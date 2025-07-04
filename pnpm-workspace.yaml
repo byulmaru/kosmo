@@ -1,0 +1,9 @@
+packages:
+  - apps/*
+  - packages/*
+
+onlyBuiltDependencies:
+  - '@mongodb-js/zstd'
+  - '@tailwindcss/oxide'
+  - esbuild
+  - sharp

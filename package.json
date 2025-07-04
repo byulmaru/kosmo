@@ -1,0 +1,26 @@
+{
+  "name": "@kosmo/monorepo",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "lint:syncpack": "syncpack lint",
+    "format": "prettier --write .",
+    "check-types": "turbo run check-types"
+  },
+  "devDependencies": {
+    "prettier": "^3.5.1",
+    "prettier-plugin-brace-style": "^0.7.2",
+    "prettier-plugin-svelte": "^3.3.3",
+    "prettier-plugin-tailwindcss": "^0.6.11",
+    "syncpack": "^13.0.3",
+    "tsx": "^4.20.3",
+    "turbo": "^2.5.0"
+  },
+  "packageManager": "pnpm@10.12.4"
+}

@@ -1,0 +1,71 @@
+type Account {
+  id: ID!
+  name: String!
+  profileCount: Count!
+  profiles: [ManagedProfile!]!
+}
+
+enum AccountState {
+  ACTIVE
+  DELETED
+}
+
+scalar Binary
+
+type Count {
+  current: Int!
+
+  """null if unlimited"""
+  max: Int
+}
+
+input CreateProfileInput {
+  handle: String!
+  useCreatedProfile: Boolean! = true
+}
+
+"""Unix timestamp in milliseconds"""
+scalar DateTime
+
+interface IProfile {
+  description: String
+  displayName(fallback: Boolean! = true): String!
+  handle: String!
+  id: ID!
+  url: String!
+}
+
+"""
+The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
+"""
+scalar JSON
+
+type ManagedProfile implements IProfile {
+  description: String
+  displayName(fallback: Boolean! = true): String!
+  handle: String!
+  id: ID!
+  url: String!
+}
+
+type Mutation {
+  createProfile(input: CreateProfileInput!): ManagedProfile!
+  useProfile(input: UseProfileInput!): ManagedProfile!
+}
+
+type PublicProfile implements IProfile {
+  description: String
+  displayName(fallback: Boolean! = true): String!
+  handle: String!
+  id: ID!
+  url: String!
+}
+
+type Query {
+  me: Account
+  usingProfile: ManagedProfile
+}
+
+input UseProfileInput {
+  profileId: String!
+}
