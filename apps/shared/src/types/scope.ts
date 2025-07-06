@@ -1,1 +1,1 @@
-export type Scope = '$superapp' | 'profile:create';
+export type Scope = '$superapp' | 'meta-profile' | 'profile:read' | 'profile:write';
