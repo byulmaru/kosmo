@@ -6,6 +6,7 @@ import {
   db,
   first,
   firstOrThrow,
+  firstOrThrowWith,
   ListMembers,
   Lists,
   ProfileAccounts,
@@ -241,10 +242,21 @@ builder.mutationFields((t) => ({
         throw new ForbiddenError();
       }
 
+      const profile = await db
+        .select({ id: Profiles.id })
+        .from(Profiles)
+        .where(and(eq(Profiles.id, input.profileId), eq(Profiles.state, ProfileState.ACTIVE)))
+        .then(firstOrThrowWith(() => new ConflictError({ field: 'profileId' })));
+
+      await db
+        .update(Sessions)
+        .set({ profileId: null })
+        .where(eq(Sessions.profileId, input.profileId));
+
       return await db
         .update(Profiles)
         .set({ state: ProfileState.DELETED })
-        .where(eq(Profiles.id, input.profileId))
+        .where(eq(Profiles.id, profile.id))
         .returning()
         .then(firstOrThrow);
     },
