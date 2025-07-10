@@ -27,6 +27,10 @@ input CreateProfileInput {
 """Unix timestamp in milliseconds"""
 scalar DateTime
 
+input DeleteProfileInput {
+  profileId: String!
+}
+
 interface IProfile {
   description: String
   displayName(fallback: Boolean! = true): String!
@@ -50,6 +54,7 @@ type ManagedProfile implements IProfile {
 
 type Mutation {
   createProfile(input: CreateProfileInput!): ManagedProfile!
+  deleteProfile(input: DeleteProfileInput!): ManagedProfile!
   useProfile(input: UseProfileInput!): ManagedProfile!
 }
 

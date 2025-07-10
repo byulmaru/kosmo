@@ -6,6 +6,7 @@ import {
   db,
   first,
   firstOrThrow,
+  firstOrThrowWith,
   ListMembers,
   Lists,
   ProfileAccounts,
@@ -13,11 +14,12 @@ import {
   Sessions,
   TableCode,
 } from '@kosmo/shared/db';
-import { ListMemberRole, ProfileAccountRole } from '@kosmo/shared/enums';
+import { ListMemberRole, ProfileAccountRole, ProfileState } from '@kosmo/shared/enums';
 import { federation } from '@kosmo/shared/federation';
 import * as validationSchema from '@kosmo/shared/validation';
-import { and, asc, count, eq, getTableColumns, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, getTableColumns, sql } from 'drizzle-orm';
 import { ConflictError, ForbiddenError, LimitExceededError } from '@/errors';
+import { assertProfileAccess } from '@/utils/profile';
 import { builder } from '../builder';
 import { Account, Count, IProfile, ManagedProfile, PublicProfile } from '../objects';
 
@@ -116,7 +118,7 @@ builder.queryFields((t) => ({
  */
 
 builder.mutationFields((t) => ({
-  createProfile: t.withAuth({ scope: 'profile:create' }).fieldWithInput({
+  createProfile: t.withAuth({ scope: 'meta-profile' }).fieldWithInput({
     type: ManagedProfile,
     input: {
       handle: t.input.string({ validate: { schema: validationSchema.handle } }),
@@ -199,27 +201,10 @@ builder.mutationFields((t) => ({
     },
 
     resolve: async (_, { input }, ctx) => {
-      const profiles = await db
-        .select({ id: ApplicationGrantProfiles.profileId })
-        .from(ApplicationGrants)
-        .innerJoin(
-          ApplicationGrantProfiles,
-          eq(ApplicationGrants.id, ApplicationGrantProfiles.applicationGrantId),
-        )
-        .where(
-          and(
-            eq(ApplicationGrants.applicationId, ctx.session.applicationId),
-            eq(ApplicationGrants.accountId, ctx.session.accountId),
-            or(
-              eq(ApplicationGrantProfiles.profileId, input.profileId),
-              isNull(ApplicationGrantProfiles.profileId),
-            ),
-          ),
-        );
-
-      if (profiles.length === 0) {
-        throw new ForbiddenError();
-      }
+      await assertProfileAccess({
+        sessionId: ctx.session.id,
+        profileId: input.profileId,
+      });
 
       await db
         .update(Sessions)
@@ -227,6 +212,53 @@ builder.mutationFields((t) => ({
         .where(eq(Sessions.id, ctx.session.id));
 
       return input.profileId;
+    },
+  }),
+
+  deleteProfile: t.withAuth({ scope: 'meta-profile' }).fieldWithInput({
+    type: ManagedProfile,
+    input: {
+      profileId: t.input.string(),
+    },
+
+    resolve: async (_, { input }, ctx) => {
+      await assertProfileAccess({
+        sessionId: ctx.session.id,
+        profileId: input.profileId,
+      });
+
+      const profileAccount = await db
+        .select({ role: ProfileAccounts.role })
+        .from(ProfileAccounts)
+        .where(
+          and(
+            eq(ProfileAccounts.profileId, input.profileId),
+            eq(ProfileAccounts.accountId, ctx.session.accountId),
+          ),
+        )
+        .then(first);
+
+      if (profileAccount?.role !== ProfileAccountRole.OWNER) {
+        throw new ForbiddenError();
+      }
+
+      const profile = await db
+        .select({ id: Profiles.id })
+        .from(Profiles)
+        .where(and(eq(Profiles.id, input.profileId), eq(Profiles.state, ProfileState.ACTIVE)))
+        .then(firstOrThrowWith(() => new ConflictError({ field: 'profileId' })));
+
+      await db
+        .update(Sessions)
+        .set({ profileId: null })
+        .where(eq(Sessions.profileId, input.profileId));
+
+      return await db
+        .update(Profiles)
+        .set({ state: ProfileState.DELETED })
+        .where(eq(Profiles.id, profile.id))
+        .returning()
+        .then(firstOrThrow);
     },
   }),
 }));

@@ -57,8 +57,8 @@ type ConflictErrorParams = {
 };
 
 export class ConflictError extends GraphQLError {
-  constructor({ field, message }: ConflictErrorParams) {
-    super(message ?? `Conflict: ${field}`, {
+  constructor({ field, message = 'error.common.conflict' }: ConflictErrorParams) {
+    super(message, {
       extensions: { type: 'ConflictError', code: 'CONFLICT', status: 409, field, message },
     });
   }
