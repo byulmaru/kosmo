@@ -1,13 +1,4 @@
-import {
-  boolean,
-  integer,
-  json,
-  pgTable,
-  text,
-  unique,
-  uniqueIndex,
-  varchar,
-} from 'drizzle-orm/pg-core';
+import { integer, json, pgTable, text, unique, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
 import { datetime } from './types';
 import { eq, sql } from 'drizzle-orm';
 import { createDbId, TableCode } from './id';
@@ -237,8 +228,8 @@ export const ProfileCryptographicKeys = pgTable('profile_cryptographic_keys', {
     .notNull()
     .references(() => Profiles.id),
   kind: pgEnums.CryptographicKeyKind('kind').notNull(),
-  privateKey: json('private_key').notNull(),
-  publicKey: json('public_key').notNull(),
+  privateKey: json('private_key').notNull().$type<JsonWebKey>(),
+  publicKey: json('public_key').notNull().$type<JsonWebKey>(),
   createdAt: datetime('created_at')
     .notNull()
     .default(sql`now()`),

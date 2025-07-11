@@ -159,6 +159,9 @@ importers:
       react-email:
         specifier: ^4.0.7
         version: 4.0.16(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      remeda:
+        specifier: ^2.23.1
+        version: 2.23.1
       tlds:
         specifier: ^1.259.0
         version: 1.259.0
