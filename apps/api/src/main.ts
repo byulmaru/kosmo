@@ -3,7 +3,6 @@ import '@kosmo/commonlib/dayjs';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { deriveContext } from '@/context';
-import { env } from '@/env';
 import { yoga } from '@/graphql';
 import type { Env } from '@/context';
 
@@ -21,7 +20,7 @@ app.route('/graphql', yoga);
 serve(
   {
     fetch: app.fetch,
-    port: env.LISTEN_PORT ?? 8260,
+    port: 8260,
   },
   (info) => {
     console.log(`Listening on port ${info.port}`);
