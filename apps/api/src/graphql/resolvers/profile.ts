@@ -251,17 +251,23 @@ builder.mutationFields((t) => ({
         .where(and(eq(Profiles.id, input.profileId), eq(Profiles.state, ProfileState.ACTIVE)))
         .then(firstOrThrowWith(() => new ConflictError({ field: 'profileId' })));
 
-      await db
-        .update(Sessions)
-        .set({ profileId: null })
-        .where(eq(Sessions.profileId, input.profileId));
+      return await db.transaction(async (tx) => {
+        await tx
+          .update(Sessions)
+          .set({ profileId: null })
+          .where(eq(Sessions.profileId, profile.id));
 
-      return await db
-        .update(Profiles)
-        .set({ state: ProfileState.DELETED })
-        .where(eq(Profiles.id, profile.id))
-        .returning()
-        .then(firstOrThrow);
+        await tx
+          .delete(ApplicationGrantProfiles)
+          .where(eq(ApplicationGrantProfiles.profileId, profile.id));
+
+        return await tx
+          .update(Profiles)
+          .set({ state: ProfileState.DELETED })
+          .where(eq(Profiles.id, profile.id))
+          .returning()
+          .then(firstOrThrow);
+      });
     },
   }),
 }));
