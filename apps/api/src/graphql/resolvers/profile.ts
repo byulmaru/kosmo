@@ -15,9 +15,9 @@ import {
   TableCode,
 } from '@kosmo/shared/db';
 import { ListMemberRole, ProfileAccountRole, ProfileState } from '@kosmo/shared/enums';
-import { federation } from '@kosmo/shared/federation';
 import * as validationSchema from '@kosmo/shared/validation';
 import { and, asc, count, eq, getTableColumns, sql } from 'drizzle-orm';
+import { env } from '@/env';
 import { ConflictError, ForbiddenError, LimitExceededError } from '@/errors';
 import { assertProfileAccess } from '@/utils/profile';
 import { builder } from '../builder';
@@ -150,8 +150,6 @@ builder.mutationFields((t) => ({
         throw new ConflictError({ field: 'handle', message: 'error.handle.conflict' });
       }
 
-      const fedifyContext = federation.createContext(ctx.c.req.raw, null);
-
       return await db.transaction(async (tx) => {
         const list = await tx
           .insert(Lists)
@@ -167,9 +165,9 @@ builder.mutationFields((t) => ({
           .values({
             id: profileId,
             handle: input.handle,
-            uri: fedifyContext.getActorUri(profileId).href,
-            inboxUri: fedifyContext.getInboxUri(profileId).href,
-            sharedInboxUri: fedifyContext.getInboxUri().href,
+            uri: `${env.PUBLIC_WEB_DOMAIN}/profile/${profileId}`,
+            inboxUri: `${env.PUBLIC_WEB_DOMAIN}/profile/${profileId}/inbox`,
+            sharedInboxUri: `${env.PUBLIC_WEB_DOMAIN}/inbox`,
             defaultFollowingListId: list.id,
           })
           .returning()
