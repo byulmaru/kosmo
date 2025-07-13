@@ -67,7 +67,10 @@ builder.objectFields(Account, (t) => ({
           ApplicationGrantProfiles,
           eq(ApplicationGrants.id, ApplicationGrantProfiles.applicationGrantId),
         )
-        .where(eq(ApplicationGrants.accountId, account.id))
+        .innerJoin(Profiles, eq(ApplicationGrantProfiles.profileId, Profiles.id))
+        .where(
+          and(eq(ApplicationGrants.accountId, account.id), eq(Profiles.state, ProfileState.ACTIVE)),
+        )
         .orderBy(asc(ApplicationGrantProfiles.profileId))
         .then((rows) => rows.map((row) => row.id));
 
@@ -76,7 +79,9 @@ builder.objectFields(Account, (t) => ({
           .select(getTableColumns(Profiles))
           .from(Profiles)
           .innerJoin(ProfileAccounts, eq(Profiles.id, ProfileAccounts.profileId))
-          .where(eq(ProfileAccounts.accountId, account.id))
+          .where(
+            and(eq(ProfileAccounts.accountId, account.id), eq(Profiles.state, ProfileState.ACTIVE)),
+          )
           .orderBy(asc(Profiles.id));
       } else {
         return profileIds as string[];
