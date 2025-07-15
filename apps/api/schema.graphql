@@ -1,8 +1,8 @@
-type Account {
+type Account implements Node {
   id: ID!
   name: String!
   profileCount: Count!
-  profiles: [ManagedProfile!]!
+  profiles: [Profile!]!
 }
 
 enum AccountState {
@@ -10,6 +10,7 @@ enum AccountState {
   DELETED
 }
 
+"""Base64 encoded binary data"""
 scalar Binary
 
 type Count {
@@ -24,19 +25,8 @@ input CreateProfileInput {
   useCreatedProfile: Boolean! = true
 }
 
-"""Unix timestamp in milliseconds"""
-scalar DateTime
-
 input DeleteProfileInput {
   profileId: String!
-}
-
-interface IProfile {
-  description: String
-  displayName(fallback: Boolean! = true): String!
-  handle: String!
-  id: ID!
-  url: String!
 }
 
 """
@@ -44,21 +34,17 @@ The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://
 """
 scalar JSON
 
-type ManagedProfile implements IProfile {
-  description: String
-  displayName(fallback: Boolean! = true): String!
-  handle: String!
-  id: ID!
-  url: String!
-}
-
 type Mutation {
-  createProfile(input: CreateProfileInput!): ManagedProfile!
-  deleteProfile(input: DeleteProfileInput!): ManagedProfile!
-  useProfile(input: UseProfileInput!): ManagedProfile!
+  createProfile(input: CreateProfileInput!): Profile!
+  deleteProfile(input: DeleteProfileInput!): Profile!
+  useProfile(input: UseProfileInput!): Profile!
 }
 
-type PublicProfile implements IProfile {
+interface Node {
+  id: ID!
+}
+
+type Profile implements Node {
   description: String
   displayName(fallback: Boolean! = true): String!
   handle: String!
@@ -68,8 +54,13 @@ type PublicProfile implements IProfile {
 
 type Query {
   me: Account
-  usingProfile: ManagedProfile
+  node(id: ID!): Node
+  nodes(ids: [ID!]!): [Node]!
+  usingProfile: Profile
 }
+
+"""Unix timestamp in milliseconds"""
+scalar Timestamp
 
 input UseProfileInput {
   profileId: String!

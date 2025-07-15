@@ -21,18 +21,24 @@ import { env } from '@/env';
 import { ConflictError, ForbiddenError, LimitExceededError } from '@/errors';
 import { assertProfileAccess } from '@/utils/profile';
 import { builder } from '../builder';
-import { Account, Count, IProfile, ManagedProfile, PublicProfile } from '../objects';
+import { Account, Count, Profile } from '../objects';
 
 /**
  * Types
  */
 
-IProfile.implement({
+builder.node(Profile, {
+  id: { resolve: (profile) => profile.id },
+
+  loadManyWithoutCache: async (ids, ctx) => {
+    return (await Profile.getDataloader(ctx).loadMany(ids)).map((profile) =>
+      profile instanceof Error ? null : profile,
+    );
+  },
+
   fields: (t) => ({
-    id: t.exposeID('id'),
     handle: t.exposeString('handle'),
     description: t.exposeString('description', { nullable: true }),
-
     displayName: t.string({
       args: {
         fallback: t.arg.boolean({ defaultValue: true }),
@@ -46,17 +52,9 @@ IProfile.implement({
   }),
 });
 
-ManagedProfile.implement({
-  interfaces: () => [IProfile],
-});
-
-PublicProfile.implement({
-  interfaces: () => [IProfile],
-});
-
 builder.objectFields(Account, (t) => ({
   profiles: t.withAuth({ session: true }).field({
-    type: [ManagedProfile],
+    type: [Profile],
     resolve: async (account) => {
       const profileIds = await db
         .select({
@@ -92,14 +90,14 @@ builder.objectFields(Account, (t) => ({
   profileCount: t.withAuth({ session: true }).field({
     type: Count,
     resolve: (account) => ({
-      currentLoader: async () => {
+      currentResolver: async () => {
         return await db
           .select({ profileCount: count() })
           .from(ProfileAccounts)
           .where(eq(ProfileAccounts.accountId, account.id))
           .then((rows) => rows[0]?.profileCount ?? 0);
       },
-      maxLoader: () => MAX_PROFILE_COUNT,
+      maxResolver: () => MAX_PROFILE_COUNT,
     }),
   }),
 }));
@@ -110,7 +108,7 @@ builder.objectFields(Account, (t) => ({
 
 builder.queryFields((t) => ({
   usingProfile: t.withAuth({ session: true }).field({
-    type: ManagedProfile,
+    type: Profile,
     nullable: true,
     resolve: (_, __, ctx) => {
       return ctx.session.profileId ?? null;
@@ -124,7 +122,7 @@ builder.queryFields((t) => ({
 
 builder.mutationFields((t) => ({
   createProfile: t.withAuth({ scope: 'meta-profile' }).fieldWithInput({
-    type: ManagedProfile,
+    type: Profile,
     input: {
       handle: t.input.string({ validate: { schema: validationSchema.handle } }),
       useCreatedProfile: t.input.boolean({ defaultValue: true }),
@@ -198,7 +196,7 @@ builder.mutationFields((t) => ({
   }),
 
   useProfile: t.withAuth({ session: true }).fieldWithInput({
-    type: ManagedProfile,
+    type: Profile,
     input: {
       profileId: t.input.string(),
     },
@@ -219,7 +217,7 @@ builder.mutationFields((t) => ({
   }),
 
   deleteProfile: t.withAuth({ scope: 'meta-profile' }).fieldWithInput({
-    type: ManagedProfile,
+    type: Profile,
     input: {
       profileId: t.input.string(),
     },

@@ -1,5 +1,6 @@
 import SchemaBuilder from '@pothos/core';
 import DataLoaderPlugin from '@pothos/plugin-dataloader';
+import RelayPlugin from '@pothos/plugin-relay';
 import ScopeAuthPlugin from '@pothos/plugin-scope-auth';
 import SimpleObjectsPlugin from '@pothos/plugin-simple-objects';
 import WithInputPlugin from '@pothos/plugin-with-input';
@@ -8,8 +9,10 @@ import dayjs from 'dayjs';
 import { GraphQLJSON } from 'graphql-scalars';
 import * as R from 'remeda';
 import { base64 } from 'rfc4648';
+import { match } from 'ts-pattern';
 import { UnauthorizedError, ValidationError } from '@/errors';
 import { hasScope } from '@/utils/scope';
+import type { TableCode } from '@kosmo/shared/db';
 import type { Scope } from '@kosmo/shared/types/scope';
 import type { SessionContext, SessionWithProfileContext, UserContext } from '@/context';
 
@@ -29,7 +32,7 @@ export const builder = new SchemaBuilder<{
   DefaultFieldNullability: false;
   Scalars: {
     Binary: { Input: Uint8Array; Output: Uint8Array };
-    DateTime: { Input: dayjs.Dayjs; Output: dayjs.Dayjs };
+    Timestamp: { Input: dayjs.Dayjs; Output: dayjs.Dayjs };
     ID: { Input: string; Output: string };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     JSON: { Input: any; Output: unknown };
@@ -38,7 +41,14 @@ export const builder = new SchemaBuilder<{
   defaultInputFieldRequiredness: true,
   defaultFieldNullability: false,
 
-  plugins: [ScopeAuthPlugin, DataLoaderPlugin, SimpleObjectsPlugin, WithInputPlugin, ZodPlugin],
+  plugins: [
+    RelayPlugin,
+    ScopeAuthPlugin,
+    DataLoaderPlugin,
+    SimpleObjectsPlugin,
+    WithInputPlugin,
+    ZodPlugin,
+  ],
 
   scopeAuth: {
     authScopes: (context) => ({
@@ -60,6 +70,21 @@ export const builder = new SchemaBuilder<{
   zod: {
     validationError: (error) => new ValidationError({ message: error.issues[0].message }),
   },
+
+  relay: {
+    encodeGlobalID: (_, id) => String(id),
+    decodeGlobalID: (globalId) => {
+      const [tableCode] = globalId.split('0', 2);
+
+      return {
+        typename: match(tableCode as (typeof TableCode)[keyof typeof TableCode])
+          .with('ACNT', () => 'Account')
+          .with('PRFL', () => 'Profile')
+          .run(),
+        id: globalId,
+      };
+    },
+  },
 });
 
 builder.queryType();
@@ -77,9 +102,11 @@ builder.scalarType('Binary', {
 
     throw new Error('Invalid binary value');
   },
+
+  description: 'Base64 encoded binary data',
 });
 
-builder.scalarType('DateTime', {
+builder.scalarType('Timestamp', {
   serialize: (value) => value.valueOf(),
   parseValue: (value) => {
     if (typeof value === 'number') {

@@ -38,25 +38,22 @@ const createObjectRef = <T extends TableConfig>(name: string, table: TableWithId
   });
 };
 
-const createInterfaceRef = <T extends TableConfig>(name: string, table: TableWithIdColumn<T>) => {
-  return builder.loadableInterfaceRef(name, {
-    ...makeLoadableFields(table),
-  });
-};
+// const createInterfaceRef = <T extends TableConfig>(name: string, table: TableWithIdColumn<T>) => {
+//   return builder.loadableInterfaceRef(name, {
+//     ...makeLoadableFields(table),
+//   });
+// };
 
 export const isTypeOf = (tableCode: string) => (self: unknown) => {
   return decodeDbId((self as { id: string }).id) === tableCode;
 };
 
-export const IProfile = createInterfaceRef('IProfile', T.Profiles);
-
 export const Account = createObjectRef('Account', T.Accounts);
-export const ManagedProfile = createObjectRef('ManagedProfile', T.Profiles);
-export const PublicProfile = createObjectRef('PublicProfile', T.Profiles);
+export const Profile = createObjectRef('Profile', T.Profiles);
 
 interface Count {
-  currentLoader: () => MaybePromise<number>;
-  maxLoader: () => MaybePromise<number | null>;
+  currentResolver: () => MaybePromise<number>;
+  maxResolver: () => MaybePromise<number | null>;
 }
 
 export const Count = builder.objectRef<Count>('Count');

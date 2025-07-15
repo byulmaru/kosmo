@@ -1,9 +1,20 @@
 import { builder } from '../builder';
 import { Account } from '../objects';
 
-Account.implement({
+builder.node(Account, {
+  id: { resolve: (account) => account.id },
+
+  loadWithoutCache: async (id, ctx) => {
+    const account = await Account.getDataloader(ctx).load(id);
+
+    if (account && account.id === ctx.session?.accountId) {
+      return account;
+    }
+
+    return null;
+  },
+
   fields: (t) => ({
-    id: t.exposeID('id'),
     name: t.exposeString('name'),
   }),
 });
