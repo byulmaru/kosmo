@@ -3,7 +3,7 @@ import { datetime } from './types';
 import { eq, sql } from 'drizzle-orm';
 import { createDbId, TableCode } from './id';
 import { pgEnums } from './enums';
-import { AccountState, ListVisibility, ProfileState } from '../../enums';
+import { AccountState, ProfileState } from '../../enums';
 import type { Scope } from '../../types/scope';
 
 export const Accounts = pgTable(
@@ -134,49 +134,6 @@ export const Instances = pgTable('instances', {
     .default(sql`now()`),
 });
 
-export const Lists = pgTable('lists', {
-  id: varchar('id')
-    .primaryKey()
-    .$defaultFn(() => createDbId(TableCode.Lists)),
-  name: varchar('name').notNull(),
-  description: text('description'),
-  visibility: pgEnums.ListVisibility('visibility').notNull().default(ListVisibility.PRIVATE),
-  createdAt: datetime('created_at')
-    .notNull()
-    .default(sql`now()`),
-});
-
-export const ListFollowings = pgTable('list_followings', {
-  id: varchar('id')
-    .primaryKey()
-    .$defaultFn(() => createDbId(TableCode.ListFollowings)),
-  listId: varchar('list_id')
-    .notNull()
-    .references(() => Lists.id),
-  profileId: varchar('profile_id')
-    .notNull()
-    .references(() => Profiles.id),
-  createdAt: datetime('created_at')
-    .notNull()
-    .default(sql`now()`),
-});
-
-export const ListMembers = pgTable('list_members', {
-  id: varchar('id')
-    .primaryKey()
-    .$defaultFn(() => createDbId(TableCode.ListMembers)),
-  listId: varchar('list_id')
-    .notNull()
-    .references(() => Lists.id),
-  profileId: varchar('profile_id')
-    .notNull()
-    .references(() => Profiles.id),
-  role: pgEnums.ListMemberRole('role').notNull(),
-  createdAt: datetime('created_at')
-    .notNull()
-    .default(sql`now()`),
-});
-
 export const Profiles = pgTable(
   'profiles',
   {
@@ -194,7 +151,6 @@ export const Profiles = pgTable(
     sharedInboxUri: varchar('shared_inbox_uri'),
     avatarFileId: varchar('avatar_file_id').references(() => Files.id),
     headerFileId: varchar('header_file_id').references(() => Files.id),
-    defaultFollowingListId: varchar('default_following_list_id').references(() => Lists.id),
     followingCount: integer('following_count').notNull().default(0),
     followersCount: integer('followers_count').notNull().default(0),
     createdAt: datetime('created_at')

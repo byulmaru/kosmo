@@ -22,18 +22,6 @@ export const InstanceType = {
 } as const;
 export type InstanceType = keyof typeof InstanceType;
 
-export const ListMemberRole = {
-  OWNER: 'OWNER',
-  SUBSCRIBER: 'SUBSCRIBER',
-} as const;
-export type ListMemberRole = keyof typeof ListMemberRole;
-
-export const ListVisibility = {
-  PRIVATE: 'PRIVATE',
-  PUBLIC: 'PUBLIC',
-} as const;
-export type ListVisibility = keyof typeof ListVisibility;
-
 export const ProfileAccountRole = {
   OWNER: 'OWNER',
   MEMBER: 'MEMBER',

@@ -7,14 +7,12 @@ import {
   first,
   firstOrThrow,
   firstOrThrowWith,
-  ListMembers,
-  Lists,
   ProfileAccounts,
   Profiles,
   Sessions,
   TableCode,
 } from '@kosmo/shared/db';
-import { ListMemberRole, ProfileAccountRole, ProfileState } from '@kosmo/shared/enums';
+import { ProfileAccountRole, ProfileState } from '@kosmo/shared/enums';
 import * as validationSchema from '@kosmo/shared/validation';
 import { and, asc, count, eq, getTableColumns, sql } from 'drizzle-orm';
 import { env } from '@/env';
@@ -107,11 +105,11 @@ builder.objectFields(Account, (t) => ({
  */
 
 builder.queryFields((t) => ({
-  usingProfile: t.withAuth({ session: true }).field({
+  usingProfile: t.field({
     type: Profile,
     nullable: true,
     resolve: (_, __, ctx) => {
-      return ctx.session.profileId ?? null;
+      return ctx.session?.profileId ?? null;
     },
   }),
 }));
@@ -149,14 +147,6 @@ builder.mutationFields((t) => ({
       }
 
       return await db.transaction(async (tx) => {
-        const list = await tx
-          .insert(Lists)
-          .values({
-            name: '기본 팔로잉 목록',
-          })
-          .returning({ id: Lists.id })
-          .then(firstOrThrow);
-
         const profileId = createDbId(TableCode.Profiles);
         const profile = await tx
           .insert(Profiles)
@@ -166,7 +156,6 @@ builder.mutationFields((t) => ({
             uri: `${env.PUBLIC_WEB_DOMAIN}/profile/${profileId}`,
             inboxUri: `${env.PUBLIC_WEB_DOMAIN}/profile/${profileId}/inbox`,
             sharedInboxUri: `${env.PUBLIC_WEB_DOMAIN}/inbox`,
-            defaultFollowingListId: list.id,
           })
           .returning()
           .then(firstOrThrow);
@@ -175,12 +164,6 @@ builder.mutationFields((t) => ({
           accountId: ctx.session.accountId,
           profileId,
           role: ProfileAccountRole.OWNER,
-        });
-
-        await tx.insert(ListMembers).values({
-          listId: list.id,
-          profileId,
-          role: ListMemberRole.OWNER,
         });
 
         if (input.useCreatedProfile) {
