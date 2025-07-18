@@ -1,16 +1,18 @@
 import {
+  Accept,
   createFederation,
   Endpoints,
   exportJwk,
+  Follow,
   generateCryptoKeyPair,
   importJwk,
   MemoryKvStore,
   Person,
 } from '@fedify/fedify';
-import { db, first, ProfileCryptographicKeys, Profiles } from '../db';
+import { db, first, ProfileCryptographicKeys, ProfileFollows, Profiles } from '../db';
 import { and, eq, isNull } from 'drizzle-orm';
 import * as R from 'remeda';
-import { CryptographicKeyKind, ProfileState } from '../enums';
+import { getOrCreateProfile } from './profile';
 
 export const federation = createFederation<unknown>({
   kv: new MemoryKvStore(),
@@ -40,15 +42,15 @@ federation
     const keys = await ctx.getActorKeyPairs(identifier);
 
     return new Person({
-      id: new URL(profile.uri),
+      id: ctx.getActorUri(identifier),
       preferredUsername: profile.handle,
       name: profile.displayName,
-      inbox: new URL(profile.inboxUri),
+      inbox: ctx.getInboxUri(identifier),
       endpoints: new Endpoints({
-        sharedInbox: new URL(profile.sharedInboxUri!),
+        sharedInbox: ctx.getInboxUri(),
       }),
-      url: new URL(profile.url ?? profile.uri),
-      publicKeys: keys.map((key) => key.cryptographicKey),
+      url: new URL(profile.url ?? ctx.getActorUri(identifier)),
+      publicKey: keys[0].cryptographicKey,
       assertionMethods: keys.map((key) => key.multikey),
     });
   })
@@ -72,7 +74,7 @@ federation
 
     const keyPairs: CryptoKeyPair[] = [];
 
-    for (const keyKind of Object.values(CryptographicKeyKind)) {
+    for (const keyKind of ['RSASSA-PKCS1-v1_5', 'Ed25519'] as const) {
       const key = keys[keyKind];
       if (key) {
         keyPairs.push({
@@ -94,6 +96,57 @@ federation
     }
 
     return keyPairs;
+  })
+  .mapHandle(async (_, username) => {
+    return await db
+      .select({
+        id: Profiles.id,
+      })
+      .from(Profiles)
+      .where(eq(Profiles.handle, username))
+      .then((rows) => rows[0]?.id ?? null);
   });
 
-federation.setInboxListeners('/profile/{identifier}/inbox', '/inbox');
+federation
+  .setInboxListeners('/profile/{identifier}/inbox', '/inbox')
+  .on(Follow, async (ctx, follow) => {
+    const object = ctx.parseUri(follow.objectId);
+    if (object === null || object.type !== 'actor') {
+      return;
+    }
+
+    const follower = await follow.getActor();
+    if (follower === null || follower.id === null || follower.inboxId === null) {
+      return;
+    }
+
+    const followingProfile = await db
+      .select({
+        id: Profiles.id,
+      })
+      .from(Profiles)
+      .where(eq(Profiles.id, object.identifier))
+      .then(first);
+
+    if (followingProfile === undefined) {
+      return;
+    }
+
+    await db.transaction(async (tx) => {
+      const followerProfile = await getOrCreateProfile({ actor: follower, tx });
+      await tx.insert(ProfileFollows).values({
+        followerProfileId: followerProfile.id,
+        followingProfileId: followingProfile.id,
+      });
+    });
+
+    await ctx.sendActivity(
+      object,
+      follower,
+      new Accept({
+        actor: follow.objectId,
+        to: follow.actorId,
+        object: follow,
+      }),
+    );
+  });
