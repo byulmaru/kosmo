@@ -29,6 +29,11 @@ input DeleteProfileInput {
   profileId: String!
 }
 
+input FollowProfileInput {
+  actorProfileId: String
+  profileId: String!
+}
+
 """
 The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
 """
@@ -37,6 +42,8 @@ scalar JSON
 type Mutation {
   createProfile(input: CreateProfileInput!): Profile!
   deleteProfile(input: DeleteProfileInput!): Profile!
+  followProfile(input: FollowProfileInput!): Profile!
+  unfollowProfile(input: UnfollowProfileInput!): Profile!
   useProfile(input: UseProfileInput!): Profile!
 }
 
@@ -61,6 +68,11 @@ type Query {
 
 """Unix timestamp in milliseconds"""
 scalar Timestamp
+
+input UnfollowProfileInput {
+  actorProfileId: String
+  profileId: String!
+}
 
 input UseProfileInput {
   profileId: String!

@@ -3,10 +3,12 @@ import {
   ApplicationGrants,
   db,
   firstOrThrow,
+  ProfileAccounts,
   Sessions,
 } from '@kosmo/shared/db';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull, or } from 'drizzle-orm';
 import { ForbiddenError } from '@/errors';
+import type { SessionContext } from '@/context';
 
 export async function assertProfileAccess(input: { sessionId: string; profileId: string }) {
   const session = await db
@@ -43,3 +45,50 @@ export async function assertProfileAccess(input: { sessionId: string; profileId:
     throw new ForbiddenError();
   }
 }
+
+type GetActorProfileIdParams = {
+  ctx: SessionContext;
+  actorProfileId: string | null | undefined;
+};
+export const getActorProfileId = async ({ ctx, actorProfileId }: GetActorProfileIdParams) => {
+  if (!actorProfileId) {
+    if (ctx.session.profileId) {
+      return ctx.session.profileId;
+    }
+
+    throw new ForbiddenError();
+  }
+
+  const profileAccounts = await db
+    .select({ id: ProfileAccounts.id })
+    .from(ProfileAccounts)
+    .innerJoin(
+      ApplicationGrants,
+      and(
+        eq(ProfileAccounts.accountId, ApplicationGrants.accountId),
+        eq(ApplicationGrants.applicationId, ctx.session.applicationId),
+      ),
+    )
+    .innerJoin(
+      ApplicationGrantProfiles,
+      and(
+        eq(ApplicationGrants.id, ApplicationGrantProfiles.applicationGrantId),
+        or(
+          eq(ApplicationGrantProfiles.profileId, ProfileAccounts.profileId),
+          isNull(ApplicationGrantProfiles.profileId),
+        ),
+      ),
+    )
+    .where(
+      and(
+        eq(ProfileAccounts.accountId, ctx.session.accountId),
+        eq(ProfileAccounts.profileId, actorProfileId),
+      ),
+    );
+
+  if (profileAccounts.length === 0) {
+    throw new ForbiddenError();
+  }
+
+  return actorProfileId;
+};

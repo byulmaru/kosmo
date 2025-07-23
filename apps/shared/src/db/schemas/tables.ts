@@ -164,6 +164,9 @@ export const Profiles = pgTable(
 );
 
 export const ProfileAccounts = pgTable('profile_accounts', {
+  id: varchar('id')
+    .primaryKey()
+    .$defaultFn(() => createDbId(TableCode.ProfileAccounts)),
   profileId: varchar('profile_id')
     .notNull()
     .references(() => Profiles.id),
@@ -191,20 +194,29 @@ export const ProfileCryptographicKeys = pgTable('profile_cryptographic_keys', {
     .default(sql`now()`),
 });
 
-export const ProfileFollows = pgTable('profile_follows', {
-  id: varchar('id')
-    .primaryKey()
-    .$defaultFn(() => createDbId(TableCode.ProfileFollows)),
-  followerProfileId: varchar('follower_profile_id')
-    .notNull()
-    .references(() => Profiles.id),
-  followingProfileId: varchar('following_profile_id')
-    .notNull()
-    .references(() => Profiles.id),
-  createdAt: datetime('created_at')
-    .notNull()
-    .default(sql`now()`),
-});
+export const ProfileFollows = pgTable(
+  'profile_follows',
+  {
+    id: varchar('id')
+      .primaryKey()
+      .$defaultFn(() => createDbId(TableCode.ProfileFollows)),
+    followerProfileId: varchar('follower_profile_id')
+      .notNull()
+      .references(() => Profiles.id),
+    followingProfileId: varchar('following_profile_id')
+      .notNull()
+      .references(() => Profiles.id),
+    createdAt: datetime('created_at')
+      .notNull()
+      .default(sql`now()`),
+  },
+  (t) => [
+    unique('follower_profile_id_following_profile_id_unique').on(
+      t.followerProfileId,
+      t.followingProfileId,
+    ),
+  ],
+);
 
 export const Sessions = pgTable('sessions', {
   id: varchar('id')
