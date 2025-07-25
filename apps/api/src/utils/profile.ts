@@ -1,56 +1,28 @@
+import { PROFILE_ACCOUNT_ORDERED_ROLES } from '@kosmo/shared/const';
 import {
   ApplicationGrantProfiles,
   ApplicationGrants,
   db,
-  firstOrThrow,
+  firstOrThrowWith,
   ProfileAccounts,
-  Sessions,
+  Profiles,
 } from '@kosmo/shared/db';
+import { ProfileAccountRole, ProfileState } from '@kosmo/shared/enums';
 import { and, eq, isNull, or } from 'drizzle-orm';
 import { ForbiddenError } from '@/errors';
 import type { SessionContext } from '@/context';
 
-export async function assertProfileAccess(input: { sessionId: string; profileId: string }) {
-  const session = await db
-    .select({
-      applicationId: Sessions.applicationId,
-      accountId: Sessions.accountId,
-    })
-    .from(Sessions)
-    .where(eq(Sessions.id, input.sessionId))
-    .then(firstOrThrow);
-
-  const allowedProfileGrants = await db
-    .select({ profileId: ApplicationGrantProfiles.profileId })
-    .from(ApplicationGrants)
-    .innerJoin(
-      ApplicationGrantProfiles,
-      eq(ApplicationGrants.id, ApplicationGrantProfiles.applicationGrantId),
-    )
-    .where(
-      and(
-        eq(ApplicationGrants.applicationId, session.applicationId),
-        eq(ApplicationGrants.accountId, session.accountId),
-      ),
-    );
-
-  const allowedProfileIds = allowedProfileGrants.map((p) => p.profileId);
-
-  // If ApplicationGrantProfiles.profileId is null, it means all profiles are accessible.
-  if (allowedProfileIds.includes(null)) {
-    return;
-  }
-
-  if (!allowedProfileIds.includes(input.profileId)) {
-    throw new ForbiddenError();
-  }
-}
-
-type GetActorProfileIdParams = {
+type GetPermittedProfileIdParams = {
   ctx: SessionContext;
   actorProfileId: string | null | undefined;
+  role?: ProfileAccountRole;
 };
-export const getActorProfileId = async ({ ctx, actorProfileId }: GetActorProfileIdParams) => {
+
+export const getPermittedProfileId = async ({
+  ctx,
+  actorProfileId,
+  role = ProfileAccountRole.MEMBER,
+}: GetPermittedProfileIdParams) => {
   if (!actorProfileId) {
     if (ctx.session.profileId) {
       return ctx.session.profileId;
@@ -59,8 +31,8 @@ export const getActorProfileId = async ({ ctx, actorProfileId }: GetActorProfile
     throw new ForbiddenError();
   }
 
-  const profileAccounts = await db
-    .select({ id: ProfileAccounts.id })
+  const profileAccount = await db
+    .select({ id: ProfileAccounts.id, role: ProfileAccounts.role })
     .from(ProfileAccounts)
     .innerJoin(
       ApplicationGrants,
@@ -79,14 +51,21 @@ export const getActorProfileId = async ({ ctx, actorProfileId }: GetActorProfile
         ),
       ),
     )
+    .innerJoin(Profiles, eq(ProfileAccounts.profileId, Profiles.id))
     .where(
       and(
         eq(ProfileAccounts.accountId, ctx.session.accountId),
         eq(ProfileAccounts.profileId, actorProfileId),
+        eq(Profiles.state, ProfileState.ACTIVE),
       ),
-    );
+    )
+    .then(firstOrThrowWith(() => new ForbiddenError()));
 
-  if (profileAccounts.length === 0) {
+  if (
+    role &&
+    PROFILE_ACCOUNT_ORDERED_ROLES.indexOf(role) <
+      PROFILE_ACCOUNT_ORDERED_ROLES.indexOf(profileAccount.role)
+  ) {
     throw new ForbiddenError();
   }
 

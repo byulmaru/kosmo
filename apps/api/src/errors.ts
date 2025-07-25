@@ -1,8 +1,28 @@
 import { GraphQLError } from 'graphql';
 
-export class NotFoundError extends GraphQLError {
-  constructor() {
-    super('Not Found', { extensions: { type: 'NotFoundError', code: 'NOT_FOUND', status: 404 } });
+type FieldErrorParams = {
+  path?: (string | number)[] | null;
+  message: string;
+};
+
+export class FieldError extends Error {
+  path: (string | number)[] | null;
+
+  constructor({ path, message }: FieldErrorParams) {
+    super(message);
+    this.path = path?.length && path.length > 0 ? path : null;
+  }
+}
+
+export class ValidationError extends FieldError {
+  constructor({ path, message }: FieldErrorParams) {
+    super({ path, message });
+  }
+}
+
+export class NotFoundError extends Error {
+  constructor({ message = 'error.common.notFound' }: { message?: string } = {}) {
+    super(message);
   }
 }
 
@@ -14,40 +34,26 @@ export class UnauthorizedError extends GraphQLError {
   }
 }
 
-export class ForbiddenError extends GraphQLError {
-  constructor() {
-    super('Forbidden', { extensions: { type: 'ForbiddenError', code: 'FORBIDDEN', status: 403 } });
-  }
-}
-
-type ValidationErrorParams = {
-  message?: string;
-};
-
-export class ValidationError extends GraphQLError {
-  constructor({ message }: ValidationErrorParams) {
-    super(message ?? 'Validation Error', {
-      extensions: { type: 'ValidationError', code: 'VALIDATION_ERROR', status: 400 },
-    });
+export class ForbiddenError extends Error {
+  constructor({ message = 'error.common.forbidden' }: { message?: string } = {}) {
+    super(message);
   }
 }
 
 type LimitExceededErrorParams = {
   object: string;
   limit: number;
+  message?: string;
 };
 
-export class LimitExceededError extends GraphQLError {
-  constructor({ object, limit }: LimitExceededErrorParams) {
-    super(`Limit Exceeded: ${object}`, {
-      extensions: {
-        type: 'LimitExceededError',
-        code: 'LIMIT_EXCEEDED',
-        status: 402,
-        object,
-        limit,
-      },
-    });
+export class LimitExceededError extends Error {
+  object: string;
+  limit: number;
+
+  constructor({ object, limit, message = 'error.common.limitExceeded' }: LimitExceededErrorParams) {
+    super(message);
+    this.object = object;
+    this.limit = limit;
   }
 }
 
@@ -56,10 +62,11 @@ type ConflictErrorParams = {
   message?: string;
 };
 
-export class ConflictError extends GraphQLError {
+export class ConflictError extends Error {
+  field: string;
+
   constructor({ field, message = 'error.common.conflict' }: ConflictErrorParams) {
-    super(message, {
-      extensions: { type: 'ConflictError', code: 'CONFLICT', status: 409, field, message },
-    });
+    super(message);
+    this.field = field;
   }
 }

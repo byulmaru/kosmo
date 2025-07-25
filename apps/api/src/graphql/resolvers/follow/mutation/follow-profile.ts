@@ -4,7 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { ForbiddenError, NotFoundError } from '@/errors';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
-import { getActorProfileId } from '@/utils/profile';
+import { getPermittedProfileId } from '@/utils/profile';
 
 builder.mutationField('followProfile', (t) =>
   t.withAuth({ scope: 'relationship' }).fieldWithInput({
@@ -13,8 +13,17 @@ builder.mutationField('followProfile', (t) =>
       profileId: t.input.string(),
       actorProfileId: t.input.string({ required: false }),
     },
+
+    errors: {
+      types: [ForbiddenError, NotFoundError],
+      dataField: { name: 'profile' },
+    },
+
     resolve: async (_, { input }, ctx) => {
-      const actorProfileId = await getActorProfileId({ ctx, actorProfileId: input.actorProfileId });
+      const actorProfileId = await getPermittedProfileId({
+        ctx,
+        actorProfileId: input.actorProfileId,
+      });
 
       if (actorProfileId === input.profileId) {
         throw new ForbiddenError();

@@ -13,7 +13,7 @@ import { ProfileAccountRole } from '@kosmo/shared/enums';
 import * as validationSchema from '@kosmo/shared/validation';
 import { eq, sql } from 'drizzle-orm';
 import { env } from '@/env';
-import { ConflictError, LimitExceededError } from '@/errors';
+import { LimitExceededError, ValidationError } from '@/errors';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
 
@@ -25,6 +25,11 @@ builder.mutationField('createProfile', (t) =>
       useCreatedProfile: t.input.boolean({ defaultValue: true }),
     },
 
+    errors: {
+      types: [ValidationError, LimitExceededError],
+      dataField: { name: 'profile' },
+    },
+
     resolve: async (_, { input }, ctx) => {
       const profileCount = await db.$count(
         ProfileAccounts,
@@ -32,7 +37,11 @@ builder.mutationField('createProfile', (t) =>
       );
 
       if (profileCount >= MAX_PROFILE_COUNT) {
-        throw new LimitExceededError({ object: 'profile', limit: MAX_PROFILE_COUNT });
+        throw new LimitExceededError({
+          object: 'Profile',
+          limit: MAX_PROFILE_COUNT,
+          message: 'error.profile.limitExceeded',
+        });
       }
 
       const handleConflictedProfile = await db
@@ -42,7 +51,10 @@ builder.mutationField('createProfile', (t) =>
         .then(first);
 
       if (handleConflictedProfile) {
-        throw new ConflictError({ field: 'handle', message: 'error.handle.conflict' });
+        throw new ValidationError({
+          path: ['input', 'handle'],
+          message: 'error.handle.conflict',
+        });
       }
 
       return await db.transaction(async (tx) => {

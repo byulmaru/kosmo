@@ -47,8 +47,6 @@ export type SessionContext = {
   };
 };
 
-export type SessionWithProfileContext = SessionContext & { session: { profileId: string } };
-
 export type Context = DefaultContext & Partial<SessionContext>;
 
 export type UserContext = Context & {

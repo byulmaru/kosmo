@@ -1,5 +1,6 @@
 import SchemaBuilder from '@pothos/core';
 import DataLoaderPlugin from '@pothos/plugin-dataloader';
+import ErrorsPlugin from '@pothos/plugin-errors';
 import RelayPlugin from '@pothos/plugin-relay';
 import ScopeAuthPlugin from '@pothos/plugin-scope-auth';
 import SimpleObjectsPlugin from '@pothos/plugin-simple-objects';
@@ -14,17 +15,15 @@ import { UnauthorizedError, ValidationError } from '@/errors';
 import { hasScope } from '@/utils/scope';
 import type { TableCode } from '@kosmo/shared/db';
 import type { Scope } from '@kosmo/shared/types/scope';
-import type { SessionContext, SessionWithProfileContext, UserContext } from '@/context';
+import type { SessionContext, UserContext } from '@/context';
 
 export const builder = new SchemaBuilder<{
   AuthContexts: {
     session: UserContext & SessionContext;
-    profile: UserContext & SessionWithProfileContext;
     scope: UserContext & SessionContext;
   };
   AuthScopes: {
     session: boolean;
-    profile: boolean;
     scope: Scope;
   };
   Context: UserContext;
@@ -36,6 +35,7 @@ export const builder = new SchemaBuilder<{
     ID: { Input: string; Output: string };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     JSON: { Input: any; Output: unknown };
+    FieldPath: { Input: string | number; Output: string | number };
   };
 }>({
   defaultInputFieldRequiredness: true,
@@ -44,6 +44,7 @@ export const builder = new SchemaBuilder<{
   plugins: [
     RelayPlugin,
     ScopeAuthPlugin,
+    ErrorsPlugin,
     DataLoaderPlugin,
     SimpleObjectsPlugin,
     WithInputPlugin,
@@ -67,8 +68,19 @@ export const builder = new SchemaBuilder<{
     },
   },
 
+  errors: {
+    defaultResultOptions: {
+      name: ({ fieldName }) => `${R.capitalize(fieldName)}Success`,
+    },
+
+    defaultUnionOptions: {
+      name: ({ fieldName }) => `${R.capitalize(fieldName)}Result`,
+    },
+  },
+
   zod: {
-    validationError: (error) => new ValidationError({ message: error.issues[0].message }),
+    validationError: (error) =>
+      new ValidationError({ path: error.issues[0].path, message: error.issues[0].message }),
   },
 
   relay: {
@@ -119,6 +131,18 @@ builder.scalarType('Timestamp', {
     throw new Error('Invalid datetime value');
   },
   description: 'Unix timestamp in milliseconds',
+});
+
+builder.scalarType('FieldPath', {
+  serialize: (value) => value,
+  parseValue: (value) => {
+    if (typeof value === 'string' || typeof value === 'number') {
+      return value;
+    }
+
+    throw new Error('Invalid field value');
+  },
+  description: 'String or Int',
 });
 
 export type Builder = typeof builder;

@@ -13,6 +13,10 @@ enum AccountState {
 """Base64 encoded binary data"""
 scalar Binary
 
+type ConflictError implements Error {
+  message: String!
+}
+
 type Count {
   current: Int!
 
@@ -25,13 +29,47 @@ input CreateProfileInput {
   useCreatedProfile: Boolean! = true
 }
 
+union CreateProfileResult = CreateProfileSuccess | LimitExceededError | ValidationError
+
+type CreateProfileSuccess {
+  profile: Profile!
+}
+
 input DeleteProfileInput {
   profileId: String!
 }
 
+union DeleteProfileResult = DeleteProfileSuccess | ForbiddenError
+
+type DeleteProfileSuccess {
+  profile: Profile!
+}
+
+interface Error {
+  message: String!
+}
+
+interface FieldError implements Error {
+  message: String!
+  path: [FieldPath!]
+}
+
+"""String or Int"""
+scalar FieldPath
+
 input FollowProfileInput {
   actorProfileId: String
   profileId: String!
+}
+
+union FollowProfileResult = FollowProfileSuccess | ForbiddenError | NotFoundError
+
+type FollowProfileSuccess {
+  profile: Profile!
+}
+
+type ForbiddenError implements Error {
+  message: String!
 }
 
 """
@@ -39,16 +77,26 @@ The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://
 """
 scalar JSON
 
+type LimitExceededError implements Error {
+  limit: Int!
+  message: String!
+  object: String!
+}
+
 type Mutation {
-  createProfile(input: CreateProfileInput!): Profile!
-  deleteProfile(input: DeleteProfileInput!): Profile!
-  followProfile(input: FollowProfileInput!): Profile!
-  unfollowProfile(input: UnfollowProfileInput!): Profile!
-  useProfile(input: UseProfileInput!): Profile!
+  createProfile(input: CreateProfileInput!): CreateProfileResult!
+  deleteProfile(input: DeleteProfileInput!): DeleteProfileResult!
+  followProfile(input: FollowProfileInput!): FollowProfileResult!
+  unfollowProfile(input: UnfollowProfileInput!): UnfollowProfileResult!
+  useProfile(input: UseProfileInput!): UseProfileResult!
 }
 
 interface Node {
   id: ID!
+}
+
+type NotFoundError implements Error {
+  message: String!
 }
 
 type Profile implements Node {
@@ -74,6 +122,23 @@ input UnfollowProfileInput {
   profileId: String!
 }
 
+union UnfollowProfileResult = ForbiddenError | NotFoundError | UnfollowProfileSuccess
+
+type UnfollowProfileSuccess {
+  profile: Profile!
+}
+
 input UseProfileInput {
   profileId: String!
+}
+
+union UseProfileResult = ForbiddenError | UseProfileSuccess
+
+type UseProfileSuccess {
+  profile: Profile!
+}
+
+type ValidationError implements Error & FieldError {
+  message: String!
+  path: [FieldPath!]
 }

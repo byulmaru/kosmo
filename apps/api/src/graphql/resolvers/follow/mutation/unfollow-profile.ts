@@ -1,10 +1,10 @@
 import { db, firstOrThrowWith, ProfileFollows, Profiles } from '@kosmo/shared/db';
 import { ProfileState } from '@kosmo/shared/enums';
 import { and, eq } from 'drizzle-orm';
-import { NotFoundError } from '@/errors';
+import { ForbiddenError, NotFoundError } from '@/errors';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
-import { getActorProfileId } from '@/utils/profile';
+import { getPermittedProfileId } from '@/utils/profile';
 
 builder.mutationField('unfollowProfile', (t) =>
   t.withAuth({ scope: 'relationship' }).fieldWithInput({
@@ -13,8 +13,17 @@ builder.mutationField('unfollowProfile', (t) =>
       profileId: t.input.string(),
       actorProfileId: t.input.string({ required: false }),
     },
+
+    errors: {
+      types: [ForbiddenError, NotFoundError],
+      dataField: { name: 'profile' },
+    },
+
     resolve: async (_, { input }, ctx) => {
-      const actorProfileId = await getActorProfileId({ ctx, actorProfileId: input.actorProfileId });
+      const actorProfileId = await getPermittedProfileId({
+        ctx,
+        actorProfileId: input.actorProfileId,
+      });
 
       const targetProfile = await db
         .select()

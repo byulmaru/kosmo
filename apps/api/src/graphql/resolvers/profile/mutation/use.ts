@@ -1,8 +1,9 @@
 import { db, Sessions } from '@kosmo/shared/db';
 import { eq } from 'drizzle-orm';
+import { ForbiddenError } from '@/errors';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
-import { assertProfileAccess } from '@/utils/profile';
+import { getPermittedProfileId } from '@/utils/profile';
 
 builder.mutationField('useProfile', (t) =>
   t.withAuth({ session: true }).fieldWithInput({
@@ -11,16 +12,18 @@ builder.mutationField('useProfile', (t) =>
       profileId: t.input.string(),
     },
 
+    errors: {
+      types: [ForbiddenError],
+      dataField: { name: 'profile' },
+    },
+
     resolve: async (_, { input }, ctx) => {
-      await assertProfileAccess({
-        sessionId: ctx.session.id,
-        profileId: input.profileId,
+      const profileId = await getPermittedProfileId({
+        ctx,
+        actorProfileId: input.profileId,
       });
 
-      await db
-        .update(Sessions)
-        .set({ profileId: input.profileId })
-        .where(eq(Sessions.id, ctx.session.id));
+      await db.update(Sessions).set({ profileId }).where(eq(Sessions.id, ctx.session.id));
 
       return input.profileId;
     },
