@@ -1,5 +1,5 @@
-import { builder } from '../builder';
-import { Account } from '../objects';
+import { builder } from '@/graphql/builder';
+import { Account } from '@/graphql/objects';
 
 builder.node(Account, {
   id: { resolve: (account) => account.id },
