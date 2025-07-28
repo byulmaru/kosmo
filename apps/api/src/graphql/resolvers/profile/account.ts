@@ -16,7 +16,7 @@ builder.objectFields(Account, (t) => ({
     type: [Profile],
     resolve: async (account, _, ctx) => {
       return await db
-        .select(getTableColumns(Profiles))
+        .selectDistinctOn([Profiles.id], getTableColumns(Profiles))
         .from(ProfileAccounts)
         .innerJoin(
           ApplicationGrants,
