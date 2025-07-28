@@ -2,7 +2,7 @@ import { integer, json, pgTable, text, unique, uniqueIndex, varchar } from 'driz
 import { datetime } from './types';
 import { eq, sql } from 'drizzle-orm';
 import { createDbId, TableCode } from './id';
-import { pgEnums } from './enums';
+import * as E from './enums';
 import { AccountState, ProfileState } from '../../enums';
 import type { Scope } from '../../types/scope';
 
@@ -15,7 +15,8 @@ export const Accounts = pgTable(
     providerAccountId: varchar('provider_account_id').notNull(),
     providerSessionToken: varchar('provider_session_token').notNull(),
     name: varchar('name').notNull(),
-    state: pgEnums.AccountState('state').notNull().default(AccountState.ACTIVE),
+    state: E.AccountState('state').notNull().default(AccountState.ACTIVE),
+    languages: json('languages').$type<string[]>().notNull().default(['ko-KR', 'en-US']),
     createdAt: datetime('created_at')
       .notNull()
       .default(sql`now()`),
@@ -112,7 +113,7 @@ export const Files = pgTable('files', {
   id: varchar('id')
     .primaryKey()
     .$defaultFn(() => createDbId(TableCode.Files)),
-  ownership: pgEnums.FileOwnership('ownership').notNull(),
+  ownership: E.FileOwnership('ownership').notNull(),
   hash: varchar('hash').unique(),
   path: varchar('path').notNull(),
   mimeType: varchar('mime_type').notNull(),
@@ -128,7 +129,7 @@ export const Instances = pgTable('instances', {
     .primaryKey()
     .$defaultFn(() => createDbId(TableCode.Instances)),
   domain: varchar('domain').notNull().unique(),
-  type: pgEnums.InstanceType('type').notNull(),
+  type: E.InstanceType('type').notNull(),
   createdAt: datetime('created_at')
     .notNull()
     .default(sql`now()`),
@@ -142,7 +143,7 @@ export const Profiles = pgTable(
       .$defaultFn(() => createDbId(TableCode.Profiles)),
     uri: varchar('uri').notNull(),
     url: varchar('url'),
-    state: pgEnums.ProfileState('state').notNull().default(ProfileState.ACTIVE),
+    state: E.ProfileState('state').notNull().default(ProfileState.ACTIVE),
     instanceId: varchar('instance_id').references(() => Instances.id),
     handle: varchar('handle').notNull(),
     displayName: varchar('display_name').notNull().default(''),
@@ -173,7 +174,7 @@ export const ProfileAccounts = pgTable('profile_accounts', {
   accountId: varchar('account_id')
     .notNull()
     .references(() => Accounts.id),
-  role: pgEnums.ProfileAccountRole('role').notNull(),
+  role: E.ProfileAccountRole('role').notNull(),
   createdAt: datetime('created_at')
     .notNull()
     .default(sql`now()`),
@@ -186,7 +187,7 @@ export const ProfileCryptographicKeys = pgTable('profile_cryptographic_keys', {
   profileId: varchar('profile_id')
     .notNull()
     .references(() => Profiles.id),
-  kind: pgEnums.CryptographicKeyKind('kind').notNull(),
+  kind: E.CryptographicKeyKind('kind').notNull(),
   privateKey: json('private_key').notNull().$type<JsonWebKey>(),
   publicKey: json('public_key').notNull().$type<JsonWebKey>(),
   createdAt: datetime('created_at')
