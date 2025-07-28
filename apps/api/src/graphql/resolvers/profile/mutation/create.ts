@@ -1,5 +1,7 @@
 import { MAX_PROFILE_COUNT } from '@kosmo/shared/const';
 import {
+  ApplicationGrantProfiles,
+  ApplicationGrants,
   createDbId,
   db,
   first,
@@ -11,7 +13,7 @@ import {
 } from '@kosmo/shared/db';
 import { ProfileAccountRole } from '@kosmo/shared/enums';
 import * as validationSchema from '@kosmo/shared/validation';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { env } from '@/env';
 import { LimitExceededError, ValidationError } from '@/errors';
 import { builder } from '@/graphql/builder';
@@ -75,6 +77,22 @@ builder.mutationField('createProfile', (t) =>
           accountId: ctx.session.accountId,
           profileId,
           role: ProfileAccountRole.OWNER,
+        });
+
+        const applicationGrant = await tx
+          .select({ id: ApplicationGrants.id })
+          .from(ApplicationGrants)
+          .where(
+            and(
+              eq(ApplicationGrants.accountId, ctx.session.accountId),
+              eq(ApplicationGrants.applicationId, ctx.session.applicationId),
+            ),
+          )
+          .then(firstOrThrow);
+
+        await tx.insert(ApplicationGrantProfiles).values({
+          applicationGrantId: applicationGrant.id,
+          profileId,
         });
 
         if (input.useCreatedProfile) {
