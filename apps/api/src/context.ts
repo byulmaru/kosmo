@@ -1,10 +1,12 @@
 import { getConnInfo } from '@hono/node-server/conninfo';
-import { db, first, Sessions } from '@kosmo/shared/db';
+import { Accounts, db, first, Sessions } from '@kosmo/shared/db';
+import { getLanguagesByAcceptLanguageHeader } from '@kosmo/shared/i18n';
 import DataLoader from 'dataloader';
 import { eq } from 'drizzle-orm';
 import stringify from 'fast-json-stable-stringify';
 import IPAddr from 'ipaddr.js';
 import * as R from 'remeda';
+import type { LANGUAGE_LIST } from '@kosmo/shared/i18n';
 import type { Scope } from '@kosmo/shared/types/scope';
 import type { Context as HonoContext } from 'hono';
 
@@ -22,6 +24,7 @@ export type ServerContext = HonoContext<Env>;
 
 type DefaultContext = {
   ip: string;
+  languages: LANGUAGE_LIST[];
 
   loader: <
     Key = string,
@@ -60,6 +63,7 @@ export type Env = {
 export const deriveContext = async (c: ServerContext): Promise<Context> => {
   const ctx: Context = {
     ip: getClientAddress(c),
+    languages: getLanguagesByAcceptLanguageHeader(c.req.header('Accept-Language')),
     loader: ({ name, nullable, many, load, key }) => {
       const cached = ctx[' $loaders'].get(name);
       if (cached) {
@@ -107,8 +111,10 @@ export const deriveContext = async (c: ServerContext): Promise<Context> => {
         accountId: Sessions.accountId,
         profileId: Sessions.profileId,
         scopes: Sessions.scopes,
+        languages: Accounts.languages,
       })
       .from(Sessions)
+      .innerJoin(Accounts, eq(Sessions.accountId, Accounts.id))
       .where(eq(Sessions.token, accessToken))
       .then(first);
 
@@ -120,6 +126,8 @@ export const deriveContext = async (c: ServerContext): Promise<Context> => {
         scopes: session.scopes ?? [],
         profileId: session.profileId,
       };
+
+      ctx.languages = session.languages;
     }
   }
 

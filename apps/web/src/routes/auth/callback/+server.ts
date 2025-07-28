@@ -14,7 +14,7 @@ import { redirect } from '@sveltejs/kit';
 import { and, asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import * as byulmaruId from '$lib/server/external/byulmaru-id';
-import { LANGUAGE_LIST } from '@kosmo/shared/i18n';
+import { getLanguagesByAcceptLanguageHeader } from '@kosmo/shared/i18n';
 
 export const GET = async ({ cookies, url, request }) => {
   const { code, state } = z
@@ -53,14 +53,6 @@ export const GET = async ({ cookies, url, request }) => {
         })
         .where(eq(Accounts.id, accountId));
     } else {
-      const acceptLanguage =
-        request.headers
-          .get('Accept-Language')
-          ?.split(',')
-          .map((lang: string) => lang.split(';', 1)[0].trim())
-          .filter((lang) => LANGUAGE_LIST.includes(lang as LANGUAGE_LIST)) ??
-        (['en-US', 'ko-KR'] as LANGUAGE_LIST[]);
-
       accountId = await tx
         .insert(Accounts)
         .values({
@@ -68,7 +60,7 @@ export const GET = async ({ cookies, url, request }) => {
           providerAccountId: userInfo.sub,
           name: userInfo.name,
           providerSessionToken: accessToken,
-          languages: acceptLanguage,
+          languages: getLanguagesByAcceptLanguageHeader(request.headers.get('Accept-Language')),
         })
         .returning({
           id: Accounts.id,

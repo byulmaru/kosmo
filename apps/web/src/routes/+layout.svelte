@@ -1,9 +1,8 @@
 <script lang="ts">
-  import { setLanguages } from '$lib/i18n.svelte';
-  const { children, data } = $props();
   import '../app.css';
+  import { setLanguages } from '$lib/i18n.svelte';
 
-  setLanguages(data.languages);
+  const { children } = $props();
 </script>
 
 {@render children()}

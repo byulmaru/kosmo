@@ -5,6 +5,7 @@ import { createDbId, TableCode } from './id';
 import * as E from './enums';
 import { AccountState, ProfileState } from '../../enums';
 import type { Scope } from '../../types/scope';
+import type { LANGUAGE_LIST } from '../../i18n';
 
 export const Accounts = pgTable(
   'accounts',
@@ -16,7 +17,7 @@ export const Accounts = pgTable(
     providerSessionToken: varchar('provider_session_token').notNull(),
     name: varchar('name').notNull(),
     state: E.AccountState('state').notNull().default(AccountState.ACTIVE),
-    languages: json('languages').$type<string[]>().notNull().default(['ko-KR', 'en-US']),
+    languages: json('languages').$type<LANGUAGE_LIST[]>().notNull().default(['ko-KR', 'en-US']),
     createdAt: datetime('created_at')
       .notNull()
       .default(sql`now()`),

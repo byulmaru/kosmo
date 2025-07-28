@@ -106,6 +106,7 @@ type Profile implements Node {
 }
 
 type Query {
+  languages: [String!]!
   me: Account
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!

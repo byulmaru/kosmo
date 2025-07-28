@@ -13,6 +13,23 @@ const languages: Record<string, LanguageData> = {
   'ko-KR': ko_KR,
 } satisfies Record<LANGUAGE_LIST, LanguageData>;
 
+export const getLanguagesByAcceptLanguageHeader = (header: string | null | undefined) => {
+  const languages =
+    (header
+      ?.split(',')
+      .map((lang: string) => lang.split(';', 1)[0].trim())
+      .filter((lang) => LANGUAGE_LIST.includes(lang as LANGUAGE_LIST)) as LANGUAGE_LIST[]) ?? [];
+
+  if (!languages.includes('en-US')) {
+    languages.push('en-US');
+  }
+  if (!languages.includes('ko-KR')) {
+    languages.push('ko-KR');
+  }
+
+  return languages;
+};
+
 type GetStringArgs = {
   locales: string[];
   key: string;
@@ -20,7 +37,7 @@ type GetStringArgs = {
 };
 
 export const getString = ({ locales, key, args }: GetStringArgs) => {
-  for (const locale of [...locales]) {
+  for (const locale of locales) {
     const currentLanguage = languages[locale];
     if (!currentLanguage) {
       continue;

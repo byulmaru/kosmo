@@ -1,15 +1,20 @@
 <script lang="ts">
   import { graphql } from '$graphql';
   import { SidebarProvider, SidebarTrigger } from '$lib/components/ui/sidebar';
+  import { setLanguages } from '$lib/i18n.svelte';
   import AppSidebar from './AppSidebar.svelte';
 
   const { children } = $props();
 
   const query = graphql(`
     query MainLayout_Query {
+      languages
+
       ...MainLayout_Sidebar_query
     }
   `);
+
+  setLanguages($query.languages);
 </script>
 
 <SidebarProvider>
