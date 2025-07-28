@@ -1,15 +1,17 @@
 import { getString } from '@kosmo/shared/i18n';
+import { writable } from 'svelte/store';
 
-let languages = $state<string[]>([]);
+const makeI18n = (locales: string[]) => {
+  return (key: string, args: Record<string, string> = {}) =>
+    getString({
+      locales,
+      key,
+      args,
+    });
+};
+
+export const i18n = writable((key: string, args: Record<string, string> = {}) => key);
 
 export function setLanguages(langs: string[]) {
-  languages = langs;
-}
-
-export function i18n(key: string, args: Record<string, string> = {}) {
-  return getString({
-    locales: languages,
-    key,
-    args,
-  });
+  i18n.set(makeI18n(langs));
 }
