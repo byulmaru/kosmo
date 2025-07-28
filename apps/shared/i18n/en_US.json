@@ -1,0 +1,22 @@
+{
+  "error": {
+    "common": {
+      "conflict": "Cannot perform this action.",
+      "forbidden": "Forbidden.",
+      "limitExceeded": "Limit exceeded.",
+      "notFound": "Not found."
+    },
+    "handle": {
+      "min": "Handle must be at least 3 characters.",
+      "max": "Handle must be at most 30 characters.",
+      "regex": "Handle must only contain letters, numbers, and hyphens.",
+      "startsOrEndsWith": "Handle cannot start or end with a hyphen.",
+      "notAllowed": "Cannot use this handle.",
+      "conflict": "This handle is already in use."
+    },
+    "profile": {
+      "limitExceeded": "Profile limit exceeded.",
+      "notFound": "Profile not found."
+    }
+  }
+}

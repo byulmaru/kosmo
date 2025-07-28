@@ -1,5 +1,6 @@
 type Account implements Node {
   id: ID!
+  languages: [String!]!
   name: String!
   profileCount: Count!
   profiles: [Profile!]!

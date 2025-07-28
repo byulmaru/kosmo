@@ -14,8 +14,9 @@ import { redirect } from '@sveltejs/kit';
 import { and, asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import * as byulmaruId from '$lib/server/external/byulmaru-id';
+import { LANGUAGE_LIST } from '@kosmo/shared/i18n';
 
-export const GET = async ({ cookies, url }) => {
+export const GET = async ({ cookies, url, request }) => {
   const { code, state } = z
     .object({
       code: z.string(),
@@ -52,6 +53,14 @@ export const GET = async ({ cookies, url }) => {
         })
         .where(eq(Accounts.id, accountId));
     } else {
+      const acceptLanguage =
+        request.headers
+          .get('Accept-Language')
+          ?.split(',')
+          .map((lang: string) => lang.split(';', 1)[0].trim())
+          .filter((lang) => LANGUAGE_LIST.includes(lang as LANGUAGE_LIST)) ??
+        (['en-US', 'ko-KR'] as LANGUAGE_LIST[]);
+
       accountId = await tx
         .insert(Accounts)
         .values({
@@ -59,6 +68,7 @@ export const GET = async ({ cookies, url }) => {
           providerAccountId: userInfo.sub,
           name: userInfo.name,
           providerSessionToken: accessToken,
+          languages: acceptLanguage,
         })
         .returning({
           id: Accounts.id,
@@ -76,7 +86,12 @@ export const GET = async ({ cookies, url }) => {
         applicationId: 'APPL0WEB',
         scopes: ['$superapp'],
       })
-      .onConflictDoNothing()
+      .onConflictDoUpdate({
+        target: [ApplicationGrants.accountId, ApplicationGrants.applicationId],
+        set: {
+          scopes: ['$superapp'],
+        },
+      })
       .returning({
         id: ApplicationGrants.id,
       })

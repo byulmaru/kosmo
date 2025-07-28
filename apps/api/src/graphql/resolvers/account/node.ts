@@ -16,6 +16,7 @@ builder.node(Account, {
 
   fields: (t) => ({
     name: t.exposeString('name'),
+    languages: t.exposeStringList('languages'),
   }),
 });
 

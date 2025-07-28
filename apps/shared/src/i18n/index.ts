@@ -1,12 +1,17 @@
+import en_US from '../../i18n/en_US.json';
 import ko_KR from '../../i18n/ko_KR.json';
 
 interface LanguageData {
   [key: string]: LanguageData | string;
 }
 
+export const LANGUAGE_LIST = ['en-US', 'ko-KR'] as const;
+export type LANGUAGE_LIST = (typeof LANGUAGE_LIST)[number];
+
 const languages: Record<string, LanguageData> = {
+  'en-US': en_US,
   'ko-KR': ko_KR,
-};
+} satisfies Record<LANGUAGE_LIST, LanguageData>;
 
 type GetStringArgs = {
   locales: string[];
@@ -34,7 +39,7 @@ export const getString = ({ locales, key, args }: GetStringArgs) => {
     }
 
     if (typeof value === 'string') {
-      return value;
+      return parseString({ str: value, args });
     }
   }
 
@@ -46,7 +51,7 @@ type ParseStringArgs = {
   args?: Record<string, string>;
 };
 
-export const parseString = ({ str, args }: ParseStringArgs) => {
+const parseString = ({ str, args }: ParseStringArgs) => {
   const compiledTemplate = compileTemplate(str);
 
   return compiledTemplate.reduce((acc, part) => {
@@ -78,7 +83,7 @@ type TemplatePart =
       }[];
     };
 
-export const compileTemplate = (template: string): TemplatePart[] => {
+const compileTemplate = (template: string): TemplatePart[] => {
   const parts: TemplatePart[] = [];
   const regex = /\\([{}])|(?:{([^{}]+?)})/g;
   let lastIndex = 0;
