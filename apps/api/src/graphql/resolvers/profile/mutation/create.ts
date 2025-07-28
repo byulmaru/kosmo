@@ -52,7 +52,7 @@ builder.mutationField('createProfile', (t) =>
 
       if (handleConflictedProfile) {
         throw new ValidationError({
-          path: ['input', 'handle'],
+          path: 'input.handle',
           message: 'error.handle.conflict',
         });
       }

@@ -1,6 +1,12 @@
 import tlds from 'tlds';
 import z from 'zod';
 
+export const stringifyPath = (path: (string | number)[]) =>
+  path
+    .map((p) => (typeof p === 'string' ? `.${p}` : `[${p}]`))
+    .join('')
+    .slice(1);
+
 export const handle = z
   .string()
   .min(3, 'error.handle.min')

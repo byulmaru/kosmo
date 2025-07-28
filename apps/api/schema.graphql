@@ -51,11 +51,8 @@ interface Error {
 
 interface FieldError implements Error {
   message: String!
-  path: [FieldPath!]
+  path: String
 }
-
-"""String or Int"""
-scalar FieldPath
 
 input FollowProfileInput {
   actorProfileId: String
@@ -140,5 +137,5 @@ type UseProfileSuccess {
 
 type ValidationError implements Error & FieldError {
   message: String!
-  path: [FieldPath!]
+  path: String
 }

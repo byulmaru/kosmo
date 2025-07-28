@@ -18,6 +18,6 @@ builder.interfaceType(FieldError, {
   name: 'FieldError',
   interfaces: [Error],
   fields: (t) => ({
-    path: t.expose('path', { type: ['FieldPath'], nullable: true }),
+    path: t.exposeString('path', { nullable: true }),
   }),
 });

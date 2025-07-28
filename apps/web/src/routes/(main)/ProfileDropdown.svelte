@@ -9,7 +9,7 @@
   import Form from '$lib/components/form/Form.svelte';
   import InputField from '$lib/components/form/InputField.svelte';
   import SubmitButton from '$lib/components/form/SubmitButton.svelte';
-  import { createForm } from '$lib/form.svelte';
+  import { createForm, FormValidationError } from '$lib/form.svelte';
 
   const {
     $query: _query,
@@ -42,9 +42,20 @@
   const createProfile = graphql(`
     mutation MainLayout_ProfileDropdown_createProfile($input: CreateProfileInput!) {
       createProfile(input: $input) {
-        id
-        displayName
-        handle
+        __typename
+
+        ... on CreateProfileSuccess {
+          profile {
+            id
+            displayName
+            handle
+          }
+        }
+
+        ... on FieldError {
+          path
+          message
+        }
       }
     }
   `);
@@ -52,7 +63,15 @@
   const useProfile = graphql(`
     mutation MainLayout_ProfileDropdown_useProfile($input: UseProfileInput!) {
       useProfile(input: $input) {
-        id
+        __typename
+
+        ... on UseProfileSuccess {
+          profile {
+            id
+            displayName
+            handle
+          }
+        }
       }
     }
   `);
@@ -61,18 +80,18 @@
     handle: validationSchema.handle,
   });
 
-  // const superform = createSuperForm({
-  //   schema: createProfileSchema,
-  //   onSubmit: async (data) => {
-  //     await createProfile({ handle: data.handle, useCreatedProfile: true });
-  //     location.reload();
-  //   },
-  // });
-
   const form = createForm({
     schema: createProfileSchema,
     onSubmit: async (data) => {
-      await createProfile({ handle: data.handle, useCreatedProfile: true });
+      const result = await createProfile({ handle: data.handle, useCreatedProfile: true });
+
+      if ('path' in result) {
+        throw new FormValidationError({
+          path: result.path,
+          message: result.message,
+        });
+      }
+
       onProfileChange();
     },
   });

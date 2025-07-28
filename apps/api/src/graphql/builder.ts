@@ -1,3 +1,4 @@
+import { stringifyPath } from '@kosmo/shared/validation';
 import SchemaBuilder from '@pothos/core';
 import DataLoaderPlugin from '@pothos/plugin-dataloader';
 import ErrorsPlugin from '@pothos/plugin-errors';
@@ -35,7 +36,6 @@ export const builder = new SchemaBuilder<{
     ID: { Input: string; Output: string };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     JSON: { Input: any; Output: unknown };
-    FieldPath: { Input: string | number; Output: string | number };
   };
 }>({
   defaultInputFieldRequiredness: true,
@@ -80,7 +80,10 @@ export const builder = new SchemaBuilder<{
 
   zod: {
     validationError: (error) =>
-      new ValidationError({ path: error.issues[0].path, message: error.issues[0].message }),
+      new ValidationError({
+        path: stringifyPath(error.issues[0].path),
+        message: error.issues[0].message,
+      }),
   },
 
   relay: {
@@ -131,18 +134,6 @@ builder.scalarType('Timestamp', {
     throw new Error('Invalid datetime value');
   },
   description: 'Unix timestamp in milliseconds',
-});
-
-builder.scalarType('FieldPath', {
-  serialize: (value) => value,
-  parseValue: (value) => {
-    if (typeof value === 'string' || typeof value === 'number') {
-      return value;
-    }
-
-    throw new Error('Invalid field value');
-  },
-  description: 'String or Int',
 });
 
 export type Builder = typeof builder;

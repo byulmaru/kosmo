@@ -2,13 +2,16 @@ import type { ZodSchema, ZodTypeDef } from 'zod';
 import type { Action } from 'svelte/action';
 import { z } from 'zod';
 import { i18n } from './i18n.svelte';
+import { stringifyPath } from '@kosmo/shared/validation';
 
-const stringifyName = (path: (string | number)[]) => {
-  return path
-    .map((p) => (typeof p === 'number' ? `[${p}]` : `.${p}`))
-    .join('')
-    .slice(1);
-};
+export class FormValidationError extends Error {
+  path: string | null;
+
+  constructor({ path, message }: { path?: string | undefined | null; message: string }) {
+    super(message);
+    this.path = path ? path.split('input.', 2)[1] : null;
+  }
+}
 
 type CreateFormParams<
   Input extends Record<string, unknown>,
@@ -39,7 +42,7 @@ export const createForm = <
 
         if (!parsed.success) {
           for (const issue of parsed.error.issues) {
-            const name = stringifyName(issue.path);
+            const name = stringifyPath(issue.path);
             inputIssues[name] ??= [];
             inputIssues[name].push(issue.message);
           }
@@ -75,14 +78,14 @@ export const createForm = <
           if (onSubmit) {
             onSubmit(parsed)
               .catch((error) => {
-                if (error.extensions?.field) {
-                  const inputNode = node.querySelector(`[name="${error.extensions.field}"]`);
+                if (error instanceof FormValidationError) {
+                  const inputNode = node.querySelector(`[name="${error.path}"]`);
                   if (
                     inputNode instanceof HTMLInputElement ||
                     inputNode instanceof HTMLSelectElement ||
                     inputNode instanceof HTMLTextAreaElement
                   ) {
-                    inputNode.setCustomValidity(i18n(error.extensions.message));
+                    inputNode.setCustomValidity(i18n(error.message));
                     inputNode.reportValidity();
                     return;
                   }

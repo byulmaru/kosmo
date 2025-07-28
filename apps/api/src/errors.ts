@@ -1,16 +1,16 @@
 import { GraphQLError } from 'graphql';
 
 type FieldErrorParams = {
-  path?: (string | number)[] | null;
+  path?: string | null;
   message: string;
 };
 
 export class FieldError extends Error {
-  path: (string | number)[] | null;
+  path: string | null;
 
   constructor({ path, message }: FieldErrorParams) {
     super(message);
-    this.path = path?.length && path.length > 0 ? path : null;
+    this.path = path ?? null;
   }
 }
 

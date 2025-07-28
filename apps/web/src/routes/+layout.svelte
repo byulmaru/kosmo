@@ -4,7 +4,6 @@
   import '../app.css';
 
   setLanguages(data.languages);
-  console.log(data.languages);
 </script>
 
 {@render children()}
