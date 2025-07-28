@@ -7,42 +7,42 @@ import {
   Profiles,
 } from '@kosmo/shared/db';
 import { ProfileState } from '@kosmo/shared/enums';
-import { and, asc, count, eq, getTableColumns } from 'drizzle-orm';
+import { and, asc, count, eq, getTableColumns, isNull, or } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Account, Count, Profile } from '@/graphql/objects';
 
 builder.objectFields(Account, (t) => ({
   profiles: t.withAuth({ session: true }).field({
     type: [Profile],
-    resolve: async (account) => {
-      const profileIds = await db
-        .select({
-          id: ApplicationGrantProfiles.profileId,
-        })
-        .from(ApplicationGrants)
+    resolve: async (account, _, ctx) => {
+      return await db
+        .select(getTableColumns(Profiles))
+        .from(ProfileAccounts)
+        .innerJoin(
+          ApplicationGrants,
+          and(
+            eq(ProfileAccounts.accountId, ApplicationGrants.accountId),
+            eq(ApplicationGrants.applicationId, ctx.session.applicationId),
+          ),
+        )
         .innerJoin(
           ApplicationGrantProfiles,
           eq(ApplicationGrants.id, ApplicationGrantProfiles.applicationGrantId),
         )
-        .innerJoin(Profiles, eq(ApplicationGrantProfiles.profileId, Profiles.id))
-        .where(
-          and(eq(ApplicationGrants.accountId, account.id), eq(Profiles.state, ProfileState.ACTIVE)),
+        .innerJoin(
+          Profiles,
+          or(
+            eq(ApplicationGrantProfiles.profileId, Profiles.id),
+            and(
+              isNull(ApplicationGrantProfiles.profileId),
+              eq(ProfileAccounts.profileId, Profiles.id),
+            ),
+          ),
         )
-        .orderBy(asc(ApplicationGrantProfiles.profileId))
-        .then((rows) => rows.map((row) => row.id));
-
-      if (profileIds.includes(null)) {
-        return await db
-          .select(getTableColumns(Profiles))
-          .from(Profiles)
-          .innerJoin(ProfileAccounts, eq(Profiles.id, ProfileAccounts.profileId))
-          .where(
-            and(eq(ProfileAccounts.accountId, account.id), eq(Profiles.state, ProfileState.ACTIVE)),
-          )
-          .orderBy(asc(Profiles.id));
-      } else {
-        return profileIds as string[];
-      }
+        .where(
+          and(eq(ProfileAccounts.accountId, account.id), eq(Profiles.state, ProfileState.ACTIVE)),
+        )
+        .orderBy(asc(Profiles.id));
     },
   }),
 
