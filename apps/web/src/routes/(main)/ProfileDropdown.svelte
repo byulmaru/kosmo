@@ -10,6 +10,8 @@
   import InputField from '$lib/components/form/InputField.svelte';
   import SubmitButton from '$lib/components/form/SubmitButton.svelte';
   import { createForm, FormValidationError } from '$lib/form.svelte';
+  import { writable } from 'svelte/store';
+  import type { StoreType } from '$lib/store';
 
   const {
     $query: _query,
@@ -20,6 +22,16 @@
     _query,
     graphql(`
       fragment MainLayout_ProfileDropdown_query on Query {
+        me {
+          id
+
+          profiles {
+            id
+            displayName
+            handle
+          }
+        }
+
         usingProfile {
           id
           displayName
@@ -29,17 +41,11 @@
     `),
   );
 
-  const myProfilesQuery = graphql(`
-    query MainLayout_ProfileDropdown_myProfiles @client {
-      me {
-        profiles {
-          id
-          displayName
-          handle
-        }
-      }
-    }
-  `);
+  const usingProfile = writable<StoreType<typeof query>['usingProfile']>();
+
+  query.subscribe((data) => {
+    $usingProfile = data.usingProfile;
+  });
 
   const createProfile = graphql(`
     mutation MainLayout_ProfileDropdown_createProfile($input: CreateProfileInput!) {
@@ -87,14 +93,16 @@
     onSubmit: async (data) => {
       const result = await createProfile({ handle: data.handle, useCreatedProfile: true });
 
-      if (result.__typename === 'ValidationError') {
+      if (result.__typename === 'CreateProfileSuccess') {
+        createProfileDialogOpen = false;
+        $usingProfile = result.profile;
+        onProfileChange();
+      } else if (result.__typename === 'ValidationError') {
         throw new FormValidationError({
           path: result.path,
           message: result.message,
         });
       }
-
-      onProfileChange();
     },
   });
 
@@ -109,33 +117,29 @@
         <span class="text-sm">👤</span>
       </div>
       <div class="grid flex-1 text-left text-sm leading-tight">
-        <span class="truncate font-semibold">{$query.usingProfile?.displayName}</span>
-        <span class="truncate text-xs">{$query.usingProfile?.handle}</span>
+        <span class="truncate font-semibold">{$usingProfile?.displayName}</span>
+        <span class="truncate text-xs">{$usingProfile?.handle}</span>
       </div>
       <span class="ml-auto">⋯</span>
     </SidebarMenuButton>
   </DropdownMenu.Trigger>
   <DropdownMenu.Content class="w-60">
     <DropdownMenu.Group>
-      {#await myProfilesQuery.load()}
-        <DropdownMenu.Item disabled>로딩중...</DropdownMenu.Item>
-      {:then data}
-        {#each data.me?.profiles ?? [] as profile (profile.id)}
-          <DropdownMenu.Item
-            onclick={async () => {
-              if ($query.usingProfile?.id !== profile.id) {
-                $query.usingProfile = profile;
-                await useProfile({ profileId: profile.id });
-                onProfileChange();
-              }
-            }}
-          >
-            👤 {profile.displayName}
-          </DropdownMenu.Item>
-        {:else}
-          <DropdownMenu.Item disabled>프로필이 없어요</DropdownMenu.Item>
-        {/each}
-      {/await}
+      {#each $query.me?.profiles ?? [] as profile (profile.id)}
+        <DropdownMenu.Item
+          onclick={async () => {
+            if ($usingProfile?.id !== profile.id) {
+              $usingProfile = profile;
+              await useProfile({ profileId: profile.id });
+              onProfileChange();
+            }
+          }}
+        >
+          👤 {profile.displayName}
+        </DropdownMenu.Item>
+      {:else}
+        <DropdownMenu.Item disabled>프로필이 없어요</DropdownMenu.Item>
+      {/each}
     </DropdownMenu.Group>
     <DropdownMenu.Separator />
     <DropdownMenu.Item onclick={() => (createProfileDialogOpen = true)}>

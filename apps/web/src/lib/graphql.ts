@@ -3,9 +3,7 @@ import { cacheExchange, createClient, errorExchange, fetchExchange } from '@typi
 // eslint-disable-next-line import/no-default-export
 export default createClient({
   url: '/graphql',
-  fetchOptions: {
-    
-  },
+  fetchOptions: {},
   exchanges: [
     errorExchange((err) => {
       return err;
