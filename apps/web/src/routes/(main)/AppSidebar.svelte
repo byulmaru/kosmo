@@ -14,10 +14,7 @@
   import type { MainLayout_Sidebar_query } from '$graphql';
   import ProfileDropdown from './ProfileDropdown.svelte';
 
-  const {
-    $query: _query,
-    onProfileChange,
-  }: { $query: MainLayout_Sidebar_query; onProfileChange: () => void } = $props();
+  const { $query: _query }: { $query: MainLayout_Sidebar_query } = $props();
 
   const query = fragment(
     _query,
@@ -33,7 +30,7 @@
   <SidebarHeader>
     <SidebarMenu>
       <SidebarMenuItem>
-        <ProfileDropdown {$query} {onProfileChange} />
+        <ProfileDropdown {$query} />
       </SidebarMenuItem>
     </SidebarMenu>
   </SidebarHeader>

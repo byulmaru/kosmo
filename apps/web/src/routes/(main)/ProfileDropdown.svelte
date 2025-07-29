@@ -10,13 +10,8 @@
   import InputField from '$lib/components/form/InputField.svelte';
   import SubmitButton from '$lib/components/form/SubmitButton.svelte';
   import { createForm, FormValidationError } from '$lib/form.svelte';
-  import { writable } from 'svelte/store';
-  import type { StoreType } from '$lib/store';
 
-  const {
-    $query: _query,
-    onProfileChange,
-  }: { $query: MainLayout_ProfileDropdown_query; onProfileChange: () => void } = $props();
+  const { $query: _query }: { $query: MainLayout_ProfileDropdown_query } = $props();
 
   const query = fragment(
     _query,
@@ -40,12 +35,6 @@
       }
     `),
   );
-
-  const usingProfile = writable<StoreType<typeof query>['usingProfile']>();
-
-  query.subscribe((data) => {
-    $usingProfile = data.usingProfile;
-  });
 
   const createProfile = graphql(`
     mutation MainLayout_ProfileDropdown_createProfile($input: CreateProfileInput!) {
@@ -94,9 +83,7 @@
       const result = await createProfile({ handle: data.handle, useCreatedProfile: true });
 
       if (result.__typename === 'CreateProfileSuccess') {
-        createProfileDialogOpen = false;
-        $usingProfile = result.profile;
-        onProfileChange();
+        location.reload();
       } else if (result.__typename === 'ValidationError') {
         throw new FormValidationError({
           path: result.path,
@@ -117,8 +104,8 @@
         <span class="text-sm">👤</span>
       </div>
       <div class="grid flex-1 text-left text-sm leading-tight">
-        <span class="truncate font-semibold">{$usingProfile?.displayName}</span>
-        <span class="truncate text-xs">{$usingProfile?.handle}</span>
+        <span class="truncate font-semibold">{$query.usingProfile?.displayName}</span>
+        <span class="truncate text-xs">{$query.usingProfile?.handle}</span>
       </div>
       <span class="ml-auto">⋯</span>
     </SidebarMenuButton>
@@ -128,10 +115,9 @@
       {#each $query.me?.profiles ?? [] as profile (profile.id)}
         <DropdownMenu.Item
           onclick={async () => {
-            if ($usingProfile?.id !== profile.id) {
-              $usingProfile = profile;
+            if ($query.usingProfile?.id !== profile.id) {
               await useProfile({ profileId: profile.id });
-              onProfileChange();
+              location.reload();
             }
           }}
         >
