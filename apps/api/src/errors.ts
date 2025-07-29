@@ -1,28 +1,39 @@
 import { GraphQLError } from 'graphql';
 
+export class TypedError extends Error {
+  code: string;
+  args?: Record<string, string>;
+
+  constructor(code: string, args?: Record<string, string>) {
+    super(code, args);
+    this.code = code;
+    this.args = args;
+  }
+}
+
 type FieldErrorParams = {
   path?: string | null;
-  message: string;
+  code: string;
 };
 
-export class FieldError extends Error {
+export class FieldError extends TypedError {
   path: string | null;
 
-  constructor({ path, message }: FieldErrorParams) {
-    super(message);
+  constructor({ path, code }: FieldErrorParams) {
+    super(code);
     this.path = path ?? null;
   }
 }
 
 export class ValidationError extends FieldError {
-  constructor({ path, message }: FieldErrorParams) {
-    super({ path, message });
+  constructor({ path, code }: FieldErrorParams) {
+    super({ path, code });
   }
 }
 
-export class NotFoundError extends Error {
-  constructor({ message = 'error.common.notFound' }: { message?: string } = {}) {
-    super(message);
+export class NotFoundError extends TypedError {
+  constructor({ code = 'error.common.notFound' }: { code?: string } = {}) {
+    super(code);
   }
 }
 
@@ -34,39 +45,31 @@ export class UnauthorizedError extends GraphQLError {
   }
 }
 
-export class ForbiddenError extends Error {
-  constructor({ message = 'error.common.forbidden' }: { message?: string } = {}) {
-    super(message);
+export class ForbiddenError extends TypedError {
+  constructor({ code = 'error.common.forbidden' }: { code?: string } = {}) {
+    super(code);
   }
 }
 
 type LimitExceededErrorParams = {
   object: string;
   limit: number;
-  message?: string;
+  code?: string;
 };
 
-export class LimitExceededError extends Error {
+export class LimitExceededError extends TypedError {
   object: string;
   limit: number;
 
-  constructor({ object, limit, message = 'error.common.limitExceeded' }: LimitExceededErrorParams) {
-    super(message);
+  constructor({ object, limit, code = 'error.common.limitExceeded' }: LimitExceededErrorParams) {
+    super(code);
     this.object = object;
     this.limit = limit;
   }
 }
 
-type ConflictErrorParams = {
-  field: string;
-  message?: string;
-};
-
-export class ConflictError extends Error {
-  field: string;
-
-  constructor({ field, message = 'error.common.conflict' }: ConflictErrorParams) {
-    super(message);
-    this.field = field;
+export class ConflictError extends FieldError {
+  constructor({ path, code = 'error.common.conflict' }: FieldErrorParams) {
+    super({ path, code });
   }
 }

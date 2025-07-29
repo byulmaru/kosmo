@@ -20,16 +20,6 @@
     _query,
     graphql(`
       fragment MainLayout_ProfileDropdown_query on Query {
-        me {
-          id
-
-          profiles {
-            id
-            displayName
-            handle
-          }
-        }
-
         usingProfile {
           id
           displayName
@@ -38,6 +28,18 @@
       }
     `),
   );
+
+  const myProfilesQuery = graphql(`
+    query MainLayout_ProfileDropdown_myProfiles @client {
+      me {
+        profiles {
+          id
+          displayName
+          handle
+        }
+      }
+    }
+  `);
 
   const createProfile = graphql(`
     mutation MainLayout_ProfileDropdown_createProfile($input: CreateProfileInput!) {
@@ -85,7 +87,7 @@
     onSubmit: async (data) => {
       const result = await createProfile({ handle: data.handle, useCreatedProfile: true });
 
-      if ('path' in result) {
+      if (result.__typename === 'ValidationError') {
         throw new FormValidationError({
           path: result.path,
           message: result.message,
@@ -113,23 +115,27 @@
       <span class="ml-auto">⋯</span>
     </SidebarMenuButton>
   </DropdownMenu.Trigger>
-  <DropdownMenu.Content class="w-56">
+  <DropdownMenu.Content class="w-60">
     <DropdownMenu.Group>
-      {#each $query.me?.profiles ?? [] as profile (profile.id)}
-        <DropdownMenu.Item
-          onclick={async () => {
-            console.log($query.usingProfile?.id, profile.id);
-            if ($query.usingProfile?.id !== profile.id) {
-              await useProfile({ profileId: profile.id });
-              onProfileChange();
-            }
-          }}
-        >
-          👤 {profile.displayName}
-        </DropdownMenu.Item>
-      {:else}
-        <DropdownMenu.Item disabled>프로필이 없어요</DropdownMenu.Item>
-      {/each}
+      {#await myProfilesQuery.load()}
+        <DropdownMenu.Item disabled>로딩중...</DropdownMenu.Item>
+      {:then data}
+        {#each data.me?.profiles ?? [] as profile (profile.id)}
+          <DropdownMenu.Item
+            onclick={async () => {
+              if ($query.usingProfile?.id !== profile.id) {
+                $query.usingProfile = profile;
+                await useProfile({ profileId: profile.id });
+                onProfileChange();
+              }
+            }}
+          >
+            👤 {profile.displayName}
+          </DropdownMenu.Item>
+        {:else}
+          <DropdownMenu.Item disabled>프로필이 없어요</DropdownMenu.Item>
+        {/each}
+      {/await}
     </DropdownMenu.Group>
     <DropdownMenu.Separator />
     <DropdownMenu.Item onclick={() => (createProfileDialogOpen = true)}>

@@ -4,19 +4,28 @@ import './limit-exceeded';
 import './not-found';
 import './validation';
 
-import { FieldError } from '@/errors';
+import { getString } from '@kosmo/shared/i18n';
+import { FieldError, TypedError } from '@/errors';
 import { builder } from '@/graphql/builder';
 
-builder.interfaceType(Error, {
+builder.interfaceType(TypedError, {
   name: 'Error',
   fields: (t) => ({
-    message: t.exposeString('message'),
+    code: t.exposeString('code'),
+    message: t.string({
+      resolve: (error, _, ctx) =>
+        getString({
+          locales: ctx.languages,
+          key: error.code,
+          args: error.args,
+        }),
+    }),
   }),
 });
 
 builder.interfaceType(FieldError, {
   name: 'FieldError',
-  interfaces: [Error],
+  interfaces: [TypedError],
   fields: (t) => ({
     path: t.exposeString('path', { nullable: true }),
   }),

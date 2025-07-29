@@ -82,7 +82,7 @@ export const builder = new SchemaBuilder<{
     validationError: (error) =>
       new ValidationError({
         path: stringifyPath(error.issues[0].path),
-        message: error.issues[0].message,
+        code: error.issues[0].message,
       }),
   },
 

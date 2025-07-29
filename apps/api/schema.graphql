@@ -15,6 +15,7 @@ enum AccountState {
 scalar Binary
 
 type ConflictError implements Error {
+  code: String!
   message: String!
 }
 
@@ -47,10 +48,12 @@ type DeleteProfileSuccess {
 }
 
 interface Error {
+  code: String!
   message: String!
 }
 
 interface FieldError implements Error {
+  code: String!
   message: String!
   path: String
 }
@@ -67,6 +70,7 @@ type FollowProfileSuccess {
 }
 
 type ForbiddenError implements Error {
+  code: String!
   message: String!
 }
 
@@ -76,6 +80,7 @@ The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://
 scalar JSON
 
 type LimitExceededError implements Error {
+  code: String!
   limit: Int!
   message: String!
   object: String!
@@ -94,6 +99,7 @@ interface Node {
 }
 
 type NotFoundError implements Error {
+  code: String!
   message: String!
 }
 
@@ -138,6 +144,7 @@ type UseProfileSuccess {
 }
 
 type ValidationError implements Error & FieldError {
+  code: String!
   message: String!
   path: String
 }

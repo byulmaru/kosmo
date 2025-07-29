@@ -42,7 +42,7 @@ builder.mutationField('createProfile', (t) =>
         throw new LimitExceededError({
           object: 'Profile',
           limit: MAX_PROFILE_COUNT,
-          message: 'error.profile.limitExceeded',
+          code: 'error.profile.limitExceeded',
         });
       }
 
@@ -55,7 +55,7 @@ builder.mutationField('createProfile', (t) =>
       if (handleConflictedProfile) {
         throw new ValidationError({
           path: 'input.handle',
-          message: 'error.handle.conflict',
+          code: 'error.handle.conflict',
         });
       }
 

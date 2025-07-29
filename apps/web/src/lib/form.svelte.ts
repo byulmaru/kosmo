@@ -1,7 +1,6 @@
 import type { ZodSchema, ZodTypeDef } from 'zod';
 import type { Action } from 'svelte/action';
 import { z } from 'zod';
-import { i18n } from './i18n.svelte';
 import { stringifyPath } from '@kosmo/shared/validation';
 
 export class FormValidationError extends Error {
@@ -53,9 +52,7 @@ export const createForm = <
         >('input, select, textarea')) {
           const name = inputNode.name;
 
-          inputNode.setCustomValidity(
-            inputIssues[name] ? inputIssues[name].map((error) => i18n(error)).join('\n') : '',
-          );
+          inputNode.setCustomValidity(inputIssues[name]?.join('\n') ?? '');
         }
 
         node.reportValidity();
@@ -85,7 +82,7 @@ export const createForm = <
                     inputNode instanceof HTMLSelectElement ||
                     inputNode instanceof HTMLTextAreaElement
                   ) {
-                    inputNode.setCustomValidity(i18n(error.message));
+                    inputNode.setCustomValidity(error.message);
                     inputNode.reportValidity();
                     return;
                   }
