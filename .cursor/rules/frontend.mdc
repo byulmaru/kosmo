@@ -5,3 +5,4 @@ alwaysApply: false
 ---
 - shadcn-svelte를 사용. 커맨드라인에서 `pnpm dlx shadcn-svelte@latest ~~` 명령어로
 - 반드시 Svelte 5, Tailwind v4 사용
+- GraphQL API의 명세는 schema.graphql을 참고할 것

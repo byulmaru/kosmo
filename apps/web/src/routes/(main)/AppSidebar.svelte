@@ -1,18 +1,9 @@
 <script lang="ts">
   import { fragment, graphql } from '$graphql';
-  import {
-    Sidebar,
-    SidebarContent,
-    SidebarGroup,
-    SidebarGroupContent,
-    SidebarHeader,
-    SidebarMenu,
-    SidebarMenuButton,
-    SidebarMenuItem,
-    SidebarRail,
-  } from '$lib/components/ui/sidebar/index';
   import type { MainLayout_Sidebar_query } from '$graphql';
+  import { Bell, Bookmark, Hash, Home, Mail, User } from '@lucide/svelte';
   import ProfileDropdown from './ProfileDropdown.svelte';
+  import AppSidebarMenuButton from './AppSidebarMenuButton.svelte';
 
   const { $query: _query }: { $query: MainLayout_Sidebar_query } = $props();
 
@@ -20,71 +11,37 @@
     _query,
     graphql(`
       fragment MainLayout_Sidebar_query on Query {
+        usingProfile {
+          id
+          handle
+        }
+
         ...MainLayout_ProfileDropdown_query
       }
     `),
   );
 </script>
 
-<Sidebar collapsible="icon">
-  <SidebarHeader>
-    <SidebarMenu>
-      <SidebarMenuItem>
-        <ProfileDropdown {$query} />
-      </SidebarMenuItem>
-    </SidebarMenu>
-  </SidebarHeader>
-
-  <SidebarContent>
-    <SidebarGroup>
-      <SidebarGroupContent>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <a href="/">
-              <SidebarMenuButton tooltipContent="홈">
-                <span>홈</span>
-              </SidebarMenuButton>
-            </a>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <a href="/explore">
-              <SidebarMenuButton tooltipContent="탐색">
-                <span>탐색</span>
-              </SidebarMenuButton>
-            </a>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <a href="/notifications">
-              <SidebarMenuButton tooltipContent="알림">
-                <span>알림</span>
-              </SidebarMenuButton>
-            </a>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <a href="/messages">
-              <SidebarMenuButton tooltipContent="메시지">
-                <span>메시지</span>
-              </SidebarMenuButton>
-            </a>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <a href="/bookmarks">
-              <SidebarMenuButton tooltipContent="북마크">
-                <span>북마크</span>
-              </SidebarMenuButton>
-            </a>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <a href="/profile">
-              <SidebarMenuButton tooltipContent="프로필">
-                <span>프로필</span>
-              </SidebarMenuButton>
-            </a>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarGroupContent>
-    </SidebarGroup>
-  </SidebarContent>
-
-  <SidebarRail />
-</Sidebar>
+<header class="hidden h-full w-18 sm:block lg:w-60">
+  <div class="fixed flex h-full w-18 flex-col lg:w-60">
+    <div
+      class="mb-4 flex items-center justify-center rounded-full text-2xl font-bold"
+    >
+      Kosmo
+    </div>
+    <nav class="flex flex-col">
+      <AppSidebarMenuButton href="/" icon={Home} label="홈" />
+      <AppSidebarMenuButton href="/explore" icon={Hash} label="탐색" />
+      <AppSidebarMenuButton href="/notifications" icon={Bell} label="알림" />
+      <AppSidebarMenuButton href="/messages" icon={Mail} label="메시지" />
+      <AppSidebarMenuButton href="/bookmarks" icon={Bookmark} label="북마크" />
+      {#if $query.usingProfile}
+        <AppSidebarMenuButton href={`/@${$query.usingProfile.handle}`} icon={User} label="프로필" />
+      {/if}
+    </nav>
+    <div class="flex-1"></div>
+    <div>
+      <ProfileDropdown {$query} />
+    </div>
+  </div>
+</header>
