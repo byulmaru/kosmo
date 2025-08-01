@@ -108,7 +108,21 @@ type Profile implements Node {
   displayName(fallback: Boolean! = true): String!
   handle: String!
   id: ID!
+  relationship: ProfileRelationship
+  state: ProfileState!
   url: String!
+}
+
+enum ProfileRelationship {
+  FOLLOWER
+  FOLLOWING
+  MUTUAL
+}
+
+enum ProfileState {
+  ACTIVE
+  DELETED
+  SUSPENDED
 }
 
 type Query {
@@ -116,6 +130,7 @@ type Query {
   me: Account
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
+  profile(handle: String, id: String): Profile
   usingProfile: Profile
 }
 

@@ -8,3 +8,5 @@ const createEnumRef = (name: keyof typeof E) => {
 };
 
 createEnumRef('AccountState');
+createEnumRef('ProfileState');
+createEnumRef('ProfileRelationship');

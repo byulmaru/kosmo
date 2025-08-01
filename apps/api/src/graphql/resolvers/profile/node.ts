@@ -1,3 +1,4 @@
+import { ProfileState } from '@kosmo/shared/enums';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
 
@@ -13,6 +14,7 @@ builder.node(Profile, {
   fields: (t) => ({
     handle: t.exposeString('handle'),
     description: t.exposeString('description', { nullable: true }),
+    state: t.expose('state', { type: ProfileState }),
     displayName: t.string({
       args: {
         fallback: t.arg.boolean({ defaultValue: true }),

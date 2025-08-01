@@ -28,6 +28,13 @@ export const ProfileAccountRole = {
 } as const;
 export type ProfileAccountRole = keyof typeof ProfileAccountRole;
 
+export const ProfileRelationship = {
+  FOLLOWING: 'FOLLOWING',
+  FOLLOWER: 'FOLLOWER',
+  MUTUAL: 'MUTUAL',
+} as const;
+export type ProfileRelationship = keyof typeof ProfileRelationship;
+
 export const ProfileState = {
   ACTIVE: 'ACTIVE',
   SUSPENDED: 'SUSPENDED',
