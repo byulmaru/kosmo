@@ -5,7 +5,7 @@ export const handle = async ({ event, resolve }) => {
   const request = await getXForwardedRequest(event.request.clone());
 
   return federation.fetch(request, {
-    contextData: undefined,
+    contextData: null,
     async onNotFound(): Promise<Response> {
       return await resolve(event);
     },
