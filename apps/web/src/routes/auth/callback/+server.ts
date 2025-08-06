@@ -90,9 +90,12 @@ export const GET = async ({ cookies, url, request }) => {
       .then(first);
 
     if (applicationGrant) {
-      await tx.insert(ApplicationGrantProfiles).values({
-        applicationGrantId: applicationGrant.id,
-      });
+      await tx
+        .insert(ApplicationGrantProfiles)
+        .values({
+          applicationGrantId: applicationGrant.id,
+        })
+        .onConflictDoNothing();
     }
 
     const firstProfileId = await tx
