@@ -18,5 +18,12 @@
       "limitExceeded": "Profile limit exceeded.",
       "notFound": "Profile not found."
     }
+  },
+  "profile": {
+    "button": {
+      "follow": "Follow",
+      "followBack": "Follow Back",
+      "unfollow": "Unfollow"
+    }
   }
 }

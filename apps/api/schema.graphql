@@ -114,8 +114,11 @@ type Profile implements Node {
 }
 
 enum ProfileRelationship {
+  BLOCKED_BY
+  BLOCKING
   FOLLOWER
   FOLLOWING
+  ME
   MUTUAL
 }
 

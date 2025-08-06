@@ -18,5 +18,12 @@
       "limitExceeded": "프로필 최대 갯수를 초과했어요.",
       "notFound": "프로필을 찾을 수 없어요."
     }
+  },
+  "profile": {
+    "button": {
+      "follow": "팔로우",
+      "followBack": "맞팔로우",
+      "unfollow": "언팔로우"
+    }
   }
 }

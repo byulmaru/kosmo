@@ -9,6 +9,6 @@ export default defineConfig({
   server: {
     port: 8261,
     strictPort: true,
-    allowedHosts: ['localhost', '.ngrok-free.app'],
+    allowedHosts: ['localhost', 'local.kos.moe'],
   },
 });

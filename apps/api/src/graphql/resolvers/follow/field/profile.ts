@@ -9,8 +9,11 @@ builder.objectField(Profile, 'relationship', (t) =>
     type: ProfileRelationship,
     nullable: true,
     resolve: async (profile, _, ctx) => {
-      if (!ctx.session?.profileId || ctx.session.profileId === profile.id) {
+      if (!ctx.session?.profileId) {
         return null;
+      }
+      if (ctx.session.profileId === profile.id) {
+        return ProfileRelationship.ME;
       }
 
       const myProfileId = ctx.session.profileId;

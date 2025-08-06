@@ -32,6 +32,9 @@ export const ProfileRelationship = {
   FOLLOWING: 'FOLLOWING',
   FOLLOWER: 'FOLLOWER',
   MUTUAL: 'MUTUAL',
+  ME: 'ME',
+  BLOCKING: 'BLOCKING',
+  BLOCKED_BY: 'BLOCKED_BY',
 } as const;
 export type ProfileRelationship = keyof typeof ProfileRelationship;
 
