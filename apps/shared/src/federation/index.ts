@@ -62,8 +62,7 @@ federation
         privateKey: ProfileCryptographicKeys.privateKey,
       })
       .from(ProfileCryptographicKeys)
-      .innerJoin(Profiles, eq(ProfileCryptographicKeys.profileId, Profiles.id))
-      .where(eq(Profiles.id, identifier))
+      .where(eq(ProfileCryptographicKeys.profileId, identifier))
       .then((rows) =>
         R.pullObject(
           rows,
