@@ -2,14 +2,14 @@ import { logger } from '@kosmo/commonlib/logger';
 import type { Plugin } from 'graphql-yoga';
 import type { Context } from '@/context';
 
+const log = logger.getChild('graphql');
+
 export const useLogger = (): Plugin<Context> => ({
   onExecute: ({ args }) => {
-    logger.info({
-      scope: 'graphql',
+    log.info('Executed operation {*}', {
       ip: args.contextValue.ip,
       user: args.contextValue.session?.accountId,
-      operation_name: args.operationName,
-      variables: args.variableValues,
+      operationName: args.operationName,
     });
   },
 });

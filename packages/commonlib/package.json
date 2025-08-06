@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "dayjs": "^1.11.13",
-    "pino": "^9.6.0"
+    "@logtape/logtape": "^1.0.4",
+    "dayjs": "^1.11.13"
   },
   "devDependencies": {
     "@types/node": "^22.14.0"
