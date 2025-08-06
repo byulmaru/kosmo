@@ -9,10 +9,12 @@ import {
   MemoryKvStore,
   Person,
 } from '@fedify/fedify';
-import { db, first, ProfileCryptographicKeys, ProfileFollows, Profiles } from '../db';
+import { db, first, Instances, ProfileCryptographicKeys, ProfileFollows, Profiles } from '../db';
 import { and, eq, isNull } from 'drizzle-orm';
 import * as R from 'remeda';
 import { getOrCreateProfile } from './profile';
+import { KOSMO_INSTANCE_ID } from '../const';
+import { InstanceType } from '../enums';
 
 export const federation = createFederation<unknown>({
   kv: new MemoryKvStore(),
@@ -32,7 +34,8 @@ federation
         description: Profiles.description,
       })
       .from(Profiles)
-      .where(and(eq(Profiles.id, identifier), isNull(Profiles.instanceId)))
+      .innerJoin(Instances, eq(Profiles.instanceId, Instances.id))
+      .where(and(eq(Profiles.id, identifier), eq(Instances.type, InstanceType.LOCAL)))
       .then(first);
 
     if (!profile) {
@@ -49,7 +52,7 @@ federation
       endpoints: new Endpoints({
         sharedInbox: ctx.getInboxUri(),
       }),
-      url: new URL(profile.url ?? ctx.getActorUri(identifier)),
+      urls: [new URL(`/@${profile.handle}`, ctx.origin)],
       publicKey: keys[0].cryptographicKey,
       assertionMethods: keys.map((key) => key.multikey),
     });
@@ -102,7 +105,7 @@ federation
         id: Profiles.id,
       })
       .from(Profiles)
-      .where(eq(Profiles.handle, username))
+      .where(and(eq(Profiles.handle, username), eq(Profiles.instanceId, KOSMO_INSTANCE_ID)))
       .then((rows) => rows[0]?.id ?? null);
   });
 

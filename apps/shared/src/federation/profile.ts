@@ -7,7 +7,8 @@ import {
   type Service,
 } from '@fedify/fedify';
 import type { Transaction } from '../db';
-import { db as database, firstOrThrow, Profiles } from '../db';
+import { db as database, firstOrThrow, Instances, Profiles } from '../db';
+import { InstanceType } from '../enums';
 
 type Actor = Application | Group | Organization | Person | Service;
 
@@ -18,12 +19,28 @@ type GetOrCreateProfileParams = {
 export const getOrCreateProfile = async ({ actor, tx }: GetOrCreateProfileParams) => {
   const db = tx ?? database;
 
+  const [handle, domain] = (await getActorHandle(actor, { trimLeadingAt: true })).split('@', 2);
+
+  const instance = await db
+    .insert(Instances)
+    .values({
+      domain,
+      type: InstanceType.ACTIVITYPUB,
+    })
+    .onConflictDoUpdate({
+      target: [Instances.domain],
+      set: { type: InstanceType.ACTIVITYPUB },
+    })
+    .returning({ id: Instances.id })
+    .then(firstOrThrow);
+
   const profileData = {
-    handle: await getActorHandle(actor, { trimLeadingAt: true }),
+    handle,
     inboxUri: actor.inboxId!.href,
     sharedInboxUri: actor.endpoints?.sharedInbox?.href,
     displayName: actor.name?.toString(),
     url: actor.url?.href?.toString(),
+    instanceId: instance.id,
   };
 
   const profile = await db
@@ -34,7 +51,9 @@ export const getOrCreateProfile = async ({ actor, tx }: GetOrCreateProfileParams
     })
     .onConflictDoUpdate({
       target: [Profiles.uri],
-      set: profileData,
+      set: {
+        ...profileData,
+      },
     })
     .returning()
     .then(firstOrThrow);

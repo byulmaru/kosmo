@@ -49,6 +49,7 @@ export const isTypeOf = (tableCode: string) => (self: unknown) => {
 };
 
 export const Account = createObjectRef('Account', T.Accounts);
+export const Instance = createObjectRef('Instance', T.Instances);
 export const Profile = createObjectRef('Profile', T.Profiles);
 
 interface Count {

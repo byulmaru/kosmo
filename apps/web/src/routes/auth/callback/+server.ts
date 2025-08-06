@@ -15,6 +15,7 @@ import { and, asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import * as byulmaruId from '$lib/server/external/byulmaru-id';
 import { getLanguagesByAcceptLanguageHeader } from '@kosmo/shared/i18n';
+import { SUPERAPP_APPLICATION_ID } from '@kosmo/shared/const';
 
 export const GET = async ({ cookies, url, request }) => {
   const { code, state } = z
@@ -75,7 +76,7 @@ export const GET = async ({ cookies, url, request }) => {
       .insert(ApplicationGrants)
       .values({
         accountId,
-        applicationId: 'APPL0WEB',
+        applicationId: SUPERAPP_APPLICATION_ID,
         scopes: ['$superapp'],
       })
       .onConflictDoUpdate({
@@ -117,7 +118,7 @@ export const GET = async ({ cookies, url, request }) => {
         token: crypto.randomUUID(),
         profileId: firstProfileId,
         scopes: ['$superapp'],
-        applicationId: 'APPL0WEB',
+        applicationId: SUPERAPP_APPLICATION_ID,
       })
       .returning({
         token: Sessions.token,

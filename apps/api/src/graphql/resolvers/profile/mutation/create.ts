@@ -1,4 +1,4 @@
-import { MAX_PROFILE_COUNT } from '@kosmo/shared/const';
+import { KOSMO_INSTANCE_ID, MAX_PROFILE_COUNT } from '@kosmo/shared/const';
 import {
   ApplicationGrantProfiles,
   ApplicationGrants,
@@ -14,7 +14,6 @@ import {
 import { ProfileAccountRole } from '@kosmo/shared/enums';
 import * as validationSchema from '@kosmo/shared/validation';
 import { and, eq, sql } from 'drizzle-orm';
-import { env } from '@/env';
 import { LimitExceededError, ValidationError } from '@/errors';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
@@ -66,9 +65,7 @@ builder.mutationField('createProfile', (t) =>
           .values({
             id: profileId,
             handle: input.handle,
-            uri: `${env.PUBLIC_WEB_DOMAIN}/profile/${profileId}`,
-            inboxUri: `${env.PUBLIC_WEB_DOMAIN}/profile/${profileId}/inbox`,
-            sharedInboxUri: `${env.PUBLIC_WEB_DOMAIN}/inbox`,
+            instanceId: KOSMO_INSTANCE_ID,
           })
           .returning()
           .then(firstOrThrow);

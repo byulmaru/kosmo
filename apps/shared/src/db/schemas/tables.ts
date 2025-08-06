@@ -142,14 +142,16 @@ export const Profiles = pgTable(
     id: varchar('id')
       .primaryKey()
       .$defaultFn(() => createDbId(TableCode.Profiles)),
-    uri: varchar('uri').notNull(),
+    uri: varchar('uri'),
     url: varchar('url'),
     state: E.ProfileState('state').notNull().default(ProfileState.ACTIVE),
-    instanceId: varchar('instance_id').references(() => Instances.id),
+    instanceId: varchar('instance_id')
+      .references(() => Instances.id)
+      .notNull(),
     handle: varchar('handle').notNull(),
     displayName: varchar('display_name').notNull().default(''),
     description: text('description'),
-    inboxUri: varchar('inbox_uri').notNull(),
+    inboxUri: varchar('inbox_uri'),
     sharedInboxUri: varchar('shared_inbox_uri'),
     avatarFileId: varchar('avatar_file_id').references(() => Files.id),
     headerFileId: varchar('header_file_id').references(() => Files.id),
@@ -161,7 +163,7 @@ export const Profiles = pgTable(
   },
   (t) => [
     uniqueIndex('uri_unique').on(t.uri),
-    uniqueIndex('handle_unique').on(sql`LOWER(${t.handle})`),
+    uniqueIndex('handle_unique').on(t.instanceId, sql`LOWER(${t.handle})`),
   ],
 );
 
