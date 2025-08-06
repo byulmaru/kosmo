@@ -18,7 +18,7 @@
   setLanguages($query.languages);
 </script>
 
-<div class="flex min-h-screen justify-center ">
+<div class="flex min-h-screen justify-center">
   <div class="flex w-full max-w-3xl lg:max-w-5xl xl:max-w-7xl">
     <!-- Left Sidebar -->
     <AppSidebar {$query} />
@@ -30,8 +30,10 @@
 
     <!-- Right Section -->
     <aside class="hidden w-90 space-y-4 px-6 py-4 xl:block">
-      <Input placeholder="검색" />
-      <Button class="w-full">새 게시물</Button>
+      <div class="fixed w-78">
+        <Input placeholder="검색" />
+        <Button class="w-full">새 게시물</Button>
+      </div>
     </aside>
   </div>
 </div>

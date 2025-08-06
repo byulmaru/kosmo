@@ -1,7 +1,7 @@
 <script lang="ts">
   import { fragment, graphql } from '$graphql';
   import type { MainLayout_Sidebar_query } from '$graphql';
-  import { Bell, Bookmark, Hash, Home, Mail, User } from '@lucide/svelte';
+  import { Bell, Bookmark, Hash, Home, Mail, Sparkles, User } from '@lucide/svelte';
   import ProfileDropdown from './ProfileDropdown.svelte';
   import AppSidebarMenuButton from './AppSidebarMenuButton.svelte';
 
@@ -24,10 +24,8 @@
 
 <header class="hidden h-full w-18 sm:block lg:w-60">
   <div class="fixed flex h-full w-18 flex-col lg:w-60">
-    <div
-      class="mb-4 flex items-center justify-center rounded-full text-2xl font-bold"
-    >
-      Kosmo
+    <div class="p-4 flex rounded-full text-2xl font-bold">
+      <Sparkles class="size-6" />
     </div>
     <nav class="flex flex-col">
       <AppSidebarMenuButton href="/" icon={Home} label="홈" />
