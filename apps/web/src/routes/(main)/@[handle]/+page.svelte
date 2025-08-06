@@ -5,14 +5,33 @@
   import { i18n } from '$lib/i18n.svelte';
   import { ProfileRelationship } from '@kosmo/shared/enums';
 
+  const selectText = (event: MouseEvent) => {
+    const selection = window.getSelection();
+    if (!selection || selection.type === 'Range') {
+      return;
+    }
+
+    const node = event.currentTarget as HTMLElement;
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  };
+
   const query = graphql(`
     query MainHandlePage_Query($handle: String!) {
       profile(handle: $handle) {
         id
+        uri
         displayName
         handle
         description
         relationship
+
+        instance {
+          id
+          domain
+        }
       }
     }
   `);
@@ -48,6 +67,10 @@
   `);
 </script>
 
+<svelte:head>
+  <link rel="alternate" href={$query.profile?.uri} type="application/activity+json" />
+</svelte:head>
+
 {#if $query.profile}
   {@const profile = $query.profile}
   <div class="bg-card text-card-foreground w-full rounded-lg border">
@@ -77,7 +100,11 @@
       </div>
       <div class="my-2">
         <div class="text-xl font-bold">{profile.displayName}</div>
-        <div class="text-muted-foreground">@{profile.handle}</div>
+        <div on:click={selectText} role="none">
+          <span class="text-muted-foreground">@{profile.handle}</span><span
+            class="text-muted-foreground/60">@{profile.instance.domain}</span
+          >
+        </div>
       </div>
       <div class="my-2">
         <p>{profile.description}</p>

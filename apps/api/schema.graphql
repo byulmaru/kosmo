@@ -117,8 +117,10 @@ type NotFoundError implements Error {
 type Profile implements Node {
   description: String
   displayName(fallback: Boolean! = true): String!
+  fullHandle: String!
   handle: String!
   id: ID!
+  instance: Instance!
   relationship: ProfileRelationship
   state: ProfileState!
   uri: String!
