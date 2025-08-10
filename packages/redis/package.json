@@ -1,0 +1,14 @@
+{
+  "name": "@kosmo/redis",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./redis.ts"
+  },
+  "dependencies": {
+    "@kosmo/runtime": "workspace:*",
+    "@sesamecare-oss/redlock": "^1.4.0",
+    "ioredis": "^5.6.1"
+  }
+}
