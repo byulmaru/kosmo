@@ -1,4 +1,4 @@
-import { getString } from '@kosmo/shared/i18n';
+import { getString } from '@kosmo/i18n';
 import { writable } from 'svelte/store';
 
 const makeI18n = (locales: string[]) => {

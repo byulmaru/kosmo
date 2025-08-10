@@ -1,4 +1,4 @@
-import { InstanceType } from '@kosmo/shared/enums';
+import { InstanceType } from '@kosmo/enum';
 import { builder } from '@/graphql/builder';
 import { Instance } from '@/graphql/objects';
 

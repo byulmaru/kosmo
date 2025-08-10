@@ -1,4 +1,4 @@
-import { federation } from '@kosmo/shared/federation';
+import { federation } from '@kosmo/federation';
 import { getXForwardedRequest } from 'x-forwarded-fetch';
 
 export const handle = async ({ event, resolve }) => {

@@ -4,13 +4,21 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "doppler run -- tsx --watch src/main.ts"
+    "dev": "doppler run -- tsx --watch src/main.ts",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@envelop/core": "^5.3.0",
     "@fedify/fedify": "^1.7.6",
     "@hono/node-server": "^1.17.1",
-    "@kosmo/shared": "workspace:*",
+    "@kosmo/const": "workspace:*",
+    "@kosmo/db": "workspace:*",
+    "@kosmo/enum": "workspace:*",
+    "@kosmo/federation": "workspace:*",
+    "@kosmo/i18n": "workspace:*",
+    "@kosmo/runtime": "workspace:*",
+    "@kosmo/type": "workspace:*",
+    "@kosmo/validation": "workspace:*",
     "@pothos/core": "^4.8.0",
     "@pothos/plugin-dataloader": "^4.4.3",
     "@pothos/plugin-errors": "^4.4.2",

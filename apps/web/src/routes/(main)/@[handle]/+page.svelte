@@ -3,7 +3,7 @@
   import { Avatar, AvatarImage } from '$lib/components/ui/avatar';
   import { Button } from '$lib/components/ui/button';
   import { i18n } from '$lib/i18n.svelte';
-  import { ProfileRelationship } from '@kosmo/shared/enums';
+  import { ProfileRelationship } from '@kosmo/enum';
 
   const selectText = (event: MouseEvent) => {
     const selection = window.getSelection();

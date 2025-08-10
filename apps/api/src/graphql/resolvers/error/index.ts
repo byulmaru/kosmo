@@ -4,7 +4,7 @@ import './limit-exceeded';
 import './not-found';
 import './validation';
 
-import { getString } from '@kosmo/shared/i18n';
+import { getString } from '@kosmo/i18n';
 import { FieldError, TypedError } from '@/errors';
 import { builder } from '@/graphql/builder';
 

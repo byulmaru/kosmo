@@ -1,5 +1,5 @@
-import { db, ProfileFollows } from '@kosmo/shared/db';
-import { ProfileRelationship } from '@kosmo/shared/enums';
+import { db, ProfileFollows } from '@kosmo/db';
+import { ProfileRelationship } from '@kosmo/enum';
 import { and, eq, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';

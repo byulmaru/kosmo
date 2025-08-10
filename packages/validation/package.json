@@ -1,0 +1,17 @@
+{
+  "name": "@kosmo/validation",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "tlds": "^1.259.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "eslint": "^9.24.0",
+    "typescript": "^5.8.3"
+  }
+}

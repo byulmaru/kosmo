@@ -1,5 +1,5 @@
-import { ApplicationGrantProfiles, db, firstOrThrow, Profiles, Sessions } from '@kosmo/shared/db';
-import { ProfileAccountRole, ProfileState } from '@kosmo/shared/enums';
+import { ApplicationGrantProfiles, db, firstOrThrow, Profiles, Sessions } from '@kosmo/db';
+import { ProfileAccountRole, ProfileState } from '@kosmo/enum';
 import { eq } from 'drizzle-orm';
 import { ForbiddenError } from '@/errors';
 import { builder } from '@/graphql/builder';

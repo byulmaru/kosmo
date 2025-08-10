@@ -1,6 +1,6 @@
 import { Accept, Follow, type InboxListener } from '@fedify/fedify';
 import { eq } from 'drizzle-orm';
-import { db, first, Profiles, ProfileFollows } from '../../db';
+import { db, first, Profiles, ProfileFollows } from '@kosmo/db';
 import { getOrCreateProfile } from '../profile';
 import type { FederationContextData } from '../type';
 

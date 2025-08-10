@@ -1,5 +1,5 @@
-import { db, decodeDbId } from '@kosmo/shared/db';
-import * as T from '@kosmo/shared/db/tables';
+import { db, decodeDbId } from '@kosmo/db';
+import * as T from '@kosmo/db/tables';
 import { asc, inArray } from 'drizzle-orm';
 import { builder } from './builder';
 import type { MaybePromise } from '@pothos/core';

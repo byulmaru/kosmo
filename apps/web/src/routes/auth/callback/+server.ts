@@ -8,14 +8,14 @@ import {
   ProfileAccounts,
   Profiles,
   Sessions,
-} from '@kosmo/shared/db';
-import { AccountState } from '@kosmo/shared/enums';
+} from '@kosmo/db';
+import { AccountState } from '@kosmo/enum';
 import { redirect } from '@sveltejs/kit';
 import { and, asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import * as byulmaruId from '$lib/server/external/byulmaru-id';
-import { getLanguagesByAcceptLanguageHeader } from '@kosmo/shared/i18n';
-import { SUPERAPP_APPLICATION_ID } from '@kosmo/shared/const';
+import { getLanguagesByAcceptLanguageHeader } from '@kosmo/i18n';
+import { SUPERAPP_APPLICATION_ID } from '@kosmo/const';
 
 export const GET = async ({ cookies, url, request }) => {
   const { code, state } = z

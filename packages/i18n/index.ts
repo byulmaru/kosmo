@@ -1,5 +1,5 @@
-import en_US from '../../i18n/en_US.json';
-import ko_KR from '../../i18n/ko_KR.json';
+import en_US from './en_US.json';
+import ko_KR from './ko_KR.json';
 
 interface LanguageData {
   [key: string]: LanguageData | string;

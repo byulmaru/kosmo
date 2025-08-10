@@ -1,4 +1,4 @@
-import { ProfileAccountRole } from './enums';
+import { ProfileAccountRole } from '@kosmo/enum';
 
 export const SUPERAPP_APPLICATION_ID = 'APPL000WEB';
 export const KOSMO_INSTANCE_ID = 'INST000KOSMO';

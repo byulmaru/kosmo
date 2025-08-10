@@ -1,7 +1,7 @@
 import type { ZodSchema, ZodTypeDef } from 'zod';
 import type { Action } from 'svelte/action';
 import { z } from 'zod';
-import { stringifyPath } from '@kosmo/shared/validation';
+import { stringifyPath } from '@kosmo/validation';
 
 export class FormValidationError extends Error {
   path: string | null;

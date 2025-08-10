@@ -1,4 +1,4 @@
-import { db, Sessions } from '@kosmo/shared/db';
+import { db, Sessions } from '@kosmo/db';
 import { eq } from 'drizzle-orm';
 import { ForbiddenError } from '@/errors';
 import { builder } from '@/graphql/builder';

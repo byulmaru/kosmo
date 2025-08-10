@@ -6,9 +6,9 @@ import {
   type Person,
   type Service,
 } from '@fedify/fedify';
-import type { Transaction } from '../db';
-import { db as database, firstOrThrow, Instances, Profiles } from '../db';
-import { InstanceType } from '../enums';
+import type { Transaction } from '@kosmo/db';
+import { db as database, firstOrThrow, Instances, Profiles } from '@kosmo/db';
+import { InstanceType } from '@kosmo/enum';
 
 type Actor = Application | Group | Organization | Person | Service;
 

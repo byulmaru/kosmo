@@ -1,0 +1,21 @@
+{
+  "name": "@kosmo/email",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts",
+    "./templates/*": "./templates/*.tsx"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ses": "^3.787.0",
+    "@react-email/render": "^0.0.15",
+    "react": "^19.1.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "eslint": "^9.24.0",
+    "typescript": "^5.8.3"
+  }
+}

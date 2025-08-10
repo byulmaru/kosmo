@@ -1,5 +1,5 @@
 <script lang="ts">
-  import * as validationSchema from '@kosmo/shared/validation';
+  import * as validationSchema from '@kosmo/validation';
   import { CirclePlus } from '@lucide/svelte';
   import { z } from 'zod';
   import { fragment, graphql, type MainLayout_ProfileDropdown_query } from '$graphql';

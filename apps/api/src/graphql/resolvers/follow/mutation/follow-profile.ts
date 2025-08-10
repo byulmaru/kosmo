@@ -1,5 +1,5 @@
-import { db, firstOrThrowWith, ProfileFollows, Profiles } from '@kosmo/shared/db';
-import { ProfileState } from '@kosmo/shared/enums';
+import { db, firstOrThrowWith, ProfileFollows, Profiles } from '@kosmo/db';
+import { ProfileState } from '@kosmo/enum';
 import { and, eq } from 'drizzle-orm';
 import { ForbiddenError, NotFoundError } from '@/errors';
 import { builder } from '@/graphql/builder';

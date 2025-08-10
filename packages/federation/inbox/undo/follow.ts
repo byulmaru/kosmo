@@ -1,7 +1,7 @@
 import type { Follow } from '@fedify/fedify';
 import type { InboxUndoListener } from '../../type';
 import { and, eq } from 'drizzle-orm';
-import { db, ProfileFollows, Profiles } from '../../../db';
+import { db, ProfileFollows, Profiles } from '@kosmo/db';
 
 export const undoFollowListener: InboxUndoListener<Follow> = async (ctx, undo, follow) => {
   if (undo.actorId === null || follow.objectId === null) {
@@ -15,14 +15,16 @@ export const undoFollowListener: InboxUndoListener<Follow> = async (ctx, undo, f
   }
 
   await db.transaction(async (tx) => {
-    await tx.delete(ProfileFollows).where(
-      and(
-        eq(
-          ProfileFollows.followerProfileId,
-          tx.select({ id: Profiles.id }).from(Profiles).where(eq(Profiles.uri, actorId.href)),
+    await tx
+      .delete(ProfileFollows)
+      .where(
+        and(
+          eq(
+            ProfileFollows.followerProfileId,
+            tx.select({ id: Profiles.id }).from(Profiles).where(eq(Profiles.uri, actorId.href)),
+          ),
+          eq(ProfileFollows.followingProfileId, object.identifier),
         ),
-        eq(ProfileFollows.followingProfileId, object.identifier),
-      ),
-    );
+      );
   });
 };

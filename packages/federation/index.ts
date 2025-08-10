@@ -12,8 +12,8 @@ import {
 import { db, first, Instances, ProfileCryptographicKeys, Profiles } from '../db';
 import { and, eq } from 'drizzle-orm';
 import * as R from 'remeda';
-import { KOSMO_INSTANCE_ID } from '../const';
-import { InstanceType } from '../enums';
+import { KOSMO_INSTANCE_ID } from '@kosmo/const';
+import { InstanceType } from '@kosmo/enum';
 import { followListener } from './inbox/follow';
 import type { FederationContextData } from './type';
 import { undoListener } from './inbox/undo';

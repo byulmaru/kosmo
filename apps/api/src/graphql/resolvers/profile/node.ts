@@ -1,4 +1,4 @@
-import { ProfileState } from '@kosmo/shared/enums';
+import { ProfileState } from '@kosmo/enum';
 import { env } from '@/env';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';

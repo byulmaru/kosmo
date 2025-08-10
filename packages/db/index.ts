@@ -1,6 +1,6 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import { env } from '../env';
+import { env } from './env';
 import { DrizzleLogger } from './logger';
 import * as enums from './schemas/enums';
 import * as tables from './schemas/tables';

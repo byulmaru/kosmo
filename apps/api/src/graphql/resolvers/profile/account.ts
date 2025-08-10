@@ -1,12 +1,12 @@
-import { MAX_PROFILE_COUNT } from '@kosmo/shared/const';
+import { MAX_PROFILE_COUNT } from '@kosmo/const';
 import {
   ApplicationGrantProfiles,
   ApplicationGrants,
   db,
   ProfileAccounts,
   Profiles,
-} from '@kosmo/shared/db';
-import { ProfileState } from '@kosmo/shared/enums';
+} from '@kosmo/db';
+import { ProfileState } from '@kosmo/enum';
 import { and, asc, count, eq, getTableColumns, isNull, or } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Account, Count, Profile } from '@/graphql/objects';

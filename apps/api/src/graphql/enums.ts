@@ -1,4 +1,4 @@
-import * as E from '@kosmo/shared/enums';
+import * as E from '@kosmo/enum';
 import { builder } from './builder';
 
 const createEnumRef = (name: keyof typeof E) => {

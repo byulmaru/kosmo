@@ -1,13 +1,13 @@
 import { getConnInfo } from '@hono/node-server/conninfo';
-import { Accounts, db, first, Sessions } from '@kosmo/shared/db';
-import { getLanguagesByAcceptLanguageHeader } from '@kosmo/shared/i18n';
+import { Accounts, db, first, Sessions } from '@kosmo/db';
+import { getLanguagesByAcceptLanguageHeader } from '@kosmo/i18n';
 import DataLoader from 'dataloader';
 import { eq } from 'drizzle-orm';
 import stringify from 'fast-json-stable-stringify';
 import IPAddr from 'ipaddr.js';
 import * as R from 'remeda';
-import type { LANGUAGE_LIST } from '@kosmo/shared/i18n';
-import type { Scope } from '@kosmo/shared/types/scope';
+import type { LANGUAGE_LIST } from '@kosmo/i18n';
+import type { Scope } from '@kosmo/type';
 import type { Context as HonoContext } from 'hono';
 
 type LoaderParams<Key, Result, SortKey, Nullability extends boolean, Many extends boolean> = {

@@ -3,9 +3,9 @@ import { datetime } from './types';
 import { eq, sql } from 'drizzle-orm';
 import { createDbId, TableCode } from './id';
 import * as E from './enums';
-import { AccountState, ProfileState } from '../../enums';
-import type { Scope } from '../../types/scope';
-import type { LANGUAGE_LIST } from '../../i18n';
+import { AccountState, ProfileState } from '@kosmo/enum';
+import type { Scope } from '@kosmo/type';
+import type { LANGUAGE_LIST } from '@kosmo/i18n';
 
 export const Accounts = pgTable(
   'accounts',

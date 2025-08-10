@@ -7,6 +7,7 @@ import unicornPlugin from 'eslint-plugin-unicorn';
 import globals from 'globals';
 import ts from 'typescript-eslint';
 
+// eslint-disable-next-line import/no-default-export
 export default ts.config(
   js.configs.recommended,
   ...ts.configs.recommended,

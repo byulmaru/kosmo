@@ -1,4 +1,4 @@
-import { stringifyPath } from '@kosmo/shared/validation';
+import { stringifyPath } from '@kosmo/validation';
 import SchemaBuilder from '@pothos/core';
 import DataLoaderPlugin from '@pothos/plugin-dataloader';
 import ErrorsPlugin from '@pothos/plugin-errors';
@@ -14,8 +14,8 @@ import { base64 } from 'rfc4648';
 import { match } from 'ts-pattern';
 import { UnauthorizedError, ValidationError } from '@/errors';
 import { hasScope } from '@/utils/scope';
-import type { TableCode } from '@kosmo/shared/db';
-import type { Scope } from '@kosmo/shared/types/scope';
+import type { TableCode } from '@kosmo/db';
+import type { Scope } from '@kosmo/type';
 import type { SessionContext, UserContext } from '@/context';
 
 export const builder = new SchemaBuilder<{

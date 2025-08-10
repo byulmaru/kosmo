@@ -1,8 +1,8 @@
 import './using';
 
-import { KOSMO_INSTANCE_ID } from '@kosmo/shared/const';
-import { db, first, Instances, Profiles } from '@kosmo/shared/db';
-import { ProfileState } from '@kosmo/shared/enums';
+import { KOSMO_INSTANCE_ID } from '@kosmo/const';
+import { db, first, Instances, Profiles } from '@kosmo/db';
+import { ProfileState } from '@kosmo/enum';
 import { and, eq, getTableColumns, sql } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';

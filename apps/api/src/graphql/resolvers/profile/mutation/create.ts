@@ -1,4 +1,4 @@
-import { KOSMO_INSTANCE_ID, MAX_PROFILE_COUNT } from '@kosmo/shared/const';
+import { KOSMO_INSTANCE_ID, MAX_PROFILE_COUNT } from '@kosmo/const';
 import {
   ApplicationGrantProfiles,
   ApplicationGrants,
@@ -10,9 +10,9 @@ import {
   Profiles,
   Sessions,
   TableCode,
-} from '@kosmo/shared/db';
-import { ProfileAccountRole } from '@kosmo/shared/enums';
-import * as validationSchema from '@kosmo/shared/validation';
+} from '@kosmo/db';
+import { ProfileAccountRole } from '@kosmo/enum';
+import * as validationSchema from '@kosmo/validation';
 import { and, eq, sql } from 'drizzle-orm';
 import { LimitExceededError, ValidationError } from '@/errors';
 import { builder } from '@/graphql/builder';

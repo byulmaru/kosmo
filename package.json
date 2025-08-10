@@ -1,6 +1,7 @@
 {
   "name": "@kosmo/monorepo",
   "private": true,
+  "type": "module",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -14,6 +15,9 @@
     "check-types": "turbo run check-types"
   },
   "devDependencies": {
+    "@kosmo/eslint-config": "workspace:*",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.5",
     "prettier": "^3.5.1",
     "prettier-plugin-brace-style": "^0.7.2",
     "prettier-plugin-svelte": "^3.3.3",

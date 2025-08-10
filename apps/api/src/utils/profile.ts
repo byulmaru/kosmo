@@ -1,4 +1,4 @@
-import { PROFILE_ACCOUNT_ORDERED_ROLES } from '@kosmo/shared/const';
+import { PROFILE_ACCOUNT_ORDERED_ROLES } from '@kosmo/const';
 import {
   ApplicationGrantProfiles,
   ApplicationGrants,
@@ -6,8 +6,8 @@ import {
   firstOrThrowWith,
   ProfileAccounts,
   Profiles,
-} from '@kosmo/shared/db';
-import { ProfileAccountRole, ProfileState } from '@kosmo/shared/enums';
+} from '@kosmo/db';
+import { ProfileAccountRole, ProfileState } from '@kosmo/enum';
 import { and, eq, isNull, or } from 'drizzle-orm';
 import { ForbiddenError } from '@/errors';
 import type { SessionContext } from '@/context';
