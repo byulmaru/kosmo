@@ -11,7 +11,9 @@ enum AccountState {
   DELETED
 }
 
-"""Base64 encoded binary data"""
+"""
+Base64 encoded binary data
+"""
 scalar Binary
 
 type ConflictError implements Error {
@@ -22,7 +24,9 @@ type ConflictError implements Error {
 type Count {
   current: Int!
 
-  """null if unlimited"""
+  """
+  null if unlimited
+  """
   max: Int
 }
 
@@ -121,19 +125,21 @@ type Profile implements Node {
   handle: String!
   id: ID!
   instance: Instance!
-  relationship: ProfileRelationship
+  relationship: ProfileRelationship!
   state: ProfileState!
   uri: String!
   url: String!
 }
 
-enum ProfileRelationship {
-  BLOCKED_BY
-  BLOCKING
-  FOLLOWER
-  FOLLOWING
-  ME
-  MUTUAL
+type ProfileRelationship {
+  from: ProfileRelationshipState
+  to: ProfileRelationshipState
+}
+
+enum ProfileRelationshipState {
+  BLOCK
+  FOLLOW
+  REQUEST_FOLLOW
 }
 
 enum ProfileState {
@@ -151,7 +157,9 @@ type Query {
   usingProfile: Profile
 }
 
-"""Unix timestamp in milliseconds"""
+"""
+Unix timestamp in milliseconds
+"""
 scalar Timestamp
 
 input UnfollowProfileInput {

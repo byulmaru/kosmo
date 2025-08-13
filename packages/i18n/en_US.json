@@ -21,9 +21,17 @@
   },
   "profile": {
     "button": {
+      "edit": "Edit Profile",
       "follow": "Follow",
       "followBack": "Follow Back",
+      "following": "Following",
+      "requestFollow": "Request Follow",
+      "requestingFollow": "Requesting Follow",
       "unfollow": "Unfollow"
+    },
+    "status": {
+      "followEachOther": "Follow each other",
+      "followsYou": "Follows you"
     }
   }
 }

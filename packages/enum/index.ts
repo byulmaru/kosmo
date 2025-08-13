@@ -28,15 +28,12 @@ export const ProfileAccountRole = {
 } as const;
 export type ProfileAccountRole = keyof typeof ProfileAccountRole;
 
-export const ProfileRelationship = {
-  FOLLOWING: 'FOLLOWING',
-  FOLLOWER: 'FOLLOWER',
-  MUTUAL: 'MUTUAL',
-  ME: 'ME',
-  BLOCKING: 'BLOCKING',
-  BLOCKED_BY: 'BLOCKED_BY',
+export const ProfileRelationshipState = {
+  FOLLOW: 'FOLLOW',
+  REQUEST_FOLLOW: 'REQUEST_FOLLOW',
+  BLOCK: 'BLOCK',
 } as const;
-export type ProfileRelationship = keyof typeof ProfileRelationship;
+export type ProfileRelationshipState = keyof typeof ProfileRelationshipState;
 
 export const ProfileState = {
   ACTIVE: 'ACTIVE',

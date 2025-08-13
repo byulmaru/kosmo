@@ -1,19 +1,20 @@
 import { db, ProfileFollows } from '@kosmo/db';
-import { ProfileRelationship } from '@kosmo/enum';
+import { ProfileRelationshipState } from '@kosmo/enum';
 import { and, eq, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
 
 builder.objectField(Profile, 'relationship', (t) =>
   t.field({
-    type: ProfileRelationship,
-    nullable: true,
+    type: builder.simpleObject('ProfileRelationship', {
+      fields: (t) => ({
+        to: t.field({ type: ProfileRelationshipState, nullable: true }),
+        from: t.field({ type: ProfileRelationshipState, nullable: true }),
+      }),
+    }),
     resolve: async (profile, _, ctx) => {
-      if (!ctx.session?.profileId) {
-        return null;
-      }
-      if (ctx.session.profileId === profile.id) {
-        return ProfileRelationship.ME;
+      if (!ctx.session?.profileId || ctx.session.profileId === profile.id) {
+        return { to: null, from: null };
       }
 
       const myProfileId = ctx.session.profileId;
@@ -59,15 +60,10 @@ builder.objectField(Profile, 'relationship', (t) =>
         followerLoader.load(profile.id),
       ]);
 
-      if (following) {
-        if (follower) {
-          return ProfileRelationship.MUTUAL;
-        } else {
-          return ProfileRelationship.FOLLOWING;
-        }
-      } else if (follower) {
-        return ProfileRelationship.FOLLOWER;
-      }
+      return {
+        to: following ? ProfileRelationshipState.FOLLOW : null,
+        from: follower ? ProfileRelationshipState.FOLLOW : null,
+      };
     },
   }),
 );

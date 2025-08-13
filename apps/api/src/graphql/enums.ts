@@ -10,4 +10,4 @@ const createEnumRef = (name: keyof typeof E) => {
 createEnumRef('AccountState');
 createEnumRef('InstanceType');
 createEnumRef('ProfileState');
-createEnumRef('ProfileRelationship');
+createEnumRef('ProfileRelationshipState');

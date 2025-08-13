@@ -21,9 +21,17 @@
   },
   "profile": {
     "button": {
+      "edit": "프로필 수정",
       "follow": "팔로우",
       "followBack": "맞팔로우",
+      "following": "팔로우 중",
+      "requestFollow": "팔로우 요청 보내기",
+      "requestingFollow": "팔로우 요청 중",
       "unfollow": "언팔로우"
+    },
+    "status": {
+      "followEachOther": "서로 팔로우 중",
+      "followsYou": "나를 팔로우 중"
     }
   }
 }
