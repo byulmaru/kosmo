@@ -1,0 +1,12 @@
+{
+  "name": "@kosmo/dayjs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "dayjs": "^1.11.13"
+  }
+}

@@ -1,4 +1,4 @@
-import { logger } from '@kosmo/commonlib/logger';
+import { logger } from '@kosmo/logger';
 import { dev } from '@kosmo/runtime';
 import type { Logger } from 'drizzle-orm/logger';
 

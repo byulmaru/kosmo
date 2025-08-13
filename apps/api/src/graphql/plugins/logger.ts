@@ -1,4 +1,4 @@
-import { logger } from '@kosmo/commonlib/logger';
+import { logger } from '@kosmo/logger';
 import type { Plugin } from 'graphql-yoga';
 import type { Context } from '@/context';
 

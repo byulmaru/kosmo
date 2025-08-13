@@ -1,10 +1,10 @@
-import { lane } from './const';
-import { Worker } from 'bullmq';
-import { logger } from '@kosmo/commonlib/logger';
-import * as Sentry from '@sentry/node';
-import { jobs } from './jobs';
-import { crons } from './crons';
+import { logger } from '@kosmo/logger';
 import { redis } from '@kosmo/redis';
+import * as Sentry from '@sentry/node';
+import { Worker } from 'bullmq';
+import { lane } from './const';
+import { crons } from './crons';
+import { jobs } from './jobs';
 
 const log = logger.getChild('mq');
 const taskMap = Object.fromEntries([...jobs, ...crons].map((job) => [job.name, job.fn]));

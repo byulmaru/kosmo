@@ -17,14 +17,15 @@
   "dependencies": {
     "@kosmo/enum": "workspace:*",
     "@kosmo/i18n": "workspace:*",
+    "@kosmo/logger": "workspace:*",
     "@kosmo/runtime": "workspace:*",
     "@kosmo/type": "workspace:*",
-    "@neondatabase/serverless": "^0.9.1",
-    "drizzle-orm": "^0.44.3",
+    "@neondatabase/serverless": "^0.9.5",
+    "drizzle-orm": "^0.44.4",
     "postgres": "^3.4.7",
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.31.0"
+    "drizzle-kit": "^0.31.4"
   }
 }

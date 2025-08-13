@@ -8,14 +8,14 @@
     "./templates/*": "./templates/*.tsx"
   },
   "dependencies": {
-    "@aws-sdk/client-ses": "^3.787.0",
+    "@aws-sdk/client-ses": "^3.864.0",
     "@react-email/render": "^0.0.15",
-    "react": "^19.1.0",
+    "react": "^19.1.1",
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@types/react": "^18.3.3",
-    "eslint": "^9.24.0",
-    "typescript": "^5.8.3"
+    "@types/react": "^18.3.23",
+    "eslint": "^9.33.0",
+    "typescript": "^5.9.2"
   }
 }

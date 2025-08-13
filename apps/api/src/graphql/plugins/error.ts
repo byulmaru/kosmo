@@ -1,5 +1,5 @@
 import { isAsyncIterable } from '@envelop/core';
-import { logger } from '@kosmo/commonlib/logger';
+import { logger } from '@kosmo/logger';
 import * as Sentry from '@sentry/node';
 import { GraphQLError } from 'graphql';
 import { dev } from '@/env';
@@ -25,10 +25,10 @@ const transformError = (error: unknown): GraphQLError => {
   if (error instanceof GraphQLError) {
     return error.originalError ? transformError(error.originalError) : error;
   } else if (error instanceof Error) {
-    logger.error(error);
+    logger.error(`Unexpected error {*}`, { error });
     return new UnexpectedError(error);
   } else {
-    logger.error(error);
+    logger.error(`Unexpected error {*}`, { error });
     return new UnexpectedError(new Error(String(error)));
   }
 };

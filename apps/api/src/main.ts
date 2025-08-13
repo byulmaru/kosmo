@@ -1,4 +1,4 @@
-import '@kosmo/commonlib/dayjs';
+import '@kosmo/dayjs';
 
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
