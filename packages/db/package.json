@@ -20,12 +20,16 @@
     "@kosmo/logger": "workspace:*",
     "@kosmo/runtime": "workspace:*",
     "@kosmo/type": "workspace:*",
-    "@neondatabase/serverless": "^0.9.5",
+    "@neondatabase/serverless": "^1.0.1",
+    "dayjs": "^1.11.13",
     "drizzle-orm": "^0.44.4",
+    "graphql": "^16.11.0",
     "postgres": "^3.4.7",
+    "ulidx": "^2.4.1",
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@types/node": "^24.2.1",
     "drizzle-kit": "^0.31.4"
   }
 }

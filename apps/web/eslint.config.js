@@ -1,5 +1,5 @@
 import config from '@kosmo/eslint-config';
-import svelteConfig from './svelte.config';
+import svelteConfig from './svelte.config.js';
 
 export default [
   ...config,
@@ -21,6 +21,6 @@ export default [
     },
   },
   {
-    ignores: ['.svelte-kit/*'],
+    ignores: ['.svelte-kit/*', '.sark/*'],
   },
 ];

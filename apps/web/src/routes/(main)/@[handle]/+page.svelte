@@ -1,9 +1,9 @@
 <script lang="ts">
+  import { ProfileRelationship } from '@kosmo/enum';
   import { graphql } from '$graphql';
   import { Avatar, AvatarImage } from '$lib/components/ui/avatar';
   import { Button } from '$lib/components/ui/button';
   import { i18n } from '$lib/i18n.svelte';
-  import { ProfileRelationship } from '@kosmo/enum';
 
   const selectText = (event: MouseEvent) => {
     const selection = window.getSelection();
@@ -100,7 +100,7 @@
       </div>
       <div class="my-2">
         <div class="text-xl font-bold">{profile.displayName}</div>
-        <div on:click={selectText} role="none">
+        <div onclick={selectText} role="none">
           <span class="text-muted-foreground">@{profile.handle}</span><span
             class="text-muted-foreground/60">@{profile.instance.domain}</span
           >

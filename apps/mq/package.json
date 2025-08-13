@@ -9,7 +9,7 @@
     "@kosmo/logger": "workspace:*",
     "@kosmo/redis": "workspace:*",
     "@kosmo/runtime": "workspace:*",
-    "@sentry/node": "^9.45.0",
+    "@sentry/node": "^10.5.0",
     "bullmq": "^5.57.0",
     "ioredis": "^5.7.0"
   }

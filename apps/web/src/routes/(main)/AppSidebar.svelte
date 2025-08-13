@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { fragment, graphql } from '$graphql';
-  import type { MainLayout_Sidebar_query } from '$graphql';
   import { Bell, Bookmark, Hash, Home, Mail, Sparkles, User } from '@lucide/svelte';
-  import ProfileDropdown from './ProfileDropdown.svelte';
+  import { fragment, graphql } from '$graphql';
   import AppSidebarMenuButton from './AppSidebarMenuButton.svelte';
+  import ProfileDropdown from './ProfileDropdown.svelte';
+  import type { MainLayout_Sidebar_query } from '$graphql';
 
   const { $query: _query }: { $query: MainLayout_Sidebar_query } = $props();
 
@@ -22,9 +22,9 @@
   );
 </script>
 
-<header class="hidden h-full w-18 sm:block lg:w-60">
-  <div class="fixed flex h-full w-18 flex-col lg:w-60">
-    <div class="p-4 flex rounded-full text-2xl font-bold">
+<header class="w-18 hidden h-full sm:block lg:w-60">
+  <div class="w-18 fixed flex h-full flex-col lg:w-60">
+    <div class="flex rounded-full p-4 text-2xl font-bold">
       <Sparkles class="size-6" />
     </div>
     <nav class="flex flex-col">

@@ -7,3 +7,8 @@ onlyBuiltDependencies:
   - '@tailwindcss/oxide'
   - esbuild
   - sharp
+
+overrides:
+  '@eslint/plugin-kit@<0.3.4': '>=0.3.4'
+  cookie@<0.7.0: '>=0.7.0'
+  esbuild@<=0.24.2: '>=0.25.0'

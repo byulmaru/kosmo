@@ -2,14 +2,14 @@
   import * as validationSchema from '@kosmo/validation';
   import { CirclePlus } from '@lucide/svelte';
   import { z } from 'zod';
-  import { fragment, graphql, type MainLayout_ProfileDropdown_query } from '$graphql';
-  import * as Dialog from '$lib/components/ui/dialog/index';
-  import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index';
-  import { SidebarMenuButton } from '$lib/components/ui/sidebar/index';
+  import { fragment, graphql } from '$graphql';
   import Form from '$lib/components/form/Form.svelte';
   import InputField from '$lib/components/form/InputField.svelte';
   import SubmitButton from '$lib/components/form/SubmitButton.svelte';
+  import * as Dialog from '$lib/components/ui/dialog/index';
+  import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index';
   import { createForm, FormValidationError } from '$lib/form.svelte';
+  import type { MainLayout_ProfileDropdown_query } from '$graphql';
 
   const { $query: _query }: { $query: MainLayout_ProfileDropdown_query } = $props();
 
@@ -23,14 +23,14 @@
           profiles {
             id
             displayName
-            handle
+            fullHandle
           }
         }
 
         usingProfile {
           id
           displayName
-          handle
+          fullHandle
         }
       }
     `),
@@ -99,16 +99,16 @@
 
 <DropdownMenu.Root bind:open={profileMenuOpen}>
   <DropdownMenu.Trigger class="w-full">
-    <SidebarMenuButton size="lg">
+    <div class="hover:bg-muted inline-flex w-full items-center justify-center gap-2 rounded-md p-3">
       <div class="flex aspect-square size-8 items-center justify-center rounded-lg bg-gray-200">
         <span class="text-sm">👤</span>
       </div>
       <div class="grid flex-1 text-left text-sm leading-tight">
         <span class="truncate font-semibold">{$query.usingProfile?.displayName}</span>
-        <span class="truncate text-xs">{$query.usingProfile?.handle}</span>
+        <span class="truncate text-xs">@{$query.usingProfile?.fullHandle}</span>
       </div>
       <span class="ml-auto">⋯</span>
-    </SidebarMenuButton>
+    </div>
   </DropdownMenu.Trigger>
   <DropdownMenu.Content class="w-60">
     <DropdownMenu.Group>

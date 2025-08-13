@@ -11,7 +11,8 @@
     "@kosmo/const": "workspace:*",
     "@kosmo/db": "workspace:*",
     "@kosmo/enum": "workspace:*",
-    "drizzle-orm": "^0.44.4"
+    "drizzle-orm": "^0.44.4",
+    "remeda": "^2.30.0"
   },
   "devDependencies": {
     "eslint": "^9.33.0",

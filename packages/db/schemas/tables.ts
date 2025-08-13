@@ -60,7 +60,7 @@ export const ApplicationGrants = pgTable(
       .notNull()
       .default(sql`now()`),
   },
-  (t) => [uniqueIndex('application_id_account_id_unique').on(t.applicationId, t.accountId)],
+  (t) => [uniqueIndex('account_id_application_id_unique').on(t.accountId, t.applicationId)],
 );
 
 export const ApplicationGrantProfiles = pgTable(

@@ -77,6 +77,20 @@ export default ts.config(
       'unicorn/filename-case': ['error', { cases: { kebabCase: true, pascalCase: true } }],
     },
   },
+
+  {
+    files: ['**/*.svelte', '**/*.svelte.[jt]s'],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        extraFileExtensions: ['.svelte'],
+        parser: ts.parser,
+      },
+    },
+    rules: {
+      'unicorn/filename-case': ['error', { cases: { kebabCase: true, pascalCase: true } }],
+    },
+  },
   {
     ignores: ['build/', '.svelte-kit/', 'dist/'],
   },
