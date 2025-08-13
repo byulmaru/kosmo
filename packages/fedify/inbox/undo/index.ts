@@ -1,5 +1,6 @@
-import { Follow, Undo, type InboxListener } from '@fedify/fedify';
+import { Follow, Undo } from '@fedify/fedify';
 import { undoFollowListener } from './follow';
+import type { InboxListener } from '@fedify/fedify';
 import type { FederationContextData } from '../../type';
 
 export const undoListener: InboxListener<FederationContextData, Undo> = async (ctx, undo) => {

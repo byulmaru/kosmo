@@ -62,9 +62,9 @@ importers:
       '@kosmo/enum':
         specifier: workspace:*
         version: link:../../packages/enum
-      '@kosmo/federation':
+      '@kosmo/fedify':
         specifier: workspace:*
-        version: link:../../packages/federation
+        version: link:../../packages/fedify
       '@kosmo/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
@@ -207,9 +207,9 @@ importers:
       '@kosmo/eslint-config':
         specifier: workspace:*
         version: link:../../packages/eslint-config
-      '@kosmo/federation':
+      '@kosmo/fedify':
         specifier: workspace:*
-        version: link:../../packages/federation
+        version: link:../../packages/fedify
       '@kosmo/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
@@ -422,7 +422,7 @@ importers:
         specifier: ^8.39.1
         version: 8.39.1(eslint@9.33.0(jiti@2.5.1))(typescript@5.9.2)
 
-  packages/federation:
+  packages/fedify:
     dependencies:
       '@fedify/fedify':
         specifier: ^1.8.5

@@ -12,6 +12,7 @@ export const TableCode = {
   Instances: 'INST',
   Profiles: 'PRFL',
   ProfileAccounts: 'PFAC',
+  ProfileActivityPubActors: 'PFAP',
   ProfileCryptographicKeys: 'PFCK',
   ProfileFollows: 'PFFL',
   Sessions: 'SESN',

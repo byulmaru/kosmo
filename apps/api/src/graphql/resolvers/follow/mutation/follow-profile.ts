@@ -1,9 +1,17 @@
-import { db, firstOrThrowWith, ProfileFollows, Profiles } from '@kosmo/db';
+import { Follow, isActor } from '@fedify/fedify';
+import {
+  db,
+  firstOrThrowWith,
+  ProfileActivityPubActors,
+  ProfileFollows,
+  Profiles,
+} from '@kosmo/db';
 import { ProfileState } from '@kosmo/enum';
 import { and, eq } from 'drizzle-orm';
 import { ForbiddenError, NotFoundError } from '@/errors';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
+import { getFedifyContext } from '@/utils/fedify';
 import { getPermittedProfileId } from '@/utils/profile';
 
 builder.mutationField('followProfile', (t) =>
@@ -29,19 +37,49 @@ builder.mutationField('followProfile', (t) =>
         throw new ForbiddenError();
       }
 
-      const targetProfile = await db
-        .select()
+      const { targetProfile, activityPubActor } = await db
+        .select({
+          targetProfile: Profiles,
+          activityPubActor: {
+            uri: ProfileActivityPubActors.uri,
+          },
+        })
         .from(Profiles)
+        .leftJoin(ProfileActivityPubActors, eq(Profiles.id, ProfileActivityPubActors.profileId))
         .where(and(eq(Profiles.id, input.profileId), eq(Profiles.state, ProfileState.ACTIVE)))
         .then(firstOrThrowWith(() => new NotFoundError()));
 
-      await db
-        .insert(ProfileFollows)
-        .values({
-          followerProfileId: actorProfileId,
-          followingProfileId: input.profileId,
-        })
-        .onConflictDoNothing();
+      await db.transaction(async (tx) => {
+        const profileFollows = await tx
+          .insert(ProfileFollows)
+          .values({
+            followerProfileId: actorProfileId,
+            followingProfileId: input.profileId,
+          })
+          .onConflictDoNothing()
+          .returning({ id: ProfileFollows.id });
+
+        if (profileFollows.length > 0) {
+          if (activityPubActor) {
+            const fedifyContext = getFedifyContext();
+            const targetActor = await fedifyContext.lookupObject(activityPubActor.uri);
+
+            if (!isActor(targetActor)) {
+              throw new NotFoundError();
+            }
+
+            await fedifyContext.sendActivity(
+              { identifier: actorProfileId },
+              targetActor,
+              new Follow({
+                actor: fedifyContext.getActorUri(actorProfileId),
+                object: targetActor.id,
+                to: targetActor.id,
+              }),
+            );
+          }
+        }
+      });
 
       return targetProfile;
     },

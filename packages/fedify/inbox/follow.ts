@@ -1,7 +1,8 @@
-import { Accept, Follow, type InboxListener } from '@fedify/fedify';
+import { Accept, Follow } from '@fedify/fedify';
+import { db, first, ProfileFollows, Profiles } from '@kosmo/db';
 import { eq } from 'drizzle-orm';
-import { db, first, Profiles, ProfileFollows } from '@kosmo/db';
-import { getOrCreateProfile } from '../profile';
+import { getOrCreateProfileId } from '../profile';
+import type { InboxListener } from '@fedify/fedify';
 import type { FederationContextData } from '../type';
 
 export const followListener: InboxListener<FederationContextData, Follow> = async (ctx, follow) => {
@@ -28,11 +29,11 @@ export const followListener: InboxListener<FederationContextData, Follow> = asyn
   }
 
   await db.transaction(async (tx) => {
-    const followerProfile = await getOrCreateProfile({ actor: follower, tx });
+    const followerProfileId = await getOrCreateProfileId({ actor: follower, tx });
     await tx
       .insert(ProfileFollows)
       .values({
-        followerProfileId: followerProfile.id,
+        followerProfileId,
         followingProfileId: followingProfile.id,
       })
       .onConflictDoNothing();

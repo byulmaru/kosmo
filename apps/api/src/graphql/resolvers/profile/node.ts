@@ -2,6 +2,7 @@ import { ProfileState } from '@kosmo/enum';
 import { env } from '@/env';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
+import { ProfileActivityPubActorByProfileIdLoader } from '@/utils/loader/profile';
 
 builder.node(Profile, {
   id: { resolve: (profile) => profile.id },
@@ -24,11 +25,21 @@ builder.node(Profile, {
     }),
 
     uri: t.string({
-      resolve: (profile) => profile.uri ?? `${env.PUBLIC_WEB_DOMAIN}/profile/${profile.id}`,
+      resolve: async (profile, _, ctx) => {
+        const profileActivityPubActor = await ProfileActivityPubActorByProfileIdLoader(ctx).load(
+          profile.id,
+        );
+        return profileActivityPubActor?.uri ?? `${env.PUBLIC_WEB_DOMAIN}/profile/${profile.id}`;
+      },
     }),
 
     url: t.string({
-      resolve: (profile) => profile.url ?? `${env.PUBLIC_WEB_DOMAIN}/@${profile.handle}`,
+      resolve: async (profile, _, ctx) => {
+        const profileActivityPubActor = await ProfileActivityPubActorByProfileIdLoader(ctx).load(
+          profile.id,
+        );
+        return profileActivityPubActor?.url ?? `${env.PUBLIC_WEB_DOMAIN}/@${profile.handle}`;
+      },
     }),
   }),
 });

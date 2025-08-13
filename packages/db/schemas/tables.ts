@@ -1,11 +1,11 @@
-import { integer, json, pgTable, text, unique, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
-import { datetime } from './types';
-import { eq, sql } from 'drizzle-orm';
-import { createDbId, TableCode } from './id';
-import * as E from './enums';
 import { AccountState, ProfileState } from '@kosmo/enum';
-import type { Scope } from '@kosmo/type';
+import { eq, sql } from 'drizzle-orm';
+import { integer, json, pgTable, text, unique, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
+import * as E from './enums';
+import { createDbId, TableCode } from './id';
+import { datetime } from './types';
 import type { LANGUAGE_LIST } from '@kosmo/i18n';
+import type { Scope } from '@kosmo/type';
 
 export const Accounts = pgTable(
   'accounts',
@@ -142,8 +142,6 @@ export const Profiles = pgTable(
     id: varchar('id')
       .primaryKey()
       .$defaultFn(() => createDbId(TableCode.Profiles)),
-    uri: varchar('uri'),
-    url: varchar('url'),
     state: E.ProfileState('state').notNull().default(ProfileState.ACTIVE),
     instanceId: varchar('instance_id')
       .references(() => Instances.id)
@@ -151,8 +149,6 @@ export const Profiles = pgTable(
     handle: varchar('handle').notNull(),
     displayName: varchar('display_name').notNull().default(''),
     description: text('description'),
-    inboxUri: varchar('inbox_uri'),
-    sharedInboxUri: varchar('shared_inbox_uri'),
     avatarFileId: varchar('avatar_file_id').references(() => Files.id),
     headerFileId: varchar('header_file_id').references(() => Files.id),
     followingCount: integer('following_count').notNull().default(0),
@@ -161,10 +157,7 @@ export const Profiles = pgTable(
       .notNull()
       .default(sql`now()`),
   },
-  (t) => [
-    uniqueIndex('uri_unique').on(t.uri),
-    uniqueIndex('handle_unique').on(t.instanceId, sql`LOWER(${t.handle})`),
-  ],
+  (t) => [uniqueIndex('handle_unique').on(t.instanceId, sql`LOWER(${t.handle})`)],
 );
 
 export const ProfileAccounts = pgTable('profile_accounts', {
@@ -178,6 +171,23 @@ export const ProfileAccounts = pgTable('profile_accounts', {
     .notNull()
     .references(() => Accounts.id),
   role: E.ProfileAccountRole('role').notNull(),
+  createdAt: datetime('created_at')
+    .notNull()
+    .default(sql`now()`),
+});
+
+export const ProfileActivityPubActors = pgTable('profile_activitypub_actors', {
+  id: varchar('id')
+    .primaryKey()
+    .$defaultFn(() => createDbId(TableCode.ProfileActivityPubActors)),
+  profileId: varchar('profile_id')
+    .notNull()
+    .unique()
+    .references(() => Profiles.id),
+  uri: varchar('uri').notNull().unique(),
+  url: varchar('url').notNull(),
+  inboxUri: varchar('inbox_uri').notNull(),
+  sharedInboxUri: varchar('shared_inbox_uri'),
   createdAt: datetime('created_at')
     .notNull()
     .default(sql`now()`),

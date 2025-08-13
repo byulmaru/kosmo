@@ -24,7 +24,7 @@
     "@kosmo/db": "workspace:*",
     "@kosmo/enum": "workspace:*",
     "@kosmo/eslint-config": "workspace:*",
-    "@kosmo/federation": "workspace:*",
+    "@kosmo/fedify": "workspace:*",
     "@kosmo/i18n": "workspace:*",
     "@kosmo/tsconfig": "workspace:*",
     "@kosmo/validation": "workspace:*",

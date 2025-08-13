@@ -9,14 +9,14 @@ import {
   Person,
   Undo,
 } from '@fedify/fedify';
-import { db, first, Instances, ProfileCryptographicKeys, Profiles } from '../db';
-import { and, eq } from 'drizzle-orm';
-import * as R from 'remeda';
 import { KOSMO_INSTANCE_ID } from '@kosmo/const';
 import { InstanceType } from '@kosmo/enum';
+import { and, eq } from 'drizzle-orm';
+import * as R from 'remeda';
+import { db, first, Instances, ProfileCryptographicKeys, Profiles } from '../db';
 import { followListener } from './inbox/follow';
-import type { FederationContextData } from './type';
 import { undoListener } from './inbox/undo';
+import type { FederationContextData } from './type';
 
 export const federation = createFederation<FederationContextData>({
   kv: new MemoryKvStore(),
@@ -27,10 +27,6 @@ federation
     const profile = await db
       .select({
         id: Profiles.id,
-        uri: Profiles.uri,
-        url: Profiles.url,
-        inboxUri: Profiles.inboxUri,
-        sharedInboxUri: Profiles.sharedInboxUri,
         handle: Profiles.handle,
         displayName: Profiles.displayName,
         description: Profiles.description,

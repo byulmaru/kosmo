@@ -1,5 +1,5 @@
 {
-  "name": "@kosmo/federation",
+  "name": "@kosmo/fedify",
   "version": "0.0.0",
   "private": true,
   "type": "module",

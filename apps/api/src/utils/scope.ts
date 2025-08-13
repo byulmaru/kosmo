@@ -1,4 +1,4 @@
-import type { Scope } from '@kosmo/shared/types/scope';
+import type { Scope } from '@kosmo/type';
 
 type HasScopeParams = {
   scope: Scope;

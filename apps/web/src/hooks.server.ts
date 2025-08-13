@@ -1,4 +1,4 @@
-import { federation } from '@kosmo/federation';
+import { federation } from '@kosmo/fedify';
 import { getXForwardedRequest } from 'x-forwarded-fetch';
 
 export const handle = async ({ event, resolve }) => {
@@ -12,7 +12,9 @@ export const handle = async ({ event, resolve }) => {
 
     async onNotAcceptable(): Promise<Response> {
       const res = await resolve(event);
-      if (res.status !== 404) return res;
+      if (res.status !== 404) {
+        return res;
+      }
       return new Response('Not acceptable', {
         status: 406,
         headers: {
