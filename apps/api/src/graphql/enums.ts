@@ -9,5 +9,6 @@ const createEnumRef = (name: keyof typeof E) => {
 
 createEnumRef('AccountState');
 createEnumRef('InstanceType');
+createEnumRef('ProfileFollowAcceptMode');
 createEnumRef('ProfileState');
 createEnumRef('ProfileRelationshipState');

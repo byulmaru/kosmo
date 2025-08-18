@@ -3,11 +3,13 @@ import {
   db,
   firstOrThrowWith,
   ProfileActivityPubActors,
+  ProfileFollowRequests,
   ProfileFollows,
   Profiles,
 } from '@kosmo/db';
-import { ProfileState } from '@kosmo/enum';
+import { ProfileFollowAcceptMode, ProfileState } from '@kosmo/enum';
 import { and, eq } from 'drizzle-orm';
+import { match } from 'ts-pattern';
 import { ForbiddenError, NotFoundError } from '@/errors';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
@@ -50,14 +52,28 @@ builder.mutationField('followProfile', (t) =>
         .then(firstOrThrowWith(() => new NotFoundError()));
 
       await db.transaction(async (tx) => {
-        const profileFollows = await tx
-          .insert(ProfileFollows)
-          .values({
-            followerProfileId: actorProfileId,
-            followingProfileId: input.profileId,
-          })
-          .onConflictDoNothing()
-          .returning({ id: ProfileFollows.id });
+        const profileFollows = await match(targetProfile.followAcceptMode)
+          .with(ProfileFollowAcceptMode.AUTO, () =>
+            tx
+              .insert(ProfileFollows)
+              .values({
+                followerProfileId: actorProfileId,
+                followingProfileId: input.profileId,
+              })
+              .onConflictDoNothing()
+              .returning({ id: ProfileFollows.id }),
+          )
+          .with(ProfileFollowAcceptMode.MANUAL, () =>
+            tx
+              .insert(ProfileFollowRequests)
+              .values({
+                followerProfileId: actorProfileId,
+                followingProfileId: input.profileId,
+              })
+              .onConflictDoNothing()
+              .returning({ id: ProfileFollowRequests.id }),
+          )
+          .exhaustive();
 
         if (profileFollows.length > 0) {
           if (activityPubActor) {

@@ -1,3 +1,14 @@
+input AcceptFollowRequestInput {
+  actorProfileId: String
+  followerProfileId: String!
+}
+
+union AcceptFollowRequestResult = AcceptFollowRequestSuccess | ForbiddenError | NotFoundError
+
+type AcceptFollowRequestSuccess {
+  profile: Profile!
+}
+
 type Account implements Node {
   id: ID!
   languages: [String!]!
@@ -102,9 +113,11 @@ type LimitExceededError implements Error {
 }
 
 type Mutation {
+  acceptFollowRequest(input: AcceptFollowRequestInput!): AcceptFollowRequestResult!
   createProfile(input: CreateProfileInput!): CreateProfileResult!
   deleteProfile(input: DeleteProfileInput!): DeleteProfileResult!
   followProfile(input: FollowProfileInput!): FollowProfileResult!
+  rejectFollowRequest(input: RejectFollowRequestInput!): RejectFollowRequestResult!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfileResult!
   useProfile(input: UseProfileInput!): UseProfileResult!
 }
@@ -121,6 +134,7 @@ type NotFoundError implements Error {
 type Profile implements Node {
   description: String
   displayName(fallback: Boolean! = true): String!
+  followAcceptMode: ProfileFollowAcceptMode!
   fullHandle: String!
   handle: String!
   id: ID!
@@ -129,6 +143,11 @@ type Profile implements Node {
   state: ProfileState!
   uri: String!
   url: String!
+}
+
+enum ProfileFollowAcceptMode {
+  AUTO
+  MANUAL
 }
 
 type ProfileRelationship {
@@ -155,6 +174,17 @@ type Query {
   nodes(ids: [ID!]!): [Node]!
   profile(handle: String, id: String): Profile
   usingProfile: Profile
+}
+
+input RejectFollowRequestInput {
+  actorProfileId: String
+  followerProfileId: String!
+}
+
+union RejectFollowRequestResult = ForbiddenError | NotFoundError | RejectFollowRequestSuccess
+
+type RejectFollowRequestSuccess {
+  profile: Profile!
 }
 
 """

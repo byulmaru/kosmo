@@ -15,6 +15,7 @@ export const TableCode = {
   ProfileActivityPubActors: 'PFAP',
   ProfileCryptographicKeys: 'PFCK',
   ProfileFollows: 'PFFL',
+  ProfileFollowRequests: 'PFFR',
   Sessions: 'SESN',
 } as const satisfies Record<keyof typeof T, Uppercase<string>>;
 

@@ -28,6 +28,12 @@ export const ProfileAccountRole = {
 } as const;
 export type ProfileAccountRole = keyof typeof ProfileAccountRole;
 
+export const ProfileFollowAcceptMode = {
+  AUTO: 'AUTO',
+  MANUAL: 'MANUAL',
+} as const;
+export type ProfileFollowAcceptMode = keyof typeof ProfileFollowAcceptMode;
+
 export const ProfileRelationshipState = {
   FOLLOW: 'FOLLOW',
   REQUEST_FOLLOW: 'REQUEST_FOLLOW',

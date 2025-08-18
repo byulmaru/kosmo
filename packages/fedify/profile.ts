@@ -7,7 +7,7 @@ import {
   ProfileActivityPubActors,
   Profiles,
 } from '@kosmo/db';
-import { InstanceType } from '@kosmo/enum';
+import { InstanceType, ProfileFollowAcceptMode } from '@kosmo/enum';
 import { eq } from 'drizzle-orm';
 import type { Application, Group, Organization, Person, Service } from '@fedify/fedify';
 import type { Transaction } from '@kosmo/db';
@@ -41,6 +41,9 @@ export const getOrCreateProfileId = async ({ actor, tx }: GetOrCreateProfileIdPa
     handle,
     displayName: actor.name?.toString(),
     instanceId: instance.id,
+    followAcceptMode: actor.manuallyApprovesFollowers
+      ? ProfileFollowAcceptMode.MANUAL
+      : ProfileFollowAcceptMode.AUTO,
   };
 
   const activityPubActorData = {

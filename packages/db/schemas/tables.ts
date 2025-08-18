@@ -1,4 +1,4 @@
-import { AccountState, ProfileState } from '@kosmo/enum';
+import { AccountState, ProfileFollowAcceptMode, ProfileState } from '@kosmo/enum';
 import { eq, sql } from 'drizzle-orm';
 import { integer, json, pgTable, text, unique, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
 import * as E from './enums';
@@ -60,7 +60,7 @@ export const ApplicationGrants = pgTable(
       .notNull()
       .default(sql`now()`),
   },
-  (t) => [uniqueIndex('account_id_application_id_unique').on(t.accountId, t.applicationId)],
+  (t) => [uniqueIndex().on(t.accountId, t.applicationId)],
 );
 
 export const ApplicationGrantProfiles = pgTable(
@@ -77,11 +77,7 @@ export const ApplicationGrantProfiles = pgTable(
       .notNull()
       .default(sql`now()`),
   },
-  (t) => [
-    unique('application_grant_id_profile_id_unique')
-      .on(t.applicationGrantId, t.profileId)
-      .nullsNotDistinct(),
-  ],
+  (t) => [unique().on(t.applicationGrantId, t.profileId).nullsNotDistinct()],
 );
 
 export const ApplicationRedirectUris = pgTable('application_redirect_uris', {
@@ -151,8 +147,9 @@ export const Profiles = pgTable(
     description: text('description'),
     avatarFileId: varchar('avatar_file_id').references(() => Files.id),
     headerFileId: varchar('header_file_id').references(() => Files.id),
-    followingCount: integer('following_count').notNull().default(0),
-    followersCount: integer('followers_count').notNull().default(0),
+    followAcceptMode: E.ProfileFollowAcceptMode('follow_accept_mode')
+      .notNull()
+      .default(ProfileFollowAcceptMode.AUTO),
     createdAt: datetime('created_at')
       .notNull()
       .default(sql`now()`),
@@ -224,12 +221,26 @@ export const ProfileFollows = pgTable(
       .notNull()
       .default(sql`now()`),
   },
-  (t) => [
-    unique('follower_profile_id_following_profile_id_unique').on(
-      t.followerProfileId,
-      t.followingProfileId,
-    ),
-  ],
+  (t) => [unique().on(t.followerProfileId, t.followingProfileId)],
+);
+
+export const ProfileFollowRequests = pgTable(
+  'profile_follow_requests',
+  {
+    id: varchar('id')
+      .primaryKey()
+      .$defaultFn(() => createDbId(TableCode.ProfileFollowRequests)),
+    followerProfileId: varchar('follower_profile_id')
+      .notNull()
+      .references(() => Profiles.id),
+    followingProfileId: varchar('following_profile_id')
+      .notNull()
+      .references(() => Profiles.id),
+    createdAt: datetime('created_at')
+      .notNull()
+      .default(sql`now()`),
+  },
+  (t) => [unique().on(t.followerProfileId, t.followingProfileId)],
 );
 
 export const Sessions = pgTable('sessions', {

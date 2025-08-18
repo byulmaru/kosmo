@@ -1,4 +1,4 @@
-import { ProfileState } from '@kosmo/enum';
+import { ProfileFollowAcceptMode, ProfileState } from '@kosmo/enum';
 import { env } from '@/env';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
@@ -17,6 +17,7 @@ builder.node(Profile, {
     handle: t.exposeString('handle'),
     description: t.exposeString('description', { nullable: true }),
     state: t.expose('state', { type: ProfileState }),
+    followAcceptMode: t.expose('followAcceptMode', { type: ProfileFollowAcceptMode }),
     displayName: t.string({
       args: {
         fallback: t.arg.boolean({ defaultValue: true }),
