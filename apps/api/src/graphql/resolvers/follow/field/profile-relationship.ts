@@ -1,4 +1,4 @@
-import { db, ProfileFollows } from '@kosmo/db';
+import { db, ProfileFollowRequests, ProfileFollows } from '@kosmo/db';
 import { ProfileRelationshipState } from '@kosmo/enum';
 import { and, eq, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
@@ -55,14 +55,55 @@ builder.objectField(Profile, 'relationship', (t) =>
         key: (profileFollow) => profileFollow?.profileId,
       });
 
-      const [following, follower] = await Promise.all([
+      const sentFollowRequestLoader = ctx.loader({
+        name: 'Profile.relationship.sentFollowRequest',
+        nullable: true,
+        load: async (ids) => {
+          return await db
+            .select()
+            .from(ProfileFollowRequests)
+            .where(
+              and(
+                eq(ProfileFollowRequests.profileId, myProfileId),
+                inArray(ProfileFollowRequests.targetProfileId, ids),
+              ),
+            );
+        },
+
+        key: (profileFollowRequest) => profileFollowRequest?.profileId,
+      });
+
+      const receivedFollowRequestLoader = ctx.loader({
+        name: 'Profile.relationship.receivedFollowRequest',
+        nullable: true,
+        load: async (ids) => {
+          return await db
+            .select()
+            .from(ProfileFollowRequests)
+            .where(inArray(ProfileFollowRequests.targetProfileId, ids));
+        },
+
+        key: (profileFollowRequest) => profileFollowRequest?.targetProfileId,
+      });
+
+      const [following, follower, sentFollowRequest, receivedFollowRequest] = await Promise.all([
         followingLoader.load(profile.id),
         followerLoader.load(profile.id),
+        sentFollowRequestLoader.load(profile.id),
+        receivedFollowRequestLoader.load(profile.id),
       ]);
 
       return {
-        to: following ? ProfileRelationshipState.FOLLOW : null,
-        from: follower ? ProfileRelationshipState.FOLLOW : null,
+        to: following
+          ? ProfileRelationshipState.FOLLOW
+          : sentFollowRequest
+            ? ProfileRelationshipState.REQUEST_FOLLOW
+            : null,
+        from: follower
+          ? ProfileRelationshipState.FOLLOW
+          : receivedFollowRequest
+            ? ProfileRelationshipState.REQUEST_FOLLOW
+            : null,
       };
     },
   }),

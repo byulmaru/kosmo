@@ -1,1 +1,1 @@
-import './profile';
+import './profile-relationship';
