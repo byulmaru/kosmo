@@ -7,7 +7,7 @@ import {
   Profiles,
 } from '@kosmo/db';
 import { ProfileState } from '@kosmo/enum';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { ForbiddenError, NotFoundError } from '@/errors';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
@@ -50,13 +50,28 @@ builder.mutationField('unfollowProfile', (t) =>
           .delete(ProfileFollows)
           .where(
             and(
-              eq(ProfileFollows.followerProfileId, actorProfileId),
-              eq(ProfileFollows.followingProfileId, input.profileId),
+              eq(ProfileFollows.profileId, actorProfileId),
+              eq(ProfileFollows.targetProfileId, input.profileId),
             ),
           )
           .returning({ id: ProfileFollows.id });
 
         if (profileFollows.length > 0) {
+          await Promise.all([
+            tx
+              .update(Profiles)
+              .set({
+                followerCount: sql`${Profiles.followerCount} - 1`,
+              })
+              .where(eq(Profiles.id, targetProfile.id)),
+            tx
+              .update(Profiles)
+              .set({
+                followingCount: sql`${Profiles.followingCount} - 1`,
+              })
+              .where(eq(Profiles.id, actorProfileId)),
+          ]);
+
           if (activityPubActor) {
             const fedifyContext = getFedifyContext();
             const targetActor = await fedifyContext.lookupObject(activityPubActor.uri);

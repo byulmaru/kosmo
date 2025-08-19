@@ -8,7 +8,7 @@ import {
   Profiles,
 } from '@kosmo/db';
 import { ProfileFollowAcceptMode, ProfileState } from '@kosmo/enum';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { match } from 'ts-pattern';
 import { ForbiddenError, NotFoundError } from '@/errors';
 import { builder } from '@/graphql/builder';
@@ -57,8 +57,8 @@ builder.mutationField('followProfile', (t) =>
             tx
               .insert(ProfileFollows)
               .values({
-                followerProfileId: actorProfileId,
-                followingProfileId: input.profileId,
+                profileId: actorProfileId,
+                targetProfileId: targetProfile.id,
               })
               .onConflictDoNothing()
               .returning({ id: ProfileFollows.id }),
@@ -67,8 +67,8 @@ builder.mutationField('followProfile', (t) =>
             tx
               .insert(ProfileFollowRequests)
               .values({
-                followerProfileId: actorProfileId,
-                followingProfileId: input.profileId,
+                profileId: actorProfileId,
+                targetProfileId: targetProfile.id,
               })
               .onConflictDoNothing()
               .returning({ id: ProfileFollowRequests.id }),
@@ -76,6 +76,23 @@ builder.mutationField('followProfile', (t) =>
           .exhaustive();
 
         if (profileFollows.length > 0) {
+          if (targetProfile.followAcceptMode === ProfileFollowAcceptMode.AUTO) {
+            await Promise.all([
+              tx
+                .update(Profiles)
+                .set({
+                  followerCount: sql`${Profiles.followerCount} + 1`,
+                })
+                .where(eq(Profiles.id, targetProfile.id)),
+              tx
+                .update(Profiles)
+                .set({
+                  followingCount: sql`${Profiles.followingCount} + 1`,
+                })
+                .where(eq(Profiles.id, actorProfileId)),
+            ]);
+          }
+
           if (activityPubActor) {
             const fedifyContext = getFedifyContext();
             const targetActor = await fedifyContext.lookupObject(activityPubActor.uri);

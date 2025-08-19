@@ -58,6 +58,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.18.2
         version: 1.18.2(hono@4.9.1)
+      '@kosmo/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
       '@kosmo/const':
         specifier: workspace:*
         version: link:../../packages/const
@@ -79,6 +82,9 @@ importers:
       '@kosmo/logger':
         specifier: workspace:*
         version: link:../../packages/logger
+      '@kosmo/redis':
+        specifier: workspace:*
+        version: link:../../packages/redis
       '@kosmo/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
@@ -327,6 +333,21 @@ importers:
         specifier: ^3.25.76
         version: 3.25.76
 
+  packages/cache:
+    dependencies:
+      '@kosmo/db':
+        specifier: workspace:*
+        version: link:../db
+      '@kosmo/enum':
+        specifier: workspace:*
+        version: link:../enum
+      '@kosmo/redis':
+        specifier: workspace:*
+        version: link:../redis
+      drizzle-orm:
+        specifier: ^0.44.4
+        version: 0.44.4(@neondatabase/serverless@1.0.1)(@opentelemetry/api@1.9.0)(@types/pg@8.15.5)(bun-types@1.2.17)(postgres@3.4.7)
+
   packages/const:
     dependencies:
       '@kosmo/enum':
@@ -465,6 +486,9 @@ importers:
       '@fedify/fedify':
         specifier: ^1.8.5
         version: 1.8.5(web-streams-polyfill@3.3.3)
+      '@kosmo/cache':
+        specifier: workspace:*
+        version: link:../cache
       '@kosmo/const':
         specifier: workspace:*
         version: link:../const
@@ -514,6 +538,9 @@ importers:
       ioredis:
         specifier: ^5.7.0
         version: 5.7.0
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
 
   packages/runtime: {}
 

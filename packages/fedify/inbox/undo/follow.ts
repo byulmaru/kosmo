@@ -20,13 +20,13 @@ export const undoFollowListener: InboxUndoListener<Follow> = async (ctx, undo, f
       .where(
         and(
           eq(
-            ProfileFollows.followerProfileId,
+            ProfileFollows.profileId,
             tx
               .select({ id: ProfileActivityPubActors.id })
               .from(ProfileActivityPubActors)
               .where(eq(ProfileActivityPubActors.uri, actorId.href)),
           ),
-          eq(ProfileFollows.followingProfileId, object.identifier),
+          eq(ProfileFollows.targetProfileId, object.identifier),
         ),
       );
   });

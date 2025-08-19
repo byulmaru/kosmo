@@ -8,7 +8,7 @@ import {
   Profiles,
 } from '@kosmo/db';
 import { ProfileState } from '@kosmo/enum';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { ForbiddenError, NotFoundError } from '@/errors';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
@@ -42,12 +42,12 @@ builder.mutationField('acceptFollowRequest', (t) =>
           },
         })
         .from(ProfileFollowRequests)
-        .innerJoin(Profiles, eq(ProfileFollowRequests.followerProfileId, Profiles.id))
+        .innerJoin(Profiles, eq(ProfileFollowRequests.profileId, Profiles.id))
         .leftJoin(ProfileActivityPubActors, eq(Profiles.id, ProfileActivityPubActors.profileId))
         .where(
           and(
-            eq(ProfileFollowRequests.followerProfileId, input.followerProfileId),
-            eq(ProfileFollowRequests.followingProfileId, actorProfileId),
+            eq(ProfileFollowRequests.profileId, input.followerProfileId),
+            eq(ProfileFollowRequests.targetProfileId, actorProfileId),
             eq(Profiles.state, ProfileState.ACTIVE),
           ),
         )
@@ -58,18 +58,29 @@ builder.mutationField('acceptFollowRequest', (t) =>
           .delete(ProfileFollowRequests)
           .where(
             and(
-              eq(ProfileFollowRequests.followerProfileId, input.followerProfileId),
-              eq(ProfileFollowRequests.followingProfileId, actorProfileId),
+              eq(ProfileFollowRequests.profileId, followerProfile.id),
+              eq(ProfileFollowRequests.targetProfileId, actorProfileId),
             ),
           );
 
-        await tx
+        const profileFollows = await tx
           .insert(ProfileFollows)
           .values({
-            followerProfileId: input.followerProfileId,
-            followingProfileId: actorProfileId,
+            profileId: followerProfile.id,
+            targetProfileId: actorProfileId,
           })
           .onConflictDoNothing();
+
+        if (profileFollows.length > 0) {
+          await Promise.all([
+            tx.update(Profiles).set({
+              followerCount: sql`${Profiles.followerCount} + 1`,
+            }).where(eq(Profiles.id, actorProfileId)),
+            tx.update(Profiles).set({
+              followingCount: sql`${Profiles.followingCount} + 1`,
+            }).where(eq(Profiles.id, followerProfile.id)),
+          ]);
+        }
 
         if (followerActivityPubActor) {
           const fedifyContext = getFedifyContext();

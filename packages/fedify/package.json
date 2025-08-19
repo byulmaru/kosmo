@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@fedify/fedify": "^1.8.5",
+    "@kosmo/cache": "workspace:*",
     "@kosmo/const": "workspace:*",
     "@kosmo/db": "workspace:*",
     "@kosmo/enum": "workspace:*",

@@ -1,0 +1,15 @@
+{
+  "name": "@kosmo/cache",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./loader/*.ts"
+  },
+  "dependencies": {
+    "@kosmo/db": "workspace:*",
+    "@kosmo/enum": "workspace:*",
+    "@kosmo/redis": "workspace:*",
+    "drizzle-orm": "^0.44.4"
+  }
+}

@@ -35,21 +35,18 @@ builder.mutationField('rejectFollowRequest', (t) =>
 
       const { followerProfile, followerActivityPubActor } = await db
         .select({
-          followRequest: {
-            id: ProfileFollowRequests.id,
-          },
           followerProfile: Profiles,
           followerActivityPubActor: {
             uri: ProfileActivityPubActors.uri,
           },
         })
         .from(ProfileFollowRequests)
-        .innerJoin(Profiles, eq(ProfileFollowRequests.followerProfileId, Profiles.id))
+        .innerJoin(Profiles, eq(ProfileFollowRequests.profileId, Profiles.id))
         .leftJoin(ProfileActivityPubActors, eq(Profiles.id, ProfileActivityPubActors.profileId))
         .where(
           and(
-            eq(ProfileFollowRequests.followerProfileId, input.followerProfileId),
-            eq(ProfileFollowRequests.followingProfileId, actorProfileId),
+            eq(ProfileFollowRequests.profileId, input.followerProfileId),
+            eq(ProfileFollowRequests.targetProfileId, actorProfileId),
             eq(Profiles.state, ProfileState.ACTIVE),
           ),
         )
@@ -60,8 +57,8 @@ builder.mutationField('rejectFollowRequest', (t) =>
           .delete(ProfileFollowRequests)
           .where(
             and(
-              eq(ProfileFollowRequests.followerProfileId, input.followerProfileId),
-              eq(ProfileFollowRequests.followingProfileId, actorProfileId),
+              eq(ProfileFollowRequests.profileId, followerProfile.id),
+              eq(ProfileFollowRequests.targetProfileId, actorProfileId),
             ),
           );
 

@@ -12,6 +12,7 @@ import { createDbId, TableCode } from './id';
 import { datetime } from './types';
 import type { LANGUAGE_LIST } from '@kosmo/i18n';
 import type { Scope } from '@kosmo/type';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 export const Accounts = pgTable(
   'accounts',
@@ -148,8 +149,8 @@ export const Posts = pgTable('posts', {
   state: E.PostState('state').notNull().default(PostState.ACTIVE),
   visibility: E.PostVisibility('visibility').notNull().default(PostVisibility.PUBLIC),
   content: text('content').notNull(),
-  replyToPostId: varchar('reply_to_post_id').references(() => Posts.id),
-  repostOfPostId: varchar('repost_of_post_id').references(() => Posts.id),
+  replyToPostId: varchar('reply_to_post_id').references((): AnyPgColumn => Posts.id),
+  repostOfPostId: varchar('repost_of_post_id').references((): AnyPgColumn => Posts.id),
   createdAt: datetime('created_at')
     .notNull()
     .default(sql`now()`),
@@ -175,6 +176,8 @@ export const Profiles = pgTable(
     followAcceptMode: E.ProfileFollowAcceptMode('follow_accept_mode')
       .notNull()
       .default(ProfileFollowAcceptMode.AUTO),
+    followingCount: integer('following_count').notNull().default(0),
+    followerCount: integer('follower_count').notNull().default(0),
     createdAt: datetime('created_at')
       .notNull()
       .default(sql`now()`),
@@ -236,17 +239,17 @@ export const ProfileFollows = pgTable(
     id: varchar('id')
       .primaryKey()
       .$defaultFn(() => createDbId(TableCode.ProfileFollows)),
-    followerProfileId: varchar('follower_profile_id')
+    profileId: varchar('profile_id')
       .notNull()
       .references(() => Profiles.id),
-    followingProfileId: varchar('following_profile_id')
+    targetProfileId: varchar('target_profile_id')
       .notNull()
       .references(() => Profiles.id),
     createdAt: datetime('created_at')
       .notNull()
       .default(sql`now()`),
   },
-  (t) => [unique().on(t.followerProfileId, t.followingProfileId)],
+  (t) => [unique().on(t.profileId, t.targetProfileId)],
 );
 
 export const ProfileFollowRequests = pgTable(
@@ -255,17 +258,17 @@ export const ProfileFollowRequests = pgTable(
     id: varchar('id')
       .primaryKey()
       .$defaultFn(() => createDbId(TableCode.ProfileFollowRequests)),
-    followerProfileId: varchar('follower_profile_id')
+    profileId: varchar('profile_id')
       .notNull()
       .references(() => Profiles.id),
-    followingProfileId: varchar('following_profile_id')
+    targetProfileId: varchar('target_profile_id')
       .notNull()
       .references(() => Profiles.id),
     createdAt: datetime('created_at')
       .notNull()
       .default(sql`now()`),
   },
-  (t) => [unique().on(t.followerProfileId, t.followingProfileId)],
+  (t) => [unique().on(t.profileId, t.targetProfileId)],
 );
 
 export const Sessions = pgTable('sessions', {

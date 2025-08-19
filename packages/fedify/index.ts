@@ -14,6 +14,7 @@ import { InstanceType } from '@kosmo/enum';
 import { and, eq } from 'drizzle-orm';
 import * as R from 'remeda';
 import { db, first, Instances, ProfileCryptographicKeys, Profiles } from '../db';
+import { followerCounter, followerDispatcher } from './dispatcher/follower';
 import { followListener } from './inbox/follow';
 import { undoListener } from './inbox/undo';
 import type { FederationContextData } from './type';
@@ -53,6 +54,7 @@ federation
       urls: [new URL(`/@${profile.handle}`, ctx.origin)],
       publicKey: keys[0].cryptographicKey,
       assertionMethods: keys.map((key) => key.multikey),
+      followers: ctx.getFollowersUri(identifier),
     });
   })
   .setKeyPairsDispatcher(async (ctx, identifier) => {
@@ -111,3 +113,6 @@ federation
   .setInboxListeners('/profile/{identifier}/inbox', '/inbox')
   .on(Follow, followListener)
   .on(Undo, undoListener);
+
+federation.setFollowersDispatcher('/profile/{identifier}/followers', followerDispatcher)
+.setCounter(followerCounter)

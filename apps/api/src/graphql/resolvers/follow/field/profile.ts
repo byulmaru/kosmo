@@ -28,13 +28,13 @@ builder.objectField(Profile, 'relationship', (t) =>
             .from(ProfileFollows)
             .where(
               and(
-                eq(ProfileFollows.followerProfileId, myProfileId),
-                inArray(ProfileFollows.followingProfileId, ids),
+                eq(ProfileFollows.profileId, myProfileId),
+                inArray(ProfileFollows.targetProfileId, ids),
               ),
             );
         },
 
-        key: (profileFollow) => profileFollow?.followingProfileId,
+        key: (profileFollow) => profileFollow?.targetProfileId,
       });
 
       const followerLoader = ctx.loader({
@@ -46,13 +46,13 @@ builder.objectField(Profile, 'relationship', (t) =>
             .from(ProfileFollows)
             .where(
               and(
-                eq(ProfileFollows.followingProfileId, myProfileId),
-                inArray(ProfileFollows.followerProfileId, ids),
+                eq(ProfileFollows.targetProfileId, myProfileId),
+                inArray(ProfileFollows.profileId, ids),
               ),
             );
         },
 
-        key: (profileFollow) => profileFollow?.followerProfileId,
+        key: (profileFollow) => profileFollow?.profileId,
       });
 
       const [following, follower] = await Promise.all([

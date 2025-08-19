@@ -30,6 +30,7 @@ export default ts.config(
       curly: ['error', 'all'],
       'import/consistent-type-specifier-style': ['error', 'prefer-top-level'],
       'import/first': 'error',
+      'import/named': 'off',
       'import/newline-after-import': ['error', { considerComments: true }],
       'import/no-default-export': 'error',
       'import/no-duplicates': 'error',

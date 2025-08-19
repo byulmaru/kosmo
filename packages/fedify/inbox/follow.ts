@@ -18,7 +18,7 @@ export const followListener: InboxListener<FederationContextData, Follow> = asyn
     return;
   }
 
-  const followingProfile = await db
+  const targetProfile = await db
     .select({
       id: Profiles.id,
       followAcceptMode: Profiles.followAcceptMode,
@@ -27,20 +27,20 @@ export const followListener: InboxListener<FederationContextData, Follow> = asyn
     .where(eq(Profiles.id, object.identifier))
     .then(first);
 
-  if (followingProfile === undefined) {
+  if (targetProfile === undefined) {
     return;
   }
 
   await db.transaction(async (tx) => {
-    const followerProfileId = await getOrCreateProfileId({ actor: follower, tx });
+    const actorProfileId = await getOrCreateProfileId({ actor: follower, tx });
 
-    await match(followingProfile.followAcceptMode)
+    await match(targetProfile.followAcceptMode)
       .with(ProfileFollowAcceptMode.AUTO, async () => {
         await tx
           .insert(ProfileFollows)
           .values({
-            followerProfileId,
-            followingProfileId: followingProfile.id,
+            profileId: actorProfileId,
+            targetProfileId: targetProfile.id,
           })
           .onConflictDoNothing();
 
@@ -58,8 +58,8 @@ export const followListener: InboxListener<FederationContextData, Follow> = asyn
         await tx
           .insert(ProfileFollowRequests)
           .values({
-            followerProfileId,
-            followingProfileId: followingProfile.id,
+            profileId: actorProfileId,
+            targetProfileId: targetProfile.id,
           })
           .onConflictDoNothing();
       })
