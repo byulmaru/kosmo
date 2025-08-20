@@ -1,5 +1,5 @@
 import tlds from 'tlds';
-import z from 'zod';
+import { z } from 'zod';
 
 export const stringifyPath = (path: (string | number)[]) =>
   path
@@ -15,3 +15,8 @@ export const handle = z
   .refine((str) => !str.startsWith('-') && !str.endsWith('-'), 'error.handle.startsOrEndsWith')
   .refine((str) => str.substring(2, 4) !== '--', 'error.handle.notAllowed')
   .refine((str) => !tlds.includes(str.toLowerCase()), 'error.handle.notAllowed');
+
+export const postContent = z
+  .string()
+  .min(1, 'error.post.content.min')
+  .max(500, 'error.post.content.max');

@@ -95,6 +95,7 @@ export const builder = new SchemaBuilder<{
         typename: match(tableCode as (typeof TableCode)[keyof typeof TableCode])
           .with('ACNT', () => 'Account')
           .with('INST', () => 'Instance')
+          .with('POST', () => 'Post')
           .with('PRFL', () => 'Profile')
           .run(),
         id: globalId,

@@ -1,1 +1,8 @@
-export type Scope = '$superapp' | 'meta-profile' | 'profile' | 'profile:read' | 'relationship';
+export type Scope =
+  | '$superapp'
+  | 'meta-profile'
+  | 'post:read'
+  | 'post:write'
+  | 'profile'
+  | 'profile:read'
+  | 'relationship';

@@ -37,6 +37,19 @@ type Count {
   max: Int
 }
 
+input CreatePostInput {
+  actorProfileId: String
+  content: String!
+  replyToPostId: String
+  visibility: PostVisibility
+}
+
+union CreatePostResult = CreatePostSuccess | ForbiddenError | ValidationError
+
+type CreatePostSuccess {
+  post: Post!
+}
+
 input CreateProfileInput {
   handle: String!
   useCreatedProfile: Boolean! = true
@@ -46,6 +59,17 @@ union CreateProfileResult = CreateProfileSuccess | LimitExceededError | Validati
 
 type CreateProfileSuccess {
   profile: Profile!
+}
+
+input DeletePostInput {
+  actorProfileId: String
+  postId: String!
+}
+
+union DeletePostResult = DeletePostSuccess | NotFoundError
+
+type DeletePostSuccess {
+  post: Post!
 }
 
 input DeleteProfileInput {
@@ -110,7 +134,9 @@ type LimitExceededError implements Error {
 
 type Mutation {
   acceptFollowRequest(input: AcceptFollowRequestInput!): AcceptFollowRequestResult!
+  createPost(input: CreatePostInput!): CreatePostResult!
   createProfile(input: CreateProfileInput!): CreateProfileResult!
+  deletePost(input: DeletePostInput!): DeletePostResult!
   deleteProfile(input: DeleteProfileInput!): DeleteProfileResult!
   followProfile(input: FollowProfileInput!): FollowProfileResult!
   rejectFollowRequest(input: RejectFollowRequestInput!): RejectFollowRequestResult!
@@ -125,6 +151,31 @@ interface Node {
 type NotFoundError implements Error {
   code: String!
   message: String!
+}
+
+type Post implements Node {
+  author: Profile!
+  content: String!
+  createdAt: Timestamp!
+  id: ID!
+  replyToPost: Post
+  repostOfPost: Post
+  state: PostState!
+  updatedAt: Timestamp
+  visibility: PostVisibility!
+}
+
+enum PostState {
+  ACTIVE
+  DELETED
+  HIDDEN
+}
+
+enum PostVisibility {
+  DIRECT
+  FOLLOWER
+  PUBLIC
+  UNLISTED
 }
 
 type Profile implements Node {
@@ -168,6 +219,7 @@ type Query {
   me: Account
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
+  post(id: String!): Post
   profile(handle: String, id: String): Profile
   usingProfile: Profile
 }
