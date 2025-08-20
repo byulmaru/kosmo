@@ -10,6 +10,7 @@ export const TableCode = {
   ApplicationSecrets: 'APPS',
   Files: 'FILE',
   Instances: 'INST',
+  Posts: 'POST',
   Profiles: 'PRFL',
   ProfileAccounts: 'PFAC',
   ProfileActivityPubActors: 'PFAP',

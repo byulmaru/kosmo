@@ -22,6 +22,21 @@ export const InstanceType = {
 } as const;
 export type InstanceType = keyof typeof InstanceType;
 
+export const PostState = {
+  ACTIVE: 'ACTIVE',
+  HIDDEN: 'HIDDEN',
+  DELETED: 'DELETED',
+} as const;
+export type PostState = keyof typeof PostState;
+
+export const PostVisibility = {
+  PUBLIC: 'PUBLIC',
+  UNLISTED: 'UNLISTED',
+  FOLLOWER: 'FOLLOWER',
+  DIRECT: 'DIRECT',
+} as const;
+export type PostVisibility = keyof typeof PostVisibility;
+
 export const ProfileAccountRole = {
   OWNER: 'OWNER',
   MEMBER: 'MEMBER',

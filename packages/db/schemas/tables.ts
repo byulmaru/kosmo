@@ -1,4 +1,10 @@
-import { AccountState, ProfileFollowAcceptMode, ProfileState } from '@kosmo/enum';
+import {
+  AccountState,
+  PostState,
+  PostVisibility,
+  ProfileFollowAcceptMode,
+  ProfileState,
+} from '@kosmo/enum';
 import { eq, sql } from 'drizzle-orm';
 import { integer, json, pgTable, text, unique, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
 import * as E from './enums';
@@ -130,6 +136,25 @@ export const Instances = pgTable('instances', {
   createdAt: datetime('created_at')
     .notNull()
     .default(sql`now()`),
+});
+
+export const Posts = pgTable('posts', {
+  id: varchar('id')
+    .primaryKey()
+    .$defaultFn(() => createDbId(TableCode.Posts)),
+  profileId: varchar('profile_id')
+    .notNull()
+    .references(() => Profiles.id),
+  state: E.PostState('state').notNull().default(PostState.ACTIVE),
+  visibility: E.PostVisibility('visibility').notNull().default(PostVisibility.PUBLIC),
+  content: text('content').notNull(),
+  replyToPostId: varchar('reply_to_post_id').references(() => Posts.id),
+  repostOfPostId: varchar('repost_of_post_id').references(() => Posts.id),
+  createdAt: datetime('created_at')
+    .notNull()
+    .default(sql`now()`),
+  updatedAt: datetime('updated_at'),
+  deletedAt: datetime('deleted_at'),
 });
 
 export const Profiles = pgTable(

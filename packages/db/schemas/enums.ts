@@ -9,6 +9,8 @@ export const AccountState = createPgEnum('_account_state', E.AccountState);
 export const CryptographicKeyKind = createPgEnum('_cryptographic_key_kind', E.CryptographicKeyKind);
 export const FileOwnership = createPgEnum('_file_ownership', E.FileOwnership);
 export const InstanceType = createPgEnum('_instance_type', E.InstanceType);
+export const PostState = createPgEnum('_post_state', E.PostState);
+export const PostVisibility = createPgEnum('_post_visibility', E.PostVisibility);
 export const ProfileAccountRole = createPgEnum('_profile_account_role', E.ProfileAccountRole);
 export const ProfileFollowAcceptMode = createPgEnum(
   '_profile_follow_accept_mode',
