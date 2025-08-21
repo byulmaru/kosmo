@@ -21,9 +21,7 @@ enum AccountState {
   DELETED
 }
 
-"""
-Base64 encoded binary data
-"""
+"""Base64 encoded binary data"""
 scalar Binary
 
 type ConflictError implements Error {
@@ -34,9 +32,7 @@ type ConflictError implements Error {
 type Count {
   current: Int!
 
-  """
-  null if unlimited
-  """
+  """null if unlimited"""
   max: Int
 }
 
@@ -252,9 +248,7 @@ type RejectFollowRequestSuccess {
   profile: Profile!
 }
 
-"""
-Unix timestamp in milliseconds
-"""
+"""Unix timestamp in milliseconds"""
 scalar Timestamp
 
 input UnfollowProfileInput {
