@@ -22,11 +22,14 @@ export const builder = new SchemaBuilder<{
   AuthContexts: {
     session: UserContext & SessionContext;
     scope: UserContext & SessionContext;
+    profile: UserContext & SessionContext & { session: { profileId: string } };
   };
   AuthScopes: {
     session: boolean;
     scope: Scope;
+    profile: boolean;
   };
+  DefaultAuthStrategy: 'all';
   Context: UserContext;
   DefaultInputFieldRequiredness: true;
   DefaultFieldNullability: false;
@@ -54,8 +57,8 @@ export const builder = new SchemaBuilder<{
   scopeAuth: {
     authScopes: (context) => ({
       session: !!context.session,
-      profile: !!context.session?.profileId,
       scope: (scope) => hasScope({ scope, sessionScopes: context.session?.scopes }),
+      profile: !!context.session?.profileId,
     }),
     treatErrorsAsUnauthorized: true,
     authorizeOnSubscribe: true,

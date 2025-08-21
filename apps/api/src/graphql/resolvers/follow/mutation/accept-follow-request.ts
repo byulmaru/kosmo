@@ -13,14 +13,12 @@ import { ForbiddenError, NotFoundError } from '@/errors';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
 import { getFedifyContext } from '@/utils/fedify';
-import { getPermittedProfileId } from '@/utils/profile';
 
 builder.mutationField('acceptFollowRequest', (t) =>
-  t.withAuth({ scope: 'relationship' }).fieldWithInput({
+  t.withAuth({ scope: 'relationship', profile: true }).fieldWithInput({
     type: Profile,
     input: {
-      followerProfileId: t.input.string(),
-      actorProfileId: t.input.string({ required: false }),
+      profileId: t.input.string(),
     },
 
     errors: {
@@ -29,11 +27,6 @@ builder.mutationField('acceptFollowRequest', (t) =>
     },
 
     resolve: async (_, { input }, ctx) => {
-      const actorProfileId = await getPermittedProfileId({
-        ctx,
-        actorProfileId: input.actorProfileId,
-      });
-
       const { followerProfile, followerActivityPubActor } = await db
         .select({
           followerProfile: Profiles,
@@ -46,8 +39,8 @@ builder.mutationField('acceptFollowRequest', (t) =>
         .leftJoin(ProfileActivityPubActors, eq(Profiles.id, ProfileActivityPubActors.profileId))
         .where(
           and(
-            eq(ProfileFollowRequests.profileId, input.followerProfileId),
-            eq(ProfileFollowRequests.targetProfileId, actorProfileId),
+            eq(ProfileFollowRequests.profileId, input.profileId),
+            eq(ProfileFollowRequests.targetProfileId, ctx.session.profileId),
             eq(Profiles.state, ProfileState.ACTIVE),
           ),
         )
@@ -59,7 +52,7 @@ builder.mutationField('acceptFollowRequest', (t) =>
           .where(
             and(
               eq(ProfileFollowRequests.profileId, followerProfile.id),
-              eq(ProfileFollowRequests.targetProfileId, actorProfileId),
+              eq(ProfileFollowRequests.targetProfileId, ctx.session.profileId),
             ),
           );
 
@@ -67,18 +60,24 @@ builder.mutationField('acceptFollowRequest', (t) =>
           .insert(ProfileFollows)
           .values({
             profileId: followerProfile.id,
-            targetProfileId: actorProfileId,
+            targetProfileId: ctx.session.profileId,
           })
           .onConflictDoNothing();
 
         if (profileFollows.length > 0) {
           await Promise.all([
-            tx.update(Profiles).set({
-              followerCount: sql`${Profiles.followerCount} + 1`,
-            }).where(eq(Profiles.id, actorProfileId)),
-            tx.update(Profiles).set({
-              followingCount: sql`${Profiles.followingCount} + 1`,
-            }).where(eq(Profiles.id, followerProfile.id)),
+            tx
+              .update(Profiles)
+              .set({
+                followerCount: sql`${Profiles.followerCount} + 1`,
+              })
+              .where(eq(Profiles.id, ctx.session.profileId)),
+            tx
+              .update(Profiles)
+              .set({
+                followingCount: sql`${Profiles.followingCount} + 1`,
+              })
+              .where(eq(Profiles.id, followerProfile.id)),
           ]);
         }
 
@@ -91,10 +90,10 @@ builder.mutationField('acceptFollowRequest', (t) =>
           }
 
           await fedifyContext.sendActivity(
-            { identifier: actorProfileId },
+            { identifier: ctx.session.profileId },
             followerActor,
             new Accept({
-              actor: fedifyContext.getActorUri(actorProfileId),
+              actor: fedifyContext.getActorUri(ctx.session.profileId),
               object: followerActor.id,
               to: followerActor.id,
             }),

@@ -185,21 +185,25 @@ export const Profiles = pgTable(
   (t) => [uniqueIndex('handle_unique').on(t.instanceId, sql`LOWER(${t.handle})`)],
 );
 
-export const ProfileAccounts = pgTable('profile_accounts', {
-  id: varchar('id')
-    .primaryKey()
-    .$defaultFn(() => createDbId(TableCode.ProfileAccounts)),
-  profileId: varchar('profile_id')
-    .notNull()
-    .references(() => Profiles.id),
-  accountId: varchar('account_id')
-    .notNull()
-    .references(() => Accounts.id),
-  role: E.ProfileAccountRole('role').notNull(),
-  createdAt: datetime('created_at')
-    .notNull()
-    .default(sql`now()`),
-});
+export const ProfileAccounts = pgTable(
+  'profile_accounts',
+  {
+    id: varchar('id')
+      .primaryKey()
+      .$defaultFn(() => createDbId(TableCode.ProfileAccounts)),
+    accountId: varchar('account_id')
+      .notNull()
+      .references(() => Accounts.id),
+    profileId: varchar('profile_id')
+      .notNull()
+      .references(() => Profiles.id),
+    role: E.ProfileAccountRole('role').notNull(),
+    createdAt: datetime('created_at')
+      .notNull()
+      .default(sql`now()`),
+  },
+  (t) => [unique().on(t.accountId, t.profileId)],
+);
 
 export const ProfileActivityPubActors = pgTable('profile_activitypub_actors', {
   id: varchar('id')

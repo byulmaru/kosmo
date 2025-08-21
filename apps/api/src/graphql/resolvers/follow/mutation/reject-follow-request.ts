@@ -12,14 +12,12 @@ import { ForbiddenError, NotFoundError } from '@/errors';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
 import { getFedifyContext } from '@/utils/fedify';
-import { getPermittedProfileId } from '@/utils/profile';
 
 builder.mutationField('rejectFollowRequest', (t) =>
-  t.withAuth({ scope: 'relationship' }).fieldWithInput({
+  t.withAuth({ scope: 'relationship', profile: true }).fieldWithInput({
     type: Profile,
     input: {
-      followerProfileId: t.input.string(),
-      actorProfileId: t.input.string({ required: false }),
+      profileId: t.input.string(),
     },
 
     errors: {
@@ -28,11 +26,6 @@ builder.mutationField('rejectFollowRequest', (t) =>
     },
 
     resolve: async (_, { input }, ctx) => {
-      const actorProfileId = await getPermittedProfileId({
-        ctx,
-        actorProfileId: input.actorProfileId,
-      });
-
       const { followerProfile, followerActivityPubActor } = await db
         .select({
           followerProfile: Profiles,
@@ -45,8 +38,8 @@ builder.mutationField('rejectFollowRequest', (t) =>
         .leftJoin(ProfileActivityPubActors, eq(Profiles.id, ProfileActivityPubActors.profileId))
         .where(
           and(
-            eq(ProfileFollowRequests.profileId, input.followerProfileId),
-            eq(ProfileFollowRequests.targetProfileId, actorProfileId),
+            eq(ProfileFollowRequests.profileId, input.profileId),
+            eq(ProfileFollowRequests.targetProfileId, ctx.session.profileId),
             eq(Profiles.state, ProfileState.ACTIVE),
           ),
         )
@@ -58,7 +51,7 @@ builder.mutationField('rejectFollowRequest', (t) =>
           .where(
             and(
               eq(ProfileFollowRequests.profileId, followerProfile.id),
-              eq(ProfileFollowRequests.targetProfileId, actorProfileId),
+              eq(ProfileFollowRequests.targetProfileId, ctx.session.profileId),
             ),
           );
 
@@ -71,10 +64,10 @@ builder.mutationField('rejectFollowRequest', (t) =>
           }
 
           await fedifyContext.sendActivity(
-            { identifier: actorProfileId },
+            { identifier: ctx.session.profileId },
             followerActor,
             new Reject({
-              actor: fedifyContext.getActorUri(actorProfileId),
+              actor: fedifyContext.getActorUri(ctx.session.profileId),
               object: followerActor.id,
               to: followerActor.id,
             }),

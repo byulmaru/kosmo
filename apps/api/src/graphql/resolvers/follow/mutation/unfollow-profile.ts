@@ -12,14 +12,12 @@ import { ForbiddenError, NotFoundError } from '@/errors';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
 import { getFedifyContext } from '@/utils/fedify';
-import { getPermittedProfileId } from '@/utils/profile';
 
 builder.mutationField('unfollowProfile', (t) =>
-  t.withAuth({ scope: 'relationship' }).fieldWithInput({
+  t.withAuth({ scope: 'relationship', profile: true }).fieldWithInput({
     type: Profile,
     input: {
       profileId: t.input.string(),
-      actorProfileId: t.input.string({ required: false }),
     },
 
     errors: {
@@ -28,11 +26,6 @@ builder.mutationField('unfollowProfile', (t) =>
     },
 
     resolve: async (_, { input }, ctx) => {
-      const actorProfileId = await getPermittedProfileId({
-        ctx,
-        actorProfileId: input.actorProfileId,
-      });
-
       const { targetProfile, activityPubActor } = await db
         .select({
           targetProfile: Profiles,
@@ -50,7 +43,7 @@ builder.mutationField('unfollowProfile', (t) =>
           .delete(ProfileFollows)
           .where(
             and(
-              eq(ProfileFollows.profileId, actorProfileId),
+              eq(ProfileFollows.profileId, ctx.session.profileId),
               eq(ProfileFollows.targetProfileId, input.profileId),
             ),
           )
@@ -69,7 +62,7 @@ builder.mutationField('unfollowProfile', (t) =>
               .set({
                 followingCount: sql`${Profiles.followingCount} - 1`,
               })
-              .where(eq(Profiles.id, actorProfileId)),
+              .where(eq(Profiles.id, ctx.session.profileId)),
           ]);
 
           if (activityPubActor) {
@@ -81,13 +74,13 @@ builder.mutationField('unfollowProfile', (t) =>
             }
 
             await fedifyContext.sendActivity(
-              { identifier: actorProfileId },
+              { identifier: ctx.session.profileId },
               targetActor,
               new Undo({
-                actor: fedifyContext.getActorUri(actorProfileId),
+                actor: fedifyContext.getActorUri(ctx.session.profileId),
                 to: targetActor.id,
                 object: new Follow({
-                  actor: fedifyContext.getActorUri(actorProfileId),
+                  actor: fedifyContext.getActorUri(ctx.session.profileId),
                   object: targetActor.id,
                 }),
               }),

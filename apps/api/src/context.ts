@@ -1,8 +1,18 @@
 import { getConnInfo } from '@hono/node-server/conninfo';
-import { Accounts, db, first, Sessions } from '@kosmo/db';
+import {
+  Accounts,
+  ApplicationGrantProfiles,
+  ApplicationGrants,
+  db,
+  first,
+  ProfileAccounts,
+  Profiles,
+  Sessions,
+} from '@kosmo/db';
+import { ProfileState } from '@kosmo/enum';
 import { getLanguagesByAcceptLanguageHeader } from '@kosmo/i18n';
 import DataLoader from 'dataloader';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, or } from 'drizzle-orm';
 import stringify from 'fast-json-stable-stringify';
 import IPAddr from 'ipaddr.js';
 import * as R from 'remeda';
@@ -104,18 +114,50 @@ export const deriveContext = async (c: ServerContext): Promise<Context> => {
 
   const accessToken = c.req.header('Authorization')?.match(/^Bearer (.+)$/)?.[1];
   if (accessToken) {
+    const headerProfileId = c.req.header('X-Actor-Profile-Id');
     const session = await db
       .select({
         id: Sessions.id,
         applicationId: Sessions.applicationId,
         accountId: Sessions.accountId,
-        profileId: Sessions.profileId,
         scopes: Sessions.scopes,
         languages: Accounts.languages,
+        profileId: Profiles.id,
       })
       .from(Sessions)
       .innerJoin(Accounts, eq(Sessions.accountId, Accounts.id))
+      .innerJoin(
+        ApplicationGrants,
+        and(
+          eq(ApplicationGrants.accountId, Sessions.accountId),
+          eq(ApplicationGrants.applicationId, Sessions.applicationId),
+        ),
+      )
+      .leftJoin(
+        ApplicationGrantProfiles,
+        eq(ApplicationGrants.id, ApplicationGrantProfiles.applicationGrantId),
+      )
+      .leftJoin(
+        ProfileAccounts,
+        and(
+          eq(Sessions.accountId, ProfileAccounts.accountId),
+          eq(ProfileAccounts.profileId, headerProfileId ?? Sessions.profileId),
+        ),
+      )
+      .leftJoin(
+        Profiles,
+        and(
+          eq(Profiles.id, ProfileAccounts.profileId),
+          eq(Profiles.state, ProfileState.ACTIVE),
+          isNotNull(ApplicationGrantProfiles.id),
+          or(
+            eq(ApplicationGrantProfiles.profileId, Profiles.id),
+            isNull(ApplicationGrantProfiles.profileId),
+          ),
+        ),
+      )
       .where(eq(Sessions.token, accessToken))
+      .limit(1)
       .then(first);
 
     if (session) {

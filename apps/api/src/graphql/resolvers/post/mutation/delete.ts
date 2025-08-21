@@ -5,14 +5,12 @@ import { and, eq } from 'drizzle-orm';
 import { NotFoundError } from '@/errors';
 import { builder } from '@/graphql/builder';
 import { Post } from '@/graphql/objects';
-import { getPermittedProfileId } from '@/utils/profile';
 
 builder.mutationField('deletePost', (t) =>
-  t.withAuth({ scope: 'post:write' }).fieldWithInput({
+  t.withAuth({ scope: 'post:write', profile: true }).fieldWithInput({
     type: Post,
     input: {
       postId: t.input.string(),
-      actorProfileId: t.input.string({ required: false }),
     },
 
     errors: {
@@ -21,11 +19,6 @@ builder.mutationField('deletePost', (t) =>
     },
 
     resolve: async (_, { input }, ctx) => {
-      const actorProfileId = await getPermittedProfileId({
-        ctx,
-        actorProfileId: input.actorProfileId,
-      });
-
       const post = await db
         .select({ id: Posts.id })
         .from(Posts)
@@ -33,7 +26,7 @@ builder.mutationField('deletePost', (t) =>
           and(
             eq(Posts.id, input.postId),
             eq(Posts.state, PostState.ACTIVE),
-            eq(Posts.profileId, actorProfileId),
+            eq(Posts.profileId, ctx.session.profileId),
           ),
         )
         .then(firstOrThrowWith(() => new NotFoundError({ code: 'error.post.notFound' })));

@@ -14,14 +14,12 @@ import { ForbiddenError, NotFoundError } from '@/errors';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
 import { getFedifyContext } from '@/utils/fedify';
-import { getPermittedProfileId } from '@/utils/profile';
 
 builder.mutationField('followProfile', (t) =>
-  t.withAuth({ scope: 'relationship' }).fieldWithInput({
+  t.withAuth({ scope: 'relationship', profile: true }).fieldWithInput({
     type: Profile,
     input: {
       profileId: t.input.string(),
-      actorProfileId: t.input.string({ required: false }),
     },
 
     errors: {
@@ -30,12 +28,7 @@ builder.mutationField('followProfile', (t) =>
     },
 
     resolve: async (_, { input }, ctx) => {
-      const actorProfileId = await getPermittedProfileId({
-        ctx,
-        actorProfileId: input.actorProfileId,
-      });
-
-      if (actorProfileId === input.profileId) {
+      if (ctx.session.profileId === input.profileId) {
         throw new ForbiddenError();
       }
 
@@ -57,7 +50,7 @@ builder.mutationField('followProfile', (t) =>
             tx
               .insert(ProfileFollows)
               .values({
-                profileId: actorProfileId,
+                profileId: ctx.session.profileId,
                 targetProfileId: targetProfile.id,
               })
               .onConflictDoNothing()
@@ -67,7 +60,7 @@ builder.mutationField('followProfile', (t) =>
             tx
               .insert(ProfileFollowRequests)
               .values({
-                profileId: actorProfileId,
+                profileId: ctx.session.profileId,
                 targetProfileId: targetProfile.id,
               })
               .onConflictDoNothing()
@@ -89,7 +82,7 @@ builder.mutationField('followProfile', (t) =>
                 .set({
                   followingCount: sql`${Profiles.followingCount} + 1`,
                 })
-                .where(eq(Profiles.id, actorProfileId)),
+                .where(eq(Profiles.id, ctx.session.profileId)),
             ]);
           }
 
@@ -102,10 +95,10 @@ builder.mutationField('followProfile', (t) =>
             }
 
             await fedifyContext.sendActivity(
-              { identifier: actorProfileId },
+              { identifier: ctx.session.profileId },
               targetActor,
               new Follow({
-                actor: fedifyContext.getActorUri(actorProfileId),
+                actor: fedifyContext.getActorUri(ctx.session.profileId),
                 object: targetActor.id,
                 to: targetActor.id,
               }),
