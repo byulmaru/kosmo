@@ -3,6 +3,7 @@ import { ProfileRelationshipState } from '@kosmo/enum';
 import { and, eq, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
+import { followingLoader } from '@/loader/following';
 
 builder.objectField(Profile, 'relationship', (t) =>
   t.field({
@@ -18,24 +19,6 @@ builder.objectField(Profile, 'relationship', (t) =>
       }
 
       const myProfileId = ctx.session.profileId;
-
-      const followingLoader = ctx.loader({
-        name: 'Profile.relationship.following',
-        nullable: true,
-        load: async (ids) => {
-          return await db
-            .select()
-            .from(ProfileFollows)
-            .where(
-              and(
-                eq(ProfileFollows.profileId, myProfileId),
-                inArray(ProfileFollows.targetProfileId, ids),
-              ),
-            );
-        },
-
-        key: (profileFollow) => profileFollow?.targetProfileId,
-      });
 
       const followerLoader = ctx.loader({
         name: 'Profile.relationship.follower',
@@ -87,7 +70,7 @@ builder.objectField(Profile, 'relationship', (t) =>
       });
 
       const [following, follower, sentFollowRequest, receivedFollowRequest] = await Promise.all([
-        followingLoader.load(profile.id),
+        followingLoader(ctx).load(profile.id),
         followerLoader.load(profile.id),
         sentFollowRequestLoader.load(profile.id),
         receivedFollowRequestLoader.load(profile.id),

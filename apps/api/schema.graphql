@@ -172,6 +172,16 @@ type Post implements Node {
   visibility: PostVisibility!
 }
 
+type PostConnection {
+  edges: [PostEdge!]!
+  pageInfo: PageInfo!
+}
+
+type PostEdge {
+  cursor: String!
+  node: Post!
+}
+
 enum PostState {
   ACTIVE
   DELETED
@@ -193,7 +203,7 @@ type Profile implements Node {
   handle: String!
   id: ID!
   instance: Instance!
-  posts(after: String, before: String, first: Int, last: Int): ProfilePostsConnection
+  posts(after: String, before: String, first: Int, last: Int): PostConnection
   relationship: ProfileRelationship!
   state: ProfileState!
   uri: String!
@@ -203,16 +213,6 @@ type Profile implements Node {
 enum ProfileFollowAcceptMode {
   AUTO
   MANUAL
-}
-
-type ProfilePostsConnection {
-  edges: [ProfilePostsConnectionEdge!]!
-  pageInfo: PageInfo!
-}
-
-type ProfilePostsConnectionEdge {
-  cursor: String!
-  node: Post!
 }
 
 type ProfileRelationship {
