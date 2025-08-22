@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ProfileRelationshipState } from '@kosmo/enum';
   import { graphql } from '$graphql';
+  import DefaultHeader from '$lib/components/header/DefaultHeader.svelte';
   import { Avatar, AvatarImage } from '$lib/components/ui/avatar';
   import { Button } from '$lib/components/ui/button';
   import { i18n } from '$lib/i18n.svelte';
@@ -91,6 +92,7 @@
 
 {#if $query.profile}
   {@const profile = $query.profile}
+  <DefaultHeader title={profile.displayName} />
   <div class="bg-card text-card-foreground w-full rounded-lg border">
     <div class="relative">
       <img class="w-full object-cover" alt="Header" src="https://placehold.co/1500x500" />

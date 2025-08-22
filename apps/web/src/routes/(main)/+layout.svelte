@@ -29,8 +29,8 @@
     </main>
 
     <!-- Right Section -->
-    <aside class="hidden w-90 space-y-4 px-6 py-4 xl:block">
-      <div class="fixed w-78">
+    <aside class="w-90 hidden space-y-4 px-6 py-4 xl:block">
+      <div class="w-78 fixed">
         <Input placeholder="검색" />
         <Button class="w-full">새 게시물</Button>
       </div>
