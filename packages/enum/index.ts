@@ -49,6 +49,12 @@ export const ProfileFollowAcceptMode = {
 } as const;
 export type ProfileFollowAcceptMode = keyof typeof ProfileFollowAcceptMode;
 
+export const ProfileRelationVisibility = {
+  PUBLIC: 'PUBLIC',
+  PRIVATE: 'PRIVATE',
+} as const;
+export type ProfileRelationVisibility = keyof typeof ProfileRelationVisibility;
+
 export const ProfileRelationshipState = {
   FOLLOW: 'FOLLOW',
   REQUEST_FOLLOW: 'REQUEST_FOLLOW',

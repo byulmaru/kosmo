@@ -16,4 +16,8 @@ export const ProfileFollowAcceptMode = createPgEnum(
   '_profile_follow_accept_mode',
   E.ProfileFollowAcceptMode,
 );
+export const ProfileRelationVisibility = createPgEnum(
+  '_profile_relation_visibility',
+  E.ProfileRelationVisibility,
+);
 export const ProfileState = createPgEnum('_profile_state', E.ProfileState);

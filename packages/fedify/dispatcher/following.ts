@@ -9,14 +9,14 @@ import {
 } from '@kosmo/db';
 import { InstanceType, ProfileRelationVisibility, ProfileState } from '@kosmo/enum';
 import { and, desc, eq, inArray } from 'drizzle-orm';
-import type { CollectionCounter, CollectionDispatcher, Context, Recipient } from '@fedify/fedify';
+import type { Actor, CollectionCounter, CollectionDispatcher, Context } from '@fedify/fedify';
 import type { FederationContextData } from '../type';
 
-export const followerDispatcher: CollectionDispatcher<
-  Recipient,
+export const followingDispatcher: CollectionDispatcher<
+  URL | Actor,
   Context<FederationContextData>,
   null,
-  URL
+  void
 > = async (ctx, identifier) => {
   const profile = await db
     .select({
@@ -32,7 +32,7 @@ export const followerDispatcher: CollectionDispatcher<
     };
   }
 
-  const followers = await db
+  const following = await db
     .select({
       id: Profiles.id,
       uri: ProfileActivityPubActors.uri,
@@ -42,7 +42,7 @@ export const followerDispatcher: CollectionDispatcher<
     .from(ProfileFollows)
     .innerJoin(
       Profiles,
-      and(eq(ProfileFollows.profileId, Profiles.id), eq(Profiles.state, ProfileState.ACTIVE)),
+      and(eq(ProfileFollows.targetProfileId, Profiles.id), eq(Profiles.state, ProfileState.ACTIVE)),
     )
     .innerJoin(
       Instances,
@@ -52,31 +52,27 @@ export const followerDispatcher: CollectionDispatcher<
       ),
     )
     .leftJoin(ProfileActivityPubActors, eq(Profiles.id, ProfileActivityPubActors.profileId))
-    .where(eq(ProfileFollows.targetProfileId, identifier))
+    .where(eq(ProfileFollows.profileId, identifier))
     .orderBy(desc(ProfileFollows.createdAt));
 
   return {
-    items: followers.map((follower) => ({
-      id: follower.uri ? new URL(follower.uri) : ctx.getActorUri(follower.id),
-      inboxId: follower.inboxUri ? new URL(follower.inboxUri) : ctx.getInboxUri(follower.id),
-      endpoints: {
-        sharedInbox: follower.sharedInboxUri ? new URL(follower.sharedInboxUri) : ctx.getInboxUri(),
-      },
-    })),
+    items: following.map((follow) =>
+      follow.uri ? new URL(follow.uri) : ctx.getActorUri(follow.id),
+    ),
   };
 };
 
-export const followerCounter: CollectionCounter<FederationContextData, URL> = async (
+export const followingCounter: CollectionCounter<FederationContextData, void> = async (
   _,
   identifier,
 ) => {
   const targetProfile = await db
     .select({
-      followerCount: Profiles.followerCount,
+      followingCount: Profiles.followingCount,
     })
     .from(Profiles)
     .where(eq(Profiles.id, identifier))
     .then(first);
 
-  return targetProfile?.followerCount ?? null;
+  return targetProfile?.followingCount ?? null;
 };

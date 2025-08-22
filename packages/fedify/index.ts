@@ -15,6 +15,7 @@ import { and, eq } from 'drizzle-orm';
 import * as R from 'remeda';
 import { db, first, Instances, ProfileCryptographicKeys, Profiles } from '../db';
 import { followerCounter, followerDispatcher } from './dispatcher/follower';
+import { followingCounter, followingDispatcher } from './dispatcher/following';
 import { followListener } from './inbox/follow';
 import { undoListener } from './inbox/undo';
 import type { FederationContextData } from './type';
@@ -55,6 +56,7 @@ federation
       publicKey: keys[0].cryptographicKey,
       assertionMethods: keys.map((key) => key.multikey),
       followers: ctx.getFollowersUri(identifier),
+      following: ctx.getFollowingUri(identifier),
     });
   })
   .setKeyPairsDispatcher(async (ctx, identifier) => {
@@ -114,5 +116,10 @@ federation
   .on(Follow, followListener)
   .on(Undo, undoListener);
 
-federation.setFollowersDispatcher('/profile/{identifier}/followers', followerDispatcher)
-.setCounter(followerCounter)
+federation
+  .setFollowersDispatcher('/profile/{identifier}/followers', followerDispatcher)
+  .setCounter(followerCounter);
+
+federation
+  .setFollowingDispatcher('/profile/{identifier}/following', followingDispatcher)
+  .setCounter(followingCounter);

@@ -3,6 +3,7 @@ import {
   PostState,
   PostVisibility,
   ProfileFollowAcceptMode,
+  ProfileRelationVisibility,
   ProfileState,
 } from '@kosmo/enum';
 import { eq, sql } from 'drizzle-orm';
@@ -176,6 +177,9 @@ export const Profiles = pgTable(
     followAcceptMode: E.ProfileFollowAcceptMode('follow_accept_mode')
       .notNull()
       .default(ProfileFollowAcceptMode.AUTO),
+    relationVisibility: E.ProfileRelationVisibility('relation_visibility')
+      .notNull()
+      .default(ProfileRelationVisibility.PUBLIC),
     followingCount: integer('following_count').notNull().default(0),
     followerCount: integer('follower_count').notNull().default(0),
     createdAt: datetime('created_at')
