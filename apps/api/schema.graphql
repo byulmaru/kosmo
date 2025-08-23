@@ -195,6 +195,10 @@ type Profile implements Node {
   description: String
   displayName(fallback: Boolean! = true): String!
   followAcceptMode: ProfileFollowAcceptMode!
+  followerCount: Int!
+  followers(after: String, before: String, first: Int, last: Int): ProfileConnection
+  following(after: String, before: String, first: Int, last: Int): ProfileConnection
+  followingCount: Int!
   fullHandle: String!
   handle: String!
   id: ID!
@@ -204,6 +208,16 @@ type Profile implements Node {
   state: ProfileState!
   uri: String!
   url: String!
+}
+
+type ProfileConnection {
+  edges: [ProfileEdge!]!
+  pageInfo: PageInfo!
+}
+
+type ProfileEdge {
+  cursor: String!
+  node: Profile!
 }
 
 enum ProfileFollowAcceptMode {
