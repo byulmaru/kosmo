@@ -5,8 +5,8 @@ import ErrorsPlugin from '@pothos/plugin-errors';
 import RelayPlugin from '@pothos/plugin-relay';
 import ScopeAuthPlugin from '@pothos/plugin-scope-auth';
 import SimpleObjectsPlugin from '@pothos/plugin-simple-objects';
+import ValidationPlugin from '@pothos/plugin-validation';
 import WithInputPlugin from '@pothos/plugin-with-input';
-import ZodPlugin from '@pothos/plugin-zod';
 import dayjs from 'dayjs';
 import { GraphQLJSON } from 'graphql-scalars';
 import * as R from 'remeda';
@@ -51,7 +51,7 @@ export const builder = new SchemaBuilder<{
     DataLoaderPlugin,
     SimpleObjectsPlugin,
     WithInputPlugin,
-    ZodPlugin,
+    ValidationPlugin,
   ],
 
   scopeAuth: {
@@ -81,10 +81,10 @@ export const builder = new SchemaBuilder<{
     },
   },
 
-  zod: {
+  validation: {
     validationError: (error) =>
       new ValidationError({
-        path: stringifyPath(error.issues[0].path),
+        path: error.issues[0]?.path ? stringifyPath(error.issues[0].path) : undefined,
         code: error.issues[0].message,
       }),
   },

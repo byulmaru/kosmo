@@ -59,7 +59,7 @@
     "vite-plugin-devtools-json": "^1.0.0",
     "vitest": "^3.2.4",
     "x-forwarded-fetch": "^0.2.0",
-    "zod": "^3.25.76"
+    "zod": "^4.1.4"
   },
   "eslintConfig": {
     "extends": [

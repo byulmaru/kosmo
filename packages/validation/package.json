@@ -8,7 +8,7 @@
   },
   "dependencies": {
     "tlds": "^1.259.0",
-    "zod": "^3.25.76"
+    "zod": "^4.1.4"
   },
   "devDependencies": {
     "eslint": "^9.33.0",

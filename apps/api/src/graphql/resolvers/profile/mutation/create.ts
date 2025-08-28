@@ -22,7 +22,7 @@ builder.mutationField('createProfile', (t) =>
   t.withAuth({ scope: 'meta-profile' }).fieldWithInput({
     type: Profile,
     input: {
-      handle: t.input.string({ validate: { schema: validationSchema.handle } }),
+      handle: t.input.string({ validate: validationSchema.handle }),
       useCreatedProfile: t.input.boolean({ defaultValue: true }),
     },
 

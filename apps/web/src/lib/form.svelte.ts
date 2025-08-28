@@ -1,7 +1,6 @@
-import type { ZodSchema, ZodTypeDef } from 'zod';
-import type { Action } from 'svelte/action';
-import { z } from 'zod';
 import { stringifyPath } from '@kosmo/validation';
+import { z } from 'zod';
+import type { Action } from 'svelte/action';
 
 export class FormValidationError extends Error {
   path: string | null;
@@ -16,8 +15,8 @@ type CreateFormParams<
   Input extends Record<string, unknown>,
   Output extends Record<string, unknown>,
 > = {
-  schema: ZodSchema<Output, ZodTypeDef, Input>;
-  onSubmit?: (data: z.output<ZodSchema<Output, ZodTypeDef, Input>>) => Promise<void>;
+  schema: z.ZodType<Output, Input>;
+  onSubmit?: (data: z.output<z.ZodType<Output, Input>>) => Promise<void>;
   onError?: (error: Error) => void;
   useFormAction?: boolean;
 };
@@ -104,7 +103,7 @@ export const createForm = <
         }
       };
 
-      const handleInput = (event: Event) => {
+      const handleInput = () => {
         if (submitted) {
           parseFormData();
         }

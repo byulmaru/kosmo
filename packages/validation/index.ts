@@ -1,9 +1,13 @@
 import tlds from 'tlds';
 import { z } from 'zod';
 
-export const stringifyPath = (path: (string | number)[]) =>
+type PathSegment = {
+  key: PropertyKey;
+};
+
+export const stringifyPath = (path: readonly (PropertyKey | PathSegment)[]) =>
   path
-    .map((p) => (typeof p === 'string' ? `.${p}` : `[${p}]`))
+    .map((p) => (typeof p === 'number' ? `[${p}]` : `.${p.toString()}`))
     .join('')
     .slice(1);
 
