@@ -247,8 +247,7 @@ type Query {
   me: Account
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
-  post(id: String!): Post
-  profile(handle: String, id: String): Profile
+  profile(handle: String!): Profile
   usingProfile: Profile
 }
 

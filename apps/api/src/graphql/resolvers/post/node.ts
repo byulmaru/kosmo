@@ -1,15 +1,15 @@
 import { PostState, PostVisibility } from '@kosmo/enum';
 import { builder } from '@/graphql/builder';
+import { getPostLoader } from '@/graphql/loaders/post';
 import { Post, Profile } from '@/graphql/objects';
+import { mapErrorToNull } from '@/utils/array';
 
 builder.node(Post, {
   id: { resolve: (post) => post.id },
-
-  loadManyWithoutCache: async (ids, ctx) => {
-    return (await Post.getDataloader(ctx).loadMany(ids)).map((post) =>
-      post instanceof Error ? null : post,
-    );
-  },
+  loadManyWithoutCache: async (ids, ctx) =>
+    getPostLoader(ctx)
+      .loadMany(ids)
+      .then((posts) => mapErrorToNull(posts)),
 
   fields: (t) => ({
     content: t.exposeString('content'),
@@ -22,13 +22,15 @@ builder.node(Post, {
     replyToPost: t.field({
       type: Post,
       nullable: true,
-      resolve: async (post) => post.replyToPostId,
+      resolve: async (post, _, ctx) =>
+        post.replyToPostId ? getPostLoader(ctx).load(post.replyToPostId) : null,
     }),
 
     repostOfPost: t.field({
       type: Post,
       nullable: true,
-      resolve: async (post) => post.repostOfPostId,
+      resolve: async (post, _, ctx) =>
+        post.repostOfPostId ? getPostLoader(ctx).load(post.repostOfPostId) : null,
     }),
   }),
 });

@@ -1,4 +1,6 @@
+import { db, Profiles } from '@kosmo/db';
 import { ProfileFollowAcceptMode, ProfileState } from '@kosmo/enum';
+import { and, eq, inArray } from 'drizzle-orm';
 import { env } from '@/env';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
@@ -7,10 +9,11 @@ import { ProfileActivityPubActorByProfileIdLoader } from '@/utils/loader/profile
 builder.node(Profile, {
   id: { resolve: (profile) => profile.id },
 
-  loadManyWithoutCache: async (ids, ctx) => {
-    return (await Profile.getDataloader(ctx).loadMany(ids)).map((profile) =>
-      profile instanceof Error ? null : profile,
-    );
+  loadMany: async (ids) => {
+    return await db
+      .select()
+      .from(Profiles)
+      .where(and(inArray(Profiles.id, ids), eq(Profiles.state, ProfileState.ACTIVE)));
   },
 
   fields: (t) => ({
