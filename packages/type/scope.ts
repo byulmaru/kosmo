@@ -5,4 +5,5 @@ export type Scope =
   | 'post:write'
   | 'profile'
   | 'profile:read'
+  | 'profile:write'
   | 'relationship';

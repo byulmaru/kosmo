@@ -137,6 +137,7 @@ type Mutation {
   followProfile(input: FollowProfileInput!): FollowProfileResult!
   rejectFollowRequest(input: RejectFollowRequestInput!): RejectFollowRequestResult!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfileResult!
+  updateProfile(input: UpdateProfileInput!): UpdateProfileResult!
   useProfile(input: UseProfileInput!): UseProfileResult!
 }
 
@@ -271,6 +272,17 @@ input UnfollowProfileInput {
 union UnfollowProfileResult = ForbiddenError | NotFoundError | UnfollowProfileSuccess
 
 type UnfollowProfileSuccess {
+  profile: Profile!
+}
+
+input UpdateProfileInput {
+  description: String
+  displayName: String!
+}
+
+union UpdateProfileResult = UpdateProfileSuccess | ValidationError
+
+type UpdateProfileSuccess {
   profile: Profile!
 }
 
