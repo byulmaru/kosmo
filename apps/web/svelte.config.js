@@ -11,19 +11,6 @@ const config = {
     // If your environment is not supported or you settled on a specific environment, switch out the adapter.
     // See https://kit.svelte.dev/docs/adapters for more information about adapters.
     adapter: adapter(),
-    alias: {
-      $graphql: './.sark',
-    },
-  },
-
-  typescript: {
-    config: (config) => ({
-      ...config,
-      compilerOptions: {
-        ...config.compilerOptions,
-        rootDirs: [...config.compilerOptions.rootDirs, '../.sark/types'],
-      },
-    }),
   },
 };
 

@@ -32,6 +32,10 @@
     "status": {
       "followEachOther": "Follow each other",
       "followsYou": "Follows you"
+    },
+    "stat": {
+      "followers": "followers",
+      "following": "following"
     }
   }
 }

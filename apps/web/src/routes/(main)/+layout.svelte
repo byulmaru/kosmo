@@ -1,19 +1,13 @@
 <script lang="ts">
-  import { graphql } from '$graphql';
+  import { usePreloadedQuery } from '@kosmo/svelte-relay';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import { setLanguages } from '$lib/i18n.svelte';
   import AppSidebar from './AppSidebar.svelte';
 
-  const { children } = $props();
+  const { children, data } = $props();
 
-  const query = graphql(`
-    query MainLayout_Query {
-      languages
-
-      ...MainLayout_Sidebar_query
-    }
-  `);
+  const query = usePreloadedQuery(data.query);
 
   setLanguages($query.languages);
 </script>

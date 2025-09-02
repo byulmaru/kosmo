@@ -1,77 +1,25 @@
 <script lang="ts">
+  import { useFragment, useMutation } from '@kosmo/svelte-relay';
   import * as validationSchema from '@kosmo/validation';
   import { CirclePlus } from '@lucide/svelte';
   import { z } from 'zod';
-  import { fragment, graphql } from '$graphql';
   import Form from '$lib/components/form/Form.svelte';
   import InputField from '$lib/components/form/InputField.svelte';
   import SubmitButton from '$lib/components/form/SubmitButton.svelte';
   import * as Dialog from '$lib/components/ui/dialog/index';
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index';
   import { createForm, FormValidationError } from '$lib/form.svelte';
-  import type { MainLayout_ProfileDropdown_query } from '$graphql';
+  import { createProfileMutation, fragment, useProfileMutation } from './ProfileDropdown.graphql';
+  import type { ProfileDropdown_createProfile_Mutation } from './__generated__/ProfileDropdown_createProfile_Mutation.graphql';
+  import type { ProfileDropdown_MainLayout_Fragment$key } from './__generated__/ProfileDropdown_MainLayout_Fragment.graphql';
+  import type { ProfileDropdown_useProfile_Mutation } from './__generated__/ProfileDropdown_useProfile_Mutation.graphql';
 
-  const { $query: _query }: { $query: MainLayout_ProfileDropdown_query } = $props();
+  const { $query: fragmentRef }: { $query: ProfileDropdown_MainLayout_Fragment$key } = $props();
 
-  const query = fragment(
-    _query,
-    graphql(`
-      fragment MainLayout_ProfileDropdown_query on Query {
-        me {
-          id
+  const query = useFragment(fragment, fragmentRef);
 
-          profiles {
-            id
-            displayName
-            fullHandle
-          }
-        }
-
-        usingProfile {
-          id
-          displayName
-          fullHandle
-        }
-      }
-    `),
-  );
-
-  const createProfile = graphql(`
-    mutation MainLayout_ProfileDropdown_createProfile($input: CreateProfileInput!) {
-      createProfile(input: $input) {
-        __typename
-
-        ... on CreateProfileSuccess {
-          profile {
-            id
-            displayName
-            handle
-          }
-        }
-
-        ... on FieldError {
-          path
-          message
-        }
-      }
-    }
-  `);
-
-  const useProfile = graphql(`
-    mutation MainLayout_ProfileDropdown_useProfile($input: UseProfileInput!) {
-      useProfile(input: $input) {
-        __typename
-
-        ... on UseProfileSuccess {
-          profile {
-            id
-            displayName
-            handle
-          }
-        }
-      }
-    }
-  `);
+  const createProfile = useMutation<ProfileDropdown_createProfile_Mutation>(createProfileMutation);
+  const useProfile = useMutation<ProfileDropdown_useProfile_Mutation>(useProfileMutation);
 
   const createProfileSchema = z.object({
     handle: validationSchema.handle,
@@ -80,7 +28,9 @@
   const form = createForm({
     schema: createProfileSchema,
     onSubmit: async (data) => {
-      const result = await createProfile({ handle: data.handle, useCreatedProfile: true });
+      const { createProfile: result } = await createProfile({
+        variables: { input: { handle: data.handle, useCreatedProfile: true } },
+      });
 
       if (result.__typename === 'CreateProfileSuccess') {
         location.reload();
@@ -116,7 +66,7 @@
         <DropdownMenu.Item
           onclick={async () => {
             if ($query.usingProfile?.id !== profile.id) {
-              await useProfile({ profileId: profile.id });
+              await useProfile({ variables: { input: { profileId: profile.id } } });
               location.reload();
             }
           }}

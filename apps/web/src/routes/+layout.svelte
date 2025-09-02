@@ -1,7 +1,11 @@
 <script lang="ts">
   import '../app.css';
 
-  const { children } = $props();
+  import { setRelayEnvironment } from '@kosmo/svelte-relay';
+
+  const { children, data } = $props();
+
+  setRelayEnvironment(data.relayEnvironment);
 </script>
 
 {@render children()}

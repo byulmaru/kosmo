@@ -1,0 +1,16 @@
+{
+  "name": "@kosmo/svelte-relay",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "peerDependencies": {
+    "relay-runtime": ">=19",
+    "svelte": ">=5.0.0"
+  },
+  "devDependencies": {
+    "@types/relay-runtime": "^19.0.2",
+    "typescript": "^5.9.2"
+  }
+}

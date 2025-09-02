@@ -32,6 +32,10 @@
     "status": {
       "followEachOther": "서로 팔로우 중",
       "followsYou": "나를 팔로우 중"
+    },
+    "stat": {
+      "followers": "팔로워",
+      "following": "팔로잉"
     }
   }
 }

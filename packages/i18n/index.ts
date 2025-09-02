@@ -31,7 +31,7 @@ export const getLanguagesByAcceptLanguageHeader = (header: string | null | undef
 };
 
 type GetStringArgs = {
-  locales: string[];
+  locales: readonly string[];
   key: string;
   args?: Record<string, string>;
 };
@@ -120,7 +120,7 @@ const compileTemplate = (template: string): TemplatePart[] => {
         type: 'expression',
         variable: variable.trim(),
         functions: functionStrings.map((functionString) => {
-          const [_, name, argString] = functionString.match(/(\w+)\s*(?:\((.+)\))?/) ?? [];
+          const [, name, argString] = functionString.match(/(\w+)\s*(?:\((.+)\))?/) ?? [];
           const args = argString?.split(',') ?? [];
           return { name, args };
         }),

@@ -1,25 +1,17 @@
 <script lang="ts">
+  import { useFragment } from '@kosmo/svelte-relay';
   import { Bell, Bookmark, Hash, Home, Mail, Sparkles, User } from '@lucide/svelte';
-  import { fragment, graphql } from '$graphql';
+  import { fragment } from './AppSidebar.graphql';
   import AppSidebarMenuButton from './AppSidebarMenuButton.svelte';
   import ProfileDropdown from './ProfileDropdown.svelte';
-  import type { MainLayout_Sidebar_query } from '$graphql';
+  import type { AppSidebar_MainLayout_Fragment$key } from './__generated__/AppSidebar_MainLayout_Fragment.graphql';
 
-  const { $query: _query }: { $query: MainLayout_Sidebar_query } = $props();
+  type Props = {
+    $query: AppSidebar_MainLayout_Fragment$key;
+  };
 
-  const query = fragment(
-    _query,
-    graphql(`
-      fragment MainLayout_Sidebar_query on Query {
-        usingProfile {
-          id
-          handle
-        }
-
-        ...MainLayout_ProfileDropdown_query
-      }
-    `),
-  );
+  const { $query: fragmentRef }: Props = $props();
+  const query = useFragment(fragment, fragmentRef);
 </script>
 
 <header class="w-18 hidden h-full sm:block lg:w-60">
