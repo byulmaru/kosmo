@@ -23,21 +23,21 @@ builder.objectField(Profile, 'followers', (t) =>
       }
 
       return resolveCursorConnection(
-        { args, toCursor: (profile) => profile.id },
+        { args, toCursor: (profile) => profile.profileFollowId },
         async ({ before, after, limit, inverted }: ResolveCursorConnectionArgs) => {
           return await db
-            .select(getTableColumns(Profiles))
+            .select({ ...getTableColumns(Profiles), profileFollowId: ProfileFollows.id })
             .from(ProfileFollows)
             .innerJoin(Profiles, eq(ProfileFollows.profileId, Profiles.id))
             .where(
               and(
                 eq(ProfileFollows.targetProfileId, profile.id),
                 eq(Profiles.state, ProfileState.ACTIVE),
-                before ? lt(ProfileFollows.id, before) : undefined,
-                after ? gt(ProfileFollows.id, after) : undefined,
+                before ? gt(ProfileFollows.id, before) : undefined,
+                after ? lt(ProfileFollows.id, after) : undefined,
               ),
             )
-            .orderBy(inverted ? asc(ProfileFollows.createdAt) : desc(ProfileFollows.createdAt))
+            .orderBy(inverted ? asc(ProfileFollows.id) : desc(ProfileFollows.id))
             .limit(limit);
         },
       );
