@@ -1,7 +1,7 @@
 import { Accept, Follow } from '@fedify/fedify';
 import { db, first, ProfileFollowRequests, ProfileFollows, Profiles } from '@kosmo/db';
 import { ProfileFollowAcceptMode } from '@kosmo/enum';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { match } from 'ts-pattern';
 import { getOrCreateProfileId } from '../profile';
 import type { InboxListener } from '@fedify/fedify';
@@ -36,13 +36,31 @@ export const followListener: InboxListener<FederationContextData, Follow> = asyn
 
     await match(targetProfile.followAcceptMode)
       .with(ProfileFollowAcceptMode.AUTO, async () => {
-        await tx
+        const profileFollow = await tx
           .insert(ProfileFollows)
           .values({
             profileId: actorProfileId,
             targetProfileId: targetProfile.id,
           })
-          .onConflictDoNothing();
+          .onConflictDoNothing()
+          .returning({
+            profileId: ProfileFollows.profileId,
+            targetProfileId: ProfileFollows.targetProfileId,
+          })
+          .then(first);
+
+        if (profileFollow) {
+          await Promise.all([
+            tx
+              .update(Profiles)
+              .set({ followerCount: sql`${Profiles.followerCount} + 1` })
+              .where(eq(Profiles.id, profileFollow.targetProfileId)),
+            tx
+              .update(Profiles)
+              .set({ followingCount: sql`${Profiles.followingCount} + 1` })
+              .where(eq(Profiles.id, profileFollow.profileId)),
+          ]);
+        }
 
         await ctx.sendActivity(
           object,
