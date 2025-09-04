@@ -204,8 +204,10 @@ type Profile implements Node {
   handle: String!
   id: ID!
   instance: Instance!
+  isMe: Boolean!
   posts(after: String, before: String, first: Int, last: Int): PostConnection
   relationship: ProfileRelationship!
+  relativeHandle: String!
   state: ProfileState!
   uri: String!
   url: String!

@@ -34,7 +34,10 @@ builder.mutationField('followProfile', (t) =>
 
       const { targetProfile, activityPubActor } = await db
         .select({
-          targetProfile: Profiles,
+          targetProfile: {
+            id: Profiles.id,
+            followAcceptMode: Profiles.followAcceptMode,
+          },
           activityPubActor: {
             uri: ProfileActivityPubActors.uri,
           },
@@ -107,7 +110,7 @@ builder.mutationField('followProfile', (t) =>
         }
       });
 
-      return targetProfile;
+      return targetProfile.id;
     },
   }),
 );

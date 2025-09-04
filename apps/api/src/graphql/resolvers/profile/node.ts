@@ -45,5 +45,9 @@ builder.node(Profile, {
         return profileActivityPubActor?.url ?? `${env.PUBLIC_WEB_DOMAIN}/@${profile.handle}`;
       },
     }),
+
+    isMe: t.boolean({
+      resolve: (profile, _, ctx) => ctx.session?.profileId === profile.id,
+    }),
   }),
 });

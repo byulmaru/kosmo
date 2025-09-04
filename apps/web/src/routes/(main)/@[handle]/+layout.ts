@@ -12,9 +12,11 @@ export const load = async ({ params, parent }) => {
             uri
             displayName
             handle
+            relativeHandle
             description
             followerCount
             followingCount
+            isMe
 
             relationship {
               to
@@ -25,6 +27,8 @@ export const load = async ({ params, parent }) => {
               id
               domain
             }
+
+            ...FollowButton_Profile_Fragment
           }
 
           usingProfile {

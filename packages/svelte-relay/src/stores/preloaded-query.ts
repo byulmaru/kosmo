@@ -14,12 +14,12 @@ export interface QueryStore<TData> {
  * createLoadedQuery로 생성된 쿼리를 사용하는 store
  * $query로 데이터에 직접 접근 가능
  */
-export function usePreloadedQuery<TData = unknown, TVariables extends Variables = Variables>(
-  loadedQuery: LoadedQuery<TData, TVariables>,
-  environment?: Environment,
-): QueryStore<TData> {
+export function usePreloadedQuery<
+  TData extends PayloadData,
+  TVariables extends Variables = Variables,
+>(loadedQuery: LoadedQuery<TData, TVariables>, environment?: Environment): QueryStore<TData> {
   const env = environment ?? getRelayEnvironment();
-  const { query, variables, data } = loadedQuery;
+  const { query, variables } = loadedQuery;
 
   // Relay operation descriptor 생성
   const request = getRequest(query);
@@ -30,9 +30,6 @@ export function usePreloadedQuery<TData = unknown, TVariables extends Variables 
   let storeSubscription: Disposable | null = null;
 
   const subscribers = new Set<(value: TData) => void>();
-
-  // 서버에서 가져온 데이터를 Relay store에 commit (hydration)
-  env.commitPayload(operation, data as PayloadData);
 
   // Relay store에서 실시간 데이터 읽기
   function getCurrentData(): TData {

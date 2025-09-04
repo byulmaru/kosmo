@@ -28,7 +28,10 @@ builder.mutationField('unfollowProfile', (t) =>
     resolve: async (_, { input }, ctx) => {
       const { targetProfile, activityPubActor } = await db
         .select({
-          targetProfile: Profiles,
+          targetProfile: {
+            id: Profiles.id,
+            followAcceptMode: Profiles.followAcceptMode,
+          },
           activityPubActor: {
             uri: ProfileActivityPubActors.uri,
           },
@@ -89,7 +92,7 @@ builder.mutationField('unfollowProfile', (t) =>
         }
       });
 
-      return targetProfile;
+      return targetProfile.id;
     },
   }),
 );
