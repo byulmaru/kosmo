@@ -10,9 +10,9 @@
   "scripts": {
     "db:check": "drizzle-kit check",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:migrate": "phase run \"drizzle-kit migrate\"",
+    "db:push": "phase run \"drizzle-kit push\"",
+    "db:studio": "phase run \"drizzle-kit studio\""
   },
   "dependencies": {
     "@kosmo/enum": "workspace:*",

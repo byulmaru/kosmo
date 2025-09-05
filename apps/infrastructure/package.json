@@ -1,0 +1,10 @@
+{
+  "name": "@kosmo/infrastructure",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@pulumi/aws": "^7.6.0",
+    "@pulumi/pulumi": "^3.193.0"
+  }
+}

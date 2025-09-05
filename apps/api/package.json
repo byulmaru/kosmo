@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "doppler run -- tsx --watch src/main.ts",
+    "dev": "phase run \"tsx --watch src/main.ts\"",
     "lint": "eslint ."
   },
   "dependencies": {

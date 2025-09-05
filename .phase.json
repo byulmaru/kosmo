@@ -1,0 +1,8 @@
+{
+  "version": "2",
+  "phaseApp": "kosmo",
+  "appId": "1014d978-67d3-466f-b92d-3f4a8cdb1a2a",
+  "defaultEnv": "Development",
+  "envId": "851ea183-b271-4a17-a72f-e6608f6be054",
+  "monorepoSupport": true
+}
