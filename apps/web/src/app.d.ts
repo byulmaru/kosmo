@@ -4,6 +4,7 @@ declare global {
   namespace App {
     interface Error {
       message: string;
+      traceId?: string;
     }
     // interface Locals {}
     // interface PageData {}

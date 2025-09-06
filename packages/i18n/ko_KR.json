@@ -18,7 +18,9 @@
     "profile": {
       "limitExceeded": "프로필 최대 갯수를 초과했어요.",
       "notFound": "프로필을 찾을 수 없어요."
-    }
+    },
+    "errorId": "오류 ID: {traceId}",
+    "errorIdHelper": "문의 시 오류 ID를 같이 보내주시면 오류 추적에 도움이 될 수 있어요."
   },
   "header": {
     "error": "오류"

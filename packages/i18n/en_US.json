@@ -18,7 +18,9 @@
     "profile": {
       "limitExceeded": "Profile limit exceeded.",
       "notFound": "Profile not found."
-    }
+    },
+    "errorId": "Error ID: {traceId}",
+    "errorIdHelper": "Please include the error ID when contacting support for better error tracking."
   },
   "header": {
     "error": "Error"

@@ -1,5 +1,7 @@
 import { federation } from '@kosmo/fedify';
+import * as Sentry from '@sentry/sveltekit';
 import { getXForwardedRequest } from 'x-forwarded-fetch';
+import { handleExceptedError } from './handle-error';
 
 export const handle = async ({ event, resolve }) => {
   const request = await getXForwardedRequest(event.request.clone());
@@ -26,4 +28,16 @@ export const handle = async ({ event, resolve }) => {
   });
 };
 
-export { handleError } from './handle-error';
+export const handleError = async ({ error }) => {
+  const exceptedError = await handleExceptedError(error);
+  if (exceptedError) {
+    return exceptedError;
+  }
+
+  const traceId = Sentry.captureException(error);
+
+  return {
+    message: 'error.unknown',
+    traceId,
+  };
+};
