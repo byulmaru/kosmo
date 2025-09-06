@@ -16,8 +16,8 @@
 
 <div>
   <TabsHeader>
-    <TabsItem href={`/@${$query.profile.handle}/following`}>팔로잉</TabsItem>
-    <TabsItem active href={`/@${$query.profile.handle}/followers`}>팔로워</TabsItem>
+    <TabsItem href={`/@${$query.profile.relativeHandle}/following`}>팔로잉</TabsItem>
+    <TabsItem active href={`/@${$query.profile.relativeHandle}/followers`}>팔로워</TabsItem>
   </TabsHeader>
   <ProfileList connectionFieldName="followers" store={profileConnection} />
 </div>

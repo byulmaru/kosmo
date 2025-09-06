@@ -22,7 +22,7 @@
     selection.addRange(range);
   };
 
-  const query = usePreloadedQuery(data.query);
+  const query = $derived(usePreloadedQuery(data.query));
 </script>
 
 <svelte:head>

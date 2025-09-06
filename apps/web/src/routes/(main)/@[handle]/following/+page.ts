@@ -9,7 +9,7 @@ export const load = async ({ params, parent }) => {
         query Page_MainHandleFollowing_Query($handle: String!) {
           profile(handle: $handle) @required(action: THROW) {
             id
-            handle
+            relativeHandle
 
             ...Page_MainHandleFollowing_Fragment
           }

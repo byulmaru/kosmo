@@ -31,6 +31,8 @@
   {#if $store[connectionFieldName]}
     {#each $store[connectionFieldName].edges as edge (edge.node.id)}
       <ProfileListItem $profile={edge.node} />
+    {:else}
+      <h3 class="text-muted-foreground text-center py-12">아무도 없어요</h3>
     {/each}
     {#if $store[connectionFieldName].pageInfo.hasNextPage}
       <button
