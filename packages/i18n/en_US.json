@@ -4,7 +4,8 @@
       "conflict": "Cannot perform this action.",
       "forbidden": "Forbidden.",
       "limitExceeded": "Limit exceeded.",
-      "notFound": "Not found."
+      "notFound": "Not found.",
+      "pageNotFound": "Page not found."
     },
     "handle": {
       "min": "Handle must be at least 3 characters.",
@@ -18,6 +19,9 @@
       "limitExceeded": "Profile limit exceeded.",
       "notFound": "Profile not found."
     }
+  },
+  "header": {
+    "error": "Error"
   },
   "profile": {
     "button": {
@@ -37,5 +41,10 @@
       "followers": "followers",
       "following": "following"
     }
+  },
+  "list": {
+    "empty": "Nothing to display",
+    "loadMore": "Load more",
+    "unavailable": "This information is unavailable"
   }
 }
