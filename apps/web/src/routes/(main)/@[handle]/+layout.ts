@@ -7,7 +7,7 @@ export const load = async ({ params, parent }) => {
       (await parent()).relayEnvironment,
       graphql`
         query Layout_MainHandle_Query($handle: String!) {
-          profile(handle: $handle) {
+          profile(handle: $handle) @required(action: THROW) {
             id
             uri
             displayName

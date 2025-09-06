@@ -25,3 +25,5 @@ export const handle = async ({ event, resolve }) => {
     },
   });
 };
+
+export { handleError } from './handle-error';

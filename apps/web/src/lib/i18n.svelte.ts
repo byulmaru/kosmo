@@ -1,17 +1,20 @@
 import { getString } from '@kosmo/i18n';
 import { writable } from 'svelte/store';
 
+type I18nFunction = (key: string | null | undefined, args?: Record<string, string>) => string;
+
 const makeI18n = (locales: readonly string[]) => {
-  return (key: string, args: Record<string, string> = {}) =>
-    getString({
-      locales,
-      key,
-      args,
-    });
+  return (key: string | null | undefined, args: Record<string, string> = {}) =>
+    key
+      ? getString({
+          locales,
+          key,
+          args,
+        })
+      : '';
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export const i18n = writable((key: string, args: Record<string, string> = {}) => key);
+export const i18n = writable<I18nFunction>((key) => key ?? '');
 
 export function setLanguages(langs: readonly string[]) {
   i18n.set(makeI18n(langs));
