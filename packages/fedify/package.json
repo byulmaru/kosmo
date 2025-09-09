@@ -7,17 +7,17 @@
     ".": "./index.ts"
   },
   "dependencies": {
-    "@fedify/fedify": "^1.8.5",
+    "@fedify/fedify": "^1.8.8",
     "@kosmo/cache": "workspace:*",
     "@kosmo/const": "workspace:*",
     "@kosmo/db": "workspace:*",
     "@kosmo/enum": "workspace:*",
-    "drizzle-orm": "^0.44.4",
-    "remeda": "^2.30.0",
+    "drizzle-orm": "^0.44.5",
+    "remeda": "^2.31.0",
     "ts-pattern": "^5.8.0"
   },
   "devDependencies": {
-    "eslint": "^9.33.0",
+    "eslint": "^9.35.0",
     "typescript": "^5.9.2"
   }
 }

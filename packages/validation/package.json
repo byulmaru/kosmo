@@ -7,11 +7,11 @@
     ".": "./index.ts"
   },
   "dependencies": {
-    "tlds": "^1.259.0",
-    "zod": "^4.1.4"
+    "tlds": "^1.260.0",
+    "zod": "^4.1.5"
   },
   "devDependencies": {
-    "eslint": "^9.33.0",
+    "eslint": "^9.35.0",
     "typescript": "^5.9.2"
   }
 }

@@ -10,6 +10,6 @@
     "@kosmo/db": "workspace:*",
     "@kosmo/enum": "workspace:*",
     "@kosmo/redis": "workspace:*",
-    "drizzle-orm": "^0.44.4"
+    "drizzle-orm": "^0.44.5"
   }
 }

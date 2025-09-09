@@ -7,6 +7,6 @@
     ".": "./index.ts"
   },
   "dependencies": {
-    "dayjs": "^1.11.13"
+    "dayjs": "^1.11.18"
   }
 }

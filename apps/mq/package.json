@@ -3,14 +3,18 @@
   "version": "0.0.0",
   "type": "module",
   "exports": {
-    ".": "./index.ts"
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "phase run \"tsx --watch src/worker.ts\""
   },
   "dependencies": {
+    "@kosmo/db": "workspace:*",
     "@kosmo/logger": "workspace:*",
     "@kosmo/redis": "workspace:*",
     "@kosmo/runtime": "workspace:*",
-    "@sentry/node": "^10.5.0",
-    "bullmq": "^5.57.0",
+    "@sentry/node": "^10.10.0",
+    "bullmq": "^5.58.5",
     "ioredis": "^5.7.0"
   }
 }
