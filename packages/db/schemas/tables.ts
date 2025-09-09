@@ -170,6 +170,7 @@ export const Profiles = pgTable(
       .references(() => Instances.id)
       .notNull(),
     handle: varchar('handle').notNull(),
+    normalizedHandle: varchar('normalized_handle').notNull(),
     displayName: varchar('display_name').notNull().default(''),
     description: text('description'),
     avatarFileId: varchar('avatar_file_id').references(() => Files.id),
@@ -186,7 +187,7 @@ export const Profiles = pgTable(
       .notNull()
       .default(sql`now()`),
   },
-  (t) => [uniqueIndex('handle_unique').on(t.instanceId, sql`LOWER(${t.handle})`)],
+  (t) => [uniqueIndex('handle_unique').on(t.instanceId, t.normalizedHandle)],
 );
 
 export const ProfileAccounts = pgTable(

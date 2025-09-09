@@ -9,7 +9,7 @@ builder.mutationField('createPost', (t) =>
   t.withAuth({ scope: 'post:write', profile: true }).fieldWithInput({
     type: Post,
     input: {
-      content: t.input.string({ validate: { schema: validationSchema.postContent } }),
+      content: t.input.string({ validate: validationSchema.postContent }),
       visibility: t.input.field({ type: PostVisibility, required: false }),
       replyToPostId: t.input.string({ required: false }),
     },

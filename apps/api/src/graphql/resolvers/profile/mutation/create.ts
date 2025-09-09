@@ -65,6 +65,7 @@ builder.mutationField('createProfile', (t) =>
           .values({
             id: profileId,
             handle: input.handle,
+            normalizedHandle: input.handle.toLowerCase(),
             instanceId: KOSMO_INSTANCE_ID,
           })
           .returning()

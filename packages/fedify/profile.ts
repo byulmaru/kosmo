@@ -39,6 +39,7 @@ export const getOrCreateProfileId = async ({ actor, tx }: GetOrCreateProfileIdPa
 
   const profileData = {
     handle,
+    normalizedHandle: handle.toLowerCase(),
     displayName: actor.name?.toString(),
     instanceId: instance.id,
     followAcceptMode: actor.manuallyApprovesFollowers
