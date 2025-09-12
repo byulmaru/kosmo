@@ -40,8 +40,7 @@ export const sendUndoFollow = defineService(
   {
     defaultQueueOptions: {
       deduplication: {
-        id: (input) =>
-          `activitypub:send:undo:follow:${input.sender.profileId}:${input.recipient.profileId}`,
+        id: (input) => `activitypub:follow:${input.sender.profileId}:${input.recipient.profileId}`,
         replace: true,
       },
     },

@@ -27,5 +27,5 @@ export const firstOrThrowWith = (errorThrower: () => unknown) => {
 };
 
 export const idToTimestamp = (id: string) => {
-  return decodeTime(id.split('0', 2)[1]);
+  return decodeTime(id.slice(5));
 };

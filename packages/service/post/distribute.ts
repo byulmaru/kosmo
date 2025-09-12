@@ -15,6 +15,11 @@ export const distribute = defineService(
     await ActivityPubService.distribute.queue({ postId });
   },
   {
-    deduplicationKeyGenerator: (input) => `post:distribute:${input.postId}`,
+    defaultQueueOptions: {
+      deduplication: {
+        id: (input) => `post:distribute:${input.postId}`,
+        replace: true,
+      },
+    },
   },
 );

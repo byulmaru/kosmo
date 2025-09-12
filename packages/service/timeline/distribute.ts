@@ -100,6 +100,11 @@ export const distribute = defineService(
     );
   },
   {
-    deduplicationKeyGenerator: (input) => `timeline:distribute:${input.postId}`,
+    defaultQueueOptions: {
+      deduplication: {
+        id: (input) => `timeline:distribute:${input.postId}`,
+        replace: true,
+      },
+    },
   },
 );

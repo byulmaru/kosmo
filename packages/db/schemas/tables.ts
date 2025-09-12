@@ -211,7 +211,7 @@ export const Profiles = pgTable(
     uri: varchar('uri').unique(),
     url: varchar('url'),
     inboxUrl: varchar('inbox_url'),
-    sharedinboxUrl: varchar('shared_inbox_url'),
+    sharedInboxUrl: varchar('shared_inbox_url'),
     createdAt: datetime('created_at')
       .notNull()
       .default(sql`now()`),

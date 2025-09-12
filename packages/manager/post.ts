@@ -82,7 +82,7 @@ export const getActivityPubNote = async ({ postId, tx }: GetActivityPubNoteParam
     .then(first);
 
   if (!post) {
-    return null;
+    return { note: null, profileId: null };
   }
 
   const postMentionProfileUris = await db
@@ -101,29 +101,33 @@ export const getActivityPubNote = async ({ postId, tx }: GetActivityPubNoteParam
       ),
     );
 
-  return new Note({
-    id: getUri(post.id, post.instance.webDomain!),
-    attribution: ProfileManager.getUri(post.profile.id, post.instance.webDomain!),
-    tos: match(post.visibility)
-      .with(PostVisibility.PUBLIC, () => [PUBLIC_COLLECTION])
-      .with(PostVisibility.UNLISTED, PostVisibility.FOLLOWER, () => [
-        ProfileManager.getFollowersUri(post.profile.id, post.instance.webDomain!),
-      ])
-      .with(PostVisibility.DIRECT, () => postMentionProfileUris)
-      .exhaustive(),
+  return {
+    note: new Note({
+      id: getUri(post.id, post.instance.webDomain!),
+      attribution: ProfileManager.getUri(post.profile.id, post.instance.webDomain!),
+      tos: match(post.visibility)
+        .with(PostVisibility.PUBLIC, () => [PUBLIC_COLLECTION])
+        .with(PostVisibility.UNLISTED, PostVisibility.FOLLOWER, () => [
+          ProfileManager.getFollowersUri(post.profile.id, post.instance.webDomain!),
+        ])
+        .with(PostVisibility.DIRECT, () => postMentionProfileUris)
+        .exhaustive(),
 
-    ccs: match(post.visibility)
-      .with(PostVisibility.PUBLIC, () => [
-        ProfileManager.getFollowersUri(post.profile.id, post.instance.webDomain!),
-        ...postMentionProfileUris,
-      ])
-      .with(PostVisibility.UNLISTED, () => [PUBLIC_COLLECTION, ...postMentionProfileUris])
-      .with(PostVisibility.FOLLOWER, () => postMentionProfileUris)
-      .with(PostVisibility.DIRECT, () => [])
-      .exhaustive(),
+      ccs: match(post.visibility)
+        .with(PostVisibility.PUBLIC, () => [
+          ProfileManager.getFollowersUri(post.profile.id, post.instance.webDomain!),
+          ...postMentionProfileUris,
+        ])
+        .with(PostVisibility.UNLISTED, () => [PUBLIC_COLLECTION, ...postMentionProfileUris])
+        .with(PostVisibility.FOLLOWER, () => postMentionProfileUris)
+        .with(PostVisibility.DIRECT, () => [])
+        .exhaustive(),
 
-    published: Temporal.Instant.fromEpochMilliseconds(post.createdAt.valueOf()),
-    content: post.content,
-    url: getUrl(post.id, post.profile.handle, post.instance.webDomain!),
-  });
+      published: Temporal.Instant.fromEpochMilliseconds(post.createdAt.valueOf()),
+      content: post.content,
+      url: getUrl(post.id, post.profile.handle, post.instance.webDomain!),
+    }),
+
+    profileId: post.profile.id,
+  };
 };

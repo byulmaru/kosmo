@@ -35,7 +35,7 @@ export const followingDispatcher: CollectionDispatcher<
       id: Profiles.id,
       uri: Profiles.uri,
       inboxUrl: Profiles.inboxUrl,
-      sharedinboxUrl: Profiles.sharedinboxUrl,
+      sharedInboxUrl: Profiles.sharedInboxUrl,
       webDomain: Instances.webDomain,
     })
     .from(ProfileFollows)

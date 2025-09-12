@@ -25,9 +25,9 @@ export const followListener: InboxListener<FederationContextData, Follow> = asyn
 
   if (followAcceptMode === ProfileFollowAcceptMode.AUTO) {
     await ActivityPubService.sendAcceptFollow.queue({
-      sender: { profileId: actorProfileId },
+      sender: { profileId: object.identifier },
       recipient: {
-        profileId: object.identifier,
+        profileId: actorProfileId,
       },
     });
   }

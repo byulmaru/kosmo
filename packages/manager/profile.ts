@@ -15,7 +15,7 @@ type CreateProfileParams = {
     handle: string;
     uri?: string;
     inboxUrl?: string;
-    sharedinboxUrl?: string;
+    sharedInboxUrl?: string;
     url?: string;
     protocol?: ProfileProtocol;
     displayName?: string;

@@ -1,19 +1,8 @@
 import { KOSMO_INSTANCE_ID, MAX_PROFILE_COUNT } from '@kosmo/const';
-import {
-  ApplicationGrantProfiles,
-  ApplicationGrants,
-  createDbId,
-  db,
-  first,
-  firstOrThrow,
-  ProfileAccounts,
-  Profiles,
-  Sessions,
-  TableCode,
-} from '@kosmo/db';
-import { ProfileAccountRole } from '@kosmo/enum';
+import { ApplicationGrantProfiles, ApplicationGrants, db, firstOrThrow, Sessions } from '@kosmo/db';
+import { ProfileService } from '@kosmo/service';
 import * as validationSchema from '@kosmo/validation';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { LimitExceededError, ValidationError } from '@/error';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
@@ -32,52 +21,14 @@ builder.mutationField('createProfile', (t) =>
     },
 
     resolve: async (_, { input }, ctx) => {
-      const profileCount = await db.$count(
-        ProfileAccounts,
-        eq(ProfileAccounts.accountId, ctx.session.accountId),
-      );
-
-      if (profileCount >= MAX_PROFILE_COUNT) {
-        throw new LimitExceededError({
-          object: 'Profile',
-          limit: MAX_PROFILE_COUNT,
-          code: 'error.profile.limitExceeded',
-        });
-      }
-
-      const handleConflictedProfile = await db
-        .select({ id: Profiles.id })
-        .from(Profiles)
-        .where(eq(sql`LOWER(${Profiles.handle})`, input.handle.toLowerCase()))
-        .then(first);
-
-      if (handleConflictedProfile) {
-        throw new ValidationError({
-          path: 'input.handle',
-          code: 'error.handle.conflict',
-        });
-      }
-
-      return await db.transaction(async (tx) => {
-        const profileId = createDbId(TableCode.Profiles);
-        const profile = await tx
-          .insert(Profiles)
-          .values({
-            id: profileId,
-            handle: input.handle,
-            normalizedHandle: input.handle.toLowerCase(),
-            instanceId: KOSMO_INSTANCE_ID,
-          })
-          .returning()
-          .then(firstOrThrow);
-
-        await tx.insert(ProfileAccounts).values({
+      try {
+        const profileId = await ProfileService.create.call({
           accountId: ctx.session.accountId,
-          profileId,
-          role: ProfileAccountRole.OWNER,
+          instanceId: KOSMO_INSTANCE_ID,
+          handle: input.handle,
         });
 
-        const applicationGrant = await tx
+        const applicationGrant = await db
           .select({ id: ApplicationGrants.id })
           .from(ApplicationGrants)
           .where(
@@ -88,20 +39,34 @@ builder.mutationField('createProfile', (t) =>
           )
           .then(firstOrThrow);
 
-        await tx.insert(ApplicationGrantProfiles).values({
+        await db.insert(ApplicationGrantProfiles).values({
           applicationGrantId: applicationGrant.id,
           profileId,
         });
 
         if (input.useCreatedProfile) {
-          await tx
-            .update(Sessions)
-            .set({ profileId: profile.id })
-            .where(eq(Sessions.id, ctx.session.id));
+          await db.update(Sessions).set({ profileId }).where(eq(Sessions.id, ctx.session.id));
         }
 
-        return profile;
-      });
+        return profileId;
+      } catch (error) {
+        if (error instanceof Error) {
+          if (error.message === 'PROFILE_LIMIT_EXCEEDED') {
+            throw new LimitExceededError({
+              object: 'Profile',
+              limit: MAX_PROFILE_COUNT,
+              code: 'error.profile.limitExceeded',
+            });
+          }
+          if (error.message === 'HANDLE_CONFLICT') {
+            throw new ValidationError({
+              path: 'input.handle',
+              code: 'error.handle.conflict',
+            });
+          }
+        }
+        throw error;
+      }
     },
   }),
 );

@@ -30,7 +30,7 @@ export const followerDispatcher: CollectionDispatcher<
       id: Profiles.id,
       uri: Profiles.uri,
       inboxUrl: Profiles.inboxUrl,
-      sharedinboxUrl: Profiles.sharedinboxUrl,
+      sharedInboxUrl: Profiles.sharedInboxUrl,
       webDomain: Instances.webDomain,
     })
     .from(ProfileFollows)
@@ -54,8 +54,8 @@ export const followerDispatcher: CollectionDispatcher<
         ? new URL(follower.inboxUrl)
         : ProfileManager.getInboxUrl(follower.id, follower.webDomain!),
       endpoints: {
-        sharedInbox: follower.sharedinboxUrl
-          ? new URL(follower.sharedinboxUrl)
+        sharedInbox: follower.sharedInboxUrl
+          ? new URL(follower.sharedInboxUrl)
           : ProfileManager.getSharedInboxUrl(follower.webDomain!),
       },
     })),

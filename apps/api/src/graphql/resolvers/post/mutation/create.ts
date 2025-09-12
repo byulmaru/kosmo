@@ -1,5 +1,5 @@
-import { db, firstOrThrow, Posts } from '@kosmo/db';
 import { PostVisibility } from '@kosmo/enum';
+import { PostService } from '@kosmo/service';
 import * as validationSchema from '@kosmo/validation';
 import { ForbiddenError, ValidationError } from '@/error';
 import { builder } from '@/graphql/builder';
@@ -20,16 +20,15 @@ builder.mutationField('createPost', (t) =>
     },
 
     resolve: async (_, { input }, ctx) => {
-      const post = await db
-        .insert(Posts)
-        .values({
-          profileId: ctx.session.profileId,
+      const post = await PostService.create.call({
+        profileId: ctx.session.profileId,
+        data: {
           content: input.content,
-          visibility: input.visibility ?? PostVisibility.PUBLIC,
-          replyToPostId: input.replyToPostId,
-        })
-        .returning()
-        .then(firstOrThrow);
+          visibility: input.visibility ?? undefined,
+          replyToPostId: input.replyToPostId ?? undefined,
+        },
+        isLocal: true,
+      });
 
       return post;
     },

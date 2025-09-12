@@ -36,8 +36,7 @@ export const sendFollow = defineService(
   {
     defaultQueueOptions: {
       deduplication: {
-        id: (input) =>
-          `activitypub:send:follow:${input.sender.profileId}:${input.recipient.profileId}`,
+        id: (input) => `activitypub:follow:${input.sender.profileId}:${input.recipient.profileId}`,
         replace: true,
       },
     },

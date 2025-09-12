@@ -39,7 +39,7 @@ export const getOrCreateProfileId = async ({ actor, tx }: GetOrCreateProfileIdPa
         ? ProfileFollowAcceptMode.MANUAL
         : ProfileFollowAcceptMode.AUTO,
       inboxUrl: actor.inboxId!.href,
-      sharedinboxUrl: actor.endpoints?.sharedInbox?.href,
+      sharedInboxUrl: actor.endpoints?.sharedInbox?.href,
       uri,
       url: actor.url?.href?.toString() ?? uri,
       protocol: ProfileProtocol.ACTIVITYPUB,
