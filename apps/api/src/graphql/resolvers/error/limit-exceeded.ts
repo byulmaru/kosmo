@@ -1,4 +1,4 @@
-import { LimitExceededError, TypedError } from '@/errors';
+import { LimitExceededError, TypedError } from '@/error';
 import { builder } from '@/graphql/builder';
 
 builder.objectType(LimitExceededError, {

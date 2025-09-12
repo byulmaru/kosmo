@@ -9,7 +9,7 @@ import {
 } from '@kosmo/db';
 import { ProfileAccountRole, ProfileState } from '@kosmo/enum';
 import { and, eq, isNull, or } from 'drizzle-orm';
-import { ForbiddenError } from '@/errors';
+import { ForbiddenError } from '@/error';
 import type { SessionContext } from '@/context';
 
 type GetPermittedProfileIdParams = {

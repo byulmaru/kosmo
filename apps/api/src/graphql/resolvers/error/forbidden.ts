@@ -1,4 +1,4 @@
-import { ForbiddenError, TypedError } from '@/errors';
+import { ForbiddenError, TypedError } from '@/error';
 import { builder } from '@/graphql/builder';
 
 builder.objectType(ForbiddenError, {

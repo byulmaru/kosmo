@@ -21,6 +21,10 @@ export const db = drizzle(pg, {
   logger: new DrizzleLogger(),
 });
 
+export const getDatabaseConnection = (tx?: Transaction) => {
+  return tx ?? db;
+};
+
 export type Database = typeof db;
 export type Transaction =
   Database extends PgDatabase<infer T, infer U, infer V> ? PgTransaction<T, U, V> : never;

@@ -12,7 +12,7 @@ import { GraphQLJSON } from 'graphql-scalars';
 import * as R from 'remeda';
 import { base64 } from 'rfc4648';
 import { match } from 'ts-pattern';
-import { UnauthorizedError, ValidationError } from '@/errors';
+import { UnauthorizedError, ValidationError } from '@/error';
 import { hasScope } from '@/utils/scope';
 import type { TableCode } from '@kosmo/db';
 import type { Scope } from '@kosmo/type';

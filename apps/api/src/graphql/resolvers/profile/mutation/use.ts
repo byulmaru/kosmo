@@ -1,6 +1,6 @@
 import { db, Sessions } from '@kosmo/db';
 import { eq } from 'drizzle-orm';
-import { ForbiddenError } from '@/errors';
+import { ForbiddenError } from '@/error';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
 import { getPermittedProfileId } from '@/utils/profile';

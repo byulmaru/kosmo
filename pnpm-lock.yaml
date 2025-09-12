@@ -46,6 +46,9 @@ importers:
       turbo:
         specifier: ^2.5.6
         version: 2.5.6
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.2
 
   apps/api:
     dependencies:
@@ -73,9 +76,6 @@ importers:
       '@kosmo/enum':
         specifier: workspace:*
         version: link:../../packages/enum
-      '@kosmo/fedify':
-        specifier: workspace:*
-        version: link:../../packages/fedify
       '@kosmo/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
@@ -88,6 +88,9 @@ importers:
       '@kosmo/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
+      '@kosmo/service':
+        specifier: workspace:*
+        version: link:../../packages/service
       '@kosmo/type':
         specifier: workspace:*
         version: link:../../packages/type
@@ -194,21 +197,36 @@ importers:
       '@kosmo/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@kosmo/enum':
+        specifier: workspace:*
+        version: link:../../packages/enum
       '@kosmo/logger':
         specifier: workspace:*
         version: link:../../packages/logger
+      '@kosmo/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
       '@kosmo/redis':
         specifier: workspace:*
         version: link:../../packages/redis
       '@kosmo/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
+      '@kosmo/service':
+        specifier: workspace:*
+        version: link:../../packages/service
+      '@kosmo/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       '@sentry/node':
         specifier: ^10.10.0
         version: 10.10.0
       bullmq:
         specifier: ^5.58.5
         version: 5.58.5
+      drizzle-orm:
+        specifier: ^0.44.5
+        version: 0.44.5(@neondatabase/serverless@1.0.1)(@opentelemetry/api@1.9.0)(@types/pg@8.15.5)(bun-types@1.2.17)(postgres@3.4.7)
       ioredis:
         specifier: ^5.7.0
         version: 5.7.0
@@ -236,12 +254,12 @@ importers:
       '@kosmo/eslint-config':
         specifier: workspace:*
         version: link:../../packages/eslint-config
-      '@kosmo/fedify':
-        specifier: workspace:*
-        version: link:../../packages/fedify
       '@kosmo/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
+      '@kosmo/service':
+        specifier: workspace:*
+        version: link:../../packages/service
       '@kosmo/svelte-relay':
         specifier: workspace:*
         version: link:../../packages/svelte-relay
@@ -511,40 +529,6 @@ importers:
         specifier: ^8.43.0
         version: 8.43.0(eslint@9.35.0(jiti@2.5.1))(typescript@5.9.2)
 
-  packages/fedify:
-    dependencies:
-      '@fedify/fedify':
-        specifier: ^1.8.8
-        version: 1.8.8(web-streams-polyfill@3.3.3)
-      '@kosmo/cache':
-        specifier: workspace:*
-        version: link:../cache
-      '@kosmo/const':
-        specifier: workspace:*
-        version: link:../const
-      '@kosmo/db':
-        specifier: workspace:*
-        version: link:../db
-      '@kosmo/enum':
-        specifier: workspace:*
-        version: link:../enum
-      drizzle-orm:
-        specifier: ^0.44.5
-        version: 0.44.5(@neondatabase/serverless@1.0.1)(@opentelemetry/api@1.9.0)(@types/pg@8.15.5)(bun-types@1.2.17)(postgres@3.4.7)
-      remeda:
-        specifier: ^2.31.0
-        version: 2.31.0
-      ts-pattern:
-        specifier: ^5.8.0
-        version: 5.8.0
-    devDependencies:
-      eslint:
-        specifier: ^9.35.0
-        version: 9.35.0(jiti@2.5.1)
-      typescript:
-        specifier: ^5.9.2
-        version: 5.9.2
-
   packages/i18n:
     devDependencies:
       '@kosmo/tsconfig':
@@ -556,6 +540,45 @@ importers:
       '@logtape/logtape':
         specifier: ^1.0.4
         version: 1.0.4
+
+  packages/manager:
+    dependencies:
+      '@fedify/fedify':
+        specifier: ^1.8.8
+        version: 1.8.8(web-streams-polyfill@3.3.3)
+      '@js-temporal/polyfill':
+        specifier: ^0.5.1
+        version: 0.5.1
+      '@kosmo/db':
+        specifier: workspace:*
+        version: link:../db
+      '@kosmo/enum':
+        specifier: workspace:*
+        version: link:../enum
+      '@kosmo/redis':
+        specifier: workspace:*
+        version: link:../redis
+      '@kosmo/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      drizzle-orm:
+        specifier: ^0.44.5
+        version: 0.44.5(@neondatabase/serverless@1.0.1)(@opentelemetry/api@1.9.0)(@types/pg@8.15.5)(bun-types@1.2.17)(postgres@3.4.7)
+      ts-pattern:
+        specifier: ^5.8.0
+        version: 5.8.0
+
+  packages/queue:
+    dependencies:
+      '@kosmo/redis':
+        specifier: workspace:*
+        version: link:../redis
+      '@kosmo/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      bullmq:
+        specifier: ^5.58.5
+        version: 5.58.5
 
   packages/redis:
     dependencies:
@@ -573,6 +596,48 @@ importers:
         version: 4.1.5
 
   packages/runtime: {}
+
+  packages/service:
+    dependencies:
+      '@fedify/fedify':
+        specifier: ^1.8.8
+        version: 1.8.8(web-streams-polyfill@3.3.3)
+      '@kosmo/const':
+        specifier: workspace:*
+        version: link:../const
+      '@kosmo/dayjs':
+        specifier: workspace:*
+        version: link:../dayjs
+      '@kosmo/db':
+        specifier: workspace:*
+        version: link:../db
+      '@kosmo/enum':
+        specifier: workspace:*
+        version: link:../enum
+      '@kosmo/manager':
+        specifier: workspace:*
+        version: link:../manager
+      '@kosmo/queue':
+        specifier: workspace:*
+        version: link:../queue
+      '@kosmo/redis':
+        specifier: workspace:*
+        version: link:../redis
+      '@kosmo/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      bullmq:
+        specifier: ^5.58.5
+        version: 5.58.5
+      drizzle-orm:
+        specifier: ^0.44.5
+        version: 0.44.5(@neondatabase/serverless@1.0.1)(@opentelemetry/api@1.9.0)(@types/pg@8.15.5)(bun-types@1.2.17)(postgres@3.4.7)
+      iter-ops:
+        specifier: ^3.5.0
+        version: 3.5.0
+      remeda:
+        specifier: ^2.31.0
+        version: 2.31.0
 
   packages/svelte-relay:
     dependencies:
@@ -4182,6 +4247,10 @@ packages:
   isexe@3.1.1:
     resolution: {integrity: sha512-LpB/54B+/2J5hqQ7imZHfdU31OlgQqx7ZicVlkm9kzg9/w8GKLEcFfJl/t7DCEDueOyBAD6zCCwTO6Fzs0NoEQ==}
     engines: {node: '>=16'}
+
+  iter-ops@3.5.0:
+    resolution: {integrity: sha512-0/DU67w30nLAyyYETTAVOwtts871N6jjQEY9NAzSXqtlAGuo8CX6O+/Hx11eRZIchACaAMUn6alEndINx27j/Q==}
+    engines: {node: '>=18'}
 
   jackspeak@3.4.3:
     resolution: {integrity: sha512-OGlZQpz2yfahA/Rd1Y8Cd9SIEsqvXkLVoSw/cgwhnhFMDbsQFeZYoJJ7bIZBS9BcamUW96asq/npPWugM+RQBw==}
@@ -10320,6 +10389,8 @@ snapshots:
   isexe@2.0.0: {}
 
   isexe@3.1.1: {}
+
+  iter-ops@3.5.0: {}
 
   jackspeak@3.4.3:
     dependencies:

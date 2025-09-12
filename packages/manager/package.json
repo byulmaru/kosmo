@@ -1,0 +1,19 @@
+{
+  "name": "@kosmo/manager",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "@fedify/fedify": "^1.8.8",
+    "@js-temporal/polyfill": "^0.5.1",
+    "@kosmo/db": "workspace:*",
+    "@kosmo/enum": "workspace:*",
+    "@kosmo/redis": "workspace:*",
+    "@kosmo/tsconfig": "workspace:*",
+    "drizzle-orm": "^0.44.5",
+    "ts-pattern": "^5.8.0"
+  }
+}

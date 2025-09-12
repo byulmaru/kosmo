@@ -1,4 +1,4 @@
-import { federation } from '@kosmo/fedify';
+import { ActivityPubService } from '@kosmo/service';
 import * as Sentry from '@sentry/sveltekit';
 import { getXForwardedRequest } from 'x-forwarded-fetch';
 import { handleExceptedError } from './handle-error';
@@ -6,7 +6,7 @@ import { handleExceptedError } from './handle-error';
 export const handle = async ({ event, resolve }) => {
   const request = await getXForwardedRequest(event.request.clone());
 
-  return federation.fetch(request, {
+  return ActivityPubService.federation.fetch(request, {
     contextData: null,
     async onNotFound(): Promise<Response> {
       return await resolve(event);

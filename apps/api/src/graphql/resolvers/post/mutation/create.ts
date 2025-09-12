@@ -1,7 +1,7 @@
 import { db, firstOrThrow, Posts } from '@kosmo/db';
 import { PostVisibility } from '@kosmo/enum';
 import * as validationSchema from '@kosmo/validation';
-import { ForbiddenError, ValidationError } from '@/errors';
+import { ForbiddenError, ValidationError } from '@/error';
 import { builder } from '@/graphql/builder';
 import { Post } from '@/graphql/objects';
 

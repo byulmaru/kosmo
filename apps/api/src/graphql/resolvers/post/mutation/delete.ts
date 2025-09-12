@@ -2,7 +2,7 @@ import { db, firstOrThrow, firstOrThrowWith, Posts } from '@kosmo/db';
 import { PostState } from '@kosmo/enum';
 import dayjs from 'dayjs';
 import { and, eq } from 'drizzle-orm';
-import { NotFoundError } from '@/errors';
+import { NotFoundError } from '@/error';
 import { builder } from '@/graphql/builder';
 import { Post } from '@/graphql/objects';
 

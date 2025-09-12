@@ -1,4 +1,4 @@
-import { NotFoundError, TypedError } from '@/errors';
+import { NotFoundError, TypedError } from '@/error';
 import { builder } from '@/graphql/builder';
 
 builder.objectType(NotFoundError, {

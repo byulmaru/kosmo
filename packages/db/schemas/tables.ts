@@ -1,13 +1,21 @@
 import {
   AccountState,
   PostState,
-  PostVisibility,
   ProfileFollowAcceptMode,
   ProfileRelationVisibility,
   ProfileState,
 } from '@kosmo/enum';
 import { eq, sql } from 'drizzle-orm';
-import { integer, json, pgTable, text, unique, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
+import {
+  index,
+  integer,
+  json,
+  pgTable,
+  text,
+  unique,
+  uniqueIndex,
+  varchar,
+} from 'drizzle-orm/pg-core';
 import * as E from './enums';
 import { createDbId, TableCode } from './id';
 import { datetime } from './types';
@@ -134,6 +142,7 @@ export const Instances = pgTable('instances', {
     .primaryKey()
     .$defaultFn(() => createDbId(TableCode.Instances)),
   domain: varchar('domain').notNull().unique(),
+  webDomain: varchar('web_domain').unique(),
   type: E.InstanceType('type').notNull(),
   createdAt: datetime('created_at')
     .notNull()
@@ -148,7 +157,7 @@ export const Posts = pgTable('posts', {
     .notNull()
     .references(() => Profiles.id),
   state: E.PostState('state').notNull().default(PostState.ACTIVE),
-  visibility: E.PostVisibility('visibility').notNull().default(PostVisibility.PUBLIC),
+  visibility: E.PostVisibility('visibility').notNull(),
   content: text('content').notNull(),
   replyToPostId: varchar('reply_to_post_id').references((): AnyPgColumn => Posts.id),
   repostOfPostId: varchar('repost_of_post_id').references((): AnyPgColumn => Posts.id),
@@ -157,6 +166,21 @@ export const Posts = pgTable('posts', {
     .default(sql`now()`),
   updatedAt: datetime('updated_at'),
   deletedAt: datetime('deleted_at'),
+});
+
+export const PostMentions = pgTable('post_mentions', {
+  id: varchar('id')
+    .primaryKey()
+    .$defaultFn(() => createDbId(TableCode.PostMentions)),
+  postId: varchar('post_id')
+    .notNull()
+    .references(() => Posts.id),
+  profileId: varchar('profile_id')
+    .notNull()
+    .references(() => Profiles.id),
+  createdAt: datetime('created_at')
+    .notNull()
+    .default(sql`now()`),
 });
 
 export const Profiles = pgTable(
@@ -183,11 +207,20 @@ export const Profiles = pgTable(
       .default(ProfileRelationVisibility.PUBLIC),
     followingCount: integer('following_count').notNull().default(0),
     followerCount: integer('follower_count').notNull().default(0),
+    protocol: E.ProfileProtocol('protocol'),
+    uri: varchar('uri').unique(),
+    url: varchar('url'),
+    inboxUrl: varchar('inbox_url'),
+    sharedinboxUrl: varchar('shared_inbox_url'),
     createdAt: datetime('created_at')
       .notNull()
       .default(sql`now()`),
+    lastActivityAt: datetime('last_activity_at').default(sql`now()`),
   },
-  (t) => [uniqueIndex('handle_unique').on(t.instanceId, t.normalizedHandle)],
+  (t) => [
+    uniqueIndex('handle_unique').on(t.instanceId, t.normalizedHandle),
+    index('last_activity_at_index').on(t.lastActivityAt),
+  ],
 );
 
 export const ProfileAccounts = pgTable(
@@ -209,23 +242,6 @@ export const ProfileAccounts = pgTable(
   },
   (t) => [unique().on(t.accountId, t.profileId)],
 );
-
-export const ProfileActivityPubActors = pgTable('profile_activitypub_actors', {
-  id: varchar('id')
-    .primaryKey()
-    .$defaultFn(() => createDbId(TableCode.ProfileActivityPubActors)),
-  profileId: varchar('profile_id')
-    .notNull()
-    .unique()
-    .references(() => Profiles.id),
-  uri: varchar('uri').notNull().unique(),
-  url: varchar('url').notNull(),
-  inboxUri: varchar('inbox_uri').notNull(),
-  sharedInboxUri: varchar('shared_inbox_uri'),
-  createdAt: datetime('created_at')
-    .notNull()
-    .default(sql`now()`),
-});
 
 export const ProfileCryptographicKeys = pgTable('profile_cryptographic_keys', {
   id: varchar('id')

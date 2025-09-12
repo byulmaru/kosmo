@@ -1,0 +1,15 @@
+{
+  "name": "@kosmo/queue",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./queue.ts",
+    "./const": "./const.ts"
+  },
+  "dependencies": {
+    "@kosmo/redis": "workspace:*",
+    "@kosmo/runtime": "workspace:*",
+    "bullmq": "^5.58.5"
+  }
+}

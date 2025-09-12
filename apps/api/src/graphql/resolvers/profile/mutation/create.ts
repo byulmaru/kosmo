@@ -14,7 +14,7 @@ import {
 import { ProfileAccountRole } from '@kosmo/enum';
 import * as validationSchema from '@kosmo/validation';
 import { and, eq, sql } from 'drizzle-orm';
-import { LimitExceededError, ValidationError } from '@/errors';
+import { LimitExceededError, ValidationError } from '@/error';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
 

@@ -1,10 +1,8 @@
 import { db, Profiles } from '@kosmo/db';
 import { ProfileFollowAcceptMode, ProfileState } from '@kosmo/enum';
 import { and, eq, inArray } from 'drizzle-orm';
-import { env } from '@/env';
 import { builder } from '@/graphql/builder';
-import { Profile } from '@/graphql/objects';
-import { ProfileActivityPubActorByProfileIdLoader } from '@/utils/loader/profile';
+import { Instance, Profile } from '@/graphql/objects';
 
 builder.node(Profile, {
   id: { resolve: (profile) => profile.id },
@@ -30,19 +28,15 @@ builder.node(Profile, {
 
     uri: t.string({
       resolve: async (profile, _, ctx) => {
-        const profileActivityPubActor = await ProfileActivityPubActorByProfileIdLoader(ctx).load(
-          profile.id,
-        );
-        return profileActivityPubActor?.uri ?? `${env.PUBLIC_WEB_DOMAIN}/profile/${profile.id}`;
+        const instance = await Instance.getDataloader(ctx).load(profile.instanceId);
+        return profile?.uri ?? `${instance.webDomain}/profile/${profile.id}`;
       },
     }),
 
     url: t.string({
       resolve: async (profile, _, ctx) => {
-        const profileActivityPubActor = await ProfileActivityPubActorByProfileIdLoader(ctx).load(
-          profile.id,
-        );
-        return profileActivityPubActor?.url ?? `${env.PUBLIC_WEB_DOMAIN}/@${profile.handle}`;
+        const instance = await Instance.getDataloader(ctx).load(profile.instanceId);
+        return profile?.url ?? `${instance.webDomain}/@${profile.handle}`;
       },
     }),
 

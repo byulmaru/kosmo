@@ -5,7 +5,7 @@ import './not-found';
 import './validation';
 
 import { getString } from '@kosmo/i18n';
-import { FieldError, TypedError } from '@/errors';
+import { FieldError, TypedError } from '@/error';
 import { builder } from '@/graphql/builder';
 
 builder.interfaceType(TypedError, {

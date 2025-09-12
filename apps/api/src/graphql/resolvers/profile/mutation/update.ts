@@ -1,6 +1,6 @@
 import { db, firstOrThrow, Profiles } from '@kosmo/db';
 import { eq } from 'drizzle-orm';
-import { ValidationError } from '@/errors';
+import { ValidationError } from '@/error';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
 

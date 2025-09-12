@@ -9,3 +9,6 @@ export const PROFILE_ACCOUNT_ORDERED_ROLES = [
   ProfileAccountRole.OWNER,
   ProfileAccountRole.MEMBER,
 ] as const;
+
+export const TIMELINE_MAX_COUNT = 1000;
+export const TIMELINE_REPOST_FALLOFF = 50;

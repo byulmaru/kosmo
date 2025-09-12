@@ -1,4 +1,4 @@
-import { FieldError, TypedError, ValidationError } from '@/errors';
+import { FieldError, TypedError, ValidationError } from '@/error';
 import { builder } from '@/graphql/builder';
 
 builder.objectType(ValidationError, {

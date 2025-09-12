@@ -1,4 +1,5 @@
 import { GraphQLError } from 'graphql';
+import { decodeTime } from 'ulidx';
 
 class DBNotFoundError extends GraphQLError {
   constructor() {
@@ -23,4 +24,8 @@ export const firstOrThrowWith = (errorThrower: () => unknown) => {
 
     return arr[0];
   };
+};
+
+export const idToTimestamp = (id: string) => {
+  return decodeTime(id.split('0', 2)[1]);
 };
