@@ -175,10 +175,6 @@ export function usePaginationFragment<
       // Fragment ref에서 node ID 추출
       const nodeId = (fragmentRef as Record<string, unknown>)?.id;
 
-      if (!nodeId || typeof nodeId !== 'string') {
-        throw new Error('Fragment ref must have an "id" field for pagination.');
-      }
-
       const variables = {
         id: nodeId,
         count,
@@ -225,10 +221,6 @@ export function usePaginationFragment<
       // Fragment ref에서 node ID 추출
       const nodeId = (fragmentRef as Record<string, unknown>)?.id;
 
-      if (!nodeId || typeof nodeId !== 'string') {
-        throw new Error('Fragment ref must have an "id" field for pagination.');
-      }
-
       const variables = {
         id: nodeId,
         count,
@@ -260,10 +252,6 @@ export function usePaginationFragment<
 
       // Fragment ref에서 node ID 추출
       const nodeId = (fragmentRef as Record<string, unknown>)?.id;
-
-      if (!nodeId || typeof nodeId !== 'string') {
-        throw new Error('Fragment ref must have an "id" field for refetch.');
-      }
 
       const refetchVariables = {
         id: nodeId,

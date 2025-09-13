@@ -251,6 +251,7 @@ type Query {
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
   profile(handle: String!): Profile
+  timeline(after: String, before: String, first: Int, last: Int): PostConnection
   usingProfile: Profile
 }
 

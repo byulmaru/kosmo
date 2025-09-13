@@ -1,12 +1,19 @@
 <script lang="ts">
+  import { usePaginationFragment, usePreloadedQuery } from '@kosmo/svelte-relay';
   import PageHeader from '$lib/components/header/DefaultHeader.svelte';
-  import { Button } from '$lib/components/ui/button';
+  import PostList from '$lib/components/post-list/PostList.svelte';
+  import type { Page_MainTimeline_Fragment$key } from './__generated__/Page_MainTimeline_Fragment.graphql';
+
+  const { data } = $props();
+
+  const query = usePreloadedQuery(data.query);
+
+  const timelineConnection = usePaginationFragment<Page_MainTimeline_Fragment$key>(
+    data.fragment,
+    $query,
+  );
 </script>
 
 <PageHeader showBackButton={false} title="홈" />
 
-<div class="p-4">
-  <h1 class="text-4xl font-bold">Web</h1>
-  <Button>안녕</Button>
-  <p>Visit <a href="https://kit.svelte.dev">kit.svelte.dev</a> to read the documentation</p>
-</div>
+<PostList connectionFieldName="timeline" store={timelineConnection} />

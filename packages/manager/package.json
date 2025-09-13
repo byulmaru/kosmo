@@ -14,6 +14,7 @@
     "@kosmo/redis": "workspace:*",
     "@kosmo/tsconfig": "workspace:*",
     "drizzle-orm": "^0.44.5",
+    "iter-ops": "^3.5.0",
     "ts-pattern": "^5.8.0"
   }
 }

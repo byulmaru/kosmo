@@ -1,8 +1,8 @@
 import { PostState, PostVisibility } from '@kosmo/enum';
 import { builder } from '@/graphql/builder';
-import { getPostLoader } from '@/graphql/loaders/post';
 import { Post, Profile } from '@/graphql/objects';
 import { mapErrorToNull } from '@/utils/array';
+import { getPostLoader } from './loader';
 
 builder.node(Post, {
   id: { resolve: (post) => post.id },
