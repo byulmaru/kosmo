@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ProfileRelationshipState } from '@kosmo/enum';
   import { usePreloadedQuery } from '@kosmo/svelte-relay';
+  import { resolve } from '$app/paths';
   import FollowButton from '$lib/components/follow-button/FollowButton.svelte';
   import DefaultHeader from '$lib/components/header/DefaultHeader.svelte';
   import { Avatar, AvatarImage } from '$lib/components/ui/avatar';
@@ -69,11 +70,21 @@
         <p>{$query.profile.description}</p>
       </div>
       <div class="my-2 flex gap-4">
-        <a class="flex gap-1" href={`/@${$query.profile.relativeHandle}/following`}>
+        <a
+          class="flex gap-1"
+          href={resolve(`/(main)/@[handle]/(profile)/following`, {
+            handle: $query.profile.relativeHandle,
+          })}
+        >
           <span class="font-semibold">{$query.profile.followingCount.toLocaleString()}</span>
           <span class="text-muted-foreground">{$i18n('profile.stat.following')}</span>
         </a>
-        <a class="flex gap-1" href={`/@${$query.profile.relativeHandle}/followers`}>
+        <a
+          class="flex gap-1"
+          href={resolve(`/(main)/@[handle]/(profile)/followers`, {
+            handle: $query.profile.relativeHandle,
+          })}
+        >
           <span class="font-semibold">{$query.profile.followerCount.toLocaleString()}</span>
           <span class="text-muted-foreground">{$i18n('profile.stat.followers')}</span>
         </a>
