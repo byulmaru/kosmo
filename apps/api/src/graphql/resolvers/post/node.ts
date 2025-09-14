@@ -1,4 +1,5 @@
 import { PostState, PostVisibility } from '@kosmo/enum';
+import sanitizeHtml from 'sanitize-html';
 import { builder } from '@/graphql/builder';
 import { Post, Profile } from '@/graphql/objects';
 import { mapErrorToNull } from '@/utils/array';
@@ -12,11 +13,16 @@ builder.node(Post, {
       .then((posts) => mapErrorToNull(posts)),
 
   fields: (t) => ({
-    content: t.exposeString('content'),
     state: t.expose('state', { type: PostState }),
     visibility: t.expose('visibility', { type: PostVisibility }),
     createdAt: t.expose('createdAt', { type: 'Timestamp' }),
     updatedAt: t.expose('updatedAt', { type: 'Timestamp', nullable: true }),
+
+    content: t.string({
+      resolve: async (post) => {
+        return sanitizeHtml(post.content);
+      },
+    }),
 
     author: t.expose('profileId', { type: Profile }),
     replyToPost: t.field({

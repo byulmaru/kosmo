@@ -1,4 +1,5 @@
 import {
+  Create,
   createFederation,
   Endpoints,
   exportJwk,
@@ -16,6 +17,7 @@ import { and, eq } from 'drizzle-orm';
 import * as R from 'remeda';
 import { followerCounter, followerDispatcher } from './dispatcher/follower';
 import { followingCounter, followingDispatcher } from './dispatcher/following';
+import { createListener } from './inbox/create';
 import { followListener } from './inbox/follow';
 import { undoListener } from './inbox/undo';
 import type { FederationContextData } from './type';
@@ -119,7 +121,8 @@ federation
 federation
   .setInboxListeners('/profile/{identifier}/inbox', '/inbox')
   .on(Follow, followListener)
-  .on(Undo, undoListener);
+  .on(Undo, undoListener)
+  .on(Create, createListener);
 
 federation
   .setFollowersDispatcher('/profile/{identifier}/followers', followerDispatcher)
