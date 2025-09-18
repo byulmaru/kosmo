@@ -126,15 +126,17 @@ export const Files = pgTable('files', {
   id: varchar('id')
     .primaryKey()
     .$defaultFn(() => createDbId(TableCode.Files)),
+  accountId: varchar('account_id').references(() => Accounts.id),
+  state: E.FileState('state').notNull(),
   ownership: E.FileOwnership('ownership').notNull(),
-  hash: varchar('hash').unique(),
   path: varchar('path').notNull(),
-  mimeType: varchar('mime_type').notNull(),
-  size: integer('size').notNull(),
+  placeholder: varchar('placeholder'),
   metadata: json('metadata'),
+  size: integer('size').notNull(),
   createdAt: datetime('created_at')
     .notNull()
     .default(sql`now()`),
+  expiresAt: datetime('expires_at'),
 });
 
 export const Instances = pgTable('instances', {

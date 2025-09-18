@@ -16,6 +16,13 @@ export const FileOwnership = {
 } as const;
 export type FileOwnership = keyof typeof FileOwnership;
 
+export const FileState = {
+  EPHEMERAL: 'EPHEMERAL',
+  PERMANENT: 'PERMANENT',
+  DELETED: 'DELETED',
+} as const;
+export type FileState = keyof typeof FileState;
+
 export const InstanceType = {
   LOCAL: 'LOCAL',
   ACTIVITYPUB: 'ACTIVITYPUB',

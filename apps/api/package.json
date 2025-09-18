@@ -9,9 +9,12 @@
     "lint:typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.890.0",
+    "@aws-sdk/lib-storage": "^3.891.0",
     "@envelop/core": "^5.3.1",
     "@fedify/fedify": "^1.8.8",
     "@hono/node-server": "^1.19.1",
+    "@hono/zod-validator": "^0.7.2",
     "@kosmo/cache": "workspace:*",
     "@kosmo/const": "workspace:*",
     "@kosmo/dayjs": "workspace:*",
