@@ -132,7 +132,7 @@ export const Files = pgTable('files', {
   path: varchar('path').notNull(),
   placeholder: varchar('placeholder'),
   metadata: json('metadata'),
-  size: integer('size').notNull(),
+  size: integer('size'),
   createdAt: datetime('created_at')
     .notNull()
     .default(sql`now()`),

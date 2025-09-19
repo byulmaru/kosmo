@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.890.0",
+    "@aws-sdk/lib-storage": "^3.891.0",
     "@hono/node-server": "^1.19.1",
     "@kosmo/db": "workspace:*",
     "@kosmo/enum": "workspace:*",
@@ -15,7 +16,10 @@
     "drizzle-orm": "^0.44.5",
     "hono": "^4.9.6",
     "postgres": "^3.4.7",
+    "rfc4648": "^1.5.4",
     "sharp": "^0.34.4",
+    "thumbhash": "^0.1.1",
+    "ts-pattern": "^5.8.0",
     "zod": "^4.1.5"
   },
   "devDependencies": {

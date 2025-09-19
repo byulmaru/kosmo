@@ -1,14 +1,22 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { Readable } from 'node:stream';
+import { GetObjectCommand, HeadObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { Upload } from '@aws-sdk/lib-storage';
 import { serve } from '@hono/node-server';
 import { db, Files, firstOrThrowWith } from '@kosmo/db';
-import { FileState } from '@kosmo/enum';
+import { FileOwnership, FileState } from '@kosmo/enum';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
+import { base64 } from 'rfc4648';
 import sharp from 'sharp';
+import { rgbaToThumbHash } from 'thumbhash';
+import { match } from 'ts-pattern';
 import { env } from './env';
 
 const app = new Hono();
+
+const MAX_REMOTE_FILE_SIZE = 16 * 1024 * 1024; // 16MB
+const FETCH_TIMEOUT = 30000; // 30초
 
 const s3Client = new S3Client({
   credentials: {
@@ -19,57 +27,154 @@ const s3Client = new S3Client({
   region: 'auto',
 });
 
-app.get('/:fileId', async (c) => {
+async function generatePlaceholder(img: sharp.Sharp, fileId: string) {
+  const raw = await img
+    .clone()
+    .resize(100, 100, { fit: 'inside' })
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  const placeholder = base64.stringify(rgbaToThumbHash(raw.info.width, raw.info.height, raw.data));
+
+  return db.update(Files).set({ placeholder }).where(eq(Files.id, fileId));
+}
+
+app.get('/:fileId/:option', async (c) => {
   const fileId = c.req.param('fileId');
+  const option = c.req.param('option');
+
+  if (option !== 'original' && option !== 'thumbnail') {
+    return c.notFound();
+  }
 
   const file = await db
     .select({
       id: Files.id,
       path: Files.path,
+      ownership: Files.ownership,
+      placeholder: Files.placeholder,
     })
     .from(Files)
     .where(and(eq(Files.id, fileId), eq(Files.state, FileState.PERMANENT)))
     .limit(1)
     .then(firstOrThrowWith(() => new HTTPException(404)));
 
-  const response = await s3Client.send(
-    new GetObjectCommand({
-      Bucket: 'kosmo-media',
-      Key: file.path,
-    }),
+  let originalStream: ReadableStream;
+  let s3Path: string | undefined;
+
+  // 이미지 데이터 가져오기
+  if (file.ownership === FileOwnership.LOCAL) {
+    const response = await s3Client.send(
+      new GetObjectCommand({
+        Bucket: 'kosmo-media',
+        Key: file.path,
+      }),
+    );
+
+    if (!response.Body) {
+      return c.notFound();
+    }
+
+    if (response.ContentType !== 'image/webp') {
+      s3Path = file.path;
+    }
+
+    originalStream = response.Body.transformToWebStream();
+  } else {
+    try {
+      const response = await fetch(file.path, {
+        signal: AbortSignal.timeout(FETCH_TIMEOUT),
+      });
+
+      if (!response.ok) {
+        return c.notFound();
+      }
+
+      // Content-Length 체크
+      const contentLength = response.headers.get('content-length');
+      if (contentLength && parseInt(contentLength) > MAX_REMOTE_FILE_SIZE) {
+        return c.text('File too large', 413);
+      }
+
+      if (!response.body) {
+        return c.notFound();
+      }
+
+      // 스트림에 크기 제한을 추가하는 TransformStream
+      let totalSize = 0;
+      const limitTransform = new TransformStream({
+        transform(chunk: Uint8Array, controller) {
+          totalSize += chunk.length;
+          if (totalSize > MAX_REMOTE_FILE_SIZE) {
+            controller.error(new Error('File too large'));
+            return;
+          }
+          controller.enqueue(chunk);
+        },
+      });
+
+      originalStream = response.body.pipeThrough(limitTransform);
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        return c.text('Request timeout', 408);
+      }
+      throw error;
+    }
+  }
+
+  const img = sharp({ animated: true });
+  // @ts-expect-error ReadableStream 시그니처 추론 문제?
+  Readable.fromWeb(originalStream).pipe(img);
+
+  const webpTransform = img.clone().webp();
+
+  if (s3Path) {
+    const upload = new Upload({
+      client: s3Client,
+      params: {
+        Bucket: 'kosmo-media',
+        Key: s3Path,
+        Body: webpTransform.clone(),
+        ContentType: 'image/webp',
+      },
+    });
+
+    upload
+      .done()
+      .then(() =>
+        s3Client.send(
+          new HeadObjectCommand({
+            Bucket: 'kosmo-media',
+            Key: s3Path,
+          }),
+        ),
+      )
+      .then((headResponse) =>
+        db.update(Files).set({ size: headResponse.ContentLength }).where(eq(Files.id, file.id)),
+      )
+      .catch((error) => {
+        console.error('S3 upload or size update failed:', error);
+      });
+  }
+
+  const responseStream = Readable.toWeb(
+    match(option)
+      .with('original', () => webpTransform)
+      .with('thumbnail', () =>
+        webpTransform.clone().resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }),
+      )
+      .exhaustive(),
   );
 
-  if (!response.Body) {
-    return c.notFound();
+  if (!file.placeholder) {
+    generatePlaceholder(img, file.id);
   }
 
-  let byteArray = await response.Body.transformToByteArray();
-
-  if (response.ContentType !== 'image/webp') {
-    const result = await sharp(byteArray, { animated: true })
-      .webp()
-      .toBuffer({ resolveWithObject: true });
-
-    byteArray = result.data;
-
-    s3Client
-      .send(
-        new PutObjectCommand({
-          Bucket: 'kosmo-media',
-          Key: file.path,
-          Body: result.data,
-          ContentType: 'image/webp',
-        }),
-      )
-      .then(() => db.update(Files).set({ size: result.info.size }).where(eq(Files.id, file.id)))
-      .then(() => null);
-  }
-
-  // @ts-expect-error 근데정말왜타입에러가나지????
-  return new Response(byteArray, {
+  return new Response(responseStream as ReadableStream, {
     headers: {
       'Content-Type': 'image/webp',
-      'Cache-Control': 'public, max-age=86400, immutable',
+      'Cache-Control': 'public, max-age=2592000, immutable',
     },
   });
 });
