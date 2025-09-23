@@ -54,6 +54,7 @@ app.get('/:fileId/:option', async (c) => {
       path: Files.path,
       ownership: Files.ownership,
       placeholder: Files.placeholder,
+      targetSize: Files.targetSize,
     })
     .from(Files)
     .where(and(eq(Files.id, fileId), eq(Files.state, FileState.PERMANENT)))
@@ -123,11 +124,15 @@ app.get('/:fileId/:option', async (c) => {
     }
   }
 
-  const img = sharp({ animated: true });
+  let img = sharp({ animated: true }).webp();
   // @ts-expect-error ReadableStream 시그니처 추론 문제?
   Readable.fromWeb(originalStream).pipe(img);
 
-  const webpTransform = img.clone().webp();
+  if (file.targetSize) {
+    img = img.resize(file.targetSize.width, file.targetSize.height, {
+      fit: 'cover',
+    });
+  }
 
   if (s3Path) {
     const upload = new Upload({
@@ -135,7 +140,7 @@ app.get('/:fileId/:option', async (c) => {
       params: {
         Bucket: 'kosmo-media',
         Key: s3Path,
-        Body: webpTransform.clone(),
+        Body: img.clone(),
         ContentType: 'image/webp',
       },
     });
@@ -160,9 +165,9 @@ app.get('/:fileId/:option', async (c) => {
 
   const responseStream = Readable.toWeb(
     match(option)
-      .with('original', () => webpTransform)
+      .with('original', () => img)
       .with('thumbnail', () =>
-        webpTransform.clone().resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }),
+        img.clone().resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }),
       )
       .exhaustive(),
   );

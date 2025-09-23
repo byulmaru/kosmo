@@ -3,6 +3,7 @@
   import * as validationSchema from '@kosmo/validation';
   import { CirclePlus } from '@lucide/svelte';
   import { z } from 'zod';
+  import Avatar from '$lib/components/avatar/Avatar.svelte';
   import Form from '$lib/components/form/Form.svelte';
   import InputField from '$lib/components/form/InputField.svelte';
   import SubmitButton from '$lib/components/form/SubmitButton.svelte';
@@ -47,42 +48,47 @@
   let createProfileDialogOpen = $state(false);
 </script>
 
-<DropdownMenu.Root bind:open={profileMenuOpen}>
-  <DropdownMenu.Trigger class="w-full">
-    <div class="hover:bg-muted inline-flex w-full items-center justify-center gap-2 rounded-md p-3">
-      <div class="flex aspect-square size-8 items-center justify-center rounded-lg bg-gray-200">
-        <span class="text-sm">👤</span>
+{#if $query.usingProfile}
+  <DropdownMenu.Root bind:open={profileMenuOpen}>
+    <DropdownMenu.Trigger class="w-full">
+      <div
+        class="hover:bg-muted inline-flex w-full items-center justify-center gap-2 rounded-md p-3"
+      >
+        <Avatar class="h-8 w-8" $profile={$query.usingProfile} />
+        <div class="grid flex-1 text-left text-sm leading-tight">
+          <span class="truncate font-semibold">{$query.usingProfile.displayName}</span>
+          <span class="truncate text-xs">@{$query.usingProfile.fullHandle}</span>
+        </div>
+        <span class="ml-auto">⋯</span>
       </div>
-      <div class="grid flex-1 text-left text-sm leading-tight">
-        <span class="truncate font-semibold">{$query.usingProfile?.displayName}</span>
-        <span class="truncate text-xs">@{$query.usingProfile?.fullHandle}</span>
-      </div>
-      <span class="ml-auto">⋯</span>
-    </div>
-  </DropdownMenu.Trigger>
-  <DropdownMenu.Content class="w-60">
-    <DropdownMenu.Group>
-      {#each $query.me?.profiles ?? [] as profile (profile.id)}
-        <DropdownMenu.Item
-          onclick={async () => {
-            if ($query.usingProfile?.id !== profile.id) {
-              await useProfile({ variables: { input: { profileId: profile.id } } });
-              location.reload();
-            }
-          }}
-        >
-          👤 {profile.displayName}
-        </DropdownMenu.Item>
-      {:else}
-        <DropdownMenu.Item disabled>프로필이 없어요</DropdownMenu.Item>
-      {/each}
-    </DropdownMenu.Group>
-    <DropdownMenu.Separator />
-    <DropdownMenu.Item onclick={() => (createProfileDialogOpen = true)}>
-      <CirclePlus /> 새 프로필 추가
-    </DropdownMenu.Item>
-  </DropdownMenu.Content>
-</DropdownMenu.Root>
+    </DropdownMenu.Trigger>
+    <DropdownMenu.Content class="w-60">
+      <DropdownMenu.Group>
+        {#each $query.me?.profiles ?? [] as profile (profile.id)}
+          <DropdownMenu.Item
+            onclick={async () => {
+              if ($query.usingProfile?.id !== profile.id) {
+                await useProfile({ variables: { input: { profileId: profile.id } } });
+                location.reload();
+              }
+            }}
+          >
+            <div class="flex items-center gap-2">
+              <Avatar class="h-4 w-4" $profile={profile} />
+              {profile.displayName}
+            </div>
+          </DropdownMenu.Item>
+        {:else}
+          <DropdownMenu.Item disabled>프로필이 없어요</DropdownMenu.Item>
+        {/each}
+      </DropdownMenu.Group>
+      <DropdownMenu.Separator />
+      <DropdownMenu.Item onclick={() => (createProfileDialogOpen = true)}>
+        <CirclePlus /> 새 프로필 추가
+      </DropdownMenu.Item>
+    </DropdownMenu.Content>
+  </DropdownMenu.Root>
+{/if}
 
 <Dialog.Root bind:open={createProfileDialogOpen}>
   <Dialog.Content>

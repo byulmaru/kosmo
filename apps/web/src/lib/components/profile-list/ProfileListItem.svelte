@@ -1,7 +1,8 @@
 <script lang="ts">
   import { ProfileRelationshipState } from '@kosmo/enum';
   import { useFragment } from '@kosmo/svelte-relay';
-  import { Avatar, AvatarImage } from '$lib/components/ui/avatar';
+  import { resolve } from '$app/paths';
+  import Avatar from '$lib/components/avatar/Avatar.svelte';
   import { i18n } from '$lib/i18n.svelte';
   import FollowButton from '../follow-button/FollowButton.svelte';
   import { fragment } from './ProfileListItem.graphql';
@@ -14,11 +15,9 @@
 
 <a
   class="hover:bg-muted/50 border-border/50 flex cursor-pointer items-start gap-3 border-b px-4 py-3 transition-colors"
-  href={`/@${$profile.relativeHandle}`}
+  href={resolve(`/(main)/@[handle]`, { handle: $profile.relativeHandle })}
 >
-  <Avatar class="size-12 flex-shrink-0">
-    <AvatarImage alt={$profile.displayName} src="https://placehold.co/400x400" />
-  </Avatar>
+  <Avatar class="size-12 flex-shrink-0" {$profile} />
 
   <div class="min-w-0 flex-1 text-sm">
     <div class="flex items-center justify-between">

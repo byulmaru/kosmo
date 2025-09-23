@@ -1,8 +1,8 @@
 <script lang="ts">
   import { dayjs } from '@kosmo/dayjs';
   import { usePreloadedQuery } from '@kosmo/svelte-relay';
+  import Avatar from '$lib/components/avatar/Avatar.svelte';
   import PageHeader from '$lib/components/header/DefaultHeader.svelte';
-  import { Avatar, AvatarImage } from '$lib/components/ui/avatar';
   import { i18n } from '$lib/i18n.svelte';
 
   const { data } = $props();
@@ -16,9 +16,7 @@
   {@const post = $query.node}
   <article class="border-border/50 border-b px-4 py-6">
     <div class="flex items-start gap-3">
-      <Avatar class="size-14 flex-shrink-0">
-        <AvatarImage alt={post.author.displayName} src="https://placehold.co/400x400" />
-      </Avatar>
+      <Avatar class="size-14 flex-shrink-0" $profile={post.author} />
 
       <div class="min-w-0 flex-1">
         <div class="mb-2">

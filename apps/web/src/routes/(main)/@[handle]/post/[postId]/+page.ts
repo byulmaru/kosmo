@@ -22,6 +22,8 @@ export const load = async ({ params, parent }) => {
                 displayName
                 relativeHandle
                 fullHandle
+
+                ...Avatar_Profile_Fragment
               }
 
               replyToPost {
@@ -30,6 +32,8 @@ export const load = async ({ params, parent }) => {
                 author {
                   displayName
                   relativeHandle
+
+                  ...Avatar_Profile_Fragment
                 }
               }
 
@@ -39,6 +43,8 @@ export const load = async ({ params, parent }) => {
                 author {
                   displayName
                   relativeHandle
+
+                  ...Avatar_Profile_Fragment
                 }
               }
             }

@@ -90,6 +90,13 @@ interface FieldError implements Error {
   path: String
 }
 
+type File implements Node {
+  id: ID!
+  placeholder: String
+  thumbnailUrl: String!
+  url: String!
+}
+
 input FollowProfileInput {
   profileId: String!
 }
@@ -193,6 +200,7 @@ enum PostVisibility {
 }
 
 type Profile implements Node {
+  avatar: File!
   description: String
   displayName(fallback: Boolean! = true): String!
   followAcceptMode: ProfileFollowAcceptMode!
@@ -279,8 +287,10 @@ type UnfollowProfileSuccess {
 }
 
 input UpdateProfileInput {
+  avatarFileId: String
   description: String
-  displayName: String!
+  displayName: String
+  headerFileId: String
 }
 
 union UpdateProfileResult = UpdateProfileSuccess | ValidationError

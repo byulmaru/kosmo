@@ -2,7 +2,7 @@
   import { dayjs } from '@kosmo/dayjs';
   import { useFragment } from '@kosmo/svelte-relay';
   import { resolve } from '$app/paths';
-  import { Avatar, AvatarImage } from '$lib/components/ui/avatar';
+  import Avatar from '$lib/components/avatar/Avatar.svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { fragment } from './PostListItem.graphql';
   import type { PostListItem_Post_Fragment$key } from './__generated__/PostListItem_Post_Fragment.graphql';
@@ -19,9 +19,7 @@
     postId: $post.id,
   })}
 >
-  <Avatar class="size-12 flex-shrink-0">
-    <AvatarImage alt={$post.author.displayName} src="https://placehold.co/400x400" />
-  </Avatar>
+  <Avatar class="size-12 flex-shrink-0" $profile={$post.author} />
 
   <div class="min-w-0 flex-1 text-sm">
     <div class="mb-1 flex items-center gap-2">

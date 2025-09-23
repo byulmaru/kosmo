@@ -49,6 +49,7 @@ export const isTypeOf = (tableCode: string) => (self: unknown) => {
 };
 
 export const Account = createObjectRef('Account', T.Accounts);
+export const File = createObjectRef('File', T.Files);
 export const Instance = createObjectRef('Instance', T.Instances);
 export const Post = createObjectRef('Post', T.Posts);
 export const Profile = createObjectRef('Profile', T.Profiles);

@@ -13,6 +13,8 @@ export const fragment = graphql`
       displayName
       relativeHandle
       fullHandle
+
+      ...Avatar_Profile_Fragment
     }
 
     replyToPost {
@@ -20,6 +22,8 @@ export const fragment = graphql`
       author {
         displayName
         relativeHandle
+
+        ...Avatar_Profile_Fragment
       }
     }
 
@@ -28,6 +32,8 @@ export const fragment = graphql`
       author {
         displayName
         relativeHandle
+
+        ...Avatar_Profile_Fragment
       }
     }
   }

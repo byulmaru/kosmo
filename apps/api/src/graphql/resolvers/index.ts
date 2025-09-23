@@ -1,6 +1,7 @@
 import './account';
 import './count';
 import './error';
+import './file';
 import './follow';
 import './instance';
 import './language';

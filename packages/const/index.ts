@@ -1,5 +1,6 @@
 import { ProfileAccountRole } from '@kosmo/enum';
 
+export const AVATAR_FILE_ID = 'FILE000AVATAR';
 export const SUPERAPP_APPLICATION_ID = 'APPL000WEB';
 export const KOSMO_INSTANCE_ID = 'INST000KOSMO';
 

@@ -29,6 +29,7 @@ export const load = async ({ params, parent }) => {
             }
 
             ...FollowButton_Profile_Fragment
+            ...Avatar_Profile_Fragment
           }
 
           usingProfile {

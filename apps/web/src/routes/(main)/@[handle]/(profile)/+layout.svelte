@@ -2,9 +2,9 @@
   import { ProfileRelationshipState } from '@kosmo/enum';
   import { usePreloadedQuery } from '@kosmo/svelte-relay';
   import { resolve } from '$app/paths';
+  import Avatar from '$lib/components/avatar/Avatar.svelte';
   import FollowButton from '$lib/components/follow-button/FollowButton.svelte';
   import DefaultHeader from '$lib/components/header/DefaultHeader.svelte';
-  import { Avatar, AvatarImage } from '$lib/components/ui/avatar';
   import { Button } from '$lib/components/ui/button';
   import { i18n } from '$lib/i18n.svelte';
 
@@ -47,9 +47,7 @@
     </div>
     <div class="p-4">
       <div class="flex items-start justify-between">
-        <Avatar class="border-background -mt-20 h-32 w-32 rounded-full border-4">
-          <AvatarImage alt={$query.profile.handle} src="https://placehold.co/400x400" />
-        </Avatar>
+        <Avatar class="border-background -mt-20 h-32 w-32 border-4" $profile={$query.profile} />
         <div>
           {#if $query.profile.isMe}
             <Button variant="outline">{$i18n('profile.button.edit')}</Button>

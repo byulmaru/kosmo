@@ -14,5 +14,6 @@ export const fragment = graphql`
     }
 
     ...FollowButton_Profile_Fragment
+    ...Avatar_Profile_Fragment
   }
 `;

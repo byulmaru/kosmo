@@ -9,6 +9,8 @@ export const fragment = graphql`
         id
         displayName
         fullHandle
+
+        ...Avatar_Profile_Fragment
       }
     }
 
@@ -16,6 +18,8 @@ export const fragment = graphql`
       id
       displayName
       fullHandle
+
+      ...Avatar_Profile_Fragment
     }
   }
 `;
