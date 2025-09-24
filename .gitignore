@@ -30,6 +30,12 @@ yarn-error.log*
 .turbo
 
 dist/
-.sark/
 __generated__/
 .envrc
+kubeconfig
+
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+

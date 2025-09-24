@@ -1,6 +1,0 @@
-name: kosmo
-main: index.ts
-runtime:
-  name: nodejs
-  options:
-    nodeargs: --import=tsx
