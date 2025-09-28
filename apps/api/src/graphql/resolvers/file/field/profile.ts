@@ -7,4 +7,10 @@ builder.objectFields(Profile, (t) => ({
     type: File,
     resolve: (profile) => profile.avatarFileId ?? AVATAR_FILE_ID,
   }),
+
+  header: t.field({
+    type: File,
+    nullable: true,
+    resolve: (profile) => profile.headerFileId,
+  }),
 }));

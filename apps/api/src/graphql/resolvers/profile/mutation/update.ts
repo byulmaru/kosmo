@@ -52,7 +52,7 @@ builder.mutationField('updateProfile', (t) =>
         .then(firstOrThrow);
 
       return await db.transaction(async (tx) => {
-        if (input.avatarFileId) {
+        if (input.avatarFileId && input.avatarFileId !== profile.avatarFileId) {
           if (profile.avatarFileId) {
             await tx
               .update(Files)
@@ -68,7 +68,7 @@ builder.mutationField('updateProfile', (t) =>
             .set({
               state: FileState.PERMANENT,
               expiresAt: null,
-              targetSize: { width: 400, height: 400 },
+              transform: { width: 400, height: 400 },
             })
             .where(
               and(
@@ -88,7 +88,7 @@ builder.mutationField('updateProfile', (t) =>
             });
         }
 
-        if (input.headerFileId) {
+        if (input.headerFileId && input.headerFileId !== profile.headerFileId) {
           if (profile.headerFileId) {
             await tx
               .update(Files)
@@ -104,7 +104,7 @@ builder.mutationField('updateProfile', (t) =>
             .set({
               state: FileState.PERMANENT,
               expiresAt: null,
-              targetSize: { width: 1500, height: 500 },
+              transform: { width: 1500, height: 500 },
             })
             .where(
               and(

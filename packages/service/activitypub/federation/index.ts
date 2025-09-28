@@ -5,16 +5,18 @@ import {
   exportJwk,
   Follow,
   generateCryptoKeyPair,
+  Image,
   importJwk,
   MemoryKvStore,
   Person,
   Undo,
 } from '@fedify/fedify';
-import { KOSMO_INSTANCE_ID } from '@kosmo/const';
+import { AVATAR_FILE_ID, KOSMO_INSTANCE_ID } from '@kosmo/const';
 import { db, first, Instances, ProfileCryptographicKeys, Profiles } from '@kosmo/db';
 import { InstanceType } from '@kosmo/enum';
 import { and, eq } from 'drizzle-orm';
 import * as R from 'remeda';
+import { env } from '../../env';
 import { followerCounter, followerDispatcher } from './dispatcher/follower';
 import { followingCounter, followingDispatcher } from './dispatcher/following';
 import { createListener } from './inbox/create';
@@ -39,6 +41,8 @@ federation
         handle: Profiles.handle,
         displayName: Profiles.displayName,
         description: Profiles.description,
+        avatarFileId: Profiles.avatarFileId,
+        headerFileId: Profiles.headerFileId,
       })
       .from(Profiles)
       .innerJoin(Instances, eq(Profiles.instanceId, Instances.id))
@@ -64,6 +68,18 @@ federation
       assertionMethods: keys.map((key) => key.multikey),
       followers: ctx.getFollowersUri(identifier),
       following: ctx.getFollowingUri(identifier),
+      icon: new Image({
+        url: new URL(
+          `${env.PUBLIC_IMAGE_DOMAIN}/${profile.avatarFileId ?? AVATAR_FILE_ID}/original`,
+        ),
+        mediaType: 'image/webp',
+      }),
+      image: profile.headerFileId
+        ? new Image({
+            url: new URL(`${env.PUBLIC_IMAGE_DOMAIN}/${profile.headerFileId}/original`),
+            mediaType: 'image/webp',
+          })
+        : undefined,
     });
   })
   .setKeyPairsDispatcher(async (ctx, identifier) => {

@@ -28,6 +28,12 @@ export const load = async ({ params, parent }) => {
               domain
             }
 
+            header {
+              id
+              placeholder
+              url
+            }
+
             ...FollowButton_Profile_Fragment
             ...Avatar_Profile_Fragment
           }

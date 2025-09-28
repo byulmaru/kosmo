@@ -1,6 +1,8 @@
 <script lang="ts">
   import { ProfileRelationshipState } from '@kosmo/enum';
   import { usePreloadedQuery } from '@kosmo/svelte-relay';
+  import { base64 } from 'rfc4648';
+  import { thumbHashToDataURL } from 'thumbhash';
   import { resolve } from '$app/paths';
   import Avatar from '$lib/components/avatar/Avatar.svelte';
   import FollowButton from '$lib/components/follow-button/FollowButton.svelte';
@@ -9,6 +11,8 @@
   import { i18n } from '$lib/i18n.svelte';
 
   const { children, data } = $props();
+
+  let headerImageLoaded = $state(false);
 
   const selectText = (event: MouseEvent) => {
     const selection = window.getSelection();
@@ -34,7 +38,26 @@
   <DefaultHeader title={$query.profile.displayName} />
   <div class="bg-card text-card-foreground w-full border-y">
     <div class="relative">
-      <img class="w-full object-cover" alt="Header" src="https://placehold.co/1500x500" />
+      <div class="aspect-3/1 bg-muted w-full">
+        {#if $query.profile.header}
+          {#if $query.profile.header.placeholder && !headerImageLoaded}
+            <img
+              class="absolute inset-0 size-full object-cover"
+              alt="Header placeholder"
+              src={thumbHashToDataURL(base64.parse($query.profile.header.placeholder))}
+            />
+          {/if}
+          <img
+            class="absolute inset-0 size-full object-cover"
+            class:opacity-0={!headerImageLoaded}
+            alt="Header"
+            onload={() => {
+              headerImageLoaded = true;
+            }}
+            src={$query.profile.header.url}
+          />
+        {/if}
+      </div>
       {#if $query.profile.relationship.from === ProfileRelationshipState.FOLLOW}
         <div
           class="bg-background/80 text-foreground absolute right-4 top-4 rounded-md px-2 py-1 text-xs font-medium backdrop-blur-sm"

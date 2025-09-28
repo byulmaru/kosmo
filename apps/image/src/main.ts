@@ -54,7 +54,8 @@ app.get('/:fileId/:option', async (c) => {
       path: Files.path,
       ownership: Files.ownership,
       placeholder: Files.placeholder,
-      targetSize: Files.targetSize,
+      transform: Files.transform,
+      processed: Files.processed,
     })
     .from(Files)
     .where(and(eq(Files.id, fileId), eq(Files.state, FileState.PERMANENT)))
@@ -62,7 +63,6 @@ app.get('/:fileId/:option', async (c) => {
     .then(firstOrThrowWith(() => new HTTPException(404)));
 
   let originalStream: ReadableStream;
-  let s3Path: string | undefined;
 
   // 이미지 데이터 가져오기
   if (file.ownership === FileOwnership.LOCAL) {
@@ -75,10 +75,6 @@ app.get('/:fileId/:option', async (c) => {
 
     if (!response.Body) {
       return c.notFound();
-    }
-
-    if (response.ContentType !== 'image/webp') {
-      s3Path = file.path;
     }
 
     originalStream = response.Body.transformToWebStream();
@@ -128,35 +124,37 @@ app.get('/:fileId/:option', async (c) => {
   // @ts-expect-error ReadableStream 시그니처 추론 문제?
   Readable.fromWeb(originalStream).pipe(img);
 
-  if (file.targetSize) {
-    img = img.resize(file.targetSize.width, file.targetSize.height, {
+  if (file.transform?.width || file.transform?.height) {
+    img = img.resize(file.transform.width, file.transform.height, {
       fit: 'cover',
+      withoutEnlargement: true,
     });
   }
 
-  if (s3Path) {
-    const upload = new Upload({
+  if (file.processed === false) {
+    new Upload({
       client: s3Client,
       params: {
         Bucket: 'kosmo-media',
-        Key: s3Path,
+        Key: file.path,
         Body: img.clone(),
         ContentType: 'image/webp',
       },
-    });
-
-    upload
+    })
       .done()
       .then(() =>
         s3Client.send(
           new HeadObjectCommand({
             Bucket: 'kosmo-media',
-            Key: s3Path,
+            Key: file.path,
           }),
         ),
       )
       .then((headResponse) =>
-        db.update(Files).set({ size: headResponse.ContentLength }).where(eq(Files.id, file.id)),
+        db
+          .update(Files)
+          .set({ size: headResponse.ContentLength, processed: true })
+          .where(eq(Files.id, file.id)),
       )
       .catch((error) => {
         console.error('S3 upload or size update failed:', error);

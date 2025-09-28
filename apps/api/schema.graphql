@@ -210,6 +210,7 @@ type Profile implements Node {
   followingCount: Int!
   fullHandle: String!
   handle: String!
+  header: File
   id: ID!
   instance: Instance!
   isMe: Boolean!
