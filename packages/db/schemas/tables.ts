@@ -7,9 +7,11 @@ import {
 } from '@kosmo/enum';
 import { eq, sql } from 'drizzle-orm';
 import {
+  boolean,
   index,
   integer,
   json,
+  jsonb,
   pgTable,
   text,
   unique,
@@ -33,7 +35,7 @@ export const Accounts = pgTable(
     providerSessionToken: varchar('provider_session_token').notNull(),
     name: varchar('name').notNull(),
     state: E.AccountState('state').notNull().default(AccountState.ACTIVE),
-    languages: json('languages').$type<LANGUAGE_LIST[]>().notNull().default(['ko-KR', 'en-US']),
+    languages: json('languages').$type<LANGUAGE_LIST[]>().notNull(),
     createdAt: datetime('created_at')
       .notNull()
       .default(sql`now()`),
@@ -43,6 +45,33 @@ export const Accounts = pgTable(
       .on(table.providerAccountId)
       .where(eq(table.state, sql`'ACTIVE'`)),
   ],
+);
+
+export const AccountProfileMemos = pgTable('account_profile_memos', {
+  id: varchar('id')
+    .primaryKey()
+    .$defaultFn(() => createDbId(TableCode.AccountProfileMemos)),
+  accountId: varchar('account_id').notNull(),
+  profileId: varchar('profile_id').notNull(),
+  content: varchar('content').notNull(),
+  createdAt: datetime('created_at')
+    .notNull()
+    .default(sql`now()`),
+});
+
+export const AccountProfileMutes = pgTable(
+  'account_profile_mutes',
+  {
+    id: varchar('id')
+      .primaryKey()
+      .$defaultFn(() => createDbId(TableCode.AccountProfileMutes)),
+    accountId: varchar('account_id').notNull(),
+    profileId: varchar('profile_id').notNull(),
+    createdAt: datetime('created_at')
+      .notNull()
+      .default(sql`now()`),
+  },
+  (t) => [unique().on(t.accountId, t.profileId)],
 );
 
 export const Applications = pgTable('applications', {
@@ -131,9 +160,10 @@ export const Files = pgTable('files', {
   ownership: E.FileOwnership('ownership').notNull(),
   path: varchar('path').notNull(),
   placeholder: varchar('placeholder'),
-  targetSize: json('target_size').$type<{ width: number; height: number }>(),
-  metadata: json('metadata'),
+  transform: jsonb('transform').$type<{ width?: number; height?: number; lossless?: boolean }>(),
+  metadata: jsonb('metadata'),
   size: integer('size'),
+  processed: boolean('processed').default(false),
   createdAt: datetime('created_at')
     .notNull()
     .default(sql`now()`),
@@ -246,6 +276,25 @@ export const ProfileAccounts = pgTable(
   (t) => [unique().on(t.accountId, t.profileId)],
 );
 
+export const ProfileBlocks = pgTable(
+  'profile_blocks',
+  {
+    id: varchar('id')
+      .primaryKey()
+      .$defaultFn(() => createDbId(TableCode.ProfileBlocks)),
+    profileId: varchar('profile_id')
+      .notNull()
+      .references(() => Profiles.id),
+    targetProfileId: varchar('target_profile_id')
+      .notNull()
+      .references(() => Profiles.id),
+    createdAt: datetime('created_at')
+      .notNull()
+      .default(sql`now()`),
+  },
+  (t) => [unique().on(t.profileId, t.targetProfileId)],
+);
+
 export const ProfileCryptographicKeys = pgTable('profile_cryptographic_keys', {
   id: varchar('id')
     .primaryKey()
@@ -286,6 +335,25 @@ export const ProfileFollowRequests = pgTable(
     id: varchar('id')
       .primaryKey()
       .$defaultFn(() => createDbId(TableCode.ProfileFollowRequests)),
+    profileId: varchar('profile_id')
+      .notNull()
+      .references(() => Profiles.id),
+    targetProfileId: varchar('target_profile_id')
+      .notNull()
+      .references(() => Profiles.id),
+    createdAt: datetime('created_at')
+      .notNull()
+      .default(sql`now()`),
+  },
+  (t) => [unique().on(t.profileId, t.targetProfileId)],
+);
+
+export const ProfileMutes = pgTable(
+  'profile_mutes',
+  {
+    id: varchar('id')
+      .primaryKey()
+      .$defaultFn(() => createDbId(TableCode.ProfileMutes)),
     profileId: varchar('profile_id')
       .notNull()
       .references(() => Profiles.id),

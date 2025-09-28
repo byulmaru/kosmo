@@ -3,6 +3,8 @@ import * as T from './tables';
 
 export const TableCode = {
   Accounts: 'ACNT',
+  AccountProfileMemos: 'PFMO',
+  AccountProfileMutes: 'ACPM',
   Applications: 'APPL',
   ApplicationGrants: 'APGR',
   ApplicationGrantProfiles: 'APGP',
@@ -14,9 +16,11 @@ export const TableCode = {
   PostMentions: 'PSTM',
   Profiles: 'PRFL',
   ProfileAccounts: 'PFAC',
+  ProfileBlocks: 'PFBL',
   ProfileCryptographicKeys: 'PFCK',
   ProfileFollows: 'PFFL',
   ProfileFollowRequests: 'PFFR',
+  ProfileMutes: 'PFMT',
   Sessions: 'SESN',
 } as const satisfies Record<keyof typeof T, Uppercase<string>>;
 

@@ -9,10 +9,10 @@ import {
   Profiles,
   Sessions,
 } from '@kosmo/db';
-import { ProfileState } from '@kosmo/enum';
+import { AccountState, ProfileState } from '@kosmo/enum';
 import { getLanguagesByAcceptLanguageHeader } from '@kosmo/i18n';
 import DataLoader from 'dataloader';
-import { and, eq, isNotNull, isNull, or } from 'drizzle-orm';
+import { and, eq, isNull, or } from 'drizzle-orm';
 import stringify from 'fast-json-stable-stringify';
 import IPAddr from 'ipaddr.js';
 import * as R from 'remeda';
@@ -114,7 +114,6 @@ export const deriveContext = async (c: ServerContext): Promise<Context> => {
 
   const accessToken = c.req.header('Authorization')?.match(/^Bearer (.+)$/)?.[1];
   if (accessToken) {
-    const headerProfileId = c.req.header('X-Actor-Profile-Id');
     const session = await db
       .select({
         id: Sessions.id,
@@ -122,7 +121,8 @@ export const deriveContext = async (c: ServerContext): Promise<Context> => {
         accountId: Sessions.accountId,
         scopes: Sessions.scopes,
         languages: Accounts.languages,
-        profileId: Profiles.id,
+        profileId: Sessions.profileId,
+        applicationGrantId: ApplicationGrants.id,
       })
       .from(Sessions)
       .innerJoin(Accounts, eq(Sessions.accountId, Accounts.id))
@@ -133,40 +133,49 @@ export const deriveContext = async (c: ServerContext): Promise<Context> => {
           eq(ApplicationGrants.applicationId, Sessions.applicationId),
         ),
       )
-      .leftJoin(
-        ApplicationGrantProfiles,
-        eq(ApplicationGrants.id, ApplicationGrantProfiles.applicationGrantId),
-      )
-      .leftJoin(
-        ProfileAccounts,
-        and(
-          eq(Sessions.accountId, ProfileAccounts.accountId),
-          eq(ProfileAccounts.profileId, headerProfileId ?? Sessions.profileId),
-        ),
-      )
-      .leftJoin(
-        Profiles,
-        and(
-          eq(Profiles.id, ProfileAccounts.profileId),
-          eq(Profiles.state, ProfileState.ACTIVE),
-          isNotNull(ApplicationGrantProfiles.id),
-          or(
-            eq(ApplicationGrantProfiles.profileId, Profiles.id),
-            isNull(ApplicationGrantProfiles.profileId),
-          ),
-        ),
-      )
-      .where(eq(Sessions.token, accessToken))
+      .where(and(eq(Sessions.token, accessToken), eq(Accounts.state, AccountState.ACTIVE)))
       .limit(1)
       .then(first);
 
     if (session) {
+      let profileId = c.req.header('X-Actor-Profile-Id') ?? session?.profileId;
+      if (profileId) {
+        await db
+          .select({
+            id: Profiles.id,
+          })
+          .from(Profiles)
+          .innerJoin(
+            ApplicationGrantProfiles,
+            and(
+              eq(ApplicationGrantProfiles.applicationGrantId, session.applicationGrantId),
+              or(
+                eq(ApplicationGrantProfiles.profileId, Profiles.id),
+                isNull(ApplicationGrantProfiles.profileId),
+              ),
+            ),
+          )
+          .innerJoin(ProfileAccounts, eq(ProfileAccounts.profileId, Profiles.id))
+          .where(
+            and(
+              eq(Profiles.id, profileId),
+              eq(ProfileAccounts.accountId, session.accountId),
+              eq(Profiles.state, ProfileState.ACTIVE),
+            ),
+          )
+          .limit(1)
+          .then(first)
+          .then((profile) => {
+            profileId = profile?.id ?? null;
+          });
+      }
+
       ctx.session = {
         id: session.id,
         applicationId: session.applicationId,
         accountId: session.accountId,
         scopes: session.scopes ?? [],
-        profileId: session.profileId,
+        profileId,
       };
 
       ctx.languages = session.languages;
