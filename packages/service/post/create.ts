@@ -8,7 +8,7 @@ type CreateParams = {
   profileId: string;
   data: {
     content: string;
-    visibility?: PostVisibility;
+    visibility: PostVisibility;
     replyToPostId?: string;
   };
   isLocal: boolean;
@@ -23,11 +23,7 @@ export const create = defineService(
       const post = await PostManager.create({
         tx,
         profileId,
-        data: {
-          ...data,
-          // TODO: 기본 공개 설정 체크
-          visibility: data.visibility ?? PostVisibility.PUBLIC,
-        },
+        data,
       });
 
       return post;

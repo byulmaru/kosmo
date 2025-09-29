@@ -1,9 +1,9 @@
 <script lang="ts">
   import { usePreloadedQuery } from '@kosmo/svelte-relay';
-  import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import { setLanguages } from '$lib/i18n.svelte';
   import AppSidebar from './AppSidebar.svelte';
+  import WritePost from './WritePost.svelte';
 
   const { children, data } = $props();
 
@@ -23,10 +23,15 @@
     </main>
 
     <!-- Right Section -->
-    <aside class="w-90 hidden space-y-4 px-6 py-4 xl:block">
-      <div class="w-78 fixed">
+    <aside class="w-90 hidden space-y-4 p-4 xl:block">
+      <div class="w-82 fixed space-y-4">
         <Input placeholder="검색" />
-        <Button class="w-full">새 게시물</Button>
+
+        <div class="space-y-3">
+          {#if $query.usingProfile}
+            <WritePost $profile={$query.usingProfile} />
+          {/if}
+        </div>
       </div>
     </aside>
   </div>

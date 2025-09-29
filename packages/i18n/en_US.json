@@ -5,7 +5,8 @@
       "forbidden": "Forbidden.",
       "limitExceeded": "Limit exceeded.",
       "notFound": "Not found.",
-      "pageNotFound": "Page not found."
+      "pageNotFound": "Page not found.",
+      "required": "Required."
     },
     "handle": {
       "min": "Handle must be at least 3 characters.",
@@ -49,5 +50,20 @@
     "empty": "Nothing to display",
     "loadMore": "Load more",
     "unavailable": "This information is unavailable"
+  },
+  "post": {
+    "visibility": {
+      "PUBLIC": { "title": "Public", "description": "Everyone can see this." },
+      "UNLISTED": {
+        "title": "Quite Public",
+        "description": "Everyone can see this, but it's not searchable."
+      },
+      "FOLLOWER": { "title": "Followers", "description": "Only followers can see this." },
+      "DIRECT": { "title": "Mentioned", "description": "Only the mentioned accounts can see this." }
+    },
+    "write": {
+      "placeholder": "What's happening?",
+      "submit": "Post"
+    }
   }
 }

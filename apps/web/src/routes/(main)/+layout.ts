@@ -17,6 +17,8 @@ export const load = async ({ parent }) => {
         usingProfile {
           id
           handle
+
+          ...WritePost_Profile_Fragment
         }
 
         ...AppSidebar_MainLayout_Fragment

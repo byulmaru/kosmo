@@ -4,6 +4,7 @@
   import { resolve } from '$app/paths';
   import Avatar from '$lib/components/avatar/Avatar.svelte';
   import { i18n } from '$lib/i18n.svelte';
+  import PostVisibilityIcon from '../PostVisibilityIcon.svelte';
   import { fragment } from './PostListItem.graphql';
   import type { PostListItem_Post_Fragment$key } from './__generated__/PostListItem_Post_Fragment.graphql';
 
@@ -26,7 +27,8 @@
       <h3 class="font-bold">{$post.author.displayName}</h3>
       <span class="text-muted-foreground">@{$post.author.fullHandle}</span>
       <span class="flex-1"></span>
-      <time class="text-muted-foreground">
+      <time class="text-muted-foreground flex items-center gap-1">
+        <PostVisibilityIcon size={12} visibility={$post.visibility} />
         {dayjs($post.createdAt).fromNow()}
       </time>
     </div>

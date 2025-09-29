@@ -7,7 +7,7 @@ import {
   ProfileAccounts,
   Profiles,
 } from '@kosmo/db';
-import { ProfileAccountRole, ProfileState } from '@kosmo/enum';
+import { PostVisibility, ProfileAccountRole, ProfileState } from '@kosmo/enum';
 import { and, eq, isNull, or } from 'drizzle-orm';
 import { ForbiddenError } from '@/error';
 import type { SessionContext } from '@/context';
@@ -70,4 +70,10 @@ export const getPermittedProfileId = async ({
   }
 
   return actorProfileId;
+};
+
+export const parseProfileConfig = (config: (typeof Profiles.$inferSelect)['config']) => {
+  return {
+    defaultPostVisibility: config?.defaultPostVisibility ?? PostVisibility.UNLISTED,
+  };
 };

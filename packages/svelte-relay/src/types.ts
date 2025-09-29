@@ -1,6 +1,7 @@
 import type {
-  CacheConfig,
+  CacheConfig as RelayCacheConfig,
   Disposable,
+  FetchQueryFetchPolicy,
   GraphQLResponse,
   RecordSourceSelectorProxy,
   RequestParameters,
@@ -24,6 +25,11 @@ export interface RelayEnvironmentConfig {
   };
   store?: Store;
 }
+
+export type CacheConfig = {
+  networkCacheConfig?: RelayCacheConfig | null | undefined;
+  fetchPolicy?: FetchQueryFetchPolicy | null | undefined;
+} | null;
 
 export interface QueryResult<TData = unknown> {
   data: TData | null;

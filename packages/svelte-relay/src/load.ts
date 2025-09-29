@@ -1,5 +1,6 @@
 import { fetchQuery } from 'relay-runtime';
 import type { Environment, GraphQLTaggedNode, Variables } from 'relay-runtime';
+import type { CacheConfig } from './types';
 
 export interface LoadedQuery<TData = unknown, TVariables extends Variables = Variables> {
   query: GraphQLTaggedNode;
@@ -18,9 +19,10 @@ export async function loadQuery<TQuery = unknown, TVariables extends Variables =
   environment: Environment,
   query: GraphQLTaggedNode,
   variables: TVariables = {} as TVariables,
+  cacheConfig?: CacheConfig,
 ): Promise<LoadedQuery<ExtractResponseData<TQuery>, TVariables>> {
   try {
-    const data = await fetchQuery(environment, query, variables).toPromise();
+    const data = await fetchQuery(environment, query, variables, cacheConfig).toPromise();
 
     return {
       query,

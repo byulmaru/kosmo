@@ -1,8 +1,9 @@
 import { db, Profiles } from '@kosmo/db';
-import { ProfileFollowAcceptMode, ProfileState } from '@kosmo/enum';
+import { PostVisibility, ProfileFollowAcceptMode, ProfileState } from '@kosmo/enum';
 import { and, eq, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Instance, Profile } from '@/graphql/objects';
+import { parseProfileConfig } from '@/utils/profile';
 
 builder.node(Profile, {
   id: { resolve: (profile) => profile.id },
@@ -42,6 +43,23 @@ builder.node(Profile, {
 
     isMe: t.boolean({
       resolve: (profile, _, ctx) => ctx.session?.profileId === profile.id,
+    }),
+
+    config: t.field({
+      type: builder.simpleObject('ProfileConfig', {
+        fields: (t) => ({
+          defaultPostVisibility: t.field({ type: PostVisibility }),
+        }),
+      }),
+      nullable: true,
+
+      resolve: (profile, _, ctx) => {
+        if (profile.id !== ctx.session?.profileId) {
+          return null;
+        }
+
+        return parseProfileConfig(profile.config);
+      },
     }),
   }),
 });

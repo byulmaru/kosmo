@@ -3,5 +3,6 @@
   "src": "./src",
   "schema": "./schema.graphql",
   "language": "typescript",
-  "eagerEsModules": true
+  "eagerEsModules": true,
+  "noFutureProofEnums": true
 }

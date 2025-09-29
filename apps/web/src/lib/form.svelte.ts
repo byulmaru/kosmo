@@ -18,7 +18,6 @@ type CreateFormParams<
   schema: z.ZodType<Output, Input>;
   onSubmit?: (data: z.output<z.ZodType<Output, Input>>) => Promise<void>;
   onError?: (error: Error) => void;
-  useFormAction?: boolean;
 };
 
 export const createForm = <
@@ -29,7 +28,10 @@ export const createForm = <
   onSubmit,
   onError,
 }: CreateFormParams<Input, Output>) => {
+  let formElement: HTMLFormElement | undefined;
+
   const action: Action<HTMLFormElement> = (node) => {
+    formElement = node;
     let submitted = false;
 
     $effect(() => {
@@ -121,6 +123,14 @@ export const createForm = <
 
   return {
     enhance: action,
+
+    submit: () => {
+      formElement?.requestSubmit();
+    },
+
+    reset: () => {
+      formElement?.reset();
+    },
   };
 };
 

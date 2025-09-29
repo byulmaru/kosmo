@@ -201,6 +201,7 @@ enum PostVisibility {
 
 type Profile implements Node {
   avatar: File!
+  config: ProfileConfig
   description: String
   displayName(fallback: Boolean! = true): String!
   followAcceptMode: ProfileFollowAcceptMode!
@@ -220,6 +221,10 @@ type Profile implements Node {
   state: ProfileState!
   uri: String!
   url: String!
+}
+
+type ProfileConfig {
+  defaultPostVisibility: PostVisibility!
 }
 
 type ProfileConnection {

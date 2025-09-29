@@ -3,7 +3,8 @@ import { PostService } from '@kosmo/service';
 import * as validationSchema from '@kosmo/validation';
 import { ForbiddenError, ValidationError } from '@/error';
 import { builder } from '@/graphql/builder';
-import { Post } from '@/graphql/objects';
+import { Post, Profile } from '@/graphql/objects';
+import { parseProfileConfig } from '@/utils/profile';
 
 builder.mutationField('createPost', (t) =>
   t.withAuth({ scope: 'post:write', profile: true }).fieldWithInput({
@@ -20,11 +21,17 @@ builder.mutationField('createPost', (t) =>
     },
 
     resolve: async (_, { input }, ctx) => {
+      const visibility: PostVisibility =
+        input.visibility ??
+        (await Profile.getDataloader(ctx)
+          .load(ctx.session.profileId)
+          .then((profile) => parseProfileConfig(profile.config).defaultPostVisibility));
+
       const post = await PostService.create.call({
         profileId: ctx.session.profileId,
         data: {
           content: input.content,
-          visibility: input.visibility ?? undefined,
+          visibility,
           replyToPostId: input.replyToPostId ?? undefined,
         },
         isLocal: true,

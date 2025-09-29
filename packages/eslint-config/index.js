@@ -90,6 +90,18 @@ export default ts.config(
     },
     rules: {
       'unicorn/filename-case': ['error', { cases: { kebabCase: true, pascalCase: true } }],
+      'svelte/sort-attributes': 'error',
+      'svelte/block-lang': ['error', { script: 'ts' }],
+      'svelte/require-each-key': 'error',
+      'svelte/valid-each-key': 'error',
+      'svelte/shorthand-directive': 'error',
+      'svelte/shorthand-attribute': 'error',
+    },
+  },
+  {
+    files: ['apps/web/src/lib/components/**/*.svelte'],
+    rules: {
+      'svelte/no-navigation-without-resolve': 'off',
     },
   },
   {
