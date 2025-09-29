@@ -31,30 +31,34 @@
   }
 </script>
 
-<header
-  class="bg-background/80 sticky top-0 z-50 flex h-14 items-center gap-3 border-b px-4 backdrop-blur-md"
->
-  {#if showBackButton}
-    <Button class="shrink-0" onclick={handleBack} size="icon" variant="ghost">
-      <ArrowLeft class="size-5" />
-    </Button>
-  {/if}
-
-  <button
-    class="flex h-full flex-1 cursor-pointer flex-row items-center"
-    onclick={scrollToTop}
-    type="button"
+<div class="@container h-[calc(env(safe-area-inset-top)+3.5rem)] w-full">
+  <header
+    class="bg-background/80 fixed top-0 z-50 w-[100cqw] border-b px-4 pt-[env(safe-area-inset-top)] backdrop-blur-md"
   >
-    {#if title}
-      <h1 class="truncate align-middle font-semibold">{title}</h1>
-    {:else if titleSnippet}
-      {@render titleSnippet()}
-    {/if}
-  </button>
+    <div class="flex h-14 items-center gap-3">
+      {#if showBackButton}
+        <Button class="shrink-0" onclick={handleBack} size="icon" variant="ghost">
+          <ArrowLeft class="size-5" />
+        </Button>
+      {/if}
 
-  <div class="flex items-center gap-2">
-    {#if actionsSnippet}
-      {@render actionsSnippet()}
-    {/if}
-  </div>
-</header>
+      <button
+        class="flex h-full flex-1 cursor-pointer flex-row items-center"
+        onclick={scrollToTop}
+        type="button"
+      >
+        {#if title}
+          <h1 class="truncate align-middle font-semibold">{title}</h1>
+        {:else if titleSnippet}
+          {@render titleSnippet()}
+        {/if}
+      </button>
+
+      <div class="flex items-center gap-2">
+        {#if actionsSnippet}
+          {@render actionsSnippet()}
+        {/if}
+      </div>
+    </div>
+  </header>
+</div>

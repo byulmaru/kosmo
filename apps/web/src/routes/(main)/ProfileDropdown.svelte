@@ -55,11 +55,11 @@
         class="hover:bg-muted inline-flex w-full items-center justify-center gap-2 rounded-md p-3"
       >
         <Avatar class="h-8 w-8" $profile={$query.usingProfile} />
-        <div class="grid flex-1 text-left text-sm leading-tight">
+        <div class="hidden flex-1 text-left text-sm leading-tight lg:grid">
           <span class="truncate font-semibold">{$query.usingProfile.displayName}</span>
           <span class="truncate text-xs">@{$query.usingProfile.fullHandle}</span>
         </div>
-        <span class="ml-auto">⋯</span>
+        <span class="ml-auto hidden lg:block">⋯</span>
       </div>
     </DropdownMenu.Trigger>
     <DropdownMenu.Content class="w-60">
