@@ -3,15 +3,12 @@ import { graphql } from '@kosmo/svelte-relay';
 export const fragment = graphql`
   fragment WritePost_Profile_Fragment on Profile {
     id
-    displayName
-    fullHandle
-    relativeHandle
 
     config {
       defaultPostVisibility
     }
 
-    ...Avatar_Profile_Fragment
+    ...ProfileInfo_Profile_Fragment
   }
 `;
 

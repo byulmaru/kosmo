@@ -13,18 +13,18 @@
 </script>
 
 <div class="flex min-h-screen justify-center">
-  <div class="flex w-full max-w-3xl lg:max-w-5xl xl:max-w-7xl">
+  <div class="flex w-full max-w-3xl lg:max-w-7xl">
     <!-- Left Sidebar -->
     <AppSidebar {$query} />
 
     <!-- Main Content -->
-    <main class="flex-1 border-x">
+    <main class="flex-1">
       {@render children()}
     </main>
 
     <!-- Right Section -->
-    <aside class="w-90 hidden space-y-4 p-4 xl:block">
-      <div class="w-82 fixed space-y-4">
+    <aside class="w-90 hidden space-y-4 lg:block">
+      <div class="w-90 fixed min-h-full space-y-4 border-l p-4">
         <Input placeholder="검색" />
 
         <div class="space-y-3">

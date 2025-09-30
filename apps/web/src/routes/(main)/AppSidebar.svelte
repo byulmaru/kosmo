@@ -18,7 +18,7 @@
 
 <!-- PC Header -->
 <header class="w-18 hidden h-full sm:block lg:w-60">
-  <div class="w-18 fixed flex h-full flex-col lg:w-60">
+  <div class="w-18 fixed flex h-full flex-col border-r lg:w-60">
     <div class="flex justify-center rounded-full p-4 text-2xl font-bold lg:justify-start">
       <Sparkles class="size-6" />
     </div>

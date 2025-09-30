@@ -14,7 +14,7 @@ export const fragment = graphql`
       relativeHandle
       fullHandle
 
-      ...Avatar_Profile_Fragment
+      ...ProfileInfo_Profile_Fragment
     }
 
     replyToPost {
@@ -23,7 +23,7 @@ export const fragment = graphql`
         displayName
         relativeHandle
 
-        ...Avatar_Profile_Fragment
+        ...ProfileInfo_Profile_Fragment
       }
     }
 
@@ -33,7 +33,7 @@ export const fragment = graphql`
         displayName
         relativeHandle
 
-        ...Avatar_Profile_Fragment
+        ...ProfileInfo_Profile_Fragment
       }
     }
   }

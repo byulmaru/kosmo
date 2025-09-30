@@ -3,10 +3,9 @@
   import { useFragment, useMutation } from '@kosmo/svelte-relay';
   import { Image, RocketIcon } from '@lucide/svelte';
   import z from 'zod';
-  import { resolve } from '$app/paths';
-  import ProfileAvatar from '$lib/components/avatar/Avatar.svelte';
   import Form from '$lib/components/form/Form.svelte';
   import PostVisibilityIcon from '$lib/components/PostVisibilityIcon.svelte';
+  import ProfileInfo from '$lib/components/profile-info/ProfileInfo.svelte';
   import { Button } from '$lib/components/ui/button';
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
   import { createForm } from '$lib/form.svelte';
@@ -46,19 +45,8 @@
   });
 </script>
 
-<a
-  class="flex items-center gap-3"
-  href={resolve(`/(main)/@[handle]`, { handle: $profile.relativeHandle })}
->
-  <ProfileAvatar class="size-10" {$profile} />
-  <div class="min-w-0 flex-1">
-    <div class="text-sm font-semibold">{$profile.displayName}</div>
-    <div class="text-muted-foreground text-xs">
-      @{$profile.fullHandle}
-    </div>
-  </div>
-</a>
-<div class="bg-card rounded-md border p-3">
+<ProfileInfo {$profile} />
+<div class="bg-card mt-3 rounded-md border p-3">
   <Form class="flex flex-col gap-2" {form}>
     <textarea
       name="content"
@@ -79,7 +67,7 @@
     <div>
       <input name="visibility" type="hidden" value={visibility} />
       <DropdownMenu.Root>
-        <DropdownMenu.Trigger>
+        <DropdownMenu.Trigger tabindex={-1}>
           <Button size="sm" variant="outline">
             <PostVisibilityIcon {visibility} />{$i18n(`post.visibility.${visibility}.title`)}
           </Button>

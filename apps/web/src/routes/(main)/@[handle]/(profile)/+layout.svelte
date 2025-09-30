@@ -70,7 +70,11 @@
     </div>
     <div class="p-4">
       <div class="flex items-start justify-between">
-        <Avatar class="border-background -mt-20 h-32 w-32 border-4" $profile={$query.profile} />
+        <Avatar
+          class="border-background -mt-20 size-32 border-4"
+          $profile={$query.profile}
+          link={false}
+        />
         <div>
           {#if $query.profile.isMe}
             <Button variant="outline">{$i18n('profile.button.edit')}</Button>

@@ -1,14 +1,12 @@
 import { graphql } from '@kosmo/svelte-relay';
 
 export const fragment = graphql`
-  fragment Avatar_Profile_Fragment on Profile {
+  fragment ProfileInfo_Profile_Fragment on Profile {
     id
+    displayName
+    fullHandle
     relativeHandle
 
-    avatar {
-      id
-      url
-      placeholder
-    }
+    ...Avatar_Profile_Fragment
   }
 `;

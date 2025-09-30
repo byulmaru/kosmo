@@ -1,38 +1,48 @@
 <script lang="ts">
   import { dayjs } from '@kosmo/dayjs';
   import { useFragment } from '@kosmo/svelte-relay';
+  import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import Avatar from '$lib/components/avatar/Avatar.svelte';
   import { i18n } from '$lib/i18n.svelte';
   import PostVisibilityIcon from '../PostVisibilityIcon.svelte';
+  import ProfileInfo from '../profile-info/ProfileInfo.svelte';
   import { fragment } from './PostListItem.graphql';
   import type { PostListItem_Post_Fragment$key } from './__generated__/PostListItem_Post_Fragment.graphql';
 
   const { $post: postRef }: { $post: PostListItem_Post_Fragment$key } = $props();
 
   const post = useFragment(fragment, postRef);
+
+  const postLink = $derived.by(() =>
+    resolve(`/(main)/@[handle]/post/[postId]`, {
+      handle: $post.author.relativeHandle,
+      postId: $post.id,
+    }),
+  );
 </script>
 
-<a
-  class="hover:bg-muted/50 border-border/50 flex cursor-pointer items-start gap-3 border-b px-4 py-3 transition-colors"
-  href={resolve(`/(main)/@[handle]/post/[postId]`, {
-    handle: $post.author.relativeHandle,
-    postId: $post.id,
-  })}
+<div
+  class="hover:bg-accent/50 border-border/50 flex cursor-pointer flex-col items-stretch gap-3 border-b px-4 py-3 transition-colors"
+  onclick={() => goto(postLink)}
+  onkeydown={(e) => {
+    if (e.key === 'Enter') {
+      goto(postLink);
+    }
+  }}
+  role="link"
+  tabindex="0"
 >
-  <Avatar class="size-12 flex-shrink-0" $profile={$post.author} />
-
+  <div class="flex items-start justify-between gap-2">
+    <ProfileInfo $profile={$post.author} />
+    <a
+      class="text-muted-foreground flex items-center gap-1 text-sm hover:underline"
+      href={postLink}
+    >
+      <PostVisibilityIcon size={12} visibility={$post.visibility} />
+      <time>{dayjs($post.createdAt).fromNow()}</time>
+    </a>
+  </div>
   <div class="min-w-0 flex-1 text-sm">
-    <div class="mb-1 flex items-center gap-2">
-      <h3 class="font-bold">{$post.author.displayName}</h3>
-      <span class="text-muted-foreground">@{$post.author.fullHandle}</span>
-      <span class="flex-1"></span>
-      <time class="text-muted-foreground flex items-center gap-1">
-        <PostVisibilityIcon size={12} visibility={$post.visibility} />
-        {dayjs($post.createdAt).fromNow()}
-      </time>
-    </div>
-
     {#if $post.replyToPost}
       <div class="text-muted-foreground mb-2 text-xs">
         {$i18n('post.replyTo')} @{$post.replyToPost.author.relativeHandle}
@@ -50,4 +60,4 @@
       {$post.content}
     </div>
   </div>
-</a>
+</div>
