@@ -12,6 +12,7 @@ export const TableCode = {
   ApplicationSecrets: 'APPS',
   Files: 'FILE',
   Instances: 'INST',
+  Notifications: 'NTFC',
   Posts: 'POST',
   PostMentions: 'PSTM',
   Profiles: 'PRFL',

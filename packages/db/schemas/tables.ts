@@ -1,5 +1,6 @@
 import {
   AccountState,
+  NotificationState,
   PostState,
   PostVisibility,
   ProfileFollowAcceptMode,
@@ -182,6 +183,26 @@ export const Instances = pgTable('instances', {
     .notNull()
     .default(sql`now()`),
 });
+
+export const Notifications = pgTable(
+  'notifications',
+  {
+    id: varchar('id')
+      .primaryKey()
+      .$defaultFn(() => createDbId(TableCode.Notifications)),
+    targetId: varchar('target_id').notNull(),
+    targetKind: E.NotificationTargetKind('target_kind').notNull(),
+    actorId: varchar('actor_id').references(() => Profiles.id),
+    objectId: varchar('object_id'),
+    state: E.NotificationState('state').notNull().default(NotificationState.UNREAD),
+    kind: E.NotificationKind('kind').notNull(),
+    data: jsonb('data').notNull().default({}),
+    createdAt: datetime('created_at')
+      .notNull()
+      .default(sql`now()`),
+  },
+  (t) => [index().on(t.targetKind, t.targetId), index().on(t.kind, t.objectId, t.createdAt)],
+);
 
 export const Posts = pgTable('posts', {
   id: varchar('id')

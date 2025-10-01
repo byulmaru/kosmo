@@ -10,6 +10,12 @@ export const CryptographicKeyKind = createPgEnum('_cryptographic_key_kind', E.Cr
 export const FileOwnership = createPgEnum('_file_ownership', E.FileOwnership);
 export const FileState = createPgEnum('_file_state', E.FileState);
 export const InstanceType = createPgEnum('_instance_type', E.InstanceType);
+export const NotificationKind = createPgEnum('_notification_kind', E.NotificationKind);
+export const NotificationState = createPgEnum('_notification_state', E.NotificationState);
+export const NotificationTargetKind = createPgEnum(
+  '_notification_target_kind',
+  E.NotificationTargetKind,
+);
 export const PostState = createPgEnum('_post_state', E.PostState);
 export const PostVisibility = createPgEnum('_post_visibility', E.PostVisibility);
 export const ProfileAccountRole = createPgEnum('_profile_account_role', E.ProfileAccountRole);

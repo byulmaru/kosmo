@@ -29,6 +29,24 @@ export const InstanceType = {
 } as const;
 export type InstanceType = keyof typeof InstanceType;
 
+export const NotificationKind = {
+  FOLLOW: 'FOLLOW',
+  FOLLOW_REQUEST: 'FOLLOW_REQUEST',
+} as const;
+export type NotificationKind = keyof typeof NotificationKind;
+
+export const NotificationState = {
+  UNREAD: 'UNREAD',
+  READ: 'READ',
+} as const;
+export type NotificationState = keyof typeof NotificationState;
+
+export const NotificationTargetKind = {
+  PROFILE: 'PROFILE',
+  ACCOUNT: 'ACCOUNT',
+} as const;
+export type NotificationTargetKind = keyof typeof NotificationTargetKind;
+
 export const PostState = {
   ACTIVE: 'ACTIVE',
   HIDDEN: 'HIDDEN',
