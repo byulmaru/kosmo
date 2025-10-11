@@ -35,7 +35,7 @@
   <div class="flex items-start justify-between gap-2">
     <ProfileInfo $profile={$post.author} />
     <a
-      class="text-muted-foreground flex items-center gap-1 text-sm hover:underline"
+      class="text-muted-foreground flex shrink-0 items-center gap-1 text-sm hover:underline"
       href={postLink}
     >
       <PostVisibilityIcon size={12} visibility={$post.visibility} />

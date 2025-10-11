@@ -18,22 +18,14 @@ export const load = async ({ params, parent }) => {
               state
 
               author {
-                id
-                displayName
-                relativeHandle
-                fullHandle
-
-                ...Avatar_Profile_Fragment
+                ...ProfileInfo_Profile_Fragment
               }
 
               replyToPost {
                 id
                 content
                 author {
-                  displayName
                   relativeHandle
-
-                  ...Avatar_Profile_Fragment
                 }
               }
 
@@ -41,10 +33,7 @@ export const load = async ({ params, parent }) => {
                 id
                 content
                 author {
-                  displayName
                   relativeHandle
-
-                  ...Avatar_Profile_Fragment
                 }
               }
             }
