@@ -9,6 +9,7 @@ type InsertParams = {
 
 export const insert = async ({ postId, profileId }: InsertParams) => {
   await redis.zadd(`timeline:${profileId}`, idToTimestamp(postId), postId);
+  await redis.expire(`timeline:${profileId}`, 60 * 60 * 24 * 7);
 };
 
 type GetParams = {

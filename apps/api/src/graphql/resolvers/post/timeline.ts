@@ -1,5 +1,7 @@
+import { db, Profiles } from '@kosmo/db';
 import { TimelineManager } from '@kosmo/manager';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
+import { eq, sql } from 'drizzle-orm';
 import * as I from 'iter-ops';
 import { builder } from '@/graphql/builder';
 import { filterNullAndError } from '@/utils/array';
@@ -18,6 +20,11 @@ builder.queryField('timeline', (t) =>
       return resolveCursorConnection(
         { args, toCursor: (post) => post.score },
         async ({ before, after, limit, inverted }: ResolveCursorConnectionArgs) => {
+          db.update(Profiles)
+            .set({ lastActivityAt: sql`now()` })
+            .where(eq(Profiles.id, ctx.session.profileId))
+            .execute();
+
           const postInfos = await TimelineManager.getPosts({
             profileId: ctx.session.profileId,
             before,
