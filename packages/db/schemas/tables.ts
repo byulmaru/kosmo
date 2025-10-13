@@ -272,6 +272,7 @@ export const Profiles = pgTable(
       .notNull()
       .default(sql`now()`),
     lastActivityAt: datetime('last_activity_at').default(sql`now()`),
+    lastFetchedAt: datetime('last_fetched_at'),
   },
   (t) => [
     uniqueIndex('handle_unique').on(t.instanceId, t.normalizedHandle),

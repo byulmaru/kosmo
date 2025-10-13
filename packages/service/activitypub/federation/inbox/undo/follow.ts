@@ -1,5 +1,5 @@
 import { ProfileService } from '@kosmo/service';
-import { getOrCreateProfileId } from '../../profile';
+import { getOrCreateProfile } from '../../profile';
 import type { Follow } from '@fedify/fedify';
 import type { InboxUndoListener } from '../../type';
 
@@ -18,10 +18,10 @@ export const undoFollowListener: InboxUndoListener<Follow> = async (ctx, undo, f
     return;
   }
 
-  const actorProfileId = await getOrCreateProfileId({ actor });
+  const actorProfile = await getOrCreateProfile({ actor });
 
   await ProfileService.unfollow.call({
-    actorProfileId,
+    actorProfileId: actorProfile.id,
     targetProfileId: object.identifier,
   });
 };

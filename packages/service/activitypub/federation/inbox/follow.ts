@@ -1,7 +1,7 @@
 import { Follow } from '@fedify/fedify';
 import { ProfileFollowAcceptMode } from '@kosmo/enum';
 import { ActivityPubService, ProfileService } from '@kosmo/service';
-import { getOrCreateProfileId } from '../profile';
+import { getOrCreateProfile } from '../profile';
 import type { InboxListener } from '@fedify/fedify';
 import type { FederationContextData } from '../type';
 
@@ -16,10 +16,10 @@ export const followListener: InboxListener<FederationContextData, Follow> = asyn
     return;
   }
 
-  const actorProfileId = await getOrCreateProfileId({ actor: follower });
+  const actorProfile = await getOrCreateProfile({ actor: follower });
 
   const { followAcceptMode } = await ProfileService.follow.call({
-    actorProfileId,
+    actorProfileId: actorProfile.id,
     targetProfileId: object.identifier,
   });
 
@@ -27,7 +27,7 @@ export const followListener: InboxListener<FederationContextData, Follow> = asyn
     await ActivityPubService.sendAcceptFollow.queue({
       sender: { profileId: object.identifier },
       recipient: {
-        profileId: actorProfileId,
+        profileId: actorProfile.id,
       },
     });
   }

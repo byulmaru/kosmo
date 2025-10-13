@@ -1,7 +1,7 @@
 import { isActor, PUBLIC_COLLECTION } from '@fedify/fedify';
 import { PostVisibility } from '@kosmo/enum';
 import { PostService } from '@kosmo/service';
-import { getOrCreateProfileId } from '../../profile';
+import { getOrCreateProfile } from '../../profile';
 import type { Note } from '@fedify/fedify';
 import type { InboxCreateListener } from '../../type';
 
@@ -16,7 +16,7 @@ export const createNoteListener: InboxCreateListener<Note> = async (ctx, create,
     return;
   }
 
-  const profileId = await getOrCreateProfileId({ actor: author });
+  const profile = await getOrCreateProfile({ actor: author });
 
   let visibility: PostVisibility;
 
@@ -34,7 +34,7 @@ export const createNoteListener: InboxCreateListener<Note> = async (ctx, create,
   }
 
   await PostService.create.call({
-    profileId,
+    profileId: profile.id,
     isLocal: false,
     data: {
       content: note.content?.toString() ?? '',

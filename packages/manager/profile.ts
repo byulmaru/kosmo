@@ -23,22 +23,25 @@ type CreateProfileParams = {
     followAcceptMode?: ProfileFollowAcceptMode;
   };
   tx?: Transaction;
+  fetch?: boolean;
 };
 
-export const create = async ({ data, tx }: CreateProfileParams) => {
+export const create = async ({ data, tx, fetch = false }: CreateProfileParams) => {
   const db = getDatabaseConnection(tx);
   return db
     .insert(Profiles)
     .values({
       ...data,
       normalizedHandle: data.handle.toLowerCase(),
+      lastFetchedAt: fetch ? sql`now()` : undefined,
     })
-    .returning({ id: Profiles.id })
+    .returning()
     .onConflictDoUpdate({
       target: [Profiles.uri],
       set: {
         ...data,
         normalizedHandle: data.handle.toLowerCase(),
+        lastFetchedAt: fetch ? sql`now()` : undefined,
       },
     })
     .then(firstOrThrow);
