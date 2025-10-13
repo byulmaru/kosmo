@@ -18,7 +18,7 @@
     <AppSidebar {$query} />
 
     <!-- Main Content -->
-    <main class="flex-1">
+    <main class="max-w-screen flex-1">
       {@render children()}
     </main>
 

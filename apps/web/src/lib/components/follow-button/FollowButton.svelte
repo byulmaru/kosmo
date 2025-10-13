@@ -44,7 +44,7 @@
     </Button>
   {:else if $profile.relationship.to === ProfileRelationshipState.FOLLOW}
     <Button
-      class="hover:bg-destructive hover:border-destructive dark:hover:bg-destructive/60 group min-w-24 hover:text-white"
+      class="hover:bg-destructive hover:border-destructive dark:hover:bg-destructive/60 group hover:text-white"
       onclick={async (e) => {
         e.preventDefault();
         await unfollowProfile({

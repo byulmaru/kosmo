@@ -4,7 +4,9 @@ export const fragment = graphql`
   fragment AppSidebar_MainLayout_Fragment on Query {
     usingProfile {
       id
-      handle
+      relativeHandle
+
+      ...Avatar_Profile_Fragment
     }
 
     ...ProfileDropdown_MainLayout_Fragment

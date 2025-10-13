@@ -71,9 +71,8 @@
     <div class="p-4">
       <div class="flex items-start justify-between">
         <Avatar
-          class="border-background -mt-20 size-32 border-4"
+          class="border-background -mt-16 size-24 border-4 sm:-mt-20 sm:size-32"
           $profile={$query.profile}
-          link={false}
         />
         <div>
           {#if $query.profile.isMe}

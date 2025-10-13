@@ -2,13 +2,14 @@
   import { tv } from 'tailwind-variants';
   import type { VariantProps } from 'tailwind-variants';
   import type { ProfileInfo_Profile_Fragment$key } from './__generated__/ProfileInfo_Profile_Fragment.graphql';
+  import type { ProfileInfo_Profile_WithRelationship_Fragment$key } from './__generated__/ProfileInfo_Profile_WithRelationship_Fragment.graphql';
 
   export const profileInfoVariants = tv({
     slots: {
       root: 'group flex items-center shrink min-w-30',
       avatar: '',
       displayName: 'group-hover:underline truncate',
-      handle: 'text-muted-foreground truncate',
+      handle: 'text-muted-foreground truncate shrink',
     },
     variants: {
       size: {
@@ -33,23 +34,38 @@
 
   export type ProfileInfoSize = VariantProps<typeof profileInfoVariants>['size'];
 
-  export type ProfileInfoProps = {
-    $profile: ProfileInfo_Profile_Fragment$key;
-    class?: string;
-    size?: ProfileInfoSize;
-  };
+  export type ProfileInfoProps =
+    | {
+        $profile: ProfileInfo_Profile_Fragment$key;
+        class?: string;
+        size?: ProfileInfoSize;
+        relationship?: false;
+      }
+    | {
+        $profile: ProfileInfo_Profile_WithRelationship_Fragment$key;
+        class?: string;
+        size?: ProfileInfoSize;
+        relationship: true;
+      };
 </script>
 
 <script lang="ts">
+  import { ProfileRelationshipState } from '@kosmo/enum';
   import { useFragment } from '@kosmo/svelte-relay';
   import { resolve } from '$app/paths';
   import ProfileAvatar from '$lib/components/avatar/Avatar.svelte';
+  import { i18n } from '$lib/i18n.svelte';
   import { cn } from '../utils';
-  import { fragment } from './ProfileInfo.graphql';
+  import { fragment, fragmentWithRelationship } from './ProfileInfo.graphql';
 
-  const { $profile: profileRef, class: className, size = 'default' }: ProfileInfoProps = $props();
+  const {
+    $profile: profileRef,
+    class: className,
+    size = 'default',
+    relationship = false,
+  }: ProfileInfoProps = $props();
 
-  const profile = useFragment(fragment, profileRef);
+  const profile = useFragment(relationship ? fragmentWithRelationship : fragment, profileRef);
 
   const styles = $derived(profileInfoVariants({ size }));
 </script>
@@ -61,8 +77,20 @@
   <ProfileAvatar class={styles.avatar()} {$profile} />
   <div class="min-w-0 shrink">
     <div class={styles.displayName()}>{$profile.displayName}</div>
-    <div class={styles.handle()}>
-      @{$profile.fullHandle}
+    <div class="flex gap-1">
+      <div class={styles.handle()}>@{$profile.fullHandle}</div>
+
+      {#if relationship && 'relationship' in $profile}
+        {#if $profile.relationship.from === ProfileRelationshipState.FOLLOW}
+          <div
+            class="text-muted-foreground/60 bg-muted -my-0.5 shrink-0 rounded-md px-1 py-0.5 text-xs"
+          >
+            {$profile.relationship.to === ProfileRelationshipState.FOLLOW
+              ? $i18n('profile.status.followEachOther')
+              : $i18n('profile.status.followsYou')}
+          </div>
+        {/if}
+      {/if}
     </div>
   </div>
 </a>
