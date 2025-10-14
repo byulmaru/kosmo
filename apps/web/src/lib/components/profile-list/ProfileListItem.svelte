@@ -16,7 +16,7 @@
   <div class="min-w-0 flex-1">
     <div class="flex justify-between gap-2">
       <div class="min-w-0 flex-1">
-        <ProfileInfo {$profile} relationship />
+        <ProfileInfo {$profile} />
       </div>
       <FollowButton {$profile} />
     </div>

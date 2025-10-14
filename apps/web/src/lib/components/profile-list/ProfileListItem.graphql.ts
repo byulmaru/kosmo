@@ -6,6 +6,6 @@ export const fragment = graphql`
     description
 
     ...FollowButton_Profile_Fragment
-    ...ProfileInfo_Profile_WithRelationship_Fragment
+    ...ProfileInfo_Profile_Fragment @arguments(relationship: true)
   }
 `;
