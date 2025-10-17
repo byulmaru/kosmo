@@ -4,6 +4,7 @@
   import PageHeader from '$lib/components/header/DefaultHeader.svelte';
   import ProfileInfo from '$lib/components/profile-info/ProfileInfo.svelte';
   import { i18n } from '$lib/i18n.svelte';
+  import TiptapRenderer from '$lib/tiptap/TiptapRenderer.svelte';
 
   const { data } = $props();
 
@@ -37,9 +38,7 @@
         </div>
       {/if}
 
-      <div class="mb-4 whitespace-pre-wrap text-lg leading-relaxed">
-        {post.content}
-      </div>
+      <TiptapRenderer content={post.content} />
 
       <time class="text-muted-foreground text-sm">
         {dayjs(post.createdAt).format('LLL')}

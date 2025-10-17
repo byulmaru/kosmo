@@ -36,9 +36,7 @@ export const createNoteListener: InboxCreateListener<Note> = async (ctx, create,
   await PostService.create.call({
     profileId: profile.id,
     isLocal: false,
-    data: {
-      content: note.content?.toString() ?? '',
-      visibility,
-    },
+    htmlContent: note.content?.toString() ?? '',
+    visibility,
   });
 };

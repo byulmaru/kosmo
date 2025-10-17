@@ -21,6 +21,7 @@
     "@kosmo/runtime": "workspace:*",
     "@kosmo/type": "workspace:*",
     "@neondatabase/serverless": "^1.0.1",
+    "@tiptap/core": "^3.6.6",
     "dayjs": "^1.11.18",
     "drizzle-orm": "^0.44.5",
     "graphql": "^16.11.0",

@@ -1,5 +1,5 @@
-import { db, PostMentions, Posts, ProfileFollows } from '@kosmo/db';
-import { PostState, PostVisibility } from '@kosmo/enum';
+import { db, PostMentions, Posts, PostSnapshots, ProfileFollows } from '@kosmo/db';
+import { PostSnapshotState, PostState, PostVisibility } from '@kosmo/enum';
 import { and, eq, getTableColumns, inArray, isNotNull, or, sql } from 'drizzle-orm';
 import type { Context } from '@/context';
 
@@ -41,4 +41,22 @@ export const getPostLoader = (ctx: Context) =>
         );
     },
     key: (post) => post?.id,
+  });
+
+export const getPostSnapshotLoader = (ctx: Context) =>
+  ctx.loader({
+    name: 'PostSnapshot(postId)',
+    nullable: true,
+    load: async (ids) => {
+      return await db
+        .select()
+        .from(PostSnapshots)
+        .where(
+          and(
+            inArray(PostSnapshots.postId, ids),
+            eq(PostSnapshots.state, PostSnapshotState.ACTIVE),
+          ),
+        );
+    },
+    key: (postSnapshot) => postSnapshot?.postId,
   });

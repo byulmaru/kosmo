@@ -14,6 +14,7 @@ export const TableCode = {
   Instances: 'INST',
   Notifications: 'NTFC',
   Posts: 'POST',
+  PostSnapshots: 'PSNS',
   PostMentions: 'PSTM',
   Profiles: 'PRFL',
   ProfileAccounts: 'PFAC',

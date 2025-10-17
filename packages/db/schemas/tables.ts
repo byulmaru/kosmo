@@ -1,6 +1,7 @@
 import {
   AccountState,
   NotificationState,
+  PostSnapshotState,
   PostState,
   PostVisibility,
   ProfileFollowAcceptMode,
@@ -25,6 +26,7 @@ import { createDbId, TableCode } from './id';
 import { datetime } from './types';
 import type { LANGUAGE_LIST } from '@kosmo/i18n';
 import type { Scope } from '@kosmo/type';
+import type { JSONContent } from '@tiptap/core';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 export const Accounts = pgTable(
@@ -213,7 +215,6 @@ export const Posts = pgTable('posts', {
     .references(() => Profiles.id),
   state: E.PostState('state').notNull().default(PostState.ACTIVE),
   visibility: E.PostVisibility('visibility').notNull(),
-  content: text('content').notNull(),
   replyToPostId: varchar('reply_to_post_id').references((): AnyPgColumn => Posts.id),
   repostOfPostId: varchar('repost_of_post_id').references((): AnyPgColumn => Posts.id),
   createdAt: datetime('created_at')
@@ -222,6 +223,28 @@ export const Posts = pgTable('posts', {
   updatedAt: datetime('updated_at'),
   deletedAt: datetime('deleted_at'),
 });
+
+export const PostSnapshots = pgTable(
+  'post_snapshots',
+  {
+    id: varchar('id')
+      .primaryKey()
+      .$defaultFn(() => createDbId(TableCode.PostSnapshots)),
+    postId: varchar('post_id')
+      .notNull()
+      .references(() => Posts.id),
+    state: E.PostSnapshotState('state').notNull().default(PostSnapshotState.ACTIVE),
+    content: jsonb('content').notNull().$type<JSONContent>(),
+    createdAt: datetime('created_at')
+      .notNull()
+      .default(sql`now()`),
+  },
+  (t) => [
+    uniqueIndex()
+      .on(t.postId)
+      .where(eq(t.state, sql`'ACTIVE'`)),
+  ],
+);
 
 export const PostMentions = pgTable('post_mentions', {
   id: varchar('id')

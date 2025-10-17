@@ -2,15 +2,14 @@
   import { PostVisibility } from '@kosmo/enum';
   import { useFragment, useMutation } from '@kosmo/svelte-relay';
   import { Image, RocketIcon } from '@lucide/svelte';
-  import z from 'zod';
-  import Form from '$lib/components/form/Form.svelte';
   import PostVisibilityIcon from '$lib/components/PostVisibilityIcon.svelte';
   import ProfileInfo from '$lib/components/profile-info/ProfileInfo.svelte';
   import { Button } from '$lib/components/ui/button';
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-  import { createForm } from '$lib/form.svelte';
   import { i18n } from '$lib/i18n.svelte';
+  import TiptapEditor from '$lib/tiptap/TiptapEditor.svelte';
   import { createPostMutation, fragment } from './WritePost.graphql';
+  import type { Editor } from '@tiptap/core';
   import type { WritePost_createPost_Mutation } from './__generated__/WritePost_createPost_Mutation.graphql';
   import type { WritePost_Profile_Fragment$key } from './__generated__/WritePost_Profile_Fragment.graphql';
 
@@ -26,44 +25,40 @@
   const createPost = useMutation<WritePost_createPost_Mutation>(createPostMutation);
 
   let visibility = $state($profile.config!.defaultPostVisibility);
+  let editor = $state<Editor>();
 
-  const form = createForm({
-    schema: z.object({
-      content: z.string().min(1, 'error.common.required'),
-      visibility: z.enum(PostVisibility),
-    }),
-    onSubmit: async (data) => {
-      const { createPost: result } = await createPost({
-        variables: { input: { content: data.content, visibility: data.visibility } },
-      });
+  let form: HTMLFormElement;
 
-      if (result.__typename === 'CreatePostSuccess') {
-        visibility = $profile.config!.defaultPostVisibility;
-        form.reset();
-      }
-    },
-  });
+  const handleSubmit = async (e: Event) => {
+    e.preventDefault();
+
+    if (!editor || editor.isEmpty) {
+      return;
+    }
+
+    const { createPost: result } = await createPost({
+      variables: { input: { content: editor.state.doc.toJSON(), visibility } },
+    });
+
+    if (result.__typename === 'CreatePostSuccess') {
+      visibility = $profile.config!.defaultPostVisibility;
+      editor.commands.clearContent();
+    }
+  };
 </script>
 
 <ProfileInfo {$profile} />
 <div class="bg-card mt-3 rounded-md border p-3">
-  <Form class="flex flex-col gap-2" {form}>
-    <textarea
-      name="content"
-      class="min-h-24 w-full resize-none outline-none"
-      oninput={(e) => {
-        const target = e.target as HTMLTextAreaElement;
-        target.style.height = 'auto';
-        target.style.height = target.scrollHeight + 'px';
-      }}
-      onkeydown={(e) => {
-        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-          e.preventDefault();
-          form.submit();
+  <form bind:this={form} class="flex flex-col gap-2" onsubmit={handleSubmit}>
+    <TiptapEditor
+      class="min-h-24"
+      onkeydown={(_, event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+          form.requestSubmit();
         }
       }}
-      placeholder={$i18n('post.write.placeholder')}
-    ></textarea>
+      bind:editor
+    />
     <div>
       <input name="visibility" type="hidden" value={visibility} />
       <DropdownMenu.Root>
@@ -95,7 +90,9 @@
     <div class="flex">
       <Button size="icon" variant="ghost"><Image /></Button>
       <div class="flex-1"></div>
-      <Button type="submit"><RocketIcon />{$i18n('post.write.submit')}</Button>
+      <Button type="submit">
+        <RocketIcon />{$i18n('post.write.submit')}
+      </Button>
     </div>
-  </Form>
+  </form>
 </div>

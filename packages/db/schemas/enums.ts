@@ -16,6 +16,7 @@ export const NotificationTargetKind = createPgEnum(
   '_notification_target_kind',
   E.NotificationTargetKind,
 );
+export const PostSnapshotState = createPgEnum('_post_snapshot_state', E.PostSnapshotState);
 export const PostState = createPgEnum('_post_state', E.PostState);
 export const PostVisibility = createPgEnum('_post_visibility', E.PostVisibility);
 export const ProfileAccountRole = createPgEnum('_profile_account_role', E.ProfileAccountRole);

@@ -2,6 +2,8 @@ import { graphql, loadQuery } from '@kosmo/svelte-relay';
 import * as Sentry from '@sentry/sveltekit';
 import type { Layout_Main_Query } from './__generated__/Layout_Main_Query.graphql';
 
+export const ssr = false;
+
 export const load = async ({ parent }) => {
   const query = await loadQuery<Layout_Main_Query>(
     (await parent()).relayEnvironment,

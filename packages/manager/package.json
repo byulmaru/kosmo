@@ -12,7 +12,10 @@
     "@kosmo/db": "workspace:*",
     "@kosmo/enum": "workspace:*",
     "@kosmo/redis": "workspace:*",
+    "@kosmo/tiptap": "workspace:*",
     "@kosmo/tsconfig": "workspace:*",
+    "@tiptap/core": "^3.6.6",
+    "@tiptap/html": "^3.7.2",
     "drizzle-orm": "^0.44.5",
     "iter-ops": "^3.5.0",
     "ts-pattern": "^5.8.0"

@@ -1,6 +1,5 @@
 import { PostVisibility } from '@kosmo/enum';
 import { PostService } from '@kosmo/service';
-import * as validationSchema from '@kosmo/validation';
 import { ForbiddenError, ValidationError } from '@/error';
 import { builder } from '@/graphql/builder';
 import { Post, Profile } from '@/graphql/objects';
@@ -10,7 +9,7 @@ builder.mutationField('createPost', (t) =>
   t.withAuth({ scope: 'post:write', profile: true }).fieldWithInput({
     type: Post,
     input: {
-      content: t.input.string({ validate: validationSchema.postContent }),
+      content: t.input.field({ type: 'JSON' }),
       visibility: t.input.field({ type: PostVisibility, required: false }),
       replyToPostId: t.input.string({ required: false }),
     },
@@ -29,11 +28,9 @@ builder.mutationField('createPost', (t) =>
 
       const post = await PostService.create.call({
         profileId: ctx.session.profileId,
-        data: {
-          content: input.content,
-          visibility,
-          replyToPostId: input.replyToPostId ?? undefined,
-        },
+        tiptapContent: input.content,
+        visibility,
+        replyToPostId: input.replyToPostId ?? undefined,
         isLocal: true,
       });
 

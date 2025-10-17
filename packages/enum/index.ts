@@ -47,6 +47,12 @@ export const NotificationTargetKind = {
 } as const;
 export type NotificationTargetKind = keyof typeof NotificationTargetKind;
 
+export const PostSnapshotState = {
+  ACTIVE: 'ACTIVE',
+  INACTIVE: 'INACTIVE',
+} as const;
+export type PostSnapshotState = keyof typeof PostSnapshotState;
+
 export const PostState = {
   ACTIVE: 'ACTIVE',
   HIDDEN: 'HIDDEN',

@@ -7,26 +7,28 @@ import {
   Instances,
   PostMentions,
   Posts,
+  PostSnapshots,
   Profiles,
 } from '@kosmo/db';
-import { PostVisibility } from '@kosmo/enum';
-import { eq } from 'drizzle-orm';
+import { PostSnapshotState, PostVisibility } from '@kosmo/enum';
+import { nodes } from '@kosmo/tiptap';
+import { generateHTML } from '@tiptap/html';
+import { and, eq } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { match } from 'ts-pattern';
 import { ProfileManager } from '.';
 import type { Transaction } from '@kosmo/db';
+import type { JSONContent } from '@tiptap/core';
 
 type CreateParams = {
   tx?: Transaction;
   profileId: string;
-  data: {
-    content: string;
-    visibility: PostVisibility;
-    replyToPostId?: string;
-  };
+  content: JSONContent;
+  visibility: PostVisibility;
+  replyToPostId?: string;
 };
 
-export const create = async ({ tx, profileId, data }: CreateParams) => {
+export const create = async ({ tx, profileId, content, ...data }: CreateParams) => {
   const db = getDatabaseConnection(tx);
 
   const post = await db
@@ -34,6 +36,8 @@ export const create = async ({ tx, profileId, data }: CreateParams) => {
     .values({ profileId, ...data })
     .returning()
     .then(firstOrThrow);
+
+  await db.insert(PostSnapshots).values({ postId: post.id, content });
 
   return post;
 };
@@ -59,7 +63,7 @@ export const getActivityPubNote = async ({ postId, tx }: GetActivityPubNoteParam
   const post = await db
     .select({
       id: Posts.id,
-      content: Posts.content,
+      content: PostSnapshots.content,
       visibility: Posts.visibility,
       createdAt: Posts.createdAt,
       profile: {
@@ -75,6 +79,10 @@ export const getActivityPubNote = async ({ postId, tx }: GetActivityPubNoteParam
       },
     })
     .from(Posts)
+    .innerJoin(
+      PostSnapshots,
+      and(eq(Posts.id, PostSnapshots.postId), eq(PostSnapshots.state, PostSnapshotState.ACTIVE)),
+    )
     .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
     .innerJoin(Instances, eq(Profiles.instanceId, Instances.id))
     .leftJoin(ReplyPosts, eq(ReplyPosts.id, Posts.replyToPostId))
@@ -124,7 +132,7 @@ export const getActivityPubNote = async ({ postId, tx }: GetActivityPubNoteParam
         .exhaustive(),
 
       published: Temporal.Instant.fromEpochMilliseconds(post.createdAt.valueOf()),
-      content: post.content,
+      content: generateHTML(post.content, nodes),
       url: getUrl(post.id, post.profile.handle, post.instance.webDomain!),
     }),
 

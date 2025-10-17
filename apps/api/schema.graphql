@@ -37,7 +37,7 @@ type Count {
 }
 
 input CreatePostInput {
-  content: String!
+  content: JSON!
   replyToPostId: String
   visibility: PostVisibility
 }
@@ -166,7 +166,7 @@ type PageInfo {
 
 type Post implements Node {
   author: Profile!
-  content: String!
+  content: JSON!
   createdAt: Timestamp!
   id: ID!
   replyToPost: Post

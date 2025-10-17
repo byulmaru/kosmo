@@ -4,6 +4,7 @@
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { i18n } from '$lib/i18n.svelte';
+  import TiptapRenderer from '$lib/tiptap/TiptapRenderer.svelte';
   import PostVisibilityIcon from '../PostVisibilityIcon.svelte';
   import ProfileInfo from '../profile-info/ProfileInfo.svelte';
   import { fragment } from './PostListItem.graphql';
@@ -56,8 +57,6 @@
       </div>
     {/if}
 
-    <div class="whitespace-pre-wrap leading-relaxed">
-      {$post.content}
-    </div>
+    <TiptapRenderer content={$post.content} />
   </div>
 </div>
