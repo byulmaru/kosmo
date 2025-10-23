@@ -119,3 +119,7 @@
     @apply bg-background text-foreground;
   }
 }
+
+.tiptap p {
+  margin-bottom: 1em;
+}

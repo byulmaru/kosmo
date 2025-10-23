@@ -3,6 +3,7 @@
   import { Editor } from '@tiptap/core';
   import { onDestroy, onMount } from 'svelte';
   import { i18n } from '$lib/i18n.svelte';
+  import { Keymap } from './extensions/keymap';
   import { Placeholder } from './extensions/placeholder';
   import type { EditorView } from '@tiptap/pm/view';
 
@@ -22,6 +23,7 @@
       extensions: [
         ...nodes,
         Placeholder.configure({ placeholder: $i18n('post.write.placeholder') }),
+        Keymap,
       ],
       content: '',
 
