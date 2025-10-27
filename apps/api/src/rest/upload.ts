@@ -58,6 +58,7 @@ upload.post(
     await db.insert(Files).values({
       id: fileId,
       accountId: c.var.context.session.accountId,
+      profileId: c.var.context.session.profileId,
       ownership: FileOwnership.LOCAL,
       state: FileState.EPHEMERAL,
       path: key,

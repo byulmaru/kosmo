@@ -1,5 +1,6 @@
 import { PostVisibility } from '@kosmo/enum';
 import { PostService } from '@kosmo/service';
+import z from 'zod';
 import { ForbiddenError, ValidationError } from '@/error';
 import { builder } from '@/graphql/builder';
 import { Post, Profile } from '@/graphql/objects';
@@ -12,6 +13,10 @@ builder.mutationField('createPost', (t) =>
       content: t.input.field({ type: 'JSON' }),
       visibility: t.input.field({ type: PostVisibility, required: false }),
       replyToPostId: t.input.string({ required: false }),
+      mediaIds: t.input.idList({
+        required: false,
+        validate: z.array(z.string()).max(4).optional(),
+      }),
     },
 
     errors: {
@@ -32,6 +37,7 @@ builder.mutationField('createPost', (t) =>
         visibility,
         replyToPostId: input.replyToPostId ?? undefined,
         isLocal: true,
+        mediaIds: input.mediaIds ?? null,
       });
 
       return post;

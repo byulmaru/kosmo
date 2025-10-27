@@ -160,6 +160,7 @@ export const Files = pgTable('files', {
     .primaryKey()
     .$defaultFn(() => createDbId(TableCode.Files)),
   accountId: varchar('account_id').references(() => Accounts.id),
+  profileId: varchar('profile_id').references((): AnyPgColumn => Profiles.id),
   state: E.FileState('state').notNull(),
   ownership: E.FileOwnership('ownership').notNull(),
   path: varchar('path').notNull(),
@@ -235,6 +236,7 @@ export const PostSnapshots = pgTable(
       .references(() => Posts.id),
     state: E.PostSnapshotState('state').notNull().default(PostSnapshotState.ACTIVE),
     content: jsonb('content').notNull().$type<JSONContent>(),
+    mediaIds: varchar('media_ids').array(),
     createdAt: datetime('created_at')
       .notNull()
       .default(sql`now()`),

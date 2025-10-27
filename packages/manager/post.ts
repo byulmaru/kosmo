@@ -1,6 +1,7 @@
 import { Note, PUBLIC_COLLECTION } from '@fedify/fedify';
 import { Temporal } from '@js-temporal/polyfill';
 import {
+  Files,
   first,
   firstOrThrow,
   getDatabaseConnection,
@@ -10,10 +11,10 @@ import {
   PostSnapshots,
   Profiles,
 } from '@kosmo/db';
-import { PostSnapshotState, PostVisibility } from '@kosmo/enum';
+import { FileState, PostSnapshotState, PostVisibility } from '@kosmo/enum';
 import { nodes } from '@kosmo/tiptap';
 import { generateHTML } from '@tiptap/html';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { match } from 'ts-pattern';
 import { ProfileManager } from '.';
@@ -26,9 +27,10 @@ type CreateParams = {
   content: JSONContent;
   visibility: PostVisibility;
   replyToPostId?: string;
+  mediaIds?: string[] | null;
 };
 
-export const create = async ({ tx, profileId, content, ...data }: CreateParams) => {
+export const create = async ({ tx, profileId, content, mediaIds, ...data }: CreateParams) => {
   const db = getDatabaseConnection(tx);
 
   const post = await db
@@ -37,7 +39,10 @@ export const create = async ({ tx, profileId, content, ...data }: CreateParams) 
     .returning()
     .then(firstOrThrow);
 
-  await db.insert(PostSnapshots).values({ postId: post.id, content });
+  await db.insert(PostSnapshots).values({ postId: post.id, content, mediaIds });
+  if (mediaIds) {
+    await db.update(Files).set({ state: FileState.PERMANENT }).where(inArray(Files.id, mediaIds));
+  }
 
   return post;
 };

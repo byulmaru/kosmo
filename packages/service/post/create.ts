@@ -1,10 +1,12 @@
-import { db } from '@kosmo/db';
-import { PostVisibility } from '@kosmo/enum';
+import { MAX_POST_MEDIA_COUNT } from '@kosmo/const';
+import { db, Files } from '@kosmo/db';
+import { FileState, PostVisibility } from '@kosmo/enum';
 import { PostManager } from '@kosmo/manager';
 import { nodes, schema } from '@kosmo/tiptap';
 import { generateJSON } from '@tiptap/html';
 import { Node } from '@tiptap/pm/model';
 import { UnrecoverableError } from 'bullmq';
+import { and, inArray, ne } from 'drizzle-orm';
 import { match } from 'ts-pattern';
 import { ActivityPubService, TimelineService } from '..';
 import { defineService } from '../define';
@@ -74,13 +76,9 @@ const splitByHardBreaks = (paragraph: JSONContent): JSONContent[] => {
 };
 
 const normalizeDoc = (doc: JSONContent): JSONContent => {
-  if (!doc.content) {
-    return doc;
-  }
-
   const result: JSONContent[] = [];
 
-  for (const node of doc.content) {
+  for (const node of doc.content ?? []) {
     if (node.type === 'paragraph') {
       if (isEmpty(node)) {
         continue;
@@ -92,7 +90,7 @@ const normalizeDoc = (doc: JSONContent): JSONContent => {
   }
 
   if (result.length === 0) {
-    throw new UnrecoverableError('DOC_EMPTY');
+    result.push({ type: 'paragraph' });
   }
 
   return { ...doc, content: result };
@@ -103,11 +101,12 @@ type CreateParams = {
   visibility: PostVisibility;
   replyToPostId?: string;
   isLocal: boolean;
+  mediaIds?: string[] | null;
 } & ({ htmlContent: string } | { tiptapContent: JSONContent });
 
 export const create = defineService(
   'post:create',
-  async ({ profileId, isLocal, visibility, replyToPostId, ...data }: CreateParams) => {
+  async ({ profileId, isLocal, visibility, replyToPostId, mediaIds, ...data }: CreateParams) => {
     const post = await db.transaction(async (tx) => {
       // TODO: 답글을 달 수 있는지 체크
 
@@ -123,12 +122,30 @@ export const create = defineService(
 
       Node.fromJSON(schema, content).check();
 
+      if (mediaIds && mediaIds.length > 0) {
+        mediaIds = mediaIds.slice(0, MAX_POST_MEDIA_COUNT);
+
+        const files = await tx
+          .select({ id: Files.id })
+          .from(Files)
+          .where(and(inArray(Files.id, mediaIds), ne(Files.state, FileState.DELETED)));
+
+        if (files.length !== mediaIds.length) {
+          throw new UnrecoverableError('MEDIA_NOT_FOUND');
+        }
+      }
+
+      if ((content.content?.length ?? 0) <= 0 && (mediaIds?.length ?? 0) <= 0) {
+        throw new UnrecoverableError('CONTENT_EMPTY');
+      }
+
       const post = await PostManager.create({
         tx,
         profileId,
         content,
         visibility,
         replyToPostId,
+        mediaIds,
       });
 
       return post;

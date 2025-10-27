@@ -27,9 +27,6 @@ const makeLoadableFields = <T extends TableConfig>(
   toKey: (parent) => parent.id,
   sort: true,
   cacheResolved: true,
-  loaderOptions: {
-    cache: false,
-  },
 });
 
 const createObjectRef = <T extends TableConfig>(name: string, table: TableWithIdColumn<T>) => {

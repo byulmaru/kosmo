@@ -46,6 +46,7 @@
     "eslint": "^9.35.0",
     "jose": "^6.1.0",
     "ky": "^1.10.0",
+    "mode-watcher": "^1.1.0",
     "normalize-email": "^1.1.1",
     "prettier": "^3.6.2",
     "prettier-plugin-svelte": "^3.4.0",
@@ -55,6 +56,7 @@
     "rfc4648": "^1.5.4",
     "svelte": "^5.38.7",
     "svelte-check": "^4.3.1",
+    "svelte-sonner": "^1.0.5",
     "sveltekit-superforms": "^2.27.1",
     "tailwind-merge": "^3.3.1",
     "tailwind-variants": "^3.1.1",
@@ -75,5 +77,8 @@
     "extends": [
       "plugin:storybook/recommended"
     ]
+  },
+  "dependencies": {
+    "@tiptap/html": "^3.7.2"
   }
 }

@@ -38,6 +38,7 @@ type Count {
 
 input CreatePostInput {
   content: JSON!
+  mediaIds: [ID!]
   replyToPostId: String
   visibility: PostVisibility
 }

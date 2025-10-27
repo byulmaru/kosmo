@@ -1,6 +1,7 @@
 <script lang="ts">
   import { nodes } from '@kosmo/tiptap';
-  import { Editor, generateHTML } from '@tiptap/core';
+  import { Editor } from '@tiptap/core';
+  import { generateHTML } from '@tiptap/html';
   import { onMount } from 'svelte';
   import type { JSONContent } from '@tiptap/core';
 
@@ -39,7 +40,7 @@
   });
 </script>
 
-<div bind:this={element}>
+<div bind:this={element} class="tiptap">
   <!-- eslint-disable-next-line svelte/no-at-html-tags -->
   {@html html}
 </div>
