@@ -5,6 +5,7 @@ import { dayjs } from '@kosmo/dayjs';
 import { createDbId, db, Files, TableCode } from '@kosmo/db';
 import { FileOwnership, FileState } from '@kosmo/enum';
 import { Hono } from 'hono';
+import sharp from 'sharp';
 import { z } from 'zod';
 import { env } from '@/env';
 import type { Env } from '@/context';
@@ -43,12 +44,16 @@ upload.post(
     const fileId = createDbId(TableCode.Files);
     const key = `${dayjs().format('YY/MM')}/${fileId}`;
 
+    const fileByteArray = await file.bytes();
+
+    const imgMetadata = await sharp(fileByteArray).metadata();
+
     const upload = new Upload({
       client: s3Client,
       params: {
         Bucket: 'kosmo-media',
         Key: key,
-        Body: file.stream(),
+        Body: fileByteArray,
         ContentType: file.type,
       },
     });
@@ -64,6 +69,10 @@ upload.post(
       path: key,
       size: file.size,
       expiresAt: dayjs().add(1, 'day'),
+      metadata: {
+        width: imgMetadata.width,
+        height: imgMetadata.height,
+      },
     });
 
     return c.json({

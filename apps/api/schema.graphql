@@ -92,10 +92,17 @@ interface FieldError implements Error {
 }
 
 type File implements Node {
+  alt: String
   id: ID!
+  metadata: FileMetadata
   placeholder: String
   thumbnailUrl: String!
   url: String!
+}
+
+type FileMetadata {
+  height: Int!
+  width: Int!
 }
 
 input FollowProfileInput {
@@ -172,6 +179,7 @@ type Post implements Node {
   id: ID!
   replyToPost: Post
   repostOfPost: Post
+  snapshot: PostSnapshot
   state: PostState!
   updatedAt: Timestamp
   visibility: PostVisibility!
@@ -185,6 +193,12 @@ type PostConnection {
 type PostEdge {
   cursor: String!
   node: Post!
+}
+
+type PostSnapshot implements Node {
+  content: JSON
+  id: ID!
+  media: [File!]
 }
 
 enum PostState {

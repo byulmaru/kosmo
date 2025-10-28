@@ -1,6 +1,6 @@
 import { PostState, PostVisibility } from '@kosmo/enum';
 import { builder } from '@/graphql/builder';
-import { Post, Profile } from '@/graphql/objects';
+import { Post, PostSnapshot, Profile } from '@/graphql/objects';
 import { mapErrorToNull } from '@/utils/array';
 import { getPostLoader, getPostSnapshotLoader } from './loader';
 
@@ -23,6 +23,14 @@ builder.node(Post, {
         const postSnapshot = await getPostSnapshotLoader(ctx).load(post.id);
         return postSnapshot?.content;
       },
+    }),
+
+    snapshot: t.field({
+      type: PostSnapshot,
+      nullable: true,
+      resolve: async (post, _, ctx) => getPostSnapshotLoader(ctx).load(post.id),
+      authScopes: (post) => ({ postView: post.id }),
+      unauthorizedResolver: () => null,
     }),
 
     author: t.expose('profileId', { type: Profile }),

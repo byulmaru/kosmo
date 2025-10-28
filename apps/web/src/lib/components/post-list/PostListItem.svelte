@@ -5,6 +5,7 @@
   import { resolve } from '$app/paths';
   import { i18n } from '$lib/i18n.svelte';
   import TiptapRenderer from '$lib/tiptap/TiptapRenderer.svelte';
+  import Gallery from '../gallery/Gallery.svelte';
   import PostVisibilityIcon from '../PostVisibilityIcon.svelte';
   import ProfileInfo from '../profile-info/ProfileInfo.svelte';
   import { fragment } from './PostListItem.graphql';
@@ -57,6 +58,9 @@
       </div>
     {/if}
 
-    <TiptapRenderer content={$post.content} />
+    {#if $post.snapshot}
+      <TiptapRenderer content={$post.snapshot.content} />
+      <Gallery $snapshot={$post.snapshot} />
+    {/if}
   </div>
 </div>

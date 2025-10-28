@@ -49,6 +49,7 @@ export const Account = createObjectRef('Account', T.Accounts);
 export const File = createObjectRef('File', T.Files);
 export const Instance = createObjectRef('Instance', T.Instances);
 export const Post = createObjectRef('Post', T.Posts);
+export const PostSnapshot = createObjectRef('PostSnapshot', T.PostSnapshots);
 export const Profile = createObjectRef('Profile', T.Profiles);
 
 interface Count {

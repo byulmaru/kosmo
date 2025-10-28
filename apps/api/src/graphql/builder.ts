@@ -14,6 +14,7 @@ import { base64 } from 'rfc4648';
 import { match } from 'ts-pattern';
 import { UnauthorizedError, ValidationError } from '@/error';
 import { hasScope } from '@/utils/scope';
+import { getPostLoader } from './resolvers/post/loader';
 import type { TableCode } from '@kosmo/db';
 import type { Scope } from '@kosmo/type';
 import type { SessionContext, UserContext } from '@/context';
@@ -28,6 +29,7 @@ export const builder = new SchemaBuilder<{
     session: boolean;
     scope: Scope;
     profile: boolean;
+    postView: string;
   };
   DefaultAuthStrategy: 'all';
   Context: UserContext;
@@ -59,6 +61,10 @@ export const builder = new SchemaBuilder<{
       session: !!context.session,
       scope: (scope) => hasScope({ scope, sessionScopes: context.session?.scopes }),
       profile: !!context.session?.profileId,
+      postView: (postId) =>
+        getPostLoader(context)
+          .load(postId)
+          .then((post) => !!post),
     }),
     treatErrorsAsUnauthorized: true,
     authorizeOnSubscribe: true,

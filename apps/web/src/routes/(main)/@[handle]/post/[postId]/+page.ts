@@ -12,10 +12,16 @@ export const load = async ({ params, parent }) => {
 
             ... on Post {
               id
-              content
               createdAt
               visibility
               state
+
+              snapshot {
+                id
+                content
+
+                ...Gallery_PostSnapshot_Fragment
+              }
 
               author {
                 ...ProfileInfo_Profile_Fragment

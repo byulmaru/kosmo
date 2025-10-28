@@ -166,8 +166,9 @@ export const Files = pgTable('files', {
   path: varchar('path').notNull(),
   placeholder: varchar('placeholder'),
   transform: jsonb('transform').$type<{ width?: number; height?: number; lossless?: boolean }>(),
-  metadata: jsonb('metadata'),
+  metadata: jsonb('metadata').$type<{ width: number; height: number }>(),
   size: integer('size'),
+  alt: text('alt'),
   processed: boolean('processed').default(false),
   createdAt: datetime('created_at')
     .notNull()

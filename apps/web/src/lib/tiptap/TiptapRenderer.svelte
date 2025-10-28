@@ -6,14 +6,14 @@
   import type { JSONContent } from '@tiptap/core';
 
   type Props = {
-    content: JSONContent;
+    content: JSONContent | null;
     editor?: Editor;
   };
 
   let { content, editor = $bindable() }: Props = $props();
 
   let element = $state<HTMLElement>();
-  const html = $derived(generateHTML(content, nodes));
+  const html = $derived(content ? generateHTML(content, nodes) : '');
 
   onMount(() => {
     editor = new Editor({

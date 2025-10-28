@@ -1,6 +1,6 @@
 import { PostVisibility } from '@kosmo/enum';
 import { PostService } from '@kosmo/service';
-import z from 'zod';
+import { z } from 'zod';
 import { ForbiddenError, ValidationError } from '@/error';
 import { builder } from '@/graphql/builder';
 import { Post, Profile } from '@/graphql/objects';

@@ -16,6 +16,7 @@ builder.node(File, {
 
   fields: (t) => ({
     placeholder: t.exposeString('placeholder', { nullable: true }),
+    alt: t.exposeString('alt', { nullable: true }),
 
     url: t.string({
       resolve: async (file) => {
@@ -27,6 +28,16 @@ builder.node(File, {
       resolve: async (file) => {
         return `${env.PUBLIC_IMAGE_DOMAIN}/${file.id}/thumbnail`;
       },
+    }),
+
+    metadata: t.expose('metadata', {
+      type: builder.simpleObject('FileMetadata', {
+        fields: (t) => ({
+          width: t.int(),
+          height: t.int(),
+        }),
+      }),
+      nullable: true,
     }),
   }),
 });

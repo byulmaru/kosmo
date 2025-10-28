@@ -1,6 +1,7 @@
 <script lang="ts">
   import { dayjs } from '@kosmo/dayjs';
   import { usePreloadedQuery } from '@kosmo/svelte-relay';
+  import Gallery from '$lib/components/gallery/Gallery.svelte';
   import PageHeader from '$lib/components/header/DefaultHeader.svelte';
   import ProfileInfo from '$lib/components/profile-info/ProfileInfo.svelte';
   import { i18n } from '$lib/i18n.svelte';
@@ -38,7 +39,10 @@
         </div>
       {/if}
 
-      <TiptapRenderer content={post.content} />
+      {#if post.snapshot}
+        <TiptapRenderer content={post.snapshot.content} />
+        <Gallery $snapshot={post.snapshot} />
+      {/if}
 
       <time class="text-muted-foreground text-sm">
         {dayjs(post.createdAt).format('LLL')}
