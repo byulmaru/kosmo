@@ -1,7 +1,6 @@
-import { db, firstOrThrowWith, Instances, ProfileFollowRequests, Profiles } from '@kosmo/db';
+import { db, first, Instances, ProfileFollowRequests, Profiles } from '@kosmo/db';
 import { ProfileProtocol } from '@kosmo/enum';
 import { ProfileManager } from '@kosmo/manager';
-import { UnrecoverableError } from 'bullmq';
 import { and, eq } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { ActivityPubService } from '..';
@@ -48,7 +47,11 @@ export const followRequestAccept = defineService(
           eq(ProfileFollowRequests.targetProfileId, params.targetProfileId),
         ),
       )
-      .then(firstOrThrowWith(() => new UnrecoverableError('NOT_FOUND')));
+      .then(first);
+
+    if (!followRequest) {
+      return false;
+    }
 
     await db.transaction(async (tx) => {
       await ProfileManager.deleteFollowRequest({
@@ -77,5 +80,7 @@ export const followRequestAccept = defineService(
         });
       }
     });
+
+    return true;
   },
 );

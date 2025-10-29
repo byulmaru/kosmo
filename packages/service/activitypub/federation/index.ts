@@ -1,4 +1,5 @@
 import {
+  Accept,
   Create,
   createFederation,
   Endpoints,
@@ -13,12 +14,13 @@ import {
 } from '@fedify/fedify';
 import { AVATAR_FILE_ID, KOSMO_INSTANCE_ID } from '@kosmo/const';
 import { db, first, Instances, ProfileCryptographicKeys, Profiles } from '@kosmo/db';
-import { InstanceType } from '@kosmo/enum';
+import { InstanceType, ProfileFollowAcceptMode } from '@kosmo/enum';
 import { and, eq } from 'drizzle-orm';
 import * as R from 'remeda';
 import { env } from '../../env';
 import { followerCounter, followerDispatcher } from './dispatcher/follower';
 import { followingCounter, followingDispatcher } from './dispatcher/following';
+import { acceptListener } from './inbox/accept';
 import { createListener } from './inbox/create';
 import { followListener } from './inbox/follow';
 import { undoListener } from './inbox/undo';
@@ -41,6 +43,7 @@ federation
         handle: Profiles.handle,
         displayName: Profiles.displayName,
         description: Profiles.description,
+        followAcceptMode: Profiles.followAcceptMode,
         avatarFileId: Profiles.avatarFileId,
         headerFileId: Profiles.headerFileId,
       })
@@ -68,6 +71,7 @@ federation
       assertionMethods: keys.map((key) => key.multikey),
       followers: ctx.getFollowersUri(identifier),
       following: ctx.getFollowingUri(identifier),
+      manuallyApprovesFollowers: profile.followAcceptMode === ProfileFollowAcceptMode.MANUAL,
       icon: new Image({
         url: new URL(
           `${env.PUBLIC_IMAGE_DOMAIN}/${profile.avatarFileId ?? AVATAR_FILE_ID}/original`,
@@ -136,9 +140,10 @@ federation
 
 federation
   .setInboxListeners('/profile/{identifier}/inbox', '/inbox')
+  .on(Accept, acceptListener)
+  .on(Create, createListener)
   .on(Follow, followListener)
-  .on(Undo, undoListener)
-  .on(Create, createListener);
+  .on(Undo, undoListener);
 
 federation
   .setFollowersDispatcher('/profile/{identifier}/followers', followerDispatcher)

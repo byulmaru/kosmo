@@ -1,5 +1,4 @@
 import { ProfileService } from '@kosmo/service';
-import { match } from 'ts-pattern';
 import { ForbiddenError, NotFoundError } from '@/error';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/objects';
@@ -22,13 +21,10 @@ builder.mutationField('acceptFollowRequest', (t) =>
           actorProfileId: input.profileId,
           targetProfileId: ctx.session.profileId,
         })
-        .catch((error: unknown) => {
-          if (error instanceof Error) {
-            throw match(error.message)
-              .with('NOT_FOUND', () => new NotFoundError())
-              .otherwise(() => error);
+        .then((success) => {
+          if (!success) {
+            throw new NotFoundError();
           }
-          throw error;
         });
 
       return input.profileId;
