@@ -1,11 +1,11 @@
-import { PUBLIC_API_DOMAIN } from '$env/static/public';
+import { env } from '$env/dynamic/public';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
   const token = cookies.get('accessToken');
   const body = await request.text();
 
-  const response = await fetch(`${PUBLIC_API_DOMAIN}/graphql`, {
+  const response = await fetch(`${env.PUBLIC_API_DOMAIN}/graphql`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

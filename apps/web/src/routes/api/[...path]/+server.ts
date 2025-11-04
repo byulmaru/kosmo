@@ -1,4 +1,4 @@
-import { PUBLIC_API_DOMAIN } from '$env/static/public';
+import { env } from '$env/dynamic/public';
 import type { RequestHandler } from './$types';
 
 const ALLOWED_PATHS = ['upload'];
@@ -18,7 +18,7 @@ export const fallback: RequestHandler = async ({ request, cookies, params }) => 
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(`${PUBLIC_API_DOMAIN}/${params.path}`, {
+  const response = await fetch(`${env.PUBLIC_API_DOMAIN}/${params.path}`, {
     method: request.method,
     headers,
     body: request.body,

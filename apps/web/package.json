@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "phase run \"vite dev\"",
+    "start": "node build",
     "build": "vite build",
     "preview": "vite preview",
     "test": "npm run test:integration && npm run test:unit",

@@ -4,10 +4,10 @@ import { zValidator } from '@hono/zod-validator';
 import { dayjs } from '@kosmo/dayjs';
 import { createDbId, db, Files, TableCode } from '@kosmo/db';
 import { FileOwnership, FileState } from '@kosmo/enum';
+import { env } from '@kosmo/env';
 import { Hono } from 'hono';
 import sharp from 'sharp';
 import { z } from 'zod';
-import { env } from '@/env';
 import type { Env } from '@/context';
 
 export const upload = new Hono<Env>();

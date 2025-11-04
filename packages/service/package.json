@@ -13,6 +13,7 @@
     "@kosmo/dayjs": "workspace:*",
     "@kosmo/db": "workspace:*",
     "@kosmo/enum": "workspace:*",
+    "@kosmo/env": "workspace:*",
     "@kosmo/manager": "workspace:*",
     "@kosmo/queue": "workspace:*",
     "@kosmo/redis": "workspace:*",

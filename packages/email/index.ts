@@ -1,6 +1,6 @@
 import { SendEmailCommand, SESClient } from '@aws-sdk/client-ses';
+import { env } from '@kosmo/env';
 import { render } from '@react-email/components';
-import { env } from './env';
 import type { ReactElement } from 'react';
 
 const ses = new SESClient({

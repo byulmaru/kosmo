@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@kosmo/enum": "workspace:*",
+    "@kosmo/env": "workspace:*",
     "@kosmo/i18n": "workspace:*",
     "@kosmo/logger": "workspace:*",
     "@kosmo/runtime": "workspace:*",

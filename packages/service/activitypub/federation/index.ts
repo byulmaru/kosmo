@@ -15,9 +15,9 @@ import {
 import { AVATAR_FILE_ID, KOSMO_INSTANCE_ID } from '@kosmo/const';
 import { db, first, Instances, ProfileCryptographicKeys, Profiles } from '@kosmo/db';
 import { InstanceType, ProfileFollowAcceptMode } from '@kosmo/enum';
+import { env } from '@kosmo/env';
 import { and, eq } from 'drizzle-orm';
 import * as R from 'remeda';
-import { env } from '../../env';
 import { followerCounter, followerDispatcher } from './dispatcher/follower';
 import { followingCounter, followingDispatcher } from './dispatcher/following';
 import { acceptListener } from './inbox/accept';

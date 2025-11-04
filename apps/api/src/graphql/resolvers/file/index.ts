@@ -1,6 +1,6 @@
 import './field';
 
-import { env } from '@/env';
+import { env } from '@kosmo/env';
 import { builder } from '@/graphql/builder';
 import { File } from '@/graphql/objects';
 import { mapErrorToNull } from '@/utils/array';

@@ -1,8 +1,8 @@
 import { isAsyncIterable } from '@envelop/core';
 import { logger } from '@kosmo/logger';
+import { dev } from '@kosmo/runtime';
 import * as Sentry from '@sentry/node';
 import { GraphQLError } from 'graphql';
-import { dev } from '@/env';
 import type { AsyncIterableIteratorOrValue, ExecutionResult } from '@envelop/core';
 import type { Plugin } from 'graphql-yoga';
 

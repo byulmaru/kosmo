@@ -3,7 +3,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "phase run \"tsx --watch src/worker.ts\""
+    "dev": "phase run \"tsx --watch src/worker.ts\"",
+    "start": "tsx src/worker.ts"
   },
   "dependencies": {
     "@kosmo/db": "workspace:*",

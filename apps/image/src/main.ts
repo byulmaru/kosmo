@@ -4,6 +4,7 @@ import { Upload } from '@aws-sdk/lib-storage';
 import { serve } from '@hono/node-server';
 import { db, Files, firstOrThrowWith } from '@kosmo/db';
 import { FileOwnership, FileState } from '@kosmo/enum';
+import { env } from '@kosmo/env';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
@@ -11,7 +12,6 @@ import { base64 } from 'rfc4648';
 import sharp from 'sharp';
 import { rgbaToThumbHash } from 'thumbhash';
 import { match } from 'ts-pattern';
-import { env } from './env';
 
 const app = new Hono();
 
