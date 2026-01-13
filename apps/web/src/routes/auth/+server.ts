@@ -22,7 +22,7 @@ export const GET = async ({ cookies }) => {
   return redirect(
     303,
     qs.stringifyUrl({
-      url: 'https://id.byulmaru.co/oauth/authorize',
+      url: 'https://byulmaru.co/oauth/authorize',
       query: {
         response_type: 'code',
         client_id: privateEnv.BYULMARU_ID_CLIENT_ID,

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "phase run \"tsx --watch src/worker.ts\"",
+    "dev": "infisical run -- tsx --watch src/worker.ts",
     "start": "tsx src/worker.ts"
   },
   "dependencies": {

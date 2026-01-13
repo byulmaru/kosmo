@@ -4,7 +4,7 @@ import { env as privateEnv } from '$env/dynamic/private';
 import { env as publicEnv } from '$env/dynamic/public';
 
 const api = ky.create({
-  prefixUrl: 'https://id.byulmaru.co',
+  prefixUrl: 'https://byulmaru.co',
 });
 
 type GetTokensParams = {
