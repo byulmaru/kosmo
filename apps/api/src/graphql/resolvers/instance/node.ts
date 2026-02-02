@@ -13,6 +13,6 @@ builder.node(Instance, {
 
   fields: (t) => ({
     domain: t.exposeString('domain'),
-    type: t.expose('type', { type: InstanceType }),
+    kind: t.expose('type', { type: InstanceType }),
   }),
 });

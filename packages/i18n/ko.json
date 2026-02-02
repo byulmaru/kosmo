@@ -1,0 +1,73 @@
+{
+  "error": {
+    "common": {
+      "conflict": "수행할 수 없는 작업이에요.",
+      "forbidden": "권한이 없어요.",
+      "limitExceeded": "제한을 초과했어요.",
+      "notFound": "찾을 수 없어요.",
+      "pageNotFound": "페이지를 찾을 수 없어요.",
+      "required": "내용을 입력해주세요."
+    },
+    "handle": {
+      "min": "핸들은 3자 이상이여야 해요.",
+      "max": "핸들은 30자 이하여야 해요.",
+      "regex": "핸들은 영문자, 숫자, 밑줄(_)만 사용할 수 있어요.",
+      "startsOrEndsWith": "핸들은 밑줄(_)으로 시작하거나 끝날 수 없어요.",
+      "notAllowed": "사용할 수 없는 핸들이에요.",
+      "continuousUnderscores": "핸들은 연속된 밑줄(__)을 포함할 수 없어요.",
+      "conflict": "다른 프로필에서 이미 사용중인 핸들이에요."
+    },
+    "profile": {
+      "limitExceeded": "프로필 최대 갯수를 초과했어요.",
+      "notFound": "프로필을 찾을 수 없어요."
+    },
+    "errorId": "오류 ID: {traceId}",
+    "errorIdHelper": "문의 시 오류 ID를 같이 보내주시면 오류 추적에 도움이 될 수 있어요."
+  },
+  "header": {
+    "error": "오류"
+  },
+  "profile": {
+    "button": {
+      "edit": "프로필 수정",
+      "follow": "팔로우",
+      "followBack": "맞팔로우",
+      "following": "팔로우 중",
+      "requestFollow": "팔로우 요청 보내기",
+      "requestingFollow": "팔로우 요청 중",
+      "unfollow": "언팔로우"
+    },
+    "status": {
+      "followEachOther": "서로 팔로우 중",
+      "followsYou": "나를 팔로우 중"
+    },
+    "stat": {
+      "followers": "팔로워",
+      "following": "팔로잉"
+    }
+  },
+  "list": {
+    "empty": "표시할 내용이 없어요",
+    "loadMore": "더 보기",
+    "unavailable": "이 정보는 사용할 수 없어요"
+  },
+  "post": {
+    "visibility": {
+      "PUBLIC": { "title": "공개", "description": "모두가 볼 수 있어요." },
+      "UNLISTED": { "title": "조용한 공개", "description": "모두가 볼 수 있지만 검색되지 않아요." },
+      "FOLLOWER": { "title": "팔로워만", "description": "팔로워만 볼 수 있어요." },
+      "DIRECT": { "title": "언급한 계정만", "description": "이 글에서 언급한 계정만 볼 수 있어요." }
+    },
+    "write": {
+      "placeholder": "무슨 일이 일어나고 있나요?",
+      "submit": "게시"
+    }
+  },
+  "menu": {
+    "content": {
+      "home": "홈",
+      "profile": "프로필",
+      "selectProfile": "프로필 선택"
+    }
+  }
+}

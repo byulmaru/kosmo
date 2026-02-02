@@ -1,4 +1,0 @@
-{
-  "extends": "@kosmo/tsconfig",
-  "include": ["**/*.ts", "**/*.svelte", "../../apps/web/src/lib/components/TiptapEditor.svelte"]
-}

@@ -1,5 +1,5 @@
-import en_US from './en_US.json';
-import ko_KR from './ko_KR.json';
+import en from './en.json';
+import ko from './ko.json';
 
 interface LanguageData {
   [key: string]: LanguageData | string;
@@ -9,8 +9,8 @@ export const LANGUAGE_LIST = ['en-US', 'ko-KR'] as const;
 export type LANGUAGE_LIST = (typeof LANGUAGE_LIST)[number];
 
 const languages: Record<string, LanguageData> = {
-  'en-US': en_US,
-  'ko-KR': ko_KR,
+  'en-US': en,
+  'ko-KR': ko,
 } satisfies Record<LANGUAGE_LIST, LanguageData>;
 
 export const getLanguagesByAcceptLanguageHeader = (header: string | null | undefined) => {

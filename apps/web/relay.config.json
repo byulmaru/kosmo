@@ -1,8 +1,8 @@
 {
-  "$schema": "./node_modules/relay-compiler/relay-compiler-config-schema.json",
   "src": "./src",
   "schema": "./schema.graphql",
   "language": "typescript",
   "eagerEsModules": true,
+  "artifactDirectory": "./src/relay",
   "noFutureProofEnums": true
 }

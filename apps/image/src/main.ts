@@ -15,6 +15,8 @@ import { match } from 'ts-pattern';
 
 const app = new Hono();
 
+app.get('/health', (c) => c.json({ status: 'ok' }));
+
 const MAX_REMOTE_FILE_SIZE = 16 * 1024 * 1024; // 16MB
 const FETCH_TIMEOUT = 30000; // 30초
 

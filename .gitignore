@@ -38,4 +38,3 @@ kubeconfig
 *.tfstate
 *.tfstate.*
 *.tfvars
-

@@ -8,11 +8,9 @@
   "eslint.enable": true,
   "eslint.format.enable": true,
   "eslint.useFlatConfig": true,
-  "eslint.validate": ["javascript", "typescript", "svelte"],
+  "eslint.validate": ["javascript", "typescript"],
   "npm.packageManager": "pnpm",
   "prettier.documentSelectors": ["**/*"],
-  "svelte.enable-ts-plugin": true,
-  "svelte.plugin.svelte.defaultScriptLanguage": "ts",
   "tailwindCSS.experimental.classRegex": [
     ["([\"'`][^\"'`]*.*?[\"'`])", "[\"'`]([^\"'`]*).*?[\"'`]"]
   ],

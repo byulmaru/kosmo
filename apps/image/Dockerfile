@@ -23,7 +23,7 @@ COPY --from=builder /app/package.json ./
 
 WORKDIR /app/apps/image
 
-EXPOSE 3001
+EXPOSE 8262
 
 CMD ["pnpm", "start"]
 

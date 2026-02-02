@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./resources": "./resources.ts"
   },
   "devDependencies": {
     "@kosmo/tsconfig": "workspace:*"

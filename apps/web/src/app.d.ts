@@ -1,15 +1,5 @@
-// See https://kit.svelte.dev/docs/types#app
-// for information about these interfaces
-declare global {
-  namespace App {
-    interface Error {
-      message: string;
-      traceId?: string;
-    }
-    // interface Locals {}
-    // interface PageData {}
-    // interface Platform {}
-  }
+declare module '*.css?url' {
+  const value: string;
+  // eslint-disable-next-line import/no-default-export
+  export default value;
 }
-
-export {};

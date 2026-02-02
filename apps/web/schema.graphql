@@ -1,1 +1,337 @@
-../api/schema.graphql
+input AcceptFollowRequestInput {
+  profileId: String!
+}
+
+union AcceptFollowRequestResult = AcceptFollowRequestSuccess | ForbiddenError | NotFoundError
+
+type AcceptFollowRequestSuccess {
+  profile: Profile!
+}
+
+type Account implements Node {
+  id: ID!
+  languages: [String!]!
+  name: String!
+  profileCount: Count!
+  profiles: [Profile!]!
+}
+
+enum AccountState {
+  ACTIVE
+  DELETED
+}
+
+"""Base64 encoded binary data"""
+scalar Binary
+
+type ConflictError implements Error {
+  code: String!
+  message: String!
+}
+
+type Count {
+  current: Int!
+
+  """null if unlimited"""
+  max: Int
+}
+
+input CreatePostInput {
+  content: JSON!
+  mediaIds: [ID!]
+  replyToPostId: String
+  visibility: PostVisibility
+}
+
+union CreatePostResult = CreatePostSuccess | ForbiddenError | ValidationError
+
+type CreatePostSuccess {
+  post: Post!
+}
+
+input CreateProfileInput {
+  handle: String!
+  useCreatedProfile: Boolean! = true
+}
+
+union CreateProfileResult = CreateProfileSuccess | LimitExceededError | ValidationError
+
+type CreateProfileSuccess {
+  profile: Profile!
+}
+
+input DeletePostInput {
+  postId: String!
+}
+
+union DeletePostResult = DeletePostSuccess | NotFoundError
+
+type DeletePostSuccess {
+  post: Post!
+}
+
+input DeleteProfileInput {
+  profileId: String!
+}
+
+union DeleteProfileResult = DeleteProfileSuccess | ForbiddenError
+
+type DeleteProfileSuccess {
+  profile: Profile!
+}
+
+interface Error {
+  code: String!
+  message: String!
+}
+
+interface FieldError implements Error {
+  code: String!
+  message: String!
+  path: String
+}
+
+type File implements Node {
+  alt: String
+  id: ID!
+  metadata: FileMetadata
+  placeholder: String
+  thumbnailUrl: String!
+  url: String!
+}
+
+type FileMetadata {
+  height: Int!
+  width: Int!
+}
+
+input FollowProfileInput {
+  profileId: String!
+}
+
+union FollowProfileResult = FollowProfileSuccess | ForbiddenError | NotFoundError
+
+type FollowProfileSuccess {
+  profile: Profile!
+}
+
+type ForbiddenError implements Error {
+  code: String!
+  message: String!
+}
+
+type Instance implements Node {
+  domain: String!
+  id: ID!
+  kind: InstanceType!
+}
+
+enum InstanceType {
+  ACTIVITYPUB
+  LOCAL
+}
+
+"""
+The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
+"""
+scalar JSON
+
+type LimitExceededError implements Error {
+  code: String!
+  limit: Int!
+  message: String!
+  object: String!
+}
+
+type Mutation {
+  acceptFollowRequest(input: AcceptFollowRequestInput!): AcceptFollowRequestResult!
+  createPost(input: CreatePostInput!): CreatePostResult!
+  createProfile(input: CreateProfileInput!): CreateProfileResult!
+  deletePost(input: DeletePostInput!): DeletePostResult!
+  deleteProfile(input: DeleteProfileInput!): DeleteProfileResult!
+  followProfile(input: FollowProfileInput!): FollowProfileResult!
+  rejectFollowRequest(input: RejectFollowRequestInput!): RejectFollowRequestResult!
+  unfollowProfile(input: UnfollowProfileInput!): UnfollowProfileResult!
+  updateProfile(input: UpdateProfileInput!): UpdateProfileResult!
+  useProfile(input: UseProfileInput!): UseProfileResult!
+}
+
+interface Node {
+  id: ID!
+}
+
+type NotFoundError implements Error {
+  code: String!
+  message: String!
+}
+
+type PageInfo {
+  endCursor: String
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+}
+
+type Post implements Node {
+  author: Profile!
+  content: JSON!
+  createdAt: Timestamp!
+  id: ID!
+  replyToPost: Post
+  repostOfPost: Post
+  snapshot: PostSnapshot
+  state: PostState!
+  updatedAt: Timestamp
+  visibility: PostVisibility!
+}
+
+type PostConnection {
+  edges: [PostEdge!]!
+  pageInfo: PageInfo!
+}
+
+type PostEdge {
+  cursor: String!
+  node: Post!
+}
+
+type PostSnapshot implements Node {
+  content: JSON
+  id: ID!
+  media: [File!]
+}
+
+enum PostState {
+  ACTIVE
+  DELETED
+  HIDDEN
+}
+
+enum PostVisibility {
+  DIRECT
+  FOLLOWER
+  PUBLIC
+  UNLISTED
+}
+
+type Profile implements Node {
+  avatar: File!
+  config: ProfileConfig
+  description: String
+  displayName(fallback: Boolean! = true): String!
+  followAcceptMode: ProfileFollowAcceptMode!
+  followerCount: Int!
+  followers(after: String, before: String, first: Int, last: Int): ProfileConnection
+  following(after: String, before: String, first: Int, last: Int): ProfileConnection
+  followingCount: Int!
+  fullHandle: String!
+  handle: String!
+  header: File
+  id: ID!
+  instance: Instance!
+  isMe: Boolean!
+  posts(after: String, before: String, first: Int, last: Int): PostConnection
+  relationship: ProfileRelationship!
+  relativeHandle: String!
+  state: ProfileState!
+  uri: String!
+  url: String!
+}
+
+type ProfileConfig {
+  defaultPostVisibility: PostVisibility!
+}
+
+type ProfileConnection {
+  edges: [ProfileEdge!]!
+  pageInfo: PageInfo!
+}
+
+type ProfileEdge {
+  cursor: String!
+  node: Profile!
+}
+
+enum ProfileFollowAcceptMode {
+  AUTO
+  MANUAL
+}
+
+type ProfileRelationship {
+  from: ProfileRelationshipState
+  to: ProfileRelationshipState
+}
+
+enum ProfileRelationshipState {
+  BLOCK
+  FOLLOW
+  REQUEST_FOLLOW
+}
+
+enum ProfileState {
+  ACTIVE
+  DELETED
+  SUSPENDED
+}
+
+type Query {
+  languages: [String!]!
+  me: Account
+  node(id: ID!): Node
+  nodes(ids: [ID!]!): [Node]!
+  profile(handle: String!): Profile
+  timeline(after: String, before: String, first: Int, last: Int): PostConnection
+  usingProfile: Profile
+}
+
+input RejectFollowRequestInput {
+  profileId: String!
+}
+
+union RejectFollowRequestResult = ForbiddenError | NotFoundError | RejectFollowRequestSuccess
+
+type RejectFollowRequestSuccess {
+  profile: Profile!
+}
+
+"""Unix timestamp in milliseconds"""
+scalar Timestamp
+
+input UnfollowProfileInput {
+  profileId: String!
+}
+
+union UnfollowProfileResult = ForbiddenError | NotFoundError | UnfollowProfileSuccess
+
+type UnfollowProfileSuccess {
+  profile: Profile!
+}
+
+input UpdateProfileInput {
+  avatarFileId: String
+  description: String
+  displayName: String
+  headerFileId: String
+}
+
+union UpdateProfileResult = UpdateProfileSuccess | ValidationError
+
+type UpdateProfileSuccess {
+  profile: Profile!
+}
+
+input UseProfileInput {
+  profileId: String!
+}
+
+union UseProfileResult = ForbiddenError | UseProfileSuccess
+
+type UseProfileSuccess {
+  profile: Profile!
+}
+
+type ValidationError implements Error & FieldError {
+  code: String!
+  message: String!
+  path: String
+}
