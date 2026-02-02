@@ -27,7 +27,7 @@ function MainLayout() {
           <Outlet />
         </main>
         <aside className="@container hidden w-80 xl:block">
-          <div className="fixed flex min-h-full w-[100cqw] flex-col gap-4 border-l p-4">
+          <div className="fixed flex h-full w-[100cqw] flex-col gap-4 overflow-y-auto border-l p-4">
             <WritePage query={query} />
           </div>
         </aside>

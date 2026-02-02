@@ -9,32 +9,32 @@
 // @ts-nocheck
 
 import { ReaderFragment } from 'relay-runtime';
-import { FragmentRefs } from 'relay-runtime';
+import { FragmentRefs } from "relay-runtime";
 export type ProfileDropdown_Profile_Fragment$data = {
-  readonly ' $fragmentSpreads': FragmentRefs<'ProfileInfo_Profile_Fragment'>;
-  readonly ' $fragmentType': 'ProfileDropdown_Profile_Fragment';
+  readonly " $fragmentSpreads": FragmentRefs<"ProfileInfo_Profile_Fragment">;
+  readonly " $fragmentType": "ProfileDropdown_Profile_Fragment";
 };
 export type ProfileDropdown_Profile_Fragment$key = {
-  readonly ' $data'?: ProfileDropdown_Profile_Fragment$data;
-  readonly ' $fragmentSpreads': FragmentRefs<'ProfileDropdown_Profile_Fragment'>;
+  readonly " $data"?: ProfileDropdown_Profile_Fragment$data;
+  readonly " $fragmentSpreads": FragmentRefs<"ProfileDropdown_Profile_Fragment">;
 };
 
 const node: ReaderFragment = {
-  argumentDefinitions: [],
-  kind: 'Fragment',
-  metadata: null,
-  name: 'ProfileDropdown_Profile_Fragment',
-  selections: [
+  "argumentDefinitions": [],
+  "kind": "Fragment",
+  "metadata": null,
+  "name": "ProfileDropdown_Profile_Fragment",
+  "selections": [
     {
-      args: null,
-      kind: 'FragmentSpread',
-      name: 'ProfileInfo_Profile_Fragment',
-    },
+      "args": null,
+      "kind": "FragmentSpread",
+      "name": "ProfileInfo_Profile_Fragment"
+    }
   ],
-  type: 'Profile',
-  abstractKey: null,
+  "type": "Profile",
+  "abstractKey": null
 };
 
-(node as any).hash = '3d80beff5ec0c695d03da3fa372a63e0';
+(node as any).hash = "3d80beff5ec0c695d03da3fa372a63e0";
 
 export default node;

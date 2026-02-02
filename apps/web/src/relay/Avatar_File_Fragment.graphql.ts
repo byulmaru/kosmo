@@ -9,32 +9,32 @@
 // @ts-nocheck
 
 import { ReaderFragment } from 'relay-runtime';
-import { FragmentRefs } from 'relay-runtime';
+import { FragmentRefs } from "relay-runtime";
 export type Avatar_File_Fragment$data = {
-  readonly ' $fragmentSpreads': FragmentRefs<'Image_File_Fragment'>;
-  readonly ' $fragmentType': 'Avatar_File_Fragment';
+  readonly " $fragmentSpreads": FragmentRefs<"Image_File_Fragment">;
+  readonly " $fragmentType": "Avatar_File_Fragment";
 };
 export type Avatar_File_Fragment$key = {
-  readonly ' $data'?: Avatar_File_Fragment$data;
-  readonly ' $fragmentSpreads': FragmentRefs<'Avatar_File_Fragment'>;
+  readonly " $data"?: Avatar_File_Fragment$data;
+  readonly " $fragmentSpreads": FragmentRefs<"Avatar_File_Fragment">;
 };
 
 const node: ReaderFragment = {
-  argumentDefinitions: [],
-  kind: 'Fragment',
-  metadata: null,
-  name: 'Avatar_File_Fragment',
-  selections: [
+  "argumentDefinitions": [],
+  "kind": "Fragment",
+  "metadata": null,
+  "name": "Avatar_File_Fragment",
+  "selections": [
     {
-      args: null,
-      kind: 'FragmentSpread',
-      name: 'Image_File_Fragment',
-    },
+      "args": null,
+      "kind": "FragmentSpread",
+      "name": "Image_File_Fragment"
+    }
   ],
-  type: 'File',
-  abstractKey: null,
+  "type": "File",
+  "abstractKey": null
 };
 
-(node as any).hash = 'c4badf563f6b18280ce115fb37e55fda';
+(node as any).hash = "c4badf563f6b18280ce115fb37e55fda";
 
 export default node;
