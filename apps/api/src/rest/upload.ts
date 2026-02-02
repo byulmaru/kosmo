@@ -1,12 +1,12 @@
 import { S3Client } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import { zValidator } from '@hono/zod-validator';
-import { dayjs } from '@kosmo/dayjs';
 import { createDbId, db, Files, TableCode } from '@kosmo/db';
 import { FileOwnership, FileState } from '@kosmo/enum';
 import { env } from '@kosmo/env';
 import { Hono } from 'hono';
 import sharp from 'sharp';
+import { Temporal } from 'temporal-polyfill';
 import { z } from 'zod';
 import type { Env } from '@/context';
 
@@ -40,9 +40,11 @@ upload.post(
       return c.json({ code: 'error.unauthorized' }, 401);
     }
 
+    const now = Temporal.Now.zonedDateTimeISO('UTC');
+
     const { file } = c.req.valid('form');
     const fileId = createDbId(TableCode.Files);
-    const key = `${dayjs().format('YY/MM')}/${fileId}`;
+    const key = `${now.year}/${now.month}/${fileId}`;
 
     const fileByteArray = await file.bytes();
 
@@ -68,7 +70,7 @@ upload.post(
       state: FileState.EPHEMERAL,
       path: key,
       size: file.size,
-      expiresAt: dayjs().add(1, 'day'),
+      expiresAt: now.toInstant().add({ hours: 24 }),
       metadata: {
         width: imgMetadata.width,
         height: imgMetadata.height,

@@ -1,9 +1,9 @@
 import { getActorHandle } from '@fedify/fedify';
-import { dayjs } from '@kosmo/dayjs';
 import { db as database, first, firstOrThrow, Instances, Profiles } from '@kosmo/db';
 import { InstanceType, ProfileFollowAcceptMode, ProfileProtocol } from '@kosmo/enum';
 import { ProfileManager } from '@kosmo/manager';
 import { eq } from 'drizzle-orm';
+import { Temporal } from 'temporal-polyfill';
 import type { Application, Group, Organization, Person, Service } from '@fedify/fedify';
 import type { Transaction } from '@kosmo/db';
 
@@ -18,7 +18,14 @@ export const getOrCreateProfile = async ({ actor, tx }: GetOrCreateProfileParams
 
   const uri = actor.id!.href;
   let profile = await db.select().from(Profiles).where(eq(Profiles.uri, uri)).then(first);
-  if (!profile || !profile.lastFetchedAt?.isAfter(dayjs().subtract(1, 'day'))) {
+  if (
+    !profile ||
+    !profile.lastFetchedAt ||
+    Temporal.Instant.compare(
+      profile.lastFetchedAt,
+      Temporal.Now.instant().subtract({ hours: 24 }),
+    ) < 0
+  ) {
     const [handle, domain] = (await getActorHandle(actor, { trimLeadingAt: true })).split('@', 2);
 
     const instance = await db

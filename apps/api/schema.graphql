@@ -60,6 +60,9 @@ type CreateProfileSuccess {
   profile: Profile!
 }
 
+"""RFC9557 formatted string"""
+scalar DateTime
+
 input DeletePostInput {
   postId: String!
 }
@@ -175,13 +178,13 @@ type PageInfo {
 type Post implements Node {
   author: Profile!
   content: JSON!
-  createdAt: Timestamp!
+  createdAt: DateTime!
   id: ID!
   replyToPost: Post
   repostOfPost: Post
   snapshot: PostSnapshot
   state: PostState!
-  updatedAt: Timestamp
+  updatedAt: DateTime
   visibility: PostVisibility!
 }
 
@@ -293,9 +296,6 @@ union RejectFollowRequestResult = ForbiddenError | NotFoundError | RejectFollowR
 type RejectFollowRequestSuccess {
   profile: Profile!
 }
-
-"""Unix timestamp in milliseconds"""
-scalar Timestamp
 
 input UnfollowProfileInput {
   profileId: String!

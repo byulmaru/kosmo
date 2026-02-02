@@ -14,8 +14,8 @@ builder.node(Post, {
   fields: (t) => ({
     state: t.expose('state', { type: PostState }),
     visibility: t.expose('visibility', { type: PostVisibility }),
-    createdAt: t.expose('createdAt', { type: 'Timestamp' }),
-    updatedAt: t.expose('updatedAt', { type: 'Timestamp', nullable: true }),
+    createdAt: t.expose('createdAt', { type: 'DateTime' }),
+    updatedAt: t.expose('updatedAt', { type: 'DateTime', nullable: true }),
 
     content: t.field({
       type: 'JSON',

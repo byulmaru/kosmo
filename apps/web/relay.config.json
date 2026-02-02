@@ -4,5 +4,8 @@
   "language": "typescript",
   "eagerEsModules": true,
   "artifactDirectory": "./src/relay",
-  "noFutureProofEnums": true
+  "noFutureProofEnums": true,
+  "customScalarTypes": {
+    "DateTime": "string"
+  }
 }

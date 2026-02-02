@@ -1,4 +1,3 @@
-import { dayjs } from '@kosmo/dayjs';
 import {
   db,
   firstOrThrow,
@@ -11,6 +10,7 @@ import {
 import { InstanceType, PostState, PostVisibility, ProfileState } from '@kosmo/enum';
 import { TimelineManager } from '@kosmo/manager';
 import { and, eq, gt } from 'drizzle-orm';
+import { Temporal } from 'temporal-polyfill';
 import { TimelineService } from '..';
 import { defineService } from '../define';
 
@@ -50,7 +50,7 @@ export const distribute = defineService(
       await TimelineManager.insert({ postId: post.id, profileId: post.profile.id });
     }
 
-    const lastActivityThreshold = dayjs().subtract(7, 'day');
+    const lastActivityThreshold = Temporal.Now.instant().subtract({ hours: 24 * 7 });
 
     const localProfileIds = new Set<string>();
 

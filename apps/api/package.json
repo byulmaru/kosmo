@@ -18,7 +18,6 @@
     "@hono/zod-validator": "^0.7.2",
     "@kosmo/cache": "workspace:*",
     "@kosmo/const": "workspace:*",
-    "@kosmo/dayjs": "workspace:*",
     "@kosmo/db": "workspace:*",
     "@kosmo/enum": "workspace:*",
     "@kosmo/env": "workspace:*",
@@ -40,7 +39,6 @@
     "@pothos/plugin-with-input": "^4.1.4",
     "@sentry/node": "^10.10.0",
     "dataloader": "^2.2.3",
-    "dayjs": "^1.11.18",
     "drizzle-orm": "^0.44.5",
     "fast-json-stable-stringify": "^2.1.0",
     "graphql": "^16.11.0",
@@ -53,6 +51,7 @@
     "remeda": "^2.31.0",
     "rfc4648": "^1.5.4",
     "sharp": "^0.34.4",
+    "temporal-polyfill": "^0.3.0",
     "ts-pattern": "^5.8.0",
     "ulidx": "^2.4.1",
     "zod": "^4.1.5"

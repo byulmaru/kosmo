@@ -7,10 +7,10 @@ import ScopeAuthPlugin from '@pothos/plugin-scope-auth';
 import SimpleObjectsPlugin from '@pothos/plugin-simple-objects';
 import ValidationPlugin from '@pothos/plugin-validation';
 import WithInputPlugin from '@pothos/plugin-with-input';
-import dayjs from 'dayjs';
 import { GraphQLJSON } from 'graphql-scalars';
 import * as R from 'remeda';
 import { base64 } from 'rfc4648';
+import { Temporal } from 'temporal-polyfill';
 import { match } from 'ts-pattern';
 import { UnauthorizedError, ValidationError } from '@/error';
 import { hasScope } from '@/utils/scope';
@@ -37,7 +37,7 @@ export const builder = new SchemaBuilder<{
   DefaultFieldNullability: false;
   Scalars: {
     Binary: { Input: Uint8Array; Output: Uint8Array };
-    Timestamp: { Input: dayjs.Dayjs; Output: dayjs.Dayjs };
+    DateTime: { Input: Temporal.Instant; Output: Temporal.Instant };
     ID: { Input: string; Output: string };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     JSON: { Input: any; Output: unknown };
@@ -132,19 +132,16 @@ builder.scalarType('Binary', {
   description: 'Base64 encoded binary data',
 });
 
-builder.scalarType('Timestamp', {
-  serialize: (value) => value.valueOf(),
+builder.scalarType('DateTime', {
+  serialize: (value) => value.toString({ smallestUnit: 'microsecond' }),
   parseValue: (value) => {
-    if (typeof value === 'number') {
-      const d = dayjs(value);
-      if (d.isValid()) {
-        return d;
-      }
+    if (typeof value === 'string') {
+      return Temporal.Instant.from(value);
     }
 
     throw new Error('Invalid datetime value');
   },
-  description: 'Unix timestamp in milliseconds',
+  description: 'RFC9557 formatted string',
 });
 
 export type Builder = typeof builder;

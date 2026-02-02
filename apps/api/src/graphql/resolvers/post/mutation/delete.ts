@@ -1,7 +1,7 @@
 import { db, firstOrThrow, firstOrThrowWith, Posts } from '@kosmo/db';
 import { PostState } from '@kosmo/enum';
-import dayjs from 'dayjs';
 import { and, eq } from 'drizzle-orm';
+import { Temporal } from 'temporal-polyfill';
 import { NotFoundError } from '@/error';
 import { builder } from '@/graphql/builder';
 import { Post } from '@/graphql/objects';
@@ -35,7 +35,7 @@ builder.mutationField('deletePost', (t) =>
         .update(Posts)
         .set({
           state: PostState.DELETED,
-          deletedAt: dayjs(),
+          deletedAt: Temporal.Now.instant(),
         })
         .where(eq(Posts.id, post.id))
         .returning()

@@ -1,7 +1,7 @@
-import { dayjs } from '@kosmo/dayjs';
 import { db, Files, firstOrThrow, Profiles } from '@kosmo/db';
 import { FileState } from '@kosmo/enum';
 import { and, eq } from 'drizzle-orm';
+import { Temporal } from 'temporal-polyfill';
 import { z } from 'zod';
 import { ValidationError } from '@/error';
 import { builder } from '@/graphql/builder';
@@ -58,7 +58,7 @@ builder.mutationField('updateProfile', (t) =>
               .update(Files)
               .set({
                 state: FileState.DELETED,
-                expiresAt: dayjs().add(30, 'days'),
+                expiresAt: Temporal.Now.instant().add({ hours: 24 * 30 }),
               })
               .where(eq(Files.id, profile.avatarFileId));
           }
@@ -94,7 +94,7 @@ builder.mutationField('updateProfile', (t) =>
               .update(Files)
               .set({
                 state: FileState.DELETED,
-                expiresAt: dayjs().add(30, 'days'),
+                expiresAt: Temporal.Now.instant().add({ hours: 24 * 30 }),
               })
               .where(and(eq(Files.id, profile.headerFileId)));
           }
