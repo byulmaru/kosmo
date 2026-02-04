@@ -1,0 +1,79 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: kosmo
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ['missingkey=error']
+  generators:
+    - list:
+        elements:
+          - env: dev
+            natsReplicas: 1
+            natsStorage: memory
+
+  template:
+    metadata:
+      name: 'kosmo-{{.env}}'
+    spec:
+      project: byulmaru
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+      destination:
+        server: 'https://kubernetes.default.svc'
+        namespace: 'kosmo-{{.env}}'
+
+      sources:
+        # 1. NATS Infrastructure
+        - repoURL: https://nats-io.github.io/k8s/helm/charts/
+          targetRevision: 2.12.4
+          chart: nats
+          helm:
+            values: |
+              fullnameOverride: nats
+              global:
+                image:
+                  registry: docker.io
+              config:
+                cluster:
+                  enabled: {{ if gt .natsReplicas 1.0 }}true{{ else }}false{{ end }}
+                  replicas: {{.natsReplicas}}
+                jetstream:
+                  enabled: true
+                  {{if eq .natsStorage "memory"}}
+                  memoryStore:
+                    enabled: true
+                  {{else}}
+                  fileStore:
+                    enabled: true
+                    pvc:
+                      enabled: true
+                      size: 10Gi
+                  {{end}}
+
+        # 2. NATS Controller
+        - repoURL: https://nats-io.github.io/k8s/helm/charts/
+          targetRevision: 0.33.0
+          chart: nack
+          helm:
+            values: |
+              namespaced: true
+              useLegacyNames: false
+              jetstream:
+                image:
+                  registry: docker.io
+                nats:
+                  url: nats://nats:4222
+
+        # 3. Kosmo Application Logic
+        - repoURL: https://github.com/byulmaru/kosmo.git
+          targetRevision: HEAD
+          path: apps/helm
+          helm:
+            values: |
+              env: {{.env}}
