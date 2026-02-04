@@ -83,7 +83,7 @@ export default function WritePage({ query }: Props) {
 
           ... on CreatePostSuccess {
             post {
-              id
+              ...PostContent_Post_Fragment
             }
           }
         }

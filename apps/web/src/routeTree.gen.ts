@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as MainRouteImport } from './routes/_main'
 import { Route as MainIndexRouteImport } from './routes/_main/index'
 import { Route as MainAtChar123handleChar125RouteImport } from './routes/_main/@{$handle}'
+import { Route as MainAtChar123handleChar125IndexRouteImport } from './routes/_main/@{$handle}/index'
 import { Route as MainAtChar123handleChar125FollowingRouteImport } from './routes/_main/@{$handle}/following'
 
 const MainRoute = MainRouteImport.update({
@@ -29,6 +30,12 @@ const MainAtChar123handleChar125Route =
     path: '/@{$handle}',
     getParentRoute: () => MainRoute,
   } as any)
+const MainAtChar123handleChar125IndexRoute =
+  MainAtChar123handleChar125IndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => MainAtChar123handleChar125Route,
+  } as any)
 const MainAtChar123handleChar125FollowingRoute =
   MainAtChar123handleChar125FollowingRouteImport.update({
     id: '/following',
@@ -40,11 +47,12 @@ export interface FileRoutesByFullPath {
   '/': typeof MainIndexRoute
   '/@{$handle}': typeof MainAtChar123handleChar125RouteWithChildren
   '/@{$handle}/following': typeof MainAtChar123handleChar125FollowingRoute
+  '/@{$handle}/': typeof MainAtChar123handleChar125IndexRoute
 }
 export interface FileRoutesByTo {
-  '/@{$handle}': typeof MainAtChar123handleChar125RouteWithChildren
   '/': typeof MainIndexRoute
   '/@{$handle}/following': typeof MainAtChar123handleChar125FollowingRoute
+  '/@{$handle}': typeof MainAtChar123handleChar125IndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -52,18 +60,20 @@ export interface FileRoutesById {
   '/_main/@{$handle}': typeof MainAtChar123handleChar125RouteWithChildren
   '/_main/': typeof MainIndexRoute
   '/_main/@{$handle}/following': typeof MainAtChar123handleChar125FollowingRoute
+  '/_main/@{$handle}/': typeof MainAtChar123handleChar125IndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/@{$handle}' | '/@{$handle}/following'
+  fullPaths: '/' | '/@{$handle}' | '/@{$handle}/following' | '/@{$handle}/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/@{$handle}' | '/' | '/@{$handle}/following'
+  to: '/' | '/@{$handle}/following' | '/@{$handle}'
   id:
     | '__root__'
     | '/_main'
     | '/_main/@{$handle}'
     | '/_main/'
     | '/_main/@{$handle}/following'
+    | '/_main/@{$handle}/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -93,6 +103,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MainAtChar123handleChar125RouteImport
       parentRoute: typeof MainRoute
     }
+    '/_main/@{$handle}/': {
+      id: '/_main/@{$handle}/'
+      path: '/'
+      fullPath: '/@{$handle}/'
+      preLoaderRoute: typeof MainAtChar123handleChar125IndexRouteImport
+      parentRoute: typeof MainAtChar123handleChar125Route
+    }
     '/_main/@{$handle}/following': {
       id: '/_main/@{$handle}/following'
       path: '/following'
@@ -105,12 +122,14 @@ declare module '@tanstack/react-router' {
 
 interface MainAtChar123handleChar125RouteChildren {
   MainAtChar123handleChar125FollowingRoute: typeof MainAtChar123handleChar125FollowingRoute
+  MainAtChar123handleChar125IndexRoute: typeof MainAtChar123handleChar125IndexRoute
 }
 
 const MainAtChar123handleChar125RouteChildren: MainAtChar123handleChar125RouteChildren =
   {
     MainAtChar123handleChar125FollowingRoute:
       MainAtChar123handleChar125FollowingRoute,
+    MainAtChar123handleChar125IndexRoute: MainAtChar123handleChar125IndexRoute,
   }
 
 const MainAtChar123handleChar125RouteWithChildren =

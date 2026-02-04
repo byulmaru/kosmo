@@ -7,8 +7,8 @@
     ".": "./index.ts"
   },
   "dependencies": {
-    "@tiptap/core": "^3.17.1",
-    "@tiptap/pm": "^3.17.1"
+    "@tiptap/core": "^3.18.0",
+    "@tiptap/pm": "^3.18.0"
   },
   "devDependencies": {
     "@kosmo/tsconfig": "workspace:*",

@@ -108,8 +108,8 @@ function ProfileLayout() {
             </Link>
           </div> */}
         </div>
-        <Outlet />
       </div>
+      <Outlet />
     </>
   );
 }

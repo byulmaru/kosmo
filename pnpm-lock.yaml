@@ -386,6 +386,9 @@ importers:
       tailwindcss:
         specifier: ^4.1.18
         version: 4.1.18
+      temporal-polyfill:
+        specifier: ^0.3.0
+        version: 0.3.0
       thumbhash:
         specifier: ^0.1.1
         version: 0.1.1
