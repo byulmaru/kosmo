@@ -9,14 +9,16 @@
   "dependencies": {
     "@kosmo/db": "workspace:*",
     "@kosmo/enum": "workspace:*",
+    "@kosmo/env": "workspace:*",
+    "@kosmo/error": "workspace:*",
     "@kosmo/logger": "workspace:*",
-    "@kosmo/queue": "workspace:*",
+    "@kosmo/nats": "workspace:*",
     "@kosmo/redis": "workspace:*",
-    "@kosmo/runtime": "workspace:*",
     "@kosmo/service": "workspace:*",
     "@kosmo/tsconfig": "workspace:*",
+    "@nats-io/jetstream": "^3.3.0",
+    "@nats-io/transport-node": "^3.3.0",
     "@sentry/node": "^10.10.0",
-    "bullmq": "^5.58.5",
     "drizzle-orm": "^0.44.5",
     "ioredis": "^5.7.0"
   }

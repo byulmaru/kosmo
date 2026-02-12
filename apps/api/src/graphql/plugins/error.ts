@@ -1,6 +1,6 @@
 import { isAsyncIterable } from '@envelop/core';
+import { dev } from '@kosmo/env';
 import { logger } from '@kosmo/logger';
-import { dev } from '@kosmo/runtime';
 import * as Sentry from '@sentry/node';
 import { GraphQLError } from 'graphql';
 import type { AsyncIterableIteratorOrValue, ExecutionResult } from '@envelop/core';

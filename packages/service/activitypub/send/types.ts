@@ -1,5 +1,5 @@
 import { db, firstOrThrowWith, Instances, Profiles } from '@kosmo/db';
-import { UnrecoverableError } from 'bullmq';
+import { UnrecoverableError } from '@kosmo/error';
 import { eq } from 'drizzle-orm';
 
 export type ActivitySender = { profileId: string; webDomain?: string };

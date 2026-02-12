@@ -25,7 +25,6 @@
     "@kosmo/logger": "workspace:*",
     "@kosmo/manager": "workspace:*",
     "@kosmo/redis": "workspace:*",
-    "@kosmo/runtime": "workspace:*",
     "@kosmo/service": "workspace:*",
     "@kosmo/type": "workspace:*",
     "@kosmo/validation": "workspace:*",

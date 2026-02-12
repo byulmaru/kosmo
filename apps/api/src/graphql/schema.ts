@@ -2,7 +2,7 @@ import './enums';
 import './objects';
 import './resolvers';
 
-import { dev } from '@kosmo/runtime';
+import { dev } from '@kosmo/env';
 import { builder } from './builder';
 
 export const schema = builder.toSchema();

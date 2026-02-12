@@ -1,7 +1,7 @@
 import { db, firstOrThrowWith, Instances, ProfileFollowRequests, Profiles } from '@kosmo/db';
 import { ProfileProtocol } from '@kosmo/enum';
+import { UnrecoverableError } from '@kosmo/error';
 import { ProfileManager } from '@kosmo/manager';
-import { UnrecoverableError } from 'bullmq';
 import { and, eq } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { ActivityPubService } from '..';

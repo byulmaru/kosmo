@@ -8,7 +8,6 @@
   },
   "dependencies": {
     "@kosmo/env": "workspace:*",
-    "@kosmo/runtime": "workspace:*",
     "@sesamecare-oss/redlock": "^1.4.0",
     "ioredis": "^5.7.0",
     "zod": "^4.1.5"

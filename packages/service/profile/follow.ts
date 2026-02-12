@@ -1,7 +1,7 @@
 import { db, firstOrThrowWith, Profiles } from '@kosmo/db';
 import { ProfileFollowAcceptMode, ProfileProtocol, ProfileState } from '@kosmo/enum';
+import { UnrecoverableError } from '@kosmo/error';
 import { ProfileManager } from '@kosmo/manager';
-import { UnrecoverableError } from 'bullmq';
 import { and, eq } from 'drizzle-orm';
 import { ActivityPubService } from '..';
 import { defineService } from '../define';

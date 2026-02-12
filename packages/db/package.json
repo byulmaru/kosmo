@@ -19,7 +19,6 @@
     "@kosmo/env": "workspace:*",
     "@kosmo/i18n": "workspace:*",
     "@kosmo/logger": "workspace:*",
-    "@kosmo/runtime": "workspace:*",
     "@kosmo/type": "workspace:*",
     "@neondatabase/serverless": "^1.0.1",
     "@tiptap/core": "^3.6.6",

@@ -1,5 +1,5 @@
+import { dev } from '@kosmo/env';
 import { logger } from '@kosmo/logger';
-import { dev } from '@kosmo/runtime';
 import type { Logger } from 'drizzle-orm/logger';
 
 const log = logger.getChild('db');

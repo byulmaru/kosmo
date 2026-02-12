@@ -1,11 +1,11 @@
 import { MAX_POST_MEDIA_COUNT } from '@kosmo/const';
 import { db, Files } from '@kosmo/db';
 import { FileState, PostVisibility } from '@kosmo/enum';
+import { UnrecoverableError } from '@kosmo/error';
 import { PostManager } from '@kosmo/manager';
 import { nodes, schema } from '@kosmo/tiptap';
 import { generateJSON } from '@tiptap/html';
 import { Node } from '@tiptap/pm/model';
-import { UnrecoverableError } from 'bullmq';
 import { and, inArray, ne } from 'drizzle-orm';
 import { match } from 'ts-pattern';
 import { ActivityPubService, TimelineService } from '..';

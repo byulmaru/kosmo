@@ -1,6 +1,6 @@
-import { queue } from '@kosmo/queue';
-import * as I from 'iter-ops';
-import type { JobsOptions } from 'bullmq';
+import { js } from '@kosmo/nats';
+import { headers } from '@nats-io/transport-node';
+import type { MsgHdrs } from '@nats-io/transport-node';
 
 type DeduplicationOptions<Input> = {
   id: string | ((input: Input) => string);
@@ -16,70 +16,49 @@ export const defineService = <Input, Output>(
   name: string,
   fn: (input: Input) => Promise<Output>,
   options?: {
-    defaultQueueOptions?: { deduplication?: DeduplicationOptions<Input> } & Omit<
-      JobsOptions,
-      'deduplication'
-    >;
+    defaultQueueOptions?: { deduplication?: DeduplicationOptions<Input> };
   },
 ) => {
   jobs.set(name, fn);
   return {
     call: (input: Input) => fn(input),
-    queue: async (input: Input, queueOptions?: JobsOptions) => {
-      const deduplicationOptions = options?.defaultQueueOptions?.deduplication
-        ? {
-            ...options.defaultQueueOptions.deduplication,
-            id:
-              typeof options.defaultQueueOptions.deduplication.id === 'string'
-                ? options.defaultQueueOptions.deduplication.id
-                : options.defaultQueueOptions.deduplication.id(input),
-          }
-        : undefined;
+    queue: async (input: Input, queueOptions?: { deduplication?: DeduplicationOptions<Input> }) => {
+      let msgHeaders: MsgHdrs | undefined;
+      const deduplicationIdRaw =
+        options?.defaultQueueOptions?.deduplication?.id ?? queueOptions?.deduplication?.id;
 
-      await queue.add(name, input, {
-        removeOnComplete: true,
-        removeOnFail: {
-          age: 24 * 60 * 60,
-          count: 10000,
-        },
-        ...options?.defaultQueueOptions,
-        deduplication: deduplicationOptions,
-        ...queueOptions,
-      });
+      if (deduplicationIdRaw) {
+        const id =
+          typeof deduplicationIdRaw === 'string' ? deduplicationIdRaw : deduplicationIdRaw(input);
+        msgHeaders = headers();
+        msgHeaders.set('Nats-Msg-Id', id);
+      }
+
+      await js.publish(name, JSON.stringify(input), { headers: msgHeaders });
     },
 
-    queueBulk: async (input: Input[] | Iterable<Input>, queueOptions?: JobsOptions) => {
-      await queue.addBulk(
-        I.pipe(
-          input,
-          I.map((data) => {
-            const deduplicationOptions = options?.defaultQueueOptions?.deduplication
-              ? {
-                  ...options.defaultQueueOptions.deduplication,
-                  id:
-                    typeof options.defaultQueueOptions.deduplication.id === 'string'
-                      ? options.defaultQueueOptions.deduplication.id
-                      : options.defaultQueueOptions.deduplication.id(data),
-                }
-              : undefined;
+    queueBulk: async (
+      input: Input[] | Iterable<Input>,
+      queueOptions?: { deduplication?: DeduplicationOptions<Input> },
+    ) => {
+      const inputs = Array.isArray(input) ? input : Array.from(input);
+      await Promise.all(
+        inputs.map(async (data) => {
+          let msgHeaders: MsgHdrs | undefined;
+          const deduplicationIdRaw =
+            options?.defaultQueueOptions?.deduplication?.id ?? queueOptions?.deduplication?.id;
 
-            return {
-              name,
-              data,
-              opts: {
-                removeOnComplete: true,
-                removeOnFail: {
-                  age: 24 * 60 * 60,
-                  count: 10000,
-                },
-                ...options?.defaultQueueOptions,
-                deduplication: deduplicationOptions,
-                ...queueOptions,
-              },
-            };
-          }),
-          I.toArray(),
-        ).first!,
+          if (deduplicationIdRaw) {
+            const id =
+              typeof deduplicationIdRaw === 'string'
+                ? deduplicationIdRaw
+                : deduplicationIdRaw(data);
+            msgHeaders = headers();
+            msgHeaders.set('Nats-Msg-Id', id);
+          }
+
+          await js.publish(name, JSON.stringify(data), { headers: msgHeaders });
+        }),
       );
     },
   };
