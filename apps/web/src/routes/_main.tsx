@@ -2,7 +2,7 @@ import { createFileRoute, Outlet } from '@tanstack/react-router';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import MenuNavbar from '@/components/menu/navbar';
 import WritePage from '@/components/post/WritePage';
-import { MainLayout_Query } from '@/relay/MainLayout_Query.graphql';
+import { MainLayout_Query } from '$relay/MainLayout_Query.graphql';
 
 export const Route = createFileRoute('/_main')({
   component: MainLayout,

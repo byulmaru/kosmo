@@ -14,7 +14,8 @@
     "jsx": "react-jsx",
     "incremental": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "$relay/*": ["./src/.relay/*"]
     }
   },
   "exclude": ["node_modules"]

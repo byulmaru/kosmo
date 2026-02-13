@@ -1,5 +1,5 @@
 import { graphql, useFragment } from 'react-relay';
-import { profile_ComponentsHeader_Profile_Fragment$key } from '@/relay/profile_ComponentsHeader_Profile_Fragment.graphql';
+import { profile_ComponentsHeader_Profile_Fragment$key } from '$relay/profile_ComponentsHeader_Profile_Fragment.graphql';
 import Header from '.';
 
 type Props = {

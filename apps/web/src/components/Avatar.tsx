@@ -1,6 +1,6 @@
 import { graphql, useFragment } from 'react-relay';
 import { cn } from 'tailwind-variants';
-import { Avatar_File_Fragment$key } from '@/relay/Avatar_File_Fragment.graphql';
+import { Avatar_File_Fragment$key } from '$relay/Avatar_File_Fragment.graphql';
 import Image from './Image';
 import { Skeleton } from './ui/skeleton';
 

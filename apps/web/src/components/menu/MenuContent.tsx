@@ -2,7 +2,7 @@ import { HouseIcon, UserIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { graphql, useFragment } from 'react-relay';
 import { match } from 'ts-pattern';
-import { MenuContent_Fragment$key } from '@/relay/MenuContent_Fragment.graphql';
+import { MenuContent_Fragment$key } from '$relay/MenuContent_Fragment.graphql';
 import ProfileDropdown from '../ProfileDropdown';
 import MenuButton from './button';
 

@@ -3,7 +3,7 @@
 import { HouseIcon, MenuIcon, SparklesIcon } from 'lucide-react';
 import { graphql, useFragment } from 'react-relay';
 import { cn } from 'tailwind-variants';
-import { Navbar_Fragment$key } from '@/relay/Navbar_Fragment.graphql';
+import { Navbar_Fragment$key } from '$relay/Navbar_Fragment.graphql';
 import MenuButton from './button';
 import MenuContent from './MenuContent';
 

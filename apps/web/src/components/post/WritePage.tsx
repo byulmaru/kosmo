@@ -8,8 +8,8 @@ import { useTranslation } from 'react-i18next';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { Keymap } from '@/lib/tiptap/extensions/keymap';
 import { Placeholder } from '@/lib/tiptap/extensions/placeholder';
-import { WritePage_CreatePostMutation } from '@/relay/WritePage_CreatePostMutation.graphql';
-import { WritePage_Query_Fragment$key } from '@/relay/WritePage_Query_Fragment.graphql';
+import { WritePage_CreatePostMutation } from '$relay/WritePage_CreatePostMutation.graphql';
+import { WritePage_Query_Fragment$key } from '$relay/WritePage_Query_Fragment.graphql';
 import ProfileInfo from '../ProfileInfo';
 import { Button } from '../ui/button';
 import {

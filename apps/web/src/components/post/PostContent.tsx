@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { graphql, useFragment } from 'react-relay';
-import { PostContent_Post_Fragment$key } from '@/relay/PostContent_Post_Fragment.graphql';
+import { PostContent_Post_Fragment$key } from '$relay/PostContent_Post_Fragment.graphql';
 import ProfileInfo from '../ProfileInfo';
 import RelativeTime from '../temporal/RelativeTime';
 import PostVisibilityIcon from './PostVisibilityIcon';

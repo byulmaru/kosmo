@@ -3,7 +3,7 @@ import { I18nextProvider } from 'react-i18next';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { getClientCookie, setClientCookie } from '@/lib/cookie';
 import i18n from '@/lib/i18n';
-import { i18n_Query } from '@/relay/i18n_Query.graphql';
+import { i18n_Query } from '$relay/i18n_Query.graphql';
 
 function LanguageSyncer({ pull }: { pull?: boolean }) {
   const data = useLazyLoadQuery<i18n_Query>(

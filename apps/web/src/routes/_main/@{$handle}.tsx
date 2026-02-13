@@ -4,7 +4,7 @@ import Avatar from '@/components/Avatar';
 import FollowButton from '@/components/FollowButton';
 import ProfileHeader from '@/components/header/profile';
 import Image from '@/components/Image';
-import { Handle_Main_Query } from '@/relay/Handle_Main_Query.graphql';
+import { Handle_Main_Query } from '$relay/Handle_Main_Query.graphql';
 
 export const Route = createFileRoute('/_main/@{$handle}')({
   component: ProfileLayout,

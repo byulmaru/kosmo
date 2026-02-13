@@ -4,8 +4,8 @@ import { Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { graphql, useFragment, useLazyLoadQuery } from 'react-relay';
 import { cn } from 'tailwind-variants';
-import { ProfileDropdown_Profile_Fragment$key } from '@/relay/ProfileDropdown_Profile_Fragment.graphql';
-import { ProfileDropdownContent_components_Query } from '@/relay/ProfileDropdownContent_components_Query.graphql';
+import { ProfileDropdown_Profile_Fragment$key } from '$relay/ProfileDropdown_Profile_Fragment.graphql';
+import { ProfileDropdownContent_components_Query } from '$relay/ProfileDropdownContent_components_Query.graphql';
 import ProfileInfo, { ProfileInfoSkeleton } from './ProfileInfo';
 
 type Props = {

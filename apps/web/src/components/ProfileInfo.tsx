@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { graphql, useFragment } from 'react-relay';
 import { tv, VariantProps } from 'tailwind-variants';
-import { ProfileInfo_Profile_Fragment$key } from '@/relay/ProfileInfo_Profile_Fragment.graphql';
+import { ProfileInfo_Profile_Fragment$key } from '$relay/ProfileInfo_Profile_Fragment.graphql';
 import Avatar, { ProfileAvatarSkeleton } from './Avatar';
 import { Skeleton } from './ui/skeleton';
 

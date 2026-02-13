@@ -1,6 +1,6 @@
 import { graphql, usePaginationFragment } from 'react-relay';
 import PostContent from '@/components/post/PostContent';
-import { ProfilePost_Profile_Fragment$key } from '@/relay/ProfilePost_Profile_Fragment.graphql';
+import { ProfilePost_Profile_Fragment$key } from '$relay/ProfilePost_Profile_Fragment.graphql';
 
 type Props = {
   profile: ProfilePost_Profile_Fragment$key;

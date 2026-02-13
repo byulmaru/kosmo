@@ -2,7 +2,7 @@ import { ProfileRelationshipState } from '@kosmo/enum';
 import { useTranslation } from 'react-i18next';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { Button } from '@/components/ui/button';
-import { FollowButton_Profile_Fragment$key } from '@/relay/FollowButton_Profile_Fragment.graphql';
+import { FollowButton_Profile_Fragment$key } from '$relay/FollowButton_Profile_Fragment.graphql';
 
 type Props = {
   profile: FollowButton_Profile_Fragment$key;

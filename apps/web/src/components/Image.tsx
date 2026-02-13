@@ -4,7 +4,7 @@ import { graphql } from 'relay-runtime';
 import { base64 } from 'rfc4648';
 import { tv, VariantProps } from 'tailwind-variants';
 import { thumbHashToDataURL } from 'thumbhash';
-import { Image_File_Fragment$key } from '@/relay/Image_File_Fragment.graphql';
+import { Image_File_Fragment$key } from '$relay/Image_File_Fragment.graphql';
 
 const variants = tv({
   slots: {
