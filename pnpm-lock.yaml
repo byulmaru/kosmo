@@ -577,6 +577,15 @@ importers:
         specifier: ^8.43.0
         version: 8.43.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
 
+  packages/fedify-nats-message-queue:
+    dependencies:
+      '@fedify/fedify':
+        specifier: '>=1.8.15'
+        version: 1.10.2
+      '@nats-io/jetstream':
+        specifier: ^3.3.0
+        version: 3.3.0
+
   packages/i18n:
     devDependencies:
       '@kosmo/tsconfig':
@@ -678,6 +687,9 @@ importers:
       '@kosmo/error':
         specifier: workspace:*
         version: link:../error
+      '@kosmo/fedify-nats-message-queue':
+        specifier: workspace:*
+        version: link:../fedify-nats-message-queue
       '@kosmo/manager':
         specifier: workspace:*
         version: link:../manager

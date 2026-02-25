@@ -12,12 +12,21 @@ export const nc: NatsConnection = await connect({
 
 export const js: JetStreamClient = jetstream(nc);
 export const streamName = 'jobs';
+export const fedifyStreamName = 'fedify';
+export const fedifySubject = 'fedify.messages';
 
 const jsm = await js.jetstreamManager();
 
 await jsm.streams.add({
   name: streamName,
   subjects: ['*'],
+  retention: RetentionPolicy.Workqueue,
+  discard: DiscardPolicy.New,
+});
+
+await jsm.streams.add({
+  name: fedifyStreamName,
+  subjects: ['fedify.>'],
   retention: RetentionPolicy.Workqueue,
   discard: DiscardPolicy.New,
 });

@@ -16,6 +16,8 @@ import { AVATAR_FILE_ID, KOSMO_INSTANCE_ID } from '@kosmo/const';
 import { db, first, Instances, ProfileCryptographicKeys, Profiles } from '@kosmo/db';
 import { InstanceType, ProfileFollowAcceptMode } from '@kosmo/enum';
 import { env } from '@kosmo/env';
+import { NatsMessageQueue } from '@kosmo/fedify-nats-message-queue';
+import { fedifyStreamName, fedifySubject, js } from '@kosmo/nats';
 import { and, eq } from 'drizzle-orm';
 import * as R from 'remeda';
 import { followerCounter, followerDispatcher } from './dispatcher/follower';
@@ -28,6 +30,11 @@ import type { FederationContextData } from './type';
 
 export const federation = createFederation<FederationContextData>({
   kv: new MemoryKvStore(),
+  queue: new NatsMessageQueue({
+    js,
+    streamName: fedifyStreamName,
+    subject: fedifySubject,
+  }),
 });
 
 export const getFedifyContext = (domain: string) => {
