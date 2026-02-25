@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@fedify/fedify": "^1.8.8",
+    "@kosmo/fedify-nats-message-queue": "workspace:*",
     "@kosmo/const": "workspace:*",
     "@kosmo/db": "workspace:*",
     "@kosmo/enum": "workspace:*",
