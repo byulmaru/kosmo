@@ -19,7 +19,6 @@ jobs:
       matrix:
         app:
           - api
-          - image
           - mq
           - web
 

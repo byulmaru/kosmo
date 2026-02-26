@@ -37,14 +37,12 @@ jobs:
         run: |
           kubectl set image deployment/kosmo-api api=ghcr.io/${{ github.repository }}/api:${{ github.sha }} --record
           kubectl set image deployment/kosmo-web web=ghcr.io/${{ github.repository }}/web:${{ github.sha }} --record
-          kubectl set image deployment/kosmo-image image=ghcr.io/${{ github.repository }}/image:${{ github.sha }} --record
           kubectl set image deployment/kosmo-mq mq=ghcr.io/${{ github.repository }}/mq:${{ github.sha }} --record
 
       - name: Wait for rollout
         run: |
           kubectl rollout status deployment/kosmo-api --timeout=5m
           kubectl rollout status deployment/kosmo-web --timeout=5m
-          kubectl rollout status deployment/kosmo-image --timeout=5m
           kubectl rollout status deployment/kosmo-mq --timeout=5m
 
       - name: Verify deployment

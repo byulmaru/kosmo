@@ -68,7 +68,6 @@ builder.mutationField('updateProfile', (t) =>
             .set({
               state: FileState.PERMANENT,
               expiresAt: null,
-              transform: { width: 400, height: 400 },
             })
             .where(
               and(
@@ -104,7 +103,6 @@ builder.mutationField('updateProfile', (t) =>
             .set({
               state: FileState.PERMANENT,
               expiresAt: null,
-              transform: { width: 1500, height: 500 },
             })
             .where(
               and(
