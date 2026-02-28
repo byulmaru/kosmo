@@ -165,7 +165,6 @@ export const Files = pgTable('files', {
   ownership: E.FileOwnership('ownership').notNull(),
   path: varchar('path').notNull(),
   placeholder: varchar('placeholder'),
-  transform: jsonb('transform').$type<{ width?: number; height?: number; lossless?: boolean }>(),
   metadata: jsonb('metadata').$type<{ width: number; height: number }>(),
   size: integer('size'),
   alt: text('alt'),
