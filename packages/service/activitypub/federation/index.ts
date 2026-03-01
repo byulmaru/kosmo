@@ -13,10 +13,9 @@ import {
   Undo,
 } from '@fedify/fedify';
 import { AVATAR_FILE_ID, KOSMO_INSTANCE_ID } from '@kosmo/const';
-import { db, first, Instances, ProfileCryptographicKeys, Profiles } from '@kosmo/db';
+import { db, Files, first, Instances, ProfileCryptographicKeys, Profiles } from '@kosmo/db';
 import { InstanceType, ProfileFollowAcceptMode } from '@kosmo/enum';
-import { env } from '@kosmo/env';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import * as R from 'remeda';
 import { followerCounter, followerDispatcher } from './dispatcher/follower';
 import { followingCounter, followingDispatcher } from './dispatcher/following';
@@ -56,6 +55,16 @@ federation
       return null;
     }
 
+    const avatarFileId = profile.avatarFileId ?? AVATAR_FILE_ID;
+    const fileIds = [avatarFileId, ...(profile.headerFileId ? [profile.headerFileId] : [])];
+
+    const files = await db
+      .select({ id: Files.id, path: Files.path })
+      .from(Files)
+      .where(inArray(Files.id, fileIds));
+
+    const filePaths = Object.fromEntries(files.map((f) => [f.id, f.path]));
+
     const keys = await ctx.getActorKeyPairs(identifier);
 
     return new Person({
@@ -72,18 +81,19 @@ federation
       followers: ctx.getFollowersUri(identifier),
       following: ctx.getFollowingUri(identifier),
       manuallyApprovesFollowers: profile.followAcceptMode === ProfileFollowAcceptMode.MANUAL,
-      icon: new Image({
-        url: new URL(
-          `${env.PUBLIC_IMAGE_DOMAIN}/${profile.avatarFileId ?? AVATAR_FILE_ID}/original`,
-        ),
-        mediaType: 'image/webp',
-      }),
-      image: profile.headerFileId
+      icon: filePaths[avatarFileId]
         ? new Image({
-            url: new URL(`${env.PUBLIC_IMAGE_DOMAIN}/${profile.headerFileId}/original`),
+            url: new URL(filePaths[avatarFileId]),
             mediaType: 'image/webp',
           })
         : undefined,
+      image:
+        profile.headerFileId && filePaths[profile.headerFileId]
+          ? new Image({
+              url: new URL(filePaths[profile.headerFileId]),
+              mediaType: 'image/webp',
+            })
+          : undefined,
     });
   })
   .setKeyPairsDispatcher(async (ctx, identifier) => {

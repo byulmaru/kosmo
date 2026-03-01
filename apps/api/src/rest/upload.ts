@@ -1,28 +1,16 @@
-import { S3Client } from '@aws-sdk/client-s3';
-import { Upload } from '@aws-sdk/lib-storage';
 import { zValidator } from '@hono/zod-validator';
 import { createDbId, db, Files, TableCode } from '@kosmo/db';
 import { FileOwnership, FileState } from '@kosmo/enum';
 import { env } from '@kosmo/env';
 import { Hono } from 'hono';
-import sharp from 'sharp';
 import { Temporal } from 'temporal-polyfill';
 import { z } from 'zod';
 import type { Env } from '@/context';
 
 export const upload = new Hono<Env>();
 
-const MAX_ORIGINAL_FILE_SIZE = 16 * 1024 * 1024;
-const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif'];
-
-const s3Client = new S3Client({
-  credentials: {
-    accessKeyId: env.S3_ACCESS_KEY_ID,
-    secretAccessKey: env.S3_SECRET_ACCESS_KEY,
-  },
-  endpoint: env.S3_ENDPOINT,
-  region: 'auto',
-});
+const MAX_ORIGINAL_FILE_SIZE = 32 * 1024 * 1024;
+const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'image/tiff'];
 
 upload.post(
   '/',
@@ -44,23 +32,20 @@ upload.post(
 
     const { file } = c.req.valid('form');
     const fileId = createDbId(TableCode.Files);
-    const key = `${now.year}/${now.month}/${fileId}`;
 
-    const fileByteArray = await file.bytes();
+    const formData = new FormData();
+    formData.append('file', file);
 
-    const imgMetadata = await sharp(fileByteArray).metadata();
-
-    const upload = new Upload({
-      client: s3Client,
-      params: {
-        Bucket: 'kosmo-media',
-        Key: key,
-        Body: fileByteArray,
-        ContentType: file.type,
-      },
+    const response = await fetch(`${env.MEDIA_API_URL}/files`, {
+      method: 'POST',
+      body: formData,
     });
 
-    await upload.done();
+    if (!response.ok) {
+      return c.json({ code: 'error.upload.failed' }, 500);
+    }
+
+    const result = await response.json() as { key: string; url: string; placeholder: string; size: number };
 
     await db.insert(Files).values({
       id: fileId,
@@ -68,13 +53,10 @@ upload.post(
       profileId: c.var.context.session.profileId,
       ownership: FileOwnership.LOCAL,
       state: FileState.EPHEMERAL,
-      path: key,
-      size: file.size,
+      path: result.url,
+      placeholder: result.placeholder,
+      size: result.size,
       expiresAt: now.toInstant().add({ hours: 24 }),
-      metadata: {
-        width: imgMetadata.width,
-        height: imgMetadata.height,
-      },
     });
 
     return c.json({
