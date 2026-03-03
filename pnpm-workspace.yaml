@@ -2,6 +2,8 @@ packages:
   - apps/*
   - packages/*
 
+nodeLinker: hoisted
+
 onlyBuiltDependencies:
   - '@mongodb-js/zstd'
   - '@parcel/watcher'

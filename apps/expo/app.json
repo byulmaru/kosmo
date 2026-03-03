@@ -1,0 +1,34 @@
+{
+  "name": "kosmo",
+  "slug": "kosmo",
+  "version": "1.0.0",
+  "orientation": "portrait",
+  "icon": "./assets/icon.png",
+  "userInterfaceStyle": "light",
+  "splash": {
+    "image": "./assets/splash-icon.png",
+    "resizeMode": "contain",
+    "backgroundColor": "#ffffff"
+  },
+  "ios": {
+    "supportsTablet": true,
+    "bundleIdentifier": "moe.kos"
+  },
+  "android": {
+    "adaptiveIcon": {
+      "foregroundImage": "./assets/adaptive-icon.png",
+      "backgroundColor": "#ffffff"
+    },
+    "predictiveBackGestureEnabled": false,
+    "package": "moe.kos"
+  },
+  "web": {
+    "bundler": "metro",
+    "favicon": "./assets/favicon.png"
+  },
+  "plugins": ["expo-router"],
+  "scheme": "kosmo",
+  "experiments": {
+    "typedRoutes": true
+  }
+}
