@@ -1,0 +1,40 @@
+{
+  "name": "@kosmo/expo",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "@mearie/react": "^0.4.1",
+    "@react-navigation/drawer": "^7.0.0",
+    "expo": "~55.0.4",
+    "expo-constants": "~55.0.7",
+    "expo-dev-client": "~55.0.10",
+    "expo-linking": "~55.0.7",
+    "expo-router": "~55.0.3",
+    "expo-status-bar": "~55.0.4",
+    "nativewind": "5.0.0-preview.2",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-native": "0.83.2",
+    "react-native-css": "^3.0.4",
+    "react-native-gesture-handler": "~2.30.0",
+    "react-native-reanimated": "^4.2.1",
+    "react-native-safe-area-context": "~5.6.2",
+    "react-native-screens": "~4.23.0",
+    "react-native-web": "^0.21.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.1",
+    "@types/react": "~19.2.14",
+    "mearie": "^0.1.6",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^4.2.1",
+    "typescript": "~5.9.2"
+  },
+  "private": true
+}
