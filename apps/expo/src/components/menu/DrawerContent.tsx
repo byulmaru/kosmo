@@ -1,9 +1,11 @@
+import { DrawerContentComponentProps } from '@react-navigation/drawer';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navigationItems } from '@/components/navigation/navigationItems';
 import MenuButton from './MenuButton';
 
-export default function DrawerContent() {
+export default function DrawerContent(props: DrawerContentComponentProps) {
+  void props;
   const insets = useSafeAreaInsets();
 
   return (
