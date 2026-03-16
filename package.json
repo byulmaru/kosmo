@@ -15,8 +15,16 @@
     "check-types": "turbo run check-types"
   },
   "devDependencies": {
-    "@kosmo/eslint-config": "workspace:*",
+    "@eslint/eslintrc": "^3.3.1",
+    "@eslint/js": "^9.35.0",
     "eslint": "^9.35.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-config-turbo": "^2.5.6",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-simple-import-sort": "^12.1.1",
+    "eslint-plugin-svelte": "^3.12.2",
+    "eslint-plugin-unicorn": "^61.0.2",
+    "globals": "^16.3.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.1.6",
     "prettier": "^3.6.2",
@@ -26,7 +34,8 @@
     "syncpack": "^13.0.4",
     "tsx": "^4.20.5",
     "turbo": "^2.5.6",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.43.0"
   },
   "packageManager": "pnpm@10.28.0+sha512.05df71d1421f21399e053fde567cea34d446fa02c76571441bfc1c7956e98e363088982d940465fd34480d4d90a0668bc12362f8aa88000a64e83d0b0e47be48"
 }
