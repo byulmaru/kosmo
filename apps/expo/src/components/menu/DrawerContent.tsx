@@ -1,9 +1,9 @@
-import { DrawerContentComponentProps } from '@react-navigation/drawer';
-import { View, StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { navigationItems } from '@/components/navigation/navigationItems';
 import MenuButton from './MenuButton';
 
-export default function DrawerContent(_props: DrawerContentComponentProps) {
+export default function DrawerContent() {
   const insets = useSafeAreaInsets();
 
   return (
@@ -17,12 +17,11 @@ export default function DrawerContent(_props: DrawerContentComponentProps) {
         },
       ]}
     >
-      <MenuButton href="/" icon="home-outline">
-        홈
-      </MenuButton>
-      <MenuButton href="/menu" icon="menu-outline">
-        메뉴
-      </MenuButton>
+      {navigationItems.map((item) => (
+        <MenuButton key={item.href} href={item.href} icon={item.icon}>
+          {item.label}
+        </MenuButton>
+      ))}
     </View>
   );
 }
