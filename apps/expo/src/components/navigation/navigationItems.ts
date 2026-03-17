@@ -40,9 +40,9 @@ export const navigationItems: NavigationItem[] = [
   },
   {
     href: '/profile',
-    label: '프로필',
-    title: 'Profile',
-    icon: 'person-outline',
-    activeIcon: 'person',
+    label: '메뉴',
+    title: 'Menu',
+    icon: 'grid-outline',
+    activeIcon: 'grid',
   },
 ];
