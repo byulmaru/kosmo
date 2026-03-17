@@ -1,9 +1,11 @@
+import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navigationItems } from '@/components/navigation/navigationItems';
 import MenuButton from './MenuButton';
 
 export default function DrawerContent() {
+  const { t } = useTranslation('expo');
   const insets = useSafeAreaInsets();
 
   return (
@@ -19,7 +21,7 @@ export default function DrawerContent() {
     >
       {navigationItems.map((item) => (
         <MenuButton key={item.href} href={item.href} icon={item.icon}>
-          {item.label}
+          {t(`navigation.${item.translationKey}.label`)}
         </MenuButton>
       ))}
     </View>

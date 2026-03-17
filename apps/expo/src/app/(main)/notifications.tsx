@@ -1,11 +1,14 @@
+import { useTranslation } from 'react-i18next';
 import TimelineScreen from '@/components/feed/TimelineScreen';
 
 export default function NotificationsPage() {
+  const { t } = useTranslation('expo');
+
   return (
     <TimelineScreen
-      eyebrow="Activity"
-      title="Notifications"
-      description="멘션, 좋아요, 리포스트, 팔로우 이벤트를 모아보는 알림 피드 자리입니다."
+      eyebrow={t('timeline.notifications.eyebrow')}
+      title={t('timeline.notifications.title')}
+      description={t('timeline.notifications.description')}
     />
   );
 }

@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { Drawer } from 'expo-router/drawer';
+import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DrawerContent from '@/components/menu/DrawerContent';
@@ -9,6 +10,7 @@ import { navigationItems } from '@/components/navigation/navigationItems';
 const SM_BREAKPOINT = 640;
 
 export default function MainLayout() {
+  const { t } = useTranslation('expo');
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const isLargeScreen = width >= SM_BREAKPOINT;
@@ -39,8 +41,8 @@ export default function MainLayout() {
               key={item.href}
               name={routeName}
               options={{
-                title: item.title,
-                tabBarAccessibilityLabel: item.label,
+                title: t(`navigation.${item.translationKey}.title`),
+                tabBarAccessibilityLabel: t(`navigation.${item.translationKey}.label`),
                 tabBarButton: (props) => {
                   const { style, ...pressableProps } = props;
 
