@@ -65,41 +65,5 @@
       "placeholder": "What's happening?",
       "submit": "Post"
     }
-  },
-  "expo": {
-    "navigation": {
-      "home": { "label": "Home", "title": "Home" },
-      "search": { "label": "Search", "title": "Search" },
-      "compose": { "label": "Compose", "title": "Compose" },
-      "notifications": { "label": "Notifications", "title": "Notifications" },
-      "profile": { "label": "Profile", "title": "Profile" }
-    },
-    "timeline": {
-      "home": {
-        "eyebrow": "For you",
-        "title": "Home timeline",
-        "description": "This is the default feed where followed accounts and recommended posts can be browsed together."
-      },
-      "search": {
-        "eyebrow": "Discover",
-        "title": "Search",
-        "description": "This is the discovery screen for trends, keywords, and people. It is a good place to add search input and recommended topics."
-      },
-      "compose": {
-        "eyebrow": "Create",
-        "title": "Compose",
-        "description": "This entry screen can connect the writing flow for new posts, media attachments, and reply target selection."
-      },
-      "notifications": {
-        "eyebrow": "Activity",
-        "title": "Notifications",
-        "description": "This is where mentions, likes, reposts, and follow events can be collected into a notification feed."
-      },
-      "profile": {
-        "eyebrow": "Identity",
-        "title": "Profile",
-        "description": "This user page is ready for a profile header, post list, likes, and media tabs."
-      }
-    }
   }
 }

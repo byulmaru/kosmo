@@ -63,42 +63,6 @@
       "submit": "게시"
     }
   },
-  "expo": {
-    "navigation": {
-      "home": { "label": "홈", "title": "홈" },
-      "search": { "label": "탐색", "title": "탐색" },
-      "compose": { "label": "작성", "title": "작성" },
-      "notifications": { "label": "알림", "title": "알림" },
-      "profile": { "label": "프로필", "title": "프로필" }
-    },
-    "timeline": {
-      "home": {
-        "eyebrow": "추천",
-        "title": "홈 타임라인",
-        "description": "팔로우한 계정과 추천 포스트를 한 화면에서 훑어볼 수 있는 기본 피드입니다."
-      },
-      "search": {
-        "eyebrow": "탐색",
-        "title": "검색",
-        "description": "트렌드, 키워드, 사람을 찾는 탐색 화면입니다. 검색 입력과 추천 토픽을 얹기 좋은 자리입니다."
-      },
-      "compose": {
-        "eyebrow": "작성",
-        "title": "새 글",
-        "description": "새 포스트 작성, 미디어 첨부, 답글 대상 선택 같은 작성 플로우를 연결할 수 있는 엔트리 화면입니다."
-      },
-      "notifications": {
-        "eyebrow": "활동",
-        "title": "알림",
-        "description": "멘션, 좋아요, 리포스트, 팔로우 이벤트를 모아보는 알림 피드 자리입니다."
-      },
-      "profile": {
-        "eyebrow": "프로필",
-        "title": "프로필",
-        "description": "프로필 헤더, 포스트 목록, 좋아요, 미디어 탭을 붙이기 위한 사용자 페이지입니다."
-      }
-    }
-  },
   "menu": {
     "content": {
       "home": "홈",

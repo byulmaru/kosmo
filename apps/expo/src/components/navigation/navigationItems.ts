@@ -3,7 +3,8 @@ import type { ComponentProps } from 'react';
 
 export type NavigationItem = {
   href: `/${string}` | '/';
-  translationKey: 'home' | 'search' | 'compose' | 'notifications' | 'profile';
+  label: string;
+  title: string;
   icon: ComponentProps<typeof Ionicons>['name'];
   activeIcon: ComponentProps<typeof Ionicons>['name'];
 };
@@ -11,31 +12,36 @@ export type NavigationItem = {
 export const navigationItems: NavigationItem[] = [
   {
     href: '/',
-    translationKey: 'home',
+    label: '홈',
+    title: 'Home',
     icon: 'home-outline',
     activeIcon: 'home',
   },
   {
     href: '/search',
-    translationKey: 'search',
+    label: '탐색',
+    title: 'Search',
     icon: 'search-outline',
     activeIcon: 'search',
   },
   {
     href: '/compose',
-    translationKey: 'compose',
+    label: '작성',
+    title: 'Compose',
     icon: 'add-circle-outline',
     activeIcon: 'add-circle',
   },
   {
     href: '/notifications',
-    translationKey: 'notifications',
+    label: '알림',
+    title: 'Notifications',
     icon: 'notifications-outline',
     activeIcon: 'notifications',
   },
   {
     href: '/profile',
-    translationKey: 'profile',
+    label: '프로필',
+    title: 'Profile',
     icon: 'person-outline',
     activeIcon: 'person',
   },
