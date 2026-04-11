@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "kosmo",
+    "slug": "kosmo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "kosmo",
+    "userInterfaceStyle": "automatic",
+    "web": {
+      "output": "server"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "unstable_useServerRendering": true
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
