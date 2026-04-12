@@ -38,8 +38,8 @@ expo:
     secretNames: []
   infisical:
     enabled: false
-    identityId: ""
-    projectId: ""
+    identityId: ''
+    projectId: ''
     envSlug: prod
     secretName: env
   podAnnotations: {}
@@ -53,10 +53,10 @@ expo:
     readOnlyRootFileSystem: false
   nodeSelector: {}
   tolerations:
-    - key: "oci.oraclecloud.com/oke-is-preemptible"
-      operator: "Equal"
-      value: "present"
-      effect: "NoSchedule"
+    - key: 'oci.oraclecloud.com/oke-is-preemptible'
+      operator: 'Equal'
+      value: 'present'
+      effect: 'NoSchedule'
   affinity:
     nodeAffinity:
       preferredDuringSchedulingIgnoredDuringExecution:
