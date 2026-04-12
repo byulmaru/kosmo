@@ -1,0 +1,68 @@
+expo:
+  replicaCount: 1
+  rollout:
+    strategy:
+      blueGreen:
+        autoPromotionEnabled: true
+  image:
+    repository: ghcr.io/byulmaru/kosmo-web
+    tag: latest
+    pullPolicy: Always
+  imagePullSecrets: []
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8080
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+  probes:
+    liveness:
+      path: /health
+      initialDelaySeconds: 5
+      periodSeconds: 10
+    readiness:
+      path: /health
+      initialDelaySeconds: 3
+      periodSeconds: 5
+  env:
+    secretNames: []
+  infisical:
+    enabled: false
+    identityId: ""
+    projectId: ""
+    envSlug: prod
+    secretName: env
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext: {}
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFileSystem: false
+  nodeSelector: {}
+  tolerations:
+    - key: "oci.oraclecloud.com/oke-is-preemptible"
+      operator: "Equal"
+      value: "present"
+      effect: "NoSchedule"
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 1
+          preference:
+            matchExpressions:
+              - key: oci.oraclecloud.com/oke-is-preemptible
+                operator: Exists
+                values: []
