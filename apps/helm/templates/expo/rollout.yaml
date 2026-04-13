@@ -1,6 +1,10 @@
 {{- $app := .Values.expo -}}
 {{- if ne (default true $app.enabled) false }}
 {{- $versionLabel := regexReplaceAll "[^A-Za-z0-9_.-]" $app.image.tag "-" | trunc 63 | trimAll "-" -}}
+{{- $imageRef := printf "%s:%s" $app.image.repository $app.image.tag -}}
+{{- if contains "sha256:" $app.image.tag -}}
+{{- $imageRef = printf "%s@%s" $app.image.repository $app.image.tag -}}
+{{- end -}}
 apiVersion: argoproj.io/v1alpha1
 kind: Rollout
 metadata:
@@ -49,7 +53,7 @@ spec:
       {{- end }}
       containers:
         - name: expo
-          image: "{{ required "expo.image.repository is required" $app.image.repository }}:{{ $app.image.tag }}"
+          image: {{ $imageRef | quote }}
           imagePullPolicy: {{ $app.image.pullPolicy }}
           securityContext:
             {{- toYaml $app.containerSecurityContext | nindent 12 }}
