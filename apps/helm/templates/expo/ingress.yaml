@@ -1,6 +1,7 @@
 {{- $app := .Values.expo -}}
 {{- if and (ne (default true $app.enabled) false) $app.ingress.enabled }}
 {{- $versionLabel := regexReplaceAll "[^A-Za-z0-9_.-]" $app.image.tag "-" | trunc 63 | trimAll "-" -}}
+{{- $defaultTlsSecretName := printf "%s-expo-tls" .Release.Name | trunc 63 | trimSuffix "-" -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -21,7 +22,11 @@ spec:
   {{- end }}
   {{- with $app.ingress.tls }}
   tls:
-    {{- toYaml . | nindent 4 }}
+    {{- range $tls := . }}
+    - hosts:
+        {{- toYaml $tls.hosts | nindent 8 }}
+      secretName: {{ default $defaultTlsSecretName $tls.secretName }}
+    {{- end }}
   {{- end }}
   rules:
     {{- range $host := $app.ingress.hosts }}

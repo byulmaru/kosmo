@@ -23,10 +23,7 @@ expo:
         paths:
           - path: /
             pathType: Prefix
-    tls:
-      - hosts:
-          - kos.moe
-        secretName: certificate
+    tls: []
   resources:
     requests:
       cpu: 100m
@@ -82,7 +79,7 @@ expo:
 
 certificate:
   enabled: false
-  secretName: certificate
+  secretName: ''
   issuerRef:
     name: cert-issuer
     kind: ClusterIssuer
