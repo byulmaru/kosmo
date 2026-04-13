@@ -2,7 +2,7 @@
 {{- if and (ne (default true $app.enabled) false) $app.ingress.enabled }}
 {{- $certificate := .Values.certificate -}}
 {{- $versionLabel := regexReplaceAll "[^A-Za-z0-9_.-]" $app.image.tag "-" | trunc 63 | trimAll "-" -}}
-{{- $defaultTlsSecretName := printf "%s-expo-tls" .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- $defaultTlsSecretName := printf "%s-tls" .Release.Name | trunc 63 | trimSuffix "-" -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

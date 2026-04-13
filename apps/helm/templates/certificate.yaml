@@ -1,6 +1,6 @@
 {{- $certificate := .Values.certificate -}}
 {{- if $certificate.enabled }}
-{{- $defaultSecretName := printf "%s-expo-tls" .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- $defaultSecretName := printf "%s-tls" .Release.Name | trunc 63 | trimSuffix "-" -}}
 {{- $secretName := default $defaultSecretName $certificate.secretName -}}
 apiVersion: cert-manager.io/v1
 kind: Certificate
