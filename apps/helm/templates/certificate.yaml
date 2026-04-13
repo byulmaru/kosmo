@@ -1,0 +1,14 @@
+{{- $certificate := .Values.certificate -}}
+{{- if $certificate.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $certificate.secretName }}
+spec:
+  secretName: {{ $certificate.secretName }}
+  issuerRef:
+    name: {{ $certificate.issuerRef.name }}
+    kind: {{ $certificate.issuerRef.kind }}
+  dnsNames:
+    {{- toYaml $certificate.dnsNames | nindent 4 }}
+{{- end }}

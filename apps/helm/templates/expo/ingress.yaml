@@ -1,0 +1,41 @@
+{{- $app := .Values.expo -}}
+{{- if and (ne (default true $app.enabled) false) $app.ingress.enabled }}
+{{- $versionLabel := regexReplaceAll "[^A-Za-z0-9_.-]" $app.image.tag "-" | trunc 63 | trimAll "-" -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ printf "%s-expo" .Release.Name | trunc 63 | trimSuffix "-" }}
+  labels:
+    helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
+    app.kubernetes.io/name: expo
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ $versionLabel | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  {{- with $app.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with $app.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with $app.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range $host := $app.ingress.hosts }}
+    - host: {{ $host.host | quote }}
+      http:
+        paths:
+          {{- range $path := $host.paths }}
+          - path: {{ $path.path }}
+            pathType: {{ $path.pathType }}
+            backend:
+              service:
+                name: {{ printf "%s-expo" $.Release.Name | trunc 63 | trimSuffix "-" }}
+                port:
+                  number: {{ $app.service.port }}
+          {{- end }}
+    {{- end }}
+{{- end }}
