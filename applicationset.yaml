@@ -1,0 +1,31 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: kosmo
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - env: dev
+            namespace: kosmo-dev
+  template:
+    metadata:
+      name: 'kosmo-{{env}}'
+    spec:
+      project: byulmaru
+      source:
+        repoURL: https://github.com/byulmaru/kosmo.git
+        targetRevision: main
+        path: apps/helm
+        helm:
+          releaseName: kosmo
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
