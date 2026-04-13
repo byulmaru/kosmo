@@ -32,7 +32,7 @@ expo:
       initialDelaySeconds: 5
       periodSeconds: 10
     readiness:
-      path: /health
+      path: /
       initialDelaySeconds: 3
       periodSeconds: 5
   env:
