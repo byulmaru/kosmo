@@ -4,6 +4,7 @@ expo:
     strategy:
       blueGreen:
         autoPromotionEnabled: true
+        previewReplicaCount: 1
   image:
     repository: ghcr.io/byulmaru/kosmo-web
     tag: latest
