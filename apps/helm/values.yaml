@@ -15,7 +15,7 @@ expo:
     port: 80
     targetPort: 8080
   ingress:
-    enabled: false
+    enabled: true
     className: nginx
     annotations: {}
     hosts:
@@ -78,7 +78,7 @@ expo:
                 values: []
 
 certificate:
-  enabled: false
+  enabled: true
   secretName: ''
   issuerRef:
     name: cert-issuer
