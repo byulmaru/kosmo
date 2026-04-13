@@ -51,7 +51,6 @@ expo:
     capabilities:
       drop:
         - ALL
-    readOnlyRootFileSystem: false
   nodeSelector: {}
   tolerations:
     - key: 'oci.oraclecloud.com/oke-is-preemptible'
