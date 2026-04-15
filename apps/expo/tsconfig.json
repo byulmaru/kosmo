@@ -1,12 +1,9 @@
 {
   "extends": ["expo/tsconfig.base", "../../tsconfig.json"],
   "compilerOptions": {
-    "target": "ESNext",
     "module": "Preserve",
-    "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
-    "types": ["bun"],
     "paths": {
       "@/*": ["./src/*"]
     }
