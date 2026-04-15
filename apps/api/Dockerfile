@@ -7,19 +7,13 @@ ENV HOST=0.0.0.0
 ENV PORT=8080
 
 COPY package.json bun.lock tsconfig.json ./
-COPY apps/api/package.json ./apps/api/package.json
-COPY apps/api/tsconfig.json ./apps/api/tsconfig.json
-COPY packages/env/package.json ./packages/env/package.json
+COPY apps/api ./apps/api
+COPY packages ./packages
 
-RUN bun install --frozen-lockfile --production
-
-COPY apps/api/schema.graphql ./apps/api/schema.graphql
-COPY apps/api/src ./apps/api/src
-COPY packages/env ./packages/env
-COPY schema.graphql ./schema.graphql
+RUN bun install --frozen-lockfile --production --filter '@kosmo/api'
 
 WORKDIR /app/apps/api
 
 EXPOSE 8080
 
-CMD ["bun", "run", "src/index.ts"]
+CMD ["bun", "run", "start"]
