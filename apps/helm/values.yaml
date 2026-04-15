@@ -77,6 +77,85 @@ expo:
                 operator: Exists
                 values: []
 
+api:
+  replicaCount: 1
+  rollout:
+    strategy:
+      blueGreen:
+        autoPromotionEnabled: true
+        previewReplicaCount: 1
+  image:
+    repository: ghcr.io/byulmaru/kosmo-api
+    tag: latest
+    pullPolicy: Always
+  imagePullSecrets: []
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8080
+  ingress:
+    enabled: true
+    className: nginx
+    annotations: {}
+    hosts:
+      - host: api.kos.moe
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+  probes:
+    liveness:
+      path: /graphql
+      initialDelaySeconds: 5
+      periodSeconds: 10
+    readiness:
+      path: /graphql
+      initialDelaySeconds: 3
+      periodSeconds: 5
+  env:
+    secretNames: []
+  infisical:
+    enabled: false
+    identityId: ''
+    projectId: ''
+    envSlug: prod
+    secretName: env
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext: {}
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+  nodeSelector: {}
+  tolerations:
+    - key: 'oci.oraclecloud.com/oke-is-preemptible'
+      operator: 'Equal'
+      value: 'present'
+      effect: 'NoSchedule'
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 1
+          preference:
+            matchExpressions:
+              - key: oci.oraclecloud.com/oke-is-preemptible
+                operator: Exists
+                values: []
+
 certificate:
   enabled: true
   secretName: ''
@@ -85,3 +164,4 @@ certificate:
     kind: ClusterIssuer
   dnsNames:
     - kos.moe
+    - api.kos.moe
