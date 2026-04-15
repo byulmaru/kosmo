@@ -7,10 +7,14 @@ ENV HOST=0.0.0.0
 ENV PORT=8080
 
 COPY package.json bun.lock tsconfig.json ./
-COPY apps/api ./apps/api
-COPY packages ./packages
+COPY apps/api/package.json ./apps/api/package.json
+COPY apps/expo/package.json ./apps/expo/package.json
+COPY packages/env/package.json ./packages/env/package.json
 
 RUN bun install --frozen-lockfile --production --filter '@kosmo/api'
+
+COPY apps/api ./apps/api
+COPY packages ./packages
 
 WORKDIR /app/apps/api
 
