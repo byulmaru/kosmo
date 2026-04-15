@@ -7,7 +7,7 @@
 
 ## Skills
 
-- When preparing commits, branches, or pull requests, use the `commit-pr-policy` skill.
+- When preparing commits, branches, or pull requests, use the `commit-pr` skill.
 - The canonical project skill directory is `.skills`. Agent-specific directories should reference it rather than keeping separate copies.
 - Make speculative commits frequently so intermediate hypotheses, pivots, and recovery points are preserved.
 
