@@ -25,7 +25,7 @@
     "expo-status-bar": "~55.0.5",
     "expo-system-ui": "~55.0.14",
     "expo-web-browser": "~55.0.13",
-    "hono": "^4.12.12",
+    "hono": "^4.12.14",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-native": "0.83.4",

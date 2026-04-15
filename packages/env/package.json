@@ -1,0 +1,6 @@
+{
+  "name": "@kosmo/env",
+  "dependencies": {
+    "zod": "^4.3.6"
+  }
+}
