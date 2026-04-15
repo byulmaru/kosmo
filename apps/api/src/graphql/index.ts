@@ -1,6 +1,6 @@
+import { dev } from '@kosmo/env';
 import { createYoga, useExecutionCancellation } from 'graphql-yoga';
 import { Hono } from 'hono';
-import { dev } from '@kosmo/env';
 import { schema } from './schema';
 import type { Env, ServerContext, UserContext } from '../context';
 
