@@ -1,6 +1,0 @@
-.git
-.github
-node_modules
-apps/expo/.expo
-apps/expo/dist
-apps/expo/.git
