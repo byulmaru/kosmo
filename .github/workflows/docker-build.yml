@@ -20,6 +20,9 @@ jobs:
           - app: expo
             dockerfile: ./apps/expo/Dockerfile
             image_suffix: web
+          - app: api
+            dockerfile: ./apps/api/Dockerfile
+            image_suffix: api
 
     steps:
       - name: Checkout
