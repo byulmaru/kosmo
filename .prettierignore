@@ -1,1 +1,4 @@
 apps/helm/templates/**/*.yaml
+apps/expo/.expo
+apps/expo/ios
+apps/expo/android
