@@ -1,0 +1,12 @@
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/preflight.css' layer(base);
+@import 'tailwindcss/utilities.css';
+@import 'nativewind/theme';
+
+@theme {
+  --color-primary: oklch(60.6% 0.25 292.717);
+}
+
+:root {
+  --color-primary: oklch(60.6% 0.25 292.717);
+}

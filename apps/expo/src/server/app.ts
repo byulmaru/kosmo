@@ -1,10 +1,10 @@
 import { resolve } from 'node:path';
 import { createRequestHandler } from 'expo-server/adapter/bun';
 import { Hono } from 'hono';
+import { serveStatic } from 'hono/bun';
 
-const buildDirectory = resolve(process.cwd(), 'dist/server');
 const expoHandler = createRequestHandler({
-  build: buildDirectory,
+  build: resolve(process.cwd(), 'dist/server'),
   environment: process.env.NODE_ENV,
 });
 
@@ -14,7 +14,9 @@ app.get('/health', (c) => {
   return c.json({ status: 'ok' });
 });
 
-app.all('*', async (c) => {
+app.use('*', serveStatic({ root: resolve(process.cwd(), 'dist/client') }));
+
+app.all('*', (c) => {
   return expoHandler(c.req.raw);
 });
 

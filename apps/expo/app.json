@@ -6,6 +6,9 @@
     "orientation": "portrait",
     "scheme": "kosmo",
     "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "moe.kos"
+    },
     "web": {
       "output": "server"
     },
