@@ -11,6 +11,10 @@
 - The canonical project skill directory is `.skills`. Agent-specific directories should reference it rather than keeping separate copies.
 - Make speculative commits frequently so intermediate hypotheses, pivots, and recovery points are preserved.
 
+## Review Guidelines
+
+- Write review comments and review summaries in Korean.
+
 ## `package.json` Changes
 
 - Use `bun add`, `bun remove`, `bun add --dev`, or other `bun`-based CLI commands for manifest updates.

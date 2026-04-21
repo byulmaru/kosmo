@@ -117,11 +117,11 @@ api:
     targetCPUUtilizationPercentage: 80
   probes:
     liveness:
-      path: /graphql
+      path: /health
       initialDelaySeconds: 5
       periodSeconds: 10
     readiness:
-      path: /graphql
+      path: /health
       initialDelaySeconds: 3
       periodSeconds: 5
   env:
