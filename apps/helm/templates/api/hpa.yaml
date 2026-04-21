@@ -1,0 +1,30 @@
+{{- $app := .Values.api -}}
+{{- if ne (default true $app.enabled) false }}
+{{- if $app.autoscaling.enabled }}
+{{- $versionLabel := regexReplaceAll "[^A-Za-z0-9_.-]" $app.image.tag "-" | trunc 63 | trimAll "-" -}}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ printf "%s-api" .Release.Name | trunc 63 | trimSuffix "-" }}
+  labels:
+    helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
+    app.kubernetes.io/name: api
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ $versionLabel | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  scaleTargetRef:
+    apiVersion: argoproj.io/v1alpha1
+    kind: Rollout
+    name: {{ printf "%s-api" .Release.Name | trunc 63 | trimSuffix "-" }}
+  minReplicas: {{ $app.autoscaling.minReplicas }}
+  maxReplicas: {{ $app.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $app.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
+{{- end }}
