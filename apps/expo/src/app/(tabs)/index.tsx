@@ -1,5 +1,16 @@
-import { TabScreen } from '@/components/navigation/tab-screen';
+import { Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function HomeScreen() {
-  return <TabScreen title="홈" description="피드를 확인하고 새로운 소식을 탐색합니다." />;
+  return (
+    <View className="bg-background flex-1">
+      <SafeAreaView className="flex-1 justify-center gap-3 px-6" edges={['top']}>
+        <Text className="text-primary text-xs font-semibold tracking-[1.6px] uppercase">KOSMO</Text>
+        <Text className="text-foreground text-5xl leading-[44px] font-bold">홈</Text>
+        <Text className="text-secondary-foreground max-w-90 text-base leading-6">
+          피드를 확인하고 새로운 소식을 탐색합니다.
+        </Text>
+      </SafeAreaView>
+    </View>
+  );
 }

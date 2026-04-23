@@ -1,15 +1,89 @@
-import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Link } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BellIcon, HouseIcon, MenuIcon, SearchIcon, SquarePenIcon } from 'lucide-react-native';
+import { Pressable, Text, View } from 'react-native';
+import { tv } from 'tailwind-variants';
+import type { Href } from 'expo-router';
+import type { LucideIcon } from 'lucide-react-native';
 
-import { BOTTOM_TAB_ITEMS } from '@/features/navigation/bottom-tabs';
+type Props = {
+  state: {
+    index: number;
+    routes: {
+      name: string;
+    }[];
+  };
+};
 
-export function BottomTabBar({ state }: BottomTabBarProps) {
-  const insets = useSafeAreaInsets();
+type BottomTabItem = {
+  key: string;
+  routeName: string;
+  title: string;
+  icon: LucideIcon;
+  href: Href;
+};
 
+const BOTTOM_TAB_ITEMS: BottomTabItem[] = [
+  {
+    key: 'home',
+    routeName: 'index',
+    title: '홈',
+    icon: HouseIcon,
+    href: '/(tabs)',
+  },
+  { key: 'search', routeName: 'search', title: '검색', icon: SearchIcon, href: '/(tabs)/search' },
+  {
+    key: 'compose',
+    routeName: 'compose',
+    title: '글쓰기',
+    icon: SquarePenIcon,
+    href: '/(tabs)/compose',
+  },
+  {
+    key: 'notifications',
+    routeName: 'notifications',
+    title: '알림',
+    icon: BellIcon,
+    href: '/(tabs)/notifications',
+  },
+  { key: 'menu', routeName: 'menu', title: '메뉴', icon: MenuIcon, href: '/(tabs)/menu' },
+] as const;
+
+const tabButtonVariants = tv({
+  base: 'flex-1 items-center justify-center pb-safe',
+  variants: {
+    isFocused: {
+      true: 'bg-primary',
+      false: 'bg-transparent',
+    },
+  },
+});
+
+const tabIconVariants = tv({
+  variants: {
+    isFocused: {
+      true: 'text-primary-foreground',
+      false: 'text-muted-foreground',
+    },
+  },
+});
+
+const tabTextVariants = tv({
+  base: 'font-semibold',
+  variants: {
+    intent: {
+      icon: 'text-base',
+      label: 'text-sm',
+    },
+    isFocused: {
+      true: 'text-primary-foreground',
+      false: 'text-muted-foreground',
+    },
+  },
+});
+
+export function BottomTabBar({ state }: Props) {
   return (
-    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+    <View className="bg-card border-border flex-row border-t">
       {BOTTOM_TAB_ITEMS.map((item) => {
         const routeIndex = state.routes.findIndex((route) => route.name === item.routeName);
         const isFocused = routeIndex >= 0 && state.index === routeIndex;
@@ -19,10 +93,14 @@ export function BottomTabBar({ state }: BottomTabBarProps) {
             <Pressable
               accessibilityRole="tab"
               accessibilityState={{ selected: isFocused }}
-              style={[styles.tabButton, isFocused && styles.tabButtonActive]}
+              className={tabButtonVariants({ isFocused })}
             >
-              <Text style={[styles.icon, isFocused && styles.activeText]}>{item.icon}</Text>
-              <Text style={[styles.label, isFocused && styles.activeText]}>{item.title}</Text>
+              <View className="items-center justify-center py-2">
+                <item.icon size={24} strokeWidth={2} className={tabIconVariants({ isFocused })} />
+                <Text className={tabTextVariants({ intent: 'label', isFocused })}>
+                  {item.title}
+                </Text>
+              </View>
             </Pressable>
           </Link>
         );
@@ -30,38 +108,3 @@ export function BottomTabBar({ state }: BottomTabBarProps) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#d1d5db',
-    backgroundColor: '#fff',
-    paddingTop: 10,
-    paddingHorizontal: 12,
-  },
-  tabButton: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    borderRadius: 10,
-    paddingVertical: 8,
-  },
-  tabButtonActive: {
-    backgroundColor: '#eef2ff',
-  },
-  icon: {
-    fontSize: 16,
-    color: '#9ca3af',
-    fontWeight: '600',
-  },
-  label: {
-    fontSize: 12,
-    color: '#9ca3af',
-    fontWeight: '600',
-  },
-  activeText: {
-    color: '#3730a3',
-  },
-});
