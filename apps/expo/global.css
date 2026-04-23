@@ -4,9 +4,47 @@
 @import 'nativewind/theme';
 
 @theme {
-  --color-primary: oklch(60.6% 0.25 292.717);
+  --color-background: oklch(100% 0 0);
+  --color-foreground: oklch(21% 0.034 264.665);
+
+  --color-card: oklch(100% 0 0);
+  --color-card-foreground: oklch(21% 0.034 264.665);
+  --color-popover: oklch(100% 0 0);
+  --color-popover-foreground: oklch(21% 0.034 264.665);
+
+  --color-primary: oklch(96.2% 0.018 292.717);
+  --color-primary-foreground: oklch(44.7% 0.187 292.717);
+
+  --color-secondary: oklch(92% 0.006 264.665);
+  --color-secondary-foreground: oklch(37.3% 0.034 264.665);
+
+  --color-muted: oklch(92% 0.006 264.665);
+  --color-muted-foreground: oklch(55.1% 0.027 264.665);
+
+  --color-border: oklch(87.2% 0.01 264.665);
+  --color-input: oklch(87.2% 0.01 264.665);
+  --color-ring: oklch(60.6% 0.25 292.717);
 }
 
 :root {
-  --color-primary: oklch(60.6% 0.25 292.717);
+  --color-background: oklch(100% 0 0);
+  --color-foreground: oklch(21% 0.034 264.665);
+
+  --color-card: oklch(100% 0 0);
+  --color-card-foreground: oklch(21% 0.034 264.665);
+  --color-popover: oklch(100% 0 0);
+  --color-popover-foreground: oklch(21% 0.034 264.665);
+
+  --color-primary: oklch(96.2% 0.018 292.717);
+  --color-primary-foreground: oklch(44.7% 0.187 292.717);
+
+  --color-secondary: oklch(92% 0.006 264.665);
+  --color-secondary-foreground: oklch(37.3% 0.034 264.665);
+
+  --color-muted: oklch(92% 0.006 264.665);
+  --color-muted-foreground: oklch(55.1% 0.027 264.665);
+
+  --color-border: oklch(87.2% 0.01 264.665);
+  --color-input: oklch(87.2% 0.01 264.665);
+  --color-ring: oklch(60.6% 0.25 292.717);
 }
