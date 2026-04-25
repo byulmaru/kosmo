@@ -6,7 +6,8 @@
   "scripts": {
     "lint:eslint": "eslint --max-warnings 0 .",
     "lint:prettier": "prettier --check --ignore-unknown '**/*'",
-    "lint:syncpack": "syncpack lint --dependency-types prod,dev,peer"
+    "lint:syncpack": "syncpack lint --dependency-types prod,dev,peer",
+    "prepare": "husky || true"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -16,12 +17,17 @@
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-simple-import-sort": "^13.0.0",
     "globals": "^17.4.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "prettier": "^3.8.2",
     "prettier-plugin-brace-style": "^0.10.1",
     "prettier-plugin-tailwindcss": "^0.7.2",
     "syncpack": "^14.3.0",
-    "typescript": "~5.9.3",
-    "typescript-eslint": "^8.58.1"
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.0"
+  },
+  "overrides": {
+    "lightningcss": "1.30.1"
   },
   "workspaces": [
     "apps/*",
