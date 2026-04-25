@@ -13,16 +13,6 @@ jobs:
   docker_build:
     name: Docker Build
     runs-on: ubuntu-24.04-arm
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - app: expo
-            dockerfile: ./apps/expo/Dockerfile
-            image_suffix: web
-          - app: api
-            dockerfile: ./apps/api/Dockerfile
-            image_suffix: api
 
     steps:
       - name: Checkout
@@ -43,7 +33,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}-${{ matrix.image_suffix }}
+          images: ghcr.io/${{ github.repository }}
           tags: |
             type=sha
             type=ref,event=branch
@@ -53,7 +43,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ${{ matrix.dockerfile }}
+          file: ./Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
