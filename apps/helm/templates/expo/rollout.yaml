@@ -61,6 +61,8 @@ spec:
             - name: http
               containerPort: {{ $app.service.targetPort }}
               protocol: TCP
+          args:
+            - expo
           {{- if or $app.infisical.enabled $app.env.secretNames }}
           envFrom:
             {{- range $app.env.secretNames }}

@@ -6,7 +6,7 @@ expo:
         autoPromotionEnabled: true
         previewReplicaCount: 1
   image:
-    repository: ghcr.io/byulmaru/kosmo-web
+    repository: ghcr.io/byulmaru/kosmo
     tag: latest
     pullPolicy: Always
   imagePullSecrets: []
@@ -85,7 +85,7 @@ api:
         autoPromotionEnabled: true
         previewReplicaCount: 1
   image:
-    repository: ghcr.io/byulmaru/kosmo-api
+    repository: ghcr.io/byulmaru/kosmo
     tag: latest
     pullPolicy: Always
   imagePullSecrets: []

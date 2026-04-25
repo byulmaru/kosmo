@@ -3,7 +3,7 @@
   "main": "expo-router/entry",
   "type": "module",
   "scripts": {
-    "start": "expo start",
+    "start": "bun ./src/server/index.ts",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
@@ -11,7 +11,8 @@
     "lint:expo": "expo lint",
     "lint:tsc": "tsc --noEmit",
     "serve-web": "bun ./src/server/index.ts",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "dev": "expo start"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.14",
