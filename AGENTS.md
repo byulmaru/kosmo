@@ -7,8 +7,7 @@
 
 ## Skills
 
-- When preparing commits, branches, or pull requests, use the `commit-pr` skill.
-- The canonical project skill directory is `.skills`. Agent-specific directories should reference it rather than keeping separate copies.
+- When preparing commits, branches, or pull requests, use the `byulmaru:commit-pr` skill provided by the Codex plugin.
 - Make speculative commits frequently so intermediate hypotheses, pivots, and recovery points are preserved.
 
 ## Review Guidelines
