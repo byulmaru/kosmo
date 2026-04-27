@@ -1,6 +1,6 @@
 import './resolvers';
 
-import { dev } from '@kosmo/env';
+import { dev } from '@kosmo/core';
 import { builder } from './builder';
 
 export const schema = builder.toSchema();

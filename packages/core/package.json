@@ -1,0 +1,13 @@
+{
+  "name": "@kosmo/core",
+  "exports": {
+    ".": "./index.ts",
+    "./db": "./db/index.ts",
+    "./enums": "./enums.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.2",
+    "temporal-polyfill": "^0.3.2",
+    "ulidx": "^2.4.1"
+  }
+}
