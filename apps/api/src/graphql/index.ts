@@ -1,4 +1,4 @@
-import { dev } from '@kosmo/env';
+import { dev } from '@kosmo/core';
 import { createYoga, useExecutionCancellation } from 'graphql-yoga';
 import { Hono } from 'hono';
 import { schema } from './schema';

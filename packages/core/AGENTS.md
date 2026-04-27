@@ -1,0 +1,3 @@
+- `packages/core/enums.ts`, `packages/core/db/enums.ts`, `packages/core/db/id.ts`, `packages/core/db/tables.ts`의 schema export는 단수 엔티티명 기준으로 사전순 정렬한다.
+  - export 이름이 복수형이어도 정렬할 때는 복수형 suffix를 제외한다.
+  - 예: `Accounts`는 `Account`로 보므로 `AccountProfiles`보다 앞에 둔다.
