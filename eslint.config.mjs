@@ -61,7 +61,7 @@ const config = ts.config(
     },
   },
   {
-    ignores: ['**/node_modules/**', '**/dist/**'],
+    ignores: ['**/node_modules/**', '**/dist/**', '**/.mearie/**'],
   },
 );
 

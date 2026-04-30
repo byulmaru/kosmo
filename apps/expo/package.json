@@ -4,18 +4,21 @@
   "type": "module",
   "scripts": {
     "start": "bun ./src/server/index.ts",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
-    "web": "expo start --web",
-    "build:web": "expo export --platform web",
+    "android": "bun run codegen && expo run:android",
+    "ios": "bun run codegen && expo run:ios",
+    "web": "bun run codegen && expo start --web",
+    "build:web": "bun run codegen && expo export --platform web",
     "lint:expo": "expo lint",
-    "lint:tsc": "tsc --noEmit",
+    "lint:tsc": "bun run codegen && tsc --noEmit",
     "serve-web": "bun ./src/server/index.ts",
     "lint": "expo lint",
-    "dev": "expo start"
+    "dev": "bun run codegen && expo start",
+    "codegen": "mearie generate"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.14",
+    "@kosmo/core": "workspace:*",
+    "@mearie/react": "^0.4.7",
     "@react-navigation/native": "^7.1.33",
     "expo": "~55.0.12",
     "expo-constants": "~55.0.12",
@@ -49,6 +52,7 @@
     "@tailwindcss/postcss": "^4.2.2",
     "@types/react": "~19.2.2",
     "eslint-config-expo": "^55.0.0",
+    "mearie": "^0.1.7",
     "postcss": "^8.5.10",
     "tailwindcss": "^4.2.2"
   },

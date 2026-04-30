@@ -5,6 +5,7 @@ node_modules/
 
 # Expo
 .expo/
+.mearie/
 dist/
 web-build/
 expo-env.d.ts

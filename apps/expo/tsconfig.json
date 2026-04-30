@@ -6,6 +6,7 @@
     "module": "Preserve",
     "noEmit": true,
     "paths": {
+      "$mearie": ["./.mearie/graphql.js"],
       "@/*": ["./src/*"]
     },
     "verbatimModuleSyntax": true

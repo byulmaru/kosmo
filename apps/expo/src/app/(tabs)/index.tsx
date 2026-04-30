@@ -1,7 +1,18 @@
+import { useQuery } from '@mearie/react';
 import { Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { graphql } from '$mearie';
 
 export default function HomeScreen() {
+  const { data, loading } = useQuery(
+    graphql(`
+      query TestQuery {
+        test
+      }
+    `),
+    undefined,
+  );
+
   return (
     <View className="bg-background flex-1">
       <SafeAreaView className="flex-1 justify-center gap-3 px-6" edges={['top']}>
@@ -10,6 +21,7 @@ export default function HomeScreen() {
         <Text className="text-secondary-foreground max-w-90 text-base leading-6">
           피드를 확인하고 새로운 소식을 탐색합니다.
         </Text>
+        {loading ? <Text>Loading...</Text> : <Text>{data?.test}</Text>}
       </SafeAreaView>
     </View>
   );
