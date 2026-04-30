@@ -1,6 +1,7 @@
 declare module 'bun' {
   interface Env {
-    API_URL: string;
     DATABASE_URL: string;
+    EXPO_PUBLIC_API_ORIGIN: string;
+    EXPO_PUBLIC_ORIGIN: string;
   }
 }

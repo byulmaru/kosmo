@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     headers.set('authorization', `Bearer ${sessionKey}`);
   }
 
-  const response = await fetch(`${process.env.API_URL}/graphql`, {
+  const response = await fetch(`${process.env.EXPO_PUBLIC_API_ORIGIN}/graphql`, {
     body: await request.text(),
     headers,
     method: 'POST',
