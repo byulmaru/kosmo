@@ -3,7 +3,7 @@ import '../../global.css';
 import { ClientProvider } from '@mearie/react';
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { client } from '@/lib/graphql/clinet';
+import { client } from '@/lib/graphql/client';
 
 export default function RootLayout() {
   return (
