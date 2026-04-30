@@ -1,6 +1,12 @@
 import { sessionCookieName } from '@kosmo/core';
 
 export async function POST(request: Request) {
+  const apiOrigin = process.env.EXPO_PUBLIC_API_ORIGIN;
+
+  if (!apiOrigin) {
+    return Response.json({ error: 'EXPO_PUBLIC_API_ORIGIN is required' }, { status: 500 });
+  }
+
   const headers = new Headers();
   const accept = request.headers.get('accept');
   const sessionKey = getCookie(request, sessionCookieName);
@@ -14,7 +20,7 @@ export async function POST(request: Request) {
     headers.set('authorization', `Bearer ${sessionKey}`);
   }
 
-  const response = await fetch(`${process.env.EXPO_PUBLIC_API_ORIGIN}/graphql`, {
+  const response = await fetch(new URL('/graphql', apiOrigin), {
     body: await request.text(),
     headers,
     method: 'POST',
