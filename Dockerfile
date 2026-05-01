@@ -27,9 +27,11 @@ RUN bun install --frozen-lockfile --production
 COPY --from=expo-build /app/apps/expo/dist ./apps/expo/dist
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 
-RUN chmod +x ./docker-entrypoint.sh
+RUN chmod +x ./docker-entrypoint.sh && chown -R bun:bun /app
 
 EXPOSE 8080
+
+USER bun
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["expo"]
