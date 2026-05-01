@@ -6,11 +6,13 @@
     "module": "Preserve",
     "noEmit": true,
     "paths": {
+      "$mearie": ["./.mearie/graphql.js"],
       "@/*": ["./src/*"]
     },
     "verbatimModuleSyntax": true
   },
   "include": [
+    ".mearie/**/*.d.ts",
     ".expo/types/**/*.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
