@@ -13,6 +13,7 @@
       "output": "server"
     },
     "plugins": [
+      "./plugins/with-gradle-parallel-disabled.cjs",
       [
         "expo-router",
         {
@@ -23,6 +24,9 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "android": {
+      "package": "moe.kos"
     }
   }
 }
