@@ -1,5 +1,9 @@
 import { sessionName } from '@kosmo/core';
 
+type StreamingRequestInit = RequestInit & {
+  duplex: 'half';
+};
+
 export async function POST(request: Request) {
   const apiOrigin = process.env.EXPO_PUBLIC_API_ORIGIN;
 
@@ -20,12 +24,15 @@ export async function POST(request: Request) {
     headers.set('authorization', `Bearer ${sessionKey}`);
   }
 
-  const response = await fetch(new URL('/graphql', apiOrigin), {
+  const requestInit: StreamingRequestInit = {
     body: request.body,
+    duplex: 'half',
     headers,
     method: 'POST',
     redirect: 'manual',
-  });
+  };
+
+  const response = await fetch(new URL('/graphql', apiOrigin), requestInit);
 
   return new Response(response.body, response);
 }
