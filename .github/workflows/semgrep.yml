@@ -14,6 +14,10 @@ permissions:
   issues: write
   pull-requests: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   SEMGREP_CONFIGS: >-
     --config=p/default
@@ -53,6 +57,7 @@ jobs:
           name: semgrep-report
           path: semgrep.json
           if-no-files-found: error
+          retention-days: 7
 
       - name: Comment findings on PR
         if: github.event_name == 'pull_request' && always()

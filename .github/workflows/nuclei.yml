@@ -13,6 +13,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.inputs.targets || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   nuclei:
     name: Nuclei scan
@@ -69,6 +73,7 @@ jobs:
             nuclei-targets.txt
             nuclei.jsonl
           if-no-files-found: warn
+          retention-days: 7
 
       - name: Notify Slack
         if: always() && env.SLACK_WEBHOOK_URL != ''
