@@ -22,6 +22,7 @@ const config: ExpoConfig = {
         unstable_useServerRendering: true,
       },
     ],
+    'expo-secure-store',
   ],
   scheme: 'kosmo',
   slug: 'kosmo',

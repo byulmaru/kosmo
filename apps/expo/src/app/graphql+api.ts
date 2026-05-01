@@ -1,4 +1,4 @@
-import { sessionCookieName } from '@kosmo/core';
+import { sessionName } from '@kosmo/core';
 
 export async function POST(request: Request) {
   const apiOrigin = process.env.EXPO_PUBLIC_API_ORIGIN;
@@ -9,7 +9,7 @@ export async function POST(request: Request) {
 
   const headers = new Headers();
   const accept = request.headers.get('accept');
-  const sessionKey = getCookie(request, sessionCookieName);
+  const sessionKey = getCookie(request, sessionName);
 
   headers.set('content-type', request.headers.get('content-type') ?? 'application/json');
   if (accept) {
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   }
 
   const response = await fetch(new URL('/graphql', apiOrigin), {
-    body: await request.text(),
+    body: request.body,
     headers,
     method: 'POST',
     redirect: 'manual',

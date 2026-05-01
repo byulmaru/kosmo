@@ -1,4 +1,5 @@
 import '../../global.css';
+import 'core-js/actual/array/to-sorted';
 
 import { ClientProvider } from '@mearie/react';
 import { Stack } from 'expo-router';

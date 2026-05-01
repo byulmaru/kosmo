@@ -1,17 +1,8 @@
-import { cacheExchange, createClient, dedupExchange, httpExchange } from '@mearie/react';
+import { cacheExchange, createClient, dedupExchange } from '@mearie/react';
 import { schema } from '$mearie';
-
-const graphqlUrl = process.env.EXPO_PUBLIC_ORIGIN
-  ? new URL('/graphql', process.env.EXPO_PUBLIC_ORIGIN).toString()
-  : '/graphql';
+import { expoFetchExchange } from './expo-fetch-exchange';
 
 export const client = createClient({
   schema,
-  exchanges: [
-    dedupExchange(),
-    cacheExchange(),
-    httpExchange({
-      url: graphqlUrl,
-    }),
-  ],
+  exchanges: [dedupExchange(), cacheExchange(), expoFetchExchange()],
 });

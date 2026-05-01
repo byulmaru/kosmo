@@ -10,7 +10,6 @@ export default function HomeScreen() {
         test
       }
     `),
-    undefined,
   );
 
   return (
