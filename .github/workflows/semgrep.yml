@@ -163,6 +163,11 @@ jobs:
               results = report.results ?? [];
             }
 
+            if (results.length === 0) {
+              core.info("No Semgrep findings detected. Skipping Slack notification.");
+              return;
+            }
+
             const counts = results.reduce((acc, result) => {
               const severity = result.extra?.severity ?? "UNKNOWN";
               acc[severity] = (acc[severity] ?? 0) + 1;
@@ -170,20 +175,20 @@ jobs:
             }, {});
 
             const status = "${{ steps.semgrep.outcome }}";
-            const title = results.length > 0
-              ? `Semgrep detected ${results.length} findings.`
-              : "Semgrep scan detected no findings.";
+            const pr = context.payload.pull_request;
+            const prLine = pr ? `PR: #${pr.number} ${pr.html_url}` : null;
 
             const payload = {
               text: [
-                `*${title}*`,
+                "*Semgrep issue detected*",
                 `Repository: \`${context.repo.owner}/${context.repo.repo}\``,
                 `Event: \`${context.eventName}\``,
+                prLine,
                 `Branch/Ref: \`${context.payload.pull_request?.head?.ref ?? context.ref.replace("refs/heads/", "")}\``,
                 `Status: \`${status}\``,
                 `ERROR: ${counts.ERROR ?? 0}, WARNING: ${counts.WARNING ?? 0}, INFO: ${counts.INFO ?? 0}`,
                 `Run: ${runUrl}`,
-              ].join("\n"),
+              ].filter(Boolean).join("\n"),
             };
 
             const response = await fetch(process.env.SLACK_WEBHOOK_URL, {
