@@ -155,3 +155,7 @@ jobs:
             if (!response.ok) {
               throw new Error(`Slack notification failed: ${response.status} ${await response.text()}`);
             }
+
+      - name: Fail when Trivy execution failed
+        if: steps.trivy.outcome == 'failure'
+        run: exit 1
