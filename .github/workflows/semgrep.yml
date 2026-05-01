@@ -28,7 +28,7 @@ env:
 jobs:
   semgrep:
     name: Semgrep scan
-    runs-on: ubuntu-latest
+    runs-on: byulmaru-arc
     if: github.actor != 'dependabot[bot]'
     env:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
