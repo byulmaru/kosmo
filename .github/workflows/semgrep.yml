@@ -1,0 +1,201 @@
+name: Semgrep
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  merge_group:
+    types: [checks_requested]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+env:
+  SEMGREP_CONFIGS: >-
+    --config=p/default
+    --config=p/javascript
+    --config=p/typescript
+    --config=p/secrets
+
+jobs:
+  semgrep:
+    name: Semgrep scan
+    runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]'
+    env:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep
+        id: semgrep
+        continue-on-error: true
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/src" \
+            -w /src \
+            semgrep/semgrep \
+            semgrep scan \
+              $SEMGREP_CONFIGS \
+              --json \
+              --output=semgrep.json
+
+      - name: Upload Semgrep report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: semgrep-report
+          path: semgrep.json
+          if-no-files-found: error
+
+      - name: Comment findings on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+
+            const marker = "<!-- semgrep-scan-report -->";
+            const reportPath = "semgrep.json";
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            let results = [];
+            if (fs.existsSync(reportPath)) {
+              const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+              results = report.results ?? [];
+            }
+
+            const severityOrder = { ERROR: 0, WARNING: 1, INFO: 2 };
+            results.sort((a, b) => {
+              const severityA = severityOrder[a.extra?.severity] ?? 99;
+              const severityB = severityOrder[b.extra?.severity] ?? 99;
+              return severityA - severityB
+                || String(a.path).localeCompare(String(b.path))
+                || Number(a.start?.line ?? 0) - Number(b.start?.line ?? 0);
+            });
+
+            const counts = results.reduce((acc, result) => {
+              const severity = result.extra?.severity ?? "UNKNOWN";
+              acc[severity] = (acc[severity] ?? 0) + 1;
+              return acc;
+            }, {});
+
+            const summary = [
+              `- Total: ${results.length}`,
+              `- ERROR: ${counts.ERROR ?? 0}`,
+              `- WARNING: ${counts.WARNING ?? 0}`,
+              `- INFO: ${counts.INFO ?? 0}`,
+            ].join("\n");
+
+            const maxFindings = 30;
+            const findingLines = results.slice(0, maxFindings).map((result, index) => {
+              const path = result.path ?? "(unknown path)";
+              const line = result.start?.line ?? "?";
+              const severity = result.extra?.severity ?? "UNKNOWN";
+              const rule = result.check_id ?? "(unknown rule)";
+              const message = (result.extra?.message ?? "").replace(/\s+/g, " ").trim();
+              return `${index + 1}. \`${severity}\` [${path}:${line}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/blob/${context.payload.pull_request.head.sha}/${path}#L${line}) - \`${rule}\`${message ? `\n   ${message}` : ""}`;
+            });
+
+            const truncated = results.length > maxFindings
+              ? `\n\n${results.length - maxFindings} findings were omitted. Check the artifact for the full report.`
+              : "";
+
+            const body = [
+              marker,
+              "## Semgrep security scan result",
+              "",
+              summary,
+              "",
+              results.length > 0
+                ? findingLines.join("\n") + truncated
+                : "No findings were detected.",
+              "",
+              `Full report: [semgrep-report artifact](${runUrl})`,
+            ].join("\n");
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+
+            const existing = comments.find((comment) =>
+              comment.user?.type === "Bot" && comment.body?.includes(marker)
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Notify Slack
+        if: always() && env.SLACK_WEBHOOK_URL != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+
+            const reportPath = "semgrep.json";
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            let results = [];
+
+            if (fs.existsSync(reportPath)) {
+              const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+              results = report.results ?? [];
+            }
+
+            const counts = results.reduce((acc, result) => {
+              const severity = result.extra?.severity ?? "UNKNOWN";
+              acc[severity] = (acc[severity] ?? 0) + 1;
+              return acc;
+            }, {});
+
+            const status = "${{ steps.semgrep.outcome }}";
+            const title = results.length > 0
+              ? `Semgrep detected ${results.length} findings.`
+              : "Semgrep scan detected no findings.";
+
+            const payload = {
+              text: [
+                `*${title}*`,
+                `Repository: \`${context.repo.owner}/${context.repo.repo}\``,
+                `Event: \`${context.eventName}\``,
+                `Branch/Ref: \`${context.payload.pull_request?.head?.ref ?? context.ref.replace("refs/heads/", "")}\``,
+                `Status: \`${status}\``,
+                `ERROR: ${counts.ERROR ?? 0}, WARNING: ${counts.WARNING ?? 0}, INFO: ${counts.INFO ?? 0}`,
+                `Run: ${runUrl}`,
+              ].join("\n"),
+            };
+
+            const response = await fetch(process.env.SLACK_WEBHOOK_URL, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) {
+              throw new Error(`Slack notification failed: ${response.status} ${await response.text()}`);
+            }
+
+      - name: Fail when Semgrep execution failed
+        if: steps.semgrep.outcome == 'failure'
+        run: exit 1
