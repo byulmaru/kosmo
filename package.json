@@ -2,7 +2,7 @@
   "name": "@kosmo/monorepo",
   "private": true,
   "version": "0.0.0",
-  "packageManager": "bun@1.3.9",
+  "packageManager": "bun@1.3.13",
   "scripts": {
     "dev": "infisical run -- bun run --parallel --workspaces dev",
     "lint:eslint": "eslint --max-warnings 0 .",
