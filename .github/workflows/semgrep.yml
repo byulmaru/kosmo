@@ -37,18 +37,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Semgrep
+        run: python -m pip install --upgrade semgrep
+
       - name: Run Semgrep
         id: semgrep
         continue-on-error: true
         run: |
-          docker run --rm \
-            -v "${{ github.workspace }}:/src" \
-            -w /src \
-            semgrep/semgrep \
-            semgrep scan \
-              $SEMGREP_CONFIGS \
-              --json \
-              --output=semgrep.json
+          semgrep scan \
+            $SEMGREP_CONFIGS \
+            --json \
+            --output=semgrep.json
 
       - name: Upload Semgrep report
         uses: actions/upload-artifact@v4
