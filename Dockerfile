@@ -2,6 +2,10 @@ FROM oven/bun:1.3.13 AS base
 
 WORKDIR /app
 
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends --only-upgrade libssl3t64 openssl-provider-legacy \
+  && rm -rf /var/lib/apt/lists/*
+
 FROM base AS workspace
 
 COPY package.json bun.lock tsconfig.json ./
