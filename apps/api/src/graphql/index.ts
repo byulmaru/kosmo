@@ -10,6 +10,7 @@ const app = createYoga<{ c: ServerContext }, UserContext>({
   schema,
   graphqlEndpoint: '/graphql',
   batching: true,
+  context: ({ c }) => ({ ...c.var.context, c }),
   cors: {
     allowedHeaders: ['Authorization', 'Content-Type'],
     methods: ['GET', 'POST'],
