@@ -8,6 +8,7 @@
 ## Skills
 
 - When preparing commits, branches, or pull requests, use the `byulmaru:commit-pr` skill provided by the Codex plugin.
+- When designing or reviewing the kosmo database schema, use `.agents/skills/database-design`.
 - Make speculative commits frequently so intermediate hypotheses, pivots, and recovery points are preserved.
 
 ## Review Guidelines
