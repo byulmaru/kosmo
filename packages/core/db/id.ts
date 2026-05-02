@@ -11,9 +11,6 @@ export const TableDiscriminator = {
   Sessions: 0x008,
 } as const satisfies Record<keyof typeof Tables, number>;
 
-let lastTimestamp = 0;
-let sequence = crypto.getRandomValues(new Uint16Array(1))[0]!;
-
 const assertTableDiscriminator = (tableDiscriminator: number) => {
   if (
     !Number.isInteger(tableDiscriminator) ||
@@ -24,28 +21,8 @@ const assertTableDiscriminator = (tableDiscriminator: number) => {
   }
 };
 
-const nextSequence = (timestamp: number) => {
-  if (timestamp === lastTimestamp) {
-    sequence = (sequence + 1) & 0xffff;
-  } else {
-    lastTimestamp = timestamp;
-    sequence = crypto.getRandomValues(new Uint16Array(1))[0]!;
-  }
-
-  return sequence;
-};
-
-const randomBits = (bitLength: bigint) => {
-  const byteLength = Number((bitLength + 7n) / 8n);
-  const bytes = crypto.getRandomValues(new Uint8Array(byteLength));
-  const mask = (1n << bitLength) - 1n;
-
-  return bytes.reduce((value, byte) => (value << 8n) | BigInt(byte), 0n) & mask;
-};
-
 const formatUuid = (bytes: Uint8Array) => {
-  const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
-
+  const hex = bytes.toHex();
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 };
 
@@ -67,14 +44,9 @@ export const createId = (
   bytes[6] = 0x80 | (tableDiscriminator >> 8);
   bytes[7] = tableDiscriminator & 0xff;
 
-  const customC = (BigInt(nextSequence(timestamp)) << 46n) | randomBits(46n);
-  bytes[8] = 0x80 | Number((customC >> 56n) & 0x3fn);
-
-  for (let index = 9; index < bytes.length; index += 1) {
-    const shift = BigInt((15 - index) * 8);
-
-    bytes[index] = Number((customC >> shift) & 0xffn);
-  }
+  // 성능 최적화를 위해 9바이트 랜덤을 만든 후 첫 비트만 10으로 만들어줌
+  crypto.getRandomValues(bytes.subarray(8));
+  bytes[8] = 0x80 | (bytes[8] & 0x3f);
 
   return formatUuid(bytes);
 };
