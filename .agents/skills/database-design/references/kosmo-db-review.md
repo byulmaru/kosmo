@@ -45,21 +45,21 @@ UUID v7 타입 코드 정책:
 
 초기 타입 코드 예시:
 
-| Code | 테이블 | 설명 |
-|---:|---|---|
-| `0` | `account` | OIDC 계정과 매핑되는 로그인 단위 |
-| `1` | `application` | kosmo에 접속하는 앱/클라이언트 |
-| `2` | `application_secret` | 애플리케이션 시크릿 |
-| `3` | `session` | 계정 + 애플리케이션 세션 |
-| `4` | `profile` | SNS에서 보이는 프로필 |
-| `5` | `account_profile` | 계정과 프로필의 연결 |
-| `6` | `post` | 게시물 메타데이터 |
-| `7` | `post_content` | 게시물 본문 버전 |
-| `8` | `profile_follow` | 프로필-프로필 팔로우 |
-| `9` | `file_object` | Object Storage 파일 |
-| `10` | `media_asset` | 업로드된 논리 미디어 |
-| `11` | `media_variant` | 썸네일/프리뷰 등 파생 파일 |
-| `12` | `post_media` | 게시물-미디어 연결 |
+| Code | 테이블               | 설명                             |
+| ---: | -------------------- | -------------------------------- |
+|  `0` | `account`            | OIDC 계정과 매핑되는 로그인 단위 |
+|  `1` | `application`        | kosmo에 접속하는 앱/클라이언트   |
+|  `2` | `application_secret` | 애플리케이션 시크릿              |
+|  `3` | `session`            | 계정 + 애플리케이션 세션         |
+|  `4` | `profile`            | SNS에서 보이는 프로필            |
+|  `5` | `account_profile`    | 계정과 프로필의 연결             |
+|  `6` | `post`               | 게시물 메타데이터                |
+|  `7` | `post_content`       | 게시물 본문 버전                 |
+|  `8` | `profile_follow`     | 프로필-프로필 팔로우             |
+|  `9` | `file_object`        | Object Storage 파일              |
+| `10` | `media_asset`        | 업로드된 논리 미디어             |
+| `11` | `media_variant`      | 썸네일/프리뷰 등 파생 파일       |
+| `12` | `post_media`         | 게시물-미디어 연결               |
 
 GraphQL Relay 적용:
 
