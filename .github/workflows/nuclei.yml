@@ -25,7 +25,9 @@ jobs:
       DEFAULT_TARGETS: |
         https://kos.moe
         https://api.kos.moe
-      NUCLEI_FLAGS: >-
+      NUCLEI_ARGS: >-
+        -list nuclei-targets.txt
+        -jle nuclei.jsonl
         -severity low,medium,high,critical
         -stats
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -57,12 +59,9 @@ jobs:
       - name: Run Nuclei
         id: nuclei
         continue-on-error: true
-        uses: projectdiscovery/nuclei-action@main
+        uses: projectdiscovery/nuclei-action@v3.1.1
         with:
-          urls: nuclei-targets.txt
-          output: nuclei.jsonl
-          json: true
-          flags: ${{ env.NUCLEI_FLAGS }}
+          args: ${{ env.NUCLEI_ARGS }}
 
       - name: Upload Nuclei artifacts
         uses: actions/upload-artifact@v4
