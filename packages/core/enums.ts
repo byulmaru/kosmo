@@ -58,6 +58,13 @@ export const PostVisibility = {
 } as const;
 export type PostVisibility = keyof typeof PostVisibility;
 
+export const ProfileState = {
+  ACTIVE: 'ACTIVE',
+  DISABLED: 'DISABLED',
+  SUSPENDED: 'SUSPENDED',
+} as const;
+export type ProfileState = keyof typeof ProfileState;
+
 export const SessionState = {
   ACTIVE: 'ACTIVE',
   REVOKED: 'REVOKED',

@@ -1,5 +1,6 @@
 import '../../global.css';
 import 'core-js/actual/array/to-sorted';
+import 'core-js/proposals/array-buffer-base64';
 
 import { ClientProvider } from '@mearie/react';
 import { Stack } from 'expo-router';
@@ -11,7 +12,6 @@ export default function RootLayout() {
     <ClientProvider client={client}>
       <SafeAreaProvider>
         <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="login" />
           <Stack.Screen name="(tabs)" />
         </Stack>
       </SafeAreaProvider>

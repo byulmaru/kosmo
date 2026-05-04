@@ -1,18 +1,13 @@
-import { drizzle } from 'drizzle-orm/bun-sql';
-import * as schema from './tables';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import * as enums from './enums';
+import * as tables from './tables';
 import type { PgDatabase, PgTransaction } from 'drizzle-orm/pg-core';
-
-const databaseUrl = Bun.env.DATABASE_URL;
-
-if (!databaseUrl) {
-  throw new Error('DATABASE_URL is required');
-}
 
 export * from './id';
 export * from './tables';
 export * from './utils';
 
-export const db = drizzle(databaseUrl, { schema });
+export const db = drizzle(process.env.DATABASE_URL, { schema: { ...tables, ...enums } });
 
 export type Database = typeof db;
 export type Transaction =

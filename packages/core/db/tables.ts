@@ -10,19 +10,15 @@ const createdAt = () =>
     .notNull()
     .default(sql`now()`);
 
-export const Accounts = pgTable(
-  'account',
-  {
-    id: uuid('id')
-      .primaryKey()
-      .$defaultFn(() => createId(TableDiscriminator.Accounts)),
-    oidcSubject: text('oidc_subject').notNull(),
-    displayName: text('display_name').notNull(),
-    state: Enum.accountState('state').notNull(),
-    createdAt: createdAt(),
-  },
-  (table) => [unique().on(table.oidcSubject)],
-);
+export const Accounts = pgTable('account', {
+  id: uuid('id')
+    .primaryKey()
+    .$defaultFn(() => createId(TableDiscriminator.Accounts)),
+  oidcSubject: text('oidc_subject').unique().notNull(),
+  displayName: text('display_name').notNull(),
+  state: Enum.accountState('state').notNull(),
+  createdAt: createdAt(),
+});
 
 export const AccountProfiles = pgTable(
   'account_profile',
@@ -192,6 +188,7 @@ export const Profiles = pgTable(
     id: uuid('id')
       .primaryKey()
       .$defaultFn(() => createId(TableDiscriminator.Profiles)),
+    state: Enum.profileState('state').notNull().default('ACTIVE'),
     handle: text('handle').notNull(),
     displayName: text('display_name').notNull(),
     bio: text('bio'),
@@ -233,16 +230,17 @@ export const Sessions = pgTable(
     accountId: uuid('account_id')
       .notNull()
       .references(() => Accounts.id),
-    applicationId: uuid('application_id')
-      .notNull()
-      .references(() => Applications.id),
+    applicationId: uuid('application_id').references(() => Applications.id),
     activeProfileId: uuid('active_profile_id').references(() => Profiles.id),
     oidcSessionKey: text('oidc_session_key'),
     token: text('token').unique().notNull(),
     state: Enum.sessionState('state').notNull(),
-    issuedAt: datetime('issued_at').notNull(),
-    lastUsedAt: datetime('last_used_at').notNull(),
-    expiresAt: datetime('expires_at').notNull(),
+    issuedAt: datetime('issued_at')
+      .notNull()
+      .default(sql`now()`),
+    lastUsedAt: datetime('last_used_at')
+      .notNull()
+      .default(sql`now()`),
   },
-  (table) => [index().on(table.accountId), index().on(table.state, table.expiresAt)],
+  (table) => [index().on(table.accountId)],
 );
