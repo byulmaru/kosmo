@@ -68,6 +68,8 @@ jobs:
         id: trivy
         continue-on-error: true
         uses: aquasecurity/trivy-action@0.35.0
+        env:
+          TRIVY_PLATFORM: linux/arm64
         with:
           image-ref: ${{ steps.trivy-image.outputs.image-ref }}
           format: json
