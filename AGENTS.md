@@ -8,7 +8,6 @@
 ## Skills
 
 - When preparing commits, branches, or pull requests, use the `byulmaru:commit-pr` skill provided by the Codex plugin.
-- When designing or reviewing the kosmo database schema, use `.agents/skills/database-design`.
 - Make speculative commits frequently so intermediate hypotheses, pivots, and recovery points are preserved.
 
 ## Review Guidelines
@@ -21,6 +20,7 @@
 - If a memory applies, use it as project-specific context while reviewing, implementing, or discussing the task.
 - When a task changes the assumptions documented in a relevant memory file, update that memory in the same change.
 - `memory/script.md`: workspace scripts, command wrappers, and script execution behavior.
+- `memory/database-design.md`: kosmo PostgreSQL/Drizzle database schema design and review context.
 
 ## `package.json` Changes
 
