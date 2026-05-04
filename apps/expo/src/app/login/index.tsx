@@ -1,4 +1,3 @@
-// import { fetch } from 'expo/fetch';
 import { sessionName } from '@kosmo/core';
 import { makeRedirectUri } from 'expo-auth-session';
 import * as Crypto from 'expo-crypto';
@@ -10,13 +9,10 @@ import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native
 
 WebBrowser.maybeCompleteAuthSession();
 
-const authorizationEndpoint = 'https://id.byulmaru.co/oauth/authorize';
-const clientId = '01KQM0S7HGTVJNZA6TTTK8T5NM';
 const redirectUri = makeRedirectUri({
   scheme: 'kosmo',
   path: 'login',
 });
-const scopes = ['openid', 'profile'];
 
 export default function Login() {
   const router = useRouter();
@@ -31,12 +27,12 @@ export default function Login() {
 
     try {
       const state = await createCodeVerifier();
-      const authorizeUrl = new URL(authorizationEndpoint);
+      const authorizeUrl = new URL('https://id.byulmaru.co/oauth/authorize');
 
       authorizeUrl.searchParams.set('response_type', 'code');
-      authorizeUrl.searchParams.set('client_id', clientId);
+      authorizeUrl.searchParams.set('client_id', process.env.EXPO_PUBLIC_OIDC_CLIENT_ID!);
       authorizeUrl.searchParams.set('redirect_uri', redirectUri);
-      authorizeUrl.searchParams.set('scope', scopes.join(' '));
+      authorizeUrl.searchParams.set('scope', 'openid profile');
       authorizeUrl.searchParams.set('state', state);
 
       const result = await WebBrowser.openAuthSessionAsync(authorizeUrl.toString(), redirectUri);
@@ -62,7 +58,12 @@ export default function Login() {
         }),
         headers: { 'content-type': 'application/json' },
         method: 'POST',
-      }).then((res) => res.json() as Promise<{ session_token?: string }>);
+      }).then(async (res) => {
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+        return res.json();
+      });
 
       if (sessionToken) {
         await setItemAsync(sessionName, sessionToken);
