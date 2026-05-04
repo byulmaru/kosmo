@@ -20,6 +20,7 @@
 - If a memory applies, use it as project-specific context while reviewing, implementing, or discussing the task.
 - When a task changes the assumptions documented in a relevant memory file, update that memory in the same change.
 - `memory/script.md`: workspace scripts, command wrappers, and script execution behavior.
+- `memory/database-design.md`: kosmo PostgreSQL/Drizzle database schema design and review context.
 
 ## `package.json` Changes
 
