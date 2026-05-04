@@ -70,8 +70,8 @@ UUID v7 type-code policy:
 
 Initial type-code examples:
 
-| Code | Table                | Description                         |
-| ---: | -------------------- | ----------------------------------- |
+| Code | Table                | Description                          |
+| ---: | -------------------- | ------------------------------------ |
 |  `0` | `account`            | Login unit mapped to an OIDC account |
 |  `1` | `application`        | App/client connecting to kosmo       |
 |  `2` | `application_secret` | Application secret                   |
