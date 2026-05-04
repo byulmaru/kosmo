@@ -7,7 +7,7 @@ export * from './id';
 export * from './tables';
 export * from './utils';
 
-export const db = drizzle(process.env.DATABASE_URL, { schema: { ...tables, ...enums } });
+export const db = drizzle(process.env.DATABASE_URL!, { schema: { ...tables, ...enums } });
 
 export type Database = typeof db;
 export type Transaction =
