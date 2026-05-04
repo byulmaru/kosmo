@@ -16,7 +16,7 @@ concurrency:
 jobs:
   docker_build:
     name: Docker Build
-    runs-on: byulmaru-arc
+    runs-on: arc-b-4x
     env:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
@@ -26,9 +26,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        with:
-          driver: remote
-          endpoint: tcp://buildkitd.arc-runners.svc.cluster.local:1234
 
       - name: Log in to GHCR
         if: github.event_name != 'pull_request'
