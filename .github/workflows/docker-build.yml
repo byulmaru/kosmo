@@ -16,7 +16,7 @@ concurrency:
 jobs:
   docker_build:
     name: Docker Build
-    runs-on: byulmaru-arc
+    runs-on: arc-b-4x
     env:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
