@@ -27,12 +27,16 @@ export default function Login() {
 
     try {
       const state = await createCodeVerifier();
+      const codeVerifier = await createCodeVerifier();
+      const codeChallenge = await createCodeChallenge(codeVerifier);
       const authorizeUrl = new URL('https://id.byulmaru.co/oauth/authorize');
 
       authorizeUrl.searchParams.set('response_type', 'code');
       authorizeUrl.searchParams.set('client_id', process.env.EXPO_PUBLIC_OIDC_CLIENT_ID!);
       authorizeUrl.searchParams.set('redirect_uri', redirectUri);
       authorizeUrl.searchParams.set('scope', 'openid profile');
+      authorizeUrl.searchParams.set('code_challenge', codeChallenge);
+      authorizeUrl.searchParams.set('code_challenge_method', 'S256');
       authorizeUrl.searchParams.set('state', state);
 
       const result = await WebBrowser.openAuthSessionAsync(authorizeUrl.toString(), redirectUri);
@@ -53,6 +57,7 @@ export default function Login() {
       const { session_token: sessionToken } = await fetch('/login/session', {
         body: JSON.stringify({
           code,
+          code_verifier: codeVerifier,
           redirect_uri: redirectUri,
           session_type: Platform.OS === 'web' ? 'web' : 'app',
         }),
@@ -109,3 +114,8 @@ export default function Login() {
 
 const createCodeVerifier = () =>
   Crypto.getRandomBytesAsync(32).then((bytes) => bytes.toBase64({ alphabet: 'base64url' }));
+
+const createCodeChallenge = (codeVerifier: string) =>
+  Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, codeVerifier, {
+    encoding: Crypto.CryptoEncoding.BASE64,
+  }).then((digest) => digest.replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', ''));

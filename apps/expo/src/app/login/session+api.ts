@@ -13,6 +13,7 @@ export async function POST(request: Request) {
   const result = z
     .object({
       code: z.string().min(1),
+      code_verifier: z.string().min(1),
       redirect_uri: z.url(),
       session_type: z.enum(['web', 'app']),
     })
@@ -39,6 +40,7 @@ export async function POST(request: Request) {
       client_id: clientId,
       client_secret: process.env.OIDC_CLIENT_SECRET,
       code: body.code,
+      code_verifier: body.code_verifier,
       redirect_uri: body.redirect_uri,
     }),
     method: 'POST',
