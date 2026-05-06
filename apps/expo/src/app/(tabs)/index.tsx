@@ -7,7 +7,10 @@ export default function HomeScreen() {
   const { data, loading } = useQuery(
     graphql(`
       query TestQuery {
-        whoami
+        me {
+          id
+          name
+        }
       }
     `),
   );
@@ -20,7 +23,7 @@ export default function HomeScreen() {
         <Text className="text-secondary-foreground max-w-90 text-base leading-6">
           피드를 확인하고 새로운 소식을 탐색합니다.
         </Text>
-        {loading ? <Text>Loading...</Text> : <Text>{data?.whoami}</Text>}
+        {loading ? <Text>Loading...</Text> : <Text>{data?.me?.name}</Text>}
       </SafeAreaView>
     </View>
   );
