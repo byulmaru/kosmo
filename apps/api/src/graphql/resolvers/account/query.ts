@@ -3,7 +3,7 @@ import { builder } from '@/graphql/builder';
 import Account from '.';
 
 builder.queryFields((t) => ({
-  me: t.withAuth({ session: true }).drizzleField({
+  me: t.withAuth({ login: true }).drizzleField({
     type: Account,
     nullable: true,
     resolve: (query, _, __, ctx) =>

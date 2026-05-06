@@ -12,12 +12,12 @@ import type { SessionContext, SessionWithProfileContext, UserContext } from '@/c
 
 export const builder = new SchemaBuilder<{
   AuthContexts: {
-    session: UserContext & SessionContext;
-    profile: UserContext & SessionWithProfileContext;
+    login: UserContext & SessionContext;
+    usingProfile: UserContext & SessionWithProfileContext;
   };
   AuthScopes: {
-    session: boolean;
-    profile: boolean;
+    login: boolean;
+    usingProfile: boolean;
   };
   Context: UserContext;
   DefaultAuthStrategy: 'all';
@@ -53,8 +53,8 @@ export const builder = new SchemaBuilder<{
   },
   scopeAuth: {
     authScopes: async (ctx) => ({
-      session: !!ctx.session,
-      profile: !!ctx.session?.profileId,
+      login: !!ctx.session,
+      usingProfile: !!ctx.session?.profileId,
     }),
     defaultStrategy: 'all',
     runScopesOnType: true,
