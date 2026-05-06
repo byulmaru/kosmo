@@ -99,10 +99,12 @@ export const relations = defineRelations(tables, (r) => ({
     followerFollows: r.many.ProfileFollows({
       from: r.Profiles.id,
       to: r.ProfileFollows.followerProfileId,
+      alias: 'profile_follow_follower',
     }),
     followeeFollows: r.many.ProfileFollows({
       from: r.Profiles.id,
       to: r.ProfileFollows.followeeProfileId,
+      alias: 'profile_follow_followee',
     }),
     oauthAuthorizationCodes: r.many.OAuthAuthorizationCodes({
       from: r.Profiles.id,
@@ -117,11 +119,13 @@ export const relations = defineRelations(tables, (r) => ({
       from: r.ProfileFollows.followeeProfileId,
       to: r.Profiles.id,
       optional: false,
+      alias: 'profile_follow_followee',
     }),
     followerProfile: r.one.Profiles({
       from: r.ProfileFollows.followerProfileId,
       to: r.Profiles.id,
       optional: false,
+      alias: 'profile_follow_follower',
     }),
   },
   Sessions: {
