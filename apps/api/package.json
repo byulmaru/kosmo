@@ -8,7 +8,7 @@
   "dependencies": {
     "@kosmo/core": "workspace:*",
     "@pothos/core": "^4.12.0",
-    "drizzle-orm": "^0.45.2",
+    "drizzle-orm": "^1.0.0-beta.22",
     "graphql": "^16.13.2",
     "graphql-yoga": "^5.21.0",
     "hono": "^4.12.14"

@@ -21,7 +21,7 @@
     "@react-navigation/native": "^7.1.33",
     "cookie": "^1.1.1",
     "core-js": "^3.49.0",
-    "drizzle-orm": "^0.45.2",
+    "drizzle-orm": "^1.0.0-beta.22",
     "expo": "~55.0.19",
     "expo-auth-session": "^55.0.15",
     "expo-constants": "~55.0.12",

@@ -115,6 +115,17 @@ Queries to check:
 - Avoid polymorphic foreign keys in the initial schema. Prefer explicit relationship tables.
 - Add ActivityPub actor details, inbox/outbox queues, and AT Protocol record/cache tables after the implementation path is concrete.
 
+Drizzle relation schema policy:
+
+- When adding a table to `packages/core/db/tables.ts` or changing a foreign key, update `packages/core/db/relations.ts` in the same change.
+- Use Drizzle relations v2 API, `defineRelations`, for relation schema definitions.
+- Do not destructure the `defineRelations` callback argument. Follow the official docs style and name the single argument `r`.
+- Reference helpers and table columns as `r.one.TableName`, `r.many.TableName`, and `r.TableName.columnName`.
+- Add `optional: false` to `one` relations backed by `notNull()` foreign keys.
+- Do not add `optional: false` to `one` relations backed by nullable foreign keys.
+- Use role-revealing relation names for self references or multiple foreign keys to the same target table.
+- Pass the v2 relation schema to DB initialization with `drizzle(..., { relations, schema })` in `packages/core/db/index.ts`.
+
 ## Base Table Responsibilities
 
 - `account`: maps an OIDC account to a kosmo internal account. Authentication secrets remain owned by the OIDC server.
