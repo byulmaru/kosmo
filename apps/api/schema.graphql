@@ -1,4 +1,14 @@
+type Account implements Node {
+  id: ID!
+  name: String
+}
+
+interface Node {
+  id: ID!
+}
+
 type Query {
-  test: String
-  whoami: String
+  me: Account
+  node(id: ID!): Node
+  nodes(ids: [ID!]!): [Node]!
 }

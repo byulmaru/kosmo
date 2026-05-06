@@ -14,6 +14,12 @@ export type SessionContext = {
   };
 };
 
+export type SessionWithProfileContext = SessionContext & {
+  session: {
+    profileId: string;
+  };
+};
+
 export type Context = DefaultContext & Partial<SessionContext>;
 export type ServerContext = HonoContext<Env>;
 export type UserContext = Context & { c: ServerContext };

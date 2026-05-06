@@ -7,10 +7,20 @@ import RelayPlugin from '@pothos/plugin-relay';
 import ScopeAuthPlugin from '@pothos/plugin-scope-auth';
 import ValidationPlugin from '@pothos/plugin-validation';
 import { getTableConfig } from 'drizzle-orm/pg-core';
-import type { UserContext } from '@/context';
+import { globalIdMap } from './id';
+import type { SessionContext, SessionWithProfileContext, UserContext } from '@/context';
 
 export const builder = new SchemaBuilder<{
+  AuthContexts: {
+    session: UserContext & SessionContext;
+    profile: UserContext & SessionWithProfileContext;
+  };
+  AuthScopes: {
+    session: boolean;
+    profile: boolean;
+  };
   Context: UserContext;
+  DefaultAuthStrategy: 'all';
   DrizzleRelations: typeof relations;
 }>({
   plugins: [
@@ -29,9 +39,25 @@ export const builder = new SchemaBuilder<{
   errors: {
     defaultTypes: [],
   },
-  relay: {},
+  relay: {
+    encodeGlobalID: (_, id) => String(id),
+    decodeGlobalID: (id) => {
+      const typename = globalIdMap.get(Number.parseInt(id.replaceAll('-', '').slice(13, 16), 16));
+
+      if (!typename) {
+        throw new Error(`Unknown global id type code`);
+      }
+
+      return { id, typename };
+    },
+  },
   scopeAuth: {
-    authScopes: () => ({}),
+    authScopes: async (ctx) => ({
+      session: !!ctx.session,
+      profile: !!ctx.session?.profileId,
+    }),
+    defaultStrategy: 'all',
+    runScopesOnType: true,
   },
 });
 
