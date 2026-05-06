@@ -1,3 +1,4 @@
 type Query {
   test: String
+  whoami: String
 }

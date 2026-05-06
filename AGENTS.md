@@ -5,11 +5,6 @@
 - Use `bun` for workspace and dependency management.
 - Never edit any `package.json` file by hand. Make changes through the appropriate CLI instead.
 
-## Skills
-
-- When preparing commits, branches, or pull requests, use the `byulmaru:commit-pr` skill provided by the Codex plugin.
-- Make speculative commits frequently so intermediate hypotheses, pivots, and recovery points are preserved.
-
 ## Review Guidelines
 
 - Write review comments and review summaries in Korean.
@@ -19,6 +14,7 @@
 - Before working on a task, check whether any `memory/*.md` file applies to the topic.
 - If a memory applies, use it as project-specific context while reviewing, implementing, or discussing the task.
 - When a task changes the assumptions documented in a relevant memory file, update that memory in the same change.
+- `memory/commit-pr.md`: team commit, branch, stacked PR, and PR writing policy.
 - `memory/script.md`: workspace scripts, command wrappers, and script execution behavior.
 - `memory/database-design.md`: kosmo PostgreSQL/Drizzle database schema design and review context.
 

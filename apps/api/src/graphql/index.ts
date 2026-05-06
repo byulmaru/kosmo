@@ -8,6 +8,7 @@ export const yoga = new Hono<Env>();
 
 const app = createYoga<{ c: ServerContext }, UserContext>({
   schema,
+  context: ({ c }) => ({ c, ...c.get('context') }),
   graphqlEndpoint: '/graphql',
   batching: true,
   cors: {

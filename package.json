@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "packageManager": "bun",
   "scripts": {
-    "dev": "infisical run -- bun run --parallel --workspaces dev",
+    "dev": "infisical run -- bun run --parallel --workspaces --if-present dev",
     "lint:eslint": "eslint --max-warnings 0 .",
     "lint:prettier": "prettier --check --ignore-unknown '**/*'",
     "lint:syncpack": "syncpack lint --dependency-types prod,dev,peer",

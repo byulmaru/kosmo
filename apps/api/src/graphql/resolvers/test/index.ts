@@ -5,4 +5,9 @@ builder.queryFields((t) => ({
     type: 'String',
     resolve: () => 'test',
   }),
+
+  whoami: t.field({
+    type: 'String',
+    resolve: (_, __, ctx) => ctx.session?.accountId,
+  }),
 }));

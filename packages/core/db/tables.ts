@@ -10,19 +10,15 @@ const createdAt = () =>
     .notNull()
     .default(sql`now()`);
 
-export const Accounts = pgTable(
-  'account',
-  {
-    id: uuid('id')
-      .primaryKey()
-      .$defaultFn(() => createId(TableDiscriminator.Accounts)),
-    oidcSubject: text('oidc_subject').notNull(),
-    displayName: text('display_name').notNull(),
-    state: Enum.accountState('state').notNull(),
-    createdAt: createdAt(),
-  },
-  (table) => [unique().on(table.oidcSubject)],
-);
+export const Accounts = pgTable('account', {
+  id: uuid('id')
+    .primaryKey()
+    .$defaultFn(() => createId(TableDiscriminator.Accounts)),
+  oidcSubject: text('oidc_subject').unique().notNull(),
+  displayName: text('display_name').notNull(),
+  state: Enum.accountState('state').notNull(),
+  createdAt: createdAt(),
+});
 
 export const AccountProfiles = pgTable(
   'account_profile',
@@ -46,13 +42,110 @@ export const AccountProfiles = pgTable(
   ],
 );
 
-export const Applications = pgTable('application', {
-  id: uuid('id')
-    .primaryKey()
-    .$defaultFn(() => createId(TableDiscriminator.Applications)),
-  name: text('name').notNull(),
-  createdAt: createdAt(),
-});
+export const Applications = pgTable(
+  'application',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => createId(TableDiscriminator.Applications)),
+    ownerAccountId: uuid('owner_account_id').references(() => Accounts.id, {
+      onDelete: 'set null',
+    }),
+    clientId: text('client_id').notNull(),
+    clientSecretHash: text('client_secret_hash'),
+    name: text('name').notNull(),
+    redirectUris: text('redirect_uris').array().notNull(),
+    scopes: text('scopes').array().notNull(),
+    type: Enum.applicationType('type').notNull(),
+    state: Enum.applicationState('state').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [unique().on(table.clientId), index().on(table.ownerAccountId)],
+);
+
+export const ApplicationAuthorizations = pgTable(
+  'application_authorization',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => createId(TableDiscriminator.ApplicationAuthorizations)),
+    applicationId: uuid('application_id')
+      .notNull()
+      .references(() => Applications.id, { onDelete: 'cascade' }),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => Accounts.id, { onDelete: 'cascade' }),
+    profileId: uuid('profile_id').references(() => Profiles.id, { onDelete: 'set null' }),
+    scopes: text('scopes').array().notNull(),
+    createdAt: createdAt(),
+    revokedAt: datetime('revoked_at'),
+  },
+  (table) => [
+    unique().on(table.applicationId, table.accountId, table.profileId),
+    index().on(table.accountId),
+    index().on(table.applicationId),
+  ],
+);
+
+export const OAuthAuthorizationCodes = pgTable(
+  'oauth_authorization_code',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => createId(TableDiscriminator.OAuthAuthorizationCodes)),
+    codeHash: text('code_hash').notNull(),
+    applicationId: uuid('application_id')
+      .notNull()
+      .references(() => Applications.id, { onDelete: 'cascade' }),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => Accounts.id, { onDelete: 'cascade' }),
+    profileId: uuid('profile_id').references(() => Profiles.id, { onDelete: 'set null' }),
+    redirectUri: text('redirect_uri').notNull(),
+    scopes: text('scopes').array().notNull(),
+    codeChallenge: text('code_challenge').notNull(),
+    codeChallengeMethod: text('code_challenge_method').notNull(),
+    createdAt: createdAt(),
+    expiresAt: datetime('expires_at').notNull(),
+    consumedAt: datetime('consumed_at'),
+  },
+  (table) => [
+    unique().on(table.codeHash),
+    index().on(table.applicationId),
+    index().on(table.expiresAt),
+  ],
+);
+
+export const OAuthTokens = pgTable(
+  'oauth_token',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => createId(TableDiscriminator.OAuthTokens)),
+    accessTokenHash: text('access_token_hash').notNull(),
+    refreshTokenHash: text('refresh_token_hash'),
+    applicationId: uuid('application_id')
+      .notNull()
+      .references(() => Applications.id, { onDelete: 'cascade' }),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => Accounts.id, { onDelete: 'cascade' }),
+    profileId: uuid('profile_id').references(() => Profiles.id, { onDelete: 'set null' }),
+    scopes: text('scopes').array().notNull(),
+    state: Enum.oauthTokenState('state').notNull(),
+    issuedAt: datetime('issued_at').notNull(),
+    lastUsedAt: datetime('last_used_at').notNull(),
+    expiresAt: datetime('expires_at').notNull(),
+    revokedAt: datetime('revoked_at'),
+  },
+  (table) => [
+    unique().on(table.accessTokenHash),
+    unique().on(table.refreshTokenHash),
+    index().on(table.accountId),
+    index().on(table.applicationId),
+    index().on(table.state, table.expiresAt),
+  ],
+);
 
 export const Posts = pgTable(
   'post',
@@ -95,6 +188,7 @@ export const Profiles = pgTable(
     id: uuid('id')
       .primaryKey()
       .$defaultFn(() => createId(TableDiscriminator.Profiles)),
+    state: Enum.profileState('state').notNull().default('ACTIVE'),
     handle: text('handle').notNull(),
     displayName: text('display_name').notNull(),
     bio: text('bio'),
@@ -136,16 +230,17 @@ export const Sessions = pgTable(
     accountId: uuid('account_id')
       .notNull()
       .references(() => Accounts.id),
-    applicationId: uuid('application_id')
-      .notNull()
-      .references(() => Applications.id),
+    applicationId: uuid('application_id').references(() => Applications.id),
     activeProfileId: uuid('active_profile_id').references(() => Profiles.id),
     oidcSessionKey: text('oidc_session_key'),
     token: text('token').unique().notNull(),
     state: Enum.sessionState('state').notNull(),
-    issuedAt: datetime('issued_at').notNull(),
-    lastUsedAt: datetime('last_used_at').notNull(),
-    expiresAt: datetime('expires_at').notNull(),
+    issuedAt: datetime('issued_at')
+      .notNull()
+      .default(sql`now()`),
+    lastUsedAt: datetime('last_used_at')
+      .notNull()
+      .default(sql`now()`),
   },
-  (table) => [index().on(table.accountId), index().on(table.state, table.expiresAt)],
+  (table) => [index().on(table.accountId)],
 );

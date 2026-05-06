@@ -18,7 +18,6 @@ const config: ExpoConfig = {
     [
       'expo-router',
       {
-        origin: process.env.EXPO_PUBLIC_ORIGIN,
         unstable_useServerRendering: true,
       },
     ],

@@ -4,15 +4,13 @@
   "type": "module",
   "scripts": {
     "start": "bun ./src/server/index.ts",
-    "android": "bun run codegen && expo run:android",
-    "ios": "bun run codegen && expo run:ios",
-    "web": "bun run codegen && expo start --web",
+    "build:local": "bun run codegen && infisical run -- expo run --device",
     "build:web": "bun run codegen && expo export --platform web",
     "lint:expo": "expo lint",
     "lint:tsc": "bun run codegen && tsc --noEmit",
     "serve-web": "bun ./src/server/index.ts",
     "lint": "expo lint",
-    "dev": "bun run codegen && expo start",
+    "dev": "bun run codegen; expo",
     "codegen": "mearie generate"
   },
   "dependencies": {
@@ -21,9 +19,13 @@
     "@mearie/core": "^0.6.7",
     "@mearie/react": "^0.4.7",
     "@react-navigation/native": "^7.1.33",
+    "cookie": "^1.1.1",
     "core-js": "^3.49.0",
-    "expo": "~55.0.12",
+    "drizzle-orm": "^0.45.2",
+    "expo": "~55.0.19",
+    "expo-auth-session": "^55.0.15",
     "expo-constants": "~55.0.12",
+    "expo-crypto": "~55.0.14",
     "expo-dev-client": "~55.0.27",
     "expo-font": "~55.0.6",
     "expo-linking": "~55.0.11",
@@ -49,7 +51,9 @@
     "react-native-worklets": "0.7.2",
     "tailwind-merge": "^3.5.0",
     "tailwind-variants": "^3.2.2",
-    "tsx": "^4.21.0"
+    "temporal-polyfill": "^0.3.2",
+    "tsx": "^4.21.0",
+    "zod": "^4.4.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.2",
