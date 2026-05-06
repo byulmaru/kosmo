@@ -7,6 +7,7 @@ export * from './id';
 export * from './relations';
 export * from './tables';
 export * from './utils';
+export { and, eq } from 'drizzle-orm';
 
 export const db = drizzle(process.env.DATABASE_URL!, {
   relations,

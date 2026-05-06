@@ -1,4 +1,5 @@
 import { dev } from '@kosmo/core';
+import { initContextCache } from '@pothos/core';
 import { createYoga, useExecutionCancellation } from 'graphql-yoga';
 import { Hono } from 'hono';
 import { schema } from './schema';
@@ -8,7 +9,7 @@ export const yoga = new Hono<Env>();
 
 const app = createYoga<{ c: ServerContext }, UserContext>({
   schema,
-  context: ({ c }) => ({ c, ...c.get('context') }),
+  context: ({ c }) => ({ ...initContextCache(), c, ...c.get('context') }),
   graphqlEndpoint: '/graphql',
   batching: true,
   cors: {
