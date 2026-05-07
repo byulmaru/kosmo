@@ -17,7 +17,7 @@ concurrency:
 jobs:
   docker_build:
     name: Docker Build
-    runs-on: arc-b-4x
+    runs-on: ubuntu-24.04-arm
     env:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
@@ -52,6 +52,9 @@ jobs:
               printf '%s=%q\n' "$name" "$value"
             fi
           done | sort > .expo-build.env
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
         if: github.event_name != 'pull_request'
