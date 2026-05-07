@@ -6,13 +6,16 @@ WORKDIR /app
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends --only-upgrade libssl3t64 openssl-provider-legacy \
+  && chown bun:bun /app \
   && rm -rf /var/lib/apt/lists/*
+
+USER bun
 
 FROM base AS workspace
 
-COPY package.json bun.lock tsconfig.json ./
-COPY apps ./apps
-COPY packages ./packages
+COPY --chown=bun:bun package.json bun.lock tsconfig.json ./
+COPY --chown=bun:bun apps ./apps
+COPY --chown=bun:bun packages ./packages
 
 FROM workspace AS deps
 
@@ -38,14 +41,12 @@ ENV PORT=8080
 
 RUN bun install --frozen-lockfile --production
 
-COPY --from=expo-build /app/apps/expo/dist ./apps/expo/dist
-COPY docker-entrypoint.sh ./docker-entrypoint.sh
+COPY --chown=bun:bun --from=expo-build /app/apps/expo/dist ./apps/expo/dist
+COPY --chown=bun:bun docker-entrypoint.sh ./docker-entrypoint.sh
 
-RUN chmod +x ./docker-entrypoint.sh && chown -R bun:bun /app
+RUN chmod +x ./docker-entrypoint.sh
 
 EXPOSE 8080
-
-USER bun
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["expo"]
