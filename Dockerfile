@@ -25,7 +25,7 @@ FROM deps AS expo-build
 
 ARG EXPO_PUBLIC_ENV_HASH
 
-RUN --mount=type=secret,id=expo_build_env,required=true \
+RUN --mount=type=secret,id=expo_build_env,required=true,uid=1000,gid=1000,mode=0400 \
   : "${EXPO_PUBLIC_ENV_HASH}" \
   && set -a \
   && . /run/secrets/expo_build_env \
