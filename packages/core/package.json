@@ -3,9 +3,11 @@
   "exports": {
     ".": "./index.ts",
     "./db": "./db/index.ts",
-    "./enums": "./enums.ts"
+    "./enums": "./enums.ts",
+    "./polyfill": "./polyfill.ts"
   },
   "dependencies": {
+    "core-js": "^3.49.0",
     "drizzle-orm": "1.0.0-beta.22",
     "postgres": "^3.4.9",
     "temporal-polyfill": "^0.3.2"

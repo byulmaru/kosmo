@@ -49,7 +49,6 @@
         "@mearie/react": "^0.4.7",
         "@react-navigation/native": "^7.1.33",
         "cookie": "^1.1.1",
-        "core-js": "^3.49.0",
         "drizzle-orm": "1.0.0-beta.22",
         "expo": "~55.0.19",
         "expo-auth-session": "^55.0.15",
@@ -96,6 +95,7 @@
     "packages/core": {
       "name": "@kosmo/core",
       "dependencies": {
+        "core-js": "^3.49.0",
         "drizzle-orm": "1.0.0-beta.22",
         "postgres": "^3.4.9",
         "temporal-polyfill": "^0.3.2",
