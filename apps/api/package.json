@@ -8,7 +8,14 @@
   "dependencies": {
     "@kosmo/core": "workspace:*",
     "@pothos/core": "^4.12.0",
-    "drizzle-orm": "^1.0.0-beta.22",
+    "@pothos/plugin-dataloader": "^4.4.3",
+    "@pothos/plugin-drizzle": "^0.17.3",
+    "@pothos/plugin-errors": "^4.9.0",
+    "@pothos/plugin-relay": "^4.7.0",
+    "@pothos/plugin-scope-auth": "^4.1.6",
+    "@pothos/plugin-validation": "^4.2.0",
+    "dataloader": "^2.2.3",
+    "drizzle-orm": "1.0.0-beta.22",
     "graphql": "^16.13.2",
     "graphql-yoga": "^5.21.0",
     "hono": "^4.12.14"
