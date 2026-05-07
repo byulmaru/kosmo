@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
   packages: write
 
 concurrency:
@@ -23,6 +24,34 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Connect Tailnet
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          audience: ${{ secrets.TAILSCALE_AUDIENCE }}
+          tags: tag:github-actions
+          ping: ${{ secrets.INFISICAL_HOST }}
+
+      - name: Get secrets from Infisical
+        uses: Infisical/secrets-action@v1.0.15
+        with:
+          method: oidc
+          domain: https://${{ secrets.INFISICAL_HOST }}
+          identity-id: ${{ secrets.INFISICAL_MACHINE_IDENTITY_ID }}
+          project-slug: kosmo
+          env-slug: prod
+
+      - name: Prepare Expo build env
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          env | while IFS='=' read -r name value; do
+            if [[ "$name" == EXPO_PUBLIC_* ]]; then
+              printf '%s=%q\n' "$name" "$value"
+            fi
+          done | sort > .expo-build.env
 
       - name: Log in to GHCR
         if: github.event_name != 'pull_request'
@@ -51,8 +80,12 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            EXPO_PUBLIC_ENV_HASH=${{ hashFiles('.expo-build.env') }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          secret-files: |
+            expo_build_env=.expo-build.env
 
       - name: Select image tag for Trivy
         id: trivy-image

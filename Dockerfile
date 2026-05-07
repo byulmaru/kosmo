@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 FROM oven/bun:1.3.13 AS base
 
 WORKDIR /app
@@ -18,7 +20,15 @@ RUN bun install --frozen-lockfile
 
 FROM deps AS expo-build
 
-RUN cd apps/expo && bun run build:web
+ARG EXPO_PUBLIC_ENV_HASH
+
+RUN --mount=type=secret,id=expo_build_env,required=true \
+  : "${EXPO_PUBLIC_ENV_HASH}" \
+  && set -a \
+  && . /run/secrets/expo_build_env \
+  && set +a \
+  && cd apps/expo \
+  && bun run build:web
 
 FROM workspace AS runtime
 
