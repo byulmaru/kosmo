@@ -63,15 +63,15 @@ spec:
               protocol: TCP
           args:
             - expo
-          {{- if or $app.infisical.enabled $app.env.secretNames }}
+          {{- if or $.Values.infisical.enabled $app.env.secretNames }}
           envFrom:
             {{- range $app.env.secretNames }}
             - secretRef:
                 name: {{ . }}
             {{- end }}
-            {{- if $app.infisical.enabled }}
+            {{- if $.Values.infisical.enabled }}
             - secretRef:
-                name: {{ $app.infisical.secretName }}
+                name: {{ $.Values.infisical.secretName }}
             {{- end }}
           {{- end }}
           livenessProbe:

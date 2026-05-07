@@ -47,12 +47,6 @@ expo:
       periodSeconds: 5
   env:
     secretNames: []
-  infisical:
-    enabled: false
-    identityId: ''
-    projectId: ''
-    envSlug: prod
-    secretName: env
   podAnnotations: {}
   podLabels: {}
   podSecurityContext: {}
@@ -126,12 +120,6 @@ api:
       periodSeconds: 5
   env:
     secretNames: []
-  infisical:
-    enabled: false
-    identityId: ''
-    projectId: ''
-    envSlug: prod
-    secretName: env
   podAnnotations: {}
   podLabels: {}
   podSecurityContext: {}
@@ -165,3 +153,10 @@ certificate:
   dnsNames:
     - kos.moe
     - api.kos.moe
+
+infisical:
+  enabled: true
+  identityId: '953a7c79-6486-44d6-a6be-04dd7eda1853'
+  projectId: '8e05f8b4-604a-4a3e-a4f2-77a89a8318be'
+  envSlug: prod
+  secretName: env
