@@ -27,4 +27,4 @@ jobs:
         run: bun run --parallel "lint:*"
 
       - name: Run lint for apps
-        run: bun run --parallel --workspaces "lint:*"
+        run: bun run --sequential --workspaces "lint:*"

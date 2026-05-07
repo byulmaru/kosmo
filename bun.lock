@@ -21,6 +21,7 @@
         "syncpack": "^14.3.0",
         "typescript": "^6.0.3",
         "typescript-eslint": "^8.59.0",
+        "unrs-resolver": "^1.11.1",
       },
     },
     "apps/api": {
