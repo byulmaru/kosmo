@@ -1,6 +1,6 @@
 import { db } from '@kosmo/core/db';
 import { builder } from '@/graphql/builder';
-import Account from '.';
+import { Account } from './node';
 
 builder.queryFields((t) => ({
   me: t.withAuth({ login: true }).drizzleField({
