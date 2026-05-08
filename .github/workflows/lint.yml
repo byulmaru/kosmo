@@ -12,7 +12,7 @@ permissions:
 jobs:
   lint:
     name: Lint
-    runs-on: byulmaru-arc
+    runs-on: arc-b-4x
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6

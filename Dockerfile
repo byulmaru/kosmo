@@ -1,16 +1,21 @@
+# syntax=docker/dockerfile:1
+
 FROM oven/bun:1.3.13 AS base
 
 WORKDIR /app
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends --only-upgrade libssl3t64 openssl-provider-legacy \
+  && chown bun:bun /app \
   && rm -rf /var/lib/apt/lists/*
+
+USER bun
 
 FROM base AS workspace
 
-COPY package.json bun.lock tsconfig.json ./
-COPY apps ./apps
-COPY packages ./packages
+COPY --chown=bun:bun package.json bun.lock tsconfig.json ./
+COPY --chown=bun:bun apps ./apps
+COPY --chown=bun:bun packages ./packages
 
 FROM workspace AS deps
 
@@ -18,7 +23,15 @@ RUN bun install --frozen-lockfile
 
 FROM deps AS expo-build
 
-RUN cd apps/expo && bun run build:web
+ARG EXPO_PUBLIC_ENV_HASH
+
+RUN --mount=type=secret,id=expo_build_env,required=true,uid=1000,gid=1000,mode=0400 \
+  : "${EXPO_PUBLIC_ENV_HASH}" \
+  && set -a \
+  && . /run/secrets/expo_build_env \
+  && set +a \
+  && cd apps/expo \
+  && bun run build:web
 
 FROM workspace AS runtime
 
@@ -28,14 +41,12 @@ ENV PORT=8080
 
 RUN bun install --frozen-lockfile --production
 
-COPY --from=expo-build /app/apps/expo/dist ./apps/expo/dist
-COPY docker-entrypoint.sh ./docker-entrypoint.sh
+COPY --chown=bun:bun --from=expo-build /app/apps/expo/dist ./apps/expo/dist
+COPY --chown=bun:bun docker-entrypoint.sh ./docker-entrypoint.sh
 
-RUN chmod +x ./docker-entrypoint.sh && chown -R bun:bun /app
+RUN chmod +x ./docker-entrypoint.sh
 
 EXPOSE 8080
-
-USER bun
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["expo"]

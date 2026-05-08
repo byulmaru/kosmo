@@ -1,6 +1,5 @@
 import '../../global.css';
-import 'core-js/actual/array/to-sorted';
-import 'core-js/proposals/array-buffer-base64';
+import '@kosmo/core/polyfill';
 
 import { ClientProvider } from '@mearie/react';
 import { Stack } from 'expo-router';

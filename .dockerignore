@@ -1,5 +1,6 @@
 .git
 .github
+.expo-build.env
 node_modules
 .expo
 dist

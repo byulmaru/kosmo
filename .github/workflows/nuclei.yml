@@ -20,7 +20,7 @@ concurrency:
 jobs:
   nuclei:
     name: Nuclei scan
-    runs-on: byulmaru-arc
+    runs-on: arc-b-4x
     env:
       DEFAULT_TARGETS: |
         https://kos.moe
