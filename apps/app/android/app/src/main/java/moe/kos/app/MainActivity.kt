@@ -56,6 +56,10 @@ class MainActivity : ComponentActivity() {
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
         webView.settings.cacheMode = WebSettings.LOAD_DEFAULT
+        webView.settings.userAgentString = listOf(
+            webView.settings.userAgentString,
+            "KosmoApp/${BuildConfig.VERSION_NAME}",
+        ).joinToString(" ")
 
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(

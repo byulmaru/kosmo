@@ -28,7 +28,7 @@ final class WebViewModel: NSObject {
         super.init()
 
         webView.navigationDelegate = self
-        webView.load(URLRequest(url: webOrigin))
+        configureUserAgent()
     }
 
     private func startLogin() {
@@ -93,6 +93,25 @@ final class WebViewModel: NSObject {
 
     private var oidcClientID: String {
         Bundle.main.object(forInfoDictionaryKey: "KOSMO_OIDC_CLIENT_ID") as? String ?? ""
+    }
+
+    private var appUserAgent: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        return "KosmoApp/\(version ?? "0.0.0")"
+    }
+
+    private func configureUserAgent() {
+        webView.evaluateJavaScript("navigator.userAgent") { [weak self] userAgent, _ in
+            Task { @MainActor in
+                guard let self else { return }
+
+                let defaultUserAgent = userAgent as? String
+                self.webView.customUserAgent = [defaultUserAgent, self.appUserAgent]
+                    .compactMap { $0 }
+                    .joined(separator: " ")
+                self.webView.load(URLRequest(url: self.webOrigin))
+            }
+        }
     }
 
     private func randomBase64URL() -> String {
