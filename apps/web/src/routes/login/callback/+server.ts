@@ -4,6 +4,7 @@ import { AccountState, SessionState } from '@kosmo/core/enums';
 import { error, redirect } from '@sveltejs/kit';
 import { z } from 'zod';
 import { env } from '$env/dynamic/private';
+import { env as publicEnv } from '$env/dynamic/public';
 import type { RequestHandler } from './$types';
 
 const LOGIN_STATE_COOKIE = 'kosmo_oidc_state';
@@ -45,7 +46,7 @@ export const GET: RequestHandler = async ({ cookies, url }) => {
     error(400, 'OIDC callback state is invalid');
   }
 
-  if (!env.PUBLIC_OIDC_CLIENT_ID || !env.OIDC_CLIENT_SECRET) {
+  if (!publicEnv.PUBLIC_OIDC_CLIENT_ID || !env.OIDC_CLIENT_SECRET) {
     error(500, 'OIDC client configuration is required');
   }
 
@@ -63,7 +64,7 @@ export const GET: RequestHandler = async ({ cookies, url }) => {
 
   const tokenResponse = await fetch(OIDC_TOKEN_URL, {
     body: JSON.stringify({
-      client_id: env.PUBLIC_OIDC_CLIENT_ID,
+      client_id: publicEnv.PUBLIC_OIDC_CLIENT_ID,
       client_secret: env.OIDC_CLIENT_SECRET,
       code: authRequest.code,
       code_verifier: authRequest.codeVerifier,
