@@ -61,7 +61,7 @@ const config = ts.config(
     },
   },
   {
-    ignores: ['**/node_modules/**', '**/dist/**', '**/.mearie/**'],
+    ignores: ['**/node_modules/**', '**/dist/**', '**/.mearie/**', '**/.svelte-kit/**'],
   },
 );
 
