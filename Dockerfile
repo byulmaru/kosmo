@@ -39,19 +39,21 @@ ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=8080
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
-COPY apps/api/package.json ./apps/api/package.json
-COPY apps/web/package.json ./apps/web/package.json
-COPY packages/core/package.json ./packages/core/package.json
+COPY --chown=node:node package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
+COPY --chown=node:node apps/api/package.json ./apps/api/package.json
+COPY --chown=node:node apps/web/package.json ./apps/web/package.json
+COPY --chown=node:node packages/core/package.json ./packages/core/package.json
 
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
-COPY apps/api ./apps/api
-COPY packages/core ./packages/core
-COPY --from=web-build /app/apps/web/build ./apps/web/build
-COPY docker-entrypoint.sh ./docker-entrypoint.sh
+COPY --chown=node:node apps/api ./apps/api
+COPY --chown=node:node packages/core ./packages/core
+COPY --chown=node:node --from=web-build /app/apps/web/build ./apps/web/build
+COPY --chown=node:node docker-entrypoint.sh ./docker-entrypoint.sh
 
 RUN chmod +x ./docker-entrypoint.sh
+
+USER node
 
 EXPOSE 8080
 
