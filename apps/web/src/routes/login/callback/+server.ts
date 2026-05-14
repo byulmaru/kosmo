@@ -1,11 +1,19 @@
 import { sessionName } from '@kosmo/core';
+import { Accounts, db, firstOrThrow, Sessions } from '@kosmo/core/db';
+import { AccountState, SessionState } from '@kosmo/core/enums';
 import { error, redirect } from '@sveltejs/kit';
 import { z } from 'zod';
-import { env } from '$env/dynamic/public';
+import { env } from '$env/dynamic/private';
 import type { RequestHandler } from './$types';
 
 const LOGIN_STATE_COOKIE = 'kosmo_oidc_state';
 const LOGIN_CODE_VERIFIER_COOKIE = 'kosmo_oidc_code_verifier';
+const OIDC_TOKEN_URL = 'https://id.byulmaru.co/oauth/token';
+
+type TokenResponse = {
+  access_token?: string;
+  id_token?: string;
+};
 
 const nativeCallbackSchema = z.object({
   code: z.string().min(1),
@@ -37,34 +45,75 @@ export const GET: RequestHandler = async ({ cookies, url }) => {
     error(400, 'OIDC callback state is invalid');
   }
 
-  const response = await fetch(new URL('/auth', env.PUBLIC_API_ORIGIN), {
-    body: JSON.stringify(
-      isNativeCallback
-        ? {
-            code: nativeCallback.data.code,
-            code_verifier: nativeCallback.data.code_verifier,
-            redirect_uri: nativeCallback.data.redirect_uri,
-          }
-        : {
-            code,
-            code_verifier: webCodeVerifier,
-            redirect_uri: new URL('/login/callback', url.origin).toString(),
-          },
-    ),
+  if (!env.PUBLIC_OIDC_CLIENT_ID || !env.OIDC_CLIENT_SECRET) {
+    error(500, 'OIDC client configuration is required');
+  }
+
+  const authRequest = isNativeCallback
+    ? {
+        code: nativeCallback.data.code,
+        codeVerifier: nativeCallback.data.code_verifier,
+        redirectUri: nativeCallback.data.redirect_uri,
+      }
+    : {
+        code,
+        codeVerifier: webCodeVerifier,
+        redirectUri: new URL('/login/callback', url.origin).toString(),
+      };
+
+  const tokenResponse = await fetch(OIDC_TOKEN_URL, {
+    body: JSON.stringify({
+      client_id: env.PUBLIC_OIDC_CLIENT_ID,
+      client_secret: env.OIDC_CLIENT_SECRET,
+      code: authRequest.code,
+      code_verifier: authRequest.codeVerifier,
+      grant_type: 'authorization_code',
+      redirect_uri: authRequest.redirectUri,
+    }),
     headers: { 'Content-Type': 'application/json' },
     method: 'POST',
   });
-  const body = (await response.json().catch(() => undefined)) as
-    | { session_token?: string }
+  const tokenJson = (await tokenResponse.json().catch(() => undefined)) as
+    | TokenResponse
     | undefined;
 
-  if (!response.ok || !body?.session_token) {
-    error(response.status || 400, 'OIDC code exchange failed');
+  if (!tokenResponse.ok || !tokenJson?.access_token || !tokenJson.id_token) {
+    error(tokenResponse.status || 400, 'OIDC code exchange failed');
   }
+
+  const { sub: oidcSubject, name: displayName } = decodeIdToken(tokenJson.id_token);
+  const sessionToken = await db.transaction(async (tx) => {
+    const account = await tx
+      .insert(Accounts)
+      .values({
+        displayName,
+        oidcSubject,
+        state: AccountState.ACTIVE,
+      })
+      .onConflictDoUpdate({
+        target: [Accounts.oidcSubject],
+        set: { displayName },
+      })
+      .returning({ id: Accounts.id })
+      .then(firstOrThrow);
+
+    const session = await tx
+      .insert(Sessions)
+      .values({
+        accountId: account.id,
+        oidcSessionKey: tokenJson.access_token,
+        state: SessionState.ACTIVE,
+        token: createSessionToken(),
+      })
+      .returning({ token: Sessions.token })
+      .then(firstOrThrow);
+
+    return session.token;
+  });
 
   cookies.delete(LOGIN_STATE_COOKIE, { path: '/login/callback' });
   cookies.delete(LOGIN_CODE_VERIFIER_COOKIE, { path: '/login/callback' });
-  cookies.set(sessionName, body.session_token, {
+  cookies.set(sessionName, sessionToken, {
     httpOnly: true,
     maxAge: 60 * 60 * 24 * 30,
     path: '/',
@@ -74,3 +123,32 @@ export const GET: RequestHandler = async ({ cookies, url }) => {
 
   redirect(302, '/');
 };
+
+function decodeIdToken(idToken: string) {
+  const [, payload] = idToken.split('.', 2);
+
+  if (!payload) {
+    error(400, 'Invalid id_token');
+  }
+
+  const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as unknown;
+  const result = z
+    .object({
+      name: z.string(),
+      sub: z.string().min(1),
+    })
+    .safeParse(decoded);
+
+  if (!result.success) {
+    error(400, 'Invalid id_token payload');
+  }
+
+  return result.data;
+}
+
+function createSessionToken() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+
+  return Buffer.from(bytes).toString('base64url');
+}

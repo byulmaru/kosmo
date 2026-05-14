@@ -1,6 +1,4 @@
 apps/helm/templates/**/*.yaml
-apps/expo/.expo
-apps/expo/.mearie
-apps/expo/expo-env.d.ts
-apps/expo/ios
-apps/expo/android
+apps/web/build/
+apps/web/.svelte-kit
+apps/web/.mearie

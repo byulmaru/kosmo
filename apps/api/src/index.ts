@@ -2,7 +2,6 @@ import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { deriveContext } from './context';
 import { yoga } from './graphql';
-import { auth } from './rest/auth';
 import type { Env } from './context';
 
 const app = new Hono<Env>();
@@ -10,8 +9,6 @@ const app = new Hono<Env>();
 app.get('/health', (c) => {
   return c.json({ status: 'ok' });
 });
-
-app.route('/auth', auth);
 
 app.use('*', async (c, next) => {
   const context = await deriveContext(c);
