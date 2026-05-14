@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-app="${1:-expo}"
+app="${1:-web}"
 app_dir="/app/apps/${app}"
 
 if [ ! -d "${app_dir}" ]; then
@@ -10,4 +10,8 @@ if [ ! -d "${app_dir}" ]; then
 fi
 
 cd "${app_dir}"
-exec bun run start
+if [ "${app}" = "web" ]; then
+  exec node build/index.js
+fi
+
+exec pnpm start

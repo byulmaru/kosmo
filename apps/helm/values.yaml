@@ -1,4 +1,4 @@
-expo:
+web:
   replicaCount: 1
   rollout:
     strategy:

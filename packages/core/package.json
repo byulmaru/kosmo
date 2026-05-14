@@ -1,5 +1,6 @@
 {
   "name": "@kosmo/core",
+  "type": "module",
   "exports": {
     ".": "./index.ts",
     "./db": "./db/index.ts",

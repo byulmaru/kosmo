@@ -1,52 +1,59 @@
 # syntax=docker/dockerfile:1
 
-FROM oven/bun:1.3.13 AS base
+FROM node:26.1.0-bookworm-slim AS base
 
 WORKDIR /app
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends --only-upgrade libssl3t64 openssl-provider-legacy \
-  && chown bun:bun /app \
-  && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/* \
+  && corepack enable
 
-USER bun
+ENV PNPM_HOME=/root/.local/share/pnpm
+ENV PATH=$PNPM_HOME:$PATH
 
 FROM base AS workspace
 
-COPY --chown=bun:bun package.json bun.lock tsconfig.json ./
-COPY --chown=bun:bun apps ./apps
-COPY --chown=bun:bun packages ./packages
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
+COPY apps ./apps
+COPY packages ./packages
 
 FROM workspace AS deps
 
-RUN bun install --frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
-FROM deps AS expo-build
+FROM deps AS web-build
 
-ARG EXPO_PUBLIC_ENV_HASH
+ARG PUBLIC_ENV_HASH
 
-RUN --mount=type=secret,id=expo_build_env,required=true,uid=1000,gid=1000,mode=0400 \
-  : "${EXPO_PUBLIC_ENV_HASH}" \
+RUN --mount=type=secret,id=web_build_env,required=true,mode=0400 \
+  : "${PUBLIC_ENV_HASH}" \
   && set -a \
-  && . /run/secrets/expo_build_env \
+  && . /run/secrets/web_build_env \
   && set +a \
-  && cd apps/expo \
-  && bun run build:web
+  && pnpm --filter @kosmo/web build
 
-FROM workspace AS runtime
+FROM base AS runtime
 
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=8080
 
-RUN bun install --frozen-lockfile --production
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
+COPY apps/api/package.json ./apps/api/package.json
+COPY apps/web/package.json ./apps/web/package.json
+COPY packages/core/package.json ./packages/core/package.json
 
-COPY --chown=bun:bun --from=expo-build /app/apps/expo/dist ./apps/expo/dist
-COPY --chown=bun:bun docker-entrypoint.sh ./docker-entrypoint.sh
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
+
+COPY apps/api ./apps/api
+COPY packages/core ./packages/core
+COPY --from=web-build /app/apps/web/build ./apps/web/build
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
 
 RUN chmod +x ./docker-entrypoint.sh
 
 EXPOSE 8080
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
-CMD ["expo"]
+CMD ["web"]

@@ -1,0 +1,16 @@
+packages:
+  - apps/*
+  - packages/*
+
+minimumReleaseAge: 4320
+allowBuilds:
+  '@tailwindcss/oxide': true
+  core-js: true
+  esbuild: true
+  unrs-resolver: true
+minimumReleaseAgeExclude:
+  - cookie@0.7.0
+  - postcss@8.5.10
+overrides:
+  cookie@<0.7.0: ^0.7.0
+  postcss@<8.5.10: ^8.5.10

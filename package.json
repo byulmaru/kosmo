@@ -2,9 +2,9 @@
   "name": "@kosmo/monorepo",
   "private": true,
   "version": "0.0.0",
-  "packageManager": "bun",
+  "packageManager": "pnpm@11.1.0+sha512.0c44e842e5686b2c061a81adda8b2258bd8818e9704b2cf2c63d56b931a7b2e910092e085027003b96ca3911ab56a07f6df5abaed2be9925034cdd686a535b14",
   "scripts": {
-    "dev": "infisical run -- bun run --parallel --workspaces --if-present dev",
+    "dev": "infisical run -- pnpm --recursive --parallel --if-present dev",
     "lint:eslint": "eslint --max-warnings 0 .",
     "lint:prettier": "prettier --check --ignore-unknown '**/*'",
     "lint:syncpack": "syncpack lint --dependency-types prod,dev,peer",
@@ -12,7 +12,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/bun": "^1.3.12",
+    "@types/node": "^25.6.2",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-import": "^2.32.0",
@@ -23,6 +23,7 @@
     "ms": "^2.1.3",
     "prettier": "^3.8.2",
     "prettier-plugin-brace-style": "^0.10.1",
+    "prettier-plugin-svelte": "^3.5.1",
     "prettier-plugin-tailwindcss": "^0.7.2",
     "syncpack": "^14.3.0",
     "typescript": "^6.0.3",
@@ -35,7 +36,7 @@
     "apps/*",
     "packages/*"
   ],
-  "patchedDependencies": {
-    "@react-native/gradle-plugin@0.83.4": "patches/@react-native%2Fgradle-plugin@0.83.4.patch"
+  "engines": {
+    "node": "26.1.0"
   }
 }
