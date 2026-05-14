@@ -1,0 +1,39 @@
+# Kosmo Native App
+
+Native WebView shells for the Kosmo web app.
+
+## Structure
+
+- `android/`: Kotlin Android app that hosts `https://kos.moe` in `WebView`.
+- `ios/`: Swift iOS app that hosts `https://kos.moe` in `WKWebView`.
+
+Both apps use the existing app identifier `moe.kos` and the custom callback URL `kosmo://login/callback`.
+
+## Login Flow
+
+1. The WebView loads `https://kos.moe`.
+2. When the WebView navigates to `https://kos.moe/login`, native code cancels the navigation.
+3. Android opens the OIDC authorize URL with Custom Tabs.
+4. iOS opens the OIDC authorize URL with `ASWebAuthenticationSession`.
+5. The OIDC provider redirects to `kosmo://login/callback`.
+6. Native code validates `state` and loads `https://kos.moe/login/callback` in the WebView with the authorization `code`, `state`, `code_verifier`, and `redirect_uri`.
+7. The web server should exchange the code and set the app WebView session cookie with `Set-Cookie` before redirecting back to `/`.
+
+## Configuration
+
+Android expects an OIDC client id from the Gradle property `kosmo.oidcClientId`. Open `android/` in Android Studio, or run Gradle if it is installed locally.
+
+```sh
+gradle assembleDebug -Pkosmo.oidcClientId=...
+```
+
+iOS expects `KOSMO_OIDC_CLIENT_ID` in the app `Info.plist` or an equivalent build setting. It is intentionally left empty in source until the deployment configuration is decided.
+
+## Web Contract
+
+The native apps assume these web routes exist:
+
+- `GET /login`: starts login in a browser on the web, but is intercepted by native WebView shells.
+- `GET /login/callback`: accepts the native OIDC callback parameters, exchanges the code, sets the HttpOnly session cookie, and redirects to `/`.
+
+The web route implementation is intentionally separate from this native app scaffold.
