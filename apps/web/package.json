@@ -13,16 +13,9 @@
     "test:unit": "vitest",
     "test": "npm run test:unit -- --run && npm run test:e2e",
     "test:e2e": "playwright install && playwright test",
-    "run:android": "BUILD_TARGET=app pnpm run build && cap run android",
-    "run:ios": "BUILD_TARGET=app pnpm run build && cap run ios",
     "start": "node build/index.js"
   },
   "devDependencies": {
-    "@capacitor/android": "^8.3.3",
-    "@capacitor/cli": "^8.3.3",
-    "@capacitor/core": "^8.3.3",
-    "@capacitor/ios": "^8.3.3",
-    "@capgo/capacitor-social-login": "^8.3.20",
     "@kosmo/core": "workspace:*",
     "@mearie/core": "^0.6.7",
     "@mearie/svelte": "^0.4.7",
