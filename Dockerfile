@@ -5,7 +5,7 @@ FROM node:26.1.0-bookworm-slim AS base
 WORKDIR /app
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends --only-upgrade libssl3t64 openssl-provider-legacy \
+  && apt-get install -y --no-install-recommends --only-upgrade libssl3 openssl \
   && rm -rf /var/lib/apt/lists/* \
   && corepack enable
 
