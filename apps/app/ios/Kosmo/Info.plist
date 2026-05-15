@@ -31,8 +31,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.social-networking</string>
-	<key>KOSMO_OIDC_CLIENT_ID</key>
-	<string>$(KOSMO_OIDC_CLIENT_ID)</string>
+	<key>PUBLIC_KOSMO_OIDC_CLIENT_ID</key>
+	<string>$(PUBLIC_KOSMO_OIDC_CLIENT_ID)</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

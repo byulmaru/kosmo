@@ -1,23 +1,32 @@
 // !$*UTF8*$!
 {
 	archiveVersion = 1;
-	classes = {};
+	classes = {
+	};
 	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
 		A10000000000000000000001 /* KosmoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000011 /* KosmoApp.swift */; };
-		A10000000000000000000002 /* WebViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* WebViewModel.swift */; };
 		A10000000000000000000003 /* WebViewScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000013 /* WebViewScreen.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A10000000000000000000010 /* Kosmo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kosmo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000000000000000000011 /* KosmoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KosmoApp.swift; sourceTree = "<group>"; };
-		A10000000000000000000012 /* WebViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebViewModel.swift; sourceTree = "<group>"; };
 		A10000000000000000000013 /* WebViewScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebViewScreen.swift; sourceTree = "<group>"; };
 		A10000000000000000000014 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A10000000000000000000032 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		A10000000000000000000020 = {
@@ -32,7 +41,6 @@
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000011 /* KosmoApp.swift */,
-				A10000000000000000000012 /* WebViewModel.swift */,
 				A10000000000000000000013 /* WebViewScreen.swift */,
 				A10000000000000000000014 /* Info.plist */,
 			);
@@ -58,8 +66,10 @@
 				A10000000000000000000032 /* Frameworks */,
 				A10000000000000000000033 /* Resources */,
 			);
-			buildRules = ();
-			dependencies = ();
+			buildRules = (
+			);
+			dependencies = (
+			);
 			name = Kosmo;
 			productName = Kosmo;
 			productReference = A10000000000000000000010 /* Kosmo.app */;
@@ -103,7 +113,8 @@
 		A10000000000000000000033 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
-			files = ();
+			files = (
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
@@ -114,21 +125,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000001 /* KosmoApp.swift in Sources */,
-				A10000000000000000000002 /* WebViewModel.swift in Sources */,
 				A10000000000000000000003 /* WebViewScreen.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
-
-/* Begin PBXFrameworksBuildPhase section */
-		A10000000000000000000032 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = ();
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXFrameworksBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
 		A10000000000000000000060 /* Debug */ = {
@@ -253,6 +254,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = 848V8UCH45;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Kosmo/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -277,6 +279,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = 848V8UCH45;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Kosmo/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

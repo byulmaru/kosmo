@@ -2,3 +2,4 @@ apps/helm/templates/**/*.yaml
 apps/web/build/
 apps/web/.svelte-kit
 apps/web/.mearie
+pnpm-lock.yaml

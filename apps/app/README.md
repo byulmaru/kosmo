@@ -21,13 +21,23 @@ Both apps use the existing app identifier `moe.kos` and the custom callback URL 
 
 ## Configuration
 
-Android expects an OIDC client id from the Gradle property `kosmo.oidcClientId`. Open `android/` in Android Studio, or run Gradle if it is installed locally.
+Android expects an OIDC client id from the public build-time environment variable `PUBLIC_KOSMO_OIDC_CLIENT_ID`. Open `android/` in Android Studio, or run Gradle if it is installed locally.
 
 ```sh
-gradle assembleDebug -Pkosmo.oidcClientId=...
+pnpm --dir apps/app/android build
 ```
 
-iOS expects `KOSMO_OIDC_CLIENT_ID` in the app `Info.plist` or an equivalent build setting. It is intentionally left empty in source until the deployment configuration is decided.
+iOS expects an OIDC client id from the public build-time environment variable `PUBLIC_KOSMO_OIDC_CLIENT_ID`. Code signing uses the Apple development team selected in the Xcode project.
+
+```sh
+pnpm --dir apps/app/ios build
+```
+
+To build, install, and launch on a selected physical iOS device:
+
+```sh
+pnpm --dir apps/app/ios run
+```
 
 ## Web Contract
 

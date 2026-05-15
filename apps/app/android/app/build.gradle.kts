@@ -14,7 +14,7 @@ android {
         versionCode = 1
         versionName = "0.0.1"
 
-        val oidcClientId = providers.gradleProperty("kosmo.oidcClientId").orNull.orEmpty()
+        val oidcClientId = providers.environmentVariable("PUBLIC_KOSMO_OIDC_CLIENT_ID").orNull.orEmpty()
         buildConfigField("String", "OIDC_CLIENT_ID", "\"$oidcClientId\"")
         buildConfigField("String", "WEB_ORIGIN", "\"https://kos.moe\"")
     }
