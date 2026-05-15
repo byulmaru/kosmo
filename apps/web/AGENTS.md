@@ -1,0 +1,1 @@
+- SvelteKit Project의 모든 dependencies는 devDependencies로 선언 (build 과정에서 모두 포함되기 때문에)

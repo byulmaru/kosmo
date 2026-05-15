@@ -1,0 +1,103 @@
+{{- $app := .Values.web -}}
+{{- if ne (default true $app.enabled) false }}
+{{- $versionLabel := regexReplaceAll "[^A-Za-z0-9_.-]" $app.image.tag "-" | trunc 63 | trimAll "-" -}}
+{{- $imageRef := printf "%s:%s" $app.image.repository $app.image.tag -}}
+{{- if contains "sha256:" $app.image.tag -}}
+{{- $imageRef = printf "%s@%s" $app.image.repository $app.image.tag -}}
+{{- end -}}
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: {{ printf "%s-web" .Release.Name | trunc 63 | trimSuffix "-" }}
+  labels:
+    helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
+    app.kubernetes.io/name: web
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ $versionLabel | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  {{- if not $app.autoscaling.enabled }}
+  replicas: {{ $app.replicaCount }}
+  {{- end }}
+  strategy:
+    blueGreen:
+      activeService: {{ printf "%s-web" .Release.Name | trunc 63 | trimSuffix "-" }}
+      previewService: {{ printf "%s-web-preview" .Release.Name | trunc 63 | trimSuffix "-" }}
+      {{- with $app.rollout.strategy.blueGreen }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: web
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      {{- with $app.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        app.kubernetes.io/name: web
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        {{- with $app.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with $app.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $app.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: web
+          image: {{ $imageRef | quote }}
+          imagePullPolicy: {{ $app.image.pullPolicy }}
+          securityContext:
+            {{- toYaml $app.containerSecurityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ $app.service.targetPort }}
+              protocol: TCP
+          args:
+            - web
+          {{- if or $.Values.infisical.enabled $app.env.secretNames }}
+          envFrom:
+            {{- range $app.env.secretNames }}
+            - secretRef:
+                name: {{ . }}
+            {{- end }}
+            {{- if $.Values.infisical.enabled }}
+            - secretRef:
+                name: {{ $.Values.infisical.secretName }}
+            {{- end }}
+          {{- end }}
+          livenessProbe:
+            httpGet:
+              path: {{ $app.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ $app.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ $app.probes.liveness.periodSeconds }}
+          readinessProbe:
+            httpGet:
+              path: {{ $app.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ $app.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ $app.probes.readiness.periodSeconds }}
+          resources:
+            {{- toYaml $app.resources | nindent 12 }}
+      {{- with $app.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $app.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $app.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

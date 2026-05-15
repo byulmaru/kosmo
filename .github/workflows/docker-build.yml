@@ -42,16 +42,16 @@ jobs:
           project-slug: kosmo
           env-slug: prod
 
-      - name: Prepare Expo build env
+      - name: Prepare web build env
         shell: bash
         run: |
           set -euo pipefail
 
           env | while IFS='=' read -r name value; do
-            if [[ "$name" == EXPO_PUBLIC_* ]]; then
+            if [[ "$name" == PUBLIC_* ]]; then
               printf '%s=%q\n' "$name" "$value"
             fi
-          done | sort > .expo-build.env
+          done | sort > .web-build.env
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -84,11 +84,11 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            EXPO_PUBLIC_ENV_HASH=${{ hashFiles('.expo-build.env') }}
+            PUBLIC_ENV_HASH=${{ hashFiles('.web-build.env') }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           secret-files: |
-            expo_build_env=.expo-build.env
+            web_build_env=.web-build.env
 
       - name: Select image tag for Trivy
         id: trivy-image
