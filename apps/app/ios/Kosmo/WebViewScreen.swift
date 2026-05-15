@@ -1,6 +1,4 @@
 import AuthenticationServices
-import CryptoKit
-import Security
 import SwiftUI
 import UIKit
 import WebKit
@@ -44,8 +42,8 @@ final class Coordinator: NSObject, WKNavigationDelegate, ASWebAuthenticationPres
         Bundle.main.url(forPublicOrigin: "PUBLIC_ORIGIN")
     }
     private let callbackPath = "/login/callback"
+    private let nativeLoginPath = "/login/native"
 
-    private var codeVerifier: String?
     private var state: String?
     private var authenticationSession: ASWebAuthenticationSession?
 
@@ -59,9 +57,9 @@ final class Coordinator: NSObject, WKNavigationDelegate, ASWebAuthenticationPres
             return
         }
 
-        if url.scheme == webOrigin.scheme, url.host == webOrigin.host, url.path == "/login" {
+        if url.scheme == webOrigin.scheme, url.host == webOrigin.host, url.path == nativeLoginPath {
             decisionHandler(.cancel)
-            startLogin()
+            startLogin(url)
             return
         }
 
@@ -83,16 +81,22 @@ final class Coordinator: NSObject, WKNavigationDelegate, ASWebAuthenticationPres
             .first { $0.isKeyWindow }!
     }
 
-    private func startLogin() {
+    private func startLogin(_ url: URL) {
         if oidcClientID.isEmpty {
             print("Kosmo native login skipped: PUBLIC_OIDC_CLIENT_ID is empty")
             return
         }
 
-        let nextState = randomBase64URL()
-        let nextCodeVerifier = randomBase64URL()
-        state = nextState
-        codeVerifier = nextCodeVerifier
+        guard
+            let loginComponents = URLComponents(url: url, resolvingAgainstBaseURL: false),
+            let state = loginComponents.queryItems?.first(where: { $0.name == "state" })?.value,
+            let codeChallenge = loginComponents.queryItems?.first(where: { $0.name == "code_challenge" })?.value
+        else {
+            print("Kosmo native login skipped: native login parameters are missing")
+            return
+        }
+
+        self.state = state
 
         var components = URLComponents(url: authorizeURL, resolvingAgainstBaseURL: false)!
         components.queryItems = [
@@ -100,9 +104,9 @@ final class Coordinator: NSObject, WKNavigationDelegate, ASWebAuthenticationPres
             URLQueryItem(name: "client_id", value: oidcClientID),
             URLQueryItem(name: "redirect_uri", value: redirectURI),
             URLQueryItem(name: "scope", value: "openid profile"),
-            URLQueryItem(name: "code_challenge", value: codeChallenge(nextCodeVerifier)),
+            URLQueryItem(name: "code_challenge", value: codeChallenge),
             URLQueryItem(name: "code_challenge_method", value: "S256"),
-            URLQueryItem(name: "state", value: nextState),
+            URLQueryItem(name: "state", value: state),
         ]
 
         guard let url = components.url else {
@@ -160,22 +164,15 @@ final class Coordinator: NSObject, WKNavigationDelegate, ASWebAuthenticationPres
             return
         }
 
-        guard let codeVerifier else {
-            print("Kosmo native login callback ignored: code verifier is missing")
-            return
-        }
-
         var sessionComponents = URLComponents(url: webOrigin, resolvingAgainstBaseURL: false)!
         sessionComponents.path = callbackPath
         sessionComponents.queryItems = [
             URLQueryItem(name: "code", value: code),
             URLQueryItem(name: "state", value: returnedState),
-            URLQueryItem(name: "code_verifier", value: codeVerifier),
             URLQueryItem(name: "redirect_uri", value: redirectURI),
         ]
 
         state = nil
-        self.codeVerifier = nil
 
         guard let sessionURL = sessionComponents.url else {
             print("Kosmo native login failed: session URL could not be built")
@@ -189,25 +186,6 @@ final class Coordinator: NSObject, WKNavigationDelegate, ASWebAuthenticationPres
         Bundle.main.object(forInfoDictionaryKey: "PUBLIC_OIDC_CLIENT_ID") as? String ?? ""
     }
 
-    private func randomBase64URL() -> String {
-        var bytes = [UInt8](repeating: 0, count: 32)
-        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
-        return Data(bytes).base64URLEncodedString()
-    }
-
-    private func codeChallenge(_ verifier: String) -> String {
-        let digest = SHA256.hash(data: Data(verifier.utf8))
-        return Data(digest).base64URLEncodedString()
-    }
-}
-
-private extension Data {
-    func base64URLEncodedString() -> String {
-        base64EncodedString()
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
-    }
 }
 
 private extension Bundle {

@@ -12,12 +12,12 @@ Both apps use the existing app identifier `moe.kos` and the custom callback URL 
 ## Login Flow
 
 1. The WebView loads `https://kos.moe`.
-2. When the WebView navigates to `https://kos.moe/login`, native code cancels the navigation.
-3. Android opens the OIDC authorize URL with Custom Tabs.
-4. iOS opens the OIDC authorize URL with `ASWebAuthenticationSession`.
+2. When the WebView navigates to `https://kos.moe/login`, the web server detects the native `KosmoApp` User-Agent.
+3. The web server sets the shared OIDC state and PKCE verifier cookies, then redirects native WebViews to `/login/native` with `state` and `code_challenge`.
+4. Native code intercepts `/login/native` and opens the OIDC authorize URL. Android uses Custom Tabs, and iOS uses `ASWebAuthenticationSession`.
 5. The OIDC provider redirects to `kosmo://login/callback`.
-6. Native code validates `state` and loads `https://kos.moe/login/callback` in the WebView with the authorization `code`, `state`, `code_verifier`, and `redirect_uri`.
-7. The web server should exchange the code and set the app WebView session cookie with `Set-Cookie` before redirecting back to `/`.
+6. Native code validates `state` and loads `https://kos.moe/login/callback` in the WebView with the authorization `code`, `state`, and `redirect_uri`.
+7. The web server validates the shared state and PKCE verifier cookies, exchanges the code, and sets the app WebView session cookie with `Set-Cookie` before redirecting back to `/`.
 
 ## Configuration
 

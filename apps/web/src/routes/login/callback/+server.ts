@@ -10,18 +10,12 @@ import type { RequestHandler } from './$types';
 const LOGIN_STATE_COOKIE = 'kosmo_oidc_state';
 const LOGIN_CODE_VERIFIER_COOKIE = 'kosmo_oidc_code_verifier';
 const OIDC_TOKEN_URL = 'https://id.byulmaru.co/oauth/token';
+const NATIVE_REDIRECT_URI = 'kosmo://login/callback';
 
 type TokenResponse = {
   access_token?: string;
   id_token?: string;
 };
-
-const nativeCallbackSchema = z.object({
-  code: z.string().min(1),
-  code_verifier: z.string().min(1),
-  redirect_uri: z.url(),
-  state: z.string().min(1),
-});
 
 export const GET: RequestHandler = async ({ cookies, url }) => {
   const code = url.searchParams.get('code');
@@ -31,18 +25,10 @@ export const GET: RequestHandler = async ({ cookies, url }) => {
     error(400, 'OIDC callback is missing code or state');
   }
 
-  const nativeCallback = nativeCallbackSchema.safeParse({
-    code,
-    code_verifier: url.searchParams.get('code_verifier'),
-    redirect_uri: url.searchParams.get('redirect_uri'),
-    state: returnedState,
-  });
-
   const webState = cookies.get(LOGIN_STATE_COOKIE);
   const webCodeVerifier = cookies.get(LOGIN_CODE_VERIFIER_COOKIE);
-  const isNativeCallback = nativeCallback.success;
 
-  if (!isNativeCallback && (!webState || !webCodeVerifier || returnedState !== webState)) {
+  if (!webState || !webCodeVerifier || returnedState !== webState) {
     error(400, 'OIDC callback state is invalid');
   }
 
@@ -50,26 +36,24 @@ export const GET: RequestHandler = async ({ cookies, url }) => {
     error(500, 'OIDC client configuration is required');
   }
 
-  const authRequest = isNativeCallback
-    ? {
-        code: nativeCallback.data.code,
-        codeVerifier: nativeCallback.data.code_verifier,
-        redirectUri: nativeCallback.data.redirect_uri,
-      }
-    : {
-        code,
-        codeVerifier: webCodeVerifier,
-        redirectUri: new URL('/login/callback', url.origin).toString(),
-      };
+  const redirectUri =
+    url.searchParams.get('redirect_uri') ?? new URL('/login/callback', url.origin).toString();
+
+  if (
+    redirectUri !== NATIVE_REDIRECT_URI &&
+    redirectUri !== new URL('/login/callback', url.origin).toString()
+  ) {
+    error(400, 'OIDC callback redirect_uri is invalid');
+  }
 
   const tokenResponse = await fetch(OIDC_TOKEN_URL, {
     body: JSON.stringify({
       client_id: publicEnv.PUBLIC_OIDC_CLIENT_ID,
       client_secret: env.OIDC_CLIENT_SECRET,
-      code: authRequest.code,
-      code_verifier: authRequest.codeVerifier,
+      code,
+      code_verifier: webCodeVerifier,
       grant_type: 'authorization_code',
-      redirect_uri: authRequest.redirectUri,
+      redirect_uri: redirectUri,
     }),
     headers: { 'Content-Type': 'application/json' },
     method: 'POST',
