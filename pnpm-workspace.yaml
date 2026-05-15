@@ -11,6 +11,8 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - cookie@0.7.0
   - postcss@8.5.10
+  - svelte@5.55.7
+  - devalue@5.8.1
 overrides:
   cookie@<0.7.0: ^0.7.0
   postcss@<8.5.10: ^8.5.10
