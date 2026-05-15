@@ -116,10 +116,10 @@ export const GET: RequestHandler = async ({ cookies, url }) => {
   cookies.delete(LOGIN_CODE_VERIFIER_COOKIE, { path: '/login/callback' });
   cookies.set(sessionName, sessionToken, {
     httpOnly: true,
-    maxAge: 60 * 60 * 24 * 30,
+    maxAge: 60 * 60 * 24 * 365,
     path: '/',
     sameSite: 'lax',
-    secure: true,
+    secure: url.protocol === 'https:',
   });
 
   redirect(302, '/');

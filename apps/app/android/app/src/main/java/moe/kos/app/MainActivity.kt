@@ -68,7 +68,8 @@ class MainActivity : ComponentActivity() {
             ): Boolean {
                 val url = request.url
 
-                if (url.scheme == "https" && url.host == "kos.moe" && url.path == "/login") {
+                val origin = Uri.parse(BuildConfig.WEB_ORIGIN)
+                if (url.scheme == origin.scheme && url.host == origin.host && url.path == "/login") {
                     startNativeLogin()
                     return true
                 }

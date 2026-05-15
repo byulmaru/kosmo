@@ -21,13 +21,13 @@ Both apps use the existing app identifier `moe.kos` and the custom callback URL 
 
 ## Configuration
 
-Android expects an OIDC client id from the public build-time environment variable `PUBLIC_KOSMO_OIDC_CLIENT_ID`. Open `android/` in Android Studio, or run Gradle if it is installed locally.
+Android expects an OIDC client id from the public build-time environment variable `PUBLIC_OIDC_CLIENT_ID`. The web origin can be overridden with `PUBLIC_ORIGIN` and defaults to `https://kos.moe`. Cleartext traffic is enabled only when `PUBLIC_ORIGIN` starts with `http://`.
 
 ```sh
 pnpm --dir apps/app/android build
 ```
 
-iOS expects an OIDC client id from the public build-time environment variable `PUBLIC_KOSMO_OIDC_CLIENT_ID`. Code signing uses the Apple development team selected in the Xcode project.
+iOS expects an OIDC client id from the public build-time environment variable `PUBLIC_OIDC_CLIENT_ID`. The web origin can be overridden with `PUBLIC_ORIGIN` and defaults to `https://kos.moe`. A host-specific ATS exception is enabled only when `PUBLIC_ORIGIN` starts with `http://`. Code signing uses the Apple development team selected in the Xcode project.
 
 ```sh
 pnpm --dir apps/app/ios build

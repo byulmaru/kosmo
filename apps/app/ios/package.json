@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "build": "infisical run -- xcodebuild -project Kosmo.xcodeproj -scheme Kosmo -configuration Debug -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build/DerivedData -allowProvisioningUpdates build",
-    "run": "node scripts/run.mjs"
+    "build": "infisical run -- node scripts/generate-info-plist.mjs && infisical run -- xcodebuild -project Kosmo.xcodeproj -scheme Kosmo -configuration Debug -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build/DerivedData INFOPLIST_FILE=build/Info.plist -allowProvisioningUpdates build",
+    "run": "node scripts/run.mjs",
+    "run:debug": "node scripts/run.mjs --debug"
   }
 }

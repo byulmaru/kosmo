@@ -14,9 +14,11 @@ android {
         versionCode = 1
         versionName = "0.0.1"
 
-        val oidcClientId = providers.environmentVariable("PUBLIC_KOSMO_OIDC_CLIENT_ID").orNull.orEmpty()
+        val oidcClientId = providers.environmentVariable("PUBLIC_OIDC_CLIENT_ID").orNull.orEmpty()
+        val origin = providers.environmentVariable("PUBLIC_ORIGIN").orNull ?: "https://kos.moe"
         buildConfigField("String", "OIDC_CLIENT_ID", "\"$oidcClientId\"")
-        buildConfigField("String", "WEB_ORIGIN", "\"https://kos.moe\"")
+        buildConfigField("String", "WEB_ORIGIN", "\"$origin\"")
+        manifestPlaceholders["usesCleartextTraffic"] = origin.startsWith("http://").toString()
     }
 
     buildFeatures {

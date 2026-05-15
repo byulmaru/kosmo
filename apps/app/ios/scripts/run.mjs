@@ -6,13 +6,48 @@ import { stdin as input, stdout as output } from 'node:process';
 import { createInterface } from 'node:readline/promises';
 
 const appPath = 'build/DerivedData/Build/Products/Debug-iphoneos/Kosmo.app';
+const executablePath = join(appPath, 'Kosmo');
 const bundleId = 'moe.kos';
+const debug = process.argv.includes('--debug');
 
 const run = (command, args) => {
   const result = spawnSync(command, args, { stdio: 'inherit' });
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
   }
+};
+
+const runJSON = (command, argsForJSON) => {
+  const dir = mkdtempSync(join(tmpdir(), 'kosmo-command-'));
+  const jsonPath = join(dir, 'result.json');
+
+  try {
+    const result = spawnSync(command, argsForJSON(jsonPath), { stdio: 'inherit' });
+    if (result.status !== 0) {
+      process.exit(result.status ?? 1);
+    }
+    return JSON.parse(readFileSync(jsonPath, 'utf8'));
+  } finally {
+    rmSync(dir, { force: true, recursive: true });
+  }
+};
+
+const findProcessID = (value) => {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  for (const [key, nested] of Object.entries(value)) {
+    if (['pid', 'processIdentifier', 'processID'].includes(key) && typeof nested === 'number') {
+      return nested;
+    }
+    const pid = findProcessID(nested);
+    if (pid) {
+      return pid;
+    }
+  }
+
+  return undefined;
 };
 
 const readDevices = () => {
@@ -67,13 +102,49 @@ if (!selected) {
 
 run('pnpm', ['run', 'build']);
 run('xcrun', ['devicectl', 'device', 'install', 'app', '--device', selected.id, appPath]);
-run('xcrun', [
-  'devicectl',
-  'device',
-  'process',
-  'launch',
-  '--device',
-  selected.id,
-  '--terminate-existing',
-  bundleId,
-]);
+
+if (debug) {
+  const launchResult = runJSON('xcrun', (jsonPath) => [
+    'devicectl',
+    'device',
+    'process',
+    'launch',
+    '--device',
+    selected.id,
+    '--terminate-existing',
+    '--start-stopped',
+    '--json-output',
+    jsonPath,
+    bundleId,
+  ]);
+  const pid = findProcessID(launchResult);
+
+  if (!pid) {
+    console.error('Could not find launched process ID.');
+    process.exit(1);
+  }
+
+  console.log(`Attaching LLDB to ${bundleId} on ${selected.name} (pid ${pid}).`);
+  run('xcrun', [
+    'lldb',
+    executablePath,
+    '-o',
+    `device select ${selected.id}`,
+    '-o',
+    `device process attach -p ${pid}`,
+    '-o',
+    'continue',
+  ]);
+} else {
+  run('xcrun', [
+    'devicectl',
+    'device',
+    'process',
+    'launch',
+    '--device',
+    selected.id,
+    '--terminate-existing',
+    '--console',
+    bundleId,
+  ]);
+}

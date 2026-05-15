@@ -24,7 +24,9 @@ struct WebViewScreen: UIViewRepresentable {
         Coordinator()
     }
 
-    private static let webOrigin = URL(string: "https://kos.moe")!
+    private static var webOrigin: URL {
+        Bundle.main.url(forPublicOrigin: "PUBLIC_ORIGIN")
+    }
 
     private static var appUserAgent: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
@@ -38,7 +40,9 @@ final class Coordinator: NSObject, WKNavigationDelegate, ASWebAuthenticationPres
 
     private let authorizeURL = URL(string: "https://id.byulmaru.co/oauth/authorize")!
     private let redirectURI = "kosmo://login/callback"
-    private let webOrigin = URL(string: "https://kos.moe")!
+    private var webOrigin: URL {
+        Bundle.main.url(forPublicOrigin: "PUBLIC_ORIGIN")
+    }
     private let callbackPath = "/login/callback"
 
     private var codeVerifier: String?
@@ -55,13 +59,21 @@ final class Coordinator: NSObject, WKNavigationDelegate, ASWebAuthenticationPres
             return
         }
 
-        if url.scheme == "https", url.host == "kos.moe", url.path == "/login" {
+        if url.scheme == webOrigin.scheme, url.host == webOrigin.host, url.path == "/login" {
             decisionHandler(.cancel)
             startLogin()
             return
         }
 
         decisionHandler(.allow)
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        print("Kosmo web navigation failed: \(error.localizedDescription)")
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        print("Kosmo web provisional navigation failed: \(error.localizedDescription)")
     }
 
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
@@ -72,6 +84,11 @@ final class Coordinator: NSObject, WKNavigationDelegate, ASWebAuthenticationPres
     }
 
     private func startLogin() {
+        if oidcClientID.isEmpty {
+            print("Kosmo native login skipped: PUBLIC_OIDC_CLIENT_ID is empty")
+            return
+        }
+
         let nextState = randomBase64URL()
         let nextCodeVerifier = randomBase64URL()
         state = nextState
@@ -88,11 +105,23 @@ final class Coordinator: NSObject, WKNavigationDelegate, ASWebAuthenticationPres
             URLQueryItem(name: "state", value: nextState),
         ]
 
-        guard let url = components.url else { return }
+        guard let url = components.url else {
+            print("Kosmo native login failed: authorize URL could not be built")
+            return
+        }
 
         let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "kosmo") {
-            [weak self] callbackURL, _ in
-            guard let callbackURL else { return }
+            [weak self] callbackURL, error in
+            if let error {
+                print("Kosmo native login failed: \(error.localizedDescription)")
+                return
+            }
+
+            guard let callbackURL else {
+                print("Kosmo native login failed: callback URL is missing")
+                return
+            }
+
             Task { @MainActor in
                 self?.handleCallback(callbackURL)
             }
@@ -100,20 +129,41 @@ final class Coordinator: NSObject, WKNavigationDelegate, ASWebAuthenticationPres
         session.presentationContextProvider = self
         session.prefersEphemeralWebBrowserSession = false
         authenticationSession = session
-        session.start()
+        if !session.start() {
+            print("Kosmo native login failed: authentication session did not start")
+        }
     }
 
     private func handleCallback(_ url: URL) {
-        guard
-            let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-            components.scheme == "kosmo",
-            components.host == "login",
-            components.path == "/callback",
-            let code = components.queryItems?.first(where: { $0.name == "code" })?.value,
-            let returnedState = components.queryItems?.first(where: { $0.name == "state" })?.value,
-            returnedState == state,
-            let codeVerifier
-        else { return }
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            print("Kosmo native login callback ignored: invalid URL")
+            return
+        }
+
+        guard components.scheme == "kosmo", components.host == "login", components.path == "/callback" else {
+            print("Kosmo native login callback ignored: unexpected callback route")
+            return
+        }
+
+        guard let code = components.queryItems?.first(where: { $0.name == "code" })?.value else {
+            print("Kosmo native login callback ignored: code is missing")
+            return
+        }
+
+        guard let returnedState = components.queryItems?.first(where: { $0.name == "state" })?.value else {
+            print("Kosmo native login callback ignored: state is missing")
+            return
+        }
+
+        guard returnedState == state else {
+            print("Kosmo native login callback ignored: state mismatch")
+            return
+        }
+
+        guard let codeVerifier else {
+            print("Kosmo native login callback ignored: code verifier is missing")
+            return
+        }
 
         var sessionComponents = URLComponents(url: webOrigin, resolvingAgainstBaseURL: false)!
         sessionComponents.path = callbackPath
@@ -127,12 +177,16 @@ final class Coordinator: NSObject, WKNavigationDelegate, ASWebAuthenticationPres
         state = nil
         self.codeVerifier = nil
 
-        guard let sessionURL = sessionComponents.url else { return }
+        guard let sessionURL = sessionComponents.url else {
+            print("Kosmo native login failed: session URL could not be built")
+            return
+        }
+
         webView?.load(URLRequest(url: sessionURL))
     }
 
     private var oidcClientID: String {
-        Bundle.main.object(forInfoDictionaryKey: "PUBLIC_KOSMO_OIDC_CLIENT_ID") as? String ?? ""
+        Bundle.main.object(forInfoDictionaryKey: "PUBLIC_OIDC_CLIENT_ID") as? String ?? ""
     }
 
     private func randomBase64URL() -> String {
@@ -153,5 +207,17 @@ private extension Data {
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
+    }
+}
+
+private extension Bundle {
+    func url(forPublicOrigin key: String) -> URL {
+        guard
+            let value = object(forInfoDictionaryKey: key) as? String,
+            !value.isEmpty,
+            let url = URL(string: value)
+        else { return URL(string: "https://kos.moe")! }
+
+        return url
     }
 }

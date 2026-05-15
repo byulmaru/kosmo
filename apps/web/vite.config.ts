@@ -34,4 +34,8 @@ export default defineConfig({
       },
     ],
   },
+  server: {
+    host: true,
+    allowedHosts: process.env.PUBLIC_ORIGIN ? [new URL(process.env.PUBLIC_ORIGIN).hostname] : [],
+  },
 });
