@@ -18,6 +18,8 @@ export const builder = new SchemaBuilder<{
   };
   Context: UserContext;
   DefaultAuthStrategy: 'all';
+  DefaultFieldNullability: false;
+  DefaultInputFieldRequiredness: true;
   Scalars: {
     DateTime: {
       Input: Temporal.Instant;
@@ -26,6 +28,8 @@ export const builder = new SchemaBuilder<{
   };
 }>({
   plugins: [RelayPlugin, ScopeAuthPlugin, ErrorsPlugin, ValidationPlugin, DataloaderPlugin],
+  defaultFieldNullability: false,
+  defaultInputFieldRequiredness: true,
   errors: {
     defaultTypes: [],
   },

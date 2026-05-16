@@ -1,6 +1,6 @@
 type Account implements Node {
   id: ID!
-  name: String
+  name: String!
 }
 
 enum AccountProfileRole {
