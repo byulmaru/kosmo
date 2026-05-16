@@ -16,7 +16,7 @@ Profile.implement({
   fields: (t) => ({
     handle: t.exposeString('handle'),
     displayName: t.exposeString('displayName'),
-    bio: t.exposeString('bio'),
+    bio: t.exposeString('bio', { nullable: true }),
     followPolicy: t.expose('followPolicy', {
       type: ProfileFollowPolicy,
     }),
