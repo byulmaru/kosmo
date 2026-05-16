@@ -6,18 +6,19 @@ const OIDC_AUTHORIZE_URL = 'https://id.byulmaru.co/oauth/authorize';
 const LOGIN_STATE_COOKIE = 'kosmo_oidc_state';
 const LOGIN_CODE_VERIFIER_COOKIE = 'kosmo_oidc_code_verifier';
 
-export const GET: RequestHandler = async ({ cookies, url }) => {
+export const GET: RequestHandler = async ({ cookies, request, url }) => {
   const state = createCodeVerifier();
   const codeVerifier = createCodeVerifier();
   const codeChallenge = await createCodeChallenge(codeVerifier);
   const redirectUri = new URL('/login/callback', url.origin).toString();
+  const secure = url.protocol === 'https:';
 
   cookies.set(LOGIN_STATE_COOKIE, state, {
     httpOnly: true,
     maxAge: 60 * 10,
     path: '/login/callback',
     sameSite: 'lax',
-    secure: true,
+    secure,
   });
 
   cookies.set(LOGIN_CODE_VERIFIER_COOKIE, codeVerifier, {
@@ -25,8 +26,16 @@ export const GET: RequestHandler = async ({ cookies, url }) => {
     maxAge: 60 * 10,
     path: '/login/callback',
     sameSite: 'lax',
-    secure: true,
+    secure,
   });
+
+  if (request.headers.get('user-agent')?.includes('KosmoApp/')) {
+    const nativeUrl = new URL('/login/native', url.origin);
+    nativeUrl.searchParams.set('code_challenge', codeChallenge);
+    nativeUrl.searchParams.set('state', state);
+
+    redirect(302, nativeUrl.toString());
+  }
 
   const authorizeUrl = new URL(OIDC_AUTHORIZE_URL);
   authorizeUrl.searchParams.set('response_type', 'code');

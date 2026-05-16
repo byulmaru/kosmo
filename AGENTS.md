@@ -3,7 +3,7 @@
 ## Workspace Rules
 
 - Use `pnpm` for workspace and dependency management.
-- Never edit any `package.json` file by hand. Make changes through the appropriate CLI instead.
+- Use CLI commands for `package.json` dependency changes. Non-dependency fields, such as `scripts`, may be edited directly.
 
 ## Review Guidelines
 
@@ -20,5 +20,5 @@
 
 ## `package.json` Changes
 
-- Use `pnpm add`, `pnpm remove`, `pnpm add --save-dev`, or other `pnpm`-based CLI commands for manifest updates.
-- If a script or field must change, update it through CLI tooling rather than directly editing the file contents.
+- Use `pnpm add`, `pnpm remove`, `pnpm add --save-dev`, or other `pnpm`-based CLI commands for dependency updates.
+- Non-dependency manifest fields, including `scripts`, may be edited directly.
