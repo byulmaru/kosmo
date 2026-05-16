@@ -3,6 +3,11 @@ type Account implements Node {
   name: String!
 }
 
+type AccountProfile implements Node {
+  id: ID!
+  role: AccountProfileRole
+}
+
 enum AccountProfileRole {
   ADMIN
   MEMBER
@@ -20,6 +25,21 @@ scalar DateTime
 
 interface Node {
   id: ID!
+}
+
+type Profile implements Node {
+  bio: String
+  createdAt: DateTime
+  displayName: String
+  followPolicy: ProfileFollowPolicy
+  handle: String
+  id: ID!
+}
+
+type ProfileFollow implements Node {
+  createdAt: DateTime
+  id: ID!
+  state: ProfileFollowState
 }
 
 enum ProfileFollowPolicy {
@@ -43,4 +63,5 @@ type Query {
   me: Account
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
+  profileByHandle(handle: String!): Profile
 }
