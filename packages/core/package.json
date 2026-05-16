@@ -5,7 +5,8 @@
     ".": "./index.ts",
     "./db": "./db/index.ts",
     "./enums": "./enums.ts",
-    "./polyfill": "./polyfill.ts"
+    "./polyfill": "./polyfill.ts",
+    "./utils": "./utils.ts"
   },
   "dependencies": {
     "core-js": "^3.49.0",

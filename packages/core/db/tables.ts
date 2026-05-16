@@ -190,12 +190,13 @@ export const Profiles = pgTable(
       .$defaultFn(() => createId(TableDiscriminator.Profiles)),
     state: Enum.profileState('state').notNull().default('ACTIVE'),
     handle: text('handle').notNull(),
+    normalizedHandle: text('normalized_handle').notNull(),
     displayName: text('display_name').notNull(),
     bio: text('bio'),
     followPolicy: Enum.profileFollowPolicy('follow_policy').notNull(),
     createdAt: createdAt(),
   },
-  (table) => [unique().on(table.handle)],
+  (table) => [unique().on(table.normalizedHandle)],
 );
 
 export const ProfileFollows = pgTable(
