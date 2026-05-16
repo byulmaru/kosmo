@@ -4,6 +4,10 @@ FROM ghcr.io/pnpm/pnpm:11 AS base
 
 WORKDIR /app
 
+RUN apt-get update \
+  && apt-get upgrade -y \
+  && rm -rf /var/lib/apt/lists/*
+
 RUN pnpm runtime set node 26.1.0 -g
 
 FROM base AS workspace
