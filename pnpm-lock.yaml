@@ -78,9 +78,6 @@ importers:
       '@pothos/plugin-dataloader':
         specifier: ^4.4.3
         version: 4.4.3(@pothos/core@4.12.0(graphql@16.14.0))(dataloader@2.2.3)(graphql@16.14.0)
-      '@pothos/plugin-drizzle':
-        specifier: ^0.17.3
-        version: 0.17.4(@pothos/core@4.12.0(graphql@16.14.0))(drizzle-orm@1.0.0-beta.22(postgres@3.4.9)(zod@4.4.3))(graphql@16.14.0)
       '@pothos/plugin-errors':
         specifier: ^4.9.0
         version: 4.9.0(@pothos/core@4.12.0(graphql@16.14.0))(graphql@16.14.0)
@@ -799,13 +796,6 @@ packages:
     peerDependencies:
       '@pothos/core': '*'
       dataloader: '2'
-      graphql: ^16.10.0
-
-  '@pothos/plugin-drizzle@0.17.4':
-    resolution: {integrity: sha512-cAaMexSSOtoXf7Khj62yOHGxHyaOnuIzNdgl+w0rNfnJdtVOr4slQjHinWJWzYWdRauOclZddxWbLaou4NK0QQ==}
-    peerDependencies:
-      '@pothos/core': '*'
-      drizzle-orm: '>=1.0.0-beta.2'
       graphql: ^16.10.0
 
   '@pothos/plugin-errors@4.9.0':
@@ -3641,12 +3631,6 @@ snapshots:
     dependencies:
       '@pothos/core': 4.12.0(graphql@16.14.0)
       dataloader: 2.2.3
-      graphql: 16.14.0
-
-  '@pothos/plugin-drizzle@0.17.4(@pothos/core@4.12.0(graphql@16.14.0))(drizzle-orm@1.0.0-beta.22(postgres@3.4.9)(zod@4.4.3))(graphql@16.14.0)':
-    dependencies:
-      '@pothos/core': 4.12.0(graphql@16.14.0)
-      drizzle-orm: 1.0.0-beta.22(postgres@3.4.9)(zod@4.4.3)
       graphql: 16.14.0
 
   '@pothos/plugin-errors@4.9.0(@pothos/core@4.12.0(graphql@16.14.0))(graphql@16.14.0)':
