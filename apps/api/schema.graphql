@@ -18,19 +18,19 @@ enum AccountState {
 """RFC9557 formatted string"""
 scalar DateTime
 
-enum FollowPolicy {
+interface Node {
+  id: ID!
+}
+
+enum ProfileFollowPolicy {
   APPROVAL_REQUIRED
   OPEN
 }
 
-enum FollowState {
+enum ProfileFollowState {
   ACCEPTED
   PENDING
   REJECTED
-}
-
-interface Node {
-  id: ID!
 }
 
 enum ProfileState {

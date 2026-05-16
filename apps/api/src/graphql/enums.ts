@@ -9,6 +9,6 @@ const createEnumRef = (name: keyof typeof Enums) => {
 
 createEnumRef('AccountState');
 createEnumRef('AccountProfileRole');
-createEnumRef('FollowPolicy');
-createEnumRef('FollowState');
+createEnumRef('ProfileFollowPolicy');
+createEnumRef('ProfileFollowState');
 createEnumRef('ProfileState');

@@ -192,7 +192,7 @@ export const Profiles = pgTable(
     handle: text('handle').notNull(),
     displayName: text('display_name').notNull(),
     bio: text('bio'),
-    followPolicy: Enum.followPolicy('follow_policy').notNull(),
+    followPolicy: Enum.profileFollowPolicy('follow_policy').notNull(),
     createdAt: createdAt(),
   },
   (table) => [unique().on(table.handle)],
@@ -210,7 +210,7 @@ export const ProfileFollows = pgTable(
     followeeProfileId: uuid('followee_profile_id')
       .notNull()
       .references(() => Profiles.id, { onDelete: 'cascade' }),
-    state: Enum.followState('state').notNull(),
+    state: Enum.profileFollowState('state').notNull(),
     createdAt: createdAt(),
     respondedAt: datetime('responded_at'),
   },
