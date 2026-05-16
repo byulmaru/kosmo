@@ -1,5 +1,7 @@
 {
   "scripts": {
-    "build": "infisical run -- gradle assembleDebug"
+    "build": "infisical run -- ./gradlew assembleDebug",
+    "run": "node scripts/run.mjs",
+    "run:debug": "node scripts/run.mjs --debug"
   }
 }

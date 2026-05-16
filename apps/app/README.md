@@ -27,6 +27,12 @@ Android expects an OIDC client id from the public build-time environment variabl
 pnpm --dir apps/app/android build
 ```
 
+To build, install, and launch on a selected Android device or emulator:
+
+```sh
+pnpm --dir apps/app/android run
+```
+
 iOS expects an OIDC client id from the public build-time environment variable `PUBLIC_OIDC_CLIENT_ID`. The web origin can be overridden with `PUBLIC_ORIGIN` and defaults to `https://kos.moe`. A host-specific ATS exception is enabled only when `PUBLIC_ORIGIN` starts with `http://`. Code signing uses the Apple development team selected in the Xcode project.
 
 ```sh
