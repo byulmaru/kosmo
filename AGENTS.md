@@ -17,6 +17,7 @@
 - `memory/commit-pr.md`: team commit, branch, stacked PR, and PR writing policy.
 - `memory/script.md`: workspace scripts, command wrappers, and script execution behavior.
 - `memory/database-design.md`: kosmo PostgreSQL/Drizzle database schema design and review context.
+- `memory/graphql-style.md`: GraphQL resolver structure, object refs, enum registration, Node ID, and resolver style.
 
 ## `package.json` Changes
 

@@ -1,10 +1,42 @@
 type Account implements Node {
   id: ID!
-  name: String
+  name: String!
 }
+
+enum AccountProfileRole {
+  ADMIN
+  MEMBER
+  OWNER
+}
+
+enum AccountState {
+  ACTIVE
+  DISABLED
+  SUSPENDED
+}
+
+"""RFC9557 formatted string"""
+scalar DateTime
 
 interface Node {
   id: ID!
+}
+
+enum ProfileFollowPolicy {
+  APPROVAL_REQUIRED
+  OPEN
+}
+
+enum ProfileFollowState {
+  ACCEPTED
+  PENDING
+  REJECTED
+}
+
+enum ProfileState {
+  ACTIVE
+  DISABLED
+  SUSPENDED
 }
 
 type Query {

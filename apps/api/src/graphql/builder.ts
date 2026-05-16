@@ -1,13 +1,10 @@
-import { db, relations } from '@kosmo/core/db';
 import SchemaBuilder from '@pothos/core';
 import DataloaderPlugin from '@pothos/plugin-dataloader';
-import DrizzlePlugin from '@pothos/plugin-drizzle';
 import ErrorsPlugin from '@pothos/plugin-errors';
 import RelayPlugin from '@pothos/plugin-relay';
 import ScopeAuthPlugin from '@pothos/plugin-scope-auth';
 import ValidationPlugin from '@pothos/plugin-validation';
-import { getTableConfig } from 'drizzle-orm/pg-core';
-import { globalIdMap } from './id';
+import { globalIdMap } from './utils';
 import type { SessionContext, SessionWithProfileContext, UserContext } from '@/context';
 
 export const builder = new SchemaBuilder<{
@@ -21,21 +18,18 @@ export const builder = new SchemaBuilder<{
   };
   Context: UserContext;
   DefaultAuthStrategy: 'all';
-  DrizzleRelations: typeof relations;
+  DefaultFieldNullability: false;
+  DefaultInputFieldRequiredness: true;
+  Scalars: {
+    DateTime: {
+      Input: Temporal.Instant;
+      Output: Temporal.Instant;
+    };
+  };
 }>({
-  plugins: [
-    RelayPlugin,
-    ScopeAuthPlugin,
-    ErrorsPlugin,
-    ValidationPlugin,
-    DataloaderPlugin,
-    DrizzlePlugin,
-  ],
-  drizzle: {
-    client: db,
-    getTableConfig,
-    relations,
-  },
+  plugins: [RelayPlugin, ScopeAuthPlugin, ErrorsPlugin, ValidationPlugin, DataloaderPlugin],
+  defaultFieldNullability: false,
+  defaultInputFieldRequiredness: true,
   errors: {
     defaultTypes: [],
   },
@@ -62,3 +56,15 @@ export const builder = new SchemaBuilder<{
 });
 
 builder.queryType({});
+
+builder.scalarType('DateTime', {
+  description: 'RFC9557 formatted string',
+  serialize: (value) => value.toString({ smallestUnit: 'millisecond' }),
+  parseValue: (value) => {
+    if (typeof value === 'string') {
+      return Temporal.Instant.from(value);
+    }
+
+    throw new Error('Invalid DateTime value');
+  },
+});

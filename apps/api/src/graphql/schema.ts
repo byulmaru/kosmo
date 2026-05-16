@@ -1,3 +1,4 @@
+import './enums';
 import './resolvers';
 
 import { dev } from '@kosmo/core';

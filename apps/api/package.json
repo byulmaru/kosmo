@@ -11,7 +11,6 @@
     "@kosmo/core": "workspace:*",
     "@pothos/core": "^4.12.0",
     "@pothos/plugin-dataloader": "^4.4.3",
-    "@pothos/plugin-drizzle": "^0.17.3",
     "@pothos/plugin-errors": "^4.9.0",
     "@pothos/plugin-relay": "^4.7.0",
     "@pothos/plugin-scope-auth": "^4.1.6",

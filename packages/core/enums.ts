@@ -24,18 +24,12 @@ export const ApplicationType = {
 } as const;
 export type ApplicationType = keyof typeof ApplicationType;
 
-export const FollowPolicy = {
-  OPEN: 'OPEN',
-  APPROVAL_REQUIRED: 'APPROVAL_REQUIRED',
-} as const;
-export type FollowPolicy = keyof typeof FollowPolicy;
-
-export const FollowState = {
+export const ProfileFollowState = {
   PENDING: 'PENDING',
   ACCEPTED: 'ACCEPTED',
   REJECTED: 'REJECTED',
 } as const;
-export type FollowState = keyof typeof FollowState;
+export type ProfileFollowState = keyof typeof ProfileFollowState;
 
 export const OAuthTokenState = {
   ACTIVE: 'ACTIVE',
@@ -57,6 +51,12 @@ export const PostVisibility = {
   DIRECT: 'DIRECT',
 } as const;
 export type PostVisibility = keyof typeof PostVisibility;
+
+export const ProfileFollowPolicy = {
+  OPEN: 'OPEN',
+  APPROVAL_REQUIRED: 'APPROVAL_REQUIRED',
+} as const;
+export type ProfileFollowPolicy = keyof typeof ProfileFollowPolicy;
 
 export const ProfileState = {
   ACTIVE: 'ACTIVE',
