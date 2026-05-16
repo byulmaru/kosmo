@@ -73,7 +73,10 @@ class MainActivity : ComponentActivity() {
 
                 if (url.scheme == "http" || url.scheme == "https") return false
 
-                startActivity(Intent(Intent.ACTION_VIEW, url))
+                val intent = Intent(Intent.ACTION_VIEW, url)
+                if (intent.resolveActivity(packageManager) != null) {
+                    startActivity(intent)
+                }
                 return true
             }
         }
