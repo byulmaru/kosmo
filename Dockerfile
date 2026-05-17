@@ -37,21 +37,25 @@ ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=8080
 
-COPY --chown=nobody:nogroup package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
-COPY --chown=nobody:nogroup apps/api/package.json ./apps/api/package.json
-COPY --chown=nobody:nogroup apps/web/package.json ./apps/web/package.json
-COPY --chown=nobody:nogroup packages/core/package.json ./packages/core/package.json
+RUN groupadd --system --gid 10001 app \
+  && useradd --system --uid 10001 --gid app --home-dir /app --shell /usr/sbin/nologin app \
+  && chown app:app /app
+
+COPY --chown=app:app package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
+COPY --chown=app:app apps/api/package.json ./apps/api/package.json
+COPY --chown=app:app apps/web/package.json ./apps/web/package.json
+COPY --chown=app:app packages/core/package.json ./packages/core/package.json
 
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
-COPY --chown=nobody:nogroup apps/api ./apps/api
-COPY --chown=nobody:nogroup packages/core ./packages/core
-COPY --chown=nobody:nogroup --from=web-build /app/apps/web/build ./apps/web/build
-COPY --chown=nobody:nogroup docker-entrypoint.sh ./docker-entrypoint.sh
+COPY --chown=app:app apps/api ./apps/api
+COPY --chown=app:app packages/core ./packages/core
+COPY --chown=app:app --from=web-build /app/apps/web/build ./apps/web/build
+COPY --chown=app:app docker-entrypoint.sh ./docker-entrypoint.sh
 
 RUN chmod +x ./docker-entrypoint.sh
 
-USER nobody
+USER app
 
 EXPOSE 8080
 
