@@ -5,14 +5,6 @@ const sourcePath = 'Kosmo/Info.plist';
 const outputPath = 'build/Info.plist';
 const origin = process.env.PUBLIC_ORIGIN ?? '';
 
-const escapeXml = (value) =>
-  value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&apos;');
-
 const atsForHttpOrigin = (origin) => {
   const host = new URL(origin).hostname;
 
@@ -21,7 +13,7 @@ const atsForHttpOrigin = (origin) => {
 	<dict>
 		<key>NSExceptionDomains</key>
 		<dict>
-			<key>${escapeXml(host)}</key>
+			<key>${host}</key>
 			<dict>
 				<key>NSExceptionAllowsInsecureHTTPLoads</key>
 				<true/>
