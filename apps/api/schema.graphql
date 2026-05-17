@@ -5,7 +5,7 @@ type Account implements Node {
 
 type AccountProfile implements Node {
   id: ID!
-  role: AccountProfileRole
+  role: AccountProfileRole!
 }
 
 enum AccountProfileRole {
@@ -29,17 +29,17 @@ interface Node {
 
 type Profile implements Node {
   bio: String
-  createdAt: DateTime
-  displayName: String
-  followPolicy: ProfileFollowPolicy
-  handle: String
+  createdAt: DateTime!
+  displayName: String!
+  followPolicy: ProfileFollowPolicy!
+  handle: String!
   id: ID!
 }
 
 type ProfileFollow implements Node {
-  createdAt: DateTime
+  createdAt: DateTime!
   id: ID!
-  state: ProfileFollowState
+  state: ProfileFollowState!
 }
 
 enum ProfileFollowPolicy {
