@@ -4,15 +4,18 @@
   "exports": {
     ".": "./index.ts",
     "./db": "./db/index.ts",
+    "./error": "./error/index.ts",
     "./enums": "./enums.ts",
     "./polyfill": "./polyfill.ts",
-    "./utils": "./utils.ts"
+    "./utils": "./utils.ts",
+    "./validation": "./validation/index.ts"
   },
   "dependencies": {
     "core-js": "^3.49.0",
     "drizzle-orm": "1.0.0-beta.22",
     "postgres": "^3.4.9",
-    "temporal-polyfill": "^0.3.2"
+    "temporal-polyfill": "^0.3.2",
+    "zod": "^4.4.3"
   },
   "scripts": {
     "drizzle:push": "infisical run -- drizzle-kit push",

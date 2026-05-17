@@ -4,6 +4,7 @@
 
 - Use `pnpm` for workspace and dependency management.
 - Use CLI commands for `package.json` dependency changes. Non-dependency fields, such as `scripts`, may be edited directly.
+- Use the Question tool when asking the user to decide between implementation options or unresolved requirements.
 
 ## Review Guidelines
 

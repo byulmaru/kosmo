@@ -84,11 +84,53 @@ builder.queryField('me', (t) =>
 
 Mutation도 필드별로 나눈다.
 
-- input type은 해당 mutation 파일 가까이에 둔다.
+- mutation은 기본적으로 `t.withAuth(...).fieldWithInput(...)`로 정의한다.
+- 단순 scalar 검증은 `input` 필드에 `validate`를 직접 붙인다.
+- 여러 필드 조합을 검증해야 하는 경우에만 mutation 파일 안에 inline Zod object schema를 둔다.
+- `packages/core/validation`에는 `handle`, `displayName`, `bio` 같은 재사용 가능한 공통 primitive schema만 둔다. `createProfileInputSchema`처럼 특정 GraphQL mutation input 전체를 core에 공통화하지 않는다.
 - mutation resolver는 권한 확인, 입력 정규화, DB 변경을 수행한다.
+- create mutation처럼 입력을 최소화할 수 있으면 필수 입력만 받고, 나머지 값은 resolver에서 명확한 기본값으로 채운다. 예를 들어 profile 생성은 `handle`만 받고 `displayName`은 `handle`, `followPolicy`는 `OPEN`으로 설정한다.
 - mutation이 Node 타입을 반환할 때 이미 `returning()` 등으로 row를 가지고 있으면 row를 반환해도 된다. 추가 조회가 필요하다면 `id`만 반환한다.
+- delete/disable처럼 반환할 Node가 더 이상 현재 GraphQL 타입의 auth scope를 만족하지 않을 수 있으면 Node 자체를 반환하지 말고 삭제/비활성화된 대상의 `ID` 같은 payload 값을 반환한다.
 - 부분 변경 없이 실패해야 하는 mutation은 transaction을 사용한다.
-- 클라이언트가 분기해야 하는 에러는 `GraphQLError`의 `extensions.code`를 사용한다.
+- Pothos Errors plugin을 사용하고, 클라이언트가 분기해야 하는 에러는 `errors.types`에 명시한다.
+- `errors.dataField`는 `profile`, `profileId`처럼 클라이언트가 받는 성공 payload의 도메인 의미가 드러나는 이름으로 지정한다.
+- builder의 error result/union 기본 이름은 `<FieldName>Success`, `<FieldName>Result` 형태를 사용한다.
+- Zod/Pothos validation 실패는 builder의 `validation.validationError`가 `ValidationError`로 변환한다. mutation별 `errors.types`에는 resolver가 직접 던지는 domain error만 명시한다.
+- 인증 scope 부족은 mutation domain error로 던지지 않고 `t.withAuth({ login: true })` 같은 auth 설정으로 처리한다.
+- 대상 리소스에 대한 권한 부족만 `PermissionDeniedError`로 던진다.
+
+예시:
+
+```ts
+builder.mutationField('createProfile', (t) =>
+  t.withAuth({ login: true }).fieldWithInput({
+    type: Profile,
+    input: {
+      handle: t.input.string({ validate: profileHandleSchema }),
+    },
+    errors: {
+      types: [ConflictError],
+      dataField: { name: 'profile' },
+    },
+    resolve: async (_, { input }, ctx) => {
+      // resolver body
+    },
+  }),
+);
+```
+
+## Error
+
+GraphQL로 노출되는 도메인 에러는 `packages/core/error`에 GraphQL 독립 class로 정의하고, `apps/api/src/graphql/errors.ts`에서 Pothos type/interface로 등록한다.
+
+- 기본 error 계층은 `KosmoError`, `FieldError`, `ValidationError`, `ConflictError`, `NotFoundError`, abstract `ForbiddenError`, `PermissionDeniedError`를 사용한다.
+- `ForbiddenError`는 직접 throw하지 않는 abstract/base class다.
+- `FieldError.field`는 optional이다. 특정 input field에 귀속되는 validation/conflict일 때만 채운다.
+- builder의 `errors.defaultTypes`는 비워두고, 각 field가 노출할 concrete error type을 `errors.types`에 명시한다.
+- validation plugin에서 발생한 입력 검증 오류는 builder 설정에서 첫 issue의 message와 `input`을 제거한 path를 사용해 `ValidationError`로 변환한다.
+- `ValidationError`와 `ConflictError`는 GraphQL `FieldError` interface를 구현한다.
+- `PermissionDeniedError`는 GraphQL `ForbiddenError` interface를 구현한다.
 
 ## Enum
 
@@ -108,7 +150,11 @@ GraphQL enum은 `apps/api/src/graphql/enums.ts`에서 전역 등록한다.
 ## DB 접근
 
 - resolver 코드는 Drizzle query builder를 직접 사용한다.
-- 단건 조회에는 필요하면 `first` 같은 helper를 사용한다.
+- 단건 조회에는 `first`, `firstOrThrow`, `firstOrThrowWith` 같은 helper를 사용한다.
+- 결과 row가 반드시 있어야 하고 없으면 DB/서버 불일치로 보는 5xx 성격의 오류라면 `firstOrThrow`를 사용한다. 예를 들어 insert/update 후 `returning()`이 비는 경우가 이에 해당한다.
+- 결과 row가 없을 수 있고 그 원인이 클라이언트 입력, 권한, 대상 부재 같은 4xx 성격의 도메인 오류라면 `firstOrThrowWith`로 `NotFoundError` 등 명시적 도메인 에러를 던진다.
+- 존재 확인과 actor 권한 조회는 가능하면 join으로 한 번에 처리한다. 예를 들어 profile mutation은 `Profiles`와 `AccountProfiles`를 join해 active profile 존재 여부와 actor role을 같이 조회한 뒤 role을 검사한다.
+- PostgreSQL unique violation 판정은 resolver 로컬 함수로 만들지 않고 `@kosmo/core/db`의 `isUniqueViolation` helper를 사용한다.
 - `createObjectRef`가 만든 loadable Node ref는 batched loading을 제공한다.
 - query, mutation, relationship resolver는 불필요한 추가 조회를 피한다. 이미 row가 있으면 row를 반환하고, ID만 있으면 ID를 반환해 Node loader를 타게 한다.
 
