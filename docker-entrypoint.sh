@@ -14,4 +14,8 @@ if [ "${app}" = "web" ]; then
   exec node build/index.js
 fi
 
+if [ "${app}" = "api" ]; then
+  exec node --import tsx src/index.ts
+fi
+
 exec pnpm start
