@@ -26,6 +26,10 @@ type ConflictError implements Error & FieldError {
   message: String!
 }
 
+input CreateProfileInput {
+  handle: String!
+}
+
 union CreateProfileResult = ConflictError | CreateProfileSuccess
 
 type CreateProfileSuccess {
@@ -34,6 +38,10 @@ type CreateProfileSuccess {
 
 """RFC9557 formatted string"""
 scalar DateTime
+
+input DeleteProfileInput {
+  id: ID!
+}
 
 union DeleteProfileResult = DeleteProfileSuccess | NotFoundError | PermissionDeniedError
 
@@ -58,24 +66,10 @@ interface ForbiddenError implements Error {
 }
 
 type Mutation {
-  createProfile(input: MutationCreateProfileInput!): CreateProfileResult!
-  deleteProfile(input: MutationDeleteProfileInput!): DeleteProfileResult!
-  updateProfile(input: MutationUpdateProfileInput!): UpdateProfileResult!
-}
-
-input MutationCreateProfileInput {
-  handle: String!
-}
-
-input MutationDeleteProfileInput {
-  id: ID!
-}
-
-input MutationUpdateProfileInput {
-  bio: String
-  displayName: String
-  followPolicy: ProfileFollowPolicy
-  id: ID!
+  createProfile(input: CreateProfileInput!): CreateProfileResult!
+  deleteProfile(input: DeleteProfileInput!): DeleteProfileResult!
+  selectProfile(input: SelectProfileInput!): SelectProfileResult!
+  updateProfile(input: UpdateProfileInput!): UpdateProfileResult!
 }
 
 interface Node {
@@ -129,6 +123,23 @@ type Query {
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
   profileByHandle(handle: String!): Profile
+}
+
+input SelectProfileInput {
+  id: ID!
+}
+
+union SelectProfileResult = NotFoundError | SelectProfileSuccess
+
+type SelectProfileSuccess {
+  profile: Profile!
+}
+
+input UpdateProfileInput {
+  bio: String
+  displayName: String
+  followPolicy: ProfileFollowPolicy
+  id: ID!
 }
 
 union UpdateProfileResult = NotFoundError | PermissionDeniedError | UpdateProfileSuccess
