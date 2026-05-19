@@ -1,9 +1,12 @@
+import { ValidationError } from '@kosmo/core/error';
 import SchemaBuilder from '@pothos/core';
 import DataloaderPlugin from '@pothos/plugin-dataloader';
 import ErrorsPlugin from '@pothos/plugin-errors';
 import RelayPlugin from '@pothos/plugin-relay';
 import ScopeAuthPlugin from '@pothos/plugin-scope-auth';
 import ValidationPlugin from '@pothos/plugin-validation';
+import WithInputPlugin from '@pothos/plugin-with-input';
+import * as R from 'remeda';
 import { globalIdMap } from './utils';
 import type { SessionContext, SessionWithProfileContext, UserContext } from '@/context';
 
@@ -27,11 +30,35 @@ export const builder = new SchemaBuilder<{
     };
   };
 }>({
-  plugins: [RelayPlugin, ScopeAuthPlugin, ErrorsPlugin, ValidationPlugin, DataloaderPlugin],
+  plugins: [
+    RelayPlugin,
+    ScopeAuthPlugin,
+    ErrorsPlugin,
+    ValidationPlugin,
+    WithInputPlugin,
+    DataloaderPlugin,
+  ],
   defaultFieldNullability: false,
   defaultInputFieldRequiredness: true,
   errors: {
     defaultTypes: [],
+    defaultResultOptions: {
+      name: ({ fieldName }) => `${R.capitalize(fieldName)}Success`,
+    },
+    defaultUnionOptions: {
+      name: ({ fieldName }) => `${R.capitalize(fieldName)}Result`,
+    },
+  },
+  validation: {
+    validationError: (failure) => {
+      const issue = failure.issues[0];
+      const field = issue?.path
+        ?.map((segment) => (typeof segment === 'object' ? segment.key : segment))
+        .filter((segment) => segment !== 'input')
+        .join('.');
+
+      return new ValidationError(issue?.message, { field: field || undefined });
+    },
   },
   relay: {
     encodeGlobalID: (_, id) => String(id),
@@ -56,6 +83,7 @@ export const builder = new SchemaBuilder<{
 });
 
 builder.queryType({});
+builder.mutationType({});
 
 builder.scalarType('DateTime', {
   description: 'RFC9557 formatted string',

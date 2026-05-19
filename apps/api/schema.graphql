@@ -20,11 +20,76 @@ enum AccountState {
   SUSPENDED
 }
 
+type ConflictError implements Error & FieldError {
+  code: String!
+  field: String
+  message: String!
+}
+
+union CreateProfileResult = ConflictError | CreateProfileSuccess
+
+type CreateProfileSuccess {
+  profile: Profile!
+}
+
 """RFC9557 formatted string"""
 scalar DateTime
 
+union DeleteProfileResult = DeleteProfileSuccess | NotFoundError | PermissionDeniedError
+
+type DeleteProfileSuccess {
+  profileId: ID!
+}
+
+interface Error {
+  code: String!
+  message: String!
+}
+
+interface FieldError implements Error {
+  code: String!
+  field: String
+  message: String!
+}
+
+interface ForbiddenError implements Error {
+  code: String!
+  message: String!
+}
+
+type Mutation {
+  createProfile(input: MutationCreateProfileInput!): CreateProfileResult!
+  deleteProfile(input: MutationDeleteProfileInput!): DeleteProfileResult!
+  updateProfile(input: MutationUpdateProfileInput!): UpdateProfileResult!
+}
+
+input MutationCreateProfileInput {
+  handle: String!
+}
+
+input MutationDeleteProfileInput {
+  id: ID!
+}
+
+input MutationUpdateProfileInput {
+  bio: String
+  displayName: String
+  followPolicy: ProfileFollowPolicy
+  id: ID!
+}
+
 interface Node {
   id: ID!
+}
+
+type NotFoundError implements Error {
+  code: String!
+  message: String!
+}
+
+type PermissionDeniedError implements Error & ForbiddenError {
+  code: String!
+  message: String!
 }
 
 type Profile implements Node {
@@ -64,4 +129,16 @@ type Query {
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
   profileByHandle(handle: String!): Profile
+}
+
+union UpdateProfileResult = NotFoundError | PermissionDeniedError | UpdateProfileSuccess
+
+type UpdateProfileSuccess {
+  profile: Profile!
+}
+
+type ValidationError implements Error & FieldError {
+  code: String!
+  field: String
+  message: String!
 }

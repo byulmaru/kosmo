@@ -1,0 +1,27 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["@nick-vi/opencode-type-inject", "opencode-pty"],
+  "formatter": {
+    "eslint": {
+      "command": ["pnpm", "exec", "eslint", "--fix", "--no-warn-ignored", "$FILE"],
+      "extensions": [".js", ".mjs", ".svelte", ".ts"]
+    },
+    "prettier": {
+      "command": ["pnpm", "exec", "prettier", "--write", "--ignore-unknown", "$FILE"],
+      "extensions": [
+        ".css",
+        ".graphql",
+        ".html",
+        ".js",
+        ".json",
+        ".md",
+        ".mjs",
+        ".svelte",
+        ".svg",
+        ".ts",
+        ".yaml",
+        ".yml"
+      ]
+    }
+  }
+}
