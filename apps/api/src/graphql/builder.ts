@@ -80,6 +80,11 @@ export const builder = new SchemaBuilder<{
     defaultStrategy: 'all',
     runScopesOnType: true,
   },
+  withInput: {
+    typeOptions: {
+      name: ({ fieldName }) => `${R.capitalize(fieldName)}Input`,
+    },
+  },
 });
 
 builder.queryType({});
