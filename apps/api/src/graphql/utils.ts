@@ -1,5 +1,6 @@
 import { builder } from './builder';
 import type { TableDiscriminator } from '@kosmo/core/db';
+import type { UserContext } from '@/context';
 
 export const globalIdMap = new Map<number, string>();
 
@@ -15,16 +16,16 @@ const alignByIds = <T extends { id: string }>(
 export const createObjectRef = <TRow extends { id: string }>(
   name: string,
   discirminator: (typeof TableDiscriminator)[keyof typeof TableDiscriminator],
-  load: (ids: string[]) => Promise<TRow[]>,
+  load: (ids: string[], ctx: UserContext) => Promise<TRow[]>,
 ) => {
   globalIdMap.set(discirminator, name);
 
   return builder.loadableNodeRef(name, {
-    load: (async (ids: string[]) => {
-      const rows = await load(ids);
+    load: (async (ids: string[], ctx: UserContext) => {
+      const rows = await load(ids, ctx);
 
       return alignByIds(ids, rows);
-    }) as (ids: string[]) => Promise<TRow[]>,
+    }) as (ids: string[], ctx: UserContext) => Promise<TRow[]>,
     toKey: (obj) => obj.id,
     cacheResolved: true,
     id: { resolve: (obj) => obj.id },
