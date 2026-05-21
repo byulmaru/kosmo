@@ -2,7 +2,7 @@ import { Accounts, db, TableDiscriminator } from '@kosmo/core/db';
 import { inArray } from 'drizzle-orm';
 import { createObjectRef } from '@/graphql/utils';
 
-export const Account = createObjectRef('Account', Accounts, TableDiscriminator.Accounts, (ids) =>
+export const Account = createObjectRef('Account', TableDiscriminator.Accounts, (ids) =>
   db.select().from(Accounts).where(inArray(Accounts.id, ids)),
 );
 

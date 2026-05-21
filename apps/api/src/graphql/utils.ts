@@ -1,14 +1,5 @@
 import { builder } from './builder';
 import type { TableDiscriminator } from '@kosmo/core/db';
-import type { AnyPgColumn, AnyPgTable } from 'drizzle-orm/pg-core';
-
-type IdColumn = AnyPgColumn<{ data: string; notNull: true }>;
-type TableWithIdColumn = AnyPgTable<{
-  columns: { id: IdColumn };
-}> & {
-  id: IdColumn;
-  $inferSelect: { id: string };
-};
 
 export const globalIdMap = new Map<number, string>();
 
@@ -21,11 +12,10 @@ const alignByIds = <T extends { id: string }>(
   return ids.map((id) => rowsById.get(id) ?? null);
 };
 
-export const createObjectRef = <TTable extends TableWithIdColumn>(
+export const createObjectRef = <TRow extends { id: string }>(
   name: string,
-  table: TTable,
   discirminator: (typeof TableDiscriminator)[keyof typeof TableDiscriminator],
-  load: (ids: string[]) => Promise<TTable['$inferSelect'][]>,
+  load: (ids: string[]) => Promise<TRow[]>,
 ) => {
   globalIdMap.set(discirminator, name);
 
@@ -34,7 +24,7 @@ export const createObjectRef = <TTable extends TableWithIdColumn>(
       const rows = await load(ids);
 
       return alignByIds(ids, rows);
-    }) as (ids: string[]) => Promise<TTable['$inferSelect'][]>,
+    }) as (ids: string[]) => Promise<TRow[]>,
     toKey: (obj) => obj.id,
     cacheResolved: true,
     id: { resolve: (obj) => obj.id },
