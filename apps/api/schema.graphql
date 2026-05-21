@@ -119,6 +119,7 @@ enum ProfileState {
 }
 
 type Query {
+  currentSession: Session
   me: Account
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
@@ -133,6 +134,12 @@ union SelectProfileResult = NotFoundError | SelectProfileSuccess
 
 type SelectProfileSuccess {
   profile: Profile!
+}
+
+type Session implements Node {
+  account: Account!
+  id: ID!
+  selectedProfile: Profile
 }
 
 input UpdateProfileInput {
