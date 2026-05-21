@@ -12,7 +12,7 @@ type TableWithIdColumn = AnyPgTable<{
 
 export const globalIdMap = new Map<number, string>();
 
-export const alignByIds = <T extends { id: string }>(
+const alignByIds = <T extends { id: string }>(
   ids: readonly string[],
   rows: readonly T[],
 ): (T | null)[] => {
@@ -25,12 +25,16 @@ export const createObjectRef = <TTable extends TableWithIdColumn>(
   name: string,
   table: TTable,
   discirminator: (typeof TableDiscriminator)[keyof typeof TableDiscriminator],
-  load: (ids: string[]) => Promise<(TTable['$inferSelect'] | null)[]>,
+  load: (ids: string[]) => Promise<TTable['$inferSelect'][]>,
 ) => {
   globalIdMap.set(discirminator, name);
 
   return builder.loadableNodeRef(name, {
-    load: load as (ids: string[]) => Promise<TTable['$inferSelect'][]>,
+    load: (async (ids: string[]) => {
+      const rows = await load(ids);
+
+      return alignByIds(ids, rows);
+    }) as (ids: string[]) => Promise<TTable['$inferSelect'][]>,
     toKey: (obj) => obj.id,
     cacheResolved: true,
     id: { resolve: (obj) => obj.id },

@@ -1,16 +1,9 @@
 import { Accounts, db, TableDiscriminator } from '@kosmo/core/db';
 import { inArray } from 'drizzle-orm';
-import { alignByIds, createObjectRef } from '@/graphql/utils';
+import { createObjectRef } from '@/graphql/utils';
 
-export const Account = createObjectRef(
-  'Account',
-  Accounts,
-  TableDiscriminator.Accounts,
-  async (ids) => {
-    const accounts = await db.select().from(Accounts).where(inArray(Accounts.id, ids));
-
-    return alignByIds(ids, accounts);
-  },
+export const Account = createObjectRef('Account', Accounts, TableDiscriminator.Accounts, (ids) =>
+  db.select().from(Accounts).where(inArray(Accounts.id, ids)),
 );
 
 Account.implement({
