@@ -1,30 +1,41 @@
-import { db } from '@kosmo/core/db';
-import { asc, inArray } from 'drizzle-orm';
 import { builder } from './builder';
 import type { TableDiscriminator } from '@kosmo/core/db';
-import type { TableConfig } from 'drizzle-orm';
-import type { AnyPgColumn, AnyPgTable, PgColumns, PgTable } from 'drizzle-orm/pg-core';
+import type { AnyPgColumn, AnyPgTable } from 'drizzle-orm/pg-core';
 
 type IdColumn = AnyPgColumn<{ data: string; notNull: true }>;
-type TableWithIdColumn<T extends TableConfig<PgColumns>> = AnyPgTable<{
+type TableWithIdColumn = AnyPgTable<{
   columns: { id: IdColumn };
 }> & {
   id: IdColumn;
-} & PgTable<T>;
+  $inferSelect: { id: string };
+};
 
 export const globalIdMap = new Map<number, string>();
 
-export const createObjectRef = <T extends TableConfig<PgColumns>>(
+export const alignByIds = <T extends { id: string }>(
+  ids: readonly string[],
+  rows: readonly T[],
+) => {
+  const rowsById = new Map(rows.map((row) => [row.id, row]));
+
+  return ids.flatMap((id) => {
+    const row = rowsById.get(id);
+
+    return row ? [row] : [];
+  });
+};
+
+export const createObjectRef = <TTable extends TableWithIdColumn>(
   name: string,
-  table: TableWithIdColumn<T>,
+  table: TTable,
   discirminator: (typeof TableDiscriminator)[keyof typeof TableDiscriminator],
+  load: (ids: string[]) => Promise<TTable['$inferSelect'][]>,
 ) => {
   globalIdMap.set(discirminator, name);
 
   return builder.loadableNodeRef(name, {
-    load: (ids) => db.select().from(table).where(inArray(table.id, ids)).orderBy(asc(table.id)),
+    load,
     toKey: (obj) => obj.id,
-    sort: true,
     cacheResolved: true,
     id: { resolve: (obj) => obj.id },
   });
