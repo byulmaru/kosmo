@@ -5,17 +5,17 @@ import {
   ProfileFollowState,
   ProfileState,
 } from '@kosmo/core/enums';
-import { inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { createObjectRef } from '@/graphql/utils';
 
 export const Profile = createObjectRef('Profile', TableDiscriminator.Profiles, (ids) =>
-  db.select().from(Profiles).where(inArray(Profiles.id, ids)),
+  db
+    .select()
+    .from(Profiles)
+    .where(and(inArray(Profiles.id, ids), eq(Profiles.state, ProfileState.ACTIVE))),
 );
 
 Profile.implement({
-  authScopes: (profile) => {
-    return profile.state === ProfileState.ACTIVE;
-  },
   fields: (t) => ({
     handle: t.exposeString('handle'),
     displayName: t.exposeString('displayName'),
