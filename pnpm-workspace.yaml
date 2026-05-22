@@ -4,6 +4,7 @@ packages:
 
 minimumReleaseAge: 4320
 allowBuilds:
+  '@fission-ai/openspec': true
   '@tailwindcss/oxide': true
   core-js: true
   esbuild: true
