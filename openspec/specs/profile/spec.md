@@ -35,6 +35,7 @@ API는 활성 프로필만 GraphQL profile object로 노출해야 한다(MUST).
 - **WHEN** 프로필 상태가 `ACTIVE`이다
 - **THEN** 시스템은 프로필 object 접근을 허용한다
 - **AND** handle, displayName, nullable bio, followPolicy, createdAt 필드를 노출한다
+- **AND** Node ID 기반 profile load도 활성 프로필만 반환한다
 
 #### Scenario: Access inactive profile object
 
