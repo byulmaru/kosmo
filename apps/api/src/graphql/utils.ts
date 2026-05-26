@@ -15,10 +15,10 @@ const alignByIds = <T extends { id: string }>(
 
 export const createObjectRef = <TRow extends { id: string }>(
   name: string,
-  discirminator: (typeof TableDiscriminator)[keyof typeof TableDiscriminator],
+  discriminator: (typeof TableDiscriminator)[keyof typeof TableDiscriminator],
   load: (ids: string[], ctx: UserContext) => Promise<TRow[]>,
 ) => {
-  globalIdMap.set(discirminator, name);
+  globalIdMap.set(discriminator, name);
 
   return builder.loadableNodeRef(name, {
     load: (async (ids: string[], ctx: UserContext) => {
