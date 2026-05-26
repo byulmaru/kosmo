@@ -2,5 +2,6 @@ apps/helm/templates/**/*.yaml
 apps/web/build/
 apps/web/.svelte-kit
 apps/web/.mearie
+.pnpm-store/
 pnpm-lock.yaml
 schema.graphql
