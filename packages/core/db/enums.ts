@@ -8,6 +8,7 @@ export const accountProfileRole = createPgEnum('account_profile_role', Enum.Acco
 export const accountState = createPgEnum('account_state', Enum.AccountState);
 export const applicationState = createPgEnum('application_state', Enum.ApplicationState);
 export const applicationType = createPgEnum('application_type', Enum.ApplicationType);
+export const mediaSource = createPgEnum('media_source', Enum.MediaSource);
 export const oauthTokenState = createPgEnum('oauth_token_state', Enum.OAuthTokenState);
 export const postState = createPgEnum('post_state', Enum.PostState);
 export const postVisibility = createPgEnum('post_visibility', Enum.PostVisibility);

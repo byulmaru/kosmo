@@ -5,6 +5,8 @@ export const TableDiscriminator = {
   AccountProfiles: 0x002,
   Applications: 0x003,
   ApplicationAuthorizations: 0x009,
+  Files: 0x00c,
+  Media: 0x00d,
   OAuthAuthorizationCodes: 0x00a,
   OAuthTokens: 0x00b,
   Posts: 0x004,

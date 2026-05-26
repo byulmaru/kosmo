@@ -140,11 +140,13 @@ Drizzle relation schema policy:
 
 ## Media And Files
 
-Separate media responsibilities:
+Current media direction:
 
-- `file_object`: actual Object Storage file, with `storage_key`, `mime_type`, `byte_size`, `sha256`, `width`, `height`, and `deleted_at`.
-- `media_asset`: logical media uploaded by a user, referencing the original `file_object`.
-- `media_variant`: thumbnail, preview, compressed, resized, WebP/AVIF, or blur preview variants.
+- `file`: physical Object Storage/R2 file owned by the application, with `storage_key`, `url`, `mime_type`, optional `byte_size`, optional `sha256`, optional `width`, optional `height`, and later deletion metadata when cleanup policy is added. Upload API can fill byte size from the incoming `File.size`; SHA-256 and dimensions are deferred to processing/measurement.
+- `media`: logical media used by the product. It can represent local uploads or remote ActivityPub media via `source = LOCAL | REMOTE`.
+- Local upload `media` rows initially reference `original_file_id`, which points to the uploaded R2 object. Image transformation and thumbnail generation are separated into a later worker/pipeline; that later work can fill `thumbnail_file_id`, thumbhash, dimensions, and hash metadata.
+- Remote ActivityPub `media` rows may initially have no file references. Store remote URL, optional remote actor ID, and remote fetched timestamp, then lazily materialize cached R2 `file` rows through an image proxy/processing pipeline later.
+- Keep thumbhash on `media`; it is nullable because both local uploads and remote media can exist before worker/proxy processing.
 - `post_media`: usage context for a post, with `position`, `alt_text`, `sensitivity`, `focus_x`, and `focus_y`.
 - `profile_media`: add later when avatar/banner usage needs its own context.
 
@@ -174,7 +176,7 @@ Thumbnail policy:
 
 - Prefer soft delete for user-visible domain objects.
 - For `post`, consider `state` and `deleted_at` if federation tombstones, moderation, or user restore policy matter.
-- Mark `media_asset` and `file_object` with `deleted_at`, then physically delete after a grace period.
+- Mark `media` and `file` with `deleted_at` once deletion policy is introduced, then physically delete R2 objects after a grace period.
 - Manage `session` and `application_secret` with revoke/expire timestamps.
 - `post_media` can cascade if audit/restore is not required, but review that with post/media deletion policy.
 - Treat `ON DELETE CASCADE` as policy, not convenience. Check whether rows are needed for audit, moderation, federation, or cost accounting.

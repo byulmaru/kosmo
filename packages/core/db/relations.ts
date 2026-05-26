@@ -12,6 +12,7 @@ export const relations = defineRelations(tables, (r) => ({
       to: r.ApplicationAuthorizations.accountId,
     }),
     applications: r.many.Applications({ from: r.Accounts.id, to: r.Applications.ownerAccountId }),
+    media: r.many.Media({ from: r.Accounts.id, to: r.Media.accountId }),
     oauthAuthorizationCodes: r.many.OAuthAuthorizationCodes({
       from: r.Accounts.id,
       to: r.OAuthAuthorizationCodes.accountId,
@@ -56,6 +57,16 @@ export const relations = defineRelations(tables, (r) => ({
       optional: false,
     }),
     profile: r.one.Profiles({ from: r.ApplicationAuthorizations.profileId, to: r.Profiles.id }),
+  },
+  Files: {
+    originalMedia: r.many.Media({ from: r.Files.id, to: r.Media.originalFileId }),
+    thumbnailMedia: r.many.Media({ from: r.Files.id, to: r.Media.thumbnailFileId }),
+  },
+  Media: {
+    account: r.one.Accounts({ from: r.Media.accountId, to: r.Accounts.id }),
+    originalFile: r.one.Files({ from: r.Media.originalFileId, to: r.Files.id }),
+    profile: r.one.Profiles({ from: r.Media.profileId, to: r.Profiles.id }),
+    thumbnailFile: r.one.Files({ from: r.Media.thumbnailFileId, to: r.Files.id }),
   },
   OAuthAuthorizationCodes: {
     account: r.one.Accounts({
@@ -106,6 +117,7 @@ export const relations = defineRelations(tables, (r) => ({
       to: r.ProfileFollows.followeeProfileId,
       alias: 'profile_follow_followee',
     }),
+    media: r.many.Media({ from: r.Profiles.id, to: r.Media.profileId }),
     oauthAuthorizationCodes: r.many.OAuthAuthorizationCodes({
       from: r.Profiles.id,
       to: r.OAuthAuthorizationCodes.profileId,
