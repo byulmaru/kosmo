@@ -1,17 +1,18 @@
 import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { env } from '@kosmo/core/env';
 import type { PutObjectCommandInput } from '@aws-sdk/client-s3';
 
 const r2Config = {
-  bucket: process.env.R2_BUCKET!,
-  publicBaseUrl: process.env.R2_PUBLIC_BASE_URL!.replace(/\/+$/, ''),
+  bucket: env.R2_BUCKET,
+  publicBaseUrl: env.R2_PUBLIC_BASE_URL.replace(/\/+$/, ''),
 };
 
 const s3 = new S3Client({
   credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+    accessKeyId: env.R2_ACCESS_KEY_ID,
+    secretAccessKey: env.R2_SECRET_ACCESS_KEY,
   },
-  endpoint: process.env.R2_ENDPOINT!,
+  endpoint: env.R2_ENDPOINT,
   region: 'auto',
 });
 

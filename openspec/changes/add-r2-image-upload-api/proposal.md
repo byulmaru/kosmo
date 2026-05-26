@@ -34,6 +34,7 @@
 - `apps/api/src/rest/`: 업로드 REST route를 추가한다.
 - `apps/api/src/utils/`: R2 helper를 추가한다.
 - `apps/api/package.json`: `@aws-sdk/client-s3` 의존성을 추가한다.
+- `packages/core/env.ts`: R2 환경변수를 zod schema로 파싱해 export한다.
 - `packages/core/db/`: `file`, `media`, `media_source`, table discriminator, relation을 추가한다.
 - 런타임 설정: R2 endpoint, bucket, access key, secret key, public base URL을 사용한다.
 - 업로드 최대 크기는 endpoint 정책 상수로 관리한다.
@@ -45,3 +46,5 @@
 - `R2_ACCESS_KEY_ID`: R2 S3 API access key ID.
 - `R2_SECRET_ACCESS_KEY`: R2 S3 API secret access key.
 - `R2_PUBLIC_BASE_URL`: 업로드 후 클라이언트에 반환할 공개 URL base. R2 API endpoint와 다를 수 있으며 custom domain 또는 public bucket URL을 사용한다.
+
+이 값들은 `@kosmo/core/env`에서 zod로 파싱한 뒤 API R2 helper가 참조한다.

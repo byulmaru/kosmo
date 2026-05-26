@@ -3,7 +3,7 @@
 - [x] 1.1 `pnpm`으로 S3-compatible R2 client 의존성을 추가한다.
 - [x] 1.2 물리 R2 객체와 논리 로컬/리모트 미디어 metadata를 위한 `Files`, `Media` 테이블을 추가한다.
 - [x] 1.3 `Files`/`Media` table discriminator, `MediaSource` enum, file reference와 account/profile ownership Drizzle relation을 추가한다.
-- [x] 1.4 R2 endpoint, bucket, access key, secret key, public base URL 런타임 설정과 업로드 최대 크기 상수를 정의한다.
+- [x] 1.4 R2 endpoint, bucket, access key, secret key, public base URL 런타임 설정을 `packages/core/env.ts`에서 zod로 파싱하고 업로드 최대 크기 상수를 정의한다.
 - [x] 1.5 S3 `Body` 호환 payload와 content type, generated key로 저장하는 작은 R2 upload helper를 구현한다.
 
 ## 2. REST route 구조
