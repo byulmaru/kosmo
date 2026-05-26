@@ -2,6 +2,7 @@ packages:
   - apps/*
   - packages/*
 
+enableGlobalVirtualStore: true
 minimumReleaseAge: 4320
 allowBuilds:
   '@fission-ai/openspec': true
@@ -9,13 +10,3 @@ allowBuilds:
   core-js: true
   esbuild: true
   unrs-resolver: true
-minimumReleaseAgeExclude:
-  - cookie@0.7.0
-  - postcss@8.5.10
-  - svelte@5.55.7
-  - devalue@5.8.1
-  - ws@8.20.1
-  - '@sveltejs/kit@2.60.1'
-overrides:
-  cookie@<0.7.0: ^0.7.0
-  postcss@<8.5.10: ^8.5.10
