@@ -4,6 +4,10 @@
   "version": "0.0.0",
   "packageManager": "pnpm@11.1.0+sha512.0c44e842e5686b2c061a81adda8b2258bd8818e9704b2cf2c63d56b931a7b2e910092e085027003b96ca3911ab56a07f6df5abaed2be9925034cdd686a535b14",
   "scripts": {
+    "db:test:down": "docker compose --env-file .env.test -f docker-compose.test.yml down",
+    "db:test:push": "set -a && . ./.env.test && set +a && env NODE_OPTIONS='--preserve-symlinks --preserve-symlinks-main' ./packages/core/node_modules/.bin/drizzle-kit push --config packages/core/drizzle.config.ts",
+    "db:test:reset": "docker compose --env-file .env.test -f docker-compose.test.yml down --volumes --remove-orphans && docker compose --env-file .env.test -f docker-compose.test.yml up -d --wait",
+    "db:test:up": "docker compose --env-file .env.test -f docker-compose.test.yml up -d --wait",
     "dev": "infisical run -- pnpm --recursive --parallel --if-present dev",
     "lint:eslint": "eslint --max-warnings 0 .",
     "lint:prettier": "prettier --check --ignore-unknown '**/*'",

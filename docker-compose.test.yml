@@ -1,0 +1,28 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    ports:
+      - '${KOSMO_TEST_POSTGRES_PORT:-54329}:5432'
+    environment:
+      POSTGRES_DB: ${KOSMO_TEST_POSTGRES_DB:-kosmo_test}
+      POSTGRES_PASSWORD: ${KOSMO_TEST_POSTGRES_PASSWORD:-kosmo}
+      POSTGRES_USER: ${KOSMO_TEST_POSTGRES_USER:-kosmo}
+    command:
+      - postgres
+      - -c
+      - fsync=off
+      - -c
+      - full_page_writes=off
+      - -c
+      - synchronous_commit=off
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 2s
+      timeout: 5s
+      retries: 15
+      start_period: 5s
+    volumes:
+      - postgres-test-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-test-data:
