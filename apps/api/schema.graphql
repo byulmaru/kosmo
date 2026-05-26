@@ -116,7 +116,7 @@ type Profile implements Node {
   followingCount: Int!
   handle: String!
   id: ID!
-  viewerFollowState: ProfileFollowState
+  viewerFollow: ProfileFollow
 }
 
 type ProfileFollow implements Node {

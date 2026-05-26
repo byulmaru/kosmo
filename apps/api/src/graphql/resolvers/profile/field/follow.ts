@@ -101,8 +101,8 @@ builder.objectFields(Profile, (t) => ({
         eq(Profiles.id, ProfileFollows.followeeProfileId),
       ),
   }),
-  viewerFollowState: t.field({
-    type: ProfileFollowState,
+  viewerFollow: t.field({
+    type: ProfileFollow,
     nullable: true,
     resolve: async (profile, _, ctx) => {
       if (!ctx.session?.profileId) {
@@ -110,7 +110,7 @@ builder.objectFields(Profile, (t) => ({
       }
 
       const follow = await db
-        .select({ state: ProfileFollows.state })
+        .select({ id: ProfileFollows.id })
         .from(ProfileFollows)
         .where(
           and(
@@ -121,7 +121,7 @@ builder.objectFields(Profile, (t) => ({
         .limit(1)
         .then(first);
 
-      return follow?.state ?? null;
+      return follow?.id ?? null;
     },
   }),
 }));
