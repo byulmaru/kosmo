@@ -6,7 +6,7 @@
 
 ## 변경 범위
 
-- `Profile`에 팔로워/팔로잉 connection, count, viewer 기준 follow 상태 필드를 추가한다.
+- `Profile`에 팔로워/팔로잉 connection, count, viewer 기준 follow 관계 필드를 추가한다.
 - 팔로워/팔로잉 connection과 count는 accepted 관계 중 상대 프로필도 활성 상태인 관계만 노출한다.
 - 팔로워/팔로잉 connection의 node는 프로필 자체가 아니라 `ProfileFollow` 관계이다.
 - `ProfileFollow`에 `follower`, `followee` 관계 필드를 추가한다.
@@ -30,9 +30,10 @@
 
 ## 남은 결정
 
-- pending 승인 플로우가 추가될 때 `PENDING` 또는 `REJECTED` 상태의 기존 follow 관계에 `followProfile`을 다시 호출하면 기존 관계를 반환할지, `ACCEPTED`로 전환할지, 별도 오류로 처리할지 결정한다.
+- pending 승인 플로우가 추가될 때 `PENDING` 또는 `REJECTED` 상태의 기존 follow 관계에 `followProfile`을 다시 호출하면 기존 관계를 반환할지, `ACCEPTED`로 전환할지, 별도 오류로 처리할지 결정한다. 이번 변경에서는 임시로 `ConflictError`를 반환한다.
+- `ProfileFollow`를 viewer 외 경로(예: `node(id:)`)로 직접 조회할 수 있도록 허용할지와 그때의 접근 정책을 결정한다.
 
 ## 남은 리스크
 
 - followers/following connection은 현재 offset 기반 cursor를 사용하므로, 페이지 조회 중 관계가 추가되거나 삭제되면 같은 cursor가 다른 위치를 가리킬 수 있다.
-- followersCount, followingCount, viewerFollowState는 프로필별 개별 쿼리를 수행하므로 여러 프로필을 한 번에 조회하는 쿼리에서는 N+1이 발생할 수 있다.
+- followersCount, followingCount, viewerFollow는 프로필별 개별 쿼리를 수행하므로 여러 프로필을 한 번에 조회하는 쿼리에서는 N+1이 발생할 수 있다.
