@@ -43,14 +43,21 @@ builder.mutationField('followProfile', (t) =>
           and(
             eq(ProfileFollows.followerProfileId, ctx.session.profileId),
             eq(ProfileFollows.followeeProfileId, targetProfile.id),
-            eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
           ),
         )
         .limit(1)
         .then(first);
 
       if (existingFollow) {
-        return existingFollow;
+        if (existingFollow.state === ProfileFollowState.ACCEPTED) {
+          return existingFollow;
+        }
+
+        // PENDING/REJECTED 재요청 정책은 후속 pending 승인 플로우에서 결정한다.
+        throw new ConflictError({
+          message: 'Profile follow already exists with unsupported state',
+          field: 'id',
+        });
       }
 
       return await db
@@ -67,21 +74,20 @@ builder.mutationField('followProfile', (t) =>
             throw error;
           }
 
-          const acceptedFollow = await db
+          const concurrentFollow = await db
             .select()
             .from(ProfileFollows)
             .where(
               and(
                 eq(ProfileFollows.followerProfileId, ctx.session.profileId),
                 eq(ProfileFollows.followeeProfileId, targetProfile.id),
-                eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
               ),
             )
             .limit(1)
             .then(first);
 
-          if (acceptedFollow) {
-            return acceptedFollow;
+          if (concurrentFollow?.state === ProfileFollowState.ACCEPTED) {
+            return concurrentFollow;
           }
 
           throw new ConflictError({
