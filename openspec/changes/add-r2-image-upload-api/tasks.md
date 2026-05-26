@@ -15,7 +15,7 @@
 ## 3. Upload endpoint 동작
 
 - [x] 3.1 `c.get('context').session` 인증 session을 요구하고 anonymous 요청은 HTTP 401 JSON으로 반환한다.
-- [x] 3.2 Hono validator로 `multipart/form-data`를 파싱하고 `image` file field를 요구한다.
+- [x] 3.2 Hono validator와 zod schema로 `multipart/form-data`를 파싱하고 `image` file field를 요구한다.
 - [x] 3.3 원본 업로드 최대 byte size를 강제하고 초과 시 HTTP 413 JSON으로 반환한다.
 - [x] 3.4 `image/*` MIME type으로 보이지 않는 파일은 HTTP 400 JSON으로 반환한다.
 - [x] 3.5 `uploads/yyyy/mm/` 형식의 object key를 서버에서 생성한다.

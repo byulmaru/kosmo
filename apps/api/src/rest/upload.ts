@@ -2,34 +2,33 @@ import { randomUUID } from 'node:crypto';
 import { db, Files, Media } from '@kosmo/core/db';
 import { Hono } from 'hono';
 import { validator } from 'hono/validator';
+import { z } from 'zod';
 import { deleteR2Object, getPublicUrl, uploadR2Object } from '../utils/r2';
 import type { Env } from '../context';
 
 const MAX_UPLOAD_SIZE = 10 * 1024 * 1024;
 
-type UploadForm = {
-  image: File;
-};
-
 export const upload = new Hono<Env>();
 
 const jsonError = (message: string) => ({ error: message });
 
-const uploadValidator = validator('form', (body, c): Response | UploadForm => {
-  const image = body.image;
-  if (!(image instanceof File)) {
-    return c.json(jsonError('image file is required'), 400);
+const uploadFormSchema = z.object({
+  image: z
+    .instanceof(File, { error: 'image file is required' })
+    .refine((image) => image.size <= MAX_UPLOAD_SIZE, 'image is too large')
+    .refine((image) => image.type.startsWith('image/'), 'image file is required'),
+});
+
+const uploadValidator = validator('form', (body, c) => {
+  const result = uploadFormSchema.safeParse(body);
+  if (result.success) {
+    return result.data;
   }
 
-  if (image.size > MAX_UPLOAD_SIZE) {
-    return c.json(jsonError('image is too large'), 413);
-  }
+  const issue = result.error.issues[0];
+  const message = issue?.message ?? 'image file is required';
 
-  if (!image.type.startsWith('image/')) {
-    return c.json(jsonError('image file is required'), 400);
-  }
-
-  return { image };
+  return c.json(jsonError(message), message === 'image is too large' ? 413 : 400);
 });
 
 const getExtension = (file: File) => {
