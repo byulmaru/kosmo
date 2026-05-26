@@ -25,5 +25,5 @@
 - [x] 4.1 API TypeScript 타입체크를 실행한다.
 - [x] 4.2 ESLint/Prettier 검증을 실행한다.
 - [x] 4.3 GraphQL schema 생성 또는 schema diff를 확인한다.
-- [ ] 4.4 PR 본문에 pending/rejected follow 재요청 정책이 이번 범위에서 제외되었음을 남긴다.
-- [ ] 4.5 수동 GraphQL 검증 쿼리와 남은 리스크를 정리한다.
+- [x] 4.4 PR 본문에 pending/rejected follow 재요청 정책이 이번 범위에서 제외되었음을 남긴다.
+- [x] 4.5 수동 GraphQL 검증 쿼리와 남은 리스크를 정리한다.
