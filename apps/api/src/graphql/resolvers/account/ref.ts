@@ -9,7 +9,7 @@ export const Account = createObjectRef('Account', TableDiscriminator.Accounts, (
     .where(
       and(
         inArray(Accounts.id, ids),
-        ctx.session ? eq(Accounts.id, ctx.session?.accountId) : sql`1=0`,
+        ctx.session ? eq(Accounts.id, ctx.session.accountId) : sql`1=0`,
       ),
     ),
 );
