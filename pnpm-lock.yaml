@@ -4,10 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-overrides:
-  cookie@<0.7.0: ^0.7.0
-  postcss@<8.5.10: ^8.5.10
-
 importers:
 
   .:

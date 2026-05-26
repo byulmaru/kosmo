@@ -24,7 +24,7 @@
   "hooks": {
     // Commands to run after worktree creation
     // Example: ["pnpm install", "docker compose up -d"]
-    "postCreate": [],
+    "postCreate": ["mise trust", "pnpm install"],
 
     // Commands to run before worktree deletion
     // Example: ["docker compose down"]
