@@ -1,7 +1,7 @@
-import { db, first, ProfileFollows } from '@kosmo/core/db';
-import { ProfileFollowState } from '@kosmo/core/enums';
+import { db, first, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { ProfileFollowState, ProfileState } from '@kosmo/core/enums';
 import { resolveOffsetConnection } from '@pothos/plugin-relay';
-import { and, count, desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq, getColumns } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile, ProfileFollow } from '../ref';
 
@@ -24,9 +24,16 @@ builder.objectFields(Profile, (t) => ({
     resolve: (profile, args) =>
       resolveOffsetConnection({ args }, ({ limit, offset }) =>
         db
-          .select()
+          .select(getColumns(ProfileFollows))
           .from(ProfileFollows)
-          .where(and(eq(ProfileFollows.followeeProfileId, profile.id), acceptedFollow))
+          .innerJoin(Profiles, eq(Profiles.id, ProfileFollows.followerProfileId))
+          .where(
+            and(
+              eq(ProfileFollows.followeeProfileId, profile.id),
+              acceptedFollow,
+              eq(Profiles.state, ProfileState.ACTIVE),
+            ),
+          )
           .orderBy(desc(ProfileFollows.createdAt), desc(ProfileFollows.id))
           .limit(limit)
           .offset(offset),
@@ -37,9 +44,16 @@ builder.objectFields(Profile, (t) => ({
     resolve: (profile, args) =>
       resolveOffsetConnection({ args }, ({ limit, offset }) =>
         db
-          .select()
+          .select(getColumns(ProfileFollows))
           .from(ProfileFollows)
-          .where(and(eq(ProfileFollows.followerProfileId, profile.id), acceptedFollow))
+          .innerJoin(Profiles, eq(Profiles.id, ProfileFollows.followeeProfileId))
+          .where(
+            and(
+              eq(ProfileFollows.followerProfileId, profile.id),
+              acceptedFollow,
+              eq(Profiles.state, ProfileState.ACTIVE),
+            ),
+          )
           .orderBy(desc(ProfileFollows.createdAt), desc(ProfileFollows.id))
           .limit(limit)
           .offset(offset),
@@ -50,7 +64,14 @@ builder.objectFields(Profile, (t) => ({
       const row = await db
         .select({ value: count() })
         .from(ProfileFollows)
-        .where(and(eq(ProfileFollows.followeeProfileId, profile.id), acceptedFollow))
+        .innerJoin(Profiles, eq(Profiles.id, ProfileFollows.followerProfileId))
+        .where(
+          and(
+            eq(ProfileFollows.followeeProfileId, profile.id),
+            acceptedFollow,
+            eq(Profiles.state, ProfileState.ACTIVE),
+          ),
+        )
         .then(first);
 
       return row?.value ?? 0;
@@ -61,7 +82,14 @@ builder.objectFields(Profile, (t) => ({
       const row = await db
         .select({ value: count() })
         .from(ProfileFollows)
-        .where(and(eq(ProfileFollows.followerProfileId, profile.id), acceptedFollow))
+        .innerJoin(Profiles, eq(Profiles.id, ProfileFollows.followeeProfileId))
+        .where(
+          and(
+            eq(ProfileFollows.followerProfileId, profile.id),
+            acceptedFollow,
+            eq(Profiles.state, ProfileState.ACTIVE),
+          ),
+        )
         .then(first);
 
       return row?.value ?? 0;
