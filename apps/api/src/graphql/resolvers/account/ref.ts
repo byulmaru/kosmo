@@ -1,14 +1,20 @@
-import { Accounts, TableDiscriminator } from '@kosmo/core/db';
+import { Accounts, db, TableDiscriminator } from '@kosmo/core/db';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { createObjectRef } from '@/graphql/utils';
 
-export const Account = createObjectRef('Account', Accounts, TableDiscriminator.Accounts);
+export const Account = createObjectRef('Account', TableDiscriminator.Accounts, (ids, ctx) =>
+  db
+    .select()
+    .from(Accounts)
+    .where(
+      and(
+        inArray(Accounts.id, ids),
+        ctx.session ? eq(Accounts.id, ctx.session.accountId) : sql`1=0`,
+      ),
+    ),
+);
 
 Account.implement({
-  authScopes: (account, ctx) => {
-    // 내 계정이면 체크 없이 true 아니면 체크 없이 false
-    return account.id === ctx.session?.accountId;
-  },
-
   fields: (t) => ({
     name: t.string({
       resolve: (account) => account.displayName,

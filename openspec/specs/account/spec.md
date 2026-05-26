@@ -44,8 +44,14 @@ API는 계정 object를 현재 세션의 계정에게만 노출해야 한다(MUS
 
 - **WHEN** 요청한 계정 ID가 현재 세션의 계정 ID와 같다
 - **THEN** 시스템은 계정 object 접근을 허용한다
+- **AND** Node ID 기반 account load도 현재 세션의 계정만 반환한다
 
 #### Scenario: Access another account object
 
 - **WHEN** 요청한 계정 ID가 현재 세션의 계정 ID와 다르다
+- **THEN** 시스템은 계정 object 접근을 허용하지 않는다
+
+#### Scenario: Access account object anonymously
+
+- **WHEN** 세션이 없는 요청이 계정 ID를 load한다
 - **THEN** 시스템은 계정 object 접근을 허용하지 않는다

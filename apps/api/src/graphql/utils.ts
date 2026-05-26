@@ -1,30 +1,32 @@
-import { db } from '@kosmo/core/db';
-import { asc, inArray } from 'drizzle-orm';
 import { builder } from './builder';
 import type { TableDiscriminator } from '@kosmo/core/db';
-import type { TableConfig } from 'drizzle-orm';
-import type { AnyPgColumn, AnyPgTable, PgColumns, PgTable } from 'drizzle-orm/pg-core';
-
-type IdColumn = AnyPgColumn<{ data: string; notNull: true }>;
-type TableWithIdColumn<T extends TableConfig<PgColumns>> = AnyPgTable<{
-  columns: { id: IdColumn };
-}> & {
-  id: IdColumn;
-} & PgTable<T>;
+import type { UserContext } from '@/context';
 
 export const globalIdMap = new Map<number, string>();
 
-export const createObjectRef = <T extends TableConfig<PgColumns>>(
+const alignByIds = <T extends { id: string }>(
+  ids: readonly string[],
+  rows: readonly T[],
+): (T | null)[] => {
+  const rowsById = new Map(rows.map((row) => [row.id, row]));
+
+  return ids.map((id) => rowsById.get(id) ?? null);
+};
+
+export const createObjectRef = <TRow extends { id: string }>(
   name: string,
-  table: TableWithIdColumn<T>,
-  discirminator: (typeof TableDiscriminator)[keyof typeof TableDiscriminator],
+  discriminator: (typeof TableDiscriminator)[keyof typeof TableDiscriminator],
+  load: (ids: string[], ctx: UserContext) => Promise<TRow[]>,
 ) => {
-  globalIdMap.set(discirminator, name);
+  globalIdMap.set(discriminator, name);
 
   return builder.loadableNodeRef(name, {
-    load: (ids) => db.select().from(table).where(inArray(table.id, ids)).orderBy(asc(table.id)),
+    load: (async (ids: string[], ctx: UserContext) => {
+      const rows = await load(ids, ctx);
+
+      return alignByIds(ids, rows);
+    }) as (ids: string[], ctx: UserContext) => Promise<TRow[]>,
     toKey: (obj) => obj.id,
-    sort: true,
     cacheResolved: true,
     id: { resolve: (obj) => obj.id },
   });

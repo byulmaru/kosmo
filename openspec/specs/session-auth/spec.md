@@ -67,7 +67,7 @@
 
 ### Requirement: API 세션 컨텍스트 파생
 
-API 서버는 Bearer token에서 현재 세션과 선택된 actor profile을 파생해야 한다(MUST).
+API 서버는 Bearer token에서 현재 세션과 세션에 저장된 actor profile을 파생해야 한다(MUST).
 
 #### Scenario: 유효한 Bearer token
 
@@ -78,11 +78,11 @@ API 서버는 Bearer token에서 현재 세션과 선택된 actor profile을 파
 
 #### Scenario: actor profile 선택
 
-- **WHEN** 유효한 세션 요청이 `X-Actor-Profile-Id` 헤더를 포함한다
+- **WHEN** 유효한 세션의 `active_profile_id`가 존재한다
 - **THEN** 시스템은 해당 프로필이 활성 상태이고 세션 계정과 `account_profile`로 연결된 경우에만 actor profile로 사용한다
 - **AND** 유효하지 않은 actor profile은 `null`로 처리한다
 
-#### Scenario: actor profile 기본값
+#### Scenario: actor profile 없음
 
-- **WHEN** 유효한 세션 요청이 `X-Actor-Profile-Id` 헤더를 포함하지 않는다
-- **THEN** 시스템은 세션의 `active_profile_id`를 actor profile 후보로 사용한다
+- **WHEN** 유효한 세션의 `active_profile_id`가 없다
+- **THEN** 시스템은 actor profile을 `null`로 처리한다

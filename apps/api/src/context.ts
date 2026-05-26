@@ -54,7 +54,7 @@ export const deriveContext = async (c: ServerContext): Promise<Context> => {
       .then(first);
 
     if (session) {
-      let profileId = c.req.header('X-Actor-Profile-Id') ?? session?.activeProfileId;
+      let profileId = session.activeProfileId;
       if (profileId) {
         await db
           .select({
