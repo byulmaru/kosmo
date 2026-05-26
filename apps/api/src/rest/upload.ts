@@ -1,12 +1,19 @@
 import { randomUUID } from 'node:crypto';
 import { sValidator } from '@hono/standard-validator';
-import { db, Files, Media } from '@kosmo/core/db';
+import { db, Files, firstOrThrowWith, Media } from '@kosmo/core/db';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { deleteR2Object, getPublicUrl, uploadR2Object } from '../utils/r2';
 import type { Env } from '../context';
 
 const MAX_UPLOAD_SIZE = 10 * 1024 * 1024;
+const ALLOWED_IMAGE_MIME_TYPES = [
+  'image/avif',
+  'image/gif',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+];
 
 export const upload = new Hono<Env>();
 
@@ -16,7 +23,7 @@ const uploadFormSchema = z.object({
   image: z
     .instanceof(File, { error: 'image file is required' })
     .refine((image) => image.size <= MAX_UPLOAD_SIZE, 'image is too large')
-    .refine((image) => image.type.startsWith('image/'), 'image file is required'),
+    .refine((image) => ALLOWED_IMAGE_MIME_TYPES.includes(image.type), 'image file is required'),
 });
 
 const getExtension = (file: File) => {
@@ -73,7 +80,7 @@ upload.post(
 
     try {
       const mediaId = await db.transaction(async (tx) => {
-        const [file] = await tx
+        const file = await tx
           .insert(Files)
           .values({
             byteSize: image.size,
@@ -82,13 +89,10 @@ upload.post(
             storageKey: key,
             url,
           })
-          .returning({ id: Files.id });
+          .returning({ id: Files.id })
+          .then(firstOrThrowWith(() => new Error('failed to insert file')));
 
-        if (!file) {
-          throw new Error('failed to insert file');
-        }
-
-        const [media] = await tx
+        const media = await tx
           .insert(Media)
           .values({
             accountId: session.accountId,
@@ -96,11 +100,8 @@ upload.post(
             profileId: session.profileId,
             source: 'LOCAL',
           })
-          .returning({ id: Media.id });
-
-        if (!media) {
-          throw new Error('failed to insert media');
-        }
+          .returning({ id: Media.id })
+          .then(firstOrThrowWith(() => new Error('failed to insert media')));
 
         return media.id;
       });

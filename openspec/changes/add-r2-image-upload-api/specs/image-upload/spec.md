@@ -16,16 +16,16 @@ API는 이미지 업로드를 위한 루트 `POST /upload` endpoint를 제공해
 
 ### Requirement: multipart 이미지 입력 검증
 
-Upload endpoint는 `image`라는 단일 file field를 가진 `multipart/form-data`를 받아야 하며, 이미지 파일 MIME type으로 보이지 않는 입력은 거부해야 한다(MUST).
+Upload endpoint는 `image`라는 단일 file field를 가진 `multipart/form-data`를 받아야 하며, 허용된 이미지 MIME type이 아닌 입력은 거부해야 한다(MUST).
 
 #### Scenario: image field 누락
 
 - **WHEN** 인증된 클라이언트가 `image` file field 없이 `POST /upload`를 보낸다
 - **THEN** 시스템은 HTTP 400 JSON error response를 반환한다
 
-#### Scenario: 이미지가 아닌 MIME type
+#### Scenario: 허용되지 않은 MIME type
 
-- **WHEN** 인증된 클라이언트가 `image/*` MIME type이 아닌 파일을 업로드한다
+- **WHEN** 인증된 클라이언트가 endpoint 정책 상수의 허용 목록에 없는 MIME type의 파일을 업로드한다
 - **THEN** 시스템은 HTTP 400 JSON error response를 반환한다
 
 #### Scenario: 업로드 크기 초과

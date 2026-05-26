@@ -9,7 +9,7 @@
 - 기존 `/graphql`과 별개로 루트 경로에 `POST /upload` REST 엔드포인트를 추가한다.
 - `multipart/form-data`의 `image` 파일 필드를 받는다.
 - 업로드 최대 크기는 endpoint 정책 상수로 제한한다.
-- 이미지 파일 MIME type으로 보이지 않는 입력은 거부한다.
+- 허용된 이미지 MIME type이 아닌 입력은 거부한다.
 - 파일 bytes는 R2에 스트리밍 업로드한다.
 - `File`은 우리 R2에 저장된 물리 파일을 나타낸다.
 - `Media`는 서비스에서 사용하는 논리 미디어를 나타내며 로컬/리모트 모두 표현한다.

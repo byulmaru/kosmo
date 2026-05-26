@@ -17,7 +17,7 @@
 - [x] 3.1 `c.get('context').session` 인증 session을 요구하고 anonymous 요청은 HTTP 401 JSON으로 반환한다.
 - [x] 3.2 `@hono/standard-validator`와 zod schema로 `multipart/form-data`를 파싱하고 `image` file field를 요구한다.
 - [x] 3.3 원본 업로드 최대 byte size를 강제하고 초과 시 HTTP 413 JSON으로 반환한다.
-- [x] 3.4 `image/*` MIME type으로 보이지 않는 파일은 HTTP 400 JSON으로 반환한다.
+- [x] 3.4 허용된 이미지 MIME type이 아닌 파일은 HTTP 400 JSON으로 반환한다.
 - [x] 3.5 `uploads/yyyy/mm/` 형식의 object key를 서버에서 생성한다.
 - [x] 3.6 입력 파일 stream을 R2에 업로드하고 R2 실패 시 HTTP 502 JSON으로 반환한다.
 - [x] 3.7 R2 업로드 성공 후 `file` row와 `source = LOCAL` `media` row를 insert하고, DB persistence 실패 시 가능한 범위에서 업로드된 R2 객체를 정리한다.
