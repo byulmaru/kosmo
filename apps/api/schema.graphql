@@ -121,6 +121,7 @@ enum ProfileState {
 type Query {
   currentSession: Session
   me: Account
+  myProfiles: [Profile!]!
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
   profileByHandle(handle: String!): Profile

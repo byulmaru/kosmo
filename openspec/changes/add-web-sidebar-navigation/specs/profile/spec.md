@@ -14,17 +14,3 @@ API는 로그인한 계정이 app-shell 프로필 전환을 위해 해당 계정
 
 - **WHEN** 로그인한 계정이 접근 가능한 프로필 목록을 요청한다
 - **THEN** 시스템은 비활성 프로필이나 해당 계정과 연결되지 않은 프로필을 반환하지 않는다
-
-### Requirement: Active profile read
-
-API는 로그인한 계정이 app-shell 프로필 전환을 위해 현재 세션의 활성 프로필을 조회할 수 있게 해야 한다(MUST).
-
-#### Scenario: Read current active profile
-
-- **WHEN** 현재 세션에 활성 프로필이 있다
-- **THEN** 시스템은 로그인한 계정에 해당 활성 프로필을 반환한다
-
-#### Scenario: Read missing active profile
-
-- **WHEN** 현재 세션에 활성 프로필이 없다
-- **THEN** 시스템은 활성 프로필을 반환하지 않는다

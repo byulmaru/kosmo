@@ -25,7 +25,7 @@
 </script>
 
 <nav
-  class="bg-card border-border fixed inset-x-0 bottom-0 grid grid-cols-5 border-t pb-[env(safe-area-inset-bottom)]"
+  class="bg-card border-border fixed inset-x-0 bottom-0 grid grid-cols-5 border-t pb-[env(safe-area-inset-bottom)] lg:hidden"
   aria-label="주요 메뉴"
 >
   {#each tabs as tab}
