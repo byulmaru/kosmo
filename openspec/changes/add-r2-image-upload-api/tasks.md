@@ -1,6 +1,6 @@
 ## 1. 의존성과 데이터 모델
 
-- [x] 1.1 `pnpm`으로 S3-compatible R2 client 의존성을 추가한다.
+- [x] 1.1 `pnpm`으로 S3-compatible R2 client와 Hono zod validator 의존성을 추가한다.
 - [x] 1.2 물리 R2 객체와 논리 로컬/리모트 미디어 metadata를 위한 `Files`, `Media` 테이블을 추가한다.
 - [x] 1.3 `Files`/`Media` table discriminator, `MediaSource` enum, file reference와 account/profile ownership Drizzle relation을 추가한다.
 - [x] 1.4 R2 endpoint, bucket, access key, secret key, public base URL 런타임 설정을 `packages/core/env.ts`에서 zod로 파싱하고 업로드 최대 크기 상수를 정의한다.
@@ -15,7 +15,7 @@
 ## 3. Upload endpoint 동작
 
 - [x] 3.1 `c.get('context').session` 인증 session을 요구하고 anonymous 요청은 HTTP 401 JSON으로 반환한다.
-- [x] 3.2 Hono validator와 zod schema로 `multipart/form-data`를 파싱하고 `image` file field를 요구한다.
+- [x] 3.2 `@hono/standard-validator`와 zod schema로 `multipart/form-data`를 파싱하고 `image` file field를 요구한다.
 - [x] 3.3 원본 업로드 최대 byte size를 강제하고 초과 시 HTTP 413 JSON으로 반환한다.
 - [x] 3.4 `image/*` MIME type으로 보이지 않는 파일은 HTTP 400 JSON으로 반환한다.
 - [x] 3.5 `uploads/yyyy/mm/` 형식의 object key를 서버에서 생성한다.

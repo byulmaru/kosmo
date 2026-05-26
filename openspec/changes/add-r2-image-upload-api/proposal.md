@@ -33,7 +33,7 @@
 - `apps/api/src/index.ts`: REST route를 루트 Hono app에 mount한다.
 - `apps/api/src/rest/`: 업로드 REST route를 추가한다.
 - `apps/api/src/utils/`: R2 helper를 추가한다.
-- `apps/api/package.json`: `@aws-sdk/client-s3` 의존성을 추가한다.
+- `apps/api/package.json`: `@aws-sdk/client-s3`, `@hono/standard-validator` 의존성을 추가한다.
 - `packages/core/env.ts`: R2 환경변수를 zod schema로 파싱해 export한다.
 - `packages/core/db/`: `file`, `media`, `media_source`, table discriminator, relation을 추가한다.
 - 런타임 설정: R2 endpoint, bucket, access key, secret key, public base URL을 사용한다.
