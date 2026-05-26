@@ -121,8 +121,8 @@ type Profile implements Node {
 
 type ProfileFollow implements Node {
   createdAt: DateTime!
-  followee: Profile!
-  follower: Profile!
+  followee: Profile
+  follower: Profile
   id: ID!
   state: ProfileFollowState!
 }

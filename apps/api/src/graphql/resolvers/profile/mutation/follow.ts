@@ -84,7 +84,10 @@ builder.mutationField('followProfile', (t) =>
             return acceptedFollow;
           }
 
-          throw error;
+          throw new ConflictError({
+            message: 'Profile follow already exists with unsupported state',
+            field: 'id',
+          });
         });
     },
   }),

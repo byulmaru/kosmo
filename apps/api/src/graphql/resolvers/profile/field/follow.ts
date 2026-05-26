@@ -10,10 +10,12 @@ const acceptedFollow = eq(ProfileFollows.state, ProfileFollowState.ACCEPTED);
 builder.objectFields(ProfileFollow, (t) => ({
   follower: t.field({
     type: Profile,
+    nullable: true,
     resolve: (follow) => follow.followerProfileId,
   }),
   followee: t.field({
     type: Profile,
+    nullable: true,
     resolve: (follow) => follow.followeeProfileId,
   }),
 }));
