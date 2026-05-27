@@ -5,6 +5,7 @@
 - Use `pnpm` for workspace and dependency management.
 - Use CLI commands for `package.json` dependency changes. Non-dependency fields, such as `scripts`, may be edited directly.
 - Use the Question tool when asking the user to decide between implementation options or unresolved requirements.
+- Do not add a `Co-authored-by` trailer for the agent in commits or PR descriptions. The author of record is the human running the agent; agent attribution belongs in the PR body or Linear, not in the git trailer.
 
 ## Review Guidelines
 
