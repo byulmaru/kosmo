@@ -15,7 +15,7 @@
 - `Media`는 서비스에서 사용하는 논리 미디어를 나타내며 로컬/리모트 모두 표현한다.
 - `MediaSource` enum은 `LOCAL`, `REMOTE`를 가진다.
 - 로컬 업로드 `Media`는 업로드된 `File`을 `originalFileId`로 참조한다.
-- 리모트 ActivityPub `Media`는 초기에는 파일 참조 없이 remote URL, actor, fetchedAt metadata만 저장할 수 있다.
+- 리모트 ActivityPub `Media`는 초기에는 파일 참조 없이 remote URL, fetchedAt metadata만 저장할 수 있으며, 리모트 actor/profile 정체성은 `Profile`이 표현한다.
 - 변환/썸네일/프록시 워커가 추후 `thumbnailFileId`, `thumbhash`, dimension, hash metadata를 채울 수 있도록 모델을 열어 둔다.
 
 ## 기능 범위

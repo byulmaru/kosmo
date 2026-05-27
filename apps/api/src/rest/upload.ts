@@ -62,7 +62,6 @@ upload.post(
     const profileId = session.profileId;
     const { image } = c.req.valid('form');
     const key = getObjectKey();
-    const url = getPublicUrl(key);
 
     try {
       await uploadR2Object({
@@ -74,6 +73,8 @@ upload.post(
     } catch {
       return c.json(jsonError('failed to upload image'), 502);
     }
+
+    const url = await getPublicUrl(key);
 
     try {
       const mediaId = await db.transaction(async (tx) => {

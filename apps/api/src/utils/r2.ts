@@ -1,22 +1,35 @@
 import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { env } from '@kosmo/core/env';
 import type { PutObjectCommandInput } from '@aws-sdk/client-s3';
 
-const r2Config = {
-  bucket: env.R2_BUCKET,
-  publicBaseUrl: env.R2_PUBLIC_BASE_URL.replace(/\/+$/, ''),
+type R2Config = {
+  bucket: string;
+  publicBaseUrl: string;
+  s3: S3Client;
 };
 
-const s3 = new S3Client({
-  credentials: {
-    accessKeyId: env.R2_ACCESS_KEY_ID,
-    secretAccessKey: env.R2_SECRET_ACCESS_KEY,
-  },
-  endpoint: env.R2_ENDPOINT,
-  region: 'auto',
-});
+let r2Config: Promise<R2Config> | undefined;
 
-export const getPublicUrl = (key: string) => `${r2Config.publicBaseUrl}/${key}`;
+const getR2Config = () => {
+  r2Config ??= import('@kosmo/core/env').then(({ env }) => ({
+    bucket: env.R2_BUCKET,
+    publicBaseUrl: env.R2_PUBLIC_BASE_URL.replace(/\/+$/, ''),
+    s3: new S3Client({
+      credentials: {
+        accessKeyId: env.R2_ACCESS_KEY_ID,
+        secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+      },
+      endpoint: env.R2_ENDPOINT,
+      region: 'auto',
+    }),
+  }));
+
+  return r2Config;
+};
+
+export const getPublicUrl = async (key: string) => {
+  const { publicBaseUrl } = await getR2Config();
+  return `${publicBaseUrl}/${key}`;
+};
 
 export const uploadR2Object = async ({
   body,
@@ -29,10 +42,12 @@ export const uploadR2Object = async ({
   contentType: string;
   key: string;
 }) => {
+  const { bucket, s3 } = await getR2Config();
+
   await s3.send(
     new PutObjectCommand({
       Body: body,
-      Bucket: r2Config.bucket,
+      Bucket: bucket,
       ...(contentLength === undefined ? {} : { ContentLength: contentLength }),
       ContentType: contentType,
       Key: key,
@@ -41,9 +56,11 @@ export const uploadR2Object = async ({
 };
 
 export const deleteR2Object = async (key: string) => {
+  const { bucket, s3 } = await getR2Config();
+
   await s3.send(
     new DeleteObjectCommand({
-      Bucket: r2Config.bucket,
+      Bucket: bucket,
       Key: key,
     }),
   );

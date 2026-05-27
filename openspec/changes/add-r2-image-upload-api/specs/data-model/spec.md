@@ -20,12 +20,13 @@
 
 - **WHEN** 인증된 사용자가 이미지 업로드에 성공한다
 - **THEN** 시스템은 업로드된 R2 객체에 대해 `file` 행을 저장한다
-- **AND** `file` 행은 R2 storage key, 공개 URL, MIME 타입, byte size, 생성 시각을 저장한다
+- **AND** `file` 행은 R2 storage key, MIME 타입, byte size, 생성 시각을 저장한다
+- **AND** 공개 URL은 R2 storage key와 런타임 public base URL에서 계산하고 `file` 행에 저장하지 않는다
 - **AND** `file` 행의 이미지 너비, 이미지 높이, SHA-256은 후속 이미지 처리/계측 전까지 비어 있을 수 있다
 - **AND** 시스템은 `source = LOCAL`인 `media` 행을 저장한다
-- **AND** `media` 행은 업로드 계정, 선택적 actor 프로필, 원본 file ID, 생성 시각을 저장한다
+- **AND** `media` 행은 업로드 계정, 필수 actor 프로필, 원본 file ID, 생성 시각을 저장한다
 - **AND** 로컬 업로드의 업로드 계정은 `account.id`를 참조해야 한다
-- **AND** actor 프로필이 존재하면 `profile.id`를 참조해야 한다
+- **AND** actor 프로필은 `profile.id`를 참조해야 한다
 
 #### Scenario: 후속 이미지 처리 metadata 저장
 
@@ -38,5 +39,5 @@
 
 - **WHEN** 시스템이 ActivityPub 리모트 이미지 메타데이터를 기록한다
 - **THEN** 시스템은 `source = REMOTE`인 `media` 행을 저장할 수 있다
-- **AND** 리모트 media 행은 remote URL, 선택적 remote actor ID, remote fetched timestamp를 저장할 수 있다
+- **AND** 리모트 media 행은 `profile.id`, remote URL, remote fetched timestamp를 저장할 수 있다
 - **AND** 리모트 media 행은 lazy image proxy 처리 전까지 file ID와 thumbhash를 비워둘 수 있다
