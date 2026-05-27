@@ -142,7 +142,7 @@ Drizzle relation schema policy:
 
 Current media direction:
 
-- `file`: physical Object Storage/R2 file owned by the application, with `storage_key`, `url`, `mime_type`, optional `byte_size`, optional `sha256`, optional `width`, optional `height`, and later deletion metadata when cleanup policy is added. Upload API can fill byte size from the incoming `File.size`; SHA-256 and dimensions are deferred to processing/measurement.
+- `file`: physical Object Storage/R2 file owned by the application, with `storage_key`, `mime_type`, optional `byte_size`, optional `sha256`, optional `width`, optional `height`, and later deletion metadata when cleanup policy is added. Do not store public/CDN URL when it is derivable from `storage_key` and environment configuration; derive it at API/service boundaries when needed. Upload API can fill byte size from the incoming `File.size`; SHA-256 and dimensions are deferred to processing/measurement.
 - `media`: logical media used by the product. It can represent local uploads or remote ActivityPub media via `source = LOCAL | REMOTE`.
 - Local upload `media` rows initially reference `original_file_id`, which points to the uploaded R2 object. Image transformation and thumbnail generation are separated into a later worker/pipeline; that later work can fill `thumbnail_file_id`, thumbhash, dimensions, and hash metadata.
 - Remote ActivityPub `media` rows may initially have no file references. Store remote URL, optional remote actor ID, and remote fetched timestamp, then lazily materialize cached R2 `file` rows through an image proxy/processing pipeline later.

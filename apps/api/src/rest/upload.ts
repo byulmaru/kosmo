@@ -80,7 +80,6 @@ upload.post(
             mimeType: image.type,
             sha256: null,
             storageKey: key,
-            url,
           })
           .returning({ id: Files.id })
           .then(firstOrThrowWith(() => new Error('failed to insert file')));

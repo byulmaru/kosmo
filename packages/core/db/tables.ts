@@ -92,7 +92,6 @@ export const Files = pgTable('file', {
     .primaryKey()
     .$defaultFn(() => createId(TableDiscriminator.Files)),
   storageKey: text('storage_key').unique().notNull(),
-  url: text('url').notNull(),
   sha256: text('sha256'),
   mimeType: text('mime_type').notNull(),
   byteSize: integer('byte_size'),
