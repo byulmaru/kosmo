@@ -69,7 +69,6 @@ const readPhysicalDevices = () => {
     const data = JSON.parse(readFileSync(jsonPath, 'utf8'));
     return data.result.devices
       .filter((device) => device.hardwareProperties?.platform === 'iOS')
-      .filter((device) => device.hardwareProperties?.reality === 'physical')
       .filter((device) => ['iPhone', 'iPad'].includes(device.hardwareProperties?.deviceType))
       .map((device) => ({
         type: 'device',
@@ -135,6 +134,8 @@ const ensureSimulatorBooted = (simulator) => {
     run('xcrun', ['simctl', 'boot', simulator.id]);
     run('xcrun', ['simctl', 'bootstatus', simulator.id, '-b']);
   }
+
+  run('open', ['-a', 'Simulator', '--args', '-CurrentDeviceUDID', simulator.id]);
 };
 
 const attachSimulatorDebugger = (simulator, pid) => {
