@@ -55,7 +55,11 @@ upload.post(
     if (!session) {
       return c.json(jsonError('Authentication required'), 401);
     }
+    if (!session.profileId) {
+      return c.json(jsonError('Profile selection required'), 403);
+    }
 
+    const profileId = session.profileId;
     const { image } = c.req.valid('form');
     const key = getObjectKey();
     const url = getPublicUrl(key);
@@ -89,7 +93,7 @@ upload.post(
           .values({
             accountId: session.accountId,
             originalFileId: file.id,
-            profileId: session.profileId,
+            profileId,
             source: 'LOCAL',
           })
           .returning({ id: Media.id })

@@ -143,9 +143,9 @@ Drizzle relation schema policy:
 Current media direction:
 
 - `file`: physical Object Storage/R2 file owned by the application, with `storage_key`, `mime_type`, optional `byte_size`, optional `sha256`, optional `width`, optional `height`, and later deletion metadata when cleanup policy is added. Do not store public/CDN URL when it is derivable from `storage_key` and environment configuration; derive it at API/service boundaries when needed. Upload API can fill byte size from the incoming `File.size`; SHA-256 and dimensions are deferred to processing/measurement.
-- `media`: logical media used by the product. It can represent local uploads or remote ActivityPub media via `source = LOCAL | REMOTE`.
+- `media`: logical media used by the product. It can represent local uploads or remote ActivityPub media via `source = LOCAL | REMOTE`, and every media row belongs to a `profile`.
 - Local upload `media` rows initially reference `original_file_id`, which points to the uploaded R2 object. Image transformation and thumbnail generation are separated into a later worker/pipeline; that later work can fill `thumbnail_file_id`, thumbhash, dimensions, and hash metadata.
-- Remote ActivityPub `media` rows may initially have no file references. Store remote URL, optional remote actor ID, and remote fetched timestamp, then lazily materialize cached R2 `file` rows through an image proxy/processing pipeline later.
+- Remote ActivityPub `media` rows may initially have no file references. Store remote URL and remote fetched timestamp on `media`; the remote actor/profile identity belongs to `profile`, then lazily materialize cached R2 `file` rows through an image proxy/processing pipeline later.
 - Keep thumbhash on `media`; it is nullable because both local uploads and remote media can exist before worker/proxy processing.
 - `post_media`: usage context for a post, with `position`, `alt_text`, `sensitivity`, `focus_x`, and `focus_y`.
 - `profile_media`: add later when avatar/banner usage needs its own context.

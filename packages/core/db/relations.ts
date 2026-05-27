@@ -65,7 +65,7 @@ export const relations = defineRelations(tables, (r) => ({
   Media: {
     account: r.one.Accounts({ from: r.Media.accountId, to: r.Accounts.id }),
     originalFile: r.one.Files({ from: r.Media.originalFileId, to: r.Files.id }),
-    profile: r.one.Profiles({ from: r.Media.profileId, to: r.Profiles.id }),
+    profile: r.one.Profiles({ from: r.Media.profileId, to: r.Profiles.id, optional: false }),
     thumbnailFile: r.one.Files({ from: r.Media.thumbnailFileId, to: r.Files.id }),
   },
   OAuthAuthorizationCodes: {

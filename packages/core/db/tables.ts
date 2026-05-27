@@ -108,11 +108,12 @@ export const Media = pgTable(
       .$defaultFn(() => createId(TableDiscriminator.Media)),
     source: Enum.mediaSource('source').notNull(),
     accountId: uuid('account_id').references(() => Accounts.id),
-    profileId: uuid('profile_id').references(() => Profiles.id),
+    profileId: uuid('profile_id')
+      .notNull()
+      .references(() => Profiles.id),
     originalFileId: uuid('original_file_id').references(() => Files.id),
     thumbnailFileId: uuid('thumbnail_file_id').references(() => Files.id),
     remoteUrl: text('remote_url'),
-    remoteActorId: text('remote_actor_id'),
     remoteFetchedAt: datetime('remote_fetched_at'),
     thumbhash: text('thumbhash'),
     createdAt: createdAt(),
