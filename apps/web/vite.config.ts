@@ -1,7 +1,9 @@
+import { homedir } from 'node:os';
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { playwright } from '@vitest/browser-playwright';
 import mearie from 'mearie/vite';
+import { searchForWorkspaceRoot } from 'vite';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
@@ -37,5 +39,11 @@ export default defineConfig({
   server: {
     host: true,
     allowedHosts: process.env.PUBLIC_ORIGIN ? [new URL(process.env.PUBLIC_ORIGIN).hostname] : [],
+    fs: {
+      allow: [
+        searchForWorkspaceRoot(import.meta.dirname),
+        `${homedir()}/Library/pnpm/store/v11/links`,
+      ],
+    },
   },
 });

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { createMutation, createQuery } from '@mearie/svelte';
-  import { graphql } from '$mearie';
+  import { selectSidebarProfileMutation, sidebarProfilesQuery } from '$lib/graphql/sidebar';
 
   type Props = {
     surface?: 'desktop' | 'drawer';
@@ -46,59 +46,27 @@
     },
   ];
 
-  const profileQuery = createQuery(
-    graphql(`
-      query SidebarProfilesQuery {
-        currentSession {
-          selectedProfile {
-            id
-            handle
-            displayName
-          }
-        }
-        myProfiles {
-          id
-          handle
-          displayName
-        }
-      }
-    `),
-  );
-
-  const [selectProfile, selectProfileResult] = createMutation(
-    graphql(`
-      mutation SelectSidebarProfileMutation($id: ID!) {
-        selectProfile(input: { id: $id }) {
-          __typename
-          ... on SelectProfileSuccess {
-            profile {
-              id
-              handle
-              displayName
-            }
-          }
-          ... on NotFoundError {
-            message
-          }
-        }
-      }
-    `),
-  );
-
+  const profileQuery = createQuery(sidebarProfilesQuery);
+  const [selectProfile, selectProfileResult] = createMutation(selectSidebarProfileMutation);
   let profileError = $state<string | null>(null);
 
-  const isActive = (item: (typeof navItems)[number]) =>
-    page.url.pathname === item.href &&
-    item.label !== '프로필' &&
-    item.label !== '북마크' &&
-    item.label !== '팔로워 요청' &&
-    item.label !== '프로필 설정';
+  const isActive = (item: (typeof navItems)[number]) => {
+    if (page.url.pathname !== item.href) {
+      return false;
+    }
+
+    if (item.href === '/menu') {
+      return item.label === '프로필';
+    }
+
+    return true;
+  };
 
   const getInitial = (name?: string, handle?: string) =>
     (name || handle || '?').slice(0, 1).toUpperCase();
 
-  const getRecentProfiles = (profiles: ProfileSummary[], activeId: string) =>
-    profiles.filter((profile) => profile.id !== activeId).slice(0, 2);
+  const getRecentProfiles = (profiles: ProfileSummary[], activeId?: string) =>
+    profiles.filter((profile) => profile.id !== activeId).slice(0, activeId ? 2 : 3);
 
   const chooseProfile = async (id: string) => {
     if (
@@ -112,6 +80,7 @@
 
     try {
       const data = await selectProfile({ id });
+
       if (data.selectProfile.__typename !== 'SelectProfileSuccess') {
         profileError = data.selectProfile.message;
         return;
@@ -193,6 +162,34 @@
           <span class="flex items-center gap-2 px-1"><span>0</span><span>팔로잉</span></span>
         </div>
       </div>
+    {:else if profileQuery.data && profileQuery.data.myProfiles.length > 0}
+      {@const selectableProfiles = getRecentProfiles(profileQuery.data.myProfiles)}
+      <div class="absolute left-5 top-[54px] flex w-[280px] items-end justify-between">
+        <div
+          class="flex size-24 items-center justify-center rounded-full bg-zinc-200 text-3xl font-bold text-zinc-500 shadow-[1px_1px_2px_rgba(0,0,0,0.25)]"
+        >
+          ?
+        </div>
+
+        <div class="flex items-center gap-3">
+          {#each selectableProfiles as profile}
+            <button
+              class="flex size-10 items-center justify-center rounded-full bg-zinc-200 text-sm font-bold text-[#111111] shadow-[1px_1px_2px_rgba(0,0,0,0.25)] transition hover:bg-zinc-300 disabled:opacity-50"
+              type="button"
+              disabled={selectProfileResult.loading}
+              aria-label={`${profile.displayName} 프로필로 선택`}
+              onclick={() => chooseProfile(profile.id)}
+            >
+              {getInitial(profile.displayName, profile.handle)}
+            </button>
+          {/each}
+        </div>
+      </div>
+
+      <div class="absolute left-2.5 top-[140px] flex w-[300px] flex-col items-start px-2 py-2">
+        <p class="text-2xl font-bold leading-[42px] text-black/85">프로필 선택</p>
+        <p class="text-sm leading-[19.6px] text-[#777777]">사용할 프로필을 선택해주세요.</p>
+      </div>
     {:else}
       <div
         class="absolute left-5 top-[54px] flex size-24 items-center justify-center rounded-full bg-zinc-200 text-3xl font-bold text-zinc-500 shadow-[1px_1px_2px_rgba(0,0,0,0.25)]"
@@ -201,7 +198,9 @@
       </div>
       <div class="absolute left-2.5 top-[140px] flex w-[300px] flex-col px-2 py-2">
         <p class="text-2xl font-bold leading-[42px] text-black/85">프로필</p>
-        <p class="text-sm leading-[19.6px] text-[#777777]">프로필을 불러오는 중입니다.</p>
+        <p class="text-sm leading-[19.6px] text-[#777777]">
+          {profileQuery.loading ? '프로필을 불러오는 중입니다.' : '사용 가능한 프로필이 없습니다.'}
+        </p>
       </div>
     {/if}
   </section>
@@ -299,7 +298,7 @@
       프로필을 불러오는 중입니다.
     {:else if profileQuery.error}
       프로필을 불러오지 못했습니다.
-    {:else if profileQuery.data.myProfiles.length === 0}
+    {:else if profileQuery.data?.myProfiles.length === 0}
       사용 가능한 프로필이 없습니다.
     {/if}
 

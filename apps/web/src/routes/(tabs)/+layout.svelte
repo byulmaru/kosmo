@@ -65,7 +65,7 @@
       {@render children()}
     </main>
 
-    <BottomTabBar />
+    <BottomTabBar onMenuClick={openDrawer} />
   </div>
 
   {#if drawerOpen}

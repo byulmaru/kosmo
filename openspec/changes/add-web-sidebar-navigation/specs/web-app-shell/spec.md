@@ -22,6 +22,11 @@
 - **THEN** 시스템은 사이드바 drawer를 연다
 - **AND** drawer는 320px 폭, 오른쪽 16px radius, 왼쪽에서 열린 surface shadow를 사용한다
 
+#### Scenario: Open mobile drawer from bottom tab menu
+
+- **WHEN** 사용자가 모바일 하단 탭의 메뉴 control을 활성화한다
+- **THEN** 시스템은 `/menu`로 이동하지 않고 사이드바 drawer를 연다
+
 #### Scenario: Open mobile drawer by swipe
 
 - **WHEN** 사용자가 모바일 크기 화면에서 왼쪽 edge swipe 제스처를 수행한다

@@ -21,5 +21,6 @@ builder.queryField('myProfiles', (t) =>
         .where(eq(Profiles.state, ProfileState.ACTIVE))
         .orderBy(asc(Profiles.createdAt));
     },
+    unauthorizedResolver: () => [],
   }),
 );
