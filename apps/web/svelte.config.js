@@ -1,5 +1,7 @@
 import adapter from '@sveltejs/adapter-node';
 
+const isStorybook = process.env.STORYBOOK === 'true';
+
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
   compilerOptions: {
@@ -8,7 +10,7 @@ const config = {
   },
   kit: {
     alias: {
-      $mearie: './.mearie/graphql.js',
+      $mearie: isStorybook ? './.storybook/mocks/mearie.ts' : './.mearie/graphql.js',
     },
     adapter: adapter(),
   },
