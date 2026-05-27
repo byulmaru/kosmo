@@ -80,7 +80,7 @@ type Mutation {
   deleteProfile(input: DeleteProfileInput!): DeleteProfileResult!
   followProfile(input: FollowProfileInput!): FollowProfileResult!
   selectProfile(input: SelectProfileInput!): SelectProfileResult!
-  unfollowProfile(input: UnfollowProfileInput!): UnfollowProfileResult
+  unfollowProfile(input: UnfollowProfileInput!): UnfollowProfileResult!
   updateProfile(input: UpdateProfileInput!): UpdateProfileResult!
 }
 
@@ -195,7 +195,7 @@ input UnfollowProfileInput {
 union UnfollowProfileResult = NotFoundError | UnfollowProfileSuccess
 
 type UnfollowProfileSuccess {
-  profileFollowId: ID!
+  profileFollowId: ID
 }
 
 input UpdateProfileInput {

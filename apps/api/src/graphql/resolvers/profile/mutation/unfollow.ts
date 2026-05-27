@@ -5,16 +5,29 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
 
+const UnfollowProfileSuccess = builder.objectRef<{ profileFollowId: string | null }>(
+  'UnfollowProfileSuccess',
+);
+
+UnfollowProfileSuccess.implement({
+  isTypeOf: (obj) => typeof obj === 'object' && obj !== null && 'profileFollowId' in obj,
+  fields: (t) => ({
+    profileFollowId: t.id({
+      nullable: true,
+      resolve: (obj) => obj.profileFollowId,
+    }),
+  }),
+});
+
 builder.mutationField('unfollowProfile', (t) =>
   t.withAuth({ usingProfile: true }).fieldWithInput({
-    type: 'ID',
-    nullable: true,
+    type: UnfollowProfileSuccess,
     input: {
       id: t.input.id({ validate: z.uuid() }),
     },
     errors: {
       types: [NotFoundError],
-      dataField: { name: 'profileFollowId' },
+      directResult: true,
     },
     resolve: async (_, { input }, ctx) => {
       const targetProfile = await db
@@ -35,7 +48,7 @@ builder.mutationField('unfollowProfile', (t) =>
         .returning({ id: ProfileFollows.id })
         .then(first);
 
-      return deleted?.id ?? null;
+      return { profileFollowId: deleted?.id ?? null };
     },
   }),
 );
