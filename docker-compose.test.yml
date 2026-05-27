@@ -2,11 +2,11 @@ services:
   postgres:
     image: postgres:17-alpine
     ports:
-      - '${KOSMO_TEST_POSTGRES_PORT:-54329}:5432'
+      - '${POSTGRES_PORT:-54329}:5432'
     environment:
-      POSTGRES_DB: ${KOSMO_TEST_POSTGRES_DB:-kosmo_test}
-      POSTGRES_PASSWORD: ${KOSMO_TEST_POSTGRES_PASSWORD:-kosmo}
-      POSTGRES_USER: ${KOSMO_TEST_POSTGRES_USER:-kosmo}
+      POSTGRES_DB: ${POSTGRES_DB:-kosmo_test}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kosmo}
+      POSTGRES_USER: ${POSTGRES_USER:-kosmo}
     command:
       - postgres
       - -c
