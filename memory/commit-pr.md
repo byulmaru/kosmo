@@ -13,6 +13,7 @@
 - 최종 머지는 PR 내용 기준의 squash merge를 전제로 하므로, 커밋 히스토리 정리보다 PR의 기능적 일관성과 리뷰 가능성을 더 우선한다.
 - 브랜치 이름은 관련 Linear 이슈 ID를 그대로 사용한다.
 - 브랜치 생성, 커밋 생성, PR 생성은 기본적으로 Aviator CLI(`av`)를 사용한다.
+- 기존 PR 제목/본문/상태 등 PR 편집은 Aviator CLI(`av pr --edit`) 대신 GitHub CLI(`gh`)를 사용한다.
 - Aviator CLI(`av`)가 설치되어 있지 않다면 커밋/PR 작업을 계속하기 전에 설치를 권장한다.
 
 ## Basic Commands
@@ -23,6 +24,7 @@
 - 커밋은 `av commit -m "<message>"`로 만든다.
 - PR은 기본적으로 `av pr -t "<title>" -b "<body>"`로 연다.
 - Draft PR로 열어야 할 때는 `av pr --draft -t "<title>" -b "<body>"`를 사용한다.
+- 이미 열린 PR의 제목/본문/상태를 편집할 때는 `gh pr edit` 같은 GitHub CLI 명령을 사용한다.
 - 브랜치 정리가 필요할 때는 `av sync --ff-trunk --rebase-to-trunk --prune`으로 로컬 브랜치 스택을 정리한다.
 - 별도 이유가 없다면 같은 목적을 위해 `git switch -c`, `git commit`, `gh pr create`를 직접 쓰지 않는다.
 
@@ -85,6 +87,7 @@
 - 작업 초반이라도 방향성이 잡히면 Draft PR을 가볍게 연다.
 - Draft PR의 목적은 승인 요청이 아니라 맥락 공유, 조기 피드백, CI 가시성 확보다.
 - 기본 PR 생성은 `av pr -t "<title>" -b "<body>"`이고, Draft PR을 열 때는 `--draft`를 붙인다.
+- 이미 열린 Draft PR의 설명을 수정하거나 상태를 바꿀 때는 `av pr --edit` 대신 `gh pr edit` 또는 관련 `gh` 명령을 사용한다.
 - Draft PR에는 지금까지 된 것, 아직 안 된 것, 막히는 점 또는 확인이 필요한 점을 간단히 적는다.
 - Ready for review로 전환할 때는 최소한 브랜치 HEAD가 정상 동작하고, PR 범위가 리뷰 가능한 단위인지 다시 확인한다.
 
