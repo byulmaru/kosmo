@@ -65,6 +65,7 @@ const config = ts.config(
       '**/node_modules/**',
       '**/dist/**',
       '**/.mearie/**',
+      '**/.pnpm-store/**',
       '**/.svelte-kit/**',
       '**/build/**',
     ],
