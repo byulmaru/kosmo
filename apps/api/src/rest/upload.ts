@@ -26,19 +26,12 @@ const uploadFormSchema = z.object({
     .refine((image) => ALLOWED_IMAGE_MIME_TYPES.includes(image.type), 'image file is required'),
 });
 
-const getExtension = (file: File) => {
-  const byType = file.type.split('/')[1];
-  const byName = file.name.match(/\.([a-zA-Z0-9]+)$/)?.[1];
-
-  return (byType || byName || 'bin').replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'bin';
-};
-
-const getObjectKey = (file: File) => {
+const getObjectKey = () => {
   const now = new Date();
   const year = now.getUTCFullYear();
   const month = String(now.getUTCMonth() + 1).padStart(2, '0');
 
-  return `uploads/${year}/${month}/${randomUUID()}.${getExtension(file)}`;
+  return `uploads/${year}/${month}/${randomUUID()}`;
 };
 
 const cleanupUploadedObjects = async (keys: string[]) => {
@@ -64,7 +57,7 @@ upload.post(
     }
 
     const { image } = c.req.valid('form');
-    const key = getObjectKey(image);
+    const key = getObjectKey();
     const url = getPublicUrl(key);
 
     try {
