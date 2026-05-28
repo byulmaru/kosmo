@@ -1,0 +1,89 @@
+{{- $app := .Values.worker -}}
+{{- if ne (default true $app.enabled) false }}
+{{- $versionLabel := regexReplaceAll "[^A-Za-z0-9_.-]" $app.image.tag "-" | trunc 63 | trimAll "-" -}}
+{{- $imageRef := printf "%s:%s" $app.image.repository $app.image.tag -}}
+{{- if contains "sha256:" $app.image.tag -}}
+{{- $imageRef = printf "%s@%s" $app.image.repository $app.image.tag -}}
+{{- end -}}
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: {{ printf "%s-worker" .Release.Name | trunc 63 | trimSuffix "-" }}
+  labels:
+    helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
+    app.kubernetes.io/name: worker
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ $versionLabel | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: {{ $app.replicaCount }}
+  strategy:
+    {{- toYaml $app.rollout.strategy | nindent 4 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: worker
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      {{- with $app.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        app.kubernetes.io/name: worker
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        {{- with $app.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with $app.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $app.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: worker
+          image: {{ $imageRef | quote }}
+          imagePullPolicy: {{ $app.image.pullPolicy }}
+          securityContext:
+            {{- toYaml $app.containerSecurityContext | nindent 12 }}
+          args:
+            - worker
+          {{- if $app.env.values }}
+          env:
+            {{- range $key, $value := $app.env.values }}
+            {{- if ne (toString $value) "" }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- end }}
+          {{- end }}
+          {{- if or $.Values.infisical.enabled $app.env.secretNames }}
+          envFrom:
+            {{- range $app.env.secretNames }}
+            - secretRef:
+                name: {{ . }}
+            {{- end }}
+            {{- if $.Values.infisical.enabled }}
+            - secretRef:
+                name: {{ $.Values.infisical.secretName }}
+            {{- end }}
+          {{- end }}
+          resources:
+            {{- toYaml $app.resources | nindent 12 }}
+      {{- with $app.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $app.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $app.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

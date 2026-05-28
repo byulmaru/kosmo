@@ -43,12 +43,14 @@ RUN groupadd --system --gid 10001 app \
 
 COPY --chown=app:app package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
 COPY --chown=app:app apps/api/package.json ./apps/api/package.json
+COPY --chown=app:app apps/worker/package.json ./apps/worker/package.json
 COPY --chown=app:app apps/web/package.json ./apps/web/package.json
 COPY --chown=app:app packages/core/package.json ./packages/core/package.json
 
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 COPY --chown=app:app apps/api ./apps/api
+COPY --chown=app:app apps/worker ./apps/worker
 COPY --chown=app:app packages/core ./packages/core
 COPY --chown=app:app --from=web-build /app/apps/web/build ./apps/web/build
 COPY --chown=app:app docker-entrypoint.sh ./docker-entrypoint.sh

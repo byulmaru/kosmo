@@ -7,19 +7,22 @@
     "./error": "./error/index.ts",
     "./enums": "./enums.ts",
     "./polyfill": "./polyfill.ts",
+    "./queue": "./queue/index.ts",
     "./utils": "./utils.ts",
     "./validation": "./validation/index.ts"
   },
   "dependencies": {
     "core-js": "^3.49.0",
     "drizzle-orm": "1.0.0-beta.22",
+    "nats": "^2.29.3",
     "postgres": "^3.4.9",
     "temporal-polyfill": "^0.3.2",
     "zod": "^4.4.3"
   },
   "scripts": {
     "drizzle:push": "infisical run -- drizzle-kit push",
-    "drizzle:generate": "infisical run -- drizzle-kit generate"
+    "drizzle:generate": "infisical run -- drizzle-kit generate",
+    "lint:tsc": "tsc --noEmit"
   },
   "devDependencies": {
     "drizzle-kit": "1.0.0-beta.22"

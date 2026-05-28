@@ -144,6 +144,58 @@ api:
                 operator: Exists
                 values: []
 
+worker:
+  enabled: true
+  replicaCount: 1
+  rollout:
+    strategy:
+      canary: {}
+  image:
+    repository: ghcr.io/byulmaru/kosmo
+    tag: latest
+    pullPolicy: Always
+  imagePullSecrets: []
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  env:
+    secretNames: []
+    values:
+      NATS_URL: ''
+      JOB_SUBJECT_PREFIX: kosmo.jobs
+      JOB_STREAM_NAME: KOSMO_JOBS
+      JOB_CONSUMER_NAME: kosmo-worker
+      JOB_ACK_WAIT_MS: '30000'
+      JOB_MAX_DELIVER: '5'
+      JOB_WORKER_CONCURRENCY: '4'
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext: {}
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+  nodeSelector: {}
+  tolerations:
+    - key: 'oci.oraclecloud.com/oke-is-preemptible'
+      operator: 'Equal'
+      value: 'present'
+      effect: 'NoSchedule'
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 1
+          preference:
+            matchExpressions:
+              - key: oci.oraclecloud.com/oke-is-preemptible
+                operator: Exists
+                values: []
+
 certificate:
   enabled: true
   secretName: ''
