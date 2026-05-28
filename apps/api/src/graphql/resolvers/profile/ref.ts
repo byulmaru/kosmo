@@ -7,7 +7,7 @@ import {
 } from '@kosmo/core/enums';
 import { and, eq, inArray } from 'drizzle-orm';
 import { createObjectRef } from '@/graphql/utils';
-import { loadReadableProfileFollowsByIds } from './loader/follow';
+import { loadProfileFollowsByIds } from './loader/follow';
 
 export const Profile = createObjectRef('Profile', TableDiscriminator.Profiles, (ids) =>
   db
@@ -47,7 +47,7 @@ AccountProfile.implement({
 export const ProfileFollow = createObjectRef(
   'ProfileFollow',
   TableDiscriminator.ProfileFollows,
-  (ids, ctx) => loadReadableProfileFollowsByIds(ids, ctx),
+  (ids, ctx) => loadProfileFollowsByIds(ids, ctx),
 );
 
 ProfileFollow.implement({

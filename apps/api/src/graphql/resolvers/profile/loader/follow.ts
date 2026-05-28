@@ -31,7 +31,7 @@ const FolloweeProfiles = alias(Profiles, 'profile_follow_followee_profile');
 const ownerProfileIdColumn = (direction: ProfileFollowConnectionDirection) =>
   direction === 'followers' ? ProfileFollows.followeeProfileId : ProfileFollows.followerProfileId;
 
-const readableProfileFollowWhere = (
+const profileFollowAccessWhere = (
   ctx: UserContext,
   {
     acceptedOnly = false,
@@ -60,18 +60,18 @@ const readableProfileFollowWhere = (
   )!;
 };
 
-const readableProfileFollows = (
+const profileFollowQuery = (
   ctx: UserContext,
-  options?: Parameters<typeof readableProfileFollowWhere>[1],
+  options?: Parameters<typeof profileFollowAccessWhere>[1],
 ) =>
   db
     .select(getColumns(ProfileFollows))
     .from(ProfileFollows)
     .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
     .innerJoin(FolloweeProfiles, eq(FolloweeProfiles.id, ProfileFollows.followeeProfileId))
-    .where(readableProfileFollowWhere(ctx, options));
+    .where(profileFollowAccessWhere(ctx, options));
 
-export const readableAcceptedProfileFollowCountLoader = (ctx: UserContext) =>
+export const acceptedProfileFollowCountLoader = (ctx: UserContext) =>
   ctx.loader<ProfileFollowCountKey, ProfileFollowCountRow, ProfileFollowCountKey, true>({
     name: 'profileFollow.acceptedCount',
     nullable: true,
@@ -87,20 +87,20 @@ export const readableAcceptedProfileFollowCountLoader = (ctx: UserContext) =>
           continue;
         }
 
-        const readableFollows = readableProfileFollows(ctx, {
+        const profileFollowRows = profileFollowQuery(ctx, {
           acceptedOnly: true,
           where: [inArray(ownerProfileIdColumn(direction), [...new Set(profileIds)])],
-        }).as('readable_profile_follows');
+        }).as('profile_follow_rows');
         const ownerColumn =
           direction === 'followers'
-            ? readableFollows.followeeProfileId
-            : readableFollows.followerProfileId;
+            ? profileFollowRows.followeeProfileId
+            : profileFollowRows.followerProfileId;
         const counts = await db
           .select({
             profileId: ownerColumn,
             value: count(),
           })
-          .from(readableFollows)
+          .from(profileFollowRows)
           .groupBy(ownerColumn);
 
         rows.push(
@@ -113,7 +113,7 @@ export const readableAcceptedProfileFollowCountLoader = (ctx: UserContext) =>
     key: (row) => row && { direction: row.direction, profileId: row.profileId },
   });
 
-export const readableAcceptedProfileFollowPageLoader = (ctx: UserContext) =>
+export const acceptedProfileFollowPageLoader = (ctx: UserContext) =>
   ctx.loader<ProfileFollowPageKey, ProfileFollowPageRow, ProfileFollowPageKey, false, true>({
     name: 'profileFollow.acceptedPage',
     many: true,
@@ -133,35 +133,35 @@ export const readableAcceptedProfileFollowPageLoader = (ctx: UserContext) =>
 
       for (const group of groups.values()) {
         const [{ direction, limit, offset }] = group;
-        const readableFollows = readableProfileFollows(ctx, {
+        const profileFollowRows = profileFollowQuery(ctx, {
           acceptedOnly: true,
           where: [
             inArray(ownerProfileIdColumn(direction), [
               ...new Set(group.map((key) => key.profileId)),
             ]),
           ],
-        }).as('readable_profile_follows');
+        }).as('profile_follow_rows');
         const ownerColumn =
           direction === 'followers'
-            ? readableFollows.followeeProfileId
-            : readableFollows.followerProfileId;
+            ? profileFollowRows.followeeProfileId
+            : profileFollowRows.followerProfileId;
         const position = sql<number>`row_number() over (
           partition by ${ownerColumn}
-          order by ${readableFollows.id} desc
+          order by ${profileFollowRows.id} desc
         )`.as('position');
 
         const rankedProfileFollows = db
           .select({
             ownerProfileId: ownerColumn,
             position,
-            id: readableFollows.id,
-            followerProfileId: readableFollows.followerProfileId,
-            followeeProfileId: readableFollows.followeeProfileId,
-            state: readableFollows.state,
-            createdAt: readableFollows.createdAt,
-            respondedAt: readableFollows.respondedAt,
+            id: profileFollowRows.id,
+            followerProfileId: profileFollowRows.followerProfileId,
+            followeeProfileId: profileFollowRows.followeeProfileId,
+            state: profileFollowRows.state,
+            createdAt: profileFollowRows.createdAt,
+            respondedAt: profileFollowRows.respondedAt,
           })
-          .from(readableFollows)
+          .from(profileFollowRows)
           .as('ranked_profile_follows');
 
         const page = await db
@@ -223,16 +223,16 @@ export const viewerFollowLoader = (ctx: UserContext) =>
     key: (profileFollow) => profileFollow?.followeeProfileId ?? null,
   });
 
-const readableProfileFollowLoader = (ctx: UserContext) =>
+const profileFollowByIdLoader = (ctx: UserContext) =>
   ctx.loader<string, ProfileFollowRow, string, true>({
-    name: 'profileFollow.readable',
+    name: 'profileFollow.byId',
     nullable: true,
-    load: (ids) => readableProfileFollows(ctx, { where: [inArray(ProfileFollows.id, ids)] }),
+    load: (ids) => profileFollowQuery(ctx, { where: [inArray(ProfileFollows.id, ids)] }),
     key: (profileFollow) => profileFollow?.id ?? null,
   });
 
-export const loadReadableProfileFollowsByIds = async (ids: string[], ctx: UserContext) => {
-  const rows = await readableProfileFollowLoader(ctx).loadMany(ids);
+export const loadProfileFollowsByIds = async (ids: string[], ctx: UserContext) => {
+  const rows = await profileFollowByIdLoader(ctx).loadMany(ids);
 
   return rows.filter((row): row is ProfileFollowRow => row !== null && !(row instanceof Error));
 };
