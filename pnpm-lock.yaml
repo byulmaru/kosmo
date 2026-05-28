@@ -104,6 +104,9 @@ importers:
       drizzle-orm:
         specifier: 1.0.0-beta.22
         version: 1.0.0-beta.22(postgres@3.4.9)(zod@4.4.3)
+      fast-json-stable-stringify:
+        specifier: ^2.1.0
+        version: 2.1.0
       graphql:
         specifier: ^16.13.2
         version: 16.14.0

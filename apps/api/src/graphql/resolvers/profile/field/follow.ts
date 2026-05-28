@@ -1,21 +1,11 @@
-import { db, first, ProfileFollows, Profiles } from '@kosmo/core/db';
-import { ProfileFollowState, ProfileState } from '@kosmo/core/enums';
 import { resolveOffsetConnection } from '@pothos/plugin-relay';
-import { and, count, desc, eq, getColumns } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
+import {
+  readableAcceptedProfileFollowCountLoader,
+  readableAcceptedProfileFollowPageLoader,
+  viewerFollowLoader,
+} from '../loader/follow';
 import { Profile, ProfileFollow } from '../ref';
-import type { SQL } from 'drizzle-orm';
-
-const countFollows = async (where: SQL, joinOn: SQL) => {
-  const row = await db
-    .select({ value: count() })
-    .from(ProfileFollows)
-    .innerJoin(Profiles, joinOn)
-    .where(where)
-    .then(first);
-
-  return row?.value ?? 0;
-};
 
 builder.objectFields(ProfileFollow, (t) => ({
   follower: t.field({
@@ -33,95 +23,73 @@ builder.objectFields(ProfileFollow, (t) => ({
 builder.objectFields(Profile, (t) => ({
   followers: t.connection({
     type: ProfileFollow,
-    resolve: async (profile, args) => {
-      const joinOn = eq(Profiles.id, ProfileFollows.followerProfileId);
-      const where = and(
-        eq(ProfileFollows.followeeProfileId, profile.id),
-        eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
-        eq(Profiles.state, ProfileState.ACTIVE),
-      )!;
-
+    resolve: async (profile, args, ctx) => {
       return resolveOffsetConnection(
-        { args, totalCount: await countFollows(where, joinOn) },
+        {
+          args,
+          totalCount:
+            (
+              await readableAcceptedProfileFollowCountLoader(ctx).load({
+                direction: 'followers',
+                profileId: profile.id,
+              })
+            )?.value ?? 0,
+        },
         ({ limit, offset }) =>
-          db
-            .select(getColumns(ProfileFollows))
-            .from(ProfileFollows)
-            .innerJoin(Profiles, joinOn)
-            .where(where)
-            .orderBy(desc(ProfileFollows.id))
-            .limit(limit)
-            .offset(offset),
+          readableAcceptedProfileFollowPageLoader(ctx).load({
+            direction: 'followers',
+            profileId: profile.id,
+            limit,
+            offset,
+          }),
       );
     },
   }),
   following: t.connection({
     type: ProfileFollow,
-    resolve: async (profile, args) => {
-      const joinOn = eq(Profiles.id, ProfileFollows.followeeProfileId);
-      const where = and(
-        eq(ProfileFollows.followerProfileId, profile.id),
-        eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
-        eq(Profiles.state, ProfileState.ACTIVE),
-      )!;
-
+    resolve: async (profile, args, ctx) => {
       return resolveOffsetConnection(
-        { args, totalCount: await countFollows(where, joinOn) },
+        {
+          args,
+          totalCount:
+            (
+              await readableAcceptedProfileFollowCountLoader(ctx).load({
+                direction: 'following',
+                profileId: profile.id,
+              })
+            )?.value ?? 0,
+        },
         ({ limit, offset }) =>
-          db
-            .select(getColumns(ProfileFollows))
-            .from(ProfileFollows)
-            .innerJoin(Profiles, joinOn)
-            .where(where)
-            .orderBy(desc(ProfileFollows.id))
-            .limit(limit)
-            .offset(offset),
+          readableAcceptedProfileFollowPageLoader(ctx).load({
+            direction: 'following',
+            profileId: profile.id,
+            limit,
+            offset,
+          }),
       );
     },
   }),
   followersCount: t.int({
-    resolve: (profile) =>
-      countFollows(
-        and(
-          eq(ProfileFollows.followeeProfileId, profile.id),
-          eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
-          eq(Profiles.state, ProfileState.ACTIVE),
-        )!,
-        eq(Profiles.id, ProfileFollows.followerProfileId),
-      ),
+    resolve: (profile, _, ctx) =>
+      readableAcceptedProfileFollowCountLoader(ctx)
+        .load({
+          direction: 'followers',
+          profileId: profile.id,
+        })
+        .then((row) => row?.value ?? 0),
   }),
   followingCount: t.int({
-    resolve: (profile) =>
-      countFollows(
-        and(
-          eq(ProfileFollows.followerProfileId, profile.id),
-          eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
-          eq(Profiles.state, ProfileState.ACTIVE),
-        )!,
-        eq(Profiles.id, ProfileFollows.followeeProfileId),
-      ),
+    resolve: (profile, _, ctx) =>
+      readableAcceptedProfileFollowCountLoader(ctx)
+        .load({
+          direction: 'following',
+          profileId: profile.id,
+        })
+        .then((row) => row?.value ?? 0),
   }),
   viewerFollow: t.field({
     type: ProfileFollow,
     nullable: true,
-    resolve: async (profile, _, ctx) => {
-      if (!ctx.session?.profileId) {
-        return null;
-      }
-
-      const follow = await db
-        .select({ id: ProfileFollows.id })
-        .from(ProfileFollows)
-        .where(
-          and(
-            eq(ProfileFollows.followerProfileId, ctx.session.profileId),
-            eq(ProfileFollows.followeeProfileId, profile.id),
-          ),
-        )
-        .limit(1)
-        .then(first);
-
-      return follow?.id ?? null;
-    },
+    resolve: (profile, _, ctx) => viewerFollowLoader(ctx).load(profile.id),
   }),
 }));

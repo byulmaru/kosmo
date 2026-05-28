@@ -1,4 +1,4 @@
-import { AccountProfiles, db, ProfileFollows, Profiles, TableDiscriminator } from '@kosmo/core/db';
+import { AccountProfiles, db, Profiles, TableDiscriminator } from '@kosmo/core/db';
 import {
   AccountProfileRole,
   ProfileFollowPolicy,
@@ -7,6 +7,7 @@ import {
 } from '@kosmo/core/enums';
 import { and, eq, inArray } from 'drizzle-orm';
 import { createObjectRef } from '@/graphql/utils';
+import { loadReadableProfileFollowsByIds } from './loader/follow';
 
 export const Profile = createObjectRef('Profile', TableDiscriminator.Profiles, (ids) =>
   db
@@ -46,7 +47,7 @@ AccountProfile.implement({
 export const ProfileFollow = createObjectRef(
   'ProfileFollow',
   TableDiscriminator.ProfileFollows,
-  (ids) => db.select().from(ProfileFollows).where(inArray(ProfileFollows.id, ids)),
+  (ids, ctx) => loadReadableProfileFollowsByIds(ids, ctx),
 );
 
 ProfileFollow.implement({
