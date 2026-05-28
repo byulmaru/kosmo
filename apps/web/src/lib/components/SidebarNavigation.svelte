@@ -282,7 +282,7 @@
       </div>
 
       <button
-        class="absolute right-5 top-[134px] inline-flex h-8 items-center justify-center rounded-lg bg-[#fce79a] px-3 text-sm font-bold text-[#111111] transition hover:bg-[#f9dc6d] disabled:opacity-50"
+        class="absolute right-5 top-[134px] inline-flex h-8 items-center justify-center rounded-lg bg-[#fce79a] px-3 text-sm font-bold text-[#111111] opacity-60"
         type="button"
         disabled
         aria-label="프로필 편집"
@@ -331,17 +331,24 @@
         </div>
       </div>
 
-      <button
-        class="absolute right-5 top-[134px] inline-flex h-8 items-center justify-center rounded-lg bg-[#fce79a] px-3 text-sm font-bold text-[#111111] transition hover:bg-[#f9dc6d] disabled:opacity-50"
-        type="button"
-        disabled
-        aria-label="프로필 편집"
-      >
-        편집
-      </button>
-
       <div class="absolute left-2.5 top-[140px] flex w-[300px] flex-col items-start px-2 py-2">
-        <p class="text-2xl font-bold leading-[42px] text-black/85">프로필 선택</p>
+        <button
+          class="flex h-[42px] max-w-full items-center gap-2 py-[5px] text-left"
+          type="button"
+          aria-label="프로필 목록"
+          aria-expanded={profileSwitcherOpen}
+          onclick={openProfileSwitcher}
+        >
+          <span class="truncate text-2xl font-bold leading-[32px] text-black/85">프로필 선택</span>
+          <svg
+            class="size-4 shrink-0 text-black/45"
+            viewBox="0 0 16 16"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path d="M4.2 6.2 8 10l3.8-3.8 1.1 1.1L8 12.2 3.1 7.3z" />
+          </svg>
+        </button>
         <p class="text-sm leading-[19.6px] text-[#777777]">사용할 프로필을 선택해주세요.</p>
       </div>
     {:else}
@@ -350,20 +357,28 @@
       >
         ?
       </div>
-      <div class="absolute left-2.5 top-[132px] flex w-[300px] flex-col px-2 py-2">
-        <p class="text-2xl font-bold leading-[42px] text-black/85">프로필</p>
+      <div class="absolute left-2.5 top-[140px] flex w-[300px] flex-col px-2 py-2">
+        <button
+          class="flex h-[42px] max-w-full items-center gap-2 py-[5px] text-left"
+          type="button"
+          aria-label="프로필 목록"
+          aria-expanded={profileSwitcherOpen}
+          onclick={openProfileSwitcher}
+        >
+          <span class="truncate text-2xl font-bold leading-[32px] text-black/85">프로필</span>
+          <svg
+            class="size-4 shrink-0 text-black/45"
+            viewBox="0 0 16 16"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path d="M4.2 6.2 8 10l3.8-3.8 1.1 1.1L8 12.2 3.1 7.3z" />
+          </svg>
+        </button>
         <p class="text-sm leading-[19.6px] text-[#777777]">
           {profileQuery.loading ? '프로필을 불러오는 중입니다.' : '새 프로필을 만들어 시작하세요.'}
         </p>
       </div>
-      <button
-        class="absolute right-5 top-[134px] inline-flex h-8 items-center justify-center rounded-lg bg-[#fce79a] px-3 text-sm font-bold text-[#111111] transition hover:bg-[#f9dc6d] disabled:opacity-50"
-        type="button"
-        disabled
-        aria-label="프로필 편집"
-      >
-        편집
-      </button>
     {/if}
 
     {#if profileSwitcherOpen}

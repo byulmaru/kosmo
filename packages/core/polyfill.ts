@@ -1,1 +1,1 @@
-import 'temporal-polyfill';
+import 'temporal-polyfill/global';
