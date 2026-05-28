@@ -65,6 +65,8 @@
   const getInitial = (name?: string, handle?: string) =>
     (name || handle || '?').slice(0, 1).toUpperCase();
 
+  const formatCount = (count: number) => new Intl.NumberFormat('ko-KR').format(count);
+
   const getRecentProfiles = (profiles: ProfileSummary[], activeId?: string) =>
     profiles.filter((profile) => profile.id !== activeId).slice(0, activeId ? 2 : 3);
 
@@ -158,8 +160,12 @@
           @{activeProfile.handle}
         </p>
         <div class="mt-2 flex items-center gap-3 text-sm leading-[22px] text-black">
-          <span class="flex items-center gap-2 px-1"><span>0</span><span>팔로워</span></span>
-          <span class="flex items-center gap-2 px-1"><span>0</span><span>팔로잉</span></span>
+          <span class="flex items-center gap-2 px-1"
+            ><span>{formatCount(activeProfile.followersCount)}</span><span>팔로워</span></span
+          >
+          <span class="flex items-center gap-2 px-1"
+            ><span>{formatCount(activeProfile.followingCount)}</span><span>팔로잉</span></span
+          >
         </div>
       </div>
     {:else if profileQuery.data && profileQuery.data.myProfiles.length > 0}

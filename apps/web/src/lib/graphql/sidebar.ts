@@ -7,6 +7,8 @@ export const sidebarProfilesQuery = graphql(`
         id
         handle
         displayName
+        followersCount
+        followingCount
       }
     }
     myProfiles {
