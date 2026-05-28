@@ -4,8 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-packageExtensionsChecksum: sha256-73TRSDJq106kpeKThE6wEN53UHNvyo2VmC6fNDIAVYU=
-
 importers:
 
   .:
@@ -171,7 +169,7 @@ importers:
         version: 1.1.1
       mearie:
         specifier: ^0.1.7
-        version: 0.1.7(@typescript-eslint/types@8.59.2)(jiti@2.7.0)(magicast@0.5.2)
+        version: 0.1.7(jiti@2.7.0)(magicast@0.5.2)
       playwright:
         specifier: ^1.59.1
         version: 1.59.1
@@ -4674,20 +4672,19 @@ snapshots:
       '@types/react': 19.2.15
       react: 19.2.6
 
-  '@mearie/cli@0.1.7(@typescript-eslint/types@8.59.2)(jiti@2.7.0)(magicast@0.5.2)':
+  '@mearie/cli@0.1.7(jiti@2.7.0)(magicast@0.5.2)':
     dependencies:
-      '@mearie/codegen': 0.1.7(@typescript-eslint/types@8.59.2)(jiti@2.7.0)(magicast@0.5.2)
+      '@mearie/codegen': 0.1.7(jiti@2.7.0)(magicast@0.5.2)
       '@mearie/config': 0.1.2(jiti@2.7.0)(magicast@0.5.2)
       citty: 0.2.2
     transitivePeerDependencies:
-      - '@typescript-eslint/types'
       - chokidar
       - dotenv
       - giget
       - jiti
       - magicast
 
-  '@mearie/codegen@0.1.7(@typescript-eslint/types@8.59.2)(jiti@2.7.0)(magicast@0.5.2)':
+  '@mearie/codegen@0.1.7(jiti@2.7.0)(magicast@0.5.2)':
     dependencies:
       '@logtape/logtape': 2.0.7
       '@mearie/config': 0.1.2(jiti@2.7.0)(magicast@0.5.2)
@@ -4695,10 +4692,8 @@ snapshots:
       '@mearie/shared': 0.4.0
       picocolors: 1.1.1
       picomatch: 4.0.4
-      svelte: 5.55.7(@typescript-eslint/types@8.59.2)
       tinyglobby: 0.2.16
     transitivePeerDependencies:
-      - '@typescript-eslint/types'
       - chokidar
       - dotenv
       - giget
@@ -4750,12 +4745,11 @@ snapshots:
       '@mearie/core': 0.6.7
       svelte: 5.55.7(@typescript-eslint/types@8.59.2)
 
-  '@mearie/vite@0.1.7(@typescript-eslint/types@8.59.2)(jiti@2.7.0)(magicast@0.5.2)':
+  '@mearie/vite@0.1.7(jiti@2.7.0)(magicast@0.5.2)':
     dependencies:
-      '@mearie/codegen': 0.1.7(@typescript-eslint/types@8.59.2)(jiti@2.7.0)(magicast@0.5.2)
+      '@mearie/codegen': 0.1.7(jiti@2.7.0)(magicast@0.5.2)
       '@mearie/config': 0.1.2(jiti@2.7.0)(magicast@0.5.2)
     transitivePeerDependencies:
-      - '@typescript-eslint/types'
       - chokidar
       - dotenv
       - giget
@@ -6815,14 +6809,13 @@ snapshots:
 
   math-intrinsics@1.1.0: {}
 
-  mearie@0.1.7(@typescript-eslint/types@8.59.2)(jiti@2.7.0)(magicast@0.5.2):
+  mearie@0.1.7(jiti@2.7.0)(magicast@0.5.2):
     dependencies:
-      '@mearie/cli': 0.1.7(@typescript-eslint/types@8.59.2)(jiti@2.7.0)(magicast@0.5.2)
+      '@mearie/cli': 0.1.7(jiti@2.7.0)(magicast@0.5.2)
       '@mearie/config': 0.1.2(jiti@2.7.0)(magicast@0.5.2)
       '@mearie/shared': 0.4.0
-      '@mearie/vite': 0.1.7(@typescript-eslint/types@8.59.2)(jiti@2.7.0)(magicast@0.5.2)
+      '@mearie/vite': 0.1.7(jiti@2.7.0)(magicast@0.5.2)
     transitivePeerDependencies:
-      - '@typescript-eslint/types'
       - chokidar
       - dotenv
       - giget

@@ -2,13 +2,9 @@ packages:
   - apps/*
   - packages/*
 
-enableGlobalVirtualStore: true
+enableGlobalVirtualStore: false
 pmOnFail: ignore
 minimumReleaseAge: 4320
-packageExtensions:
-  '@mearie/codegen@0.1.7':
-    dependencies:
-      svelte: '*'
 allowBuilds:
   '@fission-ai/openspec': true
   '@tailwindcss/oxide': true
