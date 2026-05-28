@@ -1,6 +1,6 @@
 import { db, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { ProfileFollowPolicy, ProfileFollowState, ProfileState } from '@kosmo/core/enums';
-import { and, asc, count, desc, eq, getColumns, gt, inArray, lt, or } from 'drizzle-orm';
+import { and, count, eq, getColumns, inArray, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
 import type { UserContext } from '@/context';
@@ -10,13 +10,6 @@ export type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
 type ProfileFollowCountRow = {
   profileId: string;
   value: number;
-};
-
-type ProfileFollowCursorPage = {
-  before?: string;
-  after?: string;
-  inverted: boolean;
-  limit: number;
 };
 
 const FollowerProfiles = alias(Profiles, 'profile_follow_follower_profile');
@@ -96,34 +89,6 @@ export const acceptedProfileFollowingCountLoader = (ctx: UserContext) =>
     },
     key: (row) => row?.profileId ?? null,
   });
-
-export const selectAcceptedProfileFollowers = (
-  ctx: UserContext,
-  profileId: string,
-  { before, after, inverted, limit }: ProfileFollowCursorPage,
-) =>
-  profileFollowQuery(ctx, [
-    eq(ProfileFollows.followeeProfileId, profileId),
-    eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
-    before ? gt(ProfileFollows.id, before) : undefined,
-    after ? lt(ProfileFollows.id, after) : undefined,
-  ])
-    .orderBy(inverted ? asc(ProfileFollows.id) : desc(ProfileFollows.id))
-    .limit(limit);
-
-export const selectAcceptedProfileFollowing = (
-  ctx: UserContext,
-  profileId: string,
-  { before, after, inverted, limit }: ProfileFollowCursorPage,
-) =>
-  profileFollowQuery(ctx, [
-    eq(ProfileFollows.followerProfileId, profileId),
-    eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
-    before ? gt(ProfileFollows.id, before) : undefined,
-    after ? lt(ProfileFollows.id, after) : undefined,
-  ])
-    .orderBy(inverted ? asc(ProfileFollows.id) : desc(ProfileFollows.id))
-    .limit(limit);
 
 export const viewerFollowLoader = (ctx: UserContext) =>
   ctx.loader<string, ProfileFollowRow, string, true>({
