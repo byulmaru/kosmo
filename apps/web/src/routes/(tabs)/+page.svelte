@@ -1,7 +1,6 @@
 <script lang="ts">
   import { createQuery } from '@mearie/svelte';
   import { graphql } from '$mearie';
-  import PageIntro from '$lib/components/PageIntro.svelte';
 
   const query = createQuery(
     graphql(`
@@ -15,12 +14,13 @@
   );
 </script>
 
-<PageIntro
-  title="홈"
-  description="피드를 확인하고 새로운 소식을 탐색합니다.????????"
-  tone="primary"
->
-  <p class="text-foreground mt-3 text-base">
+<section class="w-[min(100%,36rem)]">
+  <p class="text-primary mb-3 text-xs font-semibold tracking-[1.6px] uppercase">KOSMO</p>
+  <h1 class="text-text-primary m-0 text-5xl leading-[44px] font-bold">홈</h1>
+  <span class="text-text-secondary mt-3 block max-w-90 text-base leading-6">
+    피드를 확인하고 새로운 소식을 탐색합니다.
+  </span>
+  <p class="text-text-primary mt-3 text-base">
     {query.loading ? 'Loading...' : query.data?.me?.name}
   </p>
-</PageIntro>
+</section>

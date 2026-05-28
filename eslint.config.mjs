@@ -68,6 +68,7 @@ const config = ts.config(
       '**/.pnpm-store/**',
       '**/.svelte-kit/**',
       '**/build/**',
+      '**/storybook-static/**',
     ],
   },
 );

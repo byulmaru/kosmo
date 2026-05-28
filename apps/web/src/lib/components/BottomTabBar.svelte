@@ -31,7 +31,7 @@
   {#each tabs as tab}
     {@const active = isActive(tab.href)}
     <a
-      class={`grid min-h-14 place-items-center gap-0.5 py-2 text-sm font-semibold ${active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+      class={`grid min-h-14 place-items-center gap-0.5 py-2 text-sm font-semibold ${active ? 'bg-primary text-text-primary' : 'text-text-secondary'}`}
       href={tab.href}
       aria-current={active ? 'page' : undefined}
     >
