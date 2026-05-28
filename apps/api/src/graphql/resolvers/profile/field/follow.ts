@@ -1,8 +1,10 @@
 import { resolveOffsetConnection } from '@pothos/plugin-relay';
 import { builder } from '@/graphql/builder';
 import {
-  acceptedProfileFollowCountLoader,
-  acceptedProfileFollowPageLoader,
+  acceptedProfileFollowersCountLoader,
+  acceptedProfileFollowingCountLoader,
+  selectAcceptedProfileFollowers,
+  selectAcceptedProfileFollowing,
   viewerFollowLoader,
 } from '../loader/follow';
 import { Profile, ProfileFollow } from '../ref';
@@ -27,18 +29,10 @@ builder.objectFields(Profile, (t) => ({
       return resolveOffsetConnection(
         {
           args,
-          totalCount:
-            (
-              await acceptedProfileFollowCountLoader(ctx).load({
-                direction: 'followers',
-                profileId: profile.id,
-              })
-            )?.value ?? 0,
+          totalCount: (await acceptedProfileFollowersCountLoader(ctx).load(profile.id))?.value ?? 0,
         },
         ({ limit, offset }) =>
-          acceptedProfileFollowPageLoader(ctx).load({
-            direction: 'followers',
-            profileId: profile.id,
+          selectAcceptedProfileFollowers(ctx, profile.id, {
             limit,
             offset,
           }),
@@ -51,18 +45,10 @@ builder.objectFields(Profile, (t) => ({
       return resolveOffsetConnection(
         {
           args,
-          totalCount:
-            (
-              await acceptedProfileFollowCountLoader(ctx).load({
-                direction: 'following',
-                profileId: profile.id,
-              })
-            )?.value ?? 0,
+          totalCount: (await acceptedProfileFollowingCountLoader(ctx).load(profile.id))?.value ?? 0,
         },
         ({ limit, offset }) =>
-          acceptedProfileFollowPageLoader(ctx).load({
-            direction: 'following',
-            profileId: profile.id,
+          selectAcceptedProfileFollowing(ctx, profile.id, {
             limit,
             offset,
           }),
@@ -71,20 +57,14 @@ builder.objectFields(Profile, (t) => ({
   }),
   followersCount: t.int({
     resolve: (profile, _, ctx) =>
-      acceptedProfileFollowCountLoader(ctx)
-        .load({
-          direction: 'followers',
-          profileId: profile.id,
-        })
+      acceptedProfileFollowersCountLoader(ctx)
+        .load(profile.id)
         .then((row) => row?.value ?? 0),
   }),
   followingCount: t.int({
     resolve: (profile, _, ctx) =>
-      acceptedProfileFollowCountLoader(ctx)
-        .load({
-          direction: 'following',
-          profileId: profile.id,
-        })
+      acceptedProfileFollowingCountLoader(ctx)
+        .load(profile.id)
         .then((row) => row?.value ?? 0),
   }),
   viewerFollow: t.field({
