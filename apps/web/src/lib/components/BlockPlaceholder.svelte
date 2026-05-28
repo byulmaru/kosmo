@@ -19,7 +19,7 @@
 <div
   {...rest}
   data-size={size}
-  class={`border-border bg-secondary text-muted-foreground grid place-items-center rounded-[12px] border text-xs ${sizeClass[size]} ${className}`}
+  class={`border-border bg-surface text-text-secondary grid place-items-center rounded-[12px] border text-xs ${sizeClass[size]} ${className}`}
 >
   {size}
 </div>

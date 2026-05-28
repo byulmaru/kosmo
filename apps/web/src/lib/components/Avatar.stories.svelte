@@ -27,7 +27,7 @@
     {#each sizes as size}
       <div class="grid justify-items-center gap-2">
         <Avatar {size} initials="K" />
-        <span class="text-muted-foreground text-xs">{size}</span>
+        <span class="text-text-secondary text-xs">{size}</span>
       </div>
     {/each}
   </div>

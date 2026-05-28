@@ -30,11 +30,11 @@
 
   const typeMeta: Record<NotificationType, { icon: string; tone: string }> = {
     like: { icon: '♥', tone: 'bg-like' },
-    reply: { icon: '↩', tone: 'bg-secondary' },
-    repost: { icon: '↻', tone: 'bg-secondary' },
+    reply: { icon: '↩', tone: 'bg-surface' },
+    repost: { icon: '↻', tone: 'bg-surface' },
     follow: { icon: '+', tone: 'bg-primary' },
-    mention: { icon: '@', tone: 'bg-more text-background' },
-    quote: { icon: '“', tone: 'bg-secondary' },
+    mention: { icon: '@', tone: 'bg-more text-bg' },
+    quote: { icon: '“', tone: 'bg-surface' },
     followRequest: { icon: '✓', tone: 'bg-primary' },
   };
 </script>
@@ -55,9 +55,9 @@
       <Avatar size="xs" initials="K" />
       <Avatar size="xs" initials="S" />
       <Avatar size="xs" initials="M" />
-      <span class="text-muted-foreground ml-auto text-[11px]">{time}</span>
+      <span class="text-text-secondary ml-auto text-[11px]">{time}</span>
     </div>
-    <p class="text-foreground m-0 truncate text-sm">{action}</p>
-    <p class="text-muted-foreground m-0 mt-1 truncate text-[13px]">{snippet}</p>
+    <p class="text-text-primary m-0 truncate text-sm">{action}</p>
+    <p class="text-text-secondary m-0 mt-1 truncate text-[13px]">{snippet}</p>
   </div>
 </article>

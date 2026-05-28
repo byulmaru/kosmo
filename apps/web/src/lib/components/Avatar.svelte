@@ -30,7 +30,7 @@
 
 <div
   {...rest}
-  class={`border-border bg-secondary text-secondary-foreground inline-grid shrink-0 place-items-center overflow-hidden rounded-full border font-bold ${sizeClass[size]} ${className}`}
+  class={`border-border bg-surface text-text-secondary inline-grid shrink-0 place-items-center overflow-hidden rounded-full border font-bold ${sizeClass[size]} ${className}`}
 >
   {#if src}
     <img class="size-full object-cover" {src} {alt} />

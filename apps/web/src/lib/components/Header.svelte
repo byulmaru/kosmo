@@ -31,7 +31,7 @@
     <button class="grid size-8 place-items-center" type="button" aria-label="메뉴">
       <span class="text-xl leading-none">☰</span>
     </button>
-    <strong class="text-foreground flex-1 text-center text-2xl leading-none">KOSMO</strong>
+    <strong class="text-text-primary flex-1 text-center text-2xl leading-none">KOSMO</strong>
     <button class="grid size-8 place-items-center" type="button" aria-label="설정">
       <span class="text-xl leading-none">⚙</span>
     </button>
@@ -47,7 +47,7 @@
     <button class="grid size-8 place-items-center" type="button" aria-label="뒤로">
       <span class="text-xl leading-none">‹</span>
     </button>
-    <div class="bg-card text-foreground flex h-8 flex-1 items-center rounded-full px-2 text-base">
+    <div class="bg-card text-text-primary flex h-8 flex-1 items-center rounded-full px-2 text-base">
       {inputText}
     </div>
     <button
@@ -58,7 +58,7 @@
       <span class="text-base leading-none">⌕</span>
     </button>
   {:else if variant === 'title_action'}
-    <h1 class="text-foreground m-0 flex-1 text-[17px] font-bold">{title}</h1>
+    <h1 class="text-text-primary m-0 flex-1 text-[17px] font-bold">{title}</h1>
     <button class="grid size-8 place-items-center" type="button" aria-label="설정">
       <span class="text-xl leading-none">⚙</span>
     </button>
@@ -66,9 +66,9 @@
     <button class="grid size-8 place-items-center" type="button" aria-label="뒤로">
       <span class="text-xl leading-none">‹</span>
     </button>
-    <h1 class="text-foreground m-0 flex-1 text-[17px] font-bold">{title}</h1>
+    <h1 class="text-text-primary m-0 flex-1 text-[17px] font-bold">{title}</h1>
   {:else}
-    <button class="text-muted-foreground text-sm" type="button">취소</button>
+    <button class="text-text-secondary text-sm" type="button">취소</button>
     <span class="flex-1"></span>
     <Button size="sm">{variant === 'cancel_apply' ? '적용' : actionLabel}</Button>
   {/if}

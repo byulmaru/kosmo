@@ -21,14 +21,14 @@
   {#each tabs as tab}
     {@const selected = tab === active}
     <button
-      class={`relative text-sm font-semibold ${selected ? 'text-foreground' : 'text-muted-foreground'}`}
+      class={`relative text-sm font-semibold ${selected ? 'text-text-primary' : 'text-text-secondary'}`}
       type="button"
       role="tab"
       aria-selected={selected}
     >
       {tab}
       {#if selected}
-        <span class="bg-foreground absolute right-[60px] bottom-0 left-[60px] h-0.5 rounded-full"
+        <span class="bg-text-primary absolute right-[60px] bottom-0 left-[60px] h-0.5 rounded-full"
         ></span>
       {/if}
     </button>

@@ -19,7 +19,7 @@
 <div
   {...rest}
   data-ratio={ratio}
-  class={`border-border bg-secondary text-muted-foreground grid place-items-center rounded-[12px] border ${ratioClass[ratio]} ${className}`}
+  class={`border-border bg-surface text-text-secondary grid place-items-center rounded-[12px] border ${ratioClass[ratio]} ${className}`}
 >
   <div class="grid place-items-center gap-1 text-xs">
     <span class="text-2xl leading-none">□</span>

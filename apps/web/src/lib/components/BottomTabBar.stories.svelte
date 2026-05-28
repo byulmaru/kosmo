@@ -34,3 +34,5 @@
 <Story name="Home active" parameters={storyParameters('/')} />
 <Story name="Search active" parameters={storyParameters('/search')} />
 <Story name="Compose active" parameters={storyParameters('/compose')} />
+<Story name="Notifications active" parameters={storyParameters('/notifications')} />
+<Story name="Menu active" parameters={storyParameters('/menu')} />

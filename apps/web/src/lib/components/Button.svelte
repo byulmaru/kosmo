@@ -21,9 +21,9 @@
   }: ButtonProps = $props();
 
   const variantClass: Record<ButtonVariant, string> = {
-    primary: 'bg-primary text-primary-foreground hover:brightness-95',
-    secondary: 'border border-border bg-card text-card-foreground hover:bg-secondary',
-    text: 'bg-transparent text-foreground hover:bg-secondary',
+    primary: 'bg-primary text-text-primary hover:brightness-95',
+    secondary: 'border border-border bg-card text-text-primary hover:bg-surface',
+    text: 'bg-transparent text-text-primary hover:bg-surface',
   };
 
   const sizeClass: Record<ButtonSize, string> = {
@@ -38,7 +38,7 @@
   {type}
   data-variant={variant}
   data-size={size}
-  class={`inline-flex min-w-[7.5rem] items-center justify-center rounded-[8px] font-semibold whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-45 ${variantClass[variant]} ${sizeClass[size]} ${className}`}
+  class={`inline-flex min-w-[7.5rem] items-center justify-center rounded-[8px] font-semibold whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-more disabled:pointer-events-none disabled:opacity-45 ${variantClass[variant]} ${sizeClass[size]} ${className}`}
 >
   {#if children}
     {@render children()}

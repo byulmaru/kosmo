@@ -13,10 +13,10 @@
   class={`border-border bg-card flex h-[52px] w-[390px] items-center gap-3 border-b px-4 ${className}`}
 >
   <div
-    class="bg-secondary text-foreground flex h-9 flex-1 items-center gap-2 rounded-full px-4 text-xs"
+    class="bg-surface text-text-primary flex h-9 flex-1 items-center gap-2 rounded-full px-4 text-xs"
   >
     <svg
-      class="text-muted-foreground size-4"
+      class="text-text-secondary size-4"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -30,7 +30,7 @@
     <span class="truncate">{query}</span>
   </div>
   <button
-    class="text-muted-foreground grid size-5 place-items-center"
+    class="text-text-secondary grid size-5 place-items-center"
     type="button"
     aria-label="검색 지우기"
   >

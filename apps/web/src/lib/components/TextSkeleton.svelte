@@ -20,5 +20,5 @@
 <div
   {...rest}
   data-width={width}
-  class={`border-border bg-secondary h-3 rounded-[4px] border ${widthClass[width]} ${className}`}
+  class={`border-border bg-surface h-3 rounded-[4px] border ${widthClass[width]} ${className}`}
 ></div>
