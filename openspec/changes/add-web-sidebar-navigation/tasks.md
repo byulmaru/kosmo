@@ -8,8 +8,9 @@
 
 - [x] 2.1 주요 내비게이션 항목과 active item semantics를 포함하는 재사용 가능한 사이드바 컴포넌트를 만든다.
 - [x] 2.2 프로필 목록 렌더링과 `selectProfile`을 통한 즉시 프로필 선택을 추가한다.
-- [x] 2.3 사이드바를 `(tabs)` layout에 고정 데스크톱 사이드바로 연결한다.
-- [x] 2.4 Figma-to-Code HTML/CSS 기준으로 drawer 폭, 프로필 히어로, 메뉴 row 간격, active 상태 표현을 맞춘다.
+- [x] 2.3 사이드바에서 새 프로필을 생성하고 생성된 프로필로 즉시 전환할 수 있게 한다.
+- [x] 2.4 사이드바를 `(tabs)` layout에 고정 데스크톱 사이드바로 연결한다.
+- [x] 2.5 Figma-to-Code HTML/CSS 기준으로 drawer 폭, 프로필 히어로, 메뉴 row 간격, active 상태 표현을 맞춘다.
 
 ## 3. 모바일 Drawer 동작
 

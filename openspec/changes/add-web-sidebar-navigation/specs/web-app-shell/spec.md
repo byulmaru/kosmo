@@ -69,6 +69,13 @@
 - **THEN** 시스템은 즉시 해당 프로필을 활성 프로필로 요청한다
 - **AND** 요청 성공 후 사이드바는 새 활성 프로필을 반영한다
 
+#### Scenario: Create and switch to a new profile
+
+- **WHEN** 인증된 사용자가 사이드바에서 새 프로필 핸들을 입력하고 생성한다
+- **THEN** 시스템은 새 프로필 생성을 요청한다
+- **AND** 생성 성공 후 시스템은 새 프로필을 즉시 활성 프로필로 선택한다
+- **AND** 사이드바는 새 활성 프로필을 반영한다
+
 #### Scenario: Keep current profile selection
 
 - **WHEN** 사용자가 이미 활성화된 프로필을 선택한다

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { createMutation, createQuery } from '@mearie/svelte';
-  import { selectSidebarProfileMutation, sidebarProfilesQuery } from '$lib/graphql/sidebar';
+  import { createQuery } from '@mearie/svelte';
+  import { sidebarProfilesQuery } from '$lib/graphql/sidebar';
 
   type Props = {
     surface?: 'desktop' | 'drawer';
@@ -12,6 +12,38 @@
     id: string;
     handle: string;
     displayName: string;
+    followersCount?: number;
+    followingCount?: number;
+  };
+
+  type GraphQLResponse<T> = {
+    data?: T;
+    errors?: { message: string }[];
+  };
+
+  type CreateProfileResponse = {
+    createProfile:
+      | {
+          __typename: 'CreateProfileSuccess';
+          profile: ProfileSummary;
+        }
+      | {
+          __typename: 'ConflictError';
+          message: string;
+          field?: string | null;
+        };
+  };
+
+  type SelectProfileResponse = {
+    selectProfile:
+      | {
+          __typename: 'SelectProfileSuccess';
+          profile: ProfileSummary;
+        }
+      | {
+          __typename: 'NotFoundError';
+          message: string;
+        };
   };
 
   let { surface = 'desktop', onNavigate = () => {} }: Props = $props();
@@ -47,8 +79,14 @@
   ];
 
   const profileQuery = createQuery(sidebarProfilesQuery);
-  const [selectProfile, selectProfileResult] = createMutation(selectSidebarProfileMutation);
   let profileError = $state<string | null>(null);
+  let profileCreationError = $state<string | null>(null);
+  let profileSwitcherOpen = $state(false);
+  let profileCreationOpen = $state(false);
+  let newProfileHandle = $state('');
+  let profileActionLoading = $state(false);
+  let selectedProfileOverride = $state<ProfileSummary | null>(null);
+  let profilesOverride = $state<ProfileSummary[] | null>(null);
 
   const isActive = (item: (typeof navItems)[number]) => {
     if (page.url.pathname !== item.href) {
@@ -67,30 +105,156 @@
 
   const formatCount = (count: number) => new Intl.NumberFormat('ko-KR').format(count);
 
-  const getRecentProfiles = (profiles: ProfileSummary[], activeId?: string) =>
-    profiles.filter((profile) => profile.id !== activeId).slice(0, activeId ? 2 : 3);
+  const creatingOrSwitching = $derived(profileActionLoading || profileQuery.loading);
+  const sidebarProfiles = $derived(profilesOverride ?? profileQuery.data?.myProfiles ?? []);
+  const sidebarActiveProfile = $derived(
+    selectedProfileOverride ?? profileQuery.data?.currentSession?.selectedProfile ?? null,
+  );
+
+  const openProfileSwitcher = () => {
+    profileSwitcherOpen = !profileSwitcherOpen;
+    if (!profileSwitcherOpen) {
+      profileCreationOpen = false;
+      profileCreationError = null;
+    }
+  };
+
+  const requestGraphQL = async (body: string) => {
+    const response = await fetch('/graphql', {
+      body,
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+    const result = (await response.json()) as GraphQLResponse<unknown>;
+
+    if (!response.ok || result.errors?.length) {
+      throw new Error(result.errors?.[0]?.message ?? 'GraphQL 요청에 실패했습니다.');
+    }
+
+    if (!result.data) {
+      throw new Error('GraphQL 응답이 비어 있습니다.');
+    }
+
+    return result.data;
+  };
 
   const chooseProfile = async (id: string) => {
-    if (
-      profileQuery.data?.currentSession?.selectedProfile?.id === id ||
-      selectProfileResult.loading
-    ) {
+    if (sidebarActiveProfile?.id === id || creatingOrSwitching) {
       return;
     }
 
     profileError = null;
+    profileActionLoading = true;
 
     try {
-      const data = await selectProfile({ id });
+      const data = (await requestGraphQL(
+        JSON.stringify({
+          query: `mutation SelectSidebarProfile($id: ID!) {
+          selectProfile(input: { id: $id }) {
+            __typename
+            ... on SelectProfileSuccess {
+              profile { id handle displayName }
+            }
+            ... on NotFoundError { message }
+          }
+        }`,
+          variables: { id: id },
+        }),
+      )) as SelectProfileResponse;
 
       if (data.selectProfile.__typename !== 'SelectProfileSuccess') {
         profileError = data.selectProfile.message;
         return;
       }
 
+      selectedProfileOverride = sidebarProfiles.find(
+        (profile: ProfileSummary) => profile.id === id,
+      ) ?? {
+        ...data.selectProfile.profile,
+        followersCount: 0,
+        followingCount: 0,
+      };
+      profileSwitcherOpen = false;
+      profileCreationOpen = false;
       profileQuery.refetch();
-    } catch {
-      profileError = '프로필을 전환하지 못했습니다.';
+    } catch (error) {
+      profileError = error instanceof Error ? error.message : '프로필을 전환하지 못했습니다.';
+    } finally {
+      profileActionLoading = false;
+    }
+  };
+
+  const createAndSelectProfile = async (event: SubmitEvent) => {
+    event.preventDefault();
+
+    const handle = newProfileHandle.trim();
+    if (!handle || creatingOrSwitching) {
+      profileCreationError = handle ? null : '프로필 핸들을 입력해주세요.';
+      return;
+    }
+
+    profileCreationError = null;
+    profileError = null;
+    profileActionLoading = true;
+
+    try {
+      const created = (await requestGraphQL(
+        JSON.stringify({
+          query: `mutation CreateSidebarProfile($handle: String!) {
+          createProfile(input: { handle: $handle }) {
+            __typename
+            ... on CreateProfileSuccess {
+              profile { id handle displayName }
+            }
+            ... on ConflictError { message field }
+          }
+        }`,
+          variables: { handle: handle },
+        }),
+      )) as CreateProfileResponse;
+      if (created.createProfile.__typename !== 'CreateProfileSuccess') {
+        profileCreationError = created.createProfile.message;
+        return;
+      }
+
+      const createdProfile = {
+        ...created.createProfile.profile,
+        followersCount: 0,
+        followingCount: 0,
+      };
+
+      newProfileHandle = '';
+      profileCreationOpen = false;
+
+      const selected = (await requestGraphQL(
+        JSON.stringify({
+          query: `mutation SelectCreatedSidebarProfile($id: ID!) {
+          selectProfile(input: { id: $id }) {
+            __typename
+            ... on SelectProfileSuccess {
+              profile { id handle displayName }
+            }
+            ... on NotFoundError { message }
+          }
+        }`,
+          variables: { id: created.createProfile.profile.id },
+        }),
+      )) as SelectProfileResponse;
+      if (selected.selectProfile.__typename !== 'SelectProfileSuccess') {
+        profileError = selected.selectProfile.message;
+        return;
+      }
+
+      profilesOverride = [...sidebarProfiles, createdProfile];
+      selectedProfileOverride = createdProfile;
+      profileSwitcherOpen = false;
+      profileCreationOpen = false;
+      profileQuery.refetch();
+    } catch (error) {
+      profileCreationError =
+        error instanceof Error ? error.message : '프로필을 생성하지 못했습니다.';
+    } finally {
+      profileActionLoading = false;
     }
   };
 </script>
@@ -98,7 +262,7 @@
 <aside
   class={`flex h-full w-80 flex-col overflow-hidden bg-white text-[#111111] ${surface === 'drawer' ? 'rounded-r-2xl shadow-[4px_0_4px_rgba(0,0,0,0.4)]' : 'border-r border-[#eaeaea]'}`}
 >
-  <section class="relative h-60 w-80 shrink-0 overflow-hidden" aria-label="활성 프로필">
+  <section class="relative z-20 h-[260px] w-80 shrink-0 overflow-visible" aria-label="활성 프로필">
     <div
       class="absolute left-0 top-0 h-[104px] w-80 overflow-hidden bg-gradient-to-br from-zinc-200 via-zinc-100 to-zinc-300 blur-[1px]"
     >
@@ -107,44 +271,34 @@
       ></div>
     </div>
 
-    {#if profileQuery.data?.currentSession?.selectedProfile}
-      {@const activeProfile = profileQuery.data.currentSession.selectedProfile}
-      {@const recentProfiles = getRecentProfiles(profileQuery.data.myProfiles, activeProfile.id)}
-      <div class="absolute left-5 top-[54px] flex w-[280px] items-end justify-between">
+    {#if sidebarActiveProfile}
+      {@const activeProfile = sidebarActiveProfile}
+      <div class="absolute left-5 top-[54px] flex w-[280px] items-start justify-between">
         <div
           class="flex size-24 items-center justify-center rounded-full bg-[#111111] text-4xl font-bold text-white shadow-[1px_1px_2px_rgba(0,0,0,0.25)]"
         >
           {getInitial(activeProfile.displayName, activeProfile.handle)}
         </div>
-
-        <div class="flex items-center gap-3">
-          {#each recentProfiles as profile}
-            <button
-              class="flex size-10 items-center justify-center rounded-full bg-zinc-200 text-sm font-bold text-[#111111] shadow-[1px_1px_2px_rgba(0,0,0,0.25)] transition hover:bg-zinc-300 disabled:opacity-50"
-              type="button"
-              disabled={selectProfileResult.loading}
-              aria-label={`${profile.displayName} 프로필로 전환`}
-              onclick={() => chooseProfile(profile.id)}
-            >
-              {getInitial(profile.displayName, profile.handle)}
-            </button>
-          {/each}
-          <div
-            class="flex size-10 items-center justify-center rounded-full bg-[#111111] text-xl leading-none text-white"
-            aria-hidden="true"
-          >
-            +
-          </div>
-        </div>
       </div>
+
+      <button
+        class="absolute right-5 top-[134px] inline-flex h-8 items-center justify-center rounded-lg bg-[#fce79a] px-3 text-sm font-bold text-[#111111] transition hover:bg-[#f9dc6d] disabled:opacity-50"
+        type="button"
+        disabled
+        aria-label="프로필 편집"
+      >
+        편집
+      </button>
 
       <div class="absolute left-2.5 top-[140px] flex w-[300px] flex-col items-start px-2 py-2">
         <button
           class="flex h-[42px] max-w-full items-center gap-2 py-[5px] text-left"
           type="button"
           aria-label="프로필 목록"
+          aria-expanded={profileSwitcherOpen}
+          onclick={openProfileSwitcher}
         >
-          <span class="truncate text-2xl font-bold leading-[22px] text-black/85"
+          <span class="truncate text-2xl font-bold leading-[32px] text-black/85"
             >{activeProfile.displayName}</span
           >
           <svg
@@ -161,36 +315,30 @@
         </p>
         <div class="mt-2 flex items-center gap-3 text-sm leading-[22px] text-black">
           <span class="flex items-center gap-2 px-1"
-            ><span>{formatCount(activeProfile.followersCount)}</span><span>팔로워</span></span
+            ><span>{formatCount(activeProfile.followersCount ?? 0)}</span><span>팔로워</span></span
           >
           <span class="flex items-center gap-2 px-1"
-            ><span>{formatCount(activeProfile.followingCount)}</span><span>팔로잉</span></span
+            ><span>{formatCount(activeProfile.followingCount ?? 0)}</span><span>팔로잉</span></span
           >
         </div>
       </div>
-    {:else if profileQuery.data && profileQuery.data.myProfiles.length > 0}
-      {@const selectableProfiles = getRecentProfiles(profileQuery.data.myProfiles)}
-      <div class="absolute left-5 top-[54px] flex w-[280px] items-end justify-between">
+    {:else if profileQuery.data && sidebarProfiles.length > 0}
+      <div class="absolute left-5 top-[54px] flex w-[280px] items-start justify-between">
         <div
           class="flex size-24 items-center justify-center rounded-full bg-zinc-200 text-3xl font-bold text-zinc-500 shadow-[1px_1px_2px_rgba(0,0,0,0.25)]"
         >
           ?
         </div>
-
-        <div class="flex items-center gap-3">
-          {#each selectableProfiles as profile}
-            <button
-              class="flex size-10 items-center justify-center rounded-full bg-zinc-200 text-sm font-bold text-[#111111] shadow-[1px_1px_2px_rgba(0,0,0,0.25)] transition hover:bg-zinc-300 disabled:opacity-50"
-              type="button"
-              disabled={selectProfileResult.loading}
-              aria-label={`${profile.displayName} 프로필로 선택`}
-              onclick={() => chooseProfile(profile.id)}
-            >
-              {getInitial(profile.displayName, profile.handle)}
-            </button>
-          {/each}
-        </div>
       </div>
+
+      <button
+        class="absolute right-5 top-[134px] inline-flex h-8 items-center justify-center rounded-lg bg-[#fce79a] px-3 text-sm font-bold text-[#111111] transition hover:bg-[#f9dc6d] disabled:opacity-50"
+        type="button"
+        disabled
+        aria-label="프로필 편집"
+      >
+        편집
+      </button>
 
       <div class="absolute left-2.5 top-[140px] flex w-[300px] flex-col items-start px-2 py-2">
         <p class="text-2xl font-bold leading-[42px] text-black/85">프로필 선택</p>
@@ -202,17 +350,109 @@
       >
         ?
       </div>
-      <div class="absolute left-2.5 top-[140px] flex w-[300px] flex-col px-2 py-2">
+      <div class="absolute left-2.5 top-[132px] flex w-[300px] flex-col px-2 py-2">
         <p class="text-2xl font-bold leading-[42px] text-black/85">프로필</p>
         <p class="text-sm leading-[19.6px] text-[#777777]">
-          {profileQuery.loading ? '프로필을 불러오는 중입니다.' : '사용 가능한 프로필이 없습니다.'}
+          {profileQuery.loading ? '프로필을 불러오는 중입니다.' : '새 프로필을 만들어 시작하세요.'}
         </p>
+      </div>
+      <button
+        class="absolute right-5 top-[134px] inline-flex h-8 items-center justify-center rounded-lg bg-[#fce79a] px-3 text-sm font-bold text-[#111111] transition hover:bg-[#f9dc6d] disabled:opacity-50"
+        type="button"
+        disabled
+        aria-label="프로필 편집"
+      >
+        편집
+      </button>
+    {/if}
+
+    {#if profileSwitcherOpen}
+      {@const activeProfile = sidebarActiveProfile}
+      <div
+        class="absolute left-4 top-[210px] z-10 flex w-[280px] flex-col gap-0.5 rounded-[14px] border border-[#eaeaea] bg-white p-1.5 shadow-[0_6px_20px_rgba(0,0,0,0.16)]"
+        role="menu"
+        aria-label="프로필 전환"
+      >
+        {#each sidebarProfiles as profile}
+          {@const selected = activeProfile?.id === profile.id}
+          <button
+            class={`flex w-full items-center gap-2.5 rounded-[10px] p-2 text-left transition disabled:opacity-50 ${selected ? 'bg-[#f6f6f6]' : 'hover:bg-[#f8f8f8]'}`}
+            type="button"
+            role="menuitemradio"
+            aria-checked={selected}
+            disabled={creatingOrSwitching}
+            onclick={() => chooseProfile(profile.id)}
+          >
+            <span
+              class={`flex shrink-0 items-center justify-center rounded-full bg-[#fce79a] font-bold text-[#111111] ${selected ? 'size-12 text-base' : 'size-8 text-sm'}`}
+              aria-hidden="true"
+            >
+              {getInitial(profile.displayName, profile.handle)}
+            </span>
+            <span class="flex min-w-0 flex-1 flex-col gap-px overflow-hidden">
+              <span class="truncate text-sm font-bold text-[#111111]">{profile.displayName}</span>
+              <span class="truncate text-xs text-[#777777]">@{profile.handle}</span>
+            </span>
+            {#if selected}
+              <span class="text-[15px] font-bold text-[#111111]" aria-hidden="true">✓</span>
+            {/if}
+          </button>
+        {/each}
+
+        <div class="my-0.5 h-px w-full bg-[#eaeaea]"></div>
+
+        {#if profileCreationOpen}
+          <form
+            class="flex flex-col gap-1 p-1"
+            aria-label="새 프로필 만들기"
+            onsubmit={createAndSelectProfile}
+          >
+            <label class="sr-only" for={`profile-handle-${surface}`}>프로필 핸들</label>
+            <div class="flex gap-2">
+              <input
+                id={`profile-handle-${surface}`}
+                class="min-w-0 flex-1 rounded-lg border border-[#d4d4d8] px-3 py-2 text-sm outline-none transition placeholder:text-[#a1a1aa] focus:border-[#111111]"
+                name="handle"
+                autocomplete="off"
+                placeholder="새 프로필 핸들"
+                disabled={creatingOrSwitching}
+                bind:value={newProfileHandle}
+              />
+              <button
+                class="rounded-lg bg-[#fce79a] px-3 py-2 text-sm font-bold text-[#111111] transition hover:bg-[#f9dc6d] disabled:opacity-50"
+                type="submit"
+                disabled={creatingOrSwitching}
+              >
+                만들기
+              </button>
+            </div>
+            {#if profileCreationError}
+              <p class="px-1 text-xs leading-4 text-red-600">{profileCreationError}</p>
+            {/if}
+          </form>
+        {:else}
+          <button
+            class="flex w-full items-center gap-2.5 rounded-[10px] p-2 text-left transition hover:bg-[#f8f8f8] disabled:opacity-50"
+            type="button"
+            role="menuitem"
+            disabled={creatingOrSwitching}
+            onclick={() => {
+              profileCreationError = null;
+              profileCreationOpen = true;
+            }}
+          >
+            <span class="w-8 text-center text-lg font-bold text-[#111111]" aria-hidden="true"
+              >+</span
+            >
+            <span class="text-sm font-medium text-[#111111]">새 프로필 추가</span>
+          </button>
+        {/if}
       </div>
     {/if}
   </section>
 
   <section
-    class="flex min-h-0 flex-1 flex-col justify-between border-t border-[#eaeaea] bg-white p-4"
+    class="relative z-0 flex min-h-0 flex-1 flex-col justify-between border-t border-[#eaeaea] bg-white p-4"
   >
     <nav class="flex w-[264px] flex-col gap-1" aria-label="주요 메뉴">
       {#each navItems as item}
@@ -296,7 +536,11 @@
   </section>
 
   <section class="sr-only" aria-label="프로필 전환 상태">
-    {#if selectProfileResult.loading}
+    {#if profileActionLoading && profileCreationOpen}
+      프로필 생성 중
+    {/if}
+
+    {#if profileActionLoading && !profileCreationOpen}
       전환 중
     {/if}
 
@@ -304,12 +548,16 @@
       프로필을 불러오는 중입니다.
     {:else if profileQuery.error}
       프로필을 불러오지 못했습니다.
-    {:else if profileQuery.data?.myProfiles.length === 0}
+    {:else if sidebarProfiles.length === 0}
       사용 가능한 프로필이 없습니다.
     {/if}
 
     {#if profileError}
       {profileError}
+    {/if}
+
+    {#if profileCreationError}
+      {profileCreationError}
     {/if}
   </section>
 </aside>
