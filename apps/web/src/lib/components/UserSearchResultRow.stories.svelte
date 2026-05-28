@@ -14,13 +14,7 @@
       },
     },
   });
-
-  const defaultArgs = {
-    name: '사용자 이름',
-    handle: '@user@kos.moe',
-    bio: '한 줄 소개가 들어가는 자리',
-  };
 </script>
 
-<Story name="Follow" args={{ ...defaultArgs, state: 'follow' }} />
-<Story name="Following" args={{ ...defaultArgs, state: 'following' }} />
+<Story name="Follow" args={{ state: 'follow' }} />
+<Story name="Following" args={{ state: 'following' }} />
