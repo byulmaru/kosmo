@@ -1,13 +1,10 @@
-import { db, ProfileFollows } from '@kosmo/core/db';
+import { db, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { ProfileFollowState } from '@kosmo/core/enums';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
-import { asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { builder } from '@/graphql/builder';
-import {
-  profileFollowAccessWhere,
-  ProfileFollowFolloweeProfiles,
-  ProfileFollowFollowerProfiles,
-} from '../access/follow';
+import { profileFollowAccessWhere } from '../access/follow';
 import {
   acceptedProfileFollowersCountLoader,
   acceptedProfileFollowingCountLoader,
@@ -16,6 +13,9 @@ import {
 import { Profile, ProfileFollow } from '../ref';
 
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
+
+const FollowerProfiles = alias(Profiles, 'profile_follow_connection_follower_profile');
+const FolloweeProfiles = alias(Profiles, 'profile_follow_connection_followee_profile');
 
 builder.objectFields(ProfileFollow, (t) => ({
   follower: t.field({
@@ -43,21 +43,20 @@ builder.objectFields(Profile, (t) => ({
           return await db
             .select(getColumns(ProfileFollows))
             .from(ProfileFollows)
-            .innerJoin(
-              ProfileFollowFollowerProfiles,
-              eq(ProfileFollowFollowerProfiles.id, ProfileFollows.followerProfileId),
-            )
-            .innerJoin(
-              ProfileFollowFolloweeProfiles,
-              eq(ProfileFollowFolloweeProfiles.id, ProfileFollows.followeeProfileId),
-            )
+            .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
+            .innerJoin(FolloweeProfiles, eq(FolloweeProfiles.id, ProfileFollows.followeeProfileId))
             .where(
-              profileFollowAccessWhere(ctx, [
+              and(
                 eq(ProfileFollows.followeeProfileId, profile.id),
                 eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
                 before ? gt(ProfileFollows.id, before) : undefined,
                 after ? lt(ProfileFollows.id, after) : undefined,
-              ]),
+                profileFollowAccessWhere({
+                  ctx,
+                  followerProfile: FollowerProfiles,
+                  followeeProfile: FolloweeProfiles,
+                }),
+              ),
             )
             .orderBy(inverted ? asc(ProfileFollows.id) : desc(ProfileFollows.id))
             .limit(limit);
@@ -77,21 +76,20 @@ builder.objectFields(Profile, (t) => ({
           return await db
             .select(getColumns(ProfileFollows))
             .from(ProfileFollows)
-            .innerJoin(
-              ProfileFollowFollowerProfiles,
-              eq(ProfileFollowFollowerProfiles.id, ProfileFollows.followerProfileId),
-            )
-            .innerJoin(
-              ProfileFollowFolloweeProfiles,
-              eq(ProfileFollowFolloweeProfiles.id, ProfileFollows.followeeProfileId),
-            )
+            .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
+            .innerJoin(FolloweeProfiles, eq(FolloweeProfiles.id, ProfileFollows.followeeProfileId))
             .where(
-              profileFollowAccessWhere(ctx, [
+              and(
                 eq(ProfileFollows.followerProfileId, profile.id),
                 eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
                 before ? gt(ProfileFollows.id, before) : undefined,
                 after ? lt(ProfileFollows.id, after) : undefined,
-              ]),
+                profileFollowAccessWhere({
+                  ctx,
+                  followerProfile: FollowerProfiles,
+                  followeeProfile: FolloweeProfiles,
+                }),
+              ),
             )
             .orderBy(inverted ? asc(ProfileFollows.id) : desc(ProfileFollows.id))
             .limit(limit);

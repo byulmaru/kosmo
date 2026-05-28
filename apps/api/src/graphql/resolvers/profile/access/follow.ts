@@ -1,18 +1,27 @@
-import { ProfileFollows, Profiles } from '@kosmo/core/db';
+import { ProfileFollows } from '@kosmo/core/db';
 import { ProfileFollowPolicy, ProfileFollowState, ProfileState } from '@kosmo/core/enums';
 import { and, eq, or } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/pg-core';
-import type { SQL } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { UserContext } from '@/context';
 
-export const ProfileFollowFollowerProfiles = alias(Profiles, 'profile_follow_follower_profile');
-export const ProfileFollowFolloweeProfiles = alias(Profiles, 'profile_follow_followee_profile');
+type ProfileFollowAccessProfile = {
+  followPolicy: AnyPgColumn;
+  state: AnyPgColumn;
+};
 
-export const profileFollowAccessWhere = (ctx: UserContext, where: (SQL | undefined)[] = []) => {
+export const profileFollowAccessWhere = ({
+  ctx,
+  followerProfile,
+  followeeProfile,
+}: {
+  ctx: UserContext;
+  followerProfile: ProfileFollowAccessProfile;
+  followeeProfile: ProfileFollowAccessProfile;
+}) => {
   const publicAcceptedWhere = and(
     eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
-    eq(ProfileFollowFollowerProfiles.followPolicy, ProfileFollowPolicy.OPEN),
-    eq(ProfileFollowFolloweeProfiles.followPolicy, ProfileFollowPolicy.OPEN),
+    eq(followerProfile.followPolicy, ProfileFollowPolicy.OPEN),
+    eq(followeeProfile.followPolicy, ProfileFollowPolicy.OPEN),
   )!;
   const visibleWhere = ctx.session?.profileId
     ? or(
@@ -23,9 +32,8 @@ export const profileFollowAccessWhere = (ctx: UserContext, where: (SQL | undefin
     : publicAcceptedWhere;
 
   return and(
-    ...where,
-    eq(ProfileFollowFollowerProfiles.state, ProfileState.ACTIVE),
-    eq(ProfileFollowFolloweeProfiles.state, ProfileState.ACTIVE),
+    eq(followerProfile.state, ProfileState.ACTIVE),
+    eq(followeeProfile.state, ProfileState.ACTIVE),
     visibleWhere,
   )!;
 };

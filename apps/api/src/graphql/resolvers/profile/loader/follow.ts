@@ -1,11 +1,8 @@
-import { db, ProfileFollows } from '@kosmo/core/db';
+import { db, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { ProfileFollowState } from '@kosmo/core/enums';
 import { and, count, eq, getColumns, inArray } from 'drizzle-orm';
-import {
-  profileFollowAccessWhere,
-  ProfileFollowFolloweeProfiles,
-  ProfileFollowFollowerProfiles,
-} from '../access/follow';
+import { alias } from 'drizzle-orm/pg-core';
+import { profileFollowAccessWhere } from '../access/follow';
 import type { SQL } from 'drizzle-orm';
 import type { UserContext } from '@/context';
 
@@ -16,19 +13,25 @@ type ProfileFollowCountRow = {
   value: number;
 };
 
+const FollowerProfiles = alias(Profiles, 'profile_follow_follower_profile');
+const FolloweeProfiles = alias(Profiles, 'profile_follow_followee_profile');
+
 const profileFollowQuery = (ctx: UserContext, where?: (SQL | undefined)[]) =>
   db
     .select(getColumns(ProfileFollows))
     .from(ProfileFollows)
-    .innerJoin(
-      ProfileFollowFollowerProfiles,
-      eq(ProfileFollowFollowerProfiles.id, ProfileFollows.followerProfileId),
-    )
-    .innerJoin(
-      ProfileFollowFolloweeProfiles,
-      eq(ProfileFollowFolloweeProfiles.id, ProfileFollows.followeeProfileId),
-    )
-    .where(profileFollowAccessWhere(ctx, where));
+    .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
+    .innerJoin(FolloweeProfiles, eq(FolloweeProfiles.id, ProfileFollows.followeeProfileId))
+    .where(
+      and(
+        ...(where ?? []),
+        profileFollowAccessWhere({
+          ctx,
+          followerProfile: FollowerProfiles,
+          followeeProfile: FolloweeProfiles,
+        }),
+      ),
+    );
 
 export const acceptedProfileFollowersCountLoader = (ctx: UserContext) =>
   ctx.loader<string, ProfileFollowCountRow, string, true>({
