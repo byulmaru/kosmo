@@ -49,7 +49,7 @@ export const acceptedProfileFollowersCountLoader = (ctx: UserContext) =>
         .where(
           and(
             eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
-            inArray(ProfileFollows.followeeProfileId, [...new Set(keys)]),
+            inArray(ProfileFollows.followeeProfileId, keys),
             profileFollowAccessWhere({
               ctx,
               followerProfile: FollowerProfiles,
@@ -78,7 +78,7 @@ export const acceptedProfileFollowingCountLoader = (ctx: UserContext) =>
         .where(
           and(
             eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
-            inArray(ProfileFollows.followerProfileId, [...new Set(keys)]),
+            inArray(ProfileFollows.followerProfileId, keys),
             profileFollowAccessWhere({
               ctx,
               followerProfile: FollowerProfiles,
