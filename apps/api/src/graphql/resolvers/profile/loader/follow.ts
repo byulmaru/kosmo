@@ -1,7 +1,11 @@
-import { db, ProfileFollows, Profiles } from '@kosmo/core/db';
-import { ProfileFollowPolicy, ProfileFollowState, ProfileState } from '@kosmo/core/enums';
-import { and, count, eq, getColumns, inArray, or } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/pg-core';
+import { db, ProfileFollows } from '@kosmo/core/db';
+import { ProfileFollowState } from '@kosmo/core/enums';
+import { and, count, eq, getColumns, inArray } from 'drizzle-orm';
+import {
+  profileFollowAccessWhere,
+  ProfileFollowFolloweeProfiles,
+  ProfileFollowFollowerProfiles,
+} from '../access/follow';
 import type { SQL } from 'drizzle-orm';
 import type { UserContext } from '@/context';
 
@@ -12,40 +16,18 @@ type ProfileFollowCountRow = {
   value: number;
 };
 
-const FollowerProfiles = alias(Profiles, 'profile_follow_follower_profile');
-const FolloweeProfiles = alias(Profiles, 'profile_follow_followee_profile');
-
-const profileFollowAccessWhere = (ctx: UserContext, where: (SQL | undefined)[] = []) => {
-  const publicAcceptedWhere = and(
-    eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
-    eq(FollowerProfiles.followPolicy, ProfileFollowPolicy.OPEN),
-    eq(FolloweeProfiles.followPolicy, ProfileFollowPolicy.OPEN),
-  )!;
-  const visibleWhere = ctx.session?.profileId
-    ? or(
-        eq(ProfileFollows.followerProfileId, ctx.session.profileId),
-        eq(ProfileFollows.followeeProfileId, ctx.session.profileId),
-        publicAcceptedWhere,
-      )
-    : publicAcceptedWhere;
-
-  return and(
-    ...where,
-    eq(FollowerProfiles.state, ProfileState.ACTIVE),
-    eq(FolloweeProfiles.state, ProfileState.ACTIVE),
-    visibleWhere,
-  )!;
-};
-
-const profileFollowQuery = (
-  ctx: UserContext,
-  where?: Parameters<typeof profileFollowAccessWhere>[1],
-) =>
+const profileFollowQuery = (ctx: UserContext, where?: (SQL | undefined)[]) =>
   db
     .select(getColumns(ProfileFollows))
     .from(ProfileFollows)
-    .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
-    .innerJoin(FolloweeProfiles, eq(FolloweeProfiles.id, ProfileFollows.followeeProfileId))
+    .innerJoin(
+      ProfileFollowFollowerProfiles,
+      eq(ProfileFollowFollowerProfiles.id, ProfileFollows.followerProfileId),
+    )
+    .innerJoin(
+      ProfileFollowFolloweeProfiles,
+      eq(ProfileFollowFolloweeProfiles.id, ProfileFollows.followeeProfileId),
+    )
     .where(profileFollowAccessWhere(ctx, where));
 
 export const acceptedProfileFollowersCountLoader = (ctx: UserContext) =>
