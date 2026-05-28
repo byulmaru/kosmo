@@ -2,7 +2,7 @@ packages:
   - apps/*
   - packages/*
 
-enableGlobalVirtualStore: true
+enableGlobalVirtualStore: false
 pmOnFail: ignore
 minimumReleaseAge: 4320
 allowBuilds:
