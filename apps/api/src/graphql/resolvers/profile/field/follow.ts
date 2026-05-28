@@ -1,4 +1,4 @@
-import { resolveOffsetConnection } from '@pothos/plugin-relay';
+import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { builder } from '@/graphql/builder';
 import {
   acceptedProfileFollowersCountLoader,
@@ -8,6 +8,7 @@ import {
   viewerFollowLoader,
 } from '../loader/follow';
 import { Profile, ProfileFollow } from '../ref';
+import type { ProfileFollowRow } from '../loader/follow';
 
 builder.objectFields(ProfileFollow, (t) => ({
   follower: t.field({
@@ -26,15 +27,17 @@ builder.objectFields(Profile, (t) => ({
   followers: t.connection({
     type: ProfileFollow,
     resolve: async (profile, args, ctx) => {
-      return resolveOffsetConnection(
+      return resolveCursorConnection<Promise<ProfileFollowRow[]>>(
         {
           args,
-          totalCount: (await acceptedProfileFollowersCountLoader(ctx).load(profile.id))?.value ?? 0,
+          toCursor: (profileFollow) => profileFollow.id,
         },
-        ({ limit, offset }) =>
-          selectAcceptedProfileFollowers(ctx, profile.id, {
+        async ({ before, after, limit, inverted }) =>
+          await selectAcceptedProfileFollowers(ctx, profile.id, {
+            before,
+            after,
             limit,
-            offset,
+            inverted,
           }),
       );
     },
@@ -42,15 +45,17 @@ builder.objectFields(Profile, (t) => ({
   following: t.connection({
     type: ProfileFollow,
     resolve: async (profile, args, ctx) => {
-      return resolveOffsetConnection(
+      return resolveCursorConnection<Promise<ProfileFollowRow[]>>(
         {
           args,
-          totalCount: (await acceptedProfileFollowingCountLoader(ctx).load(profile.id))?.value ?? 0,
+          toCursor: (profileFollow) => profileFollow.id,
         },
-        ({ limit, offset }) =>
-          selectAcceptedProfileFollowing(ctx, profile.id, {
+        async ({ before, after, limit, inverted }) =>
+          await selectAcceptedProfileFollowing(ctx, profile.id, {
+            before,
+            after,
             limit,
-            offset,
+            inverted,
           }),
       );
     },

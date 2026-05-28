@@ -1,20 +1,22 @@
 import { db, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { ProfileFollowPolicy, ProfileFollowState, ProfileState } from '@kosmo/core/enums';
-import { and, count, desc, eq, getColumns, inArray, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, getColumns, gt, inArray, lt, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
 import type { UserContext } from '@/context';
 
-type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
+export type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
 
 type ProfileFollowCountRow = {
   profileId: string;
   value: number;
 };
 
-type ProfileFollowPage = {
+type ProfileFollowCursorPage = {
+  before?: string;
+  after?: string;
+  inverted: boolean;
   limit: number;
-  offset: number;
 };
 
 const FollowerProfiles = alias(Profiles, 'profile_follow_follower_profile');
@@ -98,28 +100,30 @@ export const acceptedProfileFollowingCountLoader = (ctx: UserContext) =>
 export const selectAcceptedProfileFollowers = (
   ctx: UserContext,
   profileId: string,
-  { limit, offset }: ProfileFollowPage,
+  { before, after, inverted, limit }: ProfileFollowCursorPage,
 ) =>
   profileFollowQuery(ctx, [
     eq(ProfileFollows.followeeProfileId, profileId),
     eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
+    before ? gt(ProfileFollows.id, before) : undefined,
+    after ? lt(ProfileFollows.id, after) : undefined,
   ])
-    .orderBy(desc(ProfileFollows.id))
-    .limit(limit)
-    .offset(offset);
+    .orderBy(inverted ? asc(ProfileFollows.id) : desc(ProfileFollows.id))
+    .limit(limit);
 
 export const selectAcceptedProfileFollowing = (
   ctx: UserContext,
   profileId: string,
-  { limit, offset }: ProfileFollowPage,
+  { before, after, inverted, limit }: ProfileFollowCursorPage,
 ) =>
   profileFollowQuery(ctx, [
     eq(ProfileFollows.followerProfileId, profileId),
     eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
+    before ? gt(ProfileFollows.id, before) : undefined,
+    after ? lt(ProfileFollows.id, after) : undefined,
   ])
-    .orderBy(desc(ProfileFollows.id))
-    .limit(limit)
-    .offset(offset);
+    .orderBy(inverted ? asc(ProfileFollows.id) : desc(ProfileFollows.id))
+    .limit(limit);
 
 export const viewerFollowLoader = (ctx: UserContext) =>
   ctx.loader<string, ProfileFollowRow, string, true>({
