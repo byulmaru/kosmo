@@ -38,18 +38,26 @@ export const acceptedProfileFollowersCountLoader = (ctx: UserContext) =>
     name: 'profileFollow.acceptedFollowersCount',
     nullable: true,
     load: async (keys) => {
-      const profileFollowRows = profileFollowQuery(ctx, [
-        eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
-        inArray(ProfileFollows.followeeProfileId, [...new Set(keys)]),
-      ]).as('profile_follow_rows');
-
       return await db
         .select({
-          profileId: profileFollowRows.followeeProfileId,
+          profileId: ProfileFollows.followeeProfileId,
           value: count(),
         })
-        .from(profileFollowRows)
-        .groupBy(profileFollowRows.followeeProfileId);
+        .from(ProfileFollows)
+        .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
+        .innerJoin(FolloweeProfiles, eq(FolloweeProfiles.id, ProfileFollows.followeeProfileId))
+        .where(
+          and(
+            eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
+            inArray(ProfileFollows.followeeProfileId, [...new Set(keys)]),
+            profileFollowAccessWhere({
+              ctx,
+              followerProfile: FollowerProfiles,
+              followeeProfile: FolloweeProfiles,
+            }),
+          ),
+        )
+        .groupBy(ProfileFollows.followeeProfileId);
     },
     key: (row) => row?.profileId ?? null,
   });
@@ -59,18 +67,26 @@ export const acceptedProfileFollowingCountLoader = (ctx: UserContext) =>
     name: 'profileFollow.acceptedFollowingCount',
     nullable: true,
     load: async (keys) => {
-      const profileFollowRows = profileFollowQuery(ctx, [
-        eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
-        inArray(ProfileFollows.followerProfileId, [...new Set(keys)]),
-      ]).as('profile_follow_rows');
-
       return await db
         .select({
-          profileId: profileFollowRows.followerProfileId,
+          profileId: ProfileFollows.followerProfileId,
           value: count(),
         })
-        .from(profileFollowRows)
-        .groupBy(profileFollowRows.followerProfileId);
+        .from(ProfileFollows)
+        .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
+        .innerJoin(FolloweeProfiles, eq(FolloweeProfiles.id, ProfileFollows.followeeProfileId))
+        .where(
+          and(
+            eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
+            inArray(ProfileFollows.followerProfileId, [...new Set(keys)]),
+            profileFollowAccessWhere({
+              ctx,
+              followerProfile: FollowerProfiles,
+              followeeProfile: FolloweeProfiles,
+            }),
+          ),
+        )
+        .groupBy(ProfileFollows.followerProfileId);
     },
     key: (row) => row?.profileId ?? null,
   });
