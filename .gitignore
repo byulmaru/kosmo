@@ -1,4 +1,9 @@
 node_modules
+.pnpm-store
 dist
 .turbo
+.pnpm-store/
 .DS_Store
+
+# Figma MCP 등 에이전트 도구가 레포 루트에 떨어뜨리는 임시 산출물(스크린샷 등).
+.tmp-*

@@ -1,3 +1,4 @@
+import './field';
 import './mutation';
 import './query';
 

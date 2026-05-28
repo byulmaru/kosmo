@@ -3,6 +3,7 @@ packages:
   - packages/*
 
 enableGlobalVirtualStore: true
+pmOnFail: ignore
 minimumReleaseAge: 4320
 allowBuilds:
   '@fission-ai/openspec': true

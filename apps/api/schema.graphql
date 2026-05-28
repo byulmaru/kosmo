@@ -60,6 +60,16 @@ interface FieldError implements Error {
   message: String!
 }
 
+input FollowProfileInput {
+  id: ID!
+}
+
+union FollowProfileResult = ConflictError | FollowProfileSuccess | NotFoundError
+
+type FollowProfileSuccess {
+  profileFollow: ProfileFollow!
+}
+
 interface ForbiddenError implements Error {
   code: String!
   message: String!
@@ -68,7 +78,9 @@ interface ForbiddenError implements Error {
 type Mutation {
   createProfile(input: CreateProfileInput!): CreateProfileResult!
   deleteProfile(input: DeleteProfileInput!): DeleteProfileResult!
+  followProfile(input: FollowProfileInput!): FollowProfileResult!
   selectProfile(input: SelectProfileInput!): SelectProfileResult!
+  unfollowProfile(input: UnfollowProfileInput!): UnfollowProfileResult!
   updateProfile(input: UpdateProfileInput!): UpdateProfileResult!
 }
 
@@ -81,6 +93,13 @@ type NotFoundError implements Error {
   message: String!
 }
 
+type PageInfo {
+  endCursor: String
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+}
+
 type PermissionDeniedError implements Error & ForbiddenError {
   code: String!
   message: String!
@@ -91,12 +110,19 @@ type Profile implements Node {
   createdAt: DateTime!
   displayName: String!
   followPolicy: ProfileFollowPolicy!
+  followers(after: String, before: String, first: Int, last: Int): ProfileFollowersConnection!
+  followersCount: Int!
+  following(after: String, before: String, first: Int, last: Int): ProfileFollowingConnection!
+  followingCount: Int!
   handle: String!
   id: ID!
+  viewerFollow: ProfileFollow
 }
 
 type ProfileFollow implements Node {
   createdAt: DateTime!
+  followee: Profile
+  follower: Profile
   id: ID!
   state: ProfileFollowState!
 }
@@ -110,6 +136,26 @@ enum ProfileFollowState {
   ACCEPTED
   PENDING
   REJECTED
+}
+
+type ProfileFollowersConnection {
+  edges: [ProfileFollowersConnectionEdge!]!
+  pageInfo: PageInfo!
+}
+
+type ProfileFollowersConnectionEdge {
+  cursor: String!
+  node: ProfileFollow!
+}
+
+type ProfileFollowingConnection {
+  edges: [ProfileFollowingConnectionEdge!]!
+  pageInfo: PageInfo!
+}
+
+type ProfileFollowingConnectionEdge {
+  cursor: String!
+  node: ProfileFollow!
 }
 
 enum ProfileState {
@@ -141,6 +187,16 @@ type Session implements Node {
   account: Account!
   id: ID!
   selectedProfile: Profile
+}
+
+input UnfollowProfileInput {
+  id: ID!
+}
+
+union UnfollowProfileResult = NotFoundError | UnfollowProfileSuccess
+
+type UnfollowProfileSuccess {
+  profileFollowId: ID
 }
 
 input UpdateProfileInput {
