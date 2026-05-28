@@ -149,7 +149,7 @@ API는 프로필 간 visible follow 관계를 GraphQL에서 조회할 수 있어
 #### Scenario: Count accepted follows
 
 - **WHEN** 클라이언트가 활성 프로필의 followersCount 또는 followingCount를 조회한다
-- **THEN** 시스템은 `ACCEPTED` follow 관계 중 상대 프로필도 활성 상태이고 viewer가 볼 수 있는 관계만 집계한다
+- **THEN** 시스템은 `ACCEPTED` follow 관계 중 상대 프로필도 활성 상태인 관계만 집계한다
 
 #### Scenario: Read public accepted follow
 

@@ -1,15 +1,11 @@
-import { db, ProfileFollows, Profiles } from '@kosmo/core/db';
-import { ProfileFollowState } from '@kosmo/core/enums';
+import { db, first, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { ProfileFollowState, ProfileState } from '@kosmo/core/enums';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
-import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
+import { and, asc, count, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { builder } from '@/graphql/builder';
 import { profileFollowAccessWhere } from '../access/follow';
-import {
-  acceptedProfileFollowersCountLoader,
-  acceptedProfileFollowingCountLoader,
-  viewerFollowLoader,
-} from '../loader/follow';
+import { viewerFollowLoader } from '../loader/follow';
 import { Profile, ProfileFollow } from '../ref';
 
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
@@ -98,16 +94,40 @@ builder.objectFields(Profile, (t) => ({
     },
   }),
   followersCount: t.int({
-    resolve: (profile, _, ctx) =>
-      acceptedProfileFollowersCountLoader(ctx)
-        .load(profile.id)
-        .then((row) => row?.value ?? 0),
+    resolve: async (profile) => {
+      const row = await db
+        .select({ value: count() })
+        .from(ProfileFollows)
+        .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
+        .where(
+          and(
+            eq(ProfileFollows.followeeProfileId, profile.id),
+            eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
+            eq(FollowerProfiles.state, ProfileState.ACTIVE),
+          ),
+        )
+        .then(first);
+
+      return row?.value ?? 0;
+    },
   }),
   followingCount: t.int({
-    resolve: (profile, _, ctx) =>
-      acceptedProfileFollowingCountLoader(ctx)
-        .load(profile.id)
-        .then((row) => row?.value ?? 0),
+    resolve: async (profile) => {
+      const row = await db
+        .select({ value: count() })
+        .from(ProfileFollows)
+        .innerJoin(FolloweeProfiles, eq(FolloweeProfiles.id, ProfileFollows.followeeProfileId))
+        .where(
+          and(
+            eq(ProfileFollows.followerProfileId, profile.id),
+            eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
+            eq(FolloweeProfiles.state, ProfileState.ACTIVE),
+          ),
+        )
+        .then(first);
+
+      return row?.value ?? 0;
+    },
   }),
   viewerFollow: t.field({
     type: ProfileFollow,
