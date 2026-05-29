@@ -1,39 +1,47 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-background: oklch(100% 0 0);
-  --color-foreground: oklch(21% 0.034 264.665);
-  --color-card: oklch(100% 0 0);
-  --color-card-foreground: oklch(21% 0.034 264.665);
-  --color-popover: oklch(100% 0 0);
-  --color-popover-foreground: oklch(21% 0.034 264.665);
-  --color-primary: oklch(96.2% 0.018 292.717);
-  --color-primary-foreground: oklch(44.7% 0.187 292.717);
-  --color-secondary: oklch(92% 0.006 264.665);
-  --color-secondary-foreground: oklch(37.3% 0.034 264.665);
-  --color-muted: oklch(92% 0.006 264.665);
-  --color-muted-foreground: oklch(55.1% 0.027 264.665);
-  --color-border: oklch(87.2% 0.01 264.665);
-  --color-input: oklch(87.2% 0.01 264.665);
-  --color-ring: oklch(60.6% 0.25 292.717);
-  --color-destructive: oklch(63.7% 0.237 25.331);
+  --color-bg: #ffffff;
+  --color-surface: #f6f6f6;
+  --color-card: #ffffff;
+  --color-text-primary: #111111;
+  --color-text-secondary: #777777;
+  --color-border: #eaeaea;
+  --color-primary: #fce79a;
+  --color-danger: #aa1010;
+  --color-like: #fcd5cf;
+  --color-more: #61a3f9;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
 }
 
 :root {
-  --color-background: oklch(100% 0 0);
-  --color-foreground: oklch(21% 0.034 264.665);
-  --color-card: oklch(100% 0 0);
-  --color-card-foreground: oklch(21% 0.034 264.665);
-  --color-popover: oklch(100% 0 0);
-  --color-popover-foreground: oklch(21% 0.034 264.665);
-  --color-primary: oklch(96.2% 0.018 292.717);
-  --color-primary-foreground: oklch(44.7% 0.187 292.717);
-  --color-secondary: oklch(92% 0.006 264.665);
-  --color-secondary-foreground: oklch(37.3% 0.034 264.665);
-  --color-muted: oklch(92% 0.006 264.665);
-  --color-muted-foreground: oklch(55.1% 0.027 264.665);
-  --color-border: oklch(87.2% 0.01 264.665);
-  --color-input: oklch(87.2% 0.01 264.665);
-  --color-ring: oklch(60.6% 0.25 292.717);
-  --color-destructive: oklch(63.7% 0.237 25.331);
+  color-scheme: light;
+  --color-bg: #ffffff;
+  --color-surface: #f6f6f6;
+  --color-card: #ffffff;
+  --color-text-primary: #111111;
+  --color-text-secondary: #777777;
+  --color-border: #eaeaea;
+  --color-primary: #fce79a;
+  --color-danger: #aa1010;
+  --color-like: #fcd5cf;
+  --color-more: #61a3f9;
+}
+
+:root[data-theme='dark'],
+.dark {
+  color-scheme: dark;
+  --color-bg: #111111;
+  --color-surface: #222222;
+  --color-card: #1c1c1e;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #777777;
+  --color-border: #333333;
+  --color-primary: #fce79a;
+  --color-danger: #aa1010;
+  --color-like: #fcd5cf;
+  --color-more: #61a3f9;
 }

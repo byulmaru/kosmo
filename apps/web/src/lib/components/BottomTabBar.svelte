@@ -38,7 +38,7 @@
     {@const active = isActive(tab.href)}
     {#if tab.label === '메뉴'}
       <button
-        class="grid min-h-14 place-items-center gap-0.5 py-2 text-sm font-semibold text-muted-foreground"
+        class={`grid min-h-14 place-items-center gap-0.5 py-2 text-sm font-semibold ${active ? 'bg-primary text-text-primary' : 'text-text-secondary'}`}
         type="button"
         onclick={onMenuClick}
         aria-label="사이드바 메뉴 열기"
@@ -59,7 +59,7 @@
       </button>
     {:else}
       <a
-        class={`grid min-h-14 place-items-center gap-0.5 py-2 text-sm font-semibold ${active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+        class={`grid min-h-14 place-items-center gap-0.5 py-2 text-sm font-semibold ${active ? 'bg-primary text-text-primary' : 'text-text-secondary'}`}
         href={tab.href}
         aria-current={active ? 'page' : undefined}
       >
