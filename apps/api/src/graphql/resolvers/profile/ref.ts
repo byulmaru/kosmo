@@ -8,7 +8,6 @@ import {
 import { and, eq, inArray } from 'drizzle-orm';
 import { createObjectRef } from '@/graphql/utils';
 import { profileFollowByIdLoader } from './loader/follow';
-import type { ProfileFollowRow } from './loader/follow';
 
 export const Profile = createObjectRef('Profile', TableDiscriminator.Profiles, (ids) =>
   db
@@ -48,11 +47,7 @@ AccountProfile.implement({
 export const ProfileFollow = createObjectRef(
   'ProfileFollow',
   TableDiscriminator.ProfileFollows,
-  async (ids, ctx) => {
-    const rows = await profileFollowByIdLoader(ctx).loadMany(ids);
-
-    return rows.filter((row): row is ProfileFollowRow => row !== null && !(row instanceof Error));
-  },
+  (ids, ctx) => profileFollowByIdLoader(ctx).loadMany(ids),
 );
 
 ProfileFollow.implement({
