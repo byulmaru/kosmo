@@ -11,6 +11,6 @@
 
 ## Codex worktree setup
 
-- `.codex/environments/environment.toml`의 setup script는 `mise trust`와 `pnpm install` 전에 원격 `refs/heads/main`을 `refs/remotes/origin/main`으로 fetch하고, 해당 ref가 실제로 생겼는지 검증한 뒤 로컬 `main` worktree 또는 `main` ref를 fast-forward로 최신화한다.
+- `.codex/environments/environment.toml`의 setup script는 `mise trust`와 `pnpm install` 전에 원격 `refs/heads/main`을 `refs/remotes/origin/main`으로 non-forcing fetch하고, 해당 ref가 실제로 생겼는지 검증한 뒤 로컬 `main` worktree 또는 `main` ref를 fast-forward로 최신화한다.
 - 새 Codex worktree의 현재 HEAD가 `origin/main`의 조상인 경우에는 현재 worktree도 `origin/main`까지 fast-forward하거나 detached HEAD를 `origin/main`으로 옮긴다.
 - 로컬 `main`이 `origin/main`으로 fast-forward될 수 없는 상태라면 setup에서 자동 갱신을 거부하고 실패시킨다.
