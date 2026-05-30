@@ -47,7 +47,11 @@ AccountProfile.implement({
 export const ProfileFollow = createObjectRef(
   'ProfileFollow',
   TableDiscriminator.ProfileFollows,
-  (ids, ctx) => profileFollowByIdLoader(ctx).loadMany(ids),
+  async (ids, ctx) => {
+    const loader = profileFollowByIdLoader(ctx);
+
+    return Promise.all(ids.map((id) => loader.load(id)));
+  },
 );
 
 ProfileFollow.implement({
