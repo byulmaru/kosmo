@@ -24,6 +24,12 @@ export const ApplicationType = {
 } as const;
 export type ApplicationType = keyof typeof ApplicationType;
 
+export const MediaSource = {
+  LOCAL: 'LOCAL',
+  REMOTE: 'REMOTE',
+} as const;
+export type MediaSource = keyof typeof MediaSource;
+
 export const ProfileFollowState = {
   PENDING: 'PENDING',
   ACCEPTED: 'ACCEPTED',

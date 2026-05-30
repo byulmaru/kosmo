@@ -11,6 +11,12 @@
 
 - Write review comments and review summaries in Korean.
 
+## OpenSpec Workflow
+
+- When creating or updating OpenSpec specs before implementation, explain the resulting spec to the user in Korean.
+- Before implementation, use the Question tool as much as practical to settle unresolved requirements and implementation choices.
+- If additional unresolved requirements or implementation choices appear after an initial question round, ask follow-up questions repeatedly until the relevant decisions are settled.
+
 ## Memory
 
 - Before working on a task, check whether any `memory/*.md` file applies to the topic.

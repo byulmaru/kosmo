@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { index, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
+import { index, integer, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
 import * as Enum from './enums';
 import { createId, TableDiscriminator } from './id';
 import { datetime } from './types';
@@ -84,6 +84,44 @@ export const ApplicationAuthorizations = pgTable(
     unique().on(table.applicationId, table.accountId, table.profileId),
     index().on(table.accountId),
     index().on(table.applicationId),
+  ],
+);
+
+export const Files = pgTable('file', {
+  id: uuid('id')
+    .primaryKey()
+    .$defaultFn(() => createId(TableDiscriminator.Files)),
+  storageKey: text('storage_key').unique().notNull(),
+  sha256: text('sha256'),
+  mimeType: text('mime_type').notNull(),
+  byteSize: integer('byte_size'),
+  width: integer('width'),
+  height: integer('height'),
+  createdAt: createdAt(),
+});
+
+export const Media = pgTable(
+  'media',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => createId(TableDiscriminator.Media)),
+    source: Enum.mediaSource('source').notNull(),
+    accountId: uuid('account_id').references(() => Accounts.id),
+    profileId: uuid('profile_id')
+      .notNull()
+      .references(() => Profiles.id),
+    originalFileId: uuid('original_file_id').references(() => Files.id),
+    thumbnailFileId: uuid('thumbnail_file_id').references(() => Files.id),
+    remoteUrl: text('remote_url'),
+    remoteFetchedAt: datetime('remote_fetched_at'),
+    thumbhash: text('thumbhash'),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index().on(table.accountId),
+    index().on(table.profileId),
+    index().on(table.remoteUrl),
   ],
 );
 
