@@ -38,6 +38,11 @@ Upload endpoint는 `image`라는 단일 file field를 가진 `multipart/form-dat
 - **WHEN** 인증된 클라이언트가 endpoint 정책 상수의 최대 업로드 크기보다 큰 이미지를 업로드한다
 - **THEN** 시스템은 HTTP 413 JSON error response를 반환한다
 
+#### Scenario: 요청 body 크기 초과
+
+- **WHEN** 인증된 클라이언트가 endpoint 정책 상수의 최대 request body 크기보다 큰 multipart 요청을 보낸다
+- **THEN** 시스템은 multipart form validation 전에 HTTP 413 JSON error response를 반환한다
+
 ### Requirement: R2 object storage
 
 Upload endpoint는 입력 파일 stream을 설정된 Cloudflare R2 bucket에 서버 생성 object key로 저장해야 하며 client filename을 storage key로 사용하면 안 된다(MUST NOT).

@@ -14,9 +14,9 @@
 
 ## 3. Upload endpoint 동작
 
-- [x] 3.1 `c.get('context').session` 인증 session을 요구하고 anonymous 요청은 HTTP 401 JSON으로 반환한다.
+- [x] 3.1 multipart parsing 전에 `c.get('context').session` 인증 session과 선택된 actor profile을 요구하고 anonymous 요청은 HTTP 401 JSON으로 반환한다.
 - [x] 3.2 `@hono/standard-validator`와 zod schema로 `multipart/form-data`를 파싱하고 `image` file field를 요구한다.
-- [x] 3.3 원본 업로드 최대 byte size를 강제하고 초과 시 HTTP 413 JSON으로 반환한다.
+- [x] 3.3 64MiB request body limit과 10MiB 원본 이미지 file size limit을 강제하고 초과 시 HTTP 413 JSON으로 반환한다.
 - [x] 3.4 허용된 이미지 MIME type이 아닌 파일은 HTTP 400 JSON으로 반환한다.
 - [x] 3.5 `uploads/yyyy/mm/` 형식의 object key를 서버에서 생성한다.
 - [x] 3.6 입력 파일 stream을 R2에 업로드하고 R2 실패 시 HTTP 502 JSON으로 반환한다.

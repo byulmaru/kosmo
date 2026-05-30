@@ -8,7 +8,7 @@
 
 - 기존 `/graphql`과 별개로 루트 경로에 `POST /upload` REST 엔드포인트를 추가한다.
 - `multipart/form-data`의 `image` 파일 필드를 받는다.
-- 업로드 최대 크기는 endpoint 정책 상수로 제한한다.
+- 요청 body는 64MiB 정책 상수로 제한하고, 원본 이미지 파일은 10MiB 정책 상수로 제한한다.
 - 허용된 이미지 MIME type이 아닌 입력은 거부한다.
 - 파일 bytes는 R2에 스트리밍 업로드한다.
 - `File`은 우리 R2에 저장된 물리 파일을 나타낸다.
@@ -37,7 +37,7 @@
 - `packages/core/env.ts`: R2 환경변수를 zod schema로 파싱해 export한다.
 - `packages/core/db/`: `file`, `media`, `media_source`, table discriminator, relation을 추가한다.
 - 런타임 설정: R2 endpoint, bucket, access key, secret key, public base URL을 사용한다.
-- 업로드 최대 크기는 endpoint 정책 상수로 관리한다.
+- 요청 body와 원본 이미지 파일 최대 크기는 endpoint 정책 상수로 관리한다.
 
 ## 추가 환경변수
 

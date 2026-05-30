@@ -2,11 +2,14 @@ import { randomUUID } from 'node:crypto';
 import { sValidator } from '@hono/standard-validator';
 import { db, Files, firstOrThrowWith, Media } from '@kosmo/core/db';
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { deleteR2Object, getPublicUrl, uploadR2Object } from '../utils/r2';
+import type { Context } from 'hono';
 import type { Env } from '../context';
 
 const MAX_UPLOAD_SIZE = 10 * 1024 * 1024;
+const MAX_UPLOAD_BODY_SIZE = 64 * 1024 * 1024;
 const ALLOWED_IMAGE_MIME_TYPES = [
   'image/avif',
   'image/gif',
@@ -38,8 +41,35 @@ const cleanupUploadedObjects = async (keys: string[]) => {
   await Promise.allSettled(keys.map((key) => deleteR2Object(key)));
 };
 
+const getUploadSession = (c: Context<Env>) => {
+  const { session } = c.get('context');
+  if (!session?.profileId) {
+    throw new Error('upload session middleware is required');
+  }
+
+  return {
+    accountId: session.accountId,
+    profileId: session.profileId,
+  };
+};
+
 upload.post(
   '/upload',
+  async (c, next) => {
+    const { session } = c.get('context');
+    if (!session) {
+      return c.json(jsonError('Authentication required'), 401);
+    }
+    if (!session.profileId) {
+      return c.json(jsonError('Profile selection required'), 403);
+    }
+
+    await next();
+  },
+  bodyLimit({
+    maxSize: MAX_UPLOAD_BODY_SIZE,
+    onError: (c) => c.json(jsonError('image is too large'), 413),
+  }),
   sValidator('form', uploadFormSchema, (result, c) => {
     if (result.success) {
       return;
@@ -51,15 +81,7 @@ upload.post(
     return c.json(jsonError(message), message === 'image is too large' ? 413 : 400);
   }),
   async (c) => {
-    const { session } = c.get('context');
-    if (!session) {
-      return c.json(jsonError('Authentication required'), 401);
-    }
-    if (!session.profileId) {
-      return c.json(jsonError('Profile selection required'), 403);
-    }
-
-    const profileId = session.profileId;
+    const { accountId, profileId } = getUploadSession(c);
     const { image } = c.req.valid('form');
     const key = getObjectKey();
 
@@ -92,7 +114,7 @@ upload.post(
         const media = await tx
           .insert(Media)
           .values({
-            accountId: session.accountId,
+            accountId,
             originalFileId: file.id,
             profileId,
             source: 'LOCAL',
