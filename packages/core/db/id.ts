@@ -25,7 +25,7 @@ const assertTableDiscriminator = (tableDiscriminator: number) => {
 };
 
 const formatUuid = (bytes: Uint8Array) => {
-  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  const hex = bytes.toHex();
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 };
 

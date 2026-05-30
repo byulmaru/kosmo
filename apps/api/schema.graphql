@@ -1,6 +1,7 @@
 type Account implements Node {
   id: ID!
   name: String!
+  profiles: [Profile!]!
 }
 
 type AccountProfile implements Node {
@@ -167,7 +168,6 @@ enum ProfileState {
 type Query {
   currentSession: Session
   me: Account
-  myProfiles: [Profile!]!
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
   profileByHandle(handle: String!): Profile

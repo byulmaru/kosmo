@@ -1,50 +1,81 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { createQuery } from '@mearie/svelte';
-  import { sidebarProfilesQuery } from '$lib/graphql/sidebar';
+  import { createMutation, createQuery } from '@mearie/svelte';
+  import { graphql } from '$mearie';
+  import type { DataOf } from '@mearie/svelte';
 
   type Props = {
     surface?: 'desktop' | 'drawer';
     onNavigate?: () => void;
   };
 
-  type ProfileSummary = {
-    id: string;
-    handle: string;
-    displayName: string;
-    followersCount?: number;
-    followingCount?: number;
-  };
-
-  type GraphQLResponse<T> = {
-    data?: T;
-    errors?: { message: string }[];
-  };
-
-  type CreateProfileResponse = {
-    createProfile:
-      | {
-          __typename: 'CreateProfileSuccess';
-          profile: ProfileSummary;
+  const sidebarProfilesQuery = graphql(`
+    query SidebarProfilesQuery {
+      currentSession {
+        selectedProfile {
+          id
+          handle
+          displayName
+          followersCount
+          followingCount
         }
-      | {
-          __typename: 'ConflictError';
-          message: string;
-          field?: string | null;
-        };
-  };
-
-  type SelectProfileResponse = {
-    selectProfile:
-      | {
-          __typename: 'SelectProfileSuccess';
-          profile: ProfileSummary;
+      }
+      me {
+        id
+        profiles {
+          id
+          handle
+          displayName
+          followersCount
+          followingCount
         }
-      | {
-          __typename: 'NotFoundError';
-          message: string;
-        };
-  };
+      }
+    }
+  `);
+
+  const selectSidebarProfileMutation = graphql(`
+    mutation SelectSidebarProfileMutation($id: ID!) {
+      selectProfile(input: { id: $id }) {
+        __typename
+        ... on SelectProfileSuccess {
+          profile {
+            id
+            handle
+            displayName
+            followersCount
+            followingCount
+          }
+        }
+        ... on NotFoundError {
+          message
+        }
+      }
+    }
+  `);
+
+  const createSidebarProfileMutation = graphql(`
+    mutation CreateSidebarProfileMutation($handle: String!) {
+      createProfile(input: { handle: $handle }) {
+        __typename
+        ... on CreateProfileSuccess {
+          profile {
+            id
+            handle
+            displayName
+            followersCount
+            followingCount
+          }
+        }
+        ... on ConflictError {
+          message
+          field
+        }
+      }
+    }
+  `);
+
+  type SidebarProfilesData = DataOf<typeof sidebarProfilesQuery>;
+  type ProfileSummary = NonNullable<SidebarProfilesData['me']>['profiles'][number];
 
   let { surface = 'desktop', onNavigate = () => {} }: Props = $props();
 
@@ -79,6 +110,8 @@
   ];
 
   const profileQuery = createQuery(sidebarProfilesQuery);
+  const [selectSidebarProfile] = createMutation(selectSidebarProfileMutation);
+  const [createSidebarProfile] = createMutation(createSidebarProfileMutation);
   let profileError = $state<string | null>(null);
   let profileCreationError = $state<string | null>(null);
   let profileSwitcherOpen = $state(false);
@@ -106,7 +139,7 @@
   const formatCount = (count: number) => new Intl.NumberFormat('ko-KR').format(count);
 
   const creatingOrSwitching = $derived(profileActionLoading || profileQuery.loading);
-  const sidebarProfiles = $derived(profilesOverride ?? profileQuery.data?.myProfiles ?? []);
+  const sidebarProfiles = $derived(profilesOverride ?? profileQuery.data?.me?.profiles ?? []);
   const sidebarActiveProfile = $derived(
     selectedProfileOverride ?? profileQuery.data?.currentSession?.selectedProfile ?? null,
   );
@@ -119,25 +152,6 @@
     }
   };
 
-  const requestGraphQL = async (body: string) => {
-    const response = await fetch('/graphql', {
-      body,
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
-    const result = (await response.json()) as GraphQLResponse<unknown>;
-
-    if (!response.ok || result.errors?.length) {
-      throw new Error(result.errors?.[0]?.message ?? 'GraphQL 요청에 실패했습니다.');
-    }
-
-    if (!result.data) {
-      throw new Error('GraphQL 응답이 비어 있습니다.');
-    }
-
-    return result.data;
-  };
-
   const chooseProfile = async (id: string) => {
     if (sidebarActiveProfile?.id === id || creatingOrSwitching) {
       return;
@@ -147,33 +161,16 @@
     profileActionLoading = true;
 
     try {
-      const data = (await requestGraphQL(
-        JSON.stringify({
-          query: `mutation SelectSidebarProfile($id: ID!) {
-          selectProfile(input: { id: $id }) {
-            __typename
-            ... on SelectProfileSuccess {
-              profile { id handle displayName }
-            }
-            ... on NotFoundError { message }
-          }
-        }`,
-          variables: { id: id },
-        }),
-      )) as SelectProfileResponse;
+      const data = await selectSidebarProfile({ id });
 
       if (data.selectProfile.__typename !== 'SelectProfileSuccess') {
         profileError = data.selectProfile.message;
         return;
       }
 
-      selectedProfileOverride = sidebarProfiles.find(
-        (profile: ProfileSummary) => profile.id === id,
-      ) ?? {
-        ...data.selectProfile.profile,
-        followersCount: 0,
-        followingCount: 0,
-      };
+      selectedProfileOverride =
+        sidebarProfiles.find((profile: ProfileSummary) => profile.id === id) ??
+        data.selectProfile.profile;
       profileSwitcherOpen = false;
       profileCreationOpen = false;
       profileQuery.refetch();
@@ -198,48 +195,18 @@
     profileActionLoading = true;
 
     try {
-      const created = (await requestGraphQL(
-        JSON.stringify({
-          query: `mutation CreateSidebarProfile($handle: String!) {
-          createProfile(input: { handle: $handle }) {
-            __typename
-            ... on CreateProfileSuccess {
-              profile { id handle displayName }
-            }
-            ... on ConflictError { message field }
-          }
-        }`,
-          variables: { handle: handle },
-        }),
-      )) as CreateProfileResponse;
+      const created = await createSidebarProfile({ handle });
       if (created.createProfile.__typename !== 'CreateProfileSuccess') {
         profileCreationError = created.createProfile.message;
         return;
       }
 
-      const createdProfile = {
-        ...created.createProfile.profile,
-        followersCount: 0,
-        followingCount: 0,
-      };
+      const createdProfile = created.createProfile.profile;
 
       newProfileHandle = '';
       profileCreationOpen = false;
 
-      const selected = (await requestGraphQL(
-        JSON.stringify({
-          query: `mutation SelectCreatedSidebarProfile($id: ID!) {
-          selectProfile(input: { id: $id }) {
-            __typename
-            ... on SelectProfileSuccess {
-              profile { id handle displayName }
-            }
-            ... on NotFoundError { message }
-          }
-        }`,
-          variables: { id: created.createProfile.profile.id },
-        }),
-      )) as SelectProfileResponse;
+      const selected = await selectSidebarProfile({ id: created.createProfile.profile.id });
       if (selected.selectProfile.__typename !== 'SelectProfileSuccess') {
         profileError = selected.selectProfile.message;
         return;
