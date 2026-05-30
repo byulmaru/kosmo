@@ -4,15 +4,19 @@ import type { UserContext } from '@/context';
 
 export const globalIdMap = new Map<number, string>();
 
-type LoadableRow<T> = T | null;
+type LoadableRow<T> = T | null | Error;
 
 const alignByIds = <T extends { id: string }>(
   ids: readonly string[],
   rows: readonly LoadableRow<T>[],
-): LoadableRow<T>[] => {
+): (T | null)[] => {
   const rowsById = new Map<string, T>();
 
   for (const row of rows) {
+    if (row instanceof Error) {
+      throw row;
+    }
+
     if (row) {
       rowsById.set(row.id, row);
     }
