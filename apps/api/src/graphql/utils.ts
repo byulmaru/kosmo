@@ -9,11 +9,14 @@ type LoadableRow<T> = T | null | Error;
 const alignByIds = <T extends { id: string }>(
   ids: readonly string[],
   rows: readonly LoadableRow<T>[],
-): (T | null)[] => {
+): LoadableRow<T>[] => {
   const rowsById = new Map<string, T>();
-  for (const row of rows) {
+  const errorsByIndex = new Map<number, Error>();
+
+  for (const [index, row] of rows.entries()) {
     if (row instanceof Error) {
-      throw row;
+      errorsByIndex.set(index, row);
+      continue;
     }
 
     if (row) {
@@ -21,7 +24,7 @@ const alignByIds = <T extends { id: string }>(
     }
   }
 
-  return ids.map((id) => rowsById.get(id) ?? null);
+  return ids.map((id, index) => errorsByIndex.get(index) ?? rowsById.get(id) ?? null);
 };
 
 export const createObjectRef = <TRow extends { id: string }>(
