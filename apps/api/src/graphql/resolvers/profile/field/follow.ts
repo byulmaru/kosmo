@@ -95,6 +95,7 @@ builder.objectFields(Profile, (t) => ({
   }),
   followersCount: t.int({
     resolve: async (profile) => {
+      // TODO: follower 수를 Profile DB 컬럼으로 옮기면 이 count 쿼리를 제거한다.
       const row = await db
         .select({ value: count() })
         .from(ProfileFollows)
@@ -113,6 +114,7 @@ builder.objectFields(Profile, (t) => ({
   }),
   followingCount: t.int({
     resolve: async (profile) => {
+      // TODO: following 수를 Profile DB 컬럼으로 옮기면 이 count 쿼리를 제거한다.
       const row = await db
         .select({ value: count() })
         .from(ProfileFollows)
