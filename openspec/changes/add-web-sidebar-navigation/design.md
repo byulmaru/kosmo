@@ -24,7 +24,7 @@
 - 새 top-level route shell을 도입하지 않고 기존 route group을 유지하며 `(tabs)/+layout.svelte`를 확장한다. 이렇게 하면 route migration 없이 기존 페이지를 유지하면서 데스크톱/모바일 내비게이션 surface를 추가할 수 있다.
 - 데스크톱과 drawer surface에서 공유하는 내비게이션 항목 렌더링을 소유하는 사이드바 컴포넌트를 만든다. 전환 기간에는 `BottomTabBar`를 모바일 하단 내비게이션으로 유지할 수 있지만, drawer는 PROD-77에서 요구하는 사이드바 동작을 제공한다.
 - 사이드바 폭은 Figma drawer 기준인 `320px`로 맞춘다. 모바일 drawer는 오른쪽 모서리 `16px` radius와 왼쪽에서 열린 surface shadow를 사용하고, 데스크톱 고정 사이드바는 같은 콘텐츠 폭에 border만 적용한다.
-- 상단 프로필 영역은 `240px` 높이의 히어로로 구성한다. 현재 API가 banner image, avatar image, follower/following count를 제공하지 않으므로 해당 값은 더미 데이터로 만들지 않고 gradient banner, initial avatar, `0` count placeholder로 표시한다.
+- 상단 프로필 영역은 `260px` 높이의 히어로로 구성한다. 현재 API가 banner image, avatar image, follower/following count를 제공하지 않으므로 해당 값은 더미 데이터로 만들지 않고 gradient banner, initial avatar, `0` count placeholder로 표시한다.
 - 메뉴 영역은 Figma 기준 `16px` padding, `264px` row 폭, `45px` row 높이, `8px` radius, `12px` icon/text gap을 사용한다. active item은 primary filled CTA가 아니라 옅은 회색 배경과 굵은 글꼴로 현재 위치를 표시한다.
 - 왼쪽 edge swipe 제스처는 새 gesture dependency를 추가하지 않고 pointer event로 구현한다. 이 제스처는 작고 shell 내부에 한정되며 새 패키지가 필요하지 않다.
 - 웹 앱에 mock 프로필 상태를 하드코딩하지 않고 인증된 GraphQL 필드로 프로필 목록을 노출한다. 현재 선택 프로필은 세션 상태인 `currentSession.selectedProfile`로 읽고, 사이드바는 `selectProfile`이 사용하는 계정/세션 상태를 반영해야 한다.
