@@ -1,6 +1,7 @@
 type Account implements Node {
   id: ID!
   name: String!
+  profiles: [Profile!]!
 }
 
 type AccountProfile implements Node {

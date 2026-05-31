@@ -1,6 +1,12 @@
 <script lang="ts">
   import { page } from '$app/state';
 
+  type Props = {
+    onMenuClick?: () => void;
+  };
+
+  let { onMenuClick = () => {} }: Props = $props();
+
   const tabs = [
     { href: '/', label: '홈', path: 'M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z' },
     {
@@ -25,29 +31,52 @@
 </script>
 
 <nav
-  class="bg-card border-border fixed inset-x-0 bottom-0 grid grid-cols-5 border-t pb-[env(safe-area-inset-bottom)]"
+  class="bg-card border-border fixed inset-x-0 bottom-0 grid grid-cols-5 border-t pb-[env(safe-area-inset-bottom)] lg:hidden"
   aria-label="주요 메뉴"
 >
   {#each tabs as tab}
     {@const active = isActive(tab.href)}
-    <a
-      class={`grid min-h-14 place-items-center gap-0.5 py-2 text-sm font-semibold ${active ? 'bg-primary text-text-primary' : 'text-text-secondary'}`}
-      href={tab.href}
-      aria-current={active ? 'page' : undefined}
-    >
-      <svg
-        class="size-6"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
+    {#if tab.label === '메뉴'}
+      <button
+        class={`grid min-h-14 place-items-center gap-0.5 py-2 text-sm font-semibold ${active ? 'bg-primary text-text-primary' : 'text-text-secondary'}`}
+        type="button"
+        onclick={onMenuClick}
+        aria-label="사이드바 메뉴 열기"
       >
-        <path d={tab.path} />
-      </svg>
-      <span>{tab.label}</span>
-    </a>
+        <svg
+          class="size-6"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d={tab.path} />
+        </svg>
+        <span>{tab.label}</span>
+      </button>
+    {:else}
+      <a
+        class={`grid min-h-14 place-items-center gap-0.5 py-2 text-sm font-semibold ${active ? 'bg-primary text-text-primary' : 'text-text-secondary'}`}
+        href={tab.href}
+        aria-current={active ? 'page' : undefined}
+      >
+        <svg
+          class="size-6"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d={tab.path} />
+        </svg>
+        <span>{tab.label}</span>
+      </a>
+    {/if}
   {/each}
 </nav>
