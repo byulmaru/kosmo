@@ -8,7 +8,12 @@ set -eu
 
 cd "${CODEX_WORKTREE_PATH:?CODEX_WORKTREE_PATH is required}"
 
-git fetch origin main:refs/remotes/origin/main
+git fetch origin refs/heads/main:refs/remotes/origin/main
+
+if ! git show-ref --verify --quiet refs/remotes/origin/main; then
+  echo "origin/main was not fetched; verify the remote default branch before continuing." >&2
+  exit 1
+fi
 
 main_worktree="$(
   git worktree list --porcelain |
