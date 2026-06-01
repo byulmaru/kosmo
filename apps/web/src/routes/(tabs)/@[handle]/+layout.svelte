@@ -34,11 +34,21 @@
   const profile = $derived(query.data?.profileByHandle ?? null);
 </script>
 
-<section class="w-[min(100%,36rem)]">
+<!--
+  공유 (tabs) 셸의 main은 `flex items-center px-6 py-8`로 콘텐츠를 세로 중앙 정렬 + 패딩한다.
+  프로필은 피드처럼 보여야 하므로 이 라우트에서만:
+  - self-start 로 탑정렬(공유 main의 items-center 무시)
+  - 모바일: 음수 마진으로 main 좌우/상단 패딩을 상쇄해 커버 풀블리드(-mx-6 -mt-8 + w-[calc(100%+3rem)])
+  - 데스크톱(lg): 음수 마진 리셋 + 고정폭 컬럼(max-w-[600px])
+  공유 셸/다른 탭 페이지는 건드리지 않는다.
+-->
+<section
+  class="-mx-6 -mt-8 w-[calc(100%+3rem)] self-start lg:mx-0 lg:mt-0 lg:w-full lg:max-w-[600px]"
+>
   {#if query.loading}
     <div aria-hidden="true">
-      <div class="bg-surface h-[104px] w-full animate-pulse rounded-lg"></div>
-      <div class="px-1">
+      <div class="bg-surface h-[104px] w-full animate-pulse"></div>
+      <div class="px-4">
         <div class="border-bg bg-surface -mt-10 size-20 animate-pulse rounded-full border-4"></div>
         <div class="mt-4 flex flex-col gap-2.5">
           <TextSkeleton width="md" class="h-5" />
@@ -49,7 +59,7 @@
     </div>
     <span class="sr-only" role="status">프로필을 불러오는 중입니다.</span>
   {:else if query.error}
-    <div class="py-12 text-center" role="alert">
+    <div class="px-4 py-12 text-center" role="alert">
       <p class="text-text-primary text-base font-semibold">프로필을 불러오지 못했어요</p>
       <p class="text-text-secondary mt-1 text-sm">잠시 후 다시 시도해주세요.</p>
       <button
@@ -61,7 +71,7 @@
       </button>
     </div>
   {:else if !profile}
-    <div class="py-12 text-center">
+    <div class="px-4 py-12 text-center">
       <p class="text-text-primary text-base font-semibold">프로필을 찾을 수 없어요</p>
       <p class="text-text-secondary mt-1 text-sm">
         @{page.params.handle} 프로필이 존재하지 않아요.
@@ -69,8 +79,8 @@
     </div>
   {:else}
     <header class="mb-6">
-      <div class="bg-primary h-[104px] w-full rounded-lg"></div>
-      <div class="px-1">
+      <div class="bg-primary h-[104px] w-full"></div>
+      <div class="px-4">
         <div
           class="border-bg bg-surface text-text-secondary -mt-10 flex size-20 items-center justify-center rounded-full border-4 text-3xl font-bold"
         >
