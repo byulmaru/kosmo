@@ -2,6 +2,7 @@
   import { page } from '$app/state';
   import { createQuery } from '@mearie/svelte';
   import { graphql } from '$mearie';
+  import TextSkeleton from '$lib/components/TextSkeleton.svelte';
 
   let { children } = $props();
 
@@ -35,11 +36,37 @@
 
 <section class="w-[min(100%,36rem)]">
   {#if query.loading}
-    <p class="text-text-secondary text-base">프로필을 불러오는 중입니다…</p>
+    <div aria-hidden="true">
+      <div class="bg-surface h-[104px] w-full animate-pulse rounded-lg"></div>
+      <div class="px-1">
+        <div class="border-bg bg-surface -mt-10 size-20 animate-pulse rounded-full border-4"></div>
+        <div class="mt-4 flex flex-col gap-2.5">
+          <TextSkeleton width="md" class="h-5" />
+          <TextSkeleton width="sm" />
+          <TextSkeleton width="lg" class="mt-2" />
+        </div>
+      </div>
+    </div>
+    <span class="sr-only" role="status">프로필을 불러오는 중입니다.</span>
   {:else if query.error}
-    <p class="text-text-secondary text-base">프로필을 불러오지 못했습니다.</p>
+    <div class="py-12 text-center" role="alert">
+      <p class="text-text-primary text-base font-semibold">프로필을 불러오지 못했어요</p>
+      <p class="text-text-secondary mt-1 text-sm">잠시 후 다시 시도해주세요.</p>
+      <button
+        class="border-border text-text-primary mt-4 rounded-lg border px-4 py-2 text-sm font-bold"
+        type="button"
+        onclick={() => query.refetch()}
+      >
+        다시 시도
+      </button>
+    </div>
   {:else if !profile}
-    <p class="text-text-primary text-base font-semibold">프로필을 찾을 수 없습니다.</p>
+    <div class="py-12 text-center">
+      <p class="text-text-primary text-base font-semibold">프로필을 찾을 수 없어요</p>
+      <p class="text-text-secondary mt-1 text-sm">
+        @{page.params.handle} 프로필이 존재하지 않아요.
+      </p>
+    </div>
   {:else}
     <header class="mb-6">
       <div class="bg-primary h-[104px] w-full rounded-lg"></div>
