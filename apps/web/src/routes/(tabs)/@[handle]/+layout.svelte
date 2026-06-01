@@ -38,13 +38,11 @@
   공유 (tabs) 셸의 main은 `flex items-center px-6 py-8`로 콘텐츠를 세로 중앙 정렬 + 패딩한다.
   프로필은 피드처럼 보여야 하므로 이 라우트에서만:
   - self-start 로 탑정렬(공유 main의 items-center 무시)
-  - 모바일: 음수 마진으로 main 좌우/상단 패딩을 상쇄해 커버 풀블리드(-mx-6 -mt-8 + w-[calc(100%+3rem)])
-  - 데스크톱(lg): 음수 마진 리셋 + 고정폭 컬럼(max-w-[600px])
+  - 음수 마진으로 main 좌우/상단 패딩(px-6 py-8)을 상쇄해 컬럼이 플러시되게 한다.
+    모바일은 화면 끝까지 풀블리드, 데스크톱은 폭만 600px로 고정(여백 없이 사이드바에 붙음).
   공유 셸/다른 탭 페이지는 건드리지 않는다.
 -->
-<section
-  class="-mx-6 -mt-8 w-[calc(100%+3rem)] self-start lg:mx-0 lg:mt-0 lg:w-full lg:max-w-[600px]"
->
+<section class="-mx-6 -mt-8 w-[calc(100%+3rem)] self-start lg:w-[600px]">
   {#if query.loading}
     <div aria-hidden="true">
       <div class="bg-surface h-[104px] w-full animate-pulse"></div>
