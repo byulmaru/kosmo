@@ -438,10 +438,17 @@
   >
     <nav class="flex w-[264px] flex-col gap-1" aria-label="주요 메뉴">
       {#each navItems as item}
-        {@const active = isActive(item)}
+        {@const resolvedHref =
+          item.label === '프로필' && sidebarActiveProfile?.handle
+            ? `/@${sidebarActiveProfile.handle}`
+            : item.href}
+        {@const active =
+          item.label === '프로필'
+            ? resolvedHref.startsWith('/@') && page.url.pathname === resolvedHref
+            : isActive(item)}
         <a
           class={`inline-flex h-[45px] w-[264px] items-center gap-3 rounded-lg px-4 py-3 text-base leading-[21px] transition ${active ? 'bg-[#f4f4f5] font-semibold text-[#111111]' : 'font-normal text-[#111111] hover:bg-[#f8f8f8]'}`}
-          href={item.href}
+          href={resolvedHref}
           aria-current={active ? 'page' : undefined}
           onclick={onNavigate}
         >
