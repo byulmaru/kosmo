@@ -27,6 +27,11 @@ type ConflictError implements Error & FieldError {
   message: String!
 }
 
+input CreatePostInput {
+  content: TipTapDocument!
+  visibility: PostVisibility!
+}
+
 input CreateProfileInput {
   handle: String!
 }
@@ -77,6 +82,7 @@ interface ForbiddenError implements Error {
 }
 
 type Mutation {
+  createPost(input: CreatePostInput!): Post!
   createProfile(input: CreateProfileInput!): CreateProfileResult!
   deleteProfile(input: DeleteProfileInput!): DeleteProfileResult!
   followProfile(input: FollowProfileInput!): FollowProfileResult!
@@ -104,6 +110,35 @@ type PageInfo {
 type PermissionDeniedError implements Error & ForbiddenError {
   code: String!
   message: String!
+}
+
+type Post implements Node {
+  content: PostContent
+  createdAt: DateTime!
+  id: ID!
+  profile: Profile!
+  state: PostState!
+  visibility: PostVisibility!
+}
+
+type PostContent implements Node {
+  bodyJson: TipTapDocument!
+  bodyText: String!
+  createdAt: DateTime!
+  id: ID!
+  spoilerText: String
+}
+
+enum PostState {
+  ACTIVE
+  DELETED
+}
+
+enum PostVisibility {
+  DIRECT
+  FOLLOWERS
+  PUBLIC
+  UNLISTED
 }
 
 type Profile implements Node {
@@ -188,6 +223,9 @@ type Session implements Node {
   id: ID!
   selectedProfile: Profile
 }
+
+"""TipTap JSON document"""
+scalar TipTapDocument
 
 input UnfollowProfileInput {
   id: ID!
