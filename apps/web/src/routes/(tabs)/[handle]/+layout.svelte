@@ -8,6 +8,12 @@
   const getInitial = (name?: string, handle?: string) =>
     (name || handle || '?').slice(0, 1).toUpperCase();
 
+  const countFormatter = new Intl.NumberFormat('en', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  });
+  const formatCount = (count: number) => countFormatter.format(count).toLowerCase();
+
   const query = createQuery(
     graphql(`
       query ProfileLayoutQuery($handle: String!) {
@@ -48,6 +54,16 @@
         {#if profile.bio}
           <p class="text-text-primary mt-3 text-base whitespace-pre-wrap">{profile.bio}</p>
         {/if}
+        <div class="mt-3 flex items-center gap-4 text-sm">
+          <span class="text-text-secondary">
+            <span class="text-text-primary font-bold">{formatCount(profile.followersCount)}</span>
+            팔로워
+          </span>
+          <span class="text-text-secondary">
+            <span class="text-text-primary font-bold">{formatCount(profile.followingCount)}</span>
+            팔로잉
+          </span>
+        </div>
       </div>
     </header>
     {@render children()}
