@@ -2,6 +2,7 @@
   import { page } from '$app/state';
   import { createMutation, createQuery } from '@mearie/svelte';
   import { graphql } from '$mearie';
+  import { formatCount, getProfileInitial } from '$lib/utils/profile';
   import type { DataOf } from '@mearie/svelte';
 
   type Props = {
@@ -133,11 +134,6 @@
     return true;
   };
 
-  const getInitial = (name?: string, handle?: string) =>
-    (name || handle || '?').slice(0, 1).toUpperCase();
-
-  const formatCount = (count: number) => new Intl.NumberFormat('ko-KR').format(count);
-
   const creatingOrSwitching = $derived(profileActionLoading || profileQuery.loading);
   const sidebarProfiles = $derived(profilesOverride ?? profileQuery.data?.me?.profiles ?? []);
   const sidebarActiveProfile = $derived(
@@ -244,7 +240,7 @@
         <div
           class="flex size-24 items-center justify-center rounded-full bg-[#111111] text-4xl font-bold text-white shadow-[1px_1px_2px_rgba(0,0,0,0.25)]"
         >
-          {getInitial(activeProfile.displayName, activeProfile.handle)}
+          {getProfileInitial(activeProfile.displayName, activeProfile.handle)}
         </div>
       </div>
 
@@ -369,7 +365,7 @@
               class={`flex shrink-0 items-center justify-center rounded-full bg-[#fce79a] font-bold text-[#111111] ${selected ? 'size-12 text-base' : 'size-8 text-sm'}`}
               aria-hidden="true"
             >
-              {getInitial(profile.displayName, profile.handle)}
+              {getProfileInitial(profile.displayName, profile.handle)}
             </span>
             <span class="flex min-w-0 flex-1 flex-col gap-px overflow-hidden">
               <span class="truncate text-sm font-bold text-[#111111]">{profile.displayName}</span>

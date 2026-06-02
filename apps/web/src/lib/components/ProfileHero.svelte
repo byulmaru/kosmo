@@ -1,5 +1,6 @@
 <script lang="ts">
   import TextSkeleton from '$lib/components/TextSkeleton.svelte';
+  import { formatCount, getProfileInitial } from '$lib/utils/profile';
 
   // 프로필 헤더(커버+아바타+이름+핸들+바이오+카운트). Figma ProfileHero(560:515)의 데이터-가용 subset.
   // 태그칩/ProfileMeta/팔로우·편집 버튼은 스키마·타 이슈(PROD-96 등) 범위라 아직 없음.
@@ -17,15 +18,6 @@
   };
 
   let { profile = null, loading = false }: Props = $props();
-
-  const getInitial = (name?: string, handle?: string) =>
-    (name || handle || '?').slice(0, 1).toUpperCase();
-
-  const countFormatter = new Intl.NumberFormat('en', {
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  });
-  const formatCount = (count: number) => countFormatter.format(count).toLowerCase();
 </script>
 
 {#if loading}
@@ -48,7 +40,7 @@
       <div
         class="border-bg bg-surface text-text-secondary -mt-10 flex size-20 items-center justify-center rounded-full border-4 text-3xl font-bold"
       >
-        {getInitial(profile.displayName, profile.handle)}
+        {getProfileInitial(profile.displayName, profile.handle)}
       </div>
       <h1 class="text-text-primary mt-3 text-2xl font-bold">{profile.displayName}</h1>
       <p class="text-text-secondary text-sm">@{profile.handle}</p>
