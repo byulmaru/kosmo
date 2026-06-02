@@ -1,11 +1,11 @@
 <script module lang="ts">
   import { defineMeta } from '@storybook/addon-svelte-csf';
 
-  import FollowButton from './FollowButton.svelte';
+  import FollowButtonView from './FollowButtonView.svelte';
 
   const { Story } = defineMeta({
     title: 'KOSMO/FollowButton',
-    component: FollowButton,
+    component: FollowButtonView,
     tags: ['autodocs'],
     argTypes: {
       authenticated: {
@@ -64,19 +64,47 @@
 
 <Story name="States" asChild parameters={{ controls: { disable: true } }}>
   <div class="grid gap-4">
-    <FollowButton {targetProfileId} {viewerProfileId} {followAction} {unfollowAction} />
-    <FollowButton
+    <FollowButtonView {targetProfileId} {viewerProfileId} {followAction} {unfollowAction} />
+    <FollowButtonView
       {targetProfileId}
       {viewerProfileId}
       viewerFollow={acceptedFollow}
       {followAction}
       {unfollowAction}
     />
-    <FollowButton {targetProfileId} {viewerProfileId} viewerFollow={pendingFollow} />
-    <FollowButton targetProfileId={viewerProfileId} {viewerProfileId} />
-    <FollowButton {targetProfileId} viewerProfileId={null} />
-    <FollowButton {targetProfileId} {viewerProfileId} authenticated={false} />
-    <FollowButton {targetProfileId} {viewerProfileId} canMutate={false} />
-    <FollowButton {targetProfileId} {viewerProfileId} followAction={failingFollowAction} />
+    <FollowButtonView
+      {targetProfileId}
+      {viewerProfileId}
+      viewerFollow={pendingFollow}
+      {followAction}
+      {unfollowAction}
+    />
+    <FollowButtonView
+      targetProfileId={viewerProfileId}
+      {viewerProfileId}
+      {followAction}
+      {unfollowAction}
+    />
+    <FollowButtonView {targetProfileId} viewerProfileId={null} {followAction} {unfollowAction} />
+    <FollowButtonView
+      {targetProfileId}
+      {viewerProfileId}
+      authenticated={false}
+      {followAction}
+      {unfollowAction}
+    />
+    <FollowButtonView
+      {targetProfileId}
+      {viewerProfileId}
+      canMutate={false}
+      {followAction}
+      {unfollowAction}
+    />
+    <FollowButtonView
+      {targetProfileId}
+      {viewerProfileId}
+      followAction={failingFollowAction}
+      {unfollowAction}
+    />
   </div>
 </Story>
