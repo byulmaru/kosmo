@@ -1,24 +1,61 @@
 <script lang="ts">
-  import type { HTMLAttributes } from 'svelte/elements';
+  import { graphql } from '$mearie';
+  import { createFragment } from '@mearie/svelte';
+  import type { FragmentRefs } from '@mearie/svelte';
+  import type { HTMLAnchorAttributes, HTMLAttributes } from 'svelte/elements';
 
   import Avatar from './Avatar.svelte';
 
-  type PostAuthorProfileProps = HTMLAttributes<HTMLElement> & {
-    displayName: string;
-    handle: string;
-    avatarUrl?: string | null;
-    href?: string;
+  type PostAuthorProfileBaseProps = {
+    profile: FragmentRefs<'PostAuthorProfile_profile'>;
   };
 
-  let {
-    displayName,
-    handle,
-    avatarUrl = null,
-    href,
-    class: className = '',
-    ...rest
-  }: PostAuthorProfileProps = $props();
+  type PostAuthorProfileLinkProps = Omit<HTMLAnchorAttributes, 'href'> &
+    PostAuthorProfileBaseProps & {
+      href: string;
+    };
 
+  type PostAuthorProfileStaticProps = HTMLAttributes<HTMLDivElement> &
+    PostAuthorProfileBaseProps & {
+      href?: undefined;
+    };
+
+  type PostAuthorProfileProps = PostAuthorProfileLinkProps | PostAuthorProfileStaticProps;
+
+  let props: PostAuthorProfileProps = $props();
+
+  const profile = $derived(props.profile);
+  const href = $derived(props.href);
+  const className = $derived(props.class ?? '');
+  const anchorAttributes = $derived.by(() => {
+    if (!props.href) {
+      return {} as Omit<HTMLAnchorAttributes, 'href'>;
+    }
+
+    const { profile: _profile, href: _href, class: _className, ...attributes } = props;
+    return attributes as Omit<HTMLAnchorAttributes, 'href'>;
+  });
+  const divAttributes = $derived.by(() => {
+    if (props.href) {
+      return {} as HTMLAttributes<HTMLDivElement>;
+    }
+
+    const { profile: _profile, href: _href, class: _className, ...attributes } = props;
+    return attributes as HTMLAttributes<HTMLDivElement>;
+  });
+
+  const profileFragment = createFragment(
+    graphql(`
+      fragment PostAuthorProfile_profile on Profile {
+        displayName
+        handle
+      }
+    `),
+    () => profile,
+  );
+
+  const displayName = $derived(profileFragment.data.displayName);
+  const handle = $derived(profileFragment.data.handle);
   const normalizedHandle = $derived(handle.startsWith('@') ? handle : `@${handle}`);
   const initials = $derived((displayName.trim() || handle.trim()).slice(0, 1).toUpperCase());
   const contentClass =
@@ -26,13 +63,8 @@
 </script>
 
 {#if href}
-  <a {...rest} {href} class={`${contentClass} ${className}`}>
-    <Avatar
-      size="sm"
-      src={avatarUrl ?? undefined}
-      alt={`${displayName} 프로필 이미지`}
-      {initials}
-    />
+  <a {...anchorAttributes} {href} class={`${contentClass} ${className}`}>
+    <Avatar size="sm" {initials} />
     <span class="min-w-0 flex-1">
       <span class="text-text-primary block truncate text-sm font-bold group-hover:underline">
         {displayName}
@@ -41,13 +73,8 @@
     </span>
   </a>
 {:else}
-  <div {...rest} class={`${contentClass} ${className}`}>
-    <Avatar
-      size="sm"
-      src={avatarUrl ?? undefined}
-      alt={`${displayName} 프로필 이미지`}
-      {initials}
-    />
+  <div {...divAttributes} class={`${contentClass} ${className}`}>
+    <Avatar size="sm" {initials} />
     <span class="min-w-0 flex-1">
       <span class="text-text-primary block truncate text-sm font-bold">{displayName}</span>
       <span class="text-text-secondary block truncate text-xs">{normalizedHandle}</span>
