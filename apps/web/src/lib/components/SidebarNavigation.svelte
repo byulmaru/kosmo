@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { profileHandleSchema } from '@kosmo/core/validation';
   import { createMutation, createQuery } from '@mearie/svelte';
   import { graphql } from '$mearie';
   import type { DataOf } from '@mearie/svelte';
@@ -138,6 +139,18 @@
 
   const formatCount = (count: number) => new Intl.NumberFormat('ko-KR').format(count);
 
+  const getProfileHandleError = (handle: string) => {
+    if (!handle) {
+      return '프로필 핸들을 입력해주세요.';
+    }
+
+    const result = profileHandleSchema.safeParse(handle);
+
+    return result.success
+      ? null
+      : (result.error.issues[0]?.message ?? '프로필 핸들 형식을 확인해주세요.');
+  };
+
   const creatingOrSwitching = $derived(profileActionLoading || profileQuery.loading);
   const sidebarProfiles = $derived(profilesOverride ?? profileQuery.data?.me?.profiles ?? []);
   const sidebarActiveProfile = $derived(
@@ -185,8 +198,14 @@
     event.preventDefault();
 
     const handle = newProfileHandle.trim();
-    if (!handle || creatingOrSwitching) {
-      profileCreationError = handle ? null : '프로필 핸들을 입력해주세요.';
+
+    if (creatingOrSwitching) {
+      return;
+    }
+
+    const handleError = getProfileHandleError(handle);
+    if (handleError) {
+      profileCreationError = handleError;
       return;
     }
 
@@ -396,6 +415,8 @@
                 class="min-w-0 flex-1 rounded-lg border border-[#d4d4d8] px-3 py-2 text-sm outline-none transition placeholder:text-[#a1a1aa] focus:border-[#111111]"
                 name="handle"
                 autocomplete="off"
+                aria-describedby={`profile-handle-help-${surface}`}
+                aria-invalid={profileCreationError ? 'true' : undefined}
                 placeholder="새 프로필 핸들"
                 disabled={creatingOrSwitching}
                 bind:value={newProfileHandle}
@@ -408,6 +429,9 @@
                 만들기
               </button>
             </div>
+            <p id={`profile-handle-help-${surface}`} class="px-1 text-xs leading-4 text-[#777777]">
+              영문, 숫자, 밑줄(_)만 사용할 수 있어요.
+            </p>
             {#if profileCreationError}
               <p class="px-1 text-xs leading-4 text-red-600">{profileCreationError}</p>
             {/if}
