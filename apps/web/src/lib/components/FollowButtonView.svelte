@@ -61,7 +61,7 @@
   );
   const disabled = $derived(loading || Boolean(unavailableReason) || isPending);
   const label = $derived(
-    loading ? '처리 중' : isSelf ? '나' : isPending ? '요청 중' : isFollowing ? '팔로잉' : '팔로우',
+    loading ? '처리 중' : isPending ? '요청 중' : isFollowing ? '팔로잉' : '팔로우',
   );
   const buttonVariant = $derived(isFollowing || isPending || isSelf ? 'secondary' : 'primary');
   const statusMessage = $derived(errorMessage ?? unavailableReason);
