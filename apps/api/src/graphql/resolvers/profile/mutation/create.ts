@@ -30,7 +30,7 @@ builder.mutationField('createProfile', (t) =>
           .then(firstOrThrow)
           .catch((error) => {
             if (isUniqueViolation(error)) {
-              throw new ConflictError({ field: 'handle' });
+              throw new ConflictError({ message: '이미 사용 중인 핸들이에요.', field: 'handle' });
             }
 
             throw error;
