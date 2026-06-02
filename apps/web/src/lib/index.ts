@@ -3,6 +3,7 @@ export { default as Avatar } from './components/Avatar.svelte';
 export { default as BlockPlaceholder } from './components/BlockPlaceholder.svelte';
 export { default as BottomTabBar } from './components/BottomTabBar.svelte';
 export { default as Button } from './components/Button.svelte';
+export { default as FollowButton } from './components/FollowButton.svelte';
 export { default as Header } from './components/Header.svelte';
 export { default as ImagePlaceholder } from './components/ImagePlaceholder.svelte';
 export { default as NotificationItem } from './components/NotificationItem.svelte';
