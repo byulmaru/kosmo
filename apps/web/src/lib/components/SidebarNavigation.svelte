@@ -146,6 +146,7 @@
       ? null
       : (result.error.issues[0]?.message ?? '프로필 핸들 형식을 확인해주세요.');
   };
+
   const creatingOrSwitching = $derived(profileActionLoading || profileQuery.loading);
   const sidebarProfiles = $derived(profilesOverride ?? profileQuery.data?.me?.profiles ?? []);
   const sidebarActiveProfile = $derived(

@@ -42,10 +42,12 @@
       >
         {getProfileInitial(profile.displayName, profile.handle)}
       </div>
-      <h1 class="text-text-primary mt-3 text-2xl font-bold">{profile.displayName}</h1>
-      <p class="text-text-secondary text-sm">@{profile.handle}</p>
+      <h1 class="text-text-primary mt-3 text-2xl font-bold break-words">{profile.displayName}</h1>
+      <p class="text-text-secondary text-sm break-words">@{profile.handle}</p>
       {#if profile.bio}
-        <p class="text-text-primary mt-3 text-base whitespace-pre-wrap">{profile.bio}</p>
+        <p class="text-text-primary mt-3 text-base break-words whitespace-pre-wrap">
+          {profile.bio}
+        </p>
       {/if}
       <div class="mt-3 flex items-center gap-4 text-sm">
         <span class="text-text-secondary">
