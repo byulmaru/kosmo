@@ -55,17 +55,17 @@
 
 ### Requirement: Profile page column alignment
 
-프로필 페이지는 공유 `(tabs)` 셸의 main 레이아웃을 변경하지 않고, 프로필 라우트에서만 콘텐츠를 탑정렬한 컬럼으로 표시해야 한다(MUST). 모바일에서는 화면 끝까지 풀블리드로, 넓은 화면에서는 고정 폭 컬럼을 가운데 정렬하고 가벼운 구분선을 표시해야 한다(MUST).
+프로필 페이지는 공유 `(tabs)` 셸의 main 레이아웃을 변경하지 않고, 프로필 라우트에서만 콘텐츠를 탑정렬한 컬럼으로 표시해야 한다(MUST). 모바일에서는 화면 끝까지 풀블리드로, 넓은 화면에서는 고정 폭 컬럼으로 표시해야 한다(MUST). 데스크톱 전체 가운데 클러스터 정렬(트위터식)은 공유 셸 재구성이 필요하므로 별도 웹 레이아웃 이슈로 이연한다.
 
 #### Scenario: Mobile full-bleed column
 
 - **WHEN** 모바일 폭에서 프로필 페이지를 본다
 - **THEN** 커버는 화면 좌우 끝까지 닿고 콘텐츠는 상단부터 시작한다
 
-#### Scenario: Desktop centered column with divider
+#### Scenario: Desktop fixed-width column
 
 - **WHEN** 넓은 화면에서 프로필 페이지를 본다
-- **THEN** 콘텐츠는 고정 폭 컬럼으로 가운데 정렬되고 양옆에 가벼운 구분선이 표시된다
+- **THEN** 콘텐츠는 고정 폭 컬럼으로 표시된다
 - **AND** 공유 셸과 다른 탭 페이지의 렌더링은 변경되지 않는다
 
 ### Requirement: Sidebar profile entry navigation
