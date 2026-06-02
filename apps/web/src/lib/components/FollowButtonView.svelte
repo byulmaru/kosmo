@@ -39,9 +39,20 @@
   let currentFollow = $state<ViewerFollow | null>(null);
   let loading = $state(false);
   let errorMessage = $state<string | null>(null);
+  let syncedPropKey = $state<string | null>(null);
+
+  const propKey = $derived(
+    [targetProfileId, viewerProfileId, viewerFollow?.id, viewerFollow?.state].join(':'),
+  );
 
   $effect(() => {
+    if (syncedPropKey === propKey) {
+      return;
+    }
+
     currentFollow = viewerFollow;
+    errorMessage = null;
+    syncedPropKey = propKey;
   });
 
   const isSelf = $derived(Boolean(viewerProfileId && viewerProfileId === targetProfileId));
@@ -58,7 +69,7 @@
             ? '이 프로필을 팔로우할 권한이 없습니다.'
             : null),
   );
-  const disabled = $derived(loading || Boolean(unavailableReason) || isPending);
+  const disabled = $derived(loading || Boolean(unavailableReason));
   const label = $derived(
     loading ? '처리 중' : isPending ? '요청 중' : isFollowing ? '팔로잉' : '팔로우',
   );
@@ -79,7 +90,7 @@
     errorMessage = null;
 
     try {
-      if (isFollowing) {
+      if (isFollowing || isPending) {
         await unfollowAction(targetProfileId);
         setFollow(null);
         return;
@@ -109,7 +120,7 @@
     {#if statusMessage}
       <p
         class="text-text-secondary m-0 max-w-56 text-xs leading-4"
-        role={errorMessage ? 'status' : undefined}
+        role={errorMessage ? 'alert' : undefined}
       >
         {statusMessage}
       </p>
