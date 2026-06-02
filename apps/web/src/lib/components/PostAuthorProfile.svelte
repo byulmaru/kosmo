@@ -4,7 +4,7 @@
   import type { FragmentRefs } from '@mearie/svelte';
   import type { HTMLAnchorAttributes, HTMLAttributes } from 'svelte/elements';
 
-  import Avatar from './Avatar.svelte';
+  import PostAuthorProfileView from './PostAuthorProfileView.svelte';
 
   type PostAuthorProfileBaseProps = {
     profile: FragmentRefs<'PostAuthorProfile_profile'>;
@@ -24,9 +24,6 @@
 
   let props: PostAuthorProfileProps = $props();
 
-  const profile = $derived(props.profile);
-  const href = $derived(props.href);
-  const className = $derived(props.class ?? '');
   const anchorAttributes = $derived.by(() => {
     if (!props.href) {
       return {} as Omit<HTMLAnchorAttributes, 'href'>;
@@ -51,33 +48,21 @@
         handle
       }
     `),
-    () => profile,
+    () => props.profile,
   );
 
   const displayName = $derived(profileFragment.data.displayName);
   const handle = $derived(profileFragment.data.handle);
-  const normalizedHandle = $derived(handle.startsWith('@') ? handle : `@${handle}`);
-  const initials = $derived((displayName.trim() || handle.trim()).slice(0, 1).toUpperCase());
-  const contentClass =
-    'group flex min-w-0 items-center gap-3 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-more';
 </script>
 
-{#if href}
-  <a {...anchorAttributes} {href} class={`${contentClass} ${className}`}>
-    <Avatar size="sm" {initials} />
-    <span class="min-w-0 flex-1">
-      <span class="text-text-primary block truncate text-sm font-bold group-hover:underline">
-        {displayName}
-      </span>
-      <span class="text-text-secondary block truncate text-xs">{normalizedHandle}</span>
-    </span>
-  </a>
+{#if props.href}
+  <PostAuthorProfileView
+    {...anchorAttributes}
+    {displayName}
+    {handle}
+    href={props.href}
+    class={props.class ?? ''}
+  />
 {:else}
-  <div {...divAttributes} class={`${contentClass} ${className}`}>
-    <Avatar size="sm" {initials} />
-    <span class="min-w-0 flex-1">
-      <span class="text-text-primary block truncate text-sm font-bold">{displayName}</span>
-      <span class="text-text-secondary block truncate text-xs">{normalizedHandle}</span>
-    </span>
-  </div>
+  <PostAuthorProfileView {...divAttributes} {displayName} {handle} class={props.class ?? ''} />
 {/if}
