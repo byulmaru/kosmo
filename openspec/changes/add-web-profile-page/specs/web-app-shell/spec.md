@@ -8,7 +8,7 @@
 
 - **WHEN** 사용자가 `/@{handle}` 형식의 주소로 이동한다
 - **THEN** 시스템은 `(tabs)` 셸(사이드바·하단탭) 안에서 해당 핸들의 프로필 페이지를 연다
-- **AND** layout에서 `profileByHandle(handle:)` query로 프로필을 조회하고, 그 결과를 하위 화면에서 재사용한다
+- **AND** layout에서 `profileByHandle(handle:)` query로 프로필을 조회해 렌더한 프로필 헤더를 하위 화면 전반에서 공유한다
 
 #### Scenario: Static endpoint not intercepted by handle route
 
