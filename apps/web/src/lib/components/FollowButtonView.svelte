@@ -47,17 +47,16 @@
   const isSelf = $derived(Boolean(viewerProfileId && viewerProfileId === targetProfileId));
   const isFollowing = $derived(currentFollow?.state === 'ACCEPTED');
   const isPending = $derived(currentFollow?.state === 'PENDING');
+  const hidden = $derived(isSelf);
   const unavailableReason = $derived(
     disabledReason ??
       (!authenticated
         ? '로그인 후 팔로우할 수 있습니다.'
         : !viewerProfileId
           ? '프로필을 선택한 뒤 팔로우할 수 있습니다.'
-          : isSelf
-            ? '내 프로필은 팔로우할 수 없습니다.'
-            : !canMutate
-              ? '이 프로필을 팔로우할 권한이 없습니다.'
-              : null),
+          : !canMutate
+            ? '이 프로필을 팔로우할 권한이 없습니다.'
+            : null),
   );
   const disabled = $derived(loading || Boolean(unavailableReason) || isPending);
   const label = $derived(
@@ -95,23 +94,25 @@
   };
 </script>
 
-<div class={`inline-flex flex-col items-start gap-1 ${className}`}>
-  <Button
-    variant={buttonVariant}
-    {size}
-    {disabled}
-    aria-busy={loading}
-    aria-pressed={isFollowing}
-    onclick={toggleFollow}
-  >
-    {label}
-  </Button>
-  {#if statusMessage}
-    <p
-      class="text-text-secondary m-0 max-w-56 text-xs leading-4"
-      role={errorMessage ? 'status' : undefined}
+{#if !hidden}
+  <div class={`inline-flex flex-col items-start gap-1 ${className}`}>
+    <Button
+      variant={buttonVariant}
+      {size}
+      {disabled}
+      aria-busy={loading}
+      aria-pressed={isFollowing}
+      onclick={toggleFollow}
     >
-      {statusMessage}
-    </p>
-  {/if}
-</div>
+      {label}
+    </Button>
+    {#if statusMessage}
+      <p
+        class="text-text-secondary m-0 max-w-56 text-xs leading-4"
+        role={errorMessage ? 'status' : undefined}
+      >
+        {statusMessage}
+      </p>
+    {/if}
+  </div>
+{/if}

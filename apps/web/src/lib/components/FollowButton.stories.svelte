@@ -79,12 +79,15 @@
       {followAction}
       {unfollowAction}
     />
-    <FollowButtonView
-      targetProfileId={viewerProfileId}
-      {viewerProfileId}
-      {followAction}
-      {unfollowAction}
-    />
+    <div class="flex min-h-8 items-center gap-3">
+      <FollowButtonView
+        targetProfileId={viewerProfileId}
+        {viewerProfileId}
+        {followAction}
+        {unfollowAction}
+      />
+      <span class="text-text-secondary text-xs">본인 프로필에서는 버튼을 표시하지 않음</span>
+    </div>
     <FollowButtonView {targetProfileId} viewerProfileId={null} {followAction} {unfollowAction} />
     <FollowButtonView
       {targetProfileId}
