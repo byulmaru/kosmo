@@ -8,12 +8,14 @@ set -eu
 
 cd "${CODEX_WORKTREE_PATH:?CODEX_WORKTREE_PATH is required}"
 
-git fetch origin refs/heads/main:refs/remotes/origin/main
+remote_main_ref=refs/remotes/origin/main
 
-if ! git show-ref --verify --quiet refs/remotes/origin/main; then
+git fetch origin +refs/heads/main:"$remote_main_ref"
+
+remote_main_commit="$(git rev-parse --verify "$remote_main_ref^{commit}")" || {
   echo "origin/main was not fetched; verify the remote default branch before continuing." >&2
   exit 1
-fi
+}
 
 main_worktree="$(
   git worktree list --porcelain |
@@ -24,24 +26,24 @@ main_worktree="$(
 )"
 
 if [ -n "$main_worktree" ]; then
-  git -C "$main_worktree" merge --ff-only origin/main
+  git -C "$main_worktree" merge --ff-only "$remote_main_commit"
 elif git show-ref --verify --quiet refs/heads/main; then
-  if git merge-base --is-ancestor main origin/main; then
-    git branch --force main origin/main
+  if git merge-base --is-ancestor refs/heads/main "$remote_main_commit"; then
+    git branch --force main "$remote_main_commit"
   else
     echo "main is not a fast-forward of origin/main; refusing to update automatically." >&2
     exit 1
   fi
 else
-  git branch main origin/main
+  git branch main "$remote_main_ref"
 fi
 
 current_branch="$(git branch --show-current || true)"
-if git merge-base --is-ancestor HEAD origin/main; then
+if git merge-base --is-ancestor HEAD "$remote_main_commit"; then
   if [ -n "$current_branch" ]; then
-    git merge --ff-only origin/main
+    git merge --ff-only "$remote_main_commit"
   else
-    git switch --detach origin/main
+    git switch --detach "$remote_main_commit"
   fi
 fi
 
