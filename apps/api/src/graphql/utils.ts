@@ -4,11 +4,23 @@ import type { UserContext } from '@/context';
 
 export const globalIdMap = new Map<number, string>();
 
+type LoadableRow<T> = T | null | Error;
+
 const alignByIds = <T extends { id: string }>(
   ids: readonly string[],
-  rows: readonly T[],
+  rows: readonly LoadableRow<T>[],
 ): (T | null)[] => {
-  const rowsById = new Map(rows.map((row) => [row.id, row]));
+  const rowsById = new Map<string, T>();
+
+  for (const row of rows) {
+    if (row instanceof Error) {
+      throw row;
+    }
+
+    if (row) {
+      rowsById.set(row.id, row);
+    }
+  }
 
   return ids.map((id) => rowsById.get(id) ?? null);
 };
@@ -16,7 +28,7 @@ const alignByIds = <T extends { id: string }>(
 export const createObjectRef = <TRow extends { id: string }>(
   name: string,
   discriminator: (typeof TableDiscriminator)[keyof typeof TableDiscriminator],
-  load: (ids: string[], ctx: UserContext) => Promise<TRow[]>,
+  load: (ids: string[], ctx: UserContext) => Promise<readonly LoadableRow<TRow>[]>,
 ) => {
   globalIdMap.set(discriminator, name);
 
