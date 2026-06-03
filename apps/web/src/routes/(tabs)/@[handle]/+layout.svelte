@@ -11,11 +11,7 @@
       query ProfileLayoutQuery($handle: String!) {
         profileByHandle(handle: $handle) {
           id
-          handle
-          displayName
-          bio
-          followersCount
-          followingCount
+          ...ProfileHero_profile
         }
       }
     `),

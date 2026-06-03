@@ -12,6 +12,7 @@
 - [x] 2.2 `lib/utils/profile.ts`에 `getProfileInitial`·compact `formatCount`를 두고 ProfileHero·사이드바에서 공용 사용한다
 - [x] 2.3 시맨틱 디자인 토큰으로 라이트/다크에 대응한다
 - [x] 2.4 `ProfileHero.stories.svelte`(Default / No bio / Loading)를 추가한다
+- [x] 2.5 `ProfileHero`가 `ProfileHero_profile` fragment를 직접 선언하고 layout query는 fragment를 spread한다. Storybook은 `createFragment`를 패스스루로 모킹한다
 
 ## 3. 상태 처리
 

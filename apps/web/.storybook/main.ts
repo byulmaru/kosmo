@@ -7,6 +7,7 @@ type NamedPlugin = { name?: string };
 type AliasEntry = { find: string; replacement: string };
 
 const mearieMockPath = fileURLToPath(new URL('./mocks/mearie.ts', import.meta.url));
+const mearieSvelteMockPath = fileURLToPath(new URL('./mocks/mearie-svelte.ts', import.meta.url));
 
 const withoutMeariePlugin = <T>(plugins: T): T => {
   if (!Array.isArray(plugins)) {
@@ -28,12 +29,17 @@ const withoutMeariePlugin = <T>(plugins: T): T => {
 
 const withMearieAlias = <T>(alias: T): T | Record<string, string> | AliasEntry[] => {
   if (Array.isArray(alias)) {
-    return [{ find: '$mearie', replacement: mearieMockPath }, ...alias];
+    return [
+      { find: '$mearie', replacement: mearieMockPath },
+      { find: '@mearie/svelte', replacement: mearieSvelteMockPath },
+      ...alias,
+    ];
   }
 
   return {
     ...(alias ?? {}),
     $mearie: mearieMockPath,
+    '@mearie/svelte': mearieSvelteMockPath,
   };
 };
 
