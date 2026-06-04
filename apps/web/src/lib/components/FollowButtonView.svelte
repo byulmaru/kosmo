@@ -9,120 +9,42 @@
   };
 
   type Props = {
-    targetProfileId: string;
-    viewerProfileId?: string | null;
-    viewerFollow?: ViewerFollow | null;
-    authenticated?: boolean;
-    canMutate?: boolean;
-    disabledReason?: string | null;
+    hidden?: boolean;
+    label: string;
+    variant: 'primary' | 'secondary';
+    disabled?: boolean;
+    loading?: boolean;
+    pressed?: boolean;
+    message?: string | null;
+    messageRole?: 'alert' | 'status';
     size?: 'sm' | 'md' | 'lg';
     class?: string;
-    onFollowChange?: (viewerFollow: ViewerFollow | null) => void;
-    followAction: (targetProfileId: string) => Promise<ViewerFollow>;
-    unfollowAction: (targetProfileId: string) => Promise<void>;
+    onclick: () => void;
   };
 
   let {
-    targetProfileId,
-    viewerProfileId = null,
-    viewerFollow = null,
-    authenticated = true,
-    canMutate = true,
-    disabledReason = null,
+    hidden = false,
+    label,
+    variant,
+    disabled = false,
+    loading = false,
+    pressed = false,
+    message = null,
+    messageRole,
     size = 'sm',
     class: className = '',
-    onFollowChange,
-    followAction,
-    unfollowAction,
+    onclick,
   }: Props = $props();
-
-  let currentFollow = $state<ViewerFollow | null>(null);
-  let loading = $state(false);
-  let errorMessage = $state<string | null>(null);
-  let syncedPropKey = $state<string | null>(null);
-
-  const propKey = $derived(
-    [targetProfileId, viewerProfileId, viewerFollow?.id, viewerFollow?.state].join(':'),
-  );
-
-  $effect(() => {
-    if (syncedPropKey === propKey) {
-      return;
-    }
-
-    currentFollow = viewerFollow;
-    errorMessage = null;
-    syncedPropKey = propKey;
-  });
-
-  const isSelf = $derived(Boolean(viewerProfileId && viewerProfileId === targetProfileId));
-  const isFollowing = $derived(currentFollow?.state === 'ACCEPTED');
-  const isPending = $derived(currentFollow?.state === 'PENDING');
-  const hidden = $derived(isSelf);
-  const unavailableReason = $derived(
-    disabledReason ??
-      (!authenticated
-        ? '로그인 후 팔로우할 수 있습니다.'
-        : !viewerProfileId
-          ? '프로필을 선택한 뒤 팔로우할 수 있습니다.'
-          : !canMutate
-            ? '이 프로필을 팔로우할 권한이 없습니다.'
-            : null),
-  );
-  const disabled = $derived(loading || Boolean(unavailableReason));
-  const label = $derived(
-    loading ? '처리 중' : isPending ? '요청 중' : isFollowing ? '팔로잉' : '팔로우',
-  );
-  const buttonVariant = $derived(isFollowing || isPending ? 'secondary' : 'primary');
-  const statusMessage = $derived(errorMessage ?? unavailableReason);
-
-  const setFollow = (nextFollow: ViewerFollow | null) => {
-    currentFollow = nextFollow;
-    onFollowChange?.(nextFollow);
-  };
-
-  const toggleFollow = async () => {
-    if (disabled) {
-      return;
-    }
-
-    loading = true;
-    errorMessage = null;
-
-    try {
-      if (isFollowing || isPending) {
-        await unfollowAction(targetProfileId);
-        setFollow(null);
-        return;
-      }
-
-      setFollow(await followAction(targetProfileId));
-    } catch (error) {
-      errorMessage = error instanceof Error ? error.message : '팔로우 상태를 변경하지 못했습니다.';
-    } finally {
-      loading = false;
-    }
-  };
 </script>
 
 {#if !hidden}
   <div class={`inline-flex flex-col items-start gap-1 ${className}`}>
-    <Button
-      variant={buttonVariant}
-      {size}
-      {disabled}
-      aria-busy={loading}
-      aria-pressed={isFollowing}
-      onclick={toggleFollow}
-    >
+    <Button {variant} {size} {disabled} aria-busy={loading} aria-pressed={pressed} {onclick}>
       {label}
     </Button>
-    {#if statusMessage}
-      <p
-        class="text-text-secondary m-0 max-w-56 text-xs leading-4"
-        role={errorMessage ? 'alert' : undefined}
-      >
-        {statusMessage}
+    {#if message}
+      <p class="text-text-secondary m-0 max-w-56 text-xs leading-4" role={messageRole}>
+        {message}
       </p>
     {/if}
   </div>

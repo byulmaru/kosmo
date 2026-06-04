@@ -8,10 +8,17 @@
     component: FollowButtonView,
     tags: ['autodocs'],
     argTypes: {
-      authenticated: {
+      variant: {
+        control: 'radio',
+        options: ['primary', 'secondary'],
+      },
+      disabled: {
         control: 'boolean',
       },
-      canMutate: {
+      loading: {
+        control: 'boolean',
+      },
+      pressed: {
         control: 'boolean',
       },
       size: {
@@ -23,82 +30,57 @@
 </script>
 
 <script lang="ts">
-  const targetProfileId = '00000000-0000-4000-8000-000000000090';
-  const viewerProfileId = '00000000-0000-4000-8000-000000000001';
-  const acceptedFollow = {
-    id: '00000000-0000-4000-8000-000000000100',
-    state: 'ACCEPTED' as const,
-  };
-  const pendingFollow = {
-    id: '00000000-0000-4000-8000-000000000101',
-    state: 'PENDING' as const,
-  };
-
-  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-  const followAction = async () => {
-    await wait(400);
-    return acceptedFollow;
-  };
-  const unfollowAction = async () => {
-    await wait(400);
-  };
-  const failingFollowAction = async () => {
-    await wait(400);
-    throw new Error('팔로우 요청에 실패했습니다. 잠시 후 다시 시도해주세요.');
-  };
+  const noop = () => {};
 </script>
 
 <Story
   name="Playground"
   args={{
-    targetProfileId,
-    viewerProfileId,
-    viewerFollow: null,
-    authenticated: true,
-    canMutate: true,
+    hidden: false,
+    label: '팔로우',
+    variant: 'primary',
+    disabled: false,
+    loading: false,
+    pressed: false,
+    message: null,
     size: 'sm',
-    followAction,
-    unfollowAction,
+    onclick: noop,
   }}
 />
 
 <Story name="States" asChild parameters={{ controls: { disable: true } }}>
   <div class="grid gap-4">
-    <FollowButtonView {targetProfileId} {viewerProfileId} {followAction} {unfollowAction} />
+    <FollowButtonView label="팔로우" variant="primary" onclick={noop} />
+    <FollowButtonView label="팔로잉" variant="secondary" pressed onclick={noop} />
+    <FollowButtonView label="요청 중" variant="secondary" onclick={noop} />
+    <FollowButtonView label="처리 중" variant="primary" loading disabled onclick={noop} />
     <FollowButtonView
-      {targetProfileId}
-      {viewerProfileId}
-      viewerFollow={acceptedFollow}
-      {followAction}
-      {unfollowAction}
+      label="팔로우"
+      variant="primary"
+      disabled
+      message="프로필을 선택한 뒤 팔로우할 수 있습니다."
+      onclick={noop}
     />
     <FollowButtonView
-      {targetProfileId}
-      {viewerProfileId}
-      viewerFollow={pendingFollow}
-      {followAction}
-      {unfollowAction}
-    />
-    <FollowButtonView {targetProfileId} viewerProfileId={null} {followAction} {unfollowAction} />
-    <FollowButtonView
-      {targetProfileId}
-      {viewerProfileId}
-      authenticated={false}
-      {followAction}
-      {unfollowAction}
+      label="팔로우"
+      variant="primary"
+      disabled
+      message="로그인 후 팔로우할 수 있습니다."
+      onclick={noop}
     />
     <FollowButtonView
-      {targetProfileId}
-      {viewerProfileId}
-      canMutate={false}
-      {followAction}
-      {unfollowAction}
+      label="팔로우"
+      variant="primary"
+      disabled
+      message="이 프로필을 팔로우할 권한이 없습니다."
+      onclick={noop}
     />
     <FollowButtonView
-      {targetProfileId}
-      {viewerProfileId}
-      followAction={failingFollowAction}
-      {unfollowAction}
+      label="팔로우"
+      variant="primary"
+      message="팔로우 요청에 실패했습니다. 잠시 후 다시 시도해주세요."
+      messageRole="alert"
+      onclick={noop}
     />
   </div>
 </Story>
