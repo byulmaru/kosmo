@@ -24,9 +24,6 @@
 
   let props: PostAuthorProfileProps = $props();
 
-  const profile = $derived(props.profile);
-  const href = $derived(props.href);
-  const className = $derived(props.class ?? '');
   const anchorAttributes = $derived.by(() => {
     if (!props.href) {
       return {} as Omit<HTMLAnchorAttributes, 'href'>;
@@ -51,7 +48,7 @@
         handle
       }
     `),
-    () => profile,
+    () => props.profile,
   );
 
   const displayName = $derived(profileFragment.data.displayName);
@@ -62,8 +59,8 @@
     'group flex min-w-0 items-center gap-3 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-more';
 </script>
 
-{#if href}
-  <a {...anchorAttributes} {href} class={`${contentClass} ${className}`}>
+{#if props.href}
+  <a {...anchorAttributes} href={props.href} class={`${contentClass} ${props.class ?? ''}`}>
     <Avatar size="sm" {initials} />
     <span class="min-w-0 flex-1">
       <span class="text-text-primary block truncate text-sm font-bold group-hover:underline">
@@ -73,7 +70,7 @@
     </span>
   </a>
 {:else}
-  <div {...divAttributes} class={`${contentClass} ${className}`}>
+  <div {...divAttributes} class={`${contentClass} ${props.class ?? ''}`}>
     <Avatar size="sm" {initials} />
     <span class="min-w-0 flex-1">
       <span class="text-text-primary block truncate text-sm font-bold">{displayName}</span>

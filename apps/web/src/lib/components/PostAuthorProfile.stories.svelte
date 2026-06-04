@@ -4,6 +4,8 @@
 
   import PostAuthorProfile from './PostAuthorProfile.svelte';
 
+  // Storybook은 .storybook/mocks/mearie-svelte.ts에서 createFragment를 패스스루로 모킹하므로
+  // 여기서는 평범한 데이터 객체를 fragment ref 자리에 그대로 넘긴다.
   const profile = (
     displayName: string,
     handle: string,
