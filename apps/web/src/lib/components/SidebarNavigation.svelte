@@ -3,6 +3,7 @@
   import { profileHandleSchema } from '@kosmo/core/validation';
   import { createMutation, createQuery } from '@mearie/svelte';
   import { graphql } from '$mearie';
+  import { formatCount, getProfileInitial } from '$lib/utils/profile';
   import type { DataOf } from '@mearie/svelte';
 
   type Props = {
@@ -134,11 +135,6 @@
     return true;
   };
 
-  const getInitial = (name?: string, handle?: string) =>
-    (name || handle || '?').slice(0, 1).toUpperCase();
-
-  const formatCount = (count: number) => new Intl.NumberFormat('ko-KR').format(count);
-
   const getProfileHandleError = (handle: string) => {
     if (!handle) {
       return '프로필 핸들을 입력해주세요.';
@@ -263,7 +259,7 @@
         <div
           class="flex size-24 items-center justify-center rounded-full bg-[#111111] text-4xl font-bold text-white shadow-[1px_1px_2px_rgba(0,0,0,0.25)]"
         >
-          {getInitial(activeProfile.displayName, activeProfile.handle)}
+          {getProfileInitial(activeProfile.displayName, activeProfile.handle)}
         </div>
       </div>
 
@@ -388,7 +384,7 @@
               class={`flex shrink-0 items-center justify-center rounded-full bg-[#fce79a] font-bold text-[#111111] ${selected ? 'size-12 text-base' : 'size-8 text-sm'}`}
               aria-hidden="true"
             >
-              {getInitial(profile.displayName, profile.handle)}
+              {getProfileInitial(profile.displayName, profile.handle)}
             </span>
             <span class="flex min-w-0 flex-1 flex-col gap-px overflow-hidden">
               <span class="truncate text-sm font-bold text-[#111111]">{profile.displayName}</span>
@@ -462,11 +458,22 @@
   >
     <nav class="flex w-[264px] flex-col gap-1" aria-label="주요 메뉴">
       {#each navItems as item}
-        {@const active = isActive(item)}
+        {@const isProfileItem = item.label === '프로필'}
+        {@const profileHandle = isProfileItem ? (sidebarActiveProfile?.handle ?? null) : null}
+        {@const profileDisabled = isProfileItem && !profileHandle}
+        {@const resolvedHref = isProfileItem
+          ? profileHandle
+            ? `/@${profileHandle}`
+            : undefined
+          : item.href}
+        {@const active = isProfileItem
+          ? !!resolvedHref && page.url.pathname === resolvedHref
+          : isActive(item)}
         <a
-          class={`inline-flex h-[45px] w-[264px] items-center gap-3 rounded-lg px-4 py-3 text-base leading-[21px] transition ${active ? 'bg-[#f4f4f5] font-semibold text-[#111111]' : 'font-normal text-[#111111] hover:bg-[#f8f8f8]'}`}
-          href={item.href}
+          class={`inline-flex h-[45px] w-[264px] items-center gap-3 rounded-lg px-4 py-3 text-base leading-[21px] transition ${active ? 'bg-[#f4f4f5] font-semibold text-[#111111]' : 'font-normal text-[#111111] hover:bg-[#f8f8f8]'} ${profileDisabled ? 'pointer-events-none opacity-50' : ''}`}
+          href={resolvedHref}
           aria-current={active ? 'page' : undefined}
+          aria-disabled={profileDisabled ? 'true' : undefined}
           onclick={onNavigate}
         >
           <svg
