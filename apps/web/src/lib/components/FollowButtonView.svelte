@@ -73,7 +73,7 @@
   const label = $derived(
     loading ? '처리 중' : isPending ? '요청 중' : isFollowing ? '팔로잉' : '팔로우',
   );
-  const buttonVariant = $derived(isFollowing || isPending || isSelf ? 'secondary' : 'primary');
+  const buttonVariant = $derived(isFollowing || isPending ? 'secondary' : 'primary');
   const statusMessage = $derived(errorMessage ?? unavailableReason);
 
   const setFollow = (nextFollow: ViewerFollow | null) => {
