@@ -158,6 +158,7 @@ type Profile implements Node {
   followingCount: Int!
   handle: String!
   id: ID!
+  posts(after: String, before: String, first: Int, last: Int): ProfilePostsConnection!
   viewerFollow: ProfileFollow
 }
 
@@ -200,6 +201,16 @@ type ProfileFollowingConnectionEdge {
   node: ProfileFollow!
 }
 
+type ProfilePostsConnection {
+  edges: [ProfilePostsConnectionEdge!]!
+  pageInfo: PageInfo!
+}
+
+type ProfilePostsConnectionEdge {
+  cursor: String!
+  node: Post!
+}
+
 enum ProfileState {
   ACTIVE
   DISABLED
@@ -211,6 +222,7 @@ type Query {
   me: Account
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
+  post(id: ID!): Post
   profileByHandle(handle: String!): Profile
 }
 
