@@ -1,9 +1,21 @@
 <script lang="ts">
   import { createFragment, createMutation } from '@mearie/svelte';
   import { graphql } from '$mearie';
-  import type { FragmentRefs } from '@mearie/svelte';
+  import type { DataOf, FragmentRefs } from '@mearie/svelte';
 
-  import FollowButtonView, { type ViewerFollow } from './FollowButtonView.svelte';
+  import Button from './Button.svelte';
+
+  const followButtonProfileFragment = graphql(`
+    fragment FollowButton_profile on Profile {
+      id
+      viewerFollow {
+        id
+        state
+      }
+    }
+  `);
+
+  type ViewerFollow = NonNullable<DataOf<typeof followButtonProfileFragment>['viewerFollow']>;
 
   type Props = {
     profile: FragmentRefs<'FollowButton_profile'>;
@@ -15,16 +27,6 @@
     class?: string;
     onFollowChange?: (viewerFollow: ViewerFollow | null) => void;
   };
-
-  const followButtonProfileFragment = graphql(`
-    fragment FollowButton_profile on Profile {
-      id
-      viewerFollow {
-        id
-        state
-      }
-    }
-  `);
 
   const followProfileMutation = graphql(`
     mutation FollowButtonFollowProfile($id: ID!) {
@@ -81,6 +83,7 @@
   const getViewerFollow = () =>
     overrideProfileId === getTargetProfileId() ? followOverride : profileFragment.data.viewerFollow;
   const isFollowing = () => getViewerFollow()?.state === 'ACCEPTED';
+  // TODO: 승인 플로우가 추가되면 PENDING/REJECTED 전이를 실제 mutation 결과로 검증한다.
   const isPending = () => getViewerFollow()?.state === 'PENDING';
   const isSelf = () => Boolean(viewerProfileId && viewerProfileId === getTargetProfileId());
   const getUnavailableReason = () =>
@@ -107,7 +110,7 @@
   const followAction = async (id: string) => {
     const data = await followProfile({ id });
     if (data.followProfile.__typename !== 'FollowProfileSuccess') {
-      throw new Error(data.followProfile.message);
+      throw new Error('팔로우 상태를 변경하지 못했습니다.');
     }
 
     return data.followProfile.profileFollow;
@@ -116,7 +119,7 @@
   const unfollowAction = async (id: string) => {
     const data = await unfollowProfile({ id });
     if (data.unfollowProfile.__typename !== 'UnfollowProfileSuccess') {
-      throw new Error(data.unfollowProfile.message);
+      throw new Error('팔로우 상태를 변경하지 못했습니다.');
     }
   };
 
@@ -138,24 +141,33 @@
       }
 
       setFollow(await followAction(targetProfileId));
-    } catch (error) {
-      errorMessage = error instanceof Error ? error.message : '팔로우 상태를 변경하지 못했습니다.';
+    } catch {
+      errorMessage = '팔로우 상태를 변경하지 못했습니다.';
     } finally {
       loading = false;
     }
   };
 </script>
 
-<FollowButtonView
-  hidden={isSelf()}
-  label={getLabel()}
-  variant={getVariant()}
-  disabled={getDisabled()}
-  {loading}
-  pressed={isFollowing()}
-  message={getMessage()}
-  messageRole={errorMessage ? 'alert' : undefined}
-  {size}
-  class={className}
-  onclick={toggleFollow}
-/>
+{#if !isSelf()}
+  <div class={`inline-flex flex-col items-start gap-1 ${className}`}>
+    <Button
+      variant={getVariant()}
+      {size}
+      disabled={getDisabled()}
+      aria-busy={loading}
+      aria-pressed={isFollowing()}
+      onclick={toggleFollow}
+    >
+      {getLabel()}
+    </Button>
+    {#if getMessage()}
+      <p
+        class="text-text-secondary m-0 max-w-56 text-xs leading-4"
+        role={errorMessage ? 'alert' : undefined}
+      >
+        {getMessage()}
+      </p>
+    {/if}
+  </div>
+{/if}

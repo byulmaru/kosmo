@@ -1,24 +1,35 @@
 <script module lang="ts">
+  import type { FragmentRefs } from '@mearie/svelte';
   import { defineMeta } from '@storybook/addon-svelte-csf';
 
-  import FollowButtonView from './FollowButtonView.svelte';
+  import FollowButton from './FollowButton.svelte';
+
+  type FollowState = 'ACCEPTED' | 'PENDING' | 'REJECTED';
+
+  const viewerProfileId = 'viewer-profile';
+  const targetProfileId = 'target-profile';
+
+  // Storybook은 .storybook/mocks/mearie-svelte.ts에서 createFragment를 패스스루로 모킹하므로
+  // 여기서는 평범한 데이터 객체를 fragment ref 자리에 그대로 넘긴다.
+  const profile = (
+    id: string,
+    viewerFollow: { id: string; state: FollowState } | null = null,
+  ): FragmentRefs<'FollowButton_profile'> =>
+    ({
+      __typename: 'Profile',
+      id,
+      viewerFollow,
+    }) as unknown as FragmentRefs<'FollowButton_profile'>;
 
   const { Story } = defineMeta({
     title: 'KOSMO/FollowButton',
-    component: FollowButtonView,
+    component: FollowButton,
     tags: ['autodocs'],
     argTypes: {
-      variant: {
-        control: 'radio',
-        options: ['primary', 'secondary'],
-      },
-      disabled: {
+      authenticated: {
         control: 'boolean',
       },
-      loading: {
-        control: 'boolean',
-      },
-      pressed: {
+      canMutate: {
         control: 'boolean',
       },
       size: {
@@ -29,58 +40,59 @@
   });
 </script>
 
-<script lang="ts">
-  const noop = () => {};
-</script>
-
 <Story
   name="Playground"
   args={{
-    hidden: false,
-    label: '팔로우',
-    variant: 'primary',
-    disabled: false,
-    loading: false,
-    pressed: false,
-    message: null,
+    profile: profile(targetProfileId),
+    viewerProfileId,
+    authenticated: true,
+    canMutate: true,
     size: 'sm',
-    onclick: noop,
   }}
 />
 
 <Story name="States" asChild parameters={{ controls: { disable: true } }}>
-  <div class="grid gap-4">
-    <FollowButtonView label="팔로우" variant="primary" onclick={noop} />
-    <FollowButtonView label="팔로잉" variant="secondary" pressed onclick={noop} />
-    <FollowButtonView label="요청 중" variant="secondary" onclick={noop} />
-    <FollowButtonView label="처리 중" variant="primary" loading disabled onclick={noop} />
-    <FollowButtonView
-      label="팔로우"
-      variant="primary"
-      disabled
-      message="프로필을 선택한 뒤 팔로우할 수 있습니다."
-      onclick={noop}
-    />
-    <FollowButtonView
-      label="팔로우"
-      variant="primary"
-      disabled
-      message="로그인 후 팔로우할 수 있습니다."
-      onclick={noop}
-    />
-    <FollowButtonView
-      label="팔로우"
-      variant="primary"
-      disabled
-      message="이 프로필을 팔로우할 권한이 없습니다."
-      onclick={noop}
-    />
-    <FollowButtonView
-      label="팔로우"
-      variant="primary"
-      message="팔로우 요청에 실패했습니다. 잠시 후 다시 시도해주세요."
-      messageRole="alert"
-      onclick={noop}
-    />
+  <div class="grid gap-4 text-sm">
+    <section class="grid gap-1">
+      <p class="text-text-secondary m-0">팔로우 가능</p>
+      <FollowButton profile={profile('followable-profile')} {viewerProfileId} />
+    </section>
+    <section class="grid gap-1">
+      <p class="text-text-secondary m-0">팔로잉</p>
+      <FollowButton
+        profile={profile('followed-profile', { id: 'follow-accepted', state: 'ACCEPTED' })}
+        {viewerProfileId}
+      />
+    </section>
+    <section class="grid gap-1">
+      <p class="text-text-secondary m-0">요청 중</p>
+      <FollowButton
+        profile={profile('pending-profile', { id: 'follow-pending', state: 'PENDING' })}
+        {viewerProfileId}
+      />
+    </section>
+    <section class="grid gap-1">
+      <p class="text-text-secondary m-0">거절 후 재요청 가능</p>
+      <FollowButton
+        profile={profile('rejected-profile', { id: 'follow-rejected', state: 'REJECTED' })}
+        {viewerProfileId}
+      />
+    </section>
+    <section class="grid gap-1">
+      <p class="text-text-secondary m-0">프로필 미선택</p>
+      <FollowButton profile={profile('missing-viewer-profile')} viewerProfileId={null} />
+    </section>
+    <section class="grid gap-1">
+      <p class="text-text-secondary m-0">비로그인</p>
+      <FollowButton profile={profile('guest-profile')} {viewerProfileId} authenticated={false} />
+    </section>
+    <section class="grid gap-1">
+      <p class="text-text-secondary m-0">권한 없음</p>
+      <FollowButton profile={profile('blocked-profile')} {viewerProfileId} canMutate={false} />
+    </section>
+    <section class="grid gap-1">
+      <p class="text-text-secondary m-0">본인 프로필에서는 버튼이 렌더링되지 않음</p>
+      <FollowButton profile={profile(viewerProfileId)} {viewerProfileId} />
+    </section>
   </div>
 </Story>
