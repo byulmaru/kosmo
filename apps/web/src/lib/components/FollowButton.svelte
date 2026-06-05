@@ -79,68 +79,60 @@
   let loading = $state(false);
   let errorMessage = $state<string | null>(null);
 
-  const getTargetProfileId = () => profileFragment.data.id;
-  const getViewerFollow = () =>
-    overrideProfileId === getTargetProfileId() ? followOverride : profileFragment.data.viewerFollow;
-  const isFollowing = () => getViewerFollow()?.state === 'ACCEPTED';
+  const viewerFollow = $derived(
+    overrideProfileId === profileFragment.data.id
+      ? followOverride
+      : profileFragment.data.viewerFollow,
+  );
+  const isFollowing = $derived(viewerFollow?.state === 'ACCEPTED');
   // TODO: 승인 플로우가 추가되면 PENDING/REJECTED 전이를 실제 mutation 결과로 검증한다.
-  const isPending = () => getViewerFollow()?.state === 'PENDING';
-  const isSelf = () => Boolean(viewerProfileId && viewerProfileId === getTargetProfileId());
-  const getUnavailableReason = () =>
+  const isPending = $derived(viewerFollow?.state === 'PENDING');
+  const unavailableReason = $derived(
     disabledReason ??
-    (!authenticated
-      ? '로그인 후 팔로우할 수 있습니다.'
-      : !viewerProfileId
-        ? '프로필을 선택한 뒤 팔로우할 수 있습니다.'
-        : !canMutate
-          ? '이 프로필을 팔로우할 권한이 없습니다.'
-          : null);
-  const getDisabled = () => loading || Boolean(getUnavailableReason());
-  const getLabel = () =>
-    loading ? '처리 중' : isPending() ? '요청 중' : isFollowing() ? '팔로잉' : '팔로우';
-  const getVariant = () => (isFollowing() || isPending() ? 'secondary' : 'primary');
-  const getMessage = () => errorMessage ?? getUnavailableReason();
+      (!authenticated
+        ? '로그인 후 팔로우할 수 있습니다.'
+        : !viewerProfileId
+          ? '프로필을 선택한 뒤 팔로우할 수 있습니다.'
+          : !canMutate
+            ? '이 프로필을 팔로우할 권한이 없습니다.'
+            : null),
+  );
+  const disabled = $derived(loading || Boolean(unavailableReason));
+  const message = $derived(errorMessage ?? unavailableReason);
 
   const setFollow = (nextFollow: ViewerFollow | null) => {
-    overrideProfileId = getTargetProfileId();
+    overrideProfileId = profileFragment.data.id;
     followOverride = nextFollow;
     onFollowChange?.(nextFollow);
   };
 
-  const followAction = async (id: string) => {
-    const data = await followProfile({ id });
-    if (data.followProfile.__typename !== 'FollowProfileSuccess') {
-      throw new Error('팔로우 상태를 변경하지 못했습니다.');
-    }
-
-    return data.followProfile.profileFollow;
-  };
-
-  const unfollowAction = async (id: string) => {
-    const data = await unfollowProfile({ id });
-    if (data.unfollowProfile.__typename !== 'UnfollowProfileSuccess') {
-      throw new Error('팔로우 상태를 변경하지 못했습니다.');
-    }
-  };
-
   const toggleFollow = async () => {
-    if (getDisabled()) {
+    if (disabled) {
       return;
     }
 
-    const targetProfileId = getTargetProfileId();
+    const targetProfileId = profileFragment.data.id;
 
     loading = true;
     errorMessage = null;
 
     try {
-      if (isFollowing() || isPending()) {
-        await unfollowAction(targetProfileId);
+      if (isFollowing || isPending) {
+        const data = await unfollowProfile({ id: targetProfileId });
+        if (data.unfollowProfile.__typename !== 'UnfollowProfileSuccess') {
+          throw new Error('팔로우 상태를 변경하지 못했습니다.');
+        }
+
         setFollow(null);
         return;
       }
 
-      setFollow(await followAction(targetProfileId));
+      const data = await followProfile({ id: targetProfileId });
+      if (data.followProfile.__typename !== 'FollowProfileSuccess') {
+        throw new Error('팔로우 상태를 변경하지 못했습니다.');
+      }
+
+      setFollow(data.followProfile.profileFollow);
     } catch {
       errorMessage = '팔로우 상태를 변경하지 못했습니다.';
     } finally {
@@ -149,24 +141,24 @@
   };
 </script>
 
-{#if !isSelf()}
+{#if !(viewerProfileId && viewerProfileId === profileFragment.data.id)}
   <div class={`inline-flex flex-col items-start gap-1 ${className}`}>
     <Button
-      variant={getVariant()}
+      variant={isFollowing || isPending ? 'secondary' : 'primary'}
       {size}
-      disabled={getDisabled()}
+      {disabled}
       aria-busy={loading}
-      aria-pressed={isFollowing()}
+      aria-pressed={isFollowing}
       onclick={toggleFollow}
     >
-      {getLabel()}
+      {loading ? '처리 중' : isPending ? '요청 중' : isFollowing ? '팔로잉' : '팔로우'}
     </Button>
-    {#if getMessage()}
+    {#if message}
       <p
         class="text-text-secondary m-0 max-w-56 text-xs leading-4"
         role={errorMessage ? 'alert' : undefined}
       >
-        {getMessage()}
+        {message}
       </p>
     {/if}
   </div>
