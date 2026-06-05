@@ -23,6 +23,7 @@
     disabledReason?: string | null;
     size?: 'sm' | 'md' | 'lg';
     class?: string;
+    onChanged?: () => void;
   };
 
   const followProfileMutation = graphql(`
@@ -64,6 +65,7 @@
     disabledReason = null,
     size = 'sm',
     class: className = '',
+    onChanged,
   }: Props = $props();
 
   const [followProfile] = createMutation(followProfileMutation);
@@ -107,6 +109,7 @@
           throw new Error('팔로우 상태를 변경하지 못했습니다.');
         }
 
+        onChanged?.();
         return;
       }
 
@@ -114,6 +117,8 @@
       if (data.followProfile.__typename !== 'FollowProfileSuccess') {
         throw new Error('팔로우 상태를 변경하지 못했습니다.');
       }
+
+      onChanged?.();
     } catch {
       errorMessage = '팔로우 상태를 변경하지 못했습니다.';
     } finally {
