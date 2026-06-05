@@ -1,6 +1,6 @@
 # Database Design Memory
 
-Use this memory when designing or reviewing the kosmo PostgreSQL/Drizzle database schema, especially for ID strategy, UUID v7 type codes, GraphQL Relay ID representation, naming conventions, media/file table boundaries, post content versioning, soft deletes, ActivityPub/AT Protocol data boundaries, and MVP versus follow-up migrations.
+Use this memory when designing or reviewing the kosmo PostgreSQL/Drizzle database schema, especially for ID strategy, kosmo UUID v8 type codes, GraphQL Relay ID representation, naming conventions, media/file table boundaries, post content versioning, soft deletes, ActivityPub/AT Protocol data boundaries, and MVP versus follow-up migrations.
 
 ## Review Posture
 
@@ -44,24 +44,23 @@ Use this memory when designing or reviewing the kosmo PostgreSQL/Drizzle databas
 
 ## ID Strategy
 
-Prefer UUID v7 stored as PostgreSQL `uuid` for database primary keys. Reconsider table-prefix text IDs such as `PRFL0...`.
+Prefer kosmo's custom UUID v8 stored as PostgreSQL `uuid` for database primary keys. Reconsider table-prefix text IDs such as `PRFL0...`.
 
 Recommended direction:
 
 - Do not store string prefixes in DB primary keys.
 - Prefer PostgreSQL native `uuid` over text IDs for joins, index size, cache locality, and throughput.
-- UUID v7 provides time-ordering and distributed generation, making it a strong default for a social product.
-- If the PostgreSQL version does not generate UUID v7 directly, generate UUID v7 in the web server/application before insert.
-- PostgreSQL versions with native UUID v7 generation can also be considered for DB-side generation.
+- kosmo's custom UUID v8 provides time-ordering and distributed generation, making it a strong default for a social product.
+- Generate kosmo UUID v8 in the web server/application before insert.
 - Keep GraphQL Relay global IDs opaque.
-- For GraphQL Relay Node type discrimination, reserve part of the UUID v7 random/implementation-defined area for a table type code.
+- For GraphQL Relay Node type discrimination, reserve part of the custom UUID v8 implementation-defined area for a table type code.
 - Node resolvers can decode the UUID type code to choose the target table.
 - Map type codes to human-readable type names for API responses or logs when needed.
 
-UUID v7 type-code policy:
+Kosmo UUID v8 type-code policy:
 
 - Never modify UUID version bits, variant bits, or timestamp bits.
-- Store the type code in a fixed part of the UUID v7 random/implementation-defined area.
+- Store the type code in a fixed implementation-defined part of the kosmo UUID v8 layout.
 - Choose enough type-code width early, for example 8 bits for 256 types or 12 bits for 4096 types.
 - Document that the type code reduces random collision space, and calculate whether the remaining random bits are sufficient.
 - Generate IDs only through a shared `generateId(tableType)` utility.
@@ -96,8 +95,8 @@ Benchmark candidates:
 
 - `TEXT prefix + ULID`
 - `CHAR(26) ULID`
-- `UUID v7`
-- `UUID v7` with reserved type-code bits
+- kosmo custom `UUID v8`
+- kosmo custom `UUID v8` with reserved type-code bits
 
 Queries to check:
 
@@ -186,10 +185,10 @@ Thumbnail policy:
 - Are business identifiers avoided as primary keys?
 - Are internal DB IDs separated from GraphQL/REST external IDs?
 - Is there a real reason to store prefixed IDs in the database?
-- Is the UUID v7 type-code bit reservation approach considered for GraphQL type discrimination?
+- Is the kosmo UUID v8 type-code bit reservation approach considered for GraphQL type discrimination?
 - Are UUID version, variant, and timestamp bit preservation rules documented?
 - Is there a table type-code map and a policy for adding or retiring codes?
-- Is UUID v7 with PostgreSQL `uuid` considered before text IDs?
+- Is kosmo UUID v8 with PostgreSQL `uuid` considered before text IDs?
 - Can enum/status columns handle near-future state expansion?
 - Are N:N relationships with role/state/order/timestamp represented as join tables?
 - Is deletion policy clear per table?

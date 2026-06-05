@@ -17,7 +17,7 @@
 - 코드는 도메인 소유 관계, 클라이언트 캐시 모델, 실제 사용자 workflow, OpenSpec을 동시에 만족해야 한다.
 - 새 API나 컴포넌트 shape는 "구현하기 쉬운 위치"보다 "데이터를 소유하고 갱신하는 위치"를 기준으로 둔다.
 - DB나 백엔드에 값이 있다는 이유만으로 프론트/API에 노출하지 않는다. 노출 필드는 실제 사용 사례와 갱신/캐시 의미가 있어야 한다.
-- 임시 leaf 처리보다 경계(boundary)를 고친다. 예를 들어 handle 표시 정책, backend error message 노출, GraphQL data shape는 컴포넌트마다 patch하지 말고 API 또는 공통 formatting/error boundary에서 정한다.
+- 임시 leaf 처리보다 경계(boundary)를 고친다. 예를 들어 handle 표시 정책, GraphQL data shape, 확정된 error 표시 정책은 컴포넌트마다 patch하지 말고 API 또는 공통 formatting/error boundary에서 정한다.
 - 타입은 실제 런타임 분기와 맞춘다. link/static처럼 렌더링 element가 달라지면 discriminated union 등으로 attribute 타입도 분기한다.
 - 불필요한 abstraction, wrapper, reactive alias를 만들지 않는다. 실제 책임 분리나 reactive dependency가 있을 때만 분리한다.
 - 미래 정책을 미리 조금 구현해야 한다면 현재 도달 가능한 상태와 미래 상태를 분리해 `TODO:` 또는 후속 이슈로 남긴다.
@@ -31,8 +31,8 @@
 - 삭제/해제 mutation은 클라이언트가 cache에서 제거할 정확한 대상 ID를 반환한다.
 - 상태가 있는 관계 mutation은 기존 row를 state 필터 없이 먼저 조회한 뒤 state별 정책으로 분기한다.
 - create input은 최소화하고 서버에서 명확한 기본값을 채운다.
-- update input은 omitted과 `null`의 의미를 명확히 분리한다. 생략은 보통 변경 없음, `null`은 명시적 clear일 때만 사용한다.
-- backend raw error message가 그대로 한국어 UI에 새지 않게 한다. 전체 error mapping이 아직 과하면 generic localized fallback을 두고 공통화는 후속으로 둔다.
+- update input은 omitted과 `null`의 의미를 명확히 분리한다. 생략은 보통 변경 없음이고, nullable 도메인 필드의 `null`은 명시적 clear가 될 수 있다. non-null 도메인 필드는 update input에서 optional로 받더라도 `null`을 새 값으로 보지 않는다.
+- backend error `message`를 UI에 어떻게 노출할지는 아직 정책이 완전히 정해지지 않은 영역이다. 메시지를 그대로 쓰는 코드만으로 확정 위반으로 단정하지 말고, 필요한 경우 error type/code 기반 분기, generic localized fallback, 원문 노출 허용 범위 중 무엇이 정책인지 먼저 정리한다.
 
 ## Spec And Policy Sync
 

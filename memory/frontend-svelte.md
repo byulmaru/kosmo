@@ -8,13 +8,14 @@
 ## GraphQL Colocation
 
 - GraphQL query, mutation, fragment document는 실제로 사용하는 `.svelte` 파일에 둔다.
-- 별도 `.ts` 파일로 빼는 것은 여러 파일이 같은 document를 재사용하거나 명확한 boundary가 있을 때만 한다.
+- 여러 컴포넌트가 같은 데이터 일부를 필요로 하면 document 자체를 재사용하지 말고 각 컴포넌트 fragment와 fragment spread로 나눈다.
+- 별도 `.ts` 파일로 빼는 것은 runtime boundary나 generated integration처럼 Svelte component 밖에 document를 둘 명확한 이유가 있을 때만 한다.
 - document를 사용하는 파일과 타입이 떨어지면 수동 타입 정의가 늘어나므로 피한다.
 - route/page query는 해당 route component에 두고, 자식 컴포넌트에는 fragment spread와 fragment ref로 데이터를 넘긴다.
 
 ## Fragment Components
 
-- GraphQL 데이터를 소비하는 컴포넌트는 개별 scalar props를 나열하지 말고 `FragmentRefs<'Component_fragment'>`를 받는다.
+- GraphQL 데이터를 소비하는 컴포넌트는 개별 scalar props를 나열하지 말고 Mearie가 생성한 `{FragmentName}$key` 타입을 받는다.
 - 컴포넌트 내부에서 `$mearie`의 `graphql(...)`와 `createFragment(..., () => props.<name>)`를 사용한다.
 - fragment typing을 피하려고 container/view를 나누지 않는다. 실제 책임 분리가 없다면 수동 타입 선언만 늘고 fragment의 장점이 사라진다.
 - 컴포넌트가 필요한 데이터는 자신이 fragment로 선언한다.
@@ -39,8 +40,8 @@
 
 ## UI And Copy
 
-- backend raw English `message`를 한국어 UI에 그대로 노출하지 않는다.
-- 전체 error code mapping이 아직 과하면 generic 한국어 fallback을 먼저 두고, 원문은 logging/debug 용도로만 취급한다.
+- backend error `message`를 사용자 UI에 그대로 노출할지, error type/code로 분기할지, generic 한국어 fallback을 쓸지는 아직 확정된 정책이 아니다.
+- 리뷰에서는 `message` 노출 자체를 곧바로 위반으로 단정하지 말고, 해당 흐름의 사용자 문구 정책이 정해져 있는지 먼저 확인한다. 정책이 정해진 뒤에는 컴포넌트마다 ad hoc 처리하지 말고 공통 error handling boundary나 helper로 모은다.
 - handle에 `@`를 붙일지 같은 표시 정책은 컴포넌트마다 ad hoc 처리하지 않는다. API boundary나 공통 formatting helper에서 정한다.
 - Figma/OpenSpec의 수치와 Tailwind class 수치가 다르면 코드 또는 spec을 같은 PR에서 정렬한다.
 - 긴 표시 이름, 긴 handle, 비어 있는 값 등 layout edge case를 story에 포함한다.

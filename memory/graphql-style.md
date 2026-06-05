@@ -94,7 +94,7 @@ Mutation도 필드별로 나눈다.
 - `packages/core/validation`에는 `handle`, `displayName`, `bio` 같은 재사용 가능한 공통 primitive schema만 둔다. `createProfileInputSchema`처럼 특정 GraphQL mutation input 전체를 core에 공통화하지 않는다.
 - mutation resolver는 권한 확인, 입력 정규화, DB 변경을 수행한다.
 - create mutation처럼 입력을 최소화할 수 있으면 필수 입력만 받고, 나머지 값은 resolver에서 명확한 기본값으로 채운다. 예를 들어 profile 생성은 `handle`만 받고 `displayName`은 `handle`, `followPolicy`는 `OPEN`으로 설정한다.
-- update mutation input은 omitted과 `null`의 의미를 명확히 분리한다. 생략은 보통 변경 없음이고, `null`은 명시적 clear를 지원할 때만 허용한다.
+- update mutation input은 omitted과 `null`의 의미를 명확히 분리한다. 생략은 보통 변경 없음이고, nullable 도메인 필드의 `null`은 명시적 clear가 될 수 있다. non-null 도메인 필드는 update input에서 optional로 받더라도 `null`을 새 값으로 보지 않는다.
 - mutation이 Node 타입을 반환할 때 이미 `returning()` 등으로 row를 가지고 있으면 row를 반환해도 된다. 추가 조회가 필요하다면 `id`만 반환한다.
 - delete/disable처럼 반환할 Node가 더 이상 현재 GraphQL 타입의 auth scope를 만족하지 않을 수 있으면 Node 자체를 반환하지 말고 삭제/비활성화된 대상의 `ID` 같은 payload 값을 반환한다.
 - 삭제/해제 mutation payload의 ID는 클라이언트가 cache에서 제거해야 하는 실제 관계/대상 row의 ID여야 한다. 예를 들어 follow 관계를 삭제하면 `Profile.id`가 아니라 삭제된 `ProfileFollow.id`를 반환한다.
@@ -165,8 +165,7 @@ GraphQL enum은 `apps/api/src/graphql/enums.ts`에서 전역 등록한다.
 - PostgreSQL unique violation 판정은 resolver 로컬 함수로 만들지 않고 `@kosmo/core/db`의 `isUniqueViolation` helper를 사용한다.
 - `createObjectRef`가 만든 loadable Node ref는 batched loading을 제공한다.
 - query, mutation, relationship resolver는 불필요한 추가 조회를 피한다. 이미 row가 있으면 row를 반환하고, ID만 있으면 ID를 반환해 Node loader를 타게 한다.
-- UUID v7 ID가 시간순 정렬 의미를 이미 제공하는 경우 connection cursor/order에서 `createdAt` 정렬을 중복으로 붙이지 않는다. 별도 product 의미가 있을 때만 `createdAt`을 정렬 기준으로 쓴다.
-- 단순 count resolver는 초기에는 query count로 둘 수 있지만, 자주 읽히는 카운트는 트래픽과 정합성 요구가 커질 때 DB-side counter/cache로 옮기는 것을 검토한다.
+- kosmo 자체 구현 UUID v8 ID가 시간순 정렬 의미를 이미 제공하는 경우 connection cursor/order에서 `createdAt` 정렬을 중복으로 붙이지 않는다. 별도 product 의미가 있을 때만 `createdAt`을 정렬 기준으로 쓴다.
 
 ## Nullability
 
