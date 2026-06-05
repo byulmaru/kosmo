@@ -3,7 +3,10 @@ import { Profile } from '@/graphql/resolvers/profile';
 import { Post, PostContent } from '../ref';
 
 builder.objectFields(Post, (t) => ({
-  profile: t.expose('profileId', { type: Profile }),
+  profile: t.field({
+    type: Profile,
+    resolve: (post) => post.profileId,
+  }),
   content: t.field({
     type: PostContent,
     nullable: true,

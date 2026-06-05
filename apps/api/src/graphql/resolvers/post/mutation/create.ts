@@ -1,6 +1,6 @@
 import { db, firstOrThrow, PostContents, Posts } from '@kosmo/core/db';
 import { PostState, PostVisibility } from '@kosmo/core/enums';
-import { extractPlainTextFromTipTapDocument, parseTipTapDocument } from '@kosmo/core/tiptap';
+import { parseTipTapDocumentContent } from '@kosmo/core/tiptap';
 import { postBodyTipTapDocumentSchema } from '@kosmo/core/validation';
 import { eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
@@ -16,9 +16,13 @@ builder.mutationField('createPost', (t) =>
       }),
       visibility: t.input.field({ type: PostVisibility }),
     },
+    errors: {
+      dataField: { name: 'post' },
+    },
     resolve: async (_, { input }, ctx) => {
-      const tipTapDocument = parseTipTapDocument(input.content);
-      const bodyText = extractPlainTextFromTipTapDocument(tipTapDocument);
+      const { document: tipTapDocument, plainText: bodyText } = parseTipTapDocumentContent(
+        input.content,
+      );
 
       return await db.transaction(async (tx) => {
         const post = await tx

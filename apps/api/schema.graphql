@@ -32,6 +32,12 @@ input CreatePostInput {
   visibility: PostVisibility!
 }
 
+union CreatePostResult = CreatePostSuccess
+
+type CreatePostSuccess {
+  post: Post!
+}
+
 input CreateProfileInput {
   handle: String!
 }
@@ -82,7 +88,7 @@ interface ForbiddenError implements Error {
 }
 
 type Mutation {
-  createPost(input: CreatePostInput!): Post!
+  createPost(input: CreatePostInput!): CreatePostResult!
   createProfile(input: CreateProfileInput!): CreateProfileResult!
   deleteProfile(input: DeleteProfileInput!): DeleteProfileResult!
   followProfile(input: FollowProfileInput!): FollowProfileResult!
