@@ -22,6 +22,9 @@
 - Before working on a task, check whether any `memory/*.md` file applies to the topic.
 - If a memory applies, use it as project-specific context while reviewing, implementing, or discussing the task.
 - When a task changes the assumptions documented in a relevant memory file, update that memory in the same change.
+- `memory/coding-style.md`: generalized coding style, API/client contract, spec sync, and runtime/tooling conventions.
+- `memory/frontend-svelte.md`: Svelte, Mearie GraphQL fragment, Storybook, and frontend UI conventions.
+- `memory/review-style.md`: Korean review comment style, priority labels, evidence, and review thread policy.
 - `memory/commit-pr.md`: team commit, branch, stacked PR, and PR writing policy.
 - `memory/script.md`: workspace scripts, command wrappers, and script execution behavior.
 - `memory/database-design.md`: kosmo PostgreSQL/Drizzle database schema design and review context.
