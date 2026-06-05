@@ -2,7 +2,7 @@
 // 패스스루로 모킹한다. 스토리는 fragment ref 대신 평범한 데이터 객체를 prop으로 넘기고,
 // 컴포넌트는 동일한 `fragment.data.*` 접근 패턴으로 데이터를 읽는다.
 // `@mearie/svelte` 자체를 alias로 대체하므로 여기서 다시 import하면 순환 참조가 된다.
-// 스토리에서 사용되지 않는 hook은 호출 시 명확히 실패하도록 stub만 둔다.
+// 스토리에서 실제 실행하지 않는 hook은 호출 시 명확히 실패하도록 stub만 둔다.
 import type {
   createFragment as CreateFragment,
   createMutation as CreateMutation,
@@ -21,7 +21,29 @@ const storybookOnly =
   };
 
 export const createQuery = storybookOnly('createQuery') as unknown as typeof CreateQuery;
-export const createMutation = storybookOnly('createMutation') as unknown as typeof CreateMutation;
+export const createMutation = (() => {
+  const execute = async () => {
+    throw new Error('@mearie/svelte#createMutation executor is not available in Storybook stories');
+  };
+
+  return [
+    execute,
+    {
+      get data() {
+        return undefined;
+      },
+      get loading() {
+        return false;
+      },
+      get error() {
+        return undefined;
+      },
+      get metadata() {
+        return undefined;
+      },
+    },
+  ];
+}) as unknown as typeof CreateMutation;
 export const createSubscription = storybookOnly(
   'createSubscription',
 ) as unknown as typeof CreateSubscription;
