@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createFragment, createMutation } from '@mearie/svelte';
   import { graphql } from '$mearie';
-  import type { DataOf, FragmentRefs } from '@mearie/svelte';
+  import type { FragmentRefs } from '@mearie/svelte';
 
   import Button from './Button.svelte';
 
@@ -15,8 +15,6 @@
     }
   `);
 
-  type ViewerFollow = NonNullable<DataOf<typeof followButtonProfileFragment>['viewerFollow']>;
-
   type Props = {
     profile: FragmentRefs<'FollowButton_profile'>;
     viewerProfileId?: string | null;
@@ -25,7 +23,6 @@
     disabledReason?: string | null;
     size?: 'sm' | 'md' | 'lg';
     class?: string;
-    onFollowChange?: (viewerFollow: ViewerFollow | null) => void;
   };
 
   const followProfileMutation = graphql(`
@@ -67,23 +64,16 @@
     disabledReason = null,
     size = 'sm',
     class: className = '',
-    onFollowChange,
   }: Props = $props();
 
   const [followProfile] = createMutation(followProfileMutation);
   const [unfollowProfile] = createMutation(unfollowProfileMutation);
   const profileFragment = createFragment(followButtonProfileFragment, () => profile);
 
-  let overrideProfileId = $state<string | null>(null);
-  let followOverride = $state<ViewerFollow | null>(null);
   let loading = $state(false);
   let errorMessage = $state<string | null>(null);
 
-  const viewerFollow = $derived(
-    overrideProfileId === profileFragment.data.id
-      ? followOverride
-      : profileFragment.data.viewerFollow,
-  );
+  const viewerFollow = $derived(profileFragment.data.viewerFollow);
   const isFollowing = $derived(viewerFollow?.state === 'ACCEPTED');
   // TODO: 승인 플로우가 추가되면 PENDING/REJECTED 전이를 실제 mutation 결과로 검증한다.
   const isPending = $derived(viewerFollow?.state === 'PENDING');
@@ -99,12 +89,6 @@
   );
   const disabled = $derived(loading || Boolean(unavailableReason));
   const message = $derived(errorMessage ?? unavailableReason);
-
-  const setFollow = (nextFollow: ViewerFollow | null) => {
-    overrideProfileId = profileFragment.data.id;
-    followOverride = nextFollow;
-    onFollowChange?.(nextFollow);
-  };
 
   const toggleFollow = async () => {
     if (disabled) {
@@ -123,7 +107,6 @@
           throw new Error('팔로우 상태를 변경하지 못했습니다.');
         }
 
-        setFollow(null);
         return;
       }
 
@@ -131,8 +114,6 @@
       if (data.followProfile.__typename !== 'FollowProfileSuccess') {
         throw new Error('팔로우 상태를 변경하지 못했습니다.');
       }
-
-      setFollow(data.followProfile.profileFollow);
     } catch {
       errorMessage = '팔로우 상태를 변경하지 못했습니다.';
     } finally {
