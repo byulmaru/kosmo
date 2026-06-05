@@ -20,6 +20,8 @@
 - 임시 leaf 처리보다 경계(boundary)를 고친다. 예를 들어 handle 표시 정책, GraphQL data shape, 확정된 error 표시 정책은 컴포넌트마다 patch하지 말고 API 또는 공통 formatting/error boundary에서 정한다.
 - 타입은 실제 런타임 분기와 맞춘다. link/static처럼 렌더링 element가 달라지면 discriminated union 등으로 attribute 타입도 분기한다.
 - 불필요한 abstraction, wrapper, reactive alias를 만들지 않는다. 실제 책임 분리나 reactive dependency가 있을 때만 분리한다.
+- 구조적으로 재사용될 책임이나 경계가 없다면 한 번만 쓰이는 값, helper, component, wrapper는 추출하지 말고 호출 위치에 인라인한다.
+- 도메인/모듈 경계상 추후 재사용 가능성이 분명하면 미리 이름을 줄 수 있지만, "언젠가 쓸 수도 있음"만으로 one-off 코드를 분리하지 않는다.
 - 미래 정책을 미리 조금 구현해야 한다면 현재 도달 가능한 상태와 미래 상태를 분리해 `TODO:` 또는 후속 이슈로 남긴다.
 - "돌아갈 것 같다"를 근거로 삼지 않는다. 실행 스크립트, CI runner, Storybook, platform-specific 동작은 실제 target workflow에서 확인한다.
 
