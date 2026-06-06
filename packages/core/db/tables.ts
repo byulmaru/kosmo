@@ -1,9 +1,10 @@
 import { sql } from 'drizzle-orm';
-import { index, integer, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
+import { index, integer, jsonb, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
 import * as Enum from './enums';
 import { createId, TableDiscriminator } from './id';
 import { datetime } from './types';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
+import type { TipTapDocument } from '../tiptap';
 
 const createdAt = () =>
   datetime('created_at')
@@ -213,6 +214,7 @@ export const PostContents = pgTable(
       .notNull()
       .references((): AnyPgColumn => Posts.id),
     bodyText: text('body_text').notNull(),
+    bodyJson: jsonb('body_json').$type<TipTapDocument>().notNull(),
     bodyHtml: text('body_html'),
     spoilerText: text('spoiler_text'),
     createdAt: createdAt(),

@@ -134,7 +134,7 @@ Drizzle relation schema policy:
 - `profile`: social identity that writes posts, follows, and federates.
 - `account_profile`: account-profile N:N relationship and role.
 - `post`: post metadata, visibility, state, and current content pointer.
-- `post_content`: body revision, with `(post_id, revision_number)` unique.
+- `post_content`: body revision, storing a plain-text projection plus TipTap JSON body, optional HTML/spoiler render fields, and eventually `(post_id, revision_number)` uniqueness when revisioning lands.
 - `profile_follow`: follower/followee direction and pending/accepted/rejected state.
 
 ## Media And Files

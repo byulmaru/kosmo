@@ -22,8 +22,17 @@ const parseTipTapDocumentNode = (value: unknown) => {
   return node;
 };
 
+export const parseTipTapDocumentContent = (value: unknown) => {
+  const node = parseTipTapDocumentNode(value);
+
+  return {
+    document: node.toJSON() as TipTapDocument,
+    plainText: getText(node, { blockSeparator: '\n' }).trim(),
+  };
+};
+
 export const parseTipTapDocument = (value: unknown): TipTapDocument =>
-  parseTipTapDocumentNode(value).toJSON() as TipTapDocument;
+  parseTipTapDocumentContent(value).document;
 
 export const tipTapDocumentSchema = z.unknown().transform((value, ctx) => {
   try {
@@ -39,7 +48,7 @@ export const tipTapDocumentSchema = z.unknown().transform((value, ctx) => {
 });
 
 export const extractPlainTextFromTipTapDocument = (document: TipTapDocument) =>
-  getText(parseTipTapDocumentNode(document), { blockSeparator: '\n' }).trim();
+  parseTipTapDocumentContent(document).plainText;
 
 export const createTipTapDocumentFromPlainText = (text: string): TipTapDocument => ({
   type: 'doc',
