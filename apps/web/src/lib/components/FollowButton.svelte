@@ -23,9 +23,10 @@
     disabledReason?: string | null;
     size?: 'sm' | 'md' | 'lg';
     class?: string;
-    onChanged?: () => void;
   };
 
+  // followee/profile에 viewerFollow와 followersCount를 함께 선택해, mutation 응답만으로
+  // normalized cache의 Profile.viewerFollow / followersCount가 갱신되게 한다(별도 refetch 불필요).
   const followProfileMutation = graphql(`
     mutation FollowButtonFollowProfile($id: ID!) {
       followProfile(input: { id: $id }) {
@@ -34,6 +35,14 @@
           profileFollow {
             id
             state
+            followee {
+              id
+              followersCount
+              viewerFollow {
+                id
+                state
+              }
+            }
           }
         }
         ... on Error {
@@ -49,6 +58,14 @@
         __typename
         ... on UnfollowProfileSuccess {
           profileFollowId
+          profile {
+            id
+            followersCount
+            viewerFollow {
+              id
+              state
+            }
+          }
         }
         ... on Error {
           message
@@ -65,7 +82,6 @@
     disabledReason = null,
     size = 'sm',
     class: className = '',
-    onChanged,
   }: Props = $props();
 
   const [followProfile] = createMutation(followProfileMutation);
@@ -109,7 +125,6 @@
           throw new Error('팔로우 상태를 변경하지 못했습니다.');
         }
 
-        onChanged?.();
         return;
       }
 
@@ -117,8 +132,6 @@
       if (data.followProfile.__typename !== 'FollowProfileSuccess') {
         throw new Error('팔로우 상태를 변경하지 못했습니다.');
       }
-
-      onChanged?.();
     } catch {
       errorMessage = '팔로우 상태를 변경하지 못했습니다.';
     } finally {

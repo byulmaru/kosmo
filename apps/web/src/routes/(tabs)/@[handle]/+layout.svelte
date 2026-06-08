@@ -66,12 +66,7 @@
   {:else}
     <ProfileHero {profile}>
       {#snippet action()}
-        <FollowButton
-          {profile}
-          {viewerProfileId}
-          {authenticated}
-          onChanged={() => query.refetch()}
-        />
+        <FollowButton {profile} {viewerProfileId} {authenticated} />
       {/snippet}
     </ProfileHero>
     {@render children()}
