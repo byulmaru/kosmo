@@ -9,7 +9,8 @@
 - 게시글 기본 정보(Plain Text 본문, 작성자 표시 이름·핸들, 작성 시각, 공개 범위)를 표시한다. 작성자 영역은 `profileByHandle` 실쿼리 + `...PostAuthorProfile_profile` fragment로 `PostAuthorProfile` 컴포넌트를 렌더하고, `/@{handle}` 프로필로 링크한다. 로딩·조회 오류·없는 게시글 상태도 이 작성자 query에 매핑한다.
 - 상단에 이전 화면으로 돌아가는 간단한 back 컨트롤을 둔다.
 - 로딩·조회 오류·없는 게시글·삭제된 게시글(`state = DELETED`) 상태를 처리하며, 모든 상태에서 상위 `(tabs)` 셸을 유지한다.
-- 작성자는 `profileByHandle` 실쿼리에서 공급하고, 게시글 본문(`Post`/`PostContent`, PR #67 shape)은 단건 조회 query가 없어 로컬 더미 상수 한 곳에서 공급한다. 분기 조건은 작성자 query의 `loading`/`error`/데이터 null과 본문 `state`에 매핑하며, 본문 더미→`post` query 1:1 교체는 별도 서브이슈 PROD-110에서 진행한다.
+- 본문·작성 시각·공개 범위 메타라인은 `lib/components/PostBody.svelte`(신규) fragment 컴포넌트로 분리한다. 기존 스키마의 `Post` 타입 위에 `PostBody_post` fragment(`content { bodyText }`, `createdAt`, `visibility`)를 선언하고, Storybook 스토리(`KOSMO/PostBody`: 본문 variant·공개 범위·빈 본문·작성자 조립)를 추가해 백엔드 없이도 레이아웃을 리뷰할 수 있게 한다. 피드·프로필 목록(PROD-111)에서 재사용한다.
+- 작성자는 `profileByHandle` 실쿼리에서 공급하고, 게시글 본문(`Post`/`PostContent`, PR #67 shape)은 단건 조회 query가 없어 `PostBody_post` fragment ref 형태의 로컬 더미 한 곳에서 공급한다. 분기 조건은 작성자 query의 `loading`/`error`/데이터 null과 본문 `state`에 매핑하며, 본문 더미→`post` query 1:1 교체는 별도 서브이슈 PROD-110에서 진행한다.
 - (Non-goals) 답글·반응·리포스트·ReplyComposer(Figma 풀 스레드 뷰), 실제 게시글 본문 조회 query 연결(PROD-110 서브이슈, PROD-93 의존), 프로필 게시글 목록→상세 이동 링크(PROD-111 서브이슈), 모바일 `(tabs)` 셸 헤더와 back 헤더 통합(별도 웹 레이아웃 이슈)은 본 체인지의 머지 범위 밖이다.
 
 BREAKING 변경 없음.
@@ -26,7 +27,7 @@ BREAKING 변경 없음.
 
 ## Impact
 
-- 영향 코드(apps/web): `routes/(tabs)/@[handle]/[postId]/+page@(tabs).svelte`(신규).
+- 영향 코드(apps/web): `routes/(tabs)/@[handle]/[postId]/+page@(tabs).svelte`(신규), `lib/components/PostBody.svelte`·`lib/components/PostBody.stories.svelte`(신규), `lib/index.ts`(PostBody export 추가).
 - 재사용: `lib/components/PostAuthorProfile.svelte`(작성자 표시 + `PostAuthorProfile_profile` fragment), `lib/components/TextSkeleton.svelte`(로딩 스켈레톤), 시맨틱 디자인 토큰.
 - 소비 API: `profileByHandle`(작성자, 기존 스키마). 게시글 본문은 더미이며, `post` 단건 조회 query 연결은 별도 서브이슈 PROD-110(PROD-93 의존)에서 진행한다. 백엔드 변경 없음.
 - 의존: PROD-91(`(tabs)/@[handle]` 라우트·`profile.ts` 유틸) 위에 스택한다.

@@ -10,6 +10,7 @@
 - [x] 2.3 작성자 영역을 `/@{handle}`로 링크한다 (초기 placeholder, `4.1`에서 컴포넌트로 교체됨)
 - [x] 2.4 작성 시각(`createdAt`)과 공개 범위(`visibility`) 메타라인을 표시한다
 - [x] 2.5 상단에 이전 화면으로 돌아가는 back 컨트롤을 둔다
+- [x] 2.6 본문·메타라인을 `PostBody` fragment 컴포넌트(`PostBody_post` on `Post`)로 분리하고, Storybook 스토리(`KOSMO/PostBody`: 본문 variant·공개 범위·빈 본문·작성자 조립)를 추가한다
 
 ## 3. 상태 처리
 
@@ -26,10 +27,10 @@
 ## 5. 검증
 
 - [x] 5.1 `pnpm --filter @kosmo/web check`(svelte-check) 통과를 확인한다
-- [x] 5.2 `pnpm lint:eslint`, `pnpm lint:prettier` 통과를 확인한다
+- [x] 5.2 `pnpm lint:eslint`, `pnpm lint:prettier`, `pnpm --filter @kosmo/web build-storybook` 통과를 확인한다
 - [x] 5.3 `openspec validate add-web-post-detail-page --strict` 통과를 확인한다
 
 ## 6. 후속 (이 체인지 범위 밖 · 별도 서브이슈)
 
-- [ ] 6.1 본문 더미 상수 → `post` 단건 조회 `createQuery`로 교체한다 — PROD-110 (PROD-93 의존)
+- [ ] 6.1 본문 더미(`PostBody_post` fragment ref) → `post` 단건 조회 `createQuery`로 교체한다(`post { state profile { ...PostAuthorProfile_profile } ...PostBody_post }`) — PROD-110 (PROD-93 의존)
 - [ ] 6.2 프로필 게시글 목록 → 게시글 디테일 이동 링크를 추가한다 — PROD-111

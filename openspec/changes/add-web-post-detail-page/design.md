@@ -25,6 +25,7 @@ PROD-89(게시글 디테일 페이지)는 단건 조회 query(PROD-93)와 작성
 - **작성자 실데이터 + 본문 더미 분리**: 이 레포는 loader 파일 없이 컴포넌트 내 인라인 `createQuery`를 쓴다. 작성자는 스키마에 이미 있는 `profileByHandle`로 실쿼리하지만, 게시글 본문 조회 query는 스키마에 없어 진짜 query를 쓰면 mearie codegen이 깨진다. 따라서 본문(`content`/`createdAt`/`state`/`visibility`)만 PR #67의 `Post`/`PostContent` shape에 맞춘 로컬 더미로 한 곳에 두고, 별도 서브이슈 PROD-110에서 `post` `createQuery`로 1:1 교체되도록 구성한다.
 - **작성자 실데이터(`profileByHandle` + fragment)**: 라우트가 `/@{handle}/{postId}`라 작성자=핸들 주인이므로, `profileByHandle(handle)` 실쿼리에 `...PostAuthorProfile_profile` fragment를 스프레드해 `PostAuthorProfile` 컴포넌트로 작성자를 표시하고 `/@{handle}`로 링크한다. 로딩/오류/없는 게시글 상태도 이 작성자 query에 매핑한다(`@[handle]/+layout.svelte`의 `profileByHandle` + fragment 패턴과 동일).
 - **back 헤더 최소화**: Figma `back_title_action`의 풀 버전(⋯ 메뉴) 대신 이번엔 back 컨트롤만 둔다.
+- **본문 표시 `PostBody` fragment 컴포넌트 분리**: 본문·작성 시각·공개 범위 메타라인을 라우트 인라인 마크업에서 `PostBody.svelte`로 추출하고, 기존 스키마의 `Post` 타입 위 `PostBody_post` fragment(`content { bodyText }`, `createdAt`, `visibility`)로 만든다. 단건 조회 query가 없어도 fragment 정의만으로 mearie codegen이 깨지지 않음을 확인했고(orphan fragment 허용), `Post` 타입 기준이라 Storybook 전용이 아닌 실 runtime-safe shape다. 이로써 (1) 백엔드 없이 Storybook(`KOSMO/PostBody`)에서 본문 레이아웃·상태를 리뷰하고, (2) 피드·프로필 목록(PROD-111)에서 재사용한다. 작성자는 여전히 별도 `profileByHandle`이며, PROD-110에서 `post.profile { ...PostAuthorProfile_profile }`로 합류한다.
 
 ## Risks / Trade-offs
 

@@ -1,8 +1,10 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { createQuery } from '@mearie/svelte';
+  import type { FragmentRefs } from '@mearie/svelte';
   import { graphql } from '$mearie';
   import PostAuthorProfile from '$lib/components/PostAuthorProfile.svelte';
+  import PostBody from '$lib/components/PostBody.svelte';
   import TextSkeleton from '$lib/components/TextSkeleton.svelte';
 
   // 게시글 디테일 화면. PROD-89 범위는 본문·작성자·작성 시각·상태 처리이며,
@@ -30,44 +32,30 @@
 
   const author = $derived(authorQuery.data?.profileByHandle ?? null);
 
-  // PR #67(PROD-92)의 GraphQL `Post`/`PostContent` shape에 맞춘 본문 더미 타입.
-  type PostBody = {
-    content: { bodyText: string; spoilerText: string | null } | null;
-    createdAt: string; // DateTime(ISO)
-    state: 'ACTIVE' | 'DELETED';
-    visibility: 'PUBLIC' | 'FOLLOWERS' | 'DIRECT';
-  };
-
   // TODO(PROD-110): 단건 조회 query(PROD-93) 머지 후 아래 본문 더미를 createQuery로 교체한다.
   //   const postQuery = createQuery(
   //     graphql(`query PostDetailQuery($id: ID!) {
-  //       post(id: $id) { content { bodyText spoilerText } createdAt state visibility }
+  //       post(id: $id) { state profile { id ...PostAuthorProfile_profile } ...PostBody_post }
   //     }`),
   //     () => ({ id: page.params.postId }),
   //   );
-  //   const post = $derived(postQuery.data?.post ?? null);
+  // 그때 작성자는 `post.profile`에서 오고, 상태 분기에 postQuery.loading/error와
+  // post null, post.state를 합류시킨다. 본문 상태별 화면은 Storybook `KOSMO/PostBody`에서 본다.
   //
-  // 그때 상태 분기에 postQuery.loading/error와 post null을 합류시킨다.
-  // 본문 상태별 화면을 확인하려면 아래 더미 값을 임시로 바꾼다.
-  const post = $derived<PostBody | null>({
+  // 더미는 실쿼리 결과와 같은 모양으로 둔다: route에서 직접 읽는 `state`는 객체 필드로 두고,
+  // 본문·메타는 `PostBody_post` fragment ref로 `PostBody`에 넘긴다.
+  type PostDetail = FragmentRefs<'PostBody_post'> & { state: 'ACTIVE' | 'DELETED' };
+  const post: PostDetail | null = {
+    __typename: 'Post',
+    state: 'ACTIVE',
     content: {
+      __typename: 'PostContent',
       bodyText:
         '본문이 들어가는 자리예요. 내용이 길어지면 여러 줄로 늘어납니다.\n줄바꿈도 그대로 보존됩니다.',
-      spoilerText: null,
     },
     createdAt: '2026-04-27T21:14:00.000Z',
-    state: 'ACTIVE',
     visibility: 'PUBLIC',
-  });
-
-  const visibilityLabel: Record<PostBody['visibility'], string> = {
-    PUBLIC: '전체 공개',
-    FOLLOWERS: '팔로워 공개',
-    DIRECT: '다이렉트',
-  };
-
-  const dateFormatter = new Intl.DateTimeFormat('ko-KR', { dateStyle: 'long', timeStyle: 'short' });
-  const formattedCreatedAt = $derived(post ? dateFormatter.format(new Date(post.createdAt)) : '');
+  } as unknown as PostDetail;
 </script>
 
 <!--
@@ -141,18 +129,7 @@
   {:else}
     <article class="px-4 py-4">
       <PostAuthorProfile profile={author} href={`/@${handle}`} />
-
-      {#if post.content}
-        <p class="text-text-primary mt-4 text-[17px] break-words whitespace-pre-wrap">
-          {post.content.bodyText}
-        </p>
-      {/if}
-
-      <div class="text-text-secondary mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-        <time datetime={post.createdAt}>{formattedCreatedAt}</time>
-        <span aria-hidden="true">·</span>
-        <span>{visibilityLabel[post.visibility]}</span>
-      </div>
+      <PostBody class="mt-4" {post} />
     </article>
   {/if}
 </section>
