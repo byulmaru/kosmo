@@ -1,6 +1,7 @@
 <script module lang="ts">
   import { defineMeta } from '@storybook/addon-svelte-csf';
 
+  import FollowButton from './FollowButton.svelte';
   import ProfileHero from './ProfileHero.svelte';
   import type { FragmentRefs } from '@mearie/svelte';
 
@@ -20,6 +21,14 @@
     bio: null,
   } as unknown as ProfileRef;
 
+  // 라우트가 action 슬롯에 넣는 팔로우 버튼 예시. 대상 프로필 id와 viewerProfileId가 달라 버튼이 노출된다.
+  const followViewerProfileId = 'viewer-profile';
+  const followTarget = {
+    __typename: 'Profile',
+    id: 'target-profile',
+    viewerFollow: null,
+  } as unknown as FragmentRefs<'FollowButton_profile'>;
+
   const { Story } = defineMeta({
     title: 'KOSMO/ProfileHero',
     component: ProfileHero,
@@ -32,3 +41,10 @@
 <Story name="Default" args={{ profile: sampleProfile }} />
 <Story name="No bio" args={{ profile: noBioProfile }} />
 <Story name="Loading" args={{ loading: true }} />
+<Story name="With action" asChild>
+  <ProfileHero profile={sampleProfile}>
+    {#snippet action()}
+      <FollowButton profile={followTarget} viewerProfileId={followViewerProfileId} />
+    {/snippet}
+  </ProfileHero>
+</Story>

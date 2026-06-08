@@ -240,6 +240,7 @@ input UnfollowProfileInput {
 union UnfollowProfileResult = NotFoundError | UnfollowProfileSuccess
 
 type UnfollowProfileSuccess {
+  profile: Profile!
   profileFollowId: ID
 }
 

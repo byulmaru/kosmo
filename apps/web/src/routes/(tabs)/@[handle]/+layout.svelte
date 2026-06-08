@@ -2,6 +2,7 @@
   import { page } from '$app/state';
   import { createQuery } from '@mearie/svelte';
   import { graphql } from '$mearie';
+  import FollowButton from '$lib/components/FollowButton.svelte';
   import ProfileHero from '$lib/components/ProfileHero.svelte';
 
   let { children } = $props();
@@ -9,9 +10,16 @@
   const query = createQuery(
     graphql(`
       query ProfileLayoutQuery($handle: String!) {
+        currentSession {
+          id
+          selectedProfile {
+            id
+          }
+        }
         profileByHandle(handle: $handle) {
           id
           ...ProfileHero_profile
+          ...FollowButton_profile
         }
       }
     `),
@@ -19,6 +27,9 @@
   );
 
   const profile = $derived(query.data?.profileByHandle ?? null);
+  // currentSession이 null이면 비로그인. selectedProfile은 본인 프로필 식별과 미선택 안내에 쓰인다.
+  const authenticated = $derived(Boolean(query.data?.currentSession));
+  const viewerProfileId = $derived(query.data?.currentSession?.selectedProfile?.id ?? null);
 </script>
 
 <!--
@@ -31,9 +42,9 @@
   공유 셸/다른 탭 페이지는 건드리지 않는다.
 -->
 <section class="-mx-6 -mt-8 w-[calc(100%+3rem)] self-start lg:w-[600px]">
-  {#if query.loading}
+  {#if query.loading && !profile}
     <ProfileHero loading />
-  {:else if query.error}
+  {:else if query.error && !profile}
     <div class="px-4 py-12 text-center" role="alert">
       <p class="text-text-primary text-base font-semibold">프로필을 불러오지 못했어요</p>
       <p class="text-text-secondary mt-1 text-sm">잠시 후 다시 시도해주세요.</p>
@@ -53,7 +64,11 @@
       </p>
     </div>
   {:else}
-    <ProfileHero {profile} />
+    <ProfileHero {profile}>
+      {#snippet action()}
+        <FollowButton {profile} {viewerProfileId} {authenticated} />
+      {/snippet}
+    </ProfileHero>
     {@render children()}
   {/if}
 </section>

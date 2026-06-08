@@ -25,6 +25,8 @@
     class?: string;
   };
 
+  // followee/profile에 viewerFollow와 followersCount를 함께 선택해, mutation 응답만으로
+  // normalized cache의 Profile.viewerFollow / followersCount가 갱신되게 한다(별도 refetch 불필요).
   const followProfileMutation = graphql(`
     mutation FollowButtonFollowProfile($id: ID!) {
       followProfile(input: { id: $id }) {
@@ -33,6 +35,14 @@
           profileFollow {
             id
             state
+            followee {
+              id
+              followersCount
+              viewerFollow {
+                id
+                state
+              }
+            }
           }
         }
         ... on Error {
@@ -48,6 +58,14 @@
         __typename
         ... on UnfollowProfileSuccess {
           profileFollowId
+          profile {
+            id
+            followersCount
+            viewerFollow {
+              id
+              state
+            }
+          }
         }
         ... on Error {
           message
@@ -123,7 +141,8 @@
 </script>
 
 {#if !(viewerProfileId && viewerProfileId === profileFragment.data.id)}
-  <div class={`inline-flex flex-col items-start gap-1 ${className}`}>
+  <!-- 안내문이 버튼보다 넓어도 버튼은 우측 끝에 붙도록 items-end로 정렬한다. -->
+  <div class={`inline-flex flex-col items-end gap-1 ${className}`}>
     <Button
       variant={isFollowing || isPending ? 'secondary' : 'primary'}
       {size}
@@ -136,7 +155,7 @@
     </Button>
     {#if message}
       <p
-        class="text-text-secondary m-0 max-w-56 text-xs leading-4"
+        class="text-text-secondary m-0 max-w-56 text-right text-xs leading-4"
         role={errorMessage ? 'alert' : undefined}
       >
         {message}

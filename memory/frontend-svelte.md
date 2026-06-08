@@ -21,6 +21,15 @@
 - 컴포넌트가 필요한 데이터는 자신이 fragment로 선언한다.
 - 부모는 자식 fragment를 spread해서 넘기고, 자식의 필드 목록을 부모 props 타입으로 복제하지 않는다.
 
+## Mearie Cache And Mutations
+
+- `cacheExchange`의 `fetchPolicy`는 client(`apps/web/src/lib/graphql/client.ts`) 생성 시 한 번 고정되는 전역 상수이고 기본값은 `cache-first`다. `createQuery` options로 per-query override가 되지 않는다(이 버전 기준).
+- `cache-first`에서 쿼리가 정규화 캐시로 완전히 denormalize되면 네트워크를 타지 않는다. 따라서 `query.refetch()`도 캐시에 데이터가 있으면 네트워크 요청을 보내지 않고 stale 캐시를 다시 내보낸다. mutation 이후 UI 갱신을 부모 `refetch()`에 의존하면 안 된다.
+- mutation 후 화면을 갱신하려면 응답에 **영향받는 엔티티의 `id`와 변경된 필드를 실어와** 정규화 캐시가 자동 갱신되게 한다. 예: follow/unfollow는 대상 `Profile`의 `viewerFollow`와 `followersCount`를 응답에서 선택한다.
+- delete/해제 mutation은 삭제된 관계 row의 `id`만으로 부모 링크를 끊지 못한다. `Profile.viewerFollow`를 `null`로 만들려면 success payload에 영향받는 부모 엔티티(예: `UnfollowProfileSuccess.profile`)를 노출하고 클라이언트가 그 필드를 다시 선택해야 한다.
+- 정규화로 안 되는 경우의 escape hatch로 `client.extension('cache').invalidate(...)`가 있으나(대상을 stale 처리해 네트워크 refetch 유발), 가능하면 응답 기반 정규화 갱신을 우선한다.
+- GraphQL 스키마 필드를 추가/변경하면 API(`schema.graphql` 재생성)와 web(`mearie/vite` 타입 재생성) 양쪽 dev를 재시작해 정렬해야 한다. 안 맞으면 클라이언트가 서버가 모르는 필드를 보내 `mutation` 실패가 난다.
+
 ## Svelte Props And Reactivity
 
 - `href` 유무에 따라 `<a>`와 `<div>`처럼 렌더링 element가 바뀌면 discriminated union props로 나눈다.
