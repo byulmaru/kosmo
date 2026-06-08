@@ -38,7 +38,7 @@
     visibility: 'PUBLIC' | 'FOLLOWERS' | 'DIRECT';
   };
 
-  // TODO(PROD-93): 단건 조회 query 머지 후 아래 본문 더미를 createQuery로 교체한다.
+  // TODO(PROD-110): 단건 조회 query(PROD-93) 머지 후 아래 본문 더미를 createQuery로 교체한다.
   //   const postQuery = createQuery(
   //     graphql(`query PostDetailQuery($id: ID!) {
   //       post(id: $id) { content { bodyText spoilerText } createdAt state visibility }
