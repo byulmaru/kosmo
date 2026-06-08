@@ -141,7 +141,8 @@
 </script>
 
 {#if !(viewerProfileId && viewerProfileId === profileFragment.data.id)}
-  <div class={`inline-flex flex-col items-start gap-1 ${className}`}>
+  <!-- 안내문이 버튼보다 넓어도 버튼은 우측 끝에 붙도록 items-end로 정렬한다. -->
+  <div class={`inline-flex flex-col items-end gap-1 ${className}`}>
     <Button
       variant={isFollowing || isPending ? 'secondary' : 'primary'}
       {size}
@@ -154,7 +155,7 @@
     </Button>
     {#if message}
       <p
-        class="text-text-secondary m-0 max-w-56 text-xs leading-4"
+        class="text-text-secondary m-0 max-w-56 text-right text-xs leading-4"
         role={errorMessage ? 'alert' : undefined}
       >
         {message}
