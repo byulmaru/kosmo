@@ -29,9 +29,11 @@
               <TextSkeleton width="md" />
               <TextSkeleton width="sm" />
             </div>
-            <div class="mt-4 flex flex-col gap-2.5">
-              <TextSkeleton width="full" />
-              <TextSkeleton width="full" />
+            <!-- 실제 게시글(이름 블록 아래 본문이 컬럼 폭으로 흐르는 형태)에 가깝도록
+                 본문 줄은 컨테이너 폭을 가득 채운다. -->
+            <div class="mt-3 flex flex-col gap-2.5">
+              <TextSkeleton width="stretch" />
+              <TextSkeleton width="stretch" />
               <TextSkeleton width="lg" />
             </div>
           </div>
