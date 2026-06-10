@@ -11,6 +11,8 @@
 - [x] 2.4 작성 시각(`createdAt`)과 공개 범위(`visibility`) 메타라인을 표시한다
 - [x] 2.5 상단에 이전 화면으로 돌아가는 back 컨트롤을 둔다
 - [x] 2.6 본문·메타라인을 `PostBody` fragment 컴포넌트(`PostBody_post` on `Post`)로 분리하고, Storybook 스토리(`KOSMO/PostBody`: 본문 variant·공개 범위·빈 본문·작성자 조립)를 추가한다
+- [x] 2.7 Foundation `font/size` 토큰(`--text-xsm` 12, `--text-md` 16)을 `@theme`에 추가하고, PostBody·PostAuthorProfile의 하드코딩 크기(`text-[17px]`, `text-xs`)를 토큰 유틸리티로 교체한다 (본문·이름은 Foundation 스케일에 맞춰 17→16)
+- [x] 2.8 Figma `Post Detail / No Thread`(659:5727) 디자인 반영: `PostAuthorProfile`을 좌측 40px 거터(아바타 md, 이후 스레드 라인 자리) + 우측 콘텐츠 컬럼 구조로 바꾸고 본문·메타를 콘텐츠 컬럼에 배치한다. 메타라인은 우측 정렬 `오후 9:14 · 2026. 04. 27 · 공개 범위` 형식으로 바꾼다. 헤더·게시물 더보기 버튼과 액션바는 이번 범위에서 제외한다
 
 ## 3. 상태 처리
 

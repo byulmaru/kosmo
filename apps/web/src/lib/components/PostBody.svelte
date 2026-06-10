@@ -33,20 +33,30 @@
     DIRECT: '다이렉트',
   };
 
-  const dateFormatter = new Intl.DateTimeFormat('ko-KR', { dateStyle: 'long', timeStyle: 'short' });
-  const formattedCreatedAt = $derived(
-    dateFormatter.format(new Date(postFragment.data.createdAt as string)),
-  );
+  // Figma 메타라인 형식(오후 9:14 · 2026. 04. 27)을 따른다. ko-KR 날짜 출력의
+  // 마지막 마침표는 Figma 표기에 없으므로 제거한다.
+  const timeFormatter = new Intl.DateTimeFormat('ko-KR', { timeStyle: 'short' });
+  const dateFormatter = new Intl.DateTimeFormat('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const formattedCreatedAt = $derived.by(() => {
+    const createdAt = new Date(postFragment.data.createdAt as string);
+    return `${timeFormatter.format(createdAt)} · ${dateFormatter.format(createdAt).replace(/\.$/, '')}`;
+  });
 </script>
 
 <div {...attributes} class={className}>
   {#if postFragment.data.content}
-    <p class="text-text-primary text-[17px] break-words whitespace-pre-wrap">
+    <p class="text-text-primary text-md break-words whitespace-pre-wrap">
       {postFragment.data.content.bodyText}
     </p>
   {/if}
 
-  <div class="text-text-secondary mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+  <div
+    class="text-text-secondary text-xsm mt-1.5 flex flex-wrap items-center justify-end gap-x-2 gap-y-1 lg:text-sm"
+  >
     <time datetime={postFragment.data.createdAt as string}>{formattedCreatedAt}</time>
     <span aria-hidden="true">·</span>
     <span>{visibilityLabel[postFragment.data.visibility]}</span>

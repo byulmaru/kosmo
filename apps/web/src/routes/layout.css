@@ -15,6 +15,12 @@
   --radius-md: 12px;
   --radius-lg: 16px;
   --radius-xl: 24px;
+  /* Foundation font/size 토큰. sm(14)은 Tailwind text-sm과 동일해 생략.
+     lg(20)·xl(24)은 Tailwind 기본(text-lg 18, text-xl 20) 사용처 정리와 함께 후속에서 추가한다. */
+  --text-xsm: 12px;
+  --text-xsm--line-height: 16px;
+  --text-md: 16px;
+  --text-md--line-height: 24px;
 }
 
 :root {

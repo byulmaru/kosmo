@@ -55,15 +55,16 @@
   </div>
 </Story>
 
-<!-- 게시글 디테일의 조립된 레이아웃(작성자 카드 + 본문 + 메타라인)을 함께 보여준다. -->
+<!-- 게시글 디테일의 조립된 레이아웃(좌측 거터 + 작성자 이름 블록 + 본문 + 메타라인)을 함께 보여준다. -->
 <Story name="Assembled (post detail)" asChild parameters={{ controls: { disable: true } }}>
   <article class="w-[600px] px-4 py-4">
-    <PostAuthorProfile profile={authorProfile('코스모 작가', 'kosmo')} href="/@kosmo" />
-    <PostBody
-      class="mt-4"
-      post={post(
-        '본문이 들어가는 자리예요. 내용이 길어지면 여러 줄로 늘어납니다.\n줄바꿈도 그대로 보존됩니다.',
-      )}
-    />
+    <PostAuthorProfile profile={authorProfile('코스모 작가', 'kosmo')} href="/@kosmo">
+      <PostBody
+        class="mt-1.5"
+        post={post(
+          '본문이 들어가는 자리예요. 내용이 길어지면 여러 줄로 늘어납니다.\n줄바꿈도 그대로 보존됩니다.',
+        )}
+      />
+    </PostAuthorProfile>
   </article>
 </Story>

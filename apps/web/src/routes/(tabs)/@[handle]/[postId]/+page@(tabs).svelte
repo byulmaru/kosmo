@@ -89,18 +89,20 @@
   </header>
 
   {#if authorQuery.loading}
-    <div class="px-4 py-4" aria-hidden="true">
-      <div class="flex items-center gap-3">
+    <div class="flex items-start gap-3 px-4 py-4" aria-hidden="true">
+      <div class="w-10 shrink-0">
         <div class="border-border bg-surface size-10 animate-pulse rounded-full border"></div>
+      </div>
+      <div class="min-w-0 flex-1">
         <div class="flex flex-col gap-2">
           <TextSkeleton width="md" />
           <TextSkeleton width="sm" />
         </div>
-      </div>
-      <div class="mt-4 flex flex-col gap-2.5">
-        <TextSkeleton width="full" />
-        <TextSkeleton width="full" />
-        <TextSkeleton width="lg" />
+        <div class="mt-4 flex flex-col gap-2.5">
+          <TextSkeleton width="full" />
+          <TextSkeleton width="full" />
+          <TextSkeleton width="lg" />
+        </div>
       </div>
     </div>
     <span class="sr-only" role="status">게시글을 불러오는 중입니다.</span>
@@ -128,8 +130,9 @@
     </div>
   {:else}
     <article class="px-4 py-4">
-      <PostAuthorProfile profile={author} href={`/@${handle}`} />
-      <PostBody class="mt-4" {post} />
+      <PostAuthorProfile profile={author} href={`/@${handle}`}>
+        <PostBody class="mt-1.5" {post} />
+      </PostAuthorProfile>
     </article>
   {/if}
 </section>
