@@ -6,7 +6,7 @@
 
 #### Scenario: 작성 폼 표시
 
-- **WHEN** 로그인한 사용자가 `/compose` 탭을 연다
+- **WHEN** 로그인했고 active profile이 선택된 사용자가 `/compose` 탭을 연다
 - **THEN** 시스템은 TipTap editor 본문 입력 영역과 제출 버튼을 표시한다
 - **AND** 시스템은 게시글 공개 범위 selector를 표시한다
 - **AND** 본문 입력 영역은 여러 줄 본문을 입력할 수 있다
