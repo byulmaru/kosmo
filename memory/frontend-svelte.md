@@ -16,6 +16,8 @@
 ## Fragment Components
 
 - GraphQL 데이터를 소비하는 컴포넌트는 개별 scalar props를 나열하지 말고 Mearie가 생성한 `{FragmentName}$key` 타입을 받는다.
+- `@mearie/svelte`의 `FragmentRefs<'FragmentName'>` helper를 fragment prop 타입으로 쓰지 않는다. Mearie 공식 fragment guide의 `$key` prop 타입 패턴을 따른다.
+- generated fragment `$key` 타입은 `$mearie`에서 type-only import한다.
 - 컴포넌트 내부에서 `$mearie`의 `graphql(...)`와 `createFragment(..., () => props.<name>)`를 사용한다.
 - fragment typing을 피하려고 container/view를 나누지 않는다. 실제 책임 분리가 없다면 수동 타입 선언만 늘고 fragment의 장점이 사라진다.
 - 컴포넌트가 필요한 데이터는 자신이 fragment로 선언한다.
@@ -52,5 +54,6 @@
 - backend error `message`를 사용자 UI에 그대로 노출할지, error type/code로 분기할지, generic 한국어 fallback을 쓸지는 아직 확정된 정책이 아니다.
 - 리뷰에서는 `message` 노출 자체를 곧바로 위반으로 단정하지 말고, 해당 흐름의 사용자 문구 정책이 정해져 있는지 먼저 확인한다. 정책이 정해진 뒤에는 컴포넌트마다 ad hoc 처리하지 말고 공통 error handling boundary나 helper로 모은다.
 - handle에 `@`를 붙일지 같은 표시 정책은 컴포넌트마다 ad hoc 처리하지 않는다. API boundary나 공통 formatting helper에서 정한다.
+- Lucide 아이콘을 import할 때는 반드시 `GlobeIcon`, `ExampleIcon`처럼 `Icon` suffix가 붙은 이름만 사용한다.
 - Figma/OpenSpec의 수치와 Tailwind class 수치가 다르면 코드 또는 spec을 같은 PR에서 정렬한다.
 - 긴 표시 이름, 긴 handle, 비어 있는 값 등 layout edge case를 story에 포함한다.

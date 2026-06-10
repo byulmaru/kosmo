@@ -2,7 +2,6 @@ import { cacheExchange, createClient, dedupExchange, httpExchange } from '@meari
 import { schema } from '$mearie';
 
 export const client = createClient({
-  // @ts-expect-error 왜지??
   schema,
   exchanges: [
     dedupExchange(),
