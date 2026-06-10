@@ -23,7 +23,7 @@
         }
       }
     `),
-    () => ({ handle: page.params.handle }),
+    () => ({ handle: page.params.handle! }),
   );
 
   const profile = $derived(query.data?.profileByHandle ?? null);
