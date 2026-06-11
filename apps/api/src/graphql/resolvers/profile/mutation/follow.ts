@@ -16,13 +16,13 @@ import { ProfileFollow } from '../ref';
 
 builder.mutationField('followProfile', (t) =>
   t.withAuth({ usingProfile: true }).fieldWithInput({
-    type: ProfileFollow,
+    type: builder.simpleObject('FollowProfilePayload', {
+      fields: (field) => ({
+        profileFollow: field.field({ type: ProfileFollow }),
+      }),
+    }),
     input: {
       id: t.input.id({ validate: z.uuid() }),
-    },
-    errors: {
-      types: [ConflictError, NotFoundError],
-      dataField: { name: 'profileFollow' },
     },
     resolve: async (_, { input }, ctx) => {
       const targetProfile = await db
@@ -50,7 +50,7 @@ builder.mutationField('followProfile', (t) =>
 
       if (existingFollow) {
         if (existingFollow.state === ProfileFollowState.ACCEPTED) {
-          return existingFollow;
+          return { profileFollow: existingFollow };
         }
 
         // PENDING/REJECTED 재요청 정책은 후속 pending 승인 플로우에서 결정한다.
@@ -60,7 +60,7 @@ builder.mutationField('followProfile', (t) =>
         });
       }
 
-      return await db
+      const profileFollow = await db
         .insert(ProfileFollows)
         .values({
           followerProfileId: ctx.session.profileId,
@@ -95,6 +95,8 @@ builder.mutationField('followProfile', (t) =>
             field: 'id',
           });
         });
+
+      return { profileFollow };
     },
   }),
 );

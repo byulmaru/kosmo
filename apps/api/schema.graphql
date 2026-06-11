@@ -21,20 +21,12 @@ enum AccountState {
   SUSPENDED
 }
 
-type ConflictError implements Error & FieldError {
-  code: String!
-  field: String
-  message: String!
-}
-
 input CreatePostInput {
   content: TipTapDocument!
   visibility: PostVisibility!
 }
 
-union CreatePostResult = CreatePostSuccess
-
-type CreatePostSuccess {
+type CreatePostPayload {
   post: Post!
 }
 
@@ -42,9 +34,7 @@ input CreateProfileInput {
   handle: String!
 }
 
-union CreateProfileResult = ConflictError | CreateProfileSuccess
-
-type CreateProfileSuccess {
+type CreateProfilePayload {
   profile: Profile!
 }
 
@@ -55,36 +45,16 @@ input DeleteProfileInput {
   id: ID!
 }
 
-union DeleteProfileResult = DeleteProfileSuccess | NotFoundError | PermissionDeniedError
-
-type DeleteProfileSuccess {
+type DeleteProfilePayload {
   profileId: ID!
-}
-
-interface Error {
-  code: String!
-  message: String!
-}
-
-interface FieldError implements Error {
-  code: String!
-  field: String
-  message: String!
 }
 
 input FollowProfileInput {
   id: ID!
 }
 
-union FollowProfileResult = ConflictError | FollowProfileSuccess | NotFoundError
-
-type FollowProfileSuccess {
+type FollowProfilePayload {
   profileFollow: ProfileFollow!
-}
-
-interface ForbiddenError implements Error {
-  code: String!
-  message: String!
 }
 
 type HomeTimelineConnection {
@@ -98,22 +68,17 @@ type HomeTimelineConnectionEdge {
 }
 
 type Mutation {
-  createPost(input: CreatePostInput!): CreatePostResult!
-  createProfile(input: CreateProfileInput!): CreateProfileResult!
-  deleteProfile(input: DeleteProfileInput!): DeleteProfileResult!
-  followProfile(input: FollowProfileInput!): FollowProfileResult!
-  selectProfile(input: SelectProfileInput!): SelectProfileResult!
-  unfollowProfile(input: UnfollowProfileInput!): UnfollowProfileResult!
-  updateProfile(input: UpdateProfileInput!): UpdateProfileResult!
+  createPost(input: CreatePostInput!): CreatePostPayload!
+  createProfile(input: CreateProfileInput!): CreateProfilePayload!
+  deleteProfile(input: DeleteProfileInput!): DeleteProfilePayload!
+  followProfile(input: FollowProfileInput!): FollowProfilePayload!
+  selectProfile(input: SelectProfileInput!): SelectProfilePayload!
+  unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
+  updateProfile(input: UpdateProfileInput!): UpdateProfilePayload!
 }
 
 interface Node {
   id: ID!
-}
-
-type NotFoundError implements Error {
-  code: String!
-  message: String!
 }
 
 type PageInfo {
@@ -121,11 +86,6 @@ type PageInfo {
   hasNextPage: Boolean!
   hasPreviousPage: Boolean!
   startCursor: String
-}
-
-type PermissionDeniedError implements Error & ForbiddenError {
-  code: String!
-  message: String!
 }
 
 type Post implements Node {
@@ -240,9 +200,7 @@ input SelectProfileInput {
   id: ID!
 }
 
-union SelectProfileResult = NotFoundError | SelectProfileSuccess
-
-type SelectProfileSuccess {
+type SelectProfilePayload {
   profile: Profile!
 }
 
@@ -259,9 +217,7 @@ input UnfollowProfileInput {
   id: ID!
 }
 
-union UnfollowProfileResult = NotFoundError | UnfollowProfileSuccess
-
-type UnfollowProfileSuccess {
+type UnfollowProfilePayload {
   profile: Profile!
   profileFollowId: ID
 }
@@ -273,14 +229,6 @@ input UpdateProfileInput {
   id: ID!
 }
 
-union UpdateProfileResult = NotFoundError | PermissionDeniedError | UpdateProfileSuccess
-
-type UpdateProfileSuccess {
+type UpdateProfilePayload {
   profile: Profile!
-}
-
-type ValidationError implements Error & FieldError {
-  code: String!
-  field: String
-  message: String!
 }

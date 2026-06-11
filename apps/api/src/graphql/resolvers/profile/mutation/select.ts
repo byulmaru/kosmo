@@ -15,13 +15,13 @@ import { Profile } from '../ref';
 
 builder.mutationField('selectProfile', (t) =>
   t.withAuth({ login: true }).fieldWithInput({
-    type: Profile,
+    type: builder.simpleObject('SelectProfilePayload', {
+      fields: (field) => ({
+        profile: field.field({ type: Profile }),
+      }),
+    }),
     input: {
       id: t.input.id({ validate: z.uuid() }),
-    },
-    errors: {
-      types: [NotFoundError],
-      dataField: { name: 'profile' },
     },
     resolve: async (_, { input }, ctx) => {
       const profile = await db
@@ -45,7 +45,7 @@ builder.mutationField('selectProfile', (t) =>
         .returning()
         .then(firstOrThrow);
 
-      return profile;
+      return { profile };
     },
   }),
 );

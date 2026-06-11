@@ -6,13 +6,13 @@ import { builder } from '@/graphql/builder';
 
 builder.mutationField('deleteProfile', (t) =>
   t.withAuth({ login: true }).fieldWithInput({
-    type: 'ID',
+    type: builder.simpleObject('DeleteProfilePayload', {
+      fields: (field) => ({
+        profileId: field.id(),
+      }),
+    }),
     input: {
       id: t.input.id({ required: true }),
-    },
-    errors: {
-      types: [NotFoundError, PermissionDeniedError],
-      dataField: { name: 'profileId' },
     },
     resolve: async (_, { input }, ctx) => {
       const profile = await db
@@ -45,7 +45,7 @@ builder.mutationField('deleteProfile', (t) =>
           .where(eq(Sessions.activeProfileId, input.id));
       });
 
-      return profile.id;
+      return { profileId: profile.id };
     },
   }),
 );

@@ -8,16 +8,16 @@ import { Profile } from '../ref';
 
 builder.mutationField('createProfile', (t) =>
   t.withAuth({ login: true }).fieldWithInput({
-    type: Profile,
+    type: builder.simpleObject('CreateProfilePayload', {
+      fields: (field) => ({
+        profile: field.field({ type: Profile }),
+      }),
+    }),
     input: {
       handle: t.input.string({ validate: profileHandleSchema }),
     },
-    errors: {
-      types: [ConflictError],
-      dataField: { name: 'profile' },
-    },
     resolve: async (_, { input }, ctx) => {
-      return await db.transaction(async (tx) => {
+      const profile = await db.transaction(async (tx) => {
         const profile = await tx
           .insert(Profiles)
           .values({
@@ -44,6 +44,8 @@ builder.mutationField('createProfile', (t) =>
 
         return profile;
       });
+
+      return { profile };
     },
   }),
 );

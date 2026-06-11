@@ -8,7 +8,11 @@ import { Post } from '../ref';
 
 builder.mutationField('createPost', (t) =>
   t.withAuth({ usingProfile: true }).fieldWithInput({
-    type: Post,
+    type: builder.simpleObject('CreatePostPayload', {
+      fields: (field) => ({
+        post: field.field({ type: Post }),
+      }),
+    }),
     input: {
       content: t.input.field({
         type: 'TipTapDocument',
@@ -16,15 +20,12 @@ builder.mutationField('createPost', (t) =>
       }),
       visibility: t.input.field({ type: PostVisibility }),
     },
-    errors: {
-      dataField: { name: 'post' },
-    },
     resolve: async (_, { input }, ctx) => {
       const { document: tipTapDocument, plainText: bodyText } = parseTipTapDocumentContent(
         input.content,
       );
 
-      return await db.transaction(async (tx) => {
+      const post = await db.transaction(async (tx) => {
         const post = await tx
           .insert(Posts)
           .values({
@@ -52,6 +53,8 @@ builder.mutationField('createPost', (t) =>
           .returning()
           .then(firstOrThrow);
       });
+
+      return { post };
     },
   }),
 );

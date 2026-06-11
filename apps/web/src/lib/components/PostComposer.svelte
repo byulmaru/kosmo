@@ -3,6 +3,7 @@
   import { createFragment, createMutation } from '@mearie/svelte';
   import { PostVisibility } from '@kosmo/core/enums';
   import { postBodyMaxLength } from '@kosmo/core/validation';
+  import { getFirstGraphQLError } from '$lib/graphql/error';
   import { getProfileInitial } from '$lib/utils/profile';
   import Avatar from './Avatar.svelte';
   import Button from './Button.svelte';
@@ -106,8 +107,10 @@
         },
       });
       resetEditor();
-    } catch {
-      errorMessage = '게시글을 작성하지 못했습니다.';
+    } catch (error) {
+      const graphQLError = getFirstGraphQLError(error);
+
+      errorMessage = graphQLError?.message ?? '게시글을 작성하지 못했습니다.';
     } finally {
       submitting = false;
     }
