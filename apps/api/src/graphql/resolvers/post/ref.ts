@@ -1,11 +1,17 @@
 import { db, PostContents, Posts, Profiles, TableDiscriminator } from '@kosmo/core/db';
 import { PostState, PostVisibility, ProfileState } from '@kosmo/core/enums';
-import { and, eq, getColumns, inArray } from 'drizzle-orm';
+import { and, eq, getColumns, inArray, or } from 'drizzle-orm';
 import { createObjectRef } from '@/graphql/utils';
 
-export const Post = createObjectRef('Post', TableDiscriminator.Posts, (ids) => {
-  // TODO(PROD-102): Apply viewer-specific visibility checks. PUBLIC and UNLISTED
-  // are readable by ID, while FOLLOWERS and DIRECT need restricted access.
+export const Post = createObjectRef('Post', TableDiscriminator.Posts, (ids, ctx) => {
+  // TODO(PROD-121): Replace this PUBLIC/UNLISTED guard with viewer-specific access.
+  const visibilityWhere = ctx.session?.profileId
+    ? or(
+        inArray(Posts.visibility, [PostVisibility.PUBLIC, PostVisibility.UNLISTED]),
+        eq(Posts.profileId, ctx.session.profileId),
+      )
+    : inArray(Posts.visibility, [PostVisibility.PUBLIC, PostVisibility.UNLISTED]);
+
   return db
     .select(getColumns(Posts))
     .from(Posts)
@@ -14,6 +20,7 @@ export const Post = createObjectRef('Post', TableDiscriminator.Posts, (ids) => {
       and(
         inArray(Posts.id, ids),
         eq(Posts.state, PostState.ACTIVE),
+        visibilityWhere,
         eq(Profiles.state, ProfileState.ACTIVE),
       ),
     );
@@ -31,7 +38,7 @@ export const PostContent = createObjectRef(
   'PostContent',
   TableDiscriminator.PostContents,
   (ids) => {
-    // TODO(PROD-102): Prevent direct PostContent node loads from bypassing the parent
+    // TODO(PROD-121): Prevent direct PostContent node loads from bypassing the parent
     // post's state and visibility policy. Historical content remains loadable.
     return db.select().from(PostContents).where(inArray(PostContents.id, ids));
   },

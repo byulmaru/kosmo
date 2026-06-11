@@ -16,6 +16,22 @@ API는 활성 게시글을 GraphQL `Post` Node로 노출해야 하며 작성자 
 - **AND** `profile`은 게시글 작성자 프로필을 가리킨다
 - **AND** `content`는 게시글의 현재 콘텐츠를 가리킨다
 
+#### Scenario: 공개 게시글 object 조회
+
+- **WHEN** 클라이언트가 `PUBLIC` 또는 `UNLISTED` 공개 범위의 활성 게시글 Node를 조회한다
+- **THEN** 시스템은 `Post` object를 반환한다
+
+#### Scenario: 작성자 본인의 비공개 게시글 object 조회
+
+- **WHEN** 현재 active profile이 게시글 작성자이고 `FOLLOWERS` 또는 `DIRECT` 공개 범위의 활성 게시글 Node를 조회한다
+- **THEN** 시스템은 `Post` object를 반환한다
+
+#### Scenario: 작성자가 아닌 viewer의 비공개 게시글 object 조회
+
+- **WHEN** 현재 active profile이 게시글 작성자가 아니거나 인증되지 않은 클라이언트가 `FOLLOWERS` 또는 `DIRECT` 공개 범위의 게시글 Node를 조회한다
+- **THEN** 시스템은 해당 게시글을 GraphQL `Post` object로 노출하지 않는다
+- **AND** viewer 기준 세부 접근 제어는 후속 변경에서 정의한다
+
 #### Scenario: 비활성 게시글 object 조회
 
 - **WHEN** 게시글 상태가 `ACTIVE`가 아니다
