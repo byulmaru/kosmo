@@ -11,7 +11,7 @@
 - [x] 2.1 `PostListItem.svelte`를 생성하고 `PostListItem_post` fragment(content.bodyText, createdAt, profile + PostAuthorProfile spread)를 선언한다
 - [x] 2.2 `PostAuthorProfile`(avatarSize=lg) + trailing 시간 + 본문으로 항목 레이아웃을 구성한다 (빈 본문이면 본문 영역 생략)
 - [x] 2.3 작성 시간 표시를 구현한다: 24시간 미만 상대시간("방금 전"/"n분 전"/"n시간 전"), 이상 날짜("2026. 04. 27"), `<time datetime>` 포함
-- [x] 2.4 본문 4줄 line-clamp와 잘림 감지(scrollHeight 비교)를 구현하고, 잘린 경우에만 "더보기..." 버튼을 노출한다
+- [x] 2.4 본문 잘림(200자 또는 10줄 초과 시 말줄임)을 구현하고, 잘린 경우에만 "더보기..." 버튼을 노출한다
 - [x] 2.5 "더보기..." 클릭 시 인라인 펼침(버튼 숨김)을 구현한다
 
 ## 3. Storybook

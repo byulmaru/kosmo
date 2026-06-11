@@ -60,34 +60,28 @@
     return date.replace(/\.$/, '');
   });
 
-  // 본문 클램프(Figma PostText 67:527 — 예시 기준 4줄)와 "더보기..."(ExpandButton
-  // 67:515) 인라인 펼침. 디테일 이동 링크는 별도 서브이슈 범위라 페이지 이동 없이
-  // 제자리에서 펼친다. 펼친 뒤 다시 접는 동작은 Figma에 없어 두지 않는다.
-  let bodyElement = $state<HTMLParagraphElement>();
+  // 본문 미리보기와 "더보기..."(Figma ExpandButton 67:515) 인라인 펼침. 디테일 이동
+  // 링크는 별도 서브이슈 범위라 페이지 이동 없이 제자리에서 펼친다. 펼친 뒤 다시
+  // 접는 동작은 Figma에 없어 두지 않는다.
+  // 잘림 기준은 렌더 측정 없이 본문 텍스트로 판정한다: 200자 초과 또는 줄바꿈 10줄
+  // 초과 중 하나라도 해당하면 자른다(글자 수 기준은 팀 결정값, Figma에 명시 없음).
+  // 줄 상한은 글자 수는 적어도 줄바꿈이 많은 본문이 목록을 길게 차지하지 않게 한다.
+  const BODY_PREVIEW_MAX_CHARS = 200;
+  const BODY_PREVIEW_MAX_LINES = 10;
+
   let expanded = $state(false);
-  let clamped = $state(false);
 
-  // 잘림 여부는 클램프된 요소의 scrollHeight가 보이는 높이를 넘는지로 감지한다.
-  // SSR에서는 측정할 수 없어 마운트 후 버튼이 나타나고, 폭 변화(리사이즈)에도
-  // 재평가한다.
-  $effect(() => {
-    const element = bodyElement;
-    // 본문이 바뀌면(높이 변화 없이도) 다시 측정해야 하므로 의존성으로 읽는다.
-    const bodyText = postFragment.data.content?.bodyText;
-    if (!element || !bodyText || expanded) {
-      clamped = false;
-      return;
+  const fullBody = $derived(postFragment.data.content?.bodyText ?? '');
+  const previewBody = $derived.by(() => {
+    const preview = fullBody.split('\n').slice(0, BODY_PREVIEW_MAX_LINES).join('\n');
+    // surrogate pair(이모지 등)를 자르지 않도록 코드 포인트 단위로 센다.
+    const characters = [...preview];
+    if (characters.length <= BODY_PREVIEW_MAX_CHARS) {
+      return preview;
     }
-
-    const measure = () => {
-      clamped = element.scrollHeight > element.clientHeight;
-    };
-    measure();
-
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
+    return characters.slice(0, BODY_PREVIEW_MAX_CHARS).join('');
   });
+  const clamped = $derived(previewBody !== fullBody);
 </script>
 
 <article {...attributes} class={`border-border border-b px-2 pt-2 pb-4 ${className ?? ''}`}>
@@ -99,13 +93,10 @@
     {/snippet}
 
     {#if postFragment.data.content}
-      <p
-        bind:this={bodyElement}
-        class={`text-text-primary text-md mt-2 break-words whitespace-pre-wrap ${expanded ? '' : 'line-clamp-4'}`}
-      >
-        {postFragment.data.content.bodyText}
+      <p class="text-text-primary text-md mt-2 break-words whitespace-pre-wrap">
+        {#if expanded || !clamped}{fullBody}{:else}{previewBody}…{/if}
       </p>
-      {#if clamped}
+      {#if clamped && !expanded}
         <button
           class="text-more text-md focus-visible:outline-more block rounded-md text-left font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
           onclick={() => (expanded = true)}

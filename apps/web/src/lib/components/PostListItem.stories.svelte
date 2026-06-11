@@ -31,9 +31,12 @@
     }) as unknown as FragmentRefs<'PostListItem_post'>;
 
   const longBody =
-    '긴 본문은 목록에서 4줄로 잘리고 더보기 버튼이 나타납니다. ' +
-    '이 문장은 클램프 동작을 확인하기 위해 일부러 길게 이어 붙였습니다. '.repeat(6) +
-    '\n줄바꿈 이후의 내용은 펼치기 전에는 보이지 않아야 합니다.\n마지막 줄입니다.';
+    '긴 본문은 목록에서 200자까지만 보이고 더보기 버튼이 나타납니다. ' +
+    '이 문장은 잘림 동작을 확인하기 위해 일부러 길게 이어 붙였습니다. '.repeat(6) +
+    '\n잘린 이후의 내용은 펼치기 전에는 보이지 않아야 합니다.\n마지막 줄입니다.';
+
+  // 글자 수는 200자 이하지만 줄바꿈이 10줄을 넘는 본문 — 줄 상한으로 잘려야 한다.
+  const manyLinesBody = Array.from({ length: 14 }, (_, index) => `${index + 1}번째 줄`).join('\n');
 
   const { Story } = defineMeta({
     title: 'KOSMO/PostListItem',
@@ -44,12 +47,12 @@
 
 <Story name="Playground" args={{ post: post('목록 항목 본문이 들어가는 자리예요.') }} />
 
-<!-- 본문 길이별 클램프 상태. 긴 본문은 4줄 클램프 + "더보기..." 버튼이 보여야 한다. -->
+<!-- 본문 길이별 잘림 상태. 200자 초과(또는 10줄 초과) 본문은 잘리고 "더보기..." 버튼이 보여야 한다. -->
 <Story name="Body states" asChild parameters={{ controls: { disable: true } }}>
   <div class="grid w-[390px]">
     <PostListItem post={post('짧은 본문 한 줄.')} />
     <PostListItem post={post(longBody)} />
-    <PostListItem post={post('줄바꿈이\n많은\n본문도\n네 줄을\n넘으면\n잘립니다.')} />
+    <PostListItem post={post(manyLinesBody)} />
     <PostListItem post={post(null)} />
   </div>
 </Story>
