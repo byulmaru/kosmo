@@ -65,9 +65,9 @@
   게시글 디테일은 피드처럼 상단부터 보여야 하므로 프로필 라우트와 같은 방식으로:
   - self-start 로 탑정렬
   - 음수 마진으로 main 좌우/상단 패딩(px-6 py-8)을 상쇄
-    모바일: 풀블리드. 데스크톱: 고정 폭 컬럼.
+    폭은 항상 중앙 컬럼 트랙을 가득 채운다(최대 폭 600px은 공유 셸 그리드가 결정).
 -->
-<section class="-mx-6 -mt-8 w-[calc(100%+3rem)] self-start lg:w-[600px]">
+<section class="-mx-6 -mt-8 w-[calc(100%+3rem)] self-start">
   <header
     class="border-border bg-bg/95 sticky top-0 z-10 flex items-center gap-3 border-b px-4 py-3 backdrop-blur"
   >
