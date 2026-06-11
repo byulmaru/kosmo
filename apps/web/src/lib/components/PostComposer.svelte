@@ -73,7 +73,6 @@
   let selectedVisibility = $state<PostVisibility>(PostVisibility.UNLISTED);
   let editorFocused = $state(false);
   let submitting = $state(false);
-  let validationMessage = $state<string | null>(null);
   let errorMessage = $state<string | null>(null);
 
   const resetEditor = () => {
@@ -119,7 +118,7 @@
   </header>
 
   <div
-    class={`relative min-h-40 rounded-md border bg-bg transition-colors ${validationMessage ? 'border-danger' : editorFocused ? 'border-primary' : 'border-border'}`}
+    class={`relative min-h-40 rounded-md border bg-bg transition-colors ${errorMessage ? 'border-danger' : editorFocused ? 'border-primary' : 'border-border'}`}
   >
     <TipTapEditor
       placeholder="무슨 일이 일어나고 있나요?"
@@ -131,9 +130,9 @@
     />
   </div>
 
-  {#if validationMessage || errorMessage}
+  {#if errorMessage}
     <p class="text-danger m-0 text-sm leading-5" role="alert">
-      {validationMessage ?? errorMessage}
+      {errorMessage}
     </p>
   {/if}
 
