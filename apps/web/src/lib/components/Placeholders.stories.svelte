@@ -13,7 +13,7 @@
 
 <script lang="ts">
   const ratios = ['1:1', '4:3', '16:9'] as const;
-  const widths = ['full', 'lg', 'md', 'sm'] as const;
+  const widths = ['stretch', 'full', 'lg', 'md', 'sm'] as const;
   const sizes = ['sm', 'md', 'lg'] as const;
 </script>
 
