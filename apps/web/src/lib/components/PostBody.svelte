@@ -3,6 +3,7 @@
   import { createFragment } from '@mearie/svelte';
   import type { FragmentRefs } from '@mearie/svelte';
   import type { HTMLAttributes } from 'svelte/elements';
+  import { Temporal } from 'temporal-polyfill';
 
   // 게시글 본문(Plain Text)과 작성 시각·공개 범위 메타라인을 표시하는 프래그먼트 컴포넌트.
   // 작성자 영역은 별도 `PostAuthorProfile`이 담당하므로 여기에는 포함하지 않는다.
@@ -37,15 +38,15 @@
 
   // Figma 메타라인 형식(오후 9:14 · 2026. 04. 27)을 따른다. ko-KR 날짜 출력의
   // 마지막 마침표는 Figma 표기에 없으므로 제거한다.
-  const timeFormatter = new Intl.DateTimeFormat('ko-KR', { timeStyle: 'short' });
-  const dateFormatter = new Intl.DateTimeFormat('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
   const formattedCreatedAt = $derived.by(() => {
-    const createdAt = new Date(postFragment.data.createdAt as string);
-    return `${timeFormatter.format(createdAt)} · ${dateFormatter.format(createdAt).replace(/\.$/, '')}`;
+    const createdAt = Temporal.Instant.from(postFragment.data.createdAt as string);
+    const time = createdAt.toLocaleString('ko-KR', { timeStyle: 'short' });
+    const date = createdAt.toLocaleString('ko-KR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    return `${time} · ${date.replace(/\.$/, '')}`;
   });
 </script>
 
