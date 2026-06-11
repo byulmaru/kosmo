@@ -49,6 +49,13 @@
 - Storybook에서만 통과하고 실제 Mearie runtime에서는 깨질 수 있는 shape를 만들지 않는다.
 - 컴포넌트 상태 story는 실제 variant/route/state 전체를 보여주어야 한다. 일부 active state만 노출하면 카탈로그 용도가 떨어진다.
 
+## Tailwind Variants
+
+- variant·slot 클래스 분기가 필요한 컴포넌트는 template string 조합 대신 `tailwind-variants`를 사용한다.
+- `tv`는 `tailwind-variants`에서 직접 import하지 않고 `$lib/tv`의 공용 wrapper를 import한다. tailwind-merge가 layout.css `@theme` 커스텀 토큰(`text-text-secondary` 색상 vs `text-xsm` 폰트 크기)을 같은 그룹으로 오판해 색상 클래스를 제거하므로, wrapper가 토큰을 `twMergeConfig`에 등록해 둔다.
+- `@theme`에 색상·폰트 크기 토큰을 추가하면 `$lib/tv.ts`의 등록 목록도 같은 변경에서 갱신한다.
+- tv를 쓰는 컴포넌트의 `class` prop은 Svelte `ClassValue` 대신 `string | null`로 좁힌다(tailwind-merge가 숫자·딕셔너리를 받지 못함).
+
 ## Design Tokens
 
 - 색상, 폰트 크기, radius 같은 디자인 값은 Tailwind 임의값(`text-[17px]`, `bg-[#fce79a]` 등)으로 하드코딩하지 않고, `apps/web/src/routes/layout.css`의 `@theme`에 정의된 Foundation 토큰 유틸리티(`text-md`, `text-text-primary`, `rounded-md` 등)를 사용한다.
