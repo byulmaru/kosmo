@@ -58,10 +58,12 @@
   </div>
 </Story>
 
-<!-- 시간 표시: 24시간 미만 상대시간, 이상 날짜(2026. 04. 27 형식). -->
+<!-- 시간 표시: 24시간 미만 상대시간(Intl.RelativeTimeFormat — "지금"/"n초 전"/"n분 전"/
+     "n시간 전"), 이상 날짜(2026. 04. 27 형식). -->
 <Story name="Time states" asChild parameters={{ controls: { disable: true } }}>
   <div class="grid w-[390px]">
-    <PostListItem post={post('방금 작성된 게시글.', minutesAgo(0.5))} />
+    <PostListItem post={post('지금 작성된 게시글.', minutesAgo(0))} />
+    <PostListItem post={post('30초 전에 작성된 게시글.', minutesAgo(0.5))} />
     <PostListItem post={post('5분 전에 작성된 게시글.', minutesAgo(5))} />
     <PostListItem post={post('3시간 전에 작성된 게시글.', minutesAgo(3 * 60))} />
     <PostListItem post={post('하루 이상 지난 게시글.', '2026-04-27T21:14:00.000Z')} />

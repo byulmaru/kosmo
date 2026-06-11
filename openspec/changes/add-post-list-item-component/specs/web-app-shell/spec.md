@@ -40,12 +40,12 @@
 
 ### Requirement: Post list item time display
 
-목록 항목의 작성 시간은 이름 블록과 같은 행의 우측에 표시해야 한다(MUST). 작성 후 24시간 미만이면 상대시간("방금 전"/"n분 전"/"n시간 전")을, 24시간 이상이면 날짜("2026. 04. 27" 형식)를 표시해야 한다(MUST). 기계 가독 시각을 `<time datetime>`으로 제공해야 한다(MUST).
+목록 항목의 작성 시간은 이름 블록과 같은 행의 우측에 표시해야 한다(MUST). 작성 후 24시간 미만이면 `Intl.RelativeTimeFormat('ko', { numeric: 'auto' })` 기반 상대시간(0초 "지금", 그 외 "n초 전"/"n분 전"/"n시간 전")을, 24시간 이상이면 날짜("2026. 04. 27" 형식)를 표시해야 한다(MUST). 기계 가독 시각을 `<time datetime>`으로 제공해야 한다(MUST).
 
 #### Scenario: Recent post relative time
 
 - **WHEN** 게시글이 24시간 이내에 작성됐다
-- **THEN** 시스템은 "n분 전" 또는 "n시간 전" 형식의 상대시간을 헤더 우측에 표시한다
+- **THEN** 시스템은 "n초 전"/"n분 전"/"n시간 전" 형식의 상대시간(0초는 "지금")을 헤더 우측에 표시한다
 
 #### Scenario: Older post absolute date
 

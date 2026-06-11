@@ -1,9 +1,9 @@
 <script lang="ts">
+  import { formatTimelineTimestamp } from '@kosmo/core/datetime';
   import { graphql } from '$mearie';
   import { createFragment } from '@mearie/svelte';
   import { tick } from 'svelte';
   import type { HTMLAttributes } from 'svelte/elements';
-  import { Temporal } from 'temporal-polyfill';
 
   import type { PostListItem_post$key } from '$mearie';
 
@@ -36,31 +36,11 @@
     () => post,
   );
 
-  // Figma TimeInfo(67:245) variant를 따른다: 24시간 미만은 상대시간("방금 전"/
-  // "n분 전"/"n시간 전"), 이상은 날짜("2026. 04. 27" — ko-KR 출력의 끝 마침표는
-  // Figma 표기에 없으므로 제거, PostBody와 같은 처리).
-  const formattedCreatedAt = $derived.by(() => {
-    const createdAt = Temporal.Instant.from(postFragment.data.createdAt as string);
-    const elapsedSeconds =
-      (Temporal.Now.instant().epochMilliseconds - createdAt.epochMilliseconds) / 1000;
-
-    if (elapsedSeconds < 60) {
-      return '방금 전';
-    }
-    if (elapsedSeconds < 3600) {
-      return `${Math.floor(elapsedSeconds / 60)}분 전`;
-    }
-    if (elapsedSeconds < 86_400) {
-      return `${Math.floor(elapsedSeconds / 3600)}시간 전`;
-    }
-
-    const date = createdAt.toLocaleString('ko-KR', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-    return date.replace(/\.$/, '');
-  });
+  // Figma TimeInfo(67:245) variant를 따른다: 24시간 미만은 상대시간, 이상은 날짜.
+  // 포맷 규칙은 @kosmo/core/datetime에서 정한다.
+  const formattedCreatedAt = $derived(
+    formatTimelineTimestamp(postFragment.data.createdAt as string),
+  );
 
   // 본문 미리보기와 "더보기..."(Figma ExpandButton 67:515) 인라인 펼침. 디테일 이동
   // 링크는 별도 서브이슈 범위라 페이지 이동 없이 제자리에서 펼친다. 펼친 뒤 다시

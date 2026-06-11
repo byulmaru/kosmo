@@ -56,7 +56,9 @@ fragment PostListItem_post on Post {
 
 ### D4. 시간 포맷: 24시간 경계의 상대/절대 전환
 
-- `Temporal.Instant` 비교로 24시간 미만이면 상대시간("방금 전"/"n분 전"/"n시간 전"), 그 이상이면 ko-KR 날짜("2026. 04. 27", 끝 마침표 제거 — `PostBody`와 같은 처리)를 표시한다.
+- 24시간 미만이면 상대시간, 그 이상이면 ko-KR 날짜("2026. 04. 27", 끝 마침표 제거)를 표시한다.
+- 상대시간은 손으로 만든 문자열 대신 `Intl.RelativeTimeFormat('ko', { numeric: 'auto' })` 출력을 그대로 사용한다(0초 "지금", 그 외 "n초 전"/"n분 전"/"n시간 전" — 리뷰 반영으로 Figma TimeInfo의 "방금 전" 표기 대신 표준 API 출력을 따른다).
+- 포맷 로직은 `@kosmo/core/datetime`으로 추출해 공통화하고(리뷰 반영), 날짜 포맷(끝 마침표 제거)은 `PostBody`도 같은 helper를 공유한다.
 - `<time datetime>`으로 기계 가독 시각을 함께 제공한다. 상대시간의 실시간 갱신(타이머)은 두지 않는다 — 목록 리렌더 시 재계산되면 충분하고, Figma·이슈에 갱신 요구가 없다.
 
 ## Risks / Trade-offs
