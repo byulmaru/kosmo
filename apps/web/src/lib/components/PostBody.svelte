@@ -40,8 +40,8 @@
   // Figma 메타라인 형식(오후 9:14 · 2026. 04. 27)을 따른다. 날짜 포맷은
   // @kosmo/core/datetime의 formatDate(끝 마침표 제거 포함)를 공유한다.
   const formattedCreatedAt = $derived.by(() => {
-    const createdAt = postFragment.data.createdAt as string;
-    const time = Temporal.Instant.from(createdAt).toLocaleString('ko-KR', { timeStyle: 'short' });
+    const createdAt = Temporal.Instant.from(postFragment.data.createdAt as string);
+    const time = createdAt.toLocaleString('ko-KR', { timeStyle: 'short' });
     return `${time} · ${formatDate(createdAt)}`;
   });
 </script>

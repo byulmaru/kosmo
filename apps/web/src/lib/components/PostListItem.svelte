@@ -3,6 +3,7 @@
   import { graphql } from '$mearie';
   import { createFragment } from '@mearie/svelte';
   import { tick } from 'svelte';
+  import { Temporal } from 'temporal-polyfill';
   import type { HTMLAttributes } from 'svelte/elements';
 
   import type { PostListItem_post$key } from '$mearie';
@@ -39,7 +40,7 @@
   // Figma TimeInfo(67:245) variant를 따른다: 24시간 미만은 상대시간, 이상은 날짜.
   // 포맷 규칙은 @kosmo/core/datetime에서 정한다.
   const formattedCreatedAt = $derived(
-    formatTimelineTimestamp(postFragment.data.createdAt as string),
+    formatTimelineTimestamp(Temporal.Instant.from(postFragment.data.createdAt as string)),
   );
 
   // 본문 미리보기와 "더보기..."(Figma ExpandButton 67:515) 인라인 펼침. 디테일 이동
