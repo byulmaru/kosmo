@@ -86,11 +86,14 @@
   const handleSubmit = async (event: SubmitEvent) => {
     event.preventDefault();
 
-    if (!editor || editor.isEmpty) {
+    if (submitting || !editor || editor.isEmpty) {
       return;
     }
 
-    const data = await createPost({
+    submitting = true;
+    errorMessage = null;
+
+    await createPost({
       input: {
         content: tipTapDocument,
         visibility: selectedVisibility,
