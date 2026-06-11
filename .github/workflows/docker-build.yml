@@ -25,14 +25,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Connect Tailnet
-        uses: tailscale/github-action@v4
-        with:
-          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
-          audience: ${{ secrets.TAILSCALE_AUDIENCE }}
-          tags: tag:github-actions
-          ping: ${{ secrets.INFISICAL_HOST }}
-
       - name: Get secrets from Infisical
         uses: Infisical/secrets-action@v1.0.15
         with:
