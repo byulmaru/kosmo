@@ -1,8 +1,9 @@
 <script module lang="ts">
-  import type { FragmentRefs } from '@mearie/svelte';
   import { defineMeta } from '@storybook/addon-svelte-csf';
 
   import PostListItem from './PostListItem.svelte';
+
+  import type { PostListItem_post$key } from '$mearie';
 
   // Storybook은 .storybook/mocks/mearie-svelte.ts에서 createFragment를 패스스루로 모킹하므로
   // 여기서는 평범한 데이터 객체를 fragment ref 자리에 그대로 넘긴다.
@@ -13,7 +14,7 @@
     createdAt: string = minutesAgo(5),
     displayName = '코스모 작가',
     handle = 'kosmo',
-  ): FragmentRefs<'PostListItem_post'> =>
+  ): PostListItem_post$key =>
     ({
       __typename: 'Post',
       id: 'story-post',
@@ -28,7 +29,7 @@
         displayName,
         handle,
       },
-    }) as unknown as FragmentRefs<'PostListItem_post'>;
+    }) as unknown as PostListItem_post$key;
 
   const longBody =
     '긴 본문은 목록에서 200자까지만 보이고 더보기 버튼이 나타납니다. ' +

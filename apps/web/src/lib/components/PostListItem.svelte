@@ -1,9 +1,11 @@
 <script lang="ts">
   import { graphql } from '$mearie';
   import { createFragment } from '@mearie/svelte';
-  import type { FragmentRefs } from '@mearie/svelte';
+  import { tick } from 'svelte';
   import type { HTMLAttributes } from 'svelte/elements';
   import { Temporal } from 'temporal-polyfill';
+
+  import type { PostListItem_post$key } from '$mearie';
 
   import PostAuthorProfile from './PostAuthorProfile.svelte';
 
@@ -11,7 +13,7 @@
   // 따른다: 시간은 헤더 우측(24시간 미만 상대시간, 이상 날짜), 본문은 클램프.
   // 디테일 이동 링크·액션바·이미지는 별도 서브이슈 범위라 포함하지 않는다.
   type Props = HTMLAttributes<HTMLElement> & {
-    post: FragmentRefs<'PostListItem_post'>;
+    post: PostListItem_post$key;
   };
 
   let { post, class: className, ...attributes }: Props = $props();
@@ -70,6 +72,7 @@
   const BODY_PREVIEW_MAX_LINES = 10;
 
   let expanded = $state(false);
+  let bodyElement = $state<HTMLParagraphElement>();
 
   const fullBody = $derived(postFragment.data.content?.bodyText ?? '');
   const previewBody = $derived.by(() => {
@@ -81,7 +84,16 @@
     }
     return characters.slice(0, BODY_PREVIEW_MAX_CHARS).join('');
   });
-  const clamped = $derived(previewBody !== fullBody);
+  // 잘려나간 부분이 공백뿐이면(예: 꼬리 줄바꿈) 펼쳐도 차이가 없으므로 자르지 않는다.
+  const clamped = $derived(fullBody.slice(previewBody.length).trim() !== '');
+
+  // 더보기 버튼은 펼치면 DOM에서 사라지므로, 포커스가 document로 떨어지지 않게
+  // 펼쳐진 본문으로 옮긴다.
+  const expand = async () => {
+    expanded = true;
+    await tick();
+    bodyElement?.focus();
+  };
 </script>
 
 <article {...attributes} class={`border-border border-b px-2 pt-2 pb-4 ${className ?? ''}`}>
@@ -92,14 +104,21 @@
       </time>
     {/snippet}
 
-    {#if postFragment.data.content}
-      <p class="text-text-primary text-md mt-2 break-words whitespace-pre-wrap">
+    {#if fullBody}
+      <!-- tabindex는 펼침 시 -1로만 설정되는 programmatic focus 대상이다(탭 순서에
+           들어가지 않음). 정적 분석이 동적 값을 음수로 판별하지 못해 경고를 끈다. -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+      <p
+        bind:this={bodyElement}
+        class="text-text-primary text-md focus-visible:outline-more mt-2 rounded-md break-words whitespace-pre-wrap focus-visible:outline-2 focus-visible:outline-offset-2"
+        tabindex={expanded ? -1 : undefined}
+      >
         {#if expanded || !clamped}{fullBody}{:else}{previewBody}…{/if}
       </p>
       {#if clamped && !expanded}
         <button
           class="text-more text-md focus-visible:outline-more block rounded-md text-left font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
-          onclick={() => (expanded = true)}
+          onclick={expand}
           type="button"
         >
           더보기...
