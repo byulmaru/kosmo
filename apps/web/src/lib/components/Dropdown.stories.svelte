@@ -54,9 +54,7 @@
 <Story name="Default" asChild parameters={{ controls: { disable: true } }}>
   <div class="flex min-h-52 items-start justify-center p-8">
     <Dropdown.Root>
-      <Dropdown.Trigger>
-        <Button variant="secondary">메뉴</Button>
-      </Dropdown.Trigger>
+      <Dropdown.Trigger>메뉴</Dropdown.Trigger>
 
       <Dropdown.Content aria-label="작업 메뉴">
         {#each menuItems as item}
@@ -72,21 +70,42 @@
   </div>
 </Story>
 
-<Story name="Selected Item" asChild parameters={{ controls: { disable: true } }}>
+<Story name="Active Item" asChild parameters={{ controls: { disable: true } }}>
   <div class="flex min-h-52 items-start justify-center p-8">
     <Dropdown.Root>
-      <Dropdown.Trigger>
-        <Button variant="secondary">정렬</Button>
-      </Dropdown.Trigger>
+      <Dropdown.Trigger>정렬</Dropdown.Trigger>
 
       <Dropdown.Content aria-label="정렬 메뉴">
         {#each sortItems as item}
           <Dropdown.Item
-            selected={item.value === selectedSort}
+            active={item.value === selectedSort}
             onclick={() => {
               selectedSort = item.value;
             }}
           >
+            <span class="grid min-w-0 gap-0.5">
+              <span class="text-text-primary text-sm font-bold">{item.label}</span>
+              <span class="text-text-secondary text-xs leading-4">{item.description}</span>
+            </span>
+          </Dropdown.Item>
+        {/each}
+      </Dropdown.Content>
+    </Dropdown.Root>
+  </div>
+</Story>
+
+<Story name="Snippet Trigger" asChild parameters={{ controls: { disable: true } }}>
+  <div class="flex min-h-52 items-start justify-center p-8">
+    <Dropdown.Root>
+      <Dropdown.Trigger>
+        {#snippet child({ props })}
+          <Button variant="secondary" {...props}>프로필 작업</Button>
+        {/snippet}
+      </Dropdown.Trigger>
+
+      <Dropdown.Content aria-label="프로필 작업 메뉴">
+        {#each menuItems as item}
+          <Dropdown.Item>
             <span class="grid min-w-0 gap-0.5">
               <span class="text-text-primary text-sm font-bold">{item.label}</span>
               <span class="text-text-secondary text-xs leading-4">{item.description}</span>
