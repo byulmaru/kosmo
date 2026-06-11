@@ -4,8 +4,7 @@ import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { createObjectRef } from '@/graphql/utils';
 
 export const Post = createObjectRef('Post', TableDiscriminator.Posts, (ids) => {
-  // TODO(PROD-102): Apply viewer-specific visibility checks. PUBLIC and UNLISTED
-  // are readable by ID, while FOLLOWERS and DIRECT need restricted access.
+  // TODO(PROD-121): Replace this PUBLIC/UNLISTED guard with viewer-specific access.
   return db
     .select(getColumns(Posts))
     .from(Posts)
@@ -14,6 +13,7 @@ export const Post = createObjectRef('Post', TableDiscriminator.Posts, (ids) => {
       and(
         inArray(Posts.id, ids),
         eq(Posts.state, PostState.ACTIVE),
+        inArray(Posts.visibility, [PostVisibility.PUBLIC, PostVisibility.UNLISTED]),
         eq(Profiles.state, ProfileState.ACTIVE),
       ),
     );
@@ -31,7 +31,7 @@ export const PostContent = createObjectRef(
   'PostContent',
   TableDiscriminator.PostContents,
   (ids) => {
-    // TODO(PROD-102): Prevent direct PostContent node loads from bypassing the parent
+    // TODO(PROD-121): Prevent direct PostContent node loads from bypassing the parent
     // post's state and visibility policy. Historical content remains loadable.
     return db.select().from(PostContents).where(inArray(PostContents.id, ids));
   },
