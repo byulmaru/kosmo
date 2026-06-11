@@ -19,6 +19,7 @@ jobs:
     name: Docker Build
     runs-on: [self-hosted, ARM64]
     env:
+      DOCKER_CONFIG: ${{ runner.temp }}/docker-config
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
     steps:
@@ -44,6 +45,14 @@ jobs:
               printf '%s=%q\n' "$name" "$value"
             fi
           done | sort > .web-build.env
+
+      - name: Prepare Docker config
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p "$DOCKER_CONFIG"
+          printf '{"auths":{}}\n' > "$DOCKER_CONFIG/config.json"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
