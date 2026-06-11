@@ -1,10 +1,21 @@
 <script lang="ts">
-  import { cn } from 'tailwind-variants';
   import { DropdownMenu as DropdownMenuPrimitive } from 'bits-ui';
+  import { cn, tv, type VariantProps } from 'tailwind-variants';
 
-  type Props = DropdownMenuPrimitive.ItemProps & {
-    active?: boolean;
-  };
+  const dropdownItem = tv({
+    base: 'text-text-primary flex w-full cursor-default items-start gap-2 rounded-sm px-3 py-2.5 text-left text-sm transition-colors outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-45',
+    variants: {
+      active: {
+        true: 'bg-primary/45 hover:bg-primary/55 focus:bg-primary/55 data-[highlighted]:bg-primary/55',
+        false: 'bg-card hover:bg-surface focus:bg-surface data-[highlighted]:bg-surface',
+      },
+    },
+    defaultVariants: {
+      active: false,
+    },
+  });
+
+  type Props = DropdownMenuPrimitive.ItemProps & VariantProps<typeof dropdownItem>;
 
   let { ref = $bindable(null), active = false, class: className, ...restProps }: Props = $props();
 </script>
@@ -13,9 +24,6 @@
   bind:ref
   data-slot="dropdown-menu-item"
   data-active={active ? '' : undefined}
-  class={cn(
-    'text-text-primary flex w-full cursor-default items-start gap-2 rounded-sm bg-card px-3 py-2.5 text-left text-sm transition-colors outline-none hover:bg-surface focus:bg-surface data-[active]:bg-primary/45 data-[disabled]:pointer-events-none data-[disabled]:opacity-45 data-[highlighted]:bg-surface hover:data-[active]:bg-primary/55 focus:data-[active]:bg-primary/55 data-[highlighted]:data-[active]:bg-primary/55',
-    className,
-  )}
+  class={cn(dropdownItem({ active }), className)}
   {...restProps}
 />
