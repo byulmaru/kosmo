@@ -93,18 +93,19 @@
     submitting = true;
     errorMessage = null;
 
-    await createPost({
-      input: {
-        content: tipTapDocument,
-        visibility: selectedVisibility,
-      },
-    })
-      .then(() => {
-        resetEditor();
-      })
-      .finally(() => {
-        submitting = false;
+    try {
+      await createPost({
+        input: {
+          content: tipTapDocument,
+          visibility: selectedVisibility,
+        },
       });
+      resetEditor();
+    } catch {
+      errorMessage = '게시글을 작성하지 못했습니다.';
+    } finally {
+      submitting = false;
+    }
   };
 </script>
 
@@ -140,10 +141,14 @@
     <div class="flex min-w-0 items-center gap-2">
       <Dropdown.Root>
         <Dropdown.Trigger>
-          <Button variant="secondary" class="flex gap-1 text-sm">
-            <PostVisibilityIcon visibility={selectedVisibility} class="shrink-0" />
-            <span class="truncate">{visibilityOptions[selectedVisibility].label}</span>
-          </Button>
+          {#snippet child({ props })}
+            <Button variant="secondary" {...props}>
+              <span class="flex min-w-0 items-center gap-1">
+                <PostVisibilityIcon visibility={selectedVisibility} class="shrink-0" size={16} />
+                <span class="truncate">{visibilityOptions[selectedVisibility].label}</span>
+              </span>
+            </Button>
+          {/snippet}
         </Dropdown.Trigger>
 
         <Dropdown.Content aria-label="게시글 공개 설정">

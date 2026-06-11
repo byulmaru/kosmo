@@ -1,10 +1,5 @@
 @import 'tailwindcss';
 
-svg.lucide-icon {
-  width: 1em;
-  height: 1em;
-}
-
 @theme {
   --color-bg: #ffffff;
   --color-surface: #f6f6f6;
