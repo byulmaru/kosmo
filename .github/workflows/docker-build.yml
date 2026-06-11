@@ -51,8 +51,19 @@ jobs:
           set -euo pipefail
 
           docker_config="$RUNNER_TEMP/docker-config"
+          docker_context="$(docker context show 2>/dev/null || true)"
           mkdir -p "$docker_config"
-          printf '{"auths":{}}\n' > "$docker_config/config.json"
+          if [[ -d "$HOME/.docker/contexts" ]]; then
+            cp -R "$HOME/.docker/contexts" "$docker_config/contexts"
+          fi
+          DOCKER_CONTEXT_NAME="$docker_context" node -e '
+            const fs = require("fs");
+            const config = { auths: {} };
+            if (process.env.DOCKER_CONTEXT_NAME) {
+              config.currentContext = process.env.DOCKER_CONTEXT_NAME;
+            }
+            fs.writeFileSync(`${process.env.RUNNER_TEMP}/docker-config/config.json`, `${JSON.stringify(config)}\n`);
+          '
           printf 'DOCKER_CONFIG=%s\n' "$docker_config" >> "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
