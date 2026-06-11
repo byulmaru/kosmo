@@ -20,7 +20,7 @@ concurrency:
 jobs:
   nuclei:
     name: Nuclei scan
-    runs-on: arc-b-4x
+    runs-on: [self-hosted]
     env:
       DEFAULT_TARGETS: |
         https://kos.moe

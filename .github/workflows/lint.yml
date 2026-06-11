@@ -12,7 +12,7 @@ permissions:
 jobs:
   lint:
     name: Lint
-    runs-on: arc-b-4x
+    runs-on: [self-hosted]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
