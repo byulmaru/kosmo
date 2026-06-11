@@ -40,7 +40,7 @@
   onpointercancel={handlePointerUp}
 />
 
-<div class="min-h-screen lg:grid lg:grid-cols-[20rem_1fr]">
+<div class="min-h-screen lg:grid lg:grid-cols-[20rem_minmax(0,1fr)_minmax(290px,350px)]">
   <div class="hidden lg:block">
     <SidebarNavigation />
   </div>
@@ -67,6 +67,9 @@
 
     <BottomTabBar onMenuClick={openDrawer} />
   </div>
+
+  <!-- 우측 레일 자리: 위젯은 PROD-113에서 채운다 -->
+  <div class="hidden lg:block"></div>
 
   {#if drawerOpen}
     <div class="fixed inset-0 z-40 lg:hidden" role="presentation">
