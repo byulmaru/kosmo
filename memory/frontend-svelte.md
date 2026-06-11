@@ -49,6 +49,12 @@
 - Storybook에서만 통과하고 실제 Mearie runtime에서는 깨질 수 있는 shape를 만들지 않는다.
 - 컴포넌트 상태 story는 실제 variant/route/state 전체를 보여주어야 한다. 일부 active state만 노출하면 카탈로그 용도가 떨어진다.
 
+## Design Tokens
+
+- 색상, 폰트 크기, radius 같은 디자인 값은 Tailwind 임의값(`text-[17px]`, `bg-[#fce79a]` 등)으로 하드코딩하지 않고, `apps/web/src/routes/layout.css`의 `@theme`에 정의된 Foundation 토큰 유틸리티(`text-md`, `text-text-primary`, `rounded-md` 등)를 사용한다.
+- 필요한 토큰이 `@theme`에 없으면(예: font weight) 임의값으로 우회 구현하지 말고, 토큰 추가 여부·이름·값을 사용자에게 질문해 결정한 뒤 진행한다.
+- 코드 `@theme` 토큰은 Figma Foundation 컬렉션과 이름·값을 일치시키고, 어느 한쪽에만 존재하는 토큰이 생기면 같은 작업에서 정렬하거나 후속 이슈로 남긴다.
+
 ## UI And Copy
 
 - backend error `message`를 사용자 UI에 그대로 노출할지, error type/code로 분기할지, generic 한국어 fallback을 쓸지는 아직 확정된 정책이 아니다.

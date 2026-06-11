@@ -8,6 +8,7 @@ export { default as Header } from './components/Header.svelte';
 export { default as ImagePlaceholder } from './components/ImagePlaceholder.svelte';
 export { default as NotificationItem } from './components/NotificationItem.svelte';
 export { default as PostAuthorProfile } from './components/PostAuthorProfile.svelte';
+export { default as PostBody } from './components/PostBody.svelte';
 export { default as SearchBar } from './components/SearchBar.svelte';
 export { default as SearchTabs } from './components/SearchTabs.svelte';
 export { default as SegmentTabs } from './components/SegmentTabs.svelte';

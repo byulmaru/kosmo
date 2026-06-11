@@ -1,6 +1,6 @@
 ## Context
 
-PROD-89(게시글 디테일 페이지)는 단건 조회 query(PROD-93)와 작성자 표시 컴포넌트(PROD-97)에 블로킹돼 있다. PR #67(PROD-92)이 `Post`/`PostContent` 타입과 `createPost` mutation을 추가했지만 단건 조회 query는 없고, `PostAuthorProfile`(PR #72)은 아직 머지 전이다. 그래서 블로커와 독립적인 라우트·UI·상태 처리만 더미 데이터로 먼저 구현한다. 순수 프론트엔드(`apps/web`, SvelteKit + mearie GraphQL + Tailwind 시맨틱 토큰)이며, 디자인 기준은 Figma `🧵 Post Detail` 섹션의 anchor 포스트다. 이 변경은 PROD-91의 `(tabs)/@[handle]` 라우트 위에 스택한다.
+PROD-89(게시글 디테일 페이지)는 단건 조회 query(PROD-93)와 작성자 표시 컴포넌트(PROD-97)에 블로킹돼 있었다. `PostAuthorProfile`(PR #72, PROD-97)이 머지되어 작성자 영역은 `profileByHandle` 실쿼리 + fragment로 실데이터를 표시한다. 다만 PR #67(PROD-92)이 `Post`/`PostContent` 타입과 `createPost` mutation을 추가했어도 단건 조회 query는 아직 없어, 게시글 본문만 의도적으로 더미로 두고, 본문 실데이터 연결은 별도 서브이슈 PROD-110(PROD-93 의존)으로 분리한다. 순수 프론트엔드(`apps/web`, SvelteKit + mearie GraphQL + Tailwind 시맨틱 토큰)이며, 디자인 기준은 Figma `🧵 Post Detail` 섹션의 anchor 포스트다. 이 변경은 PROD-91의 `(tabs)/@[handle]` 라우트 위에 스택한다.
 
 ## Goals / Non-Goals
 
@@ -14,16 +14,18 @@ PROD-89(게시글 디테일 페이지)는 단건 조회 query(PROD-93)와 작성
 **Non-Goals:**
 
 - 답글·반응·리포스트·ReplyComposer(Figma 풀 스레드 뷰).
-- 실제 `post` 조회 query 연결(PROD-93)·`PostAuthorProfile` 연결(PROD-97) — 같은 브랜치 후속.
+- 실제 게시글 본문 조회 query 연결(PROD-110 서브이슈, PROD-93 의존).
+- 프로필 게시글 목록→상세 이동 링크(PROD-111 서브이슈).
 - 모바일 `(tabs)` 셸 헤더와 back 헤더 통합 — 별도 웹 레이아웃 이슈.
 
 ## Decisions
 
 - **URL `/@{handle}/{postId}` (프로필 라우트 하위)**: 대안으로 `/posts/{postId}`(핸들 비의존 평면 경로)를 검토했으나, 작성자 핸들이 URL에 드러나고 프로필 라우트와 일관된 Mastodon식 `/@{handle}/{postId}`를 채택했다.
 - **`+page@(tabs).svelte`로 레이아웃 리셋**: `@[handle]/+layout.svelte`는 모든 하위 라우트에 작성자 `ProfileHero`를 강제로 렌더한다. 게시글 디테일은 단독 뷰여야 하므로 `@(tabs)` 세그먼트로 레이아웃을 `(tabs)` 셸까지 리셋해 ProfileHero를 건너뛰되, 사이드바·하단탭 셸은 유지한다.
-- **로컬 더미 상수**: 이 레포는 loader 파일 없이 컴포넌트 내 인라인 `createQuery`를 쓴다. 그러나 `post` 조회 query가 스키마에 없어 진짜 query를 쓰면 mearie codegen이 깨진다. 따라서 PR #67의 `Post`/`PostContent` shape에 맞춘 로컬 타입·상수를 한 곳에 두고, 상태 분기(`loading`/`error`/null/`state`)는 PROD-93 머지 후 `createQuery` 필드로 1:1 교체되도록 구성한다.
-- **작성자 placeholder**: `PostAuthorProfile`(PR #72)이 머지 전이므로, PROD-91의 `getProfileInitial` 기반 이니셜 아바타 + 표시 이름 + `@handle`로 placeholder를 만들고 `/@{handle}`로 링크한다. PROD-97 머지 후 같은 브랜치에서 컴포넌트로 교체한다.
+- **작성자 실데이터 + 본문 더미 분리**: 이 레포는 loader 파일 없이 컴포넌트 내 인라인 `createQuery`를 쓴다. 작성자는 스키마에 이미 있는 `profileByHandle`로 실쿼리하지만, 게시글 본문 조회 query는 스키마에 없어 진짜 query를 쓰면 mearie codegen이 깨진다. 따라서 본문(`content`/`createdAt`/`state`/`visibility`)만 PR #67의 `Post`/`PostContent` shape에 맞춘 로컬 더미로 한 곳에 두고, 별도 서브이슈 PROD-110에서 `post` `createQuery`로 1:1 교체되도록 구성한다.
+- **작성자 실데이터(`profileByHandle` + fragment)**: 라우트가 `/@{handle}/{postId}`라 작성자=핸들 주인이므로, `profileByHandle(handle)` 실쿼리에 `...PostAuthorProfile_profile` fragment를 스프레드해 `PostAuthorProfile` 컴포넌트로 작성자를 표시하고 `/@{handle}`로 링크한다. 로딩/오류/없는 게시글 상태도 이 작성자 query에 매핑한다(`@[handle]/+layout.svelte`의 `profileByHandle` + fragment 패턴과 동일).
 - **back 헤더 최소화**: Figma `back_title_action`의 풀 버전(⋯ 메뉴) 대신 이번엔 back 컨트롤만 둔다.
+- **본문 표시 `PostBody` fragment 컴포넌트 분리**: 본문·작성 시각·공개 범위 메타라인을 라우트 인라인 마크업에서 `PostBody.svelte`로 추출하고, 기존 스키마의 `Post` 타입 위 `PostBody_post` fragment(`content { bodyText }`, `createdAt`, `visibility`)로 만든다. 단건 조회 query가 없어도 fragment 정의만으로 mearie codegen이 깨지지 않음을 확인했고(orphan fragment 허용), `Post` 타입 기준이라 Storybook 전용이 아닌 실 runtime-safe shape다. 이로써 (1) 백엔드 없이 Storybook(`KOSMO/PostBody`)에서 본문 레이아웃·상태를 리뷰하고, (2) 피드·프로필 목록(PROD-111)에서 재사용한다. 작성자는 여전히 별도 `profileByHandle`이며, PROD-110에서 `post.profile { ...PostAuthorProfile_profile }`로 합류한다.
 
 ## Risks / Trade-offs
 
@@ -37,5 +39,5 @@ PROD-89(게시글 디테일 페이지)는 단건 조회 query(PROD-93)와 작성
 
 ## Open Questions
 
-- 게시글 단건 조회 query의 최종 형태(`post(id:)` 전용 query vs `node(id:)`)는 PROD-93에서 확정된다. 확정되면 같은 브랜치에서 더미를 교체한다.
+- 게시글 단건 조회 query의 최종 형태(`post(id:)` 전용 query vs `node(id:)`)는 PROD-93에서 확정된다. 확정되면 PROD-110 서브이슈에서 더미를 교체한다.
 - 모바일 `(tabs)` 셸 헤더 + back 헤더 통합, Figma `back_title_action` 풀 헤더(⋯ 메뉴) 적용은 별도 웹 레이아웃/IA 이슈로 이연.
