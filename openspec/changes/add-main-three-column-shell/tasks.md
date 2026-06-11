@@ -1,7 +1,8 @@
 ## 1. 레이아웃 셸 구현
 
-- [x] 1.1 `(tabs)/+layout.svelte` 그리드를 `lg:grid-cols-[20rem_minmax(0,1fr)_minmax(290px,350px)]` 3컬럼으로 확장한다
+- [x] 1.1 `(tabs)/+layout.svelte` 그리드를 `lg:grid-cols-[20rem_minmax(0,600px)_minmax(290px,350px)]` 3컬럼으로 확장한다
 - [x] 1.2 세 번째 트랙에 우측 레일 placeholder 컬럼(`hidden lg:block` 빈 div)을 추가한다
+- [x] 1.3 3컬럼 묶음을 `lg:justify-center`로 가운데 정렬해 남는 폭을 양옆 여백으로 배분한다
 
 ## 2. 검증
 

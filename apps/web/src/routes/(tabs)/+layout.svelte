@@ -40,7 +40,9 @@
   onpointercancel={handlePointerUp}
 />
 
-<div class="min-h-screen lg:grid lg:grid-cols-[20rem_minmax(0,1fr)_minmax(290px,350px)]">
+<div
+  class="min-h-screen lg:grid lg:grid-cols-[20rem_minmax(0,600px)_minmax(290px,350px)] lg:justify-center"
+>
   <div class="hidden lg:block">
     <SidebarNavigation />
   </div>
