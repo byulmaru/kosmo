@@ -38,18 +38,12 @@
   const selectSidebarProfileMutation = graphql(`
     mutation SelectSidebarProfileMutation($id: ID!) {
       selectProfile(input: { id: $id }) {
-        __typename
-        ... on SelectProfileSuccess {
-          profile {
-            id
-            handle
-            displayName
-            followersCount
-            followingCount
-          }
-        }
-        ... on NotFoundError {
-          message
+        profile {
+          id
+          handle
+          displayName
+          followersCount
+          followingCount
         }
       }
     }
@@ -58,19 +52,12 @@
   const createSidebarProfileMutation = graphql(`
     mutation CreateSidebarProfileMutation($handle: String!) {
       createProfile(input: { handle: $handle }) {
-        __typename
-        ... on CreateProfileSuccess {
-          profile {
-            id
-            handle
-            displayName
-            followersCount
-            followingCount
-          }
-        }
-        ... on ConflictError {
-          message
-          field
+        profile {
+          id
+          handle
+          displayName
+          followersCount
+          followingCount
         }
       }
     }
@@ -172,11 +159,6 @@
     try {
       const data = await selectSidebarProfile({ id });
 
-      if (data.selectProfile.__typename !== 'SelectProfileSuccess') {
-        profileError = data.selectProfile.message;
-        return;
-      }
-
       selectedProfileOverride =
         sidebarProfiles.find((profile: ProfileSummary) => profile.id === id) ??
         data.selectProfile.profile;
@@ -211,10 +193,6 @@
 
     try {
       const created = await createSidebarProfile({ handle });
-      if (created.createProfile.__typename !== 'CreateProfileSuccess') {
-        profileCreationError = created.createProfile.message;
-        return;
-      }
 
       const createdProfile = created.createProfile.profile;
 
@@ -222,10 +200,6 @@
       profileCreationOpen = false;
 
       const selected = await selectSidebarProfile({ id: created.createProfile.profile.id });
-      if (selected.selectProfile.__typename !== 'SelectProfileSuccess') {
-        profileError = selected.selectProfile.message;
-        return;
-      }
 
       profilesOverride = [...sidebarProfiles, createdProfile];
       selectedProfileOverride = createdProfile;

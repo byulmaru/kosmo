@@ -30,35 +30,10 @@
   const followProfileMutation = graphql(`
     mutation FollowButtonFollowProfile($id: ID!) {
       followProfile(input: { id: $id }) {
-        __typename
-        ... on FollowProfileSuccess {
-          profileFollow {
-            id
-            state
-            followee {
-              id
-              followersCount
-              viewerFollow {
-                id
-                state
-              }
-            }
-          }
-        }
-        ... on Error {
-          message
-        }
-      }
-    }
-  `);
-
-  const unfollowProfileMutation = graphql(`
-    mutation FollowButtonUnfollowProfile($id: ID!) {
-      unfollowProfile(input: { id: $id }) {
-        __typename
-        ... on UnfollowProfileSuccess {
-          profileFollowId
-          profile {
+        profileFollow {
+          id
+          state
+          followee {
             id
             followersCount
             viewerFollow {
@@ -67,8 +42,21 @@
             }
           }
         }
-        ... on Error {
-          message
+      }
+    }
+  `);
+
+  const unfollowProfileMutation = graphql(`
+    mutation FollowButtonUnfollowProfile($id: ID!) {
+      unfollowProfile(input: { id: $id }) {
+        profileFollowId
+        profile {
+          id
+          followersCount
+          viewerFollow {
+            id
+            state
+          }
         }
       }
     }
@@ -120,18 +108,11 @@
 
     try {
       if (isFollowing || isPending) {
-        const data = await unfollowProfile({ id: targetProfileId });
-        if (data.unfollowProfile.__typename !== 'UnfollowProfileSuccess') {
-          throw new Error('팔로우 상태를 변경하지 못했습니다.');
-        }
-
+        await unfollowProfile({ id: targetProfileId });
         return;
       }
 
-      const data = await followProfile({ id: targetProfileId });
-      if (data.followProfile.__typename !== 'FollowProfileSuccess') {
-        throw new Error('팔로우 상태를 변경하지 못했습니다.');
-      }
+      await followProfile({ id: targetProfileId });
     } catch {
       errorMessage = '팔로우 상태를 변경하지 못했습니다.';
     } finally {

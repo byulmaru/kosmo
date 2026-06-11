@@ -4,11 +4,11 @@ import { parseTipTapDocumentContent } from '@kosmo/core/tiptap';
 import { postBodyTipTapDocumentSchema } from '@kosmo/core/validation';
 import { eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { Post } from '../ref';
+import { CreatePostPayload } from './payload';
 
 builder.mutationField('createPost', (t) =>
   t.withAuth({ usingProfile: true }).fieldWithInput({
-    type: Post,
+    type: CreatePostPayload,
     input: {
       content: t.input.field({
         type: 'TipTapDocument',
@@ -16,15 +16,12 @@ builder.mutationField('createPost', (t) =>
       }),
       visibility: t.input.field({ type: PostVisibility }),
     },
-    errors: {
-      dataField: { name: 'post' },
-    },
     resolve: async (_, { input }, ctx) => {
       const { document: tipTapDocument, plainText: bodyText } = parseTipTapDocumentContent(
         input.content,
       );
 
-      return await db.transaction(async (tx) => {
+      const post = await db.transaction(async (tx) => {
         const post = await tx
           .insert(Posts)
           .values({
@@ -52,6 +49,8 @@ builder.mutationField('createPost', (t) =>
           .returning()
           .then(firstOrThrow);
       });
+
+      return { post };
     },
   }),
 );

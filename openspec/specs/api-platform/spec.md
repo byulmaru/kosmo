@@ -40,6 +40,11 @@ API는 GraphQL schema에서 공통 root type, nullability, input requiredness, D
 - **WHEN** API가 개발 환경에서 schema를 생성한다
 - **THEN** 시스템은 정렬된 GraphQL schema를 `schema.graphql` 파일로 출력한다
 
+#### Scenario: Mutation payload naming
+
+- **WHEN** mutation이 별도 payload object를 반환한다
+- **THEN** payload type name은 `<MutationName>Payload` 형식을 사용한다
+
 ### Requirement: Relay Node identity
 
 API는 DB UUID를 GraphQL Node ID로 사용하고 UUID에 포함된 테이블 식별자로 Node 타입을 판별해야 한다(MUST).
@@ -94,28 +99,30 @@ API는 request context에서 로그인 여부와 actor profile 선택 여부를 
 
 ### Requirement: API error representation
 
-API는 클라이언트가 분기할 수 있는 도메인 오류를 GraphQL error object와 field result union으로 노출해야 한다(MUST).
+API는 클라이언트가 분기할 수 있는 도메인 오류를 GraphQL `errors[]` entry로 노출해야 한다(MUST).
 
-#### Scenario: Common error fields
+#### Scenario: Common domain error fields
 
-- **WHEN** GraphQL 오류 객체가 반환된다
-- **THEN** 객체는 `message`와 `code` 필드를 포함하는 `Error` interface를 구현한다
+- **WHEN** domain error가 GraphQL 응답으로 반환된다
+- **THEN** error entry는 domain error의 `message`를 사용한다
+- **AND** `extensions.code`는 domain error code를 포함한다
 
 #### Scenario: Field-specific error
 
-- **WHEN** validation 또는 conflict 오류가 반환된다
-- **THEN** 객체는 nullable `field`를 포함하는 `FieldError` interface를 구현한다
+- **WHEN** validation 또는 conflict 오류가 특정 input field에 속한다
+- **THEN** error entry의 `extensions.field`는 해당 field path를 포함한다
 
-#### Scenario: Forbidden error
+#### Scenario: Unexpected error masking
 
-- **WHEN** permission denied 오류가 반환된다
-- **THEN** 객체는 `ForbiddenError` interface를 구현한다
+- **WHEN** 예상 밖 서버 오류가 production GraphQL 응답으로 반환된다
+- **THEN** 시스템은 내부 오류 message를 노출하지 않는다
+- **AND** `extensions.code`는 `INTERNAL_SERVER_ERROR`이다
 
 #### Scenario: Input validation failure
 
 - **WHEN** input validation이 실패한다
-- **THEN** 시스템은 첫 번째 validation issue의 message를 사용하는 `ValidationError`를 반환한다
-- **AND** validation issue path의 `input` prefix는 오류 field에서 제외된다
+- **THEN** error entry는 첫 번째 validation issue의 message를 사용한다
+- **AND** validation issue path의 `input` prefix는 `extensions.field`에서 제외된다
 
 ### Requirement: GraphQL enum registration
 

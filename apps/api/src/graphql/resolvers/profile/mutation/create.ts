@@ -4,20 +4,16 @@ import { ConflictError } from '@kosmo/core/error';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { profileHandleSchema } from '@kosmo/core/validation';
 import { builder } from '@/graphql/builder';
-import { Profile } from '../ref';
+import { CreateProfilePayload } from './payload';
 
 builder.mutationField('createProfile', (t) =>
   t.withAuth({ login: true }).fieldWithInput({
-    type: Profile,
+    type: CreateProfilePayload,
     input: {
       handle: t.input.string({ validate: profileHandleSchema }),
     },
-    errors: {
-      types: [ConflictError],
-      dataField: { name: 'profile' },
-    },
     resolve: async (_, { input }, ctx) => {
-      return await db.transaction(async (tx) => {
+      const profile = await db.transaction(async (tx) => {
         const profile = await tx
           .insert(Profiles)
           .values({
@@ -44,6 +40,8 @@ builder.mutationField('createProfile', (t) =>
 
         return profile;
       });
+
+      return { profile };
     },
   }),
 );

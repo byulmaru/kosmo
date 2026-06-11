@@ -1,6 +1,6 @@
 ## Context
 
-`PROD-92` 브랜치에는 `createPost(input: { content, visibility }): CreatePostResult!` GraphQL mutation, `Post`/`PostContent` object, `PostVisibility` enum, `TipTapDocument` scalar가 추가되어 있다. 성공 payload는 `CreatePostSuccess { post }`이며, 웹 앱에는 `/compose` 탭과 하단 탭 navigation은 있지만 현재는 안내 문구만 표시한다.
+`PROD-92` 브랜치에는 `createPost(input: { content, visibility }): CreatePostPayload!` GraphQL mutation, `Post`/`PostContent` object, `PostVisibility` enum, `TipTapDocument` scalar가 추가되어 있다. 성공 payload는 `CreatePostPayload { post }`이며, 웹 앱에는 `/compose` 탭과 하단 탭 navigation은 있지만 현재는 안내 문구만 표시한다.
 
 웹 클라이언트는 Mearie/Svelte GraphQL client를 사용하며, `SidebarNavigation`에서 `createQuery`/`createMutation` 패턴으로 현재 세션의 선택 프로필과 계정 프로필 목록을 이미 조회한다. 최신 main의 프론트엔드 규칙은 GraphQL query, mutation, fragment document를 실제로 사용하는 `.svelte` 파일에 colocate하고, 하위 컴포넌트가 데이터를 소비하면 fragment spread로 연결하도록 요구한다. 작성 UI는 TipTap editor를 사용하고, 제출 시 editor가 가진 TipTap `doc` JSON을 `createPost` mutation의 `content` 입력에 그대로 전달한다.
 
@@ -59,6 +59,6 @@
 
 ## Risks / Trade-offs
 
-- [Risk] `createPost`의 성공 결과는 `CreatePostSuccess { post }` union payload이지만, 인증 scope와 validation 실패는 GraphQL client 오류로 전달될 수 있다. → [Mitigation] 웹 mutation 호출은 `CreatePostSuccess` 분기와 예외/GraphQL client 오류를 모두 처리해 작성 실패 메시지로 매핑한다.
+- [Risk] 인증 scope와 validation 실패는 GraphQL client 오류로 전달된다. → [Mitigation] 웹 mutation 호출은 예외/GraphQL client 오류를 작성 실패 메시지로 매핑한다.
 - [Risk] 성공 후 생성된 게시글을 즉시 확인하는 화면이 없다. → [Mitigation] 이번 변경은 작성 컴포넌트와 mutation 제출에 집중하고, 상세 route나 피드 갱신은 후속 게시글 표시 흐름에서 다룬다.
 - [Risk] `DIRECT` 라벨은 언급 기능을 전제로 하지만 이번 변경은 mention UX를 구현하지 않는다. → [Mitigation] 이번 변경은 API enum 선택과 전달만 다루고, mention parsing 또는 수신자 안내는 후속 요구사항에서 다룬다.

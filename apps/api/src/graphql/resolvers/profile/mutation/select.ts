@@ -11,17 +11,13 @@ import { NotFoundError } from '@kosmo/core/error';
 import { and, eq, getColumns } from 'drizzle-orm';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
-import { Profile } from '../ref';
+import { SelectProfilePayload } from './payload';
 
 builder.mutationField('selectProfile', (t) =>
   t.withAuth({ login: true }).fieldWithInput({
-    type: Profile,
+    type: SelectProfilePayload,
     input: {
       id: t.input.id({ validate: z.uuid() }),
-    },
-    errors: {
-      types: [NotFoundError],
-      dataField: { name: 'profile' },
     },
     resolve: async (_, { input }, ctx) => {
       const profile = await db
@@ -45,7 +41,7 @@ builder.mutationField('selectProfile', (t) =>
         .returning()
         .then(firstOrThrow);
 
-      return profile;
+      return { profile };
     },
   }),
 );

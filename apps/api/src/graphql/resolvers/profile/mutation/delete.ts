@@ -3,16 +3,13 @@ import { AccountProfileRole, ProfileState } from '@kosmo/core/enums';
 import { NotFoundError, PermissionDeniedError } from '@kosmo/core/error';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
+import { DeleteProfilePayload } from './payload';
 
 builder.mutationField('deleteProfile', (t) =>
   t.withAuth({ login: true }).fieldWithInput({
-    type: 'ID',
+    type: DeleteProfilePayload,
     input: {
       id: t.input.id({ required: true }),
-    },
-    errors: {
-      types: [NotFoundError, PermissionDeniedError],
-      dataField: { name: 'profileId' },
     },
     resolve: async (_, { input }, ctx) => {
       const profile = await db
@@ -45,7 +42,7 @@ builder.mutationField('deleteProfile', (t) =>
           .where(eq(Sessions.activeProfileId, input.id));
       });
 
-      return profile.id;
+      return { profileId: profile.id };
     },
   }),
 );
