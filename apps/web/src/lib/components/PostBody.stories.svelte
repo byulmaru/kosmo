@@ -13,7 +13,11 @@
   ): FragmentRefs<'PostBody_post'> =>
     ({
       __typename: 'Post',
-      content: bodyText === null ? null : { __typename: 'PostContent', bodyText },
+      id: 'story-post',
+      content:
+        bodyText === null
+          ? null
+          : { __typename: 'PostContent', id: 'story-post-content', bodyText },
       createdAt: '2026-04-27T21:14:00.000Z',
       visibility,
     }) as unknown as FragmentRefs<'PostBody_post'>;

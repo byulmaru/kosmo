@@ -47,9 +47,11 @@
   type PostDetail = FragmentRefs<'PostBody_post'> & { state: 'ACTIVE' | 'DELETED' };
   const post: PostDetail | null = {
     __typename: 'Post',
+    id: 'dummy-post',
     state: 'ACTIVE',
     content: {
       __typename: 'PostContent',
+      id: 'dummy-post-content',
       bodyText:
         '본문이 들어가는 자리예요. 내용이 길어지면 여러 줄로 늘어납니다.\n줄바꿈도 그대로 보존됩니다.',
     },

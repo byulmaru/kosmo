@@ -15,7 +15,9 @@
   const postFragment = createFragment(
     graphql(`
       fragment PostBody_post on Post {
+        id
         content {
+          id
           bodyText
         }
         createdAt
