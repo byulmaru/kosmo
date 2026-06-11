@@ -59,6 +59,35 @@
     });
     return date.replace(/\.$/, '');
   });
+
+  // 본문 클램프(Figma PostText 67:527 — 예시 기준 4줄)와 "더보기..."(ExpandButton
+  // 67:515) 인라인 펼침. 디테일 이동 링크는 별도 서브이슈 범위라 페이지 이동 없이
+  // 제자리에서 펼친다. 펼친 뒤 다시 접는 동작은 Figma에 없어 두지 않는다.
+  let bodyElement = $state<HTMLParagraphElement>();
+  let expanded = $state(false);
+  let clamped = $state(false);
+
+  // 잘림 여부는 클램프된 요소의 scrollHeight가 보이는 높이를 넘는지로 감지한다.
+  // SSR에서는 측정할 수 없어 마운트 후 버튼이 나타나고, 폭 변화(리사이즈)에도
+  // 재평가한다.
+  $effect(() => {
+    const element = bodyElement;
+    // 본문이 바뀌면(높이 변화 없이도) 다시 측정해야 하므로 의존성으로 읽는다.
+    const bodyText = postFragment.data.content?.bodyText;
+    if (!element || !bodyText || expanded) {
+      clamped = false;
+      return;
+    }
+
+    const measure = () => {
+      clamped = element.scrollHeight > element.clientHeight;
+    };
+    measure();
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  });
 </script>
 
 <article {...attributes} class={`border-border border-b px-2 pt-2 pb-4 ${className ?? ''}`}>
@@ -70,9 +99,21 @@
     {/snippet}
 
     {#if postFragment.data.content}
-      <p class="text-text-primary text-md mt-2 break-words whitespace-pre-wrap">
+      <p
+        bind:this={bodyElement}
+        class={`text-text-primary text-md mt-2 break-words whitespace-pre-wrap ${expanded ? '' : 'line-clamp-4'}`}
+      >
         {postFragment.data.content.bodyText}
       </p>
+      {#if clamped}
+        <button
+          class="text-more text-md focus-visible:outline-more block rounded-md text-left font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
+          onclick={() => (expanded = true)}
+          type="button"
+        >
+          더보기...
+        </button>
+      {/if}
     {/if}
   </PostAuthorProfile>
 </article>
