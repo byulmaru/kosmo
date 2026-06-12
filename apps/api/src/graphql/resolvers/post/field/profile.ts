@@ -1,5 +1,4 @@
 import { db, Posts } from '@kosmo/core/db';
-import { PostState, PostVisibility } from '@kosmo/core/enums';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, gt, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
@@ -26,11 +25,7 @@ builder.objectFields(Profile, (t) => ({
               .where(
                 and(
                   eq(Posts.profileId, profile.id),
-                  eq(Posts.state, PostState.ACTIVE),
-                  postVisibilityAccessWhere({
-                    ctx,
-                    publicVisibilities: [PostVisibility.PUBLIC],
-                  }),
+                  postVisibilityAccessWhere({ ctx }),
                   before ? gt(Posts.id, before) : undefined,
                   after ? lt(Posts.id, after) : undefined,
                 ),

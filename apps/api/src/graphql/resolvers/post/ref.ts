@@ -12,11 +12,7 @@ export const Post = createObjectRef('Post', TableDiscriminator.Posts, (ids, ctx)
     .where(
       and(
         inArray(Posts.id, ids),
-        eq(Posts.state, PostState.ACTIVE),
-        postVisibilityAccessWhere({
-          ctx,
-          publicVisibilities: [PostVisibility.PUBLIC, PostVisibility.UNLISTED],
-        }),
+        postVisibilityAccessWhere({ ctx }),
         eq(Profiles.state, ProfileState.ACTIVE),
       ),
     );
