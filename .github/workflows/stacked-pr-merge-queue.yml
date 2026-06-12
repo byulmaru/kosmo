@@ -19,7 +19,7 @@ on:
 
 permissions:
   contents: write
-  issues: read
+  issues: write
   pull-requests: write
 
 concurrency:
@@ -97,6 +97,31 @@ jobs:
               return isPullRequestTargetAction("synchronize");
             }
 
+            function branchPatternMatches(pattern, branch, defaultBranch) {
+              return pattern === "~ALL"
+                || pattern === branch
+                || pattern === `refs/heads/${branch}`
+                || (pattern === "~DEFAULT_BRANCH" && branch === defaultBranch);
+            }
+
+            function rulesetTargetsBranch(ruleset, branch, defaultBranch) {
+              if (ruleset.target !== "branch" || ruleset.enforcement !== "active") {
+                return false;
+              }
+
+              const refName = ruleset.conditions?.ref_name;
+
+              if (!refName) {
+                return true;
+              }
+
+              const includes = refName.include ?? [];
+              const excludes = refName.exclude ?? [];
+
+              return includes.some((pattern) => branchPatternMatches(pattern, branch, defaultBranch))
+                && !excludes.some((pattern) => branchPatternMatches(pattern, branch, defaultBranch));
+            }
+
             function getGraphqlErrorMessages(error) {
               const messages = [];
 
@@ -133,6 +158,35 @@ jobs:
 
             function canActivateMergeQueue(permission) {
               return activationPermissions.has(String(permission).toLowerCase());
+            }
+
+            async function removeOptInLabel(number) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner,
+                  repo,
+                  issue_number: number,
+                  name: labelName,
+                });
+                core.info(`Removed unauthorized ${labelName} label from PR #${number}.`);
+              } catch (error) {
+                if (error.status === 404) {
+                  core.info(`The ${labelName} label was already absent from PR #${number}.`);
+                  return;
+                }
+
+                throw error;
+              }
+            }
+
+            async function addOptInLabel(number) {
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: number,
+                labels: [labelName],
+              });
+              core.info(`Restored ${labelName} label on PR #${number}.`);
             }
 
             async function getSenderPermission() {
@@ -208,6 +262,43 @@ jobs:
               });
 
               return labels.some((label) => label.name === labelName);
+            }
+
+            async function assertRequiredStatusChecksConfigured() {
+              const { data: repository } = await github.rest.repos.get({ owner, repo });
+              const defaultBranch = repository.default_branch;
+              const { data: rulesets } = await github.request("GET /repos/{owner}/{repo}/rulesets", {
+                owner,
+                repo,
+                per_page: 100,
+              });
+
+              const matchingRulesets = rulesets.filter((ruleset) =>
+                rulesetTargetsBranch(ruleset, targetBranch, defaultBranch),
+              );
+
+              for (const ruleset of matchingRulesets) {
+                const { data: detail } = await github.request("GET /repos/{owner}/{repo}/rulesets/{ruleset_id}", {
+                  owner,
+                  repo,
+                  ruleset_id: ruleset.id,
+                });
+                const requiredStatusChecks = detail.rules?.find(
+                  (rule) => rule.type === "required_status_checks",
+                );
+                const checks = requiredStatusChecks?.parameters?.required_status_checks ?? [];
+
+                if (checks.length > 0) {
+                  core.info(
+                    `Required status checks are configured for ${targetBranch} by ruleset ${detail.name}.`,
+                  );
+                  return;
+                }
+              }
+
+              throw new Error(
+                `No required status checks are configured for ${targetBranch}; refusing to manage merge queue state.`,
+              );
             }
 
             async function dequeuePullRequest(pullRequest) {
@@ -369,7 +460,18 @@ jobs:
               return;
             }
 
+            const senderPermission = await getSenderPermission();
+            const senderCanActivate = canActivateMergeQueue(senderPermission);
+
             if (isRocketLabelRemoval()) {
+              if (!senderCanActivate) {
+                core.info(
+                  `Restoring ${labelName} label on PR #${pullRequest.number} because sender ${context.payload.sender?.login ?? "(unknown)"} has ${senderPermission} permission, not write access.`,
+                );
+                await addOptInLabel(pullRequest.number);
+                return;
+              }
+
               core.info(`Cleaning up PR #${pullRequest.number} because the ${labelName} label was removed.`);
               await cleanUpPullRequest(pullRequest);
               return;
@@ -386,14 +488,12 @@ jobs:
               return;
             }
 
-            const senderPermission = await getSenderPermission();
-            const senderCanActivate = canActivateMergeQueue(senderPermission);
-
             if (pullRequest.baseRefName !== targetBranch) {
               if (isPullRequestTargetAction("labeled") && !senderCanActivate) {
                 core.info(
-                  `Skipping PR #${pullRequest.number} because sender ${context.payload.sender?.login ?? "(unknown)"} has ${senderPermission} permission and its base branch is ${pullRequest.baseRefName}, not ${targetBranch}.`,
+                  `Removing ${labelName} label from PR #${pullRequest.number} because sender ${context.payload.sender?.login ?? "(unknown)"} has ${senderPermission} permission and its base branch is ${pullRequest.baseRefName}, not ${targetBranch}.`,
                 );
+                await removeOptInLabel(pullRequest.number);
                 return;
               }
 
@@ -409,6 +509,11 @@ jobs:
                 `Skipping PR #${pullRequest.number} because sender ${context.payload.sender?.login ?? "(unknown)"} has ${senderPermission} permission, not write access.`,
               );
 
+              if (isPullRequestTargetAction("labeled")) {
+                await removeOptInLabel(pullRequest.number);
+                return;
+              }
+
               if (shouldCleanUpForUntrustedSender()) {
                 await cleanUpPullRequest(pullRequest);
               }
@@ -418,6 +523,13 @@ jobs:
 
             if (isBaseChangedEvent()) {
               core.info(`PR #${pullRequest.number} still targets ${targetBranch} after base edit.`);
+            }
+
+            try {
+              await assertRequiredStatusChecksConfigured();
+            } catch (error) {
+              await cleanUpPullRequest(pullRequest);
+              throw error;
             }
 
             if (pullRequest.mergeQueueEntry || pullRequest.isInMergeQueue) {
