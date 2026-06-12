@@ -97,31 +97,6 @@ jobs:
               return isPullRequestTargetAction("synchronize");
             }
 
-            function branchPatternMatches(pattern, branch, defaultBranch) {
-              return pattern === "~ALL"
-                || pattern === branch
-                || pattern === `refs/heads/${branch}`
-                || (pattern === "~DEFAULT_BRANCH" && branch === defaultBranch);
-            }
-
-            function rulesetTargetsBranch(ruleset, branch, defaultBranch) {
-              if (ruleset.target !== "branch" || ruleset.enforcement !== "active") {
-                return false;
-              }
-
-              const refName = ruleset.conditions?.ref_name;
-
-              if (!refName) {
-                return true;
-              }
-
-              const includes = refName.include ?? [];
-              const excludes = refName.exclude ?? [];
-
-              return includes.some((pattern) => branchPatternMatches(pattern, branch, defaultBranch))
-                && !excludes.some((pattern) => branchPatternMatches(pattern, branch, defaultBranch));
-            }
-
             function getGraphqlErrorMessages(error) {
               const messages = [];
 
@@ -265,35 +240,19 @@ jobs:
             }
 
             async function assertRequiredStatusChecksConfigured() {
-              const { data: repository } = await github.rest.repos.get({ owner, repo });
-              const defaultBranch = repository.default_branch;
-              const { data: rulesets } = await github.request("GET /repos/{owner}/{repo}/rulesets", {
+              const { data: rules } = await github.request("GET /repos/{owner}/{repo}/rules/branches/{branch}", {
                 owner,
                 repo,
+                branch: targetBranch,
                 per_page: 100,
               });
 
-              const matchingRulesets = rulesets.filter((ruleset) =>
-                rulesetTargetsBranch(ruleset, targetBranch, defaultBranch),
-              );
+              const requiredStatusChecks = rules.find((rule) => rule.type === "required_status_checks");
+              const checks = requiredStatusChecks?.parameters?.required_status_checks ?? [];
 
-              for (const ruleset of matchingRulesets) {
-                const { data: detail } = await github.request("GET /repos/{owner}/{repo}/rulesets/{ruleset_id}", {
-                  owner,
-                  repo,
-                  ruleset_id: ruleset.id,
-                });
-                const requiredStatusChecks = detail.rules?.find(
-                  (rule) => rule.type === "required_status_checks",
-                );
-                const checks = requiredStatusChecks?.parameters?.required_status_checks ?? [];
-
-                if (checks.length > 0) {
-                  core.info(
-                    `Required status checks are configured for ${targetBranch} by ruleset ${detail.name}.`,
-                  );
-                  return;
-                }
+              if (checks.length > 0) {
+                core.info(`Required status checks are configured for ${targetBranch}.`);
+                return;
               }
 
               throw new Error(
