@@ -26,9 +26,8 @@
     <div class="text-text-primary flex items-center gap-2">
       <ImageIcon size={20} />
       <TriangleAlertIcon size={20} />
-      <span class="flex-1"></span>
       <span
-        class="bg-primary text-text-primary flex h-8 w-30 items-center justify-center rounded-sm text-sm font-bold"
+        class="bg-primary text-text-primary ml-auto flex h-8 w-30 items-center justify-center rounded-sm text-sm font-bold"
       >
         게시
       </span>
