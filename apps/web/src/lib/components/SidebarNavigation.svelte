@@ -1,18 +1,23 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { profileHandleSchema } from '@kosmo/core/validation';
-  import { createMutation, createQuery } from '@mearie/svelte';
+  import { createFragment, createMutation } from '@mearie/svelte';
   import { graphql } from '$mearie';
   import { formatCount, getProfileInitial } from '$lib/utils/profile';
   import type { DataOf } from '@mearie/svelte';
+  import type { SidebarNavigation_query$key } from '$mearie';
 
   type Props = {
+    query?: SidebarNavigation_query$key | null;
+    loading?: boolean;
+    error?: boolean;
     surface?: 'desktop' | 'drawer';
     onNavigate?: () => void;
+    onProfileStateChanged?: () => void;
   };
 
-  const sidebarProfilesQuery = graphql(`
-    query SidebarProfilesQuery {
+  const sidebarNavigationFragment = graphql(`
+    fragment SidebarNavigation_query on Query {
       currentSession {
         selectedProfile {
           id
@@ -76,10 +81,17 @@
     }
   `);
 
-  type SidebarProfilesData = DataOf<typeof sidebarProfilesQuery>;
-  type ProfileSummary = NonNullable<SidebarProfilesData['me']>['profiles'][number];
+  type SidebarNavigationData = DataOf<typeof sidebarNavigationFragment>;
+  type ProfileSummary = NonNullable<SidebarNavigationData['me']>['profiles'][number];
 
-  let { surface = 'desktop', onNavigate = () => {} }: Props = $props();
+  let {
+    query = null,
+    loading = false,
+    error = false,
+    surface = 'desktop',
+    onNavigate = () => {},
+    onProfileStateChanged = () => {},
+  }: Props = $props();
 
   const navItems = [
     { href: '/', label: '홈', path: 'M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z' },
@@ -111,7 +123,7 @@
     },
   ];
 
-  const profileQuery = createQuery(sidebarProfilesQuery);
+  const sidebarNavigation = createFragment(sidebarNavigationFragment, () => query);
   const [selectSidebarProfile] = createMutation(selectSidebarProfileMutation);
   const [createSidebarProfile] = createMutation(createSidebarProfileMutation);
   let profileError = $state<string | null>(null);
@@ -147,10 +159,10 @@
       : (result.error.issues[0]?.message ?? '프로필 핸들 형식을 확인해주세요.');
   };
 
-  const creatingOrSwitching = $derived(profileActionLoading || profileQuery.loading);
-  const sidebarProfiles = $derived(profilesOverride ?? profileQuery.data?.me?.profiles ?? []);
+  const creatingOrSwitching = $derived(profileActionLoading || loading);
+  const sidebarProfiles = $derived(profilesOverride ?? sidebarNavigation.data?.me?.profiles ?? []);
   const sidebarActiveProfile = $derived(
-    selectedProfileOverride ?? profileQuery.data?.currentSession?.selectedProfile ?? null,
+    selectedProfileOverride ?? sidebarNavigation.data?.currentSession?.selectedProfile ?? null,
   );
 
   const openProfileSwitcher = () => {
@@ -182,7 +194,7 @@
         data.selectProfile.profile;
       profileSwitcherOpen = false;
       profileCreationOpen = false;
-      profileQuery.refetch();
+      onProfileStateChanged();
     } catch (error) {
       profileError = error instanceof Error ? error.message : '프로필을 전환하지 못했습니다.';
     } finally {
@@ -231,7 +243,7 @@
       selectedProfileOverride = createdProfile;
       profileSwitcherOpen = false;
       profileCreationOpen = false;
-      profileQuery.refetch();
+      onProfileStateChanged();
     } catch (error) {
       profileCreationError =
         error instanceof Error ? error.message : '프로필을 생성하지 못했습니다.';
@@ -304,7 +316,7 @@
           >
         </div>
       </div>
-    {:else if profileQuery.data && sidebarProfiles.length > 0}
+    {:else if sidebarNavigation.data && sidebarProfiles.length > 0}
       <div class="absolute left-5 top-[54px] flex w-[280px] items-start justify-between">
         <div
           class="flex size-24 items-center justify-center rounded-full bg-zinc-200 text-3xl font-bold text-zinc-500 shadow-[1px_1px_2px_rgba(0,0,0,0.25)]"
@@ -358,7 +370,7 @@
           </svg>
         </button>
         <p class="text-sm leading-[19.6px] text-[#777777]">
-          {profileQuery.loading ? '프로필을 불러오는 중입니다.' : '새 프로필을 만들어 시작하세요.'}
+          {loading ? '프로필을 불러오는 중입니다.' : '새 프로필을 만들어 시작하세요.'}
         </p>
       </div>
     {/if}
@@ -557,9 +569,9 @@
       전환 중
     {/if}
 
-    {#if profileQuery.loading}
+    {#if loading}
       프로필을 불러오는 중입니다.
-    {:else if profileQuery.error}
+    {:else if error}
       프로필을 불러오지 못했습니다.
     {:else if sidebarProfiles.length === 0}
       사용 가능한 프로필이 없습니다.
