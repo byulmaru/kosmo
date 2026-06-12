@@ -5,7 +5,7 @@ export const client = createClient({
   schema,
   exchanges: [
     dedupExchange(),
-    cacheExchange(),
+    cacheExchange({ fetchPolicy: 'cache-and-network' }),
     httpExchange({
       url: '/graphql',
     }),
