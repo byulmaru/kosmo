@@ -25,8 +25,8 @@
 
 ## Mearie Cache And Mutations
 
-- `cacheExchange`의 `fetchPolicy`는 client(`apps/web/src/lib/graphql/client.ts`) 생성 시 한 번 고정되는 전역 상수이고 기본값은 `cache-first`다. `createQuery` options로 per-query override가 되지 않는다(이 버전 기준).
-- `cache-first`에서 쿼리가 정규화 캐시로 완전히 denormalize되면 네트워크를 타지 않는다. 따라서 `query.refetch()`도 캐시에 데이터가 있으면 네트워크 요청을 보내지 않고 stale 캐시를 다시 내보낸다. mutation 이후 UI 갱신을 부모 `refetch()`에 의존하면 안 된다.
+- `cacheExchange`의 `fetchPolicy`는 client(`apps/web/src/lib/graphql/client.ts`) 생성 시 한 번 고정되는 전역 상수이고, 이 repo는 `cache-and-network`를 사용한다(쿼리 실행 시 캐시를 즉시 내보내고 백그라운드 네트워크 재요청으로 갱신, PROD-110 리뷰 결정). mearie 문서에는 per-operation fetch policy(`useQuery` 세 번째 인자)가 있으나 0.6.7 기준 미구현이다 — 문서-구현 불일치이므로 per-query override를 시도하지 않는다.
+- `cache-and-network`에서도 캐시 갱신은 쿼리가 새로 실행될 때(마운트, 변수 변경, `refetch()`) 일어난다. 화면이 떠 있는 동안 다른 곳에서 일어난 변경이 저절로 반영되지는 않으므로, mutation 이후 UI 갱신을 부모 `refetch()`에 의존하지 말고 아래 응답 기반 정규화 갱신을 우선한다.
 - mutation 후 화면을 갱신하려면 응답에 **영향받는 엔티티의 `id`와 변경된 필드를 실어와** 정규화 캐시가 자동 갱신되게 한다. 예: follow/unfollow는 대상 `Profile`의 `viewerFollow`와 `followersCount`를 응답에서 선택한다.
 - delete/해제 mutation은 삭제된 관계 row의 `id`만으로 부모 링크를 끊지 못한다. `Profile.viewerFollow`를 `null`로 만들려면 success payload에 영향받는 부모 엔티티(예: `UnfollowProfileSuccess.profile`)를 노출하고 클라이언트가 그 필드를 다시 선택해야 한다.
 - 정규화로 안 되는 경우의 escape hatch로 `client.extension('cache').invalidate(...)`가 있으나(대상을 stale 처리해 네트워크 refetch 유발), 가능하면 응답 기반 정규화 갱신을 우선한다.
