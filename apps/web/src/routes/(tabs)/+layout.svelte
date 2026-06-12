@@ -1,5 +1,6 @@
 <script lang="ts">
   import BottomTabBar from '$lib/components/BottomTabBar.svelte';
+  import RightRail from '$lib/components/RightRail.svelte';
   import SidebarNavigation from '$lib/components/SidebarNavigation.svelte';
 
   let { children } = $props();
@@ -70,8 +71,11 @@
     <BottomTabBar onMenuClick={openDrawer} />
   </div>
 
-  <!-- 우측 레일 자리: 위젯은 PROD-113에서 채운다 -->
-  <div class="hidden lg:block"></div>
+  <div class="hidden lg:block">
+    <div class="sticky top-0 pt-4 pl-6">
+      <RightRail />
+    </div>
+  </div>
 
   {#if drawerOpen}
     <div class="fixed inset-0 z-40 lg:hidden" role="presentation">
