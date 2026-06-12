@@ -20,11 +20,6 @@
 
   const session = $derived(query.data?.currentSession ?? null);
   const selectedProfile = $derived(session?.selectedProfile ?? null);
-
-  const handleRetry = () => {
-    // TODO: If retry must bypass cache-first stale data, invalidate currentSession first.
-    query.refetch();
-  };
 </script>
 
 <section class="grid w-[min(100%,36rem)] gap-5 self-start">
@@ -46,7 +41,7 @@
     <div class="border-border bg-card rounded-md border p-5" role="alert">
       <p class="text-text-primary m-0 text-base font-bold">글쓰기 정보를 불러오지 못했어요</p>
       <p class="text-text-secondary mt-1 mb-4 text-sm">잠시 후 다시 시도해주세요.</p>
-      <Button variant="secondary" onclick={handleRetry}>다시 시도</Button>
+      <Button variant="secondary" onclick={() => query.refetch()}>다시 시도</Button>
     </div>
   {:else if !session}
     <div class="border-border bg-card rounded-md border p-5">
