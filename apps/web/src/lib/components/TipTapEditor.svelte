@@ -1,9 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { Editor } from '@tiptap/core';
-  import { Document } from '@tiptap/extension-document';
-  import { Paragraph } from '@tiptap/extension-paragraph';
-  import { Text } from '@tiptap/extension-text';
+  import { tipTapExtensions } from '@kosmo/core/tiptap';
   import type { TipTapDocument } from '@kosmo/core/tiptap';
 
   type Props = {
@@ -40,7 +38,7 @@
   onMount(() => {
     editor = new Editor({
       element: editorHost,
-      extensions: [Document, Paragraph, Text],
+      extensions: tipTapExtensions,
       content: document ?? {
         type: 'doc',
         content: [{ type: 'paragraph' }],
