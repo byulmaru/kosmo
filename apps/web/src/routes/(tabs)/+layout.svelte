@@ -1,15 +1,17 @@
 <script lang="ts">
   import { graphql } from '$mearie';
-  import { createQuery } from '@mearie/svelte';
+  import { createQuery, getClient } from '@mearie/svelte';
   import BottomTabBar from '$lib/components/BottomTabBar.svelte';
   import RightRail from '$lib/components/RightRail.svelte';
   import SidebarNavigation from '$lib/components/SidebarNavigation.svelte';
 
   let { children } = $props();
 
+  const client = getClient();
   const query = createQuery(
     graphql(`
       query TabsLayoutQuery {
+        ...SidebarNavigation_query
         currentSession {
           id
           selectedProfile {
@@ -22,6 +24,15 @@
   );
 
   const selectedProfile = $derived(query.data?.currentSession?.selectedProfile ?? null);
+
+  const invalidateSidebarNavigationData = () => {
+    client
+      .extension('cache')
+      .invalidate(
+        { __typename: 'Query', $field: 'currentSession' },
+        { __typename: 'Query', $field: 'me' },
+      );
+  };
 
   let drawerOpen = $state(false);
   let swipeStartX = $state<number | null>(null);
@@ -63,7 +74,12 @@
   class="min-h-screen lg:grid lg:grid-cols-[20rem_minmax(0,600px)_minmax(290px,350px)] lg:justify-center"
 >
   <div class="hidden lg:block">
-    <SidebarNavigation />
+    <SidebarNavigation
+      query={query.data}
+      loading={query.loading}
+      error={Boolean(query.error)}
+      onProfileStateChanged={invalidateSidebarNavigationData}
+    />
   </div>
 
   <div class="grid min-h-screen grid-rows-[auto_1fr_auto] lg:grid-rows-[1fr]">
@@ -114,7 +130,14 @@
         onclick={closeDrawer}
       ></button>
       <div id="mobile-sidebar" class="absolute inset-y-0 left-0 max-w-[85vw]">
-        <SidebarNavigation surface="drawer" onNavigate={closeDrawer} />
+        <SidebarNavigation
+          query={query.data}
+          loading={query.loading}
+          error={Boolean(query.error)}
+          surface="drawer"
+          onNavigate={closeDrawer}
+          onProfileStateChanged={invalidateSidebarNavigationData}
+        />
       </div>
     </div>
   {/if}
