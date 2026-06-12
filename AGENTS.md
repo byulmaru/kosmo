@@ -30,6 +30,11 @@
 - `memory/database-design.md`: kosmo PostgreSQL/Drizzle database schema design and review context.
 - `memory/graphql-style.md`: GraphQL resolver structure, object refs, enum registration, Node ID, and resolver style.
 
+## Design Docs
+
+- Before working on UI/product design tasks (design implementation, Figma work, style changes), check `docs/design/*.md`.
+- When a change alters a documented design decision, update the relevant `docs/design` document in the same change.
+
 ## `package.json` Changes
 
 - Use `pnpm add`, `pnpm remove`, `pnpm add --save-dev`, or other `pnpm`-based CLI commands for dependency updates.
