@@ -28,6 +28,13 @@
 
 웹 앱은 새 글 작성 컴포넌트 사용처에서 인증과 active profile 부재 상태를 처리해야 한다(MUST).
 
+#### Scenario: 사용처 로딩 상태
+
+- **WHEN** 새 글 작성 컴포넌트가 놓인 사용처가 현재 session과 active profile 정보를 불러오는 중이다
+- **THEN** 시스템은 로딩 상태를 표시한다
+- **AND** 시스템은 새 글 작성 컴포넌트를 렌더링하지 않는다
+- **AND** 시스템은 `createPost` mutation을 호출하지 않는다
+
 #### Scenario: 인증되지 않은 사용자
 
 - **WHEN** 인증 session이 없는 사용자가 새 글 작성 컴포넌트가 놓인 사용처에 접근한다
