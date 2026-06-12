@@ -19,7 +19,7 @@
 - editor의 Plain Text projection 기준으로 빈 본문 제출 방지와 500자 초과 본문 검증을 클라이언트에서 먼저 수행한다.
 - TipTap editor의 `doc` JSON을 `createPost` mutation으로 제출한다.
 - 제출 중과 실패 상태를 컴포넌트에서 확인할 수 있게 한다.
-- 성공 후에는 별도 완료 패널이나 경로 이동 없이 editor 본문, 공개 범위, validation/error 상태를 초기화한다.
+- 성공 후에는 별도 완료 패널이나 경로 이동 없이 editor 본문, 공개 범위, 오류 상태를 초기화한다.
 - `/compose` route는 첫 사용처로서 현재 세션의 선택 프로필을 조회하고, 선택 프로필이 있을 때만 새 글 작성 컴포넌트가 선언한 fragment를 spread해 전달한다.
 
 **Non-Goals:**
@@ -45,7 +45,7 @@
 
 4. 기본 본문 제출 방지와 길이 검증은 클라이언트와 서버에서 모두 수행한다.
 
-   컴포넌트는 `kosmo-old`의 `form.svelte.ts` 흐름을 참고해 zod schema `safeParse`, form data parsing, input별 `setCustomValidity`, submit 시 `reportValidity`를 사용한다. TipTap editor는 native input이 아니므로 본문 Plain Text projection을 body proxy input에 동기화해 form validation에 참여시킨다. 빈 본문일 때는 제출 버튼을 비활성화하고 별도 오류 메시지를 표시하지 않는다. 500자 초과는 body custom validity와 오류 상태로 표시해 불필요한 mutation 호출을 줄인다. 서버 검증은 source of truth로 유지되므로 클라이언트 검증을 우회한 요청도 `createPost`에서 거부된다. 서버 오류 메시지는 사용자가 이해할 수 있는 작성 실패 상태로 표시한다.
+   컴포넌트는 editor의 Plain Text projection을 기준으로 빈 본문과 500자 초과 상태를 판단한다. 빈 본문일 때는 제출 버튼을 비활성화하고 별도 오류 메시지를 표시하지 않는다. 500자 초과는 남은 글자수 인디케이터를 음수와 오류 색상으로 표시하고 제출 버튼을 비활성화해 불필요한 mutation 호출을 줄인다. 별도 본문 길이 오류 메시지나 native form custom validity는 이번 범위에서 제공하지 않는다. 서버 검증은 source of truth로 유지되므로 클라이언트 검증을 우회한 요청도 `createPost`에서 거부된다. 서버 오류 메시지는 사용자가 이해할 수 있는 작성 실패 상태로 표시한다.
 
 5. 공개 범위 selector는 드롭다운 버튼으로 구현한다.
 
@@ -61,7 +61,7 @@
 
 8. 성공 후에는 작성 폼을 초기화한다.
 
-   `createPost`가 `CreatePostSuccess`로 완료되면 별도 완료 패널, 생성 결과 요약, 상세 route 이동 없이 editor 본문, 공개 범위 선택, validation/error 상태를 초기화한다. 공개 범위 선택은 기본값인 `UNLISTED`로 되돌리며, 이번 범위에서는 생성된 게시글의 `id`, 작성자, 현재 콘텐츠, 생성 시각을 화면 표시 목적으로 조회하지 않는다.
+   `createPost`가 `CreatePostSuccess`로 완료되면 별도 완료 패널, 생성 결과 요약, 상세 route 이동 없이 editor 본문, 공개 범위 선택, 오류 상태를 초기화한다. 공개 범위 선택은 기본값인 `UNLISTED`로 되돌리며, 이번 범위에서는 생성된 게시글의 `id`, 작성자, 현재 콘텐츠, 생성 시각을 화면 표시 목적으로 조회하지 않는다.
 
 9. `/compose`는 첫 사용처일 뿐 작성 로직의 소유자가 아니다.
 

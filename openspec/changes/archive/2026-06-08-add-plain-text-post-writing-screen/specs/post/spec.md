@@ -99,8 +99,6 @@
 - **WHEN** editor 본문의 Plain Text projection이 500자를 초과한다
 - **THEN** 시스템은 글자수 인디케이터를 오류 상태로 표시한다
 - **AND** 시스템은 남은 글자수를 음수 숫자로 표시한다
-- **AND** 시스템은 본문 길이 제한 오류를 표시한다
-- **AND** 시스템은 form validation에서 body field custom validity를 본문 길이 제한 오류로 설정한다
 - **AND** 시스템은 제출 버튼을 비활성화한다
 
 ### Requirement: TipTap post submission
@@ -113,7 +111,7 @@
 - **THEN** 시스템은 TipTap editor의 `doc` JSON을 `content` 값으로 설정한다
 - **AND** 시스템은 `visibility` 값을 사용자가 선택한 공개 범위로 설정해 `createPost` mutation을 호출한다
 - **AND** 시스템은 제출 중 상태를 표시하고 중복 제출을 방지한다
-- **AND** mutation 성공 후 editor 본문, 공개 범위 선택, validation/error 상태를 기본값으로 초기화한다
+- **AND** mutation 성공 후 editor 본문, 공개 범위 선택, 오류 상태를 기본값으로 초기화한다
 - **AND** 시스템은 생성된 게시글 확인 패널을 표시하지 않고 생성된 게시글 경로로 이동하지 않는다
 
 #### Scenario: 빈 본문 제출 방지
@@ -126,9 +124,7 @@
 #### Scenario: 너무 긴 본문 제출
 
 - **WHEN** 사용자가 500자를 초과하는 editor 본문으로 작성 컴포넌트를 제출한다
-- **THEN** 시스템은 본문 길이 제한 오류를 표시한다
-- **AND** 시스템은 zod schema 기반 form validation 실패로 제출을 차단한다
-- **AND** 시스템은 제출 버튼을 비활성화한다
+- **THEN** 시스템은 제출 버튼 비활성화 상태로 제출을 차단한다
 - **AND** 시스템은 `createPost` mutation을 호출하지 않는다
 
 #### Scenario: 작성 실패 표시
