@@ -71,7 +71,7 @@
     <BottomTabBar onMenuClick={openDrawer} />
   </div>
 
-  <div class="hidden lg:block">
+  <div class="border-border hidden border-l lg:block">
     <div class="sticky top-0 pt-4 pl-6">
       <RightRail />
     </div>
