@@ -27,7 +27,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  MERGE_QUEUE_LABEL: '🚀'
+  MERGE_QUEUE_LABEL: merge-queue
   TARGET_BRANCH: main
   MERGE_METHOD: SQUASH
 
@@ -81,7 +81,7 @@ jobs:
               return context.payload.label?.name ?? null;
             }
 
-            function isRocketLabelRemoval() {
+            function isMergeQueueLabelRemoval() {
               return isPullRequestTargetAction("unlabeled") && getEventLabelName() === labelName;
             }
 
@@ -422,7 +422,7 @@ jobs:
             const senderPermission = await getSenderPermission();
             const senderCanActivate = canActivateMergeQueue(senderPermission);
 
-            if (isRocketLabelRemoval()) {
+            if (isMergeQueueLabelRemoval()) {
               if (!senderCanActivate) {
                 core.info(
                   `Restoring ${labelName} label on PR #${pullRequest.number} because sender ${context.payload.sender?.login ?? "(unknown)"} has ${senderPermission} permission, not write access.`,
