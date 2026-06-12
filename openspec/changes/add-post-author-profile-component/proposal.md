@@ -24,5 +24,5 @@
 ## Impact
 
 - `apps/web/src/lib/components`에 GraphQL fragment 기반 게시글 작성자 프로필 표시 컴포넌트와 Storybook story가 추가된다.
-- `apps/web/src/lib/index.ts`에서 새 컴포넌트를 export한다.
+- 컴포넌트는 필요한 위치에서 직접 import하며, 웹 패키지 public barrel export는 추가하지 않는다.
 - API schema, 데이터 모델, 라우팅, 의존성은 변경하지 않는다.
