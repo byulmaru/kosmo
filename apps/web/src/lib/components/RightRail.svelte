@@ -5,7 +5,7 @@
   import PostVisibilityIcon from './PostVisibilityIcon.svelte';
 
   // TODO: 글 작성 위젯은 디자인(05 Screens - Web / RightRail) 모양만 잡아둔 정적 placeholder다.
-  // 후속 이슈에서 PostComposer 연결로 교체한다.
+  // PROD-131에서 PostComposer 연결로 교체한다.
 </script>
 
 <div class="flex w-full flex-col gap-4">
