@@ -46,6 +46,7 @@ jobs:
             const labelName = process.env.MERGE_QUEUE_LABEL;
             const targetBranch = process.env.TARGET_BRANCH;
             const mergeMethod = process.env.MERGE_METHOD;
+            const activationPermissions = new Set(["admin", "maintain", "write"]);
 
             function getPullRequestNumber() {
               if (context.eventName === "workflow_dispatch") {
@@ -66,6 +67,34 @@ jobs:
               }
 
               return number;
+            }
+
+            function isPullRequestTargetAction(action) {
+              return context.eventName === "pull_request_target" && context.payload.action === action;
+            }
+
+            function isLabelChangeAction() {
+              return isPullRequestTargetAction("labeled") || isPullRequestTargetAction("unlabeled");
+            }
+
+            function getEventLabelName() {
+              return context.payload.label?.name ?? null;
+            }
+
+            function isRocketLabelRemoval() {
+              return isPullRequestTargetAction("unlabeled") && getEventLabelName() === labelName;
+            }
+
+            function isUnrelatedLabelChange() {
+              return isLabelChangeAction() && getEventLabelName() !== labelName;
+            }
+
+            function isBaseChangedEvent() {
+              return isPullRequestTargetAction("edited") && Boolean(context.payload.changes?.base);
+            }
+
+            function shouldCleanUpForUntrustedSender() {
+              return isPullRequestTargetAction("synchronize");
             }
 
             function getGraphqlErrorMessages(error) {
@@ -100,6 +129,34 @@ jobs:
               return getGraphqlErrorMessages(error).some((message) =>
                 /auto.?merge.*already enabled|already.*auto.?merge/i.test(message),
               );
+            }
+
+            function canActivateMergeQueue(permission) {
+              return activationPermissions.has(String(permission).toLowerCase());
+            }
+
+            async function getSenderPermission() {
+              const sender = context.payload.sender?.login;
+
+              if (!sender) {
+                return "none";
+              }
+
+              try {
+                const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                  owner,
+                  repo,
+                  username: sender,
+                });
+
+                return data.permission ?? "none";
+              } catch (error) {
+                if (error.status === 404) {
+                  return "none";
+                }
+
+                throw error;
+              }
             }
 
             async function fetchPullRequest(number) {
@@ -283,6 +340,14 @@ jobs:
             }
 
             const pullRequestNumber = getPullRequestNumber();
+
+            if (isUnrelatedLabelChange()) {
+              core.info(
+                `Skipping PR #${pullRequestNumber} because ${context.payload.action} label ${getEventLabelName()} is not ${labelName}.`,
+              );
+              return;
+            }
+
             const pullRequest = await fetchPullRequest(pullRequestNumber);
             const hasLabel = await hasOptInLabel(pullRequestNumber);
 
@@ -304,26 +369,55 @@ jobs:
               return;
             }
 
-            if (pullRequest.baseRefName !== targetBranch) {
-              core.info(
-                `Skipping PR #${pullRequest.number} because its base branch is ${pullRequest.baseRefName}, not ${targetBranch}.`,
-              );
-              return;
-            }
-
-            if (!hasLabel || pullRequest.isDraft) {
-              const reason = !hasLabel
-                ? `it does not have the ${labelName} label`
-                : "it is a draft";
-              core.info(`Cleaning up PR #${pullRequest.number} because ${reason}.`);
+            if (isRocketLabelRemoval()) {
+              core.info(`Cleaning up PR #${pullRequest.number} because the ${labelName} label was removed.`);
               await cleanUpPullRequest(pullRequest);
               return;
             }
 
-            if (!pullRequest.isMergeQueueEnabled) {
-              throw new Error(
-                `PR #${pullRequest.number} targets ${targetBranch}, but GitHub merge queue is not enabled for this branch.`,
+            if (!hasLabel) {
+              core.info(`Skipping PR #${pullRequest.number} because it does not have the ${labelName} label.`);
+              return;
+            }
+
+            if (pullRequest.isDraft) {
+              core.info(`Cleaning up PR #${pullRequest.number} because it is a draft.`);
+              await cleanUpPullRequest(pullRequest);
+              return;
+            }
+
+            const senderPermission = await getSenderPermission();
+            const senderCanActivate = canActivateMergeQueue(senderPermission);
+
+            if (pullRequest.baseRefName !== targetBranch) {
+              if (isPullRequestTargetAction("labeled") && !senderCanActivate) {
+                core.info(
+                  `Skipping PR #${pullRequest.number} because sender ${context.payload.sender?.login ?? "(unknown)"} has ${senderPermission} permission and its base branch is ${pullRequest.baseRefName}, not ${targetBranch}.`,
+                );
+                return;
+              }
+
+              core.info(
+                `Cleaning up PR #${pullRequest.number} because its base branch is ${pullRequest.baseRefName}, not ${targetBranch}.`,
               );
+              await cleanUpPullRequest(pullRequest);
+              return;
+            }
+
+            if (!senderCanActivate) {
+              core.info(
+                `Skipping PR #${pullRequest.number} because sender ${context.payload.sender?.login ?? "(unknown)"} has ${senderPermission} permission, not write access.`,
+              );
+
+              if (shouldCleanUpForUntrustedSender()) {
+                await cleanUpPullRequest(pullRequest);
+              }
+
+              return;
+            }
+
+            if (isBaseChangedEvent()) {
+              core.info(`PR #${pullRequest.number} still targets ${targetBranch} after base edit.`);
             }
 
             if (pullRequest.mergeQueueEntry || pullRequest.isInMergeQueue) {
@@ -331,6 +425,12 @@ jobs:
               const details = entry ? `position ${entry.position}, state ${entry.state}` : "already in queue";
               core.info(`PR #${pullRequest.number} is already in the merge queue (${details}).`);
               return;
+            }
+
+            if (!pullRequest.isMergeQueueEnabled) {
+              throw new Error(
+                `PR #${pullRequest.number} targets ${targetBranch}, but GitHub merge queue is not enabled for this branch.`,
+              );
             }
 
             try {
