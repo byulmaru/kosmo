@@ -147,6 +147,16 @@ enum PostVisibility {
   UNLISTED
 }
 
+type PostsConnection {
+  edges: [PostsConnectionEdge!]!
+  pageInfo: PageInfo!
+}
+
+type PostsConnectionEdge {
+  cursor: String!
+  node: Post!
+}
+
 type Profile implements Node {
   bio: String
   createdAt: DateTime!
@@ -158,6 +168,7 @@ type Profile implements Node {
   followingCount: Int!
   handle: String!
   id: ID!
+  posts(after: String, before: String, first: Int, last: Int): PostsConnection!
   viewerFollow: ProfileFollow
 }
 

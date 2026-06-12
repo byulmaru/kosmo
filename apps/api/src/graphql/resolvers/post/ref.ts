@@ -1,17 +1,10 @@
 import { db, PostContents, Posts, Profiles, TableDiscriminator } from '@kosmo/core/db';
 import { PostState, PostVisibility, ProfileState } from '@kosmo/core/enums';
-import { and, eq, getColumns, inArray, or } from 'drizzle-orm';
+import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { createObjectRef } from '@/graphql/utils';
+import { postVisibilityAccessWhere } from './access/visibility';
 
 export const Post = createObjectRef('Post', TableDiscriminator.Posts, (ids, ctx) => {
-  // TODO(PROD-121): Replace this PUBLIC/UNLISTED guard with viewer-specific access.
-  const visibilityWhere = ctx.session?.profileId
-    ? or(
-        inArray(Posts.visibility, [PostVisibility.PUBLIC, PostVisibility.UNLISTED]),
-        eq(Posts.profileId, ctx.session.profileId),
-      )
-    : inArray(Posts.visibility, [PostVisibility.PUBLIC, PostVisibility.UNLISTED]);
-
   return db
     .select(getColumns(Posts))
     .from(Posts)
@@ -19,8 +12,7 @@ export const Post = createObjectRef('Post', TableDiscriminator.Posts, (ids, ctx)
     .where(
       and(
         inArray(Posts.id, ids),
-        eq(Posts.state, PostState.ACTIVE),
-        visibilityWhere,
+        postVisibilityAccessWhere({ ctx }),
         eq(Profiles.state, ProfileState.ACTIVE),
       ),
     );
