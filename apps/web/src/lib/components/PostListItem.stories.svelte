@@ -1,5 +1,6 @@
 <script module lang="ts">
   import { defineMeta } from '@storybook/addon-svelte-csf';
+  import { createTipTapDocumentFromPlainText } from '@kosmo/core/tiptap';
 
   import PostListItem from './PostListItem.svelte';
 
@@ -21,7 +22,12 @@
       content:
         bodyText === null
           ? null
-          : { __typename: 'PostContent', id: 'story-post-content', bodyText },
+          : {
+              __typename: 'PostContent',
+              id: 'story-post-content',
+              bodyJson: createTipTapDocumentFromPlainText(bodyText),
+              bodyText,
+            },
       createdAt,
       profile: {
         __typename: 'Profile',
@@ -32,11 +38,10 @@
     }) as unknown as PostListItem_post$key;
 
   const longBody =
-    '긴 본문은 목록에서 200자까지만 보이고 더보기 버튼이 나타납니다. ' +
-    '이 문장은 잘림 동작을 확인하기 위해 일부러 길게 이어 붙였습니다. '.repeat(6) +
-    '\n잘린 이후의 내용은 펼치기 전에는 보이지 않아야 합니다.\n마지막 줄입니다.';
+    '긴 본문도 목록 항목에서 원본 TipTap 문서를 그대로 렌더링합니다. ' +
+    '접힘 처리는 PROD-138에서 문서 구조를 보존하는 방식으로 별도 구현합니다. '.repeat(6) +
+    '\n여러 문단도 원본 문서 형태로 렌더링되어야 합니다.\n마지막 줄입니다.';
 
-  // 글자 수는 200자 이하지만 줄바꿈이 10줄을 넘는 본문 — 줄 상한으로 잘려야 한다.
   const manyLinesBody = Array.from({ length: 14 }, (_, index) => `${index + 1}번째 줄`).join('\n');
 
   const { Story } = defineMeta({
@@ -48,7 +53,7 @@
 
 <Story name="Playground" args={{ post: post('목록 항목 본문이 들어가는 자리예요.') }} />
 
-<!-- 본문 길이별 잘림 상태. 200자 초과(또는 10줄 초과) 본문은 잘리고 "더보기..." 버튼이 보여야 한다. -->
+<!-- 본문 상태: 짧은 본문, 긴 본문, 여러 문단, 빈 본문. 접힘 처리는 PROD-138에서 다룬다. -->
 <Story name="Body states" asChild parameters={{ controls: { disable: true } }}>
   <div class="grid w-[390px]">
     <PostListItem post={post('짧은 본문 한 줄.')} />

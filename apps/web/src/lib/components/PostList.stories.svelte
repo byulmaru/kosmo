@@ -1,5 +1,6 @@
 <script module lang="ts">
   import { defineMeta } from '@storybook/addon-svelte-csf';
+  import { createTipTapDocumentFromPlainText } from '@kosmo/core/tiptap';
 
   import PostList from './PostList.svelte';
 
@@ -15,7 +16,12 @@
     content:
       bodyText === null
         ? null
-        : { __typename: 'PostContent', id: `story-post-content-${id}`, bodyText },
+        : {
+            __typename: 'PostContent',
+            id: `story-post-content-${id}`,
+            bodyJson: createTipTapDocumentFromPlainText(bodyText),
+            bodyText,
+          },
     createdAt,
     profile: {
       __typename: 'Profile',
@@ -40,8 +46,8 @@
     }) as unknown as PostList_profile$key;
 
   const longBody =
-    '프로필 게시글 목록은 이제 실제 query 결과를 받아 항목을 렌더합니다. ' +
-    '긴 본문은 PostListItem의 더보기 동작으로 접혀야 하므로, 목록 컨테이너에서는 데이터를 그대로 전달합니다. '.repeat(
+    '프로필 게시글 목록은 실제 query 결과의 TipTap 문서를 항목 렌더러에 전달합니다. ' +
+    '긴 본문 접힘 처리는 PROD-138에서 다루며, 지금은 목록 컨테이너가 데이터를 그대로 전달합니다. '.repeat(
       4,
     );
 
@@ -61,7 +67,7 @@
 <Story
   name="Playground"
   args={{
-    profile: profile(post('playground', '프로필에 올라온 게시글 본문입니다.')),
+    profile: profile(post('playground', '프로필에 올라온 TipTap 게시글 본문입니다.')),
     loading: false,
   }}
 />

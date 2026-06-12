@@ -8,8 +8,8 @@
   import PostListItem from './PostListItem.svelte';
   import TextSkeleton from './TextSkeleton.svelte';
 
-  // 프로필 게시글 목록(PROD-124). Pagination UI는 별도 이슈로 분리하고 첫 페이지만
-  // 조회한다. 항목 본문은 TipTap 렌더러 대신 PostListItem의 plain text fragment를 사용한다.
+  // 프로필 게시글 목록. Pagination UI는 별도 이슈로 분리하고 첫 페이지만 조회한다.
+  // 항목 본문은 PostListItem의 TipTap 렌더러 fragment를 통해 렌더한다.
   type Props = HTMLAttributes<HTMLElement> & {
     profile?: PostList_profile$key | null;
     loading?: boolean;
