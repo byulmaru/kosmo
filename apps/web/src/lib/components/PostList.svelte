@@ -6,6 +6,8 @@
   // 게시글 목록 영역의 로딩 스켈레톤과 빈 상태(PROD-123).
   // 목록 query(PROD-120)가 아직 없어 fragment 없는 프레젠테이션 컴포넌트로 시작한다.
   // TODO(PROD-124): 목록 fragment를 선언하고 게시글 아이템 렌더링·오류 상태를 추가한다.
+  //   연결 시 스켈레톤 메트릭(px-4·아바타 40px)을 PostListItem(px-2·아바타 48px)에
+  //   맞춰 로딩→콘텐츠 전환 레이아웃 점프를 없앤다.
   type Props = HTMLAttributes<HTMLElement> & {
     loading?: boolean;
   };

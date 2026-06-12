@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatDate } from '@kosmo/core/datetime';
   import { graphql } from '$mearie';
   import { createFragment } from '@mearie/svelte';
   import type { FragmentRefs } from '@mearie/svelte';
@@ -36,17 +37,12 @@
     DIRECT: '다이렉트',
   };
 
-  // Figma 메타라인 형식(오후 9:14 · 2026. 04. 27)을 따른다. ko-KR 날짜 출력의
-  // 마지막 마침표는 Figma 표기에 없으므로 제거한다.
+  // Figma 메타라인 형식(오후 9:14 · 2026. 04. 27)을 따른다. 날짜 포맷은
+  // @kosmo/core/datetime의 formatDate(끝 마침표 제거 포함)를 공유한다.
   const formattedCreatedAt = $derived.by(() => {
     const createdAt = Temporal.Instant.from(postFragment.data.createdAt as string);
     const time = createdAt.toLocaleString('ko-KR', { timeStyle: 'short' });
-    const date = createdAt.toLocaleString('ko-KR', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-    return `${time} · ${date.replace(/\.$/, '')}`;
+    return `${time} · ${formatDate(createdAt)}`;
   });
 </script>
 

@@ -42,5 +42,21 @@
       )}
     />
     <PostAuthorProfile profile={profile('링크 작가', 'linked')} href="/@linked" />
+    <PostAuthorProfile avatarSize="lg" profile={profile('큰 아바타 작가', 'large-avatar')} />
+    <PostAuthorProfile profile={profile('시간 표시 작가', 'with-trailing')}>
+      {#snippet trailing()}
+        <span class="text-text-secondary text-sm">3시간 전</span>
+      {/snippet}
+    </PostAuthorProfile>
+    <PostAuthorProfile
+      profile={profile(
+        '아주 긴 표시 이름과 우측 슬롯이 같이 있는 작성자',
+        'long-name-with-trailing',
+      )}
+    >
+      {#snippet trailing()}
+        <span class="text-text-secondary text-sm">2026. 04. 27</span>
+      {/snippet}
+    </PostAuthorProfile>
   </div>
 </Story>

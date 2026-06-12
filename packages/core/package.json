@@ -3,6 +3,7 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
+    "./datetime": "./datetime.ts",
     "./db": "./db/index.ts",
     "./env": "./env.ts",
     "./error": "./error/index.ts",
