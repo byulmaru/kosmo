@@ -1,9 +1,27 @@
 <script lang="ts">
+  import { graphql } from '$mearie';
+  import { createQuery } from '@mearie/svelte';
   import BottomTabBar from '$lib/components/BottomTabBar.svelte';
   import RightRail from '$lib/components/RightRail.svelte';
   import SidebarNavigation from '$lib/components/SidebarNavigation.svelte';
 
   let { children } = $props();
+
+  const query = createQuery(
+    graphql(`
+      query TabsLayoutQuery {
+        currentSession {
+          id
+          selectedProfile {
+            id
+            ...RightRail_profile
+          }
+        }
+      }
+    `),
+  );
+
+  const selectedProfile = $derived(query.data?.currentSession?.selectedProfile ?? null);
 
   let drawerOpen = $state(false);
   let swipeStartX = $state<number | null>(null);
@@ -73,7 +91,17 @@
 
   <div class="border-border hidden border-l lg:block">
     <div class="sticky top-0 pt-4 pl-6">
-      <RightRail />
+      {#if query.loading}
+        <div class="border-border bg-card grid gap-3 rounded-lg border p-4" aria-hidden="true">
+          <div class="bg-surface size-8 animate-pulse rounded-full"></div>
+          <div class="bg-surface h-24 animate-pulse rounded-md"></div>
+          <div class="flex justify-end">
+            <div class="bg-surface h-8 w-30 animate-pulse rounded-sm"></div>
+          </div>
+        </div>
+      {:else if selectedProfile}
+        <RightRail profile={selectedProfile} />
+      {/if}
     </div>
   </div>
 
