@@ -66,6 +66,7 @@
       }
     `),
   );
+  // TODO(PROD-135): 작성 성공 후 Profile.posts connection cache를 갱신한다.
 
   let editor = $state<Editor | null>(null);
   let bodyText = $state('');

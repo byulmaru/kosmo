@@ -21,7 +21,12 @@
 - [x] 4.2 `pnpm lint:eslint`, `pnpm lint:prettier`, `pnpm --filter @kosmo/web build-storybook` 통과를 확인한다 (lint:prettier 루트 스크립트의 `'**/*'` 글롭은 Windows 셸에서 동작하지 않아, 변경 파일은 pre-commit lint-staged의 `prettier --write`로 검증)
 - [x] 4.3 `openspec validate add-profile-post-list-states --strict` 통과를 확인한다
 
-## 5. 후속 (이 체인지 범위 밖 · 별도 서브이슈)
+## 5. PROD-124 실데이터 연결
 
-- [ ] 5.1 더미 상수 → 프로필별 게시글 목록 `createQuery`로 교체하고 목록 아이템·오류 상태를 렌더한다 — PROD-124 (PROD-120 의존)
-- [ ] 5.2 목록 아이템 → 게시글 디테일 이동 링크를 추가한다 — PROD-111
+- [x] 5.1 더미 상수 → 프로필별 게시글 목록 `createQuery`로 교체하고 목록 아이템·오류 상태를 렌더한다 — PROD-124 (PROD-120 의존)
+
+## 6. 후속 (이 체인지 범위 밖 · 별도 서브이슈)
+
+- [ ] 6.1 목록 아이템 → 게시글 디테일 이동 링크를 추가한다 — PROD-111
+- [ ] 6.2 페이지네이션/더 불러오기를 추가한다 — PROD-134
+- [ ] 6.3 게시글 작성 후 프로필 게시글 목록 cache를 갱신한다 — PROD-135
