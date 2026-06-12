@@ -54,7 +54,7 @@
   {#if loading && !profileFragment.data}
     <div aria-hidden="true">
       {#each skeletonItems as item (item)}
-        <div class="flex items-start gap-3 px-2 pt-2 pb-4">
+        <div class="border-border flex items-start gap-3 border-b px-2 pt-2 pb-4">
           <div class="w-12 shrink-0">
             <div class="border-border bg-surface size-12 animate-pulse rounded-full border"></div>
           </div>

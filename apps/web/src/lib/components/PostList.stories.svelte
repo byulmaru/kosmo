@@ -9,13 +9,13 @@
   // 여기서는 평범한 데이터 객체를 fragment ref 자리에 그대로 넘긴다.
   const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 
-  const post = (bodyText: string | null, createdAt: string = minutesAgo(5)) => ({
+  const post = (id: string, bodyText: string | null, createdAt: string = minutesAgo(5)) => ({
     __typename: 'Post',
-    id: `story-post-${createdAt}`,
+    id: `story-post-${id}`,
     content:
       bodyText === null
         ? null
-        : { __typename: 'PostContent', id: `story-post-content-${createdAt}`, bodyText },
+        : { __typename: 'PostContent', id: `story-post-content-${id}`, bodyText },
     createdAt,
     profile: {
       __typename: 'Profile',
@@ -45,6 +45,12 @@
       4,
     );
 
+  const multiplePostsProfile = profile(
+    post('short', '짧은 게시글 본문입니다.'),
+    post('long', longBody, minutesAgo(90)),
+    post('empty', null, minutesAgo(180)),
+  );
+
   const { Story } = defineMeta({
     title: 'KOSMO/PostList',
     component: PostList,
@@ -54,8 +60,13 @@
 
 <Story
   name="Playground"
-  args={{ profile: profile(post('프로필에 올라온 게시글 본문입니다.')), loading: false }}
+  args={{
+    profile: profile(post('playground', '프로필에 올라온 게시글 본문입니다.')),
+    loading: false,
+  }}
 />
+
+<Story name="Multiple posts" args={{ profile: multiplePostsProfile, loading: false }} />
 
 <!-- 프로필 페이지 목록 영역의 상태 전체: 로딩 스켈레톤, 오류, 게시글 없음, 게시글 있음. -->
 <Story name="States" asChild parameters={{ controls: { disable: true } }}>
@@ -63,6 +74,6 @@
     <PostList loading />
     <PostList error onRetry={() => {}} />
     <PostList profile={profile()} />
-    <PostList profile={profile(post('짧은 게시글 본문입니다.'), post(longBody, minutesAgo(90)))} />
+    <PostList profile={multiplePostsProfile} />
   </div>
 </Story>
