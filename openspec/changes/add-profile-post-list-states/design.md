@@ -2,32 +2,34 @@
 
 ## Context
 
-프로필 페이지 `(tabs)/@[handle]/+page.svelte`는 현재 placeholder 문구 한 줄이다. 상위 `+layout.svelte`가 `profileByHandle` query로 프로필 로딩·오류·없음 상태를 처리하고 `ProfileHero`를 렌더한 뒤 `{@render children()}`으로 페이지를 표시한다. 게시글 목록 query(PROD-120)는 미머지 상태이고, 게시글 디테일(PROD-89)에서 로딩 스켈레톤·인라인 빈 상태·더미 분기 골격 패턴이 확립되어 있다. 필요한 컴포넌트(`TextSkeleton`, `Avatar` 등)는 모두 main에 머지되어 있다.
+프로필 페이지 `(tabs)/@[handle]/+page.svelte`는 placeholder 문구 한 줄에서 시작했다. 상위 `+layout.svelte`가 `profileByHandle` query로 프로필 로딩·오류·없음 상태를 처리하고 `ProfileHero`를 렌더한 뒤 `{@render children()}`으로 페이지를 표시한다. 게시글 목록 query(PROD-120)는 `Profile.posts` connection으로 main에 준비됐고, 목록 항목 컴포넌트(PROD-122)는 `PostListItem_post` fragment를 소비한다. 게시글 디테일(PROD-89)에서 로딩 스켈레톤·인라인 빈 상태 패턴이 확립되어 있다.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- 프로필 페이지에 게시글 목록 영역 골격을 추가하고, 로딩 스켈레톤과 게시글 없음 빈 상태를 실데이터 없이 표시한다.
-- PROD-124(실데이터 연결)가 더미 상수→`createQuery` 교체만으로 끝나도록 분기 골격을 미래 query 모양에 1:1 매핑한다.
-- Storybook에서 로딩·빈 상태를 확인할 수 있게 한다.
+- 프로필 페이지에 게시글 목록 영역을 추가하고, 로딩 스켈레톤·게시글 없음 빈 상태·오류 상태를 query 상태에 맞춰 표시한다.
+- `Profile.posts(first: 20)` 첫 페이지를 `PostListItem` 목록으로 렌더한다(PROD-124).
+- Storybook에서 로딩·오류·빈 상태·게시글 있음·다건 목록을 확인할 수 있게 한다.
 
 **Non-Goals:**
 
-- 게시글 목록 아이템 렌더링과 실데이터 연결(PROD-124).
 - 게시글 디테일로의 이동 링크(PROD-111).
-- 목록 조회 오류 상태(query가 생기는 PROD-124에서 함께 처리).
-- 페이지네이션·무한 스크롤.
+- 페이지네이션·무한 스크롤(PROD-134).
+- 게시글 작성 후 프로필 게시글 목록 cache 갱신(PROD-135).
+- TipTap 본문 렌더러 연결(PROD-133).
 
 ## Decisions
 
-- **상태 UI를 `PostList` 컴포넌트로 분리한다.** 페이지 인라인 마크업 대안과 비교해, Storybook에서 상태별 화면을 확인해야 하는 완료 기준을 충족하려면 컴포넌트가 필요하다. PROD-124에서 목록 아이템 렌더링·fragment가 이 컴포넌트에 추가될 자리이기도 하다. 프로필 페이지 전용 데이터·동작이 없으므로 `Profile` 접두어 없이 범용 이름을 쓴다(리뷰 반영).
-- **컴포넌트는 fragment 없는 프레젠테이션 컴포넌트로 시작한다.** 아직 소비할 데이터가 없으므로 `loading?: boolean` prop만 받는다. 데이터가 생기기 전에 가짜 fragment를 선언하면 Storybook에서만 통과하고 실제 Mearie runtime과 어긋날 수 있다(memory/frontend-svelte.md). fragment 도입은 PROD-124에서 실제 query와 함께 진행한다.
-- **페이지에는 더미 분기 골격을 두고 기본값은 loading으로 한다.** 게시글 디테일(PROD-89)의 더미 패턴을 따라, 미래 query 결과와 같은 모양의 더미 상수 한 곳에서 분기를 공급한다. 완료 기준("목록 영역 자리와 로딩 스켈레톤이 표시된다")과 일치하고, PROD-124에서 query.loading/빈 목록으로 자연스럽게 교체된다. 빈 상태 분기는 페이지에서 당장 도달 불가지만 PROD-124 선제 구현으로 주석을 남긴다.
-- **스켈레톤·빈 상태 마크업은 기존 패턴을 복제한다.** 스켈레톤은 게시글 디테일 로딩(좌측 `w-10` 아바타 거터 + `TextSkeleton` 줄)을 아이템 3개로 반복하고, 빈 상태는 확립된 인라인 패턴(`px-4 py-12 text-center`, 제목+보조 설명)을 따른다. Figma에 Empty feed 디자인이 없으므로 새 디자인을 발명하지 않고 코드 컨벤션을 따른다. 신규 디자인 토큰은 불필요하다.
+- **상태 UI와 목록 렌더링을 `PostList` 컴포넌트로 분리한다.** 페이지 인라인 마크업 대안과 비교해, Storybook에서 상태별 화면을 확인해야 하는 완료 기준을 충족하려면 컴포넌트가 필요하다. 프로필 페이지 전용 이름을 붙이지 않고 `PostList`로 둔다(리뷰 반영).
+- **`PostList`는 `PostList_profile` fragment를 소비한다.** Mearie fragment component 패턴에 따라 `Profile.posts(first: 20)`와 `PostListItem_post` spread를 컴포넌트에 colocate한다. 부모는 `ProfilePostListPageQuery`에서 `...PostList_profile`를 spread해 fragment ref를 넘긴다.
+- **정규화 cache를 위해 profile/post `id`를 query selection에 남긴다.** `PostList_profile`과 `PostListItem_post`도 `id`를 포함하지만, route query와 connection node selection에서 `id`를 명시해 Mearie normalized cache가 `Profile`/`Post` entity를 안정적으로 식별하게 한다.
+- **첫 페이지는 `posts(first: 20)`만 조회한다.** 더 불러오기 UI와 cursor pagination은 PROD-134로 분리한다.
+- **오류 상태는 query 실패와 기존 데이터 없음에만 표시한다.** 로딩/오류 중에도 fragment data가 있으면 기존 목록을 유지해 `+layout.svelte`의 `loading && !profile`, `error && !profile` 패턴과 맞춘다.
+- **스켈레톤·빈 상태 마크업은 기존 패턴을 따른다.** 스켈레톤은 `PostListItem`의 실제 행 메트릭(`px-2 pt-2 pb-4`, 48px avatar, `border-b`)과 맞추고, 빈 상태는 확립된 인라인 패턴(`px-4 py-12 text-center`, 제목+보조 설명)을 따른다. Figma에 Empty feed 디자인이 없으므로 새 디자인을 발명하지 않고 코드 컨벤션을 따른다.
 
 ## Risks / Trade-offs
 
-- [페이지 기본 상태가 영구 로딩 스켈레톤이라 실데이터 연결 전까지 사용자에게 "계속 로딩 중"으로 보인다] → 의도된 중간 상태다. PROD-124가 이 체인지에 blocked로 연결되어 있고, 더미 상수에 TODO(PROD-124) 주석으로 교체 지점을 명시한다.
-- [스켈레톤 마크업이 게시글 디테일 로딩과 중복된다] → 현 시점 두 곳뿐이라 공통화 비용이 더 크다. 목록 아이템 실렌더링(PROD-124) 때 실제 아이템 구조가 확정되면 공통화를 재검토한다.
+- [페이지 query가 layout query 뒤에 시작되어 첫 진입에서 네트워크 왕복이 하나 더 생길 수 있다] → page query colocation을 우선해 `PostList` fragment를 실제 사용 route에 둔다. layout이 page 전용 posts 데이터를 알게 하는 최적화는 체감 성능 문제가 확인되면 별도 변경에서 검토한다.
+- [게시글 작성 후 `Profile.posts` connection cache가 stale하게 남을 수 있다] → create mutation 응답 설계나 cache invalidation이 필요하므로 PROD-135로 분리하고, 이 PR에는 TODO만 남긴다.
 - [빈 상태 문구·레이아웃이 추후 Figma Empty feed 디자인과 달라질 수 있다] → 토큰 기반 마크업이라 디자인 확정 시 교체 비용이 작다.
