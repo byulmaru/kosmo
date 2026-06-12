@@ -1,35 +1,31 @@
 import { z } from 'zod';
 import { parseTipTapDocumentContent } from '../tiptap';
 
-export const postBodyTipTapDocumentSchema = z.unknown().transform((value, ctx) => {
+export const postBodyMaxLength = 500;
+
+export const postBodyTipTapDocumentSchema = z.unknown().superRefine((value, ctx) => {
   try {
-    const { document, plainText } = parseTipTapDocumentContent(value);
+    const { plainText } = parseTipTapDocumentContent(value);
 
     if (plainText.length === 0) {
       ctx.addIssue({
         code: 'custom',
-        message: 'Post body is required',
+        message: '본문을 입력해주세요.',
       });
 
-      return z.NEVER;
+      return;
     }
 
-    if (plainText.length > 5000) {
+    if (plainText.length > postBodyMaxLength) {
       ctx.addIssue({
         code: 'custom',
-        message: 'Post body must be at most 5000 characters',
+        message: `본문은 ${postBodyMaxLength.toLocaleString('ko-KR')}자까지 작성할 수 있어요.`,
       });
-
-      return z.NEVER;
     }
-
-    return document;
   } catch {
     ctx.addIssue({
       code: 'custom',
-      message: 'Invalid TipTap document',
+      message: '유효하지 않은 본문 형식입니다.',
     });
-
-    return z.NEVER;
   }
 });
