@@ -13,5 +13,8 @@ allowBuilds:
   unrs-resolver: true
 minimumReleaseAgeExclude:
   - cookie@0.7.0
+  - esbuild
+  - '@esbuild/*'
 overrides:
   cookie@<0.7.0: ^0.7.0
+  esbuild@<0.28.1: ^0.28.1
