@@ -4,6 +4,7 @@
   import BottomTabBar from '$lib/components/BottomTabBar.svelte';
   import RightRail from '$lib/components/RightRail.svelte';
   import SidebarNavigation from '$lib/components/SidebarNavigation.svelte';
+  import { setProfileSwitcherContext } from '$lib/profileSwitcherContext';
 
   let { children } = $props();
 
@@ -36,6 +37,7 @@
 
   let drawerOpen = $state(false);
   let swipeStartX = $state<number | null>(null);
+  let profileSwitcherOpen = $state(false);
 
   const openDrawer = () => {
     drawerOpen = true;
@@ -44,6 +46,17 @@
   const closeDrawer = () => {
     drawerOpen = false;
   };
+
+  // 홈 프로필 없음 온보딩 등 자식 라우트가 사이드바 프로필 스위처를 열 수 있게 한다.
+  // 사이드바가 lg 미만에서는 드로어로만 보이므로 모바일에서는 드로어를 먼저 연다.
+  const openProfileSwitcher = () => {
+    if (typeof window !== 'undefined' && !window.matchMedia('(min-width: 64rem)').matches) {
+      openDrawer();
+    }
+    profileSwitcherOpen = true;
+  };
+
+  setProfileSwitcherContext({ openProfileSwitcher });
 
   const handlePointerDown = (event: PointerEvent) => {
     swipeStartX = event.clientX <= 24 ? event.clientX : null;
@@ -78,6 +91,7 @@
       query={query.data}
       loading={query.loading}
       error={Boolean(query.error)}
+      bind:switcherOpen={profileSwitcherOpen}
       onProfileStateChanged={invalidateSidebarNavigationData}
     />
   </div>
@@ -135,6 +149,7 @@
           loading={query.loading}
           error={Boolean(query.error)}
           surface="drawer"
+          bind:switcherOpen={profileSwitcherOpen}
           onNavigate={closeDrawer}
           onProfileStateChanged={invalidateSidebarNavigationData}
         />

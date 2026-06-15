@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { graphql } from '$mearie';
   import { createQuery } from '@mearie/svelte';
   import Button from '$lib/components/Button.svelte';
@@ -50,10 +51,11 @@
     </div>
   {:else if !selectedProfile}
     <div class="border-border bg-card rounded-md border p-5">
-      <p class="text-text-primary m-0 text-base font-bold">프로필을 선택해주세요</p>
-      <p class="text-text-secondary mt-1 text-sm">
-        게시글 작성에 사용할 프로필을 먼저 선택해야 해요.
+      <p class="text-text-primary m-0 text-base font-bold">프로필이 필요해요</p>
+      <p class="text-text-secondary mt-1 mb-4 text-sm">
+        홈에서 프로필을 만들거나 선택한 뒤 글을 쓸 수 있어요.
       </p>
+      <Button variant="secondary" onclick={() => goto('/home')}>홈으로 이동</Button>
     </div>
   {:else}
     <PostComposer profile={selectedProfile} />

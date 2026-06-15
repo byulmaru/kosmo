@@ -12,6 +12,7 @@
     loading?: boolean;
     error?: boolean;
     surface?: 'desktop' | 'drawer';
+    switcherOpen?: boolean;
     onNavigate?: () => void;
     onProfileStateChanged?: () => void;
   };
@@ -89,6 +90,7 @@
     loading = false,
     error = false,
     surface = 'desktop',
+    switcherOpen = $bindable(false),
     onNavigate = () => {},
     onProfileStateChanged = () => {},
   }: Props = $props();
@@ -128,7 +130,6 @@
   const [createSidebarProfile] = createMutation(createSidebarProfileMutation);
   let profileError = $state<string | null>(null);
   let profileCreationError = $state<string | null>(null);
-  let profileSwitcherOpen = $state(false);
   let profileCreationOpen = $state(false);
   let newProfileHandle = $state('');
   let profileActionLoading = $state(false);
@@ -166,8 +167,8 @@
   );
 
   const openProfileSwitcher = () => {
-    profileSwitcherOpen = !profileSwitcherOpen;
-    if (!profileSwitcherOpen) {
+    switcherOpen = !switcherOpen;
+    if (!switcherOpen) {
       profileCreationOpen = false;
       profileCreationError = null;
     }
@@ -192,7 +193,7 @@
       selectedProfileOverride =
         sidebarProfiles.find((profile: ProfileSummary) => profile.id === id) ??
         data.selectProfile.profile;
-      profileSwitcherOpen = false;
+      switcherOpen = false;
       profileCreationOpen = false;
       onProfileStateChanged();
     } catch (error) {
@@ -241,7 +242,7 @@
 
       profilesOverride = [...sidebarProfiles, createdProfile];
       selectedProfileOverride = createdProfile;
-      profileSwitcherOpen = false;
+      switcherOpen = false;
       profileCreationOpen = false;
       onProfileStateChanged();
     } catch (error) {
@@ -289,7 +290,7 @@
           class="flex h-[42px] max-w-full items-center gap-2 py-[5px] text-left"
           type="button"
           aria-label="프로필 목록"
-          aria-expanded={profileSwitcherOpen}
+          aria-expanded={switcherOpen}
           onclick={openProfileSwitcher}
         >
           <span class="truncate text-2xl font-bold leading-[32px] text-black/85"
@@ -330,7 +331,7 @@
           class="flex h-[42px] max-w-full items-center gap-2 py-[5px] text-left"
           type="button"
           aria-label="프로필 목록"
-          aria-expanded={profileSwitcherOpen}
+          aria-expanded={switcherOpen}
           onclick={openProfileSwitcher}
         >
           <span class="truncate text-2xl font-bold leading-[32px] text-black/85">프로필 선택</span>
@@ -356,7 +357,7 @@
           class="flex h-[42px] max-w-full items-center gap-2 py-[5px] text-left"
           type="button"
           aria-label="프로필 목록"
-          aria-expanded={profileSwitcherOpen}
+          aria-expanded={switcherOpen}
           onclick={openProfileSwitcher}
         >
           <span class="truncate text-2xl font-bold leading-[32px] text-black/85">프로필</span>
@@ -375,7 +376,7 @@
       </div>
     {/if}
 
-    {#if profileSwitcherOpen}
+    {#if switcherOpen}
       {@const activeProfile = sidebarActiveProfile}
       <div
         class="absolute left-4 top-[210px] z-10 flex w-[280px] flex-col gap-0.5 rounded-[14px] border border-[#eaeaea] bg-white p-1.5 shadow-[0_6px_20px_rgba(0,0,0,0.16)]"
