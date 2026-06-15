@@ -27,7 +27,7 @@ BREAKING 변경 없음.
 
 ## Impact
 
-- 영향 코드(apps/web): `routes/(tabs)/@[handle]/[postId]/+page@(tabs).svelte`(신규), `lib/components/PostBody.svelte`·`lib/components/PostBody.stories.svelte`(신규), `lib/index.ts`(PostBody export 추가).
+- 영향 코드(apps/web): `routes/(tabs)/@[handle]/[postId]/+page@(tabs).svelte`(신규), `lib/components/PostBody.svelte`·`lib/components/PostBody.stories.svelte`(신규). `lib/index.ts` barrel export는 추가하지 않는다.
 - 재사용: `lib/components/PostAuthorProfile.svelte`(작성자 표시 + `PostAuthorProfile_profile` fragment), `lib/components/TextSkeleton.svelte`(로딩 스켈레톤), 시맨틱 디자인 토큰.
 - 소비 API: `profileByHandle`(작성자, 기존 스키마). 게시글 본문은 더미이며, `post` 단건 조회 query 연결은 별도 서브이슈 PROD-110(PROD-93 의존)에서 진행한다. 백엔드 변경 없음.
 - 의존: PROD-91(`(tabs)/@[handle]` 라우트·`profile.ts` 유틸) 위에 스택한다.
