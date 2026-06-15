@@ -1,5 +1,5 @@
 import { db, PostContents, Posts, Profiles, TableDiscriminator } from '@kosmo/core/db';
-import { PostState, PostVisibility, ProfileState } from '@kosmo/core/enums';
+import { PostState, PostVisibility } from '@kosmo/core/enums';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { createObjectRef } from '@/graphql/utils';
 import { postVisibilityAccessWhere } from './access/visibility';
@@ -10,11 +10,7 @@ export const Post = createObjectRef('Post', TableDiscriminator.Posts, (ids, ctx)
     .from(Posts)
     .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
     .where(
-      and(
-        inArray(Posts.id, ids),
-        postVisibilityAccessWhere({ ctx }),
-        eq(Profiles.state, ProfileState.ACTIVE),
-      ),
+      and(inArray(Posts.id, ids), postVisibilityAccessWhere({ authorProfile: Profiles, ctx })),
     );
 });
 

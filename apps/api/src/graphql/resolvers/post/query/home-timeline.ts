@@ -1,5 +1,5 @@
 import { db, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
-import { ProfileFollowState, ProfileState } from '@kosmo/core/enums';
+import { ProfileFollowState } from '@kosmo/core/enums';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, exists, getColumns, gt, lt, or } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
@@ -39,8 +39,7 @@ builder.queryField('homeTimeline', (t) =>
               .where(
                 and(
                   or(eq(Posts.profileId, ctx.session.profileId), acceptedFolloweeWhere),
-                  postVisibilityAccessWhere({ ctx }),
-                  eq(Profiles.state, ProfileState.ACTIVE),
+                  postVisibilityAccessWhere({ authorProfile: Profiles, ctx }),
                   before ? gt(Posts.id, before) : undefined,
                   after ? lt(Posts.id, after) : undefined,
                 ),
