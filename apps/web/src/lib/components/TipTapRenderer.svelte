@@ -46,6 +46,7 @@
 <style>
   :global(.tiptap-renderer) {
     color: var(--color-text-primary);
+    font-family: var(--font-body);
     font-size: var(--text-md);
     line-height: var(--text-md--line-height);
     white-space: pre-wrap;

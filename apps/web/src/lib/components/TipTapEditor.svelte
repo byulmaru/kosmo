@@ -91,6 +91,7 @@
     min-height: 10rem;
     padding: 1rem;
     color: var(--color-text-primary);
+    font-family: var(--font-body);
     font-size: 1rem;
     line-height: 1.625;
     white-space: pre-wrap;

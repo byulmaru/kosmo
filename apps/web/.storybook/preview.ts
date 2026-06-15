@@ -1,4 +1,6 @@
 import '../src/routes/layout.css';
+import 'pretendard/dist/web/variable/pretendardvariable.css';
+import '@sun-typeface/suit/fonts/variable/woff2/SUIT-Variable.css';
 
 import type { Preview } from '@storybook/sveltekit';
 

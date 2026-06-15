@@ -104,7 +104,7 @@
         <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
         <p
           bind:this={bodyElement}
-          class="text-text-primary text-md focus-visible:outline-more mt-2 rounded-md break-words whitespace-pre-wrap focus-visible:outline-2 focus-visible:outline-offset-2"
+          class="text-text-primary text-md font-body focus-visible:outline-more mt-2 rounded-md break-words whitespace-pre-wrap focus-visible:outline-2 focus-visible:outline-offset-2"
           tabindex={expanded ? -1 : undefined}
         >
           {#if expanded || !clamped}{fullBody}{:else}{previewBody}…{/if}
