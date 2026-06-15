@@ -30,6 +30,16 @@
 - **THEN** 시스템은 각 edge의 node를 `PostListItem`으로 렌더한다
 - **AND** 게시글 목록은 프로필 헤더 아래에 표시된다
 
+### Requirement: Profile post list detail navigation
+
+게시글 목록 영역은 각 게시글 카드 전체를 해당 게시글 디테일 페이지로 연결해야 한다(MUST). 카드 안의 별도 인터랙티브 컨트롤은 상세 이동보다 자기 동작을 우선해야 한다(MUST).
+
+#### Scenario: Navigate from post list card
+
+- **WHEN** 사용자가 프로필 게시글 목록에서 게시글 카드를 선택한다
+- **THEN** 시스템은 `/@{handle}/{postId}` 형식의 게시글 디테일 페이지로 이동한다
+- **AND** 사용자가 카드 안의 `더보기...` 같은 별도 컨트롤을 선택하면 시스템은 상세 페이지로 이동하지 않고 해당 컨트롤의 동작을 수행한다
+
 ### Requirement: Profile post list empty state
 
 게시글 목록 영역은 표시할 게시글이 없을 때 인라인 빈 상태를 표시해야 한다(MUST). 빈 상태는 제목과 보조 설명으로 구성하며, 레이아웃이 깨지지 않아야 한다(MUST).
