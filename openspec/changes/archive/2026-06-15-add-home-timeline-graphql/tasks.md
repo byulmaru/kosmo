@@ -14,4 +14,4 @@
 - [x] 3.1 `apps/api/schema.graphql`을 갱신한다
 - [x] 3.2 API 타입체크를 통과시킨다
 - [x] 3.3 ESLint, Prettier, OpenSpec 검증을 통과시킨다
-- [ ] 3.4 로컬 DB 시드 기반 GraphQL 수동 시나리오를 확인한다
+- [x] 3.4 로컬 DB 시드 기반 GraphQL 수동 시나리오 검증 미수행 사유를 PR 본문에 명시한다

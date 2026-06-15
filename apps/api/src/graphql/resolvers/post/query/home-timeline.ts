@@ -39,7 +39,7 @@ builder.queryField('homeTimeline', (t) =>
               .where(
                 and(
                   or(eq(Posts.profileId, ctx.session.profileId), acceptedFolloweeWhere),
-                  postVisibilityAccessWhere({ authorProfile: Profiles, ctx }),
+                  postVisibilityAccessWhere({ ctx }),
                   before ? gt(Posts.id, before) : undefined,
                   after ? lt(Posts.id, after) : undefined,
                 ),

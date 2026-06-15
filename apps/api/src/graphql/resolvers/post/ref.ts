@@ -9,9 +9,7 @@ export const Post = createObjectRef('Post', TableDiscriminator.Posts, (ids, ctx)
     .select(getColumns(Posts))
     .from(Posts)
     .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
-    .where(
-      and(inArray(Posts.id, ids), postVisibilityAccessWhere({ authorProfile: Profiles, ctx })),
-    );
+    .where(and(inArray(Posts.id, ids), postVisibilityAccessWhere({ ctx })));
 });
 
 Post.implement({

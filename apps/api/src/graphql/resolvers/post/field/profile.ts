@@ -1,6 +1,6 @@
-import { db, Posts } from '@kosmo/core/db';
+import { db, Posts, Profiles } from '@kosmo/core/db';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
-import { and, asc, desc, eq, gt, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
 import { postVisibilityAccessWhere } from '../access/visibility';
@@ -20,8 +20,9 @@ builder.objectFields(Profile, (t) => ({
           },
           ({ before, after, limit, inverted }) =>
             db
-              .select()
+              .select(getColumns(Posts))
               .from(Posts)
+              .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
               .where(
                 and(
                   eq(Posts.profileId, profile.id),
