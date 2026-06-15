@@ -2,17 +2,17 @@
 
 ### Requirement: Root path redirects to home
 
-루트 경로 `/`는 **세션 쿠키를 가진(로그인) 사용자**를 홈 진입점으로서 `/home`으로 리다이렉트해야 한다(MUST). 더 이상 모든 접근을 무조건 리다이렉트하지 않으며, 리다이렉트는 페이지 렌더 전 서버 사이드에서 처리한다. 세션 유효성(만료·폐기) 검증은 API와 보호 라우트가 담당한다.
+루트 경로 `/`는 **유효한 세션(로그인) 사용자**를 홈 진입점으로서 `/home`으로 보내야 한다(MUST). 더 이상 모든 접근을 무조건 리다이렉트하지 않는다. 세션 유효성은 클라이언트가 `currentSession` GraphQL 쿼리로 확인하며(만료·폐기된 세션은 `null`로 반환됨), 유효한 세션일 때만 클라이언트에서 `/home`으로 이동한다. `/`는 서버에서 요청별로 분기하지 않는 공개 페이지다(쿠키 존재만으로 서버 리다이렉트하지 않는다).
 
 #### Scenario: Redirect signed-in user to home
 
-- **WHEN** 세션 쿠키를 가진 사용자가 `/`에 접근한다
-- **THEN** 시스템은 렌더 전에 `/home`으로 리다이렉트한다
+- **WHEN** 유효한 세션을 가진 사용자가 `/`에 접근한다
+- **THEN** 시스템은 `currentSession` 확인 후 `/home`으로 이동한다
 
-#### Scenario: No session cookie is treated as guest
+#### Scenario: Invalid or missing session stays on onboarding
 
-- **WHEN** 세션 쿠키가 없는 사용자가 `/`에 접근한다
-- **THEN** 시스템은 비로그인으로 간주하고 `/home`으로 리다이렉트하지 않는다
+- **WHEN** 세션이 없거나 만료·폐기된 세션을 가진 사용자가 `/`에 접근한다
+- **THEN** `currentSession`이 `null`이므로 `/home`으로 이동하지 않고 온보딩(Welcome) 화면에 머문다
 
 ## ADDED Requirements
 
