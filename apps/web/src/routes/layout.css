@@ -1,5 +1,7 @@
 @import 'tailwindcss';
 
+/* @font-face는 npm 패키지 CSS에서 제공된다(pretendard, @sun-typeface/suit).
+   import은 +layout.svelte(앱)와 .storybook/preview.ts(Storybook) 참고. */
 @theme {
   --color-bg: #ffffff;
   --color-surface: #f6f6f6;
@@ -21,6 +23,14 @@
   --text-xsm--line-height: 16px;
   --text-md: 16px;
   --text-md--line-height: 24px;
+  /* 폰트 패밀리. font-sans(UI 기본)=SUIT, font-body(본문)=Pretendard.
+     루트 레이아웃이 font-sans를 쓰므로 모든 UI 텍스트가 SUIT를 상속한다. */
+  --font-sans:
+    'SUIT Variable', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic',
+    system-ui, sans-serif;
+  --font-body:
+    'Pretendard Variable', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo',
+    'Malgun Gothic', system-ui, sans-serif;
 }
 
 :root {

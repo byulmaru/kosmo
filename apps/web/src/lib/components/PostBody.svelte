@@ -48,7 +48,7 @@
 
 <div {...attributes} class={className}>
   {#if postFragment.data.content}
-    <p class="text-text-primary text-md break-words whitespace-pre-wrap">
+    <p class="text-text-primary text-md font-body break-words whitespace-pre-wrap">
       {postFragment.data.content.bodyText}
     </p>
   {/if}
