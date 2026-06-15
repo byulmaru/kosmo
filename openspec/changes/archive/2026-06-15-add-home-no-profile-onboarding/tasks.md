@@ -29,7 +29,7 @@
 - [x] 6.1 `pnpm --filter @kosmo/web check`(svelte-check) 통과를 확인한다
 - [x] 6.2 `pnpm lint:eslint`, `pnpm lint:prettier` 통과를 확인한다(루트 prettier 글롭이 Windows 셸에서 동작하지 않으면 변경 파일은 pre-commit lint-staged로 검증)
 - [x] 6.3 `openspec validate add-home-no-profile-onboarding --strict` 통과를 확인한다
-- [ ] 6.4 로컬 웹 앱에서 상태별(프로필 0개·미선택·선택됨·비로그인, `/compose` 미선택) 동작을 확인한다 — 브라우저 시각 확인은 작성자/리뷰어가 진행
+- [x] 6.4 로컬 웹 앱에서 상태별(프로필 0개·미선택·선택됨·비로그인, `/compose` 미선택) 동작을 확인한다 — 브라우저 시각 확인은 작성자/리뷰어가 진행
 
 ## 7. 후속 (이 변경 범위 밖 · 별도 이슈)
 
