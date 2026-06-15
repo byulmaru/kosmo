@@ -1,6 +1,11 @@
 # syntax=docker/dockerfile:1
 
-FROM ghcr.io/pnpm/pnpm:11 AS base
+ARG NODE_VERSION=26.3.0
+ARG PNPM_VERSION=11.6.0
+
+FROM ghcr.io/pnpm/pnpm:${PNPM_VERSION} AS base
+
+ARG NODE_VERSION
 
 WORKDIR /app
 
@@ -8,7 +13,7 @@ RUN apt-get update \
   && apt-get upgrade -y \
   && rm -rf /var/lib/apt/lists/*
 
-RUN pnpm runtime set node 26.1.0 -g
+RUN pnpm runtime set node ${NODE_VERSION} -g
 
 FROM base AS workspace
 
