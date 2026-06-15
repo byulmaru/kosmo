@@ -87,6 +87,16 @@ interface ForbiddenError implements Error {
   message: String!
 }
 
+type HomeTimelineConnection {
+  edges: [HomeTimelineConnectionEdge!]!
+  pageInfo: PageInfo!
+}
+
+type HomeTimelineConnectionEdge {
+  cursor: String!
+  node: Post!
+}
+
 type Mutation {
   createPost(input: CreatePostInput!): CreatePostResult!
   createProfile(input: CreateProfileInput!): CreateProfileResult!
@@ -219,6 +229,7 @@ enum ProfileState {
 
 type Query {
   currentSession: Session
+  homeTimeline(after: String, before: String, first: Int, last: Int): HomeTimelineConnection!
   me: Account
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!

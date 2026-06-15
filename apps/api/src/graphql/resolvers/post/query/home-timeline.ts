@@ -1,18 +1,31 @@
-import { db, Posts, Profiles } from '@kosmo/core/db';
+import { db, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { ProfileFollowState } from '@kosmo/core/enums';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
-import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, exists, getColumns, gt, lt, or } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { Profile } from '@/graphql/resolvers/profile';
 import { postVisibilityAccessWhere } from '../access/visibility';
 import { Post } from '../ref';
 
 type PostRow = typeof Posts.$inferSelect;
 
-builder.objectFields(Profile, (t) => ({
-  posts: t.connection(
+builder.queryField('homeTimeline', (t) =>
+  t.withAuth({ usingProfile: true }).connection(
     {
       type: Post,
-      resolve: (profile, args, ctx) => {
+      resolve: (_, args, ctx) => {
+        const acceptedFolloweeWhere = exists(
+          db
+            .select({ id: ProfileFollows.id })
+            .from(ProfileFollows)
+            .where(
+              and(
+                eq(ProfileFollows.followerProfileId, ctx.session.profileId),
+                eq(ProfileFollows.followeeProfileId, Posts.profileId),
+                eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
+              ),
+            ),
+        );
+
         return resolveCursorConnection<Promise<PostRow[]>>(
           {
             args,
@@ -25,7 +38,7 @@ builder.objectFields(Profile, (t) => ({
               .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
               .where(
                 and(
-                  eq(Posts.profileId, profile.id),
+                  or(eq(Posts.profileId, ctx.session.profileId), acceptedFolloweeWhere),
                   postVisibilityAccessWhere({ ctx }),
                   before ? gt(Posts.id, before) : undefined,
                   after ? lt(Posts.id, after) : undefined,
@@ -37,7 +50,7 @@ builder.objectFields(Profile, (t) => ({
       },
     },
     {
-      name: 'PostsConnection',
+      name: 'HomeTimelineConnection',
     },
   ),
-}));
+);

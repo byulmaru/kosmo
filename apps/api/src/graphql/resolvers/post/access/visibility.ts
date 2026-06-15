@@ -1,5 +1,5 @@
-import { db, Posts, ProfileFollows } from '@kosmo/core/db';
-import { PostState, PostVisibility, ProfileFollowState } from '@kosmo/core/enums';
+import { db, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { PostState, PostVisibility, ProfileFollowState, ProfileState } from '@kosmo/core/enums';
 import { and, eq, exists, inArray, or } from 'drizzle-orm';
 import type { UserContext } from '@/context';
 
@@ -27,5 +27,9 @@ export const postVisibilityAccessWhere = ({ ctx }: { ctx: UserContext }) => {
     : publicWhere;
 
   // TODO(PROD-121): Extend this helper with DIRECT access once recipient policy exists.
-  return and(eq(Posts.state, PostState.ACTIVE), visibleWhere)!;
+  return and(
+    eq(Posts.state, PostState.ACTIVE),
+    eq(Profiles.state, ProfileState.ACTIVE),
+    visibleWhere,
+  )!;
 };
