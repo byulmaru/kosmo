@@ -10,11 +10,11 @@
 
 - 프로필 페이지에 게시글 목록 영역을 추가하고, 로딩 스켈레톤·게시글 없음 빈 상태·오류 상태를 query 상태에 맞춰 표시한다.
 - `Profile.posts(first: 20)` 첫 페이지를 `PostListItem` 목록으로 렌더한다(PROD-124).
+- 게시글 목록 카드 전체를 `/@{handle}/{postId}` 디테일 페이지로 연결한다(PROD-111).
 - Storybook에서 로딩·오류·빈 상태·게시글 있음·다건 목록을 확인할 수 있게 한다.
 
 **Non-Goals:**
 
-- 게시글 디테일로의 이동 링크(PROD-111).
 - 페이지네이션·무한 스크롤(PROD-134).
 - 게시글 작성 후 프로필 게시글 목록 cache 갱신(PROD-135).
 - TipTap 본문 렌더러 연결(PROD-133).
@@ -25,6 +25,7 @@
 - **`PostList`는 `PostList_profile` fragment를 소비한다.** Mearie fragment component 패턴에 따라 `Profile.posts(first: 20)`와 `PostListItem_post` spread를 컴포넌트에 colocate한다. 부모는 `ProfilePostListPageQuery`에서 `...PostList_profile`를 spread해 fragment ref를 넘긴다.
 - **정규화 cache를 위해 profile/post `id`를 query selection에 남긴다.** `PostList_profile`과 `PostListItem_post`도 `id`를 포함하지만, route query와 connection node selection에서 `id`를 명시해 Mearie normalized cache가 `Profile`/`Post` entity를 안정적으로 식별하게 한다.
 - **첫 페이지는 `posts(first: 20)`만 조회한다.** 더 불러오기 UI와 cursor pagination은 PROD-134로 분리한다.
+- **카드 전체 클릭은 overlay 링크로 처리한다.** `PostListItem`은 `post.id`와 작성자 `profile.handle`로 `/@{handle}/{postId}`를 만들고, 카드 배경 레이어에 상세 링크를 둔다. 콘텐츠 레이어는 기본적으로 `pointer-events-none`으로 링크에 클릭을 통과시키고, `더보기...` 같은 실제 컨트롤만 `pointer-events-auto`로 opt-out한다. 이렇게 하면 `<a>` 안에 `<button>`을 중첩하지 않고, 후속 액션 버튼도 같은 규칙으로 추가할 수 있다.
 - **오류 상태는 query 실패와 기존 데이터 없음에만 표시한다.** 로딩/오류 중에도 fragment data가 있으면 기존 목록을 유지해 `+layout.svelte`의 `loading && !profile`, `error && !profile` 패턴과 맞춘다.
 - **스켈레톤·빈 상태 마크업은 기존 패턴을 따른다.** 스켈레톤은 `PostListItem`의 실제 행 메트릭(`px-2 pt-2 pb-4`, 48px avatar, `border-b`)과 맞추고, 빈 상태는 확립된 인라인 패턴(`px-4 py-12 text-center`, 제목+보조 설명)을 따른다. Figma에 Empty feed 디자인이 없으므로 새 디자인을 발명하지 않고 코드 컨벤션을 따른다.
 

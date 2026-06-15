@@ -35,4 +35,4 @@
 ## 6. 후속 (이 체인지 범위 밖 · 별도 서브이슈)
 
 - [ ] 6.1 본문 더미(`PostBody_post` fragment ref) → `post` 단건 조회 `createQuery`로 교체한다(`post { state profile { ...PostAuthorProfile_profile } ...PostBody_post }`) — PROD-110 (PROD-93 의존)
-- [ ] 6.2 프로필 게시글 목록 → 게시글 디테일 이동 링크를 추가한다 — PROD-111
+- [x] 6.2 프로필 게시글 목록 → 게시글 디테일 이동 링크를 추가한다 — PROD-111
