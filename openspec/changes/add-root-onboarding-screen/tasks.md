@@ -2,7 +2,7 @@
 
 - [x] 1.1 `apps/web/src/lib/components/OnboardingHero.svelte` 신규: eyebrow(`KOSMO`)·h1(`나만의 타임라인, 여기서 시작하세요`)·서브텍스트·CTA·각주. CTA는 `<a href="/login">`에 primary 토큰 클래스(`bg-primary text-text-primary …`).
 - [x] 1.2 `apps/web/src/lib/components/OnboardingHero.stories.svelte` 신규: 기본 상태 스토리.
-- [x] 1.3 Figma `get_design_context`(`1096:4414` Hero, `1059:4408` 프레임)로 토큰·치수 매핑. `layout.css @theme` 토큰만 사용(하드코딩 금지).
+- [x] 1.3 Figma `get_design_context`(`1096:4414` Hero, `1059:4408` 프레임)로 토큰·치수 매핑. 색/radius/정의된 크기는 `@theme` 토큰, `@theme`에 없는 크기(32px·13px)는 기존 관행대로 arbitrary 값.
 
 ## 2. 루트 Welcome 라우트
 
