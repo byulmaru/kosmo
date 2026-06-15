@@ -1,15 +1,13 @@
 ## 1. 스펙 정렬
 
-- [x] 1.1 PROD-147 범위에 홈 타임라인과 `FOLLOWERS` accepted follower 접근 정책을 반영한다
-- [x] 1.2 PROD-121 범위에서 홈 타임라인 첫 구현에 필요한 `FOLLOWERS` 최소 정책을 분리한다
-- [x] 1.3 `post` capability delta spec에 `Query.homeTimeline`, `Post` 접근 정책, `Profile.posts` 접근 정책을 정리한다
+- [x] 1.1 `FOLLOWERS` accepted follower 접근 정책을 선행 change(`extend-followers-post-access`)로 분리한다
+- [x] 1.2 `post` capability delta spec에 `Query.homeTimeline` 계약을 정리한다
 
 ## 2. GraphQL API 구현
 
-- [x] 2.1 `postVisibilityAccessWhere`에 accepted follower의 `FOLLOWERS` 글 접근 조건을 추가한다
-- [x] 2.2 `Query.homeTimeline` Relay connection을 추가한다
-- [x] 2.3 홈 타임라인 조회에서 내 글과 `ACCEPTED` followee 글만 포함하고 비팔로우·역방향 follower 글을 제외한다
-- [x] 2.4 `Post` Node 로딩, `Profile.posts`, `homeTimeline`이 같은 visibility 정책을 공유하게 한다
+- [x] 2.1 `Query.homeTimeline` Relay connection을 추가한다
+- [x] 2.2 홈 타임라인 조회에서 내 글과 `ACCEPTED` followee 글만 포함하고 비팔로우·역방향 follower 글을 제외한다
+- [x] 2.3 공통 `postVisibilityAccessWhere`를 적용해 노출 가능한 글만 반환한다
 
 ## 3. 스키마 및 검증
 
