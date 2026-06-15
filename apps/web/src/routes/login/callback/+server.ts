@@ -106,7 +106,7 @@ export const GET: RequestHandler = async ({ cookies, url }) => {
     secure: url.protocol === 'https:',
   });
 
-  redirect(302, '/');
+  redirect(302, '/home');
 };
 
 function decodeIdToken(idToken: string) {

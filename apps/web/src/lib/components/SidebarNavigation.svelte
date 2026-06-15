@@ -94,7 +94,7 @@
   }: Props = $props();
 
   const navItems = [
-    { href: '/', label: '홈', path: 'M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z' },
+    { href: '/home', label: '홈', path: 'M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z' },
     {
       href: '/search',
       label: '검색',
