@@ -13,7 +13,7 @@
       <span class="text-text-primary text-md font-bold">KOSMO</span>
     </div>
   </header>
-  <main class="flex flex-1 items-center px-12">
+  <main class="flex flex-1 items-center px-12 lg:px-32">
     <OnboardingHero />
   </main>
 </div>

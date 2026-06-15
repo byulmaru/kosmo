@@ -5,7 +5,7 @@
     나만의 타임라인,<br />여기서 시작하세요
   </h1>
   <p class="text-text-secondary m-0 text-md">
-    흩어진 타임라인을 한곳에서. 별마루 계정으로 바로 로그인하세요.
+    흩어진 타임라인을 한곳에서. <br class="md:hidden" />별마루 계정으로 바로 로그인하세요.
   </p>
   <div class="flex flex-col items-start gap-2">
     <a
@@ -15,8 +15,6 @@
     >
       시작하기
     </a>
-    <p class="text-text-secondary m-0 text-[13px]">
-      별마루 계정으로 가입/로그인해요. 이메일 주소 외의 정보는 수집하지 않아요.
-    </p>
+    <p class="text-text-secondary m-0 text-[13px]">별마루 계정으로 가입/로그인해요.</p>
   </div>
 </section>
