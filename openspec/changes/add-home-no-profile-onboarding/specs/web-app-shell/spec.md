@@ -2,22 +2,22 @@
 
 ### Requirement: Home no-profile onboarding
 
-홈(`(tabs)` 루트 `/`)은 로그인한 사용자에게 선택 프로필(active profile)이 없을 때 타임라인 영역 자리 대신 프로필 온보딩 안내를 표시해야 한다(MUST). 온보딩 안내는 아이콘, 제목, 보조 설명, 다음 행동을 위한 CTA로 구성해야 한다(MUST).
+홈(`(tabs)/home`, 라우트 `/home`)은 로그인한 사용자에게 선택 프로필(active profile)이 없을 때 타임라인 영역 자리 대신 프로필 온보딩 안내를 표시해야 한다(MUST). 온보딩 안내는 아이콘, 제목, 보조 설명, 다음 행동을 위한 CTA로 구성해야 한다(MUST).
 
 #### Scenario: 로그인했지만 선택 프로필이 없는 사용자
 
-- **WHEN** 인증 session이 있고 `currentSession.selectedProfile`이 없는 사용자가 `/`을 연다
+- **WHEN** 인증 session이 있고 `currentSession.selectedProfile`이 없는 사용자가 `/home`을 연다
 - **THEN** 시스템은 타임라인 영역 자리 대신 프로필 온보딩 안내(아이콘·제목·보조 설명·CTA)를 표시한다
 - **AND** 시스템은 사용자가 보유한 프로필 유무에 따라 안내 문구와 CTA 라벨을 다르게 표시한다(프로필 없음: 만들기 유도, 프로필 있음: 선택 유도)
 
 #### Scenario: 선택 프로필이 있는 사용자
 
-- **WHEN** 인증 session이 있고 `currentSession.selectedProfile`이 있는 사용자가 `/`을 연다
+- **WHEN** 인증 session이 있고 `currentSession.selectedProfile`이 있는 사용자가 `/home`을 연다
 - **THEN** 시스템은 프로필 온보딩 안내를 표시하지 않고 홈 타임라인 영역을 표시한다
 
 #### Scenario: 비로그인 사용자
 
-- **WHEN** 인증 session이 없는 사용자가 `/`을 연다
+- **WHEN** 인증 session이 없는 사용자가 `/home`을 연다
 - **THEN** 시스템은 프로필 온보딩 안내를 표시하지 않고 기존 홈 화면을 유지한다
 - **AND** 비로그인 전용 온보딩 화면은 이 요구사항의 범위가 아니다
 

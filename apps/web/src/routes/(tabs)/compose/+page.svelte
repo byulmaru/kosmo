@@ -55,7 +55,7 @@
       <p class="text-text-secondary mt-1 mb-4 text-sm">
         홈에서 프로필을 만들거나 선택한 뒤 글을 쓸 수 있어요.
       </p>
-      <Button variant="secondary" onclick={() => goto('/')}>홈으로 이동</Button>
+      <Button variant="secondary" onclick={() => goto('/home')}>홈으로 이동</Button>
     </div>
   {:else}
     <PostComposer profile={selectedProfile} />

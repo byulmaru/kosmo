@@ -2,7 +2,7 @@
 
 ## Context
 
-홈 `(tabs)/+page.svelte`는 placeholder 한 화면(`TestQuery` → `me { name }`)에서 시작했고 선택 프로필 유무로 분기하지 않는다. 상위 `(tabs)/+layout.svelte`는 이미 `currentSession.selectedProfile`을 조회하고, `invalidateSidebarNavigationData()`(=`currentSession`+`me` 무효화)를 `onProfileStateChanged`로 `SidebarNavigation`에 넘긴다. 프로필 생성/선택 흐름은 `SidebarNavigation.svelte`가 소유한다(`createProfile`→`selectProfile`→`onProfileStateChanged()`, 내부 `profileSwitcherOpen` 상태로 스위처 드롭다운 토글). 데스크톱 사이드바는 `hidden lg:block`로 항상 보이고, 모바일은 `{#if drawerOpen}` 드로어(`lg:hidden`)로 `SidebarNavigation`을 한 번 더 렌더한다. `Session.selectedProfile`은 스키마에서 nullable이다.
+이 변경은 PROD-143(홈 라우트 `/`→`/home` 이동, PR #117) 위에 스택한다. PROD-143 이후 홈 화면은 `(tabs)/home/+page.svelte`(라우트 `/home`)로 옮겨졌고 `/`는 `/home`으로 307 리다이렉트한다. 그 홈 `(tabs)/home/+page.svelte`는 placeholder 한 화면(`TestQuery` → `me { name }`)에서 시작했고 선택 프로필 유무로 분기하지 않는다. 상위 `(tabs)/+layout.svelte`는 이미 `currentSession.selectedProfile`을 조회하고, `invalidateSidebarNavigationData()`(=`currentSession`+`me` 무효화)를 `onProfileStateChanged`로 `SidebarNavigation`에 넘긴다. 프로필 생성/선택 흐름은 `SidebarNavigation.svelte`가 소유한다(`createProfile`→`selectProfile`→`onProfileStateChanged()`, 내부 `profileSwitcherOpen` 상태로 스위처 드롭다운 토글). 데스크톱 사이드바는 `hidden lg:block`로 항상 보이고, 모바일은 `{#if drawerOpen}` 드로어(`lg:hidden`)로 `SidebarNavigation`을 한 번 더 렌더한다. `Session.selectedProfile`은 스키마에서 nullable이다.
 
 ## Goals / Non-Goals
 
@@ -10,7 +10,7 @@
 
 - 로그인 + 선택 프로필 없음 상태에서 홈 타임라인 자리 대신 프로필 온보딩 안내를 표시한다.
 - 온보딩 CTA로 기존 사이드바 프로필 생성/선택 흐름을 연다(데스크톱/모바일 차이 처리).
-- `/compose` 선택 프로필 없음 상태를 `/`으로 안내한다.
+- `/compose` 선택 프로필 없음 상태를 `/home`으로 안내한다.
 - Storybook에서 온보딩 만들기/선택 상태를 확인할 수 있게 한다.
 
 **Non-Goals:**
@@ -27,7 +27,7 @@
 - **온보딩 컴포넌트는 fragment 없는 프레젠테이션 컴포넌트로 둔다.** 보유 프로필 여부(`hasProfiles`)와 CTA 콜백(`onAction`)만 받는다. GraphQL을 직접 소비하지 않으므로 Storybook에 Mearie mock이 필요 없고, 데이터 소유는 라우트(`+page.svelte`)에 둔다(route query colocation 컨벤션).
 - **스위처 open 상태를 탭 레이아웃으로 끌어올리고 context로 노출한다.** `SidebarNavigation`의 내부 `profileSwitcherOpen`을 bindable prop `switcherOpen`으로 바꿔 레이아웃이 소유하고, 데스크톱·드로어 두 인스턴스에 같은 상태를 bind한다. 자식 라우트(홈)는 layout이 `setContext`로 노출한 `openProfileSwitcher`를 `getContext`로 받아 CTA에 연결한다. 기존 context/전역 store 패턴이 없어 최소 타입 안전 모듈(`profileSwitcherContext.ts`)을 새로 도입한다.
 - **모바일에서는 드로어를 먼저 연다.** 사이드바가 `lg` 미만에서 드로어로만 보이므로, `openProfileSwitcher`는 `window.matchMedia('(min-width: 64rem)')`로 데스크톱 여부를 판단해 모바일이면 `openDrawer()` 후 스위처를 연다. `lg` 기본값은 64rem(1024px).
-- **`/compose`는 안내만 바꾼다.** 자동 `goto` 리다이렉트 대신, 기존 카드 문구를 교체하고 `/` 이동 링크/버튼을 제공한다("안내한다" 요구에 부합, 진입 맥락 유지).
+- **`/compose`는 안내만 바꾼다.** 자동 `goto` 리다이렉트 대신, 기존 카드 문구를 교체하고 `/home` 이동 링크/버튼을 제공한다("안내한다" 요구에 부합, 진입 맥락 유지).
 
 ## Risks / Trade-offs
 

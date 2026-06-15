@@ -17,12 +17,12 @@
 
 ## 4. 홈 분기
 
-- [x] 4.1 `(tabs)/+page.svelte`의 `TestQuery`를 `HomePageQuery`(`currentSession { id selectedProfile { id } }`, `me { id profiles { id } }`)로 교체한다
+- [x] 4.1 `(tabs)/home/+page.svelte`의 `TestQuery`를 `HomePageQuery`(`currentSession { id selectedProfile { id } }`, `me { id profiles { id } }`)로 교체한다
 - [x] 4.2 로그인 + 선택 프로필 없음일 때 `<ProfileOnboarding>`을 렌더하고 CTA에 context의 `openProfileSwitcher`를 연결한다. 선택 프로필 있음/비로그인은 기존 화면을 유지하고, 로딩 깜빡임을 방지한다
 
 ## 5. compose 안내
 
-- [x] 5.1 `(tabs)/compose/+page.svelte`의 선택 프로필 없음 카드를 홈(`/`) 이동 안내(문구 교체 + 링크/버튼)로 바꾼다
+- [x] 5.1 `(tabs)/compose/+page.svelte`의 선택 프로필 없음 카드를 홈(`/home`) 이동 안내(문구 교체 + 링크/버튼)로 바꾼다
 
 ## 6. 검증
 
