@@ -29,7 +29,8 @@
   const session = $derived(query.data?.currentSession ?? null);
   const selectedProfile = $derived(session?.selectedProfile ?? null);
   const hasProfiles = $derived((query.data?.me?.profiles?.length ?? 0) > 0);
-  // 로그인 + 선택 프로필 없음일 때만 온보딩을 노출한다. 비로그인은 별도 이슈에서 다룬다.
+  // 로그인 + 선택 프로필 없음일 때만 온보딩을 노출한다.
+  // 비로그인은 (tabs) 보호 라우트 가드가 루트(/)로 보내므로 여기 도달하지 않는다(PROD-148).
   const showOnboarding = $derived(Boolean(session) && !selectedProfile);
 </script>
 

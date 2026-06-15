@@ -44,11 +44,6 @@
       <p class="text-text-secondary mt-1 mb-4 text-sm">잠시 후 다시 시도해주세요.</p>
       <Button variant="secondary" onclick={() => query.refetch()}>다시 시도</Button>
     </div>
-  {:else if !session}
-    <div class="border-border bg-card rounded-md border p-5">
-      <p class="text-text-primary m-0 text-base font-bold">로그인이 필요해요</p>
-      <p class="text-text-secondary mt-1 text-sm">게시글을 작성하려면 먼저 로그인해주세요.</p>
-    </div>
   {:else if !selectedProfile}
     <div class="border-border bg-card rounded-md border p-5">
       <p class="text-text-primary m-0 text-base font-bold">프로필이 필요해요</p>
