@@ -8,6 +8,7 @@ export * from './id';
 export * from './relations';
 export * from './tables';
 export * from './utils';
+export { and, desc, eq } from 'drizzle-orm';
 
 export const pg = postgres(process.env.DATABASE_URL!, {
   max: 20,

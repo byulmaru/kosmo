@@ -1,6 +1,17 @@
 import { sessionName } from '@kosmo/core';
-import { Accounts, db, firstOrThrow, Sessions } from '@kosmo/core/db';
-import { AccountState, SessionState } from '@kosmo/core/enums';
+import {
+  AccountProfiles,
+  Accounts,
+  and,
+  db,
+  desc,
+  eq,
+  first,
+  firstOrThrow,
+  Profiles,
+  Sessions,
+} from '@kosmo/core/db';
+import { AccountState, ProfileState, SessionState } from '@kosmo/core/enums';
 import { error, redirect } from '@sveltejs/kit';
 import { z } from 'zod';
 import { env } from '$env/dynamic/private';
@@ -82,10 +93,23 @@ export const GET: RequestHandler = async ({ cookies, url }) => {
       .returning({ id: Accounts.id })
       .then(firstOrThrow);
 
+    const activeProfile = await tx
+      .select({ id: Profiles.id })
+      .from(Profiles)
+      .innerJoin(
+        AccountProfiles,
+        and(eq(AccountProfiles.profileId, Profiles.id), eq(AccountProfiles.accountId, account.id)),
+      )
+      .where(eq(Profiles.state, ProfileState.ACTIVE))
+      .orderBy(desc(Profiles.id))
+      .limit(1)
+      .then(first);
+
     const session = await tx
       .insert(Sessions)
       .values({
         accountId: account.id,
+        activeProfileId: activeProfile?.id ?? null,
         oidcSessionKey: tokenJson.access_token,
         state: SessionState.ACTIVE,
         token: createSessionToken(),
