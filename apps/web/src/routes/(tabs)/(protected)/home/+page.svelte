@@ -3,6 +3,7 @@
   import { graphql } from '$mearie';
   import ProfileOnboarding from '$lib/components/ProfileOnboarding.svelte';
   import { getProfileSwitcherContext } from '$lib/profileSwitcherContext';
+  import HomeTimeline from './HomeTimeline.svelte';
 
   const query = createQuery(
     graphql(`
@@ -15,7 +16,6 @@
         }
         me {
           id
-          name
           profiles {
             id
           }
@@ -45,6 +45,8 @@
   <span class="sr-only" role="status">홈을 불러오는 중입니다.</span>
 {:else if showOnboarding}
   <ProfileOnboarding {hasProfiles} onAction={() => profileSwitcher?.openProfileSwitcher()} />
+{:else if selectedProfile}
+  <HomeTimeline />
 {:else}
   <section class="w-[min(100%,36rem)]">
     <p class="text-primary mb-3 text-xs font-semibold tracking-[1.6px] uppercase">KOSMO</p>
@@ -52,6 +54,5 @@
     <span class="text-text-secondary mt-3 block max-w-90 text-base leading-6">
       피드를 확인하고 새로운 소식을 탐색합니다.
     </span>
-    <p class="text-text-primary mt-3 text-base">{query.data?.me?.name}</p>
   </section>
 {/if}
