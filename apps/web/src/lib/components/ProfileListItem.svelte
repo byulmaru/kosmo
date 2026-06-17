@@ -7,18 +7,17 @@
   import type { ProfileListItem_profile$key } from '$mearie';
 
   import Avatar from './Avatar.svelte';
-
-  type ProfileListItemState = 'follow' | 'following';
+  import FollowButton from './FollowButton.svelte';
 
   type ProfileListItemProps = HTMLAttributes<HTMLDivElement> & {
     profile: ProfileListItem_profile$key;
-    state?: ProfileListItemState;
+    viewerProfileId?: string | null;
     width?: 'compact' | 'wide';
   };
 
   let {
     profile,
-    state = 'follow',
+    viewerProfileId = null,
     width = 'compact',
     class: className = '',
     ...rest
@@ -31,19 +30,20 @@
         displayName
         handle
         bio
+        ...FollowButton_profile
       }
     `),
     () => profile,
   );
 
-  const following = $derived(state === 'following');
-  const buttonLabel = $derived(following ? '팔로잉' : '팔로우');
   const widthClass = $derived(width === 'wide' ? 'w-[390px]' : 'w-[358px]');
+  const showFollowButton = $derived(
+    Boolean(viewerProfileId && viewerProfileId !== fragment.data.id),
+  );
 </script>
 
 <div
   {...rest}
-  data-state={state}
   class={`border-border bg-card flex min-h-16 items-center gap-3 border-b px-4 ${widthClass} ${className}`}
 >
   <Avatar size="md" initials={getProfileInitial(fragment.data.displayName, fragment.data.handle)} />
@@ -54,11 +54,7 @@
       <p class="text-text-primary m-0 mt-1 truncate text-xs">{fragment.data.bio}</p>
     {/if}
   </div>
-  <!-- 정적 팔로우 버튼 placeholder. 실제 FollowButton 연결은 PROD-156에서 처리한다. -->
-  <button
-    class={`h-[27px] min-w-[58px] rounded-full px-3 text-xs font-bold ${following ? 'bg-surface text-text-primary' : 'bg-text-primary text-bg'}`}
-    type="button"
-  >
-    {buttonLabel}
-  </button>
+  {#if showFollowButton}
+    <FollowButton profile={fragment.data} {viewerProfileId} class="shrink-0" />
+  {/if}
 </div>
