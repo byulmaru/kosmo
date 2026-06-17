@@ -50,7 +50,7 @@
     font-size: var(--text-md);
     line-height: var(--text-md--line-height);
     white-space: pre-wrap;
-    overflow-wrap: anywhere;
+    overflow-wrap: anywhere !important;
     outline: none;
   }
 
