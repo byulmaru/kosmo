@@ -10,11 +10,12 @@
   import Avatar from './Avatar.svelte';
   import PostAuthorProfile from './PostAuthorProfile.svelte';
 
-  // 게시글 레이아웃. Figma ThreadPost(702:6286)/PostCard(67:206) 구조를 2×2 그리드로 따른다:
-  //   (1,1) 아바타            (1,2) 작성자 이름 블록 + trailing
-  //   (2,1) 스레드 공간(예약)  (2,2) 본문(이후 미디어·투표·액션 등 형제 블록 스택)
+  // 게시글 레이아웃. Figma ThreadPost(702:6286)/PostCard(67:206) 구조를 따라 행 우선 2×2로 묶는다.
+  //   ProfileRow: [아바타,        작성자 이름 블록 + trailing]
+  //   ContentRow: [스레드 공간(예약), 본문(이후 미디어·투표·액션 등 형제 블록 스택)]
+  // 각 행은 거터 셀(아바타 폭)과 콘텐츠 셀(나머지)로 나뉘어, 본문이 이름 아래로 정렬된다.
   // 거터 폭은 아바타 크기를 따른다: 디테일은 md(40px), 목록(PostCard)은 lg(48px).
-  // (2,1)은 이후 스레드 라인이 들어갈 자리로 지금은 그리드 트랙으로 폭만 예약한다.
+  // ContentRow의 거터 셀은 이후 스레드 라인이 들어갈 자리로, 지금은 폭만 예약한다.
   type PostLayoutProps = {
     profile: FragmentRefs<'PostLayout_profile'>;
     avatarSize?: 'md' | 'lg';
@@ -52,49 +53,60 @@
   );
 
   const postLayout = tv({
-    base: 'grid items-start gap-x-3',
+    slots: {
+      root: 'flex flex-col',
+      row: 'flex items-start gap-3',
+      // 거터 셀 폭 = 아바타 폭. 두 행이 같은 폭을 쓰므로 본문이 이름 아래로 정렬된다.
+      gutter: 'shrink-0',
+      content: 'min-w-0 flex-1',
+    },
     variants: {
       avatarSize: {
-        // 거터 컬럼 폭 = 아바타 폭(md 40px / lg 48px). 본문은 자동으로 이름 아래 컬럼에 정렬된다.
-        md: 'grid-cols-[2.5rem_minmax(0,1fr)]',
-        lg: 'grid-cols-[3rem_minmax(0,1fr)]',
+        md: { gutter: 'w-10' },
+        lg: { gutter: 'w-12' },
       },
     },
     defaultVariants: {
       avatarSize: 'md',
     },
   });
+
+  const slots = $derived(postLayout({ avatarSize }));
 </script>
 
-<div class={postLayout({ avatarSize, class: className })}>
-  <!-- (1,1) 아바타 거터. href면 이름 블록 링크와 목적지가 같으므로 탭 순서·스크린리더에서는 숨긴다. -->
-  {#if href}
-    <a {href} tabindex="-1" aria-hidden="true">
-      <Avatar size={avatarSize} {initials} />
-    </a>
-  {:else}
-    <Avatar size={avatarSize} {initials} />
-  {/if}
-
-  <!-- (1,2) 작성자 이름 블록 + trailing -->
-  <div class="flex items-start justify-between gap-2">
+<div class={slots.root({ class: className })}>
+  <!-- ProfileRow: 아바타 + 작성자 이름 블록/메뉴 -->
+  <div class={slots.row()}>
+    <!-- 거터 셀. href면 이름 블록 링크와 목적지가 같으므로 탭 순서·스크린리더에서는 숨긴다. -->
     {#if href}
-      <PostAuthorProfile {href} profile={profileFragment.data} />
+      <a {href} tabindex="-1" aria-hidden="true" class={slots.gutter()}>
+        <Avatar size={avatarSize} {initials} />
+      </a>
     {:else}
-      <PostAuthorProfile profile={profileFragment.data} />
-    {/if}
-    {#if trailing}
-      <div class="shrink-0">
-        {@render trailing()}
+      <div class={slots.gutter()}>
+        <Avatar size={avatarSize} {initials} />
       </div>
     {/if}
+    <div class={slots.content({ class: 'flex items-start justify-between gap-2' })}>
+      {#if href}
+        <PostAuthorProfile {href} profile={profileFragment.data} />
+      {:else}
+        <PostAuthorProfile profile={profileFragment.data} />
+      {/if}
+      {#if trailing}
+        <div class="shrink-0">
+          {@render trailing()}
+        </div>
+      {/if}
+    </div>
   </div>
 
-  <!-- (2,1) 스레드 공간(예약). 폭은 그리드 트랙이 잡고, 이후 스레드 라인이 이 셀에 들어간다. -->
-  <div aria-hidden="true"></div>
-
-  <!-- (2,2) 본문 + 이후 미디어·투표·액션 등 형제 블록 -->
-  <div class="min-w-0">
-    {@render children()}
+  <!-- ContentRow: 스레드 공간(예약) + 본문 -->
+  <div class={slots.row()}>
+    <!-- 이후 스레드 라인이 들어갈 거터 셀. 지금은 폭만 예약한다. -->
+    <div class={slots.gutter()} aria-hidden="true"></div>
+    <div class={slots.content()}>
+      {@render children()}
+    </div>
   </div>
 </div>
