@@ -1,27 +1,40 @@
 <script lang="ts">
+  import { graphql } from '$mearie';
+  import { createFragment } from '@mearie/svelte';
+  import { getProfileInitial } from '$lib/utils/profile';
   import type { HTMLAttributes } from 'svelte/elements';
+
+  import type { ProfileListItem_profile$key } from '$mearie';
 
   import Avatar from './Avatar.svelte';
 
   type ProfileListItemState = 'follow' | 'following';
 
   type ProfileListItemProps = HTMLAttributes<HTMLDivElement> & {
+    profile: ProfileListItem_profile$key;
     state?: ProfileListItemState;
-    name?: string;
-    handle?: string;
-    bio?: string;
     width?: 'compact' | 'wide';
   };
 
   let {
+    profile,
     state = 'follow',
-    name = '사용자 이름',
-    handle = '@handle@kos.mo',
-    bio = '',
     width = 'compact',
     class: className = '',
     ...rest
   }: ProfileListItemProps = $props();
+
+  const fragment = createFragment(
+    graphql(`
+      fragment ProfileListItem_profile on Profile {
+        id
+        displayName
+        handle
+        bio
+      }
+    `),
+    () => profile,
+  );
 
   const following = $derived(state === 'following');
   const buttonLabel = $derived(following ? '팔로잉' : '팔로우');
@@ -33,12 +46,12 @@
   data-state={state}
   class={`border-border bg-card flex min-h-16 items-center gap-3 border-b px-4 ${widthClass} ${className}`}
 >
-  <Avatar size="md" initials="K" />
+  <Avatar size="md" initials={getProfileInitial(fragment.data.displayName, fragment.data.handle)} />
   <div class="min-w-0 flex-1">
-    <p class="text-text-primary m-0 truncate text-sm font-bold">{name}</p>
-    <p class="text-text-secondary m-0 truncate text-xs">{handle}</p>
-    {#if bio}
-      <p class="text-text-primary m-0 mt-1 truncate text-xs">{bio}</p>
+    <p class="text-text-primary m-0 truncate text-sm font-bold">{fragment.data.displayName}</p>
+    <p class="text-text-secondary m-0 truncate text-xs">@{fragment.data.handle}</p>
+    {#if fragment.data.bio}
+      <p class="text-text-primary m-0 mt-1 truncate text-xs">{fragment.data.bio}</p>
     {/if}
   </div>
   <!-- 정적 팔로우 버튼 placeholder. 실제 FollowButton 연결은 PROD-156에서 처리한다. -->
