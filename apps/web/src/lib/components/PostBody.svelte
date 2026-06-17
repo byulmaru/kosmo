@@ -7,7 +7,7 @@
   import { Temporal } from 'temporal-polyfill';
 
   // 게시글 본문(Plain Text)과 작성 시각·공개 범위 메타라인을 표시하는 프래그먼트 컴포넌트.
-  // 작성자 영역은 별도 `PostAuthorProfile`이 담당하므로 여기에는 포함하지 않는다.
+  // 작성자 영역·본문 배치는 `PostLayout`이 담당하므로 여기에는 포함하지 않는다.
   type Props = HTMLAttributes<HTMLDivElement> & {
     post: FragmentRefs<'PostBody_post'>;
   };

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { graphql } from '$mearie';
+  import type { PostLayout_profile$key } from '$mearie';
   import { createFragment } from '@mearie/svelte';
-  import type { FragmentRefs } from '@mearie/svelte';
   import type { Snippet } from 'svelte';
 
   import { tv } from '$lib/tv';
@@ -17,7 +17,7 @@
   // 거터 폭은 아바타 크기를 따른다: 디테일은 md(40px), 목록(PostCard)은 lg(48px).
   // ContentRow의 거터 셀은 이후 스레드 라인이 들어갈 자리로, 지금은 폭만 예약한다.
   type PostLayoutProps = {
-    profile: FragmentRefs<'PostLayout_profile'>;
+    profile: PostLayout_profile$key;
     avatarSize?: 'md' | 'lg';
     // 이름 블록과 같은 행 우측에 렌더된다(목록의 작성 시간 등).
     trailing?: Snippet;
