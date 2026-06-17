@@ -80,7 +80,7 @@ API는 프로필이 작성한 활성 게시글을 최신순 Relay connection `Pr
 
 ### Requirement: Home timeline connection
 
-API는 현재 active profile 기준 홈 타임라인을 최신순 Relay connection `Query.homeTimeline`로 노출해야 한다(MUST).
+API는 현재 active profile 기준 홈 타임라인을 최신순 Relay connection `Query.homeTimeline`로 노출해야 한다(MUST). active profile이 없거나 인증되지 않은 조회에는 요청을 거부하지 않고 `null`을 반환해야 한다(MUST).
 
 #### Scenario: 내 게시글 포함
 
@@ -109,7 +109,8 @@ API는 현재 active profile 기준 홈 타임라인을 최신순 Relay connecti
 #### Scenario: active profile 없는 홈 타임라인 조회
 
 - **WHEN** 인증되지 않았거나 active profile이 없는 클라이언트가 `homeTimeline` connection을 조회한다
-- **THEN** 시스템은 GraphQL active profile 인증 scope로 요청을 거부한다
+- **THEN** 시스템은 요청을 거부하지 않고 `homeTimeline` 필드로 `null`을 반환한다
+- **AND** GraphQL 인증 오류를 발생시키지 않는다
 
 ### Requirement: PostContent GraphQL object
 
