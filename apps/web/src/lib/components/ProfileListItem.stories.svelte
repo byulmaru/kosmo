@@ -26,7 +26,6 @@
     state: 'follow',
     name: '사용자 이름',
     handle: '@handle@kos.mo',
-    tags: '',
     bio: '',
     width: 'compact',
   }}
@@ -36,7 +35,7 @@
   <div class="grid gap-3">
     <ProfileListItem state="follow" />
     <ProfileListItem state="following" />
-    <ProfileListItem state="follow" width="wide" handle="@user@kos.moe" tags="#그림 #팬아트" />
+    <ProfileListItem state="follow" width="wide" handle="@user@kos.moe" />
     <ProfileListItem
       state="following"
       width="wide"
@@ -54,13 +53,6 @@
       name="아주 긴 표시 이름이 들어가서 한 줄을 넘기면 잘려야 한다"
       handle="@super-long-handle-that-overflows@really-long-instance.example.com"
       bio="긴 한 줄 소개가 들어가서 컨테이너 폭을 넘기면 말줄임으로 잘려야 한다"
-    />
-    <ProfileListItem
-      state="following"
-      width="wide"
-      name="태그 함께"
-      handle="@user@kos.moe"
-      tags="#그림 #팬아트 #체인소맨 #커미션 #낙서"
     />
     <ProfileListItem state="follow" name="최소 정보" handle="@user@kos.moe" />
   </div>

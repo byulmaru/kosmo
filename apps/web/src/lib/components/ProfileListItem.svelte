@@ -9,7 +9,6 @@
     state?: ProfileListItemState;
     name?: string;
     handle?: string;
-    tags?: string;
     bio?: string;
     width?: 'compact' | 'wide';
   };
@@ -18,7 +17,6 @@
     state = 'follow',
     name = '사용자 이름',
     handle = '@handle@kos.mo',
-    tags = '',
     bio = '',
     width = 'compact',
     class: className = '',
@@ -37,12 +35,7 @@
 >
   <Avatar size="md" initials="K" />
   <div class="min-w-0 flex-1">
-    <div class="flex items-center gap-1">
-      <p class="text-text-primary m-0 truncate text-sm font-bold">{name}</p>
-      {#if tags}
-        <span class="text-text-secondary truncate text-xs">{tags}</span>
-      {/if}
-    </div>
+    <p class="text-text-primary m-0 truncate text-sm font-bold">{name}</p>
     <p class="text-text-secondary m-0 truncate text-xs">{handle}</p>
     {#if bio}
       <p class="text-text-primary m-0 mt-1 truncate text-xs">{bio}</p>
