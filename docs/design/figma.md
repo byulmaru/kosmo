@@ -16,6 +16,8 @@ KOSMO 디자인 작업은 Figma의 `KOSMO` 파일에서 한다.
 | `06 Prototypes / Flows` | (예약, 비어 있음)                                                                                                       |
 | `07 Archive`            | 구 와이어프레임 보관. 새 디자인의 마이그레이션 원본으로만 참조한다                                                      |
 
+웹 화면의 1024 / 1440 프레임은 각각 레이아웃 브레이크포인트 3단계(접힌 아이콘 메뉴 + 피드 + 컴포저)·4단계(풀 사이드바 + 피드 + 컴포저)에 대응한다. 단계 정의는 [breakpoints.md](./breakpoints.md)를 참고한다.
+
 ### `02 Components` 섹션 구성 (2026-06 기준)
 
 - `Mobile` — 모바일 셸 컴포넌트 (BottomTab, Header, Dropdown-Menu 등)
