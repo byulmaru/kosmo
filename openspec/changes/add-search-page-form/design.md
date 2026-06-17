@@ -9,8 +9,10 @@
 **Goals:**
 
 - 검색 입력 + submit + 비우기를 제공하고, 검색어를 URL `q`에 반영한다.
+- 검색 전·입력 중·검색 후 단계를 검색바 포커스 + `q`로 구분한다. 결과 유형 탭은 검색 후에만 노출한다.
+- 입력 중 단계에 localStorage 기반 최근 검색을 노출한다(백엔드 없음).
 - 결과 유형 탭(인기/최신/미디어/사람)을 동작시키고, 활성 탭을 URL `tab`에 반영한다(기본 `people`). 미준비 탭은 안내를 표시한다.
-- 사람 탭의 입력 전·로딩·오류·결과 없음 상태를 조회 없이 구현하고 Storybook으로 확인할 수 있게 한다.
+- 검색 후 사람 탭의 로딩·오류·결과 없음 상태를 조회 없이 구현하고 Storybook으로 확인할 수 있게 한다.
 
 **Non-Goals:**
 
@@ -22,7 +24,9 @@
 
 - **검색어·활성 탭을 URL을 source of truth로 둔다.** 로컬 상태 대안과 비교해, deep-link·공유·뒤로가기와 향후 탭(post/fediverse) 확장에 자연스럽다. `q`는 검색어, `tab`은 `popular|latest|media|people`이며 기본은 `people`. submit/탭 전환은 서로의 값을 유지한 채 `goto`로 갱신한다. PROD-154는 `q`(+`tab=people`)를 읽어 `profileByHandle`로 연결한다.
 - **검색어는 타입 비종속 제네릭 `q`로 둔다.** 이번 사이클은 `q`를 정확 handle로 해석하지만, 파라미터 이름을 `handle`로 굳히지 않아 post/fediverse 탭이 추가돼도 계약을 바꾸지 않는다.
-- **상태 UI를 `SearchResults` 컴포넌트로 분리한다.** Storybook에서 상태별 화면을 확인하기 위해 페이지 인라인 대신 컴포넌트로 둔다. `PostList`와 같은 `loading`/`error`/`onRetry` 형태에 입력 전(idle)·결과 없음(empty)을 더한다. 실제 query는 `TODO(PROD-154)`로 남긴다.
+- **검색 단계를 검색바 포커스로 구분한다.** 검색바 포커스 = 입력 중(최근 검색), 포커스 해제 + `q` 있음 = 검색 후(탭 + 결과), 그 외 = 검색 전(안내). 결과 유형 탭은 검색 후에만 노출한다. 최근 검색 항목/삭제 버튼은 `onmousedown` preventDefault로 입력 포커스를 유지해 클릭이 먼저 처리되게 하고, 항목 선택 후 `blurInput()`으로 검색 후 단계로 전환한다.
+- **최근 검색은 localStorage로 처리한다.** 추천·자동완성은 백엔드가 필요하므로 제외하고, 입력 중 단계 콘텐츠는 사용자의 제출 이력을 `lib/utils/recentSearches.ts`(`browser` 가드)에 저장해 노출한다.
+- **상태 UI를 `SearchResults` 컴포넌트로 분리한다.** Storybook에서 상태별 화면을 확인하기 위해 페이지 인라인 대신 컴포넌트로 둔다. `PostList`와 같은 `loading`/`error`/`onRetry` 형태로 검색 후 사람 탭의 로딩·오류·결과 없음을 표시한다. 실제 query는 `TODO(PROD-154)`로 남긴다.
 - **기존 `SearchBar`/`SearchTabs`를 발전시킨다.** 새 컴포넌트를 만들지 않고 표시 전용 컴포넌트를 인터랙티브화해, 디자인 대응과 사용처를 유지한다. `SearchBar`는 Figma 인스턴스의 Back 아이콘을 따르지 않는다 — 기존 코드에도 없고 웹 탭 라우트(`/search`)에서는 뒤로가기 의미가 약하다.
 - **미준비 탭은 "준비 중" 안내로 처리한다.** 인기/최신/미디어는 post 검색 백엔드가 없으므로 빈 화면 대신 확립된 빈 상태 패턴(`px-4 py-12 text-center`)으로 준비 중 안내를 표시한다.
 - **상태 마크업은 기존 패턴을 따른다.** 로딩 스켈레톤은 `ProfileListItem` 행 형태(아바타 거터 + 텍스트 줄)로 `TextSkeleton`을 재사용하고, 오류는 `role=alert`+재시도, 빈/idle/준비중은 인라인 중앙 정렬 패턴을 쓴다. 색·반경은 시맨틱 토큰으로 라이트/다크에 대응한다.
