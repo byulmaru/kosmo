@@ -186,9 +186,9 @@ kosmo 웹 애플리케이션의 공통 앱 shell 계약을 문서화한다. 이 
 
 #### Scenario: 비로그인 사용자
 
-- **WHEN** 인증 session이 없는 사용자가 `/home`을 연다
-- **THEN** 시스템은 프로필 온보딩 안내를 표시하지 않고 기존 홈 화면을 유지한다
-- **AND** 비로그인 전용 온보딩 화면은 이 요구사항의 범위가 아니다
+- **WHEN** 인증 session이 없거나 만료·폐기된 세션을 가진 사용자가 `/home`에 접근한다
+- **THEN** 보호 라우트 가드가 `currentSession`이 `null`임을 확인하고 사용자를 루트 온보딩(`/`)으로 이동시킨다
+- **AND** 따라서 `/home` 콘텐츠와 프로필 온보딩 안내는 비로그인 사용자에게 렌더링되지 않는다
 
 ### Requirement: Home onboarding routes to existing profile create/select flow
 
@@ -210,3 +210,32 @@ kosmo 웹 애플리케이션의 공통 앱 shell 계약을 문서화한다. 이 
 - **WHEN** 사용자가 온보딩에서 유도된 사이드바 흐름으로 프로필을 만들거나 선택한다
 - **THEN** 세션의 선택 프로필이 갱신된다
 - **AND** 홈은 더 이상 온보딩을 표시하지 않고 타임라인 영역을 표시한다
+
+### Requirement: Protected app routes require a valid session
+
+`(tabs)` 앱 셸 아래의 내부 화면(`/home`·`/compose`·`/search`·`/notifications`·`/menu`)은 유효한 세션(로그인)을 전제로 한다(MUST). 유효한 세션이 없는 사용자가 이 라우트에 접근하면 루트 온보딩(`/`)으로 이동해야 한다(MUST). 세션 유효성은 클라이언트가 `currentSession` GraphQL 쿼리로 확인하며(만료·폐기된 세션은 `null`로 반환됨), 쿠키 존재만으로 판정하지 않는다. 공개 프로필 라우트(`/@{handle}` 및 그 하위 게시글 상세)는 비로그인 조회를 유지해야 하며 이 가드에서 제외된다(MUST). 세션 확인이 진행 중이거나 조회가 실패한 동안에는 리다이렉트하지 않는다(MUST NOT).
+
+#### Scenario: Redirect guest from protected route to onboarding
+
+- **WHEN** 유효한 세션이 없는 사용자가 `/home`·`/compose`·`/search`·`/notifications`·`/menu` 중 하나에 접근한다
+- **THEN** 시스템은 `currentSession`이 `null`임을 확인하고 루트 온보딩(`/`)으로 이동한다
+
+#### Scenario: Invalid or expired session is treated as guest
+
+- **WHEN** 만료·폐기된 세션 쿠키를 가진 사용자가 보호 라우트에 접근한다
+- **THEN** `currentSession`이 `null`이므로 시스템은 비로그인과 동일하게 루트 온보딩(`/`)으로 이동한다
+
+#### Scenario: Public profile remains accessible without login
+
+- **WHEN** 비로그인 사용자가 `/@{handle}` 또는 `/@{handle}/{postId}`에 접근한다
+- **THEN** 시스템은 리다이렉트하지 않고 공개 프로필·게시글을 표시한다
+
+#### Scenario: Signed-in user reaches protected route
+
+- **WHEN** 유효한 세션을 가진 사용자가 보호 라우트에 접근한다
+- **THEN** 시스템은 리다이렉트 없이 해당 화면을 표시한다
+
+#### Scenario: Hold redirect while session is loading
+
+- **WHEN** `currentSession` 확인이 진행 중이거나 조회가 오류로 실패했다
+- **THEN** 시스템은 판단을 보류하고 리다이렉트하지 않는다
