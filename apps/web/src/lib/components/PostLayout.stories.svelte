@@ -30,6 +30,32 @@
   });
 </script>
 
+<Story
+  name="Playground"
+  args={{ avatarSize: 'md', href: '/@kosmo' }}
+  argTypes={{
+    avatarSize: { control: 'inline-radio', options: ['md', 'lg'] },
+    href: { control: 'text' },
+  }}
+>
+  {#snippet template(args)}
+    <div class="w-[600px] px-4 py-4">
+      <PostLayout
+        avatarSize={args.avatarSize}
+        href={args.href}
+        profile={profile('코스모 작가', 'kosmo')}
+      >
+        <PostBody
+          class="mt-1.5"
+          post={post(
+            'Playground 본문이 들어가는 자리예요. 컨트롤로 아바타 크기·링크를 바꿔보세요.',
+          )}
+        />
+      </PostLayout>
+    </div>
+  {/snippet}
+</Story>
+
 <!-- 게시글 디테일의 조립된 레이아웃(거터 아바타 + 작성자 이름 블록 + 본문 + 메타라인). -->
 <Story name="Assembled (post detail)" asChild parameters={{ controls: { disable: true } }}>
   <article class="w-[600px] px-4 py-4">
