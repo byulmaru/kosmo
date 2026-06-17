@@ -13,4 +13,6 @@
   });
 </script>
 
-<Story name="Default" args={{ query: '검색어' }} />
+<Story name="Default" args={{ placeholder: '검색어' }} />
+
+<Story name="With value" args={{ value: '별마루', placeholder: '검색어' }} />
