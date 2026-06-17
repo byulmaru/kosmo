@@ -2,7 +2,6 @@
   import type { FragmentRefs } from '@mearie/svelte';
   import { defineMeta } from '@storybook/addon-svelte-csf';
 
-  import PostAuthorProfile from './PostAuthorProfile.svelte';
   import PostBody from './PostBody.svelte';
 
   // Storybook은 .storybook/mocks/mearie-svelte.ts에서 createFragment를 패스스루로 모킹하므로
@@ -21,16 +20,6 @@
       createdAt: '2026-04-27T21:14:00.000Z',
       visibility,
     }) as unknown as FragmentRefs<'PostBody_post'>;
-
-  const authorProfile = (
-    displayName: string,
-    handle: string,
-  ): FragmentRefs<'PostAuthorProfile_profile'> =>
-    ({
-      __typename: 'Profile',
-      displayName,
-      handle,
-    }) as unknown as FragmentRefs<'PostAuthorProfile_profile'>;
 
   const { Story } = defineMeta({
     title: 'KOSMO/PostBody',
@@ -57,18 +46,4 @@
     <PostBody post={post('다이렉트 게시글.', 'DIRECT')} />
     <PostBody post={post('조용히 공개 게시글.', 'UNLISTED')} />
   </div>
-</Story>
-
-<!-- 게시글 디테일의 조립된 레이아웃(좌측 거터 + 작성자 이름 블록 + 본문 + 메타라인)을 함께 보여준다. -->
-<Story name="Assembled (post detail)" asChild parameters={{ controls: { disable: true } }}>
-  <article class="w-[600px] px-4 py-4">
-    <PostAuthorProfile profile={authorProfile('코스모 작가', 'kosmo')} href="/@kosmo">
-      <PostBody
-        class="mt-1.5"
-        post={post(
-          '본문이 들어가는 자리예요. 내용이 길어지면 여러 줄로 늘어납니다.\n줄바꿈도 그대로 보존됩니다.',
-        )}
-      />
-    </PostAuthorProfile>
-  </article>
 </Story>

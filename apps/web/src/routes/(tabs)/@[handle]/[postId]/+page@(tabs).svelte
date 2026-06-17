@@ -3,8 +3,8 @@
   import { page } from '$app/state';
   import { createQuery } from '@mearie/svelte';
   import { graphql } from '$mearie';
-  import PostAuthorProfile from '$lib/components/PostAuthorProfile.svelte';
   import PostBody from '$lib/components/PostBody.svelte';
+  import PostLayout from '$lib/components/PostLayout.svelte';
   import TextSkeleton from '$lib/components/TextSkeleton.svelte';
 
   // 게시글 디테일 화면. PROD-89 범위는 본문·작성자·작성 시각·상태 처리이며,
@@ -30,7 +30,7 @@
             profile {
               id
               handle
-              ...PostAuthorProfile_profile
+              ...PostLayout_profile
             }
             ...PostBody_post
           }
@@ -130,9 +130,9 @@
     </div>
   {:else}
     <article class="px-4 py-4">
-      <PostAuthorProfile profile={post.profile} href={`/@${post.profile.handle}`}>
+      <PostLayout profile={post.profile} href={`/@${post.profile.handle}`}>
         <PostBody class="mt-1.5" {post} />
-      </PostAuthorProfile>
+      </PostLayout>
     </article>
   {/if}
 </section>

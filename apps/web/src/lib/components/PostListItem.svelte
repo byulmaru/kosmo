@@ -9,7 +9,7 @@
 
   import type { PostListItem_post$key } from '$mearie';
 
-  import PostAuthorProfile from './PostAuthorProfile.svelte';
+  import PostLayout from './PostLayout.svelte';
   import TipTapRenderer from './TipTapRenderer.svelte';
 
   // 게시글 목록 항목(Figma PostCard 67:206). 디테일(`PostBody`)과 달리 목록 표현을
@@ -36,7 +36,7 @@
         profile {
           id
           handle
-          ...PostAuthorProfile_profile
+          ...PostLayout_profile
         }
       }
     `),
@@ -78,7 +78,7 @@
   </a>
 
   <div class="pointer-events-none relative z-10">
-    <PostAuthorProfile avatarSize="lg" profile={postFragment.data.profile}>
+    <PostLayout avatarSize="lg" profile={postFragment.data.profile}>
       {#snippet trailing()}
         <time class="text-text-secondary text-sm" datetime={postFragment.data.createdAt as string}>
           {formattedCreatedAt}
@@ -90,6 +90,6 @@
           <TipTapRenderer document={fullDocument} />
         </div>
       {/if}
-    </PostAuthorProfile>
+    </PostLayout>
   </div>
 </article>

@@ -3,6 +3,8 @@
   import { createFragment, createMutation } from '@mearie/svelte';
   import { PostVisibility } from '@kosmo/core/enums';
   import { postBodyMaxLength } from '@kosmo/core/validation';
+  import { getProfileInitial } from '$lib/utils/profile';
+  import Avatar from './Avatar.svelte';
   import Button from './Button.svelte';
   import * as Dropdown from './Dropdown';
   import PostAuthorProfile from './PostAuthorProfile.svelte';
@@ -52,6 +54,8 @@
   const profileFragment = createFragment(
     graphql(`
       fragment PostComposer_profile on Profile {
+        displayName
+        handle
         ...PostAuthorProfile_profile
       }
     `),
@@ -114,8 +118,12 @@
   aria-label="새 게시글 작성"
   onsubmit={handleSubmit}
 >
-  <header class="min-w-0">
-    <PostAuthorProfile class="min-w-0" profile={profileFragment.data} />
+  <header class="flex min-w-0 items-start gap-3">
+    <Avatar
+      size="md"
+      initials={getProfileInitial(profileFragment.data.displayName, profileFragment.data.handle)}
+    />
+    <PostAuthorProfile class="min-w-0 flex-1" profile={profileFragment.data} />
   </header>
 
   <div
