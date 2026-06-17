@@ -86,7 +86,7 @@
       {/snippet}
 
       {#if fullDocument && fullBody}
-        <div class="mt-2">
+        <div>
           <TipTapRenderer document={fullDocument} />
         </div>
       {/if}

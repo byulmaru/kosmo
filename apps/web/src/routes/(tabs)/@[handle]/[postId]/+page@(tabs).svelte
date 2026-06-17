@@ -131,7 +131,7 @@
   {:else}
     <article class="px-4 py-4">
       <PostLayout profile={post.profile} href={`/@${post.profile.handle}`}>
-        <PostBody class="mt-1.5" {post} />
+        <PostBody {post} />
       </PostLayout>
     </article>
   {/if}

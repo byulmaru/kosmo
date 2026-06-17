@@ -46,7 +46,6 @@
         profile={profile('코스모 작가', 'kosmo')}
       >
         <PostBody
-          class="mt-1.5"
           post={post(
             'Playground 본문이 들어가는 자리예요. 컨트롤로 아바타 크기·링크를 바꿔보세요.',
           )}
@@ -61,7 +60,6 @@
   <article class="w-[600px] px-4 py-4">
     <PostLayout profile={profile('코스모 작가', 'kosmo')} href="/@kosmo">
       <PostBody
-        class="mt-1.5"
         post={post(
           '본문이 들어가는 자리예요. 내용이 길어지면 여러 줄로 늘어나고, 본문은 이름 아래 컬럼에 정렬됩니다.',
         )}
@@ -77,15 +75,15 @@
       {#snippet trailing()}
         <time class="text-text-secondary text-sm">3시간 전</time>
       {/snippet}
-      <p class="text-text-primary text-md mt-1.5">md 아바타 + trailing(작성 시간) 헤더.</p>
+      <p class="text-text-primary text-md">md 아바타 + trailing(작성 시간) 헤더.</p>
     </PostLayout>
 
     <PostLayout avatarSize="lg" profile={profile('큰 아바타 작가', 'large-avatar')}>
-      <p class="text-text-primary text-md mt-2">lg 아바타(목록 표현). trailing 없음.</p>
+      <p class="text-text-primary text-md">lg 아바타(목록 표현). trailing 없음.</p>
     </PostLayout>
 
     <PostLayout profile={profile('링크 없는 작가', 'static')}>
-      <p class="text-text-primary text-md mt-1.5">href 없음 — 이름·아바타가 링크가 아니다.</p>
+      <p class="text-text-primary text-md">href 없음 — 이름·아바타가 링크가 아니다.</p>
     </PostLayout>
 
     <PostLayout
@@ -98,7 +96,7 @@
       {#snippet trailing()}
         <time class="text-text-secondary text-sm">2026. 04. 27</time>
       {/snippet}
-      <p class="text-text-primary text-md mt-1.5">
+      <p class="text-text-primary text-md">
         긴 이름·handle과 trailing이 함께 있어도 본문은 이름 아래 컬럼에 정렬된다.
       </p>
     </PostLayout>

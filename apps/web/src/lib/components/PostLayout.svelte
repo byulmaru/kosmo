@@ -54,7 +54,9 @@
 
   const postLayout = tv({
     slots: {
-      root: 'flex flex-col',
+      // gap-1(4px): ProfileRow와 ContentRow 사이 세로 간격을 레이아웃이 직접 소유한다.
+      // 본문(children)이 자기 위 여백을 따로 두지 않도록 소비처에서 mt-*를 넘기지 않는다.
+      root: 'flex flex-col gap-1',
       row: 'flex items-start gap-3',
       // 거터 셀 폭 = 아바타 폭. 두 행이 같은 폭을 쓰므로 본문이 이름 아래로 정렬된다.
       gutter: 'shrink-0',
