@@ -17,5 +17,5 @@
 
 - [x] 4.1 `pnpm --filter @kosmo/web check` 통과(mearie generate + 라우트 타입 재생성 포함).
 - [x] 4.2 `pnpm --filter @kosmo/web build` 성공.
-- [ ] 4.3 (사용자 시각 확인 대기) 동작 확인: 비로그인 보호 라우트(`/home`·`/compose`·`/search`·`/notifications`·`/menu`) → `/`; 비로그인 `/@{handle}`·게시글 상세 → 공개 조회 유지; **무효·만료 세션 쿠키 보유 시 보호 라우트 → `/`(잘못 통과시키지 않음)**; 로그인 사용자 정상 진입; `/`↔`/home` 루프 없음.
+- [x] 4.3 동작 확인: 비로그인 보호 라우트(`/home`·`/compose`·`/search`·`/notifications`·`/menu`) → `/`; 비로그인 `/@{handle}`·게시글 상세 → 공개 조회 유지; **무효·만료 세션 쿠키 보유 시 보호 라우트 → `/`(잘못 통과시키지 않음)**; 로그인 사용자 정상 진입; `/`↔`/home` 루프 없음.
 - [x] 4.4 `pnpm exec openspec validate add-protected-route-handling --strict` 통과.
