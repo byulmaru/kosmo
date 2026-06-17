@@ -37,9 +37,6 @@
   );
 
   const widthClass = $derived(width === 'wide' ? 'w-[390px]' : 'w-[358px]');
-  const showFollowButton = $derived(
-    Boolean(viewerProfileId && viewerProfileId !== fragment.data.id),
-  );
 </script>
 
 <div
@@ -54,7 +51,7 @@
       <p class="text-text-primary m-0 mt-1 truncate text-xs">{fragment.data.bio}</p>
     {/if}
   </div>
-  {#if showFollowButton}
+  {#if viewerProfileId}
     <FollowButton profile={fragment.data} {viewerProfileId} class="shrink-0" />
   {/if}
 </div>
