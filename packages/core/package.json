@@ -26,7 +26,8 @@
   },
   "scripts": {
     "drizzle:push": "infisical run -- drizzle-kit push",
-    "drizzle:generate": "infisical run -- drizzle-kit generate"
+    "drizzle:generate": "infisical run -- drizzle-kit generate",
+    "drizzle:studio": "infisical run -- drizzle-kit studio"
   },
   "devDependencies": {
     "drizzle-kit": "1.0.0-beta.22"
