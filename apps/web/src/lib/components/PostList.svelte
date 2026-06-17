@@ -3,14 +3,16 @@
   import { createFragment } from '@mearie/svelte';
   import type { HTMLAttributes } from 'svelte/elements';
 
-  import type { PostList_profile$key } from '$mearie';
+  import type { PostList_homeTimeline$key, PostList_profile$key } from '$mearie';
 
   import PostListItem from './PostListItem.svelte';
   import TextSkeleton from './TextSkeleton.svelte';
 
-  // 프로필 게시글 목록. Pagination UI는 별도 이슈로 분리하고 첫 페이지만 조회한다.
+  // 프로필 게시글 목록과 홈 타임라인은 같은 Post connection 항목 표현을 쓴다.
+  // Pagination UI는 별도 이슈로 분리하고 첫 페이지만 조회한다.
   // 항목 본문은 PostListItem의 TipTap 렌더러 fragment를 통해 렌더한다.
   type Props = HTMLAttributes<HTMLElement> & {
+    homeTimeline?: PostList_homeTimeline$key | null;
     profile?: PostList_profile$key | null;
     loading?: boolean;
     error?: boolean;
@@ -18,6 +20,7 @@
   };
 
   let {
+    homeTimeline = null,
     profile = null,
     loading = false,
     error = false,
@@ -44,14 +47,32 @@
     () => profile,
   );
 
-  const postEdges = $derived(profileFragment.data?.posts.edges ?? []);
+  const homeTimelineFragment = createFragment(
+    graphql(`
+      fragment PostList_homeTimeline on HomeTimelineConnection {
+        edges {
+          cursor
+          node {
+            id
+            ...PostListItem_post
+          }
+        }
+      }
+    `),
+    () => homeTimeline,
+  );
+
+  const postEdges = $derived(
+    homeTimelineFragment.data?.edges ?? profileFragment.data?.posts.edges ?? [],
+  );
+  const hasPostData = $derived(Boolean(homeTimelineFragment.data || profileFragment.data));
 
   // 첫 화면을 채울 만큼만 반복한다.
   const skeletonItems = [0, 1, 2];
 </script>
 
 <section {...attributes} class={className}>
-  {#if loading && !profileFragment.data}
+  {#if loading && !hasPostData}
     <div aria-hidden="true">
       {#each skeletonItems as item (item)}
         <div class="border-border flex items-start gap-3 border-b px-2 pt-2 pb-4">
@@ -75,7 +96,7 @@
       {/each}
     </div>
     <span class="sr-only" role="status">게시글 목록을 불러오는 중입니다.</span>
-  {:else if error && !profileFragment.data}
+  {:else if error && !hasPostData}
     <div class="px-4 py-12 text-center" role="alert">
       <p class="text-text-primary text-base font-semibold">게시글 목록을 불러오지 못했어요</p>
       <p class="text-text-secondary mt-1 text-sm">잠시 후 다시 시도해주세요.</p>
