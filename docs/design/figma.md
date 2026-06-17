@@ -22,7 +22,7 @@ KOSMO 디자인 작업은 Figma의 `KOSMO` 파일에서 한다.
 - `POST` — 포스트 카드와 부속 컴포넌트 (PostCard, UserInfo, Reaction, CWPostCard 등)
 - `🪄 Compose` — 작성(Edit) 화면 컴포넌트
 - `🆕 Primitives` — 기본 요소 (Button, TextField, TextArea, Avatar, Switch, Checkbox, TagChip, placeholder류 등)
-- `🔔 Notice` — 알림/사용자 행/프로필 컴포넌트
+- `🔔 Notice` — 알림/프로필 목록 항목/프로필 컴포넌트
 - `🔍 Search` — 검색 컴포넌트
 - `🧵 Post Detail` — 스레드 상세 컴포넌트
 - `⚙️ Settings` — 설정 행 컴포넌트

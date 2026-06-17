@@ -52,7 +52,7 @@
     },
     {
       name: 'Search and people',
-      components: ['SearchBar', 'UserRow', 'AccountResultRow', 'UserSearchResultRow'],
+      components: ['SearchBar', 'ProfileListItem'],
     },
     {
       name: 'Feedback and states',
