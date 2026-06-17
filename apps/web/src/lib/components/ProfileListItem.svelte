@@ -3,13 +3,12 @@
 
   import Avatar from './Avatar.svelte';
 
-  type UserRowState = 'follow' | 'following';
+  type ProfileListItemState = 'follow' | 'following';
 
-  type UserRowProps = HTMLAttributes<HTMLDivElement> & {
-    state?: UserRowState;
+  type ProfileListItemProps = HTMLAttributes<HTMLDivElement> & {
+    state?: ProfileListItemState;
     name?: string;
     handle?: string;
-    meta?: string;
     bio?: string;
     width?: 'compact' | 'wide';
   };
@@ -18,12 +17,11 @@
     state = 'follow',
     name = '사용자 이름',
     handle = '@handle@kos.mo',
-    meta = '',
     bio = '',
     width = 'compact',
     class: className = '',
     ...rest
-  }: UserRowProps = $props();
+  }: ProfileListItemProps = $props();
 
   const following = $derived(state === 'following');
   const buttonLabel = $derived(following ? '팔로잉' : '팔로우');
@@ -37,17 +35,13 @@
 >
   <Avatar size="md" initials="K" />
   <div class="min-w-0 flex-1">
-    <div class="flex items-center gap-1">
-      <p class="text-text-primary m-0 truncate text-sm font-bold">{name}</p>
-      {#if meta}
-        <span class="text-text-secondary truncate text-xs">{meta}</span>
-      {/if}
-    </div>
+    <p class="text-text-primary m-0 truncate text-sm font-bold">{name}</p>
     <p class="text-text-secondary m-0 truncate text-xs">{handle}</p>
     {#if bio}
       <p class="text-text-primary m-0 mt-1 truncate text-xs">{bio}</p>
     {/if}
   </div>
+  <!-- 정적 팔로우 버튼 placeholder. 실제 FollowButton 연결은 PROD-156에서 처리한다. -->
   <button
     class={`h-[27px] min-w-[58px] rounded-full px-3 text-xs font-bold ${following ? 'bg-surface text-text-primary' : 'bg-text-primary text-bg'}`}
     type="button"
