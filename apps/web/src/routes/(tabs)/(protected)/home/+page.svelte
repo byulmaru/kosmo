@@ -1,9 +1,9 @@
 <script lang="ts">
   import { createQuery } from '@mearie/svelte';
   import { graphql } from '$mearie';
+  import PostList from '$lib/components/PostList.svelte';
   import ProfileOnboarding from '$lib/components/ProfileOnboarding.svelte';
   import { getProfileSwitcherContext } from '$lib/profileSwitcherContext';
-  import HomeTimeline from './HomeTimeline.svelte';
 
   const query = createQuery(
     graphql(`
@@ -16,9 +16,13 @@
         }
         me {
           id
+          name
           profiles {
             id
           }
+        }
+        homeTimeline(first: 20) {
+          ...PostList_homeTimeline
         }
       }
     `),
@@ -34,6 +38,7 @@
   // 보류하므로 이 화면이 잠깐 렌더될 수 있다. session 존재를 함께 봐서 그사이 온보딩이 새지 않게 하고,
   // 세션이 null로 확정되면 (protected) 가드가 루트(/)로 보낸다(PROD-148).
   const showOnboarding = $derived(Boolean(session) && !selectedProfile);
+  const homeTimeline = $derived(query.data?.homeTimeline ?? null);
 </script>
 
 {#if query.loading && !query.data}
@@ -46,7 +51,19 @@
 {:else if showOnboarding}
   <ProfileOnboarding {hasProfiles} onAction={() => profileSwitcher?.openProfileSwitcher()} />
 {:else if selectedProfile}
-  <HomeTimeline />
+  <section class="grid w-[min(100%,36rem)] gap-6 self-start">
+    <header>
+      <p class="text-primary mb-3 text-xs font-semibold tracking-[1.6px] uppercase">KOSMO</p>
+      <h1 class="text-text-primary m-0 text-5xl leading-[44px] font-bold">홈</h1>
+    </header>
+
+    <PostList
+      {homeTimeline}
+      loading={query.loading}
+      error={Boolean(query.error)}
+      onRetry={query.refetch}
+    />
+  </section>
 {:else}
   <section class="w-[min(100%,36rem)]">
     <p class="text-primary mb-3 text-xs font-semibold tracking-[1.6px] uppercase">KOSMO</p>
@@ -54,5 +71,6 @@
     <span class="text-text-secondary mt-3 block max-w-90 text-base leading-6">
       피드를 확인하고 새로운 소식을 탐색합니다.
     </span>
+    <p class="text-text-primary mt-3 text-base">{query.data?.me?.name}</p>
   </section>
 {/if}

@@ -12,6 +12,8 @@ builder.queryField('homeTimeline', (t) =>
   t.withAuth({ usingProfile: true }).connection(
     {
       type: Post,
+      nullable: true,
+      unauthorizedResolver: () => null,
       resolve: (_, args, ctx) => {
         const acceptedFolloweeWhere = exists(
           db
