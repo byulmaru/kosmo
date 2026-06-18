@@ -10,12 +10,12 @@
   import Avatar from './Avatar.svelte';
   import PostAuthorProfile from './PostAuthorProfile.svelte';
 
-  // 게시글 레이아웃. Figma ThreadPost(702:6286)/PostCard(67:206) 구조를 따라 행 우선 2×2로 묶는다.
-  //   ProfileRow: [아바타,        작성자 이름 블록 + trailing]
-  //   ContentRow: [스레드 공간(예약), 본문(이후 미디어·투표·액션 등 형제 블록 스택)]
-  // 각 행은 거터 셀(아바타 폭)과 콘텐츠 셀(나머지)로 나뉘어, 본문이 이름 아래로 정렬된다.
-  // 거터 폭은 아바타 크기를 따른다: 디테일은 md(40px), 목록(PostCard)은 lg(48px).
-  // ContentRow의 거터 셀은 이후 스레드 라인이 들어갈 자리로, 지금은 폭만 예약한다.
+  // 게시글 레이아웃. Figma ThreadPost(702:6286)/PostCard(67:206)의 column 구조를 따라
+  // 좌측 거터(아바타)와 우측 콘텐츠 컬럼으로 나뉜다.
+  //   거터: 아바타(md 40px / lg 48px). self-stretch로 행 전체 높이를 차지해, 이후 스레드 라인이
+  //         아바타 아래로 연장될 자리를 예약한다.
+  //   콘텐츠: [작성자 이름 블록 + trailing] 헤더 / 본문(이후 미디어·투표·액션 등 형제 블록 스택).
+  // 본문(children)은 이름 블록과 같은 컬럼에 쌓여 자동으로 이름 아래로 정렬된다.
   type PostLayoutProps = {
     profile: PostLayout_profile$key;
     avatarSize?: 'md' | 'lg';
@@ -54,13 +54,13 @@
 
   const postLayout = tv({
     slots: {
-      // gap-1(4px): ProfileRow와 ContentRow 사이 세로 간격을 레이아웃이 직접 소유한다.
+      root: 'flex items-start gap-3',
+      // 거터 폭 = 아바타 폭. self-stretch로 행 전체 높이를 차지한다(이후 스레드 라인 자리).
+      gutter: 'flex shrink-0 flex-col self-stretch',
+      // gap-1(4px): 작성자 헤더와 본문 사이 세로 간격을 레이아웃이 직접 소유한다.
       // 본문(children)이 자기 위 여백을 따로 두지 않도록 소비처에서 mt-*를 넘기지 않는다.
-      root: 'flex flex-col gap-1',
-      row: 'flex items-start gap-3',
-      // 거터 셀 폭 = 아바타 폭. 두 행이 같은 폭을 쓰므로 본문이 이름 아래로 정렬된다.
-      gutter: 'shrink-0',
-      content: 'min-w-0 flex-1',
+      content: 'flex min-w-0 flex-1 flex-col gap-1',
+      header: 'flex items-start justify-between gap-2',
     },
     variants: {
       avatarSize: {
@@ -77,19 +77,20 @@
 </script>
 
 <div class={slots.root({ class: className })}>
-  <!-- ProfileRow: 아바타 + 작성자 이름 블록/메뉴 -->
-  <div class={slots.row()}>
-    <!-- 거터 셀. href면 이름 블록 링크와 목적지가 같으므로 탭 순서·스크린리더에서는 숨긴다. -->
+  <!-- 거터: 아바타. href면 이름 블록 링크와 목적지가 같으므로 탭 순서·스크린리더에서는 숨긴다. -->
+  <div class={slots.gutter()}>
     {#if href}
-      <a {href} tabindex="-1" aria-hidden="true" class={slots.gutter()}>
+      <a {href} tabindex="-1" aria-hidden="true">
         <Avatar size={avatarSize} {initials} />
       </a>
     {:else}
-      <div class={slots.gutter()}>
-        <Avatar size={avatarSize} {initials} />
-      </div>
+      <Avatar size={avatarSize} {initials} />
     {/if}
-    <div class={slots.content({ class: 'flex items-start justify-between gap-2' })}>
+  </div>
+
+  <!-- 콘텐츠 컬럼: 작성자 헤더 + 본문(형제 블록 스택). -->
+  <div class={slots.content()}>
+    <div class={slots.header()}>
       {#if href}
         <PostAuthorProfile {href} profile={profileFragment.data} />
       {:else}
@@ -101,14 +102,6 @@
         </div>
       {/if}
     </div>
-  </div>
-
-  <!-- ContentRow: 스레드 공간(예약) + 본문 -->
-  <div class={slots.row()}>
-    <!-- 이후 스레드 라인이 들어갈 거터 셀. 지금은 폭만 예약한다. -->
-    <div class={slots.gutter()} aria-hidden="true"></div>
-    <div class={slots.content()}>
-      {@render children()}
-    </div>
+    {@render children()}
   </div>
 </div>
