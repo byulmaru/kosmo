@@ -9,7 +9,7 @@
   - Svelte/Mearie/Storybook: `memory/frontend-svelte.md`
   - DB/Drizzle schema: `memory/database-design.md`
   - 스크립트/CI/명령 실행: `memory/script.md`
-  - 커밋/PR/스택 운영: `memory/commit-pr.md`
+  - 커밋/PR/스택 운영: `memory/commit-pr.md`를 먼저 읽고, 작업 상황에 맞는 하위 메모리를 추가로 읽는다.
   - 리뷰 작성과 리뷰 thread 운영: `memory/review-style.md`
 
 ## Core Principles

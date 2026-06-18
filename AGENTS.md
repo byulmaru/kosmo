@@ -25,7 +25,12 @@
 - `memory/coding-style.md`: generalized coding style, API/client contract, spec sync, and runtime/tooling conventions.
 - `memory/frontend-svelte.md`: Svelte, Mearie GraphQL fragment, Storybook, and frontend UI conventions.
 - `memory/review-style.md`: Korean review comment style, priority labels, evidence, and review thread policy.
-- `memory/commit-pr.md`: team commit, branch, stacked PR, and PR writing policy.
+- `memory/commit-pr.md`: short router for commit, branch, stacked PR, and PR writing policy. Read this first, then load the specific memory it points to.
+- `memory/commit-policy.md`: commit unit, staging scope, and commit message conventions.
+- `memory/git-pr-workflow.md`: official Git/GitHub CLI branch, commit, push, PR, and basic stacked PR workflow.
+- `memory/git-stack-maintenance.md`: official Git stack maintenance for rebase, reparent, squash-merge continuation, and force-push safety.
+- `memory/pr-writing.md`: Korean PR title/body, scope, Draft PR, and dependency explanation policy.
+- `memory/review-thread.md`: unresolved review thread handling and merge-readiness policy.
 - `memory/script.md`: workspace scripts, command wrappers, and script execution behavior.
 - `memory/database-design.md`: kosmo PostgreSQL/Drizzle database schema design and review context.
 - `memory/graphql-style.md`: GraphQL resolver structure, object refs, enum registration, Node ID, and resolver style.
