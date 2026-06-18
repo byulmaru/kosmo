@@ -24,7 +24,7 @@
 - When a task changes the assumptions documented in a relevant memory file, update that memory in the same change.
 - `memory/coding-style.md`: generalized coding style, API/client contract, spec sync, and runtime/tooling conventions.
 - `memory/frontend-svelte.md`: Svelte, Mearie GraphQL fragment, Storybook, and frontend UI conventions.
-- `memory/review-style.md`: Korean review comment style, priority labels, evidence, and review thread policy.
+- `memory/review-style.md`: Korean review comment style, priority labels, and evidence policy.
 - `memory/commit-pr.md`: short router for commit, branch, stacked PR, and PR writing policy. Read this first, then load the specific memory it points to.
 - `memory/commit-policy.md`: commit unit, staging scope, and commit message conventions.
 - `memory/git-pr-workflow.md`: official Git/GitHub CLI branch, commit, push, PR, and basic stacked PR workflow.
