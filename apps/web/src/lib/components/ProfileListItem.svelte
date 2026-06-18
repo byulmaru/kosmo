@@ -1,6 +1,7 @@
 <script lang="ts">
   import { graphql } from '$mearie';
   import { createFragment } from '@mearie/svelte';
+  import { tv } from '$lib/tv';
   import { getProfileInitial } from '$lib/utils/profile';
   import type { HTMLAttributes } from 'svelte/elements';
 
@@ -9,19 +10,33 @@
   import Avatar from './Avatar.svelte';
   import FollowButton from './FollowButton.svelte';
 
-  type ProfileListItemProps = HTMLAttributes<HTMLDivElement> & {
+  type ProfileListItemProps = Omit<HTMLAttributes<HTMLDivElement>, 'class'> & {
     profile: ProfileListItem_profile$key;
     viewerProfileId?: string | null;
     width?: 'compact' | 'wide';
+    class?: string | null;
   };
 
   let {
     profile,
     viewerProfileId = null,
     width = 'compact',
-    class: className = '',
+    class: className = null,
     ...rest
   }: ProfileListItemProps = $props();
+
+  const profileListItem = tv({
+    base: 'border-border bg-card flex min-h-16 items-center gap-3 border-b px-4',
+    variants: {
+      width: {
+        compact: 'w-[358px]',
+        wide: 'w-[390px]',
+      },
+    },
+    defaultVariants: {
+      width: 'compact',
+    },
+  });
 
   const fragment = createFragment(
     graphql(`
@@ -35,14 +50,9 @@
     `),
     () => profile,
   );
-
-  const widthClass = $derived(width === 'wide' ? 'w-[390px]' : 'w-[358px]');
 </script>
 
-<div
-  {...rest}
-  class={`border-border bg-card flex min-h-16 items-center gap-3 border-b px-4 ${widthClass} ${className}`}
->
+<div {...rest} class={profileListItem({ width, class: className })}>
   <Avatar size="md" initials={getProfileInitial(fragment.data.displayName, fragment.data.handle)} />
   <div class="min-w-0 flex-1">
     <p class="text-text-primary m-0 truncate text-sm font-bold">{fragment.data.displayName}</p>
