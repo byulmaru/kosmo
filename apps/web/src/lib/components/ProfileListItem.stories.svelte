@@ -5,7 +5,7 @@
 
   import ProfileListItem from './ProfileListItem.svelte';
 
-  type FollowState = 'ACCEPTED' | 'PENDING' | 'REJECTED';
+  type FollowState = 'ACCEPTED' | 'PENDING';
 
   const viewerProfileId = 'viewer-profile';
 
@@ -74,16 +74,6 @@
         profile={profile({
           id: 'pending-profile',
           viewerFollow: { id: 'follow-pending', state: 'PENDING' },
-        })}
-        {viewerProfileId}
-      />
-    </section>
-    <section class="grid gap-1">
-      <p class="text-text-secondary m-0">거절 후 재요청 가능</p>
-      <ProfileListItem
-        profile={profile({
-          id: 'rejected-profile',
-          viewerFollow: { id: 'follow-rejected', state: 'REJECTED' },
         })}
         {viewerProfileId}
       />
