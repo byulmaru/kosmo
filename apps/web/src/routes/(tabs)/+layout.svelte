@@ -91,7 +91,7 @@
 />
 
 <div
-  class="min-h-screen md:grid md:justify-center md:grid-cols-[5rem_minmax(0,600px)] lg:grid-cols-[5rem_minmax(0,600px)_minmax(290px,350px)] xl:grid-cols-[20rem_minmax(0,600px)_minmax(290px,350px)]"
+  class="min-h-screen md:grid md:justify-center md:grid-cols-[5rem_minmax(0,600px)] lg:grid-cols-[20rem_minmax(0,600px)_minmax(290px,350px)]"
 >
   <div class="hidden md:block">
     <SidebarNavigation

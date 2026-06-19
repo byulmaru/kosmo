@@ -484,10 +484,10 @@
   }`}
 >
   {#if surface !== 'drawer'}
-    <div class="flex h-full w-full flex-col xl:hidden">{@render collapsedRail()}</div>
+    <div class="flex h-full w-full flex-col lg:hidden">{@render collapsedRail()}</div>
   {/if}
 
-  <div class={`h-full w-full flex-col ${surface === 'drawer' ? 'flex' : 'hidden xl:flex'}`}>
+  <div class={`h-full w-full flex-col ${surface === 'drawer' ? 'flex' : 'hidden lg:flex'}`}>
     <section
       class="relative z-20 h-[260px] w-80 shrink-0 overflow-visible"
       aria-label="활성 프로필"
@@ -658,25 +658,27 @@
             <span>{item.label}</span>
           </a>
         {/each}
-        <a
-          class="mt-1 inline-flex h-[45px] w-[264px] items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-base font-bold text-text-primary transition hover:bg-[#f9dc6d]"
-          href="/compose"
-          onclick={onNavigate}
-        >
-          <svg
-            class="size-5"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
+        {#if surface === 'drawer'}
+          <a
+            class="mt-1 inline-flex h-[45px] w-[264px] items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-base font-bold text-text-primary transition hover:bg-[#f9dc6d]"
+            href="/compose"
+            onclick={onNavigate}
           >
-            <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
-          </svg>
-          <span>글쓰기</span>
-        </a>
+            <svg
+              class="size-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+            </svg>
+            <span>글쓰기</span>
+          </a>
+        {/if}
         <button
           class="inline-flex h-[45px] w-[264px] items-center gap-3 rounded-lg px-4 py-3 text-base font-normal leading-[21px] text-[#111111] transition hover:bg-[#f8f8f8]"
           type="button"
