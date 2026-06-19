@@ -1,8 +1,9 @@
 import { redirect } from '@sveltejs/kit';
+import { env as privateEnv } from '$env/dynamic/private';
 import { env } from '$env/dynamic/public';
 import type { RequestHandler } from './$types';
 
-const OIDC_AUTHORIZE_URL = 'https://id.byulmaru.co/oauth/authorize';
+const DEFAULT_OIDC_AUTHORIZE_URL = 'https://id.byulmaru.co/oauth/authorize';
 const LOGIN_STATE_COOKIE = 'kosmo_oidc_state';
 const LOGIN_CODE_VERIFIER_COOKIE = 'kosmo_oidc_code_verifier';
 
@@ -37,7 +38,7 @@ export const GET: RequestHandler = async ({ cookies, request, url }) => {
     redirect(302, nativeUrl.toString());
   }
 
-  const authorizeUrl = new URL(OIDC_AUTHORIZE_URL);
+  const authorizeUrl = new URL(privateEnv.OIDC_AUTHORIZE_URL ?? DEFAULT_OIDC_AUTHORIZE_URL);
   authorizeUrl.searchParams.set('response_type', 'code');
   authorizeUrl.searchParams.set('client_id', env.PUBLIC_OIDC_CLIENT_ID!);
   authorizeUrl.searchParams.set('redirect_uri', redirectUri);
