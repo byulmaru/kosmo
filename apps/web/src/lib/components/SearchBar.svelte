@@ -6,7 +6,10 @@
   type SearchBarProps = Omit<HTMLFormAttributes, 'onsubmit' | 'onfocus' | 'onblur'> & {
     value?: string;
     placeholder?: string;
+    // 검색 전이 아닐 때(입력 중·검색 후) 좌측 뒤로가기(←)를 노출한다.
+    showBack?: boolean;
     onsubmit?: (value: string) => void;
+    onback?: () => void;
     onfocus?: () => void;
     onblur?: () => void;
     // tailwind-merge가 받을 수 있도록 class를 문자열로 좁힌다.
@@ -16,8 +19,10 @@
   let {
     value = $bindable(''),
     placeholder = '검색어',
+    showBack = false,
     class: className,
     onsubmit,
+    onback,
     onfocus,
     onblur,
     ...rest
@@ -31,7 +36,7 @@
   }
 
   const bar = tv({
-    base: 'border-border bg-card flex h-[52px] w-[390px] items-center gap-3 border-b px-4',
+    base: 'border-border bg-card flex items-center gap-3 border-b px-4 py-2.5',
   });
 
   const handleSubmit = (event: SubmitEvent) => {
@@ -42,11 +47,33 @@
 </script>
 
 <form {...rest} class={bar({ class: className })} role="search" onsubmit={handleSubmit}>
+  {#if showBack}
+    <!-- 입력 중·검색 후에만 노출. 포커스를 빼앗지 않도록 mousedown을 막고 onback에서 처리한다. -->
+    <button
+      class="text-text-secondary size-5 shrink-0"
+      type="button"
+      aria-label="뒤로"
+      onmousedown={(event) => event.preventDefault()}
+      onclick={() => onback?.()}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M19 12H5M12 19l-7-7 7-7" />
+      </svg>
+    </button>
+  {/if}
   <div
-    class="bg-surface text-text-primary flex h-9 flex-1 items-center gap-2 rounded-full px-4 text-xs"
+    class="bg-surface text-text-primary group flex h-11 flex-1 items-center gap-2 rounded-full px-4 text-sm focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-more"
   >
     <svg
-      class="text-text-secondary size-4 shrink-0"
+      class="text-text-secondary group-focus-within:text-more size-5 shrink-0 transition-colors"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -68,14 +95,17 @@
       onfocus={() => onfocus?.()}
       onblur={() => onblur?.()}
     />
+    {#if value}
+      <!-- 입력이 있을 때만 노출. 포커스를 유지한 채 값만 비운다. -->
+      <button
+        class="text-text-secondary grid size-5 shrink-0 place-items-center"
+        type="button"
+        aria-label="검색 지우기"
+        onmousedown={(event) => event.preventDefault()}
+        onclick={() => (value = '')}
+      >
+        ×
+      </button>
+    {/if}
   </div>
-  <button
-    class="text-text-secondary grid size-5 place-items-center"
-    type="button"
-    aria-label="검색 지우기"
-    onmousedown={(event) => event.preventDefault()}
-    onclick={() => (value = '')}
-  >
-    ×
-  </button>
 </form>

@@ -81,6 +81,12 @@
   const handleRemoveRecent = (term: string) => {
     recent = removeRecentSearch(term);
   };
+
+  // 좌측 ←: 포커스를 거두고 q를 비워 검색 전 단계로 되돌린다.
+  const handleBack = () => {
+    searchBar?.blurInput();
+    navigate('', activeTab);
+  };
 </script>
 
 <section class="flex w-[min(100%,37.5rem)] flex-col self-start">
@@ -88,7 +94,9 @@
     bind:this={searchBar}
     bind:value={inputValue}
     placeholder="검색어를 입력하세요"
+    showBack={phase !== 'before'}
     onsubmit={handleSubmit}
+    onback={handleBack}
     onfocus={() => (focused = true)}
     onblur={() => (focused = false)}
     class="w-full"
