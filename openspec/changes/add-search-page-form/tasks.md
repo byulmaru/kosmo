@@ -43,6 +43,7 @@
 - [x] 7.3 `RecentSearches`의 빈 분기를 `{#each … :else}` 관용구로 바꾸고(헤딩은 유지), 자식이 하나뿐인 아이콘 버튼(검색바 ←·×, 최근 검색 ×)의 `grid`/`place-items-center`를 `flex items-center justify-center`로 정리한다
 - [x] 7.4 검색 입력 영역(검색바 + 최근 검색) 포커스를 `focusin`/`focusout`(focus-within)으로 추적해, 키보드로 입력에서 최근 검색 항목으로 Tab 이동이 가능하게 한다(Codex P2). `SearchBar`의 onfocus/onblur 콜백은 제거한다
 - [x] 7.5 최근 검색 항목과 뒤로가기(←)를 네이티브 `<a href>`(검색 URL) 링크로 바꾼다 — 키보드 Enter·마우스·새 탭 열기가 모두 동작하고, 이동 후 SvelteKit 포커스 복귀로 입력 중 단계가 닫힌다. `onclick`+`goto`·`blurInput`·`onmousedown` preventDefault 같은 포인터 전용 처리를 걷어낸다(사용자 피드백: 키보드 Enter 미동작·마우스 중심). 삭제(×)는 로컬 동작이라 버튼 유지
+- [x] 7.6 검색 제출을 `onsubmit`+`goto` 대신 페이지가 소유한 네이티브 GET 폼(`<form method="get" action="/search">` + hidden `tab`)으로 바꾼다(사용자 피드백: 검색에 굳이 event 쓰지 말 것). `SearchBar`는 표시 전용 `div`(입력 `name="q"`)로 두어 `Header` 검색바는 폼 밖이라 Enter 무동작을 유지한다. 검색어 기록은 제출 핸들러 대신 `q`를 보는 `$effect`로 옮긴다
 
 ## 8. 후속 (이 체인지 범위 밖 · 별도 이슈/PR)
 

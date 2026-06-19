@@ -1,15 +1,14 @@
 <script lang="ts">
   import { tv } from '$lib/tv';
-  import type { HTMLFormAttributes } from 'svelte/elements';
+  import type { HTMLAttributes } from 'svelte/elements';
 
-  // 네이티브 onsubmit과 충돌하지 않게 Omit 후 콜백으로 재정의한다(검색어 문자열을 넘긴다).
-  // 포커스 추적은 검색 페이지가 검색 영역(검색바+최근 검색)에 focus-within으로 처리한다.
-  type SearchBarProps = Omit<HTMLFormAttributes, 'onsubmit'> & {
+  // 표시 전용 검색 입력. 검색 제출은 이 컴포넌트를 감싸는 페이지의 네이티브 GET 폼이 처리한다
+  // (입력에 name="q"를 주어 폼이 직렬화). 포커스 추적도 페이지가 focus-within으로 한다.
+  type SearchBarProps = HTMLAttributes<HTMLDivElement> & {
     value?: string;
     placeholder?: string;
     // 검색 전이 아닐 때(입력 중·검색 후) 좌측 뒤로가기(←) 링크가 가리킬 검색 전 URL. 없으면 ←를 숨긴다.
     backHref?: string;
-    onsubmit?: (value: string) => void;
     onclear?: () => void;
     // tailwind-merge가 받을 수 있도록 class를 문자열로 좁힌다.
     class?: string | null;
@@ -20,7 +19,6 @@
     placeholder = '검색어',
     backHref,
     class: className,
-    onsubmit,
     onclear,
     ...rest
   }: SearchBarProps = $props();
@@ -31,12 +29,6 @@
     base: 'border-border bg-card flex h-14 w-[390px] items-center gap-3 border-b px-4',
   });
 
-  // Enter/폼 제출 시 검색어를 페이지로 넘긴다. 이동·포커스 처리는 페이지가 맡는다.
-  const handleSubmit = (event: SubmitEvent) => {
-    event.preventDefault();
-    onsubmit?.(value);
-  };
-
   // 지우기: 입력값을 비우고 포커스를 유지(입력 중)한다. 페이지는 onclear에서 URL q를 정리한다.
   const handleClear = () => {
     value = '';
@@ -45,7 +37,7 @@
   };
 </script>
 
-<form {...rest} class={bar({ class: className })} role="search" onsubmit={handleSubmit}>
+<div {...rest} class={bar({ class: className })} role="search">
   {#if backHref}
     <!-- 입력 중·검색 후에만 노출. 네이티브 링크라 검색 전(q 없음) URL로 이동해 검색 전 단계로 돌아간다. -->
     <a
@@ -87,6 +79,7 @@
       bind:this={inputElement}
       class="placeholder:text-text-secondary min-w-0 flex-1 bg-transparent outline-none"
       type="text"
+      name="q"
       enterkeyhint="search"
       bind:value
       {placeholder}
@@ -104,4 +97,4 @@
       </button>
     {/if}
   </div>
-</form>
+</div>

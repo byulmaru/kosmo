@@ -41,6 +41,14 @@
     recent = getRecentSearches();
   });
 
+  // 검색이 수행되면(q 존재) 그 검색어를 최근 검색에 기록한다.
+  // 제출은 네이티브 GET 폼이 처리하므로, 제출 핸들러 대신 URL의 q를 보고 여기서 기록한다.
+  $effect(() => {
+    if (queryParam) {
+      recent = addRecentSearch(queryParam);
+    }
+  });
+
   // q·tab을 검색 URL로 만든다. 최근 검색·뒤로가기는 이 URL을 그대로 <a href>로 쓴다.
   // (네이티브 링크라 키보드 Enter·마우스·새 탭 열기가 모두 동작하고, 별도 포커스 처리가 필요 없다.)
   const searchUrl = (q: string, tab: SearchTab) => {
@@ -50,15 +58,6 @@
     }
     params.set('tab', tab);
     return `/search?${params.toString()}`;
-  };
-
-  // 제출(Enter): 검색어를 최근 검색에 기록하고 결과로 이동한다.
-  // keepFocus를 주지 않으므로 SvelteKit이 이동 후 포커스를 본문으로 되돌려(focusout) 검색 후 단계로 전환한다.
-  const handleSubmit = (value: string) => {
-    if (value.trim()) {
-      recent = addRecentSearch(value);
-    }
-    void goto(searchUrl(value, activeTab), { noScroll: true });
   };
 
   const handleSelectTab = (tab: SearchTab) => {
@@ -92,14 +91,17 @@
       }
     }}
   >
-    <SearchBar
-      bind:value={inputValue}
-      placeholder="검색어를 입력하세요"
-      backHref={phase !== 'before' ? searchUrl('', activeTab) : undefined}
-      onsubmit={handleSubmit}
-      onclear={handleClear}
-      class="w-full"
-    />
+    <!-- 검색 제출은 네이티브 GET 폼이 처리한다(Enter → /search?q=…&tab=…). display:contents라 레이아웃 영향 없음. -->
+    <form method="get" action="/search" class="contents" data-sveltekit-noscroll>
+      <input type="hidden" name="tab" value={activeTab} />
+      <SearchBar
+        bind:value={inputValue}
+        placeholder="검색어를 입력하세요"
+        backHref={phase !== 'before' ? searchUrl('', activeTab) : undefined}
+        onclear={handleClear}
+        class="w-full"
+      />
+    </form>
 
     {#if phase === 'input'}
       <RecentSearches

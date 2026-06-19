@@ -22,7 +22,7 @@
 
 ## Decisions
 
-- **검색어·활성 탭을 URL을 source of truth로 둔다.** 로컬 상태 대안과 비교해, deep-link·공유·뒤로가기와 향후 탭(post/fediverse) 확장에 자연스럽다. `q`는 검색어, `tab`은 `popular|latest|media|people`이며 기본은 `people`. submit/탭 전환은 서로의 값을 유지한 채 `goto`로 갱신한다. PROD-154는 `q`(+`tab=people`)를 읽어 `profileByHandle`로 연결한다.
+- **검색어·활성 탭을 URL을 source of truth로 둔다.** 로컬 상태 대안과 비교해, deep-link·공유·뒤로가기와 향후 탭(post/fediverse) 확장에 자연스럽다. `q`는 검색어, `tab`은 `popular|latest|media|people`이며 기본은 `people`. **검색 제출은 페이지가 소유한 네이티브 GET 폼**(`<form method="get" action="/search">` + hidden `tab`)으로 두어 Enter가 브라우저(SvelteKit) 기본 내비게이션으로 처리되게 하고(검색어 기록은 제출 핸들러 대신 `q`를 보는 effect에서 한다), 탭 전환은 값을 유지한 채 `goto`로 갱신한다. PROD-154는 `q`(+`tab=people`)를 읽어 `profileByHandle`로 연결한다.
 - **검색어는 타입 비종속 제네릭 `q`로 둔다.** 이번 사이클은 `q`를 정확 handle로 해석하지만, 파라미터 이름을 `handle`로 굳히지 않아 post/fediverse 탭이 추가돼도 계약을 바꾸지 않는다.
 - **검색 단계를 검색바 포커스로 구분한다.** 검색바 포커스 = 입력 중(최근 검색), 포커스 해제 + `q` 있음 = 검색 후(탭 + 결과), 그 외 = 검색 전(안내). 결과 유형 탭은 검색 후에만 노출한다. **최근 검색 항목과 뒤로가기(←)는 검색 URL로 가는 네이티브 `<a href>` 링크로 둔다** — 키보드 Enter·마우스·새 탭 열기가 모두 동작하고, 이동 후 SvelteKit이 포커스를 본문으로 되돌려(`focusout`) 입력 중 단계가 자연히 닫히므로 `onclick`+수동 blur나 `onmousedown` preventDefault 같은 포인터 전용 처리가 필요 없다(리뷰 반영). 삭제(×)는 URL 이동이 아니라 로컬(localStorage) 동작이라 버튼으로 둔다. 포커스 추적은 검색 입력 영역(검색바 + 최근 검색)에 `focusin`/`focusout`(focus-within)으로 두고 다음 포커스 대상이 영역 밖일 때만 `focused`를 해제한다 — input의 blur만으로 끄면 키보드로 입력에서 최근 검색 링크로 Tab 이동할 때 영역이 먼저 언마운트돼 포인터 사용자만 동작하기 때문이다(Codex 리뷰 반영). 결과 영역(탭/결과)은 이 영역 밖이라 결과 탭 포커스가 입력 중으로 잘못 전환되지 않는다.
 - **최근 검색은 localStorage로 처리한다.** 추천·자동완성은 백엔드가 필요하므로 제외하고, 입력 중 단계 콘텐츠는 사용자의 제출 이력을 `lib/utils/recentSearches.ts`(`browser` 가드)에 저장해 노출한다.
