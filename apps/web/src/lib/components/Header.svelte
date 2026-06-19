@@ -1,6 +1,6 @@
 <script lang="ts">
   import Button from './Button.svelte';
-  import SearchBar from './SearchBar.svelte';
+  import SearchBar from './Search/SearchBar.svelte';
 
   type HeaderVariant =
     | 'default'

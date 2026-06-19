@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { HTMLAttributes } from 'svelte/elements';
 
-  import TextSkeleton from './TextSkeleton.svelte';
+  import TextSkeleton from '../TextSkeleton.svelte';
 
   // 사람(프로필) 탭의 검색 상태 영역.
   // 실제 검색 query 연결과 결과 목록(ProfileListItem) 렌더는 PROD-154에서 한다.

@@ -2,10 +2,10 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import RecentSearches from '$lib/components/RecentSearches.svelte';
-  import SearchBar from '$lib/components/SearchBar.svelte';
-  import SearchResults from '$lib/components/SearchResults.svelte';
-  import SearchTabs, { type SearchTab } from '$lib/components/SearchTabs.svelte';
+  import RecentSearches from '$lib/components/Search/RecentSearches.svelte';
+  import SearchBar from '$lib/components/Search/SearchBar.svelte';
+  import SearchResults from '$lib/components/Search/SearchResults.svelte';
+  import SearchTabs, { type SearchTab } from '$lib/components/Search/SearchTabs.svelte';
   import {
     addRecentSearch,
     getRecentSearches,
