@@ -10,7 +10,7 @@
 ## 2. SearchTabs 인터랙티브화 + URL 연동
 
 - [x] 2.1 `lib/components/SearchTabs.svelte`의 각 탭 `<button>`에 선택 동작(`onselect?: (tab) => void`)을 추가한다
-- [x] 2.2 URL 파라미터 `tab`(`popular|latest|media|people`)과 탭 라벨(인기/최신/미디어/사람)의 매핑을 페이지에 정의한다. 기본 활성은 `people`(사람)
+- [x] 2.2 활성 탭을 URL 파라미터 `tab`(`popular|latest|media|people`)에 반영한다. 탭 정의(slug)는 `@kosmo/core/search`(`SearchTab`·`SEARCH_TABS`·`DEFAULT_SEARCH_TAB`·`parseSearchTab`)에 두고, 페이지는 `parseSearchTab`로 `tab`을 해석한다. 한글 라벨은 `SearchTabs.svelte`의 `SEARCH_TAB_LABELS`로 표시. 기본 활성은 `people`(사람)
 
 ## 3. 최근 검색 (입력 중)
 
@@ -36,7 +36,13 @@
 - [x] 6.2 `pnpm lint:eslint`, `pnpm --filter @kosmo/web build-storybook` 통과를 확인한다 (변경 파일 prettier는 pre-commit lint-staged의 `prettier --write`로 검증)
 - [x] 6.3 `openspec validate add-search-page-form --strict` 통과를 확인한다
 
-## 7. 후속 (이 체인지 범위 밖 · 별도 이슈/PR)
+## 7. 리뷰 반영 (robin-maki, PR #134)
+
+- [x] 7.1 검색 컴포넌트 4종(+스토리)을 `lib/components/Search/` 폴더로 모으고 importer 경로를 갱신한다
+- [x] 7.2 `SearchTab` slug 정의를 `@kosmo/core/search`로 옮기고 `package.json` `exports`에 `./search`를 추가한다. 한글 라벨은 `SearchTabs.svelte`의 `SEARCH_TAB_LABELS`로만 매핑하고, 페이지는 `parseSearchTab`로 해석한다
+- [x] 7.3 `RecentSearches`의 빈 분기를 `{#each … :else}` 관용구로 바꾸고(헤딩은 유지), 자식이 하나뿐인 아이콘 버튼(검색바 ←·×, 최근 검색 ×)의 `grid`/`place-items-center`를 `flex items-center justify-center`로 정리한다
+
+## 8. 후속 (이 체인지 범위 밖 · 별도 이슈/PR)
 
 - [ ] 7.1 검색 후 사람 탭에 정확 handle `profileByHandle` query를 연결하고 `ProfileListItem` 결과·결과 없음·프로필 이동을 렌더한다 — PROD-154
 - [ ] 7.2 검색 전 추천 프로필·트렌드, 입력 중 자동완성, 인기/최신/미디어 탭 콘텐츠(post/Elasticsearch·fediverse 검색) — 별도 후속 이슈
