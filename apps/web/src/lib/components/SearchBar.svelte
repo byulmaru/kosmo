@@ -10,6 +10,7 @@
     showBack?: boolean;
     onsubmit?: (value: string) => void;
     onback?: () => void;
+    onclear?: () => void;
     onfocus?: () => void;
     onblur?: () => void;
     // tailwind-merge가 받을 수 있도록 class를 문자열로 좁힌다.
@@ -23,6 +24,7 @@
     class: className,
     onsubmit,
     onback,
+    onclear,
     onfocus,
     onblur,
     ...rest
@@ -43,6 +45,13 @@
   const handleSubmit = (event: SubmitEvent) => {
     event.preventDefault();
     onsubmit?.(value);
+  };
+
+  // 지우기: 입력값을 비우고 포커스를 유지(입력 중)한다. 페이지는 onclear에서 URL q를 정리한다.
+  const handleClear = () => {
+    value = '';
+    inputElement?.focus();
+    onclear?.();
   };
 </script>
 
@@ -103,7 +112,7 @@
         type="button"
         aria-label="검색 지우기"
         onmousedown={(event) => event.preventDefault()}
-        onclick={() => (value = '')}
+        onclick={handleClear}
       >
         ×
       </button>

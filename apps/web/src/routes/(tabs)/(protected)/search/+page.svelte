@@ -84,6 +84,14 @@
     recent = removeRecentSearch(term);
   };
 
+  // 지우기 ×: 검색 후였다면 URL q도 제거해, 빈 입력과 결과 영역이 어긋나지 않게 한다.
+  // (SearchBar가 입력값을 비우고 포커스를 유지하므로 입력 중 단계로 전환된다.)
+  const handleClear = () => {
+    if (queryParam) {
+      void navigate('', activeTab);
+    }
+  };
+
   // 좌측 ←: q를 비운 뒤(URL 갱신 완료 후) 포커스를 거둬 검색 전 단계로 되돌린다.
   const handleBack = () => {
     void navigate('', activeTab).then(() => searchBar?.blurInput());
@@ -98,6 +106,7 @@
     showBack={phase !== 'before'}
     onsubmit={handleSubmit}
     onback={handleBack}
+    onclear={handleClear}
     onfocus={() => (focused = true)}
     onblur={() => (focused = false)}
     class="w-full"

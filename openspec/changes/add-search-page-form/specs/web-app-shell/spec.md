@@ -13,7 +13,8 @@
 #### Scenario: Clear search input
 
 - **WHEN** 사용자가 입력 비우기 컨트롤을 선택한다
-- **THEN** 시스템은 검색 입력값을 비운다
+- **THEN** 시스템은 검색 입력값을 비우고 입력 포커스를 유지한다
+- **AND** 검색 후 단계였다면 URL `q`를 제거해, 빈 입력과 결과 영역이 어긋나지 않게 한다
 
 ### Requirement: Search page phases
 
