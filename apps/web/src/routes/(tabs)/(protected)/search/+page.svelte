@@ -1,6 +1,6 @@
 <script lang="ts">
   import { parseSearchTab, SearchTab } from '@kosmo/core/search';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import RecentSearches from '$lib/components/Search/RecentSearches.svelte';
@@ -28,8 +28,10 @@
   let focused = $state(false);
   const phase = $derived(focused ? 'input' : queryParam ? 'results' : 'before');
 
-  // 입력 중 값. 포커스가 없을 때만 URL의 q와 동기화해, 타이핑/이동 중 입력이 덮어써지지 않게 한다.
-  let inputValue = $state('');
+  // 입력 중 값. 초기값을 URL의 q로 두어 deep-link(`/search?q=foo`)·SSR·JS 비활성에서도
+  // 검색창과 결과 영역이 처음부터 같은 검색어를 가리키게 한다. 이후 포커스가 없을 때만 q와
+  // 동기화해(타이핑 중 덮어쓰기 방지) 이동·뒤로가기에 맞춘다.
+  let inputValue = $state(untrack(() => queryParam));
   $effect(() => {
     if (!focused) {
       inputValue = queryParam;
