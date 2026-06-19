@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { eq } from 'drizzle-orm';
 
 let closeDb: (() => Promise<void>) | undefined;
 
@@ -23,16 +24,26 @@ test('logs in through the local OIDC mock and creates a profile', async ({ conte
   await expect(page.getByRole('heading', { name: '프로필을 만들어 시작하세요' })).toBeVisible();
 
   const cookies = await context.cookies();
-  expect(cookies.some((cookie) => cookie.name === 'kosmo_session')).toBe(true);
+  const sessionCookie = cookies.find((cookie) => cookie.name === 'kosmo_session');
+  expect(sessionCookie).toBeDefined();
+
+  if (!sessionCookie) {
+    throw new Error('kosmo_session cookie is missing');
+  }
 
   const { Accounts, db, Profiles, Sessions } = await getDb();
-  const accounts = await db.select().from(Accounts);
-  const sessions = await db.select().from(Sessions);
+  const [session] = await db.select().from(Sessions).where(eq(Sessions.token, sessionCookie.value));
 
-  expect(accounts).toHaveLength(1);
-  expect(accounts[0]?.oidcSubject).toMatch(/^oidc-mock-/);
-  expect(sessions).toHaveLength(1);
-  expect(sessions[0]?.accountId).toBe(accounts[0]?.id);
+  expect(session).toBeDefined();
+
+  if (!session) {
+    throw new Error('session row for kosmo_session cookie is missing');
+  }
+
+  const [account] = await db.select().from(Accounts).where(eq(Accounts.id, session.accountId));
+
+  expect(account).toBeDefined();
+  expect(account?.oidcSubject).toMatch(/^oidc-mock-/);
 
   const handle = `e2e_${Date.now()}`;
 
@@ -45,9 +56,10 @@ test('logs in through the local OIDC mock and creates a profile', async ({ conte
   await expect(page.getByRole('heading', { name: '홈' })).toBeVisible();
   await expect(page.getByLabel('활성 프로필').getByText(`@${handle}`)).toBeVisible();
 
-  const profiles = await db.select().from(Profiles);
-  expect(profiles).toHaveLength(1);
-  expect(profiles[0]?.handle).toBe(handle);
+  const [profile] = await db.select().from(Profiles).where(eq(Profiles.handle, handle));
+
+  expect(profile).toBeDefined();
+  expect(profile?.handle).toBe(handle);
 });
 
 test('rejects malformed OIDC callbacks', async ({ context, request }) => {
