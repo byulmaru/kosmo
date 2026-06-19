@@ -59,7 +59,7 @@
   {#if showBack}
     <!-- 입력 중·검색 후에만 노출. 포커스를 빼앗지 않도록 mousedown을 막고 onback에서 처리한다. -->
     <button
-      class="text-text-secondary grid size-5 shrink-0 place-items-center"
+      class="text-text-secondary flex size-5 shrink-0 items-center justify-center"
       type="button"
       aria-label="뒤로"
       onmousedown={(event) => event.preventDefault()}
@@ -108,7 +108,7 @@
     {#if value}
       <!-- 입력이 있을 때만 노출. 포커스를 유지한 채 값만 비운다. -->
       <button
-        class="text-text-secondary grid size-5 shrink-0 place-items-center"
+        class="text-text-secondary flex size-5 shrink-0 items-center justify-center"
         type="button"
         aria-label="검색 지우기"
         onmousedown={(event) => event.preventDefault()}
