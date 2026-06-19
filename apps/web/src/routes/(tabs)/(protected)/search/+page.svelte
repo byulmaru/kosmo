@@ -32,18 +32,20 @@
   // tab이 없거나 알 수 없으면 사람(people)을 기본 활성으로 둔다.
   const activeTab = $derived(TAB_BY_SLUG[page.url.searchParams.get('tab') ?? ''] ?? '사람');
 
-  // 입력 중 값. URL의 q를 초기값으로 두고, 뒤로가기 등으로 q가 바뀌면 동기화한다.
-  let inputValue = $state('');
-  $effect(() => {
-    inputValue = queryParam;
-  });
-
   // 단계 구분(검색바 포커스 기준):
   // - input  : 검색바 포커스 = 입력 중 → 최근 검색 노출
   // - results: 포커스 해제 + q 있음 = 검색 후 → 탭 + 결과
   // - before : 그 외 = 검색 전 → 안내
   let focused = $state(false);
   const phase = $derived(focused ? 'input' : queryParam ? 'results' : 'before');
+
+  // 입력 중 값. 포커스가 없을 때만 URL의 q와 동기화해, 타이핑/이동 중 입력이 덮어써지지 않게 한다.
+  let inputValue = $state('');
+  $effect(() => {
+    if (!focused) {
+      inputValue = queryParam;
+    }
+  });
 
   let searchBar = $state<{ blurInput: () => void }>();
   let recent = $state<string[]>([]);
@@ -57,35 +59,34 @@
       params.set('q', q.trim());
     }
     params.set('tab', SLUG_BY_TAB[tab]);
-    void goto(`/search?${params.toString()}`, { keepFocus: true, noScroll: true });
+    return goto(`/search?${params.toString()}`, { keepFocus: true, noScroll: true });
   };
 
+  // URL 갱신(비동기)이 끝난 뒤 포커스를 거둬, 단계가 한 프레임 잘못 보이지 않게 한다.
   const handleSubmit = (value: string) => {
     if (value.trim()) {
       recent = addRecentSearch(value);
     }
-    navigate(value, activeTab);
+    void navigate(value, activeTab).then(() => searchBar?.blurInput());
   };
 
   const handleSelectTab = (tab: SearchTab) => {
-    navigate(queryParam, tab);
+    void navigate(queryParam, tab);
   };
 
   const handleSelectRecent = (term: string) => {
     inputValue = term;
     recent = addRecentSearch(term);
-    navigate(term, activeTab);
-    searchBar?.blurInput();
+    void navigate(term, activeTab).then(() => searchBar?.blurInput());
   };
 
   const handleRemoveRecent = (term: string) => {
     recent = removeRecentSearch(term);
   };
 
-  // 좌측 ←: 포커스를 거두고 q를 비워 검색 전 단계로 되돌린다.
+  // 좌측 ←: q를 비운 뒤(URL 갱신 완료 후) 포커스를 거둬 검색 전 단계로 되돌린다.
   const handleBack = () => {
-    searchBar?.blurInput();
-    navigate('', activeTab);
+    void navigate('', activeTab).then(() => searchBar?.blurInput());
   };
 </script>
 

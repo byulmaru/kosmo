@@ -36,13 +36,13 @@
   }
 
   const bar = tv({
-    base: 'border-border bg-card flex items-center gap-3 border-b px-4 py-2.5',
+    base: 'border-border bg-card flex h-14 w-[390px] items-center gap-3 border-b px-4',
   });
 
+  // 포커스 해제는 페이지가 URL 갱신을 마친 뒤 blurInput()으로 처리한다(단계 깜빡임 방지).
   const handleSubmit = (event: SubmitEvent) => {
     event.preventDefault();
     onsubmit?.(value);
-    inputElement?.blur();
   };
 </script>
 
@@ -50,13 +50,14 @@
   {#if showBack}
     <!-- 입력 중·검색 후에만 노출. 포커스를 빼앗지 않도록 mousedown을 막고 onback에서 처리한다. -->
     <button
-      class="text-text-secondary size-5 shrink-0"
+      class="text-text-secondary grid size-5 shrink-0 place-items-center"
       type="button"
       aria-label="뒤로"
       onmousedown={(event) => event.preventDefault()}
       onclick={() => onback?.()}
     >
       <svg
+        class="size-5"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
