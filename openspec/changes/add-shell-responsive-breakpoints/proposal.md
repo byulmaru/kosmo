@@ -4,26 +4,28 @@ PROD-112~114에서 메인 3분할 셸을 Tailwind `lg` 단일 브레이크포인
 
 ## What Changes
 
-- `(tabs)` 셸을 `lg` 단일 경계에서 `md`/`lg`/`xl` 4단계로 바꾼다: 모바일(`<md`) → 아이콘 레일 + 피드(`md`~`lg`) → 아이콘 레일 + 피드 + 우측 레일(`lg`~`xl`) → 풀 사이드바 3분할(`≥xl`).
-- 좌측 사이드바에 `xl` 미만 아이콘 전용 레일 / `xl` 이상 풀 사이드바 분기를 추가한다(한 컴포넌트에서 CSS 반응형으로 전환).
+- `(tabs)` 셸을 `lg` 단일 경계에서 `md`/`lg` 3단계 압축형으로 바꾼다: 모바일(`<md`) → 아이콘 레일 + 피드(`md`~`lg`) → 풀 사이드바 3분할(`≥lg`).
+- 풀 3분할 등장 폭을 `xl`(1280)에서 `lg`(1024)로 앞당겨, 좁은 데스크톱 폭에서 컬럼이 더 일찍·촘촘하게 압축되고 중앙 피드가 자연히 좁아지게 한다.
+- 좌측 사이드바에 `lg` 미만 아이콘 전용 레일 / `lg` 이상 풀 사이드바 분기를 둔다(한 컴포넌트에서 CSS 반응형으로 전환).
 - 모바일 ↔ 데스크톱 셸 경계를 `lg`에서 `md`로 내린다(헤더·drawer·하단 탭 바·swipe·`openProfileSwitcher` 기준).
-- 아이콘 레일 단계에서는 우측 컴포저와 하단 탭이 모두 없어 글쓰기 진입점이 사라지므로, 사이드바(아이콘/풀 공통)에 `/compose` 글쓰기 버튼을 추가한다.
+- 글쓰기 진입은 우측 레일이 없는 `md`~`lg` 아이콘 레일 단계에서만 사이드바 글쓰기 버튼으로 제공하고, `lg` 이상에서는 우측 레일 컴포저가 담당하므로 사이드바 글쓰기 버튼을 표시하지 않는다.
+- 중앙 피드 최대 폭은 `600px`를 유지한다(확장하지 않음).
 - 브레이크포인트 단계·컨벤션을 `docs/design/breakpoints.md`로 정리한다.
 - 커스텀 `--breakpoint-*` 토큰은 추가하지 않고 Tailwind 기본값을 재사용한다.
 
 ## Dependencies
 
-- 본 변경은 `add-main-three-column-shell`(PROD-112)의 3컬럼 셸 위에서 동작하며, 그 변경의 `lg` 단일 경계 동작을 다단계로 확장·대체한다. PROD-112 셸 요구사항(`Desktop three-column shell layout`)이 아직 아카이브되지 않아, 본 변경은 충돌을 피하려 기존 요구사항을 수정(MODIFIED)하지 않고 다단계 동작을 새 요구사항(ADDED)으로 추가한다.
+- 본 변경은 `add-main-three-column-shell`(PROD-112)의 3컬럼 셸 위에서 동작하며, 그 변경의 `lg` 단일 경계 동작을 압축형 다단계로 확장·대체한다. PROD-112 셸 요구사항(`Desktop three-column shell layout`)이 canonical 스펙에 아카이브되어, 본 변경은 그 요구사항을 압축형 단계 동작으로 수정(MODIFIED)하고, 아이콘 레일 사이드바·사이드바 글쓰기 진입·접힌 프로필 스위처를 새 요구사항(ADDED)으로 추가한다.
 
 ## Capabilities
 
 ### Modified Capabilities
 
-- `web-app-shell`: `lg` 단일 브레이크포인트 대신 `md`/`lg`/`xl` 4단계 반응형 동작, 아이콘 레일 사이드바, 사이드바 글쓰기 진입 요구사항이 추가된다.
+- `web-app-shell`: `lg` 단일 브레이크포인트 대신 `md`/`lg` 압축형 단계 동작으로 `Desktop three-column shell layout`을 수정하고, 아이콘 레일 사이드바·사이드바 글쓰기 진입·접힌 프로필 스위처 요구사항을 추가한다.
 
 ## Impact
 
-- `apps/web/src/routes/(tabs)/+layout.svelte` — 그리드 4단계화, 모바일 셸 토글 `lg`→`md`
+- `apps/web/src/routes/(tabs)/+layout.svelte` — 그리드 `md`(아이콘+피드)/`lg`(풀 사이드바 3분할) 압축형, 모바일 셸 토글 `lg`→`md`
 - `apps/web/src/lib/components/SidebarNavigation.svelte` — 아이콘 레일/풀 분기, 글쓰기 버튼
 - `apps/web/src/lib/components/BottomTabBar.svelte` — `lg:hidden`→`md:hidden`
 - `docs/design/breakpoints.md`(신규), `docs/design/README.md`, `docs/design/figma.md`
