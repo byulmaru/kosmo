@@ -8,7 +8,7 @@
     component: RecentSearches,
     tags: ['autodocs'],
     args: {
-      onselect: () => {},
+      hrefFor: (term: string) => `/search?q=${encodeURIComponent(term)}`,
       onremove: () => {},
     },
   });

@@ -3,15 +3,13 @@
   import type { HTMLFormAttributes } from 'svelte/elements';
 
   // 네이티브 onsubmit과 충돌하지 않게 Omit 후 콜백으로 재정의한다(검색어 문자열을 넘긴다).
-  // 포커스 추적은 검색 페이지가 검색 영역(검색바+최근 검색)에 focus-within으로 처리하므로
-  // 여기서는 onfocus/onblur 콜백을 두지 않는다.
+  // 포커스 추적은 검색 페이지가 검색 영역(검색바+최근 검색)에 focus-within으로 처리한다.
   type SearchBarProps = Omit<HTMLFormAttributes, 'onsubmit'> & {
     value?: string;
     placeholder?: string;
-    // 검색 전이 아닐 때(입력 중·검색 후) 좌측 뒤로가기(←)를 노출한다.
-    showBack?: boolean;
+    // 검색 전이 아닐 때(입력 중·검색 후) 좌측 뒤로가기(←) 링크가 가리킬 검색 전 URL. 없으면 ←를 숨긴다.
+    backHref?: string;
     onsubmit?: (value: string) => void;
-    onback?: () => void;
     onclear?: () => void;
     // tailwind-merge가 받을 수 있도록 class를 문자열로 좁힌다.
     class?: string | null;
@@ -20,26 +18,20 @@
   let {
     value = $bindable(''),
     placeholder = '검색어',
-    showBack = false,
+    backHref,
     class: className,
     onsubmit,
-    onback,
     onclear,
     ...rest
   }: SearchBarProps = $props();
 
   let inputElement: HTMLInputElement | undefined = $state();
 
-  // 페이지가 최근 검색 선택/제출 후 입력 포커스를 거둘 수 있게 한다.
-  export function blurInput() {
-    inputElement?.blur();
-  }
-
   const bar = tv({
     base: 'border-border bg-card flex h-14 w-[390px] items-center gap-3 border-b px-4',
   });
 
-  // 포커스 해제는 페이지가 URL 갱신을 마친 뒤 blurInput()으로 처리한다(단계 깜빡임 방지).
+  // Enter/폼 제출 시 검색어를 페이지로 넘긴다. 이동·포커스 처리는 페이지가 맡는다.
   const handleSubmit = (event: SubmitEvent) => {
     event.preventDefault();
     onsubmit?.(value);
@@ -54,14 +46,13 @@
 </script>
 
 <form {...rest} class={bar({ class: className })} role="search" onsubmit={handleSubmit}>
-  {#if showBack}
-    <!-- 입력 중·검색 후에만 노출. 포커스를 빼앗지 않도록 mousedown을 막고 onback에서 처리한다. -->
-    <button
+  {#if backHref}
+    <!-- 입력 중·검색 후에만 노출. 네이티브 링크라 검색 전(q 없음) URL로 이동해 검색 전 단계로 돌아간다. -->
+    <a
       class="text-text-secondary flex size-5 shrink-0 items-center justify-center"
-      type="button"
+      href={backHref}
       aria-label="뒤로"
-      onmousedown={(event) => event.preventDefault()}
-      onclick={() => onback?.()}
+      data-sveltekit-noscroll
     >
       <svg
         class="size-5"
@@ -75,7 +66,7 @@
       >
         <path d="M19 12H5M12 19l-7-7 7-7" />
       </svg>
-    </button>
+    </a>
   {/if}
   <div
     class="bg-surface text-text-primary group flex h-11 flex-1 items-center gap-2 rounded-full px-4 text-sm focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-more"
@@ -107,7 +98,6 @@
         class="text-text-secondary flex size-5 shrink-0 items-center justify-center"
         type="button"
         aria-label="검색 지우기"
-        onmousedown={(event) => event.preventDefault()}
         onclick={handleClear}
       >
         ×

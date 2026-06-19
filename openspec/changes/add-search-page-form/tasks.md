@@ -42,6 +42,7 @@
 - [x] 7.2 `SearchTab` slug 정의를 `@kosmo/core/search`로 옮기고 `package.json` `exports`에 `./search`를 추가한다. 한글 라벨은 `SearchTabs.svelte`의 `SEARCH_TAB_LABELS`로만 매핑하고, 페이지는 `parseSearchTab`로 해석한다
 - [x] 7.3 `RecentSearches`의 빈 분기를 `{#each … :else}` 관용구로 바꾸고(헤딩은 유지), 자식이 하나뿐인 아이콘 버튼(검색바 ←·×, 최근 검색 ×)의 `grid`/`place-items-center`를 `flex items-center justify-center`로 정리한다
 - [x] 7.4 검색 입력 영역(검색바 + 최근 검색) 포커스를 `focusin`/`focusout`(focus-within)으로 추적해, 키보드로 입력에서 최근 검색 항목으로 Tab 이동이 가능하게 한다(Codex P2). `SearchBar`의 onfocus/onblur 콜백은 제거한다
+- [x] 7.5 최근 검색 항목과 뒤로가기(←)를 네이티브 `<a href>`(검색 URL) 링크로 바꾼다 — 키보드 Enter·마우스·새 탭 열기가 모두 동작하고, 이동 후 SvelteKit 포커스 복귀로 입력 중 단계가 닫힌다. `onclick`+`goto`·`blurInput`·`onmousedown` preventDefault 같은 포인터 전용 처리를 걷어낸다(사용자 피드백: 키보드 Enter 미동작·마우스 중심). 삭제(×)는 로컬 동작이라 버튼 유지
 
 ## 8. 후속 (이 체인지 범위 밖 · 별도 이슈/PR)
 

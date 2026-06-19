@@ -36,61 +36,52 @@
     }
   });
 
-  let searchBar = $state<{ blurInput: () => void }>();
   let recent = $state<string[]>([]);
   onMount(() => {
     recent = getRecentSearches();
   });
 
-  const navigate = (q: string, tab: SearchTab) => {
+  // q·tab을 검색 URL로 만든다. 최근 검색·뒤로가기는 이 URL을 그대로 <a href>로 쓴다.
+  // (네이티브 링크라 키보드 Enter·마우스·새 탭 열기가 모두 동작하고, 별도 포커스 처리가 필요 없다.)
+  const searchUrl = (q: string, tab: SearchTab) => {
     const params = new URLSearchParams();
     if (q.trim()) {
       params.set('q', q.trim());
     }
     params.set('tab', tab);
-    return goto(`/search?${params.toString()}`, { keepFocus: true, noScroll: true });
+    return `/search?${params.toString()}`;
   };
 
-  // URL 갱신(비동기)이 끝난 뒤 포커스를 거둬, 단계가 한 프레임 잘못 보이지 않게 한다.
+  // 제출(Enter): 검색어를 최근 검색에 기록하고 결과로 이동한다.
+  // keepFocus를 주지 않으므로 SvelteKit이 이동 후 포커스를 본문으로 되돌려(focusout) 검색 후 단계로 전환한다.
   const handleSubmit = (value: string) => {
     if (value.trim()) {
       recent = addRecentSearch(value);
     }
-    void navigate(value, activeTab).then(() => searchBar?.blurInput());
+    void goto(searchUrl(value, activeTab), { noScroll: true });
   };
 
   const handleSelectTab = (tab: SearchTab) => {
-    void navigate(queryParam, tab);
-  };
-
-  const handleSelectRecent = (term: string) => {
-    inputValue = term;
-    recent = addRecentSearch(term);
-    void navigate(term, activeTab).then(() => searchBar?.blurInput());
+    void goto(searchUrl(queryParam, tab), { noScroll: true });
   };
 
   const handleRemoveRecent = (term: string) => {
     recent = removeRecentSearch(term);
   };
 
-  // 지우기 ×: 검색 후였다면 URL q도 제거해, 빈 입력과 결과 영역이 어긋나지 않게 한다.
-  // (SearchBar가 입력값을 비우고 포커스를 유지하므로 입력 중 단계로 전환된다.)
+  // 지우기 ×: 입력값을 비우고(SearchBar) 포커스를 유지해 입력 중 단계를 이어간다.
+  // 검색 후였다면 URL q도 제거하되 keepFocus로 포커스를 지켜 결과로 넘어가지 않게 한다.
   const handleClear = () => {
     if (queryParam) {
-      void navigate('', activeTab);
+      void goto(searchUrl('', activeTab), { noScroll: true, keepFocus: true });
     }
-  };
-
-  // 좌측 ←: q를 비운 뒤(URL 갱신 완료 후) 포커스를 거둬 검색 전 단계로 되돌린다.
-  const handleBack = () => {
-    void navigate('', activeTab).then(() => searchBar?.blurInput());
   };
 </script>
 
 <section class="flex w-[min(100%,37.5rem)] flex-col self-start">
   <!-- 검색 입력 영역(검색바 + 입력 중 최근 검색)의 포커스를 한데 추적한다.
-       input의 blur만으로 focused를 끄면 키보드로 최근 검색 항목에 닿기 전에 RecentSearches가
-       언마운트되므로, 다음 포커스 대상이 이 영역 밖일 때만 focused를 해제한다(focus-within).
+       다음 포커스 대상이 이 영역 안(예: 최근 검색 링크로 Tab)일 때만 focused를 유지하고,
+       밖으로 나가면(이동 후 SvelteKit의 포커스 복귀 포함) 입력 중 단계를 닫는다(focus-within).
        display: contents라 flex 레이아웃에는 영향이 없다. -->
   <div
     class="contents"
@@ -102,12 +93,10 @@
     }}
   >
     <SearchBar
-      bind:this={searchBar}
       bind:value={inputValue}
       placeholder="검색어를 입력하세요"
-      showBack={phase !== 'before'}
+      backHref={phase !== 'before' ? searchUrl('', activeTab) : undefined}
       onsubmit={handleSubmit}
-      onback={handleBack}
       onclear={handleClear}
       class="w-full"
     />
@@ -115,7 +104,7 @@
     {#if phase === 'input'}
       <RecentSearches
         terms={recent}
-        onselect={handleSelectRecent}
+        hrefFor={(term) => searchUrl(term, activeTab)}
         onremove={handleRemoveRecent}
         class="w-full"
       />
