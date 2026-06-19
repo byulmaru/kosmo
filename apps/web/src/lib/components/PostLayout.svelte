@@ -8,7 +8,7 @@
   import { getProfileInitial } from '$lib/utils/profile';
 
   import Avatar from './Avatar.svelte';
-  import PostAuthorProfile from './PostAuthorProfile.svelte';
+  import ProfileNameBlock from './ProfileNameBlock.svelte';
 
   // 게시글 레이아웃. Figma ThreadPost(702:6286)/PostCard(67:206)의 column 구조를 따라
   // 좌측 거터(아바타)와 우측 콘텐츠 컬럼으로 나뉜다.
@@ -42,7 +42,7 @@
       fragment PostLayout_profile on Profile {
         displayName
         handle
-        ...PostAuthorProfile_profile
+        ...ProfileNameBlock_profile
       }
     `),
     () => profile,
@@ -92,9 +92,9 @@
   <div class={slots.content()}>
     <div class={slots.header()}>
       {#if href}
-        <PostAuthorProfile {href} profile={profileFragment.data} />
+        <ProfileNameBlock {href} profile={profileFragment.data} />
       {:else}
-        <PostAuthorProfile profile={profileFragment.data} />
+        <ProfileNameBlock profile={profileFragment.data} />
       {/if}
       {#if trailing}
         <div class="shrink-0">

@@ -6,28 +6,29 @@
 
   import { tv } from '$lib/tv';
 
-  // 게시글 작성자 이름 블록(displayName + @handle). Figma UserInfo/NameBlock에 대응한다.
-  // 아바타·거터·본문 배치 같은 게시글 레이아웃은 `PostLayout`이 담당하므로 여기에는 두지 않는다.
-  type PostAuthorProfileBaseProps = {
-    profile: FragmentRefs<'PostAuthorProfile_profile'>;
+  // 프로필 이름 블록(displayName + @handle). Figma UserInfo/NameBlock에 대응한다.
+  // 게시글 작성자뿐 아니라 작성 화면의 현재 사용자에도 쓰인다. 아바타·거터·본문 배치 같은
+  // 게시글 레이아웃은 `PostLayout`이 담당하므로 여기에는 두지 않는다.
+  type ProfileNameBlockBaseProps = {
+    profile: FragmentRefs<'ProfileNameBlock_profile'>;
     // Svelte의 ClassValue(숫자·딕셔너리 포함)는 tailwind-merge가 받지 못하므로
     // 문자열로 좁힌다.
     class?: string | null;
   };
 
-  type PostAuthorProfileLinkProps = Omit<HTMLAnchorAttributes, 'href'> &
-    PostAuthorProfileBaseProps & {
+  type ProfileNameBlockLinkProps = Omit<HTMLAnchorAttributes, 'href'> &
+    ProfileNameBlockBaseProps & {
       href: string;
     };
 
-  type PostAuthorProfileStaticProps = HTMLAttributes<HTMLDivElement> &
-    PostAuthorProfileBaseProps & {
+  type ProfileNameBlockStaticProps = HTMLAttributes<HTMLDivElement> &
+    ProfileNameBlockBaseProps & {
       href?: undefined;
     };
 
-  type PostAuthorProfileProps = PostAuthorProfileLinkProps | PostAuthorProfileStaticProps;
+  type ProfileNameBlockProps = ProfileNameBlockLinkProps | ProfileNameBlockStaticProps;
 
-  let props: PostAuthorProfileProps = $props();
+  let props: ProfileNameBlockProps = $props();
 
   const anchorAttributes = $derived.by(() => {
     if (!props.href) {
@@ -48,7 +49,7 @@
 
   const profileFragment = createFragment(
     graphql(`
-      fragment PostAuthorProfile_profile on Profile {
+      fragment ProfileNameBlock_profile on Profile {
         displayName
         handle
       }
@@ -56,7 +57,7 @@
     () => props.profile,
   );
 
-  const postAuthorProfile = tv({
+  const profileNameBlock = tv({
     slots: {
       nameBlock:
         'group block min-w-0 flex-1 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-more',
@@ -70,7 +71,7 @@
     },
   });
 
-  const slots = $derived(postAuthorProfile({ link: Boolean(props.href) }));
+  const slots = $derived(profileNameBlock({ link: Boolean(props.href) }));
 </script>
 
 {#if props.href}

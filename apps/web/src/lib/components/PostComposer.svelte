@@ -7,7 +7,7 @@
   import Avatar from './Avatar.svelte';
   import Button from './Button.svelte';
   import * as Dropdown from './Dropdown';
-  import PostAuthorProfile from './PostAuthorProfile.svelte';
+  import ProfileNameBlock from './ProfileNameBlock.svelte';
   import PostVisibilityIcon from './PostVisibilityIcon.svelte';
   import TipTapEditor from './TipTapEditor.svelte';
   import type { Editor } from '@tiptap/core';
@@ -56,7 +56,7 @@
       fragment PostComposer_profile on Profile {
         displayName
         handle
-        ...PostAuthorProfile_profile
+        ...ProfileNameBlock_profile
       }
     `),
     () => profile,
@@ -123,7 +123,7 @@
       size="md"
       initials={getProfileInitial(profileFragment.data.displayName, profileFragment.data.handle)}
     />
-    <PostAuthorProfile class="min-w-0 flex-1" profile={profileFragment.data} />
+    <ProfileNameBlock class="min-w-0 flex-1" profile={profileFragment.data} />
   </header>
 
   <div
