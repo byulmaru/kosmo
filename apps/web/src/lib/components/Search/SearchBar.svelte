@@ -2,8 +2,10 @@
   import { tv } from '$lib/tv';
   import type { HTMLFormAttributes } from 'svelte/elements';
 
-  // 네이티브 onfocus/onblur와 충돌하지 않게 Omit 후 콜백으로 재정의한다.
-  type SearchBarProps = Omit<HTMLFormAttributes, 'onsubmit' | 'onfocus' | 'onblur'> & {
+  // 네이티브 onsubmit과 충돌하지 않게 Omit 후 콜백으로 재정의한다(검색어 문자열을 넘긴다).
+  // 포커스 추적은 검색 페이지가 검색 영역(검색바+최근 검색)에 focus-within으로 처리하므로
+  // 여기서는 onfocus/onblur 콜백을 두지 않는다.
+  type SearchBarProps = Omit<HTMLFormAttributes, 'onsubmit'> & {
     value?: string;
     placeholder?: string;
     // 검색 전이 아닐 때(입력 중·검색 후) 좌측 뒤로가기(←)를 노출한다.
@@ -11,8 +13,6 @@
     onsubmit?: (value: string) => void;
     onback?: () => void;
     onclear?: () => void;
-    onfocus?: () => void;
-    onblur?: () => void;
     // tailwind-merge가 받을 수 있도록 class를 문자열로 좁힌다.
     class?: string | null;
   };
@@ -25,8 +25,6 @@
     onsubmit,
     onback,
     onclear,
-    onfocus,
-    onblur,
     ...rest
   }: SearchBarProps = $props();
 
@@ -102,8 +100,6 @@
       bind:value
       {placeholder}
       aria-label="검색어"
-      onfocus={() => onfocus?.()}
-      onblur={() => onblur?.()}
     />
     {#if value}
       <!-- 입력이 있을 때만 노출. 포커스를 유지한 채 값만 비운다. -->

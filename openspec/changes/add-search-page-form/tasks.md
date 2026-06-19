@@ -36,11 +36,12 @@
 - [x] 6.2 `pnpm lint:eslint`, `pnpm --filter @kosmo/web build-storybook` 통과를 확인한다 (변경 파일 prettier는 pre-commit lint-staged의 `prettier --write`로 검증)
 - [x] 6.3 `openspec validate add-search-page-form --strict` 통과를 확인한다
 
-## 7. 리뷰 반영 (robin-maki, PR #134)
+## 7. 리뷰 반영 (robin-maki·Codex, PR #134)
 
 - [x] 7.1 검색 컴포넌트 4종(+스토리)을 `lib/components/Search/` 폴더로 모으고 importer 경로를 갱신한다
 - [x] 7.2 `SearchTab` slug 정의를 `@kosmo/core/search`로 옮기고 `package.json` `exports`에 `./search`를 추가한다. 한글 라벨은 `SearchTabs.svelte`의 `SEARCH_TAB_LABELS`로만 매핑하고, 페이지는 `parseSearchTab`로 해석한다
 - [x] 7.3 `RecentSearches`의 빈 분기를 `{#each … :else}` 관용구로 바꾸고(헤딩은 유지), 자식이 하나뿐인 아이콘 버튼(검색바 ←·×, 최근 검색 ×)의 `grid`/`place-items-center`를 `flex items-center justify-center`로 정리한다
+- [x] 7.4 검색 입력 영역(검색바 + 최근 검색) 포커스를 `focusin`/`focusout`(focus-within)으로 추적해, 키보드로 입력에서 최근 검색 항목으로 Tab 이동이 가능하게 한다(Codex P2). `SearchBar`의 onfocus/onblur 콜백은 제거한다
 
 ## 8. 후속 (이 체인지 범위 밖 · 별도 이슈/PR)
 

@@ -88,27 +88,41 @@
 </script>
 
 <section class="flex w-[min(100%,37.5rem)] flex-col self-start">
-  <SearchBar
-    bind:this={searchBar}
-    bind:value={inputValue}
-    placeholder="검색어를 입력하세요"
-    showBack={phase !== 'before'}
-    onsubmit={handleSubmit}
-    onback={handleBack}
-    onclear={handleClear}
-    onfocus={() => (focused = true)}
-    onblur={() => (focused = false)}
-    class="w-full"
-  />
-
-  {#if phase === 'input'}
-    <RecentSearches
-      terms={recent}
-      onselect={handleSelectRecent}
-      onremove={handleRemoveRecent}
+  <!-- 검색 입력 영역(검색바 + 입력 중 최근 검색)의 포커스를 한데 추적한다.
+       input의 blur만으로 focused를 끄면 키보드로 최근 검색 항목에 닿기 전에 RecentSearches가
+       언마운트되므로, 다음 포커스 대상이 이 영역 밖일 때만 focused를 해제한다(focus-within).
+       display: contents라 flex 레이아웃에는 영향이 없다. -->
+  <div
+    class="contents"
+    onfocusin={() => (focused = true)}
+    onfocusout={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+        focused = false;
+      }
+    }}
+  >
+    <SearchBar
+      bind:this={searchBar}
+      bind:value={inputValue}
+      placeholder="검색어를 입력하세요"
+      showBack={phase !== 'before'}
+      onsubmit={handleSubmit}
+      onback={handleBack}
+      onclear={handleClear}
       class="w-full"
     />
-  {:else if phase === 'results'}
+
+    {#if phase === 'input'}
+      <RecentSearches
+        terms={recent}
+        onselect={handleSelectRecent}
+        onremove={handleRemoveRecent}
+        class="w-full"
+      />
+    {/if}
+  </div>
+
+  {#if phase === 'results'}
     <SearchTabs active={activeTab} onselect={handleSelectTab} class="w-full" />
     {#if activeTab === SearchTab.PEOPLE}
       <!-- TODO(PROD-154): SearchResults에 profileByHandle createQuery를 연결해
@@ -122,7 +136,7 @@
         </p>
       </div>
     {/if}
-  {:else}
+  {:else if phase === 'before'}
     <div class="px-4 py-12 text-center">
       <p class="text-text-primary text-base font-semibold">프로필을 검색해보세요</p>
       <p class="text-text-secondary mt-1 text-sm">
