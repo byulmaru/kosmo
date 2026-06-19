@@ -46,4 +46,8 @@ jobs:
 
       - name: Clean up test Postgres
         if: always()
-        run: docker compose --env-file .env.test -f docker-compose.test.yml down --volumes --remove-orphans
+        run: |
+          set -a
+          . ./.env.test
+          set +a
+          docker compose -f docker-compose.test.yml down --volumes --remove-orphans
