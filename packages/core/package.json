@@ -9,6 +9,7 @@
     "./error": "./error/index.ts",
     "./enums": "./enums.ts",
     "./polyfill": "./polyfill.ts",
+    "./search": "./search.ts",
     "./tiptap": "./tiptap/index.ts",
     "./utils": "./utils.ts",
     "./validation": "./validation/index.ts"
