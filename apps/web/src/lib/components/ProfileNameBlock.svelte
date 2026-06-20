@@ -1,7 +1,7 @@
 <script lang="ts">
   import { graphql } from '$mearie';
+  import type { ProfileNameBlock_profile$key } from '$mearie';
   import { createFragment } from '@mearie/svelte';
-  import type { FragmentRefs } from '@mearie/svelte';
   import type { HTMLAnchorAttributes, HTMLAttributes } from 'svelte/elements';
 
   import { tv } from '$lib/tv';
@@ -10,7 +10,7 @@
   // 게시글 작성자뿐 아니라 작성 화면의 현재 사용자에도 쓰인다. 아바타·거터·본문 배치 같은
   // 게시글 레이아웃은 `PostLayout`이 담당하므로 여기에는 두지 않는다.
   type ProfileNameBlockBaseProps = {
-    profile: FragmentRefs<'ProfileNameBlock_profile'>;
+    profile: ProfileNameBlock_profile$key;
     // Svelte의 ClassValue(숫자·딕셔너리 포함)는 tailwind-merge가 받지 못하므로
     // 문자열로 좁힌다.
     class?: string | null;
