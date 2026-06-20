@@ -54,6 +54,7 @@
   const profileFragment = createFragment(
     graphql(`
       fragment PostComposer_profile on Profile {
+        id
         displayName
         handle
         ...ProfileNameBlock_profile

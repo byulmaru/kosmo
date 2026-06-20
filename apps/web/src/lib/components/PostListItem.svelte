@@ -1,7 +1,5 @@
 <script lang="ts">
   import { formatTimelineTimestamp } from '@kosmo/core/datetime';
-  import { tipTapDocumentSchema } from '@kosmo/core/tiptap';
-  import type { TipTapDocument } from '@kosmo/core/tiptap';
   import { graphql } from '$mearie';
   import { createFragment } from '@mearie/svelte';
   import type { HTMLAttributes } from 'svelte/elements';
@@ -9,14 +7,18 @@
 
   import type { PostListItem_post$key } from '$mearie';
 
-  import PostLayout from './PostLayout.svelte';
-  import TipTapRenderer from './TipTapRenderer.svelte';
+  import { getProfileInitial } from '$lib/utils/profile';
 
-  // 게시글 목록 항목(Figma PostCard 67:206). 디테일(`PostBody`)과 달리 목록 표현을
-  // 따른다: 시간은 헤더 우측(24시간 미만 상대시간, 이상 날짜), 본문은 TipTap 원본
-  // 문서 그대로 렌더한다.
-  // 카드 전체는 디테일로 이동하고, 카드 내부 컨트롤은 pointer-events-auto로
-  // overlay 링크보다 우선한다.
+  import Avatar from './Avatar.svelte';
+  import PostBody from './PostBody.svelte';
+  import ProfileNameBlock from './ProfileNameBlock.svelte';
+
+  // 게시글 목록 항목(Figma PostCard 67:206). 목록 표현(시간은 헤더 우측 상대시간,
+  // 카드 전체가 상세로 이동)은 이 컴포넌트가 자체 소유한다. 본문은 PostBody로 위임한다.
+  // 카드 전체는 overlay 링크로 상세로 이동하고, 아바타·이름의 프로필 링크는
+  // pointer-events-auto로 overlay보다 우선한다.
+  // TODO(PROD-174): feed 작성 시각 소유·레이아웃을 PostLayout처럼 정식화하고
+  //   PostLayout과 거터·헤더 grid 중복을 통합한다.
   type Props = HTMLAttributes<HTMLElement> & {
     post: PostListItem_post$key;
   };
@@ -27,17 +29,14 @@
     graphql(`
       fragment PostListItem_post on Post {
         id
-        content {
-          id
-          bodyJson
-          bodyText
-        }
         createdAt
         profile {
           id
           handle
-          ...PostLayout_profile
+          displayName
+          ...ProfileNameBlock_profile
         }
+        ...PostBody_post
       }
     `),
     () => post,
@@ -49,21 +48,10 @@
     formatTimelineTimestamp(Temporal.Instant.from(postFragment.data.createdAt as string)),
   );
   const detailHref = $derived(`/@${postFragment.data.profile.handle}/${postFragment.data.id}`);
-
-  const fullBody = $derived(postFragment.data.content?.bodyText ?? '');
-  const fullDocument = $derived.by<TipTapDocument | null>(() => {
-    const content = postFragment.data.content;
-    if (!content) {
-      return null;
-    }
-
-    const parsedDocument = tipTapDocumentSchema.safeParse(content.bodyJson);
-    if (parsedDocument.success) {
-      return parsedDocument.data;
-    }
-
-    return null;
-  });
+  const profileHref = $derived(`/@${postFragment.data.profile.handle}`);
+  const initials = $derived(
+    getProfileInitial(postFragment.data.profile.displayName, postFragment.data.profile.handle),
+  );
 </script>
 
 <article
@@ -77,19 +65,29 @@
     <span class="sr-only">@{postFragment.data.profile.handle}의 게시글 상세 보기</span>
   </a>
 
-  <div class="pointer-events-none relative z-10">
-    <PostLayout avatarSize="lg" profile={postFragment.data.profile}>
-      {#snippet trailing()}
-        <time class="text-text-secondary text-sm" datetime={postFragment.data.createdAt as string}>
+  <!-- 카드 본문은 overlay 링크 위에 있으나 클릭은 overlay(상세)로 통과시키고,
+       아바타·이름 프로필 링크만 pointer-events-auto로 받는다. -->
+  <div class="pointer-events-none relative z-10 flex items-start gap-3">
+    <a class="pointer-events-auto shrink-0" href={profileHref}>
+      <Avatar size="lg" {initials} />
+    </a>
+
+    <div class="flex min-w-0 flex-1 flex-col gap-1">
+      <div class="flex items-start justify-between gap-2">
+        <ProfileNameBlock
+          class="pointer-events-auto"
+          href={profileHref}
+          profile={postFragment.data.profile}
+        />
+        <time
+          class="text-text-secondary shrink-0 text-sm"
+          datetime={postFragment.data.createdAt as string}
+        >
           {formattedCreatedAt}
         </time>
-      {/snippet}
+      </div>
 
-      {#if fullDocument && fullBody}
-        <div>
-          <TipTapRenderer document={fullDocument} />
-        </div>
-      {/if}
-    </PostLayout>
+      <PostBody post={postFragment.data} />
+    </div>
   </div>
 </article>

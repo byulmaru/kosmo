@@ -3,7 +3,6 @@
   import { page } from '$app/state';
   import { createQuery } from '@mearie/svelte';
   import { graphql } from '$mearie';
-  import PostBody from '$lib/components/PostBody.svelte';
   import PostLayout from '$lib/components/PostLayout.svelte';
   import TextSkeleton from '$lib/components/TextSkeleton.svelte';
 
@@ -30,9 +29,8 @@
             profile {
               id
               handle
-              ...PostLayout_profile
             }
-            ...PostBody_post
+            ...PostLayout_post
           }
         }
       }
@@ -130,9 +128,7 @@
     </div>
   {:else}
     <article class="px-4 py-4">
-      <PostLayout profile={post.profile} href={`/@${post.profile.handle}`}>
-        <PostBody {post} />
-      </PostLayout>
+      <PostLayout {post} />
     </article>
   {/if}
 </section>

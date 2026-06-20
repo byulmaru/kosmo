@@ -50,6 +50,7 @@
   const profileFragment = createFragment(
     graphql(`
       fragment ProfileNameBlock_profile on Profile {
+        id
         displayName
         handle
       }
