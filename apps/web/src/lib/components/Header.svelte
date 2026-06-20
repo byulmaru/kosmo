@@ -1,6 +1,6 @@
 <script lang="ts">
   import Button from './Button.svelte';
-  import SearchBar from './SearchBar.svelte';
+  import SearchBar from './Search/SearchBar.svelte';
 
   type HeaderVariant =
     | 'default'
@@ -39,7 +39,7 @@
     <button class="grid size-8 place-items-center" type="button" aria-label="메뉴">
       <span class="text-xl leading-none">☰</span>
     </button>
-    <SearchBar query="어떤 걸 찾아볼까요?" class="h-8 flex-1 border-0 px-0 [&>div]:h-8" />
+    <SearchBar placeholder="어떤 걸 찾아볼까요?" class="h-8 flex-1 border-0 px-0 [&>div]:h-8" />
     <button class="grid size-8 place-items-center" type="button" aria-label="설정">
       <span class="text-xl leading-none">⚙</span>
     </button>
