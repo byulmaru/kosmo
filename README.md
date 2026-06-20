@@ -19,10 +19,10 @@ Use `pnpm db:test:reset` to recreate the container with an empty data directory,
 
 ## Web E2E
 
-Run the full web E2E suite with:
+Run the web E2E command with:
 
 ```sh
 pnpm test:e2e
 ```
 
-This installs the Playwright Chromium headless shell if needed, recreates the test Postgres container, pushes the Drizzle schema, then starts the API server, web preview server, and local OIDC mock for Playwright. Set `PLAYWRIGHT_BROWSER_CHANNEL` only when you intentionally want to run against another local browser channel such as `chrome`.
+This installs Playwright Chromium if needed, recreates the test Postgres container, pushes the Drizzle schema, then runs any Playwright specs under `apps/web/e2e`. The Playwright config manages the API server, web preview server, and local OIDC mock when browser specs are present. Set `PLAYWRIGHT_BROWSER_CHANNEL` only when you intentionally want to run against another local browser channel such as `chrome`.
