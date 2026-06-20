@@ -15,10 +15,10 @@
 
   // 게시글 목록 항목(Figma PostCard 67:206). 목록 표현(시간은 헤더 우측 상대시간,
   // 카드 전체가 상세로 이동)은 이 컴포넌트가 자체 소유한다. 본문은 PostBody로 위임한다.
-  // 카드 전체는 overlay 링크로 상세로 이동하고, 아바타·이름의 프로필 링크는
-  // pointer-events-auto로 overlay보다 우선한다.
-  // TODO(PROD-174): feed 작성 시각 소유·레이아웃을 PostLayout처럼 정식화하고
-  //   PostLayout과 거터·헤더 grid 중복을 통합한다.
+  // 카드 전체는 overlay 링크로 상세로 이동한다(아바타·이름은 현재 링크가 아니다).
+  // TODO(PROD-174): feed 작성 시각 소유·레이아웃을 PostLayout처럼 정식화하고,
+  //   PostLayout과 거터·헤더 grid 중복 및 overlay·pointer-events 클릭 모델을 재설계한다
+  //   (아바타·이름 → 프로필 링크 분기 포함).
   type Props = HTMLAttributes<HTMLElement> & {
     post: PostListItem_post$key;
   };
@@ -48,7 +48,6 @@
     formatTimelineTimestamp(Temporal.Instant.from(postFragment.data.createdAt as string)),
   );
   const detailHref = $derived(`/@${postFragment.data.profile.handle}/${postFragment.data.id}`);
-  const profileHref = $derived(`/@${postFragment.data.profile.handle}`);
   const initials = $derived(
     getProfileInitial(postFragment.data.profile.displayName, postFragment.data.profile.handle),
   );
@@ -65,20 +64,16 @@
     <span class="sr-only">@{postFragment.data.profile.handle}의 게시글 상세 보기</span>
   </a>
 
-  <!-- 카드 본문은 overlay 링크 위에 있으나 클릭은 overlay(상세)로 통과시키고,
-       아바타·이름 프로필 링크만 pointer-events-auto로 받는다. -->
+  <!-- 카드 본문은 overlay 링크 위에 있으나 pointer-events-none으로 클릭을 overlay(상세)로
+       통과시킨다. 아바타·이름 → 프로필 링크 분기는 PROD-174에서 다룬다. -->
   <div class="pointer-events-none relative z-10 flex items-start gap-3">
-    <a class="pointer-events-auto shrink-0" href={profileHref}>
+    <div class="shrink-0">
       <Avatar size="lg" {initials} />
-    </a>
+    </div>
 
     <div class="flex min-w-0 flex-1 flex-col gap-1">
       <div class="flex items-start justify-between gap-2">
-        <ProfileNameBlock
-          class="pointer-events-auto"
-          href={profileHref}
-          profile={postFragment.data.profile}
-        />
+        <ProfileNameBlock profile={postFragment.data.profile} />
         <time
           class="text-text-secondary shrink-0 text-sm"
           datetime={postFragment.data.createdAt as string}
