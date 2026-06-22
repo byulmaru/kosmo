@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from '@playwright/test';
 
 const host = '127.0.0.1';
@@ -5,7 +6,11 @@ const webPort = 4173;
 const apiPort = 3001;
 const oidcPort = 4300;
 
-const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+const defaultDatabaseUrl = 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+const databaseUrl =
+  process.env.TEST_DATABASE_URL ??
+  readEnvFileValue(new URL('../../.env.test', import.meta.url), 'DATABASE_URL') ??
+  defaultDatabaseUrl;
 const apiOrigin = `http://${host}:${apiPort}`;
 const webOrigin = `http://${host}:${webPort}`;
 const oidcOrigin = `http://${host}:${oidcPort}`;
@@ -14,6 +19,30 @@ const oidcClientSecret = process.env.OIDC_CLIENT_SECRET ?? 'kosmo-e2e-secret';
 const browserChannel = process.env.PLAYWRIGHT_BROWSER_CHANNEL;
 
 process.env.DATABASE_URL = databaseUrl;
+
+function readEnvFileValue(path: URL, key: string) {
+  try {
+    for (const line of readFileSync(path, 'utf8').split(/\r?\n/)) {
+      const trimmed = line.trim();
+
+      if (!trimmed || trimmed.startsWith('#')) {
+        continue;
+      }
+
+      const separator = trimmed.indexOf('=');
+
+      if (separator === -1 || trimmed.slice(0, separator) !== key) {
+        continue;
+      }
+
+      return trimmed.slice(separator + 1);
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+}
 
 export default defineConfig({
   globalSetup: './e2e/global-setup.ts',

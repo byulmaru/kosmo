@@ -25,4 +25,4 @@ Run the web E2E command with:
 pnpm test:e2e
 ```
 
-This installs Playwright Chromium if needed, recreates the test Postgres container, pushes the Drizzle schema, then runs any Playwright specs under `apps/web/e2e`. The Playwright config manages the API server, web preview server, and local OIDC mock when browser specs are present. Set `PLAYWRIGHT_BROWSER_CHANNEL` only when you intentionally want to run against another local browser channel such as `chrome`.
+This installs Playwright Chromium if needed, recreates the test Postgres container, pushes the Drizzle schema, then runs any Playwright specs under `apps/web/e2e`. The Playwright config manages the API server, web preview server, and local OIDC mock when browser specs are present. It intentionally ignores ambient `DATABASE_URL` values and uses `.env.test` instead; set `TEST_DATABASE_URL` only when you intentionally want to override the E2E database. Set `PLAYWRIGHT_BROWSER_CHANNEL` only when you intentionally want to run against another local browser channel such as `chrome`.
