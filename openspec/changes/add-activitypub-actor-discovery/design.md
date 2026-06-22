@@ -28,17 +28,17 @@ Fedify는 actor dispatcher와 WebFinger 처리를 federation instance 안에 묶
 - **Fedify 연결은 `apps/web` hook, 도메인 로직은 `packages/fedify`가 소유한다.** SvelteKit 요청 중 federation 관련 요청을 `fedifyHook`이 먼저 처리하고, 일반 웹/GraphQL proxy 요청은 기존 라우트로 흘린다. actor assembly, WebFinger handle mapping, key dispatch는 package로 분리해 Svelte 컴포넌트나 route handler에 ActivityPub 세부를 넣지 않는다.
 - **actor URI는 `/ap/actor/{profile.id}`와 raw DB UUID를 쓴다.** `/@{handle}`를 actor URI로 겸용하면 HTML route와 content negotiation이 강하게 결합되고, handle rename 가능성을 닫는다. Relay global ID는 GraphQL API 표현이므로 ActivityPub URI에 쓰지 않는다.
 - **WebFinger handle과 actor identifier를 분리한다.** WebFinger username은 local `profile.handle`이고, actor identifier는 `profile.id`다. Fedify handle mapper는 `acct:{handle}@{domain}`을 local active profile UUID로 매핑한다.
-- **local instance row가 canonical origin/domain의 source of truth다.** 요청 Host를 따라 actor URI를 만들면 동일 프로필의 federated identity가 흔들린다. `PUBLIC_ORIGIN`은 local instance row를 만들거나 검증하는 입력으로만 사용한다.
+- **local instance row가 canonical origin/domain의 source of truth다.** `localOrigin`은 local instance의 `canonical_origin`, `localDomain`은 그 origin에서 정규화한 domain이다. 요청 URL origin, Host header, `PUBLIC_API_ORIGIN`을 따라 actor URI를 만들면 동일 프로필의 federated identity가 흔들린다. `PUBLIC_ORIGIN`은 local instance row를 만들거나 검증하는 입력으로만 사용하고, local row가 없거나 `PUBLIC_ORIGIN`과 불일치하면 설정 오류로 실패한다.
 - **profile은 local/remote 공통 social identity로 확장한다.** remote ActivityPub media 설계에서 remote actor/profile identity를 `Profile`이 표현한다는 기존 방향과 맞춘다. handle uniqueness는 전역이 아니라 `(instance_id, normalized_handle)`로 제한한다.
-- **actor key는 lazy 생성한다.** 기존 local profile에 대한 migration-time backfill은 배포 시간을 늘리고 실패 복구 경로가 복잡하다. actor document 또는 key dispatcher가 local actor key를 필요로 할 때 transaction 안에서 RSA-PKCS#1-v1.5와 Ed25519 key pair를 idempotent하게 생성한다.
+- **actor key는 lazy 생성한다.** 기존 local profile에 대한 migration-time backfill은 배포 시간을 늘리고 실패 복구 경로가 복잡하다. actor document 또는 key dispatcher가 local actor key를 필요로 할 때 ActivityPub actor row를 보장한 뒤 transaction 안에서 RSA-PKCS#1-v1.5와 Ed25519 key pair를 idempotent하게 생성한다.
 - **actor document는 collection/inbox/outbox를 광고하지 않는다.** 이번 cycle은 discovery와 read-only actor document까지다. 미구현 endpoint URI를 먼저 광고하면 원격 서버가 Follow/Delivery를 시도할 수 있으므로, 구현된 기능만 문서에 노출한다.
 - **`Profile.relativeHandle`은 local 기준 표시 문자열이다.** local profile은 `@handle`, remote profile은 `@handle@domain`으로 반환한다. UI는 bare handle과 domain을 조합하지 않고 이 필드를 표시 용도로 사용한다.
 
 ## Risks / Trade-offs
 
-- **Lazy key 생성 경합** → actor key table은 profile/key type 단위 unique constraint를 두고, 생성은 transaction 또는 upsert로 idempotent하게 처리한다.
+- **Lazy key 생성 경합** → actor key table은 ActivityPub actor/key type 단위 unique constraint를 두고, 생성은 transaction 또는 upsert로 idempotent하게 처리한다.
 - **기존 profile unique 변경 migration 위험** → local instance row를 먼저 보장한 뒤 기존 profile에 `instance_id`를 채우고, 새 composite unique를 만든 다음 기존 전역 unique를 제거한다.
-- **remote profile을 Node-only로 노출하면 UX가 불완전함** → 이번 scope에서는 저장 경계만 확정한다. remote 검색과 UI 연결은 remote fetch 정책이 정해진 뒤 별도 change에서 다룬다.
+- **remote profile 조회 UX가 제한적임** → 이번 scope에서는 저장된 remote profile을 GraphQL `Profile` 읽기 대상으로 노출하되, remote 검색과 UI 연결은 remote fetch 정책이 정해진 뒤 별도 change에서 다룬다.
 - **actor document 최소 필드가 일부 fediverse 구현에 부족할 수 있음** → discovery/read 가능성만 이번 완료 기준으로 삼고, collection/inbox/outbox는 구현 전까지 광고하지 않는다.
 - **canonical origin 불일치** → 부트스트랩 시 `PUBLIC_ORIGIN`과 local instance row를 비교해 불일치를 빠르게 드러내고, request Host를 source of truth로 쓰지 않는다.
 

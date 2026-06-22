@@ -14,6 +14,7 @@
 
 - **WHEN** 요청이 ActivityPub 또는 WebFinger discovery 요청이 아니다
 - **THEN** 시스템은 기존 SvelteKit 라우트와 `/graphql` proxy 동작을 유지한다
+- **AND** `/health`, `/graphql`, `/login`, `/@{handle}` 요청은 ActivityPub handler로 가로채지 않는다
 
 ### Requirement: Local actor WebFinger discovery
 
@@ -21,20 +22,28 @@
 
 #### Scenario: Discover local active profile
 
-- **WHEN** 외부 서버가 local instance domain에 `acct:{handle}@{localDomain}` WebFinger resource를 조회한다
+- **WHEN** 외부 서버가 `GET /.well-known/webfinger?resource=acct:{handle}@{localDomain}`를 요청한다
 - **THEN** 시스템은 local instance에 속하고 정규화 handle이 일치하는 `ACTIVE` profile을 찾는다
-- **AND** WebFinger JRD의 `self` link는 `application/activity+json` type과 `https://{localOrigin}/ap/actor/{profile.id}` href를 포함한다
+- **AND** 시스템은 HTTP 200과 `application/jrd+json` content type으로 응답한다
+- **AND** WebFinger JRD의 `subject`는 canonical `acct:{handle}@{localDomain}`이다
+- **AND** `rel = self` link는 `application/activity+json` type과 `https://{localOrigin}/ap/actor/{profile.id}` href를 포함한다
 - **AND** profile-page link는 기존 웹 프로필 URL `https://{localOrigin}/@{handle}`을 가리킨다
+
+#### Scenario: Invalid WebFinger resource
+
+- **WHEN** WebFinger resource가 없거나 `acct:{handle}@{localDomain}` 형식이 아니거나 domain이 local instance domain과 다르다
+- **THEN** 시스템은 HTTP 404로 응답한다
 
 #### Scenario: Missing local profile WebFinger
 
 - **WHEN** WebFinger resource의 handle과 일치하는 local active profile이 없다
-- **THEN** 시스템은 actor를 발견할 수 없음으로 응답한다
+- **THEN** 시스템은 HTTP 404로 응답한다
 
 #### Scenario: Ignore remote profile WebFinger on local domain
 
 - **WHEN** 저장된 remote profile의 handle이 local domain WebFinger resource와 일치한다
 - **THEN** 시스템은 remote profile을 local WebFinger 결과로 반환하지 않는다
+- **AND** 시스템은 HTTP 404로 응답한다
 
 ### Requirement: Local actor document
 
@@ -42,22 +51,29 @@
 
 #### Scenario: Read local actor document
 
-- **WHEN** 외부 서버가 `https://{localOrigin}/ap/actor/{profile.id}`를 ActivityPub JSON으로 요청한다
+- **WHEN** 외부 서버가 `GET /ap/actor/{profile.id}`를 ActivityPub JSON으로 요청한다
 - **THEN** 시스템은 해당 ID의 local active profile을 조회한다
+- **AND** 시스템은 HTTP 200과 `application/activity+json` content type으로 응답한다
 - **AND** `Person` document는 `id`, `preferredUsername`, `name`, `summary`, `url`, `published`, `publicKey`, `assertionMethods`를 포함한다
-- **AND** `id`는 요청된 actor URI와 같다
+- **AND** `id`는 canonical local actor URI `https://{localOrigin}/ap/actor/{profile.id}`와 같다
 - **AND** `preferredUsername`은 local profile handle이다
 - **AND** `url`은 기존 웹 프로필 URL `https://{localOrigin}/@{handle}`이다
 
 #### Scenario: Missing local actor document
 
 - **WHEN** actor URI의 UUID와 일치하는 local active profile이 없다
-- **THEN** 시스템은 actor document를 반환하지 않는다
+- **THEN** 시스템은 HTTP 404로 응답한다
 
 #### Scenario: Do not advertise unsupported ActivityPub endpoints
 
 - **WHEN** 시스템이 local actor document를 반환한다
 - **THEN** document는 `inbox`, `outbox`, `followers`, `following`, `endpoints.sharedInbox` 값을 포함하지 않는다
+
+#### Scenario: Unsupported ActivityPub endpoint request
+
+- **WHEN** 외부 서버가 `/inbox`, `/outbox`, `/ap/actor/{profile.id}/followers`, `/ap/actor/{profile.id}/following` 같은 미지원 federation endpoint를 직접 요청한다
+- **THEN** 시스템은 HTTP 404로 응답한다
+- **AND** 해당 요청을 `/graphql` proxy 또는 API 서버로 전달하지 않는다
 
 ### Requirement: Local actor key dispatch
 
@@ -66,8 +82,9 @@
 #### Scenario: Lazily create missing local actor keys
 
 - **WHEN** local active profile의 actor key가 필요하지만 저장된 key pair가 없다
-- **THEN** 시스템은 해당 profile에 대한 RSA-PKCS#1-v1.5 key pair와 Ed25519 key pair를 생성해 저장한다
-- **AND** 같은 profile과 key type에 대해 중복 key row를 만들지 않는다
+- **THEN** 시스템은 해당 profile의 ActivityPub actor metadata row를 보장한다
+- **AND** 시스템은 해당 ActivityPub actor에 대한 RSA-PKCS#1-v1.5 key pair와 Ed25519 key pair를 생성해 저장한다
+- **AND** 같은 ActivityPub actor와 key type에 대해 중복 key row를 만들지 않는다
 
 #### Scenario: Reuse existing local actor keys
 
@@ -97,4 +114,5 @@
 #### Scenario: ActivityPub collections are out of scope
 
 - **WHEN** 외부 서버가 followers 또는 following collection을 요청한다
-- **THEN** 시스템은 이번 capability에서 collection endpoint 동작을 제공하지 않는다
+- **THEN** 시스템은 HTTP 404로 응답한다
+- **AND** 시스템은 이번 capability에서 collection endpoint 동작을 제공하지 않는다

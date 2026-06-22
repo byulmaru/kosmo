@@ -45,14 +45,14 @@ API는 프로필 표시용 handle 문자열을 local instance 기준 `relativeHa
 
 ### Requirement: Profile object visibility
 
-API는 활성 프로필만 GraphQL profile object로 노출해야 하며, 저장된 remote profile은 Node ID 직접 조회로만 노출해야 한다(MUST).
+API는 활성 local profile과 저장된 활성 remote profile을 GraphQL profile object로 조회할 수 있게 해야 한다(MUST).
 
 #### Scenario: Access active local profile object
 
 - **WHEN** local profile 상태가 `ACTIVE`이다
 - **THEN** 시스템은 프로필 object 접근을 허용한다
 - **AND** handle, relativeHandle, displayName, nullable bio, followPolicy, createdAt 필드를 노출한다
-- **AND** Node ID 기반 profile load도 활성 local profile만 반환한다
+- **AND** Node ID 기반 profile load는 활성 local profile을 반환할 수 있다
 
 #### Scenario: Access active remote profile object by Node ID
 
@@ -60,10 +60,10 @@ API는 활성 프로필만 GraphQL profile object로 노출해야 하며, 저장
 - **THEN** 시스템은 프로필 object 접근을 허용한다
 - **AND** handle, relativeHandle, displayName, nullable bio, followPolicy, createdAt 필드를 노출한다
 
-#### Scenario: Hide remote profile from local handle query
+#### Scenario: Existing local profile entry points are not expanded
 
 - **WHEN** remote profile이 저장되어 있고 상태가 `ACTIVE`이다
-- **THEN** 시스템은 기존 `profileByHandle(handle:)`, account profile list, local profile 검색 결과로 remote profile을 반환하지 않는다
+- **THEN** 이번 capability는 기존 `profileByHandle(handle:)`, account profile list, local profile 검색 결과에 remote profile을 포함하도록 확장하지 않는다
 
 #### Scenario: Access inactive profile object
 
