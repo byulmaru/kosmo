@@ -17,6 +17,6 @@
 
 - [x] 4.1 `pnpm --filter @kosmo/web check` 통과(mearie generate + 라우트 타입 재생성 포함).
 - [x] 4.2 `pnpm --filter @kosmo/web build` 성공.
-- [ ] 4.3 동작 확인: 비로그인 `/` → Welcome(SSR 즉시), `시작하기` → `/login`; 로그인(유효 세션) `/` → `/home`; **무효·만료 세션 쿠키 보유 시 `/` → Welcome 유지(잘못 리다이렉트 안 함)**.
-- [ ] 4.4 `apps/web/src`에 부정확한 잔여 참조 없음 grep 확인.
+- [x] 4.3 동작 확인: 비로그인 `/` → Welcome(SSR 즉시), `시작하기` → `/login`; 로그인(유효 세션) `/` → `/home`; **무효·만료 세션 쿠키 보유 시 `/` → Welcome 유지(잘못 리다이렉트 안 함)**.
+- [x] 4.4 `apps/web/src`에 부정확한 잔여 참조 없음 grep 확인.
 - [x] 4.5 `pnpm exec openspec validate add-root-onboarding-screen --strict` 통과.

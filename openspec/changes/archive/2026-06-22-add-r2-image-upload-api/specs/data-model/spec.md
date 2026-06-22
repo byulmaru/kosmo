@@ -10,6 +10,16 @@
 - **THEN** 시스템은 해당 테이블의 `TableDiscriminator` 값을 포함한 UUID 문자열을 기본 키로 생성한다
 - **AND** 테이블 식별자는 12비트 범위 안에 있어야 한다
 
+### Requirement: 열거형 상태 값
+
+시스템은 도메인 상태와 정책 값을 제한된 enum 값으로 저장해야 한다(MUST).
+
+#### Scenario: enum 값 사용
+
+- **WHEN** 계정, 프로필, 세션, OAuth token, 애플리케이션, 게시물, 팔로우 관계, 계정-프로필 역할, 미디어가 저장된다
+- **THEN** 시스템은 core enum에 정의된 값만 저장해야 한다
+- **AND** 지원 값은 `AccountState`, `ProfileState`, `SessionState`, `OAuthTokenState`, `ApplicationState`, `ApplicationType`, `PostState`, `PostVisibility`, `ProfileFollowPolicy`, `ProfileFollowState`, `AccountProfileRole`, `MediaSource`에 정의된 값으로 제한된다
+
 ## ADDED Requirements
 
 ### Requirement: 파일과 미디어 메타데이터 저장

@@ -19,6 +19,6 @@
 
 ## 5. 검증
 
-- [ ] 5.1 `pnpm --filter @kosmo/web check`·`build` 통과.
-- [ ] 5.2 빌드 산출물에 woff2가 번들되고(자체 origin) UI=SUIT·본문=Pretendard 렌더 확인.
-- [ ] 5.3 `pnpm exec openspec validate add-app-typography-fonts --strict` 통과.
+- [x] 5.1 `pnpm --filter @kosmo/web check`·`build` 통과.
+- [x] 5.2 빌드 산출물에 woff2가 번들되고(자체 origin) UI=SUIT·본문=Pretendard 렌더 확인.
+- [x] 5.3 `pnpm exec openspec validate add-app-typography-fonts --strict` 통과.
