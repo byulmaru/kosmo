@@ -81,9 +81,30 @@
 - **WHEN** 사용자가 인기·최신·미디어 탭을 활성으로 본다
 - **THEN** 시스템은 해당 탭 콘텐츠 대신 준비 중 안내를 표시한다
 
+### Requirement: People tab exact handle search results
+
+검색 후 사람 탭은 제출된 검색어(`q`)를 정확 handle로 해석해 기존 `profileByHandle` 조회 결과를 표시해야 한다(MUST). 사람 탭이 아니거나 제출된 검색어가 비어 있으면 handle 조회를 실행하지 않아야 한다(MUST NOT). 검색 결과는 실데이터와 팔로우 액션이 연결된 `ProfileListItem`으로 표시해야 한다(MUST). 검색 결과 항목은 해당 프로필 페이지(`/@{handle}`)로 이동할 수 있어야 한다(MUST). prefix, display name, fediverse 검색은 이 범위에서 제공하지 않는다(MUST NOT).
+
+#### Scenario: Existing handle result
+
+- **WHEN** 사용자가 존재하는 handle을 사람 탭에서 검색한다
+- **THEN** 시스템은 `profileByHandle` 결과를 `ProfileListItem`으로 표시한다
+- **AND** 결과 항목의 프로필 정보 영역은 `/@{handle}` 프로필 페이지로 이동한다
+- **AND** 결과 항목의 팔로우 액션은 기존 `ProfileListItem`/`FollowButton` 정책에 따라 표시되거나 숨겨진다
+
+#### Scenario: Missing handle result
+
+- **WHEN** 사용자가 존재하지 않는 handle을 사람 탭에서 검색한다
+- **THEN** 시스템은 결과 없음 안내를 표시한다
+
+#### Scenario: Skip search without people query
+
+- **WHEN** 사람 탭이 아니거나 제출된 검색어가 비어 있다
+- **THEN** 시스템은 `profileByHandle` 조회를 실행하지 않는다
+
 ### Requirement: People tab search states
 
-검색 후 사람 탭은 로딩, 오류, 결과 없음(empty) 상태를 표시할 수 있어야 한다(MUST). 실제 검색 query 연결 전에도 각 상태 UI를 확인할 수 있어야 한다(MUST). 로딩 스켈레톤은 프로필 항목 형태로 표시하고 스크린리더용 로딩 안내를 제공해야 하며, 색·반경은 시맨틱 디자인 토큰으로 라이트/다크에 대응해야 한다(MUST). 결과 목록 렌더와 프로필 이동은 본 요구사항 범위 밖이다.
+검색 후 사람 탭은 로딩, 오류, 결과 없음(empty) 상태를 표시할 수 있어야 한다(MUST). 로딩 스켈레톤은 프로필 항목 형태로 표시하고 스크린리더용 로딩 안내를 제공해야 하며, 색·반경은 시맨틱 디자인 토큰으로 라이트/다크에 대응해야 한다(MUST). 기존 결과 데이터가 있으면 로딩 또는 오류 중에도 기존 결과를 유지해야 한다(SHOULD).
 
 #### Scenario: Loading state
 

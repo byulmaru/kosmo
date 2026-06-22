@@ -3,6 +3,8 @@
   import { onMount, untrack } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
+  import { graphql } from '$mearie';
+  import { createQuery } from '@mearie/svelte';
   import RecentSearches from '$lib/components/Search/RecentSearches.svelte';
   import SearchBar from '$lib/components/Search/SearchBar.svelte';
   import SearchResults from '$lib/components/Search/SearchResults.svelte';
@@ -18,8 +20,33 @@
   // 지금은 q를 정확 handle로만 해석하고, 사람 탭만 동작한다.
   // SearchTab 정의(slug)는 @kosmo/core/search에 두고, 한글 라벨은 SEARCH_TAB_LABELS로 표시한다.
   const queryParam = $derived(page.url.searchParams.get('q') ?? '');
+  const trimmedQuery = $derived(queryParam.trim());
   // tab slug를 SearchTab로 해석한다. 없거나 알 수 없으면 사람(people)이 기본 활성이다.
   const activeTab = $derived(parseSearchTab(page.url.searchParams.get('tab')));
+  const shouldSearchPeople = $derived(activeTab === SearchTab.PEOPLE && trimmedQuery.length > 0);
+
+  const peopleQuery = createQuery(
+    graphql(`
+      query SearchPeopleByHandlePageQuery($handle: String!) {
+        currentSession {
+          id
+          selectedProfile {
+            id
+          }
+        }
+        profileByHandle(handle: $handle) {
+          id
+          handle
+          ...ProfileListItem_profile
+        }
+      }
+    `),
+    () => ({ handle: trimmedQuery }),
+    () => ({ skip: !shouldSearchPeople }),
+  );
+  const searchedProfile = $derived(peopleQuery.data?.profileByHandle ?? null);
+  const viewerProfileId = $derived(peopleQuery.data?.currentSession?.selectedProfile?.id ?? null);
+  const searchedProfileHref = $derived(searchedProfile ? `/@${searchedProfile.handle}` : null);
 
   // 단계 구분(검색바 포커스 기준):
   // - input  : 검색바 포커스 = 입력 중 → 최근 검색 노출
@@ -118,9 +145,16 @@
   {#if phase === 'results'}
     <SearchTabs active={activeTab} onselect={handleSelectTab} class="w-full" />
     {#if activeTab === SearchTab.PEOPLE}
-      <!-- TODO(PROD-154): SearchResults에 profileByHandle createQuery를 연결해
-           loading/error/결과 목록(ProfileListItem)·결과 없음을 query 상태로 렌더한다. -->
-      <SearchResults query={queryParam} class="w-full" />
+      <SearchResults
+        query={queryParam}
+        profile={searchedProfile}
+        profileHref={searchedProfileHref}
+        {viewerProfileId}
+        loading={shouldSearchPeople && peopleQuery.loading}
+        error={shouldSearchPeople && Boolean(peopleQuery.error)}
+        onRetry={peopleQuery.refetch}
+        class="w-full"
+      />
     {:else}
       <div class="px-4 py-12 text-center">
         <p class="text-text-primary text-base font-semibold">준비 중인 검색이에요</p>
