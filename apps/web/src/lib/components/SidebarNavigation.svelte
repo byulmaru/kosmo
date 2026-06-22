@@ -345,7 +345,7 @@
   </div>
 {/snippet}
 
-<!-- md~xl 구간 접힌 아이콘 레일. 풀 사이드바와 스크립트/상태를 공유한다. -->
+<!-- md~lg 구간 접힌 아이콘 레일. 풀 사이드바와 스크립트/상태를 공유한다. -->
 {#snippet collapsedRail()}
   <div class="flex h-full w-full flex-col items-center gap-2 px-2 py-4">
     <div class="relative">
@@ -408,7 +408,7 @@
     </nav>
 
     <a
-      class="flex size-11 items-center justify-center rounded-full bg-primary text-text-primary shadow-[1px_1px_2px_rgba(0,0,0,0.25)] transition hover:bg-[#f9dc6d]"
+      class="flex size-11 items-center justify-center rounded-full bg-primary text-text-primary shadow-[1px_1px_2px_rgba(0,0,0,0.25)] transition hover:bg-primary-hover"
       href="/compose"
       title="글쓰기"
       aria-label="글쓰기"
@@ -430,7 +430,7 @@
 
     <div class="mt-auto flex flex-col items-center gap-1">
       <button
-        class="flex size-11 items-center justify-center rounded-lg text-[#404040] transition hover:bg-surface"
+        class="flex size-11 items-center justify-center rounded-lg text-text-secondary transition hover:bg-surface"
         type="button"
         title="로그아웃"
         aria-label="로그아웃"
@@ -660,7 +660,7 @@
         {/each}
         {#if surface === 'drawer'}
           <a
-            class="mt-1 inline-flex h-[45px] w-[264px] items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-base font-bold text-text-primary transition hover:bg-[#f9dc6d]"
+            class="mt-1 inline-flex h-[45px] w-[264px] items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-base font-bold text-text-primary transition hover:bg-primary-hover"
             href="/compose"
             onclick={onNavigate}
           >
