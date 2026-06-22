@@ -3,7 +3,7 @@
 - [ ] 1.1 `packages/fedify` workspace package를 만들고 `@kosmo/core`를 참조하도록 package/tsconfig/export 경계를 구성한다.
 - [ ] 1.2 `pnpm` CLI로 `packages/fedify`에 `@fedify/fedify`와 필요한 vocab/runtime dependency를 추가한다.
 - [ ] 1.3 `pnpm` CLI로 `apps/web`에 `@kosmo/fedify`와 SvelteKit hook adapter에 필요한 `@fedify/sveltekit` dependency를 추가한다.
-- [ ] 1.4 `packages/fedify`가 federation instance, actor dispatcher, WebFinger handle mapper, key pair dispatcher를 export할 수 있는 모듈 구조를 만든다.
+- [ ] 1.4 `packages/fedify`가 federation request 판별, federation instance 또는 hook factory, actor dispatcher, WebFinger handle mapper/JRD 응답 조립, key pair dispatcher를 export할 수 있는 모듈 구조를 만든다.
 
 ## 2. Data Model
 
@@ -33,8 +33,8 @@
 
 ## 5. Web Integration
 
-- [ ] 5.1 `apps/web/src/hooks.server.ts`에서 `@fedify/sveltekit` `fedifyHook`을 연결한다.
-- [ ] 5.2 ActivityPub/WebFinger 요청은 Fedify가 처리하고 기존 `/health`, `/graphql`, `/login`, `/@{handle}` 요청은 기존 동작을 유지하는지 확인한다.
+- [ ] 5.1 `apps/web/src/hooks.server.ts`에서 `packages/fedify`가 제공하는 federation instance 또는 hook factory를 SvelteKit `handle`에 연결하고, web hook 본문에는 ActivityPub parsing/응답 조립 로직을 두지 않는다.
+- [ ] 5.2 ActivityPub/WebFinger 요청은 `packages/fedify`가 처리하고 기존 `/health`, `/graphql`, `/login`, `/@{handle}` 요청은 기존 동작을 유지하는지 확인한다.
 - [ ] 5.3 actor URI와 WebFinger JRD가 canonical local origin을 사용하고 request Host에 의존하지 않는지 확인한다.
 
 ## 6. Verification
