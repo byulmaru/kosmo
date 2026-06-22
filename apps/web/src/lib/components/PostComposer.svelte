@@ -3,9 +3,11 @@
   import { createFragment, createMutation } from '@mearie/svelte';
   import { PostVisibility } from '@kosmo/core/enums';
   import { postBodyMaxLength } from '@kosmo/core/validation';
+  import { getProfileInitial } from '$lib/utils/profile';
+  import Avatar from './Avatar.svelte';
   import Button from './Button.svelte';
   import * as Dropdown from './Dropdown';
-  import PostAuthorProfile from './PostAuthorProfile.svelte';
+  import ProfileNameBlock from './ProfileNameBlock.svelte';
   import PostVisibilityIcon from './PostVisibilityIcon.svelte';
   import TipTapEditor from './TipTapEditor.svelte';
   import type { Editor } from '@tiptap/core';
@@ -52,7 +54,10 @@
   const profileFragment = createFragment(
     graphql(`
       fragment PostComposer_profile on Profile {
-        ...PostAuthorProfile_profile
+        id
+        displayName
+        handle
+        ...ProfileNameBlock_profile
       }
     `),
     () => profile,
@@ -114,8 +119,12 @@
   aria-label="새 게시글 작성"
   onsubmit={handleSubmit}
 >
-  <header class="min-w-0">
-    <PostAuthorProfile class="min-w-0" profile={profileFragment.data} />
+  <header class="flex min-w-0 items-start gap-3">
+    <Avatar
+      size="md"
+      initials={getProfileInitial(profileFragment.data.displayName, profileFragment.data.handle)}
+    />
+    <ProfileNameBlock class="min-w-0 flex-1" profile={profileFragment.data} />
   </header>
 
   <div
