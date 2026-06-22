@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import { graphql } from '$mearie';
   import { createQuery } from '@mearie/svelte';
+  import Splash from '$lib/components/Splash.svelte';
 
   let { children } = $props();
 
@@ -33,4 +34,12 @@
   });
 </script>
 
-{@render children()}
+<!-- 캐시된 세션이 없는 콜드 검증 구간에는 자식·셸·홈 스켈레톤 대신 풀스크린 스플래시를 표시한다.
+     - 유효 세션(캐시 포함)이 잡히면 바로 자식을 렌더한다 — 캐시된 세션 탭 이동에선 스플래시가 뜨지 않는다.
+     - 세션이 null로 확정되면 위 $effect가 /로 보내며, 그동안 스플래시가 셸을 덮는다.
+     - 조회 오류는 fail-open으로 자식을 렌더해 일시 오류 사용자를 막지 않는다. -->
+{#if query.data?.currentSession || query.error}
+  {@render children()}
+{:else}
+  <Splash />
+{/if}
