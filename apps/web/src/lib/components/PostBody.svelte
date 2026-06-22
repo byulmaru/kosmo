@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { tipTapDocumentSchema } from '@kosmo/core/tiptap';
   import type { TipTapDocument } from '@kosmo/core/tiptap';
   import { graphql } from '$mearie';
   import type { PostBody_post$key } from '$mearie';
@@ -38,8 +37,9 @@
       return null;
     }
 
-    const parsedDocument = tipTapDocumentSchema.safeParse(content.bodyJson);
-    return parsedDocument.success ? parsedDocument.data : null;
+    // 서버가 write 시점에 정규화·검증한 문서이므로 read 시점에 재검증하지 않는다.
+    // 스키마 버전 불일치로 검증이 실패해도 본문이 통째로 사라지지 않도록 그대로 전달한다.
+    return content.bodyJson as TipTapDocument;
   });
 </script>
 
