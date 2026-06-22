@@ -1,0 +1,36 @@
+## Why
+
+kosmo는 로컬 프로필, 게시글, 팔로우의 SNS 뼈대가 갖춰졌지만 ActivityPub에서 로컬 프로필을 어떤 actor로 발견하고 읽을 수 있는지에 대한 계약이 없다. 이번 변경은 원격 follow나 delivery까지 확장하지 않고, 외부 서버가 kosmo 로컬 프로필을 WebFinger로 발견하고 actor document를 역참조할 수 있는 최소 federation 경계를 먼저 확정한다.
+
+## What Changes
+
+- `apps/web` SvelteKit 서버에 Fedify hook을 연결해 ActivityPub/WebFinger HTTP surface를 웹 origin에서 제공하는 방향을 스펙화한다.
+- 공통 Fedify/ActivityPub 조립 로직은 새 workspace package인 `packages/fedify`가 소유한다.
+- WebFinger `acct:{handle}@{localDomain}` 조회가 local active profile을 actor URI `https://{origin}/ap/actor/{profile.id}`로 연결하도록 정의한다.
+- actor document는 `Person`의 `id`, `preferredUsername`, `name`, `summary`, `url`, `published`, `publicKey`, `assertionMethods`만 보장한다.
+- `inbox`, `outbox`, `followers`, `following` URI와 endpoint 동작은 이번 범위에서 광고하지 않는다.
+- `instance`를 local/remote 공통 테이블로 추가하고, local instance row의 canonical origin/domain을 federation identity의 source of truth로 둔다.
+- `profile`을 local/remote 공통 social identity로 확장하고, handle uniqueness를 instance 범위로 변경한다.
+- ActivityPub actor metadata와 actor key 저장 경계를 추가한다. local actor key는 RSA-PKCS#1-v1.5와 Ed25519 key pair를 lazy 생성한다.
+- GraphQL `Profile.relativeHandle`을 추가해 local profile은 `@handle`, remote profile은 `@handle@domain`으로 표시 문자열을 서버에서 완성한다.
+- 저장된 remote profile은 GraphQL Node ID 직접 조회만 허용하고, 기존 handle 조회, 검색, 목록, UI 연결은 local profile 중심으로 유지한다.
+
+## Capabilities
+
+### New Capabilities
+
+- `activitypub-actor-discovery`: Fedify 기반 WebFinger, actor document, actor key dispatch, SvelteKit hook 연결, 이번 cycle의 federation 포함/제외 범위를 다룬다.
+
+### Modified Capabilities
+
+- `data-model`: `instance`, ActivityPub actor metadata/key 저장 경계, profile의 instance 소속과 instance-scoped handle uniqueness를 추가한다.
+- `profile`: `Profile.relativeHandle`과 remote profile의 Node-only 조회 계약을 추가하고, 기존 handle 기반 조회는 local profile 중심으로 명확히 한다.
+
+## Impact
+
+- `apps/web`: SvelteKit `hooks.server.ts`에서 Fedify hook을 연결하고, federation 요청을 웹 origin에서 처리한다.
+- `packages/fedify`: Fedify federation instance, actor dispatcher, WebFinger handle mapping, key pair dispatch, ActivityPub object assembly를 소유한다.
+- `packages/core/db`: `instance`와 ActivityPub actor 관련 테이블, `profile.instance_id`, 관련 unique/index/relation, table discriminator가 추가된다.
+- `apps/api`: GraphQL `Profile.relativeHandle` 필드와 remote profile Node 조회 정책을 반영한다.
+- dependency: `@fedify/fedify`, `@fedify/sveltekit`, 필요한 vocab/runtime 패키지를 workspace에 추가한다.
+- 환경/운영: local instance canonical origin/domain은 DB row가 source of truth이며, `PUBLIC_ORIGIN`은 초기 local instance bootstrap과 검증 입력으로 사용한다.
