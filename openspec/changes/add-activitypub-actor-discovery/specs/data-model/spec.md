@@ -98,7 +98,7 @@
 #### Scenario: 로컬 프로필 저장
 
 - **WHEN** local profile이 생성된다
-- **THEN** 시스템은 local instance ID를 profile의 소속 instance로 저장한다
+- **THEN** 시스템은 configured local instance ID를 profile의 소속 instance로 저장한다
 - **AND** local profile의 ActivityPub actor URI는 profile ID 기반 `/ap/actor/{profile.id}`로 파생될 수 있다
 
 #### Scenario: 리모트 프로필 저장
