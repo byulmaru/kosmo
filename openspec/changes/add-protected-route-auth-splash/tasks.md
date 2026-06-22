@@ -7,6 +7,7 @@
 
 - [x] 2.1 `(tabs)/(protected)/+layout.svelte`에서 `{@render children()}`를 `query.data?.currentSession || query.error`일 때만 렌더하고, 그 외에는 `Splash`를 표시하도록 게이팅한다
 - [x] 2.2 기존 `$effect` 리다이렉트(로딩·에러 보류, `null`이면 `/`로 이동) 동작은 유지한다
+- [x] 2.3 스플래시가 셸을 덮는 동안 `(tabs)` 셸(사이드바·헤더·하단탭·우측레일·드로어)을 `inert` 처리해 키보드·스크린리더 포커스가 덮인 셸에 닿지 않게 한다(컨텍스트 신호로 `(protected)`→`(tabs)` 연결)
 
 ## 3. 검증
 
