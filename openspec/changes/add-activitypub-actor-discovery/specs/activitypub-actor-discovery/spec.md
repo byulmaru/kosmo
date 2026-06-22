@@ -23,15 +23,15 @@
 #### Scenario: Discover local active profile
 
 - **WHEN** 외부 서버가 `GET /.well-known/webfinger?resource=acct:{handle}@{localDomain}`를 요청한다
-- **THEN** 시스템은 local instance에 속하고 정규화 handle이 일치하는 `ACTIVE` profile을 찾는다
+- **THEN** 시스템은 configured local instance에 속하고 정규화 handle이 일치하는 `ACTIVE` profile을 찾는다
 - **AND** 시스템은 HTTP 200과 `application/jrd+json` content type으로 응답한다
 - **AND** WebFinger JRD의 `subject`는 canonical `acct:{handle}@{localDomain}`이다
-- **AND** `rel = self` link는 `application/activity+json` type과 `https://{localOrigin}/ap/actor/{profile.id}` href를 포함한다
-- **AND** profile-page link는 기존 웹 프로필 URL `https://{localOrigin}/@{handle}`을 가리킨다
+- **AND** `rel = self` link는 `application/activity+json` type과 `{localOrigin}/ap/actor/{profile.id}` href를 포함한다
+- **AND** profile-page link는 기존 웹 프로필 URL `{localOrigin}/@{handle}`을 가리킨다
 
 #### Scenario: Invalid WebFinger resource
 
-- **WHEN** WebFinger resource가 없거나 `acct:{handle}@{localDomain}` 형식이 아니거나 domain이 local instance domain과 다르다
+- **WHEN** WebFinger resource가 없거나 `acct:{handle}@{localDomain}` 형식이 아니거나 domain이 configured local instance domain과 다르다
 - **THEN** 시스템은 HTTP 404로 응답한다
 
 #### Scenario: Missing local profile WebFinger
@@ -55,9 +55,9 @@
 - **THEN** 시스템은 해당 ID의 local active profile을 조회한다
 - **AND** 시스템은 HTTP 200과 `application/activity+json` content type으로 응답한다
 - **AND** `Person` document는 `id`, `preferredUsername`, `name`, `summary`, `url`, `published`, `inbox`, `outbox`, `publicKey`, `assertionMethods`를 포함한다
-- **AND** `id`는 canonical local actor URI `https://{localOrigin}/ap/actor/{profile.id}`와 같다
+- **AND** `id`는 canonical local actor URI `{localOrigin}/ap/actor/{profile.id}`와 같다
 - **AND** `preferredUsername`은 local profile handle이다
-- **AND** `url`은 기존 웹 프로필 URL `https://{localOrigin}/@{handle}`이다
+- **AND** `url`은 기존 웹 프로필 URL `{localOrigin}/@{handle}`이다
 - **AND** `inbox`는 actor URI에 `/inbox` path suffix를 붙인 actor-scoped URI이다
 - **AND** `outbox`는 actor URI에 `/outbox` path suffix를 붙인 actor-scoped URI이다
 

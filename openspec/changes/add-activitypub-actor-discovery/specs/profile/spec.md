@@ -43,6 +43,29 @@ API는 프로필 표시용 handle 문자열을 local instance 기준 `relativeHa
 - **WHEN** local instance 안에서 정규화된 handle과 일치하는 활성 프로필이 없다
 - **THEN** 시스템은 프로필 없음으로 응답한다
 
+### Requirement: Profile creation
+
+로그인한 계정은 유효한 handle로 local instance에 자신이 소유한 프로필을 생성할 수 있어야 한다(MUST).
+
+#### Scenario: Create profile with valid handle
+
+- **WHEN** 로그인한 계정이 유효한 handle로 프로필 생성을 요청한다
+- **THEN** 시스템은 handle과 정규화된 handle을 저장한다
+- **AND** 생성된 프로필은 configured local instance에 속한다
+- **AND** 표시 이름은 handle과 같은 값으로 초기화된다
+- **AND** 팔로우 정책은 `OPEN`으로 초기화된다
+- **AND** 생성된 프로필을 반환한다
+
+#### Scenario: Create profile with duplicate local handle
+
+- **WHEN** 로그인한 계정이 local instance에서 이미 사용 중인 정규화 handle로 프로필 생성을 요청한다
+- **THEN** 시스템은 `handle` field의 conflict 오류를 반환한다
+
+#### Scenario: Create profile with handle used only by remote profile
+
+- **WHEN** 로그인한 계정이 저장된 remote profile에서만 사용 중인 정규화 handle로 local profile 생성을 요청한다
+- **THEN** 시스템은 remote profile의 handle만을 이유로 `handle` field conflict 오류를 반환하지 않는다
+
 ### Requirement: Profile object visibility
 
 API는 활성 local profile과 저장된 활성 remote profile을 GraphQL profile object로 조회할 수 있게 해야 한다(MUST).
@@ -69,3 +92,111 @@ API는 활성 local profile과 저장된 활성 remote profile을 GraphQL profil
 
 - **WHEN** 프로필 상태가 `ACTIVE`가 아니다
 - **THEN** 시스템은 프로필 object 접근을 허용하지 않는다
+
+### Requirement: Profile follow graph
+
+API는 local profile 간 visible follow 관계를 GraphQL에서 조회할 수 있어야 한다(MUST).
+
+#### Scenario: Read accepted followers
+
+- **WHEN** 클라이언트가 활성 local profile의 followers connection을 조회한다
+- **THEN** 시스템은 해당 프로필을 followee로 하고 follower 프로필도 활성 local profile인 `ACCEPTED` follow 관계 중 viewer가 볼 수 있는 관계를 반환한다
+- **AND** 각 edge의 node는 해당 `ProfileFollow`이다
+
+#### Scenario: Read accepted following
+
+- **WHEN** 클라이언트가 활성 local profile의 following connection을 조회한다
+- **THEN** 시스템은 해당 프로필을 follower로 하고 followee 프로필도 활성 local profile인 `ACCEPTED` follow 관계 중 viewer가 볼 수 있는 관계를 반환한다
+- **AND** 각 edge의 node는 해당 `ProfileFollow`이다
+
+#### Scenario: Count accepted follows
+
+- **WHEN** 클라이언트가 활성 local profile의 followersCount 또는 followingCount를 조회한다
+- **THEN** 시스템은 `ACCEPTED` follow 관계 중 상대 프로필도 활성 local profile인 관계만 집계한다
+
+#### Scenario: Read public accepted follow
+
+- **WHEN** 클라이언트가 자기 active profile과 관련되지 않은 `ACCEPTED` follow 관계를 조회한다
+- **THEN** 시스템은 follower와 followee 프로필이 모두 활성 local profile이고 `followPolicy`가 `OPEN`인 경우에만 해당 `ProfileFollow`를 반환한다
+
+#### Scenario: Read own follow relationship
+
+- **WHEN** active profile이 있는 인증자가 자기 active profile이 follower 또는 followee인 follow 관계를 조회한다
+- **THEN** 시스템은 follower와 followee 프로필이 모두 활성 local profile이면 follow 정책과 상태에 관계없이 해당 `ProfileFollow`를 반환한다
+
+#### Scenario: Hide follow request from unrelated viewer
+
+- **WHEN** 클라이언트가 자기 active profile과 관련되지 않은 `PENDING` 또는 `REJECTED` follow 관계를 조회한다
+- **THEN** 시스템은 해당 `ProfileFollow`를 반환하지 않는다
+
+#### Scenario: Read viewer follow for local target
+
+- **WHEN** active profile이 있는 인증자가 다른 활성 local profile에 대한 viewer follow 관계를 조회한다
+- **THEN** 시스템은 viewer active profile이 대상 프로필을 follow하는 `ProfileFollow` 관계를 반환한다
+- **AND** 반환된 관계는 `ACCEPTED`, `PENDING`, `REJECTED` 상태를 포함할 수 있다
+- **AND** follow 관계가 없으면 없음으로 응답한다
+
+#### Scenario: Do not expose viewer follow for remote target
+
+- **WHEN** active profile이 있는 인증자가 저장된 활성 remote profile에 대한 viewer follow 관계를 조회한다
+- **THEN** 시스템은 follow 관계 없음으로 응답한다
+- **AND** 시스템은 remote follow fetch 또는 ActivityPub delivery를 시도하지 않는다
+
+#### Scenario: Read ProfileFollow profiles
+
+- **WHEN** 클라이언트가 `ProfileFollow.follower` 또는 `ProfileFollow.followee`를 조회한다
+- **THEN** 시스템은 관계의 follower profile 또는 followee profile이 노출 가능한 활성 local profile이면 반환한다
+- **AND** 해당 프로필이 노출 가능하지 않으면 없음으로 응답한다
+
+### Requirement: Follow profile mutation
+
+active profile이 있는 인증자는 다른 활성 local profile을 공개 follow할 수 있어야 한다(MUST).
+
+#### Scenario: Follow active local profile
+
+- **WHEN** active profile이 있는 인증자가 다른 활성 local profile follow를 요청한다
+- **THEN** 시스템은 `ACCEPTED` follow 관계를 생성한다
+- **AND** 생성된 `ProfileFollow`를 반환한다
+
+#### Scenario: Follow local profile idempotently
+
+- **WHEN** active profile이 있는 인증자가 이미 `ACCEPTED` 상태로 follow 중인 local profile follow를 요청한다
+- **THEN** 시스템은 기존 `ProfileFollow`를 반환한다
+- **AND** 오류로 처리하지 않는다
+
+#### Scenario: Prevent self follow
+
+- **WHEN** active profile이 있는 인증자가 자기 자신 follow를 요청한다
+- **THEN** 시스템은 `ConflictError`를 반환한다
+
+#### Scenario: Follow missing or remote profile
+
+- **WHEN** active profile이 있는 인증자가 없는 대상 프로필, 비활성인 대상 프로필, 또는 저장된 remote profile follow를 요청한다
+- **THEN** 시스템은 profile not found 오류를 반환한다
+- **AND** local `ProfileFollow` 관계를 생성하지 않는다
+- **AND** ActivityPub Follow를 발송하지 않는다
+
+### Requirement: Unfollow profile mutation
+
+active profile이 있는 인증자는 기존 local follow 관계를 해제할 수 있어야 한다(MUST).
+`UnfollowProfileSuccess`는 삭제된 follow ID와 함께, 클라이언트 캐시 갱신을 위해 갱신된 대상 `Profile`을 포함한다.
+
+#### Scenario: Unfollow active local profile
+
+- **WHEN** active profile이 있는 인증자가 follow 중인 활성 local profile unfollow를 요청한다
+- **THEN** 시스템은 해당 follow 관계를 제거한다
+- **AND** 삭제된 `ProfileFollow` ID를 반환한다
+- **AND** 갱신된 viewer follow 상태와 팔로워 수를 가진 대상 `Profile`을 함께 반환한다
+
+#### Scenario: Unfollow local profile idempotently
+
+- **WHEN** active profile이 있는 인증자가 follow 관계가 없는 활성 local profile unfollow를 요청한다
+- **THEN** 시스템은 오류로 처리하지 않는다
+- **AND** `profileFollowId`가 `null`이고 대상 `Profile`을 포함한 `UnfollowProfileSuccess`를 반환한다
+
+#### Scenario: Unfollow missing or remote profile
+
+- **WHEN** active profile이 있는 인증자가 없는 대상 프로필, 비활성인 대상 프로필, 또는 저장된 remote profile unfollow를 요청한다
+- **THEN** 시스템은 profile not found 오류를 반환한다
+- **AND** local `ProfileFollow` 관계를 제거하지 않는다
+- **AND** ActivityPub Undo/Follow를 발송하지 않는다

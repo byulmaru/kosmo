@@ -7,7 +7,7 @@
 
 ## 2. Data Model
 
-- [ ] 2.1 `InstanceType` 또는 동등한 enum과 `instance` 테이블을 추가해 local/remote instance domain, canonical origin, 생성/수정 시각을 저장한다.
+- [ ] 2.1 `InstanceType` 또는 동등한 enum과 `instance` 테이블을 추가해 local/remote instance domain, canonical origin, 생성/수정 시각을 저장하고, domain 중복은 막되 `LOCAL` row 단일성은 강제하지 않는다.
 - [ ] 2.2 `profile.instance_id`를 추가하고 기존 profile을 local instance에 연결하는 migration 흐름을 구현한다.
 - [ ] 2.3 `profile.normalized_handle` 전역 unique를 `(instance_id, normalized_handle)` unique로 교체하고 관련 index/relation을 갱신한다.
 - [ ] 2.4 ActivityPub actor metadata 테이블을 추가해 profile과 actor URI/type을 저장한다.
@@ -19,11 +19,12 @@
 - [ ] 3.1 `Profile.relativeHandle` 필드를 추가해 local profile은 `@handle`, remote profile은 `@handle@domain`을 반환한다.
 - [ ] 3.2 `profileByHandle(handle:)`가 local instance의 active profile만 조회하고 remote profile을 반환하지 않도록 유지/보강한다.
 - [ ] 3.3 Node ID 기반 `Profile` load가 active local profile과 저장된 active remote profile을 직접 조회할 수 있게 접근 정책을 정렬한다.
-- [ ] 3.4 GraphQL schema를 재생성하고 `Profile.relativeHandle`이 `apps/api/schema.graphql`에 반영되는지 확인한다.
+- [ ] 3.4 `profileByHandle`, account profile list, local 검색, follow graph, follow/unfollow mutation, viewerFollow가 remote profile로 확장되지 않고 local profile 기준으로 동작하는지 구현한다.
+- [ ] 3.5 GraphQL schema를 재생성하고 `Profile.relativeHandle`이 `apps/api/schema.graphql`에 반영되는지 확인한다.
 
 ## 4. Fedify Actor Discovery
 
-- [ ] 4.1 API와 Fedify package가 공유할 수 있는 local instance lookup/bootstrap helper를 만들고, local instance row를 canonical origin/domain source of truth로 읽어 `PUBLIC_ORIGIN`과 검증한다.
+- [ ] 4.1 API와 Fedify package가 공유할 수 있는 local instance lookup/bootstrap helper를 만들고, `PUBLIC_ORIGIN`과 일치하는 configured local instance row를 canonical origin/domain source of truth로 읽어 검증한다.
 - [ ] 4.2 WebFinger `acct:{handle}@{localDomain}`을 local active profile UUID actor identifier로 매핑한다.
 - [ ] 4.3 actor dispatcher를 `/ap/actor/{identifier}` URI template에 연결하고 identifier를 raw `profile.id` UUID로 해석한다.
 - [ ] 4.4 actor document를 `Person`으로 구성하고 `id`, `preferredUsername`, `name`, `summary`, `url`, `published`, `inbox`, `outbox`, `publicKey`, `assertionMethods`를 보장한다.
@@ -41,5 +42,5 @@
 
 - [ ] 6.1 DB migration/push 또는 schema check로 `instance`, profile instance 관계, actor metadata/key 테이블이 생성되는지 확인한다.
 - [ ] 6.2 WebFinger 성공/404, actor document 성공/404와 필수 `inbox`/`outbox` URI, unsupported endpoint 404, lazy key idempotency를 unit/integration test로 검증한다.
-- [ ] 6.3 GraphQL 테스트로 `relativeHandle` local/remote 표시, remote profile 조회, `profileByHandle` local-only 동작을 검증한다.
+- [ ] 6.3 GraphQL 테스트로 `relativeHandle` local/remote 표시, remote profile Node 조회, `profileByHandle` local-only 동작, remote target follow/unfollow profile not found, remote target viewerFollow 없음 응답을 검증한다.
 - [ ] 6.4 `pnpm lint:eslint`, `pnpm --filter @kosmo/fedify lint:tsc`, `pnpm --filter @kosmo/web check`, 관련 package test, `openspec validate add-activitypub-actor-discovery --strict`를 실행해 변경을 검증한다.
