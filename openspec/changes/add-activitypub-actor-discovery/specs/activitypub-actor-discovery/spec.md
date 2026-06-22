@@ -54,24 +54,27 @@
 - **WHEN** 외부 서버가 `GET /ap/actor/{profile.id}`를 ActivityPub JSON으로 요청한다
 - **THEN** 시스템은 해당 ID의 local active profile을 조회한다
 - **AND** 시스템은 HTTP 200과 `application/activity+json` content type으로 응답한다
-- **AND** `Person` document는 `id`, `preferredUsername`, `name`, `summary`, `url`, `published`, `publicKey`, `assertionMethods`를 포함한다
+- **AND** `Person` document는 `id`, `preferredUsername`, `name`, `summary`, `url`, `published`, `inbox`, `outbox`, `publicKey`, `assertionMethods`를 포함한다
 - **AND** `id`는 canonical local actor URI `https://{localOrigin}/ap/actor/{profile.id}`와 같다
 - **AND** `preferredUsername`은 local profile handle이다
 - **AND** `url`은 기존 웹 프로필 URL `https://{localOrigin}/@{handle}`이다
+- **AND** `inbox`는 actor URI에 `/inbox` path suffix를 붙인 actor-scoped URI이다
+- **AND** `outbox`는 actor URI에 `/outbox` path suffix를 붙인 actor-scoped URI이다
 
 #### Scenario: Missing local actor document
 
 - **WHEN** actor URI의 UUID와 일치하는 local active profile이 없다
 - **THEN** 시스템은 HTTP 404로 응답한다
 
-#### Scenario: Do not advertise unsupported ActivityPub endpoints
+#### Scenario: Advertise only required ActivityPub endpoints
 
 - **WHEN** 시스템이 local actor document를 반환한다
-- **THEN** document는 `inbox`, `outbox`, `followers`, `following`, `endpoints.sharedInbox` 값을 포함하지 않는다
+- **THEN** document는 ActivityPub actor 필수 속성인 `inbox`, `outbox` 값을 포함한다
+- **AND** document는 `followers`, `following`, `endpoints.sharedInbox` 값을 포함하지 않는다
 
 #### Scenario: Unsupported ActivityPub endpoint request
 
-- **WHEN** 외부 서버가 `/inbox`, `/outbox`, `/ap/actor/{profile.id}/followers`, `/ap/actor/{profile.id}/following` 같은 미지원 federation endpoint를 직접 요청한다
+- **WHEN** 외부 서버가 `/ap/actor/{profile.id}/inbox`, `/ap/actor/{profile.id}/outbox`, `/ap/actor/{profile.id}/followers`, `/ap/actor/{profile.id}/following`, `/inbox`, `/outbox` 같은 미지원 federation endpoint를 직접 요청한다
 - **THEN** 시스템은 HTTP 404로 응답한다
 - **AND** 해당 요청을 `/graphql` proxy 또는 API 서버로 전달하지 않는다
 
@@ -105,6 +108,12 @@
 
 - **WHEN** 원격 서버가 follow, accept, undo, delivery 같은 ActivityPub 상호작용을 기대한다
 - **THEN** 시스템은 이번 capability에서 해당 동작을 제공하지 않는다
+
+#### Scenario: Inbox and outbox behavior is out of scope
+
+- **WHEN** 외부 서버가 actor document에 광고된 `inbox` 또는 `outbox` URI에 요청한다
+- **THEN** 시스템은 HTTP 404로 응답한다
+- **AND** 시스템은 이번 capability에서 inbox delivery, outbox submission, outbox collection 읽기 동작을 제공하지 않는다
 
 #### Scenario: Remote actor fetch is out of scope
 

@@ -6,8 +6,9 @@ kosmo는 로컬 프로필, 게시글, 팔로우의 SNS 뼈대가 갖춰졌지만
 
 - `apps/web` SvelteKit 서버는 Fedify hook 연결만 담당하고, ActivityPub/WebFinger 요청 처리 로직은 새 workspace package인 `packages/fedify`가 소유한다.
 - WebFinger `acct:{handle}@{localDomain}` 조회가 local active profile을 actor URI `https://{origin}/ap/actor/{profile.id}`로 연결하도록 정의한다.
-- actor document는 `Person`의 `id`, `preferredUsername`, `name`, `summary`, `url`, `published`, `publicKey`, `assertionMethods`만 보장한다.
-- `inbox`, `outbox`, `followers`, `following` URI와 endpoint 동작은 이번 범위에서 광고하지 않는다.
+- actor document는 `Person`의 `id`, `preferredUsername`, `name`, `summary`, `url`, `published`, `inbox`, `outbox`, `publicKey`, `assertionMethods`를 보장한다.
+- `inbox`, `outbox`는 ActivityPub actor 필수 속성으로 actor-scoped URI를 광고하되, 실제 delivery/submission/collection endpoint 동작은 이번 범위에서 제공하지 않는다.
+- `followers`, `following`, `endpoints.sharedInbox` URI와 endpoint 동작은 이번 범위에서 광고하지 않는다.
 - `instance`를 local/remote 공통 테이블로 추가하고, local instance row의 canonical origin/domain을 federation identity의 source of truth로 둔다.
 - `profile`을 local/remote 공통 social identity로 확장하고, handle uniqueness를 instance 범위로 변경한다.
 - ActivityPub actor metadata와 actor key 저장 경계를 추가한다. local actor key는 RSA-PKCS#1-v1.5와 Ed25519 key pair를 lazy 생성한다.
