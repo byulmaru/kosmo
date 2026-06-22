@@ -94,6 +94,14 @@
   </div>
 </Story>
 
+<Story name="Linked result" asChild parameters={{ controls: { disable: true } }}>
+  <ProfileListItem
+    profile={profile({ id: 'linked-profile', handle: 'user@kos.moe' })}
+    linked
+    {viewerProfileId}
+  />
+</Story>
+
 <Story name="Edge cases" asChild parameters={{ controls: { disable: true } }}>
   <div class="grid gap-3">
     <ProfileListItem

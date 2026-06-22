@@ -45,7 +45,14 @@
 - [x] 7.5 최근 검색 항목과 뒤로가기(←)를 네이티브 `<a href>`(검색 URL) 링크로 바꾼다 — 키보드 Enter·마우스·새 탭 열기가 모두 동작하고, 이동 후 SvelteKit 포커스 복귀로 입력 중 단계가 닫힌다. `onclick`+`goto`·`blurInput`·`onmousedown` preventDefault 같은 포인터 전용 처리를 걷어낸다(사용자 피드백: 키보드 Enter 미동작·마우스 중심). 삭제(×)는 로컬 동작이라 버튼 유지
 - [x] 7.6 검색 제출을 `onsubmit`+`goto` 대신 페이지가 소유한 네이티브 GET 폼(`<form method="get" action="/search">` + hidden `tab`)으로 바꾼다(사용자 피드백: 검색에 굳이 event 쓰지 말 것). `SearchBar`는 표시 전용 `div`(입력 `name="q"`)로 두어 `Header` 검색바는 폼 밖이라 Enter 무동작을 유지한다. 검색어 기록은 제출 핸들러 대신 `q`를 보는 `$effect`로 옮긴다
 
-## 8. 후속 (이 체인지 범위 밖 · 별도 이슈/PR)
+## 8. 정확 handle 검색 결과 연결
 
-- [ ] 7.1 검색 후 사람 탭에 정확 handle `profileByHandle` query를 연결하고 `ProfileListItem` 결과·결과 없음·프로필 이동을 렌더한다 — PROD-154
-- [ ] 7.2 검색 전 추천 프로필·트렌드, 입력 중 자동완성, 인기/최신/미디어 탭 콘텐츠(post/Elasticsearch·fediverse 검색) — 별도 후속 이슈
+- [x] 8.1 검색 후 사람 탭에서 `activeTab === SearchTab.PEOPLE`이고 trim된 `q`가 있을 때만 `profileByHandle` query를 실행한다 — PROD-154
+- [x] 8.2 결과 있음 상태에서 `ProfileListItem`으로 프로필 결과를 렌더하고, `ProfileListItem`의 `linked` variant로 프로필 정보 영역을 `/@{handle}` 링크로 연결한다 — PROD-154
+- [x] 8.3 검색 결과 item에 `currentSession.selectedProfile.id`를 전달해 기존 `FollowButton` 표시/숨김 정책을 유지한다. FollowButton/viewer session 책임 경계 재정리는 PROD-170 후속으로 남긴다 — PROD-154
+- [x] 8.4 `SearchResults` Storybook에 결과 있음 상태를 추가한다 — PROD-154
+
+## 9. 후속 (이 체인지 범위 밖 · 별도 이슈/PR)
+
+- [ ] 9.1 검색 전 추천 프로필·트렌드, 입력 중 자동완성, 인기/최신/미디어 탭 콘텐츠(post/Elasticsearch·fediverse 검색) — 별도 후속 이슈
+- [ ] 9.2 `FollowButton`/`ProfileListItem`의 viewer/session 책임 경계를 재정리한다 — PROD-170
