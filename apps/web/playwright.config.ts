@@ -8,7 +8,6 @@ const oidcPort = 4300;
 
 const defaultDatabaseUrl = 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 const databaseUrl =
-  process.env.TEST_DATABASE_URL ??
   readEnvFileValue(new URL('../../.env.test', import.meta.url), 'DATABASE_URL') ??
   defaultDatabaseUrl;
 const apiOrigin = `http://${host}:${apiPort}`;
