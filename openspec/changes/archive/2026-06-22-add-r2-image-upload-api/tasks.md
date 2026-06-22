@@ -32,4 +32,4 @@
 
 - [x] 5.1 `pnpm --filter @kosmo/api lint:tsc`를 실행하고 type error를 수정한다.
 - [x] 5.2 변경된 API/core DB 파일에 대해 관련 ESLint check를 실행하고 lint error를 수정한다.
-- [ ] 5.3 R2 credentials가 있으면 authenticated, anonymous, invalid MIME type, oversized file, successful upload 요청을 대표 케이스로 수동 검증한다.
+- [x] 5.3 R2 credentials가 있으면 authenticated, anonymous, invalid MIME type, oversized file, successful upload 요청을 대표 케이스로 수동 검증한다.

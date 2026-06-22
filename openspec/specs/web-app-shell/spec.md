@@ -25,12 +25,17 @@ kosmo 웹 애플리케이션의 공통 앱 shell 계약을 문서화한다. 이 
 
 ### Requirement: Root path redirects to home
 
-루트 경로 `/`는 홈 진입점으로서 `/home`으로 리다이렉트해야 한다(MUST). 이는 임시 리다이렉트이며 이후 온보딩 도입 시 교체된다.
+루트 경로 `/`는 **유효한 세션(로그인) 사용자**를 홈 진입점으로서 `/home`으로 보내야 한다(MUST). 더 이상 모든 접근을 무조건 리다이렉트하지 않는다. 세션 유효성은 클라이언트가 `currentSession` GraphQL 쿼리로 확인하며(만료·폐기된 세션은 `null`로 반환됨), 유효한 세션일 때만 클라이언트에서 `/home`으로 이동한다. `/`는 서버에서 요청별로 분기하지 않는 공개 페이지다(쿠키 존재만으로 서버 리다이렉트하지 않는다).
 
-#### Scenario: Redirect root to home
+#### Scenario: Redirect signed-in user to home
 
-- **WHEN** 사용자가 `/`에 접근한다
-- **THEN** 시스템은 `/home`으로 리다이렉트한다
+- **WHEN** 유효한 세션을 가진 사용자가 `/`에 접근한다
+- **THEN** 시스템은 `currentSession` 확인 후 `/home`으로 이동한다
+
+#### Scenario: Invalid or missing session stays on onboarding
+
+- **WHEN** 세션이 없거나 만료·폐기된 세션을 가진 사용자가 `/`에 접근한다
+- **THEN** `currentSession`이 `null`이므로 `/home`으로 이동하지 않고 온보딩(Welcome) 화면에 머문다
 
 ### Requirement: Primary navigation targets home route
 
@@ -347,3 +352,253 @@ kosmo 웹 애플리케이션의 공통 앱 shell 계약을 문서화한다. 이 
 
 - **WHEN** 사용자가 이미 활성화된 프로필을 선택한다
 - **THEN** 시스템은 현재 활성 프로필을 그대로 유지한다
+
+### Requirement: Search page input form
+
+검색 페이지(`/search`)는 검색어를 입력하고 submit할 수 있는 검색 입력 폼을 제공해야 한다(MUST). 입력값을 비우는 컨트롤을 제공해야 한다(MUST). submit 시 검색어를 URL 쿼리 파라미터 `q`에 반영하고 현재 활성 탭(`tab`)을 유지해야 한다(MUST).
+
+#### Scenario: Submit search term
+
+- **WHEN** 사용자가 검색 입력에 검색어를 입력하고 submit한다
+- **THEN** 시스템은 URL을 `/search?q={검색어}`로 갱신한다
+- **AND** 현재 활성 탭(`tab`) 값을 유지한다
+
+#### Scenario: Clear search input
+
+- **WHEN** 사용자가 입력 비우기 컨트롤을 선택한다
+- **THEN** 시스템은 검색 입력값을 비우고 입력 포커스를 유지한다
+- **AND** 검색 후 단계였다면 URL `q`를 제거해, 빈 입력과 결과 영역이 어긋나지 않게 한다
+
+### Requirement: Search page phases
+
+검색 페이지는 검색바 포커스 상태와 제출된 검색어(`q`)에 따라 검색 전·입력 중·검색 후 단계를 구분해 표시해야 한다(MUST). 검색 결과 유형 탭은 검색 후 단계에서만 노출해야 한다(MUST). 검색바 자체도 단계에 따라 외형이 달라져야 한다(MUST): 입력 중에는 검색바에 포커스 강조를 표시하고, 입력값이 있을 때만 비우기 컨트롤을 노출하며, 검색 전이 아닌 단계(입력 중·검색 후)에는 검색 전으로 되돌리는 뒤로가기 컨트롤을 제공해야 한다(MUST).
+
+#### Scenario: Before search
+
+- **WHEN** 검색바가 포커스되지 않았고 제출된 검색어(`q`)도 없다
+- **THEN** 시스템은 검색을 안내하는 검색 전 상태를 표시한다
+- **AND** 결과 유형 탭과 뒤로가기 컨트롤을 표시하지 않는다
+
+#### Scenario: Return to before-search
+
+- **WHEN** 사용자가 입력 중 또는 검색 후 단계에서 뒤로가기 컨트롤을 선택한다
+- **THEN** 시스템은 검색바 포커스를 해제하고 제출된 검색어(`q`)를 비워 검색 전 단계로 되돌린다
+
+#### Scenario: While typing
+
+- **WHEN** 검색바가 포커스된다
+- **THEN** 시스템은 입력 중 단계로 최근 검색을 표시한다
+- **AND** 결과 유형 탭을 표시하지 않는다
+
+#### Scenario: After search
+
+- **WHEN** 검색바가 포커스되지 않았고 제출된 검색어(`q`)가 있다
+- **THEN** 시스템은 검색 후 단계로 결과 유형 탭과 결과 영역을 표시한다
+
+### Requirement: Recent searches
+
+입력 중 단계는 localStorage에 저장된 최근 검색어를 노출해야 한다(MUST). 최근 검색 항목을 선택하면 그 검색어로 검색을 수행하고, 개별 항목을 삭제할 수 있어야 한다(MUST). 이 기능은 백엔드 없이 동작한다.
+
+#### Scenario: Show recent searches
+
+- **WHEN** 검색바가 포커스되고 저장된 최근 검색어가 있다
+- **THEN** 시스템은 최근 검색어 목록을 표시한다
+
+#### Scenario: Select a recent search
+
+- **WHEN** 사용자가 최근 검색 항목을 선택한다
+- **THEN** 시스템은 그 검색어로 검색을 수행하고 URL `q`를 갱신한다
+
+#### Scenario: Remove a recent search
+
+- **WHEN** 사용자가 최근 검색 항목의 삭제 컨트롤을 선택한다
+- **THEN** 시스템은 해당 항목을 최근 검색 목록에서 제거한다
+
+### Requirement: Search result type tabs
+
+검색 후 단계는 인기·최신·미디어·사람 검색 결과 유형 탭을 제공해야 한다(MUST). 활성 탭을 URL 쿼리 파라미터 `tab`(`popular|latest|media|people`)에 반영해야 하며, `tab`이 없으면 사람(`people`)을 기본 활성으로 사용해야 한다(MUST). 탭을 전환할 때 현재 검색어(`q`)를 유지해야 한다(MUST). 사람 외 탭(인기·최신·미디어)은 관련 검색 백엔드가 준비되기 전까지 준비 중 안내를 표시해야 한다(MUST).
+
+#### Scenario: Default active tab
+
+- **WHEN** 사용자가 `tab` 파라미터 없이 검색 후 단계를 본다
+- **THEN** 시스템은 사람(`people`) 탭을 활성으로 표시한다
+
+#### Scenario: Switch result type tab
+
+- **WHEN** 사용자가 다른 결과 유형 탭을 선택한다
+- **THEN** 시스템은 URL `tab` 파라미터를 해당 탭으로 갱신한다
+- **AND** 현재 검색어(`q`) 값을 유지한다
+
+#### Scenario: Not-ready tab placeholder
+
+- **WHEN** 사용자가 인기·최신·미디어 탭을 활성으로 본다
+- **THEN** 시스템은 해당 탭 콘텐츠 대신 준비 중 안내를 표시한다
+
+### Requirement: People tab search states
+
+검색 후 사람 탭은 로딩, 오류, 결과 없음(empty) 상태를 표시할 수 있어야 한다(MUST). 실제 검색 query 연결 전에도 각 상태 UI를 확인할 수 있어야 한다(MUST). 로딩 스켈레톤은 프로필 항목 형태로 표시하고 스크린리더용 로딩 안내를 제공해야 하며, 색·반경은 시맨틱 디자인 토큰으로 라이트/다크에 대응해야 한다(MUST). 결과 목록 렌더와 프로필 이동은 본 요구사항 범위 밖이다.
+
+#### Scenario: Loading state
+
+- **WHEN** 사람 탭이 로딩 상태다
+- **THEN** 시스템은 프로필 항목 형태의 로딩 스켈레톤을 표시한다
+- **AND** 스켈레톤 시각 요소는 보조 기술에 노출하지 않고, 스크린리더에는 검색 로딩 안내를 제공한다
+
+#### Scenario: Error state
+
+- **WHEN** 사람 탭 검색이 실패했고 표시할 기존 결과가 없다
+- **THEN** 시스템은 오류 상태와 다시 시도 동작을 표시한다
+
+#### Scenario: Empty result state
+
+- **WHEN** 검색어로 일치하는 프로필이 없다
+- **THEN** 시스템은 결과 없음 안내를 표시한다
+
+### Requirement: Root path onboarding for guests
+
+루트 경로 `/`는 비로그인 사용자에게 로그인 온보딩(Welcome) 화면을 렌더링해야 한다(MUST). 이 화면은 `(tabs)` 앱 셸(사이드바·하단 탭·우측 레일) 없이 독립으로 표시되며, 로그인 시작 동선을 제공한다.
+
+#### Scenario: Show onboarding to logged-out user
+
+- **WHEN** 비로그인 사용자가 `/`에 접근한다
+- **THEN** 시스템은 앱 셸 없이 로그인 온보딩(Welcome) 화면을 렌더링한다
+
+#### Scenario: Start login from onboarding
+
+- **WHEN** 사용자가 온보딩 화면의 "시작하기"를 선택한다
+- **THEN** 시스템은 로그인 시작 경로(`/login`)로 이동한다
+
+### Requirement: Post list item display
+
+게시글 목록 항목 컴포넌트(`PostListItem`)는 게시글 한 건의 작성자 프로필(아바타·표시 이름·핸들), Plain Text 본문, 작성 시간을 표시해야 한다(MUST). 작성자 영역은 `PostAuthorProfile`을 재사용하고, 목록 항목의 아바타는 48px로 표시해야 한다(MUST). 필요한 데이터는 컴포넌트 자신의 fragment(`PostListItem_post`)로 선언해야 한다(MUST).
+
+#### Scenario: Item content display
+
+- **WHEN** 게시글 데이터(fragment ref)가 항목 컴포넌트에 전달된다
+- **THEN** 시스템은 좌측 아바타 거터와 우측 콘텐츠 컬럼 구조로 작성자 표시 이름·핸들, 본문, 작성 시간을 표시한다
+
+#### Scenario: Empty body
+
+- **WHEN** 게시글의 `content`가 비어 있다
+- **THEN** 시스템은 본문 영역 없이 작성자와 작성 시간만 표시하고 레이아웃이 깨지지 않는다
+
+### Requirement: Post list item body clamping
+
+목록 항목의 본문은 200자(코드 포인트 기준)를 초과하거나 줄바꿈 기준 10줄을 초과하면 잘라서 표시해야 하며(MUST), 본문이 실제로 잘린 경우에만 말줄임표와 "더보기..." 버튼을 노출해야 한다(MUST). "더보기..."는 게시글 디테일로 이동하지 않고 제자리에서 본문 전체를 펼쳐야 한다(MUST). 임계값(200자·10줄)은 정책 확정 전 초기값이며 PR에서 논의한다.
+
+#### Scenario: Long body clamped
+
+- **WHEN** 본문이 200자를 초과한다
+- **THEN** 시스템은 앞 200자와 말줄임표만 표시하고 본문 아래에 "더보기..." 버튼을 표시한다
+
+#### Scenario: Many lines clamped
+
+- **WHEN** 본문이 200자 이하지만 줄바꿈 기준 10줄을 초과한다
+- **THEN** 시스템은 앞 10줄과 말줄임표만 표시하고 본문 아래에 "더보기..." 버튼을 표시한다
+
+#### Scenario: Expand inline
+
+- **WHEN** 사용자가 "더보기..." 버튼을 누른다
+- **THEN** 시스템은 페이지 이동 없이 해당 항목의 본문 전체를 펼쳐 표시하고 버튼을 숨긴다
+
+#### Scenario: Short body not clamped
+
+- **WHEN** 본문이 200자 이하이고 10줄 이내다
+- **THEN** 시스템은 본문 전체를 표시하고 "더보기..." 버튼을 표시하지 않는다
+
+### Requirement: Post list item time display
+
+목록 항목의 작성 시간은 이름 블록과 같은 행의 우측에 표시해야 한다(MUST). 작성 후 24시간 미만이면 `Intl.RelativeTimeFormat('ko', { numeric: 'auto' })` 기반 상대시간(0초 "지금", 그 외 "n초 전"/"n분 전"/"n시간 전")을, 24시간 이상이면 날짜("2026. 04. 27" 형식)를 표시해야 한다(MUST). 기계 가독 시각을 `<time datetime>`으로 제공해야 한다(MUST).
+
+#### Scenario: Recent post relative time
+
+- **WHEN** 게시글이 24시간 이내에 작성됐다
+- **THEN** 시스템은 "n초 전"/"n분 전"/"n시간 전" 형식의 상대시간(0초는 "지금")을 헤더 우측에 표시한다
+
+#### Scenario: Older post absolute date
+
+- **WHEN** 게시글이 작성된 지 24시간 이상 지났다
+- **THEN** 시스템은 "2026. 04. 27" 형식의 날짜를 헤더 우측에 표시한다
+
+### Requirement: Handle-based profile page route
+
+웹 앱은 핸들을 포함한 URL로 프로필 페이지에 직접 접근할 수 있도록 `(tabs)` 그룹 안에 핸들 동적 라우트를 제공해야 한다(MUST). 이 라우트는 `@` 프리픽스를 사용해 정적 엔드포인트 경로와 충돌하지 않아야 한다(MUST).
+
+#### Scenario: Access profile by handle URL
+
+- **WHEN** 사용자가 `/@{handle}` 형식의 주소로 이동한다
+- **THEN** 시스템은 `(tabs)` 셸(사이드바·하단탭) 안에서 해당 핸들의 프로필 페이지를 연다
+- **AND** layout에서 `profileByHandle(handle:)` query로 프로필을 조회해 렌더한 프로필 헤더를 하위 화면 전반에서 공유한다
+
+#### Scenario: Static endpoint not intercepted by handle route
+
+- **WHEN** 사용자가 `/login`·`/graphql`·`/health` 등 정적 엔드포인트 경로로 이동한다
+- **THEN** 핸들 라우트는 `@`로 시작하지 않는 경로를 매칭하지 않으므로 해당 엔드포인트가 정상 처리된다
+
+### Requirement: Profile basic information display
+
+프로필 페이지는 조회된 프로필의 기본 정보를 표시해야 한다(MUST). 표시 항목은 커버 영역, 아바타, 표시 이름, 핸들, bio, 팔로워/팔로잉 수이며, 색·반경은 시맨틱 디자인 토큰을 사용해 라이트/다크에 대응해야 한다(MUST).
+
+#### Scenario: Display loaded profile
+
+- **WHEN** 핸들로 조회한 활성 프로필이 있다
+- **THEN** 시스템은 커버 밴드, 아바타, 표시 이름, `@handle`, bio(있을 때), 팔로워/팔로잉 수를 표시한다
+
+#### Scenario: Avatar initial fallback
+
+- **WHEN** 프로필에 아바타 이미지가 없다(스키마 미보유)
+- **THEN** 시스템은 표시 이름(없으면 핸들)의 첫 글자를 대문자로 한 이니셜 아바타를 표시한다
+
+#### Scenario: Compact follow counts
+
+- **WHEN** 팔로워 또는 팔로잉 수를 표시한다
+- **THEN** 시스템은 1000 이상의 값을 compact 표기(예: `1.2k`)로 보여준다
+
+### Requirement: Profile page loading and error states
+
+프로필 페이지는 로딩, 조회 오류, 없는 프로필 상태를 처리해야 한다(MUST). 오류·없는 프로필 상태에서도 상위 `(tabs)` 셸은 유지되어야 한다(MUST).
+
+#### Scenario: Loading state
+
+- **WHEN** 프로필 조회가 진행 중이다
+- **THEN** 시스템은 헤더 형태의 스켈레톤과 스크린리더용 로딩 안내를 표시한다
+
+#### Scenario: Query error
+
+- **WHEN** 프로필 조회가 오류로 실패한다
+- **THEN** 시스템은 오류 안내와 다시 시도 동작을 제공하고, 사이드바·하단탭은 유지한다
+
+#### Scenario: Missing profile
+
+- **WHEN** 핸들과 일치하는 활성 프로필이 없다
+- **THEN** 시스템은 인라인 빈 상태("프로필을 찾을 수 없어요")를 표시하고, 사이드바·하단탭은 유지한다
+
+### Requirement: Profile page column alignment
+
+프로필 페이지는 공유 `(tabs)` 셸의 main 레이아웃을 변경하지 않고, 프로필 라우트에서만 콘텐츠를 탑정렬한 컬럼으로 표시해야 한다(MUST). 모바일에서는 화면 끝까지 풀블리드로, 넓은 화면에서는 고정 폭 컬럼으로 표시해야 한다(MUST). 데스크톱 전체 가운데 클러스터 정렬(트위터식)은 공유 셸 재구성이 필요하므로 별도 웹 레이아웃 이슈로 이연한다.
+
+#### Scenario: Mobile full-bleed column
+
+- **WHEN** 모바일 폭에서 프로필 페이지를 본다
+- **THEN** 커버는 화면 좌우 끝까지 닿고 콘텐츠는 상단부터 시작한다
+
+#### Scenario: Desktop fixed-width column
+
+- **WHEN** 넓은 화면에서 프로필 페이지를 본다
+- **THEN** 콘텐츠는 고정 폭 컬럼으로 표시된다
+- **AND** 공유 셸과 다른 탭 페이지의 렌더링은 변경되지 않는다
+
+### Requirement: Sidebar profile entry navigation
+
+사이드바의 "프로필" 항목은 현재 세션에서 선택된 프로필의 프로필 페이지로 이동해야 한다(MUST). 선택된 프로필이 없으면 해당 항목을 비활성화해야 한다(MUST).
+
+#### Scenario: Navigate to own profile
+
+- **WHEN** 현재 세션에 선택된 프로필이 있고 사용자가 사이드바 "프로필" 항목을 누른다
+- **THEN** 시스템은 선택된 프로필의 `/@{handle}` 페이지로 이동한다
+- **AND** 사용자가 자신의 프로필 페이지를 보고 있을 때만 해당 항목을 활성 상태로 표시한다
+
+#### Scenario: Disabled when no selected profile
+
+- **WHEN** 현재 세션에 선택된 프로필이 없다
+- **THEN** 시스템은 사이드바 "프로필" 항목을 비활성화하여(클릭 불가) 이동하지 않는다
