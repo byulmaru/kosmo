@@ -10,15 +10,13 @@
   import Avatar from './Avatar.svelte';
   import FollowButton from './FollowButton.svelte';
 
-  type ProfileListItemBaseProps = Omit<HTMLAttributes<HTMLDivElement>, 'class'> & {
+  type ProfileListItemProps = Omit<HTMLAttributes<HTMLDivElement>, 'class'> & {
     profile: ProfileListItem_profile$key;
+    linked?: boolean;
     viewerProfileId?: string | null;
     width?: 'compact' | 'wide';
     class?: string | null;
   };
-
-  type ProfileListItemProps = ProfileListItemBaseProps &
-    ({ linked: true } | { linked?: false | undefined });
 
   let {
     profile,

@@ -40,7 +40,9 @@
         handle을 입력하면 일치하는 프로필을 찾아드려요.
       </p>
     </div>
-  {:else if loading && !profile}
+  {:else if profile}
+    <ProfileListItem {profile} linked {viewerProfileId} width="wide" class="w-full" />
+  {:else if loading}
     <div aria-hidden="true">
       {#each skeletonItems as item (item)}
         <div class="border-border flex min-h-16 items-center gap-3 border-b px-4">
@@ -55,7 +57,7 @@
       {/each}
     </div>
     <span class="sr-only" role="status">검색 결과를 불러오는 중입니다.</span>
-  {:else if error && !profile}
+  {:else if error}
     <div class="px-4 py-12 text-center" role="alert">
       <p class="text-text-primary text-base font-semibold">검색 결과를 불러오지 못했어요</p>
       <p class="text-text-secondary mt-1 text-sm">잠시 후 다시 시도해주세요.</p>
@@ -69,8 +71,6 @@
         </button>
       {/if}
     </div>
-  {:else if profile}
-    <ProfileListItem {profile} linked {viewerProfileId} width="wide" class="w-full" />
   {:else}
     <div class="px-4 py-12 text-center">
       <p class="text-text-primary text-base font-semibold">검색 결과가 없어요</p>

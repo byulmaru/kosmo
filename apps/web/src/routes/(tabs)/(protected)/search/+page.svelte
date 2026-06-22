@@ -25,15 +25,22 @@
   const activeTab = $derived(parseSearchTab(page.url.searchParams.get('tab')));
   const shouldSearchPeople = $derived(activeTab === SearchTab.PEOPLE && trimmedQuery.length > 0);
 
-  const peopleQuery = createQuery(
+  const sessionQuery = createQuery(
     graphql(`
-      query SearchPeopleByHandlePageQuery($handle: String!) {
+      query SearchPageSessionQuery {
         currentSession {
           id
           selectedProfile {
             id
           }
         }
+      }
+    `),
+  );
+
+  const peopleQuery = createQuery(
+    graphql(`
+      query SearchPeopleByHandlePageQuery($handle: String!) {
         profileByHandle(handle: $handle) {
           ...ProfileListItem_profile
         }
@@ -43,7 +50,7 @@
     () => ({ skip: !shouldSearchPeople }),
   );
   const searchedProfile = $derived(peopleQuery.data?.profileByHandle ?? null);
-  const viewerProfileId = $derived(peopleQuery.data?.currentSession?.selectedProfile?.id ?? null);
+  const viewerProfileId = $derived(sessionQuery.data?.currentSession?.selectedProfile?.id ?? null);
 
   // 단계 구분(검색바 포커스 기준):
   // - input  : 검색바 포커스 = 입력 중 → 최근 검색 노출
