@@ -18,7 +18,7 @@ import type { RequestHandler } from './$types';
 
 const LOGIN_STATE_COOKIE = 'kosmo_oidc_state';
 const LOGIN_CODE_VERIFIER_COOKIE = 'kosmo_oidc_code_verifier';
-const OIDC_TOKEN_URL = 'https://id.byulmaru.co/oauth/token';
+const DEFAULT_OIDC_TOKEN_URL = 'https://id.byulmaru.co/oauth/token';
 const NATIVE_REDIRECT_URI = 'kosmo://login/callback';
 
 type TokenResponse = {
@@ -55,7 +55,7 @@ export const GET: RequestHandler = async ({ cookies, url }) => {
     error(400, 'OIDC callback redirect_uri is invalid');
   }
 
-  const tokenResponse = await fetch(OIDC_TOKEN_URL, {
+  const tokenResponse = await fetch(env.OIDC_TOKEN_URL ?? DEFAULT_OIDC_TOKEN_URL, {
     body: JSON.stringify({
       client_id: publicEnv.PUBLIC_OIDC_CLIENT_ID,
       client_secret: env.OIDC_CLIENT_SECRET,
