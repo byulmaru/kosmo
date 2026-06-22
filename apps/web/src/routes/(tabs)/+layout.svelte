@@ -5,6 +5,7 @@
   import RightRail from '$lib/components/RightRail.svelte';
   import SidebarNavigation from '$lib/components/SidebarNavigation.svelte';
   import { setProfileSwitcherContext } from '$lib/profileSwitcherContext';
+  import { setShellChromeContext } from '$lib/shellChromeContext';
 
   let { children } = $props();
 
@@ -39,6 +40,11 @@
   let drawerOpen = $state(false);
   let swipeStartX = $state<number | null>(null);
   let profileSwitcherOpen = $state(false);
+
+  // 보호 라우트가 콜드 세션 검증 스플래시로 셸을 덮는 동안 true가 되어, 셸 크롬을 inert 처리한다.
+  // 스플래시는 (protected) 가드 안에서 렌더되고 셸은 그 부모인 여기에 있으므로, 컨텍스트로 연결한다.
+  let shellInert = $state(false);
+  setShellChromeContext({ setInert: (inert) => (shellInert = inert) });
 
   const openDrawer = () => {
     drawerOpen = true;
@@ -93,7 +99,7 @@
 <div
   class="min-h-screen md:grid md:justify-center md:grid-cols-[5rem_minmax(0,600px)] xl:grid-cols-[20rem_minmax(0,600px)_minmax(290px,350px)]"
 >
-  <div class="hidden md:block">
+  <div class="hidden md:block" inert={shellInert}>
     <SidebarNavigation
       query={query.data}
       loading={query.loading}
@@ -106,6 +112,7 @@
   <div class="grid min-h-screen grid-rows-[auto_1fr_auto] md:grid-rows-[1fr]">
     <header
       class="sticky top-0 z-20 border-b border-border bg-background/95 px-4 py-3 backdrop-blur md:hidden"
+      inert={shellInert}
     >
       <button
         class="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-bold text-foreground"
@@ -123,10 +130,12 @@
       {@render children()}
     </main>
 
-    <BottomTabBar onMenuClick={openDrawer} />
+    <div class="contents" inert={shellInert}>
+      <BottomTabBar onMenuClick={openDrawer} />
+    </div>
   </div>
 
-  <div class="border-border hidden border-l xl:block">
+  <div class="border-border hidden border-l xl:block" inert={shellInert}>
     <div class="sticky top-0 pt-4 pl-6">
       {#if query.loading}
         <div class="border-border bg-card grid gap-3 rounded-lg border p-4" aria-hidden="true">
@@ -143,7 +152,7 @@
   </div>
 
   {#if drawerOpen}
-    <div class="fixed inset-0 z-40 md:hidden" role="presentation">
+    <div class="fixed inset-0 z-40 md:hidden" role="presentation" inert={shellInert}>
       <button
         class="absolute inset-0 bg-foreground/35"
         type="button"
