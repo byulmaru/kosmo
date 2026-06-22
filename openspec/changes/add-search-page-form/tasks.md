@@ -48,7 +48,7 @@
 ## 8. 정확 handle 검색 결과 연결
 
 - [x] 8.1 검색 후 사람 탭에서 `activeTab === SearchTab.PEOPLE`이고 trim된 `q`가 있을 때만 `profileByHandle` query를 실행한다 — PROD-154
-- [x] 8.2 결과 있음 상태에서 `ProfileListItem`으로 프로필 결과를 렌더하고, 프로필 정보 영역을 `/@{handle}` 링크로 연결한다 — PROD-154
+- [x] 8.2 결과 있음 상태에서 `ProfileListItem`으로 프로필 결과를 렌더하고, `ProfileListItem`의 `linked` variant로 프로필 정보 영역을 `/@{handle}` 링크로 연결한다 — PROD-154
 - [x] 8.3 검색 결과 item에 `currentSession.selectedProfile.id`를 전달해 기존 `FollowButton` 표시/숨김 정책을 유지한다. FollowButton/viewer session 책임 경계 재정리는 PROD-170 후속으로 남긴다 — PROD-154
 - [x] 8.4 `SearchResults` Storybook에 결과 있음 상태를 추가한다 — PROD-154
 

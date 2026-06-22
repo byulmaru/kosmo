@@ -9,7 +9,6 @@
   type Props = HTMLAttributes<HTMLElement> & {
     query?: string;
     profile?: ProfileListItem_profile$key | null;
-    profileHref?: string | null;
     viewerProfileId?: string | null;
     loading?: boolean;
     error?: boolean;
@@ -19,7 +18,6 @@
   let {
     query = '',
     profile = null,
-    profileHref = null,
     viewerProfileId = null,
     loading = false,
     error = false,
@@ -72,7 +70,7 @@
       {/if}
     </div>
   {:else if profile}
-    <ProfileListItem {profile} href={profileHref} {viewerProfileId} width="wide" class="w-full" />
+    <ProfileListItem {profile} linked {viewerProfileId} width="wide" class="w-full" />
   {:else}
     <div class="px-4 py-12 text-center">
       <p class="text-text-primary text-base font-semibold">검색 결과가 없어요</p>

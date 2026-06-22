@@ -97,7 +97,7 @@
 <Story name="Linked result" asChild parameters={{ controls: { disable: true } }}>
   <ProfileListItem
     profile={profile({ id: 'linked-profile', handle: 'user@kos.moe' })}
-    href="/@user@kos.moe"
+    linked
     {viewerProfileId}
   />
 </Story>

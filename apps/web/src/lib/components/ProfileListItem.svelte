@@ -10,17 +10,19 @@
   import Avatar from './Avatar.svelte';
   import FollowButton from './FollowButton.svelte';
 
-  type ProfileListItemProps = Omit<HTMLAttributes<HTMLDivElement>, 'class'> & {
+  type ProfileListItemBaseProps = Omit<HTMLAttributes<HTMLDivElement>, 'class'> & {
     profile: ProfileListItem_profile$key;
-    href?: string | null;
     viewerProfileId?: string | null;
     width?: 'compact' | 'wide';
     class?: string | null;
   };
 
+  type ProfileListItemProps = ProfileListItemBaseProps &
+    ({ linked: true } | { linked?: false | undefined });
+
   let {
     profile,
-    href = null,
+    linked = false,
     viewerProfileId = null,
     width = 'compact',
     class: className = null,
@@ -55,9 +57,9 @@
 </script>
 
 <div {...rest} class={profileListItem({ width, class: className })}>
-  {#if href}
+  {#if linked}
     <a
-      {href}
+      href={`/@${fragment.data.handle}`}
       class="group focus-visible:outline-more flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2"
     >
       <Avatar

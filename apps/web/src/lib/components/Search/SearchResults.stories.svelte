@@ -38,7 +38,6 @@
   args={{
     query: '별마루',
     profile: profile(),
-    profileHref: '/@byulmaru',
     viewerProfileId,
   }}
 />
@@ -49,7 +48,7 @@
     <SearchResults />
     <SearchResults query="별마루" loading />
     <SearchResults query="별마루" error onRetry={() => {}} />
-    <SearchResults query="별마루" profile={profile()} profileHref="/@byulmaru" {viewerProfileId} />
+    <SearchResults query="별마루" profile={profile()} {viewerProfileId} />
     <SearchResults query="없는핸들" />
   </div>
 </Story>

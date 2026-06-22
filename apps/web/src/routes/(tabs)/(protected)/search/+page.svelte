@@ -35,8 +35,6 @@
           }
         }
         profileByHandle(handle: $handle) {
-          id
-          handle
           ...ProfileListItem_profile
         }
       }
@@ -46,7 +44,6 @@
   );
   const searchedProfile = $derived(peopleQuery.data?.profileByHandle ?? null);
   const viewerProfileId = $derived(peopleQuery.data?.currentSession?.selectedProfile?.id ?? null);
-  const searchedProfileHref = $derived(searchedProfile ? `/@${searchedProfile.handle}` : null);
 
   // 단계 구분(검색바 포커스 기준):
   // - input  : 검색바 포커스 = 입력 중 → 최근 검색 노출
@@ -148,7 +145,6 @@
       <SearchResults
         query={queryParam}
         profile={searchedProfile}
-        profileHref={searchedProfileHref}
         {viewerProfileId}
         loading={shouldSearchPeople && peopleQuery.loading}
         error={shouldSearchPeople && Boolean(peopleQuery.error)}
