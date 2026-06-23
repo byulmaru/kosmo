@@ -3,7 +3,7 @@
 - [ ] 1.1 `packages/fedify` workspace package를 만들고 `@kosmo/core`를 참조하도록 package/tsconfig/export 경계를 구성한다.
 - [ ] 1.2 `pnpm` CLI로 `packages/fedify`에 `@fedify/fedify`와 필요한 vocab/runtime dependency를 추가한다.
 - [ ] 1.3 `pnpm` CLI로 `apps/web`에 `@kosmo/fedify`와 SvelteKit hook adapter에 필요한 `@fedify/sveltekit` dependency를 추가한다.
-- [ ] 1.4 `packages/fedify`가 federation request 판별, federation instance 또는 hook factory, actor dispatcher, WebFinger handle mapper/JRD 응답 조립, key pair dispatcher를 export할 수 있는 모듈 구조를 만든다.
+- [ ] 1.4 `packages/fedify`가 federation request 판별, framework-neutral federation instance/request handler 구성요소, actor dispatcher, WebFinger handle mapper/JRD 응답 조립, key pair dispatcher를 export할 수 있는 모듈 구조를 만든다.
 
 ## 2. Data Model
 
@@ -24,23 +24,24 @@
 
 ## 4. Fedify Actor Discovery
 
-- [ ] 4.1 `packages/core`에 API와 Fedify package가 공유할 수 있는 local instance lookup/bootstrap helper를 만들고, `PUBLIC_ORIGIN`과 일치하는 configured local instance row를 canonical origin/domain source of truth로 읽어 검증한다.
-- [ ] 4.2 WebFinger `acct:{handle}@{localDomain}`을 local active profile UUID actor identifier로 매핑한다.
-- [ ] 4.3 actor dispatcher를 `/ap/actor/{identifier}` URI template에 연결하고 identifier를 raw `profile.id` UUID로 해석한다.
-- [ ] 4.4 actor document를 `Person`으로 구성하고 `id`, `preferredUsername`, `name`, `summary`, `url`, `published`, `inbox`, `outbox`, `publicKey`, `assertionMethods`를 보장한다.
-- [ ] 4.5 WebFinger와 actor document의 성공 content type, canonical subject/id, 404 실패 응답을 구현한다.
-- [ ] 4.6 local ActivityPub actor row와 actor key가 없을 때 RSA-PKCS#1-v1.5와 Ed25519 key pair를 transaction/upsert로 lazy 생성하고 재요청 시 재사용한다.
-- [ ] 4.7 actor document에 actor-scoped `inbox`, `outbox` URI를 포함하고 `followers`, `following`, `endpoints.sharedInbox`는 포함하지 않으며, 미지원 federation endpoint가 404로 종료되도록 테스트한다.
+- [ ] 4.1 `packages/core`에 runtime local instance resolve helper를 만들고, `PUBLIC_ORIGIN`과 일치하는 configured local instance row를 canonical origin/domain source of truth로 읽어 검증하되 runtime 요청 처리 중 row를 자동 생성하지 않는다.
+- [ ] 4.2 `packages/core`에 setup/migration에서 사용할 local instance bootstrap helper를 만들고, configured local instance row를 만들거나 `PUBLIC_ORIGIN`과 일치하는 기존 row를 검증한다.
+- [ ] 4.3 WebFinger `acct:{handle}@{localDomain}`을 local active profile UUID actor identifier로 매핑한다.
+- [ ] 4.4 actor dispatcher를 `/ap/actor/{identifier}` URI template에 연결하고 identifier를 raw `profile.id` UUID로 해석한다.
+- [ ] 4.5 actor document를 `Person`으로 구성하고 `id`, `preferredUsername`, `name`, `summary`, `url`, `published`, `inbox`, `outbox`, `publicKey`, `assertionMethods`를 보장한다.
+- [ ] 4.6 WebFinger와 actor document의 성공 content type, canonical subject/id, 404 실패 응답을 구현한다.
+- [ ] 4.7 local ActivityPub actor row와 actor key가 없을 때 RSA-PKCS#1-v1.5와 Ed25519 key pair를 transaction/upsert로 lazy 생성하고 재요청 시 재사용한다.
+- [ ] 4.8 actor document에 actor-scoped `inbox`, `outbox` URI를 포함하고 `followers`, `following`, `endpoints.sharedInbox`는 포함하지 않으며, 미지원 federation endpoint가 404로 종료되도록 테스트한다.
 
 ## 5. Web Integration
 
-- [ ] 5.1 `apps/web/src/hooks.server.ts`에서 `packages/fedify`가 제공하는 federation instance 또는 hook factory를 SvelteKit `handle`에 연결하고, web hook 본문에는 ActivityPub parsing/응답 조립 로직을 두지 않는다.
+- [ ] 5.1 `apps/web/src/hooks.server.ts`에서 `packages/fedify`가 제공하는 framework-neutral federation instance/request handler 구성요소를 `@fedify/sveltekit` hook adapter로 SvelteKit `handle`에 연결하고, web hook 본문에는 ActivityPub parsing/응답 조립 로직을 두지 않는다.
 - [ ] 5.2 ActivityPub/WebFinger 요청은 `packages/fedify`가 처리하고 기존 `/health`, `/graphql`, `/login`, `/@{handle}` 요청은 기존 동작을 유지하는지 확인한다.
 - [ ] 5.3 actor URI와 WebFinger JRD가 canonical local origin을 사용하고 request Host에 의존하지 않는지 확인한다.
 
 ## 6. Verification
 
-- [ ] 6.1 DB migration/push 또는 schema check로 `instance`, profile instance 관계, actor metadata/key 테이블이 생성되는지 확인한다.
+- [ ] 6.1 DB migration/push 또는 schema check로 `instance`, profile instance 관계, actor metadata/key 테이블이 생성되고 `(instance_id, normalized_handle)` unique가 같은 instance 중복은 막고 다른 instance 동일 handle은 허용하는지 확인한다.
 - [ ] 6.2 WebFinger 성공/404, actor document 성공/404와 필수 `inbox`/`outbox` URI, unsupported endpoint 404, lazy key idempotency를 unit/integration test로 검증한다.
-- [ ] 6.3 GraphQL 테스트로 `relativeHandle` local/remote 표시, remote profile Node 조회, `profileByHandle` local-only 동작, remote target active profile selection/follow/unfollow profile not found, remote target viewerFollow 없음 응답, remote profile `Profile.posts` 빈 connection을 검증한다.
+- [ ] 6.3 GraphQL 테스트로 `relativeHandle` local/remote 표시, remote profile Node 조회, `profileByHandle`/account profile list/local 검색 local-only 동작, remote-only 동일 handle의 local profile 생성 허용과 local duplicate handle conflict, remote target active profile selection/follow/unfollow profile not found, remote target viewerFollow 없음 응답, remote profile `Profile.posts` 빈 connection을 검증한다.
 - [ ] 6.4 `pnpm lint:eslint`, `pnpm --filter @kosmo/fedify lint:tsc`, `pnpm --filter @kosmo/web check`, 관련 package test, `openspec validate add-activitypub-actor-discovery --strict`를 실행해 변경을 검증한다.

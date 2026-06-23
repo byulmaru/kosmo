@@ -23,6 +23,12 @@
 - **WHEN** `PUBLIC_ORIGIN`과 일치하는 configured local instance row가 없다
 - **THEN** 시스템은 ActivityPub discovery와 local profile 생성에 필요한 설정 오류로 처리한다
 
+#### Scenario: Runtime local instance resolution does not bootstrap
+
+- **WHEN** ActivityPub discovery 또는 local profile 생성 요청 처리 중 configured local instance를 해석한다
+- **THEN** 시스템은 setup/migration bootstrap 없이 새 local instance row를 자동 생성하지 않는다
+- **AND** 시스템은 `PUBLIC_ORIGIN`과 일치하는 existing row를 읽어 검증하고, 없거나 일치하지 않으면 설정 오류로 처리한다
+
 #### Scenario: Store remote instance shell
 
 - **WHEN** 시스템이 remote profile 저장을 위해 remote instance를 기록한다
