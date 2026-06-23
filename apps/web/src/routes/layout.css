@@ -43,6 +43,7 @@
   --color-text-secondary: #777777;
   --color-border: #eaeaea;
   --color-primary: #fce79a;
+  --color-primary-hover: #f9dc6d;
   --color-danger: #aa1010;
   --color-like: #fcd5cf;
   --color-more: #61a3f9;
@@ -58,6 +59,7 @@
   --color-text-secondary: #777777;
   --color-border: #333333;
   --color-primary: #fce79a;
+  --color-primary-hover: #f9dc6d;
   --color-danger: #aa1010;
   --color-like: #fcd5cf;
   --color-more: #61a3f9;
