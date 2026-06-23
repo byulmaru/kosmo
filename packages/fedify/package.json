@@ -1,0 +1,15 @@
+{
+  "name": "@kosmo/fedify",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts",
+    "./sveltekit": "./sveltekit.ts"
+  },
+  "scripts": {
+    "lint:tsc": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fedify/fedify": "^2.2.5",
+    "@kosmo/core": "workspace:*"
+  }
+}
