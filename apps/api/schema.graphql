@@ -202,7 +202,6 @@ input SelectProfileInput {
 
 type SelectProfilePayload {
   profile: Profile!
-  session: Session!
 }
 
 type Session implements Node {
