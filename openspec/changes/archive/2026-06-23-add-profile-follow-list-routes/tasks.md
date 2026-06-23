@@ -10,10 +10,10 @@
 
 ## 3. 팔로잉 목록 라우트 (PROD-180)
 
-- [ ] 3.1 `(tabs)/@[handle]/following/+page.svelte`를 신설해 `ProfileConnectionList kind="following"`를 재사용 렌더한다
-- [ ] 3.2 팔로워 목록과 시각/상태 구조가 일치하는지 확인한다
+- [x] 3.1 `(tabs)/@[handle]/following/+page.svelte`를 신설해 `ProfileConnectionList kind="following"`를 재사용 렌더한다
+- [x] 3.2 팔로워 목록과 시각/상태 구조가 일치하는지 확인한다
 
 ## 4. 검증 (PROD-180에서 마무리)
 
-- [ ] 4.1 `pnpm -F @kosmo/web check`와 prettier를 통과시킨다
-- [ ] 4.2 `/@{handle}/followers`·`/@{handle}/following` 직접 접근 시 `ProfileHero` + 제목 + 빈 상태가 표시되고, `ProfileHero`/사이드바 카운트 링크로 이동되는지 확인한다(시각 확인은 사용자)
+- [x] 4.1 `pnpm -F @kosmo/web check`와 prettier를 통과시킨다
+- [x] 4.2 `/@{handle}/followers`·`/@{handle}/following` 직접 접근 시 `ProfileHero` + 제목 + 빈 상태가 표시되고, `ProfileHero`/사이드바 카운트 링크로 이동되는지 확인한다(시각 확인은 사용자)
