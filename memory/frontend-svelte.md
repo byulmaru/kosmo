@@ -22,6 +22,7 @@
 - fragment typing을 피하려고 container/view를 나누지 않는다. 실제 책임 분리가 없다면 수동 타입 선언만 늘고 fragment의 장점이 사라진다.
 - 컴포넌트가 필요한 데이터는 자신이 fragment로 선언한다.
 - 부모는 자식 fragment를 spread해서 넘기고, 자식의 필드 목록을 부모 props 타입으로 복제하지 않는다.
+- 자식 fragment 컴포넌트에 넘기는 값은 부모의 `$key`가 아니라 부모 `createFragment(...).data`(route query면 query의 `.data`)다. `$key`는 자기 fragment ref만 노출하므로 자식 `$key` prop에 직접 대입하면 타입 에러가 난다.
 
 ## Mearie Cache And Mutations
 

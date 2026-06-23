@@ -49,9 +49,10 @@
   };
 
   // 홈 프로필 없음 온보딩 등 자식 라우트가 사이드바 프로필 스위처를 열 수 있게 한다.
-  // 사이드바가 lg 미만에서는 드로어로만 보이므로 모바일에서는 드로어를 먼저 연다.
+  // 사이드바가 md 미만에서는 드로어로만 보이므로 모바일에서는 드로어를 먼저 연다.
+  // md 이상에서는 (접힌) 사이드바가 보이므로 드로어 없이 스위처만 연다.
   const openProfileSwitcher = () => {
-    if (typeof window !== 'undefined' && !window.matchMedia('(min-width: 64rem)').matches) {
+    if (typeof window !== 'undefined' && !window.matchMedia('(min-width: 48rem)').matches) {
       openDrawer();
     }
     profileSwitcherOpen = true;
@@ -60,6 +61,11 @@
   setProfileSwitcherContext({ openProfileSwitcher });
 
   const handlePointerDown = (event: PointerEvent) => {
+    // 드로어는 md 미만(모바일)에서만 보이므로 그 폭에서만 좌측 스와이프를 받는다.
+    if (typeof window !== 'undefined' && window.matchMedia('(min-width: 48rem)').matches) {
+      swipeStartX = null;
+      return;
+    }
     swipeStartX = event.clientX <= 24 ? event.clientX : null;
   };
 
@@ -85,9 +91,9 @@
 />
 
 <div
-  class="min-h-screen lg:grid lg:grid-cols-[20rem_minmax(0,600px)_minmax(290px,350px)] lg:justify-center"
+  class="min-h-screen md:grid md:justify-center md:grid-cols-[5rem_minmax(0,600px)] xl:grid-cols-[20rem_minmax(0,600px)_minmax(290px,350px)]"
 >
-  <div class="hidden lg:block">
+  <div class="hidden md:block">
     <SidebarNavigation
       query={query.data}
       loading={query.loading}
@@ -97,9 +103,9 @@
     />
   </div>
 
-  <div class="grid min-h-screen grid-rows-[auto_1fr_auto] lg:grid-rows-[1fr]">
+  <div class="grid min-h-screen grid-rows-[auto_1fr_auto] md:grid-rows-[1fr]">
     <header
-      class="sticky top-0 z-20 border-b border-border bg-background/95 px-4 py-3 backdrop-blur lg:hidden"
+      class="sticky top-0 z-20 border-b border-border bg-background/95 px-4 py-3 backdrop-blur md:hidden"
     >
       <button
         class="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-bold text-foreground"
@@ -113,14 +119,14 @@
       </button>
     </header>
 
-    <main class="flex min-h-0 items-center px-6 py-8 pb-24 lg:min-h-screen lg:pb-8">
+    <main class="flex min-h-0 items-center px-6 py-8 pb-24 md:min-h-screen md:pb-8">
       {@render children()}
     </main>
 
     <BottomTabBar onMenuClick={openDrawer} />
   </div>
 
-  <div class="border-border hidden border-l lg:block">
+  <div class="border-border hidden border-l xl:block">
     <div class="sticky top-0 pt-4 pl-6">
       {#if query.loading}
         <div class="border-border bg-card grid gap-3 rounded-lg border p-4" aria-hidden="true">
@@ -137,7 +143,7 @@
   </div>
 
   {#if drawerOpen}
-    <div class="fixed inset-0 z-40 lg:hidden" role="presentation">
+    <div class="fixed inset-0 z-40 md:hidden" role="presentation">
       <button
         class="absolute inset-0 bg-foreground/35"
         type="button"
