@@ -98,7 +98,7 @@
   );
 </script>
 
-<!-- md~lg 구간 접힌 아이콘 레일. 풀 사이드바와 스크립트/상태를 공유한다. -->
+<!-- md~xl 구간 접힌 아이콘 레일. 풀 사이드바와 스크립트/상태를 공유한다. -->
 {#snippet collapsedRail()}
   <div class="flex h-full w-full flex-col items-center gap-2 px-2 py-4">
     <ProfileSwitcher
