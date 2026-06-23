@@ -225,10 +225,10 @@
   }`}
 >
   {#if surface !== 'drawer'}
-    <div class="flex h-full w-full flex-col lg:hidden">{@render collapsedRail()}</div>
+    <div class="flex h-full w-full flex-col xl:hidden">{@render collapsedRail()}</div>
   {/if}
 
-  <div class={`h-full w-full flex-col ${surface === 'drawer' ? 'flex' : 'hidden lg:flex'}`}>
+  <div class={`h-full w-full flex-col ${surface === 'drawer' ? 'flex' : 'hidden xl:flex'}`}>
     <section
       class="relative z-20 h-[260px] w-80 shrink-0 overflow-visible"
       aria-label="활성 프로필"

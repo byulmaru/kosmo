@@ -91,7 +91,7 @@
 />
 
 <div
-  class="min-h-screen md:grid md:justify-center md:grid-cols-[5rem_minmax(0,600px)] lg:grid-cols-[20rem_minmax(0,600px)_minmax(290px,350px)]"
+  class="min-h-screen md:grid md:justify-center md:grid-cols-[5rem_minmax(0,600px)] xl:grid-cols-[20rem_minmax(0,600px)_minmax(290px,350px)]"
 >
   <div class="hidden md:block">
     <SidebarNavigation
@@ -126,7 +126,7 @@
     <BottomTabBar onMenuClick={openDrawer} />
   </div>
 
-  <div class="border-border hidden border-l lg:block">
+  <div class="border-border hidden border-l xl:block">
     <div class="sticky top-0 pt-4 pl-6">
       {#if query.loading}
         <div class="border-border bg-card grid gap-3 rounded-lg border p-4" aria-hidden="true">
