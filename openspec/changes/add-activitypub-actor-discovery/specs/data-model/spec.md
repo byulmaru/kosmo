@@ -68,8 +68,10 @@
 #### Scenario: Store remote actor shell
 
 - **WHEN** 시스템이 remote profile의 ActivityPub actor 저장 경계를 마련한다
-- **THEN** 시스템은 remote profile, actor URI, actor type, 선택적 public key metadata를 저장한다
+- **THEN** 시스템은 remote profile, actor URI, actor type을 ActivityPub actor metadata로 저장한다
+- **AND** remote actor의 public key metadata가 주어지는 경우 private key 없이 actor key 저장 경계에 둘 수 있어야 한다
 - **AND** actor URI는 중복될 수 없다
+- **AND** remote profile은 remote ActivityPub actor metadata row를 최대 1개만 가질 수 있다
 - **AND** remote actor fetch/cache, key refresh, signature verification 동작은 이번 요구사항에 포함되지 않는다
 
 ### Requirement: Federation storage identifiers and enums

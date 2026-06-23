@@ -2,17 +2,18 @@
 
 ### Requirement: Profile relative handle
 
-API는 프로필 표시용 handle 문자열을 local instance 기준 `relativeHandle`로 제공해야 한다(MUST).
+API는 프로필 표시용 handle 문자열을 configured local instance 기준 `relativeHandle`로 제공해야 한다(MUST).
 
-#### Scenario: Relative handle for local profile
+#### Scenario: Relative handle for configured local profile
 
-- **WHEN** 클라이언트가 local instance에 속한 활성 프로필의 `relativeHandle`을 조회한다
+- **WHEN** 클라이언트가 configured local instance에 속한 활성 프로필의 `relativeHandle`을 조회한다
 - **THEN** 시스템은 `@{handle}` 형식의 문자열을 반환한다
 
-#### Scenario: Relative handle for remote profile
+#### Scenario: Relative handle for profile outside configured local instance
 
-- **WHEN** 클라이언트가 remote instance에 속한 활성 프로필의 `relativeHandle`을 조회한다
-- **THEN** 시스템은 `@{handle}@{remoteDomain}` 형식의 문자열을 반환한다
+- **WHEN** 클라이언트가 configured local instance가 아닌 instance에 속한 활성 프로필의 `relativeHandle`을 조회한다
+- **THEN** 시스템은 `@{handle}@{instanceDomain}` 형식의 문자열을 반환한다
+- **AND** 해당 instance가 `LOCAL` 타입이어도 configured local instance가 아니면 domain을 포함한다
 
 ## MODIFIED Requirements
 
@@ -61,10 +62,10 @@ API는 프로필 표시용 handle 문자열을 local instance 기준 `relativeHa
 - **WHEN** 로그인한 계정이 configured local instance에서 이미 사용 중인 정규화 handle로 프로필 생성을 요청한다
 - **THEN** 시스템은 `handle` field의 conflict 오류를 반환한다
 
-#### Scenario: Create profile with handle used only by remote profile
+#### Scenario: Create profile with handle used only by another instance profile
 
-- **WHEN** 로그인한 계정이 저장된 remote profile에서만 사용 중인 정규화 handle로 local profile 생성을 요청한다
-- **THEN** 시스템은 remote profile의 handle만을 이유로 `handle` field conflict 오류를 반환하지 않는다
+- **WHEN** 로그인한 계정이 configured local instance가 아닌 instance에서만 사용 중인 정규화 handle로 local profile 생성을 요청한다
+- **THEN** 시스템은 다른 instance의 handle만을 이유로 `handle` field conflict 오류를 반환하지 않는다
 
 ### Requirement: Profile object visibility
 
@@ -86,7 +87,7 @@ API는 활성 local profile과 저장된 활성 remote profile을 GraphQL profil
 #### Scenario: Existing local profile entry points are not expanded
 
 - **WHEN** remote profile이 저장되어 있고 상태가 `ACTIVE`이다
-- **THEN** 이번 capability는 기존 `profileByHandle(handle:)`, account profile list, local profile 검색 결과에 remote profile을 포함하도록 확장하지 않는다
+- **THEN** 이번 capability는 기존 `profileByHandle(handle:)`에 remote profile을 포함하도록 확장하지 않는다
 
 #### Scenario: Access inactive profile object
 

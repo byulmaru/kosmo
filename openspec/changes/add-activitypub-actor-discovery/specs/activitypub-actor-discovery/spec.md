@@ -39,12 +39,6 @@
 - **WHEN** WebFinger resource의 handle과 일치하는 local active profile이 없다
 - **THEN** 시스템은 HTTP 404로 응답한다
 
-#### Scenario: Ignore remote profile WebFinger on local domain
-
-- **WHEN** 저장된 remote profile의 handle이 local domain WebFinger resource와 일치한다
-- **THEN** 시스템은 remote profile을 local WebFinger 결과로 반환하지 않는다
-- **AND** 시스템은 HTTP 404로 응답한다
-
 ### Requirement: Local actor document
 
 시스템은 local active profile의 actor URI에서 read-only ActivityPub `Person` document를 반환해야 한다(MUST).
@@ -54,7 +48,7 @@
 - **WHEN** 외부 서버가 `GET /ap/actor/{profile.id}`를 ActivityPub JSON으로 요청한다
 - **THEN** 시스템은 해당 ID의 local active profile을 조회한다
 - **AND** 시스템은 HTTP 200과 `application/activity+json` content type으로 응답한다
-- **AND** `Person` document는 `id`, `preferredUsername`, `name`, `summary`, `url`, `published`, `inbox`, `outbox`, `publicKey`, `assertionMethods`를 포함한다
+- **AND** `Person` document는 `id`, `preferredUsername`, `name`, `url`, `published`, `inbox`, `outbox`, `publicKey`, `assertionMethods`를 포함한다
 - **AND** `id`는 canonical local actor URI `{localOrigin}/ap/actor/{profile.id}`와 같다
 - **AND** `preferredUsername`은 local profile handle이다
 - **AND** `url`은 기존 웹 프로필 URL `{localOrigin}/@{handle}`이다
