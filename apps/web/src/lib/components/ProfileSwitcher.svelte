@@ -3,6 +3,7 @@
   import { createFragment, createMutation } from '@mearie/svelte';
   import { graphql } from '$mearie';
   import Avatar from '$lib/components/Avatar.svelte';
+  import { getFirstGraphQLError } from '$lib/graphql/error';
   import { getProfileInitial } from '$lib/utils/profile';
   import type { ProfileSwitcher_query$key } from '$mearie';
 
@@ -47,16 +48,10 @@
   const selectProfileMutation = graphql(`
     mutation ProfileSwitcherSelectProfileMutation($id: ID!) {
       selectProfile(input: { id: $id }) {
-        __typename
-        ... on SelectProfileSuccess {
-          profile {
-            id
-            handle
-            displayName
-          }
-        }
-        ... on NotFoundError {
-          message
+        profile {
+          id
+          handle
+          displayName
         }
       }
     }
@@ -65,17 +60,10 @@
   const createProfileMutation = graphql(`
     mutation ProfileSwitcherCreateProfileMutation($handle: String!) {
       createProfile(input: { handle: $handle }) {
-        __typename
-        ... on CreateProfileSuccess {
-          profile {
-            id
-            handle
-            displayName
-          }
-        }
-        ... on ConflictError {
-          message
-          field
+        profile {
+          id
+          handle
+          displayName
         }
       }
     }
@@ -136,18 +124,14 @@
     profileActionLoading = true;
 
     try {
-      const data = await selectProfile({ id });
-
-      if (data.selectProfile.__typename !== 'SelectProfileSuccess') {
-        profileError = data.selectProfile.message;
-        return;
-      }
-
+      await selectProfile({ id });
       switcherOpen = false;
       profileCreationOpen = false;
       onProfileStateChanged();
     } catch (error) {
-      profileError = error instanceof Error ? error.message : '프로필을 전환하지 못했습니다.';
+      const graphQLError = getFirstGraphQLError(error);
+
+      profileError = graphQLError?.message ?? '프로필을 전환하지 못했습니다.';
     } finally {
       profileActionLoading = false;
     }
@@ -173,27 +157,33 @@
     profileActionLoading = true;
 
     try {
-      const created = await createProfile({ handle });
-      if (created.createProfile.__typename !== 'CreateProfileSuccess') {
-        profileCreationError = created.createProfile.message;
+      let createdProfileId: string;
+
+      try {
+        const created = await createProfile({ handle });
+
+        createdProfileId = created.createProfile.profile.id;
+        newProfileHandle = '';
+        profileCreationOpen = false;
+      } catch (error) {
+        const graphQLError = getFirstGraphQLError(error);
+
+        profileCreationError = graphQLError?.message ?? '프로필을 생성하지 못했습니다.';
         return;
       }
 
-      newProfileHandle = '';
-      profileCreationOpen = false;
+      try {
+        await selectProfile({ id: createdProfileId });
+      } catch (error) {
+        const graphQLError = getFirstGraphQLError(error);
 
-      const selected = await selectProfile({ id: created.createProfile.profile.id });
-      if (selected.selectProfile.__typename !== 'SelectProfileSuccess') {
-        profileError = selected.selectProfile.message;
+        profileError = graphQLError?.message ?? '프로필을 전환하지 못했습니다.';
         return;
       }
 
       switcherOpen = false;
       profileCreationOpen = false;
       onProfileStateChanged();
-    } catch (error) {
-      profileCreationError =
-        error instanceof Error ? error.message : '프로필을 생성하지 못했습니다.';
     } finally {
       profileActionLoading = false;
     }
