@@ -116,11 +116,16 @@
 
   const toggleSwitcher = () => {
     switcherOpen = !switcherOpen;
+  };
+
+  // switcherOpen은 compact/full(및 데스크톱/드로어) 인스턴스가 공유하므로, 메뉴가 닫히면
+  // 어느 트리거로 닫혔든 이 인스턴스의 생성 폼·에러를 비워 다음 열림에서 목록부터 보이게 한다.
+  $effect(() => {
     if (!switcherOpen) {
       profileCreationOpen = false;
       profileCreationError = null;
     }
-  };
+  });
 
   const chooseProfile = async (id: string) => {
     if (activeProfile?.id === id || creatingOrSwitching) {
