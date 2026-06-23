@@ -8,7 +8,7 @@ export const tv = createTV({
   twMergeConfig: {
     extend: {
       theme: {
-        text: ['xsm', 'md'],
+        text: ['xsm', 'md', 'lg'],
         color: [
           'bg',
           'surface',
