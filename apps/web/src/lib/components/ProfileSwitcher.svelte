@@ -53,14 +53,6 @@
           handle
           displayName
         }
-        session {
-          id
-          selectedProfile {
-            id
-            handle
-            displayName
-          }
-        }
       }
     }
   `);
