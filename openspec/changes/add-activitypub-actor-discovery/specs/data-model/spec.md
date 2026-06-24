@@ -17,7 +17,7 @@
 
 - **WHEN** 시스템이 ActivityPub actor URI, WebFinger subject, local profile 생성의 instance ID를 결정한다
 - **THEN** 시스템은 `PUBLIC_ORIGIN`과 일치하는 configured local instance row의 canonical origin을 `localOrigin`으로 사용한다
-- **AND** 시스템은 configured local instance row의 정규화 host를 `localHost`로 사용한다
+- **AND** 시스템은 configured local instance row의 정규화 host를 `localInstanceHost`로 사용한다
 - **AND** request URL origin, Host header, `PUBLIC_API_ORIGIN`을 federation identity의 source of truth로 사용하지 않는다
 
 #### Scenario: Missing or mismatched local instance configuration

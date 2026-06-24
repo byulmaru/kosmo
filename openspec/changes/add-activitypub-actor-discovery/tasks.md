@@ -27,7 +27,7 @@
 
 - [ ] 4.1 `packages/core`에 runtime local instance resolve helper를 만들고, `PUBLIC_ORIGIN`과 일치하는 configured local instance row를 canonical origin/host source of truth로 읽어 검증하되 runtime 요청 처리 중 row를 자동 생성하지 않는다.
 - [ ] 4.2 `packages/core`에 setup/migration에서 사용할 local instance bootstrap helper를 만들고, configured local instance row를 만들거나 `PUBLIC_ORIGIN`과 일치하는 기존 row를 검증하며, profile backfill 전에 실행되는 setup/migration 흐름에 연결한다.
-- [ ] 4.3 WebFinger `acct:{handle}@{localHost}`를 local active profile UUID actor identifier로 매핑한다.
+- [ ] 4.3 WebFinger `acct:{handle}@{localInstanceHost}`를 local active profile UUID actor identifier로 매핑한다.
 - [ ] 4.4 actor dispatcher를 `/ap/actor/{identifier}` URI template에 연결하고 identifier를 raw `profile.id` UUID로 해석한다.
 - [ ] 4.5 actor document를 `Person`으로 구성하고 `id`, `preferredUsername`, `name`, `url`, `published`, `inbox`, `outbox`, `publicKey`, `assertionMethods`를 보장한다.
 - [ ] 4.6 WebFinger와 actor document의 성공 content type, canonical subject/id, 404 실패 응답을 구현한다.
