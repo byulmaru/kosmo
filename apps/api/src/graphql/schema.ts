@@ -1,5 +1,4 @@
 import './enums';
-import './errors';
 import './resolvers';
 
 import { dev } from '@kosmo/core';

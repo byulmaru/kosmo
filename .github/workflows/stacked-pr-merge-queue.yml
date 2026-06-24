@@ -1,0 +1,523 @@
+name: Stacked PR Merge Queue
+
+on:
+  pull_request_target:
+    types:
+      - labeled
+      - unlabeled
+      - synchronize
+      - reopened
+      - ready_for_review
+      - converted_to_draft
+      - edited
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to process
+        required: true
+        type: number
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+  cancel-in-progress: false
+
+env:
+  MERGE_QUEUE_LABEL: merge-queue
+  TARGET_BRANCH: main
+  MERGE_METHOD: SQUASH
+
+jobs:
+  merge_queue:
+    name: Manage native merge queue opt-in
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Process pull request
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const labelName = process.env.MERGE_QUEUE_LABEL;
+            const targetBranch = process.env.TARGET_BRANCH;
+            const mergeMethod = process.env.MERGE_METHOD;
+            const activationPermissions = new Set(["admin", "maintain", "write"]);
+
+            function getPullRequestNumber() {
+              if (context.eventName === "workflow_dispatch") {
+                const value = core.getInput("pr_number", { required: true });
+                const number = Number(value);
+
+                if (!Number.isInteger(number) || number <= 0) {
+                  throw new Error(`Invalid pull request number: ${value}`);
+                }
+
+                return number;
+              }
+
+              const number = context.payload.pull_request?.number;
+
+              if (!Number.isInteger(number)) {
+                throw new Error("This workflow requires a pull request event or pr_number input.");
+              }
+
+              return number;
+            }
+
+            function isPullRequestTargetAction(action) {
+              return context.eventName === "pull_request_target" && context.payload.action === action;
+            }
+
+            function isLabelChangeAction() {
+              return isPullRequestTargetAction("labeled") || isPullRequestTargetAction("unlabeled");
+            }
+
+            function getEventLabelName() {
+              return context.payload.label?.name ?? null;
+            }
+
+            function isMergeQueueLabelRemoval() {
+              return isPullRequestTargetAction("unlabeled") && getEventLabelName() === labelName;
+            }
+
+            function isUnrelatedLabelChange() {
+              return isLabelChangeAction() && getEventLabelName() !== labelName;
+            }
+
+            function isBaseChangedEvent() {
+              return isPullRequestTargetAction("edited") && Boolean(context.payload.changes?.base);
+            }
+
+            function shouldCleanUpForUntrustedSender() {
+              return isPullRequestTargetAction("synchronize");
+            }
+
+            function getGraphqlErrorMessages(error) {
+              const messages = [];
+
+              if (Array.isArray(error.errors)) {
+                messages.push(...error.errors.map((graphqlError) => graphqlError.message));
+              }
+
+              if (error.message) {
+                messages.push(error.message);
+              }
+
+              return messages.filter(Boolean);
+            }
+
+            function isNotReadyForQueue(error) {
+              return getGraphqlErrorMessages(error).some((message) =>
+                /blocked|check|merge requirements|mergeable|not mergeable|review|required|unstable/i.test(
+                  message,
+                ),
+              );
+            }
+
+            function isAlreadyQueued(error) {
+              return getGraphqlErrorMessages(error).some((message) =>
+                /already.*(merge queue|queued|enqueued)|pull request is already in the merge queue/i.test(message),
+              );
+            }
+
+            function isAutoMergeAlreadyEnabled(error) {
+              return getGraphqlErrorMessages(error).some((message) =>
+                /auto.?merge.*already enabled|already.*auto.?merge/i.test(message),
+              );
+            }
+
+            function canActivateMergeQueue(permission) {
+              return activationPermissions.has(String(permission).toLowerCase());
+            }
+
+            async function removeOptInLabel(number) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner,
+                  repo,
+                  issue_number: number,
+                  name: labelName,
+                });
+                core.info(`Removed unauthorized ${labelName} label from PR #${number}.`);
+              } catch (error) {
+                if (error.status === 404) {
+                  core.info(`The ${labelName} label was already absent from PR #${number}.`);
+                  return;
+                }
+
+                throw error;
+              }
+            }
+
+            async function addOptInLabel(number) {
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: number,
+                labels: [labelName],
+              });
+              core.info(`Restored ${labelName} label on PR #${number}.`);
+            }
+
+            async function getSenderPermission() {
+              const sender = context.payload.sender?.login;
+
+              if (!sender) {
+                return "none";
+              }
+
+              try {
+                const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                  owner,
+                  repo,
+                  username: sender,
+                });
+
+                return data.permission ?? "none";
+              } catch (error) {
+                if (error.status === 404) {
+                  return "none";
+                }
+
+                throw error;
+              }
+            }
+
+            async function fetchPullRequest(number) {
+              const query = `
+                query PullRequestForMergeQueue($owner: String!, $repo: String!, $number: Int!) {
+                  repository(owner: $owner, name: $repo) {
+                    pullRequest(number: $number) {
+                      id
+                      number
+                      title
+                      url
+                      state
+                      isDraft
+                      baseRefName
+                      headRefOid
+                      isMergeQueueEnabled
+                      isInMergeQueue
+                      mergeStateStatus
+                      mergeQueueEntry {
+                        id
+                        state
+                        position
+                      }
+                      autoMergeRequest {
+                        enabledAt
+                        mergeMethod
+                      }
+                    }
+                  }
+                }
+              `;
+
+              const result = await github.graphql(query, { owner, repo, number });
+              const pullRequest = result.repository?.pullRequest;
+
+              if (!pullRequest) {
+                throw new Error(`Pull request #${number} was not found.`);
+              }
+
+              return pullRequest;
+            }
+
+            async function hasOptInLabel(number) {
+              const labels = await github.paginate(github.rest.issues.listLabelsOnIssue, {
+                owner,
+                repo,
+                issue_number: number,
+                per_page: 100,
+              });
+
+              return labels.some((label) => label.name === labelName);
+            }
+
+            async function assertRequiredStatusChecksConfigured() {
+              const { data: rules } = await github.request("GET /repos/{owner}/{repo}/rules/branches/{branch}", {
+                owner,
+                repo,
+                branch: targetBranch,
+                per_page: 100,
+              });
+
+              const requiredStatusChecks = rules.find((rule) => rule.type === "required_status_checks");
+              const checks = requiredStatusChecks?.parameters?.required_status_checks ?? [];
+
+              if (checks.length > 0) {
+                core.info(`Required status checks are configured for ${targetBranch}.`);
+                return;
+              }
+
+              throw new Error(
+                `No required status checks are configured for ${targetBranch}; refusing to manage merge queue state.`,
+              );
+            }
+
+            async function dequeuePullRequest(pullRequest) {
+              const entry = pullRequest.mergeQueueEntry;
+
+              if (!entry) {
+                return false;
+              }
+
+              const mutation = `
+                mutation DequeuePullRequest($entryId: ID!) {
+                  dequeuePullRequest(input: { id: $entryId }) {
+                    mergeQueueEntry {
+                      id
+                    }
+                  }
+                }
+              `;
+
+              await github.graphql(mutation, { entryId: entry.id });
+              core.info(`Removed PR #${pullRequest.number} from the merge queue.`);
+              return true;
+            }
+
+            async function disableAutoMerge(pullRequest) {
+              if (!pullRequest.autoMergeRequest) {
+                return false;
+              }
+
+              const mutation = `
+                mutation DisablePullRequestAutoMerge($pullRequestId: ID!) {
+                  disablePullRequestAutoMerge(input: { pullRequestId: $pullRequestId }) {
+                    pullRequest {
+                      number
+                    }
+                  }
+                }
+              `;
+
+              await github.graphql(mutation, { pullRequestId: pullRequest.id });
+              core.info(`Disabled auto-merge for PR #${pullRequest.number}.`);
+              return true;
+            }
+
+            async function cleanUpPullRequest(pullRequest) {
+              const removedFromQueue = await dequeuePullRequest(pullRequest);
+              const disabledAutoMerge = await disableAutoMerge(pullRequest);
+
+              if (!removedFromQueue && !disabledAutoMerge) {
+                core.info(`PR #${pullRequest.number} has no merge queue or auto-merge state to clean up.`);
+              }
+            }
+
+            async function enqueuePullRequest(pullRequest) {
+              const mutation = `
+                mutation EnqueuePullRequest($pullRequestId: ID!, $expectedHeadOid: GitObjectID!) {
+                  enqueuePullRequest(
+                    input: {
+                      pullRequestId: $pullRequestId
+                      expectedHeadOid: $expectedHeadOid
+                    }
+                  ) {
+                    mergeQueueEntry {
+                      id
+                      state
+                      position
+                    }
+                  }
+                }
+              `;
+
+              const result = await github.graphql(mutation, {
+                pullRequestId: pullRequest.id,
+                expectedHeadOid: pullRequest.headRefOid,
+              });
+
+              const entry = result.enqueuePullRequest.mergeQueueEntry;
+              core.info(`Queued PR #${pullRequest.number} at position ${entry.position} with state ${entry.state}.`);
+            }
+
+            async function enableAutoMerge(pullRequest) {
+              if (pullRequest.autoMergeRequest) {
+                core.info(`PR #${pullRequest.number} already has auto-merge enabled.`);
+                return;
+              }
+
+              const mutation = `
+                mutation EnablePullRequestAutoMerge(
+                  $pullRequestId: ID!
+                  $expectedHeadOid: GitObjectID!
+                  $mergeMethod: PullRequestMergeMethod!
+                ) {
+                  enablePullRequestAutoMerge(
+                    input: {
+                      pullRequestId: $pullRequestId
+                      expectedHeadOid: $expectedHeadOid
+                      mergeMethod: $mergeMethod
+                    }
+                  ) {
+                    pullRequest {
+                      number
+                      autoMergeRequest {
+                        enabledAt
+                        mergeMethod
+                      }
+                    }
+                  }
+                }
+              `;
+
+              try {
+                const result = await github.graphql(mutation, {
+                  pullRequestId: pullRequest.id,
+                  expectedHeadOid: pullRequest.headRefOid,
+                  mergeMethod,
+                });
+
+                const request = result.enablePullRequestAutoMerge.pullRequest.autoMergeRequest;
+                core.info(
+                  `Enabled auto-merge for PR #${pullRequest.number} with method ${request.mergeMethod}.`,
+                );
+              } catch (error) {
+                if (isAutoMergeAlreadyEnabled(error)) {
+                  core.info(`PR #${pullRequest.number} already has auto-merge enabled.`);
+                  return;
+                }
+
+                throw error;
+              }
+            }
+
+            const pullRequestNumber = getPullRequestNumber();
+
+            if (isUnrelatedLabelChange()) {
+              core.info(
+                `Skipping PR #${pullRequestNumber} because ${context.payload.action} label ${getEventLabelName()} is not ${labelName}.`,
+              );
+              return;
+            }
+
+            const pullRequest = await fetchPullRequest(pullRequestNumber);
+            const hasLabel = await hasOptInLabel(pullRequestNumber);
+
+            core.info(
+              [
+                `PR #${pullRequest.number}: ${pullRequest.title}`,
+                `URL: ${pullRequest.url}`,
+                `State: ${pullRequest.state}`,
+                `Base: ${pullRequest.baseRefName}`,
+                `Draft: ${pullRequest.isDraft}`,
+                `Has ${labelName} label: ${hasLabel}`,
+                `Merge queue enabled: ${pullRequest.isMergeQueueEnabled}`,
+                `Merge state: ${pullRequest.mergeStateStatus}`,
+              ].join("\n"),
+            );
+
+            if (pullRequest.state !== "OPEN") {
+              core.info(`Skipping PR #${pullRequest.number} because it is ${pullRequest.state}.`);
+              return;
+            }
+
+            const senderPermission = await getSenderPermission();
+            const senderCanActivate = canActivateMergeQueue(senderPermission);
+
+            if (isMergeQueueLabelRemoval()) {
+              if (!senderCanActivate) {
+                core.info(
+                  `Restoring ${labelName} label on PR #${pullRequest.number} because sender ${context.payload.sender?.login ?? "(unknown)"} has ${senderPermission} permission, not write access.`,
+                );
+                await addOptInLabel(pullRequest.number);
+                return;
+              }
+
+              core.info(`Cleaning up PR #${pullRequest.number} because the ${labelName} label was removed.`);
+              await cleanUpPullRequest(pullRequest);
+              return;
+            }
+
+            if (!hasLabel) {
+              core.info(`Skipping PR #${pullRequest.number} because it does not have the ${labelName} label.`);
+              return;
+            }
+
+            if (pullRequest.isDraft) {
+              core.info(`Cleaning up PR #${pullRequest.number} because it is a draft.`);
+              await cleanUpPullRequest(pullRequest);
+              return;
+            }
+
+            if (pullRequest.baseRefName !== targetBranch) {
+              if (isPullRequestTargetAction("labeled") && !senderCanActivate) {
+                core.info(
+                  `Removing ${labelName} label from PR #${pullRequest.number} because sender ${context.payload.sender?.login ?? "(unknown)"} has ${senderPermission} permission and its base branch is ${pullRequest.baseRefName}, not ${targetBranch}.`,
+                );
+                await removeOptInLabel(pullRequest.number);
+                return;
+              }
+
+              core.info(
+                `Cleaning up PR #${pullRequest.number} because its base branch is ${pullRequest.baseRefName}, not ${targetBranch}.`,
+              );
+              await cleanUpPullRequest(pullRequest);
+              return;
+            }
+
+            if (!senderCanActivate) {
+              core.info(
+                `Skipping PR #${pullRequest.number} because sender ${context.payload.sender?.login ?? "(unknown)"} has ${senderPermission} permission, not write access.`,
+              );
+
+              if (isPullRequestTargetAction("labeled")) {
+                await removeOptInLabel(pullRequest.number);
+                return;
+              }
+
+              if (shouldCleanUpForUntrustedSender()) {
+                await cleanUpPullRequest(pullRequest);
+              }
+
+              return;
+            }
+
+            if (isBaseChangedEvent()) {
+              core.info(`PR #${pullRequest.number} still targets ${targetBranch} after base edit.`);
+            }
+
+            try {
+              await assertRequiredStatusChecksConfigured();
+            } catch (error) {
+              await cleanUpPullRequest(pullRequest);
+              throw error;
+            }
+
+            if (pullRequest.mergeQueueEntry || pullRequest.isInMergeQueue) {
+              const entry = pullRequest.mergeQueueEntry;
+              const details = entry ? `position ${entry.position}, state ${entry.state}` : "already in queue";
+              core.info(`PR #${pullRequest.number} is already in the merge queue (${details}).`);
+              return;
+            }
+
+            if (!pullRequest.isMergeQueueEnabled) {
+              throw new Error(
+                `PR #${pullRequest.number} targets ${targetBranch}, but GitHub merge queue is not enabled for this branch.`,
+              );
+            }
+
+            try {
+              await enqueuePullRequest(pullRequest);
+            } catch (error) {
+              if (isAlreadyQueued(error)) {
+                core.info(`PR #${pullRequest.number} is already in the merge queue.`);
+                return;
+              }
+
+              if (!isNotReadyForQueue(error)) {
+                throw error;
+              }
+
+              core.info(
+                `PR #${pullRequest.number} is not ready for immediate queue entry; enabling auto-merge instead.`,
+              );
+              await enableAutoMerge(pullRequest);
+            }

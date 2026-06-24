@@ -7,5 +7,15 @@ dist
 playwright-report
 test-results
 
+# Terraform local working files and environment-specific inputs.
+**/.terraform/
+**/backend.hcl
+**/backend.s3.tf
+**/*.tfvars
+**/*.tfvars.json
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfplan
+
 # Figma MCP 등 에이전트 도구가 레포 루트에 떨어뜨리는 임시 산출물(스크린샷 등).
 .tmp-*

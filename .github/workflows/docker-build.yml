@@ -77,8 +77,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             PUBLIC_ENV_HASH=${{ hashFiles('.web-build.env') }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           no-cache-filters: base
           secret-files: |
             web_build_env=.web-build.env

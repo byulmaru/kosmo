@@ -19,11 +19,14 @@
   --radius-lg: 16px;
   --radius-xl: 24px;
   /* Foundation font/size 토큰. sm(14)은 Tailwind text-sm과 동일해 생략.
-     lg(20)·xl(24)은 Tailwind 기본(text-lg 18, text-xl 20) 사용처 정리와 함께 후속에서 추가한다. */
+     lg(20)은 게시글 상세 본문 강조에 쓰며 Figma font/size/lg와 일치한다(PROD-173).
+     xl(24)은 Tailwind 기본(text-xl 20) 사용처 정리와 함께 후속에서 추가한다. */
   --text-xsm: 12px;
   --text-xsm--line-height: 16px;
   --text-md: 16px;
   --text-md--line-height: 24px;
+  --text-lg: 20px;
+  --text-lg--line-height: 30px;
   /* 폰트 패밀리. font-sans(UI 기본)=SUIT, font-body(본문)=Pretendard.
      루트 레이아웃이 font-sans를 쓰므로 모든 UI 텍스트가 SUIT를 상속한다. */
   --font-sans:

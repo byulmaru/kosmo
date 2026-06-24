@@ -1,5 +1,9 @@
 # kosmo
 
+## Infrastructure
+
+AWS Terraform root is documented in [apps/terraform/README.md](apps/terraform/README.md).
+
 ## Test Postgres
 
 Run a local PostgreSQL instance for tests with Docker Compose:

@@ -1,7 +1,7 @@
-import { dev } from '@kosmo/core';
 import { initContextCache } from '@pothos/core';
 import { createYoga, useExecutionCancellation } from 'graphql-yoga';
 import { Hono } from 'hono';
+import { useError } from './plugins/error';
 import { schema } from './schema';
 import type { Env, ServerContext, UserContext } from '../context';
 
@@ -16,9 +16,9 @@ const app = createYoga<{ c: ServerContext }, UserContext>({
     allowedHeaders: ['Authorization', 'Content-Type'],
     methods: ['GET', 'POST'],
   },
-  maskedErrors: !dev,
+  maskedErrors: false,
   landingPage: false,
-  plugins: [useExecutionCancellation()],
+  plugins: [useExecutionCancellation(), useError()],
 });
 
 yoga.on(['GET', 'POST', 'OPTIONS'], '/', async (c) => {

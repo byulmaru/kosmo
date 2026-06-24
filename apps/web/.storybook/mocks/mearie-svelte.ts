@@ -9,6 +9,8 @@ import type {
   createQuery as CreateQuery,
   createSubscription as CreateSubscription,
   getClient as GetClient,
+  isAggregatedError as IsAggregatedError,
+  isGraphQLError as IsGraphQLError,
   setClient as SetClient,
 } from '@mearie/svelte';
 
@@ -49,6 +51,8 @@ export const createSubscription = storybookOnly(
 ) as unknown as typeof CreateSubscription;
 export const getClient = storybookOnly('getClient') as unknown as typeof GetClient;
 export const setClient = storybookOnly('setClient') as unknown as typeof SetClient;
+export const isAggregatedError = (() => false) as unknown as typeof IsAggregatedError;
+export const isGraphQLError = (() => false) as unknown as typeof IsGraphQLError;
 
 export const createFragment = ((_fragment: unknown, fragmentRef: () => unknown) => ({
   get data() {
