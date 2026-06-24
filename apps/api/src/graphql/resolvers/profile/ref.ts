@@ -19,6 +19,9 @@ export const Profile = createObjectRef('Profile', TableDiscriminator.Profiles, (
 Profile.implement({
   fields: (t) => ({
     handle: t.exposeString('handle'),
+    displayHandle: t.string({
+      resolve: (profile) => `@${profile.handle}`,
+    }),
     displayName: t.exposeString('displayName'),
     bio: t.exposeString('bio', { nullable: true }),
     followPolicy: t.expose('followPolicy', {
