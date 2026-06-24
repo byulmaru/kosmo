@@ -1,12 +1,12 @@
 # kosmo Terraform
 
-이 디렉터리는 AWS EKS 전환을 위한 Terraform root다. PROD-198 범위에서는 실제 AWS 리소스를 만들지 않고, 이후 VPC/EKS/node group/CSI/Argo CD 이슈가 채울 수 있는 root, backend, provider, 변수, 출력 인터페이스만 준비한다.
+이 디렉터리는 AWS EKS 전환을 위한 Terraform root다. PROD-201 범위에서는 EKS worker node를 private subnet에 배치할 수 있는 2 AZ VPC, public/private subnet, 단일 NAT Gateway, route table, EKS용 security group을 준비한다.
 
 ## 범위
 
-- 포함: Terraform CLI/provider 버전 고정, AWS provider 설정, S3 backend partial configuration, 변수/출력 구조, init/plan 절차.
-- 제외: VPC, subnet, NAT Gateway, security group, EKS cluster, node group, CSI driver, Kubernetes/Helm provider, Argo CD bootstrap.
-- 제외된 리소스는 각각 PROD-201, PROD-204, PROD-205, PROD-210, PROD-212에서 추가한다.
+- 포함: Terraform CLI/provider 버전 고정, AWS provider 설정, S3 backend partial configuration, 변수/출력 구조, VPC, subnet, NAT Gateway, route table, EKS cluster/node security group, init/plan 절차.
+- 제외: EKS cluster, node group, CSI driver, Kubernetes/Helm provider, Argo CD bootstrap.
+- 제외된 리소스는 각각 PROD-204, PROD-205, PROD-210, PROD-212에서 추가한다.
 
 ## 기본 결정
 
@@ -15,6 +15,46 @@
 - cluster name은 `kosmo`로 고정한다. cluster name 변경은 replacement 성격이 강하므로 외부 변수로 열어 두지 않는다.
 - Kubernetes version 기본값은 `1.36`이다. 이 값은 스캐폴딩 기본값이며 EKS cluster를 실제 생성하는 PROD-204에서 AWS EKS 지원 상태와 add-on 호환성을 다시 확인한다.
 - node group 설정은 외부 변수로 열어 두지 않는다. 여러 node group의 구성, On-Demand/Spot 비율, instance type, min/desired/max size는 PROD-205에서 실제 Terraform 코드로 정의한다.
+- VPC CIDR 기본값은 `10.40.0.0/16`이다. public subnet은 `10.40.0.0/24`, `10.40.1.0/24`, private subnet은 `10.40.10.0/24`, `10.40.11.0/24`를 기본값으로 사용한다.
+- AZ는 현재 AWS 계정과 region에서 opt-in 없이 사용할 수 있는 availability zone 중 앞의 2개를 사용한다.
+- EKS worker node는 private subnet에 배치한다. public subnet은 NAT Gateway와 이후 public load balancer가 필요할 때만 사용한다.
+
+## 네트워크 구성
+
+Terraform plan은 다음 네트워크 리소스를 생성한다.
+
+- VPC 1개, DNS support/hostname 활성화.
+- public subnet 2개, private subnet 2개. 각 subnet은 EKS와 AWS load balancer discovery용 Kubernetes tag를 가진다.
+- Internet Gateway 1개와 public route table 1개.
+- Elastic IP 1개와 NAT Gateway 1개. NAT Gateway는 첫 번째 public subnet에 둔다.
+- private route table은 private subnet마다 1개씩 만들지만, 현재는 둘 다 동일한 NAT Gateway로 `0.0.0.0/0`을 보낸다. 이후 AZ별 NAT Gateway로 바꿀 때 각 route table의 NAT 대상만 나눌 수 있게 하기 위해서다.
+- EKS cluster security group 1개와 worker node security group 1개.
+
+## NAT Gateway trade-off
+
+현재 구성은 비용을 줄이기 위해 NAT Gateway를 1개만 둔다. 장점은 시간당 NAT Gateway 비용과 Elastic IP 수가 최소화된다는 점이다. 단점은 NAT Gateway가 위치한 AZ 또는 해당 public subnet 경로에 장애가 나면 다른 AZ의 private subnet도 outbound 인터넷/AWS API 접근에 영향을 받을 수 있고, 다른 AZ의 private subnet에서 NAT Gateway로 나가는 트래픽은 cross-AZ 데이터 전송 비용이 발생할 수 있다는 점이다.
+
+운영 가용성을 우선하면 AZ마다 NAT Gateway를 1개씩 두고, 각 private route table이 같은 AZ의 NAT Gateway를 바라보게 바꾼다. 이 대안은 NAT Gateway 시간당 비용과 처리 비용이 AZ 수만큼 늘지만, AZ 단위 장애와 cross-AZ NAT 트래픽 비용을 줄인다. kosmo의 초기 EKS 전환은 비용 민감도가 높고 트래픽 규모가 작다는 전제로 단일 NAT Gateway를 선택한다.
+
+## Security group 경계
+
+`kosmo-eks-cluster` security group은 후속 EKS cluster control plane ENI에 연결할 그룹이다. worker node security group에서 Kubernetes API HTTPS 트래픽을 받을 수 있고, worker node의 HTTPS webhook과 kubelet `10250`으로 나갈 수 있다.
+
+`kosmo-eks-nodes` security group은 private subnet의 worker node에 연결할 그룹이다. 같은 node group 내부 통신은 허용하고, control plane에서 들어오는 HTTPS와 kubelet 트래픽만 명시적으로 허용한다. outbound는 private node가 NAT Gateway를 통해 AWS API, container registry, OS package repository에 접근해야 하므로 IPv4 전체 egress를 허용한다. pod-to-pod 정책은 이 security group 대신 Kubernetes NetworkPolicy 또는 CNI 정책으로 다룬다.
+
+## EKS endpoint 운영
+
+PROD-204에서 EKS cluster를 만들 때 초기값은 public endpoint를 켜는 구성이 현실적이다. 아직 VPN, bastion, private admin path가 없기 때문에 private-only endpoint로 시작하면 장애 대응과 배포 경로가 막힐 수 있다. public endpoint를 쓰더라도 cluster API 접근 CIDR은 운영자 고정 IP 또는 CI egress IP로 좁히는 것을 기본으로 한다.
+
+private-only endpoint 전환은 다음 조건이 갖춰진 뒤에 한다.
+
+- 운영자가 VPC 내부 경로로 Kubernetes API에 접근할 수 있다.
+- CI/CD가 VPC 내부 runner, VPN, 또는 승인된 network path를 통해 cluster API에 접근할 수 있다.
+- Argo CD bootstrap 이후에도 emergency kubectl 접근 절차가 문서화되어 있다.
+
+## OKE 복귀 영향
+
+이 Terraform root는 AWS 전용 VPC, NAT Gateway, EKS security group을 만든다. OKE로 복귀할 경우 애플리케이션 Kubernetes manifest와 container image는 재사용할 수 있지만, 네트워크 IaC는 OCI VCN/subnet/NAT gateway/security list 또는 NSG 구성으로 다시 매핑해야 한다. AWS Load Balancer Controller용 subnet tag와 EKS security group 경계는 OKE에 직접 대응하지 않으므로, 복귀 계획에서는 Kubernetes 계층과 cloud network 계층을 분리해서 폐기 순서를 잡는다.
 
 ## State backend
 
@@ -31,7 +71,7 @@ use_lockfile = true
 
 `use_lockfile = true`로 S3 native lockfile을 사용한다. DynamoDB 기반 locking은 쓰지 않는다.
 
-기본 checkout 상태에서는 backend를 활성화하지 않는다. 이렇게 해야 조직 공용 S3 bucket 값이 없어도 `terraform init -backend=false`, `terraform validate`, `terraform plan`으로 스캐폴딩을 검증할 수 있다. S3 backend를 쓸 때는 `backend.s3.tf.example`을 커밋하지 않는 `backend.s3.tf`로 복사한다.
+기본 checkout 상태에서는 backend를 활성화하지 않는다. 이렇게 해야 조직 공용 S3 bucket 값이 없어도 `terraform init -backend=false`와 `terraform validate`를 실행할 수 있다. `terraform plan`은 실제 AWS availability zone 조회와 리소스 계획을 포함하므로 AWS 인증이 필요하다. S3 backend를 쓸 때는 `backend.s3.tf.example`을 커밋하지 않는 `backend.s3.tf`로 복사한다.
 
 ## 민감 값 규칙
 
@@ -73,7 +113,7 @@ cp terraform.tfvars.example terraform.tfvars
 $EDITOR terraform.tfvars
 ```
 
-현재 root에는 실제 리소스가 없으므로 `terraform.tfvars` 없이도 validate와 plan이 가능해야 한다.
+기본 CIDR을 쓰면 `terraform.tfvars` 없이도 validate가 가능하다. plan은 availability zone 조회와 AWS 리소스 계획을 위해 AWS 인증이 필요하다.
 
 ## Toolchain
 
@@ -94,4 +134,4 @@ terraform validate
 terraform plan -input=false -lock=false
 ```
 
-현재 plan은 실제 AWS 리소스 생성을 포함하지 않는다. 후속 이슈에서 리소스가 추가되면 plan 결과에 비용 발생 리소스와 운영 trade-off를 함께 문서화한다.
+현재 plan은 VPC, subnet, Elastic IP, NAT Gateway, route, security group 생성을 포함한다. NAT Gateway와 Elastic IP는 비용 발생 리소스이므로 실제 apply 전에 단일 NAT Gateway 비용/가용성 trade-off가 현재 운영 기대와 맞는지 다시 확인한다.
