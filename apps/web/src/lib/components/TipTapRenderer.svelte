@@ -5,11 +5,28 @@
   import type { TipTapDocument } from '@kosmo/core/tiptap';
   import type { HTMLAttributes } from 'svelte/elements';
 
-  type Props = HTMLAttributes<HTMLDivElement> & {
+  import { tv } from '$lib/tv';
+
+  // 본문 강조 크기. 목록(feed)=md(16px) / 상세(detail)=lg(20px). Figma 의도(상세 anchor 본문 강조, PROD-173).
+  // 폰트 크기·줄간격은 Foundation 토큰 유틸리티(text-md/text-lg)를 외곽 wrapper에 적용해 .tiptap-renderer가
+  // 상속한다. 문단 간격·공백 처리 등 그 외 렌더 규칙은 size와 무관하게 공통이다.
+  type Props = Omit<HTMLAttributes<HTMLDivElement>, 'class'> & {
     document: TipTapDocument;
+    size?: 'md' | 'lg';
+    // tailwind-merge가 ClassValue(숫자·딕셔너리)를 받지 못하므로 문자열로 좁힌다.
+    class?: string | null;
   };
 
-  let { document, class: className, ...attributes }: Props = $props();
+  let { document, size = 'md', class: className, ...attributes }: Props = $props();
+
+  const renderer = tv({
+    variants: {
+      size: {
+        md: 'text-md',
+        lg: 'text-lg',
+      },
+    },
+  });
 
   let editor = $state<Editor | null>(null);
   let editorHost: HTMLDivElement;
@@ -39,16 +56,15 @@
   });
 </script>
 
-<div {...attributes} class={className}>
+<div {...attributes} class={renderer({ size, class: className })}>
   <div bind:this={editorHost}></div>
 </div>
 
 <style>
+  /* 폰트 크기·줄간격은 외곽 wrapper의 text-md/text-lg에서 상속한다(size 변형). */
   :global(.tiptap-renderer) {
     color: var(--color-text-primary);
     font-family: var(--font-body);
-    font-size: var(--text-md);
-    line-height: var(--text-md--line-height);
     white-space: pre-wrap;
     overflow-wrap: anywhere !important;
     outline: none;

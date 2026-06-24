@@ -10,11 +10,16 @@
   // 게시글 본문(TipTap 문서)을 리치 렌더하는 프래그먼트 컴포넌트.
   // 작성자 영역·작성 시각·공개 범위 같은 정보는 PostLayout(상세)·PostListItem(목록)이
   // 담당하므로 여기에는 포함하지 않는다. 본문은 feed·detail 양쪽에서 이 컴포넌트로 통일한다.
-  type Props = HTMLAttributes<HTMLDivElement> & {
+  // size만 의도된 차이(목록 md / 상세 lg)이고, 렌더 규칙은 공유 TipTapRenderer로 동일하다.
+  type Props = Omit<HTMLAttributes<HTMLDivElement>, 'class'> & {
     post: PostBody_post$key;
+    // 본문 강조 크기. 목록=md / 상세=lg. TipTapRenderer로 그대로 전달한다.
+    size?: 'md' | 'lg';
+    // tailwind-merge가 ClassValue를 받지 못하므로 문자열로 좁힌다.
+    class?: string | null;
   };
 
-  let { post, class: className, ...attributes }: Props = $props();
+  let { post, size = 'md', class: className, ...attributes }: Props = $props();
 
   const postFragment = createFragment(
     graphql(`
@@ -44,5 +49,5 @@
 </script>
 
 {#if document}
-  <TipTapRenderer {...attributes} class={className} {document} />
+  <TipTapRenderer {...attributes} class={className} {size} {document} />
 {/if}
