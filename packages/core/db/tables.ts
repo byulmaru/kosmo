@@ -11,6 +11,11 @@ const createdAt = () =>
     .notNull()
     .default(sql`now()`);
 
+const updatedAt = () =>
+  datetime('updated_at')
+    .notNull()
+    .default(sql`now()`);
+
 export const Accounts = pgTable('account', {
   id: uuid('id')
     .primaryKey()
@@ -100,6 +105,22 @@ export const Files = pgTable('file', {
   height: integer('height'),
   createdAt: createdAt(),
 });
+
+export const Instances = pgTable(
+  'instance',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => createId(TableDiscriminator.Instances)),
+    host: text('host').unique().notNull(),
+    canonicalOrigin: text('canonical_origin'),
+    kind: Enum.instanceKind('kind').notNull(),
+    state: Enum.instanceState('state').notNull().default('ACTIVE'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [index().on(table.kind, table.state)],
+);
 
 export const Media = pgTable(
   'media',

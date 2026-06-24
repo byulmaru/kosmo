@@ -18,20 +18,20 @@
 
 ### Requirement: Local actor WebFinger discovery
 
-시스템은 local active profile을 `acct:{handle}@{localDomain}` WebFinger resource로 발견할 수 있게 해야 한다(MUST).
+시스템은 local active profile을 `acct:{handle}@{localHost}` WebFinger resource로 발견할 수 있게 해야 한다(MUST).
 
 #### Scenario: Discover local active profile
 
-- **WHEN** 외부 서버가 `GET /.well-known/webfinger?resource=acct:{handle}@{localDomain}`를 요청한다
+- **WHEN** 외부 서버가 `GET /.well-known/webfinger?resource=acct:{handle}@{localHost}`를 요청한다
 - **THEN** 시스템은 configured local instance에 속하고 정규화 handle이 일치하는 `ACTIVE` profile을 찾는다
 - **AND** 시스템은 HTTP 200과 `application/jrd+json` content type으로 응답한다
-- **AND** WebFinger JRD의 `subject`는 canonical `acct:{handle}@{localDomain}`이다
+- **AND** WebFinger JRD의 `subject`는 canonical `acct:{handle}@{localHost}`이다
 - **AND** `rel = self` link는 `application/activity+json` type과 `{localOrigin}/ap/actor/{profile.id}` href를 포함한다
 - **AND** profile-page link는 기존 웹 프로필 URL `{localOrigin}/@{handle}`을 가리킨다
 
 #### Scenario: Invalid WebFinger resource
 
-- **WHEN** WebFinger resource가 없거나 `acct:{handle}@{localDomain}` 형식이 아니거나 domain이 configured local instance domain과 다르다
+- **WHEN** WebFinger resource가 없거나 `acct:{handle}@{localHost}` 형식이 아니거나 host가 configured local instance host와 다르다
 - **THEN** 시스템은 HTTP 404로 응답한다
 
 #### Scenario: Missing local profile WebFinger
