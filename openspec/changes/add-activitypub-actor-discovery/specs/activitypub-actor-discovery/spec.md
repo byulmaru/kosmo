@@ -2,13 +2,14 @@
 
 ### Requirement: Fedify SvelteKit integration
 
-웹 애플리케이션은 canonical 웹 origin에서 ActivityPub discovery 요청을 받을 수 있도록 `packages/fedify`가 제공하는 framework-neutral Fedify federation instance/request handler 구성요소를 `@fedify/sveltekit` hook adapter로 SvelteKit hook에 연결해야 한다(MUST).
+웹 애플리케이션은 canonical 웹 origin에서 ActivityPub discovery 요청을 받을 수 있도록 `packages/fedify`가 제공하는 Fedify federation 구성을 Fedify SvelteKit hook adapter로 SvelteKit hook에 연결해야 한다(MUST).
 
 #### Scenario: Handle federation request in web hook
 
 - **WHEN** 외부 서버가 웹 origin으로 ActivityPub 또는 WebFinger 요청을 보낸다
-- **THEN** `apps/web` SvelteKit hook은 요청을 `packages/fedify`가 제공하는 Fedify handler로 위임한다
-- **AND** federation 요청 판별, WebFinger parsing, actor document assembly, key dispatch, HTTP 응답 조립은 `packages/fedify`에서 제공한다
+- **THEN** `apps/web` SvelteKit hook은 요청을 `packages/fedify`가 구성한 Fedify federation으로 위임한다
+- **AND** federation 요청 판별, WebFinger parsing, HTTP 응답 조립은 Fedify hook/fetch 흐름이 처리한다
+- **AND** actor document assembly, handle mapping dispatcher, key dispatch는 `packages/fedify`에서 제공한다
 
 #### Scenario: Preserve existing web requests
 
