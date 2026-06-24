@@ -15,18 +15,6 @@ variable "kubernetes_version" {
   }
 }
 
-variable "node_groups" {
-  type = map(object({
-    capacity_type  = optional(string)
-    instance_types = optional(list(string))
-    min_size       = optional(number)
-    desired_size   = optional(number)
-    max_size       = optional(number)
-  }))
-  description = "Worker node group interface placeholder. Concrete sizing and capacity choices belong to PROD-205."
-  default     = {}
-}
-
 variable "tags" {
   type        = map(string)
   description = "Additional tags merged into all AWS resources once resources are added."

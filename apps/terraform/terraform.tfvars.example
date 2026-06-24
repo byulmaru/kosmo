@@ -1,8 +1,6 @@
 aws_region         = "ap-northeast-2"
 kubernetes_version = "1.36"
 
-node_groups = {}
-
 tags = {
   Service = "kosmo"
 }

@@ -14,7 +14,7 @@
 - Terraform root는 환경별로 나누지 않고 단일 kosmo 클러스터만 관리한다.
 - cluster name은 `kosmo`로 고정한다. cluster name 변경은 replacement 성격이 강하므로 외부 변수로 열어 두지 않는다.
 - Kubernetes version 기본값은 `1.36`이다. 이 값은 스캐폴딩 기본값이며 EKS cluster를 실제 생성하는 PROD-204에서 AWS EKS 지원 상태와 add-on 호환성을 다시 확인한다.
-- node group은 `node_groups = {}` 인터페이스만 둔다. On-Demand/Spot 비율, instance type, min/desired/max size는 PROD-205에서 결정한다.
+- node group 설정은 외부 변수로 열어 두지 않는다. 여러 node group의 구성, On-Demand/Spot 비율, instance type, min/desired/max size는 PROD-205에서 실제 Terraform 코드로 정의한다.
 
 ## State backend
 
