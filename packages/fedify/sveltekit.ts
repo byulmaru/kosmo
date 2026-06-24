@@ -1,5 +1,1 @@
-export {
-  createKosmoFederation as createKosmoSvelteKitFederation,
-  type CreateKosmoFederationOptions as CreateKosmoSvelteKitFederationOptions,
-  type KosmoFederationContextData,
-} from './index';
+export { fedifyHook } from '@fedify/sveltekit';

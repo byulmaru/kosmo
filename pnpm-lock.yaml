@@ -132,9 +132,6 @@ importers:
 
   apps/web:
     devDependencies:
-      '@fedify/sveltekit':
-        specifier: ^2.2.5
-        version: 2.2.5(@fedify/fedify@2.2.5)(@sveltejs/kit@2.63.0(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.1.2(svelte@5.55.7(@typescript-eslint/types@8.59.2))(vite@8.0.16(@types/node@25.6.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.8.4)))(svelte@5.55.7(@typescript-eslint/types@8.59.2))(typescript@6.0.3)(vite@8.0.16(@types/node@25.6.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.8.4)))
       '@kosmo/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -255,9 +252,6 @@ importers:
 
   packages/core:
     dependencies:
-      '@opentelemetry/api':
-        specifier: ^1.9.1
-        version: 1.9.1
       '@tiptap/core':
         specifier: ^3.24.0
         version: 3.24.0(@tiptap/pm@3.24.0)
@@ -295,6 +289,9 @@ importers:
       '@fedify/fedify':
         specifier: ^2.2.5
         version: 2.2.5
+      '@fedify/sveltekit':
+        specifier: ^2.2.5
+        version: 2.2.5(@fedify/fedify@2.2.5)(@sveltejs/kit@2.63.0(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.1.2(svelte@5.55.7(@typescript-eslint/types@8.59.2))(vite@8.0.16(@types/node@25.6.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.8.4)))(svelte@5.55.7(@typescript-eslint/types@8.59.2))(typescript@6.0.3)(vite@8.0.16(@types/node@25.6.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.8.4)))
       '@kosmo/core':
         specifier: workspace:*
         version: link:../core

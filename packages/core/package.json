@@ -15,7 +15,6 @@
     "./validation": "./validation/index.ts"
   },
   "dependencies": {
-    "@opentelemetry/api": "^1.9.1",
     "@tiptap/core": "^3.24.0",
     "@tiptap/extension-document": "^3.24.0",
     "@tiptap/extension-paragraph": "^3.24.0",

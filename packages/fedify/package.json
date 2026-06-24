@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@fedify/fedify": "^2.2.5",
+    "@fedify/sveltekit": "^2.2.5",
     "@kosmo/core": "workspace:*"
   }
 }
