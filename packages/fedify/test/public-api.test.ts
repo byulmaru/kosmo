@@ -1,9 +1,7 @@
-import { createKosmoFederation } from '../index';
-import type { Federation, KvStore } from '@fedify/fedify';
+import { federation } from '../index';
+import type { Federation } from '@fedify/fedify';
 import type { KosmoFederationContextData } from '../index';
 
-declare const kv: KvStore;
+const typedFederation: Federation<KosmoFederationContextData> = federation;
 
-const federation: Federation<KosmoFederationContextData> = createKosmoFederation({ kv });
-
-void federation;
+void typedFederation;

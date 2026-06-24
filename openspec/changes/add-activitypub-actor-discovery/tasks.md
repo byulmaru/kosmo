@@ -3,7 +3,7 @@
 - [x] 1.1 `packages/fedify` workspace package를 만들고 `@kosmo/core`를 참조하도록 package/tsconfig/export 경계를 구성한다.
 - [x] 1.2 `pnpm` CLI로 `packages/fedify`에 `@fedify/fedify`와 필요한 vocab/runtime dependency를 추가한다.
 - [x] 1.3 `pnpm` CLI로 `apps/web`에 `@kosmo/fedify`와 SvelteKit hook adapter에 필요한 `@fedify/sveltekit` dependency를 추가한다.
-- [x] 1.4 `packages/fedify`가 Fedify federation factory를 export할 수 있는 모듈 구조를 만든다.
+- [x] 1.4 `packages/fedify`가 임시 `MemoryKvStore` 기반 Fedify root federation singleton을 export할 수 있는 모듈 구조를 만든다.
 
 ## 2. Data Model
 
