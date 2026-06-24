@@ -1,1 +1,1 @@
-export { federation, type KosmoFederationContextData } from './src/federation';
+export { federation } from './src/federation';
