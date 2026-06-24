@@ -1,4 +1,3 @@
-export { actorPathTemplate } from './src/actor';
 export {
   createKosmoFederation,
   type CreateKosmoFederationOptions,

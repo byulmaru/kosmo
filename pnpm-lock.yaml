@@ -289,9 +289,6 @@ importers:
       '@fedify/fedify':
         specifier: ^2.2.5
         version: 2.2.5
-      '@fedify/sveltekit':
-        specifier: ^2.2.5
-        version: 2.2.5(@fedify/fedify@2.2.5)(@sveltejs/kit@2.63.0(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.1.2(svelte@5.55.7(@typescript-eslint/types@8.59.2))(vite@8.0.16(@types/node@25.6.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.8.4)))(svelte@5.55.7(@typescript-eslint/types@8.59.2))(typescript@6.0.3)(vite@8.0.16(@types/node@25.6.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.8.4)))
       '@kosmo/core':
         specifier: workspace:*
         version: link:../core
@@ -693,12 +690,6 @@ packages:
   '@fedify/fedify@2.2.5':
     resolution: {integrity: sha512-nARV2R/lkPgUb7XBZkg+MjmZUr0vkoEWG2w/+7Rle7uf2jgk8bL3axxl95xUkvf7gWwqHrBXgw9RXWReMFIFaw==}
     engines: {bun: '>=1.1.0', deno: '>=2.0.0', node: '>=22.0.0'}
-
-  '@fedify/sveltekit@2.2.5':
-    resolution: {integrity: sha512-+WtlV4KrbrlmXp/oTnrVRX4tE9J0XyDpaDsqjAbVYx7XUMRHUqMDKX312TZAFztzXLaau38NRP+VJSnx+PV5eQ==}
-    peerDependencies:
-      '@fedify/fedify': ^2.2.5
-      '@sveltejs/kit': ^2.0.0
 
   '@fedify/vocab-runtime@2.2.5':
     resolution: {integrity: sha512-EiPkMwBqYsoSrllMOCFb0RTDwEO6XvppMmPa81lCux+7g9zXygKrJb9hJ9PP8Zi59+cJGqIF/Gdhug239+tZug==}
@@ -5024,11 +5015,6 @@ snapshots:
       uri-template-router: 1.0.0
       url-template: 3.1.1
       urlpattern-polyfill: 10.1.0
-
-  '@fedify/sveltekit@2.2.5(@fedify/fedify@2.2.5)(@sveltejs/kit@2.63.0(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.1.2(svelte@5.55.7(@typescript-eslint/types@8.59.2))(vite@8.0.16(@types/node@25.6.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.8.4)))(svelte@5.55.7(@typescript-eslint/types@8.59.2))(typescript@6.0.3)(vite@8.0.16(@types/node@25.6.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.8.4)))':
-    dependencies:
-      '@fedify/fedify': 2.2.5
-      '@sveltejs/kit': 2.63.0(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.1.2(svelte@5.55.7(@typescript-eslint/types@8.59.2))(vite@8.0.16(@types/node@25.6.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.8.4)))(svelte@5.55.7(@typescript-eslint/types@8.59.2))(typescript@6.0.3)(vite@8.0.16(@types/node@25.6.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.8.4))
 
   '@fedify/vocab-runtime@2.2.5':
     dependencies:

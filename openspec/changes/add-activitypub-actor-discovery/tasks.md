@@ -2,8 +2,8 @@
 
 - [x] 1.1 `packages/fedify` workspace package를 만들고 `@kosmo/core`를 참조하도록 package/tsconfig/export 경계를 구성한다.
 - [x] 1.2 `pnpm` CLI로 `packages/fedify`에 `@fedify/fedify`와 필요한 vocab/runtime dependency를 추가한다.
-- [x] 1.3 `pnpm` CLI로 `apps/web`에 `@kosmo/fedify`를 추가하고, `packages/fedify`에 SvelteKit hook adapter에 필요한 `@fedify/sveltekit` dependency를 추가한다.
-- [x] 1.4 `packages/fedify`가 Fedify의 federation instance, SvelteKit hook adapter, actor route template을 export할 수 있는 모듈 구조를 만든다.
+- [x] 1.3 `pnpm` CLI로 `apps/web`에 `@kosmo/fedify`를 추가한다.
+- [x] 1.4 `packages/fedify`가 Fedify federation factory를 export할 수 있는 모듈 구조를 만든다.
 
 ## 2. Data Model
 
@@ -36,7 +36,7 @@
 
 ## 5. Web Integration
 
-- [ ] 5.1 `apps/web/src/hooks.server.ts`에서 `packages/fedify`가 제공하는 federation instance를 `@kosmo/fedify/sveltekit` hook adapter로 SvelteKit `handle`에 연결하고, web hook 본문에는 ActivityPub parsing/응답 조립 로직을 두지 않는다.
+- [ ] 5.1 `apps/web/src/hooks.server.ts`에서 `packages/fedify`가 제공하는 federation 구성을 Fedify SvelteKit hook adapter로 SvelteKit `handle`에 연결하고, web hook 본문에는 ActivityPub parsing/응답 조립 로직을 두지 않는다.
 - [ ] 5.2 ActivityPub/WebFinger 요청은 `packages/fedify`가 처리하고 기존 `/health`, `/graphql`, `/login`, `/@{handle}` 요청은 기존 동작을 유지하는지 확인한다.
 - [ ] 5.3 actor URI와 WebFinger JRD가 canonical local origin을 사용하고 request Host에 의존하지 않는지 확인한다.
 
@@ -46,4 +46,4 @@
 - [ ] 6.2 local instance bootstrap helper가 configured local instance row를 생성하거나 기존 row를 검증하는 positive path, runtime local instance resolve가 configured local instance row를 읽어 검증하되 row가 없을 때 bootstrap/자동 생성을 하지 않고 설정 오류로 처리하는지, local profile 생성이 configured local instance ID를 저장하고 설정 누락/불일치를 설정 오류로 처리하는지 unit/integration test로 검증한다.
 - [ ] 6.3 WebFinger 성공/404, WebFinger `application/jrd+json` content type, canonical subject, self/profile-page links, actor document 성공/404, actor document `application/activity+json` content type, canonical `id`, `preferredUsername`, `name`, `url`, `published`, 필수 `inbox`/`outbox` URI, `publicKey`, `assertionMethods`, unsupported endpoint 404, lazy key idempotency를 unit/integration test로 검증한다.
 - [ ] 6.4 GraphQL 테스트로 `relativeHandle` configured local/non-configured local/remote 표시, remote profile Node 조회, `profileByHandle` local-only 동작, 다른 instance 동일 handle의 local profile 생성 허용과 configured local duplicate handle conflict, remote target active profile selection/follow/unfollow profile not found, remote target viewerFollow 없음 응답, remote profile `Profile.posts` 빈 connection을 검증한다.
-- [ ] 6.5 dependency ownership이 `@fedify/fedify`와 `@fedify/sveltekit`은 `packages/fedify`, `@kosmo/fedify`는 `apps/web`에 들어가는지, web hook 본문에는 ActivityPub parsing/응답 조립 로직이 없는지 확인하고, `pnpm lint:eslint`, `pnpm --filter @kosmo/fedify lint:tsc`, `pnpm --filter @kosmo/web check`, 관련 package test, `openspec validate add-activitypub-actor-discovery --strict`를 실행해 변경을 검증한다.
+- [ ] 6.5 dependency ownership이 이번 workspace 경계 PR에서는 `@fedify/fedify`는 `packages/fedify`, `@kosmo/fedify`는 `apps/web`에 들어가고 SvelteKit hook adapter 의존성은 실제 hook 연결 단계에서 추가되는지, web hook 본문에는 ActivityPub parsing/응답 조립 로직이 없는지 확인하고, `pnpm lint:eslint`, `pnpm --filter @kosmo/fedify lint:tsc`, `pnpm --filter @kosmo/web check`, 관련 package test, `openspec validate add-activitypub-actor-discovery --strict`를 실행해 변경을 검증한다.
