@@ -17,6 +17,7 @@
 - PR은 리뷰어가 독립적으로 이해하고 검증할 수 있는 하나의 기능적 변화만 담는다.
 - stacked PR의 리뷰 순서는 GitHub PR의 `baseRefName`/`headRefName`과 로컬 Git ancestry가 함께 결정한다.
 - PR 제목과 본문은 한국어로 작성한다.
+- PR 제목에는 `[codex]` 같은 agent/tool 출처 prefix를 넣지 않는다.
 - PR 제목과 본문은 작업 시작 시 확인한 사용자 의도를 반영한다.
 - PR 본문은 `무엇을 변경했는지`, `왜 변경했는지`, `어떻게 확인할 수 있는지`, `아직 어떤 문제가 남았는지` 순서를 기본으로 한다.
 - unresolved review thread는 merge 전 남기지 않는다.

@@ -7,7 +7,7 @@
 
 ## 2. Data Model
 
-- [ ] 2.1 `InstanceType` 또는 동등한 enum과 `instance` 테이블을 추가해 domain, local instance의 canonical origin, remote instance의 선택적 canonical origin, 생성/수정 시각을 저장하고, domain 중복은 막되 `LOCAL` row 단일성은 강제하지 않는다.
+- [x] 2.1 `InstanceKind` 또는 동등한 enum과 `instance` 테이블을 추가해 domain, state, local instance의 canonical origin, ActivityPub instance의 선택적 canonical origin, 생성/수정 시각을 저장하고, domain 중복은 막되 `LOCAL` row 단일성은 강제하지 않는다.
 - [ ] 2.2 `profile.instance_id`를 추가하고 local instance bootstrap 이후 기존 profile을 configured local instance에 연결해 handle을 보존하는 migration 흐름을 구현한다.
 - [ ] 2.3 `profile.normalized_handle` 전역 unique를 `(instance_id, normalized_handle)` unique로 교체하고 관련 index/relation을 갱신한다.
 - [ ] 2.4 ActivityPub actor metadata 테이블을 추가해 profile과 actor URI/type을 저장하고, actor URI 중복과 profile당 actor metadata 중복을 막는다.

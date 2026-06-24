@@ -62,6 +62,7 @@ export const relations = defineRelations(tables, (r) => ({
     originalMedia: r.many.Media({ from: r.Files.id, to: r.Media.originalFileId }),
     thumbnailMedia: r.many.Media({ from: r.Files.id, to: r.Media.thumbnailFileId }),
   },
+  Instances: {},
   Media: {
     account: r.one.Accounts({ from: r.Media.accountId, to: r.Accounts.id }),
     originalFile: r.one.Files({ from: r.Media.originalFileId, to: r.Files.id }),

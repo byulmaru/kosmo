@@ -24,6 +24,19 @@ export const ApplicationType = {
 } as const;
 export type ApplicationType = keyof typeof ApplicationType;
 
+export const InstanceKind = {
+  LOCAL: 'LOCAL',
+  ACTIVITYPUB: 'ACTIVITYPUB',
+} as const;
+export type InstanceKind = keyof typeof InstanceKind;
+
+export const InstanceState = {
+  ACTIVE: 'ACTIVE',
+  UNRESPONSIVE: 'UNRESPONSIVE',
+  SUSPENDED: 'SUSPENDED',
+} as const;
+export type InstanceState = keyof typeof InstanceState;
+
 export const MediaSource = {
   LOCAL: 'LOCAL',
   REMOTE: 'REMOTE',
