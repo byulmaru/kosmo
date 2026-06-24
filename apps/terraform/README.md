@@ -81,7 +81,7 @@ Terraform CLI는 이 디렉터리의 `mise.toml`에서만 고정한다. repo roo
 
 ```sh
 cd apps/terraform
-mise trust
+mise trust --all
 mise install
 ```
 
