@@ -33,5 +33,5 @@ kosmo는 로컬 프로필, 게시글, 팔로우의 SNS 뼈대가 갖춰졌지만
 - `packages/fedify`: Fedify federation factory, actor dispatcher 설정, WebFinger handle mapping dispatcher, key pair dispatcher, ActivityPub object assembly를 소유하고, federation request 처리와 HTTP 응답 조립은 Fedify hook/fetch 흐름에 맡긴다.
 - `packages/core/db`: `instance`와 ActivityPub actor 관련 테이블, `profile.instance_id`, 관련 unique/index/relation, table discriminator가 추가된다.
 - `apps/api`: GraphQL `Profile.relativeHandle` 필드, remote profile Node 조회 정책, remote profile active selection/follow/unfollow/viewerFollow 차단 정책, remote profile posts 빈 connection 정책을 반영한다.
-- dependency: 이번 workspace 경계 PR에서는 `packages/fedify`에 `@fedify/fedify`를 추가하고, `apps/web`에는 `@kosmo/fedify`만 추가한다. SvelteKit hook adapter 의존성은 실제 hook 연결 단계에서 추가한다.
+- dependency: 이번 workspace 경계 PR에서는 `packages/fedify`에 `@fedify/fedify`를 추가하고, `apps/web`에는 `@kosmo/fedify`와 공식 SvelteKit hook adapter인 `@fedify/sveltekit`을 추가한다.
 - 환경/운영: configured local instance canonical origin/domain은 DB row가 source of truth이며, `PUBLIC_ORIGIN`은 초기 local instance bootstrap 입력과 runtime local instance 검증 입력으로 사용한다.
