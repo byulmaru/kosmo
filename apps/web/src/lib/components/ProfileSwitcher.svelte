@@ -4,12 +4,8 @@
   import { graphql } from '$mearie';
   import Avatar from '$lib/components/Avatar.svelte';
   import { getFirstGraphQLError } from '$lib/graphql/error';
-  import type { SelectedProfileOverride } from '$lib/selectedProfileContext';
   import { getProfileInitial } from '$lib/utils/profile';
   import type { ProfileSwitcher_query$key } from '$mearie';
-
-  type ProfileStateChangedReason = 'profile-selected' | 'profile-created';
-  type ActiveProfileOverride = Pick<SelectedProfileOverride, 'id' | 'handle' | 'displayName'>;
 
   type Props = {
     query?: ProfileSwitcher_query$key | null;
@@ -17,11 +13,7 @@
     surface?: 'desktop' | 'drawer';
     loading?: boolean;
     switcherOpen?: boolean;
-    selectedProfileOverride?: ActiveProfileOverride | null;
-    onProfileStateChanged?: (
-      reason: ProfileStateChangedReason,
-      selectedProfile: SelectedProfileOverride | null,
-    ) => void;
+    onProfileStateChanged?: () => void;
   };
 
   let {
@@ -30,7 +22,6 @@
     surface = 'desktop',
     loading = false,
     switcherOpen = $bindable(false),
-    selectedProfileOverride = null,
     onProfileStateChanged = () => {},
   }: Props = $props();
 
@@ -58,23 +49,16 @@
     mutation ProfileSwitcherSelectProfileMutation($id: ID!) {
       selectProfile(input: { id: $id }) {
         profile {
-          __typename
           id
           handle
           displayName
         }
         session {
-          __typename
           id
           selectedProfile {
-            __typename
             id
             handle
             displayName
-            followingCount
-            followersCount
-            ...PostComposer_profile
-            ...RightRail_profile
           }
         }
       }
@@ -106,9 +90,7 @@
   const idSuffix = $derived(`${surface}-${variant}`);
   const creatingOrSwitching = $derived(profileActionLoading || loading);
   const profiles = $derived(switcher.data?.me?.profiles ?? []);
-  const activeProfile = $derived(
-    selectedProfileOverride ?? switcher.data?.currentSession?.selectedProfile ?? null,
-  );
+  const activeProfile = $derived(switcher.data?.currentSession?.selectedProfile ?? null);
   const triggerLabel = $derived(
     activeProfile ? activeProfile.displayName : profiles.length > 0 ? '프로필 선택' : '프로필',
   );
@@ -150,13 +132,10 @@
     profileActionLoading = true;
 
     try {
-      const selected = await selectProfile({ id });
+      await selectProfile({ id });
       switcherOpen = false;
       profileCreationOpen = false;
-      onProfileStateChanged(
-        'profile-selected',
-        selected.selectProfile.session.selectedProfile ?? null,
-      );
+      onProfileStateChanged();
     } catch (error) {
       const graphQLError = getFirstGraphQLError(error);
 
@@ -187,7 +166,6 @@
 
     try {
       let createdProfileId: string;
-      let selectedProfile: SelectedProfileOverride | null = null;
 
       try {
         const created = await createProfile({ handle });
@@ -203,9 +181,7 @@
       }
 
       try {
-        const selected = await selectProfile({ id: createdProfileId });
-
-        selectedProfile = selected.selectProfile.session.selectedProfile ?? null;
+        await selectProfile({ id: createdProfileId });
       } catch (error) {
         const graphQLError = getFirstGraphQLError(error);
 
@@ -215,7 +191,7 @@
 
       switcherOpen = false;
       profileCreationOpen = false;
-      onProfileStateChanged('profile-created', selectedProfile);
+      onProfileStateChanged();
     } finally {
       profileActionLoading = false;
     }

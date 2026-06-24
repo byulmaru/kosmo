@@ -22,8 +22,8 @@
         handle
         displayName
         bio
-        followingCount
         followersCount
+        followingCount
       }
     `),
     () => profile,
@@ -69,15 +69,15 @@
       <div class="mt-3 flex items-center gap-4 text-sm">
         <span class="text-text-secondary">
           <span class="text-text-primary font-bold"
-            >{formatCount(fragment.data.followingCount)}</span
-          >
-          팔로잉
-        </span>
-        <span class="text-text-secondary">
-          <span class="text-text-primary font-bold"
             >{formatCount(fragment.data.followersCount)}</span
           >
           팔로워
+        </span>
+        <span class="text-text-secondary">
+          <span class="text-text-primary font-bold"
+            >{formatCount(fragment.data.followingCount)}</span
+          >
+          팔로잉
         </span>
       </div>
     </div>

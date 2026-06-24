@@ -4,15 +4,8 @@
   import { graphql } from '$mearie';
   import Avatar from '$lib/components/Avatar.svelte';
   import ProfileSwitcher from '$lib/components/ProfileSwitcher.svelte';
-  import type { SelectedProfileOverride } from '$lib/selectedProfileContext';
   import { formatCount, getProfileInitial } from '$lib/utils/profile';
   import type { SidebarNavigation_query$key } from '$mearie';
-
-  type ProfileStateChangedReason = 'profile-selected' | 'profile-created';
-  type SidebarSelectedProfile = Pick<
-    SelectedProfileOverride,
-    'id' | 'handle' | 'displayName' | 'followingCount' | 'followersCount'
-  >;
 
   type Props = {
     query?: SidebarNavigation_query$key | null;
@@ -20,12 +13,8 @@
     error?: boolean;
     surface?: 'desktop' | 'drawer';
     switcherOpen?: boolean;
-    selectedProfileOverride?: SidebarSelectedProfile | null;
     onNavigate?: () => void;
-    onProfileStateChanged?: (
-      reason: ProfileStateChangedReason,
-      selectedProfile: SelectedProfileOverride | null,
-    ) => void;
+    onProfileStateChanged?: () => void;
   };
 
   const sidebarNavigationFragment = graphql(`
@@ -36,8 +25,8 @@
           id
           handle
           displayName
-          followingCount
           followersCount
+          followingCount
         }
       }
       me {
@@ -55,7 +44,6 @@
     error = false,
     surface = 'desktop',
     switcherOpen = $bindable(false),
-    selectedProfileOverride = null,
     onNavigate = () => {},
     onProfileStateChanged = () => {},
   }: Props = $props();
@@ -106,7 +94,7 @@
 
   const hasProfiles = $derived((sidebarNavigation.data?.me?.profiles?.length ?? 0) > 0);
   const sidebarActiveProfile = $derived(
-    selectedProfileOverride ?? sidebarNavigation.data?.currentSession?.selectedProfile ?? null,
+    sidebarNavigation.data?.currentSession?.selectedProfile ?? null,
   );
 </script>
 
@@ -118,7 +106,6 @@
       query={sidebarNavigation.data}
       {surface}
       {loading}
-      selectedProfileOverride={sidebarActiveProfile}
       bind:switcherOpen
       {onProfileStateChanged}
     />
@@ -280,7 +267,6 @@
           query={sidebarNavigation.data}
           {surface}
           {loading}
-          selectedProfileOverride={sidebarActiveProfile}
           bind:switcherOpen
           {onProfileStateChanged}
         />
@@ -290,13 +276,13 @@
           </p>
           <div class="mt-2 flex items-center gap-3 text-sm leading-[22px] text-black">
             <span class="flex items-center gap-2 px-1"
-              ><span>{formatCount(sidebarActiveProfile.followingCount ?? 0)}</span><span
-                >팔로잉</span
+              ><span>{formatCount(sidebarActiveProfile.followersCount ?? 0)}</span><span
+                >팔로워</span
               ></span
             >
             <span class="flex items-center gap-2 px-1"
-              ><span>{formatCount(sidebarActiveProfile.followersCount ?? 0)}</span><span
-                >팔로워</span
+              ><span>{formatCount(sidebarActiveProfile.followingCount ?? 0)}</span><span
+                >팔로잉</span
               ></span
             >
           </div>
