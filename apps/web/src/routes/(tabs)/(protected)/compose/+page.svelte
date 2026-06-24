@@ -4,6 +4,7 @@
   import { createQuery } from '@mearie/svelte';
   import Button from '$lib/components/Button.svelte';
   import PostComposer from '$lib/components/PostComposer.svelte';
+  import { getSelectedProfileContext } from '$lib/selectedProfileContext';
 
   const query = createQuery(
     graphql(`
@@ -19,8 +20,11 @@
     `),
   );
 
+  const selectedProfileContext = getSelectedProfileContext();
+
   const session = $derived(query.data?.currentSession ?? null);
-  const selectedProfile = $derived(session?.selectedProfile ?? null);
+  const selectedProfileOverride = $derived(selectedProfileContext?.selectedProfile() ?? null);
+  const selectedProfile = $derived(selectedProfileOverride ?? session?.selectedProfile ?? null);
 </script>
 
 <section class="grid w-[min(100%,36rem)] gap-5 self-start">

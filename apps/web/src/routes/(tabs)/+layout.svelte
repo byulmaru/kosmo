@@ -5,6 +5,10 @@
   import RightRail from '$lib/components/RightRail.svelte';
   import SidebarNavigation from '$lib/components/SidebarNavigation.svelte';
   import { setProfileSwitcherContext } from '$lib/profileSwitcherContext';
+  import {
+    setSelectedProfileContext,
+    type SelectedProfileOverride,
+  } from '$lib/selectedProfileContext';
   import { setShellChromeContext } from '$lib/shellChromeContext';
 
   let { children } = $props();
@@ -25,17 +29,36 @@
     `),
   );
 
-  const selectedProfile = $derived(query.data?.currentSession?.selectedProfile ?? null);
+  let selectedProfileOverride = $state<SelectedProfileOverride | null>(null);
+  const selectedProfile = $derived(
+    selectedProfileOverride ?? query.data?.currentSession?.selectedProfile ?? null,
+  );
 
-  const invalidateSidebarNavigationData = () => {
-    client
-      .extension('cache')
-      .invalidate(
+  type ProfileStateChangedReason = 'profile-selected' | 'profile-created';
+
+  setSelectedProfileContext({ selectedProfile: () => selectedProfileOverride });
+
+  const handleProfileStateChanged = (
+    reason: ProfileStateChangedReason,
+    selectedProfile: SelectedProfileOverride | null,
+  ) => {
+    if (selectedProfile) {
+      selectedProfileOverride = selectedProfile;
+    }
+
+    const cache = client.extension('cache');
+
+    if (reason === 'profile-created') {
+      cache.invalidate(
         { __typename: 'Query', $field: 'currentSession' },
         { __typename: 'Query', $field: 'me' },
-        { __typename: 'Query', $field: 'homeTimeline' },
-        { __typename: 'Profile', $field: 'viewerFollow' },
       );
+    }
+
+    cache.invalidate(
+      { __typename: 'Query', $field: 'homeTimeline' },
+      { __typename: 'Profile', $field: 'viewerFollow' },
+    );
   };
 
   let drawerOpen = $state(false);
@@ -105,8 +128,9 @@
       query={query.data}
       loading={query.loading}
       error={Boolean(query.error)}
+      {selectedProfileOverride}
       bind:switcherOpen={profileSwitcherOpen}
-      onProfileStateChanged={invalidateSidebarNavigationData}
+      onProfileStateChanged={handleProfileStateChanged}
     />
   </div>
 
@@ -166,9 +190,10 @@
           loading={query.loading}
           error={Boolean(query.error)}
           surface="drawer"
+          {selectedProfileOverride}
           bind:switcherOpen={profileSwitcherOpen}
           onNavigate={closeDrawer}
-          onProfileStateChanged={invalidateSidebarNavigationData}
+          onProfileStateChanged={handleProfileStateChanged}
         />
       </div>
     </div>

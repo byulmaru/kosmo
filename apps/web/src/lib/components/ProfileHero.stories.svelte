@@ -12,8 +12,8 @@
     handle: 'user@kos.moe',
     displayName: '표시 이름',
     bio: '본문 한 줄이 들어가는 자리예요. 내용이 길어지면 여러 줄로 늘어나요.',
-    followersCount: 128,
     followingCount: 1234,
+    followersCount: 128,
   } as unknown as ProfileRef;
 
   const noBioProfile = {
