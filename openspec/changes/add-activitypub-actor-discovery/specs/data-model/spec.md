@@ -7,17 +7,18 @@
 #### Scenario: Store local instance
 
 - **WHEN** local instance가 초기화된다
-- **THEN** 시스템은 정규화 host, instance kind, instance state, 생성 시각, 수정 시각을 저장한다
+- **THEN** 시스템은 정규화 domain, instance kind, instance state, 생성 시각, 수정 시각을 저장한다
 - **AND** local instance는 canonical origin을 저장한다
-- **AND** configured local instance의 canonical origin과 host는 federation identity의 source of truth이다
+- **AND** configured local instance의 canonical origin과 domain은 federation identity의 source of truth이다
 - **AND** canonical origin은 actor URI, WebFinger self link, profile-page link, key ID 같은 local absolute URL 생성에 사용된다
+- **AND** domain은 WebFinger subject와 `Profile.relativeHandle`에 사용된다
 - **AND** `PUBLIC_ORIGIN`은 local instance row를 만들거나 현재 deployment가 사용할 local instance row를 검증하는 입력으로만 사용된다
 
 #### Scenario: Resolve canonical local origin
 
 - **WHEN** 시스템이 ActivityPub actor URI, WebFinger subject, local profile 생성의 instance ID를 결정한다
 - **THEN** 시스템은 `PUBLIC_ORIGIN`과 일치하는 configured local instance row의 canonical origin을 `localOrigin`으로 사용한다
-- **AND** 시스템은 configured local instance row의 정규화 host를 `localInstanceHost`로 사용한다
+- **AND** 시스템은 configured local instance row의 정규화 domain을 `localDomain`으로 사용한다
 - **AND** request URL origin, Host header, `PUBLIC_API_ORIGIN`을 federation identity의 source of truth로 사용하지 않는다
 
 #### Scenario: Missing or mismatched local instance configuration
@@ -34,7 +35,7 @@
 #### Scenario: Store ActivityPub instance shell
 
 - **WHEN** 시스템이 ActivityPub profile 저장을 위해 ActivityPub instance를 기록한다
-- **THEN** 시스템은 ActivityPub instance의 정규화 host, `ACTIVITYPUB` instance kind, instance state, 생성 시각, 수정 시각을 저장한다
+- **THEN** 시스템은 ActivityPub instance의 정규화 domain, `ACTIVITYPUB` instance kind, instance state, 생성 시각, 수정 시각을 저장한다
 - **AND** ActivityPub instance의 canonical origin은 선택적으로 저장할 수 있다
 - **AND** ActivityPub actor fetch/cache 동작은 이 저장 요구사항에 포함되지 않는다
 
@@ -56,14 +57,14 @@
 - **THEN** 시스템은 해당 instance와 능동적으로 연합하지 않는다
 - **AND** 시스템은 해당 instance가 inbound 요청을 보낸 것만으로 자동 재활성화하지 않는다
 
-#### Scenario: Prevent duplicate instance host
+#### Scenario: Prevent duplicate instance domain
 
-- **WHEN** 같은 host의 instance가 이미 저장되어 있다
-- **THEN** 시스템은 같은 정규화 host를 가진 instance를 중복 저장하지 않는다
+- **WHEN** 같은 domain의 instance가 이미 저장되어 있다
+- **THEN** 시스템은 같은 정규화 domain을 가진 instance를 중복 저장하지 않는다
 
-#### Scenario: Allow multiple local instance hosts
+#### Scenario: Allow multiple local instance domains
 
-- **WHEN** 서로 다른 host의 local instance rows가 저장된다
+- **WHEN** 서로 다른 domain의 local instance rows가 저장된다
 - **THEN** 시스템은 instance kind가 `LOCAL`이라는 이유만으로 중복으로 처리하지 않는다
 - **AND** 현재 deployment의 federation identity는 `PUBLIC_ORIGIN`과 일치하는 configured local instance row에서 결정한다
 

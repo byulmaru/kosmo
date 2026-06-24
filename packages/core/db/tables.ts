@@ -112,7 +112,7 @@ export const Instances = pgTable(
     id: uuid('id')
       .primaryKey()
       .$defaultFn(() => createId(TableDiscriminator.Instances)),
-    host: text('host').unique().notNull(),
+    domain: text('domain').unique().notNull(),
     canonicalOrigin: text('canonical_origin'),
     kind: Enum.instanceKind('kind').notNull(),
     state: Enum.instanceState('state').notNull().default('ACTIVE'),
