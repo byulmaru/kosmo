@@ -1,0 +1,14 @@
+{
+  "name": "@kosmo/fedify",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "lint:tsc": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fedify/fedify": "^2.2.5",
+    "@kosmo/core": "workspace:*"
+  }
+}

@@ -2,13 +2,16 @@
 
 ### Requirement: Instance storage
 
-시스템은 local 및 remote federation instance를 `instance` 행으로 저장해야 한다(MUST).
+시스템은 local 및 ActivityPub federation instance를 `instance` 행으로 저장해야 한다(MUST).
 
 #### Scenario: Store local instance
 
 - **WHEN** local instance가 초기화된다
-- **THEN** 시스템은 canonical origin, domain, instance type, 생성 시각, 수정 시각을 저장한다
+- **THEN** 시스템은 정규화 domain, instance kind, instance state, 생성 시각, 수정 시각을 저장한다
+- **AND** local instance는 canonical origin을 저장한다
 - **AND** configured local instance의 canonical origin과 domain은 federation identity의 source of truth이다
+- **AND** canonical origin은 actor URI, WebFinger self link, profile-page link, key ID 같은 local absolute URL 생성에 사용된다
+- **AND** domain은 WebFinger subject와 `Profile.relativeHandle`에 사용된다
 - **AND** `PUBLIC_ORIGIN`은 local instance row를 만들거나 현재 deployment가 사용할 local instance row를 검증하는 입력으로만 사용된다
 
 #### Scenario: Resolve canonical local origin
@@ -29,21 +32,40 @@
 - **THEN** 시스템은 setup/migration bootstrap 없이 새 local instance row를 자동 생성하지 않는다
 - **AND** 시스템은 `PUBLIC_ORIGIN`과 일치하는 existing row를 읽어 검증하고, 없거나 일치하지 않으면 설정 오류로 처리한다
 
-#### Scenario: Store remote instance shell
+#### Scenario: Store ActivityPub instance shell
 
-- **WHEN** 시스템이 remote profile 저장을 위해 remote instance를 기록한다
-- **THEN** 시스템은 remote instance의 domain, 선택적 canonical origin, instance type, 생성 시각, 수정 시각을 저장한다
-- **AND** remote actor fetch/cache 동작은 이 저장 요구사항에 포함되지 않는다
+- **WHEN** 시스템이 ActivityPub profile 저장을 위해 ActivityPub instance를 기록한다
+- **THEN** 시스템은 ActivityPub instance의 정규화 domain, `ACTIVITYPUB` instance kind, instance state, 생성 시각, 수정 시각을 저장한다
+- **AND** ActivityPub instance의 canonical origin은 선택적으로 저장할 수 있다
+- **AND** ActivityPub actor fetch/cache 동작은 이 저장 요구사항에 포함되지 않는다
+
+#### Scenario: Active instance
+
+- **WHEN** instance state가 `ACTIVE`이다
+- **THEN** 시스템은 해당 instance와 federation discovery, fetch, delivery 같은 outbound 상호작용을 시도할 수 있다
+
+#### Scenario: Unresponsive instance
+
+- **WHEN** 특정 ActivityPub instance가 일정 기간 이상 응답하지 않아 state가 `UNRESPONSIVE`이다
+- **THEN** 시스템은 해당 instance에서 다음 inbound 요청이 오기 전까지 그 instance를 대상으로 한 outbound federation 요청을 시도하지 않는다
+- **AND** 시스템이 해당 instance에서 inbound 요청을 받으면 후속 정책에 따라 state를 다시 평가할 수 있다
+- **AND** 이 상태는 해당 instance와의 연합을 능동적으로 해제했다는 의미가 아니다
+
+#### Scenario: Suspended instance
+
+- **WHEN** 시스템 운영 정책에 따라 instance state가 `SUSPENDED`이다
+- **THEN** 시스템은 해당 instance와 능동적으로 연합하지 않는다
+- **AND** 시스템은 해당 instance가 inbound 요청을 보낸 것만으로 자동 재활성화하지 않는다
 
 #### Scenario: Prevent duplicate instance domain
 
 - **WHEN** 같은 domain의 instance가 이미 저장되어 있다
-- **THEN** 시스템은 같은 domain을 가진 instance를 중복 저장하지 않는다
+- **THEN** 시스템은 같은 정규화 domain을 가진 instance를 중복 저장하지 않는다
 
 #### Scenario: Allow multiple local instance domains
 
 - **WHEN** 서로 다른 domain의 local instance rows가 저장된다
-- **THEN** 시스템은 instance type이 `LOCAL`이라는 이유만으로 중복으로 처리하지 않는다
+- **THEN** 시스템은 instance kind가 `LOCAL`이라는 이유만으로 중복으로 처리하지 않는다
 - **AND** 현재 deployment의 federation identity는 `PUBLIC_ORIGIN`과 일치하는 configured local instance row에서 결정한다
 
 ### Requirement: ActivityPub actor storage
@@ -88,7 +110,7 @@
 
 - **WHEN** 인스턴스, ActivityPub actor, ActivityPub actor key가 저장된다
 - **THEN** 시스템은 core enum에 정의된 값만 저장해야 한다
-- **AND** 지원 값은 `InstanceType`, `ActivityPubActorType`, `ActivityPubActorKeyType`에 정의된 값으로 제한된다
+- **AND** 지원 값은 `InstanceKind`, `InstanceState`, `ActivityPubActorType`, `ActivityPubActorKeyType`에 정의된 값으로 제한된다
 
 ## MODIFIED Requirements
 

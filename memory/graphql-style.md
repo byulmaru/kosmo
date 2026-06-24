@@ -100,12 +100,14 @@ Mutation도 필드별로 나눈다.
 - 삭제/해제 mutation payload의 ID는 클라이언트가 cache에서 제거해야 하는 실제 관계/대상 row의 ID여야 한다. 예를 들어 follow 관계를 삭제하면 `Profile.id`가 아니라 삭제된 `ProfileFollow.id`를 반환한다.
 - 상태가 있는 관계 mutation은 기존 row를 특정 state로 필터링해서 찾지 말고, 먼저 관계 row를 조회한 뒤 state별 정책으로 분기한다.
 - 부분 변경 없이 실패해야 하는 mutation은 transaction을 사용한다.
-- Pothos Errors plugin을 사용하고, 클라이언트가 분기해야 하는 에러는 `errors.types`에 명시한다.
-- `errors.dataField`는 `profile`, `profileId`처럼 클라이언트가 받는 성공 payload의 도메인 의미가 드러나는 이름으로 지정한다.
-- builder의 error result/union 기본 이름은 `<FieldName>Success`, `<FieldName>Result` 형태를 사용한다.
-- Zod/Pothos validation 실패는 builder의 `validation.validationError`가 `ValidationError`로 변환한다. mutation별 `errors.types`에는 resolver가 직접 던지는 domain error만 명시한다.
-- 인증 scope 부족은 mutation domain error로 던지지 않고 `t.withAuth({ login: true })` 같은 auth 설정으로 처리한다.
-- 대상 리소스에 대한 권한 부족만 `PermissionDeniedError`로 던진다.
+- mutation 성공 결과는 Pothos Simple Objects plugin으로 정의한 `<MutationName>Payload` object를 반환한다. 예를 들어 `createProfile`은 `CreateProfilePayload`를 반환한다.
+- mutation payload object는 재사용되지 않으면 별도 `payload.ts`로 빼지 않고, 해당 mutation 파일 안에 inline으로 정의한다.
+- payload field 이름은 `profile`, `profileId`처럼 클라이언트가 받는 성공 payload의 도메인 의미가 드러나는 이름으로 지정한다.
+- domain error는 result union으로 반환하지 않고 GraphQL `errors[]` 경로로 전달한다.
+- Zod/Pothos validation 실패는 builder의 `validation.validationError`가 `ValidationError`로 변환한다.
+- 인증 scope 부족은 resolver에서 직접 던지지 않고 `t.withAuth({ login: true })` 같은 auth 설정으로 처리한다.
+- scope-auth 기본 unauthorized error는 사용하지 않고 builder의 `scopeAuth.unauthorizedError`에서 `PermissionDeniedError`로 변환한다.
+- resolver 안에서는 대상 리소스에 대한 권한 부족만 `PermissionDeniedError`로 던진다.
 - 의도적으로 후속 정책으로 미룬 state나 분기는 `TODO:` 주석으로 남겨 검색 가능하게 한다.
 
 예시:
@@ -113,16 +115,17 @@ Mutation도 필드별로 나눈다.
 ```ts
 builder.mutationField('createProfile', (t) =>
   t.withAuth({ login: true }).fieldWithInput({
-    type: Profile,
+    type: builder.simpleObject('CreateProfilePayload', {
+      fields: (field) => ({
+        profile: field.field({ type: Profile }),
+      }),
+    }),
     input: {
       handle: t.input.string({ validate: profileHandleSchema }),
     },
-    errors: {
-      types: [ConflictError],
-      dataField: { name: 'profile' },
-    },
     resolve: async (_, { input }, ctx) => {
-      // resolver body
+      const profile = await createProfile(input, ctx);
+      return { profile };
     },
   }),
 );
@@ -130,15 +133,17 @@ builder.mutationField('createProfile', (t) =>
 
 ## Error
 
-GraphQL로 노출되는 도메인 에러는 `packages/core/error`에 GraphQL 독립 class로 정의하고, `apps/api/src/graphql/errors.ts`에서 Pothos type/interface로 등록한다.
+GraphQL로 노출되는 도메인 에러는 `packages/core/error`에 GraphQL 독립 class로 정의하고, Yoga error plugin에서 GraphQL `errors[]`로 변환한다.
 
 - 기본 error 계층은 `KosmoError`, `FieldError`, `ValidationError`, `ConflictError`, `NotFoundError`, abstract `ForbiddenError`, `PermissionDeniedError`를 사용한다.
 - `ForbiddenError`는 직접 throw하지 않는 abstract/base class다.
 - `FieldError.field`는 optional이다. 특정 input field에 귀속되는 validation/conflict일 때만 채운다.
-- builder의 `errors.defaultTypes`는 비워두고, 각 field가 노출할 concrete error type을 `errors.types`에 명시한다.
 - validation plugin에서 발생한 입력 검증 오류는 builder 설정에서 첫 issue의 message와 `input`을 제거한 path를 사용해 `ValidationError`로 변환한다.
-- `ValidationError`와 `ConflictError`는 GraphQL `FieldError` interface를 구현한다.
-- `PermissionDeniedError`는 GraphQL `ForbiddenError` interface를 구현한다.
+- `KosmoError.message`는 GraphQL error `message`로 노출한다.
+- `KosmoError.code`는 GraphQL error `extensions.code`로 노출한다.
+- `FieldError.field`가 있으면 GraphQL error `extensions.field`로 노출한다.
+- auth scope 실패는 builder의 `scopeAuth.unauthorizedError`가 `PermissionDeniedError`로 변환해 GraphQL error `extensions.code`를 `PERMISSION_DENIED`로 노출한다.
+- 예상 밖 오류는 프로덕션에서 `Unexpected error`와 `INTERNAL_SERVER_ERROR` code로 마스킹한다.
 
 ## Enum
 

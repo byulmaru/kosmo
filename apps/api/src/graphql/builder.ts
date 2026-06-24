@@ -1,9 +1,9 @@
-import { ValidationError } from '@kosmo/core/error';
+import { PermissionDeniedError, ValidationError } from '@kosmo/core/error';
 import SchemaBuilder from '@pothos/core';
 import DataloaderPlugin from '@pothos/plugin-dataloader';
-import ErrorsPlugin from '@pothos/plugin-errors';
 import RelayPlugin from '@pothos/plugin-relay';
 import ScopeAuthPlugin from '@pothos/plugin-scope-auth';
+import SimpleObjectsPlugin from '@pothos/plugin-simple-objects';
 import ValidationPlugin from '@pothos/plugin-validation';
 import WithInputPlugin from '@pothos/plugin-with-input';
 import * as R from 'remeda';
@@ -38,22 +38,13 @@ export const builder = new SchemaBuilder<{
   plugins: [
     RelayPlugin,
     ScopeAuthPlugin,
-    ErrorsPlugin,
+    SimpleObjectsPlugin,
     ValidationPlugin,
     WithInputPlugin,
     DataloaderPlugin,
   ],
   defaultFieldNullability: false,
   defaultInputFieldRequiredness: true,
-  errors: {
-    defaultTypes: [],
-    defaultResultOptions: {
-      name: ({ fieldName }) => `${R.capitalize(fieldName)}Success`,
-    },
-    defaultUnionOptions: {
-      name: ({ fieldName }) => `${R.capitalize(fieldName)}Result`,
-    },
-  },
   validation: {
     validationError: (failure) => {
       const issue = failure.issues[0];
@@ -84,6 +75,8 @@ export const builder = new SchemaBuilder<{
     }),
     defaultStrategy: 'all',
     runScopesOnType: true,
+    unauthorizedError: (_parent, _context, _info, result) =>
+      new PermissionDeniedError(result.message),
   },
   withInput: {
     typeOptions: {

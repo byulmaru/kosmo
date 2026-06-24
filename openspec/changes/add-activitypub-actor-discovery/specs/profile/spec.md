@@ -13,7 +13,7 @@ API는 프로필 표시용 handle 문자열을 configured local instance 기준 
 
 - **WHEN** 클라이언트가 configured local instance가 아닌 instance에 속한 활성 프로필의 `relativeHandle`을 조회한다
 - **THEN** 시스템은 `@{handle}@{instanceDomain}` 형식의 문자열을 반환한다
-- **AND** 해당 instance가 `LOCAL` 타입이어도 configured local instance가 아니면 domain을 포함한다
+- **AND** 해당 instance가 `LOCAL` kind여도 configured local instance가 아니면 domain을 포함한다
 
 ## MODIFIED Requirements
 
@@ -55,7 +55,7 @@ API는 프로필 표시용 handle 문자열을 configured local instance 기준 
 - **AND** 생성된 프로필은 configured local instance에 속한다
 - **AND** 표시 이름은 handle과 같은 값으로 초기화된다
 - **AND** 팔로우 정책은 `OPEN`으로 초기화된다
-- **AND** 생성된 프로필을 반환한다
+- **AND** mutation은 `CreateProfilePayload.profile`로 생성된 `Profile`을 반환한다
 
 #### Scenario: Create profile with duplicate local handle
 
@@ -102,7 +102,7 @@ API는 활성 local profile과 저장된 활성 remote profile을 GraphQL profil
 
 - **WHEN** 로그인한 계정이 자신과 연결된 활성 configured local profile 선택을 요청한다
 - **THEN** 시스템은 현재 세션의 active profile을 해당 프로필로 변경한다
-- **AND** 선택된 프로필을 반환한다
+- **AND** mutation은 `SelectProfilePayload.profile`로 선택된 `Profile`을 반환한다
 
 #### Scenario: Reject remote profile selection
 
@@ -178,18 +178,18 @@ active profile이 있는 인증자는 다른 활성 local profile을 공개 foll
 
 - **WHEN** active profile이 있는 인증자가 다른 활성 local profile follow를 요청한다
 - **THEN** 시스템은 `ACCEPTED` follow 관계를 생성한다
-- **AND** 생성된 `ProfileFollow`를 반환한다
+- **AND** mutation은 `FollowProfilePayload.profileFollow`로 생성된 `ProfileFollow`를 반환한다
 
 #### Scenario: Follow local profile idempotently
 
 - **WHEN** active profile이 있는 인증자가 이미 `ACCEPTED` 상태로 follow 중인 local profile follow를 요청한다
-- **THEN** 시스템은 기존 `ProfileFollow`를 반환한다
+- **THEN** 시스템은 `FollowProfilePayload.profileFollow`로 기존 `ProfileFollow`를 반환한다
 - **AND** 오류로 처리하지 않는다
 
 #### Scenario: Prevent self follow
 
 - **WHEN** active profile이 있는 인증자가 자기 자신 follow를 요청한다
-- **THEN** 시스템은 `ConflictError`를 반환한다
+- **THEN** 시스템은 conflict code를 가진 GraphQL 오류로 요청을 거부한다
 
 #### Scenario: Follow missing or remote profile
 
@@ -201,20 +201,20 @@ active profile이 있는 인증자는 다른 활성 local profile을 공개 foll
 ### Requirement: Unfollow profile mutation
 
 active profile이 있는 인증자는 기존 local follow 관계를 해제할 수 있어야 한다(MUST).
-`UnfollowProfileSuccess`는 삭제된 follow ID와 함께, 클라이언트 캐시 갱신을 위해 갱신된 대상 `Profile`을 포함한다.
+`UnfollowProfilePayload`는 삭제된 follow ID와 함께, 클라이언트 캐시 갱신을 위해 갱신된 대상 `Profile`을 포함한다.
 
 #### Scenario: Unfollow active local profile
 
 - **WHEN** active profile이 있는 인증자가 follow 중인 활성 local profile unfollow를 요청한다
 - **THEN** 시스템은 해당 follow 관계를 제거한다
-- **AND** 삭제된 `ProfileFollow` ID를 반환한다
+- **AND** mutation은 `UnfollowProfilePayload.profileFollowId`로 삭제된 `ProfileFollow` ID를 반환한다
 - **AND** 갱신된 viewer follow 상태와 팔로워 수를 가진 대상 `Profile`을 함께 반환한다
 
 #### Scenario: Unfollow local profile idempotently
 
 - **WHEN** active profile이 있는 인증자가 follow 관계가 없는 활성 local profile unfollow를 요청한다
 - **THEN** 시스템은 오류로 처리하지 않는다
-- **AND** `profileFollowId`가 `null`이고 대상 `Profile`을 포함한 `UnfollowProfileSuccess`를 반환한다
+- **AND** `profileFollowId`가 `null`이고 대상 `Profile`을 포함한 `UnfollowProfilePayload`를 반환한다
 
 #### Scenario: Unfollow missing or remote profile
 

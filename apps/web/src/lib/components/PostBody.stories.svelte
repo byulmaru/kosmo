@@ -6,6 +6,8 @@
 
   import type { PostBody_post$key } from '$mearie';
 
+  import { makePost, postBodyCases } from '$lib/stories/postFixtures';
+
   // Storybook은 .storybook/mocks/mearie-svelte.ts에서 createFragment를 패스스루로 모킹하므로
   // 여기서는 평범한 데이터 객체를 fragment ref 자리에 그대로 넘긴다.
   const post = (bodyText: string | null): PostBody_post$key =>
@@ -45,5 +47,20 @@
       )}
     />
     <PostBody post={post(null)} />
+  </div>
+</Story>
+
+<!-- 본문 강조 크기. 같은 공유 fixture를 목록(md 16px)·상세(lg 20px)로 렌더해 의도된 크기 차이만 -->
+<!-- 다르고 나머지 규칙은 같음을 확인한다(PROD-173). -->
+<Story name="Size (목록 md / 상세 lg)" asChild parameters={{ controls: { disable: true } }}>
+  <div class="grid w-[600px] gap-8">
+    <div>
+      <div class="text-text-secondary text-xsm mb-1">목록 md (16px)</div>
+      <PostBody post={makePost(postBodyCases[1]) as unknown as PostBody_post$key} size="md" />
+    </div>
+    <div>
+      <div class="text-text-secondary text-xsm mb-1">상세 lg (20px)</div>
+      <PostBody post={makePost(postBodyCases[1]) as unknown as PostBody_post$key} size="lg" />
+    </div>
   </div>
 </Story>

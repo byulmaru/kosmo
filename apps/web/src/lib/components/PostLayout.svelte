@@ -105,7 +105,7 @@
 
   <!-- 본문 + 정보(작성 시각 · 공개 범위). 이후 미디어·투표·액션바가 형제로 쌓인다. -->
   <div class={slots.body()}>
-    <PostBody post={postFragment.data} />
+    <PostBody post={postFragment.data} size="lg" />
     <div class={slots.meta()}>
       <time datetime={postFragment.data.createdAt as string}>{formattedCreatedAt}</time>
       <span aria-hidden="true">·</span>

@@ -18,7 +18,9 @@
     "start": "node build/index.js"
   },
   "devDependencies": {
+    "@fedify/sveltekit": "^2.2.5",
     "@kosmo/core": "workspace:*",
+    "@kosmo/fedify": "workspace:*",
     "@lucide/svelte": "^1.17.0",
     "@mearie/core": "^0.6.7",
     "@mearie/svelte": "^0.4.7",
