@@ -1,17 +1,17 @@
 ## ADDED Requirements
 
-### Requirement: Profile relative handle
+### Requirement: Profile display handle
 
-API는 프로필 표시용 handle 문자열을 configured local instance 기준 `relativeHandle`로 제공해야 한다(MUST).
+API는 프로필 표시용 handle 문자열을 configured local instance 기준 `displayHandle`로 제공해야 한다(MUST).
 
-#### Scenario: Relative handle for configured local profile
+#### Scenario: Display handle for configured local profile
 
-- **WHEN** 클라이언트가 configured local instance에 속한 활성 프로필의 `relativeHandle`을 조회한다
+- **WHEN** 클라이언트가 configured local instance에 속한 활성 프로필의 `displayHandle`을 조회한다
 - **THEN** 시스템은 `@{handle}` 형식의 문자열을 반환한다
 
-#### Scenario: Relative handle for profile outside configured local instance
+#### Scenario: Display handle for profile outside configured local instance
 
-- **WHEN** 클라이언트가 configured local instance가 아닌 instance에 속한 활성 프로필의 `relativeHandle`을 조회한다
+- **WHEN** 클라이언트가 configured local instance가 아닌 instance에 속한 활성 프로필의 `displayHandle`을 조회한다
 - **THEN** 시스템은 `@{handle}@{instanceDomain}` 형식의 문자열을 반환한다
 - **AND** 해당 instance가 `LOCAL` kind여도 configured local instance가 아니면 domain을 포함한다
 
@@ -75,14 +75,14 @@ API는 활성 local profile과 저장된 활성 remote profile을 GraphQL profil
 
 - **WHEN** local profile 상태가 `ACTIVE`이다
 - **THEN** 시스템은 프로필 object 접근을 허용한다
-- **AND** handle, relativeHandle, displayName, nullable bio, followPolicy, createdAt 필드를 노출한다
+- **AND** handle, displayHandle, displayName, nullable bio, followPolicy, createdAt 필드를 노출한다
 - **AND** Node ID 기반 profile load는 활성 local profile을 반환할 수 있다
 
 #### Scenario: Access active remote profile object by Node ID
 
 - **WHEN** remote profile 상태가 `ACTIVE`이고 클라이언트가 해당 profile의 Node ID를 직접 조회한다
 - **THEN** 시스템은 프로필 object 접근을 허용한다
-- **AND** handle, relativeHandle, displayName, nullable bio, followPolicy, createdAt 필드를 노출한다
+- **AND** handle, displayHandle, displayName, nullable bio, followPolicy, createdAt 필드를 노출한다
 
 #### Scenario: Existing local profile entry points are not expanded
 
