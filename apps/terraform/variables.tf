@@ -10,8 +10,8 @@ variable "kubernetes_version" {
   default     = "1.36"
 
   validation {
-    condition     = can(regex("^1\\.[0-9]+$", var.kubernetes_version))
-    error_message = "kubernetes_version must be a Kubernetes minor version such as 1.36."
+    condition     = can(regex("^[0-9]+\\.[0-9]+$", var.kubernetes_version))
+    error_message = "kubernetes_version must be a Kubernetes minor version in major.minor format, such as 1.36 or 2.0."
   }
 }
 
