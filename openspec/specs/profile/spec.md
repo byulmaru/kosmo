@@ -124,6 +124,8 @@ API는 활성 프로필만 GraphQL profile object로 노출해야 한다(MUST).
 - **WHEN** 로그인한 계정이 자신과 연결된 활성 프로필 선택을 요청한다
 - **THEN** 시스템은 현재 세션의 active profile을 해당 프로필로 변경한다
 - **AND** mutation은 `SelectProfilePayload.profile`로 선택된 `Profile`을 반환한다
+- **AND** mutation은 `SelectProfilePayload.session`으로 현재 `Session`을 반환한다
+- **AND** 반환된 `Session.selectedProfile`은 선택된 프로필을 가리켜 클라이언트 캐시가 active profile 변경을 동기화할 수 있다
 
 #### Scenario: Select missing or inaccessible profile
 

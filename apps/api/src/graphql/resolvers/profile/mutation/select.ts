@@ -11,6 +11,7 @@ import { NotFoundError } from '@kosmo/core/error';
 import { and, eq, getColumns } from 'drizzle-orm';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
+import { Session } from '@/graphql/resolvers/session/ref';
 import { Profile } from '../ref';
 
 builder.mutationField('selectProfile', (t) =>
@@ -18,6 +19,7 @@ builder.mutationField('selectProfile', (t) =>
     type: builder.simpleObject('SelectProfilePayload', {
       fields: (field) => ({
         profile: field.field({ type: Profile }),
+        session: field.field({ type: Session }),
       }),
     }),
     input: {
@@ -45,7 +47,9 @@ builder.mutationField('selectProfile', (t) =>
         .returning()
         .then(firstOrThrow);
 
-      return { profile };
+      ctx.session.profileId = profile.id;
+
+      return { profile, session: ctx.session.id };
     },
   }),
 );
