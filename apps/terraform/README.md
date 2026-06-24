@@ -75,6 +75,16 @@ $EDITOR terraform.tfvars
 
 현재 root에는 실제 리소스가 없으므로 `terraform.tfvars` 없이도 validate와 plan이 가능해야 한다.
 
+## Toolchain
+
+Terraform CLI는 이 디렉터리의 `mise.toml`에서만 고정한다. repo root의 `mise.toml`에는 Terraform을 넣지 않아 web/api 작업에서 불필요하게 Terraform을 설치하지 않게 한다.
+
+```sh
+cd apps/terraform
+mise trust
+mise install
+```
+
 ## 검증
 
 ```sh
