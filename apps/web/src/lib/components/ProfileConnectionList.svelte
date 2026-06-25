@@ -1,16 +1,26 @@
 <script lang="ts">
+  import { createFragment } from '@mearie/svelte';
+  import { graphql } from '$mearie';
   import type { HTMLAttributes } from 'svelte/elements';
 
+  import type {
+    ProfileConnectionList_followersProfile$key,
+    ProfileConnectionList_followingProfile$key,
+  } from '$mearie';
+
+  import ProfileListItem from './ProfileListItem.svelte';
   import TextSkeleton from './TextSkeleton.svelte';
 
   // 프로필 팔로워/팔로잉 목록 영역. 게시글 목록(PostList)과 같은 상태(로딩/오류/빈) 표현·접근성 패턴을 따른다.
   // 팔로워/팔로잉은 같은 컴포넌트를 `kind`로 분기해 시각/상태 구조를 일치시킨다.
-  // 실제 connection 데이터 연결은 후속(PROD-184/185)에서 fragment prop과 항목 목록 분기를 추가한다.
-  // 데이터 연결 전에는 항목이 없어 기본적으로 빈 상태를 표시한다.
+  // Pagination UI는 별도 이슈로 분리하고 첫 페이지만 조회한다.
   type ConnectionKind = 'followers' | 'following';
 
   type Props = HTMLAttributes<HTMLElement> & {
     kind: ConnectionKind;
+    followersProfile?: ProfileConnectionList_followersProfile$key | null;
+    followingProfile?: ProfileConnectionList_followingProfile$key | null;
+    viewerProfileId?: string | null;
     loading?: boolean;
     error?: boolean;
     onRetry?: () => void;
@@ -18,6 +28,9 @@
 
   let {
     kind,
+    followersProfile = null,
+    followingProfile = null,
+    viewerProfileId = null,
     loading = false,
     error = false,
     onRetry,
@@ -54,6 +67,69 @@
 
   const text = $derived(copy[kind]);
 
+  const followersFragment = createFragment(
+    graphql(`
+      fragment ProfileConnectionList_followersProfile on Profile {
+        id
+        followers(first: 20) {
+          edges {
+            cursor
+            node {
+              id
+              follower {
+                id
+                ...ProfileListItem_profile
+              }
+            }
+          }
+        }
+      }
+    `),
+    () => followersProfile,
+  );
+
+  const followingFragment = createFragment(
+    graphql(`
+      fragment ProfileConnectionList_followingProfile on Profile {
+        id
+        following(first: 20) {
+          edges {
+            cursor
+            node {
+              id
+              followee {
+                id
+                ...ProfileListItem_profile
+              }
+            }
+          }
+        }
+      }
+    `),
+    () => followingProfile,
+  );
+
+  const getConnectionProfiles = () => {
+    if (kind === 'followers') {
+      return (
+        followersFragment.data?.followers.edges.flatMap((edge) =>
+          edge.node.follower ? [{ cursor: edge.cursor, profile: edge.node.follower }] : [],
+        ) ?? []
+      );
+    }
+
+    return (
+      followingFragment.data?.following.edges.flatMap((edge) =>
+        edge.node.followee ? [{ cursor: edge.cursor, profile: edge.node.followee }] : [],
+      ) ?? []
+    );
+  };
+
+  const connectionProfiles = $derived(getConnectionProfiles());
+  const hasConnectionData = $derived(
+    kind === 'followers' ? Boolean(followersFragment.data) : Boolean(followingFragment.data),
+  );
+
   // 첫 화면을 채울 만큼만 반복한다.
   const skeletonItems = [0, 1, 2];
 </script>
@@ -62,7 +138,7 @@
   <h2 class="text-text-primary border-border border-b px-4 pt-2 pb-3 text-base font-bold">
     {text.title}
   </h2>
-  {#if loading}
+  {#if loading && !hasConnectionData}
     <div aria-hidden="true">
       {#each skeletonItems as item (item)}
         <div class="border-border flex items-center gap-3 border-b px-4 py-3">
@@ -77,7 +153,7 @@
       {/each}
     </div>
     <span class="sr-only" role="status">{text.loadingLabel}</span>
-  {:else if error}
+  {:else if error && !hasConnectionData}
     <div class="px-4 py-12 text-center" role="alert">
       <p class="text-text-primary text-base font-semibold">{text.errorTitle}</p>
       <p class="text-text-secondary mt-1 text-sm">잠시 후 다시 시도해주세요.</p>
@@ -91,11 +167,19 @@
         </button>
       {/if}
     </div>
+  {:else if connectionProfiles.length > 0}
+    <div>
+      {#each connectionProfiles as item (item.cursor)}
+        <ProfileListItem
+          profile={item.profile}
+          linked
+          {viewerProfileId}
+          width="wide"
+          class="w-full"
+        />
+      {/each}
+    </div>
   {:else}
-    <!--
-      항목 목록 분기는 후속(PROD-184/185)에서 connection fragment prop과 함께 추가한다.
-      그 전까지는 표시할 항목이 없으므로 빈 상태를 기본으로 표시한다.
-    -->
     <div class="px-4 py-12 text-center">
       <p class="text-text-primary text-base font-semibold">{text.emptyTitle}</p>
       <p class="text-text-secondary mt-1 text-sm">{text.emptyDescription}</p>
