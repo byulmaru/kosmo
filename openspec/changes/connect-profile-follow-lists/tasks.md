@@ -13,9 +13,9 @@
 
 ## 3. 팔로잉 목록 데이터 연결 (PROD-185)
 
-- [ ] 3.1 `/@{handle}/following` route query에서 `profileByHandle(handle:)`와 `Profile.following(first: 20).edges[].node.followee`를 조회한다
-- [ ] 3.2 같은 query에서 `currentSession.selectedProfile.id`를 조회해 `viewerProfileId`로 전달한다
-- [ ] 3.3 following route가 `ProfileConnectionList kind="following"`에 profile data, loading, error, retry를 연결한다
+- [x] 3.1 `/@{handle}/following` route query에서 `profileByHandle(handle:)`와 `Profile.following(first: 20).edges[].node.followee`를 조회한다
+- [x] 3.2 같은 query에서 `currentSession.selectedProfile.id`를 조회해 `viewerProfileId`로 전달한다
+- [x] 3.3 following route가 `ProfileConnectionList kind="following"`에 profile data, loading, error, retry를 연결한다
 
 ## 4. 검증
 
