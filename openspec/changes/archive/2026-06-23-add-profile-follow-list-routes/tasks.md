@@ -16,4 +16,4 @@
 ## 4. 검증 (PROD-180에서 마무리)
 
 - [x] 4.1 `pnpm -F @kosmo/web check`와 prettier를 통과시킨다
-- [x] 4.2 `/@{handle}/followers`·`/@{handle}/following` 직접 접근 시 `ProfileHero` + 제목 + 빈 상태가 표시되고, `ProfileHero`/사이드바 카운트 링크로 이동되는지 확인한다(시각 확인은 사용자)
+- [x] 4.2 `/@{handle}/followers`·`/@{handle}/following` 직접 접근 시 `ProfileHero` + 제목 + 빈 상태가 표시되는지 확인한다(시각 확인은 사용자)
