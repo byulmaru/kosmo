@@ -3,6 +3,8 @@ import type * as Tables from './tables';
 export const TableDiscriminator = {
   Accounts: 0x001,
   AccountProfiles: 0x002,
+  ActivityPubActors: 0x00f,
+  ActivityPubActorKeys: 0x010,
   Applications: 0x003,
   ApplicationAuthorizations: 0x009,
   Files: 0x00c,

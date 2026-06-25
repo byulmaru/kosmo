@@ -6,6 +6,14 @@ const createPgEnum = <T extends string>(enumName: string, values: Record<T, T>) 
 
 export const accountProfileRole = createPgEnum('account_profile_role', Enum.AccountProfileRole);
 export const accountState = createPgEnum('account_state', Enum.AccountState);
+export const activityPubActorType = createPgEnum(
+  'activitypub_actor_type',
+  Enum.ActivityPubActorType,
+);
+export const activityPubActorKeyType = createPgEnum(
+  'activitypub_actor_key_type',
+  Enum.ActivityPubActorKeyType,
+);
 export const applicationState = createPgEnum('application_state', Enum.ApplicationState);
 export const applicationType = createPgEnum('application_type', Enum.ApplicationType);
 export const instanceKind = createPgEnum('instance_kind', Enum.InstanceKind);

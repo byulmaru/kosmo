@@ -10,9 +10,9 @@
 - [x] 2.1 `InstanceKind` 또는 동등한 enum과 `instance` 테이블을 추가해 domain, state, local instance의 canonical origin, ActivityPub instance의 선택적 canonical origin, 생성/수정 시각을 저장하고, domain 중복은 막되 `LOCAL` row 단일성은 강제하지 않는다.
 - [x] 2.2 `profile.instance_id`를 추가하고 local instance bootstrap 이후 기존 profile을 configured local instance에 연결해 handle을 보존하는 migration 흐름을 구현한다.
 - [x] 2.3 `profile.normalized_handle` 전역 unique를 `(instance_id, normalized_handle)` unique로 교체하고 관련 index/relation을 갱신한다.
-- [ ] 2.4 ActivityPub actor metadata 테이블을 추가해 profile과 actor URI/type을 저장하고, actor URI 중복과 profile당 actor metadata 중복을 막는다.
-- [ ] 2.5 ActivityPub actor key 테이블을 추가해 local actor의 public/private JWK와 remote actor의 선택적 public key metadata를 저장할 수 있게 하고 `(activitypub_actor_id, key_type)` 중복을 막는다.
-- [ ] 2.6 새 테이블의 `TableDiscriminator`, Drizzle relations, schema exports, OpenSpec data-model 계약과 일치하는 테스트 fixture를 갱신한다.
+- [x] 2.4 ActivityPub actor metadata 테이블을 추가해 profile과 actor URI/type을 저장하고, actor URI 중복과 profile당 actor metadata 중복을 막는다.
+- [x] 2.5 ActivityPub actor key 테이블을 추가해 local actor의 public/private JWK와 remote actor의 선택적 public key metadata를 저장할 수 있게 하고 `(activitypub_actor_id, key_type)` 중복을 막는다.
+- [x] 2.6 새 테이블의 `TableDiscriminator`, Drizzle relations, schema exports, OpenSpec data-model 계약과 일치하는 테스트 fixture를 갱신한다.
 
 ## 3. Profile GraphQL Contract
 

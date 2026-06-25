@@ -32,6 +32,24 @@ export const relations = defineRelations(tables, (r) => ({
       optional: false,
     }),
   },
+  ActivityPubActors: {
+    keys: r.many.ActivityPubActorKeys({
+      from: r.ActivityPubActors.id,
+      to: r.ActivityPubActorKeys.activityPubActorId,
+    }),
+    profile: r.one.Profiles({
+      from: r.ActivityPubActors.profileId,
+      to: r.Profiles.id,
+      optional: false,
+    }),
+  },
+  ActivityPubActorKeys: {
+    activityPubActor: r.one.ActivityPubActors({
+      from: r.ActivityPubActorKeys.activityPubActorId,
+      to: r.ActivityPubActors.id,
+      optional: false,
+    }),
+  },
   Applications: {
     applicationAuthorizations: r.many.ApplicationAuthorizations({
       from: r.Applications.id,
@@ -105,6 +123,10 @@ export const relations = defineRelations(tables, (r) => ({
     accountProfiles: r.many.AccountProfiles({
       from: r.Profiles.id,
       to: r.AccountProfiles.profileId,
+    }),
+    activityPubActors: r.many.ActivityPubActors({
+      from: r.Profiles.id,
+      to: r.ActivityPubActors.profileId,
     }),
     applicationAuthorizations: r.many.ApplicationAuthorizations({
       from: r.Profiles.id,

@@ -6,6 +6,8 @@ import { datetime } from './types';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { TipTapDocument } from '../tiptap';
 
+type JsonWebKeyRecord = Record<string, unknown>;
+
 const createdAt = () =>
   datetime('created_at')
     .notNull()
@@ -45,6 +47,43 @@ export const AccountProfiles = pgTable(
     unique().on(table.accountId, table.profileId),
     index().on(table.accountId),
     index().on(table.profileId),
+  ],
+);
+
+export const ActivityPubActors = pgTable(
+  'activitypub_actor',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => createId(TableDiscriminator.ActivityPubActors)),
+    profileId: uuid('profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    uri: text('uri').unique().notNull(),
+    type: Enum.activityPubActorType('type').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [unique().on(table.profileId, table.type), index().on(table.profileId)],
+);
+
+export const ActivityPubActorKeys = pgTable(
+  'activitypub_actor_key',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => createId(TableDiscriminator.ActivityPubActorKeys)),
+    activityPubActorId: uuid('activitypub_actor_id')
+      .notNull()
+      .references(() => ActivityPubActors.id, { onDelete: 'cascade' }),
+    keyType: Enum.activityPubActorKeyType('key_type').notNull(),
+    publicKeyJwk: jsonb('public_key_jwk').$type<JsonWebKeyRecord>().notNull(),
+    privateKeyJwk: jsonb('private_key_jwk').$type<JsonWebKeyRecord>(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    unique().on(table.activityPubActorId, table.keyType),
+    index().on(table.activityPubActorId),
   ],
 );
 
