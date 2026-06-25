@@ -5,6 +5,7 @@ import { relations } from './relations';
 import * as tables from './tables';
 
 export * from './id';
+export * from './local-instance';
 export * from './relations';
 export * from './tables';
 export * from './utils';

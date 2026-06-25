@@ -1,4 +1,4 @@
-import { db, first, Profiles } from '@kosmo/core/db';
+import { db, first, Profiles, resolveConfiguredLocalInstance } from '@kosmo/core/db';
 import { ProfileState } from '@kosmo/core/enums';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq } from 'drizzle-orm';
@@ -13,11 +13,14 @@ builder.queryField('profileByHandle', (t) =>
       handle: t.arg.string({ required: true }),
     },
     resolve: async (_, args) => {
+      const localInstance = await resolveConfiguredLocalInstance(db);
+
       return db
         .select()
         .from(Profiles)
         .where(
           and(
+            eq(Profiles.instanceId, localInstance.id),
             eq(Profiles.state, ProfileState.ACTIVE),
             eq(Profiles.normalizedHandle, normalizeHandle(args.handle)),
           ),

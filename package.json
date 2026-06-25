@@ -8,6 +8,7 @@
     "db:test:push": "set -a && . ./.env.test && set +a && env NODE_OPTIONS='--preserve-symlinks --preserve-symlinks-main' ./packages/core/node_modules/.bin/drizzle-kit push --config packages/core/drizzle.config.ts",
     "db:test:reset": "node scripts/test-db.mjs reset",
     "db:test:up": "node scripts/test-db.mjs up",
+    "db:bootstrap-local-instance": "pnpm --filter @kosmo/api db:bootstrap-local-instance",
     "dev": "infisical run -- pnpm --recursive --parallel --if-present dev",
     "lint:eslint": "eslint --max-warnings 0 .",
     "lint:prettier": "prettier --check --ignore-unknown '**/*'",

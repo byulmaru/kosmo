@@ -62,7 +62,9 @@ export const relations = defineRelations(tables, (r) => ({
     originalMedia: r.many.Media({ from: r.Files.id, to: r.Media.originalFileId }),
     thumbnailMedia: r.many.Media({ from: r.Files.id, to: r.Media.thumbnailFileId }),
   },
-  Instances: {},
+  Instances: {
+    profiles: r.many.Profiles({ from: r.Instances.id, to: r.Profiles.instanceId }),
+  },
   Media: {
     account: r.one.Accounts({ from: r.Media.accountId, to: r.Accounts.id }),
     originalFile: r.one.Files({ from: r.Media.originalFileId, to: r.Files.id }),
@@ -117,6 +119,10 @@ export const relations = defineRelations(tables, (r) => ({
       from: r.Profiles.id,
       to: r.ProfileFollows.followeeProfileId,
       alias: 'profile_follow_followee',
+    }),
+    instance: r.one.Instances({
+      from: r.Profiles.instanceId,
+      to: r.Instances.id,
     }),
     media: r.many.Media({ from: r.Profiles.id, to: r.Media.profileId }),
     oauthAuthorizationCodes: r.many.OAuthAuthorizationCodes({

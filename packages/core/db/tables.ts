@@ -249,6 +249,7 @@ export const Profiles = pgTable(
     id: uuid('id')
       .primaryKey()
       .$defaultFn(() => createId(TableDiscriminator.Profiles)),
+    instanceId: uuid('instance_id').references(() => Instances.id),
     state: Enum.profileState('state').notNull().default('ACTIVE'),
     handle: text('handle').notNull(),
     normalizedHandle: text('normalized_handle').notNull(),
@@ -257,7 +258,7 @@ export const Profiles = pgTable(
     followPolicy: Enum.profileFollowPolicy('follow_policy').notNull(),
     createdAt: createdAt(),
   },
-  (table) => [unique().on(table.normalizedHandle)],
+  (table) => [unique().on(table.instanceId, table.normalizedHandle), index().on(table.instanceId)],
 );
 
 export const ProfileFollows = pgTable(

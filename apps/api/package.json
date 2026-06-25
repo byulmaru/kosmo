@@ -2,6 +2,7 @@
   "name": "@kosmo/api",
   "type": "module",
   "scripts": {
+    "db:bootstrap-local-instance": "tsx scripts/bootstrap-local-instance.ts",
     "dev": "tsx watch src/index.ts",
     "start": "node --import tsx src/index.ts",
     "lint:tsc": "tsc --noEmit"
