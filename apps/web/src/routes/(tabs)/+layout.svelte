@@ -5,6 +5,10 @@
   import RightRail from '$lib/components/RightRail.svelte';
   import SidebarNavigation from '$lib/components/SidebarNavigation.svelte';
   import { setProfileSwitcherContext } from '$lib/profileSwitcherContext';
+  import {
+    setSelectedProfileContext,
+    type SelectedProfileSnapshot,
+  } from '$lib/selectedProfileContext';
   import { setShellChromeContext } from '$lib/shellChromeContext';
 
   let { children } = $props();
@@ -25,18 +29,38 @@
     `),
   );
 
-  const selectedProfile = $derived(query.data?.currentSession?.selectedProfile ?? null);
+  let selectedProfileSnapshot = $state<SelectedProfileSnapshot | null>(null);
+  const selectedProfile = $derived(
+    selectedProfileSnapshot ?? query.data?.currentSession?.selectedProfile ?? null,
+  );
 
-  const invalidateSidebarNavigationData = () => {
-    client
-      .extension('cache')
-      .invalidate(
-        { __typename: 'Query', $field: 'currentSession' },
-        { __typename: 'Query', $field: 'me' },
-        { __typename: 'Query', $field: 'homeTimeline' },
-        { __typename: 'Profile', $field: 'viewerFollow' },
-      );
+  type ProfileStateChangedReason = 'profile-selected' | 'profile-created';
+
+  setSelectedProfileContext({ selectedProfile: () => selectedProfileSnapshot });
+
+  const handleProfileStateChanged = (
+    reason: ProfileStateChangedReason,
+    selectedProfile: SelectedProfileSnapshot | null,
+  ) => {
+    selectedProfileSnapshot = selectedProfile;
+
+    const cache = client.extension('cache');
+
+    if (reason === 'profile-created') {
+      cache.invalidate({ __typename: 'Query', $field: 'me' });
+    }
+
+    cache.invalidate(
+      { __typename: 'Query', $field: 'homeTimeline' },
+      { __typename: 'Profile', $field: 'viewerFollow' },
+    );
   };
+
+  $effect(() => {
+    if (query.data?.currentSession === null) {
+      selectedProfileSnapshot = null;
+    }
+  });
 
   let drawerOpen = $state(false);
   let swipeStartX = $state<number | null>(null);
@@ -105,8 +129,9 @@
       query={query.data}
       loading={query.loading}
       error={Boolean(query.error)}
+      {selectedProfileSnapshot}
       bind:switcherOpen={profileSwitcherOpen}
-      onProfileStateChanged={invalidateSidebarNavigationData}
+      onProfileStateChanged={handleProfileStateChanged}
     />
   </div>
 
@@ -166,9 +191,10 @@
           loading={query.loading}
           error={Boolean(query.error)}
           surface="drawer"
+          {selectedProfileSnapshot}
           bind:switcherOpen={profileSwitcherOpen}
           onNavigate={closeDrawer}
-          onProfileStateChanged={invalidateSidebarNavigationData}
+          onProfileStateChanged={handleProfileStateChanged}
         />
       </div>
     </div>
