@@ -67,7 +67,7 @@
       // 거터 col(아바타 폭)을 행 전체 높이로 차지해 이후 스레드 라인 자리를 예약한다(PostLayout 패리티).
       // feed 아바타는 lg(48px)이므로 거터 폭도 w-12로 맞춘다.
       thread: 'w-12 self-stretch',
-      body: 'focus-visible:outline-more text-text-primary min-w-0 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2',
+      body: 'focus-visible:outline-more text-text-primary block min-w-0 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2',
       time: 'focus-visible:outline-more text-text-secondary shrink-0 rounded-md text-sm hover:underline focus-visible:outline-2 focus-visible:outline-offset-2',
     },
   });
