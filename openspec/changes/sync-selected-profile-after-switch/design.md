@@ -7,7 +7,7 @@
 **Goals:**
 
 - 사이드바에서 프로필을 전환하면 사이드바와 이미 열린 `/compose` composer가 같은 active profile을 즉시 표시한다.
-- 일반 프로필 선택은 `currentSession` 전체 refetch에 의존하지 않고, mutation 응답의 `Session.selectedProfile`을 화면 갱신 입력으로 사용한다.
+- 일반 프로필 선택은 `currentSession` 전체 수동 invalidation/refetch에 의존하지 않고, mutation 응답의 `Session.selectedProfile`을 화면 갱신 입력으로 사용한다.
 - active profile에 의존하는 root query field는 필요한 범위만 stale 처리하거나 동등하게 갱신한다.
 
 **Non-Goals:**
@@ -21,8 +21,8 @@
 1. **전환 성공 응답을 즉시 UI 갱신 입력으로 사용한다.**  
    일반 프로필 선택 성공 후에는 `selectProfile.session.selectedProfile`을 앱 셸이 받은 최신 active profile로 취급한다. 이는 임의의 클라이언트 추측값이 아니라 서버가 성공 응답에서 확인한 세션 상태다.
 
-2. **`currentSession` refetch는 일반 선택의 필수 경로로 두지 않는다.**  
-   `currentSession` 전체 invalidation은 route query 재실행과 화면 깜박임을 유발할 수 있다. 일반 선택에서는 mutation 응답을 통해 shell/composer 표시를 갱신하고, `homeTimeline`처럼 active profile에 따라 root 결과가 달라지는 field만 별도로 stale 처리한다.
+2. **`currentSession` 전체 수동 invalidation/refetch는 일반 선택의 필수 경로로 두지 않는다.**  
+   금지하려는 것은 캐시 정책이나 route 재마운트에 따른 자연스러운 재조회가 아니라, 일반 프로필 선택 성공 handler가 `currentSession` 전체를 직접 stale 처리하거나 refetch 완료를 UI 갱신의 전제로 삼는 흐름이다. 일반 선택에서는 mutation 응답을 통해 shell/composer 표시를 갱신하고, `homeTimeline`, `Profile.viewerFollow`처럼 active profile에 따라 결과가 달라지는 field만 별도로 stale 처리한다.
 
 3. **새 프로필 생성은 프로필 목록 갱신을 별도 허용한다.**  
    생성 직후에는 선택 프로필 표시뿐 아니라 `me.profiles` 목록 자체가 바뀐다. 따라서 `profile-created` 성격의 성공 처리에서는 `me` 또는 동등한 프로필 목록 데이터를 갱신할 수 있다.
