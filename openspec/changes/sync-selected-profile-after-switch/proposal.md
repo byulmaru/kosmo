@@ -6,7 +6,7 @@
 
 - 사이드바 프로필 전환 성공 후 앱 셸의 활성 프로필 표시는 mutation 응답의 갱신된 `Session.selectedProfile`을 기준으로 즉시 바뀌어야 한다.
 - 이미 열린 `/compose` 화면의 새 글 작성 컴포넌트도 같은 전환 결과를 반영해 작성 프로필을 즉시 바꿔야 한다.
-- 일반 프로필 선택은 `currentSession` 전체 수동 invalidation/refetch에 의존하지 않고, 선택 mutation 응답과 `homeTimeline`, `Profile.viewerFollow` 같은 active-profile 의존 field의 필요한 갱신으로 처리해야 한다.
+- 일반 프로필 선택은 `currentSession` 전체 수동 invalidation/refetch에 의존하지 않고, 선택 mutation 응답이 Mearie 정규화 캐시의 `Session.selectedProfile` 링크를 갱신하게 하며, `homeTimeline`, `Profile.viewerFollow` 같은 active-profile 의존 field는 필요한 범위만 갱신해야 한다.
 - 새 프로필 생성 후 선택되는 경우에는 접근 가능한 프로필 목록 갱신이 필요하므로 `me.profiles` 계열 데이터 갱신을 허용한다.
 
 ## Capabilities

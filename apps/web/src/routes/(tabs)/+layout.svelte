@@ -5,10 +5,6 @@
   import RightRail from '$lib/components/RightRail.svelte';
   import SidebarNavigation from '$lib/components/SidebarNavigation.svelte';
   import { setProfileSwitcherContext } from '$lib/profileSwitcherContext';
-  import {
-    setSelectedProfileContext,
-    type SelectedProfileSnapshot,
-  } from '$lib/selectedProfileContext';
   import { setShellChromeContext } from '$lib/shellChromeContext';
 
   let { children } = $props();
@@ -29,21 +25,11 @@
     `),
   );
 
-  let selectedProfileSnapshot = $state<SelectedProfileSnapshot | null>(null);
-  const selectedProfile = $derived(
-    selectedProfileSnapshot ?? query.data?.currentSession?.selectedProfile ?? null,
-  );
+  const selectedProfile = $derived(query.data?.currentSession?.selectedProfile ?? null);
 
   type ProfileStateChangedReason = 'profile-selected' | 'profile-created';
 
-  setSelectedProfileContext({ selectedProfile: () => selectedProfileSnapshot });
-
-  const handleProfileStateChanged = (
-    reason: ProfileStateChangedReason,
-    selectedProfile: SelectedProfileSnapshot | null,
-  ) => {
-    selectedProfileSnapshot = selectedProfile;
-
+  const handleProfileStateChanged = (reason: ProfileStateChangedReason) => {
     const cache = client.extension('cache');
 
     if (reason === 'profile-created') {
@@ -55,12 +41,6 @@
       { __typename: 'Profile', $field: 'viewerFollow' },
     );
   };
-
-  $effect(() => {
-    if (query.data?.currentSession === null) {
-      selectedProfileSnapshot = null;
-    }
-  });
 
   let drawerOpen = $state(false);
   let swipeStartX = $state<number | null>(null);
@@ -129,7 +109,6 @@
       query={query.data}
       loading={query.loading}
       error={Boolean(query.error)}
-      {selectedProfileSnapshot}
       bind:switcherOpen={profileSwitcherOpen}
       onProfileStateChanged={handleProfileStateChanged}
     />
@@ -191,7 +170,6 @@
           loading={query.loading}
           error={Boolean(query.error)}
           surface="drawer"
-          {selectedProfileSnapshot}
           bind:switcherOpen={profileSwitcherOpen}
           onNavigate={closeDrawer}
           onProfileStateChanged={handleProfileStateChanged}
