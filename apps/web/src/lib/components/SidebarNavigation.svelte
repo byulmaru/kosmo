@@ -4,8 +4,11 @@
   import { graphql } from '$mearie';
   import Avatar from '$lib/components/Avatar.svelte';
   import ProfileSwitcher from '$lib/components/ProfileSwitcher.svelte';
+  import type { SelectedProfileSnapshot } from '$lib/selectedProfileContext';
   import { formatCount, getProfileInitial } from '$lib/utils/profile';
   import type { SidebarNavigation_query$key } from '$mearie';
+
+  type ProfileStateChangedReason = 'profile-selected' | 'profile-created';
 
   type Props = {
     query?: SidebarNavigation_query$key | null;
@@ -13,8 +16,12 @@
     error?: boolean;
     surface?: 'desktop' | 'drawer';
     switcherOpen?: boolean;
+    selectedProfileSnapshot?: SelectedProfileSnapshot | null;
     onNavigate?: () => void;
-    onProfileStateChanged?: () => void;
+    onProfileStateChanged?: (
+      reason: ProfileStateChangedReason,
+      selectedProfile: SelectedProfileSnapshot | null,
+    ) => void;
   };
 
   const sidebarNavigationFragment = graphql(`
@@ -26,8 +33,8 @@
           handle
           relativeHandle
           displayName
-          followersCount
           followingCount
+          followersCount
         }
       }
       me {
@@ -45,6 +52,7 @@
     error = false,
     surface = 'desktop',
     switcherOpen = $bindable(false),
+    selectedProfileSnapshot = null,
     onNavigate = () => {},
     onProfileStateChanged = () => {},
   }: Props = $props();
@@ -95,7 +103,7 @@
 
   const hasProfiles = $derived((sidebarNavigation.data?.me?.profiles?.length ?? 0) > 0);
   const sidebarActiveProfile = $derived(
-    sidebarNavigation.data?.currentSession?.selectedProfile ?? null,
+    selectedProfileSnapshot ?? sidebarNavigation.data?.currentSession?.selectedProfile ?? null,
   );
 </script>
 
@@ -107,6 +115,7 @@
       query={sidebarNavigation.data}
       {surface}
       {loading}
+      {selectedProfileSnapshot}
       bind:switcherOpen
       {onProfileStateChanged}
     />
@@ -268,6 +277,7 @@
           query={sidebarNavigation.data}
           {surface}
           {loading}
+          {selectedProfileSnapshot}
           bind:switcherOpen
           {onProfileStateChanged}
         />
