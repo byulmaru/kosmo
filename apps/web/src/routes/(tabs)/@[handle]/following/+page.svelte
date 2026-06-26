@@ -1,10 +1,36 @@
 <script lang="ts">
+  import { page } from '$app/state';
+  import { createQuery } from '@mearie/svelte';
+  import { graphql } from '$mearie';
   import ProfileConnectionList from '$lib/components/ProfileConnectionList.svelte';
 
-  // 팔로잉 목록 라우트 골격. 상단 ProfileHero는 상위 @[handle] layout이 렌더한다.
-  // 팔로워 목록과 같은 ProfileConnectionList를 재사용해 시각/상태 구조를 일치시킨다.
-  // 실제 following connection 데이터 연결은 후속(PROD-185)에서 추가하며,
-  // 그 전까지는 빈 상태를 표시한다.
+  const query = createQuery(
+    graphql(`
+      query ProfileFollowingPageQuery($handle: String!) {
+        currentSession {
+          id
+          selectedProfile {
+            id
+          }
+        }
+        profileByHandle(handle: $handle) {
+          id
+          ...ProfileConnectionList_followingProfile
+        }
+      }
+    `),
+    () => ({ handle: page.params.handle! }),
+  );
+
+  const profile = $derived(query.data?.profileByHandle ?? null);
+  const viewerProfileId = $derived(query.data?.currentSession?.selectedProfile?.id ?? null);
 </script>
 
-<ProfileConnectionList kind="following" />
+<ProfileConnectionList
+  kind="following"
+  followingProfile={profile}
+  {viewerProfileId}
+  loading={query.loading}
+  error={Boolean(query.error)}
+  onRetry={query.refetch}
+/>
