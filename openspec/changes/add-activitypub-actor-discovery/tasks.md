@@ -36,7 +36,7 @@
 
 ## 5. Web Integration
 
-- [ ] 5.1 `apps/web/src/hooks.server.ts`에서 `packages/fedify`가 제공하는 federation 구성을 Fedify SvelteKit hook adapter로 SvelteKit `handle`에 연결하고, web hook 본문에는 ActivityPub parsing/응답 조립 로직을 두지 않는다.
+- [x] 5.1 `apps/web/src/hooks.server.ts`에서 `packages/fedify`가 제공하는 federation 구성을 Fedify SvelteKit hook adapter로 SvelteKit `handle`에 연결하고, web hook 본문에는 ActivityPub parsing/응답 조립 로직을 두지 않는다.
 - [ ] 5.2 ActivityPub/WebFinger 요청은 `packages/fedify`가 처리하고 기존 `/health`, `/graphql`, `/login`, `/@{handle}` 요청은 기존 동작을 유지하는지 확인한다.
 - [ ] 5.3 actor URI와 WebFinger JRD가 canonical local origin을 사용하고 request Host에 의존하지 않는지 확인한다.
 
