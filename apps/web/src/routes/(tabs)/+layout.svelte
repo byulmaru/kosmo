@@ -35,6 +35,8 @@
         { __typename: 'Query', $field: 'me' },
         { __typename: 'Query', $field: 'homeTimeline' },
         { __typename: 'Profile', $field: 'viewerFollow' },
+        { __typename: 'Profile', $field: 'followers' },
+        { __typename: 'Profile', $field: 'following' },
       );
   };
 
