@@ -16,8 +16,9 @@
 - AWS resource name prefix는 cluster name에서 파생한다. 별도 변수로 열면 같은 cluster의 이름 체계가 갈라질 수 있고 prefix 변경도 replacement 성격이 강하므로 입력값으로 받지 않는다.
 - Kubernetes version 기본값은 `1.36`이다. 이 값은 스캐폴딩 기본값이며 EKS cluster를 실제 생성하는 PROD-204에서 AWS EKS 지원 상태와 add-on 호환성을 다시 확인한다.
 - node group 설정은 외부 변수로 열어 두지 않는다. 여러 node group의 구성, On-Demand/Spot 비율, instance type, min/desired/max size는 PROD-205에서 실제 Terraform 코드로 정의한다.
-- VPC CIDR은 `10.40.0.0/16`으로 고정한다. AWS VPC의 단일 IPv4 CIDR block은 `/16`이 가장 넓은 범위이므로, Kubernetes pod IP 소모를 고려해 private subnet을 크게 배정한다.
-- public subnet은 `10.40.0.0/20`, `10.40.16.0/20`, private subnet은 `10.40.64.0/18`, `10.40.128.0/18`을 사용한다.
+- VPC CIDR은 `10.40.0.0/16`으로 고정한다. AWS VPC의 단일 IPv4 CIDR block은 `/16`이 가장 넓은 범위다.
+- public subnet은 NAT Gateway와 load balancer 배치를 위한 공간이므로 `10.40.0.0/24`, `10.40.1.0/24`를 사용한다.
+- private subnet은 EKS 기본 VPC CNI에서 node와 pod IP를 함께 소비하므로 public subnet보다 크게 잡아 `10.40.16.0/20`, `10.40.32.0/20`을 사용한다. Kubernetes Service ClusterIP는 EKS service CIDR에서 배정되므로 VPC subnet IP를 소비하지 않는다.
 - CIDR 변경은 route, subnet, EKS node placement에 직접 영향을 주므로 일반 입력 변수로 열지 않는다. `/16`보다 큰 IPv4 공간이 필요하면 VPC secondary CIDR block, VPC CNI custom networking, 또는 IPv6 적용을 별도 이슈로 설계한다.
 - AZ는 현재 AWS 계정과 region에서 opt-in 없이 사용할 수 있는 availability zone 중 앞의 2개를 사용한다.
 - EKS worker node는 private subnet에 배치한다. public subnet은 NAT Gateway와 이후 public load balancer가 필요할 때만 사용한다.
