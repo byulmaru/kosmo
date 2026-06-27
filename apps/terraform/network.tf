@@ -10,9 +10,12 @@ data "aws_availability_zones" "available" {
 locals {
   network_availability_zone_count = 2
   network_availability_zones      = slice(data.aws_availability_zones.available.names, 0, local.network_availability_zone_count)
+  vpc_cidr_block                  = "10.40.0.0/16"
+  public_subnet_cidr_blocks       = ["10.40.0.0/20", "10.40.16.0/20"]
+  private_subnet_cidr_blocks      = ["10.40.64.0/18", "10.40.128.0/18"]
 
   public_subnets = {
-    for index, cidr_block in var.public_subnet_cidrs : "public-${index + 1}" => {
+    for index, cidr_block in local.public_subnet_cidr_blocks : "public-${index + 1}" => {
       availability_zone = local.network_availability_zones[index]
       cidr_block        = cidr_block
       name              = "${local.name_prefix}-public-${index + 1}"
@@ -20,7 +23,7 @@ locals {
   }
 
   private_subnets = {
-    for index, cidr_block in var.private_subnet_cidrs : "private-${index + 1}" => {
+    for index, cidr_block in local.private_subnet_cidr_blocks : "private-${index + 1}" => {
       availability_zone = local.network_availability_zones[index]
       cidr_block        = cidr_block
       name              = "${local.name_prefix}-private-${index + 1}"
@@ -29,7 +32,7 @@ locals {
 }
 
 resource "aws_vpc" "main" {
-  cidr_block           = var.vpc_cidr
+  cidr_block           = local.vpc_cidr_block
   enable_dns_hostnames = true
   enable_dns_support   = true
 
