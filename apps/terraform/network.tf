@@ -58,8 +58,8 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name                                           = each.value.name
-    Tier                                           = "public"
+    Name                                          = each.value.name
+    Tier                                          = "public"
     "kubernetes.io/cluster/${local.cluster_name}" = "shared"
     "kubernetes.io/role/elb"                      = "1"
   }
@@ -73,8 +73,8 @@ resource "aws_subnet" "private" {
   cidr_block        = each.value.cidr_block
 
   tags = {
-    Name                                           = each.value.name
-    Tier                                           = "private"
+    Name                                          = each.value.name
+    Tier                                          = "private"
     "kubernetes.io/cluster/${local.cluster_name}" = "shared"
     "kubernetes.io/role/internal-elb"             = "1"
   }

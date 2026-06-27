@@ -39,6 +39,8 @@ Terraform plan은 다음 네트워크 리소스를 생성한다.
 
 현재 구성은 비용을 줄이기 위해 NAT Gateway를 1개만 둔다. 장점은 시간당 NAT Gateway 비용과 Elastic IP 수가 최소화된다는 점이다. 단점은 NAT Gateway가 위치한 AZ 또는 해당 public subnet 경로에 장애가 나면 다른 AZ의 private subnet도 outbound 인터넷/AWS API 접근에 영향을 받을 수 있고, 다른 AZ의 private subnet에서 NAT Gateway로 나가는 트래픽은 cross-AZ 데이터 전송 비용이 발생할 수 있다는 점이다.
 
+Elastic IP는 외부 서비스 allowlist를 위한 운영 요구사항으로 둔 것이 아니라, AWS public NAT Gateway가 Internet Gateway를 통해 IPv4 인터넷 egress를 제공하기 위해 필요한 주소다. 고정 egress IP 자체가 필요 없는 AWS API 접근은 VPC endpoint로 대체할 수 있지만, container registry나 OS package repository처럼 일반 인터넷 egress가 필요한 경로까지 제거하려면 별도 mirror/cache 또는 egress proxy 설계가 필요하다.
+
 운영 가용성을 우선하면 AZ마다 NAT Gateway를 1개씩 두고, 각 private route table이 같은 AZ의 NAT Gateway를 바라보게 바꾼다. 이 대안은 NAT Gateway 시간당 비용과 처리 비용이 AZ 수만큼 늘지만, AZ 단위 장애와 cross-AZ NAT 트래픽 비용을 줄인다. kosmo의 초기 EKS 전환은 비용 민감도가 높고 트래픽 규모가 작다는 전제로 단일 NAT Gateway를 선택한다.
 
 ## Security group 경계
