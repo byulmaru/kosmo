@@ -16,13 +16,13 @@
 
 ## 3. Profile GraphQL Contract
 
-- [x] 3.1 `Profile.displayHandle` 필드를 추가해 현재 local-only profile 모델에서는 `@handle`을 반환한다.
+- [x] 3.1 `Profile.relativeHandle` 필드를 추가해 현재 local-only profile 모델에서는 `@handle`을 반환한다.
 - [ ] 3.1a `profile.instance_id`와 instance-scoped handle uniqueness 도입 이후 configured local instance가 아닌 instance의 profile은 `@handle@domain`을 반환하도록 확장한다.
 - [ ] 3.2 `profileByHandle(handle:)`가 configured local instance의 active profile만 조회하고 remote profile을 반환하지 않도록 유지/보강한다.
 - [ ] 3.3 Node ID 기반 `Profile` load가 active local profile과 저장된 active remote profile을 직접 조회할 수 있게 접근 정책을 정렬한다.
 - [ ] 3.4 `profileByHandle`, active profile selection, follow graph, follow/unfollow mutation, viewerFollow, `Profile.posts`가 remote profile로 확장되지 않고 local profile 기준으로 동작하는지 구현한다.
 - [ ] 3.5 local profile 생성 resolver가 core runtime local instance resolve helper로 configured local instance ID를 결정하고, local instance 설정 누락/불일치를 설정 오류로 처리하게 한다.
-- [x] 3.6 GraphQL schema를 재생성하고 `Profile.displayHandle`이 `apps/api/schema.graphql`에 반영되는지 확인한다.
+- [x] 3.6 GraphQL schema를 재생성하고 `Profile.relativeHandle`이 `apps/api/schema.graphql`에 반영되는지 확인한다.
 
 ## 4. Fedify Actor Discovery
 
@@ -46,5 +46,5 @@
 - [ ] 6.1 DB migration/push 또는 schema check와 migration fixture로 `instance`, profile instance 관계, actor metadata/key 테이블이 생성되고, bootstrap 이후 기존 profile의 `instance_id`가 configured local instance로 채워지며 handle이 보존되는지, `instance.domain` 중복 금지, 서로 다른 domain의 복수 `LOCAL` row 허용, actor URI 중복 금지, profile당 actor metadata 중복 금지, actor별 key type 중복 금지, remote actor public key metadata를 private key 없이 저장할 수 있는지, `(instance_id, normalized_handle)` unique가 같은 instance 중복은 막고 다른 instance 동일 handle은 허용하는지 확인한다.
 - [ ] 6.2 local instance bootstrap helper가 configured local instance row를 생성하거나 기존 row를 검증하는 positive path, runtime local instance resolve가 configured local instance row를 읽어 검증하되 row가 없을 때 bootstrap/자동 생성을 하지 않고 설정 오류로 처리하는지, local profile 생성이 configured local instance ID를 저장하고 설정 누락/불일치를 설정 오류로 처리하는지 unit/integration test로 검증한다.
 - [ ] 6.3 WebFinger 성공/404, WebFinger `application/jrd+json` content type, canonical subject, self/profile-page links, actor document 성공/404, actor document `application/activity+json` content type, canonical `id`, `preferredUsername`, `name`, `url`, `published`, 필수 `inbox`/`outbox` URI, `publicKey`, `assertionMethods`, unsupported endpoint 404, lazy key idempotency를 unit/integration test로 검증한다.
-- [ ] 6.4 GraphQL 테스트로 `displayHandle` local 표시와 profile-instance 관계 도입 이후 configured local/non-configured local/remote 표시, remote profile Node 조회, `profileByHandle` local-only 동작, 다른 instance 동일 handle의 local profile 생성 허용과 configured local duplicate handle conflict, remote target active profile selection/follow/unfollow profile not found, remote target viewerFollow 없음 응답, remote profile `Profile.posts` 빈 connection을 검증한다.
+- [ ] 6.4 GraphQL 테스트로 `relativeHandle` local 표시와 profile-instance 관계 도입 이후 configured local/non-configured local/remote 표시, remote profile Node 조회, `profileByHandle` local-only 동작, 다른 instance 동일 handle의 local profile 생성 허용과 configured local duplicate handle conflict, remote target active profile selection/follow/unfollow profile not found, remote target viewerFollow 없음 응답, remote profile `Profile.posts` 빈 connection을 검증한다.
 - [ ] 6.5 dependency ownership이 `@fedify/fedify`는 `packages/fedify`, `@kosmo/fedify`와 `@fedify/sveltekit`은 `apps/web`에 들어가는지, web hook 본문에는 ActivityPub parsing/응답 조립 로직이 없는지 확인하고, `pnpm lint:eslint`, `pnpm --filter @kosmo/fedify lint:tsc`, `pnpm --filter @kosmo/web check`, 관련 package test, `openspec validate add-activitypub-actor-discovery --strict`를 실행해 변경을 검증한다.

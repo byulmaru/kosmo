@@ -11,7 +11,7 @@
 - **AND** local instance는 canonical origin을 저장한다
 - **AND** configured local instance의 canonical origin과 domain은 federation identity의 source of truth이다
 - **AND** canonical origin은 actor URI, WebFinger self link, profile-page link, key ID 같은 local absolute URL 생성에 사용된다
-- **AND** domain은 WebFinger subject와 `Profile.displayHandle`에 사용된다
+- **AND** domain은 WebFinger subject와 `Profile.relativeHandle`에 사용된다
 - **AND** `PUBLIC_ORIGIN`은 local instance row를 만들거나 현재 deployment가 사용할 local instance row를 검증하는 입력으로만 사용된다
 
 #### Scenario: Resolve canonical local origin

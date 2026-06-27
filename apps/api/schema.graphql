@@ -130,7 +130,6 @@ type PostsConnectionEdge {
 type Profile implements Node {
   bio: String
   createdAt: DateTime!
-  displayHandle: String!
   displayName: String!
   followPolicy: ProfileFollowPolicy!
   followers(after: String, before: String, first: Int, last: Int): ProfileFollowersConnection!
@@ -140,6 +139,7 @@ type Profile implements Node {
   handle: String!
   id: ID!
   posts(after: String, before: String, first: Int, last: Int): PostsConnection!
+  relativeHandle: String!
   viewerFollow: ProfileFollow
 }
 
