@@ -18,7 +18,8 @@
 - node group 설정은 외부 변수로 열어 두지 않는다. 여러 node group의 구성, On-Demand/Spot 비율, instance type, min/desired/max size는 PROD-205에서 실제 Terraform 코드로 정의한다.
 - VPC CIDR은 `10.40.0.0/16`으로 고정한다. AWS VPC의 단일 IPv4 CIDR block은 `/16`이 가장 넓은 범위다.
 - public subnet은 NAT Gateway와 load balancer 배치를 위한 공간이므로 `10.40.0.0/24`, `10.40.1.0/24`를 사용한다.
-- private subnet은 EKS 기본 VPC CNI에서 node와 pod IP를 함께 소비하므로 public subnet보다 크게 잡아 `10.40.16.0/20`, `10.40.32.0/20`을 사용한다. Kubernetes Service ClusterIP는 EKS service CIDR에서 배정되므로 VPC subnet IP를 소비하지 않는다.
+- private subnet은 worker node와 AWS load balancer/NAT 경로가 소비하는 cloud network 주소 공간으로 보고 `10.40.10.0/24`, `10.40.11.0/24`를 사용한다.
+- Kubernetes pod/service IP는 AWS subnet 주소 공간과 분리하는 것을 목표로 한다. AWS ENI 기반 pod IP 할당은 pod가 subnet IP를 직접 소비해 cloud portability를 낮추므로 기본 전제로 두지 않는다. Cilium 같은 CNI를 쓰더라도 cluster-pool/overlay 등 Kubernetes 내부 pod CIDR을 별도로 관리하는 모드를 우선 검토한다.
 - CIDR 변경은 route, subnet, EKS node placement에 직접 영향을 주므로 일반 입력 변수로 열지 않는다. `/16`보다 큰 IPv4 공간이 필요하면 VPC secondary CIDR block, VPC CNI custom networking, 또는 IPv6 적용을 별도 이슈로 설계한다.
 - AZ는 현재 AWS 계정과 region에서 opt-in 없이 사용할 수 있는 availability zone 중 앞의 2개를 사용한다.
 - EKS worker node는 private subnet에 배치한다. public subnet은 NAT Gateway와 이후 public load balancer가 필요할 때만 사용한다.
@@ -59,6 +60,8 @@ private-only endpoint 전환은 다음 조건이 갖춰진 뒤에 한다.
 ## OKE 복귀 영향
 
 이 Terraform root는 AWS 전용 VPC, NAT Gateway, EKS security group을 만든다. OKE로 복귀할 경우 애플리케이션 Kubernetes manifest와 container image는 재사용할 수 있지만, 네트워크 IaC는 OCI VCN/subnet/NAT gateway/security list 또는 NSG 구성으로 다시 매핑해야 한다. AWS Load Balancer Controller용 subnet tag와 EKS security group 경계는 OKE에 직접 대응하지 않으므로, 복귀 계획에서는 Kubernetes 계층과 cloud network 계층을 분리해서 폐기 순서를 잡는다.
+
+Kubernetes 위에서 운영하는 ingress, service mesh, network policy, workload manifest는 cloud network subnet CIDR에 의존하지 않게 유지한다. CNI는 가능한 한 pod CIDR을 AWS ENI/subnet에 직접 묶지 않는 구성을 우선 검토하고, cloud-specific load balancer와 storage integration은 교체 가능한 경계로 둔다.
 
 ## State backend
 

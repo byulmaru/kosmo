@@ -12,7 +12,7 @@ locals {
   network_availability_zones      = slice(data.aws_availability_zones.available.names, 0, local.network_availability_zone_count)
   vpc_cidr_block                  = "10.40.0.0/16"
   public_subnet_cidr_blocks       = ["10.40.0.0/24", "10.40.1.0/24"]
-  private_subnet_cidr_blocks      = ["10.40.16.0/20", "10.40.32.0/20"]
+  private_subnet_cidr_blocks      = ["10.40.10.0/24", "10.40.11.0/24"]
 
   public_subnets = {
     for index, cidr_block in local.public_subnet_cidr_blocks : "public-${index + 1}" => {
