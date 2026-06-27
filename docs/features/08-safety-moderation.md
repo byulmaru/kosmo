@@ -97,14 +97,14 @@ Bluesky의 labeler 모델을 참고한다.
 
 - 외부 또는 커뮤니티 moderation label을 콘텐츠에 붙일 수 있다.
 - 사용자는 어떤 label source를 신뢰할지 선택할 수 있다.
-- Kosmo 초기에는 복잡도가 높으므로 운영자 label부터 시작한다.
+- 복잡도가 높으므로 운영자 label부터 시작할지 제품 결정이 필요하다.
 
 ### 커뮤니티 모더레이션
 
 X Communities와 Misskey channel을 참고한다.
 
 - 커뮤니티별 관리자, 규칙, 차단, 게시 삭제 권한을 둘 수 있다.
-- 전체 서버 moderation과 커뮤니티 moderation의 우선순위가 필요하다.
+- 전체 서버 moderation과 커뮤니티 moderation의 적용 순서가 필요하다.
 - 커뮤니티 기능을 도입할 때 별도 스펙으로 분리한다.
 
 ## 상태와 에러
@@ -119,7 +119,7 @@ X Communities와 Misskey channel을 참고한다.
 - 사용자 제어는 viewer profile 기준이다.
 - 운영자 action은 계정, 프로필, 게시, 도메인 단위로 나뉜다.
 - moderation action은 감사 가능해야 하며 삭제와 숨김을 구분해야 한다.
-- 연합 서버에서 들어온 삭제/정지 신호와 로컬 moderation action의 우선순위가 필요하다.
+- 연합 서버에서 들어온 삭제/정지 신호와 로컬 moderation action의 적용 순서가 필요하다.
 
 ## 미결정 네이밍
 
