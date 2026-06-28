@@ -22,9 +22,10 @@ Profile, 표시 handle, Remote Profile identity를 구분한다.
   Identity, Profile State.
 - 핵심 모델: Account와 Profile을 aggregate root 후보로 둔다. Account-Profile 소유 관계는 역할과
   권한을 가진 관계로 본다.
-- 값 객체 후보: Handle, Display Name, Bio, Profile URL, Remote URL, Host.
+- 값 객체 후보: Handle, Display Name, Bio, Profile URL, Remote URL, Host, Account Profile Role.
 - 불변 조건: 로컬 handle은 로컬 네임스페이스에서 유일해야 한다. 같은 handle이라도 host가 다르면
-  다른 원격 프로필이다. private signing material과 인증 토큰은 공개 프로필 정보가 아니다.
+  다른 원격 프로필이다. private signing material과 인증 토큰은 공개 프로필 정보가 아니다. active
+  Profile은 현재 Account와 역할 관계가 있는 Profile이어야 한다.
 - 도메인 이벤트 후보: ProfileCreated, ProfileUpdated, ProfileStateChanged, HandleChanged,
   AccountProfileLinked.
 - 정책 후보: handle 변경, 프로필 삭제와 계정 삭제 분리, 원격 프로필 캐시 최신성, 프로필 편집
@@ -38,6 +39,7 @@ Profile, 표시 handle, Remote Profile identity를 구분한다.
 - 하나 이상의 프로필을 소유할 수 있다.
 - 이메일, OAuth, 패스키 같은 인증 수단은 OIDC 구현에 의존한다.
 - 계정 삭제와 프로필 삭제는 분리해서 정책을 정해야 한다.
+- 역할 기반 Profile 관리에서 마지막 소유자 역할을 제거할 수 있는지 정해야 한다.
 - 계정 정지와 프로필 정지는 운영 정책상 별도 상태가 될 수 있다.
 
 ### 프로필
@@ -59,6 +61,18 @@ Profile, 표시 handle, Remote Profile identity를 구분한다.
 
 - Profile 소유 Account는 표시 이름, bio, avatar, header image, 링크를 수정할 수 있다.
 - 변경 사항은 프로필 페이지, 사이드바, 게시 작성자 표시, 검색 결과에 반영되어야 한다.
+
+### Account-Profile 관계
+
+- Account-Profile 관계는 역할 기반 소유 모델이다.
+- 하나의 Account는 여러 Profile과 연결될 수 있다.
+- 하나의 Profile은 여러 Account와 역할 기반으로 연결될 수 있다.
+- Account-Profile 관계는 role, 상태, 연결 시각을 가진다.
+- Profile 생성, 편집, 삭제, 전환은 Account-Profile role이 허용하는 권한으로 판단한다.
+- active Profile은 Account 세션에서 선택한 현재 행동 주체이며, 소셜 행동은 active Profile 기준으로
+  수행한다.
+- 인증, 보안 설정, Profile 소유와 권한 관리는 Account 기준으로 수행한다.
+- 역할 이름, 권한 매트릭스, 초대/양도, 마지막 소유자 제거 가능 여부는 별도 결정이 필요하다.
 
 ## 프로필 상태
 

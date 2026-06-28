@@ -60,10 +60,12 @@
 
 ### 불명확한 결정 사항
 
-- Account-Profile 관계의 role, 권한, 생성/편집/삭제/전환 불변 조건.
-- Feed별 답글, Repost, 새 Post 삽입, 로컬/연합 노출 정책.
+- Account-Profile 관계의 역할 이름, 권한 매트릭스, 초대/양도/마지막 소유자 제약.
+- Home Feed와 Profile Feed의 답글, Repost, 새 Post 삽입 정책.
 
 ## 다음 인터랙티브 질문 후보
 
-1. Account-Profile 관계의 role, 권한, 생성/편집/삭제/전환 불변 조건은 어떻게 둘까?
-2. Feed별 답글, Repost, 새 Post 삽입, 로컬/연합 노출 정책을 어디서부터 확정할까?
+1. Account-Profile role 이름과 권한 매트릭스를 어떻게 둘까?
+2. Profile을 여러 Account가 관리할 때 초대, 양도, 마지막 소유자 제거 제약을 어떻게 둘까?
+3. Home Feed의 답글, Repost, 새 Post 삽입 정책을 어떻게 둘까?
+4. Profile Feed의 답글, Repost, 탭 분리 정책을 어떻게 둘까?

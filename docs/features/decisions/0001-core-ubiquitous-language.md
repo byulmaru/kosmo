@@ -56,6 +56,10 @@ Kosmo DDD 명세의 핵심 보편 언어를 다음과 같이 확정한다.
   다룬다.
 - Account가 주체인 행동은 인증, 보안, Profile 소유, 운영자 권한에 한정한다. 그 외 소셜 행동의
   기본 주체는 Profile이다.
+- Account-Profile 관계는 역할 기반 소유 모델로 둔다. 하나의 Account는 여러 Profile과 연결될 수
+  있고, 하나의 Profile도 여러 Account와 역할 기반으로 연결될 수 있다.
+- Feed 정책은 Home Feed와 Profile Feed부터 확정한다. Local Feed, Federated Feed, Hashtag Feed,
+  List Feed의 세부 정책은 이후 결정한다.
 
 ## Post Visibility 값
 
@@ -93,4 +97,5 @@ Kosmo DDD 명세의 핵심 보편 언어를 다음과 같이 확정한다.
 
 ## 남은 결정
 
-- Feed별 답글, Repost, 자동 삽입, 로컬/연합 노출 정책을 어떻게 둘지.
+- Account-Profile 관계의 역할 이름, 권한 매트릭스, 초대/양도/마지막 소유자 제약을 어떻게 둘지.
+- Home Feed와 Profile Feed의 답글, Repost, 새 Post 삽입 정책을 어떻게 둘지.
