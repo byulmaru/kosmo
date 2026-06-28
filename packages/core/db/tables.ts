@@ -249,7 +249,9 @@ export const Profiles = pgTable(
     id: uuid('id')
       .primaryKey()
       .$defaultFn(() => createId(TableDiscriminator.Profiles)),
-    instanceId: uuid('instance_id').references(() => Instances.id),
+    instanceId: uuid('instance_id')
+      .notNull()
+      .references(() => Instances.id),
     state: Enum.profileState('state').notNull().default('ACTIVE'),
     handle: text('handle').notNull(),
     normalizedHandle: text('normalized_handle').notNull(),

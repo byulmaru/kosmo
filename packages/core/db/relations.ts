@@ -123,6 +123,7 @@ export const relations = defineRelations(tables, (r) => ({
     instance: r.one.Instances({
       from: r.Profiles.instanceId,
       to: r.Instances.id,
+      optional: false,
     }),
     media: r.many.Media({ from: r.Profiles.id, to: r.Media.profileId }),
     oauthAuthorizationCodes: r.many.OAuthAuthorizationCodes({
