@@ -60,12 +60,10 @@
 
 ### 불명확한 결정 사항
 
-- Account-Profile 관계의 역할 이름, 권한 매트릭스, 초대/양도/마지막 소유자 제약.
-- Home Feed와 Profile Feed의 답글, Repost, 새 Post 삽입 정책.
+- Local Feed, Federated Feed, Hashtag Feed, List Feed의 답글/Repost 포함 정책.
 
 ## 다음 인터랙티브 질문 후보
 
-1. Account-Profile role 이름과 권한 매트릭스를 어떻게 둘까?
-2. Profile을 여러 Account가 관리할 때 초대, 양도, 마지막 소유자 제거 제약을 어떻게 둘까?
-3. Home Feed의 답글, Repost, 새 Post 삽입 정책을 어떻게 둘까?
-4. Profile Feed의 답글, Repost, 탭 분리 정책을 어떻게 둘까?
+1. Local Feed는 같은 서버의 어떤 Post를 포함해야 할까?
+2. Federated Feed는 어떤 원격 Post를 포함해야 할까?
+3. Hashtag Feed와 List Feed의 답글/Repost 포함 정책은 Home/Profile Feed와 같게 갈까, 별도로 둘까?

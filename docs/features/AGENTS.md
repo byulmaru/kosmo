@@ -30,8 +30,8 @@
 
 - 제외하기로 결정한 도메인은 도메인 지도와 컨텍스트 링크에서 제거하고, 제외 결정은
   `decisions/`와 `records/`에 남긴다.
-- Feed에는 전역 기본 정책을 두지 않는다. 답글, Repost, 새 Post 삽입, 로컬/연합 노출 같은 정책은
-  Feed Definition별로 둔다.
+- Feed에는 전역 기본 정책을 두지 않는다. 답글, Repost, 로컬/연합 노출 같은 정책은 Feed
+  Definition별로 둔다.
 - Post Visibility와 Post Eligibility는 Feed 속성이 아니라 Publishing이 소유하는 Post 속성이다.
 - Account가 주체인 행동은 인증, 보안, Profile 소유, 운영자 권한에 한정한다. 기본 소셜 행동 주체는
   Profile이다.

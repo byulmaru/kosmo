@@ -39,7 +39,7 @@ Profile, 표시 handle, Remote Profile identity를 구분한다.
 - 하나 이상의 프로필을 소유할 수 있다.
 - 이메일, OAuth, 패스키 같은 인증 수단은 OIDC 구현에 의존한다.
 - 계정 삭제와 프로필 삭제는 분리해서 정책을 정해야 한다.
-- 역할 기반 Profile 관리에서 마지막 소유자 역할을 제거할 수 있는지 정해야 한다.
+- 마지막 `Owner`는 탈퇴, role 변경, 연결 해제할 수 없다.
 - 계정 정지와 프로필 정지는 운영 정책상 별도 상태가 될 수 있다.
 
 ### 프로필
@@ -68,11 +68,16 @@ Profile, 표시 handle, Remote Profile identity를 구분한다.
 - 하나의 Account는 여러 Profile과 연결될 수 있다.
 - 하나의 Profile은 여러 Account와 역할 기반으로 연결될 수 있다.
 - Account-Profile 관계는 role, 상태, 연결 시각을 가진다.
+- Account-Profile role은 `Owner`와 `Member` 두 가지로 둔다.
+- `Owner`는 Profile 삭제, role 변경, 초대, 양도, Profile 전환, 소셜 행동을 수행할 수 있다.
+- `Member`는 Profile 전환과 소셜 행동을 수행할 수 있다.
 - Profile 생성, 편집, 삭제, 전환은 Account-Profile role이 허용하는 권한으로 판단한다.
 - active Profile은 Account 세션에서 선택한 현재 행동 주체이며, 소셜 행동은 active Profile 기준으로
   수행한다.
 - 인증, 보안 설정, Profile 소유와 권한 관리는 Account 기준으로 수행한다.
-- 역할 이름, 권한 매트릭스, 초대/양도, 마지막 소유자 제거 가능 여부는 별도 결정이 필요하다.
+- Profile에는 항상 최소 1명의 `Owner`가 있어야 한다.
+- `Owner`만 초대, role 변경, 양도를 수행할 수 있다.
+- 마지막 `Owner`는 탈퇴, role 변경, 연결 해제할 수 없다.
 
 ## 프로필 상태
 
@@ -101,7 +106,7 @@ Profile, 표시 handle, Remote Profile identity를 구분한다.
 - 로컬 프로필은 상태, 표시 handle, 검색/비교용 정규화 handle, 표시 이름, bio, 팔로우 승인
   정책, 생성 시각을 가진다.
 - 로컬 프로필 생성 시 최소 입력은 handle이며, 표시 이름은 handle을 기본값으로 삼을 수 있다.
-- 프로필 편집 권한은 해당 프로필의 소유자 또는 관리자 역할을 기준으로 판단한다.
+- 프로필 편집 권한은 해당 프로필의 `Owner` 역할을 기준으로 판단한다.
 - avatar, header image, Profile links, featured Profiles, featured tags는 프로필 표현 확장 속성으로
   별도 제품 범위를 정한다.
 
