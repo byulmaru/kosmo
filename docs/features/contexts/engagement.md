@@ -16,7 +16,7 @@ Profile 행동 단위를 기준으로 정리한다.
 ## DDD 명세
 
 - 컨텍스트 경계: 게시에 대한 반응, 재게시, 북마크 같은 사회적 행동을 정의한다. 게시 본문,
-  공개 범위 원본, 답글 Post 생성, Quote Post 작성과 thread 관계는 Publishing이 소유한다.
+  공개 범위 원본, 답글 Post 생성과 thread 관계는 Publishing이 소유한다.
 - 보편 언어: Reaction, Repost, Bookmark.
 - 핵심 모델: Post Engagement를 aggregate root 후보로 둔다. Reaction, Repost, Bookmark는 행동별
   entity 후보로 둔다.
@@ -62,11 +62,11 @@ Profile 행동 단위를 기준으로 정리한다.
 
 - 상호작용은 Profile 단위다.
 - Collection은 현재 Engagement 범위에서 제외한다.
-- Quote는 Repost의 하위 유형이 아니라 Publishing이 소유할 별도 Post 작성 모델이다.
+- Quote는 현재 도메인 범위에서 제외한다.
 - Block 발생 시 기존 Reaction, Repost, Bookmark는 삭제 또는 무효화 방향으로 본다.
 
 ## 미결정 네이밍
 
 - 반응: Reaction
 - 재게시: Repost
-- 저장: Bookmark, Save
+- 북마크: Bookmark

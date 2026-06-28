@@ -21,7 +21,7 @@ Kosmo DDD 명세의 핵심 보편 언어를 다음과 같이 확정한다.
 | 게시 목록           | Feed            | 피드          | Post 목록과 해당 목록의 후보 선택, 제어, 정렬 규칙              |
 | 반응                | Reaction        | 반응          | Profile이 Post에 남기는 반응 행동                               |
 | 재게시              | Repost          | 재게시        | Profile이 원본 Post를 자신의 관계망에 다시 노출하는 행동        |
-| 인용                | Quote           | 인용          | 별도 Post 작성 모델로 다루는 확산 행동. Repost의 하위 유형 아님 |
+| 북마크              | Bookmark        | 북마크        | Profile이 Post를 개인적으로 저장하는 행동                       |
 | 내용 경고           | Content Warning | 내용 경고     | Post 본문과 미디어를 접어서 보여주기 위한 표시 정책             |
 | 민감한 미디어       | Sensitive Media | 민감한 미디어 | Profile 또는 정책이 민감한 것으로 표시한 Media                  |
 
@@ -43,9 +43,11 @@ Kosmo DDD 명세의 핵심 보편 언어를 다음과 같이 확정한다.
   term으로 사용하지 않는다.
 - `Reaction`과 `Repost`를 canonical domain term으로 사용한다. 좋아요, 부스트, 확산 계열 표현은
   canonical domain term으로 사용하지 않는다.
-- `Quote`는 `Repost`의 하위 유형이 아니라 별도 Post 작성 모델이다.
 - `Reaction`은 Post 하나에 Profile당 여러 개를 허용한다.
+- `Bookmark`의 한국어 표현은 `북마크`로 쓴다.
+- `Quote`는 현재 도메인 범위에서 제외한다.
 - `Collection`은 현재 Engagement 범위에서 제외한다.
+- `Follow Pack`은 현재 도메인 범위에서 제외한다.
 - `Content Warning`의 한국어 표현은 `내용 경고`로 쓴다.
 - `Sensitive Media`의 한국어 표현은 `민감한 미디어`로 쓴다.
 - `Audience`와 `공개 설정`은 canonical domain term으로 쓰지 않는다. 필요하면 UI 설명 문구로만
@@ -91,7 +93,4 @@ Kosmo DDD 명세의 핵심 보편 언어를 다음과 같이 확정한다.
 
 ## 남은 결정
 
-- `Quote`를 제품 범위에 포함할지, 포함한다면 작성자 통제와 알림 정책을 어떻게 둘지.
-- `Bookmark`의 한국어 화면 표현을 무엇으로 둘지.
 - Feed별 답글, Repost, 자동 삽입, 로컬/연합 노출 정책을 어떻게 둘지.
-- Block 이후 Feed Item을 삭제, 숨김, 재계산 중 어떤 방식으로 처리할지.

@@ -14,9 +14,11 @@
 - 게시 목록의 canonical term은 `Feed`다.
 - 반응의 canonical term은 `Reaction`이다.
 - 재게시의 canonical term은 `Repost`다.
-- `Quote`는 `Repost`의 하위 유형이 아니라 별도 Post 작성 모델이다.
+- `Quote`는 현재 도메인 범위에서 제외한다.
 - `Reaction`은 Post 하나에 Profile당 여러 개를 허용한다.
+- `Bookmark`의 한국어 표현은 `북마크`다.
 - `Collection`은 현재 Engagement 범위에서 제외한다.
+- `Follow Pack`은 현재 도메인 범위에서 제외한다.
 - `Content Warning`의 한국어 표현은 `내용 경고`다.
 - `Sensitive Media`의 한국어 표현은 `민감한 미디어`다.
 - Messaging은 현재 도메인 범위에서 제외한다.
@@ -58,15 +60,10 @@
 
 ### 불명확한 결정 사항
 
-- Saved Search를 Discovery 내부 검색 저장으로만 둘지, 나중에 별도 Feed로 승격할지.
-- Quote를 MVP에서 제외할지, 작성자 통제 기반으로 포함할지.
-- Block 발생 시 Feed Item을 삭제, 숨김, 재계산 중 어떤 방식으로 처리할지.
-- Follow Pack과 추천 팔로우의 소유권과 일괄 follow 이벤트.
 - Account-Profile 관계의 role, 권한, 생성/편집/삭제/전환 불변 조건.
 - Feed별 답글, Repost, 새 Post 삽입, 로컬/연합 노출 정책.
 
 ## 다음 인터랙티브 질문 후보
 
-1. Quote는 제품 범위에 포함할까, 제외할까?
-2. Bookmark의 한국어 화면 표현을 무엇으로 둘까?
-3. Block 이후 Feed Item은 삭제, 숨김, 재계산 중 무엇으로 처리할까?
+1. Account-Profile 관계의 role, 권한, 생성/편집/삭제/전환 불변 조건은 어떻게 둘까?
+2. Feed별 답글, Repost, 새 Post 삽입, 로컬/연합 노출 정책을 어디서부터 확정할까?

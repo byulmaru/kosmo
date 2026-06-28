@@ -48,7 +48,6 @@ Post Eligibility를 소비한다.
 - Profile은 특정 프로필을 차단할 수 있다.
 - 차단된 프로필은 내 게시, 프로필, 팔로우 목록, 상호작용에 접근이 제한된다.
 - 차단 시 기존 follow, engagement, notification은 삭제 또는 무효화 방향으로 본다.
-- Block 이후 Feed Item 처리 방식은 아직 결정하지 않는다.
 - 차단한 사실을 직접 알리지는 않지만 기능적으로 추론될 수 있다.
 - 원격 Profile 차단은 로컬 서버에서의 표시와 delivery 정책을 함께 다룬다.
 
