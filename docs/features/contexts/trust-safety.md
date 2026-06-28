@@ -11,7 +11,7 @@ Profile이 원하지 않는 사람과 콘텐츠를 제어하고, 운영자 Accou
 - reference upstream: [Identity](./identity.md), [Publishing](./publishing.md), [Media](./media.md)
 - policy downstream: [Publishing](./publishing.md), [Media](./media.md), [Social Graph](./social-graph.md),
   [Engagement](./engagement.md), [Feed](./feed.md), [Discovery](./discovery.md),
-  [Notification](./notification.md), [Messaging](./messaging.md)
+  [Notification](./notification.md)
 - peer: 없음. 정책 적용 범위가 넓은 cross-cutting 컨텍스트다.
 
 ## DDD 명세
@@ -47,7 +47,8 @@ Post Eligibility를 소비한다.
 
 - Profile은 특정 프로필을 차단할 수 있다.
 - 차단된 프로필은 내 게시, 프로필, 팔로우 목록, 상호작용에 접근이 제한된다.
-- 차단 시 기존 팔로우 관계를 해제할지 정책이 필요하다.
+- 차단 시 기존 follow, engagement, notification은 삭제 또는 무효화 방향으로 본다.
+- Block 이후 Feed Item 처리 방식은 아직 결정하지 않는다.
 - 차단한 사실을 직접 알리지는 않지만 기능적으로 추론될 수 있다.
 - 원격 Profile 차단은 로컬 서버에서의 표시와 delivery 정책을 함께 다룬다.
 
@@ -65,10 +66,10 @@ Post Eligibility를 소비한다.
 - 대화 뮤트는 thread 자체를 삭제하거나 숨기는 기능이 아니다.
 - 내가 작성한 게시의 답글 알림만 끄는 옵션과 전체 thread 알림을 끄는 옵션을 구분할 수 있다.
 
-### 민감 콘텐츠 제어
+### 민감한 콘텐츠 제어
 
-- Profile은 민감 미디어를 기본으로 숨길 수 있다.
-- content warning이 붙은 게시를 자동으로 접을 수 있다.
+- Profile은 민감한 미디어를 기본으로 숨길 수 있다.
+- Content Warning이 붙은 게시를 자동으로 접을 수 있다.
 - 서버 정책상 특정 카테고리는 항상 접힌 상태로 표시할 수 있다.
 
 ## 신고

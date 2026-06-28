@@ -14,6 +14,14 @@
 - 게시 목록의 canonical term은 `Feed`다.
 - 반응의 canonical term은 `Reaction`이다.
 - 재게시의 canonical term은 `Repost`다.
+- `Quote`는 `Repost`의 하위 유형이 아니라 별도 Post 작성 모델이다.
+- `Reaction`은 Post 하나에 Profile당 여러 개를 허용한다.
+- `Collection`은 현재 Engagement 범위에서 제외한다.
+- `Content Warning`의 한국어 표현은 `내용 경고`다.
+- `Sensitive Media`의 한국어 표현은 `민감한 미디어`다.
+- Messaging은 현재 도메인 범위에서 제외한다.
+- Account가 주체인 행동은 인증, 보안, Profile 소유, 운영자 권한에 한정하고, 그 외 소셜 행동의
+  기본 주체는 Profile이다.
 - `Post Visibility`와 `Post Eligibility`는 Feed 속성이 아니라 Publishing이 소유하는 Post 속성이다.
 - `Post Visibility`가 viewer Profile별 접근 가능 대상을 먼저 결정하고, `Post Eligibility`는 그 안에서
   읽기/전파 후보성을 제한한다.
@@ -36,29 +44,29 @@
   정리한다.
 - 게시 접근/노출 범위 후보 용어가 섞여 있었으나 canonical term은 `Post Visibility`, 한국어 설명은
   `공개 범위`로 정리한다.
-- 남은 용어 결정 후보는 quote, bookmark/collection, content warning, sensitive media다.
+- 남은 용어 결정 후보는 bookmark의 화면 표현이다.
 
 ### 문서 간 불일치
 
-- Trust & Safety가 여러 컨텍스트에서 upstream과 downstream으로 동시에 표현되어 관계 방향이
-  흐려져 있다.
-- Social Graph와 Discovery, Feed와 Discovery의 관계 방향이 문서마다 다르다.
-- Attached Media 소유권이 Publishing과 Media 사이에서 겹친다.
-- README의 `주요 연결`은 개별 문서의 전체 컨텍스트 관계와 완전히 같지 않다.
+- Trust & Safety는 판단 대상 컨텍스트를 `reference upstream`으로 참조하고, 정책 결과를
+  `policy downstream`으로 제공한다.
+- Social Graph와 Discovery, Feed와 Discovery의 관계 방향은 각 컨텍스트 문서의 `컨텍스트 관계`를
+  기준으로 맞춘다.
+- Media는 Account와 Profile이 동시에 소유하는 도메인으로 정리한다.
+- README의 `주요 연결`은 도메인 지도의 축약 표현이며, 전체 관계는 개별 문서의 `컨텍스트 관계`를
+  기준으로 본다.
 
 ### 불명확한 결정 사항
 
 - Saved Search를 Discovery 내부 검색 저장으로만 둘지, 나중에 별도 Feed로 승격할지.
 - Quote를 MVP에서 제외할지, 작성자 통제 기반으로 포함할지.
-- 긍정 반응을 단일 반응으로 갈지, 확장 가능한 반응 모델로 갈지.
-- Block 발생 시 기존 follow, engagement, notification, feed item의 downstream 처리.
-- Post 수정, 삭제, Post Visibility 변경이 Feed, Discovery, Notification, federation에 전파되는 방식.
-- Media의 원본 파일, logical media, attachment, Profile media, library 경계.
+- Block 발생 시 Feed Item을 삭제, 숨김, 재계산 중 어떤 방식으로 처리할지.
 - Follow Pack과 추천 팔로우의 소유권과 일괄 follow 이벤트.
 - Account-Profile 관계의 role, 권한, 생성/편집/삭제/전환 불변 조건.
+- Feed별 답글, Repost, 새 Post 삽입, 로컬/연합 노출 정책.
 
 ## 다음 인터랙티브 질문 후보
 
-1. Quote는 Repost의 하위 유형으로 둘까, 별도 Post 작성 모델로 둘까?
-2. Bookmark와 Collection은 어떻게 구분할까?
-3. Content Warning의 canonical 한국어 표현을 무엇으로 둘까?
+1. Quote는 제품 범위에 포함할까, 제외할까?
+2. Bookmark의 한국어 화면 표현을 무엇으로 둘까?
+3. Block 이후 Feed Item은 삭제, 숨김, 재계산 중 무엇으로 처리할까?

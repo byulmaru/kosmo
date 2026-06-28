@@ -2,7 +2,7 @@
 
 ## 목표
 
-Profile이 게시에 반응하고, 재게시하고, 저장하고, 대화를 이어갈 수 있어야 한다. 기능 이름보다
+Profile이 게시에 반응하고, 재게시하고, 저장할 수 있어야 한다. 기능 이름보다
 Profile 행동 단위를 기준으로 정리한다.
 
 ## 컨텍스트 관계
@@ -15,25 +15,25 @@ Profile 행동 단위를 기준으로 정리한다.
 
 ## DDD 명세
 
-- 컨텍스트 경계: 게시에 대한 반응, 재게시, 북마크, 컬렉션 같은 사회적 행동을 정의한다. 게시 본문,
-  공개 범위 원본, 답글 Post 생성과 thread 관계는 Publishing이 소유한다.
-- 보편 언어: Reaction, Repost, Bookmark, Collection.
+- 컨텍스트 경계: 게시에 대한 반응, 재게시, 북마크 같은 사회적 행동을 정의한다. 게시 본문,
+  공개 범위 원본, 답글 Post 생성, Quote Post 작성과 thread 관계는 Publishing이 소유한다.
+- 보편 언어: Reaction, Repost, Bookmark.
 - 핵심 모델: Post Engagement를 aggregate root 후보로 둔다. Reaction, Repost, Bookmark는 행동별
   entity 후보로 둔다.
 - 값 객체 후보: Reaction Type, Repost Scope, Bookmark Privacy, Engagement Count.
 - 불변 조건: 행동 주체는 Profile 단위다. Repost는 원본 게시의 공개 범위를 넘지 않아야 한다.
-  북마크는 기본적으로 비공개다.
+  Reaction은 Post 하나에 Profile당 여러 개를 허용한다. 북마크는 기본적으로 비공개다.
 - 도메인 이벤트 후보: ReactionAdded, ReactionRemoved, PostReposted, RepostRemoved, BookmarkAdded,
   BookmarkRemoved.
-- 정책 후보: 단일 Reaction과 여러 Reaction 중 선택, count/list 공개 범위, 삭제/제한 공개 게시의
-  행동 표시.
+- 정책 후보: count/list 공개 범위, 삭제/제한 공개 게시의 행동 표시, Block 이후 행동 삭제 또는
+  무효화 방식.
 
 ## 핵심 기능
 
 ### 이모지 반응
 
 - Profile은 여러 이모지 중 하나로 반응할 수 있다.
-- TODO: Post 하나에 Profile당 하나의 Reaction만 허용할지, 여러 Reaction을 허용할지 정해야 한다.
+- Post 하나에 Profile당 여러 Reaction을 남길 수 있다.
 - 유니코드 이모지만 허용한다.
 
 ### 재게시
@@ -61,11 +61,12 @@ Profile 행동 단위를 기준으로 정리한다.
 ## 도메인 속성/정책 메모
 
 - 상호작용은 Profile 단위다.
+- Collection은 현재 Engagement 범위에서 제외한다.
+- Quote는 Repost의 하위 유형이 아니라 Publishing이 소유할 별도 Post 작성 모델이다.
+- Block 발생 시 기존 Reaction, Repost, Bookmark는 삭제 또는 무효화 방향으로 본다.
 
 ## 미결정 네이밍
 
 - 반응: Reaction
 - 재게시: Repost
-- 인용: Quote, Quote Post
 - 저장: Bookmark, Save
-- 컬렉션: Collection
