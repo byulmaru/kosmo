@@ -4,19 +4,25 @@
   import { graphql } from '$mearie';
   import Avatar from '$lib/components/Avatar.svelte';
   import ProfileSwitcher from '$lib/components/ProfileSwitcher.svelte';
+  import type {
+    ProfileStateChangedReason,
+    ProfileStateChangedSelectedProfile,
+  } from '$lib/profileStateChanged';
   import { formatCount, getProfileInitial } from '$lib/utils/profile';
   import type { SidebarNavigation_query$key } from '$mearie';
-
-  type ProfileStateChangedReason = 'profile-selected' | 'profile-created';
 
   type Props = {
     query?: SidebarNavigation_query$key | null;
     loading?: boolean;
     error?: boolean;
+    activeProfileOverride?: ProfileStateChangedSelectedProfile;
     surface?: 'desktop' | 'drawer';
     switcherOpen?: boolean;
     onNavigate?: () => void;
-    onProfileStateChanged?: (reason: ProfileStateChangedReason) => void;
+    onProfileStateChanged?: (
+      reason: ProfileStateChangedReason,
+      selectedProfile: ProfileStateChangedSelectedProfile,
+    ) => void;
   };
 
   const sidebarNavigationFragment = graphql(`
@@ -45,6 +51,7 @@
     query = null,
     loading = false,
     error = false,
+    activeProfileOverride = null,
     surface = 'desktop',
     switcherOpen = $bindable(false),
     onNavigate = () => {},
@@ -97,7 +104,7 @@
 
   const hasProfiles = $derived((sidebarNavigation.data?.me?.profiles?.length ?? 0) > 0);
   const sidebarActiveProfile = $derived(
-    sidebarNavigation.data?.currentSession?.selectedProfile ?? null,
+    activeProfileOverride ?? sidebarNavigation.data?.currentSession?.selectedProfile ?? null,
   );
 </script>
 
@@ -109,6 +116,7 @@
       query={sidebarNavigation.data}
       {surface}
       {loading}
+      {activeProfileOverride}
       bind:switcherOpen
       {onProfileStateChanged}
     />
@@ -270,6 +278,7 @@
           query={sidebarNavigation.data}
           {surface}
           {loading}
+          {activeProfileOverride}
           bind:switcherOpen
           {onProfileStateChanged}
         />

@@ -4,18 +4,24 @@
   import { graphql } from '$mearie';
   import Avatar from '$lib/components/Avatar.svelte';
   import { getFirstGraphQLError } from '$lib/graphql/error';
+  import type {
+    ProfileStateChangedReason,
+    ProfileStateChangedSelectedProfile,
+  } from '$lib/profileStateChanged';
   import { getProfileInitial } from '$lib/utils/profile';
   import type { ProfileSwitcher_query$key } from '$mearie';
-
-  type ProfileStateChangedReason = 'profile-selected' | 'profile-created';
 
   type Props = {
     query?: ProfileSwitcher_query$key | null;
     variant: 'compact' | 'full';
     surface?: 'desktop' | 'drawer';
     loading?: boolean;
+    activeProfileOverride?: ProfileStateChangedSelectedProfile;
     switcherOpen?: boolean;
-    onProfileStateChanged?: (reason: ProfileStateChangedReason) => void;
+    onProfileStateChanged?: (
+      reason: ProfileStateChangedReason,
+      selectedProfile: ProfileStateChangedSelectedProfile,
+    ) => void;
   };
 
   let {
@@ -23,6 +29,7 @@
     variant,
     surface = 'desktop',
     loading = false,
+    activeProfileOverride = null,
     switcherOpen = $bindable(false),
     onProfileStateChanged = () => {},
   }: Props = $props();
@@ -101,7 +108,9 @@
   const idSuffix = $derived(`${surface}-${variant}`);
   const creatingOrSwitching = $derived(profileActionLoading || loading);
   const profiles = $derived(switcher.data?.me?.profiles ?? []);
-  const activeProfile = $derived(switcher.data?.currentSession?.selectedProfile ?? null);
+  const activeProfile = $derived(
+    activeProfileOverride ?? switcher.data?.currentSession?.selectedProfile ?? null,
+  );
   const triggerLabel = $derived(
     activeProfile ? activeProfile.displayName : profiles.length > 0 ? '프로필 선택' : '프로필',
   );
@@ -143,10 +152,10 @@
     profileActionLoading = true;
 
     try {
-      await selectProfile({ id });
+      const selected = await selectProfile({ id });
       switcherOpen = false;
       profileCreationOpen = false;
-      onProfileStateChanged('profile-selected');
+      onProfileStateChanged('profile-selected', selected.selectProfile.session.selectedProfile);
     } catch (error) {
       const graphQLError = getFirstGraphQLError(error);
 
@@ -192,11 +201,11 @@
       }
 
       try {
-        await selectProfile({ id: createdProfileId });
+        const selected = await selectProfile({ id: createdProfileId });
 
         switcherOpen = false;
         profileCreationOpen = false;
-        onProfileStateChanged('profile-created');
+        onProfileStateChanged('profile-created', selected.selectProfile.session.selectedProfile);
       } catch (error) {
         const graphQLError = getFirstGraphQLError(error);
 

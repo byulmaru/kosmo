@@ -25,7 +25,6 @@
       }
     `),
   );
-
   const selectedProfile = $derived(query.data?.currentSession?.selectedProfile ?? null);
 
   const invalidateSidebarNavigationData = () => {
