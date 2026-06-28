@@ -4,7 +4,7 @@
   import { graphql } from '$mearie';
   import type { DataOf } from '@mearie/svelte';
   import ProfileConnectionList from '$lib/components/ProfileConnectionList.svelte';
-  import { appendConnectionPage } from '$lib/profileConnectionPagination';
+  import { loadNextConnectionPage } from '$lib/profileConnectionPagination';
 
   const client = getClient();
   const queryDocument = graphql(`
@@ -85,26 +85,18 @@
     loadingNextPage = true;
     nextPageError = false;
 
-    try {
+    const result = await loadNextConnectionPage(paginatedConnection, after, async (cursor) => {
       const result = await client.query(nextPageQueryDocument, {
         handle: page.params.handle!,
-        after,
+        after: cursor,
       });
-      const nextConnection = result.profileByHandle?.following;
 
-      if (!nextConnection) {
-        nextPageError = true;
-        return;
-      }
+      return result.profileByHandle?.following;
+    });
 
-      paginatedConnection = paginatedConnection
-        ? appendConnectionPage(paginatedConnection, nextConnection)
-        : nextConnection;
-    } catch {
-      nextPageError = true;
-    } finally {
-      loadingNextPage = false;
-    }
+    paginatedConnection = result.connection;
+    nextPageError = result.error;
+    loadingNextPage = false;
   };
 </script>
 
