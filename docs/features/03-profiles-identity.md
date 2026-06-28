@@ -54,6 +54,16 @@
 - 비공개 게시를 고정할 경우 방문자 권한에 따라 보이지 않을 수 있다.
 - 원격 actor의 pinned posts 동기화는 ActivityPub 호환성을 따로 검토한다.
 
+### 개인 프로필 노트
+
+Mastodon의 private note on profile을 참고한다.
+
+- 사용자는 다른 프로필에 대해 본인만 볼 수 있는 메모를 남길 수 있다.
+- 메모는 대상 프로필 공개 정보가 아니라 viewer와 대상 프로필 사이의 관계 메타데이터다.
+- 상대방, 공개 방문자, 원격 서버에는 노출하지 않는다.
+- 삭제는 빈 문자열 또는 null 저장 중 하나로 정하되, UI에서는 `메모 없음`과 저장 실패를 구분한다.
+- 관계 화면, 프로필 상세, 팔로우 관리 화면 중 어디에 노출할지 제품 결정이 필요하다.
+
 ### 프로필 통계
 
 - 팔로워 수, 팔로잉 수, 게시 수를 보여준다.
@@ -89,12 +99,36 @@
 - 원격 follow redirect, 이전 계정 표시, 새 계정 안내가 필요하다.
 - 계정 이동을 포함할지 제품 결정이 필요하다. 단, actor identity 설계가 이동 가능성을 막지 않아야 한다.
 
+### Featured profiles와 featured tags
+
+- Mastodon의 featured profiles처럼 사용자가 자기 프로필에 추천 프로필을 노출할 수 있다.
+- Mastodon의 featured tags처럼 사용자가 자주 쓰는 해시태그를 프로필에 고정 노출할 수 있다.
+- 추천 프로필은 팔로우와 다르며, 공개 프로필 장식과 신뢰 신호에 가깝다.
+- featured tag는 해시태그 타임라인과 프로필 게시 목록을 연결한다.
+- Kosmo에서 프로필 고정 게시, 추천 프로필, 추천 태그를 같은 `프로필 하이라이트` 모델로 묶을지
+  결정이 필요하다.
+
 ## 데이터/정책 메모
 
 - `profile.handle`은 표시 문자열과 URL lookup 책임을 혼동하면 안 된다.
 - 로컬 프로필과 원격 프로필의 uniqueness 기준은 달라야 한다.
 - profile 상태 변경은 게시, 팔로우, 알림, 검색 색인에 영향을 준다.
 - private key, actor signing material, 인증 토큰은 프로필 API로 노출하면 안 된다.
+
+## 현재 코드상 확인된 구현
+
+- `profile.handle`은 3자 이상 30자 이하이며 영문, 숫자, 밑줄만 허용한다.
+- `profile.displayName`은 1자 이상 80자 이하로 검증된다.
+- `profile.bio`는 nullable이며 500자 이하로 검증된다.
+- `profile` 테이블에는 `state`, `handle`, `normalizedHandle`, `displayName`, `bio`, `followPolicy`,
+  `createdAt`이 있다.
+- `normalizedHandle`은 unique로 저장된다.
+- `createProfile`은 handle만 입력받아 profile을 만들고, 기본 `displayName`은 handle, 기본
+  `followPolicy`는 `OPEN`으로 설정한다.
+- `updateProfile`은 `displayName`, `bio`, `followPolicy`를 수정할 수 있고, 프로필의 OWNER 또는
+  ADMIN 권한이 필요하다.
+- 현재 코드상 avatar, header image, profile links, 개인 프로필 노트, featured profiles,
+  featured tags의 완성된 구현은 확인되지 않았다.
 
 ## 미결정 네이밍
 

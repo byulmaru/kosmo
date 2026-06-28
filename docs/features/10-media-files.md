@@ -98,6 +98,19 @@ Misskey Drive를 참고한다.
 - 이미지 변환 pipeline이 실패해도 원본 삭제 여부를 신중히 정해야 한다.
 - EXIF 제거, 바이러스 스캔, 성인물 탐지 같은 운영 기능은 별도 단계로 검토한다.
 
+## 현재 코드상 확인된 구현
+
+- REST `POST /upload` 이미지 업로드 엔드포인트가 있다.
+- 업로드는 로그인 세션과 active profile이 필요하다.
+- 단일 이미지 파일은 10 MiB 이하로 제한되어 있고, 요청 본문 limit은 64 MiB다.
+- 허용 MIME type은 `image/avif`, `image/gif`, `image/jpeg`, `image/png`, `image/webp`다.
+- 업로드된 파일은 R2 object로 저장하고, DB에는 `file`과 `media` row를 트랜잭션으로 생성한다.
+- `file`은 storage key, MIME type, byte size, width/height, sha256 메타데이터를 가질 수 있다.
+- `media`는 `LOCAL`/`REMOTE` source, account/profile 소유자, original/thumbnail file, remote URL,
+  thumbhash를 가질 수 있다.
+- 응답은 media id, object key, public URL, content type을 반환한다.
+- 현재 코드상 업로드된 media를 게시 첨부로 연결하는 모델이나 작성 UI 연동은 확인되지 않았다.
+
 ## 미결정 네이밍
 
 - 미디어: Media, Attachment

@@ -31,6 +31,22 @@ Mastodon 스타일을 우선 기준으로 둔다.
 제품 결정에 따라 공개/팔로워 공개/멘션 대상 공개만 먼저 구현할 수 있다. 단, 데이터 모델은
 조용한 공개를 추가할 수 있게 공개 범위를 enum처럼 명시적으로 저장해야 한다.
 
+### 현재 코드상 확인된 구현
+
+- 게시 본문은 TipTap 문서로 입력하고, plain text projection 기준 빈 본문을 거부한다.
+- 본문 길이는 `postBodyMaxLength = 500`으로 제한되어 있다.
+- GraphQL `createPost`는 `content`와 `visibility`를 입력으로 받고, `post`와 `post_content`를
+  트랜잭션으로 생성한다.
+- `post_content`는 `bodyText`, `bodyJson`, 선택적 `bodyHtml`, 선택적 `spoilerText` 컬럼을 가진다.
+  다만 현재 `createPost` 입력에서 content warning/spoiler 입력은 확인되지 않는다.
+- 공개 범위 enum은 `PUBLIC`, `UNLISTED`, `FOLLOWERS`, `DIRECT` 4종으로 구현되어 있다.
+- 웹 작성 UI는 공개/조용한 공개/팔로워만/언급한 계정만 옵션을 노출하고, 기본값은
+  `UNLISTED`다.
+- 접근 정책은 비로그인 사용자는 `PUBLIC`, `UNLISTED`만, 로그인 사용자는 본인 게시와 수락된
+  팔로우 관계의 `FOLLOWERS` 게시까지 보게 되어 있다.
+- `DIRECT`는 enum과 작성 UI에는 있으나, recipient 정책은 `TODO(PROD-121)`로 남아 있다. 따라서
+  별도 DM 또는 멘션 대상 공개 게시가 완성된 것으로 보지 않는다.
+
 ### 답글
 
 - 사용자는 기존 게시에 답글을 달 수 있다.

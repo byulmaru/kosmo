@@ -50,6 +50,16 @@ Mastodon 스타일을 우선 기준으로 둔다.
 - 뮤트/차단/필터를 반영한다.
 - 해시태그 대소문자, 정규화, 언어별 분절 정책을 정해야 한다.
 
+### 현재 코드상 확인된 구현
+
+- GraphQL `homeTimeline` connection이 있으며, active profile이 필요하다.
+- 홈 타임라인은 내 게시와 내가 `ACCEPTED` 상태로 팔로우한 프로필의 게시를 최신순으로 조회한다.
+- 홈 타임라인과 프로필 게시 목록 모두 공통 visibility access helper를 사용한다.
+- 웹 홈 화면은 `homeTimeline(first: 20)`을 요청한다.
+- GraphQL `Profile.posts` connection이 있으며 특정 프로필의 게시 목록을 커서 기반으로 조회한다.
+- 로컬 타임라인, 연합 타임라인, 해시태그 타임라인, 리스트 피드는 현재 코드상 완성된 구현으로
+  확인되지 않았다.
+
 ## 참고 피드
 
 ### 커스텀 피드

@@ -32,6 +32,16 @@ Mastodon 스타일을 우선 기준으로 둔다.
 - 승인 전에는 팔로워 공개 게시를 볼 수 없다.
 - 원격 팔로우 요청은 ActivityPub follow/accept/reject 흐름과 연결된다.
 
+### 관계별 개인 설정
+
+Mastodon의 relationship 모델을 참고한다.
+
+- 사용자는 특정 팔로우 대상의 boost/repost를 홈 타임라인에서 받을지 선택할 수 있다.
+- 사용자는 특정 팔로우 대상이 새 게시를 올릴 때 알림을 받을지 선택할 수 있다.
+- 사용자는 특정 팔로우 대상의 게시를 지정 언어로만 받을지 선택할 수 있다.
+- 사용자는 특정 프로필에 대해 본인만 보는 개인 노트를 저장할 수 있다.
+- 이 설정들은 팔로우 자체와 분리된 관계 메타데이터로 다루는 편이 안전하다.
+
 ### 팔로워 목록
 
 - 프로필을 팔로우하는 프로필 목록을 보여준다.
@@ -81,6 +91,13 @@ Bluesky의 starter pack을 참고한다.
 - 계정 이동, 서버 이전, 백업과 연결된다.
 - 원격 프로필 identity 안정성이 먼저 필요하다.
 
+### Followed hashtags
+
+- Mastodon의 followed tags처럼 사용자가 해시태그를 팔로우하고 홈 타임라인 또는 별도 피드에서
+  해당 태그 게시를 받을 수 있다.
+- 프로필 팔로우와 달리 대상은 actor가 아니라 태그다.
+- 태그 팔로우는 해시태그 타임라인, 검색, 알림, 필터 정책과 함께 설계해야 한다.
+
 ### 가까운 친구 또는 서클
 
 - X의 일부 과거 기능이나 Instagram 계열 기능과 유사하다.
@@ -100,6 +117,19 @@ Bluesky의 starter pack을 참고한다.
 - 계정이 여러 프로필을 가질 수 있으므로 active profile 전환 시 모든 관계 UI가 갱신되어야 한다.
 - follow request와 follow relationship은 별도 상태로 모델링하는 편이 안전하다.
 - block은 follow보다 우선한다. 차단 시 기존 follow를 자동 해제할지 정책이 필요하다.
+
+## 현재 코드상 확인된 구현
+
+- 팔로우 상태 enum은 `PENDING`, `ACCEPTED`, `REJECTED`를 가진다.
+- 팔로우 정책 enum은 `OPEN`, `APPROVAL_REQUIRED`를 가진다.
+- `followProfile`은 active profile이 필요하며 자기 자신을 팔로우할 수 없게 막는다.
+- 현재 `followProfile`은 새 팔로우를 `ACCEPTED`로 바로 생성한다. `PENDING`/`REJECTED` 재요청
+  정책은 코드 주석상 후속 승인 플로우에서 결정하는 상태다.
+- `unfollowProfile`은 viewer profile과 대상 profile 사이의 follow row를 삭제한다.
+- `Profile.followers`, `Profile.following` connection과 `followersCount`, `followingCount`가
+  구현되어 있고, count는 `ACCEPTED` 및 활성 profile만 계산한다.
+- 팔로워/팔로잉 목록 접근은 viewer가 관계 당사자이거나, follower와 followee 모두 `OPEN`인
+  `ACCEPTED` 관계일 때 보이도록 제한한다.
 
 ## 미결정 네이밍
 

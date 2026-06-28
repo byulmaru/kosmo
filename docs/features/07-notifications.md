@@ -42,6 +42,15 @@
 - 승인/거절 후 요청 알림은 처리됨 상태가 된다.
 - spam follow 방지를 위해 rate limit과 batch summary가 필요할 수 있다.
 
+### 특정 프로필 새 게시 알림
+
+Mastodon의 follow relationship `notify` 설정을 참고한다.
+
+- 사용자는 팔로우한 특정 프로필이 새 게시를 올릴 때 알림을 받을 수 있다.
+- 이 설정은 전체 게시 알림 설정과 분리된 관계별 설정이다.
+- boost/repost 수신 여부, 언어 필터와 함께 팔로우 관리 화면에서 다룰 수 있다.
+- 원격 프로필의 새 게시 delivery 지연이나 실패를 사용자에게 어떻게 보일지 정해야 한다.
+
 ### 운영 알림
 
 - 신고 처리 결과, 계정 제한, 보안 경고, 정책 변경, 서버 공지를 알릴 수 있다.
@@ -55,6 +64,10 @@
 - 요청 탭: 팔로우 요청, DM 요청, 운영 처리 대기 항목을 보여줄 수 있다.
 - 읽음 상태: 전체 읽음 처리와 개별 읽음 처리를 제공할 수 있다.
 - 알림 항목은 관련 게시/프로필/요청 화면으로 이동한다.
+- Mastodon의 grouped notifications처럼 같은 타입과 같은 대상의 알림을 서버에서 묶어 반환할 수
+  있다.
+- grouped notifications는 favourite, follow, boost, follow request 같은 반복 알림의 중복 렌더링과
+  payload 크기를 줄이는 데 유용하다.
 
 ## 알림 설정
 
@@ -89,6 +102,12 @@ Mastodon의 notification filtering 모델을 우선 참고한다.
 - 계정 단위 보안 알림과 프로필 단위 소셜 알림은 별도 모델일 수 있다.
 - 원격 actor 상호작용은 delivery 지연과 중복 수신을 고려해야 한다.
 - 알림 생성과 push/email 발송은 별도 큐로 분리하는 편이 안전하다.
+
+## 현재 코드상 확인된 구현
+
+- 웹에는 `/notifications` 라우트와 `NotificationItem` UI 컴포넌트/스토리가 있다.
+- 현재 코드상 GraphQL 알림 모델, 알림 테이블, 알림 생성 resolver까지 연결된 완성 구현은
+  확인되지 않았다.
 
 ## 미결정 네이밍
 

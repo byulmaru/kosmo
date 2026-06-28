@@ -19,6 +19,8 @@
   각 기능을 구현하기 위한 내부 수단이다.
 - Bluesky, ActivityPub, AT Protocol 같은 연합/프로토콜은 사용자에게 보이는 기능과
   내부 호환성 요구를 구분해서 기록한다.
+- "현재 코드상 확인된 구현" 항목은 로컬 코드에서 완전한 구현 흐름이 확인된 사실만 적는다. enum, UI 표시,
+  DB 컬럼만 있고 접근 정책이나 mutation이 연결되지 않은 항목은 구현 완료로 보지 않는다.
 
 ## 문서 목록
 
@@ -77,6 +79,19 @@ Mastodon 방식을 우선 기준으로 잡는다.
 - [Mastodon network features](https://docs.joinmastodon.org/user/network/)
 - [Mastodon moderation](https://docs.joinmastodon.org/user/moderating/)
 - [Mastodon quote posts](https://docs.joinmastodon.org/user/quote-posts/)
+- [Mastodon accounts API](https://docs.joinmastodon.org/methods/accounts/)
+- [Mastodon relationships entity](https://docs.joinmastodon.org/entities/Relationship/)
+- [Mastodon featured tags API](https://docs.joinmastodon.org/methods/featured_tags/)
+- [Mastodon endorsements API](https://docs.joinmastodon.org/methods/endorsements/)
+- [Mastodon followed tags API](https://docs.joinmastodon.org/methods/followed_tags/)
+- [Mastodon grouped notifications API](https://docs.joinmastodon.org/methods/grouped_notifications/)
+- [Mastodon preferences API](https://docs.joinmastodon.org/methods/preferences/)
+- [Mastodon follow requests API](https://docs.joinmastodon.org/methods/follow_requests/)
+- [Mastodon domain blocks API](https://docs.joinmastodon.org/methods/domain_blocks/)
+- [Mastodon filters API](https://docs.joinmastodon.org/methods/filters/)
+- [Mastodon search API](https://docs.joinmastodon.org/methods/search/)
+- [Mastodon directory API](https://docs.joinmastodon.org/methods/directory/)
+- [Mastodon statuses API](https://docs.joinmastodon.org/methods/statuses/)
 
 ### Misskey
 
