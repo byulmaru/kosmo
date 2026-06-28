@@ -5,7 +5,12 @@
   import RightRail from '$lib/components/RightRail.svelte';
   import SidebarNavigation from '$lib/components/SidebarNavigation.svelte';
   import { setProfileSwitcherContext } from '$lib/profileSwitcherContext';
+  import type {
+    ProfileStateChangedReason,
+    ProfileStateChangedSelectedProfile,
+  } from '$lib/profileStateChanged';
   import { setShellChromeContext } from '$lib/shellChromeContext';
+  import { setTabsLayoutSessionContext } from '$lib/tabsLayoutSessionContext';
 
   let { children } = $props();
 
@@ -18,19 +23,32 @@
           id
           selectedProfile {
             id
+            ...PostComposer_profile
             ...RightRail_profile
           }
         }
       }
     `),
   );
+  let selectedProfileFromMutation = $state<ProfileStateChangedSelectedProfile | null>(null);
+  const selectedProfile = $derived(
+    selectedProfileFromMutation ?? query.data?.currentSession?.selectedProfile ?? null,
+  );
 
-  const selectedProfile = $derived(query.data?.currentSession?.selectedProfile ?? null);
+  setTabsLayoutSessionContext({
+    selectedProfile: () => selectedProfile,
+    loading: () => query.loading,
+    error: () => Boolean(query.error),
+    refetch: () => query.refetch(),
+  });
 
-  type ProfileStateChangedReason = 'profile-selected' | 'profile-created';
-
-  const handleProfileStateChanged = (reason: ProfileStateChangedReason) => {
+  const handleProfileStateChanged = (
+    reason: ProfileStateChangedReason,
+    selectedProfile: ProfileStateChangedSelectedProfile,
+  ) => {
     const cache = client.extension('cache');
+
+    selectedProfileFromMutation = selectedProfile;
 
     if (reason === 'profile-created') {
       cache.invalidate({ __typename: 'Query', $field: 'me' });
@@ -109,6 +127,7 @@
       query={query.data}
       loading={query.loading}
       error={Boolean(query.error)}
+      activeProfileOverride={selectedProfileFromMutation}
       bind:switcherOpen={profileSwitcherOpen}
       onProfileStateChanged={handleProfileStateChanged}
     />
@@ -169,6 +188,7 @@
           query={query.data}
           loading={query.loading}
           error={Boolean(query.error)}
+          activeProfileOverride={selectedProfileFromMutation}
           surface="drawer"
           bind:switcherOpen={profileSwitcherOpen}
           onNavigate={closeDrawer}
