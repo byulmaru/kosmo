@@ -1,6 +1,6 @@
 ## Context
 
-팔로워/팔로잉 목록 라우트와 `ProfileConnectionList`는 이미 `Profile.followers(first: 20)`와 `Profile.following(first: 20)` 첫 페이지를 표시한다. 선행 OpenSpec change인 `connect-profile-follow-lists`는 첫 페이지 연결까지만 다루고 pagination을 명시적으로 제외했으므로, 이 변경은 그 위에 쌓이는 후속 범위다.
+팔로워/팔로잉 목록 라우트와 `ProfileConnectionList`는 이미 `Profile.followers(first: 20)`와 `Profile.following(first: 20)` 첫 페이지를 표시한다. 선행 OpenSpec change인 `connect-profile-follow-lists`는 첫 페이지 연결 계약만 다루고 첫 페이지 이후 pagination을 후속 change로 남기므로, 이 변경은 그 위에 쌓이는 후속 범위다.
 
 API는 이미 Relay-style connection 인자(`first`, `after`, `before`, `last`)와 `PageInfo`를 제공한다. 따라서 서버 schema/resolver 변경 없이 웹 route query 변수와 목록 컴포넌트 상태를 확장하면 된다.
 
