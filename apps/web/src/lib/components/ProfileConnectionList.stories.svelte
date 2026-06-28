@@ -32,11 +32,28 @@
       ...overrides,
     }) as unknown as ProfileListItem_profile$key;
 
-  const followersProfile = (): ProfileConnectionList_followersProfile$key =>
+  const additionalProfileItems = (kind: 'followers' | 'following') => [
+    {
+      cursor: `${kind}-edge-3`,
+      profile: profile({
+        id: `${kind}-page-2-profile`,
+        displayName: '다음 페이지 프로필',
+        handle: `${kind}-next-page`,
+      }),
+    },
+  ];
+
+  const followersProfile = (
+    pageInfo: { hasNextPage: boolean; endCursor: string | null } = {
+      hasNextPage: true,
+      endCursor: 'follower-edge-2',
+    },
+  ): ProfileConnectionList_followersProfile$key =>
     ({
       __typename: 'Profile',
       id: 'target-profile',
       followers: {
+        pageInfo,
         edges: [
           {
             cursor: 'follower-edge-1',
@@ -67,11 +84,17 @@
       },
     }) as unknown as ProfileConnectionList_followersProfile$key;
 
-  const followingProfile = (): ProfileConnectionList_followingProfile$key =>
+  const followingProfile = (
+    pageInfo: { hasNextPage: boolean; endCursor: string | null } = {
+      hasNextPage: true,
+      endCursor: 'following-edge-1',
+    },
+  ): ProfileConnectionList_followingProfile$key =>
     ({
       __typename: 'Profile',
       id: 'target-profile',
       following: {
+        pageInfo,
         edges: [
           {
             cursor: 'following-edge-1',
@@ -88,6 +111,8 @@
         ],
       },
     }) as unknown as ProfileConnectionList_followingProfile$key;
+
+  const lastPageInfo = { hasNextPage: false, endCursor: null };
 
   const { Story } = defineMeta({
     title: 'KOSMO/ProfileConnectionList',
@@ -110,6 +135,7 @@
     viewerProfileId,
     loading: false,
     error: false,
+    onLoadMore: () => {},
   }}
 />
 
@@ -122,8 +148,42 @@
       kind="followers"
       followersProfile={followersProfile()}
       {viewerProfileId}
+      onLoadMore={() => {}}
     />
     <ProfileConnectionList kind="followers" />
+  </div>
+</Story>
+
+<!-- 팔로워 목록의 pagination 상태: 추가 로드 가능, 로딩, 실패, 마지막 페이지. -->
+<Story name="Followers pagination states" asChild parameters={{ controls: { disable: true } }}>
+  <div class="grid w-[600px] gap-8">
+    <ProfileConnectionList
+      kind="followers"
+      followersProfile={followersProfile()}
+      {viewerProfileId}
+      onLoadMore={() => {}}
+    />
+    <ProfileConnectionList
+      kind="followers"
+      followersProfile={followersProfile()}
+      {viewerProfileId}
+      loadingNextPage
+      onLoadMore={() => {}}
+    />
+    <ProfileConnectionList
+      kind="followers"
+      followersProfile={followersProfile()}
+      {viewerProfileId}
+      nextPageError
+      onLoadMore={() => {}}
+    />
+    <ProfileConnectionList
+      kind="followers"
+      followersProfile={followersProfile(lastPageInfo)}
+      additionalProfiles={additionalProfileItems('followers')}
+      {viewerProfileId}
+      onLoadMore={() => {}}
+    />
   </div>
 </Story>
 
@@ -136,7 +196,41 @@
       kind="following"
       followingProfile={followingProfile()}
       {viewerProfileId}
+      onLoadMore={() => {}}
     />
     <ProfileConnectionList kind="following" />
+  </div>
+</Story>
+
+<!-- 팔로잉 목록의 pagination 상태: 추가 로드 가능, 로딩, 실패, 마지막 페이지. -->
+<Story name="Following pagination states" asChild parameters={{ controls: { disable: true } }}>
+  <div class="grid w-[600px] gap-8">
+    <ProfileConnectionList
+      kind="following"
+      followingProfile={followingProfile()}
+      {viewerProfileId}
+      onLoadMore={() => {}}
+    />
+    <ProfileConnectionList
+      kind="following"
+      followingProfile={followingProfile()}
+      {viewerProfileId}
+      loadingNextPage
+      onLoadMore={() => {}}
+    />
+    <ProfileConnectionList
+      kind="following"
+      followingProfile={followingProfile()}
+      {viewerProfileId}
+      nextPageError
+      onLoadMore={() => {}}
+    />
+    <ProfileConnectionList
+      kind="following"
+      followingProfile={followingProfile(lastPageInfo)}
+      additionalProfiles={additionalProfileItems('following')}
+      {viewerProfileId}
+      onLoadMore={() => {}}
+    />
   </div>
 </Story>
