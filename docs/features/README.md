@@ -1,120 +1,86 @@
-# Kosmo 기능 리스트 초안
+# Kosmo DDD 도메인 명세
 
 ## 목적
 
-이 문서는 Kosmo를 단문형 SNS 제품으로 만들기 위해 필요한 기능을 도메인별로 정리한
-초안이다. X, Bluesky, Mastodon, Misskey의 공통 기능을 먼저 보고, 충돌하거나 특정
-플랫폼에만 있는 기능은 별도 참고 항목으로 분리한다.
+이 문서는 Kosmo를 단문형 SNS 제품으로 만들기 위해 필요한 bounded context, 도메인 모델,
+보편 언어, 정책, 불변 조건을 정리한 DDD 도메인 명세다.
 
-이 문서는 최종 PRD가 아니라 실제 제품 스펙을 작성하기 위한 작업대다. 기능명, 포함 범위,
-정책 문구, 구현 방식은 이후 제품 결정과 기술 검토를 거쳐 확정한다.
+이 문서는 구현 스펙이 아니라 제품과 구현이 함께 참조해야 하는 도메인 정의 문서다. 구현 스펙과
+OpenSpec은 이 문서의 보편 언어, 컨텍스트 경계, 정책 결정을 따른다.
 
 ## 기준
 
-- 공통 기능을 먼저 제품 후보로 둔다.
-- 플랫폼마다 이름만 다른 기능은 Kosmo 이름을 확정하지 않고 후보명을 병기한다.
-- 작동 방식이 충돌하면 Mastodon 스타일을 우선 기준으로 설명한다.
-- Mastodon에도 없거나 Mastodon과 다르게 강한 장점이 있는 기능은 참고 기능으로 분리한다.
+- Kosmo의 보편 언어를 먼저 확정하고, 확정된 용어를 모든 문서에서 일관되게 사용한다.
+- 기능 후보가 아니라 도메인 책임, 상태, 정책, 불변 조건을 기준으로 문서를 유지한다.
 - 단순 기술 레이어는 기능으로 분리하지 않는다. GraphQL, DB, 캐시, 인프라, 디자인 시스템은
   각 기능을 구현하기 위한 내부 수단이다.
-- Bluesky, ActivityPub, AT Protocol 같은 연합/프로토콜은 사용자에게 보이는 기능과
-  내부 호환성 요구를 구분해서 기록한다.
-- "현재 코드상 확인된 구현" 항목은 로컬 코드에서 완전한 구현 흐름이 확인된 사실만 적는다. enum, UI 표시,
-  DB 컬럼만 있고 접근 정책이나 mutation이 연결되지 않은 항목은 구현 완료로 보지 않는다.
+- 테이블, 컬럼, resolver, endpoint, cache key 같은 구현 세부는 기능 문서에 직접 적지 않는다.
+  필요하면 도메인이 가져야 할 속성, 상태, 생명주기, 권한, 정책 제약으로 번역해서 기록한다.
+- 현재 구현 상태나 코드 감사 결과는 이 문서의 중심 주제가 아니다. 구현과 문서가 다르면
+  별도 구현 스펙, OpenSpec, 이슈, PR 설명에서 정렬한다.
+- 파일은 도메인당 하나를 원칙으로 한다. 한 문서 안에서 하위 기능을 다루고, 도메인이 커져
+  분리해야 할 때는 먼저 경계와 관계를 이 문서에서 재정의한다.
+- 도메인 간 의존성은 각 문서의 `컨텍스트 관계` 섹션에 명시한다.
 
-## 문서 목록
+## 폴더 구조
 
-- [게시와 작성](./01-posting.md)
-- [타임라인과 피드](./02-timelines.md)
-- [프로필과 계정 정체성](./03-profiles-identity.md)
-- [관계와 소셜 그래프](./04-relationships.md)
-- [상호작용](./05-interactions.md)
-- [검색과 발견](./06-search-discovery.md)
-- [알림](./07-notifications.md)
-- [안전과 모더레이션](./08-safety-moderation.md)
-- [메시징](./09-messaging.md)
-- [미디어와 파일](./10-media-files.md)
-- [플랫폼 차이와 미결정 항목](./90-platform-differences.md)
+- `contexts/`: bounded context별 도메인 명세. 파일 하나가 하나의 컨텍스트를 대표한다.
+- `decisions/`: 확정된 도메인 용어와 모델 결정을 ADR 형태로 보관한다.
+- `records/`: 명세 점검 기록, 불일치 목록, 다음 질문 후보를 보관한다.
 
-## 참고 플랫폼
+## DDD 명세 기준
 
-### X
+각 컨텍스트 문서는 다음 관점으로 유지한다.
 
-X는 포스트, 답글, 리포스트, 인용, 북마크, 리스트, 커뮤니티, DM, Spaces처럼 대중형
-중앙집중 SNS에 가까운 기능 묶음을 제공한다. Kosmo에서는 공통 SNS 기능의 기준점으로
-참고하되, 추천 알고리즘 중심 경험이나 유료 인증/수익화 기능은 이번 초안의 핵심 범위로
-두지 않는다.
+- 컨텍스트 경계: 이 문서가 책임지는 업무 언어와 책임지지 않는 영역.
+- 보편 언어: 제품, 설계, 코드에서 같은 뜻으로 써야 하는 핵심 용어.
+- 핵심 모델: aggregate root, entity, value object 후보.
+- 불변 조건: 상태 변경 전후 항상 지켜야 하는 도메인 규칙.
+- 도메인 이벤트: 다른 컨텍스트가 반응할 수 있는 의미 있는 사건.
+- 정책과 권한: 공개 범위, 접근 제한, 운영 정책, Account/Profile 설정처럼 모델을 제약하는 규칙.
+- 컨텍스트 관계: upstream/downstream, 참조, 알림, projection 관계.
 
-공식 참고:
+## 도메인 지도
 
-- [X posts](https://help.x.com/en/using-x/how-to-post)
-- [X direct messages](https://help.x.com/en/using-x/direct-messages)
-- [X lists](https://help.x.com/en/using-x/x-lists)
-- [X bookmarks](https://help.x.com/en/using-x/bookmarks)
-- [X communities](https://help.x.com/en/using-x/communities)
-- [X Spaces](https://help.x.com/en/using-x/spaces)
+| 컨텍스트       | 문서                                                   | DDD 성격                                                    | 주요 연결                                                                                                                                    |
+| -------------- | ------------------------------------------------------ | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Identity       | [contexts/identity.md](./contexts/identity.md)         | 계정, 프로필, 원격 프로필 identity의 기준 컨텍스트          | [Social Graph](./contexts/social-graph.md), [Discovery](./contexts/discovery.md), [Trust & Safety](./contexts/trust-safety.md)               |
+| Publishing     | [contexts/publishing.md](./contexts/publishing.md)     | 게시 작성, 공개 범위, 답글, content warning의 핵심 컨텍스트 | [Engagement](./contexts/engagement.md), [Feed](./contexts/feed.md), [Media](./contexts/media.md), [Social Graph](./contexts/social-graph.md) |
+| Media          | [contexts/media.md](./contexts/media.md)               | 게시/프로필에 연결되는 미디어와 파일 원본 컨텍스트          | [Publishing](./contexts/publishing.md), [Identity](./contexts/identity.md), [Trust & Safety](./contexts/trust-safety.md)                     |
+| Social Graph   | [contexts/social-graph.md](./contexts/social-graph.md) | 팔로우, 팔로우 요청, 관계별 설정 컨텍스트                   | [Identity](./contexts/identity.md), [Feed](./contexts/feed.md), [Notification](./contexts/notification.md)                                   |
+| Engagement     | [contexts/engagement.md](./contexts/engagement.md)     | 반응, 재게시, 북마크 같은 게시 행동 컨텍스트                | [Publishing](./contexts/publishing.md), [Social Graph](./contexts/social-graph.md), [Notification](./contexts/notification.md)               |
+| Messaging      | [contexts/messaging.md](./contexts/messaging.md)       | 공개 피드 밖 제한 대화 컨텍스트                             | [Identity](./contexts/identity.md), [Social Graph](./contexts/social-graph.md), [Notification](./contexts/notification.md)                   |
+| Feed           | [contexts/feed.md](./contexts/feed.md)                 | 피드 정의와 홈/로컬/연합/리스트 projection 컨텍스트         | [Publishing](./contexts/publishing.md), [Social Graph](./contexts/social-graph.md), [Discovery](./contexts/discovery.md)                     |
+| Discovery      | [contexts/discovery.md](./contexts/discovery.md)       | 검색, 원격 lookup, 추천, 탐색 컨텍스트                      | [Identity](./contexts/identity.md), [Publishing](./contexts/publishing.md), [Trust & Safety](./contexts/trust-safety.md)                     |
+| Notification   | [contexts/notification.md](./contexts/notification.md) | 소셜/운영 알림과 읽음 상태 컨텍스트                         | [Engagement](./contexts/engagement.md), [Social Graph](./contexts/social-graph.md), [Messaging](./contexts/messaging.md)                     |
+| Trust & Safety | [contexts/trust-safety.md](./contexts/trust-safety.md) | 뮤트, 차단, 신고, 서버 moderation 컨텍스트                  | [Identity](./contexts/identity.md), [Publishing](./contexts/publishing.md), [Discovery](./contexts/discovery.md)                             |
 
-### Bluesky
+## 결정과 기록
 
-Bluesky는 custom feed, starter pack, labeler 기반 모더레이션, account portability처럼
-발견과 계정 이동성에 강한 방향을 가진다. Kosmo에서는 feed 선택권, 온보딩 묶음, 외부
-모더레이션 레이블이라는 참고 기능으로 다룬다.
+- [ADR 0001: Core Ubiquitous Language](./decisions/0001-core-ubiquitous-language.md)
+- [2026-06-28 DDD 명세 점검 기록](./records/2026-06-28-ddd-spec-audit.md)
 
-공식 참고:
+## 컨텍스트 관계 규칙
 
-- [Bluesky custom feeds](https://bsky.social/about/blog/7-27-2023-custom-feeds)
-- [Bluesky direct messages](https://bsky.social/about/blog/05-22-2024-direct-messages)
-- [Bluesky starter packs](https://bsky.social/about/blog/06-26-2024-starter-packs)
-- [Bluesky stackable moderation](https://bsky.social/about/blog/03-12-2024-stackable-moderation)
+각 컨텍스트 문서는 `컨텍스트 관계` 섹션을 가진다.
 
-### Mastodon
+- 상위: 이 인덱스 문서.
+- upstream: 이 컨텍스트가 식별자, 상태, 정책 판단을 의존하는 컨텍스트.
+- downstream: 이 컨텍스트의 이벤트나 상태 변경을 소비하는 컨텍스트.
+- reference upstream: moderation처럼 판단 대상 엔티티를 참조하기 위해 의존하는 컨텍스트.
+- policy upstream: 정책 판정이나 안전 규칙 결과를 의존하는 컨텍스트.
+- policy downstream: 정책 판정이나 안전 규칙 결과를 소비하는 컨텍스트.
+- peer: 상호 정책을 맞춰야 하지만 소유권은 분리된 컨텍스트.
 
-Mastodon은 연합형 단문 SNS의 기본 모델로 본다. 공개 범위, content warning, boost,
-favourite, bookmark, 로컬/연합 타임라인, 필터, mute/block/report 같은 충돌 항목은
-Mastodon 방식을 우선 기준으로 잡는다.
+## 공통 문서 형식
 
-공식 참고:
+각 컨텍스트 문서는 다음 관점으로 읽는다.
 
-- [Mastodon posting](https://docs.joinmastodon.org/user/posting/)
-- [Mastodon network features](https://docs.joinmastodon.org/user/network/)
-- [Mastodon moderation](https://docs.joinmastodon.org/user/moderating/)
-- [Mastodon quote posts](https://docs.joinmastodon.org/user/quote-posts/)
-- [Mastodon accounts API](https://docs.joinmastodon.org/methods/accounts/)
-- [Mastodon relationships entity](https://docs.joinmastodon.org/entities/Relationship/)
-- [Mastodon featured tags API](https://docs.joinmastodon.org/methods/featured_tags/)
-- [Mastodon endorsements API](https://docs.joinmastodon.org/methods/endorsements/)
-- [Mastodon followed tags API](https://docs.joinmastodon.org/methods/followed_tags/)
-- [Mastodon grouped notifications API](https://docs.joinmastodon.org/methods/grouped_notifications/)
-- [Mastodon preferences API](https://docs.joinmastodon.org/methods/preferences/)
-- [Mastodon follow requests API](https://docs.joinmastodon.org/methods/follow_requests/)
-- [Mastodon domain blocks API](https://docs.joinmastodon.org/methods/domain_blocks/)
-- [Mastodon filters API](https://docs.joinmastodon.org/methods/filters/)
-- [Mastodon search API](https://docs.joinmastodon.org/methods/search/)
-- [Mastodon directory API](https://docs.joinmastodon.org/methods/directory/)
-- [Mastodon statuses API](https://docs.joinmastodon.org/methods/statuses/)
-
-### Misskey
-
-Misskey는 note, renote, reaction, antenna, channel, clip, drive처럼 커뮤니티와 개인
-정리에 강한 기능을 제공한다. Kosmo에서는 풍부한 반응, 키워드 기반 수집, 클립/드라이브형
-재사용 기능을 참고 후보로 둔다.
-
-공식 참고:
-
-- [Misskey notes](https://misskey-hub.net/en/docs/for-users/features/note/)
-- [Misskey timelines](https://misskey-hub.net/en/docs/for-users/features/timeline/)
-- [Misskey reactions](https://misskey-hub.net/en/docs/for-users/features/reaction/)
-- [Misskey antennas](https://misskey-hub.net/en/docs/for-users/features/antenna/)
-- [Misskey clips](https://misskey-hub.net/en/docs/for-users/features/clip/)
-- [Misskey Drive](https://misskey-hub.net/en/docs/for-users/features/drive/)
-
-## 공통 스펙 형식
-
-각 기능 문서는 다음 관점으로 읽는다.
-
-- 목표: 사용자가 얻는 가치
-- 핵심 기능: 공통적으로 필요한 동작
-- Mastodon 우선 기준: 충돌 시 기본값으로 삼을 정책
-- 참고 기능: 특정 플랫폼에만 있거나 별도 제품 결정이 필요한 기능
-- 데이터/정책 메모: 이후 구현 스펙으로 옮겨야 하는 결정
+- 목표: Account/Profile이 얻는 가치와 컨텍스트가 책임지는 변화
+- 컨텍스트 관계: upstream/downstream/peer 관계
+- DDD 명세: 경계, 보편 언어, 모델, 불변 조건, 이벤트, 정책
+- 핵심 기능: 공통적으로 필요한 Account/Profile 행동
+- 도메인 속성/정책 메모: 이후 구현 스펙으로 옮겨야 하는 결정
 - 미결정 항목: 제품 이름, 정책, 포함 범위가 확정되지 않은 부분
+
+// TODO: 디자인적 결정은 추후 디자인 문서로 이관할 것
