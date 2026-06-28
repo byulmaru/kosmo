@@ -60,10 +60,9 @@
 
 ### 불명확한 결정 사항
 
-- Local Feed, Federated Feed, Hashtag Feed, List Feed의 답글/Repost 포함 정책.
+- Local Feed, Federated Feed, List Feed는 현재 Feed 범위에서 제외한다.
+- Hashtag Feed는 Post Visibility가 공개인 원본 Post만 포함하고, 답글과 Repost는 포함하지 않는다.
 
 ## 다음 인터랙티브 질문 후보
 
-1. Local Feed는 같은 서버의 어떤 Post를 포함해야 할까?
-2. Federated Feed는 어떤 원격 Post를 포함해야 할까?
-3. Hashtag Feed와 List Feed의 답글/Repost 포함 정책은 Home/Profile Feed와 같게 갈까, 별도로 둘까?
+1. 현재 기록 기준으로 Feed 범위 관련 추가 질문은 없다.
