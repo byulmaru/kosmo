@@ -17,6 +17,7 @@ Profile 상태 전이는 Identity 컨텍스트의 `Profile State Machine`으로 
 - `Owner` Account는 활성 Profile을 비활성화하고, 비활성화 Profile을 재활성화할 수 있다.
 - Profile 삭제는 비활성화 상태에서만 수행한다.
 - 정지는 Trust & Safety moderation action의 결과이며, 정지 해제도 Trust & Safety가 수행한다.
+- `Owner` Account는 정지 상태를 직접 해제할 수 없다.
 - 정지 해제 시 Profile은 정지 전 상태로 복구된다.
 - active Profile은 활성 상태여야 한다.
 

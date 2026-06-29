@@ -22,6 +22,11 @@
 12. Domain moderation action은 기존 Notification을 삭제하거나 읽음 상태를 바꾸지 않는다.
 13. 물리 색인 삭제, 원격 delivery 실패 처리, 재시도 방식은 구현/연합 스펙으로 분리한다.
 
+## 후속 확인
+
+- Profile 삭제는 비활성화 상태에서만 가능하다는 제약을 유지한다.
+- 정지 상태는 Trust & Safety만 해제할 수 있으며, `Owner` Account가 직접 해제할 수 없다.
+
 ## 문서 반영
 
 - [Identity 컨텍스트](../contexts/identity.md)에 Profile State Machine을 추가했다.
