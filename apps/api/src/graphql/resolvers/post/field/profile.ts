@@ -4,7 +4,7 @@ import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
 import { postVisibilityAccessWhere } from '../access/visibility';
-import { Post } from '../ref';
+import { Post, PostConnection } from '../ref';
 
 type PostRow = typeof Posts.$inferSelect;
 
@@ -36,8 +36,6 @@ builder.objectFields(Profile, (t) => ({
         );
       },
     },
-    {
-      name: 'PostsConnection',
-    },
+    PostConnection,
   ),
 }));

@@ -49,7 +49,7 @@
 
   const homeTimelineFragment = createFragment(
     graphql(`
-      fragment PostList_homeTimeline on HomeTimelineConnection {
+      fragment PostList_homeTimeline on PostConnection {
         edges {
           cursor
           node {

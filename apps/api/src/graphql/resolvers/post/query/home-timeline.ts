@@ -4,7 +4,7 @@ import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, exists, getColumns, gt, lt, or } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { postVisibilityAccessWhere } from '../access/visibility';
-import { Post } from '../ref';
+import { Post, PostConnection } from '../ref';
 
 type PostRow = typeof Posts.$inferSelect;
 
@@ -51,8 +51,6 @@ builder.queryField('homeTimeline', (t) =>
         );
       },
     },
-    {
-      name: 'HomeTimelineConnection',
-    },
+    PostConnection as never,
   ),
 );
