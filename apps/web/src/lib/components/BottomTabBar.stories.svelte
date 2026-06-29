@@ -30,6 +30,9 @@
   const { Story } = defineMeta({
     title: 'KOSMO/BottomTab',
     component: BottomTabBar,
+    globals: {
+      viewport: { value: 'mobile1', isRotated: false },
+    },
     parameters: {
       layout: 'fullscreen',
     },
