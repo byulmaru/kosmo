@@ -82,17 +82,28 @@
       return;
     }
 
+    const requestPageKey = pageKey;
+
     loadingNextPage = true;
     nextPageError = false;
 
-    const result = await loadNextConnectionPage(paginatedConnection, after, async (cursor) => {
-      const result = await client.query(nextPageQueryDocument, {
-        handle: page.params.handle!,
-        after: cursor,
-      });
+    const result = await loadNextConnectionPage(
+      paginatedConnection,
+      after,
+      async (cursor) => {
+        const result = await client.query(nextPageQueryDocument, {
+          handle: page.params.handle!,
+          after: cursor,
+        });
 
-      return result.profileByHandle?.followers;
-    });
+        return result.profileByHandle?.followers;
+      },
+      () => pageKey === requestPageKey,
+    );
+
+    if (result.stale) {
+      return;
+    }
 
     paginatedConnection = result.connection;
     nextPageError = result.error;

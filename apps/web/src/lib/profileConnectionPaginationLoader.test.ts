@@ -49,4 +49,29 @@ describe('loadNextConnectionPage', () => {
       error: true,
     });
   });
+
+  test('marks the result stale when the route key changes while loading', async () => {
+    const current: TestConnection = {
+      edges: [{ cursor: 'cursor-1', node: { id: 'node-1' } }],
+      pageInfo: { hasNextPage: true, endCursor: 'cursor-1' },
+    };
+    const next: TestConnection = {
+      edges: [{ cursor: 'cursor-2', node: { id: 'node-2' } }],
+      pageInfo: { hasNextPage: false, endCursor: 'cursor-2' },
+    };
+    const requestPageKey = 'alice:profile-1';
+    let currentPageKey = requestPageKey;
+    const load = vi.fn(async () => {
+      currentPageKey = 'bob:profile-2';
+      return next;
+    });
+
+    await expect(
+      loadNextConnectionPage(current, 'cursor-1', load, () => currentPageKey === requestPageKey),
+    ).resolves.toEqual({
+      connection: current,
+      error: false,
+      stale: true,
+    });
+  });
 });
