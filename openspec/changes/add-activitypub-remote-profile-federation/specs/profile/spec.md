@@ -150,39 +150,45 @@ API는 활성 local profile과 저장된 활성 ActivityPub remote profile을 Gr
 
 ### Requirement: Profile follow graph
 
-API는 프로필 간 visible follow 관계를 GraphQL에서 조회할 수 있어야 한다(MUST).
+API는 remote follow change 전까지 활성 local profile 간 visible follow 관계만 GraphQL에서 조회할 수 있어야 한다(MUST).
 
 #### Scenario: Read accepted followers
 
-- **WHEN** 클라이언트가 활성 프로필의 followers connection을 조회한다
-- **THEN** 시스템은 해당 프로필을 followee로 하고 follower 프로필도 활성 상태인 `ACCEPTED` follow 관계 중 viewer가 볼 수 있는 관계를 반환한다
+- **WHEN** 클라이언트가 활성 local profile의 followers connection을 조회한다
+- **THEN** 시스템은 해당 local profile을 followee로 하고 follower 프로필도 활성 local profile인 `ACCEPTED` follow 관계 중 viewer가 볼 수 있는 관계를 반환한다
 - **AND** 각 edge의 node는 해당 `ProfileFollow`이다
 
 #### Scenario: Read accepted following
 
-- **WHEN** 클라이언트가 활성 프로필의 following connection을 조회한다
-- **THEN** 시스템은 해당 프로필을 follower로 하고 followee 프로필도 활성 상태인 `ACCEPTED` follow 관계 중 viewer가 볼 수 있는 관계를 반환한다
+- **WHEN** 클라이언트가 활성 local profile의 following connection을 조회한다
+- **THEN** 시스템은 해당 local profile을 follower로 하고 followee 프로필도 활성 local profile인 `ACCEPTED` follow 관계 중 viewer가 볼 수 있는 관계를 반환한다
 - **AND** 각 edge의 node는 해당 `ProfileFollow`이다
 
 #### Scenario: Count accepted follows
 
 - **WHEN** 클라이언트가 활성 프로필의 followersCount 또는 followingCount를 조회한다
-- **THEN** 시스템은 `ACCEPTED` follow 관계 중 상대 프로필도 활성 상태인 관계만 집계한다
+- **THEN** 시스템은 `ACCEPTED` follow 관계 중 양쪽 프로필이 모두 활성 local profile인 관계만 집계한다
 
 #### Scenario: Read public accepted follow
 
 - **WHEN** 클라이언트가 자기 active profile과 관련되지 않은 `ACCEPTED` follow 관계를 조회한다
-- **THEN** 시스템은 follower와 followee 프로필이 모두 활성 상태이고 `followPolicy`가 `OPEN`인 경우에만 해당 `ProfileFollow`를 반환한다
+- **THEN** 시스템은 follower와 followee 프로필이 모두 활성 local profile이고 `followPolicy`가 `OPEN`인 경우에만 해당 `ProfileFollow`를 반환한다
 
 #### Scenario: Read own follow relationship
 
 - **WHEN** active profile이 있는 인증자가 자기 active profile이 follower 또는 followee인 follow 관계를 조회한다
-- **THEN** 시스템은 follower와 followee 프로필이 활성 상태이면 follow 정책과 상태에 관계없이 해당 `ProfileFollow`를 반환한다
+- **THEN** 시스템은 follower와 followee 프로필이 모두 활성 local profile이면 follow 정책과 상태에 관계없이 해당 `ProfileFollow`를 반환한다
 
 #### Scenario: Hide follow request from unrelated viewer
 
 - **WHEN** 클라이언트가 자기 active profile과 관련되지 않은 `PENDING` 또는 `REJECTED` follow 관계를 조회한다
 - **THEN** 시스템은 해당 `ProfileFollow`를 반환하지 않는다
+
+#### Scenario: Hide remote follow graph before remote follow support
+
+- **WHEN** 클라이언트가 저장된 active remote profile의 followers/following connection 또는 followersCount/followingCount를 조회한다
+- **THEN** 시스템은 remote follow change가 구현되기 전까지 빈 connection과 0 count로 응답한다
+- **AND** remote profile이 포함된 local `ProfileFollow` row가 있더라도 GraphQL follow graph 결과로 노출하지 않는다
 
 #### Scenario: Read viewer follow
 
@@ -199,8 +205,8 @@ API는 프로필 간 visible follow 관계를 GraphQL에서 조회할 수 있어
 #### Scenario: Read ProfileFollow profiles
 
 - **WHEN** 클라이언트가 `ProfileFollow.follower` 또는 `ProfileFollow.followee`를 조회한다
-- **THEN** 시스템은 관계의 follower profile 또는 followee profile이 노출 가능한 활성 프로필이면 반환한다
-- **AND** 해당 프로필이 노출 가능하지 않으면 없음으로 응답한다
+- **THEN** 시스템은 관계의 follower profile 또는 followee profile이 노출 가능한 활성 local profile이면 반환한다
+- **AND** 해당 프로필이 local profile이 아니거나 노출 가능하지 않으면 없음으로 응답한다
 
 ### Requirement: Follow profile mutation
 
