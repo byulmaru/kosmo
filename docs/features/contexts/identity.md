@@ -2,8 +2,8 @@
 
 ## 목표
 
-Account, Profile, Local Profile, Remote Profile, 표시 handle, Profile State의 식별 기준과 생명주기를
-정의한다.
+Account, Profile, Local Profile, Remote Profile, 표시 handle, Account State, Profile State의 식별 기준과
+생명주기를 정의한다.
 
 ## 컨텍스트 관계
 
@@ -15,21 +15,21 @@ Account, Profile, Local Profile, Remote Profile, 표시 handle, Profile State의
 
 ## DDD 명세
 
-- 컨텍스트 경계: Account, Profile, 표시 handle, 로컬/원격 Profile identity, Profile의 팔로우 승인
-  정책, Profile 이미지 연결, 팔로워/팔로잉 목록 공개 범위를 정의한다. 게시, 팔로우 관계 생명주기,
-  검색 색인, 운영 제재의 상세 규칙은 소유하지 않는다.
+- 컨텍스트 경계: Account, Profile, 표시 handle, 로컬/원격 Profile identity, Account State, Profile의
+  팔로우 승인 정책, Profile 이미지 연결, 팔로워/팔로잉 목록 공개 범위를 정의한다. 게시, 팔로우 관계
+  생명주기, 검색 색인, 운영 제재의 상세 규칙은 소유하지 않는다.
 - 보편 언어: Account, Profile, Local Profile, Remote Profile, Handle, Display Handle, Remote Profile
-  Identity, Profile State, Follow Approval Policy.
+  Identity, Account State, Profile State, Follow Approval Policy.
 - 핵심 모델: Account와 Profile을 aggregate root 후보로 둔다. Account-Profile 관계는 역할과
   권한을 가진 관계로 본다.
-- 값 객체 후보: Handle, Display Name, Bio, Profile URL, Remote URL, Host, Account Profile Role, Profile
-  State.
+- 값 객체 후보: Handle, Display Name, Bio, Profile URL, Remote URL, Host, Account Profile Role, Account
+  State, Profile State.
 - 불변 조건: 로컬 handle은 로컬 네임스페이스에서 유일해야 한다. 같은 handle이라도 host가 다르면
   다른 원격 프로필이다. 비공개 서명 자료와 인증 토큰은 공개 Profile 정보가 아니다. active
-  Profile은 현재 Account와 역할 관계가 있는 활성 Profile이어야 한다. Profile State는 상태 기계에
-  정의된 전이로만 바뀔 수 있다.
-- 도메인 이벤트 후보: ProfileCreated, ProfileUpdated, ProfileStateChanged, HandleChanged,
-  AccountProfileLinked.
+  Profile은 현재 Account와 역할 관계가 있는 활성 Profile이어야 한다. Account State와 Profile State는
+  상태 기계에 정의된 전이로만 바뀔 수 있다.
+- 도메인 이벤트 후보: AccountStateChanged, ProfileCreated, ProfileUpdated, ProfileStateChanged,
+  HandleChanged, AccountProfileLinked.
 - 정책 후보: handle 변경, 프로필 삭제와 계정 삭제 분리, 원격 프로필 캐시 최신성, 프로필 편집
   권한, 팔로우 승인 정책, 목록 공개 범위.
 
@@ -44,6 +44,27 @@ Account, Profile, Local Profile, Remote Profile, 표시 handle, Profile State의
 - Account 삭제 전에는 해당 Account가 가진 Account-Profile 관계를 정리해야 한다.
 - Account-Profile 관계 정리 과정에서 어떤 Profile의 마지막 `Owner`도 제거할 수 없다.
 - 계정 정지는 Account 상태이고 프로필 정지는 Profile 상태다.
+
+## Account 상태
+
+- 활성: Account가 인증, 보안 설정, Profile 전환의 대상이 될 수 있는 상태.
+- 정지: Trust & Safety의 moderation action으로 Account 사용이 정지된 상태.
+- 삭제됨: 재활성화할 수 없는 terminal 상태.
+
+### Account State Machine
+
+Account State는 활성, 정지, 삭제됨 세 상태를 가진다. 삭제됨은 terminal 상태이며 다른 상태로 되돌릴 수
+없다.
+
+| 현재 상태      | 전이                | 수행 주체      | 다음 상태 | 규칙                                                                        |
+| -------------- | ------------------- | -------------- | --------- | --------------------------------------------------------------------------- |
+| 없음           | Account 생성        | Account        | 활성      | 생성된 Account는 인증과 Profile 생성의 기준이 된다                          |
+| 활성           | Account 정지        | Trust & Safety | 정지      | Profile 전환과 Account 기준 소셜 행동을 수행할 수 없다                      |
+| 정지           | Account 정지 해제   | Trust & Safety | 활성      | 정지 해제는 Trust & Safety moderation action의 결과다                       |
+| 활성 또는 정지 | Account 삭제        | Account        | 삭제됨    | Account-Profile 관계가 모두 정리되어야 하며 마지막 `Owner`를 없애면 안 된다 |
+| 삭제됨         | 모든 상태 변경 요청 | 없음           | 삭제됨    | 삭제됨은 되돌릴 수 없다                                                     |
+
+정지 상태는 Trust & Safety가 소유한 moderation action의 결과이며, Account가 직접 해제할 수 없다.
 
 ### 프로필
 

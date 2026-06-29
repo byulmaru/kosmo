@@ -22,8 +22,8 @@ Profile 대상 소셜 알림과 Account 대상 운영 알림의 생성, 억제, 
 - 핵심 모델: Notification Inbox를 aggregate root 후보로 둔다. Notification Item과 Notification
   Preference는 알림함 안에서 다룬다.
 - 값 객체 후보: Notification Type, Read Timestamp, Muted Thread.
-- 불변 조건: 공개 범위상 볼 수 없는 게시의 알림은 보내지 않는다. 차단/뮤트 정책은 알림
-  생성과 표시 모두에 반영되어야 한다.
+- 불변 조건: 공개 범위상 볼 수 없는 게시의 알림은 보내지 않는다. 차단/뮤트 정책은 새 Notification Item
+  생성 억제와 기존 Notification 표시 모두에 반영되어야 한다.
 - 도메인 이벤트 후보: NotificationCreated, NotificationRead, AllNotificationsRead,
   NotificationSuppressed, NotificationPreferenceChanged.
 - 정책 후보: 팔로우하지 않는 Profile의 알림 제한, thread mute 적용, 제한/정지된 Account/Profile의
@@ -36,15 +36,15 @@ Profile 대상 소셜 알림과 Account 대상 운영 알림의 생성, 억제, 
 - Post 또는 Reply가 Profile을 멘션하면 Mention Notification 생성 대상이다.
 - 멘션 대상은 Profile 단위로 판단한다.
 - 차단한 Profile, 뮤트한 Profile, 알림에 적용하도록 설정된 Word/Hashtag Mute에 걸린 게시의 멘션
-  알림은 제한한다.
+  Notification Item은 생성하지 않는다.
 - 멘션된 Profile은 Post Visibility 판정에서 접근 대상에 포함되어야 하며, 접근할 수 없는 Post의
-  멘션 알림은 보내지 않는다.
+  Mention Notification Item은 생성하지 않는다.
 
 ### 답글
 
 - Profile이 작성한 Post에 Reply가 생성되면 Reply Notification 생성 대상이다.
 - Profile이 참여한 thread의 추가 Reply는 기본 알림 대상이다.
-- Profile이 뮤트한 thread의 Reply Notification은 보내지 않는다.
+- Profile이 뮤트한 thread의 Reply Notification Item은 생성하지 않는다.
 - 삭제된 답글의 알림은 숨긴다.
 
 ### 반응
@@ -97,9 +97,9 @@ Profile 대상 소셜 알림과 Account 대상 운영 알림의 생성, 억제, 
 
 ## 뮤트와 안전
 
-- 차단한 Profile의 새 알림은 생성하지 않거나 표시하지 않는다.
-- 뮤트한 Profile의 새 알림은 기본적으로 숨기거나 억제한다.
-- Muted Thread의 새 답글, Reaction, Repost 알림을 보내지 않는다.
+- 차단한 Profile의 새 Notification Item은 생성하지 않는다.
+- 뮤트한 Profile의 새 Notification Item은 생성하지 않는다.
+- Muted Thread의 새 답글, Reaction, Repost Notification Item은 생성하지 않는다.
 - 제한 또는 정지된 Account/Profile에서 발생한 소셜 알림은 별도 알림함으로 분리하지 않고 노출하지
   않는다.
 - 신고만으로는 알림 라우팅이나 노출 상태를 바꾸지 않는다.
