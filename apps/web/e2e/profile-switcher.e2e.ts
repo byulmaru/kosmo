@@ -4,6 +4,7 @@ import type { Page } from '@playwright/test';
 const currentSessionQueryOperations = new Set([
   'ComposePageQuery',
   'ProtectedLayoutQuery',
+  'SearchPageSessionQuery',
   'TabsLayoutQuery',
 ]);
 
@@ -14,6 +15,8 @@ test('profile selection updates open shell and compose from mutation payload', a
   await page.waitForURL('**/home');
 
   await createProfileFromSwitcher(page, 'alpha');
+  await expect(page.getByRole('heading', { name: '프로필을 만들어 시작하세요' })).toBeHidden();
+  await expect(page.getByRole('heading', { name: '홈' })).toBeVisible();
   await page.goto('/compose');
   await expect(page.getByRole('heading', { name: '글쓰기' })).toBeVisible();
   await expect(composerProfileHandle(page, 'alpha')).toBeVisible();
@@ -26,34 +29,41 @@ test('profile selection updates open shell and compose from mutation payload', a
 
   graphQLOperations.length = 0;
 
-  const selectProfileResponse = page.waitForResponse(async (response) => {
-    if (!isGraphQLResponse(response.url())) {
-      return false;
-    }
-
-    const operation = readGraphQLOperation(response.request().postData());
-
-    return operation?.operationName === 'ProfileSwitcherSelectProfileMutation';
-  });
-
-  await openProfileSwitcher(page);
-  await page.getByRole('menuitemradio').filter({ hasText: '@alpha' }).click();
-
-  const responseBody = (await (await selectProfileResponse).json()) as {
-    data?: {
-      selectProfile?: {
-        session?: {
-          selectedProfile?: {
-            handle?: string | null;
-          } | null;
-        } | null;
-      } | null;
-    };
-  };
+  const responseBody = await selectProfileFromSwitcher(page, 'alpha');
 
   expect(responseBody.data?.selectProfile?.session?.selectedProfile?.handle).toBe('alpha');
   await expect(composerProfileHandle(page, 'alpha')).toBeVisible();
   await expect(sidebarProfileHandle(page, 'alpha')).toBeVisible();
+
+  await page.waitForTimeout(500);
+
+  expect(graphQLOperations).toContain('ProfileSwitcherSelectProfileMutation');
+  expect(
+    graphQLOperations.filter((operation) => currentSessionQueryOperations.has(operation)),
+  ).toEqual([]);
+});
+
+test('profile route action follows active profile bridge after switching', async ({ page }) => {
+  const graphQLOperations = collectGraphQLOperations(page);
+
+  await page.goto('/login');
+  await page.waitForURL('**/home');
+
+  await createProfileFromSwitcher(page, 'gamma');
+  await createProfileFromSwitcher(page, 'delta');
+  await expect(sidebarProfileHandle(page, 'delta')).toBeVisible();
+
+  await page.goto('/@gamma');
+  await expect(page.getByRole('main').getByRole('button', { name: '팔로우' })).toBeVisible();
+  await page.waitForLoadState('networkidle');
+
+  graphQLOperations.length = 0;
+
+  const responseBody = await selectProfileFromSwitcher(page, 'gamma');
+
+  expect(responseBody.data?.selectProfile?.session?.selectedProfile?.handle).toBe('gamma');
+  await expect(sidebarProfileHandle(page, 'gamma')).toBeVisible();
+  await expect(page.getByRole('main').getByRole('button', { name: '팔로우' })).toBeHidden();
 
   await page.waitForTimeout(500);
 
@@ -92,6 +102,36 @@ async function createProfileFromSwitcher(page: Page, handle: string) {
 
 async function openProfileSwitcher(page: Page) {
   await page.locator('button[aria-label="프로필 목록"]:visible').first().click();
+}
+
+async function selectProfileFromSwitcher(page: Page, handle: string) {
+  const selectProfileResponse = page.waitForResponse(async (response) => {
+    if (!isGraphQLResponse(response.url())) {
+      return false;
+    }
+
+    const operation = readGraphQLOperation(response.request().postData());
+
+    return operation?.operationName === 'ProfileSwitcherSelectProfileMutation';
+  });
+
+  await openProfileSwitcher(page);
+  await page
+    .getByRole('menuitemradio')
+    .filter({ hasText: `@${handle}` })
+    .click();
+
+  return (await (await selectProfileResponse).json()) as {
+    data?: {
+      selectProfile?: {
+        session?: {
+          selectedProfile?: {
+            handle?: string | null;
+          } | null;
+        } | null;
+      } | null;
+    };
+  };
 }
 
 function composerProfileHandle(page: Page, handle: string) {

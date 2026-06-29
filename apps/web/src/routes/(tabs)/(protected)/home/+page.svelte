@@ -4,15 +4,13 @@
   import PostList from '$lib/components/PostList.svelte';
   import ProfileOnboarding from '$lib/components/ProfileOnboarding.svelte';
   import { getProfileSwitcherContext } from '$lib/profileSwitcherContext';
+  import { getTabsLayoutSessionContext } from '$lib/tabsLayoutSessionContext';
 
   const query = createQuery(
     graphql(`
       query HomePageQuery {
         currentSession {
           id
-          selectedProfile {
-            id
-          }
         }
         me {
           id
@@ -29,15 +27,17 @@
   );
 
   const profileSwitcher = getProfileSwitcherContext();
+  const tabsLayoutSession = getTabsLayoutSessionContext();
 
   const session = $derived(query.data?.currentSession ?? null);
-  const selectedProfile = $derived(session?.selectedProfile ?? null);
+  const selectedProfile = $derived(tabsLayoutSession?.selectedProfile() ?? null);
+  const selectedProfileLoading = $derived(tabsLayoutSession?.loading() ?? false);
   const hasProfiles = $derived((query.data?.me?.profiles?.length ?? 0) > 0);
   // 로그인 + 선택 프로필 없음일 때만 온보딩을 노출한다.
   // 비로그인·무효 세션도 인증 검증(currentSession) 로딩 중에는 (protected) 가드가 fail-open으로
   // 보류하므로 이 화면이 잠깐 렌더될 수 있다. session 존재를 함께 봐서 그사이 온보딩이 새지 않게 하고,
   // 세션이 null로 확정되면 (protected) 가드가 루트(/)로 보낸다(PROD-148).
-  const showOnboarding = $derived(Boolean(session) && !selectedProfile);
+  const showOnboarding = $derived(Boolean(session) && !selectedProfile && !selectedProfileLoading);
   const homeTimeline = $derived(query.data?.homeTimeline ?? null);
 </script>
 
