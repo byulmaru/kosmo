@@ -1,6 +1,7 @@
 import { db, PostContents, Posts, Profiles, TableDiscriminator } from '@kosmo/core/db';
 import { PostState, PostVisibility } from '@kosmo/core/enums';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
+import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
 import { postVisibilityAccessWhere } from './access/visibility';
 
@@ -19,6 +20,16 @@ Post.implement({
     createdAt: t.expose('createdAt', { type: 'DateTime' }),
   }),
 });
+
+export const PostConnection = builder.connectionObject(
+  {
+    type: Post,
+    name: 'PostConnection',
+  },
+  {
+    name: 'PostConnectionEdge',
+  },
+);
 
 export const PostContent = createObjectRef(
   'PostContent',
