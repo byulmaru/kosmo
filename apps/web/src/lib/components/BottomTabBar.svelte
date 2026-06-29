@@ -64,7 +64,7 @@
             aria-hidden="true"
           />
         {:else}
-          <Icon class="size-8" aria-hidden="true" />
+          <Icon class={active ? 'size-8 text-white' : 'size-8'} aria-hidden="true" />
         {/if}
         <span class="sr-only">{tab.label}</span>
       </a>
