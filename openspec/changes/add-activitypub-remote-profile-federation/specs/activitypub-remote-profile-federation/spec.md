@@ -28,6 +28,7 @@
 - **AND** 기존 instance가 없으면 normalized domain의 ActivityPub instance를 생성한다
 - **AND** 시스템은 Fedify lookup API로 `acct:{handle}@{domain}`을 해석한다
 - **AND** Fedify가 ActivityPub actor 객체를 반환하면 해당 actor의 canonical actor URI를 remote identity로 처리한다
+- **AND** 시스템은 요청 handle의 normalized value와 actor `preferredUsername`의 normalized value가 일치하는지 검증한다
 - **AND** 시스템은 actor URI에 연결된 기존 `Profile`이 있으면 해당 profile을 갱신하고, 없으면 새 `Profile`을 생성한다
 
 #### Scenario: Reject actor URI without federated handle lookup
@@ -41,6 +42,12 @@
 - **WHEN** Fedify lookup이 actor를 해석하지 못하거나 actor가 아닌 객체를 반환한다
 - **THEN** 시스템은 remote actor materialization을 실패로 처리한다
 - **AND** 시스템은 해당 객체를 `Profile`로 저장하지 않는다
+
+#### Scenario: Reject lookup username mismatch
+
+- **WHEN** Fedify lookup이 `acct:{handle}@{domain}` 요청과 다른 normalized `preferredUsername`을 가진 actor를 반환한다
+- **THEN** 시스템은 remote actor materialization을 실패로 처리한다
+- **AND** 시스템은 해당 actor를 `Profile`로 저장하거나 기존 profile에 재연결하지 않는다
 
 #### Scenario: Reject materialization for unavailable instance
 
