@@ -31,6 +31,7 @@
 
   const session = $derived(query.data?.currentSession ?? null);
   const selectedProfile = $derived(tabsLayoutSession?.selectedProfile() ?? null);
+  const selectedProfileVersion = $derived(tabsLayoutSession?.selectedProfileVersion() ?? 0);
   const selectedProfileLoading = $derived(tabsLayoutSession?.loading() ?? false);
   const hasProfiles = $derived((query.data?.me?.profiles?.length ?? 0) > 0);
   // 로그인 + 선택 프로필 없음일 때만 온보딩을 노출한다.
@@ -38,7 +39,37 @@
   // 보류하므로 이 화면이 잠깐 렌더될 수 있다. session 존재를 함께 봐서 그사이 온보딩이 새지 않게 하고,
   // 세션이 null로 확정되면 (protected) 가드가 루트(/)로 보낸다(PROD-148).
   const showOnboarding = $derived(Boolean(session) && !selectedProfile && !selectedProfileLoading);
-  const homeTimeline = $derived(query.data?.homeTimeline ?? null);
+  let loadedHomeTimelineVersion = $state(0);
+  let pendingHomeTimelineVersion = $state<number | null>(null);
+  let pendingHomeTimelineSnapshot = $state<unknown>(null);
+
+  // active profile이 바뀌면 homeTimeline은 이전 profile 기준 데이터일 수 있다.
+  // invalidate로 시작된 재조회가 한 번 끝날 때까지 기존 connection을 PostList에 넘기지 않는다.
+  $effect(() => {
+    if (
+      selectedProfileVersion !== loadedHomeTimelineVersion &&
+      selectedProfileVersion !== pendingHomeTimelineVersion
+    ) {
+      pendingHomeTimelineVersion = selectedProfileVersion;
+      pendingHomeTimelineSnapshot = query.data?.homeTimeline ?? null;
+    }
+  });
+
+  $effect(() => {
+    if (
+      pendingHomeTimelineVersion !== null &&
+      (query.error || (query.data?.homeTimeline ?? null) !== pendingHomeTimelineSnapshot)
+    ) {
+      loadedHomeTimelineVersion = pendingHomeTimelineVersion;
+      pendingHomeTimelineVersion = null;
+      pendingHomeTimelineSnapshot = null;
+    }
+  });
+
+  const homeTimelineStale = $derived(pendingHomeTimelineVersion !== null);
+  const homeTimeline = $derived(
+    homeTimelineStale || query.error ? null : (query.data?.homeTimeline ?? null),
+  );
 </script>
 
 {#if query.loading && !query.data}
@@ -59,7 +90,7 @@
 
     <PostList
       {homeTimeline}
-      loading={query.loading}
+      loading={query.loading || homeTimelineStale}
       error={Boolean(query.error)}
       onRetry={query.refetch}
     />

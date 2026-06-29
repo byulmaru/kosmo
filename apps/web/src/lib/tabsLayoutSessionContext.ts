@@ -9,6 +9,7 @@ export type TabsLayoutSelectedProfile =
 
 type TabsLayoutSessionContext = {
   selectedProfile: () => TabsLayoutSelectedProfile;
+  selectedProfileVersion: () => number;
   loading: () => boolean;
   error: () => boolean;
   refetch: () => unknown;
