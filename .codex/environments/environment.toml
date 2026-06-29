@@ -50,3 +50,13 @@ fi
 mise trust
 pnpm install
 '''
+
+[[actions]]
+name = "Dev Server"
+icon = "run"
+command = "pnpm dev"
+
+[[actions]]
+name = "Storybook"
+icon = "tool"
+command = "pnpm --filter @kosmo/web storybook"
