@@ -1,18 +1,28 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { graphql } from '$mearie';
+  import type { BottomTabBar_profile$key } from '$mearie';
+  import { createFragment } from '@mearie/svelte';
 
   import Avatar from '$lib/components/Avatar.svelte';
   import { getProfileInitial } from '$lib/utils/profile';
   import { getBottomTabItems, isBottomTabActive, type BottomTabIcon } from './bottomTabBar';
 
   type Props = {
-    selectedProfile?: {
-      handle: string;
-      displayName?: string | null;
-    } | null;
+    selectedProfile?: BottomTabBar_profile$key | null;
   };
 
   let { selectedProfile = null }: Props = $props();
+
+  const selectedProfileFragment = createFragment(
+    graphql(`
+      fragment BottomTabBar_profile on Profile {
+        handle
+        displayName
+      }
+    `),
+    () => selectedProfile,
+  );
 
   const TAB_ICON_PATHS = {
     home: 'M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z',
@@ -23,12 +33,15 @@
   } satisfies Record<BottomTabIcon, string>;
 
   const tabs = $derived(
-    getBottomTabItems({ selectedProfileHandle: selectedProfile?.handle ?? null }),
+    getBottomTabItems({ selectedProfileHandle: selectedProfileFragment.data?.handle ?? null }),
   );
 
   const profileInitial = $derived(
-    selectedProfile
-      ? getProfileInitial(selectedProfile.displayName ?? undefined, selectedProfile.handle)
+    selectedProfileFragment.data
+      ? getProfileInitial(
+          selectedProfileFragment.data.displayName ?? undefined,
+          selectedProfileFragment.data.handle,
+        )
       : ' ',
   );
 </script>

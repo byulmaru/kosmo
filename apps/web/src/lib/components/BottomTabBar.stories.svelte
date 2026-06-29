@@ -1,5 +1,6 @@
 <script module lang="ts">
   import { defineMeta } from '@storybook/addon-svelte-csf';
+  import type { BottomTabBar_profile$key } from '$mearie';
 
   import BottomTabBar from './BottomTabBar.svelte';
 
@@ -25,7 +26,7 @@
   const selectedProfile = {
     handle: 'kosmo',
     displayName: '코스모',
-  };
+  } as unknown as BottomTabBar_profile$key;
 
   const { Story } = defineMeta({
     title: 'KOSMO/BottomTab',

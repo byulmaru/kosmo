@@ -51,6 +51,21 @@ kosmo 웹 애플리케이션의 공통 앱 shell 계약을 문서화한다. 이 
 - **WHEN** 현재 경로가 `/home`이다
 - **THEN** 사이드바·하단 탭 바의 홈 항목이 active로 강조된다
 
+### Requirement: Mobile bottom tab profile entry
+
+모바일 하단 탭 바의 마지막 항목은 메뉴 drawer control이 아니라 현재 세션에서 선택된 프로필의 프로필 페이지로 이동하는 "프로필" 항목이어야 한다(MUST). 선택된 프로필이 없으면 이 항목은 비활성화되어야 하며(MUST), 하단 탭 바는 사이드바 drawer를 여는 메뉴 control을 제공하지 않아야 한다(MUST NOT).
+
+#### Scenario: Navigate to selected profile from bottom tab
+
+- **WHEN** 현재 세션에 선택된 프로필이 있고 사용자가 모바일 하단 탭 바의 "프로필" 항목을 활성화한다
+- **THEN** 시스템은 선택된 프로필의 `/@{handle}` 페이지로 이동한다
+- **AND** 사용자가 자신의 프로필 페이지를 보고 있을 때만 하단 탭의 "프로필" 항목을 active로 표시한다
+
+#### Scenario: Disable bottom profile tab when no selected profile
+
+- **WHEN** 현재 세션에 선택된 프로필이 없다
+- **THEN** 시스템은 모바일 하단 탭 바의 "프로필" 항목을 비활성화하여 이동하지 않는다
+
 ### Requirement: Handle and post-id based post detail route
 
 웹 앱은 핸들과 게시글 ID를 포함한 URL로 단일 게시글 디테일에 직접 접근할 수 있도록, 프로필 라우트 하위에 게시글 ID 동적 라우트를 제공해야 한다(MUST). 이 라우트는 작성자 프로필 헤더(`ProfileHero`)를 렌더하지 않고 단독 게시글 뷰로 표시해야 하며(MUST), 상위 `(tabs)` 셸(사이드바·하단탭)은 유지해야 한다(MUST).
@@ -293,11 +308,6 @@ kosmo 웹 애플리케이션의 공통 앱 shell 계약을 문서화한다. 이 
 - **WHEN** 사용자가 모바일 drawer control을 활성화한다
 - **THEN** 시스템은 사이드바 drawer를 연다
 - **AND** drawer는 320px 폭, 오른쪽 16px radius, 왼쪽에서 열린 surface shadow를 사용한다
-
-#### Scenario: Open mobile drawer from bottom tab menu
-
-- **WHEN** 사용자가 모바일 하단 탭의 메뉴 control을 활성화한다
-- **THEN** 시스템은 `/menu`로 이동하지 않고 사이드바 drawer를 연다
 
 #### Scenario: Open mobile drawer by swipe
 

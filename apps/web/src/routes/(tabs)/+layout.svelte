@@ -18,8 +18,7 @@
           id
           selectedProfile {
             id
-            handle
-            displayName
+            ...BottomTabBar_profile
             ...RightRail_profile
           }
         }
