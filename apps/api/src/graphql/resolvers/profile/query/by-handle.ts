@@ -1,5 +1,6 @@
-import { db, first, Profiles, resolveConfiguredLocalInstance } from '@kosmo/core/db';
+import { db, first, Profiles } from '@kosmo/core/db';
 import { ProfileState } from '@kosmo/core/enums';
+import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';

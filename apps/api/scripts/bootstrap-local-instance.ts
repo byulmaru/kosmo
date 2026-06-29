@@ -1,4 +1,5 @@
-import { bootstrapConfiguredLocalInstance, db, pg } from '@kosmo/core/db';
+import { db, pg } from '@kosmo/core/db';
+import { bootstrapConfiguredLocalInstance } from '@kosmo/core/db/seed';
 
 try {
   const instance = await bootstrapConfiguredLocalInstance(db);

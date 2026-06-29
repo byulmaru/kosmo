@@ -258,7 +258,7 @@ export const Profiles = pgTable(
     followPolicy: Enum.profileFollowPolicy('follow_policy').notNull(),
     createdAt: createdAt(),
   },
-  (table) => [unique().on(table.instanceId, table.normalizedHandle), index().on(table.instanceId)],
+  (table) => [unique().on(table.instanceId, table.normalizedHandle)],
 );
 
 export const ProfileFollows = pgTable(
