@@ -9,7 +9,7 @@ kosmo는 local actor discovery 경계를 만들고 있지만, 원격 ActivityPub
 - remote actor identity는 ActivityPub actor URI로 구분하고, kosmo 내부 GraphQL/DB identity는 기존 `Profile.id`를 사용한다.
 - actor URI 직접 입력만으로 remote profile을 저장하지 않고, federated handle lookup을 통과한 actor만 저장한다.
 - remote actor는 `preferredUsername`을 `Profile.handle`, actor `summary`를 `Profile.bio`, actor `published`를 `Profile.createdAt`에 반영한다.
-- remote actor refresh는 저장된 `lastFetchedAt`이 7일을 넘으면 federation 내부 materialization 경로에서 수행하고, 실패한 resolve에 대한 negative cache는 두지 않는다.
+- remote actor refresh는 저장된 `lastFetchedAt`이 7일을 넘으면 기존 active profile 참조를 막지 않고 federation 내부 materialization 경로에서 비동기적으로 예약/수행하며, 실패한 resolve에 대한 negative cache는 두지 않는다.
 - remote `Profile`은 GraphQL Node와 handle 조회에서 local profile과 같은 `Profile` 타입으로 노출하되, `Profile.origin` enum으로 local/remote 성격을 구분한다.
 - remote follow, inbox activity 처리, outbox/Note ingestion, `Profile.posts` 확장은 별도 change로 분리한다.
 

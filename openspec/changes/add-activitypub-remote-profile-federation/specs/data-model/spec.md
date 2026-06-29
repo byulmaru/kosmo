@@ -19,8 +19,9 @@
 
 #### Scenario: Mark stale remote actor
 
-- **WHEN** remote actor의 마지막 fetch 시각이 7일을 초과했다
-- **THEN** 시스템은 해당 actor를 federation 내부 materialization 경로에서 refresh 대상 stale actor로 판단할 수 있어야 한다
+- **WHEN** remote actor의 마지막 fetch 시각이 없거나 7일을 초과했다
+- **THEN** 시스템은 해당 actor를 federation 내부 materialization 경로에서 비동기 refresh 대상 stale actor로 판단할 수 있어야 한다
+- **AND** stale 판단은 저장된 active profile 참조를 차단하지 않는다
 
 ## MODIFIED Requirements
 

@@ -20,7 +20,7 @@
 - remote follow/unfollow, inbound Follow/Accept/Reject/Undo 처리.
 - remote outbox/Note ingestion, remote `Profile.posts` 확장, home timeline에 remote posts 포함.
 - actor URI 직접 입력만으로 remote profile 저장.
-- background worker/queue 기반 refresh 최적화.
+- dedicated background worker/queue 기반 refresh 최적화.
 - remote media file proxy, thumbnail 처리, image cache materialization.
 - `viewerCanFollow` 같은 capability field 도입.
 
@@ -35,14 +35,14 @@
 - **actor URI가 같으면 같은 profile이다.** `activitypub_actor.uri`는 unique이며, 기존 row가 있으면 해당 `Profile`을 갱신한다. 같은 `(instance_id, normalized_handle)`에 다른 actor URI가 이미 있으면 identity 충돌로 처리해 저장하지 않는다.
 - **remote actor 필드는 기존 profile 필드에 투영한다.** actor `preferredUsername`은 `Profile.handle`, normalized username은 `Profile.normalizedHandle`, actor `name`은 `Profile.displayName`, actor `summary`는 `Profile.bio`, actor `published`는 `Profile.createdAt`에 저장한다. `relativeHandle`은 DB에 저장하지 않고 configured local instance 기준으로 계산한다.
 - **remote follow policy는 actor projection에서만 저장한다.** actor가 follower 승인 필요 속성을 제공하면 `Profile.followPolicy = APPROVAL_REQUIRED`, 그렇지 않으면 `OPEN`으로 저장한다. 이 change에서는 저장만 하고 remote follow 동작은 열지 않는다.
-- **stale actor는 7일 기준으로 refresh한다.** `ActivityPubActor.lastFetchedAt`이 없거나 7일을 넘으면 federation 내부 materialization 경로에서 refresh를 시도한다. `profileByHandle`과 Node load는 DB-only로 유지한다. refresh 실패 시 기존 active profile은 stale 상태로 반환할 수 있다. 실패한 resolve에 대한 negative cache는 두지 않는다.
+- **stale actor는 7일 기준으로 비동기 refresh한다.** `ActivityPubActor.lastFetchedAt`이 없거나 7일을 넘더라도 저장된 active profile 참조는 refresh 완료를 기다리지 않는다. federation 내부 materialization 경로는 기존 active profile을 반환하고 refresh를 비동기적으로 예약/수행한다. `profileByHandle`과 Node load는 DB-only로 유지한다. refresh 실패 시 기존 active profile은 stale 상태로 계속 반환할 수 있다. 실패한 resolve에 대한 negative cache는 두지 않는다.
 - **suspended instance는 GraphQL profile 노출도 막는다.** `InstanceState.SUSPENDED`는 운영 정책상 federation 차단이므로 해당 instance의 profile Node 조회, DB handle 조회 결과 노출, actor materialization을 막는다. `UNRESPONSIVE`는 outbound federation을 억제할 수 있지만 이미 저장된 stale profile 조회는 허용한다.
 
 ## Risks / Trade-offs
 
 - **미저장 remote profile을 사용자가 직접 검색할 entry point가 없음** → 이번 변경에서는 `profileByHandle`을 저장된 profile 조회로 제한하고, 미저장 remote actor discovery UX/API는 후속 제품 결정으로 남긴다.
 - **identity 충돌 처리 실패 시 profile 병합 오류 가능** → actor URI unique와 `(instance_id, normalized_handle)` unique를 적용하고, Fedify lookup 결과의 canonical actor URI를 기준으로 저장한다.
-- **stale refresh가 사용자 요청 latency를 늘릴 수 있음** → 일반 GraphQL 조회에서는 refresh하지 않고 federation 내부 materialization 경로에서만 7일 TTL을 적용한다.
+- **stale refresh가 참조 경로를 불필요하게 지연시킬 수 있음** → 저장된 active profile은 먼저 반환하고 refresh는 federation 내부 materialization 경로에서 비동기로 예약/수행한다. 일반 GraphQL 조회에서는 refresh하지 않는다.
 - **후속 follow/post 기능이 이 foundation에 의존함** → 이번 change는 remote profile 저장/조회 계약을 작게 완료하고, follow/post changes에서 필요한 추가 metadata를 별도로 추가한다.
 
 ## Migration Plan
@@ -50,7 +50,7 @@
 1. 기존 `add-activitypub-actor-discovery`의 `instance`, `profile.instance_id`, `activitypub_actor`, local actor key dispatch 저장 경계를 전제로 한다.
 2. `Profile.origin` enum을 GraphQL에 추가하고 instance kind에서 계산하거나 profile 저장 값으로 제공하는 방식을 구현한다.
 3. `activitypub_actor.last_fetched_at`과 remote actor source fields를 추가한다.
-4. 기존 저장 remote profile이 있다면 actor `last_fetched_at`은 null로 두어 첫 federation 내부 materialization에서 refresh되게 한다.
+4. 기존 저장 remote profile이 있다면 actor `last_fetched_at`은 null로 두어 첫 federation 내부 materialization에서 비동기 refresh 대상으로 판단되게 한다.
 
 Rollback은 새 GraphQL 필드와 remote actor materialization 경로를 닫은 뒤, 새 metadata 컬럼을 되돌린다. 이미 remote actor/profile row가 생긴 뒤에는 local user data와 섞이지 않도록 `origin = ACTIVITYPUB` 또는 `instance.kind = ACTIVITYPUB` 기준으로 정리해야 한다.
 

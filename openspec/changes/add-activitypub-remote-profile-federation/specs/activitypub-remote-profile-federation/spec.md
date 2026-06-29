@@ -88,19 +88,20 @@
 
 ### Requirement: Remote actor refresh
 
-시스템은 저장된 remote actor가 stale 상태이면 federation 내부 materialization 경로에서 다시 lookup해 profile projection을 갱신해야 한다(MUST).
+시스템은 저장된 remote actor가 stale 상태이면 기존 active profile 참조를 막지 않고 federation 내부 materialization 경로에서 비동기 refresh를 예약/수행해야 한다(MUST).
 
-#### Scenario: Refresh stale actor
+#### Scenario: Return stale actor and schedule refresh
 
 - **WHEN** 저장된 remote actor의 `lastFetchedAt`이 없거나 7일을 초과했다
 - **AND** federation 내부 service가 해당 remote actor를 사용해야 한다
-- **THEN** 시스템은 Fedify lookup으로 remote actor refresh를 시도한다
+- **THEN** 시스템은 저장된 active profile을 refresh 완료 전에도 반환한다
+- **AND** 시스템은 Fedify lookup 기반 remote actor refresh를 비동기적으로 예약/수행한다
 - **AND** refresh가 성공하면 `Profile` projection과 actor metadata를 갱신한다
 
-#### Scenario: Return stale actor on refresh failure
+#### Scenario: Keep stale actor on refresh failure
 
-- **WHEN** 저장된 active remote profile이 있고 actor refresh가 실패한다
-- **THEN** 시스템은 기존 stale profile을 반환할 수 있다
+- **WHEN** 저장된 active remote profile이 있고 비동기 actor refresh가 실패한다
+- **THEN** 시스템은 기존 stale profile을 계속 반환할 수 있다
 - **AND** 시스템은 실패한 resolve에 대한 negative cache row를 만들지 않는다
 
 #### Scenario: Do not materialize suspended instance
