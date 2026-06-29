@@ -124,7 +124,7 @@ export const relations = defineRelations(tables, (r) => ({
       from: r.Profiles.id,
       to: r.AccountProfiles.profileId,
     }),
-    activityPubActors: r.many.ActivityPubActors({
+    activityPubActor: r.one.ActivityPubActors({
       from: r.Profiles.id,
       to: r.ActivityPubActors.profileId,
     }),

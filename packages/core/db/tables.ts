@@ -64,7 +64,7 @@ export const ActivityPubActors = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (table) => [unique().on(table.profileId, table.type), index().on(table.profileId)],
+  (table) => [unique().on(table.profileId)],
 );
 
 export const ActivityPubActorKeys = pgTable(
@@ -81,10 +81,7 @@ export const ActivityPubActorKeys = pgTable(
     privateKeyJwk: jsonb('private_key_jwk').$type<JsonWebKeyRecord>(),
     createdAt: createdAt(),
   },
-  (table) => [
-    unique().on(table.activityPubActorId, table.keyType),
-    index().on(table.activityPubActorId),
-  ],
+  (table) => [unique().on(table.activityPubActorId, table.keyType)],
 );
 
 export const Applications = pgTable(
