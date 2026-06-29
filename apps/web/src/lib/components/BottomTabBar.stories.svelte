@@ -22,6 +22,11 @@
     },
   });
 
+  const selectedProfile = {
+    handle: 'kosmo',
+    displayName: '코스모',
+  };
+
   const { Story } = defineMeta({
     title: 'KOSMO/BottomTab',
     component: BottomTabBar,
@@ -31,8 +36,17 @@
   });
 </script>
 
-<Story name="Home active" parameters={storyParameters('/')} />
-<Story name="Search active" parameters={storyParameters('/search')} />
-<Story name="Compose active" parameters={storyParameters('/compose')} />
-<Story name="Notifications active" parameters={storyParameters('/notifications')} />
-<Story name="Menu active" parameters={storyParameters('/menu')} />
+<Story name="Home active" args={{ selectedProfile }} parameters={storyParameters('/home')} />
+<Story name="Search active" args={{ selectedProfile }} parameters={storyParameters('/search')} />
+<Story name="Compose active" args={{ selectedProfile }} parameters={storyParameters('/compose')} />
+<Story
+  name="Notifications active"
+  args={{ selectedProfile }}
+  parameters={storyParameters('/notifications')}
+/>
+<Story name="Profile active" args={{ selectedProfile }} parameters={storyParameters('/@kosmo')} />
+<Story
+  name="No selected profile"
+  args={{ selectedProfile: null }}
+  parameters={storyParameters('/home')}
+/>

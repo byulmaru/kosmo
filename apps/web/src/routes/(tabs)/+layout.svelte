@@ -18,6 +18,8 @@
           id
           selectedProfile {
             id
+            handle
+            displayName
             ...RightRail_profile
           }
         }
@@ -132,7 +134,7 @@
     </main>
 
     <div class="contents" inert={shellInert}>
-      <BottomTabBar onMenuClick={openDrawer} />
+      <BottomTabBar {selectedProfile} />
     </div>
   </div>
 

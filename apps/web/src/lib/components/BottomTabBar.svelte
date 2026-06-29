@@ -1,81 +1,75 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { BellIcon, HomeIcon, SearchIcon, SquarePenIcon, UserIcon } from '@lucide/svelte';
+  import type { IconProps } from '@lucide/svelte';
+  import type { Component } from 'svelte';
+
+  import Avatar from '$lib/components/Avatar.svelte';
+  import { getProfileInitial } from '$lib/utils/profile';
+  import { getBottomTabItems, isBottomTabActive, type BottomTabIcon } from './bottomTabBar';
 
   type Props = {
-    onMenuClick?: () => void;
+    selectedProfile?: {
+      handle: string;
+      displayName?: string | null;
+    } | null;
   };
 
-  let { onMenuClick = () => {} }: Props = $props();
+  let { selectedProfile = null }: Props = $props();
 
-  const tabs = [
-    { href: '/home', label: '홈', path: 'M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z' },
-    {
-      href: '/search',
-      label: '검색',
-      path: 'm21 21-4.3-4.3M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15z',
-    },
-    {
-      href: '/compose',
-      label: '글쓰기',
-      path: 'M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z',
-    },
-    {
-      href: '/notifications',
-      label: '알림',
-      path: 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4',
-    },
-    { href: '/menu', label: '메뉴', path: 'M4 6h16M4 12h16M4 18h16' },
-  ];
+  const TAB_ICONS = {
+    home: HomeIcon,
+    search: SearchIcon,
+    compose: SquarePenIcon,
+    notifications: BellIcon,
+    profile: UserIcon,
+  } satisfies Record<BottomTabIcon, Component<IconProps>>;
 
-  const isActive = (href: string) => page.url.pathname === href;
+  const tabs = $derived(
+    getBottomTabItems({ selectedProfileHandle: selectedProfile?.handle ?? null }),
+  );
 </script>
 
 <nav
-  class="bg-card border-border fixed inset-x-0 bottom-0 grid grid-cols-5 border-t pb-[env(safe-area-inset-bottom)] md:hidden"
+  class="bg-card border-border fixed inset-x-0 bottom-0 grid min-h-[77px] grid-cols-5 border-t pb-[env(safe-area-inset-bottom)] md:hidden"
   aria-label="주요 메뉴"
 >
   {#each tabs as tab}
-    {@const active = isActive(tab.href)}
-    {#if tab.label === '메뉴'}
-      <button
-        class={`grid min-h-14 place-items-center gap-0.5 py-2 text-sm font-semibold ${active ? 'bg-primary text-text-primary' : 'text-text-secondary'}`}
-        type="button"
-        onclick={onMenuClick}
-        aria-label="사이드바 메뉴 열기"
+    {@const active = isBottomTabActive(tab, page.url.pathname)}
+    {@const Icon = TAB_ICONS[tab.icon]}
+    {#if tab.disabled}
+      <span
+        class="relative grid min-h-18 place-items-center px-2 py-2 text-text-secondary opacity-45"
+        aria-disabled="true"
+        aria-label={tab.label}
       >
-        <svg
-          class="size-6"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <path d={tab.path} />
-        </svg>
-        <span>{tab.label}</span>
-      </button>
+        <span class="grid size-10 place-items-center rounded-full bg-surface">
+          <UserIcon class="size-5" aria-hidden="true" />
+        </span>
+        <span class="sr-only">{tab.label}</span>
+      </span>
     {:else}
       <a
-        class={`grid min-h-14 place-items-center gap-0.5 py-2 text-sm font-semibold ${active ? 'bg-primary text-text-primary' : 'text-text-secondary'}`}
+        class={`relative grid min-h-18 place-items-center px-2 py-2 transition ${active ? 'text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
         href={tab.href}
+        aria-label={tab.label}
         aria-current={active ? 'page' : undefined}
       >
-        <svg
-          class="size-6"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <path d={tab.path} />
-        </svg>
-        <span>{tab.label}</span>
+        {#if active}
+          <span class="bg-text-primary absolute top-0 h-px w-full" aria-hidden="true"></span>
+        {/if}
+        {#if tab.icon === 'profile'}
+          <Avatar
+            size="md"
+            initials={selectedProfile
+              ? getProfileInitial(selectedProfile.displayName ?? undefined, selectedProfile.handle)
+              : ''}
+            aria-hidden="true"
+          />
+        {:else}
+          <Icon class="size-8" aria-hidden="true" />
+        {/if}
+        <span class="sr-only">{tab.label}</span>
       </a>
     {/if}
   {/each}
