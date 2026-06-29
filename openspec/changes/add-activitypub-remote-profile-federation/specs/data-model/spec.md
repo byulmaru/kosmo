@@ -14,7 +14,7 @@
 #### Scenario: Store remote actor source metadata
 
 - **WHEN** remote actor가 inbox, outbox, followers, following, shared inbox URI를 제공한다
-- **THEN** 시스템은 후속 follow/post changes가 사용할 수 있도록 endpoint URI를 actor metadata 또는 관련 저장 경계에 저장할 수 있다
+- **THEN** 시스템은 후속 follow/post changes가 사용할 수 있도록 제공된 endpoint URI를 actor metadata 또는 관련 저장 경계에 저장한다
 - **AND** endpoint URI 저장은 follow delivery, collection fetch, post ingestion을 이번 change에서 제공한다는 의미가 아니다
 
 #### Scenario: Mark stale remote actor
