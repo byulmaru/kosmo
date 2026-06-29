@@ -1,8 +1,5 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { BellIcon, HomeIcon, SearchIcon, SquarePenIcon, UserIcon } from '@lucide/svelte';
-  import type { IconProps } from '@lucide/svelte';
-  import type { Component } from 'svelte';
 
   import Avatar from '$lib/components/Avatar.svelte';
   import { getProfileInitial } from '$lib/utils/profile';
@@ -17,56 +14,78 @@
 
   let { selectedProfile = null }: Props = $props();
 
-  const TAB_ICONS = {
-    home: HomeIcon,
-    search: SearchIcon,
-    compose: SquarePenIcon,
-    notifications: BellIcon,
-    profile: UserIcon,
-  } satisfies Record<BottomTabIcon, Component<IconProps>>;
+  const TAB_ICON_PATHS = {
+    home: 'M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z',
+    search: 'm21 21-4.3-4.3M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15z',
+    compose: 'M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z',
+    notifications: 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4',
+    profile: '',
+  } satisfies Record<BottomTabIcon, string>;
 
   const tabs = $derived(
     getBottomTabItems({ selectedProfileHandle: selectedProfile?.handle ?? null }),
   );
+
+  const profileInitial = $derived(
+    selectedProfile
+      ? getProfileInitial(selectedProfile.displayName ?? undefined, selectedProfile.handle)
+      : ' ',
+  );
 </script>
 
 <nav
-  class="bg-card border-border fixed inset-x-0 bottom-0 grid min-h-[77px] grid-cols-5 border-t pb-[env(safe-area-inset-bottom)] md:hidden"
+  class="bg-card border-border fixed inset-x-0 bottom-0 grid grid-cols-5 border-t pb-[env(safe-area-inset-bottom)] md:hidden"
   aria-label="주요 메뉴"
 >
   {#each tabs as tab}
     {@const active = isBottomTabActive(tab, page.url.pathname)}
-    {@const Icon = TAB_ICONS[tab.icon]}
+    {@const iconPath = TAB_ICON_PATHS[tab.icon]}
     {#if tab.disabled}
       <span
-        class="relative grid min-h-18 place-items-center px-2 py-2 text-text-secondary opacity-45"
+        class="grid min-h-14 place-items-center gap-0.5 py-2 text-sm font-semibold text-text-secondary opacity-45"
         aria-disabled="true"
-        aria-label={tab.label}
       >
-        <span class="grid size-10 place-items-center rounded-full bg-surface">
-          <UserIcon class="size-5" aria-hidden="true" />
-        </span>
-        <span class="sr-only">{tab.label}</span>
+        {#if tab.icon === 'profile'}
+          <Avatar size="xs" initials={profileInitial} aria-hidden="true" />
+        {:else}
+          <svg
+            class="size-6"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d={iconPath} />
+          </svg>
+        {/if}
+        <span>{tab.label}</span>
       </span>
     {:else}
       <a
-        class={`relative grid min-h-18 place-items-center px-2 py-2 transition ${active ? 'bg-primary text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
+        class={`grid min-h-14 place-items-center gap-0.5 py-2 text-sm font-semibold transition ${active ? 'bg-primary text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
         href={tab.href}
-        aria-label={tab.label}
         aria-current={active ? 'page' : undefined}
       >
         {#if tab.icon === 'profile'}
-          <Avatar
-            size="md"
-            initials={selectedProfile
-              ? getProfileInitial(selectedProfile.displayName ?? undefined, selectedProfile.handle)
-              : ''}
-            aria-hidden="true"
-          />
+          <Avatar size="xs" initials={profileInitial} aria-hidden="true" />
         {:else}
-          <Icon class={active ? 'size-8 text-white' : 'size-8'} aria-hidden="true" />
+          <svg
+            class="size-6"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d={iconPath} />
+          </svg>
         {/if}
-        <span class="sr-only">{tab.label}</span>
+        <span>{tab.label}</span>
       </a>
     {/if}
   {/each}
