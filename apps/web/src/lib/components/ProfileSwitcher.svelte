@@ -40,6 +40,7 @@
         selectedProfile {
           id
           handle
+          relativeHandle
           displayName
         }
       }
@@ -48,6 +49,7 @@
         profiles {
           id
           handle
+          relativeHandle
           displayName
         }
       }
@@ -60,6 +62,7 @@
         profile {
           id
           handle
+          relativeHandle
           displayName
         }
         session {
@@ -67,6 +70,7 @@
           selectedProfile {
             id
             handle
+            relativeHandle
             displayName
             followingCount
             followersCount
@@ -84,6 +88,7 @@
         profile {
           id
           handle
+          relativeHandle
           displayName
         }
       }
@@ -236,7 +241,7 @@
         />
         <span class="flex min-w-0 flex-1 flex-col gap-px overflow-hidden">
           <span class="truncate text-sm font-bold text-[#111111]">{profile.displayName}</span>
-          <span class="truncate text-xs text-[#777777]">@{profile.handle}</span>
+          <span class="truncate text-xs text-[#777777]">{profile.relativeHandle}</span>
         </span>
         {#if selected}
           <span class="text-[15px] font-bold text-[#111111]" aria-hidden="true">✓</span>

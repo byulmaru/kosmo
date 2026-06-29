@@ -28,6 +28,7 @@
       id: 'story-author-profile',
       displayName: '코스모 작가',
       handle: 'kosmo',
+      relativeHandle: '@kosmo',
     },
   });
 
@@ -36,9 +37,9 @@
       __typename: 'Profile',
       id: 'story-profile',
       posts: {
-        __typename: 'PostsConnection',
+        __typename: 'PostConnection',
         edges: posts.map((node, index) => ({
-          __typename: 'PostsConnectionEdge',
+          __typename: 'PostConnectionEdge',
           cursor: `story-cursor-${index}`,
           node,
         })),
@@ -47,9 +48,9 @@
 
   const homeTimeline = (...posts: ReturnType<typeof post>[]): PostList_homeTimeline$key =>
     ({
-      __typename: 'HomeTimelineConnection',
+      __typename: 'PostConnection',
       edges: posts.map((node, index) => ({
-        __typename: 'HomeTimelineConnectionEdge',
+        __typename: 'PostConnectionEdge',
         cursor: `story-home-cursor-${index}`,
         node,
       })),

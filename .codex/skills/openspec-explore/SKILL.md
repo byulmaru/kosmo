@@ -11,7 +11,7 @@ metadata:
 
 Enter explore mode. Think deeply. Visualize freely. Follow the conversation wherever it goes.
 
-**IMPORTANT: Explore mode is for thinking, not implementing.** You may read files, search code, and investigate the codebase, but you must NEVER write code or implement features. If the user asks you to implement something, remind them to exit explore mode first and create a change proposal. You MAY create OpenSpec artifacts (proposals, designs, specs) if the user asks—that's capturing thinking, not implementing.
+**IMPORTANT: Explore mode is for thinking, not implementing.** You may read files, search code, and investigate the codebase, but you must NEVER write code or implement features. If the user asks you to implement something, remind them to exit explore mode first and create a change proposal. You MAY create OpenSpec artifacts (proposals, specs, designs, decisions, tasks) if the user asks—that's capturing thinking, not implementing.
 
 **This is a stance, not a workflow.** There are no fixed steps, no required sequence, no mandatory outputs. You're a thinking partner helping the user explore.
 
@@ -112,6 +112,7 @@ If the user mentions a change or you detect one is relevant:
 1. **Read existing artifacts for context**
    - `openspec/changes/<name>/proposal.md`
    - `openspec/changes/<name>/design.md`
+   - `openspec/changes/<name>/decisions.md` (if present)
    - `openspec/changes/<name>/tasks.md`
    - etc.
 
@@ -121,17 +122,18 @@ If the user mentions a change or you detect one is relevant:
 
 3. **Offer to capture when decisions are made**
 
-   | Insight Type               | Where to Capture             |
-   | -------------------------- | ---------------------------- |
-   | New requirement discovered | `specs/<capability>/spec.md` |
-   | Requirement changed        | `specs/<capability>/spec.md` |
-   | Design decision made       | `design.md`                  |
-   | Scope changed              | `proposal.md`                |
-   | New work identified        | `tasks.md`                   |
-   | Assumption invalidated     | Relevant artifact            |
+   | Insight Type               | Where to Capture                                       |
+   | -------------------------- | ------------------------------------------------------ |
+   | New requirement discovered | `specs/<capability>/spec.md`                           |
+   | Requirement changed        | `specs/<capability>/spec.md`                           |
+   | Design approach changed    | `design.md`                                            |
+   | Design decision made       | `decisions.md` if present; otherwise `design.md`       |
+   | Scope changed              | `proposal.md`                                          |
+   | New work identified        | `tasks.md`                                             |
+   | Assumption invalidated     | `decisions.md` if present; otherwise relevant artifact |
 
    Example offers:
-   - "That's a design decision. Capture it in design.md?"
+   - "That's a design decision. Capture it in decisions.md if this change uses that artifact?"
    - "This is a new requirement. Add it to specs?"
    - "This changes scope. Update the proposal?"
 
@@ -263,7 +265,7 @@ You: That changes everything.
 There's no required ending. Discovery might:
 
 - **Flow into a proposal**: "Ready to start? I can create a change proposal."
-- **Result in artifact updates**: "Updated design.md with these decisions"
+- **Result in artifact updates**: "Updated decisions.md with these decisions"
 - **Just provide clarity**: User has what they need, moves on
 - **Continue later**: "We can pick this up anytime"
 

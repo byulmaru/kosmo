@@ -16,6 +16,7 @@
       id: string;
       displayName: string;
       handle: string;
+      relativeHandle: string;
       bio: string | null;
       viewerFollow: { id: string; state: FollowState } | null;
     }> = {},
@@ -24,7 +25,8 @@
       __typename: 'Profile',
       id: 'target-profile',
       displayName: '사용자 이름',
-      handle: 'handle@kos.mo',
+      handle: 'handle',
+      relativeHandle: '@handle@kos.mo',
       bio: null,
       viewerFollow: null,
       ...overrides,
@@ -96,7 +98,7 @@
 
 <Story name="Linked result" asChild parameters={{ controls: { disable: true } }}>
   <ProfileListItem
-    profile={profile({ id: 'linked-profile', handle: 'user@kos.moe' })}
+    profile={profile({ id: 'linked-profile', handle: 'user', relativeHandle: '@user@kos.moe' })}
     linked
     {viewerProfileId}
   />
@@ -110,13 +112,19 @@
       profile={profile({
         id: 'long-profile',
         displayName: '아주 긴 표시 이름이 들어가서 한 줄을 넘기면 잘려야 한다',
-        handle: 'super-long-handle-that-overflows@really-long-instance.example.com',
+        handle: 'super-long-handle-that-overflows',
+        relativeHandle: '@super-long-handle-that-overflows@really-long-instance.example.com',
         bio: '긴 한 줄 소개가 들어가서 컨테이너 폭을 넘기면 말줄임으로 잘려야 한다',
       })}
     />
     <ProfileListItem
       {viewerProfileId}
-      profile={profile({ id: 'minimal-profile', displayName: '최소 정보', handle: 'user@kos.moe' })}
+      profile={profile({
+        id: 'minimal-profile',
+        displayName: '최소 정보',
+        handle: 'user',
+        relativeHandle: '@user@kos.moe',
+      })}
     />
   </div>
 </Story>

@@ -1,6 +1,7 @@
 import { AccountProfiles, db, firstOrThrow, isUniqueViolation, Profiles } from '@kosmo/core/db';
 import { AccountProfileRole, ProfileFollowPolicy } from '@kosmo/core/enums';
 import { ConflictError } from '@kosmo/core/error';
+import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { profileHandleSchema } from '@kosmo/core/validation';
 import { builder } from '@/graphql/builder';
@@ -17,11 +18,13 @@ builder.mutationField('createProfile', (t) =>
       handle: t.input.string({ validate: profileHandleSchema }),
     },
     resolve: async (_, { input }, ctx) => {
+      const localInstance = await resolveConfiguredLocalInstance();
       const profile = await db.transaction(async (tx) => {
         const profile = await tx
           .insert(Profiles)
           .values({
             handle: input.handle,
+            instanceId: localInstance.id,
             normalizedHandle: normalizeHandle(input.handle),
             displayName: input.handle,
             followPolicy: ProfileFollowPolicy.OPEN,

@@ -57,16 +57,6 @@ type FollowProfilePayload {
   profileFollow: ProfileFollow!
 }
 
-type HomeTimelineConnection {
-  edges: [HomeTimelineConnectionEdge!]!
-  pageInfo: PageInfo!
-}
-
-type HomeTimelineConnectionEdge {
-  cursor: String!
-  node: Post!
-}
-
 type Mutation {
   createPost(input: CreatePostInput!): CreatePostPayload!
   createProfile(input: CreateProfileInput!): CreateProfilePayload!
@@ -97,6 +87,16 @@ type Post implements Node {
   visibility: PostVisibility!
 }
 
+type PostConnection {
+  edges: [PostConnectionEdge!]!
+  pageInfo: PageInfo!
+}
+
+type PostConnectionEdge {
+  cursor: String!
+  node: Post!
+}
+
 type PostContent implements Node {
   bodyJson: TipTapDocument!
   bodyText: String!
@@ -117,16 +117,6 @@ enum PostVisibility {
   UNLISTED
 }
 
-type PostsConnection {
-  edges: [PostsConnectionEdge!]!
-  pageInfo: PageInfo!
-}
-
-type PostsConnectionEdge {
-  cursor: String!
-  node: Post!
-}
-
 type Profile implements Node {
   bio: String
   createdAt: DateTime!
@@ -138,7 +128,8 @@ type Profile implements Node {
   followingCount: Int!
   handle: String!
   id: ID!
-  posts(after: String, before: String, first: Int, last: Int): PostsConnection!
+  posts(after: String, before: String, first: Int, last: Int): PostConnection!
+  relativeHandle: String!
   viewerFollow: ProfileFollow
 }
 
@@ -189,7 +180,7 @@ enum ProfileState {
 
 type Query {
   currentSession: Session
-  homeTimeline(after: String, before: String, first: Int, last: Int): HomeTimelineConnection
+  homeTimeline(after: String, before: String, first: Int, last: Int): PostConnection
   me: Account
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!

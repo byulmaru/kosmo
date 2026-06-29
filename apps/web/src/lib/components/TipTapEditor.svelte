@@ -100,10 +100,6 @@
   }
 
   :global(.post-composer-editor p) {
-    margin: 0 0 0.75rem;
-  }
-
-  :global(.post-composer-editor p:last-child) {
-    margin-bottom: 0;
+    margin: 0;
   }
 </style>

@@ -67,7 +67,7 @@
 
 - backend error `message`를 사용자 UI에 그대로 노출할지, error type/code로 분기할지, generic 한국어 fallback을 쓸지는 아직 확정된 정책이 아니다.
 - 리뷰에서는 `message` 노출 자체를 곧바로 위반으로 단정하지 말고, 해당 흐름의 사용자 문구 정책이 정해져 있는지 먼저 확인한다. 정책이 정해진 뒤에는 컴포넌트마다 ad hoc 처리하지 말고 공통 error handling boundary나 helper로 모은다.
-- handle에 `@`를 붙일지 같은 표시 정책은 컴포넌트마다 ad hoc 처리하지 않는다. API boundary나 공통 formatting helper에서 정한다.
+- 프로필 handle 표시 정책은 컴포넌트마다 ad hoc 처리하지 않는다. GraphQL에서는 표시용 문자열로 `Profile.relativeHandle`을 사용하고, `Profile.handle`은 URL lookup, local handle validation, route 생성용 bare handle로 둔다.
 - Lucide 아이콘을 import할 때는 반드시 `GlobeIcon`, `ExampleIcon`처럼 `Icon` suffix가 붙은 이름만 사용한다.
 - Figma/OpenSpec의 수치와 Tailwind class 수치가 다르면 코드 또는 spec을 같은 PR에서 정렬한다.
 - 긴 표시 이름, 긴 handle, 비어 있는 값 등 layout edge case를 story에 포함한다.

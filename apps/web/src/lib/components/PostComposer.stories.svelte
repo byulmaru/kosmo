@@ -11,6 +11,7 @@
     id: 'profile-1',
     displayName: '코스모 작가',
     handle: 'kosmo',
+    relativeHandle: '@kosmo',
   } as unknown as PostComposer_profile$key;
 
   const { Story } = defineMeta({

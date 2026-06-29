@@ -15,6 +15,7 @@
     createdAt: string = minutesAgo(5),
     displayName = '코스모 작가',
     handle = 'kosmo',
+    relativeHandle = `@${handle}`,
   ): PostListItem_post$key =>
     ({
       __typename: 'Post',
@@ -34,6 +35,7 @@
         id: 'story-profile',
         displayName,
         handle,
+        relativeHandle,
       },
     }) as unknown as PostListItem_post$key;
 
@@ -84,6 +86,7 @@
         minutesAgo(60),
         '정말 아주 긴 표시 이름을 가진 게시글 작성자 프로필',
         'very-long-author-handle-that-should-not-break-layout',
+        '@user@remote.example',
       )}
     />
     <PostListItem post={post('넓은 컨테이너에서도 레이아웃이 유지됩니다.')} class="w-[600px]" />

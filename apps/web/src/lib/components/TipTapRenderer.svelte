@@ -71,10 +71,6 @@
   }
 
   :global(.tiptap-renderer p) {
-    margin: 0 0 0.75rem;
-  }
-
-  :global(.tiptap-renderer p:last-child) {
-    margin-bottom: 0;
+    margin: 0;
   }
 </style>

@@ -32,6 +32,7 @@
         selectedProfile {
           id
           handle
+          relativeHandle
           displayName
           followingCount
           followersCount
@@ -283,7 +284,7 @@
         />
         {#if sidebarActiveProfile}
           <p class="max-w-full truncate text-sm leading-[19.6px] text-[#777777]">
-            @{sidebarActiveProfile.handle}
+            {sidebarActiveProfile.relativeHandle}
           </p>
           <div class="mt-2 flex items-center gap-3 text-sm leading-[22px] text-black">
             <a

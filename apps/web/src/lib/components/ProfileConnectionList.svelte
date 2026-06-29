@@ -6,6 +6,7 @@
   import type {
     ProfileConnectionList_followersProfile$key,
     ProfileConnectionList_followingProfile$key,
+    ProfileListItem_profile$key,
   } from '$mearie';
 
   import ProfileListItem from './ProfileListItem.svelte';
@@ -13,27 +14,39 @@
 
   // 프로필 팔로워/팔로잉 목록 영역. 게시글 목록(PostList)과 같은 상태(로딩/오류/빈) 표현·접근성 패턴을 따른다.
   // 팔로워/팔로잉은 같은 컴포넌트를 `kind`로 분기해 시각/상태 구조를 일치시킨다.
-  // Pagination UI는 별도 이슈로 분리하고 첫 페이지만 조회한다.
   type ConnectionKind = 'followers' | 'following';
+  type ConnectionProfileItem = { cursor: string; profile: ProfileListItem_profile$key };
 
   type Props = HTMLAttributes<HTMLElement> & {
     kind: ConnectionKind;
     followersProfile?: ProfileConnectionList_followersProfile$key | null;
     followingProfile?: ProfileConnectionList_followingProfile$key | null;
+    additionalProfiles?: ConnectionProfileItem[];
+    hasNextPage?: boolean | null;
+    endCursor?: string | null;
+    loadingNextPage?: boolean;
+    nextPageError?: boolean;
     viewerProfileId?: string | null;
     loading?: boolean;
     error?: boolean;
     onRetry?: () => void;
+    onLoadMore?: (after: string) => void;
   };
 
   let {
     kind,
     followersProfile = null,
     followingProfile = null,
+    additionalProfiles = [],
+    hasNextPage = null,
+    endCursor = null,
+    loadingNextPage = false,
+    nextPageError = false,
     viewerProfileId = null,
     loading = false,
     error = false,
     onRetry,
+    onLoadMore,
     class: className,
     ...attributes
   }: Props = $props();
@@ -47,6 +60,8 @@
       emptyDescription: string;
       errorTitle: string;
       loadingLabel: string;
+      nextPageErrorTitle: string;
+      loadingNextPageLabel: string;
     }
   > = {
     followers: {
@@ -55,6 +70,8 @@
       emptyDescription: '이 프로필을 팔로우하는 사람이 생기면 여기에 표시돼요.',
       errorTitle: '팔로워 목록을 불러오지 못했어요',
       loadingLabel: '팔로워 목록을 불러오는 중입니다.',
+      nextPageErrorTitle: '팔로워를 더 불러오지 못했어요',
+      loadingNextPageLabel: '팔로워를 더 불러오는 중입니다.',
     },
     following: {
       title: '팔로잉',
@@ -62,6 +79,8 @@
       emptyDescription: '이 프로필이 팔로우하는 사람이 생기면 여기에 표시돼요.',
       errorTitle: '팔로잉 목록을 불러오지 못했어요',
       loadingLabel: '팔로잉 목록을 불러오는 중입니다.',
+      nextPageErrorTitle: '팔로잉을 더 불러오지 못했어요',
+      loadingNextPageLabel: '팔로잉을 더 불러오는 중입니다.',
     },
   };
 
@@ -72,6 +91,10 @@
       fragment ProfileConnectionList_followersProfile on Profile {
         id
         followers(first: 20) {
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
           edges {
             cursor
             node {
@@ -93,6 +116,10 @@
       fragment ProfileConnectionList_followingProfile on Profile {
         id
         following(first: 20) {
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
           edges {
             cursor
             node {
@@ -125,10 +152,28 @@
     );
   };
 
-  const connectionProfiles = $derived(getConnectionProfiles());
+  const firstPageProfiles = $derived(getConnectionProfiles());
+  const connectionProfiles = $derived([...firstPageProfiles, ...additionalProfiles]);
   const hasConnectionData = $derived(
     kind === 'followers' ? Boolean(followersFragment.data) : Boolean(followingFragment.data),
   );
+  const firstPageInfo = $derived(
+    kind === 'followers'
+      ? followersFragment.data?.followers.pageInfo
+      : followingFragment.data?.following.pageInfo,
+  );
+  const effectiveHasNextPage = $derived(hasNextPage ?? firstPageInfo?.hasNextPage ?? false);
+  const effectiveEndCursor = $derived(endCursor ?? firstPageInfo?.endCursor ?? null);
+  const showPagination = $derived(Boolean(onLoadMore) && (effectiveHasNextPage || nextPageError));
+  const canLoadMore = $derived(Boolean(effectiveEndCursor) && !loadingNextPage);
+
+  const loadMore = () => {
+    if (!effectiveEndCursor || loadingNextPage) {
+      return;
+    }
+
+    onLoadMore?.(effectiveEndCursor);
+  };
 
   // 첫 화면을 채울 만큼만 반복한다.
   const skeletonItems = [0, 1, 2];
@@ -179,6 +224,28 @@
         />
       {/each}
     </div>
+    {#if showPagination}
+      <div class="border-border border-t px-4 py-4 text-center">
+        {#if nextPageError}
+          <p class="text-text-primary text-sm font-semibold" role="alert">
+            {text.nextPageErrorTitle}
+          </p>
+          <p class="text-text-secondary mt-1 text-sm">잠시 후 다시 시도해주세요.</p>
+        {/if}
+        <button
+          class="border-border text-text-primary mt-3 rounded-lg border px-4 py-2 text-sm font-bold disabled:opacity-45"
+          type="button"
+          disabled={!canLoadMore}
+          aria-busy={loadingNextPage}
+          onclick={loadMore}
+        >
+          {loadingNextPage ? '불러오는 중' : nextPageError ? '다시 시도' : '더 불러오기'}
+        </button>
+        {#if loadingNextPage}
+          <span class="sr-only" role="status">{text.loadingNextPageLabel}</span>
+        {/if}
+      </div>
+    {/if}
   {:else}
     <div class="px-4 py-12 text-center">
       <p class="text-text-primary text-base font-semibold">{text.emptyTitle}</p>
