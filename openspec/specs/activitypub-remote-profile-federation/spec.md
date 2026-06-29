@@ -29,9 +29,11 @@ kosmo가 Fedify를 통해 원격 ActivityPub actor를 조회하고, 기존 `Prof
 #### Scenario: Materialize remote actor from federated handle
 
 - **WHEN** federation 내부 service가 `@{handle}@{domain}` 형식의 federated handle materialization을 요청한다
-- **THEN** 시스템은 Fedify lookup API로 `acct:{handle}@{domain}`을 해석한다
+- **THEN** 시스템은 Fedify lookup 전에 normalized domain의 기존 ActivityPub instance를 조회한다
+- **AND** 기존 instance 상태가 `SUSPENDED` 또는 `UNRESPONSIVE`이면 Fedify lookup 없이 materialization을 실패 처리한다
+- **AND** 기존 instance가 없으면 normalized domain의 ActivityPub instance를 생성한다
+- **AND** 시스템은 Fedify lookup API로 `acct:{handle}@{domain}`을 해석한다
 - **AND** Fedify가 ActivityPub actor 객체를 반환하면 해당 actor의 canonical actor URI를 remote identity로 처리한다
-- **AND** 시스템은 materialization 전에 normalized domain의 ActivityPub instance를 찾거나 생성한다
 - **AND** 시스템은 actor URI에 연결된 기존 `Profile`이 있으면 해당 profile을 갱신하고, 없으면 새 `Profile`을 생성한다
 
 #### Scenario: Reject actor URI without federated handle lookup
@@ -49,7 +51,7 @@ kosmo가 Fedify를 통해 원격 ActivityPub actor를 조회하고, 기존 `Prof
 #### Scenario: Reject materialization for unavailable instance
 
 - **WHEN** federated handle의 normalized domain에 해당하는 기존 instance 상태가 `SUSPENDED` 또는 `UNRESPONSIVE`이다
-- **THEN** 시스템은 remote actor materialization을 실패로 처리한다
+- **THEN** 시스템은 Fedify lookup을 수행하지 않고 remote actor materialization을 실패로 처리한다
 - **AND** 시스템은 새 `Profile`을 만들거나 기존 profile을 refresh하지 않는다
 
 #### Scenario: Reuse existing actor URI

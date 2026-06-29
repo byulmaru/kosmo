@@ -4,7 +4,7 @@
 - [ ] 1.2 `activitypub_actor`에 remote actor refresh에 필요한 `last_fetched_at`과 remote actor source metadata를 추가한다.
 - [ ] 1.3 remote actor key fetch/verification은 Fedify에 맡기고, 이번 change에서 remote public key 저장 요구사항을 추가하지 않도록 actor key 저장 경계를 정렬한다.
 - [ ] 1.4 actor URI unique와 `(instance_id, normalized_handle)` 충돌 정책에 필요한 index/constraint를 정렬한다.
-- [ ] 1.5 remote profile materialization 전에 normalized domain의 ActivityPub instance를 find-or-create하고, suspended 또는 unresponsive instance는 저장/refresh를 거부하도록 데이터 접근 경계를 구현한다.
+- [ ] 1.5 remote profile materialization의 Fedify lookup 전에 normalized domain의 ActivityPub instance를 find-or-create하고, suspended 또는 unresponsive instance는 lookup 없이 저장/refresh를 거부하도록 데이터 접근 경계를 구현한다.
 - [ ] 1.6 새 테이블/컬럼/enum의 `TableDiscriminator`, Drizzle table exports, relations v2 schema, migration fixture를 갱신한다.
 
 ## 2. Remote Actor Materialization
@@ -27,7 +27,7 @@
 ## 4. Verification
 
 - [ ] 4.1 GraphQL schema를 재생성하고 `Profile.origin`, DB-only `profileByHandle`, remote Node 조회 계약이 반영되는지 확인한다.
-- [ ] 4.2 remote actor materialization unit/integration test로 Fedify lookup 성공, lookup 실패, non-actor lookup 실패, existing actor URI 재사용, handle collision 실패, remote instance find-or-create, unsupported `preferredUsername` 거부, unsupported `name`의 displayName fallback, stale actor의 active profile 선반환과 비동기 refresh 예약, `UNRESPONSIVE` refresh 미예약, suspended instance 차단을 검증한다.
-- [ ] 4.3 GraphQL profile test로 DB-only local/federated `profileByHandle`, configured local domain의 `handle@domain`/`@handle@domain` local lookup, remote `handle@domain`/`@handle@domain` lookup, `Profile.origin`, remote Node 조회, active profile selection remote 거부를 검증한다.
+- [ ] 4.2 remote actor materialization unit/integration test로 Fedify lookup 성공, lookup 실패, non-actor lookup 실패, existing actor URI 재사용, handle collision 실패, remote instance find-or-create, unsupported `preferredUsername` 거부, unsupported `name`의 displayName fallback, stale actor의 active profile 선반환과 비동기 refresh 예약, `UNRESPONSIVE` refresh 미예약, suspended/unresponsive instance에서 lookup 미수행과 저장/refresh 차단을 검증한다.
+- [ ] 4.3 GraphQL profile test로 DB-only local/federated `profileByHandle`, configured local domain의 `handle@domain`/`@handle@domain` local lookup, remote `handle@domain`/`@handle@domain` lookup, `Profile.origin`, remote Node 조회, active profile selection remote 거부, remote target follow/unfollow profile not found, remote target viewerFollow 없음 응답을 검증한다.
 - [ ] 4.4 web profile list/search 결과, profile page, profile page 하위 링크가 remote profile 링크를 route parameter `handle@domain`으로 전달되는 `relativeHandle` 기반 federated handle URL로 만들고, remote follow 지원 전까지 local follow action을 숨기거나 비활성화하는지 검증한다.
 - [ ] 4.5 `pnpm lint:eslint`, 관련 package typecheck/test, GraphQL schema check, DB migration/schema check, `openspec validate add-activitypub-remote-profile-federation --strict`를 실행한다.
