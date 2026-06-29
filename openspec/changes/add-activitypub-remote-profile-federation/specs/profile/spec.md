@@ -23,7 +23,7 @@ API는 같은 `Profile` 타입 안에서 local profile과 ActivityPub remote pro
 
 - **WHEN** 클라이언트가 저장된 ActivityPub remote profile의 profile 링크를 만든다
 - **THEN** 클라이언트는 bare `handle`이 아니라 `relativeHandle`과 `origin`을 사용한다
-- **AND** remote profile 링크는 `profileByHandle`이 federated handle로 조회할 수 있는 `@{handle}@{domain}` 형식의 URL로 이동한다
+- **AND** remote profile 링크는 route parameter가 `handle@domain`으로 전달되어 `profileByHandle`이 federated handle로 조회할 수 있는 URL로 이동한다
 
 #### Scenario: Hide local follow action for remote profile
 
@@ -51,7 +51,7 @@ API는 같은 `Profile` 타입 안에서 local profile과 ActivityPub remote pro
 
 #### Scenario: Find stored active remote profile by federated handle
 
-- **WHEN** 클라이언트가 `@{handle}@{domain}` 형식의 federated handle로 프로필 조회를 요청한다
+- **WHEN** 클라이언트가 `handle@domain` 또는 `@handle@domain` 형식의 federated handle로 프로필 조회를 요청한다
 - **THEN** 시스템은 handle과 domain을 정규화한다
 - **AND** 시스템은 kosmo DB에서 해당 domain의 suspended 상태가 아닌 instance와 normalized handle에 일치하는 활성 remote `Profile`을 조회한다
 - **AND** 일치하는 저장된 활성 remote profile이 있으면 해당 프로필을 반환한다

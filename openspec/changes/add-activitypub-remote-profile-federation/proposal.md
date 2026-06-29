@@ -4,7 +4,7 @@ kosmo는 local actor discovery 경계를 만들고 있지만, 원격 ActivityPub
 
 ## What Changes
 
-- `profileByHandle(handle:)`는 기존 local handle과 저장된 remote `@handle@domain` 입력을 모두 지원하되, kosmo DB만 조회하고 외부 actor fetch나 저장을 수행하지 않는다.
+- `profileByHandle(handle:)`는 기존 local handle과 저장된 remote `handle@domain`/`@handle@domain` 입력을 모두 지원하되, kosmo DB만 조회하고 외부 actor fetch나 저장을 수행하지 않는다.
 - remote actor materialization은 공개 GraphQL API가 아니라 federation 내부 service로 제공하며, Fedify의 WebFinger/object lookup과 ActivityPub vocabulary API를 사용한다.
 - remote actor identity는 ActivityPub actor URI로 구분하고, kosmo 내부 GraphQL/DB identity는 기존 `Profile.id`를 사용한다.
 - actor URI 직접 입력만으로 remote profile을 저장하지 않고, federated handle lookup을 통과한 actor만 저장한다.

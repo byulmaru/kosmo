@@ -28,7 +28,7 @@
 
 - **remote actor는 `Profile`로 materialize한다.** 별도 `RemoteProfile` GraphQL 타입을 만들지 않는다. local/remote 차이는 `Profile.origin`, 소속 `instance`, `activitypub_actor` metadata, resolver 정책으로 표현한다.
 - **`Profile.origin` enum을 노출한다.** `relativeHandle`은 표시 문자열이지 origin 판별 API가 아니다. 클라이언트가 local/ActivityPub 여부를 알아야 하는 경우 `Profile.origin`을 사용한다. enum 값은 우선 `LOCAL`, `ACTIVITYPUB`로 둔다.
-- **`profileByHandle`은 DB-only query로 유지한다.** bare handle 또는 configured local domain handle은 configured local instance에서 조회하고, `@handle@domain` 또는 동등한 federated handle은 저장된 remote `Profile`을 `(instance.domain, profile.normalizedHandle)` 기준으로 조회한다. 이 query는 WebFinger, actor document fetch, refresh, DB materialization을 수행하지 않는다.
+- **`profileByHandle`은 DB-only query로 유지한다.** bare handle 또는 configured local domain handle은 configured local instance에서 조회하고, `handle@domain`, `@handle@domain`, 또는 동등한 federated handle은 저장된 remote `Profile`을 `(instance.domain, profile.normalizedHandle)` 기준으로 조회한다. 이 query는 WebFinger, actor document fetch, refresh, DB materialization을 수행하지 않는다.
 - **remote actor fetch/write는 federation 내부 service로 분리한다.** remote actor를 처음 만들거나 갱신해야 하는 federation 내부 흐름에서만 Fedify의 WebFinger/object lookup API로 `acct:handle@domain`을 해석한다. 일반 GraphQL 조회는 외부 I/O와 DB write를 수행하지 않는다.
 - **Fedify의 protocol primitive를 재사용한다.** remote actor lookup, JSON-LD dereferencing, ActivityPub object parsing, HTTP safety는 Fedify API와 설정을 사용한다. kosmo는 Fedify가 반환한 typed actor를 `Profile`로 투영하고 actor URI uniqueness, instance state, refresh timestamp 같은 제품 정책만 구현한다.
 - **WebFinger 없는 actor URI 저장은 허용하지 않는다.** actor URI 직접 입력만으로 저장하면 `acct:` identity와 handle/domain 신뢰도가 약해진다. remote profile materialization은 federated handle lookup에서 얻은 Fedify actor 객체의 canonical actor URI를 기준으로만 수행한다.
@@ -37,7 +37,7 @@
 - **remote follow policy는 actor projection에서만 저장한다.** actor가 follower 승인 필요 속성을 제공하면 `Profile.followPolicy = APPROVAL_REQUIRED`, 그렇지 않으면 `OPEN`으로 저장한다. 이 change에서는 저장만 하고 remote follow 동작은 열지 않는다.
 - **stale actor는 7일 기준으로 비동기 refresh한다.** `ActivityPubActor.lastFetchedAt`이 없거나 7일을 넘더라도 저장된 active profile 참조는 refresh 완료를 기다리지 않는다. federation 내부 materialization 경로는 기존 active profile을 반환하고 refresh를 비동기적으로 예약/수행한다. `profileByHandle`과 Node load는 DB-only로 유지한다. refresh 실패 시 기존 active profile은 stale 상태로 계속 반환할 수 있다. 실패한 resolve에 대한 negative cache는 두지 않는다.
 - **suspended instance는 GraphQL profile 노출도 막는다.** `InstanceState.SUSPENDED`는 운영 정책상 federation 차단이므로 해당 instance의 profile Node 조회, DB handle 조회 결과 노출, actor materialization을 막는다. `UNRESPONSIVE`는 outbound federation을 억제할 수 있지만 이미 저장된 stale profile 조회는 허용한다.
-- **web 링크는 remote profile을 federated handle로 이동시킨다.** 저장된 remote profile을 검색 결과나 profile list에서 보여줄 때 bare `handle` 기반 `/@handle` URL을 만들지 않고 `relativeHandle`/`origin`을 사용해 `@handle@domain` 조회 URL로 연결한다. remote follow 동작은 후속 change 전까지 노출하지 않거나 비활성화한다.
+- **web 링크는 remote profile을 federated handle로 이동시킨다.** 저장된 remote profile을 검색 결과나 profile list에서 보여줄 때 bare `handle` 기반 `/@handle` URL을 만들지 않고 `relativeHandle`/`origin`을 사용해 route parameter가 `handle@domain`으로 전달되는 federated handle URL로 연결한다. remote follow 동작은 후속 change 전까지 노출하지 않거나 비활성화한다.
 
 ## Risks / Trade-offs
 
