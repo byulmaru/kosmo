@@ -19,6 +19,17 @@ API는 같은 `Profile` 타입 안에서 local profile과 ActivityPub remote pro
 - **WHEN** 클라이언트가 local-only 또는 ActivityPub-specific UI를 분기해야 한다
 - **THEN** 클라이언트는 `relativeHandle` 문자열을 파싱하지 않고 `Profile.origin`을 사용할 수 있어야 한다
 
+#### Scenario: Link to stored remote profile by relative handle
+
+- **WHEN** 클라이언트가 저장된 ActivityPub remote profile의 profile 링크를 만든다
+- **THEN** 클라이언트는 bare `handle`이 아니라 `relativeHandle`과 `origin`을 사용한다
+- **AND** remote profile 링크는 `profileByHandle`이 federated handle로 조회할 수 있는 `@{handle}@{domain}` 형식의 URL로 이동한다
+
+#### Scenario: Hide local follow action for remote profile
+
+- **WHEN** 클라이언트가 저장된 ActivityPub remote profile을 표시한다
+- **THEN** 클라이언트는 remote follow change가 구현되기 전까지 local follow mutation을 실행하는 follow action을 숨기거나 비활성화한다
+
 ## MODIFIED Requirements
 
 ### Requirement: Profile identity

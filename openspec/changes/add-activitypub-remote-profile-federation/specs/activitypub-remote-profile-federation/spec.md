@@ -62,7 +62,7 @@
 - **AND** 시스템은 actor `preferredUsername`의 normalized value를 `Profile.normalizedHandle`로 저장한다
 - **AND** 시스템은 actor `name`이 있으면 `Profile.displayName`으로 저장하고, 없으면 handle을 표시 이름으로 사용한다
 - **AND** 시스템은 actor `summary`를 `Profile.bio`로 저장한다
-- **AND** 시스템은 actor `published`를 `Profile.createdAt`으로 저장한다
+- **AND** actor `published`가 있으면 시스템은 이를 `Profile.createdAt`으로 저장한다
 
 #### Scenario: Reject actor without preferred username
 
@@ -70,10 +70,15 @@
 - **THEN** 시스템은 remote profile materialization을 실패 처리한다
 - **AND** 시스템은 해당 actor를 `Profile`로 저장하지 않는다
 
-#### Scenario: Fall back when actor published is absent
+#### Scenario: Fall back when new actor published is absent
 
-- **WHEN** remote actor에 `published`가 없다
+- **WHEN** 새 remote actor를 `Profile`로 최초 저장해야 하고 remote actor에 `published`가 없다
 - **THEN** 시스템은 materialization 시각을 `Profile.createdAt`으로 저장한다
+
+#### Scenario: Preserve createdAt when refreshing actor without published
+
+- **WHEN** 저장된 remote profile을 refresh하고 있고 remote actor에 `published`가 없다
+- **THEN** 시스템은 기존 `Profile.createdAt`을 보존한다
 
 #### Scenario: Project remote follow policy
 
@@ -96,7 +101,7 @@
 - **AND** federation 내부 service가 해당 remote actor를 사용해야 한다
 - **THEN** 시스템은 저장된 active profile을 refresh 완료 전에도 반환한다
 - **AND** 시스템은 Fedify lookup 기반 remote actor refresh를 비동기적으로 예약/수행한다
-- **AND** refresh가 성공하면 `Profile` projection과 actor metadata를 갱신한다
+- **AND** refresh가 성공하면 기존 `createdAt` 보존 정책을 지키면서 `Profile` projection과 actor metadata를 갱신한다
 
 #### Scenario: Keep stale actor on refresh failure
 
