@@ -39,7 +39,6 @@ Profile, 표시 handle, Remote Profile identity를 구분한다.
 - 하나 이상의 프로필을 소유할 수 있다.
 - 이메일, OAuth, 패스키 같은 인증 수단은 OIDC 구현에 의존한다.
 - 계정 삭제와 프로필 삭제는 서로 다른 생명주기로 다룬다.
-- 마지막 `Owner`는 탈퇴, role 변경, 연결 해제할 수 없다.
 - 계정 정지는 Account 상태이고 프로필 정지는 Profile 상태다.
 
 ### 프로필

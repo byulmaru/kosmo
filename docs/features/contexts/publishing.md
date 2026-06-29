@@ -123,9 +123,8 @@ Post Eligibility는 Post가 Post List, Discovery, Notification 같은 읽기/전
 
 ### 미디어 첨부
 
-- Profile은 이미지를 첨부할 수 있다.
-- 첨부 개수, 용량, 파일 형식, 해상도 제한은 제품/운영 정책으로 둔다.
-- 이미지에는 alt text를 입력할 수 있어야 한다.
+- Profile은 Media 컨텍스트가 제공한 이미지를 Post에 첨부할 수 있다.
+- Publishing은 Post와 Media의 연결과 Post 단위 민감한 미디어 플래그를 소유한다.
 - 민감한 미디어 플래그는 Post 단위 속성으로 둔다.
 
 ## 도메인 속성/정책 메모
