@@ -91,7 +91,7 @@ Post Eligibility는 Post가 Post List, Discovery, Notification 같은 읽기/전
 - 공개: 누구나 볼 수 있고 검색 결과와 해시태그 목록 노출 후보가 된다.
 - 조용한 공개: 누구나 볼 수 있지만 검색 결과와 해시태그 목록에는 노출되지 않는다.
 - 팔로워 공개: 작성자를 수락된 상태로 팔로우한 Profile과 멘션된 Profile에게만 보인다.
-- 멘션한 프로필만: Post에서 멘션한 Profile에게만 보인다.
+- 멘션한 프로필만: 작성자와 Post에서 멘션한 Profile에게만 보인다.
 
 초기 Post Visibility 값은 공개, 조용한 공개, 팔로워 공개, 멘션한 프로필만 네 가지로 확정한다.
 
