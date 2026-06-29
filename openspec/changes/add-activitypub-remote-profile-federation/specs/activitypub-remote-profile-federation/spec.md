@@ -64,6 +64,17 @@
 - **AND** 시스템은 actor `summary`를 `Profile.bio`로 저장한다
 - **AND** 시스템은 actor `published`를 `Profile.createdAt`으로 저장한다
 
+#### Scenario: Reject actor without preferred username
+
+- **WHEN** remote actor에 `preferredUsername`이 없다
+- **THEN** 시스템은 remote profile materialization을 실패 처리한다
+- **AND** 시스템은 해당 actor를 `Profile`로 저장하지 않는다
+
+#### Scenario: Fall back when actor published is absent
+
+- **WHEN** remote actor에 `published`가 없다
+- **THEN** 시스템은 materialization 시각을 `Profile.createdAt`으로 저장한다
+
 #### Scenario: Project remote follow policy
 
 - **WHEN** remote actor가 follower 승인 필요 속성을 제공한다
