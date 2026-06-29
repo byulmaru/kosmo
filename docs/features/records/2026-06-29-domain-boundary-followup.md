@@ -24,20 +24,8 @@
 12. 특정 키워드나 미디어 유형을 근거로 Content Warning을 요구하는 정책은 현재 두지 않는다.
 13. 해시태그 자동완성은 현재 Discovery 범위에서 제외한다.
 
-## 다음 질문 초안
+## 후속 처리
 
-1. Profile 상태 전이를 어느 수준까지 도메인 명세로 확정할지 결정해야 한다.
-   - 초안: 활성 -> 비활성화는 `Owner`가 수행하고 되돌릴 수 있다.
-   - 초안: 활성 또는 비활성화 -> 정지는 Trust & Safety moderation action으로 수행한다.
-   - 초안: 정지 -> 활성 또는 비활성화는 Trust & Safety가 정지를 해제할 때 수행한다.
-   - 초안: 비활성화 -> 삭제됨은 `Owner`가 요청하고, 삭제됨은 되돌릴 수 없는 terminal 상태로 둔다.
-   - 추가 결정 필요: 활성 상태에서 바로 삭제됨으로 갈 수 있는지, 정지 상태의 Profile을 삭제할 수
-     있는지, 삭제 대기 상태를 별도로 둘지 정해야 한다.
-2. Domain moderation action taxonomy를 도메인 명세에 둘지 결정해야 한다.
-   - 의미: Profile mute/block이 아니라 운영자 Account가 원격 도메인 또는 서버 전체에 적용하는
-     moderation action의 종류와 효과를 뜻한다.
-   - 초안: `Limit`은 공개 노출과 도달 범위를 줄이지만 완전히 없는 것으로 취급하지 않는다.
-   - 초안: `Block`은 원격 Domain의 Profile, Post, Media, Notification, 관계 후보를 없는 것처럼
-     취급한다.
-   - 추가 결정 필요: `Limit`과 `Block`만 둘지, Domain moderation taxonomy 자체를 연합 구현 스펙으로
-     제외할지 정해야 한다.
+Profile 상태 전이와 Domain moderation action taxonomy 질문은
+[2026-06-29 상태 기계와 Domain moderation 결정 기록](./2026-06-29-state-moderation-followup.md)에서
+닫혔다.

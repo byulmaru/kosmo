@@ -27,7 +27,8 @@ Profile, 표시 handle, Remote Profile identity를 구분한다.
   State.
 - 불변 조건: 로컬 handle은 로컬 네임스페이스에서 유일해야 한다. 같은 handle이라도 host가 다르면
   다른 원격 프로필이다. private signing material과 인증 토큰은 공개 프로필 정보가 아니다. active
-  Profile은 현재 Account와 역할 관계가 있는 Profile이어야 한다.
+  Profile은 현재 Account와 역할 관계가 있는 활성 Profile이어야 한다. Profile State는 상태 기계에
+  정의된 전이로만 바뀔 수 있다.
 - 도메인 이벤트 후보: ProfileCreated, ProfileUpdated, ProfileStateChanged, HandleChanged,
   AccountProfileLinked.
 - 정책 후보: handle 변경, 프로필 삭제와 계정 삭제 분리, 원격 프로필 캐시 최신성, 프로필 편집
@@ -96,6 +97,26 @@ Profile, 표시 handle, Remote Profile identity를 구분한다.
 - 비활성화: 프로필이 비활성화되었지만 다시 활성화가 될 가능성이 존재하는 경우
 - 정지: Trust & Safety의 moderation action으로 Profile 사용과 표시가 정지된 경우
 - 삭제됨: 프로필이 비활성화되었으며 다시 활성화가 될 가능성이 없어 안전하게 정보를 삭제 가능한 경우
+
+### Profile State Machine
+
+Profile State는 활성, 비활성화, 정지, 삭제됨 네 상태를 가진다. 삭제됨은 terminal 상태이며 다른
+상태로 되돌릴 수 없다.
+
+| 현재 상태          | 전이                | 수행 주체       | 다음 상태      | 규칙                                                                  |
+| ------------------ | ------------------- | --------------- | -------------- | --------------------------------------------------------------------- |
+| 없음               | Profile 생성        | Account         | 활성           | 생성한 Account는 Profile의 `Owner`가 된다                             |
+| 활성               | Profile 비활성화    | `Owner` Account | 비활성화       | active Profile로 선택할 수 없고 소셜 행동을 수행할 수 없다            |
+| 비활성화           | Profile 재활성화    | `Owner` Account | 활성           | 정지 상태가 아니어야 한다                                             |
+| 활성 또는 비활성화 | Profile 정지        | Trust & Safety  | 정지           | 정지 전 상태를 복구 대상 상태로 보존한다                              |
+| 정지               | Profile 정지 해제   | Trust & Safety  | 정지 전 상태   | 정지 전 상태가 활성 또는 비활성화였는지에 따라 복구한다               |
+| 비활성화           | Profile 삭제        | `Owner` Account | 삭제됨         | 삭제 전에 Profile은 비활성화 상태여야 한다                            |
+| 활성 또는 정지     | Profile 삭제 요청   | `Owner` Account | 현재 상태 유지 | 삭제하려면 먼저 비활성화되어야 하며, 정지 상태는 정지 해제가 필요하다 |
+| 삭제됨             | 모든 상태 변경 요청 | 없음            | 삭제됨         | 삭제됨은 되돌릴 수 없다                                               |
+
+정지 상태는 Trust & Safety가 소유한 moderation action의 결과이며, `Owner` Account가 직접 해제할 수 없다.
+Publishing, Post List, Discovery, Notification은 Profile State를 재정의하지 않고 Identity가 제공하는
+상태와 Trust & Safety의 moderation 결과를 소비한다.
 
 ## 팔로우 요청 승인 여부
 
