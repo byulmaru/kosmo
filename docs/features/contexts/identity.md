@@ -22,7 +22,8 @@ Profile, 표시 handle, Remote Profile identity를 구분한다.
   Identity, Profile State, Follow Approval Policy.
 - 핵심 모델: Account와 Profile을 aggregate root 후보로 둔다. Account-Profile 소유 관계는 역할과
   권한을 가진 관계로 본다.
-- 값 객체 후보: Handle, Display Name, Bio, Profile URL, Remote URL, Host, Account Profile Role.
+- 값 객체 후보: Handle, Display Name, Bio, Profile URL, Remote URL, Host, Account Profile Role, Profile
+  State.
 - 불변 조건: 로컬 handle은 로컬 네임스페이스에서 유일해야 한다. 같은 handle이라도 host가 다르면
   다른 원격 프로필이다. private signing material과 인증 토큰은 공개 프로필 정보가 아니다. active
   Profile은 현재 Account와 역할 관계가 있는 Profile이어야 한다.
@@ -89,6 +90,7 @@ Profile, 표시 handle, Remote Profile identity를 구분한다.
 
 - 활성: 정상 표시.
 - 비활성화: 프로필이 비활성화되었지만 다시 활성화가 될 가능성이 존재하는 경우
+- 정지: Trust & Safety의 moderation action으로 Profile 사용과 표시가 정지된 경우
 - 삭제됨: 프로필이 비활성화되었으며 다시 활성화가 될 가능성이 없어 안전하게 정보를 삭제 가능한 경우
 
 ## 팔로우 요청 승인 여부
