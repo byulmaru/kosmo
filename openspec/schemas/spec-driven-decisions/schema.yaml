@@ -90,11 +90,7 @@ artifacts:
       Create the design document that explains HOW to implement the change.
       Durable choices and deferred decisions belong in decisions.md, not in design.md.
 
-      When to include design.md (create only if any apply):
-      - Cross-cutting change (multiple services/modules) or new architectural pattern
-      - New external dependency or significant data model changes
-      - Security, performance, or migration complexity
-      - Ambiguity that benefits from technical decisions before coding
+      This schema requires design.md for every new change. Keep it concise for small changes, but still capture the implementation approach before recording decisions.
 
       Sections:
       - **Context**: Background, current state, constraints, stakeholders
@@ -109,7 +105,7 @@ artifacts:
 
       Good design docs explain the "why" behind technical decisions.
     requires:
-      - proposal
+      - specs
 
   - id: decisions
     generates: decisions.md
@@ -132,7 +128,6 @@ artifacts:
 
       Keep decisions separate from tasks and design notes. design.md can explain the implementation approach, but decisions.md is the durable decision record agents should read before implementation. Use one section per decision rather than one long mixed bullet list.
     requires:
-      - specs
       - design
 
   - id: tasks

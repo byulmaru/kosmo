@@ -122,18 +122,18 @@ If the user mentions a change or you detect one is relevant:
 
 3. **Offer to capture when decisions are made**
 
-   | Insight Type               | Where to Capture                    |
-   | -------------------------- | ----------------------------------- |
-   | New requirement discovered | `specs/<capability>/spec.md`        |
-   | Requirement changed        | `specs/<capability>/spec.md`        |
-   | Design approach changed    | `design.md`                         |
-   | Design decision made       | `decisions.md`                      |
-   | Scope changed              | `proposal.md`                       |
-   | New work identified        | `tasks.md`                          |
-   | Assumption invalidated     | `decisions.md` or relevant artifact |
+   | Insight Type               | Where to Capture                                       |
+   | -------------------------- | ------------------------------------------------------ |
+   | New requirement discovered | `specs/<capability>/spec.md`                           |
+   | Requirement changed        | `specs/<capability>/spec.md`                           |
+   | Design approach changed    | `design.md`                                            |
+   | Design decision made       | `decisions.md` if present; otherwise `design.md`       |
+   | Scope changed              | `proposal.md`                                          |
+   | New work identified        | `tasks.md`                                             |
+   | Assumption invalidated     | `decisions.md` if present; otherwise relevant artifact |
 
    Example offers:
-   - "That's a design decision. Capture it in decisions.md?"
+   - "That's a design decision. Capture it in decisions.md if this change uses that artifact?"
    - "This is a new requirement. Add it to specs?"
    - "This changes scope. Update the proposal?"
 
