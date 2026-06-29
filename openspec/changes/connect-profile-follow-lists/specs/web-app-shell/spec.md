@@ -26,7 +26,7 @@
 
 ### Requirement: Profile connection list data rendering
 
-팔로워·팔로잉 목록 라우트는 해당 프로필의 follow connection 첫 페이지를 조회해 프로필 항목 목록을 렌더해야 한다(MUST). `/@{handle}/followers`는 `Profile.followers(first: 20).edges[].node.follower`를 `ProfileListItem`으로 표시해야 하며(MUST), `/@{handle}/following`은 `Profile.following(first: 20).edges[].node.followee`를 `ProfileListItem`으로 표시해야 한다(MUST). 두 목록은 connection이 반환한 edge 순서를 그대로 렌더하고 클라이언트에서 별도 정렬하지 않아야 한다(MUST NOT). 각 항목은 기존 `ProfileListItem`/`FollowButton` 정책을 따라 프로필 정보와 가능한 follow action을 표시해야 한다(MUST). 이 요구사항은 첫 페이지 렌더링만 포함하며, pagination은 포함하지 않는다(MUST NOT).
+팔로워·팔로잉 목록 라우트는 해당 프로필의 follow connection 첫 페이지를 조회해 프로필 항목 목록을 렌더해야 한다(MUST). `/@{handle}/followers`는 `Profile.followers(first: 20).edges[].node.follower`를 `ProfileListItem`으로 표시해야 하며(MUST), `/@{handle}/following`은 `Profile.following(first: 20).edges[].node.followee`를 `ProfileListItem`으로 표시해야 한다(MUST). 두 목록은 connection이 반환한 edge 순서를 그대로 렌더하고 클라이언트에서 별도 정렬하지 않아야 한다(MUST NOT). 각 항목은 기존 `ProfileListItem`/`FollowButton` 정책을 따라 프로필 정보와 가능한 follow action을 표시해야 한다(MUST). 이 요구사항은 첫 페이지 렌더링 계약만 정의하며, 첫 페이지 이후의 pagination 동작은 후속 change에서 별도 요구사항으로 정의한다.
 
 #### Scenario: Render followers from connection
 
