@@ -20,6 +20,7 @@
     graphql(`
       fragment ProfileHero_profile on Profile {
         handle
+        relativeHandle
         displayName
         bio
         followersCount
@@ -60,25 +61,31 @@
       <h1 class="text-text-primary mt-3 text-2xl font-bold break-words">
         {fragment.data.displayName}
       </h1>
-      <p class="text-text-secondary text-sm break-words">@{fragment.data.handle}</p>
+      <p class="text-text-secondary text-sm break-words">{fragment.data.relativeHandle}</p>
       {#if fragment.data.bio}
         <p class="text-text-primary mt-3 text-base break-words whitespace-pre-wrap">
           {fragment.data.bio}
         </p>
       {/if}
       <div class="mt-3 flex items-center gap-4 text-sm">
-        <span class="text-text-secondary">
+        <a
+          class="text-text-secondary border-b border-transparent hover:border-current"
+          href={`/@${fragment.data.handle}/following`}
+        >
           <span class="text-text-primary font-bold"
             >{formatCount(fragment.data.followingCount)}</span
           >
           팔로잉
-        </span>
-        <span class="text-text-secondary">
+        </a>
+        <a
+          class="text-text-secondary border-b border-transparent hover:border-current"
+          href={`/@${fragment.data.handle}/followers`}
+        >
           <span class="text-text-primary font-bold"
             >{formatCount(fragment.data.followersCount)}</span
           >
           팔로워
-        </span>
+        </a>
       </div>
     </div>
   </header>

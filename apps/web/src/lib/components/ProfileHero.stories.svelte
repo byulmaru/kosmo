@@ -9,7 +9,8 @@
   // 여기서는 평범한 데이터 객체를 fragment ref 자리에 그대로 넘긴다.
   type ProfileRef = FragmentRefs<'ProfileHero_profile'>;
   const sampleProfile = {
-    handle: 'user@kos.moe',
+    handle: 'user',
+    relativeHandle: '@user@kos.moe',
     displayName: '표시 이름',
     bio: '본문 한 줄이 들어가는 자리예요. 내용이 길어지면 여러 줄로 늘어나요.',
     followersCount: 128,
@@ -41,6 +42,17 @@
 <Story name="Default" args={{ profile: sampleProfile }} />
 <Story name="No bio" args={{ profile: noBioProfile }} />
 <Story name="Loading" args={{ loading: true }} />
+<Story
+  name="Remote handle"
+  args={{
+    profile: {
+      ...(sampleProfile as unknown as Record<string, unknown>),
+      displayName: '먼 인스턴스 사용자',
+      handle: 'user',
+      relativeHandle: '@user@remote.example',
+    } as unknown as ProfileRef,
+  }}
+/>
 <Story name="With action" asChild>
   <ProfileHero profile={sampleProfile}>
     {#snippet action()}

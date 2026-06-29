@@ -19,7 +19,7 @@ web:
     className: nginx
     annotations: {}
     hosts:
-      - host: kos.moe
+      - host: dev.kos.moe
         paths:
           - path: /
             pathType: Prefix
@@ -92,7 +92,7 @@ api:
     className: nginx
     annotations: {}
     hosts:
-      - host: api.kos.moe
+      - host: dev-api.kos.moe
         paths:
           - path: /
             pathType: Prefix
@@ -153,10 +153,12 @@ certificate:
   dnsNames:
     - kos.moe
     - api.kos.moe
+    - dev.kos.moe
+    - dev-api.kos.moe
 
 infisical:
   enabled: true
   identityId: '953a7c79-6486-44d6-a6be-04dd7eda1853'
   projectId: '8e05f8b4-604a-4a3e-a4f2-77a89a8318be'
-  envSlug: prod
+  envSlug: dev
   secretName: env

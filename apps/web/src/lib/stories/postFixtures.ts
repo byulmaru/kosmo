@@ -62,6 +62,7 @@ type PostOverrides = {
   visibility?: 'PUBLIC' | 'UNLISTED' | 'FOLLOWERS' | 'DIRECT';
   displayName?: string;
   handle?: string;
+  relativeHandle?: string;
 };
 
 const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
@@ -74,6 +75,7 @@ export const makePost = (body: PostBodyCase, overrides: PostOverrides = {}) => {
     visibility = 'PUBLIC',
     displayName = '코스모 작가',
     handle = 'kosmo',
+    relativeHandle = `@${handle}`,
   } = overrides;
 
   return {
@@ -85,6 +87,7 @@ export const makePost = (body: PostBodyCase, overrides: PostOverrides = {}) => {
       __typename: 'Profile',
       id: `${id}-profile`,
       handle,
+      relativeHandle,
       displayName,
     },
     content:

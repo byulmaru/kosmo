@@ -46,6 +46,7 @@
         id
         displayName
         handle
+        relativeHandle
         bio
         ...FollowButton_profile
       }
@@ -68,7 +69,7 @@
         <p class="text-text-primary group-hover:underline m-0 truncate text-sm font-bold">
           {fragment.data.displayName}
         </p>
-        <p class="text-text-secondary m-0 truncate text-xs">@{fragment.data.handle}</p>
+        <p class="text-text-secondary m-0 truncate text-xs">{fragment.data.relativeHandle}</p>
         {#if fragment.data.bio}
           <p class="text-text-primary m-0 mt-1 truncate text-xs">{fragment.data.bio}</p>
         {/if}
@@ -82,7 +83,7 @@
       />
       <div class="min-w-0 flex-1">
         <p class="text-text-primary m-0 truncate text-sm font-bold">{fragment.data.displayName}</p>
-        <p class="text-text-secondary m-0 truncate text-xs">@{fragment.data.handle}</p>
+        <p class="text-text-secondary m-0 truncate text-xs">{fragment.data.relativeHandle}</p>
         {#if fragment.data.bio}
           <p class="text-text-primary m-0 mt-1 truncate text-xs">{fragment.data.bio}</p>
         {/if}

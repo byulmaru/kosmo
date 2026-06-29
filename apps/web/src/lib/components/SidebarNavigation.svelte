@@ -24,6 +24,7 @@
         selectedProfile {
           id
           handle
+          relativeHandle
           displayName
           followersCount
           followingCount
@@ -272,18 +273,24 @@
         />
         {#if sidebarActiveProfile}
           <p class="max-w-full truncate text-sm leading-[19.6px] text-[#777777]">
-            @{sidebarActiveProfile.handle}
+            {sidebarActiveProfile.relativeHandle}
           </p>
           <div class="mt-2 flex items-center gap-3 text-sm leading-[22px] text-black">
-            <span class="flex items-center gap-2 px-1"
+            <a
+              class="flex items-center gap-2 border-b border-transparent px-1 hover:border-current"
+              href={`/@${sidebarActiveProfile.handle}/following`}
+              onclick={onNavigate}
               ><span>{formatCount(sidebarActiveProfile.followingCount ?? 0)}</span><span
                 >팔로잉</span
-              ></span
+              ></a
             >
-            <span class="flex items-center gap-2 px-1"
+            <a
+              class="flex items-center gap-2 border-b border-transparent px-1 hover:border-current"
+              href={`/@${sidebarActiveProfile.handle}/followers`}
+              onclick={onNavigate}
               ><span>{formatCount(sidebarActiveProfile.followersCount ?? 0)}</span><span
                 >팔로워</span
-              ></span
+              ></a
             >
           </div>
         {:else if hasProfiles}

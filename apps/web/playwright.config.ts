@@ -65,7 +65,7 @@ export default defineConfig({
       url: `${oidcOrigin}/health`,
     },
     {
-      command: 'pnpm --dir ../api start',
+      command: 'pnpm --dir ../api db:bootstrap-local-instance && pnpm --dir ../api start',
       env: {
         DATABASE_URL: databaseUrl,
         NODE_ENV: 'production',

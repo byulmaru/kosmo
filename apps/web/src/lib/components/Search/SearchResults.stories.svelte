@@ -12,6 +12,7 @@
       id: string;
       displayName: string;
       handle: string;
+      relativeHandle: string;
       bio: string | null;
       viewerFollow: { id: string; state: 'ACCEPTED' | 'PENDING' } | null;
     }> = {},
@@ -21,6 +22,7 @@
       id: 'searched-profile',
       displayName: '별마루',
       handle: 'byulmaru',
+      relativeHandle: '@byulmaru',
       bio: '코스모에서 만나는 첫 프로필',
       viewerFollow: null,
       ...overrides,

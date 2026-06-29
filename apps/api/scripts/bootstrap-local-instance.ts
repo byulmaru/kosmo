@@ -1,9 +1,10 @@
-import { bootstrapConfiguredLocalInstance, db, pg } from '@kosmo/core/db';
+import { pg } from '@kosmo/core/db';
+import { seedDatabase } from '@kosmo/core/db/seed';
 
 try {
-  const instance = await bootstrapConfiguredLocalInstance(db);
+  const { localInstance } = await seedDatabase();
   console.log(
-    `Configured local instance: ${instance.domain} (${instance.canonicalOrigin ?? 'no origin'})`,
+    `Configured local instance: ${localInstance.domain} (${localInstance.canonicalOrigin ?? 'no origin'})`,
   );
 } finally {
   await pg.end();

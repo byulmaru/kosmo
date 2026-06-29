@@ -44,7 +44,7 @@ API는 활성 게시글을 GraphQL `Post` Node로 노출해야 하며 작성자 
 
 ### Requirement: 프로필 게시글 목록 connection
 
-API는 프로필이 작성한 활성 게시글을 최신순 Relay connection `Profile.posts`로 노출해야 하며, viewer와 작성자의 관계에 따라 공개 범위를 제한해야 한다(MUST).
+API는 프로필이 작성한 활성 게시글을 최신순 Relay connection `Profile.posts`로 노출해야 하며, viewer와 작성자의 관계에 따라 공개 범위를 제한해야 한다(MUST). `Profile.posts`는 게시글 node 목록 공용 wrapper인 `PostConnection`을 반환해야 한다(MUST).
 
 #### Scenario: 공개 프로필 게시글 목록 조회
 
@@ -80,7 +80,7 @@ API는 프로필이 작성한 활성 게시글을 최신순 Relay connection `Pr
 
 ### Requirement: Home timeline connection
 
-API는 현재 active profile 기준 홈 타임라인을 최신순 Relay connection `Query.homeTimeline`로 노출해야 한다(MUST). active profile이 없거나 인증되지 않은 조회에는 요청을 거부하지 않고 `null`을 반환해야 한다(MUST).
+API는 현재 active profile 기준 홈 타임라인을 최신순 Relay connection `Query.homeTimeline`로 노출해야 한다(MUST). `Query.homeTimeline`은 게시글 node 목록 공용 wrapper인 `PostConnection`을 반환해야 한다(MUST). active profile이 없거나 인증되지 않은 조회에는 요청을 거부하지 않고 `null`을 반환해야 한다(MUST).
 
 #### Scenario: 내 게시글 포함
 
