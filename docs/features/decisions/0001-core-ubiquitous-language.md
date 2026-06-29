@@ -43,6 +43,10 @@ Kosmo DDD 명세의 핵심 보편 언어를 다음과 같이 확정한다.
   정책이다.
 - 게시 목록의 canonical domain term은 `Post List`다. `Feed`는 canonical domain term으로 사용하지
   않는다.
+- 기본 게시 목록의 canonical domain term은 `Home Post List`다. `Following Post List`는 현재
+  canonical domain term으로 사용하지 않는다.
+- `Post List Item`은 canonical domain term으로 사용하지 않는다. 목록에 표시되는 대상은 Post 또는
+  Repost 후보와 Control Decision으로 설명한다.
 - `Reaction`과 `Repost`를 canonical domain term으로 사용한다. 좋아요, 부스트, 확산 계열 표현은
   canonical domain term으로 사용하지 않는다.
 - `Reaction`은 Post 하나에 Profile당 같은 이모지 1개만 허용하고, 서로 다른 이모지는 여러 개
