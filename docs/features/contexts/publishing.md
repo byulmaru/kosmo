@@ -17,20 +17,21 @@ Profile이 짧은 텍스트를 작성하고, 필요하면 미디어와 메타데
 
 ## DDD 명세
 
-- 컨텍스트 경계: 게시 작성, 게시 본문, 공개 범위, 답글 구조, Content Warning, 게시 상태를
-  정의한다. 게시 목록 삽입, 반응/재게시, 검색 색인은 소유하지 않는다.
+- 컨텍스트 경계: 게시 작성, 게시 본문, 공개 범위, 답글 구조, Content Warning, 민감한 미디어 상태,
+  게시 상태, Post Eligibility 정책을 정의한다. 게시 목록 삽입, 반응/재게시, 검색 색인은 소유하지
+  않는다.
 - 보편 언어: Post, Author Profile, Post Visibility, Reply, Thread, Content Warning, Sensitive Media,
   Tombstone.
 - 핵심 모델: Post를 aggregate root 후보로 둔다. Post Content, Reply Relation, Attached Media는
   Post 안에서 생명주기를 맞추는 하위 모델 후보로 본다.
 - 값 객체 후보: Post Body, Post Visibility, Content Warning Text, Mention Target, Language, Publish
-  Timestamp.
+  Timestamp, Sensitive Media Flag.
 - 불변 조건: 작성자는 유효한 Profile이어야 한다. 빈 게시 판단은 본문과 첨부 미디어를 함께 본다.
   답글의 기본 공개 범위는 원본 게시의 공개 범위를 넘지 않아야 한다. 게시 후 Post Visibility는 변경할
-  수 없다.
-- 도메인 이벤트 후보: PostPublished, ReplyPublished, PostEdited, PostDeleted, ContentWarningChanged,
-  PostEligibilityChanged.
-- 정책 후보: 본문 길이, 멘션한 프로필만 수신자 정책, 삭제와 수정 이력, Content Warning 요구 조건.
+  수 없다. 민감한 미디어로 표시한 Post의 모든 첨부 Media는 가려져야 한다.
+- 도메인 이벤트 후보: PostPublished, ReplyPublished, PostDeleted.
+- 정책 후보: 본문 길이, 멘션한 프로필만 수신자 정책, 삭제, Content Warning 요구 조건, Post
+  Eligibility 후보성.
 
 ### Post Visibility
 
@@ -56,7 +57,8 @@ Post Visibility는 Post가 가진 접근/노출 범위 속성이다. 어떤 Prof
 ### Post Eligibility
 
 Post Eligibility는 Post가 Post List, Discovery, Notification 같은 읽기/전파 컨텍스트의 후보가 될 수
-있는지 나타내는 Post 수준 속성이다.
+있는지 판단하는 Publishing 정책이다. Post Eligibility는 별도 데이터를 가지는 Post 속성이나 값 객체가
+아니다.
 
 - Post Eligibility는 viewer별 접근 권한 판정이 아니다.
 - Post Visibility가 viewer별 접근 가능 대상을 먼저 결정한다.
@@ -66,7 +68,7 @@ Post Eligibility는 Post가 Post List, Discovery, Notification 같은 읽기/전
 - Post Eligibility는 Post Visibility를 넓히거나 우회할 수 없다.
 - Post의 작성, 삭제, tombstone, 게시 상태를 반영한다.
 - Author Profile의 활성/정지/삭제 상태를 반영한다.
-- Post에 연결된 Media가 Post 노출을 막는 상태인지 반영한다.
+- Post에 연결된 Media가 접근 불가능한 상태인지 반영할 수 있다.
 - Trust & Safety의 moderation 결과가 Post, Author Profile, Media, 원격 출처의 노출을 막는지
   반영한다.
 - Publishing은 Post Visibility를 먼저 적용하고 Post Eligibility를 그 다음 적용해 viewer Profile에게
@@ -103,7 +105,8 @@ Post Eligibility는 Post가 Post List, Discovery, Notification 같은 읽기/전
 - 빈 게시 판단은 텍스트 본문과 첨부 미디어를 함께 고려한다.
 - 본문 길이 제한은 500자다.
 - 공개 범위는 공개, 조용한 공개, 팔로워 공개, 멘션한 프로필만을 구분해야 한다.
-- Content Warning은 `내용 경고`로 표현하며 게시 본문의 표시 정책과 별도 속성으로 다룬다.
+- Content Warning은 `내용 경고`로 표현하며 Publishing이 소유하는 Post 속성으로 다룬다.
+- 게시 후 본문, Content Warning, Post Visibility 수정은 지원하지 않는다.
 
 ### 답글
 
@@ -119,18 +122,19 @@ Post Eligibility는 Post가 Post List, Discovery, Notification 같은 읽기/전
 - 접힌 게시의 본문과 미디어는 viewer Profile이 펼치기 전까지 숨긴다.
 - 경고 문구는 검색/게시 목록 미리보기에서 본문 대신 노출될 수 있다.
 - 민감한 미디어 표시와 Content Warning은 서로 독립적으로 설정할 수 있어야 한다.
-- 서버 정책상 특정 키워드나 미디어 유형에는 경고를 권장하거나 요구할 수 있다.
+- Publishing 정책상 특정 키워드나 미디어 유형에는 경고를 권장하거나 요구할 수 있다.
 
 ### 미디어 첨부
 
 - Profile은 Media 컨텍스트가 제공한 이미지를 Post에 첨부할 수 있다.
 - Publishing은 Post와 Media의 연결과 Post 단위 민감한 미디어 플래그를 소유한다.
 - 민감한 미디어 플래그는 Post 단위 속성으로 둔다.
+- Post가 민감한 미디어로 설정되면 해당 Post에 연결된 모든 Media 표시가 가려진다.
 
 ## 도메인 속성/정책 메모
 
 - 게시 ID와 작성자 Profile ID는 불변이어야 한다.
-- 본문 수정 기능을 제공할 경우 수정 이력 공개 범위를 정해야 한다.
+- Post 수정 기능은 현재 지원하지 않는다.
 - 삭제는 soft delete로 처리한다.
 - 게시 후 Post Visibility는 변경할 수 없다.
 
@@ -139,16 +143,13 @@ Post Eligibility는 Post가 Post List, Discovery, Notification 같은 읽기/전
 - 설문은 현재 Publishing 도메인 범위에서 제외한다.
 - 예약 게시와 임시 저장은 현재 Publishing 도메인 범위에서 제외한다.
 - 동영상과 GIF 첨부는 현재 Publishing 도메인 범위에서 제외한다.
+- Post 수정은 현재 Publishing 도메인 범위에서 제외한다.
 - 작성 화면 상태와 업로드 실패 표시 방식은 도메인 스펙에서 제외한다.
 - URL 미리보기는 디자인/미디어 처리 범위로 분리하고 현재 Publishing 도메인 범위에서 제외한다.
-
-## 미결정 네이밍
-
-- 재게시: Repost
-- 내용 경고: Content Warning, CW, 접힘 제목
 
 ## 확정된 용어
 
 - 게시물: Post
 - 공개 범위: Post Visibility
+- 내용 경고: Content Warning
 - 민감한 미디어: Sensitive Media

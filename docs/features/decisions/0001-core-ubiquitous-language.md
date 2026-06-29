@@ -19,11 +19,11 @@ Kosmo DDD 명세의 핵심 보편 언어를 다음과 같이 확정한다.
 | 로그인/보안 주체    | Account         | 계정          | 인증, 보안 설정, Profile 소유 관계의 주체                       |
 | 게시 접근/노출 범위 | Post Visibility | 공개 범위     | Post를 누가 볼 수 있고 어디에 노출될 수 있는지 나타내는 값 객체 |
 | 게시 목록           | Post List       | 게시 목록     | Post와 Repost 목록의 후보 선택, 제어, 정렬 규칙                 |
-| 반응                | Reaction        | 반응          | Profile이 Post에 남기는 반응 행동                               |
+| 반응                | Reaction        | 반응          | Profile이 Post에 이모지 단위로 남기는 반응 행동                 |
 | 재게시              | Repost          | 재게시        | Profile이 원본 Post를 자신의 관계망에 다시 노출하는 행동        |
 | 북마크              | Bookmark        | 북마크        | Profile이 Post를 개인적으로 저장하는 행동                       |
 | 내용 경고           | Content Warning | 내용 경고     | Post 본문과 미디어를 접어서 보여주기 위한 표시 정책             |
-| 민감한 미디어       | Sensitive Media | 민감한 미디어 | Profile 또는 정책이 민감한 것으로 표시한 Media                  |
+| 민감한 미디어       | Sensitive Media | 민감한 미디어 | Post 단위로 설정되어 연결된 모든 Media를 가리는 상태            |
 
 ## 용어 규칙
 
@@ -39,11 +39,14 @@ Kosmo DDD 명세의 핵심 보편 언어를 다음과 같이 확정한다.
   Control로 재정의하지 않는다.
 - `Post Visibility`는 viewer Profile별 접근 가능 대상을 먼저 결정한다. `Post Eligibility`는 Post
   Visibility가 허용한 viewer-visible Post 안에서 읽기/전파 후보성을 제한한다.
+- `Post Eligibility`는 데이터를 가지는 Post 속성이나 값 객체가 아니라 Publishing이 소유하는 후보성
+  정책이다.
 - 게시 목록의 canonical domain term은 `Post List`다. `Feed`는 canonical domain term으로 사용하지
   않는다.
 - `Reaction`과 `Repost`를 canonical domain term으로 사용한다. 좋아요, 부스트, 확산 계열 표현은
   canonical domain term으로 사용하지 않는다.
-- `Reaction`은 Post 하나에 Profile당 여러 개를 허용한다.
+- `Reaction`은 Post 하나에 Profile당 같은 이모지 1개만 허용하고, 서로 다른 이모지는 여러 개
+  허용한다.
 - `Bookmark`의 한국어 표현은 `북마크`로 쓴다.
 - `Quote`는 현재 도메인 범위에서 제외한다.
 - `Collection`은 현재 Engagement 범위에서 제외한다.

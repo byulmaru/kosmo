@@ -18,7 +18,8 @@
 - 반응의 canonical term은 `Reaction`이다.
 - 재게시의 canonical term은 `Repost`다.
 - `Quote`는 현재 도메인 범위에서 제외한다.
-- `Reaction`은 Post 하나에 Profile당 여러 개를 허용한다.
+- `Reaction`은 Post 하나에 Profile당 같은 이모지 1개만 허용하고, 서로 다른 이모지는 여러 개
+  허용한다.
 - `Bookmark`의 한국어 표현은 `북마크`다.
 - `Collection`은 현재 Engagement 범위에서 제외한다.
 - `Follow Pack`은 현재 도메인 범위에서 제외한다.
@@ -27,8 +28,8 @@
 - Messaging은 현재 도메인 범위에서 제외한다.
 - Account가 주체인 행동은 인증, 보안, Profile 소유, 운영자 권한에 한정하고, 그 외 소셜 행동의
   기본 주체는 Profile이다.
-- `Post Visibility`와 `Post Eligibility`는 Post List 속성이 아니라 Publishing이 소유하는 Post
-  속성이다.
+- `Post Visibility`는 Post List 속성이 아니라 Publishing이 소유하는 Post 속성이다.
+- `Post Eligibility`는 데이터를 가지는 Post 속성이 아니라 Publishing이 소유하는 후보성 정책이다.
 - `Post Visibility`가 viewer Profile별 접근 가능 대상을 먼저 결정하고, `Post Eligibility`는 그 안에서
   읽기/전파 후보성을 제한한다.
 - `Post Visibility` 값은 공개, 조용한 공개, 팔로워 공개, 멘션한 프로필만 네 가지다.

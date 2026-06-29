@@ -16,10 +16,10 @@ Profile, 표시 handle, Remote Profile identity를 구분한다.
 
 ## DDD 명세
 
-- 컨텍스트 경계: Account, Profile, 표시 handle, 로컬/원격 Profile identity를 정의한다. 게시, 팔로우,
-  검색 색인, 운영 제재의 상세 규칙은 소유하지 않는다.
+- 컨텍스트 경계: Account, Profile, 표시 handle, 로컬/원격 Profile identity, Profile의 팔로우 승인
+  정책을 정의한다. 게시, 팔로우 관계 생명주기, 검색 색인, 운영 제재의 상세 규칙은 소유하지 않는다.
 - 보편 언어: Account, Profile, Local Profile, Remote Profile, Handle, Display Handle, Remote Profile
-  Identity, Profile State.
+  Identity, Profile State, Follow Approval Policy.
 - 핵심 모델: Account와 Profile을 aggregate root 후보로 둔다. Account-Profile 소유 관계는 역할과
   권한을 가진 관계로 본다.
 - 값 객체 후보: Handle, Display Name, Bio, Profile URL, Remote URL, Host, Account Profile Role.
@@ -29,7 +29,7 @@ Profile, 표시 handle, Remote Profile identity를 구분한다.
 - 도메인 이벤트 후보: ProfileCreated, ProfileUpdated, ProfileStateChanged, HandleChanged,
   AccountProfileLinked.
 - 정책 후보: handle 변경, 프로필 삭제와 계정 삭제 분리, 원격 프로필 캐시 최신성, 프로필 편집
-  권한.
+  권한, 팔로우 승인 정책.
 
 ## 핵심 기능
 
@@ -39,6 +39,7 @@ Profile, 표시 handle, Remote Profile identity를 구분한다.
 - 하나 이상의 프로필을 소유할 수 있다.
 - 이메일, OAuth, 패스키 같은 인증 수단은 OIDC 구현에 의존한다.
 - 계정 삭제와 프로필 삭제는 서로 다른 생명주기로 다룬다.
+- Profile이 남아 있으면 Account를 삭제할 수 없다.
 - 계정 정지는 Account 상태이고 프로필 정지는 Profile 상태다.
 
 ### 프로필
@@ -92,8 +93,11 @@ Profile, 표시 handle, Remote Profile identity를 구분한다.
 
 ## 팔로우 요청 승인 여부
 
-- 자유: 타 프로필이 해당 프로필을 대상으로 팔로우 동작시 승인 절차 없이 팔로우 관계가 생성됨.
-- 승인제: 타 프로필이 해당 프로필을 대상으로 팔로우 동작시 팔로우 요청이 생성됨.
+Profile은 팔로우 승인 정책을 가진다. Social Graph는 이 값을 참조해 Follow Relationship 또는 Follow
+Request를 생성한다.
+
+- 자유: 다른 Profile이 해당 Profile을 팔로우하면 승인 절차 없이 Follow Relationship이 생성된다.
+- 승인제: 다른 Profile이 해당 Profile을 팔로우하면 Follow Request가 생성된다.
 
 ## 입력 정책
 
@@ -107,14 +111,12 @@ Profile, 표시 handle, Remote Profile identity를 구분한다.
 - 프로필 편집 권한은 해당 프로필의 `Owner` 역할을 기준으로 판단한다.
 - avatar, header image, Profile links는 프로필 표현 속성이다.
 
-## 미결정 네이밍
-
-- 계정: Account
-- 표시 handle: Display Handle, Qualified Handle
-- 원본 URL: canonicalUrl, remoteUrl
-- 승인제 프로필: Locked, Protected, Follow approval required
-
 ## 확정된 용어
 
+- 계정: Account
 - 프로필: Profile
 - 원격 프로필: Remote Profile
+- 표시 handle: Display Handle
+- qualified handle: Qualified Handle
+- 원격 원본 URL: Remote URL
+- 팔로우 승인 정책: Follow Approval Policy

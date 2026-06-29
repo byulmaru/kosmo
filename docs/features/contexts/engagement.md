@@ -22,11 +22,11 @@ Profile 행동 단위를 기준으로 정리한다.
   entity 후보로 둔다.
 - 값 객체 후보: Reaction Type, Repost Scope, Bookmark Privacy, Engagement Count.
 - 불변 조건: 행동 주체는 Profile 단위다. Repost는 원본 게시의 공개 범위를 넘지 않아야 한다.
-  Reaction은 Post 하나에 Profile당 여러 개를 허용한다. 북마크는 기본적으로 비공개다.
+  Reaction은 Post 하나에 Profile당 같은 이모지 1개만 허용하고 서로 다른 이모지는 여러 개 허용한다.
+  북마크는 기본적으로 비공개다.
 - 도메인 이벤트 후보: ReactionAdded, ReactionRemoved, PostReposted, RepostRemoved, BookmarkAdded,
   BookmarkRemoved.
-- 정책 후보: count/list 공개 범위, 삭제/제한 공개 게시의 행동 표시, Block 이후 행동 삭제 또는
-  무효화 방식.
+- 정책 후보: count/list 공개 범위, 삭제/제한 공개 게시의 행동 표시, Block 이후 행동 삭제.
 
 ## 핵심 기능
 
@@ -42,7 +42,7 @@ Profile 행동 단위를 기준으로 정리한다.
 - Profile은 Post를 자기 팔로워에게 다시 노출할 수 있다.
 - 재게시 취소가 가능해야 한다.
 - Repost는 원본 Post의 Post Visibility를 변경하지 않는다.
-- 원본 Post가 삭제되면 Repost를 제거하거나 숨긴다.
+- 원본 Post가 삭제되면 Repost를 표시하지 않는다.
 - 공개 / 조용한 공개 Post만 재게시할 수 있다.
 
 ### 북마크
@@ -61,9 +61,9 @@ Profile 행동 단위를 기준으로 정리한다.
 ## 도메인 속성/정책 메모
 
 - 상호작용은 Profile 단위다.
-- Block 발생 시 기존 Reaction, Repost, Bookmark는 삭제 또는 무효화 방향으로 본다.
+- Block 발생 시 기존 Reaction, Repost, Bookmark는 삭제한다.
 
-## 미결정 네이밍
+## 확정된 용어
 
 - 반응: Reaction
 - 재게시: Repost

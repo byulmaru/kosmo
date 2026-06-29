@@ -28,8 +28,11 @@ PR #176의 unresolved review thread를 확인하고, 답글에 남은 결정을 
 - 도메인 스펙이 아닌 화면 상태, 구현 실패 처리, 업로드 세부 제한, 캐시 만료, dedupe 같은 문구는
   제거하거나 제외/보류 범위로 이동했다.
 
-## 남은 질문 후보
+## 후속 처리
 
-1. Post 수정 기능을 제공할 경우 수정 이력 공개 범위를 어떻게 둘지 결정해야 한다.
-2. Account 삭제와 Profile 삭제의 분리 정책을 더 구체화해야 한다.
-3. 원격 follow delivery 실패 상태를 도메인 상태로 둘지, 구현/연합 프로토콜 처리로 둘지 결정해야 한다.
+아래 항목은 [2026-06-29 정책 소유권 후속 결정 기록](./2026-06-29-policy-ownership-followup.md)과
+[ADR 0003](../decisions/0003-policy-ownership-clarifications.md)에서 닫혔다.
+
+- Post 수정은 현재 지원하지 않는다.
+- Profile이 남아 있으면 Account를 삭제할 수 없다.
+- 원격 follow delivery 실패 상태는 구현/연합 스펙으로 분리한다.
