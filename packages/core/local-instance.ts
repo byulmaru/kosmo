@@ -1,21 +1,18 @@
 import { eq } from 'drizzle-orm';
+import { db } from './db';
 import { Instances } from './db/tables';
 import { first } from './db/utils';
 import {
   parseLocalInstanceConfig,
   validateConfiguredLocalInstance,
 } from './local-instance-internal';
-import type { Database } from './db';
 import type { LocalInstanceOptions } from './local-instance-internal';
 
 let configuredLocalInstancePromise: Promise<typeof Instances.$inferSelect> | undefined;
 
-const loadConfiguredLocalInstance = async (
-  database: Database,
-  options: LocalInstanceOptions = {},
-) => {
+const loadConfiguredLocalInstance = async (options: LocalInstanceOptions = {}) => {
   const config = parseLocalInstanceConfig(options);
-  const instance = await database
+  const instance = await db
     .select()
     .from(Instances)
     .where(eq(Instances.domain, config.domain))
@@ -25,15 +22,12 @@ const loadConfiguredLocalInstance = async (
   return validateConfiguredLocalInstance(instance, config);
 };
 
-export const resolveConfiguredLocalInstance = async (
-  database: Database,
-  options: LocalInstanceOptions = {},
-) => {
+export const resolveConfiguredLocalInstance = async (options: LocalInstanceOptions = {}) => {
   if ('publicOrigin' in options) {
-    return loadConfiguredLocalInstance(database, options);
+    return loadConfiguredLocalInstance(options);
   }
 
-  configuredLocalInstancePromise ??= loadConfiguredLocalInstance(database, options);
+  configuredLocalInstancePromise ??= loadConfiguredLocalInstance(options);
 
   return configuredLocalInstancePromise;
 };

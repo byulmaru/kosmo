@@ -14,7 +14,7 @@ builder.queryField('profileByHandle', (t) =>
       handle: t.arg.string({ required: true }),
     },
     resolve: async (_, args) => {
-      const localInstance = await resolveConfiguredLocalInstance(db);
+      const localInstance = await resolveConfiguredLocalInstance();
 
       return db
         .select()

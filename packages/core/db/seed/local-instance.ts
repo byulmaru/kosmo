@@ -5,18 +5,15 @@ import {
   parseLocalInstanceConfig,
   validateConfiguredLocalInstance,
 } from '../../local-instance-internal';
+import { db } from '../index';
 import { Instances, Profiles } from '../tables';
 import { first, firstOrThrow, isUniqueViolation } from '../utils';
 import type { LocalInstanceOptions } from '../../local-instance-internal';
-import type { Database } from '../index';
 
-export const bootstrapConfiguredLocalInstance = async (
-  database: Database,
-  options: LocalInstanceOptions = {},
-) => {
+export const bootstrapConfiguredLocalInstance = async (options: LocalInstanceOptions = {}) => {
   const config = parseLocalInstanceConfig(options);
 
-  return database.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     const existing = await tx
       .select()
       .from(Instances)

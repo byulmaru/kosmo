@@ -18,7 +18,7 @@ builder.mutationField('createProfile', (t) =>
       handle: t.input.string({ validate: profileHandleSchema }),
     },
     resolve: async (_, { input }, ctx) => {
-      const localInstance = await resolveConfiguredLocalInstance(db);
+      const localInstance = await resolveConfiguredLocalInstance();
       const profile = await db.transaction(async (tx) => {
         const profile = await tx
           .insert(Profiles)

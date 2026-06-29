@@ -1,5 +1,4 @@
 import { serve } from '@hono/node-server';
-import { db } from '@kosmo/core/db';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { Hono } from 'hono';
 import { deriveContext } from './context';
@@ -7,7 +6,7 @@ import { yoga } from './graphql';
 import { rest } from './rest';
 import type { Env } from './context';
 
-await resolveConfiguredLocalInstance(db);
+await resolveConfiguredLocalInstance();
 
 const app = new Hono<Env>();
 
