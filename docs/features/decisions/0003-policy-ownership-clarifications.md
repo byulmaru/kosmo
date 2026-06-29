@@ -26,7 +26,7 @@ Accepted
 - Thread mute는 Trust & Safety가 아니라 Notification이 소유한다.
 - 원격 delivery 실패, 원격 서버 전달 실패, 원격 서버 삭제/정지 신호 적용 순서는 구현/연합 스펙으로
   분리하고 현재 도메인 명세에서 제외한다.
-- 제한 또는 정지된 Account/Profile에서 발생한 소셜 알림은 별도 요청함으로 분리하지 않고 노출하지
+- 제한 또는 정지된 Account/Profile에서 발생한 소셜 알림은 별도 알림함으로 분리하지 않고 노출하지
   않는다. 신고 제출만으로는 대상의 노출, 알림, 라우팅이 바뀌지 않는다.
 - Post 첨부 제한은 초기값으로 Post당 이미지 최대 4개로 둔다. Media 파일 제한은 이미지당 최대 10
   MiB, MIME type `image/avif`, `image/jpeg`, `image/png`, `image/webp`, 가로/세로 각각 최대 4096px로
@@ -50,5 +50,5 @@ Accepted
 - [Notification 컨텍스트](../contexts/notification.md)는 thread mute와 알림 억제를 소유한다.
 - [Trust & Safety 컨텍스트](../contexts/trust-safety.md)는 신고, 차단, 뮤트, 운영자 moderation 정책을
   소유하지만 thread mute와 연합 delivery 실패 처리는 소유하지 않는다.
-- [Media 컨텍스트](../contexts/media.md)는 파일 원본, 파생 이미지, 접근성 설명, 업로드 제한을
+- [Media 컨텍스트](../contexts/media.md)는 파일 원본, 파생 이미지, Alt Text, 업로드 제한을
   소유하지만 Post 단위 민감한 미디어 상태는 소유하지 않는다.

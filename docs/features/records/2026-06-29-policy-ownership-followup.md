@@ -20,7 +20,7 @@ DDD 도메인 명세에서 `~정한다`처럼 미확정으로 남은 표현, 문
 8. Thread mute는 Notification이 소유한다.
 9. 연합 delivery 실패, 원격 서버 전달 실패, 원격 서버 삭제/정지 신호 적용 순서는 구현/연합 스펙으로
    분리한다.
-10. 제한 또는 정지된 Account/Profile에서 발생한 소셜 알림은 별도 요청함으로 보내지 않고 노출하지
+10. 제한 또는 정지된 Account/Profile에서 발생한 소셜 알림은 별도 알림함으로 보내지 않고 노출하지
     않는다. 신고만으로는 노출, 알림, 라우팅 변화가 없다.
 11. 로컬 이미지 업로드 제한은 Post당 이미지 최대 4개, 이미지당 최대 10 MiB, MIME type
     `image/avif`, `image/jpeg`, `image/png`, `image/webp`, 가로/세로 각각 최대 4096px로 둔다. Avatar

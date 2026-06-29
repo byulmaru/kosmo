@@ -2,8 +2,7 @@
 
 ## 목표
 
-Profile이 게시에 반응하고, 재게시하고, 저장할 수 있어야 한다. 기능 이름보다
-Profile 행동 단위를 기준으로 정리한다.
+Profile이 Post에 남기는 Reaction, Repost, Bookmark 행동과 그 결과를 정의한다.
 
 ## 컨텍스트 관계
 
@@ -21,7 +20,7 @@ Profile 행동 단위를 기준으로 정리한다.
 - 핵심 모델: Post Engagement를 aggregate root 후보로 둔다. Reaction, Repost, Bookmark는 행동별
   entity 후보로 둔다.
 - 값 객체 후보: Reaction Type, Repost Scope, Bookmark Privacy, Engagement Count.
-- 불변 조건: 행동 주체는 Profile 단위다. Repost는 원본 게시의 공개 범위를 넘지 않아야 한다.
+- 불변 조건: 행동 주체는 Profile 단위다. Repost는 원본 Post의 Post Visibility를 넘지 않아야 한다.
   Reaction은 Post 하나에 Profile당 같은 이모지 1개만 허용하고 서로 다른 이모지는 여러 개 허용한다.
   북마크는 기본적으로 비공개다.
 - 도메인 이벤트 후보: ReactionAdded, ReactionRemoved, PostReposted, RepostRemoved, BookmarkAdded,
@@ -39,22 +38,22 @@ Profile 행동 단위를 기준으로 정리한다.
 
 ### 재게시
 
-- Profile은 Post를 자기 팔로워에게 다시 노출할 수 있다.
-- 재게시 취소가 가능해야 한다.
+- Profile은 Post를 자신의 Followers에게 다시 노출할 수 있다.
+- Profile은 자신이 만든 Repost를 취소할 수 있다.
 - Repost는 원본 Post의 Post Visibility를 변경하지 않는다.
-- 원본 Post가 삭제되면 Repost를 표시하지 않는다.
+- 원본 Post가 삭제되면 Repost는 노출 후보가 아니다.
 - 공개 / 조용한 공개 Post만 재게시할 수 있다.
 
 ### 북마크
 
 - Profile은 Post를 개인적으로 저장할 수 있다.
-- 북마크는 타인에게 보여지지 않는다.
+- Bookmark는 저장한 Profile에게만 보인다.
 - Post 작성자에게 북마크 알림을 보내지 않는다.
 - 북마크 목록은 저장한 Profile만 볼 수 있다.
 
 ## 카운트와 목록
 
-- 답글 수, 반응한 Profile 수, 재게시한 Profile 수를 표시한다.
+- 답글 수, 반응한 Profile 수, 재게시한 Profile 수를 계산한다.
 - 반응자 목록과 재게시자 목록은 공개 범위와 차단 상태를 반영한다.
 - 답글 수는 Publishing이 소유한 thread 관계를 반영한 읽기 지표로 다룬다.
 
