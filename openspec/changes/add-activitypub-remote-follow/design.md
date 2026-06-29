@@ -25,6 +25,7 @@
 - **outbound delivery는 Fedify `sendActivity`를 사용한다.** kosmo는 `Follow` 또는 `Undo(Follow)` activity를 만들고 Fedify에 전달한다. retry/queue/signature는 Fedify 설정에 맡긴다.
 - **inbound activity는 Fedify inbox listener에서 받는다.** HTTP signature verification, actor key fetch, request parsing은 Fedify에 맡기고, kosmo handler는 verified typed Follow/Undo/Accept/Reject만 처리한다.
 - **remote target follow는 pending 가능성을 인정한다.** remote actor가 approval required이거나 Accept를 기다려야 하면 `PENDING`으로 저장한다. Accept를 받으면 `ACCEPTED`, Reject를 받으면 `REJECTED`로 갱신한다.
+- **unresponsive instance에는 outbound follow delivery를 하지 않는다.** `UNRESPONSIVE` instance는 저장된 stale profile 조회만 허용하고 outbound federation을 억제하므로 remote follow/unfollow mutation은 대상이 차단된 것으로 처리하고 `Follow`/`Undo(Follow)`를 발송하지 않는다.
 - **remote followers/following collection은 mirror하지 않는다.** remote profile의 full collection을 가져오지 않고, kosmo DB에 저장된 local/remote `ProfileFollow` 관계만 GraphQL follow graph에 반영한다.
 - **unsupported inbox activity는 닫는다.** Follow graph에 필요한 activity 외에는 이번 change에서 처리하지 않는다.
 

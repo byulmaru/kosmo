@@ -23,5 +23,5 @@
 ## 4. Verification
 
 - [ ] 4.1 ActivityPub follow test로 Fedify `sendActivity` outbound Follow/Undo, Fedify inbox listener inbound Follow/Undo/Accept/Reject, idempotency, state transition, unsupported inbox activity 차단을 검증한다.
-- [ ] 4.2 GraphQL follow test로 remote target follow/unfollow, viewerFollow, remote collection/count unsupported 응답, suspended instance target 차단을 검증한다.
+- [ ] 4.2 GraphQL follow test로 remote target follow/unfollow, viewerFollow, remote collection/count unsupported 응답, suspended 또는 unresponsive instance target 차단과 outbound Follow/Undo 미발송을 검증한다.
 - [ ] 4.3 `pnpm lint:eslint`, 관련 package typecheck/test, GraphQL schema check, `openspec validate add-activitypub-remote-follow --strict`를 실행한다.
