@@ -31,12 +31,23 @@
     `),
   );
   let selectedProfileFromMutation = $state<ProfileStateChangedSelectedProfile | null>(null);
+  let selectedProfileVersion = $state(0);
   const selectedProfile = $derived(
     selectedProfileFromMutation ?? query.data?.currentSession?.selectedProfile ?? null,
   );
 
+  $effect(() => {
+    if (
+      selectedProfileFromMutation &&
+      query.data?.currentSession?.selectedProfile?.id === selectedProfileFromMutation.id
+    ) {
+      selectedProfileFromMutation = null;
+    }
+  });
+
   setTabsLayoutSessionContext({
     selectedProfile: () => selectedProfile,
+    selectedProfileVersion: () => selectedProfileVersion,
     loading: () => query.loading,
     error: () => Boolean(query.error),
     refetch: () => query.refetch(),
@@ -44,11 +55,12 @@
 
   const handleProfileStateChanged = (
     reason: ProfileStateChangedReason,
-    selectedProfile: ProfileStateChangedSelectedProfile,
+    selectedProfileFromResponse: ProfileStateChangedSelectedProfile,
   ) => {
     const cache = client.extension('cache');
 
-    selectedProfileFromMutation = selectedProfile;
+    selectedProfileFromMutation = selectedProfileFromResponse;
+    selectedProfileVersion += 1;
 
     if (reason === 'profile-created') {
       cache.invalidate({ __typename: 'Query', $field: 'me' });

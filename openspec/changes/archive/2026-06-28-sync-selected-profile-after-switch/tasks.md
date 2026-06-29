@@ -21,6 +21,6 @@
 
 - [x] 4.1 E2E에서 프로필 생성 후 composer와 사이드바가 생성된 프로필을 표시하는지 확인한다
 - [x] 4.2 E2E에서 이미 열린 `/compose` 화면에서 다른 프로필을 선택하면 composer와 사이드바가 즉시 새 프로필을 표시하는지 확인한다
-- [x] 4.3 E2E에서 일반 프로필 선택 성공 handler가 `currentSession` 전체 invalidation/refetch를 직접 요구하지 않고, 필요한 mutation과 active-profile 의존 field 갱신만 발생시키는지 확인한다
-- [x] 4.4 E2E에서 프로필 전환 직후 홈 온보딩과 프로필 route viewer action이 최신 active profile을 반영하는지 확인한다
+- [x] 4.3 E2E에서 일반 프로필 선택 성공 handler가 `currentSession.selectedProfile` route query 재실행을 요구하지 않고 mutation 응답을 반영하는지 request body 기준으로 확인한다
+- [x] 4.4 E2E에서 프로필 전환 직후 홈 타임라인 refetch 중 이전 active profile의 게시글을 숨기고, 프로필 route viewer action이 최신 active profile을 반영하는지 확인한다
 - [x] 4.5 `pnpm exec openspec validate sync-selected-profile-after-switch --strict`, `pnpm --dir apps/web check`, 관련 E2E, lint/prettier를 실행한다

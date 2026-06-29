@@ -1,15 +1,8 @@
 import { expect, test } from '@playwright/test';
-import type { Page } from '@playwright/test';
-
-const currentSessionQueryOperations = new Set([
-  'ComposePageQuery',
-  'ProtectedLayoutQuery',
-  'SearchPageSessionQuery',
-  'TabsLayoutQuery',
-]);
+import type { Page, Route } from '@playwright/test';
 
 test('profile selection updates open shell and compose from mutation payload', async ({ page }) => {
-  const graphQLOperations = collectGraphQLOperations(page);
+  const graphQLRequests = collectGraphQLRequests(page);
 
   await page.goto('/login');
   await page.waitForURL('**/home');
@@ -27,7 +20,7 @@ test('profile selection updates open shell and compose from mutation payload', a
   await expect(sidebarProfileHandle(page, 'beta')).toBeVisible();
   await page.waitForLoadState('networkidle');
 
-  graphQLOperations.length = 0;
+  graphQLRequests.clear();
 
   const responseBody = await selectProfileFromSwitcher(page, 'alpha');
 
@@ -35,16 +28,14 @@ test('profile selection updates open shell and compose from mutation payload', a
   await expect(composerProfileHandle(page, 'alpha')).toBeVisible();
   await expect(sidebarProfileHandle(page, 'alpha')).toBeVisible();
 
-  await page.waitForTimeout(500);
+  await page.waitForLoadState('networkidle');
 
-  expect(graphQLOperations).toContain('ProfileSwitcherSelectProfileMutation');
-  expect(
-    graphQLOperations.filter((operation) => currentSessionQueryOperations.has(operation)),
-  ).toEqual([]);
+  expect(graphQLRequests.operationNames).toContain('ProfileSwitcherSelectProfileMutation');
+  expect(graphQLRequests.currentSessionSelectedProfileOperations).toEqual([]);
 });
 
 test('profile route action follows active profile bridge after switching', async ({ page }) => {
-  const graphQLOperations = collectGraphQLOperations(page);
+  const graphQLRequests = collectGraphQLRequests(page);
 
   await page.goto('/login');
   await page.waitForURL('**/home');
@@ -57,7 +48,7 @@ test('profile route action follows active profile bridge after switching', async
   await expect(page.getByRole('main').getByRole('button', { name: '팔로우' })).toBeVisible();
   await page.waitForLoadState('networkidle');
 
-  graphQLOperations.length = 0;
+  graphQLRequests.clear();
 
   const responseBody = await selectProfileFromSwitcher(page, 'gamma');
 
@@ -65,16 +56,46 @@ test('profile route action follows active profile bridge after switching', async
   await expect(sidebarProfileHandle(page, 'gamma')).toBeVisible();
   await expect(page.getByRole('main').getByRole('button', { name: '팔로우' })).toBeHidden();
 
-  await page.waitForTimeout(500);
+  await page.waitForLoadState('networkidle');
 
-  expect(graphQLOperations).toContain('ProfileSwitcherSelectProfileMutation');
-  expect(
-    graphQLOperations.filter((operation) => currentSessionQueryOperations.has(operation)),
-  ).toEqual([]);
+  expect(graphQLRequests.operationNames).toContain('ProfileSwitcherSelectProfileMutation');
+  expect(graphQLRequests.currentSessionSelectedProfileOperations).toEqual([]);
 });
 
-function collectGraphQLOperations(page: Page) {
-  const operations: string[] = [];
+test('home timeline hides previous profile posts while active profile refetches', async ({
+  page,
+}) => {
+  const betaPostBody = 'beta profile timeline post';
+
+  await page.goto('/login');
+  await page.waitForURL('**/home');
+
+  await createProfileFromSwitcher(page, 'alphahome');
+  await createProfileFromSwitcher(page, 'betahome');
+  await expect(sidebarProfileHandle(page, 'betahome')).toBeVisible();
+
+  await createPost(page, betaPostBody);
+  await page.goto('/home');
+  await expect(page.getByText(betaPostBody)).toBeVisible();
+
+  const delayedHomeQuery = await delayNextGraphQLOperation(page, 'HomePageQuery');
+
+  const responseBody = await selectProfileFromSwitcher(page, 'alphahome');
+
+  expect(responseBody.data?.selectProfile?.session?.selectedProfile?.handle).toBe('alphahome');
+  await expect(sidebarProfileHandle(page, 'alphahome')).toBeVisible();
+  await delayedHomeQuery.waitForRequest();
+  await expect(page.getByText(betaPostBody)).toBeHidden();
+
+  delayedHomeQuery.release();
+
+  await expect(page.getByText('아직 게시글이 없어요')).toBeVisible();
+  await expect(page.getByText(betaPostBody)).toBeHidden();
+});
+
+function collectGraphQLRequests(page: Page) {
+  const operationNames: string[] = [];
+  const currentSessionSelectedProfileOperations: string[] = [];
 
   page.on('request', (request) => {
     if (request.method() !== 'POST' || !isGraphQLResponse(request.url())) {
@@ -83,11 +104,22 @@ function collectGraphQLOperations(page: Page) {
 
     const operation = readGraphQLOperation(request.postData());
     if (operation?.operationName) {
-      operations.push(operation.operationName);
+      operationNames.push(operation.operationName);
+    }
+
+    if (operation?.query && readsCurrentSessionSelectedProfile(operation.query)) {
+      currentSessionSelectedProfileOperations.push(operation.operationName ?? '<anonymous>');
     }
   });
 
-  return operations;
+  return {
+    operationNames,
+    currentSessionSelectedProfileOperations,
+    clear: () => {
+      operationNames.length = 0;
+      currentSessionSelectedProfileOperations.length = 0;
+    },
+  };
 }
 
 async function createProfileFromSwitcher(page: Page, handle: string) {
@@ -134,6 +166,61 @@ async function selectProfileFromSwitcher(page: Page, handle: string) {
   };
 }
 
+async function createPost(page: Page, body: string) {
+  const createPostResponse = page.waitForResponse(async (response) => {
+    if (!isGraphQLResponse(response.url())) {
+      return false;
+    }
+
+    const operation = readGraphQLOperation(response.request().postData());
+
+    return operation?.operationName === 'PostComposerCreatePost';
+  });
+
+  await page.goto('/compose');
+  const composer = page.getByRole('main').locator('form[aria-label="새 게시글 작성"]');
+
+  await composer.locator('[aria-label="게시글 본문"]').fill(body);
+  await composer.getByRole('button', { name: '게시', exact: true }).click();
+  await createPostResponse;
+}
+
+async function delayNextGraphQLOperation(page: Page, operationName: string) {
+  let release!: () => void;
+  const releasePromise = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+
+  let resolveRequestSeen!: () => void;
+  const requestSeenPromise = new Promise<void>((resolve) => {
+    resolveRequestSeen = resolve;
+  });
+
+  let matched = false;
+  const handler = async (route: Route) => {
+    const operation = readGraphQLOperation(route.request().postData());
+
+    if (matched || operation?.operationName !== operationName) {
+      await route.fallback();
+      return;
+    }
+
+    matched = true;
+    const response = await route.fetch();
+    resolveRequestSeen();
+    await releasePromise;
+    await route.fulfill({ response });
+    await page.unroute('**/graphql', handler);
+  };
+
+  await page.route('**/graphql', handler);
+
+  return {
+    waitForRequest: () => requestSeenPromise,
+    release,
+  };
+}
+
 function composerProfileHandle(page: Page, handle: string) {
   return page
     .getByRole('main')
@@ -155,8 +242,12 @@ function readGraphQLOperation(postData: string | null) {
   }
 
   try {
-    return JSON.parse(postData) as { operationName?: string | null };
+    return JSON.parse(postData) as { operationName?: string | null; query?: string | null };
   } catch {
     return null;
   }
+}
+
+function readsCurrentSessionSelectedProfile(query: string) {
+  return /currentSession(?:\s*\([^)]*\))?\s*{[^}]*selectedProfile/s.test(query);
 }
