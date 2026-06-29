@@ -62,7 +62,7 @@
 
 - **WHEN** remote profile shell을 새로 저장해야 한다
 - **THEN** 시스템은 normalized domain에 해당하는 ActivityPub instance를 먼저 찾거나 생성한다
-- **AND** 기존 instance 상태가 `SUSPENDED`이면 remote profile shell을 저장하지 않는다
+- **AND** 기존 instance 상태가 `SUSPENDED` 또는 `UNRESPONSIVE`이면 remote profile shell을 저장하지 않는다
 
 #### Scenario: 계정-프로필 역할 저장
 
