@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ProfileListItem_profile$key } from '$mearie';
+  import type { Snippet } from 'svelte';
   import type { HTMLAttributes } from 'svelte/elements';
 
   import ProfileListItem from '../ProfileListItem.svelte';
@@ -9,7 +10,7 @@
   type Props = HTMLAttributes<HTMLElement> & {
     query?: string;
     profile?: ProfileListItem_profile$key | null;
-    viewerProfileId?: string | null;
+    action?: Snippet;
     loading?: boolean;
     error?: boolean;
     onRetry?: () => void;
@@ -18,7 +19,7 @@
   let {
     query = '',
     profile = null,
-    viewerProfileId = null,
+    action,
     loading = false,
     error = false,
     onRetry,
@@ -41,7 +42,7 @@
       </p>
     </div>
   {:else if profile}
-    <ProfileListItem {profile} linked {viewerProfileId} width="wide" class="w-full" />
+    <ProfileListItem {profile} linked {action} width="wide" class="w-full" />
   {:else if loading}
     <div aria-hidden="true">
       {#each skeletonItems as item (item)}

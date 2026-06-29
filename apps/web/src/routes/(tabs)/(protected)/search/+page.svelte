@@ -5,6 +5,7 @@
   import { page } from '$app/state';
   import { graphql } from '$mearie';
   import { createQuery } from '@mearie/svelte';
+  import FollowButton from '$lib/components/FollowButton.svelte';
   import RecentSearches from '$lib/components/Search/RecentSearches.svelte';
   import SearchBar from '$lib/components/Search/SearchBar.svelte';
   import SearchResults from '$lib/components/Search/SearchResults.svelte';
@@ -43,6 +44,7 @@
       query SearchPeopleByHandlePageQuery($handle: String!) {
         profileByHandle(handle: $handle) {
           ...ProfileListItem_profile
+          ...FollowButton_profile
         }
       }
     `),
@@ -152,12 +154,17 @@
       <SearchResults
         query={queryParam}
         profile={searchedProfile}
-        {viewerProfileId}
         loading={shouldSearchPeople && peopleQuery.loading}
         error={shouldSearchPeople && Boolean(peopleQuery.error)}
         onRetry={peopleQuery.refetch}
         class="w-full"
-      />
+      >
+        {#snippet action()}
+          {#if viewerProfileId && searchedProfile}
+            <FollowButton profile={searchedProfile} {viewerProfileId} class="shrink-0" />
+          {/if}
+        {/snippet}
+      </SearchResults>
     {:else}
       <div class="px-4 py-12 text-center">
         <p class="text-text-primary text-base font-semibold">준비 중인 검색이에요</p>

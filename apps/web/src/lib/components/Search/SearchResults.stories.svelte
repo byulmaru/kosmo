@@ -1,8 +1,10 @@
 <script module lang="ts">
+  import type { FragmentRefs } from '@mearie/svelte';
   import { defineMeta } from '@storybook/addon-svelte-csf';
 
   import type { ProfileListItem_profile$key } from '$mearie';
 
+  import FollowButton from '../FollowButton.svelte';
   import SearchResults from './SearchResults.svelte';
 
   const viewerProfileId = 'viewer-profile';
@@ -28,6 +30,14 @@
       ...overrides,
     }) as unknown as ProfileListItem_profile$key;
 
+  const followTarget = (
+    overrides: Partial<{
+      id: string;
+      viewerFollow: { id: string; state: 'ACCEPTED' | 'PENDING' } | null;
+    }> = {},
+  ): FragmentRefs<'FollowButton_profile'> =>
+    profile(overrides) as unknown as FragmentRefs<'FollowButton_profile'>;
+
   const { Story } = defineMeta({
     title: 'KOSMO/SearchResults',
     component: SearchResults,
@@ -40,7 +50,6 @@
   args={{
     query: '별마루',
     profile: profile(),
-    viewerProfileId,
   }}
 />
 
@@ -50,7 +59,11 @@
     <SearchResults />
     <SearchResults query="별마루" loading />
     <SearchResults query="별마루" error onRetry={() => {}} />
-    <SearchResults query="별마루" profile={profile()} {viewerProfileId} />
+    <SearchResults query="별마루" profile={profile()}>
+      {#snippet action()}
+        <FollowButton profile={followTarget()} {viewerProfileId} />
+      {/snippet}
+    </SearchResults>
     <SearchResults query="없는핸들" />
   </div>
 </Story>

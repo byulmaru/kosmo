@@ -1,6 +1,8 @@
 <script lang="ts">
   import { createFragment } from '@mearie/svelte';
   import { graphql } from '$mearie';
+  import type { FragmentRefs } from '@mearie/svelte';
+  import type { Snippet } from 'svelte';
   import type { HTMLAttributes } from 'svelte/elements';
 
   import type {
@@ -15,7 +17,9 @@
   // 프로필 팔로워/팔로잉 목록 영역. 게시글 목록(PostList)과 같은 상태(로딩/오류/빈) 표현·접근성 패턴을 따른다.
   // 팔로워/팔로잉은 같은 컴포넌트를 `kind`로 분기해 시각/상태 구조를 일치시킨다.
   type ConnectionKind = 'followers' | 'following';
-  type ConnectionProfileItem = { cursor: string; profile: ProfileListItem_profile$key };
+  type ProfileConnectionActionProfile = ProfileListItem_profile$key &
+    FragmentRefs<'FollowButton_profile'>;
+  type ConnectionProfileItem = { cursor: string; profile: ProfileConnectionActionProfile };
 
   type Props = HTMLAttributes<HTMLElement> & {
     kind: ConnectionKind;
@@ -26,7 +30,7 @@
     endCursor?: string | null;
     loadingNextPage?: boolean;
     nextPageError?: boolean;
-    viewerProfileId?: string | null;
+    action?: Snippet<[profile: ProfileConnectionActionProfile]>;
     loading?: boolean;
     error?: boolean;
     onRetry?: () => void;
@@ -42,7 +46,7 @@
     endCursor = null,
     loadingNextPage = false,
     nextPageError = false,
-    viewerProfileId = null,
+    action,
     loading = false,
     error = false,
     onRetry,
@@ -102,6 +106,7 @@
               follower {
                 id
                 ...ProfileListItem_profile
+                ...FollowButton_profile
               }
             }
           }
@@ -127,6 +132,7 @@
               followee {
                 id
                 ...ProfileListItem_profile
+                ...FollowButton_profile
               }
             }
           }
@@ -215,13 +221,14 @@
   {:else if connectionProfiles.length > 0}
     <div>
       {#each connectionProfiles as item (item.cursor)}
-        <ProfileListItem
-          profile={item.profile}
-          linked
-          {viewerProfileId}
-          width="wide"
-          class="w-full"
-        />
+        {@const actionSnippet = action}
+        <ProfileListItem profile={item.profile} linked width="wide" class="w-full">
+          {#if actionSnippet}
+            {#snippet action()}
+              {@render actionSnippet(item.profile)}
+            {/snippet}
+          {/if}
+        </ProfileListItem>
       {/each}
     </div>
     {#if showPagination}

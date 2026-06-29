@@ -3,6 +3,7 @@
   import { createQuery, getClient } from '@mearie/svelte';
   import { graphql } from '$mearie';
   import type { DataOf } from '@mearie/svelte';
+  import FollowButton from '$lib/components/FollowButton.svelte';
   import ProfileConnectionList from '$lib/components/ProfileConnectionList.svelte';
   import { loadNextConnectionPage } from '$lib/profileConnectionPagination';
 
@@ -37,6 +38,7 @@
               follower {
                 id
                 ...ProfileListItem_profile
+                ...FollowButton_profile
               }
             }
           }
@@ -119,9 +121,14 @@
   endCursor={paginatedPageInfo?.endCursor}
   {loadingNextPage}
   {nextPageError}
-  {viewerProfileId}
   loading={query.loading}
   error={Boolean(query.error)}
   onRetry={query.refetch}
   onLoadMore={loadMore}
-/>
+>
+  {#snippet action(profile)}
+    {#if viewerProfileId}
+      <FollowButton {profile} {viewerProfileId} class="shrink-0" />
+    {/if}
+  {/snippet}
+</ProfileConnectionList>

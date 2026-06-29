@@ -1,8 +1,10 @@
 <script module lang="ts">
+  import type { FragmentRefs } from '@mearie/svelte';
   import { defineMeta } from '@storybook/addon-svelte-csf';
 
   import type { ProfileListItem_profile$key } from '$mearie';
 
+  import FollowButton from './FollowButton.svelte';
   import ProfileListItem from './ProfileListItem.svelte';
 
   type FollowState = 'ACCEPTED' | 'PENDING';
@@ -32,6 +34,14 @@
       ...overrides,
     }) as unknown as ProfileListItem_profile$key;
 
+  const followTarget = (
+    overrides: Partial<{
+      id: string;
+      viewerFollow: { id: string; state: FollowState } | null;
+    }> = {},
+  ): FragmentRefs<'FollowButton_profile'> =>
+    profile(overrides) as unknown as FragmentRefs<'FollowButton_profile'>;
+
   const { Story } = defineMeta({
     title: 'KOSMO/ProfileListItem',
     component: ProfileListItem,
@@ -49,7 +59,6 @@
   name="Playground"
   args={{
     profile: profile(),
-    viewerProfileId,
     width: 'compact',
   }}
 />
@@ -58,7 +67,11 @@
   <div class="grid gap-4 text-sm">
     <section class="grid gap-1">
       <p class="text-text-secondary m-0">팔로우 가능</p>
-      <ProfileListItem profile={profile({ id: 'followable-profile' })} {viewerProfileId} />
+      <ProfileListItem profile={profile({ id: 'followable-profile' })}>
+        {#snippet action()}
+          <FollowButton profile={followTarget({ id: 'followable-profile' })} {viewerProfileId} />
+        {/snippet}
+      </ProfileListItem>
     </section>
     <section class="grid gap-1">
       <p class="text-text-secondary m-0">팔로잉</p>
@@ -67,8 +80,17 @@
           id: 'followed-profile',
           viewerFollow: { id: 'follow-accepted', state: 'ACCEPTED' },
         })}
-        {viewerProfileId}
-      />
+      >
+        {#snippet action()}
+          <FollowButton
+            profile={followTarget({
+              id: 'followed-profile',
+              viewerFollow: { id: 'follow-accepted', state: 'ACCEPTED' },
+            })}
+            {viewerProfileId}
+          />
+        {/snippet}
+      </ProfileListItem>
     </section>
     <section class="grid gap-1">
       <p class="text-text-secondary m-0">요청 중</p>
@@ -77,8 +99,17 @@
           id: 'pending-profile',
           viewerFollow: { id: 'follow-pending', state: 'PENDING' },
         })}
-        {viewerProfileId}
-      />
+      >
+        {#snippet action()}
+          <FollowButton
+            profile={followTarget({
+              id: 'pending-profile',
+              viewerFollow: { id: 'follow-pending', state: 'PENDING' },
+            })}
+            {viewerProfileId}
+          />
+        {/snippet}
+      </ProfileListItem>
     </section>
   </div>
 </Story>
@@ -87,11 +118,15 @@
   <div class="grid gap-4 text-sm">
     <section class="grid gap-1">
       <p class="text-text-secondary m-0">비로그인 공개 조회 또는 선택 프로필 없음</p>
-      <ProfileListItem profile={profile({ id: 'guest-profile' })} viewerProfileId={null} />
+      <ProfileListItem profile={profile({ id: 'guest-profile' })} />
     </section>
     <section class="grid gap-1">
       <p class="text-text-secondary m-0">본인 프로필</p>
-      <ProfileListItem profile={profile({ id: viewerProfileId })} {viewerProfileId} />
+      <ProfileListItem profile={profile({ id: viewerProfileId })}>
+        {#snippet action()}
+          <FollowButton profile={followTarget({ id: viewerProfileId })} {viewerProfileId} />
+        {/snippet}
+      </ProfileListItem>
     </section>
   </div>
 </Story>
@@ -100,15 +135,17 @@
   <ProfileListItem
     profile={profile({ id: 'linked-profile', handle: 'user', relativeHandle: '@user@kos.moe' })}
     linked
-    {viewerProfileId}
-  />
+  >
+    {#snippet action()}
+      <FollowButton profile={followTarget({ id: 'linked-profile' })} {viewerProfileId} />
+    {/snippet}
+  </ProfileListItem>
 </Story>
 
 <Story name="Edge cases" asChild parameters={{ controls: { disable: true } }}>
   <div class="grid gap-3">
     <ProfileListItem
       width="wide"
-      {viewerProfileId}
       profile={profile({
         id: 'long-profile',
         displayName: '아주 긴 표시 이름이 들어가서 한 줄을 넘기면 잘려야 한다',
@@ -118,7 +155,6 @@
       })}
     />
     <ProfileListItem
-      {viewerProfileId}
       profile={profile({
         id: 'minimal-profile',
         displayName: '최소 정보',
