@@ -122,6 +122,12 @@
 - **THEN** 시스템은 기존 stale profile을 계속 반환할 수 있다
 - **AND** 시스템은 실패한 resolve에 대한 negative cache row를 만들지 않는다
 
+#### Scenario: Skip refresh for unresponsive instance
+
+- **WHEN** 저장된 remote actor의 instance 상태가 `UNRESPONSIVE`이다
+- **THEN** 시스템은 저장된 active profile을 stale 상태로 계속 반환할 수 있다
+- **AND** 시스템은 remote actor refresh를 예약하거나 수행하지 않는다
+
 #### Scenario: Do not materialize suspended instance
 
 - **WHEN** remote actor가 속한 instance 상태가 `SUSPENDED`이다
