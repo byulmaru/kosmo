@@ -8,8 +8,8 @@
 ## 2. Data Model
 
 - [x] 2.1 `InstanceKind` 또는 동등한 enum과 `instance` 테이블을 추가해 domain, state, local instance의 canonical origin, ActivityPub instance의 선택적 canonical origin, 생성/수정 시각을 저장하고, domain 중복은 막되 `LOCAL` row 단일성은 강제하지 않는다.
-- [ ] 2.2 `profile.instance_id`를 추가하고 local instance bootstrap 이후 기존 profile을 configured local instance에 연결해 handle을 보존하는 migration 흐름을 구현한다.
-- [ ] 2.3 `profile.normalized_handle` 전역 unique를 `(instance_id, normalized_handle)` unique로 교체하고 관련 index/relation을 갱신한다.
+- [x] 2.2 `profile.instance_id`를 추가하고 local instance bootstrap 이후 기존 profile을 configured local instance에 연결해 handle을 보존하는 migration 흐름을 구현한다.
+- [x] 2.3 `profile.normalized_handle` 전역 unique를 `(instance_id, normalized_handle)` unique로 교체하고 관련 index/relation을 갱신한다.
 - [ ] 2.4 ActivityPub actor metadata 테이블을 추가해 profile과 actor URI/type을 저장하고, actor URI 중복과 profile당 actor metadata 중복을 막는다.
 - [ ] 2.5 ActivityPub actor key 테이블을 추가해 local actor의 public/private JWK와 remote actor의 선택적 public key metadata를 저장할 수 있게 하고 `(activitypub_actor_id, key_type)` 중복을 막는다.
 - [ ] 2.6 새 테이블의 `TableDiscriminator`, Drizzle relations, schema exports, OpenSpec data-model 계약과 일치하는 테스트 fixture를 갱신한다.
@@ -18,16 +18,16 @@
 
 - [x] 3.1 `Profile.relativeHandle` 필드를 추가해 현재 local-only profile 모델에서는 `@handle`을 반환한다.
 - [ ] 3.1a `profile.instance_id`와 instance-scoped handle uniqueness 도입 이후 configured local instance가 아닌 instance의 profile은 `@handle@domain`을 반환하도록 확장한다.
-- [ ] 3.2 `profileByHandle(handle:)`가 configured local instance의 active profile만 조회하고 remote profile을 반환하지 않도록 유지/보강한다.
+- [x] 3.2 `profileByHandle(handle:)`가 configured local instance의 active profile만 조회하고 remote profile을 반환하지 않도록 유지/보강한다.
 - [ ] 3.3 Node ID 기반 `Profile` load가 active local profile과 저장된 active remote profile을 직접 조회할 수 있게 접근 정책을 정렬한다.
 - [ ] 3.4 `profileByHandle`, active profile selection, follow graph, follow/unfollow mutation, viewerFollow, `Profile.posts`가 remote profile로 확장되지 않고 local profile 기준으로 동작하는지 구현한다.
-- [ ] 3.5 local profile 생성 resolver가 core runtime local instance resolve helper로 configured local instance ID를 결정하고, local instance 설정 누락/불일치를 설정 오류로 처리하게 한다.
+- [x] 3.5 local profile 생성 resolver가 core runtime local instance resolve helper로 configured local instance ID를 결정하고, local instance 설정 누락/불일치를 설정 오류로 처리하게 한다.
 - [x] 3.6 GraphQL schema를 재생성하고 `Profile.relativeHandle`이 `apps/api/schema.graphql`에 반영되는지 확인한다.
 
 ## 4. Fedify Actor Discovery
 
-- [ ] 4.1 `packages/core`에 runtime local instance resolve helper를 만들고, `PUBLIC_ORIGIN`과 일치하는 configured local instance row를 canonical origin/domain source of truth로 읽어 검증하되 runtime 요청 처리 중 row를 자동 생성하지 않는다.
-- [ ] 4.2 `packages/core`에 setup/migration에서 사용할 local instance bootstrap helper를 만들고, configured local instance row를 만들거나 `PUBLIC_ORIGIN`과 일치하는 기존 row를 검증하며, profile backfill 전에 실행되는 setup/migration 흐름에 연결한다.
+- [x] 4.1 `packages/core`에 runtime local instance resolve helper를 만들고, `PUBLIC_ORIGIN`과 일치하는 configured local instance row를 canonical origin/domain source of truth로 읽어 검증하되 runtime 요청 처리 중 row를 자동 생성하지 않는다.
+- [x] 4.2 `packages/core`에 setup/migration에서 사용할 local instance bootstrap helper를 만들고, configured local instance row를 만들거나 `PUBLIC_ORIGIN`과 일치하는 기존 row를 검증하며, profile backfill 전에 실행되는 setup/migration 흐름에 연결한다.
 - [ ] 4.3 WebFinger `acct:{handle}@{localDomain}`을 local active profile UUID actor identifier로 매핑한다.
 - [ ] 4.4 actor dispatcher를 `/ap/actor/{identifier}` URI template에 연결하고 identifier를 raw `profile.id` UUID로 해석한다.
 - [ ] 4.5 actor document를 `Person`으로 구성하고 `id`, `preferredUsername`, `name`, `url`, `published`, `inbox`, `outbox`, `publicKey`, `assertionMethods`를 보장한다.

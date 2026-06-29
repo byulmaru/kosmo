@@ -65,11 +65,12 @@ export default defineConfig({
       url: `${oidcOrigin}/health`,
     },
     {
-      command: 'pnpm --dir ../api start',
+      command: 'pnpm --dir ../api db:bootstrap-local-instance && pnpm --dir ../api start',
       env: {
         DATABASE_URL: databaseUrl,
         NODE_ENV: 'production',
         PORT: String(apiPort),
+        PUBLIC_ORIGIN: webOrigin,
         R2_ACCESS_KEY_ID: 'e2e-access-key',
         R2_BUCKET: 'e2e-bucket',
         R2_ENDPOINT: 'http://127.0.0.1:4900',
@@ -88,6 +89,7 @@ export default defineConfig({
         OIDC_CLIENT_SECRET: oidcClientSecret,
         OIDC_TOKEN_URL: `${oidcOrigin}/oauth/token`,
         PUBLIC_API_ORIGIN: apiOrigin,
+        PUBLIC_ORIGIN: webOrigin,
         PUBLIC_OIDC_CLIENT_ID: oidcClientId,
       },
       reuseExistingServer: false,

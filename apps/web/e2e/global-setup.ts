@@ -1,7 +1,9 @@
 export default async function globalSetup() {
   process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+  process.env.PUBLIC_ORIGIN ??= 'http://127.0.0.1:4173';
 
   const { pg } = await import('@kosmo/core/db');
+  const { seedDatabase } = await import('@kosmo/core/db/seed');
 
   await pg.unsafe(`
     DO $$
@@ -18,6 +20,8 @@ export default async function globalSetup() {
       END IF;
     END $$;
   `);
+
+  await seedDatabase();
 
   await pg.end();
 }
