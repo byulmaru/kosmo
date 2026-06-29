@@ -28,6 +28,7 @@
       id: 'story-author-profile',
       displayName: '코스모 작가',
       handle: 'kosmo',
+      relativeHandle: '@kosmo',
     },
   });
 

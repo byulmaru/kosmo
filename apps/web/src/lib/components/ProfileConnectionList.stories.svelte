@@ -18,6 +18,7 @@
       id: string;
       displayName: string;
       handle: string;
+      relativeHandle: string;
       bio: string | null;
       viewerFollow: { id: string; state: FollowState } | null;
     }> = {},
@@ -27,6 +28,7 @@
       id: 'connection-profile',
       displayName: '연결된 프로필',
       handle: 'connected',
+      relativeHandle: '@connected',
       bio: '팔로우 관계 목록에서 표시되는 프로필입니다.',
       viewerFollow: null,
       ...overrides,
@@ -47,6 +49,7 @@
                 id: 'follower-1',
                 displayName: '첫 번째 팔로워',
                 handle: 'first-follower',
+                relativeHandle: '@first-follower',
               }),
             },
           },
@@ -59,6 +62,7 @@
                 id: 'follower-2',
                 displayName: '두 번째 팔로워',
                 handle: 'second-follower',
+                relativeHandle: '@second-follower',
                 viewerFollow: { id: 'viewer-follow-2', state: 'ACCEPTED' },
               }),
             },
@@ -82,6 +86,7 @@
                 id: 'followee-1',
                 displayName: '팔로잉 대상',
                 handle: 'followee',
+                relativeHandle: '@followee',
               }),
             },
           },
