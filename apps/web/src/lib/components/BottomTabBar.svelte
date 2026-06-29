@@ -50,14 +50,11 @@
       </span>
     {:else}
       <a
-        class={`relative grid min-h-18 place-items-center px-2 py-2 transition ${active ? 'text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
+        class={`relative grid min-h-18 place-items-center px-2 py-2 transition ${active ? 'bg-primary text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
         href={tab.href}
         aria-label={tab.label}
         aria-current={active ? 'page' : undefined}
       >
-        {#if active}
-          <span class="bg-text-primary absolute top-0 h-px w-full" aria-hidden="true"></span>
-        {/if}
         {#if tab.icon === 'profile'}
           <Avatar
             size="md"
