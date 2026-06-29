@@ -58,6 +58,12 @@
 - **THEN** 시스템은 remote instance ID를 profile의 소속 instance로 저장한다
 - **AND** remote profile 저장은 remote follow, inbox activity 처리, remote post ingestion을 의미하지 않는다
 
+#### Scenario: 리모트 프로필 저장 전 인스턴스 보장
+
+- **WHEN** remote profile shell을 새로 저장해야 한다
+- **THEN** 시스템은 normalized domain에 해당하는 ActivityPub instance를 먼저 찾거나 생성한다
+- **AND** 기존 instance 상태가 `SUSPENDED`이면 remote profile shell을 저장하지 않는다
+
 #### Scenario: 계정-프로필 역할 저장
 
 - **WHEN** 계정이 프로필에 연결된다

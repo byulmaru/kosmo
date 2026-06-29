@@ -8,7 +8,8 @@ kosmo는 local actor discovery 경계를 만들고 있지만, 원격 ActivityPub
 - remote actor materialization은 공개 GraphQL API가 아니라 federation 내부 service로 제공하며, Fedify의 WebFinger/object lookup과 ActivityPub vocabulary API를 사용한다.
 - remote actor identity는 ActivityPub actor URI로 구분하고, kosmo 내부 GraphQL/DB identity는 기존 `Profile.id`를 사용한다.
 - actor URI 직접 입력만으로 remote profile을 저장하지 않고, federated handle lookup을 통과한 actor만 저장한다.
-- remote actor는 `preferredUsername`을 `Profile.handle`, actor `summary`를 `Profile.bio`, actor `published`를 `Profile.createdAt`에 반영하되, `published`가 없는 actor의 `createdAt` fallback은 최초 저장 시에만 적용한다.
+- remote actor는 materialization 전에 normalized domain의 ActivityPub instance를 보장하고, actor `preferredUsername`이 기존 `Profile.handle` 스키마를 만족할 때만 `Profile.handle`/`normalizedHandle`로 저장한다.
+- remote actor는 actor `summary`를 `Profile.bio`, actor `published`를 `Profile.createdAt`에 반영하되, `published`가 없는 actor의 `createdAt` fallback은 최초 저장 시에만 적용한다.
 - remote actor refresh는 저장된 `lastFetchedAt`이 7일을 넘으면 기존 active profile 참조를 막지 않고 federation 내부 materialization 경로에서 비동기적으로 예약/수행하며, 실패한 resolve에 대한 negative cache는 두지 않는다.
 - remote `Profile`은 GraphQL Node와 handle 조회에서 local profile과 같은 `Profile` 타입으로 노출하되, `Profile.origin` enum으로 local/remote 성격을 구분한다.
 - web은 저장된 remote profile의 링크를 bare local handle이 아니라 `relativeHandle` 기반 federated handle URL로 만들고, remote follow가 도입되기 전까지 remote profile의 follow action을 숨기거나 비활성화한다.

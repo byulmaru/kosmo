@@ -25,6 +25,7 @@
 - **WHEN** federation 내부 service가 `@{handle}@{domain}` 형식의 federated handle materialization을 요청한다
 - **THEN** 시스템은 Fedify lookup API로 `acct:{handle}@{domain}`을 해석한다
 - **AND** Fedify가 ActivityPub actor 객체를 반환하면 해당 actor의 canonical actor URI를 remote identity로 처리한다
+- **AND** 시스템은 materialization 전에 normalized domain의 ActivityPub instance를 찾거나 생성한다
 - **AND** 시스템은 actor URI에 연결된 기존 `Profile`이 있으면 해당 profile을 갱신하고, 없으면 새 `Profile`을 생성한다
 
 #### Scenario: Reject actor URI without federated handle lookup
@@ -38,6 +39,12 @@
 - **WHEN** Fedify lookup이 actor를 해석하지 못하거나 actor가 아닌 객체를 반환한다
 - **THEN** 시스템은 remote actor materialization을 실패로 처리한다
 - **AND** 시스템은 해당 객체를 `Profile`로 저장하지 않는다
+
+#### Scenario: Reject materialization for suspended instance
+
+- **WHEN** federated handle의 normalized domain에 해당하는 기존 instance 상태가 `SUSPENDED`이다
+- **THEN** 시스템은 remote actor materialization을 실패로 처리한다
+- **AND** 시스템은 새 `Profile`을 만들거나 기존 profile을 refresh하지 않는다
 
 #### Scenario: Reuse existing actor URI
 
@@ -69,6 +76,12 @@
 - **WHEN** remote actor에 `preferredUsername`이 없다
 - **THEN** 시스템은 remote profile materialization을 실패 처리한다
 - **AND** 시스템은 해당 actor를 `Profile`로 저장하지 않는다
+
+#### Scenario: Reject actor with unsupported preferred username
+
+- **WHEN** remote actor `preferredUsername`이 기존 `Profile.handle` 스키마를 만족하지 않는다
+- **THEN** 시스템은 remote profile materialization을 실패 처리한다
+- **AND** 시스템은 URL이나 `profileByHandle`로 다시 조회할 수 없는 remote profile을 저장하지 않는다
 
 #### Scenario: Fall back when new actor published is absent
 
