@@ -3,16 +3,11 @@
   import { createQuery } from '@mearie/svelte';
   import { graphql } from '$mearie';
   import ProfileConnectionList from '$lib/components/ProfileConnectionList.svelte';
+  import { getTabsLayoutSessionContext } from '$lib/tabsLayoutSessionContext';
 
   const query = createQuery(
     graphql(`
       query ProfileFollowersPageQuery($handle: String!) {
-        currentSession {
-          id
-          selectedProfile {
-            id
-          }
-        }
         profileByHandle(handle: $handle) {
           id
           ...ProfileConnectionList_followersProfile
@@ -22,8 +17,9 @@
     () => ({ handle: page.params.handle! }),
   );
 
+  const tabsLayoutSession = getTabsLayoutSessionContext();
   const profile = $derived(query.data?.profileByHandle ?? null);
-  const viewerProfileId = $derived(query.data?.currentSession?.selectedProfile?.id ?? null);
+  const viewerProfileId = $derived(tabsLayoutSession?.selectedProfile()?.id ?? null);
 </script>
 
 <ProfileConnectionList

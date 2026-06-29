@@ -2,7 +2,7 @@
 
 ### Requirement: Sidebar profile switching
 
-웹 애플리케이션은 인증된 사용자가 사이드바에서 접근 가능한 프로필 사이를 전환할 수 있게 해야 한다(MUST). 프로필 전환 성공 후 앱 셸의 활성 프로필 표시는 성공 응답의 `Session.selectedProfile`을 반영해야 하며(MUST), 일반 프로필 선택 성공 handler는 `currentSession` 전체 수동 invalidation/refetch 완료에 의존하지 않아야 한다(MUST NOT).
+웹 애플리케이션은 인증된 사용자가 사이드바에서 접근 가능한 프로필 사이를 전환할 수 있게 해야 한다(MUST). 프로필 전환 성공 후 앱 셸의 활성 프로필 표시와 앱 셸 아래 화면의 active profile 판단은 성공 응답의 `Session.selectedProfile`을 반영해야 하며(MUST), 일반 프로필 선택 성공 handler는 `currentSession` 전체 수동 invalidation/refetch 완료에 의존하지 않아야 한다(MUST NOT).
 
 #### Scenario: Render accessible profiles
 
@@ -18,6 +18,7 @@
 - **THEN** 시스템은 즉시 해당 프로필을 활성 프로필로 요청한다
 - **AND** 요청 성공 후 사이드바는 성공 응답의 `Session.selectedProfile`을 새 활성 프로필로 반영한다
 - **AND** 사이드바는 `currentSession` 전체 조회가 다시 완료될 때까지 이전 활성 프로필을 계속 표시하지 않는다
+- **AND** 이미 열린 홈, 검색, 프로필 화면에서 active profile 존재 여부나 viewer profile id를 쓰는 UI는 성공 응답의 `Session.selectedProfile`을 반영한다
 - **AND** 시스템은 `homeTimeline` 같은 active-profile 의존 root query field와 `Profile.viewerFollow` 같은 active-profile 의존 entity field를 stale 처리하거나 동등한 방식으로 새 active profile 기준 결과를 보장한다
 
 #### Scenario: Create and switch to a new profile
