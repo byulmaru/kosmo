@@ -139,6 +139,7 @@ type Profile implements Node {
   handle: String!
   id: ID!
   posts(after: String, before: String, first: Int, last: Int): PostsConnection!
+  relativeHandle: String!
   viewerFollow: ProfileFollow
 }
 

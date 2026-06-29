@@ -1,0 +1,142 @@
+<script module lang="ts">
+  import { defineMeta } from '@storybook/addon-svelte-csf';
+
+  import type {
+    ProfileConnectionList_followersProfile$key,
+    ProfileConnectionList_followingProfile$key,
+    ProfileListItem_profile$key,
+  } from '$mearie';
+
+  import ProfileConnectionList from './ProfileConnectionList.svelte';
+
+  type FollowState = 'ACCEPTED' | 'PENDING';
+
+  const viewerProfileId = 'viewer-profile';
+
+  const profile = (
+    overrides: Partial<{
+      id: string;
+      displayName: string;
+      handle: string;
+      bio: string | null;
+      viewerFollow: { id: string; state: FollowState } | null;
+    }> = {},
+  ): ProfileListItem_profile$key =>
+    ({
+      __typename: 'Profile',
+      id: 'connection-profile',
+      displayName: '연결된 프로필',
+      handle: 'connected',
+      bio: '팔로우 관계 목록에서 표시되는 프로필입니다.',
+      viewerFollow: null,
+      ...overrides,
+    }) as unknown as ProfileListItem_profile$key;
+
+  const followersProfile = (): ProfileConnectionList_followersProfile$key =>
+    ({
+      __typename: 'Profile',
+      id: 'target-profile',
+      followers: {
+        edges: [
+          {
+            cursor: 'follower-edge-1',
+            node: {
+              __typename: 'ProfileFollow',
+              id: 'follower-follow-1',
+              follower: profile({
+                id: 'follower-1',
+                displayName: '첫 번째 팔로워',
+                handle: 'first-follower',
+              }),
+            },
+          },
+          {
+            cursor: 'follower-edge-2',
+            node: {
+              __typename: 'ProfileFollow',
+              id: 'follower-follow-2',
+              follower: profile({
+                id: 'follower-2',
+                displayName: '두 번째 팔로워',
+                handle: 'second-follower',
+                viewerFollow: { id: 'viewer-follow-2', state: 'ACCEPTED' },
+              }),
+            },
+          },
+        ],
+      },
+    }) as unknown as ProfileConnectionList_followersProfile$key;
+
+  const followingProfile = (): ProfileConnectionList_followingProfile$key =>
+    ({
+      __typename: 'Profile',
+      id: 'target-profile',
+      following: {
+        edges: [
+          {
+            cursor: 'following-edge-1',
+            node: {
+              __typename: 'ProfileFollow',
+              id: 'following-follow-1',
+              followee: profile({
+                id: 'followee-1',
+                displayName: '팔로잉 대상',
+                handle: 'followee',
+              }),
+            },
+          },
+        ],
+      },
+    }) as unknown as ProfileConnectionList_followingProfile$key;
+
+  const { Story } = defineMeta({
+    title: 'KOSMO/ProfileConnectionList',
+    component: ProfileConnectionList,
+    tags: ['autodocs'],
+    argTypes: {
+      kind: {
+        control: 'radio',
+        options: ['followers', 'following'],
+      },
+    },
+  });
+</script>
+
+<Story
+  name="Playground"
+  args={{
+    kind: 'followers',
+    followersProfile: followersProfile(),
+    viewerProfileId,
+    loading: false,
+    error: false,
+  }}
+/>
+
+<!-- 팔로워 목록 영역의 상태 전체: 로딩, 오류, 항목 있음, 빈 상태. -->
+<Story name="Followers states" asChild parameters={{ controls: { disable: true } }}>
+  <div class="grid w-[600px] gap-8">
+    <ProfileConnectionList kind="followers" loading />
+    <ProfileConnectionList kind="followers" error onRetry={() => {}} />
+    <ProfileConnectionList
+      kind="followers"
+      followersProfile={followersProfile()}
+      {viewerProfileId}
+    />
+    <ProfileConnectionList kind="followers" />
+  </div>
+</Story>
+
+<!-- 팔로잉 목록 영역의 상태 전체: 로딩, 오류, 항목 있음, 빈 상태. 팔로워와 같은 구조를 공유한다. -->
+<Story name="Following states" asChild parameters={{ controls: { disable: true } }}>
+  <div class="grid w-[600px] gap-8">
+    <ProfileConnectionList kind="following" loading />
+    <ProfileConnectionList kind="following" error onRetry={() => {}} />
+    <ProfileConnectionList
+      kind="following"
+      followingProfile={followingProfile()}
+      {viewerProfileId}
+    />
+    <ProfileConnectionList kind="following" />
+  </div>
+</Story>
