@@ -9,25 +9,25 @@
 
 ## 2. Remote Actor Materialization
 
-- [ ] 2.1 federated handle parser를 구현해 bare local handle, `@handle`, `handle@domain`, `@handle@domain` 입력을 configured local 또는 remote handle 형태로 분류한다.
+- [ ] 2.1 federated handle parser를 구현해 bare local handle, `@handle`, `handle@domain`, `@handle@domain` 입력을 configured local 또는 remote handle 형태로 분류하고, configured local domain의 `handle@domain`/`@handle@domain`은 local handle로 처리한다.
 - [ ] 2.2 `packages/fedify`에 Fedify lookup API를 사용하는 remote actor materialization adapter를 구현하고 수동 WebFinger/JSON-LD fetcher를 만들지 않는다.
 - [ ] 2.3 Fedify lookup/dereference 설정 surface로 HTTP safety, timeout, 응답 크기 제한을 적용하고 별도 content-type/redirect/SSRF 검증 로직을 중복 구현하지 않는다.
 - [ ] 2.4 actor URI unique와 `(instance_id, normalized_handle)` 충돌 정책을 적용해 기존 `Profile` 갱신 또는 새 `Profile` 생성을 idempotent하게 처리한다.
-- [ ] 2.5 actor `preferredUsername`, `name`, `summary`, `published`, follower 승인 필요 속성을 `Profile` 필드와 follow policy로 projection하되, `preferredUsername`은 기존 `Profile.handle` 스키마를 통과해야 하고 `published` 누락 시 `created_at` fallback은 최초 저장에만 적용하고 refresh에서는 기존 `created_at`을 보존한다.
+- [ ] 2.5 actor `preferredUsername`, `name`, `summary`, `published`, follower 승인 필요 속성을 `Profile` 필드와 follow policy로 projection하되, `preferredUsername`은 기존 `Profile.handle` 스키마를 통과해야 하고 `name`은 기존 `Profile.displayName` 스키마를 통과할 때만 사용하며 `published` 누락 시 `created_at` fallback은 최초 저장에만 적용하고 refresh에서는 기존 `created_at`을 보존한다.
 - [ ] 2.6 actor materialization 성공 시 `last_fetched_at`을 갱신하고, 7일 TTL을 넘은 actor는 저장된 active profile을 먼저 반환하면서 비동기 refresh를 예약/수행하되 `UNRESPONSIVE` instance에서는 refresh를 예약하지 않도록 구현한다.
 - [ ] 2.7 suspended instance의 actor materialization, actor refresh, Profile object 노출을 차단한다.
 
 ## 3. GraphQL Profile API
 
 - [ ] 3.1 `Profile.origin` enum을 GraphQL schema에 노출하고 `Profile.relativeHandle`과 함께 local/remote 표시 계약을 갱신한다.
-- [ ] 3.2 `profileByHandle(handle:)`가 bare local handle과 저장된 `handle@domain`/`@handle@domain` federated handle을 모두 kosmo DB에서만 조회하고 WebFinger/actor fetch/write를 수행하지 않도록 확장한다.
+- [ ] 3.2 `profileByHandle(handle:)`가 bare local handle, configured local domain의 `handle@domain`/`@handle@domain`, 저장된 remote `handle@domain`/`@handle@domain`을 모두 kosmo DB에서만 조회하고 WebFinger/actor fetch/write를 수행하지 않도록 확장한다.
 - [ ] 3.3 Node ID 기반 `Profile` loader가 local profile과 active remote profile을 반환하되 suspended instance profile은 노출하지 않도록 접근 조건을 정렬한다.
 - [ ] 3.4 active profile selection은 configured local profile만 허용하고 remote profile 선택은 profile not found로 유지한다.
 
 ## 4. Verification
 
 - [ ] 4.1 GraphQL schema를 재생성하고 `Profile.origin`, DB-only `profileByHandle`, remote Node 조회 계약이 반영되는지 확인한다.
-- [ ] 4.2 remote actor materialization unit/integration test로 Fedify lookup 성공, lookup 실패, non-actor lookup 실패, existing actor URI 재사용, handle collision 실패, remote instance find-or-create, unsupported `preferredUsername` 거부, stale actor의 active profile 선반환과 비동기 refresh 예약, `UNRESPONSIVE` refresh 미예약, suspended instance 차단을 검증한다.
-- [ ] 4.3 GraphQL profile test로 DB-only local/federated `profileByHandle`, `handle@domain`/`@handle@domain` remote lookup, `Profile.origin`, remote Node 조회, active profile selection remote 거부를 검증한다.
+- [ ] 4.2 remote actor materialization unit/integration test로 Fedify lookup 성공, lookup 실패, non-actor lookup 실패, existing actor URI 재사용, handle collision 실패, remote instance find-or-create, unsupported `preferredUsername` 거부, unsupported `name`의 displayName fallback, stale actor의 active profile 선반환과 비동기 refresh 예약, `UNRESPONSIVE` refresh 미예약, suspended instance 차단을 검증한다.
+- [ ] 4.3 GraphQL profile test로 DB-only local/federated `profileByHandle`, configured local domain의 `handle@domain`/`@handle@domain` local lookup, remote `handle@domain`/`@handle@domain` lookup, `Profile.origin`, remote Node 조회, active profile selection remote 거부를 검증한다.
 - [ ] 4.4 web profile list/search 결과가 remote profile 링크를 route parameter `handle@domain`으로 전달되는 `relativeHandle` 기반 federated handle URL로 만들고, remote follow 지원 전까지 local follow action을 숨기거나 비활성화하는지 검증한다.
 - [ ] 4.5 `pnpm lint:eslint`, 관련 package typecheck/test, GraphQL schema check, DB migration/schema check, `openspec validate add-activitypub-remote-profile-federation --strict`를 실행한다.

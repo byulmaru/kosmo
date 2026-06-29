@@ -67,7 +67,8 @@
 - **WHEN** remote actor가 검증된다
 - **THEN** 시스템은 actor `preferredUsername`을 `Profile.handle`로 저장한다
 - **AND** 시스템은 actor `preferredUsername`의 normalized value를 `Profile.normalizedHandle`로 저장한다
-- **AND** 시스템은 actor `name`이 있으면 `Profile.displayName`으로 저장하고, 없으면 handle을 표시 이름으로 사용한다
+- **AND** actor `name`이 기존 `Profile.displayName` 스키마를 만족하면 시스템은 이를 `Profile.displayName`으로 저장한다
+- **AND** actor `name`이 없거나 기존 `Profile.displayName` 스키마를 만족하지 않으면 시스템은 handle을 표시 이름으로 사용한다
 - **AND** 시스템은 actor `summary`를 `Profile.bio`로 저장한다
 - **AND** actor `published`가 있으면 시스템은 이를 `Profile.createdAt`으로 저장한다
 
