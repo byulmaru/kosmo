@@ -42,7 +42,7 @@ API는 같은 `Profile` 타입 안에서 local profile과 ActivityPub remote pro
 
 - **WHEN** 클라이언트가 `@{handle}@{domain}` 형식의 federated handle로 프로필 조회를 요청한다
 - **THEN** 시스템은 handle과 domain을 정규화한다
-- **AND** 시스템은 kosmo DB에서 해당 domain의 instance와 normalized handle에 일치하는 활성 remote `Profile`을 조회한다
+- **AND** 시스템은 kosmo DB에서 해당 domain의 suspended 상태가 아닌 instance와 normalized handle에 일치하는 활성 remote `Profile`을 조회한다
 - **AND** 일치하는 저장된 활성 remote profile이 있으면 해당 프로필을 반환한다
 - **AND** 시스템은 `profileByHandle` 처리 중 WebFinger, actor document fetch, actor refresh, remote profile 저장을 수행하지 않는다
 
