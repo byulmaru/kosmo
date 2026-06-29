@@ -74,6 +74,29 @@ API는 같은 `Profile` 타입 안에서 local profile과 ActivityPub remote pro
 - **WHEN** configured local instance 안에서 정규화된 handle과 일치하는 활성 프로필이 없다
 - **THEN** 시스템은 프로필 없음으로 응답한다
 
+### Requirement: Profile creation
+
+로그인한 계정은 유효한 handle로 자신이 소유한 configured local profile을 생성할 수 있어야 한다(MUST).
+
+#### Scenario: Create profile with valid handle
+
+- **WHEN** 로그인한 계정이 유효한 handle로 프로필 생성을 요청한다
+- **THEN** 시스템은 configured local instance에 속한 local profile로 handle과 정규화된 handle을 저장한다
+- **AND** 표시 이름은 handle과 같은 값으로 초기화된다
+- **AND** 팔로우 정책은 `OPEN`으로 초기화된다
+- **AND** mutation은 `CreateProfilePayload.profile`로 생성된 `Profile`을 반환한다
+
+#### Scenario: Create profile with duplicate local handle
+
+- **WHEN** 로그인한 계정이 configured local instance 안에서 이미 사용 중인 정규화 handle로 프로필 생성을 요청한다
+- **THEN** 시스템은 `handle` field의 conflict 오류를 반환한다
+
+#### Scenario: Create profile with remote-only duplicate handle
+
+- **WHEN** 로그인한 계정이 다른 ActivityPub instance에만 존재하는 정규화 handle로 local profile 생성을 요청한다
+- **THEN** 시스템은 그 remote profile을 local handle conflict로 취급하지 않는다
+- **AND** 다른 local profile 생성 검증을 통과하면 configured local instance에 새 profile을 생성할 수 있다
+
 ### Requirement: Profile object visibility
 
 API는 활성 local profile과 저장된 활성 ActivityPub remote profile을 GraphQL profile object로 조회할 수 있게 해야 한다(MUST).
