@@ -13,10 +13,12 @@
     {
       displayName = '코스모 작가',
       handle = 'kosmo',
+      relativeHandle = `@${handle}`,
       visibility = 'PUBLIC',
     }: {
       displayName?: string;
       handle?: string;
+      relativeHandle?: string;
       visibility?: 'PUBLIC' | 'UNLISTED' | 'FOLLOWERS' | 'DIRECT';
     } = {},
   ): PostLayout_post$key =>
@@ -29,6 +31,7 @@
         __typename: 'Profile',
         id: 'story-profile',
         handle,
+        relativeHandle,
         displayName,
       },
       content: {
@@ -70,6 +73,7 @@
       post={post('긴 이름·handle과 함께여도 본문은 이름 아래 컬럼에 정렬된다.', {
         displayName: '정말 아주 긴 표시 이름을 가진 게시글 작성자 프로필',
         handle: 'very-long-author-handle-that-should-not-break-layout',
+        relativeHandle: '@user@remote.example',
       })}
     />
   </div>

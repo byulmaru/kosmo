@@ -20,6 +20,7 @@
     graphql(`
       fragment ProfileHero_profile on Profile {
         handle
+        relativeHandle
         displayName
         bio
         followersCount
@@ -60,7 +61,7 @@
       <h1 class="text-text-primary mt-3 text-2xl font-bold break-words">
         {fragment.data.displayName}
       </h1>
-      <p class="text-text-secondary text-sm break-words">@{fragment.data.handle}</p>
+      <p class="text-text-secondary text-sm break-words">{fragment.data.relativeHandle}</p>
       {#if fragment.data.bio}
         <p class="text-text-primary mt-3 text-base break-words whitespace-pre-wrap">
           {fragment.data.bio}

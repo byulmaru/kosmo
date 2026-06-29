@@ -6,7 +6,7 @@
 
   import { tv } from '$lib/tv';
 
-  // 프로필 이름 블록(displayName + @handle). Figma UserInfo/NameBlock에 대응한다.
+  // 프로필 이름 블록(displayName + relativeHandle). Figma UserInfo/NameBlock에 대응한다.
   // 게시글 작성자뿐 아니라 작성 화면의 현재 사용자에도 쓰인다. 아바타·거터·본문 배치 같은
   // 게시글 레이아웃은 `PostLayout`이 담당하므로 여기에는 두지 않는다.
   type ProfileNameBlockBaseProps = {
@@ -53,6 +53,7 @@
         id
         displayName
         handle
+        relativeHandle
       }
     `),
     () => props.profile,
@@ -81,7 +82,7 @@
       {profileFragment.data.displayName}
     </span>
     <span class={slots.handle()}>
-      @{profileFragment.data.handle}
+      {profileFragment.data.relativeHandle}
     </span>
   </a>
 {:else}
@@ -90,7 +91,7 @@
       {profileFragment.data.displayName}
     </span>
     <span class={slots.handle()}>
-      @{profileFragment.data.handle}
+      {profileFragment.data.relativeHandle}
     </span>
   </div>
 {/if}
