@@ -159,9 +159,9 @@
         onRetry={peopleQuery.refetch}
         class="w-full"
       >
-        {#snippet action()}
-          {#if viewerProfileId && searchedProfile}
-            <FollowButton profile={searchedProfile} {viewerProfileId} class="shrink-0" />
+        {#snippet action(profile)}
+          {#if viewerProfileId}
+            <FollowButton {profile} {viewerProfileId} class="shrink-0" />
           {/if}
         {/snippet}
       </SearchResults>

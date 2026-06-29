@@ -89,7 +89,5 @@
       </div>
     </div>
   {/if}
-  {#if action}
-    <div class="shrink-0">{@render action()}</div>
-  {/if}
+  {@render action?.()}
 </div>

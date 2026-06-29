@@ -171,7 +171,7 @@
       onLoadMore={() => {}}
     >
       {#snippet action(profile: ProfileListItem_profile$key)}
-        <FollowButton profile={followTarget(profile)} {viewerProfileId} />
+        <FollowButton profile={followTarget(profile)} {viewerProfileId} class="shrink-0" />
       {/snippet}
     </ProfileConnectionList>
     <ProfileConnectionList kind="followers" />
@@ -187,7 +187,7 @@
       onLoadMore={() => {}}
     >
       {#snippet action(profile: ProfileListItem_profile$key)}
-        <FollowButton profile={followTarget(profile)} {viewerProfileId} />
+        <FollowButton profile={followTarget(profile)} {viewerProfileId} class="shrink-0" />
       {/snippet}
     </ProfileConnectionList>
     <ProfileConnectionList
@@ -197,7 +197,7 @@
       onLoadMore={() => {}}
     >
       {#snippet action(profile: ProfileListItem_profile$key)}
-        <FollowButton profile={followTarget(profile)} {viewerProfileId} />
+        <FollowButton profile={followTarget(profile)} {viewerProfileId} class="shrink-0" />
       {/snippet}
     </ProfileConnectionList>
     <ProfileConnectionList
@@ -207,7 +207,7 @@
       onLoadMore={() => {}}
     >
       {#snippet action(profile: ProfileListItem_profile$key)}
-        <FollowButton profile={followTarget(profile)} {viewerProfileId} />
+        <FollowButton profile={followTarget(profile)} {viewerProfileId} class="shrink-0" />
       {/snippet}
     </ProfileConnectionList>
     <ProfileConnectionList
@@ -217,7 +217,7 @@
       onLoadMore={() => {}}
     >
       {#snippet action(profile: ProfileListItem_profile$key)}
-        <FollowButton profile={followTarget(profile)} {viewerProfileId} />
+        <FollowButton profile={followTarget(profile)} {viewerProfileId} class="shrink-0" />
       {/snippet}
     </ProfileConnectionList>
   </div>
@@ -234,7 +234,7 @@
       onLoadMore={() => {}}
     >
       {#snippet action(profile: ProfileListItem_profile$key)}
-        <FollowButton profile={followTarget(profile)} {viewerProfileId} />
+        <FollowButton profile={followTarget(profile)} {viewerProfileId} class="shrink-0" />
       {/snippet}
     </ProfileConnectionList>
     <ProfileConnectionList kind="following" />
@@ -250,7 +250,7 @@
       onLoadMore={() => {}}
     >
       {#snippet action(profile: ProfileListItem_profile$key)}
-        <FollowButton profile={followTarget(profile)} {viewerProfileId} />
+        <FollowButton profile={followTarget(profile)} {viewerProfileId} class="shrink-0" />
       {/snippet}
     </ProfileConnectionList>
     <ProfileConnectionList
@@ -260,7 +260,7 @@
       onLoadMore={() => {}}
     >
       {#snippet action(profile: ProfileListItem_profile$key)}
-        <FollowButton profile={followTarget(profile)} {viewerProfileId} />
+        <FollowButton profile={followTarget(profile)} {viewerProfileId} class="shrink-0" />
       {/snippet}
     </ProfileConnectionList>
     <ProfileConnectionList
@@ -270,7 +270,7 @@
       onLoadMore={() => {}}
     >
       {#snippet action(profile: ProfileListItem_profile$key)}
-        <FollowButton profile={followTarget(profile)} {viewerProfileId} />
+        <FollowButton profile={followTarget(profile)} {viewerProfileId} class="shrink-0" />
       {/snippet}
     </ProfileConnectionList>
     <ProfileConnectionList
@@ -280,7 +280,7 @@
       onLoadMore={() => {}}
     >
       {#snippet action(profile: ProfileListItem_profile$key)}
-        <FollowButton profile={followTarget(profile)} {viewerProfileId} />
+        <FollowButton profile={followTarget(profile)} {viewerProfileId} class="shrink-0" />
       {/snippet}
     </ProfileConnectionList>
   </div>
