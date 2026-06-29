@@ -41,7 +41,7 @@
 
 - OpenSpec과 구현은 root field, object field, payload, error type, connection, UI 수치 단위가 서로 맞아야 한다.
 - 코드가 spec과 다르면 어느 쪽이 source of truth인지 정하고 같은 PR에서 정렬한다.
-- 현재 범위에서 의도적으로 미룬 정책은 코드 주석이나 OpenSpec의 남은 결정으로 검색 가능하게 남긴다.
+- 현재 범위에서 의도적으로 미룬 정책은 코드 주석이나 OpenSpec `decisions.md`의 남은 결정으로 검색 가능하게 남긴다.
 - 장기적으로 유지될 규칙은 task-specific skill보다 `memory/`에 남긴다.
 
 ## Runtime And Tooling

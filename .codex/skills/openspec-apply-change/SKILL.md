@@ -41,7 +41,7 @@ Implement tasks from an OpenSpec change.
    ```
 
    This returns:
-   - `contextFiles`: artifact ID -> array of concrete file paths (varies by schema - could be proposal/specs/design/tasks or spec/tests/implementation/docs)
+   - `contextFiles`: artifact ID -> array of concrete file paths (varies by schema - could be proposal/specs/design/decisions/tasks or spec/tests/implementation/docs)
    - Progress (total, complete, remaining)
    - Task list with status
    - Dynamic instruction based on current state
@@ -55,7 +55,7 @@ Implement tasks from an OpenSpec change.
 
    Read every file path listed under `contextFiles` from the apply instructions output.
    The files depend on the schema being used:
-   - **spec-driven**: proposal, specs, design, tasks
+   - **spec-driven**: proposal, specs, design, decisions, tasks
    - Other schemas: follow the contextFiles from CLI output
 
 5. **Show current progress**
