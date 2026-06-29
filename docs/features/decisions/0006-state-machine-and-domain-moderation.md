@@ -27,6 +27,9 @@ Domain moderation action taxonomy는 Trust & Safety 도메인 명세에 둔다.
 - Domain moderation action은 Profile 제어의 mute/block과 구분한다.
 - Domain Limit은 원격 Domain의 도달 범위를 제한한다.
 - Domain Block은 원격 Domain을 없는 것처럼 취급한다.
+- Domain Limit은 전역 Post Eligibility를 false로 만들지 않고 공개 Post List와 Discovery 같은 surface별
+  후보 제한으로 적용한다.
+- Domain Block은 Publishing의 Post Eligibility에 반영되는 전역 제외 정책이다.
 - Trust & Safety가 Domain moderation action 원본 정책을 소유하고, Publishing, Media, Social Graph,
   Engagement, Post List, Discovery, Notification은 그 결과를 소비한다.
 - Domain moderation action은 기존 Notification을 삭제하거나 읽음 상태를 바꾸지 않는다.
