@@ -41,7 +41,8 @@ Account, Profile, Local Profile, Remote Profile, 표시 handle, Profile State의
 - 하나 이상의 Profile과 역할 관계를 가질 수 있다.
 - 인증 수단의 구체 구현은 Identity 도메인 명세에서 정의하지 않는다.
 - 계정 삭제와 프로필 삭제는 서로 다른 생명주기로 다룬다.
-- Profile이 남아 있으면 Account를 삭제할 수 없다.
+- Account 삭제 전에는 해당 Account가 가진 Account-Profile 관계를 정리해야 한다.
+- Account-Profile 관계 정리 과정에서 어떤 Profile의 마지막 `Owner`도 제거할 수 없다.
 - 계정 정지는 Account 상태이고 프로필 정지는 Profile 상태다.
 
 ### 프로필

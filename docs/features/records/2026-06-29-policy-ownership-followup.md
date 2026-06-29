@@ -26,7 +26,8 @@ DDD 도메인 명세에서 `~정한다`처럼 미확정으로 남은 표현, 문
     `image/avif`, `image/jpeg`, `image/png`, `image/webp`, 가로/세로 각각 최대 4096px로 둔다. Avatar
     표시 crop은 400x400, header image 표시 crop은 1500x500을 기준으로 둔다.
 12. Post 수정은 현재 지원하지 않는다.
-13. Profile이 남아 있으면 Account를 삭제할 수 없다.
+13. Account 삭제 전에는 해당 Account가 가진 Account-Profile 관계를 정리해야 하며, 어떤 Profile의
+    마지막 `Owner`도 제거할 수 없다.
 14. Block 발생 시 기존 follow, Reaction, Repost, Bookmark는 삭제한다. 기존 Notification은 삭제하거나
     상태를 바꾸지 않는다.
 15. 이미 확정된 용어는 `미결정 네이밍`에 남기지 않고 `확정된 용어`로 옮긴다.

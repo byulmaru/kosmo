@@ -67,7 +67,7 @@ Post Eligibility는 Post가 Post List, Discovery, Notification 같은 읽기/전
 - Post Eligibility가 true여도 Post Visibility가 허용하지 않은 viewer Profile에게 노출될 수 없다.
 - Post Eligibility는 Post Visibility를 넓히거나 우회할 수 없다.
 - Post의 작성, 삭제, tombstone, 게시 상태를 반영한다.
-- Author Profile의 활성/정지/삭제 상태를 반영한다.
+- Author Profile의 활성/비활성화/정지/삭제 상태를 반영한다.
 - Post에 연결된 Media가 접근 불가능한 상태인지 반영할 수 있다.
 - Trust & Safety의 moderation 결과가 Post, Author Profile, Media, 원격 출처의 노출을 막는지
   반영한다.
