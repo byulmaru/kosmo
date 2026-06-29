@@ -16,7 +16,7 @@ Kosmo DDD 명세의 핵심 보편 언어를 다음과 같이 확정한다.
 | ------------------- | --------------- | ------------- | --------------------------------------------------------------- |
 | 짧은 게시 단위      | Post            | 게시          | Profile이 작성하고 배포하는 단문 콘텐츠의 canonical domain term |
 | 공개 소셜 정체성    | Profile         | 프로필        | 게시, 팔로우, 상호작용, 알림의 기본 행동 주체                   |
-| 로그인/보안 주체    | Account         | 계정          | 인증, 보안 설정, Profile 소유 관계의 주체                       |
+| 로그인/보안 주체    | Account         | 계정          | 인증, 보안 설정, Profile Owner/Member 관계의 주체               |
 | 게시 접근/노출 범위 | Post Visibility | 공개 범위     | Post를 누가 볼 수 있고 어디에 노출될 수 있는지 나타내는 값 객체 |
 | 게시 목록           | Post List       | 게시 목록     | Post와 Repost 목록의 후보 선택, 제어, 정렬 규칙                 |
 | 반응                | Reaction        | 반응          | Profile이 Post에 이모지 단위로 남기는 반응 행동                 |
@@ -30,7 +30,7 @@ Kosmo DDD 명세의 핵심 보편 언어를 다음과 같이 확정한다.
 - `Post`는 Kosmo의 canonical 작성 단위다.
 - `Note`와 `Status`는 Kosmo의 canonical domain term으로 사용하지 않는다.
 - `Profile`은 공개 소셜 정체성과 행동 주체를 뜻한다.
-- `Account`는 로그인과 보안 설정의 주체로만 사용한다.
+- `Account`는 로그인, 보안 설정, Profile Owner/Member 권한의 주체로만 사용한다.
 - 프로토콜 행위자 용어와 일반 행위 주체 용어는 Kosmo의 canonical domain term으로 사용하지 않는다.
 - 원격 프로토콜에서 행위자를 나타내는 개념도 도메인 문서에서는 `Remote Profile`로 표현한다.
 - `Post Visibility`는 domain/value-object 용어로 사용하고, 화면 표시용 한국어 문구는 `공개 범위`로
@@ -61,9 +61,9 @@ Kosmo DDD 명세의 핵심 보편 언어를 다음과 같이 확정한다.
   제한한다.
 - Messaging은 현재 도메인 범위에서 제외한다. `멘션한 프로필만`은 Publishing의 Post Visibility 값으로
   다룬다.
-- Account가 주체인 행동은 인증, 보안, Profile 소유, 운영자 권한에 한정한다. 그 외 소셜 행동의
-  기본 주체는 Profile이다.
-- Account-Profile 관계는 역할 기반 소유 모델로 둔다. 하나의 Account는 여러 Profile과 연결될 수
+- Account가 주체인 행동은 인증, 보안, Profile Owner/Member 권한, 운영자 권한에 한정한다. 그 외 소셜
+  행동의 기본 주체는 Profile이다.
+- Account-Profile 관계는 역할 기반 관계 모델로 둔다. 하나의 Account는 여러 Profile과 연결될 수
   있고, 하나의 Profile도 여러 Account와 역할 기반으로 연결될 수 있다.
 - Account-Profile role은 `Owner`와 `Member` 두 가지로 둔다.
 - Profile에는 항상 최소 1명의 `Owner`가 있어야 한다. `Owner`만 초대, role 변경, 양도를 수행할 수

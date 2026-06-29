@@ -39,7 +39,7 @@ Eligibility 정책에 반영되는 선행 정책 결과다. Post List는 moderat
 
 - Profile은 특정 프로필을 뮤트할 수 있다.
 - 뮤트된 프로필의 게시는 숨기거나 접고, 알림은 숨기거나 억제한다.
-- 뮤트는 기존 Notification을 삭제하지 않는다.
+- 뮤트는 기존 Notification을 삭제하거나 상태를 바꾸지 않는다.
 - 뮤트 기간을 영구/기간제 중에서 선택할 수 있다.
 - 뮤트한 사실은 상대에게 알리지 않는다.
 - 뮤트는 팔로우 관계를 자동으로 끊지 않는다.
@@ -48,7 +48,8 @@ Eligibility 정책에 반영되는 선행 정책 결과다. Post List는 moderat
 
 - Profile은 특정 프로필을 차단할 수 있다.
 - 차단된 프로필은 내 게시, 프로필, 팔로우 목록, 상호작용에 접근이 제한된다.
-- 차단 시 기존 follow, Reaction, Repost, Bookmark, Notification은 삭제한다.
+- 차단 시 기존 follow, Reaction, Repost, Bookmark는 삭제한다.
+- 차단은 기존 Notification을 삭제하거나 상태를 바꾸지 않는다.
 - 차단한 사실을 직접 알리지는 않지만 기능적으로 추론될 수 있다.
 
 ### 단어와 해시태그 뮤트
@@ -77,7 +78,7 @@ Eligibility 정책에 반영되는 선행 정책 결과다. Post List는 moderat
 
 ### 프로필 신고
 
-- Account는 자신이 소유하지 않은 Profile을 신고할 수 있다.
+- Account는 해당 Account와 역할 관계가 없는 Profile을 신고할 수 있다.
 - 신고 시 최근 게시 일부를 함께 첨부할 수 있다.
 
 ### 신고 처리

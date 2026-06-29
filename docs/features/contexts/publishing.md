@@ -29,8 +29,9 @@ Profile이 짧은 텍스트를 작성하고, 필요하면 미디어와 메타데
 - 불변 조건: 작성자는 유효한 Profile이어야 한다. 빈 게시 판단은 본문과 첨부 미디어를 함께 본다.
   답글의 기본 공개 범위는 원본 게시의 공개 범위를 넘지 않아야 한다. 게시 후 Post Visibility는 변경할
   수 없다. 민감한 미디어로 표시한 Post의 모든 첨부 Media는 가려져야 한다.
-- 도메인 이벤트 후보: PostPublished, ReplyPublished, PostDeleted.
-- 정책 후보: 본문 길이, 멘션한 프로필만 수신자 정책, 삭제, Content Warning 요구 조건, Post
+- 도메인 이벤트 후보: PostPublished, ReplyPublished, PostDeleted, PostMediaAttached,
+  PostMediaDetached.
+- 정책 후보: 본문 길이, 멘션한 프로필만 수신자 정책, 삭제, Content Warning 사용 정책, Post
   Eligibility 후보성.
 
 ### Post Visibility
@@ -114,7 +115,9 @@ Post Eligibility는 Post가 Post List, Discovery, Notification 같은 읽기/전
 - 답글은 원본 게시와 thread 관계를 가진다.
 - 답글의 기본 Post Visibility는 원본 Post의 Post Visibility를 넘지 않아야 한다.
 - 답글의 멘션 대상은 원본 작성자와 thread 참여자 중 Post Visibility로 접근 가능한 Profile로 제한한다.
-- 차단/뮤트/삭제된 게시에는 답글 작성이 제한될 수 있다.
+- 삭제된 Post, 정지된 Author Profile의 Post, 차단 관계 때문에 접근할 수 없는 Post에는 답글을 작성할
+  수 없다.
+- 뮤트만으로는 답글 작성을 제한하지 않는다.
 
 ### 내용 경고
 
@@ -122,12 +125,13 @@ Post Eligibility는 Post가 Post List, Discovery, Notification 같은 읽기/전
 - 접힌 게시의 본문과 미디어는 viewer Profile이 펼치기 전까지 숨긴다.
 - 경고 문구는 검색/게시 목록 미리보기에서 본문 대신 노출될 수 있다.
 - 민감한 미디어 표시와 Content Warning은 서로 독립적으로 설정할 수 있어야 한다.
-- Publishing 정책상 특정 키워드나 미디어 유형에는 경고를 권장하거나 요구할 수 있다.
+- 특정 키워드나 미디어 유형을 근거로 Content Warning을 요구하는 정책은 현재 두지 않는다.
 
 ### 미디어 첨부
 
 - Profile은 Media 컨텍스트가 제공한 이미지를 Post에 첨부할 수 있다.
-- Publishing은 Post와 Media의 연결과 Post 단위 민감한 미디어 플래그를 소유한다.
+- Publishing은 Post와 Media의 연결, 첨부 순서, 첨부 해제, Post 단위 첨부 개수 제한을 소유한다.
+- Post 하나에는 이미지를 최대 4개까지 첨부할 수 있다.
 - 민감한 미디어 플래그는 Post 단위 속성으로 둔다.
 - Post가 민감한 미디어로 설정되면 해당 Post에 연결된 모든 Media 표시가 가려진다.
 

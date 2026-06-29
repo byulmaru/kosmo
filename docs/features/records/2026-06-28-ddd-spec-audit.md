@@ -26,8 +26,8 @@
 - `Content Warning`의 한국어 표현은 `내용 경고`다.
 - `Sensitive Media`의 한국어 표현은 `민감한 미디어`다.
 - Messaging은 현재 도메인 범위에서 제외한다.
-- Account가 주체인 행동은 인증, 보안, Profile 소유, 운영자 권한에 한정하고, 그 외 소셜 행동의
-  기본 주체는 Profile이다.
+- Account가 주체인 행동은 인증, 보안, Profile의 Owner/Member 권한, 운영자 권한에 한정하고, 그 외
+  소셜 행동의 기본 주체는 Profile이다.
 - `Post Visibility`는 Post List 속성이 아니라 Publishing이 소유하는 Post 속성이다.
 - `Post Eligibility`는 데이터를 가지는 Post 속성이 아니라 Publishing이 소유하는 후보성 정책이다.
 - `Post Visibility`가 viewer Profile별 접근 가능 대상을 먼저 결정하고, `Post Eligibility`는 그 안에서
@@ -60,7 +60,7 @@
   `policy downstream`으로 제공한다.
 - Social Graph와 Discovery, Post List와 Discovery의 관계 방향은 각 컨텍스트 문서의 `컨텍스트 관계`를
   기준으로 맞춘다.
-- Media는 Account와 Profile이 동시에 소유하는 도메인으로 정리한다.
+- Media는 Account의 업로드/감사 책임과 Profile의 사용 주체를 함께 기록하는 도메인으로 정리한다.
 - README의 `주요 연결`은 도메인 지도의 축약 표현이며, 전체 관계는 개별 문서의 `컨텍스트 관계`를
   기준으로 본다.
 

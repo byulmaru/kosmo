@@ -34,8 +34,8 @@
   둔다.
 - Post Visibility는 Publishing이 소유하는 Post 속성이다. Post Eligibility는 데이터를 가지는 Post
   속성이 아니라 Publishing이 소유하는 후보성 정책이다.
-- Account가 주체인 행동은 인증, 보안, Profile 소유, 운영자 권한에 한정한다. 기본 소셜 행동 주체는
-  Profile이다.
+- Account가 주체인 행동은 인증, 보안, Profile Owner/Member 권한, 운영자 권한에 한정한다. 기본 소셜
+  행동 주체는 Profile이다.
 - Messaging은 현재 도메인 범위에서 제외한다.
 - Collection은 현재 Engagement 범위에서 제외한다.
 

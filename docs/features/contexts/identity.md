@@ -17,10 +17,11 @@ Profile, 표시 handle, Remote Profile identity를 구분한다.
 ## DDD 명세
 
 - 컨텍스트 경계: Account, Profile, 표시 handle, 로컬/원격 Profile identity, Profile의 팔로우 승인
-  정책을 정의한다. 게시, 팔로우 관계 생명주기, 검색 색인, 운영 제재의 상세 규칙은 소유하지 않는다.
+  정책, Profile 이미지 연결, 팔로워/팔로잉 목록 공개 범위를 정의한다. 게시, 팔로우 관계 생명주기,
+  검색 색인, 운영 제재의 상세 규칙은 소유하지 않는다.
 - 보편 언어: Account, Profile, Local Profile, Remote Profile, Handle, Display Handle, Remote Profile
   Identity, Profile State, Follow Approval Policy.
-- 핵심 모델: Account와 Profile을 aggregate root 후보로 둔다. Account-Profile 소유 관계는 역할과
+- 핵심 모델: Account와 Profile을 aggregate root 후보로 둔다. Account-Profile 관계는 역할과
   권한을 가진 관계로 본다.
 - 값 객체 후보: Handle, Display Name, Bio, Profile URL, Remote URL, Host, Account Profile Role, Profile
   State.
@@ -30,14 +31,14 @@ Profile, 표시 handle, Remote Profile identity를 구분한다.
 - 도메인 이벤트 후보: ProfileCreated, ProfileUpdated, ProfileStateChanged, HandleChanged,
   AccountProfileLinked.
 - 정책 후보: handle 변경, 프로필 삭제와 계정 삭제 분리, 원격 프로필 캐시 최신성, 프로필 편집
-  권한, 팔로우 승인 정책.
+  권한, 팔로우 승인 정책, 목록 공개 범위.
 
 ## 핵심 기능
 
 ### 계정
 
 - 로그인의 주체다.
-- 하나 이상의 프로필을 소유할 수 있다.
+- 하나 이상의 Profile과 역할 관계를 가질 수 있다.
 - 이메일, OAuth, 패스키 같은 인증 수단은 OIDC 구현에 의존한다.
 - 계정 삭제와 프로필 삭제는 서로 다른 생명주기로 다룬다.
 - Profile이 남아 있으면 Account를 삭제할 수 없다.
@@ -61,29 +62,32 @@ Profile, 표시 handle, Remote Profile identity를 구분한다.
 
 ### 프로필 편집
 
-- Profile 소유 Account는 표시 이름, bio, avatar, header image, 링크를 수정할 수 있다.
+- Profile의 `Owner` Account는 표시 이름, bio, avatar, header image, 링크를 수정할 수 있다.
+- 현재 Profile에 연결된 avatar/header Media 참조는 Identity가 소유한다.
+- avatar/header의 파일 원본, crop 기준, 파생 이미지는 Media가 소유한다.
 - 변경 사항은 프로필 페이지, 사이드바, 게시 작성자 표시, 검색 결과에 반영되어야 한다.
 
 ### Account-Profile 관계
 
-- Account-Profile 관계는 역할 기반 소유 모델이다.
+- Account-Profile 관계는 역할 기반 관계 모델이다.
 - 하나의 Account는 여러 Profile과 연결될 수 있다.
 - 하나의 Profile은 여러 Account와 역할 기반으로 연결될 수 있다.
 - Account-Profile 관계는 role, 상태, 연결 시각을 가진다.
 - Account-Profile role은 `Owner`와 `Member` 두 가지로 둔다.
-- `Owner`는 Profile 삭제, role 변경, Account 초대, 소유권 양도, Profile 전환, 소셜 행동을 수행할 수
+- `Owner`는 Profile 삭제, role 변경, Account 초대, Owner 지위 양도, Profile 전환, 소셜 행동을 수행할 수
   있다.
 - `Member`는 Profile 전환과 소셜 행동을 수행할 수 있다.
-- `Owner`와 `Member` 구분은 하나의 Profile을 여러 Account가 함께 소유하거나 운영할 때 삭제와 권한
+- `Member`는 Profile 편집, Profile 삭제, role 변경, Account 초대, Owner 지위 양도를 수행할 수 없다.
+- `Owner`와 `Member` 구분은 하나의 Profile을 여러 Account가 함께 운영할 때 삭제와 권한
   변경 권한을 분리하기 위해 필요하다.
 - 초대는 `Owner`가 다른 Account를 해당 Profile의 역할 관계에 추가하는 행동이다.
-- 소유권 양도는 다른 Account를 `Owner`로 만들거나 `Owner` 지위를 이전하는 행동이다.
+- Owner 지위 양도는 다른 Account를 `Owner`로 만들거나 `Owner` 지위를 이전하는 행동이다.
 - Profile 생성, 편집, 삭제, 전환은 Account-Profile role이 허용하는 권한으로 판단한다.
 - active Profile은 Account 세션에서 선택한 현재 행동 주체이며, 소셜 행동은 active Profile 기준으로
   수행한다.
-- 인증, 보안 설정, Profile 소유와 권한 관리는 Account 기준으로 수행한다.
+- 인증, 보안 설정, Profile의 Owner/Member 권한 관리는 Account 기준으로 수행한다.
 - Profile에는 항상 최소 1명의 `Owner`가 있어야 한다.
-- `Owner`만 초대, role 변경, 양도를 수행할 수 있다.
+- `Owner`만 초대, role 변경, Owner 지위 양도를 수행할 수 있다.
 - 마지막 `Owner`는 탈퇴, role 변경, 연결 해제할 수 없다.
 
 ## 프로필 상태
@@ -95,11 +99,16 @@ Profile, 표시 handle, Remote Profile identity를 구분한다.
 
 ## 팔로우 요청 승인 여부
 
-Profile은 팔로우 승인 정책을 가진다. Social Graph는 이 값을 참조해 Follow Relationship 또는 Follow
-Request를 생성한다.
+Profile은 팔로우 승인 정책을 가진다. Social Graph는 이 값을 참조해 Follow Relationship을 즉시
+수락하거나 요청 대기 상태로 둔다.
 
 - 자유: 다른 Profile이 해당 Profile을 팔로우하면 승인 절차 없이 Follow Relationship이 생성된다.
-- 승인제: 다른 Profile이 해당 Profile을 팔로우하면 Follow Request가 생성된다.
+- 승인제: 다른 Profile이 해당 Profile을 팔로우하면 Follow Relationship이 요청 대기 상태가 된다.
+
+## 목록 공개 범위
+
+- Profile은 팔로워 목록 공개 범위와 팔로잉 목록 공개 범위를 별도로 가진다.
+- Social Graph는 Identity의 목록 공개 범위를 참조해 팔로워/팔로잉 목록 접근을 판단한다.
 
 ## 입력 정책
 

@@ -18,8 +18,8 @@ PR 리뷰에서 확인된 문서 간 불일치를 다음처럼 확정한다.
   Post도 포함한다.
 - Profile State에는 `정지`를 포함한다. 정지는 Trust & Safety의 moderation action으로 Profile 사용과
   표시가 정지된 상태다.
-- Profile mute는 Notification을 삭제하지 않는다. 뮤트된 Profile의 알림은 숨기거나 억제하고,
-  Notification 삭제는 Block 정책으로만 다룬다.
+- Profile mute는 Notification을 삭제하거나 상태를 바꾸지 않는다. 뮤트된 Profile의 새 알림은 숨기거나
+  억제한다.
 - Discovery는 검색에 적용하도록 설정된 Word Mute 또는 Hashtag Mute만 검색 결과 제외에 사용한다.
 - 신고 제출만으로 검색 색인이나 검색 노출은 바뀌지 않는다. 검색 색인 제외는 실제 moderation action으로
   제한, 정지, 삭제된 Post와 Profile에만 적용한다.
