@@ -34,7 +34,7 @@ Media의 업로드 주체, 사용 주체, 파일 원본, 파생 이미지, Alt T
 - 이미지 파일 하나는 최대 10 MiB까지 허용한다.
 - 허용 MIME type은 `image/avif`, `image/jpeg`, `image/png`, `image/webp`다.
 - 로컬 이미지의 픽셀 캔버스는 가로와 세로 각각 최대 4096px까지 허용한다.
-- 완료되지 않은 Media upload는 취소될 수 있다.
+- 완료되지 않은 Media 업로드는 취소할 수 있고 Post 또는 Profile 표현에 연결할 수 없다.
 
 ### Alt Text
 
@@ -71,7 +71,7 @@ Media의 업로드 주체, 사용 주체, 파일 원본, 파생 이미지, Alt T
 ### 원격 미디어 프록시
 
 - 원격 Media는 원본 URL과 Media Proxy URL을 구분한다.
-- 외부에 노출되는 Media URL은 접근 권한, Domain moderation action, Media 변환 정책을 통과한 결과다.
+- Media 접근 결과는 접근 권한, Domain moderation action, Media 변환 정책을 통과한 경우에만 제공된다.
 - 원격 서버 차단 또는 미디어 제거 요청은 Media 접근 결과에 반영한다.
 
 ## 도메인 속성/정책 메모

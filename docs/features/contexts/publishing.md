@@ -66,9 +66,9 @@ Post Eligibility는 Post가 Post List, Discovery, Notification 같은 읽기/전
   제한한다.
 - Post Eligibility가 true여도 Post Visibility가 허용하지 않은 viewer Profile에게 노출될 수 없다.
 - Post Eligibility는 Post Visibility를 넓히거나 우회할 수 없다.
-- Post의 작성, 삭제, tombstone, 게시 상태를 반영한다.
+- Post의 작성, 삭제, Tombstone, 게시 상태를 반영한다.
 - Author Profile의 활성/비활성화/정지/삭제 상태를 반영한다.
-- Post에 연결된 Media가 접근 불가능한 상태인지 반영할 수 있다.
+- Post에 연결된 Media가 접근 불가능하면 Post Eligibility는 이를 반영해 읽기/전파 후보에서 제외한다.
 - Trust & Safety의 moderation 결과가 Post, Author Profile, Media, 원격 출처의 노출을 막는지
   반영한다.
 - Publishing은 Post Visibility를 먼저 적용하고 Post Eligibility를 그 다음 적용해 viewer Profile에게
@@ -119,8 +119,8 @@ Post Eligibility는 Post가 Post List, Discovery, Notification 같은 읽기/전
 
 ### 내용 경고
 
-- Profile은 게시에 Content Warning 또는 접힘 제목을 붙일 수 있다.
-- 접힌 게시의 본문과 미디어는 viewer Profile이 펼치기 전까지 숨긴다.
+- Profile은 게시에 Content Warning 텍스트를 붙일 수 있다.
+- Content Warning이 있는 Post는 본문과 Media 표시 제한 상태를 가진다.
 - Search와 Post List는 Content Warning 텍스트를 Post 본문과 분리해 소비한다.
 - 민감한 미디어 표시와 Content Warning은 서로 독립적인 Post 속성이다.
 - 특정 키워드나 미디어 유형을 근거로 Content Warning을 요구하는 정책은 현재 두지 않는다.
@@ -137,7 +137,7 @@ Post Eligibility는 Post가 Post List, Discovery, Notification 같은 읽기/전
 
 - 게시 ID와 작성자 Profile ID는 불변이어야 한다.
 - Post 수정 기능은 현재 지원하지 않는다.
-- 삭제는 soft delete로 처리한다.
+- Post 삭제는 Tombstone 상태로 표현하고 visible eligible Post 후보에서 제외한다.
 - 게시 후 Post Visibility는 변경할 수 없다.
 
 ## 제외/보류 범위
@@ -151,7 +151,7 @@ Post Eligibility는 Post가 Post List, Discovery, Notification 같은 읽기/전
 
 ## 확정된 용어
 
-- 게시물: Post
+- 게시: Post
 - 공개 범위: Post Visibility
 - 내용 경고: Content Warning
 - 민감한 미디어: Sensitive Media

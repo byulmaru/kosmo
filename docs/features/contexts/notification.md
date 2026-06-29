@@ -93,7 +93,7 @@ Profile 대상 소셜 알림과 Account 대상 운영 알림의 생성, 억제, 
 - 팔로우하지 않는 Profile의 알림을 제한할 수 있다.
 - 새 계정, 프로필 이미지 없음, 이메일 미확인 계정의 알림을 제한할 수 있다.
 - 특정 Profile의 새 Post 알림 설정은 Social Graph의 관계별 preference다.
-- push와 in-app은 별도 도메인 알림으로 분리하지 않는다.
+- 전달 채널은 Notification 모델을 분리하는 기준으로 삼지 않는다.
 
 ## 뮤트와 안전
 
