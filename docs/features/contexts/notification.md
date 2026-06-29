@@ -99,6 +99,8 @@ Profile 대상 소셜 알림과 Account 대상 운영 알림의 생성, 억제, 
 
 - 차단한 Profile의 새 Notification Item은 생성하지 않는다.
 - 뮤트한 Profile의 새 Notification Item은 생성하지 않는다.
+- Profile 도메인 차단 또는 서버 Domain Block에 걸린 원격 Domain에서 발생한 새 Notification Item은
+  생성하지 않는다.
 - Muted Thread의 새 답글, Reaction, Repost Notification Item은 생성하지 않는다.
 - 제한 또는 정지된 Account/Profile에서 발생한 소셜 알림은 별도 알림함으로 분리하지 않고 노출하지
   않는다.
@@ -109,7 +111,8 @@ Profile 대상 소셜 알림과 Account 대상 운영 알림의 생성, 억제, 
 - 알림은 notification event와 읽음 상태를 분리한다.
 - Notification Inbox는 active Profile별 scope를 가진다.
 - 계정 단위 보안 알림과 프로필 단위 소셜 알림은 대상 scope를 분리한다.
-- block, mute, limit, suspend가 발생해도 기존 Notification은 삭제하거나 상태를 바꾸지 않는다.
+- block, mute, Profile 도메인 차단, Domain Block, limit, suspend가 발생해도 기존 Notification은
+  삭제하거나 상태를 바꾸지 않는다.
 
 ## 제외/보류 범위
 
