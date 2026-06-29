@@ -40,9 +40,9 @@
 - **THEN** 시스템은 remote actor materialization을 실패로 처리한다
 - **AND** 시스템은 해당 객체를 `Profile`로 저장하지 않는다
 
-#### Scenario: Reject materialization for suspended instance
+#### Scenario: Reject materialization for unavailable instance
 
-- **WHEN** federated handle의 normalized domain에 해당하는 기존 instance 상태가 `SUSPENDED`이다
+- **WHEN** federated handle의 normalized domain에 해당하는 기존 instance 상태가 `SUSPENDED` 또는 `UNRESPONSIVE`이다
 - **THEN** 시스템은 remote actor materialization을 실패로 처리한다
 - **AND** 시스템은 새 `Profile`을 만들거나 기존 profile을 refresh하지 않는다
 

@@ -25,6 +25,12 @@ API는 같은 `Profile` 타입 안에서 local profile과 ActivityPub remote pro
 - **THEN** 클라이언트는 bare `handle`이 아니라 `relativeHandle`과 `origin`을 사용한다
 - **AND** remote profile 링크는 route parameter가 `handle@domain`으로 전달되어 `profileByHandle`이 federated handle로 조회할 수 있는 URL로 이동한다
 
+#### Scenario: Link within stored remote profile by relative handle
+
+- **WHEN** 클라이언트가 저장된 ActivityPub remote profile의 profile page 안에서 하위 링크를 만든다
+- **THEN** 클라이언트는 bare `handle`이 아니라 `relativeHandle`과 `origin`을 사용한다
+- **AND** 하위 링크는 route parameter가 `handle@domain`으로 전달되는 federated handle URL을 유지한다
+
 #### Scenario: Hide local follow action for remote profile
 
 - **WHEN** 클라이언트가 저장된 ActivityPub remote profile을 표시한다
