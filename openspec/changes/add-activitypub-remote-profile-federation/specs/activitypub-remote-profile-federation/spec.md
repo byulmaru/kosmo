@@ -29,7 +29,7 @@
 - **AND** 시스템은 Fedify lookup API로 `acct:{handle}@{domain}`을 해석한다
 - **AND** Fedify가 ActivityPub actor 객체를 반환하면 해당 actor의 canonical actor URI를 remote identity로 처리한다
 - **AND** 시스템은 요청 handle의 normalized value와 actor `preferredUsername`의 normalized value가 일치하는지 검증한다
-- **AND** 시스템은 actor URI에 연결된 기존 `Profile`이 있으면 해당 profile을 갱신하고, 없으면 새 `Profile`을 생성한다
+- **AND** 시스템은 actor URI가 기존 ActivityPub remote profile actor metadata에 연결되어 있으면 해당 remote profile을 갱신하고, 없으면 새 `Profile`을 생성한다
 
 #### Scenario: Reject actor URI without federated handle lookup
 
@@ -57,9 +57,15 @@
 
 #### Scenario: Reuse existing actor URI
 
-- **WHEN** remote actor materialization 결과의 actor URI가 이미 저장되어 있다
-- **THEN** 시스템은 같은 actor URI에 연결된 기존 `Profile`을 같은 remote profile로 간주한다
+- **WHEN** remote actor materialization 결과의 actor URI가 이미 ActivityPub remote profile actor metadata에 저장되어 있다
+- **THEN** 시스템은 같은 actor URI에 연결된 기존 remote `Profile`을 같은 remote profile로 간주한다
 - **AND** 시스템은 새 `Profile`을 만들지 않고 기존 row를 갱신한다
+
+#### Scenario: Reject local actor URI collision
+
+- **WHEN** remote actor materialization 결과의 actor URI가 configured local actor 또는 local profile actor metadata에 이미 저장되어 있다
+- **THEN** 시스템은 identity 충돌로 materialization을 실패 처리한다
+- **AND** 시스템은 local profile을 remote profile로 갱신하거나 반환하지 않는다
 
 #### Scenario: Reject handle collision with different actor URI
 
