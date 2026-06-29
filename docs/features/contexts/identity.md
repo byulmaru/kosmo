@@ -94,7 +94,7 @@ Account State는 활성, 정지, 삭제됨 세 상태를 가진다. 삭제됨은
 - Account-Profile 관계는 역할 기반 관계 모델이다.
 - 하나의 Account는 여러 Profile과 연결될 수 있다.
 - 하나의 Profile은 여러 Account와 역할 기반으로 연결될 수 있다.
-- Account-Profile 관계는 role, 상태, 연결 시각을 가진다.
+- Account-Profile 관계는 role과 연결 시각을 가진다.
 - Account-Profile role은 `Owner`와 `Member` 두 가지로 둔다.
 - `Owner`는 Profile 삭제, role 변경, Account 초대, Owner 지위 양도, Profile 전환을 수행할 수 있고,
   해당 Profile을 active Profile로 선택해 소셜 행동을 수행할 수 있다.
@@ -104,6 +104,7 @@ Account State는 활성, 정지, 삭제됨 세 상태를 가진다. 삭제됨은
 - `Owner`와 `Member`는 Profile 운영 권한과 소셜 행동 권한을 분리한다.
 - 초대는 `Owner`가 다른 Account를 해당 Profile의 역할 관계에 추가하는 행동이다.
 - Owner 지위 양도는 다른 Account를 `Owner`로 만들거나 `Owner` 지위를 이전하는 행동이다.
+- 초대, 수락, 연결 해제 흐름은 별도 Account-Profile Relationship State Machine으로 두지 않는다.
 - Profile 생성, 편집, 삭제, 전환은 Account-Profile role이 허용하는 권한으로 판단한다.
 - active Profile은 Account 세션에서 선택한 현재 행동 주체이며, 소셜 행동은 active Profile 기준으로
   수행한다.

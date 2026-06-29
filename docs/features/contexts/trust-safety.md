@@ -90,8 +90,10 @@ Eligibility를 false로 만들지 않고 Hashtag Post List 같은 공개 탐색 
   있다.
 - limit은 특정 기능이나 도달 범위를 제한하는 조치이고, suspend는 Account 또는 Profile의 사용과 표시를
   정지하는 조치다.
+- Moderation Case는 신고 묶음과 운영자 action 판단 단위이며, 별도 Moderation Case State Machine은
+  두지 않는다.
 - 신고 처리 기록은 감사 로그로 남겨야 한다.
-- 신고자에게 처리 결과와 처리 상태 목록을 제공하지 않는다.
+- 신고자에게 처리 결과나 운영 검토 단계 정보를 제공하지 않는다.
 - 제한 또는 정지된 Account/Profile에서 발생한 소셜 알림은 별도 알림함으로 분리하지 않고 노출하지
   않는다.
 
