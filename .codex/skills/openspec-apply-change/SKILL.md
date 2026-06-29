@@ -55,7 +55,8 @@ Implement tasks from an OpenSpec change.
 
    Read every file path listed under `contextFiles` from the apply instructions output.
    The files depend on the schema being used:
-   - **spec-driven**: proposal, specs, design, decisions, tasks
+   - **spec-driven-decisions**: proposal, specs, design, decisions, tasks
+   - **spec-driven**: proposal, specs, design, tasks
    - Other schemas: follow the contextFiles from CLI output
 
 5. **Show current progress**

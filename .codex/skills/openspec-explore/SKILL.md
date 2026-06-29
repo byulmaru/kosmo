@@ -112,7 +112,7 @@ If the user mentions a change or you detect one is relevant:
 1. **Read existing artifacts for context**
    - `openspec/changes/<name>/proposal.md`
    - `openspec/changes/<name>/design.md`
-   - `openspec/changes/<name>/decisions.md`
+   - `openspec/changes/<name>/decisions.md` (if present)
    - `openspec/changes/<name>/tasks.md`
    - etc.
 

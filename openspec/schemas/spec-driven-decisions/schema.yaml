@@ -1,4 +1,4 @@
-name: spec-driven
+name: spec-driven-decisions
 version: 1
 description: Default OpenSpec workflow - proposal → specs → design → decisions → tasks
 artifacts:
