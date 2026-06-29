@@ -10,7 +10,7 @@ Profile 행동 단위를 기준으로 정리한다.
 - 상위: [DDD 도메인 명세 인덱스](../README.md)
 - upstream: [Publishing](./publishing.md), [Identity](./identity.md)
 - policy upstream: [Trust & Safety](./trust-safety.md)
-- downstream: [Notification](./notification.md), [Feed](./feed.md), [Discovery](./discovery.md)
+- downstream: [Notification](./notification.md), [Post List](./post-list.md), [Discovery](./discovery.md)
 - peer: [Social Graph](./social-graph.md)
 
 ## DDD 명세
@@ -32,18 +32,18 @@ Profile 행동 단위를 기준으로 정리한다.
 
 ### 이모지 반응
 
-- Profile은 여러 이모지 중 하나로 반응할 수 있다.
-- Post 하나에 Profile당 여러 Reaction을 남길 수 있다.
+- Profile은 Post에 여러 종류의 이모지 Reaction을 남길 수 있다.
+- Post 하나에 대해 같은 Profile은 같은 이모지 Reaction을 하나만 남길 수 있다.
+- Post 하나에 대해 같은 Profile이 서로 다른 이모지 Reaction을 여러 개 남길 수 있다.
 - 유니코드 이모지만 허용한다.
 
 ### 재게시
 
-- Profile은 다른 Profile의 Post를 자기 팔로워에게 다시 노출할 수 있다.
+- Profile은 Post를 자기 팔로워에게 다시 노출할 수 있다.
 - 재게시 취소가 가능해야 한다.
-- 원본 Post가 삭제되거나 Post Visibility가 팔로워 공개 또는 멘션한 프로필만으로 변경되면 Repost를
-  제거하거나 숨긴다.
+- Repost는 원본 Post의 Post Visibility를 변경하지 않는다.
+- 원본 Post가 삭제되면 Repost를 제거하거나 숨긴다.
 - 공개 / 조용한 공개 Post만 재게시할 수 있다.
-- 팔로워 공개 Post는 작성 Profile 스스로만 재게시할 수 있다.
 
 ### 북마크
 
@@ -54,15 +54,13 @@ Profile 행동 단위를 기준으로 정리한다.
 
 ## 카운트와 목록
 
-- 답글 수, 반응 수, 재게시 수를 표시한다.
+- 답글 수, 반응한 Profile 수, 재게시한 Profile 수를 표시한다.
 - 반응자 목록과 재게시자 목록은 공개 범위와 차단 상태를 반영한다.
 - 답글 수는 Publishing이 소유한 thread 관계를 반영한 읽기 지표로 다룬다.
 
 ## 도메인 속성/정책 메모
 
 - 상호작용은 Profile 단위다.
-- Collection은 현재 Engagement 범위에서 제외한다.
-- Quote는 현재 도메인 범위에서 제외한다.
 - Block 발생 시 기존 Reaction, Repost, Bookmark는 삭제 또는 무효화 방향으로 본다.
 
 ## 미결정 네이밍

@@ -30,8 +30,9 @@
 
 - 제외하기로 결정한 도메인은 도메인 지도와 컨텍스트 링크에서 제거하고, 제외 결정은
   `decisions/`와 `records/`에 남긴다.
-- Feed에는 전역 기본 정책을 두지 않는다. 답글과 Repost 포함 정책은 Feed Definition별로 둔다.
-- Post Visibility와 Post Eligibility는 Feed 속성이 아니라 Publishing이 소유하는 Post 속성이다.
+- Post List에는 전역 기본 정책을 두지 않는다. 답글과 Repost 포함 정책은 Post List Definition별로
+  둔다.
+- Post Visibility와 Post Eligibility는 Post List 속성이 아니라 Publishing이 소유하는 Post 속성이다.
 - Account가 주체인 행동은 인증, 보안, Profile 소유, 운영자 권한에 한정한다. 기본 소셜 행동 주체는
   Profile이다.
 - Messaging은 현재 도메인 범위에서 제외한다.
@@ -42,5 +43,5 @@
 ```sh
 pnpm lint:prettier
 node -e 'const fs=require("fs"),path=require("path"); const files=[]; function walk(d){for(const e of fs.readdirSync(d,{withFileTypes:true})){const p=path.join(d,e.name); if(e.isDirectory()) walk(p); else if(p.endsWith(".md")) files.push(p)}} walk("docs/features"); let bad=[]; for(const f of files){const s=fs.readFileSync(f,"utf8"); const re=/\[[^\]]*\]\(([^)]+)\)/g; let m; while((m=re.exec(s))){const href=m[1]; if(/^(https?:|mailto:|#)/.test(href)) continue; const target=href.split("#")[0]; if(!target) continue; const resolved=path.resolve(path.dirname(f), target); if(!fs.existsSync(resolved)) bad.push(`${f}: ${href}`); }} if(bad.length){console.error(bad.join("\n")); process.exit(1)} console.log(`checked ${files.length} markdown files`);'
-rg --glob '!AGENTS.md' -n "사용자|User|Actor|actor|Share|share|Timeline|타임라인|비공개 게시|private 게시|공유|share/repost|repost|\bprofile\b|\baccount\b|\bpost\b|Antenna|Keyword Feed|키워드 수집 피드" docs/features
+node -e 'const fs=require("fs"),path=require("path"); const pattern=/사용자|User|Actor|actor|Share|share|Timeline|타임라인|비공개 게시|private 게시|공유|share\/repost|repost|\bprofile\b|\baccount\b|\bpost\b|Antenna|Keyword Feed|키워드 수집 피드/; const files=[]; function walk(d){for(const e of fs.readdirSync(d,{withFileTypes:true})){const p=path.join(d,e.name); if(e.isDirectory()) walk(p); else if(p.endsWith(".md") && path.basename(p)!=="AGENTS.md") files.push(p)}} walk("docs/features"); const bad=[]; for(const f of files){const raw=fs.readFileSync(f,"utf8"); const text=raw.replace(/\[([^\]]*)\]\([^)]+\)/g,"$1"); text.split(/\n/).forEach((line,i)=>{if(pattern.test(line)) bad.push(`${f}:${i+1}: ${line}`)})} if(bad.length){console.error(bad.join("\n")); process.exit(1)} console.log("no canonical term conflicts found");'
 ```
