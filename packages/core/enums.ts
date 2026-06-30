@@ -17,11 +17,11 @@ export const ActivityPubActorType = {
 } as const;
 export type ActivityPubActorType = keyof typeof ActivityPubActorType;
 
-export const ActivityPubActorKeyType = {
+export const ActivityPubActorKeyKind = {
   RSA_PKCS1_V1_5: 'RSA_PKCS1_V1_5',
   ED25519: 'ED25519',
 } as const;
-export type ActivityPubActorKeyType = keyof typeof ActivityPubActorKeyType;
+export type ActivityPubActorKeyKind = keyof typeof ActivityPubActorKeyKind;
 
 export const ApplicationState = {
   ACTIVE: 'ACTIVE',

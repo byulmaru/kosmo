@@ -83,9 +83,9 @@
 #### Scenario: Store local actor keys
 
 - **WHEN** local actor key pair가 생성된다
-- **THEN** 시스템은 ActivityPub actor, key type, public key JWK, private key JWK, 생성 시각을 저장한다
-- **AND** key type은 RSA-PKCS#1-v1.5와 Ed25519를 구분한다
-- **AND** 같은 ActivityPub actor와 key type의 key row는 중복될 수 없다
+- **THEN** 시스템은 ActivityPub actor, key kind, public key JWK, private key JWK, 생성 시각을 저장한다
+- **AND** key kind는 RSA-PKCS#1-v1.5와 Ed25519를 구분한다
+- **AND** 같은 ActivityPub actor와 key kind의 key row는 중복될 수 없다
 
 #### Scenario: Store remote actor shell
 
@@ -110,7 +110,7 @@
 
 - **WHEN** 인스턴스, ActivityPub actor, ActivityPub actor key가 저장된다
 - **THEN** 시스템은 core enum에 정의된 값만 저장해야 한다
-- **AND** 지원 값은 `InstanceKind`, `InstanceState`, `ActivityPubActorType`, `ActivityPubActorKeyType`에 정의된 값으로 제한된다
+- **AND** 지원 값은 `InstanceKind`, `InstanceState`, `ActivityPubActorType`, `ActivityPubActorKeyKind`에 정의된 값으로 제한된다
 
 ## MODIFIED Requirements
 

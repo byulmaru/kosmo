@@ -11,7 +11,7 @@
 - [x] 2.2 `profile.instance_id`를 추가하고 local instance bootstrap 이후 기존 profile을 configured local instance에 연결해 handle을 보존하는 migration 흐름을 구현한다.
 - [x] 2.3 `profile.normalized_handle` 전역 unique를 `(instance_id, normalized_handle)` unique로 교체하고 관련 index/relation을 갱신한다.
 - [x] 2.4 ActivityPub actor metadata 테이블을 추가해 profile과 actor URI/type을 저장하고, actor URI 중복과 profile당 actor metadata 중복을 막는다.
-- [x] 2.5 ActivityPub actor key 테이블을 추가해 local actor의 public/private JWK와 remote actor의 선택적 public key metadata를 저장할 수 있게 하고 `(activitypub_actor_id, key_type)` 중복을 막는다.
+- [x] 2.5 ActivityPub actor key 테이블을 추가해 local actor의 public/private JWK와 remote actor의 선택적 public key metadata를 저장할 수 있게 하고 `(activitypub_actor_id, kind)` 중복을 막는다.
 - [x] 2.6 새 테이블의 `TableDiscriminator`, Drizzle relations, schema exports, OpenSpec data-model 계약과 일치하는 테스트 fixture를 갱신한다.
 
 ## 3. Profile GraphQL Contract
@@ -43,7 +43,7 @@
 
 ## 6. Verification
 
-- [ ] 6.1 DB migration/push 또는 schema check와 migration fixture로 `instance`, profile instance 관계, actor metadata/key 테이블이 생성되고, bootstrap 이후 기존 profile의 `instance_id`가 configured local instance로 채워지며 handle이 보존되는지, `instance.domain` 중복 금지, 서로 다른 domain의 복수 `LOCAL` row 허용, actor URI 중복 금지, profile당 actor metadata 중복 금지, actor별 key type 중복 금지, remote actor public key metadata를 private key 없이 저장할 수 있는지, `(instance_id, normalized_handle)` unique가 같은 instance 중복은 막고 다른 instance 동일 handle은 허용하는지 확인한다.
+- [ ] 6.1 DB migration/push 또는 schema check와 migration fixture로 `instance`, profile instance 관계, actor metadata/key 테이블이 생성되고, bootstrap 이후 기존 profile의 `instance_id`가 configured local instance로 채워지며 handle이 보존되는지, `instance.domain` 중복 금지, 서로 다른 domain의 복수 `LOCAL` row 허용, actor URI 중복 금지, profile당 actor metadata 중복 금지, actor별 key kind 중복 금지, remote actor public key metadata를 private key 없이 저장할 수 있는지, `(instance_id, normalized_handle)` unique가 같은 instance 중복은 막고 다른 instance 동일 handle은 허용하는지 확인한다.
 - [ ] 6.2 local instance bootstrap helper가 configured local instance row를 생성하거나 기존 row를 검증하는 positive path, runtime local instance resolve가 configured local instance row를 읽어 검증하되 row가 없을 때 bootstrap/자동 생성을 하지 않고 설정 오류로 처리하는지, local profile 생성이 configured local instance ID를 저장하고 설정 누락/불일치를 설정 오류로 처리하는지 unit/integration test로 검증한다.
 - [ ] 6.3 WebFinger 성공/404, WebFinger `application/jrd+json` content type, canonical subject, self/profile-page links, actor document 성공/404, actor document `application/activity+json` content type, canonical `id`, `preferredUsername`, `name`, `url`, `published`, 필수 `inbox`/`outbox` URI, `publicKey`, `assertionMethods`, unsupported endpoint 404, lazy key idempotency를 unit/integration test로 검증한다.
 - [ ] 6.4 GraphQL 테스트로 `relativeHandle` local 표시와 profile-instance 관계 도입 이후 configured local/non-configured local/remote 표시, remote profile Node 조회, `profileByHandle` local-only 동작, 다른 instance 동일 handle의 local profile 생성 허용과 configured local duplicate handle conflict, remote target active profile selection/follow/unfollow profile not found, remote target viewerFollow 없음 응답, remote profile `Profile.posts` 빈 connection을 검증한다.

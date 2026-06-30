@@ -82,7 +82,7 @@
 - **WHEN** local active profile의 actor key가 필요하지만 저장된 key pair가 없다
 - **THEN** 시스템은 해당 profile의 ActivityPub actor metadata row를 보장한다
 - **AND** 시스템은 해당 ActivityPub actor에 대한 RSA-PKCS#1-v1.5 key pair와 Ed25519 key pair를 생성해 저장한다
-- **AND** 같은 ActivityPub actor와 key type에 대해 중복 key row를 만들지 않는다
+- **AND** 같은 ActivityPub actor와 key kind에 대해 중복 key row를 만들지 않는다
 
 #### Scenario: Reuse existing local actor keys
 

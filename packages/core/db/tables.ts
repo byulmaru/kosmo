@@ -76,12 +76,12 @@ export const ActivityPubActorKeys = pgTable(
     activityPubActorId: uuid('activitypub_actor_id')
       .notNull()
       .references(() => ActivityPubActors.id, { onDelete: 'cascade' }),
-    keyType: Enum.activityPubActorKeyType('key_type').notNull(),
+    kind: Enum.activityPubActorKeyKind('kind').notNull(),
     publicKeyJwk: jsonb('public_key_jwk').$type<JsonWebKeyRecord>().notNull(),
     privateKeyJwk: jsonb('private_key_jwk').$type<JsonWebKeyRecord>(),
     createdAt: createdAt(),
   },
-  (table) => [unique().on(table.activityPubActorId, table.keyType)],
+  (table) => [unique().on(table.activityPubActorId, table.kind)],
 );
 
 export const Applications = pgTable(
