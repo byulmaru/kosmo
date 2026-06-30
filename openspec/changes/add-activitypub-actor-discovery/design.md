@@ -37,7 +37,7 @@ Fedify는 actor dispatcher, WebFinger 처리, federation request routing을 fede
 
 ## Risks / Trade-offs
 
-- **Lazy key 생성 경합** → actor key table은 ActivityPub actor/key type 단위 unique constraint를 두고, 생성은 transaction 또는 upsert로 idempotent하게 처리한다.
+- **Lazy key 생성 경합** → actor key table은 ActivityPub actor/key kind 단위 unique constraint를 두고, 생성은 transaction 또는 upsert로 idempotent하게 처리한다.
 - **기존 profile unique 변경 migration 위험** → configured local instance row를 먼저 보장한 뒤 기존 profile에 `instance_id`를 채우고, 새 composite unique를 만든 다음 기존 전역 unique를 제거한다.
 - **remote profile 조회 UX가 제한적임** → 이번 scope에서는 저장된 remote profile을 GraphQL `Profile` 읽기 대상으로 노출하되, remote UI 연결은 remote fetch 정책이 정해진 뒤 별도 change에서 다룬다.
 - **remote profile에 local workflow가 붙은 것처럼 보일 수 있음** → Node 직접 조회는 허용하지만 active profile 선택은 profile not found 오류로 닫고, viewerFollow는 없음으로 응답하며, follow/unfollow mutation은 profile not found 오류로 닫아 remote Follow/delivery가 없는 거짓 관계를 만들지 않는다. `Profile.posts`도 빈 connection으로 응답해 remote post fetch가 있는 것처럼 보이지 않게 한다.

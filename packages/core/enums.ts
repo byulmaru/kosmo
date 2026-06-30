@@ -12,6 +12,17 @@ export const AccountState = {
 } as const;
 export type AccountState = keyof typeof AccountState;
 
+export const ActivityPubActorType = {
+  PERSON: 'PERSON',
+} as const;
+export type ActivityPubActorType = keyof typeof ActivityPubActorType;
+
+export const ActivityPubActorKeyKind = {
+  RSA_PKCS1_V1_5: 'RSA_PKCS1_V1_5',
+  ED25519: 'ED25519',
+} as const;
+export type ActivityPubActorKeyKind = keyof typeof ActivityPubActorKeyKind;
+
 export const ApplicationState = {
   ACTIVE: 'ACTIVE',
   DISABLED: 'DISABLED',
