@@ -5,10 +5,7 @@
   import RightRail from '$lib/components/RightRail.svelte';
   import SidebarNavigation from '$lib/components/SidebarNavigation.svelte';
   import { setProfileSwitcherContext } from '$lib/profileSwitcherContext';
-  import type {
-    ProfileStateChangedReason,
-    ProfileStateChangedSelectedProfile,
-  } from '$lib/profileStateChanged';
+  import type { ProfileStateChangedReason } from '$lib/profileStateChanged';
   import { setShellChromeContext } from '$lib/shellChromeContext';
   import { setTabsLayoutSessionContext } from '$lib/tabsLayoutSessionContext';
 
@@ -30,20 +27,8 @@
       }
     `),
   );
-  let selectedProfileFromMutation = $state<ProfileStateChangedSelectedProfile | null>(null);
   let selectedProfileVersion = $state(0);
-  const selectedProfile = $derived(
-    selectedProfileFromMutation ?? query.data?.currentSession?.selectedProfile ?? null,
-  );
-
-  $effect(() => {
-    if (
-      selectedProfileFromMutation &&
-      query.data?.currentSession?.selectedProfile?.id === selectedProfileFromMutation.id
-    ) {
-      selectedProfileFromMutation = null;
-    }
-  });
+  const selectedProfile = $derived(query.data?.currentSession?.selectedProfile ?? null);
 
   setTabsLayoutSessionContext({
     selectedProfile: () => selectedProfile,
@@ -53,13 +38,9 @@
     refetch: () => query.refetch(),
   });
 
-  const handleProfileStateChanged = (
-    reason: ProfileStateChangedReason,
-    selectedProfileFromResponse: ProfileStateChangedSelectedProfile,
-  ) => {
+  const handleProfileStateChanged = (reason: ProfileStateChangedReason) => {
     const cache = client.extension('cache');
 
-    selectedProfileFromMutation = selectedProfileFromResponse;
     selectedProfileVersion += 1;
 
     if (reason === 'profile-created') {
@@ -67,6 +48,7 @@
     }
 
     cache.invalidate(
+      { __typename: 'Query', $field: 'currentSession' },
       { __typename: 'Query', $field: 'homeTimeline' },
       { __typename: 'Profile', $field: 'viewerFollow' },
     );
@@ -139,7 +121,6 @@
       query={query.data}
       loading={query.loading}
       error={Boolean(query.error)}
-      activeProfileOverride={selectedProfileFromMutation}
       bind:switcherOpen={profileSwitcherOpen}
       onProfileStateChanged={handleProfileStateChanged}
     />
@@ -200,7 +181,6 @@
           query={query.data}
           loading={query.loading}
           error={Boolean(query.error)}
-          activeProfileOverride={selectedProfileFromMutation}
           surface="drawer"
           bind:switcherOpen={profileSwitcherOpen}
           onNavigate={closeDrawer}
