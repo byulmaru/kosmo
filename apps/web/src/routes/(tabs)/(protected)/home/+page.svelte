@@ -33,12 +33,15 @@
   const selectedProfile = $derived(tabsLayoutSession?.selectedProfile() ?? null);
   const selectedProfileVersion = $derived(tabsLayoutSession?.selectedProfileVersion() ?? 0);
   const selectedProfileLoading = $derived(tabsLayoutSession?.loading() ?? false);
+  const selectedProfileError = $derived(tabsLayoutSession ? tabsLayoutSession.error() : true);
   const hasProfiles = $derived((query.data?.me?.profiles?.length ?? 0) > 0);
   // 로그인 + 선택 프로필 없음일 때만 온보딩을 노출한다.
   // 비로그인·무효 세션도 인증 검증(currentSession) 로딩 중에는 (protected) 가드가 fail-open으로
   // 보류하므로 이 화면이 잠깐 렌더될 수 있다. session 존재를 함께 봐서 그사이 온보딩이 새지 않게 하고,
   // 세션이 null로 확정되면 (protected) 가드가 루트(/)로 보낸다(PROD-148).
-  const showOnboarding = $derived(Boolean(session) && !selectedProfile && !selectedProfileLoading);
+  const showOnboarding = $derived(
+    Boolean(session) && !selectedProfile && !selectedProfileLoading && !selectedProfileError,
+  );
   let loadedHomeTimelineVersion = $state(0);
   let pendingHomeTimelineVersion = $state<number | null>(null);
   let pendingHomeTimelineSnapshot = $state<unknown>(null);

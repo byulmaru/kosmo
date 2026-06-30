@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
 import type { Page, Route } from '@playwright/test';
 
-test('profile selection updates open shell and compose from mutation payload', async ({ page }) => {
+test('profile selection updates open shell and compose through currentSession cache', async ({
+  page,
+}) => {
   const graphQLRequests = collectGraphQLRequests(page);
 
   await page.goto('/login');
@@ -31,10 +33,10 @@ test('profile selection updates open shell and compose from mutation payload', a
   await page.waitForLoadState('networkidle');
 
   expect(graphQLRequests.operationNames).toContain('ProfileSwitcherSelectProfileMutation');
-  expect(graphQLRequests.currentSessionSelectedProfileOperations).toEqual([]);
+  expect(graphQLRequests.currentSessionSelectedProfileOperations).toContain('TabsLayoutQuery');
 });
 
-test('profile route action follows active profile bridge after switching', async ({ page }) => {
+test('profile route action follows currentSession cache after switching', async ({ page }) => {
   const graphQLRequests = collectGraphQLRequests(page);
 
   await page.goto('/login');
@@ -59,7 +61,7 @@ test('profile route action follows active profile bridge after switching', async
   await page.waitForLoadState('networkidle');
 
   expect(graphQLRequests.operationNames).toContain('ProfileSwitcherSelectProfileMutation');
-  expect(graphQLRequests.currentSessionSelectedProfileOperations).toEqual([]);
+  expect(graphQLRequests.currentSessionSelectedProfileOperations).toContain('TabsLayoutQuery');
 });
 
 test('home timeline hides previous profile posts while active profile refetches', async ({
@@ -91,6 +93,23 @@ test('home timeline hides previous profile posts while active profile refetches'
 
   await expect(page.getByText('아직 게시글이 없어요')).toBeVisible();
   await expect(page.getByText(betaPostBody)).toBeHidden();
+});
+
+test('home onboarding stays hidden while tabs layout profile query errors', async ({ page }) => {
+  await page.goto('/login');
+  await page.waitForURL('**/home');
+
+  await createProfileFromSwitcher(page, 'errorhome');
+  await expect(sidebarProfileHandle(page, 'errorhome')).toBeVisible();
+
+  await failGraphQLOperation(page, 'TabsLayoutQuery');
+  await page.reload();
+
+  await expect(page.getByRole('region', { name: '프로필 상태' })).toContainText(
+    '프로필을 불러오지 못했습니다.',
+  );
+  await expect(page.getByRole('heading', { name: '사용할 프로필을 선택해주세요' })).toBeHidden();
+  await expect(page.getByRole('heading', { name: '홈' })).toBeVisible();
 });
 
 function collectGraphQLRequests(page: Page) {
@@ -219,6 +238,23 @@ async function delayNextGraphQLOperation(page: Page, operationName: string) {
     waitForRequest: () => requestSeenPromise,
     release,
   };
+}
+
+async function failGraphQLOperation(page: Page, operationName: string) {
+  await page.route('**/graphql', async (route) => {
+    const operation = readGraphQLOperation(route.request().postData());
+
+    if (operation?.operationName !== operationName) {
+      await route.fallback();
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ errors: [{ message: `${operationName} failed for test` }] }),
+    });
+  });
 }
 
 function composerProfileHandle(page: Page, handle: string) {
