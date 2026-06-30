@@ -33,4 +33,4 @@
 - `apps/web/src/routes/(tabs)/@[handle]/+layout.svelte`
 - `apps/web/src/routes/(tabs)/@[handle]/[postId]/+page@(tabs).svelte`
 - `openspec/specs/web-app-shell/spec.md`
-- `docs/design/breakpoints.md` 또는 별도 shell scroll design 문서
+- `docs/design/breakpoints.md`

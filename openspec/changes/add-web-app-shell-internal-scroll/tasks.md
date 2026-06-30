@@ -29,7 +29,7 @@
 ## 4. 문서 정렬
 
 - [ ] 4.1 `openspec/specs/web-app-shell/spec.md` 또는 이 change delta가 internal scroll app shell 요구사항과 일치하는지 확인한다.
-- [ ] 4.2 `docs/design/breakpoints.md` 또는 별도 shell scroll design 문서에 scroll ownership과 기존 `md`/`xl` 단계 유지 정책을 반영한다.
+- [ ] 4.2 `docs/design/breakpoints.md`의 scroll ownership 정책이 구현 결과와 일치하는지 확인한다.
 - [ ] 4.3 구현 중 `PROD-220` 하단바 겹침이 함께 해소됐는지 확인하고, 이슈 처리 여부를 구현 PR 설명에 남긴다.
 - [ ] 4.4 `PROD-233`은 변경된 shell 기준의 반응형 내비게이션 E2E 후속 작업으로 남긴다.
 

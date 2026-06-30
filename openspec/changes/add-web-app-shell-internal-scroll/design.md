@@ -47,7 +47,7 @@
 
 ## Migration Plan
 
-1. OpenSpec change와 디자인 문서를 먼저 PR로 올려 scroll ownership 계약을 리뷰한다.
+1. OpenSpec change와 `docs/design/breakpoints.md` 갱신을 먼저 PR로 올려 scroll ownership 계약을 리뷰한다.
 2. 스펙 PR 위에 구현 PR을 쌓고, 최신 `main`의 shell 관련 변경을 다시 확인한 뒤 구현한다.
 3. 구현 PR에서는 shell layout, bottom tab padding, sidebar/drawer height, right rail placement, route scroll behavior를 한 번에 검증한다.
 4. 구현 완료 후 PROD-220이 함께 해소됐는지 판단하고, PROD-233은 변경된 shell 기준으로 E2E를 보강한다.
