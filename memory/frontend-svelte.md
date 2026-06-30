@@ -15,6 +15,7 @@
 
 ## Fragment Components
 
+- `apps/web`에서 GraphQL entity 데이터를 받는 Svelte 컴포넌트는 기본적으로 fragment component로 작성한다. `handle`, `displayName` 같은 field subset을 개별 scalar prop으로 복제하는 것은 fragment 경계를 피할 명확한 이유가 있을 때만 허용한다.
 - GraphQL 데이터를 소비하는 컴포넌트는 개별 scalar props를 나열하지 말고 Mearie가 생성한 `{FragmentName}$key` 타입을 받는다.
 - `@mearie/svelte`의 `FragmentRefs<'FragmentName'>` helper를 fragment prop 타입으로 쓰지 않는다. Mearie 공식 fragment guide의 `$key` prop 타입 패턴을 따른다.
 - generated fragment `$key` 타입은 `$mearie`에서 type-only import한다.
