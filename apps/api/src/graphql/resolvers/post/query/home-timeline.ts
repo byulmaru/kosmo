@@ -1,5 +1,4 @@
 import { db, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
-import { ProfileFollowState } from '@kosmo/core/enums';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, exists, getColumns, gt, lt, or } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
@@ -15,7 +14,7 @@ builder.queryField('homeTimeline', (t) =>
       nullable: true,
       unauthorizedResolver: () => null,
       resolve: (_, args, ctx) => {
-        const acceptedFolloweeWhere = exists(
+        const followeeWhere = exists(
           db
             .select({ id: ProfileFollows.id })
             .from(ProfileFollows)
@@ -23,7 +22,6 @@ builder.queryField('homeTimeline', (t) =>
               and(
                 eq(ProfileFollows.followerProfileId, ctx.session.profileId),
                 eq(ProfileFollows.followeeProfileId, Posts.profileId),
-                eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
               ),
             ),
         );
@@ -40,7 +38,7 @@ builder.queryField('homeTimeline', (t) =>
               .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
               .where(
                 and(
-                  or(eq(Posts.profileId, ctx.session.profileId), acceptedFolloweeWhere),
+                  or(eq(Posts.profileId, ctx.session.profileId), followeeWhere),
                   postVisibilityAccessWhere({ ctx }),
                   before ? gt(Posts.id, before) : undefined,
                   after ? lt(Posts.id, after) : undefined,

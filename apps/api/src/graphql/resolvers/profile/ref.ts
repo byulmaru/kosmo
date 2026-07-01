@@ -1,10 +1,5 @@
 import { AccountProfiles, db, Profiles, TableDiscriminator } from '@kosmo/core/db';
-import {
-  AccountProfileRole,
-  ProfileFollowPolicy,
-  ProfileFollowState,
-  ProfileState,
-} from '@kosmo/core/enums';
+import { AccountProfileRole, ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq, inArray } from 'drizzle-orm';
 import { createObjectRef } from '@/graphql/utils';
@@ -69,9 +64,6 @@ export const ProfileFollow = createObjectRef(
 
 ProfileFollow.implement({
   fields: (t) => ({
-    state: t.expose('state', {
-      type: ProfileFollowState,
-    }),
     createdAt: t.expose('createdAt', {
       type: 'DateTime',
     }),

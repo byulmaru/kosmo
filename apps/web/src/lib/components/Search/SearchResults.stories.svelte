@@ -5,10 +5,9 @@
 
   import SearchResults from './SearchResults.svelte';
 
-  type FollowState = 'ACCEPTED' | 'PENDING';
   type ViewerState = {
     isSelf: boolean;
-    follow: { id: string; state: FollowState } | null;
+    follow: { id: string } | null;
   };
 
   const defaultViewerState = (overrides: Partial<ViewerState> = {}): ViewerState => ({

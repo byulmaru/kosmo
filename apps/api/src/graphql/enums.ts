@@ -12,5 +12,4 @@ createEnumRef('AccountProfileRole');
 createEnumRef('PostState');
 createEnumRef('PostVisibility');
 createEnumRef('ProfileFollowPolicy');
-createEnumRef('ProfileFollowState');
 createEnumRef('ProfileState');
