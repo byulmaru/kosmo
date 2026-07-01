@@ -31,11 +31,17 @@
 
 - **WHEN** remote actor가 local actor가 보낸 Follow에 대한 `Accept` activity를 보낸다
 - **THEN** 시스템은 해당 outbound `ProfileFollow` 관계 상태를 `ACCEPTED`로 갱신한다
+- **AND** `Accept.actor`는 해당 `ProfileFollow`의 remote followee actor URI와 일치해야 한다
+- **AND** `Accept.object`는 해당 `ProfileFollow`에 연결된 outbound Follow activity identity를 참조해야 한다
+- **AND** actor 또는 object가 일치하지 않는 `Accept`는 해당 follow 관계를 갱신하지 않는다
 
 #### Scenario: Remote follow rejected
 
 - **WHEN** remote actor가 local actor가 보낸 Follow에 대한 `Reject` activity를 보낸다
 - **THEN** 시스템은 해당 outbound `ProfileFollow` 관계 상태를 `REJECTED`로 갱신한다
+- **AND** `Reject.actor`는 해당 `ProfileFollow`의 remote followee actor URI와 일치해야 한다
+- **AND** `Reject.object`는 해당 `ProfileFollow`에 연결된 outbound Follow activity identity를 참조해야 한다
+- **AND** actor 또는 object가 일치하지 않는 `Reject`는 해당 follow 관계를 갱신하지 않는다
 
 #### Scenario: Unfollow active remote profile
 
@@ -54,12 +60,16 @@
 - **AND** 시스템은 remote profile을 follower, local profile을 followee로 하는 `ProfileFollow` 관계를 생성하거나 갱신한다
 - **AND** local profile follow policy가 `OPEN`이면 follow 관계를 `ACCEPTED`로 만들고 `Accept` activity를 발송한다
 - **AND** local profile follow policy가 `APPROVAL_REQUIRED`이면 follow 관계를 `PENDING`으로 둔다
+- **AND** 이번 capability는 `APPROVAL_REQUIRED` inbound Follow에 대한 Accept 또는 Reject를 자동 발송하지 않는다
+- **AND** `PENDING` remote follow request를 승인 또는 거절하고 그 결과 activity를 발송하는 UX는 후속 capability에서 다룬다
 
 #### Scenario: Receive remote Undo Follow
 
 - **WHEN** Fedify inbox listener가 verified remote `Undo(Follow)` activity를 전달한다
 - **THEN** 시스템은 해당 remote follower와 local followee 사이의 `ProfileFollow` 관계를 제거한다
 - **AND** 시스템은 같은 remote Undo를 idempotent하게 처리한다
+- **AND** `Undo.actor`는 undo 대상 Follow의 actor 및 remote follower actor URI와 일치해야 한다
+- **AND** actor 또는 object가 일치하지 않는 `Undo(Follow)`는 해당 follow 관계를 제거하지 않는다
 
 #### Scenario: Reject unsupported inbox activity
 
