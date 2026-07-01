@@ -1,5 +1,4 @@
 <script module lang="ts">
-  import type { FragmentRefs } from '@mearie/svelte';
   import { defineMeta } from '@storybook/addon-svelte-csf';
 
   import type {
@@ -8,13 +7,25 @@
     ProfileListItem_profile$key,
   } from '$mearie';
 
-  import FollowButton from './FollowButton.svelte';
   import ProfileConnectionList from './ProfileConnectionList.svelte';
 
   type FollowState = 'ACCEPTED' | 'PENDING';
-  type ProfileActionMock = ProfileListItem_profile$key & FragmentRefs<'FollowButton_profile'>;
+  type ViewerState = {
+    authenticated: boolean;
+    hasSelectedProfile: boolean;
+    isSelf: boolean;
+    canMutate: boolean;
+    follow: { id: string; state: FollowState } | null;
+  };
 
-  const viewerProfileId = 'viewer-profile';
+  const defaultViewerState = (overrides: Partial<ViewerState> = {}): ViewerState => ({
+    authenticated: true,
+    hasSelectedProfile: true,
+    isSelf: false,
+    canMutate: true,
+    follow: null,
+    ...overrides,
+  });
 
   const profile = (
     overrides: Partial<{
@@ -23,7 +34,7 @@
       handle: string;
       relativeHandle: string;
       bio: string | null;
-      viewerFollow: { id: string; state: FollowState } | null;
+      viewerState: ViewerState;
     }> = {},
   ): ProfileListItem_profile$key =>
     ({
@@ -33,28 +44,14 @@
       handle: 'connected',
       relativeHandle: '@connected',
       bio: '팔로우 관계 목록에서 표시되는 프로필입니다.',
-      viewerFollow: null,
+      viewerState: defaultViewerState(),
       ...overrides,
     }) as unknown as ProfileListItem_profile$key;
-
-  const actionProfile = (
-    overrides: Partial<{
-      id: string;
-      displayName: string;
-      handle: string;
-      relativeHandle: string;
-      bio: string | null;
-      viewerFollow: { id: string; state: FollowState } | null;
-    }> = {},
-  ): ProfileActionMock => profile(overrides) as unknown as ProfileActionMock;
-
-  const followTarget = (item: ProfileListItem_profile$key): FragmentRefs<'FollowButton_profile'> =>
-    item as unknown as FragmentRefs<'FollowButton_profile'>;
 
   const additionalProfileItems = (kind: 'followers' | 'following') => [
     {
       cursor: `${kind}-edge-3`,
-      profile: actionProfile({
+      profile: profile({
         id: `${kind}-page-2-profile`,
         displayName: '다음 페이지 프로필',
         handle: `${kind}-next-page`,
@@ -97,7 +94,9 @@
                 displayName: '두 번째 팔로워',
                 handle: 'second-follower',
                 relativeHandle: '@second-follower',
-                viewerFollow: { id: 'viewer-follow-2', state: 'ACCEPTED' },
+                viewerState: defaultViewerState({
+                  follow: { id: 'viewer-follow-2', state: 'ACCEPTED' },
+                }),
               }),
             },
           },
@@ -169,11 +168,7 @@
       kind="followers"
       followersProfile={followersProfile()}
       onLoadMore={() => {}}
-    >
-      {#snippet action(profile: ProfileListItem_profile$key)}
-        <FollowButton profile={followTarget(profile)} {viewerProfileId} class="shrink-0" />
-      {/snippet}
-    </ProfileConnectionList>
+    />
     <ProfileConnectionList kind="followers" />
   </div>
 </Story>
@@ -185,41 +180,25 @@
       kind="followers"
       followersProfile={followersProfile()}
       onLoadMore={() => {}}
-    >
-      {#snippet action(profile: ProfileListItem_profile$key)}
-        <FollowButton profile={followTarget(profile)} {viewerProfileId} class="shrink-0" />
-      {/snippet}
-    </ProfileConnectionList>
+    />
     <ProfileConnectionList
       kind="followers"
       followersProfile={followersProfile()}
       loadingNextPage
       onLoadMore={() => {}}
-    >
-      {#snippet action(profile: ProfileListItem_profile$key)}
-        <FollowButton profile={followTarget(profile)} {viewerProfileId} class="shrink-0" />
-      {/snippet}
-    </ProfileConnectionList>
+    />
     <ProfileConnectionList
       kind="followers"
       followersProfile={followersProfile()}
       nextPageError
       onLoadMore={() => {}}
-    >
-      {#snippet action(profile: ProfileListItem_profile$key)}
-        <FollowButton profile={followTarget(profile)} {viewerProfileId} class="shrink-0" />
-      {/snippet}
-    </ProfileConnectionList>
+    />
     <ProfileConnectionList
       kind="followers"
       followersProfile={followersProfile(lastPageInfo)}
       additionalProfiles={additionalProfileItems('followers')}
       onLoadMore={() => {}}
-    >
-      {#snippet action(profile: ProfileListItem_profile$key)}
-        <FollowButton profile={followTarget(profile)} {viewerProfileId} class="shrink-0" />
-      {/snippet}
-    </ProfileConnectionList>
+    />
   </div>
 </Story>
 
@@ -232,11 +211,7 @@
       kind="following"
       followingProfile={followingProfile()}
       onLoadMore={() => {}}
-    >
-      {#snippet action(profile: ProfileListItem_profile$key)}
-        <FollowButton profile={followTarget(profile)} {viewerProfileId} class="shrink-0" />
-      {/snippet}
-    </ProfileConnectionList>
+    />
     <ProfileConnectionList kind="following" />
   </div>
 </Story>
@@ -248,40 +223,24 @@
       kind="following"
       followingProfile={followingProfile()}
       onLoadMore={() => {}}
-    >
-      {#snippet action(profile: ProfileListItem_profile$key)}
-        <FollowButton profile={followTarget(profile)} {viewerProfileId} class="shrink-0" />
-      {/snippet}
-    </ProfileConnectionList>
+    />
     <ProfileConnectionList
       kind="following"
       followingProfile={followingProfile()}
       loadingNextPage
       onLoadMore={() => {}}
-    >
-      {#snippet action(profile: ProfileListItem_profile$key)}
-        <FollowButton profile={followTarget(profile)} {viewerProfileId} class="shrink-0" />
-      {/snippet}
-    </ProfileConnectionList>
+    />
     <ProfileConnectionList
       kind="following"
       followingProfile={followingProfile()}
       nextPageError
       onLoadMore={() => {}}
-    >
-      {#snippet action(profile: ProfileListItem_profile$key)}
-        <FollowButton profile={followTarget(profile)} {viewerProfileId} class="shrink-0" />
-      {/snippet}
-    </ProfileConnectionList>
+    />
     <ProfileConnectionList
       kind="following"
       followingProfile={followingProfile(lastPageInfo)}
       additionalProfiles={additionalProfileItems('following')}
       onLoadMore={() => {}}
-    >
-      {#snippet action(profile: ProfileListItem_profile$key)}
-        <FollowButton profile={followTarget(profile)} {viewerProfileId} class="shrink-0" />
-      {/snippet}
-    </ProfileConnectionList>
+    />
   </div>
 </Story>

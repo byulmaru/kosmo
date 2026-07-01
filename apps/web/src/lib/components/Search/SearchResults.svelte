@@ -1,17 +1,14 @@
 <script lang="ts">
-  import type { FollowButton_profile$key, ProfileListItem_profile$key } from '$mearie';
-  import type { Snippet } from 'svelte';
+  import type { ProfileListItem_profile$key } from '$mearie';
   import type { HTMLAttributes } from 'svelte/elements';
 
   import ProfileListItem from '../ProfileListItem.svelte';
   import TextSkeleton from '../TextSkeleton.svelte';
 
   // 사람(프로필) 탭의 검색 상태 영역.
-  type SearchResultActionProfile = ProfileListItem_profile$key & FollowButton_profile$key;
   type Props = HTMLAttributes<HTMLElement> & {
     query?: string;
-    profile?: SearchResultActionProfile | null;
-    action?: Snippet<[profile: SearchResultActionProfile]>;
+    profile?: ProfileListItem_profile$key | null;
     loading?: boolean;
     error?: boolean;
     onRetry?: () => void;
@@ -20,7 +17,6 @@
   let {
     query = '',
     profile = null,
-    action,
     loading = false,
     error = false,
     onRetry,
@@ -43,16 +39,7 @@
       </p>
     </div>
   {:else if profile}
-    {@const actionSnippet = action}
-    {#if actionSnippet}
-      <ProfileListItem {profile} linked width="wide" class="w-full">
-        {#snippet action()}
-          {@render actionSnippet(profile)}
-        {/snippet}
-      </ProfileListItem>
-    {:else}
-      <ProfileListItem {profile} linked width="wide" class="w-full" />
-    {/if}
+    <ProfileListItem {profile} linked width="wide" class="w-full" />
   {:else if loading}
     <div aria-hidden="true">
       {#each skeletonItems as item (item)}

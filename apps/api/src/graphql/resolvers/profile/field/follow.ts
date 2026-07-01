@@ -12,6 +12,15 @@ type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
 
 const FollowerProfiles = alias(Profiles, 'profile_follow_connection_follower_profile');
 const FolloweeProfiles = alias(Profiles, 'profile_follow_connection_followee_profile');
+const ProfileViewerState = builder.simpleObject('ProfileViewerState', {
+  fields: (field) => ({
+    authenticated: field.boolean(),
+    hasSelectedProfile: field.boolean(),
+    isSelf: field.boolean(),
+    canMutate: field.boolean(),
+    follow: field.field({ type: ProfileFollow, nullable: true }),
+  }),
+});
 
 builder.objectFields(ProfileFollow, (t) => ({
   follower: t.field({
@@ -135,5 +144,20 @@ builder.objectFields(Profile, (t) => ({
     type: ProfileFollow,
     nullable: true,
     resolve: (profile, _, ctx) => viewerFollowLoader(ctx).load(profile.id),
+  }),
+  viewerState: t.field({
+    type: ProfileViewerState,
+    resolve: async (profile, _, ctx) => {
+      const viewerProfileId = ctx.session?.profileId ?? null;
+      const isSelf = Boolean(viewerProfileId && viewerProfileId === profile.id);
+
+      return {
+        authenticated: Boolean(ctx.session),
+        hasSelectedProfile: Boolean(viewerProfileId),
+        isSelf,
+        canMutate: Boolean(viewerProfileId && !isSelf),
+        follow: await viewerFollowLoader(ctx).load(profile.id),
+      };
+    },
   }),
 }));

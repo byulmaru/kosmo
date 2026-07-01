@@ -5,7 +5,6 @@
   import { page } from '$app/state';
   import { graphql } from '$mearie';
   import { createQuery } from '@mearie/svelte';
-  import FollowButton from '$lib/components/FollowButton.svelte';
   import RecentSearches from '$lib/components/Search/RecentSearches.svelte';
   import SearchBar from '$lib/components/Search/SearchBar.svelte';
   import SearchResults from '$lib/components/Search/SearchResults.svelte';
@@ -26,25 +25,11 @@
   const activeTab = $derived(parseSearchTab(page.url.searchParams.get('tab')));
   const shouldSearchPeople = $derived(activeTab === SearchTab.PEOPLE && trimmedQuery.length > 0);
 
-  const sessionQuery = createQuery(
-    graphql(`
-      query SearchPageSessionQuery {
-        currentSession {
-          id
-          selectedProfile {
-            id
-          }
-        }
-      }
-    `),
-  );
-
   const peopleQuery = createQuery(
     graphql(`
       query SearchPeopleByHandlePageQuery($handle: String!) {
         profileByHandle(handle: $handle) {
           ...ProfileListItem_profile
-          ...FollowButton_profile
         }
       }
     `),
@@ -52,7 +37,6 @@
     () => ({ skip: !shouldSearchPeople }),
   );
   const searchedProfile = $derived(peopleQuery.data?.profileByHandle ?? null);
-  const viewerProfileId = $derived(sessionQuery.data?.currentSession?.selectedProfile?.id ?? null);
 
   // 단계 구분(검색바 포커스 기준):
   // - input  : 검색바 포커스 = 입력 중 → 최근 검색 노출
@@ -158,13 +142,7 @@
         error={shouldSearchPeople && Boolean(peopleQuery.error)}
         onRetry={peopleQuery.refetch}
         class="w-full"
-      >
-        {#snippet action(profile)}
-          {#if viewerProfileId}
-            <FollowButton {profile} {viewerProfileId} class="shrink-0" />
-          {/if}
-        {/snippet}
-      </SearchResults>
+      />
     {:else}
       <div class="px-4 py-12 text-center">
         <p class="text-text-primary text-base font-semibold">준비 중인 검색이에요</p>

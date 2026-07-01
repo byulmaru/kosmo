@@ -10,12 +10,6 @@
   const query = createQuery(
     graphql(`
       query ProfileLayoutQuery($handle: String!) {
-        currentSession {
-          id
-          selectedProfile {
-            id
-          }
-        }
         profileByHandle(handle: $handle) {
           id
           ...ProfileHero_profile
@@ -27,9 +21,6 @@
   );
 
   const profile = $derived(query.data?.profileByHandle ?? null);
-  // currentSession이 null이면 비로그인. selectedProfile은 본인 프로필 식별과 미선택 안내에 쓰인다.
-  const authenticated = $derived(Boolean(query.data?.currentSession));
-  const viewerProfileId = $derived(query.data?.currentSession?.selectedProfile?.id ?? null);
 </script>
 
 <!--
@@ -65,7 +56,7 @@
   {:else}
     <ProfileHero {profile}>
       {#snippet action()}
-        <FollowButton {profile} {viewerProfileId} {authenticated} />
+        <FollowButton {profile} />
       {/snippet}
     </ProfileHero>
     {@render children()}

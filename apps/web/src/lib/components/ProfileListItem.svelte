@@ -3,17 +3,16 @@
   import { createFragment } from '@mearie/svelte';
   import { tv } from '$lib/tv';
   import { getProfileInitial } from '$lib/utils/profile';
-  import type { Snippet } from 'svelte';
   import type { HTMLAttributes } from 'svelte/elements';
 
   import type { ProfileListItem_profile$key } from '$mearie';
 
   import Avatar from './Avatar.svelte';
+  import FollowButton from './FollowButton.svelte';
 
   type ProfileListItemProps = Omit<HTMLAttributes<HTMLDivElement>, 'class'> & {
     profile: ProfileListItem_profile$key;
     linked?: boolean;
-    action?: Snippet;
     width?: 'compact' | 'wide';
     class?: string | null;
   };
@@ -21,7 +20,6 @@
   let {
     profile,
     linked = false,
-    action,
     width = 'compact',
     class: className = null,
     ...rest
@@ -48,6 +46,7 @@
         handle
         relativeHandle
         bio
+        ...FollowButton_profile
       }
     `),
     () => profile,
@@ -89,5 +88,5 @@
       </div>
     </div>
   {/if}
-  {@render action?.()}
+  <FollowButton profile={fragment.data} class="shrink-0" />
 </div>

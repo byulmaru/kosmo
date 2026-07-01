@@ -175,6 +175,15 @@ API는 프로필 간 visible follow 관계를 GraphQL에서 조회할 수 있어
 - **AND** 반환된 관계는 `ACCEPTED`, `PENDING`, `REJECTED` 상태를 포함할 수 있다
 - **AND** follow 관계가 없으면 없음으로 응답한다
 
+#### Scenario: Read viewer state
+
+- **WHEN** 클라이언트가 활성 프로필의 `viewerState`를 조회한다
+- **THEN** 시스템은 현재 요청에 유효한 세션이 있는지 `authenticated`로 반환한다
+- **AND** 현재 세션에 active profile이 선택되어 있는지 `hasSelectedProfile`로 반환한다
+- **AND** 조회 대상 프로필이 viewer active profile 자신인지 `isSelf`로 반환한다
+- **AND** viewer가 대상 프로필의 follow 상태를 바꿀 수 있는지 `canMutate`로 반환한다
+- **AND** viewer active profile이 대상 프로필을 follow하는 관계가 있으면 `follow`로 반환하고, 없으면 없음으로 응답한다
+
 #### Scenario: Read ProfileFollow profiles
 
 - **WHEN** 클라이언트가 `ProfileFollow.follower` 또는 `ProfileFollow.followee`를 조회한다

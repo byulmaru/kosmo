@@ -4,9 +4,9 @@ import { describe, expect, test } from 'vitest';
 
 const componentSource = readFileSync('src/lib/components/ProfileConnectionList.svelte', 'utf8');
 
-describe('ProfileConnectionList action snippet', () => {
-  test('passes the rendered profile action to ProfileListItem as a named action snippet', () => {
-    expect.assertions(2);
+describe('ProfileConnectionList profile row boundary', () => {
+  test('keeps follow action ownership inside ProfileListItem instead of passing an action snippet', () => {
+    expect.assertions(4);
 
     const compiled = compile(componentSource, {
       generate: 'client',
@@ -14,9 +14,9 @@ describe('ProfileConnectionList action snippet', () => {
       filename: 'ProfileConnectionList.svelte',
     }).js.code;
 
-    expect(compiled).toMatch(
-      /ProfileListItem\(\$\$anchor, \{[\s\S]*?action,\s*\$\$slots: \{ action: true \}/,
-    );
+    expect(componentSource).not.toContain('FollowButton_profile');
+    expect(componentSource).not.toContain('action?: Snippet');
+    expect(compiled).not.toMatch(/\$\$slots: \{ action: true \}/);
     expect(compiled).not.toMatch(/ProfileListItem\(\$\$anchor, \{[\s\S]*?children:/);
   });
 });

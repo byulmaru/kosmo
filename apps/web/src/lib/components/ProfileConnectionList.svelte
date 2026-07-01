@@ -1,11 +1,9 @@
 <script lang="ts">
   import { createFragment } from '@mearie/svelte';
   import { graphql } from '$mearie';
-  import type { Snippet } from 'svelte';
   import type { HTMLAttributes } from 'svelte/elements';
 
   import type {
-    FollowButton_profile$key,
     ProfileConnectionList_followersProfile$key,
     ProfileConnectionList_followingProfile$key,
     ProfileListItem_profile$key,
@@ -17,8 +15,7 @@
   // 프로필 팔로워/팔로잉 목록 영역. 게시글 목록(PostList)과 같은 상태(로딩/오류/빈) 표현·접근성 패턴을 따른다.
   // 팔로워/팔로잉은 같은 컴포넌트를 `kind`로 분기해 시각/상태 구조를 일치시킨다.
   type ConnectionKind = 'followers' | 'following';
-  type ProfileConnectionActionProfile = ProfileListItem_profile$key & FollowButton_profile$key;
-  type ConnectionProfileItem = { cursor: string; profile: ProfileConnectionActionProfile };
+  type ConnectionProfileItem = { cursor: string; profile: ProfileListItem_profile$key };
 
   type Props = HTMLAttributes<HTMLElement> & {
     kind: ConnectionKind;
@@ -29,7 +26,6 @@
     endCursor?: string | null;
     loadingNextPage?: boolean;
     nextPageError?: boolean;
-    action?: Snippet<[profile: ProfileConnectionActionProfile]>;
     loading?: boolean;
     error?: boolean;
     onRetry?: () => void;
@@ -45,7 +41,6 @@
     endCursor = null,
     loadingNextPage = false,
     nextPageError = false,
-    action,
     loading = false,
     error = false,
     onRetry,
@@ -105,7 +100,6 @@
               follower {
                 id
                 ...ProfileListItem_profile
-                ...FollowButton_profile
               }
             }
           }
@@ -131,7 +125,6 @@
               followee {
                 id
                 ...ProfileListItem_profile
-                ...FollowButton_profile
               }
             }
           }
@@ -220,16 +213,7 @@
   {:else if connectionProfiles.length > 0}
     <div>
       {#each connectionProfiles as item (item.cursor)}
-        {@const actionSnippet = action}
-        {#if actionSnippet}
-          <ProfileListItem profile={item.profile} linked width="wide" class="w-full">
-            {#snippet action()}
-              {@render actionSnippet(item.profile)}
-            {/snippet}
-          </ProfileListItem>
-        {:else}
-          <ProfileListItem profile={item.profile} linked width="wide" class="w-full" />
-        {/if}
+        <ProfileListItem profile={item.profile} linked width="wide" class="w-full" />
       {/each}
     </div>
     {#if showPagination}

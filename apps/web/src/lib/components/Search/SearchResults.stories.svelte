@@ -1,14 +1,27 @@
 <script module lang="ts">
   import { defineMeta } from '@storybook/addon-svelte-csf';
 
-  import type { FollowButton_profile$key, ProfileListItem_profile$key } from '$mearie';
+  import type { ProfileListItem_profile$key } from '$mearie';
 
-  import FollowButton from '../FollowButton.svelte';
   import SearchResults from './SearchResults.svelte';
 
-  type SearchResultMock = ProfileListItem_profile$key & FollowButton_profile$key;
+  type FollowState = 'ACCEPTED' | 'PENDING';
+  type ViewerState = {
+    authenticated: boolean;
+    hasSelectedProfile: boolean;
+    isSelf: boolean;
+    canMutate: boolean;
+    follow: { id: string; state: FollowState } | null;
+  };
 
-  const viewerProfileId = 'viewer-profile';
+  const defaultViewerState = (overrides: Partial<ViewerState> = {}): ViewerState => ({
+    authenticated: true,
+    hasSelectedProfile: true,
+    isSelf: false,
+    canMutate: true,
+    follow: null,
+    ...overrides,
+  });
 
   const profile = (
     overrides: Partial<{
@@ -17,9 +30,9 @@
       handle: string;
       relativeHandle: string;
       bio: string | null;
-      viewerFollow: { id: string; state: 'ACCEPTED' | 'PENDING' } | null;
+      viewerState: ViewerState;
     }> = {},
-  ): SearchResultMock =>
+  ): ProfileListItem_profile$key =>
     ({
       __typename: 'Profile',
       id: 'searched-profile',
@@ -27,9 +40,9 @@
       handle: 'byulmaru',
       relativeHandle: '@byulmaru',
       bio: '코스모에서 만나는 첫 프로필',
-      viewerFollow: null,
+      viewerState: defaultViewerState(),
       ...overrides,
-    }) as unknown as SearchResultMock;
+    }) as unknown as ProfileListItem_profile$key;
 
   const { Story } = defineMeta({
     title: 'KOSMO/SearchResults',
@@ -52,11 +65,7 @@
     <SearchResults />
     <SearchResults query="별마루" loading />
     <SearchResults query="별마루" error onRetry={() => {}} />
-    <SearchResults query="별마루" profile={profile()}>
-      {#snippet action(profile)}
-        <FollowButton {profile} {viewerProfileId} class="shrink-0" />
-      {/snippet}
-    </SearchResults>
+    <SearchResults query="별마루" profile={profile()} />
     <SearchResults query="없는핸들" />
   </div>
 </Story>
