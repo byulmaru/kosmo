@@ -15,7 +15,14 @@
 
 - **WHEN** remote ActivityPub profile이 local profile을 follow한다
 - **THEN** 시스템은 remote follower와 local followee 사이의 `ProfileFollow` 관계를 저장한다
-- **AND** inbound Follow activity identity 또는 response metadata를 중복 처리 방지에 사용할 수 있어야 한다
+- **AND** inbound Follow activity identity 또는 response metadata는 domain correlation에 사용할 수 있어야 한다
+- **AND** activity-level duplicate skip은 Fedify inbox idempotency와 `ProfileFollow` unique 제약에 맡긴다
+
+#### Scenario: Store repeated outbound remote Follow attempts
+
+- **WHEN** `REJECTED` 상태의 ActivityPub remote follow 관계가 새 follow 요청으로 재시도된다
+- **THEN** 시스템은 새 outbound Follow activity identity를 새 시도에 연결할 수 있어야 한다
+- **AND** outbound Follow activity identity는 follower actor URI와 followee actor URI만으로 파생하지 않고 시도마다 고유해야 한다
 
 ## MODIFIED Requirements
 
