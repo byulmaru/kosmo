@@ -5,6 +5,7 @@
 - [ ] 1.3 최신 `main` 기준으로 `apps/web/src/lib/components/SidebarNavigation.svelte`의 mobile drawer, `md`~`xl` icon rail, `xl+` full sidebar 분기를 확인한다.
 - [ ] 1.4 최신 `main` 기준으로 `ProfileConnectionList`와 팔로워·팔로잉 route가 shell 전환에 추가 pagination 작업 없이 호환되는지 확인한다.
 - [ ] 1.5 최신 `main` 기준으로 `openspec/specs/web-app-shell/spec.md`와 `docs/design/breakpoints.md`가 `md`/`xl` 3단계 기준과 어긋나지 않는지 확인한다.
+- [ ] 1.6 `add-shell-responsive-breakpoints`가 먼저 archive되어 canonical `web-app-shell`이 `md`/`xl` 3단계 기준인지 확인한다.
 
 ## 2. Shell scroll ownership 전환
 

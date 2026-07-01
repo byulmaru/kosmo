@@ -13,6 +13,10 @@
 - 반응형 내비게이션 E2E suite 전체는 `PROD-233` 범위로 남기고, 이 변경은 구현에 필요한 최소 viewport smoke 검증만 포함한다.
 - feed/list pagination, 하단 탭 IA 변경, 네이티브 WebView 전용 pull-to-refresh는 제외한다.
 
+## Dependencies
+
+- `add-shell-responsive-breakpoints`가 먼저 archive되어 `web-app-shell` canonical spec의 반응형 셸 기준이 `md`/`xl` 3단계로 갱신된 뒤에 이 change를 archive한다. 이 change는 그 3단계 기준을 전제로 internal scroll ownership만 추가하며, canonical `Desktop three-column shell layout`의 breakpoint 계약은 중복 수정하지 않는다.
+
 ## Capabilities
 
 ### New Capabilities
