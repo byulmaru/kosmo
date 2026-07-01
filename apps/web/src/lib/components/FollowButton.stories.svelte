@@ -4,8 +4,6 @@
 
   import FollowButton from './FollowButton.svelte';
 
-  type FollowState = 'ACCEPTED' | 'PENDING' | 'REJECTED';
-
   const viewerProfileId = 'viewer-profile';
   const targetProfileId = 'target-profile';
 
@@ -13,7 +11,7 @@
   // 여기서는 평범한 데이터 객체를 fragment ref 자리에 그대로 넘긴다.
   const profile = (
     id: string,
-    viewerFollow: { id: string; state: FollowState } | null = null,
+    viewerFollow: { id: string } | null = null,
   ): FragmentRefs<'FollowButton_profile'> =>
     ({
       __typename: 'Profile',
@@ -59,24 +57,7 @@
     </section>
     <section class="grid gap-1">
       <p class="text-text-secondary m-0">팔로잉</p>
-      <FollowButton
-        profile={profile('followed-profile', { id: 'follow-accepted', state: 'ACCEPTED' })}
-        {viewerProfileId}
-      />
-    </section>
-    <section class="grid gap-1">
-      <p class="text-text-secondary m-0">요청 중</p>
-      <FollowButton
-        profile={profile('pending-profile', { id: 'follow-pending', state: 'PENDING' })}
-        {viewerProfileId}
-      />
-    </section>
-    <section class="grid gap-1">
-      <p class="text-text-secondary m-0">거절 후 재요청 가능</p>
-      <FollowButton
-        profile={profile('rejected-profile', { id: 'follow-rejected', state: 'REJECTED' })}
-        {viewerProfileId}
-      />
+      <FollowButton profile={profile('followed-profile', { id: 'follow' })} {viewerProfileId} />
     </section>
     <section class="grid gap-1">
       <p class="text-text-secondary m-0">프로필 미선택</p>

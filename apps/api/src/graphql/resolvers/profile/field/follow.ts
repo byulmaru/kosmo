@@ -1,5 +1,5 @@
 import { db, first, ProfileFollows, Profiles } from '@kosmo/core/db';
-import { ProfileFollowState, ProfileState } from '@kosmo/core/enums';
+import { ProfileState } from '@kosmo/core/enums';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, count, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -44,7 +44,6 @@ builder.objectFields(Profile, (t) => ({
             .where(
               and(
                 eq(ProfileFollows.followeeProfileId, profile.id),
-                eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
                 before ? gt(ProfileFollows.id, before) : undefined,
                 after ? lt(ProfileFollows.id, after) : undefined,
                 profileFollowAccessWhere({
@@ -77,7 +76,6 @@ builder.objectFields(Profile, (t) => ({
             .where(
               and(
                 eq(ProfileFollows.followerProfileId, profile.id),
-                eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
                 before ? gt(ProfileFollows.id, before) : undefined,
                 after ? lt(ProfileFollows.id, after) : undefined,
                 profileFollowAccessWhere({
@@ -103,7 +101,6 @@ builder.objectFields(Profile, (t) => ({
         .where(
           and(
             eq(ProfileFollows.followeeProfileId, profile.id),
-            eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
             eq(FollowerProfiles.state, ProfileState.ACTIVE),
           ),
         )
@@ -122,7 +119,6 @@ builder.objectFields(Profile, (t) => ({
         .where(
           and(
             eq(ProfileFollows.followerProfileId, profile.id),
-            eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
             eq(FolloweeProfiles.state, ProfileState.ACTIVE),
           ),
         )

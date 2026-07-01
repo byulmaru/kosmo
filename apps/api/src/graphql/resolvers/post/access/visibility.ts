@@ -1,11 +1,11 @@
 import { db, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
-import { PostState, PostVisibility, ProfileFollowState, ProfileState } from '@kosmo/core/enums';
+import { PostState, PostVisibility, ProfileState } from '@kosmo/core/enums';
 import { and, eq, exists, inArray, or } from 'drizzle-orm';
 import type { UserContext } from '@/context';
 
 export const postVisibilityAccessWhere = ({ ctx }: { ctx: UserContext }) => {
   const publicWhere = inArray(Posts.visibility, [PostVisibility.PUBLIC, PostVisibility.UNLISTED]);
-  const acceptedFollowerWhere = ctx.session?.profileId
+  const followerWhere = ctx.session?.profileId
     ? and(
         eq(Posts.visibility, PostVisibility.FOLLOWERS),
         exists(
@@ -16,14 +16,13 @@ export const postVisibilityAccessWhere = ({ ctx }: { ctx: UserContext }) => {
               and(
                 eq(ProfileFollows.followerProfileId, ctx.session.profileId),
                 eq(ProfileFollows.followeeProfileId, Posts.profileId),
-                eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
               ),
             ),
         ),
       )
     : undefined;
   const visibleWhere = ctx.session?.profileId
-    ? or(publicWhere, eq(Posts.profileId, ctx.session.profileId), acceptedFollowerWhere)!
+    ? or(publicWhere, eq(Posts.profileId, ctx.session.profileId), followerWhere)!
     : publicWhere;
 
   // TODO(PROD-121): Extend this helper with DIRECT access once recipient policy exists.

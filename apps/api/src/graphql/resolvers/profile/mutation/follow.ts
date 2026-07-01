@@ -7,7 +7,7 @@ import {
   ProfileFollows,
   Profiles,
 } from '@kosmo/core/db';
-import { ProfileFollowState, ProfileState } from '@kosmo/core/enums';
+import { ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -26,7 +26,7 @@ builder.mutationField('followProfile', (t) =>
     },
     resolve: async (_, { input }, ctx) => {
       const targetProfile = await db
-        .select({ id: Profiles.id })
+        .select({ id: Profiles.id, followPolicy: Profiles.followPolicy })
         .from(Profiles)
         .where(and(eq(Profiles.id, input.id), eq(Profiles.state, ProfileState.ACTIVE)))
         .limit(1)
@@ -49,13 +49,12 @@ builder.mutationField('followProfile', (t) =>
         .then(first);
 
       if (existingFollow) {
-        if (existingFollow.state === ProfileFollowState.ACCEPTED) {
-          return { profileFollow: existingFollow };
-        }
+        return { profileFollow: existingFollow };
+      }
 
-        // PENDING/REJECTED 재요청 정책은 후속 pending 승인 플로우에서 결정한다.
+      if (targetProfile.followPolicy !== ProfileFollowPolicy.OPEN) {
         throw new ConflictError({
-          message: 'Profile follow already exists with unsupported state',
+          message: 'Profile requires follow request',
           field: 'id',
         });
       }
@@ -65,7 +64,6 @@ builder.mutationField('followProfile', (t) =>
         .values({
           followerProfileId: ctx.session.profileId,
           followeeProfileId: targetProfile.id,
-          state: ProfileFollowState.ACCEPTED,
         })
         .returning()
         .then(firstOrThrow)
@@ -86,12 +84,12 @@ builder.mutationField('followProfile', (t) =>
             .limit(1)
             .then(first);
 
-          if (concurrentFollow?.state === ProfileFollowState.ACCEPTED) {
+          if (concurrentFollow) {
             return concurrentFollow;
           }
 
           throw new ConflictError({
-            message: 'Profile follow already exists with unsupported state',
+            message: 'Profile follow could not be created',
             field: 'id',
           });
         });

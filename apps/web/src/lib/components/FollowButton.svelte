@@ -10,7 +10,6 @@
       id
       viewerFollow {
         id
-        state
       }
     }
   `);
@@ -32,13 +31,11 @@
       followProfile(input: { id: $id }) {
         profileFollow {
           id
-          state
           followee {
             id
             followersCount
             viewerFollow {
               id
-              state
             }
           }
         }
@@ -55,7 +52,6 @@
           followersCount
           viewerFollow {
             id
-            state
           }
         }
       }
@@ -80,9 +76,7 @@
   let errorMessage = $state<string | null>(null);
 
   const viewerFollow = $derived(profileFragment.data.viewerFollow);
-  const isFollowing = $derived(viewerFollow?.state === 'ACCEPTED');
-  // TODO: 승인 플로우가 추가되면 PENDING/REJECTED 전이를 실제 mutation 결과로 검증한다.
-  const isPending = $derived(viewerFollow?.state === 'PENDING');
+  const isFollowing = $derived(Boolean(viewerFollow));
   const unavailableReason = $derived(
     disabledReason ??
       (!authenticated
@@ -107,7 +101,7 @@
     errorMessage = null;
 
     try {
-      if (isFollowing || isPending) {
+      if (isFollowing) {
         await unfollowProfile({ id: targetProfileId });
         return;
       }
@@ -125,14 +119,14 @@
   <!-- 안내문이 버튼보다 넓어도 버튼은 우측 끝에 붙도록 items-end로 정렬한다. -->
   <div class={`inline-flex flex-col items-end gap-1 ${className}`}>
     <Button
-      variant={isFollowing || isPending ? 'secondary' : 'primary'}
+      variant={isFollowing ? 'secondary' : 'primary'}
       {size}
       {disabled}
       aria-busy={loading}
       aria-pressed={isFollowing}
       onclick={toggleFollow}
     >
-      {loading ? '처리 중' : isPending ? '요청 중' : isFollowing ? '팔로잉' : '팔로우'}
+      {loading ? '처리 중' : isFollowing ? '팔로잉' : '팔로우'}
     </Button>
     {#if message}
       <p

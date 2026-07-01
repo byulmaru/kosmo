@@ -137,10 +137,20 @@ export const relations = defineRelations(tables, (r) => ({
       to: r.ProfileFollows.followerProfileId,
       alias: 'profile_follow_follower',
     }),
+    followerFollowRequests: r.many.ProfileFollowRequests({
+      from: r.Profiles.id,
+      to: r.ProfileFollowRequests.followerProfileId,
+      alias: 'profile_follow_request_follower',
+    }),
     followeeFollows: r.many.ProfileFollows({
       from: r.Profiles.id,
       to: r.ProfileFollows.followeeProfileId,
       alias: 'profile_follow_followee',
+    }),
+    followeeFollowRequests: r.many.ProfileFollowRequests({
+      from: r.Profiles.id,
+      to: r.ProfileFollowRequests.followeeProfileId,
+      alias: 'profile_follow_request_followee',
     }),
     instance: r.one.Instances({
       from: r.Profiles.instanceId,
@@ -167,6 +177,20 @@ export const relations = defineRelations(tables, (r) => ({
       to: r.Profiles.id,
       optional: false,
       alias: 'profile_follow_follower',
+    }),
+  },
+  ProfileFollowRequests: {
+    followeeProfile: r.one.Profiles({
+      from: r.ProfileFollowRequests.followeeProfileId,
+      to: r.Profiles.id,
+      optional: false,
+      alias: 'profile_follow_request_followee',
+    }),
+    followerProfile: r.one.Profiles({
+      from: r.ProfileFollowRequests.followerProfileId,
+      to: r.Profiles.id,
+      optional: false,
+      alias: 'profile_follow_request_follower',
     }),
   },
   Sessions: {

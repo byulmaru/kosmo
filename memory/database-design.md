@@ -31,9 +31,9 @@ Use this memory when designing or reviewing the kosmo PostgreSQL/Drizzle databas
 
 ## Kosmo Schema Direction
 
-- The initial schema should focus on the minimum SNS backbone: `account`, `application`, `session`, `profile`, `account_profile`, `post`, `post_content`, and `profile_follow`.
+- The initial schema should focus on the minimum SNS backbone: `account`, `application`, `session`, `profile`, `account_profile`, `post`, `post_content`, `profile_follow`, and `profile_follow_request`.
 - Defer fluid UX/policy areas to later migrations: profile tags, themes, ActivityPub detail tables, AT Protocol caches, moderation, notifications, block/mute, and media processing.
-- Reflect expensive-to-change boundaries early: account-profile N:N, post content versioning, and profile-follow directionality.
+- Reflect expensive-to-change boundaries early: account-profile N:N, post content versioning, profile-follow directionality, and separation between established follows and follow requests.
 - Keep DB internal IDs, external API IDs, Object Storage keys, and CDN URLs as separate responsibilities.
 
 ## Naming
@@ -67,23 +67,27 @@ Kosmo UUID v8 type-code policy:
 - Decode IDs only through a shared `decodeIdType(id)` utility.
 - Store IDs as PostgreSQL `uuid`, not as string prefixes.
 
-Initial type-code examples:
+Current type-code registry examples. The source of truth is `TableDiscriminator` in `packages/core/db/id.ts`.
 
-| Code | Table                | Description                          |
-| ---: | -------------------- | ------------------------------------ |
-|  `0` | `account`            | Login unit mapped to an OIDC account |
-|  `1` | `application`        | App/client connecting to kosmo       |
-|  `2` | `application_secret` | Application secret                   |
-|  `3` | `session`            | Account and application session      |
-|  `4` | `profile`            | Social profile                       |
-|  `5` | `account_profile`    | Account-profile relationship         |
-|  `6` | `post`               | Post metadata                        |
-|  `7` | `post_content`       | Post body revision                   |
-|  `8` | `profile_follow`     | Profile follow relationship          |
-|  `9` | `file_object`        | Object Storage file                  |
-| `10` | `media_asset`        | Uploaded logical media               |
-| `11` | `media_variant`      | Thumbnail/preview derived file       |
-| `12` | `post_media`         | Post-media relationship              |
+| Code | Table                       | Description                          |
+| ---: | --------------------------- | ------------------------------------ |
+|  `1` | `account`                   | Login unit mapped to an OIDC account |
+|  `2` | `account_profile`           | Account-profile relationship         |
+|  `3` | `application`               | App/client connecting to kosmo       |
+|  `4` | `post`                      | Post metadata                        |
+|  `5` | `post_content`              | Post body revision                   |
+|  `6` | `profile`                   | Social profile                       |
+|  `7` | `profile_follow`            | Established profile follow           |
+|  `8` | `session`                   | Account and application session      |
+|  `9` | `application_authorization` | OAuth application authorization      |
+| `10` | `oauth_authorization_code`  | OAuth authorization code             |
+| `11` | `oauth_token`               | OAuth access/refresh token           |
+| `12` | `file`                      | Object Storage file                  |
+| `13` | `media`                     | Uploaded or remote logical media     |
+| `14` | `instance`                  | Local or remote service instance     |
+| `15` | `activitypub_actor`         | ActivityPub actor details            |
+| `16` | `activitypub_actor_key`     | ActivityPub actor key                |
+| `17` | `profile_follow_request`    | Profile follow request lifecycle     |
 
 Relay global ID options:
 
@@ -135,7 +139,8 @@ Drizzle relation schema policy:
 - `account_profile`: account-profile N:N relationship and role.
 - `post`: post metadata, visibility, state, and current content pointer.
 - `post_content`: body revision, storing a plain-text projection plus TipTap JSON body, optional HTML/spoiler render fields, and eventually `(post_id, revision_number)` uniqueness when revisioning lands.
-- `profile_follow`: follower/followee direction and pending/accepted/rejected state.
+- `profile_follow`: established follower/followee direction only; row existence means the follow relationship is active.
+- `profile_follow_request`: pending follower/followee request direction before a follow relationship is established. The row itself means the request is pending; accepted or rejected requests are removed instead of stored with a state.
 
 ## Media And Files
 
