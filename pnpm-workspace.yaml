@@ -7,11 +7,8 @@ pmOnFail: ignore
 blockExoticSubdeps: true
 trustPolicy: no-downgrade
 trustPolicyExclude:
-  # Existing lockfile entries with weaker trust evidence; keep exceptions version-pinned.
-  - '@fedify/vocab-tools@2.2.5'
-  - '@fedify/webfinger@2.2.5'
+  # Transitive entries still pinned by upstream packages; keep exceptions version-pinned.
   - chokidar@4.0.3
-  - prettier-plugin-tailwindcss@0.7.4
   - semver@6.3.1
 minimumReleaseAge: 10080
 allowBuilds:
