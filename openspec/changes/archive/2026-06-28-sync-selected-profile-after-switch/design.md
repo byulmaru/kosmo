@@ -24,7 +24,7 @@
 2. **각 route가 자기 active profile 의존성을 선언한다.**
    `/compose`는 `currentSession.selectedProfile { ...PostComposer_profile }`, 홈은 `currentSession.selectedProfile { id }`, 검색/프로필/follow list는 viewer 판단에 필요한 `id`를 자기 query에 둔다. layout context는 프로필 스위처 열기 같은 UI command에만 사용하고, GraphQL fragment ref를 하위 route에 전달하지 않는다.
 
-3. **새 프로필 생성은 프로필 목록 갱신을 별도 허용한다.**  
+3. **새 프로필 생성은 프로필 목록 갱신을 별도 허용한다.**
    생성 직후에는 선택 프로필 표시뿐 아니라 `me.profiles` 목록 자체가 바뀐다. 따라서 `profile-created` 성격의 성공 처리에서는 `me` 또는 동등한 프로필 목록 데이터를 갱신할 수 있다.
 
 4. **전환 후 갱신은 비동기 refetch를 허용한다.**

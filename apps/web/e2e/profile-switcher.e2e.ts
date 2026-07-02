@@ -93,6 +93,12 @@ test('home timeline updates after the home route active profile query refetches'
   await expect(sidebarProfileHandle(page, 'alphahome')).toBeVisible();
   await delayedHomeQuery.waitForRequest();
 
+  await expect(page.getByText(betaPostBody)).toBeHidden();
+  await expect(page.getByText('아직 게시글이 없어요')).toBeHidden();
+  await expect(
+    page.getByRole('status').filter({ hasText: '게시글 목록을 불러오는 중입니다.' }),
+  ).toBeAttached();
+
   delayedHomeQuery.release();
 
   await expect(page.getByText('아직 게시글이 없어요')).toBeVisible();
