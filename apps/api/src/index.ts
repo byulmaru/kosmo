@@ -6,7 +6,7 @@ import { yoga } from './graphql';
 import { rest } from './rest';
 import type { Env } from './context';
 
-await resolveConfiguredLocalInstance();
+await resolveConfiguredLocalInstance({ publicOrigin: process.env.PUBLIC_ORIGIN });
 
 const app = new Hono<Env>();
 

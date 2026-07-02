@@ -27,7 +27,7 @@
   );
 
   const profile = $derived(query.data?.profileByHandle ?? null);
-  // currentSession이 null이면 비로그인. selectedProfile은 본인 프로필 식별과 미선택 안내에 쓰인다.
+  // currentSession이 null이면 비로그인. viewer profile id는 이 route query의 active profile을 따른다.
   const authenticated = $derived(Boolean(query.data?.currentSession));
   const viewerProfileId = $derived(query.data?.currentSession?.selectedProfile?.id ?? null);
 </script>

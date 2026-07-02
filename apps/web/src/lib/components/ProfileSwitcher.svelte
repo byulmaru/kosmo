@@ -4,6 +4,7 @@
   import { graphql } from '$mearie';
   import Avatar from '$lib/components/Avatar.svelte';
   import { getFirstGraphQLError } from '$lib/graphql/error';
+  import type { ProfileStateChangedReason } from '$lib/profileStateChanged';
   import { getProfileInitial } from '$lib/utils/profile';
   import type { ProfileSwitcher_query$key } from '$mearie';
 
@@ -13,7 +14,7 @@
     surface?: 'desktop' | 'drawer';
     loading?: boolean;
     switcherOpen?: boolean;
-    onProfileStateChanged?: () => void;
+    onProfileStateChanged?: (reason: ProfileStateChangedReason) => void;
   };
 
   let {
@@ -63,6 +64,8 @@
             handle
             relativeHandle
             displayName
+            followingCount
+            followersCount
           }
         }
       }
@@ -140,7 +143,7 @@
       await selectProfile({ id });
       switcherOpen = false;
       profileCreationOpen = false;
-      onProfileStateChanged();
+      onProfileStateChanged('profile-selected');
     } catch (error) {
       const graphQLError = getFirstGraphQLError(error);
 
@@ -187,16 +190,16 @@
 
       try {
         await selectProfile({ id: createdProfileId });
+
+        switcherOpen = false;
+        profileCreationOpen = false;
+        onProfileStateChanged('profile-created');
       } catch (error) {
         const graphQLError = getFirstGraphQLError(error);
 
         profileError = graphQLError?.message ?? '프로필을 전환하지 못했습니다.';
         return;
       }
-
-      switcherOpen = false;
-      profileCreationOpen = false;
-      onProfileStateChanged();
     } finally {
       profileActionLoading = false;
     }

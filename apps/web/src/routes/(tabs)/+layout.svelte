@@ -5,6 +5,7 @@
   import RightRail from '$lib/components/RightRail.svelte';
   import SidebarNavigation from '$lib/components/SidebarNavigation.svelte';
   import { setProfileSwitcherContext } from '$lib/profileSwitcherContext';
+  import type { ProfileStateChangedReason } from '$lib/profileStateChanged';
   import { setShellChromeContext } from '$lib/shellChromeContext';
 
   let { children } = $props();
@@ -25,18 +26,20 @@
       }
     `),
   );
-
   const selectedProfile = $derived(query.data?.currentSession?.selectedProfile ?? null);
 
-  const invalidateSidebarNavigationData = () => {
-    client
-      .extension('cache')
-      .invalidate(
-        { __typename: 'Query', $field: 'currentSession' },
-        { __typename: 'Query', $field: 'me' },
-        { __typename: 'Query', $field: 'homeTimeline' },
-        { __typename: 'Profile', $field: 'viewerFollow' },
-      );
+  const handleProfileStateChanged = (reason: ProfileStateChangedReason) => {
+    const cache = client.extension('cache');
+
+    if (reason === 'profile-created') {
+      cache.invalidate({ __typename: 'Query', $field: 'me' });
+    }
+
+    cache.invalidate(
+      { __typename: 'Query', $field: 'currentSession' },
+      { __typename: 'Query', $field: 'homeTimeline' },
+      { __typename: 'Profile', $field: 'viewerFollow' },
+    );
   };
 
   let drawerOpen = $state(false);
@@ -107,7 +110,7 @@
       loading={query.loading}
       error={Boolean(query.error)}
       bind:switcherOpen={profileSwitcherOpen}
-      onProfileStateChanged={invalidateSidebarNavigationData}
+      onProfileStateChanged={handleProfileStateChanged}
     />
   </div>
 
@@ -169,7 +172,7 @@
           surface="drawer"
           bind:switcherOpen={profileSwitcherOpen}
           onNavigate={closeDrawer}
-          onProfileStateChanged={invalidateSidebarNavigationData}
+          onProfileStateChanged={handleProfileStateChanged}
         />
       </div>
     </div>
