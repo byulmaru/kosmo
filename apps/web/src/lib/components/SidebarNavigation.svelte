@@ -219,7 +219,7 @@
 {/snippet}
 
 <aside
-  class={`flex h-full flex-col bg-white text-[#111111] ${
+  class={`flex h-full min-h-0 flex-col bg-white text-[#111111] ${
     surface === 'drawer'
       ? 'w-80 overflow-hidden rounded-r-2xl shadow-[4px_0_4px_rgba(0,0,0,0.4)]'
       : 'w-full border-r border-[#eaeaea]'
@@ -229,7 +229,7 @@
     <div class="flex h-full w-full flex-col xl:hidden">{@render collapsedRail()}</div>
   {/if}
 
-  <div class={`h-full w-full flex-col ${surface === 'drawer' ? 'flex' : 'hidden xl:flex'}`}>
+  <div class={`h-full min-h-0 w-full flex-col ${surface === 'drawer' ? 'flex' : 'hidden xl:flex'}`}>
     <section
       class="relative z-20 h-[260px] w-80 shrink-0 overflow-visible"
       aria-label="활성 프로필"
@@ -304,7 +304,7 @@
     </section>
 
     <section
-      class="relative z-0 flex min-h-0 flex-1 flex-col justify-between border-t border-[#eaeaea] bg-white p-4"
+      class="relative z-0 flex min-h-0 flex-1 flex-col justify-between overflow-y-auto border-t border-[#eaeaea] bg-white p-4"
     >
       <nav class="flex w-[264px] flex-col gap-1" aria-label="주요 메뉴">
         {#each navItems as item}
