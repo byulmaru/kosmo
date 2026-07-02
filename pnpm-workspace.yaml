@@ -4,7 +4,13 @@ packages:
 
 enableGlobalVirtualStore: false
 pmOnFail: ignore
-minimumReleaseAge: 4320
+blockExoticSubdeps: true
+trustPolicy: no-downgrade
+trustPolicyExclude:
+  # Transitive entries still pinned by upstream packages; keep exceptions version-pinned.
+  - chokidar@4.0.3
+  - semver@6.3.1
+minimumReleaseAge: 10080
 allowBuilds:
   '@fission-ai/openspec': true
   '@tailwindcss/oxide': true
