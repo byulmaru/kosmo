@@ -101,7 +101,7 @@
 <div
   class="min-h-screen md:grid md:justify-center md:grid-cols-[5rem_minmax(0,600px)] xl:grid-cols-[20rem_minmax(0,600px)_minmax(290px,350px)]"
 >
-  <div class="hidden md:block" inert={shellInert}>
+  <div class="hidden md:sticky md:top-0 md:block md:h-dvh md:self-start" inert={shellInert}>
     <SidebarNavigation
       query={query.data}
       loading={query.loading}
@@ -138,7 +138,7 @@
   </div>
 
   <div class="border-border hidden border-l xl:block" inert={shellInert}>
-    <div class="sticky top-0 pt-4 pl-6">
+    <div class="sticky top-0 h-dvh overflow-y-auto pt-4 pl-6">
       {#if query.loading}
         <div class="border-border bg-card grid gap-3 rounded-lg border p-4" aria-hidden="true">
           <div class="bg-surface size-8 animate-pulse rounded-full"></div>
