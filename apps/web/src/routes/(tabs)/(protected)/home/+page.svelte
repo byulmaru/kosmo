@@ -40,7 +40,7 @@
   const showOnboarding = $derived(
     Boolean(session) && !selectedProfile && !query.loading && !query.error,
   );
-  let acceptedHomeTimelineProfileId = $state<string | null>(null);
+  let loadedHomeTimelineProfileId = $state<string | null>(null);
   let pendingHomeTimelineProfileId = $state<string | null>(null);
   let pendingHomeTimelineSnapshot = $state<unknown>(null);
 
@@ -51,18 +51,18 @@
     const currentHomeTimeline = query.data?.homeTimeline ?? null;
 
     if (!profileId) {
-      acceptedHomeTimelineProfileId = null;
+      loadedHomeTimelineProfileId = null;
       pendingHomeTimelineProfileId = null;
       pendingHomeTimelineSnapshot = null;
       return;
     }
 
-    if (!query.loading && acceptedHomeTimelineProfileId === null) {
-      acceptedHomeTimelineProfileId = profileId;
+    if (!query.loading && loadedHomeTimelineProfileId === null) {
+      loadedHomeTimelineProfileId = profileId;
       return;
     }
 
-    if (profileId !== acceptedHomeTimelineProfileId && profileId !== pendingHomeTimelineProfileId) {
+    if (profileId !== loadedHomeTimelineProfileId && profileId !== pendingHomeTimelineProfileId) {
       pendingHomeTimelineProfileId = profileId;
       pendingHomeTimelineSnapshot = currentHomeTimeline;
     }
@@ -76,7 +76,7 @@
       !query.loading &&
       (query.error || currentHomeTimeline !== pendingHomeTimelineSnapshot)
     ) {
-      acceptedHomeTimelineProfileId = pendingHomeTimelineProfileId;
+      loadedHomeTimelineProfileId = pendingHomeTimelineProfileId;
       pendingHomeTimelineProfileId = null;
       pendingHomeTimelineSnapshot = null;
     }
@@ -106,7 +106,7 @@
 
     <PostList
       {homeTimeline}
-      loading={query.loading}
+      loading={query.loading || homeTimelineStale}
       error={Boolean(query.error)}
       onRetry={query.refetch}
     />
