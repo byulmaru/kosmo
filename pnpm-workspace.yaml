@@ -4,7 +4,16 @@ packages:
 
 enableGlobalVirtualStore: false
 pmOnFail: ignore
-minimumReleaseAge: 4320
+blockExoticSubdeps: true
+trustPolicy: no-downgrade
+trustPolicyExclude:
+  # Existing lockfile entries with weaker trust evidence; keep exceptions version-pinned.
+  - '@fedify/vocab-tools@2.2.5'
+  - '@fedify/webfinger@2.2.5'
+  - chokidar@4.0.3
+  - prettier-plugin-tailwindcss@0.7.4
+  - semver@6.3.1
+minimumReleaseAge: 10080
 allowBuilds:
   '@fission-ai/openspec': true
   '@tailwindcss/oxide': true
