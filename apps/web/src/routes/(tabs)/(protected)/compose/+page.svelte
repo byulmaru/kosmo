@@ -1,13 +1,27 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { graphql } from '$mearie';
+  import { createQuery } from '@mearie/svelte';
   import Button from '$lib/components/Button.svelte';
   import PostComposer from '$lib/components/PostComposer.svelte';
-  import { getTabsLayoutSessionContext } from '$lib/tabsLayoutSessionContext';
 
-  const tabsLayoutSession = getTabsLayoutSessionContext();
-  const selectedProfile = $derived(tabsLayoutSession?.selectedProfile() ?? null);
-  const loading = $derived(tabsLayoutSession?.loading() ?? false);
-  const error = $derived(tabsLayoutSession ? tabsLayoutSession.error() : true);
+  const query = createQuery(
+    graphql(`
+      query ComposePageQuery {
+        currentSession {
+          id
+          selectedProfile {
+            id
+            ...PostComposer_profile
+          }
+        }
+      }
+    `),
+  );
+
+  const selectedProfile = $derived(query.data?.currentSession?.selectedProfile ?? null);
+  const loading = $derived(query.loading && !query.data);
+  const error = $derived(Boolean(query.error) && !query.data);
 </script>
 
 <section class="grid w-[min(100%,36rem)] gap-5 self-start">
@@ -29,7 +43,7 @@
     <div class="border-border bg-card rounded-md border p-5" role="alert">
       <p class="text-text-primary m-0 text-base font-bold">글쓰기 정보를 불러오지 못했어요</p>
       <p class="text-text-secondary mt-1 mb-4 text-sm">잠시 후 다시 시도해주세요.</p>
-      <Button variant="secondary" onclick={() => tabsLayoutSession?.refetch()}>다시 시도</Button>
+      <Button variant="secondary" onclick={() => query.refetch()}>다시 시도</Button>
     </div>
   {:else if !selectedProfile}
     <div class="border-border bg-card rounded-md border p-5">

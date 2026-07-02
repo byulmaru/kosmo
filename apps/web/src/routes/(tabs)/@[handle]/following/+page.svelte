@@ -4,12 +4,17 @@
   import { graphql } from '$mearie';
   import type { DataOf } from '@mearie/svelte';
   import ProfileConnectionList from '$lib/components/ProfileConnectionList.svelte';
-  import { getTabsLayoutSessionContext } from '$lib/tabsLayoutSessionContext';
   import { loadNextConnectionPage } from '$lib/profileConnectionPagination';
 
   const client = getClient();
   const queryDocument = graphql(`
     query ProfileFollowingPageQuery($handle: String!) {
+      currentSession {
+        id
+        selectedProfile {
+          id
+        }
+      }
       profileByHandle(handle: $handle) {
         id
         ...ProfileConnectionList_followingProfile
@@ -46,9 +51,8 @@
 
   const query = createQuery(queryDocument, () => ({ handle: page.params.handle! }));
 
-  const tabsLayoutSession = getTabsLayoutSessionContext();
   const profile = $derived(query.data?.profileByHandle ?? null);
-  const viewerProfileId = $derived(tabsLayoutSession?.selectedProfile()?.id ?? null);
+  const viewerProfileId = $derived(query.data?.currentSession?.selectedProfile?.id ?? null);
 
   let pageKey = $state<string | null>(null);
   let paginatedConnection = $state<NextPageConnection | null>(null);

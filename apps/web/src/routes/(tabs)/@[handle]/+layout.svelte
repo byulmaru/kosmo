@@ -4,7 +4,6 @@
   import { graphql } from '$mearie';
   import FollowButton from '$lib/components/FollowButton.svelte';
   import ProfileHero from '$lib/components/ProfileHero.svelte';
-  import { getTabsLayoutSessionContext } from '$lib/tabsLayoutSessionContext';
 
   let { children } = $props();
 
@@ -13,6 +12,9 @@
       query ProfileLayoutQuery($handle: String!) {
         currentSession {
           id
+          selectedProfile {
+            id
+          }
         }
         profileByHandle(handle: $handle) {
           id
@@ -24,11 +26,10 @@
     () => ({ handle: page.params.handle! }),
   );
 
-  const tabsLayoutSession = getTabsLayoutSessionContext();
   const profile = $derived(query.data?.profileByHandle ?? null);
-  // currentSession이 null이면 비로그인. viewer profile id는 layout의 active profile bridge를 따른다.
+  // currentSession이 null이면 비로그인. viewer profile id는 이 route query의 active profile을 따른다.
   const authenticated = $derived(Boolean(query.data?.currentSession));
-  const viewerProfileId = $derived(tabsLayoutSession?.selectedProfile()?.id ?? null);
+  const viewerProfileId = $derived(query.data?.currentSession?.selectedProfile?.id ?? null);
 </script>
 
 <!--

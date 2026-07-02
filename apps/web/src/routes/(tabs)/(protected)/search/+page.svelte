@@ -9,7 +9,6 @@
   import SearchBar from '$lib/components/Search/SearchBar.svelte';
   import SearchResults from '$lib/components/Search/SearchResults.svelte';
   import SearchTabs, { SEARCH_TAB_LABELS } from '$lib/components/Search/SearchTabs.svelte';
-  import { getTabsLayoutSessionContext } from '$lib/tabsLayoutSessionContext';
   import {
     addRecentSearch,
     getRecentSearches,
@@ -25,11 +24,16 @@
   // tab slug를 SearchTab로 해석한다. 없거나 알 수 없으면 사람(people)이 기본 활성이다.
   const activeTab = $derived(parseSearchTab(page.url.searchParams.get('tab')));
   const shouldSearchPeople = $derived(activeTab === SearchTab.PEOPLE && trimmedQuery.length > 0);
-  const tabsLayoutSession = getTabsLayoutSessionContext();
 
   const peopleQuery = createQuery(
     graphql(`
       query SearchPeopleByHandlePageQuery($handle: String!) {
+        currentSession {
+          id
+          selectedProfile {
+            id
+          }
+        }
         profileByHandle(handle: $handle) {
           ...ProfileListItem_profile
         }
@@ -39,7 +43,7 @@
     () => ({ skip: !shouldSearchPeople }),
   );
   const searchedProfile = $derived(peopleQuery.data?.profileByHandle ?? null);
-  const viewerProfileId = $derived(tabsLayoutSession?.selectedProfile()?.id ?? null);
+  const viewerProfileId = $derived(peopleQuery.data?.currentSession?.selectedProfile?.id ?? null);
 
   // 단계 구분(검색바 포커스 기준):
   // - input  : 검색바 포커스 = 입력 중 → 최근 검색 노출

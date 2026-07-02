@@ -66,8 +66,6 @@
             displayName
             followingCount
             followersCount
-            ...PostComposer_profile
-            ...RightRail_profile
           }
         }
       }

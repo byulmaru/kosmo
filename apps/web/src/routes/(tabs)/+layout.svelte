@@ -7,7 +7,6 @@
   import { setProfileSwitcherContext } from '$lib/profileSwitcherContext';
   import type { ProfileStateChangedReason } from '$lib/profileStateChanged';
   import { setShellChromeContext } from '$lib/shellChromeContext';
-  import { setTabsLayoutSessionContext } from '$lib/tabsLayoutSessionContext';
 
   let { children } = $props();
 
@@ -20,28 +19,16 @@
           id
           selectedProfile {
             id
-            ...PostComposer_profile
             ...RightRail_profile
           }
         }
       }
     `),
   );
-  let selectedProfileVersion = $state(0);
   const selectedProfile = $derived(query.data?.currentSession?.selectedProfile ?? null);
-
-  setTabsLayoutSessionContext({
-    selectedProfile: () => selectedProfile,
-    selectedProfileVersion: () => selectedProfileVersion,
-    loading: () => query.loading,
-    error: () => Boolean(query.error),
-    refetch: () => query.refetch(),
-  });
 
   const handleProfileStateChanged = (reason: ProfileStateChangedReason) => {
     const cache = client.extension('cache');
-
-    selectedProfileVersion += 1;
 
     if (reason === 'profile-created') {
       cache.invalidate({ __typename: 'Query', $field: 'me' });
