@@ -1,6 +1,3 @@
-import { eq, isNull, or } from 'drizzle-orm';
-import type { AnyPgColumn } from 'drizzle-orm/pg-core';
-
 type ProfileInstanceRef = {
   instanceId: string | null;
 };
@@ -17,10 +14,6 @@ type InstanceRef = {
 type RelativeHandleOptions = {
   configuredLocalInstance: InstanceRef;
   profileInstance?: InstanceRef | null;
-};
-
-type ProfileInstanceColumns = {
-  instanceId: AnyPgColumn;
 };
 
 export const isConfiguredLocalProfile = (
@@ -42,8 +35,3 @@ export const formatRelativeHandle = (
 
   return `@${profile.handle}@${profileInstance.domain}`;
 };
-
-export const configuredLocalProfileWhere = (
-  profile: ProfileInstanceColumns,
-  configuredLocalInstanceId: string,
-) => or(isNull(profile.instanceId), eq(profile.instanceId, configuredLocalInstanceId))!;

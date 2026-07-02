@@ -1,11 +1,4 @@
-import {
-  AccountProfiles,
-  db,
-  first,
-  Instances,
-  Profiles,
-  TableDiscriminator,
-} from '@kosmo/core/db';
+import { AccountProfiles, db, Profiles, TableDiscriminator } from '@kosmo/core/db';
 import {
   AccountProfileRole,
   ProfileFollowPolicy,
@@ -17,6 +10,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { createObjectRef } from '@/graphql/utils';
 import { formatRelativeHandle } from '@/profile/identity';
 import { profileFollowByIdLoader } from './loader/follow';
+import { profileInstanceByIdLoader } from './loader/instance';
 
 export const Profile = createObjectRef('Profile', TableDiscriminator.Profiles, (ids) =>
   db
@@ -29,7 +23,7 @@ Profile.implement({
   fields: (t) => ({
     handle: t.exposeString('handle'),
     relativeHandle: t.string({
-      resolve: async (profile) => {
+      resolve: async (profile, _, ctx) => {
         const configuredLocalInstance = await resolveConfiguredLocalInstance();
         const profileInstanceId = profile.instanceId;
 
@@ -37,12 +31,7 @@ Profile.implement({
           return formatRelativeHandle(profile, { configuredLocalInstance });
         }
 
-        const profileInstance = await db
-          .select({ domain: Instances.domain, id: Instances.id })
-          .from(Instances)
-          .where(eq(Instances.id, profileInstanceId))
-          .limit(1)
-          .then(first);
+        const profileInstance = await profileInstanceByIdLoader(ctx).load(profileInstanceId);
 
         return formatRelativeHandle(profile, { configuredLocalInstance, profileInstance });
       },

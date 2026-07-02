@@ -8,12 +8,10 @@ import {
 } from '@kosmo/core/db';
 import { ProfileState } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
-import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq, getColumns } from 'drizzle-orm';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
 import { Session } from '@/graphql/resolvers/session/ref';
-import { configuredLocalProfileWhere } from '@/profile/identity';
 import { Profile } from '../ref';
 
 builder.mutationField('selectProfile', (t) =>
@@ -28,7 +26,6 @@ builder.mutationField('selectProfile', (t) =>
       id: t.input.id({ validate: z.uuid() }),
     },
     resolve: async (_, { input }, ctx) => {
-      const localInstance = await resolveConfiguredLocalInstance();
       const profile = await db
         .select(getColumns(Profiles))
         .from(Profiles)
@@ -37,7 +34,6 @@ builder.mutationField('selectProfile', (t) =>
           and(
             eq(Profiles.id, input.id),
             eq(Profiles.state, ProfileState.ACTIVE),
-            configuredLocalProfileWhere(Profiles, localInstance.id),
             eq(AccountProfiles.accountId, ctx.session.accountId),
           ),
         )

@@ -1,11 +1,9 @@
 import { db, first, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { ProfileFollowState, ProfileState } from '@kosmo/core/enums';
-import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, count, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { builder } from '@/graphql/builder';
-import { configuredLocalProfileWhere, isConfiguredLocalProfile } from '@/profile/identity';
 import { profileFollowAccessWhere } from '../access/follow';
 import { viewerFollowLoader } from '../loader/follow';
 import { Profile, ProfileFollow } from '../ref';
@@ -32,8 +30,6 @@ builder.objectFields(Profile, (t) => ({
   followers: t.connection({
     type: ProfileFollow,
     resolve: async (profile, args, ctx) => {
-      const localInstance = await resolveConfiguredLocalInstance();
-
       return resolveCursorConnection<Promise<ProfileFollowRow[]>>(
         {
           args,
@@ -55,7 +51,6 @@ builder.objectFields(Profile, (t) => ({
                   ctx,
                   followerProfile: FollowerProfiles,
                   followeeProfile: FolloweeProfiles,
-                  localInstanceId: localInstance.id,
                 }),
               ),
             )
@@ -68,8 +63,6 @@ builder.objectFields(Profile, (t) => ({
   following: t.connection({
     type: ProfileFollow,
     resolve: async (profile, args, ctx) => {
-      const localInstance = await resolveConfiguredLocalInstance();
-
       return resolveCursorConnection<Promise<ProfileFollowRow[]>>(
         {
           args,
@@ -91,7 +84,6 @@ builder.objectFields(Profile, (t) => ({
                   ctx,
                   followerProfile: FollowerProfiles,
                   followeeProfile: FolloweeProfiles,
-                  localInstanceId: localInstance.id,
                 }),
               ),
             )
@@ -103,11 +95,6 @@ builder.objectFields(Profile, (t) => ({
   }),
   followersCount: t.int({
     resolve: async (profile) => {
-      const localInstance = await resolveConfiguredLocalInstance();
-
-      if (!isConfiguredLocalProfile(profile, localInstance)) {
-        return 0;
-      }
       // TODO: follower 수를 Profile DB 컬럼으로 옮기면 이 count 쿼리를 제거한다.
       const row = await db
         .select({ value: count() })
@@ -118,7 +105,6 @@ builder.objectFields(Profile, (t) => ({
             eq(ProfileFollows.followeeProfileId, profile.id),
             eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
             eq(FollowerProfiles.state, ProfileState.ACTIVE),
-            configuredLocalProfileWhere(FollowerProfiles, localInstance.id),
           ),
         )
         .then(first);
@@ -128,11 +114,6 @@ builder.objectFields(Profile, (t) => ({
   }),
   followingCount: t.int({
     resolve: async (profile) => {
-      const localInstance = await resolveConfiguredLocalInstance();
-
-      if (!isConfiguredLocalProfile(profile, localInstance)) {
-        return 0;
-      }
       // TODO: following 수를 Profile DB 컬럼으로 옮기면 이 count 쿼리를 제거한다.
       const row = await db
         .select({ value: count() })
@@ -143,7 +124,6 @@ builder.objectFields(Profile, (t) => ({
             eq(ProfileFollows.followerProfileId, profile.id),
             eq(ProfileFollows.state, ProfileFollowState.ACCEPTED),
             eq(FolloweeProfiles.state, ProfileState.ACTIVE),
-            configuredLocalProfileWhere(FolloweeProfiles, localInstance.id),
           ),
         )
         .then(first);
