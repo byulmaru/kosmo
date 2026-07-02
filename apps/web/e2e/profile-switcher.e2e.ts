@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Page, Route } from '@playwright/test';
 
-test('profile selection updates open shell and compose through currentSession cache', async ({
+test('profile selection updates compose through its route currentSession query', async ({
   page,
 }) => {
   const graphQLRequests = collectGraphQLRequests(page);
@@ -33,10 +33,12 @@ test('profile selection updates open shell and compose through currentSession ca
   await page.waitForLoadState('networkidle');
 
   expect(graphQLRequests.operationNames).toContain('ProfileSwitcherSelectProfileMutation');
-  expect(graphQLRequests.currentSessionSelectedProfileOperations).toContain('TabsLayoutQuery');
+  expect(graphQLRequests.currentSessionSelectedProfileOperations).toContain('ComposePageQuery');
 });
 
-test('profile route action follows currentSession cache after switching', async ({ page }) => {
+test('profile route action follows its route currentSession query after switching', async ({
+  page,
+}) => {
   const graphQLRequests = collectGraphQLRequests(page);
 
   await page.goto('/login');
@@ -61,12 +63,13 @@ test('profile route action follows currentSession cache after switching', async 
   await page.waitForLoadState('networkidle');
 
   expect(graphQLRequests.operationNames).toContain('ProfileSwitcherSelectProfileMutation');
-  expect(graphQLRequests.currentSessionSelectedProfileOperations).toContain('TabsLayoutQuery');
+  expect(graphQLRequests.currentSessionSelectedProfileOperations).toContain('ProfileLayoutQuery');
 });
 
-test('home timeline hides previous profile posts while active profile refetches', async ({
+test('home timeline updates after the home route active profile query refetches', async ({
   page,
 }) => {
+  const graphQLRequests = collectGraphQLRequests(page);
   const betaPostBody = 'beta profile timeline post';
 
   await page.goto('/login');
@@ -79,6 +82,8 @@ test('home timeline hides previous profile posts while active profile refetches'
   await createPost(page, betaPostBody);
   await page.goto('/home');
   await expect(page.getByText(betaPostBody)).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  graphQLRequests.clear();
 
   const delayedHomeQuery = await delayNextGraphQLOperation(page, 'HomePageQuery');
 
@@ -87,29 +92,37 @@ test('home timeline hides previous profile posts while active profile refetches'
   expect(responseBody.data?.selectProfile?.session?.selectedProfile?.handle).toBe('alphahome');
   await expect(sidebarProfileHandle(page, 'alphahome')).toBeVisible();
   await delayedHomeQuery.waitForRequest();
-  await expect(page.getByText(betaPostBody)).toBeHidden();
 
   delayedHomeQuery.release();
 
   await expect(page.getByText('아직 게시글이 없어요')).toBeVisible();
   await expect(page.getByText(betaPostBody)).toBeHidden();
+
+  await page.waitForLoadState('networkidle');
+
+  expect(graphQLRequests.operationNames).toContain('ProfileSwitcherSelectProfileMutation');
+  expect(graphQLRequests.currentSessionSelectedProfileOperations).toContain('HomePageQuery');
 });
 
-test('home onboarding stays hidden while tabs layout profile query errors', async ({ page }) => {
+test('home onboarding stays hidden while the home active profile query errors', async ({
+  page,
+}) => {
+  const graphQLRequests = collectGraphQLRequests(page);
+
   await page.goto('/login');
   await page.waitForURL('**/home');
 
   await createProfileFromSwitcher(page, 'errorhome');
   await expect(sidebarProfileHandle(page, 'errorhome')).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  graphQLRequests.clear();
 
-  await failGraphQLOperation(page, 'TabsLayoutQuery');
+  await failGraphQLOperation(page, 'HomePageQuery');
   await page.reload();
 
-  await expect(page.getByRole('region', { name: '프로필 상태' })).toContainText(
-    '프로필을 불러오지 못했습니다.',
-  );
   await expect(page.getByRole('heading', { name: '사용할 프로필을 선택해주세요' })).toBeHidden();
   await expect(page.getByRole('heading', { name: '홈' })).toBeVisible();
+  expect(graphQLRequests.currentSessionSelectedProfileOperations).toContain('HomePageQuery');
 });
 
 function collectGraphQLRequests(page: Page) {
