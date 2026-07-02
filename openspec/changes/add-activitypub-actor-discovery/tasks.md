@@ -17,10 +17,10 @@
 ## 3. Profile GraphQL Contract
 
 - [x] 3.1 `Profile.relativeHandle` 필드를 추가해 현재 local-only profile 모델에서는 `@handle`을 반환한다.
-- [ ] 3.1a `profile.instance_id`와 instance-scoped handle uniqueness 도입 이후 configured local instance가 아닌 instance의 profile은 `@handle@domain`을 반환하도록 확장한다.
+- [x] 3.1a `profile.instance_id`와 instance-scoped handle uniqueness 도입 이후 configured local instance가 아닌 instance의 profile은 `@handle@domain`을 반환하도록 확장한다.
 - [x] 3.2 `profileByHandle(handle:)`가 configured local instance의 active profile만 조회하고 remote profile을 반환하지 않도록 유지/보강한다.
-- [ ] 3.3 Node ID 기반 `Profile` load가 active local profile과 저장된 active remote profile을 직접 조회할 수 있게 접근 정책을 정렬한다.
-- [ ] 3.4 `profileByHandle`, active profile selection, follow graph, follow/unfollow mutation, viewerFollow, `Profile.posts`가 remote profile로 확장되지 않고 local profile 기준으로 동작하는지 구현한다.
+- [x] 3.3 Node ID 기반 `Profile` load가 active local profile과 저장된 active remote profile을 직접 조회할 수 있게 접근 정책을 정렬한다.
+- [x] 3.4 `profileByHandle`, active profile selection, follow graph, follow/unfollow mutation, viewerFollow, `Profile.posts`가 remote profile로 확장되지 않고 local profile 기준으로 동작하는지 구현한다.
 - [x] 3.5 local profile 생성 resolver가 core runtime local instance resolve helper로 configured local instance ID를 결정하고, local instance 설정 누락/불일치를 설정 오류로 처리하게 한다.
 - [x] 3.6 GraphQL schema를 재생성하고 `Profile.relativeHandle`이 `apps/api/schema.graphql`에 반영되는지 확인한다.
 

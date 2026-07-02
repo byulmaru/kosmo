@@ -1,9 +1,11 @@
 import { db, first, firstOrThrowWith, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { ProfileState } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
+import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq, getColumns } from 'drizzle-orm';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
+import { configuredLocalProfileWhere } from '@/profile/identity';
 import { Profile } from '../ref';
 
 builder.mutationField('unfollowProfile', (t) =>
@@ -18,10 +20,17 @@ builder.mutationField('unfollowProfile', (t) =>
       id: t.input.id({ validate: z.uuid() }),
     },
     resolve: async (_, { input }, ctx) => {
+      const localInstance = await resolveConfiguredLocalInstance();
       const targetProfile = await db
         .select(getColumns(Profiles))
         .from(Profiles)
-        .where(and(eq(Profiles.id, input.id), eq(Profiles.state, ProfileState.ACTIVE)))
+        .where(
+          and(
+            eq(Profiles.id, input.id),
+            eq(Profiles.state, ProfileState.ACTIVE),
+            configuredLocalProfileWhere(Profiles, localInstance.id),
+          ),
+        )
         .limit(1)
         .then(firstOrThrowWith(() => new NotFoundError('Profile not found')));
 
