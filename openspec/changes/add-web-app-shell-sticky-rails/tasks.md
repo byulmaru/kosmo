@@ -13,7 +13,7 @@
 - [x] 2.2 중앙 `main`은 route content wrapper로 유지하고, 별도 scroll owner가 되지 않게 한다.
 - [x] 2.3 shell chrome wheel 이벤트를 중앙 피드로 전달하는 custom wheel forwarding을 추가하지 않는다.
 - [x] 2.4 일반 route 이동과 back/forward는 SvelteKit/browser document scroll 정책을 따르게 하고, internal scroller용 scroll restoration helper를 만들지 않는다.
-- [x] 2.5 검색 화면의 `noScroll`/`data-sveltekit-noscroll`/focus 동작이 기존 document scroll 기준으로 유지되는지 확인한다.
+- [ ] 2.5 검색 화면의 `noScroll`/`data-sveltekit-noscroll`/focus 동작이 기존 document scroll 기준으로 유지되는지 확인한다. 로그인 세션 smoke에서 확인한다.
 
 ## 3. Sticky rail 배치
 
