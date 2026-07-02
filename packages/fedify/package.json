@@ -5,10 +5,16 @@
     ".": "./index.ts"
   },
   "scripts": {
-    "lint:tsc": "tsc --noEmit"
+    "lint:tsc": "tsc --noEmit",
+    "test": "pnpm run test:unit -- --run",
+    "test:unit": "vitest"
   },
   "dependencies": {
     "@fedify/fedify": "^2.3.0",
+    "@fedify/vocab": "2.3.0",
     "@kosmo/core": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "4.1.8"
   }
 }
