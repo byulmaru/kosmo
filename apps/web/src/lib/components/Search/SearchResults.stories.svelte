@@ -7,18 +7,12 @@
 
   type FollowState = 'ACCEPTED' | 'PENDING';
   type ViewerState = {
-    authenticated: boolean;
-    hasSelectedProfile: boolean;
     isSelf: boolean;
-    canMutate: boolean;
     follow: { id: string; state: FollowState } | null;
   };
 
   const defaultViewerState = (overrides: Partial<ViewerState> = {}): ViewerState => ({
-    authenticated: true,
-    hasSelectedProfile: true,
     isSelf: false,
-    canMutate: true,
     follow: null,
     ...overrides,
   });
@@ -30,7 +24,7 @@
       handle: string;
       relativeHandle: string;
       bio: string | null;
-      viewerState: ViewerState;
+      viewerState: ViewerState | null;
     }> = {},
   ): ProfileListItem_profile$key =>
     ({

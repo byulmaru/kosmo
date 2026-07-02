@@ -28,10 +28,7 @@
     __typename: 'Profile',
     id: 'target-profile',
     viewerState: {
-      authenticated: true,
-      hasSelectedProfile: true,
       isSelf: false,
-      canMutate: true,
       follow: null,
     },
   } as unknown as FollowButton_profile$key;

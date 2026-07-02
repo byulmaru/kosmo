@@ -7,18 +7,12 @@
 
   type FollowState = 'ACCEPTED' | 'PENDING';
   type ViewerState = {
-    authenticated: boolean;
-    hasSelectedProfile: boolean;
     isSelf: boolean;
-    canMutate: boolean;
     follow: { id: string; state: FollowState } | null;
   };
 
   const defaultViewerState = (overrides: Partial<ViewerState> = {}): ViewerState => ({
-    authenticated: true,
-    hasSelectedProfile: true,
     isSelf: false,
-    canMutate: true,
     follow: null,
     ...overrides,
   });
@@ -32,7 +26,7 @@
       handle: string;
       relativeHandle: string;
       bio: string | null;
-      viewerState: ViewerState;
+      viewerState: ViewerState | null;
     }> = {},
   ): ProfileListItem_profile$key =>
     ({
@@ -101,24 +95,11 @@
 <Story name="Viewer states" asChild parameters={{ controls: { disable: true } }}>
   <div class="grid gap-4 text-sm">
     <section class="grid gap-1">
-      <p class="text-text-secondary m-0">프로필 미선택</p>
+      <p class="text-text-secondary m-0">viewerState 없음</p>
       <ProfileListItem
         profile={profile({
           id: 'missing-viewer-profile',
-          viewerState: defaultViewerState({ hasSelectedProfile: false, canMutate: false }),
-        })}
-      />
-    </section>
-    <section class="grid gap-1">
-      <p class="text-text-secondary m-0">비로그인 공개 조회</p>
-      <ProfileListItem
-        profile={profile({
-          id: 'guest-profile',
-          viewerState: defaultViewerState({
-            authenticated: false,
-            hasSelectedProfile: false,
-            canMutate: false,
-          }),
+          viewerState: null,
         })}
       />
     </section>
@@ -127,7 +108,7 @@
       <ProfileListItem
         profile={profile({
           id: 'self-profile',
-          viewerState: defaultViewerState({ isSelf: true, canMutate: false }),
+          viewerState: defaultViewerState({ isSelf: true }),
         })}
       />
     </section>

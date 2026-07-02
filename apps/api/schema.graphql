@@ -131,7 +131,7 @@ type Profile implements Node {
   posts(after: String, before: String, first: Int, last: Int): PostConnection!
   relativeHandle: String!
   viewerFollow: ProfileFollow
-  viewerState: ProfileViewerState!
+  viewerState: ProfileViewerState
 }
 
 type ProfileFollow implements Node {
@@ -180,10 +180,7 @@ enum ProfileState {
 }
 
 type ProfileViewerState {
-  authenticated: Boolean!
-  canMutate: Boolean!
   follow: ProfileFollow
-  hasSelectedProfile: Boolean!
   isSelf: Boolean!
 }
 

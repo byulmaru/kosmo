@@ -9,10 +9,7 @@
     fragment FollowButton_profile on Profile {
       id
       viewerState {
-        authenticated
-        hasSelectedProfile
         isSelf
-        canMutate
         follow {
           id
           state
@@ -66,24 +63,14 @@
   let errorMessage = $state<string | null>(null);
 
   const viewerState = $derived(profileFragment.data.viewerState);
-  const viewerFollow = $derived(viewerState.follow);
+  const viewerFollow = $derived(viewerState?.follow ?? null);
   const isFollowing = $derived(viewerFollow?.state === 'ACCEPTED');
   // TODO: 승인 플로우가 추가되면 PENDING/REJECTED 전이를 실제 mutation 결과로 검증한다.
   const isPending = $derived(viewerFollow?.state === 'PENDING');
-  const unavailableReason = $derived(
-    !viewerState.authenticated
-      ? '로그인 후 팔로우할 수 있습니다.'
-      : !viewerState.hasSelectedProfile
-        ? '프로필을 선택한 뒤 팔로우할 수 있습니다.'
-        : !viewerState.canMutate
-          ? '이 프로필을 팔로우할 권한이 없습니다.'
-          : null,
-  );
-  const disabled = $derived(loading || Boolean(unavailableReason));
-  const message = $derived(errorMessage ?? unavailableReason);
+  const disabled = $derived(loading);
 
   const toggleFollow = async () => {
-    if (disabled) {
+    if (disabled || !viewerState || viewerState.isSelf) {
       return;
     }
 
@@ -107,8 +94,7 @@
   };
 </script>
 
-{#if !viewerState.isSelf}
-  <!-- 안내문이 버튼보다 넓어도 버튼은 우측 끝에 붙도록 items-end로 정렬한다. -->
+{#if viewerState && !viewerState.isSelf}
   <div class={`inline-flex flex-col items-end gap-1 ${className}`}>
     <Button
       variant={isFollowing || isPending ? 'secondary' : 'primary'}
@@ -120,12 +106,9 @@
     >
       {loading ? '처리 중' : isPending ? '요청 중' : isFollowing ? '팔로잉' : '팔로우'}
     </Button>
-    {#if message}
-      <p
-        class="text-text-secondary m-0 max-w-56 text-right text-xs leading-4"
-        role={errorMessage ? 'alert' : undefined}
-      >
-        {message}
+    {#if errorMessage}
+      <p class="text-text-secondary m-0 max-w-56 text-right text-xs leading-4" role="alert">
+        {errorMessage}
       </p>
     {/if}
   </div>

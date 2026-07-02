@@ -14,10 +14,7 @@ const FollowerProfiles = alias(Profiles, 'profile_follow_connection_follower_pro
 const FolloweeProfiles = alias(Profiles, 'profile_follow_connection_followee_profile');
 const ProfileViewerState = builder.simpleObject('ProfileViewerState', {
   fields: (field) => ({
-    authenticated: field.boolean(),
-    hasSelectedProfile: field.boolean(),
     isSelf: field.boolean(),
-    canMutate: field.boolean(),
     follow: field.field({ type: ProfileFollow, nullable: true }),
   }),
 });
@@ -147,15 +144,17 @@ builder.objectFields(Profile, (t) => ({
   }),
   viewerState: t.field({
     type: ProfileViewerState,
+    nullable: true,
     resolve: async (profile, _, ctx) => {
       const viewerProfileId = ctx.session?.profileId ?? null;
+      if (!viewerProfileId) {
+        return null;
+      }
+
       const isSelf = Boolean(viewerProfileId && viewerProfileId === profile.id);
 
       return {
-        authenticated: Boolean(ctx.session),
-        hasSelectedProfile: Boolean(viewerProfileId),
         isSelf,
-        canMutate: Boolean(viewerProfileId && !isSelf),
         follow: await viewerFollowLoader(ctx).load(profile.id),
       };
     },

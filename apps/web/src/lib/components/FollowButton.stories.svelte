@@ -7,19 +7,13 @@
 
   type FollowState = 'ACCEPTED' | 'PENDING' | 'REJECTED';
   type ViewerState = {
-    authenticated: boolean;
-    hasSelectedProfile: boolean;
     isSelf: boolean;
-    canMutate: boolean;
     follow: { id: string; state: FollowState } | null;
   };
 
   const targetProfileId = 'target-profile';
   const defaultViewerState = (overrides: Partial<ViewerState> = {}): ViewerState => ({
-    authenticated: true,
-    hasSelectedProfile: true,
     isSelf: false,
-    canMutate: true,
     follow: null,
     ...overrides,
   });
@@ -28,7 +22,7 @@
   // 여기서는 평범한 데이터 객체를 fragment ref 자리에 그대로 넘긴다.
   const profile = (
     id: string,
-    viewerState: ViewerState = defaultViewerState(),
+    viewerState: ViewerState | null = defaultViewerState(),
   ): FollowButton_profile$key =>
     ({
       __typename: 'Profile',
@@ -91,38 +85,12 @@
       />
     </section>
     <section class="grid gap-1">
-      <p class="text-text-secondary m-0">프로필 미선택</p>
-      <FollowButton
-        profile={profile(
-          'missing-viewer-profile',
-          defaultViewerState({ hasSelectedProfile: false, canMutate: false }),
-        )}
-      />
-    </section>
-    <section class="grid gap-1">
-      <p class="text-text-secondary m-0">비로그인</p>
-      <FollowButton
-        profile={profile(
-          'guest-profile',
-          defaultViewerState({
-            authenticated: false,
-            hasSelectedProfile: false,
-            canMutate: false,
-          }),
-        )}
-      />
-    </section>
-    <section class="grid gap-1">
-      <p class="text-text-secondary m-0">권한 없음</p>
-      <FollowButton
-        profile={profile('blocked-profile', defaultViewerState({ canMutate: false }))}
-      />
+      <p class="text-text-secondary m-0">viewerState 없음</p>
+      <FollowButton profile={profile('missing-viewer-profile', null)} />
     </section>
     <section class="grid gap-1">
       <p class="text-text-secondary m-0">본인 프로필에서는 버튼이 렌더링되지 않음</p>
-      <FollowButton
-        profile={profile('self-profile', defaultViewerState({ isSelf: true, canMutate: false }))}
-      />
+      <FollowButton profile={profile('self-profile', defaultViewerState({ isSelf: true }))} />
     </section>
   </div>
 </Story>
