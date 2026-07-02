@@ -19,7 +19,7 @@ export const viewerFollowLoader = (ctx: UserContext) =>
       }
 
       return await db
-        .select()
+        .select(getColumns(ProfileFollows))
         .from(ProfileFollows)
         .where(
           and(
@@ -35,8 +35,8 @@ export const profileFollowByIdLoader = (ctx: UserContext) =>
   ctx.loader<string, ProfileFollowRow, string, true>({
     name: 'profileFollow.byId',
     nullable: true,
-    load: (ids) =>
-      db
+    load: async (ids) => {
+      return db
         .select(getColumns(ProfileFollows))
         .from(ProfileFollows)
         .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
@@ -50,6 +50,7 @@ export const profileFollowByIdLoader = (ctx: UserContext) =>
               followeeProfile: FolloweeProfiles,
             }),
           ),
-        ),
+        );
+    },
     key: (profileFollow) => profileFollow?.id ?? null,
   });

@@ -5,9 +5,12 @@ import {
   ProfileFollowState,
   ProfileState,
 } from '@kosmo/core/enums';
+import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq, inArray } from 'drizzle-orm';
 import { createObjectRef } from '@/graphql/utils';
+import { formatRelativeHandle } from '@/profile/identity';
 import { profileFollowByIdLoader } from './loader/follow';
+import { profileInstanceByIdLoader } from './loader/instance';
 
 export const Profile = createObjectRef('Profile', TableDiscriminator.Profiles, (ids) =>
   db
@@ -20,7 +23,18 @@ Profile.implement({
   fields: (t) => ({
     handle: t.exposeString('handle'),
     relativeHandle: t.string({
-      resolve: (profile) => `@${profile.handle}`,
+      resolve: async (profile, _, ctx) => {
+        const configuredLocalInstance = await resolveConfiguredLocalInstance();
+        const profileInstanceId = profile.instanceId;
+
+        if (!profileInstanceId || profileInstanceId === configuredLocalInstance.id) {
+          return formatRelativeHandle(profile, { configuredLocalInstance });
+        }
+
+        const profileInstance = await profileInstanceByIdLoader(ctx).load(profileInstanceId);
+
+        return formatRelativeHandle(profile, { configuredLocalInstance, profileInstance });
+      },
     }),
     displayName: t.exposeString('displayName'),
     bio: t.exposeString('bio', { nullable: true }),
