@@ -138,18 +138,11 @@ type ProfileFollow implements Node {
   followee: Profile
   follower: Profile
   id: ID!
-  state: ProfileFollowState!
 }
 
 enum ProfileFollowPolicy {
   APPROVAL_REQUIRED
   OPEN
-}
-
-enum ProfileFollowState {
-  ACCEPTED
-  PENDING
-  REJECTED
 }
 
 type ProfileFollowersConnection {

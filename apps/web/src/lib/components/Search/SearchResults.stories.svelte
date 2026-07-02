@@ -14,7 +14,7 @@
       handle: string;
       relativeHandle: string;
       bio: string | null;
-      viewerFollow: { id: string; state: 'ACCEPTED' | 'PENDING' } | null;
+      viewerFollow: { id: string } | null;
     }> = {},
   ): ProfileListItem_profile$key =>
     ({

@@ -54,13 +54,6 @@ export const MediaSource = {
 } as const;
 export type MediaSource = keyof typeof MediaSource;
 
-export const ProfileFollowState = {
-  PENDING: 'PENDING',
-  ACCEPTED: 'ACCEPTED',
-  REJECTED: 'REJECTED',
-} as const;
-export type ProfileFollowState = keyof typeof ProfileFollowState;
-
 export const OAuthTokenState = {
   ACTIVE: 'ACTIVE',
   REVOKED: 'REVOKED',

@@ -5,8 +5,6 @@
 
   import ProfileListItem from './ProfileListItem.svelte';
 
-  type FollowState = 'ACCEPTED' | 'PENDING';
-
   const viewerProfileId = 'viewer-profile';
 
   // 실제 Mearie fragment ref 대신 표시 필드만 담은 mock 객체를 캐스팅해 넘긴다.
@@ -18,7 +16,7 @@
       handle: string;
       relativeHandle: string;
       bio: string | null;
-      viewerFollow: { id: string; state: FollowState } | null;
+      viewerFollow: { id: string } | null;
     }> = {},
   ): ProfileListItem_profile$key =>
     ({
@@ -65,17 +63,7 @@
       <ProfileListItem
         profile={profile({
           id: 'followed-profile',
-          viewerFollow: { id: 'follow-accepted', state: 'ACCEPTED' },
-        })}
-        {viewerProfileId}
-      />
-    </section>
-    <section class="grid gap-1">
-      <p class="text-text-secondary m-0">요청 중</p>
-      <ProfileListItem
-        profile={profile({
-          id: 'pending-profile',
-          viewerFollow: { id: 'follow-pending', state: 'PENDING' },
+          viewerFollow: { id: 'follow' },
         })}
         {viewerProfileId}
       />

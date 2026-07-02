@@ -9,8 +9,6 @@
 
   import ProfileConnectionList from './ProfileConnectionList.svelte';
 
-  type FollowState = 'ACCEPTED' | 'PENDING';
-
   const viewerProfileId = 'viewer-profile';
 
   const profile = (
@@ -20,7 +18,7 @@
       handle: string;
       relativeHandle: string;
       bio: string | null;
-      viewerFollow: { id: string; state: FollowState } | null;
+      viewerFollow: { id: string } | null;
     }> = {},
   ): ProfileListItem_profile$key =>
     ({
@@ -80,7 +78,7 @@
                 displayName: '두 번째 팔로워',
                 handle: 'second-follower',
                 relativeHandle: '@second-follower',
-                viewerFollow: { id: 'viewer-follow-2', state: 'ACCEPTED' },
+                viewerFollow: { id: 'viewer-follow-2' },
               }),
             },
           },
