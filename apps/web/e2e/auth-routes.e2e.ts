@@ -1,5 +1,17 @@
 import { expect, test } from '@playwright/test';
-import { closeE2EDatabase, resetE2EDatabase } from './db-fixtures';
+import {
+  closeE2EDatabase,
+  createE2ESession,
+  resetE2EDatabase,
+  setE2ESessionCookie,
+} from './db-fixtures';
+
+const protectedHeadingRoutes = [
+  { heading: '홈', path: '/home' },
+  { heading: '글쓰기', path: '/compose' },
+  { heading: '알림', path: '/notifications' },
+  { heading: '메뉴', path: '/menu' },
+] as const;
 
 test.beforeEach(async () => {
   await resetE2EDatabase();
@@ -26,4 +38,32 @@ test('mock OIDC로 로그인하면 보호 홈으로 이동하고 세션이 유�
 
   await page.goto('/');
   await expect(page).toHaveURL(/\/home$/);
+});
+
+test.describe('로그인 사용자 보호 라우트', () => {
+  test.beforeEach(async ({ context }) => {
+    const { token } = await createE2ESession();
+
+    await setE2ESessionCookie(context, token);
+  });
+
+  for (const route of protectedHeadingRoutes) {
+    test(`${route.path}에서 보호 shell과 페이지 heading을 본다`, async ({ page }) => {
+      await page.goto(route.path);
+
+      await expect(page).toHaveURL(new RegExp(`${route.path}$`));
+      await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: route.heading })).toBeVisible();
+      await expect(page.getByTestId('auth-splash')).toHaveCount(0);
+    });
+  }
+
+  test('/search에서 보호 shell과 검색 입력을 본다', async ({ page }) => {
+    await page.goto('/search');
+
+    await expect(page).toHaveURL(/\/search$/);
+    await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: '검색어' })).toBeVisible();
+    await expect(page.getByTestId('auth-splash')).toHaveCount(0);
+  });
 });
