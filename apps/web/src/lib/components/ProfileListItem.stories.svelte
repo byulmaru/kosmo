@@ -6,8 +6,16 @@
   import ProfileListItem from './ProfileListItem.svelte';
 
   type FollowState = 'ACCEPTED' | 'PENDING';
+  type ViewerState = {
+    isSelf: boolean;
+    follow: { id: string; state: FollowState } | null;
+  };
 
-  const viewerProfileId = 'viewer-profile';
+  const defaultViewerState = (overrides: Partial<ViewerState> = {}): ViewerState => ({
+    isSelf: false,
+    follow: null,
+    ...overrides,
+  });
 
   // 실제 Mearie fragment ref 대신 표시 필드만 담은 mock 객체를 캐스팅해 넘긴다.
   // (Storybook은 .storybook/mocks의 createFragment가 data getter로 그대로 돌려준다.)
@@ -18,7 +26,7 @@
       handle: string;
       relativeHandle: string;
       bio: string | null;
-      viewerFollow: { id: string; state: FollowState } | null;
+      viewerState: ViewerState | null;
     }> = {},
   ): ProfileListItem_profile$key =>
     ({
@@ -28,7 +36,7 @@
       handle: 'handle',
       relativeHandle: '@handle@kos.mo',
       bio: null,
-      viewerFollow: null,
+      viewerState: defaultViewerState(),
       ...overrides,
     }) as unknown as ProfileListItem_profile$key;
 
@@ -49,7 +57,6 @@
   name="Playground"
   args={{
     profile: profile(),
-    viewerProfileId,
     width: 'compact',
   }}
 />
@@ -58,16 +65,17 @@
   <div class="grid gap-4 text-sm">
     <section class="grid gap-1">
       <p class="text-text-secondary m-0">팔로우 가능</p>
-      <ProfileListItem profile={profile({ id: 'followable-profile' })} {viewerProfileId} />
+      <ProfileListItem profile={profile({ id: 'followable-profile' })} />
     </section>
     <section class="grid gap-1">
       <p class="text-text-secondary m-0">팔로잉</p>
       <ProfileListItem
         profile={profile({
           id: 'followed-profile',
-          viewerFollow: { id: 'follow-accepted', state: 'ACCEPTED' },
+          viewerState: defaultViewerState({
+            follow: { id: 'follow-accepted', state: 'ACCEPTED' },
+          }),
         })}
-        {viewerProfileId}
       />
     </section>
     <section class="grid gap-1">
@@ -75,23 +83,34 @@
       <ProfileListItem
         profile={profile({
           id: 'pending-profile',
-          viewerFollow: { id: 'follow-pending', state: 'PENDING' },
+          viewerState: defaultViewerState({
+            follow: { id: 'follow-pending', state: 'PENDING' },
+          }),
         })}
-        {viewerProfileId}
       />
     </section>
   </div>
 </Story>
 
-<Story name="Hidden action states" asChild parameters={{ controls: { disable: true } }}>
+<Story name="Viewer states" asChild parameters={{ controls: { disable: true } }}>
   <div class="grid gap-4 text-sm">
     <section class="grid gap-1">
-      <p class="text-text-secondary m-0">비로그인 공개 조회 또는 선택 프로필 없음</p>
-      <ProfileListItem profile={profile({ id: 'guest-profile' })} viewerProfileId={null} />
+      <p class="text-text-secondary m-0">viewerState 없음</p>
+      <ProfileListItem
+        profile={profile({
+          id: 'missing-viewer-profile',
+          viewerState: null,
+        })}
+      />
     </section>
     <section class="grid gap-1">
       <p class="text-text-secondary m-0">본인 프로필</p>
-      <ProfileListItem profile={profile({ id: viewerProfileId })} {viewerProfileId} />
+      <ProfileListItem
+        profile={profile({
+          id: 'self-profile',
+          viewerState: defaultViewerState({ isSelf: true }),
+        })}
+      />
     </section>
   </div>
 </Story>
@@ -100,7 +119,6 @@
   <ProfileListItem
     profile={profile({ id: 'linked-profile', handle: 'user', relativeHandle: '@user@kos.moe' })}
     linked
-    {viewerProfileId}
   />
 </Story>
 
@@ -108,7 +126,6 @@
   <div class="grid gap-3">
     <ProfileListItem
       width="wide"
-      {viewerProfileId}
       profile={profile({
         id: 'long-profile',
         displayName: '아주 긴 표시 이름이 들어가서 한 줄을 넘기면 잘려야 한다',
@@ -118,7 +135,6 @@
       })}
     />
     <ProfileListItem
-      {viewerProfileId}
       profile={profile({
         id: 'minimal-profile',
         displayName: '최소 정보',

@@ -9,7 +9,6 @@
   type Props = HTMLAttributes<HTMLElement> & {
     query?: string;
     profile?: ProfileListItem_profile$key | null;
-    viewerProfileId?: string | null;
     loading?: boolean;
     error?: boolean;
     onRetry?: () => void;
@@ -18,7 +17,6 @@
   let {
     query = '',
     profile = null,
-    viewerProfileId = null,
     loading = false,
     error = false,
     onRetry,
@@ -41,7 +39,7 @@
       </p>
     </div>
   {:else if profile}
-    <ProfileListItem {profile} linked {viewerProfileId} width="wide" class="w-full" />
+    <ProfileListItem {profile} linked width="wide" class="w-full" />
   {:else if loading}
     <div aria-hidden="true">
       {#each skeletonItems as item (item)}
