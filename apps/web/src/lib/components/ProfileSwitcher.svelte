@@ -4,7 +4,6 @@
   import { graphql } from '$mearie';
   import Avatar from '$lib/components/Avatar.svelte';
   import { getFirstGraphQLError } from '$lib/graphql/error';
-  import type { ProfileStateChangedReason } from '$lib/profileStateChanged';
   import { getProfileInitial } from '$lib/utils/profile';
   import type { ProfileSwitcher_query$key } from '$mearie';
 
@@ -14,7 +13,7 @@
     surface?: 'desktop' | 'drawer';
     loading?: boolean;
     switcherOpen?: boolean;
-    onProfileStateChanged?: (reason: ProfileStateChangedReason) => void;
+    onProfileStateChanged?: () => void;
   };
 
   let {
@@ -75,6 +74,15 @@
   const createProfileMutation = graphql(`
     mutation ProfileSwitcherCreateProfileMutation($handle: String!) {
       createProfile(input: { handle: $handle }) {
+        account {
+          id
+          profiles {
+            id
+            handle
+            relativeHandle
+            displayName
+          }
+        }
         profile {
           id
           handle
@@ -143,7 +151,7 @@
       await selectProfile({ id });
       switcherOpen = false;
       profileCreationOpen = false;
-      onProfileStateChanged('profile-selected');
+      onProfileStateChanged();
     } catch (error) {
       const graphQLError = getFirstGraphQLError(error);
 
@@ -193,7 +201,7 @@
 
         switcherOpen = false;
         profileCreationOpen = false;
-        onProfileStateChanged('profile-created');
+        onProfileStateChanged();
       } catch (error) {
         const graphQLError = getFirstGraphQLError(error);
 

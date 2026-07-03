@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Page, Route } from '@playwright/test';
 
-test('profile selection updates compose through its route currentSession query', async ({
+test('profile selection updates compose from the selectProfile mutation payload', async ({
   page,
 }) => {
   const graphQLRequests = collectGraphQLRequests(page);
@@ -33,12 +33,9 @@ test('profile selection updates compose through its route currentSession query',
   await page.waitForLoadState('networkidle');
 
   expect(graphQLRequests.operationNames).toContain('ProfileSwitcherSelectProfileMutation');
-  expect(graphQLRequests.currentSessionSelectedProfileOperations).toContain('ComposePageQuery');
 });
 
-test('profile route action follows its route currentSession query after switching', async ({
-  page,
-}) => {
+test('profile route action follows viewerState after switching profiles', async ({ page }) => {
   const graphQLRequests = collectGraphQLRequests(page);
 
   await page.goto('/login');
@@ -63,12 +60,9 @@ test('profile route action follows its route currentSession query after switchin
   await page.waitForLoadState('networkidle');
 
   expect(graphQLRequests.operationNames).toContain('ProfileSwitcherSelectProfileMutation');
-  expect(graphQLRequests.currentSessionSelectedProfileOperations).toContain('ProfileLayoutQuery');
 });
 
-test('home timeline updates after the home route active profile query refetches', async ({
-  page,
-}) => {
+test('home timeline refetches after switching active-profile-dependent data', async ({ page }) => {
   const graphQLRequests = collectGraphQLRequests(page);
   const betaPostBody = 'beta profile timeline post';
 
@@ -161,12 +155,37 @@ function collectGraphQLRequests(page: Page) {
 }
 
 async function createProfileFromSwitcher(page: Page, handle: string) {
+  const createProfileResponse = page.waitForResponse(async (response) => {
+    if (!isGraphQLResponse(response.url())) {
+      return false;
+    }
+
+    const operation = readGraphQLOperation(response.request().postData());
+
+    return operation?.operationName === 'ProfileSwitcherCreateProfileMutation';
+  });
+
   await openProfileSwitcher(page);
   await page.getByRole('menuitem', { name: '새 프로필 추가' }).click();
   const creationForm = page.getByRole('form', { name: '새 프로필 만들기' });
 
   await creationForm.getByPlaceholder('새 프로필 핸들').fill(handle);
   await creationForm.getByRole('button', { name: '만들기', exact: true }).click();
+  const responseBody = (await (await createProfileResponse).json()) as {
+    data?: {
+      createProfile?: {
+        account?: {
+          profiles?: Array<{ handle?: string | null } | null> | null;
+        } | null;
+      } | null;
+    };
+  };
+
+  expect(
+    responseBody.data?.createProfile?.account?.profiles?.some(
+      (profile) => profile?.handle === handle,
+    ),
+  ).toBe(true);
   await expect(page.getByText(`@${handle}`).first()).toBeVisible();
 }
 

@@ -4,7 +4,6 @@
   import { graphql } from '$mearie';
   import Avatar from '$lib/components/Avatar.svelte';
   import ProfileSwitcher from '$lib/components/ProfileSwitcher.svelte';
-  import type { ProfileStateChangedReason } from '$lib/profileStateChanged';
   import { formatCount, getProfileInitial } from '$lib/utils/profile';
   import type { SidebarNavigation_query$key } from '$mearie';
 
@@ -15,7 +14,7 @@
     surface?: 'desktop' | 'drawer';
     switcherOpen?: boolean;
     onNavigate?: () => void;
-    onProfileStateChanged?: (reason: ProfileStateChangedReason) => void;
+    onProfileStateChanged?: () => void;
   };
 
   const sidebarNavigationFragment = graphql(`

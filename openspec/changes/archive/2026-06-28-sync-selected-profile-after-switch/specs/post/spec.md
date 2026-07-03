@@ -2,7 +2,7 @@
 
 ### Requirement: Post composer usage boundary
 
-웹 앱은 새 글 작성 컴포넌트 사용처에서 인증과 active profile 부재 상태를 처리해야 한다(MUST). `/compose` 사용처는 자기 route GraphQL operation에서 `currentSession.selectedProfile`과 새 글 작성 컴포넌트가 요구하는 `Profile` fragment를 선언해야 하며(MUST), 이미 열린 상태에서 프로필 전환이 성공하면 Mearie cache 갱신과 route query refetch 결과를 작성 프로필로 반영해야 한다(MUST).
+웹 앱은 새 글 작성 컴포넌트 사용처에서 인증과 active profile 부재 상태를 처리해야 한다(MUST). `/compose` 사용처는 자기 route GraphQL operation에서 `currentSession.selectedProfile`과 새 글 작성 컴포넌트가 요구하는 `Profile` fragment를 선언해야 하며(MUST), 이미 열린 상태에서 프로필 전환이 성공하면 Mearie cache의 `Session.selectedProfile` 갱신 결과를 작성 프로필로 반영해야 한다(MUST).
 
 #### Scenario: 사용처 로딩 상태
 

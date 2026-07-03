@@ -1,14 +1,15 @@
 ## Why
 
-프로필 전환 mutation은 성공 응답으로 갱신된 `Session.selectedProfile`을 제공하지만, 이미 열린 웹 셸과 `/compose`, 홈, 검색, 프로필 화면이 active profile 변경을 어떤 GraphQL operation을 통해 반영해야 하는지 클라이언트 계약이 명확하지 않다. 사용자가 사이드바에서 프로필을 바꾼 뒤 각 화면이 자기 데이터 요구사항을 route-local GraphQL operation에 드러내고, Mearie cache 갱신과 필요한 refetch를 통해 active profile 기반 UI를 비동기적으로 반영하도록 요구사항을 확정한다. (Linear PROD-130)
+프로필 전환 mutation은 성공 응답으로 갱신된 `Session.selectedProfile`을 제공하지만, 기존 구현은 active profile 변경을 넓은 `Query.currentSession` stale/refetch에 기대기 쉬웠다. 사용자가 사이드바에서 프로필을 바꾼 뒤 mutation payload가 Mearie normalized cache의 owner object를 갱신하고, active profile을 암묵 입력으로 쓰는 파생 데이터만 필요한 범위로 stale 처리하도록 요구사항을 확정한다. (Linear PROD-130)
 
 ## What Changes
 
-- 사이드바 프로필 전환 성공 후 앱 셸의 활성 프로필 표시는 Mearie cache의 `Session.selectedProfile`/`Query.currentSession` 갱신을 반영해야 한다.
+- 사이드바 프로필 전환 성공 후 앱 셸의 활성 프로필 표시는 `selectProfile.session.selectedProfile` mutation 응답이 갱신한 Mearie cache를 반영해야 한다.
 - 이미 열린 `/compose` 화면의 새 글 작성 컴포넌트는 `/compose` route query가 선언한 `currentSession.selectedProfile { ...PostComposer_profile }` 결과를 작성 프로필로 사용해야 한다.
-- 홈, 검색, 프로필, followers/following 화면의 active profile 존재 여부와 viewer profile id 판단도 각 route query가 자기에게 필요한 `currentSession.selectedProfile` 필드를 선언해야 한다.
-- 일반 프로필 선택은 `Query.currentSession`, `Query.homeTimeline`, `Profile.viewerFollow` 등 active-profile 의존 cache target을 stale 처리하고, Mearie가 각 구독 route query를 비동기적으로 갱신하게 둔다.
-- 새 프로필 생성 후 선택되는 경우에는 접근 가능한 프로필 목록 갱신이 필요하므로 `me.profiles` 계열 데이터 갱신을 허용한다.
+- 홈처럼 active profile 객체가 필요한 route는 자기 query에 필요한 `currentSession.selectedProfile` 필드를 선언해야 한다.
+- 검색, 프로필, followers/following의 팔로우 액션은 최신 main의 `Profile.viewerState` 책임 분리를 유지하며 viewer 판단용 `viewerProfileId` route 흐름을 추가하지 않는다.
+- 일반 프로필 선택은 `Query.homeTimeline`, `Profile.viewerState` 등 active-profile 의존 파생 cache target을 stale 처리하고, Mearie가 구독 query를 비동기적으로 갱신하게 둔다.
+- 새 프로필 생성 후 선택되는 경우에는 `createProfile.account.profiles` 응답이 접근 가능한 프로필 목록 cache를 갱신해야 한다.
 
 ## Capabilities
 
@@ -24,5 +25,5 @@
 ## Impact
 
 - `apps/web`: 프로필 스위처, 탭 셸 layout, 사이드바, `/compose`, 홈, 검색, 프로필, followers/following route의 선택 프로필 데이터 흐름이 영향을 받는다.
-- GraphQL public schema/API shape는 변경하지 않는다. `selectProfile` 성공 응답의 `session.selectedProfile` 계약은 기존 `profile` 스펙을 따른다.
+- GraphQL public schema/API shape는 `createProfile` 응답에 `account: Account!`를 추가한다. `selectProfile` 성공 응답의 `session.selectedProfile` 계약은 기존 `profile` 스펙을 따른다.
 - `homeTimeline`처럼 active profile에 의존하는 root query field는 프로필 전환 후 stale 처리 또는 동등한 갱신 전략이 필요하다.
