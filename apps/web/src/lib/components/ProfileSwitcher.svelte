@@ -75,6 +75,15 @@
   const createProfileMutation = graphql(`
     mutation ProfileSwitcherCreateProfileMutation($handle: String!) {
       createProfile(input: { handle: $handle }) {
+        account {
+          id
+          profiles {
+            id
+            handle
+            relativeHandle
+            displayName
+          }
+        }
         profile {
           id
           handle

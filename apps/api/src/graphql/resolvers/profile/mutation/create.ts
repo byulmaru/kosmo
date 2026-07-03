@@ -1,16 +1,26 @@
-import { AccountProfiles, db, firstOrThrow, isUniqueViolation, Profiles } from '@kosmo/core/db';
+import {
+  AccountProfiles,
+  Accounts,
+  db,
+  firstOrThrow,
+  isUniqueViolation,
+  Profiles,
+} from '@kosmo/core/db';
 import { AccountProfileRole, ProfileFollowPolicy } from '@kosmo/core/enums';
 import { ConflictError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { profileHandleSchema } from '@kosmo/core/validation';
+import { eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
+import { Account } from '@/graphql/resolvers/account';
 import { Profile } from '../ref';
 
 builder.mutationField('createProfile', (t) =>
   t.withAuth({ login: true }).fieldWithInput({
     type: builder.simpleObject('CreateProfilePayload', {
       fields: (field) => ({
+        account: field.field({ type: Account }),
         profile: field.field({ type: Profile }),
       }),
     }),
@@ -19,7 +29,7 @@ builder.mutationField('createProfile', (t) =>
     },
     resolve: async (_, { input }, ctx) => {
       const localInstance = await resolveConfiguredLocalInstance();
-      const profile = await db.transaction(async (tx) => {
+      const { account, profile } = await db.transaction(async (tx) => {
         const profile = await tx
           .insert(Profiles)
           .values({
@@ -45,10 +55,16 @@ builder.mutationField('createProfile', (t) =>
           role: AccountProfileRole.OWNER,
         });
 
-        return profile;
+        const account = await tx
+          .select()
+          .from(Accounts)
+          .where(eq(Accounts.id, ctx.session.accountId))
+          .then(firstOrThrow);
+
+        return { account, profile };
       });
 
-      return { profile };
+      return { account, profile };
     },
   }),
 );

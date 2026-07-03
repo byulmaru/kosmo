@@ -36,9 +36,7 @@ test('profile selection updates compose through its route currentSession query',
   expect(graphQLRequests.currentSessionSelectedProfileOperations).toContain('ComposePageQuery');
 });
 
-test('profile route action follows its route currentSession query after switching', async ({
-  page,
-}) => {
+test('profile route action follows Profile.viewerState after switching', async ({ page }) => {
   const graphQLRequests = collectGraphQLRequests(page);
 
   await page.goto('/login');
@@ -63,7 +61,11 @@ test('profile route action follows its route currentSession query after switchin
   await page.waitForLoadState('networkidle');
 
   expect(graphQLRequests.operationNames).toContain('ProfileSwitcherSelectProfileMutation');
-  expect(graphQLRequests.currentSessionSelectedProfileOperations).toContain('ProfileLayoutQuery');
+  expect(graphQLRequests.operationNames).toContain('ProfileLayoutQuery');
+  expect(graphQLRequests.currentSessionSelectedProfileOperations).toContain('TabsLayoutQuery');
+  expect(graphQLRequests.currentSessionSelectedProfileOperations).not.toContain(
+    'ProfileLayoutQuery',
+  );
 });
 
 test('home timeline updates after the home route active profile query refetches', async ({
@@ -161,12 +163,49 @@ function collectGraphQLRequests(page: Page) {
 }
 
 async function createProfileFromSwitcher(page: Page, handle: string) {
+  let createProfilePostData: string | null = null;
+  const createProfileResponse = page.waitForResponse(async (response) => {
+    if (!isGraphQLResponse(response.url())) {
+      return false;
+    }
+
+    createProfilePostData = response.request().postData();
+    const operation = readGraphQLOperation(createProfilePostData);
+
+    return operation?.operationName === 'ProfileSwitcherCreateProfileMutation';
+  });
+
   await openProfileSwitcher(page);
   await page.getByRole('menuitem', { name: '새 프로필 추가' }).click();
   const creationForm = page.getByRole('form', { name: '새 프로필 만들기' });
 
   await creationForm.getByPlaceholder('새 프로필 핸들').fill(handle);
   await creationForm.getByRole('button', { name: '만들기', exact: true }).click();
+
+  const responseBody = (await (await createProfileResponse).json()) as {
+    data?: {
+      createProfile?: {
+        account?: {
+          profiles?: Array<{ handle?: string | null } | null> | null;
+        } | null;
+      } | null;
+    };
+    errors?: Array<{
+      extensions?: Record<string, unknown> | null;
+      message?: string | null;
+      path?: Array<string | number> | null;
+    }> | null;
+  };
+
+  expect(
+    responseBody.errors,
+    JSON.stringify({ errors: responseBody.errors, request: createProfilePostData }, null, 2),
+  ).toBeUndefined();
+  expect(
+    responseBody.data?.createProfile?.account?.profiles?.some(
+      (profile) => profile?.handle === handle,
+    ),
+  ).toBe(true);
   await expect(page.getByText(`@${handle}`).first()).toBeVisible();
 }
 
