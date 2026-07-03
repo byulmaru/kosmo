@@ -23,9 +23,11 @@ const readJsonBody = async (request) => {
 const createCodeChallenge = (codeVerifier) =>
   createHash('sha256').update(codeVerifier).digest('base64url');
 
-const createIdToken = ({ name, sub }) => {
+const createIdToken = ({ email, email_verified: emailVerified, name, sub }) => {
   const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
-  const payload = Buffer.from(JSON.stringify({ name, sub })).toString('base64url');
+  const payload = Buffer.from(
+    JSON.stringify({ email, email_verified: emailVerified, name, sub }),
+  ).toString('base64url');
 
   return `${header}.${payload}.`;
 };
@@ -62,9 +64,11 @@ const server = createServer(async (request, response) => {
     const code = randomUUID();
     codes.set(code, {
       codeChallenge,
+      email: 'e2e-user@example.test',
+      email_verified: true,
       name: 'E2E User',
       redirectUri,
-      sub: `oidc-mock-${code}`,
+      sub: 'oidc-mock-e2e-user',
     });
 
     const callbackUrl = new URL(redirectUri);
