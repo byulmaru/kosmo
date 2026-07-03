@@ -33,7 +33,7 @@
 - [x] 4.5 actor document를 `Person`으로 구성하고 `id`, `preferredUsername`, `name`, `url`, `published`, `inbox`, `outbox`, `publicKey`, `assertionMethods`를 보장한다.
 - [ ] 4.6 WebFinger와 actor document의 성공 content type, canonical subject/id, 404 실패 응답을 구현한다.
 - [x] 4.7 local ActivityPub actor row와 actor key가 없을 때 RSA-PKCS#1-v1.5와 Ed25519 key pair를 transaction/upsert로 lazy 생성하고 재요청 시 재사용한다.
-- [x] 4.8 actor document에 actor-scoped `inbox`, `outbox` URI를 포함하고 `followers`, `following`, `endpoints.sharedInbox`는 포함하지 않으며, 미지원 federation endpoint가 404로 종료되도록 테스트한다.
+- [ ] 4.8 actor document에 actor-scoped `inbox`, `outbox` URI를 포함하고 `followers`, `following`, `endpoints.sharedInbox`는 포함하지 않으며, 미지원 federation endpoint가 404로 종료되도록 테스트한다.
 
 ## 5. Web Integration
 
