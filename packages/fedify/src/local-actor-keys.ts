@@ -57,7 +57,12 @@ export interface LocalActorKeyPairsResult {
   readonly profile: LocalProfileActorProfile;
 }
 
+// Fedify uses the first key pair as the HTTP Signature #main-key, so RSA must stay first.
 const keyKinds = [ActivityPubActorKeyKind.RSA_PKCS1_V1_5, ActivityPubActorKeyKind.ED25519] as const;
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const isUuidLike = (value: string): boolean => uuidPattern.test(value);
 
 type GenerateCryptoKeyPairAlgorithm = 'RSASSA-PKCS1-v1_5' | 'Ed25519';
 
@@ -134,6 +139,11 @@ export const ensureLocalActorKeyPairs = async ({
   profileId,
   store,
 }: EnsureLocalActorKeyPairsOptions): Promise<LocalActorKeyPairsResult | null> => {
+  // Route identifiers are public path input; reject non-UUID values before they reach uuid columns.
+  if (!isUuidLike(profileId)) {
+    return null;
+  }
+
   const profile = await store.findActiveLocalProfile({ localInstanceId, profileId });
 
   if (!profile) {

@@ -68,9 +68,11 @@ export const createKosmoFederation = ({
         return null;
       }
 
+      // Build key IDs from the canonical origin, not from an arbitrary request origin.
       const canonicalContext = federation.createContext(new URL(canonicalOrigin), undefined);
       const keyPairs = await canonicalContext.getActorKeyPairs(identifier);
 
+      // These URIs are advertised now; their handlers stay intentionally unsupported for this change.
       return createLocalProfilePerson({
         actorUri,
         inboxUri: buildActorScopedUri(actorUri, 'inbox'),
