@@ -12,9 +12,10 @@
   "dependencies": {
     "@fedify/fedify": "^2.3.0",
     "@fedify/vocab": "2.3.0",
-    "@kosmo/core": "workspace:*"
+    "@kosmo/core": "workspace:*",
+    "drizzle-orm": "1.0.0-beta.22"
   },
   "devDependencies": {
-    "vitest": "4.1.8"
+    "vitest": "^4.1.8"
   }
 }

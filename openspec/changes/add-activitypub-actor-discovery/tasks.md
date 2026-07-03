@@ -29,11 +29,11 @@
 - [x] 4.1 `packages/core`에 runtime local instance resolve helper를 만들고, `PUBLIC_ORIGIN`과 일치하는 configured local instance row를 canonical origin/domain source of truth로 읽어 검증하되 runtime 요청 처리 중 row를 자동 생성하지 않는다.
 - [x] 4.2 `packages/core`에 setup/migration에서 사용할 local instance bootstrap helper를 만들고, configured local instance row를 만들거나 `PUBLIC_ORIGIN`과 일치하는 기존 row를 검증하며, profile backfill 전에 실행되는 setup/migration 흐름에 연결한다.
 - [ ] 4.3 WebFinger `acct:{handle}@{localDomain}`을 local active profile UUID actor identifier로 매핑한다.
-- [ ] 4.4 actor dispatcher를 `/ap/actor/{identifier}` URI template에 연결하고 identifier를 raw `profile.id` UUID로 해석한다.
-- [ ] 4.5 actor document를 `Person`으로 구성하고 `id`, `preferredUsername`, `name`, `url`, `published`, `inbox`, `outbox`, `publicKey`, `assertionMethods`를 보장한다.
+- [x] 4.4 actor dispatcher를 `/ap/actor/{identifier}` URI template에 연결하고 identifier를 raw `profile.id` UUID로 해석한다.
+- [x] 4.5 actor document를 `Person`으로 구성하고 `id`, `preferredUsername`, `name`, `url`, `published`, `inbox`, `outbox`, `publicKey`, `assertionMethods`를 보장한다.
 - [ ] 4.6 WebFinger와 actor document의 성공 content type, canonical subject/id, 404 실패 응답을 구현한다.
-- [ ] 4.7 local ActivityPub actor row와 actor key가 없을 때 RSA-PKCS#1-v1.5와 Ed25519 key pair를 transaction/upsert로 lazy 생성하고 재요청 시 재사용한다.
-- [ ] 4.8 actor document에 actor-scoped `inbox`, `outbox` URI를 포함하고 `followers`, `following`, `endpoints.sharedInbox`는 포함하지 않으며, 미지원 federation endpoint가 404로 종료되도록 테스트한다.
+- [x] 4.7 local ActivityPub actor row와 actor key가 없을 때 RSA-PKCS#1-v1.5와 Ed25519 key pair를 transaction/upsert로 lazy 생성하고 재요청 시 재사용한다.
+- [x] 4.8 actor document에 actor-scoped `inbox`, `outbox` URI를 포함하고 `followers`, `following`, `endpoints.sharedInbox`는 포함하지 않으며, 미지원 federation endpoint가 404로 종료되도록 테스트한다.
 
 ## 5. Web Integration
 
