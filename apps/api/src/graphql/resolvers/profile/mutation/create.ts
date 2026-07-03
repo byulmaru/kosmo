@@ -5,14 +5,12 @@ import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { profileHandleSchema } from '@kosmo/core/validation';
 import { builder } from '@/graphql/builder';
-import { Account } from '@/graphql/resolvers/account';
 import { Profile } from '../ref';
 
 builder.mutationField('createProfile', (t) =>
   t.withAuth({ login: true }).fieldWithInput({
     type: builder.simpleObject('CreateProfilePayload', {
       fields: (field) => ({
-        account: field.field({ type: Account }),
         profile: field.field({ type: Profile }),
       }),
     }),
@@ -50,7 +48,7 @@ builder.mutationField('createProfile', (t) =>
         return profile;
       });
 
-      return { account: ctx.session.accountId, profile };
+      return { profile };
     },
   }),
 );
