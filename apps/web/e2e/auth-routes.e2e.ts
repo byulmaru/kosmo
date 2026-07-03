@@ -1,3 +1,4 @@
+import { SessionState } from '@kosmo/core/enums';
 import { expect, test } from '@playwright/test';
 import {
   closeE2EDatabase,
@@ -6,6 +7,8 @@ import {
   setE2ESessionCookie,
 } from './db-fixtures';
 
+const loginCodeVerifierCookie = 'kosmo_oidc_code_verifier';
+const loginStateCookie = 'kosmo_oidc_state';
 const protectedHeadingRoutes = [
   { heading: '홈', path: '/home' },
   { heading: '글쓰기', path: '/compose' },
@@ -71,6 +74,53 @@ test('비로그인 보호 라우트 진입은 스플래시 후 루트로 이동�
 
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
+});
+
+test('무효 세션 쿠키로 보호 라우트에 진입하면 루트로 이동한다', async ({ context, page }) => {
+  const { token } = await createE2ESession({ sessionState: SessionState.REVOKED });
+
+  await setE2ESessionCookie(context, token);
+  await page.goto('/home');
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toHaveCount(0);
+});
+
+test('OIDC callback은 허용되지 않은 redirect_uri를 거부한다', async ({
+  baseURL,
+  context,
+  page,
+}) => {
+  const state = 'e2e-invalid-redirect-state';
+  const callbackUrl = new URL('/login/callback', baseURL).toString();
+
+  await context.addCookies([
+    {
+      httpOnly: true,
+      name: loginStateCookie,
+      path: '/login/callback',
+      sameSite: 'Lax',
+      url: callbackUrl,
+      value: state,
+    },
+    {
+      httpOnly: true,
+      name: loginCodeVerifierCookie,
+      path: '/login/callback',
+      sameSite: 'Lax',
+      url: callbackUrl,
+      value: 'e2e-code-verifier',
+    },
+  ]);
+
+  const response = await page.goto(
+    `/login/callback?code=e2e-code&state=${state}&redirect_uri=${encodeURIComponent(
+      'https://evil.example/callback',
+    )}`,
+  );
+
+  expect(response?.status()).toBe(400);
 });
 
 test.describe('로그인 사용자 보호 라우트', () => {
