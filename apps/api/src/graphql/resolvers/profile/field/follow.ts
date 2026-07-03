@@ -142,19 +142,15 @@ builder.objectFields(Profile, (t) => ({
     nullable: true,
     resolve: (profile, _, ctx) => viewerFollowLoader(ctx).load(profile.id),
   }),
-  viewerState: t.field({
+  viewerState: t.withAuth({ usingProfile: true }).field({
     type: ProfileViewerState,
     nullable: true,
+    unauthorizedResolver: () => null,
     resolve: async (profile, _, ctx) => {
-      const viewerProfileId = ctx.session?.profileId ?? null;
-      if (!viewerProfileId) {
-        return null;
-      }
-
-      const isSelf = Boolean(viewerProfileId && viewerProfileId === profile.id);
+      const viewerProfileId = ctx.session.profileId;
 
       return {
-        isSelf,
+        isSelf: viewerProfileId === profile.id,
         follow: await viewerFollowLoader(ctx).load(profile.id),
       };
     },
