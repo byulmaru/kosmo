@@ -113,13 +113,16 @@ export async function createE2ESession(options: CreateE2ESessionOptions = {}) {
 }
 
 export async function setE2ESessionCookie(context: BrowserContext, token: string) {
+  const origin = new URL(process.env.PUBLIC_ORIGIN ?? webOrigin);
+
   await context.addCookies([
     {
+      domain: origin.hostname,
       httpOnly: true,
       name: sessionName,
       path: '/',
       sameSite: 'Lax',
-      url: process.env.PUBLIC_ORIGIN ?? webOrigin,
+      secure: origin.protocol === 'https:',
       value: token,
     },
   ]);
