@@ -5,7 +5,17 @@
 
   import SearchResults from './SearchResults.svelte';
 
-  const viewerProfileId = 'viewer-profile';
+  type FollowState = 'ACCEPTED' | 'PENDING';
+  type ViewerState = {
+    isSelf: boolean;
+    follow: { id: string; state: FollowState } | null;
+  };
+
+  const defaultViewerState = (overrides: Partial<ViewerState> = {}): ViewerState => ({
+    isSelf: false,
+    follow: null,
+    ...overrides,
+  });
 
   const profile = (
     overrides: Partial<{
@@ -14,7 +24,7 @@
       handle: string;
       relativeHandle: string;
       bio: string | null;
-      viewerFollow: { id: string; state: 'ACCEPTED' | 'PENDING' } | null;
+      viewerState: ViewerState | null;
     }> = {},
   ): ProfileListItem_profile$key =>
     ({
@@ -24,7 +34,7 @@
       handle: 'byulmaru',
       relativeHandle: '@byulmaru',
       bio: '코스모에서 만나는 첫 프로필',
-      viewerFollow: null,
+      viewerState: defaultViewerState(),
       ...overrides,
     }) as unknown as ProfileListItem_profile$key;
 
@@ -40,7 +50,6 @@
   args={{
     query: '별마루',
     profile: profile(),
-    viewerProfileId,
   }}
 />
 
@@ -50,7 +59,7 @@
     <SearchResults />
     <SearchResults query="별마루" loading />
     <SearchResults query="별마루" error onRetry={() => {}} />
-    <SearchResults query="별마루" profile={profile()} {viewerProfileId} />
+    <SearchResults query="별마루" profile={profile()} />
     <SearchResults query="없는핸들" />
   </div>
 </Story>

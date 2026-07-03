@@ -13,7 +13,6 @@
   type ProfileListItemProps = Omit<HTMLAttributes<HTMLDivElement>, 'class'> & {
     profile: ProfileListItem_profile$key;
     linked?: boolean;
-    viewerProfileId?: string | null;
     width?: 'compact' | 'wide';
     class?: string | null;
   };
@@ -21,7 +20,6 @@
   let {
     profile,
     linked = false,
-    viewerProfileId = null,
     width = 'compact',
     class: className = null,
     ...rest
@@ -90,7 +88,5 @@
       </div>
     </div>
   {/if}
-  {#if viewerProfileId}
-    <FollowButton profile={fragment.data} {viewerProfileId} class="shrink-0" />
-  {/if}
+  <FollowButton profile={fragment.data} class="shrink-0" />
 </div>

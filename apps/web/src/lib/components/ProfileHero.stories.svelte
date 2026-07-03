@@ -4,6 +4,7 @@
   import FollowButton from './FollowButton.svelte';
   import ProfileHero from './ProfileHero.svelte';
   import type { FragmentRefs } from '@mearie/svelte';
+  import type { FollowButton_profile$key } from '$mearie';
 
   // 스토리북은 .storybook/mocks/mearie-svelte.ts에서 createFragment를 패스스루로 모킹하므로
   // 여기서는 평범한 데이터 객체를 fragment ref 자리에 그대로 넘긴다.
@@ -22,13 +23,15 @@
     bio: null,
   } as unknown as ProfileRef;
 
-  // 라우트가 action 슬롯에 넣는 팔로우 버튼 예시. 대상 프로필 id와 viewerProfileId가 달라 버튼이 노출된다.
-  const followViewerProfileId = 'viewer-profile';
+  // 라우트가 hero action 슬롯에 넣는 팔로우 버튼 예시. 버튼 정책은 FollowButton의 Profile.viewerState가 판단한다.
   const followTarget = {
     __typename: 'Profile',
     id: 'target-profile',
-    viewerFollow: null,
-  } as unknown as FragmentRefs<'FollowButton_profile'>;
+    viewerState: {
+      isSelf: false,
+      follow: null,
+    },
+  } as unknown as FollowButton_profile$key;
 
   const { Story } = defineMeta({
     title: 'KOSMO/ProfileHero',
@@ -56,7 +59,7 @@
 <Story name="With action" asChild>
   <ProfileHero profile={sampleProfile}>
     {#snippet action()}
-      <FollowButton profile={followTarget} viewerProfileId={followViewerProfileId} />
+      <FollowButton profile={followTarget} />
     {/snippet}
   </ProfileHero>
 </Story>

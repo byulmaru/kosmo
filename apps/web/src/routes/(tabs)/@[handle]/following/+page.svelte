@@ -9,12 +9,6 @@
   const client = getClient();
   const queryDocument = graphql(`
     query ProfileFollowingPageQuery($handle: String!) {
-      currentSession {
-        id
-        selectedProfile {
-          id
-        }
-      }
       profileByHandle(handle: $handle) {
         id
         ...ProfileConnectionList_followingProfile
@@ -52,7 +46,6 @@
   const query = createQuery(queryDocument, () => ({ handle: page.params.handle! }));
 
   const profile = $derived(query.data?.profileByHandle ?? null);
-  const viewerProfileId = $derived(query.data?.currentSession?.selectedProfile?.id ?? null);
 
   let pageKey = $state<string | null>(null);
   let paginatedConnection = $state<NextPageConnection | null>(null);
@@ -119,7 +112,6 @@
   endCursor={paginatedPageInfo?.endCursor}
   {loadingNextPage}
   {nextPageError}
-  {viewerProfileId}
   loading={query.loading}
   error={Boolean(query.error)}
   onRetry={query.refetch}

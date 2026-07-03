@@ -10,8 +10,16 @@
   import ProfileConnectionList from './ProfileConnectionList.svelte';
 
   type FollowState = 'ACCEPTED' | 'PENDING';
+  type ViewerState = {
+    isSelf: boolean;
+    follow: { id: string; state: FollowState } | null;
+  };
 
-  const viewerProfileId = 'viewer-profile';
+  const defaultViewerState = (overrides: Partial<ViewerState> = {}): ViewerState => ({
+    isSelf: false,
+    follow: null,
+    ...overrides,
+  });
 
   const profile = (
     overrides: Partial<{
@@ -20,7 +28,7 @@
       handle: string;
       relativeHandle: string;
       bio: string | null;
-      viewerFollow: { id: string; state: FollowState } | null;
+      viewerState: ViewerState | null;
     }> = {},
   ): ProfileListItem_profile$key =>
     ({
@@ -30,7 +38,7 @@
       handle: 'connected',
       relativeHandle: '@connected',
       bio: '팔로우 관계 목록에서 표시되는 프로필입니다.',
-      viewerFollow: null,
+      viewerState: defaultViewerState(),
       ...overrides,
     }) as unknown as ProfileListItem_profile$key;
 
@@ -80,7 +88,9 @@
                 displayName: '두 번째 팔로워',
                 handle: 'second-follower',
                 relativeHandle: '@second-follower',
-                viewerFollow: { id: 'viewer-follow-2', state: 'ACCEPTED' },
+                viewerState: defaultViewerState({
+                  follow: { id: 'viewer-follow-2', state: 'ACCEPTED' },
+                }),
               }),
             },
           },
@@ -137,7 +147,6 @@
   args={{
     kind: 'followers',
     followersProfile: followersProfile(),
-    viewerProfileId,
     loading: false,
     error: false,
     onLoadMore: () => {},
@@ -152,7 +161,6 @@
     <ProfileConnectionList
       kind="followers"
       followersProfile={followersProfile()}
-      {viewerProfileId}
       onLoadMore={() => {}}
     />
     <ProfileConnectionList kind="followers" />
@@ -165,20 +173,17 @@
     <ProfileConnectionList
       kind="followers"
       followersProfile={followersProfile()}
-      {viewerProfileId}
       onLoadMore={() => {}}
     />
     <ProfileConnectionList
       kind="followers"
       followersProfile={followersProfile()}
-      {viewerProfileId}
       loadingNextPage
       onLoadMore={() => {}}
     />
     <ProfileConnectionList
       kind="followers"
       followersProfile={followersProfile()}
-      {viewerProfileId}
       nextPageError
       onLoadMore={() => {}}
     />
@@ -186,7 +191,6 @@
       kind="followers"
       followersProfile={followersProfile(lastPageInfo)}
       additionalProfiles={additionalProfileItems('followers')}
-      {viewerProfileId}
       onLoadMore={() => {}}
     />
   </div>
@@ -200,7 +204,6 @@
     <ProfileConnectionList
       kind="following"
       followingProfile={followingProfile()}
-      {viewerProfileId}
       onLoadMore={() => {}}
     />
     <ProfileConnectionList kind="following" />
@@ -213,20 +216,17 @@
     <ProfileConnectionList
       kind="following"
       followingProfile={followingProfile()}
-      {viewerProfileId}
       onLoadMore={() => {}}
     />
     <ProfileConnectionList
       kind="following"
       followingProfile={followingProfile()}
-      {viewerProfileId}
       loadingNextPage
       onLoadMore={() => {}}
     />
     <ProfileConnectionList
       kind="following"
       followingProfile={followingProfile()}
-      {viewerProfileId}
       nextPageError
       onLoadMore={() => {}}
     />
@@ -234,7 +234,6 @@
       kind="following"
       followingProfile={followingProfile(lastPageInfo)}
       additionalProfiles={additionalProfileItems('following')}
-      {viewerProfileId}
       onLoadMore={() => {}}
     />
   </div>

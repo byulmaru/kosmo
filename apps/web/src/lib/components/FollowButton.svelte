@@ -1,32 +1,31 @@
 <script lang="ts">
   import { createFragment, createMutation } from '@mearie/svelte';
   import { graphql } from '$mearie';
-  import type { FragmentRefs } from '@mearie/svelte';
+  import type { FollowButton_profile$key } from '$mearie';
 
   import Button from './Button.svelte';
 
   const followButtonProfileFragment = graphql(`
     fragment FollowButton_profile on Profile {
       id
-      viewerFollow {
-        id
-        state
+      viewerState {
+        isSelf
+        follow {
+          id
+          state
+        }
       }
     }
   `);
 
   type Props = {
-    profile: FragmentRefs<'FollowButton_profile'>;
-    viewerProfileId?: string | null;
-    authenticated?: boolean;
-    canMutate?: boolean;
-    disabledReason?: string | null;
+    profile: FollowButton_profile$key;
     size?: 'sm' | 'md' | 'lg';
     class?: string;
   };
 
-  // followee/profile에 viewerFollow와 followersCount를 함께 선택해, mutation 응답만으로
-  // normalized cache의 Profile.viewerFollow / followersCount가 갱신되게 한다(별도 refetch 불필요).
+  // followee/profile에 viewerState와 followersCount를 함께 선택해, mutation 응답만으로
+  // normalized cache의 Profile.viewerState / followersCount가 갱신되게 한다(별도 refetch 불필요).
   const followProfileMutation = graphql(`
     mutation FollowButtonFollowProfile($id: ID!) {
       followProfile(input: { id: $id }) {
@@ -34,12 +33,8 @@
           id
           state
           followee {
-            id
             followersCount
-            viewerFollow {
-              id
-              state
-            }
+            ...FollowButton_profile
           }
         }
       }
@@ -51,26 +46,14 @@
       unfollowProfile(input: { id: $id }) {
         profileFollowId
         profile {
-          id
           followersCount
-          viewerFollow {
-            id
-            state
-          }
+          ...FollowButton_profile
         }
       }
     }
   `);
 
-  let {
-    profile,
-    viewerProfileId = null,
-    authenticated = true,
-    canMutate = true,
-    disabledReason = null,
-    size = 'sm',
-    class: className = '',
-  }: Props = $props();
+  let { profile, size = 'sm', class: className = '' }: Props = $props();
 
   const [followProfile] = createMutation(followProfileMutation);
   const [unfollowProfile] = createMutation(unfollowProfileMutation);
@@ -79,25 +62,15 @@
   let loading = $state(false);
   let errorMessage = $state<string | null>(null);
 
-  const viewerFollow = $derived(profileFragment.data.viewerFollow);
+  const viewerState = $derived(profileFragment.data.viewerState);
+  const viewerFollow = $derived(viewerState?.follow ?? null);
   const isFollowing = $derived(viewerFollow?.state === 'ACCEPTED');
   // TODO: 승인 플로우가 추가되면 PENDING/REJECTED 전이를 실제 mutation 결과로 검증한다.
   const isPending = $derived(viewerFollow?.state === 'PENDING');
-  const unavailableReason = $derived(
-    disabledReason ??
-      (!authenticated
-        ? '로그인 후 팔로우할 수 있습니다.'
-        : !viewerProfileId
-          ? '프로필을 선택한 뒤 팔로우할 수 있습니다.'
-          : !canMutate
-            ? '이 프로필을 팔로우할 권한이 없습니다.'
-            : null),
-  );
-  const disabled = $derived(loading || Boolean(unavailableReason));
-  const message = $derived(errorMessage ?? unavailableReason);
+  const disabled = $derived(loading);
 
   const toggleFollow = async () => {
-    if (disabled) {
+    if (disabled || !viewerState || viewerState.isSelf) {
       return;
     }
 
@@ -121,8 +94,7 @@
   };
 </script>
 
-{#if !(viewerProfileId && viewerProfileId === profileFragment.data.id)}
-  <!-- 안내문이 버튼보다 넓어도 버튼은 우측 끝에 붙도록 items-end로 정렬한다. -->
+{#if viewerState && !viewerState.isSelf}
   <div class={`inline-flex flex-col items-end gap-1 ${className}`}>
     <Button
       variant={isFollowing || isPending ? 'secondary' : 'primary'}
@@ -134,12 +106,9 @@
     >
       {loading ? '처리 중' : isPending ? '요청 중' : isFollowing ? '팔로잉' : '팔로우'}
     </Button>
-    {#if message}
-      <p
-        class="text-text-secondary m-0 max-w-56 text-right text-xs leading-4"
-        role={errorMessage ? 'alert' : undefined}
-      >
-        {message}
+    {#if errorMessage}
+      <p class="text-text-secondary m-0 max-w-56 text-right text-xs leading-4" role="alert">
+        {errorMessage}
       </p>
     {/if}
   </div>

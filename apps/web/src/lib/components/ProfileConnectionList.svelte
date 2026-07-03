@@ -26,7 +26,6 @@
     endCursor?: string | null;
     loadingNextPage?: boolean;
     nextPageError?: boolean;
-    viewerProfileId?: string | null;
     loading?: boolean;
     error?: boolean;
     onRetry?: () => void;
@@ -42,7 +41,6 @@
     endCursor = null,
     loadingNextPage = false,
     nextPageError = false,
-    viewerProfileId = null,
     loading = false,
     error = false,
     onRetry,
@@ -215,13 +213,7 @@
   {:else if connectionProfiles.length > 0}
     <div>
       {#each connectionProfiles as item (item.cursor)}
-        <ProfileListItem
-          profile={item.profile}
-          linked
-          {viewerProfileId}
-          width="wide"
-          class="w-full"
-        />
+        <ProfileListItem profile={item.profile} linked width="wide" class="w-full" />
       {/each}
     </div>
     {#if showPagination}
