@@ -57,7 +57,7 @@ test('DB reset 후에도 API에 캐시된 local instance로 프로필을 만들 
   context,
   page,
 }) => {
-  const handle = `e2e-created-${randomUUID().slice(0, 8)}`;
+  const handle = `e2e_created_${randomUUID().slice(0, 8)}`;
   const { token } = await createE2ESession({ profile: false });
 
   await setE2ESessionCookie(context, token);
