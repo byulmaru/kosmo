@@ -116,7 +116,7 @@ active profile이 있는 인증자는 기존 local 또는 ActivityPub remote fol
 - **THEN** 시스템은 해당 follow 관계를 제거한다
 - **AND** 시스템은 Fedify `sendActivity`를 통해 기존 Follow에 대한 ActivityPub `Undo` activity를 발송한다
 - **AND** mutation은 `UnfollowProfilePayload.profileFollowId`로 삭제된 `ProfileFollow` ID를 반환한다
-- **AND** 갱신된 viewer follow 상태를 가진 대상 `Profile`을 함께 반환한다
+- **AND** 갱신된 viewer follow 상태와 followersCount를 가진 대상 `Profile`을 함께 반환한다
 
 #### Scenario: Unfollow profile idempotently
 
@@ -131,7 +131,7 @@ active profile이 있는 인증자는 기존 local 또는 ActivityPub remote fol
 - **THEN** 시스템은 local `ProfileFollow` 관계를 제거한다
 - **AND** `UNRESPONSIVE` instance에는 ActivityPub `Undo(Follow)` activity를 발송하지 않는다
 - **AND** mutation은 `UnfollowProfilePayload.profileFollowId`로 삭제된 `ProfileFollow` ID를 반환한다
-- **AND** 갱신된 viewer follow 상태를 가진 대상 `Profile`을 함께 반환한다
+- **AND** 갱신된 viewer follow 상태와 followersCount를 가진 대상 `Profile`을 함께 반환한다
 
 #### Scenario: Unfollow missing or blocked profile
 
