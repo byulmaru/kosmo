@@ -57,12 +57,12 @@ export interface LocalActorKeyPairsResult {
   readonly profile: LocalProfileActorProfile;
 }
 
-// Fedify uses the first key pair as the HTTP Signature #main-key, so RSA must stay first.
-const keyKinds = [ActivityPubActorKeyKind.RSA_PKCS1_V1_5, ActivityPubActorKeyKind.ED25519] as const;
+// ActivityPubActorKeyKind is ordered RSA then Ed25519; Fedify uses the first key pair as #main-key.
+const keyKinds = Object.values(ActivityPubActorKeyKind);
 
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const canonicalUuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-const isUuidLike = (value: string): boolean => uuidPattern.test(value);
+const isCanonicalUuid = (value: string): boolean => canonicalUuidPattern.test(value);
 
 type GenerateCryptoKeyPairAlgorithm = 'RSASSA-PKCS1-v1_5' | 'Ed25519';
 
@@ -139,8 +139,8 @@ export const ensureLocalActorKeyPairs = async ({
   profileId,
   store,
 }: EnsureLocalActorKeyPairsOptions): Promise<LocalActorKeyPairsResult | null> => {
-  // Route identifiers are public path input; reject non-UUID values before they reach uuid columns.
-  if (!isUuidLike(profileId)) {
+  // Route identifiers are public path input; reject non-canonical UUIDs before they reach uuid columns.
+  if (!isCanonicalUuid(profileId)) {
     return null;
   }
 
