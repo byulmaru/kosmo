@@ -1,5 +1,3 @@
-import '@kosmo/core/polyfill';
-
 import { createFederation, MemoryKvStore } from '@fedify/fedify';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { ensureDrizzleLocalActorKeyPairs } from './local-actor-store';
