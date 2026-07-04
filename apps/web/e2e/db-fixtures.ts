@@ -41,7 +41,8 @@ export async function resetE2EDatabase() {
       SELECT 'TRUNCATE TABLE ' || string_agg(format('%I.%I', schemaname, tablename), ', ') || ' CASCADE'
       INTO truncate_statement
       FROM pg_tables
-      WHERE schemaname = 'public';
+      WHERE schemaname = 'public'
+        AND tablename <> 'instance';
 
       IF truncate_statement IS NOT NULL THEN
         EXECUTE truncate_statement;
