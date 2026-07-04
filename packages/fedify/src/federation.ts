@@ -4,20 +4,7 @@ import { ensureDrizzleLocalActorKeyPairs } from './local-actor-store';
 import { createLocalProfilePerson } from './local-profile-actor';
 import type { Federation } from '@fedify/fedify';
 
-interface ConfiguredLocalInstance {
-  readonly id: string;
-  readonly canonicalOrigin: string | null;
-}
-
 const federationOrigin = process.env.PUBLIC_ORIGIN;
-
-const getCanonicalOrigin = (localInstance: ConfiguredLocalInstance): string => {
-  if (!localInstance.canonicalOrigin) {
-    throw new Error(`Configured local instance ${localInstance.id} is missing canonicalOrigin.`);
-  }
-
-  return localInstance.canonicalOrigin;
-};
 
 export const federation: Federation<void> = createFederation<void>({
   kv: new MemoryKvStore(),
@@ -27,7 +14,7 @@ export const federation: Federation<void> = createFederation<void>({
 federation
   .setActorDispatcher('/ap/actor/{identifier}', async (_ctx, identifier) => {
     const localInstance = await resolveConfiguredLocalInstance();
-    const canonicalOrigin = getCanonicalOrigin(localInstance);
+    const { canonicalOrigin } = localInstance;
     const canonicalContext = federation.createContext(new URL(canonicalOrigin), undefined);
     const result = await ensureDrizzleLocalActorKeyPairs({
       actorUri: canonicalContext.getActorUri(identifier),
@@ -57,7 +44,7 @@ federation
   .mapHandle(() => null)
   .setKeyPairsDispatcher(async (_ctx, identifier) => {
     const localInstance = await resolveConfiguredLocalInstance();
-    const canonicalOrigin = getCanonicalOrigin(localInstance);
+    const { canonicalOrigin } = localInstance;
     const canonicalContext = federation.createContext(new URL(canonicalOrigin), undefined);
     const result = await ensureDrizzleLocalActorKeyPairs({
       actorUri: canonicalContext.getActorUri(identifier),
