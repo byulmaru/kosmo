@@ -5,6 +5,7 @@ const port = Number(process.env.OIDC_MOCK_PORT ?? 4300);
 const clientId = process.env.PUBLIC_OIDC_CLIENT_ID ?? 'kosmo-e2e-client';
 const clientSecret = process.env.OIDC_CLIENT_SECRET ?? 'kosmo-e2e-secret';
 const codes = new Map();
+let tokenRequestCount = 0;
 
 const sendJson = (response, status, body) => {
   response.writeHead(status, { 'content-type': 'application/json' });
@@ -38,6 +39,11 @@ const server = createServer(async (request, response) => {
   if (request.method === 'GET' && url.pathname === '/health') {
     response.writeHead(200, { 'content-type': 'text/plain' });
     response.end('ok');
+    return;
+  }
+
+  if (request.method === 'GET' && url.pathname === '/__e2e/token-requests') {
+    sendJson(response, 200, { count: tokenRequestCount });
     return;
   }
 
@@ -81,6 +87,8 @@ const server = createServer(async (request, response) => {
   }
 
   if (request.method === 'POST' && url.pathname === '/oauth/token') {
+    tokenRequestCount += 1;
+
     let body;
     try {
       body = await readJsonBody(request);

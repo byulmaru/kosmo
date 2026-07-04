@@ -2,9 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { AccountState, SessionState } from '@kosmo/core/enums';
 import { createE2ESession, resetE2EDatabase, setE2ESessionCookie } from './db-fixtures';
 import { expect, test } from './fixtures';
+import type { APIRequestContext } from '@playwright/test';
 
 const loginCodeVerifierCookie = 'kosmo_oidc_code_verifier';
 const loginStateCookie = 'kosmo_oidc_state';
+const oidcOrigin = 'http://127.0.0.1:4300';
 const protectedHeadingRoutes = [
   { heading: '홈', path: '/home' },
   { heading: '글쓰기', path: '/compose' },
@@ -29,6 +31,16 @@ const invalidSessionCases = [
     token: async () => (await createE2ESession({ accountState: AccountState.DISABLED })).token,
   },
 ] as const;
+
+async function getOIDCTokenRequestCount(request: APIRequestContext) {
+  const response = await request.get(`${oidcOrigin}/__e2e/token-requests`);
+
+  expect(response.ok()).toBe(true);
+
+  const body = (await response.json()) as { count: number };
+
+  return body.count;
+}
 
 test.beforeEach(async () => {
   await resetE2EDatabase();
@@ -142,9 +154,12 @@ test('OIDC callback은 허용되지 않은 redirect_uri를 거부한다', async 
   baseURL,
   context,
   page,
+  request,
 }) => {
   const state = 'e2e-invalid-redirect-state';
   const callbackUrl = new URL('/login/callback', baseURL);
+
+  const tokenRequestCount = await getOIDCTokenRequestCount(request);
 
   await context.addCookies([
     {
@@ -174,6 +189,7 @@ test('OIDC callback은 허용되지 않은 redirect_uri를 거부한다', async 
   );
 
   expect(response?.status()).toBe(400);
+  expect(await getOIDCTokenRequestCount(request)).toBe(tokenRequestCount);
 });
 
 test.describe('로그인 사용자 보호 라우트', () => {
