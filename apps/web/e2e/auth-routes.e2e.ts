@@ -61,7 +61,8 @@ test('DB reset 후에도 API에 캐시된 local instance로 프로필을 만들 
   const { token } = await createE2ESession({ profile: false });
 
   await setE2ESessionCookie(context, token);
-  await page.goto('/');
+  await page.goto('/home');
+  await expect(page).toHaveURL(/\/home$/);
 
   const response = await page.evaluate(async (profileHandle) => {
     const graphqlResponse = await fetch('/graphql', {
