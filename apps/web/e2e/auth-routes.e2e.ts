@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { AccountState, SessionState } from '@kosmo/core/enums';
 import { createE2ESession, resetE2EDatabase, setE2ESessionCookie } from './db-fixtures';
 import { expect, test } from './fixtures';
@@ -50,6 +51,41 @@ test('mock OIDC로 로그인하면 보호 홈으로 이동하고 세션이 유�
 
   await page.goto('/');
   await expect(page).toHaveURL(/\/home$/);
+});
+
+test('DB reset 후에도 API에 캐시된 local instance로 프로필을 만들 수 있다', async ({
+  context,
+  page,
+}) => {
+  const handle = `e2e-created-${randomUUID().slice(0, 8)}`;
+  const { token } = await createE2ESession({ profile: false });
+
+  await setE2ESessionCookie(context, token);
+  await page.goto('/');
+
+  const response = await page.evaluate(async (profileHandle) => {
+    const graphqlResponse = await fetch('/graphql', {
+      body: JSON.stringify({
+        query: `
+          mutation E2ECreateProfile($handle: String!) {
+            createProfile(input: { handle: $handle }) {
+              profile {
+                handle
+              }
+            }
+          }
+        `,
+        variables: { handle: profileHandle },
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+
+    return graphqlResponse.json();
+  }, handle);
+
+  expect(response.errors, JSON.stringify(response.errors)).toBeUndefined();
+  expect(response.data.createProfile.profile.handle).toBe(handle);
 });
 
 test('비로그인 보호 라우트 진입은 스플래시 후 루트로 이동한다', async ({ page }) => {
