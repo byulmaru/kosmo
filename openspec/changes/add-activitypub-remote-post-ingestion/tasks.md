@@ -15,7 +15,7 @@
 
 - [ ] 3.1 `Profile.posts`가 remote profile에서 outbox refresh를 시도하고 이미 materialized된 visible posts를 최신순 connection으로 반환하되, `UNRESPONSIVE` instance에서는 outbox refresh를 시도하지 않고 저장된 materialized posts만 반환하도록 resolver를 확장한다.
 - [ ] 3.2 `Post` visibility access가 remote materialized posts를 local posts와 같은 visibility 규칙으로 다루도록 정렬한다.
-- [ ] 3.3 `homeTimeline`이 accepted remote followee의 materialized posts를 포함할 수 있게 정렬한다.
+- [ ] 3.3 `homeTimeline`이 established `ProfileFollow`로 팔로우 중인 remote followee의 materialized posts를 포함할 수 있게 정렬한다.
 - [ ] 3.4 GraphQL schema를 재생성하고 remote `Profile.posts`와 home timeline contract를 확인한다.
 
 ## 4. Verification
