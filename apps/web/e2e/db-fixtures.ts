@@ -50,7 +50,7 @@ export async function resetE2EDatabase() {
     END $$;
   `);
 
-  await seedDatabase();
+  await seedDatabase({ publicOrigin: webOrigin });
 }
 
 export async function closeE2EDatabase() {
@@ -114,7 +114,7 @@ export async function createE2ESession(options: CreateE2ESessionOptions = {}) {
 }
 
 export async function setE2ESessionCookie(context: BrowserContext, token: string) {
-  const origin = new URL(process.env.PUBLIC_ORIGIN ?? webOrigin);
+  const origin = new URL(webOrigin);
 
   await context.addCookies([
     {
