@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Linear Estimate'
+  short_description: 'Linear estimate 기준과 cycle scope 보정'
+  default_prompt: 'Use $linear-estimate to review Linear cycle issues and recalibrate estimates from review risk.'
