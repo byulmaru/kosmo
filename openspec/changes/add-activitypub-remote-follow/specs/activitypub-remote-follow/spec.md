@@ -20,9 +20,9 @@
 
 - **WHEN** follow protocol handler가 remote actor URI를 참조하지만 저장된 ActivityPub remote `Profile`이 없다
 - **THEN** 시스템은 actor URI만으로 `Profile`을 생성하지 않는다
-- **AND** 시스템은 Fedify가 해석한 remote actor 객체의 `preferredUsername`과 actor URI host로 candidate `acct:{preferredUsername}@{domain}`을 만들 수 있을 때만 `add-activitypub-remote-profile-federation`의 Fedify/WebFinger lookup 기반 materialization 경로를 수행한다
-- **AND** WebFinger lookup 결과의 canonical actor URI는 inbound activity의 remote actor URI와 일치해야 한다
-- **AND** candidate federated handle을 만들 수 없거나 lookup이 federated handle과 actor URI를 검증하지 못하면 `ProfileFollow` 또는 `ProfileFollowRequest`를 생성하거나 갱신하지 않는다
+- **AND** actor URI host를 `acct:` domain으로 신뢰하지 않고, Fedify/WebFinger lookup으로 actor URI에 대응하는 federated handle과 domain을 실제로 검증한다
+- **AND** WebFinger lookup이 반환한 federated handle의 canonical actor URI는 inbound activity의 remote actor URI와 일치해야 한다
+- **AND** WebFinger lookup이 federated handle과 actor URI를 검증하지 못하면 `ProfileFollow` 또는 `ProfileFollowRequest`를 생성하거나 갱신하지 않는다
 
 ### Requirement: Outbound remote follow
 
@@ -33,7 +33,8 @@
 - **WHEN** active local profile이 `followPolicy`가 `OPEN`인 활성 ActivityPub remote profile follow를 요청한다
 - **THEN** 시스템은 local profile을 follower, remote profile을 followee로 하는 established `ProfileFollow` 관계를 생성하거나 기존 관계를 반환한다
 - **AND** 새 `ProfileFollow` 관계가 생성된 경우에만 Fedify `sendActivity`로 ActivityPub `Follow` activity를 발송한다
-- **AND** 새 logical outbound Follow activity의 id, actor URI, object URI, Fedify `orderingKey`는 후속 Accept/Reject/Undo correlation에 사용할 수 있도록 해당 `ProfileFollow`에 연결된다
+- **AND** 새 logical outbound Follow activity의 id, actor URI, object URI는 후속 Accept/Reject/Undo correlation에 사용할 수 있도록 해당 `ProfileFollow`에 연결된다
+- **AND** Fedify `orderingKey`는 local follower actor URI와 remote followee actor URI pair에서 안정적으로 파생하며, 같은 pair의 모든 outbound Follow와 Undo(Follow)에 재사용한다
 - **AND** 기존 `ProfileFollow` 관계를 반환하는 idempotent 요청에서는 ActivityPub `Follow` activity를 다시 발송하지 않는다
 
 #### Scenario: Remote follow accepted
@@ -63,11 +64,19 @@
 - **THEN** 시스템은 해당 `ProfileFollow` 관계를 제거한다
 - **AND** 시스템은 Fedify `sendActivity`로 기존 Follow에 대한 `Undo` activity를 발송한다
 - **AND** 시스템은 저장된 원본 Follow activity id, actor URI, object URI를 `Undo.object`의 대상 Follow에 사용한다
-- **AND** 시스템은 원본 Follow와 후속 `Undo(Follow)`를 같은 Fedify `orderingKey`로 발송한다
+- **AND** 시스템은 같은 local follower actor URI와 remote followee actor URI pair의 모든 Follow/Undo(Follow)에 사용하는 stable Fedify `orderingKey`로 `Undo(Follow)`를 발송한다
 
 ### Requirement: Inbound remote follow
 
 시스템은 remote ActivityPub profile이 local profile을 follow하거나 unfollow할 수 있게 해야 한다(MUST). Remote actor가 아직 저장되어 있지 않으면 시스템은 Fedify/WebFinger lookup 기반 materialization을 먼저 수행해야 한다(MUST).
+
+#### Scenario: Guard inbound activity from unavailable remote actor
+
+- **WHEN** Fedify inbox listener가 verified follow protocol activity를 전달하고 remote actor가 저장된 ActivityPub remote `Profile`로 조회된다
+- **THEN** 시스템은 remote actor의 instance 상태를 확인한다
+- **AND** remote actor instance가 `SUSPENDED`이면 `ProfileFollow` 또는 `ProfileFollowRequest`를 생성, 갱신, 삭제하지 않고 outbound Accept 또는 Reject를 발송하지 않는다
+- **AND** remote actor instance가 `UNRESPONSIVE`이고 activity 처리가 outbound Accept 또는 Reject 같은 response delivery를 필요로 하면 `ProfileFollow` 또는 `ProfileFollowRequest`를 생성하거나 갱신하지 않고 outbound response를 발송하지 않는다
+- **AND** remote actor instance가 `UNRESPONSIVE`인 경우에도 actor/object correlation이 검증된 Accept, Reject, Undo(Follow)는 outbound delivery 없이 기존 local projection 또는 request를 정리할 수 있다
 
 #### Scenario: Receive remote Follow for local actor
 
@@ -79,9 +88,12 @@
 - **AND** actor, object, 또는 recipient가 일치하지 않는 `Follow`는 `ProfileFollow` 또는 `ProfileFollowRequest`를 생성하거나 갱신하지 않고 `Accept(Follow)`도 발송하지 않는다
 - **AND** `Follow.object`가 활성 local followee profile을 식별하지 못하면 `ProfileFollow` 또는 `ProfileFollowRequest`를 생성하거나 갱신하지 않고 `Accept(Follow)`도 발송하지 않는다
 - **AND** remote follower와 local followee 사이에 established `ProfileFollow` 관계가 이미 있으면 시스템은 해당 관계를 idempotent하게 유지하고 `ProfileFollowRequest`를 생성하지 않는다
+- **AND** remote follower와 local followee 사이에 established `ProfileFollow` 관계가 이미 있으면 같은 pair의 pending `ProfileFollowRequest`를 같은 transaction 안에서 삭제한다
 - **AND** existing established 관계가 있거나 local profile follow policy가 `OPEN`이면 Fedify `sendActivity`로 원본 Follow를 object로 하는 `Accept(Follow)` activity를 remote actor에게 발송한다
 - **AND** established 관계가 없고 local profile follow policy가 `OPEN`이면 remote profile을 follower, local profile을 followee로 하는 established `ProfileFollow` 관계를 생성한다
+- **AND** established 관계가 없고 local profile follow policy가 `OPEN`이면 같은 pair의 pending `ProfileFollowRequest`를 같은 transaction 안에서 삭제한다
 - **AND** established 관계가 없고 local profile follow policy가 `APPROVAL_REQUIRED`이면 remote profile을 follower, local profile을 followee로 하는 `ProfileFollowRequest`를 생성하거나 기존 request를 유지한다
+- **AND** 기존 `ProfileFollowRequest`를 유지하는 duplicate Follow에서는 저장된 inbound Follow response metadata를 갱신하지 않는다
 - **AND** 이번 capability는 established 관계가 없는 `APPROVAL_REQUIRED` inbound Follow에 대한 Accept 또는 Reject를 자동 발송하지 않는다
 - **AND** pending remote follow request를 승인 또는 거절하고 그 결과 activity를 발송하는 UX는 후속 capability에서 다룬다
 

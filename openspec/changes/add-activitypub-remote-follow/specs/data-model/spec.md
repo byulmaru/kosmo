@@ -2,7 +2,7 @@
 
 ### Requirement: Remote follow activity correlation storage
 
-시스템은 ActivityPub remote follow activity를 established `ProfileFollow` 관계 또는 inbound pending `ProfileFollowRequest` 요청에 연결해 후속 Accept/Reject/Undo 처리에 필요한 correlation 정보를 저장할 수 있어야 한다(MUST).
+시스템은 ActivityPub remote Follow activity를 established `ProfileFollow` 관계 또는 inbound pending `ProfileFollowRequest` 요청에 연결해 후속 Accept/Reject/Undo 처리에 필요한 correlation 정보를 저장할 수 있어야 한다(MUST).
 
 #### Scenario: Store outbound remote Follow correlation
 
@@ -10,6 +10,7 @@
 - **THEN** 시스템은 outbound Follow activity identity, actor URI, object URI, Fedify `orderingKey`를 established `ProfileFollow`에 연결할 수 있어야 한다
 - **AND** remote Accept 또는 Reject를 기존 follow 관계에 대응시킬 수 있어야 한다
 - **AND** outbound Follow activity identity는 follower actor URI와 followee actor URI만으로 파생하지 않고 새 logical outbound Follow activity마다 고유해야 한다
+- **AND** Fedify `orderingKey`는 follower actor URI와 followee actor URI pair에서 안정적으로 파생되어 같은 pair의 모든 outbound Follow와 Undo(Follow)에 재사용되어야 한다
 - **AND** Fedify transport retry는 같은 Follow activity identity를 재사용해야 한다
 - **AND** 이번 capability는 outbound `ProfileFollowRequest`를 만들지 않으며, approval-required remote follow request correlation은 후속 capability에서 다룬다
 - **AND** transport delivery retry와 queue 상태는 Fedify 경계에 맡기고 도메인 테이블에 중복 저장하지 않는다
@@ -19,6 +20,7 @@
 - **WHEN** remote ActivityPub profile이 local profile을 follow한다
 - **THEN** 시스템은 local follow policy에 따라 remote follower와 local followee 사이의 established `ProfileFollow` 관계 또는 pending `ProfileFollowRequest` 요청을 저장한다
 - **AND** inbound Follow activity identity 또는 response metadata는 duplicate correlation과 Accept/Reject response 구성에 사용할 수 있어야 한다
+- **AND** 같은 remote follower와 local followee pair의 pending `ProfileFollowRequest`가 이미 있으면 기존 inbound Follow activity identity 또는 response metadata를 유지하고 새 duplicate Follow의 metadata로 갱신하지 않는다
 - **AND** inbound `Undo(Follow)`는 저장된 inbound Follow id가 다르거나 object id가 없더라도 verified same actor/object이면 해당 관계 또는 request를 취소하는 의사로 처리할 수 있어야 한다
 - **AND** activity-level duplicate skip은 Fedify inbox idempotency와 `ProfileFollow`/`ProfileFollowRequest` unique 제약에 맡긴다
 
@@ -46,5 +48,6 @@
 #### Scenario: 원격 팔로우 activity correlation 추적
 
 - **WHEN** 팔로우 관계가 ActivityPub remote profile을 포함한다
-- **THEN** 시스템은 Follow, Accept, Reject, Undo activity identity, actor/object URI, Fedify `orderingKey` 같은 correlation metadata를 해당 `ProfileFollow` 관계 또는 inbound `ProfileFollowRequest` 요청과 연결할 수 있어야 한다
+- **THEN** 시스템은 원본 Follow activity identity, actor/object URI, Fedify `orderingKey`, inbound Follow response metadata 같은 correlation metadata를 해당 `ProfileFollow` 관계 또는 inbound `ProfileFollowRequest` 요청과 연결할 수 있어야 한다
+- **AND** Accept, Reject, Undo activity identity의 durable history 저장은 이번 domain table 요구사항이 아니며 Fedify idempotency 또는 후속 activity log capability의 책임이다
 - **AND** transport delivery retry와 queue metadata는 Fedify가 소유하며 local-only follow 관계의 필수 값이 아니다
