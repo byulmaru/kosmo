@@ -1,3 +1,5 @@
+import '@kosmo/core/polyfill';
+
 import { createFederation, MemoryKvStore } from '@fedify/fedify';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { ensureDrizzleLocalActorKeyPairs } from './local-actor-store';
@@ -40,13 +42,16 @@ federation
     }
 
     const actorIdentifier = result.profile.id;
+    // Keep inbox/outbox routes unregistered until delivery and collections are implemented.
+    const actorUri = canonicalContext.getActorUri(actorIdentifier);
+    const actorPathname = actorUri.pathname.replace(/\/$/, '');
     const keyPairs = await canonicalContext.getActorKeyPairs(actorIdentifier);
 
     return createLocalProfilePerson({
-      actorUri: canonicalContext.getActorUri(actorIdentifier),
-      inboxUri: canonicalContext.getInboxUri(actorIdentifier),
+      actorUri,
+      inboxUri: new URL(`${actorPathname}/inbox`, actorUri),
       keyPairs,
-      outboxUri: canonicalContext.getOutboxUri(actorIdentifier),
+      outboxUri: new URL(`${actorPathname}/outbox`, actorUri),
       profile: result.profile,
       profileUri: new URL(`/@${encodeURIComponent(result.profile.handle)}`, canonicalOrigin),
     });
@@ -64,6 +69,3 @@ federation
 
     return result ? [...result.keyPairs] : [];
   });
-
-federation.setInboxDispatcher('/ap/actor/{identifier}/inbox', () => null);
-federation.setOutboxDispatcher('/ap/actor/{identifier}/outbox', () => null);
