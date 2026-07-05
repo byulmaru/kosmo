@@ -9,10 +9,9 @@
 
   import ProfileConnectionList from './ProfileConnectionList.svelte';
 
-  type FollowState = 'ACCEPTED' | 'PENDING';
   type ViewerState = {
     isSelf: boolean;
-    follow: { id: string; state: FollowState } | null;
+    follow: { id: string } | null;
   };
 
   const defaultViewerState = (overrides: Partial<ViewerState> = {}): ViewerState => ({
@@ -89,7 +88,7 @@
                 handle: 'second-follower',
                 relativeHandle: '@second-follower',
                 viewerState: defaultViewerState({
-                  follow: { id: 'viewer-follow-2', state: 'ACCEPTED' },
+                  follow: { id: 'viewer-follow-2' },
                 }),
               }),
             },

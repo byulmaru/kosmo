@@ -309,14 +309,33 @@ export const ProfileFollows = pgTable(
     followeeProfileId: uuid('followee_profile_id')
       .notNull()
       .references(() => Profiles.id, { onDelete: 'cascade' }),
-    state: Enum.profileFollowState('state').notNull(),
     createdAt: createdAt(),
-    respondedAt: datetime('responded_at'),
   },
   (table) => [
     unique().on(table.followerProfileId, table.followeeProfileId),
-    index().on(table.followeeProfileId, table.state),
-    index().on(table.followerProfileId, table.state),
+    index().on(table.followeeProfileId),
+    index().on(table.followerProfileId),
+  ],
+);
+
+export const ProfileFollowRequests = pgTable(
+  'profile_follow_request',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => createId(TableDiscriminator.ProfileFollowRequests)),
+    followerProfileId: uuid('follower_profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    followeeProfileId: uuid('followee_profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    unique().on(table.followerProfileId, table.followeeProfileId),
+    index().on(table.followeeProfileId),
+    index().on(table.followerProfileId),
   ],
 );
 

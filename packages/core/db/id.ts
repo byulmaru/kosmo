@@ -16,6 +16,7 @@ export const TableDiscriminator = {
   PostContents: 0x005,
   Profiles: 0x006,
   ProfileFollows: 0x007,
+  ProfileFollowRequests: 0x011,
   Sessions: 0x008,
 } as const satisfies Record<keyof typeof Tables, number>;
 

@@ -5,10 +5,9 @@
 
   import ProfileListItem from './ProfileListItem.svelte';
 
-  type FollowState = 'ACCEPTED' | 'PENDING';
   type ViewerState = {
     isSelf: boolean;
-    follow: { id: string; state: FollowState } | null;
+    follow: { id: string } | null;
   };
 
   const defaultViewerState = (overrides: Partial<ViewerState> = {}): ViewerState => ({
@@ -73,18 +72,7 @@
         profile={profile({
           id: 'followed-profile',
           viewerState: defaultViewerState({
-            follow: { id: 'follow-accepted', state: 'ACCEPTED' },
-          }),
-        })}
-      />
-    </section>
-    <section class="grid gap-1">
-      <p class="text-text-secondary m-0">요청 중</p>
-      <ProfileListItem
-        profile={profile({
-          id: 'pending-profile',
-          viewerState: defaultViewerState({
-            follow: { id: 'follow-pending', state: 'PENDING' },
+            follow: { id: 'follow-accepted' },
           }),
         })}
       />

@@ -5,10 +5,9 @@
 
   import FollowButton from './FollowButton.svelte';
 
-  type FollowState = 'ACCEPTED' | 'PENDING' | 'REJECTED';
   type ViewerState = {
     isSelf: boolean;
-    follow: { id: string; state: FollowState } | null;
+    follow: { id: string } | null;
   };
 
   const targetProfileId = 'target-profile';
@@ -62,25 +61,7 @@
       <FollowButton
         profile={profile(
           'followed-profile',
-          defaultViewerState({ follow: { id: 'follow-accepted', state: 'ACCEPTED' } }),
-        )}
-      />
-    </section>
-    <section class="grid gap-1">
-      <p class="text-text-secondary m-0">요청 중</p>
-      <FollowButton
-        profile={profile(
-          'pending-profile',
-          defaultViewerState({ follow: { id: 'follow-pending', state: 'PENDING' } }),
-        )}
-      />
-    </section>
-    <section class="grid gap-1">
-      <p class="text-text-secondary m-0">거절 후 재요청 가능</p>
-      <FollowButton
-        profile={profile(
-          'rejected-profile',
-          defaultViewerState({ follow: { id: 'follow-rejected', state: 'REJECTED' } }),
+          defaultViewerState({ follow: { id: 'follow-accepted' } }),
         )}
       />
     </section>
