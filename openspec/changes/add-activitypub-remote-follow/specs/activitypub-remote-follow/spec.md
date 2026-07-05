@@ -35,7 +35,7 @@
 - **WHEN** active local profile이 `followPolicy`가 `OPEN`인 활성 ActivityPub remote profile follow를 요청한다
 - **THEN** 시스템은 local profile을 follower, remote profile을 followee로 하는 established `ProfileFollow` 관계를 생성하거나 기존 관계를 반환한다
 - **AND** 새 `ProfileFollow` 관계가 생성된 경우에만 Fedify `sendActivity`로 ActivityPub `Follow` activity를 발송한다
-- **AND** 새 logical outbound Follow activity의 id, actor URI, object URI는 후속 Accept/Reject/Undo correlation에 사용할 수 있도록 해당 `ProfileFollow`에 연결된다
+- **AND** 새 logical outbound Follow activity의 id는 Undo(Follow) 구성과 Fedify transport retry에 사용할 수 있도록 저장하고, actor URI와 object URI는 후속 Accept/Reject/Undo 검증에 사용할 수 있도록 해당 `ProfileFollow`에 연결된다
 - **AND** Fedify `orderingKey`는 local follower actor URI와 remote followee actor URI pair에서 안정적으로 파생하며, 같은 pair의 모든 outbound Follow와 Undo(Follow)에 재사용한다
 - **AND** 기존 `ProfileFollow` 관계를 반환하는 idempotent 요청에서는 ActivityPub `Follow` activity를 다시 발송하지 않는다
 
@@ -44,7 +44,7 @@
 - **WHEN** remote actor가 local actor가 보낸 Follow에 대한 `Accept` activity를 보낸다
 - **THEN** 시스템은 해당 outbound Follow가 이미 established `ProfileFollow`로 투영되어 있으면 idempotent하게 처리한다
 - **AND** `Accept.actor`는 해당 outbound Follow의 remote followee actor URI와 일치해야 한다
-- **AND** `Accept.object`는 해당 outbound Follow activity identity를 참조해야 한다
+- **AND** `Accept.object`로 전달되거나 참조된 Follow의 actor/object는 해당 outbound Follow의 local follower actor URI와 remote followee actor URI에 대응해야 한다
 - **AND** personal inbox에서 Fedify `ctx.recipient`가 제공되면 시스템은 해당 recipient identifier를 local actor/profile로 resolve하고, 그 canonical actor URI가 해당 outbound Follow의 local follower actor URI와 일치해야 한다
 - **AND** Fedify `ctx.recipient`가 없으면 shared inbox로 간주하고 actor/object 조건으로 recipient를 검증한다
 - **AND** actor, object, 또는 recipient가 일치하지 않는 `Accept`는 local follow graph 또는 request를 갱신하지 않는다
@@ -56,7 +56,7 @@
 - **THEN** 시스템은 해당 outbound Follow가 established `ProfileFollow`로 투영되어 있으면 그 관계를 제거한다
 - **AND** 시스템은 거절 상태 값을 저장하지 않는다
 - **AND** `Reject.actor`는 해당 outbound Follow의 remote followee actor URI와 일치해야 한다
-- **AND** `Reject.object`는 해당 outbound Follow activity identity를 참조해야 한다
+- **AND** `Reject.object`로 전달되거나 참조된 Follow의 actor/object는 해당 outbound Follow의 local follower actor URI와 remote followee actor URI에 대응해야 한다
 - **AND** personal inbox에서 Fedify `ctx.recipient`가 제공되면 시스템은 해당 recipient identifier를 local actor/profile로 resolve하고, 그 canonical actor URI가 해당 outbound Follow의 local follower actor URI와 일치해야 한다
 - **AND** Fedify `ctx.recipient`가 없으면 shared inbox로 간주하고 actor/object 조건으로 recipient를 검증한다
 - **AND** actor, object, 또는 recipient가 일치하지 않는 `Reject`는 local follow graph 또는 request를 갱신하지 않는다
