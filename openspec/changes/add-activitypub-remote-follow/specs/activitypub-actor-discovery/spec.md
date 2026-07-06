@@ -29,6 +29,18 @@
 - **AND** document는 shared inbox discovery를 위한 `endpoints.sharedInbox` 값을 포함한다
 - **AND** document는 `followers`, `following` 값을 포함하지 않는다
 
+#### Scenario: Expose local actor key wire shape
+
+- **WHEN** 시스템이 local actor document에 포함할 actor key를 필요로 한다
+- **THEN** 시스템은 Fedify actor key-pairs dispatcher로 저장된 key pair를 제공한다
+- **AND** missing key pair는 `activitypub-actor-discovery` 저장 계약에 따라 actor별 RSA-PKCS#1-v1.5와 Ed25519 row를 lazy-create하고, existing key row가 있으면 새 key pair를 생성하지 않는다
+- **AND** RSA-PKCS#1-v1.5 public key는 `publicKey`의 Fedify `CryptographicKey`로 노출된다
+- **AND** RSA `CryptographicKey.id`는 `{actorUri}#main-key`이고 `owner`는 `{actorUri}`이다
+- **AND** Ed25519 public key는 `assertionMethods`의 Fedify `Multikey`로 노출된다
+- **AND** Ed25519 `Multikey.id`는 `{actorUri}#ed25519-key`이고 `controller`는 `{actorUri}`이다
+- **AND** 공개 key material은 저장된 `RSA_PKCS1_V1_5` 또는 `ED25519` public JWK에서 import한 `CryptoKey`를 사용한다
+- **AND** 시스템은 PEM, Multibase, Multicodec, JSON-LD 직렬화를 직접 구현하지 않고 Fedify `CryptographicKey`/`Multikey` serialization에 맡긴다
+
 #### Scenario: Handle follow protocol inbox delivery
 
 - **WHEN** 외부 서버가 actor-scoped `/ap/actor/{profile.id}/inbox` 또는 shared `/inbox`로 ActivityPub follow protocol activity를 전달한다
