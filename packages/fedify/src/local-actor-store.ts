@@ -3,15 +3,15 @@ import '@kosmo/core/polyfill';
 import { ActivityPubActorKeys, ActivityPubActors, db, first, Profiles } from '@kosmo/core/db';
 import { ActivityPubActorType, ProfileState } from '@kosmo/core/enums';
 import { and, eq } from 'drizzle-orm';
-import { ensureLocalActorKeyPairs } from './local-actor-keys';
+import { ensureLocalProfileActor } from './local-actor-keys';
 import type { Database } from '@kosmo/core/db';
 import type {
   CreateLocalActorKeyInput,
   CreateLocalActorRowInput,
-  EnsureLocalActorKeyPairsOptions,
-  LocalActorKeyPairsResult,
+  EnsureLocalProfileActorOptions,
   LocalActorStore,
   LocalProfileActorProfile,
+  LocalProfileActorResult,
   StoredLocalActorKey,
   StoredLocalActorRow,
 } from './local-actor-keys';
@@ -141,11 +141,11 @@ export const createDrizzleLocalActorStore = (client: LocalActorDbClient = db): L
   },
 });
 
-export const ensureDrizzleLocalActorKeyPairs = async (
-  options: Omit<EnsureLocalActorKeyPairsOptions, 'store'>,
-): Promise<LocalActorKeyPairsResult | null> =>
+export const ensureDrizzleLocalProfileActor = async (
+  options: Omit<EnsureLocalProfileActorOptions, 'store'>,
+): Promise<LocalProfileActorResult | null> =>
   db.transaction((tx) =>
-    ensureLocalActorKeyPairs({
+    ensureLocalProfileActor({
       ...options,
       store: createDrizzleLocalActorStore(tx),
     }),

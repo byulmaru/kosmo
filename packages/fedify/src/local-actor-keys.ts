@@ -44,14 +44,14 @@ export interface LocalActorStore {
   createActorKey(input: CreateLocalActorKeyInput): Promise<StoredLocalActorKey>;
 }
 
-export interface EnsureLocalActorKeyPairsOptions {
+export interface EnsureLocalProfileActorOptions {
   readonly actorUri: URL;
   readonly localInstanceId: string;
   readonly profileId: string;
   readonly store: LocalActorStore;
 }
 
-export interface LocalActorKeyPairsResult {
+export interface LocalProfileActorResult {
   readonly actor: StoredLocalActorRow;
   readonly keyPairs: readonly CryptoKeyPair[];
   readonly profile: LocalProfileActorProfile;
@@ -133,12 +133,12 @@ const importStoredKeyPair = async (storedKey: StoredLocalActorKey): Promise<Cryp
   };
 };
 
-export const ensureLocalActorKeyPairs = async ({
+export const ensureLocalProfileActor = async ({
   actorUri,
   localInstanceId,
   profileId,
   store,
-}: EnsureLocalActorKeyPairsOptions): Promise<LocalActorKeyPairsResult | null> => {
+}: EnsureLocalProfileActorOptions): Promise<LocalProfileActorResult | null> => {
   // Route identifiers are public path input; reject non-canonical UUIDs before they reach uuid columns.
   if (!isCanonicalUuid(profileId)) {
     return null;
