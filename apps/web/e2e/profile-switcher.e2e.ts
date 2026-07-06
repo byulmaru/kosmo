@@ -80,15 +80,7 @@ test('home route active profile query refetches after switching profiles', async
   await page.waitForLoadState('networkidle');
   graphQLRequests.clear();
 
-  const homeQueryResponse = page.waitForResponse(async (response) => {
-    if (!isGraphQLResponse(response.url())) {
-      return false;
-    }
-
-    const operation = readGraphQLOperation(response.request().postData());
-
-    return operation?.operationName === 'HomePageQuery';
-  });
+  const homeQueryResponse = waitForGraphQLOperation(page, 'HomePageQuery');
 
   const responseBody = await selectProfileFromSwitcher(page, 'alphahome');
 
@@ -196,19 +188,15 @@ async function createProfileFromSwitcher(page: Page, handle: string) {
 }
 
 async function openProfileSwitcher(page: Page) {
+  await expect(page.getByTestId('auth-splash')).toHaveCount(0);
   await page.locator('button[aria-label="프로필 목록"]:visible').first().click();
 }
 
 async function selectProfileFromSwitcher(page: Page, handle: string) {
-  const selectProfileResponse = page.waitForResponse(async (response) => {
-    if (!isGraphQLResponse(response.url())) {
-      return false;
-    }
-
-    const operation = readGraphQLOperation(response.request().postData());
-
-    return operation?.operationName === 'ProfileSwitcherSelectProfileMutation';
-  });
+  const selectProfileResponse = waitForGraphQLOperation(
+    page,
+    'ProfileSwitcherSelectProfileMutation',
+  );
 
   await openProfileSwitcher(page);
   await page
@@ -233,15 +221,7 @@ async function selectProfileFromSwitcher(page: Page, handle: string) {
 }
 
 async function createPost(page: Page, body: string) {
-  const createPostResponse = page.waitForResponse(async (response) => {
-    if (!isGraphQLResponse(response.url())) {
-      return false;
-    }
-
-    const operation = readGraphQLOperation(response.request().postData());
-
-    return operation?.operationName === 'PostComposerCreatePost';
-  });
+  const createPostResponse = waitForGraphQLOperation(page, 'PostComposerCreatePost');
 
   await page.goto('/compose');
   const composer = page.getByRole('main').locator('form[aria-label="새 게시글 작성"]');
@@ -277,6 +257,18 @@ function composerProfileHandle(page: Page, handle: string) {
 
 function sidebarProfileHandle(page: Page, handle: string) {
   return page.locator('section[aria-label="활성 프로필"]:visible').first().getByText(`@${handle}`);
+}
+
+function waitForGraphQLOperation(page: Page, operationName: string) {
+  return page.waitForResponse(async (response) => {
+    if (!isGraphQLResponse(response.url())) {
+      return false;
+    }
+
+    const operation = readGraphQLOperation(response.request().postData());
+
+    return operation?.operationName === operationName;
+  });
 }
 
 function isGraphQLResponse(url: string) {
