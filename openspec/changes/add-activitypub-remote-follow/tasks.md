@@ -2,7 +2,7 @@
 
 - [ ] 1.1 원본 remote Follow activity id, actor/object URI, Fedify `orderingKey`, inbound Follow response metadata를 `ProfileFollow` 또는 inbound `ProfileFollowRequest`에 연결할 수 있는 activity correlation metadata 저장 경계를 추가하고, Accept/Reject/Undo activity id durable history는 Fedify idempotency 또는 후속 activity log 범위로 둔다.
 - [ ] 1.2 outbound Follow activity identity는 생성된 `ProfileFollow.id`에서 파생한 kosmo outbound Follow URI로 새 logical Follow마다 고유하게 만들고, Fedify `orderingKey`는 follower actor URI와 followee actor URI pair에서 안정적으로 파생해 같은 pair의 모든 outbound Follow/Undo(Follow)에 재사용하며, Fedify transport retry는 같은 identity를 재사용하게 하고, transport retry/queue 상태는 Fedify 경계에 두고 도메인 테이블에 중복 저장하지 않도록 저장 모델을 정렬한다.
-- [ ] 1.3 #190의 상태 없는 `ProfileFollow`와 pending-only `ProfileFollowRequest` 구조에 맞춰 Drizzle table/relations/migration fixture를 갱신한다.
+- [ ] 1.3 #198로 archive된 `split-profile-follow-requests`의 상태 없는 `ProfileFollow`와 pending-only `ProfileFollowRequest` 구조에 맞춰 Drizzle table/relations/migration fixture를 갱신한다.
 
 ## 2. Fedify Follow Integration
 

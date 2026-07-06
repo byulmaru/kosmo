@@ -21,7 +21,7 @@
 
 ## Decisions
 
-- **`ProfileFollow`는 established follow source of truth다.** local/remote 여부와 관계없이 성립된 follower/followee 방향은 `ProfileFollow`에 저장한다. Pending follow request는 #190의 `ProfileFollowRequest`에 저장하며, 원본 Follow activity id와 actor/object URI는 후속 Accept/Reject/Undo를 연결하기 위한 correlation metadata로만 둔다. Accept/Reject/Undo activity id의 durable history는 이번 도메인 테이블 범위가 아니다.
+- **`ProfileFollow`는 established follow source of truth다.** local/remote 여부와 관계없이 성립된 follower/followee 방향은 `ProfileFollow`에 저장한다. Pending follow request는 #198로 archive된 `split-profile-follow-requests`의 `ProfileFollowRequest`에 저장하며, 원본 Follow activity id와 actor/object URI는 후속 Accept/Reject/Undo를 연결하기 위한 correlation metadata로만 둔다. Accept/Reject/Undo activity id의 durable history는 이번 도메인 테이블 범위가 아니다.
 - **outbound delivery는 Fedify `sendActivity`를 사용한다.** kosmo는 `Follow`, `Undo(Follow)`, `Accept(Follow)` 또는 후속 승인 UX의 `Reject(Follow)` activity를 만들고 Fedify에 전달한다. retry/queue/signature는 Fedify 설정에 맡긴다. Follow activity id는 생성된 `ProfileFollow.id`에서 파생한 kosmo outbound Follow URI로 고정해 logical Follow마다 고유하게 만들고, Fedify `orderingKey`는 local follower actor URI와 remote followee actor URI pair에서 안정적으로 파생해 같은 pair의 모든 Follow/Undo(Follow)에 재사용한다.
 - **inbound activity는 Fedify inbox listener에서 받는다.** HTTP signature verification, actor key fetch, request parsing은 Fedify에 맡기고, kosmo handler는 verified typed Follow/Undo/Accept/Reject만 처리한다.
 - **follow protocol inbox endpoint는 discovery-only 404 경계를 대체한다.** actor document가 광고하는 actor-scoped inbox와 Fedify가 처리하는 shared inbox는 Follow/Undo/Accept/Reject delivery를 Fedify inbox listener로 받는다. `outbox`, followers/following collection, post delivery 같은 non-follow endpoint는 이 change에서 열지 않는다.
