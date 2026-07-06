@@ -23,6 +23,13 @@
         }
         homeTimeline(first: 20) {
           ...PostList_homeTimeline
+          edges {
+            cursor
+            node {
+              id
+              ...PostListItem_post
+            }
+          }
         }
       }
     `),
@@ -40,52 +47,7 @@
   const showOnboarding = $derived(
     Boolean(session) && !selectedProfile && !query.loading && !query.error,
   );
-  let loadedHomeTimelineProfileId = $state<string | null>(null);
-  let pendingHomeTimelineProfileId = $state<string | null>(null);
-  let pendingHomeTimelineSnapshot = $state<unknown>(null);
-
-  // homeTimeline은 현재 session의 active profile을 암묵 입력으로 쓰는 root field다.
-  // selectedProfile id가 먼저 바뀐 동안 이전 profile 기준 connection을 계속 표시하지 않는다.
-  $effect(() => {
-    const profileId = selectedProfile?.id ?? null;
-    const currentHomeTimeline = query.data?.homeTimeline ?? null;
-
-    if (!profileId) {
-      loadedHomeTimelineProfileId = null;
-      pendingHomeTimelineProfileId = null;
-      pendingHomeTimelineSnapshot = null;
-      return;
-    }
-
-    if (!query.loading && loadedHomeTimelineProfileId === null) {
-      loadedHomeTimelineProfileId = profileId;
-      return;
-    }
-
-    if (profileId !== loadedHomeTimelineProfileId && profileId !== pendingHomeTimelineProfileId) {
-      pendingHomeTimelineProfileId = profileId;
-      pendingHomeTimelineSnapshot = currentHomeTimeline;
-    }
-  });
-
-  $effect(() => {
-    const currentHomeTimeline = query.data?.homeTimeline ?? null;
-
-    if (
-      pendingHomeTimelineProfileId &&
-      !query.loading &&
-      (query.error || currentHomeTimeline !== pendingHomeTimelineSnapshot)
-    ) {
-      loadedHomeTimelineProfileId = pendingHomeTimelineProfileId;
-      pendingHomeTimelineProfileId = null;
-      pendingHomeTimelineSnapshot = null;
-    }
-  });
-
-  const homeTimelineStale = $derived(Boolean(pendingHomeTimelineProfileId));
-  const homeTimeline = $derived(
-    homeTimelineStale || query.error ? null : (query.data?.homeTimeline ?? null),
-  );
+  const homeTimeline = $derived(query.error ? null : (query.data?.homeTimeline ?? null));
 </script>
 
 {#if query.loading && !query.data}
@@ -106,7 +68,7 @@
 
     <PostList
       {homeTimeline}
-      loading={query.loading || homeTimelineStale}
+      loading={query.loading}
       error={Boolean(query.error)}
       onRetry={query.refetch}
     />

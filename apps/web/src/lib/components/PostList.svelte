@@ -3,7 +3,11 @@
   import { createFragment } from '@mearie/svelte';
   import type { HTMLAttributes } from 'svelte/elements';
 
-  import type { PostList_homeTimeline$key, PostList_profile$key } from '$mearie';
+  import type {
+    PostList_homeTimeline$key,
+    PostList_profile$key,
+    PostListItem_post$key,
+  } from '$mearie';
 
   import PostListItem from './PostListItem.svelte';
   import TextSkeleton from './TextSkeleton.svelte';
@@ -11,8 +15,12 @@
   // 프로필 게시글 목록과 홈 타임라인은 같은 Post connection 항목 표현을 쓴다.
   // Pagination UI는 별도 이슈로 분리하고 첫 페이지만 조회한다.
   // 항목 본문은 PostListItem의 TipTap 렌더러 fragment를 통해 렌더한다.
+  type HomeTimeline = PostList_homeTimeline$key & {
+    edges?: readonly { cursor: string; node: { id: string } & PostListItem_post$key }[];
+  };
+
   type Props = HTMLAttributes<HTMLElement> & {
-    homeTimeline?: PostList_homeTimeline$key | null;
+    homeTimeline?: HomeTimeline | null;
     profile?: PostList_profile$key | null;
     loading?: boolean;
     error?: boolean;
@@ -62,10 +70,16 @@
     () => homeTimeline,
   );
 
+  const homeTimelineEdges = $derived(homeTimeline?.edges);
   const postEdges = $derived(
-    homeTimelineFragment.data?.edges ?? profileFragment.data?.posts.edges ?? [],
+    homeTimelineEdges ??
+      homeTimelineFragment.data?.edges ??
+      profileFragment.data?.posts.edges ??
+      [],
   );
-  const hasPostData = $derived(Boolean(homeTimelineFragment.data || profileFragment.data));
+  const hasPostData = $derived(
+    Boolean(homeTimelineEdges || homeTimelineFragment.data || profileFragment.data),
+  );
 
   // 첫 화면을 채울 만큼만 반복한다.
   const skeletonItems = [0, 1, 2];
