@@ -4,7 +4,6 @@
   import { graphql } from '$mearie';
   import Avatar from '$lib/components/Avatar.svelte';
   import ProfileSwitcher from '$lib/components/ProfileSwitcher.svelte';
-  import type { ProfileStateChangedReason } from '$lib/profileStateChanged';
   import { formatCount, getProfileInitial } from '$lib/utils/profile';
   import type { SidebarNavigation_query$key } from '$mearie';
 
@@ -15,7 +14,6 @@
     surface?: 'desktop' | 'drawer';
     switcherOpen?: boolean;
     onNavigate?: () => void;
-    onProfileStateChanged?: (reason: ProfileStateChangedReason) => void;
   };
 
   const sidebarNavigationFragment = graphql(`
@@ -47,7 +45,6 @@
     surface = 'desktop',
     switcherOpen = $bindable(false),
     onNavigate = () => {},
-    onProfileStateChanged = () => {},
   }: Props = $props();
 
   const navItems = [
@@ -109,7 +106,6 @@
       {surface}
       {loading}
       bind:switcherOpen
-      {onProfileStateChanged}
     />
 
     <nav class="flex w-full flex-col items-center gap-1" aria-label="주요 메뉴">
@@ -270,7 +266,6 @@
           {surface}
           {loading}
           bind:switcherOpen
-          {onProfileStateChanged}
         />
         {#if sidebarActiveProfile}
           <p class="max-w-full truncate text-sm leading-[19.6px] text-[#777777]">

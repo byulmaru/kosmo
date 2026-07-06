@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
-test('profile selection updates compose through its route currentSession query', async ({
+test('profile selection updates compose from the selectProfile mutation response', async ({
   page,
 }) => {
   const graphQLRequests = collectGraphQLRequests(page);
@@ -33,7 +33,6 @@ test('profile selection updates compose through its route currentSession query',
   await page.waitForLoadState('networkidle');
 
   expect(graphQLRequests.operationNames).toContain('ProfileSwitcherSelectProfileMutation');
-  expect(graphQLRequests.currentSessionSelectedProfileOperations).toContain('ComposePageQuery');
 });
 
 test('profile route action follows Profile.viewerState after switching', async ({ page }) => {
@@ -62,10 +61,6 @@ test('profile route action follows Profile.viewerState after switching', async (
 
   expect(graphQLRequests.operationNames).toContain('ProfileSwitcherSelectProfileMutation');
   expect(graphQLRequests.operationNames).toContain('ProfileLayoutQuery');
-  expect(graphQLRequests.currentSessionSelectedProfileOperations).toContain('TabsLayoutQuery');
-  expect(graphQLRequests.currentSessionSelectedProfileOperations).not.toContain(
-    'ProfileLayoutQuery',
-  );
 });
 
 test('home route active profile query refetches after switching profiles', async ({ page }) => {
@@ -107,7 +102,7 @@ test('home route active profile query refetches after switching profiles', async
   await page.waitForLoadState('networkidle');
 
   expect(graphQLRequests.operationNames).toContain('ProfileSwitcherSelectProfileMutation');
-  expect(graphQLRequests.currentSessionSelectedProfileOperations).toContain('HomePageQuery');
+  expect(graphQLRequests.operationNames).toContain('HomePageQuery');
 });
 
 test('home onboarding stays hidden while the home active profile query errors', async ({
@@ -128,12 +123,11 @@ test('home onboarding stays hidden while the home active profile query errors', 
 
   await expect(page.getByRole('heading', { name: '사용할 프로필을 선택해주세요' })).toBeHidden();
   await expect(page.getByRole('heading', { name: '홈' })).toBeVisible();
-  expect(graphQLRequests.currentSessionSelectedProfileOperations).toContain('HomePageQuery');
+  expect(graphQLRequests.operationNames).toContain('HomePageQuery');
 });
 
 function collectGraphQLRequests(page: Page) {
   const operationNames: string[] = [];
-  const currentSessionSelectedProfileOperations: string[] = [];
 
   page.on('request', (request) => {
     if (request.method() !== 'POST' || !isGraphQLResponse(request.url())) {
@@ -144,18 +138,12 @@ function collectGraphQLRequests(page: Page) {
     if (operation?.operationName) {
       operationNames.push(operation.operationName);
     }
-
-    if (operation?.query && readsCurrentSessionSelectedProfile(operation.query)) {
-      currentSessionSelectedProfileOperations.push(operation.operationName ?? '<anonymous>');
-    }
   });
 
   return {
     operationNames,
-    currentSessionSelectedProfileOperations,
     clear: () => {
       operationNames.length = 0;
-      currentSessionSelectedProfileOperations.length = 0;
     },
   };
 }
@@ -204,7 +192,7 @@ async function createProfileFromSwitcher(page: Page, handle: string) {
       (profile) => profile?.handle === handle,
     ),
   ).toBe(true);
-  await expect(page.getByText(`@${handle}`).first()).toBeVisible();
+  await expect(sidebarProfileHandle(page, handle)).toBeVisible();
 }
 
 async function openProfileSwitcher(page: Page) {
@@ -305,8 +293,4 @@ function readGraphQLOperation(postData: string | null) {
   } catch {
     return null;
   }
-}
-
-function readsCurrentSessionSelectedProfile(query: string) {
-  return query.includes('currentSession') && query.includes('selectedProfile');
 }

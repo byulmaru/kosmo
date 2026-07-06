@@ -1,10 +1,9 @@
 <script lang="ts">
   import { profileHandleSchema } from '@kosmo/core/validation';
-  import { createFragment, createMutation } from '@mearie/svelte';
+  import { createFragment, createMutation, getClient } from '@mearie/svelte';
   import { graphql } from '$mearie';
   import Avatar from '$lib/components/Avatar.svelte';
   import { getFirstGraphQLError } from '$lib/graphql/error';
-  import type { ProfileStateChangedReason } from '$lib/profileStateChanged';
   import { getProfileInitial } from '$lib/utils/profile';
   import type { ProfileSwitcher_query$key } from '$mearie';
 
@@ -14,7 +13,6 @@
     surface?: 'desktop' | 'drawer';
     loading?: boolean;
     switcherOpen?: boolean;
-    onProfileStateChanged?: (reason: ProfileStateChangedReason) => void;
   };
 
   let {
@@ -23,7 +21,6 @@
     surface = 'desktop',
     loading = false,
     switcherOpen = $bindable(false),
-    onProfileStateChanged = () => {},
   }: Props = $props();
 
   const profileSwitcherFragment = graphql(`
@@ -66,6 +63,9 @@
             displayName
             followingCount
             followersCount
+            ...BottomTabBar_profile
+            ...RightRail_profile
+            ...PostComposer_profile
           }
         }
       }
@@ -94,6 +94,7 @@
     }
   `);
 
+  const client = getClient();
   const switcher = createFragment(profileSwitcherFragment, () => query);
   const [selectProfile] = createMutation(selectProfileMutation);
   const [createProfile] = createMutation(createProfileMutation);
@@ -131,6 +132,16 @@
     switcherOpen = !switcherOpen;
   };
 
+  const invalidateActiveProfileCacheTargets = (sessionId: string) => {
+    client
+      .extension('cache')
+      .invalidate(
+        { __typename: 'Session', id: sessionId, $field: 'selectedProfile' },
+        { __typename: 'Query', $field: 'homeTimeline' },
+        { __typename: 'Profile', $field: 'viewerState' },
+      );
+  };
+
   // switcherOpen은 compact/full(및 데스크톱/드로어) 인스턴스가 공유하므로, 메뉴가 닫히면
   // 어느 트리거로 닫혔든 이 인스턴스의 생성 폼·에러를 비워 다음 열림에서 목록부터 보이게 한다.
   $effect(() => {
@@ -149,10 +160,10 @@
     profileActionLoading = true;
 
     try {
-      await selectProfile({ id });
+      const selected = await selectProfile({ id });
       switcherOpen = false;
       profileCreationOpen = false;
-      onProfileStateChanged('profile-selected');
+      invalidateActiveProfileCacheTargets(selected.selectProfile.session.id);
     } catch (error) {
       const graphQLError = getFirstGraphQLError(error);
 
@@ -198,11 +209,11 @@
       }
 
       try {
-        await selectProfile({ id: createdProfileId });
+        const selected = await selectProfile({ id: createdProfileId });
 
         switcherOpen = false;
         profileCreationOpen = false;
-        onProfileStateChanged('profile-created');
+        invalidateActiveProfileCacheTargets(selected.selectProfile.session.id);
       } catch (error) {
         const graphQLError = getFirstGraphQLError(error);
 
