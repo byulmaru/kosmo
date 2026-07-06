@@ -2,7 +2,7 @@
 
 ### Requirement: Profile follow graph
 
-API는 local profile과 ActivityPub remote profile이 참여하는 visible follow 관계를 GraphQL에서 조회할 수 있어야 한다(MUST). Remote ActivityPub followers/following collection item은 fetch하거나 mirror하지 않고, kosmo DB에 저장된 known `ProfileFollow` 관계만 GraphQL followers/following connection에 반영해야 한다(MUST). ActivityPub remote profile의 followers/following count는 actor materialization/refresh 때 DB에 저장한 remote collection count를 사용해야 한다(MUST).
+API는 local profile과 ActivityPub remote profile이 참여하는 visible follow 관계를 GraphQL에서 조회할 수 있어야 한다(MUST). Remote ActivityPub followers/following collection item은 fetch하거나 mirror하지 않고, kosmo DB에 저장된 known `ProfileFollow` 관계만 GraphQL followers/following connection에 반영해야 한다(MUST). Local profile과 ActivityPub remote profile의 followers/following count는 `profile` row에 저장된 count를 사용해야 한다(MUST).
 
 #### Scenario: Read followers for local or remote profile
 
@@ -20,18 +20,13 @@ API는 local profile과 ActivityPub remote profile이 참여하는 visible follo
 - **AND** 각 edge의 node는 해당 `ProfileFollow`이다
 - **AND** 조회 대상이 ActivityPub remote profile이어도 remote following collection을 fetch하거나 mirror하지 않는다
 
-#### Scenario: Count local follows
+#### Scenario: Count stored follows
 
-- **WHEN** 클라이언트가 활성 local profile의 followersCount 또는 followingCount를 조회한다
-- **THEN** 시스템은 established `ProfileFollow` 관계 중 상대 프로필도 노출 가능한 활성 profile인 관계만 집계한다
-
-#### Scenario: Count stored remote follow collections
-
-- **WHEN** 클라이언트가 활성 ActivityPub remote profile의 followersCount 또는 followingCount를 조회한다
-- **THEN** 시스템은 actor metadata에 저장된 remote followers/following collection count를 반환한다
-- **AND** GraphQL count 조회 중 remote collection을 fetch하거나 collection item/page를 mirror하지 않는다
-- **AND** 저장된 count가 없으면 GraphQL non-null count 계약을 유지하기 위해 0으로 응답한다
-- **AND** 반환 count는 마지막 actor materialization/refresh 시점의 remote collection count이며, followers/following connection의 edge 수와 같을 필요가 없다
+- **WHEN** 클라이언트가 활성 local profile 또는 활성 ActivityPub remote profile의 followersCount 또는 followingCount를 조회한다
+- **THEN** 시스템은 `profile` row에 저장된 followers count 또는 following count를 반환한다
+- **AND** GraphQL count 조회 중 `ProfileFollow` aggregate query 또는 remote collection fetch를 수행하지 않는다
+- **AND** 반환 count는 GraphQL non-null count 계약을 유지한다
+- **AND** 조회 대상이 ActivityPub remote profile이면 반환 count는 마지막 actor materialization/refresh 또는 이후 follow side effect가 반영한 저장 count이며, followers/following connection의 edge 수와 같을 필요가 없다
 
 #### Scenario: Read public follow
 
@@ -46,8 +41,8 @@ API는 local profile과 ActivityPub remote profile이 참여하는 visible follo
 #### Scenario: Hide follow request from follow graph
 
 - **WHEN** local 또는 ActivityPub remote profile 사이에 pending `ProfileFollowRequest`가 있다
-- **THEN** 시스템은 해당 요청을 followers/following connection, local profile의 followersCount/followingCount, viewerFollow, viewerState.follow 결과에 `ProfileFollow`로 노출하지 않는다
-- **AND** pending request는 ActivityPub remote profile actor metadata에 저장된 remote collection count를 임의 증감하지 않는다
+- **THEN** 시스템은 해당 요청을 followers/following connection, followersCount, followingCount, viewerFollow, viewerState.follow 결과에 `ProfileFollow`로 노출하지 않는다
+- **AND** pending request는 local profile 또는 ActivityPub remote profile의 저장 count를 변경하지 않는다
 
 #### Scenario: Read viewer follow for local or remote target
 

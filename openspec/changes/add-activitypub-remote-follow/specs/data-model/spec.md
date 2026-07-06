@@ -1,16 +1,38 @@
 ## ADDED Requirements
 
-### Requirement: Remote actor collection count storage
+### Requirement: Stored profile follow counts
 
-시스템은 ActivityPub remote actor materialization과 refresh 결과로 확인한 followers/following collection count를 actor metadata에 저장해야 한다(MUST).
+시스템은 local profile과 ActivityPub remote profile 모두에 대해 followers/following count를 `profile` row에 저장해야 한다(MUST).
 
-#### Scenario: Store remote actor collection counts
+#### Scenario: Initialize stored profile counts
 
-- **WHEN** remote ActivityPub actor가 성공적으로 materialize되거나 refresh된다
-- **THEN** 시스템은 remote followers collection count와 following collection count를 actor metadata에 저장한다
+- **WHEN** local profile 또는 ActivityPub remote profile이 생성된다
+- **THEN** 시스템은 `profile` row에 followers count와 following count를 저장한다
 - **AND** 저장 count는 음수가 될 수 없다
+- **AND** 새 local profile의 followers count와 following count는 0으로 초기화한다
+- **AND** 새 remote profile의 followers count와 following count는 actor materialization에서 확인한 remote followers/following collection count로 초기화한다
+- **AND** remote collection count를 확인할 수 없으면 GraphQL non-null count 계약을 유지할 수 있도록 0으로 초기화할 수 있다
+
+#### Scenario: Update stored counts for established follow changes
+
+- **WHEN** established `ProfileFollow` 관계가 새로 생성된다
+- **THEN** 시스템은 같은 transaction에서 follower profile의 following count와 followee profile의 followers count를 1씩 증가시킨다
+- **AND** follower 또는 followee가 local profile인지 ActivityPub remote profile인지는 count 갱신 조건을 바꾸지 않는다
+- **AND** idempotent follow 요청처럼 기존 `ProfileFollow` 관계를 반환하는 경우에는 저장 count를 중복 증가시키지 않는다
+- **AND** pending `ProfileFollowRequest` 생성 또는 삭제는 저장 count를 변경하지 않는다
+
+#### Scenario: Update stored counts when established follow is removed
+
+- **WHEN** established `ProfileFollow` 관계가 삭제된다
+- **THEN** 시스템은 같은 transaction에서 follower profile의 following count와 followee profile의 followers count를 1씩 감소시킨다
+- **AND** 저장 count는 0보다 작아질 수 없다
+- **AND** follow 관계가 없어 idempotent unfollow로 처리되는 경우에는 저장 count를 변경하지 않는다
+
+#### Scenario: Refresh remote stored counts
+
+- **WHEN** remote ActivityPub actor refresh가 followers/following collection count를 확인한다
+- **THEN** 시스템은 해당 remote `Profile`의 저장 followers count와 following count를 확인한 값으로 갱신한다
 - **AND** remote collection item 또는 page content는 이번 capability에서 mirror하지 않는다
-- **AND** collection count를 확인할 수 없는 새 remote actor는 GraphQL non-null count 계약을 유지할 수 있도록 count를 0으로 초기화할 수 있다
 - **AND** refresh에서 collection count를 확인할 수 없으면 기존 저장 count를 임의로 0으로 덮어쓰지 않는다
 
 ### Requirement: Remote follow activity correlation storage
