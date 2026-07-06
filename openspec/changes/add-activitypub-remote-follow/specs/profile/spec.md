@@ -48,11 +48,14 @@ API는 local profile과 ActivityPub remote profile이 참여하는 visible follo
 - **THEN** 시스템은 viewer active profile이 대상 프로필을 follow하는 `ProfileFollow` 관계를 반환한다
 - **AND** follow 관계가 없으면 없음으로 응답한다
 
-#### Scenario: Read viewer state follow for local or remote target
+#### Scenario: Read viewer state
 
-- **WHEN** active profile이 있는 인증자가 활성 local profile 또는 활성 ActivityPub remote profile의 `viewerState`를 조회한다
-- **THEN** 시스템은 viewer active profile이 대상 프로필을 follow하는 established `ProfileFollow` 관계를 `viewerState.follow`로 반환한다
-- **AND** follow 관계가 없거나 pending `ProfileFollowRequest`만 있으면 `viewerState.follow`는 없음으로 응답한다
+- **WHEN** 클라이언트가 활성 local profile 또는 활성 ActivityPub remote profile의 `viewerState`를 조회한다
+- **THEN** 시스템은 현재 요청에 active profile이 선택되어 있으면 viewer-relative 상태를 반환한다
+- **AND** 현재 요청에 active profile이 없으면 없음으로 응답한다
+- **AND** 조회 대상 프로필이 viewer active profile 자신인지 `isSelf`로 반환한다
+- **AND** viewer active profile이 대상 프로필을 follow하는 established `ProfileFollow` 관계가 있으면 `viewerState.follow`로 반환하고, 없으면 없음으로 응답한다
+- **AND** pending `ProfileFollowRequest`만 있으면 `viewerState.follow`는 없음으로 응답한다
 - **AND** 대상 프로필이 ActivityPub remote profile이어도 remote followers/following collection을 fetch하거나 mirror하지 않는다
 
 #### Scenario: Read ProfileFollow profiles
