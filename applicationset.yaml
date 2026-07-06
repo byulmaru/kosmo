@@ -17,6 +17,7 @@ spec:
     metadata:
       name: 'kosmo-{{env}}'
     spec:
+      project: default
       source:
         repoURL: https://github.com/byulmaru/kosmo.git
         targetRevision: main
