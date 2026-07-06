@@ -18,7 +18,8 @@
 - **WHEN** 이미 저장된 ActivityPub object URI가 다시 inbox delivery에서 발견된다
 - **AND** 기존 object mapping의 작성 actor가 이번 delivery의 materialized remote actor와 같다
 - **THEN** 시스템은 새 `Post`를 만들지 않고 기존 object mapping과 연결된 `Post`를 재사용한다
-- **AND** 시스템은 재전달된 Note의 content, visibility, published projection을 기준으로 기존 `Post`, `PostContent`, ActivityPub object mapping을 갱신한다
+- **AND** 시스템은 재전달된 Note의 content와 visibility를 기준으로 기존 `Post`, `PostContent`, ActivityPub object mapping을 갱신한다
+- **AND** 시스템은 기존 `Post.createdAt`을 갱신하지 않는다
 
 #### Scenario: Reject duplicate remote object mapping from different actor
 
@@ -53,6 +54,7 @@
 
 - **WHEN** remote ActivityPub Note가 게시물로 materialize된다
 - **THEN** 시스템은 remote 작성 profile, 공개 범위, 게시물 상태, 현재 콘텐츠, Note published 시각 또는 최초 수신 시각 fallback을 저장한다
+- **AND** Note published 시각이 수신 시각보다 5분을 초과해 미래이면 `Post.createdAt`에는 원본 published 시각 대신 수신 시각 fallback을 저장한다
 - **AND** remote 작성 profile은 `profile.id`를 참조해야 한다
 - **AND** ActivityPub object URI mapping은 materialized remote post와 연결되어야 한다
 
