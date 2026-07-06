@@ -17,14 +17,23 @@
 #### Scenario: Materialize public inbound remote notes
 
 - **WHEN** Fedify inbox listener가 verified remote `Create(Note)` activity를 전달한다
-- **THEN** 시스템은 activity actor를 저장된 ActivityPub remote `Profile`로 조회하거나 `add-activitypub-remote-profile-federation` materialization 경계로 materialize한다
+- **THEN** 시스템은 activity actor를 저장된 ActivityPub remote `Profile`로 조회한다
+- **AND** 저장된 ActivityPub remote `Profile`로 조회되지 않는 actor의 delivery는 skip하며, 이번 capability에서 WebFinger lookup이나 actor materialization을 수행하지 않는다
 - **AND** `Create.actor`가 있으면 materialized remote actor URI와 일치해야 한다
 - **AND** Note `attributedTo`는 materialized remote actor URI와 일치해야 한다
-- **AND** 시스템은 public으로 볼 수 있고 `inReplyTo`가 없는 top-level Note를 찾는다
+- **AND** 시스템은 `to`에 `as:Public`이 있거나 `cc`에만 `as:Public`이 있으며 `inReplyTo`가 없는 top-level Note를 찾는다
+- **AND** `to`에 `as:Public`이 있으면 `Post.visibility`를 `PUBLIC`으로 저장한다
+- **AND** `to`에는 `as:Public`이 없고 `cc`에만 `as:Public`이 있으면 `Post.visibility`를 `UNLISTED`로 저장한다
 - **AND** 시스템은 각 Note의 ActivityPub object URI를 unique identity로 저장한다
-- **AND** 시스템은 중복 object URI에 대해 새 `Post`를 만들지 않고 기존 `Post`를 갱신한다
+- **AND** 시스템은 중복 object URI가 기존 object mapping의 작성 actor와 같은 remote actor에서 재전달된 경우 새 `Post`를 만들지 않고 기존 `Post`, `PostContent`, ActivityPub object mapping projection을 갱신한다
 - **AND** 시스템은 materialized remote posts를 `Profile.posts` connection에서 반환할 수 있게 한다
 - **AND** 시스템은 remote actor outbox를 조회하지 않는다
+
+#### Scenario: Materialize public shared inbox Create Note
+
+- **WHEN** Fedify shared inbox listener가 verified remote `Create(Note)` activity를 전달한다
+- **THEN** 시스템은 local follow 관계, personal inbox recipient, 또는 local recipient 검증을 요구하지 않는다
+- **AND** 저장된 ActivityPub remote profile 조회, actor attribution, public top-level Note 검증이 통과하면 해당 Note를 `Post`로 materialize한다
 
 #### Scenario: Skip non-public or unsupported remote objects
 
@@ -39,6 +48,13 @@
 - **THEN** 시스템은 해당 Note를 `Post`로 materialize하지 않는다
 - **AND** 기존 materialized `Post` 또는 ActivityPub object mapping을 갱신하지 않는다
 
+#### Scenario: Skip duplicate Note URI from different actor
+
+- **WHEN** inbound `Create(Note)`의 Note object URI가 이미 ActivityPub object mapping에 저장되어 있다
+- **AND** 기존 object mapping의 작성 actor가 이번 delivery의 materialized remote actor URI와 다르다
+- **THEN** 시스템은 해당 Note를 새 `Post`로 materialize하지 않는다
+- **AND** 기존 `Post`, `PostContent`, ActivityPub object mapping을 갱신하지 않는다
+
 #### Scenario: Guard inbound Note from blocked instance
 
 - **WHEN** Fedify inbox listener가 verified remote Note delivery를 전달하고 remote actor가 저장된 ActivityPub remote `Profile`로 조회된다
@@ -46,11 +62,22 @@
 - **AND** remote actor instance가 `SUSPENDED`이면 `Post`, `PostContent`, ActivityPub object mapping을 생성하거나 갱신하지 않는다
 - **AND** remote actor instance가 `UNRESPONSIVE`인 경우에도 저장된 active remote profile과 actor/object attribution 검증이 통과하면 Note를 materialize할 수 있다
 
+#### Scenario: Skip Note from unknown actor
+
+- **WHEN** inbound `Create(Note)`의 activity actor가 저장된 ActivityPub remote `Profile`로 조회되지 않는다
+- **THEN** 시스템은 해당 Note를 `Post`로 materialize하지 않는다
+- **AND** 시스템은 추가 WebFinger discovery 또는 actor profile materialization을 시도하지 않는다
+- **AND** 이 조건은 Fedify가 inbox verification 과정에서 수행하는 actor key verification 또는 typed object handling을 금지하지 않는다
+
 #### Scenario: Project remote Note content
 
 - **WHEN** 시스템이 remote Note를 `Post`로 materialize한다
 - **THEN** 시스템은 Note 작성자를 remote profile로 저장한다
-- **AND** 시스템은 Note published 시각을 `Post.createdAt`으로 저장한다
+- **AND** Note `published`가 있으면 시스템은 해당 시각을 `Post.createdAt`으로 저장한다
+- **AND** Note `published`가 있으면 시스템은 ActivityPub object mapping의 원본 published 시각으로도 저장한다
+- **AND** 새 remote post 최초 저장 시 Note `published`가 없으면 시스템은 수신 시각을 `Post.createdAt` fallback으로 사용한다
+- **AND** 새 remote post 최초 저장 시 Note `published`가 없으면 시스템은 ActivityPub object mapping의 원본 published 시각을 `null`로 저장한다
+- **AND** 기존 object URI가 재전달됐고 Note `published`가 없으면 시스템은 기존 `Post.createdAt`을 유지한다
 - **AND** 시스템은 Note HTML content를 `PostContent.bodyHtml`로 저장할 수 있다
 - **AND** 시스템은 Note content에서 plain text projection을 만들어 `PostContent.bodyText`로 저장한다
 - **AND** 시스템은 plain text projection에서 단순 TipTap document를 만들어 `PostContent.bodyJson`으로 저장한다

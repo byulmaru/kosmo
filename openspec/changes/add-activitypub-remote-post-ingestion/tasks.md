@@ -6,10 +6,13 @@
 
 ## 2. Remote Post Materialization
 
-- [ ] 2.1 Fedify inbox listener가 전달한 verified typed `Create(Note)`를 post materialization handler로 연결한다.
-- [ ] 2.2 Fedify typed object를 기준으로 actor attribution 검증, public top-level Note 판정, unsupported object skip, duplicate ActivityPub object URI upsert 정책을 구현한다.
-- [ ] 2.3 remote Note를 `Post`와 `PostContent`로 materialize하고 HTML, plain text projection, 단순 TipTap JSON projection을 저장한다.
-- [ ] 2.4 `SUSPENDED` instance의 inbound Note side effect를 차단하고 `UNRESPONSIVE` instance의 저장된 active remote profile에 대한 inbound Note materialization 정책을 구현한다.
+- [ ] 2.1 actor-scoped inbox와 shared inbox가 verified typed `Create(Note)`를 unsupported endpoint 404가 아니라 Fedify inbox listener를 거쳐 post materialization handler로 연결하도록 한다.
+- [ ] 2.2 Fedify typed object를 기준으로 저장된 remote actor 조회, actor attribution 검증, `to`/`cc` 기반 public top-level Note 판정, unsupported object skip, duplicate ActivityPub object URI upsert 정책을 구현한다.
+- [ ] 2.3 remote Note를 `Post`와 `PostContent`로 materialize하고 HTML, plain text projection, 단순 TipTap JSON projection, Note `published` 또는 최초 수신 시각 fallback을 `Post.createdAt`으로 저장하되 ActivityPub object mapping의 원본 published 시각은 Note `published`가 없으면 `null`로 저장한다.
+- [ ] 2.4 중복 object URI 재전달 시 기존 object mapping의 actor와 이번 delivery actor가 같을 때만 기존 `Post`를 재사용하면서 content, visibility, published projection을 갱신한다.
+- [ ] 2.5 저장되지 않은 actor delivery의 materialization을 skip하고 WebFinger lookup 또는 actor materialization을 수행하지 않도록 한다.
+- [ ] 2.6 shared inbox로 들어온 public `Create(Note)`는 local follow 관계나 recipient 검증 없이 actor attribution과 public top-level Note 검증만으로 materialize한다.
+- [ ] 2.7 `SUSPENDED` instance의 inbound Note side effect를 차단하고 `UNRESPONSIVE` instance의 저장된 active remote profile에 대한 inbound Note materialization 정책을 구현한다.
 
 ## 3. GraphQL Post API
 
@@ -20,6 +23,6 @@
 
 ## 4. Verification
 
-- [ ] 4.1 remote post ingestion test로 Fedify inbox delivery, actor attribution 검증, public top-level Note materialization, reply Note skip, duplicate object URI reuse, unsupported object skip을 검증한다.
+- [ ] 4.1 remote post ingestion test로 actor-scoped/shared inbox route의 Fedify listener 연결과 GraphQL proxy 미전달, Fedify inbox delivery, 저장된 remote actor만 materialize, unknown actor에서 추가 WebFinger/materialization 미수행, actor attribution 검증, `to` Public은 `PUBLIC`, `cc` Public은 `UNLISTED`, public top-level Note materialization, shared inbox public Note materialization, reply Note skip, 같은 actor의 duplicate object URI projection update, 다른 actor의 duplicate object URI update 거부, missing published 최초 수신 시각 fallback과 object mapping published `null`, 재전달 시 기존 createdAt 유지, unsupported object skip을 검증한다.
 - [ ] 4.2 GraphQL post test로 remote `Profile.posts`의 DB-only materialized read, remote fetch 미시도, `UNRESPONSIVE` instance materialized read, `homeTimeline` 포함 여부를 검증한다.
 - [ ] 4.3 `pnpm lint:eslint`, 관련 package typecheck/test, GraphQL schema check, DB migration/schema check, `openspec validate add-activitypub-remote-post-ingestion --strict`를 실행한다.

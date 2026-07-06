@@ -7,7 +7,8 @@
 #### Scenario: Store remote Note object mapping
 
 - **WHEN** remote ActivityPub Note가 kosmo `Post`로 materialize된다
-- **THEN** 시스템은 ActivityPub object URI, object type, 작성 actor, 연결된 post, 수신 시각, published 시각을 저장한다
+- **THEN** 시스템은 ActivityPub object URI, object type, 작성 actor, 연결된 post, 수신 시각, 선택적 원본 published 시각을 저장한다
+- **AND** Note `published`가 없으면 ActivityPub object mapping의 원본 published 시각은 `null`이어야 한다
 - **AND** ActivityPub object URI는 중복될 수 없다
 - **AND** 하나의 ActivityPub object는 최대 하나의 kosmo `Post`에 연결된다
 - **AND** 하나의 remote materialized `Post`는 최대 하나의 ActivityPub object identity에 연결된다
@@ -15,7 +16,16 @@
 #### Scenario: Reuse existing remote object mapping from duplicate delivery
 
 - **WHEN** 이미 저장된 ActivityPub object URI가 다시 inbox delivery에서 발견된다
-- **THEN** 시스템은 새 `Post`를 만들지 않고 기존 object mapping과 연결된 `Post`를 갱신할 수 있다
+- **AND** 기존 object mapping의 작성 actor가 이번 delivery의 materialized remote actor와 같다
+- **THEN** 시스템은 새 `Post`를 만들지 않고 기존 object mapping과 연결된 `Post`를 재사용한다
+- **AND** 시스템은 재전달된 Note의 content, visibility, published projection을 기준으로 기존 `Post`, `PostContent`, ActivityPub object mapping을 갱신한다
+
+#### Scenario: Reject duplicate remote object mapping from different actor
+
+- **WHEN** 이미 저장된 ActivityPub object URI가 다시 inbox delivery에서 발견된다
+- **AND** 기존 object mapping의 작성 actor가 이번 delivery의 materialized remote actor와 다르다
+- **THEN** 시스템은 새 `Post`를 만들지 않는다
+- **AND** 기존 object mapping과 연결된 `Post`, `PostContent`, ActivityPub object mapping을 갱신하지 않는다
 
 ## MODIFIED Requirements
 
@@ -42,7 +52,7 @@
 #### Scenario: 리모트 게시물 저장
 
 - **WHEN** remote ActivityPub Note가 게시물로 materialize된다
-- **THEN** 시스템은 remote 작성 profile, 공개 범위, 게시물 상태, 현재 콘텐츠, Note published 시각을 저장한다
+- **THEN** 시스템은 remote 작성 profile, 공개 범위, 게시물 상태, 현재 콘텐츠, Note published 시각 또는 최초 수신 시각 fallback을 저장한다
 - **AND** remote 작성 profile은 `profile.id`를 참조해야 한다
 - **AND** ActivityPub object URI mapping은 materialized remote post와 연결되어야 한다
 
