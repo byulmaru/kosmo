@@ -2,19 +2,19 @@
 
 ### Requirement: ActivityPub object materialization storage
 
-시스템은 remote ActivityPub object URI와 kosmo `Post` row의 연결을 저장해야 한다(MUST).
+시스템은 inbound remote ActivityPub object URI와 kosmo `Post` row의 연결을 저장해야 한다(MUST).
 
 #### Scenario: Store remote Note object mapping
 
 - **WHEN** remote ActivityPub Note가 kosmo `Post`로 materialize된다
-- **THEN** 시스템은 ActivityPub object URI, object type, 작성 actor, 연결된 post, fetch 시각, published 시각을 저장한다
+- **THEN** 시스템은 ActivityPub object URI, object type, 작성 actor, 연결된 post, 수신 시각, published 시각을 저장한다
 - **AND** ActivityPub object URI는 중복될 수 없다
 - **AND** 하나의 ActivityPub object는 최대 하나의 kosmo `Post`에 연결된다
 - **AND** 하나의 remote materialized `Post`는 최대 하나의 ActivityPub object identity에 연결된다
 
-#### Scenario: Reuse existing remote object mapping
+#### Scenario: Reuse existing remote object mapping from duplicate delivery
 
-- **WHEN** 이미 저장된 ActivityPub object URI가 다시 outbox ingestion에서 발견된다
+- **WHEN** 이미 저장된 ActivityPub object URI가 다시 inbox delivery에서 발견된다
 - **THEN** 시스템은 새 `Post`를 만들지 않고 기존 object mapping과 연결된 `Post`를 갱신할 수 있다
 
 ## MODIFIED Requirements
@@ -25,7 +25,7 @@
 
 #### Scenario: 새 도메인 행 생성
 
-- **WHEN** `account`, `account_profile`, `application`, `application_authorization`, `file`, `media`, `oauth_authorization_code`, `oauth_token`, `post`, `post_content`, `profile`, `profile_follow`, `session`, `instance`, `activitypub_actor`, `activitypub_actor_key`, ActivityPub object mapping 행이 생성된다
+- **WHEN** `account`, `account_profile`, `application`, `application_authorization`, `file`, `media`, `oauth_authorization_code`, `oauth_token`, `post`, `post_content`, `profile`, `profile_follow`, `profile_follow_request`, `session`, `instance`, `activitypub_actor`, `activitypub_actor_key`, ActivityPub object mapping 행이 생성된다
 - **THEN** 시스템은 해당 테이블의 `TableDiscriminator` 값을 포함한 UUID 문자열을 기본 키로 생성한다
 - **AND** 테이블 식별자는 12비트 범위 안에 있어야 한다
 
