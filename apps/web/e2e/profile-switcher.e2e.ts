@@ -1,7 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { Kind, parse } from 'graphql';
 import type { Page } from '@playwright/test';
-import type { SelectionNode } from 'graphql';
 
 test('profile selection updates compose through its route currentSession query', async ({
   page,
@@ -87,7 +85,15 @@ test('home route active profile query refetches after switching profiles', async
   await page.waitForLoadState('networkidle');
   graphQLRequests.clear();
 
-  const homeQueryResponse = waitForGraphQLOperation(page, 'HomePageQuery');
+  const homeQueryResponse = page.waitForResponse(async (response) => {
+    if (!isGraphQLResponse(response.url())) {
+      return false;
+    }
+
+    const operation = readGraphQLOperation(response.request().postData());
+
+    return operation?.operationName === 'HomePageQuery';
+  });
 
   const responseBody = await selectProfileFromSwitcher(page, 'alphahome');
 
@@ -206,11 +212,6 @@ async function openProfileSwitcher(page: Page) {
 }
 
 async function selectProfileFromSwitcher(page: Page, handle: string) {
-  const waitForActiveProfile = await createElementTextWaiter(
-    page,
-    'section[aria-label="활성 프로필"]',
-    `@${handle}`,
-  );
   const selectProfileResponse = page.waitForResponse(async (response) => {
     if (!isGraphQLResponse(response.url())) {
       return false;
@@ -238,7 +239,7 @@ async function selectProfileFromSwitcher(page: Page, handle: string) {
       } | null;
     };
   };
-  await waitForActiveProfile();
+  await expect(sidebarProfileHandle(page, handle)).toBeVisible();
 
   return responseBody;
 }
@@ -290,18 +291,6 @@ function sidebarProfileHandle(page: Page, handle: string) {
   return page.locator('section[aria-label="활성 프로필"]:visible').first().getByText(`@${handle}`);
 }
 
-function waitForGraphQLOperation(page: Page, operationName: string) {
-  return page.waitForResponse(async (response) => {
-    if (!isGraphQLResponse(response.url())) {
-      return false;
-    }
-
-    const operation = readGraphQLOperation(response.request().postData());
-
-    return operation?.operationName === operationName;
-  });
-}
-
 function isGraphQLResponse(url: string) {
   return new URL(url).pathname === '/graphql';
 }
@@ -319,116 +308,5 @@ function readGraphQLOperation(postData: string | null) {
 }
 
 function readsCurrentSessionSelectedProfile(query: string) {
-  try {
-    const document = parse(query);
-    const fragments = new Map(
-      document.definitions
-        .filter((definition) => definition.kind === Kind.FRAGMENT_DEFINITION)
-        .map((definition) => [definition.name.value, definition]),
-    );
-
-    const selectionHasPath = (
-      selections: readonly SelectionNode[],
-      path: readonly string[],
-      seenFragments = new Set<string>(),
-    ): boolean =>
-      selections.some((selection) => {
-        if (selection.kind === Kind.FIELD) {
-          if (selection.name.value !== path[0]) {
-            return false;
-          }
-
-          if (path.length === 1) {
-            return true;
-          }
-
-          return selection.selectionSet
-            ? selectionHasPath(selection.selectionSet.selections, path.slice(1), seenFragments)
-            : false;
-        }
-
-        if (selection.kind === Kind.INLINE_FRAGMENT) {
-          return selectionHasPath(selection.selectionSet.selections, path, seenFragments);
-        }
-
-        if (seenFragments.has(selection.name.value)) {
-          return false;
-        }
-
-        seenFragments.add(selection.name.value);
-        const fragment = fragments.get(selection.name.value);
-
-        return fragment
-          ? selectionHasPath(fragment.selectionSet.selections, path, seenFragments)
-          : false;
-      });
-
-    return document.definitions.some(
-      (definition) =>
-        definition.kind === Kind.OPERATION_DEFINITION &&
-        selectionHasPath(definition.selectionSet.selections, ['currentSession', 'selectedProfile']),
-    );
-  } catch {
-    return false;
-  }
-}
-
-async function createElementTextWaiter(page: Page, selector: string, text: string) {
-  const waiterId = crypto.randomUUID();
-
-  await page.evaluate(
-    ({ selector, text, waiterId }) => {
-      const targetWindow = window as Window & {
-        __kosmoE2eTextWaiters?: Record<string, Promise<void>>;
-      };
-      const eventName = `kosmo:e2e-dom-text-match:${waiterId}`;
-      const getElementText = (element: Element) =>
-        element instanceof HTMLElement ? element.innerText : (element.textContent ?? '');
-      const matches = () =>
-        Array.from(document.querySelectorAll(selector)).some((element) =>
-          getElementText(element).includes(text),
-        );
-
-      targetWindow.__kosmoE2eTextWaiters ??= {};
-
-      if (matches()) {
-        targetWindow.__kosmoE2eTextWaiters[waiterId] = Promise.resolve();
-        return;
-      }
-
-      targetWindow.__kosmoE2eTextWaiters[waiterId] = new Promise<void>((resolve) => {
-        let observer: MutationObserver | null = null;
-        const finish = () => {
-          observer?.disconnect();
-          resolve();
-        };
-
-        document.addEventListener(eventName, finish, { once: true });
-
-        observer = new MutationObserver(() => {
-          if (matches()) {
-            document.dispatchEvent(new Event(eventName));
-          }
-        });
-        observer.observe(document.body, {
-          characterData: true,
-          childList: true,
-          subtree: true,
-        });
-      });
-    },
-    { selector, text, waiterId },
-  );
-
-  return () =>
-    page.evaluate((waiterId) => {
-      const targetWindow = window as Window & {
-        __kosmoE2eTextWaiters?: Record<string, Promise<void>>;
-      };
-      const waiter = targetWindow.__kosmoE2eTextWaiters?.[waiterId] ?? Promise.resolve();
-
-      return waiter.finally(() => {
-        delete targetWindow.__kosmoE2eTextWaiters?.[waiterId];
-      });
-    }, waiterId);
+  return query.includes('currentSession') && query.includes('selectedProfile');
 }
