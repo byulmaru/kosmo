@@ -31,7 +31,7 @@
 
 #### Scenario: 새 도메인 행 생성
 
-- **WHEN** `account`, `account_profile`, `application`, `application_authorization`, `file`, `media`, `oauth_authorization_code`, `oauth_token`, `post`, `post_content`, `profile`, `profile_follow`, `session`, `instance`, `activitypub_actor`, `activitypub_actor_key` 행이 생성된다
+- **WHEN** `account`, `account_profile`, `application`, `application_authorization`, `file`, `media`, `oauth_authorization_code`, `oauth_token`, `post`, `post_content`, `profile`, `profile_follow`, `profile_follow_request`, `session`, `instance`, `activitypub_actor`, `activitypub_actor_key` 행이 생성된다
 - **THEN** 시스템은 해당 테이블의 `TableDiscriminator` 값을 포함한 UUID 문자열을 기본 키로 생성한다
 - **AND** 테이블 식별자는 12비트 범위 안에 있어야 한다
 
@@ -77,6 +77,6 @@
 
 #### Scenario: enum 값 사용
 
-- **WHEN** 계정, 프로필, 세션, OAuth token, 애플리케이션, 게시물, 팔로우 관계, 계정-프로필 역할, 미디어, 인스턴스, ActivityPub actor, ActivityPub actor key가 저장된다
+- **WHEN** 계정, 프로필, 세션, OAuth token, 애플리케이션, 게시물, 계정-프로필 역할, 미디어, 인스턴스, ActivityPub actor, ActivityPub actor key가 저장된다
 - **THEN** 시스템은 core enum에 정의된 값만 저장해야 한다
-- **AND** 지원 값은 `AccountState`, `ProfileState`, `SessionState`, `OAuthTokenState`, `ApplicationState`, `ApplicationType`, `PostState`, `PostVisibility`, `ProfileFollowPolicy`, `ProfileFollowState`, `AccountProfileRole`, `MediaSource`, `InstanceKind`, `InstanceState`, `ActivityPubActorType`, `ActivityPubActorKeyType`에 정의된 값으로 제한된다
+- **AND** 지원 값은 `AccountState`, `ProfileState`, `SessionState`, `OAuthTokenState`, `ApplicationState`, `ApplicationType`, `PostState`, `PostVisibility`, `ProfileFollowPolicy`, `AccountProfileRole`, `MediaSource`, `InstanceKind`, `InstanceState`, `ActivityPubActorType`, `ActivityPubActorKeyType`에 정의된 값으로 제한된다
