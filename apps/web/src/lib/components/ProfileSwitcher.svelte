@@ -132,11 +132,10 @@
     switcherOpen = !switcherOpen;
   };
 
-  const invalidateActiveProfileCacheTargets = (sessionId: string) => {
+  const invalidateActiveProfileCacheTargets = () => {
     client
       .extension('cache')
       .invalidate(
-        { __typename: 'Session', id: sessionId, $field: 'selectedProfile' },
         { __typename: 'Query', $field: 'homeTimeline' },
         { __typename: 'Profile', $field: 'viewerState' },
       );
@@ -152,7 +151,7 @@
   });
 
   const chooseProfile = async (id: string) => {
-    if (activeProfile?.id === id || creatingOrSwitching) {
+    if (creatingOrSwitching) {
       return;
     }
 
@@ -160,10 +159,10 @@
     profileActionLoading = true;
 
     try {
-      const selected = await selectProfile({ id });
+      await selectProfile({ id });
       switcherOpen = false;
       profileCreationOpen = false;
-      invalidateActiveProfileCacheTargets(selected.selectProfile.session.id);
+      invalidateActiveProfileCacheTargets();
     } catch (error) {
       const graphQLError = getFirstGraphQLError(error);
 
@@ -209,11 +208,11 @@
       }
 
       try {
-        const selected = await selectProfile({ id: createdProfileId });
+        await selectProfile({ id: createdProfileId });
 
         switcherOpen = false;
         profileCreationOpen = false;
-        invalidateActiveProfileCacheTargets(selected.selectProfile.session.id);
+        invalidateActiveProfileCacheTargets();
       } catch (error) {
         const graphQLError = getFirstGraphQLError(error);
 

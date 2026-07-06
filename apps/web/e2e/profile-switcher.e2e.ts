@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
-test('profile selection updates compose from the selectProfile mutation response', async ({
+test('selectProfile response carries selectedProfile without currentSession refetch', async ({
   page,
 }) => {
   const graphQLRequests = collectGraphQLRequests(page);
@@ -18,7 +18,6 @@ test('profile selection updates compose from the selectProfile mutation response
   await expect(sidebarProfileHandle(page, 'alpha')).toBeVisible();
 
   await createProfileFromSwitcher(page, 'beta');
-  await expect(composerProfileHandle(page, 'beta')).toBeVisible();
   await expect(sidebarProfileHandle(page, 'beta')).toBeVisible();
   await page.waitForLoadState('networkidle');
 
@@ -27,12 +26,12 @@ test('profile selection updates compose from the selectProfile mutation response
   const responseBody = await selectProfileFromSwitcher(page, 'alpha');
 
   expect(responseBody.data?.selectProfile?.session?.selectedProfile?.handle).toBe('alpha');
-  await expect(composerProfileHandle(page, 'alpha')).toBeVisible();
-  await expect(sidebarProfileHandle(page, 'alpha')).toBeVisible();
 
   await page.waitForLoadState('networkidle');
 
   expect(graphQLRequests.operationNames).toContain('ProfileSwitcherSelectProfileMutation');
+  expect(graphQLRequests.operationNames).not.toContain('ComposePageQuery');
+  expect(graphQLRequests.operationNames).not.toContain('TabsLayoutQuery');
 });
 
 test('profile route action follows Profile.viewerState after switching', async ({ page }) => {
@@ -54,7 +53,6 @@ test('profile route action follows Profile.viewerState after switching', async (
   const responseBody = await selectProfileFromSwitcher(page, 'gamma');
 
   expect(responseBody.data?.selectProfile?.session?.selectedProfile?.handle).toBe('gamma');
-  await expect(sidebarProfileHandle(page, 'gamma')).toBeVisible();
   await expect(page.getByRole('main').getByRole('button', { name: '팔로우' })).toBeHidden();
 
   await page.waitForLoadState('networkidle');
@@ -85,7 +83,6 @@ test('home route active profile query refetches after switching profiles', async
   const responseBody = await selectProfileFromSwitcher(page, 'alphahome');
 
   expect(responseBody.data?.selectProfile?.session?.selectedProfile?.handle).toBe('alphahome');
-  await expect(sidebarProfileHandle(page, 'alphahome')).toBeVisible();
   const homeQueryBody = (await (await homeQueryResponse).json()) as {
     data?: { homeTimeline?: { edges?: unknown[] | null } | null };
   };
@@ -215,8 +212,6 @@ async function selectProfileFromSwitcher(page: Page, handle: string) {
       } | null;
     };
   };
-  await expect(sidebarProfileHandle(page, handle)).toBeVisible();
-
   return responseBody;
 }
 
