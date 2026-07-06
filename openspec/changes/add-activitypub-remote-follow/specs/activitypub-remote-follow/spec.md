@@ -59,13 +59,13 @@
 #### Scenario: Remote follow rejected
 
 - **WHEN** remote actor가 local actor가 보낸 Follow에 대한 `Reject` activity를 보낸다
-- **THEN** 시스템은 해당 outbound Follow가 established `ProfileFollow`로 투영되어 있으면 그 관계를 제거한다
+- **THEN** 시스템은 `Reject.object`가 현재 저장된 outbound Follow identity를 확인하고 해당 outbound Follow가 established `ProfileFollow`로 투영되어 있으면 그 관계를 제거한다
 - **AND** 시스템은 거절 상태 값을 저장하지 않는다
 - **AND** `Reject.actor`는 해당 outbound Follow의 remote followee actor URI와 일치해야 한다
 - **AND** `Reject.object`가 embedded Follow이거나 Fedify가 안전하게 typed Follow로 제공한 object이면 그 Follow의 actor/object는 해당 outbound Follow의 local follower actor URI와 remote followee actor URI에 대응해야 한다
 - **AND** embedded/typed Follow가 id를 포함하고 그 id가 kosmo outbound Follow URI이면 해당 URI는 현재 저장된 outbound Follow identity와 일치해야 한다
 - **AND** embedded/typed Follow의 kosmo outbound Follow URI가 현재 저장된 outbound Follow identity와 다르거나 존재하지 않는 `ProfileFollow`를 가리키면 local follow graph 또는 request를 갱신하지 않는다
-- **AND** embedded/typed Follow의 id가 없거나 kosmo outbound Follow URI가 아니면 시스템은 actor/object 검증 결과로 해당 outbound Follow와 대응시킬 수 있다
+- **AND** embedded/typed Follow의 id가 없거나 kosmo outbound Follow URI가 아니면 actor/object가 일치해도 local follow graph 또는 request를 갱신하지 않는다
 - **AND** `Reject.object`가 IRI-only이고 kosmo outbound Follow URI이면 시스템은 URI에서 `ProfileFollow.id`를 찾아 저장된 outbound Follow actor/object metadata로 actor/object를 검증한다
 - **AND** `Reject.object`에서 actor/object를 확인할 수 없으면 local follow graph 또는 request를 갱신하지 않는다
 - **AND** personal inbox에서 Fedify `ctx.recipient`가 제공되면 시스템은 해당 recipient identifier를 local actor/profile로 resolve하고, 그 canonical actor URI가 해당 outbound Follow의 local follower actor URI와 일치해야 한다
@@ -121,9 +121,11 @@
 - **AND** `Undo.object`가 IRI-only이면 시스템은 이번 capability에서 지원하지 않는 Undo로 처리하고 local follow graph 또는 request를 제거하지 않는다
 - **AND** `Undo.actor`는 undo 대상 Follow의 actor 및 remote follower actor URI와 일치해야 한다
 - **AND** undo 대상 Follow의 object는 local followee actor URI와 일치해야 한다
+- **AND** undo 대상 Follow는 id를 포함해야 하며, id가 없으면 actor/object가 일치해도 local follow graph 또는 request를 제거하지 않는다
+- **AND** undo 대상 Follow id는 해당 remote follower와 local followee 사이의 현재 established `ProfileFollow` 또는 pending `ProfileFollowRequest`에 저장된 inbound Follow id와 일치해야 한다
+- **AND** undo 대상 Follow id가 현재 저장된 inbound Follow id와 다르면 local follow graph 또는 request를 제거하지 않는다
 - **AND** personal inbox에서 Fedify `ctx.recipient`가 제공되면 시스템은 해당 recipient identifier를 local actor/profile로 resolve하고, 그 canonical actor URI가 undo 대상 Follow의 object local actor URI와 일치해야 한다
 - **AND** Fedify `ctx.recipient`가 없으면 shared inbox로 간주하고 undo 대상 Follow object로 local followee를 검증한다
-- **AND** verified same actor/object의 `Undo(Follow)`는 저장된 inbound Follow id와 다르거나 object id가 없어도 해당 follow 관계 또는 request를 취소하려는 의사로 처리한다
 - **AND** 검증이 통과하면 시스템은 해당 remote follower와 local followee 사이의 established `ProfileFollow` 관계 또는 pending `ProfileFollowRequest`를 제거한다
 - **AND** 시스템은 같은 remote Undo를 idempotent하게 처리한다
 - **AND** actor, object, 또는 recipient가 일치하지 않는 `Undo(Follow)`는 local follow graph 또는 request를 제거하지 않는다
