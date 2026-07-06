@@ -22,6 +22,8 @@
 - **WHEN** 사람 탭이 아니거나 제출된 검색어가 비어 있다
 - **THEN** 시스템은 `profileByHandle` 조회를 실행하지 않는다
 
+## ADDED Requirements
+
 ### Requirement: Remote profile follow actions
 
 웹 앱은 활성 ActivityPub remote profile을 local profile과 같은 follow action 대상으로 취급하고, remote profile이라는 이유만으로 follow/unfollow UI를 숨기거나 비활성화하지 않아야 한다(MUST).
