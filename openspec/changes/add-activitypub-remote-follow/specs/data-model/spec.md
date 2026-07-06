@@ -9,6 +9,7 @@
 - **WHEN** local profile이 remote ActivityPub profile을 follow하고 outbound Follow activity를 보낸다
 - **THEN** 시스템은 outbound Follow activity identity, actor URI, object URI, Fedify `orderingKey`를 established `ProfileFollow`에 연결할 수 있어야 한다
 - **AND** remote Accept 또는 Reject는 Follow id exact match 없이 object로 전달되거나 참조된 Follow의 actor/object가 저장된 outbound Follow actor/object와 일치하면 기존 follow 관계에 대응시킬 수 있어야 한다
+- **AND** outbound Follow activity identity는 생성된 `ProfileFollow.id`에서 파생한 kosmo outbound Follow URI여야 한다
 - **AND** outbound Follow activity identity는 follower actor URI와 followee actor URI만으로 파생하지 않고 새 logical outbound Follow activity마다 고유해야 한다
 - **AND** Fedify `orderingKey`는 follower actor URI와 followee actor URI pair에서 안정적으로 파생되어 같은 pair의 모든 outbound Follow와 Undo(Follow)에 재사용되어야 한다
 - **AND** Fedify transport retry는 같은 Follow activity identity를 재사용해야 한다
@@ -22,6 +23,7 @@
 - **AND** inbound Follow activity identity 또는 response metadata는 duplicate correlation과 Accept/Reject response 구성에 사용할 수 있어야 한다
 - **AND** 같은 remote follower와 local followee pair의 pending `ProfileFollowRequest`가 이미 있으면 기존 inbound Follow activity identity 또는 response metadata를 유지하고 새 duplicate Follow의 metadata로 갱신하지 않는다
 - **AND** 같은 remote follower와 local followee pair의 established `ProfileFollow`가 이미 있으면 기존 inbound Follow response metadata를 유지하고 같은 id의 재전달 또는 새 Follow id를 가진 duplicate Follow의 metadata로 갱신하지 않는다
+- **AND** duplicate inbound Follow에 대한 `Accept(Follow)` response object는 저장된 first-wins metadata가 아니라 현재 검증을 통과한 수신 Follow object를 사용할 수 있어야 한다
 - **AND** inbound `Undo(Follow)`는 저장된 inbound Follow id가 다르거나 object id가 없더라도 verified same actor/object이면 해당 관계 또는 request를 취소하는 의사로 처리할 수 있어야 한다
 - **AND** activity-level duplicate skip은 Fedify inbox idempotency와 `ProfileFollow`/`ProfileFollowRequest` unique 제약에 맡긴다
 
