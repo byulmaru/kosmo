@@ -136,43 +136,37 @@ API는 활성 프로필만 GraphQL profile object로 노출해야 한다(MUST).
 
 API는 프로필 간 visible follow 관계를 GraphQL에서 조회할 수 있어야 한다(MUST).
 
-#### Scenario: Read accepted followers
+#### Scenario: Read followers
 
 - **WHEN** 클라이언트가 활성 프로필의 followers connection을 조회한다
-- **THEN** 시스템은 해당 프로필을 followee로 하고 follower 프로필도 활성 상태인 `ACCEPTED` follow 관계 중 viewer가 볼 수 있는 관계를 반환한다
+- **THEN** 시스템은 해당 프로필을 followee로 하고 follower 프로필도 활성 상태인 follow 관계 중 viewer가 볼 수 있는 관계를 반환한다
 - **AND** 각 edge의 node는 해당 `ProfileFollow`이다
 
-#### Scenario: Read accepted following
+#### Scenario: Read following
 
 - **WHEN** 클라이언트가 활성 프로필의 following connection을 조회한다
-- **THEN** 시스템은 해당 프로필을 follower로 하고 followee 프로필도 활성 상태인 `ACCEPTED` follow 관계 중 viewer가 볼 수 있는 관계를 반환한다
+- **THEN** 시스템은 해당 프로필을 follower로 하고 followee 프로필도 활성 상태인 follow 관계 중 viewer가 볼 수 있는 관계를 반환한다
 - **AND** 각 edge의 node는 해당 `ProfileFollow`이다
 
-#### Scenario: Count accepted follows
+#### Scenario: Count follows
 
 - **WHEN** 클라이언트가 활성 프로필의 followersCount 또는 followingCount를 조회한다
-- **THEN** 시스템은 `ACCEPTED` follow 관계 중 상대 프로필도 활성 상태인 관계만 집계한다
+- **THEN** 시스템은 상대 프로필도 활성 상태인 follow 관계만 집계한다
 
-#### Scenario: Read public accepted follow
+#### Scenario: Read public follow
 
-- **WHEN** 클라이언트가 자기 active profile과 관련되지 않은 `ACCEPTED` follow 관계를 조회한다
+- **WHEN** 클라이언트가 자기 active profile과 관련되지 않은 follow 관계를 조회한다
 - **THEN** 시스템은 follower와 followee 프로필이 모두 활성 상태이고 `followPolicy`가 `OPEN`인 경우에만 해당 `ProfileFollow`를 반환한다
 
 #### Scenario: Read own follow relationship
 
 - **WHEN** active profile이 있는 인증자가 자기 active profile이 follower 또는 followee인 follow 관계를 조회한다
-- **THEN** 시스템은 follower와 followee 프로필이 활성 상태이면 follow 정책과 상태에 관계없이 해당 `ProfileFollow`를 반환한다
-
-#### Scenario: Hide follow request from unrelated viewer
-
-- **WHEN** 클라이언트가 자기 active profile과 관련되지 않은 `PENDING` 또는 `REJECTED` follow 관계를 조회한다
-- **THEN** 시스템은 해당 `ProfileFollow`를 반환하지 않는다
+- **THEN** 시스템은 follower와 followee 프로필이 활성 상태이면 해당 `ProfileFollow`를 반환한다
 
 #### Scenario: Read viewer follow
 
 - **WHEN** active profile이 있는 인증자가 다른 활성 프로필에 대한 viewer follow 관계를 조회한다
 - **THEN** 시스템은 viewer active profile이 대상 프로필을 follow하는 `ProfileFollow` 관계를 반환한다
-- **AND** 반환된 관계는 `ACCEPTED`, `PENDING`, `REJECTED` 상태를 포함할 수 있다
 - **AND** follow 관계가 없으면 없음으로 응답한다
 
 #### Scenario: Read viewer state
@@ -191,19 +185,25 @@ API는 프로필 간 visible follow 관계를 GraphQL에서 조회할 수 있어
 
 ### Requirement: Follow profile mutation
 
-active profile이 있는 인증자는 다른 활성 프로필을 공개 follow할 수 있어야 한다(MUST).
+active profile이 있는 인증자는 다른 활성 공개 프로필을 즉시 follow할 수 있어야 한다(MUST).
 
-#### Scenario: Follow active profile
+#### Scenario: Follow open active profile
 
-- **WHEN** active profile이 있는 인증자가 다른 활성 프로필 follow를 요청한다
-- **THEN** 시스템은 `ACCEPTED` follow 관계를 생성한다
+- **WHEN** active profile이 있는 인증자가 `followPolicy`가 `OPEN`인 다른 활성 프로필 follow를 요청한다
+- **THEN** 시스템은 follow 관계를 생성한다
 - **AND** mutation은 `FollowProfilePayload.profileFollow`로 생성된 `ProfileFollow`를 반환한다
 
 #### Scenario: Follow profile idempotently
 
-- **WHEN** active profile이 있는 인증자가 이미 `ACCEPTED` 상태로 follow 중인 프로필 follow를 요청한다
+- **WHEN** active profile이 있는 인증자가 이미 follow 중인 프로필 follow를 요청한다
 - **THEN** 시스템은 `FollowProfilePayload.profileFollow`로 기존 `ProfileFollow`를 반환한다
 - **AND** 오류로 처리하지 않는다
+
+#### Scenario: Reject unsupported approval-required follow
+
+- **WHEN** active profile이 있는 인증자가 `followPolicy`가 `APPROVAL_REQUIRED`인 활성 프로필 follow를 요청하고 팔로우 요청 생성 플로우가 아직 제공되지 않는다
+- **THEN** 시스템은 conflict code를 가진 GraphQL 오류로 요청을 거부한다
+- **AND** `ProfileFollow` 관계를 생성하지 않는다
 
 #### Scenario: Prevent self follow
 
