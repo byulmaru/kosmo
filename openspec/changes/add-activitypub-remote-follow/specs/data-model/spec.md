@@ -7,11 +7,13 @@
 #### Scenario: Store outbound remote Follow correlation
 
 - **WHEN** local profile이 remote ActivityPub profile을 follow하고 outbound Follow activity를 보낸다
-- **THEN** 시스템은 outbound Follow activity identity, actor URI, object URI, Fedify `orderingKey`를 established `ProfileFollow`에 연결할 수 있어야 한다
+- **THEN** 시스템은 outbound Follow activity identity, actor URI, object URI, generation timestamp, Fedify `orderingKey`를 established `ProfileFollow`에 연결할 수 있어야 한다
 - **AND** remote Accept 또는 Reject는 object로 전달되거나 참조된 Follow가 kosmo outbound Follow URI를 id로 포함하거나 참조하면 그 URI가 현재 저장된 outbound Follow identity와 일치해야 기존 follow 관계에 대응시킬 수 있어야 한다
-- **AND** object로 전달되거나 참조된 Follow에 kosmo outbound Follow URI가 없으면 actor/object가 저장된 outbound Follow actor/object와 일치할 때 기존 follow 관계에 대응시킬 수 있어야 한다
+- **AND** object로 전달되거나 참조된 Follow에 kosmo outbound Follow URI가 없으면 remote Follow id를 compatibility hint로만 취급하고 actor/object가 저장된 outbound Follow actor/object와 일치할 때 기존 follow 관계에 대응시킬 수 있어야 한다
+- **AND** remote Reject의 activity timestamp가 현재 outbound Follow generation timestamp보다 오래된 것이 확인되면 actor/object가 일치해도 기존 follow 관계를 제거하지 않을 수 있어야 한다
 - **AND** outbound Follow activity identity는 생성된 `ProfileFollow.id`에서 파생한 kosmo outbound Follow URI여야 한다
 - **AND** outbound Follow activity identity는 follower actor URI와 followee actor URI만으로 파생하지 않고 새 logical outbound Follow activity마다 고유해야 한다
+- **AND** outbound Follow activity identity는 kosmo가 발송하는 Follow/Undo transport identity로 안정적이어야 하지만, remote server가 후속 Accept/Reject object에서 이 identity를 보존한다는 것을 필수 전제로 삼지 않는다
 - **AND** Fedify `orderingKey`는 follower actor URI와 followee actor URI pair에서 안정적으로 파생되어 같은 pair의 모든 outbound Follow와 Undo(Follow)에 재사용되어야 한다
 - **AND** 후속 Fedify transport retry가 같은 Follow activity identity를 재사용할 수 있도록 outbound Follow activity identity를 안정적으로 저장해야 한다
 - **AND** 이번 capability는 outbound `ProfileFollowRequest`를 만들지 않으며, approval-required remote follow request correlation은 후속 capability에서 다룬다
@@ -21,18 +23,19 @@
 
 - **WHEN** remote ActivityPub profile이 local profile을 follow한다
 - **THEN** 시스템은 local follow policy에 따라 remote follower와 local followee 사이의 established `ProfileFollow` 관계 또는 pending `ProfileFollowRequest` 요청을 저장한다
-- **AND** inbound Follow activity identity 또는 response metadata는 duplicate correlation과 Accept/Reject response 구성에 사용할 수 있어야 한다
+- **AND** inbound Follow activity identity, response metadata, generation timestamp는 duplicate correlation, Undo freshness guard, Accept/Reject response 구성에 사용할 수 있어야 한다
 - **AND** 같은 remote follower와 local followee pair의 pending `ProfileFollowRequest`가 이미 있으면 기존 inbound Follow activity identity 또는 response metadata를 유지하고 새 duplicate Follow의 metadata로 갱신하지 않는다
 - **AND** 같은 remote follower와 local followee pair의 established `ProfileFollow`가 이미 있으면 기존 inbound Follow response metadata를 유지하고 같은 id의 재전달 또는 새 Follow id를 가진 duplicate Follow의 metadata로 갱신하지 않는다
+- **AND** duplicate Follow가 검증되면 first-wins response metadata를 유지하더라도 inbound Follow generation timestamp는 현재 Follow activity timestamp로 갱신할 수 있어야 한다
 - **AND** duplicate inbound Follow에 대한 `Accept(Follow)` response object는 저장된 first-wins metadata가 아니라 현재 검증을 통과한 수신 Follow object를 사용할 수 있어야 한다
-- **AND** inbound `Undo(Follow)`는 저장된 inbound Follow id가 다르거나 object id가 없더라도 verified same actor/object이면 해당 관계 또는 request를 취소하는 의사로 처리할 수 있어야 한다
+- **AND** inbound `Undo(Follow)`는 저장된 inbound Follow id가 다르거나 object id가 없더라도 verified same actor/object이고 activity timestamp가 현재 inbound Follow generation timestamp보다 오래되지 않았으면 해당 관계 또는 request를 취소하는 의사로 처리할 수 있어야 한다
 - **AND** IRI-only `Undo.object`는 이번 capability에서 inbound Follow metadata로 역조회하지 않고 side effect 없이 무시할 수 있어야 한다
 - **AND** activity-level duplicate skip은 Fedify inbox idempotency와 `ProfileFollow`/`ProfileFollowRequest` unique 제약에 맡긴다
 
 #### Scenario: Remove rejected remote follow projection
 
 - **WHEN** remote actor가 저장된 outbound Follow의 actor/object와 일치하는 Follow를 object로 하는 Reject를 보낸다
-- **THEN** 시스템은 해당 Follow에 연결된 optimistic established `ProfileFollow` projection을 제거할 수 있어야 한다
+- **THEN** 시스템은 해당 Reject의 activity timestamp가 현재 outbound Follow generation timestamp보다 오래되지 않았으면 그 Follow에 연결된 optimistic established `ProfileFollow` projection을 제거할 수 있어야 한다
 - **AND** 시스템은 거절 상태 값을 저장하지 않는다
 
 ## MODIFIED Requirements
