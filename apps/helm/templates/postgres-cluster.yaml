@@ -1,0 +1,17 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ include "kosmo.postgresName" . }}
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  instances: 1
+  bootstrap:
+    initdb:
+      database: kosmo
+      owner: kosmo
+  storage:
+    size: 10Gi
