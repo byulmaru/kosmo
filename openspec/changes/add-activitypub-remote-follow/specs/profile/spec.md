@@ -145,4 +145,4 @@ active profile이 있는 인증자는 기존 local 또는 ActivityPub remote fol
 - **WHEN** active profile이 있는 인증자가 없는 대상 프로필, 비활성인 대상 프로필, 또는 `SUSPENDED` instance의 remote profile unfollow를 요청한다
 - **THEN** 시스템은 profile not found 오류를 반환한다
 - **AND** local `ProfileFollow` 관계를 제거하지 않는다
-- **AND** ActivityPub Undo/Follow를 발송하지 않는다
+- **AND** ActivityPub `Undo(Follow)` activity를 발송하지 않는다

@@ -45,6 +45,9 @@
 - **THEN** 시스템은 해당 outbound Follow가 이미 established `ProfileFollow`로 투영되어 있으면 idempotent하게 처리한다
 - **AND** `Accept.actor`는 해당 outbound Follow의 remote followee actor URI와 일치해야 한다
 - **AND** `Accept.object`가 embedded Follow이거나 Fedify가 안전하게 typed Follow로 제공한 object이면 그 Follow의 actor/object는 해당 outbound Follow의 local follower actor URI와 remote followee actor URI에 대응해야 한다
+- **AND** embedded/typed Follow가 id를 포함하고 그 id가 kosmo outbound Follow URI이면 해당 URI는 현재 저장된 outbound Follow identity와 일치해야 한다
+- **AND** embedded/typed Follow의 kosmo outbound Follow URI가 현재 저장된 outbound Follow identity와 다르거나 존재하지 않는 `ProfileFollow`를 가리키면 local follow graph 또는 request를 갱신하지 않는다
+- **AND** embedded/typed Follow의 id가 없거나 kosmo outbound Follow URI가 아니면 시스템은 actor/object 검증 결과로 해당 outbound Follow와 대응시킬 수 있다
 - **AND** `Accept.object`가 IRI-only이고 kosmo outbound Follow URI이면 시스템은 URI에서 `ProfileFollow.id`를 찾아 저장된 outbound Follow actor/object metadata로 actor/object를 검증한다
 - **AND** `Accept.object`에서 actor/object를 확인할 수 없으면 local follow graph 또는 request를 갱신하지 않는다
 - **AND** personal inbox에서 Fedify `ctx.recipient`가 제공되면 시스템은 해당 recipient identifier를 local actor/profile로 resolve하고, 그 canonical actor URI가 해당 outbound Follow의 local follower actor URI와 일치해야 한다
@@ -59,6 +62,9 @@
 - **AND** 시스템은 거절 상태 값을 저장하지 않는다
 - **AND** `Reject.actor`는 해당 outbound Follow의 remote followee actor URI와 일치해야 한다
 - **AND** `Reject.object`가 embedded Follow이거나 Fedify가 안전하게 typed Follow로 제공한 object이면 그 Follow의 actor/object는 해당 outbound Follow의 local follower actor URI와 remote followee actor URI에 대응해야 한다
+- **AND** embedded/typed Follow가 id를 포함하고 그 id가 kosmo outbound Follow URI이면 해당 URI는 현재 저장된 outbound Follow identity와 일치해야 한다
+- **AND** embedded/typed Follow의 kosmo outbound Follow URI가 현재 저장된 outbound Follow identity와 다르거나 존재하지 않는 `ProfileFollow`를 가리키면 local follow graph 또는 request를 갱신하지 않는다
+- **AND** embedded/typed Follow의 id가 없거나 kosmo outbound Follow URI가 아니면 시스템은 actor/object 검증 결과로 해당 outbound Follow와 대응시킬 수 있다
 - **AND** `Reject.object`가 IRI-only이고 kosmo outbound Follow URI이면 시스템은 URI에서 `ProfileFollow.id`를 찾아 저장된 outbound Follow actor/object metadata로 actor/object를 검증한다
 - **AND** `Reject.object`에서 actor/object를 확인할 수 없으면 local follow graph 또는 request를 갱신하지 않는다
 - **AND** personal inbox에서 Fedify `ctx.recipient`가 제공되면 시스템은 해당 recipient identifier를 local actor/profile로 resolve하고, 그 canonical actor URI가 해당 outbound Follow의 local follower actor URI와 일치해야 한다

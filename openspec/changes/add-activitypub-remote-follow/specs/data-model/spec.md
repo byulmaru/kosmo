@@ -8,7 +8,8 @@
 
 - **WHEN** local profile이 remote ActivityPub profile을 follow하고 outbound Follow activity를 보낸다
 - **THEN** 시스템은 outbound Follow activity identity, actor URI, object URI, Fedify `orderingKey`를 established `ProfileFollow`에 연결할 수 있어야 한다
-- **AND** remote Accept 또는 Reject는 Follow id exact match 없이 object로 전달되거나 참조된 Follow의 actor/object가 저장된 outbound Follow actor/object와 일치하면 기존 follow 관계에 대응시킬 수 있어야 한다
+- **AND** remote Accept 또는 Reject는 object로 전달되거나 참조된 Follow가 kosmo outbound Follow URI를 id로 포함하거나 참조하면 그 URI가 현재 저장된 outbound Follow identity와 일치해야 기존 follow 관계에 대응시킬 수 있어야 한다
+- **AND** object로 전달되거나 참조된 Follow에 kosmo outbound Follow URI가 없으면 actor/object가 저장된 outbound Follow actor/object와 일치할 때 기존 follow 관계에 대응시킬 수 있어야 한다
 - **AND** outbound Follow activity identity는 생성된 `ProfileFollow.id`에서 파생한 kosmo outbound Follow URI여야 한다
 - **AND** outbound Follow activity identity는 follower actor URI와 followee actor URI만으로 파생하지 않고 새 logical outbound Follow activity마다 고유해야 한다
 - **AND** Fedify `orderingKey`는 follower actor URI와 followee actor URI pair에서 안정적으로 파생되어 같은 pair의 모든 outbound Follow와 Undo(Follow)에 재사용되어야 한다
