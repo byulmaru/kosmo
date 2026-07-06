@@ -1,0 +1,25 @@
+{{- $hostname := trimSuffix "." .Values.webDomain -}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ printf "%s-web" .Release.Name | trunc 63 | trimSuffix "-" }}
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: web
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Values.version | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  parentRefs:
+    - name: "public"
+      namespace: "gateway"
+  hostnames:
+    - {{ $hostname | quote }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ printf "%s-web" .Release.Name | trunc 63 | trimSuffix "-" }}
+          port: 80

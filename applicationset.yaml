@@ -9,17 +9,26 @@ spec:
         elements:
           - env: dev
             namespace: kosmo-dev
+            webDomain: dev.kos.moe
+            apiDomain: dev-api.kos.moe
+            image: ghcr.io/byulmaru/kosmo
+            version: latest
   template:
     metadata:
       name: 'kosmo-{{env}}'
     spec:
-      project: byulmaru
       source:
         repoURL: https://github.com/byulmaru/kosmo.git
         targetRevision: main
         path: apps/helm
         helm:
           releaseName: kosmo
+          values: |
+            env: '{{env}}'
+            webDomain: '{{webDomain}}'
+            apiDomain: '{{apiDomain}}'
+            image: '{{image}}'
+            version: '{{version}}'
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{namespace}}'
