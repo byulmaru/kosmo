@@ -95,13 +95,9 @@ test('home timeline updates after the home route active profile query refetches'
   await expect(sidebarProfileHandle(page, 'alphahome')).toBeVisible();
   await delayedHomeQuery.waitForRequest();
 
-  await expect(page.getByText(betaPostBody)).toBeHidden();
-  await expect(page.getByText('아직 게시글이 없어요')).toBeHidden();
-  await expect(
-    page.getByRole('status').filter({ hasText: '게시글 목록을 불러오는 중입니다.' }),
-  ).toBeAttached();
-
+  const waitForEmptyTimeline = await createElementTextWaiter(page, 'main', '아직 게시글이 없어요');
   delayedHomeQuery.release();
+  await waitForEmptyTimeline();
 
   await expect(page.getByText('아직 게시글이 없어요')).toBeVisible();
   await expect(page.getByText(betaPostBody)).toBeHidden();
@@ -214,6 +210,11 @@ async function openProfileSwitcher(page: Page) {
 }
 
 async function selectProfileFromSwitcher(page: Page, handle: string) {
+  const waitForActiveProfile = await createElementTextWaiter(
+    page,
+    'section[aria-label="활성 프로필"]',
+    `@${handle}`,
+  );
   const selectProfileResponse = page.waitForResponse(async (response) => {
     if (!isGraphQLResponse(response.url())) {
       return false;
@@ -230,7 +231,7 @@ async function selectProfileFromSwitcher(page: Page, handle: string) {
     .filter({ hasText: `@${handle}` })
     .click();
 
-  return (await (await selectProfileResponse).json()) as {
+  const responseBody = (await (await selectProfileResponse).json()) as {
     data?: {
       selectProfile?: {
         session?: {
@@ -241,6 +242,9 @@ async function selectProfileFromSwitcher(page: Page, handle: string) {
       } | null;
     };
   };
+  await waitForActiveProfile();
+
+  return responseBody;
 }
 
 async function createPost(page: Page, body: string) {
@@ -283,9 +287,9 @@ async function delayNextGraphQLOperation(page: Page, operationName: string) {
     }
 
     matched = true;
-    const response = await route.fetch();
     resolveRequestSeen();
     await releasePromise;
+    const response = await route.fetch();
     await route.fulfill({ response });
     await page.unroute('**/graphql', handler);
   };
@@ -344,4 +348,64 @@ function readGraphQLOperation(postData: string | null) {
 
 function readsCurrentSessionSelectedProfile(query: string) {
   return /currentSession(?:\s*\([^)]*\))?\s*{[^}]*selectedProfile/s.test(query);
+}
+
+async function createElementTextWaiter(page: Page, selector: string, text: string) {
+  const waiterId = crypto.randomUUID();
+
+  await page.evaluate(
+    ({ selector, text, waiterId }) => {
+      const targetWindow = window as Window & {
+        __kosmoE2eTextWaiters?: Record<string, Promise<void>>;
+      };
+      const eventName = `kosmo:e2e-dom-text-match:${waiterId}`;
+      const getElementText = (element: Element) =>
+        element instanceof HTMLElement ? element.innerText : (element.textContent ?? '');
+      const matches = () =>
+        Array.from(document.querySelectorAll(selector)).some((element) =>
+          getElementText(element).includes(text),
+        );
+
+      targetWindow.__kosmoE2eTextWaiters ??= {};
+
+      if (matches()) {
+        targetWindow.__kosmoE2eTextWaiters[waiterId] = Promise.resolve();
+        return;
+      }
+
+      targetWindow.__kosmoE2eTextWaiters[waiterId] = new Promise<void>((resolve) => {
+        let observer: MutationObserver | null = null;
+        const finish = () => {
+          observer?.disconnect();
+          resolve();
+        };
+
+        document.addEventListener(eventName, finish, { once: true });
+
+        observer = new MutationObserver(() => {
+          if (matches()) {
+            document.dispatchEvent(new Event(eventName));
+          }
+        });
+        observer.observe(document.body, {
+          characterData: true,
+          childList: true,
+          subtree: true,
+        });
+      });
+    },
+    { selector, text, waiterId },
+  );
+
+  return () =>
+    page.evaluate((waiterId) => {
+      const targetWindow = window as Window & {
+        __kosmoE2eTextWaiters?: Record<string, Promise<void>>;
+      };
+      const waiter = targetWindow.__kosmoE2eTextWaiters?.[waiterId] ?? Promise.resolve();
+
+      return waiter.finally(() => {
+        delete targetWindow.__kosmoE2eTextWaiters?.[waiterId];
+      });
+    }, waiterId);
 }

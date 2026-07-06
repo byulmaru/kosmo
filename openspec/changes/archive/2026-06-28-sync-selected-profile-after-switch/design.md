@@ -13,7 +13,7 @@
 **Non-Goals:**
 
 - GraphQL public schema의 `selectProfile` payload shape를 다시 바꾸지 않는다.
-- `homeTimeline`이나 `Profile.viewerFollow` 같은 active-profile 의존 field를 모두 mutation 응답 정규화만으로 해결하지 않는다.
+- `homeTimeline`이나 `Profile.viewerState` 같은 active-profile 의존 field를 모두 mutation 응답 정규화만으로 해결하지 않는다.
 - 새 프로필 생성/선택 흐름과 일반 프로필 선택 흐름의 모든 invalidation을 동일하게 취급하지 않는다.
 
 ## Decisions
@@ -28,10 +28,10 @@
    생성 직후에는 선택 프로필 표시뿐 아니라 `me.profiles` 목록 자체가 바뀐다. 따라서 `profile-created` 성격의 성공 처리에서는 `me` 또는 동등한 프로필 목록 데이터를 갱신할 수 있다.
 
 4. **전환 후 갱신은 비동기 refetch를 허용한다.**
-   일반 선택 handler는 `Query.currentSession`, `Query.homeTimeline`, `Profile.viewerFollow` 같은 active-profile 의존 cache target을 stale 처리한다. Mearie가 각 구독 query를 다시 실행하면서 `/compose`, 홈, 검색, 프로필, follow list UI가 새 active profile 기준으로 갱신된다. 전환 직후 한 순간 이전 데이터가 보일 수 있는 것은 허용한다.
+   일반 선택 handler는 `Query.currentSession`, `Query.homeTimeline`, `Profile.viewerState` 같은 active-profile 의존 cache target을 stale 처리한다. Mearie가 각 구독 query를 다시 실행하면서 `/compose`, 홈, 검색, 프로필, follow list UI가 새 active profile 기준으로 갱신된다. 전환 직후 한 순간 이전 데이터가 보일 수 있는 것은 허용한다.
 
 ## Risks / Trade-offs
 
 - **[Risk] mutation 응답 정규화가 열린 query 구독을 즉시 깨우지 못할 수 있음** → 선택 성공 handler가 `Query.currentSession`을 stale 처리해 route-local active profile query가 비동기적으로 다시 실행되게 한다.
-- **[Risk] active profile 의존 데이터가 일부 stale하게 남을 수 있음** → `homeTimeline`, `Profile.viewerFollow`처럼 active profile을 입력으로 삼는 field는 선택 성공 후 명시적으로 stale 처리하거나 같은 효과의 갱신을 적용한다.
+- **[Risk] active profile 의존 데이터가 일부 stale하게 남을 수 있음** → `homeTimeline`, `Profile.viewerState`처럼 active profile을 입력으로 삼는 field는 선택 성공 후 명시적으로 stale 처리하거나 같은 효과의 갱신을 적용한다.
 - **[Risk] 생성과 선택의 갱신 범위가 섞일 수 있음** → 성공 이유를 일반 선택과 새 프로필 생성으로 구분해, 생성 시에만 프로필 목록 갱신을 포함한다.

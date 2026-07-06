@@ -351,7 +351,7 @@ kosmo 웹 애플리케이션의 공통 앱 shell 계약을 문서화한다. 이 
 - **THEN** 시스템은 즉시 해당 프로필을 활성 프로필로 요청한다
 - **AND** 요청 성공 후 사이드바는 Mearie cache의 `Session.selectedProfile`/`Query.currentSession` 갱신 결과를 새 활성 프로필로 반영한다
 - **AND** 이미 열린 홈, 검색, 프로필 화면에서 active profile 존재 여부나 viewer profile id를 쓰는 UI는 각 route query의 `currentSession.selectedProfile` 갱신 결과를 비동기적으로 반영한다
-- **AND** 시스템은 `homeTimeline` 같은 active-profile 의존 root query field와 `Profile.viewerFollow` 같은 active-profile 의존 entity field를 stale 처리하거나 동등한 방식으로 새 active profile 기준 결과를 보장한다
+- **AND** 시스템은 `homeTimeline` 같은 active-profile 의존 root query field와 `Profile.viewerState` 같은 active-profile 의존 entity field를 stale 처리하거나 동등한 방식으로 새 active profile 기준 결과를 보장한다
 
 #### Scenario: Create and switch to a new profile
 
