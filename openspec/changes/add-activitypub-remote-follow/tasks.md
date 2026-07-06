@@ -25,11 +25,11 @@
 
 - [ ] 3.1 `followProfile`과 `unfollowProfile`이 active remote profile target을 지원하도록 확장한다.
 - [ ] 3.2 remote profile의 `followers`, `following`, `followersCount`, `followingCount`가 nullable unsupported가 아니라 저장된 local/remote `ProfileFollow` 기준 known graph를 반환하도록 확장한다.
-- [ ] 3.3 `viewerFollow`가 local target과 remote target 모두에서 현재 active profile의 `ProfileFollow` 관계를 반환하도록 loader와 테스트를 갱신한다.
+- [ ] 3.3 `viewerFollow`와 `viewerState.follow`가 local target과 remote target 모두에서 현재 active profile의 established `ProfileFollow` 관계를 반환하고 pending `ProfileFollowRequest`를 숨기도록 loader와 테스트를 갱신한다.
 - [ ] 3.4 GraphQL schema를 재생성하고 remote known follow graph/count와 remote follow mutation contract를 확인한다.
 
 ## 4. Verification
 
 - [ ] 4.1 ActivityPub follow test로 Fedify `sendActivity` outbound Follow/Undo/Accept, `ProfileFollow.id` 기반 outbound Follow URI, follow/unfollow/refollow에서 같은 actor pair stable `orderingKey`의 Follow/Undo 발송, Fedify inbox listener inbound Follow/Undo/Accept/Reject, outbound Follow id exact match 없이 embedded/typed Follow와 IRI-only kosmo outbound Follow URI의 Accept/Reject actor/object matching, actor/object를 확인할 수 없는 Accept/Reject 무시, unknown actor WebFinger `acct:` identity/self link와 canonical actor URI 검증, materialization 전 instance guard, actor/object 및 personal inbox recipient identifier matching, active local actor 검증, unavailable remote actor guard, idempotent established inbound Follow, established 전환 시 pending request 삭제, duplicate pending/established inbound Follow first-wins metadata와 current Follow object Accept response, established follow/request projection, unsupported inbox activity 무시를 검증한다.
-- [ ] 4.2 GraphQL follow test로 remote target follow/unfollow, local/remote `APPROVAL_REQUIRED` target 거부, viewerFollow, remote known follow graph/count 응답, suspended instance target 차단, unresponsive instance follow 차단, unresponsive instance unfollow local 삭제와 outbound Follow/Undo 미발송을 검증한다.
+- [ ] 4.2 GraphQL follow test로 remote target follow/unfollow, local/remote `APPROVAL_REQUIRED` target 거부, viewerFollow, viewerState.follow, remote known follow graph/count 응답, suspended instance target 차단, unresponsive instance follow 차단, unresponsive instance unfollow local 삭제와 outbound Follow/Undo 미발송을 검증한다.
 - [ ] 4.3 `pnpm lint:eslint`, 관련 package typecheck/test, GraphQL schema check, `openspec validate add-activitypub-remote-follow --strict`를 실행한다.
