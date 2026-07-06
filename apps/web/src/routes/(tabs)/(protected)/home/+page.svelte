@@ -23,13 +23,6 @@
         }
         homeTimeline(first: 20) {
           ...PostList_homeTimeline
-          edges {
-            cursor
-            node {
-              id
-              ...PostListItem_post
-            }
-          }
         }
       }
     `),

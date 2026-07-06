@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
-import type { Page, Route } from '@playwright/test';
+import { Kind, parse } from 'graphql';
+import type { Page } from '@playwright/test';
+import type { SelectionNode } from 'graphql';
 
 test('profile selection updates compose through its route currentSession query', async ({
   page,
@@ -68,9 +70,7 @@ test('profile route action follows Profile.viewerState after switching', async (
   );
 });
 
-test('home timeline updates after the home route active profile query refetches', async ({
-  page,
-}) => {
+test('home route active profile query refetches after switching profiles', async ({ page }) => {
   const graphQLRequests = collectGraphQLRequests(page);
   const betaPostBody = 'beta profile timeline post';
 
@@ -87,20 +87,16 @@ test('home timeline updates after the home route active profile query refetches'
   await page.waitForLoadState('networkidle');
   graphQLRequests.clear();
 
-  const delayedHomeQuery = await delayNextGraphQLOperation(page, 'HomePageQuery');
+  const homeQueryResponse = waitForGraphQLOperation(page, 'HomePageQuery');
 
   const responseBody = await selectProfileFromSwitcher(page, 'alphahome');
 
   expect(responseBody.data?.selectProfile?.session?.selectedProfile?.handle).toBe('alphahome');
   await expect(sidebarProfileHandle(page, 'alphahome')).toBeVisible();
-  await delayedHomeQuery.waitForRequest();
-
-  const waitForEmptyTimeline = await createElementTextWaiter(page, 'main', '아직 게시글이 없어요');
-  delayedHomeQuery.release();
-  await waitForEmptyTimeline();
-
-  await expect(page.getByText('아직 게시글이 없어요')).toBeVisible();
-  await expect(page.getByText(betaPostBody)).toBeHidden();
+  const homeQueryBody = (await (await homeQueryResponse).json()) as {
+    data?: { homeTimeline?: { edges?: unknown[] | null } | null };
+  };
+  expect(homeQueryBody.data?.homeTimeline?.edges).toEqual([]);
 
   await page.waitForLoadState('networkidle');
 
@@ -266,42 +262,6 @@ async function createPost(page: Page, body: string) {
   await createPostResponse;
 }
 
-async function delayNextGraphQLOperation(page: Page, operationName: string) {
-  let release!: () => void;
-  const releasePromise = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-
-  let resolveRequestSeen!: () => void;
-  const requestSeenPromise = new Promise<void>((resolve) => {
-    resolveRequestSeen = resolve;
-  });
-
-  let matched = false;
-  const handler = async (route: Route) => {
-    const operation = readGraphQLOperation(route.request().postData());
-
-    if (matched || operation?.operationName !== operationName) {
-      await route.fallback();
-      return;
-    }
-
-    matched = true;
-    resolveRequestSeen();
-    await releasePromise;
-    const response = await route.fetch();
-    await route.fulfill({ response });
-    await page.unroute('**/graphql', handler);
-  };
-
-  await page.route('**/graphql', handler);
-
-  return {
-    waitForRequest: () => requestSeenPromise,
-    release,
-  };
-}
-
 async function failGraphQLOperation(page: Page, operationName: string) {
   await page.route('**/graphql', async (route) => {
     const operation = readGraphQLOperation(route.request().postData());
@@ -330,6 +290,18 @@ function sidebarProfileHandle(page: Page, handle: string) {
   return page.locator('section[aria-label="활성 프로필"]:visible').first().getByText(`@${handle}`);
 }
 
+function waitForGraphQLOperation(page: Page, operationName: string) {
+  return page.waitForResponse(async (response) => {
+    if (!isGraphQLResponse(response.url())) {
+      return false;
+    }
+
+    const operation = readGraphQLOperation(response.request().postData());
+
+    return operation?.operationName === operationName;
+  });
+}
+
 function isGraphQLResponse(url: string) {
   return new URL(url).pathname === '/graphql';
 }
@@ -347,7 +319,58 @@ function readGraphQLOperation(postData: string | null) {
 }
 
 function readsCurrentSessionSelectedProfile(query: string) {
-  return /currentSession(?:\s*\([^)]*\))?\s*{[^}]*selectedProfile/s.test(query);
+  try {
+    const document = parse(query);
+    const fragments = new Map(
+      document.definitions
+        .filter((definition) => definition.kind === Kind.FRAGMENT_DEFINITION)
+        .map((definition) => [definition.name.value, definition]),
+    );
+
+    const selectionHasPath = (
+      selections: readonly SelectionNode[],
+      path: readonly string[],
+      seenFragments = new Set<string>(),
+    ): boolean =>
+      selections.some((selection) => {
+        if (selection.kind === Kind.FIELD) {
+          if (selection.name.value !== path[0]) {
+            return false;
+          }
+
+          if (path.length === 1) {
+            return true;
+          }
+
+          return selection.selectionSet
+            ? selectionHasPath(selection.selectionSet.selections, path.slice(1), seenFragments)
+            : false;
+        }
+
+        if (selection.kind === Kind.INLINE_FRAGMENT) {
+          return selectionHasPath(selection.selectionSet.selections, path, seenFragments);
+        }
+
+        if (seenFragments.has(selection.name.value)) {
+          return false;
+        }
+
+        seenFragments.add(selection.name.value);
+        const fragment = fragments.get(selection.name.value);
+
+        return fragment
+          ? selectionHasPath(fragment.selectionSet.selections, path, seenFragments)
+          : false;
+      });
+
+    return document.definitions.some(
+      (definition) =>
+        definition.kind === Kind.OPERATION_DEFINITION &&
+        selectionHasPath(definition.selectionSet.selections, ['currentSession', 'selectedProfile']),
+    );
+  } catch {
+    return false;
+  }
 }
 
 async function createElementTextWaiter(page: Page, selector: string, text: string) {

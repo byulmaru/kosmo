@@ -24,5 +24,5 @@
 ## Impact
 
 - `apps/web`: 프로필 스위처, 탭 셸 layout, 사이드바, `/compose`, 홈, 검색, 프로필, followers/following route의 선택 프로필 데이터 흐름이 영향을 받는다.
-- GraphQL public schema/API shape는 변경하지 않는다. `selectProfile` 성공 응답의 `session.selectedProfile` 계약은 기존 `profile` 스펙을 따른다.
+- GraphQL public schema/API shape는 `CreateProfilePayload.account` 추가로 변경된다. `selectProfile` 성공 응답의 `session.selectedProfile` 계약은 기존 `profile` 스펙을 따른다.
 - `homeTimeline`처럼 active profile에 의존하는 root query field는 프로필 전환 후 stale 처리 또는 동등한 갱신 전략이 필요하다.

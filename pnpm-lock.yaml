@@ -211,6 +211,9 @@ importers:
       drizzle-orm:
         specifier: 1.0.0-beta.22
         version: 1.0.0-beta.22(@opentelemetry/api@1.9.1)(postgres@3.4.9)(zod@4.4.3)
+      graphql:
+        specifier: ^16.14.0
+        version: 16.14.0
       mearie:
         specifier: ^0.1.7
         version: 0.1.7(jiti@2.7.0)(magicast@0.5.2)
