@@ -34,6 +34,7 @@
 - **THEN** 시스템은 local profile 대상과 같은 `FollowButton` 표시 정책을 적용한다
 - **AND** 대상 remote profile의 `followPolicy`가 `OPEN`이고 instance 상태가 `SUSPENDED` 또는 `UNRESPONSIVE`가 아니면 follow action을 사용할 수 있다
 - **AND** follow action은 `followProfile` mutation을 호출하고 optimistic UI는 `viewerState.follow`, `viewerFollow`, followersCount 갱신 정책을 따른다
+- **AND** 대상이 ActivityPub remote profile이면 optimistic UI는 actor metadata에 저장된 remote followersCount를 임의 증감하지 않는다
 
 #### Scenario: Hide or disable unsupported remote follow action
 
@@ -47,3 +48,4 @@
 - **THEN** 시스템은 local profile 대상과 같은 unfollow action을 표시한다
 - **AND** 대상 remote profile의 `followPolicy`가 `APPROVAL_REQUIRED`로 바뀌었거나 instance 상태가 `UNRESPONSIVE`여도 established follow의 unfollow action은 숨기지 않는다
 - **AND** unfollow action은 `unfollowProfile` mutation을 호출하고 optimistic UI는 `viewerState.follow`, `viewerFollow`, followersCount 갱신 정책을 따른다
+- **AND** 대상이 ActivityPub remote profile이면 optimistic UI는 actor metadata에 저장된 remote followersCount를 임의 증감하지 않는다

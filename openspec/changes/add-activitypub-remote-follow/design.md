@@ -35,8 +35,8 @@
 - **duplicate inbound Follow 응답은 현재 수신 Follow를 사용하되 freshness timestamp는 갱신한다.** pending request 또는 established follow에 저장된 inbound Follow response metadata는 first-wins로 유지하지만, duplicate Follow에 대한 `Accept(Follow)`를 발송할 때의 object는 현재 검증을 통과한 수신 Follow object를 사용한다. 또한 remote Follow id가 unreliable하므로, duplicate Follow를 검증하면 Undo freshness guard에만 쓰는 inbound follow generation timestamp는 수신 시각 또는 `published` 기반 timestamp로 갱신할 수 있다.
 - **inbound Undo(Follow)는 actor/object와 freshness guard로 삭제한다.** remote actor가 Follow/Undo/Follow를 반복하면 늦게 도착한 이전 `Undo(Follow)`가 새 관계를 지울 수 있다. 하지만 Follow id를 strict하게 요구하면 id를 보존하지 않는 서버와 호환되지 않는다. 따라서 embedded/typed `Undo.object`의 actor/object와 recipient가 현재 관계/request와 일치하면 삭제할 수 있으며, `Undo.published`가 현재 inbound follow generation timestamp보다 오래된 것이 확인될 때만 side effect 없이 무시한다. IRI-only object는 이번 change에서 actor/object를 안전하게 확인하지 못하므로 계속 side effect 없이 무시한다.
 - **unresponsive instance에는 outbound follow delivery를 하지 않는다.** `UNRESPONSIVE` instance는 저장된 stale profile 조회만 허용하고 outbound federation을 억제하므로 remote follow mutation은 차단한다. 이미 존재하는 remote follow를 unfollow할 때는 local `ProfileFollow`를 제거하되 `Undo(Follow)`는 발송하지 않는다.
-- **remote followers/following collection은 mirror하지 않는다.** remote profile의 full collection을 가져오지 않고, kosmo DB에 저장된 local/remote `ProfileFollow` 관계만 GraphQL follow graph에 반영한다.
-- **remote follow graph count는 known graph 기준이다.** remote profile의 followers/following/count 필드는 nullable unsupported가 아니라 kosmo DB에 저장된 `ProfileFollow` 관계를 기준으로 반환하며, fediverse 전체 collection count로 해석하지 않는다.
+- **remote followers/following collection edge는 mirror하지 않는다.** remote profile의 full collection item/page는 저장하지 않고, GraphQL followers/following connection에는 kosmo DB에 저장된 local/remote `ProfileFollow` 관계만 반영한다. 다만 remote collection `totalItems` 성격의 count는 actor materialization/refresh 때 별도 actor metadata로 저장한다.
+- **remote count source는 connection source와 분리한다.** local profile의 followers/following count는 established `ProfileFollow` 집계를 사용하지만, ActivityPub remote profile의 `followersCount`/`followingCount`는 저장된 remote actor collection count를 사용한다. remote target follow/unfollow projection은 local known graph를 바꾸더라도 저장된 remote collection count를 임의 증감하지 않고, 후속 actor refresh가 remote count를 갱신한다.
 - **unsupported inbox activity는 무시한다.** Follow graph에 필요한 activity 외에는 이번 change에서 listener를 두지 않거나 처리하지 않는다.
 
 ## Risks / Trade-offs
@@ -45,7 +45,7 @@
 - **remote Follow id 비호환성** → Follow id가 누락/재사용되는 서버와의 호환성을 위해 actor/object fallback을 유지한다. `published`가 제공되는 stale Reject/Undo는 막을 수 있지만, `published` 없이 늦게 도착한 destructive activity는 현재 generation과 구분할 수 없으므로 compatibility를 우선해 처리할 수 있다.
 - **delivery 성공과 local projection 불일치** → 원본 Follow correlation metadata, stable `orderingKey`, idempotent mutation 처리로 재시도를 안전하게 만든다.
 - **follow request approval UX 부재** → `APPROVAL_REQUIRED` local profile에 대한 inbound Follow는 `ProfileFollowRequest`로 저장하고 Accept/Reject를 자동 발송하지 않는다. 승인/거절 UX와 그 결과 activity delivery는 후속 change로 남긴다.
-- **remote collection 미러링 없음** → followers/following count는 kosmo가 아는 관계 기준이며 fediverse 전체 count가 아니다.
+- **remote collection count staleness** → remote followers/following count는 actor materialization/refresh 시점에 저장된 remote collection count이므로 실시간 fediverse 값과 다를 수 있다. Connection edge는 여전히 kosmo가 아는 `ProfileFollow` 관계만 노출한다.
 
 ## Migration Plan
 

@@ -1,5 +1,18 @@
 ## ADDED Requirements
 
+### Requirement: Remote actor collection count storage
+
+시스템은 ActivityPub remote actor materialization과 refresh 결과로 확인한 followers/following collection count를 actor metadata에 저장해야 한다(MUST).
+
+#### Scenario: Store remote actor collection counts
+
+- **WHEN** remote ActivityPub actor가 성공적으로 materialize되거나 refresh된다
+- **THEN** 시스템은 remote followers collection count와 following collection count를 actor metadata에 저장한다
+- **AND** 저장 count는 음수가 될 수 없다
+- **AND** remote collection item 또는 page content는 이번 capability에서 mirror하지 않는다
+- **AND** collection count를 확인할 수 없는 새 remote actor는 GraphQL non-null count 계약을 유지할 수 있도록 count를 0으로 초기화할 수 있다
+- **AND** refresh에서 collection count를 확인할 수 없으면 기존 저장 count를 임의로 0으로 덮어쓰지 않는다
+
 ### Requirement: Remote follow activity correlation storage
 
 시스템은 ActivityPub remote Follow activity를 established `ProfileFollow` 관계 또는 inbound pending `ProfileFollowRequest` 요청에 연결해 후속 Accept/Reject/Undo 처리에 필요한 correlation 정보를 저장할 수 있어야 한다(MUST).
