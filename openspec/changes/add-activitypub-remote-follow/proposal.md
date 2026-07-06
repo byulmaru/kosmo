@@ -1,6 +1,6 @@
 ## Why
 
-remote ActivityPub actor가 kosmo `Profile`로 materialize되면, 다음 단계는 local profile과 remote profile 사이의 follow 관계를 실제 ActivityPub Follow protocol과 연결하는 것이다. 이 변경은 remote post ingestion 없이 follow graph와 inbox/outbox follow activity만 연다.
+remote ActivityPub actor가 kosmo `Profile`로 materialize되면, 다음 단계는 local profile과 remote profile 사이의 follow 관계를 실제 ActivityPub Follow protocol과 연결하는 것이다. 이 변경은 remote post ingestion 없이 follow graph, follow protocol inbox delivery, outbound follow activity 발송만 연다.
 
 ## What Changes
 
