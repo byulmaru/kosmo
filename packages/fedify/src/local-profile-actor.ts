@@ -1,5 +1,5 @@
 import { Person } from '@fedify/vocab';
-import type { ActorKeyPair } from '@fedify/fedify';
+import type { ActorKeyPair, Context } from '@fedify/fedify';
 
 export interface LocalProfileActorProfile {
   readonly id: string;
@@ -10,10 +10,7 @@ export interface LocalProfileActorProfile {
 }
 
 export interface CreateLocalProfilePersonOptions {
-  readonly actorUri: URL;
-  readonly inboxUri: URL;
-  readonly outboxUri: URL;
-  readonly profileUri: URL;
+  readonly context: Context<void>;
   readonly profile: LocalProfileActorProfile;
   readonly keyPairs: readonly ActorKeyPair[];
 }
@@ -22,12 +19,9 @@ const getPublicKeyAlgorithmName = (keyPair: ActorKeyPair): string =>
   keyPair.publicKey.algorithm.name;
 
 export const createLocalProfilePerson = ({
-  actorUri,
-  inboxUri,
+  context,
   keyPairs,
-  outboxUri,
   profile,
-  profileUri,
 }: CreateLocalProfilePersonOptions): Person => {
   const rsaKeyPair = keyPairs.find(
     (keyPair) => getPublicKeyAlgorithmName(keyPair) === 'RSASSA-PKCS1-v1_5',
@@ -39,6 +33,13 @@ export const createLocalProfilePerson = ({
   if (rsaKeyPair == null) {
     throw new Error(`Local ActivityPub actor ${profile.id} is missing an RSA key pair.`);
   }
+
+  const actorUri = context.getActorUri(profile.id);
+  const actorPathname = actorUri.pathname.replace(/\/$/, '');
+  // Keep inbox/outbox routes unregistered until delivery and collections are implemented.
+  const inboxUri = new URL(`${actorPathname}/inbox`, actorUri);
+  const outboxUri = new URL(`${actorPathname}/outbox`, actorUri);
+  const profileUri = new URL(`/@${encodeURIComponent(profile.handle)}`, context.canonicalOrigin);
 
   return new Person({
     id: actorUri,

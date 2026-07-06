@@ -12,12 +12,10 @@ export const federation: Federation<void> = createFederation<void>({
 });
 
 federation
-  .setActorDispatcher('/ap/actor/{identifier}', async (_ctx, identifier) => {
+  .setActorDispatcher('/ap/actor/{identifier}', async (ctx, identifier) => {
     const localInstance = await resolveConfiguredLocalInstance();
-    const { canonicalOrigin } = localInstance;
-    const canonicalContext = federation.createContext(new URL(canonicalOrigin), undefined);
     const result = await ensureDrizzleLocalActorKeyPairs({
-      actorUri: canonicalContext.getActorUri(identifier),
+      actorUri: ctx.getActorUri(identifier),
       localInstanceId: localInstance.id,
       profileId: identifier,
     });
@@ -27,27 +25,19 @@ federation
     }
 
     const actorIdentifier = result.profile.id;
-    // Keep inbox/outbox routes unregistered until delivery and collections are implemented.
-    const actorUri = canonicalContext.getActorUri(actorIdentifier);
-    const actorPathname = actorUri.pathname.replace(/\/$/, '');
-    const keyPairs = await canonicalContext.getActorKeyPairs(actorIdentifier);
+    const keyPairs = await ctx.getActorKeyPairs(actorIdentifier);
 
     return createLocalProfilePerson({
-      actorUri,
-      inboxUri: new URL(`${actorPathname}/inbox`, actorUri),
+      context: ctx,
       keyPairs,
-      outboxUri: new URL(`${actorPathname}/outbox`, actorUri),
       profile: result.profile,
-      profileUri: new URL(`/@${encodeURIComponent(result.profile.handle)}`, canonicalOrigin),
     });
   })
   .mapHandle(() => null)
-  .setKeyPairsDispatcher(async (_ctx, identifier) => {
+  .setKeyPairsDispatcher(async (ctx, identifier) => {
     const localInstance = await resolveConfiguredLocalInstance();
-    const { canonicalOrigin } = localInstance;
-    const canonicalContext = federation.createContext(new URL(canonicalOrigin), undefined);
     const result = await ensureDrizzleLocalActorKeyPairs({
-      actorUri: canonicalContext.getActorUri(identifier),
+      actorUri: ctx.getActorUri(identifier),
       localInstanceId: localInstance.id,
       profileId: identifier,
     });
