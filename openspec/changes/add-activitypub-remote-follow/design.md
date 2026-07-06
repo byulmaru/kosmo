@@ -10,7 +10,7 @@
 - remote actor가 local actor를 Follow/Undo할 수 있게 한다.
 - inbound Accept/Reject를 받아 outbound follow projection을 정리한다.
 - `ProfileFollow`를 established follow graph의 source of truth로 유지하고 pending request는 `ProfileFollowRequest`에 둔다.
-- Fedify inbox listener, signature/key verification, `sendActivity`, delivery queue/retry를 재사용한다.
+- Fedify inbox listener, signature/key verification, `sendActivity`를 재사용한다.
 
 **Non-Goals:**
 
@@ -18,14 +18,15 @@
 - remote post ingestion, timeline federation, mention/reply delivery.
 - moderation/block/mute/domain allowlist 정책.
 - user-facing follow request approval UI.
+- Fedify delivery queue/retry 설정과 운영 검증.
 
 ## Decisions
 
 - **`ProfileFollow`는 established follow source of truth다.** local/remote 여부와 관계없이 성립된 follower/followee 방향은 `ProfileFollow`에 저장한다. Pending follow request는 #198로 archive된 `split-profile-follow-requests`의 `ProfileFollowRequest`에 저장하며, 원본 Follow activity id와 actor/object URI는 후속 Accept/Reject/Undo를 연결하기 위한 correlation metadata로만 둔다. Accept/Reject/Undo activity id의 durable history는 이번 도메인 테이블 범위가 아니다.
-- **outbound delivery는 Fedify `sendActivity`를 사용한다.** kosmo는 `Follow`, `Undo(Follow)`, `Accept(Follow)` 또는 후속 승인 UX의 `Reject(Follow)` activity를 만들고 Fedify에 전달한다. retry/queue/signature는 Fedify 설정에 맡긴다. Follow activity id는 생성된 `ProfileFollow.id`에서 파생한 kosmo outbound Follow URI로 고정해 logical Follow마다 고유하게 만들고, Fedify `orderingKey`는 local follower actor URI와 remote followee actor URI pair에서 안정적으로 파생해 같은 pair의 모든 Follow/Undo(Follow)에 재사용한다.
+- **outbound delivery는 Fedify `sendActivity`를 사용한다.** kosmo는 `Follow`, `Undo(Follow)`, `Accept(Follow)` 또는 후속 승인 UX의 `Reject(Follow)` activity를 만들고 Fedify에 전달한다. signature는 Fedify에 맡기며, delivery queue/retry 설정과 운영 검증은 후속 capability 범위로 둔다. Follow activity id는 생성된 `ProfileFollow.id`에서 파생한 kosmo outbound Follow URI로 고정해 logical Follow마다 고유하게 만들고, Fedify `orderingKey`는 local follower actor URI와 remote followee actor URI pair에서 안정적으로 파생해 같은 pair의 모든 Follow/Undo(Follow)에 재사용한다.
 - **inbound activity는 Fedify inbox listener에서 받는다.** HTTP signature verification, actor key fetch, request parsing은 Fedify에 맡기고, kosmo handler는 verified typed Follow/Undo/Accept/Reject만 처리한다.
 - **follow protocol inbox endpoint는 discovery-only 404 경계를 대체한다.** actor document가 광고하는 actor-scoped inbox와 Fedify가 처리하는 shared inbox는 Follow/Undo/Accept/Reject delivery를 Fedify inbox listener로 받는다. `outbox`, followers/following collection, post delivery 같은 non-follow endpoint는 이 change에서 열지 않는다.
-- **Accept/Reject correlation은 actor/object 기준이다.** 저장된 outbound Follow id는 Undo(Follow) 구성과 transport retry에 사용하지만, inbound Accept/Reject가 반드시 같은 Follow id를 참조해야 하는 것은 아니다. `Accept.object` 또는 `Reject.object`가 embedded Follow이거나 Fedify가 안전하게 typed Follow로 제공한 object이면 그 actor/object를 검증한다. IRI-only object가 kosmo outbound Follow URI이면 `ProfileFollow.id`로 저장된 outbound Follow actor/object metadata를 조회해 검증한다. 두 경로 모두 actor/object를 확인할 수 없으면 follow graph/request side effect를 만들지 않는다.
+- **Accept/Reject correlation은 actor/object 기준이다.** 저장된 outbound Follow id는 Undo(Follow) 구성과 후속 Fedify transport retry에 사용하지만, inbound Accept/Reject가 반드시 같은 Follow id를 참조해야 하는 것은 아니다. `Accept.object` 또는 `Reject.object`가 embedded Follow이거나 Fedify가 안전하게 typed Follow로 제공한 object이면 그 actor/object를 검증한다. IRI-only object가 kosmo outbound Follow URI이면 `ProfileFollow.id`로 저장된 outbound Follow actor/object metadata를 조회해 검증한다. 두 경로 모두 actor/object를 확인할 수 없으면 follow graph/request side effect를 만들지 않는다.
 - **unknown remote actor는 lookup 후 저장한다.** inbound follow protocol activity가 저장되지 않은 remote actor를 참조하면 actor URI만으로 `Profile`을 만들지 않고, actor URI host를 `acct:` domain으로 신뢰하지 않는다. Fedify WebFinger URL-resource lookup 또는 동등한 lookup으로 반환된 `acct:{handle}@{domain}` identity와 ActivityPub self link가 inbound activity actor URI를 검증할 때만 해당 `acct:` identity를 #182의 materialization 입력으로 사용한다. materialization write 전에는 해당 `acct:` domain의 existing instance 상태를 확인해 `SUSPENDED` 또는 `UNRESPONSIVE`이면 follow graph/request side effect를 만들지 않는다.
 - **personal inbox recipient는 canonical actor URI로 해석한다.** Fedify `ctx.recipient`는 actor URI가 아니라 actor identifier이므로, personal inbox에서 제공되면 먼저 local actor/profile로 resolve하고 그 canonical actor URI를 activity object 또는 저장된 outbound Follow의 local follower actor URI와 비교한다. `ctx.recipient`가 없으면 shared inbox로 간주하고 actor/object correlation만으로 recipient를 검증한다.
 - **remote target follow는 local stored `followPolicy`를 기준으로 낙관적으로 처리한다.** remote target의 stored `followPolicy`가 `OPEN`이면 kosmo DB에는 established `ProfileFollow`를 만들고 Follow를 발송한다. 이후 Accept는 idempotent하게 처리하고, Reject는 해당 projection을 제거한다. `APPROVAL_REQUIRED` local/remote target에 대한 request 생성은 후속 request flow로 남기며 이번 change에서는 conflict로 거부한다.

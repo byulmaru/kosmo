@@ -13,9 +13,9 @@
 - **AND** outbound Follow activity identity는 생성된 `ProfileFollow.id`에서 파생한 kosmo outbound Follow URI여야 한다
 - **AND** outbound Follow activity identity는 follower actor URI와 followee actor URI만으로 파생하지 않고 새 logical outbound Follow activity마다 고유해야 한다
 - **AND** Fedify `orderingKey`는 follower actor URI와 followee actor URI pair에서 안정적으로 파생되어 같은 pair의 모든 outbound Follow와 Undo(Follow)에 재사용되어야 한다
-- **AND** Fedify transport retry는 같은 Follow activity identity를 재사용해야 한다
+- **AND** 후속 Fedify transport retry가 같은 Follow activity identity를 재사용할 수 있도록 outbound Follow activity identity를 안정적으로 저장해야 한다
 - **AND** 이번 capability는 outbound `ProfileFollowRequest`를 만들지 않으며, approval-required remote follow request correlation은 후속 capability에서 다룬다
-- **AND** transport delivery retry와 queue 상태는 Fedify 경계에 맡기고 도메인 테이블에 중복 저장하지 않는다
+- **AND** Fedify delivery queue/retry 설정과 운영 검증은 후속 capability 범위이며, transport delivery retry와 queue 상태는 도메인 테이블에 중복 저장하지 않는다
 
 #### Scenario: Store inbound remote Follow correlation
 
@@ -26,6 +26,7 @@
 - **AND** 같은 remote follower와 local followee pair의 established `ProfileFollow`가 이미 있으면 기존 inbound Follow response metadata를 유지하고 같은 id의 재전달 또는 새 Follow id를 가진 duplicate Follow의 metadata로 갱신하지 않는다
 - **AND** duplicate inbound Follow에 대한 `Accept(Follow)` response object는 저장된 first-wins metadata가 아니라 현재 검증을 통과한 수신 Follow object를 사용할 수 있어야 한다
 - **AND** inbound `Undo(Follow)`는 저장된 inbound Follow id가 다르거나 object id가 없더라도 verified same actor/object이면 해당 관계 또는 request를 취소하는 의사로 처리할 수 있어야 한다
+- **AND** IRI-only `Undo.object`는 이번 capability에서 inbound Follow metadata로 역조회하지 않고 side effect 없이 무시할 수 있어야 한다
 - **AND** activity-level duplicate skip은 Fedify inbox idempotency와 `ProfileFollow`/`ProfileFollowRequest` unique 제약에 맡긴다
 
 #### Scenario: Remove rejected remote follow projection

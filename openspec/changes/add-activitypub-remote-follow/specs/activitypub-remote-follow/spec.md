@@ -2,13 +2,14 @@
 
 ### Requirement: Fedify follow protocol boundary
 
-시스템은 ActivityPub follow protocol 처리에서 Fedify가 제공하는 inbox, signature, key, send, queue 기능을 재사용해야 한다(MUST).
+시스템은 ActivityPub follow protocol 처리에서 Fedify가 제공하는 inbox, signature, key, send 기능을 재사용해야 한다(MUST).
 
 #### Scenario: Use Fedify for outbound follow protocol activities
 
 - **WHEN** 시스템이 remote actor로 Follow, Undo(Follow), Accept(Follow), 또는 Reject(Follow)를 발송한다
 - **THEN** 시스템은 Fedify `sendActivity`를 사용한다
-- **AND** 시스템은 HTTP signature, delivery retry, queue를 직접 구현하지 않는다
+- **AND** 시스템은 HTTP signature를 직접 구현하지 않는다
+- **AND** Fedify delivery queue/retry 설정과 운영 검증은 후속 capability 범위로 두고, 이번 capability에서는 queue/retry 상태를 저장하거나 직접 구현하지 않는다
 
 #### Scenario: Use Fedify for inbound follow activities
 
@@ -35,7 +36,7 @@
 - **WHEN** active local profile이 `followPolicy`가 `OPEN`인 활성 ActivityPub remote profile follow를 요청한다
 - **THEN** 시스템은 local profile을 follower, remote profile을 followee로 하는 established `ProfileFollow` 관계를 생성하거나 기존 관계를 반환한다
 - **AND** 새 `ProfileFollow` 관계가 생성된 경우에만 Fedify `sendActivity`로 ActivityPub `Follow` activity를 발송한다
-- **AND** 새 logical outbound Follow activity의 id는 생성된 `ProfileFollow.id`에서 파생한 kosmo outbound Follow URI로 고정해 Undo(Follow) 구성과 Fedify transport retry에 사용할 수 있도록 저장하고, actor URI와 object URI는 후속 Accept/Reject/Undo 검증에 사용할 수 있도록 해당 `ProfileFollow`에 연결된다
+- **AND** 새 logical outbound Follow activity의 id는 생성된 `ProfileFollow.id`에서 파생한 kosmo outbound Follow URI로 고정해 Undo(Follow) 구성과 후속 Fedify transport retry에 사용할 수 있도록 저장하고, actor URI와 object URI는 후속 Accept/Reject/Undo 검증에 사용할 수 있도록 해당 `ProfileFollow`에 연결된다
 - **AND** Fedify `orderingKey`는 local follower actor URI와 remote followee actor URI pair에서 안정적으로 파생하며, 같은 pair의 모든 outbound Follow와 Undo(Follow)에 재사용한다
 - **AND** 기존 `ProfileFollow` 관계를 반환하는 idempotent 요청에서는 ActivityPub `Follow` activity를 다시 발송하지 않는다
 
@@ -116,7 +117,8 @@
 #### Scenario: Receive remote Undo Follow
 
 - **WHEN** Fedify inbox listener가 verified remote `Undo(Follow)` activity를 전달한다
-- **THEN** `Undo.object`는 Follow activity여야 한다
+- **THEN** `Undo.object`는 embedded Follow이거나 Fedify가 안전하게 typed Follow로 제공한 object여야 한다
+- **AND** `Undo.object`가 IRI-only이면 시스템은 이번 capability에서 지원하지 않는 Undo로 처리하고 local follow graph 또는 request를 제거하지 않는다
 - **AND** `Undo.actor`는 undo 대상 Follow의 actor 및 remote follower actor URI와 일치해야 한다
 - **AND** undo 대상 Follow의 object는 local followee actor URI와 일치해야 한다
 - **AND** personal inbox에서 Fedify `ctx.recipient`가 제공되면 시스템은 해당 recipient identifier를 local actor/profile로 resolve하고, 그 canonical actor URI가 undo 대상 Follow의 object local actor URI와 일치해야 한다
