@@ -10,6 +10,7 @@ metadata:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
   annotations:
     tailscale.com/hostname: {{ include "kosmo.postgresTailscaleHostname" . | quote }}
+    tailscale.com/tags: "tag:dev-database"
 spec:
   type: LoadBalancer
   loadBalancerClass: tailscale
