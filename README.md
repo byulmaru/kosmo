@@ -4,6 +4,17 @@
 
 AWS Terraform root is documented in [apps/terraform/README.md](apps/terraform/README.md).
 
+## Development Secrets
+
+Dev scripts load environment variables from Vault through `scripts/vault-run.mjs`.
+Install the Vault CLI and set `VAULT_ADDR`; if needed, the wrapper runs
+`vault login -method=oidc` before reading secrets. Use normal workspace scripts
+such as `pnpm dev`. The default secret path is
+`secret/kubernetes/kosmo/local`; use
+`node scripts/vault-run.mjs --env dev -- pnpm --recursive --parallel --if-present dev`
+or `node scripts/vault-run.mjs --secret-path secret/kubernetes/kosmo/dev -- <command>`
+to point at another path.
+
 ## Test Postgres
 
 Run a local PostgreSQL instance for tests with Docker Compose:
