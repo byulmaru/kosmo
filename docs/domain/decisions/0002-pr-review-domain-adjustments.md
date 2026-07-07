@@ -1,0 +1,57 @@
+# ADR 0002: PR Review Domain Adjustments
+
+## 상태
+
+Accepted
+
+## 날짜
+
+2026-06-29
+
+## 결정
+
+PR 리뷰에서 확인된 불일치와 불명확한 범위를 다음처럼 정리한다.
+
+- 게시 목록의 canonical domain term은 `Post List`다. `Feed`는 canonical domain term으로 사용하지
+  않는다.
+- `Post List` 정책은 Home Post List, Profile Post List, Hashtag Post List만 다룬다.
+- Home Post List와 Profile Post List는 Post Form이 Repost인 [Post](../objects/post.md) 후보를 합쳐 목록
+  항목으로 표시한다.
+- Hashtag Post List는 Post Visibility가 공개인 원본 Post만 포함하고 답글과 Repost는 포함하지 않는다.
+- Local, Federated, List 기반 Post List, Custom Post List, 키워드 수집형 Post List는 현재 범위에서
+  제외한다.
+- Repost는 공개 또는 조용한 공개 Post만 대상으로 한다. Repost는 원본 Post Visibility를 변경하지
+  않는다.
+- Reaction은 같은 Post에 대해 Profile당 같은 이모지 1개만 허용하고, 서로 다른 이모지는 여러 개
+  허용한다.
+- 본문 길이는 500자로 제한한다. 첨부 미디어가 있으면 본문이 없어도 Post를 게시할 수 있다.
+- 게시 후 Post Visibility는 변경할 수 없다.
+- 팔로워 공개 Post도 멘션된 Profile에게는 보인다.
+- 민감한 미디어 플래그는 Post 단위 속성으로 둔다.
+- 설문, 예약 게시, 임시 저장, 동영상, GIF는 현재 Post/Media 범위에서 제외한다.
+- Alt Text는 필수 입력이 아니다.
+- Media는 Account의 업로드/감사 책임과 Profile의 사용 주체를 함께 기록한다. 구체 파일 형식, Hash,
+  EXIF 처리 같은 기술 세부와 개인 파일함, 과거 업로드 재사용 라이브러리는 현재 Media 범위에서
+  제외한다.
+- 단어/해시태그 제어의 canonical term은 Word Mute, Hashtag Mute다. Filter는 canonical term으로
+  사용하지 않는다.
+- 단어/해시태그 뮤트는 대소문자를 구분하지 않고, 단어 경계 없이 부분 문자열로 매치한다.
+- thread mute는 해당 Post/thread의 답글, Reaction, Repost 알림을 끄는 단위다.
+- Block 발생 시 기존 Notification은 삭제하거나 상태를 바꾸지 않는다.
+- 서버 차단 또는 Profile 도메인 차단에 걸린 콘텐츠는 없는 것처럼 취급한다.
+- 신고 제출, 신고 묶음, 신고 처리, Labeler, stackable moderation, 커뮤니티 moderation은 현재 도메인
+  범위에서 제외한다.
+
+## 문서 반영
+
+- [Post List Definition](../objects/post-list-definition.md)은 게시 목록과 Post Form별 후보 합성 규칙을
+  정의한다.
+- [Post](../objects/post.md)는 Post Form, Post Visibility, 본문 길이, 빈 Post 판정, Content Warning,
+  Sensitive Media 속성을 정의한다.
+- [Media](../objects/media.md)는 이미지 중심의 Media 도메인만 다룬다.
+- [Notification Item](../objects/notification-item.md)은 thread mute와 읽음 상태를 정의한다.
+- [Profile Relation Rule](../objects/profile-relation-rule.md)은 Profile 차단과 뮤트 정책을 정의한다.
+- [Word Mute Rule](../objects/word-mute-rule.md)과 [Hashtag Mute Rule](../objects/hashtag-mute-rule.md)은
+  단어/해시태그 뮤트 정책을 정의한다.
+- [Profile Domain Block](../objects/profile-domain-block.md)은 Profile 개인 Domain block을 정의한다.
+- [Instance](../objects/instance.md)는 서버 차단 정책을 정의한다.
