@@ -1,3 +1,4 @@
+{{- if .Values.webDomain -}}
 {{- $hostname := trimSuffix "." .Values.webDomain -}}
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -23,3 +24,4 @@ spec:
       backendRefs:
         - name: {{ printf "%s-web" .Release.Name | trunc 63 | trimSuffix "-" }}
           port: 80
+{{- end }}
