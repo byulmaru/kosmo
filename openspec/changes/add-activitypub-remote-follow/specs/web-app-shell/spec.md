@@ -12,6 +12,18 @@
 - **AND** stored ActivityPub remote profile의 `relativeHandle`은 bare `@handle`이 아니라 `@handle@domain`이다
 - **AND** 결과 항목의 팔로우 액션은 local profile 또는 ActivityPub remote profile 여부와 관계없이 기존 `ProfileListItem`/`FollowButton` 정책에 따라 표시되거나 숨겨진다
 
+#### Scenario: Local-domain handle result
+
+- **WHEN** 사용자가 configured local domain의 `handle@domain` 또는 `@handle@domain` 형식 handle을 사람 탭에서 검색한다
+- **THEN** 시스템은 이를 remote profile 검색으로 취급하지 않고 local profile lookup으로 정규화한다
+- **AND** 결과 profile의 `relativeHandle`은 `@handle` 형식으로 유지된다
+
+#### Scenario: Stored remote handle result
+
+- **WHEN** 사용자가 remote domain의 `handle@domain` 또는 `@handle@domain` 형식 handle을 사람 탭에서 검색한다
+- **THEN** 시스템은 이미 materialized되어 DB에 저장된 ActivityPub remote profile만 반환한다
+- **AND** 검색 중 WebFinger lookup, actor document fetch, 또는 remote profile 저장을 수행하지 않는다
+
 #### Scenario: Missing handle result
 
 - **WHEN** 사용자가 존재하지 않는 handle을 사람 탭에서 검색한다

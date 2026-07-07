@@ -13,6 +13,12 @@
 - **AND** 새 remote profile의 followers count와 following count는 actor materialization에서 확인한 remote followers/following collection count로 초기화한다
 - **AND** remote collection count를 확인할 수 없으면 GraphQL non-null count 계약을 유지할 수 있도록 0으로 초기화할 수 있다
 
+#### Scenario: Backfill stored profile counts
+
+- **WHEN** followers/following 저장 count column을 기존 DB에 추가한다
+- **THEN** migration은 기존 established `ProfileFollow` row를 기준으로 각 profile의 followers count와 following count를 채운다
+- **AND** 비활성 profile이 포함된 관계는 active profile count backfill에 포함하지 않는다
+
 #### Scenario: Update stored counts for established follow changes
 
 - **WHEN** established `ProfileFollow` 관계가 새로 생성된다
@@ -28,11 +34,21 @@
 - **AND** 저장 count는 0보다 작아질 수 없다
 - **AND** follow 관계가 없어 idempotent unfollow로 처리되는 경우에는 저장 count를 변경하지 않는다
 
+#### Scenario: Adjust stored counts when a profile is disabled
+
+- **WHEN** active profile이 비활성화된다
+- **THEN** 시스템은 해당 profile이 follower인 established `ProfileFollow` row의 active followee profile followers count를 1씩 감소시킨다
+- **AND** 해당 profile이 followee인 established `ProfileFollow` row의 active follower profile following count를 1씩 감소시킨다
+- **AND** `ProfileFollow` row는 삭제하지 않는다
+- **AND** 저장 count는 0보다 작아질 수 없다
+
 #### Scenario: Refresh remote stored counts
 
 - **WHEN** remote ActivityPub actor refresh가 followers/following collection count를 확인한다
 - **THEN** 시스템은 해당 remote `Profile`의 저장 followers count와 following count를 확인한 값으로 갱신한다
 - **AND** remote collection item 또는 page content는 이번 capability에서 mirror하지 않는다
+- **AND** 이번 capability는 remote baseline count와 local optimistic delta를 별도 column으로 분리하지 않는다
+- **AND** 저장 count는 best-effort 값이며, remote refresh와 이후 follow side effect가 마지막으로 반영한 값으로 간주한다
 - **AND** refresh에서 collection count를 확인할 수 없으면 기존 저장 count를 임의로 0으로 덮어쓰지 않는다
 
 ### Requirement: Remote follow activity correlation storage
