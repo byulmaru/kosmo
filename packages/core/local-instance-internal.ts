@@ -13,6 +13,10 @@ export type LocalInstanceConfig = {
   domain: string;
 };
 
+export type ConfiguredLocalInstance = typeof Instances.$inferSelect & {
+  canonicalOrigin: string;
+};
+
 export type LocalInstanceOptions = {
   publicOrigin?: string;
 };
@@ -47,7 +51,7 @@ export const parseLocalInstanceConfig = ({
 export const validateConfiguredLocalInstance = (
   instance: typeof Instances.$inferSelect | undefined,
   config: LocalInstanceConfig,
-) => {
+): ConfiguredLocalInstance => {
   if (!instance) {
     throw new LocalInstanceConfigurationError('Configured local instance row is missing');
   }
@@ -62,5 +66,5 @@ export const validateConfiguredLocalInstance = (
     );
   }
 
-  return instance;
+  return instance as ConfiguredLocalInstance;
 };

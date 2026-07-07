@@ -6,9 +6,9 @@ import {
   parseLocalInstanceConfig,
   validateConfiguredLocalInstance,
 } from './local-instance-internal';
-import type { LocalInstanceOptions } from './local-instance-internal';
+import type { ConfiguredLocalInstance, LocalInstanceOptions } from './local-instance-internal';
 
-let configuredLocalInstancePromise: Promise<typeof Instances.$inferSelect> | undefined;
+let configuredLocalInstancePromise: Promise<ConfiguredLocalInstance> | undefined;
 
 const loadConfiguredLocalInstance = async (options: LocalInstanceOptions = {}) => {
   const config = parseLocalInstanceConfig(options);
@@ -32,4 +32,4 @@ export const resolveConfiguredLocalInstance = async (options: LocalInstanceOptio
   return configuredLocalInstancePromise;
 };
 
-export type { LocalInstanceOptions };
+export type { ConfiguredLocalInstance, LocalInstanceOptions };
