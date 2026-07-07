@@ -51,11 +51,27 @@ test('검색 전 상태에서 검색어 입력에 포커스하면 최근 검색 
   await expect(page.getByRole('textbox', { name: '검색어' })).toBeVisible();
   await expect(page.getByText('프로필을 검색해보세요')).toBeVisible();
   await expect(page.getByRole('tablist', { name: '검색 결과 유형' })).toHaveCount(0);
-  await expect(page.getByText('최근 검색')).toHaveCount(0);
+  await expect(page.getByText('최근 검색', { exact: true })).toHaveCount(0);
 
   await page.getByRole('textbox', { name: '검색어' }).focus();
 
-  await expect(page.getByText('최근 검색')).toBeVisible();
+  await expect(page.getByText('최근 검색', { exact: true })).toBeVisible();
+  await expect(page.getByText('아직 최근 검색이 없어요.')).toBeVisible();
+  await expect(page.getByRole('tablist', { name: '검색 결과 유형' })).toHaveCount(0);
+});
+
+test('공백만 있는 q는 검색 후 단계나 최근 검색으로 처리하지 않는다', async ({ context, page }) => {
+  await signInSearchUser(context);
+
+  await page.goto('/search?q=%20%20%20&tab=people');
+
+  const searchInput = page.getByRole('textbox', { name: '검색어' });
+  await expect(searchInput).toHaveValue('   ');
+  await expect(page.getByText('프로필을 검색해보세요')).toBeVisible();
+  await expect(page.getByRole('tablist', { name: '검색 결과 유형' })).toHaveCount(0);
+
+  await searchInput.focus();
+
   await expect(page.getByText('아직 최근 검색이 없어요.')).toBeVisible();
   await expect(page.getByRole('tablist', { name: '검색 결과 유형' })).toHaveCount(0);
 });
@@ -74,11 +90,9 @@ test('handle을 제출하면 사람 탭 결과와 프로필 링크를 본다', a
   await expect(page).toHaveURL(/\/search\?/);
   expectSearchParams(page, { q: handle, tab: 'people' });
   await expectPeopleTabSelected(page);
-  await expect(page.getByRole('link', { name: new RegExp(displayName) })).toHaveAttribute(
-    'href',
-    `/@${handle}`,
-  );
-  await expect(page.getByText(`@${handle}`)).toBeVisible();
+  const profileLink = page.getByRole('link', { name: new RegExp(displayName) });
+  await expect(profileLink).toHaveAttribute('href', `/@${handle}`);
+  await expect(profileLink).toContainText(`@${handle}`);
 });
 
 test('검색어 deep-link는 tab이 없거나 알 수 없어도 사람 탭 결과를 보여준다', async ({
