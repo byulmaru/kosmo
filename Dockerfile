@@ -27,14 +27,7 @@ RUN pnpm install --frozen-lockfile
 
 FROM deps AS web-build
 
-ARG PUBLIC_ENV_HASH
-
-RUN --mount=type=secret,id=web_build_env,required=true,mode=0400 \
-  : "${PUBLIC_ENV_HASH}" \
-  && set -a \
-  && . /run/secrets/web_build_env \
-  && set +a \
-  && pnpm --filter @kosmo/web build
+RUN pnpm --filter @kosmo/web build
 
 FROM base AS runtime
 

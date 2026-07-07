@@ -28,9 +28,9 @@
     "zod": "^4.4.3"
   },
   "scripts": {
-    "drizzle:generate": "infisical run -- drizzle-kit generate",
-    "drizzle:push": "infisical run -- drizzle-kit push",
-    "drizzle:studio": "infisical run -- drizzle-kit studio"
+    "drizzle:generate": "node ../../scripts/vault-run.mjs -- drizzle-kit generate",
+    "drizzle:push": "node ../../scripts/vault-run.mjs -- drizzle-kit push",
+    "drizzle:studio": "node ../../scripts/vault-run.mjs -- drizzle-kit studio"
   },
   "devDependencies": {
     "drizzle-kit": "1.0.0-beta.22"

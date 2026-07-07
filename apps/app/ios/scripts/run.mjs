@@ -106,9 +106,9 @@ const readSimulators = () => {
 };
 
 const buildApp = (target) => {
-  run('infisical', ['run', '--', 'node', 'scripts/generate-info-plist.mjs']);
-  run('infisical', [
-    'run',
+  run('node', ['../../../scripts/vault-run.mjs', '--', 'node', 'scripts/generate-info-plist.mjs']);
+  run('node', [
+    '../../../scripts/vault-run.mjs',
     '--',
     'xcodebuild',
     '-project',
