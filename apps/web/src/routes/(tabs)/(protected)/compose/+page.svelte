@@ -19,8 +19,9 @@
     `),
   );
 
-  const session = $derived(query.data?.currentSession ?? null);
-  const selectedProfile = $derived(session?.selectedProfile ?? null);
+  const selectedProfile = $derived(query.data?.currentSession?.selectedProfile ?? null);
+  const loading = $derived(query.loading && !query.data);
+  const error = $derived(Boolean(query.error) && !query.data);
 </script>
 
 <section class="grid w-[min(100%,36rem)] gap-5 self-start">
@@ -29,7 +30,7 @@
     <h1 class="text-text-primary m-0 text-4xl leading-10 font-bold">글쓰기</h1>
   </header>
 
-  {#if query.loading}
+  {#if loading}
     <div class="border-border bg-card grid gap-3 rounded-md border p-4" aria-hidden="true">
       <div class="bg-surface h-5 w-36 animate-pulse rounded-sm"></div>
       <div class="bg-surface h-40 animate-pulse rounded-md"></div>
@@ -38,7 +39,7 @@
       </div>
     </div>
     <span class="sr-only" role="status">글쓰기 화면을 불러오는 중입니다.</span>
-  {:else if query.error}
+  {:else if error}
     <div class="border-border bg-card rounded-md border p-5" role="alert">
       <p class="text-text-primary m-0 text-base font-bold">글쓰기 정보를 불러오지 못했어요</p>
       <p class="text-text-secondary mt-1 mb-4 text-sm">잠시 후 다시 시도해주세요.</p>

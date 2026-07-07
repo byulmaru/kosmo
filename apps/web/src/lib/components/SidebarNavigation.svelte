@@ -14,7 +14,6 @@
     surface?: 'desktop' | 'drawer';
     switcherOpen?: boolean;
     onNavigate?: () => void;
-    onProfileStateChanged?: () => void;
   };
 
   const sidebarNavigationFragment = graphql(`
@@ -26,8 +25,8 @@
           handle
           relativeHandle
           displayName
-          followersCount
           followingCount
+          followersCount
         }
       }
       me {
@@ -46,7 +45,6 @@
     surface = 'desktop',
     switcherOpen = $bindable(false),
     onNavigate = () => {},
-    onProfileStateChanged = () => {},
   }: Props = $props();
 
   const navItems = [
@@ -108,7 +106,6 @@
       {surface}
       {loading}
       bind:switcherOpen
-      {onProfileStateChanged}
     />
 
     <nav class="flex w-full flex-col items-center gap-1" aria-label="주요 메뉴">
@@ -269,7 +266,6 @@
           {surface}
           {loading}
           bind:switcherOpen
-          {onProfileStateChanged}
         />
         {#if sidebarActiveProfile}
           <p class="max-w-full truncate text-sm leading-[19.6px] text-[#777777]">

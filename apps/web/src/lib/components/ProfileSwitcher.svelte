@@ -1,6 +1,6 @@
 <script lang="ts">
   import { profileHandleSchema } from '@kosmo/core/validation';
-  import { createFragment, createMutation } from '@mearie/svelte';
+  import { createFragment, createMutation, getClient } from '@mearie/svelte';
   import { graphql } from '$mearie';
   import Avatar from '$lib/components/Avatar.svelte';
   import { getFirstGraphQLError } from '$lib/graphql/error';
@@ -13,7 +13,6 @@
     surface?: 'desktop' | 'drawer';
     loading?: boolean;
     switcherOpen?: boolean;
-    onProfileStateChanged?: () => void;
   };
 
   let {
@@ -22,7 +21,6 @@
     surface = 'desktop',
     loading = false,
     switcherOpen = $bindable(false),
-    onProfileStateChanged = () => {},
   }: Props = $props();
 
   const profileSwitcherFragment = graphql(`
@@ -63,6 +61,11 @@
             handle
             relativeHandle
             displayName
+            followingCount
+            followersCount
+            ...BottomTabBar_profile
+            ...RightRail_profile
+            ...PostComposer_profile
           }
         }
       }
@@ -72,6 +75,15 @@
   const createProfileMutation = graphql(`
     mutation ProfileSwitcherCreateProfileMutation($handle: String!) {
       createProfile(input: { handle: $handle }) {
+        account {
+          id
+          profiles {
+            id
+            handle
+            relativeHandle
+            displayName
+          }
+        }
         profile {
           id
           handle
@@ -82,6 +94,7 @@
     }
   `);
 
+  const client = getClient();
   const switcher = createFragment(profileSwitcherFragment, () => query);
   const [selectProfile] = createMutation(selectProfileMutation);
   const [createProfile] = createMutation(createProfileMutation);
@@ -119,6 +132,15 @@
     switcherOpen = !switcherOpen;
   };
 
+  const invalidateActiveProfileCacheTargets = () => {
+    client
+      .extension('cache')
+      .invalidate(
+        { __typename: 'Query', $field: 'homeTimeline' },
+        { __typename: 'Profile', $field: 'viewerState' },
+      );
+  };
+
   // switcherOpen은 compact/full(및 데스크톱/드로어) 인스턴스가 공유하므로, 메뉴가 닫히면
   // 어느 트리거로 닫혔든 이 인스턴스의 생성 폼·에러를 비워 다음 열림에서 목록부터 보이게 한다.
   $effect(() => {
@@ -129,7 +151,7 @@
   });
 
   const chooseProfile = async (id: string) => {
-    if (activeProfile?.id === id || creatingOrSwitching) {
+    if (creatingOrSwitching) {
       return;
     }
 
@@ -140,7 +162,7 @@
       await selectProfile({ id });
       switcherOpen = false;
       profileCreationOpen = false;
-      onProfileStateChanged();
+      invalidateActiveProfileCacheTargets();
     } catch (error) {
       const graphQLError = getFirstGraphQLError(error);
 
@@ -187,16 +209,16 @@
 
       try {
         await selectProfile({ id: createdProfileId });
+
+        switcherOpen = false;
+        profileCreationOpen = false;
+        invalidateActiveProfileCacheTargets();
       } catch (error) {
         const graphQLError = getFirstGraphQLError(error);
 
         profileError = graphQLError?.message ?? '프로필을 전환하지 못했습니다.';
         return;
       }
-
-      switcherOpen = false;
-      profileCreationOpen = false;
-      onProfileStateChanged();
     } finally {
       profileActionLoading = false;
     }

@@ -35,6 +35,7 @@ input CreateProfileInput {
 }
 
 type CreateProfilePayload {
+  account: Account!
   profile: Profile!
 }
 

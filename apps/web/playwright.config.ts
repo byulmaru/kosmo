@@ -47,6 +47,7 @@ export default defineConfig({
   globalSetup: './e2e/global-setup.ts',
   testDir: './e2e',
   testMatch: '**/*.e2e.ts',
+  workers: 1,
   use: {
     baseURL: webOrigin,
     ...(browserChannel ? { channel: browserChannel } : {}),

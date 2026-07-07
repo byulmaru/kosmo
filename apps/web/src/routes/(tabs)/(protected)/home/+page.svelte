@@ -37,8 +37,10 @@
   // 비로그인·무효 세션도 인증 검증(currentSession) 로딩 중에는 (protected) 가드가 fail-open으로
   // 보류하므로 이 화면이 잠깐 렌더될 수 있다. session 존재를 함께 봐서 그사이 온보딩이 새지 않게 하고,
   // 세션이 null로 확정되면 (protected) 가드가 루트(/)로 보낸다(PROD-148).
-  const showOnboarding = $derived(Boolean(session) && !selectedProfile);
-  const homeTimeline = $derived(query.data?.homeTimeline ?? null);
+  const showOnboarding = $derived(
+    Boolean(session) && !selectedProfile && !query.loading && !query.error,
+  );
+  const homeTimeline = $derived(query.error ? null : (query.data?.homeTimeline ?? null));
 </script>
 
 {#if query.loading && !query.data}

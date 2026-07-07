@@ -1,6 +1,6 @@
 <script lang="ts">
   import { graphql } from '$mearie';
-  import { createQuery, getClient } from '@mearie/svelte';
+  import { createQuery } from '@mearie/svelte';
   import BottomTabBar from '$lib/components/BottomTabBar.svelte';
   import RightRail from '$lib/components/RightRail.svelte';
   import SidebarNavigation from '$lib/components/SidebarNavigation.svelte';
@@ -9,7 +9,6 @@
 
   let { children } = $props();
 
-  const client = getClient();
   const query = createQuery(
     graphql(`
       query TabsLayoutQuery {
@@ -25,19 +24,7 @@
       }
     `),
   );
-
   const selectedProfile = $derived(query.data?.currentSession?.selectedProfile ?? null);
-
-  const invalidateSidebarNavigationData = () => {
-    client
-      .extension('cache')
-      .invalidate(
-        { __typename: 'Query', $field: 'currentSession' },
-        { __typename: 'Query', $field: 'me' },
-        { __typename: 'Query', $field: 'homeTimeline' },
-        { __typename: 'Profile', $field: 'viewerState' },
-      );
-  };
 
   let drawerOpen = $state(false);
   let swipeStartX = $state<number | null>(null);
@@ -107,7 +94,6 @@
       loading={query.loading}
       error={Boolean(query.error)}
       bind:switcherOpen={profileSwitcherOpen}
-      onProfileStateChanged={invalidateSidebarNavigationData}
     />
   </div>
 
@@ -169,7 +155,6 @@
           surface="drawer"
           bind:switcherOpen={profileSwitcherOpen}
           onNavigate={closeDrawer}
-          onProfileStateChanged={invalidateSidebarNavigationData}
         />
       </div>
     </div>
