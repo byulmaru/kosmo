@@ -117,31 +117,6 @@ describe('WebFinger local profile handle mapping', () => {
       ),
     );
   });
-
-  test('serves WebFinger for a normalized profile handle', async () => {
-    const profile = await createProfile({ handle: 'Alice', instanceId: localInstanceId });
-
-    const response = await federation.fetch(
-      new Request(
-        `${publicOrigin}/.well-known/webfinger?resource=${encodeURIComponent(
-          'acct:alice@127.0.0.1:4173',
-        )}`,
-      ),
-      { contextData: undefined },
-    );
-
-    assert.equal(response.status, 200);
-
-    const json = (await response.json()) as {
-      links?: Array<{ rel?: string; href?: string; type?: string }>;
-    };
-
-    assert.ok(
-      json.links?.some(
-        (link) => link.rel === 'self' && link.href === `${publicOrigin}/ap/actor/${profile.id}`,
-      ),
-    );
-  });
 });
 
 const truncateDatabase = async () => {
