@@ -391,6 +391,7 @@ test('검색 지우기와 뒤로가기 컨트롤은 q를 제거하고 검색 전
   const searchInput = page.getByRole('textbox', { name: '검색어' });
   await page.getByRole('button', { name: '검색 지우기' }).click();
 
+  await expect(searchInput).toHaveValue('');
   await expectSearchParams(page, { tab: 'people' });
   await expectSearchParamAbsent(page, 'q');
   await expect(searchInput).toBeFocused();
