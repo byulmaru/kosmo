@@ -47,6 +47,7 @@ export default defineConfig({
   globalSetup: './e2e/global-setup.ts',
   testDir: './e2e',
   testMatch: '**/*.e2e.ts',
+  // E2E specs reset a shared Postgres database, so files must not run in parallel.
   workers: 1,
   use: {
     baseURL: webOrigin,
