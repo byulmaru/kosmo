@@ -38,13 +38,17 @@ async function expectPeopleTabSelected(page: Page) {
   await expectSearchTabSelected(page, '사람');
 }
 
-function expectSearchParams(page: Page, expected: Record<string, string>) {
-  const url = new URL(page.url());
+async function expectSearchParams(page: Page, expected: Record<string, string>) {
+  await expect
+    .poll(() => {
+      const url = new URL(page.url());
 
-  expect(url.pathname).toBe('/search');
-  for (const [key, value] of Object.entries(expected)) {
-    expect(url.searchParams.get(key)).toBe(value);
-  }
+      return {
+        pathname: url.pathname,
+        ...Object.fromEntries(Object.keys(expected).map((key) => [key, url.searchParams.get(key)])),
+      };
+    })
+    .toEqual({ pathname: '/search', ...expected });
 }
 
 async function expectSearchParamAbsent(page: Page, key: string) {
