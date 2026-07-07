@@ -298,10 +298,20 @@ export const Profiles = pgTable(
     displayName: text('display_name').notNull(),
     bio: text('bio'),
     followPolicy: Enum.profileFollowPolicy('follow_policy').notNull(),
+    followersCount: integer('followers_count').notNull().default(0),
+    followingCount: integer('following_count').notNull().default(0),
     createdAt: createdAt(),
   },
   (table) => [unique().on(table.instanceId, table.normalizedHandle)],
 );
+
+const activityPubFollowMetadata = () => ({
+  activityPubFollowUri: text('activitypub_follow_uri'),
+  activityPubFollowActorUri: text('activitypub_follow_actor_uri'),
+  activityPubFollowObjectUri: text('activitypub_follow_object_uri'),
+  activityPubFollowGenerationAt: datetime('activitypub_follow_generation_at'),
+  activityPubFollowOrderingKey: text('activitypub_follow_ordering_key'),
+});
 
 export const ProfileFollows = pgTable(
   'profile_follow',
@@ -315,6 +325,7 @@ export const ProfileFollows = pgTable(
     followeeProfileId: uuid('followee_profile_id')
       .notNull()
       .references(() => Profiles.id, { onDelete: 'cascade' }),
+    ...activityPubFollowMetadata(),
     createdAt: createdAt(),
   },
   (table) => [
@@ -336,6 +347,7 @@ export const ProfileFollowRequests = pgTable(
     followeeProfileId: uuid('followee_profile_id')
       .notNull()
       .references(() => Profiles.id, { onDelete: 'cascade' }),
+    ...activityPubFollowMetadata(),
     createdAt: createdAt(),
   },
   (table) => [

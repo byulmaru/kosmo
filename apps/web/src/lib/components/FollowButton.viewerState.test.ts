@@ -15,9 +15,9 @@ describe('FollowButton viewer state boundary', () => {
     }).js.code;
 
     expect(componentSource).toContain('viewerState');
-    expect(componentSource).toContain('origin');
-    expect(componentSource).toContain("origin === 'LOCAL'");
-    expect(componentSource).toContain('isLocalProfile && viewerState');
+    expect(componentSource).not.toContain('origin');
+    expect(componentSource).not.toContain("origin === 'LOCAL'");
+    expect(componentSource).not.toContain('isLocalProfile');
     expect(componentSource).toContain('isSelf');
     expect(componentSource).toContain('follow {');
     expect(componentSource).not.toContain('authenticated');

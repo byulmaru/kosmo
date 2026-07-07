@@ -1,36 +1,27 @@
 import { ProfileFollows } from '@kosmo/core/db';
-import { ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
-import { and, eq, isNull, or } from 'drizzle-orm';
+import { InstanceState, ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
+import { and, eq, isNull, ne, or } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { UserContext } from '@/context';
 
 type ProfileFollowAccessProfile = {
   followPolicy: AnyPgColumn;
-  instanceId: AnyPgColumn;
   state: AnyPgColumn;
 };
 
 export const profileFollowAccessWhere = ({
-  configuredLocalInstanceId,
   ctx,
+  followerInstance,
   followerProfile,
+  followeeInstance,
   followeeProfile,
 }: {
-  configuredLocalInstanceId: string;
   ctx: UserContext;
+  followerInstance: { state: AnyPgColumn };
   followerProfile: ProfileFollowAccessProfile;
+  followeeInstance: { state: AnyPgColumn };
   followeeProfile: ProfileFollowAccessProfile;
 }) => {
-  const localProfilesWhere = and(
-    or(
-      isNull(followerProfile.instanceId),
-      eq(followerProfile.instanceId, configuredLocalInstanceId),
-    ),
-    or(
-      isNull(followeeProfile.instanceId),
-      eq(followeeProfile.instanceId, configuredLocalInstanceId),
-    ),
-  )!;
   const publicFollowWhere = and(
     eq(followerProfile.followPolicy, ProfileFollowPolicy.OPEN),
     eq(followeeProfile.followPolicy, ProfileFollowPolicy.OPEN),
@@ -44,9 +35,10 @@ export const profileFollowAccessWhere = ({
     : publicFollowWhere;
 
   return and(
-    localProfilesWhere,
     eq(followerProfile.state, ProfileState.ACTIVE),
     eq(followeeProfile.state, ProfileState.ACTIVE),
+    or(isNull(followerInstance.state), ne(followerInstance.state, InstanceState.SUSPENDED)),
+    or(isNull(followeeInstance.state), ne(followeeInstance.state, InstanceState.SUSPENDED)),
     visibleWhere,
   )!;
 };

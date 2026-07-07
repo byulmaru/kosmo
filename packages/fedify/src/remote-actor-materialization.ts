@@ -1,6 +1,6 @@
 import '@kosmo/core/polyfill';
 
-import { getActorTypeName, isActor } from '@fedify/vocab';
+import { Collection, getActorTypeName, isActor } from '@fedify/vocab';
 import {
   ActivityPubActors,
   db,
@@ -20,6 +20,7 @@ import {
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { parseProfileHandle } from '@kosmo/core/profile';
+import { setRemoteProfileFollowCountBaseline } from '@kosmo/core/profile-follow';
 import { normalizeHandle } from '@kosmo/core/utils';
 import {
   profileBioSchema,
@@ -41,10 +42,11 @@ export class RemoteActorMaterializationError extends Error {
 }
 
 type RemoteActorLookupContext = Pick<Context<void>, 'lookupObject'> &
-  Partial<Pick<Context<void>, 'contextLoader' | 'documentLoader'>>;
+  Partial<Pick<Context<void>, 'contextLoader' | 'documentLoader' | 'lookupWebFinger'>>;
 
 type RemoteActorMaterializationOptions = {
   context: RemoteActorLookupContext;
+  expectedActorUri?: URL;
   handle: string;
   now?: Temporal.Instant;
 };
@@ -68,6 +70,11 @@ type ActorEndpoints = {
   inboxUri: string | null;
   outboxUri: string | null;
   sharedInboxUri: string | null;
+};
+
+type ActorCounts = {
+  followersCount?: number;
+  followingCount?: number;
 };
 
 type ActorWithKosmoFields = Actor & {
@@ -208,6 +215,7 @@ const withLookupSignal =
 const lookupRemoteActor = async (
   context: RemoteActorLookupContext,
   handle: string,
+  expectedActorUri?: URL,
 ): Promise<Actor> => {
   const signal = AbortSignal.timeout(remoteActorLookupTimeoutMs);
   const object = (await context.lookupObject(`acct:${handle}`, {
@@ -228,7 +236,54 @@ const lookupRemoteActor = async (
     throw new RemoteActorMaterializationError('Remote actor is missing canonical URI.');
   }
 
+  if (expectedActorUri && object.id.href !== expectedActorUri.href) {
+    throw new RemoteActorMaterializationError('Remote actor canonical URI does not match.');
+  }
+
   return object;
+};
+
+const lookupCollectionCount = async (
+  context: RemoteActorLookupContext,
+  collectionUri: URL | null | undefined,
+): Promise<number | undefined> => {
+  if (!collectionUri) {
+    return undefined;
+  }
+
+  try {
+    const signal = AbortSignal.timeout(remoteActorLookupTimeoutMs);
+    const object = await context.lookupObject(collectionUri, {
+      ...(context.contextLoader
+        ? { contextLoader: withLookupSignal(context.contextLoader, signal) }
+        : {}),
+      ...(context.documentLoader
+        ? { documentLoader: withLookupSignal(context.documentLoader, signal) }
+        : {}),
+      signal,
+    });
+
+    return object instanceof Collection && object.totalItems !== null
+      ? object.totalItems
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const lookupActorCounts = async (
+  context: RemoteActorLookupContext,
+  actor: ActorWithKosmoFields,
+): Promise<ActorCounts> => {
+  const [followersCount, followingCount] = await Promise.all([
+    lookupCollectionCount(context, actor.followersId),
+    lookupCollectionCount(context, actor.followingId),
+  ]);
+
+  return {
+    ...(followersCount === undefined ? {} : { followersCount }),
+    ...(followingCount === undefined ? {} : { followingCount }),
+  };
 };
 
 const findStoredRemoteProfile = async (domain: string, normalizedHandle: string) =>
@@ -252,6 +307,26 @@ const findStoredRemoteProfile = async (domain: string, normalizedHandle: string)
     .limit(1)
     .then(first);
 
+const findStoredRemoteProfileByActorUri = async (actorUri: URL) =>
+  db
+    .select({
+      actor: getColumns(ActivityPubActors),
+      instance: getColumns(Instances),
+      profile: getColumns(Profiles),
+    })
+    .from(ActivityPubActors)
+    .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .where(
+      and(
+        eq(ActivityPubActors.uri, actorUri.href),
+        eq(Instances.kind, InstanceKind.ACTIVITYPUB),
+        eq(Profiles.state, ProfileState.ACTIVE),
+      ),
+    )
+    .limit(1)
+    .then(first);
+
 const isStale = (lastFetchedAt: Temporal.Instant | null, now: Temporal.Instant) =>
   lastFetchedAt === null ||
   lastFetchedAt.add(remoteActorRefreshTtl).epochNanoseconds <= now.epochNanoseconds;
@@ -262,6 +337,7 @@ const defaultScheduleRefresh = (refresh: () => Promise<void>) => {
 
 export const findOrMaterializeRemoteProfileActor = async ({
   context,
+  expectedActorUri,
   handle,
   now = getNow(),
   scheduleRefresh = defaultScheduleRefresh,
@@ -285,18 +361,89 @@ export const findOrMaterializeRemoteProfileActor = async ({
       isStale(stored.actor.lastFetchedAt, now)
     ) {
       scheduleRefresh(async () => {
-        await materializeRemoteProfileActor({ context, handle, now: getNow() });
+        await materializeRemoteProfileActor({
+          context,
+          expectedActorUri,
+          handle,
+          now: getNow(),
+        });
       });
     }
 
     return stored.profile;
   }
 
-  return materializeRemoteProfileActor({ context, handle, now });
+  return materializeRemoteProfileActor({ context, expectedActorUri, handle, now });
+};
+
+export const findOrMaterializeRemoteProfileActorByUri = async ({
+  context,
+  actorUri,
+  now = getNow(),
+  scheduleRefresh = defaultScheduleRefresh,
+}: {
+  context: RemoteActorLookupContext;
+  actorUri: URL;
+  now?: Temporal.Instant;
+  scheduleRefresh?: (refresh: () => Promise<void>) => void;
+}) => {
+  const stored = await findStoredRemoteProfileByActorUri(actorUri);
+
+  if (stored) {
+    if (stored.instance.state !== InstanceState.ACTIVE) {
+      return null;
+    }
+
+    if (isStale(stored.actor.lastFetchedAt, now)) {
+      scheduleRefresh(async () => {
+        await materializeRemoteProfileActor({
+          context,
+          expectedActorUri: actorUri,
+          handle: `${stored.profile.handle}@${stored.instance.domain}`,
+          now: getNow(),
+        });
+      });
+    }
+
+    return stored.profile;
+  }
+
+  if (!context.lookupWebFinger) {
+    return null;
+  }
+
+  const descriptor = await context.lookupWebFinger(actorUri);
+  const subject = descriptor?.subject;
+  const hasActivityPubSelfLink = descriptor?.links?.some(
+    (link) =>
+      link.rel === 'self' &&
+      link.href === actorUri.href &&
+      (link.type === 'application/activity+json' || link.type?.startsWith('application/ld+json')),
+  );
+
+  if (!subject?.startsWith('acct:') || !hasActivityPubSelfLink) {
+    return null;
+  }
+
+  try {
+    return await materializeRemoteProfileActor({
+      context,
+      expectedActorUri: actorUri,
+      handle: subject.slice('acct:'.length),
+      now,
+    });
+  } catch (error) {
+    if (error instanceof RemoteActorMaterializationError || error instanceof NotFoundError) {
+      return null;
+    }
+
+    throw error;
+  }
 };
 
 export const materializeRemoteProfileActor = async ({
   context,
+  expectedActorUri,
   handle,
   now = getNow(),
 }: RemoteActorMaterializationOptions) => {
@@ -308,9 +455,14 @@ export const materializeRemoteProfileActor = async ({
   }
 
   const remoteInstance = await ensureRemoteInstance(parsed.domain);
-  const actor = await lookupRemoteActor(context, `${parsed.normalizedHandle}@${parsed.domain}`);
+  const actor = await lookupRemoteActor(
+    context,
+    `${parsed.normalizedHandle}@${parsed.domain}`,
+    expectedActorUri,
+  );
   const projection = projectActor(actor as ActorWithKosmoFields, parsed.normalizedHandle);
   const endpoints = getActorEndpoints(actor as ActorWithKosmoFields);
+  const counts = await lookupActorCounts(context, actor as ActorWithKosmoFields);
   const actorUri = actor.id!.href;
   const actorType = toActorType(actor);
 
@@ -351,6 +503,12 @@ export const materializeRemoteProfileActor = async ({
           .returning()
           .then(firstOrThrow);
 
+        await setRemoteProfileFollowCountBaseline({
+          executor: tx,
+          profileId: profile.id,
+          ...counts,
+        });
+
         await tx
           .update(ActivityPubActors)
           .set({
@@ -390,6 +548,7 @@ export const materializeRemoteProfileActor = async ({
           handle: projection.handle,
           instanceId: remoteInstance.id,
           normalizedHandle: projection.normalizedHandle,
+          ...counts,
         })
         .returning()
         .then(firstOrThrow);

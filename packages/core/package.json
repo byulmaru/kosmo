@@ -12,6 +12,7 @@
     "./local-instance": "./local-instance.ts",
     "./polyfill": "./polyfill.ts",
     "./profile": "./profile.ts",
+    "./profile-follow": "./profile-follow.ts",
     "./search": "./search.ts",
     "./tiptap": "./tiptap/index.ts",
     "./utils": "./utils.ts",

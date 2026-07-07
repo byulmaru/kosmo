@@ -5,6 +5,7 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 import {
   AccountProfileRole,
   AccountState,
+  ActivityPubActorType,
   InstanceKind,
   InstanceState,
   ProfileFollowPolicy,
@@ -26,6 +27,7 @@ const databaseUrl = 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
+let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
@@ -48,6 +50,7 @@ describe('GraphQL remote profile boundary', () => {
     ({
       AccountProfiles,
       Accounts,
+      ActivityPubActors,
       db,
       firstOrThrow,
       Instances,
@@ -163,15 +166,18 @@ describe('GraphQL remote profile boundary', () => {
     });
   });
 
-  test('hides remote follow graph data even when cross-instance rows exist', async () => {
+  test('returns stored remote follow graph data', async () => {
     const auth = await createAuthenticatedSession();
     const remoteInstance = await createRemoteInstance();
     const remote = await createProfile({ handle: 'remote', instanceId: remoteInstance.id });
 
-    await db.insert(ProfileFollows).values([
-      { followerProfileId: auth.profile.id, followeeProfileId: remote.id },
-      { followerProfileId: remote.id, followeeProfileId: auth.profile.id },
-    ]);
+    const [viewerFollow, reverseFollow] = await db
+      .insert(ProfileFollows)
+      .values([
+        { followerProfileId: auth.profile.id, followeeProfileId: remote.id },
+        { followerProfileId: remote.id, followeeProfileId: auth.profile.id },
+      ])
+      .returning();
 
     const result = await requestGraphQL<{
       profileByHandle: {
@@ -199,12 +205,12 @@ describe('GraphQL remote profile boundary', () => {
 
     assertNoGraphQLErrors(result);
     assert.deepEqual(result.data?.profileByHandle, {
-      followers: { edges: [] },
+      followers: { edges: [{ node: { id: viewerFollow!.id } }] },
       followersCount: 0,
-      following: { edges: [] },
+      following: { edges: [{ node: { id: reverseFollow!.id } }] },
       followingCount: 0,
-      viewerFollow: null,
-      viewerState: { follow: null, isSelf: false },
+      viewerFollow: { id: viewerFollow!.id },
+      viewerState: { follow: { id: viewerFollow!.id }, isSelf: false },
     });
   });
 
@@ -236,7 +242,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(session.activeProfileId, auth.profile.id);
   });
 
-  test('rejects following a remote profile without creating a relationship', async () => {
+  test('rejects following a remote profile without actor metadata', async () => {
     const auth = await createAuthenticatedSession();
     const remoteInstance = await createRemoteInstance();
     const remote = await createProfile({ handle: 'remote', instanceId: remoteInstance.id });
@@ -253,7 +259,37 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(await countRows(ProfileFollows), 0);
   });
 
-  test('rejects unfollowing a remote profile without deleting an existing row', async () => {
+  test('returns an existing remote follow idempotently', async () => {
+    const auth = await createAuthenticatedSession();
+    const remoteInstance = await createRemoteInstance();
+    const remote = await createProfile({ handle: 'remote', instanceId: remoteInstance.id });
+    await db.insert(ActivityPubActors).values({
+      profileId: remote.id,
+      type: ActivityPubActorType.PERSON,
+      uri: `https://${remoteDomain}/users/remote`,
+    });
+    const follow = await db
+      .insert(ProfileFollows)
+      .values({ followerProfileId: auth.profile.id, followeeProfileId: remote.id })
+      .returning()
+      .then(firstOrThrow);
+
+    const result = await requestGraphQL<{
+      followProfile: { profileFollow: { id: string } } | null;
+    }>(
+      `mutation FollowRemote($id: ID!) {
+        followProfile(input: { id: $id }) { profileFollow { id } }
+      }`,
+      { id: remote.id },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.followProfile?.profileFollow.id, follow.id);
+    assert.equal(await countRows(ProfileFollows), 1);
+  });
+
+  test('deletes an existing remote follow locally when delivery metadata is absent', async () => {
     const auth = await createAuthenticatedSession();
     const remoteInstance = await createRemoteInstance();
     const remote = await createProfile({ handle: 'remote', instanceId: remoteInstance.id });
@@ -263,7 +299,9 @@ describe('GraphQL remote profile boundary', () => {
       .returning()
       .then(firstOrThrow);
 
-    const result = await requestGraphQL(
+    const result = await requestGraphQL<{
+      unfollowProfile: { profileFollowId: string | null } | null;
+    }>(
       `mutation UnfollowRemote($id: ID!) {
         unfollowProfile(input: { id: $id }) { profileFollowId }
       }`,
@@ -271,14 +309,9 @@ describe('GraphQL remote profile boundary', () => {
       auth.token,
     );
 
-    assertGraphQLErrorCode(result, 'NOT_FOUND');
-    const preserved = await db
-      .select()
-      .from(ProfileFollows)
-      .where(eq(ProfileFollows.id, follow.id))
-      .limit(1)
-      .then(firstOrThrow);
-    assert.equal(preserved.id, follow.id);
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.unfollowProfile?.profileFollowId, follow.id);
+    assert.equal(await countRows(ProfileFollows), 0);
   });
 
   test('allows creating a local profile when only a remote profile has the same handle', async () => {

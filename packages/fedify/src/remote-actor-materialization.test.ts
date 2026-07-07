@@ -2,7 +2,7 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, mock, test } from 'node:test';
-import { Endpoints, Note, Person } from '@fedify/vocab';
+import { Collection, Endpoints, Note, Person } from '@fedify/vocab';
 import {
   ActivityPubActorType,
   InstanceKind,
@@ -28,6 +28,7 @@ let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
 let Profiles: typeof CoreDb.Profiles;
 let seedDatabase: typeof CoreSeed.seedDatabase;
+let findOrMaterializeRemoteProfileActorByUri: typeof Materialization.findOrMaterializeRemoteProfileActorByUri;
 let findOrMaterializeRemoteProfileActor: typeof Materialization.findOrMaterializeRemoteProfileActor;
 let materializeRemoteProfileActor: typeof Materialization.materializeRemoteProfileActor;
 let RemoteActorMaterializationError: typeof Materialization.RemoteActorMaterializationError;
@@ -43,6 +44,7 @@ describe('remote actor materialization', () => {
       await import('@kosmo/core/db'));
     ({ seedDatabase } = await import('@kosmo/core/db/seed'));
     ({
+      findOrMaterializeRemoteProfileActorByUri,
       findOrMaterializeRemoteProfileActor,
       materializeRemoteProfileActor,
       RemoteActorMaterializationError,
@@ -64,7 +66,16 @@ describe('remote actor materialization', () => {
 
   test('stores a looked-up actor and its endpoint metadata', async () => {
     const actor = createActor();
-    const { context, lookupObject } = createLookupContext(async () => actor);
+    const { context, lookupObject } = createLookupContext(async (identifier) => {
+      if (identifier instanceof URL) {
+        return new Collection({
+          id: identifier,
+          totalItems: identifier.pathname.endsWith('/followers') ? 1_200 : 300,
+        });
+      }
+
+      return actor;
+    });
     const now = Temporal.Instant.from('2026-07-10T00:00:00Z');
 
     const profile = await materializeRemoteProfileActor({
@@ -77,8 +88,10 @@ describe('remote actor materialization', () => {
     assert.equal(profile.displayName, 'Alice Remote');
     assert.equal(profile.bio, 'Remote bio');
     assert.equal(profile.followPolicy, ProfileFollowPolicy.APPROVAL_REQUIRED);
+    assert.equal(profile.followersCount, 1_200);
+    assert.equal(profile.followingCount, 300);
     assert.equal(profile.createdAt.toString(), '2024-01-02T03:04:05Z');
-    assert.equal(lookupObject.mock.calls.length, 1);
+    assert.equal(lookupObject.mock.calls.length, 3);
     assert.equal(lookupObject.mock.calls[0]?.arguments[0], `acct:alice@${remoteDomain}`);
     assert.ok(lookupObject.mock.calls[0]?.arguments[1]?.signal instanceof AbortSignal);
 
@@ -101,6 +114,110 @@ describe('remote actor materialization', () => {
     assert.equal(stored.actor.followingUri, `https://${remoteDomain}/users/alice/following`);
     assert.equal(stored.actor.sharedInboxUri, `https://${remoteDomain}/inbox`);
     assert.equal(stored.actor.lastFetchedAt?.toString(), now.toString());
+  });
+
+  test('preserves stored counts when refreshed collections are unavailable', async () => {
+    const actor = createActor();
+    const firstContext = createLookupContext(async (identifier) => {
+      if (identifier instanceof URL) {
+        return new Collection({ id: identifier, totalItems: 42 });
+      }
+
+      return actor;
+    }).context;
+    const profile = await materializeRemoteProfileActor({
+      context: firstContext,
+      handle: `alice@${remoteDomain}`,
+    });
+    const secondContext = createLookupContext(async (identifier) =>
+      identifier instanceof URL ? null : actor,
+    ).context;
+
+    const refreshed = await materializeRemoteProfileActor({
+      context: secondContext,
+      handle: `alice@${remoteDomain}`,
+    });
+
+    assert.equal(refreshed.id, profile.id);
+    assert.equal(refreshed.followersCount, 42);
+    assert.equal(refreshed.followingCount, 42);
+  });
+
+  test('materializes an actor URI only after WebFinger identity verification', async () => {
+    const actor = createActor();
+    const { context } = createLookupContext(async () => actor);
+    const lookupWebFinger = mock.fn<Context<void>['lookupWebFinger']>(async () => ({
+      links: [
+        {
+          href: actor.id!.href,
+          rel: 'self',
+          type: 'application/activity+json',
+        },
+      ],
+      subject: `acct:alice@${remoteDomain}`,
+    }));
+
+    const profile = await findOrMaterializeRemoteProfileActorByUri({
+      actorUri: actor.id!,
+      context: { ...context, lookupWebFinger },
+    });
+
+    assert.equal(profile?.handle, 'alice');
+    assert.equal(lookupWebFinger.mock.calls.length, 1);
+  });
+
+  test('rejects unverified actor URI identities without writing', async () => {
+    const actor = createActor();
+    const { context } = createLookupContext(async () => actor);
+    const cases = [
+      null,
+      {
+        links: [{ href: actor.id!.href, rel: 'self', type: 'application/activity+json' }],
+        subject: `acct:bob@${remoteDomain}`,
+      },
+      {
+        links: [
+          {
+            href: `https://${remoteDomain}/users/other`,
+            rel: 'self',
+            type: 'application/activity+json',
+          },
+        ],
+        subject: `acct:alice@${remoteDomain}`,
+      },
+    ];
+
+    for (const descriptor of cases) {
+      const lookupWebFinger = mock.fn<Context<void>['lookupWebFinger']>(async () => descriptor);
+      const profile = await findOrMaterializeRemoteProfileActorByUri({
+        actorUri: actor.id!,
+        context: { ...context, lookupWebFinger },
+      });
+
+      assert.equal(profile, null);
+    }
+
+    const requestedActorUri = new URL(`https://${remoteDomain}/users/requested`);
+    const canonicalMismatch = await findOrMaterializeRemoteProfileActorByUri({
+      actorUri: requestedActorUri,
+      context: {
+        ...context,
+        lookupWebFinger: mock.fn<Context<void>['lookupWebFinger']>(async () => ({
+          links: [
+            {
+              href: requestedActorUri.href,
+              rel: 'self',
+              type: 'application/activity+json',
+            },
+          ],
+          subject: `acct:alice@${remoteDomain}`,
+        })),
+      },
+    });
+
+    assert.equal(canonicalMismatch, null);
+
+    assert.equal(await countRows(Profiles), 0);
   });
 
   test('canonicalizes a trailing DNS root dot before lookup and storage', async () => {
@@ -287,7 +404,7 @@ describe('remote actor materialization', () => {
     assert.equal(refreshes.length, 1);
 
     await refreshes[0]!();
-    assert.equal(lookupObject.mock.calls.length, 1);
+    assert.equal(lookupObject.mock.calls.length, 3);
   });
 
   test('returns stale profiles without refresh for unresponsive instances', async () => {
