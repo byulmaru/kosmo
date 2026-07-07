@@ -38,8 +38,6 @@
         handle을 입력하면 일치하는 프로필을 찾아드려요.
       </p>
     </div>
-  {:else if profile}
-    <ProfileListItem {profile} linked width="wide" class="w-full" />
   {:else if loading}
     <div aria-hidden="true">
       {#each skeletonItems as item (item)}
@@ -69,6 +67,8 @@
         </button>
       {/if}
     </div>
+  {:else if profile}
+    <ProfileListItem {profile} linked width="wide" class="w-full" />
   {:else}
     <div class="px-4 py-12 text-center">
       <p class="text-text-primary text-base font-semibold">검색 결과가 없어요</p>
