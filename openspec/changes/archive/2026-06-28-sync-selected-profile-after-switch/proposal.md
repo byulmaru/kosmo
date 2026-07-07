@@ -1,14 +1,15 @@
 ## Why
 
-프로필 전환 mutation은 성공 응답으로 갱신된 `Session.selectedProfile`을 제공하지만, 이미 열린 웹 셸과 `/compose`, 홈, 검색, 프로필 화면이 active profile 변경을 어떤 GraphQL operation을 통해 반영해야 하는지 클라이언트 계약이 명확하지 않다. 사용자가 사이드바에서 프로필을 바꾼 뒤 각 화면이 자기 데이터 요구사항을 route-local GraphQL operation에 드러내고, Mearie cache 갱신과 필요한 refetch를 통해 active profile 기반 UI를 비동기적으로 반영하도록 요구사항을 확정한다. (Linear PROD-130)
+프로필 전환 mutation은 성공 응답으로 갱신된 `Session.selectedProfile`을 제공하지만, 이미 열린 웹 셸과 `/compose`, 홈, 검색, 프로필 화면이 active profile 변경을 어떤 GraphQL operation 또는 viewer-dependent field를 통해 반영해야 하는지 클라이언트 계약이 명확하지 않다. 사용자가 사이드바에서 프로필을 바꾼 뒤 각 화면이 자기 데이터 요구사항을 route-local GraphQL operation에 드러내고, Mearie cache 갱신과 필요한 refetch를 통해 active profile 기반 UI를 비동기적으로 반영하도록 요구사항을 확정한다. (Linear PROD-130)
 
 ## What Changes
 
 - 사이드바 프로필 전환 성공 후 앱 셸의 활성 프로필 표시는 Mearie cache의 `Session.selectedProfile`/`Query.currentSession` 갱신을 반영해야 한다.
 - 이미 열린 `/compose` 화면의 새 글 작성 컴포넌트는 `/compose` route query가 선언한 `currentSession.selectedProfile { ...PostComposer_profile }` 결과를 작성 프로필로 사용해야 한다.
-- 홈, 검색, 프로필, followers/following 화면의 active profile 존재 여부와 viewer profile id 판단도 각 route query가 자기에게 필요한 `currentSession.selectedProfile` 필드를 선언해야 한다.
-- 일반 프로필 선택은 `Query.currentSession`, `Query.homeTimeline`, `Profile.viewerFollow` 등 active-profile 의존 cache target을 stale 처리하고, Mearie가 각 구독 route query를 비동기적으로 갱신하게 둔다.
-- 새 프로필 생성 후 선택되는 경우에는 접근 가능한 프로필 목록 갱신이 필요하므로 `me.profiles` 계열 데이터 갱신을 허용한다.
+- 홈처럼 active profile 자체가 필요한 화면은 각 route query가 자기에게 필요한 `currentSession.selectedProfile` 필드를 선언해야 한다.
+- 검색, 프로필, followers/following 화면의 viewer-dependent UI는 `Profile.viewerState` 같은 active-profile 의존 entity field 갱신 결과를 반영해야 한다.
+- 일반 프로필 선택은 mutation 응답의 `Session.selectedProfile` 정규화 갱신에 직접 결과를 맡기고, `Query.homeTimeline`, `Profile.viewerState` 등 active-profile 의존 파생 cache target만 stale 처리해 Mearie가 각 구독 route query를 비동기적으로 갱신하게 둔다.
+- 새 프로필 생성 후 선택되는 경우에는 `createProfile.account.profiles` 응답으로 접근 가능한 프로필 목록 cache를 갱신한다.
 
 ## Capabilities
 
