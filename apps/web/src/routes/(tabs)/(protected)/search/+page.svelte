@@ -21,9 +21,10 @@
   // SearchTab 정의(slug)는 @kosmo/core/search에 두고, 한글 라벨은 SEARCH_TAB_LABELS로 표시한다.
   const queryParam = $derived(page.url.searchParams.get('q') ?? '');
   const trimmedQuery = $derived(queryParam.trim());
+  const hasSubmittedQuery = $derived(trimmedQuery.length > 0);
   // tab slug를 SearchTab로 해석한다. 없거나 알 수 없으면 사람(people)이 기본 활성이다.
   const activeTab = $derived(parseSearchTab(page.url.searchParams.get('tab')));
-  const shouldSearchPeople = $derived(activeTab === SearchTab.PEOPLE && trimmedQuery.length > 0);
+  const shouldSearchPeople = $derived(activeTab === SearchTab.PEOPLE && hasSubmittedQuery);
 
   const peopleQuery = createQuery(
     graphql(`
@@ -40,10 +41,10 @@
 
   // 단계 구분(검색바 포커스 기준):
   // - input  : 검색바 포커스 = 입력 중 → 최근 검색 노출
-  // - results: 포커스 해제 + q 있음 = 검색 후 → 탭 + 결과
+  // - results: 포커스 해제 + trim 후 q 있음 = 검색 후 → 탭 + 결과
   // - before : 그 외 = 검색 전 → 안내
   let focused = $state(false);
-  const phase = $derived(focused ? 'input' : queryParam ? 'results' : 'before');
+  const phase = $derived(focused ? 'input' : hasSubmittedQuery ? 'results' : 'before');
 
   // 입력 중 값. 초기값을 URL의 q로 두어 deep-link(`/search?q=foo`)·SSR·JS 비활성에서도
   // 검색창과 결과 영역이 처음부터 같은 검색어를 가리키게 한다. 이후 포커스가 없을 때만 q와
@@ -60,10 +61,10 @@
     recent = getRecentSearches();
   });
 
-  // 검색이 수행되면(q 존재) 그 검색어를 최근 검색에 기록한다.
+  // 검색이 수행되면(trim 후 q 존재) 그 검색어를 최근 검색에 기록한다.
   // 제출은 네이티브 GET 폼이 처리하므로, 제출 핸들러 대신 URL의 q를 보고 여기서 기록한다.
   $effect(() => {
-    if (queryParam) {
+    if (hasSubmittedQuery) {
       recent = addRecentSearch(queryParam);
     }
   });
