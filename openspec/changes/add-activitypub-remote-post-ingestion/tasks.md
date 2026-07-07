@@ -17,12 +17,12 @@
 ## 3. GraphQL Post API
 
 - [ ] 3.1 `Profile.posts`가 remote profile에서 remote fetch 없이 이미 materialized된 visible posts를 최신순 connection으로 반환하도록 resolver를 확장한다.
-- [ ] 3.2 `Post` visibility access가 remote materialized posts를 local posts와 같은 visibility 규칙으로 다루도록 정렬한다.
-- [ ] 3.3 `homeTimeline`이 established `ProfileFollow`로 팔로우 중인 remote followee의 materialized posts를 포함할 수 있게 정렬한다.
+- [ ] 3.2 `Post` visibility access가 remote materialized posts를 local posts와 같은 visibility 규칙으로 다루되 작성자 instance가 `SUSPENDED`인 remote post는 노출하지 않도록 정렬한다.
+- [ ] 3.3 `homeTimeline`이 established `ProfileFollow`로 팔로우 중인 remote followee의 materialized posts를 포함할 수 있게 정렬하되 `SUSPENDED` instance의 materialized posts는 제외한다.
 - [ ] 3.4 GraphQL schema를 재생성하고 remote `Profile.posts`와 home timeline contract를 확인한다.
 
 ## 4. Verification
 
 - [ ] 4.1 remote post ingestion test로 actor-scoped/shared inbox route의 Fedify listener 연결과 GraphQL proxy 미전달, Fedify inbox delivery, 저장된 remote actor만 materialize, unknown actor에서 추가 WebFinger/materialization 미수행, actor attribution 검증, `to` Public은 `PUBLIC`, `cc` Public은 `UNLISTED`, public top-level Note materialization, shared inbox public Note materialization, reply Note skip, 같은 actor의 duplicate object URI content/visibility update와 createdAt 유지, 다른 actor의 duplicate object URI update 거부, missing published 최초 수신 시각 fallback과 object mapping published `null`, 5분 초과 미래 published의 `Post.createdAt` fallback과 object mapping 원본 published 보존, 재전달 시 published 유무와 값에 관계없이 기존 createdAt 유지, unsupported object skip을 검증한다.
-- [ ] 4.2 GraphQL post test로 remote `Profile.posts`의 DB-only materialized read, remote fetch 미시도, `UNRESPONSIVE` instance materialized read, `homeTimeline` 포함 여부를 검증한다.
+- [ ] 4.2 GraphQL post test로 remote `Profile.posts`의 DB-only materialized read, remote fetch 미시도, `UNRESPONSIVE` instance materialized read, `SUSPENDED` instance의 기존 materialized post가 `Post` Node, remote `Profile.posts`, `homeTimeline`에서 숨겨짐, `homeTimeline` 포함 여부를 검증한다.
 - [ ] 4.3 `pnpm lint:eslint`, 관련 package typecheck/test, GraphQL schema check, DB migration/schema check, `openspec validate add-activitypub-remote-post-ingestion --strict`를 실행한다.

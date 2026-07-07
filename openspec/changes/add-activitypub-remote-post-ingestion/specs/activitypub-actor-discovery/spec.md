@@ -9,23 +9,25 @@
 - **WHEN** 외부 서버가 `GET /ap/actor/{profile.id}`를 ActivityPub JSON으로 요청한다
 - **THEN** 시스템은 해당 ID의 local active profile을 조회한다
 - **AND** 시스템은 HTTP 200과 `application/activity+json` content type으로 응답한다
-- **AND** `Person` document는 `id`, `preferredUsername`, `name`, `url`, `published`, `inbox`, `outbox`, `publicKey`, `assertionMethods`를 포함한다
+- **AND** `Person` document는 `id`, `preferredUsername`, `name`, `url`, `published`, `inbox`, `outbox`, `endpoints`, `publicKey`, `assertionMethods`를 포함한다
 - **AND** `id`는 canonical local actor URI `{localOrigin}/ap/actor/{profile.id}`와 같다
 - **AND** `preferredUsername`은 local profile handle이다
 - **AND** `url`은 기존 웹 프로필 URL `{localOrigin}/@{handle}`이다
 - **AND** `inbox`는 actor URI에 `/inbox` path suffix를 붙인 actor-scoped URI이다
 - **AND** `outbox`는 actor URI에 `/outbox` path suffix를 붙인 actor-scoped URI이다
+- **AND** `endpoints.sharedInbox`는 shared inbox URI `{localOrigin}/inbox`이다
 
 #### Scenario: Missing local actor document
 
 - **WHEN** actor URI의 UUID와 일치하는 local active profile이 없다
 - **THEN** 시스템은 HTTP 404로 응답한다
 
-#### Scenario: Advertise only required ActivityPub endpoints
+#### Scenario: Advertise supported ActivityPub endpoints
 
 - **WHEN** 시스템이 local actor document를 반환한다
 - **THEN** document는 ActivityPub actor 필수 속성인 `inbox`, `outbox` 값을 포함한다
-- **AND** document는 `followers`, `following`, `endpoints.sharedInbox` 값을 포함하지 않는다
+- **AND** document는 shared inbox discovery를 위한 `endpoints.sharedInbox` 값을 포함한다
+- **AND** document는 `followers`, `following` 값을 포함하지 않는다
 
 #### Scenario: Handle supported inbox delivery
 
