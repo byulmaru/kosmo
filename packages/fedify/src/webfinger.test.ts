@@ -27,19 +27,10 @@ describe('WebFinger local profile handle mapping', () => {
     process.env.DATABASE_URL ??= databaseUrl;
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
-    const coreDb = await import('@kosmo/core/db');
-    const federationModule = await import('./federation');
-    const seed = await import('@kosmo/core/db/seed');
-    const webfinger = await import('./webfinger');
-
-    db = coreDb.db;
-    firstOrThrow = coreDb.firstOrThrow;
-    Instances = coreDb.Instances;
-    pg = coreDb.pg;
-    Profiles = coreDb.Profiles;
-    seedDatabase = seed.seedDatabase;
-    federation = federationModule.federation;
-    resolveLocalActorIdentifierByHandle = webfinger.resolveLocalActorIdentifierByHandle;
+    ({ db, firstOrThrow, Instances, pg, Profiles } = await import('@kosmo/core/db'));
+    ({ federation } = await import('./federation'));
+    ({ seedDatabase } = await import('@kosmo/core/db/seed'));
+    ({ resolveLocalActorIdentifierByHandle } = await import('./webfinger'));
 
     await truncateDatabase();
 
