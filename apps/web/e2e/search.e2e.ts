@@ -15,19 +15,22 @@ async function signInSearchUser(
   return session;
 }
 
-async function clearRecentSearchesBeforeNavigation(page: Page) {
-  await page.addInitScript((storageKey) => {
-    localStorage.removeItem(storageKey);
-  }, recentSearchesKey);
-}
-
-async function seedRecentSearchesBeforeNavigation(page: Page, terms: string[]) {
+async function setRecentSearchesBeforeNavigation(page: Page, terms: string[]) {
   await page.addInitScript(
     ({ storageKey, recentTerms }) => {
+      if (recentTerms.length === 0) {
+        localStorage.removeItem(storageKey);
+        return;
+      }
+
       localStorage.setItem(storageKey, JSON.stringify(recentTerms));
     },
     { storageKey: recentSearchesKey, recentTerms: terms },
   );
+}
+
+function isSearchPeopleRequest(body: string) {
+  return body.includes('SearchPeopleByHandlePageQuery');
 }
 
 async function expectSearchTabSelected(page: Page, name: string) {
@@ -70,9 +73,8 @@ async function expectRecentSearches(page: Page, terms: string[]) {
   expect(stored).toEqual(terms);
 }
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async () => {
   await resetE2EDatabase();
-  await clearRecentSearchesBeforeNavigation(page);
 });
 
 test('검색 전 상태에서 검색어 입력에 포커스하면 최근 검색 영역을 본다', async ({
@@ -80,6 +82,7 @@ test('검색 전 상태에서 검색어 입력에 포커스하면 최근 검색 
   page,
 }) => {
   await signInSearchUser(context);
+  await setRecentSearchesBeforeNavigation(page, []);
 
   await page.goto('/search');
 
@@ -98,6 +101,7 @@ test('검색 전 상태에서 검색어 입력에 포커스하면 최근 검색 
 
 test('공백만 있는 q는 검색 후 단계나 최근 검색으로 처리하지 않는다', async ({ context, page }) => {
   await signInSearchUser(context);
+  await setRecentSearchesBeforeNavigation(page, []);
 
   await page.goto('/search?q=%20%20%20&tab=people');
 
@@ -112,9 +116,51 @@ test('공백만 있는 q는 검색 후 단계나 최근 검색으로 처리하�
   await expect(page.getByRole('tablist', { name: '검색 결과 유형' })).toHaveCount(0);
 });
 
+test('공백 q와 사람 외 탭은 사람 검색 GraphQL을 요청하지 않는다', async ({ context, page }) => {
+  const handle = 'e2e-no-people-query-target';
+  let peopleRequestCount = 0;
+
+  await signInSearchUser(context, { handle });
+  await page.route('**/graphql', async (route) => {
+    const body = route.request().postData() ?? '';
+
+    if (isSearchPeopleRequest(body)) {
+      peopleRequestCount += 1;
+    }
+
+    await route.continue();
+  });
+
+  await page.goto('/search?q=%20%20%20&tab=people');
+
+  await expect(page.getByText('프로필을 검색해보세요')).toBeVisible();
+  await expect(page.getByRole('tablist', { name: '검색 결과 유형' })).toHaveCount(0);
+  expect(peopleRequestCount).toBe(0);
+
+  await page.goto(`/search?q=${handle}&tab=popular`);
+
+  await expectSearchParams(page, { q: handle, tab: 'popular' });
+  await expectSearchTabSelected(page, '인기');
+  await expect(page.getByText('준비 중인 검색이에요')).toBeVisible();
+  expect(peopleRequestCount).toBe(0);
+
+  const tabCases = [
+    { name: '최신', tab: 'latest', message: '최신 검색은 곧 제공될 예정이에요.' },
+    { name: '미디어', tab: 'media', message: '미디어 검색은 곧 제공될 예정이에요.' },
+  ];
+
+  for (const { name, tab, message } of tabCases) {
+    await page.getByRole('tab', { name }).click();
+
+    await expectSearchParams(page, { q: handle, tab });
+    await expectSearchTabSelected(page, name);
+    await expect(page.getByText(message)).toBeVisible();
+    expect(peopleRequestCount).toBe(0);
+  }
+});
 test('저장된 최근 검색을 표시하고 개별 항목을 삭제한다', async ({ context, page }) => {
   await signInSearchUser(context);
-  await seedRecentSearchesBeforeNavigation(page, ['recent-alpha', 'recent-beta']);
+  await setRecentSearchesBeforeNavigation(page, ['recent-alpha', 'recent-beta']);
 
   await page.goto('/search');
   await page.getByRole('textbox', { name: '검색어' }).focus();
@@ -136,7 +182,7 @@ test('최근 검색 항목을 선택하면 해당 검색어로 다시 검색한�
   const displayName = 'E2E 최근 검색 대상';
 
   await signInSearchUser(context, { displayName, handle });
-  await seedRecentSearchesBeforeNavigation(page, [handle]);
+  await setRecentSearchesBeforeNavigation(page, [handle]);
 
   await page.goto('/search');
   await page.getByRole('textbox', { name: '검색어' }).focus();
@@ -235,7 +281,7 @@ test('사람 검색 실패 시 오류 상태와 다시 시도를 제공한다', 
   await page.route('**/graphql', async (route) => {
     const body = route.request().postData() ?? '';
 
-    if (body.includes('SearchPeopleByHandlePageQuery')) {
+    if (isSearchPeopleRequest(body)) {
       peopleRequestCount += 1;
       await route.fulfill({
         contentType: 'application/json',
@@ -254,6 +300,50 @@ test('사람 검색 실패 시 오류 상태와 다시 시도를 제공한다', 
   const previousCount = peopleRequestCount;
   await page.getByRole('button', { name: '다시 시도' }).click();
   await expect.poll(() => peopleRequestCount).toBeGreaterThan(previousCount);
+});
+
+test('기존 사람 검색 결과가 있으면 다음 검색 실패 중에도 기존 결과를 유지한다', async ({
+  context,
+  page,
+}) => {
+  const existingHandle = 'e2e-existing-result';
+  const failingHandle = 'e2e-existing-result-error';
+  const displayName = 'E2E 기존 결과';
+  let failingRequestCount = 0;
+
+  await signInSearchUser(context, { displayName, handle: existingHandle });
+  await page.route('**/graphql', async (route) => {
+    const body = route.request().postData() ?? '';
+
+    if (isSearchPeopleRequest(body) && body.includes(failingHandle)) {
+      failingRequestCount += 1;
+      await route.fulfill({
+        contentType: 'application/json',
+        status: 500,
+        body: JSON.stringify({ errors: [{ message: 'E2E forced search error' }] }),
+      });
+      return;
+    }
+
+    await route.continue();
+  });
+
+  await page.goto(`/search?q=${existingHandle}&tab=people`);
+
+  const existingProfileLink = page.getByRole('link', { name: new RegExp(displayName) });
+  await expect(existingProfileLink).toHaveAttribute('href', `/@${existingHandle}`);
+  await expect(existingProfileLink).toContainText(`@${existingHandle}`);
+
+  const searchInput = page.getByRole('textbox', { name: '검색어' });
+  await searchInput.fill(failingHandle);
+  await searchInput.press('Enter');
+
+  await expectSearchParams(page, { q: failingHandle, tab: 'people' });
+  await expect.poll(() => failingRequestCount).toBeGreaterThan(0);
+  await expect(existingProfileLink).toHaveAttribute('href', `/@${existingHandle}`);
+  await expect(existingProfileLink).toContainText(`@${existingHandle}`);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '다시 시도' })).toHaveCount(0);
 });
 
 test('검색 지우기와 뒤로가기 컨트롤은 q를 제거하고 검색 전 단계로 돌린다', async ({
