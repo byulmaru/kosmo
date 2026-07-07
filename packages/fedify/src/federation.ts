@@ -2,7 +2,7 @@ import { createFederation, MemoryKvStore } from '@fedify/fedify';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { ensureDrizzleLocalProfileActor } from './local-actor-store';
 import { createLocalProfilePerson } from './local-profile-person';
-import { mapLocalProfileHandle } from './webfinger';
+import { resolveLocalActorIdentifierByHandle } from './webfinger';
 import type { Federation } from '@fedify/fedify';
 
 const federationOrigin = process.env.PUBLIC_ORIGIN;
@@ -34,7 +34,7 @@ federation
       profile: result.profile,
     });
   })
-  .mapHandle(mapLocalProfileHandle)
+  .mapHandle((_context, username) => resolveLocalActorIdentifierByHandle(username))
   .setKeyPairsDispatcher(async (ctx, identifier) => {
     const localInstance = await resolveConfiguredLocalInstance();
     const result = await ensureDrizzleLocalProfileActor({

@@ -1,9 +1,7 @@
 import { db, first, Profiles } from '@kosmo/core/db';
 import { ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq } from 'drizzle-orm';
-import type { ActorHandleMapper } from '@fedify/fedify';
 
 export const resolveLocalActorIdentifierByHandle = async (handle: string) => {
   const localInstance = await resolveConfiguredLocalInstance();
@@ -15,7 +13,7 @@ export const resolveLocalActorIdentifierByHandle = async (handle: string) => {
       and(
         eq(Profiles.instanceId, localInstance.id),
         eq(Profiles.state, ProfileState.ACTIVE),
-        eq(Profiles.normalizedHandle, normalizeHandle(handle)),
+        eq(Profiles.handle, handle),
       ),
     )
     .limit(1)
@@ -23,6 +21,3 @@ export const resolveLocalActorIdentifierByHandle = async (handle: string) => {
 
   return profile?.id ?? null;
 };
-
-export const mapLocalProfileHandle: ActorHandleMapper<void> = (_context, username) =>
-  resolveLocalActorIdentifierByHandle(username);

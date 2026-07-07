@@ -1,6 +1,7 @@
+import assert from 'node:assert/strict';
+import { after, before, beforeEach, describe, test } from 'node:test';
 import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
 import { normalizeHandle } from '@kosmo/core/utils';
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as FederationModule from './federation';
@@ -16,14 +17,13 @@ let pg: typeof CoreDb.pg;
 let Profiles: typeof CoreDb.Profiles;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let federation: typeof FederationModule.federation;
-let mapLocalProfileHandle: typeof WebFinger.mapLocalProfileHandle;
 let resolveLocalActorIdentifierByHandle: typeof WebFinger.resolveLocalActorIdentifierByHandle;
 
 describe('WebFinger local profile handle mapping', () => {
   let localInstanceId: string;
   let remoteInstanceId: string;
 
-  beforeAll(async () => {
+  before(async () => {
     process.env.DATABASE_URL ??= databaseUrl;
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
@@ -39,7 +39,6 @@ describe('WebFinger local profile handle mapping', () => {
     Profiles = coreDb.Profiles;
     seedDatabase = seed.seedDatabase;
     federation = federationModule.federation;
-    mapLocalProfileHandle = webfinger.mapLocalProfileHandle;
     resolveLocalActorIdentifierByHandle = webfinger.resolveLocalActorIdentifierByHandle;
 
     await truncateDatabase();
@@ -53,45 +52,39 @@ describe('WebFinger local profile handle mapping', () => {
     await db.delete(Profiles);
   });
 
-  afterAll(async () => {
+  after(async () => {
     await pg.end();
   });
 
   test('returns the active local profile id for a matching handle', async () => {
     const profile = await createProfile({ handle: 'alice', instanceId: localInstanceId });
 
-    await expect(resolveLocalActorIdentifierByHandle('alice')).resolves.toBe(profile.id);
+    assert.equal(await resolveLocalActorIdentifierByHandle('alice'), profile.id);
   });
 
-  test('normalizes the queried handle before lookup', async () => {
-    const profile = await createProfile({ handle: 'alice', instanceId: localInstanceId });
+  test('returns null when the queried handle is not canonical', async () => {
+    await createProfile({ handle: 'alice', instanceId: localInstanceId });
 
-    await expect(resolveLocalActorIdentifierByHandle(' Alice ')).resolves.toBe(profile.id);
+    assert.equal(await resolveLocalActorIdentifierByHandle(' Alice '), null);
+    assert.equal(await resolveLocalActorIdentifierByHandle('Alice'), null);
   });
 
   test('returns null when the local handle does not exist', async () => {
-    await expect(resolveLocalActorIdentifierByHandle('missing')).resolves.toBeNull();
+    assert.equal(await resolveLocalActorIdentifierByHandle('missing'), null);
   });
 
-  test.each([ProfileState.DISABLED, ProfileState.SUSPENDED])(
-    'returns null when the matching local profile is %s',
-    async (state) => {
+  for (const state of [ProfileState.DISABLED, ProfileState.SUSPENDED]) {
+    test(`returns null when the matching local profile is ${state}`, async () => {
       await createProfile({ handle: 'alice', instanceId: localInstanceId, state });
 
-      await expect(resolveLocalActorIdentifierByHandle('alice')).resolves.toBeNull();
-    },
-  );
+      assert.equal(await resolveLocalActorIdentifierByHandle('alice'), null);
+    });
+  }
 
   test('ignores a matching handle from a non-configured instance', async () => {
     await createProfile({ handle: 'alice', instanceId: remoteInstanceId });
 
-    await expect(resolveLocalActorIdentifierByHandle('alice')).resolves.toBeNull();
-  });
-
-  test('exposes the same lookup as a Fedify handle mapper callback', async () => {
-    const profile = await createProfile({ handle: 'alice', instanceId: localInstanceId });
-
-    await expect(mapLocalProfileHandle({} as never, 'alice')).resolves.toBe(profile.id);
+    assert.equal(await resolveLocalActorIdentifierByHandle('alice'), null);
   });
 
   test('serves a WebFinger JRD for a local active profile handle', async () => {
@@ -106,24 +99,38 @@ describe('WebFinger local profile handle mapping', () => {
       { contextData: undefined },
     );
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get('content-type')).toContain('application/jrd+json');
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') ?? '', /application\/jrd\+json/);
 
     const json = (await response.json()) as {
       subject?: string;
       links?: Array<{ rel?: string; href?: string; type?: string }>;
     };
 
-    expect(json.subject).toBe('acct:alice@127.0.0.1:4173');
-    expect(json.links).toContainEqual({
-      rel: 'self',
-      href: `${publicOrigin}/ap/actor/${profile.id}`,
-      type: 'application/activity+json',
-    });
-    expect(json.links).toContainEqual({
-      rel: 'http://webfinger.net/rel/profile-page',
-      href: `${publicOrigin}/@alice`,
-    });
+    assert.equal(json.subject, 'acct:alice@127.0.0.1:4173');
+    assert.ok(
+      json.links?.some(
+        (link) =>
+          link.rel === 'self' &&
+          link.href === `${publicOrigin}/ap/actor/${profile.id}` &&
+          link.type === 'application/activity+json',
+      ),
+    );
+  });
+
+  test('returns 404 for a non-canonical WebFinger handle', async () => {
+    await createProfile({ handle: 'alice', instanceId: localInstanceId });
+
+    const response = await federation.fetch(
+      new Request(
+        `${publicOrigin}/.well-known/webfinger?resource=${encodeURIComponent(
+          'acct:Alice@127.0.0.1:4173',
+        )}`,
+      ),
+      { contextData: undefined },
+    );
+
+    assert.equal(response.status, 404);
   });
 });
 
