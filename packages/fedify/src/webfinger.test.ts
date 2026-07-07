@@ -62,11 +62,11 @@ describe('WebFinger local profile handle mapping', () => {
     assert.equal(await resolveLocalActorIdentifierByHandle('alice'), profile.id);
   });
 
-  test('returns null when the queried handle is not canonical', async () => {
-    await createProfile({ handle: 'alice', instanceId: localInstanceId });
+  test('normalizes the queried handle before lookup', async () => {
+    const profile = await createProfile({ handle: 'alice', instanceId: localInstanceId });
 
-    assert.equal(await resolveLocalActorIdentifierByHandle(' Alice '), null);
-    assert.equal(await resolveLocalActorIdentifierByHandle('Alice'), null);
+    assert.equal(await resolveLocalActorIdentifierByHandle(' Alice '), profile.id);
+    assert.equal(await resolveLocalActorIdentifierByHandle('Alice'), profile.id);
   });
 
   test('returns null when the local handle does not exist', async () => {
@@ -118,19 +118,29 @@ describe('WebFinger local profile handle mapping', () => {
     );
   });
 
-  test('returns 404 for a non-canonical WebFinger handle', async () => {
-    await createProfile({ handle: 'alice', instanceId: localInstanceId });
+  test('serves WebFinger for a normalized profile handle', async () => {
+    const profile = await createProfile({ handle: 'Alice', instanceId: localInstanceId });
 
     const response = await federation.fetch(
       new Request(
         `${publicOrigin}/.well-known/webfinger?resource=${encodeURIComponent(
-          'acct:Alice@127.0.0.1:4173',
+          'acct:alice@127.0.0.1:4173',
         )}`,
       ),
       { contextData: undefined },
     );
 
-    assert.equal(response.status, 404);
+    assert.equal(response.status, 200);
+
+    const json = (await response.json()) as {
+      links?: Array<{ rel?: string; href?: string; type?: string }>;
+    };
+
+    assert.ok(
+      json.links?.some(
+        (link) => link.rel === 'self' && link.href === `${publicOrigin}/ap/actor/${profile.id}`,
+      ),
+    );
   });
 });
 

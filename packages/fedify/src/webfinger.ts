@@ -1,6 +1,7 @@
 import { db, first, Profiles } from '@kosmo/core/db';
 import { ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
+import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq } from 'drizzle-orm';
 
 export const resolveLocalActorIdentifierByHandle = async (handle: string) => {
@@ -13,7 +14,7 @@ export const resolveLocalActorIdentifierByHandle = async (handle: string) => {
       and(
         eq(Profiles.instanceId, localInstance.id),
         eq(Profiles.state, ProfileState.ACTIVE),
-        eq(Profiles.handle, handle),
+        eq(Profiles.normalizedHandle, normalizeHandle(handle)),
       ),
     )
     .limit(1)
