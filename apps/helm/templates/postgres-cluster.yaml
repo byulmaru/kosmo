@@ -9,6 +9,11 @@ metadata:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
   instances: 1
+  {{- if eq .Values.env "dev" }}
+  postgresql:
+    pg_hba:
+      - host kosmo kosmo 100.64.0.0/10 trust
+  {{- end }}
   bootstrap:
     initdb:
       database: kosmo

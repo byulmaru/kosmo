@@ -1,0 +1,24 @@
+{{- if eq .Values.env "dev" -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kosmo.postgresTailscaleName" . }}
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: postgres-tailscale
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    tailscale.com/hostname: {{ include "kosmo.postgresTailscaleHostname" . | quote }}
+spec:
+  type: LoadBalancer
+  loadBalancerClass: tailscale
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+  selector:
+    cnpg.io/cluster: {{ include "kosmo.postgresName" . }}
+    cnpg.io/instanceRole: primary
+{{- end }}
