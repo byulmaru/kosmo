@@ -7,6 +7,9 @@ import {
   firstOrThrow,
   Instances,
   pg,
+  PostContents,
+  Posts,
+  ProfileFollows,
   Profiles,
   Sessions,
 } from '@kosmo/core/db';
@@ -14,13 +17,22 @@ import { seedDatabase } from '@kosmo/core/db/seed';
 import {
   AccountProfileRole,
   AccountState,
+  PostState,
+  PostVisibility,
   ProfileFollowPolicy,
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
+import {
+  createTipTapDocumentFromPlainText,
+  extractPlainTextFromTipTapDocument,
+} from '@kosmo/core/tiptap';
+import { eq } from 'drizzle-orm';
+import { Temporal } from 'temporal-polyfill';
 import type { BrowserContext } from '@playwright/test';
 
 const webOrigin = 'http://127.0.0.1:4173';
+let lastPostSeedTimestamp = 0;
 
 type CreateE2ESessionOptions = {
   accountState?: AccountState;
@@ -32,7 +44,38 @@ type CreateE2ESessionOptions = {
   token?: string;
 };
 
+type CreateE2EProfileOptions = {
+  displayName?: string;
+  followPolicy?: ProfileFollowPolicy;
+  handle?: string;
+  state?: ProfileState;
+};
+
+type CreateE2EFollowOptions = {
+  createdAt?: string;
+  followeeProfileId: string;
+  followerProfileId: string;
+};
+
+type CreateE2EPostOptions = {
+  body?: string;
+  createdAt?: string;
+  profileId: string;
+  state?: PostState;
+  visibility?: PostVisibility;
+};
+
+const toInstant = (value?: string) => (value ? Temporal.Instant.from(value) : undefined);
+
+async function waitForNextPostSeedTimestamp() {
+  while (Date.now() <= lastPostSeedTimestamp) {
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  }
+}
+
 export async function resetE2EDatabase() {
+  lastPostSeedTimestamp = 0;
+
   await pg.unsafe(`
     DO $$
     DECLARE
@@ -111,6 +154,83 @@ export async function createE2ESession(options: CreateE2ESessionOptions = {}) {
     .then(firstOrThrow);
 
   return { account, profile, session, token };
+}
+
+export async function createE2EProfile(options: CreateE2EProfileOptions = {}) {
+  const suffix = randomUUID().slice(0, 8);
+  const displayName = options.displayName ?? `E2E Profile ${suffix}`;
+  const handle = options.handle ?? `e2e-profile-${suffix}`;
+  const instance = await db.select().from(Instances).limit(1).then(firstOrThrow);
+
+  return await db
+    .insert(Profiles)
+    .values({
+      displayName,
+      followPolicy: options.followPolicy ?? ProfileFollowPolicy.OPEN,
+      handle,
+      instanceId: instance.id,
+      normalizedHandle: handle.toLowerCase(),
+      state: options.state ?? ProfileState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+}
+
+export async function createE2EFollow(options: CreateE2EFollowOptions) {
+  const createdAt = toInstant(options.createdAt);
+
+  return await db
+    .insert(ProfileFollows)
+    .values({
+      followeeProfileId: options.followeeProfileId,
+      followerProfileId: options.followerProfileId,
+      ...(createdAt ? { createdAt } : {}),
+    })
+    .returning()
+    .then(firstOrThrow);
+}
+
+export async function createE2EPost(options: CreateE2EPostOptions) {
+  const bodyJson = createTipTapDocumentFromPlainText(options.body ?? '');
+  const bodyText = extractPlainTextFromTipTapDocument(bodyJson);
+  const createdAt = toInstant(options.createdAt);
+
+  await waitForNextPostSeedTimestamp();
+
+  const post = await db.transaction(async (tx) => {
+    const post = await tx
+      .insert(Posts)
+      .values({
+        profileId: options.profileId,
+        state: options.state ?? PostState.ACTIVE,
+        visibility: options.visibility ?? PostVisibility.PUBLIC,
+        ...(createdAt ? { createdAt } : {}),
+      })
+      .returning()
+      .then(firstOrThrow);
+
+    const content = await tx
+      .insert(PostContents)
+      .values({
+        bodyJson,
+        bodyText,
+        postId: post.id,
+        ...(createdAt ? { createdAt } : {}),
+      })
+      .returning()
+      .then(firstOrThrow);
+
+    return await tx
+      .update(Posts)
+      .set({ currentContentId: content.id })
+      .where(eq(Posts.id, post.id))
+      .returning()
+      .then(firstOrThrow);
+  });
+
+  lastPostSeedTimestamp = Date.now();
+
+  return post;
 }
 
 export async function setE2ESessionCookie(context: BrowserContext, token: string) {
