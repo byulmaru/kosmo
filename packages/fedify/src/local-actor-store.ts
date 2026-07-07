@@ -3,7 +3,7 @@ import '@kosmo/core/polyfill';
 import { ActivityPubActorKeys, ActivityPubActors, db, first, Profiles } from '@kosmo/core/db';
 import { ActivityPubActorType, ProfileState } from '@kosmo/core/enums';
 import { and, eq } from 'drizzle-orm';
-import { ensureLocalProfileActor } from './local-actor-keys';
+import { ensureLocalProfileActor } from './local-profile-actor';
 import type { Database } from '@kosmo/core/db';
 import type {
   CreateLocalActorKeyInput,
@@ -14,7 +14,7 @@ import type {
   LocalProfileActorResult,
   StoredLocalActorKey,
   StoredLocalActorRow,
-} from './local-actor-keys';
+} from './local-profile-actor';
 
 type LocalActorDbClient = Pick<Database, 'insert' | 'select'>;
 
