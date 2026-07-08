@@ -108,13 +108,13 @@
 - **AND** remote follower와 local followee 사이에 established `ProfileFollow` 관계가 이미 있으면 시스템은 해당 관계를 idempotent하게 유지하고 `ProfileFollowRequest`를 생성하지 않는다
 - **AND** remote follower와 local followee 사이에 established `ProfileFollow` 관계가 이미 있으면 같은 pair의 pending `ProfileFollowRequest`를 같은 transaction 안에서 삭제한다
 - **AND** existing established 관계에 대해 같은 id의 Follow가 재전달되거나 같은 pair의 새 Follow id가 전달되어도 시스템은 저장된 inbound Follow response metadata를 갱신하지 않는다
-- **AND** existing established 관계에 대해 같은 id의 Follow가 재전달되거나 같은 pair의 새 Follow id가 전달되면 시스템은 response metadata를 갱신하지 않더라도 Undo freshness guard에 사용할 inbound follow generation timestamp는 현재 검증된 Follow의 activity timestamp로 갱신할 수 있다
+- **AND** existing established 관계에 대해 같은 id의 Follow가 재전달되거나 같은 pair의 새 Follow id가 전달되면 시스템은 response metadata를 갱신하지 않더라도 Undo freshness guard에 사용할 inbound follow generation timestamp를 현재 저장된 timestamp보다 최신인 검증된 Follow activity timestamp로 갱신할 수 있다
 - **AND** existing established 관계가 있거나 local profile follow policy가 `OPEN`이면 Fedify `sendActivity`로 현재 검증을 통과한 수신 Follow를 object로 하는 `Accept(Follow)` activity를 remote actor에게 발송한다
 - **AND** established 관계가 없고 local profile follow policy가 `OPEN`이면 remote profile을 follower, local profile을 followee로 하는 established `ProfileFollow` 관계를 생성한다
 - **AND** established 관계가 없고 local profile follow policy가 `OPEN`이면 같은 pair의 pending `ProfileFollowRequest`를 같은 transaction 안에서 삭제한다
 - **AND** established 관계가 없고 local profile follow policy가 `APPROVAL_REQUIRED`이면 remote profile을 follower, local profile을 followee로 하는 `ProfileFollowRequest`를 생성하거나 기존 request를 유지한다
 - **AND** 기존 `ProfileFollowRequest`를 유지하는 duplicate Follow에서는 저장된 inbound Follow response metadata를 갱신하지 않는다
-- **AND** 기존 `ProfileFollowRequest`를 유지하는 duplicate Follow에서도 Undo freshness guard에 사용할 inbound follow generation timestamp는 현재 검증된 Follow의 activity timestamp로 갱신할 수 있다
+- **AND** 기존 `ProfileFollowRequest`를 유지하는 duplicate Follow에서도 Undo freshness guard에 사용할 inbound follow generation timestamp를 현재 저장된 timestamp보다 최신인 검증된 Follow activity timestamp로 갱신할 수 있다
 - **AND** 이번 capability는 established 관계가 없는 `APPROVAL_REQUIRED` inbound Follow에 대한 Accept 또는 Reject를 자동 발송하지 않는다
 - **AND** pending remote follow request를 승인 또는 거절하고 그 결과 activity를 발송하는 UX는 후속 capability에서 다룬다
 

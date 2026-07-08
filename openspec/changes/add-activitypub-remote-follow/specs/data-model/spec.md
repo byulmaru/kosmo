@@ -18,6 +18,7 @@
 - **WHEN** followers/following 저장 count column을 기존 DB에 추가한다
 - **THEN** migration은 기존 established `ProfileFollow` row를 기준으로 각 profile의 followers count와 following count를 채운다
 - **AND** 비활성 profile이 포함된 관계는 active profile count backfill에 포함하지 않는다
+- **AND** `SUSPENDED` instance 소속 remote profile이 포함된 관계는 visible profile count backfill에 포함하지 않는다
 
 #### Scenario: Update stored counts for established follow changes
 
@@ -65,6 +66,7 @@
 - **AND** remote collection item 또는 page content는 이번 capability에서 mirror하지 않는다
 - **AND** 이번 capability는 remote baseline count와 local optimistic delta를 별도 column으로 분리하지 않는다
 - **AND** 저장 count는 best-effort 값이며, remote refresh와 이후 follow side effect가 마지막으로 반영한 값으로 간주한다
+- **AND** remote collection count가 kosmo가 저장한 known `ProfileFollow` edge를 이미 포함하더라도 이번 capability는 해당 edge를 deduplicate하는 별도 count reconciliation model을 두지 않는다
 - **AND** refresh에서 collection count를 확인할 수 없으면 기존 저장 count를 임의로 0으로 덮어쓰지 않는다
 
 ### Requirement: Remote follow activity correlation storage
@@ -93,7 +95,7 @@
 - **AND** inbound Follow activity identity, response metadata, generation timestamp는 duplicate correlation, Undo freshness guard, Accept/Reject response 구성에 사용할 수 있어야 한다
 - **AND** 같은 remote follower와 local followee pair의 pending `ProfileFollowRequest`가 이미 있으면 기존 inbound Follow activity identity 또는 response metadata를 유지하고 새 duplicate Follow의 metadata로 갱신하지 않는다
 - **AND** 같은 remote follower와 local followee pair의 established `ProfileFollow`가 이미 있으면 기존 inbound Follow response metadata를 유지하고 같은 id의 재전달 또는 새 Follow id를 가진 duplicate Follow의 metadata로 갱신하지 않는다
-- **AND** duplicate Follow가 검증되면 first-wins response metadata를 유지하더라도 inbound Follow generation timestamp는 현재 Follow activity timestamp로 갱신할 수 있어야 한다
+- **AND** duplicate Follow가 검증되면 first-wins response metadata를 유지하더라도 inbound Follow generation timestamp는 현재 저장된 timestamp보다 최신인 Follow activity timestamp로 갱신할 수 있어야 한다
 - **AND** duplicate inbound Follow에 대한 `Accept(Follow)` response object는 저장된 first-wins metadata가 아니라 현재 검증을 통과한 수신 Follow object를 사용할 수 있어야 한다
 - **AND** inbound `Undo(Follow)`는 저장된 inbound Follow id가 다르거나 object id가 없더라도 verified same actor/object이고 activity timestamp가 현재 inbound Follow generation timestamp보다 오래되지 않았으면 해당 관계 또는 request를 취소하는 의사로 처리할 수 있어야 한다
 - **AND** IRI-only `Undo.object`는 이번 capability에서 inbound Follow metadata로 역조회하지 않고 side effect 없이 무시할 수 있어야 한다
