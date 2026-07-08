@@ -308,6 +308,10 @@ importers:
       drizzle-orm:
         specifier: 1.0.0-beta.22
         version: 1.0.0-beta.22(@opentelemetry/api@1.9.1)(postgres@3.4.9)(zod@4.4.3)
+    devDependencies:
+      tsx:
+        specifier: ^4.22.4
+        version: 4.22.4
 
 packages:
 
