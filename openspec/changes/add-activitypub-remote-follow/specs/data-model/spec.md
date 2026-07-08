@@ -104,7 +104,7 @@
 #### Scenario: Remove rejected remote follow projection
 
 - **WHEN** remote actor가 저장된 outbound Follow의 actor/object와 일치하는 Follow를 object로 하는 Reject를 보낸다
-- **THEN** 시스템은 해당 Reject의 activity timestamp가 현재 outbound Follow generation timestamp보다 오래되지 않았으면 그 Follow에 연결된 optimistic established `ProfileFollow` projection을 제거할 수 있어야 한다
+- **THEN** 시스템은 해당 Reject의 activity timestamp가 현재 outbound Follow generation timestamp보다 오래되지 않았으면 그 Follow에 연결된 optimistic established `ProfileFollow` projection을 제거해야 한다
 - **AND** 시스템은 거절 상태 값을 저장하지 않는다
 
 ## MODIFIED Requirements
