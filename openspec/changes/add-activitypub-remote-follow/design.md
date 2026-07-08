@@ -38,7 +38,7 @@
 - **profile count는 저장 카운터다.** local/remote 여부와 관계없이 `Profile`은 followers/following count를 저장한다. GraphQL `followersCount`/`followingCount` resolver는 정상 조회 경로에서 `ProfileFollow` aggregate query를 수행하지 않고 저장된 profile count를 반환한다. Migration은 기존 established follow 관계에서 count를 backfill한다.
 - **remote followers/following collection edge는 mirror하지 않는다.** remote profile의 full collection item/page는 저장하지 않고, GraphQL followers/following connection에는 kosmo DB에 저장된 local/remote `ProfileFollow` 관계만 반영한다. 다만 remote collection `totalItems` 성격의 count는 actor materialization/refresh 때 remote `Profile`의 저장 count로 반영한다.
 - **count update source는 단순 best-effort다.** established `ProfileFollow`가 생성/삭제되면 follower profile의 following count와 followee profile의 followers count를 같은 transaction에서 증감한다. Remote actor materialization/refresh가 remote collection count를 확인하면 해당 remote `Profile`의 저장 count를 그 값으로 덮어쓸 수 있다. Baseline/delta 분리 없이 마지막 side effect가 반영한 값을 사용한다.
-- **노출 불가 전환은 follow row를 보존하고 count만 조정한다.** profile을 `DISABLED`로 바꾸거나 remote instance를 `SUSPENDED`로 바꿀 때 관련 `ProfileFollow` row를 삭제하지 않고, 남은 active/visible 상대 profile의 저장 count에서 노출 불가 profile과의 관계를 제외한다.
+- **노출 불가 전환은 follow row를 보존하고 count만 조정한다.** profile을 `DISABLED`로 바꾸거나 remote instance를 `SUSPENDED`로 바꿀 때 관련 `ProfileFollow` row를 삭제하지 않고, 남은 active/visible 상대 profile의 저장 count에서 노출 불가 profile과의 관계를 제외한다. Remote instance가 `SUSPENDED`에서 `ACTIVE`로 돌아오면 preserved `ProfileFollow` row를 기준으로 count를 다시 증가시키거나 같은 결과가 되도록 재계산한다.
 - **unsupported inbox activity는 무시한다.** Follow graph에 필요한 activity 외에는 이번 change에서 listener를 두지 않거나 처리하지 않는다.
 
 ## Risks / Trade-offs

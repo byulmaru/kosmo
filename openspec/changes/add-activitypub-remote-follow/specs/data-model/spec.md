@@ -50,6 +50,14 @@
 - **AND** `ProfileFollow` row는 삭제하지 않는다
 - **AND** 저장 count는 0보다 작아질 수 없다
 
+#### Scenario: Restore stored counts when a remote instance suspension is lifted
+
+- **WHEN** ActivityPub remote instance 상태가 `SUSPENDED`에서 `ACTIVE`로 전환된다
+- **THEN** 시스템은 해당 instance의 active remote profile이 follower인 established `ProfileFollow` row의 active followee profile followers count를 증가시킨다
+- **AND** 해당 instance의 active remote profile이 followee인 established `ProfileFollow` row의 active follower profile following count를 증가시킨다
+- **AND** `ProfileFollow` row는 삭제하지 않는다
+- **AND** 시스템은 preserved `ProfileFollow` row를 기준으로 count를 복구하거나 같은 결과가 되도록 저장 count를 재계산할 수 있다
+
 #### Scenario: Refresh remote stored counts
 
 - **WHEN** remote ActivityPub actor refresh가 followers/following collection count를 확인한다
