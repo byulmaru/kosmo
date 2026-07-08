@@ -110,18 +110,21 @@ describe('WebFinger local profile handle mapping', () => {
   });
 
   test('rejects WebFinger requests from a non-canonical host', async () => {
-    await createProfile({ handle: 'alice', instanceId: localInstanceId });
+    const profile = await createProfile({ handle: 'alice', instanceId: localInstanceId });
 
-    const response = await federation.fetch(
-      new Request(
-        `http://preview.example/.well-known/webfinger?resource=${encodeURIComponent(
-          'acct:alice@preview.example',
-        )}`,
-      ),
-      { contextData: undefined },
-    );
+    for (const resource of [
+      'acct:alice@preview.example',
+      `${publicOrigin}/ap/actor/${profile.id}`,
+    ]) {
+      const response = await federation.fetch(
+        new Request(
+          `http://preview.example/.well-known/webfinger?resource=${encodeURIComponent(resource)}`,
+        ),
+        { contextData: undefined },
+      );
 
-    assert.equal(response.status, 404);
+      assert.equal(response.status, 404);
+    }
   });
 });
 

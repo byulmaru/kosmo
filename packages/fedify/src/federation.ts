@@ -14,6 +14,10 @@ export const federation: Federation<void> = createFederation<void>({
 
 federation
   .setActorDispatcher('/ap/actor/{identifier}', async (ctx, identifier) => {
+    if (ctx.host !== new URL(ctx.canonicalOrigin).host) {
+      return null;
+    }
+
     const localInstance = await resolveConfiguredLocalInstance();
     const result = await ensureDrizzleLocalProfileActor({
       actorUri: ctx.getActorUri(identifier),
