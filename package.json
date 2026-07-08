@@ -14,7 +14,8 @@
     "lint:prettier": "prettier --check --ignore-unknown '**/*'",
     "lint:syncpack": "syncpack lint --dependency-types prod,dev,peer",
     "prepare": "husky || true",
-    "test:e2e": "pnpm db:test:reset && pnpm db:test:push && pnpm --filter @kosmo/fedify test:unit && pnpm --filter @kosmo/web test:e2e"
+    "test:e2e": "pnpm db:test:reset && pnpm db:test:push && pnpm --filter @kosmo/web test:e2e",
+    "test:fedify": "pnpm --filter @kosmo/fedify test:unit"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

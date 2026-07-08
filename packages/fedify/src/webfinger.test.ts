@@ -24,7 +24,7 @@ describe('WebFinger local profile handle mapping', () => {
   let remoteInstanceId: string;
 
   before(async () => {
-    process.env.DATABASE_URL ??= databaseUrl;
+    process.env.DATABASE_URL = databaseUrl;
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
     ({ db, firstOrThrow, Instances, pg, Profiles } = await import('@kosmo/core/db'));
@@ -126,6 +126,8 @@ describe('WebFinger local profile handle mapping', () => {
 });
 
 const truncateDatabase = async () => {
+  assertTestDatabaseUrl();
+
   await pg.unsafe(`
     DO $$
     DECLARE
@@ -141,6 +143,10 @@ const truncateDatabase = async () => {
       END IF;
     END $$;
   `);
+};
+
+const assertTestDatabaseUrl = () => {
+  assert.equal(new URL(process.env.DATABASE_URL ?? '').pathname, '/kosmo_test');
 };
 
 const createRemoteInstance = async () =>
