@@ -9,6 +9,9 @@ metadata:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
   instances: 1
+{{- if eq .Values.env "dev" }}
+  enablePDB: false
+{{- end }}
   bootstrap:
     initdb:
       database: kosmo
