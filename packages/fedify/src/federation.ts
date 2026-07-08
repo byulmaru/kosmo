@@ -34,7 +34,11 @@ federation
       profile: result.profile,
     });
   })
-  .mapHandle((_context, username) => resolveLocalActorIdentifierByHandle(username))
+  .mapHandle((context, username) =>
+    context.host === new URL(context.canonicalOrigin).host
+      ? resolveLocalActorIdentifierByHandle(username)
+      : null,
+  )
   .setKeyPairsDispatcher(async (ctx, identifier) => {
     const localInstance = await resolveConfiguredLocalInstance();
     const result = await ensureDrizzleLocalProfileActor({
