@@ -75,9 +75,9 @@
 - **AND** actor, object, 또는 recipient가 일치하지 않는 `Reject`는 local follow graph 또는 request를 갱신하지 않는다
 - **AND** 이번 capability는 outbound `ProfileFollowRequest`를 만들지 않으므로, established `ProfileFollow` projection에 연결되지 않는 `Reject`는 follow graph 또는 request를 갱신하지 않는다
 
-#### Scenario: Unfollow active remote profile
+#### Scenario: Send remote Undo when unfollowing active remote profile
 
-- **WHEN** active local profile이 `SUSPENDED` 또는 `UNRESPONSIVE`가 아닌 responsive instance에 속한 활성 ActivityPub remote profile unfollow를 요청한다
+- **WHEN** active local profile이 `SUSPENDED` instance가 아닌 활성 ActivityPub remote profile unfollow를 요청한다
 - **THEN** 시스템은 해당 `ProfileFollow` 관계를 제거한다
 - **AND** 시스템은 Fedify `sendActivity`로 기존 Follow에 대한 `Undo` activity를 발송한다
 - **AND** 시스템은 저장된 원본 Follow activity id, actor URI, object URI를 `Undo.object`의 대상 Follow에 사용한다

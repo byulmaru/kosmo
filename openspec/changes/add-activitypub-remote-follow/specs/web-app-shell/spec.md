@@ -58,6 +58,6 @@
 
 - **WHEN** active profile이 있는 사용자가 established `ProfileFollow`로 follow 중인 활성 ActivityPub remote profile을 본다
 - **THEN** 시스템은 local profile 대상과 같은 unfollow action을 표시한다
-- **AND** 대상 remote profile의 `followPolicy`가 `APPROVAL_REQUIRED`로 바뀌었거나 instance 상태가 `UNRESPONSIVE`여도 established follow의 unfollow action은 숨기지 않는다
+- **AND** 대상 remote profile의 `followPolicy`가 `APPROVAL_REQUIRED`로 바뀌어도 established follow의 unfollow action은 숨기지 않는다
 - **AND** unfollow action은 `unfollowProfile` mutation을 호출하고 optimistic UI는 `viewerState.follow`, `viewerFollow`, followersCount 갱신 정책을 따른다
 - **AND** 대상이 ActivityPub remote profile이어도 optimistic UI는 mutation 결과에 포함된 저장 followersCount를 local profile과 같은 방식으로 반영한다

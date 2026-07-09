@@ -146,13 +146,18 @@ active profile이 있는 인증자는 `followPolicy`가 `OPEN`인 다른 활성 
 - **WHEN** active profile이 있는 인증자가 자기 자신 follow를 요청한다
 - **THEN** 시스템은 conflict code를 가진 GraphQL 오류로 요청을 거부한다
 
+#### Scenario: Require active profile to follow
+
+- **WHEN** 인증되지 않았거나 active profile이 없는 클라이언트가 `followProfile` mutation을 요청한다
+- **THEN** 시스템은 GraphQL active profile 인증 scope 오류로 요청을 거부한다
+- **AND** profile not found 오류로 처리하지 않는다
+
 #### Scenario: Follow missing or blocked profile
 
-- **WHEN** active profile이 있는 인증자가 없는 대상 프로필, 비활성인 대상 프로필, 또는 `SUSPENDED`/`UNRESPONSIVE` instance의 remote profile follow를 요청한다
+- **WHEN** active profile이 있는 인증자가 없는 대상 프로필, 비활성인 대상 프로필, 또는 `SUSPENDED` instance의 remote profile follow를 요청한다
 - **THEN** 시스템은 profile not found 오류를 반환한다
 - **AND** `ProfileFollow` 관계를 생성하지 않는다
 - **AND** ActivityPub Follow를 발송하지 않는다
-- **AND** 같은 follower/followee의 established `ProfileFollow` 관계가 이미 있으면 `Follow profile idempotently` 시나리오가 우선하며 profile not found 오류를 반환하지 않는다
 
 ### Requirement: Unfollow profile mutation
 
@@ -168,7 +173,7 @@ active profile이 있는 인증자는 기존 local 또는 ActivityPub remote fol
 
 #### Scenario: Unfollow active remote profile
 
-- **WHEN** active profile이 있는 인증자가 `SUSPENDED` 또는 `UNRESPONSIVE`가 아닌 responsive instance에 속한 활성 ActivityPub remote profile을 follow 중이고 unfollow를 요청한다
+- **WHEN** active profile이 있는 인증자가 `SUSPENDED` instance가 아닌 활성 ActivityPub remote profile을 follow 중이고 unfollow를 요청한다
 - **THEN** 시스템은 해당 follow 관계를 제거한다
 - **AND** 시스템은 Fedify `sendActivity`를 통해 기존 Follow에 대한 ActivityPub `Undo` activity를 발송한다
 - **AND** mutation은 `UnfollowProfilePayload.profileFollowId`로 삭제된 `ProfileFollow` ID를 반환한다
@@ -181,13 +186,11 @@ active profile이 있는 인증자는 기존 local 또는 ActivityPub remote fol
 - **AND** `profileFollowId`가 `null`이고 대상 `Profile`을 포함한 `UnfollowProfilePayload`를 반환한다
 - **AND** 대상이 ActivityPub remote profile이면 ActivityPub `Undo(Follow)` activity를 발송하지 않는다
 
-#### Scenario: Unfollow unresponsive remote profile locally
+#### Scenario: Require active profile to unfollow
 
-- **WHEN** active profile이 있는 인증자가 `UNRESPONSIVE` instance에 속한 활성 ActivityPub remote profile을 follow 중이고 unfollow를 요청한다
-- **THEN** 시스템은 local `ProfileFollow` 관계를 제거한다
-- **AND** `UNRESPONSIVE` instance에는 ActivityPub `Undo(Follow)` activity를 발송하지 않는다
-- **AND** mutation은 `UnfollowProfilePayload.profileFollowId`로 삭제된 `ProfileFollow` ID를 반환한다
-- **AND** 갱신된 viewer follow 상태와 followersCount를 가진 대상 `Profile`을 함께 반환한다
+- **WHEN** 인증되지 않았거나 active profile이 없는 클라이언트가 `unfollowProfile` mutation을 요청한다
+- **THEN** 시스템은 GraphQL active profile 인증 scope 오류로 요청을 거부한다
+- **AND** profile not found 오류로 처리하지 않는다
 
 #### Scenario: Unfollow missing or blocked profile
 
