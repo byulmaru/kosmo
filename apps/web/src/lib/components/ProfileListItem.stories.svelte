@@ -23,6 +23,7 @@
       id: string;
       displayName: string;
       handle: string;
+      origin: 'LOCAL' | 'ACTIVITYPUB';
       relativeHandle: string;
       bio: string | null;
       viewerState: ViewerState | null;
@@ -33,6 +34,7 @@
       id: 'target-profile',
       displayName: '사용자 이름',
       handle: 'handle',
+      origin: 'LOCAL',
       relativeHandle: '@handle@kos.mo',
       bio: null,
       viewerState: defaultViewerState(),
@@ -74,6 +76,16 @@
           viewerState: defaultViewerState({
             follow: { id: 'follow-accepted' },
           }),
+        })}
+      />
+    </section>
+    <section class="grid gap-1">
+      <p class="text-text-secondary m-0">원격 프로필</p>
+      <ProfileListItem
+        profile={profile({
+          id: 'remote-profile',
+          origin: 'ACTIVITYPUB',
+          relativeHandle: '@remote@remote.example',
         })}
       />
     </section>

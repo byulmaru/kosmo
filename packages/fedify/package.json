@@ -6,7 +6,7 @@
   },
   "scripts": {
     "lint:tsc": "tsc --noEmit",
-    "test:unit": "tsx --test src/*.test.ts"
+    "test:unit": "tsx --test --test-concurrency=1 src/*.test.ts"
   },
   "dependencies": {
     "@fedify/fedify": "^2.3.0",

@@ -30,7 +30,7 @@ import { and, eq, getColumns } from 'drizzle-orm';
 import type { Context } from '@fedify/fedify';
 import type { Actor, Object as ActivityPubObject } from '@fedify/vocab';
 
-const remoteActorRefreshTtl = Temporal.Duration.from({ days: 7 });
+const remoteActorRefreshTtl = Temporal.Duration.from({ hours: 7 * 24 });
 const remoteActorLookupTimeoutMs = 10_000;
 
 export class RemoteActorMaterializationError extends Error {
@@ -296,96 +296,108 @@ export const materializeRemoteProfileActor = async ({
   const actorUri = actor.id!.href;
   const actorType = toActorType(actor);
 
-  return db.transaction(async (tx) => {
-    const existingActor = await tx
-      .select({
-        instance: getColumns(Instances),
-        profile: getColumns(Profiles),
-      })
-      .from(ActivityPubActors)
-      .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
-      .leftJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .where(eq(ActivityPubActors.uri, actorUri))
-      .limit(1)
-      .then(first);
+  const persistActor = () =>
+    db.transaction(async (tx) => {
+      const existingActor = await tx
+        .select({
+          instance: getColumns(Instances),
+          profile: getColumns(Profiles),
+        })
+        .from(ActivityPubActors)
+        .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
+        .leftJoin(Instances, eq(Instances.id, Profiles.instanceId))
+        .where(eq(ActivityPubActors.uri, actorUri))
+        .limit(1)
+        .then(first);
 
-    if (existingActor) {
-      if (
-        existingActor.profile.instanceId === null ||
-        existingActor.profile.instanceId === localInstance.id ||
-        existingActor.instance?.kind === InstanceKind.LOCAL
-      ) {
-        throw new ConflictError({ message: 'Remote actor collides with a local actor' });
+      if (existingActor) {
+        if (
+          existingActor.profile.instanceId === null ||
+          existingActor.profile.instanceId === localInstance.id ||
+          existingActor.instance?.kind === InstanceKind.LOCAL
+        ) {
+          throw new ConflictError({ message: 'Remote actor collides with a local actor' });
+        }
+
+        const profile = await tx
+          .update(Profiles)
+          .set({
+            bio: projection.bio,
+            createdAt: projection.published ?? existingActor.profile.createdAt,
+            displayName: projection.displayName,
+            followPolicy: projection.followPolicy,
+            handle: projection.handle,
+            normalizedHandle: projection.normalizedHandle,
+          })
+          .where(eq(Profiles.id, existingActor.profile.id))
+          .returning()
+          .then(firstOrThrow);
+
+        await tx
+          .update(ActivityPubActors)
+          .set({
+            ...endpoints,
+            lastFetchedAt: now,
+            type: actorType,
+            updatedAt: now,
+          })
+          .where(eq(ActivityPubActors.uri, actorUri));
+
+        return profile;
+      }
+
+      const handleCollision = await tx
+        .select({ id: Profiles.id })
+        .from(Profiles)
+        .where(
+          and(
+            eq(Profiles.instanceId, remoteInstance.id),
+            eq(Profiles.normalizedHandle, projection.normalizedHandle),
+          ),
+        )
+        .limit(1)
+        .then(first);
+
+      if (handleCollision) {
+        throw new ConflictError({ message: 'Remote actor handle collides with another actor' });
       }
 
       const profile = await tx
-        .update(Profiles)
-        .set({
+        .insert(Profiles)
+        .values({
           bio: projection.bio,
+          createdAt: projection.published ?? now,
           displayName: projection.displayName,
           followPolicy: projection.followPolicy,
           handle: projection.handle,
+          instanceId: remoteInstance.id,
           normalizedHandle: projection.normalizedHandle,
         })
-        .where(eq(Profiles.id, existingActor.profile.id))
         .returning()
         .then(firstOrThrow);
 
       await tx
-        .update(ActivityPubActors)
-        .set({
+        .insert(ActivityPubActors)
+        .values({
           ...endpoints,
           lastFetchedAt: now,
+          profileId: profile.id,
           type: actorType,
-          updatedAt: now,
+          uri: actorUri,
         })
-        .where(eq(ActivityPubActors.uri, actorUri));
+        .returning()
+        .then(firstOrThrow);
 
       return profile;
+    });
+
+  try {
+    return await persistActor();
+  } catch (error) {
+    if (!isUniqueViolation(error)) {
+      throw error;
     }
 
-    const handleCollision = await tx
-      .select({ id: Profiles.id })
-      .from(Profiles)
-      .where(
-        and(
-          eq(Profiles.instanceId, remoteInstance.id),
-          eq(Profiles.normalizedHandle, projection.normalizedHandle),
-        ),
-      )
-      .limit(1)
-      .then(first);
-
-    if (handleCollision) {
-      throw new ConflictError({ message: 'Remote actor handle collides with another actor' });
-    }
-
-    const profile = await tx
-      .insert(Profiles)
-      .values({
-        bio: projection.bio,
-        createdAt: projection.published ?? now,
-        displayName: projection.displayName,
-        followPolicy: projection.followPolicy,
-        handle: projection.handle,
-        instanceId: remoteInstance.id,
-        normalizedHandle: projection.normalizedHandle,
-      })
-      .returning()
-      .then(firstOrThrow);
-
-    await tx
-      .insert(ActivityPubActors)
-      .values({
-        ...endpoints,
-        lastFetchedAt: now,
-        profileId: profile.id,
-        type: actorType,
-        uri: actorUri,
-      })
-      .returning()
-      .then(firstOrThrow);
-
-    return profile;
-  });
+    return persistActor();
+  }
 };

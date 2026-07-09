@@ -22,10 +22,12 @@
   const profile = (
     id: string,
     viewerState: ViewerState | null = defaultViewerState(),
+    origin: 'LOCAL' | 'ACTIVITYPUB' = 'LOCAL',
   ): FollowButton_profile$key =>
     ({
       __typename: 'Profile',
       id,
+      origin,
       viewerState,
     }) as unknown as FollowButton_profile$key;
 
@@ -72,6 +74,10 @@
     <section class="grid gap-1">
       <p class="text-text-secondary m-0">본인 프로필에서는 버튼이 렌더링되지 않음</p>
       <FollowButton profile={profile('self-profile', defaultViewerState({ isSelf: true }))} />
+    </section>
+    <section class="grid gap-1">
+      <p class="text-text-secondary m-0">원격 프로필에서는 버튼이 렌더링되지 않음</p>
+      <FollowButton profile={profile('remote-profile', defaultViewerState(), 'ACTIVITYPUB')} />
     </section>
   </div>
 </Story>

@@ -42,7 +42,7 @@ const normalizeDomain = (domain: string): string | null => {
     return null;
   }
 
-  const hostname = domainToASCII(url.hostname).toLowerCase();
+  const hostname = domainToASCII(url.hostname).toLowerCase().replace(/\.$/, '');
 
   if (!hostname) {
     return null;
