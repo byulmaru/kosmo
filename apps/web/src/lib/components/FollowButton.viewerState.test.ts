@@ -6,7 +6,7 @@ const componentSource = readFileSync('src/lib/components/FollowButton.svelte', '
 
 describe('FollowButton viewer state boundary', () => {
   test('uses only relationship state from Profile.viewerState', () => {
-    expect.assertions(8);
+    expect.assertions(11);
 
     const compiled = compile(componentSource, {
       generate: 'client',
@@ -15,6 +15,9 @@ describe('FollowButton viewer state boundary', () => {
     }).js.code;
 
     expect(componentSource).toContain('viewerState');
+    expect(componentSource).toContain('origin');
+    expect(componentSource).toContain("origin === 'LOCAL'");
+    expect(componentSource).toContain('isLocalProfile && viewerState');
     expect(componentSource).toContain('isSelf');
     expect(componentSource).toContain('follow {');
     expect(componentSource).not.toContain('authenticated');
