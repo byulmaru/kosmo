@@ -23,7 +23,8 @@
 - **THEN** 시스템은 actor URI만으로 `Profile`을 생성하지 않는다
 - **AND** actor URI host를 `acct:` domain으로 신뢰하지 않고, Fedify WebFinger URL-resource lookup 또는 기존 Fedify-backed materialization lookup으로 actor URI에 대응하는 `acct:{handle}@{domain}` identity와 ActivityPub self link를 실제로 검증한다
 - **AND** WebFinger 결과의 `acct:` identity와 self link가 inbound activity의 remote actor URI를 검증하면 시스템은 해당 `acct:` identity를 `add-activitypub-remote-profile-federation`의 materialization 입력으로 사용한다
-- **AND** materialization write 전에 해당 `acct:` domain의 기존 instance 상태가 `SUSPENDED` 또는 `UNRESPONSIVE`이면 `Profile`을 생성하거나 갱신하지 않고 `ProfileFollow` 또는 `ProfileFollowRequest`도 생성하거나 갱신하지 않는다
+- **AND** materialization write 전에 해당 `acct:` domain의 기존 instance 상태가 `SUSPENDED`이면 `Profile`을 생성하거나 갱신하지 않고 `ProfileFollow` 또는 `ProfileFollowRequest`도 생성하거나 갱신하지 않는다
+- **AND** materialization write 전에 해당 `acct:` domain의 기존 instance 상태가 `UNRESPONSIVE`이면 시스템은 inbound activity를 reachability signal로 보고 instance 상태를 `ACTIVE`로 갱신한 뒤 materialization과 follow 처리를 계속한다
 - **AND** materialization 결과의 canonical actor URI는 inbound activity의 remote actor URI와 일치해야 한다
 - **AND** WebFinger lookup이 federated handle과 actor URI를 검증하지 못하면 `ProfileFollow` 또는 `ProfileFollowRequest`를 생성하거나 갱신하지 않는다
 
@@ -35,7 +36,8 @@
 
 - **WHEN** active local profile이 `followPolicy`가 `OPEN`인 활성 ActivityPub remote profile follow를 요청한다
 - **THEN** 시스템은 local profile을 follower, remote profile을 followee로 하는 established `ProfileFollow` 관계를 생성하거나 기존 관계를 반환한다
-- **AND** 새 `ProfileFollow` 관계가 생성된 경우에만 Fedify `sendActivity`로 ActivityPub `Follow` activity를 발송한다
+- **AND** 새 `ProfileFollow` 관계가 생성되고 remote instance 상태가 `UNRESPONSIVE`가 아닌 경우에만 Fedify `sendActivity`로 ActivityPub `Follow` activity를 발송한다
+- **AND** 새 `ProfileFollow` 관계가 생성되었지만 remote instance 상태가 `UNRESPONSIVE`이면 시스템은 local follow graph만 갱신하고 ActivityPub `Follow` activity를 발송하지 않는다
 - **AND** 새 logical outbound Follow activity의 id는 생성된 `ProfileFollow.id`에서 파생한 kosmo outbound Follow URI로 고정해 Undo(Follow) 구성과 후속 Fedify transport retry에 사용할 수 있도록 저장하고, actor URI와 object URI는 후속 Accept/Reject/Undo 검증에 사용할 수 있도록 해당 `ProfileFollow`에 연결된다
 - **AND** Fedify `orderingKey`는 local follower actor URI와 remote followee actor URI pair에서 안정적으로 파생하며, 같은 pair의 모든 outbound Follow와 Undo(Follow)에 재사용한다
 - **AND** 기존 `ProfileFollow` 관계를 반환하는 idempotent 요청에서는 ActivityPub `Follow` activity를 다시 발송하지 않는다
@@ -79,9 +81,10 @@
 
 - **WHEN** active local profile이 `SUSPENDED` instance가 아닌 활성 ActivityPub remote profile unfollow를 요청한다
 - **THEN** 시스템은 해당 `ProfileFollow` 관계를 제거한다
-- **AND** 시스템은 Fedify `sendActivity`로 기존 Follow에 대한 `Undo` activity를 발송한다
+- **AND** remote instance 상태가 `UNRESPONSIVE`가 아니면 시스템은 Fedify `sendActivity`로 기존 Follow에 대한 `Undo` activity를 발송한다
+- **AND** remote instance 상태가 `UNRESPONSIVE`이면 시스템은 ActivityPub `Undo(Follow)` activity를 발송하지 않는다
 - **AND** 시스템은 저장된 원본 Follow activity id, actor URI, object URI를 `Undo.object`의 대상 Follow에 사용한다
-- **AND** 시스템은 같은 local follower actor URI와 remote followee actor URI pair의 모든 Follow/Undo(Follow)에 사용하는 stable Fedify `orderingKey`로 `Undo(Follow)`를 발송한다
+- **AND** `Undo(Follow)`를 발송할 때 시스템은 같은 local follower actor URI와 remote followee actor URI pair의 모든 Follow/Undo(Follow)에 사용하는 stable Fedify `orderingKey`를 사용한다
 
 ### Requirement: Inbound remote follow
 
@@ -92,8 +95,7 @@
 - **WHEN** Fedify inbox listener가 verified follow protocol activity를 전달하고 remote actor가 저장된 ActivityPub remote `Profile`로 조회된다
 - **THEN** 시스템은 remote actor의 instance 상태를 확인한다
 - **AND** remote actor instance가 `SUSPENDED`이면 `ProfileFollow` 또는 `ProfileFollowRequest`를 생성, 갱신, 삭제하지 않고 outbound Accept 또는 Reject를 발송하지 않는다
-- **AND** remote actor instance가 `UNRESPONSIVE`이고 activity 처리가 outbound Accept 또는 Reject 같은 response delivery를 필요로 하면 `ProfileFollow` 또는 `ProfileFollowRequest`를 생성하거나 갱신하지 않고 outbound response를 발송하지 않는다
-- **AND** remote actor instance가 `UNRESPONSIVE`인 경우에도 actor/object correlation이 검증된 Accept, Reject, Undo(Follow)는 outbound delivery 없이 기존 local projection 또는 request를 정리할 수 있다
+- **AND** remote actor instance가 `UNRESPONSIVE`이면 시스템은 해당 inbound activity를 reachability signal로 보고 instance 상태를 `ACTIVE`로 갱신한 뒤 follow protocol 처리를 계속한다
 
 #### Scenario: Receive remote Follow for local actor
 
