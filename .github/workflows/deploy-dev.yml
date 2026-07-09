@@ -30,12 +30,10 @@ jobs:
             const githubToken = await core.getIDToken();
             core.setSecret(githubToken);
 
-            const baseUrl = process.env.ARGOCD_SERVER.replace(/\/$/, "");
-            const dexTokenResponse = await fetch(`${baseUrl}/api/dex/token`, {
+            const response = await fetch(`${process.env.ARGOCD_SERVER.replace(/\/$/, "")}/api/dex/token`, {
               method: "POST",
               headers: {
                 authorization: `Basic ${Buffer.from("argo-cd-cli:").toString("base64")}`,
-                "content-type": "application/x-www-form-urlencoded",
               },
               body: new URLSearchParams({
                 connector_id: "github-actions",
@@ -47,11 +45,11 @@ jobs:
               }),
             });
 
-            if (!dexTokenResponse.ok) {
-              throw new Error(`Dex token exchange failed: ${dexTokenResponse.status} ${await dexTokenResponse.text()}`);
+            if (!response.ok) {
+              throw new Error(`Dex token exchange failed: ${response.status} ${await response.text()}`);
             }
 
-            const dexToken = (await dexTokenResponse.json()).access_token;
+            const { access_token: dexToken } = await response.json();
             if (!dexToken) {
               throw new Error("Dex token response did not include an access token.");
             }
