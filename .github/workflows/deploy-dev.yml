@@ -27,39 +27,10 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            const runtimeToken = process.env.ACTIONS_RUNTIME_TOKEN;
-            const idTokenUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
-            const server = process.env.ARGOCD_SERVER;
-
-            if (!server) {
-              throw new Error("ARGOCD_SERVER is required.");
-            }
-
-            if (!runtimeToken || !idTokenUrl) {
-              throw new Error("GitHub Actions OIDC environment is unavailable.");
-            }
-
-            const githubTokenResponse = await fetch(idTokenUrl, {
-              method: "POST",
-              headers: {
-                authorization: `bearer ${runtimeToken}`,
-                accept: "application/json; api-version=2.0",
-                "content-type": "application/json",
-              },
-              body: "{}",
-            });
-
-            if (!githubTokenResponse.ok) {
-              throw new Error(`GitHub OIDC token request failed: ${githubTokenResponse.status} ${await githubTokenResponse.text()}`);
-            }
-
-            const githubToken = (await githubTokenResponse.json()).value;
-            if (!githubToken) {
-              throw new Error("GitHub OIDC token response did not include a token.");
-            }
+            const githubToken = await core.getIDToken();
             core.setSecret(githubToken);
 
-            const baseUrl = /^https?:\/\//.test(server) ? server.replace(/\/$/, "") : `https://${server}`;
+            const baseUrl = process.env.ARGOCD_SERVER.replace(/\/$/, "");
             const dexTokenResponse = await fetch(`${baseUrl}/api/dex/token`, {
               method: "POST",
               headers: {
