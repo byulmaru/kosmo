@@ -20,7 +20,6 @@ jobs:
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: [self-hosted, macOS]
     env:
-      ARGOCD_BASE_URL: https://argocd-aws.tail1fdd55.ts.net
       ARGOCD_SERVER: argocd-aws.tail1fdd55.ts.net
     steps:
       - name: Get Argo CD token
@@ -31,7 +30,7 @@ jobs:
             const githubToken = await core.getIDToken();
             core.setSecret(githubToken);
 
-            const response = await fetch(`${process.env.ARGOCD_BASE_URL.replace(/\/$/, "")}/api/dex/token`, {
+            const response = await fetch(`https://${process.env.ARGOCD_SERVER}/api/dex/token`, {
               method: "POST",
               headers: {
                 authorization: `Basic ${Buffer.from("argo-cd-cli:").toString("base64")}`,
