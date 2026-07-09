@@ -1,22 +1,37 @@
-import { AccountProfiles, db, Profiles, TableDiscriminator } from '@kosmo/core/db';
-import { AccountProfileRole, ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
+import { AccountProfiles, db, Instances, Profiles, TableDiscriminator } from '@kosmo/core/db';
+import { AccountProfileRole, ProfileFollowPolicy, ProfileOrigin } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { createObjectRef } from '@/graphql/utils';
-import { formatRelativeHandle } from '@/profile/identity';
+import { formatRelativeHandle, getProfileOrigin } from '@/profile/identity';
+import { visibleProfileWhere } from './access/visibility';
 import { profileFollowByIdLoader } from './loader/follow';
 import { profileInstanceByIdLoader } from './loader/instance';
 
 export const Profile = createObjectRef('Profile', TableDiscriminator.Profiles, (ids) =>
   db
-    .select()
+    .select(getColumns(Profiles))
     .from(Profiles)
-    .where(and(inArray(Profiles.id, ids), eq(Profiles.state, ProfileState.ACTIVE))),
+    .leftJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .where(
+      and(
+        inArray(Profiles.id, ids),
+        visibleProfileWhere({ profile: Profiles, instance: Instances }),
+      ),
+    ),
 );
 
 Profile.implement({
   fields: (t) => ({
     handle: t.exposeString('handle'),
+    origin: t.field({
+      type: ProfileOrigin,
+      resolve: async (profile) => {
+        const configuredLocalInstance = await resolveConfiguredLocalInstance();
+
+        return getProfileOrigin(profile, configuredLocalInstance);
+      },
+    }),
     relativeHandle: t.string({
       resolve: async (profile, _, ctx) => {
         const configuredLocalInstance = await resolveConfiguredLocalInstance();

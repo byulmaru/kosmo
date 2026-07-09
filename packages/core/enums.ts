@@ -13,7 +13,11 @@ export const AccountState = {
 export type AccountState = keyof typeof AccountState;
 
 export const ActivityPubActorType = {
+  APPLICATION: 'APPLICATION',
+  GROUP: 'GROUP',
+  ORGANIZATION: 'ORGANIZATION',
   PERSON: 'PERSON',
+  SERVICE: 'SERVICE',
 } as const;
 export type ActivityPubActorType = keyof typeof ActivityPubActorType;
 
@@ -80,6 +84,12 @@ export const ProfileFollowPolicy = {
   APPROVAL_REQUIRED: 'APPROVAL_REQUIRED',
 } as const;
 export type ProfileFollowPolicy = keyof typeof ProfileFollowPolicy;
+
+export const ProfileOrigin = {
+  LOCAL: 'LOCAL',
+  ACTIVITYPUB: 'ACTIVITYPUB',
+} as const;
+export type ProfileOrigin = keyof typeof ProfileOrigin;
 
 export const ProfileState = {
   ACTIVE: 'ACTIVE',
