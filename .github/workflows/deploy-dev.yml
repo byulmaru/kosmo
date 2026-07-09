@@ -1,0 +1,128 @@
+name: Deploy Dev
+
+on:
+  workflow_run:
+    workflows: [Docker Build]
+    branches: [main]
+    types: [completed]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-main
+  cancel-in-progress: true
+
+jobs:
+  restart_dev:
+    name: Restart Dev Rollouts
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: [self-hosted]
+    steps:
+      - name: Get Argo CD token
+        id: argocd-token
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ARGOCD_SERVER: ${{ vars.ARGOCD_SERVER }}
+        with:
+          script: |
+            const runtimeToken = process.env.ACTIONS_RUNTIME_TOKEN;
+            const idTokenUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
+            const server = process.env.ARGOCD_SERVER;
+
+            if (!server) {
+              throw new Error("ARGOCD_SERVER repository variable is required.");
+            }
+
+            if (!runtimeToken || !idTokenUrl) {
+              throw new Error("GitHub Actions OIDC environment is unavailable.");
+            }
+
+            const githubTokenResponse = await fetch(idTokenUrl, {
+              method: "POST",
+              headers: {
+                authorization: `bearer ${runtimeToken}`,
+                accept: "application/json; api-version=2.0",
+                "content-type": "application/json",
+              },
+              body: "{}",
+            });
+
+            if (!githubTokenResponse.ok) {
+              throw new Error(`GitHub OIDC token request failed: ${githubTokenResponse.status} ${await githubTokenResponse.text()}`);
+            }
+
+            const githubToken = (await githubTokenResponse.json()).value;
+            if (!githubToken) {
+              throw new Error("GitHub OIDC token response did not include a token.");
+            }
+            core.setSecret(githubToken);
+
+            const baseUrl = /^https?:\/\//.test(server) ? server.replace(/\/$/, "") : `https://${server}`;
+            const dexTokenResponse = await fetch(`${baseUrl}/api/dex/token`, {
+              method: "POST",
+              headers: {
+                authorization: `Basic ${Buffer.from("argo-cd-cli:").toString("base64")}`,
+                "content-type": "application/x-www-form-urlencoded",
+              },
+              body: new URLSearchParams({
+                connector_id: "github-actions",
+                grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+                scope: "openid email profile federated:id",
+                requested_token_type: "urn:ietf:params:oauth:token-type:access_token",
+                subject_token: githubToken,
+                subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
+              }),
+            });
+
+            if (!dexTokenResponse.ok) {
+              throw new Error(`Dex token exchange failed: ${dexTokenResponse.status} ${await dexTokenResponse.text()}`);
+            }
+
+            const dexToken = (await dexTokenResponse.json()).access_token;
+            if (!dexToken) {
+              throw new Error("Dex token response did not include an access token.");
+            }
+
+            core.setSecret(dexToken);
+            core.setOutput("token", dexToken);
+
+      - name: Install Argo CD CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if command -v argocd >/dev/null 2>&1; then
+            exit 0
+          fi
+
+          case "$(uname -m)" in
+            x86_64) argocd_arch=amd64 ;;
+            aarch64 | arm64) argocd_arch=arm64 ;;
+            *)
+              echo "::error::Unsupported runner architecture: $(uname -m)"
+              exit 1
+              ;;
+          esac
+
+          curl -sSfL -o "${RUNNER_TEMP}/argocd" "https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-${argocd_arch}"
+          chmod 555 "${RUNNER_TEMP}/argocd"
+          echo "${RUNNER_TEMP}" >> "${GITHUB_PATH}"
+
+      - name: Restart dev rollouts
+        env:
+          ARGOCD_AUTH_TOKEN: ${{ steps.argocd-token.outputs.token }}
+          ARGOCD_SERVER: ${{ vars.ARGOCD_SERVER }}
+          ARGOCD_OPTS: --grpc-web
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for rollout in kosmo-web kosmo-api; do
+            argocd app actions run kosmo-dev restart \
+              --group argoproj.io \
+              --kind Rollout \
+              --namespace kosmo-dev \
+              --resource-name "${rollout}"
+          done
