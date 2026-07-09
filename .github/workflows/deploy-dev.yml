@@ -19,12 +19,12 @@ jobs:
     name: Restart Dev Rollouts
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: [self-hosted]
+    env:
+      ARGOCD_SERVER: https://argocd-aws.tail1fdd55.ts.net
     steps:
       - name: Get Argo CD token
         id: argocd-token
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        env:
-          ARGOCD_SERVER: ${{ vars.ARGOCD_SERVER }}
         with:
           script: |
             const runtimeToken = process.env.ACTIONS_RUNTIME_TOKEN;
@@ -32,7 +32,7 @@ jobs:
             const server = process.env.ARGOCD_SERVER;
 
             if (!server) {
-              throw new Error("ARGOCD_SERVER repository variable is required.");
+              throw new Error("ARGOCD_SERVER is required.");
             }
 
             if (!runtimeToken || !idTokenUrl) {
@@ -113,7 +113,6 @@ jobs:
       - name: Restart dev rollouts
         env:
           ARGOCD_AUTH_TOKEN: ${{ steps.argocd-token.outputs.token }}
-          ARGOCD_SERVER: ${{ vars.ARGOCD_SERVER }}
           ARGOCD_OPTS: --grpc-web
         shell: bash
         run: |
