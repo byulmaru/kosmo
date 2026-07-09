@@ -60,3 +60,4 @@ Rollback은 새 GraphQL 필드와 remote actor materialization 경로를 닫은 
 
 - remote actor type별 표시 정책은 구현 중 Fedify가 제공하는 actor type 정보를 확인해 `Profile`로 안전하게 투영 가능한 범위를 정한다.
 - 미저장 remote actor를 사용자 검색 UI에서 언제/어떻게 발견하게 할지는 후속 제품 결정으로 남긴다.
+- Fedify 2.3.0의 public `DocumentLoaderFactoryOptions`에는 raw JSON/WebFinger response-size 제한이 없다. private-address 차단과 전체 lookup/context deadline은 공개 surface로 적용하되, 별도 WebFinger/JSON-LD fetcher나 전역 `fetch` 교체로 경계를 우회하지 않는다. 응답 크기 제한은 Fedify가 bounded loader surface를 제공하거나 의존성을 올릴 수 있을 때 완료한다.

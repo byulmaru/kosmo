@@ -40,8 +40,11 @@ export class RemoteActorMaterializationError extends Error {
   }
 }
 
+type RemoteActorLookupContext = Pick<Context<void>, 'lookupObject'> &
+  Partial<Pick<Context<void>, 'contextLoader' | 'documentLoader'>>;
+
 type RemoteActorMaterializationOptions = {
-  context: Pick<Context<void>, 'lookupObject'>;
+  context: RemoteActorLookupContext;
   handle: string;
   now?: Temporal.Instant;
 };
@@ -194,12 +197,27 @@ const ensureRemoteInstance = async (domain: string) => {
     });
 };
 
+const withLookupSignal =
+  (loader: Context<void>['documentLoader'], signal: AbortSignal): Context<void>['documentLoader'] =>
+  (url, options) =>
+    loader(url, {
+      ...options,
+      signal: options?.signal ? AbortSignal.any([options.signal, signal]) : signal,
+    });
+
 const lookupRemoteActor = async (
-  context: Pick<Context<void>, 'lookupObject'>,
+  context: RemoteActorLookupContext,
   handle: string,
 ): Promise<Actor> => {
+  const signal = AbortSignal.timeout(remoteActorLookupTimeoutMs);
   const object = (await context.lookupObject(`acct:${handle}`, {
-    signal: AbortSignal.timeout(remoteActorLookupTimeoutMs),
+    ...(context.contextLoader
+      ? { contextLoader: withLookupSignal(context.contextLoader, signal) }
+      : {}),
+    ...(context.documentLoader
+      ? { documentLoader: withLookupSignal(context.documentLoader, signal) }
+      : {}),
+    signal,
   })) as ActivityPubObject | null;
 
   if (!isActor(object)) {

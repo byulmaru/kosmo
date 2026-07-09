@@ -122,6 +122,24 @@ describe('remote actor materialization', () => {
     assert.equal(lookupObject.mock.calls[0]?.arguments[0], `acct:alice@${remoteDomain}`);
   });
 
+  test('applies the lookup deadline to document and context loaders', async () => {
+    const documentLoader = createDocumentLoader();
+    const contextLoader = createDocumentLoader();
+    const { context, lookupObject } = createLookupContext(async () => createActor(), {
+      contextLoader,
+      documentLoader,
+    });
+
+    await materializeRemoteProfileActor({ context, handle: `alice@${remoteDomain}` });
+
+    const lookupOptions = lookupObject.mock.calls[0]?.arguments[1];
+    assert.ok(lookupOptions?.signal instanceof AbortSignal);
+    await lookupOptions?.documentLoader?.(`https://${remoteDomain}/actor`);
+    await lookupOptions?.contextLoader?.(`https://${remoteDomain}/context`);
+    assert.equal(documentLoader.mock.calls[0]?.arguments[1]?.signal, lookupOptions?.signal);
+    assert.equal(contextLoader.mock.calls[0]?.arguments[1]?.signal, lookupOptions?.signal);
+  });
+
   test('rejects lookup errors, missing objects, and non-actors without creating profiles', async () => {
     const lookupError = new Error('lookup failed');
     const cases: Array<{
@@ -398,18 +416,27 @@ const createActor = (overrides: Partial<PersonOptions> = {}) =>
 const createLookupContext = (
   implementation: (
     identifier: string | URL,
-    options?: { signal?: AbortSignal },
+    options?: NonNullable<Parameters<Context<void>['lookupObject']>[1]>,
   ) => Promise<ActivityPubObject | null>,
+  loaders: Partial<Pick<Context<void>, 'contextLoader' | 'documentLoader'>> = {},
 ) => {
   const lookupObject = mock.fn(implementation);
 
   return {
     context: {
+      ...loaders,
       lookupObject: lookupObject as unknown as Context<void>['lookupObject'],
     },
     lookupObject,
   };
 };
+
+const createDocumentLoader = () =>
+  mock.fn<Context<void>['documentLoader']>(async (url) => ({
+    contextUrl: null,
+    document: {},
+    documentUrl: url,
+  }));
 
 const createRemoteInstance = async ({
   state = InstanceState.ACTIVE,
