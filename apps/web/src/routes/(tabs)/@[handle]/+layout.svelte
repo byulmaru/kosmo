@@ -12,6 +12,7 @@
       query ProfileLayoutQuery($handle: String!) {
         profileByHandle(handle: $handle) {
           id
+          origin
           ...ProfileHero_profile
           ...FollowButton_profile
         }
@@ -54,11 +55,15 @@
       </p>
     </div>
   {:else}
-    <ProfileHero {profile}>
-      {#snippet action()}
-        <FollowButton {profile} />
-      {/snippet}
-    </ProfileHero>
+    {#if profile.origin === 'LOCAL'}
+      <ProfileHero {profile}>
+        {#snippet action()}
+          <FollowButton {profile} />
+        {/snippet}
+      </ProfileHero>
+    {:else}
+      <ProfileHero {profile} />
+    {/if}
     {@render children()}
   {/if}
 </section>

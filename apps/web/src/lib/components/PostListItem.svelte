@@ -37,6 +37,7 @@
         profile {
           id
           handle
+          relativeHandle
           displayName
           ...ProfileNameBlock_profile
         }
@@ -49,8 +50,10 @@
   const formattedCreatedAt = $derived(
     formatTimelineTimestamp(Temporal.Instant.from(postFragment.data.createdAt as string)),
   );
-  const detailHref = $derived(`/@${postFragment.data.profile.handle}/${postFragment.data.id}`);
-  const profileHref = $derived(`/@${postFragment.data.profile.handle}`);
+  const detailHref = $derived(
+    `/${postFragment.data.profile.relativeHandle}/${postFragment.data.id}`,
+  );
+  const profileHref = $derived(`/${postFragment.data.profile.relativeHandle}`);
   const initials = $derived(
     getProfileInitial(postFragment.data.profile.displayName, postFragment.data.profile.handle),
   );

@@ -56,7 +56,7 @@
 <div {...rest} class={profileListItem({ width, class: className })}>
   {#if linked}
     <a
-      href={`/@${fragment.data.handle}`}
+      href={`/${fragment.data.relativeHandle}`}
       class="group focus-visible:outline-more flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2"
     >
       <Avatar

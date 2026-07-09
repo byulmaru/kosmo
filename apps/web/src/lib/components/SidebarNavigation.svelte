@@ -111,11 +111,13 @@
     <nav class="flex w-full flex-col items-center gap-1" aria-label="주요 메뉴">
       {#each navItems as item}
         {@const isProfileItem = item.label === '프로필'}
-        {@const profileHandle = isProfileItem ? (sidebarActiveProfile?.handle ?? null) : null}
-        {@const profileDisabled = isProfileItem && !profileHandle}
+        {@const profileRelativeHandle = isProfileItem
+          ? (sidebarActiveProfile?.relativeHandle ?? null)
+          : null}
+        {@const profileDisabled = isProfileItem && !profileRelativeHandle}
         {@const resolvedHref = isProfileItem
-          ? profileHandle
-            ? `/@${profileHandle}`
+          ? profileRelativeHandle
+            ? `/${profileRelativeHandle}`
             : undefined
           : item.href}
         {@const active = isProfileItem
@@ -274,7 +276,7 @@
           <div class="mt-2 flex items-center gap-3 text-sm leading-[22px] text-black">
             <a
               class="flex items-center gap-2 border-b border-transparent px-1 hover:border-current"
-              href={`/@${sidebarActiveProfile.handle}/following`}
+              href={`/${sidebarActiveProfile.relativeHandle}/following`}
               onclick={onNavigate}
               ><span>{formatCount(sidebarActiveProfile.followingCount ?? 0)}</span><span
                 >팔로잉</span
@@ -282,7 +284,7 @@
             >
             <a
               class="flex items-center gap-2 border-b border-transparent px-1 hover:border-current"
-              href={`/@${sidebarActiveProfile.handle}/followers`}
+              href={`/${sidebarActiveProfile.relativeHandle}/followers`}
               onclick={onNavigate}
               ><span>{formatCount(sidebarActiveProfile.followersCount ?? 0)}</span><span
                 >팔로워</span
@@ -305,11 +307,13 @@
       <nav class="flex w-[264px] flex-col gap-1" aria-label="주요 메뉴">
         {#each navItems as item}
           {@const isProfileItem = item.label === '프로필'}
-          {@const profileHandle = isProfileItem ? (sidebarActiveProfile?.handle ?? null) : null}
-          {@const profileDisabled = isProfileItem && !profileHandle}
+          {@const profileRelativeHandle = isProfileItem
+            ? (sidebarActiveProfile?.relativeHandle ?? null)
+            : null}
+          {@const profileDisabled = isProfileItem && !profileRelativeHandle}
           {@const resolvedHref = isProfileItem
-            ? profileHandle
-              ? `/@${profileHandle}`
+            ? profileRelativeHandle
+              ? `/${profileRelativeHandle}`
               : undefined
             : item.href}
           {@const active = isProfileItem

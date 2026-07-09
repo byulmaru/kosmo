@@ -70,7 +70,7 @@
       <div class="mt-3 flex items-center gap-4 text-sm">
         <a
           class="text-text-secondary border-b border-transparent hover:border-current"
-          href={`/@${fragment.data.handle}/following`}
+          href={`/${fragment.data.relativeHandle}/following`}
         >
           <span class="text-text-primary font-bold"
             >{formatCount(fragment.data.followingCount)}</span
@@ -79,7 +79,7 @@
         </a>
         <a
           class="text-text-secondary border-b border-transparent hover:border-current"
-          href={`/@${fragment.data.handle}/followers`}
+          href={`/${fragment.data.relativeHandle}/followers`}
         >
           <span class="text-text-primary font-bold"
             >{formatCount(fragment.data.followersCount)}</span

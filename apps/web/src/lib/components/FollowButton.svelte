@@ -8,6 +8,7 @@
   const followButtonProfileFragment = graphql(`
     fragment FollowButton_profile on Profile {
       id
+      origin
       viewerState {
         isSelf
         follow {
@@ -62,11 +63,12 @@
 
   const viewerState = $derived(profileFragment.data.viewerState);
   const viewerFollow = $derived(viewerState?.follow ?? null);
+  const isLocalProfile = $derived(profileFragment.data.origin === 'LOCAL');
   const isFollowing = $derived(Boolean(viewerFollow));
   const disabled = $derived(loading);
 
   const toggleFollow = async () => {
-    if (disabled || !viewerState || viewerState.isSelf) {
+    if (disabled || !isLocalProfile || !viewerState || viewerState.isSelf) {
       return;
     }
 
@@ -90,7 +92,7 @@
   };
 </script>
 
-{#if viewerState && !viewerState.isSelf}
+{#if isLocalProfile && viewerState && !viewerState.isSelf}
   <div class={`inline-flex flex-col items-end gap-1 ${className}`}>
     <Button
       variant={isFollowing ? 'secondary' : 'primary'}

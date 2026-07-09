@@ -42,6 +42,7 @@
         profile {
           id
           handle
+          relativeHandle
           displayName
           ...ProfileNameBlock_profile
         }
@@ -51,7 +52,7 @@
     () => post,
   );
 
-  const profileHref = $derived(`/@${postFragment.data.profile.handle}`);
+  const profileHref = $derived(`/${postFragment.data.profile.relativeHandle}`);
   const initials = $derived(
     getProfileInitial(postFragment.data.profile.displayName, postFragment.data.profile.handle),
   );

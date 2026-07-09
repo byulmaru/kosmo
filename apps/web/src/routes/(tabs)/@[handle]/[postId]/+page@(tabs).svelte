@@ -29,6 +29,7 @@
             profile {
               id
               handle
+              relativeHandle
             }
             ...PostLayout_post
           }
@@ -45,8 +46,8 @@
   // 정식 URL로 정규화한다. postId가 source of truth이므로 게시글은 그대로 두고
   // 주소만 replaceState로 바꿔 히스토리에 잘못된 핸들이 남지 않게 한다.
   $effect(() => {
-    if (post && post.profile.handle !== handle) {
-      void goto(`/@${post.profile.handle}/${postId}`, { replaceState: true });
+    if (post && post.profile.relativeHandle.replace(/^@/, '') !== handle) {
+      void goto(`/${post.profile.relativeHandle}/${postId}`, { replaceState: true });
     }
   });
 </script>

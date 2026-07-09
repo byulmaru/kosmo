@@ -18,6 +18,7 @@
     graphql(`
       fragment BottomTabBar_profile on Profile {
         handle
+        relativeHandle
         displayName
       }
     `),
@@ -33,7 +34,9 @@
   } satisfies Record<BottomTabIcon, string>;
 
   const tabs = $derived(
-    getBottomTabItems({ selectedProfileHandle: selectedProfileFragment.data?.handle ?? null }),
+    getBottomTabItems({
+      selectedProfileRelativeHandle: selectedProfileFragment.data?.relativeHandle ?? null,
+    }),
   );
 
   const profileInitial = $derived(
