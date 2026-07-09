@@ -18,9 +18,10 @@ jobs:
   restart_dev:
     name: Restart Dev Rollouts
     if: github.event.workflow_run.conclusion == 'success'
-    runs-on: [self-hosted]
+    runs-on: [self-hosted, macOS]
     env:
-      ARGOCD_SERVER: https://argocd-aws.tail1fdd55.ts.net
+      ARGOCD_BASE_URL: https://argocd-aws.tail1fdd55.ts.net
+      ARGOCD_SERVER: argocd-aws.tail1fdd55.ts.net
     steps:
       - name: Get Argo CD token
         id: argocd-token
@@ -30,7 +31,7 @@ jobs:
             const githubToken = await core.getIDToken();
             core.setSecret(githubToken);
 
-            const response = await fetch(`${process.env.ARGOCD_SERVER.replace(/\/$/, "")}/api/dex/token`, {
+            const response = await fetch(`${process.env.ARGOCD_BASE_URL.replace(/\/$/, "")}/api/dex/token`, {
               method: "POST",
               headers: {
                 authorization: `Basic ${Buffer.from("argo-cd-cli:").toString("base64")}`,
@@ -75,20 +76,19 @@ jobs:
               ;;
           esac
 
-          curl -sSfL -o "${RUNNER_TEMP}/argocd" "https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-${argocd_arch}"
+          curl -sSfL -o "${RUNNER_TEMP}/argocd" "https://github.com/argoproj/argo-cd/releases/latest/download/argocd-darwin-${argocd_arch}"
           chmod 555 "${RUNNER_TEMP}/argocd"
           echo "${RUNNER_TEMP}" >> "${GITHUB_PATH}"
 
       - name: Restart dev rollouts
         env:
           ARGOCD_AUTH_TOKEN: ${{ steps.argocd-token.outputs.token }}
-          ARGOCD_OPTS: --grpc-web
         shell: bash
         run: |
           set -euo pipefail
 
           for rollout in kosmo-web kosmo-api; do
-            argocd app actions run kosmo-dev restart \
+            argocd --server "${ARGOCD_SERVER}" --grpc-web app actions run kosmo-dev restart \
               --group argoproj.io \
               --kind Rollout \
               --namespace kosmo-dev \
