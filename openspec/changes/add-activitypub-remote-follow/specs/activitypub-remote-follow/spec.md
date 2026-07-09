@@ -21,6 +21,7 @@
 
 - **WHEN** follow protocol handler가 remote actor URI를 참조하지만 저장된 ActivityPub remote `Profile`이 없다
 - **THEN** 시스템은 actor URI만으로 `Profile`을 생성하지 않는다
+- **AND** inbound `Follow`에서 `Follow.object`가 active local actor URI로 resolve되지 않거나 personal inbox recipient가 제공되었지만 같은 local actor로 resolve되지 않으면 WebFinger lookup 또는 actor materialization을 수행하지 않고 side effect 없이 무시한다
 - **AND** actor URI host를 `acct:` domain으로 신뢰하지 않고, Fedify WebFinger URL-resource lookup 또는 기존 Fedify-backed materialization lookup으로 actor URI에 대응하는 `acct:{handle}@{domain}` identity와 ActivityPub self link를 실제로 검증한다
 - **AND** WebFinger 결과의 `acct:` identity와 self link가 inbound activity의 remote actor URI를 검증하면 시스템은 해당 `acct:` identity를 `add-activitypub-remote-profile-federation`의 materialization 입력으로 사용한다
 - **AND** materialization write 전에 해당 `acct:` domain의 기존 instance 상태가 `SUSPENDED`이면 `Profile`을 생성하거나 갱신하지 않고 `ProfileFollow` 또는 `ProfileFollowRequest`도 생성하거나 갱신하지 않는다
