@@ -34,6 +34,7 @@
 - **THEN** 시스템은 같은 transaction에서 follower profile의 following count와 followee profile의 followers count를 1씩 감소시킨다
 - **AND** 저장 count는 0보다 작아질 수 없다
 - **AND** follow 관계가 없어 idempotent unfollow로 처리되는 경우에는 저장 count를 변경하지 않는다
+- **AND** profile 비활성화 또는 remote instance suspension 때문에 이미 visible count에서 제외된 관계를 삭제하는 경우에는 해당 count를 중복 감소시키지 않는다
 
 #### Scenario: Adjust stored counts when a profile is disabled
 
