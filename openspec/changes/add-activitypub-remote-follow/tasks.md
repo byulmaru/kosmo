@@ -7,7 +7,7 @@
 
 ## 2. Fedify Follow Integration
 
-- [ ] 2.1 remote target `followProfile`에서 target `followPolicy`가 `OPEN`이면 established `ProfileFollow`를 생성 또는 idempotent 반환하고, 새 관계이며 remote instance가 `UNRESPONSIVE`가 아닐 때만 Fedify `sendActivity`로 `Follow` activity를 발송한다.
+- [ ] 2.1 remote target `followProfile`에서 target `followPolicy`가 `OPEN`이면 established `ProfileFollow`를 생성 또는 idempotent 반환하고, 새 관계이며 remote instance가 `UNRESPONSIVE`가 아닐 때만 Fedify `sendActivity`로 `Follow` activity를 발송한다. `UNRESPONSIVE` 때문에 억제된 outbound Follow는 durable pending delivery로 저장하지 않고, instance 회복 뒤 idempotent follow retry에서도 재발송하지 않는다.
 - [ ] 2.2 `followProfile`에서 target `followPolicy`가 `APPROVAL_REQUIRED`이면 후속 request flow 전까지 local/remote target 모두 conflict로 거부하고 `ProfileFollow`/`ProfileFollowRequest`/`Follow` activity를 만들지 않는다.
 - [ ] 2.3 remote target `unfollowProfile`에서 established `ProfileFollow`를 제거하고 remote instance가 `SUSPENDED` 또는 `UNRESPONSIVE`가 아닐 때만 Fedify `sendActivity`로 저장된 원본 Follow를 object로 하는 `Undo(Follow)` activity를 follower/followee actor pair의 stable `orderingKey`로 발송한다.
 - [ ] 2.4 remote target `unfollowProfile`의 idempotent 응답, `SUSPENDED` instance 대상 기존 local follow 삭제, 또는 `UNRESPONSIVE` instance 대상 local 삭제는 ActivityPub `Undo(Follow)` activity를 발송하지 않는다.
