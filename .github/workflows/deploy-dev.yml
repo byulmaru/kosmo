@@ -1,0 +1,95 @@
+name: Deploy Dev
+
+on:
+  workflow_run:
+    workflows: [Docker Build]
+    branches: [main]
+    types: [completed]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-main
+  cancel-in-progress: true
+
+jobs:
+  restart_dev:
+    name: Restart Dev Rollouts
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: [self-hosted, macOS]
+    env:
+      ARGOCD_SERVER: argocd-aws.tail1fdd55.ts.net
+    steps:
+      - name: Get Argo CD token
+        id: argocd-token
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const githubToken = await core.getIDToken();
+            core.setSecret(githubToken);
+
+            const response = await fetch(`https://${process.env.ARGOCD_SERVER}/api/dex/token`, {
+              method: "POST",
+              headers: {
+                authorization: `Basic ${Buffer.from("argo-cd-cli:").toString("base64")}`,
+              },
+              body: new URLSearchParams({
+                connector_id: "github-actions",
+                grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+                scope: "openid email profile federated:id",
+                requested_token_type: "urn:ietf:params:oauth:token-type:access_token",
+                subject_token: githubToken,
+                subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
+              }),
+            });
+
+            if (!response.ok) {
+              throw new Error(`Dex token exchange failed: ${response.status} ${await response.text()}`);
+            }
+
+            const { access_token: dexToken } = await response.json();
+            if (!dexToken) {
+              throw new Error("Dex token response did not include an access token.");
+            }
+
+            core.setSecret(dexToken);
+            core.setOutput("token", dexToken);
+
+      - name: Install Argo CD CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if command -v argocd >/dev/null 2>&1; then
+            exit 0
+          fi
+
+          case "$(uname -m)" in
+            x86_64) argocd_arch=amd64 ;;
+            aarch64 | arm64) argocd_arch=arm64 ;;
+            *)
+              echo "::error::Unsupported runner architecture: $(uname -m)"
+              exit 1
+              ;;
+          esac
+
+          curl -sSfL -o "${RUNNER_TEMP}/argocd" "https://github.com/argoproj/argo-cd/releases/latest/download/argocd-darwin-${argocd_arch}"
+          chmod 555 "${RUNNER_TEMP}/argocd"
+          echo "${RUNNER_TEMP}" >> "${GITHUB_PATH}"
+
+      - name: Restart dev rollouts
+        env:
+          ARGOCD_AUTH_TOKEN: ${{ steps.argocd-token.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for rollout in kosmo-web kosmo-api; do
+            argocd --server "${ARGOCD_SERVER}" --grpc-web app actions run kosmo-dev restart \
+              --group argoproj.io \
+              --kind Rollout \
+              --namespace kosmo-dev \
+              --resource-name "${rollout}"
+          done
