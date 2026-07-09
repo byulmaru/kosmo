@@ -38,6 +38,7 @@
 - **WHEN** active local profile이 `followPolicy`가 `OPEN`인 활성 ActivityPub remote profile follow를 요청한다
 - **THEN** 시스템은 local profile을 follower, remote profile을 followee로 하는 established `ProfileFollow` 관계를 생성하거나 기존 관계를 반환한다
 - **AND** 새 `ProfileFollow` 관계가 생성되고 remote instance 상태가 `UNRESPONSIVE`가 아닌 경우에만 Fedify `sendActivity`로 ActivityPub `Follow` activity를 발송한다
+- **AND** Fedify `sendActivity`가 실패하더라도 이번 capability는 생성된 local `ProfileFollow` 관계와 저장 count를 rollback하지 않는다
 - **AND** 새 `ProfileFollow` 관계가 생성되었지만 remote instance 상태가 `UNRESPONSIVE`이면 시스템은 local follow graph만 갱신하고 ActivityPub `Follow` activity를 발송하지 않는다
 - **AND** `UNRESPONSIVE` 상태에서 발송이 억제된 `Follow`는 이번 capability에서 durable pending delivery로 저장하지 않으며, instance가 `ACTIVE`로 회복된 뒤의 idempotent follow retry에서도 재발송하지 않는다
 - **AND** 새 logical outbound Follow activity의 id는 생성된 `ProfileFollow.id`에서 파생한 kosmo outbound Follow URI로 고정해 Undo(Follow) 구성과 후속 Fedify transport retry에 사용할 수 있도록 저장하고, actor URI와 object URI는 후속 Accept/Reject/Undo 검증에 사용할 수 있도록 해당 `ProfileFollow`에 연결된다
@@ -84,6 +85,7 @@
 - **WHEN** active local profile이 `SUSPENDED` instance가 아닌 활성 ActivityPub remote profile unfollow를 요청한다
 - **THEN** 시스템은 해당 `ProfileFollow` 관계를 제거한다
 - **AND** remote instance 상태가 `UNRESPONSIVE`가 아니면 시스템은 Fedify `sendActivity`로 기존 Follow에 대한 `Undo` activity를 발송한다
+- **AND** Fedify `sendActivity`가 실패하더라도 이번 capability는 삭제된 local `ProfileFollow` 관계와 저장 count를 rollback하지 않는다
 - **AND** remote instance 상태가 `UNRESPONSIVE`이면 시스템은 ActivityPub `Undo(Follow)` activity를 발송하지 않는다
 - **AND** 시스템은 저장된 원본 Follow activity id, actor URI, object URI를 `Undo.object`의 대상 Follow에 사용한다
 - **AND** `Undo(Follow)`를 발송할 때 시스템은 같은 local follower actor URI와 remote followee actor URI pair의 모든 Follow/Undo(Follow)에 사용하는 stable Fedify `orderingKey`를 사용한다
