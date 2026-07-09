@@ -8,6 +8,7 @@ import type { Federation } from '@fedify/fedify';
 const federationOrigin = process.env.PUBLIC_ORIGIN;
 
 export const federation: Federation<void> = createFederation<void>({
+  allowPrivateAddress: false,
   kv: new MemoryKvStore(),
   ...(federationOrigin ? { origin: federationOrigin } : {}),
 });

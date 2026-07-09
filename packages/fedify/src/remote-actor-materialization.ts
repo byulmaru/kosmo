@@ -31,6 +31,7 @@ import type { Context } from '@fedify/fedify';
 import type { Actor, Object as ActivityPubObject } from '@fedify/vocab';
 
 const remoteActorRefreshTtl = Temporal.Duration.from({ days: 7 });
+const remoteActorLookupTimeoutMs = 10_000;
 
 export class RemoteActorMaterializationError extends Error {
   constructor(message: string) {
@@ -197,7 +198,9 @@ const lookupRemoteActor = async (
   context: Pick<Context<void>, 'lookupObject'>,
   handle: string,
 ): Promise<Actor> => {
-  const object = (await context.lookupObject(`acct:${handle}`)) as ActivityPubObject | null;
+  const object = (await context.lookupObject(`acct:${handle}`, {
+    signal: AbortSignal.timeout(remoteActorLookupTimeoutMs),
+  })) as ActivityPubObject | null;
 
   if (!isActor(object)) {
     throw new RemoteActorMaterializationError('Remote lookup did not return an actor.');
