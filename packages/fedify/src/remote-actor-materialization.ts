@@ -282,9 +282,13 @@ export const findOrMaterializeRemoteProfileActor = async ({
       stored.instance.state !== InstanceState.UNRESPONSIVE &&
       isStale(stored.actor.lastFetchedAt, now)
     ) {
-      scheduleRefresh(async () => {
-        await materializeRemoteProfileActor({ context, handle, now: getNow() });
-      });
+      try {
+        scheduleRefresh(async () => {
+          await materializeRemoteProfileActor({ context, handle, now: getNow() });
+        });
+      } catch {
+        return stored.profile;
+      }
     }
 
     return stored.profile;
@@ -332,13 +336,18 @@ export const materializeRemoteProfileActor = async ({
         .then(first);
 
       if (existingActor) {
+        const existingInstance = existingActor.instance;
+
         if (
           existingActor.profile.instanceId === null ||
           existingActor.profile.instanceId === localInstance.id ||
-          existingActor.instance?.kind === InstanceKind.LOCAL
+          !existingInstance ||
+          existingInstance.kind === InstanceKind.LOCAL
         ) {
           throw new ConflictError({ message: 'Remote actor collides with a local actor' });
         }
+
+        requireAvailableRemoteInstance(existingInstance);
 
         if (existingActor.profile.state !== ProfileState.ACTIVE) {
           throw new RemoteActorMaterializationError('Remote profile is unavailable.');

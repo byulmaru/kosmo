@@ -10,7 +10,7 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '@kosmo/core/enums';
-import { count, eq } from 'drizzle-orm';
+import { count, eq, ne } from 'drizzle-orm';
 import type { Context } from '@fedify/fedify';
 import type { Object as ActivityPubObject } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
@@ -20,6 +20,7 @@ import type * as Materialization from './remote-actor-materialization';
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 const remoteDomain = 'remote.example';
+const remoteAliasDomain = 'alias.example';
 
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let db: typeof CoreDb.db;
@@ -55,7 +56,7 @@ describe('remote actor materialization', () => {
 
   beforeEach(async () => {
     await db.delete(Profiles);
-    await db.delete(Instances).where(eq(Instances.domain, remoteDomain));
+    await db.delete(Instances).where(ne(Instances.id, localInstanceId));
   });
 
   after(async () => {
@@ -277,6 +278,29 @@ describe('remote actor materialization', () => {
     });
   }
 
+  for (const state of [InstanceState.SUSPENDED, InstanceState.UNRESPONSIVE]) {
+    test(`does not refresh an existing actor from a ${state} instance through an alias`, async () => {
+      const stored = await createStoredRemoteActor({ instanceState: state });
+      const { context, lookupObject } = createLookupContext(async () =>
+        createActor({ name: 'Unexpected Refresh' }),
+      );
+
+      await assert.rejects(
+        materializeRemoteProfileActor({ context, handle: `alice@${remoteAliasDomain}` }),
+        /Remote instance is unavailable/,
+      );
+
+      assert.equal(lookupObject.mock.calls.length, 1);
+      const profile = await db
+        .select()
+        .from(Profiles)
+        .where(eq(Profiles.id, stored.profile.id))
+        .limit(1)
+        .then(firstOrThrow);
+      assert.equal(profile.displayName, 'alice');
+    });
+  }
+
   test('rejects actor URI collisions with local profiles', async () => {
     const profile = await createProfile({ handle: 'local', instanceId: localInstanceId });
     const actor = createActor();
@@ -338,6 +362,26 @@ describe('remote actor materialization', () => {
 
     await refreshes[0]!();
     assert.equal(lookupObject.mock.calls.length, 1);
+  });
+
+  test('returns a stale profile when scheduling refresh throws synchronously', async () => {
+    const now = Temporal.Instant.from('2026-07-10T00:00:00Z');
+    const stored = await createStoredRemoteActor({
+      lastFetchedAt: now.subtract({ hours: 8 * 24 }),
+    });
+    const { context, lookupObject } = createLookupContext(async () => createActor());
+
+    const profile = await findOrMaterializeRemoteProfileActor({
+      context,
+      handle: `alice@${remoteDomain}`,
+      now,
+      scheduleRefresh: () => {
+        throw new Error('queue unavailable');
+      },
+    });
+
+    assert.equal(profile.id, stored.profile.id);
+    assert.equal(lookupObject.mock.calls.length, 0);
   });
 
   test('returns stale profiles without refresh for unresponsive instances', async () => {
