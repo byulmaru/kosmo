@@ -41,6 +41,14 @@
 - **AND** 시스템은 materialized remote posts를 `Profile.posts` connection에서 반환할 수 있게 한다
 - **AND** 시스템은 remote actor outbox를 조회하지 않는다
 
+#### Scenario: Serialize duplicate Note revision updates
+
+- **WHEN** 같은 remote actor와 object URI의 서로 다른 `Create` delivery가 동시에 처리된다
+- **THEN** 시스템은 기존 object mapping 갱신을 transaction에서 수행하고 해당 `activitypub_object` row를 잠근 뒤 canonical `bodyJson`을 비교한다
+- **AND** canonical `bodyJson`이 기존 revision과 같으면 시스템은 새 `PostContent`를 만들지 않고 기존 revision을 재사용한다
+- **AND** 같은 canonical `bodyJson`으로 동시에 들어온 delivery는 동일한 revision을 중복 생성하거나 `Post.currentContentId`를 불필요하게 교체하지 않는다
+- **AND** transaction 실패 또는 object URI unique conflict는 부분 `Post`, `PostContent`, ActivityPub object mapping row를 남기지 않는다
+
 #### Scenario: Materialize public shared inbox Create Note
 
 - **WHEN** Fedify shared inbox listener가 verified remote `Create` activity를 전달하고 Fedify가 단일 object를 `Note`로 resolve한다
@@ -107,6 +115,8 @@
 - **AND** 시스템은 최초 또는 변경 content revision의 `PostContent.createdAt`을 해당 delivery의 수신 시각으로 저장한다
 - **AND** 시스템은 remote Note HTML 원본을 저장하지 않고 `PostContent.bodyHtml`을 `null`로 둔다
 - **AND** Fedify가 제공한 primary Note `content`가 없으면 시스템은 빈 canonical TipTap document를 `bodyJson`으로 만들고 여기서 빈 `bodyText`를 추출해 저장한다
+- **AND** Fedify의 단일 `Note.content` 값이 `LanguageString`이면 시스템은 `.toString()`으로 문자열 값만 추출해 일반 문자열 content와 같은 projection 경계로 처리한다
+- **AND** 시스템은 `LanguageString.locale`을 저장하거나 locale 선호도에 따른 별도 content 선택을 수행하지 않는다
 - **AND** content가 있으면 시스템은 Note `mediaType`의 parameter를 제외하고 type/subtype의 ASCII case를 정규화한 MIME essence로 판정한다
 - **AND** content가 있고 Note `mediaType`이 없으면 시스템은 MIME essence를 ActivityStreams 기본인 `text/html`로 취급한다
 - **AND** content의 MIME essence가 `text/html`이면 시스템은 `@kosmo/core/tiptap`의 server-side helper에서 `@tiptap/html` `generateJSON()`과 기존 `Document`/`Paragraph`/`Text` extensions로 TipTap document를 만든 뒤 정규화하고 trim된 `bodyText`를 추출한다

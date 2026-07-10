@@ -34,6 +34,13 @@
 - **AND** 시스템은 최초 object mapping의 수신 시각과 원본 published 시각을 갱신하지 않는다
 - **AND** 시스템은 기존 `Post.createdAt`을 갱신하지 않는다
 
+#### Scenario: Serialize existing remote object revision updates
+
+- **WHEN** 같은 remote actor의 기존 ActivityPub object URI가 서로 다른 `Create` delivery에서 동시에 갱신된다
+- **THEN** 시스템은 기존 object mapping 갱신을 transaction에서 수행하고 해당 `activitypub_object` row를 잠근 뒤 canonical `bodyJson`을 비교한다
+- **AND** 같은 canonical `bodyJson`의 동시 재전달은 동일 `PostContent` revision을 중복 생성하지 않는다
+- **AND** 시스템은 비교 결과에 따라 최대 하나의 새 revision을 생성하고 `Post.currentContentId`를 해당 revision으로 교체하거나 기존 revision을 재사용한다
+
 #### Scenario: Reject duplicate remote object mapping from different actor
 
 - **WHEN** 이미 저장된 ActivityPub object URI가 다시 inbox delivery에서 발견된다
@@ -92,6 +99,7 @@
 
 - **WHEN** remote ActivityPub Note content가 `PostContent`로 materialize된다
 - **THEN** 시스템은 remote Note HTML 원본을 저장하지 않고 `bodyHtml`을 `null`로 둔다
+- **AND** Fedify의 단일 `Note.content`가 `LanguageString`이면 locale은 저장하지 않고 `.toString()` 문자열 값만 projection 입력으로 사용한다
 - **AND** 시스템은 Note media type에 따라 server-side TipTap HTML parsing 또는 plain-text helper로 canonical `bodyJson`을 만들고 여기서 trim된 `bodyText`를 추출해 저장한다
 - **AND** Note content가 없으면 빈 `bodyText`와 빈 TipTap document를 저장할 수 있다
 - **AND** 최초 또는 변경 revision의 `createdAt`은 해당 delivery 수신 시각이다
