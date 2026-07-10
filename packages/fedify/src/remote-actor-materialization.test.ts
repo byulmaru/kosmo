@@ -55,7 +55,7 @@ describe('remote actor materialization', () => {
 
   beforeEach(async () => {
     await db.delete(Profiles);
-    await db.delete(Instances).where(eq(Instances.kind, InstanceKind.ACTIVITYPUB));
+    await db.delete(Instances).where(eq(Instances.domain, remoteDomain));
   });
 
   after(async () => {
@@ -211,6 +211,19 @@ describe('remote actor materialization', () => {
     });
   }
 
+  test('does not treat an existing local instance as an ActivityPub instance', async () => {
+    await createRemoteInstance({ kind: InstanceKind.LOCAL });
+    const { context, lookupObject } = createLookupContext(async () => createActor());
+
+    await assert.rejects(
+      materializeRemoteProfileActor({ context, handle: `alice@${remoteDomain}` }),
+      /Remote instance is not an ActivityPub instance/,
+    );
+
+    assert.equal(lookupObject.mock.calls.length, 0);
+    assert.equal(await countRows(Profiles), 0);
+  });
+
   test('reuses an existing remote actor URI and refreshes published when present', async () => {
     const originalCreatedAt = Temporal.Instant.from('2020-01-01T00:00:00Z');
     const nextPublished = Temporal.Instant.from('2024-01-02T03:04:05Z');
@@ -239,6 +252,30 @@ describe('remote actor materialization', () => {
 
     assert.equal(preserved.createdAt.toString(), nextPublished.toString());
   });
+
+  for (const state of [ProfileState.DISABLED, ProfileState.SUSPENDED]) {
+    test(`does not reactivate or update a ${state} remote profile`, async () => {
+      const stored = await createStoredRemoteActor({ profileState: state });
+      const { context, lookupObject } = createLookupContext(async () =>
+        createActor({ name: 'Unexpected Refresh' }),
+      );
+
+      await assert.rejects(
+        materializeRemoteProfileActor({ context, handle: `alice@${remoteDomain}` }),
+        /Remote profile is unavailable/,
+      );
+
+      assert.equal(lookupObject.mock.calls.length, 1);
+      const profile = await db
+        .select()
+        .from(Profiles)
+        .where(eq(Profiles.id, stored.profile.id))
+        .limit(1)
+        .then(firstOrThrow);
+      assert.equal(profile.state, state);
+      assert.equal(profile.displayName, 'alice');
+    });
+  }
 
   test('rejects actor URI collisions with local profiles', async () => {
     const profile = await createProfile({ handle: 'local', instanceId: localInstanceId });
@@ -439,14 +476,15 @@ const createDocumentLoader = () =>
   }));
 
 const createRemoteInstance = async ({
+  kind = InstanceKind.ACTIVITYPUB,
   state = InstanceState.ACTIVE,
-}: { state?: InstanceState } = {}) =>
+}: { kind?: InstanceKind; state?: InstanceState } = {}) =>
   db
     .insert(Instances)
     .values({
       canonicalOrigin: `https://${remoteDomain}`,
       domain: remoteDomain,
-      kind: InstanceKind.ACTIVITYPUB,
+      kind,
       state,
     })
     .returning()
@@ -456,10 +494,12 @@ const createProfile = async ({
   createdAt,
   handle,
   instanceId,
+  state = ProfileState.ACTIVE,
 }: {
   createdAt?: Temporal.Instant;
   handle: string;
   instanceId: string;
+  state?: ProfileState;
 }) =>
   db
     .insert(Profiles)
@@ -470,7 +510,7 @@ const createProfile = async ({
       handle,
       instanceId,
       normalizedHandle: handle.toLowerCase(),
-      state: ProfileState.ACTIVE,
+      state,
     })
     .returning()
     .then(firstOrThrow);
@@ -479,13 +519,20 @@ const createStoredRemoteActor = async ({
   createdAt = Temporal.Instant.from('2020-01-01T00:00:00Z'),
   instanceState = InstanceState.ACTIVE,
   lastFetchedAt = Temporal.Instant.from('2026-07-09T00:00:00Z'),
+  profileState = ProfileState.ACTIVE,
 }: {
   createdAt?: Temporal.Instant;
   instanceState?: InstanceState;
   lastFetchedAt?: Temporal.Instant | null;
+  profileState?: ProfileState;
 } = {}) => {
   const instance = await createRemoteInstance({ state: instanceState });
-  const profile = await createProfile({ createdAt, handle: 'alice', instanceId: instance.id });
+  const profile = await createProfile({
+    createdAt,
+    handle: 'alice',
+    instanceId: instance.id,
+    state: profileState,
+  });
   const actor = await db
     .insert(ActivityPubActors)
     .values({

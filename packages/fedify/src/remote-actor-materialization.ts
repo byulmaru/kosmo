@@ -142,6 +142,18 @@ const projectActor = (actor: ActorWithKosmoFields, requestedNormalizedHandle: st
   } satisfies ActorProjection;
 };
 
+const requireAvailableRemoteInstance = (instance: typeof Instances.$inferSelect) => {
+  if (instance.kind !== InstanceKind.ACTIVITYPUB) {
+    throw new RemoteActorMaterializationError('Remote instance is not an ActivityPub instance.');
+  }
+
+  if (instance.state === InstanceState.SUSPENDED || instance.state === InstanceState.UNRESPONSIVE) {
+    throw new RemoteActorMaterializationError('Remote instance is unavailable.');
+  }
+
+  return instance;
+};
+
 const ensureRemoteInstance = async (domain: string) => {
   const existing = await db
     .select()
@@ -151,14 +163,7 @@ const ensureRemoteInstance = async (domain: string) => {
     .then(first);
 
   if (existing) {
-    if (
-      existing.state === InstanceState.SUSPENDED ||
-      existing.state === InstanceState.UNRESPONSIVE
-    ) {
-      throw new RemoteActorMaterializationError('Remote instance is unavailable.');
-    }
-
-    return existing;
+    return requireAvailableRemoteInstance(existing);
   }
 
   return db
@@ -186,14 +191,7 @@ const ensureRemoteInstance = async (domain: string) => {
         throw error;
       }
 
-      if (
-        concurrent.state === InstanceState.SUSPENDED ||
-        concurrent.state === InstanceState.UNRESPONSIVE
-      ) {
-        throw new RemoteActorMaterializationError('Remote instance is unavailable.');
-      }
-
-      return concurrent;
+      return requireAvailableRemoteInstance(concurrent);
     });
 };
 
@@ -335,6 +333,10 @@ export const materializeRemoteProfileActor = async ({
           existingActor.instance?.kind === InstanceKind.LOCAL
         ) {
           throw new ConflictError({ message: 'Remote actor collides with a local actor' });
+        }
+
+        if (existingActor.profile.state !== ProfileState.ACTIVE) {
+          throw new RemoteActorMaterializationError('Remote profile is unavailable.');
         }
 
         const profile = await tx
