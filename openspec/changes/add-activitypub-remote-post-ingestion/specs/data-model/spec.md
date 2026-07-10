@@ -28,8 +28,8 @@
 - **WHEN** 이미 저장된 ActivityPub object URI가 다시 inbox delivery에서 발견된다
 - **AND** 기존 object mapping의 `activityPubActorId`가 이번 delivery actor URI로 조회한 `activitypub_actor.id`와 같다
 - **THEN** 시스템은 새 `Post`를 만들지 않고 기존 object mapping과 연결된 `Post`를 재사용한다
-- **AND** 재전달된 Note에서 저장될 `bodyText`가 변경되었으면 시스템은 새 `PostContent` revision을 생성하고 기존 `Post.currentContentId`를 새 revision으로 교체한다
-- **AND** 재전달된 Note에서 저장될 `bodyText`가 같으면 시스템은 기존 `PostContent` revision을 재사용한다
+- **AND** 재전달된 Note에서 저장될 canonical `bodyJson`의 구조가 변경되었으면 시스템은 새 `PostContent` revision을 생성하고 기존 `Post.currentContentId`를 새 revision으로 교체한다
+- **AND** 재전달된 Note에서 저장될 canonical `bodyJson`이 같으면 시스템은 기존 `PostContent` revision을 재사용한다
 - **AND** 시스템은 재전달된 Note의 visibility와 관계없이 최초 `Post.visibility`를 갱신하지 않는다
 - **AND** 시스템은 최초 object mapping의 수신 시각과 원본 published 시각을 갱신하지 않는다
 - **AND** 시스템은 기존 `Post.createdAt`을 갱신하지 않는다
@@ -82,6 +82,6 @@
 
 - **WHEN** remote ActivityPub Note content가 `PostContent`로 materialize된다
 - **THEN** 시스템은 remote Note HTML 원본을 저장하지 않고 `bodyHtml`을 `null`로 둔다
-- **AND** 시스템은 Note media type에 따라 server-side TipTap HTML parsing 또는 plain-text helper로 `bodyJson`과 trim된 `bodyText`를 저장한다
+- **AND** 시스템은 Note media type에 따라 server-side TipTap HTML parsing 또는 plain-text helper로 canonical `bodyJson`을 만들고 여기서 trim된 `bodyText`를 추출해 저장한다
 - **AND** Note content가 없으면 빈 `bodyText`와 빈 TipTap document를 저장할 수 있다
 - **AND** 최초 또는 변경 revision의 `createdAt`은 해당 delivery 수신 시각이다

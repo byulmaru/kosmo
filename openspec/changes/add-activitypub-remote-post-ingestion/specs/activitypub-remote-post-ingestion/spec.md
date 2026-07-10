@@ -34,7 +34,7 @@
 - **AND** 시스템은 각 Note의 ActivityPub object URI를 unique identity로 저장한다
 - **AND** 시스템은 Note `id.href`를 object URI로 저장하고 actor/object identity에 handle/domain 기반 별도 equality를 적용하지 않는다
 - **AND** 시스템은 중복 object URI가 기존 object mapping의 작성 actor와 같은 remote actor에서 재전달된 경우 새 `Post`를 만들지 않고 기존 `Post`를 재사용한다
-- **AND** persisted `bodyText`가 변경되었으면 새 `PostContent` revision을 생성하고 `Post.currentContentId`를 교체하며, `bodyText`가 같으면 기존 `PostContent`를 재사용한다
+- **AND** canonical `bodyJson`의 구조가 변경되었으면 새 `PostContent` revision을 생성하고 `Post.currentContentId`를 교체하며, canonical `bodyJson`이 같으면 기존 `PostContent`를 재사용한다
 - **AND** 중복 object URI 재전달은 기존 `Post.visibility`를 수정하지 않는다
 - **AND** 중복 object URI 재전달은 최초 ActivityPub object mapping의 수신 시각과 원본 published 시각을 수정하지 않는다
 - **AND** 중복 object URI 재전달은 기존 `Post.createdAt`을 수정하지 않는다
@@ -106,13 +106,13 @@
 - **AND** 기존 object URI가 재전달되면 Note `published` 유무와 값에 관계없이 시스템은 기존 `Post.createdAt`을 유지한다
 - **AND** 시스템은 최초 또는 변경 content revision의 `PostContent.createdAt`을 해당 delivery의 수신 시각으로 저장한다
 - **AND** 시스템은 remote Note HTML 원본을 저장하지 않고 `PostContent.bodyHtml`을 `null`로 둔다
-- **AND** Fedify가 제공한 primary Note `content`가 없으면 시스템은 빈 `bodyText`와 빈 TipTap document를 저장한다
+- **AND** Fedify가 제공한 primary Note `content`가 없으면 시스템은 빈 canonical TipTap document를 `bodyJson`으로 만들고 여기서 빈 `bodyText`를 추출해 저장한다
 - **AND** content가 있고 Note `mediaType`이 없거나 `text/html`이면 시스템은 `@kosmo/core/tiptap`의 server-side helper에서 `@tiptap/html` `generateJSON()`과 기존 `Document`/`Paragraph`/`Text` extensions로 TipTap document를 만든 뒤 정규화하고 trim된 `bodyText`를 추출한다
-- **AND** content가 있고 Note `mediaType`이 `text/plain`이면 시스템은 trim된 content를 `bodyText`로 저장하고 기존 plain-text-to-TipTap helper로 `bodyJson`을 만든다
+- **AND** content가 있고 Note `mediaType`이 `text/plain`이면 시스템은 기존 plain-text-to-TipTap helper로 canonical `bodyJson`을 만든 뒤 core TipTap helper로 trim된 `bodyText`를 추출한다
 - **AND** content가 있고 Note `mediaType`이 그 외 값이면 시스템은 해당 Note를 materialize하지 않는다
 - **AND** TipTap HTML 변환 또는 core document 정규화가 실패하면 시스템은 해당 Note를 materialize하지 않고 부분 row를 남기지 않는다
 - **AND** Note attachment는 이번 capability에서 저장하지 않으며, content 없이 attachment만 있는 Note도 빈 본문의 `PostContent`로 materialize한다
-- **AND** duplicate delivery의 revision 변경 여부는 저장될 `bodyText`만 비교해 결정한다
+- **AND** duplicate delivery의 revision 변경 여부는 canonical `bodyJson`의 structural equality로 결정하고 파생 `bodyText`는 별도로 비교하지 않는다
 
 #### Scenario: Return only materialized posts
 
