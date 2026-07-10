@@ -43,10 +43,10 @@
 
 #### Scenario: Handle supported inbox delivery
 
-- **WHEN** 외부 서버가 actor-scoped `/ap/actor/{profile.id}/inbox` 또는 shared `/inbox`로 ActivityPub follow protocol activity 또는 `Create(Note)` activity를 전달한다
+- **WHEN** 외부 서버가 actor-scoped `/ap/actor/{profile.id}/inbox` 또는 shared `/inbox`로 ActivityPub follow protocol activity 또는 `Create` activity를 전달한다
 - **THEN** 시스템은 해당 요청을 unsupported endpoint 404로 종료하지 않고 Fedify inbox listener로 처리한다
 - **AND** Fedify가 verified typed `Follow`, `Undo(Follow)`, `Accept(Follow)`, 또는 `Reject(Follow)`를 제공하면 시스템은 `activitypub-remote-follow` handler로 위임한다
-- **AND** Fedify가 verified typed `Create(Note)`를 제공하면 시스템은 `activitypub-remote-post-ingestion` materialization handler로 위임한다
+- **AND** Fedify가 verified typed `Create`를 제공하면 시스템은 `activitypub-remote-post-ingestion` materialization handler로 위임한다
 - **AND** 시스템은 해당 요청을 `/graphql` proxy 또는 API 서버로 전달하지 않는다
 
 #### Scenario: Unsupported ActivityPub endpoint request
@@ -67,9 +67,9 @@ local actor discovery 경계는 actor document, follow protocol inbox delivery, 
 
 #### Scenario: Remote Note delivery is handled by post ingestion capability
 
-- **WHEN** 원격 서버가 actor-scoped inbox 또는 shared inbox로 `Create(Note)` activity를 보낸다
+- **WHEN** 원격 서버가 actor-scoped inbox 또는 shared inbox로 `Create` activity를 보낸다
 - **THEN** 시스템은 discovery-only 404 경계 대신 `activitypub-remote-post-ingestion` capability의 Fedify inbox listener와 post materialization handler 계약을 따른다
-- **AND** public top-level Note로 materialize되지 않는 inbox delivery는 이번 capability에서 post side effect를 만들지 않는다
+- **AND** Fedify가 resolve한 단일 public top-level Note로 materialize되지 않는 inbox delivery는 이번 capability에서 post side effect를 만들지 않는다
 
 #### Scenario: Outbox behavior remains out of scope
 
