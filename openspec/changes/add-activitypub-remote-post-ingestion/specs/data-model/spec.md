@@ -12,13 +12,23 @@
 - **AND** ActivityPub object URI는 중복될 수 없다
 - **AND** 하나의 ActivityPub object는 최대 하나의 kosmo `Post`에 연결된다
 - **AND** 하나의 remote materialized `Post`는 최대 하나의 ActivityPub object identity에 연결된다
+- **AND** 최초 `Post`, `PostContent`, ActivityPub object mapping 생성은 하나의 transaction으로 수행된다
+
+#### Scenario: Handle concurrent duplicate remote object materialization
+
+- **WHEN** 같은 remote actor의 동일 ActivityPub object URI가 최초 materialization 중 동시에 전달된다
+- **THEN** 시스템은 최대 하나의 ActivityPub object mapping과 연결된 `Post`만 생성한다
+- **AND** object URI unique conflict가 발생한 transaction은 부분 생성된 `Post` 또는 `PostContent`를 남기지 않는다
 
 #### Scenario: Reuse existing remote object mapping from duplicate delivery
 
 - **WHEN** 이미 저장된 ActivityPub object URI가 다시 inbox delivery에서 발견된다
 - **AND** 기존 object mapping의 작성 actor가 이번 delivery의 materialized remote actor와 같다
 - **THEN** 시스템은 새 `Post`를 만들지 않고 기존 object mapping과 연결된 `Post`를 재사용한다
-- **AND** 시스템은 재전달된 Note의 content와 visibility를 기준으로 기존 `Post`, `PostContent`, ActivityPub object mapping을 갱신한다
+- **AND** 재전달된 Note의 content projection이 변경되었으면 시스템은 새 `PostContent` revision을 생성하고 기존 `Post.currentContentId`를 새 revision으로 교체한다
+- **AND** 재전달된 Note의 content projection이 같으면 시스템은 기존 `PostContent` revision을 재사용한다
+- **AND** 재전달된 Note의 visibility가 변경되었으면 시스템은 기존 `Post.visibility`를 갱신한다
+- **AND** 시스템은 최초 object mapping의 수신 시각과 원본 published 시각을 갱신하지 않는다
 - **AND** 시스템은 기존 `Post.createdAt`을 갱신하지 않는다
 
 #### Scenario: Reject duplicate remote object mapping from different actor
@@ -67,6 +77,6 @@
 #### Scenario: 리모트 게시물 콘텐츠 projection 저장
 
 - **WHEN** remote ActivityPub Note content가 `PostContent`로 materialize된다
-- **THEN** 시스템은 HTML content를 `bodyHtml`에 저장할 수 있다
+- **THEN** 시스템은 remote Note HTML 원본을 저장하지 않고 `bodyHtml`을 `null`로 둔다
 - **AND** 시스템은 HTML 또는 source content에서 plain text projection을 만들어 `bodyText`에 저장한다
 - **AND** 시스템은 plain text projection에서 단순 TipTap JSON 문서를 만들어 `bodyJson`에 저장한다

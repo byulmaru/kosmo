@@ -25,7 +25,10 @@
 - **AND** `to`에 `as:Public`이 있으면 `Post.visibility`를 `PUBLIC`으로 저장한다
 - **AND** `to`에는 `as:Public`이 없고 `cc`에만 `as:Public`이 있으면 `Post.visibility`를 `UNLISTED`로 저장한다
 - **AND** 시스템은 각 Note의 ActivityPub object URI를 unique identity로 저장한다
-- **AND** 시스템은 중복 object URI가 기존 object mapping의 작성 actor와 같은 remote actor에서 재전달된 경우 새 `Post`를 만들지 않고 기존 `Post`, `PostContent`, ActivityPub object mapping projection을 갱신한다
+- **AND** 시스템은 중복 object URI가 기존 object mapping의 작성 actor와 같은 remote actor에서 재전달된 경우 새 `Post`를 만들지 않고 기존 `Post`를 재사용한다
+- **AND** content projection이 변경되었으면 새 `PostContent` revision을 생성하고 `Post.currentContentId`를 교체하며, content projection이 같으면 기존 `PostContent`를 재사용한다
+- **AND** visibility가 변경되었으면 기존 `Post.visibility`를 갱신한다
+- **AND** 중복 object URI 재전달은 최초 ActivityPub object mapping의 수신 시각과 원본 published 시각을 수정하지 않는다
 - **AND** 중복 object URI 재전달은 기존 `Post.createdAt`을 수정하지 않는다
 - **AND** 시스템은 materialized remote posts를 `Profile.posts` connection에서 반환할 수 있게 한다
 - **AND** 시스템은 remote actor outbox를 조회하지 않는다
@@ -80,8 +83,8 @@
 - **AND** 새 remote post 최초 저장 시 Note `published`가 수신 시각보다 5분을 초과해 미래이면 시스템은 수신 시각을 `Post.createdAt` fallback으로 사용한다
 - **AND** 새 remote post 최초 저장 시 Note `published`가 없으면 시스템은 ActivityPub object mapping의 원본 published 시각을 `null`로 저장한다
 - **AND** 기존 object URI가 재전달되면 Note `published` 유무와 값에 관계없이 시스템은 기존 `Post.createdAt`을 유지한다
-- **AND** 시스템은 Note HTML content를 `PostContent.bodyHtml`로 저장할 수 있다
-- **AND** 시스템은 Note content에서 plain text projection을 만들어 `PostContent.bodyText`로 저장한다
+- **AND** 시스템은 remote Note HTML 원본을 저장하지 않고 `PostContent.bodyHtml`을 `null`로 둔다
+- **AND** 시스템은 Note HTML 또는 source content에서 plain text projection을 만들어 `PostContent.bodyText`로 저장한다
 - **AND** 시스템은 plain text projection에서 단순 TipTap document를 만들어 `PostContent.bodyJson`으로 저장한다
 
 #### Scenario: Return only materialized posts
