@@ -1,16 +1,27 @@
 import { db, PostContents, Posts, Profiles, TableDiscriminator } from '@kosmo/core/db';
 import { PostState, PostVisibility } from '@kosmo/core/enums';
+import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
 import { postVisibilityAccessWhere } from './access/visibility';
 
-export const Post = createObjectRef('Post', TableDiscriminator.Posts, (ids, ctx) => {
+export const Post = createObjectRef('Post', TableDiscriminator.Posts, async (ids, ctx) => {
+  const configuredLocalInstance = await resolveConfiguredLocalInstance();
+
   return db
     .select(getColumns(Posts))
     .from(Posts)
     .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
-    .where(and(inArray(Posts.id, ids), postVisibilityAccessWhere({ ctx })));
+    .where(
+      and(
+        inArray(Posts.id, ids),
+        postVisibilityAccessWhere({
+          ctx,
+          configuredLocalInstanceId: configuredLocalInstance.id,
+        }),
+      ),
+    );
 });
 
 Post.implement({

@@ -1,4 +1,5 @@
 import { db, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, exists, getColumns, gt, lt, or } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
@@ -13,7 +14,8 @@ builder.queryField('homeTimeline', (t) =>
       type: Post,
       nullable: true,
       unauthorizedResolver: () => null,
-      resolve: (_, args, ctx) => {
+      resolve: async (_, args, ctx) => {
+        const configuredLocalInstance = await resolveConfiguredLocalInstance();
         const followeeWhere = exists(
           db
             .select({ id: ProfileFollows.id })
@@ -39,7 +41,10 @@ builder.queryField('homeTimeline', (t) =>
               .where(
                 and(
                   or(eq(Posts.profileId, ctx.session.profileId), followeeWhere),
-                  postVisibilityAccessWhere({ ctx }),
+                  postVisibilityAccessWhere({
+                    ctx,
+                    configuredLocalInstanceId: configuredLocalInstance.id,
+                  }),
                   before ? gt(Posts.id, before) : undefined,
                   after ? lt(Posts.id, after) : undefined,
                 ),

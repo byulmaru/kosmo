@@ -35,7 +35,10 @@ builder.objectFields(Profile, (t) => ({
               .where(
                 and(
                   eq(Posts.profileId, profile.id),
-                  postVisibilityAccessWhere({ ctx }),
+                  postVisibilityAccessWhere({
+                    ctx,
+                    configuredLocalInstanceId: configuredLocalInstance.id,
+                  }),
                   before ? gt(Posts.id, before) : undefined,
                   after ? lt(Posts.id, after) : undefined,
                 ),

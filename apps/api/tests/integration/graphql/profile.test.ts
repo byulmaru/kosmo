@@ -236,6 +236,64 @@ describe('GraphQL remote profile boundary', () => {
     assert.deepEqual(result.data?.profileByHandle?.posts, { edges: [] });
   });
 
+  test('hides remote and suspended-instance posts from Node and home timeline', async () => {
+    const auth = await createAuthenticatedSession();
+    const remoteInstance = await createRemoteInstance();
+    const remote = await createProfile({ handle: 'remote', instanceId: remoteInstance.id });
+    const suspendedInstance = await createRemoteInstance({
+      domain: 'suspended.example',
+      state: InstanceState.SUSPENDED,
+    });
+    const suspended = await createProfile({
+      handle: 'suspended',
+      instanceId: suspendedInstance.id,
+    });
+    const [remotePost, suspendedPost] = await db
+      .insert(Posts)
+      .values([
+        {
+          profileId: remote.id,
+          state: PostState.ACTIVE,
+          visibility: PostVisibility.PUBLIC,
+        },
+        {
+          profileId: suspended.id,
+          state: PostState.ACTIVE,
+          visibility: PostVisibility.PUBLIC,
+        },
+      ])
+      .returning();
+    await db.insert(ProfileFollows).values([
+      { followerProfileId: auth.profile.id, followeeProfileId: remote.id },
+      { followerProfileId: auth.profile.id, followeeProfileId: suspended.id },
+    ]);
+
+    const result = await requestGraphQL<{
+      remotePost: { id: string } | null;
+      suspendedPost: { id: string } | null;
+      homeTimeline: { edges: unknown[] } | null;
+    }>(
+      `query HiddenForeignPosts($remotePostId: ID!, $suspendedPostId: ID!) {
+        remotePost: node(id: $remotePostId) {
+          ... on Post { id }
+        }
+        suspendedPost: node(id: $suspendedPostId) {
+          ... on Post { id }
+        }
+        homeTimeline(first: 10) { edges { node { id } } }
+      }`,
+      { remotePostId: remotePost.id, suspendedPostId: suspendedPost.id },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data, {
+      remotePost: null,
+      suspendedPost: null,
+      homeTimeline: { edges: [] },
+    });
+  });
+
   test('rejects selecting a remote profile even when the account owns it', async () => {
     const auth = await createAuthenticatedSession();
     const remoteInstance = await createRemoteInstance();
@@ -437,14 +495,20 @@ const assertGraphQLErrorCode = (result: GraphQLResult<unknown>, code: string) =>
   assert.equal(result.errors?.[0]?.extensions?.code, code, JSON.stringify(result.errors));
 };
 
-const createRemoteInstance = async () =>
+const createRemoteInstance = async ({
+  domain = remoteDomain,
+  state = InstanceState.ACTIVE,
+}: {
+  domain?: string;
+  state?: InstanceState;
+} = {}) =>
   db
     .insert(Instances)
     .values({
-      canonicalOrigin: `https://${remoteDomain}`,
-      domain: remoteDomain,
+      canonicalOrigin: `https://${domain}`,
+      domain,
       kind: InstanceKind.ACTIVITYPUB,
-      state: InstanceState.ACTIVE,
+      state,
     })
     .returning()
     .then(firstOrThrow);

@@ -1,9 +1,15 @@
 import { db, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { PostState, PostVisibility, ProfileState } from '@kosmo/core/enums';
-import { and, eq, exists, inArray, or } from 'drizzle-orm';
+import { and, eq, exists, inArray, isNull, or } from 'drizzle-orm';
 import type { UserContext } from '@/context';
 
-export const postVisibilityAccessWhere = ({ ctx }: { ctx: UserContext }) => {
+export const postVisibilityAccessWhere = ({
+  ctx,
+  configuredLocalInstanceId,
+}: {
+  ctx: UserContext;
+  configuredLocalInstanceId: string;
+}) => {
   const publicWhere = inArray(Posts.visibility, [PostVisibility.PUBLIC, PostVisibility.UNLISTED]);
   const followerWhere = ctx.session?.profileId
     ? and(
@@ -29,6 +35,7 @@ export const postVisibilityAccessWhere = ({ ctx }: { ctx: UserContext }) => {
   return and(
     eq(Posts.state, PostState.ACTIVE),
     eq(Profiles.state, ProfileState.ACTIVE),
+    or(isNull(Profiles.instanceId), eq(Profiles.instanceId, configuredLocalInstanceId)),
     visibleWhere,
   )!;
 };
