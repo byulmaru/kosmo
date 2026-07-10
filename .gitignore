@@ -6,6 +6,12 @@ dist
 .DS_Store
 playwright-report
 test-results
+**/__generated__/
+apps/app/.expo/
+apps/app/dist/
+apps/app/storybook-static/
+apps/app/android/
+apps/app/ios/
 
 # Terraform local working files and environment-specific inputs.
 **/.terraform/

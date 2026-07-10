@@ -1,7 +1,0 @@
-{
-  "scripts": {
-    "build": "node ../../../scripts/vault-run.mjs -- node scripts/generate-info-plist.mjs && node ../../../scripts/vault-run.mjs -- xcodebuild -project Kosmo.xcodeproj -scheme Kosmo -configuration Debug -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build/DerivedData INFOPLIST_FILE=build/Info.plist -allowProvisioningUpdates build",
-    "run": "node scripts/run.mjs",
-    "run:debug": "node scripts/run.mjs --debug"
-  }
-}

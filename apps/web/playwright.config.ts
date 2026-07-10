@@ -36,7 +36,8 @@ function readEnvFileValue(path: URL, key: string) {
 
       return trimmed.slice(separator + 1);
     }
-  } catch {
+  }
+  catch {
     return undefined;
   }
 
@@ -84,12 +85,17 @@ export default defineConfig({
       url: `${apiOrigin}/health`,
     },
     {
-      command: `pnpm run build && pnpm run preview -- --host ${host}`,
+      command: 'pnpm --dir ../app build && node --import tsx src/server/index.ts',
       env: {
         DATABASE_URL: databaseUrl,
+        EXPO_PUBLIC_OIDC_CLIENT_ID: oidcClientId,
+        EXPO_PUBLIC_OIDC_ISSUER: oidcOrigin,
+        EXPO_PUBLIC_WEB_ORIGIN: webOrigin,
+        EXPO_WEB_ROOT: '../app/dist',
         OIDC_AUTHORIZE_URL: `${oidcOrigin}/oauth/authorize`,
         OIDC_CLIENT_SECRET: oidcClientSecret,
         OIDC_TOKEN_URL: `${oidcOrigin}/oauth/token`,
+        PORT: String(webPort),
         PUBLIC_API_ORIGIN: apiOrigin,
         PUBLIC_ORIGIN: webOrigin,
         PUBLIC_OIDC_CLIENT_ID: oidcClientId,

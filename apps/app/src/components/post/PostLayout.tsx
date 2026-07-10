@@ -1,0 +1,60 @@
+import { useRouter } from 'expo-router';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { graphql, useFragment } from 'react-relay';
+import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
+import { Avatar } from '@/components/ui/Avatar';
+import { formatPostDate } from '@/lib/date';
+import { useTheme } from '@/theme/ThemeProvider';
+import { spacing, typography } from '@/theme/tokens';
+import { PostBody } from './PostBody';
+import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
+
+const PostLayoutFragment = graphql`
+  fragment PostLayout_post on Post {
+    id
+    createdAt
+    visibility
+    profile {
+      id
+      handle
+      displayName
+      ...ProfileNameBlock_profile
+    }
+    ...PostBody_post
+  }
+`;
+
+const visibilityLabels: Record<string, string> = {
+  PUBLIC: '전체 공개',
+  UNLISTED: '조용히 공개',
+  FOLLOWERS: '팔로워 공개',
+  DIRECT: '다이렉트',
+};
+
+export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
+  const theme = useTheme();
+  const router = useRouter();
+  const post = useFragment(PostLayoutFragment, postKey);
+  const profileHref = `/@${post.profile.handle}` as const;
+
+  return (
+    <View style={styles.root}>
+      <Pressable onPress={() => router.push(profileHref)}>
+        <Avatar label={post.profile.displayName} size={40} />
+      </Pressable>
+      <View style={styles.content}>
+        <ProfileNameBlock href={profileHref} profile={post.profile} />
+        <PostBody post={post} size="lg" />
+        <Text style={[styles.meta, { color: theme.textSecondary }]}>
+          {formatPostDate(post.createdAt)} · {visibilityLabels[post.visibility] ?? post.visibility}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.md },
+  content: { flex: 1, gap: spacing.md, minWidth: 0 },
+  meta: { fontFamily: 'SUIT', textAlign: 'right', ...typography.sm },
+});

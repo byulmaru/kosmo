@@ -10,7 +10,7 @@
 - Context / Problem: internal scroll app shell은 중앙 피드만 스크롤되는 구조를 만들 수 있지만, 사이드바·우측 rail·빈 shell 영역 위에서 기본 scroll이 이어지지 않는다. 이를 보정하려면 wheel 이벤트 전달 같은 custom 동작이 필요하다.
 - Decision Outcome: `(tabs)` shell의 기본 scroll owner는 document/window로 유지한다. 중앙 `main`은 단일 internal scroll container가 되지 않는다.
 - Alternatives Considered: 중앙 internal scroller와 shell chrome wheel forwarding을 함께 쓰는 방식은 조작감이 어색하고 구현 책임이 커져 제외한다.
-- Consequences: route scroll restoration은 SvelteKit/browser의 document scroll 정책을 기본으로 따른다. 내부 scroller 전용 helper는 만들지 않는다.
+- Consequences: web route scroll restoration은 Expo Router/browser의 document scroll 정책과 맞춘다. 내부 scroller 전용 helper는 만들지 않는다.
 - Confirmation / Follow-up: 피드, 사이드바, 우측 rail, 빈 layout 영역에서 wheel/trackpad 입력이 자연스럽게 document scroll로 이어지는지 smoke로 확인한다.
 
 ### 데스크톱 좌우 rail은 sticky로 고정한다
@@ -35,10 +35,10 @@
 
 - Status: Accepted
 - Context / Problem: internal scroll shell에서는 route 이동 시 내부 scroller top 이동과 back/forward 복원이 별도 구현 책임이 된다. 새 방향은 document scroll을 유지하므로 별도 helper의 필요성이 낮다.
-- Decision Outcome: 일반 route 이동과 back/forward는 SvelteKit/browser document scroll 정책에 맡긴다. 검색 화면의 query-only `noScroll`/focus 흐름은 기존 정책을 보존한다.
+- Decision Outcome: 일반 route 이동과 back/forward는 Expo Router/browser document scroll 정책에 맞춘다. 검색 화면의 query-only `router.replace`는 현재 document scroll과 입력 focus를 보존한다.
 - Alternatives Considered: component-local scroll position Map은 internal scroller 전용 보정이므로 이번 방향에서는 제외한다.
-- Consequences: 구현 PR에서 scroll restoration 코드는 추가하지 않거나 제거한다. 검색 `noScroll` 회귀만 smoke로 확인한다.
-- Confirmation / Follow-up: path-changing navigation은 새 route 상단에서 시작하고, 검색 tab/q 변경은 기존 noScroll 동작을 유지하는지 확인한다.
+- Consequences: 구현 PR에서 internal scroller restoration 코드는 추가하지 않는다. 검색 query navigation의 scroll/focus 회귀만 smoke로 확인한다.
+- Confirmation / Follow-up: path-changing navigation은 새 route 상단에서 시작하고, 검색 tab/q 변경은 현재 document position과 input focus를 유지하는지 확인한다.
 
 ### 반응형 내비게이션 E2E suite는 PROD-233으로 남긴다
 
@@ -52,7 +52,7 @@
 ## Remaining Decisions
 
 - 우측 rail 내부 overflow 허용 조건과 세부 class는 구현 중 실제 content 높이를 보고 확정한다.
-- iOS Safari/WebView safe-area/overscroll 대응이 별도 이슈로 커지는지는 구현 검증 후 결정한다.
+- iOS Safari와 Expo native safe-area/overscroll 대응이 별도 이슈로 커지는지는 구현 검증 후 결정한다.
 - fixed rail이 필요한지는 sticky 구현 후 실제 사용감과 layout 안정성을 보고 후속으로 판단한다.
 
 ## Superseded Decisions

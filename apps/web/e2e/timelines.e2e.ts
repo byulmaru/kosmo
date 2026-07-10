@@ -7,6 +7,7 @@ import {
   setE2ESessionCookie,
 } from './db-fixtures';
 import { expect, test } from './fixtures';
+import { isGraphQLOperation } from './graphql';
 import type { Page } from '@playwright/test';
 
 const minute = 60_000;
@@ -17,9 +18,7 @@ function isoAgo(milliseconds: number) {
 }
 
 function formatDateLabel(iso: string) {
-  return new Date(iso)
-    .toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' })
-    .replace(/\.$/, '');
+  return new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric' }).format(new Date(iso));
 }
 
 async function expectPostOrder(page: Page, bodies: string[]) {
@@ -81,7 +80,7 @@ test('홈 타임라인은 본인 글과 팔로우한 프로필 글만 최신순�
 
   await page.goto('/home');
 
-  await expect(page.getByRole('heading', { name: '홈' })).toBeVisible();
+  await expect(page.getByText('홈', { exact: true }).last()).toBeVisible();
   await expectPostOrder(page, [
     'E2E timeline followed latest body',
     'E2E timeline viewer body',
@@ -94,10 +93,8 @@ test('홈 타임라인은 본인 글과 팔로우한 프로필 글만 최신순�
   await expect(
     page.getByRole('link', { name: 'E2E Timeline Viewer @e2e-timeline-viewer' }),
   ).toHaveCount(1);
-  await expect(page.getByRole('link', { name: /분 전|시간 전|지금/ }).first()).toBeVisible();
-  await expect(
-    page.getByRole('link', { name: formatDateLabel(oldFollowedPostTime) }),
-  ).toBeVisible();
+  await expect(page.getByText(/분|시간|방금/).first()).toBeVisible();
+  await expect(page.getByText(formatDateLabel(oldFollowedPostTime))).toBeVisible();
   await expect(page.getByText('게시글 목록을 불러오는 중입니다.')).toHaveCount(0);
   await expect(page.getByText('아직 게시글이 없어요')).toHaveCount(0);
 });
@@ -154,7 +151,7 @@ test('게시글이 없는 홈과 프로필 목록은 빈 상태를 보여준다'
   await setE2ESessionCookie(context, viewer.token);
 
   await page.goto('/home');
-  await expect(page.getByRole('heading', { name: '홈' })).toBeVisible();
+  await expect(page.getByText('홈', { exact: true }).last()).toBeVisible();
   await expect(page.getByText('아직 게시글이 없어요')).toBeVisible();
 
   await page.goto(`/@${emptyProfile.handle}`);
@@ -202,9 +199,7 @@ test('프로필 게시글 목록 오류 상태는 다시 시도를 제공한다'
 
   await setE2ESessionCookie(context, viewer.token);
   await page.route('**/graphql', async (route) => {
-    const body = route.request().postData() ?? '';
-
-    if (body.includes('ProfilePostListPageQuery')) {
+    if (isGraphQLOperation(route.request().postData(), 'ProfilePostListPageQuery')) {
       profilePostsRequestCount += 1;
       await route.fulfill({
         contentType: 'application/json',
@@ -219,7 +214,7 @@ test('프로필 게시글 목록 오류 상태는 다시 시도를 제공한다'
 
   await page.goto(`/@${targetProfile.handle}`);
 
-  await expect(page.getByRole('alert')).toContainText('게시글 목록을 불러오지 못했어요');
+  await expect(page.getByRole('alert')).toContainText('게시글을 불러오지 못했어요');
   const previousCount = profilePostsRequestCount;
   await page.getByRole('button', { name: '다시 시도' }).click();
   await expect.poll(() => profilePostsRequestCount).toBeGreaterThan(previousCount);

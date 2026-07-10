@@ -37,7 +37,8 @@ export const parseTipTapDocument = (value: unknown): TipTapDocument =>
 export const tipTapDocumentSchema = z.unknown().transform((value, ctx) => {
   try {
     return parseTipTapDocument(value);
-  } catch {
+  }
+  catch {
     ctx.addIssue({
       code: 'custom',
       message: 'Invalid TipTap document',

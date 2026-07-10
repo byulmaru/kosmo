@@ -24,8 +24,8 @@
 ## Impact
 
 - `openspec/specs/web-app-shell/spec.md`
-- `apps/web/src/routes/(tabs)/@[handle]/followers/+page.svelte`
-- `apps/web/src/routes/(tabs)/@[handle]/following/+page.svelte`
-- `apps/web/src/lib/components/ProfileConnectionList.svelte`
-- `apps/web/src/lib/components/ProfileConnectionList.stories.svelte`
+- `apps/app/src/app/(tabs)/(profile)/[profileHandle]/followers.tsx`
+- `apps/app/src/app/(tabs)/(profile)/[profileHandle]/following.tsx`
+- `apps/app/src/components/profile/ProfileConnectionList.tsx`
+- `apps/app` React Native Web Storybook의 pagination state stories
 - API schema/resolver 변경 없음: 기존 `Profile.followers(after:, first:)`, `Profile.following(after:, first:)`, `PageInfo` 계약을 사용한다.

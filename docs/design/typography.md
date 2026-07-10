@@ -23,10 +23,12 @@
 - 이는 **Figma 작업 환경 한정 대치**다. 코드·실서비스는 그대로 SUIT·Pretendard Variable을 사용하며 브랜드 결정은 바뀌지 않는다.
 - 로고처럼 SUIT로 지정하려던 요소도 Figma에서는 Inter로 표기한다(로고 에셋 확정 전까지는 대문자 "K").
 
-## 웹 구현 (apps/web)
+## Expo/React Native 구현 (`apps/app`)
 
-- 두 폰트는 **npm 패키지로 관리**한다(`pretendard`, `@sun-typeface/suit`, 둘 다 Variable). 각 패키지가 제공하는 `@font-face` CSS를 `+layout.svelte`(앱)와 `.storybook/preview.ts`(Storybook)에서 import하면 Vite가 woff2를 번들해 자체 origin에서 제공한다(외부 CDN 런타임 의존 없음, git에 폰트 바이너리 미커밋). 패키지 버전은 `package.json`으로 관리한다.
-- Tailwind v4 `@theme` 토큰:
-  - `--font-sans` = `SUIT Variable` → 유틸 `font-sans`. 루트 레이아웃(`+layout.svelte`)이 `font-sans`를 쓰므로 **모든 UI 텍스트가 SUIT를 상속**한다(화면별 지정 불필요).
-  - `--font-body` = `Pretendard Variable` → 유틸 `font-body` + CSS 변수 `var(--font-body)`.
-- **본문에만 Pretendard를 적용**한다: `PostBody`는 `font-body` 유틸, `TipTapRenderer`·`TipTapEditor`는 `<style>`에서 `font-family: var(--font-body)`.
+- 두 폰트는 **npm 패키지로 관리**한다(`pretendard`, `@sun-typeface/suit`, 둘 다 Variable). `apps/app/src/app/_layout.tsx`가 package의 Variable TTF를 `expo-font` `useFonts`로 로드하므로 Android/iOS/Web이 같은 asset을 bundle한다. 외부 CDN 런타임 의존과 git에 복제한 폰트 binary는 두지 않는다.
+- app에서 사용하는 family name은 `SUIT`와 `Pretendard`다. package 경로나 내부 font filename을 component style에 직접 사용하지 않는다.
+- React Native `Text`/`TextInput`은 CSS font 상속에 의존하지 않는다. 공용 primitive와 각 text style은 용도에 맞는 `fontFamily`를 명시한다.
+  - UI, 버튼, 내비게이션, 라벨, heading: `fontFamily: 'SUIT'`
+  - 포스트 본문, 긴 글 입력: `fontFamily: 'Pretendard'`
+- font size/line height는 `apps/app/src/theme/tokens.ts`의 `typography` token을 사용한다. 화면에서 같은 Foundation 값을 raw number로 반복하지 않는다.
+- React Native Web Storybook은 app과 같은 font loader/decorator를 사용해 production family name과 asset을 그대로 검증한다.

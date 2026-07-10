@@ -1,7 +1,4 @@
 {
   "npm.packageManager": "pnpm",
-  "npm.scriptRunner": "pnpm",
-  "files.associations": {
-    "*.css": "tailwindcss"
-  }
+  "npm.scriptRunner": "pnpm"
 }

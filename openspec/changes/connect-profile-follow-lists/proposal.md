@@ -22,8 +22,8 @@
 
 ## Impact
 
-- `apps/web/src/routes/(tabs)/@[handle]/followers/+page.svelte`
-- `apps/web/src/routes/(tabs)/@[handle]/following/+page.svelte`
-- `apps/web/src/lib/components/ProfileConnectionList.svelte`
-- `apps/web/src/lib/components/ProfileConnectionList.stories.svelte`
-- API schema 변경 없음: 기존 `Profile.followers`/`Profile.following` connection과 `ProfileFollow.follower`/`ProfileFollow.followee` 필드를 사용한다.
+- `apps/app/src/app/(tabs)/(profile)/[profileHandle]/followers.tsx`
+- `apps/app/src/app/(tabs)/(profile)/[profileHandle]/following.tsx`
+- `apps/app/src/components/profile/ProfileConnectionList.tsx`
+- `apps/app` React Native Web Storybook의 `ProfileConnectionList` state stories
+- API schema 변경 없음: 기존 `Profile.followers`/`Profile.following` Relay connection과 `ProfileFollow.follower`/`ProfileFollow.followee` 필드를 사용한다.

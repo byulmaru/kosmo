@@ -61,12 +61,16 @@ const config = ts.config(
     },
   },
   {
+    files: ['packages/fbjs-shim/**/*.js'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+  {
     ignores: [
       '**/node_modules/**',
       '**/dist/**',
-      '**/.mearie/**',
       '**/.pnpm-store/**',
-      '**/.svelte-kit/**',
       '**/build/**',
       '**/storybook-static/**',
     ],

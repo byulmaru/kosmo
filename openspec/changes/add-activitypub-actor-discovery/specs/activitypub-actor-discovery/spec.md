@@ -1,20 +1,20 @@
 ## ADDED Requirements
 
-### Requirement: Fedify SvelteKit integration
+### Requirement: Fedify web BFF integration
 
-웹 애플리케이션은 canonical 웹 origin에서 ActivityPub discovery 요청을 받을 수 있도록 `packages/fedify`가 제공하는 Fedify federation 구성을 Fedify SvelteKit hook adapter로 SvelteKit hook에 연결해야 한다(MUST).
+웹 BFF는 canonical 웹 origin에서 ActivityPub discovery 요청을 받을 수 있도록 `packages/fedify`가 제공하는 Fedify federation의 `fetch` 경계에 federation path를 연결해야 한다(MUST).
 
-#### Scenario: Handle federation request in web hook
+#### Scenario: Handle federation request in web BFF
 
 - **WHEN** 외부 서버가 웹 origin으로 ActivityPub 또는 WebFinger 요청을 보낸다
-- **THEN** `apps/web` SvelteKit hook은 요청을 `packages/fedify`가 구성한 Fedify federation으로 위임한다
-- **AND** federation 요청 판별, WebFinger parsing, HTTP 응답 조립은 Fedify hook/fetch 흐름이 처리한다
+- **THEN** `apps/web` Hono BFF는 요청을 `packages/fedify`가 구성한 Fedify federation으로 위임한다
+- **AND** federation 요청 판별, WebFinger parsing, HTTP 응답 조립은 Fedify fetch 흐름이 처리한다
 - **AND** actor document assembly, handle mapping dispatcher, key dispatch는 `packages/fedify`에서 제공한다
 
 #### Scenario: Preserve existing web requests
 
 - **WHEN** 요청이 ActivityPub 또는 WebFinger discovery 요청이 아니다
-- **THEN** 시스템은 기존 SvelteKit 라우트와 `/graphql` proxy 동작을 유지한다
+- **THEN** 시스템은 Expo SPA asset/fallback과 `/graphql` proxy 동작을 유지한다
 - **AND** `/health`, `/graphql`, `/login`, `/@{handle}` 요청은 ActivityPub handler로 가로채지 않는다
 
 ### Requirement: Local actor WebFinger discovery

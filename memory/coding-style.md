@@ -6,7 +6,7 @@
 - 이 메모는 PR 본문이 아니라 다른 사람 PR에 `robin-maki`가 직접 남긴 리뷰에서 반복된 기준을 일반화한 것이다.
 - 세부 영역은 기존 메모를 우선한다.
   - GraphQL resolver/API 세부 구조: `memory/graphql-style.md`
-  - Svelte/Mearie/Storybook: `memory/frontend-svelte.md`
+  - Expo Router/React Native Web/React Relay/Storybook: `memory/frontend-react-native.md`
   - DB/Drizzle schema: `memory/database-design.md`
   - 스크립트/CI/명령 실행: `memory/script.md`
   - 커밋/PR/스택 운영: `memory/commit-pr.md`를 먼저 읽고, 작업 상황에 맞는 하위 메모리를 추가로 읽는다.

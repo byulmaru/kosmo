@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { AccountState, SessionState } from '@kosmo/core/enums';
 import { createE2ESession, resetE2EDatabase, setE2ESessionCookie } from './db-fixtures';
 import { expect, test } from './fixtures';
+import { isGraphQLOperation } from './graphql';
 import type { APIRequestContext } from '@playwright/test';
 
 const loginCodeVerifierCookie = 'kosmo_oidc_code_verifier';
@@ -49,17 +50,17 @@ test.beforeEach(async () => {
 test('비로그인 사용자는 루트 온보딩에서 로그인 진입점을 본다', async ({ page }) => {
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { name: /나만의 타임라인/ })).toBeVisible();
-  await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
-  await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toHaveCount(0);
+  await expect(page.getByText(/나만의 우주를/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Kosmo 시작하기' })).toBeVisible();
+  await expect(page.getByRole('menu', { name: '주요 메뉴' })).toHaveCount(0);
 });
 
 test('mock OIDC로 로그인하면 보호 홈으로 이동하고 세션이 유지된다', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('link', { name: '시작하기' }).click();
+  await page.getByRole('button', { name: 'Kosmo 시작하기' }).click();
 
   await expect(page).toHaveURL(/\/home$/);
-  await expect(page.getByRole('heading', { name: '프로필을 만들어 시작하세요' })).toBeVisible();
+  await expect(page.getByText('첫 프로필을 만들어 보세요')).toBeVisible();
 
   await page.goto('/');
   await expect(page).toHaveURL(/\/home$/);
@@ -88,6 +89,7 @@ test('DB reset 후에도 API에 캐시된 local instance로 프로필을 만들 
             }
           }
         `,
+        operationName: 'E2ECreateProfile',
         variables: { handle: profileHandle },
       }),
       headers: { 'content-type': 'application/json' },
@@ -109,9 +111,10 @@ test('비로그인 보호 라우트 진입은 스플래시 후 루트로 이동�
   });
 
   await page.route('**/graphql', async (route) => {
-    const body = route.request().postData() ?? '';
-
-    if (!releaseProtectedLayoutQuery && body.includes('ProtectedLayoutQuery')) {
+    if (
+      !releaseProtectedLayoutQuery &&
+      isGraphQLOperation(route.request().postData(), 'SessionProviderQuery')
+    ) {
       await new Promise<void>((resolve) => {
         releaseProtectedLayoutQuery = resolve;
         resolveProtectedLayoutPaused();
@@ -124,19 +127,14 @@ test('비로그인 보호 라우트 진입은 스플래시 후 루트로 이동�
   const navigation = page.goto('/home');
 
   await protectedLayoutPaused;
-  await expect(page.getByTestId('auth-splash')).toBeVisible();
-  await expect(
-    page
-      .locator('[inert]')
-      .filter({ has: page.locator('nav[aria-label="주요 메뉴"]') })
-      .first(),
-  ).toBeAttached();
+  await expect(page.getByRole('progressbar', { name: '세션을 확인하는 중입니다.' })).toBeVisible();
+  await expect(page.getByRole('menu', { name: '주요 메뉴' })).toHaveCount(0);
 
   releaseProtectedLayoutQuery?.();
   await navigation;
 
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Kosmo 시작하기' })).toBeVisible();
 });
 
 for (const scenario of invalidSessionCases) {
@@ -145,8 +143,8 @@ for (const scenario of invalidSessionCases) {
     await page.goto('/home');
 
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
-    await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Kosmo 시작하기' })).toBeVisible();
+    await expect(page.getByRole('menu', { name: '주요 메뉴' })).toHaveCount(0);
   });
 }
 
@@ -204,9 +202,9 @@ test.describe('로그인 사용자 보호 라우트', () => {
       await page.goto(route.path);
 
       await expect(page).toHaveURL(new RegExp(`${route.path}$`));
-      await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: route.heading })).toBeVisible();
-      await expect(page.getByTestId('auth-splash')).toHaveCount(0);
+      await expect(page.getByRole('menu', { name: '주요 메뉴' })).toBeVisible();
+      await expect(page.getByText(route.heading, { exact: true }).last()).toBeVisible();
+      await expect(page.getByRole('progressbar')).toHaveCount(0);
     });
   }
 
@@ -214,8 +212,8 @@ test.describe('로그인 사용자 보호 라우트', () => {
     await page.goto('/search');
 
     await expect(page).toHaveURL(/\/search$/);
-    await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toBeVisible();
+    await expect(page.getByRole('menu', { name: '주요 메뉴' })).toBeVisible();
     await expect(page.getByRole('textbox', { name: '검색어' })).toBeVisible();
-    await expect(page.getByTestId('auth-splash')).toHaveCount(0);
+    await expect(page.getByRole('progressbar')).toHaveCount(0);
   });
 });

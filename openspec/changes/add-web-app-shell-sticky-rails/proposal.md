@@ -11,9 +11,9 @@
 - 중앙 `main`을 단일 internal scroll container로 만들거나, shell chrome의 wheel 이벤트를 중앙 피드로 인위적으로 전달하지 않는다.
 - `md` 이상 좌측 icon rail/full sidebar와 `xl` 이상 `RightRail`은 grid flow 안에서 `position: sticky` 기반으로 viewport에 머무르게 한다.
 - 우측 rail 내용이 viewport보다 길어지는 경우에는 rail 내부 overflow를 허용할 수 있지만, 중앙 피드의 scroll ownership과 분리한다.
-- 일반 route 이동과 back/forward는 SvelteKit/browser의 document scroll 정책을 따르고, 검색 화면의 query-only `noScroll` 흐름은 유지한다.
+- 일반 route 이동과 back/forward는 Expo Router/browser의 document scroll 정책을 따르고, 검색 화면의 query-only navigation은 현재 scroll/focus를 유지한다.
 - 반응형 내비게이션 E2E suite 전체는 `PROD-233` 범위로 남기고, 이 변경은 구현에 필요한 viewport smoke 검증만 포함한다.
-- feed/list pagination, 하단 탭 IA 변경, 네이티브 WebView 전용 pull-to-refresh 정책은 제외한다.
+- feed/list pagination, 하단 탭 IA 변경, native 전용 pull-to-refresh/overscroll 정책은 제외한다.
 
 ## Dependencies
 
@@ -32,11 +32,11 @@
 
 ## Impact
 
-- `apps/web/src/routes/(tabs)/+layout.svelte`
-- `apps/web/src/lib/components/BottomTabBar.svelte`
-- `apps/web/src/lib/components/SidebarNavigation.svelte`
-- `apps/web/src/lib/components/RightRail.svelte`
-- `apps/web/src/routes/(tabs)/@[handle]/+layout.svelte`
-- `apps/web/src/routes/(tabs)/@[handle]/[postId]/+page@(tabs).svelte`
+- `apps/app/src/components/shell/UniversalShell.tsx`
+- `apps/app/src/components/shell/BottomTabBar.tsx`
+- `apps/app/src/components/shell/SidebarNavigation.tsx`
+- `apps/app/src/components/shell/RightRail.tsx`
+- `apps/app/src/app/(tabs)/(profile)/[profileHandle]/_layout.tsx`
+- `apps/app/src/app/(tabs)/(post)/[profileHandle]/[postId].tsx`
 - `openspec/specs/web-app-shell/spec.md`
 - `docs/design/breakpoints.md`

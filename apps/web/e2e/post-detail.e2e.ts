@@ -1,0 +1,51 @@
+import { PostVisibility } from '@kosmo/core/enums';
+import {
+  createE2EPost,
+  createE2ESession,
+  resetE2EDatabase,
+  setE2ESessionCookie,
+} from './db-fixtures';
+import { expect, test } from './fixtures';
+import { readGraphQLOperation, waitForGraphQLOperation } from './graphql';
+
+test.beforeEach(async () => {
+  await resetE2EDatabase();
+});
+
+test('게시글 목록에서 상세로 이동하고 뒤로 가며 deep-link handle을 정규화한다', async ({
+  context,
+  page,
+}) => {
+  const body = 'E2E post detail body';
+  const viewer = await createE2ESession({
+    displayName: 'E2E Detail Viewer',
+    handle: 'e2e-detail-viewer',
+  });
+  const post = await createE2EPost({
+    body,
+    profileId: viewer.profile!.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  await setE2ESessionCookie(context, viewer.token);
+  await page.goto('/home');
+
+  const detailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
+  await page.getByRole('link', { name: body }).click();
+  const response = await detailResponse;
+  const operation = readGraphQLOperation(response.request().postData());
+
+  expect(operation?.operationName).toBe('PostDetailQuery');
+  expect(operation?.variables).toMatchObject({ postId: post.id });
+  await expect(page).toHaveURL(new RegExp(`/@${viewer.profile!.handle}/${post.id}$`));
+  await expect(page.getByText('게시글', { exact: true }).last()).toBeVisible();
+  await expect(page.getByText(body)).toBeVisible();
+  await expect(page.getByText(/전체 공개$/)).toBeVisible();
+
+  await page.getByRole('button', { name: '뒤로 가기' }).click();
+  await expect(page).toHaveURL(/\/home$/);
+  await expect(page.getByText(body)).toBeVisible();
+
+  await page.goto(`/@wrong-handle/${post.id}`);
+  await expect(page).toHaveURL(new RegExp(`/@${viewer.profile!.handle}/${post.id}$`));
+  await expect(page.getByText(body)).toBeVisible();
+});

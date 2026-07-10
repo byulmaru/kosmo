@@ -1,0 +1,15 @@
+{
+  "src": "./src",
+  "schema": "../api/schema.graphql",
+  "language": "typescript",
+  "eagerEsModules": true,
+  "noSourceControl": true,
+  "requireCustomScalarTypes": true,
+  "customScalarTypes": {
+    "DateTime": "string",
+    "TipTapDocument": {
+      "name": "TipTapDocument",
+      "path": "./src/types/graphql.ts"
+    }
+  }
+}

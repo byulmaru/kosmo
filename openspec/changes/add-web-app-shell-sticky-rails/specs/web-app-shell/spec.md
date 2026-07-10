@@ -61,34 +61,34 @@
 
 ### Requirement: Document scroll route behavior
 
-`(tabs)` 셸 아래의 route 전환은 SvelteKit/browser의 document scroll 정책과 호환되어야 한다(MUST). 일반 path-changing navigation은 새 route 상단에서 시작해야 하며(MUST), 검색 화면의 query-only `noScroll`/`data-sveltekit-noscroll`/focus 동작은 유지되어야 한다(MUST). 이 변경은 internal scroller 전용 back/forward restoration helper를 도입하지 않아야 한다(MUST NOT).
+`(tabs)` 셸 아래의 route 전환은 Expo Router/browser의 document scroll 정책과 호환되어야 한다(MUST). 일반 path-changing navigation은 새 route 상단에서 시작해야 하며(MUST), 검색 화면의 query-only navigation은 현재 document scroll과 input focus를 유지해야 한다(MUST). 이 변경은 internal scroller 전용 back/forward restoration helper를 도입하지 않아야 한다(MUST NOT).
 
 #### Scenario: Route navigation starts at document top
 
 - **WHEN** 사용자가 `(tabs)` 셸 안에서 일반 내비게이션으로 다른 route로 이동한다
 - **THEN** 새 route는 document scroll 상단에서 시작한다
 
-#### Scenario: Preserve search noScroll behavior
+#### Scenario: Preserve search query scroll and focus
 
 - **WHEN** 사용자가 검색 화면에서 검색어 또는 검색 탭을 변경한다
-- **THEN** 시스템은 기존 `noScroll`/`data-sveltekit-noscroll` 정책을 유지한다
+- **THEN** 시스템은 query-only Expo Router navigation 중 현재 document scroll을 유지한다
 - **AND** 검색 입력 포커스와 결과 영역 전환은 document scroll 정책과 충돌하지 않는다
 
 #### Scenario: Do not add internal restoration helper
 
 - **WHEN** 사용자가 back/forward navigation을 사용한다
-- **THEN** 시스템은 SvelteKit/browser의 document scroll restoration을 사용한다
+- **THEN** 시스템은 Expo Router/browser의 document scroll restoration과 호환된다
 - **AND** 중앙 internal scroller 전용 위치 저장 helper를 요구하지 않는다
 
 ### Requirement: Sticky rails verification boundary
 
-`(tabs)` sticky rail 전환은 최소 viewport smoke 검증으로 document scroll, sticky rail 위치, drawer, 하단 탭, 우측 rail, 검색 `noScroll`, 게시글 상세 sticky header 회귀 여부를 확인해야 한다(MUST). 반응형 앱 내비게이션 E2E suite 전체 구현은 별도 `PROD-233` 범위로 유지해야 한다(MUST).
+`(tabs)` sticky rail 전환은 최소 viewport smoke 검증으로 document scroll, sticky rail 위치, drawer, 하단 탭, 우측 rail, 검색 query scroll/focus, 게시글 상세 sticky header 회귀 여부를 확인해야 한다(MUST). 반응형 앱 내비게이션 E2E suite 전체 구현은 별도 `PROD-233` 범위로 유지해야 한다(MUST).
 
 #### Scenario: Minimum viewport smoke coverage
 
 - **WHEN** sticky rail 전환을 검증한다
 - **THEN** 모바일 1개, `md` 이상 `xl` 미만 1개, `xl` 이상 1개 viewport에서 document scroll과 rail sticky 동작을 확인한다
-- **AND** drawer open/close, bottom tab, RightRail 위치, 검색 `noScroll`, 게시글 상세 sticky header의 핵심 회귀를 확인한다
+- **AND** drawer open/close, bottom tab, RightRail 위치, 검색 query scroll/focus, 게시글 상세 sticky header의 핵심 회귀를 확인한다
 
 #### Scenario: Leave navigation E2E suite to follow-up
 

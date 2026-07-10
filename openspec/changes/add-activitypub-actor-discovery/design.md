@@ -2,7 +2,7 @@
 
 kosmo의 공개 웹 origin은 이미 `/@{handle}` 프로필 페이지와 `/graphql` proxy를 제공한다. API 서버는 Hono/GraphQL을 별도 origin에서 실행하고, 브라우저 클라이언트는 웹 서버를 통해 API로 요청을 전달한다. ActivityPub discovery는 외부 fediverse 서버가 접근하는 HTTP surface이므로 API origin이 아니라 canonical 웹 origin에서 제공해야 한다.
 
-Fedify는 actor dispatcher, WebFinger 처리, federation request routing을 federation instance와 hook/fetch 흐름 안에 묶어 제공한다. 이번 변경은 Fedify를 `apps/web` SvelteKit hook에 연결하되, `apps/web`은 hook composition만 담당한다. actor 조회, actor document assembly, handle mapping dispatcher, key dispatch 같은 ActivityPub 도메인 로직은 `packages/fedify`가 소유하게 하고, request 판별과 HTTP 응답 조립은 Fedify 공식 API에 맡겨 웹 라우팅 adapter와 federation 도메인 로직을 분리한다.
+Fedify는 actor dispatcher, WebFinger 처리, federation request routing을 federation instance와 fetch 흐름 안에 묶어 제공한다. Expo migration 이후 `apps/web` Hono BFF는 federation path를 Fedify `federation.fetch`에 전달하는 composition만 담당한다. actor 조회, actor document assembly, handle mapping dispatcher, key dispatch 같은 ActivityPub 도메인 로직은 `packages/fedify`가 소유하게 하고, request 판별과 HTTP 응답 조립은 Fedify 공식 API에 맡겨 웹 라우팅 adapter와 federation 도메인 로직을 분리한다.
 
 ## Goals / Non-Goals
 
@@ -25,7 +25,7 @@ Fedify는 actor dispatcher, WebFinger 처리, federation request routing을 fede
 ## Decisions
 
 - **ActivityPub surface는 웹 origin에 둔다.** actor URI와 WebFinger subject는 외부 서버가 보는 공개 identity이므로 `PUBLIC_API_ORIGIN`이 아니라 canonical 웹 origin을 사용한다. 대안인 API origin 노출은 브라우저 API transport와 federation identity가 갈라지고, API 서버 배포 topology가 공개 actor URI에 새겨지는 문제가 있어 배제한다.
-- **Fedify 연결은 SvelteKit hook adapter, federation 로직은 `packages/fedify`가 소유한다.** `packages/fedify`는 Fedify root federation singleton과 federation 도메인 구성을 제공하고, `apps/web`은 `hooks.server.ts`에서 Fedify SvelteKit adapter로 이를 SvelteKit `handle`에 연결한다. federation 요청 판별, WebFinger resource parsing/JRD 응답 조립, HTTP 응답 조립은 Fedify 공식 hook/fetch 흐름에 맡기고, actor assembly, handle mapping dispatcher, key dispatch는 package로 분리해 Svelte component, SvelteKit route handler, web hook 본문에 ActivityPub 세부를 넣지 않는다. root federation singleton은 이번 workspace 경계 PR에서 임시 `MemoryKvStore`로 생성하고, production durable KV store 선택은 후속 구현에서 교체한다.
+- **Fedify 연결은 Hono BFF의 좁은 fetch adapter, federation 로직은 `packages/fedify`가 소유한다.** `packages/fedify`는 Fedify root federation singleton과 federation 도메인 구성을 제공하고, `apps/web/src/server`는 `/.well-known/*`, `/ap/*` 요청만 `federation.fetch`에 전달한다. federation 요청 판별, WebFinger resource parsing/JRD 응답 조립, HTTP 응답 조립은 Fedify 공식 fetch 흐름에 맡기고, actor assembly, handle mapping dispatcher, key dispatch는 package로 분리해 Expo component나 Hono handler 본문에 ActivityPub 세부를 넣지 않는다. root federation singleton은 이번 workspace 경계에서 임시 `MemoryKvStore`로 생성하고, production durable KV store 선택은 후속 구현에서 교체한다.
 - **actor URI는 `/ap/actor/{profile.id}`와 raw DB UUID를 쓴다.** `/@{handle}`를 actor URI로 겸용하면 HTML route와 content negotiation이 강하게 결합되고, handle rename 가능성을 닫는다. Relay global ID는 GraphQL API 표현이므로 ActivityPub URI에 쓰지 않는다.
 - **WebFinger handle과 actor identifier를 분리한다.** WebFinger username은 local `profile.handle`이고, actor identifier는 `profile.id`다. Fedify handle mapper는 `acct:{handle}@{domain}`을 local active profile UUID로 매핑한다.
 - **configured local instance row가 canonical origin/domain의 source of truth다.** `localOrigin`은 `PUBLIC_ORIGIN`과 일치하는 configured local instance의 `canonical_origin`이며 actor URI, WebFinger self link, profile-page link, key ID 같은 local absolute URL을 만들 때만 사용한다. `localDomain`은 WebFinger subject와 `Profile.relativeHandle`에 쓰는 federation identity domain이다. 요청 URL origin, Host header, `PUBLIC_API_ORIGIN`을 따라 actor URI를 만들면 동일 프로필의 federated identity가 흔들린다. `PUBLIC_ORIGIN`은 local instance row를 만들거나 현재 deployment가 사용할 local instance row를 검증하는 입력으로만 사용한다. 서로 다른 domain의 `LOCAL` rows는 이후 multi-local-instance 확장을 위해 허용할 수 있지만, 현재 deployment의 federation identity는 `PUBLIC_ORIGIN`에 매칭되는 row 하나에서 결정한다. `packages/core`는 setup/migration에서 local instance row를 생성하거나 검증하는 bootstrap helper와, runtime에서 row를 새로 만들지 않고 읽기/검증만 수행하는 resolve helper를 분리해 소유한다. `packages/fedify`와 `apps/api`는 runtime resolve helper를 공유한다.
@@ -52,7 +52,7 @@ Fedify는 actor dispatcher, WebFinger 처리, federation request routing을 fede
 4. `profile.normalized_handle` 전역 unique를 `(instance_id, normalized_handle)` unique로 교체한다.
 5. key pair는 migration에서 만들지 않고 첫 actor key 요청 시 lazy 생성한다.
 
-Rollback은 Fedify hook과 GraphQL 필드를 제거한 뒤 새 테이블/컬럼 migration을 되돌리는 방식이다. 이미 federation에 공개된 actor URI가 생긴 뒤에는 외부 캐시가 남을 수 있으므로 production rollback은 actor 공개 전 배포 단계에서 검증해야 한다.
+Rollback은 Hono federation fetch 연결과 GraphQL 필드를 제거한 뒤 새 테이블/컬럼 migration을 되돌리는 방식이다. 이미 federation에 공개된 actor URI가 생긴 뒤에는 외부 캐시가 남을 수 있으므로 production rollback은 actor 공개 전 배포 단계에서 검증해야 한다.
 
 ## Open Questions
 

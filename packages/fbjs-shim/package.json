@@ -1,0 +1,11 @@
+{
+  "name": "fbjs",
+  "private": true,
+  "version": "3.0.5-kosmo.0",
+  "license": "MIT",
+  "exports": {
+    "./lib/areEqual": "./lib/areEqual.js",
+    "./lib/invariant": "./lib/invariant.js",
+    "./lib/warning": "./lib/warning.js"
+  }
+}

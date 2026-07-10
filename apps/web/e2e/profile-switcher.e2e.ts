@@ -1,7 +1,13 @@
-import { expect, test } from '@playwright/test';
+import { resetE2EDatabase } from './db-fixtures';
+import { expect, test } from './fixtures';
+import { readGraphQLOperation } from './graphql';
 import type { Page } from '@playwright/test';
 
-test('selectProfile response carries selectedProfile without currentSession refetch', async ({
+test.beforeEach(async () => {
+  await resetE2EDatabase();
+});
+
+test('selectProfile response carries selectedProfile and recreates the active Relay environment', async ({
   page,
 }) => {
   const graphQLRequests = collectGraphQLRequests(page);
@@ -10,10 +16,10 @@ test('selectProfile response carries selectedProfile without currentSession refe
   await page.waitForURL('**/home');
 
   await createProfileFromSwitcher(page, 'alpha');
-  await expect(page.getByRole('heading', { name: '프로필을 만들어 시작하세요' })).toBeHidden();
-  await expect(page.getByRole('heading', { name: '홈' })).toBeVisible();
+  await expect(page.getByText('첫 프로필을 만들어 보세요')).toBeHidden();
+  await expect(page.getByText('홈', { exact: true }).last()).toBeVisible();
   await page.goto('/compose');
-  await expect(page.getByRole('heading', { name: '글쓰기' })).toBeVisible();
+  await expect(page.getByText('글쓰기', { exact: true }).last()).toBeVisible();
   await expect(composerProfileHandle(page, 'alpha')).toBeVisible();
   await expect(sidebarProfileHandle(page, 'alpha')).toBeVisible();
 
@@ -25,13 +31,14 @@ test('selectProfile response carries selectedProfile without currentSession refe
 
   const responseBody = await selectProfileFromSwitcher(page, 'alpha');
 
-  expect(responseBody.data?.selectProfile?.session?.selectedProfile?.handle).toBe('alpha');
-
-  await page.waitForLoadState('networkidle');
+  expect(responseBody.data?.selectProfile?.profile?.handle).toBe('alpha');
+  await expect(page.getByRole('progressbar')).toHaveCount(0);
+  await expect(page).toHaveURL(/\/compose$/);
+  await expect(composerProfileHandle(page, 'alpha')).toBeVisible();
 
   expect(graphQLRequests.operationNames).toContain('ProfileSwitcherSelectProfileMutation');
-  expect(graphQLRequests.operationNames).not.toContain('ComposePageQuery');
-  expect(graphQLRequests.operationNames).not.toContain('TabsLayoutQuery');
+  expect(graphQLRequests.operationNames).toContain('SessionProviderQuery');
+  expect(graphQLRequests.operationNames).toContain('UniversalShellQuery');
 });
 
 test('profile route action follows Profile.viewerState after switching', async ({ page }) => {
@@ -45,17 +52,17 @@ test('profile route action follows Profile.viewerState after switching', async (
   await expect(sidebarProfileHandle(page, 'delta')).toBeVisible();
 
   await page.goto('/@gamma');
-  await expect(page.getByRole('main').getByRole('button', { name: '팔로우' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '팔로우' })).toBeVisible();
   await page.waitForLoadState('networkidle');
 
   graphQLRequests.clear();
 
   const responseBody = await selectProfileFromSwitcher(page, 'gamma');
 
-  expect(responseBody.data?.selectProfile?.session?.selectedProfile?.handle).toBe('gamma');
-  await expect(page.getByRole('main').getByRole('button', { name: '팔로우' })).toBeHidden();
-
-  await page.waitForLoadState('networkidle');
+  expect(responseBody.data?.selectProfile?.profile?.handle).toBe('gamma');
+  await expect(page.getByRole('progressbar')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '팔로우' })).toBeHidden();
+  await expect(page.getByText('@gamma', { exact: true }).last()).toBeVisible();
 
   expect(graphQLRequests.operationNames).toContain('ProfileSwitcherSelectProfileMutation');
   expect(graphQLRequests.operationNames).toContain('ProfileLayoutQuery');
@@ -82,7 +89,7 @@ test('home route active profile query refetches after switching profiles', async
 
   const responseBody = await selectProfileFromSwitcher(page, 'alphahome');
 
-  expect(responseBody.data?.selectProfile?.session?.selectedProfile?.handle).toBe('alphahome');
+  expect(responseBody.data?.selectProfile?.profile?.handle).toBe('alphahome');
   const homeQueryBody = (await (await homeQueryResponse).json()) as {
     data?: { homeTimeline?: { edges?: unknown[] | null } | null };
   };
@@ -110,8 +117,8 @@ test('home onboarding stays hidden while the home active profile query errors', 
   await failGraphQLOperation(page, 'HomePageQuery');
   await page.reload();
 
-  await expect(page.getByRole('heading', { name: '사용할 프로필을 선택해주세요' })).toBeHidden();
-  await expect(page.getByRole('heading', { name: '홈' })).toBeVisible();
+  await expect(page.getByText('사용할 프로필을 선택해 주세요')).toBeHidden();
+  await expect(page.getByRole('alert')).toContainText('화면을 불러오지 못했어요');
   expect(graphQLRequests.operationNames).toContain('HomePageQuery');
 });
 
@@ -151,11 +158,9 @@ async function createProfileFromSwitcher(page: Page, handle: string) {
   });
 
   await openProfileSwitcher(page);
-  await page.getByRole('menuitem', { name: '새 프로필 추가' }).click();
-  const creationForm = page.getByRole('form', { name: '새 프로필 만들기' });
-
-  await creationForm.getByPlaceholder('새 프로필 핸들').fill(handle);
-  await creationForm.getByRole('button', { name: '만들기', exact: true }).click();
+  await page.getByRole('button', { name: '새 프로필 추가' }).click();
+  await page.getByRole('textbox', { name: '새 프로필 핸들' }).fill(handle);
+  await page.getByRole('button', { name: '만들고 선택' }).click();
 
   const responseBody = (await (await createProfileResponse).json()) as {
     data?: {
@@ -185,8 +190,8 @@ async function createProfileFromSwitcher(page: Page, handle: string) {
 }
 
 async function openProfileSwitcher(page: Page) {
-  await expect(page.getByTestId('auth-splash')).toHaveCount(0);
-  await page.locator('button[aria-label="프로필 목록"]:visible').first().click();
+  await expect(page.getByRole('progressbar')).toHaveCount(0);
+  await page.getByRole('button', { name: '프로필 목록' }).first().click();
 }
 
 async function selectProfileFromSwitcher(page: Page, handle: string) {
@@ -197,16 +202,19 @@ async function selectProfileFromSwitcher(page: Page, handle: string) {
 
   await openProfileSwitcher(page);
   await page
-    .getByRole('menuitemradio')
+    .getByRole('radio')
     .filter({ hasText: `@${handle}` })
     .click();
 
   const responseBody = (await (await selectProfileResponse).json()) as {
     data?: {
       selectProfile?: {
+        profile?: {
+          handle?: string | null;
+        } | null;
         session?: {
           selectedProfile?: {
-            handle?: string | null;
+            id?: string | null;
           } | null;
         } | null;
       } | null;
@@ -216,12 +224,12 @@ async function selectProfileFromSwitcher(page: Page, handle: string) {
 }
 
 async function createPost(page: Page, body: string) {
-  const createPostResponse = waitForGraphQLOperation(page, 'PostComposerCreatePost');
+  const createPostResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
 
   await page.goto('/compose');
-  const composer = page.getByRole('main').locator('form[aria-label="새 게시글 작성"]');
+  const composer = page.getByLabel('새 게시글 작성');
 
-  await composer.locator('[aria-label="게시글 본문"]').fill(body);
+  await composer.getByRole('textbox', { name: '게시글 본문' }).fill(body);
   await composer.getByRole('button', { name: '게시', exact: true }).click();
   await createPostResponse;
 }
@@ -244,14 +252,11 @@ async function failGraphQLOperation(page: Page, operationName: string) {
 }
 
 function composerProfileHandle(page: Page, handle: string) {
-  return page
-    .getByRole('main')
-    .locator('form[aria-label="새 게시글 작성"]')
-    .getByText(`@${handle}`);
+  return page.getByLabel('새 게시글 작성').getByText(`@${handle}`);
 }
 
 function sidebarProfileHandle(page: Page, handle: string) {
-  return page.locator('section[aria-label="활성 프로필"]:visible').first().getByText(`@${handle}`);
+  return page.getByRole('button', { name: '프로필 목록' }).first().getByText(`@${handle}`);
 }
 
 function waitForGraphQLOperation(page: Page, operationName: string) {
@@ -268,16 +273,4 @@ function waitForGraphQLOperation(page: Page, operationName: string) {
 
 function isGraphQLResponse(url: string) {
   return new URL(url).pathname === '/graphql';
-}
-
-function readGraphQLOperation(postData: string | null) {
-  if (!postData) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(postData) as { operationName?: string | null; query?: string | null };
-  } catch {
-    return null;
-  }
 }

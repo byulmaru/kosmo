@@ -16,10 +16,12 @@ const compose = findCompose();
 
 if (command === 'down') {
   runCompose(['down', ...extraArgs]);
-} else if (command === 'up') {
+}
+else if (command === 'up') {
   runCompose(['up', '-d', ...extraArgs]);
   waitForHealthyService();
-} else {
+}
+else {
   runCompose(['down', '--volumes', '--remove-orphans']);
   runCompose(['up', '-d', '--force-recreate']);
   waitForHealthyService();
