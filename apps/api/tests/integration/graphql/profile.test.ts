@@ -34,6 +34,7 @@ let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
+let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
 let Sessions: typeof CoreDb.Sessions;
 let seedDatabase: typeof CoreSeed.seedDatabase;
@@ -57,6 +58,7 @@ describe('GraphQL remote profile boundary', () => {
       pg,
       ProfileFollows,
       Profiles,
+      PostContents,
       Posts,
       Sessions,
     } = await import('@kosmo/core/db'));
@@ -291,6 +293,70 @@ describe('GraphQL remote profile boundary', () => {
       remotePost: null,
       suspendedPost: null,
       homeTimeline: { edges: [] },
+    });
+  });
+
+  test('hides remote and suspended-instance post contents from Node', async () => {
+    const remoteInstance = await createRemoteInstance();
+    const remote = await createProfile({ handle: 'remote', instanceId: remoteInstance.id });
+    const suspendedInstance = await createRemoteInstance({
+      domain: 'suspended.example',
+      state: InstanceState.SUSPENDED,
+    });
+    const suspended = await createProfile({
+      handle: 'suspended',
+      instanceId: suspendedInstance.id,
+    });
+    const [remotePost, suspendedPost] = await db
+      .insert(Posts)
+      .values([
+        {
+          profileId: remote.id,
+          state: PostState.ACTIVE,
+          visibility: PostVisibility.PUBLIC,
+        },
+        {
+          profileId: suspended.id,
+          state: PostState.ACTIVE,
+          visibility: PostVisibility.PUBLIC,
+        },
+      ])
+      .returning();
+    const [remoteContent, suspendedContent] = await db
+      .insert(PostContents)
+      .values([
+        {
+          bodyJson: { type: 'doc', content: [] },
+          bodyText: 'remote content',
+          postId: remotePost.id,
+        },
+        {
+          bodyJson: { type: 'doc', content: [] },
+          bodyText: 'suspended content',
+          postId: suspendedPost.id,
+        },
+      ])
+      .returning();
+
+    const result = await requestGraphQL<{
+      remoteContent: { id: string } | null;
+      suspendedContent: { id: string } | null;
+    }>(
+      `query HiddenForeignPostContents($remoteContentId: ID!, $suspendedContentId: ID!) {
+        remoteContent: node(id: $remoteContentId) {
+          ... on PostContent { id }
+        }
+        suspendedContent: node(id: $suspendedContentId) {
+          ... on PostContent { id }
+        }
+      }`,
+      { remoteContentId: remoteContent.id, suspendedContentId: suspendedContent.id },
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data, {
+      remoteContent: null,
+      suspendedContent: null,
     });
   });
 
@@ -570,6 +636,7 @@ const countRows = async (table: typeof Profiles | typeof ProfileFollows): Promis
 
 const resetFixtures = async () => {
   await db.delete(Sessions);
+  await db.delete(PostContents);
   await db.delete(Posts);
   await db.delete(ProfileFollows);
   await db.delete(AccountProfiles);

@@ -45,10 +45,23 @@ export const PostConnection = builder.connectionObject(
 export const PostContent = createObjectRef(
   'PostContent',
   TableDiscriminator.PostContents,
-  (ids) => {
-    // TODO(PROD-121): Prevent direct PostContent node loads from bypassing the parent
-    // post's state and visibility policy. Historical content remains loadable.
-    return db.select().from(PostContents).where(inArray(PostContents.id, ids));
+  async (ids, ctx) => {
+    const configuredLocalInstance = await resolveConfiguredLocalInstance();
+
+    return db
+      .select(getColumns(PostContents))
+      .from(PostContents)
+      .innerJoin(Posts, eq(Posts.id, PostContents.postId))
+      .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+      .where(
+        and(
+          inArray(PostContents.id, ids),
+          postVisibilityAccessWhere({
+            ctx,
+            configuredLocalInstanceId: configuredLocalInstance.id,
+          }),
+        ),
+      );
   },
 );
 
