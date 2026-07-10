@@ -7,7 +7,7 @@
   "scripts": {
     "lint:tsc": "tsc --noEmit",
     "test": "pnpm lint:tsc && pnpm --workspace-root test:fedify",
-    "test:unit": "tsx --test src/*.test.ts"
+    "test:unit": "tsx --test --test-concurrency=1 src/*.test.ts"
   },
   "dependencies": {
     "@fedify/fedify": "^2.3.0",
