@@ -107,9 +107,11 @@
 - **AND** 시스템은 최초 또는 변경 content revision의 `PostContent.createdAt`을 해당 delivery의 수신 시각으로 저장한다
 - **AND** 시스템은 remote Note HTML 원본을 저장하지 않고 `PostContent.bodyHtml`을 `null`로 둔다
 - **AND** Fedify가 제공한 primary Note `content`가 없으면 시스템은 빈 canonical TipTap document를 `bodyJson`으로 만들고 여기서 빈 `bodyText`를 추출해 저장한다
-- **AND** content가 있고 Note `mediaType`이 없거나 `text/html`이면 시스템은 `@kosmo/core/tiptap`의 server-side helper에서 `@tiptap/html` `generateJSON()`과 기존 `Document`/`Paragraph`/`Text` extensions로 TipTap document를 만든 뒤 정규화하고 trim된 `bodyText`를 추출한다
-- **AND** content가 있고 Note `mediaType`이 `text/plain`이면 시스템은 기존 plain-text-to-TipTap helper로 canonical `bodyJson`을 만든 뒤 core TipTap helper로 trim된 `bodyText`를 추출한다
-- **AND** content가 있고 Note `mediaType`이 그 외 값이면 시스템은 해당 Note를 materialize하지 않는다
+- **AND** content가 있으면 시스템은 Note `mediaType`의 parameter를 제외하고 type/subtype의 ASCII case를 정규화한 MIME essence로 판정한다
+- **AND** content가 있고 Note `mediaType`이 없으면 시스템은 MIME essence를 ActivityStreams 기본인 `text/html`로 취급한다
+- **AND** content의 MIME essence가 `text/html`이면 시스템은 `@kosmo/core/tiptap`의 server-side helper에서 `@tiptap/html` `generateJSON()`과 기존 `Document`/`Paragraph`/`Text` extensions로 TipTap document를 만든 뒤 정규화하고 trim된 `bodyText`를 추출한다
+- **AND** content의 MIME essence가 `text/plain`이면 시스템은 기존 plain-text-to-TipTap helper로 canonical `bodyJson`을 만든 뒤 core TipTap helper로 trim된 `bodyText`를 추출한다
+- **AND** content가 있고 Note `mediaType`이 malformed이거나 MIME essence가 그 외 값이면 시스템은 해당 Note를 materialize하지 않는다
 - **AND** TipTap HTML 변환 또는 core document 정규화가 실패하면 시스템은 해당 Note를 materialize하지 않고 부분 row를 남기지 않는다
 - **AND** Note attachment는 이번 capability에서 저장하지 않으며, content 없이 attachment만 있는 Note도 빈 본문의 `PostContent`로 materialize한다
 - **AND** duplicate delivery의 revision 변경 여부는 canonical `bodyJson`의 structural equality로 결정하고 파생 `bodyText`는 별도로 비교하지 않는다
