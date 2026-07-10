@@ -16,8 +16,8 @@ import { count, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
-import type { deriveContext as DeriveContext, Env } from '../context';
-import type { yoga as YogaRouter } from './index';
+import type { deriveContext as DeriveContext, Env } from '../../../src/context';
+import type { yoga as YogaRouter } from '../../../src/graphql';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const localDomain = '127.0.0.1:4173';
@@ -62,8 +62,8 @@ describe('GraphQL remote profile boundary', () => {
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
 
-    ({ deriveContext } = await import('../context'));
-    ({ yoga } = await import('./index'));
+    ({ deriveContext } = await import('../../../src/context'));
+    ({ yoga } = await import('../../../src/graphql'));
 
     app = new Hono<Env>();
     app.use('*', async (c, next) => {
