@@ -56,6 +56,12 @@ API는 활성 게시글의 current 또는 historical 콘텐츠 revision을 Graph
 - **AND** `bodyJson`은 저장된 TipTap 문서 JSON 원본이다
 - **AND** `spoilerText`는 값이 없을 수 있다
 
+#### Scenario: current 게시글 콘텐츠 직접 조회
+
+- **WHEN** 클라이언트가 `ACTIVE` 게시글의 current `PostContent` Node를 직접 조회한다
+- **THEN** 시스템은 viewer의 parent `Post.visibility` 접근 조건과 작성자 profile/instance visibility를 적용한다
+- **AND** 모든 접근 조건이 통과한 경우에만 해당 `PostContent` object를 반환한다
+
 #### Scenario: historical 게시글 콘텐츠 직접 조회
 
 - **WHEN** 클라이언트가 `ACTIVE` 게시글의 current revision이 아닌 historical `PostContent` Node를 직접 조회한다

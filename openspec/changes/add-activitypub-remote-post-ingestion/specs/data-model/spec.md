@@ -54,6 +54,16 @@
 - **AND** `activitypub_object`는 `TableDiscriminator.ActivityPubObjects`를 사용한다
 - **AND** 테이블 식별자는 12비트 범위 안에 있어야 한다
 
+### Requirement: 열거형 상태 값
+
+시스템은 도메인 상태와 정책 값을 제한된 enum 값으로 저장해야 한다(MUST).
+
+#### Scenario: enum 값 사용
+
+- **WHEN** 계정, 프로필, 세션, OAuth token, 애플리케이션, 게시물, 계정-프로필 역할, 미디어, 인스턴스, ActivityPub actor, ActivityPub actor key, ActivityPub object가 저장된다
+- **THEN** 시스템은 core enum에 정의된 값만 저장해야 한다
+- **AND** 지원 값은 `AccountState`, `ProfileState`, `SessionState`, `OAuthTokenState`, `ApplicationState`, `ApplicationType`, `PostState`, `PostVisibility`, `ProfileFollowPolicy`, `AccountProfileRole`, `MediaSource`, `InstanceKind`, `InstanceState`, `ActivityPubActorType`, `ActivityPubActorKeyKind`, `ActivityPubObjectType`에 정의된 값으로 제한된다
+
 ### Requirement: 게시물과 콘텐츠 저장
 
 시스템은 local 게시물과 remote ActivityPub Note에서 materialized된 게시물의 메타데이터와 본문 콘텐츠를 분리하여 저장해야 한다(MUST).
