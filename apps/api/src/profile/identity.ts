@@ -1,3 +1,10 @@
+import {
+  getProfileOrigin,
+  isConfiguredLocalProfile,
+  parseProfileHandle,
+} from '@kosmo/core/profile';
+import type { ParsedProfileHandle } from '@kosmo/core/profile';
+
 type ProfileInstanceRef = {
   instanceId: string | null;
 };
@@ -16,11 +23,6 @@ type RelativeHandleOptions = {
   profileInstance?: InstanceRef | null;
 };
 
-export const isConfiguredLocalProfile = (
-  profile: ProfileInstanceRef,
-  configuredLocalInstance: Pick<InstanceRef, 'id'>,
-) => profile.instanceId === null || profile.instanceId === configuredLocalInstance.id;
-
 export const formatRelativeHandle = (
   profile: ProfileHandleRef,
   { configuredLocalInstance, profileInstance }: RelativeHandleOptions,
@@ -35,3 +37,6 @@ export const formatRelativeHandle = (
 
   return `@${profile.handle}@${profileInstance.domain}`;
 };
+
+export { getProfileOrigin, isConfiguredLocalProfile, parseProfileHandle };
+export type { ParsedProfileHandle };

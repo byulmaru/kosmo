@@ -1,5 +1,6 @@
 import { db, ProfileFollows, Profiles } from '@kosmo/core/db';
-import { and, eq, getColumns, inArray } from 'drizzle-orm';
+import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
+import { and, eq, getColumns, inArray, isNull, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { profileFollowAccessWhere } from '../access/follow';
 import type { UserContext } from '@/context';
@@ -17,14 +18,20 @@ export const viewerFollowLoader = (ctx: UserContext) =>
       if (!ctx.session?.profileId) {
         return [];
       }
+      const configuredLocalInstance = await resolveConfiguredLocalInstance();
 
       return await db
         .select(getColumns(ProfileFollows))
         .from(ProfileFollows)
+        .innerJoin(FolloweeProfiles, eq(FolloweeProfiles.id, ProfileFollows.followeeProfileId))
         .where(
           and(
             eq(ProfileFollows.followerProfileId, ctx.session.profileId),
             inArray(ProfileFollows.followeeProfileId, ids),
+            or(
+              isNull(FolloweeProfiles.instanceId),
+              eq(FolloweeProfiles.instanceId, configuredLocalInstance.id),
+            ),
           ),
         );
     },
@@ -36,6 +43,8 @@ export const profileFollowByIdLoader = (ctx: UserContext) =>
     name: 'profileFollow.byId',
     nullable: true,
     load: async (ids) => {
+      const configuredLocalInstance = await resolveConfiguredLocalInstance();
+
       return db
         .select(getColumns(ProfileFollows))
         .from(ProfileFollows)
@@ -45,6 +54,7 @@ export const profileFollowByIdLoader = (ctx: UserContext) =>
           and(
             inArray(ProfileFollows.id, ids),
             profileFollowAccessWhere({
+              configuredLocalInstanceId: configuredLocalInstance.id,
               ctx,
               followerProfile: FollowerProfiles,
               followeeProfile: FolloweeProfiles,
