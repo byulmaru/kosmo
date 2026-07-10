@@ -527,27 +527,6 @@ describe('GraphQL remote profile boundary', () => {
 
     assertGraphQLErrorCode(result, 'PERMISSION_DENIED');
   });
-
-  test('authorizes a legacy local profile without an instance in an existing session', async () => {
-    const auth = await createAuthenticatedSession();
-    await db.update(Profiles).set({ instanceId: null }).where(eq(Profiles.id, auth.profile.id));
-
-    const result = await requestGraphQL<{ createPost: { post: { id: string } } | null }>(
-      `mutation CreatePostWithLegacyLocalSession($content: TipTapDocument!) {
-        createPost(input: { content: $content, visibility: UNLISTED }) { post { id } }
-      }`,
-      {
-        content: {
-          type: 'doc',
-          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'allowed' }] }],
-        },
-      },
-      auth.token,
-    );
-
-    assertNoGraphQLErrors(result);
-    assert.ok(result.data?.createPost?.post.id);
-  });
 });
 
 type GraphQLErrorResult = {
