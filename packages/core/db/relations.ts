@@ -154,6 +154,7 @@ export const relations = defineRelations(tables, (r) => ({
     }),
     instance: r.one.Instances({
       from: r.Profiles.instanceId,
+      optional: false,
       to: r.Instances.id,
     }),
     media: r.many.Media({ from: r.Profiles.id, to: r.Media.profileId }),
