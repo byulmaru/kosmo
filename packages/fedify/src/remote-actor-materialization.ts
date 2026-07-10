@@ -307,6 +307,11 @@ export const materializeRemoteProfileActor = async ({
 
   const remoteInstance = await ensureRemoteInstance(parsed.domain);
   const actor = await lookupRemoteActor(context, `${parsed.normalizedHandle}@${parsed.domain}`);
+
+  if (actor.id!.origin === localInstance.canonicalOrigin) {
+    throw new ConflictError({ message: 'Remote actor URI uses the local origin' });
+  }
+
   const projection = projectActor(actor as ActorWithKosmoFields, parsed.normalizedHandle);
   const endpoints = getActorEndpoints(actor as ActorWithKosmoFields);
   const actorUri = actor.id!.href;

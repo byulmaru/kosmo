@@ -293,6 +293,19 @@ describe('remote actor materialization', () => {
     );
   });
 
+  test('rejects a local-origin actor URI before a local actor row exists', async () => {
+    const actor = createActor({ id: new URL(`${publicOrigin}/ap/actors/alice`) });
+    const { context } = createLookupContext(async () => actor);
+
+    await assert.rejects(
+      materializeRemoteProfileActor({ context, handle: `alice@${remoteDomain}` }),
+      /Remote actor URI uses the local origin/,
+    );
+
+    assert.equal(await countRows(Profiles), 0);
+    assert.equal(await countRows(ActivityPubActors), 0);
+  });
+
   test('rejects handle collisions with a different actor URI', async () => {
     const instance = await createRemoteInstance();
     await createProfile({ handle: 'alice', instanceId: instance.id });
