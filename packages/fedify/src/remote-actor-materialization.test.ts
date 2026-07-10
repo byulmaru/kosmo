@@ -2,7 +2,7 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, mock, test } from 'node:test';
-import { Endpoints, Note, Person } from '@fedify/vocab';
+import { Endpoints, LanguageString, Note, Person } from '@fedify/vocab';
 import {
   ActivityPubActorType,
   InstanceKind,
@@ -184,6 +184,19 @@ describe('remote actor materialization', () => {
       );
       assert.equal(await countRows(Profiles), 0);
     }
+  });
+
+  test('materializes a language-tagged preferred username', async () => {
+    const actor = createActor({ preferredUsername: new LanguageString('alice', 'en') });
+    const { context } = createLookupContext(async () => actor);
+
+    const profile = await materializeRemoteProfileActor({
+      context,
+      handle: `alice@${remoteDomain}`,
+    });
+
+    assert.equal(profile.handle, 'alice');
+    assert.equal(profile.normalizedHandle, 'alice');
   });
 
   test('falls back to the handle when the actor name is unsupported', async () => {

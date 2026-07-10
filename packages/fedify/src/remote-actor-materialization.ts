@@ -109,7 +109,7 @@ const getActorEndpoints = (actor: ActorWithKosmoFields): ActorEndpoints => ({
 });
 
 const projectActor = (actor: ActorWithKosmoFields, requestedNormalizedHandle: string) => {
-  const preferredUsername = actor.preferredUsername;
+  const preferredUsername = actor.preferredUsername?.toString();
 
   if (!preferredUsername) {
     throw new RemoteActorMaterializationError('Remote actor is missing preferredUsername.');
