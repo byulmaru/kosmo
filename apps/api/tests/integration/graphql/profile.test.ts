@@ -388,6 +388,34 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(session.activeProfileId, auth.profile.id);
   });
 
+  test('hides remote profiles from an account profile list', async () => {
+    const auth = await createAuthenticatedSession();
+    const remoteInstance = await createRemoteInstance();
+    const remote = await createProfile({ handle: 'remote', instanceId: remoteInstance.id });
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: remote.id,
+      role: AccountProfileRole.OWNER,
+    });
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: remote.id })
+      .where(eq(Sessions.id, auth.session.id));
+
+    const result = await requestGraphQL<{
+      me: { profiles: Array<{ id: string }> } | null;
+    }>(
+      `query AccountProfiles {
+        me { profiles { id } }
+      }`,
+      {},
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.me?.profiles, [{ id: auth.profile.id }]);
+  });
+
   test('rejects following a remote profile without creating a relationship', async () => {
     const auth = await createAuthenticatedSession();
     const remoteInstance = await createRemoteInstance();
