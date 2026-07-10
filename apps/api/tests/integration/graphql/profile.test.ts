@@ -317,6 +317,36 @@ describe('GraphQL remote profile boundary', () => {
       .then(firstOrThrow);
     assert.equal(ownership.accountId, auth.account.id);
   });
+
+  test('does not authorize a remote profile stored in an existing session', async () => {
+    const auth = await createAuthenticatedSession();
+    const remoteInstance = await createRemoteInstance();
+    const remote = await createProfile({ handle: 'remote', instanceId: remoteInstance.id });
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: remote.id,
+      role: AccountProfileRole.OWNER,
+    });
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: remote.id })
+      .where(eq(Sessions.id, auth.session.id));
+
+    const result = await requestGraphQL(
+      `mutation CreatePostWithRemoteSession($content: TipTapDocument!) {
+        createPost(input: { content: $content, visibility: UNLISTED }) { post { id } }
+      }`,
+      {
+        content: {
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'blocked' }] }],
+        },
+      },
+      auth.token,
+    );
+
+    assertGraphQLErrorCode(result, 'PERMISSION_DENIED');
+  });
 });
 
 type GraphQLErrorResult = {
