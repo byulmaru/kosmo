@@ -7,6 +7,8 @@ import {
   AccountState,
   InstanceKind,
   InstanceState,
+  PostState,
+  PostVisibility,
   ProfileFollowPolicy,
   ProfileState,
   SessionState,
@@ -32,6 +34,7 @@ let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
+let Posts: typeof CoreDb.Posts;
 let Sessions: typeof CoreDb.Sessions;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let deriveContext: typeof DeriveContext;
@@ -54,6 +57,7 @@ describe('GraphQL remote profile boundary', () => {
       pg,
       ProfileFollows,
       Profiles,
+      Posts,
       Sessions,
     } = await import('@kosmo/core/db'));
     ({ seedDatabase } = await import('@kosmo/core/db/seed'));
@@ -206,6 +210,30 @@ describe('GraphQL remote profile boundary', () => {
       viewerFollow: null,
       viewerState: { follow: null, isSelf: false },
     });
+  });
+
+  test('hides remote posts even when post rows exist', async () => {
+    const remoteInstance = await createRemoteInstance();
+    const remote = await createProfile({ handle: 'remote', instanceId: remoteInstance.id });
+    await db.insert(Posts).values({
+      profileId: remote.id,
+      state: PostState.ACTIVE,
+      visibility: PostVisibility.PUBLIC,
+    });
+
+    const result = await requestGraphQL<{
+      profileByHandle: { posts: { edges: unknown[] } } | null;
+    }>(
+      `query RemotePosts($handle: String!) {
+        profileByHandle(handle: $handle) {
+          posts(first: 10) { edges { node { id } } }
+        }
+      }`,
+      { handle: `remote@${remoteDomain}` },
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.profileByHandle?.posts, { edges: [] });
   });
 
   test('rejects selecting a remote profile even when the account owns it', async () => {
@@ -478,6 +506,7 @@ const countRows = async (table: typeof Profiles | typeof ProfileFollows): Promis
 
 const resetFixtures = async () => {
   await db.delete(Sessions);
+  await db.delete(Posts);
   await db.delete(ProfileFollows);
   await db.delete(AccountProfiles);
   await db.delete(Accounts);

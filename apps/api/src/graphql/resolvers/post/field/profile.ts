@@ -1,4 +1,6 @@
 import { db, Posts, Profiles } from '@kosmo/core/db';
+import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
+import { isConfiguredLocalProfile } from '@kosmo/core/profile';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
@@ -12,12 +14,19 @@ builder.objectFields(Profile, (t) => ({
   posts: t.connection(
     {
       type: Post,
-      resolve: (profile, args, ctx) => {
+      resolve: async (profile, args, ctx) => {
+        const configuredLocalInstance = await resolveConfiguredLocalInstance();
+        const connectionOptions = {
+          args,
+          toCursor: (post: PostRow) => post.id,
+        };
+
+        if (!isConfiguredLocalProfile(profile, configuredLocalInstance)) {
+          return resolveCursorConnection<Promise<PostRow[]>>(connectionOptions, async () => []);
+        }
+
         return resolveCursorConnection<Promise<PostRow[]>>(
-          {
-            args,
-            toCursor: (post) => post.id,
-          },
+          connectionOptions,
           ({ before, after, limit, inverted }) =>
             db
               .select(getColumns(Posts))
