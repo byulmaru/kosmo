@@ -77,6 +77,6 @@
 - [x] 8.2 native shell을 폭과 무관한 mobile layout과 top safe area로 고정하고 unfollow connection edge를 Relay store에서 제거한다
 - [x] 8.3 BFF의 unexpected error log를 redaction하고 native session request body와 credential response cache 경계를 제한한다
 - [x] 8.4 Expo 정적 asset에 immutable/no-cache validator와 build-time precompression을 적용한다
-- [x] 8.5 app/web unit test, BFF typecheck, clean Android/iOS build를 PR CI gate로 연결하고 native deep-link 계약을 `kosmo://` custom scheme 범위로 정렬한다
+- [x] 8.5 app/web unit test와 BFF typecheck를 PR CI gate로 연결하고 native deep-link 계약을 `kosmo://` custom scheme 범위로 정렬한다. clean Android/iOS build CI는 runner 환경을 갖추는 후속 이슈 PROD-266으로 분리한다
 - [x] 8.6 게시 직후 Post List membership은 후속 subscription이 소유하고 TipTap 전체 제거 검토는 별도 change로 분리한다고 기록한다
 - [x] 8.7 전체 build/test와 OpenSpec strict validation을 다시 통과시키고 canonical spec을 sync한 뒤 change를 archive한다

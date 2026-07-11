@@ -73,7 +73,7 @@ API는 Pothos Relay plugin, loadable `Node`, `Query.node/nodes`, opaque global I
 4. 온보딩과 app shell을 먼저 옮긴 뒤 home/compose, profile/follow/post, search, placeholder 화면 순서로 vertical slice를 이식한다.
 5. follow pagination은 `usePaginationFragment`, profile switch는 actor-scoped Relay environment reset, mutation은 response normalization과 필요한 connection updater로 옮긴다. unfollow처럼 이미 열린 connection membership을 즉시 바꿔야 하는 mutation은 Relay updater를 사용하되, 새 게시글의 Home/Profile Post List 반영은 후속 subscription change가 소유한다.
 6. 기존 component state story를 React Native Web Storybook으로 이식하고 build/a11y 검증을 구성한다.
-7. Playwright fixture/config를 새 BFF/Expo build에 맞추고 Relay compile, TypeScript, Expo export, Web E2E, Expo prebuild 및 Android/iOS build 검증을 실행한다.
+7. Playwright fixture/config를 새 BFF/Expo build에 맞추고 Relay compile, TypeScript, Expo export, Web E2E 및 Expo prebuild 검증을 실행한다.
 8. Svelte/Mearie/manual native build source와 의존성을 제거하고 Docker, entrypoint, CI artifact path, 문서를 갱신한다.
 9. production image를 build해 `/health`, `/`, `/graphql`, login callback, federation route를 smoke test한다.
 

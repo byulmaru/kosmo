@@ -111,7 +111,7 @@ Relay network layer는 플랫폼별 인증 수단을 사용해 같은 `/graphql`
 
 ### Requirement: Universal client verification
 
-마이그레이션된 클라이언트는 Relay compile, TypeScript, web export, web E2E와 Expo project 검증을 자동화해야 한다(MUST).
+마이그레이션된 클라이언트는 Relay compile, TypeScript, web export와 web E2E를 자동화해야 한다(MUST). Expo project는 Android/iOS application identity와 callback scheme을 일관되게 정의해야 한다(MUST).
 
 #### Scenario: Validate a pull request
 
@@ -124,8 +124,6 @@ Relay network layer는 플랫폼별 인증 수단을 사용해 같은 `/graphql`
 
 - **WHEN** Expo project configuration을 검사한다
 - **THEN** Android package와 iOS bundle identifier는 `moe.kos`이고 callback scheme은 `kosmo`이다
-- **AND** clean Expo prebuild 뒤 Android debug build가 성공해야 한다
-- **AND** clean Expo prebuild 뒤 iOS simulator build가 성공해야 한다
 
 ### Requirement: Universal component catalog
 
