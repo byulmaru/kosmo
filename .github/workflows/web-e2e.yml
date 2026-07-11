@@ -11,8 +11,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: web-e2e
+  cancel-in-progress: false
 
 jobs:
   web_e2e:
