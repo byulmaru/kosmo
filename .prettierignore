@@ -8,6 +8,8 @@ apps/web/build/
 apps/web/storybook-static/
 apps/web/.svelte-kit
 apps/web/.mearie
+apps/app/dist/
+apps/app/storybook-static/
 .pnpm-store/
 pnpm-lock.yaml
 schema.graphql

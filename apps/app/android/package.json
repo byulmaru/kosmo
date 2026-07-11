@@ -1,7 +1,0 @@
-{
-  "scripts": {
-    "build": "node ../../../scripts/vault-run.mjs -- ./gradlew assembleDebug",
-    "run": "node scripts/run.mjs",
-    "run:debug": "node scripts/run.mjs --debug"
-  }
-}

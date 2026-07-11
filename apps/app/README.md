@@ -1,55 +1,40 @@
-# Kosmo Native App
+# Kosmo universal app
 
-Native WebView shells for the Kosmo web app.
+Expo Router, React Native, React Native Web, and Relay power the same iOS, Android, and web client.
 
-## Structure
-
-- `android/`: Kotlin Android app that hosts `https://kos.moe` in `WebView`.
-- `ios/`: Swift iOS app that hosts `https://kos.moe` in `WKWebView`.
-
-Both apps use the existing app identifier `moe.kos` and the custom callback URL `kosmo://login/callback`.
-
-## Login Flow
-
-1. The WebView loads `https://kos.moe`.
-2. When the WebView navigates to `https://kos.moe/login`, the web server detects the native `KosmoApp` User-Agent.
-3. The web server sets the shared OIDC state and PKCE verifier cookies, then redirects native WebViews to `/login/native` with `state` and `code_challenge`.
-4. Native code intercepts `/login/native` and opens the OIDC authorize URL. Android uses Custom Tabs, and iOS uses `ASWebAuthenticationSession`.
-5. The OIDC provider redirects to `kosmo://login/callback`.
-6. Native code validates `state` and loads `https://kos.moe/login/callback` in the WebView with the authorization `code`, `state`, and `redirect_uri`.
-7. The web server validates the shared state and PKCE verifier cookies, exchanges the code, and sets the app WebView session cookie with `Set-Cookie` before redirecting back to `/`.
-
-## Configuration
-
-Android expects an OIDC client id from the public build-time environment variable `PUBLIC_OIDC_CLIENT_ID`. The web origin can be overridden with `PUBLIC_ORIGIN` and defaults to `https://kos.moe`. Cleartext traffic is enabled only when `PUBLIC_ORIGIN` starts with `http://`.
+## Development
 
 ```sh
-pnpm --dir apps/app/android build
+pnpm --filter @kosmo/app dev
+pnpm --filter @kosmo/app ios
+pnpm --filter @kosmo/app android
+pnpm --filter @kosmo/app web
 ```
 
-To build, install, and launch on a selected Android device or emulator:
+Set `EXPO_PUBLIC_WEB_ORIGIN`, `EXPO_PUBLIC_OIDC_ISSUER`, and `EXPO_PUBLIC_OIDC_CLIENT_ID` for native authentication. When Expo evaluates `app.config.ts`, the existing `PUBLIC_ORIGIN`, `PUBLIC_OIDC_ISSUER`, and `PUBLIC_OIDC_CLIENT_ID` Vault values are mapped to those names unless an `EXPO_PUBLIC_*` override is already set. Browser builds use same-origin `/login` and `/graphql` through `@kosmo/web`.
+
+Native `EXPO_PUBLIC_WEB_ORIGIN` must be an HTTPS origin. Loopback HTTP is accepted for local development; a non-loopback HTTP origin requires the explicit development-only `EXPO_PUBLIC_ALLOW_INSECURE_ORIGIN=1` override. SecureStore sessions are bound to the normalized origin and are discarded instead of being sent after an environment change.
+
+Native OIDC uses Expo AuthSession with the `kosmo://login/callback` redirect. Register that exact URI with the provider and test login in a development or standalone build; Expo Go cannot use the custom callback scheme for this flow.
+
+Native projects are generated with `expo prebuild --clean`; they are not source-of-truth files.
+
+## Validation
 
 ```sh
-pnpm --dir apps/app/android run
+pnpm --filter @kosmo/app check
+pnpm --filter @kosmo/app test:unit
+pnpm --filter @kosmo/app export:web
+pnpm --filter @kosmo/app build-storybook
+pnpm --filter @kosmo/app test:storybook
 ```
 
-iOS expects an OIDC client id from the public build-time environment variable `PUBLIC_OIDC_CLIENT_ID`. The web origin can be overridden with `PUBLIC_ORIGIN` and defaults to `https://kos.moe`. A host-specific ATS exception is enabled only when `PUBLIC_ORIGIN` starts with `http://`. Code signing uses the Apple development team selected in the Xcode project.
+The workspace enforces a seven-day `minimumReleaseAge`. Until the latest Expo SDK 56 patch releases age into that window, the dependency-version recommendation is checked separately from the other Expo Doctor diagnostics:
 
 ```sh
-pnpm --dir apps/app/ios build
+cd apps/app
+pnpm dlx expo-doctor@1.20.0 .
+EXPO_DOCTOR_SKIP_DEPENDENCY_VERSION_CHECK=1 pnpm dlx expo-doctor@1.20.0 .
 ```
 
-To build, install, and launch on a selected physical iOS device:
-
-```sh
-pnpm --dir apps/app/ios run
-```
-
-## Web Contract
-
-The native apps assume these web routes exist:
-
-- `GET /login`: starts login in a browser on the web, but is intercepted by native WebView shells.
-- `GET /login/callback`: accepts the native OIDC callback parameters, exchanges the code, sets the HttpOnly session cookie, and redirects to `/`.
-
-The web route implementation is intentionally separate from this native app scaffold.
+Run the unfiltered check first and verify that only age-window package recommendations remain before using the qualified command. Do not bypass the workspace age policy to silence the recommendation. Upgrade the Expo patch set together after pnpm accepts it, then return to the unfiltered check.

@@ -20,6 +20,17 @@
 - security scanner나 CI step에 `continue-on-error`를 쓰는 경우, 후속 step에서 실패 여부를 명시적으로 판정해 workflow가 조용히 성공하지 않게 한다.
 - dependency, tooling, CI 명령이 바뀌면 변경 이유와 platform 제약을 리뷰에서 확인한다.
 
+## Expo, Relay, Web BFF
+
+- `apps/app`의 `prepare`, `dev`, `check`, `build`는 필요한 Relay generated artifact보다 먼저 `relay-compiler`를 실행한다. `__generated__`는 commit하지 않으므로 clean checkout과 CI에서도 compiler 선행을 생략하지 않는다.
+- universal client 검증은 `pnpm --filter @kosmo/app relay`, `check`, `export:web`을 분리해 실패 경계를 확인한다. `export:web`은 이전 환경의 `EXPO_PUBLIC_*` inline 값을 Metro cache에서 재사용하지 않도록 `expo export --clear`를 사용한다. Expo web export 산출물은 `apps/app/dist`이며 UI source를 소유하지 않는 `apps/web` Hono BFF가 이를 제공한다.
+- BFF 검증은 federation-first 전역 전달과 공식 미처리 callback, federation 표현의 404 보존, `/health`, 로그인/callback, native session exchange, cookie/Bearer GraphQL proxy, WebFinger/ActivityPub 응답, SPA deep-link fallback을 포함한다. Expo export 성공만으로 server origin 계약이 검증됐다고 보지 않는다.
+- native project는 Expo managed/CNG 산출물이다. package/bundle ID나 config plugin을 검증할 때는 app config와 clean `expo prebuild` 결과를 확인하고, 생성된 Gradle/Xcode source를 수동 source of truth로 편집하지 않는다.
+- Android/iOS 실행 검증은 기존 원칙대로 사용자가 보는 install/launch/deep-link 결과까지 확인한다. web 전용 검증으로 native build 가능성을 대신하지 않는다.
+- `EXPO_PUBLIC_*` 값은 client bundle에 공개되어도 되는 설정에만 사용한다. OIDC client secret, session token, database/federation 설정은 Hono BFF 또는 server runtime에 남긴다.
+- `apps/app/app.config.ts`는 기존 Vault의 `PUBLIC_ORIGIN`, `PUBLIC_OIDC_ISSUER`, `PUBLIC_OIDC_CLIENT_ID`를 대응하는 `EXPO_PUBLIC_*`로 이식하되 명시적 `EXPO_PUBLIC_*` override를 우선한다. 이 mapping은 공개 설정만 다루고 secret을 client bundle로 옮기지 않는다.
+- `apps/web` BFF의 OIDC는 `PUBLIC_OIDC_ISSUER`를 `openid-client`로 discovery해 성공한 configuration/JWKS cache를 재사용한다. Browser와 native code exchange 모두 `enableNonRepudiationChecks`로 ID token signature와 claims를 검증하며, insecure issuer는 local loopback E2E에서만 허용한다.
+
 ## Codex worktree setup
 
 - `.codex/environments/environment.toml`의 setup script는 `mise trust`와 `pnpm install` 전에 원격 `refs/heads/main`을 `refs/remotes/origin/main`으로 fetch하고, 해당 ref의 commit OID를 확정한 뒤 로컬 `main` worktree 또는 `main` ref를 fast-forward로 최신화한다.

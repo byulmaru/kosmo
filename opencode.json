@@ -4,7 +4,7 @@
   "formatter": {
     "eslint": {
       "command": ["pnpm", "exec", "eslint", "--fix", "--no-warn-ignored", "$FILE"],
-      "extensions": [".js", ".mjs", ".svelte", ".ts"]
+      "extensions": [".cjs", ".js", ".jsx", ".mjs", ".ts", ".tsx"]
     },
     "prettier": {
       "command": ["pnpm", "exec", "prettier", "--write", "--ignore-unknown", "$FILE"],
@@ -12,13 +12,15 @@
         ".css",
         ".graphql",
         ".html",
+        ".cjs",
         ".js",
+        ".jsx",
         ".json",
         ".md",
         ".mjs",
-        ".svelte",
         ".svg",
         ".ts",
+        ".tsx",
         ".yaml",
         ".yml"
       ]

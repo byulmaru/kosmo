@@ -15,6 +15,11 @@ such as `pnpm dev`. The default secret path is
 or `node scripts/vault-run.mjs --secret-path secret/kubernetes/kosmo/dev -- <command>`
 to point at another path.
 
+Run `pnpm dev`, then open `http://localhost:5173`. Local development uses Expo/Metro
+on public port `5173`, the Hono web BFF on internal port `5174`, and the API on
+`3000`. Metro proxies the BFF routes so the browser keeps the production same-origin
+contract. Server deployments and tests override these defaults with `PORT`.
+
 ## Test Postgres
 
 Run a local PostgreSQL instance for tests with Docker Compose:
@@ -37,7 +42,8 @@ Use `pnpm db:test:reset` to recreate the container with an empty data directory,
 Run the web E2E command with:
 
 ```sh
+pnpm --filter @kosmo/app exec playwright install chromium
 pnpm test:e2e
 ```
 
-This installs Playwright Chromium if needed, recreates the test Postgres container, pushes the Drizzle schema, then runs any Playwright specs under `apps/web/e2e`. The Playwright config manages the API server, web preview server, and local OIDC mock when browser specs are present. It intentionally ignores ambient `DATABASE_URL` values and uses `.env.test` instead, so the reset, schema push, and Playwright servers share the same database. Set `PLAYWRIGHT_BROWSER_CHANNEL` only when you intentionally want to run against another local browser channel such as `chrome`.
+Install Playwright Chromium once, then run the E2E command. The command recreates the test Postgres container, pushes the Drizzle schema, and runs the Playwright specs under `apps/web/e2e`. The Playwright config manages the API server, Expo web export, Hono BFF, and local OIDC mock. It intentionally ignores ambient `DATABASE_URL` values and uses `.env.test` instead, so the reset, schema push, and Playwright servers share the same database. Set `PLAYWRIGHT_BROWSER_CHANNEL` only when you intentionally want to run against another local browser channel such as `chrome`.

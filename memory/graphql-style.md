@@ -182,7 +182,7 @@ GraphQL enum은 `apps/api/src/graphql/enums.ts`에서 전역 등록한다.
 
 ## Client And Spec Sync
 
-- GraphQL operation은 실제 사용하는 Svelte 파일에 colocate한다. 프론트 세부 규칙은 `memory/frontend-svelte.md`를 따른다.
+- GraphQL operation은 실제 사용하는 React Native `.tsx` 파일에 Relay `graphql` tag로 colocate한다. 프론트 fragment, connection, actor environment 세부 규칙은 `memory/frontend-react-native.md`를 따른다.
 - GraphQL mutation error UI 분기가 여러 컴포넌트에서 반복되면 공통 helper나 error handling boundary로 모을 후보로 본다.
 - API 구현과 OpenSpec은 root field, object field, payload, error type, connection 단위가 서로 맞아야 한다.
 - GraphQL field/payload shape가 바뀌면 같은 변경에서 OpenSpec도 정렬한다.

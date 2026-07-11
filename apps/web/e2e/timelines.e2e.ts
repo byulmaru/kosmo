@@ -7,6 +7,7 @@ import {
   setE2ESessionCookie,
 } from './db-fixtures';
 import { expect, test } from './fixtures';
+import { isGraphQLOperation } from './graphql';
 import type { Page } from '@playwright/test';
 
 const minute = 60_000;
@@ -202,9 +203,7 @@ test('프로필 게시글 목록 오류 상태는 다시 시도를 제공한다'
 
   await setE2ESessionCookie(context, viewer.token);
   await page.route('**/graphql', async (route) => {
-    const body = route.request().postData() ?? '';
-
-    if (body.includes('ProfilePostListPageQuery')) {
+    if (isGraphQLOperation(route.request().postData(), 'ProfilePostListPageQuery')) {
       profilePostsRequestCount += 1;
       await route.fulfill({
         contentType: 'application/json',

@@ -1,1 +1,3 @@
-- SvelteKit Project의 모든 dependencies는 devDependencies로 선언 (build 과정에서 모두 포함되기 때문에)
+- Hono BFF 런타임에서 import하는 패키지는 `dependencies`에 선언한다.
+- UI와 Relay 문서는 `apps/app`이 소유하며, 이 package는 인증·GraphQL proxy·Fedify·정적 파일 제공만 담당한다.
+- 서버 route 변경은 `src/server/app.test.ts`로 검증한다.

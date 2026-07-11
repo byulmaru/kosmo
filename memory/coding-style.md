@@ -6,7 +6,7 @@
 - 이 메모는 PR 본문이 아니라 다른 사람 PR에 `robin-maki`가 직접 남긴 리뷰에서 반복된 기준을 일반화한 것이다.
 - 세부 영역은 기존 메모를 우선한다.
   - GraphQL resolver/API 세부 구조: `memory/graphql-style.md`
-  - Svelte/Mearie/Storybook: `memory/frontend-svelte.md`
+  - Expo Router/React Native Web/React Relay/Storybook: `memory/frontend-react-native.md`
   - DB/Drizzle schema: `memory/database-design.md`
   - 스크립트/CI/명령 실행: `memory/script.md`
   - 커밋/PR/스택 운영: `memory/commit-pr.md`를 먼저 읽고, 작업 상황에 맞는 하위 메모리를 추가로 읽는다.
@@ -46,6 +46,7 @@
 
 ## Runtime And Tooling
 
+- 날짜·시간 도메인 값과 UI 포맷은 `Date`나 `Date.now()`로 재구현하지 않고 `Temporal.Instant`과 `@kosmo/core/datetime`을 사용한다. GraphQL `DateTime` 문자열은 클라이언트 경계에서 `Temporal.Instant.from(...)`으로 변환한다.
 - dependency, runtime API, CI command, platform workaround를 바꿀 때는 왜 바뀌는지와 target runtime/platform 제약을 확인한다.
 - Node/Web/OS별 API 지원 여부를 확인하지 않고 polyfill이나 대체 구현으로 바꾸지 않는다.
 - CI/security scanner는 실패를 성공으로 삼키지 않는다. `continue-on-error`를 쓰면 후속 step에서 실패 여부를 판정해야 한다.

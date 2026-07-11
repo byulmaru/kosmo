@@ -49,5 +49,11 @@ minimumReleaseAgeExclude:
   - hono@4.12.25
 overrides:
   '@opentelemetry/sdk-metrics@<2.8.0': ^2.8.0
+  # Expo Router exposes broad native peers; align every peer snapshot with SDK 56 / RN 0.85.
+  '@react-native/metro-config': 0.85.3
   cookie@<0.7.0: ^0.7.0
   esbuild@<0.28.1: ^0.28.1
+  # Keep fbjs's declared parser without crossing into the later provenance-downgrade releases.
+  'fbjs@3.0.5>ua-parser-js': 1.0.39
+  react-native-reanimated: 4.3.1
+  react-native-worklets: 0.8.3

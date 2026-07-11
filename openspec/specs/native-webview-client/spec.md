@@ -1,113 +1,69 @@
 ## Purpose
 
-kosmo 네이티브 WebView 클라이언트의 현재 계약을 문서화한다. 이 스펙은 Android WebView shell과 iOS WKWebView shell이 웹 앱을 호스팅하고 네이티브 OIDC 로그인을 연결하는 동작을 다룬다.
+kosmo Android/iOS Expo 클라이언트의 현재 계약을 문서화한다. 이 스펙은 React Native 직접 렌더링, Expo Router navigation, AuthSession PKCE 로그인과 SecureStore session을 다루며 legacy capability 이름만 이관 이력을 위해 유지한다.
 
 ## Requirements
 
-### Requirement: Native WebView shell
+### Requirement: Native Expo application
 
-네이티브 앱은 kosmo 웹 origin을 WebView로 호스팅해야 한다(MUST).
+네이티브 앱은 Expo Router와 React Native가 직접 렌더링하는 Android/iOS 애플리케이션이어야 한다(MUST).
 
-#### Scenario: Launch native app
+#### Scenario: Launch native application
 
-- **WHEN** 네이티브 앱이 처음 실행된다
-- **THEN** Android는 `WebView`를 화면 전체에 표시한다
-- **AND** iOS는 `WKWebView`를 화면 전체에 표시한다
-- **AND** WebView는 설정된 web origin을 로드한다
+- **WHEN** 사용자가 Android 또는 iOS 앱을 실행한다
+- **THEN** 앱은 Expo Router root를 렌더한다
+- **AND** 앱의 화면을 원격 web origin의 WebView로 렌더하지 않는다
 
-#### Scenario: Configure WebView storage and JavaScript
+### Requirement: Native system-browser login
 
-- **WHEN** 네이티브 WebView가 생성된다
-- **THEN** Android WebView는 JavaScript, DOM storage, cookie 수신을 활성화한다
-- **AND** iOS WKWebView는 기본 website data store를 사용한다
+네이티브 앱은 authorization code with PKCE 로그인을 system browser session으로 수행해야 한다(MUST).
 
-### Requirement: Native app user agent
+#### Scenario: Start native login
 
-네이티브 앱은 웹 서버가 네이티브 WebView 요청을 식별할 수 있도록 user-agent에 `KosmoApp/<version>` 값을 포함해야 한다(MUST).
+- **WHEN** 사용자가 네이티브 온보딩에서 로그인을 시작한다
+- **THEN** 앱은 random state, PKCE verifier, S256 code challenge를 생성한다
+- **AND** OIDC authorize URL의 redirect URI는 `kosmo://login/callback`이다
+- **AND** 앱은 Expo AuthSession과 system browser를 사용해 authorize URL을 연다
 
-#### Scenario: Android user agent
+#### Scenario: Reject invalid callback
 
-- **WHEN** Android WebView가 웹 요청을 보낸다
-- **THEN** user-agent는 기본 WebView user-agent 뒤에 `KosmoApp/<app version>`을 포함한다
+- **WHEN** callback의 route, code 또는 state가 요청과 일치하지 않는다
+- **THEN** 앱은 code를 session exchange endpoint로 보내지 않는다
+- **AND** 인증되지 않은 상태를 유지한다
 
-#### Scenario: iOS user agent
+### Requirement: Native secure session
 
-- **WHEN** iOS WKWebView가 웹 요청을 보낸다
-- **THEN** application name user-agent 값은 `KosmoApp/<app version>`이다
-- **AND** 앱 버전을 알 수 없으면 `KosmoApp/0.0.0`을 사용한다
+네이티브 앱은 OIDC code를 web BFF에서 Kosmo session token으로 교환하고 token을 platform secure storage에 보관해야 한다(MUST).
 
-### Requirement: Native login handoff
+#### Scenario: Complete native login
 
-네이티브 앱은 웹 `/login/native` handoff를 가로채 시스템 브라우저 기반 OIDC 로그인을 시작해야 한다(MUST).
+- **WHEN** system browser가 유효한 authorization code와 state를 반환한다
+- **THEN** 앱은 code, PKCE verifier, redirect URI를 HTTPS native session endpoint로 보낸다
+- **AND** 응답의 Kosmo session token을 Expo SecureStore에 저장한다
+- **AND** 이후 Relay 요청은 session token을 Bearer 인증으로 사용한다
 
-#### Scenario: Intercept native login route
+#### Scenario: Restart signed-in app
 
-- **WHEN** WebView가 설정된 web origin의 `/login/native`로 이동한다
-- **THEN** 네이티브 앱은 WebView navigation을 중단한다
-- **AND** URL의 `state`와 `code_challenge` query parameter를 읽는다
+- **WHEN** 유효한 Kosmo session token이 SecureStore에 있고 앱을 다시 실행한다
+- **THEN** 앱은 token을 복원하고 `currentSession` query로 유효성을 확인한다
+- **AND** 유효하면 보호 화면에 접근할 수 있다
 
-#### Scenario: Start Android native login
+#### Scenario: Discard invalid stored session
 
-- **WHEN** Android 앱이 `/login/native`에서 state와 code challenge를 받는다
-- **THEN** 앱은 OIDC authorize URL을 생성한다
-- **AND** redirect URI는 `kosmo://login/callback`이다
-- **AND** scope는 `openid profile`이다
-- **AND** code challenge method는 `S256`이다
-- **AND** 앱은 Custom Tabs로 authorize URL을 연다
+- **WHEN** 저장된 token으로 `currentSession`이 `null`을 반환한다
+- **THEN** 앱은 저장된 token을 삭제한다
+- **AND** 보호 route에서 공개 온보딩으로 이동한다
 
-#### Scenario: Start iOS native login
+### Requirement: Expo native navigation behavior
 
-- **WHEN** iOS 앱이 `/login/native`에서 state와 code challenge를 받는다
-- **THEN** 앱은 OIDC authorize URL을 생성한다
-- **AND** redirect URI는 `kosmo://login/callback`이다
-- **AND** scope는 `openid profile`이다
-- **AND** code challenge method는 `S256`이다
-- **AND** 앱은 `ASWebAuthenticationSession`으로 authorize URL을 연다
+네이티브 앱은 Expo Router history와 platform back behavior를 사용하고, 외부 origin은 system browser로 열어야 한다(MUST).
 
-#### Scenario: Missing native login configuration
+#### Scenario: Navigate back
 
-- **WHEN** 네이티브 앱에 OIDC client ID가 설정되어 있지 않다
-- **THEN** 앱은 네이티브 로그인을 시작하지 않는다
+- **WHEN** 사용자가 Android back 또는 iOS navigation back을 실행하고 이전 Expo route가 있다
+- **THEN** 앱은 이전 route로 이동한다
 
-### Requirement: Native login callback handling
+#### Scenario: Open external URL
 
-네이티브 앱은 `kosmo://login/callback` callback을 검증한 뒤 웹 callback endpoint로 전달해야 한다(MUST).
-
-#### Scenario: Register callback route
-
-- **WHEN** OIDC provider가 `kosmo://login/callback`으로 리다이렉트한다
-- **THEN** Android 앱은 `kosmo` scheme, `login` host, `/callback` path의 VIEW intent를 받을 수 있다
-- **AND** iOS 앱은 `kosmo` callback URL scheme을 사용하는 authentication session callback을 받을 수 있다
-
-#### Scenario: Accept valid native callback
-
-- **WHEN** 네이티브 앱이 `kosmo://login/callback` callback에서 authorization code와 state를 받는다
-- **THEN** 앱은 callback state가 저장된 login state와 같은지 확인한다
-- **AND** state가 일치하면 web origin의 `/login/callback`을 WebView에 로드한다
-- **AND** WebView callback URL은 code, state, `redirect_uri=kosmo://login/callback` query parameter를 포함한다
-- **AND** 저장된 login state는 callback 전달 후 초기화된다
-
-#### Scenario: Ignore invalid native callback
-
-- **WHEN** callback route가 `kosmo://login/callback`이 아니거나 code가 없거나 state가 없거나 state가 저장된 login state와 다르다
-- **THEN** 네이티브 앱은 callback을 웹 callback endpoint로 전달하지 않는다
-
-### Requirement: Native navigation behavior
-
-네이티브 앱은 WebView 내 웹 탐색과 외부 URL 탐색을 분리해야 한다(MUST).
-
-#### Scenario: Android external URL
-
-- **WHEN** Android WebView가 http 또는 https가 아닌 URL로 이동한다
-- **THEN** 앱은 처리 가능한 외부 activity가 있으면 해당 activity를 연다
-- **AND** WebView navigation은 앱에서 처리된 것으로 간주한다
-
-#### Scenario: Android back navigation
-
-- **WHEN** Android 사용자가 뒤로 가기를 실행하고 WebView history가 있다
-- **THEN** 앱은 activity를 종료하지 않고 WebView에서 뒤로 이동한다
-
-#### Scenario: iOS navigation failure
-
-- **WHEN** iOS WKWebView navigation 또는 provisional navigation이 실패한다
-- **THEN** 앱은 실패 내용을 로그로 기록한다
+- **WHEN** 사용자가 Kosmo canonical origin이 아닌 http 또는 https URL을 활성화한다
+- **THEN** 앱은 해당 URL을 system browser로 연다
