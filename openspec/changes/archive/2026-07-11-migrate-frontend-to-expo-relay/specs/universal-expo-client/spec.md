@@ -32,7 +32,7 @@
 
 #### Scenario: Open a native deep link
 
-- **WHEN** Android 또는 iOS가 지원 route를 가리키는 `kosmo://` deep link나 연동된 universal link를 연다
+- **WHEN** Android 또는 iOS가 지원 route를 가리키는 `kosmo://` custom-scheme deep link를 연다
 - **THEN** 시스템은 웹과 같은 canonical 화면으로 이동한다
 
 ### Requirement: Platform-adaptive application shell

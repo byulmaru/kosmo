@@ -70,3 +70,13 @@
 - [x] 7.7 `memory/frontend-react-native.md`에 Relay/React Native 규칙을 정리하고 coding/graphql/script memory와 해당 AGENTS 라우팅을 정렬한다
 - [x] 7.8 active OpenSpec change의 Svelte/Mearie/WebView 구현 task를 조사해 Expo 이식, 완료 또는 superseded 상태를 명시한다
 - [x] 7.9 OpenSpec strict validation과 전체 build/test를 재실행하고 변경 범위를 검토 가능한 checkpoint commit으로 정리한다
+
+## 8. Ready 리뷰 후속 보강
+
+- [x] 8.1 앱이 native-safe validation entrypoint만 사용하게 하고 Relay HTTP 200 GraphQL error에서 작성·프로필 전환 상태를 보존한다
+- [x] 8.2 native shell을 폭과 무관한 mobile layout과 top safe area로 고정하고 unfollow connection edge를 Relay store에서 제거한다
+- [x] 8.3 BFF의 unexpected error log를 redaction하고 native session request body와 credential response cache 경계를 제한한다
+- [x] 8.4 Expo 정적 asset에 immutable/no-cache validator와 build-time precompression을 적용한다
+- [x] 8.5 app/web unit test, BFF typecheck, clean Android/iOS build를 PR CI gate로 연결하고 native deep-link 계약을 `kosmo://` custom scheme 범위로 정렬한다
+- [x] 8.6 게시 직후 Post List membership은 후속 subscription이 소유하고 TipTap 전체 제거 검토는 별도 change로 분리한다고 기록한다
+- [x] 8.7 전체 build/test와 OpenSpec strict validation을 다시 통과시키고 canonical spec을 sync한 뒤 change를 archive한다

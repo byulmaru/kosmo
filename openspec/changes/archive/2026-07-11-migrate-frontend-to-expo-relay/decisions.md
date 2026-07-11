@@ -64,8 +64,17 @@
 - Context / Problem: 기존 TipTap editor/renderer는 DOM에 의존해 native에서 실행할 수 있지만 현재 schema는 doc/paragraph/text만 사용한다.
 - Decision Outcome: 공용 `TextInput`의 plain text를 TipTap JSON으로 변환하고 TipTap JSON을 공용 `Text` tree/plain text로 projection하는 최소 adapter를 사용한다.
 - Alternatives Considered: native rich text editor dependency 추가는 현재 product 기능보다 크고, Web만 TipTap을 유지하는 안은 작성 UX/data code를 분기해 제외했다.
-- Consequences: 현재 줄바꿈·500자·visibility·submit 계약은 유지한다. mark/media/mention이 schema에 추가되면 editor 선택을 다시 결정해야 한다.
-- Confirmation / Follow-up: 변환 round-trip 단위 test와 compose E2E를 추가한다.
+- Consequences: 현재 줄바꿈·500자·visibility·submit 계약은 유지한다. 앱은 native-safe validation entrypoint만 사용해 TipTap/ProseMirror runtime을 native bundle에 포함하지 않는다. mark/media/mention이 schema에 추가되면 editor 선택을 다시 결정해야 한다.
+- Confirmation / Follow-up: 변환 round-trip 단위 test와 compose E2E를 추가한다. TipTap을 저장·GraphQL 계약에서도 제거할지, rich-text editor를 component WebView로 제공할지는 이 migration과 분리된 후속 change에서 결정한다.
+
+### 새 게시글의 Post List 반영은 후속 subscription이 소유한다
+
+- Status: Accepted
+- Context / Problem: `createPost` 성공 직후 이미 열린 Home/Profile Post List에 새 edge를 직접 prepend할 수 있지만, 게시 발행을 여러 client와 surface에 일관되게 전달할 subscription 경계를 별도로 도입할 예정이다.
+- Decision Outcome: 이 migration에서는 `createPost` 응답의 Post normalization과 성공 UI만 유지하고 Home/Profile connection membership은 직접 수정하지 않는다. 새 게시글의 실시간 목록 반영은 후속 subscription change가 소유한다.
+- Alternatives Considered: 현재 Relay connection에만 `@prependNode`를 적용하는 안은 한 client의 일부 열린 목록만 갱신해 향후 subscription 동작과 중복될 수 있어 제외했다. 성공 후 actor environment 전체를 재생성하는 안은 과도한 재요청을 만들어 제외했다.
+- Consequences: subscription 도입 전에는 게시 직후 열린 목록이 network refetch 전까지 새 게시글을 표시하지 않을 수 있다. 이 제한은 기존 client parity로 수용한다.
+- Confirmation / Follow-up: 후속 change에서 Post published event의 subscription payload, Home/Profile Post List membership과 중복 edge 방지를 함께 정의한다.
 
 ### Svelte/WebView를 병행하지 않고 screen slice별 commit 후 일괄 cutover한다
 
@@ -98,6 +107,8 @@
 
 - Expo server output + Relay SSR 도입 시점: 검색/preview/no-JS 요구가 명시될 때 결정한다.
 - rich text editor 확장: TipTap document schema가 plain text subset을 넘을 때 platform editor와 data contract를 결정한다.
+- post document 단순화: TipTap을 저장·GraphQL 계약에서 완전히 제거할지 component WebView rich-text editor로 유지할지는 별도 change에서 결정한다.
+- Post List subscription: 게시 발행 event와 Home/Profile Post List 갱신·중복 제거 계약은 별도 change에서 결정한다.
 - EAS/app store 배포: 계정, signing credential, channel 정책이 제공될 때 별도 운영 change에서 결정한다.
 
 ## Active OpenSpec Migration Audit (2026-07-11)

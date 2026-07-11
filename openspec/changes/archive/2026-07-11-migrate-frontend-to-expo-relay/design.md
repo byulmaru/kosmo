@@ -71,7 +71,7 @@ API는 Pothos Relay plugin, loadable `Node`, `Query.node/nodes`, opaque global I
 2. `apps/web`의 auth/session 생성 로직을 framework-neutral module로 옮기고 Hono BFF에서 login, callback, native session, GraphQL proxy, health, federation을 검증한다.
 3. 기존 manual `apps/app/android`, `apps/app/ios`를 Expo managed project로 교체하고 route skeleton, theme/font, Relay compiler/environment, auth storage를 구축한다.
 4. 온보딩과 app shell을 먼저 옮긴 뒤 home/compose, profile/follow/post, search, placeholder 화면 순서로 vertical slice를 이식한다.
-5. follow pagination은 `usePaginationFragment`, profile switch는 actor-scoped Relay environment reset, mutation은 response normalization과 필요한 connection updater로 옮긴다.
+5. follow pagination은 `usePaginationFragment`, profile switch는 actor-scoped Relay environment reset, mutation은 response normalization과 필요한 connection updater로 옮긴다. unfollow처럼 이미 열린 connection membership을 즉시 바꿔야 하는 mutation은 Relay updater를 사용하되, 새 게시글의 Home/Profile Post List 반영은 후속 subscription change가 소유한다.
 6. 기존 component state story를 React Native Web Storybook으로 이식하고 build/a11y 검증을 구성한다.
 7. Playwright fixture/config를 새 BFF/Expo build에 맞추고 Relay compile, TypeScript, Expo export, Web E2E, Expo prebuild 및 Android/iOS build 검증을 실행한다.
 8. Svelte/Mearie/manual native build source와 의존성을 제거하고 Docker, entrypoint, CI artifact path, 문서를 갱신한다.

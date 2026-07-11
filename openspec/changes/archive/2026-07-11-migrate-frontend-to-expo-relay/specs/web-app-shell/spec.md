@@ -67,6 +67,7 @@ GraphQL entity data를 표시하는 shell과 화면 component는 Relay fragment 
 
 - **WHEN** 인증된 계정에 접근 가능한 활성 프로필이 있다
 - **THEN** 데스크톱 사이드바 또는 모바일 profile switch surface는 활성 프로필 정보를 표시한다
+- **AND** full 데스크톱 사이드바는 260px 높이의 상단 프로필 영역을 유지하고 compact rail은 40px avatar trigger를 사용한다
 - **AND** 활성 프로필 정보는 `currentSession.selectedProfile` 조회 결과를 기반으로 하며, 프로필 전환 성공 후 Relay store 갱신과 actor environment 재생성 결과를 반영한다
 - **AND** 현재 활성 프로필을 시각적으로 구분한다
 - **AND** 접근 가능한 다른 프로필을 control로 표시해 전환할 수 있게 한다
