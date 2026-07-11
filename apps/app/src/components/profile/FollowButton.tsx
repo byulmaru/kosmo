@@ -18,6 +18,9 @@ type FollowButtonProps = {
 const followButtonProfileFragment = graphql`
   fragment FollowButton_profile on Profile {
     id
+    instance {
+      kind
+    }
     viewerState {
       isSelf
       follow {
@@ -65,15 +68,16 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
     useMutation<FollowButtonUnfollowProfileMutation>(unfollowProfileMutation);
   const [error, setError] = useState(false);
   const viewerState = data.viewerState;
+  const isLocalProfile = data.instance.kind === 'LOCAL';
   const isFollowing = Boolean(viewerState?.follow);
   const loading = following || unfollowing;
 
-  if (!viewerState || viewerState.isSelf) {
+  if (!isLocalProfile || !viewerState || viewerState.isSelf) {
     return null;
   }
 
   const toggleFollow = () => {
-    if (loading) {
+    if (loading || !isLocalProfile) {
       return;
     }
 
