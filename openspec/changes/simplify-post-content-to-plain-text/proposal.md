@@ -12,7 +12,7 @@
 - Expo/React Native Web 앱이 adapter 없이 `bodyText`를 직접 제출·표시하도록 Relay schema, artifact, fixture와 Storybook을 갱신한다.
 - 계획 중인 ActivityPub remote Note projection은 실행 가능한 HTML이나 TipTap document를 저장하지 않고 canonical Plain Text만 산출하도록 PROD-259의 전제를 재범위화한다. 실제 remote Note materialization은 PROD-259/PROD-261 범위에 남긴다.
 - 게시 직후 이미 열린 목록 갱신, rich text 기능과 editor 도입은 포함하지 않는다.
-- 구현은 merge-safe한 두 PR로 나눈다. PROD-268은 CW rename, Plain Text validation과 `bodyText` 직접 조회를 준비하면서 기존 TipTap write/storage 계약을 유지하고, PROD-267은 DB·GraphQL·Relay write 계약을 한 번에 전환한다.
+- 구현은 merge-safe한 두 PR로 나눈다. PROD-268은 API/domain의 CW rename을 legacy `spoiler_text` 컬럼에 매핑하고 Plain Text validation과 `bodyText` 직접 조회를 준비하면서 기존 물리 DB와 TipTap write/storage 계약을 유지한다. PROD-267은 물리 컬럼 rename과 DB·GraphQL·Relay write 계약을 한 번에 전환한다.
 
 ## Capabilities
 

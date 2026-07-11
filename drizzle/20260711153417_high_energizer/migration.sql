@@ -1,1 +1,0 @@
-ALTER TABLE "post_content" RENAME COLUMN "spoiler_text" TO "content_warning";

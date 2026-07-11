@@ -53,10 +53,10 @@
 
 - Status: Accepted
 - Context / Problem: DB column drop, GraphQL mutation input과 Relay composer를 서로 다른 시점에 바꾸면 중간 main의 게시글 작성이 실패하지만, read path와 validation 준비는 기존 계약을 유지한 채 먼저 머지할 수 있다.
-- Decision Outcome: PROD-268은 CW rename, Plain Text validation과 앱의 `bodyText` 직접 조회를 담당하고 기존 TipTap write/storage를 유지한다. PROD-267은 PROD-268 이후 DB drop, API input과 앱 write path를 하나의 atomic cutover로 수행한다.
+- Decision Outcome: PROD-268은 API/domain의 `contentWarning`을 legacy SQL 컬럼 `spoiler_text`에 매핑하고 Plain Text validation과 앱의 `bodyText` 직접 조회를 담당하며, 물리 DB와 기존 TipTap write/storage를 유지한다. PROD-267은 PROD-268 이후 `spoiler_text` → `content_warning` 물리 rename, DB drop, API input과 앱 write path를 하나의 atomic cutover로 수행한다.
 - Alternatives Considered: 모든 변경을 한 PR에 두면 리뷰 범위가 크다. DB/API/app을 각각 분리하면 임시 dual contract가 없이는 중간 main이 깨진다. dual contract를 추가하는 방식은 이미 확정한 호환 계층 없음 결정과 충돌한다.
 - Consequences: PROD-268은 독립적으로 main에 머지할 수 있고 PROD-267은 그 이후 머지해야 한다. OpenSpec change는 두 PR에 걸쳐 진행되며 준비 PR 머지 시 일부 task가 pending 상태로 남는다.
-- Confirmation / Follow-up: PROD-268에서 기존 TipTap create E2E를 유지하고, PROD-267에서 전체 cutover 검증을 실행한다.
+- Confirmation / Follow-up: PROD-268에서 migration 없이 기존 TipTap create E2E를 유지하고, PROD-267에서 rename/drop migration을 포함한 전체 cutover 검증을 실행한다. Production expand/contract 배포 장치는 PROD-269에서 별도로 확립한다.
 
 ### ActivityPub projection은 Plain Text output으로 재범위화한다
 
