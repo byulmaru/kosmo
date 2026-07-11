@@ -348,6 +348,12 @@ export const materializeRemoteProfileActor = async ({
           .then(firstOrThrow)
           .then(requireAvailableRemoteInstance);
 
+      const lockRemoteInstances = async (instanceIds: readonly string[]) => {
+        for (const instanceId of [...new Set(instanceIds)].sort()) {
+          await lockRemoteInstance(instanceId);
+        }
+      };
+
       let existingActor = await findExistingActor();
       let lockedRemoteInstance: typeof Instances.$inferSelect | undefined;
 
@@ -368,7 +374,7 @@ export const materializeRemoteProfileActor = async ({
           throw new ConflictError({ message: 'Remote actor collides with a local actor' });
         }
 
-        await lockRemoteInstance(existingInstanceId);
+        await lockRemoteInstances([existingInstanceId, remoteInstance.id]);
 
         if (existingActor.profile.state !== ProfileState.ACTIVE) {
           throw new RemoteActorMaterializationError('Remote profile is unavailable.');
@@ -386,7 +392,7 @@ export const materializeRemoteProfileActor = async ({
           .from(Profiles)
           .where(
             and(
-              eq(Profiles.instanceId, existingInstanceId),
+              eq(Profiles.instanceId, remoteInstance.id),
               eq(Profiles.normalizedHandle, projection.normalizedHandle),
               ne(Profiles.id, existingActor.profile.id),
             ),

@@ -388,6 +388,35 @@ describe('remote actor materialization', () => {
     assert.equal(profile.handle, 'alice');
   });
 
+  test('rejects requested-domain handle collisions when an actor URI resolves through an alias', async () => {
+    const stored = await createStoredRemoteActor();
+    const aliasInstance = await createRemoteInstance({ domain: remoteAliasDomain });
+    const aliasProfile = await createProfile({ handle: 'alice', instanceId: aliasInstance.id });
+    await db.insert(ActivityPubActors).values({
+      profileId: aliasProfile.id,
+      type: ActivityPubActorType.PERSON,
+      uri: `https://${remoteAliasDomain}/users/alice`,
+    });
+    const { context } = createLookupContext(async () => createActor({ name: 'Alias Refresh' }));
+
+    await assert.rejects(
+      materializeRemoteProfileActor({
+        context,
+        handle: `alice@${remoteAliasDomain}`,
+        now: Temporal.Instant.from('2026-07-10T00:00:00Z'),
+      }),
+      /Remote actor handle collides with another actor/,
+    );
+
+    const profile = await db
+      .select()
+      .from(Profiles)
+      .where(eq(Profiles.id, stored.profile.id))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(profile.displayName, 'alice');
+  });
+
   for (const state of [ProfileState.DISABLED, ProfileState.SUSPENDED]) {
     test(`does not reactivate or update a ${state} remote profile`, async () => {
       const stored = await createStoredRemoteActor({ profileState: state });
@@ -667,14 +696,15 @@ const createDocumentLoader = () =>
   }));
 
 const createRemoteInstance = async ({
+  domain = remoteDomain,
   kind = InstanceKind.ACTIVITYPUB,
   state = InstanceState.ACTIVE,
-}: { kind?: InstanceKind; state?: InstanceState } = {}) =>
+}: { domain?: string; kind?: InstanceKind; state?: InstanceState } = {}) =>
   db
     .insert(Instances)
     .values({
-      canonicalOrigin: `https://${remoteDomain}`,
-      domain: remoteDomain,
+      canonicalOrigin: `https://${domain}`,
+      domain,
       kind,
       state,
     })
