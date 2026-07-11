@@ -2,54 +2,64 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
-import { createWebApp } from './app';
-import type { CreateWebAppOptions, WebServerConfig } from './app';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
+import type { Hono } from 'hono';
+
+const { createSession, federationFetch } = vi.hoisted(() => ({
+  createSession: vi.fn<(tokens: { accessToken: string; idToken: string }) => Promise<string>>(),
+  federationFetch: vi.fn<(request: Request) => Promise<Response>>(),
+}));
+
+vi.mock('./auth', async (importOriginal) => ({
+  ...((await importOriginal()) as object),
+  createOidcSession: createSession,
+}));
+
+vi.mock('@kosmo/fedify', () => ({
+  federation: { fetch: federationFetch },
+}));
 
 let staticRoot: string;
+let app: Hono;
+let fetch = vi.fn<typeof globalThis.fetch>();
 
 beforeAll(async () => {
   staticRoot = await mkdtemp(join(tmpdir(), 'kosmo-web-server-'));
   await writeFile(join(staticRoot, 'index.html'), '<html>expo app</html>');
   await writeFile(join(staticRoot, 'asset.js'), 'console.log("asset")');
+  vi.stubEnv('EXPO_WEB_ROOT', staticRoot);
+  ({ default: app } = await import('./app'));
+});
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.stubEnv('OIDC_AUTHORIZE_URL', 'https://id.example/oauth/authorize');
+  vi.stubEnv('PUBLIC_OIDC_CLIENT_ID', 'kosmo-client');
+  vi.stubEnv('OIDC_CLIENT_SECRET', 'kosmo-secret');
+  vi.stubEnv('OIDC_TOKEN_URL', 'https://id.example/oauth/token');
+  vi.stubEnv('PUBLIC_API_ORIGIN', 'https://api.example');
+  vi.stubEnv('PUBLIC_ORIGIN', undefined);
+  createSession.mockResolvedValue('kosmo-session-token');
+  federationFetch.mockResolvedValue(new Response('federated', { status: 203 }));
+  fetch = vi.fn<typeof globalThis.fetch>(async () =>
+    Response.json({ access_token: 'oidc-access-token', id_token: createIdToken() }),
+  );
+  vi.stubGlobal('fetch', fetch);
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 afterAll(async () => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
   await rm(staticRoot, { force: true, recursive: true });
 });
 
-type TestAppOverrides = Omit<Partial<CreateWebAppOptions>, 'config'> & {
-  config?: Partial<WebServerConfig>;
-};
-
-const createTestApp = ({ config, ...overrides }: TestAppOverrides = {}) => {
-  const createSession = vi.fn(async () => 'kosmo-session-token');
-  const federationFetch = vi.fn(async () => new Response('federated', { status: 203 }));
-  const fetch = vi.fn<typeof globalThis.fetch>(async () =>
-    Response.json({ access_token: 'oidc-access-token', id_token: createIdToken() }),
-  );
-  const app = createWebApp({
-    config: {
-      oidcAuthorizeUrl: 'https://id.example/oauth/authorize',
-      oidcClientId: 'kosmo-client',
-      oidcClientSecret: 'kosmo-secret',
-      oidcTokenUrl: 'https://id.example/oauth/token',
-      publicApiOrigin: 'https://api.example',
-      staticRoot,
-      ...config,
-    },
-    createSession,
-    federationFetch,
-    fetch,
-    ...overrides,
-  });
-
-  return { app, createSession, federationFetch, fetch };
-};
-
 describe('browser login', () => {
   test('starts PKCE login and preserves the browser cookie contract', async () => {
-    const { app } = createTestApp();
     const response = await app.request('https://kos.moe/login', {
       headers: { 'User-Agent': 'KosmoApp/0.0.1' },
     });
@@ -76,7 +86,6 @@ describe('browser login', () => {
   });
 
   test('keeps local HTTP login cookies usable', async () => {
-    const { app } = createTestApp();
     const response = await app.request('http://127.0.0.1:4173/login');
     const setCookie = response.headers.get('set-cookie') ?? '';
 
@@ -86,7 +95,7 @@ describe('browser login', () => {
   });
 
   test('uses the public origin when TLS terminates before the Node server', async () => {
-    const { app, fetch } = createTestApp({ config: { publicOrigin: 'https://kos.moe' } });
+    vi.stubEnv('PUBLIC_ORIGIN', 'https://kos.moe');
     const login = await app.request('http://web:8080/login');
     const loginCookies = login.headers.get('set-cookie') ?? '';
     const loginLocation = new URL(login.headers.get('location') ?? '');
@@ -106,7 +115,6 @@ describe('browser login', () => {
   });
 
   test('exchanges a valid callback and sets the existing session cookie', async () => {
-    const { app, createSession, fetch } = createTestApp();
     const login = await app.request('https://kos.moe/login');
     const loginCookies = login.headers.get('set-cookie') ?? '';
     const state = getCookieValue(loginCookies, 'kosmo_oidc_state');
@@ -146,7 +154,6 @@ describe('browser login', () => {
   });
 
   test('rejects a non-browser redirect before token exchange', async () => {
-    const { app, createSession, fetch } = createTestApp();
     const login = await app.request('https://kos.moe/login');
     const loginCookies = login.headers.get('set-cookie') ?? '';
     const state = getCookieValue(loginCookies, 'kosmo_oidc_state');
@@ -166,7 +173,6 @@ describe('browser login', () => {
 
 describe('native session exchange', () => {
   test('returns a Kosmo token without setting a cookie', async () => {
-    const { app, createSession, fetch } = createTestApp();
     const response = await app.request('/login/native/session', {
       body: JSON.stringify({
         code: 'native-code',
@@ -210,7 +216,6 @@ describe('native session exchange', () => {
       name: 'invalid redirect',
     },
   ])('rejects $name without calling OIDC', async ({ body }) => {
-    const { app, createSession, fetch } = createTestApp();
     const response = await app.request('/login/native/session', {
       body: JSON.stringify(body),
       headers: { 'content-type': 'application/json' },
@@ -223,10 +228,10 @@ describe('native session exchange', () => {
   });
 
   test('does not create a session when OIDC rejects the code', async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+    fetch = vi.fn<typeof globalThis.fetch>(async () =>
       Response.json({ error: 'invalid_grant' }, { status: 400 }),
     );
-    const { app, createSession } = createTestApp({ fetch });
+    vi.stubGlobal('fetch', fetch);
     const response = await app.request('/login/native/session', {
       body: JSON.stringify({
         code: 'bad-code',
@@ -265,14 +270,14 @@ describe('GraphQL proxy', () => {
     },
   ])('forwards a $name', async ({ expectedAuthorization, headers: requestHeaders }) => {
     let body = '';
-    const fetch = vi.fn<typeof globalThis.fetch>(async (_input, init) => {
+    fetch = vi.fn<typeof globalThis.fetch>(async (_input, init) => {
       body = await new Response(init?.body).text();
       return new Response('upstream-body', {
         headers: { 'content-type': 'application/graphql-response+json', 'x-upstream': 'yes' },
         status: 202,
       });
     });
-    const { app } = createTestApp({ fetch });
+    vi.stubGlobal('fetch', fetch);
     const headers = new Headers({
       accept: 'application/graphql-response+json',
       'content-type': 'application/json',
@@ -303,7 +308,6 @@ describe('GraphQL proxy', () => {
   });
 
   test('rejects unsupported methods without calling the API', async () => {
-    const { app, fetch } = createTestApp();
     const response = await app.request('/graphql');
 
     expect(response.status).toBe(405);
@@ -312,7 +316,6 @@ describe('GraphQL proxy', () => {
   });
 
   test('rejects malformed authorization instead of falling back to a cookie', async () => {
-    const { app, fetch } = createTestApp();
     const response = await app.request('/graphql', {
       body: '{}',
       headers: {
@@ -330,7 +333,6 @@ describe('GraphQL proxy', () => {
 
 describe('runtime routing', () => {
   test('serves health, assets, and SPA deep links', async () => {
-    const { app } = createTestApp();
     const health = await app.request('/health');
     const asset = await app.request('/asset.js');
     const deepLink = await app.request('/@alice/post-id');
@@ -345,10 +347,9 @@ describe('runtime routing', () => {
   });
 
   test('sends WebFinger and ActivityPub paths to federation before SPA fallback', async () => {
-    const federationFetch = vi.fn(
+    federationFetch.mockImplementation(
       async (request: Request) => new Response(new URL(request.url).pathname, { status: 203 }),
     );
-    const { app } = createTestApp({ federationFetch });
 
     for (const path of ['/.well-known/webfinger?resource=acct:alice@kos.moe', '/ap/actor/id']) {
       const response = await app.request(path);
