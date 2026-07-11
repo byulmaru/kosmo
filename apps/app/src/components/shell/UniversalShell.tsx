@@ -41,6 +41,7 @@ const ShellQuery = graphql`
 const webStickyRail = {
   alignSelf: 'flex-start',
   height: '100vh',
+  minHeight: 0,
   position: 'sticky',
   top: 0,
 } as unknown as ViewStyle;

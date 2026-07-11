@@ -160,8 +160,21 @@ export const UniversalCompact: Story = {
 export const UniversalFull: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
   parameters: universalParameters,
+  play: async ({ canvasElement }) => {
+    const view = canvasElement.ownerDocument.defaultView;
+    let rail: HTMLElement | null = within(canvasElement).getByRole('navigation', {
+      name: '주요 메뉴',
+    });
+
+    while (rail && view?.getComputedStyle(rail).position !== 'sticky') {
+      rail = rail.parentElement;
+    }
+
+    expect(rail).not.toBeNull();
+    expect(rail?.getBoundingClientRect().height).toBeLessThanOrEqual(view?.innerHeight ?? 0);
+  },
   render: () => (
-    <View style={{ height: 900 }}>
+    <View style={{ height: 1800 }}>
       <UniversalShell />
     </View>
   ),
