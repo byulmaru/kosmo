@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: web-e2e-test-db
+  group: web-e2e
   cancel-in-progress: false
 
 jobs:
