@@ -69,7 +69,7 @@ local actor discovery 경계는 actor document, follow protocol inbox delivery, 
 
 - **WHEN** 원격 서버가 actor-scoped inbox 또는 shared inbox로 `Create` activity를 보낸다
 - **THEN** 시스템은 discovery-only 404 경계 대신 `activitypub-remote-post-ingestion` capability의 Fedify inbox listener와 post materialization handler 계약을 따른다
-- **AND** Fedify가 resolve한 단일 public top-level Note로 materialize되지 않는 inbox delivery는 이번 capability에서 post side effect를 만들지 않는다
+- **AND** Fedify가 resolve한 지원 addressing의 단일 top-level Note로 materialize되지 않는 inbox delivery는 이번 capability에서 post side effect를 만들지 않는다
 
 #### Scenario: Outbox behavior remains out of scope
 

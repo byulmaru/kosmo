@@ -1,5 +1,16 @@
 ## ADDED Requirements
 
+### Requirement: ActivityPub actor addressing metadata
+
+시스템은 remote Note addressing을 판정하는 데 필요한 nullable author followers collection URI를 ActivityPub actor metadata에 저장해야 한다(MUST).
+
+#### Scenario: Store remote actor followers collection URI
+
+- **WHEN** remote ActivityPub actor가 최초 materialize되거나 refresh된다
+- **THEN** 시스템은 Fedify actor의 `followersId?.href`를 nullable `activitypub_actor.followers_uri`에 저장한다
+- **AND** actor가 `followersId`를 제공하지 않으면 `followers_uri`는 `null`이다
+- **AND** 시스템은 actor URI에 `/followers` 같은 path를 붙여 followers collection URI를 추론하지 않는다
+
 ### Requirement: ActivityPub object materialization storage
 
 시스템은 inbound remote ActivityPub object URI와 kosmo `Post` row의 연결을 저장해야 한다(MUST).
@@ -15,13 +26,13 @@
 - **AND** `uri`에는 unique constraint가 있어야 한다
 - **AND** `postId`에는 unique constraint가 있어야 한다
 - **AND** `activityPubActorId`에는 non-unique index가 있어야 하고 `type`에는 unique constraint를 두지 않는다
-- **AND** 최초 `Post`, `PostContent`, ActivityPub object mapping 생성은 하나의 transaction으로 수행된다
+- **AND** 최초 `Post`, `PostContent`, resolved `post_mention`, ActivityPub object mapping 생성은 하나의 transaction으로 수행된다
 
 #### Scenario: Handle concurrent duplicate remote object materialization
 
 - **WHEN** 같은 remote actor의 동일 ActivityPub object URI가 최초 materialization 중 동시에 전달된다
 - **THEN** 시스템은 최대 하나의 ActivityPub object mapping과 연결된 `Post`만 생성한다
-- **AND** object URI unique conflict가 발생한 transaction은 부분 생성된 `Post` 또는 `PostContent`를 남기지 않는다
+- **AND** object URI unique conflict가 발생한 transaction은 부분 생성된 `Post`, `PostContent` 또는 `post_mention`을 남기지 않는다
 
 #### Scenario: Reuse existing remote object mapping from duplicate delivery
 
@@ -46,7 +57,27 @@
 - **WHEN** 이미 저장된 ActivityPub object URI가 다시 inbox delivery에서 발견된다
 - **AND** 기존 object mapping의 `activityPubActorId`가 이번 delivery actor URI로 조회한 `activitypub_actor.id`와 다르다
 - **THEN** 시스템은 새 `Post`를 만들지 않는다
-- **AND** 기존 object mapping과 연결된 `Post`, `PostContent`, ActivityPub object mapping을 갱신하지 않는다
+- **AND** 기존 object mapping과 연결된 `Post`, `PostContent`, `post_mention`, ActivityPub object mapping을 갱신하지 않는다
+
+### Requirement: Post mention relation storage
+
+시스템은 Post에서 mention된 local 또는 ActivityPub remote Profile을 origin 공통 `post_mention` 관계로 저장해야 한다(MUST).
+
+#### Scenario: Store materialized remote Post mentions
+
+- **WHEN** remote ActivityPub Note가 최초 `Post`로 materialize되고 Note `toIds`의 mention actor URI가 active local 또는 remote `Profile`로 resolve된다
+- **THEN** 시스템은 `post_mention`에 `id`, `postId`, `profileId`, `createdAt`을 저장한다
+- **AND** `postId`는 `post.id`, `profileId`는 `profile.id`를 참조한다
+- **AND** 같은 Post와 Profile 조합은 중복될 수 없다
+- **AND** `postId`와 `profileId`에는 각각 조회용 index가 있어야 한다
+- **AND** Post 또는 mentioned Profile이 삭제되면 연결된 mention 관계도 함께 삭제된다
+- **AND** 최초 Post와 mention 관계 생성은 `Post`, `PostContent`, ActivityPub object mapping과 같은 transaction에서 수행된다
+
+#### Scenario: Do not store unresolved raw mention URI
+
+- **WHEN** Note `toIds`의 mention actor URI가 local 또는 materialized ActivityPub remote `Profile`로 resolve되지 않는다
+- **THEN** 시스템은 raw actor URI만 가진 `post_mention` row를 저장하지 않는다
+- **AND** 이번 capability는 nullable `profileId` 또는 별도 raw recipient URI 저장소를 추가하지 않는다
 
 ## MODIFIED Requirements
 
@@ -56,9 +87,10 @@
 
 #### Scenario: 새 도메인 행 생성
 
-- **WHEN** `account`, `account_profile`, `application`, `application_authorization`, `file`, `media`, `oauth_authorization_code`, `oauth_token`, `post`, `post_content`, `profile`, `profile_follow`, `profile_follow_request`, `session`, `instance`, `activitypub_actor`, `activitypub_actor_key`, `activitypub_object` 행이 생성된다
+- **WHEN** `account`, `account_profile`, `application`, `application_authorization`, `file`, `media`, `oauth_authorization_code`, `oauth_token`, `post`, `post_content`, `post_mention`, `profile`, `profile_follow`, `profile_follow_request`, `session`, `instance`, `activitypub_actor`, `activitypub_actor_key`, `activitypub_object` 행이 생성된다
 - **THEN** 시스템은 해당 테이블의 `TableDiscriminator` 값을 포함한 UUID 문자열을 기본 키로 생성한다
 - **AND** `activitypub_object`는 `TableDiscriminator.ActivityPubObjects`를 사용한다
+- **AND** `post_mention`은 `TableDiscriminator.PostMentions`를 사용한다
 - **AND** 테이블 식별자는 12비트 범위 안에 있어야 한다
 
 ### Requirement: 열거형 상태 값
@@ -67,7 +99,7 @@
 
 #### Scenario: enum 값 사용
 
-- **WHEN** 계정, 프로필, 세션, OAuth token, 애플리케이션, 게시물, 계정-프로필 역할, 미디어, 인스턴스, ActivityPub actor, ActivityPub actor key, ActivityPub object가 저장된다
+- **WHEN** 계정, 프로필, 세션, OAuth token, 애플리케이션, 게시물, 게시물 mention, 계정-프로필 역할, 미디어, 인스턴스, ActivityPub actor, ActivityPub actor key, ActivityPub object가 저장된다
 - **THEN** 시스템은 core enum에 정의된 값만 저장해야 한다
 - **AND** 지원 값은 `AccountState`, `ProfileState`, `SessionState`, `OAuthTokenState`, `ApplicationState`, `ApplicationType`, `PostState`, `PostVisibility`, `ProfileFollowPolicy`, `AccountProfileRole`, `MediaSource`, `InstanceKind`, `InstanceState`, `ActivityPubActorType`, `ActivityPubActorKeyKind`, `ActivityPubObjectType`에 정의된 값으로 제한된다
 
@@ -85,7 +117,7 @@
 
 - **WHEN** remote ActivityPub Note가 게시물로 materialize된다
 - **THEN** 시스템은 remote 작성 profile, 공개 범위, `ACTIVE` 게시물 상태, 현재 콘텐츠, Note published 시각 또는 최초 수신 시각 fallback을 저장한다
-- **AND** Note published 시각이 수신 시각보다 5분을 초과해 미래이면 `Post.createdAt`에는 원본 published 시각 대신 수신 시각 fallback을 저장한다
+- **AND** Note published 시각이 수신 시각보다 미래이면 `Post.createdAt`에는 원본 published 시각 대신 수신 시각 fallback을 저장한다
 - **AND** remote 작성 profile은 `profile.id`를 참조해야 한다
 - **AND** ActivityPub object URI mapping은 materialized remote post와 연결되어야 한다
 
