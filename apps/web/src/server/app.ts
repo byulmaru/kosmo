@@ -20,10 +20,45 @@ const LOGIN_COOKIE_MAX_AGE = 60 * 10;
 const PKCE_CODE_VERIFIER = /^[A-Za-z0-9._~-]{43,128}$/;
 const SESSION_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 const STATIC_ROOT = process.env.EXPO_WEB_ROOT ?? '../app/dist';
+const FEDERATION_MEDIA_TYPES = new Set([
+  'application/activity+json',
+  'application/jrd+json',
+  'application/json',
+  'application/ld+json',
+  'application/xrd+xml',
+]);
 
 type StreamingRequestInit = RequestInit & { duplex: 'half' };
 
 const app = new Hono();
+const serveSpaFallback = serveStatic({ path: 'index.html', root: STATIC_ROOT });
+
+app.use('*', async (c, next) => {
+  const fallThrough = async () => {
+    await next();
+    return new Response(c.res.body, c.res);
+  };
+  const fallThroughNotAcceptable = async () => {
+    const response = await fallThrough();
+    if (response.status !== 404) {
+      return response;
+    }
+
+    return new Response('Not acceptable', {
+      headers: { 'Content-Type': 'text/plain', Vary: 'Accept' },
+      status: 406,
+    });
+  };
+
+  const response = await federation.fetch(c.req.raw, {
+    contextData: undefined,
+    onNotAcceptable: fallThroughNotAcceptable,
+    onNotFound: fallThrough,
+  });
+
+  c.res = response;
+  return response;
+});
 
 app.onError((cause, c) => {
   if (cause instanceof OidcAuthError) {
@@ -186,18 +221,9 @@ app.post('/graphql', async (c) => {
 });
 app.all('/graphql', methodNotAllowed);
 
-const federationHandler = (c: Context) => federation.fetch(c.req.raw, { contextData: undefined });
-app.all('/.well-known/*', federationHandler);
-app.all('/ap/*', federationHandler);
-
 app.on(['GET', 'HEAD'], '*', serveStatic({ root: STATIC_ROOT }));
-app.on(
-  ['GET', 'HEAD'],
-  '*',
-  serveStatic({
-    path: 'index.html',
-    root: STATIC_ROOT,
-  }),
+app.on(['GET', 'HEAD'], '*', (c, next) =>
+  acceptsSpa(c.req.header('accept'), c.req.path) ? serveSpaFallback(c, next) : next(),
 );
 
 export default app;
@@ -253,3 +279,33 @@ const createCodeChallenge = async (codeVerifier: string) => {
 
   return Buffer.from(digest).toString('base64url');
 };
+
+const acceptsSpa = (accept: string | undefined, path: string) => {
+  if (!accept) {
+    return path === '/';
+  }
+
+  const mediaTypes = preferredMediaTypes(accept);
+  const preferred = mediaTypes[0];
+  const prefersHtml = preferred === 'text/html' || preferred === 'application/xhtml+xml';
+
+  if (mediaTypes.some((mediaType) => FEDERATION_MEDIA_TYPES.has(mediaType)) && !prefersHtml) {
+    return false;
+  }
+
+  return prefersHtml || (preferred === '*/*' && path === '/');
+};
+
+const preferredMediaTypes = (accept: string) =>
+  accept
+    .split(',')
+    .map((part, index) => {
+      const [mediaType = '', ...parameters] = part.trim().toLowerCase().split(';');
+      const qualityParameter = parameters.find((parameter) => parameter.trim().startsWith('q='));
+      const quality = qualityParameter ? Number.parseFloat(qualityParameter.trim().slice(2)) : 1;
+
+      return { index, mediaType, quality };
+    })
+    .filter(({ mediaType, quality }) => mediaType && quality > 0)
+    .sort((left, right) => right.quality - left.quality || left.index - right.index)
+    .map(({ mediaType }) => mediaType);

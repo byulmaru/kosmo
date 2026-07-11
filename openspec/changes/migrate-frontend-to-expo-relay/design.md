@@ -18,8 +18,9 @@ API는 Pothos Relay plugin, loadable `Node`, `Query.node/nodes`, opaque global I
 
 2. `apps/web`
    - `/health`, `/login`, `/login/callback`, `/login/native/session`, `/graphql`을 제공한다.
-   - WebFinger/ActivityPub request를 기존 `federation.fetch`에 전달한다.
-   - 나머지 GET request에는 `apps/app/dist` asset을 제공하고 알려지지 않은 client route는 `index.html`로 fallback한다.
+   - 모든 request를 기존 `federation.fetch`에 먼저 전달하고, Fedify의 공식 미처리 callback에서만 Hono route와 SPA fallback을 실행한다.
+   - 나머지 browser HTML GET request에는 `apps/app/dist` asset을 제공하고 알려지지 않은 client route는 `index.html`로 fallback한다. federation 표현의 미존재 resource는 404를 유지한다.
+   - Expo 개발 서버는 고정 ActivityPub pathname 목록 대신 federation `Accept`/`Content-Type`을 기준으로 임의 경로를 BFF에 전달한다.
    - browser login은 기존 HttpOnly cookie를 유지한다. native login은 code/verifier를 server에서 교환하고 Kosmo session token을 JSON으로 반환한다.
 
 3. `apps/api`

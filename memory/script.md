@@ -24,7 +24,7 @@
 
 - `apps/app`의 `prepare`, `dev`, `check`, `build`는 필요한 Relay generated artifact보다 먼저 `relay-compiler`를 실행한다. `__generated__`는 commit하지 않으므로 clean checkout과 CI에서도 compiler 선행을 생략하지 않는다.
 - universal client 검증은 `pnpm --filter @kosmo/app relay`, `check`, `export:web`을 분리해 실패 경계를 확인한다. `export:web`은 이전 환경의 `EXPO_PUBLIC_*` inline 값을 Metro cache에서 재사용하지 않도록 `expo export --clear`를 사용한다. Expo web export 산출물은 `apps/app/dist`이며 UI source를 소유하지 않는 `apps/web` Hono BFF가 이를 제공한다.
-- BFF 검증은 `/health`, 로그인/callback, native session exchange, cookie/Bearer GraphQL proxy, WebFinger/ActivityPub 전달, SPA deep-link fallback을 포함한다. Expo export 성공만으로 server origin 계약이 검증됐다고 보지 않는다.
+- BFF 검증은 federation-first 전역 전달과 공식 미처리 callback, federation 표현의 404 보존, `/health`, 로그인/callback, native session exchange, cookie/Bearer GraphQL proxy, WebFinger/ActivityPub 응답, SPA deep-link fallback을 포함한다. Expo export 성공만으로 server origin 계약이 검증됐다고 보지 않는다.
 - native project는 Expo managed/CNG 산출물이다. package/bundle ID나 config plugin을 검증할 때는 app config와 clean `expo prebuild` 결과를 확인하고, 생성된 Gradle/Xcode source를 수동 source of truth로 편집하지 않는다.
 - Android/iOS 실행 검증은 기존 원칙대로 사용자가 보는 install/launch/deep-link 결과까지 확인한다. web 전용 검증으로 native build 가능성을 대신하지 않는다.
 - `EXPO_PUBLIC_*` 값은 client bundle에 공개되어도 되는 설정에만 사용한다. OIDC client secret, session token, database/federation 설정은 Hono BFF 또는 server runtime에 남긴다.

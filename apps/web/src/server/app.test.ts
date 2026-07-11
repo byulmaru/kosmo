@@ -3,11 +3,12 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
+import type { federation } from '@kosmo/fedify';
 import type { Hono } from 'hono';
 
 const { createSession, federationFetch } = vi.hoisted(() => ({
   createSession: vi.fn<(tokens: { accessToken: string; idToken: string }) => Promise<string>>(),
-  federationFetch: vi.fn<(request: Request) => Promise<Response>>(),
+  federationFetch: vi.fn<typeof federation.fetch>(),
 }));
 
 vi.mock('./auth', async (importOriginal) => ({
@@ -40,7 +41,13 @@ beforeEach(() => {
   vi.stubEnv('PUBLIC_API_ORIGIN', 'https://api.example');
   vi.stubEnv('PUBLIC_ORIGIN', undefined);
   createSession.mockResolvedValue('kosmo-session-token');
-  federationFetch.mockResolvedValue(new Response('federated', { status: 203 }));
+  federationFetch.mockImplementation(async (request, options) => {
+    if (!options.onNotFound) {
+      throw new Error('Missing federation fallback');
+    }
+
+    return options.onNotFound(request);
+  });
   fetch = vi.fn<typeof globalThis.fetch>(async () =>
     Response.json({ access_token: 'oidc-access-token', id_token: createIdToken() }),
   );
@@ -335,29 +342,110 @@ describe('runtime routing', () => {
   test('serves health, assets, and SPA deep links', async () => {
     const health = await app.request('/health');
     const asset = await app.request('/asset.js');
-    const deepLink = await app.request('/@alice/post-id');
+    const root = await app.request('/', { headers: { accept: '*/*' } });
+    const deepLink = await app.request('/@alice/post-id', {
+      headers: { accept: 'text/html' },
+    });
 
     expect(health.status).toBe(200);
     expect(await health.text()).toBe('ok');
     expect(asset.status).toBe(200);
     expect(asset.headers.get('content-type')).toContain('text/javascript');
     expect(await asset.text()).toBe('console.log("asset")');
+    expect(root.status).toBe(200);
+    expect(await root.text()).toBe('<html>expo app</html>');
     expect(deepLink.status).toBe(200);
     expect(await deepLink.text()).toBe('<html>expo app</html>');
+    expect(federationFetch).toHaveBeenCalledTimes(4);
   });
 
-  test('sends WebFinger and ActivityPub paths to federation before SPA fallback', async () => {
+  test('keeps fallback headers mutable for federation response metadata', async () => {
+    federationFetch.mockImplementation(async (request, options) => {
+      if (!options.onNotFound) {
+        throw new Error('Missing federation fallback');
+      }
+
+      const response = await options.onNotFound(request);
+      response.headers.set('Vary', 'Accept');
+      return response;
+    });
+
+    const response = await app.request('/health', {
+      headers: { accept: 'application/activity+json' },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('vary')).toBe('Accept');
+  });
+
+  test('does not turn a missing federation representation into the SPA', async () => {
+    const response = await app.request('/users/missing', {
+      headers: { accept: 'application/activity+json' },
+    });
+
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe('404 Not Found');
+  });
+
+  test.each([undefined, '*/*'])(
+    'preserves a missing WebFinger response with Accept %s',
+    async (accept) => {
+      const headers = accept ? { accept } : undefined;
+      const response = await app.request('/.well-known/webfinger?resource=acct:missing@kos.moe', {
+        headers,
+      });
+
+      expect(response.status).toBe(404);
+      expect(await response.text()).toBe('404 Not Found');
+    },
+  );
+
+  test('lets federation handle any path before BFF and SPA routes', async () => {
     federationFetch.mockImplementation(
       async (request: Request) => new Response(new URL(request.url).pathname, { status: 203 }),
     );
 
-    for (const path of ['/.well-known/webfinger?resource=acct:alice@kos.moe', '/ap/actor/id']) {
+    for (const path of ['/health', '/users/alice/inbox']) {
       const response = await app.request(path);
 
       expect(response.status).toBe(203);
       expect(await response.text()).toBe(new URL(path, 'http://localhost').pathname);
     }
     expect(federationFetch).toHaveBeenCalledTimes(2);
+  });
+
+  test('falls through when federation declines the requested representation', async () => {
+    federationFetch.mockImplementation(async (request, options) => {
+      if (!options.onNotAcceptable) {
+        throw new Error('Missing federation representation fallback');
+      }
+
+      return options.onNotAcceptable(request);
+    });
+
+    const response = await app.request('/@alice/post-id', {
+      headers: { accept: 'text/html' },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('<html>expo app</html>');
+  });
+
+  test('preserves a federation 406 when no BFF route accepts the request', async () => {
+    federationFetch.mockImplementation(async (request, options) => {
+      if (!options.onNotAcceptable) {
+        throw new Error('Missing federation representation fallback');
+      }
+
+      return options.onNotAcceptable(request);
+    });
+
+    const response = await app.request('/users/alice/inbox', { method: 'DELETE' });
+
+    expect(response.status).toBe(406);
+    expect(response.headers.get('content-type')).toContain('text/plain');
+    expect(response.headers.get('vary')).toBe('Accept');
+    expect(await response.text()).toBe('Not acceptable');
   });
 });
 

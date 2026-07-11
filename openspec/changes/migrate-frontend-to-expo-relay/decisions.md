@@ -17,7 +17,7 @@
 
 - Status: Accepted
 - Context / Problem: SvelteKit은 UI 외에도 login, cookie, GraphQL proxy, Fedify, health와 Kubernetes web runtime을 소유한다.
-- Decision Outcome: Svelte UI/framework는 제거하되 `apps/web` package는 Hono 기반 BFF로 남긴다. BFF는 server endpoint를 먼저 처리하고 그 외 GET을 `apps/app/dist` asset 또는 SPA fallback으로 제공한다.
+- Decision Outcome: Svelte UI/framework는 제거하되 `apps/web` package는 Hono 기반 BFF로 남긴다. BFF는 모든 request를 Fedify handler에 먼저 전달하고, Fedify의 `onNotFound` 또는 `onNotAcceptable` callback에서만 auth, GraphQL, health, `apps/app/dist` asset과 SPA fallback을 이어서 처리한다.
 - Alternatives Considered: 모든 endpoint를 `apps/api`로 옮기는 안은 public web origin/federation/쿠키 경계와 Helm routing을 함께 바꿔 제외했다. Expo API route에 넣는 안은 client build와 database/federation runtime dependency를 결합해 제외했다.
 - Consequences: web workload와 origin은 유지되며 Expo native bundle은 BFF code를 포함하지 않는다. Docker는 app export와 BFF runtime을 모두 패키징한다.
 - Confirmation / Follow-up: `/health`, `/`, `/graphql`, login callback, WebFinger와 ActivityPub smoke test를 유지한다.

@@ -9,7 +9,7 @@
 - 공개 온보딩, 보호 화면, 홈 타임라인, 글쓰기, 검색, 프로필, 팔로우 목록, 게시글 상세를 Android/iOS/Web 공용 React Native 컴포넌트와 Expo Router 경로로 제공한다.
 - GraphQL operation을 React 컴포넌트에 colocate하고 Relay Compiler가 TypeScript 타입과 runtime artifact를 생성하도록 한다.
 - 웹은 기존 HttpOnly 세션 쿠키 흐름을 유지하고, 네이티브는 시스템 브라우저 PKCE 로그인 뒤 발급받은 Kosmo 세션 토큰을 SecureStore에 저장해 Bearer 요청에 사용한다.
-- 기존 `/health`, `/login`, `/login/callback`, `/graphql`, WebFinger/ActivityPub 경로와 Kubernetes web workload 계약을 유지한다.
+- 기존 `/health`, `/login`, `/login/callback`, `/graphql`, Fedify가 소유하는 federation 경로와 Kubernetes web workload 계약을 유지한다.
 - Svelte/Mearie 및 수동 Gradle/Xcode WebView 빌드 도구를 제거하고, 기존 상태 카탈로그는 React Native Web Storybook으로 이식한다.
 
 ## Capabilities

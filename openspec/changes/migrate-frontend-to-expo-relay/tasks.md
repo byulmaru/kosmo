@@ -14,7 +14,7 @@
 - [x] 2.2 Hono 기반 `apps/web` runtime에 `/health`, browser `/login`, `/login/callback` handler를 구현하고 기존 cookie 속성을 보존한다
 - [x] 2.3 `/login/native/session` code/verifier validation, OIDC server-side exchange, JSON session token 응답과 실패 test를 구현한다
 - [x] 2.4 `/graphql` proxy가 명시적 Bearer token을 우선하고 그렇지 않으면 `kosmo_session` cookie를 Bearer로 변환하도록 구현한다
-- [x] 2.5 WebFinger/ActivityPub path를 `federation.fetch`로 전달하고 일반 request와 분리한다
+- [x] 2.5 모든 request를 `federation.fetch`에 우선 전달하고 Fedify의 공식 미처리 callback에서만 일반 BFF route로 fallback한다
 - [x] 2.6 Expo web static asset 제공과 unknown client route의 `index.html` fallback을 구현한다
 - [x] 2.7 browser login, invalid redirect, native exchange, cookie/Bearer/anonymous proxy, health, federation route의 server test를 추가한다
 
