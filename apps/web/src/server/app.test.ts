@@ -108,7 +108,7 @@ afterAll(async () => {
 describe('browser login', () => {
   test('starts PKCE login and preserves the browser cookie contract', async () => {
     const response = await app.request('https://kos.moe/login', {
-      headers: { 'User-Agent': 'KosmoApp/0.0.1' },
+      headers: { 'sec-fetch-mode': 'navigate', 'User-Agent': 'KosmoApp/0.0.1' },
     });
     const location = new URL(response.headers.get('location') ?? '');
     const setCookie = response.headers.get('set-cookie') ?? '';
@@ -362,7 +362,9 @@ describe('GraphQL proxy', () => {
   });
 
   test('rejects unsupported methods without calling the API', async () => {
-    const response = await app.request('/graphql');
+    const response = await app.request('/graphql', {
+      headers: { 'sec-fetch-mode': 'navigate' },
+    });
 
     expect(response.status).toBe(405);
     expect(response.headers.get('allow')).toBe('POST');
@@ -387,11 +389,13 @@ describe('GraphQL proxy', () => {
 
 describe('runtime routing', () => {
   test('serves health, assets, and SPA deep links', async () => {
-    const health = await app.request('/health');
+    const health = await app.request('/health', {
+      headers: { 'sec-fetch-mode': 'navigate' },
+    });
     const asset = await app.request('/asset.js');
     const root = await app.request('/', { headers: { accept: '*/*' } });
     const deepLink = await app.request('/@alice/post-id', {
-      headers: { accept: 'text/html' },
+      headers: { 'sec-fetch-mode': 'navigate' },
     });
 
     expect(health.status).toBe(200);
@@ -452,13 +456,13 @@ describe('runtime routing', () => {
       async (request: Request) => new Response(new URL(request.url).pathname, { status: 203 }),
     );
 
-    for (const path of ['/health', '/users/alice/inbox']) {
+    for (const path of ['/health', '/login', '/graphql', '/asset.js', '/users/alice/inbox']) {
       const response = await app.request(path);
 
       expect(response.status).toBe(203);
       expect(await response.text()).toBe(new URL(path, 'http://localhost').pathname);
     }
-    expect(federationFetch).toHaveBeenCalledTimes(2);
+    expect(federationFetch).toHaveBeenCalledTimes(5);
   });
 
   test('falls through when federation declines the requested representation', async () => {
@@ -471,7 +475,7 @@ describe('runtime routing', () => {
     });
 
     const response = await app.request('/@alice/post-id', {
-      headers: { accept: 'text/html' },
+      headers: { accept: 'text/html', 'sec-fetch-mode': 'navigate' },
     });
 
     expect(response.status).toBe(200);
