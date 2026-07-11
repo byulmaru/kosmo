@@ -6,6 +6,7 @@
 
 ### <decision title>
 
+- Decision Date: YYYY-MM-DD
 - Status: Accepted
 - Context / Problem: <what issue required a decision>
 - Decision Outcome: <chosen option and why>
