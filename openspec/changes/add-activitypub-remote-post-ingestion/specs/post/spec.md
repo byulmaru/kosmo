@@ -71,7 +71,9 @@ API는 활성 게시글의 current 또는 historical 콘텐츠 revision을 Graph
 
 - **WHEN** 클라이언트가 `ACTIVE` 게시글의 current revision이 아닌 historical `PostContent` Node를 직접 조회한다
 - **THEN** 시스템은 `Post.currentContentId`와 관계없이 해당 `PostContent` object를 반환할 수 있다
-- **AND** 직접 조회는 `post_mention`을 포함한 viewer의 공통 parent `Post.visibility` 접근 조건과 작성자 profile/instance visibility를 적용한다
+- **AND** 직접 조회는 현재 `post_mention`과 현재 established follow 관계를 포함한 viewer의 공통 parent `Post.visibility` 접근 조건 및 작성자 profile/instance visibility를 적용한다
+- **AND** 시스템은 revision 당시 mention 또는 follower audience snapshot을 요구하거나 별도 저장하지 않는다
+- **AND** same-visibility recipient 변경으로 현재 parent audience가 달라지면 historical revision 접근 대상도 현재 audience를 따른다
 
 #### Scenario: 비활성 게시글 콘텐츠 직접 조회
 
