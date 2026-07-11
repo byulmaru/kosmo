@@ -13,7 +13,6 @@ import {
   NATIVE_REDIRECT_URI,
   OidcAuthError,
 } from './auth';
-import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 const LOGIN_COOKIE_MAX_AGE = 60 * 10;
@@ -70,7 +69,7 @@ app.onError((cause, c) => {
 });
 
 app.get('/health', (c) => c.text('ok'));
-app.all('/health', methodNotAllowed);
+app.all('/health', (c) => c.text('Method Not Allowed', 405, { Allow: 'GET' }));
 
 app.get('/login', async (c) => {
   const clientId = requireOidcClientId();
@@ -102,7 +101,7 @@ app.get('/login', async (c) => {
 
   return c.redirect(authorizeUrl.toString(), 302);
 });
-app.all('/login', methodNotAllowed);
+app.all('/login', (c) => c.text('Method Not Allowed', 405, { Allow: 'GET' }));
 
 app.get('/login/callback', async (c) => {
   const requestUrl = new URL(c.req.url);
@@ -154,7 +153,7 @@ app.get('/login/callback', async (c) => {
 
   return c.redirect('/home', 302);
 });
-app.all('/login/callback', methodNotAllowed);
+app.all('/login/callback', (c) => c.text('Method Not Allowed', 405, { Allow: 'GET' }));
 
 app.post('/login/native/session', async (c) => {
   const body = (await c.req.json().catch(() => undefined)) as unknown;
@@ -181,7 +180,7 @@ app.post('/login/native/session', async (c) => {
 
   return c.json({ token: await createOidcSession(tokens) });
 });
-app.all('/login/native/session', methodNotAllowed);
+app.all('/login/native/session', (c) => c.text('Method Not Allowed', 405, { Allow: 'POST' }));
 
 app.post('/graphql', async (c) => {
   const publicApiOrigin = process.env.PUBLIC_API_ORIGIN;
@@ -219,7 +218,7 @@ app.post('/graphql', async (c) => {
 
   return new Response(response.body, response);
 });
-app.all('/graphql', methodNotAllowed);
+app.all('/graphql', (c) => c.text('Method Not Allowed', 405, { Allow: 'POST' }));
 
 app.on(['GET', 'HEAD'], '*', serveStatic({ root: STATIC_ROOT }));
 app.on(['GET', 'HEAD'], '*', (c, next) =>
@@ -227,11 +226,6 @@ app.on(['GET', 'HEAD'], '*', (c, next) =>
 );
 
 export default app;
-
-function methodNotAllowed(c: Context) {
-  c.header('Allow', c.req.path === '/graphql' || c.req.path.endsWith('/session') ? 'POST' : 'GET');
-  return c.text('Method Not Allowed', 405);
-}
 
 const requireOidcConfig = () => {
   const clientSecret = process.env.OIDC_CLIENT_SECRET;
