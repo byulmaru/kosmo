@@ -4,19 +4,6 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths:
-      - .dockerignore
-      - .github/workflows/docker-build.yml
-      - Dockerfile
-      - docker-entrypoint.sh
-      - package.json
-      - pnpm-lock.yaml
-      - pnpm-workspace.yaml
-      - tsconfig.json
-      - apps/api/**
-      - apps/app/**
-      - apps/web/**
-      - packages/**
 
 permissions:
   contents: read
