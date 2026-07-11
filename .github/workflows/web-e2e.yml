@@ -10,10 +10,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: web-e2e
-  cancel-in-progress: false
-
 jobs:
   web_e2e:
     name: Web E2E
@@ -47,10 +43,7 @@ jobs:
           pnpm --filter @kosmo/app test:storybook
 
       - name: Run Fedify unit tests
-        run: |
-          pnpm db:test:reset
-          pnpm db:test:push
-          pnpm test:fedify
+        run: pnpm test:fedify
 
       - name: Run web E2E tests
         run: pnpm test:e2e
@@ -66,6 +59,6 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Clean up test Postgres
+      - name: Clean up test database
         if: always()
-        run: node scripts/test-db.mjs down --volumes --remove-orphans
+        run: pnpm db:test:drop
