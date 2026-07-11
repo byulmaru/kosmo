@@ -114,15 +114,15 @@ API는 현재 active profile 기준 홈 타임라인을 최신순 Relay connecti
 
 ### Requirement: PostContent GraphQL object
 
-API는 게시글의 현재 콘텐츠를 GraphQL `PostContent` Node로 노출하고 TipTap JSON 원본, Plain Text projection, 선택적 스포일러 텍스트를 제공해야 한다(MUST).
+API는 게시글의 현재 콘텐츠를 GraphQL `PostContent` Node로 노출하고 TipTap JSON 원본, Plain Text projection, 선택적 Content Warning을 제공해야 한다(MUST).
 
 #### Scenario: 게시글 콘텐츠 조회
 
 - **WHEN** 클라이언트가 게시글의 현재 콘텐츠를 조회한다
 - **THEN** 시스템은 `PostContent` object를 반환한다
-- **AND** `PostContent`는 `id`, `bodyJson`, `bodyText`, `spoilerText`, `createdAt` 필드를 포함한다
+- **AND** `PostContent`는 `id`, `bodyJson`, `bodyText`, `contentWarning`, `createdAt` 필드를 포함한다
 - **AND** `bodyJson`은 저장된 TipTap 문서 JSON 원본이다
-- **AND** `spoilerText`는 값이 없을 수 있다
+- **AND** `contentWarning`은 값이 없을 수 있다
 
 ### Requirement: TipTap document post creation
 

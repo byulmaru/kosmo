@@ -101,9 +101,9 @@ type PostConnectionEdge {
 type PostContent implements Node {
   bodyJson: TipTapDocument!
   bodyText: String!
+  contentWarning: String
   createdAt: DateTime!
   id: ID!
-  spoilerText: String
 }
 
 enum PostState {

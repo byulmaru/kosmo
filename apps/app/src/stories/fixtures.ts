@@ -1,5 +1,4 @@
 import { Temporal } from 'temporal-polyfill';
-import { createTipTapDocumentFromPlainText } from '@/lib/tiptap';
 
 export type StoryProfile = {
   __typename: 'Profile';
@@ -85,7 +84,6 @@ export function post({
         ? null
         : {
             __typename: 'PostContent' as const,
-            bodyJson: createTipTapDocumentFromPlainText(bodyText),
             bodyText,
             id: `content-${id}`,
           },
@@ -159,5 +157,5 @@ export function followingProfile(profiles: StoryProfile[], metadata: PaginationM
 }
 
 export const longBody =
-  '긴 본문도 목록과 상세 화면에서 같은 TipTap 문서를 사용해 렌더링합니다. '.repeat(8) +
+  '긴 Plain Text 본문도 목록과 상세 화면에서 같은 내용으로 렌더링합니다. '.repeat(8) +
   '\n두 번째 문단의 줄바꿈과 빈 줄도 유지되어야 합니다.\n\n마지막 문단입니다.';
