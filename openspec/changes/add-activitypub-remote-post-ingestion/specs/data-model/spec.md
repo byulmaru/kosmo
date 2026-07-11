@@ -38,19 +38,27 @@
 
 - **WHEN** 이미 저장된 ActivityPub object URI가 다시 inbox delivery에서 발견된다
 - **AND** 기존 object mapping의 `activityPubActorId`가 이번 delivery actor URI로 조회한 `activitypub_actor.id`와 같다
+- **AND** incoming Note를 다시 판정한 visibility가 기존 `Post.visibility`와 같다
 - **THEN** 시스템은 새 `Post`를 만들지 않고 기존 object mapping과 연결된 `Post`를 재사용한다
 - **AND** 재전달된 Note에서 저장될 canonical `bodyJson`의 구조가 변경되었으면 시스템은 새 `PostContent` revision을 생성하고 기존 `Post.currentContentId`를 새 revision으로 교체한다
 - **AND** 재전달된 Note에서 저장될 canonical `bodyJson`이 같으면 시스템은 기존 `PostContent` revision을 재사용한다
-- **AND** 시스템은 재전달된 Note의 visibility와 관계없이 최초 `Post.visibility`를 갱신하지 않는다
+- **AND** 시스템은 최초 `Post.visibility`를 갱신하지 않는다
 - **AND** 시스템은 최초 object mapping의 수신 시각과 원본 published 시각을 갱신하지 않는다
 - **AND** 시스템은 기존 `Post.createdAt`을 갱신하지 않는다
 
-#### Scenario: Serialize existing remote object revision updates
+#### Scenario: Reject duplicate remote object visibility changes
+
+- **WHEN** 같은 actor의 저장된 ActivityPub object URI가 다시 inbox delivery에서 발견된다
+- **AND** incoming Note를 다시 판정한 visibility가 기존 `Post.visibility`와 다르다
+- **THEN** 시스템은 기존 `Post`, `PostContent`, `post_mention`, ActivityPub object mapping을 갱신하지 않는다
+
+#### Scenario: Serialize existing remote object content and mention updates
 
 - **WHEN** 같은 remote actor의 기존 ActivityPub object URI가 서로 다른 `Create` delivery에서 동시에 갱신된다
-- **THEN** 시스템은 기존 object mapping 갱신을 transaction에서 수행하고 해당 `activitypub_object` row를 잠근 뒤 canonical `bodyJson`을 비교한다
+- **THEN** 시스템은 기존 object mapping 갱신을 transaction에서 수행하고 해당 `activitypub_object` row를 잠근 뒤 visibility, canonical `bodyJson`과 resolved mention 집합을 비교한다
 - **AND** 같은 canonical `bodyJson`의 동시 재전달은 동일 `PostContent` revision을 중복 생성하지 않는다
-- **AND** 시스템은 비교 결과에 따라 최대 하나의 새 revision을 생성하고 `Post.currentContentId`를 해당 revision으로 교체하거나 기존 revision을 재사용한다
+- **AND** 시스템은 비교 결과에 따라 최대 하나의 새 revision을 생성하고 `Post.currentContentId`를 해당 revision으로 교체하거나 기존 revision을 재사용하며, 같은 delivery의 resolved mention 집합을 함께 반영한다
+- **AND** 시스템은 서로 다른 delivery의 content와 mention이 섞인 상태를 노출하지 않는다
 
 #### Scenario: Reject duplicate remote object mapping from different actor
 
@@ -72,6 +80,15 @@
 - **AND** `postId`와 `profileId`에는 각각 조회용 index가 있어야 한다
 - **AND** Post 또는 mentioned Profile이 삭제되면 연결된 mention 관계도 함께 삭제된다
 - **AND** 최초 Post와 mention 관계 생성은 `Post`, `PostContent`, ActivityPub object mapping과 같은 transaction에서 수행된다
+
+#### Scenario: Synchronize mentions from an accepted duplicate delivery
+
+- **WHEN** 같은 visibility의 duplicate `Create`가 기존 remote Post에 accepted된다
+- **THEN** 시스템은 incoming Note `toIds`에서 resolve된 Profile에는 missing `post_mention`을 추가한다
+- **AND** incoming resolved mention 집합에 더 이상 포함되지 않은 기존 `post_mention`은 제거한다
+- **AND** canonical `bodyJson`이 같아 기존 `PostContent`를 재사용하더라도 mention 집합은 동기화한다
+- **AND** content revision과 mention 집합이 함께 변경되면 해당 변경을 같은 locked transaction에서 수행한다
+- **AND** 새 addressing에 active local recipient가 남지 않았더라도 제거된 local Profile의 stale 접근을 유지하지 않는다
 
 #### Scenario: Do not store unresolved raw mention URI
 

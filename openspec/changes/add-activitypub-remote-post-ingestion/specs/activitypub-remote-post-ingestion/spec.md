@@ -75,19 +75,21 @@
 - **THEN** `toIds`에 `as:Public`이 있으면 `Post.visibility = PUBLIC`이다
 - **AND** `toIds`에 Public이 없고 `ccIds`에 `as:Public`이 있으면 `Post.visibility = UNLISTED`이다
 - **AND** Public marker가 없고 author의 non-null `followersUri`가 `toIds`에 정확히 일치하면 `Post.visibility = FOLLOWERS`이다
-- **AND** Public marker와 matching followers URI가 없고 `toIds` mention actor가 하나 이상 Profile로 resolve되면 `Post.visibility = DIRECT`이다
+- **AND** Public marker와 matching followers URI가 없고 Public/followers/author를 제외한 `toIds` mention 후보 URI가 하나 이상 있으면 `Post.visibility = DIRECT`이다
+- **AND** `DIRECT` 판정은 개별 mention actor lookup 성공 여부와 분리하며 실제 `post_mention`에는 Profile로 resolve된 후보만 저장한다
 - **AND** 이 판정은 `PUBLIC`, `UNLISTED`, `FOLLOWERS`, `DIRECT` 순서로 우선하며 mention actor URI가 함께 있어도 앞선 marker의 visibility를 덮어쓰지 않는다
 - **AND** actor `followersUri`가 없거나 exact match하지 않으면 시스템은 actor URI path에서 followers collection을 추론하지 않는다
 
-#### Scenario: Require local relevance for followers and direct Notes
+#### Scenario: Require local relevance for first followers and direct Note materialization
 
-- **WHEN** visibility가 `FOLLOWERS` 또는 `DIRECT`로 판정된다
-- **THEN** `FOLLOWERS` Note는 author를 established `ProfileFollow`로 팔로우하는 active local Profile 또는 active local mentioned Profile이 하나 이상일 때만 materialize한다
-- **AND** `DIRECT` Note는 active local mentioned Profile이 하나 이상일 때만 materialize한다
+- **WHEN** 저장되지 않은 Note의 visibility가 `FOLLOWERS` 또는 `DIRECT`로 판정된다
+- **THEN** `FOLLOWERS` Note는 author를 established `ProfileFollow`로 팔로우하는 active local Profile 또는 active local mentioned Profile이 하나 이상일 때만 최초 materialize한다
+- **AND** `DIRECT` Note는 active local mentioned Profile이 하나 이상일 때만 최초 materialize한다
 - **AND** personal inbox에서 Fedify `ctx.recipient`가 제공되면 해당 recipient identifier를 active local Profile로 resolve하고 그 Profile이 해당 Note의 follower 또는 mention 접근 대상이어야 한다
 - **AND** shared inbox에서는 `ctx.recipient`를 요구하지 않고 Note `toIds`와 DB의 established follow 관계로 같은 local relevance를 판정한다
 - **AND** 접근 가능한 active local Profile이 하나도 없는 followers/direct Note는 materialize하지 않는다
 - **AND** `PUBLIC`/`UNLISTED` Note는 local recipient 또는 follow 관계를 요구하지 않는다
+- **AND** 이미 materialize된 같은 visibility의 Note가 재전달되면 새 addressing에 active local relevance가 남지 않았더라도 기존 local mention의 stale 접근을 제거하기 위한 `post_mention` 동기화를 수행할 수 있다
 
 #### Scenario: Skip unsupported addressing or object type
 
@@ -99,8 +101,9 @@
 #### Scenario: Materialize supported shared inbox Create Note
 
 - **WHEN** Fedify shared inbox listener가 verified remote `Create`를 전달하고 단일 object가 지원 addressing의 top-level `Note`로 resolve된다
-- **THEN** `PUBLIC`/`UNLISTED`는 local recipient 검증 없이 materialize할 수 있다
-- **AND** `FOLLOWERS`/`DIRECT`는 actor attribution, addressing과 local relevance 검증이 통과한 경우에만 materialize한다
+- **THEN** 새 `PUBLIC`/`UNLISTED` Note는 local recipient 검증 없이 최초 materialize할 수 있다
+- **AND** 새 `FOLLOWERS`/`DIRECT` Note는 actor attribution, addressing과 local relevance 검증이 통과한 경우에만 최초 materialize한다
+- **AND** 기존 same-visibility Note의 duplicate 처리에는 stale mention 접근 제거 계약을 적용한다
 
 #### Scenario: Store a new materialized remote Note
 
@@ -114,19 +117,31 @@
 #### Scenario: Reuse a duplicate Note from the same author
 
 - **WHEN** 같은 remote actor의 기존 object URI가 서로 다른 activity ID의 `Create`에서 다시 전달된다
+- **AND** incoming Note를 다시 판정한 visibility가 기존 `Post.visibility`와 같다
 - **THEN** 시스템은 새 `Post`를 만들지 않고 기존 `Post`를 재사용한다
 - **AND** canonical `bodyJson` 구조가 변경되었으면 새 `PostContent` revision을 생성하고 `Post.currentContentId`를 교체한다
 - **AND** canonical `bodyJson`이 같으면 기존 `PostContent` revision을 재사용한다
+- **AND** 시스템은 새 `toIds`에서 resolve된 Profile 집합과 일치하도록 `post_mention`을 추가 및 제거한다
+- **AND** 새 Direct recipient 후보가 모두 resolve되지 않더라도 incoming resolved mention 집합이 비어 있으면 기존 `post_mention`을 모두 제거한다
+- **AND** canonical `bodyJson`이 같고 resolved mention 집합만 달라졌으면 새 `PostContent` revision 없이 `post_mention`만 갱신한다
 - **AND** 기존 `Post.visibility`, 최초 object mapping의 수신 시각과 원본 published 시각 및 기존 `Post.createdAt`을 수정하지 않는다
-- **AND** duplicate `Create`의 mention 추가/제거 반영 여부는 이번 capability에서 정의하지 않는다
 
-#### Scenario: Serialize duplicate Note revision updates
+#### Scenario: Reject duplicate Note visibility changes
+
+- **WHEN** 같은 remote actor의 기존 object URI가 서로 다른 activity ID의 `Create`에서 다시 전달된다
+- **AND** incoming Note를 다시 판정한 visibility가 기존 `Post.visibility`와 다르다
+- **THEN** 시스템은 기존 `Post.visibility`를 변경하지 않는다
+- **AND** 시스템은 새 content를 기존 audience에 노출하지 않도록 `PostContent`, `Post.currentContentId`와 `post_mention`을 갱신하지 않는다
+- **AND** 기존 ActivityPub object mapping의 수신 시각과 원본 published 시각 및 기존 `Post.createdAt`도 갱신하지 않는다
+
+#### Scenario: Serialize duplicate Note content and mention updates
 
 - **WHEN** 같은 remote actor와 object URI의 서로 다른 `Create` delivery가 동시에 처리된다
-- **THEN** 시스템은 기존 object mapping 갱신을 transaction에서 수행하고 해당 `activitypub_object` row를 잠근 뒤 canonical `bodyJson`을 비교한다
+- **THEN** 시스템은 기존 object mapping 갱신을 transaction에서 수행하고 해당 `activitypub_object` row를 잠근 뒤 visibility, canonical `bodyJson`과 resolved mention 집합을 비교한다
 - **AND** canonical `bodyJson`이 기존 revision과 같으면 시스템은 새 `PostContent`를 만들지 않고 기존 revision을 재사용한다
 - **AND** 같은 canonical `bodyJson`으로 동시에 들어온 delivery는 동일한 revision을 중복 생성하거나 `Post.currentContentId`를 불필요하게 교체하지 않는다
-- **AND** transaction 실패 또는 object URI unique conflict는 부분 `Post`, `PostContent`, `post_mention`, ActivityPub object mapping row를 남기지 않는다
+- **AND** 각 accepted delivery의 content와 resolved mention 집합은 같은 transaction에서 함께 반영되어 서로 다른 delivery의 content와 mention이 섞이지 않는다
+- **AND** transaction 실패 또는 object URI unique conflict는 부분 `Post`, `PostContent`, `post_mention`, ActivityPub object mapping row를 남기거나 기존 content/mention 집합을 부분 갱신하지 않는다
 
 #### Scenario: Reject duplicate Note URI from different author
 
