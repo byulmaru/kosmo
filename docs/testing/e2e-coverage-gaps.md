@@ -19,12 +19,12 @@ E2E 테스트가 빠진 사용자 흐름을 정리한다. 공용 테스트 DB를
 
 ## 현재 E2E가 덮는 영역
 
-| 영역 | 현재 테스트 | 커버리지 요약 |
-| --- | --- | --- |
-| 인증과 보호 라우트 | `auth-routes.e2e.ts` | 루트 온보딩, mock OIDC 로그인, 보호 라우트 guest redirect, invalid session redirect, 주요 보호 라우트 heading smoke |
-| 홈/프로필 게시글 목록 | `timelines.e2e.ts` | 홈 타임라인 최신순/팔로우 필터, 프로필 게시글 목록, 빈 목록, 긴/빈 본문, 프로필 게시글 목록 오류/재시도 |
-| 검색 | `search.e2e.ts` | 검색 전/입력 중/검색 후 단계, 최근 검색, 검색 탭 URL 상태, 사람 탭 handle 결과/없음/오류/재시도, 검색 지우기/뒤로가기 |
-| 프로필 전환 캐시 | `profile-switcher.e2e.ts` | 프로필 생성/선택 후 `selectedProfile` 캐시 반영, `/compose`/프로필/홈의 active profile 의존 query 갱신 |
+| 영역                  | 현재 테스트               | 커버리지 요약                                                                                                         |
+| --------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| 인증과 보호 라우트    | `auth-routes.e2e.ts`      | 루트 온보딩, mock OIDC 로그인, 보호 라우트 guest redirect, invalid session redirect, 주요 보호 라우트 heading smoke   |
+| 홈/프로필 게시글 목록 | `timelines.e2e.ts`        | 홈 타임라인 최신순/팔로우 필터, 프로필 게시글 목록, 빈 목록, 긴/빈 본문, 프로필 게시글 목록 오류/재시도               |
+| 검색                  | `search.e2e.ts`           | 검색 전/입력 중/검색 후 단계, 최근 검색, 검색 탭 URL 상태, 사람 탭 handle 결과/없음/오류/재시도, 검색 지우기/뒤로가기 |
+| 프로필 전환 캐시      | `profile-switcher.e2e.ts` | 프로필 생성/선택 후 `selectedProfile` 캐시 반영, `/compose`/프로필/홈의 active profile 의존 query 갱신                |
 
 ## E2E 누락 목록
 
