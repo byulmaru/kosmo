@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { AccountState, SessionState } from '@kosmo/core/enums';
 import { createE2ESession, resetE2EDatabase, setE2ESessionCookie } from './db-fixtures';
 import { expect, test } from './fixtures';
@@ -8,6 +8,7 @@ import type { APIRequestContext } from '@playwright/test';
 const loginCodeVerifierCookie = 'kosmo_oidc_code_verifier';
 const loginStateCookie = 'kosmo_oidc_state';
 const oidcOrigin = 'http://127.0.0.1:4300';
+const oidcClientId = process.env.PUBLIC_OIDC_CLIENT_ID ?? 'kosmo-e2e-client';
 const protectedHeadingRoutes = [
   { heading: '홈', path: '/home' },
   { heading: '글쓰기', path: '/compose' },
@@ -41,6 +42,33 @@ async function getOIDCTokenRequestCount(request: APIRequestContext) {
   const body = (await response.json()) as { count: number };
 
   return body.count;
+}
+
+async function authorizeNativeCode(
+  request: APIRequestContext,
+  codeVerifier: string,
+  loginHint?: string,
+) {
+  const state = randomUUID();
+  const authorizeUrl = new URL('/oauth/authorize', oidcOrigin);
+  authorizeUrl.search = new URLSearchParams({
+    client_id: oidcClientId,
+    code_challenge: createHash('sha256').update(codeVerifier).digest('base64url'),
+    code_challenge_method: 'S256',
+    redirect_uri: 'kosmo://login/callback',
+    response_type: 'code',
+    scope: 'openid profile',
+    state,
+    ...(loginHint ? { login_hint: loginHint } : {}),
+  }).toString();
+
+  const authorization = await request.get(authorizeUrl.toString(), { maxRedirects: 0 });
+  const callbackUrl = new URL(authorization.headers().location ?? '');
+
+  expect(authorization.status()).toBe(302);
+  expect(callbackUrl.searchParams.get('state')).toBe(state);
+
+  return callbackUrl;
 }
 
 test.beforeEach(async () => {
@@ -86,6 +114,38 @@ test('mock OIDC로 로그인하면 보호 홈으로 이동하고 세션이 유�
 
   await page.goto('/');
   await expect(page).toHaveURL(/\/home$/);
+});
+
+test('native PKCE code를 서명 검증해 cookie 없이 Kosmo 세션으로 교환한다', async ({ request }) => {
+  const codeVerifier = 'v'.repeat(43);
+  const callbackUrl = await authorizeNativeCode(request, codeVerifier);
+  const response = await request.post('/login/native/session', {
+    data: {
+      code: callbackUrl.searchParams.get('code'),
+      codeVerifier,
+      redirectUri: 'kosmo://login/callback',
+    },
+  });
+  const body = (await response.json()) as { token?: unknown };
+
+  expect(response.status()).toBe(200);
+  expect(typeof body.token).toBe('string');
+  expect(response.headers()['set-cookie']).toBeUndefined();
+});
+
+test('서명이 잘못된 native ID token은 Kosmo 세션으로 교환하지 않는다', async ({ request }) => {
+  const codeVerifier = 'v'.repeat(43);
+  const callbackUrl = await authorizeNativeCode(request, codeVerifier, 'invalid-signature');
+  const response = await request.post('/login/native/session', {
+    data: {
+      code: callbackUrl.searchParams.get('code'),
+      codeVerifier,
+      redirectUri: 'kosmo://login/callback',
+    },
+  });
+
+  expect(response.status()).toBe(400);
+  expect(await response.text()).toBe('OIDC code exchange failed');
 });
 
 test('DB reset 후에도 API에 캐시된 local instance로 프로필을 만들 수 있다', async ({

@@ -29,6 +29,7 @@
 - Android/iOS 실행 검증은 기존 원칙대로 사용자가 보는 install/launch/deep-link 결과까지 확인한다. web 전용 검증으로 native build 가능성을 대신하지 않는다.
 - `EXPO_PUBLIC_*` 값은 client bundle에 공개되어도 되는 설정에만 사용한다. OIDC client secret, session token, database/federation 설정은 Hono BFF 또는 server runtime에 남긴다.
 - `apps/app/app.config.ts`는 기존 Vault의 `PUBLIC_ORIGIN`, `PUBLIC_OIDC_ISSUER`, `PUBLIC_OIDC_CLIENT_ID`를 대응하는 `EXPO_PUBLIC_*`로 이식하되 명시적 `EXPO_PUBLIC_*` override를 우선한다. 이 mapping은 공개 설정만 다루고 secret을 client bundle로 옮기지 않는다.
+- `apps/web` BFF의 OIDC는 `PUBLIC_OIDC_ISSUER`를 `openid-client`로 discovery해 성공한 configuration/JWKS cache를 재사용한다. Browser와 native code exchange 모두 `enableNonRepudiationChecks`로 ID token signature와 claims를 검증하며, insecure issuer는 local loopback E2E에서만 허용한다.
 
 ## Codex worktree setup
 

@@ -2,13 +2,33 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Configuration, enableNonRepudiationChecks, ResponseBodyError } from 'openid-client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { federation } from '@kosmo/fedify';
 import type { Hono } from 'hono';
+import type {
+  authorizationCodeGrant as oidcAuthorizationCodeGrant,
+  discovery as oidcDiscovery,
+} from 'openid-client';
 
-const { createSession, federationFetch } = vi.hoisted(() => ({
-  createSession: vi.fn<(tokens: { accessToken: string; idToken: string }) => Promise<string>>(),
+const { authorizationCodeGrant, createSession, discovery, federationFetch } = vi.hoisted(() => ({
+  authorizationCodeGrant: vi.fn<typeof oidcAuthorizationCodeGrant>(),
+  createSession:
+    vi.fn<
+      (identity: {
+        accessToken: string;
+        displayName: string;
+        oidcSubject: string;
+      }) => Promise<string>
+    >(),
+  discovery: vi.fn<typeof oidcDiscovery>(),
   federationFetch: vi.fn<typeof federation.fetch>(),
+}));
+
+vi.mock('openid-client', async (importOriginal) => ({
+  ...((await importOriginal()) as object),
+  authorizationCodeGrant,
+  discovery,
 }));
 
 vi.mock('./auth', async (importOriginal) => ({
@@ -34,12 +54,34 @@ beforeAll(async () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubEnv('OIDC_AUTHORIZE_URL', 'https://id.example/oauth/authorize');
+  vi.stubEnv('PUBLIC_OIDC_ISSUER', 'https://id.example');
   vi.stubEnv('PUBLIC_OIDC_CLIENT_ID', 'kosmo-client');
   vi.stubEnv('OIDC_CLIENT_SECRET', 'kosmo-secret');
-  vi.stubEnv('OIDC_TOKEN_URL', 'https://id.example/oauth/token');
   vi.stubEnv('PUBLIC_API_ORIGIN', 'https://api.example');
   vi.stubEnv('PUBLIC_ORIGIN', undefined);
+  discovery.mockImplementation(
+    async (_issuer, clientId, metadata) =>
+      new Configuration(
+        {
+          authorization_endpoint: 'https://id.example/oauth/authorize',
+          issuer: 'https://id.example',
+          jwks_uri: 'https://id.example/oauth/jwks',
+          token_endpoint: 'https://id.example/oauth/token',
+        },
+        clientId,
+        metadata,
+      ),
+  );
+  authorizationCodeGrant.mockImplementation(
+    async () =>
+      ({
+        access_token: 'oidc-access-token',
+        claims: () => ({ name: 'Kosmo User', sub: 'oidc-subject' }),
+        expiresIn: () => undefined,
+        id_token: 'signed-id-token',
+        token_type: 'bearer' as const,
+      }) as unknown as Awaited<ReturnType<typeof oidcAuthorizationCodeGrant>>,
+  );
   createSession.mockResolvedValue('kosmo-session-token');
   federationFetch.mockImplementation(async (request, options) => {
     if (!options.onNotFound) {
@@ -48,9 +90,7 @@ beforeEach(() => {
 
     return options.onNotFound(request);
   });
-  fetch = vi.fn<typeof globalThis.fetch>(async () =>
-    Response.json({ access_token: 'oidc-access-token', id_token: createIdToken() }),
-  );
+  fetch = vi.fn<typeof globalThis.fetch>();
   vi.stubGlobal('fetch', fetch);
 });
 
@@ -90,6 +130,13 @@ describe('browser login', () => {
     expect(setCookie).toContain('HttpOnly');
     expect(setCookie).toContain('SameSite=Lax');
     expect(setCookie).toContain('Secure');
+    expect(discovery).toHaveBeenCalledWith(
+      new URL('https://id.example'),
+      'kosmo-client',
+      'kosmo-secret',
+      undefined,
+      { execute: [enableNonRepudiationChecks] },
+    );
   });
 
   test('keeps local HTTP login cookies usable', async () => {
@@ -110,14 +157,15 @@ describe('browser login', () => {
     const callback = await app.request(`http://web:8080/login/callback?code=code&state=${state}`, {
       headers: { cookie: cookieHeader(loginCookies) },
     });
-    const tokenRequest = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body)) as Record<
-      string,
-      string
-    >;
+    const [, callbackUrl, checks] = authorizationCodeGrant.mock.calls[0] ?? [];
 
     expect(loginLocation.searchParams.get('redirect_uri')).toBe('https://kos.moe/login/callback');
     expect(loginCookies).toContain('Secure');
-    expect(tokenRequest.redirect_uri).toBe('https://kos.moe/login/callback');
+    expect(callbackUrl).toBeInstanceOf(URL);
+    expect((callbackUrl as URL).origin + (callbackUrl as URL).pathname).toBe(
+      'https://kos.moe/login/callback',
+    );
+    expect(checks).toMatchObject({ expectedState: state });
     expect(callback.headers.get('set-cookie')).toContain('Secure');
   });
 
@@ -130,25 +178,20 @@ describe('browser login', () => {
       `https://kos.moe/login/callback?code=oidc-code&state=${state}`,
       { headers: { cookie: cookieHeader(loginCookies) } },
     );
-    const tokenRequest = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body)) as Record<
-      string,
-      string
-    >;
+    const [, callbackUrl, checks] = authorizationCodeGrant.mock.calls[0] ?? [];
     const setCookie = response.headers.get('set-cookie') ?? '';
 
-    expect(fetch).toHaveBeenCalledOnce();
-    expect(String(fetch.mock.calls[0]?.[0])).toBe('https://id.example/oauth/token');
-    expect(tokenRequest).toEqual({
-      client_id: 'kosmo-client',
-      client_secret: 'kosmo-secret',
-      code: 'oidc-code',
-      code_verifier: verifier,
-      grant_type: 'authorization_code',
-      redirect_uri: 'https://kos.moe/login/callback',
+    expect(authorizationCodeGrant).toHaveBeenCalledOnce();
+    expect((callbackUrl as URL).searchParams.get('code')).toBe('oidc-code');
+    expect(checks).toEqual({
+      expectedState: state,
+      idTokenExpected: true,
+      pkceCodeVerifier: verifier,
     });
     expect(createSession).toHaveBeenCalledWith({
       accessToken: 'oidc-access-token',
-      idToken: createIdToken(),
+      displayName: 'Kosmo User',
+      oidcSubject: 'oidc-subject',
     });
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe('/home');
@@ -173,7 +216,7 @@ describe('browser login', () => {
 
     expect(response.status).toBe(400);
     expect(await response.text()).toBe('OIDC callback redirect_uri is invalid');
-    expect(fetch).not.toHaveBeenCalled();
+    expect(authorizationCodeGrant).not.toHaveBeenCalled();
     expect(createSession).not.toHaveBeenCalled();
   });
 });
@@ -189,18 +232,16 @@ describe('native session exchange', () => {
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     });
-    const tokenRequest = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body)) as Record<
-      string,
-      string
-    >;
+    const [, callbackUrl, checks] = authorizationCodeGrant.mock.calls[0] ?? [];
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ token: 'kosmo-session-token' });
     expect(response.headers.has('set-cookie')).toBe(false);
-    expect(tokenRequest).toMatchObject({
-      code: 'native-code',
-      code_verifier: 'v'.repeat(43),
-      redirect_uri: 'kosmo://login/callback',
+    expect((callbackUrl as URL).toString()).toBe('kosmo://login/callback?code=native-code');
+    expect(checks).toEqual({
+      expectedState: undefined,
+      idTokenExpected: true,
+      pkceCodeVerifier: 'v'.repeat(43),
     });
     expect(createSession).toHaveBeenCalledOnce();
   });
@@ -230,29 +271,35 @@ describe('native session exchange', () => {
     });
 
     expect(response.status).toBe(400);
-    expect(fetch).not.toHaveBeenCalled();
+    expect(authorizationCodeGrant).not.toHaveBeenCalled();
     expect(createSession).not.toHaveBeenCalled();
   });
 
-  test('does not create a session when OIDC rejects the code', async () => {
-    fetch = vi.fn<typeof globalThis.fetch>(async () =>
-      Response.json({ error: 'invalid_grant' }, { status: 400 }),
-    );
-    vi.stubGlobal('fetch', fetch);
-    const response = await app.request('/login/native/session', {
-      body: JSON.stringify({
-        code: 'bad-code',
-        codeVerifier: 'v'.repeat(43),
-        redirectUri: 'kosmo://login/callback',
-      }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
+  test.each([
+    { error: 'invalid_grant', expectedStatus: 400, upstreamStatus: 400 },
+    { error: 'server_error', expectedStatus: 503, upstreamStatus: 503 },
+  ])(
+    'returns $expectedStatus when OIDC responds with $upstreamStatus',
+    async ({ error, expectedStatus, upstreamStatus }) => {
+      const upstream = Response.json({ error }, { status: upstreamStatus });
+      authorizationCodeGrant.mockRejectedValue(
+        new ResponseBodyError(error, { cause: { error }, response: upstream }),
+      );
+      const response = await app.request('/login/native/session', {
+        body: JSON.stringify({
+          code: 'bad-code',
+          codeVerifier: 'v'.repeat(43),
+          redirectUri: 'kosmo://login/callback',
+        }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      });
 
-    expect(response.status).toBe(400);
-    expect(await response.text()).toBe('OIDC code exchange failed');
-    expect(createSession).not.toHaveBeenCalled();
-  });
+      expect(response.status).toBe(expectedStatus);
+      expect(await response.text()).toBe('OIDC code exchange failed');
+      expect(createSession).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('GraphQL proxy', () => {
@@ -463,11 +510,3 @@ const cookieHeader = (setCookie: string) =>
   ['kosmo_oidc_state', 'kosmo_oidc_code_verifier']
     .map((name) => `${name}=${getCookieValue(setCookie, name)}`)
     .join('; ');
-
-const createIdToken = () => {
-  const payload = Buffer.from(JSON.stringify({ name: 'Kosmo User', sub: 'oidc-subject' })).toString(
-    'base64url',
-  );
-
-  return `header.${payload}.signature`;
-};

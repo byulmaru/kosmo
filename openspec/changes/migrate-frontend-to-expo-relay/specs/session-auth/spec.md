@@ -8,6 +8,7 @@
 
 - **WHEN** `/login/native/session`이 code, PKCE verifier, `kosmo://login/callback` redirect URI를 포함한 POST 요청을 받는다
 - **THEN** 서버는 server-side OIDC client secret과 함께 token endpoint에 authorization code를 제출한다
+- **AND** 서버는 discovery metadata와 JWKS를 사용해 ID token signature, issuer, audience와 시간 claims를 검증한다
 - **AND** OIDC 계정을 upsert하고 ACTIVE Kosmo session을 생성한다
 - **AND** 응답 body로 Kosmo session token을 반환한다
 - **AND** 응답에 session cookie를 설정하지 않는다
@@ -50,6 +51,13 @@
 - **WHEN** `/login/callback` GET 요청에 `code`와 쿠키 state와 일치하는 `state`가 포함된다
 - **THEN** 시스템은 OIDC token endpoint에 authorization code, PKCE code verifier, client id, client secret, grant type, 현재 origin의 `/login/callback` redirect URI를 제출한다
 - **AND** token 응답에는 access token과 id token이 포함되어야 한다
+- **AND** 시스템은 ID token signature, issuer, audience와 시간 claims가 유효할 때만 Kosmo session을 생성한다
+
+#### Scenario: 검증되지 않은 ID token 거부
+
+- **WHEN** token endpoint가 잘못된 서명 또는 issuer, audience, 만료 claims를 가진 ID token을 반환한다
+- **THEN** 시스템은 HTTP 400 오류를 반환한다
+- **AND** OIDC 계정 또는 Kosmo session을 생성하지 않는다
 
 #### Scenario: callback 입력 누락
 

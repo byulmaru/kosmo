@@ -22,6 +22,7 @@ API는 Pothos Relay plugin, loadable `Node`, `Query.node/nodes`, opaque global I
    - 나머지 browser HTML GET request에는 `apps/app/dist` asset을 제공하고 알려지지 않은 client route는 `index.html`로 fallback한다. federation 표현의 미존재 resource는 404를 유지한다.
    - Expo 개발 서버는 고정 ActivityPub pathname 목록 대신 federation `Accept`/`Content-Type`을 기준으로 임의 경로를 BFF에 전달한다.
    - browser login은 기존 HttpOnly cookie를 유지한다. native login은 code/verifier를 server에서 교환하고 Kosmo session token을 JSON으로 반환한다.
+   - 두 code exchange는 OIDC issuer discovery를 한 번 cache하고 표준 PKCE/token request 및 JWKS 기반 ID token signature·issuer·audience·time claims 검증을 거친다.
 
 3. `apps/api`
    - GraphQL schema/resolver를 유지한다.
@@ -51,7 +52,7 @@ API는 Pothos Relay plugin, loadable `Node`, `Query.node/nodes`, opaque global I
 - EAS 계정·credential 생성 또는 app store 배포.
 - 알림·메뉴 placeholder에 새로운 product 기능 추가.
 - TipTap의 현재 schema에 없는 rich mark, media, mention 기능 추가.
-- 별도 보안 backlog인 OIDC `id_token` signature/claims 검증(PROD-246)과 `PostContent` direct Node visibility(PROD-247)를 이 migration branch에서 해결하는 것. 이동된 auth 코드는 해당 이슈가 적용될 한 경계에 유지한다.
+- 별도 보안 backlog인 `PostContent` direct Node visibility(PROD-247)를 이 migration branch에서 해결하는 것.
 
 ## Risks / Trade-offs
 

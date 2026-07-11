@@ -53,10 +53,10 @@
 
 - Status: Accepted
 - Context / Problem: HttpOnly cookie jar를 공유하던 WebView와 달리 React Native fetch는 browser callback cookie를 사용할 수 없다.
-- Decision Outcome: Web은 기존 `/login`과 `/login/callback` HttpOnly cookie를 유지한다. Native는 Expo AuthSession으로 PKCE code를 받고 `/login/native/session`에 code/verifier를 POST해 Kosmo token을 받은 뒤 validated web origin과 함께 SecureStore JSON envelope에 저장한다. 기존 Vault의 `PUBLIC_ORIGIN`, `PUBLIC_OIDC_ISSUER`, `PUBLIC_OIDC_CLIENT_ID`는 Expo config에서 대응 `EXPO_PUBLIC_*`로 mapping하고 명시적 Expo override를 우선한다. 두 client 모두 BFF `/graphql`을 사용한다.
+- Decision Outcome: Web은 기존 `/login`과 `/login/callback` HttpOnly cookie를 유지한다. Native는 Expo AuthSession으로 PKCE code를 받고 `/login/native/session`에 code/verifier를 POST해 Kosmo token을 받은 뒤 validated web origin과 함께 SecureStore JSON envelope에 저장한다. BFF는 `openid-client`로 issuer metadata를 discovery/cache하고 표준 authorization code grant와 JWKS 기반 ID token signature·issuer·audience·time claims 검증을 수행한 뒤에만 Kosmo session을 만든다. 기존 Vault의 `PUBLIC_ORIGIN`, `PUBLIC_OIDC_ISSUER`, `PUBLIC_OIDC_CLIENT_ID`는 Expo config에서 대응 `EXPO_PUBLIC_*`로 mapping하고 명시적 Expo override를 우선한다. 두 client 모두 BFF `/graphql`을 사용한다.
 - Alternatives Considered: token을 deep link query에 넣는 안은 노출 위험 때문에 제외했다. OIDC client secret을 app에 넣고 직접 교환하는 안도 제외했다. native cookie emulation은 platform별 cookie jar 결합을 다시 만들기 때문에 제외했다.
 - Consequences: BFF가 native session exchange validation과 Bearer forwarding을 추가로 소유한다. 저장 token이 invalid하거나 envelope origin이 현재 configured origin과 다르면 client가 삭제하고 onboarding으로 이동한다. Native origin은 HTTPS를 기본으로 하고 loopback 외 HTTP는 명시적 development override가 있을 때만 허용한다.
-- Confirmation / Follow-up: native exchange request, Bearer GraphQL contract, origin-bound storage와 unsafe origin 거부 test를 추가한다. `id_token` cryptographic validation은 별도 PROD-246 범위로 유지한다.
+- Confirmation / Follow-up: native exchange request, Bearer GraphQL contract, origin-bound storage와 unsafe origin 거부 test를 추가한다. OIDC mock은 discovery·JWKS·서명된 ID token을 제공하고 browser/native E2E가 cryptographic validation 경계를 통과해야 한다.
 
 ### 현재 TipTap subset은 pure TypeScript plain-text adapter로 옮긴다
 

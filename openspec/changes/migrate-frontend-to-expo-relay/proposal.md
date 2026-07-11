@@ -9,6 +9,7 @@
 - 공개 온보딩, 보호 화면, 홈 타임라인, 글쓰기, 검색, 프로필, 팔로우 목록, 게시글 상세를 Android/iOS/Web 공용 React Native 컴포넌트와 Expo Router 경로로 제공한다.
 - GraphQL operation을 React 컴포넌트에 colocate하고 Relay Compiler가 TypeScript 타입과 runtime artifact를 생성하도록 한다.
 - 웹은 기존 HttpOnly 세션 쿠키 흐름을 유지하고, 네이티브는 시스템 브라우저 PKCE 로그인 뒤 발급받은 Kosmo 세션 토큰을 SecureStore에 저장해 Bearer 요청에 사용한다.
+- BFF의 browser/native OIDC code 교환은 issuer discovery와 JWKS 서명·claims 검증을 제공하는 표준 OIDC client를 사용한다.
 - 기존 `/health`, `/login`, `/login/callback`, `/graphql`, Fedify가 소유하는 federation 경로와 Kubernetes web workload 계약을 유지한다.
 - Svelte/Mearie 및 수동 Gradle/Xcode WebView 빌드 도구를 제거하고, 기존 상태 카탈로그는 React Native Web Storybook으로 이식한다.
 
@@ -29,7 +30,7 @@
 ## Impact
 
 - 주요 변경 경로: `apps/app`, `apps/web`, `Dockerfile`, `docker-entrypoint.sh`, `.github/workflows`, `docs/design`, `memory`, `openspec/specs`.
-- 추가 의존성: Expo SDK/Router, React, React Native/Web, React Relay/Relay Compiler, Expo AuthSession/SecureStore, Hono 정적 서버 계층, React Native Web Storybook.
+- 추가 의존성: Expo SDK/Router, React, React Native/Web, React Relay/Relay Compiler, Expo AuthSession/SecureStore, Hono 정적 서버 계층, `openid-client`, React Native Web Storybook.
 - 제거 의존성: Svelte/SvelteKit, Mearie, Svelte Storybook, 수동 Android/iOS WebView 프로젝트 의존성.
 - API GraphQL schema와 도메인 resolver shape는 유지하되 web BFF 인증 및 transport 계약이 확장된다.
 - 웹 배포는 기존 web workload와 origin을 유지하고, 네이티브 빌드는 Expo CLI/EAS 호환 프로젝트 구조로 전환된다.

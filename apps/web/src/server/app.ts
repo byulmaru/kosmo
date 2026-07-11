@@ -4,10 +4,15 @@ import { federation } from '@kosmo/fedify';
 import { Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import {
+  buildAuthorizationUrl,
+  calculatePKCECodeChallenge,
+  randomPKCECodeVerifier,
+  randomState,
+} from 'openid-client';
+import {
   createOidcSession,
-  DEFAULT_OIDC_AUTHORIZE_URL,
-  DEFAULT_OIDC_TOKEN_URL,
   exchangeOidcCode,
+  getOidcConfiguration,
   LOGIN_CODE_VERIFIER_COOKIE,
   LOGIN_STATE_COOKIE,
   NATIVE_REDIRECT_URI,
@@ -72,12 +77,11 @@ app.get('/health', (c) => c.text('ok'));
 app.all('/health', (c) => c.text('Method Not Allowed', 405, { Allow: 'GET' }));
 
 app.get('/login', async (c) => {
-  const clientId = requireOidcClientId();
-  const state = createCodeVerifier();
-  const codeVerifier = createCodeVerifier();
-  const codeChallenge = await createCodeChallenge(codeVerifier);
+  const state = randomState();
+  const codeVerifier = randomPKCECodeVerifier();
+  const codeChallenge = await calculatePKCECodeChallenge(codeVerifier);
   const requestUrl = new URL(c.req.url);
-  const publicOrigin = getPublicOrigin(requestUrl);
+  const publicOrigin = new URL(process.env.PUBLIC_ORIGIN ?? requestUrl.origin);
   const redirectUri = new URL('/login/callback', publicOrigin).toString();
   const cookieOptions = {
     httpOnly: true,
@@ -87,17 +91,16 @@ app.get('/login', async (c) => {
     secure: publicOrigin.protocol === 'https:',
   };
 
+  const authorizeUrl = buildAuthorizationUrl(await getOidcConfiguration(), {
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
+    redirect_uri: redirectUri,
+    scope: 'openid profile',
+    state,
+  });
+
   setCookie(c, LOGIN_STATE_COOKIE, state, cookieOptions);
   setCookie(c, LOGIN_CODE_VERIFIER_COOKIE, codeVerifier, cookieOptions);
-
-  const authorizeUrl = new URL(process.env.OIDC_AUTHORIZE_URL ?? DEFAULT_OIDC_AUTHORIZE_URL);
-  authorizeUrl.searchParams.set('response_type', 'code');
-  authorizeUrl.searchParams.set('client_id', clientId);
-  authorizeUrl.searchParams.set('redirect_uri', redirectUri);
-  authorizeUrl.searchParams.set('scope', 'openid profile');
-  authorizeUrl.searchParams.set('code_challenge', codeChallenge);
-  authorizeUrl.searchParams.set('code_challenge_method', 'S256');
-  authorizeUrl.searchParams.set('state', state);
 
   return c.redirect(authorizeUrl.toString(), 302);
 });
@@ -119,7 +122,7 @@ app.get('/login/callback', async (c) => {
     return c.text('OIDC callback state is invalid', 400);
   }
 
-  const publicOrigin = getPublicOrigin(requestUrl);
+  const publicOrigin = new URL(process.env.PUBLIC_ORIGIN ?? requestUrl.origin);
   const redirectUri = new URL('/login/callback', publicOrigin).toString();
   const requestedRedirectUri = requestUrl.searchParams.get('redirect_uri');
 
@@ -127,19 +130,11 @@ app.get('/login/callback', async (c) => {
     return c.text('OIDC callback redirect_uri is invalid', 400);
   }
 
-  const { clientId, clientSecret } = requireOidcConfig();
-  const tokens = await exchangeOidcCode(
-    {
-      clientId,
-      clientSecret,
-      code,
-      codeVerifier,
-      redirectUri,
-      tokenUrl: process.env.OIDC_TOKEN_URL ?? DEFAULT_OIDC_TOKEN_URL,
-    },
-    globalThis.fetch,
+  const callbackUrl = new URL('/login/callback', publicOrigin);
+  callbackUrl.search = requestUrl.search;
+  const sessionToken = await createOidcSession(
+    await exchangeOidcCode({ callbackUrl, codeVerifier, expectedState: state }),
   );
-  const sessionToken = await createOidcSession(tokens);
 
   deleteCookie(c, LOGIN_STATE_COOKIE, { path: '/login/callback' });
   deleteCookie(c, LOGIN_CODE_VERIFIER_COOKIE, { path: '/login/callback' });
@@ -157,28 +152,31 @@ app.all('/login/callback', (c) => c.text('Method Not Allowed', 405, { Allow: 'GE
 
 app.post('/login/native/session', async (c) => {
   const body = (await c.req.json().catch(() => undefined)) as unknown;
+  const input = body && typeof body === 'object' ? body : {};
+  const code = Reflect.get(input, 'code');
+  const codeVerifier = Reflect.get(input, 'codeVerifier');
+  const redirectUri = Reflect.get(input, 'redirectUri');
 
-  if (!isNativeSessionRequest(body)) {
+  if (
+    typeof code !== 'string' ||
+    code.length < 1 ||
+    code.length > 2048 ||
+    typeof codeVerifier !== 'string' ||
+    !PKCE_CODE_VERIFIER.test(codeVerifier) ||
+    typeof redirectUri !== 'string'
+  ) {
     return c.text('Native session request is invalid', 400);
   }
-  if (body.redirectUri !== NATIVE_REDIRECT_URI) {
+  if (redirectUri !== NATIVE_REDIRECT_URI) {
     return c.text('Native session redirectUri is invalid', 400);
   }
 
-  const { clientId, clientSecret } = requireOidcConfig();
-  const tokens = await exchangeOidcCode(
-    {
-      clientId,
-      clientSecret,
-      code: body.code,
-      codeVerifier: body.codeVerifier,
-      redirectUri: body.redirectUri,
-      tokenUrl: process.env.OIDC_TOKEN_URL ?? DEFAULT_OIDC_TOKEN_URL,
-    },
-    globalThis.fetch,
-  );
+  const callbackUrl = new URL(NATIVE_REDIRECT_URI);
+  callbackUrl.searchParams.set('code', code);
 
-  return c.json({ token: await createOidcSession(tokens) });
+  return c.json({
+    token: await createOidcSession(await exchangeOidcCode({ callbackUrl, codeVerifier })),
+  });
 });
 app.all('/login/native/session', (c) => c.text('Method Not Allowed', 405, { Allow: 'POST' }));
 
@@ -226,53 +224,6 @@ app.on(['GET', 'HEAD'], '*', (c, next) =>
 );
 
 export default app;
-
-const requireOidcConfig = () => {
-  const clientSecret = process.env.OIDC_CLIENT_SECRET;
-  if (!clientSecret) {
-    throw new OidcAuthError(500, 'OIDC client configuration is required');
-  }
-
-  return { clientId: requireOidcClientId(), clientSecret };
-};
-
-const requireOidcClientId = () => {
-  const clientId = process.env.PUBLIC_OIDC_CLIENT_ID;
-  if (!clientId) {
-    throw new OidcAuthError(500, 'OIDC client configuration is required');
-  }
-
-  return clientId;
-};
-
-const getPublicOrigin = (requestUrl: URL) =>
-  new URL(process.env.PUBLIC_ORIGIN ?? requestUrl.origin);
-
-const isNativeSessionRequest = (
-  value: unknown,
-): value is { code: string; codeVerifier: string; redirectUri: string } =>
-  !!value &&
-  typeof value === 'object' &&
-  isStringWithin(Reflect.get(value, 'code'), 1, 2048) &&
-  typeof Reflect.get(value, 'codeVerifier') === 'string' &&
-  PKCE_CODE_VERIFIER.test(Reflect.get(value, 'codeVerifier')) &&
-  typeof Reflect.get(value, 'redirectUri') === 'string';
-
-const isStringWithin = (value: unknown, min: number, max: number): value is string =>
-  typeof value === 'string' && value.length >= min && value.length <= max;
-
-const createCodeVerifier = () => {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-
-  return Buffer.from(bytes).toString('base64url');
-};
-
-const createCodeChallenge = async (codeVerifier: string) => {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(codeVerifier));
-
-  return Buffer.from(digest).toString('base64url');
-};
 
 const acceptsSpa = (accept: string | undefined, path: string) => {
   if (!accept) {
