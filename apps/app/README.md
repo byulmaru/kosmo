@@ -15,6 +15,8 @@ Set `EXPO_PUBLIC_WEB_ORIGIN`, `EXPO_PUBLIC_OIDC_ISSUER`, and `EXPO_PUBLIC_OIDC_C
 
 Native `EXPO_PUBLIC_WEB_ORIGIN` must be an HTTPS origin. Loopback HTTP is accepted for local development; a non-loopback HTTP origin requires the explicit development-only `EXPO_PUBLIC_ALLOW_INSECURE_ORIGIN=1` override. SecureStore sessions are bound to the normalized origin and are discarded instead of being sent after an environment change.
 
+Native OIDC uses Expo AuthSession with the `kosmo://login/callback` redirect. Register that exact URI with the provider and test login in a development or standalone build; Expo Go cannot use the custom callback scheme for this flow.
+
 Native projects are generated with `expo prebuild --clean`; they are not source-of-truth files.
 
 ## Validation

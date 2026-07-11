@@ -224,6 +224,9 @@ importers:
       relay-runtime:
         specifier: ^21.0.1
         version: 21.0.1
+      temporal-polyfill:
+        specifier: ^0.3.2
+        version: 0.3.2
     devDependencies:
       '@babel/core':
         specifier: ^7.29.7

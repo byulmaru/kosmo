@@ -19,6 +19,7 @@ const PostListItemFragment = graphql`
     profile {
       id
       handle
+      relativeHandle
       displayName
       ...ProfileNameBlock_profile
     }
@@ -29,8 +30,8 @@ const PostListItemFragment = graphql`
 export function PostListItem({ post: postKey }: { post: PostListItem_post$key }) {
   const theme = useTheme();
   const post = useFragment(PostListItemFragment, postKey);
-  const profileHref = `/@${post.profile.handle}` as const;
-  const detailHref = `/@${post.profile.handle}/${post.id}` as const;
+  const profileHref = `/${post.profile.relativeHandle}` as const;
+  const detailHref = `/${post.profile.relativeHandle}/${post.id}` as const;
 
   return (
     <View role="article" style={[styles.card, { borderColor: theme.border }]}>

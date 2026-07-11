@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 
 const port = Number(process.env.OIDC_MOCK_PORT ?? 4300);
+const host = process.env.OIDC_MOCK_HOST ?? '127.0.0.1';
 const clientId = process.env.PUBLIC_OIDC_CLIENT_ID ?? 'kosmo-e2e-client';
 const clientSecret = process.env.OIDC_CLIENT_SECRET ?? 'kosmo-e2e-secret';
 const codes = new Map();
@@ -122,7 +123,7 @@ const server = createServer(async (request, response) => {
   sendJson(response, 404, { error: 'not_found' });
 });
 
-server.listen(port, '127.0.0.1');
+server.listen(port, host);
 
 process.on('SIGTERM', () => {
   server.close(() => {

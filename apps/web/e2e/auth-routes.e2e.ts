@@ -238,4 +238,129 @@ test.describe('로그인 사용자 보호 라우트', () => {
     await expect(page.getByRole('textbox', { name: '검색어' })).toBeVisible();
     await expect(page.getByRole('progressbar')).toHaveCount(0);
   });
+
+  test('web shell은 document scroll을 유지한다', async ({ page }) => {
+    await page.setViewportSize({ height: 360, width: 1440 });
+    await page.goto('/compose');
+
+    await expect(page.getByRole('textbox', { name: '게시글 본문' }).first()).toBeVisible();
+
+    const scrollState = await page.evaluate(() => ({
+      clientHeight: document.documentElement.clientHeight,
+      overflowY: getComputedStyle(document.body).overflowY,
+      scrollHeight: document.documentElement.scrollHeight,
+    }));
+
+    expect(scrollState.overflowY).toBe('auto');
+    expect(scrollState.scrollHeight).toBeGreaterThan(scrollState.clientHeight);
+
+    await page.mouse.move(720, 180);
+    await page.mouse.wheel(0, 400);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  });
+
+  test('mobile drawer는 왼쪽에 열리고 Lucide 메뉴 규격을 유지한다', async ({ page }) => {
+    let canonicalProfilePath = '';
+
+    await page.route('**/graphql', async (route) => {
+      if (!isGraphQLOperation(route.request().postData(), 'UniversalShellQuery')) {
+        await route.continue();
+        return;
+      }
+
+      const response = await route.fetch();
+      const body = (await response.json()) as {
+        data?: {
+          currentSession?: {
+            selectedProfile?: { handle: string; id: string; relativeHandle: string } | null;
+          } | null;
+          me?: {
+            profiles?: Array<{ id: string; relativeHandle: string } | null> | null;
+          } | null;
+        };
+      };
+      const selectedProfile = body.data?.currentSession?.selectedProfile;
+
+      if (selectedProfile) {
+        selectedProfile.relativeHandle = `@${selectedProfile.handle}@remote.example`;
+        for (const profile of body.data?.me?.profiles ?? []) {
+          if (profile?.id === selectedProfile.id) {
+            profile.relativeHandle = selectedProfile.relativeHandle;
+          }
+        }
+        canonicalProfilePath = `/${selectedProfile.relativeHandle}`;
+      }
+
+      await route.fulfill({
+        body: JSON.stringify(body),
+        contentType: 'application/json',
+        status: response.status(),
+      });
+    });
+
+    await page.setViewportSize({ height: 667, width: 390 });
+    await page.goto('/home');
+    await page.getByRole('button', { name: '메뉴 열기' }).click();
+
+    const drawer = page.locator('#mobile-sidebar');
+    const navigation = drawer.getByRole('navigation', { name: '주요 메뉴' });
+    const home = navigation.getByRole('link', { name: '홈' });
+    const homeIcon = home.locator('svg');
+    const homeLabel = home.getByText('홈', { exact: true });
+
+    await expect(drawer).toBeVisible();
+    await expect.poll(() => canonicalProfilePath).not.toBe('');
+    await expect(navigation.getByRole('link', { exact: true, name: '프로필' })).toHaveAttribute(
+      'href',
+      canonicalProfilePath,
+    );
+    await expect(drawer.getByRole('link', { name: /팔로잉/ })).toHaveAttribute(
+      'href',
+      `${canonicalProfilePath}/following`,
+    );
+    await expect(drawer.getByRole('link', { name: /^\S+ 팔로워$/ })).toHaveAttribute(
+      'href',
+      `${canonicalProfilePath}/followers`,
+    );
+    const profileLinks = await page.getByRole('link', { exact: true, name: '프로필' }).all();
+    expect(profileLinks).toHaveLength(2);
+    for (const profileLink of profileLinks) {
+      await expect(profileLink).toHaveAttribute('href', canonicalProfilePath);
+    }
+    expect(await drawer.boundingBox()).toMatchObject({ height: 667, width: 320, x: 0, y: 0 });
+    expect(await home.boundingBox()).toMatchObject({ height: 45, width: 264 });
+    const iconBox = await homeIcon.boundingBox();
+    const labelBox = await homeLabel.boundingBox();
+    expect(iconBox).toMatchObject({ height: 20, width: 20 });
+    expect(labelBox!.x).toBeGreaterThan(iconBox!.x + iconBox!.width);
+    expect(
+      Math.abs(labelBox!.y + labelBox!.height / 2 - (iconBox!.y + iconBox!.height / 2)),
+    ).toBeLessThanOrEqual(1);
+
+    const drawerState = await drawer.evaluate((element) => {
+      let fixedAncestor: HTMLElement | null = element as HTMLElement;
+      while (fixedAncestor && getComputedStyle(fixedAncestor).position !== 'fixed') {
+        fixedAncestor = fixedAncestor.parentElement;
+      }
+
+      const menuScroll = [...element.querySelectorAll<HTMLElement>('*')].find((candidate) =>
+        ['auto', 'scroll'].includes(getComputedStyle(candidate).overflowY),
+      );
+      const menuItems =
+        element.querySelector('[role="navigation"][aria-label="주요 메뉴"]')?.children ?? [];
+
+      return {
+        animationName: fixedAncestor ? getComputedStyle(fixedAncestor).animationName : null,
+        hasEmoji: /\p{Extended_Pictographic}/u.test(element.textContent ?? ''),
+        itemsUseSvg: [...menuItems].every((item) => item.querySelector('svg')),
+        scrollClientHeight: menuScroll?.clientHeight ?? 0,
+        scrollHeight: menuScroll?.scrollHeight ?? 0,
+      };
+    });
+
+    expect(drawerState.animationName).toBe('none');
+    expect(drawerState.hasEmoji).toBe(false);
+    expect(drawerState.itemsUseSvg).toBe(true);
+    expect(drawerState.scrollHeight).toBeGreaterThan(drawerState.scrollClientHeight);
+  });
 });

@@ -28,7 +28,7 @@ const profileListItemFragment = graphql`
 export function ProfileListItem({ linked = false, profile, style }: ProfileListItemProps) {
   const theme = useTheme();
   const data = useFragment(profileListItemFragment, profile);
-  const profileHref = `/@${data.handle}` as Href;
+  const profileHref = `/${data.relativeHandle}` as Href;
   const content = (
     <>
       <Avatar label={data.displayName || data.handle} size={40} />

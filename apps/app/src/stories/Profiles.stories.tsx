@@ -251,9 +251,25 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const HeroNameAndLoadingStates: Story = {};
+export const HeroNameAndLoadingStates: Story = {
+  play: async ({ canvasElement }) => {
+    expect(
+      canvasElement.querySelector('a[href="/@remote-user@very-long-instance.example/following"]'),
+    ).toBeInTheDocument();
+    expect(
+      canvasElement.querySelector('a[href="/@remote-user@very-long-instance.example/followers"]'),
+    ).toBeInTheDocument();
+  },
+};
 
-export const ListAndFollowStates: Story = { render: () => <ProfileListCatalog /> };
+export const ListAndFollowStates: Story = {
+  play: async ({ canvasElement }) => {
+    expect(
+      canvasElement.querySelector('a[href="/@remote-user@very-long-instance.example"]'),
+    ).toBeInTheDocument();
+  },
+  render: () => <ProfileListCatalog />,
+};
 
 export const FollowSubmitting: Story = {
   parameters: { relay: { mutationLoading: true } },

@@ -17,6 +17,7 @@ const PostLayoutFragment = graphql`
     profile {
       id
       handle
+      relativeHandle
       displayName
       ...ProfileNameBlock_profile
     }
@@ -34,7 +35,7 @@ const visibilityLabels: Record<string, string> = {
 export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
   const theme = useTheme();
   const post = useFragment(PostLayoutFragment, postKey);
-  const profileHref = `/@${post.profile.handle}` as const;
+  const profileHref = `/${post.profile.relativeHandle}` as const;
 
   return (
     <View style={styles.root}>

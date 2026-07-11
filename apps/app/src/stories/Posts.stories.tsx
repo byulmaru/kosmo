@@ -1,5 +1,6 @@
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { Temporal } from 'temporal-polyfill';
 import { PostBody } from '@/components/post/PostBody';
 import { PostComposer } from '@/components/post/PostComposer';
 import { PostLayout } from '@/components/post/PostLayout';
@@ -23,17 +24,17 @@ const manyLinesPost = post({
 });
 const nowPost = post({
   bodyText: '지금 작성된 게시글.',
-  createdAt: new Date().toISOString(),
+  createdAt: Temporal.Now.instant().toString(),
   id: 'now',
 });
 const secondsOldPost = post({
   bodyText: '30초 전에 작성된 게시글.',
-  createdAt: new Date(Date.now() - 30_000).toISOString(),
+  createdAt: Temporal.Now.instant().subtract({ seconds: 30 }).toString(),
   id: 'seconds-old',
 });
 const hoursOldPost = post({
   bodyText: '3시간 전에 작성된 게시글.',
-  createdAt: new Date(Date.now() - 3 * 60 * 60_000).toISOString(),
+  createdAt: Temporal.Now.instant().subtract({ hours: 3 }).toString(),
   id: 'hours-old',
 });
 const oldPost = post({
@@ -195,6 +196,9 @@ function PostCatalog() {
           post={requireFragment(requirePost(posts, 7).listItem, 'hours-old post item')}
         />
         <PostListItem post={requireFragment(requirePost(posts, 8).listItem, 'old post item')} />
+        <PostListItem
+          post={requireFragment(requirePost(posts, 13).listItem, 'remote author post item')}
+        />
       </Section>
 
       <Section title="Detail layout · visibility and long author">
@@ -265,7 +269,14 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const BodyTimeAndLayoutStates: Story = {};
+export const BodyTimeAndLayoutStates: Story = {
+  play: async ({ canvasElement }) => {
+    expect(canvasElement.querySelector('a[href="/@user@remote.example"]')).toBeInTheDocument();
+    expect(
+      canvasElement.querySelector('a[href="/@user@remote.example/detail-remote"]'),
+    ).toBeInTheDocument();
+  },
+};
 
 export const ListLoadingErrorEmptyAndContent: Story = { render: () => <PostListCatalog /> };
 

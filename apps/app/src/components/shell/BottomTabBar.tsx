@@ -1,5 +1,5 @@
 import { Link, usePathname } from 'expo-router';
-import { Bell, House, Pencil, Search } from 'lucide-react-native';
+import { Bell, House, PenLine, Search } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useFragment } from 'react-relay';
@@ -12,7 +12,7 @@ import type { BottomTabBar_profile$key } from './__generated__/BottomTabBar_prof
 
 const BottomTabBarFragment = graphql`
   fragment BottomTabBar_profile on Profile {
-    handle
+    relativeHandle
     displayName
   }
 `;
@@ -26,7 +26,7 @@ type Tab = {
 const baseTabs: Tab[] = [
   { href: '/home', Icon: House, label: '홈' },
   { href: '/search', Icon: Search, label: '검색' },
-  { href: '/compose', Icon: Pencil, label: '글쓰기' },
+  { href: '/compose', Icon: PenLine, label: '글쓰기' },
   { href: '/notifications', Icon: Bell, label: '알림' },
 ];
 
@@ -42,7 +42,7 @@ export function BottomTabBar({
   const tabs: Tab[] = [
     ...baseTabs,
     {
-      href: profile ? (`/@${profile.handle}` as Href) : undefined,
+      href: profile ? (`/${profile.relativeHandle}` as Href) : undefined,
       label: '프로필',
     },
   ];
@@ -65,26 +65,41 @@ export function BottomTabBar({
             accessibilityRole={tab.href ? 'link' : 'button'}
             accessibilityState={{ disabled: !tab.href }}
             disabled={!tab.href}
-            style={({ pressed }) => [
+            style={StyleSheet.flatten([
               styles.item,
               {
                 backgroundColor: active ? theme.primary : 'transparent',
-                opacity: !tab.href ? 0.45 : pressed ? 0.7 : 1,
+                opacity: tab.href ? 1 : 0.45,
               },
-            ]}
+            ])}
           >
-            {tab.label === '프로필' ? (
-              <Avatar label={profile?.displayName ?? '프로필'} size={24} />
-            ) : tab.Icon ? (
-              <tab.Icon
-                color={active ? theme.text : theme.textSecondary}
-                size={24}
-                strokeWidth={2}
-              />
-            ) : null}
-            <Text style={[styles.label, { color: active ? theme.text : theme.textSecondary }]}>
-              {tab.label}
-            </Text>
+            {({ pressed }) => (
+              <>
+                {tab.label === '프로필' ? (
+                  <Avatar
+                    label={profile?.displayName ?? '프로필'}
+                    size={24}
+                    style={pressed && styles.pressedContent}
+                  />
+                ) : tab.Icon ? (
+                  <tab.Icon
+                    color={active ? theme.text : theme.textSecondary}
+                    size={24}
+                    strokeWidth={2}
+                    style={pressed && styles.pressedContent}
+                  />
+                ) : null}
+                <Text
+                  style={[
+                    styles.label,
+                    pressed && styles.pressedContent,
+                    { color: active ? theme.text : theme.textSecondary },
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </>
+            )}
           </Pressable>
         );
 
@@ -114,4 +129,5 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   label: { fontFamily: 'SUIT', fontWeight: '700', ...typography.xsm },
+  pressedContent: { opacity: 0.7 },
 });

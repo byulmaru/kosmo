@@ -65,8 +65,8 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
     return null;
   }
 
-  const followingHref = `/@${data.handle}/following` as Href;
-  const followersHref = `/@${data.handle}/followers` as Href;
+  const followingHref = `/${data.relativeHandle}/following` as Href;
+  const followersHref = `/${data.relativeHandle}/followers` as Href;
 
   return (
     <View style={styles.root}>

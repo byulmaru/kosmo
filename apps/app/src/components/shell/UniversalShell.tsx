@@ -59,6 +59,8 @@ const webFixedBottomBar = {
   zIndex: 20,
 } as unknown as ViewStyle;
 
+const webDocumentColumn = { minHeight: '100vh' } as unknown as ViewStyle;
+
 export function UniversalShell() {
   const { retry, revision } = useRelayActor();
 
@@ -146,7 +148,12 @@ function UniversalShellContent({ revision }: { revision: number }) {
         ) : null}
 
         <View
-          style={[styles.center, full && styles.centerWithRightRail, { borderColor: theme.border }]}
+          style={[
+            styles.center,
+            web && webDocumentColumn,
+            full && styles.centerWithRightRail,
+            { borderColor: theme.border },
+          ]}
         >
           {mobile ? (
             <View
@@ -157,11 +164,15 @@ function UniversalShellContent({ revision }: { revision: number }) {
               ]}
             >
               <Pressable
+                aria-controls={drawerOpen ? 'mobile-sidebar' : undefined}
                 accessibilityLabel="메뉴 열기"
                 accessibilityRole="button"
                 accessibilityState={{ expanded: drawerOpen }}
                 onPress={() => setDrawerOpen(true)}
-                style={({ pressed }) => [styles.menuButton, { opacity: pressed ? 0.7 : 1 }]}
+                style={({ pressed }) => [
+                  styles.menuButton,
+                  { borderColor: theme.border, opacity: pressed ? 0.7 : 1 },
+                ]}
               >
                 <Menu color={theme.text} size={20} strokeWidth={2} />
                 <Text style={[styles.menuLabel, { color: theme.text }]}>메뉴</Text>
@@ -192,14 +203,17 @@ function UniversalShellContent({ revision }: { revision: number }) {
 
         <Modal
           accessibilityLabel="메뉴"
-          animationType="slide"
+          animationType="none"
           onRequestClose={closeDrawer}
           role="dialog"
           transparent
           visible={drawerOpen}
         >
           <View style={styles.drawerBackdrop}>
-            <View style={[styles.drawer, { backgroundColor: theme.card }]}>
+            <View
+              nativeID="mobile-sidebar"
+              style={[styles.drawer, { backgroundColor: theme.card }]}
+            >
               <SidebarNavigation
                 onNavigate={closeDrawer}
                 onSwitcherOpenChange={setSwitcherOpen}
@@ -255,6 +269,13 @@ const styles = StyleSheet.create({
   },
   menuLabel: { fontFamily: 'SUIT', fontWeight: '700' },
   drawerBackdrop: { backgroundColor: 'rgba(0,0,0,0.35)', flex: 1, flexDirection: 'row' },
-  drawer: { maxWidth: '85%', width: 320 },
+  drawer: {
+    borderBottomRightRadius: 16,
+    borderTopRightRadius: 16,
+    boxShadow: '4px 0 4px rgba(0, 0, 0, 0.4)',
+    maxWidth: '85%',
+    overflow: 'hidden',
+    width: 320,
+  },
   drawerClose: { flex: 1 },
 });

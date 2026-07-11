@@ -45,7 +45,11 @@ export async function startNativeLogin(): Promise<string | null> {
     throw new Error('EXPO_PUBLIC_OIDC_ISSUER and EXPO_PUBLIC_OIDC_CLIENT_ID are required.');
   }
 
-  const redirectUri = makeRedirectUri({ scheme: 'kosmo', path: 'login/callback' });
+  const redirectUri = makeRedirectUri({
+    native: 'kosmo://login/callback',
+    path: 'login/callback',
+    scheme: 'kosmo',
+  });
   const discovery = await fetchDiscoveryAsync(issuer);
   const request = new AuthRequest({
     clientId,

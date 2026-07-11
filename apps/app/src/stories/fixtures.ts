@@ -1,3 +1,4 @@
+import { Temporal } from 'temporal-polyfill';
 import { createTipTapDocumentFromPlainText } from '@/lib/tiptap';
 
 export type StoryProfile = {
@@ -63,7 +64,7 @@ export type StoryPost = ReturnType<typeof post>;
 
 export function post({
   bodyText = '코스모에서 전하는 첫 번째 소식입니다.',
-  createdAt = new Date(Date.now() - 5 * 60_000).toISOString(),
+  createdAt = Temporal.Now.instant().subtract({ minutes: 5 }).toString(),
   id = 'post-1',
   profile: author = profile(),
   visibility = 'UNLISTED',

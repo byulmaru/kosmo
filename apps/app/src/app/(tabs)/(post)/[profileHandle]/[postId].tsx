@@ -20,7 +20,7 @@ const PostQuery = graphql`
         state
         profile {
           id
-          handle
+          relativeHandle
         }
         ...PostLayout_post @alias
       }
@@ -35,7 +35,7 @@ export default function PostDetailScreen() {
   const { revision } = useRelayActor();
   const [fetchKey, setFetchKey] = useState(0);
   const postId = params.postId ?? '';
-  const routeHandle = (params.profileHandle ?? '').replace(/^@/, '');
+  const routeRelativeHandle = params.profileHandle ?? '';
 
   return (
     <ScrollView contentContainerStyle={styles.root} stickyHeaderIndices={[0]}>
@@ -53,7 +53,7 @@ export default function PostDetailScreen() {
         <Text style={[styles.heading, { color: theme.text }]}>게시글</Text>
       </View>
       <RouteBoundary
-        key={`${routeHandle}:${postId}`}
+        key={`${routeRelativeHandle}:${postId}`}
         loading={<StateView loading title="게시글을 불러오는 중입니다." />}
         onRetry={() => setFetchKey((key) => key + 1)}
         title="게시글을 불러오지 못했어요"
@@ -61,7 +61,7 @@ export default function PostDetailScreen() {
         <PostDetailContent
           fetchKey={`${revision}:${fetchKey}`}
           postId={postId}
-          routeHandle={routeHandle}
+          routeRelativeHandle={routeRelativeHandle}
         />
       </RouteBoundary>
     </ScrollView>
@@ -71,11 +71,11 @@ export default function PostDetailScreen() {
 function PostDetailContent({
   fetchKey,
   postId,
-  routeHandle,
+  routeRelativeHandle,
 }: {
   fetchKey: string;
   postId: string;
-  routeHandle: string;
+  routeRelativeHandle: string;
 }) {
   const router = useRouter();
   const data = useLazyLoadQuery<PostDetailQuery>(
@@ -86,10 +86,10 @@ function PostDetailContent({
   const post = data.node?.__typename === 'Post' ? data.node : null;
 
   useEffect(() => {
-    if (post && post.profile.handle !== routeHandle) {
-      router.replace(`/@${post.profile.handle}/${postId}`);
+    if (post && post.profile.relativeHandle !== routeRelativeHandle) {
+      router.replace(`/${post.profile.relativeHandle}/${postId}`);
     }
-  }, [post, postId, routeHandle, router]);
+  }, [post, postId, routeRelativeHandle, router]);
 
   return !post ? (
     <StateView

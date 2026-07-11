@@ -1,12 +1,13 @@
 import { PostVisibility } from '@kosmo/core/enums';
 import {
   createE2EPost,
+  createE2EProfile,
   createE2ESession,
   resetE2EDatabase,
   setE2ESessionCookie,
 } from './db-fixtures';
 import { expect, test } from './fixtures';
-import { readGraphQLOperation, waitForGraphQLOperation } from './graphql';
+import { isGraphQLOperation, readGraphQLOperation, waitForGraphQLOperation } from './graphql';
 
 test.beforeEach(async () => {
   await resetE2EDatabase();
@@ -47,5 +48,51 @@ test('게시글 목록에서 상세로 이동하고 뒤로 가며 deep-link hand
 
   await page.goto(`/@wrong-handle/${post.id}`);
   await expect(page).toHaveURL(new RegExp(`/@${viewer.profile!.handle}/${post.id}$`));
+  await expect(page.getByText(body)).toBeVisible();
+});
+
+test('연합 프로필 게시글은 relativeHandle URL을 유지하고 정규화한다', async ({ context, page }) => {
+  const body = 'E2E federated post detail body';
+  const viewer = await createE2ESession({ handle: 'e2e-federated-detail-viewer' });
+  const author = await createE2EProfile({ handle: 'e2e-federated-author' });
+  const post = await createE2EPost({
+    body,
+    profileId: author.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const relativeHandle = `@${author.handle}@remote.example`;
+
+  await setE2ESessionCookie(context, viewer.token);
+  await page.route('**/graphql', async (route) => {
+    if (!isGraphQLOperation(route.request().postData(), 'PostDetailQuery')) {
+      await route.continue();
+      return;
+    }
+
+    const response = await route.fetch();
+    const responseBody = (await response.json()) as {
+      data?: { node?: { profile?: { relativeHandle: string } | null } | null };
+    };
+    const profile = responseBody.data?.node?.profile;
+
+    if (profile) {
+      profile.relativeHandle = relativeHandle;
+    }
+
+    await route.fulfill({
+      body: JSON.stringify(responseBody),
+      contentType: 'application/json',
+      status: response.status(),
+    });
+  });
+
+  const canonicalPath = `/${relativeHandle}/${post.id}`;
+
+  await page.goto(canonicalPath);
+  await expect(page).toHaveURL(new RegExp(`${canonicalPath}$`));
+  await expect(page.getByText(body)).toBeVisible();
+
+  await page.goto(`/@wrong-handle/${post.id}`);
+  await expect(page).toHaveURL(new RegExp(`${canonicalPath}$`));
   await expect(page.getByText(body)).toBeVisible();
 });

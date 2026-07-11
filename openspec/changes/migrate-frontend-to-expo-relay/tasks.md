@@ -63,7 +63,7 @@
 
 - [x] 7.1 Docker build가 Relay compile·Expo web export를 수행하고 BFF와 `apps/app/dist`만 web runtime에 포함하도록 갱신한다
 - [x] 7.2 `docker-entrypoint.sh`, root scripts, web E2E/CI workflow와 artifact path를 새 app/web package 경계에 맞춘다
-- [ ] 7.3 production container에서 `/health`, `/`, `/graphql`, browser login callback, native session, WebFinger/ActivityPub smoke test를 실행한다
+- [x] 7.3 production container에서 `/health`, `/`, `/graphql`, browser login callback, native session, WebFinger/ActivityPub smoke test를 실행한다
 - [x] 7.4 Svelte routes/components, Mearie, Svelte Storybook, manual Android/iOS WebView source와 전용 dependency/config를 제거한다
 - [x] 7.5 pnpm CLI로 제거 dependency를 정리하고 lockfile, syncpack, workspace install을 검증한다
 - [x] 7.6 `docs/design/breakpoints.md`, `typography.md`와 관련 design 문서를 Expo/React Native Web 구현 위치로 갱신한다
