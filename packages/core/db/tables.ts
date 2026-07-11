@@ -273,7 +273,7 @@ export const PostContents = pgTable(
     bodyText: text('body_text').notNull(),
     bodyJson: jsonb('body_json').$type<TipTapDocument>().notNull(),
     bodyHtml: text('body_html'),
-    spoilerText: text('spoiler_text'),
+    contentWarning: text('content_warning'),
     createdAt: createdAt(),
   },
   (table) => [index().on(table.postId)],

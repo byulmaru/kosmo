@@ -32,7 +32,8 @@
   "scripts": {
     "drizzle:generate": "node ../../scripts/vault-run.mjs -- drizzle-kit generate",
     "drizzle:push": "node ../../scripts/vault-run.mjs -- drizzle-kit push",
-    "drizzle:studio": "node ../../scripts/vault-run.mjs -- drizzle-kit studio"
+    "drizzle:studio": "node ../../scripts/vault-run.mjs -- drizzle-kit studio",
+    "test:migration": "cd ../.. && node scripts/test-db.mjs reset && node --env-file .env.test --test 'packages/core/db/*.migration.test.mjs'"
   },
   "devDependencies": {
     "drizzle-kit": "1.0.0-beta.22"

@@ -48,7 +48,7 @@
 - UI 텍스트는 `SUIT`, 포스트 본문과 긴 입력은 `Pretendard`를 사용한다. React Native에는 CSS 상속이 없으므로 공용 primitive 또는 각 `Text`/`TextInput` style에서 family를 명시한다.
 - touch target은 최소 44×44를 확보하고 `accessibilityRole`, `accessibilityLabel`, `accessibilityState`를 실제 동작과 맞춘다. 선택 tab, disabled/loading button, modal/drawer 상태는 시각 표현만으로 전달하지 않는다.
 - `useWindowDimensions`로 layout 단계를 고르되 product breakpoint 값은 token에서 읽는다. render 중 플랫폼 전역 `window`를 직접 읽지 않는다.
-- 현재 TipTap 계약은 doc/paragraph/text subset이다. `apps/app/src/lib/tiptap.ts`의 pure TypeScript adapter로 plain text를 변환하고, 앱은 `@kosmo/core/validation/post-policy`와 `@kosmo/core/validation/profile` 같은 native-safe subpath만 import해 DOM TipTap runtime을 native bundle에 넣지 않는다. 저장·GraphQL 계약에서 TipTap을 완전히 제거할지는 별도 OpenSpec change에서 결정한다.
+- 현재 write 계약은 TipTap doc/paragraph/text subset이다. `apps/app/src/lib/tiptap.ts`의 pure TypeScript adapter는 composer의 plain text를 TipTap JSON으로 변환하는 write 경계에만 사용하고, 게시글 조회는 저장된 `bodyText`를 직접 표시한다. 앱은 `@kosmo/core/validation/post-policy`와 `@kosmo/core/validation/profile` 같은 native-safe subpath만 import해 DOM TipTap runtime을 native bundle에 넣지 않는다. 저장·GraphQL 계약의 TipTap 제거는 `simplify-post-content-to-plain-text` OpenSpec change가 담당한다.
 
 ## Storybook
 

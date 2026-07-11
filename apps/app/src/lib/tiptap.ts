@@ -15,10 +15,3 @@ export function createTipTapDocumentFromPlainText(text: string): TipTapDocument 
     }),
   };
 }
-
-export function extractPlainTextFromTipTapDocument(document: TipTapDocument): string {
-  return (document.content ?? [])
-    .map((paragraph) => (paragraph.content ?? []).map((text) => text.text).join(''))
-    .join('\n')
-    .trim();
-}

@@ -45,7 +45,7 @@ PostContent.implement({
   fields: (t) => ({
     bodyJson: t.expose('bodyJson', { type: 'TipTapDocument' }),
     bodyText: t.exposeString('bodyText'),
-    spoilerText: t.exposeString('spoilerText', { nullable: true }),
+    contentWarning: t.exposeString('contentWarning', { nullable: true }),
     createdAt: t.expose('createdAt', { type: 'DateTime' }),
   }),
 });
