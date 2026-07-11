@@ -1,0 +1,117 @@
+diff --git a/dist/mod.cjs b/dist/mod.cjs
+index 8d992b9..66bc206 100644
+--- a/dist/mod.cjs
++++ b/dist/mod.cjs
+@@ -49268,7 +49268,10 @@ async function lookupObject(identifier, options = {}) {
+ 	});
+ }
+ async function lookupObjectInternal(identifier, options = {}) {
+-	const documentLoader = options.documentLoader ?? (0, _fedify_vocab_runtime.getDocumentLoader)({ userAgent: options.userAgent });
++	const documentLoader = options.documentLoader ?? (0, _fedify_vocab_runtime.getDocumentLoader)({
++		userAgent: options.userAgent,
++		maxResponseSize: options.maxResponseSize
++	});
+ 	if (typeof identifier === "string") identifier = toAcctUrl(identifier) ?? new URL(identifier);
+ 	let remoteDoc = null;
+ 	if (identifier.protocol === "http:" || identifier.protocol === "https:") try {
+@@ -49282,6 +49285,7 @@ async function lookupObjectInternal(identifier, options = {}) {
+ 			tracerProvider: options.tracerProvider,
+ 			meterProvider: options.meterProvider,
+ 			allowPrivateAddress: "allowPrivateAddress" in options && options.allowPrivateAddress === true,
++			maxResponseSize: options.maxResponseSize,
+ 			signal: options.signal
+ 		});
+ 		if (jrd?.links == null) return null;
+diff --git a/dist/mod.d.cts b/dist/mod.d.cts
+index c6e9a94..44ab945 100644
+--- a/dist/mod.d.cts
++++ b/dist/mod.d.cts
+@@ -18714,6 +18714,11 @@ interface LookupObjectOptions {
+   */
+   meterProvider?: MeterProvider;
+   /**
++  * The maximum number of response body bytes to read while resolving the
++  * WebFinger resource descriptor.
++  */
++  maxResponseSize?: number;
++  /**
+   * AbortSignal for cancelling the request.
+   * @since 1.8.0
+   */
+diff --git a/dist/mod.d.ts b/dist/mod.d.ts
+index addc7b7..2f0b67d 100644
+--- a/dist/mod.d.ts
++++ b/dist/mod.d.ts
+@@ -18714,6 +18714,11 @@ interface LookupObjectOptions {
+   */
+   meterProvider?: MeterProvider;
+   /**
++  * The maximum number of response body bytes to read while resolving the
++  * WebFinger resource descriptor.
++  */
++  maxResponseSize?: number;
++  /**
+   * AbortSignal for cancelling the request.
+   * @since 1.8.0
+   */
+diff --git a/dist/mod.js b/dist/mod.js
+index c084813..c9a499c 100644
+--- a/dist/mod.js
++++ b/dist/mod.js
+@@ -49244,7 +49244,10 @@ async function lookupObject(identifier, options = {}) {
+ 	});
+ }
+ async function lookupObjectInternal(identifier, options = {}) {
+-	const documentLoader = options.documentLoader ?? getDocumentLoader({ userAgent: options.userAgent });
++	const documentLoader = options.documentLoader ?? getDocumentLoader({
++		userAgent: options.userAgent,
++		maxResponseSize: options.maxResponseSize
++	});
+ 	if (typeof identifier === "string") identifier = toAcctUrl(identifier) ?? new URL(identifier);
+ 	let remoteDoc = null;
+ 	if (identifier.protocol === "http:" || identifier.protocol === "https:") try {
+@@ -49258,6 +49261,7 @@ async function lookupObjectInternal(identifier, options = {}) {
+ 			tracerProvider: options.tracerProvider,
+ 			meterProvider: options.meterProvider,
+ 			allowPrivateAddress: "allowPrivateAddress" in options && options.allowPrivateAddress === true,
++			maxResponseSize: options.maxResponseSize,
+ 			signal: options.signal
+ 		});
+ 		if (jrd?.links == null) return null;
+diff --git a/src/lookup.ts b/src/lookup.ts
+index d2164ec..3920a21 100644
+--- a/src/lookup.ts
++++ b/src/lookup.ts
+@@ -158,6 +158,12 @@ export interface LookupObjectOptions {
+    */
+   meterProvider?: MeterProvider;
+ 
++  /**
++   * The maximum number of response body bytes to read while resolving the
++   * WebFinger resource descriptor.
++   */
++  maxResponseSize?: number;
++
+   /**
+    * AbortSignal for cancelling the request.
+    * @since 1.8.0
+@@ -268,7 +274,10 @@ async function lookupObjectInternal(
+   options: LookupObjectOptions = {},
+ ): Promise<Object | null> {
+   const documentLoader = options.documentLoader ??
+-    getDocumentLoader({ userAgent: options.userAgent });
++    getDocumentLoader({
++      userAgent: options.userAgent,
++      maxResponseSize: options.maxResponseSize,
++    });
+   if (typeof identifier === "string") {
+     identifier = toAcctUrl(identifier) ?? new URL(identifier);
+   }
+@@ -289,6 +298,7 @@ async function lookupObjectInternal(
+       meterProvider: options.meterProvider,
+       allowPrivateAddress: "allowPrivateAddress" in options &&
+         options.allowPrivateAddress === true,
++      maxResponseSize: options.maxResponseSize,
+       signal: options.signal,
+     });
+     if (jrd?.links == null) return null;

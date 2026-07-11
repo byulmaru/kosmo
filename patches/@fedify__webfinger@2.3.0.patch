@@ -1,0 +1,291 @@
+diff --git a/dist/mod.cjs b/dist/mod.cjs
+index a7cc6ba..66b6947 100644
+--- a/dist/mod.cjs
++++ b/dist/mod.cjs
+@@ -13,6 +13,52 @@ const logger = (0, _logtape_logtape.getLogger)([
+ 	"lookup"
+ ]);
+ const DEFAULT_MAX_REDIRECTION = 5;
++class ResponseBodyTooLargeError extends Error {
++	constructor(maxResponseSize) {
++		super(`Response body exceeds the configured limit of ${maxResponseSize} bytes.`);
++		this.name = "ResponseBodyTooLargeError";
++	}
++}
++async function readResponseJson(response, maxResponseSize) {
++	if (maxResponseSize == null) return await response.json();
++	const contentLength = response.headers.get("Content-Length");
++	const declaredSize = contentLength == null ? null : Number(contentLength);
++	if (declaredSize != null && Number.isSafeInteger(declaredSize) && declaredSize >= 0 && declaredSize > maxResponseSize) {
++		try {
++			await response.body?.cancel();
++		} catch {
++		}
++		throw new ResponseBodyTooLargeError(maxResponseSize);
++	}
++	const reader = response.body?.getReader();
++	if (reader == null) return await response.json();
++	const chunks = [];
++	let size = 0;
++	try {
++		while (true) {
++			const { done, value } = await reader.read();
++			if (done) break;
++			size += value.byteLength;
++			if (size > maxResponseSize) {
++				try {
++					await reader.cancel();
++				} catch {
++				}
++				throw new ResponseBodyTooLargeError(maxResponseSize);
++			}
++			chunks.push(value);
++		}
++	} finally {
++		reader.releaseLock();
++	}
++	const bytes = new Uint8Array(size);
++	let offset = 0;
++	for (const chunk of chunks) {
++		bytes.set(chunk, offset);
++		offset += chunk.byteLength;
++	}
++	return JSON.parse(new TextDecoder().decode(bytes));
++}
+ const WEBFINGER_HISTOGRAM_BUCKETS = [
+ 	5,
+ 	10,
+@@ -235,14 +281,14 @@ async function lookupWebFingerInternal(resource, options = {}) {
+ 		}
+ 		try {
+ 			return {
+-				resource: await response.json(),
++				resource: await readResponseJson(response, options.maxResponseSize),
+ 				result: "found",
+ 				statusCode: response.status,
+ 				remoteHost
+ 			};
+ 		} catch (e) {
+-			if (e instanceof SyntaxError) {
+-				logger.debug("Failed to parse WebFinger resource descriptor as JSON: {error}", { error: e });
++			if (e instanceof SyntaxError || e instanceof ResponseBodyTooLargeError) {
++				logger.debug("Failed to read WebFinger resource descriptor as JSON: {error}", { error: e });
+ 				return {
+ 					resource: null,
+ 					result: "invalid",
+diff --git a/dist/mod.d.cts b/dist/mod.d.cts
+index a126e2e..02d2637 100644
+--- a/dist/mod.d.cts
++++ b/dist/mod.d.cts
+@@ -112,6 +112,11 @@ interface LookupWebFingerOptions {
+   */
+   maxRedirection?: number;
+   /**
++  * The maximum response body size in bytes.  If omitted, the response body is
++  * unbounded.
++  */
++  maxResponseSize?: number;
++  /**
+   * The OpenTelemetry tracer provider.  If omitted, the global tracer provider
+   * is used.
+   */
+diff --git a/dist/mod.d.ts b/dist/mod.d.ts
+index a126e2e..02d2637 100644
+--- a/dist/mod.d.ts
++++ b/dist/mod.d.ts
+@@ -112,6 +112,11 @@ interface LookupWebFingerOptions {
+   */
+   maxRedirection?: number;
+   /**
++  * The maximum response body size in bytes.  If omitted, the response body is
++  * unbounded.
++  */
++  maxResponseSize?: number;
++  /**
+   * The OpenTelemetry tracer provider.  If omitted, the global tracer provider
+   * is used.
+   */
+diff --git a/dist/mod.js b/dist/mod.js
+index 3907895..2bb6962 100644
+--- a/dist/mod.js
++++ b/dist/mod.js
+@@ -12,6 +12,52 @@ const logger = getLogger([
+ 	"lookup"
+ ]);
+ const DEFAULT_MAX_REDIRECTION = 5;
++class ResponseBodyTooLargeError extends Error {
++	constructor(maxResponseSize) {
++		super(`Response body exceeds the configured limit of ${maxResponseSize} bytes.`);
++		this.name = "ResponseBodyTooLargeError";
++	}
++}
++async function readResponseJson(response, maxResponseSize) {
++	if (maxResponseSize == null) return await response.json();
++	const contentLength = response.headers.get("Content-Length");
++	const declaredSize = contentLength == null ? null : Number(contentLength);
++	if (declaredSize != null && Number.isSafeInteger(declaredSize) && declaredSize >= 0 && declaredSize > maxResponseSize) {
++		try {
++			await response.body?.cancel();
++		} catch {
++		}
++		throw new ResponseBodyTooLargeError(maxResponseSize);
++	}
++	const reader = response.body?.getReader();
++	if (reader == null) return await response.json();
++	const chunks = [];
++	let size = 0;
++	try {
++		while (true) {
++			const { done, value } = await reader.read();
++			if (done) break;
++			size += value.byteLength;
++			if (size > maxResponseSize) {
++				try {
++					await reader.cancel();
++				} catch {
++				}
++				throw new ResponseBodyTooLargeError(maxResponseSize);
++			}
++			chunks.push(value);
++		}
++	} finally {
++		reader.releaseLock();
++	}
++	const bytes = new Uint8Array(size);
++	let offset = 0;
++	for (const chunk of chunks) {
++		bytes.set(chunk, offset);
++		offset += chunk.byteLength;
++	}
++	return JSON.parse(new TextDecoder().decode(bytes));
++}
+ const WEBFINGER_HISTOGRAM_BUCKETS = [
+ 	5,
+ 	10,
+@@ -234,14 +280,14 @@ async function lookupWebFingerInternal(resource, options = {}) {
+ 		}
+ 		try {
+ 			return {
+-				resource: await response.json(),
++				resource: await readResponseJson(response, options.maxResponseSize),
+ 				result: "found",
+ 				statusCode: response.status,
+ 				remoteHost
+ 			};
+ 		} catch (e) {
+-			if (e instanceof SyntaxError) {
+-				logger.debug("Failed to parse WebFinger resource descriptor as JSON: {error}", { error: e });
++			if (e instanceof SyntaxError || e instanceof ResponseBodyTooLargeError) {
++				logger.debug("Failed to read WebFinger resource descriptor as JSON: {error}", { error: e });
+ 				return {
+ 					resource: null,
+ 					result: "invalid",
+diff --git a/src/lookup.ts b/src/lookup.ts
+index 5b35c47..37eeb40 100644
+--- a/src/lookup.ts
++++ b/src/lookup.ts
+@@ -22,6 +22,67 @@ const logger = getLogger(["fedify", "webfinger", "lookup"]);
+ 
+ const DEFAULT_MAX_REDIRECTION = 5;
+ 
++class ResponseBodyTooLargeError extends Error {
++  constructor(maxResponseSize: number) {
++    super(
++      `Response body exceeds the configured limit of ${maxResponseSize} bytes.`,
++    );
++    this.name = "ResponseBodyTooLargeError";
++  }
++}
++
++async function readResponseJson(
++  response: Response,
++  maxResponseSize?: number,
++): Promise<unknown> {
++  if (maxResponseSize == null) return await response.json();
++
++  const contentLength = response.headers.get("Content-Length");
++  const declaredSize = contentLength == null ? undefined : Number(contentLength);
++  if (
++    declaredSize != null && Number.isSafeInteger(declaredSize) &&
++    declaredSize >= 0 && declaredSize > maxResponseSize
++  ) {
++    try {
++      await response.body?.cancel();
++    } catch {
++      // Preserve the size-limit error even if the runtime rejects cancellation.
++    }
++    throw new ResponseBodyTooLargeError(maxResponseSize);
++  }
++
++  const reader = response.body?.getReader();
++  if (reader == null) return JSON.parse("");
++  const chunks: Uint8Array[] = [];
++  let size = 0;
++  try {
++    while (true) {
++      const { done, value } = await reader.read();
++      if (done) break;
++      size += value.byteLength;
++      if (size > maxResponseSize) {
++        try {
++          await reader.cancel();
++        } catch {
++          // Preserve the size-limit error even if the runtime rejects cancellation.
++        }
++        throw new ResponseBodyTooLargeError(maxResponseSize);
++      }
++      chunks.push(value);
++    }
++  } finally {
++    reader.releaseLock();
++  }
++
++  const bytes = new Uint8Array(size);
++  let offset = 0;
++  for (const chunk of chunks) {
++    bytes.set(chunk, offset);
++    offset += chunk.byteLength;
++  }
++  return JSON.parse(new TextDecoder().decode(bytes));
++}
++
+ /**
+  * The terminal classification of an outgoing {@link lookupWebFinger} call,
+  * recorded as the `webfinger.lookup.result` attribute on the
+@@ -160,6 +221,12 @@ export interface LookupWebFingerOptions {
+    */
+   maxRedirection?: number;
+ 
++  /**
++   * The maximum number of response body bytes to read.
++   * If omitted, the response body is unbounded.
++   */
++  maxResponseSize?: number;
++
+   /**
+    * The OpenTelemetry tracer provider.  If omitted, the global tracer provider
+    * is used.
+@@ -430,7 +497,10 @@ async function lookupWebFingerInternal(
+       };
+     }
+     try {
+-      const parsed = await response.json() as ResourceDescriptor;
++      const parsed = await readResponseJson(
++        response,
++        options.maxResponseSize,
++      ) as ResourceDescriptor;
+       return {
+         resource: parsed,
+         result: "found",
+@@ -438,9 +508,9 @@ async function lookupWebFingerInternal(
+         remoteHost,
+       };
+     } catch (e) {
+-      if (e instanceof SyntaxError) {
++      if (e instanceof SyntaxError || e instanceof ResponseBodyTooLargeError) {
+         logger.debug(
+-          "Failed to parse WebFinger resource descriptor as JSON: {error}",
++          "Failed to read WebFinger resource descriptor as JSON: {error}",
+           { error: e },
+         );
+         return {

@@ -195,6 +195,30 @@ describe('remote actor materialization', () => {
     assert.equal(instance.domain, remoteDomain);
   });
 
+  test('uses bounded loaders when the lookup context does not provide them', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () =>
+      new Response(new Uint8Array(1024 * 1024 + 1), {
+        headers: { 'content-type': 'application/activity+json' },
+      });
+
+    try {
+      const { context } = createLookupContext(async (_identifier, options) => {
+        const contextLoader = options?.contextLoader;
+        const documentLoader = options?.documentLoader;
+        assert.equal(typeof contextLoader, 'function');
+        assert.equal(typeof documentLoader, 'function');
+        await assert.rejects(contextLoader!(`https://${remoteDomain}/context`));
+        await assert.rejects(documentLoader!(`https://${remoteDomain}/actor`));
+        return createActor();
+      });
+
+      await materializeRemoteProfileActor({ context, handle: `alice@${remoteDomain}` });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test('applies the lookup deadline to document and context loaders', async () => {
     const documentLoader = createDocumentLoader();
     const contextLoader = createDocumentLoader();
@@ -207,6 +231,7 @@ describe('remote actor materialization', () => {
 
     const lookupOptions = lookupObject.mock.calls[0]?.arguments[1];
     assert.ok(lookupOptions?.signal instanceof AbortSignal);
+    assert.equal(lookupOptions?.maxResponseSize, 1024 * 1024);
     await lookupOptions?.documentLoader?.(`https://${remoteDomain}/actor`);
     await lookupOptions?.contextLoader?.(`https://${remoteDomain}/context`);
     assert.equal(documentLoader.mock.calls[0]?.arguments[1]?.signal, lookupOptions?.signal);
