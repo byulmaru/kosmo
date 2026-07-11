@@ -24,6 +24,7 @@ const remoteAliasDomain = 'alias.example';
 
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let db: typeof CoreDb.db;
+let first: typeof CoreDb.first;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
@@ -40,7 +41,7 @@ describe('remote actor materialization', () => {
     process.env.DATABASE_URL = databaseUrl;
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
-    ({ ActivityPubActors, db, firstOrThrow, Instances, pg, Profiles } =
+    ({ ActivityPubActors, db, first, firstOrThrow, Instances, pg, Profiles } =
       await import('@kosmo/core/db'));
     ({ seedDatabase } = await import('@kosmo/core/db/seed'));
     ({
@@ -542,6 +543,26 @@ describe('remote actor materialization', () => {
 
     assert.equal(await countRows(Profiles), 0);
     assert.equal(await countRows(ActivityPubActors), 0);
+  });
+
+  test('rejects a hostless canonical actor URI before creating an actor profile', async () => {
+    const actor = createActor({ id: new URL('urn:example:alice') });
+    const { context } = createLookupContext(async () => actor);
+
+    await assert.rejects(
+      materializeRemoteProfileActor({ context, handle: `alice@${remoteDomain}` }),
+      /Remote actor URI must use HTTP\(S\) with a hostname/,
+    );
+
+    assert.equal(await countRows(Profiles), 0);
+    assert.equal(await countRows(ActivityPubActors), 0);
+    const emptyDomainInstance = await db
+      .select()
+      .from(Instances)
+      .where(eq(Instances.domain, ''))
+      .limit(1)
+      .then(first);
+    assert.equal(emptyDomainInstance, undefined);
   });
 
   test('rejects handle collisions with a different actor URI', async () => {

@@ -311,17 +311,22 @@ export const materializeRemoteProfileActor = async ({
 
   const requestedRemoteInstance = await ensureRemoteInstance(parsed.domain);
   const actor = await lookupRemoteActor(context, `${parsed.normalizedHandle}@${parsed.domain}`);
+  const actorId = actor.id!;
 
-  if (actor.id!.origin === localInstance.canonicalOrigin) {
+  if ((actorId.protocol !== 'http:' && actorId.protocol !== 'https:') || !actorId.hostname) {
+    throw new RemoteActorMaterializationError('Remote actor URI must use HTTP(S) with a hostname.');
+  }
+
+  if (actorId.origin === localInstance.canonicalOrigin) {
     throw new ConflictError({ message: 'Remote actor URI uses the local origin' });
   }
 
   const projection = projectActor(actor as ActorWithKosmoFields, parsed.normalizedHandle);
   const endpoints = getActorEndpoints(actor as ActorWithKosmoFields);
-  const actorUri = actor.id!.href;
+  const actorUri = actorId.href;
   const actorType = toActorType(actor);
   const canonicalRemoteInstance = await ensureRemoteInstance(
-    actor.id!.host.toLowerCase().replace(/\.$/, ''),
+    actorId.host.toLowerCase().replace(/\.$/, ''),
   );
 
   const persistActor = () =>
