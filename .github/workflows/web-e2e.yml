@@ -12,6 +12,7 @@ permissions:
 
 concurrency:
   group: web-e2e
+  queue: max
   cancel-in-progress: false
 
 jobs:
