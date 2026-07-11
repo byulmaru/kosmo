@@ -15,6 +15,8 @@ such as `pnpm dev`. The default secret path is
 or `node scripts/vault-run.mjs --secret-path secret/kubernetes/kosmo/dev -- <command>`
 to point at another path.
 
+Local defaults are API `3000`, Hono web BFF `5173`, and Expo/Metro `8081`. Server deployments and tests override these defaults with `PORT`.
+
 ## Test Postgres
 
 Run a local PostgreSQL instance for tests with Docker Compose:
