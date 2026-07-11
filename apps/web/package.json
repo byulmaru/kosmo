@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc --noEmit",
     "check": "tsc --noEmit",
-    "dev": "tsx watch src/server/index.ts",
+    "dev": "PORT=5174 tsx watch src/server/index.ts",
     "start": "tsx src/server/index.ts",
     "test": "pnpm test:unit && pnpm test:e2e",
     "test:e2e": "playwright test --pass-with-no-tests",

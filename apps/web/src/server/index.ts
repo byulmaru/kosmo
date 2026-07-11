@@ -9,7 +9,7 @@ const app = createWebApp({
 
 serve({
   fetch: app.fetch,
-  port: Number(process.env.PORT ?? 5173),
+  port: Number(process.env.PORT ?? 5174),
 });
 
 export default app;

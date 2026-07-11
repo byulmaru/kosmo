@@ -62,6 +62,29 @@ describe('Relay network', () => {
 });
 
 describe('native web origin', () => {
+  it('uses the current browser origin before build-time configuration', () => {
+    const existingWindow = globalThis.window;
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { location: { origin: 'http://localhost:5173' } },
+    });
+
+    try {
+      assert.equal(getWebOrigin(), 'http://localhost:5173');
+    }
+    finally {
+      if (existingWindow) {
+        Object.defineProperty(globalThis, 'window', {
+          configurable: true,
+          value: existingWindow,
+        });
+      }
+      else {
+        Reflect.deleteProperty(globalThis, 'window');
+      }
+    }
+  });
+
   it('normalizes an HTTPS or loopback origin', () => {
     assert.equal(normalizeWebOrigin('https://kosmo.example/', false), 'https://kosmo.example');
     assert.equal(normalizeWebOrigin('http://127.0.0.1:4173', false), 'http://127.0.0.1:4173');

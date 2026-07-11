@@ -8,7 +8,7 @@
     "build": "pnpm export:web",
     "build-storybook": "storybook build --disable-telemetry",
     "check": "pnpm relay && tsc --noEmit",
-    "dev": "pnpm relay && expo start",
+    "dev": "pnpm relay && expo start --port 5173",
     "export:web": "pnpm relay && expo export --clear --platform web",
     "ios": "expo run:ios",
     "lint:relay": "relay-compiler",
@@ -20,7 +20,7 @@
     "storybook:dev": "storybook dev -p 6006 --disable-telemetry",
     "test:storybook": "vitest run --project=storybook",
     "test:unit": "node --import tsx --test 'src/**/*.test.ts'",
-    "web": "expo start --web"
+    "web": "expo start --web --port 5173"
   },
   "dependencies": {
     "@kosmo/core": "workspace:*",

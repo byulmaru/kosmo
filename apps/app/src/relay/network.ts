@@ -3,14 +3,14 @@ import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtim
 const loopbackHosts = new Set(['127.0.0.1', '[::1]', 'localhost']);
 
 export function getWebOrigin(): string {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return normalizeWebOrigin(window.location.origin, false);
+  }
+
   const configured = process.env.EXPO_PUBLIC_WEB_ORIGIN;
 
   if (configured) {
     return normalizeWebOrigin(configured, process.env.EXPO_PUBLIC_ALLOW_INSECURE_ORIGIN === '1');
-  }
-
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return normalizeWebOrigin(window.location.origin, false);
   }
 
   throw new Error('EXPO_PUBLIC_WEB_ORIGIN is required outside the browser.');
