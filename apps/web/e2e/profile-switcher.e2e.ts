@@ -16,7 +16,7 @@ test('selectProfile response carries selectedProfile and recreates the active Re
   await page.waitForURL('**/home');
 
   await createProfileFromSwitcher(page, 'alpha');
-  await expect(page.getByText('첫 프로필을 만들어 보세요')).toBeHidden();
+  await expect(page.getByText('프로필을 만들어 시작하세요')).toBeHidden();
   await expect(page.getByText('홈', { exact: true }).last()).toBeVisible();
   await page.goto('/compose');
   await expect(page.getByText('글쓰기', { exact: true }).last()).toBeVisible();
@@ -117,8 +117,8 @@ test('home onboarding stays hidden while the home active profile query errors', 
   await failGraphQLOperation(page, 'HomePageQuery');
   await page.reload();
 
-  await expect(page.getByText('사용할 프로필을 선택해 주세요')).toBeHidden();
-  await expect(page.getByRole('alert')).toContainText('화면을 불러오지 못했어요');
+  await expect(page.getByText('사용할 프로필을 선택해주세요')).toBeHidden();
+  await expect(page.getByRole('alert')).toContainText('홈을 불러오지 못했어요');
   expect(graphQLRequests.operationNames).toContain('HomePageQuery');
 });
 
@@ -158,9 +158,11 @@ async function createProfileFromSwitcher(page: Page, handle: string) {
   });
 
   await openProfileSwitcher(page);
-  await page.getByRole('button', { name: '새 프로필 추가' }).click();
-  await page.getByRole('textbox', { name: '새 프로필 핸들' }).fill(handle);
-  await page.getByRole('button', { name: '만들고 선택' }).click();
+  await page.getByRole('menuitem', { name: '새 프로필 추가' }).click();
+  const creationForm = page.getByRole('form', { name: '새 프로필 만들기' });
+
+  await creationForm.getByPlaceholder('새 프로필 핸들').fill(handle);
+  await creationForm.getByRole('button', { name: '만들기', exact: true }).click();
 
   const responseBody = (await (await createProfileResponse).json()) as {
     data?: {
@@ -192,6 +194,7 @@ async function createProfileFromSwitcher(page: Page, handle: string) {
 async function openProfileSwitcher(page: Page) {
   await expect(page.getByRole('progressbar')).toHaveCount(0);
   await page.getByRole('button', { name: '프로필 목록' }).first().click();
+  await expect(page.getByRole('menu', { name: '프로필 전환' })).toBeVisible();
 }
 
 async function selectProfileFromSwitcher(page: Page, handle: string) {
@@ -202,7 +205,7 @@ async function selectProfileFromSwitcher(page: Page, handle: string) {
 
   await openProfileSwitcher(page);
   await page
-    .getByRole('radio')
+    .getByRole('menuitemradio')
     .filter({ hasText: `@${handle}` })
     .click();
 
@@ -227,7 +230,7 @@ async function createPost(page: Page, body: string) {
   const createPostResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
 
   await page.goto('/compose');
-  const composer = page.getByLabel('새 게시글 작성');
+  const composer = page.getByLabel('새 게시글 작성').first();
 
   await composer.getByRole('textbox', { name: '게시글 본문' }).fill(body);
   await composer.getByRole('button', { name: '게시', exact: true }).click();
@@ -252,11 +255,11 @@ async function failGraphQLOperation(page: Page, operationName: string) {
 }
 
 function composerProfileHandle(page: Page, handle: string) {
-  return page.getByLabel('새 게시글 작성').getByText(`@${handle}`);
+  return page.getByLabel('새 게시글 작성').first().getByText(`@${handle}`);
 }
 
 function sidebarProfileHandle(page: Page, handle: string) {
-  return page.getByRole('button', { name: '프로필 목록' }).first().getByText(`@${handle}`);
+  return page.getByLabel('활성 프로필 핸들').filter({ hasText: `@${handle}` });
 }
 
 function waitForGraphQLOperation(page: Page, operationName: string) {

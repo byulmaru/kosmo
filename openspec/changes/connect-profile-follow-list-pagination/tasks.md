@@ -1,7 +1,5 @@
 ## 1. Route pagination state
 
-> Expo migration note: 완료 checkbox는 legacy Mearie 수동 pagination 이력으로 보존한다. 수동 edge merge와 cursor state는 migration change 5.6의 Relay `@refetchable`/`@connection`/`usePaginationFragment`가 supersede한다.
-
 - [x] 1.1 followers route query에 `after` 변수를 추가하고 첫 페이지와 다음 페이지를 구분해 조회할 수 있게 한다
 - [x] 1.2 following route query에 `after` 변수를 추가하고 첫 페이지와 다음 페이지를 구분해 조회할 수 있게 한다
 - [x] 1.3 handle 또는 첫 페이지 대상 profile이 바뀌면 누적 connection state와 다음 페이지 오류 상태를 초기화한다

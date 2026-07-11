@@ -21,8 +21,7 @@ export function normalizeWebOrigin(value: string, allowInsecure: boolean): strin
 
   try {
     origin = new URL(value);
-  }
-  catch {
+  } catch {
     throw new Error('EXPO_PUBLIC_WEB_ORIGIN must be a valid URL origin.');
   }
 

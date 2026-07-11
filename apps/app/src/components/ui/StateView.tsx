@@ -5,6 +5,7 @@ import { Button } from './Button';
 
 type StateViewProps = {
   actionLabel?: string;
+  alert?: boolean;
   description?: string;
   loading?: boolean;
   onAction?: () => void;
@@ -13,6 +14,7 @@ type StateViewProps = {
 
 export function StateView({
   actionLabel,
+  alert = false,
   description,
   loading = false,
   onAction,
@@ -21,7 +23,7 @@ export function StateView({
   const theme = useTheme();
 
   return (
-    <View accessibilityRole={loading ? undefined : 'alert'} style={styles.root}>
+    <View accessibilityRole={alert ? 'alert' : undefined} style={styles.root}>
       {loading ? <ActivityIndicator accessibilityLabel={title} color={theme.text} /> : null}
       <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
       {description ? (

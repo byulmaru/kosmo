@@ -3,7 +3,7 @@ import { expect, test } from './fixtures';
 import { isGraphQLOperation, readGraphQLOperation } from './graphql';
 import type { BrowserContext, Page } from '@playwright/test';
 
-const recentSearchesKey = 'kosmo.recent-searches';
+const recentSearchesKey = 'kosmo:recent-searches';
 
 async function signInSearchUser(
   context: BrowserContext,
@@ -35,6 +35,16 @@ async function expectSearchParams(page: Page, expected: Record<string, string>) 
     .toEqual({ pathname: '/search', ...expected });
 }
 
+async function expectSearchParamAbsent(page: Page, key: string) {
+  await expect
+    .poll(() => {
+      const url = new URL(page.url());
+      expect(url.pathname).toBe('/search');
+      return url.searchParams.get(key);
+    })
+    .toBeNull();
+}
+
 async function expectTabSelected(page: Page, name: string) {
   await expect(page.getByRole('tab', { name })).toHaveAttribute('aria-selected', 'true');
 }
@@ -53,12 +63,12 @@ test('검색 전 상태와 최근 검색을 React Native Web semantics로 표시
 
   const input = page.getByRole('textbox', { name: '검색어' });
   await expect(input).toBeVisible();
-  await expect(page.getByText('프로필을 검색해 보세요')).toBeVisible();
-  await expect(page.getByRole('tablist')).toHaveCount(0);
+  await expect(page.getByText('프로필을 검색해보세요')).toBeVisible();
+  await expect(page.getByRole('tablist', { name: '검색 결과 유형' })).toHaveCount(0);
 
   await input.focus();
   await expect(page.getByText('최근 검색', { exact: true })).toBeVisible();
-  await expect(page.getByText('최근 검색이 없어요.')).toBeVisible();
+  await expect(page.getByText('아직 최근 검색이 없어요.')).toBeVisible();
 });
 
 test('공백 검색은 사람 Relay query를 요청하지 않는다', async ({ context, page }) => {
@@ -72,7 +82,7 @@ test('공백 검색은 사람 Relay query를 요청하지 않는다', async ({ c
   });
 
   await page.goto('/search?q=%20%20%20&tab=people');
-  await expect(page.getByText('프로필을 검색해 보세요')).toBeVisible();
+  await expect(page.getByText('프로필을 검색해보세요')).toBeVisible();
   expect(peopleRequestCount).toBe(0);
 });
 
@@ -84,7 +94,9 @@ test('저장된 최근 검색을 표시하고 개별 항목을 삭제한다', as
 
   await expect(page.getByText('recent-alpha', { exact: true })).toBeVisible();
   await expect(page.getByText('recent-beta', { exact: true })).toBeVisible();
-  await page.getByRole('button', { exact: true, name: 'recent-alpha 최근 검색 삭제' }).click();
+  await expect(page.getByRole('link', { name: 'recent-alpha' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'recent-beta' })).toBeVisible();
+  await page.getByRole('button', { name: "최근 검색 'recent-alpha' 삭제" }).click();
 
   await expect(page.getByText('recent-alpha', { exact: true })).toHaveCount(0);
   expect(
@@ -99,12 +111,14 @@ test('최근 검색 항목을 선택하면 사람 검색 결과를 요청한다'
   await setRecentSearchesBeforeNavigation(page, [handle]);
   await page.goto('/search');
   await page.getByRole('textbox', { name: '검색어' }).focus();
-  await page.getByText(handle, { exact: true }).click();
+  await page.getByRole('link', { name: handle }).click();
 
   await expectSearchParams(page, { q: handle, tab: 'people' });
   await expectTabSelected(page, '사람');
-  await expect(page.getByText(displayName, { exact: true }).last()).toBeVisible();
-  await expect(page.getByText(`@${handle}`, { exact: true }).last()).toBeVisible();
+  await expect(page.getByRole('link', { name: new RegExp(displayName) })).toHaveAttribute(
+    'href',
+    `/@${handle}`,
+  );
 });
 
 test('handle 제출은 operationName을 포함한 Relay request와 사람 결과를 만든다', async ({
@@ -130,7 +144,10 @@ test('handle 제출은 operationName을 포함한 Relay request와 사람 결과
 
   await expectSearchParams(page, { q: handle, tab: 'people' });
   await expectTabSelected(page, '사람');
-  await expect(page.getByText(displayName, { exact: true }).last()).toBeVisible();
+  await expect(page.getByRole('link', { name: new RegExp(displayName) })).toHaveAttribute(
+    'href',
+    `/@${handle}`,
+  );
   expect(operationName).toBe('SearchPeopleByHandlePageQuery');
 });
 
@@ -140,7 +157,10 @@ test('알 수 없는 tab은 사람 탭으로 정규화한다', async ({ context,
   await page.goto(`/search?q=${handle}&tab=unknown`);
 
   await expectTabSelected(page, '사람');
-  await expect(page.getByText(`@${handle}`, { exact: true }).last()).toBeVisible();
+  await expect(page.getByRole('link', { name: new RegExp(`@${handle}`) })).toHaveAttribute(
+    'href',
+    `/@${handle}`,
+  );
 });
 
 test('사람 외 탭은 q를 유지하고 준비 중 상태를 보여준다', async ({ context, page }) => {
@@ -167,10 +187,37 @@ test('존재하지 않는 handle은 결과 없음 상태를 보여준다', async
   await page.goto(`/search?q=${handle}&tab=people`);
 
   await expect(page.getByText('검색 결과가 없어요')).toBeVisible();
-  await expect(page.getByText(`@${handle} 프로필이 존재하지 않아요.`)).toBeVisible();
+  await expect(page.getByText(`'${handle}'에 해당하는 프로필을 찾지 못했어요.`)).toBeVisible();
 });
 
-test('사람 검색 실패는 공용 Relay 오류 경계에서 다시 시도할 수 있다', async ({ context, page }) => {
+test('검색 지우기와 뒤로가기 컨트롤은 q를 제거하고 검색 전 단계로 돌린다', async ({
+  context,
+  page,
+}) => {
+  const handle = 'e2e-control-target';
+  await signInSearchUser(context, { handle });
+  await page.goto(`/search?q=${handle}&tab=people`);
+
+  const input = page.getByRole('textbox', { name: '검색어' });
+  await page.getByRole('button', { name: '검색 지우기' }).click();
+
+  await expect(input).toHaveValue('');
+  await expectSearchParams(page, { tab: 'people' });
+  await expectSearchParamAbsent(page, 'q');
+  await expect(input).toBeFocused();
+  await expect(page.getByRole('tablist', { name: '검색 결과 유형' })).toHaveCount(0);
+
+  await input.fill(handle);
+  await input.press('Enter');
+  await expectSearchParams(page, { q: handle, tab: 'people' });
+  await page.getByRole('link', { name: '뒤로' }).click();
+
+  await expectSearchParams(page, { tab: 'people' });
+  await expectSearchParamAbsent(page, 'q');
+  await expect(page.getByText('프로필을 검색해보세요')).toBeVisible();
+});
+
+test('사람 검색 실패는 검색 결과 오류 경계에서 다시 시도할 수 있다', async ({ context, page }) => {
   let peopleRequestCount = 0;
   await signInSearchUser(context);
   await page.route('**/graphql', async (route) => {
@@ -188,7 +235,7 @@ test('사람 검색 실패는 공용 Relay 오류 경계에서 다시 시도할 
   });
   await page.goto('/search?q=e2e-error-target&tab=people');
 
-  await expect(page.getByRole('alert')).toContainText('화면을 불러오지 못했어요');
+  await expect(page.getByRole('alert')).toContainText('검색 결과를 불러오지 못했어요');
   const previousCount = peopleRequestCount;
   await page.getByRole('button', { name: '다시 시도' }).click();
   await expect.poll(() => peopleRequestCount).toBeGreaterThan(previousCount);

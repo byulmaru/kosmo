@@ -1,11 +1,11 @@
-import { useRouter } from 'expo-router';
+import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatPostDate } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { radii, spacing, typography } from '@/theme/tokens';
 import { PostBody } from './PostBody';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
 
@@ -33,21 +33,33 @@ const visibilityLabels: Record<string, string> = {
 
 export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
   const theme = useTheme();
-  const router = useRouter();
   const post = useFragment(PostLayoutFragment, postKey);
   const profileHref = `/@${post.profile.handle}` as const;
 
   return (
     <View style={styles.root}>
-      <Pressable onPress={() => router.push(profileHref)}>
-        <Avatar label={post.profile.displayName} size={40} />
-      </Pressable>
+      <Link asChild href={profileHref}>
+        <Pressable
+          aria-hidden
+          accessibilityElementsHidden
+          accessible={false}
+          focusable={false}
+          importantForAccessibility="no-hide-descendants"
+          style={styles.avatar}
+          tabIndex={-1}
+        >
+          <Avatar label={post.profile.displayName || post.profile.handle} size={40} />
+        </Pressable>
+      </Link>
       <View style={styles.content}>
         <ProfileNameBlock href={profileHref} profile={post.profile} />
-        <PostBody post={post} size="lg" />
-        <Text style={[styles.meta, { color: theme.textSecondary }]}>
-          {formatPostDate(post.createdAt)} · {visibilityLabels[post.visibility] ?? post.visibility}
-        </Text>
+        <View style={styles.body}>
+          <PostBody post={post} size="lg" />
+          <Text style={[styles.meta, { color: theme.textSecondary }]}>
+            {formatPostDate(post.createdAt)} ·{' '}
+            {visibilityLabels[post.visibility] ?? post.visibility}
+          </Text>
+        </View>
       </View>
     </View>
   );
@@ -55,6 +67,8 @@ export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
 
 const styles = StyleSheet.create({
   root: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.md },
-  content: { flex: 1, gap: spacing.md, minWidth: 0 },
-  meta: { fontFamily: 'SUIT', textAlign: 'right', ...typography.sm },
+  avatar: { borderRadius: radii.full },
+  content: { flex: 1, gap: spacing.xs, minWidth: 0 },
+  body: { minWidth: 0 },
+  meta: { fontFamily: 'SUIT', marginTop: 6, textAlign: 'right', ...typography.xsm },
 });

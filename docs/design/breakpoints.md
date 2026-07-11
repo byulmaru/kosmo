@@ -29,7 +29,7 @@ React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owne
 - `compact`~`full`에서는 아이콘 레일이 layout flow 안에서 sticky viewport column으로 고정된다. 레일 자체가 스크롤 가능한 콘텐츠를 갖지 않는 한 wheel 입력은 document scroll로 이어진다.
 - `≥ full`에서는 풀 사이드바와 우측 레일이 각각 layout flow 안의 sticky column으로 배치된다. 두 rail은 중앙 컬럼과 겹치지 않도록 width 계산에 참여한다.
 - 우측 레일 콘텐츠가 viewport보다 긴 경우 rail 내부 overflow를 허용할 수 있지만, 중앙 피드를 별도 internal scroller로 만들지는 않는다.
-- 일반 route 이동과 back/forward는 Expo Router와 browser history의 document scroll policy에 맞춘다. 검색 화면의 query-only `router.replace`는 현재 document scroll과 입력 focus를 보존하도록 명시적으로 검증한다.
+- 일반 route 이동과 back/forward는 Expo Router와 browser history의 document scroll policy에 맞춘다. 검색 화면의 query-only `router.push`/`setParams` 이동은 현재 document scroll과 입력 focus를 보존하도록 명시적으로 검증한다.
 - shell chrome에서 중앙 피드로 wheel 이벤트를 인위적으로 전달하지 않는다.
 
 ## 구현 위치

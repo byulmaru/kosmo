@@ -1,13 +1,14 @@
 import { Slot } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
-import { ProfileRouteBoundary } from '@/components/profile/ProfileRouteBoundary';
 import { useProfileHandle } from '@/components/profile/route';
+import { RouteBoundary } from '@/components/RouteBoundary';
 import { StateView } from '@/components/ui/StateView';
 import { useRelayActor } from '@/relay/RelayActorProvider';
+import type { ReactNode } from 'react';
 import type { ProfileLayoutQuery as ProfileLayoutQueryType } from './__generated__/ProfileLayoutQuery.graphql';
 
 const ProfileLayoutQuery = graphql`
@@ -26,18 +27,18 @@ export default function ProfileLayout() {
   const [fetchKey, setFetchKey] = useState(0);
 
   return (
-    <ProfileRouteBoundary
+    <RouteBoundary
       key={handle}
       loading={
-        <ScrollView style={styles.scroll}>
+        <ProfileRouteContainer>
           <ProfileHero loading />
-        </ScrollView>
+        </ProfileRouteContainer>
       }
       onRetry={() => setFetchKey((key) => key + 1)}
       title="프로필을 불러오지 못했어요"
     >
       <ProfileLayoutContent fetchKey={`${revision}:${fetchKey}`} handle={handle} />
-    </ProfileRouteBoundary>
+    </RouteBoundary>
   );
 }
 
@@ -59,11 +60,22 @@ function ProfileLayoutContent({ fetchKey, handle }: { fetchKey: string; handle: 
   }
 
   return (
-    <ScrollView style={styles.scroll}>
+    <ProfileRouteContainer>
       <ProfileHero action={<FollowButton profile={profile} />} profile={profile} />
       <Slot />
-    </ScrollView>
+    </ProfileRouteContainer>
   );
 }
 
-const styles = StyleSheet.create({ scroll: { flex: 1 } });
+function ProfileRouteContainer({ children }: { children: ReactNode }) {
+  return Platform.OS === 'web' ? (
+    <View style={styles.webRoot}>{children}</View>
+  ) : (
+    <ScrollView style={styles.nativeRoot}>{children}</ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  nativeRoot: { flex: 1 },
+  webRoot: { width: '100%' },
+});

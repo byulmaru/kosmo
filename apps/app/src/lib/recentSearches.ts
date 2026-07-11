@@ -1,14 +1,24 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-const KEY = 'kosmo.recent-searches';
+// Keep the existing web key so a framework migration does not discard browser history.
+// SecureStore keys cannot contain `:`, so native uses a platform-safe equivalent.
+const NATIVE_KEY = 'kosmo.recent-searches';
+const WEB_KEY = 'kosmo:recent-searches';
 const LIMIT = 8;
 
 export async function readRecentSearches(): Promise<string[]> {
-  const serialized =
-    Platform.OS === 'web'
-      ? globalThis.localStorage?.getItem(KEY)
-      : await SecureStore.getItemAsync(KEY).catch(() => null);
+  let serialized: string | null | undefined;
+
+  if (Platform.OS === 'web') {
+    try {
+      serialized = globalThis.localStorage?.getItem(WEB_KEY);
+    } catch {
+      return [];
+    }
+  } else {
+    serialized = await SecureStore.getItemAsync(NATIVE_KEY).catch(() => null);
+  }
 
   if (!serialized) {
     return [];
@@ -19,8 +29,7 @@ export async function readRecentSearches(): Promise<string[]> {
     return Array.isArray(value)
       ? value.filter((item): item is string => typeof item === 'string').slice(0, LIMIT)
       : [];
-  }
-  catch {
+  } catch {
     return [];
   }
 }
@@ -29,11 +38,15 @@ export async function writeRecentSearches(searches: string[]): Promise<void> {
   const serialized = JSON.stringify(searches.slice(0, LIMIT));
 
   if (Platform.OS === 'web') {
-    globalThis.localStorage?.setItem(KEY, serialized);
+    try {
+      globalThis.localStorage?.setItem(WEB_KEY, serialized);
+    } catch {
+      // Preserve the previous web behavior when storage is unavailable or blocked.
+    }
     return;
   }
 
-  await SecureStore.setItemAsync(KEY, serialized);
+  await SecureStore.setItemAsync(NATIVE_KEY, serialized).catch(() => undefined);
 }
 
 export function addRecentSearch(searches: string[], term: string): string[] {

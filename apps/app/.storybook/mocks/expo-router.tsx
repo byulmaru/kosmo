@@ -1,4 +1,12 @@
-import { createContext, Fragment, useContext, useMemo, useState } from 'react';
+import {
+  cloneElement,
+  createContext,
+  Fragment,
+  isValidElement,
+  useContext,
+  useMemo,
+  useState,
+} from 'react';
 import { Text } from 'react-native';
 import type { PropsWithChildren, ReactNode } from 'react';
 
@@ -59,8 +67,26 @@ export function useRouter() {
   );
 }
 
-export function Link({ children }: PropsWithChildren<{ asChild?: boolean; href: Href }>) {
-  return <Fragment>{children}</Fragment>;
+export function Link({
+  asChild,
+  children,
+  href,
+}: PropsWithChildren<{ asChild?: boolean; href: Href }>) {
+  const { setPathname } = useContext(RouterContext);
+  if (
+    !asChild ||
+    !isValidElement<{ href?: string; onPress?: (event: unknown) => void }>(children)
+  ) {
+    return <Fragment>{children}</Fragment>;
+  }
+
+  return cloneElement(children, {
+    href: typeof href === 'string' ? href : href.pathname,
+    onPress: (event: unknown) => {
+      children.props.onPress?.(event);
+      setPathname(href);
+    },
+  });
 }
 
 export function Slot() {

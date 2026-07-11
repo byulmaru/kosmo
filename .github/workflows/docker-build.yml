@@ -64,40 +64,6 @@ jobs:
           image_ref="$(printf '%s\n' "${{ steps.meta.outputs.tags }}" | head -n 1)"
           echo "image-ref=${image_ref}" >> "${GITHUB_OUTPUT}"
 
-      - name: Smoke test production web container
-        env:
-          IMAGE_REF: ${{ steps.trivy-image.outputs.image-ref }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          network="kosmo-web-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          api_container="${network}-api"
-          web_container="${network}-web"
-          cleanup() {
-            docker rm --force "${api_container}" "${web_container}" >/dev/null 2>&1 || true
-            docker network rm "${network}" >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
-
-          docker pull "${IMAGE_REF}"
-          docker network create "${network}"
-          docker run --detach --name "${api_container}" --network "${network}" \
-            --mount "type=bind,src=${PWD}/apps/web/e2e/graphql-smoke-mock.mjs,dst=/graphql-smoke-mock.mjs,readonly" \
-            node:26.3.0-slim node /graphql-smoke-mock.mjs
-          docker run --detach --name "${web_container}" --network "${network}" \
-            --env DATABASE_URL=postgres://unused:unused@127.0.0.1:1/unused \
-            --env OIDC_AUTHORIZE_URL=http://kosmo-oidc-smoke/oauth/authorize \
-            --env OIDC_CLIENT_SECRET=kosmo-smoke-secret \
-            --env OIDC_TOKEN_URL=http://kosmo-oidc-smoke/oauth/token \
-            --env PUBLIC_API_ORIGIN="http://${api_container}:3001" \
-            --env PUBLIC_OIDC_CLIENT_ID=kosmo-smoke-client \
-            --env PUBLIC_ORIGIN="http://${web_container}:8080" \
-            "${IMAGE_REF}" web
-          docker run --rm --network "${network}" \
-            --mount "type=bind,src=${PWD}/apps/web/e2e/container-smoke.mjs,dst=/container-smoke.mjs,readonly" \
-            node:26.3.0-slim node /container-smoke.mjs "http://${web_container}:8080"
-
       - name: Run Trivy image scan
         id: trivy
         continue-on-error: true

@@ -2,27 +2,26 @@ import { Component, Suspense } from 'react';
 import { StateView } from '@/components/ui/StateView';
 import type { ErrorInfo, ReactNode } from 'react';
 
-type ProfileRouteBoundaryProps = {
+type RouteBoundaryProps = {
   children: ReactNode;
+  description?: string;
+  error?: (retry: () => void) => ReactNode;
   loading: ReactNode;
   onRetry: () => void;
   title: string;
 };
 
-type ProfileRouteBoundaryState = { failed: boolean };
+type RouteBoundaryState = { failed: boolean };
 
-export class ProfileRouteBoundary extends Component<
-  ProfileRouteBoundaryProps,
-  ProfileRouteBoundaryState
-> {
+export class RouteBoundary extends Component<RouteBoundaryProps, RouteBoundaryState> {
   state = { failed: false };
 
-  static getDerivedStateFromError(): ProfileRouteBoundaryState {
+  static getDerivedStateFromError(): RouteBoundaryState {
     return { failed: true };
   }
 
   componentDidCatch(error: unknown, info: ErrorInfo) {
-    console.error('Profile route error', error, info.componentStack);
+    console.error('Route error', error, info.componentStack);
   }
 
   private retry = () => {
@@ -32,10 +31,15 @@ export class ProfileRouteBoundary extends Component<
 
   render() {
     if (this.state.failed) {
+      if (this.props.error) {
+        return this.props.error(this.retry);
+      }
+
       return (
         <StateView
           actionLabel="다시 시도"
-          description="잠시 후 다시 시도해주세요."
+          alert
+          description={this.props.description ?? '잠시 후 다시 시도해주세요.'}
           onAction={this.retry}
           title={this.props.title}
         />

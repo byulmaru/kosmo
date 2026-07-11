@@ -16,7 +16,7 @@ const config: ExpoConfig = {
   version: '0.0.1',
   scheme: 'kosmo',
   orientation: 'default',
-  userInterfaceStyle: 'automatic',
+  userInterfaceStyle: 'light',
   ios: {
     buildNumber: '1',
     bundleIdentifier: 'moe.kos',

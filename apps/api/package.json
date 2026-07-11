@@ -3,7 +3,7 @@
   "type": "module",
   "scripts": {
     "db:bootstrap-local-instance": "tsx scripts/bootstrap-local-instance.ts",
-    "dev": "PORT=3000 tsx watch src/index.ts",
+    "dev": "tsx watch src/index.ts",
     "start": "node --import tsx src/index.ts",
     "lint:tsc": "tsc --noEmit"
   },

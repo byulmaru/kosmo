@@ -22,8 +22,7 @@ export const postBodyTipTapDocumentSchema = z.unknown().superRefine((value, ctx)
         message: `본문은 ${postBodyMaxLength.toLocaleString('ko-KR')}자까지 작성할 수 있어요.`,
       });
     }
-  }
-  catch {
+  } catch {
     ctx.addIssue({
       code: 'custom',
       message: '유효하지 않은 본문 형식입니다.',

@@ -14,6 +14,7 @@ import { Splash } from '@/components/Splash';
 import { initialActorState, reduceActorState } from './actorState';
 import { createRelayEnvironment } from './environment';
 import type { PropsWithChildren } from 'react';
+import type { Environment } from 'relay-runtime';
 
 type RelayActorValue = {
   clearNativeSession: () => Promise<void>;
@@ -26,7 +27,12 @@ type RelayActorValue = {
 
 const RelayActorContext = createContext<RelayActorValue | null>(null);
 
-export function RelayActorProvider({ children }: PropsWithChildren) {
+export function RelayActorProvider({
+  children,
+  createEnvironment = createRelayEnvironment,
+}: PropsWithChildren<{
+  createEnvironment?: (token: string | null) => Environment;
+}>) {
   const [nativeToken, setNativeToken] = useState<string | null | undefined>(
     Platform.OS === 'web' ? null : undefined,
   );
@@ -61,9 +67,9 @@ export function RelayActorProvider({ children }: PropsWithChildren) {
   }, []);
 
   const environment = useMemo(
-    () => createRelayEnvironment(nativeToken ?? null),
+    () => createEnvironment(nativeToken ?? null),
     // actorId intentionally invalidates selected-profile-scoped cached fields.
-    [actor.id, actor.revision, nativeToken],
+    [actor.id, actor.revision, createEnvironment, nativeToken],
   );
   const value = useMemo(
     () => ({

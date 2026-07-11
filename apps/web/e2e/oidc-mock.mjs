@@ -92,8 +92,7 @@ const server = createServer(async (request, response) => {
     let body;
     try {
       body = await readJsonBody(request);
-    }
-    catch {
+    } catch {
       sendJson(response, 400, { error: 'invalid_json' });
       return;
     }

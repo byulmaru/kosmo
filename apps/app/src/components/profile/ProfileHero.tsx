@@ -4,7 +4,7 @@ import { graphql, useFragment } from 'react-relay';
 import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { radii, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { ProfileHero_profile$key } from './__generated__/ProfileHero_profile.graphql';
@@ -37,16 +37,26 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
 
   if (loading) {
     return (
-      <View accessibilityLabel="프로필을 불러오는 중입니다." accessibilityRole="progressbar">
-        <View style={[styles.cover, { backgroundColor: theme.surface }]} />
-        <View style={styles.body}>
-          <View style={[styles.avatarSkeleton, { backgroundColor: theme.surface }]} />
-          <View style={styles.skeletonCopy}>
-            <Skeleton height={20} width="50%" />
-            <Skeleton height={16} width="30%" />
-            <Skeleton height={16} width="70%" />
+      <View>
+        <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          <View style={[styles.cover, { backgroundColor: theme.surface }]} />
+          <View style={styles.body}>
+            <View
+              style={[
+                styles.avatarSkeleton,
+                { backgroundColor: theme.surface, borderColor: theme.background },
+              ]}
+            />
+            <View style={styles.skeletonCopy}>
+              <Skeleton height={20} width="50%" />
+              <Skeleton height={16} width="30%" />
+              <Skeleton height={16} width="70%" />
+            </View>
           </View>
         </View>
+        <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
+          프로필을 불러오는 중입니다.
+        </Text>
       </View>
     );
   }
@@ -68,7 +78,9 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
           </View>
           {action ? <View style={styles.action}>{action}</View> : null}
         </View>
-        <Text style={[styles.displayName, { color: theme.text }]}>{data.displayName}</Text>
+        <Text accessibilityRole="header" style={[styles.displayName, { color: theme.text }]}>
+          {data.displayName}
+        </Text>
         <Text style={[styles.handle, { color: theme.textSecondary }]}>{data.relativeHandle}</Text>
         {data.bio ? <Text style={[styles.bio, { color: theme.text }]}>{data.bio}</Text> : null}
         <View style={styles.counts}>
@@ -99,8 +111,14 @@ const styles = StyleSheet.create({
   cover: { height: 104, width: '100%' },
   body: { paddingHorizontal: spacing.lg },
   avatarRow: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between' },
-  avatarBorder: { borderRadius: 999, marginTop: -40, padding: 4 },
-  avatarSkeleton: { borderRadius: 999, height: 80, marginTop: -40, width: 80 },
+  avatarBorder: { borderRadius: radii.full, marginTop: -40, padding: spacing.xs },
+  avatarSkeleton: {
+    borderRadius: radii.full,
+    borderWidth: spacing.xs,
+    height: 80,
+    marginTop: -40,
+    width: 80,
+  },
   action: { marginTop: spacing.md },
   displayName: { fontFamily: 'SUIT', fontWeight: '700', marginTop: spacing.md, ...typography.xl },
   handle: { fontFamily: 'SUIT', ...typography.sm },
@@ -110,4 +128,12 @@ const styles = StyleSheet.create({
   count: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
   countLabel: { fontFamily: 'SUIT', ...typography.sm },
   skeletonCopy: { gap: spacing.sm, marginTop: spacing.lg },
+  srOnly: {
+    height: 1,
+    left: 0,
+    overflow: 'hidden',
+    position: 'absolute',
+    top: 0,
+    width: 1,
+  },
 });

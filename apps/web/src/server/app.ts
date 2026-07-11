@@ -200,8 +200,7 @@ export const createWebApp = ({
       }
 
       headers.set('authorization', explicitAuthorization);
-    }
-    else if (sessionToken) {
+    } else if (sessionToken) {
       headers.set('authorization', `Bearer ${sessionToken}`);
     }
 

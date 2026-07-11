@@ -4,7 +4,7 @@ kosmo는 로컬 프로필, 게시글, 팔로우의 SNS 뼈대가 갖춰졌지만
 
 ## What Changes
 
-- `apps/web` Hono BFF는 ActivityPub/WebFinger path를 Fedify `federation.fetch`에 전달하고, 요청 처리 로직은 workspace package인 `packages/fedify`가 소유한다.
+- `apps/web` SvelteKit 서버는 Fedify hook 연결만 담당하고, ActivityPub/WebFinger 요청 처리 로직은 새 workspace package인 `packages/fedify`가 소유한다.
 - WebFinger `acct:{handle}@{localDomain}` 조회가 local active profile을 actor URI `{localOrigin}/ap/actor/{profile.id}`로 연결하도록 정의한다.
 - actor document는 `Person`의 `id`, `preferredUsername`, `name`, `url`, `published`, `inbox`, `outbox`, `publicKey`, `assertionMethods`를 보장한다.
 - `inbox`, `outbox`는 ActivityPub actor 필수 속성으로 actor-scoped URI를 광고하되, 실제 delivery/submission/collection endpoint 동작은 이번 범위에서 제공하지 않는다.
@@ -19,7 +19,7 @@ kosmo는 로컬 프로필, 게시글, 팔로우의 SNS 뼈대가 갖춰졌지만
 
 ### New Capabilities
 
-- `activitypub-actor-discovery`: Fedify 기반 WebFinger, actor document, actor key dispatch, web BFF 연결, 이번 cycle의 federation 포함/제외 범위를 다룬다.
+- `activitypub-actor-discovery`: Fedify 기반 WebFinger, actor document, actor key dispatch, SvelteKit hook adapter 연결, 이번 cycle의 federation 포함/제외 범위를 다룬다.
 
 ### Modified Capabilities
 
@@ -29,9 +29,9 @@ kosmo는 로컬 프로필, 게시글, 팔로우의 SNS 뼈대가 갖춰졌지만
 
 ## Impact
 
-- `apps/web`: Hono BFF가 `/.well-known/*`, `/ap/*`를 `packages/fedify`가 제공하는 `federation.fetch`로 전달한다.
+- `apps/web`: SvelteKit `hooks.server.ts`에서 `packages/fedify`가 제공하는 federation 구성과 Fedify SvelteKit hook adapter를 연결한다.
 - `packages/fedify`: Fedify root federation singleton, actor dispatcher 설정, WebFinger handle mapping dispatcher, key pair dispatcher, ActivityPub object assembly를 소유하고, federation request 처리와 HTTP 응답 조립은 Fedify hook/fetch 흐름에 맡긴다. 이번 workspace 경계 PR에서는 임시 `MemoryKvStore`를 사용하며, production durable KV store 선택은 후속 구현에서 교체한다.
 - `packages/core/db`: `instance`와 ActivityPub actor 관련 테이블, `profile.instance_id`, 관련 unique/index/relation, table discriminator가 추가된다.
 - `apps/api`: GraphQL `Profile.relativeHandle` 필드, remote profile Node 조회 정책, remote profile active selection/follow/unfollow/viewerFollow 차단 정책, remote profile posts 빈 connection 정책을 반영한다.
-- dependency: `packages/fedify`가 `@fedify/fedify`를 소유하고, `apps/web`은 workspace dependency `@kosmo/fedify`만 사용한다. SvelteKit 전용 `@fedify/sveltekit` adapter는 Expo/Hono cutover에서 제거한다.
+- dependency: 이번 workspace 경계 PR에서는 `packages/fedify`에 `@fedify/fedify`를 추가하고, `apps/web`에는 `@kosmo/fedify`와 공식 SvelteKit hook adapter인 `@fedify/sveltekit`을 추가한다.
 - 환경/운영: configured local instance canonical origin/domain은 DB row가 source of truth이며, `PUBLIC_ORIGIN`은 초기 local instance bootstrap 입력과 runtime local instance 검증 입력으로 사용한다.

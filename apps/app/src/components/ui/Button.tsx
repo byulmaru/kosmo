@@ -25,6 +25,8 @@ export function Button({
   const backgroundColor =
     tone === 'primary' ? theme.primary : tone === 'danger' ? theme.danger : theme.card;
   const color = tone === 'danger' ? '#ffffff' : theme.text;
+  const borderColor = tone === 'secondary' ? theme.border : 'transparent';
+  const borderWidth = tone === 'secondary' ? 1 : 0;
 
   return (
     <Pressable
@@ -35,8 +37,9 @@ export function Button({
         styles.root,
         {
           backgroundColor,
-          borderColor: theme.border,
-          opacity: disabled ? 0.45 : state.pressed ? 0.75 : 1,
+          borderColor,
+          borderWidth,
+          opacity: disabled || loading ? 0.45 : state.pressed ? 0.95 : 1,
         },
         typeof style === 'function' ? style(state) : style,
       ]}
@@ -54,9 +57,9 @@ export function Button({
 const styles = StyleSheet.create({
   root: {
     alignItems: 'center',
-    borderRadius: radii.md,
-    borderWidth: 1,
-    minHeight: 44,
+    borderRadius: radii.sm,
+    minHeight: 40,
+    minWidth: 120,
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,

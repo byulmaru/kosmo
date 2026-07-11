@@ -1,7 +1,5 @@
 ## 1. 최신 기준 재확인
 
-> Expo migration note: 완료 checkbox는 legacy Svelte document-scroll/sticky-rail 구현 이력으로 보존한다. 최종 UI 경로와 남은 smoke는 migration change 4.2/4.3/6.3/6.5의 Expo Router·React Native Web 구현이 supersede한다.
-
 - [x] 1.1 최신 `main` 기준으로 `apps/web/src/routes/(tabs)/+layout.svelte`의 shell grid, mobile header, main, right rail wrapper 구조를 확인한다.
 - [x] 1.2 최신 `main` 기준으로 `apps/web/src/lib/components/BottomTabBar.svelte`의 fixed bottom tab, safe-area padding, 표시 breakpoint를 확인한다.
 - [x] 1.3 최신 `main` 기준으로 `apps/web/src/lib/components/SidebarNavigation.svelte`의 mobile drawer, `md`~`xl` icon rail, `xl+` full sidebar 분기를 확인한다.
@@ -15,7 +13,7 @@
 - [x] 2.2 중앙 `main`은 route content wrapper로 유지하고, 별도 scroll owner가 되지 않게 한다.
 - [x] 2.3 shell chrome wheel 이벤트를 중앙 피드로 전달하는 custom wheel forwarding을 추가하지 않는다.
 - [x] 2.4 일반 route 이동과 back/forward는 SvelteKit/browser document scroll 정책을 따르게 하고, internal scroller용 scroll restoration helper를 만들지 않는다.
-- [ ] 2.5 Expo Web 검색 화면의 query-only `router.replace`가 현재 document scroll과 입력 focus를 유지하는지 로그인 세션 smoke에서 확인한다.
+- [ ] 2.5 검색 화면의 `noScroll`/`data-sveltekit-noscroll`/focus 동작이 기존 document scroll 기준으로 유지되는지 확인한다. 로그인 세션 smoke에서 확인한다.
 
 ## 3. Sticky rail 배치
 
@@ -46,5 +44,5 @@
 - [x] 6.2 구현 PR에서 `pnpm -F @kosmo/web check`를 통과시킨다.
 - [x] 6.3 구현 PR에서 모바일 1개, `md`~`xl` 1개, `xl+` 1개 viewport를 smoke로 확인한다.
 - [ ] 6.4 구현 PR에서 `/home`, `/search`, `/notifications`, `/menu`, `/compose`, 프로필/팔로우 목록/게시글 상세 route를 smoke로 확인한다. 현재 fresh browser route smoke는 보호 route 리다이렉트와 공개 프로필 계열 렌더링까지만 확인했다.
-- [ ] 6.5 구현 PR에서 drawer open/close, bottom tab, icon rail/full sidebar, RightRail 위치, 검색 query scroll/focus, 게시글 상세 sticky header를 확인한다. legacy viewport smoke는 document scroll, bottom tab fixed, icon rail/full sidebar, RightRail 위치까지 확인했다.
+- [ ] 6.5 구현 PR에서 drawer open/close, bottom tab, icon rail/full sidebar, RightRail 위치, 검색 `noScroll`, 게시글 상세 sticky header를 확인한다. 현재 viewport smoke는 document scroll, bottom tab fixed, icon rail/full sidebar, RightRail 위치까지 확인했다.
 - [x] 6.6 반응형 앱 내비게이션 E2E suite 전체는 구현하지 않고, 필요 검증은 `PROD-233` 후속 범위로 남긴다.

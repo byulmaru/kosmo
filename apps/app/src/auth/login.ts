@@ -7,6 +7,7 @@ import {
 } from 'expo-auth-session';
 import { Platform } from 'react-native';
 import { getWebOrigin } from '@/relay/network';
+import type { GestureResponderEvent } from 'react-native';
 
 type NativeSessionResponse = {
   token?: unknown;
@@ -18,6 +19,22 @@ export function startWebLogin(): void {
   }
 
   window.location.assign(`${getWebOrigin()}/login`);
+}
+
+export function startWebLoginFromPress(event: GestureResponderEvent): void {
+  const pointer = event.nativeEvent as unknown as MouseEvent;
+  if (
+    (typeof pointer.button === 'number' && pointer.button !== 0) ||
+    pointer.altKey ||
+    pointer.ctrlKey ||
+    pointer.metaKey ||
+    pointer.shiftKey
+  ) {
+    return;
+  }
+
+  event.preventDefault();
+  startWebLogin();
 }
 
 export async function startNativeLogin(): Promise<string | null> {

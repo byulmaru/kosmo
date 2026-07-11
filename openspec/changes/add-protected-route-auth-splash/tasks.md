@@ -1,7 +1,5 @@
 ## 1. 스플래시 컴포넌트
 
-> Expo migration note: 아래 7/7 checkbox는 legacy Svelte 구현의 완료 이력이다. cold/cached/null/error/inert 접근성 의미는 migration change 3.3, 4.5, 6.3에서 Expo layout/provider와 React Native `Splash`로 이식·검증한다.
-
 - [x] 1.1 `apps/web/src/lib/components/Splash.svelte`를 추가한다: `fixed inset-0 z-50` 풀스크린 오버레이, 중립 배경(`bg-bg`) + 중앙 임시 K 로고(아이콘 단독), 디자인 토큰만 사용
 - [x] 1.2 시각 요소는 `aria-hidden`, 스크린리더용 `role="status"` 로딩 안내를 둔다
 

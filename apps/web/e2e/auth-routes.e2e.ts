@@ -50,17 +50,39 @@ test.beforeEach(async () => {
 test('비로그인 사용자는 루트 온보딩에서 로그인 진입점을 본다', async ({ page }) => {
   await page.goto('/');
 
-  await expect(page.getByText(/나만의 우주를/)).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Kosmo 시작하기' })).toBeVisible();
-  await expect(page.getByRole('menu', { name: '주요 메뉴' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: /나만의 타임라인/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toHaveCount(0);
+});
+
+test('세션 확인이 실패해도 루트 온보딩과 로그인 진입점을 유지한다', async ({ page }) => {
+  await page.route('**/graphql', async (route) => {
+    if (isGraphQLOperation(route.request().postData(), 'SessionProviderQuery')) {
+      await route.fulfill({
+        body: JSON.stringify({ errors: [{ message: 'temporary session failure' }] }),
+        contentType: 'application/json',
+        status: 503,
+      });
+      return;
+    }
+
+    await route.continue();
+  });
+
+  await page.goto('/');
+
+  await expect(page.getByRole('heading', { name: /나만의 타임라인/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: '시작하기' })).toHaveAttribute('href', '/login');
 });
 
 test('mock OIDC로 로그인하면 보호 홈으로 이동하고 세션이 유지된다', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Kosmo 시작하기' }).click();
+  await page.getByRole('link', { name: '시작하기' }).click();
 
   await expect(page).toHaveURL(/\/home$/);
-  await expect(page.getByText('첫 프로필을 만들어 보세요')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '프로필을 만들어 시작하세요' })).toBeVisible();
+  await page.getByRole('button', { name: '프로필 만들기' }).click();
+  await expect(page.getByRole('menu', { name: '프로필 전환' })).toBeVisible();
 
   await page.goto('/');
   await expect(page).toHaveURL(/\/home$/);
@@ -128,13 +150,13 @@ test('비로그인 보호 라우트 진입은 스플래시 후 루트로 이동�
 
   await protectedLayoutPaused;
   await expect(page.getByRole('progressbar', { name: '세션을 확인하는 중입니다.' })).toBeVisible();
-  await expect(page.getByRole('menu', { name: '주요 메뉴' })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toHaveCount(0);
 
   releaseProtectedLayoutQuery?.();
   await navigation;
 
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('button', { name: 'Kosmo 시작하기' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
 });
 
 for (const scenario of invalidSessionCases) {
@@ -143,8 +165,8 @@ for (const scenario of invalidSessionCases) {
     await page.goto('/home');
 
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByRole('button', { name: 'Kosmo 시작하기' })).toBeVisible();
-    await expect(page.getByRole('menu', { name: '주요 메뉴' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toHaveCount(0);
   });
 }
 
@@ -202,7 +224,7 @@ test.describe('로그인 사용자 보호 라우트', () => {
       await page.goto(route.path);
 
       await expect(page).toHaveURL(new RegExp(`${route.path}$`));
-      await expect(page.getByRole('menu', { name: '주요 메뉴' })).toBeVisible();
+      await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toBeVisible();
       await expect(page.getByText(route.heading, { exact: true }).last()).toBeVisible();
       await expect(page.getByRole('progressbar')).toHaveCount(0);
     });
@@ -212,7 +234,7 @@ test.describe('로그인 사용자 보호 라우트', () => {
     await page.goto('/search');
 
     await expect(page).toHaveURL(/\/search$/);
-    await expect(page.getByRole('menu', { name: '주요 메뉴' })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toBeVisible();
     await expect(page.getByRole('textbox', { name: '검색어' })).toBeVisible();
     await expect(page.getByRole('progressbar')).toHaveCount(0);
   });

@@ -83,8 +83,7 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
 
     if (isFollowing) {
       commitUnfollow(config);
-    }
-    else {
+    } else {
       commitFollow(config);
     }
   };
@@ -92,12 +91,15 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
   return (
     <View style={[styles.root, style]}>
       <Button
-        accessibilityState={{ busy: loading, selected: isFollowing }}
-        loading={loading}
+        aria-pressed={isFollowing}
+        accessibilityState={{ busy: loading, disabled: loading, selected: isFollowing }}
+        disabled={loading}
+        hitSlop={6}
         onPress={toggleFollow}
+        style={styles.button}
         tone={isFollowing ? 'secondary' : 'primary'}
       >
-        {isFollowing ? '팔로잉' : '팔로우'}
+        {loading ? '처리 중' : isFollowing ? '팔로잉' : '팔로우'}
       </Button>
       {error ? (
         <Text accessibilityRole="alert" style={[styles.error, { color: theme.textSecondary }]}>
@@ -110,5 +112,6 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
 
 const styles = StyleSheet.create({
   root: { alignItems: 'flex-end', gap: spacing.xs },
+  button: { minHeight: 32, paddingVertical: 0 },
   error: { fontFamily: 'SUIT', maxWidth: 224, textAlign: 'right', ...typography.xsm },
 });

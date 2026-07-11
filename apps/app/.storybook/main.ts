@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { relayVitePlugin } from './relay-vite-plugin.ts';
 import type { StorybookConfig } from '@storybook/react-vite';
 
 const require = createRequire(import.meta.url);
@@ -12,13 +13,14 @@ const config: StorybookConfig = {
   stories: ['../src/**/*.stories.@(ts|tsx)'],
   viteFinal: (viteConfig) => ({
     ...viteConfig,
+    plugins: [relayVitePlugin(), ...(viteConfig.plugins ?? [])],
     resolve: {
       ...viteConfig.resolve,
       alias: [
         { find: /^react-native$/, replacement: require.resolve('react-native-web') },
         {
-          find: /^react-relay$/,
-          replacement: fileURLToPath(new URL('./mocks/react-relay.tsx', import.meta.url)),
+          find: /^react-native-svg$/,
+          replacement: require.resolve('react-native-svg/lib/module/elements.web.js'),
         },
         {
           find: /^expo-router$/,

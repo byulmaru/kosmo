@@ -36,8 +36,7 @@ function readEnvFileValue(path: URL, key: string) {
 
       return trimmed.slice(separator + 1);
     }
-  }
-  catch {
+  } catch {
     return undefined;
   }
 

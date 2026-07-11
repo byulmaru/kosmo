@@ -1,13 +1,15 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii } from '@/theme/tokens';
+import type { StyleProp, ViewStyle } from 'react-native';
 
 type AvatarProps = {
   label: string;
   size?: number;
+  style?: StyleProp<ViewStyle>;
 };
 
-export function Avatar({ label, size = 48 }: AvatarProps) {
+export function Avatar({ label, size = 40, style }: AvatarProps) {
   const theme = useTheme();
   const initial = label.trim().slice(0, 1).toUpperCase() || '?';
 
@@ -17,10 +19,16 @@ export function Avatar({ label, size = 48 }: AvatarProps) {
       style={[
         styles.root,
         { backgroundColor: theme.surface, borderColor: theme.border, height: size, width: size },
+        style,
       ]}
     >
       <Text
-        style={{ color: theme.text, fontFamily: 'SUIT', fontSize: size * 0.36, fontWeight: '700' }}
+        style={{
+          color: theme.textSecondary,
+          fontFamily: 'SUIT',
+          fontSize: size * 0.36,
+          fontWeight: '700',
+        }}
       >
         {initial}
       </Text>

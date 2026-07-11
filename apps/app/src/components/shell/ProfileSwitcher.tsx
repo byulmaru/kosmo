@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { profileHandleSchema } from '@kosmo/core/validation';
+import { CheckIcon, ChevronDownIcon, PlusIcon } from 'lucide-react-native';
+import { useEffect, useState } from 'react';
+import { Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
-import { TextField } from '@/components/ui/TextField';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
@@ -76,14 +77,23 @@ const CreateProfileMutation = graphql`
 
 type Props = {
   compact?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  open?: boolean;
   query: ProfileSwitcher_query$key;
+  showAvatar?: boolean;
 };
 
-export function ProfileSwitcher({ compact = false, query }: Props) {
+export function ProfileSwitcher({
+  compact = false,
+  onOpenChange,
+  open: controlledOpen,
+  query,
+  showAvatar = true,
+}: Props) {
   const theme = useTheme();
   const data = useFragment(ProfileSwitcherFragment, query);
   const { resetActor } = useRelayActor();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [handle, setHandle] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +104,20 @@ export function ProfileSwitcher({ compact = false, query }: Props) {
   const active = data.currentSession?.selectedProfile ?? null;
   const profiles = data.me?.profiles ?? [];
   const busy = selecting || creatingProfile;
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = (nextOpen: boolean) => {
+    if (controlledOpen === undefined) {
+      setInternalOpen(nextOpen);
+    }
+    onOpenChange?.(nextOpen);
+  };
+
+  useEffect(() => {
+    if (!open) {
+      setCreating(false);
+      setError(null);
+    }
+  }, [open]);
 
   const selectProfile = (id: string) => {
     setError(null);
@@ -108,10 +132,16 @@ export function ProfileSwitcher({ compact = false, query }: Props) {
   };
 
   const createProfile = () => {
-    const normalized = handle.trim().replace(/^@/, '');
+    const normalized = handle.trim();
+    if (!normalized) {
+      setError('프로필 핸들을 입력해주세요.');
+      return;
+    }
 
-    if (!/^[A-Za-z0-9_]+$/.test(normalized)) {
-      setError('영문, 숫자, 밑줄(_)만 사용할 수 있어요.');
+    const result = profileHandleSchema.safeParse(normalized);
+
+    if (!result.success) {
+      setError(result.error.issues[0]?.message ?? '프로필 핸들 형식을 확인해주세요.');
       return;
     }
 
@@ -127,112 +157,199 @@ export function ProfileSwitcher({ compact = false, query }: Props) {
     });
   };
 
+  const menu = (
+    <View
+      accessibilityLabel="프로필 전환"
+      accessibilityRole="menu"
+      style={[styles.menu, { backgroundColor: theme.card, borderColor: theme.border }]}
+    >
+      {profiles.map((profile) => {
+        const selected = active?.id === profile.id;
+        return (
+          <Pressable
+            aria-checked={selected}
+            accessibilityRole={Platform.OS === 'web' ? undefined : 'radio'}
+            accessibilityState={{ checked: selected, disabled: busy }}
+            disabled={busy}
+            key={profile.id}
+            onPress={() => selectProfile(profile.id)}
+            role={Platform.OS === 'web' ? ('menuitemradio' as 'radio') : undefined}
+            style={({ pressed }) => [
+              styles.profile,
+              {
+                backgroundColor: selected || pressed ? theme.surface : 'transparent',
+                opacity: busy ? 0.5 : 1,
+              },
+            ]}
+          >
+            <Avatar label={profile.displayName} size={selected ? 48 : 32} />
+            <View style={styles.profileLabel}>
+              <Text numberOfLines={1} style={[styles.profileName, { color: theme.text }]}>
+                {profile.displayName}
+              </Text>
+              <Text numberOfLines={1} style={[styles.handle, { color: theme.textSecondary }]}>
+                {profile.relativeHandle}
+              </Text>
+            </View>
+            {selected ? <CheckIcon color={theme.text} size={16} /> : null}
+          </Pressable>
+        );
+      })}
+
+      <View style={[styles.divider, { backgroundColor: theme.border }]} />
+
+      {creating ? (
+        <View
+          accessibilityLabel="새 프로필 만들기"
+          role={Platform.OS === 'web' ? 'form' : undefined}
+          style={styles.createForm}
+        >
+          <View style={styles.createRow}>
+            <TextInput
+              accessibilityLabel="프로필 핸들"
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!busy}
+              onChangeText={setHandle}
+              onSubmitEditing={createProfile}
+              placeholder="새 프로필 핸들"
+              placeholderTextColor={theme.textSecondary}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: theme.card,
+                  borderColor: error ? theme.danger : theme.border,
+                  color: theme.text,
+                },
+              ]}
+              value={handle}
+            />
+            <Button
+              disabled={busy}
+              loading={busy}
+              onPress={createProfile}
+              style={styles.createButton}
+            >
+              만들기
+            </Button>
+          </View>
+          <Text style={[styles.help, { color: theme.textSecondary }]}>
+            영문, 숫자, 밑줄(_)만 사용할 수 있어요.
+          </Text>
+          {error ? <Text style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
+        </View>
+      ) : (
+        <Pressable
+          accessibilityLabel="새 프로필 추가"
+          disabled={busy}
+          onPress={() => {
+            setCreating(true);
+            setError(null);
+          }}
+          role={Platform.OS === 'web' ? 'menuitem' : 'button'}
+          style={({ pressed }) => [
+            styles.addProfile,
+            { backgroundColor: pressed ? theme.surface : 'transparent', opacity: busy ? 0.5 : 1 },
+          ]}
+        >
+          <View style={styles.addIcon}>
+            <PlusIcon color={theme.text} size={18} strokeWidth={2.25} />
+          </View>
+          <Text style={[styles.addLabel, { color: theme.text }]}>새 프로필 추가</Text>
+        </Pressable>
+      )}
+      {!creating && error ? (
+        <Text style={[styles.error, { color: theme.danger }]}>{error}</Text>
+      ) : null}
+    </View>
+  );
+
   return (
-    <>
+    <View
+      style={[
+        styles.root,
+        compact ? styles.compactRoot : styles.fullRoot,
+        { zIndex: open ? 30 : 0 },
+      ]}
+    >
       <Pressable
+        aria-expanded={open}
         accessibilityLabel="프로필 목록"
         accessibilityRole="button"
-        onPress={() => setOpen(true)}
-        style={({ pressed }) => [styles.trigger, { opacity: pressed ? 0.65 : 1 }]}
+        onPress={() => setOpen(!open)}
+        style={({ pressed }) => [
+          styles.trigger,
+          compact ? styles.compactTrigger : styles.fullTrigger,
+          { opacity: pressed ? 0.65 : 1 },
+        ]}
       >
-        <Avatar label={active?.displayName ?? '프로필'} size={compact ? 40 : 48} />
+        {showAvatar ? <Avatar label={active?.displayName ?? '?'} size={compact ? 40 : 48} /> : null}
         {!compact ? (
-          <View style={styles.triggerLabel}>
-            <Text numberOfLines={1} style={[styles.name, { color: theme.text }]}>
-              {active?.displayName ?? (profiles.length ? '프로필 선택' : '프로필 만들기')}
-            </Text>
-            <Text numberOfLines={1} style={[styles.handle, { color: theme.textSecondary }]}>
-              {active?.relativeHandle ?? '프로필을 선택해 주세요'}
-            </Text>
-          </View>
+          <Text numberOfLines={1} style={[styles.triggerName, { color: theme.text }]}>
+            {active?.displayName ?? (profiles.length ? '프로필 선택' : '프로필')}
+          </Text>
         ) : null}
+        {!compact ? <ChevronDownIcon color={theme.textSecondary} size={16} /> : null}
       </Pressable>
 
-      <Modal
-        accessibilityLabel="프로필 전환"
-        animationType="fade"
-        onRequestClose={() => setOpen(false)}
-        role="dialog"
-        transparent
-        visible={open}
-      >
-        <Pressable onPress={() => setOpen(false)} style={styles.backdrop}>
-          <Pressable
-            accessibilityLabel="프로필 전환"
-            accessibilityViewIsModal
-            onPress={(event) => event.stopPropagation()}
-            role="dialog"
-            style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}
+      {Platform.OS === 'web' ? (
+        open ? (
+          <View
+            style={[styles.webMenu, compact ? styles.compactMenuPosition : styles.fullMenuPosition]}
           >
-            <Text style={[styles.heading, { color: theme.text }]}>프로필 전환</Text>
-            {profiles.map((profile) => {
-              const selected = active?.id === profile.id;
-              return (
-                <Pressable
-                  aria-checked={selected}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: selected, disabled: busy }}
-                  disabled={busy}
-                  key={profile.id}
-                  onPress={() => selectProfile(profile.id)}
-                  style={[
-                    styles.profile,
-                    { backgroundColor: selected ? theme.surface : 'transparent' },
-                  ]}
-                >
-                  <Avatar label={profile.displayName} size={40} />
-                  <View style={styles.profileLabel}>
-                    <Text style={[styles.name, { color: theme.text }]}>{profile.displayName}</Text>
-                    <Text style={[styles.handle, { color: theme.textSecondary }]}>
-                      {profile.relativeHandle}
-                    </Text>
-                  </View>
-                  {selected ? <Text style={{ color: theme.text }}>✓</Text> : null}
-                </Pressable>
-              );
-            })}
-
-            {creating ? (
-              <View style={styles.createForm}>
-                <TextField
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  error={error ?? undefined}
-                  label="새 프로필 핸들"
-                  onChangeText={setHandle}
-                  onSubmitEditing={createProfile}
-                  placeholder="kosmo_user"
-                  value={handle}
-                />
-                <Button disabled={busy} loading={busy} onPress={createProfile}>
-                  만들고 선택
-                </Button>
-              </View>
-            ) : (
-              <Button
-                onPress={() => {
-                  setCreating(true);
-                  setError(null);
-                }}
-                tone="secondary"
-              >
-                새 프로필 추가
-              </Button>
-            )}
-            {!creating && error ? (
-              <Text style={[styles.error, { color: theme.danger }]}>{error}</Text>
-            ) : null}
+            {menu}
+          </View>
+        ) : null
+      ) : (
+        <Modal
+          accessibilityLabel="프로필 전환"
+          animationType="fade"
+          onRequestClose={() => setOpen(false)}
+          role="dialog"
+          transparent
+          visible={open}
+        >
+          <Pressable onPress={() => setOpen(false)} style={styles.backdrop}>
+            <Pressable
+              accessibilityLabel="프로필 전환"
+              accessibilityViewIsModal
+              onPress={(event) => event.stopPropagation()}
+              style={styles.nativeMenu}
+            >
+              {menu}
+            </Pressable>
           </Pressable>
-        </Pressable>
-      </Modal>
-    </>
+        </Modal>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  trigger: { alignItems: 'center', flexDirection: 'row', gap: spacing.md },
-  triggerLabel: { flex: 1, minWidth: 0 },
-  name: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
+  root: { position: 'relative' },
+  compactRoot: { height: 44, width: 44 },
+  fullRoot: { alignSelf: 'stretch' },
+  trigger: { alignItems: 'center', flexDirection: 'row' },
+  compactTrigger: { height: 44, justifyContent: 'center', width: 44 },
+  fullTrigger: { alignSelf: 'flex-start', gap: spacing.sm, height: 42, maxWidth: '100%' },
+  triggerName: {
+    flexShrink: 1,
+    fontFamily: 'SUIT',
+    fontWeight: '700',
+    ...typography.xl,
+  },
+  webMenu: { position: 'absolute', width: 280, zIndex: 30 },
+  compactMenuPosition: { left: 52, top: 0 },
+  fullMenuPosition: { left: 0, top: 50 },
+  menu: {
+    borderRadius: 14,
+    borderWidth: 1,
+    boxShadow: '0 6px 20px rgba(0, 0, 0, 0.16)',
+    gap: 2,
+    padding: 6,
+    width: 280,
+  },
+  profileName: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
   handle: { fontFamily: 'SUIT', ...typography.xsm },
   backdrop: {
     alignItems: 'center',
@@ -241,23 +358,39 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.lg,
   },
-  modal: {
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    gap: spacing.sm,
-    maxWidth: 400,
-    padding: spacing.lg,
-    width: '100%',
-  },
-  heading: { fontFamily: 'SUIT', fontWeight: '800', marginBottom: spacing.sm, ...typography.lg },
+  nativeMenu: { width: 280 },
   profile: {
     alignItems: 'center',
-    borderRadius: radii.md,
+    borderRadius: 10,
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: 10,
     padding: spacing.sm,
   },
-  profileLabel: { flex: 1 },
-  createForm: { gap: spacing.md, marginTop: spacing.sm },
-  error: { fontFamily: 'SUIT', textAlign: 'center', ...typography.xsm },
+  profileLabel: { flex: 1, minWidth: 0 },
+  divider: { height: 1, marginVertical: 2, width: '100%' },
+  createForm: { gap: spacing.xs, padding: spacing.xs },
+  createRow: { flexDirection: 'row', gap: spacing.sm },
+  input: {
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    flex: 1,
+    fontFamily: 'SUIT',
+    minHeight: 40,
+    minWidth: 0,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    ...typography.sm,
+  },
+  createButton: { minHeight: 40, minWidth: 72, paddingHorizontal: spacing.md },
+  help: { fontFamily: 'SUIT', paddingHorizontal: spacing.xs, ...typography.xsm },
+  error: { fontFamily: 'SUIT', paddingHorizontal: spacing.xs, ...typography.xsm },
+  addProfile: {
+    alignItems: 'center',
+    borderRadius: 10,
+    flexDirection: 'row',
+    gap: 10,
+    padding: spacing.sm,
+  },
+  addIcon: { alignItems: 'center', justifyContent: 'center', width: 32 },
+  addLabel: { fontFamily: 'SUIT', fontWeight: '500', ...typography.sm },
 });

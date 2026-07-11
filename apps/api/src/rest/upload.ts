@@ -92,8 +92,7 @@ upload.post(
         contentType: image.type,
         key,
       });
-    }
-    catch {
+    } catch {
       return c.json(jsonError('failed to upload image'), 502);
     }
 
@@ -135,8 +134,7 @@ upload.post(
         },
         201,
       );
-    }
-    catch {
+    } catch {
       await cleanupUploadedObjects([key]);
 
       return c.json(jsonError('failed to persist image'), 500);

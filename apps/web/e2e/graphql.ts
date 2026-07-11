@@ -13,8 +13,7 @@ export function readGraphQLOperation(postData: string | null): GraphQLOperation 
 
   try {
     return JSON.parse(postData) as GraphQLOperation;
-  }
-  catch {
+  } catch {
     return null;
   }
 }

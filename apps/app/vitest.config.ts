@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { storybookTest } from '@storybook/addon-vitest/vitest-plugin';
 import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
+import { relayVitePlugin } from './.storybook/relay-vite-plugin';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -14,6 +15,7 @@ export default defineConfig({
       {
         extends: true,
         plugins: [
+          relayVitePlugin(),
           storybookTest({
             configDir: join(currentDirectory, '.storybook'),
           }),
@@ -21,6 +23,10 @@ export default defineConfig({
         resolve: {
           alias: [
             { find: /^react-native$/, replacement: require.resolve('react-native-web') },
+            {
+              find: /^react-native-svg$/,
+              replacement: require.resolve('react-native-svg/lib/module/elements.web.js'),
+            },
             {
               find: /^expo-secure-store$/,
               replacement: join(currentDirectory, '.storybook/mocks/expo-secure-store.ts'),

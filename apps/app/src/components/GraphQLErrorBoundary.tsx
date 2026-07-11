@@ -27,6 +27,7 @@ export class GraphQLErrorBoundary extends Component<Props, State> {
       return (
         <StateView
           actionLabel="다시 시도"
+          alert
           description={formatGraphQLError(this.state.error)}
           onAction={this.retry}
           title="화면을 불러오지 못했어요"

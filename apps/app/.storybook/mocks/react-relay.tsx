@@ -1,68 +1,92 @@
-import { createContext, useContext } from 'react';
-import type { PropsWithChildren, ReactNode } from 'react';
-
-type MutationConfig = {
-  onCompleted?: (response: unknown, errors?: ReadonlyArray<unknown> | null) => void;
-  onError?: (error: Error) => void;
-};
+import { useCallback } from 'react';
+import { Environment, Network, RecordSource, Store } from 'relay-runtime';
+import { RelayActorProvider } from '@/relay/RelayActorProvider';
+import type { PropsWithChildren } from 'react';
+import type { GraphQLResponse, RequestParameters } from 'relay-runtime';
 
 type RelayMockValue = {
   mutationError?: string;
   mutationLoading?: boolean;
   mutationResponse?: unknown;
+  paginationError?: string | boolean;
+  paginationLoading?: boolean;
+  paginationResponse?: unknown;
   queryData?: unknown;
 };
 
-type PaginationMetadata = {
-  hasNext?: boolean;
-  isLoadingNext?: boolean;
-  nextPageError?: boolean;
-};
+export function RelayStoryProvider({
+  children,
+  mutationError,
+  mutationLoading,
+  mutationResponse,
+  paginationError,
+  paginationLoading,
+  paginationResponse,
+  queryData,
+}: PropsWithChildren<RelayMockValue>) {
+  const createEnvironment = useCallback(
+    () =>
+      createStoryEnvironment({
+        mutationError,
+        mutationLoading,
+        mutationResponse,
+        paginationError,
+        paginationLoading,
+        paginationResponse,
+        queryData,
+      }),
+    [
+      mutationError,
+      mutationLoading,
+      mutationResponse,
+      paginationError,
+      paginationLoading,
+      paginationResponse,
+      queryData,
+    ],
+  );
 
-const RelayMockContext = createContext<RelayMockValue>({});
-
-export function RelayStoryProvider({ children, ...value }: PropsWithChildren<RelayMockValue>) {
-  return <RelayMockContext.Provider value={value}>{children}</RelayMockContext.Provider>;
+  return <RelayActorProvider createEnvironment={createEnvironment}>{children}</RelayActorProvider>;
 }
 
-export function RelayEnvironmentProvider({ children }: { children: ReactNode }) {
-  return children;
+function createStoryEnvironment(mock: RelayMockValue): Environment {
+  return new Environment({
+    network: Network.create((request) => executeStoryOperation(request, mock)),
+    store: new Store(new RecordSource()),
+  });
 }
 
-export function graphql(strings: TemplateStringsArray) {
-  return strings.join('');
-}
-
-export function useFragment<T>(_fragment: unknown, key: T): T {
-  return key;
-}
-
-export function useLazyLoadQuery<T>(): T {
-  return useContext(RelayMockContext).queryData as T;
-}
-
-export function useMutation() {
-  const mock = useContext(RelayMockContext);
-  const commit = (config: MutationConfig) => {
+function executeStoryOperation(
+  request: RequestParameters,
+  mock: RelayMockValue,
+): Promise<GraphQLResponse> {
+  if (request.operationKind === 'mutation') {
     if (mock.mutationError) {
-      config.onError?.(new Error(mock.mutationError));
-      return;
+      return Promise.reject(new Error(mock.mutationError));
+    }
+    if (mock.mutationLoading) {
+      return new Promise(() => undefined);
     }
 
-    config.onCompleted?.(mock.mutationResponse ?? {}, null);
-  };
+    return Promise.resolve({ data: (mock.mutationResponse ?? {}) as GraphQLResponse['data'] });
+  }
 
-  return [commit, Boolean(mock.mutationLoading)] as const;
-}
+  if (request.name.endsWith('NextPageQuery')) {
+    if (mock.paginationError) {
+      return Promise.reject(
+        new Error(
+          typeof mock.paginationError === 'string'
+            ? mock.paginationError
+            : '다음 페이지를 불러오지 못했습니다.',
+        ),
+      );
+    }
+    if (mock.paginationLoading) {
+      return new Promise(() => undefined);
+    }
 
-export function usePaginationFragment<T>(_fragment: unknown, key: T) {
-  const metadata = (key as T & { __story?: PaginationMetadata }).__story ?? {};
+    return Promise.resolve({ data: (mock.paginationResponse ?? {}) as GraphQLResponse['data'] });
+  }
 
-  return {
-    data: key,
-    hasNext: Boolean(metadata.hasNext),
-    isLoadingNext: Boolean(metadata.isLoadingNext),
-    loadNext: (_count: number, options?: { onComplete?: (error: Error | null) => void }) =>
-      options?.onComplete?.(metadata.nextPageError ? new Error('다음 페이지 오류') : null),
-  };
+  return Promise.resolve({ data: (mock.queryData ?? {}) as GraphQLResponse['data'] });
 }

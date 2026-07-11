@@ -6,7 +6,6 @@ try {
   console.log(
     `Configured local instance: ${localInstance.domain} (${localInstance.canonicalOrigin ?? 'no origin'})`,
   );
-}
-finally {
+} finally {
   await pg.end();
 }

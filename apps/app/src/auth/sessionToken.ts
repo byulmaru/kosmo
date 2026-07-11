@@ -10,8 +10,7 @@ export function parseStoredSessionToken(value: unknown, expectedOrigin: string):
   let stored: unknown;
   try {
     stored = JSON.parse(value) as unknown;
-  }
-  catch {
+  } catch {
     return null;
   }
 

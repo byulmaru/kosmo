@@ -1,10 +1,8 @@
 .git
 .github
+.web-build.env
 node_modules
 .expo
 dist
 apps/app/android
 apps/app/ios
-playwright-report
-test-results
-storybook-static

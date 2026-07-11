@@ -1,7 +1,5 @@
 ## 1. Data Model and Migrations
 
-> Expo migration note: backend/Fedify/API task는 이 change에 남고, client UI 검증은 migration change 5.5~5.7의 Expo route와 Relay fragment에 이식한다.
-
 - [ ] 1.1 `Profile.origin` GraphQL enum에 필요한 core/API enum 경계를 정리하고 `Profile`의 origin을 instance kind에서 계산하거나 안정적으로 제공하는 방식을 구현한다.
 - [ ] 1.2 `activitypub_actor`에 remote actor refresh에 필요한 `last_fetched_at`과 remote actor source metadata를 추가한다.
 - [ ] 1.3 remote actor key fetch/verification은 Fedify에 맡기고, 이번 change에서 remote public key 저장 요구사항을 추가하지 않도록 actor key 저장 경계를 정렬한다.
@@ -32,5 +30,5 @@
 - [ ] 4.1 GraphQL schema를 재생성하고 `Profile.origin`, DB-only `profileByHandle`, remote Node 조회 계약이 반영되는지 확인한다.
 - [ ] 4.2 remote actor materialization unit/integration test로 Fedify lookup 성공, lookup 실패, non-actor lookup 실패, requested handle과 actor `preferredUsername` mismatch 거부, existing remote actor URI 재사용, local actor URI collision 거부, handle collision 실패, remote instance find-or-create, unsupported `preferredUsername` 거부, unsupported `name`의 displayName fallback, stale actor의 active profile 선반환과 비동기 refresh 예약, `UNRESPONSIVE` refresh 미예약, suspended/unresponsive instance에서 lookup 미수행과 저장/refresh 차단을 검증한다.
 - [ ] 4.3 GraphQL profile test로 DB-only local/federated `profileByHandle`, configured local domain의 `handle@domain`/`@handle@domain` local lookup, remote `handle@domain`/`@handle@domain` lookup, `Profile.origin`, remote Node 조회, active profile selection remote 거부, remote-only duplicate handle의 local profile creation 허용, remote target follow/unfollow profile not found, remote target viewerFollow 없음 응답, remote followers/following connection 빈 결과와 0 count를 검증한다.
-- [ ] 4.4 Expo Web/native profile list/search 결과, profile page, profile page 하위 링크와 팔로우 카운트 링크가 remote profile 링크를 `/${relativeHandle}` path로 만들고 route parameter는 `handle@domain`으로 전달되는지, remote follow 지원 전까지 local follow action을 숨기거나 비활성화하는지 Relay component/E2E로 검증한다.
+- [ ] 4.4 web profile list/search 결과, profile page, profile page 하위 링크와 팔로우 카운트 링크가 remote profile 링크를 `/${relativeHandle}` path로 만들고 route parameter는 `handle@domain`으로 전달되는지, remote follow 지원 전까지 local follow action을 숨기거나 비활성화하는지 검증한다.
 - [ ] 4.5 `pnpm lint:eslint`, 관련 package typecheck/test, GraphQL schema check, DB migration/schema check, `openspec validate add-activitypub-remote-profile-federation --strict`를 실행한다.

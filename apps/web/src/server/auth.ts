@@ -129,8 +129,7 @@ const decodeLegacyIdTokenClaims = (idToken: string) => {
   let decoded: unknown;
   try {
     decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as unknown;
-  }
-  catch {
+  } catch {
     throw new OidcAuthError(400, 'Invalid id_token payload');
   }
 

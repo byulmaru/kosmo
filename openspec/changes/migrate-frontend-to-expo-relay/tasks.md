@@ -53,17 +53,17 @@
 - [x] 6.1 Relay compiler를 실행해 모든 colocated document와 schema가 일치하고 generated TypeScript가 typecheck되는지 확인한다
 - [x] 6.2 Playwright config를 mock OIDC + API + Expo export + Hono BFF로 갱신하고 기존 web E2E assertion을 React Native Web semantics에 맞춘다
 - [x] 6.3 로그인/보호 route/profile switch/timeline/compose/profile/follow pagination/search/post detail E2E를 통과시킨다
-- [x] 6.4 React Native Web Storybook static build와 accessibility 검증을 통과시킨다
+- [x] 6.4 React Native Web Storybook static build와 semantic accessibility 검증을 통과시킨다. 기존 디자인 토큰 `#777777`의 색 대비 부채는 UI parity를 위해 이 migration에서 변경하지 않고 color-contrast rule에서 제외한다
 - [x] 6.5 Expo web production export와 BFF deep-link `/@{handle}/{postId}` 직접 접근을 검증한다
 - [x] 6.6 clean Expo prebuild 뒤 Android `assembleDebug`를 실행하고 package/deep-link 설정을 검증한다
 - [x] 6.7 clean Expo prebuild 뒤 iOS simulator `xcodebuild`를 실행하고 bundle ID/deep-link 설정을 검증한다
-- [x] 6.8 `expo-doctor`, workspace ESLint, Prettier, syncpack와 기존 API/Fedify test를 통과시킨다. `expo-doctor`의 dependency version check는 7일 `minimumReleaseAge` 안의 `expo@56.0.15`·`expo-router@56.2.14`만 정책상 유예했고, 나머지 검사는 20/20 통과했다
+- [x] 6.8 `expo-doctor`, workspace ESLint, Prettier, syncpack와 기존 API/Fedify test를 통과시킨다. 설치 version은 maturity policy를 만족하는 `expo@56.0.14`·`expo-router@56.2.13`이며, 7일 window 안의 권장 patch `expo@56.0.15`·`expo-router@56.2.14`에 대한 dependency version check만 유예하고 나머지 검사는 20/20 통과했다
 
 ## 7. 배포 전환과 정리
 
 - [x] 7.1 Docker build가 Relay compile·Expo web export를 수행하고 BFF와 `apps/app/dist`만 web runtime에 포함하도록 갱신한다
 - [x] 7.2 `docker-entrypoint.sh`, root scripts, web E2E/CI workflow와 artifact path를 새 app/web package 경계에 맞춘다
-- [x] 7.3 production container에서 `/health`, `/`, `/graphql`, browser login callback, native session, WebFinger/ActivityPub smoke test를 실행한다
+- [ ] 7.3 production container에서 `/health`, `/`, `/graphql`, browser login callback, native session, WebFinger/ActivityPub smoke test를 실행한다
 - [x] 7.4 Svelte routes/components, Mearie, Svelte Storybook, manual Android/iOS WebView source와 전용 dependency/config를 제거한다
 - [x] 7.5 pnpm CLI로 제거 dependency를 정리하고 lockfile, syncpack, workspace install을 검증한다
 - [x] 7.6 `docs/design/breakpoints.md`, `typography.md`와 관련 design 문서를 Expo/React Native Web 구현 위치로 갱신한다

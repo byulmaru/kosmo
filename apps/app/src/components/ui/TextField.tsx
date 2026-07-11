@@ -60,4 +60,6 @@ const styles = StyleSheet.create({
   error: { fontFamily: 'SUIT', ...typography.xsm },
 });
 
-export const TextArea = TextField;
+export const TextArea = forwardRef<TextInput, TextFieldProps>(function TextArea(props, ref) {
+  return <TextField {...props} ref={ref} multiline />;
+});

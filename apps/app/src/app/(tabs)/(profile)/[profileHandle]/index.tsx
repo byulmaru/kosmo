@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PostList } from '@/components/post/PostList';
-import { ProfileRouteBoundary } from '@/components/profile/ProfileRouteBoundary';
 import { useProfileHandle } from '@/components/profile/route';
+import { RouteBoundary } from '@/components/RouteBoundary';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import type { ProfilePostListPageQuery as ProfilePostListPageQueryType } from './__generated__/ProfilePostListPageQuery.graphql';
 
@@ -21,14 +21,15 @@ export default function ProfilePostListPage() {
   const [fetchKey, setFetchKey] = useState(0);
 
   return (
-    <ProfileRouteBoundary
+    <RouteBoundary
+      error={(retry) => <PostList error onRetry={retry} />}
       key={handle}
       loading={<PostList loading />}
       onRetry={() => setFetchKey((key) => key + 1)}
-      title="게시글을 불러오지 못했어요"
+      title="게시글 목록을 불러오지 못했어요"
     >
       <ProfilePostListPageContent fetchKey={`${revision}:${fetchKey}`} handle={handle} />
-    </ProfileRouteBoundary>
+    </RouteBoundary>
   );
 }
 

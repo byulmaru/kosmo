@@ -32,8 +32,7 @@ export const parseLocalInstanceConfig = ({
 
   try {
     url = new URL(publicOrigin);
-  }
-  catch {
+  } catch {
     throw new LocalInstanceConfigurationError('PUBLIC_ORIGIN must be a valid URL origin');
   }
 

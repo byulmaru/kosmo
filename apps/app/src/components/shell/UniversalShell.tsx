@@ -1,13 +1,27 @@
 import { Slot } from 'expo-router';
-import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Menu } from 'lucide-react-native';
+import { useMemo, useState } from 'react';
+import {
+  Modal,
+  PanResponder,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
+import { RouteBoundary } from '@/components/RouteBoundary';
+import { Splash } from '@/components/Splash';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, spacing } from '@/theme/tokens';
 import { BottomTabBar } from './BottomTabBar';
 import { RightRail } from './RightRail';
+import { ShellChromeProvider } from './ShellChromeContext';
 import { SidebarNavigation } from './SidebarNavigation';
+import type { ViewStyle } from 'react-native';
 import type { UniversalShellQuery } from './__generated__/UniversalShellQuery.graphql';
 
 const ShellQuery = graphql`
@@ -24,11 +38,46 @@ const ShellQuery = graphql`
   }
 `;
 
+const webStickyRail = {
+  alignSelf: 'flex-start',
+  height: '100vh',
+  position: 'sticky',
+  top: 0,
+} as unknown as ViewStyle;
+
+const webStickyHeader = {
+  position: 'sticky',
+  top: 0,
+  zIndex: 20,
+} as unknown as ViewStyle;
+
+const webFixedBottomBar = {
+  bottom: 0,
+  left: 0,
+  position: 'fixed',
+  right: 0,
+  zIndex: 20,
+} as unknown as ViewStyle;
+
 export function UniversalShell() {
+  const { retry, revision } = useRelayActor();
+
+  return (
+    <RouteBoundary
+      loading={<Splash label="앱을 불러오는 중입니다." />}
+      onRetry={retry}
+      title="앱을 불러오지 못했어요"
+    >
+      <UniversalShellContent revision={revision} />
+    </RouteBoundary>
+  );
+}
+
+function UniversalShellContent({ revision }: { revision: number }) {
   const theme = useTheme();
-  const { revision } = useRelayActor();
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
   const data = useLazyLoadQuery<UniversalShellQuery>(
     ShellQuery,
     {},
@@ -38,84 +87,173 @@ export function UniversalShell() {
   const compact = width >= breakpoints.compact && width < breakpoints.full;
   const full = width >= breakpoints.full;
   const mobile = width < breakpoints.compact;
+  const web = Platform.OS === 'web';
+
+  const swipeToOpenDrawer = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_event, gesture) =>
+          mobile &&
+          !drawerOpen &&
+          gesture.x0 <= 24 &&
+          gesture.dx > 8 &&
+          Math.abs(gesture.dx) > Math.abs(gesture.dy),
+        onPanResponderRelease: (_event, gesture) => {
+          if (gesture.dx >= 72) {
+            setDrawerOpen(true);
+          }
+        },
+      }),
+    [drawerOpen, mobile],
+  );
+
+  const closeDrawer = () => {
+    setDrawerOpen(false);
+    setSwitcherOpen(false);
+  };
+  const openProfileSwitcher = () => {
+    if (mobile) {
+      setDrawerOpen(true);
+    }
+    setSwitcherOpen(true);
+  };
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.background }]}>
-      {!mobile ? (
-        <View style={[styles.sidebar, { borderColor: theme.border, width: full ? 320 : 80 }]}>
-          <SidebarNavigation compact={compact} query={data} />
-        </View>
-      ) : null}
-
-      <View style={[styles.center, { borderColor: theme.border }]}>
-        {mobile ? (
+    <ShellChromeProvider openProfileSwitcher={openProfileSwitcher}>
+      <View
+        {...swipeToOpenDrawer.panHandlers}
+        style={[
+          styles.root,
+          web ? styles.webRoot : styles.nativeRoot,
+          { backgroundColor: theme.background },
+        ]}
+      >
+        {!mobile ? (
           <View
             style={[
-              styles.mobileHeader,
-              { backgroundColor: theme.card, borderColor: theme.border },
+              styles.sidebar,
+              web && webStickyRail,
+              { borderColor: theme.border, width: full ? 320 : 80 },
             ]}
           >
-            <Pressable
-              accessibilityLabel="메뉴 열기"
-              onPress={() => setDrawerOpen(true)}
-              style={styles.menuButton}
-            >
-              <Text style={{ color: theme.text, fontSize: 22 }}>☰</Text>
-            </Pressable>
-            <Text style={{ color: theme.text, fontFamily: 'SUIT', fontWeight: '800' }}>KOSMO</Text>
+            <SidebarNavigation
+              compact={compact}
+              onSwitcherOpenChange={setSwitcherOpen}
+              query={data}
+              switcherOpen={switcherOpen}
+            />
           </View>
         ) : null}
-        <View style={[styles.route, mobile && styles.mobileRoute]}>
-          <Slot />
-        </View>
-        {mobile ? <BottomTabBar profile={profile} /> : null}
-      </View>
 
-      {full ? (
-        <View style={[styles.rightRail, { borderColor: theme.border }]}>
-          {profile ? <RightRail profile={profile} /> : null}
-        </View>
-      ) : null}
-
-      <Modal
-        accessibilityLabel="메뉴"
-        animationType="slide"
-        onRequestClose={() => setDrawerOpen(false)}
-        role="dialog"
-        transparent
-        visible={drawerOpen}
-      >
-        <View style={styles.drawerBackdrop}>
-          <View style={[styles.drawer, { backgroundColor: theme.card }]}>
-            <SidebarNavigation onNavigate={() => setDrawerOpen(false)} query={data} />
+        <View
+          style={[styles.center, full && styles.centerWithRightRail, { borderColor: theme.border }]}
+        >
+          {mobile ? (
+            <View
+              style={[
+                styles.mobileHeader,
+                web && webStickyHeader,
+                { backgroundColor: theme.card, borderColor: theme.border },
+              ]}
+            >
+              <Pressable
+                accessibilityLabel="메뉴 열기"
+                accessibilityRole="button"
+                accessibilityState={{ expanded: drawerOpen }}
+                onPress={() => setDrawerOpen(true)}
+                style={({ pressed }) => [styles.menuButton, { opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Menu color={theme.text} size={20} strokeWidth={2} />
+                <Text style={[styles.menuLabel, { color: theme.text }]}>메뉴</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          <View
+            style={[
+              styles.route,
+              !web && styles.nativeRoute,
+              mobile && web && styles.webMobileRoute,
+            ]}
+          >
+            <Slot />
           </View>
-          <Pressable
-            accessibilityLabel="메뉴 닫기"
-            onPress={() => setDrawerOpen(false)}
-            style={styles.drawerClose}
-          />
+          {mobile ? (
+            <View style={web ? webFixedBottomBar : undefined}>
+              <BottomTabBar profile={profile} />
+            </View>
+          ) : null}
         </View>
-      </Modal>
-    </View>
+
+        {full ? (
+          <View style={[styles.rightRail, web && webStickyRail, { borderColor: theme.border }]}>
+            {profile ? <RightRail profile={profile} /> : null}
+          </View>
+        ) : null}
+
+        <Modal
+          accessibilityLabel="메뉴"
+          animationType="slide"
+          onRequestClose={closeDrawer}
+          role="dialog"
+          transparent
+          visible={drawerOpen}
+        >
+          <View style={styles.drawerBackdrop}>
+            <View style={[styles.drawer, { backgroundColor: theme.card }]}>
+              <SidebarNavigation
+                onNavigate={closeDrawer}
+                onSwitcherOpenChange={setSwitcherOpen}
+                query={data}
+                surface="drawer"
+                switcherOpen={switcherOpen}
+              />
+            </View>
+            <Pressable
+              accessibilityLabel="사이드바 닫기"
+              accessibilityRole="button"
+              onPress={closeDrawer}
+              style={styles.drawerClose}
+            />
+          </View>
+        </Modal>
+      </View>
+    </ShellChromeProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, flexDirection: 'row', justifyContent: 'center' },
+  root: { flexDirection: 'row', justifyContent: 'center', minHeight: '100%' },
+  nativeRoot: { flex: 1 },
+  webRoot: { flexGrow: 1 },
   sidebar: { borderRightWidth: 1, minHeight: '100%' },
-  center: { borderRightWidth: 1, flex: 1, maxWidth: 600, minWidth: 0 },
-  route: { flex: 1 },
-  mobileRoute: { paddingBottom: 0 },
-  rightRail: { borderRightWidth: 1, padding: spacing.lg, width: 320 },
-  mobileHeader: {
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.md,
-    minHeight: 56,
-    paddingHorizontal: spacing.md,
+  center: { flex: 1, maxWidth: 600, minHeight: '100%', minWidth: 0 },
+  centerWithRightRail: { borderRightWidth: 1 },
+  route: { minHeight: 0 },
+  nativeRoute: { flex: 1 },
+  webMobileRoute: { paddingBottom: 56 },
+  rightRail: {
+    overflow: 'scroll',
+    paddingLeft: spacing.xl,
+    paddingTop: spacing.lg,
+    width: 350,
   },
-  menuButton: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
+  mobileHeader: {
+    borderBottomWidth: 1,
+    minHeight: 56,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  menuButton: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    minHeight: 40,
+    paddingHorizontal: spacing.lg,
+  },
+  menuLabel: { fontFamily: 'SUIT', fontWeight: '700' },
   drawerBackdrop: { backgroundColor: 'rgba(0,0,0,0.35)', flex: 1, flexDirection: 'row' },
   drawer: { maxWidth: '85%', width: 320 },
   drawerClose: { flex: 1 },

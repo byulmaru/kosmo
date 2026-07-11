@@ -30,6 +30,13 @@ export const Result: Story = {
     relay: { data: { profileByHandle: result } },
     router: { params: { q: 'byulmaru', tab: 'people' }, pathname: '/search' },
   },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('link', { name: /별마루/ })).toHaveAttribute(
+      'href',
+      '/@byulmaru',
+    );
+  },
 };
 
 export const EmptyResult: Story = {
@@ -49,7 +56,7 @@ export const RecentSearchInteraction: Story = {
   loaders: [
     async () => {
       globalThis.localStorage?.setItem(
-        'kosmo.recent-searches',
+        'kosmo:recent-searches',
         JSON.stringify(['별마루', '@remote@space.example']),
       );
       return {};
@@ -60,7 +67,7 @@ export const RecentSearchInteraction: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('textbox', { name: '검색어' }));
     await expect(canvas.findByText('별마루')).resolves.toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '별마루 최근 검색 삭제' }));
+    await userEvent.click(canvas.getByRole('button', { name: "최근 검색 '별마루' 삭제" }));
     await expect(canvas.queryByText('별마루')).not.toBeInTheDocument();
   },
 };
@@ -82,7 +89,7 @@ export const LoadingAndErrorBoundaries: Story = {
       <Section title="No query">
         <StateView
           description="handle을 입력하면 일치하는 프로필을 찾아드려요."
-          title="프로필을 검색해 보세요"
+          title="프로필을 검색해보세요"
         />
       </Section>
     </Catalog>

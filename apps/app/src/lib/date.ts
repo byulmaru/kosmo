@@ -1,19 +1,27 @@
-export function formatTimelineTimestamp(value: string): string {
+const relativeTimeFormat = new Intl.RelativeTimeFormat('ko', { numeric: 'auto' });
+
+function formatDate(value: Date): string {
+  return value
+    .toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' })
+    .replace(/\.$/, '');
+}
+
+export function formatTimelineTimestamp(value: string, now: number | Date = Date.now()): string {
   const date = new Date(value);
-  const elapsed = Date.now() - date.getTime();
-  const minutes = Math.floor(elapsed / 60_000);
+  const nowMilliseconds = now instanceof Date ? now.getTime() : now;
+  const elapsedSeconds = Math.max(0, Math.floor((nowMilliseconds - date.getTime()) / 1_000));
 
-  if (minutes < 1) {
-    return '방금';
+  if (elapsedSeconds < 60) {
+    return relativeTimeFormat.format(-elapsedSeconds, 'second');
   }
-  if (minutes < 60) {
-    return `${minutes}분`;
+  if (elapsedSeconds < 3_600) {
+    return relativeTimeFormat.format(-Math.floor(elapsedSeconds / 60), 'minute');
   }
-  if (minutes < 1_440) {
-    return `${Math.floor(minutes / 60)}시간`;
+  if (elapsedSeconds < 86_400) {
+    return relativeTimeFormat.format(-Math.floor(elapsedSeconds / 3_600), 'hour');
   }
 
-  return new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric' }).format(date);
+  return formatDate(date);
 }
 
 export function formatPostDate(value: string): string {
@@ -21,13 +29,5 @@ export function formatPostDate(value: string): string {
   const time = new Intl.DateTimeFormat('ko-KR', { hour: 'numeric', minute: '2-digit' }).format(
     date,
   );
-  const day = new Intl.DateTimeFormat('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  })
-    .format(date)
-    .replace(/\.$/, '');
-
-  return `${time} · ${day}`;
+  return `${time} · ${formatDate(date)}`;
 }

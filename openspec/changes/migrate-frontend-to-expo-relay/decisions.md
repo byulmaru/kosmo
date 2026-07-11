@@ -11,7 +11,7 @@
 - Decision Outcome: `apps/app`을 Expo SDK 56 managed/CNG workspace package로 교체하고 Expo Router를 유일한 client route tree로 사용한다. package/bundle ID `moe.kos`와 scheme `kosmo`는 유지한다. SDK 57은 핵심 package가 workspace의 7일 `minimumReleaseAge`를 아직 충족하지 못해 채택하지 않는다.
 - Alternatives Considered: 기존 native project에 bare React Native를 수동 통합하는 안은 Gradle/Xcode source를 계속 직접 소유하고 Expo upgrade 비용을 높여 제외했다. 별도 `apps/expo`를 병행하는 안은 중복 client를 남겨 제외했다.
 - Consequences: 기존 `android`, `ios` source는 제거되고 필요할 때 `expo prebuild`가 생성한다. native-only 기능은 config plugin 또는 platform module 경계로 제한한다. SDK 57 전환은 package maturity window 이후 별도 upgrade로 수행한다.
-- Confirmation / Follow-up: `expo config`, Android/iOS bundle 명령과 deep-link config로 식별자를 검증한다. 2026-07-11 기준 `expo@56.0.15`와 `expo-router@56.2.14`는 7일 age window 안이므로 dependency version check만 유예하고 나머지 Expo Doctor 항목을 검증했다. 해당 patch set이 정책에 들어오면 함께 upgrade하고 unfiltered Doctor를 다시 실행한다.
+- Confirmation / Follow-up: `expo config`, Android/iOS bundle 명령과 deep-link config로 식별자를 검증한다. 2026-07-11 기준 maturity policy를 만족하는 `expo@56.0.14`와 `expo-router@56.2.13`을 설치했다. 권장 patch `expo@56.0.15`와 `expo-router@56.2.14`는 아직 7일 age window 안이므로 dependency version check만 유예하고 나머지 Expo Doctor 항목을 검증했다. 해당 patch set이 정책에 들어오면 함께 upgrade하고 unfiltered Doctor를 다시 실행한다.
 
 ### `apps/web`은 Hono BFF와 Expo asset server로 유지한다
 

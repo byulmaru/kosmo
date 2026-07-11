@@ -71,15 +71,13 @@ describe('native web origin', () => {
 
     try {
       assert.equal(getWebOrigin(), 'http://localhost:5173');
-    }
-    finally {
+    } finally {
       if (existingWindow) {
         Object.defineProperty(globalThis, 'window', {
           configurable: true,
           value: existingWindow,
         });
-      }
-      else {
+      } else {
         Reflect.deleteProperty(globalThis, 'window');
       }
     }
@@ -102,8 +100,7 @@ describe('native web origin', () => {
 
     try {
       assert.throws(() => getWebOrigin());
-    }
-    finally {
+    } finally {
       process.env.EXPO_PUBLIC_WEB_ORIGIN = configured;
     }
   });

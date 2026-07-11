@@ -4,7 +4,21 @@ export type StoryProfile = {
   __typename: 'Profile';
   bio: string | null;
   displayName: string;
+  followers: {
+    edges: Array<{
+      cursor: string;
+      node: { __typename: 'ProfileFollow'; follower: StoryProfile | null; id: string };
+    }>;
+    pageInfo: StoryPageInfo;
+  };
   followersCount: number;
+  following: {
+    edges: Array<{
+      cursor: string;
+      node: { __typename: 'ProfileFollow'; followee: StoryProfile | null; id: string };
+    }>;
+    pageInfo: StoryPageInfo;
+  };
   followingCount: number;
   handle: string;
   id: string;
@@ -12,12 +26,30 @@ export type StoryProfile = {
   viewerState: { follow: { id: string } | null; isSelf: boolean } | null;
 };
 
+type StoryPageInfo = {
+  endCursor: string | null;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+  startCursor: string | null;
+};
+
+function pageInfo(hasNextPage = false, endCursor: string | null = null): StoryPageInfo {
+  return {
+    endCursor,
+    hasNextPage,
+    hasPreviousPage: false,
+    startCursor: null,
+  };
+}
+
 export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
   return {
     __typename: 'Profile',
     bio: '우주와 사람을 잇는 코스모 프로필입니다.',
     displayName: '코스모 작가',
+    followers: { edges: [], pageInfo: pageInfo() },
     followersCount: 128,
+    following: { edges: [], pageInfo: pageInfo() },
     followingCount: 42,
     handle: 'kosmo',
     id: 'profile-kosmo',
@@ -56,7 +88,7 @@ export function post({
     createdAt,
     id,
     profile: author,
-    state: 'PUBLISHED',
+    state: 'ACTIVE',
     visibility,
   };
 }
@@ -65,6 +97,7 @@ export function timeline(...posts: StoryPost[]) {
   return {
     __typename: 'PostConnection' as const,
     edges: posts.map((node, index) => ({ cursor: `post-cursor-${index}`, node })),
+    pageInfo: pageInfo(),
   };
 }
 
@@ -87,19 +120,20 @@ export function shellQuery({
 
 type PaginationMetadata = {
   hasNext?: boolean;
-  isLoadingNext?: boolean;
-  nextPageError?: boolean;
 };
 
 export function followersProfile(profiles: StoryProfile[], metadata: PaginationMetadata = {}) {
   return {
     ...profile(),
-    __story: metadata,
     followers: {
       edges: profiles.map((follower, index) => ({
         cursor: `follower-cursor-${index}`,
-        node: { follower, id: `follower-edge-${index}` },
+        node: { __typename: 'ProfileFollow' as const, follower, id: `follower-edge-${index}` },
       })),
+      pageInfo: pageInfo(
+        Boolean(metadata.hasNext),
+        profiles.length ? `follower-cursor-${profiles.length - 1}` : null,
+      ),
     },
   };
 }
@@ -107,12 +141,15 @@ export function followersProfile(profiles: StoryProfile[], metadata: PaginationM
 export function followingProfile(profiles: StoryProfile[], metadata: PaginationMetadata = {}) {
   return {
     ...profile(),
-    __story: metadata,
     following: {
       edges: profiles.map((followee, index) => ({
         cursor: `following-cursor-${index}`,
-        node: { followee, id: `following-edge-${index}` },
+        node: { __typename: 'ProfileFollow' as const, followee, id: `following-edge-${index}` },
       })),
+      pageInfo: pageInfo(
+        Boolean(metadata.hasNext),
+        profiles.length ? `following-cursor-${profiles.length - 1}` : null,
+      ),
     },
   };
 }
