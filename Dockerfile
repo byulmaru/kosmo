@@ -23,7 +23,8 @@ COPY packages ./packages
 
 FROM workspace AS deps
 
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=kosmo-pnpm-store,target=/pnpm/store \
+  pnpm install --frozen-lockfile --store-dir=/pnpm/store
 
 FROM deps AS app-build
 
@@ -50,7 +51,8 @@ COPY --chown=app:app apps/web/package.json ./apps/web/package.json
 COPY --chown=app:app packages/core/package.json ./packages/core/package.json
 COPY --chown=app:app packages/fedify/package.json ./packages/fedify/package.json
 
-RUN pnpm install --filter @kosmo/api... --filter @kosmo/web... --frozen-lockfile --prod --ignore-scripts
+RUN --mount=type=cache,id=kosmo-pnpm-store,target=/pnpm/store \
+  pnpm install --filter @kosmo/api... --filter @kosmo/web... --frozen-lockfile --prod --ignore-scripts --store-dir=/pnpm/store
 
 COPY --chown=app:app apps/api ./apps/api
 COPY --chown=app:app packages/core ./packages/core

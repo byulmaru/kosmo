@@ -4,6 +4,19 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    paths:
+      - .dockerignore
+      - .github/workflows/docker-build.yml
+      - Dockerfile
+      - docker-entrypoint.sh
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - tsconfig.json
+      - apps/api/**
+      - apps/app/**
+      - apps/web/**
+      - packages/**
 
 permissions:
   contents: read
@@ -27,6 +40,10 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+        with:
+          name: kosmo-${{ runner.name }}
+          keep-state: true
+          cache-binary: false
 
       - name: Log in to GHCR
         if: github.event_name != 'pull_request'
@@ -64,6 +81,26 @@ jobs:
           image_ref="$(printf '%s\n' "${{ steps.meta.outputs.tags }}" | head -n 1)"
           echo "image-ref=${image_ref}" >> "${GITHUB_OUTPUT}"
 
+      - name: Find local Trivy
+        id: trivy-binary
+        shell: bash
+        run: |
+          trivy_dir="${RUNNER_TOOL_CACHE}/kosmo-trivy-v0.70.0/trivy-bin"
+          echo "${trivy_dir}" >> "${GITHUB_PATH}"
+          if [[ -x "${trivy_dir}/trivy" ]]; then
+            echo "installed=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "installed=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Install Trivy
+        if: steps.trivy-binary.outputs.installed != 'true'
+        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+        with:
+          version: v0.70.0
+          cache: false
+          path: ${{ runner.tool_cache }}/kosmo-trivy-v0.70.0
+
       - name: Run Trivy image scan
         id: trivy
         continue-on-error: true
@@ -79,6 +116,9 @@ jobs:
           vuln-type: os,library
           scanners: vuln
           severity: HIGH,CRITICAL
+          cache: false
+          cache-dir: ${{ runner.tool_cache }}/kosmo-trivy-cache
+          skip-setup-trivy: true
 
       - name: Upload Trivy report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
