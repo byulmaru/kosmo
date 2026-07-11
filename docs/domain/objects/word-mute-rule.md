@@ -2,52 +2,72 @@
 
 ## 정의
 
-Word Mute Rule은 owner Profile이 특정 단어를 기준으로 Post List, Search, Notification 노출을 제어하는 규칙이다.
+Word Mute Rule은 Owner Profile이 특정 단어를 기준으로 Post List, 검색, Notification 노출을 제어하는 규칙이다.
 
 ## 상태
 
-명시된 상태 차원은 없다.
+### Mute Scope
+
+Mute Scope는 여러 값을 동시에 가질 수 있다.
+
+| 값           | 의미                             |
+| ------------ | -------------------------------- |
+| Home         | Home Post List에 적용            |
+| Profile      | Profile Post List에 적용         |
+| Hashtag      | Hashtag Post List에 적용         |
+| Search       | 검색 결과에 적용                 |
+| Notification | 새 Notification Item 생성에 적용 |
+
+### Mute Decision
+
+| 값       | 의미                 |
+| -------- | -------------------- |
+| Exclude  | 후보에서 제거한다    |
+| Collapse | 접힌 상태로 노출한다 |
 
 ## 속성
 
-| 속성               | 타입/nullability | 검증 정책                            | 상태별 존재 조건 | 조회 권한                  |
-| ------------------ | ---------------- | ------------------------------------ | ---------------- | -------------------------- |
-| 대상 단어          | 문자열, 필수     | 대소문자 구분 없음, 부분 문자열 매치 | 항상             | `Safety.WordMuteRuleOwner` |
-| 적용 위치          | enum 목록, 필수  | Home, Notification, Hashtag, Search  | 항상             | `Safety.WordMuteRuleOwner` |
-| hide/collapse 결정 | enum, 필수       | Exclude 또는 Collapse                | 항상             | `Safety.WordMuteRuleOwner` |
-| 만료 시각          | 시각, nullable   | 영구 또는 기간제                     | 항상             | `Safety.WordMuteRuleOwner` |
+| 속성      | 타입/nullability | 검증 정책                                  | 존재 조건 | 조회 조건    | 조회 권한            |
+| --------- | ---------------- | ------------------------------------------ | --------- | ------------ | -------------------- |
+| 대상 단어 | 문자열, 필수     | 대소문자를 구분하지 않는 부분 문자열 match | 항상      | Owner만 조회 | `WordMuteRule.Owner` |
+| 만료 시각 | 시각, nullable   | 생성/변경 시 미래 시각이거나 영구다        | 항상      | Owner만 조회 | `WordMuteRule.Owner` |
 
 ## 관계
 
-| 관계           | 대상                                              | 조건                | 조회 권한                                                                  |
-| -------------- | ------------------------------------------------- | ------------------- | -------------------------------------------------------------------------- |
-| owner Profile  | [Profile](./profile.md)                           | rule을 가진 Profile | `Safety.WordMuteRuleOwner`                                                 |
-| 게시 목록 정책 | [Post List Definition](./post-list-definition.md) | Post List 적용      | `PostList.HomeViewer`, `PostList.ProfileViewer`, `PostList.PublicExplorer` |
-| 검색 정책      | [Search Index](./search-index.md)                 | Search 적용         | `Search.SafeScope`                                                         |
-| 알림 정책      | [Notification Item](./notification-item.md)       | Notification 적용   | `Notification.Recipient`                                                   |
+| 관계          | 대상                    | 방향                      | cardinality | 존재 조건 | 조회 조건    | 조회 권한            |
+| ------------- | ----------------------- | ------------------------- | ----------- | --------- | ------------ | -------------------- |
+| Owner Profile | [Profile](./profile.md) | Word Mute Rule -> Profile | 1 -> 1      | 항상      | Owner만 조회 | `WordMuteRule.Owner` |
+
+같은 Owner Profile과 정규화된 대상 단어 조합에는 적용 중인 Rule이 하나만 존재한다.
 
 ## 행동
 
-| 행동           | 행동 주체 Profile | 대상 객체      | 입력값                      | 권한                       | 결과                                                                                        |
-| -------------- | ----------------- | -------------- | --------------------------- | -------------------------- | ------------------------------------------------------------------------------------------- |
-| Word Mute 생성 | Profile           | Word Mute Rule | 단어, 적용 위치, 기간, 결정 | `Safety.WordMuteRuleOwner` | Word Mute Rule이 생성되고, 지정한 적용 위치에서만 소비된다                                  |
-| Word Mute 변경 | owner Profile     | Word Mute Rule | 적용 위치, 기간, 결정       | `Safety.WordMuteRuleOwner` | Word Mute Rule이 바뀌고, Notification 미적용 규칙은 새 Notification Item 생성을 막지 않는다 |
-| Word Mute 제거 | owner Profile     | Word Mute Rule | 없음                        | `Safety.WordMuteRuleOwner` | Word Mute Rule이 제거된다                                                                   |
+| 행동                | 행동 주체 Profile | 대상 객체      | 입력값                           | 권한                 | 조건                                                                                              | 결과                                                              |
+| ------------------- | ----------------- | -------------- | -------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Word Mute Rule 생성 | Owner Profile     | Word Mute Rule | 단어, Scope, Decision, 만료 시각 | `Profile.Member`     | Owner는 Active/Normal Local Profile이고 단어가 비어 있지 않으며 같은 조합의 적용 중인 Rule이 없다 | 입력 Scope/Decision과 Owner 관계를 가진 Word Mute Rule이 생성된다 |
+| Word Mute Rule 변경 | Owner Profile     | Word Mute Rule | Scope, Decision, 만료 시각       | `WordMuteRule.Owner` | Scope가 하나 이상이고 만료 시각이 미래이거나 영구다                                               | Scope, Decision, 만료 시각이 바뀐다                               |
+| Word Mute Rule 제거 | Owner Profile     | Word Mute Rule | 없음                             | `WordMuteRule.Owner` | Rule이 존재한다                                                                                   | Word Mute Rule이 제거된다                                         |
 
 ## 권한
 
-| 권한                       | 종류      | 성립 조건                                                                                                     | 대표 참조           |
-| -------------------------- | --------- | ------------------------------------------------------------------------------------------------------------- | ------------------- |
-| `Safety.WordMuteRuleOwner` | 객체 종속 | 행동 주체 Profile이 Word Mute Rule의 owner Profile이다. 생성 시에는 생성될 Word Mute Rule의 owner Profile이다 | Word Mute Rule 조회 |
+| 권한                 | 종류      | 성립 조건                                              |
+| -------------------- | --------- | ------------------------------------------------------ |
+| `WordMuteRule.Owner` | 객체 종속 | 행동/요청 Profile이 Word Mute Rule의 Owner Profile이다 |
 
-## 불변 조건
+## 조회 정책
 
-- 추가 전역 불변 조건은 두지 않는다. 행동별 제약은 행동 결과에 둔다.
+- Rule은 선택된 Scope에서만 소비한다.
+- Post List와 검색에서는 Mute Decision을 적용하고 Notification Scope에서는 일치하는 새 Notification Item을
+  생성하지 않는다.
+- 기존 Notification Item의 존재와 Read State는 바꾸지 않는다.
+- 만료 시각이 지난 Rule은 조회 정책에 적용하지 않는다.
 
 ## 확정 용어
 
 - 단어 뮤트: Word Mute
 - 단어 뮤트 규칙: Word Mute Rule
+- Mute Scope: Mute Scope
+- Mute Decision: Mute Decision
 
 ## 제외/보류
 

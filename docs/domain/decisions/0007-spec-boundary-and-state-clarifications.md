@@ -10,32 +10,25 @@ Accepted
 
 ## 결정
 
-서브에이전트 검수 후 남은 도메인 경계와 상태/알림 정책을 다음처럼 확정한다.
-
-- Media는 URL 발급, Media Proxy, 파일 원본, 파생 이미지, 변환 결과 제공을 소유한다.
-- Media는 Media 접근 권한의 원본 판단을 소유하지 않는다. Post Media 접근 판단은 [Post](../objects/post.md)의
-  Post Visibility와 Post Eligibility를 따르고, Profile Media 접근 판단은 [Profile](../objects/profile.md)의
-  표현 정책을 따른다. [Instance](../objects/instance.md)의 safety 상태 결과는 Media 접근 결과에 반영된다.
-  Instance reachability 상태는 새 원격 fetch와 원본 재검증 요청 여부에만 반영된다.
-- Media는 파일 검증 정책을 가진다. 구체 MIME type, Hash, EXIF 처리, 파일 크기 수치, 파생
-  이미지 생성 방식 같은 기술 세부는 도메인 명세가 아니라 구현/OpenSpec에서 다룬다.
-- Follow Relationship은 요청 대기 상태를 갖지 않고 성립된 팔로우 관계만 표현한다. 요청 대기, 수락, 거절은
-  [Follow Request](../objects/follow-request.md)의 Follow Request State로 둔다. 요청 취소, 언팔로우, 차단
-  삭제의 이력 보존 방식은 도메인 상태로 확장하지 않고 구현 스펙으로 분리한다.
-- [Account](../objects/account.md)는 Account State를 소유한다. Account State는 활성, 정지, 삭제됨 세
-  상태를 가진다.
-- Account 정지와 정지 해제는 운영자 Account의 action 결과다.
-- Account 삭제 전에는 Account-Profile 관계가 모두 정리되어야 하며, 그 과정에서 어떤 Profile의 마지막
-  `Owner`도 제거할 수 없다.
-- block, mute, Muted Thread에 걸린 새 Notification Item은 생성하지 않는다.
-- block, mute, limit, suspend가 발생해도 기존 Notification Item은 삭제하거나 읽음 상태를 바꾸지 않는다.
+- Media 접근 결과는 연결 Post 또는 Profile의 조회 정책을 따른다. Remote Media의 Instance 상태는 Media의
+  Remote Profile 관계에서 파생한다.
+- Media URL과 File 저장 위치는 영구 도메인 속성이 아니다.
+- File 형식, Hash, EXIF, 크기 제한, 이미지 생성 방식은 구현/OpenSpec에서 다룬다.
+- Follow Relationship은 성립된 관계만 표현하고 Follow Request는 Pending/Accepted/Rejected 상태를 가진다.
+- Follow Request 승인/거절/취소는 Pending 상태에만 적용한다.
+- Account State는 Active, Suspended, Deleted 값을 가지며 Deleted는 terminal 상태다.
+- Account 정지/해제는 운영자 행동이고 삭제는 마지막 Profile Owner를 제거하지 않을 때만 가능하다.
+- Notification Item은 Read State와 Notification Type을 가진다.
+- Follow Request Notification 표시는 원본 Follow Request State에서 파생하며 별도 처리 상태를 복제하지 않는다.
+- Pending Follow Request 취소는 대응하는 Follow Request Notification Item을 제거한다.
+- Post Notification Mute, Profile Mute/Block, 개인 Domain Block에 걸린 새 Notification Item은 만들지 않는다.
+- 기존 Notification Item은 이후 제어 객체나 Instance 상태가 바뀌어도 삭제하거나 Read State를 바꾸지 않는다.
+- 물리 색인 유지/삭제, 원격 delivery 실패, 재시도, 동기화 순서는 구현/연합 스펙으로 분리한다.
 
 ## 문서 반영
 
-- [Media](../objects/media.md)와 [File](../objects/file.md)은 파일 표현과 Media Proxy를 소유하고 접근
-  권한 원본 판단은 참조 정책으로 분리한다.
-- [Follow Relationship](../objects/follow-relationship.md)은 성립된 팔로우 관계만 다룬다.
-- [Follow Request](../objects/follow-request.md)는 요청 대기, 수락, 거절 상태를 다룬다.
-- [Account](../objects/account.md)는 Account State와 상태 변경 행동을 명시한다.
-- [Notification Item](../objects/notification-item.md)은 block/mute 대상 새 Notification Item을 생성하지
-  않는다고 명시한다.
+- [Media](../objects/media.md)와 [File](../objects/file.md)은 도메인 표현과 구현 저장 경계를 구분한다.
+- [Follow Relationship](../objects/follow-relationship.md)과 [Follow Request](../objects/follow-request.md)는
+  각자의 생명주기를 정의한다.
+- [Account](../objects/account.md)은 terminal 상태를 포함한 상태 Mutation 조건을 정의한다.
+- [Notification Item](../objects/notification-item.md)은 원본 객체 상태를 복제하지 않는다.

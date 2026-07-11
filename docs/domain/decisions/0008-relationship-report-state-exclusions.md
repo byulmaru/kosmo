@@ -10,14 +10,14 @@ Accepted
 
 ## 결정
 
-도메인 명세에 남은 상태 기계 후보 중 다음 두 가지는 현재 도메인 상태 기계로 두지 않는다.
-
-- Account-Profile 관계는 별도 Account-Profile Relationship State Machine을 갖지 않는다.
-- Account-Profile 관계의 현재 권한은 `Owner`/`Member` role과 마지막 `Owner` 불변 조건으로 판단한다.
-- 초대, 수락, 연결 해제 흐름은 Account-Profile 관계 상태로 확장하지 않는다.
-- 신고 제출, 신고 묶음, 신고 처리 단계 전이는 현재 도메인 범위에서 제외한다.
+- Account-Profile Membership은 별도 lifecycle 상태 차원을 갖지 않는다.
+- Account Profile Role은 Owner와 Member 값을 가진다.
+- Membership 생성, Role 변경, Owner 지위 양도, 제거 조건은 행동에 정의한다.
+- Local Profile에는 Owner Membership이 항상 하나 이상 존재하며 각 행동 조건에서 이를 보장한다.
+- 초대 수락 대기와 연결 해제 대기는 현재 Membership 상태로 확장하지 않는다.
+- 신고 제출, 신고 묶음, 신고 처리 단계와 관련 durable 객체는 현재 도메인 범위에서 제외한다.
 
 ## 문서 반영
 
-- [Account-Profile Membership](../objects/account-profile-membership.md)은 Account-Profile 관계를 role
-  기반 관계로 유지하고 별도 상태 기계를 두지 않는다.
+- [Account-Profile Membership](../objects/account-profile-membership.md)은 Role과 관계 Mutation만 소유한다.
+- 신고 관련 durable 객체와 상태 기계는 객체 인덱스에 두지 않는다.

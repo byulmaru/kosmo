@@ -4,7 +4,7 @@
 
 [2026-06-29 도메인 경계 후속 결정 기록](./2026-06-29-domain-boundary-followup.md)에 남긴 Profile 상태
 전이와 Domain moderation action taxonomy 질문이 닫혔다. 확정 결정은
-[ADR 0006](../decisions/0006-state-machine-and-domain-moderation.md)에 남겼다.
+[ADR 0006](../decisions/0006-state-machine-and-instance-states.md)에 남겼다.
 
 ## 확정된 결정
 
@@ -31,4 +31,4 @@
 
 - [Identity 컨텍스트](../objects/profile.md)에 Profile State Machine을 추가했다.
 - [Trust & Safety 컨텍스트](../objects/instance.md)에 Domain Moderation Action을 추가했다.
-- [ADR 0006](../decisions/0006-state-machine-and-domain-moderation.md)을 추가했다.
+- [ADR 0006](../decisions/0006-state-machine-and-instance-states.md)을 추가했다.

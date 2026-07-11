@@ -15,7 +15,7 @@
 
 ## 문서 반영
 
-- [Post List 컨텍스트](../objects/post-list-definition.md)에서 `Post List Item`을 보편 언어와 모델 후보에서
+- [Post List 컨텍스트](../policies/post-list.md)에서 `Post List Item`을 보편 언어와 모델 후보에서
   제거했다.
 - [ADR 0001](../decisions/0001-core-ubiquitous-language.md)에 Home Post List와 Post List Item 제외
   결정을 추가했다.

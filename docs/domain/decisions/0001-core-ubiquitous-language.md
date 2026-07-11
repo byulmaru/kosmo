@@ -10,98 +10,48 @@ Accepted
 
 ## 결정
 
-Kosmo DDD 명세의 핵심 보편 언어를 다음과 같이 확정한다.
+Kosmo 도메인의 핵심 보편 언어를 다음처럼 확정한다.
 
-| 개념                | 확정 용어       | 한국어 설명   | 사용 범위                                                                     |
-| ------------------- | --------------- | ------------- | ----------------------------------------------------------------------------- |
-| 짧은 게시 단위      | Post            | 게시          | Profile이 작성하고 배포하는 단문 콘텐츠의 canonical domain term               |
-| 공개 소셜 정체성    | Profile         | 프로필        | 게시, 팔로우, 상호작용, 알림의 기본 행동 주체                                 |
-| 로그인 주체         | Account         | 계정          | 인증, Profile Owner/Member 관계의 주체                                        |
-| 게시 접근/노출 범위 | Post Visibility | 공개 범위     | Post를 누가 볼 수 있고 어디에 노출될 수 있는지 나타내는 값 객체               |
-| 게시 목록           | Post List       | 게시 목록     | Post 후보 선택, 제어, 정렬 규칙                                               |
-| 반응                | Reaction        | 반응          | Profile이 Post에 이모지 단위로 남기는 반응 행동                               |
-| 재게시              | Repost          | 재게시        | Post Form 값 중 원본 Post를 Repost 작성자의 Post List 후보로 다시 포함하는 값 |
-| 북마크              | Bookmark        | 북마크        | Profile이 Post를 개인적으로 저장하는 행동                                     |
-| 내용 경고           | Content Warning | 내용 경고     | Post 본문과 미디어를 접어서 보여주기 위한 표시 정책                           |
-| 민감한 미디어       | Sensitive Media | 민감한 미디어 | Post 단위로 설정되어 연결된 모든 Media를 가리는 상태                          |
+| 개념             | 확정 용어       | 의미                                                                 |
+| ---------------- | --------------- | -------------------------------------------------------------------- |
+| 짧은 게시 단위   | Post            | Profile이 작성하고 배포하는 단문 콘텐츠                              |
+| 공개 소셜 정체성 | Profile         | 게시, 팔로우, 상호작용, 알림의 기본 행동 주체                        |
+| 로그인 주체      | Account         | 인증과 Profile Owner/Member 관계의 주체                              |
+| 게시 접근 범위   | Post Visibility | Post를 볼 수 있는 Profile 관계를 정하는 상태 차원                    |
+| 게시 목록        | Post List       | 여러 객체를 소비해 Post 후보와 Control Decision을 계산하는 조회 정책 |
+| 반응             | Reaction        | Profile이 Post에 남기는 이모지 반응 객체                             |
+| 재게시           | Repost          | Post Form 상태 값                                                    |
+| 개인 저장        | Bookmark        | Profile이 Post를 개인적으로 저장한 객체                              |
+| 내용 경고        | Content Warning | Post 본문과 Media를 접어 표시하는 속성                               |
+| 민감한 미디어    | Sensitive Media | Post에 연결된 모든 Media 표시를 가리는 boolean 속성                  |
 
 ## 용어 규칙
 
-- `Post`는 Kosmo의 canonical 작성 단위다.
-- `Note`와 `Status`는 Kosmo의 canonical domain term으로 사용하지 않는다.
-- `Profile`은 공개 소셜 정체성과 행동 주체를 뜻한다.
-- `Account`는 로그인, Profile Owner/Member 권한의 주체로만 사용한다.
-- 프로토콜 행위자 용어와 일반 행위 주체 용어는 Kosmo의 canonical domain term으로 사용하지 않는다.
-- 원격 프로토콜에서 행위자를 나타내는 개념도 도메인 문서에서는 `Remote Profile`로 표현한다.
-- `Post Visibility`는 domain/value-object 용어로 사용하고, 화면 표시용 한국어 문구는 `공개 범위`로
-  쓴다.
-- `Post Visibility`는 [Post](../objects/post.md)의 속성이다. Post List는 Post Visibility를 Post List
-  Control로 재정의하지 않는다.
-- `Post Visibility`는 viewer Profile별 접근 가능 대상을 먼저 결정한다. `Post Eligibility`는 Post
-  Visibility가 허용한 viewer-visible Post 안에서 읽기/전파 후보성을 제한한다.
-- `Post Eligibility`는 데이터를 가지는 Post 속성이나 값 객체가 아니라 Post가 소유하는 후보성
-  정책이다.
-- 게시 목록의 canonical domain term은 `Post List`다. `Feed`는 canonical domain term으로 사용하지
-  않는다.
-- 기본 게시 목록의 canonical domain term은 `Home Post List`다. `Following Post List`는 현재
-  canonical domain term으로 사용하지 않는다.
-- `Post List Item`은 canonical domain term으로 사용하지 않는다. 목록에 표시되는 대상은 Post 후보와
-  Control Decision으로 설명한다.
-- `Reaction`과 `Repost`를 canonical domain term으로 사용한다. `Reaction`은 별도 객체이고, `Repost`는
-  [Post](../objects/post.md)의 Post Form 상태 값이다. 좋아요, 부스트, 확산 계열 표현은 canonical domain
-  term으로 사용하지 않는다.
-- `Reaction`은 Post 하나에 Profile당 같은 이모지 1개만 허용하고, 서로 다른 이모지는 여러 개
-  허용한다.
-- `Bookmark`의 한국어 표현은 `북마크`로 쓴다.
-- `Quote`는 현재 도메인 범위에서 제외한다.
-- `Collection`은 현재 도메인 범위에서 제외한다.
-- `Follow Pack`은 현재 도메인 범위에서 제외한다.
-- `Content Warning`의 한국어 표현은 `내용 경고`로 쓴다.
-- `Sensitive Media`의 한국어 표현은 `민감한 미디어`로 쓴다.
-- `Audience`와 `공개 설정`은 canonical domain term으로 쓰지 않는다. 필요하면 UI 설명 문구로만
-  제한한다.
-- Messaging은 현재 도메인 범위에서 제외한다. `멘션한 프로필만`은 [Post](../objects/post.md)의 Post
-  Visibility 값으로 다룬다.
-- Account가 주체인 행동은 인증, Profile Owner/Member 권한, 운영자 권한에 한정한다. 그 외 소셜
-  행동의 기본 주체는 Profile이다.
-- Account-Profile 관계는 역할 기반 관계 모델로 둔다. 하나의 Account는 여러 Profile과 연결될 수
-  있고, 하나의 Profile도 여러 Account와 역할 기반으로 연결될 수 있다.
-- Account-Profile role은 `Owner`와 `Member` 두 가지로 둔다.
-- Profile에는 항상 최소 1명의 `Owner`가 있어야 한다. `Owner`만 초대, role 변경, 양도를 수행할 수
-  있고 마지막 `Owner`는 탈퇴, role 변경, 연결 해제할 수 없다.
-- Local, Federated, List 기반 Post List는 현재 Post List 범위에서 제외한다.
-- Post List 정책은 Home Post List, Profile Post List, Hashtag Post List만 다룬다.
-- Home Post List는 viewer Profile이 작성한 답글, viewer Profile의 Post에 달린 답글, viewer Profile이
-  팔로우한 Profile의 Post에 viewer Profile이 팔로우한 Profile이 단 답글을 포함한다.
-- Home Post List는 viewer Profile 또는 viewer Profile이 팔로우한 Profile이 작성한 Repost Post를 포함한다.
-- Profile Post List는 대상 Profile의 Original Post와 Repost Post를 표시한다.
-- Hashtag Post List는 Post Visibility가 공개인 Original Post만 표시하고, Reply와 Repost를 포함하지
-  않는다.
-- 게시 후 Post Visibility는 변경할 수 없다.
+- `Post`는 canonical 작성 단위다. `Note`, `Status`는 canonical domain term으로 사용하지 않는다.
+- `Profile`은 공개 소셜 정체성과 소셜 행동 주체다. `Account`는 로그인과 Profile 운영 관계의 주체다.
+- Local/Remote 구분은 [Profile](../objects/profile.md)의 Profile Origin 상태 차원이다.
+- `Post Visibility`는 [Post](../objects/post.md)의 상태 차원이다. Post List는 이를 재정의하지 않는다.
+- `Post Eligibility`는 데이터 속성이나 값 객체가 아니라 Post가 소유한 조회 후보성 정책이다.
+- `Post List`는 durable 객체가 아니다. Home, Profile, Hashtag Post List 규칙은
+  [Post List Policy](../policies/post-list.md)에 둔다.
+- `Repost`는 별도 durable 객체가 아니라 Post Form 값이다.
+- `Reaction`과 `Bookmark`는 별도 durable 객체다.
+- `Audience`, `Feed`, `Post List Item`, `좋아요`, `부스트`는 canonical domain term으로 사용하지 않는다.
+- Account가 주체인 행동은 인증, Profile Owner/Member 관계, 운영자 행동에 한정한다.
+- Messaging, Quote, Collection, Follow Pack은 현재 범위에서 제외한다.
 
 ## Post Visibility 값
 
-`Post Visibility`는 다음 네 값으로 확정한다.
-
-| 값                 | 한국어 설명     | 의미                                                                         |
-| ------------------ | --------------- | ---------------------------------------------------------------------------- |
-| Public             | 공개            | 모든 viewer가 볼 수 있고 검색/해시태그 목록 후보가 된다                      |
-| Quiet Public       | 조용한 공개     | 모든 viewer가 볼 수 있지만 검색/해시태그 목록에는 노출하지 않는다            |
-| Followers Only     | 팔로워 공개     | 작성자, 작성자를 수락된 상태로 팔로우한 Profile, 멘션된 Profile이 볼 수 있다 |
-| Mentioned Profiles | 멘션한 프로필만 | 작성자와 Post에서 멘션한 Profile만 볼 수 있다                                |
+| 값                 | 의미                                                                 |
+| ------------------ | -------------------------------------------------------------------- |
+| Public             | 모든 viewer가 볼 수 있고 검색/Hashtag Post List 후보가 된다          |
+| Unlisted           | 모든 viewer가 볼 수 있지만 검색/Hashtag Post List 후보가 되지 않는다 |
+| Followers Only     | 작성자, 작성자를 팔로우한 Profile, 멘션된 Profile이 볼 수 있다       |
+| Mentioned Profiles | 작성자와 멘션된 Profile만 볼 수 있다                                 |
 
 ## 문서 반영
 
-- [Post](../objects/post.md)는 `Post`, `Post Form`, `Repost`, `Post Visibility`를 canonical term으로
-  사용한다.
-- [Post List Definition](../objects/post-list-definition.md)은 Post가 제공한 visible eligible Post를
-  소비하고, viewer/list 수준 제어만 `Post List Control`로 정의한다.
-- [Account](../objects/account.md)와 [Profile](../objects/profile.md)은 `Account`, `Profile`,
-  `Remote Profile`을 canonical term으로 사용한다.
-- [Reaction](../objects/reaction.md)은 `Reaction`을 canonical term으로 사용한다.
-- 객체 문서는 `Post`, `Profile`, `Account`, `Post Form`, `Post Visibility`, `Post List`, `Reaction`,
-  `Repost`를 확정 용어로 사용한다.
-
-## 남은 결정
-
-- 세부 정책 결정은 각 후속 ADR과 records 문서에서 추적한다.
+- [Post](../objects/post.md)는 Post Form, Post Visibility, Repost, Post Eligibility를 소유한다.
+- [Profile](../objects/profile.md)은 Local/Remote 상태와 기본 소셜 행동 주체를 정의한다.
+- [Post List Policy](../policies/post-list.md)는 목록 후보와 Control Decision을 정의한다.
+- [Reaction](../objects/reaction.md)과 [Bookmark](../objects/bookmark.md)은 독립 객체로 유지한다.

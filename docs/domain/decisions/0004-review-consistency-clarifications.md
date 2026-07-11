@@ -10,33 +10,21 @@ Accepted
 
 ## 결정
 
-PR 리뷰에서 확인된 문서 간 불일치를 다음처럼 확정한다.
-
-- 팔로워 공개 Post의 접근 가능 대상에는 작성자, 작성자를 수락된 상태로 팔로우한 Profile, 멘션된
-  Profile이 포함된다.
-- Home Post List 후보 집합의 일반 Post 후보는 원본 Post로 한정하고, Home Post List 답글 정책에 맞는
-  Reply Post만 별도 후보로 포함한다.
-- Profile State에는 `정지`를 포함한다. 정지는 운영자 action으로 Profile 사용과 표시가 정지된 상태다.
-- Profile mute는 Notification을 삭제하거나 상태를 바꾸지 않는다. 뮤트된 Profile의 새 알림은 숨기거나
-  억제한다.
-- [Search Index](../objects/search-index.md)는 검색에 적용하도록 설정된 Word Mute 또는 Hashtag Mute만
-  검색 결과 제외에 사용한다.
-- 검색 색인 제외는 실제 moderation action으로 제한, 정지, 삭제된 Post와 Profile에만 적용한다.
-- Notification은 알림에 적용하도록 설정된 Word Mute 또는 Hashtag Mute만 멘션 알림 제한에 사용한다.
-- Post List는 현재 Post List Definition의 적용 위치와 일치하는 Word Mute 또는 Hashtag Mute만 적용하고,
-  upstream hide/collapse 결정을 소비한다.
-- Repost Post 후보에는 Repost를 작성한 Profile과 source Post의 Author Profile 모두에 Profile block/mute control을
-  적용한다.
-- Hashtag Post List는 공개 원본 Post만 대상으로 한다.
+- Followers Only Post는 Author, Author를 팔로우한 Profile, Mentioned Profile이 볼 수 있다.
+- Home Post List는 Original 후보와 제한된 Reply 후보를 구분해 계산한다.
+- Repost 후보에는 Repost Author와 Source Post Author 양쪽의 Profile Block/Profile Mute를 적용한다.
+- 여러 Control Decision이 겹치면 `Exclude > Collapse > Include` 순서로 결합한다.
+- Profile lifecycle과 운영자 suspension은 서로 다른 상태 차원이다.
+- Profile Mute는 기존 Notification Item을 삭제하거나 Read State를 바꾸지 않는다.
+- Word Mute Rule과 Hashtag Mute Rule은 선택된 Mute Scope에서만 소비한다.
+- Post 검색 후보는 Public Post 중 Post Eligibility를 통과한 대상이다.
+- Profile 검색 후보는 공개 조회 정책을 통과하며 Domain Limit Instance의 Remote Profile은 제외한다.
+- Hashtag Post List는 Public Original Post만 대상으로 한다.
+- Profile Domain Block은 Post List와 검색뿐 아니라 직접 Profile/Post/Media 조회에도 적용한다.
 
 ## 문서 반영
 
-- [Post](../objects/post.md)는 팔로워 공개 요약에도 작성자를 포함한다.
-- [Post List Definition](../objects/post-list-definition.md)은 Home Post List 후보 집합에서 Original Post와
-  Reply Post를 분리하고, Repost source Author Profile과 mute 적용 위치/결정을 명시한다.
-- [Profile](../objects/profile.md)은 Profile State에 정지를 포함한다.
-- [Profile Relation Rule](../objects/profile-relation-rule.md), [Word Mute Rule](../objects/word-mute-rule.md),
-  [Hashtag Mute Rule](../objects/hashtag-mute-rule.md)은 mute의 알림 처리를 숨김/억제로 정의한다.
-- [Search Index](../objects/search-index.md)는 검색 scope에 적용된 mute와 실제 moderation action만 검색
-  제외 조건으로 사용하고, [Hashtag](../objects/hashtag.md)는 해시태그 목록 후보를 공개 원본 Post로
-  제한한다.
+- [Post](../objects/post.md)는 직접 조회와 검색 후보 조건을 정의한다.
+- [Post List Policy](../policies/post-list.md)는 목록별 후보와 제어 결합을 정의한다.
+- [Profile](../objects/profile.md)은 lifecycle/suspension 상태를 분리한다.
+- 개인 제어 객체는 각각 적용 Scope와 기존 Notification 보존 규칙을 명시한다.

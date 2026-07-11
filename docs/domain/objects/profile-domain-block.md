@@ -2,44 +2,46 @@
 
 ## 정의
 
-Profile Domain Block은 owner Profile이 원격 Instance 전체를 개인적으로 차단한 결과다.
+Profile Domain Block은 Owner Profile이 Target Instance 전체를 개인적으로 차단한 관계다.
 
 ## 상태
 
-명시된 상태 차원은 없다.
+이 객체는 별도 상태 차원을 가지지 않는다. 객체의 존재가 적용 중인 Domain Block을 뜻한다.
 
 ## 속성
 
-| 속성        | 타입/nullability | 검증 정책            | 상태별 존재 조건 | 조회 권한                        |
-| ----------- | ---------------- | -------------------- | ---------------- | -------------------------------- |
-| 대상 Domain | 문자열, 필수     | 원격 Instance 식별자 | 항상             | `Safety.ProfileDomainBlockOwner` |
-| 생성 시각   | 시각, 필수       | 미정                 | 항상             | `Safety.ProfileDomainBlockOwner` |
+| 속성      | 타입/nullability | 검증 정책                      | 존재 조건 | 조회 조건    | 조회 권한                  |
+| --------- | ---------------- | ------------------------------ | --------- | ------------ | -------------------------- |
+| 생성 시각 | 시각, 필수       | 생성 결과로 기록하며 변경 불가 | 항상      | Owner만 조회 | `ProfileDomainBlock.Owner` |
 
 ## 관계
 
-| 관계           | 대상                                              | 조건                 | 조회 권한                                                                  |
-| -------------- | ------------------------------------------------- | -------------------- | -------------------------------------------------------------------------- |
-| owner Profile  | [Profile](./profile.md)                           | block을 가진 Profile | `Safety.ProfileDomainBlockOwner`                                           |
-| 대상 Instance  | [Instance](./instance.md)                         | 차단 대상 원격 서버  | `Safety.ProfileDomainBlockOwner`                                           |
-| 게시 목록 정책 | [Post List Definition](./post-list-definition.md) | Post List 적용       | `PostList.HomeViewer`, `PostList.ProfileViewer`, `PostList.PublicExplorer` |
-| 검색 정책      | [Search Index](./search-index.md)                 | Search 적용          | `Search.SafeScope`                                                         |
+| 관계            | 대상                      | 방향                             | cardinality | 존재 조건 | 조회 조건    | 조회 권한                  |
+| --------------- | ------------------------- | -------------------------------- | ----------- | --------- | ------------ | -------------------------- |
+| Owner Profile   | [Profile](./profile.md)   | Profile Domain Block -> Profile  | 1 -> 1      | 항상      | Owner만 조회 | `ProfileDomainBlock.Owner` |
+| Target Instance | [Instance](./instance.md) | Profile Domain Block -> Instance | 1 -> 1      | 항상      | Owner만 조회 | `ProfileDomainBlock.Owner` |
+
+같은 Owner Profile과 Target Instance 조합에는 Profile Domain Block이 하나만 존재한다. Target Domain 문자열은
+별도 속성으로 중복하지 않고 Target Instance의 Domain에서 파생한다.
 
 ## 행동
 
-| 행동                   | 행동 주체 Profile | 대상 객체            | 입력값 | 권한                             | 결과                                                                                                                         |
-| ---------------------- | ----------------- | -------------------- | ------ | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Profile Domain block   | Profile           | Profile Domain Block | Domain | `Safety.ProfileDomainBlockOwner` | Profile Domain Block이 생성되고, 대상 Instance 콘텐츠를 owner Profile에게 없는 것처럼 취급하며, 기존 Notification을 보존한다 |
-| Profile Domain unblock | owner Profile     | Profile Domain Block | 없음   | `Safety.ProfileDomainBlockOwner` | Profile Domain Block이 제거된다                                                                                              |
+| 행동                      | 행동 주체 Profile | 대상 객체            | 입력값          | 권한                       | 조건                                                             | 결과                                                       |
+| ------------------------- | ----------------- | -------------------- | --------------- | -------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------- |
+| Profile Domain Block 생성 | Owner Profile     | Profile Domain Block | Target Instance | `Profile.Member`           | Owner는 Active/Normal Local Profile이고 같은 조합의 Block이 없다 | Owner/Instance 관계를 가진 Profile Domain Block이 생성된다 |
+| Profile Domain Block 제거 | Owner Profile     | Profile Domain Block | 없음            | `ProfileDomainBlock.Owner` | Profile Domain Block이 존재한다                                  | Profile Domain Block이 제거된다                            |
 
 ## 권한
 
-| 권한                             | 종류      | 성립 조건                                                                                                              | 대표 참조                 |
-| -------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| `Safety.ProfileDomainBlockOwner` | 객체 종속 | 행동 주체 Profile이 개인 Domain block의 owner Profile이다. 생성 시에는 생성될 Profile Domain Block의 owner Profile이다 | Profile 개인 Domain block |
+| 권한                       | 종류      | 성립 조건                                                    |
+| -------------------------- | --------- | ------------------------------------------------------------ |
+| `ProfileDomainBlock.Owner` | 객체 종속 | 행동/요청 Profile이 Profile Domain Block의 Owner Profile이다 |
 
-## 불변 조건
+## 조회 정책
 
-- 추가 전역 불변 조건은 두지 않는다. 행동별 제약은 행동 결과에 둔다.
+- Target Instance의 Profile, Post, Media는 Owner Profile에게 직접 접근, Post List, 검색, Notification에서
+  없는 것처럼 취급한다.
+- 기존 Notification Item의 존재와 Read State는 바꾸지 않는다.
 
 ## 확정 용어
 
