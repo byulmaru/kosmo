@@ -26,10 +26,10 @@ Notification을 억제한 관계다.
 
 ## 행동
 
-| 행동                        | 행동 주체 Profile | 대상 객체              | 입력값    | 권한                         | 조건                                                                                    | 결과                                                     |
-| --------------------------- | ----------------- | ---------------------- | --------- | ---------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| Post Notification Mute 생성 | Owner Profile     | Post Notification Mute | Root Post | `Profile.Member`             | Owner는 Active/Normal Local Profile이고 Root Post 조회 정책을 통과하며 같은 조합이 없다 | Owner/Post 관계를 가진 Post Notification Mute가 생성된다 |
-| Post Notification Mute 제거 | Owner Profile     | Post Notification Mute | 없음      | `PostNotificationMute.Owner` | Post Notification Mute가 존재한다                                                       | Post Notification Mute가 제거된다                        |
+| 행동                        | 행동 주체 Profile | 대상 객체              | 입력값    | 권한                                           | 조건                                                                                    | 결과                                                     |
+| --------------------------- | ----------------- | ---------------------- | --------- | ---------------------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Post Notification Mute 생성 | Owner Profile     | Post Notification Mute | Root Post | `Account.Active`, `Profile.Member`             | Owner는 Active/Normal Local Profile이고 Root Post 조회 정책을 통과하며 같은 조합이 없다 | Owner/Post 관계를 가진 Post Notification Mute가 생성된다 |
+| Post Notification Mute 제거 | Owner Profile     | Post Notification Mute | 없음      | `Account.Active`, `PostNotificationMute.Owner` | Post Notification Mute가 존재한다                                                       | Post Notification Mute가 제거된다                        |
 
 ## 권한
 

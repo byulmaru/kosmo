@@ -24,26 +24,26 @@ Alt Text, File 표현, 접근 결과를 소유한다.
 
 ## 관계
 
-| 관계                   | 대상                    | 방향             | cardinality | 존재 조건                   | 조회 조건              | 조회 권한             |
-| ---------------------- | ----------------------- | ---------------- | ----------- | --------------------------- | ---------------------- | --------------------- |
-| Profile                | [Profile](./profile.md) | Media -> Profile | 1 -> 1      | 항상                        | Media 조회 정책 통과   | `Media.Profile`       |
-| Upload Account         | [Account](./account.md) | Media -> Account | 1 -> 1      | Source가 Local              | 업로드 감사 조회       | `Media.UploadAccount` |
-| Original File          | [File](./file.md)       | Media -> File    | 1 -> 1      | Source가 Local              | Media 조회 정책 통과   | 없음                  |
-| Derived File           | [File](./file.md)       | Media -> File    | 1 -> 0..N   | 파생 표현이 생성된 경우     | Media 조회 정책 통과   | 없음                  |
-| Attached Post          | [Post](./post.md)       | Media <- Post    | 1 -> 0..N   | Post에 첨부된 경우          | Post 조회 정책 통과    | 없음                  |
-| Profile Representation | [Profile](./profile.md) | Media <- Profile | 1 -> 0..N   | avatar/header로 연결된 경우 | Profile 조회 정책 통과 | 없음                  |
+| 관계                   | 대상                    | 방향             | cardinality | 존재 조건                                  | 조회 조건              | 조회 권한             |
+| ---------------------- | ----------------------- | ---------------- | ----------- | ------------------------------------------ | ---------------------- | --------------------- |
+| Profile                | [Profile](./profile.md) | Media -> Profile | 1 -> 1      | 항상                                       | Media 조회 정책 통과   | `Media.Profile`       |
+| Upload Account         | [Account](./account.md) | Media -> Account | 1 -> 1      | Source가 Local                             | 업로드 감사 조회       | `Media.UploadAccount` |
+| Original File          | [File](./file.md)       | Media -> File    | 1 -> 1      | Source가 Local                             | Media 조회 정책 통과   | 없음                  |
+| Derived File           | [File](./file.md)       | Media -> File    | 1 -> 0..N   | Source가 Local이고 파생 표현이 생성된 경우 | Media 조회 정책 통과   | 없음                  |
+| Attached Post          | [Post](./post.md)       | Media <- Post    | 1 -> 0..N   | Post에 첨부된 경우                         | Post 조회 정책 통과    | 없음                  |
+| Profile Representation | [Profile](./profile.md) | Media <- Profile | 1 -> 0..N   | avatar/header로 연결된 경우                | Profile 조회 정책 통과 | 없음                  |
 
 Local Media의 Profile은 upload를 수행한 Local Profile이다. Remote Media의 Profile은 원본 Remote Profile이며,
-Origin Instance는 이 Profile에서 파생한다.
+Instance는 이 Profile에서 파생한다.
 
 ## 행동
 
-| 행동              | 행동 주체 | 대상 객체 | 입력값                               | 권한                       | 조건                                                                                         | 결과                                                                                        |
-| ----------------- | --------- | --------- | ------------------------------------ | -------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| 이미지 업로드     | Profile   | Media     | 이미지 File, Alt Text                | `Profile.Member`           | 행동 주체는 Active/Normal Local Profile이고 입력 File이 이미지 검증을 통과한다               | Source=Local인 Media와 Type=Original File이 생성되고 행동 주체/요청 Account 관계가 생성된다 |
-| Remote Media 등록 | 시스템    | Media     | Remote Profile, Remote URL, Alt Text | `System.RemoteMediaSource` | Remote Profile의 Origin Instance가 새 원격 요청 허용 상태이고 같은 Remote URL의 Media가 없다 | Source=Remote인 Media와 Remote Profile 관계가 생성된다                                      |
-| Remote Media 갱신 | 시스템    | Media     | Alt Text, Fetch 결과                 | `System.RemoteMediaSource` | Source가 Remote이고 Profile의 Origin Instance가 새 원격 요청 허용 상태다                     | 원격 속성과 Remote Fetched At이 갱신된다                                                    |
-| Alt Text 변경     | Profile   | Media     | Alt Text                             | `Media.Profile`            | Source가 Local이다                                                                           | Alt Text가 바뀐다                                                                           |
+| 행동              | 행동 주체 | 대상 객체 | 입력값                               | 권한                               | 조건                                                                                  | 결과                                                                                                  |
+| ----------------- | --------- | --------- | ------------------------------------ | ---------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 이미지 업로드     | Profile   | Media     | 이미지 데이터, Alt Text              | `Account.Active`, `Profile.Member` | 행동 주체는 Active/Normal Local Profile이고 입력 데이터가 이미지 검증을 통과한다      | Source=Local인 Media와 Type=Original File, Media/File, 행동 주체 Profile/요청 Account 관계가 생성된다 |
+| Remote Media 등록 | 시스템    | Media     | Remote Profile, Remote URL, Alt Text | `System.RemoteMediaSource`         | Remote Profile의 Instance가 새 원격 요청 허용 상태이고 같은 Remote URL의 Media가 없다 | Source=Remote인 Media와 Remote Profile 관계가 생성된다                                                |
+| Remote Media 갱신 | 시스템    | Media     | Alt Text, Fetch 결과                 | `System.RemoteMediaSource`         | Source가 Remote이고 Profile의 Instance가 새 원격 요청 허용 상태다                     | 원격 속성과 Remote Fetched At이 갱신된다                                                              |
+| Alt Text 변경     | Profile   | Media     | Alt Text                             | `Account.Active`, `Media.Profile`  | Source가 Local이다                                                                    | Alt Text가 바뀐다                                                                                     |
 
 ## 권한
 
@@ -58,9 +58,9 @@ Origin Instance는 이 Profile에서 파생한다.
 - Post에 연결된 Media는 해당 Post 조회 정책을 통과한 viewer만 조회할 수 있다.
 - Profile avatar/header Media는 해당 Profile 조회 정책을 통과한 viewer만 조회할 수 있다.
 - 아직 Post나 Profile에 연결되지 않은 Local Media는 Media의 Profile만 조회할 수 있다.
-- Remote Media는 Profile의 Origin Instance Safety State가 Domain Block이 아니어야 한다.
+- Remote Media는 Profile의 Instance Safety State가 Domain Block이 아니어야 한다.
 - viewer의 Profile Domain Block 대상 Instance에서 온 Remote Media는 viewer에게 없는 것처럼 취급한다.
-- Profile의 Origin Instance Reachability State가 Unreachable이거나 Service State가 Suspended이면 새 fetch와 원본
+- Profile의 Instance Reachability State가 Unreachable이거나 Service State가 Suspended이면 새 fetch와 원본
   재검증을 보내지 않지만 기존에 허용된 표현의 공개 범위를 자동으로 바꾸지 않는다.
 - Sensitive Media가 true인 Post에 연결된 모든 Media 표시는 가린다.
 - avatar 표현은 400x400 crop, header 표현은 1500x500 crop을 기준으로 한다.

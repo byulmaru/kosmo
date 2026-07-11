@@ -14,7 +14,7 @@ Follow Relationship은 Profile 간 성립된 follower/followee 방향 관계다.
 | 속성                           | 타입/nullability | 검증 정책                      | 존재 조건 | 조회 조건            | 조회 권한            |
 | ------------------------------ | ---------------- | ------------------------------ | --------- | -------------------- | -------------------- |
 | 생성 시각                      | 시각, 필수       | 생성 결과로 기록하며 변경 불가 | 항상      | 관계 당사자          | `Follow.Participant` |
-| 관계별 새 Post 알림 Preference | boolean, 필수    | true 또는 false                | 항상      | follower의 개인 설정 | `Follow.Follower`    |
+| 관계별 새 Post 알림 Preference | boolean, 필수    | 생성 시 기본값은 false다       | 항상      | follower의 개인 설정 | `Follow.Follower`    |
 
 ## 관계
 
@@ -27,13 +27,14 @@ Follow Relationship은 Profile 간 성립된 follower/followee 방향 관계다.
 
 ## 행동
 
-| 행동                         | 행동 주체 Profile | 대상 객체           | 입력값           | 권한              | 조건                                                                                                                                      | 결과                           |
-| ---------------------------- | ----------------- | ------------------- | ---------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| Follow Relationship 생성     | Follower Profile  | Follow Relationship | Followee Profile | `Profile.Member`  | 두 Profile이 다르고 Active/Normal이며 Followee의 Approval Policy가 Open이다. 양방향 Profile Block, Profile Domain Block, 기존 관계가 없다 | Follow Relationship이 생성된다 |
-| Unfollow                     | Follower Profile  | Follow Relationship | 없음             | `Follow.Follower` | 관계가 존재한다                                                                                                                           | Follow Relationship이 제거된다 |
-| 새 Post 알림 Preference 변경 | Follower Profile  | Follow Relationship | boolean          | `Follow.Follower` | 관계가 존재한다                                                                                                                           | Preference가 바뀐다            |
+| 행동                         | 행동 주체 Profile | 대상 객체           | 입력값           | 권한                                | 조건                                                                                                                                      | 결과                                                                                                                                        |
+| ---------------------------- | ----------------- | ------------------- | ---------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Follow Relationship 생성     | Follower Profile  | Follow Relationship | Followee Profile | `Account.Active`, `Profile.Member`  | 두 Profile이 다르고 Active/Normal이며 Followee의 Approval Policy가 Open이다. 양방향 Profile Block, Profile Domain Block, 기존 관계가 없다 | 새 Post 알림 Preference=false인 Follow Relationship이 생성된다. 같은 조합의 Pending Follow Request와 그 Notification Item이 있으면 제거된다 |
+| Unfollow                     | Follower Profile  | Follow Relationship | 없음             | `Account.Active`, `Follow.Follower` | 관계가 존재한다                                                                                                                           | Follow Relationship이 제거되고 Accepted Follow Request의 해당 관계 참조와 이 관계를 원인으로 가진 Notification Item이 제거된다              |
+| 새 Post 알림 Preference 변경 | Follower Profile  | Follow Relationship | boolean          | `Account.Active`, `Follow.Follower` | 관계가 존재한다                                                                                                                           | Preference가 바뀐다                                                                                                                         |
 
 Approval Policy가 Approval Required인 Followee에는 Follow Relationship을 직접 생성하지 않고 Follow Request를 생성한다.
+Approval Policy 변경만으로 기존 Pending Follow Request를 승인하거나 제거하지 않는다.
 
 ## 권한
 

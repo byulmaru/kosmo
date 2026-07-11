@@ -29,13 +29,15 @@ Account가 아니라 Profile이다.
 
 ## 행동
 
-| 행동              | 행동 주체      | 대상 객체 | 입력값 | 권한               | 조건                                                                                   | 결과                             |
-| ----------------- | -------------- | --------- | ------ | ------------------ | -------------------------------------------------------------------------------------- | -------------------------------- |
-| Account 삭제      | Account        | Account   | 없음   | `Account.Self`     | Account State가 Deleted가 아니고 모든 Membership을 제거해도 마지막 Owner 조건을 지킨다 | Account State가 Deleted가 된다   |
-| Account 정지      | 운영자 Account | Account   | 사유   | `Account.Operator` | 대상 Account State가 Active다                                                          | Account State가 Suspended가 된다 |
-| Account 정지 해제 | 운영자 Account | Account   | 사유   | `Account.Operator` | 대상 Account State가 Suspended다                                                       | Account State가 Active가 된다    |
+| 행동              | 행동 주체      | 대상 객체 | 입력값 | 권한                                 | 조건                                                                                   | 결과                                                      |
+| ----------------- | -------------- | --------- | ------ | ------------------------------------ | -------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Account 삭제      | Account        | Account   | 없음   | `Account.Self`                       | Account State가 Deleted가 아니고 모든 Membership을 제거해도 마지막 Owner 조건을 지킨다 | 모든 Membership이 제거되고 Account State가 Deleted가 된다 |
+| Account 정지      | 운영자 Account | Account   | 사유   | `Account.Active`, `Account.Operator` | 대상 Account State가 Active다                                                          | Account State가 Suspended가 된다                          |
+| Account 정지 해제 | 운영자 Account | Account   | 사유   | `Account.Active`, `Account.Operator` | 대상 Account State가 Suspended다                                                       | Account State가 Active가 된다                             |
 
 Deleted Account에는 다른 상태 전이를 적용하지 않는다.
+Suspended Account는 `Account.Active`가 필요한 행동을 수행할 수 없지만 Account 삭제와 Account 대상 Operational
+Notification 읽음 처리는 요청할 수 있다.
 
 ## 권한
 

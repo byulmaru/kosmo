@@ -26,11 +26,11 @@ Profile Mute는 Owner Profile이 Target Profile의 콘텐츠와 새 Notification
 
 ## 행동
 
-| 행동              | 행동 주체 Profile | 대상 객체    | 입력값                    | 권한                | 조건                                                                                      | 결과                                     |
-| ----------------- | ----------------- | ------------ | ------------------------- | ------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------- |
-| Profile Mute 생성 | Owner Profile     | Profile Mute | Target Profile, 만료 시각 | `Profile.Member`    | Owner는 Active/Normal Local Profile이고 Target과 다르며 같은 조합의 적용 중인 Mute가 없다 | Owner/Target 관계를 가진 Mute가 생성된다 |
-| Profile Mute 변경 | Owner Profile     | Profile Mute | 만료 시각                 | `ProfileMute.Owner` | 입력이 미래 시각이거나 영구다                                                             | 만료 시각이 바뀐다                       |
-| Profile Mute 제거 | Owner Profile     | Profile Mute | 없음                      | `ProfileMute.Owner` | Profile Mute가 존재한다                                                                   | Profile Mute가 제거된다                  |
+| 행동              | 행동 주체 Profile | 대상 객체    | 입력값                    | 권한                                  | 조건                                                                                      | 결과                                     |
+| ----------------- | ----------------- | ------------ | ------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------- |
+| Profile Mute 생성 | Owner Profile     | Profile Mute | Target Profile, 만료 시각 | `Account.Active`, `Profile.Member`    | Owner는 Active/Normal Local Profile이고 Target과 다르며 같은 조합의 적용 중인 Mute가 없다 | Owner/Target 관계를 가진 Mute가 생성된다 |
+| Profile Mute 변경 | Owner Profile     | Profile Mute | 만료 시각                 | `Account.Active`, `ProfileMute.Owner` | 입력이 미래 시각이거나 영구다                                                             | 만료 시각이 바뀐다                       |
+| Profile Mute 제거 | Owner Profile     | Profile Mute | 없음                      | `Account.Active`, `ProfileMute.Owner` | Profile Mute가 존재한다                                                                   | Profile Mute가 제거된다                  |
 
 ## 권한
 

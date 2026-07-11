@@ -26,13 +26,15 @@ Accepted
   [Hashtag Mute Rule](../objects/hashtag-mute-rule.md), [Profile Domain Block](../objects/profile-domain-block.md)이
   각각 소유한다.
 - Instance 전역 safety, reachability, service 상태는 [Instance](../objects/instance.md)가 소유한다.
-- Media는 Profile, Local Upload Account, Alt Text를 소유한다. Remote Media의 Origin Instance는 Media의 Remote
-  Profile에서 파생한다.
+- Media는 Profile, Local Upload Account, Alt Text를 소유한다. Media의 Instance는 Media Profile에서 파생한다.
 - File은 Original/Derived 표현을 소유하고 저장소 위치와 공개 URL은 소유하지 않는다.
-- Post 작성/Reply 작성은 Attached Media 관계를 원자적으로 생성하며 게시 뒤 연결을 바꾸지 않는다.
+- Post/Reply/Quote 작성은 Attached Media 관계를 원자적으로 생성하며 게시 뒤 연결을 바꾸지 않는다.
 - Profile Block 생성은 두 Profile 사이의 Follow Request와 Follow Relationship, Target이 Owner의 Post에 남긴
-  Reaction을 제거한다. Repost Post, Bookmark, 기존 Notification Item은 유지한다.
+  Reaction을 제거한다. 제거된 Follow 객체를 직접 원인으로 가진 Notification Item도 제거하며 Repost Post,
+  Bookmark, 다른 기존 Notification Item은 유지한다.
 - Account 삭제는 Membership을 모두 정리하고 Local Profile의 마지막 Owner를 제거하지 않을 때만 가능하다.
+- Local Profile 또는 Account가 주체인 행동은 관계 권한과 별도로 `Account.Active`를 요구한다. Account 삭제와
+  Account 대상 Operational Notification 읽음은 명시적 예외다.
 
 ## 문서 반영
 

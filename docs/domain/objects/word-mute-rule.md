@@ -42,11 +42,11 @@ Mute Scope는 여러 값을 동시에 가질 수 있다.
 
 ## 행동
 
-| 행동                | 행동 주체 Profile | 대상 객체      | 입력값                           | 권한                 | 조건                                                                                              | 결과                                                              |
-| ------------------- | ----------------- | -------------- | -------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Word Mute Rule 생성 | Owner Profile     | Word Mute Rule | 단어, Scope, Decision, 만료 시각 | `Profile.Member`     | Owner는 Active/Normal Local Profile이고 단어가 비어 있지 않으며 같은 조합의 적용 중인 Rule이 없다 | 입력 Scope/Decision과 Owner 관계를 가진 Word Mute Rule이 생성된다 |
-| Word Mute Rule 변경 | Owner Profile     | Word Mute Rule | Scope, Decision, 만료 시각       | `WordMuteRule.Owner` | Scope가 하나 이상이고 만료 시각이 미래이거나 영구다                                               | Scope, Decision, 만료 시각이 바뀐다                               |
-| Word Mute Rule 제거 | Owner Profile     | Word Mute Rule | 없음                             | `WordMuteRule.Owner` | Rule이 존재한다                                                                                   | Word Mute Rule이 제거된다                                         |
+| 행동                | 행동 주체 Profile | 대상 객체      | 입력값                           | 권한                                   | 조건                                                                                                                                     | 결과                                                              |
+| ------------------- | ----------------- | -------------- | -------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Word Mute Rule 생성 | Owner Profile     | Word Mute Rule | 단어, Scope, Decision, 만료 시각 | `Account.Active`, `Profile.Member`     | Owner는 Active/Normal Local Profile이고 단어와 Scope가 비어 있지 않으며 만료 시각이 미래이거나 영구다. 같은 조합의 적용 중인 Rule이 없다 | 입력 Scope/Decision과 Owner 관계를 가진 Word Mute Rule이 생성된다 |
+| Word Mute Rule 변경 | Owner Profile     | Word Mute Rule | Scope, Decision, 만료 시각       | `Account.Active`, `WordMuteRule.Owner` | Scope가 하나 이상이고 만료 시각이 미래이거나 영구다                                                                                      | Scope, Decision, 만료 시각이 바뀐다                               |
+| Word Mute Rule 제거 | Owner Profile     | Word Mute Rule | 없음                             | `Account.Active`, `WordMuteRule.Owner` | Rule이 존재한다                                                                                                                          | Word Mute Rule이 제거된다                                         |
 
 ## 권한
 

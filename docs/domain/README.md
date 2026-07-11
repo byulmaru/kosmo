@@ -56,6 +56,10 @@
 별도 `불변 조건` 섹션은 두지 않는다. 행동 전제와 결과 보장은 행동에, 값 제약은 속성에, uniqueness와
 cardinality는 관계에, 조회 제한은 조회 정책과 조회 조건에 둔다.
 
+Local Profile이 주체인 행동에서 `Account.Active`는 해당 Profile을 선택한 요청 Account의 상태 사실이다.
+Membership/Owner 같은 관계 사실과 Account 활성 상태를 하나의 권한으로 합치지 않고 행동 권한 열에서 각각
+참조한다.
+
 ## 객체 인덱스
 
 | 객체                                                                  | 책임                                    | 주요 관계                                                                                                |
@@ -78,7 +82,7 @@ cardinality는 관계에, 조회 제한은 조회 정책과 조회 조건에 둔
 | [Hashtag Mute Rule](./objects/hashtag-mute-rule.md)                   | Hashtag 기반 개인 노출 제어             | [Profile](./objects/profile.md), [Hashtag](./objects/hashtag.md)                                         |
 | [Profile Domain Block](./objects/profile-domain-block.md)             | Profile 개인 원격 Instance 차단         | [Profile](./objects/profile.md), [Instance](./objects/instance.md)                                       |
 | [Post Notification Mute](./objects/post-notification-mute.md)         | Profile별 Post thread 알림 억제         | [Profile](./objects/profile.md), [Post](./objects/post.md)                                               |
-| [Instance](./objects/instance.md)                                     | 원격 서버 식별과 서버 상태              | [Profile](./objects/profile.md)                                                                          |
+| [Instance](./objects/instance.md)                                     | Profile 소속 서버 식별과 서버 상태      | [Profile](./objects/profile.md)                                                                          |
 
 ## 조회 정책
 

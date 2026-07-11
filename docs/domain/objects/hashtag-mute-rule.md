@@ -43,11 +43,11 @@ Mute Scope는 여러 값을 동시에 가질 수 있다.
 
 ## 행동
 
-| 행동                   | 행동 주체 Profile | 대상 객체         | 입력값                              | 권한                    | 조건                                                                      | 결과                                                                         |
-| ---------------------- | ----------------- | ----------------- | ----------------------------------- | ----------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Hashtag Mute Rule 생성 | Owner Profile     | Hashtag Mute Rule | Hashtag, Scope, Decision, 만료 시각 | `Profile.Member`        | Owner는 Active/Normal Local Profile이고 같은 조합의 적용 중인 Rule이 없다 | 입력 Scope/Decision과 Owner/Hashtag 관계를 가진 Hashtag Mute Rule이 생성된다 |
-| Hashtag Mute Rule 변경 | Owner Profile     | Hashtag Mute Rule | Scope, Decision, 만료 시각          | `HashtagMuteRule.Owner` | Scope가 하나 이상이고 만료 시각이 미래이거나 영구다                       | Scope, Decision, 만료 시각이 바뀐다                                          |
-| Hashtag Mute Rule 제거 | Owner Profile     | Hashtag Mute Rule | 없음                                | `HashtagMuteRule.Owner` | Rule이 존재한다                                                           | Hashtag Mute Rule이 제거된다                                                 |
+| 행동                   | 행동 주체 Profile | 대상 객체         | 입력값                              | 권한                                      | 조건                                                                                                                           | 결과                                                                         |
+| ---------------------- | ----------------- | ----------------- | ----------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| Hashtag Mute Rule 생성 | Owner Profile     | Hashtag Mute Rule | Hashtag, Scope, Decision, 만료 시각 | `Account.Active`, `Profile.Member`        | Owner는 Active/Normal Local Profile이고 Scope가 하나 이상이며 만료 시각이 미래이거나 영구다. 같은 조합의 적용 중인 Rule이 없다 | 입력 Scope/Decision과 Owner/Hashtag 관계를 가진 Hashtag Mute Rule이 생성된다 |
+| Hashtag Mute Rule 변경 | Owner Profile     | Hashtag Mute Rule | Scope, Decision, 만료 시각          | `Account.Active`, `HashtagMuteRule.Owner` | Scope가 하나 이상이고 만료 시각이 미래이거나 영구다                                                                            | Scope, Decision, 만료 시각이 바뀐다                                          |
+| Hashtag Mute Rule 제거 | Owner Profile     | Hashtag Mute Rule | 없음                                | `Account.Active`, `HashtagMuteRule.Owner` | Rule이 존재한다                                                                                                                | Hashtag Mute Rule이 제거된다                                                 |
 
 ## 권한
 

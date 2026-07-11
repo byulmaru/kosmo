@@ -25,10 +25,10 @@ Bookmark는 Profile이 Post를 개인적으로 저장한 결과다.
 
 ## 행동
 
-| 행동          | 행동 주체 Profile | 대상 객체 | 입력값 | 권한             | 조건                                                                                              | 결과                |
-| ------------- | ----------------- | --------- | ------ | ---------------- | ------------------------------------------------------------------------------------------------- | ------------------- |
-| Bookmark 추가 | Profile           | Bookmark  | Post   | `Profile.Member` | 행동 주체가 Active/Normal Local Profile이고 Post 조회 정책을 통과하며 같은 조합의 Bookmark가 없다 | Bookmark가 생성된다 |
-| Bookmark 삭제 | Profile           | Bookmark  | 없음   | `Bookmark.Owner` | Bookmark가 존재한다                                                                               | Bookmark가 제거된다 |
+| 행동          | 행동 주체 Profile | 대상 객체 | 입력값 | 권한                               | 조건                                                                                              | 결과                |
+| ------------- | ----------------- | --------- | ------ | ---------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------- |
+| Bookmark 추가 | Profile           | Bookmark  | Post   | `Account.Active`, `Profile.Member` | 행동 주체가 Active/Normal Local Profile이고 Post 조회 정책을 통과하며 같은 조합의 Bookmark가 없다 | Bookmark가 생성된다 |
+| Bookmark 삭제 | Profile           | Bookmark  | 없음   | `Account.Active`, `Bookmark.Owner` | Bookmark가 존재한다                                                                               | Bookmark가 제거된다 |
 
 ## 권한
 
