@@ -2,6 +2,8 @@
 
 KOSMO 웹의 메인 3분할 레이아웃은 트위터/X처럼 화면 폭에 따라 단계적으로 컬럼이 줄어든다. Expo/React Native Web 구현은 `apps/app/src/theme/tokens.ts`의 공용 breakpoint(`compact=768`, `full=1280`)를 사용한다. 이 값은 기존 디자인 명칭 `md`/`xl`과 각각 같으며, 좁은 데스크톱 폭에서 중앙 피드가 비좁게 눌리지 않도록 풀 3분할 등장 폭을 `1280px`로 둔다.
 
+이 단계는 Web에만 적용한다. Android/iOS는 태블릿처럼 폭이 `compact` 이상이어도 safe area를 적용한 mobile header, drawer, 하단 탭 셸을 유지한다.
+
 ## 단계
 
 | 단계            | 폭 구간                       | 좌측        | 중앙         | 우측   | 모바일 셸            |
@@ -36,13 +38,14 @@ React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owne
 
 - breakpoint token: `apps/app/src/theme/tokens.ts`
 - 셸 레이아웃과 컬럼 가시성: `apps/app/src/components/shell/UniversalShell.tsx`
+- Web/native layout 단계 판정: `apps/app/src/components/shell/shellLayout.ts`
 - 접힌/펼친 사이드바와 글쓰기 진입: `apps/app/src/components/shell/SidebarNavigation.tsx`
 - 하단 탭 바와 safe-area: `apps/app/src/components/shell/BottomTabBar.tsx`
 - 우측 레일: `apps/app/src/components/shell/RightRail.tsx`
 
 ## 컨벤션 (다른 화면에서 재사용)
 
-- 모바일 ↔ 데스크톱 셸 전환은 `breakpoints.compact`를 기준으로 한다.
+- Web의 모바일 ↔ 데스크톱 셸 전환은 `breakpoints.compact`를 기준으로 한다. native는 폭과 무관하게 모바일 셸을 유지한다.
 - 우측 보조 컬럼(레일)과 풀 사이드바 등 데스크톱 전체 구성은 `breakpoints.full`을 기준으로 노출한다.
 - 데스크톱 shell chrome은 document scroll 위에서 sticky/fixed 위치 정책을 명확히 갖되, 중앙 콘텐츠를 별도 internal scroller로 만드는 방식에 의존하지 않는다.
 - breakpoint 숫자를 component-local 상수로 새로 만들지 않는다. 기존 `compact`/`full`로 표현되지 않는 단계가 꼭 필요할 때만 디자인 오너와 합의 후 `theme/tokens.ts`에 추가한다.

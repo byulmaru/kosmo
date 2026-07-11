@@ -106,7 +106,7 @@ export const ProfileSwitcherInteraction: Story = {
       mutationResponse: {
         selectProfile: {
           profile: secondProfile,
-          session: { selectedProfile: { id: secondProfile.id } },
+          session: { id: 'session-story', selectedProfile: { id: secondProfile.id } },
         },
       },
     },
@@ -127,6 +127,56 @@ export const ProfileSwitcherInteraction: Story = {
     const reopenedMenu = await canvas.findByRole('menu', { name: '프로필 전환' });
     expect(within(reopenedMenu).queryByRole('form', { name: '새 프로필 만들기' })).toBeNull();
     expect(within(reopenedMenu).getByRole('menuitem', { name: '새 프로필 추가' })).toBeVisible();
+  },
+  render: () => <ProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherSelectGraphQLError: Story = {
+  parameters: {
+    relay: {
+      mutationGraphQLErrors: ['프로필을 전환할 수 없습니다.'],
+      mutationResponse: {
+        selectProfile: {
+          profile: query.currentSession.selectedProfile,
+          session: { id: 'session-story', selectedProfile: query.currentSession.selectedProfile },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    const menu = await canvas.findByRole('menu', { name: '프로필 전환' });
+    await userEvent.click(within(menu).getAllByRole('menuitemradio')[1]!);
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '프로필을 전환하지 못했습니다.',
+    );
+    expect(menu).toBeVisible();
+  },
+  render: () => <ProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherCreateGraphQLError: Story = {
+  parameters: {
+    relay: {
+      mutationGraphQLErrors: ['이미 사용 중인 핸들입니다.'],
+      mutationResponse: {
+        createProfile: { account: query.me, profile: secondProfile },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    const menu = await canvas.findByRole('menu', { name: '프로필 전환' });
+    await userEvent.click(within(menu).getByRole('menuitem', { name: '새 프로필 추가' }));
+    const input = canvas.getByRole('textbox', { name: '프로필 핸들' });
+    await userEvent.type(input, 'kept_handle');
+    await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '프로필을 생성하지 못했습니다.',
+    );
+    expect(input).toHaveValue('kept_handle');
   },
   render: () => <ProfileSwitcherStory />,
 };

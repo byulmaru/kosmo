@@ -14,7 +14,9 @@
     "./search": "./search.ts",
     "./tiptap": "./tiptap/index.ts",
     "./utils": "./utils.ts",
-    "./validation": "./validation/index.ts"
+    "./validation": "./validation/index.ts",
+    "./validation/post-policy": "./validation/post-policy.ts",
+    "./validation/profile": "./validation/profile.ts"
   },
   "dependencies": {
     "@tiptap/core": "^3.24.0",

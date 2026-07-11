@@ -1,4 +1,4 @@
-import { profileHandleSchema } from '@kosmo/core/validation';
+import { profileHandleSchema } from '@kosmo/core/validation/profile';
 import { CheckIcon, ChevronDownIcon, PlusIcon } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -123,7 +123,12 @@ export function ProfileSwitcher({
     setError(null);
     commitSelect({
       variables: { id },
-      onCompleted: (response) => {
+      onCompleted: (response, errors) => {
+        if (errors?.length) {
+          setError('프로필을 전환하지 못했습니다.');
+          return;
+        }
+
         setOpen(false);
         resetActor(response.selectProfile.session.selectedProfile?.id ?? id);
       },
@@ -148,7 +153,12 @@ export function ProfileSwitcher({
     setError(null);
     commitCreate({
       variables: { handle: normalized },
-      onCompleted: (response) => {
+      onCompleted: (response, errors) => {
+        if (errors?.length) {
+          setError('프로필을 생성하지 못했습니다.');
+          return;
+        }
+
         setHandle('');
         setCreating(false);
         selectProfile(response.createProfile.profile.id);
@@ -158,45 +168,71 @@ export function ProfileSwitcher({
   };
 
   const menu = (
-    <View
-      accessibilityLabel="프로필 전환"
-      accessibilityRole="menu"
-      style={[styles.menu, { backgroundColor: theme.card, borderColor: theme.border }]}
-    >
-      {profiles.map((profile) => {
-        const selected = active?.id === profile.id;
-        return (
+    <View style={[styles.menu, { backgroundColor: theme.card, borderColor: theme.border }]}>
+      <View accessibilityLabel="프로필 전환" accessibilityRole="menu" style={styles.menuItems}>
+        {profiles.map((profile) => {
+          const selected = active?.id === profile.id;
+          return (
+            <Pressable
+              aria-checked={selected}
+              accessibilityRole={Platform.OS === 'web' ? undefined : 'radio'}
+              accessibilityState={{ checked: selected, disabled: busy }}
+              disabled={busy}
+              key={profile.id}
+              onPress={() => selectProfile(profile.id)}
+              role={Platform.OS === 'web' ? ('menuitemradio' as 'radio') : undefined}
+              style={({ pressed }) => [
+                styles.profile,
+                {
+                  backgroundColor: selected || pressed ? theme.surface : 'transparent',
+                  opacity: busy ? 0.5 : 1,
+                },
+              ]}
+            >
+              <Avatar label={profile.displayName} size={selected ? 48 : 32} />
+              <View style={styles.profileLabel}>
+                <Text numberOfLines={1} style={[styles.profileName, { color: theme.text }]}>
+                  {profile.displayName}
+                </Text>
+                <Text numberOfLines={1} style={[styles.handle, { color: theme.textSecondary }]}>
+                  {profile.relativeHandle}
+                </Text>
+              </View>
+              {selected ? <CheckIcon color={theme.text} size={16} /> : null}
+            </Pressable>
+          );
+        })}
+
+        <View
+          accessibilityRole={Platform.OS === 'web' ? undefined : 'none'}
+          role={Platform.OS === 'web' ? 'separator' : undefined}
+          style={[styles.divider, { backgroundColor: theme.border }]}
+        />
+
+        {!creating ? (
           <Pressable
-            aria-checked={selected}
-            accessibilityRole={Platform.OS === 'web' ? undefined : 'radio'}
-            accessibilityState={{ checked: selected, disabled: busy }}
+            accessibilityLabel="새 프로필 추가"
             disabled={busy}
-            key={profile.id}
-            onPress={() => selectProfile(profile.id)}
-            role={Platform.OS === 'web' ? ('menuitemradio' as 'radio') : undefined}
+            onPress={() => {
+              setCreating(true);
+              setError(null);
+            }}
+            role={Platform.OS === 'web' ? 'menuitem' : 'button'}
             style={({ pressed }) => [
-              styles.profile,
+              styles.addProfile,
               {
-                backgroundColor: selected || pressed ? theme.surface : 'transparent',
+                backgroundColor: pressed ? theme.surface : 'transparent',
                 opacity: busy ? 0.5 : 1,
               },
             ]}
           >
-            <Avatar label={profile.displayName} size={selected ? 48 : 32} />
-            <View style={styles.profileLabel}>
-              <Text numberOfLines={1} style={[styles.profileName, { color: theme.text }]}>
-                {profile.displayName}
-              </Text>
-              <Text numberOfLines={1} style={[styles.handle, { color: theme.textSecondary }]}>
-                {profile.relativeHandle}
-              </Text>
+            <View style={styles.addIcon}>
+              <PlusIcon color={theme.text} size={18} strokeWidth={2.25} />
             </View>
-            {selected ? <CheckIcon color={theme.text} size={16} /> : null}
+            <Text style={[styles.addLabel, { color: theme.text }]}>새 프로필 추가</Text>
           </Pressable>
-        );
-      })}
-
-      <View style={[styles.divider, { backgroundColor: theme.border }]} />
+        ) : null}
+      </View>
 
       {creating ? (
         <View
@@ -206,6 +242,7 @@ export function ProfileSwitcher({
         >
           <View style={styles.createRow}>
             <TextInput
+              aria-invalid={Boolean(error)}
               accessibilityLabel="프로필 핸들"
               autoCapitalize="none"
               autoCorrect={false}
@@ -236,30 +273,17 @@ export function ProfileSwitcher({
           <Text style={[styles.help, { color: theme.textSecondary }]}>
             영문, 숫자, 밑줄(_)만 사용할 수 있어요.
           </Text>
-          {error ? <Text style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
+          {error ? (
+            <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
+              {error}
+            </Text>
+          ) : null}
         </View>
-      ) : (
-        <Pressable
-          accessibilityLabel="새 프로필 추가"
-          disabled={busy}
-          onPress={() => {
-            setCreating(true);
-            setError(null);
-          }}
-          role={Platform.OS === 'web' ? 'menuitem' : 'button'}
-          style={({ pressed }) => [
-            styles.addProfile,
-            { backgroundColor: pressed ? theme.surface : 'transparent', opacity: busy ? 0.5 : 1 },
-          ]}
-        >
-          <View style={styles.addIcon}>
-            <PlusIcon color={theme.text} size={18} strokeWidth={2.25} />
-          </View>
-          <Text style={[styles.addLabel, { color: theme.text }]}>새 프로필 추가</Text>
-        </Pressable>
-      )}
+      ) : null}
       {!creating && error ? (
-        <Text style={[styles.error, { color: theme.danger }]}>{error}</Text>
+        <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
+          {error}
+        </Text>
       ) : null}
     </View>
   );
@@ -345,10 +369,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     boxShadow: '0 6px 20px rgba(0, 0, 0, 0.16)',
-    gap: 2,
     padding: 6,
     width: 280,
   },
+  menuItems: { gap: 2 },
   profileName: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
   handle: { fontFamily: 'SUIT', ...typography.xsm },
   backdrop: {

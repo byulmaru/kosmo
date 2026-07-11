@@ -1,5 +1,5 @@
 import { PostVisibility } from '@kosmo/core/enums';
-import { postBodyMaxLength } from '@kosmo/core/validation';
+import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
 import { AtSignIcon, GlobeIcon, LockIcon, MoonIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -89,7 +89,12 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
     setError(null);
     commit({
       variables: { input: { content: createTipTapDocumentFromPlainText(body), visibility } },
-      onCompleted: () => {
+      onCompleted: (_response, errors) => {
+        if (errors?.length) {
+          setError('게시글을 작성하지 못했습니다.');
+          return;
+        }
+
         setBody('');
         setVisibility(PostVisibility.UNLISTED);
         editor.current?.focus();

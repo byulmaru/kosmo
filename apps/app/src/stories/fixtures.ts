@@ -24,7 +24,10 @@ export type StoryProfile = {
   handle: string;
   id: string;
   relativeHandle: string;
-  viewerState: { follow: { id: string } | null; isSelf: boolean } | null;
+  viewerState: {
+    follow: { follower?: { id: string } | null; id: string } | null;
+    isSelf: boolean;
+  } | null;
 };
 
 type StoryPageInfo = {

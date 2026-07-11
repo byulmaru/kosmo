@@ -14,9 +14,13 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ProfilesStoriesQuery as ProfilesStoriesQueryType } from './__generated__/ProfilesStoriesQuery.graphql';
 
 const followable = profile({ id: 'profile-followable' });
+const followingOwnerId = 'profile-following-content';
 const followed = profile({
   id: 'profile-followed',
-  viewerState: { follow: { id: 'follow-story' }, isSelf: false },
+  viewerState: {
+    follow: { follower: { id: followingOwnerId }, id: 'following-edge-0' },
+    isSelf: false,
+  },
 });
 const self = profile({
   displayName: '내 프로필',
@@ -39,8 +43,8 @@ const followersContent = {
 };
 const followingEmpty = { ...followingProfile([]), id: 'profile-following-empty' };
 const followingContent = {
-  ...followingProfile([remote]),
-  id: 'profile-following-content',
+  ...followingProfile([followed]),
+  id: followingOwnerId,
 };
 
 const storyProfiles = [
@@ -239,6 +243,18 @@ function FollowersWithNextPage() {
   );
 }
 
+function FollowingWithFollowedProfile() {
+  const profile = requireProfile(useStoryProfiles(), 9);
+  return (
+    <Catalog>
+      <ProfileConnectionList
+        kind="following"
+        profile={requireFragment(profile.followingList, 'following list')}
+      />
+    </Catalog>
+  );
+}
+
 const meta = {
   component: ProfileCatalog,
   parameters: {
@@ -291,6 +307,29 @@ export const FollowErrorInteraction: Story = {
     );
   },
   render: () => <FollowButtonStory />,
+};
+
+export const UnfollowRemovesCachedConnectionEdge: Story = {
+  parameters: {
+    relay: {
+      mutationResponse: {
+        unfollowProfile: {
+          profile: {
+            ...followed,
+            followersCount: followed.followersCount - 1,
+            viewerState: { follow: null, isSelf: false },
+          },
+          profileFollowId: 'following-edge-0',
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '팔로잉' }));
+    await expect(canvas.findByText('아직 팔로잉이 없어요')).resolves.toBeVisible();
+  },
+  render: () => <FollowingWithFollowedProfile />,
 };
 
 export const ConnectionLoadingErrorEmptyAndContent: Story = {

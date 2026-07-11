@@ -11,15 +11,17 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { Splash } from '@/components/Splash';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { breakpoints, spacing } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
 import { BottomTabBar } from './BottomTabBar';
 import { RightRail } from './RightRail';
 import { ShellChromeProvider } from './ShellChromeContext';
+import { getShellLayout } from './shellLayout';
 import { SidebarNavigation } from './SidebarNavigation';
 import type { ViewStyle } from 'react-native';
 import type { UniversalShellQuery } from './__generated__/UniversalShellQuery.graphql';
@@ -78,6 +80,7 @@ export function UniversalShell() {
 
 function UniversalShellContent({ revision }: { revision: number }) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -87,10 +90,11 @@ function UniversalShellContent({ revision }: { revision: number }) {
     { fetchKey: revision, fetchPolicy: 'store-and-network' },
   );
   const profile = data.currentSession?.selectedProfile ?? null;
-  const compact = width >= breakpoints.compact && width < breakpoints.full;
-  const full = width >= breakpoints.full;
-  const mobile = width < breakpoints.compact;
   const web = Platform.OS === 'web';
+  const layout = getShellLayout(web, width);
+  const compact = layout === 'compact';
+  const full = layout === 'full';
+  const mobile = layout === 'mobile';
 
   const swipeToOpenDrawer = useMemo(
     () =>
@@ -161,7 +165,11 @@ function UniversalShellContent({ revision }: { revision: number }) {
               style={[
                 styles.mobileHeader,
                 web && webStickyHeader,
-                { backgroundColor: theme.card, borderColor: theme.border },
+                {
+                  backgroundColor: theme.card,
+                  borderColor: theme.border,
+                  paddingTop: spacing.md + (web ? 0 : insets.top),
+                },
               ]}
             >
               <Pressable
@@ -255,8 +263,8 @@ const styles = StyleSheet.create({
   mobileHeader: {
     borderBottomWidth: 1,
     minHeight: 56,
+    paddingBottom: spacing.md,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
   },
   menuButton: {
     alignItems: 'center',

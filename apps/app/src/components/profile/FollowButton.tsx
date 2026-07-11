@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
+import { ConnectionHandler } from 'relay-runtime';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
@@ -21,6 +22,9 @@ const followButtonProfileFragment = graphql`
       isSelf
       follow {
         id
+        follower {
+          id
+        }
       }
     }
   }
@@ -41,9 +45,9 @@ const followProfileMutation = graphql`
 `;
 
 const unfollowProfileMutation = graphql`
-  mutation FollowButtonUnfollowProfileMutation($id: ID!) {
+  mutation FollowButtonUnfollowProfileMutation($connections: [ID!]!, $id: ID!) {
     unfollowProfile(input: { id: $id }) {
-      profileFollowId
+      profileFollowId @deleteEdge(connections: $connections)
       profile {
         followersCount
         ...FollowButton_profile
@@ -74,17 +78,24 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
     }
 
     setError(false);
-    const config = {
-      variables: { id: data.id },
+    const callbacks = {
       onCompleted: (_response: unknown, errors: ReadonlyArray<unknown> | null | undefined) =>
         setError(Boolean(errors?.length)),
       onError: () => setError(true),
     };
 
     if (isFollowing) {
-      commitUnfollow(config);
+      const followerId = viewerState.follow?.follower?.id;
+      const connections = [
+        ConnectionHandler.getConnectionID(data.id, 'ProfileConnectionList_followers'),
+        ...(followerId
+          ? [ConnectionHandler.getConnectionID(followerId, 'ProfileConnectionList_following')]
+          : []),
+      ];
+
+      commitUnfollow({ ...callbacks, variables: { connections, id: data.id } });
     } else {
-      commitFollow(config);
+      commitFollow({ ...callbacks, variables: { id: data.id } });
     }
   };
 

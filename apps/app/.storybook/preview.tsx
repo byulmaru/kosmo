@@ -21,6 +21,7 @@ const preview: Preview = {
           <ThemeProvider>
             <RelayStoryProvider
               mutationError={relay.mutationError}
+              mutationGraphQLErrors={relay.mutationGraphQLErrors}
               mutationLoading={relay.mutationLoading}
               mutationResponse={relay.mutationResponse}
               paginationError={relay.paginationError}

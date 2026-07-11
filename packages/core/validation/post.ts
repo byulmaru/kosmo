@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { parseTipTapDocumentContent } from '../tiptap';
+import { postBodyMaxLength } from './post-policy';
 
-export const postBodyMaxLength = 500;
+export { postBodyMaxLength } from './post-policy';
 
 export const postBodyTipTapDocumentSchema = z.unknown().superRefine((value, ctx) => {
   try {

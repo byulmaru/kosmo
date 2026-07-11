@@ -6,6 +6,7 @@ import type { GraphQLResponse, RequestParameters } from 'relay-runtime';
 
 type RelayMockValue = {
   mutationError?: string;
+  mutationGraphQLErrors?: string[];
   mutationLoading?: boolean;
   mutationResponse?: unknown;
   paginationError?: string | boolean;
@@ -17,6 +18,7 @@ type RelayMockValue = {
 export function RelayStoryProvider({
   children,
   mutationError,
+  mutationGraphQLErrors,
   mutationLoading,
   mutationResponse,
   paginationError,
@@ -28,6 +30,7 @@ export function RelayStoryProvider({
     () =>
       createStoryEnvironment({
         mutationError,
+        mutationGraphQLErrors,
         mutationLoading,
         mutationResponse,
         paginationError,
@@ -37,6 +40,7 @@ export function RelayStoryProvider({
       }),
     [
       mutationError,
+      mutationGraphQLErrors,
       mutationLoading,
       mutationResponse,
       paginationError,
@@ -68,7 +72,10 @@ function executeStoryOperation(
       return new Promise(() => undefined);
     }
 
-    return Promise.resolve({ data: (mock.mutationResponse ?? {}) as GraphQLResponse['data'] });
+    return Promise.resolve({
+      data: (mock.mutationResponse ?? {}) as GraphQLResponse['data'],
+      errors: mock.mutationGraphQLErrors?.map((message) => ({ message })),
+    });
   }
 
   if (request.name.endsWith('NextPageQuery')) {

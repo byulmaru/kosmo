@@ -331,3 +331,23 @@ export const ComposerErrorInteraction: Story = {
   },
   render: () => <ComposerStory />,
 };
+
+export const ComposerGraphQLErrorPreservesInput: Story = {
+  parameters: {
+    relay: {
+      mutationGraphQLErrors: ['본문 형식이 올바르지 않습니다.'],
+      mutationResponse: { createPost: { post: { id: 'post-rejected-in-story' } } },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
+    await userEvent.type(body, '오류가 나도 보존할 본문입니다.');
+    await userEvent.click(canvas.getByRole('button', { name: '게시' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '게시글을 작성하지 못했습니다.',
+    );
+    expect(body).toHaveValue('오류가 나도 보존할 본문입니다.');
+  },
+  render: () => <ComposerStory />,
+};
