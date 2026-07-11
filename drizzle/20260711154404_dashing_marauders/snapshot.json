@@ -2,7 +2,7 @@
   "version": "8",
   "dialect": "postgres",
   "id": "fa704a08-0d5b-4e41-94ed-7c055c17d9d1",
-  "prevIds": ["5fa26b11-7b73-45ab-85df-96141496d70c"],
+  "prevIds": ["31da2e3f-8095-4a22-8d88-6b0aface17be"],
   "ddl": [
     {
       "values": ["OWNER", "ADMIN", "MEMBER"],
