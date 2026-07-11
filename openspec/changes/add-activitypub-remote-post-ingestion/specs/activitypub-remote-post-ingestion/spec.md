@@ -58,17 +58,6 @@
 - **AND** 서로 다른 `Create.objectIds`가 복수이면 시스템은 어느 object도 hydrate하거나 materialize하지 않는다
 - **AND** hydration 실패, non-Note object, missing object URI, mismatched attribution 또는 reply Note는 Post side effect 없이 skip한다
 
-#### Scenario: Resolve Note mentions with best-effort actor lookup
-
-- **WHEN** resolved Note의 기본 type, object URI, attribution과 top-level precondition이 통과한다
-- **THEN** 시스템은 Note `toIds`에서 `as:Public`, author `followersUri`와 author URI를 제외한 서로 다른 actor URI를 mention 후보로 처리한다
-- **AND** local actor URI는 해당 active local `Profile`, 저장된 remote actor URI는 해당 active ActivityPub remote `Profile`로 resolve한다
-- **AND** 저장되지 않은 remote mention actor URI는 author와 같은 Fedify `ctx.lookupWebFinger(mentionActorUri)` URL-resource lookup, `acct:` subject와 ActivityPub self-link 검증을 거쳐 best-effort로 materialize한다
-- **AND** 성공적으로 resolve된 local/remote Profile은 최초 Post materialization의 `post_mention` 관계로 저장한다
-- **AND** 개별 mention의 lookup 실패, self-link 불일치, 비지원 actor 또는 `SUSPENDED`/`UNRESPONSIVE` instance는 해당 mention만 제외하고 Note 전체를 실패시키지 않는다
-- **AND** 시스템은 `ccIds` actor URI를 이번 capability의 mention으로 저장하지 않는다
-- **AND** 시스템은 unresolved mention raw URI를 별도 저장하지 않는다
-
 #### Scenario: Classify supported Note visibility
 
 - **WHEN** 시스템이 top-level Note의 visibility를 판정한다
@@ -80,6 +69,29 @@
 - **AND** 이 판정은 `PUBLIC`, `UNLISTED`, `FOLLOWERS`, `DIRECT` 순서로 우선하며 mention actor URI가 함께 있어도 앞선 marker의 visibility를 덮어쓰지 않는다
 - **AND** actor `followersUri`가 없거나 exact match하지 않으면 시스템은 actor URI path에서 followers collection을 추론하지 않는다
 
+#### Scenario: Preflight first private Note local relevance before remote mention lookup
+
+- **WHEN** 아직 materialize되지 않은 Note의 visibility가 `FOLLOWERS` 또는 `DIRECT`로 판정된다
+- **THEN** 시스템은 unknown remote mention actor를 WebFinger lookup하거나 materialize하기 전에 `toIds`의 local actor URI를 active local mentioned Profile로 resolve한다
+- **AND** `FOLLOWERS`는 author를 established `ProfileFollow`로 팔로우하는 active local Profile 또는 active local mentioned Profile이 하나 이상인지 확인한다
+- **AND** `DIRECT`는 active local mentioned Profile이 하나 이상인지 확인한다
+- **AND** personal inbox의 `ctx.recipient`가 있으면 해당 local Profile이 이 follower 또는 mention 접근 대상에 포함되어야 한다
+- **AND** shared inbox에서는 local actor URI와 DB의 established follow 관계만으로 같은 preflight를 수행한다
+- **AND** preflight가 실패하면 시스템은 unknown remote mention에 `ctx.lookupWebFinger()`를 호출하거나 remote mention Profile을 생성하지 않고 Note를 skip한다
+- **AND** unknown author lookup은 이 preflight보다 앞선 author precondition으로 유지한다
+- **AND** `PUBLIC`/`UNLISTED` Note와 기존 same-visibility Note duplicate는 이 최초 private materialization preflight를 요구하지 않는다
+
+#### Scenario: Resolve Note mentions with best-effort actor lookup
+
+- **WHEN** resolved Note가 `PUBLIC`/`UNLISTED`이거나 새 `FOLLOWERS`/`DIRECT` Note의 local relevance preflight가 통과하거나 기존 same-visibility Note duplicate로 처리된다
+- **THEN** 시스템은 Note `toIds`에서 `as:Public`, author `followersUri`와 author URI를 제외한 서로 다른 actor URI를 mention 후보로 처리한다
+- **AND** local actor URI는 해당 active local `Profile`, 저장된 remote actor URI는 해당 active ActivityPub remote `Profile`로 resolve한다
+- **AND** 저장되지 않은 remote mention actor URI는 author와 같은 Fedify `ctx.lookupWebFinger(mentionActorUri)` URL-resource lookup, `acct:` subject와 ActivityPub self-link 검증을 거쳐 best-effort로 materialize한다
+- **AND** 성공적으로 resolve된 local/remote Profile은 최초 Post materialization 또는 accepted duplicate의 `post_mention` 관계에 반영한다
+- **AND** 개별 mention의 lookup 실패, self-link 불일치, 비지원 actor 또는 `SUSPENDED`/`UNRESPONSIVE` instance는 해당 mention만 제외하고 Note 전체를 실패시키지 않는다
+- **AND** 시스템은 `ccIds` actor URI를 이번 capability의 mention으로 저장하지 않는다
+- **AND** 시스템은 unresolved mention raw URI를 별도 저장하지 않는다
+
 #### Scenario: Require local relevance for first followers and direct Note materialization
 
 - **WHEN** 저장되지 않은 Note의 visibility가 `FOLLOWERS` 또는 `DIRECT`로 판정된다
@@ -88,6 +100,7 @@
 - **AND** personal inbox에서 Fedify `ctx.recipient`가 제공되면 해당 recipient identifier를 active local Profile로 resolve하고 그 Profile이 해당 Note의 follower 또는 mention 접근 대상이어야 한다
 - **AND** shared inbox에서는 `ctx.recipient`를 요구하지 않고 Note `toIds`와 DB의 established follow 관계로 같은 local relevance를 판정한다
 - **AND** 접근 가능한 active local Profile이 하나도 없는 followers/direct Note는 materialize하지 않는다
+- **AND** 새 followers/direct Note의 이 판정은 unknown remote mention actor lookup보다 먼저 수행한다
 - **AND** `PUBLIC`/`UNLISTED` Note는 local recipient 또는 follow 관계를 요구하지 않는다
 - **AND** 이미 materialize된 같은 visibility의 Note가 재전달되면 새 addressing에 active local relevance가 남지 않았더라도 기존 local mention의 stale 접근을 제거하기 위한 `post_mention` 동기화를 수행할 수 있다
 
