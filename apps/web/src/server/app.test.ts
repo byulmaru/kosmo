@@ -580,7 +580,11 @@ describe('runtime routing', () => {
 });
 
 const getCookieValue = (setCookie: string, name: string) => {
-  const value = new RegExp(`(?:^|,\\s*)${name}=([^;,]+)`).exec(setCookie)?.[1];
+  const cookie = setCookie
+    .split(',')
+    .map((part) => part.trimStart())
+    .find((part) => part.startsWith(`${name}=`));
+  const value = cookie?.slice(name.length + 1).split(';', 1)[0];
 
   if (!value) {
     throw new Error(`Missing ${name} cookie`);
