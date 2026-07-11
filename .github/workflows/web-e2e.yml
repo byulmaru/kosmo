@@ -30,6 +30,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Run app and web unit tests
+        run: |
+          pnpm --filter @kosmo/app test:unit
+          pnpm --filter @kosmo/web test:unit
+
+      - name: Check web TypeScript
+        run: pnpm --filter @kosmo/web check
+
       - name: Install Playwright Chromium
         run: pnpm --filter @kosmo/app exec playwright install chromium
 
