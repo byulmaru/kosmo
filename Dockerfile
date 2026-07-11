@@ -28,6 +28,10 @@ RUN pnpm install --frozen-lockfile
 FROM deps AS app-build
 
 RUN pnpm --filter @kosmo/app build
+RUN find apps/app/dist -type f \( \
+      -name '*.css' -o -name '*.html' -o -name '*.js' -o -name '*.json' \
+      -o -name '*.mjs' -o -name '*.svg' -o -name '*.ttf' -o -name '*.wasm' \
+    \) -exec gzip -9 -n -k {} +
 
 FROM base AS runtime
 

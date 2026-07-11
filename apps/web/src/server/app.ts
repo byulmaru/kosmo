@@ -1,5 +1,6 @@
 import { federation } from '@kosmo/fedify';
 import { Hono } from 'hono';
+import { routePath } from 'hono/route';
 import { OidcAuthError } from './auth';
 import graphqlRoutes from './routes/graphql';
 import loginRoutes from './routes/login';
@@ -40,7 +41,10 @@ app.onError((cause, c) => {
     return c.text(cause.message, cause.status as ContentfulStatusCode);
   }
 
-  console.error(cause);
+  console.error('Unhandled BFF error', {
+    method: c.req.method,
+    route: routePath(c),
+  });
   return c.text('Internal Server Error', 500);
 });
 

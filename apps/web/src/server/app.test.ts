@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { Configuration, enableNonRepudiationChecks, ResponseBodyError } from 'openid-client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { federation } from '@kosmo/fedify';
@@ -44,10 +45,15 @@ let staticRoot: string;
 let app: Hono;
 let fetch = vi.fn<typeof globalThis.fetch>();
 
+const ASSET_BODY = 'console.log("asset")';
+const HASHED_ASSET_NAME = 'entry-0123456789abcdef0123456789abcdef.js';
+
 beforeAll(async () => {
   staticRoot = await mkdtemp(join(tmpdir(), 'kosmo-web-server-'));
   await writeFile(join(staticRoot, 'index.html'), '<html>expo app</html>');
-  await writeFile(join(staticRoot, 'asset.js'), 'console.log("asset")');
+  await writeFile(join(staticRoot, 'asset.js'), ASSET_BODY);
+  await writeFile(join(staticRoot, 'asset.js.gz'), gzipSync(ASSET_BODY));
+  await writeFile(join(staticRoot, HASHED_ASSET_NAME), ASSET_BODY);
   vi.stubEnv('EXPO_WEB_ROOT', staticRoot);
   ({ default: app } = await import('./app'));
 });
@@ -95,6 +101,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
@@ -236,6 +243,8 @@ describe('native session exchange', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ token: 'kosmo-session-token' });
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('pragma')).toBe('no-cache');
     expect(response.headers.has('set-cookie')).toBe(false);
     expect((callbackUrl as URL).toString()).toBe('kosmo://login/callback?code=native-code');
     expect(checks).toEqual({
@@ -244,6 +253,50 @@ describe('native session exchange', () => {
       pkceCodeVerifier: 'v'.repeat(43),
     });
     expect(createSession).toHaveBeenCalledOnce();
+  });
+
+  test('rejects a body larger than 16 KiB before OIDC exchange', async () => {
+    const response = await app.request('/login/native/session', {
+      body: JSON.stringify({
+        code: 'native-code',
+        codeVerifier: 'v'.repeat(43),
+        padding: 'x'.repeat(16 * 1024),
+        redirectUri: 'kosmo://login/callback',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(413);
+    expect(await response.text()).toBe('Payload Too Large');
+    expect(authorizationCodeGrant).not.toHaveBeenCalled();
+    expect(createSession).not.toHaveBeenCalled();
+  });
+
+  test('does not include OIDC or database secrets in unhandled error logs', async () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const secrets = ['native-code-secret', 'access-token-secret', 'query-param-secret'];
+    createSession.mockRejectedValue(new Error(`Failed query params: ${secrets[0]}, ${secrets[1]}`));
+
+    const response = await app.request(`/login/native/session?debug=${secrets[2]}`, {
+      body: JSON.stringify({
+        code: secrets[0],
+        codeVerifier: 'v'.repeat(43),
+        redirectUri: 'kosmo://login/callback',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+    const logged = JSON.stringify(errorLog.mock.calls);
+
+    expect(response.status).toBe(500);
+    expect(errorLog).toHaveBeenCalledWith('Unhandled BFF error', {
+      method: 'POST',
+      route: '/login/native/session',
+    });
+    for (const secret of secrets) {
+      expect(logged).not.toContain(secret);
+    }
   });
 
   test.each([
@@ -408,6 +461,32 @@ describe('runtime routing', () => {
     expect(deepLink.status).toBe(200);
     expect(await deepLink.text()).toBe('<html>expo app</html>');
     expect(federationFetch).toHaveBeenCalledTimes(4);
+  });
+
+  test('revalidates the SPA shell and caches content-hashed assets immutably', async () => {
+    const shell = await app.request('/');
+    const etag = shell.headers.get('etag');
+    const revalidated = await app.request('/', {
+      headers: { 'if-none-match': etag ?? '' },
+    });
+    const hashedAsset = await app.request(`/${HASHED_ASSET_NAME}`);
+
+    expect(shell.headers.get('cache-control')).toBe('no-cache');
+    expect(etag).toBeTruthy();
+    expect(revalidated.status).toBe(304);
+    expect(revalidated.headers.get('cache-control')).toBe('no-cache');
+    expect(hashedAsset.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+  });
+
+  test('serves deterministic precompressed assets when gzip is accepted', async () => {
+    const response = await app.request('/asset.js', {
+      headers: { 'accept-encoding': 'gzip' },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-encoding')).toBe('gzip');
+    expect(response.headers.get('vary')).toContain('Accept-Encoding');
+    expect(gunzipSync(Buffer.from(await response.arrayBuffer())).toString()).toBe(ASSET_BODY);
   });
 
   test('keeps fallback headers mutable for federation response metadata', async () => {
