@@ -26,7 +26,7 @@ import {
   profileDisplayNameSchema,
   profileHandleSchema,
 } from '@kosmo/core/validation';
-import { and, eq, getColumns } from 'drizzle-orm';
+import { and, eq, getColumns, ne } from 'drizzle-orm';
 import type { Context } from '@fedify/fedify';
 import type { Actor, LanguageString, Object as ActivityPubObject } from '@fedify/vocab';
 
@@ -351,6 +351,23 @@ export const materializeRemoteProfileActor = async ({
 
         if (existingActor.profile.state !== ProfileState.ACTIVE) {
           throw new RemoteActorMaterializationError('Remote profile is unavailable.');
+        }
+
+        const handleCollision = await tx
+          .select({ id: Profiles.id })
+          .from(Profiles)
+          .where(
+            and(
+              eq(Profiles.instanceId, existingActor.profile.instanceId),
+              eq(Profiles.normalizedHandle, projection.normalizedHandle),
+              ne(Profiles.id, existingActor.profile.id),
+            ),
+          )
+          .limit(1)
+          .then(first);
+
+        if (handleCollision) {
+          throw new ConflictError({ message: 'Remote actor handle collides with another actor' });
         }
 
         const profile = await tx

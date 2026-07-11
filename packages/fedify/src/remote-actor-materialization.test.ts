@@ -291,6 +291,25 @@ describe('remote actor materialization', () => {
     assert.equal(preserved.createdAt.toString(), nextPublished.toString());
   });
 
+  test('rejects handle collisions when refreshing an existing actor URI', async () => {
+    const stored = await createStoredRemoteActor();
+    await createProfile({ handle: 'bob', instanceId: stored.instance.id });
+    const { context } = createLookupContext(async () => createActor({ preferredUsername: 'bob' }));
+
+    await assert.rejects(
+      materializeRemoteProfileActor({ context, handle: `bob@${remoteDomain}` }),
+      /Remote actor handle collides with another actor/,
+    );
+
+    const profile = await db
+      .select()
+      .from(Profiles)
+      .where(eq(Profiles.id, stored.profile.id))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(profile.handle, 'alice');
+  });
+
   for (const state of [ProfileState.DISABLED, ProfileState.SUSPENDED]) {
     test(`does not reactivate or update a ${state} remote profile`, async () => {
       const stored = await createStoredRemoteActor({ profileState: state });
