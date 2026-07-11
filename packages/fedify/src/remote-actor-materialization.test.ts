@@ -123,6 +123,57 @@ describe('remote actor materialization', () => {
     assert.equal(lookupObject.mock.calls[0]?.arguments[0], `acct:alice@${remoteDomain}`);
   });
 
+  test('stores an alias lookup under the canonical actor domain', async () => {
+    const now = Temporal.Instant.from('2026-07-10T00:00:00Z');
+    const { context, lookupObject } = createLookupContext(async () => createActor());
+
+    const materialized = await findOrMaterializeRemoteProfileActor({
+      context,
+      handle: `alice@${remoteAliasDomain}`,
+      now,
+    });
+    const canonical = await findOrMaterializeRemoteProfileActor({
+      context,
+      handle: `alice@${remoteDomain}`,
+      now,
+    });
+
+    const instance = await db
+      .select()
+      .from(Instances)
+      .where(eq(Instances.id, materialized.instanceId!))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(instance.domain, remoteDomain);
+    assert.equal(canonical.id, materialized.id);
+    assert.equal(lookupObject.mock.calls.length, 1);
+  });
+
+  test('moves an existing alias-stored actor to the canonical actor domain', async () => {
+    const aliasInstance = await createRemoteInstance({ domain: remoteAliasDomain });
+    const aliasProfile = await createProfile({ handle: 'alice', instanceId: aliasInstance.id });
+    await db.insert(ActivityPubActors).values({
+      profileId: aliasProfile.id,
+      type: ActivityPubActorType.PERSON,
+      uri: `https://${remoteDomain}/users/alice`,
+    });
+    const { context } = createLookupContext(async () => createActor());
+
+    const materialized = await findOrMaterializeRemoteProfileActor({
+      context,
+      handle: `alice@${remoteDomain}`,
+    });
+
+    const instance = await db
+      .select()
+      .from(Instances)
+      .where(eq(Instances.id, materialized.instanceId!))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(materialized.id, aliasProfile.id);
+    assert.equal(instance.domain, remoteDomain);
+  });
+
   test('applies the lookup deadline to document and context loaders', async () => {
     const documentLoader = createDocumentLoader();
     const contextLoader = createDocumentLoader();

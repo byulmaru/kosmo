@@ -26,7 +26,7 @@ import {
   profileDisplayNameSchema,
   profileHandleSchema,
 } from '@kosmo/core/validation';
-import { and, eq, getColumns, ne } from 'drizzle-orm';
+import { and, eq, getColumns, inArray, ne } from 'drizzle-orm';
 import type { Context } from '@fedify/fedify';
 import type { Actor, LanguageString, Object as ActivityPubObject } from '@fedify/vocab';
 
@@ -309,7 +309,7 @@ export const materializeRemoteProfileActor = async ({
     throw new RemoteActorMaterializationError('Remote materialization requires a remote handle.');
   }
 
-  const remoteInstance = await ensureRemoteInstance(parsed.domain);
+  const requestedRemoteInstance = await ensureRemoteInstance(parsed.domain);
   const actor = await lookupRemoteActor(context, `${parsed.normalizedHandle}@${parsed.domain}`);
 
   if (actor.id!.origin === localInstance.canonicalOrigin) {
@@ -320,6 +320,9 @@ export const materializeRemoteProfileActor = async ({
   const endpoints = getActorEndpoints(actor as ActorWithKosmoFields);
   const actorUri = actor.id!.href;
   const actorType = toActorType(actor);
+  const canonicalRemoteInstance = await ensureRemoteInstance(
+    actor.id!.host.toLowerCase().replace(/\.$/, ''),
+  );
 
   const persistActor = () =>
     db.transaction(async (tx) => {
@@ -349,16 +352,25 @@ export const materializeRemoteProfileActor = async ({
           .then(requireAvailableRemoteInstance);
 
       const lockRemoteInstances = async (instanceIds: readonly string[]) => {
+        const lockedInstances = new Map<string, typeof Instances.$inferSelect>();
+
         for (const instanceId of [...new Set(instanceIds)].sort()) {
-          await lockRemoteInstance(instanceId);
+          const instance = await lockRemoteInstance(instanceId);
+          lockedInstances.set(instance.id, instance);
         }
+
+        return lockedInstances;
       };
 
       let existingActor = await findExistingActor();
-      let lockedRemoteInstance: typeof Instances.$inferSelect | undefined;
+      let lockedCanonicalRemoteInstance: typeof Instances.$inferSelect | undefined;
 
       if (!existingActor) {
-        lockedRemoteInstance = await lockRemoteInstance(remoteInstance.id);
+        const lockedInstances = await lockRemoteInstances([
+          requestedRemoteInstance.id,
+          canonicalRemoteInstance.id,
+        ]);
+        lockedCanonicalRemoteInstance = lockedInstances.get(canonicalRemoteInstance.id);
         existingActor = await findExistingActor();
       }
 
@@ -374,17 +386,14 @@ export const materializeRemoteProfileActor = async ({
           throw new ConflictError({ message: 'Remote actor collides with a local actor' });
         }
 
-        await lockRemoteInstances([existingInstanceId, remoteInstance.id]);
+        await lockRemoteInstances([
+          existingInstanceId,
+          requestedRemoteInstance.id,
+          canonicalRemoteInstance.id,
+        ]);
 
         if (existingActor.profile.state !== ProfileState.ACTIVE) {
           throw new RemoteActorMaterializationError('Remote profile is unavailable.');
-        }
-
-        if (
-          existingActor.actor.lastFetchedAt !== null &&
-          existingActor.actor.lastFetchedAt.epochNanoseconds >= now.epochNanoseconds
-        ) {
-          return existingActor.profile;
         }
 
         const handleCollision = await tx
@@ -392,7 +401,10 @@ export const materializeRemoteProfileActor = async ({
           .from(Profiles)
           .where(
             and(
-              eq(Profiles.instanceId, remoteInstance.id),
+              inArray(Profiles.instanceId, [
+                requestedRemoteInstance.id,
+                canonicalRemoteInstance.id,
+              ]),
               eq(Profiles.normalizedHandle, projection.normalizedHandle),
               ne(Profiles.id, existingActor.profile.id),
             ),
@@ -404,6 +416,22 @@ export const materializeRemoteProfileActor = async ({
           throw new ConflictError({ message: 'Remote actor handle collides with another actor' });
         }
 
+        if (
+          existingActor.actor.lastFetchedAt !== null &&
+          existingActor.actor.lastFetchedAt.epochNanoseconds >= now.epochNanoseconds
+        ) {
+          if (existingInstanceId === canonicalRemoteInstance.id) {
+            return existingActor.profile;
+          }
+
+          return tx
+            .update(Profiles)
+            .set({ instanceId: canonicalRemoteInstance.id })
+            .where(eq(Profiles.id, existingActor.profile.id))
+            .returning()
+            .then(firstOrThrow);
+        }
+
         const profile = await tx
           .update(Profiles)
           .set({
@@ -412,6 +440,7 @@ export const materializeRemoteProfileActor = async ({
             displayName: projection.displayName,
             followPolicy: projection.followPolicy,
             handle: projection.handle,
+            instanceId: canonicalRemoteInstance.id,
             normalizedHandle: projection.normalizedHandle,
           })
           .where(eq(Profiles.id, existingActor.profile.id))
@@ -432,13 +461,13 @@ export const materializeRemoteProfileActor = async ({
       }
 
       const targetRemoteInstance =
-        lockedRemoteInstance ?? (await lockRemoteInstance(remoteInstance.id));
+        lockedCanonicalRemoteInstance ?? (await lockRemoteInstance(canonicalRemoteInstance.id));
       const handleCollision = await tx
         .select({ id: Profiles.id })
         .from(Profiles)
         .where(
           and(
-            eq(Profiles.instanceId, targetRemoteInstance.id),
+            inArray(Profiles.instanceId, [requestedRemoteInstance.id, targetRemoteInstance.id]),
             eq(Profiles.normalizedHandle, projection.normalizedHandle),
           ),
         )
