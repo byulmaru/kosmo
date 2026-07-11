@@ -249,6 +249,38 @@ describe('remote actor materialization', () => {
     });
   }
 
+  test('rechecks a remote instance suspended during lookup before storing an actor', async () => {
+    const instance = await createRemoteInstance();
+    let markLookupStarted!: () => void;
+    const lookupStarted = new Promise<void>((resolve) => {
+      markLookupStarted = resolve;
+    });
+    let releaseLookup!: () => void;
+    const lookupReleased = new Promise<void>((resolve) => {
+      releaseLookup = resolve;
+    });
+    const { context } = createLookupContext(async () => {
+      markLookupStarted();
+      await lookupReleased;
+      return createActor();
+    });
+
+    const materialization = materializeRemoteProfileActor({
+      context,
+      handle: `alice@${remoteDomain}`,
+    });
+    await lookupStarted;
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.SUSPENDED })
+      .where(eq(Instances.id, instance.id));
+    releaseLookup();
+
+    await assert.rejects(materialization, /Remote instance is unavailable/);
+    assert.equal(await countRows(Profiles), 0);
+    assert.equal(await countRows(ActivityPubActors), 0);
+  });
+
   test('does not treat an existing local instance as an ActivityPub instance', async () => {
     await createRemoteInstance({ kind: InstanceKind.LOCAL });
     const { context, lookupObject } = createLookupContext(async () => createActor());
@@ -289,6 +321,52 @@ describe('remote actor materialization', () => {
     });
 
     assert.equal(preserved.createdAt.toString(), nextPublished.toString());
+  });
+
+  test('keeps the newer actor refresh when an older lookup finishes later', async () => {
+    const stored = await createStoredRemoteActor();
+    const olderNow = Temporal.Instant.from('2026-07-10T00:00:00Z');
+    const newerNow = Temporal.Instant.from('2026-07-10T00:01:00Z');
+    let markOlderLookupStarted!: () => void;
+    const olderLookupStarted = new Promise<void>((resolve) => {
+      markOlderLookupStarted = resolve;
+    });
+    let releaseOlderLookup!: () => void;
+    const olderLookupReleased = new Promise<void>((resolve) => {
+      releaseOlderLookup = resolve;
+    });
+    const { context: olderContext } = createLookupContext(async () => {
+      markOlderLookupStarted();
+      await olderLookupReleased;
+      return createActor({ name: 'Older Alice' });
+    });
+    const { context: newerContext } = createLookupContext(async () =>
+      createActor({ name: 'Newer Alice' }),
+    );
+
+    const olderRefresh = materializeRemoteProfileActor({
+      context: olderContext,
+      handle: `alice@${remoteDomain}`,
+      now: olderNow,
+    });
+    await olderLookupStarted;
+    await materializeRemoteProfileActor({
+      context: newerContext,
+      handle: `alice@${remoteDomain}`,
+      now: newerNow,
+    });
+    releaseOlderLookup();
+    await olderRefresh;
+
+    const persisted = await db
+      .select({ actor: ActivityPubActors, profile: Profiles })
+      .from(ActivityPubActors)
+      .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
+      .where(eq(Profiles.id, stored.profile.id))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(persisted.profile.displayName, 'Newer Alice');
+    assert.equal(persisted.actor.lastFetchedAt?.toString(), newerNow.toString());
   });
 
   test('rejects handle collisions when refreshing an existing actor URI', async () => {

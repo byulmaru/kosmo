@@ -323,34 +323,62 @@ export const materializeRemoteProfileActor = async ({
 
   const persistActor = () =>
     db.transaction(async (tx) => {
-      const existingActor = await tx
-        .select({
-          instance: getColumns(Instances),
-          profile: getColumns(Profiles),
-        })
-        .from(ActivityPubActors)
-        .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
-        .leftJoin(Instances, eq(Instances.id, Profiles.instanceId))
-        .where(eq(ActivityPubActors.uri, actorUri))
-        .limit(1)
-        .then(first);
+      const findExistingActor = () =>
+        tx
+          .select({
+            actor: getColumns(ActivityPubActors),
+            instance: getColumns(Instances),
+            profile: getColumns(Profiles),
+          })
+          .from(ActivityPubActors)
+          .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
+          .leftJoin(Instances, eq(Instances.id, Profiles.instanceId))
+          .where(eq(ActivityPubActors.uri, actorUri))
+          .limit(1)
+          .for('update', { of: ActivityPubActors })
+          .then(first);
+
+      const lockRemoteInstance = (instanceId: string) =>
+        tx
+          .select()
+          .from(Instances)
+          .where(eq(Instances.id, instanceId))
+          .limit(1)
+          .for('update', { of: Instances })
+          .then(firstOrThrow)
+          .then(requireAvailableRemoteInstance);
+
+      let existingActor = await findExistingActor();
+      let lockedRemoteInstance: typeof Instances.$inferSelect | undefined;
+
+      if (!existingActor) {
+        lockedRemoteInstance = await lockRemoteInstance(remoteInstance.id);
+        existingActor = await findExistingActor();
+      }
 
       if (existingActor) {
-        const existingInstance = existingActor.instance;
+        const existingInstanceId = existingActor.profile.instanceId;
 
         if (
-          existingActor.profile.instanceId === null ||
-          existingActor.profile.instanceId === localInstance.id ||
-          !existingInstance ||
-          existingInstance.kind === InstanceKind.LOCAL
+          existingInstanceId === null ||
+          existingInstanceId === localInstance.id ||
+          !existingActor.instance ||
+          existingActor.instance.kind === InstanceKind.LOCAL
         ) {
           throw new ConflictError({ message: 'Remote actor collides with a local actor' });
         }
 
-        requireAvailableRemoteInstance(existingInstance);
+        await lockRemoteInstance(existingInstanceId);
 
         if (existingActor.profile.state !== ProfileState.ACTIVE) {
           throw new RemoteActorMaterializationError('Remote profile is unavailable.');
+        }
+
+        if (
+          existingActor.actor.lastFetchedAt !== null &&
+          existingActor.actor.lastFetchedAt.epochNanoseconds >= now.epochNanoseconds
+        ) {
+          return existingActor.profile;
         }
 
         const handleCollision = await tx
@@ -358,7 +386,7 @@ export const materializeRemoteProfileActor = async ({
           .from(Profiles)
           .where(
             and(
-              eq(Profiles.instanceId, existingActor.profile.instanceId),
+              eq(Profiles.instanceId, existingInstanceId),
               eq(Profiles.normalizedHandle, projection.normalizedHandle),
               ne(Profiles.id, existingActor.profile.id),
             ),
@@ -397,12 +425,14 @@ export const materializeRemoteProfileActor = async ({
         return profile;
       }
 
+      const targetRemoteInstance =
+        lockedRemoteInstance ?? (await lockRemoteInstance(remoteInstance.id));
       const handleCollision = await tx
         .select({ id: Profiles.id })
         .from(Profiles)
         .where(
           and(
-            eq(Profiles.instanceId, remoteInstance.id),
+            eq(Profiles.instanceId, targetRemoteInstance.id),
             eq(Profiles.normalizedHandle, projection.normalizedHandle),
           ),
         )
@@ -421,7 +451,7 @@ export const materializeRemoteProfileActor = async ({
           displayName: projection.displayName,
           followPolicy: projection.followPolicy,
           handle: projection.handle,
-          instanceId: remoteInstance.id,
+          instanceId: targetRemoteInstance.id,
           normalizedHandle: projection.normalizedHandle,
         })
         .returning()
