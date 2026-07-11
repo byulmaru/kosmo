@@ -395,6 +395,64 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(session.activeProfileId, auth.profile.id);
   });
 
+  test('rejects updating a remote profile even when the account owns it', async () => {
+    const auth = await createAuthenticatedSession();
+    const remoteInstance = await createRemoteInstance();
+    const remote = await createProfile({ handle: 'remote', instanceId: remoteInstance.id });
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: remote.id,
+      role: AccountProfileRole.OWNER,
+    });
+
+    const result = await requestGraphQL(
+      `mutation UpdateRemote($id: ID!) {
+        updateProfile(input: { id: $id, displayName: "overwritten" }) { profile { id } }
+      }`,
+      { id: remote.id },
+      auth.token,
+    );
+
+    assertGraphQLErrorCode(result, 'NOT_FOUND');
+    const preserved = await db
+      .select()
+      .from(Profiles)
+      .where(eq(Profiles.id, remote.id))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(preserved.displayName, remote.displayName);
+    assert.equal(preserved.bio, remote.bio);
+    assert.equal(preserved.followPolicy, remote.followPolicy);
+  });
+
+  test('rejects deleting a remote profile even when the account owns it', async () => {
+    const auth = await createAuthenticatedSession();
+    const remoteInstance = await createRemoteInstance();
+    const remote = await createProfile({ handle: 'remote', instanceId: remoteInstance.id });
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: remote.id,
+      role: AccountProfileRole.OWNER,
+    });
+
+    const result = await requestGraphQL(
+      `mutation DeleteRemote($id: ID!) {
+        deleteProfile(input: { id: $id }) { profileId }
+      }`,
+      { id: remote.id },
+      auth.token,
+    );
+
+    assertGraphQLErrorCode(result, 'NOT_FOUND');
+    const preserved = await db
+      .select()
+      .from(Profiles)
+      .where(eq(Profiles.id, remote.id))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(preserved.state, ProfileState.ACTIVE);
+  });
+
   test('hides remote profiles from an account profile list', async () => {
     const auth = await createAuthenticatedSession();
     const remoteInstance = await createRemoteInstance();

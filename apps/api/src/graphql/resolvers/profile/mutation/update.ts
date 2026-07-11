@@ -1,6 +1,7 @@
 import { AccountProfiles, db, firstOrThrow, firstOrThrowWith, Profiles } from '@kosmo/core/db';
 import { AccountProfileRole, ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
 import { NotFoundError, PermissionDeniedError } from '@kosmo/core/error';
+import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { profileBioSchema, profileDisplayNameSchema } from '@kosmo/core/validation';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -24,6 +25,7 @@ builder.mutationField('updateProfile', (t) =>
       followPolicy: t.input.field({ type: ProfileFollowPolicy, required: false }),
     },
     resolve: async (_, { input }, ctx) => {
+      const configuredLocalInstance = await resolveConfiguredLocalInstance();
       const profile = await db
         .select({ id: Profiles.id, actorRole: AccountProfiles.role })
         .from(Profiles)
@@ -33,6 +35,7 @@ builder.mutationField('updateProfile', (t) =>
             eq(Profiles.id, input.id),
             eq(Profiles.state, ProfileState.ACTIVE),
             eq(AccountProfiles.accountId, ctx.session.accountId),
+            eq(Profiles.instanceId, configuredLocalInstance.id),
           ),
         )
         .limit(1)

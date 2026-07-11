@@ -1,6 +1,7 @@
 import { AccountProfiles, db, firstOrThrowWith, Profiles, Sessions } from '@kosmo/core/db';
 import { AccountProfileRole, ProfileState } from '@kosmo/core/enums';
 import { NotFoundError, PermissionDeniedError } from '@kosmo/core/error';
+import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 
@@ -15,6 +16,7 @@ builder.mutationField('deleteProfile', (t) =>
       id: t.input.id({ required: true }),
     },
     resolve: async (_, { input }, ctx) => {
+      const configuredLocalInstance = await resolveConfiguredLocalInstance();
       const profile = await db
         .select({ id: Profiles.id, actorRole: AccountProfiles.role })
         .from(Profiles)
@@ -24,6 +26,7 @@ builder.mutationField('deleteProfile', (t) =>
             eq(Profiles.id, input.id),
             eq(Profiles.state, ProfileState.ACTIVE),
             eq(AccountProfiles.accountId, ctx.session.accountId),
+            eq(Profiles.instanceId, configuredLocalInstance.id),
           ),
         )
         .limit(1)
