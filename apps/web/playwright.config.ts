@@ -2,12 +2,18 @@ import { readFileSync } from 'node:fs';
 import { defineConfig } from '@playwright/test';
 
 const host = '127.0.0.1';
-const webPort = 4173;
-const apiPort = 3001;
-const oidcPort = 4300;
+const portOffset = Number(process.env.KOSMO_TEST_PORT_OFFSET ?? 0);
+const webPort = 4173 + portOffset;
+const apiPort = 3001 + portOffset;
+const oidcPort = 4300 + portOffset;
+
+if (!Number.isInteger(portOffset) || portOffset < 0 || portOffset > 60_000) {
+  throw new Error('KOSMO_TEST_PORT_OFFSET must be an integer from 0 to 60000.');
+}
 
 const defaultDatabaseUrl = 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 const databaseUrl =
+  process.env.DATABASE_URL ??
   readEnvFileValue(new URL('../../.env.test', import.meta.url), 'DATABASE_URL') ??
   defaultDatabaseUrl;
 const apiOrigin = `http://${host}:${apiPort}`;
@@ -18,6 +24,8 @@ const oidcClientSecret = process.env.OIDC_CLIENT_SECRET ?? 'kosmo-e2e-secret';
 const browserChannel = process.env.PLAYWRIGHT_BROWSER_CHANNEL;
 
 process.env.DATABASE_URL = databaseUrl;
+process.env.PUBLIC_OIDC_ISSUER = oidcOrigin;
+process.env.PUBLIC_ORIGIN = webOrigin;
 
 function readEnvFileValue(path: URL, key: string) {
   try {

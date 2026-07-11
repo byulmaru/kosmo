@@ -7,7 +7,7 @@ import type { APIRequestContext } from '@playwright/test';
 
 const loginCodeVerifierCookie = 'kosmo_oidc_code_verifier';
 const loginStateCookie = 'kosmo_oidc_state';
-const oidcOrigin = 'http://127.0.0.1:4300';
+const oidcOrigin = process.env.PUBLIC_OIDC_ISSUER ?? 'http://127.0.0.1:4300';
 const oidcClientId = process.env.PUBLIC_OIDC_CLIENT_ID ?? 'kosmo-e2e-client';
 const protectedHeadingRoutes = [
   { heading: '홈', path: '/home' },
