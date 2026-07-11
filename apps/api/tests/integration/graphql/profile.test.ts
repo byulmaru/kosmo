@@ -13,6 +13,7 @@ import {
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
+import { isConfiguredLocalProfile } from '@kosmo/core/profile';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { count, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -85,6 +86,12 @@ describe('GraphQL remote profile boundary', () => {
 
   after(async () => {
     await pg.end();
+  });
+
+  test('does not treat a malformed profile without an instance as local', () => {
+    const malformedProfile = { instanceId: null } as unknown as { instanceId: string };
+
+    assert.equal(isConfiguredLocalProfile(malformedProfile, { id: localInstanceId }), false);
   });
 
   test('looks up local and stored remote profiles without materializing missing handles', async () => {

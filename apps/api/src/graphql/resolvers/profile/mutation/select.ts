@@ -9,7 +9,7 @@ import {
 import { ProfileState } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { and, eq, getColumns, isNull, or } from 'drizzle-orm';
+import { and, eq, getColumns } from 'drizzle-orm';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
 import { Session } from '@/graphql/resolvers/session/ref';
@@ -37,7 +37,7 @@ builder.mutationField('selectProfile', (t) =>
             eq(Profiles.id, input.id),
             eq(Profiles.state, ProfileState.ACTIVE),
             eq(AccountProfiles.accountId, ctx.session.accountId),
-            or(isNull(Profiles.instanceId), eq(Profiles.instanceId, configuredLocalInstance.id)),
+            eq(Profiles.instanceId, configuredLocalInstance.id),
           ),
         )
         .limit(1)

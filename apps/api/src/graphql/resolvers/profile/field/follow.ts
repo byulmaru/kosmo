@@ -3,7 +3,7 @@ import { ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { isConfiguredLocalProfile } from '@kosmo/core/profile';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
-import { and, asc, count, desc, eq, getColumns, gt, isNull, lt, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { builder } from '@/graphql/builder';
 import { profileFollowAccessWhere } from '../access/follow';
@@ -142,10 +142,7 @@ builder.objectFields(Profile, (t) => ({
           and(
             eq(ProfileFollows.followeeProfileId, profile.id),
             eq(FollowerProfiles.state, ProfileState.ACTIVE),
-            or(
-              isNull(FollowerProfiles.instanceId),
-              eq(FollowerProfiles.instanceId, configuredLocalInstance.id),
-            ),
+            eq(FollowerProfiles.instanceId, configuredLocalInstance.id),
           ),
         )
         .then(first);
@@ -170,10 +167,7 @@ builder.objectFields(Profile, (t) => ({
           and(
             eq(ProfileFollows.followerProfileId, profile.id),
             eq(FolloweeProfiles.state, ProfileState.ACTIVE),
-            or(
-              isNull(FolloweeProfiles.instanceId),
-              eq(FolloweeProfiles.instanceId, configuredLocalInstance.id),
-            ),
+            eq(FolloweeProfiles.instanceId, configuredLocalInstance.id),
           ),
         )
         .then(first);

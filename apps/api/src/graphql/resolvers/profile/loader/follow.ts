@@ -1,6 +1,6 @@
 import { db, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { and, eq, getColumns, inArray, isNull, or } from 'drizzle-orm';
+import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { profileFollowAccessWhere } from '../access/follow';
 import type { UserContext } from '@/context';
@@ -28,10 +28,7 @@ export const viewerFollowLoader = (ctx: UserContext) =>
           and(
             eq(ProfileFollows.followerProfileId, ctx.session.profileId),
             inArray(ProfileFollows.followeeProfileId, ids),
-            or(
-              isNull(FolloweeProfiles.instanceId),
-              eq(FolloweeProfiles.instanceId, configuredLocalInstance.id),
-            ),
+            eq(FolloweeProfiles.instanceId, configuredLocalInstance.id),
           ),
         );
     },

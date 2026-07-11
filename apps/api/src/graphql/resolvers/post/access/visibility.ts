@@ -1,6 +1,6 @@
 import { db, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { PostState, PostVisibility, ProfileState } from '@kosmo/core/enums';
-import { and, eq, exists, inArray, isNull, or } from 'drizzle-orm';
+import { and, eq, exists, inArray, or } from 'drizzle-orm';
 import type { UserContext } from '@/context';
 
 export const postVisibilityAccessWhere = ({
@@ -35,7 +35,7 @@ export const postVisibilityAccessWhere = ({
   return and(
     eq(Posts.state, PostState.ACTIVE),
     eq(Profiles.state, ProfileState.ACTIVE),
-    or(isNull(Profiles.instanceId), eq(Profiles.instanceId, configuredLocalInstanceId)),
+    eq(Profiles.instanceId, configuredLocalInstanceId),
     visibleWhere,
   )!;
 };

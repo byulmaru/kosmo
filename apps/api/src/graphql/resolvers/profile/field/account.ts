@@ -1,7 +1,7 @@
 import { AccountProfiles, db, Profiles } from '@kosmo/core/db';
 import { ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { and, asc, eq, getColumns, isNull, or } from 'drizzle-orm';
+import { and, asc, eq, getColumns } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Account } from '@/graphql/resolvers/account';
 import { Profile } from '../ref';
@@ -25,7 +25,7 @@ builder.objectField(Account, 'profiles', (t) =>
         .where(
           and(
             eq(Profiles.state, ProfileState.ACTIVE),
-            or(isNull(Profiles.instanceId), eq(Profiles.instanceId, configuredLocalInstance.id)),
+            eq(Profiles.instanceId, configuredLocalInstance.id),
           ),
         )
         .orderBy(asc(Profiles.createdAt));

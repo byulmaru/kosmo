@@ -7,7 +7,7 @@ type InstanceRef = {
 };
 
 type ProfileInstanceRef = {
-  instanceId: string | null;
+  instanceId: string;
 };
 
 export type ParsedProfileHandle =
@@ -104,7 +104,7 @@ export const parseProfileHandle = (
 export const isConfiguredLocalProfile = (
   profile: ProfileInstanceRef,
   configuredLocalInstance: InstanceRef,
-) => profile.instanceId === null || profile.instanceId === configuredLocalInstance.id;
+) => profile.instanceId === configuredLocalInstance.id;
 
 export const getProfileOrigin = (
   profile: ProfileInstanceRef,

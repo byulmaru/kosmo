@@ -2,7 +2,7 @@ import { db, first, Instances, Profiles } from '@kosmo/core/db';
 import { InstanceKind, ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { parseProfileHandle } from '@kosmo/core/profile';
-import { and, eq, getColumns, isNull, or } from 'drizzle-orm';
+import { and, eq, getColumns } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { visibleProfileWhere } from '../access/visibility';
 import { Profile } from '../ref';
@@ -44,11 +44,10 @@ builder.queryField('profileByHandle', (t) =>
       return db
         .select(getColumns(Profiles))
         .from(Profiles)
-        .leftJoin(Instances, eq(Instances.id, Profiles.instanceId))
         .where(
           and(
             eq(Profiles.state, ProfileState.ACTIVE),
-            or(isNull(Profiles.instanceId), eq(Profiles.instanceId, localInstance.id)),
+            eq(Profiles.instanceId, localInstance.id),
             eq(Profiles.normalizedHandle, parsed.normalizedHandle),
           ),
         )

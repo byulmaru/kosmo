@@ -12,7 +12,7 @@ export const Profile = createObjectRef('Profile', TableDiscriminator.Profiles, (
   db
     .select(getColumns(Profiles))
     .from(Profiles)
-    .leftJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
     .where(
       and(
         inArray(Profiles.id, ids),
@@ -37,7 +37,7 @@ Profile.implement({
         const configuredLocalInstance = await resolveConfiguredLocalInstance();
         const profileInstanceId = profile.instanceId;
 
-        if (!profileInstanceId || profileInstanceId === configuredLocalInstance.id) {
+        if (profileInstanceId === configuredLocalInstance.id) {
           return formatRelativeHandle(profile, { configuredLocalInstance });
         }
 

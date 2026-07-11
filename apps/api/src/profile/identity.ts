@@ -6,7 +6,7 @@ import {
 import type { ParsedProfileHandle } from '@kosmo/core/profile';
 
 type ProfileInstanceRef = {
-  instanceId: string | null;
+  instanceId: string;
 };
 
 type ProfileHandleRef = ProfileInstanceRef & {

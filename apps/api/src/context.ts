@@ -2,7 +2,7 @@ import { AccountProfiles, Accounts, db, first, Profiles, Sessions } from '@kosmo
 import { AccountState, ProfileState, SessionState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import DataLoader from 'dataloader';
-import { and, eq, isNull, or } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import stringify from 'fast-json-stable-stringify';
 import * as R from 'remeda';
 import type { Context as HonoContext } from 'hono';
@@ -136,7 +136,7 @@ export const deriveContext = async (c: ServerContext): Promise<Context> => {
           .where(
             and(
               eq(Profiles.id, profileId),
-              or(isNull(Profiles.instanceId), eq(Profiles.instanceId, localInstance.id)),
+              eq(Profiles.instanceId, localInstance.id),
               eq(Profiles.state, ProfileState.ACTIVE),
             ),
           )

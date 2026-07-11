@@ -10,7 +10,7 @@ import {
 import { ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { and, eq, isNull, or } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
 import { ProfileFollow } from '../ref';
@@ -37,7 +37,7 @@ builder.mutationField('followProfile', (t) =>
           and(
             eq(Profiles.id, input.id),
             eq(Profiles.state, ProfileState.ACTIVE),
-            or(isNull(Profiles.instanceId), eq(Profiles.instanceId, configuredLocalInstance.id)),
+            eq(Profiles.instanceId, configuredLocalInstance.id),
           ),
         )
         .limit(1)
