@@ -1,3 +1,5 @@
+import '@kosmo/core/polyfill';
+
 import { pg } from '@kosmo/core/db';
 import { seedDatabase } from '@kosmo/core/db/seed';
 
