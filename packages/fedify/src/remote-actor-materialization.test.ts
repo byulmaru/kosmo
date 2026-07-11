@@ -199,6 +199,30 @@ describe('remote actor materialization', () => {
     assert.equal(profile.normalizedHandle, 'alice');
   });
 
+  test('materializes a language-tagged actor name', async () => {
+    const actor = createActor({ name: new LanguageString('Alice Remote', 'en') });
+    const { context } = createLookupContext(async () => actor);
+
+    const profile = await materializeRemoteProfileActor({
+      context,
+      handle: `alice@${remoteDomain}`,
+    });
+
+    assert.equal(profile.displayName, 'Alice Remote');
+  });
+
+  test('materializes a language-tagged actor summary', async () => {
+    const actor = createActor({ summary: new LanguageString('Remote bio', 'en') });
+    const { context } = createLookupContext(async () => actor);
+
+    const profile = await materializeRemoteProfileActor({
+      context,
+      handle: `alice@${remoteDomain}`,
+    });
+
+    assert.equal(profile.bio, 'Remote bio');
+  });
+
   test('falls back to the handle when the actor name is unsupported', async () => {
     const { context } = createLookupContext(async () => createActor({ name: 'x'.repeat(1_000) }));
 

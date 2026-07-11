@@ -28,7 +28,7 @@ import {
 } from '@kosmo/core/validation';
 import { and, eq, getColumns } from 'drizzle-orm';
 import type { Context } from '@fedify/fedify';
-import type { Actor, Object as ActivityPubObject } from '@fedify/vocab';
+import type { Actor, LanguageString, Object as ActivityPubObject } from '@fedify/vocab';
 
 const remoteActorRefreshTtl = Temporal.Duration.from({ hours: 7 * 24 });
 const remoteActorLookupTimeoutMs = 10_000;
@@ -76,11 +76,11 @@ type ActorWithKosmoFields = Actor & {
   followingId?: URL | null;
   inboxId?: URL | null;
   manuallyApprovesFollowers?: boolean | null;
-  name?: string | null;
+  name?: string | LanguageString | null;
   outboxId?: URL | null;
-  preferredUsername?: string | null;
+  preferredUsername?: string | LanguageString | null;
   published?: Temporal.Instant | null;
-  summary?: string | null;
+  summary?: string | LanguageString | null;
 };
 
 const getNow = () => Temporal.Now.instant();
@@ -127,8 +127,8 @@ const projectActor = (actor: ActorWithKosmoFields, requestedNormalizedHandle: st
     throw new RemoteActorMaterializationError('Remote actor preferredUsername is unsupported.');
   }
 
-  const displayName = profileDisplayNameSchema.safeParse(actor.name);
-  const bio = profileBioSchema.safeParse(actor.summary ?? null);
+  const displayName = profileDisplayNameSchema.safeParse(actor.name?.toString());
+  const bio = profileBioSchema.safeParse(actor.summary?.toString() ?? null);
 
   return {
     bio: bio.success ? bio.data : null,
