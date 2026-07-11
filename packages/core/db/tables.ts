@@ -4,7 +4,6 @@ import * as Enum from './enums';
 import { createId, TableDiscriminator } from './id';
 import { datetime } from './types';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
-import type { TipTapDocument } from '../tiptap';
 
 type JsonWebKeyRecord = Record<string, unknown>;
 
@@ -271,9 +270,7 @@ export const PostContents = pgTable(
       .notNull()
       .references((): AnyPgColumn => Posts.id),
     bodyText: text('body_text').notNull(),
-    bodyJson: jsonb('body_json').$type<TipTapDocument>().notNull(),
-    bodyHtml: text('body_html'),
-    contentWarning: text('spoiler_text'),
+    contentWarning: text('content_warning'),
     createdAt: createdAt(),
   },
   (table) => [index().on(table.postId)],

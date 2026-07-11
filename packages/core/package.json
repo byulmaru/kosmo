@@ -12,17 +12,12 @@
     "./local-instance": "./local-instance.ts",
     "./polyfill": "./polyfill.ts",
     "./search": "./search.ts",
-    "./tiptap": "./tiptap/index.ts",
     "./utils": "./utils.ts",
     "./validation": "./validation/index.ts",
     "./validation/post-policy": "./validation/post-policy.ts",
     "./validation/profile": "./validation/profile.ts"
   },
   "dependencies": {
-    "@tiptap/core": "^3.24.0",
-    "@tiptap/extension-document": "^3.24.0",
-    "@tiptap/extension-paragraph": "^3.24.0",
-    "@tiptap/extension-text": "^3.24.0",
     "core-js": "^3.49.0",
     "drizzle-orm": "1.0.0-beta.22",
     "postgres": "^3.4.9",

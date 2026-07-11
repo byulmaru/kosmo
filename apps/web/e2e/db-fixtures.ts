@@ -23,10 +23,6 @@ import {
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
-import {
-  createTipTapDocumentFromPlainText,
-  extractPlainTextFromTipTapDocument,
-} from '@kosmo/core/tiptap';
 import { eq } from 'drizzle-orm';
 import { Temporal } from 'temporal-polyfill';
 import type { BrowserContext } from '@playwright/test';
@@ -204,8 +200,7 @@ export async function createE2EFollow(options: CreateE2EFollowOptions) {
 }
 
 export async function createE2EPost(options: CreateE2EPostOptions) {
-  const bodyJson = createTipTapDocumentFromPlainText(options.body ?? '');
-  const bodyText = extractPlainTextFromTipTapDocument(bodyJson);
+  const bodyText = (options.body ?? '').trim();
   const createdAt = toInstant(options.createdAt);
 
   await waitForNextPostSeedTimestamp();
@@ -225,7 +220,6 @@ export async function createE2EPost(options: CreateE2EPostOptions) {
     const content = await tx
       .insert(PostContents)
       .values({
-        bodyJson,
         bodyText,
         postId: post.id,
         ...(createdAt ? { createdAt } : {}),

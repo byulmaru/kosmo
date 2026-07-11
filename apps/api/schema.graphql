@@ -22,7 +22,7 @@ enum AccountState {
 }
 
 input CreatePostInput {
-  content: TipTapDocument!
+  bodyText: String!
   visibility: PostVisibility!
 }
 
@@ -99,7 +99,6 @@ type PostConnectionEdge {
 }
 
 type PostContent implements Node {
-  bodyJson: TipTapDocument!
   bodyText: String!
   contentWarning: String
   createdAt: DateTime!
@@ -201,9 +200,6 @@ type Session implements Node {
   id: ID!
   selectedProfile: Profile
 }
-
-"""TipTap JSON document"""
-scalar TipTapDocument
 
 input UnfollowProfileInput {
   id: ID!

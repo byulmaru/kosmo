@@ -43,7 +43,6 @@ export const PostContent = createObjectRef(
 
 PostContent.implement({
   fields: (t) => ({
-    bodyJson: t.expose('bodyJson', { type: 'TipTapDocument' }),
     bodyText: t.exposeString('bodyText'),
     contentWarning: t.exposeString('contentWarning', { nullable: true }),
     createdAt: t.expose('createdAt', { type: 'DateTime' }),

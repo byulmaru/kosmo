@@ -125,8 +125,9 @@ kosmo의 현재 PostgreSQL/Drizzle 기반 도메인 저장 모델, ID 생성 규
 #### Scenario: 게시물 콘텐츠 저장
 
 - **WHEN** 게시물 본문이 저장된다
-- **THEN** 시스템은 게시물, 텍스트 본문, TipTap JSON 본문, 선택적 HTML 본문, 선택적 Content Warning, 생성 시각을 저장한다
+- **THEN** 시스템은 게시물, canonical Plain Text 본문, 선택적 Content Warning, 생성 시각을 저장한다
 - **AND** 게시물 콘텐츠는 `post.id`를 참조해야 한다
+- **AND** 시스템은 TipTap JSON 또는 실행 가능한 HTML 본문을 저장하지 않는다
 
 ### Requirement: 열거형 상태 값
 
