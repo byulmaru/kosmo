@@ -51,9 +51,10 @@
 
 #### Scenario: Read participant requests
 
-- **WHEN** active profile이 있는 인증자가 incoming 또는 outgoing request connection을 조회한다
-- **THEN** incoming에는 active profile이 followee인 request만 반환한다
-- **AND** outgoing에는 active profile이 follower인 request만 반환한다
+- **WHEN** active profile이 있는 인증자가 자기 Profile의 incoming 또는 outgoing request connection을 조회한다
+- **THEN** `incomingFollowRequests`에는 해당 Profile이 followee인 request만 반환한다
+- **AND** `outgoingFollowRequests`에는 해당 Profile이 follower인 request만 반환한다
+- **AND** viewer의 active Profile이 아닌 Profile에서는 두 connection을 노출하지 않는다
 - **AND** 비당사자에게는 request Node를 노출하지 않는다
 
 #### Scenario: Prevent invalid request creation

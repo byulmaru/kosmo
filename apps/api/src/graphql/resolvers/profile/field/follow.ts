@@ -138,60 +138,64 @@ builder.objectFields(Profile, (t) => ({
       };
     },
   }),
+  incomingFollowRequests: t.withAuth({ usingProfile: true }).connection(
+    {
+      type: ProfileFollowRequest,
+      nullable: true,
+      unauthorizedResolver: () => null,
+      resolve: (profile, args, ctx) => {
+        if (profile.id !== ctx.session.profileId) {
+          return null;
+        }
+
+        return resolveCursorConnection<Promise<ProfileFollowRequestRow[]>>(
+          { args, toCursor: (request) => request.id },
+          ({ before, after, limit, inverted }) =>
+            db
+              .select()
+              .from(ProfileFollowRequests)
+              .where(
+                and(
+                  eq(ProfileFollowRequests.followeeProfileId, profile.id),
+                  before ? gt(ProfileFollowRequests.id, before) : undefined,
+                  after ? lt(ProfileFollowRequests.id, after) : undefined,
+                ),
+              )
+              .orderBy(inverted ? asc(ProfileFollowRequests.id) : desc(ProfileFollowRequests.id))
+              .limit(limit),
+        );
+      },
+    },
+    ProfileFollowRequestConnection as never,
+  ),
+  outgoingFollowRequests: t.withAuth({ usingProfile: true }).connection(
+    {
+      type: ProfileFollowRequest,
+      nullable: true,
+      unauthorizedResolver: () => null,
+      resolve: (profile, args, ctx) => {
+        if (profile.id !== ctx.session.profileId) {
+          return null;
+        }
+
+        return resolveCursorConnection<Promise<ProfileFollowRequestRow[]>>(
+          { args, toCursor: (request) => request.id },
+          ({ before, after, limit, inverted }) =>
+            db
+              .select()
+              .from(ProfileFollowRequests)
+              .where(
+                and(
+                  eq(ProfileFollowRequests.followerProfileId, profile.id),
+                  before ? gt(ProfileFollowRequests.id, before) : undefined,
+                  after ? lt(ProfileFollowRequests.id, after) : undefined,
+                ),
+              )
+              .orderBy(inverted ? asc(ProfileFollowRequests.id) : desc(ProfileFollowRequests.id))
+              .limit(limit),
+        );
+      },
+    },
+    ProfileFollowRequestConnection as never,
+  ),
 }));
-
-builder.queryField('incomingFollowRequests', (t) =>
-  t.withAuth({ usingProfile: true }).connection(
-    {
-      type: ProfileFollowRequest,
-      nullable: true,
-      unauthorizedResolver: () => null,
-      resolve: (_, args, ctx) =>
-        resolveCursorConnection<Promise<ProfileFollowRequestRow[]>>(
-          { args, toCursor: (request) => request.id },
-          ({ before, after, limit, inverted }) =>
-            db
-              .select()
-              .from(ProfileFollowRequests)
-              .where(
-                and(
-                  eq(ProfileFollowRequests.followeeProfileId, ctx.session.profileId),
-                  before ? gt(ProfileFollowRequests.id, before) : undefined,
-                  after ? lt(ProfileFollowRequests.id, after) : undefined,
-                ),
-              )
-              .orderBy(inverted ? asc(ProfileFollowRequests.id) : desc(ProfileFollowRequests.id))
-              .limit(limit),
-        ),
-    },
-    ProfileFollowRequestConnection as never,
-  ),
-);
-
-builder.queryField('outgoingFollowRequests', (t) =>
-  t.withAuth({ usingProfile: true }).connection(
-    {
-      type: ProfileFollowRequest,
-      nullable: true,
-      unauthorizedResolver: () => null,
-      resolve: (_, args, ctx) =>
-        resolveCursorConnection<Promise<ProfileFollowRequestRow[]>>(
-          { args, toCursor: (request) => request.id },
-          ({ before, after, limit, inverted }) =>
-            db
-              .select()
-              .from(ProfileFollowRequests)
-              .where(
-                and(
-                  eq(ProfileFollowRequests.followerProfileId, ctx.session.profileId),
-                  before ? gt(ProfileFollowRequests.id, before) : undefined,
-                  after ? lt(ProfileFollowRequests.id, after) : undefined,
-                ),
-              )
-              .orderBy(inverted ? asc(ProfileFollowRequests.id) : desc(ProfileFollowRequests.id))
-              .limit(limit),
-        ),
-    },
-    ProfileFollowRequestConnection as never,
-  ),
-);

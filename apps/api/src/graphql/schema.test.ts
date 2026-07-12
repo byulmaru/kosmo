@@ -41,9 +41,10 @@ test('rejects empty and over-500-character Plain Text before creating a post', a
   }
 });
 
-test('exposes pending-only follow request query and mutation contracts', () => {
+test('exposes pending-only follow request profile fields and mutation contracts', async () => {
   const profileFollowRequest = schema.getType('ProfileFollowRequest');
   const profileViewerState = schema.getType('ProfileViewerState');
+  const profile = schema.getType('Profile');
   const mutation = schema.getMutationType();
   const query = schema.getQueryType();
 
@@ -52,8 +53,33 @@ test('exposes pending-only follow request query and mutation contracts', () => {
   assert.equal(profileFollowRequest.getFields().respondedAt, undefined);
   assert.ok(isObjectType(profileViewerState));
   assert.ok(profileViewerState.getFields().followRequest);
-  assert.ok(query?.getFields().incomingFollowRequests);
-  assert.ok(query?.getFields().outgoingFollowRequests);
+  assert.ok(isObjectType(profile));
+  assert.ok(profile.getFields().incomingFollowRequests);
+  assert.ok(profile.getFields().outgoingFollowRequests);
+  assert.equal(query?.getFields().incomingFollowRequests, undefined);
+  assert.equal(query?.getFields().outgoingFollowRequests, undefined);
+  assert.equal(
+    await profile
+      .getFields()
+      .incomingFollowRequests?.resolve?.(
+        { id: 'another-profile' } as never,
+        {},
+        { session: { profileId: 'viewer-profile' } } as never,
+        {} as never,
+      ),
+    null,
+  );
+  assert.equal(
+    await profile
+      .getFields()
+      .outgoingFollowRequests?.resolve?.(
+        { id: 'another-profile' } as never,
+        {},
+        { session: { profileId: 'viewer-profile' } } as never,
+        {} as never,
+      ),
+    null,
+  );
   assert.ok(mutation?.getFields().approveFollowRequest);
   assert.ok(mutation?.getFields().rejectFollowRequest);
   assert.ok(mutation?.getFields().cancelFollowRequest);

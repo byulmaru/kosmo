@@ -260,10 +260,21 @@ API는 로그인한 계정이 app-shell 프로필 전환을 위해 해당 계정
 
 ### Requirement: Profile viewer follow-request state
 
-API는 active profile이 대상 Profile에 보낸 pending request를 viewer-relative state로 노출해야 한다(MUST).
+API는 active profile이 대상 Profile에 보낸 pending request를 viewer-relative state로 노출하고, 자기 Profile이 주고받은 pending requests를 Profile-owned connections로 제공해야 한다(MUST).
 
 #### Scenario: Read viewer outgoing request
 
 - **WHEN** active profile이 있는 인증자가 다른 활성 Profile의 `viewerState`를 조회한다
 - **THEN** viewer가 대상에 보낸 pending request가 있으면 `followRequest`로 반환한다
 - **AND** pending request가 없으면 `followRequest`는 없음이다
+
+#### Scenario: Read self Profile request connections
+
+- **WHEN** active profile이 있는 인증자가 자기 Profile을 조회한다
+- **THEN** `incomingFollowRequests`는 해당 Profile이 followee인 pending requests를 반환한다
+- **AND** `outgoingFollowRequests`는 해당 Profile이 follower인 pending requests를 반환한다
+
+#### Scenario: Hide another Profile request connections
+
+- **WHEN** active profile이 있는 인증자가 다른 Profile을 조회한다
+- **THEN** `incomingFollowRequests`와 `outgoingFollowRequests`는 없음이다

@@ -152,6 +152,8 @@ type Profile implements Node {
   followingCount: Int!
   handle: String!
   id: ID!
+  incomingFollowRequests(after: String, before: String, first: Int, last: Int): ProfileFollowRequestConnection
+  outgoingFollowRequests(after: String, before: String, first: Int, last: Int): ProfileFollowRequestConnection
   posts(after: String, before: String, first: Int, last: Int): PostConnection!
   relativeHandle: String!
   viewerFollow: ProfileFollow
@@ -222,11 +224,9 @@ type ProfileViewerState {
 type Query {
   currentSession: Session
   homeTimeline(after: String, before: String, first: Int, last: Int): PostConnection
-  incomingFollowRequests(after: String, before: String, first: Int, last: Int): ProfileFollowRequestConnection
   me: Account
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
-  outgoingFollowRequests(after: String, before: String, first: Int, last: Int): ProfileFollowRequestConnection
   profileByHandle(handle: String!): Profile
 }
 

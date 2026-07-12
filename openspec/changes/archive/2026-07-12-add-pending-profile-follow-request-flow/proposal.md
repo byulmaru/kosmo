@@ -9,8 +9,8 @@
 - canonical Follow Request를 pending-only 객체로 정렬하고 승인·거절·취소 시 요청 row를 삭제한다.
 - `followProfile`이 승인제 Profile에 대해 중복 없는 `ProfileFollowRequest`를 만들고 기존 관계와 요청을
   멱등하게 반환한다.
-- 요청 당사자만 incoming/outgoing 요청을 조회하고, followee만 승인·거절하며 follower만 취소할 수 있는
-  GraphQL 계약을 제공한다.
+- active viewer의 Profile 필드에서만 incoming/outgoing 요청을 조회하고, followee만 승인·거절하며 follower만
+  취소할 수 있는 GraphQL 계약을 제공한다.
 - 승인은 요청 삭제와 `ProfileFollow` 생성을 한 transaction에서 수행하고, 거절·취소는 요청만 삭제한다.
 - remote Follow 요청도 같은 request row와 lifecycle service를 사용하며, 승인·거절 delivery는 ActivityPub
   Follow delivery port로 위임한다.
@@ -36,6 +36,7 @@
 - Linear: [PROD-272](https://linear.app/byulmaru/issue/PROD-272/follow-request의-pending-only-생성처리-흐름을-제공한다)
 - Canonical domain: `docs/domain/objects/follow-request.md`, 관련 Follow Relationship/Notification 문서와 ADR.
 - `packages/core`: pending-only lifecycle service, notification/activity delivery port, transaction 경계.
-- `apps/api`: Follow Request GraphQL Node, viewer query fields, follow/approve/reject/cancel mutations.
+- `apps/api`: Follow Request GraphQL Node, 자기 Profile의 request fields, follow/approve/reject/cancel mutations.
 - `apps/app`: Relay fragment/mutation과 FollowButton pending UI.
+- Notification 목록과 incoming request 처리 UI는 Notification 소유 이슈에 남긴다.
 - 데이터베이스 migration이나 Accepted/Rejected 상태 컬럼은 추가하지 않는다.

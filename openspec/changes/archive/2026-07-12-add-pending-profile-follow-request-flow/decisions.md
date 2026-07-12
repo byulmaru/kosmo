@@ -35,15 +35,15 @@
 - Consequences: 현재 기본 구현은 안전한 no-op이며 소유 이슈가 실제 adapter를 주입한다. port 실패와 retry 정책은 각 소유 경계가 결정한다.
 - Confirmation / Follow-up: lifecycle 테스트에서 port 호출 payload와 호출하지 않는 local 경로를 검증한다.
 
-### GraphQL은 request Node와 participant connections를 제공한다
+### GraphQL은 request Node와 Profile-owned connections를 제공한다
 
 - Decision Date: 2026-07-12
 - Status: Accepted
 - Context / Problem: FollowButton 상태와 followee 처리 흐름 모두 안정적인 Relay identity와 제한된 조회가 필요하다.
-- Decision Outcome: `ProfileFollowRequest` Node, `Profile.viewerState.followRequest`, viewer incoming/outgoing connections와 처리 mutations를 제공한다.
+- Decision Outcome: `ProfileFollowRequest` Node, `Profile.viewerState.followRequest`, 자기 Profile에서만 읽을 수 있는 `incomingFollowRequests`/`outgoingFollowRequests` connections와 처리 mutations를 제공한다.
 - Alternatives Considered: boolean pending 필드만 노출하면 cancel/approve/reject 대상 identity가 없고 cache 정규화가 어렵다.
 - Consequences: request loader는 participant access를 강제하고 mutation payload는 영향받은 Profile/request ID를 반환한다.
-- Confirmation / Follow-up: schema snapshot과 app Relay compiler로 계약을 검증한다.
+- Confirmation / Follow-up: schema test에서 request connections가 루트 Query에는 없고 Profile에 있음을 검증하고 app Relay compiler로 계약을 검증한다.
 
 ## Remaining Decisions
 
