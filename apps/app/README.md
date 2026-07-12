@@ -47,6 +47,8 @@ The Android and iOS child lanes must provide the following common inputs before 
 
 The `Native Distribution Foundation` workflow never grants credentials to pull requests or merge-queue runs. A manual run on `main` uses the protected `native-test-distribution` environment to exchange GitHub OIDC for the short-lived WIF ADC managed by PROD-303, then performs read-only Firebase release lookups. That environment also provides the existing `EXPO_PUBLIC_WEB_ORIGIN`, `EXPO_PUBLIC_OIDC_ISSUER`, and `EXPO_PUBLIC_OIDC_CLIENT_ID` public runtime settings to the platform child workflows. Firebase/WIF identifiers stay in environment variables, and signing material remains owned by the platform child issues.
 
+Pull-request validation uses dummy Firebase App IDs and does not prove that Firebase apps exist. Before the manual `main` smoke can pass, PROD-303 must create or import Android and Apple Firebase apps for `moe.kos`, create the tester group, and populate the protected environment with their real IDs.
+
 The auth action's generated `gha-creds-*.json` file is ignored by Git and Docker, removed explicitly on success or failure, and must not be uploaded as an artifact. Long-lived service-account JSON and Firebase CLI tokens are not supported.
 
 ## Validation
