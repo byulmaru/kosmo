@@ -163,20 +163,18 @@ test('disableProfile은 profile lifecycle과 active session 정리를 소유한�
       execute function delay_profile_disable()
     `;
 
-    let disableAttempts: number | undefined;
     try {
       await Promise.all([disableProfile(follower.id), disableProfile(followee.id)]);
       const [{ attempts }] = await pg<
         { attempts: number }[]
       >`select last_value::integer as attempts from profile_disable_attempts`;
-      disableAttempts = attempts;
+      assert.equal(attempts, 3);
     } finally {
       await pg`drop trigger delay_profile_disable on profile`;
       await pg`drop function delay_profile_disable()`;
       await pg`drop sequence profile_disable_attempts`;
     }
 
-    assert.equal(disableAttempts, 3);
     const concurrentlyDisabled = await db
       .select()
       .from(Profiles)
