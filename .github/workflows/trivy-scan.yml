@@ -103,11 +103,12 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      - name: Notify Slack about Trivy findings
-        if: always() && env.SLACK_WEBHOOK_URL != ''
+      - name: Report Trivy findings
+        if: always()
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           TRIVY_IMAGE_REF: ${{ steps.image.outputs.image-ref }}
+          TRIVY_STATUS: ${{ steps.trivy.outcome }}
         with:
           script: |
             const fs = require("fs");
@@ -116,19 +117,9 @@ jobs:
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const imageRef = process.env.TRIVY_IMAGE_REF;
 
-            if (!fs.existsSync(reportPath)) {
-              core.info("No Trivy report was produced. Skipping Slack notification.");
-              return;
-            }
-
-            const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
-            const vulnerabilities = (report.Results ?? [])
-              .flatMap((result) => result.Vulnerabilities ?? []);
-
-            if (vulnerabilities.length === 0) {
-              core.info("No Trivy findings detected. Skipping Slack notification.");
-              return;
-            }
+            const hasReport = fs.existsSync(reportPath);
+            const report = hasReport ? JSON.parse(fs.readFileSync(reportPath, "utf8")) : {};
+            const vulnerabilities = (report.Results ?? []).flatMap((result) => result.Vulnerabilities ?? []);
 
             const counts = vulnerabilities.reduce((acc, vulnerability) => {
               const severity = vulnerability.Severity ?? "UNKNOWN";
@@ -148,6 +139,34 @@ jobs:
             const omitted = vulnerabilities.length > topFindings.length
               ? `\n...and ${vulnerabilities.length - topFindings.length} more finding(s).`
               : "";
+
+            const summary = [
+              "## Trivy image scan",
+              "",
+              `Image: \`${imageRef || "unknown"}\``,
+              `Status: \`${process.env.TRIVY_STATUS}\``,
+              "",
+              "| Severity | Count |",
+              "| --- | ---: |",
+              `| CRITICAL | ${counts.CRITICAL ?? 0} |`,
+              `| HIGH | ${counts.HIGH ?? 0} |`,
+              "",
+              "### Findings",
+              "",
+              !hasReport
+                ? "No Trivy report was produced."
+                : topFindings.length > 0
+                  ? topFindings.join("\n") + omitted
+                  : "No findings were detected.",
+              "",
+              `Full report: [trivy-report artifact](${runUrl})`,
+            ].join("\n");
+
+            await core.summary.addRaw(summary).write();
+
+            if (!process.env.SLACK_WEBHOOK_URL || !hasReport || vulnerabilities.length === 0) {
+              return;
+            }
 
             const sourceRef = context.eventName === "workflow_run"
               ? context.payload.workflow_run.head_branch
