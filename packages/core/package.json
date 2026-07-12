@@ -32,7 +32,7 @@
     "drizzle:studio": "node ../../scripts/vault-run.mjs -- drizzle-kit studio",
     "test": "pnpm test:migrate && pnpm test:migration",
     "test:migrate": "cd ../.. && node scripts/test-db.mjs run -- pnpm --filter @kosmo/core exec node --import tsx --test db/migrate.test.ts",
-    "test:migration": "cd ../.. && node scripts/test-db.mjs reset && node --env-file .env.test --test 'packages/core/db/*.migration.test.mjs'"
+    "test:migration": "cd ../.. && node scripts/test-db.mjs run -- node --test 'packages/core/db/*.migration.test.mjs'"
   },
   "devDependencies": {
     "drizzle-kit": "1.0.0-beta.22"

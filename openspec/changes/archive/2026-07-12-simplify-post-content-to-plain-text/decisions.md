@@ -6,6 +6,7 @@
 
 ### `body_text`를 유일한 canonical 본문으로 사용한다
 
+- Date: 2026-07-12
 - Status: Accepted
 - Context / Problem: 현재 `post_content`는 같은 본문을 `body_text`, TipTap `body_json`, 선택적 `body_html`로 표현해 불일치 가능성과 변환 비용을 만든다.
 - Decision Outcome: 기존 `body_text`를 수정 없이 canonical로 승격하고 `body_json`, `body_html`을 같은 migration에서 제거한다. `spoiler_text`는 값을 보존한 채 `content_warning`으로 이름을 바꾼다.
@@ -15,6 +16,7 @@
 
 ### Content Warning을 Kosmo 도메인 용어로 사용한다
 
+- Date: 2026-07-12
 - Status: Accepted
 - Context / Problem: 현재 `spoilerText`는 Mastodon REST API의 `spoiler_text` 명칭에 가깝고, Kosmo domain 문서는 `Content Warning`을 확정 용어로 사용한다. ActivityStreams wire property는 `summary`다.
 - Decision Outcome: DB는 `content_warning`, GraphQL은 `contentWarning`을 사용하고 ActivityPub adapter에서 Note `summary`와 상호 변환한다.
@@ -24,6 +26,7 @@
 
 ### 구조적 본문 참조는 PostContent 관계로 확장한다
 
+- Date: 2026-07-12
 - Status: Accepted
 - Context / Problem: 향후 Mention, Hashtag, Custom Emoji를 지원하려면 Plain Text 안의 token과 domain entity를 연결해야 하지만 이를 위해 TipTap 같은 rich-text AST를 유지할 필요는 없다.
 - Decision Outcome: canonical `bodyText`는 유지하고 기능 구현 시 `PostContent` revision이 소유하는 명시적 token-to-entity 관계로 확장한다. 초기 관계는 source token과 entity ID를 저장하며 offset annotation은 실제 요구가 생길 때만 추가한다.
@@ -33,6 +36,7 @@
 
 ### GraphQL은 `bodyText` 입력과 `PostContent` revision 출력을 사용한다
 
+- Date: 2026-07-12
 - Status: Accepted
 - Context / Problem: `CreatePostInput.content: TipTapDocument!`와 `PostContent.bodyJson`이 제품에 없는 rich document를 공개 계약으로 고정한다.
 - Decision Outcome: 입력을 `CreatePostInput.bodyText: String!`로 바꾸고 출력은 기존 revision 경계인 `Post.content.bodyText`를 유지한다. `TipTapDocument` scalar와 `bodyJson` field는 제거한다.
@@ -42,6 +46,7 @@
 
 ### DB·API·앱을 한 번의 breaking release로 전환한다
 
+- Date: 2026-07-12
 - Status: Accepted
 - Context / Problem: TipTap scalar와 컬럼을 즉시 제거하면 구버전 API 또는 앱이 새 계층과 호환되지 않는다.
 - Decision Outcome: 임시 호환 scalar/input/column 없이 DB migration, API schema와 Relay 앱을 한 PR과 coordinated release로 전환한다.
@@ -51,6 +56,7 @@
 
 ### 변경을 merge-safe한 준비 PR과 atomic cutover PR로 나눈다
 
+- Date: 2026-07-12
 - Status: Accepted
 - Context / Problem: DB column drop, GraphQL mutation input과 Relay composer를 서로 다른 시점에 바꾸면 중간 main의 게시글 작성이 실패하지만, read path와 validation 준비는 기존 계약을 유지한 채 먼저 머지할 수 있다.
 - Decision Outcome: PROD-268은 API/domain의 `contentWarning`을 legacy SQL 컬럼 `spoiler_text`에 매핑하고 Plain Text validation과 앱의 `bodyText` 직접 조회를 담당하며, 물리 DB와 기존 TipTap write/storage를 유지한다. PROD-267은 PROD-268 이후 `spoiler_text` → `content_warning` 물리 rename, DB drop, API input과 앱 write path를 하나의 atomic cutover로 수행한다.
@@ -60,6 +66,7 @@
 
 ### ActivityPub projection은 Plain Text output으로 재범위화한다
 
+- Date: 2026-07-12
 - Status: Accepted
 - Context / Problem: PROD-259는 아직 구현되지 않은 remote Note projection을 canonical TipTap document로 만드는 계획이어서 이 변경과 충돌한다.
 - Decision Outcome: PROD-259의 output을 실행 가능한 HTML이나 TipTap JSON이 아닌 safe Plain Text로 바꾼다. remote Note 수신과 materialization 구현은 해당 ActivityPub 작업에 남긴다.
@@ -69,6 +76,7 @@
 
 ### 새 목록 membership 갱신은 계속 subscription으로 미룬다
 
+- Date: 2026-07-12
 - Status: Accepted
 - Context / Problem: create mutation 전환 중 생성된 게시글을 열린 Home/Profile connection에 넣는 updater를 추가할 유혹이 있지만 PR #217의 확정 범위와 다르다.
 - Decision Outcome: create mutation은 생성된 `Post.id`만 반환하고 connection membership은 후속 subscription이 담당한다.
