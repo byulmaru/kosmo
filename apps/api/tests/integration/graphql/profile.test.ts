@@ -364,12 +364,10 @@ describe('GraphQL remote profile boundary', () => {
       .insert(PostContents)
       .values([
         {
-          bodyJson: { type: 'doc', content: [] },
           bodyText: 'remote content',
           postId: remotePost.id,
         },
         {
-          bodyJson: { type: 'doc', content: [] },
           bodyText: 'suspended content',
           postId: suspendedPost.id,
         },
@@ -609,15 +607,10 @@ describe('GraphQL remote profile boundary', () => {
       .where(eq(Sessions.id, auth.session.id));
 
     const result = await requestGraphQL(
-      `mutation CreatePostWithRemoteSession($content: TipTapDocument!) {
-        createPost(input: { content: $content, visibility: UNLISTED }) { post { id } }
+      `mutation CreatePostWithRemoteSession($bodyText: String!) {
+        createPost(input: { bodyText: $bodyText, visibility: UNLISTED }) { post { id } }
       }`,
-      {
-        content: {
-          type: 'doc',
-          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'blocked' }] }],
-        },
-      },
+      { bodyText: 'blocked' },
       auth.token,
     );
 

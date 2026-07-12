@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
+import { parse } from 'hono/utils/cookie';
 import { Configuration, enableNonRepudiationChecks, ResponseBodyError } from 'openid-client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { federation } from '@kosmo/fedify';
@@ -119,7 +120,8 @@ describe('browser login', () => {
     });
     const location = new URL(response.headers.get('location') ?? '');
     const setCookie = response.headers.get('set-cookie') ?? '';
-    const verifier = getCookieValue(setCookie, 'kosmo_oidc_code_verifier');
+    const cookies = responseCookies(response.headers);
+    const verifier = cookies.kosmo_oidc_code_verifier;
 
     expect(response.status).toBe(302);
     expect(location.origin + location.pathname).toBe('https://id.example/oauth/authorize');
@@ -130,7 +132,7 @@ describe('browser login', () => {
       redirect_uri: 'https://kos.moe/login/callback',
       response_type: 'code',
       scope: 'openid profile',
-      state: getCookieValue(setCookie, 'kosmo_oidc_state'),
+      state: cookies.kosmo_oidc_state,
     });
     expect(setCookie).toContain('Max-Age=600');
     expect(setCookie).toContain('Path=/login/callback');
@@ -158,16 +160,17 @@ describe('browser login', () => {
   test('uses the public origin when TLS terminates before the Node server', async () => {
     vi.stubEnv('PUBLIC_ORIGIN', 'https://kos.moe');
     const login = await app.request('http://web:8080/login');
-    const loginCookies = login.headers.get('set-cookie') ?? '';
+    const setCookie = login.headers.get('set-cookie') ?? '';
+    const cookies = responseCookies(login.headers);
     const loginLocation = new URL(login.headers.get('location') ?? '');
-    const state = getCookieValue(loginCookies, 'kosmo_oidc_state');
+    const state = cookies.kosmo_oidc_state;
     const callback = await app.request(`http://web:8080/login/callback?code=code&state=${state}`, {
-      headers: { cookie: cookieHeader(loginCookies) },
+      headers: { cookie: cookieHeader(cookies) },
     });
     const [, callbackUrl, checks] = authorizationCodeGrant.mock.calls[0] ?? [];
 
     expect(loginLocation.searchParams.get('redirect_uri')).toBe('https://kos.moe/login/callback');
-    expect(loginCookies).toContain('Secure');
+    expect(setCookie).toContain('Secure');
     expect(callbackUrl).toBeInstanceOf(URL);
     expect((callbackUrl as URL).origin + (callbackUrl as URL).pathname).toBe(
       'https://kos.moe/login/callback',
@@ -178,12 +181,12 @@ describe('browser login', () => {
 
   test('exchanges a valid callback and sets the existing session cookie', async () => {
     const login = await app.request('https://kos.moe/login');
-    const loginCookies = login.headers.get('set-cookie') ?? '';
-    const state = getCookieValue(loginCookies, 'kosmo_oidc_state');
-    const verifier = getCookieValue(loginCookies, 'kosmo_oidc_code_verifier');
+    const cookies = responseCookies(login.headers);
+    const state = cookies.kosmo_oidc_state;
+    const verifier = cookies.kosmo_oidc_code_verifier;
     const response = await app.request(
       `https://kos.moe/login/callback?code=oidc-code&state=${state}`,
-      { headers: { cookie: cookieHeader(loginCookies) } },
+      { headers: { cookie: cookieHeader(cookies) } },
     );
     const [, callbackUrl, checks] = authorizationCodeGrant.mock.calls[0] ?? [];
     const setCookie = response.headers.get('set-cookie') ?? '';
@@ -212,13 +215,13 @@ describe('browser login', () => {
 
   test('rejects a non-browser redirect before token exchange', async () => {
     const login = await app.request('https://kos.moe/login');
-    const loginCookies = login.headers.get('set-cookie') ?? '';
-    const state = getCookieValue(loginCookies, 'kosmo_oidc_state');
+    const cookies = responseCookies(login.headers);
+    const state = cookies.kosmo_oidc_state;
     const response = await app.request(
       `https://kos.moe/login/callback?code=oidc-code&state=${state}&redirect_uri=${encodeURIComponent(
         'kosmo://login/callback',
       )}`,
-      { headers: { cookie: cookieHeader(loginCookies) } },
+      { headers: { cookie: cookieHeader(cookies) } },
     );
 
     expect(response.status).toBe(400);
@@ -579,17 +582,12 @@ describe('runtime routing', () => {
   });
 });
 
-const getCookieValue = (setCookie: string, name: string) => {
-  const value = new RegExp(`(?:^|,\\s*)${name}=([^;,]+)`).exec(setCookie)?.[1];
+const responseCookies = (headers: Headers) =>
+  Object.fromEntries(
+    headers.getSetCookie().flatMap((cookie) => Object.entries(parse(cookie)).slice(0, 1)),
+  );
 
-  if (!value) {
-    throw new Error(`Missing ${name} cookie`);
-  }
-
-  return value;
-};
-
-const cookieHeader = (setCookie: string) =>
-  ['kosmo_oidc_state', 'kosmo_oidc_code_verifier']
-    .map((name) => `${name}=${getCookieValue(setCookie, name)}`)
+const cookieHeader = (cookies: Record<string, string>) =>
+  Object.entries(cookies)
+    .map(([name, value]) => `${name}=${value}`)
     .join('; ');

@@ -1,22 +1,16 @@
-name: Web E2E
+name: Test
 
 on:
   pull_request:
   merge_group:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: web-e2e
-  cancel-in-progress: false
-
 jobs:
-  web_e2e:
-    name: Web E2E
+  test:
+    name: Test
     runs-on: [self-hosted]
     steps:
       - name: Checkout repository
@@ -30,30 +24,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run app and web unit tests
-        run: |
-          pnpm --filter @kosmo/app test:unit
-          pnpm --filter @kosmo/web test:unit
-
-      - name: Check web TypeScript
-        run: pnpm --filter @kosmo/web check
-
       - name: Install Playwright Chromium
         run: pnpm --filter @kosmo/app exec playwright install chromium
 
-      - name: Build and test the app Storybook
-        run: |
-          pnpm --filter @kosmo/app build-storybook
-          pnpm --filter @kosmo/app test:storybook
-
-      - name: Run Fedify unit tests
-        run: |
-          pnpm db:test:reset
-          pnpm db:test:push
-          pnpm test:fedify
-
-      - name: Run web E2E tests
-        run: pnpm test:e2e
+      - name: Run module tests
+        run: pnpm test
 
       - name: Upload Playwright artifacts
         if: failure()
@@ -66,6 +41,6 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Clean up test Postgres
+      - name: Clean up test database
         if: always()
-        run: node scripts/test-db.mjs down --volumes --remove-orphans
+        run: pnpm db:test:drop

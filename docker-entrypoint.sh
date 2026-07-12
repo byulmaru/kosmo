@@ -10,6 +10,10 @@ case "${1:-web}" in
     cd /app/apps/api
     exec node --import tsx src/index.ts
     ;;
+  migrate)
+    cd /app/packages/core
+    exec node --import tsx db/migrate.ts
+    ;;
   *)
     echo "Unknown app: $1" >&2
     exit 1

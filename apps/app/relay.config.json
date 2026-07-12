@@ -6,10 +6,6 @@
   "noSourceControl": true,
   "requireCustomScalarTypes": true,
   "customScalarTypes": {
-    "DateTime": "string",
-    "TipTapDocument": {
-      "name": "TipTapDocument",
-      "path": "./src/types/graphql.ts"
-    }
+    "DateTime": "string"
   }
 }

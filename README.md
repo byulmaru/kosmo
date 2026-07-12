@@ -35,7 +35,7 @@ The test database connection string is defined in `.env.test`:
 DATABASE_URL=postgres://kosmo:kosmo@localhost:54329/kosmo_test
 ```
 
-Use `pnpm db:test:reset` to recreate the container with an empty data directory, and `pnpm db:test:down` to stop it.
+Use `pnpm db:test:reset` to recreate only the default `kosmo_test` database while keeping the shared Postgres server running. Use `pnpm db:test:down` to stop the server, or add `-- --volumes --remove-orphans` when the Docker volume must also be removed.
 
 ## Web E2E
 
@@ -46,4 +46,4 @@ pnpm --filter @kosmo/app exec playwright install chromium
 pnpm test:e2e
 ```
 
-Install Playwright Chromium once, then run the E2E command. The command recreates the test Postgres container, pushes the Drizzle schema, and runs the Playwright specs under `apps/web/e2e`. The Playwright config manages the API server, Expo web export, Hono BFF, and local OIDC mock. It intentionally ignores ambient `DATABASE_URL` values and uses `.env.test` instead, so the reset, schema push, and Playwright servers share the same database. Set `PLAYWRIGHT_BROWSER_CHANNEL` only when you intentionally want to run against another local browser channel such as `chrome`.
+Install Playwright Chromium once, then run the E2E command. The command keeps the Docker Postgres server running, creates a unique `kosmo_test_*` database for the execution, pushes the Drizzle schema, runs the Playwright specs under `apps/web/e2e`, and drops only that database afterward. Concurrent root test commands therefore share the server without sharing schema, fixture state, or local API/web/OIDC ports. An explicit loopback `DATABASE_URL` in the `kosmo_test_*` namespace takes precedence over `.env.test`; other hosts or database names are rejected before destructive test operations. The wrapper derives a port offset from the isolated database name; set `KOSMO_TEST_PORT_OFFSET` only when a specific runner slot needs a fixed offset. The Playwright config manages the API server, Expo web export, Hono BFF, and local OIDC mock. Set `PLAYWRIGHT_BROWSER_CHANNEL` only when you intentionally want to run against another local browser channel such as `chrome`.

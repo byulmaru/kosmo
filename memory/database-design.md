@@ -138,7 +138,7 @@ Drizzle relation schema policy:
 - `profile`: social identity that writes posts, follows, and federates.
 - `account_profile`: account-profile N:N relationship and role.
 - `post`: post metadata, visibility, state, and current content pointer.
-- `post_content`: body revision, storing a plain-text projection plus TipTap JSON body, optional HTML/spoiler render fields, and eventually `(post_id, revision_number)` uniqueness when revisioning lands.
+- `post_content`: body revision, storing canonical Plain Text plus optional Content Warning, and eventually `(post_id, revision_number)` uniqueness when revisioning lands. It does not store TipTap JSON or executable HTML. The DB/API domain name is `content_warning`/`contentWarning`; ActivityPub adapters map it to Note `summary`.
 - `profile_follow`: established follower/followee direction only; row existence means the follow relationship is active.
 - `profile_follow_request`: pending follower/followee request direction before a follow relationship is established. The row itself means the request is pending; accepted or rejected requests are removed instead of stored with a state.
 

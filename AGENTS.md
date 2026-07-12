@@ -13,6 +13,10 @@
 
 ## OpenSpec Workflow
 
+- Before planning or updating an OpenSpec change, read `memory/issue-openspec-workflow.md` and
+  follow the Issue -> OpenSpec -> Implementation order.
+- Define the Linear issue scope and dependency structure before creating the OpenSpec change. If
+  the spec reveals an independently deliverable scope, update or split the Linear issues first.
 - When creating or updating OpenSpec specs before implementation, explain the resulting spec to the user in Korean.
 - Before implementation, use the Question tool as much as practical to settle unresolved requirements and implementation choices.
 - If additional unresolved requirements or implementation choices appear after an initial question round, ask follow-up questions repeatedly until the relevant decisions are settled.
@@ -23,6 +27,8 @@
 - If a memory applies, use it as project-specific context while reviewing, implementing, or discussing the task.
 - When a task changes the assumptions documented in a relevant memory file, update that memory in the same change.
 - `memory/coding-style.md`: generalized coding style, API/client contract, spec sync, and runtime/tooling conventions.
+- `memory/issue-openspec-workflow.md`: issue-first planning, OpenSpec ownership and granularity,
+  implementation boundaries, and completion gates.
 - `memory/frontend-react-native.md`: Expo Router, React Native Web, React Relay, Storybook, and frontend UI conventions.
 - `memory/review-style.md`: Korean review comment style, priority labels, and evidence policy.
 - `memory/commit-pr.md`: short router for commit, branch, stacked PR, and PR writing policy. Read this first, then load the specific memory it points to.
@@ -33,6 +39,8 @@
 - `memory/review-thread.md`: unresolved review thread handling and merge-readiness policy.
 - `memory/script.md`: workspace scripts, command wrappers, and script execution behavior.
 - `memory/database-design.md`: kosmo PostgreSQL/Drizzle database schema design and review context.
+- `memory/database-migrations.md`: additive와 breaking DB 변경 분류, expand/transition/contract
+  이슈·PR·배포 순서, backfill과 contract gate.
 - `memory/graphql-style.md`: GraphQL resolver structure, object refs, enum registration, Node ID, and resolver style.
 
 ## Design Docs

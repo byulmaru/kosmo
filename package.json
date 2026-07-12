@@ -5,7 +5,8 @@
   "packageManager": "pnpm@11.10.0+sha512.0b7f8b98060031904c017e3a41eb187a16d40eeb829b95c4f8cb03681761fc4ab53dd219115b9b447f4dce1a05a214764461e7d3703392a9f32f9511ce8c86c8",
   "scripts": {
     "db:test:down": "node scripts/test-db.mjs down",
-    "db:test:push": "set -a && . ./.env.test && set +a && env NODE_OPTIONS='--preserve-symlinks --preserve-symlinks-main' ./packages/core/node_modules/.bin/drizzle-kit push --config packages/core/drizzle.config.ts",
+    "db:test:drop": "node scripts/test-db.mjs drop",
+    "db:test:push": "env DATABASE_URL=\"${DATABASE_URL:-postgres://kosmo:kosmo@localhost:54329/kosmo_test}\" NODE_OPTIONS='--preserve-symlinks --preserve-symlinks-main' ./packages/core/node_modules/.bin/drizzle-kit push --config packages/core/drizzle.config.ts",
     "db:test:reset": "node scripts/test-db.mjs reset",
     "db:test:up": "node scripts/test-db.mjs up",
     "db:bootstrap-local-instance": "pnpm --filter @kosmo/api db:bootstrap-local-instance",
@@ -14,8 +15,12 @@
     "lint:prettier": "prettier --check --ignore-unknown '**/*'",
     "lint:syncpack": "syncpack lint --dependency-types prod,dev,peer",
     "prepare": "husky || true",
-    "test:e2e": "pnpm db:test:reset && pnpm db:test:push && pnpm --filter @kosmo/web test:e2e",
-    "test:fedify": "pnpm --filter @kosmo/fedify test:unit"
+    "test": "pnpm --recursive --workspace-concurrency=1 --if-present test",
+    "test:dev-deployment": "node --test scripts/dev-deployment.test.mjs",
+    "test:e2e": "node scripts/test-db.mjs run -- pnpm test:e2e:database",
+    "test:e2e:database": "pnpm db:test:push && pnpm --filter @kosmo/web test:e2e",
+    "test:fedify": "node scripts/test-db.mjs run -- pnpm test:fedify:database",
+    "test:fedify:database": "pnpm db:test:push && pnpm --filter @kosmo/fedify test:unit"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

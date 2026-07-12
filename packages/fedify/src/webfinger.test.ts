@@ -8,7 +8,7 @@ import type * as FederationModule from './federation';
 import type * as WebFinger from './webfinger';
 
 const publicOrigin = 'http://127.0.0.1:4173';
-const databaseUrl = 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
@@ -149,7 +149,11 @@ const truncateDatabase = async () => {
 };
 
 const assertTestDatabaseUrl = () => {
-  assert.equal(new URL(process.env.DATABASE_URL ?? '').pathname, '/kosmo_test');
+  const url = new URL(process.env.DATABASE_URL ?? '');
+  const databaseName = decodeURIComponent(url.pathname.slice(1));
+
+  assert.ok(['127.0.0.1', '[::1]', 'localhost'].includes(url.hostname));
+  assert.match(databaseName, /^kosmo_test(?:_[a-z0-9_]+)?$/);
 };
 
 const createRemoteInstance = async () =>

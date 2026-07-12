@@ -23,7 +23,7 @@
 - 한 컴포넌트가 여러 부모 query에서 재사용되더라도 document를 공용 query helper로 빼지 않는다. 재사용 경계는 query가 아니라 fragment다.
 - operation name은 화면/컴포넌트 책임을 드러내는 기존 이름을 유지한다. Relay network request body는 `operationName`, persisted text가 아닌 `request.params.text`, `variables`를 포함해 API와 E2E interception 계약을 지킨다.
 - generated `__generated__` artifact는 commit하지 않는다. schema 또는 document가 바뀌면 `pnpm --filter @kosmo/app relay`를 실행하고 `check`/build에서도 compiler를 선행한다.
-- `DateTime`, `TipTapDocument` 같은 custom scalar는 `apps/app/relay.config.json`에서 native-safe TypeScript type으로 매핑한다. DOM 기반 editor type을 scalar boundary에 넣지 않는다.
+- `DateTime` 같은 custom scalar는 `apps/app/relay.config.json`에서 native-safe TypeScript type으로 매핑한다. DOM 기반 editor type을 scalar boundary에 넣지 않는다.
 
 ## Relay Environment And Mutations
 
@@ -48,7 +48,7 @@
 - UI 텍스트는 `SUIT`, 포스트 본문과 긴 입력은 `Pretendard`를 사용한다. React Native에는 CSS 상속이 없으므로 공용 primitive 또는 각 `Text`/`TextInput` style에서 family를 명시한다.
 - touch target은 최소 44×44를 확보하고 `accessibilityRole`, `accessibilityLabel`, `accessibilityState`를 실제 동작과 맞춘다. 선택 tab, disabled/loading button, modal/drawer 상태는 시각 표현만으로 전달하지 않는다.
 - `useWindowDimensions`로 layout 단계를 고르되 product breakpoint 값은 token에서 읽는다. render 중 플랫폼 전역 `window`를 직접 읽지 않는다.
-- 현재 TipTap 계약은 doc/paragraph/text subset이다. `apps/app/src/lib/tiptap.ts`의 pure TypeScript adapter로 plain text를 변환하고, 앱은 `@kosmo/core/validation/post-policy`와 `@kosmo/core/validation/profile` 같은 native-safe subpath만 import해 DOM TipTap runtime을 native bundle에 넣지 않는다. 저장·GraphQL 계약에서 TipTap을 완전히 제거할지는 별도 OpenSpec change에서 결정한다.
+- 게시글 write/read 계약은 canonical `bodyText`다. composer는 trim된 Plain Text를 `CreatePostInput.bodyText`로 직접 제출하고 조회는 저장된 `bodyText`를 표시한다. 앱은 `@kosmo/core/validation/post-policy`와 `@kosmo/core/validation/profile` 같은 native-safe subpath만 import하며 TipTap/ProseMirror runtime이나 document adapter를 포함하지 않는다.
 
 ## Storybook
 

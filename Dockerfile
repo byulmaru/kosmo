@@ -55,6 +55,7 @@ RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store \
   pnpm install --filter @kosmo/api... --filter @kosmo/web... --frozen-lockfile --prod --ignore-scripts --store-dir=/var/cache/pnpm/store
 
 COPY --chown=app:app apps/api ./apps/api
+COPY --chown=app:app drizzle ./drizzle
 COPY --chown=app:app packages/core ./packages/core
 COPY --chown=app:app packages/fedify ./packages/fedify
 COPY --chown=app:app apps/web/src/server ./apps/web/src/server

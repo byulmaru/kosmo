@@ -6,6 +6,7 @@
   },
   "scripts": {
     "lint:tsc": "tsc --noEmit",
+    "test": "pnpm lint:tsc && pnpm --workspace-root test:fedify",
     "test:unit": "tsx --test src/*.test.ts"
   },
   "dependencies": {

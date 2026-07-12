@@ -3,16 +3,12 @@ name: Semgrep
 on:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
   merge_group:
     types: [checks_requested]
   workflow_dispatch:
 
 permissions:
   contents: read
-  issues: write
-  pull-requests: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -52,6 +48,7 @@ jobs:
         id: semgrep
         continue-on-error: true
         run: |
+          # shellcheck disable=SC2086
           semgrep scan \
             $SEMGREP_CONFIGS \
             --json \
@@ -66,19 +63,19 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Comment findings on PR
-        if: github.event_name == 'pull_request' && always()
+      - name: Report Semgrep findings
+        if: always()
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const fs = require("fs");
 
-            const marker = "<!-- semgrep-scan-report -->";
             const reportPath = "semgrep.json";
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
 
+            const hasReport = fs.existsSync(reportPath);
             let results = [];
-            if (fs.existsSync(reportPath)) {
+            if (hasReport) {
               const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
               results = report.results ?? [];
             }
@@ -99,11 +96,33 @@ jobs:
             }, {});
 
             const summary = [
-              `- Total: ${results.length}`,
-              `- ERROR: ${counts.ERROR ?? 0}`,
-              `- WARNING: ${counts.WARNING ?? 0}`,
-              `- INFO: ${counts.INFO ?? 0}`,
-            ].join("\n");
+              ["Severity", "Count"],
+              ["ERROR", String(counts.ERROR ?? 0)],
+              ["WARNING", String(counts.WARNING ?? 0)],
+              ["INFO", String(counts.INFO ?? 0)],
+            ];
+
+            const annotationCounts = { ERROR: 0, WARNING: 0, INFO: 0 };
+            for (const result of results) {
+              const severity = result.extra?.severity ?? "INFO";
+              const path = result.path;
+              const line = Number(result.start?.line);
+              if (!path || !Number.isInteger(line) || (annotationCounts[severity] ?? 10) >= 10) {
+                continue;
+              }
+
+              const rule = result.check_id ?? "Semgrep finding";
+              const message = (result.extra?.message ?? rule).replace(/\s+/g, " ").trim();
+              const properties = { file: path, startLine: line, title: rule };
+              if (severity === "ERROR") {
+                core.error(message, properties);
+              } else if (severity === "WARNING") {
+                core.warning(message, properties);
+              } else {
+                core.notice(message, properties);
+              }
+              annotationCounts[severity] += 1;
+            }
 
             const maxFindings = 30;
             const findingLines = results.slice(0, maxFindings).map((result, index) => {
@@ -112,7 +131,8 @@ jobs:
               const severity = result.extra?.severity ?? "UNKNOWN";
               const rule = result.check_id ?? "(unknown rule)";
               const message = (result.extra?.message ?? "").replace(/\s+/g, " ").trim();
-              return `${index + 1}. \`${severity}\` [${path}:${line}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/blob/${context.payload.pull_request.head.sha}/${path}#L${line}) - \`${rule}\`${message ? `\n   ${message}` : ""}`;
+              const sha = context.payload.pull_request?.head?.sha ?? context.sha;
+              return `${index + 1}. \`${severity}\` [${path}:${line}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/blob/${sha}/${path}#L${line}) - \`${rule}\`${message ? `\n   ${message}` : ""}`;
             });
 
             const truncated = results.length > maxFindings
@@ -120,44 +140,28 @@ jobs:
               : "";
 
             const body = [
-              marker,
-              "## Semgrep security scan result",
+              "## Semgrep security scan",
               "",
-              summary,
+              `Status: \`${{ steps.semgrep.outcome }}\``,
               "",
-              results.length > 0
-                ? findingLines.join("\n") + truncated
-                : "No findings were detected.",
+              "### Summary",
+              "",
+              "| Severity | Count |",
+              "| --- | ---: |",
+              ...summary.slice(1).map(([severity, count]) => `| ${severity} | ${count} |`),
+              "",
+              "### Findings",
+              "",
+              !hasReport
+                ? "No Semgrep report was produced."
+                : results.length > 0
+                  ? findingLines.join("\n") + truncated
+                  : "No findings were detected.",
               "",
               `Full report: [semgrep-report artifact](${runUrl})`,
             ].join("\n");
 
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              per_page: 100,
-            });
-
-            const existing = comments.find((comment) =>
-              comment.user?.type === "Bot" && comment.body?.includes(marker)
-            );
-
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
+            await core.summary.addRaw(body).write();
 
       - name: Notify Slack
         if: always() && env.SLACK_WEBHOOK_URL != ''

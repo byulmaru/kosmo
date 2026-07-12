@@ -23,15 +23,11 @@ import {
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
-import {
-  createTipTapDocumentFromPlainText,
-  extractPlainTextFromTipTapDocument,
-} from '@kosmo/core/tiptap';
 import { eq } from 'drizzle-orm';
 import { Temporal } from 'temporal-polyfill';
 import type { BrowserContext } from '@playwright/test';
 
-const webOrigin = 'http://127.0.0.1:4173';
+const webOrigin = process.env.PUBLIC_ORIGIN ?? 'http://127.0.0.1:4173';
 let lastPostSeedTimestamp = 0;
 
 type CreateE2ESessionOptions = {
@@ -75,6 +71,7 @@ async function waitForNextPostSeedTimestamp() {
 
 export async function resetE2EDatabase() {
   lastPostSeedTimestamp = 0;
+  assertTestDatabaseUrl();
 
   await pg.unsafe(`
     DO $$
@@ -98,6 +95,18 @@ export async function resetE2EDatabase() {
 
 export async function closeE2EDatabase() {
   await pg.end();
+}
+
+function assertTestDatabaseUrl() {
+  const url = new URL(process.env.DATABASE_URL ?? '');
+  const databaseName = decodeURIComponent(url.pathname.slice(1));
+
+  if (
+    !['127.0.0.1', '[::1]', 'localhost'].includes(url.hostname) ||
+    !/^kosmo_test(?:_[a-z0-9_]+)?$/.test(databaseName)
+  ) {
+    throw new Error(`Refusing to reset non-test database ${url.hostname}/${databaseName}.`);
+  }
 }
 
 export async function createE2ESession(options: CreateE2ESessionOptions = {}) {
@@ -191,8 +200,7 @@ export async function createE2EFollow(options: CreateE2EFollowOptions) {
 }
 
 export async function createE2EPost(options: CreateE2EPostOptions) {
-  const bodyJson = createTipTapDocumentFromPlainText(options.body ?? '');
-  const bodyText = extractPlainTextFromTipTapDocument(bodyJson);
+  const bodyText = (options.body ?? '').trim();
   const createdAt = toInstant(options.createdAt);
 
   await waitForNextPostSeedTimestamp();
@@ -212,7 +220,6 @@ export async function createE2EPost(options: CreateE2EPostOptions) {
     const content = await tx
       .insert(PostContents)
       .values({
-        bodyJson,
         bodyText,
         postId: post.id,
         ...(createdAt ? { createdAt } : {}),
