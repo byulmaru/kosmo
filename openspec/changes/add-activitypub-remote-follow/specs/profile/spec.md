@@ -118,6 +118,8 @@ active profile이 있는 인증자는 `followPolicy`가 `OPEN`인 다른 활성 
 - **WHEN** active profile이 있는 인증자가 `followPolicy`가 `OPEN`인 다른 활성 local profile follow를 요청한다
 - **THEN** 시스템은 established `ProfileFollow` 관계를 생성하거나 기존 관계를 반환한다
 - **AND** mutation은 `FollowProfilePayload.profileFollow`로 `ProfileFollow`를 반환한다
+- **AND** mutation은 `FollowProfilePayload.followerProfile`과 `FollowProfilePayload.followeeProfile`로 transaction 완료 시점의 양쪽 `Profile`을 반환한다
+- **AND** `followerProfile.followingCount`와 `followeeProfile.followersCount`는 생성된 관계가 반영된 저장 count다
 
 #### Scenario: Follow open active remote profile
 
@@ -128,11 +130,13 @@ active profile이 있는 인증자는 `followPolicy`가 `OPEN`인 다른 활성 
 - **AND** 새 `ProfileFollow` 관계가 생성되었지만 remote instance 상태가 `UNRESPONSIVE`이면 ActivityPub `Follow` activity를 발송하지 않는다
 - **AND** 기존 `ProfileFollow` 관계를 반환하는 idempotent 요청에서는 ActivityPub `Follow` activity를 다시 발송하지 않는다
 - **AND** mutation은 `FollowProfilePayload.profileFollow`로 `ProfileFollow`를 반환한다
+- **AND** mutation은 최신 저장 count를 가진 `followerProfile`과 `followeeProfile`을 반환한다
 
 #### Scenario: Follow profile idempotently
 
 - **WHEN** active profile이 있는 인증자가 이미 follow 중인 프로필 follow를 요청한다
 - **THEN** 시스템은 `FollowProfilePayload.profileFollow`로 기존 `ProfileFollow`를 반환한다
+- **AND** mutation은 count를 중복 증가시키지 않은 최신 `followerProfile`과 `followeeProfile`을 반환한다
 - **AND** 오류로 처리하지 않는다
 - **AND** 대상이 ActivityPub remote profile이면 ActivityPub `Follow` activity를 다시 발송하지 않는다
 
@@ -164,15 +168,15 @@ active profile이 있는 인증자는 `followPolicy`가 `OPEN`인 다른 활성 
 ### Requirement: Unfollow profile mutation
 
 active profile이 있는 인증자는 기존 local 또는 ActivityPub remote follow 관계를 해제할 수 있어야 한다(MUST).
-`UnfollowProfilePayload`는 삭제된 follow ID와 함께, 클라이언트 캐시 갱신을 위해 갱신된 대상 `Profile`을 포함한다.
-단, `SUSPENDED` instance의 remote profile처럼 GraphQL `Profile` object로 노출하지 않는 대상의 local follow 관계만 정리하는 경우 `profile`은 `null`일 수 있다.
+`UnfollowProfilePayload`는 삭제된 follow ID와 함께, 클라이언트 캐시 갱신을 위해 transaction 완료 시점의 `followerProfile`과 `followeeProfile`을 포함한다.
+단, `SUSPENDED` instance의 remote profile처럼 GraphQL `Profile` object로 노출하지 않는 대상의 local follow 관계만 정리하는 경우 `followeeProfile`은 `null`일 수 있다.
 
 #### Scenario: Unfollow active local profile
 
 - **WHEN** active profile이 있는 인증자가 follow 중인 활성 local profile unfollow를 요청한다
 - **THEN** 시스템은 해당 follow 관계를 제거한다
 - **AND** mutation은 `UnfollowProfilePayload.profileFollowId`로 삭제된 `ProfileFollow` ID를 반환한다
-- **AND** 갱신된 viewer follow 상태와 팔로워 수를 가진 대상 `Profile`을 함께 반환한다
+- **AND** mutation은 감소된 `followingCount`를 가진 `followerProfile`과 감소된 `followersCount` 및 갱신된 viewer follow 상태를 가진 `followeeProfile`을 함께 반환한다
 
 #### Scenario: Unfollow active remote profile
 
@@ -182,13 +186,13 @@ active profile이 있는 인증자는 기존 local 또는 ActivityPub remote fol
 - **AND** Fedify `sendActivity`가 실패하더라도 삭제된 local `ProfileFollow` 관계와 저장 count를 rollback하지 않는다
 - **AND** remote instance 상태가 `UNRESPONSIVE`이면 ActivityPub `Undo(Follow)` activity를 발송하지 않는다
 - **AND** mutation은 `UnfollowProfilePayload.profileFollowId`로 삭제된 `ProfileFollow` ID를 반환한다
-- **AND** 갱신된 viewer follow 상태와 followersCount를 가진 대상 `Profile`을 함께 반환한다
+- **AND** mutation은 감소된 저장 count를 가진 `followerProfile`과 `followeeProfile`을 함께 반환한다
 
 #### Scenario: Unfollow profile idempotently
 
 - **WHEN** active profile이 있는 인증자가 follow 관계가 없는 활성 profile unfollow를 요청한다
 - **THEN** 시스템은 오류로 처리하지 않는다
-- **AND** `profileFollowId`가 `null`이고 대상 `Profile`을 포함한 `UnfollowProfilePayload`를 반환한다
+- **AND** `profileFollowId`가 `null`이고 count를 변경하지 않은 최신 `followerProfile`과 `followeeProfile`을 포함한 `UnfollowProfilePayload`를 반환한다
 - **AND** 대상이 ActivityPub remote profile이면 ActivityPub `Undo(Follow)` activity를 발송하지 않는다
 
 #### Scenario: Unfollow suspended remote profile locally
@@ -197,7 +201,7 @@ active profile이 있는 인증자는 기존 local 또는 ActivityPub remote fol
 - **THEN** 시스템은 local `ProfileFollow` 관계를 제거한다
 - **AND** ActivityPub `Undo(Follow)` activity를 발송하지 않는다
 - **AND** mutation은 `UnfollowProfilePayload.profileFollowId`로 삭제된 `ProfileFollow` ID를 반환한다
-- **AND** 대상 remote profile은 GraphQL `Profile` object로 노출하지 않으므로 `UnfollowProfilePayload.profile`은 `null`일 수 있다
+- **AND** 대상 remote profile은 GraphQL `Profile` object로 노출하지 않으므로 `UnfollowProfilePayload.followeeProfile`은 `null`일 수 있다
 
 #### Scenario: Require active profile to unfollow
 
