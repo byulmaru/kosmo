@@ -90,12 +90,12 @@
 - **AND** 시스템은 저장된 원본 Follow activity id, actor URI, object URI를 `Undo.object`의 대상 Follow에 사용한다
 - **AND** `Undo(Follow)`를 발송할 때 시스템은 같은 local follower actor URI와 remote followee actor URI pair의 모든 Follow/Undo(Follow)에 사용하는 stable Fedify `orderingKey`를 사용한다
 
-#### Scenario: Remove suspended remote follow locally
+#### Scenario: Preserve suspended remote follow
 
 - **WHEN** active local profile이 `SUSPENDED` instance에 속한 ActivityPub remote profile을 이미 follow 중이고 unfollow를 요청한다
-- **THEN** 시스템은 해당 local `ProfileFollow` 관계를 제거한다
+- **THEN** 시스템은 profile not found 오류를 반환한다
+- **AND** 해당 local `ProfileFollow` 관계와 저장 count를 보존한다
 - **AND** ActivityPub `Undo(Follow)` activity를 발송하지 않는다
-- **AND** 대상 remote profile은 GraphQL `Profile` object로 노출하지 않아도 된다
 
 ### Requirement: Inbound remote follow
 

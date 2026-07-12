@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { eq, inArray, or } from 'drizzle-orm';
+import { and, eq, inArray, or } from 'drizzle-orm';
 import { db, firstOrThrow, Instances, pg, ProfileFollows, Profiles } from '../db';
 import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
 import { ConflictError, NotFoundError } from '../error';
@@ -72,6 +72,19 @@ test('follow action은 관계와 저장 count를 idempotent하게 갱신한다',
   assert.equal(results[0].profileFollow.id, results[1].profileFollow.id);
   assert.equal((await readProfile(follower.id)).followingCount, 1);
   assert.equal((await readProfile(followee.id)).followersCount, 1);
+
+  await db
+    .delete(ProfileFollows)
+    .where(
+      and(
+        eq(ProfileFollows.followerProfileId, follower.id),
+        eq(ProfileFollows.followeeProfileId, followee.id),
+      ),
+    );
+  await assert.rejects(
+    unfollowProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
+    NotFoundError,
+  );
 });
 
 test('follow action의 도메인 오류는 GraphQL field 이름을 포함하지 않는다', async () => {
@@ -156,4 +169,35 @@ test('unfollow action은 대상 조회, 관계 삭제와 count 감소를 함께 
   assert.equal(duplicate.profileFollowId, null);
   assert.equal((await readProfile(follower.id)).followingCount, 0);
   assert.equal((await readProfile(followee.id)).followersCount, 0);
+});
+
+test('SUSPENDED target unfollow는 관계와 count를 보존한다', async () => {
+  const follower = await createProfile();
+  const followee = await createProfile();
+  await createProfileFollow({ followerProfileId: follower.id, followeeProfileId: followee.id });
+  await db
+    .update(Instances)
+    .set({ state: InstanceState.SUSPENDED })
+    .where(eq(Instances.id, followee.instanceId));
+
+  await assert.rejects(
+    unfollowProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
+    NotFoundError,
+  );
+
+  assert.equal(
+    await db
+      .select()
+      .from(ProfileFollows)
+      .where(
+        and(
+          eq(ProfileFollows.followerProfileId, follower.id),
+          eq(ProfileFollows.followeeProfileId, followee.id),
+        ),
+      )
+      .then((rows) => rows.length),
+    1,
+  );
+  assert.equal((await readProfile(follower.id)).followingCount, 1);
+  assert.equal((await readProfile(followee.id)).followersCount, 1);
 });
