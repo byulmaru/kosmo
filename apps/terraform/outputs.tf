@@ -1,24 +1,31 @@
-output "aws_region" {
-  description = "AWS region configured for this Terraform root."
-  value       = var.aws_region
+output "firebase_android_app_id" {
+  value = google_firebase_android_app.kosmo.app_id
 }
 
-output "cluster_name" {
-  description = "EKS cluster name candidate for the later cluster resource."
-  value       = local.cluster_name
+output "firebase_ios_app_id" {
+  value = google_firebase_apple_app.kosmo.app_id
 }
 
-output "kubernetes_version" {
-  description = "Kubernetes minor version candidate for the later EKS cluster."
-  value       = var.kubernetes_version
+output "firebase_project_number" {
+  value = data.google_project.firebase.number
 }
 
-output "name_prefix" {
-  description = "Shared name prefix for later AWS resources."
-  value       = local.name_prefix
+output "firebase_project_id" {
+  value = local.firebase_project_id
 }
 
-output "tags" {
-  description = "Default tags that will be applied to AWS resources."
-  value       = local.tags
+output "gcp_service_account" {
+  value = google_service_account.app_distribution.email
+}
+
+output "gcp_workload_identity_provider" {
+  value = google_iam_workload_identity_pool_provider.kosmo.name
+}
+
+output "terraform_gcp_service_account" {
+  value = google_service_account.terraform.email
+}
+
+output "terraform_gcp_workload_identity_provider" {
+  value = google_iam_workload_identity_pool_provider.terraform.name
 }

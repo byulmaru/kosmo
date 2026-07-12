@@ -1,3 +1,8 @@
-# This root intentionally uses Terraform's default local backend until the
-# organization S3 state bucket is configured locally. Copy backend.s3.tf.example
-# to backend.s3.tf to enable the partial S3 backend.
+terraform {
+  backend "s3" {
+    bucket       = "byulmaru-terraform-state"
+    key          = "kosmo/terraform.tfstate"
+    region       = "ap-northeast-2"
+    use_lockfile = true
+  }
+}
