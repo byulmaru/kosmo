@@ -18,7 +18,7 @@ import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as Materialization from './remote-actor-materialization';
 
 const publicOrigin = 'http://127.0.0.1:4173';
-const databaseUrl = 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 const remoteDomain = 'remote.example';
 const remoteAliasDomain = 'alias.example';
 
@@ -913,5 +913,5 @@ const truncateDatabase = async () => {
 };
 
 const assertTestDatabaseUrl = () => {
-  assert.equal(new URL(process.env.DATABASE_URL ?? '').pathname, '/kosmo_test');
+  assert.match(new URL(process.env.DATABASE_URL ?? '').pathname, /^\/kosmo_test(?:_[a-z0-9_]+)?$/);
 };
