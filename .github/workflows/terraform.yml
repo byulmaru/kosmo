@@ -31,7 +31,7 @@ env:
   TF_PLAN_ARTIFACT: terraform-plan
   TF_ROOT: apps/terraform
   TF_STATE_BUCKET: byulmaru-terraform-state
-  TF_STATE_KEY: kosmo/firebase.tfstate
+  TF_STATE_KEY: kosmo/terraform.tfstate
 
 jobs:
   plan:
