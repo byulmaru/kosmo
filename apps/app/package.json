@@ -6,6 +6,7 @@
   "scripts": {
     "android": "expo run:android",
     "build": "pnpm export:web",
+    "build:ios": "bash scripts/build-ios-simulator.sh",
     "build-storybook": "storybook build --disable-telemetry",
     "check": "pnpm relay && tsc --noEmit",
     "dev": "pnpm relay && expo start --port 5173",

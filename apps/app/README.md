@@ -19,6 +19,27 @@ Native OIDC uses Expo AuthSession with the `kosmo://login/callback` redirect. Re
 
 Native projects are generated with `expo prebuild --clean`; they are not source-of-truth files.
 
+## Native iOS build
+
+`apps/app/ios` is generated Expo CNG output and must remain untracked. Reproduce the
+unsigned simulator build with:
+
+```sh
+pnpm --filter @kosmo/app build:ios
+```
+
+The script runs Relay compilation, a clean `expo prebuild --clean --platform ios`,
+and an unsigned `xcodebuild` for the iPhone simulator SDK. It preflights the selected
+Xcode developer directory and version, accepted Xcode license, iPhone simulator SDK,
+and CocoaPods path/version before compiling. Set `KOSMO_KEEP_IOS_BUILD=1` when you
+need to inspect the generated `apps/app/ios` project after a local run.
+
+The `Native iOS` CI check runs on a self-hosted macOS runner for `pull_request`,
+`merge_group`, and `workflow_dispatch`. The runner must have Xcode selected with
+`xcode-select`, an accepted Xcode license, initialized Xcode first-launch simulator
+support, the iPhone simulator SDK, CocoaPods, mise, and pnpm. Failure logs are written
+under `apps/app/.native-build/ios` and uploaded by CI when the check fails.
+
 ## Validation
 
 ```sh

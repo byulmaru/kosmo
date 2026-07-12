@@ -1,0 +1,63 @@
+name: Native iOS
+
+on:
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native_ios:
+    name: Native iOS
+    runs-on: [self-hosted, macOS]
+    env:
+      CI: 1
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Ensure generated iOS project remains untracked
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -n "$(git ls-files apps/app/ios)" ]]; then
+            echo "::error::apps/app/ios must remain generated and untracked."
+            git ls-files apps/app/ios
+            exit 1
+          fi
+
+          if ! git check-ignore -q apps/app/ios/; then
+            echo "::error::apps/app/ios must stay ignored so Expo CNG output does not become source of truth."
+            exit 1
+          fi
+
+      - name: Set up mise
+        uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        with:
+          cache: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build iOS simulator app
+        run: pnpm --filter @kosmo/app build:ios
+
+      - name: Upload Native iOS logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-ios-logs
+          path: apps/app/.native-build/ios
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Clean up generated iOS state
+        if: always()
+        run: rm -rf apps/app/ios apps/app/.native-build/ios

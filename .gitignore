@@ -8,6 +8,7 @@ playwright-report
 test-results
 **/__generated__/
 apps/app/.expo/
+apps/app/.native-build/
 apps/app/dist/
 apps/app/storybook-static/
 apps/app/android/
