@@ -7,7 +7,9 @@
 - Firebase 활성화와 Android/iOS 앱 등록 (`moe.kos`)
 - Firebase App Distribution 서비스 계정과 최소 IAM 권한
 - `main`의 지정 workflow만 허용하는 GitHub Actions Workload Identity Federation
+- Terraform plan/apply가 공유하는 GitHub Actions WIF 서비스 계정
 - GitHub `native-test-distribution` environment와 배포 변수
+- GitHub `terraform-apply` environment와 Terraform repository 변수
 - Firebase provider가 지원하지 않는 `native-testers` group의 멱등 REST bootstrap
 
 Firebase를 Google Cloud 프로젝트에 추가하는 작업은 되돌릴 수 없다. 앱 리소스에는 `PREVENT` 삭제 정책을 적용한다.
@@ -26,6 +28,18 @@ Terraform의 GitHub provider는 `gh auth token`을 사용한다. `gh auth status
 Terraform 실행 시에는 장기 credential 파일 대신 현재 `gcloud` 계정의 단기 token을 주입한다.
 
 ## 검증과 적용
+
+최초 bootstrap에서는 Terraform state만 접근할 수 있는 AWS OIDC role을 한 번 만든다.
+
+```sh
+./scripts/ensure-ci-aws-role.sh
+```
+
+그 뒤 `apps/terraform/**` 또는 Terraform workflow가 바뀐 PR에서는 plan을 실행해 PR comment와 artifact로 남긴다. PR이 `main`에 병합되면 같은 repository tree에서 만든 성공한 plan artifact만 찾아 그대로 apply한다. plan과 apply는 같은 GCP 서비스 계정과 AWS role을 사용한다.
+
+외부 기여자의 PR workflow는 기여 이력과 무관하게 저장소 관리자의 실행 승인을 받아야 한다. 이 정책은 GitHub Actions의 `all_external_contributors` 설정으로 관리하며, 조직 구성원의 PR만 자동 실행한다.
+
+로컬 bootstrap 또는 복구가 필요할 때는 아래 순서로 실행한다.
 
 ```sh
 export AWS_PROFILE=default
