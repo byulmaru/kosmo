@@ -30,6 +30,8 @@ test('follow mutation payloads expose both updated profiles', () => {
   assert.ok(isObjectType(unfollowPayload));
   assert.ok(unfollowPayload.getFields().followerProfile);
   assert.ok(unfollowPayload.getFields().followeeProfile);
+  assert.equal(String(unfollowPayload.getFields().followerProfile?.type), 'Profile!');
+  assert.equal(String(unfollowPayload.getFields().followeeProfile?.type), 'Profile');
   assert.equal(unfollowPayload.getFields().profile, undefined);
 });
 

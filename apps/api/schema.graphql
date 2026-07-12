@@ -208,7 +208,7 @@ input UnfollowProfileInput {
 }
 
 type UnfollowProfilePayload {
-  followeeProfile: Profile!
+  followeeProfile: Profile
   followerProfile: Profile!
   profileFollowId: ID
 }
