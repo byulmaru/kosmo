@@ -74,9 +74,11 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      - name: Notify Slack
-        if: always() && env.SLACK_WEBHOOK_URL != ''
+      - name: Report Nuclei findings
+        if: always()
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          NUCLEI_STATUS: ${{ steps.nuclei.outcome }}
         with:
           script: |
             const fs = require("fs");
@@ -86,7 +88,7 @@ jobs:
             const targets = fs.existsSync("nuclei-targets.txt")
               ? fs.readFileSync("nuclei-targets.txt", "utf8").split(/\r?\n/).filter(Boolean)
               : [];
-            const status = "${{ steps.nuclei.outcome }}";
+            const status = process.env.NUCLEI_STATUS;
 
             const findings = fs.existsSync(reportPath)
               ? fs.readFileSync(reportPath, "utf8")
@@ -102,11 +104,6 @@ jobs:
                   }
                 })
               : [];
-
-            if (findings.length === 0 && status !== "failure") {
-              core.info("No Nuclei findings detected. Skipping Slack notification.");
-              return;
-            }
 
             const counts = findings.reduce((acc, finding) => {
               const severity = finding.info?.severity ?? finding.severity ?? "unknown";
@@ -124,6 +121,37 @@ jobs:
             const omitted = findings.length > topFindings.length
               ? `\n...and ${findings.length - topFindings.length} more finding(s).`
               : "";
+
+            const summary = [
+              "## Nuclei scan",
+              "",
+              `Targets: ${targets.map((target) => `\`${target}\``).join(", ") || "none"}`,
+              `Status: \`${status}\``,
+              "",
+              "| Severity | Count |",
+              "| --- | ---: |",
+              `| Critical | ${counts.critical ?? 0} |`,
+              `| High | ${counts.high ?? 0} |`,
+              `| Medium | ${counts.medium ?? 0} |`,
+              `| Low | ${counts.low ?? 0} |`,
+              `| Info | ${counts.info ?? 0} |`,
+              "",
+              "### Findings",
+              "",
+              findings.length > 0
+                ? topFindings.join("\n") + omitted
+                : status === "failure"
+                  ? "The Nuclei scan failed before producing findings."
+                  : "No findings were detected.",
+              "",
+              `Full report: [nuclei-report artifact](${runUrl})`,
+            ].join("\n");
+
+            await core.summary.addRaw(summary).write();
+
+            if (!process.env.SLACK_WEBHOOK_URL || (findings.length === 0 && status !== "failure")) {
+              return;
+            }
 
             const payload = {
               text: [
