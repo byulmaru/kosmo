@@ -7,6 +7,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { FollowButton_profile$key } from './__generated__/FollowButton_profile.graphql';
+import type { FollowButtonCancelFollowRequestMutation } from './__generated__/FollowButtonCancelFollowRequestMutation.graphql';
 import type { FollowButtonFollowProfileMutation } from './__generated__/FollowButtonFollowProfileMutation.graphql';
 import type { FollowButtonUnfollowProfileMutation } from './__generated__/FollowButtonUnfollowProfileMutation.graphql';
 
@@ -26,6 +27,9 @@ const followButtonProfileFragment = graphql`
           id
         }
       }
+      followRequest {
+        id
+      }
     }
   }
 `;
@@ -33,12 +37,26 @@ const followButtonProfileFragment = graphql`
 const followProfileMutation = graphql`
   mutation FollowButtonFollowProfileMutation($id: ID!) {
     followProfile(input: { id: $id }) {
+      profile {
+        followersCount
+        ...FollowButton_profile
+      }
       profileFollow {
         id
-        followee {
-          followersCount
-          ...FollowButton_profile
-        }
+      }
+      profileFollowRequest {
+        id
+      }
+    }
+  }
+`;
+
+const cancelFollowRequestMutation = graphql`
+  mutation FollowButtonCancelFollowRequestMutation($id: ID!) {
+    cancelFollowRequest(input: { id: $id }) {
+      profileFollowRequestId @deleteRecord
+      profile {
+        ...FollowButton_profile
       }
     }
   }
@@ -63,10 +81,13 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
     useMutation<FollowButtonFollowProfileMutation>(followProfileMutation);
   const [commitUnfollow, unfollowing] =
     useMutation<FollowButtonUnfollowProfileMutation>(unfollowProfileMutation);
+  const [commitCancelRequest, cancellingRequest] =
+    useMutation<FollowButtonCancelFollowRequestMutation>(cancelFollowRequestMutation);
   const [error, setError] = useState(false);
   const viewerState = data.viewerState;
   const isFollowing = Boolean(viewerState?.follow);
-  const loading = following || unfollowing;
+  const isRequestPending = Boolean(viewerState?.followRequest);
+  const loading = following || unfollowing || cancellingRequest;
 
   if (!viewerState || viewerState.isSelf) {
     return null;
@@ -94,6 +115,11 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
       ];
 
       commitUnfollow({ ...callbacks, variables: { connections, id: data.id } });
+    } else if (isRequestPending && viewerState.followRequest) {
+      commitCancelRequest({
+        ...callbacks,
+        variables: { id: viewerState.followRequest.id },
+      });
     } else {
       commitFollow({ ...callbacks, variables: { id: data.id } });
     }
@@ -102,15 +128,19 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
   return (
     <View style={[styles.root, style]}>
       <Button
-        aria-pressed={isFollowing}
-        accessibilityState={{ busy: loading, disabled: loading, selected: isFollowing }}
+        aria-pressed={isFollowing || isRequestPending}
+        accessibilityState={{
+          busy: loading,
+          disabled: loading,
+          selected: isFollowing || isRequestPending,
+        }}
         disabled={loading}
         hitSlop={6}
         onPress={toggleFollow}
         style={styles.button}
-        tone={isFollowing ? 'secondary' : 'primary'}
+        tone={isFollowing || isRequestPending ? 'secondary' : 'primary'}
       >
-        {loading ? '처리 중' : isFollowing ? '팔로잉' : '팔로우'}
+        {loading ? '처리 중' : isFollowing ? '팔로잉' : isRequestPending ? '요청됨' : '팔로우'}
       </Button>
       {error ? (
         <Text accessibilityRole="alert" style={[styles.error, { color: theme.textSecondary }]}>

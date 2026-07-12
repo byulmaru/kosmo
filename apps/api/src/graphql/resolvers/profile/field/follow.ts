@@ -1,13 +1,20 @@
-import { db, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { db, ProfileFollowRequests, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { builder } from '@/graphql/builder';
 import { profileFollowAccessWhere } from '../access/follow';
 import { viewerFollowLoader } from '../loader/follow';
-import { Profile, ProfileFollow } from '../ref';
+import { viewerFollowRequestLoader } from '../loader/follow-request';
+import {
+  Profile,
+  ProfileFollow,
+  ProfileFollowRequest,
+  ProfileFollowRequestConnection,
+} from '../ref';
 
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
+type ProfileFollowRequestRow = typeof ProfileFollowRequests.$inferSelect;
 
 const FollowerProfiles = alias(Profiles, 'profile_follow_connection_follower_profile');
 const FolloweeProfiles = alias(Profiles, 'profile_follow_connection_followee_profile');
@@ -15,6 +22,7 @@ const ProfileViewerState = builder.simpleObject('ProfileViewerState', {
   fields: (field) => ({
     isSelf: field.boolean(),
     follow: field.field({ type: ProfileFollow, nullable: true }),
+    followRequest: field.field({ type: ProfileFollowRequest, nullable: true }),
   }),
 });
 
@@ -28,6 +36,19 @@ builder.objectFields(ProfileFollow, (t) => ({
     type: Profile,
     nullable: true,
     resolve: (follow) => follow.followeeProfileId,
+  }),
+}));
+
+builder.objectFields(ProfileFollowRequest, (t) => ({
+  follower: t.field({
+    type: Profile,
+    nullable: true,
+    resolve: (request) => request.followerProfileId,
+  }),
+  followee: t.field({
+    type: Profile,
+    nullable: true,
+    resolve: (request) => request.followeeProfileId,
   }),
 }));
 
@@ -113,7 +134,64 @@ builder.objectFields(Profile, (t) => ({
       return {
         isSelf: viewerProfileId === profile.id,
         follow: await viewerFollowLoader(ctx).load(profile.id),
+        followRequest: await viewerFollowRequestLoader(ctx).load(profile.id),
       };
     },
   }),
 }));
+
+builder.queryField('incomingFollowRequests', (t) =>
+  t.withAuth({ usingProfile: true }).connection(
+    {
+      type: ProfileFollowRequest,
+      nullable: true,
+      unauthorizedResolver: () => null,
+      resolve: (_, args, ctx) =>
+        resolveCursorConnection<Promise<ProfileFollowRequestRow[]>>(
+          { args, toCursor: (request) => request.id },
+          ({ before, after, limit, inverted }) =>
+            db
+              .select()
+              .from(ProfileFollowRequests)
+              .where(
+                and(
+                  eq(ProfileFollowRequests.followeeProfileId, ctx.session.profileId),
+                  before ? gt(ProfileFollowRequests.id, before) : undefined,
+                  after ? lt(ProfileFollowRequests.id, after) : undefined,
+                ),
+              )
+              .orderBy(inverted ? asc(ProfileFollowRequests.id) : desc(ProfileFollowRequests.id))
+              .limit(limit),
+        ),
+    },
+    ProfileFollowRequestConnection as never,
+  ),
+);
+
+builder.queryField('outgoingFollowRequests', (t) =>
+  t.withAuth({ usingProfile: true }).connection(
+    {
+      type: ProfileFollowRequest,
+      nullable: true,
+      unauthorizedResolver: () => null,
+      resolve: (_, args, ctx) =>
+        resolveCursorConnection<Promise<ProfileFollowRequestRow[]>>(
+          { args, toCursor: (request) => request.id },
+          ({ before, after, limit, inverted }) =>
+            db
+              .select()
+              .from(ProfileFollowRequests)
+              .where(
+                and(
+                  eq(ProfileFollowRequests.followerProfileId, ctx.session.profileId),
+                  before ? gt(ProfileFollowRequests.id, before) : undefined,
+                  after ? lt(ProfileFollowRequests.id, after) : undefined,
+                ),
+              )
+              .orderBy(inverted ? asc(ProfileFollowRequests.id) : desc(ProfileFollowRequests.id))
+              .limit(limit),
+        ),
+    },
+    ProfileFollowRequestConnection as never,
+  ),
+);

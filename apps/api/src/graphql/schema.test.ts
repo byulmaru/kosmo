@@ -40,3 +40,21 @@ test('rejects empty and over-500-character Plain Text before creating a post', a
     assert.equal(result.errors?.[0]?.message, message);
   }
 });
+
+test('exposes pending-only follow request query and mutation contracts', () => {
+  const profileFollowRequest = schema.getType('ProfileFollowRequest');
+  const profileViewerState = schema.getType('ProfileViewerState');
+  const mutation = schema.getMutationType();
+  const query = schema.getQueryType();
+
+  assert.ok(isObjectType(profileFollowRequest));
+  assert.equal(profileFollowRequest.getFields().state, undefined);
+  assert.equal(profileFollowRequest.getFields().respondedAt, undefined);
+  assert.ok(isObjectType(profileViewerState));
+  assert.ok(profileViewerState.getFields().followRequest);
+  assert.ok(query?.getFields().incomingFollowRequests);
+  assert.ok(query?.getFields().outgoingFollowRequests);
+  assert.ok(mutation?.getFields().approveFollowRequest);
+  assert.ok(mutation?.getFields().rejectFollowRequest);
+  assert.ok(mutation?.getFields().cancelFollowRequest);
+});

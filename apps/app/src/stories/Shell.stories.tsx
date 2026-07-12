@@ -17,7 +17,7 @@ const secondProfile = profile({
   handle: 'remote',
   id: 'profile-remote',
   relativeHandle: '@remote@space.example',
-  viewerState: { follow: null, isSelf: true },
+  viewerState: { follow: null, followRequest: null, isSelf: true },
 });
 const query = shellQuery({ profiles: [profile(), secondProfile] });
 

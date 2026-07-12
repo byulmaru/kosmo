@@ -2,9 +2,11 @@ import { AccountProfiles, db, Profiles, TableDiscriminator } from '@kosmo/core/d
 import { AccountProfileRole, ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq, inArray } from 'drizzle-orm';
+import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
 import { formatRelativeHandle } from '@/profile/identity';
 import { profileFollowByIdLoader } from './loader/follow';
+import { profileFollowRequestByIdLoader } from './loader/follow-request';
 import { profileInstanceByIdLoader } from './loader/instance';
 
 export const Profile = createObjectRef('Profile', TableDiscriminator.Profiles, (ids) =>
@@ -69,3 +71,27 @@ ProfileFollow.implement({
     }),
   }),
 });
+
+export const ProfileFollowRequest = createObjectRef(
+  'ProfileFollowRequest',
+  TableDiscriminator.ProfileFollowRequests,
+  (ids, ctx) => profileFollowRequestByIdLoader(ctx).loadMany(ids),
+);
+
+ProfileFollowRequest.implement({
+  fields: (t) => ({
+    createdAt: t.expose('createdAt', {
+      type: 'DateTime',
+    }),
+  }),
+});
+
+export const ProfileFollowRequestConnection = builder.connectionObject(
+  {
+    type: ProfileFollowRequest,
+    name: 'ProfileFollowRequestConnection',
+  },
+  {
+    name: 'ProfileFollowRequestConnectionEdge',
+  },
+);

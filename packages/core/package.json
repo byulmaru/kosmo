@@ -9,6 +9,8 @@
     "./env": "./env.ts",
     "./error": "./error/index.ts",
     "./enums": "./enums.ts",
+    "./follow-request": "./follow-request.ts",
+    "./follow-request/db": "./follow-request-db.ts",
     "./local-instance": "./local-instance.ts",
     "./polyfill": "./polyfill.ts",
     "./services": "./services/index.ts",

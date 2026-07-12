@@ -21,6 +21,20 @@ enum AccountState {
   SUSPENDED
 }
 
+input ApproveFollowRequestInput {
+  id: ID!
+}
+
+type ApproveFollowRequestPayload {
+  profile: Profile!
+  profileFollow: ProfileFollow!
+  profileFollowRequestId: ID!
+}
+
+input CancelFollowRequestInput {
+  id: ID!
+}
+
 input CreatePostInput {
   bodyText: String!
   visibility: PostVisibility!
@@ -55,14 +69,24 @@ input FollowProfileInput {
 }
 
 type FollowProfilePayload {
-  profileFollow: ProfileFollow!
+  profile: Profile!
+  profileFollow: ProfileFollow
+  profileFollowRequest: ProfileFollowRequest
+}
+
+type FollowRequestRemovalPayload {
+  profile: Profile!
+  profileFollowRequestId: ID!
 }
 
 type Mutation {
+  approveFollowRequest(input: ApproveFollowRequestInput!): ApproveFollowRequestPayload!
+  cancelFollowRequest(input: CancelFollowRequestInput!): FollowRequestRemovalPayload!
   createPost(input: CreatePostInput!): CreatePostPayload!
   createProfile(input: CreateProfileInput!): CreateProfilePayload!
   deleteProfile(input: DeleteProfileInput!): DeleteProfilePayload!
   followProfile(input: FollowProfileInput!): FollowProfilePayload!
+  rejectFollowRequest(input: RejectFollowRequestInput!): FollowRequestRemovalPayload!
   selectProfile(input: SelectProfileInput!): SelectProfilePayload!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
   updateProfile(input: UpdateProfileInput!): UpdateProfilePayload!
@@ -146,6 +170,23 @@ enum ProfileFollowPolicy {
   OPEN
 }
 
+type ProfileFollowRequest implements Node {
+  createdAt: DateTime!
+  followee: Profile
+  follower: Profile
+  id: ID!
+}
+
+type ProfileFollowRequestConnection {
+  edges: [ProfileFollowRequestConnectionEdge!]!
+  pageInfo: PageInfo!
+}
+
+type ProfileFollowRequestConnectionEdge {
+  cursor: String!
+  node: ProfileFollowRequest!
+}
+
 type ProfileFollowersConnection {
   edges: [ProfileFollowersConnectionEdge!]!
   pageInfo: PageInfo!
@@ -174,16 +215,23 @@ enum ProfileState {
 
 type ProfileViewerState {
   follow: ProfileFollow
+  followRequest: ProfileFollowRequest
   isSelf: Boolean!
 }
 
 type Query {
   currentSession: Session
   homeTimeline(after: String, before: String, first: Int, last: Int): PostConnection
+  incomingFollowRequests(after: String, before: String, first: Int, last: Int): ProfileFollowRequestConnection
   me: Account
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
+  outgoingFollowRequests(after: String, before: String, first: Int, last: Int): ProfileFollowRequestConnection
   profileByHandle(handle: String!): Profile
+}
+
+input RejectFollowRequestInput {
+  id: ID!
 }
 
 input SelectProfileInput {

@@ -19,13 +19,18 @@ const followed = profile({
   id: 'profile-followed',
   viewerState: {
     follow: { follower: { id: followingOwnerId }, id: 'following-edge-0' },
+    followRequest: null,
     isSelf: false,
   },
+});
+const requested = profile({
+  id: 'profile-requested',
+  viewerState: { follow: null, followRequest: { id: 'follow-request-0' }, isSelf: false },
 });
 const self = profile({
   displayName: '내 프로필',
   id: 'profile-self',
-  viewerState: { follow: null, isSelf: true },
+  viewerState: { follow: null, followRequest: null, isSelf: true },
 });
 const remote = profile({
   bio: '먼 인스턴스에서 온 아주 긴 한 줄 소개가 컨테이너 폭을 넘겨도 레이아웃은 유지됩니다.',
@@ -49,6 +54,7 @@ const followingContent = {
 
 const storyProfiles = [
   followable,
+  requested,
   followed,
   self,
   remote,
@@ -113,8 +119,8 @@ function requireFragment<T>(fragment: T | null | undefined, label: string): T {
 function ProfileCatalog() {
   const profiles = useStoryProfiles();
   const followableRef = requireProfile(profiles, 0);
-  const remoteRef = requireProfile(profiles, 3);
-  const noBioRef = requireProfile(profiles, 4);
+  const remoteRef = requireProfile(profiles, 4);
+  const noBioRef = requireProfile(profiles, 5);
 
   return (
     <Catalog>
@@ -157,23 +163,29 @@ function ProfileListCatalog() {
       <Section title="Following">
         <ProfileListItem
           linked
-          profile={requireFragment(requireProfile(profiles, 1).listItem, 'following list item')}
+          profile={requireFragment(requireProfile(profiles, 2).listItem, 'following list item')}
+        />
+      </Section>
+      <Section title="Request pending">
+        <ProfileListItem
+          linked
+          profile={requireFragment(requireProfile(profiles, 1).listItem, 'requested list item')}
         />
       </Section>
       <Section title="No viewer state · action hidden">
         <ProfileListItem
-          profile={requireFragment(requireProfile(profiles, 5).listItem, 'no-viewer list item')}
+          profile={requireFragment(requireProfile(profiles, 6).listItem, 'no-viewer list item')}
         />
       </Section>
       <Section title="Self · action hidden">
         <ProfileListItem
-          profile={requireFragment(requireProfile(profiles, 2).listItem, 'self list item')}
+          profile={requireFragment(requireProfile(profiles, 3).listItem, 'self list item')}
         />
       </Section>
       <Section title="Long remote content">
         <ProfileListItem
           linked
-          profile={requireFragment(requireProfile(profiles, 3).listItem, 'remote list item')}
+          profile={requireFragment(requireProfile(profiles, 4).listItem, 'remote list item')}
         />
       </Section>
     </Catalog>
@@ -195,7 +207,7 @@ function ConnectionCatalog() {
         <ProfileConnectionList
           kind="followers"
           profile={requireFragment(
-            requireProfile(profiles, 6).followersList,
+            requireProfile(profiles, 7).followersList,
             'empty followers list',
           )}
         />
@@ -203,7 +215,7 @@ function ConnectionCatalog() {
       <Section title="Followers · content and more">
         <ProfileConnectionList
           kind="followers"
-          profile={requireFragment(requireProfile(profiles, 7).followersList, 'followers list')}
+          profile={requireFragment(requireProfile(profiles, 8).followersList, 'followers list')}
         />
       </Section>
       <Section title="Following · loading">
@@ -216,7 +228,7 @@ function ConnectionCatalog() {
         <ProfileConnectionList
           kind="following"
           profile={requireFragment(
-            requireProfile(profiles, 8).followingList,
+            requireProfile(profiles, 9).followingList,
             'empty following list',
           )}
         />
@@ -224,7 +236,7 @@ function ConnectionCatalog() {
       <Section title="Following · content and last page">
         <ProfileConnectionList
           kind="following"
-          profile={requireFragment(requireProfile(profiles, 9).followingList, 'following list')}
+          profile={requireFragment(requireProfile(profiles, 10).followingList, 'following list')}
         />
       </Section>
     </Catalog>
@@ -232,7 +244,7 @@ function ConnectionCatalog() {
 }
 
 function FollowersWithNextPage() {
-  const profile = requireProfile(useStoryProfiles(), 7);
+  const profile = requireProfile(useStoryProfiles(), 8);
   return (
     <Catalog>
       <ProfileConnectionList
@@ -244,7 +256,7 @@ function FollowersWithNextPage() {
 }
 
 function FollowingWithFollowedProfile() {
-  const profile = requireProfile(useStoryProfiles(), 9);
+  const profile = requireProfile(useStoryProfiles(), 10);
   return (
     <Catalog>
       <ProfileConnectionList
@@ -280,9 +292,11 @@ export const HeroNameAndLoadingStates: Story = {
 
 export const ListAndFollowStates: Story = {
   play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
     expect(
       canvasElement.querySelector('a[href="/@remote-user@very-long-instance.example"]'),
     ).toBeInTheDocument();
+    expect(canvas.getByRole('button', { name: '요청됨' })).toBeInTheDocument();
   },
   render: () => <ProfileListCatalog />,
 };
@@ -317,7 +331,7 @@ export const UnfollowRemovesCachedConnectionEdge: Story = {
           profile: {
             ...followed,
             followersCount: followed.followersCount - 1,
-            viewerState: { follow: null, isSelf: false },
+            viewerState: { follow: null, followRequest: null, isSelf: false },
           },
           profileFollowId: 'following-edge-0',
         },
