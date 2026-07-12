@@ -1,6 +1,7 @@
-import { AccountProfiles, db, firstOrThrowWith, Profiles, Sessions } from '@kosmo/core/db';
+import { AccountProfiles, db, firstOrThrowWith, Profiles } from '@kosmo/core/db';
 import { AccountProfileRole, ProfileState } from '@kosmo/core/enums';
 import { NotFoundError, PermissionDeniedError } from '@kosmo/core/error';
+import { disableProfile } from '@kosmo/core/services';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 
@@ -33,17 +34,7 @@ builder.mutationField('deleteProfile', (t) =>
         throw new PermissionDeniedError('Profile owner permission is required');
       }
 
-      await db.transaction(async (tx) => {
-        await tx
-          .update(Profiles)
-          .set({ state: ProfileState.DISABLED })
-          .where(eq(Profiles.id, input.id));
-
-        await tx
-          .update(Sessions)
-          .set({ activeProfileId: null })
-          .where(eq(Sessions.activeProfileId, input.id));
-      });
+      await disableProfile(input.id);
 
       return { profileId: profile.id };
     },

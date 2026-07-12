@@ -1,7 +1,5 @@
-import { db, first, firstOrThrowWith, ProfileFollows, Profiles } from '@kosmo/core/db';
-import { ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
-import { ConflictError, NotFoundError } from '@kosmo/core/error';
-import { and, eq, sql } from 'drizzle-orm';
+import { ConflictError } from '@kosmo/core/error';
+import { createProfileFollow } from '@kosmo/core/services';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
 import { ProfileFollow } from '../ref';
@@ -17,83 +15,14 @@ builder.mutationField('followProfile', (t) =>
       id: t.input.id({ validate: z.uuid() }),
     },
     resolve: async (_, { input }, ctx) => {
-      const targetProfile = await db
-        .select({ id: Profiles.id, followPolicy: Profiles.followPolicy })
-        .from(Profiles)
-        .where(and(eq(Profiles.id, input.id), eq(Profiles.state, ProfileState.ACTIVE)))
-        .limit(1)
-        .then(firstOrThrowWith(() => new NotFoundError('Profile not found')));
-
-      if (ctx.session.profileId === targetProfile.id) {
-        throw new ConflictError({ message: 'Profile cannot follow itself', field: 'id' });
-      }
-
-      const existingFollow = await db
-        .select()
-        .from(ProfileFollows)
-        .where(
-          and(
-            eq(ProfileFollows.followerProfileId, ctx.session.profileId),
-            eq(ProfileFollows.followeeProfileId, targetProfile.id),
-          ),
-        )
-        .limit(1)
-        .then(first);
-
-      if (existingFollow) {
-        return { profileFollow: existingFollow };
-      }
-
-      if (targetProfile.followPolicy !== ProfileFollowPolicy.OPEN) {
-        throw new ConflictError({
-          message: 'Profile requires follow request',
-          field: 'id',
-        });
-      }
-
-      const profileFollow = await db.transaction(async (tx) => {
-        const insertedFollow = await tx
-          .insert(ProfileFollows)
-          .values({
-            followerProfileId: ctx.session.profileId,
-            followeeProfileId: targetProfile.id,
-          })
-          .onConflictDoNothing()
-          .returning()
-          .then(first);
-
-        if (insertedFollow) {
-          await tx
-            .update(Profiles)
-            .set({ followingCount: sql`${Profiles.followingCount} + 1` })
-            .where(eq(Profiles.id, ctx.session.profileId));
-          await tx
-            .update(Profiles)
-            .set({ followersCount: sql`${Profiles.followersCount} + 1` })
-            .where(eq(Profiles.id, targetProfile.id));
-          return insertedFollow;
+      const { profileFollow } = await createProfileFollow({
+        followerProfileId: ctx.session.profileId,
+        followeeProfileId: input.id,
+      }).catch((error: unknown) => {
+        if (error instanceof ConflictError) {
+          throw new ConflictError({ message: error.message, field: 'id' });
         }
-
-        const concurrentFollow = await tx
-          .select()
-          .from(ProfileFollows)
-          .where(
-            and(
-              eq(ProfileFollows.followerProfileId, ctx.session.profileId),
-              eq(ProfileFollows.followeeProfileId, targetProfile.id),
-            ),
-          )
-          .limit(1)
-          .then(first);
-
-        if (concurrentFollow) {
-          return concurrentFollow;
-        }
-
-        throw new ConflictError({
-          message: 'Profile follow could not be created',
-          field: 'id',
-        });
+        throw error;
       });
 
       return { profileFollow };

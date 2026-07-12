@@ -4,6 +4,7 @@ import {
   createE2EFollow,
   createE2EProfile,
   createE2ESession,
+  insertE2EFollowRaw,
   resetE2EDatabase,
   setE2ESessionCookie,
 } from './db-fixtures';
@@ -92,7 +93,7 @@ test('동시 follow와 unfollow는 저장 count를 한 번만 갱신한다', asy
 test('unfollow 저장 count는 0 미만으로 감소하지 않는다', async ({ context, page }) => {
   const viewer = await createE2ESession({ handle: 'e2e-count-floor-viewer' });
   const target = await createE2EProfile({ handle: 'e2e-count-floor-target' });
-  await createE2EFollow({
+  await insertE2EFollowRaw({
     followeeProfileId: target.id,
     followerProfileId: viewer.profile!.id,
   });
