@@ -57,8 +57,3 @@ overrides:
   'fbjs@3.0.5>ua-parser-js': 1.0.39
   react-native-reanimated: 4.3.1
   react-native-worklets: 0.8.3
-
-patchedDependencies:
-  '@fedify/vocab-runtime@2.3.0': patches/@fedify__vocab-runtime@2.3.0.patch
-  '@fedify/vocab@2.3.0': patches/@fedify__vocab@2.3.0.patch
-  '@fedify/webfinger@2.3.0': patches/@fedify__webfinger@2.3.0.patch

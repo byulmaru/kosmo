@@ -1,32 +1,15 @@
-import { createFederation, getDocumentLoader, kvCache, MemoryKvStore } from '@fedify/fedify';
+import { createFederation, MemoryKvStore } from '@fedify/fedify';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { ensureDrizzleLocalProfileActor } from './local-actor-store';
 import { createLocalProfilePerson } from './local-profile-person';
 import { resolveLocalActorIdentifierByHandle } from './webfinger';
-import type { DocumentLoaderFactoryOptions, Federation } from '@fedify/fedify';
+import type { Federation } from '@fedify/fedify';
 
 const federationOrigin = process.env.PUBLIC_ORIGIN;
-export const remoteActorLookupMaxResponseSize = 1024 * 1024;
-const federationKv = new MemoryKvStore();
-
-export const createBoundedDocumentLoader =
-  (kind: 'object' | 'context') => (options?: DocumentLoaderFactoryOptions) =>
-    kvCache({
-      loader: getDocumentLoader({
-        allowPrivateAddress: options?.allowPrivateAddress ?? false,
-        maxResponseSize: remoteActorLookupMaxResponseSize,
-        userAgent: options?.userAgent,
-      }),
-      kv: federationKv,
-      prefix: ['_fedify', 'remoteDocument'],
-      kind,
-    });
 
 export const federation: Federation<void> = createFederation<void>({
   allowPrivateAddress: false,
-  contextLoaderFactory: createBoundedDocumentLoader('context'),
-  documentLoaderFactory: createBoundedDocumentLoader('object'),
-  kv: federationKv,
+  kv: new MemoryKvStore(),
   ...(federationOrigin ? { origin: federationOrigin } : {}),
 });
 

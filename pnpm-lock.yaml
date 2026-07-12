@@ -13,11 +13,6 @@ overrides:
   react-native-reanimated: 4.3.1
   react-native-worklets: 0.8.3
 
-patchedDependencies:
-  '@fedify/vocab-runtime@2.3.0': d9f711f53a74f0db5360980f7eaf699a32d12b4c7b45a8601da756fe329c4b2d
-  '@fedify/vocab@2.3.0': f15bbcce8c8691bf4bb1aa7d23756e7ba5d688733629237821394aafa165c022
-  '@fedify/webfinger@2.3.0': ad68986d53c3cd674b276034a3a3f4f410a3ed47d798312edd36f2c90f5fdf75
-
 importers:
 
   .:
@@ -348,7 +343,7 @@ importers:
         version: 2.3.0
       '@fedify/vocab':
         specifier: 2.3.0
-        version: 2.3.0(patch_hash=f15bbcce8c8691bf4bb1aa7d23756e7ba5d688733629237821394aafa165c022)
+        version: 2.3.0
       '@kosmo/core':
         specifier: workspace:*
         version: link:../core
@@ -3203,7 +3198,6 @@ packages:
 
   canonicalize@2.1.0:
     resolution: {integrity: sha512-F705O3xrsUtgt98j7leetNhTWPe+5S72rlL5O4jA1pKqBVQ/dT1O1D6PFxmSXvc0SUOinWS57DKx0I3CHrXJHQ==}
-    hasBin: true
 
   chai@5.3.3:
     resolution: {integrity: sha512-4zNhdJD/iOjSH0A05ea+Ke6MU5mmpQcbQsSOkgdaUMJ9zTlDTD/GYlwohmIE2u0gaxHYiVHEn1Fw9mZ/ktJWgw==}
@@ -7777,9 +7771,9 @@ snapshots:
   '@fedify/fedify@2.3.0':
     dependencies:
       '@fedify/uri-template': 2.3.0
-      '@fedify/vocab': 2.3.0(patch_hash=f15bbcce8c8691bf4bb1aa7d23756e7ba5d688733629237821394aafa165c022)
-      '@fedify/vocab-runtime': 2.3.0(patch_hash=d9f711f53a74f0db5360980f7eaf699a32d12b4c7b45a8601da756fe329c4b2d)
-      '@fedify/webfinger': 2.3.0(patch_hash=ad68986d53c3cd674b276034a3a3f4f410a3ed47d798312edd36f2c90f5fdf75)
+      '@fedify/vocab': 2.3.0
+      '@fedify/vocab-runtime': 2.3.0
+      '@fedify/webfinger': 2.3.0
       '@js-temporal/polyfill': 0.5.1
       '@logtape/logtape': 2.2.1
       '@opentelemetry/api': 1.9.1
@@ -7796,7 +7790,7 @@ snapshots:
 
   '@fedify/uri-template@2.3.0': {}
 
-  '@fedify/vocab-runtime@2.3.0(patch_hash=d9f711f53a74f0db5360980f7eaf699a32d12b4c7b45a8601da756fe329c4b2d)':
+  '@fedify/vocab-runtime@2.3.0':
     dependencies:
       '@js-temporal/polyfill': 0.5.1
       '@logtape/logtape': 2.2.1
@@ -7814,11 +7808,11 @@ snapshots:
       es-toolkit: 1.47.0
       yaml: 2.9.0
 
-  '@fedify/vocab@2.3.0(patch_hash=f15bbcce8c8691bf4bb1aa7d23756e7ba5d688733629237821394aafa165c022)':
+  '@fedify/vocab@2.3.0':
     dependencies:
-      '@fedify/vocab-runtime': 2.3.0(patch_hash=d9f711f53a74f0db5360980f7eaf699a32d12b4c7b45a8601da756fe329c4b2d)
+      '@fedify/vocab-runtime': 2.3.0
       '@fedify/vocab-tools': 2.3.0
-      '@fedify/webfinger': 2.3.0(patch_hash=ad68986d53c3cd674b276034a3a3f4f410a3ed47d798312edd36f2c90f5fdf75)
+      '@fedify/webfinger': 2.3.0
       '@js-temporal/polyfill': 0.5.1
       '@logtape/logtape': 2.2.1
       '@multiformats/base-x': 4.0.1
@@ -7828,9 +7822,9 @@ snapshots:
       jsonld: 9.0.0
       pkijs: 3.4.0
 
-  '@fedify/webfinger@2.3.0(patch_hash=ad68986d53c3cd674b276034a3a3f4f410a3ed47d798312edd36f2c90f5fdf75)':
+  '@fedify/webfinger@2.3.0':
     dependencies:
-      '@fedify/vocab-runtime': 2.3.0(patch_hash=d9f711f53a74f0db5360980f7eaf699a32d12b4c7b45a8601da756fe329c4b2d)
+      '@fedify/vocab-runtime': 2.3.0
       '@logtape/logtape': 2.2.1
       '@opentelemetry/api': 1.9.1
       es-toolkit: 1.46.1

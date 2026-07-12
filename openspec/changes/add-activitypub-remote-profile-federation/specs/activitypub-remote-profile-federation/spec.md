@@ -16,17 +16,6 @@
 - **THEN** 시스템은 해당 actor를 `Profile`로 투영하는 도메인 정책을 적용한다
 - **AND** 시스템은 actor URI uniqueness, instance state, cache timestamp 같은 kosmo 저장 정책만 소유한다
 
-### Requirement: Remote lookup HTTP resource bounds
-
-시스템은 remote actor materialization의 HTTP 자원 한계를 Fedify lookup 및 document-loader 설정으로 적용해야 한다(MUST).
-
-#### Scenario: Bound remote lookup responses
-
-- **WHEN** 시스템이 federated handle을 통해 remote actor를 조회하거나 JSON-LD context를 dereference한다
-- **THEN** 시스템은 10초 취소 신호와 1 MiB 응답 본문 한계를 Fedify의 WebFinger, actor document, context loader에 적용한다
-- **AND** alternate document 추적도 같은 취소 신호를 유지한다
-- **AND** 시스템은 content-type, redirect, SSRF 검증 또는 원격 응답 parser를 별도 구현하지 않는다
-
 ### Requirement: Remote actor materialization through Fedify lookup
 
 시스템은 federation 내부 actor materialization 흐름에서 federated handle을 Fedify lookup으로 해석한 뒤 remote ActivityPub actor를 kosmo `Profile`로 materialize해야 한다(MUST).

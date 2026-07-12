@@ -27,14 +27,11 @@ import {
   profileHandleSchema,
 } from '@kosmo/core/validation';
 import { and, eq, getColumns, inArray, ne } from 'drizzle-orm';
-import { createBoundedDocumentLoader, remoteActorLookupMaxResponseSize } from './federation';
 import type { Context } from '@fedify/fedify';
 import type { Actor, LanguageString, Object as ActivityPubObject } from '@fedify/vocab';
 
 const remoteActorRefreshTtl = Temporal.Duration.from({ hours: 7 * 24 });
 const remoteActorLookupTimeoutMs = 10_000;
-const fallbackContextLoader = createBoundedDocumentLoader('context')();
-const fallbackDocumentLoader = createBoundedDocumentLoader('object')();
 
 export class RemoteActorMaterializationError extends Error {
   constructor(message: string) {
@@ -211,12 +208,13 @@ const lookupRemoteActor = async (
   handle: string,
 ): Promise<Actor> => {
   const signal = AbortSignal.timeout(remoteActorLookupTimeoutMs);
-  const contextLoader = context.contextLoader ?? fallbackContextLoader;
-  const documentLoader = context.documentLoader ?? fallbackDocumentLoader;
   const object = (await context.lookupObject(`acct:${handle}`, {
-    contextLoader: withLookupSignal(contextLoader, signal),
-    documentLoader: withLookupSignal(documentLoader, signal),
-    maxResponseSize: remoteActorLookupMaxResponseSize,
+    ...(context.contextLoader
+      ? { contextLoader: withLookupSignal(context.contextLoader, signal) }
+      : {}),
+    ...(context.documentLoader
+      ? { documentLoader: withLookupSignal(context.documentLoader, signal) }
+      : {}),
     signal,
   })) as ActivityPubObject | null;
 
