@@ -2,7 +2,13 @@ name: Native Distribution Foundation
 
 on:
   pull_request:
-  merge_group:
+    paths:
+      - .github/workflows/native-distribution-foundation.yml
+      - apps/app/Gemfile
+      - apps/app/Gemfile.lock
+      - apps/app/fastlane/**
+      - apps/app/mise.toml
+      - mise.toml
   workflow_dispatch:
 
 permissions:
