@@ -1,7 +1,6 @@
-import { db, first, ProfileFollows, Profiles } from '@kosmo/core/db';
-import { ProfileState } from '@kosmo/core/enums';
+import { db, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
-import { and, asc, count, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { builder } from '@/graphql/builder';
 import { profileFollowAccessWhere } from '../access/follow';
@@ -97,42 +96,8 @@ builder.objectFields(Profile, (t) => ({
       );
     },
   }),
-  followersCount: t.int({
-    resolve: async (profile) => {
-      // TODO: follower 수를 Profile DB 컬럼으로 옮기면 이 count 쿼리를 제거한다.
-      const row = await db
-        .select({ value: count() })
-        .from(ProfileFollows)
-        .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
-        .where(
-          and(
-            eq(ProfileFollows.followeeProfileId, profile.id),
-            eq(FollowerProfiles.state, ProfileState.ACTIVE),
-          ),
-        )
-        .then(first);
-
-      return row?.value ?? 0;
-    },
-  }),
-  followingCount: t.int({
-    resolve: async (profile) => {
-      // TODO: following 수를 Profile DB 컬럼으로 옮기면 이 count 쿼리를 제거한다.
-      const row = await db
-        .select({ value: count() })
-        .from(ProfileFollows)
-        .innerJoin(FolloweeProfiles, eq(FolloweeProfiles.id, ProfileFollows.followeeProfileId))
-        .where(
-          and(
-            eq(ProfileFollows.followerProfileId, profile.id),
-            eq(FolloweeProfiles.state, ProfileState.ACTIVE),
-          ),
-        )
-        .then(first);
-
-      return row?.value ?? 0;
-    },
-  }),
+  followersCount: t.exposeInt('followersCount'),
+  followingCount: t.exposeInt('followingCount'),
   viewerFollow: t.field({
     type: ProfileFollow,
     nullable: true,

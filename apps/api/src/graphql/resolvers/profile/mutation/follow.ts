@@ -1,15 +1,7 @@
-import {
-  db,
-  first,
-  firstOrThrow,
-  firstOrThrowWith,
-  isUniqueViolation,
-  ProfileFollows,
-  Profiles,
-} from '@kosmo/core/db';
+import { db, first, firstOrThrowWith, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
 import { ProfileFollow } from '../ref';
@@ -59,40 +51,50 @@ builder.mutationField('followProfile', (t) =>
         });
       }
 
-      const profileFollow = await db
-        .insert(ProfileFollows)
-        .values({
-          followerProfileId: ctx.session.profileId,
-          followeeProfileId: targetProfile.id,
-        })
-        .returning()
-        .then(firstOrThrow)
-        .catch(async (error) => {
-          if (!isUniqueViolation(error)) {
-            throw error;
-          }
+      const profileFollow = await db.transaction(async (tx) => {
+        const insertedFollow = await tx
+          .insert(ProfileFollows)
+          .values({
+            followerProfileId: ctx.session.profileId,
+            followeeProfileId: targetProfile.id,
+          })
+          .onConflictDoNothing()
+          .returning()
+          .then(first);
 
-          const concurrentFollow = await db
-            .select()
-            .from(ProfileFollows)
-            .where(
-              and(
-                eq(ProfileFollows.followerProfileId, ctx.session.profileId),
-                eq(ProfileFollows.followeeProfileId, targetProfile.id),
-              ),
-            )
-            .limit(1)
-            .then(first);
+        if (insertedFollow) {
+          await tx
+            .update(Profiles)
+            .set({ followingCount: sql`${Profiles.followingCount} + 1` })
+            .where(eq(Profiles.id, ctx.session.profileId));
+          await tx
+            .update(Profiles)
+            .set({ followersCount: sql`${Profiles.followersCount} + 1` })
+            .where(eq(Profiles.id, targetProfile.id));
+          return insertedFollow;
+        }
 
-          if (concurrentFollow) {
-            return concurrentFollow;
-          }
+        const concurrentFollow = await tx
+          .select()
+          .from(ProfileFollows)
+          .where(
+            and(
+              eq(ProfileFollows.followerProfileId, ctx.session.profileId),
+              eq(ProfileFollows.followeeProfileId, targetProfile.id),
+            ),
+          )
+          .limit(1)
+          .then(first);
 
-          throw new ConflictError({
-            message: 'Profile follow could not be created',
-            field: 'id',
-          });
+        if (concurrentFollow) {
+          return concurrentFollow;
+        }
+
+        throw new ConflictError({
+          message: 'Profile follow could not be created',
+          field: 'id',
         });
+      });
 
       return { profileFollow };
     },
