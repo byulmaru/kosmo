@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { pg } from '@kosmo/core/db';
+import { pg } from '../packages/core/db/index.ts';
 
 const root = resolve(import.meta.dirname, '..');
 const temporaryDirectory = mkdtempSync(join(tmpdir(), 'kosmo-migration-'));
