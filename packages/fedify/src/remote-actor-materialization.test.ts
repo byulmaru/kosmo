@@ -124,6 +124,26 @@ describe('remote actor materialization', () => {
     assert.equal(lookupObject.mock.calls[0]?.arguments[0], `acct:alice@${remoteDomain}`);
   });
 
+  test('canonicalizes a trailing DNS root dot before a port during storage', async () => {
+    const actor = createActor({ id: new URL('https://remote.example.:8443/users/alice') });
+    const { context, lookupObject } = createLookupContext(async () => actor);
+
+    const profile = await materializeRemoteProfileActor({
+      context,
+      handle: 'alice@remote.example.:8443',
+    });
+
+    const instance = await db
+      .select()
+      .from(Instances)
+      .where(eq(Instances.id, profile.instanceId!))
+      .limit(1)
+      .then(firstOrThrow);
+
+    assert.equal(instance.domain, 'remote.example:8443');
+    assert.equal(lookupObject.mock.calls[0]?.arguments[0], 'acct:alice@remote.example:8443');
+  });
+
   test('stores an alias lookup under the canonical actor domain', async () => {
     const now = Temporal.Instant.from('2026-07-10T00:00:00Z');
     const { context, lookupObject } = createLookupContext(async () => createActor());

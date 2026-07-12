@@ -325,8 +325,9 @@ export const materializeRemoteProfileActor = async ({
   const endpoints = getActorEndpoints(actor as ActorWithKosmoFields);
   const actorUri = actorId.href;
   const actorType = toActorType(actor);
+  const canonicalActorHostname = actorId.hostname.toLowerCase().replace(/\.$/, '');
   const canonicalRemoteInstance = await ensureRemoteInstance(
-    actorId.host.toLowerCase().replace(/\.$/, ''),
+    actorId.port ? `${canonicalActorHostname}:${actorId.port}` : canonicalActorHostname,
   );
 
   const persistActor = () =>
