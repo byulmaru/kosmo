@@ -27,7 +27,7 @@ FROM workspace AS deps
 RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store \
   pnpm install --frozen-lockfile --ignore-scripts --store-dir=/var/cache/pnpm/store
 
-RUN pnpm rebuild
+RUN pnpm rebuild --pending
 
 # pnpm install --ignore-scripts skips this package-name bin link, but app builds invoke it.
 RUN test -e apps/app/node_modules/.bin/relay-compiler \
