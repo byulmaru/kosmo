@@ -28,6 +28,7 @@ jobs:
         uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
         with:
           cache: false
+          working_directory: apps/app
 
       - name: Set up locked Bundler
         run: |
@@ -35,6 +36,7 @@ jobs:
           echo "BUNDLE_PATH=${RUNNER_TEMP}/native-distribution-bundle" >> "${GITHUB_ENV}"
 
       - name: Install Fastlane dependencies
+        working-directory: apps/app
         run: bundle install --jobs 4 --retry 3
 
       - name: Set smoke build numbers
@@ -93,6 +95,7 @@ jobs:
         uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
         with:
           cache: false
+          working_directory: apps/app
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
@@ -103,6 +106,7 @@ jobs:
           echo "BUNDLE_PATH=${RUNNER_TEMP}/native-distribution-bundle" >> "${GITHUB_ENV}"
 
       - name: Install Fastlane dependencies
+        working-directory: apps/app
         run: bundle install --jobs 4 --retry 3
 
       - name: Resolve release metadata

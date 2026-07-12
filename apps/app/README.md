@@ -21,14 +21,15 @@ Native projects are generated with `expo prebuild --clean`; they are not source-
 
 ## Native test distribution
 
-Ruby, Bundler, Fastlane, and the Firebase App Distribution plugin are locked at the repository root. Install the mise toolchain and gems, then load the platform validation lanes from the app directory:
+Ruby, Bundler, Fastlane, and the Firebase App Distribution plugin are scoped and locked inside `apps/app`. The app-level mise configuration inherits Node and pnpm from the repository root and adds Ruby only for this app. Install the app toolchain and gems, then load the platform validation lanes:
 
 ```sh
-mise install
-gem install bundler --version 4.0.15 --no-document
-bundle install
 cd apps/app
-bundle exec fastlane lanes
+mise trust
+mise install
+mise exec -- gem install bundler --version 4.0.15 --no-document
+mise exec -- bundle install
+mise exec -- bundle exec fastlane lanes
 ```
 
 The Android and iOS child lanes must provide the following common inputs before prebuild or distribution:
