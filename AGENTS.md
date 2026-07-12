@@ -39,6 +39,8 @@
 - `memory/review-thread.md`: unresolved review thread handling and merge-readiness policy.
 - `memory/script.md`: workspace scripts, command wrappers, and script execution behavior.
 - `memory/database-design.md`: kosmo PostgreSQL/Drizzle database schema design and review context.
+- `memory/database-migrations.md`: additive와 breaking DB 변경 분류, expand/transition/contract
+  이슈·PR·배포 순서, backfill과 contract gate.
 - `memory/graphql-style.md`: GraphQL resolver structure, object refs, enum registration, Node ID, and resolver style.
 
 ## Design Docs
