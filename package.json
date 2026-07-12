@@ -10,7 +10,7 @@
     "db:test:reset": "node scripts/test-db.mjs reset",
     "db:test:up": "node scripts/test-db.mjs up",
     "db:bootstrap-local-instance": "pnpm --filter @kosmo/api db:bootstrap-local-instance",
-    "check": "pnpm --filter @kosmo/app check && pnpm --filter @kosmo/web check",
+    "check": "pnpm --recursive --parallel --if-present check",
     "dev": "node scripts/vault-run.mjs -- pnpm --recursive --parallel --if-present dev",
     "lint:eslint": "eslint --max-warnings 0 .",
     "lint:prettier": "prettier --check --ignore-unknown '**/*'",
@@ -20,8 +20,8 @@
     "test:e2e:database": "pnpm db:test:push && pnpm --filter @kosmo/web test:e2e",
     "test:fedify": "node scripts/test-db.mjs run -- pnpm test:fedify:database",
     "test:fedify:database": "pnpm db:test:push && pnpm --filter @kosmo/fedify test:unit",
-    "test:storybook": "pnpm --filter @kosmo/app build-storybook && pnpm --filter @kosmo/app test:storybook",
-    "test:unit": "pnpm --filter @kosmo/api test:unit && pnpm --filter @kosmo/app test:unit && pnpm --filter @kosmo/web test:unit"
+    "test:storybook": "pnpm --recursive --parallel --if-present build-storybook && pnpm --recursive --parallel --if-present test:storybook",
+    "test:unit": "pnpm --recursive --parallel --if-present --filter '!@kosmo/fedify' test:unit"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
