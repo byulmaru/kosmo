@@ -15,14 +15,14 @@
 - Consequences: 처리 이력은 Follow Request에서 조회할 수 없으며 request ID 재처리는 not-found다.
 - Confirmation / Follow-up: canonical 문서, OpenSpec과 DB/API 타입에 state/respondedAt이 없어야 한다.
 
-### 하나의 lifecycle service가 local/remote 처리를 소유한다
+### 하나의 profile-follow action이 local/remote 처리를 소유한다
 
 - Decision Date: 2026-07-12
 - Status: Accepted
 - Context / Problem: GraphQL과 ActivityPub listener가 각자 request row를 다루면 권한, uniqueness와 처리 결과가 drift할 수 있다.
-- Decision Outcome: 저장 mutation은 core lifecycle 함수로 집중하고 local API와 remote adapter가 이를 호출한다.
+- Decision Outcome: 저장 mutation은 core profile-follow action으로 집중하고 local API와 remote adapter가 이를 호출한다.
 - Alternatives Considered: resolver별 직접 쿼리는 적은 파일로 끝나지만 federation과 local 흐름의 불변 조건을 공유하지 못한다.
-- Consequences: lifecycle 함수는 actor role과 target 정책을 명시적으로 입력/검증하고 transaction을 소유한다.
+- Consequences: action은 actor role과 target 정책을 명시적으로 입력/검증하고 transaction을 소유한다.
 - Confirmation / Follow-up: 생성·승인·거절·취소와 중복/권한 단위 테스트를 같은 service에서 검증한다.
 
 ### Notification과 ActivityPub는 port로 연결한다

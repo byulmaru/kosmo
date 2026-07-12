@@ -5,7 +5,7 @@
 
 ## 2. PROD-272 lifecycle and API
 
-- [x] 2.1 local/remote 생성과 승인·거절·취소가 공유하는 transaction-aware lifecycle 및 integration port를 구현한다.
+- [x] 2.1 local/remote 생성과 승인·거절·취소가 공유하는 transaction-aware profile-follow action 및 integration port를 구현한다.
 - [x] 2.2 request participant loader, GraphQL Node, 자기 Profile의 incoming/outgoing 조회와 viewer state를 구현한다.
 - [x] 2.3 follow 생성 응답과 approve/reject/cancel mutations를 lifecycle에 연결한다.
 - [x] 2.4 중복, 권한, 승인/거절/취소 결과와 port 호출을 단위·로컬 통합 테스트로 검증한다.

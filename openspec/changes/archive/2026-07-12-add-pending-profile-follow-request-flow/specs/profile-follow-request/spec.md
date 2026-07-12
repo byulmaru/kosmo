@@ -83,11 +83,11 @@ Notification 저장과 ActivityPub delivery를 직접 구현하지 않아야 한
 #### Scenario: Delegate notification lifecycle
 
 - **WHEN** request가 생성되거나 삭제된다
-- **THEN** lifecycle service는 notification port를 호출한다
+- **THEN** profile-follow action은 notification port를 호출한다
 - **AND** notification row shape, 표시 상태와 delivery 정책을 Follow Request 저장 모델에 복제하지 않는다
 
 #### Scenario: Delegate ActivityPub response delivery
 
 - **WHEN** correlation metadata가 있는 remote request를 승인하거나 거절한다
-- **THEN** lifecycle service는 기존 ActivityPub Follow response port에 request와 처리 결과를 전달한다
-- **AND** HTTP signature, queue, retry 또는 activity serialization을 lifecycle service에 중복 구현하지 않는다
+- **THEN** profile-follow action은 기존 ActivityPub Follow response port에 request와 처리 결과를 전달한다
+- **AND** HTTP signature, queue, retry 또는 activity serialization을 profile-follow action에 중복 구현하지 않는다

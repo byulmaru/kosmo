@@ -187,7 +187,12 @@ export async function createE2EProfile(options: CreateE2EProfileOptions = {}) {
 }
 
 export const createE2EFollow = (options: Omit<CreateE2EFollowOptions, 'createdAt'>) =>
-  createProfileFollow(options).then(({ profileFollow }) => profileFollow);
+  createProfileFollow(options).then((result) => {
+    if (result.kind !== 'follow') {
+      throw new Error('E2E follow fixture requires an open target profile');
+    }
+    return result.profileFollow;
+  });
 
 export async function insertE2EFollowRaw(options: CreateE2EFollowOptions) {
   const createdAt = toInstant(options.createdAt);

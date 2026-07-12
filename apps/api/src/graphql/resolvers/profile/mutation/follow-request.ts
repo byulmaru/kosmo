@@ -1,4 +1,8 @@
-import { followRequestService } from '@kosmo/core/follow-request/db';
+import {
+  approveProfileFollowRequest,
+  cancelProfileFollowRequest,
+  rejectProfileFollowRequest,
+} from '@kosmo/core/services';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
 import { Profile, ProfileFollow } from '../ref';
@@ -21,13 +25,13 @@ builder.mutationField('approveFollowRequest', (t) =>
     }),
     input: { id: t.input.id({ validate: z.uuid() }) },
     resolve: async (_, { input }, ctx) => {
-      const result = await followRequestService.approve({
+      const result = await approveProfileFollowRequest({
         requestId: input.id,
         actorProfileId: ctx.session.profileId,
       });
       return {
         profileFollowRequestId: result.request.id,
-        profileFollow: result.follow,
+        profileFollow: result.profileFollow,
         profile: result.request.followerProfileId,
       };
     },
@@ -39,7 +43,7 @@ builder.mutationField('rejectFollowRequest', (t) =>
     type: FollowRequestRemovalPayload,
     input: { id: t.input.id({ validate: z.uuid() }) },
     resolve: async (_, { input }, ctx) => {
-      const request = await followRequestService.reject({
+      const request = await rejectProfileFollowRequest({
         requestId: input.id,
         actorProfileId: ctx.session.profileId,
       });
@@ -53,7 +57,7 @@ builder.mutationField('cancelFollowRequest', (t) =>
     type: FollowRequestRemovalPayload,
     input: { id: t.input.id({ validate: z.uuid() }) },
     resolve: async (_, { input }, ctx) => {
-      const request = await followRequestService.cancel({
+      const request = await cancelProfileFollowRequest({
         requestId: input.id,
         actorProfileId: ctx.session.profileId,
       });

@@ -1,22 +1,26 @@
-import type { FollowRequestService } from '@kosmo/core/follow-request';
+import { createProfileFollow } from '@kosmo/core/services';
+import type { FollowRequestActionPorts } from '@kosmo/core/services';
 
 export const materializeInboundFollowRequest = ({
-  service,
   followerProfileId,
   followeeProfileId,
   activityId,
   actorId,
   objectId,
+  ports,
 }: {
-  service: FollowRequestService;
   followerProfileId: string;
   followeeProfileId: string;
   activityId: URL;
   actorId: URL;
   objectId: URL;
+  ports?: FollowRequestActionPorts;
 }) =>
-  service.followProfile({
-    followerProfileId,
-    followeeProfileId,
-    source: { kind: 'activitypub', activityId, actorId, objectId },
-  });
+  createProfileFollow(
+    {
+      followerProfileId,
+      followeeProfileId,
+      source: { kind: 'activitypub', activityId, actorId, objectId },
+    },
+    ports,
+  );
