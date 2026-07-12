@@ -1,0 +1,183 @@
+name: Trivy Scan
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: [Docker Build]
+    branches: [main]
+    types: [completed]
+  schedule:
+    # 03:00 KST
+    - cron: '0 18 * * *'
+
+permissions:
+  actions: read
+  contents: read
+  packages: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  trivy_scan:
+    name: Trivy Scan
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: [self-hosted, ARM64]
+    env:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+    steps:
+      - name: Download Docker image reference
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: docker-image-ref
+          path: docker-image-ref
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Select Docker image reference
+        id: image
+        shell: bash
+        run: |
+          if [[ -f docker-image-ref/docker-image-ref.txt ]]; then
+            image_ref="$(< docker-image-ref/docker-image-ref.txt)"
+          else
+            image_ref="ghcr.io/${GITHUB_REPOSITORY}:latest"
+          fi
+          echo "image-ref=${image_ref}" >> "${GITHUB_OUTPUT}"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Find local Trivy
+        id: trivy-binary
+        shell: bash
+        run: |
+          trivy_dir="${RUNNER_TOOL_CACHE}/kosmo-trivy-v0.70.0/trivy-bin"
+          echo "${trivy_dir}" >> "${GITHUB_PATH}"
+          if [[ -x "${trivy_dir}/trivy" ]]; then
+            echo "installed=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "installed=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Install Trivy
+        if: steps.trivy-binary.outputs.installed != 'true'
+        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+        with:
+          version: v0.70.0
+          cache: false
+          path: ${{ runner.tool_cache }}/kosmo-trivy-v0.70.0
+
+      - name: Run Trivy image scan
+        id: trivy
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_PLATFORM: linux/arm64
+        with:
+          image-ref: ${{ steps.image.outputs.image-ref }}
+          format: json
+          output: trivy.json
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: os,library
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          cache: false
+          cache-dir: ${{ runner.tool_cache }}/kosmo-trivy-cache
+          skip-setup-trivy: true
+
+      - name: Upload Trivy report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: trivy-report
+          path: trivy.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Notify Slack about Trivy findings
+        if: always() && env.SLACK_WEBHOOK_URL != ''
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          TRIVY_IMAGE_REF: ${{ steps.image.outputs.image-ref }}
+        with:
+          script: |
+            const fs = require("fs");
+
+            const reportPath = "trivy.json";
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const imageRef = process.env.TRIVY_IMAGE_REF;
+
+            if (!fs.existsSync(reportPath)) {
+              core.info("No Trivy report was produced. Skipping Slack notification.");
+              return;
+            }
+
+            const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+            const vulnerabilities = (report.Results ?? [])
+              .flatMap((result) => result.Vulnerabilities ?? []);
+
+            if (vulnerabilities.length === 0) {
+              core.info("No Trivy findings detected. Skipping Slack notification.");
+              return;
+            }
+
+            const counts = vulnerabilities.reduce((acc, vulnerability) => {
+              const severity = vulnerability.Severity ?? "UNKNOWN";
+              acc[severity] = (acc[severity] ?? 0) + 1;
+              return acc;
+            }, {});
+
+            const topFindings = vulnerabilities.slice(0, 10).map((vulnerability, index) => {
+              const severity = vulnerability.Severity ?? "UNKNOWN";
+              const id = vulnerability.VulnerabilityID ?? "unknown vulnerability";
+              const packageName = vulnerability.PkgName ?? "unknown package";
+              const installed = vulnerability.InstalledVersion ?? "unknown";
+              const fixed = vulnerability.FixedVersion ? ` -> ${vulnerability.FixedVersion}` : "";
+              return `${index + 1}. [${severity}] ${id} ${packageName} ${installed}${fixed}`;
+            });
+
+            const omitted = vulnerabilities.length > topFindings.length
+              ? `\n...and ${vulnerabilities.length - topFindings.length} more finding(s).`
+              : "";
+
+            const sourceRef = context.eventName === "workflow_run"
+              ? context.payload.workflow_run.head_branch
+              : context.ref.replace("refs/heads/", "");
+
+            const payload = {
+              text: [
+                "*Trivy image issue detected*",
+                `Repository: \`${context.repo.owner}/${context.repo.repo}\``,
+                `Image: \`${imageRef}\``,
+                `Event: \`${context.eventName}\``,
+                `Branch/Ref: \`${sourceRef}\``,
+                `Findings: CRITICAL ${counts.CRITICAL ?? 0}, HIGH ${counts.HIGH ?? 0}`,
+                "",
+                topFindings.join("\n") + omitted,
+                "",
+                `Run: ${runUrl}`,
+              ].join("\n"),
+            };
+
+            const response = await fetch(process.env.SLACK_WEBHOOK_URL, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) {
+              throw new Error(`Slack notification failed: ${response.status} ${await response.text()}`);
+            }
+
+      - name: Fail when Trivy execution failed
+        if: steps.trivy.outcome == 'failure'
+        run: exit 1
