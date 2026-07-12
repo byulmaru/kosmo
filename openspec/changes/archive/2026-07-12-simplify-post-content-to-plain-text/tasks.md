@@ -11,11 +11,11 @@
 
 ## 2. Atomic Plain Text cutover (PROD-267)
 
-- [ ] 2.1 Rename `spoiler_text` to `content_warning`, remove `body_json` and `body_html` from the Drizzle schema, generate the coordinated destructive migration without modifying `body_text`, and add migration preservation coverage.
-- [ ] 2.2 Replace TipTap document validation in `createPost` with the shared Plain Text schema and store `CreatePostInput.bodyText` directly while preserving transaction, ownership, revision, visibility, and payload behavior.
-- [ ] 2.3 Remove the `TipTapDocument` scalar and `PostContent.bodyJson`, regenerate the API schema, and extend API contract unit coverage.
-- [ ] 2.4 Submit and render Plain Text directly in the Relay app, remove manual document types/custom scalar mapping, and keep connection membership deferred to subscription.
-- [ ] 2.5 Remove the core/app TipTap adapters, tests, exports, `@tiptap/*` dependencies, and lockfile entries with pnpm.
-- [ ] 2.6 Update Web fixtures and E2E for Plain Text creation, multi-line preservation, and empty/over-500-character rejection.
-- [ ] 2.7 Re-scope Linear PROD-259 to safe canonical Plain Text projection and update canonical OpenSpec/domain/project memory.
-- [ ] 2.8 Verify no live TipTap/ProseMirror contract remains and run the full migration, API/app/core, Relay, TypeScript, Storybook, Web E2E, lint/format and OpenSpec strict suite.
+- [x] 2.1 Rename `spoiler_text` to `content_warning`, remove `body_json` and `body_html` from the Drizzle schema, generate the coordinated destructive migration without modifying `body_text`, and add migration preservation coverage.
+- [x] 2.2 Replace TipTap document validation in `createPost` with the shared Plain Text schema and store `CreatePostInput.bodyText` directly while preserving transaction, ownership, revision, visibility, and payload behavior.
+- [x] 2.3 Remove the `TipTapDocument` scalar and `PostContent.bodyJson`, regenerate the API schema, and extend API contract unit coverage.
+- [x] 2.4 Submit and render Plain Text directly in the Relay app, remove manual document types/custom scalar mapping, and keep connection membership deferred to subscription.
+- [x] 2.5 Remove the core/app TipTap adapters, tests, exports, `@tiptap/*` dependencies, and lockfile entries with pnpm.
+- [x] 2.6 Update Web fixtures and E2E for Plain Text creation, multi-line preservation, and empty/over-500-character rejection.
+- [x] 2.7 Re-scope Linear PROD-259 to safe canonical Plain Text projection and update canonical OpenSpec/domain/project memory.
+- [x] 2.8 Verify no live TipTap/ProseMirror contract remains and run the full migration, API/app/core, Relay, TypeScript, Storybook, Web E2E, lint/format and OpenSpec strict suite.

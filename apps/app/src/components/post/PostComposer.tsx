@@ -8,7 +8,6 @@ import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { TextArea } from '@/components/ui/TextField';
-import { createTipTapDocumentFromPlainText } from '@/lib/tiptap';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import type { TextInput } from 'react-native';
@@ -88,7 +87,7 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
     }
     setError(null);
     commit({
-      variables: { input: { content: createTipTapDocumentFromPlainText(body), visibility } },
+      variables: { input: { bodyText, visibility } },
       onCompleted: (_response, errors) => {
         if (errors?.length) {
           setError('게시글을 작성하지 못했습니다.');

@@ -8,7 +8,6 @@ import ValidationPlugin from '@pothos/plugin-validation';
 import WithInputPlugin from '@pothos/plugin-with-input';
 import * as R from 'remeda';
 import { globalIdMap } from './utils';
-import type { TipTapDocument } from '@kosmo/core/tiptap';
 import type { SessionContext, SessionWithProfileContext, UserContext } from '@/context';
 
 export const builder = new SchemaBuilder<{
@@ -28,10 +27,6 @@ export const builder = new SchemaBuilder<{
     DateTime: {
       Input: Temporal.Instant;
       Output: Temporal.Instant;
-    };
-    TipTapDocument: {
-      Input: TipTapDocument;
-      Output: TipTapDocument;
     };
   };
 }>({
@@ -98,10 +93,4 @@ builder.scalarType('DateTime', {
 
     throw new Error('Invalid DateTime value');
   },
-});
-
-builder.scalarType('TipTapDocument', {
-  description: 'TipTap JSON document',
-  serialize: (value) => value,
-  parseValue: (value) => value as TipTapDocument,
 });
