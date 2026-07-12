@@ -1,6 +1,0 @@
-aws_region         = "ap-northeast-2"
-kubernetes_version = "1.36"
-
-tags = {
-  Service = "kosmo"
-}
