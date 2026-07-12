@@ -20,6 +20,7 @@ export const createProfileFollow = async ({
       .from(Profiles)
       .where(and(eq(Profiles.id, followeeProfileId), eq(Profiles.state, ProfileState.ACTIVE)))
       .limit(1)
+      .for('update')
       .then(firstOrThrowWith(() => new NotFoundError('Profile not found')));
 
     if (followerProfileId === target.id) {

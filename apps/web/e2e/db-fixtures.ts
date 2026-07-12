@@ -186,13 +186,8 @@ export async function createE2EProfile(options: CreateE2EProfileOptions = {}) {
     .then(firstOrThrow);
 }
 
-export async function createE2EFollow(options: CreateE2EFollowOptions) {
-  if (options.createdAt) {
-    throw new Error('Use insertE2EFollowRaw when a custom createdAt is required.');
-  }
-
-  return (await createProfileFollow(options)).profileFollow;
-}
+export const createE2EFollow = (options: Omit<CreateE2EFollowOptions, 'createdAt'>) =>
+  createProfileFollow(options).then(({ profileFollow }) => profileFollow);
 
 export async function insertE2EFollowRaw(options: CreateE2EFollowOptions) {
   const createdAt = toInstant(options.createdAt);
