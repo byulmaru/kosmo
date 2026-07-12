@@ -27,7 +27,7 @@ concurrency:
 
 env:
   AWS_REGION: ap-northeast-2
-  TF_IN_AUTOMATION: "true"
+  TF_IN_AUTOMATION: 'true'
   TF_PLAN_ARTIFACT: terraform-plan
   TF_ROOT: apps/terraform
   TF_STATE_BUCKET: byulmaru-terraform-state
@@ -62,7 +62,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
-          terraform_version: "1.15.6"
+          terraform_version: '1.15.6'
 
       - name: Terraform init
         working-directory: ${{ env.TF_ROOT }}
@@ -200,7 +200,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
-          terraform_version: "1.15.6"
+          terraform_version: '1.15.6'
 
       - name: Setup AWS CLI
         uses: jdx/mise-action@e6a8b3978addb5a52f2b4cd9d91eafa7f0ab959d # v4.2.0
