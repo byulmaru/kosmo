@@ -1,9 +1,9 @@
 import { AccountProfiles, db, Instances, Profiles, TableDiscriminator } from '@kosmo/core/db';
-import { AccountProfileRole, ProfileFollowPolicy, ProfileOrigin } from '@kosmo/core/enums';
+import { AccountProfileRole, InstanceKind, ProfileFollowPolicy } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { createObjectRef } from '@/graphql/utils';
-import { formatRelativeHandle, getProfileOrigin } from '@/profile/identity';
+import { formatRelativeHandle } from '@/profile/identity';
 import { visibleProfileWhere } from './access/visibility';
 import { profileFollowByIdLoader } from './loader/follow';
 import { profileInstanceByIdLoader } from './loader/instance';
@@ -25,11 +25,15 @@ Profile.implement({
   fields: (t) => ({
     handle: t.exposeString('handle'),
     origin: t.field({
-      type: ProfileOrigin,
-      resolve: async (profile) => {
-        const configuredLocalInstance = await resolveConfiguredLocalInstance();
+      type: InstanceKind,
+      resolve: async (profile, _, ctx) => {
+        const profileInstance = await profileInstanceByIdLoader(ctx).load(profile.instanceId);
 
-        return getProfileOrigin(profile, configuredLocalInstance);
+        if (!profileInstance) {
+          throw new Error('Profile instance is required to resolve profile origin');
+        }
+
+        return profileInstance.kind;
       },
     }),
     relativeHandle: t.string({

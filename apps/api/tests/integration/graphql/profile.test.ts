@@ -176,6 +176,37 @@ describe('GraphQL remote profile boundary', () => {
     });
   });
 
+  test('reports the owning instance kind for a profile outside the configured local instance', async () => {
+    const otherLocalInstance = await db
+      .insert(Instances)
+      .values({
+        canonicalOrigin: 'https://other-local.example',
+        domain: 'other-local.example',
+        kind: InstanceKind.LOCAL,
+        state: InstanceState.ACTIVE,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const profile = await createProfile({
+      handle: 'other-local',
+      instanceId: otherLocalInstance.id,
+    });
+
+    const result = await requestGraphQL<{
+      node: { origin: string } | null;
+    }>(
+      `query OtherLocalProfileOrigin($id: ID!) {
+        node(id: $id) {
+          ... on Profile { origin }
+        }
+      }`,
+      { id: profile.id },
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.node?.origin, 'LOCAL');
+  });
+
   test('hides remote follow graph data even when cross-instance rows exist', async () => {
     const auth = await createAuthenticatedSession();
     const remoteInstance = await createRemoteInstance();

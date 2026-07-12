@@ -85,12 +85,6 @@ export const ProfileFollowPolicy = {
 } as const;
 export type ProfileFollowPolicy = keyof typeof ProfileFollowPolicy;
 
-export const ProfileOrigin = {
-  LOCAL: 'LOCAL',
-  ACTIVITYPUB: 'ACTIVITYPUB',
-} as const;
-export type ProfileOrigin = keyof typeof ProfileOrigin;
-
 export const ProfileState = {
   ACTIVE: 'ACTIVE',
   DISABLED: 'DISABLED',

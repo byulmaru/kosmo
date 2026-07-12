@@ -12,5 +12,5 @@ createEnumRef('AccountProfileRole');
 createEnumRef('PostState');
 createEnumRef('PostVisibility');
 createEnumRef('ProfileFollowPolicy');
-createEnumRef('ProfileOrigin');
+createEnumRef('InstanceKind');
 createEnumRef('ProfileState');

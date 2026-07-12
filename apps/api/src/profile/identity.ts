@@ -1,9 +1,4 @@
-import {
-  getProfileOrigin,
-  isConfiguredLocalProfile,
-  parseProfileHandle,
-} from '@kosmo/core/profile';
-import type { ParsedProfileHandle } from '@kosmo/core/profile';
+import { isConfiguredLocalProfile } from '@kosmo/core/profile';
 
 type ProfileInstanceRef = {
   instanceId: string;
@@ -37,6 +32,3 @@ export const formatRelativeHandle = (
 
   return `@${profile.handle}@${profileInstance.domain}`;
 };
-
-export { getProfileOrigin, isConfiguredLocalProfile, parseProfileHandle };
-export type { ParsedProfileHandle };

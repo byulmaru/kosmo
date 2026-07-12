@@ -1,5 +1,4 @@
 import { domainToASCII } from 'node:url';
-import { ProfileOrigin } from './enums';
 import { normalizeHandle } from './utils';
 
 type InstanceRef = {
@@ -105,11 +104,3 @@ export const isConfiguredLocalProfile = (
   profile: ProfileInstanceRef,
   configuredLocalInstance: InstanceRef,
 ) => profile.instanceId === configuredLocalInstance.id;
-
-export const getProfileOrigin = (
-  profile: ProfileInstanceRef,
-  configuredLocalInstance: InstanceRef,
-): ProfileOrigin =>
-  isConfiguredLocalProfile(profile, configuredLocalInstance)
-    ? ProfileOrigin.LOCAL
-    : ProfileOrigin.ACTIVITYPUB;
