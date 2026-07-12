@@ -138,14 +138,22 @@ test('disableProfile은 profile lifecycle과 active session 정리를 소유한�
       followerProfileId: followee.id,
       followeeProfileId: follower.id,
     });
+    await pg`create sequence profile_disable_attempts`;
     await pg`
       create function delay_profile_disable() returns trigger
-      language plpgsql as $$
+      language plpgsql as $function$
+      declare
+        attempt bigint;
       begin
-        perform pg_sleep(0.1);
+        attempt := nextval('profile_disable_attempts');
+        if attempt <= 2 then
+          while (select last_value from profile_disable_attempts) < 2 loop
+            perform pg_sleep(0.01);
+          end loop;
+        end if;
         return new;
       end
-      $$
+      $function$
     `;
     await pg`
       create trigger delay_profile_disable
@@ -155,13 +163,20 @@ test('disableProfile은 profile lifecycle과 active session 정리를 소유한�
       execute function delay_profile_disable()
     `;
 
+    let disableAttempts: number | undefined;
     try {
       await Promise.all([disableProfile(follower.id), disableProfile(followee.id)]);
+      const [{ attempts }] = await pg<
+        { attempts: number }[]
+      >`select last_value::integer as attempts from profile_disable_attempts`;
+      disableAttempts = attempts;
     } finally {
       await pg`drop trigger delay_profile_disable on profile`;
       await pg`drop function delay_profile_disable()`;
+      await pg`drop sequence profile_disable_attempts`;
     }
 
+    assert.equal(disableAttempts, 3);
     const concurrentlyDisabled = await db
       .select()
       .from(Profiles)
