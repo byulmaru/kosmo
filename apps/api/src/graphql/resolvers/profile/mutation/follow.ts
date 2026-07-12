@@ -1,13 +1,15 @@
 import { ConflictError } from '@kosmo/core/error';
-import { createProfileFollow } from '@kosmo/core/services';
+import { followProfile } from '@kosmo/core/services';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
-import { ProfileFollow } from '../ref';
+import { Profile, ProfileFollow } from '../ref';
 
 builder.mutationField('followProfile', (t) =>
   t.withAuth({ usingProfile: true }).fieldWithInput({
     type: builder.simpleObject('FollowProfilePayload', {
       fields: (field) => ({
+        followeeProfile: field.field({ type: Profile }),
+        followerProfile: field.field({ type: Profile }),
         profileFollow: field.field({ type: ProfileFollow }),
       }),
     }),
@@ -15,7 +17,7 @@ builder.mutationField('followProfile', (t) =>
       id: t.input.id({ validate: z.uuid() }),
     },
     resolve: async (_, { input }, ctx) => {
-      const { profileFollow } = await createProfileFollow({
+      return followProfile({
         followerProfileId: ctx.session.profileId,
         followeeProfileId: input.id,
       }).catch((error: unknown) => {
@@ -24,8 +26,6 @@ builder.mutationField('followProfile', (t) =>
         }
         throw error;
       });
-
-      return { profileFollow };
     },
   }),
 );

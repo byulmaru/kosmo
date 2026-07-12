@@ -20,7 +20,7 @@ import {
   SessionState,
 } from '../enums';
 import { disableProfile } from './profile';
-import { createProfileFollow } from './profile-follow';
+import { followProfile } from './profile-follow';
 
 after(async () => pg.end());
 
@@ -85,11 +85,11 @@ test('disableProfile은 profile lifecycle과 active session 정리를 소유한�
     .then(firstOrThrow);
 
   try {
-    const outgoing = await createProfileFollow({
+    const outgoing = await followProfile({
       followerProfileId: profile.id,
       followeeProfileId: followee.id,
     });
-    const incoming = await createProfileFollow({
+    const incoming = await followProfile({
       followerProfileId: follower.id,
       followeeProfileId: profile.id,
     });
@@ -130,11 +130,11 @@ test('disableProfile은 profile lifecycle과 active session 정리를 소유한�
       0,
     );
 
-    await createProfileFollow({
+    await followProfile({
       followerProfileId: follower.id,
       followeeProfileId: followee.id,
     });
-    await createProfileFollow({
+    await followProfile({
       followerProfileId: followee.id,
       followeeProfileId: follower.id,
     });

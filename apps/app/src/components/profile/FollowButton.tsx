@@ -35,10 +35,15 @@ const followProfileMutation = graphql`
     followProfile(input: { id: $id }) {
       profileFollow {
         id
-        followee {
-          followersCount
-          ...FollowButton_profile
-        }
+      }
+      followerProfile {
+        id
+        followingCount
+      }
+      followeeProfile {
+        id
+        followersCount
+        ...FollowButton_profile
       }
     }
   }
@@ -48,7 +53,12 @@ const unfollowProfileMutation = graphql`
   mutation FollowButtonUnfollowProfileMutation($connections: [ID!]!, $id: ID!) {
     unfollowProfile(input: { id: $id }) {
       profileFollowId @deleteEdge(connections: $connections)
-      profile {
+      followerProfile {
+        id
+        followingCount
+      }
+      followeeProfile {
+        id
         followersCount
         ...FollowButton_profile
       }

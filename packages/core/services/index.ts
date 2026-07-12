@@ -1,2 +1,2 @@
 export { disableProfile } from './profile';
-export { createProfileFollow, unfollowProfile } from './profile-follow';
+export { followProfile, unfollowProfile } from './profile-follow';

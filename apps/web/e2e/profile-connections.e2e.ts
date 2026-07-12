@@ -29,6 +29,8 @@ const mutateFollow = async (
             mutation E2EProfileFollow($id: ID!) {
               ${operation}(input: { id: $id }) {
                 ${operation === 'followProfile' ? 'profileFollow { id }' : 'profileFollowId'}
+                followerProfile { id followingCount }
+                followeeProfile { id followersCount }
               }
             }
           `,
@@ -56,6 +58,16 @@ test('동시 follow와 unfollow는 저장 count를 한 번만 갱신한다', asy
     mutateFollow(page, 'followProfile', target.id),
   ]);
   expect(followResponses.every((response) => !response.errors)).toBe(true);
+  for (const response of followResponses) {
+    expect(response.data.followProfile.followerProfile).toMatchObject({
+      followingCount: 1,
+      id: viewer.profile!.id,
+    });
+    expect(response.data.followProfile.followeeProfile).toMatchObject({
+      followersCount: 1,
+      id: target.id,
+    });
+  }
 
   const followedViewer = await db
     .select()
@@ -75,6 +87,16 @@ test('동시 follow와 unfollow는 저장 count를 한 번만 갱신한다', asy
     mutateFollow(page, 'unfollowProfile', target.id),
   ]);
   expect(unfollowResponses.every((response) => !response.errors)).toBe(true);
+  for (const response of unfollowResponses) {
+    expect(response.data.unfollowProfile.followerProfile).toMatchObject({
+      followingCount: 0,
+      id: viewer.profile!.id,
+    });
+    expect(response.data.unfollowProfile.followeeProfile).toMatchObject({
+      followersCount: 0,
+      id: target.id,
+    });
+  }
 
   const unfollowedViewer = await db
     .select()

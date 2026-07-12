@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db, first, firstOrThrowWith, ProfileFollows, Profiles } from '../db';
 import { ProfileFollowPolicy, ProfileState } from '../enums';
 import { ConflictError, NotFoundError } from '../error';
@@ -11,10 +11,15 @@ type ProfileFollowInput = {
   followeeProfileId: string;
 };
 
-export const createProfileFollow = async ({
+export const followProfile = async ({
   followerProfileId,
   followeeProfileId,
-}: ProfileFollowInput): Promise<{ created: boolean; profileFollow: ProfileFollowRow }> =>
+}: ProfileFollowInput): Promise<{
+  created: boolean;
+  followeeProfile: ProfileRow;
+  followerProfile: ProfileRow;
+  profileFollow: ProfileFollowRow;
+}> =>
   db.transaction(async (tx) => {
     const target = await tx
       .select({ followPolicy: Profiles.followPolicy, id: Profiles.id })
@@ -39,51 +44,68 @@ export const createProfileFollow = async ({
       .limit(1)
       .then(first);
 
+    let result: { created: boolean; profileFollow: ProfileFollowRow };
     if (existing) {
-      return { created: false, profileFollow: existing };
+      result = { created: false, profileFollow: existing };
+    } else {
+      if (target.followPolicy !== ProfileFollowPolicy.OPEN) {
+        throw new ConflictError({ message: 'Profile requires follow request' });
+      }
+
+      const inserted = await tx
+        .insert(ProfileFollows)
+        .values({ followerProfileId, followeeProfileId: target.id })
+        .onConflictDoNothing()
+        .returning()
+        .then(first);
+
+      if (inserted) {
+        await tx
+          .update(Profiles)
+          .set({ followingCount: sql`${Profiles.followingCount} + 1` })
+          .where(eq(Profiles.id, followerProfileId));
+        await tx
+          .update(Profiles)
+          .set({ followersCount: sql`${Profiles.followersCount} + 1` })
+          .where(eq(Profiles.id, target.id));
+        result = { created: true, profileFollow: inserted };
+      } else {
+        const concurrent = await tx
+          .select()
+          .from(ProfileFollows)
+          .where(
+            and(
+              eq(ProfileFollows.followerProfileId, followerProfileId),
+              eq(ProfileFollows.followeeProfileId, target.id),
+            ),
+          )
+          .limit(1)
+          .then(firstOrThrowWith(() => new ConflictError({ message: 'Profile follow failed' })));
+        result = { created: false, profileFollow: concurrent };
+      }
     }
-    if (target.followPolicy !== ProfileFollowPolicy.OPEN) {
-      throw new ConflictError({ message: 'Profile requires follow request' });
+
+    const profiles = await tx
+      .select()
+      .from(Profiles)
+      .where(inArray(Profiles.id, [followerProfileId, target.id]));
+    const followerProfile = profiles.find(({ id }) => id === followerProfileId);
+    const followeeProfile = profiles.find(({ id }) => id === target.id);
+    if (!followerProfile || !followeeProfile) {
+      throw new NotFoundError('Profile not found');
     }
 
-    const inserted = await tx
-      .insert(ProfileFollows)
-      .values({ followerProfileId, followeeProfileId: target.id })
-      .onConflictDoNothing()
-      .returning()
-      .then(first);
-
-    if (!inserted) {
-      const concurrent = await tx
-        .select()
-        .from(ProfileFollows)
-        .where(
-          and(
-            eq(ProfileFollows.followerProfileId, followerProfileId),
-            eq(ProfileFollows.followeeProfileId, target.id),
-          ),
-        )
-        .limit(1)
-        .then(firstOrThrowWith(() => new ConflictError({ message: 'Profile follow failed' })));
-      return { created: false, profileFollow: concurrent };
-    }
-
-    await tx
-      .update(Profiles)
-      .set({ followingCount: sql`${Profiles.followingCount} + 1` })
-      .where(eq(Profiles.id, followerProfileId));
-    await tx
-      .update(Profiles)
-      .set({ followersCount: sql`${Profiles.followersCount} + 1` })
-      .where(eq(Profiles.id, target.id));
-
-    return { created: true, profileFollow: inserted };
+    return { ...result, followeeProfile, followerProfile };
   });
 
 export const unfollowProfile = async ({
   followerProfileId,
   followeeProfileId,
-}: ProfileFollowInput): Promise<{ profile: ProfileRow; profileFollowId: string | null }> =>
+}: ProfileFollowInput): Promise<{
+  followeeProfile: ProfileRow;
+  followerProfile: ProfileRow;
+  profileFollowId: string | null;
+}> =>
   db.transaction(async (tx) => {
     const target = await tx
       .select()
@@ -114,5 +136,15 @@ export const unfollowProfile = async ({
         .where(eq(Profiles.id, target.id));
     }
 
-    return { profile: target, profileFollowId: deleted?.id ?? null };
+    const profiles = await tx
+      .select()
+      .from(Profiles)
+      .where(inArray(Profiles.id, [followerProfileId, target.id]));
+    const followerProfile = profiles.find(({ id }) => id === followerProfileId);
+    const followeeProfile = profiles.find(({ id }) => id === target.id);
+    if (!followerProfile || !followeeProfile) {
+      throw new NotFoundError('Profile not found');
+    }
+
+    return { followeeProfile, followerProfile, profileFollowId: deleted?.id ?? null };
   });

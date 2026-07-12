@@ -5,7 +5,7 @@ import { db, firstOrThrow, Instances, pg, ProfileFollows, Profiles } from '../db
 import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
 import { ConflictError } from '../error';
 import { disableProfile } from './profile';
-import { createProfileFollow, unfollowProfile } from './profile-follow';
+import { followProfile, unfollowProfile } from './profile-follow';
 
 const instanceIds: string[] = [];
 const profileIds: string[] = [];
@@ -65,12 +65,16 @@ test('follow action은 관계와 저장 count를 idempotent하게 갱신한다',
   const followee = await createProfile();
 
   const results = await Promise.all([
-    createProfileFollow({ followerProfileId: follower.id, followeeProfileId: followee.id }),
-    createProfileFollow({ followerProfileId: follower.id, followeeProfileId: followee.id }),
+    followProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
+    followProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
   ]);
 
   assert.equal(results.filter(({ created }) => created).length, 1);
   assert.equal(results[0].profileFollow.id, results[1].profileFollow.id);
+  assert.equal(results[0].followerProfile.followingCount, 1);
+  assert.equal(results[0].followeeProfile.followersCount, 1);
+  assert.equal(results[1].followerProfile.followingCount, 1);
+  assert.equal(results[1].followeeProfile.followersCount, 1);
   assert.equal((await readProfile(follower.id)).followingCount, 1);
   assert.equal((await readProfile(followee.id)).followersCount, 1);
 });
@@ -80,7 +84,7 @@ test('follow action의 도메인 오류는 GraphQL field 이름을 포함하지 
   const followee = await createProfile(ProfileFollowPolicy.APPROVAL_REQUIRED);
 
   await assert.rejects(
-    createProfileFollow({ followerProfileId: follower.id, followeeProfileId: followee.id }),
+    followProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
     (error: unknown) => error instanceof ConflictError && error.field === undefined,
   );
 });
@@ -88,7 +92,7 @@ test('follow action의 도메인 오류는 GraphQL field 이름을 포함하지 
 test('unfollow action은 대상 조회, 관계 삭제와 count 감소를 함께 소유한다', async () => {
   const follower = await createProfile();
   const followee = await createProfile();
-  await createProfileFollow({ followerProfileId: follower.id, followeeProfileId: followee.id });
+  await followProfile({ followerProfileId: follower.id, followeeProfileId: followee.id });
 
   const deleted = await unfollowProfile({
     followerProfileId: follower.id,
@@ -100,13 +104,15 @@ test('unfollow action은 대상 조회, 관계 삭제와 count 감소를 함께 
   });
 
   assert.ok(deleted.profileFollowId);
-  assert.equal(deleted.profile.id, followee.id);
+  assert.equal(deleted.followerProfile.followingCount, 0);
+  assert.equal(deleted.followeeProfile.followersCount, 0);
   assert.equal(duplicate.profileFollowId, null);
-  assert.equal(duplicate.profile.id, followee.id);
+  assert.equal(duplicate.followerProfile.followingCount, 0);
+  assert.equal(duplicate.followeeProfile.followersCount, 0);
   assert.equal((await readProfile(follower.id)).followingCount, 0);
   assert.equal((await readProfile(followee.id)).followersCount, 0);
 
   await disableProfile(followee.id);
-  assert.equal(deleted.profile.state, ProfileState.ACTIVE);
+  assert.equal(deleted.followeeProfile.state, ProfileState.ACTIVE);
   assert.equal((await readProfile(followee.id)).state, ProfileState.DISABLED);
 });

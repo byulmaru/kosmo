@@ -314,10 +314,14 @@ export const UnfollowRemovesCachedConnectionEdge: Story = {
     relay: {
       mutationResponse: {
         unfollowProfile: {
-          profile: {
+          followeeProfile: {
             ...followed,
             followersCount: followed.followersCount - 1,
             viewerState: { follow: null, isSelf: false },
+          },
+          followerProfile: {
+            ...followingContent,
+            followingCount: followingContent.followingCount - 1,
           },
           profileFollowId: 'following-edge-0',
         },

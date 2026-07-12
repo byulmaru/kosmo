@@ -7,7 +7,8 @@ builder.mutationField('unfollowProfile', (t) =>
   t.withAuth({ usingProfile: true }).fieldWithInput({
     type: builder.simpleObject('UnfollowProfilePayload', {
       fields: (field) => ({
-        profile: field.field({ type: Profile }),
+        followeeProfile: field.field({ type: Profile }),
+        followerProfile: field.field({ type: Profile }),
         profileFollowId: field.id({ nullable: true }),
       }),
     }),

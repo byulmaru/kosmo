@@ -23,7 +23,7 @@ import {
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
-import { createProfileFollow } from '@kosmo/core/services';
+import { followProfile } from '@kosmo/core/services';
 import { eq } from 'drizzle-orm';
 import { Temporal } from 'temporal-polyfill';
 import type { BrowserContext } from '@playwright/test';
@@ -187,7 +187,7 @@ export async function createE2EProfile(options: CreateE2EProfileOptions = {}) {
 }
 
 export const createE2EFollow = (options: Omit<CreateE2EFollowOptions, 'createdAt'>) =>
-  createProfileFollow(options).then(({ profileFollow }) => profileFollow);
+  followProfile(options).then(({ profileFollow }) => profileFollow);
 
 export async function insertE2EFollowRaw(options: CreateE2EFollowOptions) {
   const createdAt = toInstant(options.createdAt);
