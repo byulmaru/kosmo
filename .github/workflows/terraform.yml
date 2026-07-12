@@ -22,7 +22,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: terraform-kosmo-firebase-state
+  group: terraform-kosmo-state
   cancel-in-progress: false
 
 env:
