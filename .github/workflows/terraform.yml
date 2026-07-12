@@ -74,8 +74,6 @@ jobs:
 
       - name: Terraform plan
         working-directory: ${{ env.TF_ROOT }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: terraform plan -input=false -out=terraform.tfplan
 
       - name: Render Terraform plan
@@ -278,8 +276,6 @@ jobs:
 
       - name: Terraform apply saved plan
         working-directory: ${{ env.TF_ROOT }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 

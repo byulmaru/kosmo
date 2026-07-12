@@ -34,10 +34,6 @@ provider "google-beta" {
   user_project_override = false
 }
 
-provider "github" {
-  owner = local.github_owner
-}
-
 data "google_project" "firebase" {
   provider   = google-beta
   project_id = local.firebase_project_id
@@ -203,66 +199,4 @@ resource "google_service_account_iam_member" "terraform" {
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_actions.name}/attribute.credential/terraform"
 
   depends_on = [google_iam_workload_identity_pool_provider.terraform]
-}
-
-resource "github_repository_environment" "native_distribution" {
-  repository        = local.github_repository
-  environment       = local.environment
-  can_admins_bypass = false
-
-  deployment_branch_policy {
-    protected_branches     = false
-    custom_branch_policies = true
-  }
-}
-
-resource "github_repository_environment_deployment_policy" "main" {
-  repository     = local.github_repository
-  environment    = github_repository_environment.native_distribution.environment
-  branch_pattern = "main"
-}
-
-resource "github_repository_environment" "terraform_apply" {
-  repository        = local.github_repository
-  environment       = local.terraform_apply_environment
-  can_admins_bypass = false
-
-  deployment_branch_policy {
-    protected_branches     = false
-    custom_branch_policies = true
-  }
-}
-
-resource "github_repository_environment_deployment_policy" "terraform_apply" {
-  repository     = local.github_repository
-  environment    = github_repository_environment.terraform_apply.environment
-  branch_pattern = "main"
-}
-
-resource "github_actions_environment_variable" "native_distribution" {
-  for_each = {
-    FIREBASE_ANDROID_APP_ID        = google_firebase_android_app.kosmo.app_id
-    FIREBASE_IOS_APP_ID            = google_firebase_apple_app.kosmo.app_id
-    FIREBASE_PROJECT_ID            = local.firebase_project_id
-    FIREBASE_TESTER_GROUP          = local.distribution_group
-    GCP_SERVICE_ACCOUNT            = google_service_account.app_distribution.email
-    GCP_WORKLOAD_IDENTITY_PROVIDER = google_iam_workload_identity_pool_provider.kosmo.name
-  }
-
-  repository    = local.github_repository
-  environment   = github_repository_environment.native_distribution.environment
-  variable_name = each.key
-  value         = each.value
-}
-
-resource "github_actions_variable" "terraform" {
-  for_each = {
-    AWS_TERRAFORM_ROLE_ARN        = "arn:aws:iam::822638974464:role/github-actions-kosmo-terraform"
-    GCP_TERRAFORM_PROVIDER        = google_iam_workload_identity_pool_provider.terraform.name
-    GCP_TERRAFORM_SERVICE_ACCOUNT = google_service_account.terraform.email
-  }
-
-  repository    = local.github_repository
-  variable_name = each.key
-  value         = each.value
 }
