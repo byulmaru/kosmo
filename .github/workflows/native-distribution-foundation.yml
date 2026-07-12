@@ -1,0 +1,161 @@
+name: Native Distribution Foundation
+
+on:
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Fastlane foundation
+    runs-on: [self-hosted]
+    env:
+      FIREBASE_ANDROID_APP_ID: 1:000000000000:android:0000000000000000
+      FIREBASE_IOS_APP_ID: 1:000000000000:ios:0000000000000000
+      FIREBASE_TESTER_GROUP: native-testers
+      KOSMO_ACTIONS_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      KOSMO_MARKETING_VERSION: 0.0.0-smoke
+      KOSMO_RELEASE_NOTES: Configuration validation only; no release is uploaded.
+      KOSMO_SOURCE_COMMIT: ${{ github.sha }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up mise
+        uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        with:
+          cache: false
+
+      - name: Set up locked Bundler
+        run: |
+          gem install bundler --version 4.0.15 --no-document
+          echo "BUNDLE_PATH=${RUNNER_TEMP}/native-distribution-bundle" >> "${GITHUB_ENV}"
+
+      - name: Install Fastlane dependencies
+        run: bundle install --jobs 4 --retry 3
+
+      - name: Set smoke build numbers
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ((GITHUB_RUN_ATTEMPT >= 100)); then
+            echo "::error::GITHUB_RUN_ATTEMPT must remain below 100"
+            exit 1
+          fi
+
+          build_number=$((GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT))
+          {
+            echo "KOSMO_ANDROID_BUILD_NUMBER=${build_number}"
+            echo "KOSMO_IOS_BUILD_NUMBER=${build_number}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Load Android and iOS validation lanes
+        working-directory: apps/app
+        env:
+          FL_REPORT_PATH: ${{ runner.temp }}
+          HOME: ${{ runner.temp }}/native-distribution-home
+        run: |
+          bundle exec fastlane lanes
+          bundle exec fastlane android validate_distribution_config
+          bundle exec fastlane ios validate_distribution_config
+
+      - name: Remove Fastlane temporary files
+        if: always()
+        run: |
+          rm -rf -- "${RUNNER_TEMP}/native-distribution-home/.fastlane"
+          rm -f -- "${RUNNER_TEMP}/report.xml"
+
+  firebase_auth_smoke:
+    name: Validate Firebase WIF authentication
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: [self-hosted]
+    environment: native-test-distribution
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      FIREBASE_ANDROID_APP_ID: ${{ vars.FIREBASE_ANDROID_APP_ID }}
+      FIREBASE_IOS_APP_ID: ${{ vars.FIREBASE_IOS_APP_ID }}
+      FIREBASE_TESTER_GROUP: ${{ vars.FIREBASE_TESTER_GROUP }}
+      KOSMO_ACTIONS_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      KOSMO_RELEASE_NOTES: WIF authentication smoke only; no release is uploaded.
+      KOSMO_SOURCE_COMMIT: ${{ github.sha }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up mise
+        uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        with:
+          cache: false
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set up locked Bundler
+        run: |
+          gem install bundler --version 4.0.15 --no-document
+          echo "BUNDLE_PATH=${RUNNER_TEMP}/native-distribution-bundle" >> "${GITHUB_ENV}"
+
+      - name: Install Fastlane dependencies
+        run: bundle install --jobs 4 --retry 3
+
+      - name: Resolve release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ((GITHUB_RUN_ATTEMPT >= 100)); then
+            echo "::error::GITHUB_RUN_ATTEMPT must remain below 100"
+            exit 1
+          fi
+
+          build_number=$((GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT))
+          marketing_version="$(pnpm --filter @kosmo/app exec expo config --type public --json | ruby -rjson -e 'print JSON.parse(STDIN.read).fetch("version")')"
+          {
+            echo "KOSMO_ANDROID_BUILD_NUMBER=${build_number}"
+            echo "KOSMO_IOS_BUILD_NUMBER=${build_number}"
+            echo "KOSMO_MARKETING_VERSION=${marketing_version}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Authenticate to Google Cloud
+        id: google-auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: ${{ vars.FIREBASE_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+          cleanup_credentials: true
+
+      - name: Validate Firebase access
+        working-directory: apps/app
+        env:
+          FL_REPORT_PATH: ${{ runner.temp }}
+          HOME: ${{ runner.temp }}/native-distribution-home
+        run: |
+          bundle exec fastlane android firebase_auth_smoke
+          bundle exec fastlane ios firebase_auth_smoke
+
+      - name: Remove temporary credentials
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -n "${GOOGLE_GHA_CREDS_PATH:-}" && -e "${GOOGLE_GHA_CREDS_PATH}" ]]; then
+            rm -f -- "${GOOGLE_GHA_CREDS_PATH}"
+          fi
+          rm -rf -- "${RUNNER_TEMP}/native-distribution-home/.fastlane"
+          rm -f -- "${RUNNER_TEMP}/report.xml"
+
+          if find "${GITHUB_WORKSPACE}" -name 'gha-creds-*.json' -print -quit | grep -q .; then
+            echo "::error::Google ADC credential files remain in the workspace"
+            exit 1
+          fi

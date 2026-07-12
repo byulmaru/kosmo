@@ -1,0 +1,7 @@
+source "https://rubygems.org"
+
+ruby "3.4.10"
+
+gem "fastlane", "2.237.0"
+
+eval_gemfile "apps/app/fastlane/Pluginfile"

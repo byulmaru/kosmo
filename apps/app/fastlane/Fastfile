@@ -1,0 +1,93 @@
+require "json"
+
+opt_out_usage
+skip_docs
+
+def required_environment(name)
+  value = ENV[name].to_s.strip
+  UI.user_error!("#{name} is required") if value.empty?
+  value
+end
+
+def distribution_config(platform)
+  platform_name = platform.to_s.upcase
+  build_number = required_environment("KOSMO_#{platform_name}_BUILD_NUMBER")
+  unless build_number.match?(/\A[1-9]\d*\z/)
+    UI.user_error!("KOSMO_#{platform_name}_BUILD_NUMBER must be a positive integer")
+  end
+
+  tester_group = required_environment("FIREBASE_TESTER_GROUP")
+  if tester_group.include?("@") || tester_group.include?(",")
+    UI.user_error!("FIREBASE_TESTER_GROUP must be a group alias, not tester emails")
+  end
+
+  {
+    app_id: required_environment("FIREBASE_#{platform_name}_APP_ID"),
+    build_number: build_number,
+    marketing_version: required_environment("KOSMO_MARKETING_VERSION"),
+    release_notes: required_environment("KOSMO_RELEASE_NOTES"),
+    run_url: required_environment("KOSMO_ACTIONS_RUN_URL"),
+    source_commit: required_environment("KOSMO_SOURCE_COMMIT"),
+    tester_group: tester_group,
+  }
+end
+
+def validate_distribution_config(platform)
+  config = distribution_config(platform)
+  UI.success(
+    "#{platform} distribution config is valid: " \
+    "#{config[:marketing_version]} (#{config[:build_number]}) from #{config[:source_commit]}"
+  )
+  config
+end
+
+def validate_wif_credentials
+  credentials_path = required_environment("GOOGLE_APPLICATION_CREDENTIALS")
+  gha_credentials_path = required_environment("GOOGLE_GHA_CREDS_PATH")
+
+  unless File.expand_path(credentials_path) == File.expand_path(gha_credentials_path)
+    UI.user_error!("Firebase authentication must use the ADC file created by google-github-actions/auth")
+  end
+  UI.user_error!("ADC credential file does not exist") unless File.file?(credentials_path)
+
+  credentials = JSON.parse(File.read(credentials_path))
+  unless credentials["type"] == "external_account"
+    UI.user_error!("Firebase authentication must use Workload Identity Federation credentials")
+  end
+end
+
+def firebase_auth_smoke(platform)
+  config = validate_distribution_config(platform)
+  validate_wif_credentials
+  latest_release = firebase_app_distribution_get_latest_release(app: config[:app_id])
+
+  if latest_release
+    UI.success("Firebase App Distribution authentication succeeded for #{platform}")
+  else
+    UI.success("Firebase App Distribution authentication succeeded; no previous #{platform} release exists")
+  end
+end
+
+platform :android do
+  desc "Validate the shared Android distribution inputs without building or uploading"
+  lane :validate_distribution_config do
+    validate_distribution_config(:android)
+  end
+
+  desc "Validate WIF ADC access to Firebase App Distribution without uploading"
+  lane :firebase_auth_smoke do
+    firebase_auth_smoke(:android)
+  end
+end
+
+platform :ios do
+  desc "Validate the shared iOS distribution inputs without building or uploading"
+  lane :validate_distribution_config do
+    validate_distribution_config(:ios)
+  end
+
+  desc "Validate WIF ADC access to Firebase App Distribution without uploading"
+  lane :firebase_auth_smoke do
+    firebase_auth_smoke(:ios)
+  end
+end
