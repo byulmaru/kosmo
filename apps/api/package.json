@@ -6,6 +6,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "node --import tsx src/index.ts",
     "lint:tsc": "tsc --noEmit",
+    "test": "pnpm lint:tsc && pnpm test:unit",
     "test:unit": "NODE_ENV=production node --import tsx --test 'src/**/*.test.ts'"
   },
   "dependencies": {
