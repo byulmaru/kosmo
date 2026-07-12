@@ -19,7 +19,7 @@ API는 프로필 표시용 handle 문자열을 configured local instance 기준 
 
 ### Requirement: Profile identity
 
-시스템은 프로필을 계정과 분리된 소셜 identity로 저장하고, configured local profile과 저장된 remote profile에 대한 handle 기반 조회를 지원해야 한다(MUST).
+시스템은 프로필을 계정과 분리된 소셜 identity로 저장하고, configured local profile에 대한 handle 기반 조회를 지원해야 한다(MUST).
 
 #### Scenario: Store profile identity
 
@@ -34,18 +34,10 @@ API는 프로필 표시용 handle 문자열을 configured local instance 기준 
 - **THEN** 시스템은 handle을 정규화하여 configured local instance에 속한 활성 프로필을 조회한다
 - **AND** 일치하는 활성 configured local profile이 있으면 해당 프로필을 반환한다
 
-#### Scenario: Find stored remote profile by domain-qualified handle
+#### Scenario: Do not find remote profile by local handle query
 
-- **WHEN** 클라이언트가 configured local domain이 아닌 domain-qualified handle로 프로필 조회를 요청한다
-- **THEN** 시스템은 해당 domain의 활성 ActivityPub instance에 속한 저장된 활성 remote profile을 조회한다
-- **AND** 일치하는 저장 프로필이 있으면 해당 프로필을 반환한다
-- **AND** 조회 중 remote actor fetch 또는 profile materialization을 시도하지 않는다
-
-#### Scenario: Keep bare and configured local handle lookup local
-
-- **WHEN** 클라이언트가 bare handle 또는 configured local domain-qualified handle로 프로필 조회를 요청한다
-- **THEN** 시스템은 configured local instance에 속한 활성 프로필만 조회한다
-- **AND** 다른 instance의 저장된 프로필을 반환하지 않는다
+- **WHEN** 클라이언트가 기존 handle 기반 프로필 조회를 요청한다
+- **THEN** 시스템은 저장된 remote profile을 이 조회 결과로 반환하지 않는다
 
 #### Scenario: Missing profile by handle
 
@@ -79,12 +71,6 @@ API는 프로필 표시용 handle 문자열을 configured local instance 기준 
 
 API는 활성 local profile과 저장된 활성 remote profile을 GraphQL profile object로 조회할 수 있게 해야 한다(MUST).
 
-#### Scenario: Expose profile origin as the owning instance kind
-
-- **WHEN** 클라이언트가 활성 프로필의 `origin`을 조회한다
-- **THEN** 시스템은 프로필이 속한 instance의 `InstanceKind` 값을 반환한다
-- **AND** configured local instance와의 일치 여부를 별도 origin vocabulary로 매핑하지 않는다
-
 #### Scenario: Access active local profile object
 
 - **WHEN** local profile 상태가 `ACTIVE`이다
@@ -98,10 +84,10 @@ API는 활성 local profile과 저장된 활성 remote profile을 GraphQL profil
 - **THEN** 시스템은 프로필 object 접근을 허용한다
 - **AND** handle, relativeHandle, displayName, nullable bio, followPolicy, createdAt 필드를 노출한다
 
-#### Scenario: Access active remote profile object by domain-qualified handle
+#### Scenario: Existing local profile entry points are not expanded
 
-- **WHEN** remote profile이 저장되어 있고 상태가 `ACTIVE`이며 클라이언트가 해당 domain-qualified handle로 조회한다
-- **THEN** 시스템은 `profileByHandle(handle:)`로 해당 remote profile object를 반환한다
+- **WHEN** remote profile이 저장되어 있고 상태가 `ACTIVE`이다
+- **THEN** 이번 capability는 기존 `profileByHandle(handle:)`에 remote profile을 포함하도록 확장하지 않는다
 
 #### Scenario: Access inactive profile object
 

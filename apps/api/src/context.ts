@@ -1,10 +1,18 @@
-import { AccountProfiles, Accounts, db, first, Profiles, Sessions } from '@kosmo/core/db';
-import { AccountState, ProfileState, SessionState } from '@kosmo/core/enums';
-import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
+import {
+  AccountProfiles,
+  Accounts,
+  db,
+  first,
+  Instances,
+  Profiles,
+  Sessions,
+} from '@kosmo/core/db';
+import { AccountState, SessionState } from '@kosmo/core/enums';
 import DataLoader from 'dataloader';
 import { and, eq } from 'drizzle-orm';
 import stringify from 'fast-json-stable-stringify';
 import * as R from 'remeda';
+import { visibleProfileWhere } from './graphql/resolvers/profile/access/visibility';
 import type { Context as HonoContext } from 'hono';
 
 type LoaderParams<Key, Result, SortKey, Nullability extends boolean, Many extends boolean> = {
@@ -119,8 +127,6 @@ export const deriveContext = async (c: ServerContext): Promise<Context> => {
     if (session) {
       let profileId = session.activeProfileId;
       if (profileId) {
-        const localInstance = await resolveConfiguredLocalInstance();
-
         await db
           .select({
             id: Profiles.id,
@@ -133,11 +139,11 @@ export const deriveContext = async (c: ServerContext): Promise<Context> => {
               eq(AccountProfiles.accountId, session.accountId),
             ),
           )
+          .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
           .where(
             and(
               eq(Profiles.id, profileId),
-              eq(Profiles.instanceId, localInstance.id),
-              eq(Profiles.state, ProfileState.ACTIVE),
+              visibleProfileWhere({ profile: Profiles, instance: Instances }),
             ),
           )
           .limit(1)

@@ -15,7 +15,7 @@ import {
 } from '@kosmo/core/enums';
 import { isConfiguredLocalProfile } from '@kosmo/core/profile';
 import { normalizeHandle } from '@kosmo/core/utils';
-import { count, eq } from 'drizzle-orm';
+import { and, count, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -107,18 +107,18 @@ describe('GraphQL remote profile boundary', () => {
       [`@bob@${remoteDomain}`, remote.id, 'ACTIVITYPUB', `@bob@${remoteDomain}`],
     ] as const;
 
-    for (const [handle, id, origin, relativeHandle] of cases) {
+    for (const [handle, id, kind, relativeHandle] of cases) {
       const result = await requestGraphQL<{
         profileByHandle: {
           id: string;
-          origin: string;
+          instance: { kind: string };
           relativeHandle: string;
         } | null;
       }>(
         `query ProfileByHandle($handle: String!) {
           profileByHandle(handle: $handle) {
             id
-            origin
+            instance { kind }
             relativeHandle
           }
         }`,
@@ -126,7 +126,11 @@ describe('GraphQL remote profile boundary', () => {
       );
 
       assertNoGraphQLErrors(result);
-      assert.deepEqual(result.data?.profileByHandle, { id, origin, relativeHandle });
+      assert.deepEqual(result.data?.profileByHandle, {
+        id,
+        instance: { kind },
+        relativeHandle,
+      });
     }
 
     const profileCountBefore = await countRows(Profiles);
@@ -150,7 +154,7 @@ describe('GraphQL remote profile boundary', () => {
       node: {
         __typename: string;
         id: string;
-        origin: string;
+        instance: { kind: string };
         relativeHandle: string;
       } | null;
     }>(
@@ -159,7 +163,7 @@ describe('GraphQL remote profile boundary', () => {
           __typename
           ... on Profile {
             id
-            origin
+            instance { kind }
             relativeHandle
           }
         }
@@ -171,7 +175,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.deepEqual(result.data?.node, {
       __typename: 'Profile',
       id: remote.id,
-      origin: 'ACTIVITYPUB',
+      instance: { kind: 'ACTIVITYPUB' },
       relativeHandle: `@alice@${remoteDomain}`,
     });
   });
@@ -193,93 +197,106 @@ describe('GraphQL remote profile boundary', () => {
     });
 
     const result = await requestGraphQL<{
-      node: { origin: string } | null;
+      node: { instance: { kind: string } } | null;
     }>(
-      `query OtherLocalProfileOrigin($id: ID!) {
+      `query OtherLocalProfileInstance($id: ID!) {
         node(id: $id) {
-          ... on Profile { origin }
+          ... on Profile { instance { kind } }
         }
       }`,
       { id: profile.id },
     );
 
     assertNoGraphQLErrors(result);
-    assert.equal(result.data?.node?.origin, 'LOCAL');
+    assert.equal(result.data?.node?.instance.kind, 'LOCAL');
   });
 
-  test('hides remote follow graph data even when cross-instance rows exist', async () => {
+  test('reads follow graph data for active profiles on another local instance', async () => {
     const auth = await createAuthenticatedSession();
-    const remoteInstance = await createRemoteInstance();
-    const remote = await createProfile({ handle: 'remote', instanceId: remoteInstance.id });
+    const otherLocalInstance = await createLocalInstance({ domain: 'other-local.example' });
+    const otherLocal = await createProfile({
+      handle: 'other-local',
+      instanceId: otherLocalInstance.id,
+    });
 
     await db.insert(ProfileFollows).values([
-      { followerProfileId: auth.profile.id, followeeProfileId: remote.id },
-      { followerProfileId: remote.id, followeeProfileId: auth.profile.id },
+      { followerProfileId: auth.profile.id, followeeProfileId: otherLocal.id },
+      { followerProfileId: otherLocal.id, followeeProfileId: auth.profile.id },
     ]);
 
     const result = await requestGraphQL<{
-      profileByHandle: {
-        followers: { edges: unknown[] };
-        followersCount: number;
-        following: { edges: unknown[] };
-        followingCount: number;
-        viewerFollow: unknown | null;
-        viewerState: { follow: unknown | null; isSelf: boolean } | null;
+      node: {
+        followers: { edges: Array<{ node: { id: string } }> };
+        following: { edges: Array<{ node: { id: string } }> };
+        viewerFollow: { id: string } | null;
+        viewerState: { follow: { id: string } | null; isSelf: boolean } | null;
       } | null;
     }>(
-      `query RemoteFollowGraph($handle: String!) {
-        profileByHandle(handle: $handle) {
-          followers(first: 10) { edges { node { id } } }
-          followersCount
-          following(first: 10) { edges { node { id } } }
-          followingCount
-          viewerFollow { id }
-          viewerState { isSelf follow { id } }
+      `query OtherLocalFollowGraph($id: ID!) {
+        node(id: $id) {
+          ... on Profile {
+            followers(first: 10) { edges { node { id } } }
+            following(first: 10) { edges { node { id } } }
+            viewerFollow { id }
+            viewerState { isSelf follow { id } }
+          }
         }
       }`,
-      { handle: `remote@${remoteDomain}` },
+      { id: otherLocal.id },
       auth.token,
     );
 
     assertNoGraphQLErrors(result);
-    assert.deepEqual(result.data?.profileByHandle, {
-      followers: { edges: [] },
-      followersCount: 0,
-      following: { edges: [] },
-      followingCount: 0,
-      viewerFollow: null,
-      viewerState: { follow: null, isSelf: false },
+    assert.equal(result.data?.node?.followers.edges.length, 1);
+    assert.equal(result.data?.node?.following.edges.length, 1);
+    assert.equal(
+      result.data?.node?.viewerFollow?.id,
+      result.data?.node?.followers.edges[0]?.node.id,
+    );
+    assert.deepEqual(result.data?.node?.viewerState, {
+      follow: result.data?.node?.viewerFollow,
+      isSelf: false,
     });
   });
 
-  test('hides remote posts even when post rows exist', async () => {
-    const remoteInstance = await createRemoteInstance();
-    const remote = await createProfile({ handle: 'remote', instanceId: remoteInstance.id });
-    await db.insert(Posts).values({
-      profileId: remote.id,
-      state: PostState.ACTIVE,
-      visibility: PostVisibility.PUBLIC,
+  test('reads active posts for profiles on another local instance', async () => {
+    const otherLocalInstance = await createLocalInstance({ domain: 'other-local.example' });
+    const otherLocal = await createProfile({
+      handle: 'other-local',
+      instanceId: otherLocalInstance.id,
     });
+    const post = await db
+      .insert(Posts)
+      .values({
+        profileId: otherLocal.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.PUBLIC,
+      })
+      .returning()
+      .then(firstOrThrow);
 
     const result = await requestGraphQL<{
-      profileByHandle: { posts: { edges: unknown[] } } | null;
+      post: { id: string } | null;
+      node: { posts: { edges: Array<{ node: { id: string } }> } } | null;
     }>(
-      `query RemotePosts($handle: String!) {
-        profileByHandle(handle: $handle) {
-          posts(first: 10) { edges { node { id } } }
+      `query OtherLocalPosts($postId: ID!, $profileId: ID!) {
+        post: node(id: $postId) { ... on Post { id } }
+        node(id: $profileId) {
+          ... on Profile { posts(first: 10) { edges { node { id } } } }
         }
       }`,
-      { handle: `remote@${remoteDomain}` },
+      { postId: post.id, profileId: otherLocal.id },
     );
 
     assertNoGraphQLErrors(result);
-    assert.deepEqual(result.data?.profileByHandle?.posts, { edges: [] });
+    assert.deepEqual(result.data, {
+      post: { id: post.id },
+      node: { posts: { edges: [{ node: { id: post.id } }] } },
+    });
   });
 
-  test('hides remote and suspended-instance posts from Node and home timeline', async () => {
+  test('hides suspended-instance posts from Node and home timeline', async () => {
     const auth = await createAuthenticatedSession();
-    const remoteInstance = await createRemoteInstance();
-    const remote = await createProfile({ handle: 'remote', instanceId: remoteInstance.id });
     const suspendedInstance = await createRemoteInstance({
       domain: 'suspended.example',
       state: InstanceState.SUSPENDED,
@@ -288,55 +305,42 @@ describe('GraphQL remote profile boundary', () => {
       handle: 'suspended',
       instanceId: suspendedInstance.id,
     });
-    const [remotePost, suspendedPost] = await db
+    const suspendedPost = await db
       .insert(Posts)
-      .values([
-        {
-          profileId: remote.id,
-          state: PostState.ACTIVE,
-          visibility: PostVisibility.PUBLIC,
-        },
-        {
-          profileId: suspended.id,
-          state: PostState.ACTIVE,
-          visibility: PostVisibility.PUBLIC,
-        },
-      ])
-      .returning();
-    await db.insert(ProfileFollows).values([
-      { followerProfileId: auth.profile.id, followeeProfileId: remote.id },
-      { followerProfileId: auth.profile.id, followeeProfileId: suspended.id },
-    ]);
+      .values({
+        profileId: suspended.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.PUBLIC,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db.insert(ProfileFollows).values({
+      followerProfileId: auth.profile.id,
+      followeeProfileId: suspended.id,
+    });
 
     const result = await requestGraphQL<{
-      remotePost: { id: string } | null;
       suspendedPost: { id: string } | null;
       homeTimeline: { edges: unknown[] } | null;
     }>(
-      `query HiddenForeignPosts($remotePostId: ID!, $suspendedPostId: ID!) {
-        remotePost: node(id: $remotePostId) {
-          ... on Post { id }
-        }
+      `query HiddenSuspendedPosts($suspendedPostId: ID!) {
         suspendedPost: node(id: $suspendedPostId) {
           ... on Post { id }
         }
         homeTimeline(first: 10) { edges { node { id } } }
       }`,
-      { remotePostId: remotePost.id, suspendedPostId: suspendedPost.id },
+      { suspendedPostId: suspendedPost.id },
       auth.token,
     );
 
     assertNoGraphQLErrors(result);
     assert.deepEqual(result.data, {
-      remotePost: null,
       suspendedPost: null,
       homeTimeline: { edges: [] },
     });
   });
 
-  test('hides remote and suspended-instance post contents from Node', async () => {
-    const remoteInstance = await createRemoteInstance();
-    const remote = await createProfile({ handle: 'remote', instanceId: remoteInstance.id });
+  test('hides suspended-instance post contents from Node', async () => {
     const suspendedInstance = await createRemoteInstance({
       domain: 'suspended.example',
       state: InstanceState.SUSPENDED,
@@ -345,156 +349,53 @@ describe('GraphQL remote profile boundary', () => {
       handle: 'suspended',
       instanceId: suspendedInstance.id,
     });
-    const [remotePost, suspendedPost] = await db
+    const suspendedPost = await db
       .insert(Posts)
-      .values([
-        {
-          profileId: remote.id,
-          state: PostState.ACTIVE,
-          visibility: PostVisibility.PUBLIC,
-        },
-        {
-          profileId: suspended.id,
-          state: PostState.ACTIVE,
-          visibility: PostVisibility.PUBLIC,
-        },
-      ])
-      .returning();
-    const [remoteContent, suspendedContent] = await db
+      .values({
+        profileId: suspended.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.PUBLIC,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const suspendedContent = await db
       .insert(PostContents)
-      .values([
-        {
-          bodyText: 'remote content',
-          postId: remotePost.id,
-        },
-        {
-          bodyText: 'suspended content',
-          postId: suspendedPost.id,
-        },
-      ])
-      .returning();
+      .values({
+        bodyText: 'suspended content',
+        postId: suspendedPost.id,
+      })
+      .returning()
+      .then(firstOrThrow);
 
     const result = await requestGraphQL<{
-      remoteContent: { id: string } | null;
       suspendedContent: { id: string } | null;
     }>(
-      `query HiddenForeignPostContents($remoteContentId: ID!, $suspendedContentId: ID!) {
-        remoteContent: node(id: $remoteContentId) {
-          ... on PostContent { id }
-        }
+      `query HiddenSuspendedPostContents($suspendedContentId: ID!) {
         suspendedContent: node(id: $suspendedContentId) {
           ... on PostContent { id }
         }
       }`,
-      { remoteContentId: remoteContent.id, suspendedContentId: suspendedContent.id },
+      { suspendedContentId: suspendedContent.id },
     );
 
     assertNoGraphQLErrors(result);
     assert.deepEqual(result.data, {
-      remoteContent: null,
       suspendedContent: null,
     });
   });
 
-  test('rejects selecting a remote profile even when the account owns it', async () => {
+  test('includes active profiles from another local instance in an account profile list', async () => {
     const auth = await createAuthenticatedSession();
-    const remoteInstance = await createRemoteInstance();
-    const remote = await createProfile({ handle: 'remote', instanceId: remoteInstance.id });
+    const otherLocalInstance = await createLocalInstance({ domain: 'other-local.example' });
+    const otherLocal = await createProfile({
+      handle: 'other-local',
+      instanceId: otherLocalInstance.id,
+    });
     await db.insert(AccountProfiles).values({
       accountId: auth.account.id,
-      profileId: remote.id,
+      profileId: otherLocal.id,
       role: AccountProfileRole.OWNER,
     });
-
-    const result = await requestGraphQL(
-      `mutation SelectRemote($id: ID!) {
-        selectProfile(input: { id: $id }) { profile { id } }
-      }`,
-      { id: remote.id },
-      auth.token,
-    );
-
-    assertGraphQLErrorCode(result, 'NOT_FOUND');
-    const session = await db
-      .select()
-      .from(Sessions)
-      .where(eq(Sessions.id, auth.session.id))
-      .limit(1)
-      .then(firstOrThrow);
-    assert.equal(session.activeProfileId, auth.profile.id);
-  });
-
-  test('rejects updating a remote profile even when the account owns it', async () => {
-    const auth = await createAuthenticatedSession();
-    const remoteInstance = await createRemoteInstance();
-    const remote = await createProfile({ handle: 'remote', instanceId: remoteInstance.id });
-    await db.insert(AccountProfiles).values({
-      accountId: auth.account.id,
-      profileId: remote.id,
-      role: AccountProfileRole.OWNER,
-    });
-
-    const result = await requestGraphQL(
-      `mutation UpdateRemote($id: ID!) {
-        updateProfile(input: { id: $id, displayName: "overwritten" }) { profile { id } }
-      }`,
-      { id: remote.id },
-      auth.token,
-    );
-
-    assertGraphQLErrorCode(result, 'NOT_FOUND');
-    const preserved = await db
-      .select()
-      .from(Profiles)
-      .where(eq(Profiles.id, remote.id))
-      .limit(1)
-      .then(firstOrThrow);
-    assert.equal(preserved.displayName, remote.displayName);
-    assert.equal(preserved.bio, remote.bio);
-    assert.equal(preserved.followPolicy, remote.followPolicy);
-  });
-
-  test('rejects deleting a remote profile even when the account owns it', async () => {
-    const auth = await createAuthenticatedSession();
-    const remoteInstance = await createRemoteInstance();
-    const remote = await createProfile({ handle: 'remote', instanceId: remoteInstance.id });
-    await db.insert(AccountProfiles).values({
-      accountId: auth.account.id,
-      profileId: remote.id,
-      role: AccountProfileRole.OWNER,
-    });
-
-    const result = await requestGraphQL(
-      `mutation DeleteRemote($id: ID!) {
-        deleteProfile(input: { id: $id }) { profileId }
-      }`,
-      { id: remote.id },
-      auth.token,
-    );
-
-    assertGraphQLErrorCode(result, 'NOT_FOUND');
-    const preserved = await db
-      .select()
-      .from(Profiles)
-      .where(eq(Profiles.id, remote.id))
-      .limit(1)
-      .then(firstOrThrow);
-    assert.equal(preserved.state, ProfileState.ACTIVE);
-  });
-
-  test('hides remote profiles from an account profile list', async () => {
-    const auth = await createAuthenticatedSession();
-    const remoteInstance = await createRemoteInstance();
-    const remote = await createProfile({ handle: 'remote', instanceId: remoteInstance.id });
-    await db.insert(AccountProfiles).values({
-      accountId: auth.account.id,
-      profileId: remote.id,
-      role: AccountProfileRole.OWNER,
-    });
-    await db
-      .update(Sessions)
-      .set({ activeProfileId: remote.id })
-      .where(eq(Sessions.id, auth.session.id));
 
     const result = await requestGraphQL<{
       me: { profiles: Array<{ id: string }> } | null;
@@ -507,7 +408,35 @@ describe('GraphQL remote profile boundary', () => {
     );
 
     assertNoGraphQLErrors(result);
-    assert.deepEqual(result.data?.me?.profiles, [{ id: auth.profile.id }]);
+    assert.deepEqual(result.data?.me?.profiles, [{ id: auth.profile.id }, { id: otherLocal.id }]);
+  });
+
+  test('restores an active profile from another local instance in the session context', async () => {
+    const auth = await createAuthenticatedSession();
+    const otherLocalInstance = await createLocalInstance({ domain: 'other-local.example' });
+    const otherLocal = await createProfile({
+      handle: 'other-local',
+      instanceId: otherLocalInstance.id,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: otherLocal.id,
+      role: AccountProfileRole.OWNER,
+    });
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: otherLocal.id })
+      .where(eq(Sessions.id, auth.session.id));
+
+    const result = await requestGraphQL(
+      `mutation CreatePostWithOtherLocalSession {
+        createPost(input: { bodyText: "created", visibility: UNLISTED }) { post { id } }
+      }`,
+      {},
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
   });
 
   test('rejects following a remote profile without creating a relationship', async () => {
@@ -561,11 +490,11 @@ describe('GraphQL remote profile boundary', () => {
     await createProfile({ handle: 'alice', instanceId: remoteInstance.id });
 
     const result = await requestGraphQL<{
-      createProfile: { profile: { id: string; origin: string } } | null;
+      createProfile: { profile: { id: string; instance: { kind: string } } } | null;
     }>(
       `mutation CreateLocalDuplicate($handle: String!) {
         createProfile(input: { handle: $handle }) {
-          profile { id origin }
+          profile { id instance { kind } }
         }
       }`,
       { handle: 'alice' },
@@ -573,7 +502,7 @@ describe('GraphQL remote profile boundary', () => {
     );
 
     assertNoGraphQLErrors(result);
-    assert.equal(result.data?.createProfile?.profile.origin, 'LOCAL');
+    assert.equal(result.data?.createProfile?.profile.instance.kind, 'LOCAL');
 
     const created = await db
       .select()
@@ -590,31 +519,6 @@ describe('GraphQL remote profile boundary', () => {
       .limit(1)
       .then(firstOrThrow);
     assert.equal(ownership.accountId, auth.account.id);
-  });
-
-  test('does not authorize a remote profile stored in an existing session', async () => {
-    const auth = await createAuthenticatedSession();
-    const remoteInstance = await createRemoteInstance();
-    const remote = await createProfile({ handle: 'remote', instanceId: remoteInstance.id });
-    await db.insert(AccountProfiles).values({
-      accountId: auth.account.id,
-      profileId: remote.id,
-      role: AccountProfileRole.OWNER,
-    });
-    await db
-      .update(Sessions)
-      .set({ activeProfileId: remote.id })
-      .where(eq(Sessions.id, auth.session.id));
-
-    const result = await requestGraphQL(
-      `mutation CreatePostWithRemoteSession($bodyText: String!) {
-        createPost(input: { bodyText: $bodyText, visibility: UNLISTED }) { post { id } }
-      }`,
-      { bodyText: 'blocked' },
-      auth.token,
-    );
-
-    assertGraphQLErrorCode(result, 'PERMISSION_DENIED');
   });
 });
 
@@ -670,6 +574,24 @@ const createRemoteInstance = async ({
       canonicalOrigin: `https://${domain}`,
       domain,
       kind: InstanceKind.ACTIVITYPUB,
+      state,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+const createLocalInstance = async ({
+  domain,
+  state = InstanceState.ACTIVE,
+}: {
+  domain: string;
+  state?: InstanceState;
+}) =>
+  db
+    .insert(Instances)
+    .values({
+      canonicalOrigin: `https://${domain}`,
+      domain,
+      kind: InstanceKind.LOCAL,
       state,
     })
     .returning()
@@ -731,6 +653,7 @@ const countRows = async (table: typeof Profiles | typeof ProfileFollows): Promis
     .then((row) => row.value);
 
 const resetFixtures = async () => {
+  await db.update(Posts).set({ currentContentId: null });
   await db.delete(Sessions);
   await db.delete(PostContents);
   await db.delete(Posts);
@@ -739,6 +662,9 @@ const resetFixtures = async () => {
   await db.delete(Accounts);
   await db.delete(Profiles);
   await db.delete(Instances).where(eq(Instances.kind, InstanceKind.ACTIVITYPUB));
+  await db
+    .delete(Instances)
+    .where(and(eq(Instances.kind, InstanceKind.LOCAL), ne(Instances.id, localInstanceId)));
 };
 
 const truncateDatabase = async () => {

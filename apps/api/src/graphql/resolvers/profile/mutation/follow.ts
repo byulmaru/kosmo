@@ -1,10 +1,10 @@
-import { db, first, firstOrThrowWith, ProfileFollows, Profiles } from '@kosmo/core/db';
-import { ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
+import { db, first, firstOrThrowWith, Instances, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { InstanceKind, ProfileFollowPolicy } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
-import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
+import { visibleProfileWhere } from '../access/visibility';
 import { ProfileFollow } from '../ref';
 
 builder.mutationField('followProfile', (t) =>
@@ -18,18 +18,18 @@ builder.mutationField('followProfile', (t) =>
       id: t.input.id({ validate: z.uuid() }),
     },
     resolve: async (_, { input }, ctx) => {
-      const configuredLocalInstance = await resolveConfiguredLocalInstance();
       const targetProfile = await db
         .select({
           followPolicy: Profiles.followPolicy,
           id: Profiles.id,
         })
         .from(Profiles)
+        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
         .where(
           and(
             eq(Profiles.id, input.id),
-            eq(Profiles.state, ProfileState.ACTIVE),
-            eq(Profiles.instanceId, configuredLocalInstance.id),
+            eq(Instances.kind, InstanceKind.LOCAL),
+            visibleProfileWhere({ profile: Profiles, instance: Instances }),
           ),
         )
         .limit(1)

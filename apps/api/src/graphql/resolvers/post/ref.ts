@@ -1,27 +1,17 @@
-import { db, PostContents, Posts, Profiles, TableDiscriminator } from '@kosmo/core/db';
+import { db, Instances, PostContents, Posts, Profiles, TableDiscriminator } from '@kosmo/core/db';
 import { PostState, PostVisibility } from '@kosmo/core/enums';
-import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
 import { postVisibilityAccessWhere } from './access/visibility';
 
 export const Post = createObjectRef('Post', TableDiscriminator.Posts, async (ids, ctx) => {
-  const configuredLocalInstance = await resolveConfiguredLocalInstance();
-
   return db
     .select(getColumns(Posts))
     .from(Posts)
     .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
-    .where(
-      and(
-        inArray(Posts.id, ids),
-        postVisibilityAccessWhere({
-          ctx,
-          configuredLocalInstanceId: configuredLocalInstance.id,
-        }),
-      ),
-    );
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .where(and(inArray(Posts.id, ids), postVisibilityAccessWhere({ ctx })));
 });
 
 Post.implement({
@@ -46,22 +36,13 @@ export const PostContent = createObjectRef(
   'PostContent',
   TableDiscriminator.PostContents,
   async (ids, ctx) => {
-    const configuredLocalInstance = await resolveConfiguredLocalInstance();
-
     return db
       .select(getColumns(PostContents))
       .from(PostContents)
       .innerJoin(Posts, eq(Posts.id, PostContents.postId))
       .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-      .where(
-        and(
-          inArray(PostContents.id, ids),
-          postVisibilityAccessWhere({
-            ctx,
-            configuredLocalInstanceId: configuredLocalInstance.id,
-          }),
-        ),
-      );
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(and(inArray(PostContents.id, ids), postVisibilityAccessWhere({ ctx })));
   },
 );
 

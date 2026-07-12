@@ -1,10 +1,10 @@
-import { db, first, firstOrThrowWith, ProfileFollows, Profiles } from '@kosmo/core/db';
-import { ProfileState } from '@kosmo/core/enums';
+import { db, first, firstOrThrowWith, Instances, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { InstanceKind } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
-import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq, getColumns, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
+import { visibleProfileWhere } from '../access/visibility';
 import { Profile } from '../ref';
 
 builder.mutationField('unfollowProfile', (t) =>
@@ -19,15 +19,15 @@ builder.mutationField('unfollowProfile', (t) =>
       id: t.input.id({ validate: z.uuid() }),
     },
     resolve: async (_, { input }, ctx) => {
-      const configuredLocalInstance = await resolveConfiguredLocalInstance();
       const targetProfile = await db
         .select(getColumns(Profiles))
         .from(Profiles)
+        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
         .where(
           and(
             eq(Profiles.id, input.id),
-            eq(Profiles.state, ProfileState.ACTIVE),
-            eq(Profiles.instanceId, configuredLocalInstance.id),
+            eq(Instances.kind, InstanceKind.LOCAL),
+            visibleProfileWhere({ profile: Profiles, instance: Instances }),
           ),
         )
         .limit(1)

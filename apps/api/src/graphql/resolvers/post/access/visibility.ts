@@ -1,15 +1,10 @@
-import { db, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
-import { PostState, PostVisibility, ProfileState } from '@kosmo/core/enums';
+import { db, Instances, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { PostState, PostVisibility } from '@kosmo/core/enums';
 import { and, eq, exists, inArray, or } from 'drizzle-orm';
+import { visibleProfileWhere } from '../../profile/access/visibility';
 import type { UserContext } from '@/context';
 
-export const postVisibilityAccessWhere = ({
-  ctx,
-  configuredLocalInstanceId,
-}: {
-  ctx: UserContext;
-  configuredLocalInstanceId: string;
-}) => {
+export const postVisibilityAccessWhere = ({ ctx }: { ctx: UserContext }) => {
   const publicWhere = inArray(Posts.visibility, [PostVisibility.PUBLIC, PostVisibility.UNLISTED]);
   const followerWhere = ctx.session?.profileId
     ? and(
@@ -34,8 +29,7 @@ export const postVisibilityAccessWhere = ({
   // TODO(PROD-121): Extend this helper with DIRECT access once recipient policy exists.
   return and(
     eq(Posts.state, PostState.ACTIVE),
-    eq(Profiles.state, ProfileState.ACTIVE),
-    eq(Profiles.instanceId, configuredLocalInstanceId),
+    visibleProfileWhere({ profile: Profiles, instance: Instances }),
     visibleWhere,
   )!;
 };

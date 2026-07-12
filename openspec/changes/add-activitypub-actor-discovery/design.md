@@ -19,7 +19,7 @@ Fedify는 actor dispatcher, WebFinger 처리, federation request routing을 fede
 - remote follow 수신/발신, inbox/outbox delivery/submission/collection 동작, shared inbox, followers/following collection 제공.
 - remote actor fetch/cache 동작, TTL, retry, signature verification 정책 구현.
 - handle rename, 이전 handle alias/history, WebFinger redirect.
-- 저장되지 않은 remote profile의 fetch/materialization, active profile 선택, remote profile 대상 local follow graph 확장, remote profile posts fetch.
+- 저장된 remote profile의 UI 연결, active profile 선택, remote profile 대상 local follow graph 확장, remote profile posts fetch.
 - ActivityPub 게시물, Note object, Create/Follow/Accept/Undo activity 송수신.
 
 ## Decisions
@@ -34,13 +34,12 @@ Fedify는 actor dispatcher, WebFinger 처리, federation request routing을 fede
 - **actor key는 lazy 생성한다.** 기존 local profile에 대한 migration-time backfill은 배포 시간을 늘리고 실패 복구 경로가 복잡하다. actor document 또는 key dispatcher가 local actor key를 필요로 할 때 ActivityPub actor row를 보장한 뒤 transaction 안에서 RSA-PKCS#1-v1.5와 Ed25519 key pair를 idempotent하게 생성한다.
 - **actor document는 필수 `inbox`/`outbox` URI만 광고하고 endpoint 동작은 열지 않는다.** ActivityPub actor object는 `inbox`와 `outbox`가 필수 속성이므로 actor-scoped `/ap/actor/{profile.id}/inbox`, `/ap/actor/{profile.id}/outbox` URI를 문서에 포함한다. 다만 이번 cycle은 discovery와 read-only actor document까지이므로 해당 endpoint 요청은 404로 종료하고, `followers`, `following`, `endpoints.sharedInbox`는 구현 전까지 문서에 노출하지 않는다.
 - **`Profile.relativeHandle`은 configured local 기준 표시 문자열이다.** configured local profile은 `@handle`, configured local instance가 아닌 instance의 profile은 `@handle@domain`으로 반환한다. 같은 `LOCAL` kind라도 현재 deployment의 configured local instance가 아니면 domain을 포함한다. UI는 bare handle과 domain을 조합하지 않고 이 필드를 표시 용도로 사용한다. `profile.instance_id`가 도입되기 전의 현재 profile 모델에서는 local profile에 대해 `@handle`만 반환하고, instance-aware remote profile 분기는 profile-instance 관계와 instance-scoped handle uniqueness가 들어온 뒤 구현한다.
-- **`profileByHandle`은 입력 형태로 local/remote 조회 경계를 구분한다.** bare handle과 configured local domain이 붙은 handle은 configured local instance에서만 조회한다. 다른 domain이 붙은 qualified handle은 이미 저장된 active ActivityPub profile만 조회하며, 조회 중 remote actor fetch나 profile materialization을 시작하지 않는다.
 
 ## Risks / Trade-offs
 
 - **Lazy key 생성 경합** → actor key table은 ActivityPub actor/key kind 단위 unique constraint를 두고, 생성은 transaction 또는 upsert로 idempotent하게 처리한다.
 - **기존 profile unique 변경 migration 위험** → configured local instance row를 먼저 보장한 뒤 기존 profile에 `instance_id`를 채우고, 새 composite unique를 만든 다음 기존 전역 unique를 제거한다.
-- **remote profile 조회가 네트워크 fetch처럼 오해될 수 있음** → 이번 scope에서는 저장된 remote profile만 Node와 domain-qualified handle로 조회하고, 일치하는 row가 없으면 remote fetch/materialization 없이 없음으로 응답한다.
+- **remote profile 조회 UX가 제한적임** → 이번 scope에서는 저장된 remote profile을 GraphQL `Profile` 읽기 대상으로 노출하되, remote UI 연결은 remote fetch 정책이 정해진 뒤 별도 change에서 다룬다.
 - **remote profile에 local workflow가 붙은 것처럼 보일 수 있음** → Node 직접 조회는 허용하지만 active profile 선택은 profile not found 오류로 닫고, viewerFollow는 없음으로 응답하며, follow/unfollow mutation은 profile not found 오류로 닫아 remote Follow/delivery가 없는 거짓 관계를 만들지 않는다. `Profile.posts`도 빈 connection으로 응답해 remote post fetch가 있는 것처럼 보이지 않게 한다.
 - **actor document 최소 필드가 일부 fediverse 구현에 부족할 수 있음** → ActivityPub actor 필수 `inbox`/`outbox` URI는 포함하되 discovery/read 가능성만 이번 완료 기준으로 삼고, delivery/submission/collection 동작과 followers/following/sharedInbox는 후속 구현 전까지 제공하지 않는다.
 - **canonical origin 불일치** → 부트스트랩 시 `PUBLIC_ORIGIN`과 configured local instance row를 비교해 불일치를 빠르게 드러내고, request Host를 source of truth로 쓰지 않는다.

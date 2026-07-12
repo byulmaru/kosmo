@@ -1,6 +1,4 @@
-import { db, ProfileFollows, Profiles } from '@kosmo/core/db';
-import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { isConfiguredLocalProfile } from '@kosmo/core/profile';
+import { db, Instances, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -13,6 +11,8 @@ type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
 
 const FollowerProfiles = alias(Profiles, 'profile_follow_connection_follower_profile');
 const FolloweeProfiles = alias(Profiles, 'profile_follow_connection_followee_profile');
+const FollowerInstances = alias(Instances, 'profile_follow_connection_follower_instance');
+const FolloweeInstances = alias(Instances, 'profile_follow_connection_followee_instance');
 const ProfileViewerState = builder.simpleObject('ProfileViewerState', {
   fields: (field) => ({
     isSelf: field.boolean(),
@@ -37,18 +37,6 @@ builder.objectFields(Profile, (t) => ({
   followers: t.connection({
     type: ProfileFollow,
     resolve: async (profile, args, ctx) => {
-      const configuredLocalInstance = await resolveConfiguredLocalInstance();
-
-      if (!isConfiguredLocalProfile(profile, configuredLocalInstance)) {
-        return resolveCursorConnection<Promise<ProfileFollowRow[]>>(
-          {
-            args,
-            toCursor: (profileFollow) => profileFollow.id,
-          },
-          async () => [],
-        );
-      }
-
       return resolveCursorConnection<Promise<ProfileFollowRow[]>>(
         {
           args,
@@ -60,15 +48,18 @@ builder.objectFields(Profile, (t) => ({
             .from(ProfileFollows)
             .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
             .innerJoin(FolloweeProfiles, eq(FolloweeProfiles.id, ProfileFollows.followeeProfileId))
+            .innerJoin(FollowerInstances, eq(FollowerInstances.id, FollowerProfiles.instanceId))
+            .innerJoin(FolloweeInstances, eq(FolloweeInstances.id, FolloweeProfiles.instanceId))
             .where(
               and(
                 eq(ProfileFollows.followeeProfileId, profile.id),
                 before ? gt(ProfileFollows.id, before) : undefined,
                 after ? lt(ProfileFollows.id, after) : undefined,
                 profileFollowAccessWhere({
-                  configuredLocalInstanceId: configuredLocalInstance.id,
                   ctx,
+                  followerInstance: FollowerInstances,
                   followerProfile: FollowerProfiles,
+                  followeeInstance: FolloweeInstances,
                   followeeProfile: FolloweeProfiles,
                 }),
               ),
@@ -82,18 +73,6 @@ builder.objectFields(Profile, (t) => ({
   following: t.connection({
     type: ProfileFollow,
     resolve: async (profile, args, ctx) => {
-      const configuredLocalInstance = await resolveConfiguredLocalInstance();
-
-      if (!isConfiguredLocalProfile(profile, configuredLocalInstance)) {
-        return resolveCursorConnection<Promise<ProfileFollowRow[]>>(
-          {
-            args,
-            toCursor: (profileFollow) => profileFollow.id,
-          },
-          async () => [],
-        );
-      }
-
       return resolveCursorConnection<Promise<ProfileFollowRow[]>>(
         {
           args,
@@ -105,15 +84,18 @@ builder.objectFields(Profile, (t) => ({
             .from(ProfileFollows)
             .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
             .innerJoin(FolloweeProfiles, eq(FolloweeProfiles.id, ProfileFollows.followeeProfileId))
+            .innerJoin(FollowerInstances, eq(FollowerInstances.id, FollowerProfiles.instanceId))
+            .innerJoin(FolloweeInstances, eq(FolloweeInstances.id, FolloweeProfiles.instanceId))
             .where(
               and(
                 eq(ProfileFollows.followerProfileId, profile.id),
                 before ? gt(ProfileFollows.id, before) : undefined,
                 after ? lt(ProfileFollows.id, after) : undefined,
                 profileFollowAccessWhere({
-                  configuredLocalInstanceId: configuredLocalInstance.id,
                   ctx,
+                  followerInstance: FollowerInstances,
                   followerProfile: FollowerProfiles,
+                  followeeInstance: FolloweeInstances,
                   followeeProfile: FolloweeProfiles,
                 }),
               ),
@@ -124,36 +106,12 @@ builder.objectFields(Profile, (t) => ({
       );
     },
   }),
-  followersCount: t.int({
-    resolve: async (profile) => {
-      const configuredLocalInstance = await resolveConfiguredLocalInstance();
-
-      return isConfiguredLocalProfile(profile, configuredLocalInstance)
-        ? profile.followersCount
-        : 0;
-    },
-  }),
-  followingCount: t.int({
-    resolve: async (profile) => {
-      const configuredLocalInstance = await resolveConfiguredLocalInstance();
-
-      return isConfiguredLocalProfile(profile, configuredLocalInstance)
-        ? profile.followingCount
-        : 0;
-    },
-  }),
+  followersCount: t.exposeInt('followersCount'),
+  followingCount: t.exposeInt('followingCount'),
   viewerFollow: t.field({
     type: ProfileFollow,
     nullable: true,
-    resolve: async (profile, _, ctx) => {
-      const configuredLocalInstance = await resolveConfiguredLocalInstance();
-
-      if (!isConfiguredLocalProfile(profile, configuredLocalInstance)) {
-        return null;
-      }
-
-      return viewerFollowLoader(ctx).load(profile.id);
-    },
+    resolve: (profile, _, ctx) => viewerFollowLoader(ctx).load(profile.id),
   }),
   viewerState: t.withAuth({ usingProfile: true }).field({
     type: ProfileViewerState,
@@ -161,14 +119,6 @@ builder.objectFields(Profile, (t) => ({
     unauthorizedResolver: () => null,
     resolve: async (profile, _, ctx) => {
       const viewerProfileId = ctx.session.profileId;
-      const configuredLocalInstance = await resolveConfiguredLocalInstance();
-
-      if (!isConfiguredLocalProfile(profile, configuredLocalInstance)) {
-        return {
-          isSelf: false,
-          follow: null,
-        };
-      }
 
       return {
         isSelf: viewerProfileId === profile.id,

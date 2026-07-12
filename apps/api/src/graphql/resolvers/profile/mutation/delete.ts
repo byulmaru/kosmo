@@ -1,9 +1,16 @@
-import { AccountProfiles, db, firstOrThrowWith, Profiles, Sessions } from '@kosmo/core/db';
+import {
+  AccountProfiles,
+  db,
+  firstOrThrowWith,
+  Instances,
+  Profiles,
+  Sessions,
+} from '@kosmo/core/db';
 import { AccountProfileRole, ProfileState } from '@kosmo/core/enums';
 import { NotFoundError, PermissionDeniedError } from '@kosmo/core/error';
-import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
+import { visibleProfileWhere } from '../access/visibility';
 
 builder.mutationField('deleteProfile', (t) =>
   t.withAuth({ login: true }).fieldWithInput({
@@ -16,17 +23,16 @@ builder.mutationField('deleteProfile', (t) =>
       id: t.input.id({ required: true }),
     },
     resolve: async (_, { input }, ctx) => {
-      const configuredLocalInstance = await resolveConfiguredLocalInstance();
       const profile = await db
         .select({ id: Profiles.id, actorRole: AccountProfiles.role })
         .from(Profiles)
         .innerJoin(AccountProfiles, eq(AccountProfiles.profileId, Profiles.id))
+        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
         .where(
           and(
             eq(Profiles.id, input.id),
-            eq(Profiles.state, ProfileState.ACTIVE),
             eq(AccountProfiles.accountId, ctx.session.accountId),
-            eq(Profiles.instanceId, configuredLocalInstance.id),
+            visibleProfileWhere({ profile: Profiles, instance: Instances }),
           ),
         )
         .limit(1)
