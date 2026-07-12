@@ -16,6 +16,7 @@
     "lint:syncpack": "syncpack lint --dependency-types prod,dev,peer",
     "prepare": "husky || true",
     "test": "pnpm --recursive --workspace-concurrency=1 --if-present test",
+    "test:dev-deployment": "node --test scripts/dev-deployment.test.mjs",
     "test:e2e": "node scripts/test-db.mjs run -- pnpm test:e2e:database",
     "test:e2e:database": "pnpm db:test:push && pnpm --filter @kosmo/web test:e2e",
     "test:fedify": "node scripts/test-db.mjs run -- pnpm test:fedify:database",

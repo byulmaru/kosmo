@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-main
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   restart_dev:
@@ -78,6 +78,15 @@ jobs:
           curl -sSfL -o "${RUNNER_TEMP}/argocd" "https://github.com/argoproj/argo-cd/releases/latest/download/argocd-darwin-${argocd_arch}"
           chmod 555 "${RUNNER_TEMP}/argocd"
           echo "${RUNNER_TEMP}" >> "${GITHUB_PATH}"
+
+      - name: Sync dev application
+        env:
+          ARGOCD_AUTH_TOKEN: ${{ steps.argocd-token.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          argocd --server "${ARGOCD_SERVER}" --grpc-web app sync kosmo-dev --timeout 600
 
       - name: Restart dev rollouts
         env:
