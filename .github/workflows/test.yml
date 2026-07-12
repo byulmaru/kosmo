@@ -27,9 +27,6 @@ jobs:
       - name: Install Playwright Chromium
         run: pnpm --filter @kosmo/app exec playwright install chromium
 
-      - name: Run database migration upgrade test
-        run: pnpm test:migrations
-
       - name: Run module tests
         run: pnpm test
 

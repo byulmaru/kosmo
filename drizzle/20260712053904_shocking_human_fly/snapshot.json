@@ -1,8 +1,8 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "b0fc8588-d9d1-480a-8c94-d7b527a69cd1",
-  "prevIds": ["31da2e3f-8095-4a22-8d88-6b0aface17be"],
+  "id": "09ac8693-f440-4c84-8684-cb59da5c28a6",
+  "prevIds": ["fa704a08-0d5b-4e41-94ed-7c055c17d9d1"],
   "ddl": [
     {
       "values": ["OWNER", "ADMIN", "MEMBER"],
@@ -1380,19 +1380,6 @@
       "table": "post_content"
     },
     {
-      "type": "jsonb",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "body_json",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_content"
-    },
-    {
       "type": "text",
       "typeSchema": null,
       "notNull": false,
@@ -1400,20 +1387,7 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "body_html",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_content"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "spoiler_text",
+      "name": "content_warning",
       "entityType": "columns",
       "schema": "public",
       "table": "post_content"
