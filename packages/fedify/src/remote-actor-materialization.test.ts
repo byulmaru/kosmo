@@ -913,5 +913,9 @@ const truncateDatabase = async () => {
 };
 
 const assertTestDatabaseUrl = () => {
-  assert.match(new URL(process.env.DATABASE_URL ?? '').pathname, /^\/kosmo_test(?:_[a-z0-9_]+)?$/);
+  const url = new URL(process.env.DATABASE_URL ?? '');
+  const databaseName = decodeURIComponent(url.pathname.slice(1));
+
+  assert.ok(['127.0.0.1', '[::1]', 'localhost'].includes(url.hostname));
+  assert.match(databaseName, /^kosmo_test(?:_[a-z0-9_]+)?$/);
 };
