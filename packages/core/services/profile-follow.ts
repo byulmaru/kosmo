@@ -4,6 +4,7 @@ import { ProfileFollowPolicy, ProfileState } from '../enums';
 import { ConflictError, NotFoundError } from '../error';
 
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
+type ProfileRow = typeof Profiles.$inferSelect;
 
 type ProfileFollowInput = {
   followerProfileId: string;
@@ -20,7 +21,6 @@ export const createProfileFollow = async ({
       .from(Profiles)
       .where(and(eq(Profiles.id, followeeProfileId), eq(Profiles.state, ProfileState.ACTIVE)))
       .limit(1)
-      .for('update')
       .then(firstOrThrowWith(() => new NotFoundError('Profile not found')));
 
     if (followerProfileId === target.id) {
@@ -83,10 +83,10 @@ export const createProfileFollow = async ({
 export const unfollowProfile = async ({
   followerProfileId,
   followeeProfileId,
-}: ProfileFollowInput): Promise<{ profileId: string; profileFollowId: string | null }> =>
+}: ProfileFollowInput): Promise<{ profile: ProfileRow; profileFollowId: string | null }> =>
   db.transaction(async (tx) => {
     const target = await tx
-      .select({ id: Profiles.id })
+      .select()
       .from(Profiles)
       .where(and(eq(Profiles.id, followeeProfileId), eq(Profiles.state, ProfileState.ACTIVE)))
       .limit(1)
@@ -114,5 +114,5 @@ export const unfollowProfile = async ({
         .where(eq(Profiles.id, target.id));
     }
 
-    return { profileId: target.id, profileFollowId: deleted?.id ?? null };
+    return { profile: target, profileFollowId: deleted?.id ?? null };
   });

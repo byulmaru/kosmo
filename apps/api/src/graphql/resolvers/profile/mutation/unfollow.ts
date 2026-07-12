@@ -20,7 +20,7 @@ builder.mutationField('unfollowProfile', (t) =>
         followeeProfileId: input.id,
       });
 
-      return { profile: result.profileId, profileFollowId: result.profileFollowId };
+      return { profile: result.profile, profileFollowId: result.profileFollowId };
     },
   }),
 );

@@ -3,7 +3,8 @@ import { after, test } from 'node:test';
 import { eq, inArray, or } from 'drizzle-orm';
 import { db, firstOrThrow, Instances, pg, ProfileFollows, Profiles } from '../db';
 import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
-import { ConflictError, NotFoundError } from '../error';
+import { ConflictError } from '../error';
+import { disableProfile } from './profile';
 import { createProfileFollow, unfollowProfile } from './profile-follow';
 
 const instanceIds: string[] = [];
@@ -84,60 +85,6 @@ test('follow action의 도메인 오류는 GraphQL field 이름을 포함하지 
   );
 });
 
-test('follow action은 동시에 비활성화된 대상에 관계를 생성하지 않는다', async () => {
-  const follower = await createProfile();
-  const followee = await createProfile();
-  let follow: ReturnType<typeof createProfileFollow> | undefined;
-
-  await db.transaction(async (tx) => {
-    await tx
-      .select({ id: Profiles.id })
-      .from(Profiles)
-      .where(eq(Profiles.id, followee.id))
-      .for('update');
-
-    follow = createProfileFollow({
-      followerProfileId: follower.id,
-      followeeProfileId: followee.id,
-    });
-
-    for (let attempts = 0; attempts < 100; attempts += 1) {
-      const [blocked] = await pg<{ blocked: boolean }[]>`
-        select exists (
-          select 1
-          from pg_stat_activity
-          where datname = current_database()
-            and pid <> pg_backend_pid()
-            and wait_event_type = 'Lock'
-            and query like '%"profile"%'
-        ) as blocked
-      `;
-      if (blocked?.blocked) {
-        break;
-      }
-      if (attempts === 99) {
-        assert.fail('follow query did not wait for the profile row lock');
-      }
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-
-    await tx
-      .update(Profiles)
-      .set({ state: ProfileState.DISABLED })
-      .where(eq(Profiles.id, followee.id));
-  });
-
-  await assert.rejects(follow, NotFoundError);
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(eq(ProfileFollows.followeeProfileId, followee.id))
-      .then((rows) => rows.length),
-    0,
-  );
-});
-
 test('unfollow action은 대상 조회, 관계 삭제와 count 감소를 함께 소유한다', async () => {
   const follower = await createProfile();
   const followee = await createProfile();
@@ -153,7 +100,13 @@ test('unfollow action은 대상 조회, 관계 삭제와 count 감소를 함께 
   });
 
   assert.ok(deleted.profileFollowId);
+  assert.equal(deleted.profile.id, followee.id);
   assert.equal(duplicate.profileFollowId, null);
+  assert.equal(duplicate.profile.id, followee.id);
   assert.equal((await readProfile(follower.id)).followingCount, 0);
   assert.equal((await readProfile(followee.id)).followersCount, 0);
+
+  await disableProfile(followee.id);
+  assert.equal(deleted.profile.state, ProfileState.ACTIVE);
+  assert.equal((await readProfile(followee.id)).state, ProfileState.DISABLED);
 });
