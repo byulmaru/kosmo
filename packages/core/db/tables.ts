@@ -291,6 +291,8 @@ export const Profiles = pgTable(
     displayName: text('display_name').notNull(),
     bio: text('bio'),
     followPolicy: Enum.profileFollowPolicy('follow_policy').notNull(),
+    followersCount: integer('followers_count').notNull().default(0),
+    followingCount: integer('following_count').notNull().default(0),
     createdAt: createdAt(),
   },
   (table) => [unique().on(table.instanceId, table.normalizedHandle)],
