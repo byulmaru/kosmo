@@ -337,6 +337,9 @@ importers:
       temporal-polyfill:
         specifier: ^0.3.2
         version: 0.3.2
+      tsx:
+        specifier: ^4.22.4
+        version: 4.22.4
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -6120,6 +6123,7 @@ packages:
   tsx@4.22.4:
     resolution: {integrity: sha512-X8EX+XV4QR5xCsrgxaED954zTDfY8KqlDtskKEL0cHhyS/P8b4IFOvGDQpsC9Q1XnLq915wEfwwY/zzskCtmhg==}
     engines: {node: '>=18.0.0'}
+    hasBin: true
 
   type-check@0.4.0:
     resolution: {integrity: sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew==}

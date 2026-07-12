@@ -27,12 +27,16 @@
     "drizzle-orm": "1.0.0-beta.22",
     "postgres": "^3.4.9",
     "temporal-polyfill": "^0.3.2",
+    "tsx": "^4.22.4",
     "zod": "^4.4.3"
   },
   "scripts": {
+    "db:migrate": "node --import tsx db/migrate.ts",
     "drizzle:generate": "node ../../scripts/vault-run.mjs -- drizzle-kit generate",
     "drizzle:push": "node ../../scripts/vault-run.mjs -- drizzle-kit push",
-    "drizzle:studio": "node ../../scripts/vault-run.mjs -- drizzle-kit studio"
+    "drizzle:studio": "node ../../scripts/vault-run.mjs -- drizzle-kit studio",
+    "test": "pnpm test:migrate",
+    "test:migrate": "cd ../.. && node scripts/test-db.mjs run -- pnpm --filter @kosmo/core exec node --import tsx --test db/migrate.test.ts"
   },
   "devDependencies": {
     "drizzle-kit": "1.0.0-beta.22"

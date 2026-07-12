@@ -36,3 +36,11 @@
 - `.codex/environments/environment.toml`의 setup script는 `mise trust`와 `pnpm install` 전에 원격 `refs/heads/main`을 `refs/remotes/origin/main`으로 fetch하고, 해당 ref의 commit OID를 확정한 뒤 로컬 `main` worktree 또는 `main` ref를 fast-forward로 최신화한다.
 - 새 Codex worktree의 현재 HEAD가 fetch된 `origin/main` commit의 조상인 경우에는 현재 worktree도 해당 commit까지 fast-forward하거나 detached HEAD를 해당 commit으로 옮긴다.
 - 로컬 `main`이 `origin/main`으로 fast-forward될 수 없는 상태라면 setup에서 자동 갱신을 거부하고 실패시킨다.
+
+## Dev database migrations
+
+- dev 배포는 `Deploy Dev`가 `kosmo-dev` 애플리케이션을 full sync하고, dev 전용 Argo CD `PreSync` Job이 같은 `latest` 런타임 이미지의 `migrate` entrypoint를 실행한 뒤 기존 API/web Rollout을 restart한다. sync나 migration이 실패하면 restart하지 않는다.
+- migration runner는 Drizzle history와 PostgreSQL advisory lock을 사용한다. `Deploy Dev` 실행도 취소하지 않고 직렬화하므로 동일 DB에 migration을 동시에 적용하지 않는다.
+- dev migration은 기존 dev DB와 credential을 그대로 사용하고 데이터를 reset하지 않는다. dev downtime은 허용한다.
+- 로컬에서는 `pnpm --filter @kosmo/core db:migrate`로 같은 runner를 실행한다. 런타임 이미지에는 `drizzle/` migration 파일이 포함된다.
+- production의 immutable image, expand/contract, backup/rollback/approval gate와 배포 smoke는 PROD-269 후속 범위이며 dev 계약을 그대로 production에 적용하지 않는다.
