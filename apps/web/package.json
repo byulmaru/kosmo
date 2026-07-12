@@ -8,7 +8,7 @@
     "check": "tsc --noEmit",
     "dev": "PORT=5174 tsx watch src/server/index.ts",
     "start": "tsx src/server/index.ts",
-    "test": "pnpm test:unit && pnpm test:e2e",
+    "test": "pnpm check && pnpm test:unit && pnpm --workspace-root test:e2e",
     "test:e2e": "playwright test --pass-with-no-tests",
     "test:unit": "vitest run"
   },
