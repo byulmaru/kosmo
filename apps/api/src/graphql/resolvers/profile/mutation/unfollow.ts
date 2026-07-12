@@ -14,13 +14,10 @@ builder.mutationField('unfollowProfile', (t) =>
     input: {
       id: t.input.id({ validate: z.uuid() }),
     },
-    resolve: async (_, { input }, ctx) => {
-      const result = await unfollowProfile({
+    resolve: (_, { input }, ctx) =>
+      unfollowProfile({
         followerProfileId: ctx.session.profileId,
         followeeProfileId: input.id,
-      });
-
-      return { profile: result.profile, profileFollowId: result.profileFollowId };
-    },
+      }),
   }),
 );

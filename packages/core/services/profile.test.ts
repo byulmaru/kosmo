@@ -93,6 +93,7 @@ test('disableProfile은 profile lifecycle과 active session 정리를 소유한�
       followerProfileId: follower.id,
       followeeProfileId: profile.id,
     });
+    await db.update(Profiles).set({ followersCount: 0 }).where(eq(Profiles.id, followee.id));
 
     await disableProfile(profile.id);
 
@@ -128,6 +129,51 @@ test('disableProfile은 profile lifecycle과 active session 정리를 소유한�
         .then(({ followingCount }) => followingCount),
       0,
     );
+
+    await createProfileFollow({
+      followerProfileId: follower.id,
+      followeeProfileId: followee.id,
+    });
+    await createProfileFollow({
+      followerProfileId: followee.id,
+      followeeProfileId: follower.id,
+    });
+    await pg`
+      create function delay_profile_disable() returns trigger
+      language plpgsql as $$
+      begin
+        perform pg_sleep(0.1);
+        return new;
+      end
+      $$
+    `;
+    await pg`
+      create trigger delay_profile_disable
+      after update of state on profile
+      for each row
+      when (new.state = 'DISABLED' and old.state <> 'DISABLED')
+      execute function delay_profile_disable()
+    `;
+
+    try {
+      await Promise.all([disableProfile(follower.id), disableProfile(followee.id)]);
+    } finally {
+      await pg`drop trigger delay_profile_disable on profile`;
+      await pg`drop function delay_profile_disable()`;
+    }
+
+    const concurrentlyDisabled = await db
+      .select()
+      .from(Profiles)
+      .where(inArray(Profiles.id, [follower.id, followee.id]));
+    assert.ok(concurrentlyDisabled.every(({ state }) => state === ProfileState.DISABLED));
+    const preservedDisabled = await db
+      .select()
+      .from(Profiles)
+      .where(eq(Profiles.id, profile.id))
+      .then(firstOrThrow);
+    assert.equal(preservedDisabled.followersCount, 1);
+    assert.equal(preservedDisabled.followingCount, 1);
     assert.equal(
       await db
         .select()

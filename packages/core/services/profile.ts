@@ -1,10 +1,10 @@
-import { and, eq, exists, sql } from 'drizzle-orm';
+import { and, DrizzleQueryError, eq, exists, sql } from 'drizzle-orm';
 import { db, first, ProfileFollows, Profiles, Sessions } from '../db';
 import { ProfileState } from '../enums';
 import { NotFoundError } from '../error';
 
-export const disableProfile = async (profileId: string) => {
-  await db.transaction(async (tx) => {
+const disableProfileOnce = (profileId: string) =>
+  db.transaction(async (tx) => {
     const disabled = await tx
       .update(Profiles)
       .set({ state: ProfileState.DISABLED })
@@ -60,4 +60,21 @@ export const disableProfile = async (profileId: string) => {
       .set({ activeProfileId: null })
       .where(eq(Sessions.activeProfileId, profileId));
   });
+
+export const disableProfile = async (profileId: string) => {
+  try {
+    return await disableProfileOnce(profileId);
+  } catch (error) {
+    const deadlock =
+      error instanceof DrizzleQueryError &&
+      error.cause &&
+      'code' in error.cause &&
+      error.cause.code === '40P01';
+
+    if (!deadlock) {
+      throw error;
+    }
+
+    return disableProfileOnce(profileId);
+  }
 };
