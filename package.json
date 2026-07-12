@@ -6,7 +6,7 @@
   "scripts": {
     "db:test:down": "node scripts/test-db.mjs down",
     "db:test:drop": "node scripts/test-db.mjs drop",
-    "db:test:push": "env DATABASE_URL=\"${DATABASE_URL:-postgres://kosmo:kosmo@localhost:54329/kosmo_test}\" NODE_OPTIONS='--preserve-symlinks --preserve-symlinks-main' ./packages/core/node_modules/.bin/drizzle-kit push --config packages/core/drizzle.config.ts",
+    "db:test:migrate": "env DATABASE_URL=\"${DATABASE_URL:-postgres://kosmo:kosmo@localhost:54329/kosmo_test}\" NODE_OPTIONS='--preserve-symlinks --preserve-symlinks-main' ./packages/core/node_modules/.bin/drizzle-kit migrate --config packages/core/drizzle.config.ts",
     "db:test:reset": "node scripts/test-db.mjs reset",
     "db:test:up": "node scripts/test-db.mjs up",
     "db:bootstrap-local-instance": "pnpm --filter @kosmo/api db:bootstrap-local-instance",
@@ -18,9 +18,11 @@
     "test": "pnpm --recursive --workspace-concurrency=1 --if-present test",
     "test:dev-deployment": "node --test scripts/dev-deployment.test.mjs",
     "test:e2e": "node scripts/test-db.mjs run -- pnpm test:e2e:database",
-    "test:e2e:database": "pnpm db:test:push && pnpm --filter @kosmo/web test:e2e",
+    "test:e2e:database": "pnpm db:test:migrate && pnpm --filter @kosmo/web test:e2e",
     "test:fedify": "node scripts/test-db.mjs run -- pnpm test:fedify:database",
-    "test:fedify:database": "pnpm db:test:push && pnpm --filter @kosmo/fedify test:unit"
+    "test:fedify:database": "pnpm db:test:migrate && pnpm --filter @kosmo/fedify test:unit",
+    "test:migrations": "node scripts/test-db.mjs run -- pnpm test:migrations:database",
+    "test:migrations:database": "node --import tsx scripts/test-profile-follow-count-migration.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
