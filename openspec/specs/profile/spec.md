@@ -94,6 +94,7 @@ API는 활성 local profile과 저장된 활성 ActivityPub remote profile을 Gr
 - **AND** 표시 이름은 handle과 같은 값으로 초기화된다
 - **AND** 팔로우 정책은 `OPEN`으로 초기화된다
 - **AND** mutation은 `CreateProfilePayload.profile`로 생성된 `Profile`을 반환한다
+- **AND** mutation은 `CreateProfilePayload.account`로 현재 계정과 갱신된 프로필 목록을 반환한다
 
 #### Scenario: Create profile with duplicate local handle
 
