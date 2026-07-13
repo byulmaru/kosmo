@@ -12,7 +12,7 @@
 
 ## 3. PROD-318 검증
 
-- [ ] 3.1 OIDC E2E mock을 confidential web client와 public native client로 분리하고, API direct exchange의 성공·PKCE/redirect/signature/payload 오류·no-store/no-cookie를 검증한다.
+- [x] 3.1 OIDC E2E mock을 confidential web client와 public native client로 분리하고, API direct exchange의 성공·PKCE/redirect/signature/payload 오류·no-store/no-cookie를 검증한다.
 - [x] 3.2 app unit test에 browser/native GraphQL host·credential·Bearer behavior와 session envelope mismatch/legacy 삭제를 추가한다.
 - [x] 3.3 API/unit, app Relay/typecheck/web export, web BFF regression을 실행하고 결과를 기록한다.
 
