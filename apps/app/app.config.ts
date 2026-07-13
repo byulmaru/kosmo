@@ -1,5 +1,23 @@
 import type { ExpoConfig } from 'expo/config';
 
+function androidVersionCode(): number {
+  const configured = process.env.KOSMO_ANDROID_VERSION_CODE;
+  if (configured === undefined) {
+    return 1;
+  }
+
+  if (!/^[1-9]\d*$/.test(configured)) {
+    throw new Error('KOSMO_ANDROID_VERSION_CODE must be a positive integer.');
+  }
+
+  const versionCode = Number(configured);
+  if (!Number.isSafeInteger(versionCode) || versionCode > 2_100_000_000) {
+    throw new Error('KOSMO_ANDROID_VERSION_CODE is outside Android versionCode limits.');
+  }
+
+  return versionCode;
+}
+
 const publicEnvironmentAliases = {
   EXPO_PUBLIC_API_ORIGIN: 'PUBLIC_API_ORIGIN',
   EXPO_PUBLIC_OIDC_ISSUER: 'PUBLIC_OIDC_ISSUER',
@@ -35,7 +53,7 @@ const config: ExpoConfig = {
   },
   android: {
     package: 'moe.kos',
-    versionCode: 1,
+    versionCode: androidVersionCode(),
     predictiveBackGestureEnabled: true,
   },
   web: {
