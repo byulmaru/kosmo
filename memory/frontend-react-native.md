@@ -27,7 +27,7 @@
 
 ## Relay Environment And Mutations
 
-- web request는 same-origin BFF `/graphql`과 HttpOnly cookie를 사용한다. Native request는 `EXPO_PUBLIC_API_ORIGIN`의 API `/graphql`에 SecureStore에서 복원한 session token을 Bearer로 보내고 `credentials: 'omit'`을 사용한다. Native SecureStore 값은 validated API origin, OIDC issuer, native public client ID와 token을 함께 저장하며 하나라도 현재 설정과 다르면 삭제해 환경 또는 OIDC application 전환 뒤 이전 bearer를 보내지 않는다. UI code가 web cookie를 직접 읽거나 native token을 URL에 넣지 않는다.
+- web request는 same-origin BFF `/graphql`과 HttpOnly cookie를 사용한다. Native request는 `EXPO_PUBLIC_API_ORIGIN`의 API `/graphql`에 SecureStore에서 복원한 session token을 Bearer로 보내고 `credentials: 'omit'`을 사용한다. AuthSession의 pre-Relay PKCE code exchange도 같은 API `/graphql`의 unauthenticated `exchangeNativeOidcSession` mutation으로 보내며, BFF REST route나 raw ID/access token 교환을 사용하지 않는다. Native SecureStore 값은 validated API origin, OIDC issuer, native public client ID와 token을 함께 저장하며 하나라도 현재 설정과 다르면 삭제해 환경 또는 OIDC application 전환 뒤 이전 bearer를 보내지 않는다. UI code가 web cookie를 직접 읽거나 native token을 URL에 넣지 않는다.
 - `Session.selectedProfile.id`가 바뀌면 Relay Environment와 Store를 새로 만든 뒤 현재 route query를 새 actor 기준으로 실행한다. `homeTimeline`, `viewerState`, `viewerFollow`를 수동 필드 목록으로 invalidate하지 않는다.
 - mutation 응답은 영향받는 Node의 `id`와 변경된 필드를 선택해 Relay normalized store가 갱신되게 한다. connection membership 변경이 필요할 때만 Relay connection directive 또는 좁은 updater를 사용한다.
 - 새 게시글의 Home/Profile 목록 membership은 현재 `createPost` updater가 아니라 후속 Relay subscription이 소유한다. subscription 전에는 게시 성공 후 열린 목록이 refetch 전까지 갱신되지 않는 제한을 수용하며 임시 `@prependNode`를 추가하지 않는다.

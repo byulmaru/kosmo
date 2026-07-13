@@ -20,12 +20,12 @@
 
 ### Requirement: Native secure session
 
-네이티브 앱은 OIDC code를 공개 API origin의 native session endpoint에서 Kosmo session token으로 교환하고 token을 platform secure storage에 보관해야 한다(MUST). 웹 BFF는 새 native bundle의 session 교환 경로가 아니어야 한다(MUST).
+네이티브 앱은 OIDC code를 공개 API origin의 unauthenticated `exchangeNativeOidcSession` GraphQL mutation에서 Kosmo session token으로 교환하고 token을 platform secure storage에 보관해야 한다(MUST). 웹 BFF는 새 native bundle의 session 교환 경로가 아니어야 한다(MUST).
 
 #### Scenario: Complete native login
 
 - **WHEN** system browser가 유효한 authorization code와 state를 반환한다
-- **THEN** 앱은 code, PKCE verifier, `kosmo://login/callback` redirect URI를 validated HTTPS API origin의 `/login/native/session`으로 보낸다
+- **THEN** 앱은 code, PKCE verifier, `kosmo://login/callback` redirect URI를 validated HTTPS API origin의 `/graphql`에 `exchangeNativeOidcSession` mutation input으로 보낸다
 - **AND** 앱은 응답의 Kosmo session token만 Expo SecureStore에 저장한다
 - **AND** 이후 Relay 요청은 API origin에 session token을 Bearer 인증으로 사용한다
 - **AND** 앱은 authorization code, PKCE verifier, ID token 또는 access token을 저장하지 않는다

@@ -17,6 +17,8 @@ Native `EXPO_PUBLIC_API_ORIGIN` must be an HTTPS origin. Loopback HTTP is accept
 
 Native OIDC uses Expo AuthSession with the `kosmo://login/callback` redirect. Register that exact URI with the provider and test login in a development or standalone build; Expo Go cannot use the custom callback scheme for this flow.
 
+After a successful callback, native login sends only the authorization code, PKCE verifier, and exact redirect URI to the API origin's `/graphql` `exchangeNativeOidcSession` mutation. It does not call the BFF native REST route or send raw OIDC tokens.
+
 Native projects are generated with `expo prebuild --clean`; they are not source-of-truth files.
 
 ## iOS Ad Hoc Firebase distribution

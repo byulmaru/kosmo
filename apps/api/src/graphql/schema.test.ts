@@ -40,3 +40,65 @@ test('rejects empty and over-500-character Plain Text before creating a post', a
     assert.equal(result.errors?.[0]?.message, message);
   }
 });
+
+test('exposes the unauthenticated native OIDC session exchange mutation', () => {
+  const mutation = schema.getMutationType();
+  const input = schema.getType('ExchangeNativeOidcSessionInput');
+  const payload = schema.getType('ExchangeNativeOidcSessionPayload');
+
+  assert.ok(mutation?.getFields().exchangeNativeOidcSession);
+  assert.ok(isInputObjectType(input));
+  assert.equal(String(input.getFields().code?.type), 'String!');
+  assert.equal(String(input.getFields().codeVerifier?.type), 'String!');
+  assert.equal(String(input.getFields().redirectUri?.type), 'String!');
+  assert.ok(isObjectType(payload));
+  assert.equal(String(payload.getFields().token?.type), 'String!');
+});
+
+test('rejects malformed native OIDC session exchange input before an OIDC exchange', async () => {
+  const result = await graphql({
+    schema,
+    source: `
+      mutation ExchangeNativeOidcSession($input: ExchangeNativeOidcSessionInput!) {
+        exchangeNativeOidcSession(input: $input) {
+          token
+        }
+      }
+    `,
+    variableValues: {
+      input: {
+        code: 'authorization-code',
+        codeVerifier: 'too-short',
+        redirectUri: 'https://evil.example/login/callback',
+      },
+    },
+  });
+
+  assert.equal(result.data == null, true);
+  assert.equal(result.errors?.[0]?.message, 'Invalid input');
+});
+
+test('does not accept raw upstream token fields for native OIDC session exchange', async () => {
+  const result = await graphql({
+    schema,
+    source: `
+      mutation ExchangeNativeOidcSession($input: ExchangeNativeOidcSessionInput!) {
+        exchangeNativeOidcSession(input: $input) {
+          token
+        }
+      }
+    `,
+    variableValues: {
+      input: {
+        accessToken: 'upstream-access-token',
+        code: 'authorization-code',
+        codeVerifier: 'v'.repeat(43),
+        idToken: 'upstream.id.token',
+        redirectUri: 'kosmo://login/callback',
+      },
+    },
+  });
+
+  assert.equal(result.data == null, true);
+  assert.match(result.errors?.[0]?.message ?? '', /Field .* is not defined/);
+});

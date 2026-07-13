@@ -39,6 +39,26 @@ const createUnexpectedGraphQLError = (error: unknown, graphQLError?: GraphQLErro
   });
 };
 
+const createValidationGraphQLError = (graphQLError: GraphQLError) =>
+  new GraphQLError('Invalid input', {
+    nodes: graphQLError.nodes,
+    source: graphQLError.source,
+    positions: graphQLError.positions,
+    path: graphQLError.path,
+    extensions: {
+      code: 'VALIDATION',
+    },
+  });
+
+const isNativeOidcSessionInputError = (error: GraphQLError) => {
+  const isNativeOidcSessionOperation =
+    error.source?.body.includes('exchangeNativeOidcSession') === true;
+  const isInputCoercionError = /^Variable "\$[^"]+" got invalid value/.test(error.message);
+  const isNativeInputValidationError = error.message.includes('ExchangeNativeOidcSessionInput');
+
+  return (isNativeOidcSessionOperation && isInputCoercionError) || isNativeInputValidationError;
+};
+
 const transformError = (error: unknown): GraphQLError => {
   const graphQLError = error instanceof GraphQLError ? error : undefined;
   const kosmoError = unwrapKosmoError(error);
@@ -52,6 +72,13 @@ const transformError = (error: unknown): GraphQLError => {
       extensions: getKosmoErrorExtensions(kosmoError),
       originalError: kosmoError,
     });
+  }
+
+  // Variable coercion happens before the mutation resolver. Mask only this
+  // public credential-exchange operation so malformed inputs cannot echo code
+  // or token values while preserving other GraphQL validation diagnostics.
+  if (graphQLError && isNativeOidcSessionInputError(graphQLError)) {
+    return createValidationGraphQLError(graphQLError);
   }
 
   if (graphQLError && !graphQLError.originalError) {
