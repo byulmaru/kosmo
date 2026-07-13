@@ -4,8 +4,13 @@ import { createServer } from 'node:http';
 const port = Number(process.env.OIDC_MOCK_PORT ?? 4300);
 const host = process.env.OIDC_MOCK_HOST ?? '127.0.0.1';
 const issuer = process.env.PUBLIC_OIDC_ISSUER ?? `http://${host}:${port}`;
-const clientId = process.env.PUBLIC_OIDC_CLIENT_ID ?? 'kosmo-e2e-client';
-const clientSecret = process.env.OIDC_CLIENT_SECRET ?? 'kosmo-e2e-secret';
+const webClientId = process.env.PUBLIC_OIDC_CLIENT_ID ?? 'kosmo-e2e-client';
+const webClientSecret = process.env.OIDC_CLIENT_SECRET ?? 'kosmo-e2e-secret';
+const nativeClientId = process.env.PUBLIC_OIDC_NATIVE_CLIENT_ID ?? 'kosmo-e2e-native-client';
+const clients = new Map([
+  [webClientId, { secret: webClientSecret, type: 'confidential' }],
+  [nativeClientId, { type: 'public' }],
+]);
 const keyId = 'kosmo-e2e-signing-key';
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const publicJwk = {
@@ -34,7 +39,7 @@ const readFormBody = async (request) => {
 const createCodeChallenge = (codeVerifier) =>
   createHash('sha256').update(codeVerifier).digest('base64url');
 
-const createIdToken = ({ email, email_verified: emailVerified, name, sub }) => {
+const createIdToken = ({ clientId, email, email_verified: emailVerified, name, sub }) => {
   const issuedAt = Math.floor(Date.now() / 1000);
   const header = Buffer.from(JSON.stringify({ alg: 'RS256', kid: keyId, typ: 'JWT' })).toString(
     'base64url',
@@ -83,7 +88,7 @@ const server = createServer(async (request, response) => {
       scopes_supported: ['openid', 'profile'],
       subject_types_supported: ['public'],
       token_endpoint: `${issuer}/oauth/token`,
-      token_endpoint_auth_methods_supported: ['client_secret_post'],
+      token_endpoint_auth_methods_supported: ['client_secret_post', 'none'],
     });
     return;
   }
@@ -101,10 +106,11 @@ const server = createServer(async (request, response) => {
     const codeChallengeMethod = url.searchParams.get('code_challenge_method');
     const invalidSignature = url.searchParams.get('login_hint') === 'invalid-signature';
     const state = url.searchParams.get('state');
+    const client = clients.get(requestClientId);
 
     if (
       responseType !== 'code' ||
-      requestClientId !== clientId ||
+      !client ||
       !redirectUri ||
       !codeChallenge ||
       codeChallengeMethod !== 'S256' ||
@@ -116,6 +122,7 @@ const server = createServer(async (request, response) => {
 
     const code = randomUUID();
     codes.set(code, {
+      clientId: requestClientId,
       codeChallenge,
       email: 'e2e-user@example.test',
       email_verified: true,
@@ -145,10 +152,17 @@ const server = createServer(async (request, response) => {
     const body = await readFormBody(request);
     const code = body.get('code');
     const codeData = code ? codes.get(code) : undefined;
+    const client = codeData ? clients.get(codeData.clientId) : undefined;
+    const hasValidClientAuthentication =
+      client?.type === 'confidential'
+        ? body.get('client_secret') === client.secret
+        : client?.type === 'public' && body.get('client_secret') === null;
+
     if (
       body.get('grant_type') !== 'authorization_code' ||
-      body.get('client_id') !== clientId ||
-      body.get('client_secret') !== clientSecret ||
+      !client ||
+      body.get('client_id') !== codeData?.clientId ||
+      !hasValidClientAuthentication ||
       !codeData ||
       body.get('redirect_uri') !== codeData.redirectUri ||
       createCodeChallenge(body.get('code_verifier') ?? '') !== codeData.codeChallenge

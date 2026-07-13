@@ -15,14 +15,15 @@ import type {
 
 const { authorizationCodeGrant, createSession, discovery, federationFetch } = vi.hoisted(() => ({
   authorizationCodeGrant: vi.fn<typeof oidcAuthorizationCodeGrant>(),
-  createSession:
-    vi.fn<
-      (identity: {
-        accessToken: string;
+  createSession: vi.fn<
+    (
+      database: unknown,
+      identity: {
         displayName: string;
         oidcSubject: string;
-      }) => Promise<string>
-    >(),
+      },
+    ) => Promise<string>
+  >(),
   discovery: vi.fn<typeof oidcDiscovery>(),
   federationFetch: vi.fn<typeof federation.fetch>(),
 }));
@@ -198,8 +199,7 @@ describe('browser login', () => {
       idTokenExpected: true,
       pkceCodeVerifier: verifier,
     });
-    expect(createSession).toHaveBeenCalledWith({
-      accessToken: 'oidc-access-token',
+    expect(createSession).toHaveBeenCalledWith(expect.anything(), {
       displayName: 'Kosmo User',
       oidcSubject: 'oidc-subject',
     });

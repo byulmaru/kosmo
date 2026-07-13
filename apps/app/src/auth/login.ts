@@ -7,6 +7,7 @@ import {
 } from 'expo-auth-session';
 import { Platform } from 'react-native';
 import { getWebOrigin } from '@/relay/network';
+import { getNativeSessionConfiguration } from './nativeConfig';
 import type { GestureResponderEvent } from 'react-native';
 
 type NativeSessionResponse = {
@@ -38,12 +39,7 @@ export function startWebLoginFromPress(event: GestureResponderEvent): void {
 }
 
 export async function startNativeLogin(): Promise<string | null> {
-  const issuer = process.env.EXPO_PUBLIC_OIDC_ISSUER;
-  const clientId = process.env.EXPO_PUBLIC_OIDC_CLIENT_ID;
-
-  if (!issuer || !clientId) {
-    throw new Error('EXPO_PUBLIC_OIDC_ISSUER and EXPO_PUBLIC_OIDC_CLIENT_ID are required.');
-  }
+  const { apiOrigin, clientId, issuer } = getNativeSessionConfiguration();
 
   const redirectUri = makeRedirectUri({
     native: 'kosmo://login/callback',
@@ -69,8 +65,9 @@ export async function startNativeLogin(): Promise<string | null> {
     throw new Error('로그인 승인을 완료하지 못했습니다.');
   }
 
-  const response = await fetch(`${getWebOrigin()}/login/native/session`, {
+  const response = await fetch(`${apiOrigin}/login/native/session`, {
     method: 'POST',
+    credentials: 'omit',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       code: result.params.code,

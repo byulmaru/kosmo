@@ -131,6 +131,9 @@ importers:
       hono:
         specifier: ^4.12.25
         version: 4.12.25
+      openid-client:
+        specifier: 6.8.4
+        version: 6.8.4
       remeda:
         specifier: ^2.34.1
         version: 2.34.1

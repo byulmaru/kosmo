@@ -1,15 +1,4 @@
 import {
-  AccountProfiles,
-  Accounts,
-  db,
-  first,
-  firstOrThrow,
-  Profiles,
-  Sessions,
-} from '@kosmo/core/db';
-import { AccountState, ProfileState, SessionState } from '@kosmo/core/enums';
-import { and, desc, eq } from 'drizzle-orm';
-import {
   allowInsecureRequests,
   authorizationCodeGrant,
   AuthorizationResponseError,
@@ -21,12 +10,13 @@ import {
 } from 'openid-client';
 import type { Configuration } from 'openid-client';
 
+export { createOidcSession } from '@kosmo/core/db';
+
 export const LOGIN_CODE_VERIFIER_COOKIE = 'kosmo_oidc_code_verifier';
 export const LOGIN_STATE_COOKIE = 'kosmo_oidc_state';
 export const NATIVE_REDIRECT_URI = 'kosmo://login/callback';
 
 type OidcIdentity = {
-  accessToken: string;
   displayName: string;
   oidcSubject: string;
 };
@@ -122,55 +112,7 @@ export const exchangeOidcCode = async ({
   }
 
   return {
-    accessToken: tokens.access_token,
     displayName: claims.name,
     oidcSubject: claims.sub,
   };
-};
-
-export const createOidcSession = async ({
-  accessToken,
-  displayName,
-  oidcSubject,
-}: OidcIdentity) => {
-  return db.transaction(async (tx) => {
-    const account = await tx
-      .insert(Accounts)
-      .values({
-        displayName,
-        oidcSubject,
-        state: AccountState.ACTIVE,
-      })
-      .onConflictDoUpdate({
-        target: [Accounts.oidcSubject],
-        set: { displayName },
-      })
-      .returning({ id: Accounts.id })
-      .then(firstOrThrow);
-
-    const activeProfile = await tx
-      .select({ id: Profiles.id })
-      .from(Profiles)
-      .innerJoin(
-        AccountProfiles,
-        and(eq(AccountProfiles.profileId, Profiles.id), eq(AccountProfiles.accountId, account.id)),
-      )
-      .where(eq(Profiles.state, ProfileState.ACTIVE))
-      .orderBy(desc(Profiles.id))
-      .limit(1)
-      .then(first);
-
-    return tx
-      .insert(Sessions)
-      .values({
-        accountId: account.id,
-        activeProfileId: activeProfile?.id ?? null,
-        oidcSessionKey: accessToken,
-        state: SessionState.ACTIVE,
-        token: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url'),
-      })
-      .returning({ token: Sessions.token })
-      .then(firstOrThrow)
-      .then((session) => session.token);
-  });
 };
