@@ -1,4 +1,7 @@
+require 'digest'
 require 'fileutils'
+require 'json'
+require 'open3'
 require 'plist'
 require 'set'
 require 'shellwords'
@@ -243,6 +246,236 @@ platform :ios do
     ensure
       delete_ephemeral_keychain(path: keychain_path) if keychain_path
       FileUtils.rm_f(udids_file)
+    end
+  end
+end
+
+ANDROID_APP_ROOT = File.expand_path('..', __dir__)
+ANDROID_DIRECTORY = File.join(ANDROID_APP_ROOT, 'android')
+ANDROID_PACKAGE = 'moe.kos'
+
+def android_required_environment(name)
+  value = ENV.fetch(name, '').strip
+  UI.user_error!("#{name} is required") if value.empty?
+  value
+end
+
+def android_run_command!(*command)
+  output, status = Open3.capture2e(*command, chdir: ANDROID_APP_ROOT)
+  UI.user_error!("#{command.first} failed:\n#{output}") unless status.success?
+  output
+end
+
+def android_run_command_with_environment!(environment, *command)
+  output, status = Open3.capture2e(environment, *command, chdir: ANDROID_APP_ROOT)
+  UI.user_error!("#{command.first} failed:\n#{output}") unless status.success?
+  output
+end
+
+def android_run_adb!(*arguments)
+  output, status = Open3.capture2e(android_required_environment('ANDROID_ADB'), *arguments)
+  UI.user_error!("adb #{arguments.join(' ')} failed:\n#{output}") unless status.success?
+  output
+end
+
+def android_run_adb_probe(*arguments)
+  Open3.capture2e(android_required_environment('ANDROID_ADB'), *arguments)
+end
+
+def android_normalized_fingerprint(value)
+  fingerprint = value.delete(':').upcase
+  UI.user_error!('Android certificate SHA-256 fingerprint is invalid') unless fingerprint.match?(/\A[0-9A-F]{64}\z/)
+  fingerprint
+end
+
+def android_release_config
+  expo_config = JSON.parse(android_run_command!('pnpm', 'exec', 'expo', 'config', '--type', 'public', '--json'))
+  package_name = expo_config.fetch('android').fetch('package')
+  UI.user_error!("Android package must remain #{ANDROID_PACKAGE}") unless package_name == ANDROID_PACKAGE
+
+  build_number = Integer(android_required_environment('KOSMO_ANDROID_BUILD_NUMBER'), 10)
+  UI.user_error!('KOSMO_ANDROID_BUILD_NUMBER must allow a predecessor build') if build_number < 2
+
+  source_commit = android_required_environment('KOSMO_SOURCE_COMMIT')
+  UI.user_error!('KOSMO_SOURCE_COMMIT must be a full Git SHA') unless source_commit.match?(/\A[0-9a-f]{40}\z/)
+
+  tester_group = android_required_environment('FIREBASE_TESTER_GROUP')
+  UI.user_error!('FIREBASE_TESTER_GROUP must be a group alias, not tester emails') if tester_group.include?('@') || tester_group.include?(',')
+
+  {
+    apk_analyzer: android_required_environment('ANDROID_APKANALYZER'),
+    apksigner: android_required_environment('ANDROID_APKSIGNER'),
+    app_id: android_required_environment('FIREBASE_ANDROID_APP_ID'),
+    build_number: build_number,
+    expected_fingerprint: android_normalized_fingerprint(android_required_environment('ANDROID_RELEASE_CERTIFICATE_SHA256')),
+    marketing_version: expo_config.fetch('version'),
+    metadata_path: android_required_environment('KOSMO_RELEASE_METADATA_PATH'),
+    predecessor_apk: android_required_environment('KOSMO_ANDROID_PREDECESSOR_APK'),
+    release_notes: android_required_environment('KOSMO_RELEASE_NOTES'),
+    run_url: android_required_environment('KOSMO_ACTIONS_RUN_URL'),
+    source_commit: source_commit,
+    tester_group: tester_group,
+  }
+end
+
+def android_build_release!(version_code)
+  android_run_command_with_environment!(
+    { 'KOSMO_ANDROID_VERSION_CODE' => version_code.to_s },
+    'pnpm',
+    'exec',
+    'expo',
+    'prebuild',
+    '--clean',
+    '--platform',
+    'android',
+    '--no-install',
+  )
+
+  gradle(
+    task: 'assemble',
+    build_type: 'Release',
+    project_dir: ANDROID_DIRECTORY,
+    flags: '--no-daemon',
+    print_command: false,
+  )
+
+  apk = File.join(ANDROID_DIRECTORY, 'app/build/outputs/apk/release/app-release.apk')
+  UI.user_error!('Release APK was not created') unless File.file?(apk) && File.size?(apk)
+  apk
+end
+
+def android_verify_apk!(config, apk, expected_version_code)
+  package_name = android_run_command!(config[:apk_analyzer], 'manifest', 'application-id', apk).strip
+  version_code = android_run_command!(config[:apk_analyzer], 'manifest', 'version-code', apk).strip
+  version_name = android_run_command!(config[:apk_analyzer], 'manifest', 'version-name', apk).strip
+  UI.user_error!("APK package ID mismatch: #{package_name}") unless package_name == ANDROID_PACKAGE
+  UI.user_error!("APK versionCode mismatch: #{version_code}") unless version_code == expected_version_code.to_s
+  UI.user_error!("APK versionName mismatch: #{version_name}") unless version_name == config[:marketing_version]
+
+  verification = android_run_command!(config[:apksigner], 'verify', '--verbose', '--print-certs', apk)
+  actual_fingerprint = verification[/certificate SHA-256 digest:\s*([0-9A-Fa-f:]+)/i, 1]
+  UI.user_error!('APK signing certificate was not found') unless actual_fingerprint
+  unless android_normalized_fingerprint(actual_fingerprint) == config[:expected_fingerprint]
+    UI.user_error!('APK signing certificate fingerprint mismatch')
+  end
+end
+
+def android_selected_device!
+  requested = ENV.fetch('KOSMO_ANDROID_DEVICE_SERIAL', '').strip
+  devices = android_run_adb!('devices').lines.filter_map do |line|
+    serial, state = line.split(/\s+/, 2)
+    serial if state&.strip == 'device'
+  end
+
+  if requested.empty?
+    UI.user_error!('Exactly one connected Android test device is required') unless devices.one?
+    return devices.first
+  end
+
+  UI.user_error!('Requested Android test device is not connected') unless devices.include?(requested)
+  requested
+end
+
+def android_installed_version_code(serial)
+  output = android_run_adb!('-s', serial, 'shell', 'dumpsys', 'package', ANDROID_PACKAGE)
+  output[/versionCode=(\d+)/, 1]&.to_i
+end
+
+def android_wait_for_running!(serial)
+  10.times do
+    output, status = android_run_adb_probe('-s', serial, 'shell', 'pidof', ANDROID_PACKAGE)
+    return if status.success? && !output.strip.empty?
+
+    sleep 1
+  end
+
+  UI.user_error!('Android app did not stay running after launch')
+end
+
+def android_verify_install_and_update!(config, predecessor_apk, release_apk)
+  serial = android_selected_device!
+  installed_before = android_installed_version_code(serial)
+
+  if installed_before.nil?
+    android_run_adb!('-s', serial, 'install', predecessor_apk)
+    predecessor_version = android_installed_version_code(serial)
+    unless predecessor_version == config[:build_number] - 1
+      UI.user_error!('Android predecessor install did not set the expected versionCode')
+    end
+  elsif installed_before >= config[:build_number]
+    UI.user_error!("Android test device already has versionCode #{installed_before}; run a newer distribution")
+  end
+
+  android_run_adb!('-s', serial, 'install', '-r', release_apk)
+  installed_after = android_installed_version_code(serial)
+  UI.user_error!('Android update did not set the expected versionCode') unless installed_after == config[:build_number]
+  android_run_adb!('-s', serial, 'shell', 'monkey', '-p', ANDROID_PACKAGE, '1')
+  android_wait_for_running!(serial)
+end
+
+def android_verify_wif_adc!
+  credentials_path = android_required_environment('GOOGLE_APPLICATION_CREDENTIALS')
+  UI.user_error!('Google ADC file does not exist') unless File.file?(credentials_path)
+  credentials = JSON.parse(File.read(credentials_path))
+  UI.user_error!('Firebase upload must use WIF Application Default Credentials') unless credentials['type'] == 'external_account'
+  credentials_path
+end
+
+def android_release_value(release, name)
+  release[name] || release[name.to_s]
+end
+
+def android_write_metadata!(config, apk, release)
+  firebase_console_uri = android_release_value(release, :firebaseConsoleUri)
+  testing_uri = android_release_value(release, :testingUri)
+  UI.user_error!('Firebase release did not return its console URL') unless firebase_console_uri
+  UI.user_error!('Firebase release did not return its tester URL') unless testing_uri
+
+  metadata = {
+    artifact_sha256: Digest::SHA256.file(apk).hexdigest,
+    artifact_size_bytes: File.size(apk),
+    firebase_console_uri: firebase_console_uri,
+    package_name: ANDROID_PACKAGE,
+    signer_sha256: config[:expected_fingerprint],
+    source_commit: config[:source_commit],
+    testing_uri: testing_uri,
+    version_code: config[:build_number],
+    version_name: config[:marketing_version],
+    workflow_url: config[:run_url],
+  }
+  FileUtils.mkdir_p(File.dirname(config[:metadata_path]), mode: 0o700)
+  File.write(config[:metadata_path], JSON.generate(metadata))
+  File.chmod(0o600, config[:metadata_path])
+end
+
+platform :android do
+  desc 'Build, verify, install, update, and distribute a signed Android Release APK'
+  lane :distribute do
+    config = android_release_config
+
+    begin
+      android_run_command!('pnpm', 'relay')
+
+      predecessor_apk = android_build_release!(config[:build_number] - 1)
+      FileUtils.cp(predecessor_apk, config[:predecessor_apk])
+      android_verify_apk!(config, config[:predecessor_apk], config[:build_number] - 1)
+
+      release_apk = android_build_release!(config[:build_number])
+      android_verify_apk!(config, release_apk, config[:build_number])
+      android_verify_install_and_update!(config, config[:predecessor_apk], release_apk)
+
+      credentials_path = android_verify_wif_adc!
+      release = firebase_app_distribution(
+        app: config[:app_id],
+        android_artifact_path: release_apk,
+        android_artifact_type: 'APK',
+        groups: config[:tester_group],
+        release_notes: config[:release_notes],
+        service_credentials_file: credentials_path,
+      )
+      android_write_metadata!(config, release_apk, release)
+    ensure
+      FileUtils.rm_rf(ANDROID_DIRECTORY)
     end
   end
 end
