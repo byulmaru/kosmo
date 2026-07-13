@@ -123,51 +123,40 @@ API는 활성 local profile과 저장된 활성 remote profile을 GraphQL profil
 
 ### Requirement: Profile follow graph
 
-API는 local profile 간 visible follow 관계를 GraphQL에서 조회할 수 있어야 한다(MUST).
+API는 활성 상태이고 `SUSPENDED`가 아닌 profile 간 visible follow 관계를 GraphQL에서 조회할 수 있어야 한다(MUST).
 
 #### Scenario: Read followers
 
-- **WHEN** 클라이언트가 활성 local profile의 followers connection을 조회한다
-- **THEN** 시스템은 해당 프로필을 followee로 하고 follower 프로필도 활성 local profile인 follow 관계 중 viewer가 볼 수 있는 관계를 반환한다
+- **WHEN** 클라이언트가 활성 profile의 followers connection을 조회한다
+- **THEN** 시스템은 해당 profile을 followee로 하고 follower 프로필도 노출 가능한 활성 profile인 follow 관계 중 viewer가 볼 수 있는 관계를 반환한다
 - **AND** 각 edge의 node는 해당 `ProfileFollow`이다
 
 #### Scenario: Read following
 
-- **WHEN** 클라이언트가 활성 local profile의 following connection을 조회한다
-- **THEN** 시스템은 해당 프로필을 follower로 하고 followee 프로필도 활성 local profile인 follow 관계 중 viewer가 볼 수 있는 관계를 반환한다
+- **WHEN** 클라이언트가 활성 profile의 following connection을 조회한다
+- **THEN** 시스템은 해당 profile을 follower로 하고 followee 프로필도 노출 가능한 활성 profile인 follow 관계 중 viewer가 볼 수 있는 관계를 반환한다
 - **AND** 각 edge의 node는 해당 `ProfileFollow`이다
-
-#### Scenario: Count follows
-
-- **WHEN** 클라이언트가 활성 local profile의 followersCount 또는 followingCount를 조회한다
-- **THEN** 시스템은 상대 프로필도 활성 local profile인 follow 관계만 집계한다
 
 #### Scenario: Read public follow
 
 - **WHEN** 클라이언트가 자기 active profile과 관련되지 않은 follow 관계를 조회한다
-- **THEN** 시스템은 follower와 followee 프로필이 모두 활성 local profile이고 `followPolicy`가 `OPEN`인 경우에만 해당 `ProfileFollow`를 반환한다
+- **THEN** 시스템은 follower와 followee 프로필이 모두 노출 가능한 활성 profile이고 `followPolicy`가 `OPEN`인 경우에만 해당 `ProfileFollow`를 반환한다
 
 #### Scenario: Read own follow relationship
 
 - **WHEN** active profile이 있는 인증자가 자기 active profile이 follower 또는 followee인 follow 관계를 조회한다
-- **THEN** 시스템은 follower와 followee 프로필이 모두 활성 local profile이면 해당 `ProfileFollow`를 반환한다
+- **THEN** 시스템은 follower와 followee 프로필이 모두 노출 가능한 활성 profile이면 해당 `ProfileFollow`를 반환한다
 
-#### Scenario: Read viewer follow for local target
+#### Scenario: Read viewer follow
 
-- **WHEN** active profile이 있는 인증자가 다른 활성 local profile에 대한 viewer follow 관계를 조회한다
+- **WHEN** active profile이 있는 인증자가 다른 노출 가능한 활성 profile에 대한 viewer follow 관계를 조회한다
 - **THEN** 시스템은 viewer active profile이 대상 프로필을 follow하는 `ProfileFollow` 관계를 반환한다
 - **AND** follow 관계가 없으면 없음으로 응답한다
-
-#### Scenario: Do not expose viewer follow for remote target
-
-- **WHEN** active profile이 있는 인증자가 저장된 활성 remote profile에 대한 viewer follow 관계를 조회한다
-- **THEN** 시스템은 follow 관계 없음으로 응답한다
-- **AND** 시스템은 remote follow fetch 또는 ActivityPub delivery를 시도하지 않는다
 
 #### Scenario: Read ProfileFollow profiles
 
 - **WHEN** 클라이언트가 `ProfileFollow.follower` 또는 `ProfileFollow.followee`를 조회한다
-- **THEN** 시스템은 관계의 follower profile 또는 followee profile이 노출 가능한 활성 local profile이면 반환한다
+- **THEN** 시스템은 관계의 follower profile 또는 followee profile이 노출 가능한 활성 profile이면 반환한다
 - **AND** 해당 프로필이 노출 가능하지 않으면 없음으로 응답한다
 
 ### Requirement: Follow profile mutation

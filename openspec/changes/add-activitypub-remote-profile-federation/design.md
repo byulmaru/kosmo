@@ -1,6 +1,6 @@
 ## Context
 
-`add-activitypub-actor-discovery`는 local profile을 WebFinger와 actor document로 공개하는 read-only federation 경계를 만든다. 그 변경은 remote profile을 `Profile` 저장 모델에 올릴 수 있는 토대를 마련하지만, 기존 `profileByHandle`, follow/unfollow, `Profile.posts`는 local-only로 닫아 둔다.
+`add-activitypub-actor-discovery`는 local profile을 WebFinger와 actor document로 공개하는 read-only federation 경계를 만든다. 그 변경은 remote profile을 `Profile` 저장 모델에 올릴 수 있는 토대를 마련하고, 기존 `profileByHandle`과 신규 remote follow 생성, `Profile.posts`는 local capability 경계로 유지하되 ownership/visibility 기반 선택과 기존 visible follow 관계의 조회·unfollow에는 instance kind guard를 두지 않는다.
 
 이번 변경은 첫 번째 후속 단계로, remote ActivityPub actor를 기존 `Profile` row로 materialize하고 GraphQL에서 active remote profile을 읽을 수 있게 한다. follow, inbox activity, remote posts는 별도 changes에서 다룬다.
 
@@ -14,10 +14,11 @@
 - remote actor URI를 ActivityPub identity의 canonical key로 사용하고, kosmo 내부 identity는 `Profile.id`를 계속 사용한다.
 - remote actor를 기존 `Profile` 필드로 projection하고, 소속 instance의 `kind`를 `Profile.instance.kind`로 노출해 local/remote를 구분한다.
 - remote actor refresh timestamp와 suspended instance 차단 정책을 정의한다.
+- active profile 선택·session restore와 기존 follow 관계 접근은 instance kind가 아니라 account ownership 및 active/non-`SUSPENDED` visibility를 실제 invariant로 사용한다.
 
 **Non-Goals:**
 
-- remote follow/unfollow, inbound Follow/Accept/Reject/Undo 처리.
+- ActivityPub remote Follow/Undo delivery, 신규 remote follow 생성, inbound Follow/Accept/Reject/Undo 처리.
 - remote outbox/Note ingestion, remote `Profile.posts` 확장, home timeline에 remote posts 포함.
 - actor URI 직접 입력만으로 remote profile 저장.
 - dedicated background worker/queue 기반 refresh 최적화.
@@ -38,6 +39,7 @@
 - **remote follow policy는 actor projection에서만 저장한다.** actor가 follower 승인 필요 속성을 제공하면 `Profile.followPolicy = APPROVAL_REQUIRED`, 그렇지 않으면 `OPEN`으로 저장한다. 이 change에서는 저장만 하고 remote follow 동작은 열지 않는다.
 - **stale actor는 7일 기준으로 비동기 refresh한다.** `ActivityPubActor.lastFetchedAt`이 없거나 7일을 넘더라도 저장된 active profile 참조는 refresh 완료를 기다리지 않는다. federation 내부 materialization 경로는 기존 active profile을 반환하고 refresh를 비동기적으로 예약/수행한다. `profileByHandle`과 Node load는 DB-only로 유지한다. refresh 실패 시 기존 active profile은 stale 상태로 계속 반환할 수 있다. 실패한 resolve에 대한 negative cache는 두지 않는다.
 - **suspended instance는 GraphQL profile 노출도 막는다.** `InstanceState.SUSPENDED`는 운영 정책상 federation 차단이므로 해당 instance의 profile Node 조회, DB handle 조회 결과 노출, actor materialization을 막는다. `UNRESPONSIVE`는 이미 저장된 stale profile 조회는 허용하지만 outbound federation을 억제하므로 actor materialization이나 refresh를 예약/수행하지 않는다.
+- **선택과 기존 follow 관계 접근은 kind guard를 두지 않는다.** active profile 선택과 session restore는 account ownership 및 active/non-`SUSPENDED` visibility를 만족하면 local/remote profile에 동일하게 적용한다. 신규 remote follow 생성은 ActivityPub delivery가 없으므로 계속 차단하지만, 이미 저장된 visible 관계의 follow graph/viewerFollow 조회와 unfollow는 instance kind와 무관하게 처리한다.
 - **web 링크는 remote profile을 federated handle로 이동시킨다.** 저장된 remote profile을 검색 결과, profile list, profile page, profile page의 하위 링크에서 보여줄 때 bare `handle` 기반 `/@handle` URL을 만들지 않고 `relativeHandle`을 사용해 route parameter가 `handle@domain`으로 전달되는 federated handle URL로 연결한다. remote follow 동작은 `instance.kind`가 `ACTIVITYPUB`이면 후속 change 전까지 노출하지 않거나 비활성화한다.
 
 ## Risks / Trade-offs
