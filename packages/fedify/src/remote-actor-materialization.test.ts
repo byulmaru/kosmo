@@ -104,6 +104,20 @@ describe('remote actor materialization', () => {
     assert.equal(stored.actor.lastFetchedAt?.toString(), now.toString());
   });
 
+  test('preserves the original handle casing during lookup', async () => {
+    const actor = createActor({ preferredUsername: 'Alice' });
+    const { context, lookupObject } = createLookupContext(async () => actor);
+
+    const profile = await materializeRemoteProfileActor({
+      context,
+      handle: `Alice@${remoteDomain}`,
+    });
+
+    assert.equal(profile.handle, 'Alice');
+    assert.equal(profile.normalizedHandle, 'alice');
+    assert.equal(lookupObject.mock.calls[0]?.arguments[0], `acct:Alice@${remoteDomain}`);
+  });
+
   test('canonicalizes a trailing DNS root dot before lookup and storage', async () => {
     const { context, lookupObject } = createLookupContext(async () => createActor());
 

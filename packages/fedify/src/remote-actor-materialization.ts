@@ -291,7 +291,7 @@ export const materializeRemoteProfileActor = async ({
   }
 
   const requestedRemoteInstance = await ensureRemoteInstance(parsed.domain);
-  const actor = await lookupRemoteActor(context, `${parsed.normalizedHandle}@${parsed.domain}`);
+  const actor = await lookupRemoteActor(context, `${parsed.handle}@${parsed.domain}`);
   const actorId = actor.id!;
 
   if ((actorId.protocol !== 'http:' && actorId.protocol !== 'https:') || !actorId.hostname) {
