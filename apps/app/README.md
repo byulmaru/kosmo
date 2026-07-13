@@ -69,6 +69,16 @@ Use an App Store Connect **Team Key** with provisioning access. Do not place any
 
 If an onboarding run reports no UDIDs, do not retry the signing lane. Ask the tester to complete the Firebase Safari/profile registration first. Rotate a deploy key, `MATCH_PASSWORD`, or Apple Team Key by replacing the corresponding environment secret; use the onboarding environment only when profile/device changes are required.
 
+## Android test distribution
+
+`Android Test Distribution` is a manual-only `main` workflow. It creates a clean CNG Android project for each monotonic `KOSMO_ANDROID_VERSION_CODE`, builds a fixed-key signed Release APK, verifies its package/version/certificate, installs a predecessor build and updates it on one connected dedicated Android device, then uploads the verified APK to Firebase App Distribution. It does not run for pull requests or pushes, and it has no iOS or shared Firebase/WIF smoke path.
+
+The protected `native-test-distribution` environment supplies the Firebase/WIF identifiers and the Android release signing inputs. Its execution source is GitHub Environment secrets; a recovery copy of the signing identity is held in the current repository administrator's Login Keychain. Repository administrators own recovery and rotation. Replacing this key breaks in-place updates, so plan a new distribution channel before rotating it.
+
+Dispatch the workflow from `main` after the Terraform apply that authorizes `.github/workflows/android-test-distribution.yml`. Connect exactly one dedicated Android test device over ADB, or provide its serial at dispatch. The lane never uninstalls an existing app: a clean device receives a same-signer predecessor APK first, and an existing device must have a lower versionCode before the release APK is installed with `adb install -r`.
+
+The iOS workflows may use the public native test settings documented above. This Android workflow intentionally does not inject `EXPO_PUBLIC_WEB_ORIGIN`, `EXPO_PUBLIC_OIDC_ISSUER`, or `EXPO_PUBLIC_OIDC_CLIENT_ID`: APK distribution, install/update, and launch are verified, while the BFF-backed login callback and GraphQL smoke remain deferred until the Expo app authentication path is decided.
+
 ## Validation
 
 ```sh
