@@ -9,13 +9,13 @@
 
 ## 2. Remote Actor Materialization
 
-- [ ] 2.1 federated handle parser를 구현해 bare local handle, `@handle`, `handle@domain`, `@handle@domain` 입력을 configured local 또는 remote handle 형태로 분류하고, configured local domain의 `handle@domain`/`@handle@domain`은 local handle로 처리한다.
-- [ ] 2.2 `packages/fedify`에 Fedify lookup API를 사용하는 remote actor materialization adapter를 구현하고 수동 WebFinger/JSON-LD fetcher를 만들지 않는다.
-- [ ] 2.3 Fedify lookup/dereference가 제공하는 HTTP safety를 재사용하고 별도 fetcher/parser 또는 content-type/redirect/SSRF 검증 로직을 구현하지 않는다.
-- [ ] 2.4 actor URI unique와 `(instance_id, normalized_handle)` 충돌 정책을 적용해 기존 remote `Profile` 갱신 또는 새 `Profile` 생성을 idempotent하게 처리하되, local actor URI 재사용은 identity 충돌로 거부한다.
-- [ ] 2.5 actor `preferredUsername`, `name`, `summary`, `published`, follower 승인 필요 속성을 `Profile` 필드와 follow policy로 projection하되, `preferredUsername`은 요청 handle과 normalized 값이 일치하고 기존 `Profile.handle` 스키마를 통과해야 하며 `name`은 기존 `Profile.displayName` 스키마를 통과할 때만 사용하고 `published` 누락 시 `created_at` fallback은 최초 저장에만 적용하고 refresh에서는 기존 `created_at`을 보존한다.
-- [ ] 2.6 actor materialization 성공 시 `last_fetched_at`을 갱신하고, 7일 TTL을 넘은 actor는 저장된 active profile을 먼저 반환하면서 비동기 refresh를 예약/수행하되 `UNRESPONSIVE` instance에서는 refresh를 예약하지 않도록 구현한다.
-- [ ] 2.7 suspended instance의 actor materialization, actor refresh, Profile object 노출을 차단한다.
+- [x] 2.1 federated handle parser를 구현해 bare local handle, `@handle`, `handle@domain`, `@handle@domain` 입력을 configured local 또는 remote handle 형태로 분류하고, configured local domain의 `handle@domain`/`@handle@domain`은 local handle로 처리한다.
+- [x] 2.2 `packages/fedify`에 Fedify lookup API를 사용하는 remote actor materialization adapter를 구현하고 수동 WebFinger/JSON-LD fetcher를 만들지 않는다.
+- [x] 2.3 Fedify lookup/dereference가 제공하는 HTTP safety를 재사용하고 별도 fetcher/parser 또는 content-type/redirect/SSRF 검증 로직을 구현하지 않는다.
+- [x] 2.4 actor URI unique와 `(instance_id, normalized_handle)` 충돌 정책을 적용해 기존 remote `Profile` 갱신 또는 새 `Profile` 생성을 idempotent하게 처리하되, local actor URI 재사용은 identity 충돌로 거부한다.
+- [x] 2.5 actor `preferredUsername`, `name`, `summary`, `published`, follower 승인 필요 속성을 `Profile` 필드와 follow policy로 projection하되, `preferredUsername`은 요청 handle과 normalized 값이 일치하고 기존 `Profile.handle` 스키마를 통과해야 하며 `name`은 기존 `Profile.displayName` 스키마를 통과할 때만 사용하고 `published` 누락 시 `created_at` fallback은 최초 저장에만 적용하고 refresh에서는 기존 `created_at`을 보존한다.
+- [x] 2.6 actor materialization 성공 시 `last_fetched_at`을 갱신하고, 7일 TTL을 넘은 actor는 저장된 active profile을 먼저 반환하면서 비동기 refresh를 예약/수행하되 `UNRESPONSIVE` instance에서는 refresh를 예약하지 않도록 구현한다.
+- [x] 2.7 suspended instance의 actor materialization, actor refresh, Profile object 노출을 차단한다.
 
 ## 3. GraphQL Profile API
 
