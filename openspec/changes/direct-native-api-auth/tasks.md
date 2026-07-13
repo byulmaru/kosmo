@@ -15,6 +15,8 @@
 - [x] 3.1 OIDC E2E mock을 confidential web client와 public native client로 분리하고, API direct GraphQL mutation의 성공·PKCE/redirect/signature/code length 오류·no-store/no-cookie를 검증한다.
 - [x] 3.2 app unit test에 browser/native GraphQL host·credential·Bearer behavior와 session envelope mismatch/legacy 삭제를 추가한다.
 - [x] 3.3 API/unit, app Relay/typecheck/web export, web BFF regression을 실행하고 결과를 기록한다.
+- [x] 3.4 사용되지 않은 fragment를 포함해 `exchangeNativeOidcSession`의 inline GraphQL literal과 native input에 연결된 variable/default validation failure도 credential 값을 echo하지 않는 generic error로 마스킹하고 transport 회귀 테스트를 추가한다.
+- [x] 3.5 `session-auth` delta requirement identifier를 active spec과 일치시켜 archive 시 계약 교체가 누락되지 않게 한다.
 
 ## 4. 공개 출시 gate
 
