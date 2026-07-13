@@ -295,6 +295,42 @@ describe('GraphQL remote profile boundary', () => {
     });
   });
 
+  test('reads stored active remote posts through the general visibility policy', async () => {
+    const remoteInstance = await createRemoteInstance();
+    const remote = await createProfile({
+      handle: 'remote-post-author',
+      instanceId: remoteInstance.id,
+    });
+    const post = await db
+      .insert(Posts)
+      .values({
+        profileId: remote.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.PUBLIC,
+      })
+      .returning()
+      .then(firstOrThrow);
+
+    const result = await requestGraphQL<{
+      post: { id: string } | null;
+      node: { posts: { edges: Array<{ node: { id: string } }> } } | null;
+    }>(
+      `query StoredRemotePosts($postId: ID!, $profileId: ID!) {
+        post: node(id: $postId) { ... on Post { id } }
+        node(id: $profileId) {
+          ... on Profile { posts(first: 10) { edges { node { id } } } }
+        }
+      }`,
+      { postId: post.id, profileId: remote.id },
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data, {
+      post: { id: post.id },
+      node: { posts: { edges: [{ node: { id: post.id } }] } },
+    });
+  });
+
   test('hides suspended-instance posts from Node and home timeline', async () => {
     const auth = await createAuthenticatedSession();
     const suspendedInstance = await createRemoteInstance({

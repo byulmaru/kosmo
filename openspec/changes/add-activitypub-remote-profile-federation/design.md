@@ -1,8 +1,8 @@
 ## Context
 
-`add-activitypub-actor-discovery`는 local profile을 WebFinger와 actor document로 공개하는 read-only federation 경계를 만든다. 그 변경은 remote profile을 `Profile` 저장 모델에 올릴 수 있는 토대를 마련하고, 기존 `profileByHandle`과 신규 remote follow 생성, `Profile.posts`는 local capability 경계로 유지하되 ownership/visibility 기반 선택과 기존 visible follow 관계의 조회·unfollow에는 instance kind guard를 두지 않는다.
+`add-activitypub-actor-discovery`는 local profile을 WebFinger와 actor document로 공개하는 read-only federation 경계를 만든다. 그 변경은 remote profile을 `Profile` 저장 모델에 올릴 수 있는 토대를 마련하고, 기존 `profileByHandle`과 신규 remote follow 생성은 local capability 경계로 유지하되 ownership/visibility 기반 선택, 기존 visible follow 관계의 조회·unfollow, 저장된 Post 조회에는 instance kind guard를 두지 않는다. `Profile.posts`는 kosmo DB에 이미 저장된 Post에 일반 공개 범위를 적용하고 federation fetch나 materialization은 수행하지 않는다.
 
-이번 변경은 첫 번째 후속 단계로, remote ActivityPub actor를 기존 `Profile` row로 materialize하고 GraphQL에서 active remote profile을 읽을 수 있게 한다. follow, inbox activity, remote posts는 별도 changes에서 다룬다.
+이번 변경은 첫 번째 후속 단계로, remote ActivityPub actor를 기존 `Profile` row로 materialize하고 GraphQL에서 active remote profile을 읽을 수 있게 한다. follow, inbox activity, remote post fetch/ingestion은 별도 changes에서 다룬다.
 
 ## Goals / Non-Goals
 
@@ -19,7 +19,7 @@
 **Non-Goals:**
 
 - ActivityPub remote Follow/Undo delivery, 신규 remote follow 생성, inbound Follow/Accept/Reject/Undo 처리.
-- remote outbox/Note ingestion, remote `Profile.posts` 확장, home timeline에 remote posts 포함.
+- remote outbox/Note fetch·ingestion, remote Post materialization, home timeline에 remote posts 포함. kosmo DB에 이미 저장된 Post의 일반 visibility 기반 조회는 제외 범위가 아니다.
 - actor URI 직접 입력만으로 remote profile 저장.
 - dedicated background worker/queue 기반 refresh 최적화.
 - remote media file proxy, thumbnail 처리, image cache materialization.
