@@ -31,7 +31,6 @@ import type { Context } from '@fedify/fedify';
 import type { Actor, LanguageString, Object as ActivityPubObject } from '@fedify/vocab';
 
 const remoteActorRefreshTtl = Temporal.Duration.from({ hours: 7 * 24 });
-const remoteActorLookupTimeoutMs = 10_000;
 
 export class RemoteActorMaterializationError extends Error {
   constructor(message: string) {
@@ -40,8 +39,7 @@ export class RemoteActorMaterializationError extends Error {
   }
 }
 
-type RemoteActorLookupContext = Pick<Context<void>, 'lookupObject'> &
-  Partial<Pick<Context<void>, 'contextLoader' | 'documentLoader'>>;
+type RemoteActorLookupContext = Pick<Context<void>, 'lookupObject'>;
 
 type RemoteActorMaterializationOptions = {
   context: RemoteActorLookupContext;
@@ -195,28 +193,11 @@ const ensureRemoteInstance = async (domain: string) => {
     });
 };
 
-const withLookupSignal =
-  (loader: Context<void>['documentLoader'], signal: AbortSignal): Context<void>['documentLoader'] =>
-  (url, options) =>
-    loader(url, {
-      ...options,
-      signal: options?.signal ? AbortSignal.any([options.signal, signal]) : signal,
-    });
-
 const lookupRemoteActor = async (
   context: RemoteActorLookupContext,
   handle: string,
 ): Promise<Actor> => {
-  const signal = AbortSignal.timeout(remoteActorLookupTimeoutMs);
-  const object = (await context.lookupObject(`acct:${handle}`, {
-    ...(context.contextLoader
-      ? { contextLoader: withLookupSignal(context.contextLoader, signal) }
-      : {}),
-    ...(context.documentLoader
-      ? { documentLoader: withLookupSignal(context.documentLoader, signal) }
-      : {}),
-    signal,
-  })) as ActivityPubObject | null;
+  const object = (await context.lookupObject(`acct:${handle}`)) as ActivityPubObject | null;
 
   if (!isActor(object)) {
     throw new RemoteActorMaterializationError('Remote lookup did not return an actor.');

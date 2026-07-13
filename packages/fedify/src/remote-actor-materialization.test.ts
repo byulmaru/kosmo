@@ -82,7 +82,6 @@ describe('remote actor materialization', () => {
     assert.equal(profile.createdAt.toString(), '2024-01-02T03:04:05Z');
     assert.equal(lookupObject.mock.calls.length, 1);
     assert.equal(lookupObject.mock.calls[0]?.arguments[0], `acct:alice@${remoteDomain}`);
-    assert.ok(lookupObject.mock.calls[0]?.arguments[1]?.signal instanceof AbortSignal);
 
     const stored = await db
       .select({ actor: ActivityPubActors, instance: Instances })
@@ -193,24 +192,6 @@ describe('remote actor materialization', () => {
       .then(firstOrThrow);
     assert.equal(materialized.id, aliasProfile.id);
     assert.equal(instance.domain, remoteDomain);
-  });
-
-  test('applies the lookup deadline to document and context loaders', async () => {
-    const documentLoader = createDocumentLoader();
-    const contextLoader = createDocumentLoader();
-    const { context, lookupObject } = createLookupContext(async () => createActor(), {
-      contextLoader,
-      documentLoader,
-    });
-
-    await materializeRemoteProfileActor({ context, handle: `alice@${remoteDomain}` });
-
-    const lookupOptions = lookupObject.mock.calls[0]?.arguments[1];
-    assert.ok(lookupOptions?.signal instanceof AbortSignal);
-    await lookupOptions?.documentLoader?.(`https://${remoteDomain}/actor`);
-    await lookupOptions?.contextLoader?.(`https://${remoteDomain}/context`);
-    assert.equal(documentLoader.mock.calls[0]?.arguments[1]?.signal, lookupOptions?.signal);
-    assert.equal(contextLoader.mock.calls[0]?.arguments[1]?.signal, lookupOptions?.signal);
   });
 
   test('rejects lookup errors, missing objects, and non-actors without creating profiles', async () => {
@@ -767,25 +748,16 @@ const createLookupContext = (
     identifier: string | URL,
     options?: NonNullable<Parameters<Context<void>['lookupObject']>[1]>,
   ) => Promise<ActivityPubObject | null>,
-  loaders: Partial<Pick<Context<void>, 'contextLoader' | 'documentLoader'>> = {},
 ) => {
   const lookupObject = mock.fn(implementation);
 
   return {
     context: {
-      ...loaders,
       lookupObject: lookupObject as unknown as Context<void>['lookupObject'],
     },
     lookupObject,
   };
 };
-
-const createDocumentLoader = () =>
-  mock.fn<Context<void>['documentLoader']>(async (url) => ({
-    contextUrl: null,
-    document: {},
-    documentUrl: url,
-  }));
 
 const createRemoteInstance = async ({
   domain = remoteDomain,
