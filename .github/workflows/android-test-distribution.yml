@@ -1,0 +1,205 @@
+name: Android Test Distribution
+
+on:
+  workflow_dispatch:
+    inputs:
+      device_serial:
+        description: Connected dedicated Android test device serial (leave blank only when exactly one device is connected)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: android-test-distribution-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  distribute:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, macOS]
+    environment: native-test-distribution
+    outputs:
+      artifact_sha256: ${{ steps.metadata.outputs.artifact_sha256 }}
+      firebase_console_uri: ${{ steps.metadata.outputs.firebase_console_uri }}
+      signer_sha256: ${{ steps.metadata.outputs.signer_sha256 }}
+      testing_uri: ${{ steps.metadata.outputs.testing_uri }}
+      version_code: ${{ steps.metadata.outputs.version_code }}
+      version_name: ${{ steps.metadata.outputs.version_name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up mise
+        uses: jdx/mise-action@e6a8b3978addb5a52f2b4cd9d91eafa7f0ab959d # v4.2.0
+        with:
+          cache: false
+
+      - name: Set up Java
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.0.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:?Android SDK root is required}}"
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;27.1.12297006" \
+            "cmake;3.22.1"
+          for tool in \
+            "${sdk_root}/build-tools/36.0.0/apksigner" \
+            "${sdk_root}/cmdline-tools/latest/bin/apkanalyzer" \
+            "${sdk_root}/platform-tools/adb"; do
+            test -x "${tool}"
+          done
+          {
+            echo "ANDROID_APKSIGNER=${sdk_root}/build-tools/36.0.0/apksigner"
+            echo "ANDROID_APKANALYZER=${sdk_root}/cmdline-tools/latest/bin/apkanalyzer"
+            echo "ANDROID_ADB=${sdk_root}/platform-tools/adb"
+          } >> "${GITHUB_ENV}"
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set up Ruby and Fastlane
+        uses: ruby/setup-ruby@d45b1a4e94b71acab930e56e79c6aa188764e7f9 # v1
+        with:
+          bundler-cache: true
+          ruby-version: '3.4'
+          working-directory: apps/app
+
+      - name: Calculate release metadata
+        shell: bash
+        env:
+          DEVICE_SERIAL_INPUT: ${{ inputs.device_serial }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_RUN_ATTEMPT}" -ge 100 ]]; then
+            echo "GITHUB_RUN_ATTEMPT must be below 100." >&2
+            exit 1
+          fi
+          build_number=$((GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT))
+          if [[ "${build_number}" -gt 2100000000 ]]; then
+            echo "Android versionCode exceeds the platform limit." >&2
+            exit 1
+          fi
+          device_serial="${DEVICE_SERIAL_INPUT}"
+          if [[ -n "${device_serial}" && ! "${device_serial}" =~ ^[A-Za-z0-9._:-]+$ ]]; then
+            echo "device_serial contains unsupported characters." >&2
+            exit 1
+          fi
+          {
+            printf 'KOSMO_ANDROID_BUILD_NUMBER=%s\n' "${build_number}"
+            printf 'KOSMO_ANDROID_DEVICE_SERIAL=%s\n' "${device_serial}"
+            printf 'KOSMO_ANDROID_PREDECESSOR_APK=%s\n' "${RUNNER_TEMP}/kosmo-android-predecessor.apk"
+            printf 'KOSMO_ACTIONS_RUN_URL=%s\n' "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            printf 'KOSMO_RELEASE_METADATA_PATH=%s\n' "${RUNNER_TEMP}/kosmo-android-release-metadata.json"
+            printf 'KOSMO_RELEASE_NOTES=%s\n' "Android test build ${build_number} from ${GITHUB_SHA} (${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})"
+            printf 'KOSMO_SOURCE_COMMIT=%s\n' "${GITHUB_SHA}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Restore Android release signing
+        shell: bash
+        env:
+          ANDROID_RELEASE_KEY_ALIAS: ${{ vars.ANDROID_RELEASE_KEY_ALIAS }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2016
+          node --input-type=module -e '
+            import fs from "node:fs";
+            import path from "node:path";
+            const required = (name) => {
+              const value = process.env[name]?.trim();
+              if (!value) throw new Error(`${name} is required`);
+              return value;
+            };
+            const encoded = required("ANDROID_RELEASE_KEYSTORE_BASE64");
+            if (!/^[A-Za-z0-9+/=]+$/.test(encoded)) throw new Error("Android release keystore is not base64");
+            const runnerTemp = required("RUNNER_TEMP");
+            const signingDir = fs.mkdtempSync(path.join(runnerTemp, "kosmo-android-signing-"));
+            fs.chmodSync(signingDir, 0o700);
+            const keystorePath = path.join(signingDir, "release.jks");
+            const gradleHome = path.join(signingDir, "gradle");
+            const keystore = Buffer.from(encoded, "base64");
+            if (keystore.length === 0) throw new Error("Android release keystore is empty");
+            fs.mkdirSync(gradleHome, { recursive: true, mode: 0o700 });
+            fs.writeFileSync(keystorePath, keystore, { mode: 0o600 });
+            fs.chmodSync(keystorePath, 0o600);
+            const properties = [
+              `android.injected.signing.store.file=${keystorePath}`,
+              `android.injected.signing.store.password=${required("ANDROID_RELEASE_STORE_PASSWORD")}`,
+              `android.injected.signing.key.alias=${required("ANDROID_RELEASE_KEY_ALIAS")}`,
+              `android.injected.signing.key.password=${required("ANDROID_RELEASE_KEY_PASSWORD")}`,
+            ].join("\n");
+            const propertiesPath = path.join(gradleHome, "gradle.properties");
+            fs.writeFileSync(propertiesPath, `${properties}\n`, { mode: 0o600 });
+            fs.chmodSync(propertiesPath, 0o600);
+            fs.appendFileSync(required("GITHUB_ENV"), `GRADLE_USER_HOME=${gradleHome}\nKOSMO_ANDROID_SIGNING_DIR=${signingDir}\n`);
+          '
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          project_id: ${{ vars.FIREBASE_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+          cleanup_credentials: true
+
+      - name: Build and distribute Android Release APK
+        working-directory: apps/app
+        env:
+          ANDROID_RELEASE_CERTIFICATE_SHA256: ${{ vars.ANDROID_RELEASE_CERTIFICATE_SHA256 }}
+          FIREBASE_ANDROID_APP_ID: ${{ vars.FIREBASE_ANDROID_APP_ID }}
+          FIREBASE_TESTER_GROUP: ${{ vars.FIREBASE_TESTER_GROUP }}
+          NODE_ENV: production
+        run: bundle exec fastlane android distribute
+
+      - name: Publish release metadata
+        id: metadata
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2016
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const metadata = JSON.parse(fs.readFileSync(process.env.KOSMO_RELEASE_METADATA_PATH, "utf8"));
+            const output = (name, value) => fs.appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${value}\n`);
+            for (const name of ["artifact_sha256", "firebase_console_uri", "signer_sha256", "testing_uri", "version_code", "version_name"]) output(name, metadata[name]);
+            fs.appendFileSync(
+              process.env.GITHUB_STEP_SUMMARY,
+              `## Android test distribution\n\n- Package: \`${metadata.package_name}\`\n- Version: \`${metadata.version_name} (${metadata.version_code})\`\n- Source: \`${metadata.source_commit}\`\n- APK SHA-256: \`${metadata.artifact_sha256}\`\n- Signer SHA-256: \`${metadata.signer_sha256}\`\n- [Firebase console release](${metadata.firebase_console_uri})\n- [Tester install page](${metadata.testing_uri})\n- [Workflow](${metadata.workflow_url})\n`,
+            );
+          '
+
+      - name: Remove signing and generated files
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          rm -f \
+            "${RUNNER_TEMP}/kosmo-android-predecessor.apk" \
+            "${RUNNER_TEMP}/kosmo-android-release-metadata.json" \
+            "${GOOGLE_APPLICATION_CREDENTIALS:-}" \
+            "${GOOGLE_GHA_CREDS_PATH:-}"
+          if [[ -n "${KOSMO_ANDROID_SIGNING_DIR:-}" ]]; then
+            rm -rf -- "${KOSMO_ANDROID_SIGNING_DIR}"
+          fi
+          rm -rf -- "${GITHUB_WORKSPACE}/apps/app/android"

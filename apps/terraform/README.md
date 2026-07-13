@@ -81,6 +81,6 @@ bucket은 `byulmaru-terraform-state`, state key는 `kosmo/terraform.tfstate`이�
 
 ## Rotation과 revocation
 
-정적 Google credential은 없으므로 정기 key rotation은 필요하지 않다. repository, workflow, branch 또는 environment가 바뀌면 WIF provider의 숫자 ID 기반 trust condition을 먼저 수정하고 저장한 plan을 적용한다. 현재 distribution provider는 `main`의 `ios-ad-hoc-distribution.yml`과 승인형 `ios-device-onboarding.yml`만 허용한다.
+정적 Google credential은 없으므로 정기 key rotation은 필요하지 않다. repository, workflow, branch 또는 environment가 바뀌면 WIF provider의 숫자 ID 기반 trust condition을 먼저 수정하고 저장한 plan을 적용한다. 현재 distribution provider는 `main`의 `android-test-distribution.yml`, `ios-ad-hoc-distribution.yml`, 승인형 `ios-device-onboarding.yml`의 정확한 environment/workflow 조합만 허용한다.
 
 긴급 차단은 WIF provider에 `disabled = true`를 추가해 적용한다. 영구 폐기는 service account의 `roles/iam.workloadIdentityUser` binding을 제거한 plan을 먼저 적용한 뒤, 별도 검토로 보호된 provider와 service account의 deletion policy를 해제한다.
