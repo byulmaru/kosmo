@@ -1,0 +1,248 @@
+require 'fileutils'
+require 'plist'
+require 'set'
+require 'shellwords'
+require 'tmpdir'
+
+default_platform(:ios)
+opt_out_usage
+
+BUNDLE_IDENTIFIER = 'moe.kos'
+WORKSPACE_PATH = 'ios/Kosmo.xcworkspace'
+SCHEME = 'Kosmo'
+
+def require_environment!(*names)
+  missing = names.select { |name| ENV[name].to_s.empty? }
+  UI.user_error!("Missing required environment variable(s): #{missing.join(', ')}") unless missing.empty?
+end
+
+def build_number!
+  build_number = ENV.fetch('IOS_BUILD_NUMBER')
+  UI.user_error!('IOS_BUILD_NUMBER must be a positive integer.') unless build_number.match?(/\A[1-9]\d*\z/)
+
+  build_number
+end
+
+platform :ios do
+  private_lane :validate_release_environment do
+    require_environment!(
+      'APPLE_DEVELOPER_TEAM_ID',
+      'FIREBASE_IOS_APP_ID',
+      'FIREBASE_TESTER_GROUP',
+      'IOS_ARTIFACT_DIR',
+      'MATCH_GIT_PRIVATE_KEY_PATH',
+      'MATCH_GIT_URL',
+      'MATCH_KEYCHAIN_PASSWORD',
+      'MATCH_KEYCHAIN_PATH',
+      'MATCH_PASSWORD',
+      'RELEASE_NOTES_FILE',
+    )
+    build_number!
+  end
+
+  private_lane :load_apple_api_key do
+    require_environment!('APPLE_API_KEY_ID', 'APPLE_API_ISSUER_ID', 'APPLE_API_KEY_PATH')
+
+    app_store_connect_api_key(
+      key_id: ENV.fetch('APPLE_API_KEY_ID'),
+      issuer_id: ENV.fetch('APPLE_API_ISSUER_ID'),
+      key_filepath: ENV.fetch('APPLE_API_KEY_PATH'),
+      duration: 1200,
+      in_house: false,
+    )
+  end
+
+  private_lane :create_ephemeral_keychain do
+    create_keychain(
+      path: ENV.fetch('MATCH_KEYCHAIN_PATH'),
+      password: ENV.fetch('MATCH_KEYCHAIN_PASSWORD'),
+      default_keychain: false,
+      unlock: true,
+      timeout: 3600,
+      lock_after_timeout: true,
+      add_to_search_list: true,
+      require_create: true,
+    )
+
+    lane_context[SharedValues::KEYCHAIN_PATH] || ENV.fetch('MATCH_KEYCHAIN_PATH')
+  end
+
+  private_lane :delete_ephemeral_keychain do |options|
+    keychain_path = options.fetch(:path)
+    delete_keychain(keychain_path: keychain_path) if File.exist?(keychain_path)
+  end
+
+  private_lane :sync_adhoc_signing do |options|
+    match_options = {
+      app_identifier: BUNDLE_IDENTIFIER,
+      clone_branch_directly: true,
+      force_for_new_devices: options.fetch(:force_for_new_devices),
+      git_branch: 'main',
+      git_private_key: ENV.fetch('MATCH_GIT_PRIVATE_KEY_PATH'),
+      git_url: ENV.fetch('MATCH_GIT_URL'),
+      keychain_name: ENV.fetch('MATCH_KEYCHAIN_PATH'),
+      keychain_password: ENV.fetch('MATCH_KEYCHAIN_PASSWORD'),
+      readonly: options.fetch(:readonly),
+      shallow_clone: true,
+      team_id: ENV.fetch('APPLE_DEVELOPER_TEAM_ID'),
+      type: 'adhoc',
+    }
+
+    if options[:api_key]
+      match_options[:api_key] = options[:api_key]
+      match_options[:git_full_name] = 'Kosmo iOS signing'
+      match_options[:git_user_email] = 'signing@kos.moe'
+    end
+
+    match(**match_options)
+  end
+
+  private_lane :verify_prebuild_signing do
+    require_environment!('APPLE_DEVELOPER_TEAM_ID')
+
+    build_settings = sh(
+      "xcodebuild -workspace #{Shellwords.escape(WORKSPACE_PATH)} " \
+      "-scheme #{Shellwords.escape(SCHEME)} -configuration Release -showBuildSettings",
+    )
+    {
+      'DEVELOPMENT_TEAM' => ENV.fetch('APPLE_DEVELOPER_TEAM_ID'),
+      'PRODUCT_BUNDLE_IDENTIFIER' => BUNDLE_IDENTIFIER,
+    }.each do |name, value|
+      pattern = /^\s*#{Regexp.escape(name)} = #{Regexp.escape(value)}\s*$/
+      UI.user_error!("#{name} does not match the expected iOS signing configuration.") unless build_settings.match?(pattern)
+    end
+  end
+
+  private_lane :build_adhoc_ipa do
+    profile_mapping = lane_context[SharedValues::MATCH_PROVISIONING_PROFILE_MAPPING]
+    UI.user_error!('match did not return an Ad Hoc provisioning profile mapping.') if profile_mapping.nil? || profile_mapping.empty?
+
+    build_app(
+      clean: true,
+      configuration: 'Release',
+      export_method: 'ad-hoc',
+      export_options: { provisioningProfiles: profile_mapping },
+      output_directory: ENV.fetch('IOS_ARTIFACT_DIR'),
+      output_name: 'Kosmo.ipa',
+      scheme: SCHEME,
+      workspace: WORKSPACE_PATH,
+    )
+  end
+
+  private_lane :verify_adhoc_ipa do |options|
+    ipa_path = File.expand_path(options.fetch(:ipa_path))
+    UI.user_error!("IPA was not created at #{ipa_path}.") unless File.file?(ipa_path)
+
+    team_id = ENV.fetch('APPLE_DEVELOPER_TEAM_ID')
+    expected_build_number = build_number!
+
+    Dir.mktmpdir('kosmo-ipa-') do |directory|
+      sh("unzip -qq #{Shellwords.escape(ipa_path)} -d #{Shellwords.escape(directory)}")
+      app_bundle = Dir[File.join(directory, 'Payload', '*.app')].first
+      UI.user_error!('IPA does not contain an app bundle.') unless app_bundle
+
+      info = Plist.parse_xml(File.join(app_bundle, 'Info.plist'))
+      UI.user_error!('IPA Info.plist is missing.') unless info
+      UI.user_error!('IPA bundle identifier does not match moe.kos.') unless info['CFBundleIdentifier'] == BUNDLE_IDENTIFIER
+      UI.user_error!('IPA build number does not match IOS_BUILD_NUMBER.') unless info['CFBundleVersion'] == expected_build_number
+
+      provisioning_profile = File.join(app_bundle, 'embedded.mobileprovision')
+      UI.user_error!('IPA does not embed a provisioning profile.') unless File.file?(provisioning_profile)
+
+      profile_plist = File.join(directory, 'embedded.mobileprovision.plist')
+      sh(
+        "security cms -D -i #{Shellwords.escape(provisioning_profile)} " \
+        "> #{Shellwords.escape(profile_plist)}",
+      )
+      profile = Plist.parse_xml(profile_plist)
+      UI.user_error!('Embedded provisioning profile is invalid.') unless profile
+      UI.user_error!('Embedded provisioning profile has a different team.') unless Array(profile['TeamIdentifier']).include?(team_id)
+      UI.user_error!('Embedded provisioning profile has a different app identifier.') unless profile.dig('Entitlements', 'application-identifier') == "#{team_id}.#{BUNDLE_IDENTIFIER}"
+      UI.user_error!('Embedded provisioning profile is not an Ad Hoc profile.') if profile['ProvisionsAllDevices'] || profile.dig('Entitlements', 'get-task-allow')
+
+      profile_devices = Array(profile['ProvisionedDevices'])
+      UI.user_error!('Embedded provisioning profile has no registered devices.') if profile_devices.empty?
+
+      expected_devices_file = ENV['IOS_REQUIRED_UDIDS_FILE']
+      if expected_devices_file && !expected_devices_file.empty?
+        expected_devices = File.foreach(expected_devices_file).drop(1).filter_map do |line|
+          device_id = line.split("\t", 2).first.to_s.strip
+          device_id unless device_id.empty?
+        end.to_set
+        UI.user_error!('Embedded provisioning profile omits a registered tester device.') unless expected_devices.subset?(profile_devices.to_set)
+      end
+
+      signing_output = sh("codesign --display --verbose=4 #{Shellwords.escape(app_bundle)} 2>&1")
+      sh("codesign --verify --deep --strict --verbose=2 #{Shellwords.escape(app_bundle)}")
+      UI.user_error!('IPA signing team does not match the provisioning profile.') unless signing_output.match?(/TeamIdentifier=#{Regexp.escape(team_id)}(?:\s|$)/)
+      UI.user_error!('IPA is not signed with an Apple distribution certificate.') unless signing_output.match?(/^Authority=(?:Apple|iPhone) Distribution/m)
+    end
+  end
+
+  private_lane :verify_newer_than_firebase_release do
+    latest_release = firebase_app_distribution_get_latest_release(app: ENV.fetch('FIREBASE_IOS_APP_ID'))
+    return unless latest_release
+
+    latest_build_number = Integer(latest_release.fetch(:buildVersion))
+    UI.user_error!('IOS_BUILD_NUMBER is not newer than the latest Firebase iOS release.') unless build_number!.to_i > latest_build_number
+  end
+
+  private_lane :upload_ipa_to_firebase do |options|
+    firebase_app_distribution(
+      app: ENV.fetch('FIREBASE_IOS_APP_ID'),
+      groups: ENV.fetch('FIREBASE_TESTER_GROUP'),
+      ipa_path: options.fetch(:ipa_path),
+      release_notes_file: ENV.fetch('RELEASE_NOTES_FILE'),
+    )
+  end
+
+  lane :release_adhoc do
+    validate_release_environment
+    keychain_path = create_ephemeral_keychain
+
+    begin
+      verify_prebuild_signing
+      sync_adhoc_signing(readonly: true, force_for_new_devices: false)
+      ipa_path = build_adhoc_ipa
+      verify_adhoc_ipa(ipa_path: ipa_path)
+      verify_newer_than_firebase_release
+      upload_ipa_to_firebase(ipa_path: ipa_path)
+    ensure
+      delete_ephemeral_keychain(path: keychain_path) if keychain_path
+    end
+  end
+
+  lane :onboard_devices do
+    validate_release_environment
+    udids_file = ENV.fetch('IOS_REQUIRED_UDIDS_FILE')
+    keychain_path = nil
+
+    begin
+      FileUtils.rm_f(udids_file)
+      firebase_app_distribution_get_udids(app: ENV.fetch('FIREBASE_IOS_APP_ID'), output_file: udids_file)
+      UI.user_error!('Firebase has no registered tester UDIDs to onboard.') unless File.file?(udids_file) && File.size?(udids_file)
+
+      api_key = load_apple_api_key
+      register_devices(
+        api_key: api_key,
+        devices_file: udids_file,
+        team_id: ENV.fetch('APPLE_DEVELOPER_TEAM_ID'),
+      )
+
+      keychain_path = create_ephemeral_keychain
+      verify_prebuild_signing
+      sync_adhoc_signing(
+        api_key: api_key,
+        force_for_new_devices: true,
+        readonly: false,
+      )
+      ipa_path = build_adhoc_ipa
+      verify_adhoc_ipa(ipa_path: ipa_path)
+      verify_newer_than_firebase_release
+      upload_ipa_to_firebase(ipa_path: ipa_path)
+    ensure
+      delete_ephemeral_keychain(path: keychain_path) if keychain_path
+      FileUtils.rm_f(udids_file)
+    end
+  end
+end

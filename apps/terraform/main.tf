@@ -7,7 +7,10 @@ locals {
 
   app_identifier     = "moe.kos"
   distribution_group = "native-testers"
-  environment        = "native-test-distribution"
+  native_distribution_workflows = {
+    "ios-device-onboarding"    = ".github/workflows/ios-device-onboarding.yml"
+    "native-test-distribution" = ".github/workflows/ios-ad-hoc-distribution.yml"
+  }
 
   terraform_apply_environment = "terraform-apply"
   terraform_roles = toset([
@@ -132,8 +135,10 @@ resource "google_iam_workload_identity_pool_provider" "kosmo" {
     "assertion.repository_id == '${local.github_repository_id}'",
     "assertion.repository_owner_id == '${local.github_owner_id}'",
     "assertion.ref == 'refs/heads/main'",
-    "assertion.environment == '${local.environment}'",
-    "assertion.workflow_ref == '${local.github_owner}/${local.github_repository}/.github/workflows/native-distribution-foundation.yml@refs/heads/main'",
+    "(${join(" || ", [
+      for environment, workflow in local.native_distribution_workflows :
+      "(assertion.environment == '${environment}' && assertion.workflow_ref == '${local.github_owner}/${local.github_repository}/${workflow}@refs/heads/main')"
+    ])})",
   ])
 
   oidc {
