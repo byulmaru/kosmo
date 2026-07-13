@@ -86,8 +86,8 @@ Notification Item은 Recipient Profile과 Recipient Account 중 정확히 하나
   않는다.
 - Domain Block Instance에서 온 원인 객체는 새 Notification Item을 만들지 않는다.
 - Followee Post는 Follow Relationship의 새 Post 알림 Preference가 true일 때만 생성한다.
-- Follow Request Notification의 처리 표시는 Related Follow Request State에서 파생한다.
-- Pending Follow Request가 취소되면 대응하는 Follow Request Notification Item을 제거한다.
+- Follow Request Notification은 Related Follow Request가 존재하는 동안만 유지한다.
+- Follow Request가 승인, 거절 또는 취소되면 대응하는 Follow Request Notification Item을 제거한다.
 - Follow Request 또는 Follow Relationship이 제거되면 이를 직접 원인으로 가진 Notification Item도 제거한다.
 - Mute가 나중에 생성되어도 기존 Notification Item의 존재와 Read State는 바꾸지 않는다. Profile Block은 제거된
   Follow 객체를 직접 원인으로 가진 Notification Item만 제거한다.
