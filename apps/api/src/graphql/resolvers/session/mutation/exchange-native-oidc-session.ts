@@ -1,4 +1,5 @@
-import { createOidcSession, db } from '@kosmo/core/db';
+import { createOidcSession } from '@kosmo/core/auth';
+import { db } from '@kosmo/core/db';
 import { ValidationError } from '@kosmo/core/error';
 import {
   allowInsecureRequests,

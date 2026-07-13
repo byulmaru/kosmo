@@ -10,7 +10,7 @@ import {
 } from 'openid-client';
 import type { Configuration } from 'openid-client';
 
-export { createOidcSession } from '@kosmo/core/db';
+export { createOidcSession } from '@kosmo/core/auth';
 
 export const LOGIN_CODE_VERIFIER_COOKIE = 'kosmo_oidc_code_verifier';
 export const LOGIN_STATE_COOKIE = 'kosmo_oidc_state';

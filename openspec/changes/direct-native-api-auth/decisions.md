@@ -34,12 +34,12 @@
 - Consequences: legacy plain/web-origin storage는 one-time re-login을 유발한다. `EXPO_PUBLIC_*` 값은 native build 전에 주입돼야 한다.
 - Confirmation / Follow-up: app codec/network tests에서 legacy와 origin/issuer/client mismatch 삭제를 검증한다.
 
-### 검증된 identity의 session writer만 core DB에 공유하고 upstream token은 저장하지 않는다
+### 검증된 identity의 session writer는 core auth에 공유하고 upstream token은 저장하지 않는다
 
 - Decision Date: 2026-07-13
 - Status: Accepted
 - Context / Problem: web과 API는 동일한 account upsert/session transaction이 필요하지만 OIDC transport/client configuration은 서로 다르다. 현재 writer가 미사용 upstream access token을 session row에 저장한다.
-- Decision Outcome: core DB에는 verified `{ displayName, oidcSubject }`로 session을 만드는 writer만 둔다. BFF/API는 각자의 OIDC code exchange를 유지하고, shared writer는 `oidcSessionKey`를 쓰지 않는다.
+- Decision Outcome: `@kosmo/core/auth`에는 verified `{ displayName, oidcSubject }`로 session을 만드는 writer만 둔다. `@kosmo/core/db`는 DB infrastructure만 제공한다. BFF/API는 각자의 OIDC code exchange를 유지하고, shared writer는 `oidcSessionKey`를 쓰지 않는다.
 - Alternatives Considered: `openid-client` 전체를 core로 옮기는 안은 Expo가 소비하는 package에 server transport dependency를 섞으므로 제외했다. API/BFF에 transaction을 복제하는 안은 security behavior drift를 만들므로 제외했다.
 - Consequences: 새 session은 upstream credential을 저장하지 않는다. 기존 값 cleanup과 column contract는 PROD-320에서 구버전 writer drain 뒤 수행한다.
 - Confirmation / Follow-up: DB assertion으로 새 native 및 web login session에 upstream token이 저장되지 않음을 확인한다.

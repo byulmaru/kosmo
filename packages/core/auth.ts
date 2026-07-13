@@ -1,8 +1,8 @@
 import { and, desc, eq } from 'drizzle-orm';
-import { AccountState, ProfileState, SessionState } from '../enums';
-import { AccountProfiles, Accounts, Profiles, Sessions } from './tables';
-import { first, firstOrThrow } from './utils';
-import type { Database } from './index';
+import { AccountProfiles, Accounts, Profiles, Sessions } from './db/tables';
+import { first, firstOrThrow } from './db/utils';
+import { AccountState, ProfileState, SessionState } from './enums';
+import type { Database } from './db';
 
 type VerifiedOidcIdentity = {
   displayName: string;

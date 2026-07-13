@@ -6,7 +6,6 @@ import * as tables from './tables';
 
 export * from './id';
 export * from './relations';
-export * from './session';
 export * from './tables';
 export * from './utils';
 
