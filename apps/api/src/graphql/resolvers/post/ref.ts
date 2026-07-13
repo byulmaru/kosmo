@@ -5,14 +5,14 @@ import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
 import { postVisibilityAccessWhere } from './access/visibility';
 
-export const Post = createObjectRef('Post', TableDiscriminator.Posts, async (ids, ctx) => {
-  return db
+export const Post = createObjectRef('Post', TableDiscriminator.Posts, (ids, ctx) =>
+  db
     .select(getColumns(Posts))
     .from(Posts)
     .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(and(inArray(Posts.id, ids), postVisibilityAccessWhere({ ctx })));
-});
+    .where(and(inArray(Posts.id, ids), postVisibilityAccessWhere({ ctx }))),
+);
 
 Post.implement({
   fields: (t) => ({
@@ -35,15 +35,14 @@ export const PostConnection = builder.connectionObject(
 export const PostContent = createObjectRef(
   'PostContent',
   TableDiscriminator.PostContents,
-  async (ids, ctx) => {
-    return db
+  (ids, ctx) =>
+    db
       .select(getColumns(PostContents))
       .from(PostContents)
       .innerJoin(Posts, eq(Posts.id, PostContents.postId))
       .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
       .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .where(and(inArray(PostContents.id, ids), postVisibilityAccessWhere({ ctx })));
-  },
+      .where(and(inArray(PostContents.id, ids), postVisibilityAccessWhere({ ctx }))),
 );
 
 PostContent.implement({

@@ -4,7 +4,7 @@ import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { parseProfileHandle } from '@kosmo/core/profile';
 import { and, eq, getColumns } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { visibleProfileWhere } from '../access/visibility';
+import { visibleProfileWhere } from '@/profile/visibility';
 import { Profile } from '../ref';
 
 builder.queryField('profileByHandle', (t) =>

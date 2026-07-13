@@ -12,7 +12,7 @@ import DataLoader from 'dataloader';
 import { and, eq } from 'drizzle-orm';
 import stringify from 'fast-json-stable-stringify';
 import * as R from 'remeda';
-import { visibleProfileWhere } from './graphql/resolvers/profile/access/visibility';
+import { visibleProfileWhere } from './profile/visibility';
 import type { Context as HonoContext } from 'hono';
 
 type LoaderParams<Key, Result, SortKey, Nullability extends boolean, Many extends boolean> = {

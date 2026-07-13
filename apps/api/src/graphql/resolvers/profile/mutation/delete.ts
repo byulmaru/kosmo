@@ -10,7 +10,7 @@ import { AccountProfileRole, ProfileState } from '@kosmo/core/enums';
 import { NotFoundError, PermissionDeniedError } from '@kosmo/core/error';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { visibleProfileWhere } from '../access/visibility';
+import { visibleProfileWhere } from '@/profile/visibility';
 
 builder.mutationField('deleteProfile', (t) =>
   t.withAuth({ login: true }).fieldWithInput({

@@ -1,10 +1,9 @@
 import { db, first, firstOrThrowWith, Instances, ProfileFollows, Profiles } from '@kosmo/core/db';
-import { InstanceKind } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
 import { and, eq, getColumns, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
-import { visibleProfileWhere } from '../access/visibility';
+import { visibleProfileWhere } from '@/profile/visibility';
 import { Profile } from '../ref';
 
 builder.mutationField('unfollowProfile', (t) =>
@@ -26,7 +25,6 @@ builder.mutationField('unfollowProfile', (t) =>
         .where(
           and(
             eq(Profiles.id, input.id),
-            eq(Instances.kind, InstanceKind.LOCAL),
             visibleProfileWhere({ profile: Profiles, instance: Instances }),
           ),
         )

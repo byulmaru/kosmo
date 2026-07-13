@@ -1,21 +1,12 @@
 import { AccountProfiles, db, Instances, Profiles, TableDiscriminator } from '@kosmo/core/db';
-import { AccountProfileRole, InstanceKind, ProfileFollowPolicy } from '@kosmo/core/enums';
+import { AccountProfileRole, ProfileFollowPolicy } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
-import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
 import { formatRelativeHandle } from '@/profile/identity';
-import { visibleProfileWhere } from './access/visibility';
+import { visibleProfileWhere } from '@/profile/visibility';
 import { profileFollowByIdLoader } from './loader/follow';
 import { profileInstanceByIdLoader } from './loader/instance';
-
-const ProfileInstance = builder.simpleObject('ProfileInstance', {
-  fields: (t) => ({
-    kind: t.field({
-      type: InstanceKind,
-    }),
-  }),
-});
 
 export const Profile = createObjectRef('Profile', TableDiscriminator.Profiles, (ids) =>
   db
@@ -33,18 +24,6 @@ export const Profile = createObjectRef('Profile', TableDiscriminator.Profiles, (
 Profile.implement({
   fields: (t) => ({
     handle: t.exposeString('handle'),
-    instance: t.field({
-      type: ProfileInstance,
-      resolve: async (profile, _, ctx) => {
-        const profileInstance = await profileInstanceByIdLoader(ctx).load(profile.instanceId);
-
-        if (!profileInstance) {
-          throw new Error('Profile instance is required to resolve profile instance');
-        }
-
-        return profileInstance;
-      },
-    }),
     relativeHandle: t.string({
       resolve: async (profile, _, ctx) => {
         const configuredLocalInstance = await resolveConfiguredLocalInstance();

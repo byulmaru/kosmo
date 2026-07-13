@@ -12,7 +12,7 @@ import { profileBioSchema, profileDisplayNameSchema } from '@kosmo/core/validati
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
-import { visibleProfileWhere } from '../access/visibility';
+import { visibleProfileWhere } from '@/profile/visibility';
 import { Profile } from '../ref';
 
 builder.mutationField('updateProfile', (t) =>

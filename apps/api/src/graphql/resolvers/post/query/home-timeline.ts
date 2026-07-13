@@ -13,7 +13,7 @@ builder.queryField('homeTimeline', (t) =>
       type: Post,
       nullable: true,
       unauthorizedResolver: () => null,
-      resolve: async (_, args, ctx) => {
+      resolve: (_, args, ctx) => {
         const followeeWhere = exists(
           db
             .select({ id: ProfileFollows.id })

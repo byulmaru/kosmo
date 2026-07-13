@@ -4,7 +4,7 @@ import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
-import { visibleProfileWhere } from '../access/visibility';
+import { visibleProfileWhere } from '@/profile/visibility';
 import { ProfileFollow } from '../ref';
 
 builder.mutationField('followProfile', (t) =>

@@ -12,7 +12,7 @@ builder.objectFields(Profile, (t) => ({
   posts: t.connection(
     {
       type: Post,
-      resolve: async (profile, args, ctx) => {
+      resolve: (profile, args, ctx) => {
         const connectionOptions = {
           args,
           toCursor: (post: PostRow) => post.id,

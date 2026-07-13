@@ -1,7 +1,7 @@
 import { db, Instances, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { PostState, PostVisibility } from '@kosmo/core/enums';
 import { and, eq, exists, inArray, or } from 'drizzle-orm';
-import { visibleProfileWhere } from '../../profile/access/visibility';
+import { visibleProfileWhere } from '@/profile/visibility';
 import type { UserContext } from '@/context';
 
 export const postVisibilityAccessWhere = ({ ctx }: { ctx: UserContext }) => {

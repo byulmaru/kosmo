@@ -439,6 +439,157 @@ describe('GraphQL remote profile boundary', () => {
     assertNoGraphQLErrors(result);
   });
 
+  test('selects an owned active remote profile and restores it from the session', async () => {
+    const auth = await createAuthenticatedSession();
+    const remoteInstance = await createRemoteInstance();
+    const remote = await createProfile({ handle: 'owned-remote', instanceId: remoteInstance.id });
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: remote.id,
+      role: AccountProfileRole.OWNER,
+    });
+
+    const selected = await requestGraphQL<{
+      selectProfile: {
+        profile: { id: string; instance: { kind: string } };
+        session: { selectedProfile: { id: string; instance: { kind: string } } | null };
+      };
+    }>(
+      `mutation SelectRemote($id: ID!) {
+        selectProfile(input: { id: $id }) {
+          profile { id instance { kind } }
+          session { selectedProfile { id instance { kind } } }
+        }
+      }`,
+      { id: remote.id },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(selected);
+    assert.deepEqual(selected.data?.selectProfile, {
+      profile: { id: remote.id, instance: { kind: 'ACTIVITYPUB' } },
+      session: { selectedProfile: { id: remote.id, instance: { kind: 'ACTIVITYPUB' } } },
+    });
+
+    const restored = await requestGraphQL<{
+      currentSession: { selectedProfile: { id: string; instance: { kind: string } } | null } | null;
+    }>(
+      `query CurrentRemoteSession {
+        currentSession { selectedProfile { id instance { kind } } }
+      }`,
+      {},
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(restored);
+    assert.deepEqual(restored.data?.currentSession?.selectedProfile, {
+      id: remote.id,
+      instance: { kind: 'ACTIVITYPUB' },
+    });
+  });
+
+  test('rejects remote profile selection without ownership by the session account', async () => {
+    const auth = await createAuthenticatedSession();
+    const otherAuth = await createAuthenticatedSession();
+    const remoteInstance = await createRemoteInstance();
+    const unownedRemote = await createProfile({
+      handle: 'unowned-remote',
+      instanceId: remoteInstance.id,
+    });
+    const otherOwnedRemote = await createProfile({
+      handle: 'other-owned-remote',
+      instanceId: remoteInstance.id,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: otherAuth.account.id,
+      profileId: otherOwnedRemote.id,
+      role: AccountProfileRole.OWNER,
+    });
+
+    for (const id of [unownedRemote.id, otherOwnedRemote.id]) {
+      const result = await requestGraphQL(
+        `mutation SelectUnownedRemote($id: ID!) {
+          selectProfile(input: { id: $id }) { profile { id } }
+        }`,
+        { id },
+        auth.token,
+      );
+
+      assertGraphQLErrorCode(result, 'NOT_FOUND');
+    }
+
+    const session = await db
+      .select()
+      .from(Sessions)
+      .where(eq(Sessions.id, auth.session.id))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(session.activeProfileId, auth.profile.id);
+  });
+
+  test('rejects an owned remote profile when it is inactive or its instance is suspended', async () => {
+    const auth = await createAuthenticatedSession();
+    const remoteInstance = await createRemoteInstance();
+    const remote = await createProfile({
+      handle: 'invisible-remote',
+      instanceId: remoteInstance.id,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: remote.id,
+      role: AccountProfileRole.OWNER,
+    });
+
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, remote.id));
+
+    const inactive = await requestGraphQL(
+      `mutation SelectInactiveRemote($id: ID!) {
+        selectProfile(input: { id: $id }) { profile { id } }
+      }`,
+      { id: remote.id },
+      auth.token,
+    );
+
+    assertGraphQLErrorCode(inactive, 'NOT_FOUND');
+
+    await db.update(Profiles).set({ state: ProfileState.ACTIVE }).where(eq(Profiles.id, remote.id));
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.SUSPENDED })
+      .where(eq(Instances.id, remoteInstance.id));
+
+    const suspended = await requestGraphQL(
+      `mutation SelectSuspendedRemote($id: ID!) {
+        selectProfile(input: { id: $id }) { profile { id } }
+      }`,
+      { id: remote.id },
+      auth.token,
+    );
+
+    assertGraphQLErrorCode(suspended, 'NOT_FOUND');
+
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: remote.id })
+      .where(eq(Sessions.id, auth.session.id));
+
+    const restored = await requestGraphQL<{
+      currentSession: { selectedProfile: { id: string } | null } | null;
+    }>(
+      `query CurrentSuspendedRemoteSession {
+        currentSession { selectedProfile { id } }
+      }`,
+      {},
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(restored);
+    assert.equal(restored.data?.currentSession?.selectedProfile, null);
+  });
+
   test('rejects following a remote profile without creating a relationship', async () => {
     const auth = await createAuthenticatedSession();
     const remoteInstance = await createRemoteInstance();
@@ -456,7 +607,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(await countRows(ProfileFollows), 0);
   });
 
-  test('rejects unfollowing a remote profile without deleting an existing row', async () => {
+  test('allows unfollowing a visible remote profile without an instance-kind rejection', async () => {
     const auth = await createAuthenticatedSession();
     const remoteInstance = await createRemoteInstance();
     const remote = await createProfile({ handle: 'remote', instanceId: remoteInstance.id });
@@ -466,8 +617,45 @@ describe('GraphQL remote profile boundary', () => {
       .returning()
       .then(firstOrThrow);
 
-    const result = await requestGraphQL(
+    const result = await requestGraphQL<{
+      unfollowProfile: {
+        profile: { id: string; instance: { kind: string } };
+        profileFollowId: string;
+      };
+    }>(
       `mutation UnfollowRemote($id: ID!) {
+        unfollowProfile(input: { id: $id }) {
+          profile { id instance { kind } }
+          profileFollowId
+        }
+      }`,
+      { id: remote.id },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.unfollowProfile, {
+      profile: { id: remote.id, instance: { kind: 'ACTIVITYPUB' } },
+      profileFollowId: follow.id,
+    });
+    assert.equal(await countRows(ProfileFollows), 0);
+  });
+
+  test('rejects unfollowing a suspended remote profile without deleting the relationship', async () => {
+    const auth = await createAuthenticatedSession();
+    const remoteInstance = await createRemoteInstance({ state: InstanceState.SUSPENDED });
+    const remote = await createProfile({
+      handle: 'suspended-remote',
+      instanceId: remoteInstance.id,
+    });
+    const follow = await db
+      .insert(ProfileFollows)
+      .values({ followerProfileId: auth.profile.id, followeeProfileId: remote.id })
+      .returning()
+      .then(firstOrThrow);
+
+    const result = await requestGraphQL(
+      `mutation UnfollowSuspendedRemote($id: ID!) {
         unfollowProfile(input: { id: $id }) { profileFollowId }
       }`,
       { id: remote.id },

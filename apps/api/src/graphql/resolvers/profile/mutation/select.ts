@@ -12,7 +12,7 @@ import { and, eq, getColumns } from 'drizzle-orm';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
 import { Session } from '@/graphql/resolvers/session/ref';
-import { visibleProfileWhere } from '../access/visibility';
+import { visibleProfileWhere } from '@/profile/visibility';
 import { Profile } from '../ref';
 
 builder.mutationField('selectProfile', (t) =>
