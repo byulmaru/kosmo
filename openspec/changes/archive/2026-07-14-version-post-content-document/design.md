@@ -2,7 +2,7 @@
 
 현재 `post_content`는 non-null `body_text`와 nullable `content_warning`만 저장하고 GraphQL과 앱도 `bodyText`를 직접 읽는다. PROD-267은 TipTap runtime과 JSON/HTML 저장을 제거했지만, remote Note와 후속 Mention/Custom Emoji가 요구하는 구조적 의미를 Plain Text 하나로는 보존할 수 없다. PROD-341은 editor 기능을 다시 도입하지 않고 제한된 versioned document를 공통 canonical body로 만든다.
 
-현재 환경은 production이 아니며 사용자는 기존 Post 데이터를 보존하지 않아도 된다고 확정했다. 따라서 운영 중 구버전 workload와 rollback window를 위한 expand/transition/contract migration 대신 기존 Post/PostContent를 삭제하는 단일 breaking migration을 허용한다. remote Note projection과 materialization은 각각 PROD-259/PROD-261이 소유하며 이 변경은 그 입력·저장 계약만 제공한다.
+현재 프로덕션 DB 자체가 존재하지 않으며 사용자는 비프로덕션의 기존 Post 데이터를 보존하지 않아도 된다고 확정했다. 따라서 운영 중 구버전 workload와 rollback window를 위한 expand/transition/contract migration 대신 기존 Post/PostContent를 삭제하는 단일 breaking migration을 허용한다. remote Note projection과 materialization은 각각 PROD-259/PROD-261이 소유하며 이 변경은 그 입력·저장 계약만 제공한다.
 
 ## Goals / Non-Goals
 

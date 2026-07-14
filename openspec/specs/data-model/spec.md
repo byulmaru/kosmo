@@ -132,7 +132,7 @@ kosmo의 현재 PostgreSQL/Drizzle 기반 도메인 저장 모델, ID 생성 규
 
 ### Requirement: 게시물과 콘텐츠 저장
 
-시스템은 게시물 메타데이터와 게시물 본문 콘텐츠를 분리하여 저장하고, Plain Text를 게시글 본문의 canonical 표현으로 사용해야 한다(MUST).
+시스템은 게시물 메타데이터와 게시물 본문 콘텐츠를 분리하여 저장하고, schema version이 식별된 canonical ProseMirror document JSON을 게시글 본문의 canonical 표현으로 사용해야 한다(MUST).
 
 #### Scenario: 게시물 저장
 
@@ -143,17 +143,19 @@ kosmo의 현재 PostgreSQL/Drizzle 기반 도메인 저장 모델, ID 생성 규
 #### Scenario: 게시물 콘텐츠 저장
 
 - **WHEN** 게시물 본문이 저장된다
-- **THEN** 시스템은 게시물, canonical Plain Text 본문, 선택적 Content Warning, 생성 시각을 저장한다
+- **THEN** 시스템은 게시물, document schema version, canonical document JSON, 선택적 Content Warning과 생성 시각을 저장한다
 - **AND** 게시물 콘텐츠는 `post.id`를 참조해야 한다
-- **AND** 시스템은 TipTap JSON 또는 실행 가능한 HTML 본문을 저장하지 않는다
+- **AND** schema version과 document는 nullable일 수 없다
+- **AND** 시스템은 파생 Plain Text나 실행 가능한 HTML 본문을 별도 canonical 값으로 저장하지 않는다
+- **AND** JSON 안의 entity reference는 DB foreign key를 대체하지 않으며 필요한 relation projection은 같은 transaction에서 저장되고 canonical document로부터 재구축 가능해야 한다
 
-#### Scenario: 기존 게시물 콘텐츠 migration
+#### Scenario: 비프로덕션 기존 게시물 migration
 
-- **WHEN** TipTap 저장 계약이 적용된 기존 `post_content` 행을 Plain Text 저장 계약으로 migration한다
-- **THEN** 시스템은 기존 `body_text` 값을 수정하지 않고 canonical 본문으로 보존한다
-- **AND** 시스템은 콘텐츠 revision ID, 게시물 연결, Content Warning과 생성 시각을 보존한다
-- **AND** 시스템은 `body_json`과 `body_html` 컬럼을 제거한다
-- **AND** 시스템은 `spoiler_text` 컬럼의 기존 값을 `content_warning`으로 보존한다
+- **WHEN** Plain Text 저장 계약의 기존 `post`와 `post_content`가 있는 비프로덕션 DB에 V1 document migration을 적용한다
+- **THEN** 시스템은 기존 `post`와 `post_content` 행을 모두 삭제한다
+- **AND** `post.current_content_id` 참조 순서 때문에 migration이 실패하지 않는다
+- **AND** `body_text` 컬럼을 제거하고 non-null `body_schema_version`과 `body_document` 컬럼을 추가한다
+- **AND** migration 후 기존 게시물 또는 고아 콘텐츠가 남지 않는다
 
 ### Requirement: 열거형 상태 값
 

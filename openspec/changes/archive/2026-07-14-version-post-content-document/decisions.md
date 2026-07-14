@@ -58,7 +58,7 @@
 
 - Decision Date: 2026-07-14
 - Status: Accepted
-- Context / Problem: `body_text`를 non-null versioned document로 교체하는 production migration은 expand/transition/contract가 필요하지만 현재 데이터는 production이 아니며 사용자가 모든 Post 삭제를 허용했다.
+- Context / Problem: `body_text`를 non-null versioned document로 교체하는 production migration은 expand/transition/contract가 필요하지만 현재 프로덕션 DB 자체가 존재하지 않으며 사용자가 비프로덕션의 모든 Post 삭제를 허용했다.
 - Decision Outcome: migration은 `post.current_content_id`를 정리한 뒤 기존 `post_content`와 `post`를 모두 삭제하고 `body_text`를 non-null version/document 컬럼으로 즉시 교체한다.
 - Alternatives Considered: 기존 Plain Text backfill과 dual-write는 production rollback에는 안전하지만 현재 환경에서 불필요한 compatibility code와 후속 contract를 만든다. JSON default를 두면 새 row가 잘못된 implicit document를 가질 수 있다.
 - Consequences: 모든 기존 게시글과 revision을 잃고 down migration을 제공하지 않는다. production 또는 보존 요구가 생기면 이 결정을 적용할 수 없다.

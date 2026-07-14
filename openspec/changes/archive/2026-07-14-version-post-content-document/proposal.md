@@ -4,7 +4,7 @@
 
 ## What Changes
 
-- **BREAKING** `post_content.body_text`를 schema version과 canonical document JSON으로 교체하고, 비프로덕션의 기존 `Post`/`PostContent` 데이터는 migration에서 모두 삭제한다.
+- **BREAKING** `post_content.body_text`를 schema version과 canonical document JSON으로 교체한다. 현재 프로덕션 DB 자체가 존재하지 않으므로 기존 비프로덕션 `Post`/`PostContent` 데이터는 migration에서 모두 삭제한다.
 - V1을 `doc`, `paragraph`, `text`, `hard_break` node와 안전한 absolute HTTP(S) `link` mark로 제한한다. `pre`와 그 밖의 rich-text node/mark는 지원하지 않는다.
 - 서버 전용 `prosemirror-model` `Schema`, `nodeFromJSON()`, `check()`, `toJSON()` 경계로 입력을 검증하고 결정적으로 canonicalize한다.
 - 로컬 `bodyText` 입력을 V1 document로 변환하고, 읽기·검색·접근성·500자 검증용 Plain Text를 document에서 결정적으로 파생한다.
