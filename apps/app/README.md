@@ -11,11 +11,13 @@ pnpm --filter @kosmo/app android
 pnpm --filter @kosmo/app web
 ```
 
-Set `EXPO_PUBLIC_WEB_ORIGIN`, `EXPO_PUBLIC_OIDC_ISSUER`, and `EXPO_PUBLIC_OIDC_CLIENT_ID` for native authentication. When Expo evaluates `app.config.ts`, the existing `PUBLIC_ORIGIN`, `PUBLIC_OIDC_ISSUER`, and `PUBLIC_OIDC_CLIENT_ID` Vault values are mapped to those names unless an `EXPO_PUBLIC_*` override is already set. Browser builds use same-origin `/login` and `/graphql` through `@kosmo/web`.
+Set `EXPO_PUBLIC_API_ORIGIN`, `EXPO_PUBLIC_OIDC_ISSUER`, and `EXPO_PUBLIC_OIDC_NATIVE_CLIENT_ID` for native authentication. When Expo evaluates `app.config.ts`, `PUBLIC_API_ORIGIN`, `PUBLIC_OIDC_ISSUER`, and `PUBLIC_OIDC_NATIVE_CLIENT_ID` are mapped to those names unless an `EXPO_PUBLIC_*` override is already set. Browser builds keep same-origin `/login` and `/graphql` through `@kosmo/web`.
 
-Native `EXPO_PUBLIC_WEB_ORIGIN` must be an HTTPS origin. Loopback HTTP is accepted for local development; a non-loopback HTTP origin requires the explicit development-only `EXPO_PUBLIC_ALLOW_INSECURE_ORIGIN=1` override. SecureStore sessions are bound to the normalized origin and are discarded instead of being sent after an environment change.
+Native `EXPO_PUBLIC_API_ORIGIN` must be an HTTPS origin. Loopback HTTP is accepted for local development; a non-loopback HTTP origin requires the explicit development-only `EXPO_PUBLIC_ALLOW_INSECURE_ORIGIN=1` override. SecureStore sessions are bound to the normalized API origin, issuer, and native client ID, and are discarded instead of being sent after a configuration change.
 
 Native OIDC uses Expo AuthSession with the `kosmo://login/callback` redirect. Register that exact URI with the provider and test login in a development or standalone build; Expo Go cannot use the custom callback scheme for this flow.
+
+After a successful callback, native login sends only the authorization code, PKCE verifier, and exact redirect URI to the API origin's `/graphql` `exchangeNativeOidcSession` mutation. It does not send raw OIDC tokens.
 
 Native projects are generated with `expo prebuild --clean`; they are not source-of-truth files.
 
