@@ -14,16 +14,6 @@
 - Consequences: core services가 공유 server business logic의 일관된 진입점이 된다. API/BFF의 간접 재수출과 `db` 인자가 사라지며, 향후 PR #231과 합쳐질 때 services index export만 병합하면 된다.
 - Confirmation / Follow-up: API/web typecheck와 OIDC E2E로 두 호출 경로가 같은 service를 사용하고 upstream token을 저장하지 않음을 확인한다.
 
-### 프로덕션 GraphQL 입력 오류는 endpoint 경계에서 공통 마스킹한다
-
-- Decision Date: 2026-07-14
-- Status: Accepted
-- Context / Problem: credential exchange mutation만 식별하려고 operation, fragment, variable definition의 AST graph를 순회하면 보안 정책보다 구현과 회귀 테스트가 훨씬 커지고 새 credential mutation마다 별도 추적 코드를 추가해야 한다.
-- Decision Outcome: 프로덕션 GraphQL endpoint는 validation과 variable coercion failure를 operation 종류와 무관하게 `Invalid input`/`VALIDATION`으로 마스킹한다. 개발 환경은 schema diagnostics를 유지한다.
-- Alternatives Considered: native mutation input node만 AST로 추적하는 안은 한 operation을 위해 GraphQL validation engine 일부를 재구현하므로 제외했다. native mutation만 custom untyped scalar로 받는 안은 schema 계약을 약화하므로 제외했다.
-- Consequences: 프로덕션 client는 잘못된 query/input의 상세 GraphQL diagnostics를 받지 못하며 error code 기반 generic UI를 사용한다. error plugin과 transport test는 작아지고 credential echo 정책은 새 input shape에도 자동 적용된다.
-- Confirmation / Follow-up: variable coercion과 inline validation 값이 production response에 포함되지 않는 대표 transport test를 유지한다.
-
 ### API GraphQL mutation이 public-client code + PKCE를 교환한다
 
 - Decision Date: 2026-07-13

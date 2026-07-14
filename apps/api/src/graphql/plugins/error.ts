@@ -39,20 +39,6 @@ const createUnexpectedGraphQLError = (error: unknown, graphQLError?: GraphQLErro
   });
 };
 
-const createValidationGraphQLError = (error: Error) => {
-  const graphQLError = error instanceof GraphQLError ? error : undefined;
-
-  return new GraphQLError('Invalid input', {
-    nodes: graphQLError?.nodes,
-    source: graphQLError?.source,
-    positions: graphQLError?.positions,
-    path: graphQLError?.path,
-    extensions: {
-      code: 'VALIDATION',
-    },
-  });
-};
-
 const transformError = (error: unknown): GraphQLError => {
   const graphQLError = error instanceof GraphQLError ? error : undefined;
   const kosmoError = unwrapKosmoError(error);
@@ -66,10 +52,6 @@ const transformError = (error: unknown): GraphQLError => {
       extensions: getKosmoErrorExtensions(kosmoError),
       originalError: kosmoError,
     });
-  }
-
-  if (!dev && graphQLError?.message.startsWith('Variable "$')) {
-    return createValidationGraphQLError(graphQLError);
   }
 
   if (graphQLError && !graphQLError.originalError) {
@@ -110,13 +92,4 @@ export const useError = (): Plugin<UserContext> => ({
       return;
     },
   }),
-  onValidate: () => {
-    if (dev) {
-      return;
-    }
-
-    return ({ result, setResult }) => {
-      setResult(result.map(createValidationGraphQLError));
-    };
-  },
 });

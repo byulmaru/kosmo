@@ -15,9 +15,8 @@
 - [x] 3.1 PROD-318에서 OIDC E2E mock을 confidential web client와 public native client로 분리하고, API direct GraphQL mutation의 성공·signature failure·대표 input rejection·no-store/no-cookie를 검증한다.
 - [x] 3.2 app unit test에 browser/native GraphQL host·credential·Bearer behavior와 session envelope mismatch/legacy 삭제를 추가한다.
 - [x] 3.3 API/unit, app Relay/typecheck/web export, web BFF regression을 실행하고 결과를 기록한다.
-- [x] 3.4 PROD-318에서 production GraphQL validation과 variable coercion failure를 endpoint 공통 generic error로 마스킹하고 대표 credential value transport 회귀 테스트를 추가한다.
-- [x] 3.5 `session-auth` delta requirement identifier를 active spec과 일치시켜 archive 시 계약 교체가 누락되지 않게 한다.
-- [x] 3.6 shared session use case를 `@kosmo/core/services`로 배치하고, `@kosmo/core/db`에는 DB infrastructure만 남도록 API·BFF import를 갱신한다.
+- [x] 3.4 `session-auth` delta requirement identifier를 active spec과 일치시켜 archive 시 계약 교체가 누락되지 않게 한다.
+- [x] 3.5 shared session use case를 `@kosmo/core/services`로 배치하고, `@kosmo/core/db`에는 DB infrastructure만 남도록 API·BFF import를 갱신한다.
 
 ## 4. PROD-338 공개 출시 gate
 
