@@ -10,7 +10,7 @@ kosmo의 현재 PostgreSQL/Drizzle 기반 도메인 저장 모델, ID 생성 규
 
 #### Scenario: 새 도메인 행 생성
 
-- **WHEN** `account`, `account_profile`, `application`, `application_authorization`, `file`, `media`, `oauth_authorization_code`, `oauth_token`, `post`, `post_content`, `profile`, `profile_follow`, `profile_follow_request`, `session` 행이 생성된다
+- **WHEN** `account`, `account_profile`, `application`, `application_authorization`, `file`, `media`, `oauth_authorization_code`, `oauth_token`, `post`, `post_content`, `profile`, `profile_follow`, `profile_follow_request`, `session`, `instance`, `activitypub_actor`, `activitypub_actor_key` 행이 생성된다
 - **THEN** 시스템은 해당 테이블의 `TableDiscriminator` 값을 포함한 UUID 문자열을 기본 키로 생성한다
 - **AND** 테이블 식별자는 12비트 범위 안에 있어야 한다
 
@@ -64,9 +64,27 @@ kosmo의 현재 PostgreSQL/Drizzle 기반 도메인 저장 모델, ID 생성 규
 #### Scenario: 프로필 저장
 
 - **WHEN** 프로필이 생성된다
-- **THEN** 시스템은 상태, 원본 handle, 정규화된 handle, 표시 이름, 선택적 bio, 팔로우 정책, 생성 시각을 저장한다
-- **AND** 정규화된 handle은 중복될 수 없다
+- **THEN** 시스템은 소속 instance, 상태, 원본 handle, 정규화된 handle, 표시 이름, 선택적 bio, 팔로우 정책, 생성 시각을 저장한다
+- **AND** 소속 instance와 정규화된 handle 조합은 중복될 수 없다
 - **AND** 프로필 상태 기본값은 `ACTIVE`이다
+
+#### Scenario: 로컬 프로필 저장
+
+- **WHEN** local profile이 생성된다
+- **THEN** 시스템은 configured local instance ID를 profile의 소속 instance로 저장한다
+- **AND** local profile의 ActivityPub actor URI는 profile ID 기반 `/ap/actor/{profile.id}`로 파생될 수 있다
+
+#### Scenario: 리모트 프로필 저장
+
+- **WHEN** remote profile shell이 저장된다
+- **THEN** 시스템은 remote instance ID를 profile의 소속 instance로 저장한다
+- **AND** remote profile 저장은 remote follow, inbox activity 처리, remote post ingestion을 의미하지 않는다
+
+#### Scenario: 리모트 프로필 저장 전 인스턴스 보장
+
+- **WHEN** remote profile shell을 새로 저장해야 한다
+- **THEN** 시스템은 normalized domain에 해당하는 ActivityPub instance를 먼저 찾거나 생성한다
+- **AND** 기존 instance 상태가 `SUSPENDED` 또는 `UNRESPONSIVE`이면 remote profile shell을 저장하지 않는다
 
 #### Scenario: 계정-프로필 역할 저장
 
@@ -143,9 +161,9 @@ kosmo의 현재 PostgreSQL/Drizzle 기반 도메인 저장 모델, ID 생성 규
 
 #### Scenario: enum 값 사용
 
-- **WHEN** 계정, 프로필, 세션, OAuth token, 애플리케이션, 게시물, 계정-프로필 역할, 미디어가 저장된다
+- **WHEN** 계정, 프로필, 세션, OAuth token, 애플리케이션, 게시물, 계정-프로필 역할, 미디어, 인스턴스, ActivityPub actor, ActivityPub actor key가 저장된다
 - **THEN** 시스템은 core enum에 정의된 값만 저장해야 한다
-- **AND** 지원 값은 `AccountState`, `ProfileState`, `SessionState`, `OAuthTokenState`, `ApplicationState`, `ApplicationType`, `PostState`, `PostVisibility`, `ProfileFollowPolicy`, `AccountProfileRole`, `MediaSource`에 정의된 값으로 제한된다
+- **AND** 지원 값은 `AccountState`, `ProfileState`, `SessionState`, `OAuthTokenState`, `ApplicationState`, `ApplicationType`, `PostState`, `PostVisibility`, `ProfileFollowPolicy`, `AccountProfileRole`, `MediaSource`, `InstanceKind`, `InstanceState`, `ActivityPubActorType`, `ActivityPubActorKeyKind`에 정의된 값으로 제한된다
 
 ### Requirement: 파일과 미디어 메타데이터 저장
 
@@ -176,3 +194,26 @@ kosmo의 현재 PostgreSQL/Drizzle 기반 도메인 저장 모델, ID 생성 규
 - **THEN** 시스템은 `source = REMOTE`인 `media` 행을 저장할 수 있다
 - **AND** 리모트 media 행은 `profile.id`, remote URL, remote fetched timestamp를 저장할 수 있다
 - **AND** 리모트 media 행은 lazy image proxy 처리 전까지 file ID와 thumbhash를 비워둘 수 있다
+
+### Requirement: Remote actor refresh metadata
+
+시스템은 ActivityPub actor metadata에 remote actor materialization과 refresh에 필요한 정보를 저장해야 한다(MUST).
+
+#### Scenario: Store remote actor metadata
+
+- **WHEN** remote ActivityPub actor가 성공적으로 materialize된다
+- **THEN** 시스템은 actor URI, actor type, profile, 생성 시각, 수정 시각과 함께 마지막 fetch 시각을 저장한다
+- **AND** actor URI는 중복될 수 없다
+- **AND** remote profile은 ActivityPub actor metadata row를 최대 1개만 가질 수 있다
+
+#### Scenario: Store remote actor source metadata
+
+- **WHEN** remote actor가 inbox, outbox, followers, following, shared inbox URI를 제공한다
+- **THEN** 시스템은 후속 follow/post changes가 사용할 수 있도록 제공된 endpoint URI를 actor metadata 또는 관련 저장 경계에 저장한다
+- **AND** endpoint URI 저장은 follow delivery, collection fetch, post ingestion을 이번 change에서 제공한다는 의미가 아니다
+
+#### Scenario: Mark stale remote actor
+
+- **WHEN** remote actor의 마지막 fetch 시각이 없거나 7일을 초과했다
+- **THEN** 시스템은 해당 actor를 federation 내부 materialization 경로에서 비동기 refresh 대상 stale actor로 판단할 수 있어야 한다
+- **AND** stale 판단은 저장된 active profile 참조를 차단하지 않는다

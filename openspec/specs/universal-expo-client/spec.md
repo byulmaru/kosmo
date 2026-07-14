@@ -33,8 +33,9 @@ Android, iOS, Web에서 하나의 Expo Router·React Native route tree와 React 
 
 #### Scenario: Navigate profile routes
 
-- **WHEN** 사용자가 `/@{handle}`, `/@{handle}/followers`, `/@{handle}/following`, `/@{handle}/{postId}` 중 하나로 이동한다
-- **THEN** Expo Router는 handle과 선택적 post ID를 route parameter로 해석해 해당 공개 화면을 표시한다
+- **WHEN** 사용자가 `/${relativeHandle}`, `/${relativeHandle}/followers`, `/${relativeHandle}/following`, `/${relativeHandle}/{postId}` 중 하나로 이동한다
+- **THEN** Expo Router는 local profile의 `@handle` 또는 stored ActivityPub remote profile의 `@handle@domain`을 `relativeHandle`로 해석해 해당 공개 화면을 표시한다
+- **AND** route parameter에서는 leading `@`를 제거한 `handle` 또는 `handle@domain`을 `profileByHandle(handle:)`에 전달한다
 
 #### Scenario: Open a native deep link
 
