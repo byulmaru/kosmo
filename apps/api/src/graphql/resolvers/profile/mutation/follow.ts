@@ -16,8 +16,8 @@ builder.mutationField('followProfile', (t) =>
     input: {
       id: t.input.id({ validate: z.uuid() }),
     },
-    resolve: async (_, { input }, ctx) => {
-      return followProfile({
+    resolve: (_, { input }, ctx) =>
+      followProfile({
         followerProfileId: ctx.session.profileId,
         followeeProfileId: input.id,
       }).catch((error: unknown) => {
@@ -25,7 +25,6 @@ builder.mutationField('followProfile', (t) =>
           throw new ConflictError({ message: error.message, field: 'id' });
         }
         throw error;
-      });
-    },
+      }),
   }),
 );
