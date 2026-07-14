@@ -8,86 +8,125 @@
 
 **Goals:**
 
-- Profile Recipient를 기준으로 재사용할 수 있는 Notification Item base와 type-specific source 확장 경계를 만든다.
+- Profile Recipient를 기준으로 재사용할 수 있는 최소 Notification Item projection을 만든다.
 - Follow를 첫 sample source로 연결해 생성·중복·삭제·Re-follow와 best-effort 실패 격리를 검증한다.
-- 선택된 Profile의 Relay connection, Read mutation, Unread count와 Account/Profile 격리를 고정한다.
-- Expo 목록과 shell badge의 세부 UX는 소유 이슈가 결정하고 구현 전에 이 change에 동기화하게 한다.
-- Local Follow 정상 경로를 source action부터 UI와 badge까지 Web E2E로 검증한다.
+- Account-Profile membership이 있는 Profile의 Relay connection, Read mutation과 visible Unread count를 고정한다.
+- Recipient Profile 자체 visibility, source 존재·Recipient 일치와 Related Profile visibility의 공통 predicate를 만족하지 않는 item을 모든 API 표면에서 숨긴다.
+- UI와 Relay cache는 selected Profile별로 격리하고 Local Follow 정상 경로를 Web E2E로 검증한다.
 
 **Non-Goals:**
 
 - Follow Request와 다른 Notification Type, historical backfill.
 - 실제 Profile Mute·Profile Block·Domain Block 판정 연결.
-- Related Profile unavailable item을 후속 자동 정리할 원인·시점 정책.
+- unavailable item을 비동기 삭제할 event, queue/scan, retry, worker와 대량 처리.
 - ActivityPub ingress, actor materialization, Follow/Undo transport와 remote E2E.
-- outbox, retry, reconciliation, background worker, Push, realtime, email과 OS notification.
+- outbox, delivery retry/reconciliation, Push, realtime, email과 OS notification.
 - 전체 읽음, 수동 삭제, 보존 기간, 별도 Notification 상세 화면과 inline follow-back.
 
 ## Architecture
 
-### 저장 모델과 생명주기
+### 단일 Notification projection
 
-`notification_item`은 GraphQL `NotificationItem` Node가 되는 공통 base다. UUID v8 `id`, `recipient_profile_id`, `created_at`, nullable `read_at`만 저장한다. Unread/Read는 `read_at` nullability에서 파생하고 별도 Read State를 중복 저장하지 않는다. `(recipient_profile_id, id DESC)`는 stable inbox pagination을, `read_at IS NULL` 조건의 recipient partial index는 Unread count를 지원한다.
+`notification_item` 하나가 저장 projection이자 GraphQL `NotificationItem` Node다.
 
-`notification_follow`는 Follow type extension이다. 자체 UUID v8 ID와 discriminator를 가지며, `notification_item_id`와 `profile_follow_id`를 각각 non-null unique foreign key로 저장한다. extension 존재가 `NotificationType.FOLLOW`를 뜻하고 Related Profile은 source의 `follower_profile_id`에서 파생한다. base에는 미래 type용 nullable source column이나 DB type enum을 두지 않는다.
+- `id uuid`: Kosmo UUID v8과 하나의 `NotificationItems` discriminator.
+- `recipient_profile_id uuid`: `profile.id` foreign key. Recipient Profile 물리 삭제에는 cascade한다.
+- `kind notification_kind`: 현재 `FOLLOW`만 지원한다.
+- `source_id uuid`: kind가 가리키는 source ID. 의도적으로 foreign key를 만들지 않는다.
+- `data jsonb NOT NULL DEFAULT '{}'`: kind별 애플리케이션 타입으로 검증하는 최소 추가 데이터.
+- `created_at`, nullable `read_at`: `read_at` nullability가 Unread/Read와 최초 Read 시각을 모두 표현한다.
 
-base와 extension은 하나의 transaction에서 생성한다. deferred integrity trigger는 commit 시 살아 있는 base가 정확히 하나의 지원 extension을 갖는지 확인한다. `notification_item` 삭제는 FK cascade로 extension을 삭제한다. `profile_follow` 삭제도 FK cascade로 extension을 삭제하고, extension의 `AFTER DELETE` cleanup trigger가 base를 삭제한다. base 삭제에서 시작한 cascade 중 cleanup trigger가 같은 base를 다시 삭제하는 경로는 zero-row no-op이어야 하며 migration integration test로 고정한다.
+`(kind, source_id, recipient_profile_id)` unique constraint는 같은 source와 Recipient 조합의 item 하나를 보장하면서 하나의 source가 여러 Recipient에게 투영되는 후속 kind를 허용한다. column prefix `(kind, source_id)`는 source cleanup에도 사용할 수 있다. `(recipient_profile_id, id DESC)` index는 inbox pagination을, `read_at IS NULL` 조건의 Recipient partial index는 Unread count 후보를 지원한다. `created_at`은 표시 값이며 정렬 key로 중복 사용하지 않는다.
 
-공통 Follow Notification 저장 경계는 established `ProfileFollow` 하나만 입력으로 받고, 호출자에게 Recipient나 Related Profile ID를 받지 않는다. source row를 읽어 Followee를 Recipient, Follower를 Related Profile로 파생하고 Recipient가 Local Profile인지 검증한다. 두 unique constraint의 기존 행 또는 concurrent conflict를 기존 item을 나타내는 성공 결과로 정규화한다. origin은 이 경계의 분기 기준이 아니며, 이미 materialize된 Remote Follower source도 같은 경계를 사용한다.
+FOLLOW에서 `source_id`는 `profile_follow.id`이고 `data`는 `{}`다. Recipient는 Followee, Related Profile은 Follower에서 조회 시 파생한다. Profile ID, 이름·handle snapshot을 `data`에 복제하지 않는다. 별도 `notification_follow` table, type별 discriminator, source FK, cleanup trigger와 deferred integrity constraint는 만들지 않는다. 새 Profile-scoped kind가 생기면 그 시점에 enum, source mapping과 실제 필요한 data shape만 추가한다. Account-scoped Operational Notification의 저장 구조는 해당 kind의 별도 change가 결정한다.
 
-### source action과 failure boundary
+### source 저장·삭제와 failure boundary
 
-공용 ProfileFollow action은 새 관계 transaction을 먼저 commit한다. 그 뒤 같은 request 안에서 Notification eligibility와 저장 경계를 순서대로 `await`하고 모든 Notification-side 오류를 catch한다. 같은 DB transaction/savepoint에 넣어 Notification SQL 오류가 Follow를 abort하게 하거나, request 종료 뒤 실행이 보장되지 않는 fire-and-forget 호출을 사용하지 않는다.
+공통 Follow Notification 저장 경계는 established `ProfileFollow` 하나만 입력으로 받고, 호출자에게 Recipient나 Related Profile ID를 받지 않는다. source row를 읽어 Followee를 Recipient, Follower를 Related Profile로 파생하고 Recipient가 Local Profile인지 검증한다. 기존 `(FOLLOW, source_id, recipient_profile_id)` 행 또는 concurrent unique conflict는 기존 item을 나타내는 성공 결과로 정규화한다. Follower origin은 분기 기준이 아니며 이미 materialize된 Remote Follower source도 같은 경계를 사용한다.
 
-실제 Mute/Block evaluator가 연결되기 전에는 기본 allow다. 명시적 deny와 evaluator 오류는 item을 만들지 않으며, evaluator 오류는 privacy-safe fail-closed로 처리한다. 저장 실패도 Follow 성공을 유지한다. 누락 intent를 durable하게 저장하지 않으므로 duplicate Follow, scan 또는 backfill로 자동 복구하지 않는다. 단, 새 관계에서 시작한 integration 경계 자체가 같은 source로 재진입하면 저장 경계의 idempotency로 성공한 no-op이 된다.
+공용 ProfileFollow 생성 action은 새 관계 transaction을 먼저 commit한다. 그 뒤 같은 request 안에서 Notification eligibility와 create 경계를 순서대로 `await`하고 모든 Notification-side 오류를 catch한다. 실제 Mute/Block evaluator가 연결되기 전에는 기본 allow이며, 명시 deny와 evaluator 오류는 item을 만들지 않는다. evaluator 오류는 privacy-safe fail-closed다.
 
-### GraphQL API
+정상 ProfileFollow 삭제 action도 source transaction을 먼저 commit한 뒤 `(FOLLOW, source_id)` delete 경계를 같은 request에서 `await`하고 오류를 catch한다. create/delete Notification 오류는 모두 source action 성공을 바꾸지 않는다. 같은 DB transaction/savepoint에 넣거나 fire-and-forget 호출을 사용하지 않는다.
+
+따라서 process 종료나 Notification 저장 실패로 새 item이 유실될 수 있고, delete 실패나 raw source 삭제로 orphan row가 남을 수 있다. 첫 delivery는 이를 받아들이며 durable intent, retry와 message queue를 제공하지 않는다. orphan은 아래 visible predicate에서 즉시 숨긴다.
+
+### GraphQL 권한과 identity scope
 
 Notification resolver module은 `NotificationItem` loadable Node ref, `NotificationType`, connection, Profile fields와 Read mutation을 소유한다.
 
-- `Profile.notifications`: 현재 선택된 Profile만 읽을 수 있는 `NotificationItemConnection`.
-- `Profile.unreadNotificationCount`: `recipient_profile_id`와 `read_at IS NULL`만 계산한다.
+- `Profile.notifications`: target Profile의 visible `NotificationItemConnection`.
+- `Profile.unreadNotificationCount`: 같은 visible predicate를 만족하는 unread item 수.
 - `NotificationItem`: `id`, `type`, `createdAt`, nullable `readAt`, nullable `relatedProfile`.
 - `markNotificationRead(input: { id })`: `MarkNotificationReadPayload.notificationItem`과 `.recipientProfile`을 반환한다.
 
-목록은 시간 정렬 UUID v8 `id DESC` keyset pagination을 사용하고 opaque cursor에 ID를 담는다. `created_at`은 표시 값이며 정렬 key로 중복 사용하지 않는다. 목록과 count query는 Related Profile visibility를 join filter로 사용하지 않는다. item/source를 찾은 뒤 Related Profile ID를 Profile Node loader에 전달하고, 조회 불가하면 필드만 `null`로 만든다.
+Profile fields와 Read mutation의 authorization은 session의 selected Profile이 아니라 로그인 Account와 target Recipient Profile 사이의 Account-Profile membership이다. membership의 role은 권한 판정에 사용하지 않는다. selected Profile이 없거나 target과 달라도 membership이 있으면 API는 성공한다.
 
-Read update는 현재 active Profile의 recipient 조건을 SQL에 포함하고 `read_at = coalesce(read_at, now())` 의미로 최초 시각을 보존한다. 다른 Recipient의 item과 없는 ID는 모두 `NOT_FOUND`, active Profile 부재는 `usingProfile` auth의 `PERMISSION_DENIED`로 처리한다. Node loader도 active recipient로 제한해 다른 inbox Node를 반환하지 않는다. payload의 Recipient Profile을 함께 선택하면 Relay가 `unreadNotificationCount`를 동일 Node에 정규화한다.
+- 인증되지 않은 Profile field와 Read 요청은 `PERMISSION_DENIED`다.
+- Profile field에서 membership이 없으면 `PERMISSION_DENIED`다.
+- Node는 없는 ID, membership 부재와 hidden item을 모두 `null`로 정규화한다.
+- Read는 없는 ID, membership 부재와 hidden item을 모두 `NOT_FOUND`로 정규화한다.
+- Recipient Profile 자체가 비활성 등으로 GraphQL Profile object에 노출되지 않으면 Notification Node는 `null`이고 Read는 `NOT_FOUND`다.
+
+UI와 Relay cache는 여전히 현재 selected Profile을 inbox scope로 사용한다. API authorization과 UI identity selection을 분리하면 같은 Account의 다른 Profile을 관리 도구나 후속 client가 명시적으로 조회할 수 있으면서, 일반 화면은 selected Profile의 item만 표시한다.
+
+### visible predicate와 pagination
+
+FOLLOW item은 다음 조건을 모두 만족할 때만 API에 존재한다.
+
+1. 요청 Account가 Recipient Profile membership을 가진다.
+2. Recipient Profile 자체가 GraphQL Profile object로 조회 가능하다.
+3. `kind = FOLLOW`의 `source_id`로 실제 `profile_follow` source를 찾을 수 있다.
+4. source의 Followee가 저장된 Recipient와 일치한다.
+5. source의 Follower인 Related Profile을 **Recipient Profile을 viewer로** 조회할 수 있다.
+
+Connection query는 이 predicate를 SQL에서 적용한 뒤 `id DESC` keyset limit을 적용한다. page를 먼저 가져온 뒤 hidden row를 애플리케이션에서 버리지 않는다. Unread count, Node와 Read mutation도 같은 source/visibility predicate를 재사용한다. 이로써 hidden row가 short page, 잘못된 page info, badge drift나 Read side channel을 만들지 않는다.
+
+opaque cursor에는 마지막 Notification Item ID를 담고 다음 page는 `id < cursor`를 사용한다. `NotificationItem.relatedProfile`은 공통 schema에서 nullable이지만, 반환되는 FOLLOW item은 Related Profile이 실제로 조회 가능한 경우뿐이다. raw `source_id`와 `data`는 API에 노출하지 않는다.
+
+Read update는 membership과 visible predicate를 같은 SQL 경계에 포함하고 `read_at = coalesce(read_at, now())` 의미로 최초 시각을 보존한다. payload의 Recipient Profile을 함께 반환해 Relay가 item `readAt`과 정확한 Profile의 count를 함께 갱신할 수 있게 한다.
+
+### unavailable 상태와 후속 cleanup
+
+위 공통 visible predicate를 만족하지 않는 item은 connection, Unread count, Node와 Read mutation에서 모두 없는 것으로 취급한다. generic item, `relatedProfile: null` Follow fallback, 이름·handle snapshot 또는 client-side filtering을 제공하지 않는다.
+
+DB row와 기존 `read_at`은 비동기 cleanup 전까지 남을 수 있다. cleanup 전에 visibility가 회복되면 같은 row가 기존 Read 상태로 다시 나타날 수 있다. 이 임시 상태는 첫 delivery에서 허용한다.
+
+도메인 방향은 source가 없거나 Recipient와 일치하지 않거나 Related Profile이 Recipient 기준으로 unavailable이 되면 item을 비동기적이고 idempotent하게 삭제하는 것이다. Recipient Profile 자체의 일시 비활성화·정지만으로 item을 삭제할지는 재활성화 의미와 함께 `PROD-328`에서 결정한다. 원인별 event, message queue 또는 fallback scan, retry, worker, 허용 지연과 대량 처리는 별도 `PROD-328`의 Issue → OpenSpec → Implementation 흐름이 소유한다. `PROD-328`은 이 change의 task나 archive gate가 아니다.
 
 ### 후속 UI 결정 경계
 
-이 spec-only slice는 UI 세부 UX를 선결정하지 않는다. `PROD-277`은 목록 표시 상태, item activation 순서, navigation·실패 표현, fetch·refresh·pagination·Profile 전환 cache 경계를 결정하고 구현 전에 `notification` requirements, design과 decisions를 갱신한다. `PROD-324`는 shell surface, count cap, 접근성, loading/error와 Profile 전환 cache 경계를 결정하고 구현 전에 `web-app-shell` delta와 관련 design/decisions를 추가한다.
+`PROD-277`은 정상 Follow item의 loading/error/empty/read 상태, item activation과 Read/navigation 순서, fetch·refresh·pagination·Profile 전환 cache 경계를 결정하고 구현 전에 이 change를 갱신한다. `PROD-324`는 shell surface, count cap, 접근성, loading/error와 Profile 전환 cache 경계를 결정하고 구현 전에 `web-app-shell` delta와 관련 design/decisions를 추가한다.
 
-다만 공통 API·domain behavior에서 파생되는 unavailable 계약은 지금 고정한다. source가 남은 item은 Related Profile visibility와 무관하게 목록·Read·Unread count에 참여하며, 클라이언트는 snapshot 없이 type 기반 generic fallback을 표시하고 Profile 이동을 제공하지 않되 Read는 허용한다. 이 최소 계약을 넘는 interaction과 표현은 `PROD-277`이 소유한다.
+두 UI slice 모두 API에서 반환된 visible item과 count만 소비한다. unavailable item을 client가 다시 판정하거나 generic fallback으로 표현하는 UX는 없다.
 
 ## Verification Strategy
 
-- `PROD-325`: migration/DB integration으로 discriminator, unique/FK, deferred integrity, cascade/cleanup trigger, index를 검증한다.
-- `PROD-274`: storage test로 source correlation, Local/Remote Follower, existing/concurrent idempotency를 검증한다.
-- `PROD-275`: schema/resolver test로 cursor, 권한, Node filtering, 반복·동시 Read, count와 unavailable을 검증한다.
-- `PROD-276`: action test로 allow/deny/evaluator error/storage failure, integration 재진입과 origin-neutral port 호출을 검증한다.
-- `PROD-277`·`PROD-324`: 구현 전에 각 이슈가 소유한 UI 결정을 이 change에 반영하고, 그 계약을 Storybook interaction/a11y와 Android/iOS smoke로 검증한다.
-- `PROD-278`: 실제 Local Follow action을 사용하는 Web E2E와 관련 workspace 검증을 통과한 뒤 archive 전후 strict validation을 실행한다.
+- `PROD-325`: migration/DB integration으로 kind enum, 단일 table, Recipient FK, loose source ID, JSONB default, unique constraint와 조회 index를 검증한다.
+- `PROD-274`: storage test로 source-only create/delete, Recipient/Related Profile 파생, Local/Remote Follower, existing/concurrent idempotency를 검증한다.
+- `PROD-275`: schema/resolver test로 role-independent membership, 비선택 Profile 접근, cursor, SQL visible filtering, Node/Read 숨김, 반복·동시 Read와 visible count를 검증한다.
+- `PROD-276`: action test로 allow/deny/evaluator error/create·delete storage failure, integration 재진입, 정상 source cleanup과 origin-neutral port 호출을 검증한다.
+- `PROD-277`·`PROD-324`: 정상 item UI 계약을 Storybook interaction/a11y, Relay cache integration과 결정된 platform smoke로 검증한다.
+- `PROD-278`: 실제 Local Follow/Unfollow action을 사용하는 Web E2E와 관련 workspace 검증을 통과한 뒤 archive 전후 strict validation을 실행한다.
 
 ## Risks / Trade-offs
 
-- [Follow commit 뒤 Notification 호출 전에 process가 종료되면 item이 유실될 수 있다] → 첫 delivery는 best-effort임을 명시하고 자동 retry를 제공하지 않는다. durable delivery가 필요해지면 별도 outbox/recovery change로 다룬다.
-- [type-specific cleanup/integrity trigger는 Drizzle relation만 읽어서는 생명주기가 드러나지 않는다] → migration SQL에 목적이 드러나는 이름을 사용하고 raw source delete, base delete, mapping delete와 rollback을 DB integration test로 검증한다.
-- [base delete cascade가 extension cleanup trigger를 다시 실행한다] → parent delete가 zero-row no-op인지 검증해 recursion과 unexpected row count를 막는다.
-- [여러 active change가 TableDiscriminator를 동시에 추가할 수 있다] → `PROD-325` 구현 시 최신 기준 브랜치에서 미사용 discriminator를 할당하고 registry uniqueness test를 실행한다.
-- [Related Profile visibility를 목록 join에 넣으면 item과 count가 조용히 사라진다] → base recipient/read 조건과 nullable Profile Node load를 분리해 target API test로 고정한다.
+- [Follow commit 뒤 Notification 호출 전에 process가 종료되면 item이 유실될 수 있다] → 첫 delivery는 best-effort임을 명시하고 자동 retry를 제공하지 않는다. durable delivery가 필요해지면 별도 message queue/outbox change로 다룬다.
+- [공통 visible predicate를 만족하지 않는 row가 물리적으로 남을 수 있다] → API의 list/count/Node/Read는 같은 predicate로 숨기고, invalid source·unavailable Related Profile의 장기 비동기 정리와 Recipient inactivity 정책은 `PROD-328`로 분리한다.
+- [hidden row를 조회 후 버리면 page가 짧아지고 count와 불일치한다] → 공통 visible predicate를 SQL에서 limit 전에 적용하고 모든 API 표면이 같은 predicate를 사용한다.
+- [Account membership 권한과 selected Profile UI scope를 혼동할 수 있다] → resolver는 membership만 검사하고 client query/cache는 selected Profile ID를 명시하는 test를 각각 둔다.
+- [JSONB가 범용 extension framework가 될 수 있다] → kind별 최소 type validation만 두고 FOLLOW는 `{}`, GIN index와 snapshot은 추가하지 않는다.
 - [UI 구현이 공통 API 계약과 다른 cache 또는 interaction을 선택할 수 있다] → `PROD-277`·`PROD-324`의 첫 task를 OpenSpec 갱신 gate로 두고 구현·검증을 그 뒤에 진행한다.
 
 ## Migration Plan
 
-1. `PROD-325`에서 additive `notification_item`·`notification_follow` schema, discriminator, relation, index와 trigger를 배포한다. 기존 `ProfileFollow`는 backfill하지 않는다.
+1. `PROD-325`에서 additive `notification_item` schema, `notification_kind`, discriminator, Recipient FK, source uniqueness와 조회 index를 배포한다. 기존 `ProfileFollow`는 backfill하지 않는다.
 2. `PROD-274` 저장 경계와 `PROD-275` API를 schema 위에 병렬로 구현한다.
-3. `PROD-281`의 공용 ProfileFollow action과 `PROD-274`가 준비되면 `PROD-276` source integration을 연결한다.
+3. `PROD-281`의 공용 ProfileFollow action과 `PROD-274`가 준비되면 `PROD-276` create/delete source integration을 연결한다.
 4. API가 안정되면 `PROD-277` 목록과 `PROD-324` badge를 병렬로 배포한다.
 5. `PROD-278`에서 vertical E2E, canonical 문서/task sync와 archive 전후 validation을 완료한다.
 
-애플리케이션 rollback은 additive table을 유지하고 Notification source 호출·API·UI만 이전 버전으로 되돌린다. 데이터가 생성된 뒤 table을 자동 drop하는 down migration은 사용하지 않는다. trigger 또는 schema 자체를 제거해야 한다면 Notification 쓰기를 먼저 중단하고 데이터 보존/삭제 결정을 별도 migration으로 수행한다.
+애플리케이션 rollback은 additive table을 유지하고 Notification source 호출·API·UI만 이전 버전으로 되돌린다. 데이터가 생성된 뒤 table을 자동 drop하는 down migration은 사용하지 않는다. schema 자체를 제거해야 한다면 Notification 쓰기를 먼저 중단하고 데이터 보존/삭제 결정을 별도 migration으로 수행한다.
 
 ## Open Questions
 
-현재 공통 저장·API 계약의 구현을 막는 열린 질문은 없다. 목록과 badge의 세부 UX는 소유 이슈인 `PROD-277`·`PROD-324`가 구현 전에 결정한다. 실제 Mute/Block 연결은 `PROD-327`, unavailable item 자동 정리 원인·시점은 `PROD-328`, delivery/retry와 다른 Notification Type은 각각 별도 Issue → OpenSpec 흐름에서 결정한다.
+현재 공통 저장·API 계약의 구현을 막는 열린 질문은 없다. 목록과 badge의 세부 UX는 소유 이슈인 `PROD-277`·`PROD-324`가 구현 전에 결정한다. 실제 Mute/Block 연결은 `PROD-327`, invalid source·unavailable Related Profile item의 비동기 삭제 방식과 Recipient inactivity cleanup 여부는 `PROD-328`, delivery queue/retry와 다른 Notification Type은 각각 별도 Issue → OpenSpec 흐름에서 결정한다.

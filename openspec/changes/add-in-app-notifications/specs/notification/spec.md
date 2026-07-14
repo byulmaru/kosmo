@@ -2,15 +2,16 @@
 
 ### Requirement: Follow Notification source correlation
 
-시스템은 새 `ProfileFollow` 관계를 첫 Notification source로 사용하고, source·Recipient·Related Profile의 상관관계를 보존하는 Follow Notification Item을 생성해야 한다(MUST).
+시스템은 새 `ProfileFollow` 관계를 첫 Notification source로 사용하고 source·Recipient·Related Profile의 상관관계를 보존하는 Follow Notification Item을 생성해야 한다(MUST).
 
 #### Scenario: 새 Local Follow에서 알림 생성
 
 - **WHEN** Local Follower Profile이 Local Followee Profile과 새 `ProfileFollow` 관계를 만들고 Notification eligibility 결과가 allow이다
-- **THEN** 시스템은 Followee를 Recipient Profile, Follower를 Related Profile, 새 `ProfileFollow`를 source로 하는 `FOLLOW` Notification Item 하나를 생성한다
+- **THEN** 시스템은 `kind = FOLLOW`, `source_id = ProfileFollow.id`, `recipient_profile_id = Followee.id`, `data = {}`인 Notification Item 하나를 생성한다
+- **AND** Related Profile은 source의 Follower에서 파생한다
 - **AND** 새 item의 `readAt`은 `null`이다
 
-#### Scenario: source에서 Recipient와 Related Profile 파생
+#### Scenario: source-only 저장 입력
 
 - **WHEN** 저장 경계가 하나의 established `ProfileFollow` source를 입력으로 받는다
 - **THEN** 시스템은 source의 Followee를 Recipient, Follower를 Related Profile로 파생한다
@@ -26,7 +27,7 @@
 
 - **WHEN** 같은 `ProfileFollow.id` source를 Notification 저장 경계에 두 번 이상 전달한다
 - **THEN** 시스템은 기존 Notification Item을 나타내는 성공 결과 또는 동등한 idempotent no-op을 반환한다
-- **AND** 같은 source의 Notification Item은 하나만 존재한다
+- **AND** `(FOLLOW, source_id, recipient_profile_id)`의 Notification Item은 하나만 존재한다
 
 #### Scenario: source integration 경계 재진입
 
@@ -44,7 +45,7 @@
 #### Scenario: Unfollow 뒤 Re-follow
 
 - **WHEN** 기존 관계를 Unfollow한 뒤 같은 Follower와 Followee가 다시 Follow하여 새 `ProfileFollow.id`를 만든다
-- **THEN** 이전 source의 Notification Item은 남지 않는다
+- **THEN** 정상 cleanup이 성공한 이전 source의 Notification Item은 남지 않는다
 - **AND** eligibility가 allow이고 저장이 성공하면 시스템은 새 source에 대해 Follow Notification Item을 정확히 하나 생성한다
 
 #### Scenario: 이미 materialize된 Remote Follower source
@@ -84,31 +85,44 @@
 
 - **WHEN** eligibility가 allow이지만 Notification Item 저장이 실패한다
 - **THEN** 시스템은 새 `ProfileFollow` 관계와 Follow 성공 응답을 유지한다
-- **AND** 이번 capability는 누락된 Notification을 retry, outbox, duplicate Follow 또는 reconciliation으로 자동 복구하지 않는다
+- **AND** 이번 capability는 누락된 Notification을 retry, outbox, message queue, duplicate Follow 또는 reconciliation으로 자동 복구하지 않는다
+
+#### Scenario: commit 이후 같은 request에서 처리
+
+- **WHEN** 새 `ProfileFollow` transaction이 commit된다
+- **THEN** source action은 같은 request에서 eligibility와 Notification 저장을 순서대로 await하고 오류를 catch한다
+- **AND** Notification을 source transaction/savepoint에 포함하거나 fire-and-forget으로 실행하지 않는다
 
 ### Requirement: Follow source 생명주기 정리
 
-시스템은 `ProfileFollow` source가 제거되면 이를 직접 원인으로 가진 Follow Notification Item도 제거해야 한다(MUST).
+시스템은 정상 `ProfileFollow` 삭제 action에서 같은 source의 Follow Notification Item을 idempotent하게 정리해야 한다(MUST).
 
 #### Scenario: Unfollow로 source 삭제
 
-- **WHEN** Unfollow가 `ProfileFollow` source를 삭제한다
-- **THEN** 저장 계층은 대응하는 Follow Notification source mapping과 Notification Item을 함께 삭제한다
-- **AND** 삭제된 item은 목록과 Unread count에서 사라진다
+- **WHEN** Unfollow가 `ProfileFollow` source transaction을 commit한다
+- **THEN** source action은 같은 request에서 `(FOLLOW, source_id)` delete 경계를 await한다
+- **AND** cleanup이 성공하면 대응하는 Notification Item은 목록, Unread count, Node와 Read에서 사라진다
 
-#### Scenario: source row를 제거하는 다른 domain lifecycle
+#### Scenario: 반복 cleanup
 
-- **WHEN** Profile 또는 policy lifecycle이 `ProfileFollow` source row를 실제로 삭제한다
-- **THEN** 대응하는 Follow Notification Item도 source와 함께 제거된다
+- **WHEN** 이미 삭제된 `(FOLLOW, source_id)` item을 delete 경계에 다시 전달한다
+- **THEN** 저장 경계는 성공한 idempotent no-op을 반환한다
 
-#### Scenario: source는 남고 Related Profile만 unavailable
+#### Scenario: Notification cleanup 실패
 
-- **WHEN** Profile Domain Block, Instance Domain Block, Profile 비활성화·정지 또는 다른 조회 정책 변화로 Related Profile을 더 이상 조회할 수 없지만 `ProfileFollow` source는 남아 있다
-- **THEN** 시스템은 기존 Notification Item과 Read 상태를 유지한다
+- **WHEN** source 삭제 뒤 Notification delete가 실패하거나 process가 종료된다
+- **THEN** `ProfileFollow` 삭제와 Unfollow 성공 응답은 유지된다
+- **AND** 남은 row는 source를 찾을 수 없으므로 모든 Notification API 표면에서 숨겨진다
 
-### Requirement: Profile-scoped Notification GraphQL 계약
+#### Scenario: action 밖에서 source row 삭제
 
-API는 현재 선택된 Profile에 귀속된 Notification Item connection과 Unread count를 Profile object에 제공해야 한다(MUST).
+- **WHEN** raw SQL 또는 Notification integration을 호출하지 않는 lifecycle이 `ProfileFollow` source를 삭제한다
+- **THEN** loose `source_id`를 가진 Notification row가 남을 수 있다
+- **AND** API는 그 row를 숨기며 database trigger나 source foreign key가 정리를 대신하지 않는다
+
+### Requirement: Membership 기반 Profile Notification GraphQL 계약
+
+API는 로그인 Account가 Account-Profile membership을 가진 Profile의 Notification Item connection과 Unread count를 Profile object에 제공해야 한다(MUST).
 
 #### Scenario: Notification GraphQL shape
 
@@ -116,44 +130,57 @@ API는 현재 선택된 Profile에 귀속된 Notification Item connection과 Unr
 - **THEN** `NotificationItem`은 Relay `Node`를 구현하고 `id`, `type`, `createdAt`, nullable `readAt`, nullable `relatedProfile`을 제공한다
 - **AND** `NotificationType`은 이번 capability에서 `FOLLOW`만 제공한다
 - **AND** `Profile.notifications`는 `NotificationItemConnection`을, `Profile.unreadNotificationCount`는 음수가 아닌 정수를 반환한다
-- **AND** API는 raw source ID나 과거 이름·handle snapshot을 Notification Item 필드로 노출하지 않는다
+- **AND** API는 raw `source_id`, `data`나 과거 이름·handle snapshot을 Notification Item 필드로 노출하지 않는다
+- **AND** API가 반환하는 FOLLOW item의 `relatedProfile`은 실제로 조회 가능한 Profile이다
 
-#### Scenario: 선택된 Profile inbox 조회
+#### Scenario: membership이 있는 Profile inbox 조회
 
-- **WHEN** 현재 session에 선택된 Profile이 있고 클라이언트가 그 Profile의 `notifications`와 `unreadNotificationCount`를 조회한다
-- **THEN** API는 해당 Profile이 Recipient인 item과 count만 반환한다
+- **WHEN** 로그인 Account가 target Profile에 Account-Profile membership을 가지고 `notifications`와 `unreadNotificationCount`를 조회한다
+- **THEN** API는 membership role을 판정에 사용하지 않고 해당 Profile이 Recipient인 visible item과 count를 반환한다
 
-#### Scenario: 선택된 Profile이 없는 조회
+#### Scenario: selected Profile과 다른 target 조회
 
-- **WHEN** 로그인 session에 선택된 Profile이 없는 요청이 Profile-scoped Notification 필드에 접근한다
+- **WHEN** target Profile이 session의 selected Profile과 다르거나 session에 selected Profile이 없지만 요청 Account가 target membership을 가진다
+- **THEN** API는 target Profile의 Notification field 조회를 허용한다
+
+#### Scenario: 인증되지 않은 Profile field 조회
+
+- **WHEN** 인증되지 않은 요청이 Profile-scoped Notification field에 접근한다
 - **THEN** API는 `PERMISSION_DENIED` GraphQL 오류를 반환한다
 
-#### Scenario: 다른 Recipient Profile 조회
+#### Scenario: membership이 없는 Profile field 조회
 
-- **WHEN** 요청이 다른 Account의 Profile 또는 같은 Account에서 현재 선택되지 않은 Profile의 inbox를 조회한다
+- **WHEN** 로그인 Account가 target Profile membership 없이 `notifications` 또는 `unreadNotificationCount`를 조회한다
 - **THEN** API는 `PERMISSION_DENIED` GraphQL 오류를 반환한다
 - **AND** 그 Profile의 Notification Item이나 count를 노출하지 않는다
 
-#### Scenario: 다른 Recipient의 Notification Node 조회
+#### Scenario: Notification Node 조회
 
-- **WHEN** 요청이 `node(id:)`로 현재 선택된 Profile이 Recipient가 아닌 Notification Item ID를 조회한다
-- **THEN** recipient-filtered Node loader는 해당 object를 반환하지 않는다
+- **WHEN** 요청이 `node(id:)`로 없는 Notification Item, membership이 없는 Recipient의 item 또는 hidden item을 조회한다
+- **THEN** recipient-filtered Node loader는 모두 `null`을 반환한다
 
-### Requirement: Stable newest-first Notification pagination
+#### Scenario: inactive Recipient의 Notification Node
 
-API는 Kosmo UUID v8 Notification Item ID의 시간 순서를 사용해 Recipient inbox를 stable newest-first Relay connection으로 제공해야 한다(MUST).
+- **WHEN** Notification Item의 Recipient Profile이 비활성 등으로 GraphQL Profile object에 노출되지 않는다
+- **THEN** Notification Node loader는 해당 item을 `null`로 반환한다
+- **AND** `markNotificationRead`는 같은 item ID에 `NOT_FOUND`를 반환한다
 
-#### Scenario: 첫 페이지 정렬
+### Requirement: Visible newest-first Notification pagination
 
-- **WHEN** 클라이언트가 선택된 Profile의 Notification 첫 페이지를 요청한다
-- **THEN** API는 `NotificationItem.id DESC` 순서로 item을 반환한다
-- **AND** opaque cursor는 마지막 item ID를 기준으로 다음 경계를 표현한다
+API는 source가 저장 Recipient와 일치하고 Related Profile을 조회할 수 있는 Notification Item만 Kosmo UUID v8 ID의 시간 순서로 stable newest-first Relay connection에 포함해야 한다(MUST).
+
+#### Scenario: 첫 페이지 정렬과 filtering
+
+- **WHEN** 클라이언트가 권한이 있는 Profile의 Notification 첫 페이지를 요청한다
+- **THEN** API는 Recipient Profile 자체의 API visibility, source 존재, source Followee와 저장 Recipient의 일치, Recipient Profile 기준 Related Profile visibility를 SQL에서 적용한 뒤 page limit을 적용한다
+- **AND** visible item을 `NotificationItem.id DESC` 순서로 반환한다
+- **AND** opaque cursor는 마지막 visible item ID를 기준으로 다음 경계를 표현한다
 
 #### Scenario: 다음 페이지 조회
 
 - **WHEN** 클라이언트가 이전 페이지의 end cursor로 다음 페이지를 요청한다
-- **THEN** API는 cursor보다 오래된 ID만 반환한다
-- **AND** 페이지 경계에서 item을 중복하거나 건너뛰지 않는다
+- **THEN** API는 cursor보다 오래된 visible ID만 반환한다
+- **AND** hidden item 때문에 page가 불필요하게 짧아지거나 page 경계에서 visible item을 중복·누락하지 않는다
 
 #### Scenario: 새 item 도착 뒤 pagination
 
@@ -161,20 +188,25 @@ API는 Kosmo UUID v8 Notification Item ID의 시간 순서를 사용해 Recipien
 - **THEN** API는 기존 cursor의 오래된 방향 경계를 유지한다
 - **AND** 새 item은 새로고침 또는 route 재조회에서 첫 페이지에 나타난다
 
-### Requirement: Idempotent Notification Read와 Unread count
+#### Scenario: Related Profile visibility viewer
 
-API는 선택된 Recipient Profile의 Notification Item 하나를 Read로 전환하고 같은 Profile 범위의 Unread count를 일관되게 갱신해야 한다(MUST).
+- **WHEN** API가 FOLLOW item의 Related Profile visibility를 평가한다
+- **THEN** viewer는 요청 Account나 selected Profile이 아니라 item의 Recipient Profile이다
+
+### Requirement: Idempotent Notification Read와 visible Unread count
+
+API는 권한이 있는 Recipient Profile의 visible Notification Item 하나를 Read로 전환하고 같은 Profile 범위의 visible Unread count를 일관되게 갱신해야 한다(MUST).
 
 #### Scenario: 최초 Read
 
-- **WHEN** Recipient가 `markNotificationRead(input: { id })`로 `readAt = null`인 item을 읽는다
+- **WHEN** membership이 있는 Account가 `markNotificationRead(input: { id })`로 `readAt = null`인 visible item을 읽는다
 - **THEN** API는 `readAt`에 최초 Read 시각을 한 번 기록한다
-- **AND** Recipient Profile의 `unreadNotificationCount`는 한 번 감소한다
+- **AND** Recipient Profile의 visible `unreadNotificationCount`는 한 번 감소한다
 - **AND** `MarkNotificationReadPayload`는 갱신된 `notificationItem`과 `recipientProfile`을 반환한다
 
 #### Scenario: 반복 Read
 
-- **WHEN** Recipient가 이미 Read인 같은 item ID로 `markNotificationRead(input: { id })`를 다시 호출한다
+- **WHEN** 같은 Account가 이미 Read인 같은 visible item ID로 `markNotificationRead`를 다시 호출한다
 - **THEN** API는 성공한 idempotent 결과를 반환한다
 - **AND** 최초 `readAt`과 Unread count를 변경하지 않는다
 
@@ -182,50 +214,79 @@ API는 선택된 Recipient Profile의 Notification Item 하나를 Read로 전환
 
 - **WHEN** 같은 Unread item에 둘 이상의 Read 요청이 동시에 도착한다
 - **THEN** 시스템은 하나의 Unread-to-Read 전이만 반영한다
-- **AND** 모든 성공 응답은 보존된 최초 `readAt`과 일관된 Unread count를 관찰한다
+- **AND** 모든 성공 응답은 보존된 최초 `readAt`과 일관된 visible Unread count를 관찰한다
 
-#### Scenario: 다른 Profile item Read
+#### Scenario: membership이 없는 item Read
 
-- **WHEN** 요청이 다른 Account 또는 같은 Account의 다른 선택되지 않은 Profile이 Recipient인 item ID를 읽으려 한다
+- **WHEN** 로그인 Account가 Recipient Profile membership이 없는 item ID를 읽으려 한다
 - **THEN** API는 존재하지 않는 ID와 구별되지 않는 `NOT_FOUND` GraphQL 오류를 반환한다
 - **AND** item과 count는 변경되지 않는다
 
-#### Scenario: 선택된 Profile이 없는 Read
+#### Scenario: 인증되지 않은 Read
 
-- **WHEN** session에 선택된 Profile이 없는 요청이 `markNotificationRead`를 호출한다
+- **WHEN** 인증되지 않은 요청이 `markNotificationRead`를 호출한다
 - **THEN** API는 `PERMISSION_DENIED` GraphQL 오류를 반환한다
 
-### Requirement: Related Profile unavailable fallback
+#### Scenario: visible count 계산
 
-시스템은 source가 남아 있는 기존 Notification Item의 Related Profile을 조회할 수 없더라도 item·Read·Unread count를 유지해야 한다(MUST).
+- **WHEN** API가 `unreadNotificationCount`를 계산한다
+- **THEN** Recipient Profile 자체가 API에 visible하고 source가 존재하며 source Followee가 저장 Recipient와 일치하고 Related Profile visible predicate와 `read_at IS NULL`을 만족하는 Recipient item만 센다
+- **AND** connection에서 숨긴 item을 count에 포함하지 않는다
 
-#### Scenario: unavailable Related Profile API 응답
+### Requirement: Unavailable Notification Item 숨김
 
-- **WHEN** 기존 Follow Notification의 source는 남아 있지만 Follower Profile을 현재 Recipient가 조회할 수 없다
-- **THEN** API는 item을 connection에 유지하고 `relatedProfile: null`을 반환한다
-- **AND** 이름·handle snapshot을 대신 반환하지 않는다
+시스템은 Recipient Profile 자체가 API에 노출되지 않거나 source가 없거나 source Recipient가 저장 Recipient와 일치하지 않거나 Recipient Profile 기준으로 Related Profile을 조회할 수 없는 Notification Item을 모든 API 표면에서 존재하지 않는 것으로 취급해야 한다(MUST).
 
-#### Scenario: unavailable item Read와 count
+#### Scenario: unavailable item connection과 count
 
-- **WHEN** `relatedProfile`이 `null`인 item이 Unread이다
-- **THEN** item은 `unreadNotificationCount`에 포함된다
-- **AND** Recipient는 같은 `markNotificationRead` 계약으로 item을 Read 처리할 수 있다
+- **WHEN** Recipient Profile 자체가 API에 노출되지 않거나 기존 Follow Notification의 source가 없거나 source Followee가 저장 Recipient와 다르거나 Follower Profile을 Recipient가 조회할 수 없다
+- **THEN** API는 item을 connection에서 제외하고 Unread여도 `unreadNotificationCount`에 포함하지 않는다
+- **AND** filtering은 page limit 전에 SQL에서 적용된다
 
-#### Scenario: unavailable Follow item 표시와 활성화
+#### Scenario: unavailable item Node와 Read
 
-- **WHEN** Follow item의 `relatedProfile`이 `null`이다
-- **THEN** 클라이언트는 저장 snapshot 없이 `FOLLOW` type 기반 generic fallback을 표시하고 Profile 이동을 비활성화한다
-- **AND** item이 Unread이면 사용자는 item을 Read 처리할 수 있다
-- **AND** unavailable item 하나가 목록 전체의 error가 되거나 숨겨져서는 안 된다
+- **WHEN** 요청이 unavailable item ID를 Node 또는 `markNotificationRead`에 전달한다
+- **THEN** Node는 `null`을 반환하고 Read는 `NOT_FOUND`를 반환한다
+- **AND** 저장된 `readAt`은 변경되지 않는다
+
+#### Scenario: cleanup 전 저장 상태
+
+- **WHEN** unavailable item의 비동기 cleanup이 아직 실행되지 않았다
+- **THEN** database row와 기존 Read 상태는 남을 수 있다
+- **AND** cleanup 전에 visibility가 회복되면 item은 기존 Read 상태로 다시 visible해질 수 있다
+
+#### Scenario: generic fallback 금지
+
+- **WHEN** item이 unavailable이다
+- **THEN** API와 client는 `relatedProfile: null` Follow item, 이름·handle snapshot 또는 type-only generic item을 반환·표시하지 않는다
+- **AND** client는 서버가 반환한 page나 count를 unavailable 기준으로 다시 필터링하지 않는다
+
+#### Scenario: 후속 비동기 삭제 경계
+
+- **WHEN** source가 없거나 Recipient와 일치하지 않거나 Related Profile이 Recipient 기준으로 unavailable인 item의 장기 물리 정리를 설계한다
+- **THEN** 원인별 event, queue 또는 scan, worker, retry와 허용 지연은 별도 `PROD-328` OpenSpec이 소유한다
+- **AND** Recipient Profile 자체의 일시 비활성화·정지가 물리 삭제 원인인지도 `PROD-328`이 결정한다
+- **AND** 이번 capability의 구현 task와 archive gate에는 포함하지 않는다
 
 ### Requirement: Local Follow vertical verification
 
-시스템은 실제 Local Follow action부터 Notification Item, API, 목록 UI와 badge까지의 Profile 격리를 Web E2E로 검증해야 한다(MUST).
+시스템은 실제 Local Follow action부터 Notification Item, API, 목록 UI, badge, Read와 정상 source cleanup까지의 Profile 격리를 Web E2E로 검증해야 한다(MUST).
 
 #### Scenario: Recipient Profile A와 B 격리
 
 - **WHEN** Local Follower가 Recipient Account의 Profile A를 실제 Follow action으로 팔로우하고 Recipient가 Profile B와 A를 차례로 선택한다
-- **THEN** Profile B의 API와 UI에는 A의 Notification Item이나 Unread count가 노출되지 않는다
+- **THEN** Profile B의 UI에는 A의 Notification Item이나 Unread count가 노출되지 않는다
 - **AND** Profile A에서는 Follower를 가리키는 Unread item과 count가 보인다
+- **AND** API authorization은 Account가 가진 membership을 사용하되 UI query와 Relay cache는 selected Profile A/B를 섞지 않는다
 - **AND** `PROD-277`·`PROD-324`가 구현 전에 추가한 목록·Read·navigation·badge 요구사항을 같은 item으로 검증한다
-- **AND** Profile B로 다시 전환해도 A의 item이나 count가 섞이지 않는다
+
+#### Scenario: Follow item Read와 이동
+
+- **WHEN** Recipient가 visible Follow item을 활성화한다
+- **THEN** 결정된 UI 순서에 따라 item은 최초 Read로 전환되고 badge는 한 번 감소하며 Related Profile로 이동한다
+- **AND** 같은 item을 다시 읽어도 최초 `readAt`과 count가 유지된다
+
+#### Scenario: Unfollow cleanup
+
+- **WHEN** Follower가 정상 Unfollow action으로 source를 삭제하고 Notification cleanup이 성공한다
+- **THEN** 같은 source item은 Recipient의 목록, count, Node와 Read에서 더 이상 보이지 않는다

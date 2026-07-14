@@ -4,30 +4,30 @@ Kosmo에는 Notification Item의 canonical 도메인 계약과 `/notifications` 
 
 ## What Changes
 
-- Profile을 Recipient로 하는 Notification Item의 공통 생명주기, source correlation, 생성 정책, 읽음 상태와 격리 계약을 추가한다.
-- 첫 type으로 Follow를 지원하고, Local ProfileFollow 생성·중복·Unfollow·Re-follow 및 이미 materialize된 Remote Follower 관계가 같은 source mapping을 사용하는 동작을 정의한다.
-- Notification Item과 Follow source를 base/type-specific table로 나누고, Node ID, foreign key/cascade, source uniqueness와 Recipient inbox 조회 index를 정의한다.
-- 선택된 Profile의 newest-first Relay connection, item 단위 idempotent Read mutation과 Unread count API를 추가한다.
-- `PROD-277`이 목록 표시·interaction·navigation·refresh·cache UX를 결정해 이 change를 갱신한 뒤 `/notifications` Follow 목록을 구현한다. 단, unavailable item의 generic fallback·이동 불가·Read 가능 계약은 공통 경계로 미리 고정한다.
-- `PROD-324`가 count cap·접근성·loading/error·Profile 전환 UX를 결정해 이 change의 `web-app-shell` delta를 추가한 뒤 모든 알림 진입점의 Unread badge를 구현한다.
-- Notification 정책 평가 오류·deny·저장 실패가 Follow 결과를 바꾸지 않는 실패 경계를 추가한다.
-- Follow Request Notification, 다른 Notification Type, 실제 Mute/Block 정책 연결, unavailable item 자동 정리, ActivityPub ingress, historical backfill, outbox/retry, Push/realtime은 제외한다.
+- Profile을 Recipient로 하는 Notification Item의 공통 생명주기, source correlation, 생성 정책, 읽음 상태와 권한 계약을 추가한다.
+- 첫 kind로 Follow를 지원하고, Local ProfileFollow 생성·중복·Unfollow·Re-follow 및 이미 materialize된 Remote Follower 관계가 같은 source mapping을 사용하는 동작을 정의한다.
+- `kind`, FK 없는 `source_id`와 kind-specific `data` JSONB를 가진 단일 `notification_item` projection, source·Recipient uniqueness와 Recipient inbox 조회 index를 정의한다.
+- 로그인 Account가 Account-Profile membership을 가진 Profile의 newest-first Relay connection, item 단위 idempotent Read mutation과 visible Unread count API를 사용하게 한다. selected Profile은 API 권한 조건이 아니며 UI/cache scope에만 사용한다.
+- Recipient Profile 자체 visibility, source 존재·Recipient 일치와 Recipient Profile 기준 Related Profile visibility로 구성된 공통 predicate를 만족하지 않는 item은 connection, count, Node와 Read에서 모두 숨긴다. row와 Read 상태는 후속 cleanup 전까지 남을 수 있지만 API는 generic fallback이나 raw source/data를 반환하지 않는다.
+- `PROD-277`이 정상 item의 표시·interaction·navigation·refresh·cache UX를 결정하고, `PROD-324`가 badge UX를 결정한 뒤 `/notifications` 목록과 모든 shell badge를 구현한다.
+- Notification 정책 평가 오류·deny·저장 실패가 Follow 결과를 바꾸지 않는 best-effort 실패 경계를 추가한다.
+- Follow Request Notification, 다른 Notification Type, 실제 Mute/Block 정책 연결, invalid source·unavailable Related Profile item의 비동기 물리 삭제와 Recipient inactivity cleanup 정책, ActivityPub ingress, historical backfill, outbox/message queue/retry, Push/realtime은 제외한다.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `notification`: Profile-scoped Notification Item의 Follow source 생명주기, eligibility, 조회·Read·Unread API와 cross-slice 검증 계약을 다룬다.
+- `notification`: Profile-scoped Notification Item의 Follow source 생명주기, eligibility, membership 기반 조회·Read·Unread API, unavailable 숨김과 cross-slice 검증 계약을 다룬다.
 
 ### Modified Capabilities
 
-- `data-model`: Notification Item base table, Follow source table, TableDiscriminator, foreign key/cascade, source uniqueness와 Recipient 조회 index를 추가한다.
+- `data-model`: `notification_item` 단일 table, `notification_kind` enum, FK 없는 source ID, kind-specific JSONB data, source uniqueness와 Recipient 조회 index를 추가한다.
 - `api-platform`: `NotificationType` enum을 공통 GraphQL enum 등록 계약에 추가한다. `NotificationItem`은 기존 Relay Node identity 규칙을 따른다.
 
 ## Impact
 
-- `packages/core`: Notification enum, ID registry, Drizzle table/relation, migration, 저장·정책 경계와 ProfileFollow action 연결.
-- `apps/api`: Notification Node/connection, Profile-scoped 목록·Unread count, Read mutation, schema와 resolver/service test.
-- `apps/app`: `PROD-277`·`PROD-324`가 이 change를 갱신한 뒤 구현할 `/notifications` 목록, Follow item interaction, shell badge와 Relay cache 갱신.
-- `apps/web/e2e`: Local Follow에서 목록·Read·badge·Profile 격리까지의 vertical flow.
-- OpenSpec archive는 마지막 통합 이슈인 `PROD-278`이 전체 task와 canonical 문서 정렬을 검증한 뒤 수행한다.
+- `packages/core`: Notification enum, ID registry, 단일 Drizzle table/migration, 저장·정책 경계와 ProfileFollow 생성·삭제 action 연결.
+- `apps/api`: Notification Node/connection, membership 기반 Profile 목록·visible Unread count, Read mutation, schema와 resolver/service test.
+- `apps/app`: `PROD-277`·`PROD-324`가 구현할 `/notifications` 정상 Follow 목록, item interaction, shell badge와 selected Profile별 Relay cache 갱신.
+- `apps/web/e2e`: Local Follow에서 목록·Read·badge·Profile 이동·Unfollow cleanup까지의 vertical flow.
+- OpenSpec archive는 마지막 통합 이슈인 `PROD-278`이 전체 task와 canonical 문서 정렬을 검증한 뒤 수행한다. unavailable 비동기 cleanup은 별도 `PROD-328`이 소유하며 이 change의 archive gate가 아니다.
