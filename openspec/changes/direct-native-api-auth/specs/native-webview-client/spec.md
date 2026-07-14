@@ -42,8 +42,8 @@
 - **THEN** 앱은 저장된 token을 삭제한다
 - **AND** 보호 route에서 공개 온보딩으로 이동한다
 
-#### Scenario: Discard a session from another native configuration
+#### Scenario: Discard an invalid session envelope
 
-- **WHEN** SecureStore session envelope의 API origin, native OIDC issuer 또는 native client ID가 현재 설정과 다르거나 legacy web-origin envelope이다
+- **WHEN** SecureStore session envelope이 malformed이거나 API origin, native OIDC issuer 또는 native client ID가 현재 설정과 다르다
 - **THEN** 앱은 저장 값을 삭제하고 token을 복원하지 않는다
-- **AND** 이전 token을 API 또는 웹 BFF에 전송하지 않는다
+- **AND** 저장된 token을 API에 전송하지 않는다

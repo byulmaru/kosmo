@@ -16,11 +16,11 @@ Relay network layer는 웹에서는 same-origin BFF를, Android/iOS에서는 공
 - **THEN** Relay network는 설정된 API origin의 `/graphql`에 `Authorization: Bearer <session>` 헤더를 포함한 POST 요청을 보낸다
 - **AND** native request는 browser cookie credential에 의존하지 않는다
 
-#### Scenario: Discard a session from another native environment
+#### Scenario: Discard an invalid native session envelope
 
-- **WHEN** SecureStore session envelope의 API origin, native OIDC issuer 또는 native client ID가 현재 설정과 다르거나 legacy plain token 또는 web-origin envelope이다
+- **WHEN** SecureStore session envelope이 malformed이거나 API origin, native OIDC issuer 또는 native client ID가 현재 설정과 다르다
 - **THEN** client는 저장 값을 삭제하고 session token을 복원하지 않는다
-- **AND** 이전 token을 현재 API origin 또는 web origin의 `/graphql`로 전송하지 않는다
+- **AND** 저장된 token을 현재 API origin의 `/graphql`로 전송하지 않는다
 
 #### Scenario: Validate the native API origin
 

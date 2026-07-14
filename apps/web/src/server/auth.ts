@@ -12,7 +12,6 @@ import type { Configuration } from 'openid-client';
 
 export const LOGIN_CODE_VERIFIER_COOKIE = 'kosmo_oidc_code_verifier';
 export const LOGIN_STATE_COOKIE = 'kosmo_oidc_state';
-export const NATIVE_REDIRECT_URI = 'kosmo://login/callback';
 
 type OidcIdentity = {
   displayName: string;

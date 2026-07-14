@@ -11,7 +11,6 @@ const loginCodeVerifierCookie = 'kosmo_oidc_code_verifier';
 const loginStateCookie = 'kosmo_oidc_state';
 const apiOrigin = process.env.PUBLIC_API_ORIGIN ?? 'http://127.0.0.1:3001';
 const oidcOrigin = process.env.PUBLIC_OIDC_ISSUER ?? 'http://127.0.0.1:4300';
-const oidcClientId = process.env.PUBLIC_OIDC_CLIENT_ID ?? 'kosmo-e2e-client';
 const nativeOidcClientId = process.env.PUBLIC_OIDC_NATIVE_CLIENT_ID ?? 'kosmo-e2e-native-client';
 const nativeSessionEndpoint = new URL('/graphql', apiOrigin).toString();
 const nativeSessionOperationName = 'E2ENativeOidcSessionExchange';
@@ -156,25 +155,6 @@ test('mock OIDC로 로그인하면 보호 홈으로 이동하고 세션이 유�
   await expect(page).toHaveURL(/\/home$/);
 });
 
-test('legacy BFF는 confidential client PKCE code를 cookie 없이 Kosmo 세션으로 교환한다', async ({
-  request,
-}) => {
-  const codeVerifier = 'v'.repeat(43);
-  const callbackUrl = await authorizeNativeCode(request, codeVerifier, { clientId: oidcClientId });
-  const response = await request.post('/login/native/session', {
-    data: {
-      code: callbackUrl.searchParams.get('code'),
-      codeVerifier,
-      redirectUri: 'kosmo://login/callback',
-    },
-  });
-  const body = (await response.json()) as { token?: unknown };
-
-  expect(response.status()).toBe(200);
-  expect(typeof body.token).toBe('string');
-  expect(response.headers()['set-cookie']).toBeUndefined();
-});
-
 test('API는 public native PKCE code를 cookie 없이 Kosmo 세션으로 교환한다', async ({ request }) => {
   const codeVerifier = 'v'.repeat(43);
   const callbackUrl = await authorizeNativeCode(request, codeVerifier);
@@ -207,26 +187,6 @@ test('API는 public native PKCE code를 cookie 없이 Kosmo 세션으로 교환�
   expect(response.headers()['cache-control']).toContain('no-store');
   expect(response.headers().pragma).toBe('no-cache');
   expect(response.headers()['set-cookie']).toBeUndefined();
-});
-
-test('legacy BFF는 서명이 잘못된 ID token을 Kosmo 세션으로 교환하지 않는다', async ({
-  request,
-}) => {
-  const codeVerifier = 'v'.repeat(43);
-  const callbackUrl = await authorizeNativeCode(request, codeVerifier, {
-    clientId: oidcClientId,
-    loginHint: 'invalid-signature',
-  });
-  const response = await request.post('/login/native/session', {
-    data: {
-      code: callbackUrl.searchParams.get('code'),
-      codeVerifier,
-      redirectUri: 'kosmo://login/callback',
-    },
-  });
-
-  expect(response.status()).toBe(400);
-  expect(await response.text()).toBe('OIDC code exchange failed');
 });
 
 test('API는 서명이 잘못된 public native ID token을 Kosmo 세션으로 교환하지 않는다', async ({

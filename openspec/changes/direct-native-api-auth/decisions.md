@@ -24,25 +24,25 @@
 - Consequences: API에 `openid-client` public-client configuration과 E2E public-client mock이 필요하다. client secret은 API와 app 모두 읽지 않는다.
 - Confirmation / Follow-up: valid/invalid PKCE code, invalid signature, redirect mismatch와 raw token 입력을 API E2E로 검증한다.
 
-### 앱은 API GraphQL mutation을 사용하고 BFF legacy REST route를 남긴다
+### 앱은 API GraphQL mutation만 사용하고 BFF native REST route를 제거한다
 
 - Decision Date: 2026-07-13
 - Status: Accepted
-- Context / Problem: 웹과 앱이 가능한 한 같은 GraphQL transport surface를 쓰면 client contract를 단순화할 수 있다. 다만 BFF의 web confidential-client code exchange를 API로 옮기면 web client secret과 cookie boundary가 불필요하게 넓어진다. 이미 배포된 native bundle의 BFF REST route를 즉시 끊으면 rollback도 어렵다.
-- Decision Outcome: 새 native bundle은 API origin의 `/graphql`에서 `exchangeNativeOidcSession` mutation을 호출한다. mutation input은 authorization code, PKCE verifier, exact redirect URI만 가진다. BFF의 `/login/native/session` REST route는 기존 배포 bundle의 transition/rollback 호환을 위해 유지하고, 웹은 기존 confidential-client BFF code exchange와 cookie 경계를 계속 사용한다.
-- Alternatives Considered: API REST `/login/native/session`은 native auth만 별도 HTTP surface로 남기므로 제외했다. 웹 code exchange를 API mutation으로 통합하는 안은 confidential client secret과 browser cookie security boundary를 넓히므로 제외했다. BFF route 즉시 삭제는 이미 배포된 native bundle의 로그인 실패를 만들 수 있어 제외했다.
-- Consequences: API direct exchange는 HTTP status 대신 GraphQL error contract를 사용한다. GraphQL endpoint 전체에 mutation 전용 body limit을 추가하지 않고 code/verifier input limit으로 표면을 제한한다. BFF route retirement는 adoption/rollback window 뒤 별도 작업이다.
+- Context / Problem: 웹과 앱이 가능한 한 같은 GraphQL transport surface를 쓰면 client contract를 단순화할 수 있다. BFF의 web confidential-client code exchange를 API로 옮기면 web client secret과 cookie boundary가 불필요하게 넓어지지만, BFF native REST endpoint는 모바일 앱 배포 전에만 사용된 임시 경로라 호환성 소유자가 없다.
+- Decision Outcome: native 앱은 API origin의 `/graphql`에서 `exchangeNativeOidcSession` mutation만 호출한다. mutation input은 authorization code, PKCE verifier, exact redirect URI만 가진다. BFF의 `/login/native/session` REST route와 전용 validation/test를 제거하고, 웹은 기존 confidential-client BFF code exchange와 cookie 경계를 계속 사용한다.
+- Alternatives Considered: API REST `/login/native/session`은 native auth만 별도 HTTP surface로 남기므로 제외했다. 웹 code exchange를 API mutation으로 통합하는 안은 confidential client secret과 browser cookie security boundary를 넓히므로 제외했다. BFF route 유지는 배포된 consumer 없이 중복 인증 surface만 남기므로 제외했다.
+- Consequences: native session exchange surface는 API GraphQL 하나다. API direct exchange는 HTTP status 대신 GraphQL error contract를 사용하며 code/verifier input limit으로 표면을 제한한다. 미배포 BFF 경로를 위한 migration이나 rollback 호환성은 제공하지 않는다.
 - Confirmation / Follow-up: app unit test와 actual-device 검증에서 새 native request host가 API origin의 `/graphql`이고 mutation input이 raw OIDC token을 받지 않는지 확인한다.
 
 ### native OIDC configuration과 SecureStore는 API environment에 결속한다
 
 - Decision Date: 2026-07-13
 - Status: Accepted
-- Context / Problem: web confidential client ID를 native public client에 재사용하면 credential model이 섞이고, 이전 web-origin envelope을 새 API origin으로 보내면 환경 전환 때 bearer token이 잘못 전달될 수 있다.
+- Context / Problem: web confidential client ID를 native public client에 재사용하면 credential model이 섞이고, malformed 또는 다른 native configuration의 envelope을 현재 API origin으로 보내면 bearer token이 잘못 전달될 수 있다.
 - Decision Outcome: native는 `EXPO_PUBLIC_OIDC_NATIVE_CLIENT_ID`와 `EXPO_PUBLIC_API_ORIGIN`을 사용한다. SecureStore envelope은 API origin, native OIDC issuer, native client ID, Kosmo session token을 함께 저장하고 하나라도 다르면 삭제한다.
 - Alternatives Considered: 기존 `EXPO_PUBLIC_OIDC_CLIENT_ID`/web origin 재사용은 confidential/public client 경계를 깨므로 제외했다. API origin만 저장하는 안은 identity configuration 변경 시 재로그인을 강제하지 못해 제외했다.
-- Consequences: legacy plain/web-origin storage는 one-time re-login을 유발한다. `EXPO_PUBLIC_*` 값은 native build 전에 주입돼야 한다.
-- Confirmation / Follow-up: app codec/network tests에서 legacy와 origin/issuer/client mismatch 삭제를 검증한다.
+- Consequences: malformed 또는 origin/issuer/client mismatch storage는 삭제된다. `EXPO_PUBLIC_*` 값은 native build 전에 주입돼야 한다.
+- Confirmation / Follow-up: app codec/network tests에서 malformed와 origin/issuer/client mismatch 삭제를 검증한다.
 
 ### 검증된 identity의 session writer는 core auth에 공유하고 upstream token은 저장하지 않는다
 
@@ -67,7 +67,6 @@
 ## Remaining Decisions
 
 - native distribution pipeline의 public environment injection 자동화는 현재 범위 밖이다. 첫 native distribution은 `EXPO_PUBLIC_API_ORIGIN`, `EXPO_PUBLIC_OIDC_ISSUER`, `EXPO_PUBLIC_OIDC_NATIVE_CLIENT_ID`가 build-time에 주입됐음을 release checklist로 확인한다.
-- BFF legacy native endpoint의 제거 기준은 app adoption과 rollback window를 확인한 뒤 별도 issue에서 정한다.
 
 ## Superseded Decisions
 
