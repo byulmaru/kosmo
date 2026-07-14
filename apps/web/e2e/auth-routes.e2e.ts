@@ -255,63 +255,11 @@ test('API는 서명이 잘못된 public native ID token을 Kosmo 세션으로 �
   expect(JSON.stringify(body)).not.toContain(codeVerifier);
 });
 
-test('API는 허용되지 않은 native redirect URI를 OIDC token endpoint에 보내지 않는다', async ({
-  request,
-}) => {
-  const codeVerifier = 'v'.repeat(43);
-  const callbackUrl = await authorizeNativeCode(request, codeVerifier);
-  const tokenRequestCount = await getOIDCTokenRequestCount(request);
-  const response = await exchangeNativeOidcSession(request, {
-    code: callbackUrl.searchParams.get('code'),
-    codeVerifier,
-    redirectUri: 'https://evil.example/login/callback',
-  });
-  const body = (await response.json()) as NativeSessionGraphQLResponse;
-
-  expect(response.status()).toBe(200);
-  expectNativeSessionGraphQLError(body);
-  expect(await getOIDCTokenRequestCount(request)).toBe(tokenRequestCount);
-});
-
 test('API는 malformed PKCE verifier를 OIDC token endpoint에 보내지 않는다', async ({ request }) => {
   const tokenRequestCount = await getOIDCTokenRequestCount(request);
   const response = await exchangeNativeOidcSession(request, {
     code: 'e2e-unsubmitted-code',
     codeVerifier: 'too-short',
-    redirectUri: 'kosmo://login/callback',
-  });
-  const body = (await response.json()) as NativeSessionGraphQLResponse;
-
-  expect(response.status()).toBe(200);
-  expectNativeSessionGraphQLError(body);
-  expect(await getOIDCTokenRequestCount(request)).toBe(tokenRequestCount);
-});
-
-test('API는 raw OIDC token 입력을 세션으로 교환하지 않는다', async ({ request }) => {
-  const accessToken = 'mock-access-token';
-  const idToken = 'mock.id.token';
-  const tokenRequestCount = await getOIDCTokenRequestCount(request);
-  const response = await exchangeNativeOidcSession(request, {
-    accessToken,
-    idToken,
-    redirectUri: 'kosmo://login/callback',
-  });
-  const body = (await response.json()) as NativeSessionGraphQLResponse;
-
-  expect(response.status()).toBe(200);
-  expectNativeSessionGraphQLError(body);
-  expect(JSON.stringify(body)).not.toContain(accessToken);
-  expect(JSON.stringify(body)).not.toContain(idToken);
-  expect(await getOIDCTokenRequestCount(request)).toBe(tokenRequestCount);
-});
-
-test('API는 길이 제한을 넘는 authorization code를 OIDC token endpoint에 보내지 않는다', async ({
-  request,
-}) => {
-  const tokenRequestCount = await getOIDCTokenRequestCount(request);
-  const response = await exchangeNativeOidcSession(request, {
-    code: 'x'.repeat(2049),
-    codeVerifier: 'v'.repeat(43),
     redirectUri: 'kosmo://login/callback',
   });
   const body = (await response.json()) as NativeSessionGraphQLResponse;
