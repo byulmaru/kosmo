@@ -1,11 +1,9 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as enums from './enums';
-import { relations } from './relations';
 import * as tables from './tables';
 
 export * from './id';
-export * from './relations';
 export * from './tables';
 export * from './utils';
 
@@ -21,7 +19,6 @@ export const pg = postgres(process.env.DATABASE_URL!, {
 
 export const db = drizzle({
   client: pg,
-  relations,
   schema: { ...tables, ...enums },
 });
 
