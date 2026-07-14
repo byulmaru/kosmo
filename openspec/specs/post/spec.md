@@ -1,6 +1,6 @@
 ## Purpose
 
-kosmo 게시글 capability의 현재 계약을 문서화한다. 게시글·게시글 콘텐츠 GraphQL object와 canonical Plain Text 저장 계약, 유니버설 앱의 React Native `TextInput` 작성 흐름을 다룬다.
+kosmo 게시글 capability의 현재 계약을 문서화한다. 게시글·게시글 콘텐츠 GraphQL object, versioned canonical document 저장과 파생 Plain Text 계약, 유니버설 앱의 React Native `TextInput` 작성 흐름을 다룬다.
 
 ## Requirements
 

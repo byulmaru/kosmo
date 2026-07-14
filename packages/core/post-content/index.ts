@@ -36,6 +36,10 @@ export interface VersionedPostContentDocument {
   readonly document: PostContentDocumentV1;
 }
 
+export function normalizePostContentPlainText(bodyText: string): string {
+  return bodyText.replaceAll('\r\n', '\n').replaceAll('\r', '\n').trim();
+}
+
 export function isPostContentDocumentV1(value: unknown): value is PostContentDocumentV1 {
   if (!isRecordWithKeys(value, ['type', 'content']) || value.type !== 'doc') {
     return false;

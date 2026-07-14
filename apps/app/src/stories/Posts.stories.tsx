@@ -1,5 +1,7 @@
+import { usePathname } from 'expo-router';
+import { Linking, Text } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Temporal } from 'temporal-polyfill';
 import { PostBody } from '@/components/post/PostBody';
 import { PostComposer } from '@/components/post/PostComposer';
@@ -285,6 +287,18 @@ function ComposerStory() {
   );
 }
 
+function LinkedPostListItemStory() {
+  const { posts } = usePostsStoryData();
+  const pathname = usePathname();
+
+  return (
+    <Catalog>
+      <Text testID="current-story-pathname">{pathname}</Text>
+      <PostListItem post={requireFragment(requirePost(posts, 14).listItem, 'linked post item')} />
+    </Catalog>
+  );
+}
+
 const meta = {
   component: PostCatalog,
   parameters: {
@@ -324,6 +338,26 @@ export const BodyTimeAndLayoutStates: Story = {
 };
 
 export const ListLoadingErrorEmptyAndContent: Story = { render: () => <PostListCatalog /> };
+
+export const LinkedBodyKeepsDetailNavigationIsolated: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const openURL = fn(async () => undefined);
+    const originalOpenURL = Linking.openURL;
+    Linking.openURL = openURL;
+
+    try {
+      await userEvent.click(canvas.getByLabelText('안전한 외부 링크, https://example.com/path'));
+      await expect(openURL).toHaveBeenCalledWith('https://example.com/path');
+      await expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+        '/@kosmo/post-1',
+      );
+    } finally {
+      Linking.openURL = originalOpenURL;
+    }
+  },
+  render: () => <LinkedPostListItemStory />,
+};
 
 export const ComposerDefault: Story = { render: () => <ComposerStory /> };
 

@@ -1,5 +1,6 @@
+import { isDeepStrictEqual } from 'node:util';
 import { Schema } from 'prosemirror-model';
-import { postContentSchemaVersion } from './index';
+import { normalizePostContentPlainText, postContentSchemaVersion } from './index';
 import type { Mark, Node as ProseMirrorNode } from 'prosemirror-model';
 import type {
   PostContentDocumentV1,
@@ -64,7 +65,7 @@ export function canonicalizePostContentDocument(
 }
 
 export function postContentDocumentFromText(bodyText: string): VersionedPostContentDocument {
-  const normalized = bodyText.replaceAll('\r\n', '\n').replaceAll('\r', '\n').trim();
+  const normalized = normalizePostContentPlainText(bodyText);
   const content: unknown[] = [];
 
   for (const [index, line] of normalized.split('\n').entries()) {
@@ -105,7 +106,9 @@ export function arePostContentRevisionsEqual(
   const leftDocument = migrateToCurrentVersion(left.schemaVersion, left.document);
   const rightDocument = migrateToCurrentVersion(right.schemaVersion, right.document);
 
-  return left.contentWarning === right.contentWarning && deepEqual(leftDocument, rightDocument);
+  return (
+    left.contentWarning === right.contentWarning && isDeepStrictEqual(leftDocument, rightDocument)
+  );
 }
 
 function migrateToCurrentVersion(schemaVersion: number, document: unknown): PostContentDocumentV1 {
@@ -213,26 +216,6 @@ function normalizeHttpUrl(href: string): string {
     throw new TypeError('Link href must use http or https');
   }
   return url.href;
-}
-
-function deepEqual(left: unknown, right: unknown): boolean {
-  if (left === right) {
-    return true;
-  }
-  if (Array.isArray(left) && Array.isArray(right)) {
-    return (
-      left.length === right.length && left.every((value, index) => deepEqual(value, right[index]))
-    );
-  }
-  if (!isRecord(left) || !isRecord(right)) {
-    return false;
-  }
-  const leftKeys = Object.keys(left);
-  const rightKeys = Object.keys(right);
-  return (
-    leftKeys.length === rightKeys.length &&
-    leftKeys.every((key) => key in right && deepEqual(left[key], right[key]))
-  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

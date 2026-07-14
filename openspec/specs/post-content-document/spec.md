@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD - created by archiving change version-post-content-document. Update Purpose after archive.
+PostContent 본문의 versioned ProseMirror document schema, 서버 검증·canonicalization, Plain Text 호환 경계와 제한된 앱 renderer 계약을 정의한다.
 
 ## Requirements
 

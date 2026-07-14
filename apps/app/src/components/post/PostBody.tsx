@@ -73,6 +73,7 @@ export function PostBody({
                 accessibilityRole="link"
                 key={inlineIndex}
                 onPress={(event) => {
+                  event.preventDefault();
                   event.stopPropagation();
                   void Linking.openURL(link.attrs.href);
                 }}
