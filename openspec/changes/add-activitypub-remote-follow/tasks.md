@@ -99,7 +99,7 @@ DB-known local/remote follow graph를 GraphQL에서 읽을 수 있다.
 
 - DB-only GraphQL connection, stored count와 viewer state를 검증한다.
 
-- [ ] 5.1 PROD-245가 connection, stored count, viewerFollow/viewerState read 계약을 검증한다.
+- [x] 5.1 PROD-245가 connection, stored count, viewerFollow/viewerState read 계약을 검증한다.
 
 ## 6. PROD-263 Remote Profile Web Follow Action
 
