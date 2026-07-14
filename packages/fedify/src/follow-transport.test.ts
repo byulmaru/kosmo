@@ -1,0 +1,131 @@
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import { Accept, Follow, Person, Undo } from '@fedify/vocab';
+import {
+  getFollowOrderingKey,
+  getOutboundFollowActivityUri,
+  sendAcceptFollowActivity,
+  sendOutboundFollowActivity,
+  sendOutboundUndoFollowActivity,
+} from './follow-transport';
+import type { Activity, Recipient } from '@fedify/vocab';
+import type { FollowTransportContext } from './follow-transport';
+
+const canonicalOrigin = 'https://kos.moe';
+const localProfileId = '019f6f67-1111-7777-8888-123456789abc';
+const profileFollowId = '019f6f67-2222-7777-8888-123456789abc';
+const localActorUri = new URL(`${canonicalOrigin}/ap/actor/${localProfileId}`);
+const remoteActorUri = new URL('https://remote.example/users/alice');
+const remoteActor = new Person({
+  id: remoteActorUri,
+  inbox: new URL('https://remote.example/users/alice/inbox'),
+});
+
+describe('Fedify follow transport', () => {
+  test('sends an outbound Follow with stable relation identity and ordering', async () => {
+    const fixture = createContextFixture();
+    const activity = await sendOutboundFollowActivity({
+      context: fixture.context,
+      localProfileId,
+      profileFollowId,
+      remoteActor,
+    });
+
+    assert.ok(activity instanceof Follow);
+    assert.equal(activity.id?.href, `${canonicalOrigin}/ap/follow/${profileFollowId}`);
+    assert.equal(activity.actorId?.href, localActorUri.href);
+    assert.equal(activity.objectId?.href, remoteActorUri.href);
+    assert.deepEqual(
+      activity.toIds.map((uri) => uri.href),
+      [remoteActorUri.href],
+    );
+    assert.deepEqual(fixture.calls, [
+      {
+        activity,
+        options: { orderingKey: getFollowOrderingKey(localActorUri, remoteActorUri) },
+        recipient: remoteActor,
+        sender: { identifier: localProfileId },
+      },
+    ]);
+  });
+
+  test('sends Undo with the original Follow and the same actor-pair ordering key', async () => {
+    const fixture = createContextFixture();
+    const originalFollow = new Follow({
+      actor: localActorUri,
+      id: getOutboundFollowActivityUri(canonicalOrigin, profileFollowId),
+      object: remoteActorUri,
+    });
+    const activity = await sendOutboundUndoFollowActivity({
+      context: fixture.context,
+      localProfileId,
+      originalFollow,
+      remoteActor,
+    });
+
+    assert.ok(activity instanceof Undo);
+    assert.equal(activity.actorId?.href, localActorUri.href);
+    assert.equal(await activity.getObject(), originalFollow);
+    assert.deepEqual(fixture.calls[0]?.options, {
+      orderingKey: getFollowOrderingKey(localActorUri, remoteActorUri),
+    });
+  });
+
+  test('sends Accept to the remote follower with the received Follow as object', async () => {
+    const fixture = createContextFixture();
+    const receivedFollow = new Follow({ actor: remoteActorUri, object: localActorUri });
+    const activity = await sendAcceptFollowActivity({
+      context: fixture.context,
+      localProfileId,
+      receivedFollow,
+      remoteActor,
+    });
+
+    assert.ok(activity instanceof Accept);
+    assert.equal(activity.actorId?.href, localActorUri.href);
+    assert.equal(await activity.getObject(), receivedFollow);
+    assert.equal(fixture.calls[0]?.recipient, remoteActor);
+    assert.equal(fixture.calls[0]?.options, undefined);
+  });
+
+  test('rejects a recipient without an actor id before delivery', async () => {
+    const fixture = createContextFixture();
+    const recipient = { id: null, inboxId: new URL('https://remote.example/inbox') };
+
+    await assert.rejects(
+      sendOutboundFollowActivity({
+        context: fixture.context,
+        localProfileId,
+        profileFollowId,
+        remoteActor: recipient,
+      }),
+      /must have an actor id/,
+    );
+    assert.equal(fixture.calls.length, 0);
+  });
+});
+
+interface SendActivityCall {
+  readonly activity: Activity;
+  readonly options: { readonly orderingKey?: string } | undefined;
+  readonly recipient: Recipient;
+  readonly sender: { readonly identifier: string };
+}
+
+const createContextFixture = () => {
+  const calls: SendActivityCall[] = [];
+  const context = {
+    canonicalOrigin,
+    getActorUri: (identifier: string) => new URL(`/ap/actor/${identifier}`, canonicalOrigin),
+    sendActivity: async (
+      sender: { identifier: string },
+      recipient: Recipient,
+      activity: Activity,
+      options?: { orderingKey?: string },
+    ) => {
+      calls.push({ activity, options, recipient, sender });
+    },
+  } as FollowTransportContext;
+
+  return { calls, context };
+};

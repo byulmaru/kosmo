@@ -412,6 +412,44 @@ describe('runtime routing', () => {
     expect(federationFetch).toHaveBeenCalledTimes(5);
   });
 
+  test('does not proxy personal or shared ActivityPub inbox requests to the API', async () => {
+    federationFetch.mockImplementation(async (request: Request) => {
+      const pathname = new URL(request.url).pathname;
+      return new Response(null, {
+        status: pathname === '/inbox' || pathname.endsWith('/inbox') ? 202 : 404,
+      });
+    });
+
+    for (const path of ['/ap/actor/local-profile/inbox', '/inbox']) {
+      const response = await app.request(path, {
+        body: '{}',
+        headers: { 'content-type': 'application/activity+json' },
+        method: 'POST',
+      });
+
+      expect(response.status).toBe(202);
+    }
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test('keeps unsupported ActivityPub collections out of the API and SPA fallbacks', async () => {
+    federationFetch.mockResolvedValue(new Response('404 Not Found', { status: 404 }));
+
+    for (const path of [
+      '/ap/actor/local-profile/outbox',
+      '/ap/actor/local-profile/followers',
+      '/ap/actor/local-profile/following',
+      '/outbox',
+    ]) {
+      const response = await app.request(path, {
+        headers: { accept: 'application/activity+json' },
+      });
+
+      expect(response.status).toBe(404);
+    }
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   test('falls through when federation declines the requested representation', async () => {
     federationFetch.mockImplementation(async (request, options) => {
       if (!options.onNotAcceptable) {

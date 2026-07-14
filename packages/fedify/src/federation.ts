@@ -1,5 +1,6 @@
 import { createFederation, MemoryKvStore } from '@fedify/fedify';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
+import { registerFollowInboxListeners, unhandledFollowInboxHandlers } from './follow-inbox';
 import { ensureDrizzleLocalProfileActor } from './local-actor-store';
 import { createLocalProfilePerson } from './local-profile-person';
 import { resolveLocalActorIdentifierByHandle } from './webfinger';
@@ -54,3 +55,5 @@ federation
 
     return result ? [...result.keyPairs] : [];
   });
+
+registerFollowInboxListeners(federation, unhandledFollowInboxHandlers);

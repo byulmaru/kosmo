@@ -1,4 +1,4 @@
-import { Person } from '@fedify/vocab';
+import { Endpoints, Person } from '@fedify/vocab';
 import type { ActorKeyPair, Context } from '@fedify/fedify';
 import type { LocalProfileActorProfile } from './local-profile-actor';
 
@@ -29,9 +29,9 @@ export const createLocalProfilePerson = ({
 
   const actorUri = context.getActorUri(profile.id);
   const actorPathname = actorUri.pathname.replace(/\/$/, '');
-  // Keep inbox/outbox routes unregistered until delivery and collections are implemented.
   const inboxUri = new URL(`${actorPathname}/inbox`, actorUri);
   const outboxUri = new URL(`${actorPathname}/outbox`, actorUri);
+  const sharedInboxUri = new URL('/inbox', context.canonicalOrigin);
   const profileUri = new URL(`/@${encodeURIComponent(profile.handle)}`, context.canonicalOrigin);
 
   return new Person({
@@ -45,5 +45,6 @@ export const createLocalProfilePerson = ({
     outbox: outboxUri,
     publicKey: rsaKeyPair.cryptographicKey,
     assertionMethods: ed25519KeyPairs.map((keyPair) => keyPair.multikey),
+    endpoints: new Endpoints({ sharedInbox: sharedInboxUri }),
   });
 };
