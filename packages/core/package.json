@@ -10,6 +10,8 @@
     "./error": "./error/index.ts",
     "./enums": "./enums.ts",
     "./local-instance": "./local-instance.ts",
+    "./post-content": "./post-content/index.ts",
+    "./post-content/server": "./post-content/server.ts",
     "./polyfill": "./polyfill.ts",
     "./profile": "./profile.ts",
     "./search": "./search.ts",
@@ -23,6 +25,7 @@
     "core-js": "^3.49.0",
     "drizzle-orm": "1.0.0-beta.22",
     "postgres": "^3.4.9",
+    "prosemirror-model": "^1.25.10",
     "temporal-polyfill": "^0.3.2",
     "tsx": "^4.22.4",
     "zod": "^4.4.3"

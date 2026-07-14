@@ -1,5 +1,6 @@
 import { db, Instances, PostContents, Posts, Profiles, TableDiscriminator } from '@kosmo/core/db';
 import { PostState, PostVisibility } from '@kosmo/core/enums';
+import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
@@ -47,7 +48,25 @@ export const PostContent = createObjectRef(
 
 PostContent.implement({
   fields: (t) => ({
-    bodyText: t.exposeString('bodyText'),
+    body: t.field({
+      type: builder.simpleObject('PostContentBody', {
+        fields: (field) => ({
+          schemaVersion: field.int(),
+          document: field.field({ type: 'PostContentDocument' }),
+        }),
+      }),
+      resolve: (content) => ({
+        schemaVersion: content.bodySchemaVersion,
+        document: content.bodyDocument,
+      }),
+    }),
+    bodyText: t.string({
+      resolve: (content) =>
+        postContentDocumentToText({
+          schemaVersion: content.bodySchemaVersion,
+          document: content.bodyDocument,
+        }),
+    }),
     contentWarning: t.exposeString('contentWarning', { nullable: true }),
     createdAt: t.expose('createdAt', { type: 'DateTime' }),
   }),

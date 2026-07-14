@@ -8,6 +8,7 @@ import ValidationPlugin from '@pothos/plugin-validation';
 import WithInputPlugin from '@pothos/plugin-with-input';
 import * as R from 'remeda';
 import { globalIdMap } from './utils';
+import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
 import type { SessionContext, SessionWithProfileContext, UserContext } from '@/context';
 
 export const builder = new SchemaBuilder<{
@@ -27,6 +28,10 @@ export const builder = new SchemaBuilder<{
     DateTime: {
       Input: Temporal.Instant;
       Output: Temporal.Instant;
+    };
+    PostContentDocument: {
+      Input: never;
+      Output: PostContentDocumentV1;
     };
   };
 }>({
@@ -92,5 +97,13 @@ builder.scalarType('DateTime', {
     }
 
     throw new Error('Invalid DateTime value');
+  },
+});
+
+builder.scalarType('PostContentDocument', {
+  description: 'Kosmo PostContent ProseMirror document JSON',
+  serialize: (value) => value,
+  parseValue: () => {
+    throw new Error('PostContentDocument is output-only');
   },
 });

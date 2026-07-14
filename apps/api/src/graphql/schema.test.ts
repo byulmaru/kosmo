@@ -3,11 +3,13 @@ import test from 'node:test';
 import { graphql, isInputObjectType, isObjectType } from 'graphql';
 import { schema } from './schema';
 
-test('exposes the Plain Text post contract without TipTap', () => {
+test('exposes the versioned PostContent document and Plain Text composer contract', () => {
   const postContent = schema.getType('PostContent');
   const createPostInput = schema.getType('CreatePostInput');
 
   assert.ok(isObjectType(postContent));
+  assert.ok(postContent.getFields().body);
+  assert.ok(postContent.getFields().bodyText);
   assert.ok(postContent.getFields().contentWarning);
   assert.equal(postContent.getFields().spoilerText, undefined);
   assert.equal(postContent.getFields().bodyJson, undefined);
@@ -16,6 +18,8 @@ test('exposes the Plain Text post contract without TipTap', () => {
   assert.equal(createPostInput.getFields().content, undefined);
   assert.equal(String(createPostInput.getFields().bodyText?.type), 'String!');
   assert.equal(schema.getType('TipTapDocument'), undefined);
+  assert.ok(isObjectType(schema.getType('PostContentBody')));
+  assert.equal(String(schema.getType('PostContentDocument')), 'PostContentDocument');
 });
 
 test('follow mutation payloads expose both updated profiles', () => {

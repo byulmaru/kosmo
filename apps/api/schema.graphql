@@ -117,11 +117,20 @@ type PostConnectionEdge {
 }
 
 type PostContent implements Node {
+  body: PostContentBody!
   bodyText: String!
   contentWarning: String
   createdAt: DateTime!
   id: ID!
 }
+
+type PostContentBody {
+  document: PostContentDocument!
+  schemaVersion: Int!
+}
+
+"""Kosmo PostContent ProseMirror document JSON"""
+scalar PostContentDocument
 
 enum PostState {
   ACTIVE

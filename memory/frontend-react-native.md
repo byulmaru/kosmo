@@ -48,7 +48,7 @@
 - UI 텍스트는 `SUIT`, 포스트 본문과 긴 입력은 `Pretendard`를 사용한다. React Native에는 CSS 상속이 없으므로 공용 primitive 또는 각 `Text`/`TextInput` style에서 family를 명시한다.
 - touch target은 최소 44×44를 확보하고 `accessibilityRole`, `accessibilityLabel`, `accessibilityState`를 실제 동작과 맞춘다. 선택 tab, disabled/loading button, modal/drawer 상태는 시각 표현만으로 전달하지 않는다.
 - `useWindowDimensions`로 layout 단계를 고르되 product breakpoint 값은 token에서 읽는다. render 중 플랫폼 전역 `window`를 직접 읽지 않는다.
-- 게시글 write/read 계약은 canonical `bodyText`다. composer는 trim된 Plain Text를 `CreatePostInput.bodyText`로 직접 제출하고 조회는 저장된 `bodyText`를 표시한다. 앱은 `@kosmo/core/validation/post-policy`와 `@kosmo/core/validation/profile` 같은 native-safe subpath만 import하며 TipTap/ProseMirror runtime이나 document adapter를 포함하지 않는다.
+- 게시글 canonical read 계약은 schema version이 식별된 ProseMirror document JSON이다. composer는 trim된 Plain Text를 `CreatePostInput.bodyText`로 계속 제출하고 서버 공통 경계가 document로 변환한다. 앱은 native-safe JSON 타입과 제한된 paragraph/text/hard-break/link renderer만 사용하며, 파생 `bodyText`는 미지원 document fallback으로 표시한다. `prosemirror-model` 검증/canonicalization은 server-only subpath에 두고 앱 bundle에는 TipTap, ProseMirror runtime/editor/view 또는 WebView editor를 포함하지 않는다.
 
 ## Storybook
 

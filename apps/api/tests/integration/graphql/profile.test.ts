@@ -13,6 +13,7 @@ import {
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
+import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { isConfiguredLocalProfile } from '@kosmo/core/profile';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, count, eq, ne } from 'drizzle-orm';
@@ -397,7 +398,8 @@ describe('GraphQL remote profile boundary', () => {
     const suspendedContent = await db
       .insert(PostContents)
       .values({
-        bodyText: 'suspended content',
+        bodySchemaVersion: 1,
+        bodyDocument: postContentDocumentFromText('suspended content').document,
         postId: suspendedPost.id,
       })
       .returning()
@@ -464,15 +466,47 @@ describe('GraphQL remote profile boundary', () => {
       .set({ activeProfileId: otherLocal.id })
       .where(eq(Sessions.id, auth.session.id));
 
-    const result = await requestGraphQL(
-      `mutation CreatePostWithOtherLocalSession {
-        createPost(input: { bodyText: "created", visibility: UNLISTED }) { post { id } }
+    const result = await requestGraphQL<{
+      createPost: {
+        post: {
+          content: {
+            body: { document: unknown; schemaVersion: number };
+            bodyText: string;
+          } | null;
+        };
+      };
+    }>(
+      `mutation CreatePostWithOtherLocalSession($bodyText: String!) {
+        createPost(input: { bodyText: $bodyText, visibility: UNLISTED }) {
+          post {
+            content { body { schemaVersion document } bodyText }
+          }
+        }
       }`,
-      {},
+      { bodyText: 'first\r\nsecond' },
       auth.token,
     );
 
     assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.createPost.post.content, {
+      body: {
+        document: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                { type: 'text', text: 'first' },
+                { type: 'hard_break' },
+                { type: 'text', text: 'second' },
+              ],
+            },
+          ],
+        },
+        schemaVersion: 1,
+      },
+      bodyText: 'first\nsecond',
+    });
   });
 
   test('selects an owned active remote profile and restores it from the session', async () => {

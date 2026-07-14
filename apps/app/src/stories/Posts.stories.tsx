@@ -59,6 +59,37 @@ const remoteAuthorPost = post({
     relativeHandle: '@user@remote.example',
   }),
 });
+const linkedPost = post({
+  bodyDocument: {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: '일반 텍스트와 ' },
+          {
+            type: 'text',
+            text: '안전한 외부 링크',
+            marks: [{ type: 'link', attrs: { href: 'https://example.com/path' } }],
+          },
+          { type: 'hard_break' },
+          { type: 'text', text: '강제 개행을 함께 표시합니다.' },
+        ],
+      },
+      { type: 'paragraph', content: [{ type: 'text', text: '두 번째 문단입니다.' }] },
+    ],
+  },
+  bodyText: '일반 텍스트와 안전한 외부 링크\n강제 개행을 함께 표시합니다.\n\n두 번째 문단입니다.',
+  id: 'linked',
+});
+const unsupportedDocumentPost = post({
+  bodyDocument: {
+    type: 'doc',
+    content: [{ type: 'pre', content: [{ type: 'text', text: '실행하면 안 되는 구조' }] }],
+  } as never,
+  bodyText: '미지원 문서는 안전한 Plain Text로 표시합니다.',
+  id: 'unsupported-document',
+});
 const storyPosts = [
   shortPost,
   longPost,
@@ -71,6 +102,8 @@ const storyPosts = [
   oldPost,
   ...visibilityPosts,
   remoteAuthorPost,
+  linkedPost,
+  unsupportedDocumentPost,
 ];
 const composerProfile = profile({ id: 'profile-composer' });
 const emptyPostsProfile = profileWithPosts([], { id: 'profile-posts-empty' });
@@ -176,6 +209,10 @@ function PostCatalog() {
           size="lg"
         />
         <PostBody post={requireFragment(requirePost(posts, 3).body, 'empty post body')} />
+        <PostBody post={requireFragment(requirePost(posts, 14).body, 'linked post body')} />
+        <PostBody
+          post={requireFragment(requirePost(posts, 15).body, 'unsupported document post body')}
+        />
       </Section>
 
       <Section title="List items · body states">
@@ -271,10 +308,18 @@ type Story = StoryObj<typeof meta>;
 
 export const BodyTimeAndLayoutStates: Story = {
   play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
     expect(canvasElement.querySelector('a[href="/@user@remote.example"]')).toBeInTheDocument();
     expect(
       canvasElement.querySelector('a[href="/@user@remote.example/detail-remote"]'),
     ).toBeInTheDocument();
+    expect(
+      canvas.getByRole('link', { name: /안전한 외부 링크, https:\/\/example\.com\/path/ }),
+    ).toBeVisible();
+    expect(canvasElement.textContent).toContain('강제 개행을 함께 표시합니다.');
+    expect(canvasElement.textContent).toContain('두 번째 문단입니다.');
+    expect(canvas.getByText('미지원 문서는 안전한 Plain Text로 표시합니다.')).toBeVisible();
+    expect(canvas.queryByText('실행하면 안 되는 구조')).not.toBeInTheDocument();
   },
 };
 
