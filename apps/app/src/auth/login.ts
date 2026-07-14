@@ -7,10 +7,13 @@ import {
 } from 'expo-auth-session';
 import { Platform } from 'react-native';
 import { getWebOrigin } from '@/relay/network';
+import { getNativeSessionConfiguration } from './nativeConfig';
 import type { GestureResponderEvent } from 'react-native';
 
-type NativeSessionResponse = {
-  token?: unknown;
+export type NativeOidcSessionExchangeInput = {
+  code: string;
+  codeVerifier: string;
+  redirectUri: string;
 };
 
 export function startWebLogin(): void {
@@ -37,13 +40,8 @@ export function startWebLoginFromPress(event: GestureResponderEvent): void {
   startWebLogin();
 }
 
-export async function startNativeLogin(): Promise<string | null> {
-  const issuer = process.env.EXPO_PUBLIC_OIDC_ISSUER;
-  const clientId = process.env.EXPO_PUBLIC_OIDC_CLIENT_ID;
-
-  if (!issuer || !clientId) {
-    throw new Error('EXPO_PUBLIC_OIDC_ISSUER and EXPO_PUBLIC_OIDC_CLIENT_ID are required.');
-  }
+export async function startNativeAuthorization(): Promise<NativeOidcSessionExchangeInput | null> {
+  const { clientId, issuer } = getNativeSessionConfiguration();
 
   const redirectUri = makeRedirectUri({
     native: 'kosmo://login/callback',
@@ -69,20 +67,9 @@ export async function startNativeLogin(): Promise<string | null> {
     throw new Error('로그인 승인을 완료하지 못했습니다.');
   }
 
-  const response = await fetch(`${getWebOrigin()}/login/native/session`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      code: result.params.code,
-      codeVerifier: request.codeVerifier,
-      redirectUri,
-    }),
-  });
-  const body = (await response.json().catch(() => null)) as NativeSessionResponse | null;
-
-  if (!response.ok || typeof body?.token !== 'string' || body.token.length === 0) {
-    throw new Error('네이티브 세션을 만들지 못했습니다.');
-  }
-
-  return body.token;
+  return {
+    code: result.params.code,
+    codeVerifier: request.codeVerifier,
+    redirectUri,
+  };
 }

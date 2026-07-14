@@ -1,12 +1,12 @@
 ## Purpose
 
-Web cookie client와 native bearer client가 공통으로 사용하는 kosmo BFF/API bridge 계약을 문서화한다. GraphQL proxy, credential forwarding과 React Relay transport·compiler 경계를 다룬다.
+Web cookie client가 사용하는 kosmo BFF/API bridge 계약을 문서화한다. GraphQL proxy, cookie credential forwarding과 React Relay transport·compiler 경계를 다룬다.
 
 ## Requirements
 
 ### Requirement: GraphQL HTTP proxy
 
-웹 BFF는 Web cookie client와 native Bearer client의 GraphQL 요청을 API 서버로 프록시해야 한다(MUST).
+웹 BFF는 Web cookie client의 GraphQL 요청을 API 서버로 프록시해야 한다(MUST).
 
 #### Scenario: Proxy GraphQL POST
 
@@ -21,12 +21,6 @@ Web cookie client와 native bearer client가 공통으로 사용하는 kosmo BFF
 
 - **WHEN** `/graphql` 요청에 `kosmo_session` cookie가 있고 명시적 Authorization header가 없다
 - **THEN** 시스템은 API 요청에 `Authorization: Bearer <session>` 헤더를 설정한다
-
-#### Scenario: Forward native bearer token
-
-- **WHEN** `/graphql` 요청에 올바른 `Authorization: Bearer <session>` 헤더가 있다
-- **THEN** 시스템은 해당 Authorization header를 API 요청에 전달한다
-- **AND** session cookie 값으로 명시적 Bearer token을 덮어쓰지 않는다
 
 #### Scenario: Proxy anonymous request
 

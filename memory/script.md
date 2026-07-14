@@ -28,8 +28,8 @@
 - native project는 Expo managed/CNG 산출물이다. package/bundle ID나 config plugin을 검증할 때는 app config와 clean `expo prebuild` 결과를 확인하고, 생성된 Gradle/Xcode source를 수동 source of truth로 편집하지 않는다.
 - Android/iOS 실행 검증은 기존 원칙대로 사용자가 보는 install/launch/deep-link 결과까지 확인한다. web 전용 검증으로 native build 가능성을 대신하지 않는다.
 - `EXPO_PUBLIC_*` 값은 client bundle에 공개되어도 되는 설정에만 사용한다. OIDC client secret, session token, database/federation 설정은 Hono BFF 또는 server runtime에 남긴다.
-- `apps/app/app.config.ts`는 기존 Vault의 `PUBLIC_ORIGIN`, `PUBLIC_OIDC_ISSUER`, `PUBLIC_OIDC_CLIENT_ID`를 대응하는 `EXPO_PUBLIC_*`로 이식하되 명시적 `EXPO_PUBLIC_*` override를 우선한다. 이 mapping은 공개 설정만 다루고 secret을 client bundle로 옮기지 않는다.
-- `apps/web` BFF의 browser OIDC는 `PUBLIC_OIDC_ISSUER`를 `openid-client`로 discovery해 성공한 configuration/JWKS cache를 재사용한다. `enableNonRepudiationChecks`로 ID token signature와 claims를 검증하며, insecure issuer는 local loopback E2E에서만 허용한다. Native code exchange는 API GraphQL만 소유한다.
+- `apps/app/app.config.ts`는 `PUBLIC_ORIGIN`, `PUBLIC_API_ORIGIN`, `PUBLIC_OIDC_ISSUER`, `PUBLIC_OIDC_NATIVE_CLIENT_ID`를 대응하는 `EXPO_PUBLIC_*`로 이식하되 명시적 `EXPO_PUBLIC_*` override를 우선한다. web confidential client ID와 secret은 Expo bundle에 이식하지 않는다. 이 mapping은 공개 설정만 다룬다.
+- `apps/web` BFF의 browser OIDC는 `PUBLIC_OIDC_ISSUER`를 `openid-client`로 discovery해 confidential client configuration/JWKS cache를 재사용한다. API의 native GraphQL session exchange mutation은 별도의 public native client ID와 `None()` client authentication으로 discovery하며 secret을 읽지 않는다. 두 경로 모두 `enableNonRepudiationChecks`로 ID token signature와 claims를 검증하고, insecure issuer는 local loopback E2E에서만 허용한다. Native code exchange는 API GraphQL만 소유한다.
 
 ## Codex worktree setup
 
