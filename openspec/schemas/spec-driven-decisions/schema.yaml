@@ -201,5 +201,9 @@ apply:
     Treat design's Recommended Approach as a non-normative default: an alternative is allowed when it preserves the Deliverable, Guardrails, Verification, specs, and accepted decisions.
     Before taking a materially different approach, compare it with Current Constraints, Allowed Alternatives, and Known Traps.
     Pause and update the Linear issue and OpenSpec artifacts first if the alternative changes scope, observable behavior, a public contract, or a durable decision.
+    During planning and implementation, when a material choice is not already covered by an accepted decision, AI may compare alternatives and trade-offs but MUST pause for a human to make the final choice and state the reason. A choice is material when it has meaningful alternatives and affects observable behavior, data, security, compatibility, rollout, reversibility, or the direction of later work.
+    Before opening or updating the implementation PR, identify the material implementation decisions that were actually made. AI may draft the PR decision record from established choices and reasons, but MUST NOT infer or invent a missing choice or rationale; ask the human decision owner when the record is unclear.
+    Record material implementation decisions in the PR with the chosen option, alternatives considered, rationale, and accepted consequences. If the PR only applies accepted OpenSpec decisions without making a new material decision, state that explicitly instead of inventing one.
+    Link to accepted durable decisions rather than duplicating them in the PR. If implementation reveals a new durable decision, pause and update the Linear issue and OpenSpec artifacts before treating it as decided in the PR.
     Work through pending checkbox tasks and mark a task complete only after its verification evidence exists.
     Pause if you hit blockers or need clarification.
