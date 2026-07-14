@@ -9,13 +9,24 @@
 - **WHEN** remote actor가 local actor inbox 또는 shared inbox로 `Create` activity를 보낸다
 - **THEN** Fedify inbox listener는 verified typed `Create` activity를 kosmo post materialization handler에 전달한다
 - **AND** 시스템은 request parsing, HTTP signature verification, remote actor key verification, WebFinger, JSON-LD dereference 또는 typed ActivityPub object parsing을 직접 구현하지 않는다
-- **AND** 같은 activity ID의 재전달 skip은 Fedify inbox idempotency에 맡긴다
+- **AND** 시스템은 typed `Create.id`가 non-null absolute URL인지 object hydration 전에 검증한다
+- **AND** missing 또는 invalid `Create.id`는 object hydration, instance 상태 갱신과 모든 Post side effect 전에 fail-closed로 skip한다
+- **AND** materialization input은 `Create.id.href`인 `activityId`와 handler 진입 시 한 번 캡처한 delivery `receivedAt`을 필수로 포함한다
+- **AND** `activityId`에는 actor, object URI, personal/shared inbox route, recipient 또는 worker별 prefix를 붙이지 않는다
+- **AND** Fedify inbox idempotency는 domain side effect exactly-once의 source of truth가 아니다
 - **AND** materialization handler는 `Create.actorIds`의 서로 다른 URL `.href`를 정확히 하나로 제한하고 해당 URI로 author Profile을 조회하거나 materialize한다
 - **AND** author precondition이 통과한 뒤 서로 다른 `Create.objectIds`의 URL `.href`를 정확히 하나로 제한한다
 - **AND** handler는 `Create.getObject({ documentLoader: ctx.documentLoader })`로 embedded 또는 IRI-only object를 같은 Fedify vocabulary 경계에서 resolve한다
 - **AND** 시스템은 object dereference용 HTTP client나 ActivityPub parser를 직접 구현하지 않는다
 - **AND** 시스템은 Fedify의 default `crossOrigin: "ignore"` 정책을 유지하고 `crossOrigin: "trust"`를 사용하지 않는다
 - **AND** 시스템은 `Create.object` 외의 attribution, addressing, reply property를 추가 hydrate하지 않고 Fedify ID accessor로 검증한다
+
+#### Scenario: Use one global receipt key across deliveries
+
+- **WHEN** 같은 `Create.id.href`가 personal inbox와 shared inbox, 서로 다른 recipient 또는 worker로 전달된다
+- **THEN** 시스템은 모든 delivery에 동일한 `activityId` receipt key를 사용한다
+- **AND** actor 또는 object URI가 달라져도 receipt key scope는 달라지지 않는다
+- **AND** receipt claim이 이미 존재하면 시스템은 새 Post, PostContent 또는 ActivityPub object mapping side effect를 만들지 않는다
 
 ### Requirement: Remote inbox Note ingestion
 
@@ -123,7 +134,7 @@
 - **WHEN** author, object, attribution, top-level, visibility, mention, local relevance와 content projection 검증이 모두 통과한다
 - **THEN** 시스템은 Note author를 remote profile로 연결하고 새 `Post.state = ACTIVE`로 저장한다
 - **AND** Note `id.href`를 unique ActivityPub object URI로 저장하고 actor/object identity에 handle/domain 기반 별도 equality를 적용하지 않는다
-- **AND** 최초 `Post`, `PostContent`, `post_mention`, ActivityPub object mapping은 하나의 transaction으로 생성한다
+- **AND** global inbox receipt, 최초 `Post`, `PostContent`, `post_mention`, ActivityPub object mapping은 하나의 transaction으로 생성한다
 - **AND** 시스템은 materialized remote Post를 공통 `Post` Node, `Profile.posts`와 home timeline read path에서 사용할 수 있게 한다
 - **AND** 시스템은 remote actor outbox를 조회하지 않는다
 
@@ -154,7 +165,9 @@
 - **AND** canonical `bodyJson`이 기존 revision과 같으면 시스템은 새 `PostContent`를 만들지 않고 기존 revision을 재사용한다
 - **AND** 같은 canonical `bodyJson`으로 동시에 들어온 delivery는 동일한 revision을 중복 생성하거나 `Post.currentContentId`를 불필요하게 교체하지 않는다
 - **AND** 각 accepted delivery의 content와 resolved mention 집합은 같은 transaction에서 함께 반영되어 서로 다른 delivery의 content와 mention이 섞이지 않는다
-- **AND** transaction 실패 또는 object URI unique conflict는 부분 `Post`, `PostContent`, `post_mention`, ActivityPub object mapping row를 남기거나 기존 content/mention 집합을 부분 갱신하지 않는다
+- **AND** transaction 실패 또는 object URI unique conflict는 receipt-only나 부분 `Post`, `PostContent`, `post_mention`, ActivityPub object mapping row를 남기거나 기존 content/mention 집합을 부분 갱신하지 않는다
+- **AND** object URI insert conflict는 현재 transaction을 rollback한 뒤 새 transaction에서 global receipt를 다시 claim하고 existing mapping을 잠가 처리한다
+- **AND** 시스템은 aborted transaction 안에서 recovery query를 실행하거나 다른 unique violation을 object URI race로 취급하지 않는다
 
 #### Scenario: Reject duplicate Note URI from different author
 

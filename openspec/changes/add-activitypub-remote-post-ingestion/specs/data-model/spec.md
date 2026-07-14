@@ -26,13 +26,42 @@
 - **AND** `uri`에는 unique constraint가 있어야 한다
 - **AND** `postId`에는 unique constraint가 있어야 한다
 - **AND** `activityPubActorId`에는 non-unique index가 있어야 하고 `type`에는 unique constraint를 두지 않는다
-- **AND** 최초 `Post`, `PostContent`, resolved `post_mention`, ActivityPub object mapping 생성은 하나의 transaction으로 수행된다
+- **AND** global inbox receipt, 최초 `Post`, `PostContent`, resolved `post_mention`, ActivityPub object mapping 생성은 하나의 transaction으로 수행된다
 
 #### Scenario: Handle concurrent duplicate remote object materialization
 
 - **WHEN** 같은 remote actor의 동일 ActivityPub object URI가 최초 materialization 중 동시에 전달된다
 - **THEN** 시스템은 최대 하나의 ActivityPub object mapping과 연결된 `Post`만 생성한다
-- **AND** object URI unique conflict가 발생한 transaction은 부분 생성된 `Post`, `PostContent` 또는 `post_mention`을 남기지 않는다
+- **AND** object URI unique conflict가 발생한 transaction은 receipt-only나 부분 생성된 `Post`, `PostContent` 또는 `post_mention`을 남기지 않는다
+- **AND** conflict recovery는 현재 transaction을 rollback한 뒤 새 transaction에서 global receipt를 다시 claim하고 existing mapping을 `FOR UPDATE`로 잠가 수행한다
+- **AND** 시스템은 aborted transaction 안에서 recovery query를 실행하거나 다른 unique violation을 object URI race로 취급하지 않는다
+
+### Requirement: Global inbound ActivityPub receipt storage
+
+시스템은 inbound ActivityPub activity의 domain side effect를 global activity ID 기준으로 한 번만 commit하기 위한 receipt를 저장해야 한다(MUST).
+
+#### Scenario: Store one global Create receipt
+
+- **WHEN** 유효한 `Create.id.href`를 가진 delivery가 materialization transaction에 진입한다
+- **THEN** 시스템은 `activitypub_inbox_activity_receipt`에 `id`, global `activityId`와 handler 진입 시 한 번 캡처한 `receivedAt`을 저장한다
+- **AND** `activityId`에는 unique constraint가 있어야 한다
+- **AND** receipt key에는 actor, object URI, personal/shared inbox route, recipient 또는 worker scope를 붙이지 않는다
+- **AND** receipt는 Post, ActivityPub object 또는 actor foreign key를 갖지 않고 Post 삭제 뒤에도 replay 방지를 위해 보존한다
+- **AND** 이번 capability는 receipt TTL, cleanup 또는 partitioning을 추가하지 않는다
+
+#### Scenario: Claim receipt and materialization atomically
+
+- **WHEN** 시스템이 accepted Create delivery를 materialize한다
+- **THEN** transaction 시작 시 receipt를 `ON CONFLICT DO NOTHING ... RETURNING`으로 claim한다
+- **AND** claim 결과가 없으면 모든 Post, PostContent, post mention과 ActivityPub object mapping side effect 없이 종료한다
+- **AND** receipt, `Post`, `PostContent`, `Post.currentContentId`, `post_mention`과 ActivityPub object mapping은 함께 commit되거나 rollback된다
+- **AND** storage 장애 또는 downstream write 실패는 receipt만 남기지 않아 같은 delivery를 retry할 수 있다
+
+#### Scenario: Treat the same activity ID as one delivery globally
+
+- **WHEN** 같은 `Create.id.href`가 다른 inbox route, recipient, worker, actor 또는 object URI와 함께 다시 전달된다
+- **THEN** 시스템은 기존 global receipt와 충돌시킨다
+- **AND** 시스템은 새 object mapping, Post 또는 revision을 만들지 않는다
 
 #### Scenario: Reuse existing remote object mapping from duplicate delivery
 
@@ -79,7 +108,7 @@
 - **AND** 같은 Post와 Profile 조합은 중복될 수 없다
 - **AND** `postId`와 `profileId`에는 각각 조회용 index가 있어야 한다
 - **AND** Post 또는 mentioned Profile이 삭제되면 연결된 mention 관계도 함께 삭제된다
-- **AND** 최초 Post와 mention 관계 생성은 `Post`, `PostContent`, ActivityPub object mapping과 같은 transaction에서 수행된다
+- **AND** 최초 Post와 mention 관계 생성은 global inbox receipt, `Post`, `PostContent`, ActivityPub object mapping과 같은 transaction에서 수행된다
 
 #### Scenario: Synchronize mentions from an accepted duplicate delivery
 
@@ -104,9 +133,10 @@
 
 #### Scenario: 새 도메인 행 생성
 
-- **WHEN** `account`, `account_profile`, `application`, `application_authorization`, `file`, `media`, `oauth_authorization_code`, `oauth_token`, `post`, `post_content`, `post_mention`, `profile`, `profile_follow`, `profile_follow_request`, `session`, `instance`, `activitypub_actor`, `activitypub_actor_key`, `activitypub_object` 행이 생성된다
+- **WHEN** `account`, `account_profile`, `application`, `application_authorization`, `file`, `media`, `oauth_authorization_code`, `oauth_token`, `post`, `post_content`, `post_mention`, `profile`, `profile_follow`, `profile_follow_request`, `session`, `instance`, `activitypub_actor`, `activitypub_actor_key`, `activitypub_object`, `activitypub_inbox_activity_receipt` 행이 생성된다
 - **THEN** 시스템은 해당 테이블의 `TableDiscriminator` 값을 포함한 UUID 문자열을 기본 키로 생성한다
 - **AND** `activitypub_object`는 `TableDiscriminator.ActivityPubObjects`를 사용한다
+- **AND** `activitypub_inbox_activity_receipt`는 `TableDiscriminator.ActivityPubInboxActivityReceipts`를 사용한다
 - **AND** `post_mention`은 `TableDiscriminator.PostMentions`를 사용한다
 - **AND** 테이블 식별자는 12비트 범위 안에 있어야 한다
 
