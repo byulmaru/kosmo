@@ -143,6 +143,7 @@ GraphQL로 노출되는 도메인 에러는 `packages/core/error`에 GraphQL 독
 - `KosmoError.code`는 GraphQL error `extensions.code`로 노출한다.
 - `FieldError.field`가 있으면 GraphQL error `extensions.field`로 노출한다.
 - auth scope 실패는 builder의 `scopeAuth.unauthorizedError`가 `PermissionDeniedError`로 변환해 GraphQL error `extensions.code`를 `PERMISSION_DENIED`로 노출한다.
+- 프로덕션 endpoint의 GraphQL validation과 variable coercion failure는 operation별 AST 추적 없이 공통 `Invalid input`/`VALIDATION` error로 마스킹한다. 개발 환경은 schema diagnostics를 유지한다.
 - 예상 밖 오류는 프로덕션에서 `Unexpected error`와 `INTERNAL_SERVER_ERROR` code로 마스킹한다.
 
 ## Enum

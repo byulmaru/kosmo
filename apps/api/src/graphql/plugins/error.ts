@@ -1,16 +1,8 @@
 import { dev } from '@kosmo/core';
 import { FieldError, KosmoError } from '@kosmo/core/error';
-import { getOperationAST, GraphQLError, visit } from 'graphql';
+import { GraphQLError } from 'graphql';
 import { isAsyncIterable } from 'graphql-yoga';
-import type {
-  ArgumentNode,
-  ASTNode,
-  DocumentNode,
-  ExecutionResult,
-  FragmentDefinitionNode,
-  GraphQLErrorExtensions,
-  SelectionSetNode,
-} from 'graphql';
+import type { ExecutionResult, GraphQLErrorExtensions } from 'graphql';
 import type { Plugin } from 'graphql-yoga';
 import type { UserContext } from '@/context';
 
@@ -47,190 +39,21 @@ const createUnexpectedGraphQLError = (error: unknown, graphQLError?: GraphQLErro
   });
 };
 
-const createValidationGraphQLError = (graphQLError: GraphQLError) =>
-  new GraphQLError('Invalid input', {
-    nodes: graphQLError.nodes,
-    source: graphQLError.source,
-    positions: graphQLError.positions,
-    path: graphQLError.path,
+const createValidationGraphQLError = (error: Error) => {
+  const graphQLError = error instanceof GraphQLError ? error : undefined;
+
+  return new GraphQLError('Invalid input', {
+    nodes: graphQLError?.nodes,
+    source: graphQLError?.source,
+    positions: graphQLError?.positions,
+    path: graphQLError?.path,
     extensions: {
       code: 'VALIDATION',
     },
   });
-
-const isNativeOidcSessionInputError = (
-  error: GraphQLError,
-  nativeInputVariableNodes: ReadonlySet<ASTNode>,
-) => {
-  const isInputCoercionError = /^Variable "\$[^"]+" got invalid value/.test(error.message);
-
-  return (
-    isInputCoercionError && error.nodes?.some((node) => nativeInputVariableNodes.has(node)) === true
-  );
 };
 
-const addAstNodes = (node: ASTNode, nodes: Set<ASTNode>) => {
-  visit(node, {
-    enter(node) {
-      nodes.add(node);
-    },
-  });
-};
-
-const getFragmentDefinitions = (document: DocumentNode) => {
-  const fragments = new Map<string, FragmentDefinitionNode>();
-
-  for (const definition of document.definitions) {
-    if (definition.kind === 'FragmentDefinition') {
-      fragments.set(definition.name.value, definition);
-    }
-  }
-
-  return fragments;
-};
-
-const getNativeOidcSessionInputArguments = (
-  selectionSet: SelectionSetNode,
-  fragments: ReadonlyMap<string, FragmentDefinitionNode>,
-  visitedFragmentNames = new Set<string>(),
-) => {
-  const inputArguments: ArgumentNode[] = [];
-
-  for (const selection of selectionSet.selections) {
-    if (selection.kind === 'Field') {
-      if (selection.name.value === 'exchangeNativeOidcSession') {
-        const input = selection.arguments?.find((argument) => argument.name.value === 'input');
-        if (input) {
-          inputArguments.push(input);
-        }
-      }
-
-      if (selection.selectionSet) {
-        inputArguments.push(
-          ...getNativeOidcSessionInputArguments(
-            selection.selectionSet,
-            fragments,
-            visitedFragmentNames,
-          ),
-        );
-      }
-      continue;
-    }
-
-    if (selection.kind === 'InlineFragment') {
-      inputArguments.push(
-        ...getNativeOidcSessionInputArguments(
-          selection.selectionSet,
-          fragments,
-          visitedFragmentNames,
-        ),
-      );
-      continue;
-    }
-
-    const fragmentName = selection.name.value;
-    const fragment = fragments.get(fragmentName);
-    if (fragment && !visitedFragmentNames.has(fragmentName)) {
-      const nestedVisitedFragmentNames = new Set(visitedFragmentNames).add(fragmentName);
-      inputArguments.push(
-        ...getNativeOidcSessionInputArguments(
-          fragment.selectionSet,
-          fragments,
-          nestedVisitedFragmentNames,
-        ),
-      );
-    }
-  }
-
-  return inputArguments;
-};
-
-const getNativeOidcSessionInputVariableNames = (inputArguments: readonly ArgumentNode[]) => {
-  const variableNames = new Set<string>();
-
-  for (const input of inputArguments) {
-    visit(input.value, {
-      Variable(node) {
-        variableNames.add(node.name.value);
-      },
-    });
-  }
-
-  return variableNames;
-};
-
-const getNativeOidcSessionInputNodes = (document: DocumentNode) => {
-  const inputNodes = new Set<ASTNode>();
-  const nativeInputVariableNames = new Set<string>();
-
-  // GraphQL validates unused fragments too. Collect their native input variables
-  // from the whole document so malformed variable defaults cannot echo credentials.
-  visit(document, {
-    Field(node) {
-      if (node.name.value !== 'exchangeNativeOidcSession') {
-        return;
-      }
-
-      const input = node.arguments?.find((argument) => argument.name.value === 'input');
-      if (input) {
-        addAstNodes(input, inputNodes);
-        for (const variableName of getNativeOidcSessionInputVariableNames([input])) {
-          nativeInputVariableNames.add(variableName);
-        }
-      }
-    },
-  });
-
-  visit(document, {
-    VariableDefinition(node) {
-      if (nativeInputVariableNames.has(node.variable.name.value)) {
-        addAstNodes(node, inputNodes);
-      }
-    },
-  });
-
-  return inputNodes;
-};
-
-const isNativeOidcSessionInputValidationError = (
-  error: unknown,
-  nativeInputNodes: ReadonlySet<ASTNode>,
-) =>
-  error instanceof GraphQLError && error.nodes?.some((node) => nativeInputNodes.has(node)) === true;
-
-const getNativeOidcSessionInputVariableNodes = (
-  document: DocumentNode,
-  operationName: string | undefined,
-) => {
-  const operation = getOperationAST(document, operationName);
-  const variableNodes = new Set<ASTNode>();
-
-  if (!operation) {
-    return variableNodes;
-  }
-
-  const inputArguments = getNativeOidcSessionInputArguments(
-    operation.selectionSet,
-    getFragmentDefinitions(document),
-  );
-  const variableNames = getNativeOidcSessionInputVariableNames(inputArguments);
-  for (const input of inputArguments) {
-    addAstNodes(input.value, variableNodes);
-  }
-
-  for (const variableDefinition of operation.variableDefinitions ?? []) {
-    if (variableNames.has(variableDefinition.variable.name.value)) {
-      addAstNodes(variableDefinition, variableNodes);
-    }
-  }
-
-  return variableNodes;
-};
-
-const transformError = (
-  error: unknown,
-  nativeInputVariableNodes: ReadonlySet<ASTNode> = new Set(),
-): GraphQLError => {
+const transformError = (error: unknown): GraphQLError => {
   const graphQLError = error instanceof GraphQLError ? error : undefined;
   const kosmoError = unwrapKosmoError(error);
 
@@ -245,10 +68,7 @@ const transformError = (
     });
   }
 
-  // Variable coercion happens before the mutation resolver. Mask only this
-  // public credential-exchange operation so malformed inputs cannot echo code
-  // or token values while preserving other GraphQL validation diagnostics.
-  if (graphQLError && isNativeOidcSessionInputError(graphQLError, nativeInputVariableNodes)) {
+  if (!dev && graphQLError?.message.startsWith('Variable "$')) {
     return createValidationGraphQLError(graphQLError);
   }
 
@@ -259,17 +79,14 @@ const transformError = (
   return createUnexpectedGraphQLError(error, graphQLError);
 };
 
-const transformExecutionResult = (
-  result: ExecutionResult,
-  nativeInputVariableNodes: ReadonlySet<ASTNode>,
-): ExecutionResult => {
+const transformExecutionResult = (result: ExecutionResult): ExecutionResult => {
   if (!result.errors?.length) {
     return result;
   }
 
   return {
     ...result,
-    errors: result.errors.map((error) => transformError(error, nativeInputVariableNodes)),
+    errors: result.errors.map(transformError),
   };
 };
 
@@ -279,41 +96,27 @@ export const useError = (): Plugin<UserContext> => ({
       setError(transformError(error));
     });
   },
-  onExecute: ({ args }) => {
-    const nativeInputVariableNodes = getNativeOidcSessionInputVariableNodes(
-      args.document,
-      args.operationName,
-    );
+  onExecute: () => ({
+    onExecuteDone: ({ result, setResult }) => {
+      if (isAsyncIterable(result)) {
+        return {
+          onNext: ({ result, setResult }) => {
+            setResult(transformExecutionResult(result));
+          },
+        };
+      }
 
-    return {
-      onExecuteDone: ({ result, setResult }) => {
-        if (isAsyncIterable(result)) {
-          return {
-            onNext: ({ result, setResult }) => {
-              setResult(transformExecutionResult(result, nativeInputVariableNodes));
-            },
-          };
-        }
-
-        setResult(transformExecutionResult(result, nativeInputVariableNodes));
-        return;
-      },
-    };
-  },
-  onValidate: ({ params }) => {
-    const nativeInputNodes = getNativeOidcSessionInputNodes(params.documentAST);
-    if (nativeInputNodes.size === 0) {
+      setResult(transformExecutionResult(result));
+      return;
+    },
+  }),
+  onValidate: () => {
+    if (dev) {
       return;
     }
 
     return ({ result, setResult }) => {
-      setResult(
-        result.map((error) =>
-          isNativeOidcSessionInputValidationError(error, nativeInputNodes)
-            ? createValidationGraphQLError(error)
-            : error,
-        ),
-      );
+      setResult(result.map(createValidationGraphQLError));
     };
   },
 });
