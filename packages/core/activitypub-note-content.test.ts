@@ -24,6 +24,25 @@ describe('projectRemoteNoteContent', () => {
     assert.equal(projection.bodyText, 'Hello world\nSecond & final');
   });
 
+  it('preserves whitespace and newlines inside pre elements', () => {
+    assert.equal(
+      projectRemoteNoteContent({
+        content: '<p>before</p><pre>  first\r\n    second  </pre><p>after</p>',
+        summary: null,
+        mediaType: 'text/html',
+      }).bodyText,
+      'before\n  first\n    second  \nafter',
+    );
+    assert.equal(
+      projectRemoteNoteContent({
+        content: '<pre>  only\n    pre  </pre>',
+        summary: null,
+        mediaType: 'text/html',
+      }).bodyText,
+      '  only\n    pre  ',
+    );
+  });
+
   it('removes executable markup, attributes, URLs, and images while keeping link text', () => {
     const projection = projectRemoteNoteContent({
       content:

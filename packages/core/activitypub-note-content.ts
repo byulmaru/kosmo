@@ -50,6 +50,7 @@ const ignoredTags = new Set(['head', 'script', 'style', 'template']);
 function htmlToPlainText(html: string): string {
   let ignoredDepth = 0;
   let pendingSpace = false;
+  let preDepth = 0;
   let text = '';
 
   const appendBreak = () => {
@@ -70,12 +71,26 @@ function htmlToPlainText(html: string): string {
           ignoredDepth = 1;
           return;
         }
-        if (name === 'br' || name === 'hr' || blockTags.has(name)) {
+        if (name === 'pre') {
+          appendBreak();
+          preDepth += 1;
+          return;
+        }
+        if (name === 'br' || name === 'hr') {
+          appendBreak();
+          return;
+        }
+        if (preDepth === 0 && blockTags.has(name)) {
           appendBreak();
         }
       },
       ontext(value) {
         if (ignoredDepth > 0) {
+          return;
+        }
+        if (preDepth > 0) {
+          pendingSpace = false;
+          text += value.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
           return;
         }
 
@@ -99,7 +114,12 @@ function htmlToPlainText(html: string): string {
           ignoredDepth -= 1;
           return;
         }
-        if (blockTags.has(name)) {
+        if (name === 'pre') {
+          preDepth = Math.max(0, preDepth - 1);
+          appendBreak();
+          return;
+        }
+        if (preDepth === 0 && blockTags.has(name)) {
           appendBreak();
         }
       },
@@ -108,7 +128,7 @@ function htmlToPlainText(html: string): string {
   );
   parser.end(html);
 
-  return text.trim();
+  return text.replace(/^\n+|\n+$/gu, '');
 }
 
 function projectText(value: string | null, mediaType: string | null): string {
