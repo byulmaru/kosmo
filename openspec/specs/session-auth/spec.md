@@ -16,7 +16,7 @@
 
 ### Requirement: OIDC callback 처리
 
-웹 애플리케이션은 `/login/callback`에서 browser login code를 교환하고 cookie 기반 Kosmo session을 생성해야 한다(MUST). 네이티브 code는 전용 `/login/native/session` endpoint에서 처리해야 한다(MUST).
+웹 애플리케이션은 `/login/callback`에서 browser login code를 교환하고 cookie 기반 Kosmo session을 생성해야 한다(MUST).
 
 #### Scenario: 유효한 browser callback 수신
 
