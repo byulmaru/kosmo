@@ -17,7 +17,6 @@ import type { Configuration } from 'openid-client';
 
 const NATIVE_REDIRECT_URI = 'kosmo://login/callback';
 const PKCE_CODE_VERIFIER = /^[A-Za-z0-9._~-]{43,128}$/;
-const nativeSessionInputError = 'Invalid input';
 
 let oidcConfiguration: Promise<Configuration> | undefined;
 
@@ -115,13 +114,13 @@ builder.mutationField('exchangeNativeOidcSession', (t) =>
     }),
     input: {
       code: t.input.string({
-        validate: z.string().min(1, nativeSessionInputError).max(2048, nativeSessionInputError),
+        validate: z.string().min(1).max(2048),
       }),
       codeVerifier: t.input.string({
-        validate: z.string().regex(PKCE_CODE_VERIFIER, nativeSessionInputError),
+        validate: z.string().regex(PKCE_CODE_VERIFIER),
       }),
       redirectUri: t.input.string({
-        validate: z.literal(NATIVE_REDIRECT_URI, nativeSessionInputError),
+        validate: z.literal(NATIVE_REDIRECT_URI),
       }),
     },
     resolve: async (_, { input }, ctx) => {

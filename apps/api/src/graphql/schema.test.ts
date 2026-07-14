@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { ValidationError } from '@kosmo/core/error';
 import { graphql, isInputObjectType, isObjectType } from 'graphql';
 import { schema } from './schema';
 
@@ -75,7 +76,8 @@ test('rejects malformed native OIDC session exchange input before an OIDC exchan
   });
 
   assert.equal(result.data == null, true);
-  assert.equal(result.errors?.[0]?.message, 'Invalid input');
+  assert.ok(result.errors?.[0]?.originalError instanceof ValidationError);
+  assert.equal(result.errors[0].originalError.field, 'codeVerifier');
 });
 
 test('does not accept raw upstream token fields for native OIDC session exchange', async () => {
