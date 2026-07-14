@@ -13,6 +13,7 @@
     "./polyfill": "./polyfill.ts",
     "./profile": "./profile.ts",
     "./search": "./search.ts",
+    "./services": "./services/index.ts",
     "./utils": "./utils.ts",
     "./validation": "./validation/index.ts",
     "./validation/post-policy": "./validation/post-policy.ts",
