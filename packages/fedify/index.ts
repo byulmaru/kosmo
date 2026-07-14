@@ -9,3 +9,4 @@ export {
   materializeRemoteProfileActor,
   RemoteActorMaterializationError,
 } from './src/remote-actor-materialization';
+export { projectFedifyNoteContent } from './src/remote-note-content';
