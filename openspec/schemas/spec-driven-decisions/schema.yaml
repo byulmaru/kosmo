@@ -95,11 +95,19 @@ artifacts:
       Sections:
       - **Context**: Background, current state, constraints, stakeholders
       - **Goals / Non-Goals**: What this design achieves and explicitly excludes
+      - **Implementation Guidance**: Non-normative handoff guidance split into:
+        - **Current Constraints**: Relevant code paths, existing architecture, and why the straightforward implementation may fail
+        - **Recommended Approach**: A practical default path and rationale
+        - **Allowed Alternatives**: Other approaches that may be used when they preserve specs and accepted decisions
+        - **Known Traps**: Incorrect shortcuts, security or compatibility hazards, and likely review failures
       - **Risks / Trade-offs**: Known limitations, things that could go wrong. Format: [Risk] → Mitigation
       - **Migration Plan**: Steps to deploy, rollback strategy (if applicable)
       - **Open Questions**: Outstanding decisions or unknowns to resolve
 
       Focus on architecture and approach, not line-by-line implementation.
+      Implementation Guidance is explicitly non-normative. It should help an implementer start safely without fixing filenames, function names, helpers, registries, or data structures unless a spec, existing public contract, or accepted decision requires them.
+      Recommend one default approach for non-trivial work, explain why it fits the current code, and name acceptable alternatives. Put binding behavior in specs and durable constraints in decisions.
+      Do not invent alternatives for trivial work; write `없음.` when there is no meaningful alternative or trap.
       If the design establishes a durable choice, summarize the approach here and capture the choice, rationale, alternatives, and consequences in decisions.md.
       Reference the proposal for motivation and specs for requirements.
 
@@ -128,6 +136,7 @@ artifacts:
       - **Superseded Decisions**: Choices replaced during the change. Include what replaced them and why. Use "없음." if there are none.
 
       Keep decisions separate from tasks and design notes. design.md can explain the implementation approach, but decisions.md is the durable decision record agents should read before implementation. Use one section per decision rather than one long mixed bullet list.
+      Record a filename, function, helper, registry, data structure, or other internal mechanism as a decision only when compatibility, security, rollout, or multiple implementation slices require that exact choice. Otherwise keep it as non-normative Implementation Guidance in design.md.
       Append decision records in chronological order. When records conflict, the decision with the later date wins. If a decision changes on the same date, the later record MUST explicitly identify the earlier record it supersedes.
     requires:
       - design
@@ -144,21 +153,36 @@ artifacts:
 
       Guidelines:
       - Group related tasks under ## numbered headings
+      - When implementation issues already exist, identify the owning Linear issue in the heading
+      - Every task group MUST include these handoff fields before its checkboxes:
+        - **Deliverable**: the observable result owned by the task group, stated without prescribing an internal mechanism
+        - **Guardrails**: binding constraints derived from specs, existing public contracts, and accepted decisions; write `없음.` when there are none
+        - **Verification**: concrete tests, checks, or evidence that prove the deliverable and guardrails
       - Each task MUST be a checkbox: `- [ ] X.Y Task description`
       - Tasks should be small enough to complete in one session
       - Order tasks by dependency (what must be done first?)
+      - Do not copy Recommended Approach into a binding checkbox. Link to design guidance when an implementer needs a starting point.
+      - Do not require a filename, function, helper, registry, or data structure unless a spec, existing public contract, or accepted decision requires it.
+      - Do not invent Guardrails to make the section look complete.
 
       Example:
       ```
-      ## 1. Setup
+      ## 1. PROD-123 Data export
 
-      - [ ] 1.1 Create new module structure
-      - [ ] 1.2 Add dependencies to package.json
+      **Deliverable**
 
-      ## 2. Core Implementation
+      사용자가 요청한 데이터를 CSV로 내보낼 수 있다.
 
-      - [ ] 2.1 Implement data export function
-      - [ ] 2.2 Add CSV formatting utilities
+      **Guardrails**
+
+      - 기존 export 권한을 우회하지 않는다.
+
+      **Verification**
+
+      - 권한이 있는 요청의 CSV 내용과 권한이 없는 요청의 거부를 검증한다.
+
+      - [ ] 1.1 Export requirement를 만족하는 서버 동작을 구현한다.
+      - [ ] 1.2 성공·권한 실패 검증을 추가하고 관련 check를 통과시킨다.
       ```
 
       Reference specs for what needs to be built, design for implementation approach, and decisions for accepted constraints and deferred choices.
@@ -172,5 +196,10 @@ apply:
   requires: [decisions, tasks]
   tracks: tasks.md
   instruction: |
-    Read context files, work through pending tasks, mark complete as you go.
+    Read proposal, specs, design, decisions, and tasks before implementation.
+    Treat specs, accepted decisions, and each task group's Guardrails as binding.
+    Treat design's Recommended Approach as a non-normative default: an alternative is allowed when it preserves the Deliverable, Guardrails, Verification, specs, and accepted decisions.
+    Before taking a materially different approach, compare it with Current Constraints, Allowed Alternatives, and Known Traps.
+    Pause and update the Linear issue and OpenSpec artifacts first if the alternative changes scope, observable behavior, a public contract, or a durable decision.
+    Work through pending checkbox tasks and mark a task complete only after its verification evidence exists.
     Pause if you hit blockers or need clarification.

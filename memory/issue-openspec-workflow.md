@@ -111,22 +111,50 @@ OpenSpec은 저장소의 `spec-driven-decisions` schema를 따른다.
 
 - `proposal.md`: Linear 이슈를 영향받는 capability와 repository impact로 번역한다.
 - `specs/**/spec.md`: 규범적이고 검증 가능한 행동을 정의한다.
-- `design.md`: 구현 접근, 위험, migration과 rollback을 설명한다.
-- `decisions.md`: durable choice, 대안, 결과와 남은 결정을 기록한다.
-- `tasks.md`: 승인된 구현 이슈를 의존 순서의 검증 가능한 작업으로 구체화한다.
+- `design.md`: 현재 구현 제약, 비규범적 권장 접근, 허용 가능한 대안과 알려진 함정, 위험, migration과 rollback을 설명한다.
+- `decisions.md`: 구현자가 반드시 지켜야 하는 durable choice, 대안, 결과와 남은 결정을 기록한다. 파일명, 함수, helper나 자료구조는 장기 호환성·보안·rollout 또는 여러 구현 slice가 정확한 선택을 공유해야 할 때만 고정한다.
+- `tasks.md`: 승인된 구현 이슈를 의존 순서의 검증 가능한 작업으로 구체화한다. 각 task group은 결과 수준의 Deliverable, specs·공개 계약·accepted decision에서 파생한 Guardrails, 완료를 증명할 Verification을 checkbox와 분리해 제공한다.
 
 proposal은 계약 이슈를 링크한다. 공유 change의 task heading은 이미 존재하는 구현 이슈를 식별한다.
 
 ```md
 ## 1. PROD-123 Notification read path
 
+**Deliverable**
+
+권한이 있는 Recipient가 Notification을 읽고 최초 읽음 시각을 유지한다.
+
+**Guardrails**
+
+- 권한이 없는 Recipient에게 존재 여부를 노출하지 않는다.
+
+**Verification**
+
+- 최초·반복 Read와 권한 실패를 검증한다.
+
 - [ ] 1.1 ...
 - [ ] 1.2 ...
 
 ## 2. PROD-124 Notification client flow
 
+**Deliverable**
+
+클라이언트가 읽음 결과를 올바른 Recipient cache에 반영한다.
+
+**Guardrails**
+
+없음.
+
+**Verification**
+
+- Profile 전환과 Read 뒤 cache 격리를 검증한다.
+
 - [ ] 2.1 ...
 ```
+
+`design.md`의 Recommended Approach는 구현자가 안전하게 시작하기 위한 기본 경로이지 규범적 계약이 아니다.
+구현자는 specs, accepted decisions, Deliverable, Guardrails와 Verification을 모두 만족하면 Allowed Alternatives나
+동등한 방식을 선택할 수 있다. 권장 접근을 task checkbox에 복제해 내부 구현 수단으로 고정하지 않는다.
 
 `tasks.md`는 숨은 backlog가 아니다. OpenSpec 작업 중 독립적으로 전달할 결과가 발견되면 작업을 멈추고
 Linear 이슈를 먼저 생성하거나 분리한 뒤 OpenSpec을 갱신한다.
@@ -147,6 +175,10 @@ Linear 이슈를 먼저 생성하거나 분리한 뒤 OpenSpec을 갱신한다.
 - 구현 이슈는 계약 부모와 OpenSpec change를 링크한다.
 - PR은 담당 이슈의 결과와 검증 범위만 소유한다.
 - 구현은 이슈, specs, design과 accepted decisions를 함께 만족해야 한다.
+- 구현자는 design의 Current Constraints와 Known Traps를 확인하고 Recommended Approach를 기본 경로로 검토한다.
+  다른 접근도 Deliverable, Guardrails, Verification, specs와 accepted decisions를 모두 만족하면 허용한다.
+- 다른 접근이 범위, 관찰 가능한 행동, 공개 계약 또는 durable decision을 바꾸면 구현을 멈추고 Linear와 OpenSpec을
+  먼저 갱신한다.
 - 행동이나 범위가 바뀌면 Linear, OpenSpec, 코드 순서로 갱신한다.
 
 새로 발견한 작업은 다음처럼 처리한다.
