@@ -17,30 +17,12 @@ export function getWebOrigin(): string {
 }
 
 export function normalizeWebOrigin(value: string, allowInsecure: boolean): string {
-  return normalizeOrigin(value, allowInsecure, 'EXPO_PUBLIC_WEB_ORIGIN');
-}
-
-export function getApiOrigin(): string {
-  const configured = process.env.EXPO_PUBLIC_API_ORIGIN;
-
-  if (!configured) {
-    throw new Error('EXPO_PUBLIC_API_ORIGIN is required on native.');
-  }
-
-  return normalizeApiOrigin(configured, process.env.EXPO_PUBLIC_ALLOW_INSECURE_ORIGIN === '1');
-}
-
-export function normalizeApiOrigin(value: string, allowInsecure: boolean): string {
-  return normalizeOrigin(value, allowInsecure, 'EXPO_PUBLIC_API_ORIGIN');
-}
-
-function normalizeOrigin(value: string, allowInsecure: boolean, environmentName: string): string {
   let origin: URL;
 
   try {
     origin = new URL(value);
   } catch {
-    throw new Error(`${environmentName} must be a valid URL origin.`);
+    throw new Error('EXPO_PUBLIC_WEB_ORIGIN must be a valid URL origin.');
   }
 
   if (
@@ -51,21 +33,17 @@ function normalizeOrigin(value: string, allowInsecure: boolean, environmentName:
     origin.search ||
     origin.hash
   ) {
-    throw new Error(`${environmentName} must not include credentials, a path, query, or hash.`);
+    throw new Error('EXPO_PUBLIC_WEB_ORIGIN must not include credentials, a path, query, or hash.');
   }
 
   if (
     origin.protocol !== 'https:' &&
     !(origin.protocol === 'http:' && (loopbackHosts.has(origin.hostname) || allowInsecure))
   ) {
-    throw new Error(`${environmentName} must use HTTPS outside loopback development origins.`);
+    throw new Error('EXPO_PUBLIC_WEB_ORIGIN must use HTTPS outside loopback development origins.');
   }
 
   return origin.origin;
-}
-
-function isNativeRuntime(): boolean {
-  return globalThis.navigator?.product === 'ReactNative';
 }
 
 export async function executeGraphQLRequest(
@@ -78,15 +56,13 @@ export async function executeGraphQLRequest(
     throw new Error(`Relay operation ${request.name} has no query text.`);
   }
 
-  const native = isNativeRuntime();
-  const origin = native ? getApiOrigin() : getWebOrigin();
-  const response = await fetchImplementation(`${origin}/graphql`, {
+  const response = await fetchImplementation(`${getWebOrigin()}/graphql`, {
     method: 'POST',
-    credentials: native ? 'omit' : 'include',
+    credentials: 'include',
     headers: {
       accept: 'application/json',
       'content-type': 'application/json',
-      ...(native && token ? { authorization: `Bearer ${token}` } : {}),
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify({
       operationName: request.name,

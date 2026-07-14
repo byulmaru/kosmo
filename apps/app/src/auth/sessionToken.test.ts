@@ -17,56 +17,23 @@ describe('session token storage value', () => {
   });
 });
 
-describe('native-configuration-bound session token storage', () => {
-  const configuration = {
-    apiOrigin: 'https://api.kosmo.example',
-    clientId: 'native-client',
-    issuer: 'https://id.kosmo.example',
-  };
+describe('origin-bound session token storage', () => {
+  const origin = 'https://kosmo.example';
 
-  it('returns a token only for the native configuration that stored it', () => {
-    const stored = serializeStoredSessionToken(configuration, 'opaque-token');
+  it('returns a token only for the origin that stored it', () => {
+    const stored = serializeStoredSessionToken(origin, 'opaque-token');
 
-    assert.equal(parseStoredSessionToken(stored, configuration), 'opaque-token');
-    assert.equal(
-      parseStoredSessionToken(stored, {
-        ...configuration,
-        apiOrigin: 'https://api.staging.kosmo.example',
-      }),
-      null,
-    );
-    assert.equal(
-      parseStoredSessionToken(stored, {
-        ...configuration,
-        issuer: 'https://id.staging.kosmo.example',
-      }),
-      null,
-    );
-    assert.equal(
-      parseStoredSessionToken(stored, { ...configuration, clientId: 'other-client' }),
-      null,
-    );
+    assert.equal(parseStoredSessionToken(stored, origin), 'opaque-token');
+    assert.equal(parseStoredSessionToken(stored, 'https://staging.kosmo.example'), null);
   });
 
   it('rejects legacy and malformed storage values', () => {
-    assert.equal(parseStoredSessionToken('opaque-token', configuration), null);
-    assert.equal(
-      parseStoredSessionToken(
-        JSON.stringify({ origin: 'https://kosmo.example', token: 'opaque-token' }),
-        configuration,
-      ),
-      null,
-    );
-    assert.equal(
-      parseStoredSessionToken(
-        JSON.stringify({ apiOrigin: configuration.apiOrigin }),
-        configuration,
-      ),
-      null,
-    );
+    assert.equal(parseStoredSessionToken('opaque-token', origin), null);
+    assert.equal(parseStoredSessionToken('{"origin":1,"token":"opaque-token"}', origin), null);
+    assert.equal(parseStoredSessionToken('{"origin":"https://kosmo.example"}', origin), null);
   });
 
   it('does not serialize a blank token', () => {
-    assert.throws(() => serializeStoredSessionToken(configuration, '  '));
+    assert.throws(() => serializeStoredSessionToken(origin, '  '));
   });
 });

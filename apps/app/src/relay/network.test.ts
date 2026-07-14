@@ -3,13 +3,10 @@ import { describe, it } from 'node:test';
 import {
   executeGraphQLRequest,
   formatGraphQLError,
-  getApiOrigin,
   getWebOrigin,
-  normalizeApiOrigin,
   normalizeWebOrigin,
 } from './network';
 
-process.env.EXPO_PUBLIC_API_ORIGIN = 'http://127.0.0.1:4200';
 process.env.EXPO_PUBLIC_WEB_ORIGIN = 'http://127.0.0.1:5173';
 
 const request = {
@@ -22,11 +19,9 @@ const request = {
 };
 
 describe('Relay network', () => {
-  it('sends a native operation directly to the API without cookie credentials', async () => {
+  it('sends operationName and native bearer token', async () => {
     let captured: RequestInit | undefined;
-    let capturedUrl: RequestInfo | URL | undefined;
-    const fakeFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-      capturedUrl = input;
+    const fakeFetch = async (_input: RequestInfo | URL, init?: RequestInit) => {
       captured = init;
       return new Response(JSON.stringify({ data: { currentSession: null } }), {
         headers: { 'content-type': 'application/json' },
@@ -34,16 +29,8 @@ describe('Relay network', () => {
       });
     };
 
-    const restoreNavigator = stubNavigatorProduct('ReactNative');
+    await executeGraphQLRequest(request, {}, 'native-token', fakeFetch);
 
-    try {
-      await executeGraphQLRequest(request, {}, 'native-token', fakeFetch);
-    } finally {
-      restoreNavigator();
-    }
-
-    assert.equal(capturedUrl, 'http://127.0.0.1:4200/graphql');
-    assert.equal(captured?.credentials, 'omit');
     assert.equal(
       (captured?.headers as Record<string, string>).authorization,
       'Bearer native-token',
@@ -55,18 +42,15 @@ describe('Relay network', () => {
     });
   });
 
-  it('uses the web BFF cookie transport without a bearer token', async () => {
+  it('uses cookie credentials without synthesizing a bearer token on web', async () => {
     let captured: RequestInit | undefined;
-    let capturedUrl: RequestInfo | URL | undefined;
-    const fakeFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-      capturedUrl = input;
+    const fakeFetch = async (_input: RequestInfo | URL, init?: RequestInit) => {
       captured = init;
       return new Response(JSON.stringify({ data: {} }), { status: 200 });
     };
 
-    await executeGraphQLRequest(request, {}, 'must-not-leave-web', fakeFetch);
+    await executeGraphQLRequest(request, {}, null, fakeFetch);
 
-    assert.equal(capturedUrl, 'http://127.0.0.1:5173/graphql');
     assert.equal(captured?.credentials, 'include');
     assert.equal((captured?.headers as Record<string, string>).authorization, undefined);
   });
@@ -76,41 +60,6 @@ describe('Relay network', () => {
     assert.equal(formatGraphQLError(null), '요청을 처리하지 못했습니다.');
   });
 });
-
-describe('native API origin', () => {
-  it('uses only the configured API origin', () => {
-    assert.equal(getApiOrigin(), 'http://127.0.0.1:4200');
-  });
-
-  it('normalizes an HTTPS or loopback origin', () => {
-    assert.equal(
-      normalizeApiOrigin('https://api.kosmo.example/', false),
-      'https://api.kosmo.example',
-    );
-    assert.equal(normalizeApiOrigin('http://127.0.0.1:4200', false), 'http://127.0.0.1:4200');
-  });
-
-  it('rejects path-bearing and insecure remote origins by default', () => {
-    assert.throws(() => normalizeApiOrigin('https://api.kosmo.example/graphql', false));
-    assert.throws(() => normalizeApiOrigin('http://api.kosmo.example', false));
-  });
-});
-
-function stubNavigatorProduct(product: string): () => void {
-  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
-  Object.defineProperty(globalThis, 'navigator', {
-    configurable: true,
-    value: { product },
-  });
-
-  return () => {
-    if (descriptor) {
-      Object.defineProperty(globalThis, 'navigator', descriptor);
-    } else {
-      Reflect.deleteProperty(globalThis, 'navigator');
-    }
-  };
-}
 
 describe('native web origin', () => {
   it('uses the current browser origin before build-time configuration', () => {

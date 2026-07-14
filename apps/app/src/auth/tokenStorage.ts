@@ -1,6 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
-import { getNativeSessionConfiguration } from './nativeConfig';
+import { getWebOrigin } from '@/relay/network';
 import { parseStoredSessionToken, serializeStoredSessionToken } from './sessionToken';
 
 const SESSION_TOKEN_KEY = 'kosmo.session-token';
@@ -16,7 +16,7 @@ export async function readSessionToken(): Promise<string | null> {
     return null;
   }
 
-  const token = parseStoredSessionToken(stored, getNativeSessionConfiguration());
+  const token = parseStoredSessionToken(stored, getWebOrigin());
 
   if (!token) {
     await SecureStore.deleteItemAsync(SESSION_TOKEN_KEY);
@@ -32,7 +32,7 @@ export async function writeSessionToken(token: string): Promise<void> {
 
   await SecureStore.setItemAsync(
     SESSION_TOKEN_KEY,
-    serializeStoredSessionToken(getNativeSessionConfiguration(), token),
+    serializeStoredSessionToken(getWebOrigin(), token),
     {
       keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
     },
