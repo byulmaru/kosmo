@@ -52,9 +52,9 @@ FOLLOW에서 `source_id`는 `profile_follow.id`이고 `data`는 `{}`다. Recipie
 
 ### GraphQL 권한과 identity scope
 
-Notification resolver module은 `Notification` interface, kind별 concrete object, 전용 Node resolution route, connection, Profile fields와 Read mutation을 소유한다. 저장 row의 `kind`가 concrete GraphQL type을 결정하며 `kind` 자체는 public enum이나 공통 field로 노출하지 않는다.
+Notification resolver module은 `Notification` interface, kind별 concrete object, kind-aware Node resolution, connection, Profile fields와 Read mutation을 소유한다. 저장 row의 `kind`가 concrete GraphQL type을 결정하며 `kind` 자체는 public enum이나 공통 field로 노출하지 않는다.
 
-현재 공용 Node decode는 UUID discriminator를 `globalIdMap`의 단일 object typename으로 바꾸고 해당 loadable Node ref를 찾는다. `Notifications` discriminator는 여러 concrete object가 공유하므로 이 경로에 `FollowNotification`을 직접 등록하거나 `Notification` interface 이름만 등록해서는 안 된다. `PROD-275`는 공용 Node registry/decode-resolution 경계를 확장해 `Notifications`를 kind-aware Node route로 등록한다. 이 route는 ID를 batch load하고 membership과 visible predicate를 적용한 뒤 row의 `kind`에 따라 concrete object type을 부여한다. 현재 `FOLLOW`는 `FollowNotification`으로 resolve하고 지원하지 않는 kind나 hidden row는 Node 없음으로 정규화한다.
+현재 공용 Node decode는 UUID discriminator를 `globalIdMap`의 단일 object typename으로 바꾸고 해당 loadable Node ref를 찾으므로 shared discriminator를 그대로 처리할 수 없다. `Notifications` discriminator를 `FollowNotification`에 직접 등록하거나 loadable Node ref가 없는 `Notification` interface 이름에 등록해서는 안 된다. 권장 접근은 Notification 전용 Node route가 ID를 batch load하고 membership과 visible predicate를 적용한 뒤 row의 `kind`에 따라 concrete object type을 부여하는 것이다. 구현자는 같은 불변 조건을 만족하는 동등한 Node resolution 방식을 선택할 수 있으며, 구체적인 registry와 loader 구조는 `PROD-275` 구현에서 결정한다. 현재 `FOLLOW`는 `FollowNotification`으로 resolve하고 지원하지 않는 kind나 hidden row는 Node 없음으로 정규화한다.
 
 - `Profile.notifications`: target Profile의 visible `NotificationConnection`.
 - `Profile.unreadNotificationCount`: 같은 visible predicate를 만족하는 unread item 수.

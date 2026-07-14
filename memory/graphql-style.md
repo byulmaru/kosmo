@@ -158,7 +158,7 @@ GraphQL enum은 `apps/api/src/graphql/enums.ts`에서 전역 등록한다.
 - Relay Node ID는 DB UUID를 opaque global ID로 사용한다.
 - `createObjectRef`는 table discriminator와 GraphQL type name을 `globalIdMap`에 등록한다.
 - Node decode는 UUID discriminator로 GraphQL type name을 찾는다.
-- 하나의 table discriminator가 GraphQL interface의 여러 concrete object에 대응하는 예외에서는 discriminator를 concrete typename 하나에 중복 등록하거나 loadable Node ref가 없는 interface typename에 직접 등록하지 않는다. discriminator는 전용 Node resolution route를 선택하고, 그 route가 row를 batch load한 뒤 kind로 concrete object type을 결정해야 한다.
+- 하나의 table discriminator가 GraphQL interface의 여러 concrete object에 대응하는 예외에서는 discriminator를 concrete typename 하나에 중복 등록하거나 loadable Node ref가 없는 interface typename에 직접 등록하지 않는다. Notification 전용 Node route 또는 동등한 방식으로 row를 load한 뒤 kind에 맞는 concrete object type을 결정한다. 구체적인 registry와 loader 구조는 해당 기능 구현에서 선택한다.
 - 클라이언트는 ID 내부 구조에 의존하면 안 된다.
 
 ## DB 접근

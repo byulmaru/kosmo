@@ -14,11 +14,11 @@
 
 ## 3. PROD-275 권한이 있는 Profile의 알림 목록·읽음·Unread count API를 제공한다
 
-- [ ] 3.1 `Notification implements Node` interface와 `FollowNotification implements Notification & Node` concrete object를 추가하고, 공용 Node registry/decode-resolution 경계를 `Notifications` discriminator의 kind-aware route를 지원하도록 확장해 `kind = FOLLOW`를 `FollowNotification`으로 resolve한다. non-null `relatedProfile`을 제공하고 raw kind/source/data/snapshot은 노출하지 않는다.
+- [ ] 3.1 `Notification implements Node` interface와 `FollowNotification implements Notification & Node` concrete object를 추가하고, 현재 discriminator→단일 typename Node 경로가 shared discriminator를 처리하지 못하는 문제를 해결해 단일 `Notifications` discriminator의 row가 kind에 맞는 concrete object로 resolve되게 한다. Notification 전용 Node route 또는 동등한 방식을 사용할 수 있지만 같은 discriminator를 concrete type마다 중복 등록하거나 loader 없는 interface typename으로 직접 등록해서는 안 된다. `FollowNotification.relatedProfile`은 non-null로 제공하고 raw kind/source/data/snapshot은 노출하지 않는다.
 - [ ] 3.2 `Profile.notifications`와 `Profile.unreadNotificationCount`에 role-independent Account-Profile membership 권한을 적용하고 selected Profile 부재·불일치와 API 권한을 분리한다.
 - [ ] 3.3 Recipient Profile API visibility, source 존재, source Followee와 저장 Recipient 일치, Recipient Profile 기준 Related Profile visibility를 SQL page limit 전에 적용한 `id DESC` opaque cursor connection과 동일 predicate의 visible Unread count를 구현한다.
 - [ ] 3.4 `markNotificationRead(input: { id })`가 membership·visible predicate와 최초 `readAt`을 보존하고 `notification`·`recipientProfile` payload 및 field/Node/Read error matrix를 따르게 한다.
-- [ ] 3.5 API test로 connection과 `node(id:)`의 `Notification` inline fragment·`FollowNotification.__typename`, shared discriminator batch loading, unsupported kind 오라우팅 방지, 현재 membership role 전체, 비선택 Profile, inactive Recipient, ID keyset page 경계, missing source·Recipient mismatch·hidden Related Profile의 list/count/Node/Read, 반복·동시 Read를 검증하고 generated schema/typecheck/lint를 통과시킨다.
+- [ ] 3.5 API test로 connection과 `node(id:)`의 FOLLOW→`FollowNotification` resolution, `Notification` inline fragment, 여러 ID batch 결과 순서, hidden row의 `null` 반환, unsupported kind 오라우팅 방지, 현재 membership role 전체, 비선택 Profile, inactive Recipient, ID keyset page 경계, missing source·Recipient mismatch·hidden Related Profile의 list/count/Node/Read, 반복·동시 Read를 검증하고 generated schema/typecheck/lint를 통과시킨다.
 
 ## 4. PROD-276 ProfileFollow 생성·삭제에서 Follow 알림을 동기화한다
 
