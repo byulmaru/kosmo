@@ -153,6 +153,47 @@ export const BottomNavigation: Story = { render: () => <BottomNavigationStory />
 
 export const CompactSidebar: Story = { render: () => <CompactSidebarStory /> };
 
+export const FollowUpdatesBothProfileCounts: Story = {
+  parameters: {
+    relay: {
+      data: {
+        ...query,
+        node: {
+          ...followedProfile,
+          followersCount: 16,
+          viewerState: { follow: null, isSelf: false },
+        },
+      },
+      mutationResponse: {
+        followProfile: {
+          followeeProfile: followedProfile,
+          followerProfile: { ...selectedProfile, followingCount: 43 },
+          profileFollow: { id: 'profile-follow-edge' },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewerFollowing = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@selected/following"]',
+    );
+    const targetFollowers = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@followed/followers"]',
+    );
+    expect(viewerFollowing).not.toBeNull();
+    expect(targetFollowers).not.toBeNull();
+    expect(within(viewerFollowing!).getByText('42')).toBeVisible();
+    expect(within(targetFollowers!).getByText('16')).toBeVisible();
+
+    await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
+
+    await expect(within(viewerFollowing!).findByText('43')).resolves.toBeVisible();
+    await expect(within(targetFollowers!).findByText('17')).resolves.toBeVisible();
+  },
+  render: () => <FollowCacheStory />,
+};
+
 export const UnfollowUpdatesBothProfileCounts: Story = {
   parameters: {
     relay: {
