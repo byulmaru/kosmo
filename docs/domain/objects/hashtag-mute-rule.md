@@ -11,13 +11,13 @@ Hashtag Mute Rule은 Owner Profile이 특정 Hashtag를 기준으로 Post List, 
 
 Mute Scope는 여러 값을 동시에 가질 수 있다.
 
-| 값           | 의미                             |
-| ------------ | -------------------------------- |
-| Home         | Home Post List에 적용            |
-| Profile      | Profile Post List에 적용         |
-| Hashtag      | Hashtag Post List에 적용         |
-| Search       | 검색 결과에 적용                 |
-| Notification | 새 Notification Item 생성에 적용 |
+| 값           | 의미                        |
+| ------------ | --------------------------- |
+| Home         | Home Post List에 적용       |
+| Profile      | Profile Post List에 적용    |
+| Hashtag      | Hashtag Post List에 적용    |
+| Search       | 검색 결과에 적용            |
+| Notification | 새 Notification 생성에 적용 |
 
 ### Mute Decision
 
@@ -58,9 +58,9 @@ Mute Scope는 여러 값을 동시에 가질 수 있다.
 ## 조회 정책
 
 - Rule은 선택된 Scope에서만 소비한다.
-- Post List와 검색에서는 Mute Decision을 적용하고 Notification Scope에서는 일치하는 새 Notification Item을
+- Post List와 검색에서는 Mute Decision을 적용하고 Notification Scope에서는 일치하는 새 Notification을
   생성하지 않는다.
-- 기존 Notification Item의 존재와 Read State는 바꾸지 않는다.
+- 기존 Notification의 존재와 Read State는 바꾸지 않는다.
 - 만료 시각이 지난 Rule은 조회 정책에 적용하지 않는다.
 
 ## 확정 용어

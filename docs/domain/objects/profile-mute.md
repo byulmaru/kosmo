@@ -42,8 +42,8 @@ Profile Mute는 Owner Profile이 Target Profile의 콘텐츠와 새 Notification
 
 - Home/Hashtag Post List에서는 Target Profile의 Post를 Exclude한다.
 - Target Profile Post List에서는 Target Profile의 Post를 Collapse한다.
-- Target Profile에서 발생한 새 Notification Item은 생성하지 않는다.
-- 기존 Notification Item의 존재와 Read State는 바꾸지 않는다.
+- Target Profile에서 발생한 새 Notification은 생성하지 않는다.
+- 기존 Notification의 존재와 Read State는 바꾸지 않는다.
 - 만료 시각이 지난 Profile Mute는 조회 정책에 적용하지 않는다.
 
 ## 확정 용어

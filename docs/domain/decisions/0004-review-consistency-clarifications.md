@@ -15,7 +15,7 @@ Accepted
 - Repost 후보에는 Repost Author와 Source Post Author 양쪽의 Profile Block/Profile Mute를 적용한다.
 - 여러 Control Decision이 겹치면 `Exclude > Collapse > Include` 순서로 결합한다.
 - Profile lifecycle과 운영자 suspension은 서로 다른 상태 차원이다.
-- Profile Mute는 기존 Notification Item을 삭제하거나 Read State를 바꾸지 않는다.
+- Profile Mute는 기존 Notification을 삭제하거나 Read State를 바꾸지 않는다.
 - Word Mute Rule과 Hashtag Mute Rule은 선택된 Mute Scope에서만 소비한다.
 - Post 검색 후보는 Public Post 중 Post Eligibility를 통과한 대상이다.
 - Profile 검색 후보는 공개 조회 정책을 통과하며 Domain Limit Instance의 Remote Profile은 제외한다.
