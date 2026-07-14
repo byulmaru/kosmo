@@ -1,5 +1,13 @@
 import { and, desc, eq } from 'drizzle-orm';
-import { AccountProfiles, Accounts, db, first, firstOrThrow, Profiles, Sessions } from '../db';
+import {
+  AccountProfiles,
+  Accounts,
+  first,
+  firstOrThrow,
+  getDatabaseConnection,
+  Profiles,
+  Sessions,
+} from '../db';
 import { AccountState, ProfileState, SessionState } from '../enums';
 import type { Transaction } from '../db';
 
@@ -14,9 +22,9 @@ type VerifiedOidcIdentity = {
  */
 export const createOidcSession = async (
   { displayName, oidcSubject }: VerifiedOidcIdentity,
-  transaction?: Transaction,
+  tx?: Transaction,
 ) => {
-  const create = async (tx: Transaction) => {
+  return getDatabaseConnection(tx).transaction(async (tx) => {
     const account = await tx
       .insert(Accounts)
       .values({
@@ -54,7 +62,5 @@ export const createOidcSession = async (
       .returning({ token: Sessions.token })
       .then(firstOrThrow)
       .then((session) => session.token);
-  };
-
-  return transaction ? create(transaction) : db.transaction(create);
+  });
 };

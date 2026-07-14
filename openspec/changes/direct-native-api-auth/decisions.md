@@ -19,7 +19,7 @@
 - Decision Date: 2026-07-14
 - Status: Accepted
 - Context / Problem: session 생성은 독립 호출에서는 자체 transaction이 필요하지만, 다른 service use case와 하나의 원자적 작업으로 조합될 때 새 transaction을 강제하면 composition을 막는다. 이 결정은 같은 날짜의 `세션 생성 use case는 core services가 소유한다`를 대체하되 services ownership은 유지한다.
-- Decision Outcome: `@kosmo/core/services`의 `createOidcSession`은 verified `{ displayName, oidcSubject }`와 optional core transaction을 받는다. transaction이 있으면 합류하고, 없으면 shared `db`로 기존처럼 transaction을 시작한다.
+- Decision Outcome: `@kosmo/core/services`의 `createOidcSession`은 verified `{ displayName, oidcSubject }`와 optional core transaction을 받는다. `getDatabaseConnection(tx)`로 caller transaction 또는 shared `db`를 선택하고, 선택한 connection에서 transaction 경계를 열어 caller transaction에는 savepoint로 합류하며 없으면 shared `db`에서 transaction을 시작한다.
 - Alternatives Considered: 항상 shared `db`를 쓰는 방식은 가장 단순하지만 caller transaction과 원자적으로 조합할 수 없어 제외했다. generic database implementation 주입은 production implementation이 하나인 현재 필요보다 넓으므로 도입하지 않는다.
 - Consequences: transport caller는 일반 로그인에서 DB 인자를 전달하지 않는다. transaction을 이미 소유한 core service만 명시적으로 전달할 수 있으며, DB infrastructure와 application use case의 namespace 경계는 유지된다.
 - Confirmation / Follow-up: core와 API/web typecheck로 optional transaction type과 기존 호출의 호환성을 확인한다.

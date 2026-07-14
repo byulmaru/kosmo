@@ -40,7 +40,7 @@
 ## Core Services
 
 - API와 BFF가 공유하는 server business use case는 `packages/core/services`가 소유한다. GraphQL resolver와 HTTP route는 transport validation과 actor context를 처리한 뒤 service를 호출한다.
-- service는 production database implementation이 하나인 현재 구조에서 `@kosmo/core/db`의 shared `db`를 내부 사용한다. 다른 core service가 이미 transaction을 소유하고 원자적으로 조합해야 할 때만 optional transaction을 받아 합류하며, 없으면 자체 transaction을 시작한다. test seam이나 복수 implementation 요구 없이 generic `Database`를 전달하는 추상화는 만들지 않는다.
+- service는 production database implementation이 하나인 현재 구조에서 `getDatabaseConnection(tx)`로 optional transaction 또는 shared `db`를 선택한다. 여러 DB 작업을 원자적으로 수행하는 service는 선택한 connection에서 transaction 경계를 열어, caller transaction이 있으면 savepoint로 합류하고 없으면 shared `db`에서 transaction을 시작한다. test seam이나 복수 implementation 요구 없이 generic `Database`를 전달하는 추상화는 만들지 않는다.
 - `packages/core/db`는 DB client, schema, relation과 DB 전용 utility를 소유하고 account/session 생성 같은 application transaction은 소유하지 않는다.
 - OIDC discovery와 code exchange처럼 transport 또는 protocol-specific 검증은 API/BFF 경계에 남기고, core service에는 검증된 identity와 business input만 전달한다.
 
