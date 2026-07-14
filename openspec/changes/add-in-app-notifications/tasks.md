@@ -1,6 +1,6 @@
-## 1. PROD-325 Notification Item 단일 테이블 스키마와 조회 인덱스를 도입한다
+## 1. PROD-325 Notification 단일 테이블 스키마와 조회 인덱스를 도입한다
 
-- [ ] 1.1 `NotificationItems`의 미사용 UUID v8 discriminator, `notification_kind`의 `FOLLOW` 값과 단일 `notification_item` Drizzle table/export/relation을 추가한다.
+- [ ] 1.1 `Notifications`의 미사용 UUID v8 discriminator, `notification_kind`의 `FOLLOW` 값과 단일 `notification` Drizzle table/export/relation을 추가한다.
 - [ ] 1.2 Recipient Profile FK/cascade, FK 없는 `source_id`, `data jsonb NOT NULL DEFAULT '{}'`, `(kind, source_id, recipient_profile_id)` unique constraint, Recipient 목록 index와 Unread partial index를 additive migration에 반영한다.
 - [ ] 1.3 migration/DB integration test로 Recipient FK, kind/data default, 직접 duplicate source 거부, `id DESC` index와 Unread partial index를 검증한다.
 - [ ] 1.4 DB schema check와 migration 검증으로 `notification_follow`, source FK, cleanup trigger, deferred integrity, 미래 kind/data와 GIN index가 선제 추가되지 않았는지 확인한다.
@@ -14,11 +14,11 @@
 
 ## 3. PROD-275 권한이 있는 Profile의 알림 목록·읽음·Unread count API를 제공한다
 
-- [ ] 3.1 `NotificationType.FOLLOW`, `NotificationItem` Node, nullable Related Profile field를 추가하고 raw source/data/snapshot을 노출하지 않는다.
+- [ ] 3.1 `Notification implements Node` interface와 `FollowNotification implements Notification & Node` concrete object를 추가하고 `kind = FOLLOW` type resolution, non-null `relatedProfile`, raw kind/source/data/snapshot 비노출을 구현한다.
 - [ ] 3.2 `Profile.notifications`와 `Profile.unreadNotificationCount`에 role-independent Account-Profile membership 권한을 적용하고 selected Profile 부재·불일치와 API 권한을 분리한다.
 - [ ] 3.3 Recipient Profile API visibility, source 존재, source Followee와 저장 Recipient 일치, Recipient Profile 기준 Related Profile visibility를 SQL page limit 전에 적용한 `id DESC` opaque cursor connection과 동일 predicate의 visible Unread count를 구현한다.
-- [ ] 3.4 `markNotificationRead(input: { id })`가 membership·visible predicate와 최초 `readAt`을 보존하고 `notificationItem`·`recipientProfile` payload 및 field/Node/Read error matrix를 따르게 한다.
-- [ ] 3.5 API test로 현재 membership role 전체, 비선택 Profile, inactive Recipient, ID keyset page 경계, missing source·Recipient mismatch·hidden Related Profile의 list/count/Node/Read, 반복·동시 Read를 검증하고 generated schema/typecheck/lint를 통과시킨다.
+- [ ] 3.4 `markNotificationRead(input: { id })`가 membership·visible predicate와 최초 `readAt`을 보존하고 `notification`·`recipientProfile` payload 및 field/Node/Read error matrix를 따르게 한다.
+- [ ] 3.5 API test로 `Notification` inline fragment와 `FollowNotification.__typename`, 현재 membership role 전체, 비선택 Profile, inactive Recipient, ID keyset page 경계, missing source·Recipient mismatch·hidden Related Profile의 list/count/Node/Read, 반복·동시 Read를 검증하고 generated schema/typecheck/lint를 통과시킨다.
 
 ## 4. PROD-276 ProfileFollow 생성·삭제에서 Follow 알림을 동기화한다
 

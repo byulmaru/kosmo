@@ -35,11 +35,11 @@ Accepted
 - Domain Block은 콘텐츠와 관계 후보를 없는 것처럼 취급한다.
 - 새 원격 요청은 Safety State가 Domain Block이 아니고 Reachability/Service State가 Reachable/Active일 때만
   보낸다.
-- Instance 상태 변경은 기존 Notification Item의 존재와 Read State를 바꾸지 않는다.
+- Instance 상태 변경은 기존 Notification의 존재와 Read State를 바꾸지 않는다.
 
 ## 문서 반영
 
 - [Profile](../objects/profile.md)은 lifecycle, suspension, origin 상태 차원과 Mutation 조건을 정의한다.
 - [Instance](../objects/instance.md)는 type, safety, reachability, service 상태 차원과 각 Mutation을 정의한다.
 - [Post](../objects/post.md), [Media](../objects/media.md), [Post List Policy](../policies/post-list.md),
-  [Notification Item](../objects/notification-item.md)은 Instance 상태의 조회 결과를 소비한다.
+  [Notification](../objects/notification.md)은 Instance 상태의 조회 결과를 소비한다.

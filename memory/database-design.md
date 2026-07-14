@@ -126,10 +126,10 @@ Queries to check:
 
 ### Notification Projection Exception
 
-Profile-scoped Notification Item은 여러 source의 사용자용 projection이므로 일반적인 polymorphic
+Profile-scoped Notification은 여러 source의 사용자용 projection이므로 일반적인 polymorphic
 relationship 금지 규칙에 다음 한정 예외를 둔다.
 
-- `notification_item` 하나에 `kind` enum과 `source_id uuid`를 저장하며 `source_id`에는 의도적으로 foreign
+- `notification` 하나에 `kind` enum과 `source_id uuid`를 저장하며 `source_id`에는 의도적으로 foreign
   key를 만들지 않는다. `kind`가 실제 source table과 application validation을 결정한다.
 - 명확한 소유 관계인 `recipient_profile_id`는 `profile.id` foreign key와 물리 삭제 cascade를 유지한다.
 - source 중복은 `(kind, source_id, recipient_profile_id)` unique constraint로 막고, 정상 source

@@ -31,8 +31,8 @@ Accepted
 - Post thread 알림 억제는 [Post Notification Mute](../objects/post-notification-mute.md)가 소유한다.
 - Profile 대상 Mute와 Block은 각각 [Profile Mute](../objects/profile-mute.md),
   [Profile Block](../objects/profile-block.md)이 소유한다.
-- 기존 Notification Item은 이후 Mute가 생겨도 삭제하거나 Read State를 바꾸지 않는다. Profile Block은 함께
-  제거되는 Follow Request/Relationship을 직접 원인으로 가진 Notification Item만 제거한다.
+- 기존 Notification은 이후 Mute가 생겨도 삭제하거나 Read State를 바꾸지 않는다. Profile Block은 함께
+  제거되는 Follow Request/Relationship을 직접 원인으로 가진 Notification만 제거한다.
 - Domain Block과 Profile Domain Block 대상 콘텐츠는 적용 대상 viewer에게 없는 것처럼 취급한다.
 - 신고 제출, 신고 묶음, 신고 처리, Labeler, stackable policy, 커뮤니티 관리는 현재 범위에서 제외한다.
 
@@ -41,5 +41,5 @@ Accepted
 - [Post](../objects/post.md)는 본문, Post Form, Post Visibility, Content Warning, Sensitive Media를 정의한다.
 - [Media](../objects/media.md)는 이미지 중심의 Media와 Alt Text를 정의한다.
 - [Post List Policy](../policies/post-list.md)는 후보 합성과 제어 결정을 정의한다.
-- [Notification Item](../objects/notification-item.md)은 개별 알림과 Read State만 소유한다.
+- [Notification](../objects/notification.md)은 개별 알림과 Read State만 소유한다.
 - 개인 제어 설정은 각각의 독립 객체 문서가 소유한다.

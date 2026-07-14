@@ -1,6 +1,6 @@
 ## Context
 
-`docs/domain/objects/notification-item.md`는 Notification Item의 Recipient, Read State, type별 source와 삭제·억제 정책을 canonical 계약으로 정의한다. 현재 저장소에는 Notification table, GraphQL API와 실제 목록이 없고 `/notifications`는 placeholder다. 선행 `PROD-323`과 PR #244가 Follow Request를 pending-only 모델로 정렬했으므로, Follow와 Follow Request의 충돌 없이 첫 Notification source를 설계할 수 있다.
+`docs/domain/objects/notification.md`는 Notification의 Recipient, Read State, type별 source와 삭제·억제 정책을 canonical 계약으로 정의한다. 현재 저장소에는 Notification table, GraphQL API와 실제 목록이 없고 `/notifications`는 placeholder다. 선행 `PROD-323`과 PR #244가 Follow Request를 pending-only 모델로 정렬했으므로, Follow와 Follow Request의 충돌 없이 첫 Notification source를 설계할 수 있다.
 
 이 change는 `PROD-271`이 소유하는 하나의 행동 계약을 `PROD-325`, `PROD-274`, `PROD-275`, `PROD-276`, `PROD-277`, `PROD-324`, `PROD-278`의 리뷰 가능한 구현 PR로 나눈다. spec-only PR인 `PROD-273`은 구현 코드를 포함하지 않으며, 마지막 통합 이슈 `PROD-278`이 전체 scope 검증과 archive를 소유한다.
 
@@ -8,7 +8,7 @@
 
 **Goals:**
 
-- Profile Recipient를 기준으로 재사용할 수 있는 최소 Notification Item projection을 만든다.
+- Profile Recipient를 기준으로 재사용할 수 있는 최소 Notification projection을 만든다.
 - Follow를 첫 sample source로 연결해 생성·중복·삭제·Re-follow와 best-effort 실패 격리를 검증한다.
 - Account-Profile membership이 있는 Profile의 Relay connection, Read mutation과 visible Unread count를 고정한다.
 - Recipient Profile 자체 visibility, source 존재·Recipient 일치와 Related Profile visibility의 공통 predicate를 만족하지 않는 item을 모든 API 표면에서 숨긴다.
@@ -27,9 +27,9 @@
 
 ### 단일 Notification projection
 
-`notification_item` 하나가 저장 projection이자 GraphQL `NotificationItem` Node다.
+`notification` 하나가 저장 projection이며 GraphQL에서는 공통 `Notification` interface와 kind별 concrete object로 해석된다.
 
-- `id uuid`: Kosmo UUID v8과 하나의 `NotificationItems` discriminator.
+- `id uuid`: Kosmo UUID v8과 하나의 `Notifications` discriminator.
 - `recipient_profile_id uuid`: `profile.id` foreign key. Recipient Profile 물리 삭제에는 cascade한다.
 - `kind notification_kind`: 현재 `FOLLOW`만 지원한다.
 - `source_id uuid`: kind가 가리키는 source ID. 의도적으로 foreign key를 만들지 않는다.
@@ -52,12 +52,13 @@ FOLLOW에서 `source_id`는 `profile_follow.id`이고 `data`는 `{}`다. Recipie
 
 ### GraphQL 권한과 identity scope
 
-Notification resolver module은 `NotificationItem` loadable Node ref, `NotificationType`, connection, Profile fields와 Read mutation을 소유한다.
+Notification resolver module은 `Notification` interface, kind별 concrete object, Node loader, connection, Profile fields와 Read mutation을 소유한다. 저장 row의 `kind`가 concrete GraphQL type을 결정하며 `kind` 자체는 public enum이나 공통 field로 노출하지 않는다.
 
-- `Profile.notifications`: target Profile의 visible `NotificationItemConnection`.
+- `Profile.notifications`: target Profile의 visible `NotificationConnection`.
 - `Profile.unreadNotificationCount`: 같은 visible predicate를 만족하는 unread item 수.
-- `NotificationItem`: `id`, `type`, `createdAt`, nullable `readAt`, nullable `relatedProfile`.
-- `markNotificationRead(input: { id })`: `MarkNotificationReadPayload.notificationItem`과 `.recipientProfile`을 반환한다.
+- `Notification implements Node`: 모든 kind가 공유하는 `id`, `createdAt`, nullable `readAt`.
+- `FollowNotification implements Notification & Node`: Follow 전용 non-null `relatedProfile`.
+- `markNotificationRead(input: { id })`: `MarkNotificationReadPayload.notification`과 `.recipientProfile`을 반환한다.
 
 Profile fields와 Read mutation의 authorization은 session의 selected Profile이 아니라 로그인 Account와 target Recipient Profile 사이의 Account-Profile membership이다. membership의 role은 권한 판정에 사용하지 않는다. selected Profile이 없거나 target과 달라도 membership이 있으면 API는 성공한다.
 
@@ -81,7 +82,7 @@ FOLLOW item은 다음 조건을 모두 만족할 때만 API에 존재한다.
 
 Connection query는 이 predicate를 SQL에서 적용한 뒤 `id DESC` keyset limit을 적용한다. page를 먼저 가져온 뒤 hidden row를 애플리케이션에서 버리지 않는다. Unread count, Node와 Read mutation도 같은 source/visibility predicate를 재사용한다. 이로써 hidden row가 short page, 잘못된 page info, badge drift나 Read side channel을 만들지 않는다.
 
-opaque cursor에는 마지막 Notification Item ID를 담고 다음 page는 `id < cursor`를 사용한다. 현재 `createId`의 UUID v8은 millisecond timestamp 뒤에 random tail을 사용하므로 같은 millisecond의 생성 순서와 새 item의 page 배치는 보장하지 않는다. 이 제한은 현재 제품 범위에서 허용한다. `NotificationItem.relatedProfile`은 공통 schema에서 nullable이지만, 반환되는 FOLLOW item은 Related Profile이 실제로 조회 가능한 경우뿐이다. raw `source_id`와 `data`는 API에 노출하지 않는다.
+opaque cursor에는 마지막 Notification ID를 담고 다음 page는 `id < cursor`를 사용한다. 현재 `createId`의 UUID v8은 millisecond timestamp 뒤에 random tail을 사용하므로 같은 millisecond의 생성 순서와 새 item의 page 배치는 보장하지 않는다. 이 제한은 현재 제품 범위에서 허용한다. 반환되는 `FollowNotification`은 Related Profile이 실제로 조회 가능한 경우뿐이므로 `relatedProfile`은 non-null이다. raw `kind`, `source_id`와 `data`는 API에 노출하지 않는다.
 
 Read update는 membership과 visible predicate를 같은 SQL 경계에 포함하고 `read_at = coalesce(read_at, now())` 의미로 최초 시각을 보존한다. payload의 Recipient Profile을 함께 반환해 Relay가 item `readAt`과 정확한 Profile의 count를 함께 갱신할 수 있게 한다.
 
@@ -119,7 +120,7 @@ DB row와 기존 `read_at`은 비동기 cleanup 전까지 남을 수 있다. cle
 
 ## Migration Plan
 
-1. `PROD-325`에서 additive `notification_item` schema, `notification_kind`, discriminator, Recipient FK, source uniqueness와 조회 index를 배포한다. 기존 `ProfileFollow`는 backfill하지 않는다.
+1. `PROD-325`에서 additive `notification` schema, `notification_kind`, discriminator, Recipient FK, source uniqueness와 조회 index를 배포한다. 기존 `ProfileFollow`는 backfill하지 않는다.
 2. `PROD-274` 저장 경계와 `PROD-275` API를 schema 위에 병렬로 구현한다.
 3. `PROD-281`의 공용 ProfileFollow action과 `PROD-274`가 준비되면 `PROD-276` create/delete source integration을 연결한다.
 4. API가 안정되면 `PROD-277` 목록과 `PROD-324` badge를 병렬로 배포한다.
@@ -129,4 +130,4 @@ DB row와 기존 `read_at`은 비동기 cleanup 전까지 남을 수 있다. cle
 
 ## Open Questions
 
-현재 공통 저장·API 계약의 구현을 막는 열린 질문은 없다. 목록과 badge의 세부 UX는 소유 이슈인 `PROD-277`·`PROD-324`가 구현 전에 결정한다. 실제 Mute/Block 연결은 `PROD-327`, invalid source·unavailable Related Profile item의 비동기 삭제 방식과 Recipient inactivity cleanup 여부는 `PROD-328`, delivery queue/retry와 다른 Notification Type은 각각 별도 Issue → OpenSpec 흐름에서 결정한다.
+현재 공통 저장·API 계약의 구현을 막는 열린 질문은 없다. 목록과 badge의 세부 UX는 소유 이슈인 `PROD-277`·`PROD-324`가 구현 전에 결정한다. 실제 Mute/Block 연결은 `PROD-327`, invalid source·unavailable Related Profile item의 비동기 삭제 방식과 Recipient inactivity cleanup 여부는 `PROD-328`, delivery queue/retry와 다른 Notification kind는 각각 별도 Issue → OpenSpec 흐름에서 결정한다.

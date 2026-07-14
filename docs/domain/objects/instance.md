@@ -88,7 +88,7 @@ Author Profile과 Media Profile에서 파생한다.
   뺀다.
 - Domain Block은 해당 Remote Instance의 Profile, Post, Media와 관계 후보를 viewer에게 없는 것처럼 취급한다.
 - Local Instance의 Safety/Reachability/Service State는 Normal/Reachable/Active를 유지한다.
-- Instance 상태 변경 action 자체는 기존 Notification Item과 Read State를 동기적으로 바꾸지 않는다. 변경 때문에
+- Instance 상태 변경 action 자체는 기존 Notification과 Read State를 동기적으로 바꾸지 않는다. 변경 때문에
   조회 불가가 된 item은 Notification 조회에서 없는 것으로 취급하고 후속 비동기 cleanup 전까지 저장 상태가 남을
   수 있다.
 - 공개 차단 목록은 제공하지 않는다.

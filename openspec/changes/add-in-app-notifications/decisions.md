@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 [PROD-273](https://linear.app/byulmaru/issue/PROD-273), canonical Notification Item·Follow Relationship 문서, `add-in-app-notifications` proposal/specs/design과 `PROD-325`~`PROD-278` 구현 이슈 경계를 반영한다. `PROD-323`과 PR #244가 Follow Request를 pending-only 모델로 먼저 정렬했으며, 이번 change는 Follow를 재사용 가능한 Profile-scoped Notification 기반의 첫 sample source로 사용한다.
+이 기록은 [PROD-273](https://linear.app/byulmaru/issue/PROD-273), canonical Notification·Follow Relationship 문서, `add-in-app-notifications` proposal/specs/design과 `PROD-325`~`PROD-278` 구현 이슈 경계를 반영한다. `PROD-323`과 PR #244가 Follow Request를 pending-only 모델로 먼저 정렬했으며, 이번 change는 Follow를 재사용 가능한 Profile-scoped Notification 기반의 첫 sample source로 사용한다.
 
 ## Decision Records
 
@@ -9,17 +9,17 @@
 - Decision Date: 2026-07-14
 - Status: Accepted
 - Context / Problem: 저장, API, source action, 목록, badge와 E2E가 같은 사용자 결과를 만들지만 각각 별도 PR로 전달된다.
-- Decision Outcome: `notification` 하나의 새 capability와 `data-model`, `api-platform` delta를 사용한다. 구현은 `PROD-325`, `274`, `275`, `276`, `277`, `324`, `278` heading으로 나누되 모든 slice가 이 change를 공유한다.
+- Decision Outcome: `notification` 하나의 새 capability와 `data-model` delta를 사용한다. 구현은 `PROD-325`, `274`, `275`, `276`, `277`, `324`, `278` heading으로 나누되 모든 slice가 이 change를 공유한다.
 - Alternatives Considered: DB/API/UI별 OpenSpec 분리, `PROD-271` Project 전체를 하나의 장기 change로 유지, 기존 `profile` capability에 모든 요구사항 추가.
 - Consequences: 각 구현 PR은 자기 Linear 이슈와 검증만 소유하고, 전체 task·canonical 문서 sync와 archive는 마지막 `PROD-278`이 수행한다.
 - Confirmation / Follow-up: `tasks.md` 최상위 heading과 Linear 구현 이슈를 1:1로 유지하고 archive gate에서 전체 PR merge를 확인한다.
 
-### Notification Item은 단일 table projection으로 저장한다
+### Notification은 단일 table projection으로 저장한다
 
 - Decision Date: 2026-07-14
 - Status: Accepted
 - Context / Problem: 첫 Follow delivery에 base/type-specific extension, 두 discriminator, trigger와 deferred integrity를 도입하면 미래 type을 위해 현재 복잡성을 지불한다.
-- Decision Outcome: `notification_item(id, recipient_profile_id, kind, source_id, data, created_at, read_at)` 하나만 둔다. ID는 UUID v8이고 `NotificationItems` discriminator 하나를 사용한다.
+- Decision Outcome: `notification(id, recipient_profile_id, kind, source_id, data, created_at, read_at)` 하나만 둔다. ID는 UUID v8이고 `Notifications` discriminator 하나를 사용한다.
 - Alternatives Considered: base와 type-specific extension, 하나의 wide table에 type별 nullable FK, PostgreSQL partitioning.
 - Consequences: GraphQL Node identity와 읽음 상태가 한 row에 있고 후속 Profile-scoped kind도 기본적으로 같은 table을 사용한다. 별도 `notification_follow`, extension discriminator와 cross-table integrity trigger는 없다. Account-scoped Operational 저장은 선결정하지 않는다.
 - Confirmation / Follow-up: `PROD-325`가 최신 main에서 미사용 discriminator를 할당하고 단일 schema/migration을 검증한다.
@@ -33,6 +33,16 @@
 - Alternatives Considered: source FK가 있는 extension table, 범용 untyped payload, Recipient/Related Profile과 이름·handle snapshot 복제.
 - Consequences: kind가 source table과 data shape를 결정한다. 같은 source가 여러 Recipient에게 투영될 수 있고, raw source/data는 API에 노출하지 않으며 GIN index나 범용 payload framework를 선제 추가하지 않는다.
 - Confirmation / Follow-up: 후속 Profile-scoped kind는 실제 필요가 생길 때 enum value, source mapping과 최소 data validation을 함께 추가한다. Account-scoped kind는 별도 저장 결정을 가진다.
+
+### GraphQL은 Notification interface와 kind별 concrete object를 사용한다
+
+- Decision Date: 2026-07-14
+- Status: Accepted
+- Context / Problem: 공통 `type` enum과 nullable kind별 field를 한 object에 모으면 새 kind가 추가될 때 공통 object가 넓어지고, 클라이언트도 실제 제공 field와 무관한 enum 분기를 해야 한다.
+- Decision Outcome: `Notification implements Node` interface는 `id`, `createdAt`, nullable `readAt`만 제공한다. `FollowNotification implements Notification & Node`는 non-null `relatedProfile`을 제공한다. 저장 row의 `kind`가 concrete GraphQL type을 결정하며 public `NotificationType` enum과 공통 `type` field는 노출하지 않는다.
+- Alternatives Considered: `Notification` 단일 object와 `NotificationType` enum, nullable kind별 field를 가진 wide object, kind마다 서로 무관한 connection.
+- Consequences: `Profile.notifications`는 `NotificationConnection`을 반환하고 클라이언트는 `... on FollowNotification` inline fragment로 kind별 field를 선택한다. unavailable Follow item은 숨기므로 generic object나 nullable Related Profile fallback이 없다.
+- Confirmation / Follow-up: 후속 kind는 자신의 concrete object와 kind resolution을 추가하며 공통 interface에는 모든 kind가 공유하는 field만 추가한다.
 
 ### source identity와 상관관계는 ProfileFollow row가 소유한다
 
@@ -89,7 +99,7 @@
 - Decision Date: 2026-07-14
 - Status: Accepted
 - Context / Problem: 현재 `createId`의 UUID v8은 millisecond timestamp 뒤에 random tail을 사용하므로 같은 millisecond에 생성된 ID의 대소가 생성 순서와 일치하지 않는다. ID 단독 cursor는 첫 page 뒤 같은 millisecond에 추가된 item을 오래된 page에 섞을 수 있다.
-- Decision Outcome: Notification connection은 `NotificationItem.id DESC` 단일 keyset과 opaque ID cursor를 유지한다. 같은 millisecond 안의 생성 순서와 새 item의 page 배치는 보장하지 않는다.
+- Decision Outcome: Notification connection은 `Notification.id DESC` 단일 keyset과 opaque ID cursor를 유지한다. 같은 millisecond 안의 생성 순서와 새 item의 page 배치는 보장하지 않는다.
 - Alternatives Considered: `(createdAt DESC, id DESC)` composite cursor, Notification 전용 monotonic ordering key, 공용 `createId` 변경, offset pagination.
 - Consequences: 다음 page는 `id < cursor` 경계로 조회하고 목록 index는 `(recipient_profile_id, id DESC)`다. 같은 millisecond에 뒤늦게 생성된 item은 ID random tail에 따라 기존 cursor의 다음 page에 나타날 수 있으며, 이 정도의 순서 차이는 현재 Notification 제품 요구에서 허용한다.
 - Confirmation / Follow-up: `PROD-275`가 고정된 item 집합의 ID keyset page 경계와 visible item 중복/누락 방지를 검증하되 같은 millisecond의 생성 chronology나 concurrent insert snapshot은 요구하지 않는다.
@@ -109,7 +119,7 @@
 - Decision Date: 2026-07-14
 - Status: Accepted
 - Context / Problem: 반복·동시 Read가 timestamp를 덮어쓰거나 count를 두 번 감소시키면 목록과 badge가 불일치한다.
-- Decision Outcome: Read update는 membership과 visible predicate를 포함하고 `read_at = coalesce(read_at, now())` 의미로 최초 시각을 보존한다. Unread count는 같은 visible predicate와 `read_at IS NULL`로 계산한다. payload는 `notificationItem`과 `recipientProfile`을 반환한다.
+- Decision Outcome: Read update는 membership과 visible predicate를 포함하고 `read_at = coalesce(read_at, now())` 의미로 최초 시각을 보존한다. Unread count는 같은 visible predicate와 `read_at IS NULL`로 계산한다. payload는 `notification`과 `recipientProfile`을 반환한다.
 - Alternatives Considered: client-side count decrement만 사용, mutable stored counter, 매 Read마다 timestamp 갱신.
 - Consequences: 반복·동시 Read는 idempotent하고 hidden item은 Read하거나 count할 수 없다. Relay는 payload의 두 Node를 통해 정확한 Profile cache를 갱신한다.
 - Confirmation / Follow-up: `PROD-275`가 최초 timestamp, concurrent update와 visible count를 검증한다.
@@ -119,7 +129,7 @@
 - Decision Date: 2026-07-14
 - Status: Accepted
 - Context / Problem: API hidden만으로 사용자 노출은 막지만 source가 invalid하거나 Related Profile을 볼 수 없는 의미 없는 row가 영구 보존되는 상태는 이상적인 domain lifecycle이 아니다. 반면 Recipient Profile의 비활성화·정지는 복구될 수 있다.
-- Decision Outcome: source가 없거나 Recipient와 일치하지 않거나 Related Profile이 Recipient 기준으로 unavailable이 되면 Notification Item을 비동기적이고 idempotent하게 삭제하는 방향을 채택한다. Recipient Profile 자체의 일시 비활성화·정지가 삭제 원인인지는 확정하지 않는다. 현재 change에는 event, queue/scan, worker, retry와 허용 지연 구현을 포함하지 않는다.
+- Decision Outcome: source가 없거나 Recipient와 일치하지 않거나 Related Profile이 Recipient 기준으로 unavailable이 되면 Notification을 비동기적이고 idempotent하게 삭제하는 방향을 채택한다. Recipient Profile 자체의 일시 비활성화·정지가 삭제 원인인지는 확정하지 않는다. 현재 change에는 event, queue/scan, worker, retry와 허용 지연 구현을 포함하지 않는다.
 - Alternatives Considered: hidden row 영구 보존, 현재 change에 동기 trigger나 queue 도입.
 - Consequences: 현재 구현은 공통 hidden predicate만 제공하고 실제 cleanup 전까지 row가 남을 수 있다. 별도 `PROD-328`이 구현 수단, lifecycle event와 Recipient inactivity 보존/삭제를 정한다.
 - Confirmation / Follow-up: `PROD-328`은 이번 change의 task와 archive gate가 아니며 별도 Issue → OpenSpec → Implementation을 따른다.
@@ -138,10 +148,10 @@
 
 - 실제 Profile Mute·Profile Block·Domain Block evaluator 연결과 정책별 억제 test는 후속 `PROD-327`의 별도 OpenSpec에서 결정한다.
 - invalid source·unavailable Related Profile item의 원인별 event, queue/scan, retry, 허용 지연과 대량 처리 및 Recipient inactivity cleanup 여부는 `PROD-328`의 별도 OpenSpec에서 결정한다.
-- outbox/message queue, delivery retry/reconciliation, Push/realtime과 다른 Notification Type은 필요를 소유하는 별도 Linear 이슈와 OpenSpec에서 결정한다.
+- outbox/message queue, delivery retry/reconciliation, Push/realtime과 다른 Notification kind는 필요를 소유하는 별도 Linear 이슈와 OpenSpec에서 결정한다.
 
 ## Superseded Decisions
 
-- 이 PR의 초기 draft가 제안한 `notification_item` base + `notification_follow` extension, source FK/cascade, cleanup trigger와 deferred integrity constraint는 단일 projection 결정으로 대체한다.
+- 이 PR의 초기 draft가 제안한 기존 이름의 `notification_item` base + `notification_follow` extension, source FK/cascade, cleanup trigger와 deferred integrity constraint는 단일 `notification` projection 결정으로 대체한다.
 - 이 PR의 초기 draft가 제안한 selected Profile 전용 API 권한은 role-independent Account-Profile membership 권한으로 대체한다.
 - 이 PR의 초기 draft가 제안한 `relatedProfile: null` generic fallback, Read 허용과 Unread count 포함은 unavailable item 전면 숨김으로 대체한다.
