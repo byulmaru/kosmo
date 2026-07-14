@@ -2,7 +2,7 @@
 
 Expo 앱은 현재 로그인과 GraphQL 요청을 웹 BFF에 의존한다. 웹의 cookie/BFF 경계는 유지하되, 공개 OIDC client와 PKCE를 사용하는 네이티브 앱은 Kosmo API에서 직접 세션을 발급받고 API에 직접 요청해야 한다.
 
-이 변경은 API/server 구현 [PROD-318](https://linear.app/byulmaru/issue/PROD-318/api%EC%97%90-public-client-oidc-%EC%84%B8%EC%85%98-%EA%B5%90%ED%99%98-graphql%EC%9D%84-%EC%B6%94%EA%B0%80%ED%95%9C%EB%8B%A4)과 Expo client 구현 [PROD-338](https://linear.app/byulmaru/issue/PROD-338/expo-%EC%95%B1%EC%9D%84-api-graphql-%EC%A7%81%EC%A0%91-%EC%9D%B8%EC%A6%9D-%EA%B2%BD%EB%A1%9C%EB%A1%9C-%EC%A0%84%ED%99%98%ED%95%9C%EB%8B%A4)의 공유 계약이다. IdP가 authorization code를 검증 전에 소모하지 않게 하는 [PROD-317](https://linear.app/byulmaru/issue/PROD-317/oidc-token-endpoint%EA%B0%80-%EA%B2%80%EC%A6%9D-%EC%8B%A4%ED%8C%A8-%EC%A0%84-authorization-code%EB%A5%BC-%EC%86%8C%EB%AA%A8%ED%95%98%EC%A7%80-%EC%95%8A%EA%B2%8C-%ED%95%9C%EB%8B%A4) 완료가 출시 gate다.
+이 변경은 API/server 구현 [PROD-318](https://linear.app/byulmaru/issue/PROD-318/api%EC%97%90-public-client-oidc-%EC%84%B8%EC%85%98-%EA%B5%90%ED%99%98-graphql%EC%9D%84-%EC%B6%94%EA%B0%80%ED%95%9C%EB%8B%A4)과 Expo client 구현 [PROD-338](https://linear.app/byulmaru/issue/PROD-338/expo-%EC%95%B1%EC%9D%84-api-graphql-%EC%A7%81%EC%A0%91-%EC%9D%B8%EC%A6%9D-%EA%B2%BD%EB%A1%9C%EB%A1%9C-%EC%A0%84%ED%99%98%ED%95%9C%EB%8B%A4)의 공유 계약이다. authorization code 안전 소모(PROD-317), edge rate limit(PROD-319), 실제 테스트 배포와 실기기 검증(PROD-287)은 구현 PR과 독립된 공개 rollout gate다.
 
 ## What Changes
 

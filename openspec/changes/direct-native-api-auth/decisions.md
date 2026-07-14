@@ -7,12 +7,32 @@
 ### 세션 생성 use case는 core services가 소유한다
 
 - Decision Date: 2026-07-14
-- Status: Accepted
+- Status: Superseded
 - Context / Problem: session 생성 transaction은 API와 BFF가 공유하는 server business logic이며 OIDC discovery, code exchange 또는 인증 정책 자체를 소유하지 않는다. `core/auth`에 두면 파일명이 실제 책임보다 넓고, PR #231이 도입하는 shared business-logic 경계와도 어긋난다.
 - Decision Outcome: `@kosmo/core/services`의 `createOidcSession`이 verified `{ displayName, oidcSubject }`를 받아 core `db`로 account/session transaction을 수행한다. API와 BFF는 OIDC identity 검증 뒤 service를 직접 호출한다.
 - Alternatives Considered: `@kosmo/core/auth`는 인증 프로토콜을 소유하지 않아 제외했다. `@kosmo/core/db`는 application use case를 infrastructure namespace에 두므로 제외했다. 호출자가 `db`를 주입하는 방식은 현재 production database implementation이 하나뿐이고 PR #231의 service pattern과 달라 제외했다.
 - Consequences: core services가 공유 server business logic의 일관된 진입점이 된다. API/BFF의 간접 재수출과 `db` 인자가 사라지며, 향후 PR #231과 합쳐질 때 services index export만 병합하면 된다.
 - Confirmation / Follow-up: API/web typecheck와 OIDC E2E로 두 호출 경로가 같은 service를 사용하고 upstream token을 저장하지 않음을 확인한다.
+
+### core session service는 선택적으로 caller transaction에 합류한다
+
+- Decision Date: 2026-07-14
+- Status: Accepted
+- Context / Problem: session 생성은 독립 호출에서는 자체 transaction이 필요하지만, 다른 service use case와 하나의 원자적 작업으로 조합될 때 새 transaction을 강제하면 composition을 막는다. 이 결정은 같은 날짜의 `세션 생성 use case는 core services가 소유한다`를 대체하되 services ownership은 유지한다.
+- Decision Outcome: `@kosmo/core/services`의 `createOidcSession`은 verified `{ displayName, oidcSubject }`와 optional core transaction을 받는다. transaction이 있으면 합류하고, 없으면 shared `db`로 기존처럼 transaction을 시작한다.
+- Alternatives Considered: 항상 shared `db`를 쓰는 방식은 가장 단순하지만 caller transaction과 원자적으로 조합할 수 없어 제외했다. generic database implementation 주입은 production implementation이 하나인 현재 필요보다 넓으므로 도입하지 않는다.
+- Consequences: transport caller는 일반 로그인에서 DB 인자를 전달하지 않는다. transaction을 이미 소유한 core service만 명시적으로 전달할 수 있으며, DB infrastructure와 application use case의 namespace 경계는 유지된다.
+- Confirmation / Follow-up: core와 API/web typecheck로 optional transaction type과 기존 호출의 호환성을 확인한다.
+
+### OIDC account identity는 단일 issuer의 subject를 사용한다
+
+- Decision Date: 2026-07-14
+- Status: Accepted
+- Context / Problem: OIDC `sub`는 issuer 내부에서 고유하고 account table은 `oidcSubject` 하나를 unique identity로 사용한다. 또한 session 생성에는 display name이 필요하다.
+- Decision Outcome: Kosmo는 단일 configured OIDC issuer를 불변조건으로 두며 해당 issuer는 유효한 문자열 `name` claim을 항상 제공한다. 따라서 account는 `sub`만으로 식별하고 `name`을 display name으로 사용한다.
+- Alternatives Considered: `(issuer, sub)` 복합 identity와 name fallback은 다중 issuer 또는 불완전한 claim을 지원하지만 현재 제품 불변조건에 필요하지 않아 제외한다.
+- Consequences: 다중 issuer 지원이나 claim 계약 변경은 account identity migration과 display-name 정책을 포함한 별도 계약이 필요하다.
+- Confirmation / Follow-up: OIDC library가 configured issuer를 검증하고 E2E fixture가 `sub`와 `name`을 제공하는지 확인한다.
 
 ### API GraphQL mutation이 public-client code + PKCE를 교환한다
 
@@ -62,12 +82,16 @@
 - Decision Outcome: mutation에는 strict input validation·no-store를 넣고, reliable rate limit은 gateway/WAF 또는 shared-store로 PROD-319에서 제공한다. PROD-319 완료 전에는 public native client rollout을 하지 않는다.
 - Alternatives Considered: process-local per-IP limiter는 replica/rollout/proxy에서 우회되므로 제외했다.
 - Consequences: 이 change의 code validation과 public rollout은 분리된다. PROD-319은 enforcement owner, threshold, trusted identifier, 429 behavior를 소유한다.
-- Confirmation / Follow-up: release 전 edge enforcement의 multi-replica behavior와 web login non-regression을 PROD-319에서 검증한다.
+- Confirmation / Follow-up: release 전 edge enforcement의 multi-replica behavior와 web login non-regression을 별도 후속 PROD-319에서 검증한다.
 
 ## Remaining Decisions
 
-- native distribution pipeline의 public environment injection 자동화는 현재 범위 밖이다. 첫 native distribution은 `EXPO_PUBLIC_API_ORIGIN`, `EXPO_PUBLIC_OIDC_ISSUER`, `EXPO_PUBLIC_OIDC_NATIVE_CLIENT_ID`가 build-time에 주입됐음을 release checklist로 확인한다.
+- PROD-287은 `EXPO_PUBLIC_API_ORIGIN`, `EXPO_PUBLIC_OIDC_ISSUER`, `EXPO_PUBLIC_OIDC_NATIVE_CLIENT_ID`가 build-time에 주입된 실제 Android/iPhone login과 GraphQL smoke를 소유한다.
+- PROD-342는 custom scheme을 claimed HTTPS redirect로 이전하는 후속 계약을 소유한다.
+- PROD-343은 이메일 조회 등 OIDC API 호출이 실제 요구사항이 될 때 필요한 upstream token scope, refresh와 revoke 정책, 암호화 저장 위치를 결정한다. 현재 session writer는 upstream token을 저장하지 않는다.
+- PROD-344는 Kosmo bearer session의 만료·로그아웃·원격 폐기 정책을 소유한다.
 
 ## Superseded Decisions
 
 - 2026-07-13 `검증된 identity의 session writer는 core auth에 공유하고 upstream token은 저장하지 않는다`의 배치 결정은 2026-07-14 `세션 생성 use case는 core services가 소유한다`가 대체한다. upstream token 비보관 결정은 유지한다.
+- 2026-07-14 `세션 생성 use case는 core services가 소유한다`는 같은 날짜의 `core session service는 선택적으로 caller transaction에 합류한다`가 대체한다. core services ownership은 유지하고 transaction composition 결정만 변경한다.

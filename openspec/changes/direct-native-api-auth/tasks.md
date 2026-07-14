@@ -1,7 +1,7 @@
 ## 1. PROD-318 API public-client session exchange
 
 - [x] 1.1 `openid-client`를 API dependency로 추가하고, verified OIDC identity만으로 account/session을 만드는 shared session service를 도입해 BFF도 upstream token을 새 session에 저장하지 않게 한다.
-- [x] 1.2 API GraphQL의 unauthenticated `exchangeNativeOidcSession` mutation에 public-client discovery, PKCE code exchange, exact redirect/input 제한, no-store 응답과 redacted GraphQL failure 처리를 구현한다.
+- [x] 1.2 API GraphQL의 unauthenticated `exchangeNativeOidcSession` mutation에 public-client discovery, PKCE code exchange, exact redirect/input 제한, no-store 응답과 generic OIDC exchange failure 처리를 구현한다.
 - [x] 1.3 API runtime에 `PUBLIC_OIDC_NATIVE_CLIENT_ID`를 연결하고 confidential web client/secret과 분리된 configuration을 검증한다.
 - [x] 1.4 배포된 mobile consumer가 없는 BFF `/login/native/session` route와 전용 validation/test를 제거한다.
 
@@ -18,8 +18,3 @@
 - [x] 3.3 API/unit, app Relay/typecheck/web export, web BFF regression을 실행하고 결과를 기록한다.
 - [x] 3.4 `session-auth` delta requirement identifier를 active spec과 일치시켜 archive 시 계약 교체가 누락되지 않게 한다.
 - [x] 3.5 shared session use case를 `@kosmo/core/services`로 배치하고, `@kosmo/core/db`에는 DB infrastructure만 남도록 API·BFF import를 갱신한다.
-
-## 4. PROD-338 공개 출시 gate
-
-- [ ] 4.1 PROD-317의 authorization code 안전 소모와 PROD-319의 reliable edge rate limit 완료를 확인한다.
-- [ ] 4.2 build-time public environment가 주입된 실제 Android 또는 iOS 기기에서 native login과 API direct authenticated GraphQL을 검증한다.

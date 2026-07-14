@@ -1,6 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { AccountProfiles, Accounts, db, first, firstOrThrow, Profiles, Sessions } from '../db';
 import { AccountState, ProfileState, SessionState } from '../enums';
+import type { Transaction } from '../db';
 
 type VerifiedOidcIdentity = {
   displayName: string;
@@ -11,8 +12,11 @@ type VerifiedOidcIdentity = {
  * Creates a Kosmo session for an OIDC identity that has already been verified
  * by the caller. Upstream OIDC tokens must not be persisted with the session.
  */
-export const createOidcSession = async ({ displayName, oidcSubject }: VerifiedOidcIdentity) => {
-  return db.transaction(async (tx) => {
+export const createOidcSession = async (
+  { displayName, oidcSubject }: VerifiedOidcIdentity,
+  transaction?: Transaction,
+) => {
+  const create = async (tx: Transaction) => {
     const account = await tx
       .insert(Accounts)
       .values({
@@ -50,5 +54,7 @@ export const createOidcSession = async ({ displayName, oidcSubject }: VerifiedOi
       .returning({ token: Sessions.token })
       .then(firstOrThrow)
       .then((session) => session.token);
-  });
+  };
+
+  return transaction ? create(transaction) : db.transaction(create);
 };
