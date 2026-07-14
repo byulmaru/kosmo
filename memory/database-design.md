@@ -118,16 +118,12 @@ Queries to check:
 - Avoid polymorphic foreign keys in the initial schema. Prefer explicit relationship tables.
 - Add ActivityPub actor details, inbox/outbox queues, and AT Protocol record/cache tables after the implementation path is concrete.
 
-Drizzle relation schema policy:
+Drizzle query policy:
 
-- When adding a table to `packages/core/db/tables.ts` or changing a foreign key, update `packages/core/db/relations.ts` in the same change.
-- Use Drizzle relations v2 API, `defineRelations`, for relation schema definitions.
-- Do not destructure the `defineRelations` callback argument. Follow the official docs style and name the single argument `r`.
-- Reference helpers and table columns as `r.one.TableName`, `r.many.TableName`, and `r.TableName.columnName`.
-- Add `optional: false` to `one` relations backed by `notNull()` foreign keys.
-- Do not add `optional: false` to `one` relations backed by nullable foreign keys.
-- Use role-revealing relation names for self references or multiple foreign keys to the same target table.
-- Pass the v2 relation schema to DB initialization with `drizzle(..., { relations, schema })` in `packages/core/db/index.ts`.
+- Use Drizzle's SQL-like query builder with explicit `select`, `from`, and `join` clauses.
+- Do not define a Drizzle relation schema while the project does not use the relational query API (`db.query.*`).
+- Define database foreign keys in `packages/core/db/tables.ts` with `.references()`; relation metadata is not a substitute for database constraints.
+- If a future change adopts the relational query API, introduce only the relation definitions required by concrete query paths and update this policy in the same change.
 
 ## Base Table Responsibilities
 
