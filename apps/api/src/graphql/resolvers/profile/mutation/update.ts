@@ -1,10 +1,18 @@
-import { AccountProfiles, db, firstOrThrow, firstOrThrowWith, Profiles } from '@kosmo/core/db';
-import { AccountProfileRole, ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
+import {
+  AccountProfiles,
+  db,
+  firstOrThrow,
+  firstOrThrowWith,
+  Instances,
+  Profiles,
+} from '@kosmo/core/db';
+import { AccountProfileRole, ProfileFollowPolicy } from '@kosmo/core/enums';
 import { NotFoundError, PermissionDeniedError } from '@kosmo/core/error';
 import { profileBioSchema, profileDisplayNameSchema } from '@kosmo/core/validation';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
+import { visibleProfileWhere } from '@/profile/visibility';
 import { Profile } from '../ref';
 
 builder.mutationField('updateProfile', (t) =>
@@ -28,11 +36,12 @@ builder.mutationField('updateProfile', (t) =>
         .select({ id: Profiles.id, actorRole: AccountProfiles.role })
         .from(Profiles)
         .innerJoin(AccountProfiles, eq(AccountProfiles.profileId, Profiles.id))
+        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
         .where(
           and(
             eq(Profiles.id, input.id),
-            eq(Profiles.state, ProfileState.ACTIVE),
             eq(AccountProfiles.accountId, ctx.session.accountId),
+            visibleProfileWhere({ profile: Profiles, instance: Instances }),
           ),
         )
         .limit(1)

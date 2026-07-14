@@ -1,4 +1,4 @@
-import { db, Posts, Profiles } from '@kosmo/core/db';
+import { db, Instances, Posts, Profiles } from '@kosmo/core/db';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
@@ -13,16 +13,19 @@ builder.objectFields(Profile, (t) => ({
     {
       type: Post,
       resolve: (profile, args, ctx) => {
+        const connectionOptions = {
+          args,
+          toCursor: (post: PostRow) => post.id,
+        };
+
         return resolveCursorConnection<Promise<PostRow[]>>(
-          {
-            args,
-            toCursor: (post) => post.id,
-          },
+          connectionOptions,
           ({ before, after, limit, inverted }) =>
             db
               .select(getColumns(Posts))
               .from(Posts)
               .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+              .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
               .where(
                 and(
                   eq(Posts.profileId, profile.id),

@@ -3,7 +3,7 @@
 - [ ] 1.1 원본 remote Follow activity id, actor/object URI, generation timestamp, Fedify `orderingKey`, inbound Follow response metadata를 `ProfileFollow` 또는 inbound `ProfileFollowRequest`에 연결할 수 있는 activity correlation metadata 저장 경계를 추가하고, Accept/Reject/Undo activity id durable history는 Fedify idempotency 또는 후속 activity log 범위로 둔다.
 - [ ] 1.2 outbound Follow activity identity는 생성된 `ProfileFollow.id`에서 파생한 kosmo outbound Follow URI로 새 logical Follow마다 고유하게 만들고, Fedify `orderingKey`는 follower actor URI와 followee actor URI pair에서 안정적으로 파생해 같은 pair의 모든 outbound Follow/Undo(Follow)에 재사용하며, 후속 Fedify transport retry가 같은 identity를 재사용할 수 있도록 저장 모델을 정렬하되 transport retry/queue 상태는 도메인 테이블에 중복 저장하지 않는다.
 - [ ] 1.3 #198로 archive된 `split-profile-follow-requests`의 상태 없는 `ProfileFollow`와 pending-only `ProfileFollowRequest` 구조에 맞춰 Drizzle table/relations/migration fixture를 갱신한다.
-- [x] 1.4 `profile` row에 followers/following count를 저장하고 기존 established `ProfileFollow` 전체에서 backfill하며, GraphQL follow/unfollow의 관계 생성/삭제와 같은 transaction에서 count를 증감한다. Profile 상태, instance 상태, remote baseline 갱신은 후속 범위로 둔다.
+- [x] 1.4 `profile` row에 followers/following count를 저장하고 기존 established `ProfileFollow` 전체에서 backfill하며, GraphQL follow/unfollow의 관계 생성/삭제와 같은 transaction에서 count를 증감한다. Profile/Instance lifecycle에 따른 follow count 정합성은 이 remote-follow change가 소유하되 PR #212에서는 count reconciliation을 구현하지 않고 현재 stored counter 동작을 유지한다.
 
 ## 2. Fedify Follow Integration
 
@@ -26,6 +26,8 @@
 ## 3. GraphQL Profile Follow API
 
 - [ ] 3.1 `followProfile`과 `unfollowProfile`이 active remote profile target을 지원하도록 확장한다.
+- [ ] 3.1a Profile이 DISABLED/SUSPENDED로 전환되거나 instance가 SUSPENDED로 전환될 때 stored follow count를 visible follow graph 기준으로 reconciliation한다.
+- [ ] 3.1b Profile/Instance가 ACTIVE로 복구될 때 stored follow count 정합성을 복원한다.
 - [x] 3.2 `followersCount`/`followingCount`는 `profile` row의 저장 count를 반환한다. Connection과 가시성 정책은 변경하지 않는다.
 - [ ] 3.3 `viewerFollow`와 `viewerState.follow`가 local target과 remote target 모두에서 현재 active profile의 established `ProfileFollow` 관계를 반환하고 pending `ProfileFollowRequest`를 숨기도록 loader와 테스트를 갱신한다.
 - [ ] 3.4 GraphQL schema를 재생성하고 remote known follow graph connection, 저장된 profile count, profile 비활성화와 remote instance suspension/unsuspension 후 count 조정, follow/unfollow의 최신 `followerProfile`/`followeeProfile` payload, `SUSPENDED` remote target local unfollow에서 nullable `followeeProfile`을 포함한 remote follow mutation contract를 확인한다.

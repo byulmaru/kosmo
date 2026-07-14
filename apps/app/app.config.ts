@@ -10,6 +10,12 @@ for (const [expoName, existingName] of Object.entries(publicEnvironmentAliases))
   process.env[expoName] ??= process.env[existingName];
 }
 
+const iosBuildNumber = process.env.IOS_BUILD_NUMBER ?? '1';
+
+if (!/^[1-9]\d*$/.test(iosBuildNumber)) {
+  throw new Error('IOS_BUILD_NUMBER must be a positive integer.');
+}
+
 const config: ExpoConfig = {
   name: 'Kosmo',
   slug: 'kosmo',
@@ -18,7 +24,8 @@ const config: ExpoConfig = {
   orientation: 'default',
   userInterfaceStyle: 'light',
   ios: {
-    buildNumber: '1',
+    appleTeamId: process.env.APPLE_DEVELOPER_TEAM_ID,
+    buildNumber: iosBuildNumber,
     bundleIdentifier: 'moe.kos',
     supportsTablet: true,
     infoPlist: {

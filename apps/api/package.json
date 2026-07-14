@@ -4,9 +4,10 @@
   "scripts": {
     "db:bootstrap-local-instance": "tsx scripts/bootstrap-local-instance.ts",
     "dev": "tsx watch src/index.ts",
-    "start": "node --import tsx src/index.ts",
     "lint:tsc": "tsc --noEmit",
+    "start": "node --import tsx src/index.ts",
     "test": "pnpm lint:tsc && pnpm test:unit",
+    "test:integration": "tsx --test --test-concurrency=1 tests/integration/**/*.test.ts",
     "test:unit": "NODE_ENV=production node --import tsx --test 'src/**/*.test.ts'"
   },
   "dependencies": {

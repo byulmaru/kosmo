@@ -32,6 +32,7 @@ const remote = profile({
   displayName: '아주 긴 표시 이름을 가진 먼 우주의 사용자',
   handle: 'remote-user',
   id: 'profile-remote',
+  instance: { kind: 'ACTIVITYPUB' },
   relativeHandle: '@remote-user@very-long-instance.example',
 });
 const noBio = profile({ bio: null, id: 'profile-no-bio' });
@@ -140,6 +141,11 @@ function ProfileCatalog() {
 
 function FollowButtonStory() {
   const profile = requireProfile(useStoryProfiles(), 0);
+  return <FollowButton profile={requireFragment(profile.followButton, 'follow button')} />;
+}
+
+function RemoteFollowButtonStory() {
+  const profile = requireProfile(useStoryProfiles(), 3);
   return <FollowButton profile={requireFragment(profile.followButton, 'follow button')} />;
 }
 
@@ -307,6 +313,13 @@ export const FollowErrorInteraction: Story = {
     );
   },
   render: () => <FollowButtonStory />,
+};
+
+export const RemoteFollowIsHidden: Story = {
+  play: ({ canvasElement }) => {
+    expect(within(canvasElement).queryByRole('button', { name: '팔로우' })).not.toBeInTheDocument();
+  },
+  render: () => <RemoteFollowButtonStory />,
 };
 
 export const UnfollowRemovesCachedConnectionEdge: Story = {

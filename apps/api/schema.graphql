@@ -60,6 +60,11 @@ type FollowProfilePayload {
   profileFollow: ProfileFollow!
 }
 
+enum InstanceKind {
+  ACTIVITYPUB
+  LOCAL
+}
+
 type Mutation {
   createPost(input: CreatePostInput!): CreatePostPayload!
   createProfile(input: CreateProfileInput!): CreateProfilePayload!
@@ -130,6 +135,7 @@ type Profile implements Node {
   followingCount: Int!
   handle: String!
   id: ID!
+  instance: ProfileInstance!
   posts(after: String, before: String, first: Int, last: Int): PostConnection!
   relativeHandle: String!
   viewerFollow: ProfileFollow
@@ -166,6 +172,10 @@ type ProfileFollowingConnection {
 type ProfileFollowingConnectionEdge {
   cursor: String!
   node: ProfileFollow!
+}
+
+type ProfileInstance {
+  kind: InstanceKind!
 }
 
 enum ProfileState {

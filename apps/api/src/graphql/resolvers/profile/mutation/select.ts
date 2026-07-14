@@ -3,15 +3,16 @@ import {
   db,
   firstOrThrow,
   firstOrThrowWith,
+  Instances,
   Profiles,
   Sessions,
 } from '@kosmo/core/db';
-import { ProfileState } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
 import { and, eq, getColumns } from 'drizzle-orm';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
 import { Session } from '@/graphql/resolvers/session/ref';
+import { visibleProfileWhere } from '@/profile/visibility';
 import { Profile } from '../ref';
 
 builder.mutationField('selectProfile', (t) =>
@@ -29,12 +30,13 @@ builder.mutationField('selectProfile', (t) =>
       const profile = await db
         .select(getColumns(Profiles))
         .from(Profiles)
+        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
         .leftJoin(AccountProfiles, and(eq(AccountProfiles.profileId, Profiles.id)))
         .where(
           and(
             eq(Profiles.id, input.id),
-            eq(Profiles.state, ProfileState.ACTIVE),
             eq(AccountProfiles.accountId, ctx.session.accountId),
+            visibleProfileWhere({ profile: Profiles, instance: Instances }),
           ),
         )
         .limit(1)

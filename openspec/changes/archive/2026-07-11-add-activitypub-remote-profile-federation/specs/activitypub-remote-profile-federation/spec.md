@@ -61,6 +61,14 @@
 - **THEN** 시스템은 같은 actor URI에 연결된 기존 remote `Profile`을 같은 remote profile로 간주한다
 - **AND** 시스템은 새 `Profile`을 만들지 않고 기존 row를 갱신한다
 
+#### Scenario: Store actor under its canonical domain
+
+- **WHEN** Fedify lookup이 요청한 federated handle domain과 다른 normalized host를 가진 canonical actor URI를 반환한다
+- **THEN** 시스템은 canonical actor URI host의 ActivityPub instance에 remote `Profile`을 저장한다
+- **AND** 기존 actor가 요청 alias instance에 저장돼 있으면 canonical actor URI instance로 이동한다
+- **AND** 요청 domain만을 위한 별도 `Profile` alias를 만들지 않는다
+- **AND** DB-only remote handle 조회는 canonical actor domain에서 해당 profile을 찾는다
+
 #### Scenario: Reject local actor URI collision
 
 - **WHEN** remote actor materialization 결과의 actor URI가 configured local actor 또는 local profile actor metadata에 이미 저장되어 있다

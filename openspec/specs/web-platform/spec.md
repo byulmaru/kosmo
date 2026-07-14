@@ -38,9 +38,9 @@ Expo web 정적 애플리케이션을 제공하고 인증·GraphQL proxy·Activi
 
 #### Scenario: Serve an exported route
 
-- **WHEN** browser가 `/`, `/home`, `/search`, `/@{handle}` 또는 `/@{handle}/{postId}`를 직접 요청한다
+- **WHEN** browser가 `/`, `/home`, `/search`, `/${relativeHandle}` 또는 `/${relativeHandle}/{postId}`를 직접 요청한다
 - **THEN** web server는 Expo Web entry HTML과 fingerprinted local asset을 제공한다
-- **AND** Expo Router가 browser에서 canonical route를 복원한다
+- **AND** Expo Router가 local `@handle` 또는 stored ActivityPub remote `@handle@domain`의 canonical route를 복원한다
 
 #### Scenario: Preserve server endpoints
 

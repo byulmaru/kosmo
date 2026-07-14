@@ -8,6 +8,9 @@ Accepted
 
 2026-06-29
 
+Follow Request 상태와 Notification 처리 표시에 관한 결정은
+[ADR 0009](./0009-pending-only-follow-request-lifecycle.md)로 대체되었다. 나머지 결정은 유지한다.
+
 ## 결정
 
 - Media 접근 결과는 연결 Post 또는 Profile의 조회 정책을 따른다. Media의 Instance는 Media Profile 관계에서

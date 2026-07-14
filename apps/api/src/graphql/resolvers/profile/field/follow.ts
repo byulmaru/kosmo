@@ -1,4 +1,4 @@
-import { db, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { db, Instances, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -11,6 +11,8 @@ type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
 
 const FollowerProfiles = alias(Profiles, 'profile_follow_connection_follower_profile');
 const FolloweeProfiles = alias(Profiles, 'profile_follow_connection_followee_profile');
+const FollowerInstances = alias(Instances, 'profile_follow_connection_follower_instance');
+const FolloweeInstances = alias(Instances, 'profile_follow_connection_followee_instance');
 const ProfileViewerState = builder.simpleObject('ProfileViewerState', {
   fields: (field) => ({
     isSelf: field.boolean(),
@@ -46,6 +48,8 @@ builder.objectFields(Profile, (t) => ({
             .from(ProfileFollows)
             .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
             .innerJoin(FolloweeProfiles, eq(FolloweeProfiles.id, ProfileFollows.followeeProfileId))
+            .innerJoin(FollowerInstances, eq(FollowerInstances.id, FollowerProfiles.instanceId))
+            .innerJoin(FolloweeInstances, eq(FolloweeInstances.id, FolloweeProfiles.instanceId))
             .where(
               and(
                 eq(ProfileFollows.followeeProfileId, profile.id),
@@ -53,7 +57,9 @@ builder.objectFields(Profile, (t) => ({
                 after ? lt(ProfileFollows.id, after) : undefined,
                 profileFollowAccessWhere({
                   ctx,
+                  followerInstance: FollowerInstances,
                   followerProfile: FollowerProfiles,
+                  followeeInstance: FolloweeInstances,
                   followeeProfile: FolloweeProfiles,
                 }),
               ),
@@ -78,6 +84,8 @@ builder.objectFields(Profile, (t) => ({
             .from(ProfileFollows)
             .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
             .innerJoin(FolloweeProfiles, eq(FolloweeProfiles.id, ProfileFollows.followeeProfileId))
+            .innerJoin(FollowerInstances, eq(FollowerInstances.id, FollowerProfiles.instanceId))
+            .innerJoin(FolloweeInstances, eq(FolloweeInstances.id, FolloweeProfiles.instanceId))
             .where(
               and(
                 eq(ProfileFollows.followerProfileId, profile.id),
@@ -85,7 +93,9 @@ builder.objectFields(Profile, (t) => ({
                 after ? lt(ProfileFollows.id, after) : undefined,
                 profileFollowAccessWhere({
                   ctx,
+                  followerInstance: FollowerInstances,
                   followerProfile: FollowerProfiles,
+                  followeeInstance: FolloweeInstances,
                   followeeProfile: FolloweeProfiles,
                 }),
               ),

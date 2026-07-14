@@ -3,7 +3,7 @@ import { after, test } from 'node:test';
 import { eq, inArray, or } from 'drizzle-orm';
 import { db, firstOrThrow, Instances, pg, ProfileFollows, Profiles } from '../db';
 import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
-import { ConflictError } from '../error';
+import { ConflictError, NotFoundError } from '../error';
 import { disableProfile } from './profile';
 import { followProfile, unfollowProfile } from './profile-follow';
 
@@ -86,6 +86,20 @@ test('follow action의 도메인 오류는 GraphQL field 이름을 포함하지 
   await assert.rejects(
     followProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
     (error: unknown) => error instanceof ConflictError && error.field === undefined,
+  );
+});
+
+test('follow action은 SUSPENDED instance의 profile을 숨긴다', async () => {
+  const follower = await createProfile();
+  const followee = await createProfile();
+  await db
+    .update(Instances)
+    .set({ state: InstanceState.SUSPENDED })
+    .where(eq(Instances.id, followee.instanceId));
+
+  await assert.rejects(
+    followProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
+    NotFoundError,
   );
 });
 

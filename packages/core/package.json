@@ -11,6 +11,7 @@
     "./enums": "./enums.ts",
     "./local-instance": "./local-instance.ts",
     "./polyfill": "./polyfill.ts",
+    "./profile": "./profile.ts",
     "./services": "./services/index.ts",
     "./search": "./search.ts",
     "./utils": "./utils.ts",

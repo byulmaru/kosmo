@@ -11,9 +11,10 @@ kosmo는 local actor discovery 경계를 만들고 있지만, 원격 ActivityPub
 - remote actor는 materialization 전에 normalized domain의 ActivityPub instance를 보장하고, actor `preferredUsername`이 기존 `Profile.handle` 스키마를 만족할 때만 `Profile.handle`/`normalizedHandle`로 저장한다.
 - remote actor는 actor `summary`를 `Profile.bio`, actor `published`를 `Profile.createdAt`에 반영하되, `published`가 없는 actor의 `createdAt` fallback은 최초 저장 시에만 적용한다.
 - remote actor refresh는 저장된 `lastFetchedAt`이 7일을 넘으면 기존 active profile 참조를 막지 않고 federation 내부 materialization 경로에서 비동기적으로 예약/수행하며, 실패한 resolve에 대한 negative cache는 두지 않는다.
-- remote `Profile`은 GraphQL Node와 handle 조회에서 local profile과 같은 `Profile` 타입으로 노출하되, `Profile.origin` enum으로 local/remote 성격을 구분한다.
+- remote `Profile`은 GraphQL Node와 handle 조회에서 local profile과 같은 `Profile` 타입으로 노출하되, 소속 instance의 `kind`를 `Profile.instance.kind`로 구분한다.
+- active profile 선택과 session restore는 account ownership 및 active/non-`SUSPENDED` visibility를 기준으로 instance kind와 무관하게 처리한다. 신규 remote follow 생성은 후속 change 전까지 차단하지만, 이미 저장된 visible 관계의 조회와 unfollow는 instance kind로 차단하지 않는다.
 - web은 저장된 remote profile의 링크를 bare local handle이 아니라 `relativeHandle` 기반 federated handle URL로 만들고, remote follow가 도입되기 전까지 remote profile의 follow action을 숨기거나 비활성화한다.
-- remote follow, inbox activity 처리, outbox/Note ingestion, `Profile.posts` 확장은 별도 change로 분리한다.
+- ActivityPub remote follow/Undo delivery, inbox activity 처리, outbox/Note fetch·ingestion과 Post materialization은 별도 change로 분리한다. 다만 kosmo DB에 이미 저장된 remote profile의 Post 조회는 일반 게시글 공개 범위를 그대로 따른다.
 
 ## Capabilities
 
@@ -24,12 +25,12 @@ kosmo는 local actor discovery 경계를 만들고 있지만, 원격 ActivityPub
 ### Modified Capabilities
 
 - `data-model`: remote actor refresh metadata와 remote profile materialization 저장 요구사항을 추가한다.
-- `profile`: `Profile.origin` enum, DB-only federated handle 조회, active remote profile object visibility를 반영한다.
+- `profile`: `Profile.instance.kind`, DB-only federated handle 조회, active remote profile object visibility, ownership/visibility 기반 선택·기존 follow 관계 접근을 반영한다.
 
 ## Impact
 
 - `packages/fedify`: Fedify API를 사용한 remote actor lookup과 typed actor projection adapter를 소유한다.
 - `packages/core/db`: ActivityPub actor refresh metadata와 actor URI/profile unique 경계를 저장할 테이블/컬럼/index가 필요하다.
-- `apps/api`: `Profile.origin`, DB-only `profileByHandle`, remote profile Node visibility, schema regeneration, GraphQL 테스트가 필요하다.
-- `apps/web`: 저장된 remote profile 표시와 profile 링크에는 `Profile.origin`과 `relativeHandle`을 사용하고, remote follow가 아직 없는 상태에서 local follow action을 노출하지 않는다.
-- 후속 changes: remote follow와 remote post ingestion은 이 foundation change에 의존한다.
+- `apps/api`: `Profile.instance.kind`, DB-only `profileByHandle`, remote profile Node visibility, ownership/visibility 기반 선택·session restore·기존 follow 관계 접근, schema regeneration, GraphQL 테스트가 필요하다.
+- `apps/web`: 저장된 remote profile 표시에는 `Profile.instance.kind`를, profile 링크에는 `relativeHandle`을 사용하고, remote follow가 아직 없는 상태에서 local follow action을 노출하지 않는다.
+- 후속 changes: remote follow와 remote post fetch/ingestion은 이 foundation change에 의존한다. 저장된 Post의 DB-only 조회는 이 후속 범위에 포함되지 않는다.

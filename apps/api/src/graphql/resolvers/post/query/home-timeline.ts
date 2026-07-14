@@ -1,4 +1,4 @@
-import { db, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { db, Instances, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, exists, getColumns, gt, lt, or } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
@@ -36,6 +36,7 @@ builder.queryField('homeTimeline', (t) =>
               .select(getColumns(Posts))
               .from(Posts)
               .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+              .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
               .where(
                 and(
                   or(eq(Posts.profileId, ctx.session.profileId), followeeWhere),

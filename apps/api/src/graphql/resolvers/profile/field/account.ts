@@ -1,8 +1,8 @@
-import { AccountProfiles, db, Profiles } from '@kosmo/core/db';
-import { ProfileState } from '@kosmo/core/enums';
+import { AccountProfiles, db, Instances, Profiles } from '@kosmo/core/db';
 import { and, asc, eq, getColumns } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Account } from '@/graphql/resolvers/account';
+import { visibleProfileWhere } from '@/profile/visibility';
 import { Profile } from '../ref';
 
 builder.objectField(Account, 'profiles', (t) =>
@@ -19,7 +19,8 @@ builder.objectField(Account, 'profiles', (t) =>
             eq(AccountProfiles.accountId, account.id),
           ),
         )
-        .where(eq(Profiles.state, ProfileState.ACTIVE))
+        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+        .where(visibleProfileWhere({ profile: Profiles, instance: Instances }))
         .orderBy(asc(Profiles.createdAt));
     },
   }),

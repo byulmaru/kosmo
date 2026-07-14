@@ -1,5 +1,7 @@
+import { isConfiguredLocalProfile } from '@kosmo/core/profile';
+
 type ProfileInstanceRef = {
-  instanceId: string | null;
+  instanceId: string;
 };
 
 type ProfileHandleRef = ProfileInstanceRef & {
@@ -15,11 +17,6 @@ type RelativeHandleOptions = {
   configuredLocalInstance: InstanceRef;
   profileInstance?: InstanceRef | null;
 };
-
-export const isConfiguredLocalProfile = (
-  profile: ProfileInstanceRef,
-  configuredLocalInstance: Pick<InstanceRef, 'id'>,
-) => profile.instanceId === null || profile.instanceId === configuredLocalInstance.id;
 
 export const formatRelativeHandle = (
   profile: ProfileHandleRef,
