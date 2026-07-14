@@ -9,7 +9,7 @@
 - Decision Date: 2026-07-14
 - Status: Accepted
 - Context / Problem: 저장, API, source action, 목록, badge와 E2E가 같은 사용자 결과를 만들지만 각각 별도 PR로 전달된다.
-- Decision Outcome: `notification` 하나의 새 capability와 `data-model` delta를 사용한다. 구현은 `PROD-325`, `274`, `275`, `276`, `277`, `324`, `278` heading으로 나누되 모든 slice가 이 change를 공유한다.
+- Decision Outcome: `notification` 하나의 새 capability와 `data-model`, `api-platform` delta를 사용한다. 구현은 `PROD-325`, `274`, `275`, `276`, `277`, `324`, `278` heading으로 나누되 모든 slice가 이 change를 공유한다.
 - Alternatives Considered: DB/API/UI별 OpenSpec 분리, `PROD-271` Project 전체를 하나의 장기 change로 유지, 기존 `profile` capability에 모든 요구사항 추가.
 - Consequences: 각 구현 PR은 자기 Linear 이슈와 검증만 소유하고, 전체 task·canonical 문서 sync와 archive는 마지막 `PROD-278`이 수행한다.
 - Confirmation / Follow-up: `tasks.md` 최상위 heading과 Linear 구현 이슈를 1:1로 유지하고 archive gate에서 전체 PR merge를 확인한다.
@@ -39,10 +39,10 @@
 - Decision Date: 2026-07-14
 - Status: Accepted
 - Context / Problem: 공통 `type` enum과 nullable kind별 field를 한 object에 모으면 새 kind가 추가될 때 공통 object가 넓어지고, 클라이언트도 실제 제공 field와 무관한 enum 분기를 해야 한다.
-- Decision Outcome: `Notification implements Node` interface는 `id`, `createdAt`, nullable `readAt`만 제공한다. `FollowNotification implements Notification & Node`는 non-null `relatedProfile`을 제공한다. 저장 row의 `kind`가 concrete GraphQL type을 결정하며 public `NotificationType` enum과 공통 `type` field는 노출하지 않는다.
+- Decision Outcome: `Notification implements Node` interface는 `id`, `createdAt`, nullable `readAt`만 제공한다. `FollowNotification implements Notification & Node`는 non-null `relatedProfile`을 제공한다. 저장 row의 `kind`가 concrete GraphQL type을 결정하며 public `NotificationType` enum과 공통 `type` field는 노출하지 않는다. `Notifications` discriminator는 concrete typename 하나가 아니라 kind-aware Node resolution route에 등록하고, 이 route가 row를 load한 뒤 concrete type을 결정한다.
 - Alternatives Considered: `Notification` 단일 object와 `NotificationType` enum, nullable kind별 field를 가진 wide object, kind마다 서로 무관한 connection.
-- Consequences: `Profile.notifications`는 `NotificationConnection`을 반환하고 클라이언트는 `... on FollowNotification` inline fragment로 kind별 field를 선택한다. unavailable Follow item은 숨기므로 generic object나 nullable Related Profile fallback이 없다.
-- Confirmation / Follow-up: 후속 kind는 자신의 concrete object와 kind resolution을 추가하며 공통 interface에는 모든 kind가 공유하는 field만 추가한다.
+- Consequences: `Profile.notifications`는 `NotificationConnection`을 반환하고 클라이언트는 `... on FollowNotification` inline fragment로 kind별 field를 선택한다. unavailable Follow item은 숨기므로 generic object나 nullable Related Profile fallback이 없다. 현재 discriminator→단일 object typename인 공용 Node registry/decode-resolution 경계는 shared-discriminator route를 지원하도록 확장해야 한다. 같은 discriminator를 concrete type마다 중복 등록하거나 loadable ref가 없는 interface typename으로 직접 route하지 않는다.
+- Confirmation / Follow-up: `PROD-275`가 connection과 `node(id:)` 모두에서 FOLLOW row를 `FollowNotification`으로 resolve하고 hidden·unsupported row를 노출하지 않는지 검증한다. 후속 kind는 자신의 concrete object와 route mapping을 추가하며 공통 interface에는 모든 kind가 공유하는 field만 추가한다.
 
 ### source identity와 상관관계는 ProfileFollow row가 소유한다
 

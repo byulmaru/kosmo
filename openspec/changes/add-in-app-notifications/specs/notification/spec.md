@@ -130,9 +130,17 @@ API는 로그인 Account가 Account-Profile membership을 가진 Profile의 Noti
 - **THEN** `Notification implements Node` interface는 `id`, `createdAt`, nullable `readAt`을 제공한다
 - **AND** `FollowNotification implements Notification & Node` concrete object는 non-null `relatedProfile`을 제공한다
 - **AND** `notification.kind = FOLLOW`인 row는 `FollowNotification`으로 resolve된다
+- **AND** `Notifications` discriminator는 kind-aware Node resolution route에 등록되며 concrete object typename 하나나 loadable ref가 없는 interface typename에 직접 매핑되지 않는다
 - **AND** `Profile.notifications`는 `NotificationConnection`을, `Profile.unreadNotificationCount`는 음수가 아닌 정수를 반환한다
 - **AND** API는 public `NotificationType` enum, 공통 `type` field, raw `kind`, `source_id`, `data`나 과거 이름·handle snapshot을 노출하지 않는다
 - **AND** 클라이언트는 `... on FollowNotification` inline fragment로 Follow 전용 field를 선택한다
+
+#### Scenario: Shared discriminator Notification Node 조회
+
+- **WHEN** 클라이언트가 visible FOLLOW Notification ID를 `node(id:)`에 제공한다
+- **THEN** API는 `Notifications` discriminator의 kind-aware route로 row를 batch load한다
+- **AND** membership과 visible predicate를 적용한 뒤 `kind = FOLLOW` row를 `FollowNotification` concrete object로 반환한다
+- **AND** 지원하지 않는 kind, membership이 없는 Recipient 또는 hidden row는 다른 concrete type이나 generic Notification으로 잘못 route하지 않고 `null`을 반환한다
 
 #### Scenario: membership이 있는 Profile inbox 조회
 
