@@ -42,12 +42,12 @@ cd apps/terraform
 
 Add the following non-secret environment variables to both `native-test-distribution` and `ios-device-onboarding`:
 
-| Variable                            | Value                                                   |
-| ----------------------------------- | ------------------------------------------------------- |
-| `APPLE_DEVELOPER_TEAM_ID`           | Apple Developer Team ID for `moe.kos`                   |
-| `EXPO_PUBLIC_API_ORIGIN`            | HTTPS origin of the native test API deployment          |
-| `EXPO_PUBLIC_OIDC_ISSUER`           | OIDC issuer used by that test deployment                |
-| `EXPO_PUBLIC_OIDC_NATIVE_CLIENT_ID` | Public OIDC client that allows `kosmo://login/callback` |
+| Variable                     | Value                                              |
+| ---------------------------- | -------------------------------------------------- |
+| `APPLE_DEVELOPER_TEAM_ID`    | Apple Developer Team ID for `moe.kos`              |
+| `EXPO_PUBLIC_WEB_ORIGIN`     | HTTPS origin of the native test web/BFF deployment |
+| `EXPO_PUBLIC_OIDC_ISSUER`    | OIDC issuer used by that test deployment           |
+| `EXPO_PUBLIC_OIDC_CLIENT_ID` | OIDC client that allows `kosmo://login/callback`   |
 
 Create two different SSH deploy keys for `byulmaru/kosmo-ios-signing`. Add the public read-only key to the repository and place its private key in `native-test-distribution` as `MATCH_READONLY_PRIVATE_KEY`. Add the public write key with write access to the repository and place its private key only in `ios-device-onboarding` as `MATCH_WRITE_PRIVATE_KEY`.
 
