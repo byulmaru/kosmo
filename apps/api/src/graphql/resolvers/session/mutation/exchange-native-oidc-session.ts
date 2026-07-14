@@ -1,6 +1,5 @@
-import { createOidcSession } from '@kosmo/core/auth';
-import { db } from '@kosmo/core/db';
 import { ValidationError } from '@kosmo/core/error';
+import { createOidcSession } from '@kosmo/core/services';
 import {
   allowInsecureRequests,
   authorizationCodeGrant,
@@ -133,7 +132,6 @@ builder.mutationField('exchangeNativeOidcSession', (t) =>
         const callbackUrl = new URL(NATIVE_REDIRECT_URI);
         callbackUrl.searchParams.set('code', input.code);
         const token = await createOidcSession(
-          db,
           await exchangeOidcCode({ callbackUrl, codeVerifier: input.codeVerifier }),
         );
 

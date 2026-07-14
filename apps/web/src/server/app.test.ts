@@ -15,15 +15,8 @@ import type {
 
 const { authorizationCodeGrant, createSession, discovery, federationFetch } = vi.hoisted(() => ({
   authorizationCodeGrant: vi.fn<typeof oidcAuthorizationCodeGrant>(),
-  createSession: vi.fn<
-    (
-      database: unknown,
-      identity: {
-        displayName: string;
-        oidcSubject: string;
-      },
-    ) => Promise<string>
-  >(),
+  createSession:
+    vi.fn<(identity: { displayName: string; oidcSubject: string }) => Promise<string>>(),
   discovery: vi.fn<typeof oidcDiscovery>(),
   federationFetch: vi.fn<typeof federation.fetch>(),
 }));
@@ -34,8 +27,7 @@ vi.mock('openid-client', async (importOriginal) => ({
   discovery,
 }));
 
-vi.mock('./auth', async (importOriginal) => ({
-  ...((await importOriginal()) as object),
+vi.mock('@kosmo/core/services', () => ({
   createOidcSession: createSession,
 }));
 
@@ -199,7 +191,7 @@ describe('browser login', () => {
       idTokenExpected: true,
       pkceCodeVerifier: verifier,
     });
-    expect(createSession).toHaveBeenCalledWith(expect.anything(), {
+    expect(createSession).toHaveBeenCalledWith({
       displayName: 'Kosmo User',
       oidcSubject: 'oidc-subject',
     });

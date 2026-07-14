@@ -1,8 +1,6 @@
 import { and, desc, eq } from 'drizzle-orm';
-import { AccountProfiles, Accounts, Profiles, Sessions } from './db/tables';
-import { first, firstOrThrow } from './db/utils';
-import { AccountState, ProfileState, SessionState } from './enums';
-import type { Database } from './db';
+import { AccountProfiles, Accounts, db, first, firstOrThrow, Profiles, Sessions } from '../db';
+import { AccountState, ProfileState, SessionState } from '../enums';
 
 type VerifiedOidcIdentity = {
   displayName: string;
@@ -13,11 +11,8 @@ type VerifiedOidcIdentity = {
  * Creates a Kosmo session for an OIDC identity that has already been verified
  * by the caller. Upstream OIDC tokens must not be persisted with the session.
  */
-export const createOidcSession = async (
-  database: Database,
-  { displayName, oidcSubject }: VerifiedOidcIdentity,
-) => {
-  return database.transaction(async (tx) => {
+export const createOidcSession = async ({ displayName, oidcSubject }: VerifiedOidcIdentity) => {
+  return db.transaction(async (tx) => {
     const account = await tx
       .insert(Accounts)
       .values({

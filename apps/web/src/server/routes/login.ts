@@ -1,5 +1,5 @@
 import { sessionName } from '@kosmo/core';
-import { db } from '@kosmo/core/db';
+import { createOidcSession } from '@kosmo/core/services';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
@@ -10,7 +10,6 @@ import {
   randomState,
 } from 'openid-client';
 import {
-  createOidcSession,
   exchangeOidcCode,
   getOidcConfiguration,
   LOGIN_CODE_VERIFIER_COOKIE,
@@ -82,7 +81,6 @@ loginRoutes.get('/login/callback', async (c) => {
   const callbackUrl = new URL('/login/callback', publicOrigin);
   callbackUrl.search = requestUrl.search;
   const sessionToken = await createOidcSession(
-    db,
     await exchangeOidcCode({ callbackUrl, codeVerifier, expectedState: state }),
   );
 
@@ -129,10 +127,7 @@ loginRoutes.post(
 
     const callbackUrl = new URL(NATIVE_REDIRECT_URI);
     callbackUrl.searchParams.set('code', code);
-    const token = await createOidcSession(
-      db,
-      await exchangeOidcCode({ callbackUrl, codeVerifier }),
-    );
+    const token = await createOidcSession(await exchangeOidcCode({ callbackUrl, codeVerifier }));
 
     return c.json({ token }, 200, { 'Cache-Control': 'no-store', Pragma: 'no-cache' });
   },

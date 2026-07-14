@@ -4,6 +4,16 @@
 
 ## Decision Records
 
+### 세션 생성 use case는 core services가 소유한다
+
+- Decision Date: 2026-07-14
+- Status: Accepted
+- Context / Problem: session 생성 transaction은 API와 BFF가 공유하는 server business logic이며 OIDC discovery, code exchange 또는 인증 정책 자체를 소유하지 않는다. `core/auth`에 두면 파일명이 실제 책임보다 넓고, PR #231이 도입하는 shared business-logic 경계와도 어긋난다.
+- Decision Outcome: `@kosmo/core/services`의 `createOidcSession`이 verified `{ displayName, oidcSubject }`를 받아 core `db`로 account/session transaction을 수행한다. API와 BFF는 OIDC identity 검증 뒤 service를 직접 호출한다.
+- Alternatives Considered: `@kosmo/core/auth`는 인증 프로토콜을 소유하지 않아 제외했다. `@kosmo/core/db`는 application use case를 infrastructure namespace에 두므로 제외했다. 호출자가 `db`를 주입하는 방식은 현재 production database implementation이 하나뿐이고 PR #231의 service pattern과 달라 제외했다.
+- Consequences: core services가 공유 server business logic의 일관된 진입점이 된다. API/BFF의 간접 재수출과 `db` 인자가 사라지며, 향후 PR #231과 합쳐질 때 services index export만 병합하면 된다.
+- Confirmation / Follow-up: API/web typecheck와 OIDC E2E로 두 호출 경로가 같은 service를 사용하고 upstream token을 저장하지 않음을 확인한다.
+
 ### 프로덕션 GraphQL 입력 오류는 endpoint 경계에서 공통 마스킹한다
 
 - Decision Date: 2026-07-14
@@ -47,7 +57,7 @@
 ### 검증된 identity의 session writer는 core auth에 공유하고 upstream token은 저장하지 않는다
 
 - Decision Date: 2026-07-13
-- Status: Accepted
+- Status: Superseded
 - Context / Problem: web과 API는 동일한 account upsert/session transaction이 필요하지만 OIDC transport/client configuration은 서로 다르다. 현재 writer가 미사용 upstream access token을 session row에 저장한다.
 - Decision Outcome: `@kosmo/core/auth`에는 verified `{ displayName, oidcSubject }`로 session을 만드는 writer만 둔다. `@kosmo/core/db`는 DB infrastructure만 제공한다. BFF/API는 각자의 OIDC code exchange를 유지하고, shared writer는 `oidcSessionKey`를 쓰지 않는다.
 - Alternatives Considered: `openid-client` 전체를 core로 옮기는 안은 Expo가 소비하는 package에 server transport dependency를 섞으므로 제외했다. API/BFF에 transaction을 복제하는 안은 security behavior drift를 만들므로 제외했다.
@@ -71,4 +81,4 @@
 
 ## Superseded Decisions
 
-- 없음.
+- 2026-07-13 `검증된 identity의 session writer는 core auth에 공유하고 upstream token은 저장하지 않는다`의 배치 결정은 2026-07-14 `세션 생성 use case는 core services가 소유한다`가 대체한다. upstream token 비보관 결정은 유지한다.

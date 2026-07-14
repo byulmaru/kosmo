@@ -1,6 +1,6 @@
 ## 1. PROD-318 API public-client session exchange
 
-- [x] 1.1 `openid-client`를 API dependency로 추가하고, verified OIDC identity만으로 account/session을 만드는 shared auth writer를 도입해 BFF도 upstream token을 새 session에 저장하지 않게 한다.
+- [x] 1.1 `openid-client`를 API dependency로 추가하고, verified OIDC identity만으로 account/session을 만드는 shared session service를 도입해 BFF도 upstream token을 새 session에 저장하지 않게 한다.
 - [x] 1.2 API GraphQL의 unauthenticated `exchangeNativeOidcSession` mutation에 public-client discovery, PKCE code exchange, exact redirect/input 제한, no-store 응답과 redacted GraphQL failure 처리를 구현한다.
 - [x] 1.3 API runtime에 `PUBLIC_OIDC_NATIVE_CLIENT_ID`를 연결하고 confidential web client/secret과 분리된 configuration을 검증한다.
 
@@ -17,7 +17,7 @@
 - [x] 3.3 API/unit, app Relay/typecheck/web export, web BFF regression을 실행하고 결과를 기록한다.
 - [x] 3.4 PROD-318에서 production GraphQL validation과 variable coercion failure를 endpoint 공통 generic error로 마스킹하고 대표 credential value transport 회귀 테스트를 추가한다.
 - [x] 3.5 `session-auth` delta requirement identifier를 active spec과 일치시켜 archive 시 계약 교체가 누락되지 않게 한다.
-- [x] 3.6 shared session writer를 `@kosmo/core/auth`로 배치하고, `@kosmo/core/db`에는 DB infrastructure만 남도록 API·BFF import를 갱신한다.
+- [x] 3.6 shared session use case를 `@kosmo/core/services`로 배치하고, `@kosmo/core/db`에는 DB infrastructure만 남도록 API·BFF import를 갱신한다.
 
 ## 4. PROD-338 공개 출시 gate
 
