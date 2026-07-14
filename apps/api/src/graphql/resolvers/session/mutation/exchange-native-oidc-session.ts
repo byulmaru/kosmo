@@ -87,17 +87,28 @@ const exchangeOidcCode = async ({
     if (cause instanceof NativeSessionExchangeError) {
       throw cause;
     }
+    if (cause instanceof ResponseBodyError) {
+      if (cause.status >= 500) {
+        throw cause;
+      }
+
+      throw new NativeSessionExchangeError({ cause });
+    }
     if (
-      cause instanceof ResponseBodyError ||
       cause instanceof WWWAuthenticateChallengeError ||
       cause instanceof AuthorizationResponseError
     ) {
       throw new NativeSessionExchangeError({ cause });
     }
-    if (
-      cause instanceof ClientError &&
-      !(cause.cause instanceof Response && cause.cause.status >= 500)
-    ) {
+    if (cause instanceof ClientError) {
+      const status =
+        cause.cause && typeof cause.cause === 'object' && 'status' in cause.cause
+          ? cause.cause.status
+          : undefined;
+      if (typeof status === 'number' && status >= 500) {
+        throw cause;
+      }
+
       throw new NativeSessionExchangeError({ cause });
     }
 

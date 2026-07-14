@@ -34,7 +34,10 @@ type NativeSessionGraphQLResponse = {
       token?: unknown;
     } | null;
   } | null;
-  errors?: unknown[];
+  errors?: {
+    extensions?: { code?: unknown };
+    message?: unknown;
+  }[];
 };
 
 async function exchangeNativeOidcSession(
@@ -213,6 +216,23 @@ test('API는 서명이 잘못된 public native ID token을 Kosmo 세션으로 �
   expectNativeSessionGraphQLError(body);
   expect(JSON.stringify(body)).not.toContain(code);
   expect(JSON.stringify(body)).not.toContain(codeVerifier);
+});
+
+test('API는 OIDC token endpoint의 5xx를 내부 오류로 분류한다', async ({ request }) => {
+  const codeVerifier = 'v'.repeat(43);
+  const callbackUrl = await authorizeNativeCode(request, codeVerifier, {
+    loginHint: 'token-server-error',
+  });
+  const response = await exchangeNativeOidcSession(request, {
+    code: callbackUrl.searchParams.get('code'),
+    codeVerifier,
+    redirectUri: 'kosmo://login/callback',
+  });
+  const body = (await response.json()) as NativeSessionGraphQLResponse;
+
+  expect(response.status()).toBe(200);
+  expectNativeSessionGraphQLError(body);
+  expect(body.errors?.[0]?.extensions?.code).toBe('INTERNAL_SERVER_ERROR');
 });
 
 test('API는 잘못된 PKCE verifier를 OIDC token endpoint에 보내지 않는다', async ({ request }) => {

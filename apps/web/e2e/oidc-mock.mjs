@@ -104,7 +104,9 @@ const server = createServer(async (request, response) => {
     const redirectUri = url.searchParams.get('redirect_uri');
     const codeChallenge = url.searchParams.get('code_challenge');
     const codeChallengeMethod = url.searchParams.get('code_challenge_method');
-    const invalidSignature = url.searchParams.get('login_hint') === 'invalid-signature';
+    const loginHint = url.searchParams.get('login_hint');
+    const invalidSignature = loginHint === 'invalid-signature';
+    const tokenServerError = loginHint === 'token-server-error';
     const state = url.searchParams.get('state');
     const client = clients.get(requestClientId);
 
@@ -130,6 +132,7 @@ const server = createServer(async (request, response) => {
       name: 'E2E User',
       redirectUri,
       sub: 'oidc-mock-e2e-user',
+      tokenServerError,
     });
 
     const callbackUrl = new URL(redirectUri);
@@ -168,6 +171,11 @@ const server = createServer(async (request, response) => {
       createCodeChallenge(body.get('code_verifier') ?? '') !== codeData.codeChallenge
     ) {
       sendJson(response, 400, { error: 'invalid_grant' });
+      return;
+    }
+
+    if (codeData.tokenServerError) {
+      sendJson(response, 503, { error: 'server_error' });
       return;
     }
 
