@@ -84,15 +84,15 @@
 - Consequences: Profile field의 인증/membership 실패는 `PERMISSION_DENIED`다. Node는 없는 ID·membership 부재·hidden item을 `null`로, Read는 membership 부재·hidden item·없는 ID를 `NOT_FOUND`로 정규화한다. UI/cache는 계속 selected Profile별로 격리한다.
 - Confirmation / Follow-up: `PROD-275`가 role-independent membership, 비선택 Profile 접근, selected Profile 부재와 error matrix를 검증한다.
 
-### UUID ID가 chronology와 cursor tie-breaker를 함께 소유한다
+### UUID ID 단독 cursor에서 같은 millisecond의 임의 순서를 허용한다
 
 - Decision Date: 2026-07-14
 - Status: Accepted
-- Context / Problem: newest-first connection에 `(createdAt, id)`를 사용하면 시간 정렬 UUID가 이미 제공하는 순서를 중복 저장·색인하고 cursor가 복잡해진다.
-- Decision Outcome: Notification connection은 `NotificationItem.id DESC` 단일 keyset과 opaque ID cursor를 사용한다. `createdAt`은 표시 값이다.
-- Alternatives Considered: `(createdAt DESC, id DESC)` cursor, offset pagination, createdAt 단일 cursor.
-- Consequences: 다음 page는 `id < cursor` 경계로 조회하며 새 item은 refresh 후 첫 page에서 나타난다. 목록 index는 `(recipient_profile_id, id DESC)`다.
-- Confirmation / Follow-up: `PROD-275`가 concurrent insert가 있는 page 경계와 중복/누락을 API test로 검증한다.
+- Context / Problem: 현재 `createId`의 UUID v8은 millisecond timestamp 뒤에 random tail을 사용하므로 같은 millisecond에 생성된 ID의 대소가 생성 순서와 일치하지 않는다. ID 단독 cursor는 첫 page 뒤 같은 millisecond에 추가된 item을 오래된 page에 섞을 수 있다.
+- Decision Outcome: Notification connection은 `NotificationItem.id DESC` 단일 keyset과 opaque ID cursor를 유지한다. 같은 millisecond 안의 생성 순서와 새 item의 page 배치는 보장하지 않는다.
+- Alternatives Considered: `(createdAt DESC, id DESC)` composite cursor, Notification 전용 monotonic ordering key, 공용 `createId` 변경, offset pagination.
+- Consequences: 다음 page는 `id < cursor` 경계로 조회하고 목록 index는 `(recipient_profile_id, id DESC)`다. 같은 millisecond에 뒤늦게 생성된 item은 ID random tail에 따라 기존 cursor의 다음 page에 나타날 수 있으며, 이 정도의 순서 차이는 현재 Notification 제품 요구에서 허용한다.
+- Confirmation / Follow-up: `PROD-275`가 고정된 item 집합의 ID keyset page 경계와 visible item 중복/누락 방지를 검증하되 같은 millisecond의 생성 chronology나 concurrent insert snapshot은 요구하지 않는다.
 
 ### unavailable item은 API 전체에서 숨긴다
 

@@ -51,6 +51,8 @@ Recommended direction:
 - Do not store string prefixes in DB primary keys.
 - Prefer PostgreSQL native `uuid` over text IDs for joins, index size, cache locality, and throughput.
 - kosmo's custom UUID v8 provides time-ordering and distributed generation, making it a strong default for a social product.
+- The current `createId` layout stores a millisecond timestamp followed by a random tail. IDs are time-grouped but are
+  not monotonic within the same millisecond.
 - Generate kosmo UUID v8 in the web server/application before insert.
 - Keep GraphQL Relay global IDs opaque.
 - For GraphQL Relay Node type discrimination, reserve part of the custom UUID v8 implementation-defined area for a table type code.
@@ -66,6 +68,10 @@ Kosmo UUID v8 type-code policy:
 - Generate IDs only through a shared `generateId(tableType)` utility.
 - Decode IDs only through a shared `decodeIdType(id)` utility.
 - Store IDs as PostgreSQL `uuid`, not as string prefixes.
+- An ID-only keyset is valid when arbitrary ordering and page placement within the same millisecond are acceptable.
+  When persisted timestamp ordering matters, use an immutable timestamp plus an ID tie-breaker. When insertion order
+  must also be monotonic for identical timestamps, use a database ordering key or change the generator in a separately
+  reviewed platform change.
 
 Current type-code registry examples. The source of truth is `TableDiscriminator` in `packages/core/db/id.ts`.
 

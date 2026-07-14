@@ -18,7 +18,7 @@
 - [ ] 3.2 `Profile.notifications`와 `Profile.unreadNotificationCount`에 role-independent Account-Profile membership 권한을 적용하고 selected Profile 부재·불일치와 API 권한을 분리한다.
 - [ ] 3.3 Recipient Profile API visibility, source 존재, source Followee와 저장 Recipient 일치, Recipient Profile 기준 Related Profile visibility를 SQL page limit 전에 적용한 `id DESC` opaque cursor connection과 동일 predicate의 visible Unread count를 구현한다.
 - [ ] 3.4 `markNotificationRead(input: { id })`가 membership·visible predicate와 최초 `readAt`을 보존하고 `notificationItem`·`recipientProfile` payload 및 field/Node/Read error matrix를 따르게 한다.
-- [ ] 3.5 API test로 현재 membership role 전체, 비선택 Profile, inactive Recipient, page 경계/concurrent insert, missing source·Recipient mismatch·hidden Related Profile의 list/count/Node/Read, 반복·동시 Read를 검증하고 generated schema/typecheck/lint를 통과시킨다.
+- [ ] 3.5 API test로 현재 membership role 전체, 비선택 Profile, inactive Recipient, ID keyset page 경계, missing source·Recipient mismatch·hidden Related Profile의 list/count/Node/Read, 반복·동시 Read를 검증하고 generated schema/typecheck/lint를 통과시킨다.
 
 ## 4. PROD-276 ProfileFollow 생성·삭제에서 Follow 알림을 동기화한다
 
@@ -46,7 +46,7 @@
 ## 7. PROD-278 Local Follow Web E2E와 OpenSpec archive를 완료한다
 
 - [ ] 7.1 모든 선행 slice가 merge되고 scoped validation을 통과했는지 확인한 뒤 Local Account/Profile A/B와 실제 Follow/Unfollow action을 사용하는 Web E2E fixture를 준비한다.
-- [ ] 7.2 Follow 뒤 Recipient selected Profile 목록에 visible unread item이 newest-first로 나타나고 badge가 증가하며 다른 selected Profile UI/cache에는 섞이지 않는지 검증한다.
+- [ ] 7.2 Follow 뒤 Recipient selected Profile 목록에 visible unread item이 나타나고 badge가 증가하며 다른 selected Profile UI/cache에는 섞이지 않는지 검증한다.
 - [ ] 7.3 item의 Read·Related Profile 이동·반복 Read와 정상 Unfollow 뒤 목록/count/Node/Read cleanup을 end-to-end로 검증한다.
 - [ ] 7.4 workspace required checks, canonical Notification 문서와 delta spec sync, 전체 32개 task 완료 및 `openspec validate add-in-app-notifications --strict`를 확인한다.
 - [ ] 7.5 proposal 전체 scope가 완료된 뒤 change를 archive하고 archive 후 strict validation을 통과시키되 `PROD-327`, `PROD-328`, delivery queue/retry, Push/realtime과 ActivityPub ingress를 archive gate로 끌어오지 않는다.

@@ -81,7 +81,7 @@ FOLLOW item은 다음 조건을 모두 만족할 때만 API에 존재한다.
 
 Connection query는 이 predicate를 SQL에서 적용한 뒤 `id DESC` keyset limit을 적용한다. page를 먼저 가져온 뒤 hidden row를 애플리케이션에서 버리지 않는다. Unread count, Node와 Read mutation도 같은 source/visibility predicate를 재사용한다. 이로써 hidden row가 short page, 잘못된 page info, badge drift나 Read side channel을 만들지 않는다.
 
-opaque cursor에는 마지막 Notification Item ID를 담고 다음 page는 `id < cursor`를 사용한다. `NotificationItem.relatedProfile`은 공통 schema에서 nullable이지만, 반환되는 FOLLOW item은 Related Profile이 실제로 조회 가능한 경우뿐이다. raw `source_id`와 `data`는 API에 노출하지 않는다.
+opaque cursor에는 마지막 Notification Item ID를 담고 다음 page는 `id < cursor`를 사용한다. 현재 `createId`의 UUID v8은 millisecond timestamp 뒤에 random tail을 사용하므로 같은 millisecond의 생성 순서와 새 item의 page 배치는 보장하지 않는다. 이 제한은 현재 제품 범위에서 허용한다. `NotificationItem.relatedProfile`은 공통 schema에서 nullable이지만, 반환되는 FOLLOW item은 Related Profile이 실제로 조회 가능한 경우뿐이다. raw `source_id`와 `data`는 API에 노출하지 않는다.
 
 Read update는 membership과 visible predicate를 같은 SQL 경계에 포함하고 `read_at = coalesce(read_at, now())` 의미로 최초 시각을 보존한다. payload의 Recipient Profile을 함께 반환해 Relay가 item `readAt`과 정확한 Profile의 count를 함께 갱신할 수 있게 한다.
 

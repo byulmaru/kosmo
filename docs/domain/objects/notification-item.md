@@ -50,11 +50,11 @@ Notification Item은 Recipient Profile과 Recipient Account 중 정확히 하나
 
 ## 행동
 
-| 행동                           | 행동 주체 | 대상 객체         | 입력값                     | 권한                                       | 조건                                                                                                    | 결과                                                                                   |
-| ------------------------------ | --------- | ----------------- | -------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Notification 생성              | 시스템    | Notification Item | Type, Recipient, 원인 객체 | `System.NotificationSource`                | Type별 필수 관계가 존재하고 Recipient가 원인 객체의 조회 정책을 통과하며 아래 억제 정책에 걸리지 않는다 | 입력 Notification Type과 Read State=Unread인 Notification Item 및 원인 관계가 생성된다 |
-| Profile Notification 읽음 처리 | Account   | Notification Item | 없음                       | `Account.Active`, `Notification.Recipient` | Type이 Operational이 아니고 Read State가 Unread다                                                       | Read State가 Read가 되고 읽음 시각이 기록된다                                          |
-| Account Notification 읽음 처리 | Account   | Notification Item | 없음                       | `Notification.Recipient`                   | Type이 Operational이고 Recipient Account State가 Deleted가 아니며 Read State가 Unread다                 | Read State가 Read가 되고 읽음 시각이 기록된다                                          |
+| 행동                           | 행동 주체 | 대상 객체         | 입력값                     | 권한                                       | 조건                                                                                                    | 결과                                                                                             |
+| ------------------------------ | --------- | ----------------- | -------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Notification 생성              | 시스템    | Notification Item | Type, Recipient, 원인 객체 | `System.NotificationSource`                | Type별 필수 관계가 존재하고 Recipient가 원인 객체의 조회 정책을 통과하며 아래 억제 정책에 걸리지 않는다 | 입력 Notification Type과 Read State=Unread인 Notification Item 및 원인 관계가 생성된다           |
+| Profile Notification 읽음 처리 | Account   | Notification Item | 없음                       | `Account.Active`, `Notification.Recipient` | Type이 Operational이 아니다                                                                             | Unread이면 Read가 되고 읽음 시각이 최초 기록된다. 이미 Read이면 상태와 읽음 시각을 바꾸지 않는다 |
+| Account Notification 읽음 처리 | Account   | Notification Item | 없음                       | `Notification.Recipient`                   | Type이 Operational이고 Recipient Account State가 Deleted가 아니며 Read State가 Unread다                 | Read State가 Read가 되고 읽음 시각이 기록된다                                                    |
 
 ### Type별 생성 관계
 
