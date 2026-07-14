@@ -10,20 +10,10 @@ import { getWebOrigin } from '@/relay/network';
 import { getNativeSessionConfiguration } from './nativeConfig';
 import type { GestureResponderEvent } from 'react-native';
 
-const nativeOidcSessionExchangeMutation = `
-  mutation NativeOidcSessionExchange($input: ExchangeNativeOidcSessionInput!) {
-    exchangeNativeOidcSession(input: $input) {
-      token
-    }
-  }
-`;
-
-type NativeSessionResponse = {
-  data?: {
-    exchangeNativeOidcSession?: {
-      token?: unknown;
-    } | null;
-  } | null;
+export type NativeOidcSessionExchangeInput = {
+  code: string;
+  codeVerifier: string;
+  redirectUri: string;
 };
 
 export function startWebLogin(): void {
@@ -50,8 +40,8 @@ export function startWebLoginFromPress(event: GestureResponderEvent): void {
   startWebLogin();
 }
 
-export async function startNativeLogin(): Promise<string | null> {
-  const { apiOrigin, clientId, issuer } = getNativeSessionConfiguration();
+export async function startNativeAuthorization(): Promise<NativeOidcSessionExchangeInput | null> {
+  const { clientId, issuer } = getNativeSessionConfiguration();
 
   const redirectUri = makeRedirectUri({
     native: 'kosmo://login/callback',
@@ -77,28 +67,9 @@ export async function startNativeLogin(): Promise<string | null> {
     throw new Error('로그인 승인을 완료하지 못했습니다.');
   }
 
-  const response = await fetch(`${apiOrigin}/graphql`, {
-    method: 'POST',
-    credentials: 'omit',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      operationName: 'NativeOidcSessionExchange',
-      query: nativeOidcSessionExchangeMutation,
-      variables: {
-        input: {
-          code: result.params.code,
-          codeVerifier: request.codeVerifier,
-          redirectUri,
-        },
-      },
-    }),
-  });
-  const body = (await response.json().catch(() => null)) as NativeSessionResponse | null;
-  const token = body?.data?.exchangeNativeOidcSession?.token;
-
-  if (!response.ok || typeof token !== 'string' || token.length === 0) {
-    throw new Error('네이티브 세션을 만들지 못했습니다.');
-  }
-
-  return token;
+  return {
+    code: result.params.code,
+    codeVerifier: request.codeVerifier,
+    redirectUri,
+  };
 }
