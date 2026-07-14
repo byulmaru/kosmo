@@ -25,10 +25,12 @@ jobs:
       DEFAULT_TARGETS: |
         https://kos.moe
         https://api.kos.moe
+      # Cloudflare controls the edge cipher suites, which cannot be changed on the current plan.
       NUCLEI_ARGS: >-
         -list nuclei-targets.txt
         -jle nuclei.jsonl
         -severity low,medium,high,critical
+        -exclude-id weak-cipher-suites
         -stats
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
