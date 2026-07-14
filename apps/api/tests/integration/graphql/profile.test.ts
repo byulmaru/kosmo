@@ -16,7 +16,7 @@ import {
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { isConfiguredLocalProfile } from '@kosmo/core/profile';
 import { normalizeHandle } from '@kosmo/core/utils';
-import { and, count, eq, ne } from 'drizzle-orm';
+import { and, asc, count, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -262,7 +262,7 @@ describe('GraphQL remote profile boundary', () => {
     });
   });
 
-  test('reads only visible stored follow graph data for a remote profile without side effects', async () => {
+  test('reads visible established relationships and stored counts for a remote profile', async () => {
     const auth = await createAuthenticatedSession();
     await db
       .update(Profiles)
@@ -275,10 +275,62 @@ describe('GraphQL remote profile boundary', () => {
       handle: 'remote-follow-graph',
       instanceId: remoteInstance.id,
     });
-    const pendingRemote = await createProfile({
-      followersCount: 47,
-      followingCount: 53,
-      handle: 'pending-remote-follow-graph',
+    const publicFollower = await createProfile({
+      handle: 'public-follower',
+      instanceId: localInstanceId,
+    });
+    const publicFollowee = await createProfile({
+      handle: 'public-followee',
+      instanceId: localInstanceId,
+    });
+    const [viewerFollow, reverseViewerFollow, publicFollowerFollow, publicFollowingFollow] =
+      await db
+        .insert(ProfileFollows)
+        .values([
+          { followerProfileId: auth.profile.id, followeeProfileId: remote.id },
+          { followerProfileId: remote.id, followeeProfileId: auth.profile.id },
+          { followerProfileId: publicFollower.id, followeeProfileId: remote.id },
+          { followerProfileId: remote.id, followeeProfileId: publicFollowee.id },
+        ])
+        .returning();
+    const authenticated = await requestFollowGraph(
+      `remote-follow-graph@${remoteDomain}`,
+      auth.token,
+    );
+    const anonymous = await requestFollowGraph(`remote-follow-graph@${remoteDomain}`);
+
+    assertNoGraphQLErrors(authenticated);
+    assert.deepEqual(
+      authenticated.data?.profileByHandle?.followers.edges.map(({ node }) => node.id).sort(),
+      [viewerFollow!.id, publicFollowerFollow!.id].sort(),
+    );
+    assert.deepEqual(
+      authenticated.data?.profileByHandle?.following.edges.map(({ node }) => node.id).sort(),
+      [reverseViewerFollow!.id, publicFollowingFollow!.id].sort(),
+    );
+    assert.equal(authenticated.data?.profileByHandle?.followersCount, 41);
+    assert.equal(authenticated.data?.profileByHandle?.followingCount, 43);
+    assert.deepEqual(authenticated.data?.profileByHandle?.viewerFollow, { id: viewerFollow!.id });
+    assert.deepEqual(authenticated.data?.profileByHandle?.viewerState, {
+      follow: { id: viewerFollow!.id },
+      isSelf: false,
+    });
+
+    assertNoGraphQLErrors(anonymous);
+    assert.deepEqual(anonymous.data?.profileByHandle, {
+      followers: { edges: [{ node: { id: publicFollowerFollow!.id } }] },
+      followersCount: 41,
+      following: { edges: [{ node: { id: publicFollowingFollow!.id } }] },
+      followingCount: 43,
+      viewerFollow: null,
+      viewerState: null,
+    });
+  });
+
+  test('excludes private, inactive, and suspended relationships from a remote follow graph', async () => {
+    const remoteInstance = await createRemoteInstance();
+    const remote = await createProfile({
+      handle: 'filtered-remote-follow-graph',
       instanceId: remoteInstance.id,
     });
     const publicFollower = await createProfile({
@@ -299,6 +351,16 @@ describe('GraphQL remote profile boundary', () => {
       handle: 'private-followee',
       instanceId: localInstanceId,
     });
+    const inactiveFollower = await createProfile({
+      handle: 'inactive-follower',
+      instanceId: localInstanceId,
+      state: ProfileState.DISABLED,
+    });
+    const inactiveFollowee = await createProfile({
+      handle: 'inactive-followee',
+      instanceId: localInstanceId,
+      state: ProfileState.DISABLED,
+    });
     const suspendedInstance = await createRemoteInstance({
       domain: 'suspended-follow-graph.example',
       state: InstanceState.SUSPENDED,
@@ -312,127 +374,87 @@ describe('GraphQL remote profile boundary', () => {
       instanceId: suspendedInstance.id,
     });
 
-    const [viewerFollow, reverseViewerFollow, publicFollowerFollow, publicFollowingFollow] =
-      await db
-        .insert(ProfileFollows)
-        .values([
-          { followerProfileId: auth.profile.id, followeeProfileId: remote.id },
-          { followerProfileId: remote.id, followeeProfileId: auth.profile.id },
-          { followerProfileId: publicFollower.id, followeeProfileId: remote.id },
-          { followerProfileId: remote.id, followeeProfileId: publicFollowee.id },
-          { followerProfileId: privateFollower.id, followeeProfileId: remote.id },
-          { followerProfileId: remote.id, followeeProfileId: privateFollowee.id },
-          { followerProfileId: suspendedFollower.id, followeeProfileId: remote.id },
-          { followerProfileId: remote.id, followeeProfileId: suspendedFollowee.id },
-        ])
-        .returning();
+    const [publicFollowerFollow, publicFollowingFollow] = await db
+      .insert(ProfileFollows)
+      .values([
+        { followerProfileId: publicFollower.id, followeeProfileId: remote.id },
+        { followerProfileId: remote.id, followeeProfileId: publicFollowee.id },
+        { followerProfileId: privateFollower.id, followeeProfileId: remote.id },
+        { followerProfileId: remote.id, followeeProfileId: privateFollowee.id },
+        { followerProfileId: inactiveFollower.id, followeeProfileId: remote.id },
+        { followerProfileId: remote.id, followeeProfileId: inactiveFollowee.id },
+        { followerProfileId: suspendedFollower.id, followeeProfileId: remote.id },
+        { followerProfileId: remote.id, followeeProfileId: suspendedFollowee.id },
+      ])
+      .returning();
+
+    const result = await requestFollowGraph(`filtered-remote-follow-graph@${remoteDomain}`);
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.profileByHandle, {
+      followers: { edges: [{ node: { id: publicFollowerFollow!.id } }] },
+      followersCount: 0,
+      following: { edges: [{ node: { id: publicFollowingFollow!.id } }] },
+      followingCount: 0,
+      viewerFollow: null,
+      viewerState: null,
+    });
+  });
+
+  test('returns viewer follow only for an outgoing established relationship', async () => {
+    const auth = await createAuthenticatedSession();
+    const remoteInstance = await createRemoteInstance();
+    const followedRemote = await createProfile({
+      handle: 'followed-remote',
+      instanceId: remoteInstance.id,
+    });
+    const reverseOnlyRemote = await createProfile({
+      handle: 'reverse-only-remote',
+      instanceId: remoteInstance.id,
+    });
+    const pendingRemote = await createProfile({
+      followersCount: 47,
+      followingCount: 53,
+      handle: 'pending-remote-follow-graph',
+      instanceId: remoteInstance.id,
+    });
+
+    const followed = await db
+      .insert(ProfileFollows)
+      .values({ followerProfileId: auth.profile.id, followeeProfileId: followedRemote.id })
+      .returning()
+      .then(firstOrThrow);
+    await db
+      .insert(ProfileFollows)
+      .values({ followerProfileId: reverseOnlyRemote.id, followeeProfileId: auth.profile.id });
     await db.insert(ProfileFollowRequests).values([
       { followerProfileId: auth.profile.id, followeeProfileId: pendingRemote.id },
       { followerProfileId: pendingRemote.id, followeeProfileId: auth.profile.id },
     ]);
 
-    const readStoredCounts = async (profileId: string) =>
-      db
-        .select({
-          followersCount: Profiles.followersCount,
-          followingCount: Profiles.followingCount,
-        })
-        .from(Profiles)
-        .where(eq(Profiles.id, profileId))
-        .limit(1)
-        .then(firstOrThrow);
-    const stateBefore = {
-      instances: await countRows(Instances),
-      profiles: await countRows(Profiles),
-      remoteCounts: await readStoredCounts(remote.id),
-      pendingRemoteCounts: await readStoredCounts(pendingRemote.id),
-      follows: await countRows(ProfileFollows),
-      requests: await countRows(ProfileFollowRequests),
-    };
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (() => {
-      throw new Error('Remote follow graph reads must not fetch remote collections.');
-    }) as typeof fetch;
+    const [outgoing, reverseOnly, pending] = await Promise.all([
+      requestFollowGraph(`followed-remote@${remoteDomain}`, auth.token),
+      requestFollowGraph(`reverse-only-remote@${remoteDomain}`, auth.token),
+      requestFollowGraph(`pending-remote-follow-graph@${remoteDomain}`, auth.token),
+    ]);
 
-    let authenticated: GraphQLResult<FollowGraph>;
-    let anonymous: GraphQLResult<FollowGraph>;
-    let pending: GraphQLResult<FollowGraph>;
-
-    try {
-      authenticated = await requestGraphQL<FollowGraph>(
-        `query RemoteFollowGraph($handle: String!) {
-          profileByHandle(handle: $handle) {
-            followers(first: 10) { edges { node { id } } }
-            followersCount
-            following(first: 10) { edges { node { id } } }
-            followingCount
-            viewerFollow { id }
-            viewerState { isSelf follow { id } }
-          }
-        }`,
-        { handle: `remote-follow-graph@${remoteDomain}` },
-        auth.token,
-      );
-      anonymous = await requestGraphQL<FollowGraph>(
-        `query PublicRemoteFollowGraph($handle: String!) {
-          profileByHandle(handle: $handle) {
-            followers(first: 10) { edges { node { id } } }
-            followersCount
-            following(first: 10) { edges { node { id } } }
-            followingCount
-            viewerFollow { id }
-            viewerState { isSelf follow { id } }
-          }
-        }`,
-        { handle: `remote-follow-graph@${remoteDomain}` },
-      );
-      pending = await requestGraphQL<FollowGraph>(
-        `query PendingRemoteFollowGraph($handle: String!) {
-          profileByHandle(handle: $handle) {
-            followers(first: 10) { edges { node { id } } }
-            followersCount
-            following(first: 10) { edges { node { id } } }
-            followingCount
-            viewerFollow { id }
-            viewerState { isSelf follow { id } }
-          }
-        }`,
-        { handle: `pending-remote-follow-graph@${remoteDomain}` },
-        auth.token,
-      );
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
-
-    assertNoGraphQLErrors(authenticated!);
-    assert.deepEqual(
-      authenticated!.data?.profileByHandle?.followers.edges.map(({ node }) => node.id).sort(),
-      [viewerFollow!.id, publicFollowerFollow!.id].sort(),
-    );
-    assert.deepEqual(
-      authenticated!.data?.profileByHandle?.following.edges.map(({ node }) => node.id).sort(),
-      [reverseViewerFollow!.id, publicFollowingFollow!.id].sort(),
-    );
-    assert.equal(authenticated!.data?.profileByHandle?.followersCount, 41);
-    assert.equal(authenticated!.data?.profileByHandle?.followingCount, 43);
-    assert.deepEqual(authenticated!.data?.profileByHandle?.viewerFollow, { id: viewerFollow!.id });
-    assert.deepEqual(authenticated!.data?.profileByHandle?.viewerState, {
-      follow: { id: viewerFollow!.id },
+    assertNoGraphQLErrors(outgoing);
+    assert.deepEqual(outgoing.data?.profileByHandle?.viewerFollow, { id: followed.id });
+    assert.deepEqual(outgoing.data?.profileByHandle?.viewerState, {
+      follow: { id: followed.id },
       isSelf: false,
     });
 
-    assertNoGraphQLErrors(anonymous!);
-    assert.deepEqual(anonymous!.data?.profileByHandle, {
-      followers: { edges: [{ node: { id: publicFollowerFollow!.id } }] },
-      followersCount: 41,
-      following: { edges: [{ node: { id: publicFollowingFollow!.id } }] },
-      followingCount: 43,
-      viewerFollow: null,
-      viewerState: null,
-    });
+    for (const result of [reverseOnly, pending]) {
+      assertNoGraphQLErrors(result);
+      assert.equal(result.data?.profileByHandle?.viewerFollow, null);
+      assert.deepEqual(result.data?.profileByHandle?.viewerState, {
+        follow: null,
+        isSelf: false,
+      });
+    }
 
-    assertNoGraphQLErrors(pending!);
-    assert.deepEqual(pending!.data?.profileByHandle, {
+    assert.deepEqual(pending.data?.profileByHandle, {
       followers: { edges: [] },
       followersCount: 47,
       following: { edges: [] },
@@ -440,18 +462,59 @@ describe('GraphQL remote profile boundary', () => {
       viewerFollow: null,
       viewerState: { follow: null, isSelf: false },
     });
+  });
 
-    assert.deepEqual(
-      {
-        instances: await countRows(Instances),
-        profiles: await countRows(Profiles),
-        remoteCounts: await readStoredCounts(remote.id),
-        pendingRemoteCounts: await readStoredCounts(pendingRemote.id),
-        follows: await countRows(ProfileFollows),
-        requests: await countRows(ProfileFollowRequests),
-      },
-      stateBefore,
-    );
+  test('reads a remote follow graph without network or database writes', async () => {
+    const auth = await createAuthenticatedSession();
+    const remoteInstance = await createRemoteInstance();
+    const remote = await createProfile({
+      followersCount: 61,
+      followingCount: 67,
+      handle: 'read-only-remote-follow-graph',
+      instanceId: remoteInstance.id,
+    });
+    const pendingFollower = await createProfile({
+      handle: 'pending-follower',
+      instanceId: localInstanceId,
+    });
+    await db
+      .insert(ProfileFollows)
+      .values({ followerProfileId: auth.profile.id, followeeProfileId: remote.id });
+    await db
+      .insert(ProfileFollowRequests)
+      .values({ followerProfileId: pendingFollower.id, followeeProfileId: remote.id });
+
+    const readFollowGraphState = async () =>
+      JSON.stringify({
+        instances: await db.select().from(Instances).orderBy(asc(Instances.id)),
+        profiles: await db.select().from(Profiles).orderBy(asc(Profiles.id)),
+        follows: await db.select().from(ProfileFollows).orderBy(asc(ProfileFollows.id)),
+        requests: await db
+          .select()
+          .from(ProfileFollowRequests)
+          .orderBy(asc(ProfileFollowRequests.id)),
+      });
+    const stateBefore = await readFollowGraphState();
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (() => {
+      throw new Error('Remote follow graph reads must not fetch remote collections.');
+    }) as typeof fetch;
+
+    let result: GraphQLResult<FollowGraph>;
+
+    try {
+      result = await requestFollowGraph(
+        `read-only-remote-follow-graph@${remoteDomain}`,
+        auth.token,
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    assertNoGraphQLErrors(result!);
+    assert.equal(result!.data?.profileByHandle?.followersCount, 61);
+    assert.equal(result!.data?.profileByHandle?.followingCount, 67);
+    assert.equal(await readFollowGraphState(), stateBefore);
   });
 
   test('reads active posts for profiles on another local instance', async () => {
@@ -1002,6 +1065,22 @@ type FollowGraph = {
   } | null;
 };
 
+const requestFollowGraph = (handle: string, token?: string) =>
+  requestGraphQL<FollowGraph>(
+    `query FollowGraph($handle: String!) {
+      profileByHandle(handle: $handle) {
+        followers(first: 10) { edges { node { id } } }
+        followersCount
+        following(first: 10) { edges { node { id } } }
+        followingCount
+        viewerFollow { id }
+        viewerState { isSelf follow { id } }
+      }
+    }`,
+    { handle },
+    token,
+  );
+
 const requestGraphQL = async <TData = Record<string, unknown>>(
   query: string,
   variables: Record<string, unknown>,
@@ -1073,12 +1152,14 @@ const createProfile = async ({
   followingCount,
   handle,
   instanceId,
+  state = ProfileState.ACTIVE,
 }: {
   followPolicy?: ProfileFollowPolicy;
   followersCount?: number;
   followingCount?: number;
   handle: string;
   instanceId: string;
+  state?: ProfileState;
 }) =>
   db
     .insert(Profiles)
@@ -1090,7 +1171,7 @@ const createProfile = async ({
       handle,
       instanceId,
       normalizedHandle: normalizeHandle(handle),
-      state: ProfileState.ACTIVE,
+      state,
     })
     .returning()
     .then(firstOrThrow);
