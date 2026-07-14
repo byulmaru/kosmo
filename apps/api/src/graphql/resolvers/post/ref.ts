@@ -1,17 +1,18 @@
-import { db, PostContents, Posts, Profiles, TableDiscriminator } from '@kosmo/core/db';
+import { db, Instances, PostContents, Posts, Profiles, TableDiscriminator } from '@kosmo/core/db';
 import { PostState, PostVisibility } from '@kosmo/core/enums';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
 import { postVisibilityAccessWhere } from './access/visibility';
 
-export const Post = createObjectRef('Post', TableDiscriminator.Posts, (ids, ctx) => {
-  return db
+export const Post = createObjectRef('Post', TableDiscriminator.Posts, (ids, ctx) =>
+  db
     .select(getColumns(Posts))
     .from(Posts)
     .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
-    .where(and(inArray(Posts.id, ids), postVisibilityAccessWhere({ ctx })));
-});
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .where(and(inArray(Posts.id, ids), postVisibilityAccessWhere({ ctx }))),
+);
 
 Post.implement({
   fields: (t) => ({
@@ -34,11 +35,14 @@ export const PostConnection = builder.connectionObject(
 export const PostContent = createObjectRef(
   'PostContent',
   TableDiscriminator.PostContents,
-  (ids) => {
-    // TODO(PROD-121): Prevent direct PostContent node loads from bypassing the parent
-    // post's state and visibility policy. Historical content remains loadable.
-    return db.select().from(PostContents).where(inArray(PostContents.id, ids));
-  },
+  (ids, ctx) =>
+    db
+      .select(getColumns(PostContents))
+      .from(PostContents)
+      .innerJoin(Posts, eq(Posts.id, PostContents.postId))
+      .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(and(inArray(PostContents.id, ids), postVisibilityAccessWhere({ ctx }))),
 );
 
 PostContent.implement({

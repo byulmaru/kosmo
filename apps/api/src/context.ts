@@ -1,9 +1,18 @@
-import { AccountProfiles, Accounts, db, first, Profiles, Sessions } from '@kosmo/core/db';
-import { AccountState, ProfileState, SessionState } from '@kosmo/core/enums';
+import {
+  AccountProfiles,
+  Accounts,
+  db,
+  first,
+  Instances,
+  Profiles,
+  Sessions,
+} from '@kosmo/core/db';
+import { AccountState, SessionState } from '@kosmo/core/enums';
 import DataLoader from 'dataloader';
 import { and, eq } from 'drizzle-orm';
 import stringify from 'fast-json-stable-stringify';
 import * as R from 'remeda';
+import { visibleProfileWhere } from './profile/visibility';
 import type { Context as HonoContext } from 'hono';
 
 type LoaderParams<Key, Result, SortKey, Nullability extends boolean, Many extends boolean> = {
@@ -130,7 +139,13 @@ export const deriveContext = async (c: ServerContext): Promise<Context> => {
               eq(AccountProfiles.accountId, session.accountId),
             ),
           )
-          .where(and(eq(Profiles.id, profileId), eq(Profiles.state, ProfileState.ACTIVE)))
+          .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+          .where(
+            and(
+              eq(Profiles.id, profileId),
+              visibleProfileWhere({ profile: Profiles, instance: Instances }),
+            ),
+          )
           .limit(1)
           .then(first)
           .then((profile) => {

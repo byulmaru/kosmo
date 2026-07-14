@@ -1,9 +1,10 @@
-import { db, first, firstOrThrowWith, ProfileFollows, Profiles } from '@kosmo/core/db';
-import { ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
+import { db, first, firstOrThrowWith, Instances, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { InstanceKind, ProfileFollowPolicy } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
+import { visibleProfileWhere } from '@/profile/visibility';
 import { ProfileFollow } from '../ref';
 
 builder.mutationField('followProfile', (t) =>
@@ -18,9 +19,19 @@ builder.mutationField('followProfile', (t) =>
     },
     resolve: async (_, { input }, ctx) => {
       const targetProfile = await db
-        .select({ id: Profiles.id, followPolicy: Profiles.followPolicy })
+        .select({
+          followPolicy: Profiles.followPolicy,
+          id: Profiles.id,
+        })
         .from(Profiles)
-        .where(and(eq(Profiles.id, input.id), eq(Profiles.state, ProfileState.ACTIVE)))
+        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+        .where(
+          and(
+            eq(Profiles.id, input.id),
+            eq(Instances.kind, InstanceKind.LOCAL),
+            visibleProfileWhere({ profile: Profiles, instance: Instances }),
+          ),
+        )
         .limit(1)
         .then(firstOrThrowWith(() => new NotFoundError('Profile not found')));
 

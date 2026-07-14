@@ -71,42 +71,42 @@ API는 local profile과 ActivityPub remote profile이 참여하는 visible follo
 - **THEN** 시스템은 관계의 follower profile 또는 followee profile이 노출 가능한 활성 profile이면 반환한다
 - **AND** 해당 프로필이 노출 가능하지 않으면 없음으로 응답한다
 
-### Requirement: Profile origin
+### Requirement: Profile instance kind
 
-API는 같은 `Profile` 타입 안에서 local profile과 ActivityPub remote profile을 구분할 수 있는 origin enum을 제공해야 한다(MUST).
+API는 같은 `Profile` 타입 안에서 소속 instance의 `kind`를 `Profile.instance.kind`로 노출해야 한다(MUST).
 
-#### Scenario: Origin for local profile
+#### Scenario: Instance kind for local profile
 
-- **WHEN** 클라이언트가 configured local instance에 속한 활성 profile의 `origin`을 조회한다
+- **WHEN** 클라이언트가 configured local instance에 속한 활성 profile의 `instance.kind`를 조회한다
 - **THEN** 시스템은 `LOCAL`을 반환한다
 
-#### Scenario: Origin for ActivityPub profile
+#### Scenario: Instance kind for ActivityPub profile
 
-- **WHEN** 클라이언트가 ActivityPub instance에 속한 활성 profile의 `origin`을 조회한다
+- **WHEN** 클라이언트가 ActivityPub instance에 속한 활성 profile의 `instance.kind`를 조회한다
 - **THEN** 시스템은 `ACTIVITYPUB`을 반환한다
 
-#### Scenario: Use origin for UI branching
+#### Scenario: Use instance kind for UI branching
 
 - **WHEN** 클라이언트가 local-only 또는 ActivityPub-specific UI를 분기해야 한다
-- **THEN** 클라이언트는 `relativeHandle` 문자열을 파싱하지 않고 `Profile.origin`을 사용할 수 있어야 한다
+- **THEN** 클라이언트는 `relativeHandle` 문자열을 파싱하지 않고 `Profile.instance.kind`를 사용할 수 있어야 한다
 
 #### Scenario: Link to stored remote profile by relative handle
 
 - **WHEN** 클라이언트가 저장된 ActivityPub remote profile의 profile 링크를 만든다
-- **THEN** 클라이언트는 bare `handle`이 아니라 `relativeHandle`과 `origin`을 사용한다
+- **THEN** 클라이언트는 bare `handle`이 아니라 `relativeHandle`을 사용하고 `Profile.instance.kind`로 UI를 분기한다
 - **AND** remote profile 링크는 `/${relativeHandle}` path로 이동한다
 - **AND** `relativeHandle`은 `@handle@domain` 형식이고, route parameter는 `handle@domain`으로 전달되어 `profileByHandle`이 federated handle로 조회할 수 있어야 한다
 
 #### Scenario: Link within stored remote profile by relative handle
 
 - **WHEN** 클라이언트가 저장된 ActivityPub remote profile의 profile page 안에서 하위 링크를 만든다
-- **THEN** 클라이언트는 bare `handle`이 아니라 `relativeHandle`과 `origin`을 사용한다
+- **THEN** 클라이언트는 bare `handle`이 아니라 `relativeHandle`을 사용하고 `Profile.instance.kind`로 UI를 분기한다
 - **AND** 하위 링크는 `/${relativeHandle}` path 아래에서 route parameter가 `handle@domain`으로 전달되는 federated handle URL을 유지한다
 
-#### Scenario: Use origin for remote follow action
+#### Scenario: Use instance kind for remote follow action
 
 - **WHEN** 클라이언트가 저장된 ActivityPub remote profile을 표시한다
-- **THEN** 클라이언트는 `origin = ACTIVITYPUB`이라는 이유만으로 follow/unfollow action을 숨기거나 비활성화하지 않는다
+- **THEN** 클라이언트는 `instance.kind = ACTIVITYPUB`이라는 이유만으로 follow/unfollow action을 숨기거나 비활성화하지 않는다
 - **AND** remote follow action 표시 여부는 `web-app-shell`의 remote profile follow actions 계약을 따른다
 
 ### Requirement: Follow profile mutation
