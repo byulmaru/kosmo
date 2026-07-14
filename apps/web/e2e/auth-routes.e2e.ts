@@ -215,11 +215,27 @@ test('API는 서명이 잘못된 public native ID token을 Kosmo 세션으로 �
   expect(JSON.stringify(body)).not.toContain(codeVerifier);
 });
 
-test('API는 malformed PKCE verifier를 OIDC token endpoint에 보내지 않는다', async ({ request }) => {
+test('API는 잘못된 PKCE verifier를 OIDC token endpoint에 보내지 않는다', async ({ request }) => {
   const tokenRequestCount = await getOIDCTokenRequestCount(request);
   const response = await exchangeNativeOidcSession(request, {
     code: 'e2e-unsubmitted-code',
     codeVerifier: 'too-short',
+    redirectUri: 'kosmo://login/callback',
+  });
+  const body = (await response.json()) as NativeSessionGraphQLResponse;
+
+  expect(response.status()).toBe(200);
+  expectNativeSessionGraphQLError(body);
+  expect(await getOIDCTokenRequestCount(request)).toBe(tokenRequestCount);
+});
+
+test('API는 raw upstream token field를 세션 교환 입력으로 허용하지 않는다', async ({ request }) => {
+  const tokenRequestCount = await getOIDCTokenRequestCount(request);
+  const response = await exchangeNativeOidcSession(request, {
+    accessToken: 'e2e-upstream-access-token',
+    code: 'e2e-unsubmitted-code',
+    codeVerifier: 'v'.repeat(43),
+    idToken: 'e2e.upstream.id.token',
     redirectUri: 'kosmo://login/callback',
   });
   const body = (await response.json()) as NativeSessionGraphQLResponse;
