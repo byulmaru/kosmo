@@ -111,7 +111,7 @@ Fedify inbox listener
 5. PROD-256이 전체 slice, canonical spec sync와 archive를 검증한다.
 6. 후속 이슈가 Reply/FOLLOWERS/DIRECT/Update와 다른 deferred contract를 별도 OpenSpec으로 확장한다.
 
-## Risks and Mitigations
+## Risks / Trade-offs
 
 - **동시 duplicate Create**: object URI unique constraint와 loser transaction rollback으로 Post를 하나만 남긴다.
 - **같은 activity ID가 다른 object를 가리킴**: activity ID는 domain identity가 아니므로 각 verified Note object URI를 독립적으로 처리한다.
@@ -119,8 +119,12 @@ Fedify inbox listener
 - **unknown actor delivery 유실**: profile materialization을 명시적 선행 조건으로 두어 inbox abuse surface와 숨은 network/write를 줄인다.
 - **기존 resolver 결함**: PROD-262가 결함을 발견하면 implementation scope를 다시 열고 test-only 이슈에서 조용히 수정하지 않는다.
 
-## Migration and Rollback
+## Migration Plan
 
 - schema 변경은 PROD-255의 additive object mapping migration만 소유한다.
 - 구현 slice 배포 전에는 ingestion handler가 등록되지 않으므로 spec-only merge가 runtime behavior를 바꾸지 않는다.
 - rollback은 ingestion handler 비활성화로 새 materialization을 멈춘다. 별도 receipt data cleanup은 존재하지 않는다.
+
+## Open Questions
+
+없음. 구현 중 새 product 또는 ownership 결정이 필요하면 해당 Linear 이슈와 이 change의 decision을 먼저 갱신한다.
