@@ -22,8 +22,8 @@ import {
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
-import { followProfile } from '@kosmo/core/services';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
+import { followProfile } from '@kosmo/core/services';
 import { eq } from 'drizzle-orm';
 import { Temporal } from 'temporal-polyfill';
 import type { BrowserContext } from '@playwright/test';
