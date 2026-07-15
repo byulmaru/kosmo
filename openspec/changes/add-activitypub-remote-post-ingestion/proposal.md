@@ -31,4 +31,4 @@
 - Implementation slices: PROD-255 schema, PROD-259 projection, PROD-260 inbox validation과 PROD-262 authorization regression을 진행한 뒤 PROD-261이 최초 materialization transaction을 통합하고 PROD-256이 integration/archive를 소유한다.
 - Existing foundations: PROD-241의 activity-neutral actor/shared inbox route와 PR #212/PROD-257의 DB-only GraphQL read/authorization을 변경하지 않는다.
 - Ownership: 구현 자식 PR은 이 공유 change를 수정하거나 archive하지 않고 각 이슈의 코드와 검증만 소유한다.
-- Deferred contracts: `Update(Note)`/`Delete(Note)` lifecycle은 PROD-365가 별도 Issue → OpenSpec으로 소유한다. PostgreSQL activity receipt, duplicate Create revision 갱신과 object conflict recovery lock은 실제 필요가 생길 때 별도 계약으로 결정한다.
+- Deferred contracts: `Update(Note)`/`Delete(Note)` lifecycle은 PROD-365가 별도 Issue → OpenSpec으로 소유한다. activity-level audit 또는 object와 무관한 side effect가 실제로 필요해질 때만 PostgreSQL activity receipt를 별도 계약으로 재검토한다. duplicate `Create` revision 갱신과 object conflict recovery lock은 first-write-wins 결정으로 대체되며 deferred scope가 아니다.
