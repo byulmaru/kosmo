@@ -74,6 +74,16 @@
 - Consequences: core action은 ActivityPub 타입이나 Notification side effect에 의존하지 않고 검증된 profile ID와 transaction 경계만 소비한다.
 - Confirmation / Follow-up: 구현 diff와 tests에 Fedify handler, correlation schema, Notification 변경이 포함되지 않는지 검토한다.
 
+### 겹치는 Follow profile mutation은 PROD-272를 먼저 archive한다
+
+- Decision Date: 2026-07-15
+- Status: Accepted
+- Context / Problem: `add-profile-follow-request-lifecycle`과 active `add-activitypub-remote-follow`은 같은 `Follow profile mutation` requirement를 서로 다른 단계의 계약으로 수정한다. archive 순서와 최종 누적 동기화가 없으면 나중에 archive한 delta가 local request/union 또는 remote follow 계약을 덮어쓸 수 있다.
+- Decision Outcome: PROD-272의 spec-only PR, 구현과 `add-profile-follow-request-lifecycle` archive를 remote follow 구현 자식 및 `add-activitypub-remote-follow` 최종 archive보다 먼저 완료한다. PROD-361은 remote-follow 최종 archive 전에 해당 profile delta를 당시 active spec에 rebase해 PROD-272의 `FollowProfileResult`, local `APPROVAL_REQUIRED` request와 payload 계약을 보존하면서 remote `OPEN` follow 계약을 누적한다.
+- Alternatives Considered: 이 change에 remote follow 시나리오를 복사하면 PROD-272가 구현하지 않는 ActivityPub delivery를 자기 완료 계약으로 소유하게 된다. 순서를 암묵적으로만 두면 독립 archive가 마지막 delta로 requirement를 덮어쓸 수 있다.
+- Consequences: PROD-272가 archive될 때까지 remote target follow는 현재처럼 지원되지 않으며, remote follow 구현은 archive된 pending-only boundary를 소비한다. 최종 remote contract 병합과 archive 책임은 계속 PROD-361에 있다.
+- Confirmation / Follow-up: 이 change archive 후 active profile spec의 local request/union을 검증하고, PROD-361 archive 전에는 그 계약과 remote follow 시나리오가 같은 최종 requirement에 함께 존재하는지 검증한다.
+
 ### 이번 앱 변경은 union 호환에 한정한다
 
 - Decision Date: 2026-07-15

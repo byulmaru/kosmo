@@ -69,6 +69,7 @@ PROD-323은 request row의 존재 자체가 Pending이며 승인 시 삭제+rela
 - [동시 approve/create에서 relation과 count가 어긋날 수 있다] → pair unique, 실제 insert/delete 결과와 DB-backed concurrency test로 한 번만 count를 변경한다.
 - [Profile disable 또는 instance suspension과 request 전이가 경쟁할 수 있다] → write transaction 안에서 participant 가용성을 다시 검증하고 경쟁 테스트를 추가한다.
 - [active remote-follow change와 같은 저장 경계를 수정한다] → 이 change는 공통 lifecycle만 소유하고 correlation/generation/exact-row 조건부 삭제는 PROD-243에 남긴다.
+- [두 active change가 같은 `Follow profile mutation` requirement를 서로 다른 단계의 계약으로 수정한다] → 이 change를 먼저 구현·archive하고, 이후 PROD-361이 remote-follow 최종 delta를 현재 active spec에 rebase해 union/request와 remote follow 계약을 함께 보존한다.
 - [rollback 뒤 생성된 pending row가 남을 수 있다] → caller transaction 참여와 rollback 통합 테스트를 완료 조건으로 둔다.
 - [requested UI 없이 request가 생성되면 사용자가 현재 상태를 확인하기 어렵다] → 이번 변경은 기존 화면 호환만 제공하며 requested/cancel/incoming UI는 명시적으로 후속 범위로 남긴다.
 
@@ -78,4 +79,6 @@ PROD-323은 request row의 존재 자체가 Pending이며 승인 시 삭제+rela
 2. 병합된 main에서 `prod-272` 구현 브랜치를 만들고 Core, GraphQL, app 변경을 하나의 Draft PR로 제공한다.
 3. 기존 테이블과 discriminator를 사용하므로 DB migration은 실행하지 않는다.
 4. Core DB-backed 테스트, API schema/integration 테스트, Relay compiler와 Storybook 검증을 통과한 뒤 API와 앱 변경을 함께 배포한다.
-5. rollback은 구현 PR을 되돌린다. 이미 생성된 pending request row는 기존 schema에서 안전하게 보존되지만 구버전 API에서 조회·처리되지 않으므로 재배포 전 운영상 pending 상태임을 감수한다.
+5. `add-profile-follow-request-lifecycle`을 `add-activitypub-remote-follow`의 구현 자식 및 최종 archive보다 먼저 archive하고, archive 후 active `profile` spec에 local request와 follow result union 계약이 반영됐는지 검증한다.
+6. 이후 PROD-361은 `add-activitypub-remote-follow`의 `Follow profile mutation` delta를 당시 active spec에 rebase해 이 change의 local request/union 계약과 remote `OPEN` follow 계약을 누적한 뒤 최종 archive한다.
+7. rollback은 구현 PR을 되돌린다. 이미 생성된 pending request row는 기존 schema에서 안전하게 보존되지만 구버전 API에서 조회·처리되지 않으므로 재배포 전 운영상 pending 상태임을 감수한다.

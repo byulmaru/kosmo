@@ -31,3 +31,4 @@
 - `apps/app/src/components/profile/FollowButton.tsx`와 Relay/Storybook fixture: 새 union을 처리하도록 갱신된다.
 - 기존 `profile_follow_request` 테이블, unique/FK/index와 `TableDiscriminator`를 그대로 사용하므로 migration과 dependency 변경은 없다.
 - `add-activitypub-remote-follow`/PROD-243은 ActivityPub 검증·materialization·correlation/generation·조건부 삭제를 계속 소유하고, 이 change의 core lifecycle을 검증된 actor pair에 재사용한다.
+- 두 active change가 같은 `Follow profile mutation` requirement를 수정하므로 이 change를 먼저 구현·archive하고, PROD-361이 `add-activitypub-remote-follow` 최종 archive에서 이 change의 union/request 계약과 remote follow 계약을 누적 동기화한다.

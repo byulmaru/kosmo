@@ -81,13 +81,15 @@ Participant가 pending request를 Relay Node와 자기 Profile 소유 connection
 - OpenSpec PR에서 승인된 durable decision을 구현 PR에서 변경하지 않는다.
 - Notification, Fedify handler/delivery, correlation/generation, 새 migration과 request 관리 UI를 포함하지 않는다.
 - OpenSpec archive는 구현과 검증이 모두 완료된 뒤 수행한다.
+- 이 change는 `add-activitypub-remote-follow`의 구현 자식 및 최종 archive보다 먼저 archive하며, remote follow 시나리오를 이 구현 범위에 흡수하지 않는다.
 
 **Verification**
 
 - OpenSpec strict validation, Core service, API unit/integration, Relay/app/Storybook, workspace lint/format을 통과시킨다.
 - spec requirement와 task가 구현·테스트에 대응하는지 확인하고 archive 후 validation을 다시 실행한다.
+- sibling remote-follow change의 PROD-272 선행 gate와 PROD-361 누적 delta 동기화 책임이 이 change의 archive 순서와 일치하는지 확인한다.
 
 - [ ] 4.1 Core, API, app의 관련 전체 검증과 workspace lint/format을 실행하고 실패를 수정한다.
-- [ ] 4.2 PROD-243·PROD-321 경계, migration 부재, GraphQL breaking rollout과 남은 위험을 독립 리뷰한다.
+- [ ] 4.2 PROD-243·PROD-321 경계, migration 부재, GraphQL breaking rollout, PROD-272 선행 archive와 PROD-361 최종 누적 동기화를 독립 리뷰한다.
 - [ ] 4.3 모든 requirement scenario와 task의 구현·검증 근거를 확인하고 task checkbox를 실제 상태와 일치시킨다.
-- [ ] 4.4 구현 완료 뒤 change를 archive하고 archive 후 OpenSpec strict validation을 통과시킨다.
+- [ ] 4.4 구현 완료 뒤 remote-follow 구현·최종 archive보다 먼저 이 change를 archive하고, active profile spec의 local request/union 계약과 archive 후 OpenSpec strict validation을 확인한다.
