@@ -100,13 +100,14 @@
 
 ### Requirement: UUID 기반 테이블 식별자
 
-시스템은 주요 도메인 테이블의 기본 키를 PostgreSQL `uuid` 값으로 저장하고 신규 행의 ID를 애플리케이션에서 표준 UUIDv7으로 생성해야 한다(MUST).
+시스템은 주요 도메인 테이블의 기본 키를 PostgreSQL `uuid` 값으로 저장하고 신규 행의 ID를 PostgreSQL 18.4 내장 `uuidv7()` default로 생성해야 한다(MUST).
 
 #### Scenario: 새 도메인 행 생성
 
 - **WHEN** 주요 도메인 테이블의 신규 행이 생성된다
 - **THEN** 시스템은 table discriminator가 없는 표준 UUIDv7 문자열을 기본 키로 생성한다
 - **AND** ID는 PostgreSQL `uuid` column에 저장된다
+- **AND** 애플리케이션은 UUID bit layout을 직접 생성하지 않는다
 
 #### Scenario: 기존 UUIDv8 행 유지
 

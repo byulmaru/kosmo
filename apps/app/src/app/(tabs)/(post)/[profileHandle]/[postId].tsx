@@ -87,7 +87,7 @@ function PostDetailContent({
 
   useEffect(() => {
     if (post && post.profile.relativeHandle !== routeRelativeHandle) {
-      router.replace(`/${post.profile.relativeHandle}/${encodeURIComponent(postId)}`);
+      router.replace(`/${post.profile.relativeHandle}/${postId}`);
     }
   }, [post, postId, routeRelativeHandle, router]);
 

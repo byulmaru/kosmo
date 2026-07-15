@@ -1,5 +1,11 @@
 import type { Page } from '@playwright/test';
 
+export const toGlobalId = (typename: string, id: string) =>
+  Buffer.concat([
+    Buffer.from(id.replaceAll('-', ''), 'hex'),
+    Buffer.from(typename, 'ascii'),
+  ]).toString('base64url');
+
 export type GraphQLOperation = {
   operationName?: string | null;
   query?: string | null;

@@ -81,7 +81,7 @@ PROD-323은 request row의 존재 자체가 Pending이며 승인 시 삭제+rela
 
 1. `prod-272/openspec`의 spec-only PR을 먼저 strict validation하고 리뷰·병합한다.
 2. 병합된 main에서 `prod-272` 구현 브랜치를 만들고 Core, GraphQL, app 변경을 하나의 Draft PR로 제공한다.
-3. 기존 `profile_follow_request` table과 UUID key를 사용하므로 DB migration은 실행하지 않는다. 기존 UUIDv8 값은 유지되고 신규 row는 공용 UUIDv7 generator를 사용한다.
+3. 이 change는 별도 DB migration을 추가하지 않고 기존 `profile_follow_request` table과 UUID key를 사용한다. PROD-366 적용 뒤 신규 row는 PostgreSQL `uuidv7()` default를 사용하고 기존 UUIDv8 값은 유지된다.
 4. Core DB-backed 테스트, API schema/integration 테스트, Relay compiler와 Storybook 검증을 통과한 뒤 API와 앱 변경을 함께 배포한다.
 5. PROD-243과 PROD-272 구현은 서로의 구현·병합을 기다리지 않고 병렬 진행한다. `add-profile-follow-request-lifecycle`은 `add-activitypub-remote-follow` 최종 archive보다 먼저 archive하고, archive 후 active `profile` spec에 local request와 follow result union 계약이 반영됐는지 검증한다.
 6. 이후 PROD-361은 `add-activitypub-remote-follow`의 `Follow profile mutation` delta를 당시 active spec에 rebase해 이 change의 local request/union 계약과 remote `OPEN` follow 계약을 누적한 뒤 최종 archive한다.

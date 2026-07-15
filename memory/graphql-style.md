@@ -155,7 +155,7 @@ GraphQL enum은 `apps/api/src/graphql/enums.ts`에서 전역 등록한다.
 
 ## ID와 Node
 
-- Relay Node ID는 concrete GraphQL typename과 DB UUID를 포함하는 opaque global ID다.
+- Relay Node ID는 DB UUID의 raw 16바이트 뒤에 concrete GraphQL typename ASCII bytes를 이어 붙인 payload를 unpadded base64url로 encode한 opaque global ID다. UUID가 고정 폭이므로 별도 구분자나 typename 길이 필드를 두지 않는다. URL path segment에 추가 `encodeURIComponent`를 적용하지 않는다.
 - Node decode는 global ID의 concrete typename으로 해당 loadable Node ref를 찾고 underlying DB UUID를 loader에 전달한다. UUID version이나 table discriminator로 GraphQL type을 추론하지 않는다.
 - Node를 식별하는 query·mutation input은 `t.input.globalID({ for: ConcreteNodeRef })`로 허용된 concrete type을 제한하고 resolver에서는 decode된 `id`만 core service나 DB query에 전달한다.
 - legacy raw UUID GraphQL ID fallback은 제공하지 않는다. 기존 UUIDv8 DB row도 새 global ID로 감싸서만 GraphQL에 입력한다.
@@ -174,11 +174,11 @@ GraphQL enum은 `apps/api/src/graphql/enums.ts`에서 전역 등록한다.
 - PostgreSQL unique violation 판정은 resolver 로컬 함수로 만들지 않고 `@kosmo/core/db`의 `isUniqueViolation` helper를 사용한다.
 - `createObjectRef`가 만든 loadable Node ref는 batched loading을 제공한다.
 - query, mutation, relationship resolver는 불필요한 추가 조회를 피한다. 이미 row가 있으면 row를 반환하고, ID만 있으면 ID를 반환해 Node loader를 타게 한다.
-- kosmo `createId`의 UUIDv7은 millisecond timestamp 뒤에 random tail을 사용하므로 같은 millisecond 안에서는
+- PostgreSQL `uuidv7()`로 생성한 DB ID는 millisecond timestamp 뒤에 random 영역을 사용하며 같은 millisecond 안에서는
   생성 순서가 단조 증가하지 않는다. 같은 millisecond의 임의 순서와 page 배치를 허용할 때만 ID 단독
   cursor/order를 사용한다. 저장된 시각 기준 정렬이 필요하면 immutable `createdAt`과 ID tie-breaker를
   cursor·order·index에 함께 사용한다. 동일 timestamp에서도 삽입 순서를 보장해야 하면 database ordering key나
-  공용 ID generator 변경을 별도 platform change로 검토한다.
+  DB ordering key 변경을 별도 platform change로 검토한다.
 
 ## Nullability
 

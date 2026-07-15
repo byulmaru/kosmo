@@ -44,6 +44,26 @@
 - Consequences: input typename도 도메인 대상 type과 일치해야 하며 core service는 계속 DB UUID만 다룬다.
 - Confirmation / Follow-up: profile 관련 mutation input의 성공, raw UUID 거부, 잘못된 typename test로 확인한다.
 
+### UUIDv7은 PostgreSQL 18.4 column default로 생성한다
+
+- Decision Date: 2026-07-16
+- Status: Accepted
+- Context / Problem: production database는 PostgreSQL 18.4이며 표준 `uuidv7()` 함수를 내장한다. 애플리케이션에서 동일한 UUID bit layout을 직접 구현하면 중복 코드와 별도 검증 책임이 생긴다. 기존 테스트 DB의 PostgreSQL 17 설정은 production과 불일치했다.
+- Decision Outcome: 모든 주요 도메인 table의 신규 ID는 PostgreSQL `uuidv7()` column default로 생성한다. 애플리케이션 `createId`를 제거하고 테스트 DB를 PostgreSQL 18.4로 맞춘다. 기존 ID 값은 재작성하지 않고 column default만 변경하는 schema migration을 적용한다.
+- Alternatives Considered: 애플리케이션 custom generator 유지, UUID library dependency 추가, PostgreSQL 17 호환 함수를 직접 설치. production이 이미 PostgreSQL 18.4이고 DB default가 모든 insert 경로를 일관되게 다루므로 채택하지 않았다.
+- Consequences: insert가 ID를 생략할 수 있고 DB round trip 전에는 ID를 알 수 없다. 미리 생성한 ID 비교에 의존하던 conflict 판별은 `RETURNING` row 유무로 변경한다. PostgreSQL 18 미만 환경은 지원하지 않는다.
+- Confirmation / Follow-up: migration SQL의 default-only 변경, `uuid_extract_version(id) = 7`, 기존 UUIDv8 fixture 보존, production과 동일한 test DB image로 검증한다.
+
+### GraphQL global ID는 UUID-first binary payload의 unpadded base64url을 사용한다
+
+- Decision Date: 2026-07-16
+- Status: Accepted
+- Context / Problem: Pothos 기본 base64 global ID는 `+`, `/`, `=`를 포함할 수 있어 post route의 path segment마다 `encodeURIComponent`가 필요하다. 공개 opaque ID가 transport 위치마다 추가 변환을 요구하면 client 전달 계약이 복잡해진다.
+- Decision Outcome: encode 전 payload는 DB UUID의 raw 16바이트를 앞에 두고 concrete GraphQL typename의 ASCII bytes를 뒤에 구분자 없이 배치한 뒤 padding 없는 base64url로 encode한다. decoder는 고정된 첫 16바이트를 UUID로, 나머지를 typename으로 읽고 URL-safe alphabet, canonical representation과 GraphQL typename 문법을 검증한다. padded base64, raw UUID, 기존 `typename:uuid-string` payload와 malformed 값을 거부한다. 클라이언트는 받은 ID를 추가 escaping 없이 route와 GraphQL variable에 그대로 사용한다.
+- Alternatives Considered: Pothos 기본 base64를 유지하고 모든 route에서 URL encode/decode, UUID를 URL 전용 별도 key로 변환, 가변 길이 typename을 앞에 두고 separator 또는 length prefix를 추가, GraphQL Name 문자 집합을 6-bit 단위로 packing. 첫 방식은 누락 위험과 이중 표현을 만들고, 두 번째는 공개 identity를 둘로 나누며, typename-first framing은 UUID가 이미 고정 16바이트인 상황에서 불필요한 구분 정보를 추가하므로 채택하지 않았다. 6-bit packing은 일반적인 typename에서 global ID를 1~3자 줄이는 데 비해 custom bit codec과 canonical padding 검증 복잡도가 커 채택하지 않았다.
+- Consequences: `Post` global ID는 20-byte payload가 되어 27자다. 최초 global ID cutover 전이므로 별도 호환 decoder를 제공하지 않는다. ID는 계속 opaque하며 client가 base64url payload를 decode하거나 typename/UUID에 의존해서는 안 된다. 이 형식은 underlying Node ID가 UUID라는 현재 계약에 의존한다.
+- Confirmation / Follow-up: codec unit test에서 URL-safe alphabet과 invalid/padded 입력 거부를 검증하고 post detail E2E에서 ID가 추가 escaping 없이 path와 GraphQL variable에 전달되는지 확인한다.
+
 ## Remaining Decisions
 
 - 없음.
@@ -52,3 +72,4 @@
 
 - canonical `api-platform`의 “DB UUID를 GraphQL Node ID로 그대로 사용하고 table discriminator로 type을 판별한다”는 계약은 2026-07-15의 concrete typename 기반 opaque global ID 결정으로 대체한다.
 - canonical `data-model`과 기존 ID memory의 “신규 DB ID에 `TableDiscriminator`를 포함한다”는 계약은 2026-07-15의 신규 UUIDv7·기존 UUIDv8 무마이그레이션 공존 결정으로 대체한다.
+- 2026-07-15 UUIDv7 결정의 애플리케이션 custom generator와 schema migration 없음 부분은 2026-07-16의 PostgreSQL 18.4 `uuidv7()` column default 결정으로 대체한다. 기존 ID 무재작성 결정은 유지한다.

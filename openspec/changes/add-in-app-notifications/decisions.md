@@ -108,9 +108,9 @@
 
 - Decision Date: 2026-07-14
 - Status: Accepted
-- Context / Problem: 현재 `createId`의 UUID v8은 millisecond timestamp 뒤에 random tail을 사용하므로 같은 millisecond에 생성된 ID의 대소가 생성 순서와 일치하지 않는다. ID 단독 cursor는 첫 page 뒤 같은 millisecond에 추가된 item을 오래된 page에 섞을 수 있다.
+- Context / Problem: PROD-366 이전 공용 UUID generator는 millisecond timestamp 뒤에 random tail을 사용하므로 같은 millisecond에 생성된 ID의 대소가 생성 순서와 일치하지 않는다. ID 단독 cursor는 첫 page 뒤 같은 millisecond에 추가된 item을 오래된 page에 섞을 수 있다.
 - Decision Outcome: Notification connection은 `Notification.id DESC` 단일 keyset과 opaque ID cursor를 유지한다. 같은 millisecond 안의 생성 순서와 새 item의 page 배치는 보장하지 않는다.
-- Alternatives Considered: `(createdAt DESC, id DESC)` composite cursor, Notification 전용 monotonic ordering key, 공용 `createId` 변경, offset pagination.
+- Alternatives Considered: `(createdAt DESC, id DESC)` composite cursor, Notification 전용 monotonic ordering key, 공용 ID 생성 정책 변경, offset pagination.
 - Consequences: 다음 page는 `id < cursor` 경계로 조회하고 목록 index는 `(recipient_profile_id, id DESC)`다. 같은 millisecond에 뒤늦게 생성된 item은 ID random tail에 따라 기존 cursor의 다음 page에 나타날 수 있으며, 이 정도의 순서 차이는 현재 Notification 제품 요구에서 허용한다.
 - Confirmation / Follow-up: `PROD-275`가 고정된 item 집합의 ID keyset page 경계와 visible item 중복/누락 방지를 검증하되 같은 millisecond의 생성 chronology나 concurrent insert snapshot은 요구하지 않는다.
 

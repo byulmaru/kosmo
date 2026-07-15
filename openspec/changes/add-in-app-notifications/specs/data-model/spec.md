@@ -2,13 +2,14 @@
 
 ### Requirement: UUID 기반 테이블 식별자
 
-시스템은 주요 도메인 테이블의 기본 키를 PostgreSQL `uuid` 값으로 저장하고 신규 행의 ID를 애플리케이션에서 표준 UUIDv7으로 생성해야 한다(MUST).
+시스템은 주요 도메인 테이블의 기본 키를 PostgreSQL `uuid` 값으로 저장하고 신규 행의 ID를 PostgreSQL 18.4 내장 `uuidv7()` default로 생성해야 한다(MUST).
 
 #### Scenario: 새 도메인 행 생성
 
 - **WHEN** 주요 도메인 테이블의 신규 행이 생성된다
 - **THEN** 시스템은 table discriminator가 없는 표준 UUIDv7 문자열을 기본 키로 생성한다
 - **AND** ID는 PostgreSQL `uuid` column에 저장된다
+- **AND** 애플리케이션은 UUID bit layout을 직접 생성하지 않는다
 
 #### Scenario: 기존 UUIDv8 행 유지
 
@@ -26,7 +27,7 @@
 
 - **WHEN** Follow Notification을 생성한다
 - **THEN** 시스템은 `notification`에 PostgreSQL `uuid` `id`, non-null `recipient_profile_id`, `kind = FOLLOW`, non-null `source_id`, `data = {}`, `created_at`과 nullable `read_at`을 저장한다
-- **AND** 신규 `notification.id`는 표준 UUIDv7으로 생성되고 기존 UUIDv8 Notification ID도 그대로 유효하다
+- **AND** 신규 `notification.id`는 PostgreSQL `uuidv7()` default로 생성되고 기존 UUIDv8 Notification ID도 그대로 유효하다
 - **AND** `read_at = null`은 Unread를, non-null `read_at`은 Read와 최초 Read 시각을 나타낸다
 - **AND** `data`는 PostgreSQL `jsonb NOT NULL DEFAULT '{}'::jsonb`이며 애플리케이션이 kind별 shape를 검증한다
 - **AND** 별도 Read State enum, type-specific extension table, 미래 source column이나 mutable `updated_at`을 저장하지 않는다

@@ -9,6 +9,8 @@ API는 concrete GraphQL typename과 DB UUID를 포함하는 opaque global ID를 
 - **WHEN** concrete GraphQL Node object가 ID를 반환한다
 - **THEN** 시스템은 concrete GraphQL typename과 underlying DB UUID를 포함하는 opaque global ID를 반환한다
 - **AND** DB UUID 문자열을 GraphQL Node ID로 그대로 노출하지 않는다
+- **AND** encode 전 payload는 DB UUID의 raw 16바이트 뒤에 concrete GraphQL typename의 ASCII bytes를 구분자 없이 배치한다
+- **AND** global ID는 padding 없는 base64url 문자열로 URL path segment에 추가 escaping 없이 사용할 수 있다
 
 #### Scenario: Resolve node type
 

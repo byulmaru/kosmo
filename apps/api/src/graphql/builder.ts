@@ -7,6 +7,7 @@ import SimpleObjectsPlugin from '@pothos/plugin-simple-objects';
 import ValidationPlugin from '@pothos/plugin-validation';
 import WithInputPlugin from '@pothos/plugin-with-input';
 import * as R from 'remeda';
+import { decodeGlobalId, encodeGlobalId } from './global-id';
 import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
 import type { SessionContext, SessionWithProfileContext, UserContext } from '@/context';
 
@@ -54,6 +55,10 @@ export const builder = new SchemaBuilder<{
 
       return new ValidationError(issue?.message, { field: field || undefined });
     },
+  },
+  relay: {
+    decodeGlobalID: decodeGlobalId,
+    encodeGlobalID: encodeGlobalId,
   },
   scopeAuth: {
     authScopes: async (ctx) => ({

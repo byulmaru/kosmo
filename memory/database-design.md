@@ -50,14 +50,14 @@ Recommended direction:
 
 - Do not store string prefixes in DB primary keys.
 - Prefer PostgreSQL native `uuid` over text IDs for joins, index size, cache locality, and throughput.
-- Standard UUIDv7 provides time grouping and distributed application-side generation without coupling DB identity to a table registry.
-- The current `createId` layout stores a 48-bit millisecond timestamp followed by a random tail. IDs are time-grouped but are
-  not monotonic within the same millisecond.
-- Generate UUIDv7 in the web server/application before insert through the shared `createId()` utility.
+- Standard UUIDv7 provides time grouping without coupling DB identity to a table registry.
+- Generate new primary keys with the PostgreSQL 18.4 built-in `uuidv7()` function as the column default. Do not duplicate UUID bit layout code in the application.
+- PostgreSQL UUIDv7 IDs are time-grouped but are not treated as monotonic within the same millisecond.
 - Keep DB UUID and GraphQL Relay global ID as separate responsibilities. GraphQL ID contains the concrete typename and DB UUID as an opaque value.
 - Do not reserve or decode table discriminator bits for GraphQL type routing.
 - Existing kosmo UUIDv8 primary keys and foreign keys remain valid permanently. Do not delete, backfill, or rewrite them to UUIDv7.
 - Existing UUIDv8 and new UUIDv7 share the same 48-bit millisecond timestamp position and can coexist in PostgreSQL `uuid` columns, relations, loaders, and time-grouped ordering.
+- Changing the column default requires a schema migration, but it must not rewrite existing primary or foreign key values.
 - Store IDs as PostgreSQL `uuid`, not as string prefixes.
 - An ID-only keyset is valid when arbitrary ordering and page placement within the same millisecond are acceptable.
   When persisted timestamp ordering matters, use an immutable timestamp plus an ID tie-breaker. When insertion order
