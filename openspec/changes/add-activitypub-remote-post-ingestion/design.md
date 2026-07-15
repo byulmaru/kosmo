@@ -1,81 +1,98 @@
 ## Context
 
-remote profile foundation은 ActivityPub actor를 kosmo `Profile`로 저장하고 읽을 수 있게 한다. remote follow change는 Fedify inbox listener와 follow graph를 연결한다. 이 change는 그 다음 단계로 inbox에 전달된 지원 addressing의 top-level Note activity를 kosmo `Post`로 materialize해 읽기 경험을 제공한다.
+PR #212/PROD-257은 저장된 remote Profile/Post를 공통 GraphQL surface에서 DB-only로 읽고 Profile/Instance/Post parent authorization을 적용한다. 완료된 PROD-241은 actor-scoped/shared inbox HTTP route와 handler registration 경계를 activity-neutral foundation으로 제공한다. 반면 legacy remote post ingestion change는 unknown actor lookup, private audience, mention relation, TipTap projection과 resolver 변경까지 소유해 PROD-256과 최신 구현 자식 책임에 충돌한다.
+
+이번 change는 이미 검증·저장된 actor가 보낸 공개 top-level Note를 existing Post model에 안전하게 materialize하는 write path만 연다. PROD-341의 versioned PostContent document가 외부 선행 조건이고, PROD-354가 공유 OpenSpec을 단독 소유한다.
 
 ## Goals / Non-Goals
 
-**Goals:**
+**Goals**
 
-- Fedify inbox listener가 검증해 전달한 `Create`의 단일 object를 Fedify vocabulary로 resolve하고 지원 addressing의 top-level Note이면 처리한다.
-- `PUBLIC`, `UNLISTED`, `FOLLOWERS`, `DIRECT` top-level Note를 kosmo `Post`/`PostContent`로 materialize한다.
-- inbound activity actor와 Note author가 materialization 대상 remote actor와 일치하는지 검증한다.
-- 저장되지 않은 inbound author와 mention actor를 기존 Fedify WebFinger/self-link materialization 경계로 resolve한다.
-- ActivityPub object URI uniqueness로 중복 materialization을 막는다.
-- author followers collection과 mention actor URI로 `PUBLIC`, `UNLISTED`, `FOLLOWERS`, `DIRECT`를 판정하고 remote mention을 공통 Profile 관계로 저장한다.
-- remote `Profile.posts`와 home timeline에서 materialized remote posts를 반환한다.
-- remote post visibility를 보수적으로 매핑한다.
+- Fedify typed `Create`와 vocabulary hydration을 재사용한다.
+- PROD-241의 activity-neutral inbox route에 remote-post capability가 소유하는 `Create` handler를 등록한다.
+- known actor와 public top-level Note만 side effect input으로 허용한다.
+- global activity receipt와 Post side effect를 PostgreSQL에서 원자적으로 처리한다.
+- remote content를 공통 versioned PostContent document로 저장한다.
+- 기존 GraphQL authorization/read contract가 materialized row에도 적용됨을 검증한다.
 
-**Non-Goals:**
+**Non-Goals**
 
-- remote actor outbox traversal, outbox refresh, full outbox mirror, background worker 기반 deep backfill.
-- mention notification, mention syntax/rendering, local compose mention 입력, replies, thread reconstruction.
-- Announce/boost, Like/reaction, bookmark.
-- `bto`/`bcc`, author followers collection 이외의 임의 collection, `ccIds` actor mention 같은 추가 private addressing.
-- remote media file proxy, thumbnail, image cache.
-- `Update(Note)`, `Delete(Note)` 또는 Tombstone 처리.
-- `Profile.posts`와 `homeTimeline`의 기존 `Post.id` 기반 connection ordering/pagination primitive를 다른 기준으로 재정의하는 일.
-- remote Note 본문 길이 제한, truncate, 또는 길이 초과 rejection 정책 확정.
-- remote Note `sensitive` boolean의 별도 정책. ActivityStreams `summary`의 V1 Plain Text `PostContent.document.summary` projection은 PROD-259가 소유한다.
-- 복수 `Create.object`의 hydration과 materialization.
-- 같은 object URI가 duplicate `Create`로 재전달될 때 기존 `Post.visibility`를 새 값으로 변경하는 일.
-- `Update(Note)`에서 기존 visibility 또는 `post_mention` recipient를 추가하거나 제거하는 정책.
-- `PostContent` revision별 mention/follower audience snapshot을 별도 relation으로 저장하거나 historical revision을 당시 audience로 authorize하는 일.
-- unknown author/mention lookup의 rate limit, cardinality limit, allowlist 또는 다른 anti-spam 정책.
-- 기존 `ActivityPubActor.followersUri = null` row를 inbox Note 수신 중 backfill하거나 author refresh로 복구하는 일.
-- Fedify KV backend를 durable/shared production store로 교체하거나 activity ID를 kosmo DB에 별도 저장해 process restart와 다중 instance 사이의 activity ID idempotency를 보장하는 일.
+- `activitypub-actor-discovery`의 공통 route requirement 재정의
+- remote actor/mentioned Profile discovery 또는 refresh
+- Reply/thread([PROD-358](https://linear.app/byulmaru/issue/PROD-358)), FOLLOWERS audience([PROD-360](https://linear.app/byulmaru/issue/PROD-360)), DIRECT recipient relation([PROD-359](https://linear.app/byulmaru/issue/PROD-359))
+- GraphQL schema/resolver 변경 또는 request-time remote fetch
+- Fedify 전체 KV backend, queue/worker와 authenticated shared-inbox identity
+- ActivityStreams Mention, media, update/delete와 outbox backfill
 
-## Decisions
+## Data Flow
 
-- **Fedify inbox listener와 vocabulary hydration을 사용한다.** HTTP signature verification, actor key verification, request parsing, typed ActivityPub object handling과 activity ID 기반 inbox idempotency는 Fedify에 맡긴다. kosmo는 `actorIds`/`objectIds`로 actor/profile/instance와 단일 object ID precondition을 먼저 검증한 뒤 `Create.getObject({ documentLoader: ctx.documentLoader })`로 embedded 또는 IRI-only object를 resolve한다. Fedify의 default `crossOrigin: "ignore"` 정책을 유지해 신뢰할 수 없는 cross-origin embedded object는 authoritative URI에서 다시 가져오며 `crossOrigin: "trust"`를 사용하지 않는다. object dereference용 HTTP client나 ActivityPub parser를 별도로 구현하지 않고 hydration 실패 또는 `Note`가 아닌 결과는 skip한다. 이 change가 명시적으로 hydrate하는 property는 `Create.object` 하나뿐이며 attribution, addressing, reply 판정은 `attributionIds`, `toIds`, `ccIds`, `replyTargetIds`를 사용한다.
-- **durable activity ID idempotency backend는 이번 change에서 정하지 않는다.** 같은 activity ID의 재전달 skip은 configured Fedify KV에 맡기며, 현재 `MemoryKvStore` 구성은 process-local이므로 process restart 또는 다중 instance 사이의 deduplication을 보장하지 않는다. ActivityPub object URI unique constraint는 같은 Note URI의 중복 materialization을 막지만, 재시작 뒤 같은 activity ID가 서로 다른 object URI를 가리키는 경우까지 막지는 않는다. 이번 change는 이를 accepted risk로 두고 activity ID를 `activitypub_object`에 저장하지 않으며, durable/shared Fedify KV backend 선택과 운영 구성은 별도 infrastructure change로 남긴다.
-- **actor-scoped inbox와 shared inbox가 같은 Note ingestion 경계다.** `activitypub-actor-discovery`의 unsupported endpoint 경계는 verified `Create` delivery를 Fedify listener로 통과시키고, post ingestion handler가 Fedify로 resolve한 지원 addressing의 단일 top-level Note만 materialize한다.
-- **ActivityPub object URI가 remote post identity다.** Fedify URL의 `.href` 문자열을 actor/object URI 저장과 exact equality 비교에 사용하고 handle/domain 기반 별도 동일성 추론은 하지 않는다. object URI를 unique로 저장하고, 서로 다른 activity ID의 `Create`에서 같은 remote actor와 object URI가 다시 발견되면 incoming visibility를 다시 판정한다. incoming visibility가 기존 `Post.visibility`와 같을 때만 기존 `Post`를 재사용해 content와 resolved mention 집합을 갱신하며, 다르면 새 content가 기존 audience로 노출되지 않도록 `PostContent`와 `post_mention`을 모두 갱신하지 않는다. 최초 visibility, object mapping metadata와 `Post.createdAt`은 유지한다. 최초 `Post`, `PostContent`, resolved `post_mention`, object mapping 생성은 하나의 transaction으로 수행하고 object URI unique conflict가 발생하면 부분 생성 row를 남기지 않는다. 기존 mapping 갱신도 transaction에서 해당 `activitypub_object` row를 잠근 뒤 canonical versioned PostContent document의 구조적 equality를 비교해 revision 생성 및 `Post.currentContentId` 교체와 resolved mention 집합 동기화를 함께 수행한다. 같은 content의 동시 재전달은 동일 revision을 중복 생성하지 않고, content와 mention이 서로 다른 delivery에서 섞인 상태를 노출하지 않는다. 이미 저장된 object mapping의 `activityPubActorId`가 이번 delivery에서 URI로 조회한 `activitypub_actor.id`와 다르면 기존 `Post`, `PostContent`, `post_mention`, object mapping을 갱신하지 않는다. kosmo `Post.id`는 내부 GraphQL/DB identity로 유지한다.
-- **`activitypub_object`는 좁은 identity mapping이다.** UUIDv7 `id`, object `uri`, `type`, `activityPubActorId`, `postId`, `receivedAt`, nullable `publishedAt`만 저장한다. Note에는 non-unique `ActivityPubObjectType.NOTE`를 저장한다. `uri`와 `postId`는 각각 unique이고, `activityPubActorId`는 `activitypub_actor.id`를 참조하는 non-unique indexed foreign key이다. actor URI를 mapping에 중복 저장하지 않는다.
-- **actor attribution을 단일 URI로 검증한다.** Fedify는 missing activity actor와 signature/key owner 불일치를 listener 진입 전에 거부한다. kosmo handler는 `Create.actorIds`의 서로 다른 URL `.href` 문자열을 정확히 하나만 허용하고, Note `attributionIds`의 서로 다른 URL `.href` 문자열도 정확히 하나만 허용한다. 두 URI는 exact match해야 하며, 해당 URI의 `activitypub_actor`가 가리키는 remote `Profile.state`는 `ACTIVE`이고 그 instance kind는 `ACTIVITYPUB`이어야 한다. 이 조건이나 Note object URI가 검증되지 않으면 저장하지 않는다.
-- **unknown author는 object hydration 전에 기존 inbound actor lookup 경계로 materialize한다.** verified `Create.actorIds`의 단일 URI가 DB에 없으면 remote-follow에서 이미 정의한 Fedify `ctx.lookupWebFinger(actorUri)` URL-resource lookup을 재사용한다. URL에 대한 `ctx.lookupObject(actorUri)`는 actor document를 직접 가져오면 WebFinger를 생략할 수 있으므로 이 검증을 대신하지 않는다. WebFinger 결과의 `acct:` subject와 ActivityPub self link를 확인하고 self link가 inbound actor URI와 정확히 일치할 때만 해당 federated handle을 기존 remote profile materialization service에 전달한다. post ingestion은 local recipient나 기존 follow 관계가 없어도 이 author lookup을 수행하며, lookup/self-link/materialization이 실패하면 object를 hydrate하지 않는다. `SUSPENDED` instance는 차단하고 verified inbound author의 `UNRESPONSIVE` instance는 reachability signal로 `ACTIVE`로 전환한 뒤 진행한다. 성공적으로 materialize된 author Profile은 이후 Note가 다른 검증에서 탈락해도 독립적으로 유효한 remote Profile로 유지한다.
-- **stale stored author는 refresh하지 않는다.** 저장된 actor가 stale이어도 Note ingestion은 DB row를 그대로 사용하고 remote actor materialization service나 profile refresh를 예약/수행하지 않는다. 이는 `activitypub-remote-profile-federation`의 federation 내부 materialization 일반 refresh 규칙에 대한 명시적 inbox Note ingestion 예외다. Fedify가 inbox signature와 actor key 검증 및 accepted `Create.object` hydration에 필요한 protocol fetch를 수행하는 것은 actor profile refresh와 구분해 허용한다.
-- **actor followers collection URI를 저장한다.** remote actor materialization/refresh 때 Fedify actor의 nullable `followersId?.href`를 `ActivityPubActor.followersUri`에 투영한다. followers URI는 actor URI에 path를 붙여 추론하지 않는다. 값이 없거나 Note `toIds`와 exact match하지 않으면 해당 addressing을 `FOLLOWERS`로 추정하지 않으며, inbox Note ingestion이 누락 값을 backfill하거나 이를 이유로 author를 refresh하지 않는다. 다른 지원 visibility로도 판정되지 않으면 해당 Note를 skip한다.
-- **visibility는 addressing marker 우선순위로 판정한다.** `replyTargetIds`가 비어 있는 top-level Note에서 `toIds` Public은 `PUBLIC`, 그 외 `ccIds` Public은 `UNLISTED`, 그 외 author `followersUri`가 `toIds`에 있으면 `FOLLOWERS`, 그 외 Public/followers/author를 제외한 `toIds` mention 후보 URI가 하나 이상 있으면 `DIRECT`다. Direct 여부와 mention Profile 저장을 분리해, lookup에 실패한 후보가 있어도 기존 Direct Post의 stale recipient를 제거할 수 있게 한다. 새 Direct Post의 최초 저장은 별도로 active local mentioned Profile을 요구한다. Public marker가 followers collection이나 mention과 함께 있어도 앞선 public/unlisted 판정이 우선한다. `ccIds` actor URI는 mention으로 저장하지 않는다.
-- **mention actor는 best-effort로 materialize한다.** Public/followers marker와 author URI를 제외한 서로 다른 `toIds` actor URI를 mention 후보로 열거한다. 새 Followers/Direct Note는 private local relevance preflight가 통과한 뒤에만 저장된 ActivityPub actor URI를 resolve하고 unknown remote URI를 author와 같은 WebFinger/self-link/materialization 경계로 lookup한다. Public/Unlisted Note와 기존 same-visibility duplicate는 이 최초 저장 preflight를 요구하지 않는다. 성공한 local/remote active Profile은 공통 `post_mention` 관계로 저장하고 개별 lookup 실패, self-link 불일치, 비지원 actor, unavailable instance는 해당 mention만 제외하며 Note 전체를 버리지 않는다. remote mention lookup에 cardinality/rate limit을 두는 추가 anti-spam 정책은 후속 범위다.
-- **private Note 최초 저장은 remote mention lookup 전에 active local relevance를 확인한다.** Public/unlisted Note는 local recipient나 follow 관계 없이 최초 materialize한다. 새 Followers Note는 unknown remote mention lookup 전에 author를 established 관계로 팔로우하는 active local Profile 또는 `toIds`에서 직접 resolve되는 active local mentioned Profile이 하나 이상인지 확인한다. 새 Direct Note는 같은 단계에서 active local mentioned Profile이 하나 이상인지 확인한다. 이 preflight가 실패하면 unknown remote mention을 WebFinger lookup/materialize하거나 remote mention Profile side effect를 만들지 않고 Note를 skip한다. personal inbox의 `ctx.recipient`가 있으면 해당 local Profile이 이 접근 대상에 포함되어야 하고, shared inbox는 local actor URI와 DB follow 관계로 같은 조건을 판정한다. unknown author materialization은 이 mention preflight보다 앞선 별도 precondition으로 유지한다. 이미 저장된 같은 visibility의 Note가 재전달되면 새 addressing에 active local relevance가 남지 않았더라도 stale mention 접근을 제거할 수 있도록 recipient 동기화를 수행한다.
-- **`post_mention`은 origin 공통 access relation이다.** `post_mention`은 `Post`와 mentioned `Profile`을 연결하며 remote inbox ingestion이 최초 materialization 때 생성한다. 같은 visibility의 duplicate `Create`는 새 `toIds`에서 resolve된 Profile 집합을 authoritative recipient set으로 사용해 기존 relation에 새 Profile을 추가하고 더 이상 포함되지 않은 Profile을 제거한다. mention 집합만 바뀌고 canonical PostContent document가 같으면 새 `PostContent` revision 없이 relation만 갱신한다. mention과 content가 모두 바뀌면 같은 locked transaction에서 함께 반영한다. 공통 Post visibility predicate는 `FOLLOWERS`에서 established follower 또는 mentioned Profile을, `DIRECT`에서 mentioned Profile을 허용한다. local compose에는 아직 mention 입력 경로가 없으므로 이번 change는 local post의 mention 관계를 생성하지 않는다. `Update(Note)` recipient 정책은 정의하지 않는다.
-- **published fallback은 최초 `Post.createdAt` projection에만 적용한다.** Note `published`가 있고 수신 시각보다 미래가 아니면 최초 materialization의 `Post.createdAt`으로 저장하고 ActivityPub object mapping에도 원본 published 시각을 저장한다. 새 remote post 최초 저장 시 `published`가 없거나 수신 시각보다 미래이면 수신 시각을 `Post.createdAt` fallback으로 사용한다. `published`가 없을 때 ActivityPub object mapping의 원본 published 시각은 `null`이고, 미래인 경우 원본 값은 mapping에 보존한다. 이후 같은 object URI가 재전달되면 `published` 유무와 값에 관계없이 기존 `Post.createdAt`을 유지한다.
-- **PostContent는 PROD-341 versioned canonical document revision이다.** 새 remote `Post`는 `ACTIVE`로 만들고, 최초 및 변경 revision의 `PostContent.createdAt`은 해당 delivery 수신 시각으로 둔다. PROD-259는 Fedify의 단일 `Note.content`와 `summary`를 canonical `{ version, summary, body }` document로 projection한다. `LanguageString`은 `.toString()` 문자열 값만 사용하고 locale은 저장하지 않는다. primary content가 없으면 V1 canonical empty body를 사용한다. content가 있으면 MIME essence를 정규화하고 `text/html`과 `text/plain`을 전용 parser로 V1 paragraph/text/hard-break/link body에 projection한 뒤 `@kosmo/core/post-content/server`로 검증·canonicalize한다. `pre`를 포함한 비지원 block은 전용 node 없이 visible text와 개행만 보존한다. malformed 또는 비지원 MIME, schema 검증 실패이면 Note를 skip한다. attachment-only Note는 empty body로 materialize한다. remote HTML 원본과 파생 Plain Text는 저장하지 않는다. 같은 actor의 동일 object URI가 재전달되면 canonical versioned PostContent document 의미가 달라진 경우에만 새 `PostContent` revision을 만들고 `Post.currentContentId`를 교체한다. 같으면 기존 revision을 재사용한다. current와 historical revision은 모두 GraphQL `PostContent` Node로 직접 조회할 수 있다. 직접 조회는 parent `Post.state = ACTIVE`와 parent visibility 및 작성자 profile/instance visibility를 요구하되, historical revision에는 `Post.currentContentId` 일치를 요구하지 않는다. 최초 object mapping의 수신 시각, 원본 published 시각, visibility와 기존 `Post.createdAt`은 재전달로 갱신하지 않는다.
-- **historical PostContent는 현재 parent audience로 authorize한다.** revision별 mention 또는 follower audience snapshot을 저장하지 않는다. current와 historical `PostContent` Node 직접 조회는 모두 현재 parent `Post.visibility`, 현재 `post_mention`, 현재 established follow 관계와 작성자 profile/instance visibility를 적용한다. same-visibility Direct duplicate가 recipient를 A에서 B로 바꾸면 B가 이전 content revision을 조회할 수 있고 A는 현재 Direct 접근을 잃는 것을 accepted limitation으로 둔다. visibility 변경 delivery는 계속 전체 갱신을 거부한다.
-- **GraphQL 요청 중 remote fetch를 하지 않는다.** `Profile.posts` 요청은 이미 inbox에서 materialized된 posts만 반환한다. 저장된 materialized posts가 없으면 빈 connection을 반환한다.
-- **GraphQL post read path는 origin 공통 경계를 유지한다.** materialized remote post도 기존 `Post`, `Profile.posts`, `homeTimeline` resolver와 공통 visibility predicate를 사용한다. remote 전용 resolver 분기를 추가하지 않고 공통 visibility 경계에 remote instance 상태 조건만 추가한다.
-- **기존 `Post.id` 기반 connection ordering/pagination 계약을 바꾸지 않는다.** `Profile.posts`와 `homeTimeline`은 기존과 같이 logical connection order를 `Post.id DESC`로 유지하고 cursor도 `Post.id`를 기준으로 처리한다. remote `published`는 `Post.createdAt` projection에만 반영하며 ordering primitive나 cursor에 사용하지 않는다.
-- **local compose 500자 제한을 remote inbox content에 그대로 재사용하지 않는다.** remote federation content는 저장, 렌더링, UX 정책을 별도로 결정해야 하므로 이번 PR에서는 content projection만 정의하고 길이 초과 처리 정책은 확정하지 않는다.
-- **blocked instance의 inbound side effect를 제한한다.** `SUSPENDED` instance의 delivery는 `Create.object`를 hydrate하거나 저장하지 않는다. `UNRESPONSIVE` instance의 verified inbound author는 materialization eligibility와 별개인 reachability signal로 보고 instance를 `ACTIVE`로 갱신한 뒤 author materialization 또는 object hydration을 계속한다. 최초 `Post` materialization은 그 뒤 actor/object attribution, 지원 addressing의 top-level, local relevance와 content projection 검증을 모두 통과한 Note에만 수행한다. 기존 same-visibility Note의 duplicate는 stale mention 접근 제거 계약을 적용한다.
-- **SUSPENDED instance의 기존 materialized posts도 read path에서 숨긴다.** instance가 나중에 `SUSPENDED`로 바뀌면 새 delivery가 없어도 `Post` Node, `PostContent` Node 직접 조회, remote `Profile.posts`, `homeTimeline`에서 해당 remote post를 반환하지 않는다.
-- **home timeline은 materialized posts만 사용한다.** remote followee의 outbox를 home timeline 요청에서 깊게 fetch하지 않고, 이미 materialized된 posts를 local posts와 같은 visibility 규칙으로 섞는다.
-- **mention은 home timeline 후보를 확장하지 않는다.** viewer가 established 관계로 팔로우하는 author의 materialized post는 공통 visibility를 통과하면 `FOLLOWERS` 또는 mentioned viewer 대상 `DIRECT`도 home timeline에 포함할 수 있다. non-followee author가 viewer를 mention했다는 이유만으로 home timeline 후보에 추가하지 않으며 mention notification과 별도 mention 목록은 후속 범위다.
+```text
+Fedify inbox listener
+  -> typed Create.id/actor/object cardinality 확인
+  -> 저장된 actor/profile/instance eligibility 조회
+  -> Fedify documentLoader로 Note hydration
+  -> attribution/top-level/public addressing 검증
+  -> PROD-259 canonical document projection
+  -> PROD-261 PostgreSQL transaction
+       receipt claim
+       object mapping
+       Post/PostContent/currentContent
+  -> existing GraphQL DB-only read
+```
 
-## Risks / Trade-offs
+## Recommended Approach
 
-- **전달되지 않은 과거 게시글 누락** → inbox로 전달된 Note만 materialize하고, outbox backfill로 보완하지 않는다.
-- **remote private post 공개 위험** → 정해진 addressing 우선순위와 exact followers URI/mention 관계로 visibility와 접근 대상을 판정하고, 지원하지 않거나 불분명한 addressing은 skip한다.
-- **content projection 품질 한계** → PROD-259 parser와 PROD-341 V1 schema가 지원하는 paragraph/text/hard-break/link 범위만 저장하고 `pre`, remote HTML 원본과 attachment는 보존하지 않는다. rich content fidelity와 media 저장은 후속 정책에서 확장한다.
-- **home timeline completeness 한계** → materialized된 remote posts만 포함하고 outbox traversal은 범위 밖으로 둔다.
-- **activity ID deduplication 내구성 한계** → 현재 Fedify `MemoryKvStore`에서는 process restart와 다중 instance 사이의 같은 activity ID 재전달을 deduplicate하지 못한다. object URI uniqueness로 같은 Note의 중복 저장은 막되 durable/shared activity ID idempotency는 별도 infrastructure change에서 다룬다.
-- **inbound lookup 증폭 위험** → unknown author와 materialization 대상 Note의 `toIds` mention actor를 materialize하므로 악의적인 delivery가 federation lookup과 Profile row 생성을 늘릴 수 있다. 새 Followers/Direct Note는 unknown remote mention lookup 전에 local relevance를 확인해 저장되지 않을 private Note의 mention lookup side effect를 막는다. unknown author와 Public/Unlisted Note 및 accepted duplicate의 mention lookup에는 별도 rate/cardinality 제한을 두지 않고 후속 anti-spam change로 남긴다.
-- **followers URI 누락에 따른 completeness 한계** → 기존 actor의 `followersUri`가 `null`이면 해당 actor의 followers-only Note를 `FOLLOWERS`로 판정하지 못해 skip할 수 있다. inbox ingestion에서 이를 복구하지 않는 accepted limitation으로 두고, 별도 profile materialization/refresh가 값을 채운 이후의 delivery부터 처리한다.
-- **historical private revision audience drift** → revision별 audience를 보존하지 않으므로 same-visibility recipient 변경은 현재 recipient에게 과거 content revision 접근을 허용하고 이전 recipient의 접근을 제거할 수 있다. content revision과 audience revision을 별도 모델링하는 복잡성을 이번 change에 추가하지 않는 accepted limitation이다.
+### Inbox adapter와 validation
 
-## Migration Plan
+- actor-scoped/shared listener는 같은 `Create` handler와 `withIdempotency("global")` 설정을 사용한다.
+- handler는 non-null `Create.id.href`와 진입 시 한 번 캡처한 `receivedAt`을 필수 input으로 만든다.
+- actor/object URI는 URL `.href` 기준으로 deduplicate해 각각 하나만 허용한다.
+- Note hydration 전에 저장된 `ActivityPubActor + Profile + Instance`를 조회한다. unknown/inactive/non-ActivityPub/SUSPENDED는 hydration과 profile network/write 없이 종료한다.
+- ACTIVE/UNRESPONSIVE actor만 진행하며, hydration된 Note의 ID와 attribution을 검증한 뒤 UNRESPONSIVE instance를 compare-and-set으로 ACTIVE 복구할 수 있다.
+- object는 `Create.getObject({ documentLoader })`를 사용하고 Fedify cross-origin 기본값을 유지한다. custom fetch/parser와 `trust`는 사용하지 않는다.
+- `to`의 Public은 PUBLIC, `cc`의 Public은 UNLISTED로 projection한다. reply 또는 public marker가 없는 addressing은 skip한다.
 
-1. ActivityPub actor followers URI, object mapping과 origin 공통 `post_mention` 저장 경계를 추가한다.
-2. verified inbound author/mention actor lookup과 Fedify inbox Note materialization service를 추가한다.
-3. addressing visibility, local relevance, content projection과 원자적 최초/duplicate 저장 경계를 구현한다.
-4. origin 공통 Post visibility 경계에 mention recipient와 remote instance 상태 필터를 추가하고 기존 `Post`/`PostContent`/`Profile.posts` read path를 검증한다.
-5. 기존 origin 공통 `homeTimeline`이 established `ProfileFollow`의 local/remote followee에서 viewer-visible materialized posts를 별도 remote 분기 없이 포함하고 non-followee mention으로 후보를 확장하지 않는지 검증한다.
+### Content projection
+
+- Fedify adapter는 `LanguageString.toString()`으로 primitive content/summary를 만들고 locale/vocabulary type을 core에 전달하지 않는다.
+- PROD-259는 HTML/plain/absent content를 PROD-341의 V1 paragraph/text/hard_break/link body와 Plain Text Content Warning으로 projection한다.
+- raw HTML, executable markup/URL, image와 파생 Plain Text는 canonical storage가 아니다.
+- canonical document structural equality와 nullable Content Warning equality가 revision identity다. raw serialized JSON 문자열이나 formatting-only HTML은 독립 revision identity가 아니다.
+
+### Durable storage와 concurrency
+
+- PROD-255는 unique global `activityId` receipt와 unique object URI/Post mapping을 제공한다.
+- PROD-261은 transaction 시작에서 receipt를 `ON CONFLICT DO NOTHING ... RETURNING`으로 claim한다. claim 실패는 Post side effect 없는 성공한 duplicate다.
+- 최초 delivery는 receipt, mapping, Post, first PostContent와 currentContent를 함께 저장한다.
+- object URI insert conflict는 현재 transaction을 sentinel error로 rollback한 뒤 새 transaction에서 receipt를 다시 claim하고 existing mapping을 `FOR UPDATE`로 잠근다. 다른 unique violation을 object race로 정규화하지 않는다.
+- same actor mapping은 canonical document/Content Warning 변경에만 새 revision을 만든다. 다른 actor 또는 visibility mismatch는 기존 Post를 변경하지 않고 receipt만 처리 완료로 남긴다.
+- `receivedAt`은 mapping 수신 시각과 새 PostContent 생성 시각에 사용한다. 유효한 published가 `receivedAt + 5분` 이내이면 최초 `Post.createdAt`에 사용하고 missing/더 미래이면 receivedAt으로 fallback한다. 원본 published는 nullable mapping metadata로 보존한다.
+
+### GraphQL regression boundary
+
+- remote Post 전용 resolver, object mapping join과 request-time fetch를 추가하지 않는다.
+- PROD-262는 object mapping 없이 remote Profile/Post/PostContent fixture를 만들어 `Post` Node, current/historical `PostContent`, `Profile.posts`, `homeTimeline`의 existing authorization을 검증한다.
+- ACTIVE/UNRESPONSIVE의 PUBLIC/UNLISTED stale read는 허용하고 SUSPENDED/inactive author/inactive Post는 숨긴다. connection ordering/cursor는 기존 `Post.id DESC`를 유지한다.
+
+## Delivery and Ownership
+
+1. PROD-341이 versioned PostContent document를 main에 병합한다.
+2. PROD-354 spec-only PR은 PR #260의 activity-neutral inbox 책임 정렬 위에서 이 change만 소유하고 main에 병합한다.
+3. PROD-255/259/260/262 구현 PR은 이 공유 change를 수정하지 않고 각 schema/projection/validation/regression 결과만 전달한다.
+4. PROD-261이 PROD-255/259/260 결과를 하나의 materialization transaction으로 통합한다.
+5. PROD-256이 전체 slice, canonical spec sync와 archive를 검증한다.
+6. PROD-256 완료 뒤 PROD-358/360/359가 현재 change를 다시 열지 않고 각각 별도 OpenSpec으로 deferred contract를 확장한다.
+
+## Risks and Mitigations
+
+- **Fedify KV와 DB receipt 불일치**: KV는 최적화로만 취급하고 DB receipt conflict를 최종 판정으로 사용한다.
+- **object URI 동시 insert**: aborted transaction 밖에서만 lock/recovery를 수행하고 독립 connection test로 검증한다.
+- **unknown actor delivery 유실**: profile materialization을 명시적 선행 조건으로 두어 inbox abuse surface와 숨은 network/write를 줄인다.
+- **content fidelity 제한**: V1 allowlist와 deterministic canonicalization을 사용하고 Mention/media는 후속 version에서 확장한다.
+- **기존 resolver 결함**: PROD-262가 결함을 발견하면 implementation scope를 다시 열고 test-only 이슈에서 조용히 수정하지 않는다.
+
+## Migration and Rollback
+
+- schema 변경은 PROD-255의 additive migration이 소유하며 PROD-354는 migration을 만들지 않는다.
+- 구현 slice 배포 전에는 ingestion handler가 등록되지 않으므로 spec-only merge가 runtime behavior를 바꾸지 않는다.
+- rollback은 ingestion handler 비활성화로 새 materialization을 멈출 수 있다. durable receipt 삭제는 replay 보장을 약화하므로 rollback 절차에 포함하지 않는다.
