@@ -5,10 +5,10 @@
 ## What Changes
 
 - Local `OPEN` 프로필 follow는 기존처럼 성립된 `ProfileFollow`를 생성하거나 반환하고, `APPROVAL_REQUIRED` 프로필 follow는 pending `ProfileFollowRequest`를 생성하거나 반환한다.
-- Local/Remote request가 공유하는 pair 조회, 승인, 거절, 취소 core lifecycle과 participant·상태·중복 검증을 제공한다.
+- Local/Remote request가 공유하는 pair 조회, 승인, 거절, 취소 core lifecycle을 제공한다. participant 가용성은 관계를 만드는 승인에서 검증하고, 거절·취소는 unavailable 상대가 있어도 pending row를 정리할 수 있게 한다.
 - 승인 시 request 삭제, relation 생성과 저장 follow count 갱신을 하나의 transaction으로 처리하고 caller transaction에 참여한다.
 - GraphQL에 participant 전용 `ProfileFollowRequest` Relay Node, Profile 소유 incoming/outgoing connection과 처리 mutation을 제공한다.
-- **BREAKING**: `FollowProfilePayload.profileFollow`을 `ProfileFollowResult` union 타입의 `FollowProfilePayload.result`로 교체하고 Relay cache 갱신에 필요한 Profile과 삭제 ID를 처리 mutation payload에 포함한다.
+- **BREAKING**: `FollowProfilePayload.profileFollow`을 `ProfileFollowResult` union 타입의 `FollowProfilePayload.result`로 교체한다. 승인은 영향받은 Profile과 삭제 ID를, 거절·취소는 삭제 ID를 처리 mutation payload에 포함한다.
 - 기존 FollowButton은 union 결과를 안전하게 처리해 `OPEN` follow/unfollow 동작을 유지하되 요청 상태·취소·관리 UI는 추가하지 않는다.
 - Notification 생성·표시, Fedify inbox/Accept/Reject delivery, remote target follow/unfollow, inbound correlation/generation과 새 DB migration은 포함하지 않는다.
 

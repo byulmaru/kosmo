@@ -24,15 +24,25 @@
 - Consequences: service 경계가 caller transaction 참여를 지원해야 하고 concurrency/savepoint/rollback DB test가 필수다.
 - Confirmation / Follow-up: 중복 create, 동시 approve, 기존 relation 승인과 caller rollback에서 relation 수와 저장 count를 함께 검증한다.
 
+### Participant 가용성은 승인에서만 요구한다
+
+- Decision Date: 2026-07-15
+- Status: Accepted
+- Context / Problem: 승인은 새 관계를 생성하므로 두 participant의 가용성과 차단 상태가 필요하지만, 거절·취소까지 같은 검사를 적용하면 unavailable 상대가 포함된 pending row를 정리할 수 없다.
+- Decision Outcome: approve는 두 participant가 active/normal이고 remote instance가 `SUSPENDED`가 아니어야 한다. reject는 active followee와 request 존재만, cancel은 active follower와 request 존재만 요구하며 다른 participant의 가용성을 요구하지 않는다.
+- Alternatives Considered: 모든 transition에 participant 가용성을 요구하면 pair unique stale row가 남는다. unavailable request를 자동 삭제하면 actor의 명시적 거절·취소 권한과 transaction 경계를 우회한다.
+- Consequences: 승인 불가 request도 올바른 active participant가 명시적으로 제거할 수 있으며 relation과 count는 변경되지 않는다.
+- Confirmation / Follow-up: inactive follower reject, inactive followee cancel과 `SUSPENDED` remote counterpart cleanup을 DB-backed test로 검증한다.
+
 ### Request 조회는 participant와 Profile 소유 경계로 제한한다
 
 - Decision Date: 2026-07-15
 - Status: Accepted
 - Context / Problem: pending request는 공개 follow graph가 아니며 Node ID나 다른 Profile의 connection을 통해 존재가 노출되면 관계 의도와 계정 활동이 유출된다.
-- Decision Outcome: `ProfileFollowRequest` Node는 현재 active Profile이 follower 또는 followee일 때만 반환한다. incoming/outgoing connection은 현재 active Profile과 동일한 Profile field에서만 반환하고 다른 Profile에서는 `null`을 반환한다. participant가 비활성이거나 remote instance가 `SUSPENDED`이면 Node와 connection에서 숨긴다.
-- Alternatives Considered: 인증 사용자 전체에 공개하거나 root Query로 제공하면 object 소유권과 Relay actor cache 경계가 흐려진다. field resolver에서만 권한을 확인하면 Node loader와 connection을 통한 우회가 남는다.
-- Consequences: Node access, participant field, connection resolver가 같은 visibility predicate를 공유해야 한다.
-- Confirmation / Follow-up: non-participant global ID 조회, 다른 Profile connection과 unavailable participant가 모두 존재를 노출하지 않는지 API integration test로 확인한다.
+- Decision Outcome: `ProfileFollowRequest` Node는 현재 active Profile이 follower 또는 followee일 때만 반환한다. incoming/outgoing connection은 현재 active Profile과 동일한 Profile field에서만 반환하고 다른 Profile에서는 `null`을 반환한다. 다른 participant가 비활성이거나 remote instance가 `SUSPENDED`여도 request는 active participant에게 보이며 unavailable Profile 필드만 Profile visibility 계약에 따라 `null`일 수 있다.
+- Alternatives Considered: 인증 사용자 전체에 공개하거나 root Query로 제공하면 object 소유권과 Relay actor cache 경계가 흐려진다. unavailable participant가 있다는 이유로 request 전체를 숨기면 active counterpart가 거절·취소할 cleanup 경로가 사라진다. field resolver에서만 권한을 확인하면 Node loader와 connection을 통한 우회가 남는다.
+- Consequences: Node access와 connection은 participant predicate를 공유하고, participant Profile field는 각 Profile visibility를 별도로 적용해야 한다.
+- Confirmation / Follow-up: non-participant global ID와 다른 Profile connection은 존재를 노출하지 않고, unavailable counterpart가 있는 request는 active participant에게 보이되 해당 Profile field만 숨겨지는지 API integration test로 확인한다.
 
 ### Follow 성공 결과는 명시적인 GraphQL union과 result 필드를 사용한다
 
@@ -44,14 +54,14 @@
 - Consequences: dev 서버만 운용하므로 구버전 native client compatibility transition 없이 API와 현재 앱을 같은 구현 PR에서 함께 전환한다.
 - Confirmation / Follow-up: Relay compiler와 기존 OPEN FollowButton 동작을 검증하고 API schema와 앱 operation이 같은 배포 단위에 포함됐는지 확인한다.
 
-### Request 처리 mutation은 삭제 ID와 영향받은 Profile을 반환한다
+### Request 처리 mutation은 transition별 최소 cache payload를 반환한다
 
 - Decision Date: 2026-07-15
 - Status: Accepted
 - Context / Problem: 승인·거절·취소 뒤 request row가 삭제되므로 Node를 성공 payload로 반환하면 loader/auth가 실패하고 Relay cache에서 제거할 정확한 ID가 필요하다.
-- Decision Outcome: 공개 mutation 이름은 `approveProfileFollowRequest`, `rejectProfileFollowRequest`, `cancelProfileFollowRequest`로 한다. 승인은 `ProfileFollow`, 삭제된 request global ID와 follower/followee Profile을 반환하고, 거절·취소는 삭제된 request global ID와 follower/followee Profile을 반환한다. 삭제된 request Node는 반환하지 않는다.
-- Alternatives Considered: boolean success는 cache 제거와 count/Profile 갱신에 필요한 정보가 없다. 삭제된 Node 반환은 존재하지 않는 row를 다시 load해야 한다. 하나의 범용 transition mutation은 actor 역할과 허용 transition을 input 값에 숨긴다.
-- Consequences: mutation별 payload와 권한 테스트가 추가되며 앱은 삭제 ID로 request Node/connection을 제거할 수 있다.
+- Decision Outcome: 공개 mutation 이름은 `approveProfileFollowRequest`, `rejectProfileFollowRequest`, `cancelProfileFollowRequest`로 한다. 승인은 `ProfileFollow`, 삭제된 request global ID와 follower/followee Profile을 반환한다. 거절·취소는 relation/count를 변경하지 않으므로 삭제된 request global ID만 반환한다. 삭제된 request Node는 반환하지 않는다.
+- Alternatives Considered: boolean success는 cache에서 정확한 request를 제거할 수 없다. 삭제된 Node 반환은 존재하지 않는 row를 다시 load해야 한다. 거절·취소에서 Profile을 필수 반환하면 unavailable counterpart cleanup을 payload 가용성에 결합한다. 하나의 범용 transition mutation은 actor 역할과 허용 transition을 input 값에 숨긴다.
+- Consequences: mutation별 payload와 권한 테스트가 추가되며 앱은 삭제 ID로 request Node/connection을 제거할 수 있다. Profile과 count 갱신은 승인 payload에만 필요하다.
 - Confirmation / Follow-up: 공개 이름과 payload field를 schema snapshot과 integration test로 고정한다.
 
 ### Request connection은 시간순을 공개 계약으로 고정하지 않는다

@@ -38,12 +38,12 @@ PROD-323은 request row의 존재 자체가 Pending이며 승인 시 삭제+rela
 ### Recommended Approach
 
 1. Established relation 생성·count 갱신의 현재 동작을 유지하면서 request service가 같은 connection/transaction 안에서 호출할 수 있는 core 경계로 정리한다. caller transaction이 있으면 그 경계 안에 합류하고, 없으면 shared DB에서 transaction을 시작한다.
-2. request service는 pair lookup, local policy 기반 생성, approve, reject, cancel action을 소유한다. 각 action은 participant profile/instance 상태와 actor 역할을 write 직전에 검증한다.
+2. request service는 pair lookup, local policy 기반 생성, approve, reject, cancel action을 소유한다. 각 action은 actor 역할을 write 직전에 검증하고, participant profile/instance 상태는 request 생성과 approve에서 검증한다.
 3. local follow action은 established relation을 먼저 확인하고, 없으면 pending request를 확인한 뒤 target policy에 따라 relation 또는 request를 생성한다. concurrency는 pair unique와 insert 결과로 수렴시키고 기존 row를 반환한다.
-4. approve action은 request와 participant를 조회·검증한 뒤 relation 생성 또는 기존 relation 확인, request 삭제와 새 relation의 count 증가를 하나의 transaction에서 처리한다. relation이 이미 있으면 request만 삭제하고 count를 증가시키지 않는다.
-5. reject/cancel action은 각각 followee/follower 권한을 검증한 뒤 request를 삭제하며 count를 변경하지 않는다. 이미 삭제된 request ID는 not found로 처리한다.
-6. GraphQL은 `ProfileFollowRequest` loadable Node와 participant access를 추가하고, 현재 active Profile과 동일한 Profile에서만 incoming/outgoing connection을 반환한다. connection은 기존 API의 Relay pagination 관례를 재사용하고 시간순 필드나 정렬 방향을 공개 계약으로 고정하지 않는다.
-7. `followProfile`은 `FollowProfilePayload.result`의 `ProfileFollowResult` union을 반환한다. approve/reject/cancel mutation은 삭제된 request ID와 영향받은 Profile을 반환하고 삭제된 request Node는 반환하지 않는다.
+4. approve action은 request와 두 participant의 가용성·차단 상태를 조회·검증한 뒤 relation 생성 또는 기존 relation 확인, request 삭제와 새 relation의 count 증가를 하나의 transaction에서 처리한다. relation이 이미 있으면 request만 삭제하고 count를 증가시키지 않는다.
+5. reject/cancel action은 각각 followee/follower 권한과 request 존재만 검증한 뒤 request를 삭제하며 count를 변경하지 않는다. 다른 participant가 비활성이거나 remote instance가 `SUSPENDED`여도 cleanup을 허용하고, 이미 삭제된 request ID는 not found로 처리한다.
+6. GraphQL은 `ProfileFollowRequest` loadable Node와 participant access를 추가하고, 현재 active Profile과 동일한 Profile에서만 incoming/outgoing connection을 반환한다. 다른 participant가 unavailable이어도 request Node와 connection은 현재 active participant에게 보이고 unavailable Profile 필드만 visibility 계약에 따라 `null`일 수 있다. connection은 기존 API의 Relay pagination 관례를 재사용하고 시간순 필드나 정렬 방향을 공개 계약으로 고정하지 않는다.
+7. `followProfile`은 `FollowProfilePayload.result`의 `ProfileFollowResult` union을 반환한다. approve mutation은 `ProfileFollow`, 삭제된 request ID와 영향받은 Profile을 반환하고, reject/cancel mutation은 삭제된 request ID만 반환한다. 삭제된 request Node는 반환하지 않는다.
 8. FollowButton은 `__typename`과 inline fragment로 union을 처리한다. `ProfileFollow`일 때만 기존 connection/count updater를 적용하고 `ProfileFollowRequest`는 타입/runtime 오류 없이 성공으로 소비하되 requested UI 상태는 만들지 않는다.
 9. Core DB-backed 테스트가 transaction/concurrency/count를, API schema/integration 테스트가 Node/visibility/connection/payload를, app Relay/Storybook 검증이 기존 OPEN 호환을 소유한다.
 
@@ -58,6 +58,7 @@ PROD-323은 request row의 존재 자체가 Pending이며 승인 시 삭제+rela
 - approval-required target에 임시 `ProfileFollow`를 만들면 follow policy와 count를 우회한다.
 - request를 삭제한 뒤 request Node를 payload로 반환하면 loader/auth scope가 실패한다.
 - participant access를 field resolver에만 적용하고 Node loader/connection에 적용하지 않으면 request 존재가 유출된다.
+- 다른 participant가 unavailable이라는 이유로 participant에게 request 자체를 숨기거나 거절·취소를 막으면 pair unique pending row를 정리하지 못한다.
 - cursor가 사용하는 정렬과 before/after 비교 방향이 다르면 페이지 사이에서 request가 중복되거나 누락될 수 있다.
 - 사전 존재 확인 뒤 무조건 count를 증가시키면 concurrent insert나 기존 relation 승인에서 count가 중복된다.
 - PROD-243의 correlation/generation column을 예상해 request row를 update하거나 ActivityPub delivery port를 임의로 고정하면 병렬 구현 경계를 침범한다.
@@ -67,7 +68,8 @@ PROD-323은 request row의 존재 자체가 Pending이며 승인 시 삭제+rela
 
 - [GraphQL success field 교체가 기존 클라이언트에 breaking change다] → dev 서버만 운용하므로 compatibility transition 없이 API와 현재 앱 operation을 같은 구현 PR에서 갱신·검증하고 함께 배포한다.
 - [동시 approve/create에서 relation과 count가 어긋날 수 있다] → pair unique, 실제 insert/delete 결과와 DB-backed concurrency test로 한 번만 count를 변경한다.
-- [Profile disable 또는 instance suspension과 request 전이가 경쟁할 수 있다] → write transaction 안에서 participant 가용성을 다시 검증하고 경쟁 테스트를 추가한다.
+- [Profile disable 또는 instance suspension과 승인이 경쟁할 수 있다] → approve write transaction 안에서 participant 가용성을 다시 검증하고 경쟁 테스트를 추가한다.
+- [다른 participant가 unavailable해진 request가 stale row로 남을 수 있다] → 승인은 거부하되 active followee의 거절과 active follower의 취소는 request 존재와 역할만으로 허용한다.
 - [active remote-follow change와 같은 저장 경계를 수정한다] → 이 change는 공통 lifecycle만 소유하고 correlation/generation/exact-row 조건부 삭제는 PROD-243에 남긴다.
 - [두 active change가 같은 `Follow profile mutation` requirement를 서로 다른 단계의 계약으로 수정한다] → 이 change를 먼저 구현·archive하고, 이후 PROD-361이 remote-follow 최종 delta를 현재 active spec에 rebase해 union/request와 remote follow 계약을 함께 보존한다.
 - [rollback 뒤 생성된 pending row가 남을 수 있다] → caller transaction 참여와 rollback 통합 테스트를 완료 조건으로 둔다.
