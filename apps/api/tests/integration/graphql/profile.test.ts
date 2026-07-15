@@ -262,6 +262,49 @@ describe('GraphQL remote profile boundary', () => {
     });
   });
 
+  test('does not expose pending requests as local follow relationships', async () => {
+    const auth = await createAuthenticatedSession();
+    const otherLocalInstance = await createLocalInstance({ domain: 'pending-local.example' });
+    const otherLocal = await createProfile({
+      handle: 'pending-local',
+      instanceId: otherLocalInstance.id,
+    });
+    await db.insert(ProfileFollowRequests).values([
+      { followerProfileId: auth.profile.id, followeeProfileId: otherLocal.id },
+      { followerProfileId: otherLocal.id, followeeProfileId: auth.profile.id },
+    ]);
+
+    const result = await requestGraphQL<{
+      node: {
+        followers: { edges: Array<{ node: { id: string } }> };
+        following: { edges: Array<{ node: { id: string } }> };
+        viewerFollow: { id: string } | null;
+        viewerState: { follow: { id: string } | null; isSelf: boolean } | null;
+      } | null;
+    }>(
+      `query PendingLocalFollowGraph($id: ID!) {
+        node(id: $id) {
+          ... on Profile {
+            followers(first: 10) { edges { node { id } } }
+            following(first: 10) { edges { node { id } } }
+            viewerFollow { id }
+            viewerState { isSelf follow { id } }
+          }
+        }
+      }`,
+      { id: otherLocal.id },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.node, {
+      followers: { edges: [] },
+      following: { edges: [] },
+      viewerFollow: null,
+      viewerState: { follow: null, isSelf: false },
+    });
+  });
+
   test('reads visible established relationships and stored counts for a remote profile', async () => {
     const remoteInstance = await createRemoteInstance();
     const remote = await createProfile({
