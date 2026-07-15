@@ -1,31 +1,13 @@
 import { isDeepStrictEqual } from 'node:util';
-import { Schema } from 'prosemirror-model';
 import { postBodyMaxLength } from '../validation/post-policy';
 import { normalizePostContentPlainText, postContentSchemaVersion } from './index';
-import type { Node as ProseMirrorNode } from 'prosemirror-model';
+import { postContentSchemaV1 } from './schema-v1';
+import type { Mark, Node as ProseMirrorNode } from 'prosemirror-model';
 import type {
   PostContentBodyDocumentV1,
   PostContentDocumentV1,
-  PostContentInlineNode,
-  PostContentLinkMark,
   PostContentSchemaVersion,
 } from './index';
-
-export const postContentSchemaV1 = new Schema({
-  nodes: {
-    doc: { content: 'paragraph+' },
-    paragraph: { content: 'inline*', group: 'block' },
-    text: { group: 'inline' },
-    hard_break: { group: 'inline', inline: true, marks: '', selectable: false },
-  },
-  marks: {
-    link: {
-      attrs: { href: {} },
-      inclusive: false,
-      excludes: 'link',
-    },
-  },
-});
 
 export function canonicalizePostContentDocument(document: unknown): PostContentDocumentV1 {
   if (!isRecordWithExactKeys(document, ['version', 'summary', 'body'])) {
@@ -56,9 +38,8 @@ function canonicalizePostContentBody(
   schemaVersion: PostContentSchemaVersion,
   body: unknown,
 ): PostContentBodyDocumentV1 {
-  const normalizedInput = normalizeAllowedJson(body);
-
-  const parsed = postContentSchemaV1.nodeFromJSON(normalizedInput);
+  assertPostContentJsonKeys(body);
+  const parsed = postContentSchemaV1.nodeFromJSON(canonicalizeDuplicateLinkMarks(body));
   parsed.check();
 
   const paragraphs: ProseMirrorNode[] = [];
@@ -67,7 +48,7 @@ function canonicalizePostContentBody(
 
     paragraph.forEach((node) => {
       if (node.isText) {
-        inline.push(postContentSchemaV1.text(node.text!, node.marks));
+        appendNormalizedText(inline, node.text!, node.marks);
       } else {
         inline.push(postContentSchemaV1.nodes.hard_break.create());
       }
@@ -148,83 +129,10 @@ function assertSupportedVersion(
   }
 }
 
-function normalizeAllowedJson(value: unknown): PostContentBodyDocumentV1 {
-  if (!isRecordWithExactKeys(value, ['type', 'content']) || value.type !== 'doc') {
-    throw new TypeError('PostContent document must be a doc with content');
-  }
-  if (!Array.isArray(value.content) || value.content.length === 0) {
-    throw new TypeError('PostContent doc must contain at least one paragraph');
-  }
-
-  const paragraphs: PostContentBodyDocumentV1['content'][number][] = [];
-  for (const paragraph of value.content) {
-    if (!isRecord(paragraph) || paragraph.type !== 'paragraph') {
-      throw new TypeError('PostContent doc only accepts paragraph blocks');
-    }
-    assertOnlyKeys(paragraph, ['type', 'content']);
-    if (paragraph.content === undefined) {
-      paragraphs.push({ type: 'paragraph' });
-      continue;
-    }
-    if (!Array.isArray(paragraph.content)) {
-      throw new TypeError('Paragraph content must be an array');
-    }
-
-    const inline: PostContentInlineNode[] = [];
-    for (const node of paragraph.content) {
-      if (!isRecord(node)) {
-        throw new TypeError('Inline node must be an object');
-      }
-      if (node.type === 'hard_break') {
-        assertOnlyKeys(node, ['type']);
-        inline.push({ type: 'hard_break' });
-        continue;
-      }
-      if (node.type !== 'text') {
-        throw new TypeError(`Unsupported inline node: ${String(node.type)}`);
-      }
-      assertOnlyKeys(node, ['type', 'text', 'marks']);
-      if (typeof node.text !== 'string' || node.text.length === 0) {
-        throw new TypeError('Text nodes must contain non-empty text');
-      }
-      if (node.marks === undefined) {
-        appendNormalizedText(inline, node.text);
-        continue;
-      }
-      if (!Array.isArray(node.marks)) {
-        throw new TypeError('Text marks must be an array');
-      }
-
-      const hrefs = new Set<string>();
-      for (const mark of node.marks) {
-        if (!isRecordWithExactKeys(mark, ['type', 'attrs']) || mark.type !== 'link') {
-          throw new TypeError('Only link marks are supported');
-        }
-        if (!isRecordWithExactKeys(mark.attrs, ['href']) || typeof mark.attrs.href !== 'string') {
-          throw new TypeError('Link marks require only an href attribute');
-        }
-        hrefs.add(normalizeHttpUrl(mark.attrs.href));
-      }
-      if (hrefs.size > 1) {
-        throw new TypeError('Text cannot contain different nested links');
-      }
-      const href = hrefs.values().next().value;
-      appendNormalizedText(
-        inline,
-        node.text,
-        href ? [{ type: 'link', attrs: { href } }] : undefined,
-      );
-    }
-    paragraphs.push({ type: 'paragraph', ...(inline.length > 0 ? { content: inline } : {}) });
-  }
-
-  return { type: 'doc', content: paragraphs };
-}
-
 function appendNormalizedText(
-  inline: PostContentInlineNode[],
+  inline: ProseMirrorNode[],
   value: string,
-  marks?: readonly PostContentLinkMark[],
+  marks?: readonly Mark[],
 ): void {
   for (const [index, text] of value
     .replaceAll('\r\n', '\n')
@@ -232,25 +140,77 @@ function appendNormalizedText(
     .split('\n')
     .entries()) {
     if (index > 0) {
-      inline.push({ type: 'hard_break' });
+      inline.push(postContentSchemaV1.nodes.hard_break.create());
     }
     if (text.length > 0) {
-      inline.push({ type: 'text', text, ...(marks ? { marks } : {}) });
+      inline.push(postContentSchemaV1.text(text, marks));
     }
   }
 }
 
-function normalizeHttpUrl(href: string): string {
-  let url: URL;
-  try {
-    url = new URL(href);
-  } catch {
-    throw new TypeError('Link href must be an absolute URL');
+function assertPostContentJsonKeys(value: unknown): void {
+  if (!isRecord(value)) {
+    return;
   }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new TypeError('Link href must use http or https');
+
+  if (value.type === 'doc' || value.type === 'paragraph') {
+    assertOnlyKeys(value, ['type', 'content']);
+    if (value.content !== undefined && !Array.isArray(value.content)) {
+      throw new TypeError('Node content must be an array');
+    }
+    if (Array.isArray(value.content)) {
+      value.content.forEach(assertPostContentJsonKeys);
+    }
+    return;
   }
-  return url.href;
+  if (value.type === 'text') {
+    assertOnlyKeys(value, ['type', 'text', 'marks']);
+    if (value.marks !== undefined && !Array.isArray(value.marks)) {
+      throw new TypeError('Text marks must be an array');
+    }
+    if (Array.isArray(value.marks)) {
+      for (const mark of value.marks) {
+        if (!isRecord(mark)) {
+          continue;
+        }
+        assertOnlyKeys(mark, ['type', 'attrs']);
+        if (isRecord(mark.attrs)) {
+          assertOnlyKeys(mark.attrs, ['href']);
+        }
+      }
+    }
+    return;
+  }
+  if (value.type === 'hard_break') {
+    assertOnlyKeys(value, ['type']);
+  }
+}
+
+function canonicalizeDuplicateLinkMarks(value: unknown): unknown {
+  if (!isRecord(value)) {
+    return value;
+  }
+  if ((value.type === 'doc' || value.type === 'paragraph') && Array.isArray(value.content)) {
+    return { ...value, content: value.content.map(canonicalizeDuplicateLinkMarks) };
+  }
+  if (value.type !== 'text' || !Array.isArray(value.marks)) {
+    return value;
+  }
+
+  const hrefs = new Set(
+    value.marks.map((mark) => {
+      const parsed = postContentSchemaV1.markFromJSON(mark);
+      return new URL(String(parsed.attrs.href)).href;
+    }),
+  );
+  if (hrefs.size > 1) {
+    throw new TypeError('Text cannot contain different nested links');
+  }
+  const href = hrefs.values().next().value;
+  return {
+    ...value,
+    marks: href ? [postContentSchemaV1.marks.link.create({ href }).toJSON()] : [],
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -143,7 +143,16 @@ test('projects paragraph boundaries, hard breaks and link labels to Plain Text',
 
 for (const [name, document] of [
   ['pre node', { type: 'doc', content: [{ type: 'pre' }] }],
+  ['invalid content expression', { type: 'doc', content: [{ type: 'text', text: 'body' }] }],
   ['unknown paragraph attr', { type: 'doc', content: [{ type: 'paragraph', attrs: {} }] }],
+  ['null paragraph content', { type: 'doc', content: [{ type: 'paragraph', content: null }] }],
+  [
+    'null text marks',
+    {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'body', marks: null }] }],
+    },
+  ],
   [
     'unsafe link',
     {
