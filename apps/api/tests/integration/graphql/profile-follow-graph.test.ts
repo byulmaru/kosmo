@@ -14,7 +14,7 @@ import {
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, asc, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { encodeGlobalId } from '../../../src/graphql/global-id';
+import { encodeGlobalId as globalId } from '../../../src/graphql/global-id';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
@@ -441,8 +441,6 @@ const requestFollowGraph = (handle: string, token?: string) =>
     { handle },
     token,
   );
-
-const globalId = encodeGlobalId;
 
 const assertRemoteFollowGraphHidesCounterparts = async ({
   followPolicy = ProfileFollowPolicy.OPEN,

@@ -18,7 +18,7 @@ import { isConfiguredLocalProfile } from '@kosmo/core/profile';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, count, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { encodeGlobalId } from '../../../src/graphql/global-id';
+import { encodeGlobalId as globalId } from '../../../src/graphql/global-id';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
@@ -879,8 +879,6 @@ const requestGraphQL = async <TData = Record<string, unknown>>(
   assert.equal(response.status, 200);
   return (await response.json()) as GraphQLResult<TData>;
 };
-
-const globalId = encodeGlobalId;
 
 const assertNoGraphQLErrors = (result: GraphQLResult<unknown>) => {
   assert.equal(result.errors, undefined, JSON.stringify(result.errors));
