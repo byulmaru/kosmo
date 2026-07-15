@@ -37,6 +37,13 @@
 - update input은 omitted과 `null`의 의미를 명확히 분리한다. 생략은 보통 변경 없음이고, nullable 도메인 필드의 `null`은 명시적 clear가 될 수 있다. non-null 도메인 필드는 update input에서 optional로 받더라도 `null`을 새 값으로 보지 않는다.
 - backend error `message`를 UI에 어떻게 노출할지는 아직 정책이 완전히 정해지지 않은 영역이다. 메시지를 그대로 쓰는 코드만으로 확정 위반으로 단정하지 말고, 필요한 경우 error type/code 기반 분기, generic localized fallback, 원문 노출 허용 범위 중 무엇이 정책인지 먼저 정리한다.
 
+## Core Services
+
+- API와 BFF가 공유하는 server business use case는 `packages/core/services`가 소유한다. GraphQL resolver와 HTTP route는 transport validation과 actor context를 처리한 뒤 service를 호출한다.
+- service는 production database implementation이 하나인 현재 구조에서 `getDatabaseConnection(tx)`로 optional transaction 또는 shared `db`를 선택한다. 여러 DB 작업을 원자적으로 수행하는 service는 선택한 connection에서 transaction 경계를 열어, caller transaction이 있으면 savepoint로 합류하고 없으면 shared `db`에서 transaction을 시작한다. test seam이나 복수 implementation 요구 없이 generic `Database`를 전달하는 추상화는 만들지 않는다.
+- `packages/core/db`는 DB client, schema, relation과 DB 전용 utility를 소유하고 account/session 생성 같은 application transaction은 소유하지 않는다.
+- OIDC discovery와 code exchange처럼 transport 또는 protocol-specific 검증은 API/BFF 경계에 남기고, core service에는 검증된 identity와 business input만 전달한다.
+
 ## Spec And Policy Sync
 
 - OpenSpec과 구현은 root field, object field, payload, error type, connection, UI 수치 단위가 서로 맞아야 한다.

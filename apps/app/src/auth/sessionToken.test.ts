@@ -6,34 +6,72 @@ import {
   serializeStoredSessionToken,
 } from './sessionToken';
 
-describe('session token storage value', () => {
-  it('accepts an opaque non-empty token', () => {
+describe('세션 토큰 저장 값', () => {
+  it('비어 있지 않은 opaque token을 허용한다', () => {
     assert.equal(normalizeSessionToken('opaque-token'), 'opaque-token');
   });
 
-  it('rejects missing and blank storage values', () => {
+  it('누락되거나 빈 저장 값을 거부한다', () => {
     assert.equal(normalizeSessionToken(null), null);
     assert.equal(normalizeSessionToken('  '), null);
   });
 });
 
-describe('origin-bound session token storage', () => {
-  const origin = 'https://kosmo.example';
+describe('native 설정에 결속된 세션 토큰 저장 값', () => {
+  const configuration = {
+    apiOrigin: 'https://api.kosmo.example',
+    clientId: 'native-client',
+    issuer: 'https://id.kosmo.example',
+  };
 
-  it('returns a token only for the origin that stored it', () => {
-    const stored = serializeStoredSessionToken(origin, 'opaque-token');
+  it('저장 당시 native 설정과 일치할 때만 토큰을 반환한다', () => {
+    const stored = serializeStoredSessionToken(configuration, 'opaque-token');
 
-    assert.equal(parseStoredSessionToken(stored, origin), 'opaque-token');
-    assert.equal(parseStoredSessionToken(stored, 'https://staging.kosmo.example'), null);
+    assert.equal(parseStoredSessionToken(stored, configuration), 'opaque-token');
+    assert.equal(
+      parseStoredSessionToken(stored, {
+        ...configuration,
+        apiOrigin: 'https://api.staging.kosmo.example',
+      }),
+      null,
+    );
+    assert.equal(
+      parseStoredSessionToken(stored, {
+        ...configuration,
+        issuer: 'https://id.staging.kosmo.example',
+      }),
+      null,
+    );
+    assert.equal(
+      parseStoredSessionToken(stored, { ...configuration, clientId: 'other-client' }),
+      null,
+    );
   });
 
-  it('rejects legacy and malformed storage values', () => {
-    assert.equal(parseStoredSessionToken('opaque-token', origin), null);
-    assert.equal(parseStoredSessionToken('{"origin":1,"token":"opaque-token"}', origin), null);
-    assert.equal(parseStoredSessionToken('{"origin":"https://kosmo.example"}', origin), null);
+  it('잘못된 저장 값을 거부한다', () => {
+    assert.equal(parseStoredSessionToken('opaque-token', configuration), null);
+    assert.equal(
+      parseStoredSessionToken(
+        JSON.stringify({
+          apiOrigin: 1,
+          clientId: configuration.clientId,
+          issuer: configuration.issuer,
+          token: 'opaque-token',
+        }),
+        configuration,
+      ),
+      null,
+    );
+    assert.equal(
+      parseStoredSessionToken(
+        JSON.stringify({ apiOrigin: configuration.apiOrigin }),
+        configuration,
+      ),
+      null,
+    );
   });
 
-  it('does not serialize a blank token', () => {
-    assert.throws(() => serializeStoredSessionToken(origin, '  '));
+  it('빈 토큰을 직렬화하지 않는다', () => {
+    assert.throws(() => serializeStoredSessionToken(configuration, '  '));
   });
 });
