@@ -1,7 +1,23 @@
 import { isPostContentDocumentV1 } from '@kosmo/core/post-content';
 import { Linking, StyleSheet, Text, View } from 'react-native';
+import { match } from 'ts-pattern';
 import { useTheme } from '@/theme/ThemeProvider';
 import { typography } from '@/theme/tokens';
+import type {
+  PostContentBodyDocumentV1,
+  PostContentInlineNode,
+  PostContentParagraphNode,
+  PostContentTextNode,
+} from '@kosmo/core/post-content';
+import type { Key, ReactNode } from 'react';
+import type { StyleProp, TextStyle } from 'react-native';
+
+type PostContentNode = PostContentBodyDocumentV1 | PostContentParagraphNode | PostContentInlineNode;
+type PostContentMark = NonNullable<PostContentTextNode['marks']>[number];
+
+interface RenderContext {
+  readonly bodyStyle: StyleProp<TextStyle>;
+}
 
 export function PostContentRenderer({
   bodyText,
@@ -24,38 +40,58 @@ export function PostContentRenderer({
     return bodyText ? <Text style={bodyStyle}>{bodyText}</Text> : null;
   }
 
-  return (
-    <View>
-      {document.content.map((paragraph, paragraphIndex) => (
-        <Text key={paragraphIndex} style={bodyStyle}>
-          {(paragraph.content ?? []).map((node, inlineIndex) => {
-            if (node.type === 'hard_break') {
-              return '\n';
-            }
-            const link = node.marks?.[0];
+  return renderNode(document, 'body', { bodyStyle });
+}
 
-            return link ? (
-              <Text
-                accessibilityLabel={`${node.text}, ${link.attrs.href}`}
-                accessibilityRole="link"
-                key={inlineIndex}
-                onPress={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  void Linking.openURL(link.attrs.href);
-                }}
-                style={styles.link}
-              >
-                {node.text}
-              </Text>
-            ) : (
-              node.text
-            );
-          })}
-        </Text>
-      ))}
-    </View>
+function renderNode(node: PostContentNode, key: Key, context: RenderContext): ReactNode {
+  return match(node)
+    .with({ type: 'doc' }, (document) => (
+      <View key={key}>
+        {document.content.map((child, index) => renderNode(child, `${key}.${index}`, context))}
+      </View>
+    ))
+    .with({ type: 'paragraph' }, (paragraph) => (
+      <Text key={key} style={context.bodyStyle}>
+        {(paragraph.content ?? []).map((child, index) =>
+          renderNode(child, `${key}.${index}`, context),
+        )}
+      </Text>
+    ))
+    .with({ type: 'text' }, (text) => renderMarks(text, key))
+    .with({ type: 'hard_break' }, () => '\n')
+    .exhaustive();
+}
+
+function renderMarks(node: PostContentTextNode, key: Key): ReactNode {
+  return (node.marks ?? []).reduceRight<ReactNode>(
+    (content, mark, index) => renderMark(mark, content, node.text, `${key}.mark.${index}`),
+    node.text,
   );
+}
+
+function renderMark(
+  mark: PostContentMark,
+  content: ReactNode,
+  accessibilityLabel: string,
+  key: Key,
+): ReactNode {
+  return match(mark)
+    .with({ type: 'link' }, (link) => (
+      <Text
+        accessibilityLabel={`${accessibilityLabel}, ${link.attrs.href}`}
+        accessibilityRole="link"
+        key={key}
+        onPress={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          void Linking.openURL(link.attrs.href);
+        }}
+        style={styles.link}
+      >
+        {content}
+      </Text>
+    ))
+    .exhaustive();
 }
 
 const styles = StyleSheet.create({
