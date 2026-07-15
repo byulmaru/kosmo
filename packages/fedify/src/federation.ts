@@ -1,5 +1,4 @@
 import { createFederation, MemoryKvStore } from '@fedify/fedify';
-import { Accept, Follow, Reject, Undo } from '@fedify/vocab';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { ensureDrizzleLocalProfileActor } from './local-actor-store';
 import { createLocalProfilePerson } from './local-profile-person';
@@ -56,13 +55,4 @@ federation
     return result ? [...result.keyPairs] : [];
   });
 
-federation
-  .setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox')
-  .on(Follow, throwUnhandledInboxActivity)
-  .on(Undo, throwUnhandledInboxActivity)
-  .on(Accept, throwUnhandledInboxActivity)
-  .on(Reject, throwUnhandledInboxActivity);
-
-function throwUnhandledInboxActivity(): never {
-  throw new Error('ActivityPub inbox handler is not implemented.');
-}
+federation.setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox');

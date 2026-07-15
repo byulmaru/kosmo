@@ -46,19 +46,6 @@ describe('Fedify inbox routes', () => {
     );
   });
 
-  test('unhandled Follow fails so the sender can retry delivery', async () => {
-    const fixture = await createInboxFixture(throwUnhandledInboxActivity);
-    const response = await fixture.federation.fetch(
-      await fixture.createSignedFollowRequest(
-        `/ap/actor/${localProfileId}/inbox`,
-        'unhandled-follow',
-      ),
-      { contextData: undefined },
-    );
-
-    assert.equal(response.status, 500, await response.text());
-  });
-
   test('keeps unsupported follow collections and outbox paths in the 404 fallback', async () => {
     const federation = createFederation<void>({ kv: new MemoryKvStore() });
     federation
@@ -138,7 +125,3 @@ const createInboxFixture = async (onFollow: FollowHandler) => {
 
   return { createSignedFollowRequest, federation };
 };
-
-function throwUnhandledInboxActivity(): never {
-  throw new Error('ActivityPub inbox handler is not implemented.');
-}
