@@ -2,7 +2,7 @@
 
 `docs/domain/objects/notification.md`는 Notification의 Recipient, Read State, type별 source와 삭제·억제 정책을 canonical 계약으로 정의한다. 현재 저장소에는 Notification table, GraphQL API와 실제 목록이 없고 `/notifications`는 placeholder다. 선행 `PROD-323`과 PR #244가 Follow Request를 pending-only 모델로 정렬했으므로, Follow와 Follow Request의 충돌 없이 첫 Notification source를 설계할 수 있다.
 
-이 change는 `PROD-271`이 소유하는 하나의 행동 계약을 `PROD-325`, `PROD-274`, `PROD-275`, `PROD-276`, `PROD-277`, `PROD-324`, `PROD-278`의 리뷰 가능한 구현 PR로 나눈다. spec-only PR인 `PROD-273`은 구현 코드를 포함하지 않으며, 마지막 통합 이슈 `PROD-278`이 전체 scope 검증과 archive를 소유한다.
+이 change는 `PROD-271`이 소유하는 하나의 행동 계약을 `PROD-325`, `PROD-274`, `PROD-275`, `PROD-352`, `PROD-351`, `PROD-350`, `PROD-276`, `PROD-277`, `PROD-324`, `PROD-278`의 리뷰 가능한 구현 PR로 나눈다. spec-only PR인 `PROD-273`은 구현 코드를 포함하지 않으며, 마지막 통합 이슈 `PROD-278`이 전체 scope 검증과 archive를 소유한다.
 
 ## Goals / Non-Goals
 
@@ -106,7 +106,10 @@ DB row와 기존 `read_at`은 비동기 cleanup 전까지 남을 수 있다. cle
 
 - `PROD-325`: migration/DB integration으로 kind enum, 단일 table, Recipient FK, loose source ID, JSONB default, unique constraint와 조회 index를 검증한다.
 - `PROD-274`: storage test로 source-only create/delete, Recipient/Related Profile 파생, Local/Remote Follower, existing/concurrent idempotency를 검증한다.
-- `PROD-275`: schema/resolver test로 role-independent membership, 비선택 Profile 접근, cursor, SQL visible filtering, Node/Read 숨김, 반복·동시 Read와 visible count를 검증한다.
+- `PROD-275`: schema/resolver test로 kind-aware Node resolution, batch 순서, role-independent membership, 비선택 Profile 접근과 공통 SQL visible predicate를 검증한다.
+- `PROD-352`: connection test로 `id DESC` keyset pagination과 limit 전 visible filtering을 검증한다.
+- `PROD-351`: count test로 공통 predicate를 만족하는 visible Unread item만 계산하는지 검증한다.
+- `PROD-350`: mutation test로 Node와 같은 hidden predicate, 최초 `readAt`, 반복·동시 Read와 payload를 검증한다.
 - `PROD-276`: action test로 allow/deny/evaluator error/create·delete storage failure, integration 재진입, 정상 source cleanup과 origin-neutral port 호출을 검증한다.
 - `PROD-277`·`PROD-324`: 정상 item UI 계약을 Storybook interaction/a11y, Relay cache integration과 결정된 platform smoke로 검증한다.
 - `PROD-278`: 실제 Local Follow/Unfollow action을 사용하는 Web E2E와 관련 workspace 검증을 통과한 뒤 archive 전후 strict validation을 실행한다.
@@ -123,10 +126,11 @@ DB row와 기존 `read_at`은 비동기 cleanup 전까지 남을 수 있다. cle
 ## Migration Plan
 
 1. `PROD-325`에서 additive `notification` schema, `notification_kind`, discriminator, Recipient FK, source uniqueness와 조회 index를 배포한다. 기존 `ProfileFollow`는 backfill하지 않는다.
-2. `PROD-274` 저장 경계와 `PROD-275` API를 schema 위에 병렬로 구현한다.
-3. `PROD-281`의 공용 ProfileFollow action과 `PROD-274`가 준비되면 `PROD-276` create/delete source integration을 연결한다.
-4. API가 안정되면 `PROD-277` 목록과 `PROD-324` badge를 병렬로 배포한다.
-5. `PROD-278`에서 vertical E2E, canonical 문서/task sync와 archive 전후 validation을 완료한다.
+2. `PROD-274` 저장 경계와 `PROD-275` GraphQL/Node·공통 visible 조회 기반을 schema 위에 병렬로 구현한다.
+3. `PROD-275` 뒤 `PROD-352` connection, `PROD-351` Unread count와 `PROD-350` Read mutation을 독립 PR로 구현한다.
+4. `PROD-281`의 공용 ProfileFollow action과 `PROD-274`가 준비되면 `PROD-276` create/delete source integration을 연결한다.
+5. API가 안정되면 `PROD-277` 목록과 `PROD-324` badge를 병렬로 배포한다.
+6. `PROD-278`에서 vertical E2E, canonical 문서/task sync와 archive 전후 validation을 완료한다.
 
 애플리케이션 rollback은 additive table을 유지하고 Notification source 호출·API·UI만 이전 버전으로 되돌린다. 데이터가 생성된 뒤 table을 자동 drop하는 down migration은 사용하지 않는다. schema 자체를 제거해야 한다면 Notification 쓰기를 먼저 중단하고 데이터 보존/삭제 결정을 별도 migration으로 수행한다.
 

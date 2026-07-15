@@ -6,23 +6,35 @@ export const globalIdMap = new Map<number, string>();
 
 type LoadableRow<T> = T | null | Error;
 
-const alignByIds = <T extends { id: string }>(
-  ids: readonly string[],
-  rows: readonly LoadableRow<T>[],
-): (T | null)[] => {
-  const rowsById = new Map<string, T>();
+export const globalNodeRouteMap = new Map<
+  string,
+  (ids: string[], ctx: UserContext) => Promise<readonly unknown[]>
+>();
 
-  for (const row of rows) {
-    if (row instanceof Error) {
-      throw row;
-    }
+const registerGlobalNodeRoute = <TRow extends { id: string }>(
+  name: string,
+  load: (ids: string[], ctx: UserContext) => Promise<readonly LoadableRow<TRow>[]>,
+) => {
+  const cachedLoad = async (ids: string[], ctx: UserContext): Promise<(TRow | null)[]> => {
+    const loader = ctx.loader<string, TRow, string, true>({
+      name: `global-node:${name}`,
+      nullable: true,
+      key: (row) => row?.id ?? null,
+      load: async (keys) =>
+        (await load(keys, ctx)).flatMap((row) => {
+          if (row instanceof Error) {
+            throw row;
+          }
 
-    if (row) {
-      rowsById.set(row.id, row);
-    }
-  }
+          return row ? [row] : [];
+        }),
+    });
 
-  return ids.map((id) => rowsById.get(id) ?? null);
+    return Promise.all(ids.map((id) => loader.load(id)));
+  };
+
+  globalNodeRouteMap.set(name, cachedLoad);
+  return cachedLoad;
 };
 
 export const createObjectRef = <TRow extends { id: string }>(
@@ -32,14 +44,25 @@ export const createObjectRef = <TRow extends { id: string }>(
 ) => {
   globalIdMap.set(discriminator, name);
 
-  return builder.loadableNodeRef(name, {
-    load: (async (ids: string[], ctx: UserContext) => {
-      const rows = await load(ids, ctx);
+  const loadCached = registerGlobalNodeRoute(name, async (ids, ctx) =>
+    (await load(ids, ctx)).map((row) =>
+      row && !(row instanceof Error) ? { ...row, __typename: name } : row,
+    ),
+  );
 
-      return alignByIds(ids, rows);
-    }) as (ids: string[], ctx: UserContext) => Promise<TRow[]>,
+  return builder.loadableNodeRef(name, {
+    load: loadCached as (ids: string[], ctx: UserContext) => Promise<TRow[]>,
     toKey: (obj) => obj.id,
     cacheResolved: true,
     id: { resolve: (obj) => obj.id },
   });
+};
+
+export const registerNodeRoute = <TRow extends { id: string }>(
+  name: string,
+  discriminator: (typeof TableDiscriminator)[keyof typeof TableDiscriminator],
+  load: (ids: string[], ctx: UserContext) => Promise<readonly LoadableRow<TRow>[]>,
+) => {
+  globalIdMap.set(discriminator, name);
+  registerGlobalNodeRoute(name, load);
 };
