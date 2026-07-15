@@ -1,6 +1,6 @@
 ## Why
 
-기존 remote post ingestion change는 Linear 책임 구조보다 먼저 작성되어 unknown actor materialization, private audience, `post_mention`, activity receipt, duplicate `Create` revision 갱신과 오래된 PostContent shape를 함께 소유한다. PROD-354는 PROD-256과 구현 자식의 실제 첫 ingestion 범위에서 다시 출발해, known actor의 public Note를 object URI당 한 번만 existing Post model에 저장하는 최소 계약으로 정리한다.
+기존 remote post ingestion change는 Linear 책임 구조보다 먼저 작성되어 unknown actor materialization, private audience, `post_mention`, activity receipt, duplicate `Create` revision 갱신과 오래된 PostContent shape를 함께 소유한다. PROD-354는 PROD-256 최종 통합 gate와 독립 구현 slice의 실제 첫 ingestion 범위에서 다시 출발해, known actor의 public Note를 object URI당 한 번만 existing Post model에 저장하는 최소 계약으로 정리한다.
 
 ## What Changes
 
@@ -30,5 +30,5 @@
 - Completed foundations: [PROD-341](https://linear.app/byulmaru/issue/PROD-341)의 versioned PostContent document 계약과 PROD-357의 activity-neutral inbox 책임 정렬이 main에 병합됐다.
 - Implementation slices: PROD-255 schema, PROD-259 projection, PROD-260 inbox validation과 PROD-262 authorization regression을 진행한 뒤 PROD-261이 최초 materialization transaction을 통합하고 PROD-256이 integration/archive를 소유한다.
 - Existing foundations: PROD-241의 activity-neutral actor/shared inbox route와 PR #212/PROD-257의 DB-only GraphQL read/authorization을 변경하지 않는다.
-- Ownership: 구현 자식 PR은 이 공유 change를 수정하거나 archive하지 않고 각 이슈의 코드와 검증만 소유한다.
+- Ownership: parent-child 계층을 사용하지 않는다. 구현 slice PR은 이 공유 change를 수정하거나 archive하지 않고 각 이슈의 코드와 검증만 소유하며, Linear Block 관계가 전달 순서를 표현한다.
 - Deferred contracts: `Update(Note)`/`Delete(Note)` lifecycle은 PROD-365가 별도 Issue → OpenSpec으로 소유한다. activity-level audit 또는 object와 무관한 side effect가 실제로 필요해질 때만 PostgreSQL activity receipt를 별도 계약으로 재검토한다. duplicate `Create` revision 갱신과 object conflict recovery lock은 first-write-wins 결정으로 대체되며 deferred scope가 아니다.

@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 [PROD-354](https://linear.app/byulmaru/issue/PROD-354), 부모 [PROD-256](https://linear.app/byulmaru/issue/PROD-256), PROD-255/259/260/261/262와 완료된 [PROD-341](https://linear.app/byulmaru/issue/PROD-341)의 최신 계약을 반영한다. PR #258의 이전 activity receipt, duplicate revision과 lock recovery 설계는 source of truth가 아니다.
+이 기록은 [PROD-354](https://linear.app/byulmaru/issue/PROD-354), 최종 통합·archive gate [PROD-256](https://linear.app/byulmaru/issue/PROD-256), 독립 구현 이슈 PROD-255/259/260/261/262와 완료된 [PROD-341](https://linear.app/byulmaru/issue/PROD-341)의 최신 계약을 반영한다. 이 이슈들은 parent-child 계층 대신 Linear Block 관계로 전달 순서를 표현한다. PR #258의 이전 activity receipt, duplicate revision과 lock recovery 설계는 source of truth가 아니다.
 
 ## Decision Records
 
