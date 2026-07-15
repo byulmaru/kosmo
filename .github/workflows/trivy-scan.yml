@@ -44,7 +44,7 @@ jobs:
           if [[ -f docker-image-ref/docker-image-ref.txt ]]; then
             image_ref="$(< docker-image-ref/docker-image-ref.txt)"
           else
-            image_ref="ghcr.io/${GITHUB_REPOSITORY}:latest"
+            image_ref="ghcr.io/${GITHUB_REPOSITORY}:main"
           fi
           echo "image-ref=${image_ref}" >> "${GITHUB_OUTPUT}"
 
