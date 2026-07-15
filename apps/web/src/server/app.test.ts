@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { parse } from 'hono/utils/cookie';
-import { Configuration, enableNonRepudiationChecks, ResponseBodyError } from 'openid-client';
+import { Configuration, enableNonRepudiationChecks } from 'openid-client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { federation } from '@kosmo/fedify';
 import type { Hono } from 'hono';
@@ -16,13 +16,7 @@ import type {
 const { authorizationCodeGrant, createSession, discovery, federationFetch } = vi.hoisted(() => ({
   authorizationCodeGrant: vi.fn<typeof oidcAuthorizationCodeGrant>(),
   createSession:
-    vi.fn<
-      (identity: {
-        accessToken: string;
-        displayName: string;
-        oidcSubject: string;
-      }) => Promise<string>
-    >(),
+    vi.fn<(identity: { displayName: string; oidcSubject: string }) => Promise<string>>(),
   discovery: vi.fn<typeof oidcDiscovery>(),
   federationFetch: vi.fn<typeof federation.fetch>(),
 }));
@@ -33,8 +27,7 @@ vi.mock('openid-client', async (importOriginal) => ({
   discovery,
 }));
 
-vi.mock('./auth', async (importOriginal) => ({
-  ...((await importOriginal()) as object),
+vi.mock('@kosmo/core/services', () => ({
   createOidcSession: createSession,
 }));
 
@@ -199,7 +192,6 @@ describe('browser login', () => {
       pkceCodeVerifier: verifier,
     });
     expect(createSession).toHaveBeenCalledWith({
-      accessToken: 'oidc-access-token',
       displayName: 'Kosmo User',
       oidcSubject: 'oidc-subject',
     });
@@ -229,133 +221,6 @@ describe('browser login', () => {
     expect(authorizationCodeGrant).not.toHaveBeenCalled();
     expect(createSession).not.toHaveBeenCalled();
   });
-});
-
-describe('native session exchange', () => {
-  test('returns a Kosmo token without setting a cookie', async () => {
-    const response = await app.request('/login/native/session', {
-      body: JSON.stringify({
-        code: 'native-code',
-        codeVerifier: 'v'.repeat(43),
-        redirectUri: 'kosmo://login/callback',
-      }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
-    const [, callbackUrl, checks] = authorizationCodeGrant.mock.calls[0] ?? [];
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ token: 'kosmo-session-token' });
-    expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(response.headers.get('pragma')).toBe('no-cache');
-    expect(response.headers.has('set-cookie')).toBe(false);
-    expect((callbackUrl as URL).toString()).toBe('kosmo://login/callback?code=native-code');
-    expect(checks).toEqual({
-      expectedState: undefined,
-      idTokenExpected: true,
-      pkceCodeVerifier: 'v'.repeat(43),
-    });
-    expect(createSession).toHaveBeenCalledOnce();
-  });
-
-  test('rejects a body larger than 16 KiB before OIDC exchange', async () => {
-    const response = await app.request('/login/native/session', {
-      body: JSON.stringify({
-        code: 'native-code',
-        codeVerifier: 'v'.repeat(43),
-        padding: 'x'.repeat(16 * 1024),
-        redirectUri: 'kosmo://login/callback',
-      }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
-
-    expect(response.status).toBe(413);
-    expect(await response.text()).toBe('Payload Too Large');
-    expect(authorizationCodeGrant).not.toHaveBeenCalled();
-    expect(createSession).not.toHaveBeenCalled();
-  });
-
-  test('does not include OIDC or database secrets in unhandled error logs', async () => {
-    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const secrets = ['native-code-secret', 'access-token-secret', 'query-param-secret'];
-    createSession.mockRejectedValue(new Error(`Failed query params: ${secrets[0]}, ${secrets[1]}`));
-
-    const response = await app.request(`/login/native/session?debug=${secrets[2]}`, {
-      body: JSON.stringify({
-        code: secrets[0],
-        codeVerifier: 'v'.repeat(43),
-        redirectUri: 'kosmo://login/callback',
-      }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
-    const logged = JSON.stringify(errorLog.mock.calls);
-
-    expect(response.status).toBe(500);
-    expect(errorLog).toHaveBeenCalledWith('Unhandled BFF error', {
-      method: 'POST',
-      route: '/login/native/session',
-    });
-    for (const secret of secrets) {
-      expect(logged).not.toContain(secret);
-    }
-  });
-
-  test.each([
-    {
-      body: { code: '', codeVerifier: 'v'.repeat(43), redirectUri: 'kosmo://login/callback' },
-      name: 'missing code',
-    },
-    {
-      body: { code: 'code', codeVerifier: 'short', redirectUri: 'kosmo://login/callback' },
-      name: 'short verifier',
-    },
-    {
-      body: { code: 'code', codeVerifier: '!'.repeat(43), redirectUri: 'kosmo://login/callback' },
-      name: 'invalid verifier characters',
-    },
-    {
-      body: { code: 'code', codeVerifier: 'v'.repeat(43), redirectUri: 'https://evil.example' },
-      name: 'invalid redirect',
-    },
-  ])('rejects $name without calling OIDC', async ({ body }) => {
-    const response = await app.request('/login/native/session', {
-      body: JSON.stringify(body),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
-
-    expect(response.status).toBe(400);
-    expect(authorizationCodeGrant).not.toHaveBeenCalled();
-    expect(createSession).not.toHaveBeenCalled();
-  });
-
-  test.each([
-    { error: 'invalid_grant', expectedStatus: 400, upstreamStatus: 400 },
-    { error: 'server_error', expectedStatus: 503, upstreamStatus: 503 },
-  ])(
-    'returns $expectedStatus when OIDC responds with $upstreamStatus',
-    async ({ error, expectedStatus, upstreamStatus }) => {
-      const upstream = Response.json({ error }, { status: upstreamStatus });
-      authorizationCodeGrant.mockRejectedValue(
-        new ResponseBodyError(error, { cause: { error }, response: upstream }),
-      );
-      const response = await app.request('/login/native/session', {
-        body: JSON.stringify({
-          code: 'bad-code',
-          codeVerifier: 'v'.repeat(43),
-          redirectUri: 'kosmo://login/callback',
-        }),
-        headers: { 'content-type': 'application/json' },
-        method: 'POST',
-      });
-
-      expect(response.status).toBe(expectedStatus);
-      expect(await response.text()).toBe('OIDC code exchange failed');
-      expect(createSession).not.toHaveBeenCalled();
-    },
-  );
 });
 
 describe('GraphQL proxy', () => {

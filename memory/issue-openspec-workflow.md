@@ -111,22 +111,50 @@ OpenSpec은 저장소의 `spec-driven-decisions` schema를 따른다.
 
 - `proposal.md`: Linear 이슈를 영향받는 capability와 repository impact로 번역한다.
 - `specs/**/spec.md`: 규범적이고 검증 가능한 행동을 정의한다.
-- `design.md`: 구현 접근, 위험, migration과 rollback을 설명한다.
-- `decisions.md`: durable choice, 대안, 결과와 남은 결정을 기록한다.
-- `tasks.md`: 승인된 구현 이슈를 의존 순서의 검증 가능한 작업으로 구체화한다.
+- `design.md`: 현재 구현 제약, 비규범적 권장 접근, 허용 가능한 대안과 알려진 함정, 위험, migration과 rollback을 설명한다.
+- `decisions.md`: 구현자가 반드시 지켜야 하는 durable choice, 대안, 결과와 남은 결정을 기록한다. 파일명, 함수, helper나 자료구조는 장기 호환성·보안·rollout 또는 여러 구현 slice가 정확한 선택을 공유해야 할 때만 고정한다.
+- `tasks.md`: 승인된 구현 이슈를 의존 순서의 검증 가능한 작업으로 구체화한다. 각 task group은 결과 수준의 Deliverable, specs·공개 계약·accepted decision에서 파생한 Guardrails, 완료를 증명할 Verification을 checkbox와 분리해 제공한다.
 
 proposal은 계약 이슈를 링크한다. 공유 change의 task heading은 이미 존재하는 구현 이슈를 식별한다.
 
 ```md
-## 1. PROD-123 Notification read path
+## 1. PROD-123 Data export API
+
+**Deliverable**
+
+권한이 있는 사용자가 요청한 데이터를 CSV로 내보낼 수 있다.
+
+**Guardrails**
+
+- 기존 export 권한을 우회하지 않는다.
+
+**Verification**
+
+- 성공한 요청의 CSV 내용과 권한 실패를 검증한다.
 
 - [ ] 1.1 ...
 - [ ] 1.2 ...
 
-## 2. PROD-124 Notification client flow
+## 2. PROD-124 Data export client
+
+**Deliverable**
+
+클라이언트가 export를 요청하고 생성된 CSV를 내려받을 수 있다.
+
+**Guardrails**
+
+없음.
+
+**Verification**
+
+- export 요청, 완료와 다운로드 흐름을 검증한다.
 
 - [ ] 2.1 ...
 ```
+
+`design.md`의 Recommended Approach는 구현자가 안전하게 시작하기 위한 기본 경로이지 규범적 계약이 아니다.
+구현자는 specs, accepted decisions, Deliverable, Guardrails와 Verification을 모두 만족하면 Allowed Alternatives나
+동등한 방식을 선택할 수 있다. 권장 접근을 task checkbox에 복제해 내부 구현 수단으로 고정하지 않는다.
 
 `tasks.md`는 숨은 backlog가 아니다. OpenSpec 작업 중 독립적으로 전달할 결과가 발견되면 작업을 멈추고
 Linear 이슈를 먼저 생성하거나 분리한 뒤 OpenSpec을 갱신한다.
@@ -147,7 +175,21 @@ Linear 이슈를 먼저 생성하거나 분리한 뒤 OpenSpec을 갱신한다.
 - 구현 이슈는 계약 부모와 OpenSpec change를 링크한다.
 - PR은 담당 이슈의 결과와 검증 범위만 소유한다.
 - 구현은 이슈, specs, design과 accepted decisions를 함께 만족해야 한다.
+- 구현자는 design의 Current Constraints와 Known Traps를 확인하고 Recommended Approach를 기본 경로로 검토한다.
+  다른 접근도 Deliverable, Guardrails, Verification, specs와 accepted decisions를 모두 만족하면 허용한다.
+- 다른 접근이 범위, 관찰 가능한 행동, 공개 계약 또는 durable decision을 바꾸면 구현을 멈추고 Linear와 OpenSpec을
+  먼저 갱신한다.
 - 행동이나 범위가 바뀌면 Linear, OpenSpec, 코드 순서로 갱신한다.
+- 계획·구현 중 accepted decision으로 정해지지 않은 중요한 선택이 필요하면 AI는 대안과 trade-off를 비교해
+  제시할 수 있지만, 최종 선택과 이유는 사람이 결정하도록 멈춘다. 관찰 가능한 행동, 데이터, 보안, 호환성,
+  rollout, 가역성 또는 후속 구현 방향에 영향을 주며 실질적인 대안이 있었던 선택을 중요한 결정으로 본다.
+- 구현 PR을 열거나 갱신하기 전에 구현 중 실제로 확정된 중요한 결정을 식별한다. AI는 이미 확정된 선택과
+  이유를 바탕으로 PR 결정문을 작성할 수 있지만, 근거가 없거나 불명확한 선택과 이유를 추론해 만들지 않고
+  결정한 사람에게 확인한다.
+- PR에는 중요한 구현 결정의 선택, 고려한 대안, 이유와 감수한 결과를 기록한다. 새로 내린 중요한 결정이
+  없다면 accepted OpenSpec decision을 그대로 적용했음을 명시하며 형식적인 결정을 만들지 않는다.
+- accepted durable decision은 PR에 전문을 복제하지 않고 링크와 적용 결과를 남긴다. 구현 중 새로운 durable
+  decision이 필요해지면 PR 본문에만 기록하지 않고 Linear와 OpenSpec을 먼저 갱신한다.
 
 새로 발견한 작업은 다음처럼 처리한다.
 

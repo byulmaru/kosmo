@@ -21,10 +21,13 @@ const webOrigin = `http://${host}:${webPort}`;
 const oidcOrigin = `http://${host}:${oidcPort}`;
 const oidcClientId = process.env.PUBLIC_OIDC_CLIENT_ID ?? 'kosmo-e2e-client';
 const oidcClientSecret = process.env.OIDC_CLIENT_SECRET ?? 'kosmo-e2e-secret';
+const nativeOidcClientId = process.env.PUBLIC_OIDC_NATIVE_CLIENT_ID ?? 'kosmo-e2e-native-client';
 const browserChannel = process.env.PLAYWRIGHT_BROWSER_CHANNEL;
 
 process.env.DATABASE_URL = databaseUrl;
+process.env.PUBLIC_API_ORIGIN = apiOrigin;
 process.env.PUBLIC_OIDC_ISSUER = oidcOrigin;
+process.env.PUBLIC_OIDC_NATIVE_CLIENT_ID = nativeOidcClientId;
 process.env.PUBLIC_ORIGIN = webOrigin;
 
 function readEnvFileValue(path: URL, key: string) {
@@ -70,6 +73,7 @@ export default defineConfig({
         OIDC_MOCK_PORT: String(oidcPort),
         PUBLIC_OIDC_CLIENT_ID: oidcClientId,
         PUBLIC_OIDC_ISSUER: oidcOrigin,
+        PUBLIC_OIDC_NATIVE_CLIENT_ID: nativeOidcClientId,
       },
       reuseExistingServer: false,
       timeout: 30_000,
@@ -81,6 +85,8 @@ export default defineConfig({
         DATABASE_URL: databaseUrl,
         NODE_ENV: 'production',
         PORT: String(apiPort),
+        PUBLIC_OIDC_ISSUER: oidcOrigin,
+        PUBLIC_OIDC_NATIVE_CLIENT_ID: nativeOidcClientId,
         PUBLIC_ORIGIN: webOrigin,
         R2_ACCESS_KEY_ID: 'e2e-access-key',
         R2_BUCKET: 'e2e-bucket',
@@ -96,8 +102,9 @@ export default defineConfig({
       command: 'pnpm --dir ../app build && node --import tsx src/server/index.ts',
       env: {
         DATABASE_URL: databaseUrl,
-        EXPO_PUBLIC_OIDC_CLIENT_ID: oidcClientId,
+        EXPO_PUBLIC_API_ORIGIN: apiOrigin,
         EXPO_PUBLIC_OIDC_ISSUER: oidcOrigin,
+        EXPO_PUBLIC_OIDC_NATIVE_CLIENT_ID: nativeOidcClientId,
         EXPO_PUBLIC_WEB_ORIGIN: webOrigin,
         EXPO_WEB_ROOT: '../app/dist',
         OIDC_CLIENT_SECRET: oidcClientSecret,
@@ -106,6 +113,7 @@ export default defineConfig({
         PUBLIC_ORIGIN: webOrigin,
         PUBLIC_OIDC_CLIENT_ID: oidcClientId,
         PUBLIC_OIDC_ISSUER: oidcOrigin,
+        PUBLIC_OIDC_NATIVE_CLIENT_ID: nativeOidcClientId,
       },
       reuseExistingServer: false,
       timeout: 120_000,

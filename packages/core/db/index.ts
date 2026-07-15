@@ -1,11 +1,9 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as enums from './enums';
-import { relations } from './relations';
 import * as tables from './tables';
 
 export * from './id';
-export * from './relations';
 export * from './tables';
 export * from './utils';
 
@@ -21,8 +19,12 @@ export const pg = postgres(process.env.DATABASE_URL!, {
 
 export const db = drizzle({
   client: pg,
-  relations,
   schema: { ...tables, ...enums },
 });
 
 export type Database = typeof db;
+export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
+
+export const getDatabaseConnection = (tx?: Transaction) => {
+  return tx ?? db;
+};

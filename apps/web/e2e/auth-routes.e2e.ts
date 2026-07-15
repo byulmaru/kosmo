@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { db, Sessions } from '@kosmo/core/db';
 import { AccountState, SessionState } from '@kosmo/core/enums';
+import { eq } from 'drizzle-orm';
 import { createE2ESession, resetE2EDatabase, setE2ESessionCookie } from './db-fixtures';
 import { expect, test } from './fixtures';
 import { isGraphQLOperation } from './graphql';
@@ -7,14 +9,54 @@ import type { APIRequestContext } from '@playwright/test';
 
 const loginCodeVerifierCookie = 'kosmo_oidc_code_verifier';
 const loginStateCookie = 'kosmo_oidc_state';
+const apiOrigin = process.env.PUBLIC_API_ORIGIN ?? 'http://127.0.0.1:3001';
 const oidcOrigin = process.env.PUBLIC_OIDC_ISSUER ?? 'http://127.0.0.1:4300';
-const oidcClientId = process.env.PUBLIC_OIDC_CLIENT_ID ?? 'kosmo-e2e-client';
+const nativeOidcClientId = process.env.PUBLIC_OIDC_NATIVE_CLIENT_ID ?? 'kosmo-e2e-native-client';
+const nativeSessionEndpoint = new URL('/graphql', apiOrigin).toString();
+const nativeSessionOperationName = 'E2ENativeOidcSessionExchange';
+const nativeSessionMutation = `
+  mutation E2ENativeOidcSessionExchange($input: ExchangeNativeOidcSessionInput!) {
+    exchangeNativeOidcSession(input: $input) {
+      token
+    }
+  }
+`;
 const protectedHeadingRoutes = [
   { heading: '홈', path: '/home' },
   { heading: '글쓰기', path: '/compose' },
   { heading: '알림', path: '/notifications' },
   { heading: '메뉴', path: '/menu' },
 ] as const;
+
+type NativeSessionGraphQLResponse = {
+  data?: {
+    exchangeNativeOidcSession?: {
+      token?: unknown;
+    } | null;
+  } | null;
+  errors?: {
+    extensions?: { code?: unknown };
+    message?: unknown;
+  }[];
+};
+
+async function exchangeNativeOidcSession(
+  request: APIRequestContext,
+  input: Record<string, unknown>,
+) {
+  return request.post(nativeSessionEndpoint, {
+    data: {
+      operationName: nativeSessionOperationName,
+      query: nativeSessionMutation,
+      variables: { input },
+    },
+  });
+}
+
+function expectNativeSessionGraphQLError(body: NativeSessionGraphQLResponse) {
+  expect(body.errors, JSON.stringify(body)).toBeDefined();
+  expect(body.errors?.length ?? 0).toBeGreaterThan(0);
+}
 const invalidSessionCases = [
   {
     name: '존재하지 않는 세션 토큰',
@@ -47,12 +89,12 @@ async function getOIDCTokenRequestCount(request: APIRequestContext) {
 async function authorizeNativeCode(
   request: APIRequestContext,
   codeVerifier: string,
-  loginHint?: string,
+  { clientId = nativeOidcClientId, loginHint }: { clientId?: string; loginHint?: string } = {},
 ) {
   const state = randomUUID();
   const authorizeUrl = new URL('/oauth/authorize', oidcOrigin);
   authorizeUrl.search = new URLSearchParams({
-    client_id: oidcClientId,
+    client_id: clientId,
     code_challenge: createHash('sha256').update(codeVerifier).digest('base64url'),
     code_challenge_method: 'S256',
     redirect_uri: 'kosmo://login/callback',
@@ -116,36 +158,111 @@ test('mock OIDC로 로그인하면 보호 홈으로 이동하고 세션이 유�
   await expect(page).toHaveURL(/\/home$/);
 });
 
-test('native PKCE code를 서명 검증해 cookie 없이 Kosmo 세션으로 교환한다', async ({ request }) => {
+test('API는 public native PKCE code를 cookie 없이 Kosmo 세션으로 교환한다', async ({ request }) => {
   const codeVerifier = 'v'.repeat(43);
   const callbackUrl = await authorizeNativeCode(request, codeVerifier);
-  const response = await request.post('/login/native/session', {
-    data: {
-      code: callbackUrl.searchParams.get('code'),
-      codeVerifier,
-      redirectUri: 'kosmo://login/callback',
-    },
+  const response = await exchangeNativeOidcSession(request, {
+    code: callbackUrl.searchParams.get('code'),
+    codeVerifier,
+    redirectUri: 'kosmo://login/callback',
   });
-  const body = (await response.json()) as { token?: unknown };
+  const body = (await response.json()) as NativeSessionGraphQLResponse;
 
   expect(response.status()).toBe(200);
-  expect(typeof body.token).toBe('string');
+  expect(body.errors, JSON.stringify(body.errors)).toBeUndefined();
+
+  const token = body.data?.exchangeNativeOidcSession?.token;
+
+  expect(typeof token).toBe('string');
+
+  if (typeof token !== 'string') {
+    throw new Error('Native session response did not contain a token.');
+  }
+
+  const session = await db
+    .select({ oidcSessionKey: Sessions.oidcSessionKey })
+    .from(Sessions)
+    .where(eq(Sessions.token, token))
+    .then((sessions) => sessions[0]);
+
+  expect(session).toBeDefined();
+  expect(session?.oidcSessionKey).toBeNull();
+  expect(response.headers()['cache-control']).toContain('no-store');
+  expect(response.headers().pragma).toBe('no-cache');
   expect(response.headers()['set-cookie']).toBeUndefined();
 });
 
-test('서명이 잘못된 native ID token은 Kosmo 세션으로 교환하지 않는다', async ({ request }) => {
+test('API는 서명이 잘못된 public native ID token을 Kosmo 세션으로 교환하지 않는다', async ({
+  request,
+}) => {
   const codeVerifier = 'v'.repeat(43);
-  const callbackUrl = await authorizeNativeCode(request, codeVerifier, 'invalid-signature');
-  const response = await request.post('/login/native/session', {
-    data: {
-      code: callbackUrl.searchParams.get('code'),
-      codeVerifier,
-      redirectUri: 'kosmo://login/callback',
-    },
+  const callbackUrl = await authorizeNativeCode(request, codeVerifier, {
+    loginHint: 'invalid-signature',
   });
+  const code = callbackUrl.searchParams.get('code');
 
-  expect(response.status()).toBe(400);
-  expect(await response.text()).toBe('OIDC code exchange failed');
+  if (!code) {
+    throw new Error('OIDC mock did not return an authorization code.');
+  }
+
+  const response = await exchangeNativeOidcSession(request, {
+    code,
+    codeVerifier,
+    redirectUri: 'kosmo://login/callback',
+  });
+  const body = (await response.json()) as NativeSessionGraphQLResponse;
+
+  expect(response.status()).toBe(200);
+  expectNativeSessionGraphQLError(body);
+  expect(JSON.stringify(body)).not.toContain(code);
+  expect(JSON.stringify(body)).not.toContain(codeVerifier);
+});
+
+test('API는 OIDC token endpoint의 5xx를 내부 오류로 분류한다', async ({ request }) => {
+  const codeVerifier = 'v'.repeat(43);
+  const callbackUrl = await authorizeNativeCode(request, codeVerifier, {
+    loginHint: 'token-server-error',
+  });
+  const response = await exchangeNativeOidcSession(request, {
+    code: callbackUrl.searchParams.get('code'),
+    codeVerifier,
+    redirectUri: 'kosmo://login/callback',
+  });
+  const body = (await response.json()) as NativeSessionGraphQLResponse;
+
+  expect(response.status()).toBe(200);
+  expectNativeSessionGraphQLError(body);
+  expect(body.errors?.[0]?.extensions?.code).toBe('INTERNAL_SERVER_ERROR');
+});
+
+test('API는 잘못된 PKCE verifier를 OIDC token endpoint에 보내지 않는다', async ({ request }) => {
+  const tokenRequestCount = await getOIDCTokenRequestCount(request);
+  const response = await exchangeNativeOidcSession(request, {
+    code: 'e2e-unsubmitted-code',
+    codeVerifier: 'too-short',
+    redirectUri: 'kosmo://login/callback',
+  });
+  const body = (await response.json()) as NativeSessionGraphQLResponse;
+
+  expect(response.status()).toBe(200);
+  expectNativeSessionGraphQLError(body);
+  expect(await getOIDCTokenRequestCount(request)).toBe(tokenRequestCount);
+});
+
+test('API는 raw upstream token field를 세션 교환 입력으로 허용하지 않는다', async ({ request }) => {
+  const tokenRequestCount = await getOIDCTokenRequestCount(request);
+  const response = await exchangeNativeOidcSession(request, {
+    accessToken: 'e2e-upstream-access-token',
+    code: 'e2e-unsubmitted-code',
+    codeVerifier: 'v'.repeat(43),
+    idToken: 'e2e.upstream.id.token',
+    redirectUri: 'kosmo://login/callback',
+  });
+  const body = (await response.json()) as NativeSessionGraphQLResponse;
+
+  expect(response.status()).toBe(200);
+  expectNativeSessionGraphQLError(body);
+  expect(await getOIDCTokenRequestCount(request)).toBe(tokenRequestCount);
 });
 
 test('DB reset 후에도 API에 캐시된 local instance로 프로필을 만들 수 있다', async ({

@@ -39,9 +39,9 @@ Notification을 억제한 관계다.
 
 ## 조회 정책
 
-- Root Post와 그 Reply 하위에서 발생한 새 Reply, Reaction, Repost Notification Item을 Owner Profile에게
+- Root Post와 그 Reply 하위에서 발생한 새 Reply, Reaction, Repost Notification을 Owner Profile에게
   생성하지 않는다.
-- 기존 Notification Item의 존재와 Read State는 바꾸지 않는다.
+- 기존 Notification의 존재와 Read State는 바꾸지 않는다.
 
 ## 확정 용어
 

@@ -20,11 +20,11 @@ Accepted
 - avatar/header의 현재 Media 참조는 Profile이 소유한다.
 - Follow Request는 Follow Relationship과 별도 객체다.
 - Profile Mute, Profile Block, Word Mute Rule, Hashtag Mute Rule, Profile Domain Block은 별도 객체다.
-- Mute/Instance 상태가 바뀌어도 기존 Notification Item의 존재와 Read State는 바꾸지 않는다. Profile Block은
-  함께 제거되는 Follow 객체를 직접 원인으로 가진 Notification Item만 제거한다.
-- Pending Follow Request 취소는 대응하는 Follow Request Notification Item도 제거한다.
+- Mute/Instance 상태가 바뀌어도 기존 Notification의 존재와 Read State는 바꾸지 않는다. Profile Block은
+  함께 제거되는 Follow 객체를 직접 원인으로 가진 Notification만 제거한다.
+- Pending Follow Request 취소는 대응하는 Follow Request Notification도 제거한다.
 - Follow Approval Policy 변경은 기존 Pending Follow Request를 바꾸지 않는다. Open Policy에서 Follow
-  Relationship을 만들 때 같은 조합의 Pending Request가 있으면 해당 Request와 Notification Item을 제거한다.
+  Relationship을 만들 때 같은 조합의 Pending Request가 있으면 해당 Request와 Notification을 제거한다.
 - Follow Relationship의 새 Post 알림 Preference 기본값은 false다. 직접 생성과 Follow Request 승인 모두 같은
   기본값을 사용한다.
 - 검색 후보와 lookup 조건은 원본 Post/Profile/Hashtag/Instance 조회 정책에서 정의한다.

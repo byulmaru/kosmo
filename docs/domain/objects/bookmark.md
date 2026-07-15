@@ -39,7 +39,7 @@ Bookmark는 Profile이 Post를 개인적으로 저장한 결과다.
 ## 조회 정책
 
 - Bookmark는 저장한 Profile에게만 보인다.
-- Bookmark 생성은 Post Author에게 Notification Item을 만들지 않는다.
+- Bookmark 생성은 Post Author에게 Notification을 만들지 않는다.
 - Profile Block이 생성되어도 Bookmark는 제거하지 않는다. Block 조회 정책 때문에 대상 Post를 볼 수 없는 동안은
   저장 관계만 유지한다.
 

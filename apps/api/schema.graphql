@@ -50,6 +50,16 @@ type DeleteProfilePayload {
   profileId: ID!
 }
 
+input ExchangeNativeOidcSessionInput {
+  code: String!
+  codeVerifier: String!
+  redirectUri: String!
+}
+
+type ExchangeNativeOidcSessionPayload {
+  token: String!
+}
+
 input FollowProfileInput {
   id: ID!
 }
@@ -69,6 +79,7 @@ type Mutation {
   createPost(input: CreatePostInput!): CreatePostPayload!
   createProfile(input: CreateProfileInput!): CreateProfilePayload!
   deleteProfile(input: DeleteProfileInput!): DeleteProfilePayload!
+  exchangeNativeOidcSession(input: ExchangeNativeOidcSessionInput!): ExchangeNativeOidcSessionPayload!
   followProfile(input: FollowProfileInput!): FollowProfilePayload!
   selectProfile(input: SelectProfileInput!): SelectProfilePayload!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!

@@ -51,6 +51,8 @@ Recommended direction:
 - Do not store string prefixes in DB primary keys.
 - Prefer PostgreSQL native `uuid` over text IDs for joins, index size, cache locality, and throughput.
 - kosmo's custom UUID v8 provides time-ordering and distributed generation, making it a strong default for a social product.
+- The current `createId` layout stores a millisecond timestamp followed by a random tail. IDs are time-grouped but are
+  not monotonic within the same millisecond.
 - Generate kosmo UUID v8 in the web server/application before insert.
 - Keep GraphQL Relay global IDs opaque.
 - For GraphQL Relay Node type discrimination, reserve part of the custom UUID v8 implementation-defined area for a table type code.
@@ -66,6 +68,10 @@ Kosmo UUID v8 type-code policy:
 - Generate IDs only through a shared `generateId(tableType)` utility.
 - Decode IDs only through a shared `decodeIdType(id)` utility.
 - Store IDs as PostgreSQL `uuid`, not as string prefixes.
+- An ID-only keyset is valid when arbitrary ordering and page placement within the same millisecond are acceptable.
+  When persisted timestamp ordering matters, use an immutable timestamp plus an ID tie-breaker. When insertion order
+  must also be monotonic for identical timestamps, use a database ordering key or change the generator in a separately
+  reviewed platform change.
 
 Current type-code registry examples. The source of truth is `TableDiscriminator` in `packages/core/db/id.ts`.
 
@@ -118,16 +124,30 @@ Queries to check:
 - Avoid polymorphic foreign keys in the initial schema. Prefer explicit relationship tables.
 - Add ActivityPub actor details, inbox/outbox queues, and AT Protocol record/cache tables after the implementation path is concrete.
 
-Drizzle relation schema policy:
+### Notification Projection Exception
 
-- When adding a table to `packages/core/db/tables.ts` or changing a foreign key, update `packages/core/db/relations.ts` in the same change.
-- Use Drizzle relations v2 API, `defineRelations`, for relation schema definitions.
-- Do not destructure the `defineRelations` callback argument. Follow the official docs style and name the single argument `r`.
-- Reference helpers and table columns as `r.one.TableName`, `r.many.TableName`, and `r.TableName.columnName`.
-- Add `optional: false` to `one` relations backed by `notNull()` foreign keys.
-- Do not add `optional: false` to `one` relations backed by nullable foreign keys.
-- Use role-revealing relation names for self references or multiple foreign keys to the same target table.
-- Pass the v2 relation schema to DB initialization with `drizzle(..., { relations, schema })` in `packages/core/db/index.ts`.
+Profile-scoped Notification은 여러 source의 사용자용 projection이므로 일반적인 polymorphic
+relationship 금지 규칙에 다음 한정 예외를 둔다.
+
+- `notification` 하나에 `kind` enum과 `source_id uuid`를 저장하며 `source_id`에는 의도적으로 foreign
+  key를 만들지 않는다. `kind`가 실제 source table과 application validation을 결정한다.
+- 명확한 소유 관계인 `recipient_profile_id`는 `profile.id` foreign key와 물리 삭제 cascade를 유지한다.
+- source 중복은 `(kind, source_id, recipient_profile_id)` unique constraint로 막고, 정상 source
+  생성·삭제 action이 Notification 저장·정리를 호출한다. 같은 source가 여러 Recipient에게 투영되는 kind를
+  허용한다.
+- `data jsonb`는 kind별 최소 추가 데이터만 저장한다. 범용 payload framework나 GIN index를 선제 추가하지
+  않으며 Follow는 `{}`를 사용하고 Profile ID·이름·handle snapshot을 복제하지 않는다.
+- loose source가 없어지거나 Related Profile을 Recipient 기준으로 조회할 수 없으면 API는 해당 item을 목록,
+  count, Node와 Read에서 숨긴다. 장기 비동기 물리 정리는 별도 capability가 소유한다.
+- 이 예외를 다른 domain relationship의 generic polymorphic association 근거로 확장하지 않는다.
+- Account-scoped Operational Notification의 저장 구조는 해당 kind를 구현하는 별도 change에서 결정한다.
+
+Drizzle query policy:
+
+- Use Drizzle's SQL-like query builder with explicit `select`, `from`, and `join` clauses.
+- Do not define a Drizzle relation schema while the project does not use the relational query API (`db.query.*`).
+- Define database foreign keys in `packages/core/db/tables.ts` with `.references()`; relation metadata is not a substitute for database constraints.
+- If a future change adopts the relational query API, introduce only the relation definitions required by concrete query paths and update this policy in the same change.
 
 ## Base Table Responsibilities
 

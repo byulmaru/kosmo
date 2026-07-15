@@ -1,13 +1,23 @@
 import { Link, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { startNativeLogin, startWebLogin, startWebLoginFromPress } from '@/auth/login';
+import { graphql, useMutation } from 'react-relay';
+import { startNativeAuthorization, startWebLogin, startWebLoginFromPress } from '@/auth/login';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, radii, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
+import type { IndexScreenExchangeNativeOidcSessionMutation } from './__generated__/IndexScreenExchangeNativeOidcSessionMutation.graphql';
+
+const ExchangeNativeOidcSessionMutation = graphql`
+  mutation IndexScreenExchangeNativeOidcSessionMutation($input: ExchangeNativeOidcSessionInput!) {
+    exchangeNativeOidcSession(input: $input) {
+      token
+    }
+  }
+`;
 
 export default function IndexScreen() {
   const theme = useTheme();
@@ -15,6 +25,9 @@ export default function IndexScreen() {
   const { width } = useWindowDimensions();
   const { setNativeSession } = useRelayActor();
   const { status } = useSession();
+  const [commitSessionExchange] = useMutation<IndexScreenExchangeNativeOidcSessionMutation>(
+    ExchangeNativeOidcSessionMutation,
+  );
   const [loggingIn, setLoggingIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,14 +46,33 @@ export default function IndexScreen() {
     setLoggingIn(true);
     setError(null);
     try {
-      const token = await startNativeLogin();
-      if (token) {
-        await setNativeSession(token);
-        router.replace('/home');
+      const input = await startNativeAuthorization();
+      if (!input) {
+        setLoggingIn(false);
+        return;
       }
+
+      commitSessionExchange({
+        variables: { input },
+        onCompleted: (response, errors) => {
+          if (errors?.length) {
+            setError('네이티브 세션을 만들지 못했습니다.');
+            setLoggingIn(false);
+            return;
+          }
+
+          void setNativeSession(response.exchangeNativeOidcSession.token)
+            .then(() => router.replace('/home'))
+            .catch(() => setError('네이티브 세션을 저장하지 못했습니다.'))
+            .finally(() => setLoggingIn(false));
+        },
+        onError: () => {
+          setError('네이티브 세션을 만들지 못했습니다.');
+          setLoggingIn(false);
+        },
+      });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '로그인하지 못했습니다.');
-    } finally {
       setLoggingIn(false);
     }
   };

@@ -44,7 +44,7 @@ Expo web 정적 애플리케이션을 제공하고 인증·GraphQL proxy·Activi
 
 #### Scenario: Preserve server endpoints
 
-- **WHEN** client가 `/health`, `/login`, `/login/callback`, `/login/native/session`, `/graphql` 또는 Fedify에 등록된 federation path를 요청한다
+- **WHEN** client가 `/health`, `/login`, `/login/callback`, `/graphql` 또는 Fedify에 등록된 federation path를 요청한다
 - **THEN** web server는 SPA fallback 전에 해당 server handler를 실행한다
 
 #### Scenario: Serve unknown client route
