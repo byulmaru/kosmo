@@ -11,6 +11,13 @@
 
 - Write review comments and review summaries in Korean.
 
+## Pull Request Completion
+
+- Treat pull request readiness and OpenSpec change completion as separate decisions.
+- When a pull request's own scoped implementation and required verification are complete, mark it Ready for review unless the user explicitly requests that it remain a Draft.
+- Do not archive an OpenSpec change merely because an individual pull request in a split or stacked implementation is complete or merged.
+- Archive an OpenSpec change only after the proposal's entire declared scope and all tasks across every implementation slice are complete, required validation passes, and delta specs are synchronized as appropriate.
+
 ## OpenSpec Workflow
 
 - Before planning or updating an OpenSpec change, read `memory/issue-openspec-workflow.md` and
