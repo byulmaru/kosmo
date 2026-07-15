@@ -655,13 +655,15 @@ describe('GraphQL remote profile boundary', () => {
 
     const result = await requestGraphQL<{
       unfollowProfile: {
-        profile: { id: string; instance: { kind: string } };
+        followeeProfile: { followersCount: number; id: string; instance: { kind: string } };
+        followerProfile: { followingCount: number; id: string };
         profileFollowId: string;
       };
     }>(
       `mutation UnfollowRemote($id: ID!) {
         unfollowProfile(input: { id: $id }) {
-          profile { id instance { kind } }
+          followeeProfile { followersCount id instance { kind } }
+          followerProfile { followingCount id }
           profileFollowId
         }
       }`,
@@ -671,7 +673,12 @@ describe('GraphQL remote profile boundary', () => {
 
     assertNoGraphQLErrors(result);
     assert.deepEqual(result.data?.unfollowProfile, {
-      profile: { id: remote.id, instance: { kind: 'ACTIVITYPUB' } },
+      followeeProfile: {
+        followersCount: 0,
+        id: remote.id,
+        instance: { kind: 'ACTIVITYPUB' },
+      },
+      followerProfile: { followingCount: 0, id: auth.profile.id },
       profileFollowId: follow.id,
     });
     assert.equal(await countRows(ProfileFollows), 0);
