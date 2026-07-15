@@ -34,13 +34,12 @@ Post는 Profile이 작성하고 배포하는 짧은 게시 단위다. 게시 본
 
 ## 속성
 
-| 속성            | 타입/nullability | 검증 정책                                       | 존재 조건                         | 조회 조건           | 조회 권한 |
-| --------------- | ---------------- | ----------------------------------------------- | --------------------------------- | ------------------- | --------- |
-| 본문            | 문자열, nullable | 500자 이하이며 Media가 없으면 비어 있을 수 없다 | Form이 Original, Reply 또는 Quote | Post 조회 정책 통과 | 없음      |
-| Content Warning | 문자열, nullable | 존재할 때 빈 문자열이 아니다                    | Form이 Original, Reply 또는 Quote | Post 조회 정책 통과 | 없음      |
-| Sensitive Media | boolean, 필수    | Post에 연결된 모든 Media 표시에 함께 적용한다   | Form이 Original, Reply 또는 Quote | Post 조회 정책 통과 | 없음      |
-| 생성 시각       | 시각, 필수       | 생성 결과로 기록하며 변경 불가                  | 항상                              | Post 조회 정책 통과 | 없음      |
-| 삭제 시각       | 시각, nullable   | Tombstone 전이 결과로 기록하며 변경 불가        | Lifecycle이 Tombstone             | Tombstone 조회 정책 | 없음      |
+| 속성             | 타입/nullability         | 검증 정책                                                                                                                                                  | 존재 조건                         | 조회 조건           | 조회 권한 |
+| ---------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | ------------------- | --------- |
+| Content Document | Versioned JSON, nullable | `{ version, summary, body }`; V1 summary는 nullable Plain Text이고 summary와 body Plain Text 합계가 500자 이하이며 Media가 없으면 body가 비어 있을 수 없다 | Form이 Original, Reply 또는 Quote | Post 조회 정책 통과 | 없음      |
+| Sensitive Media  | boolean, 필수            | Post에 연결된 모든 Media 표시에 함께 적용한다                                                                                                              | Form이 Original, Reply 또는 Quote | Post 조회 정책 통과 | 없음      |
+| 생성 시각        | 시각, 필수               | 생성 결과로 기록하며 변경 불가                                                                                                                             | 항상                              | Post 조회 정책 통과 | 없음      |
+| 삭제 시각        | 시각, nullable           | Tombstone 전이 결과로 기록하며 변경 불가                                                                                                                   | Lifecycle이 Tombstone             | Tombstone 조회 정책 | 없음      |
 
 ## 관계
 
@@ -127,3 +126,5 @@ Original/Reply/Quote에서 다른 Profile의 Media를 연결할 수 있는지는
 - Mentioned Profiles Post는 Repost할 수 없다.
 - 게시 후 Media 연결/해제와 Post Visibility 변경은 지원하지 않는다.
 - 설문, 예약 게시, 임시 저장, 동영상/GIF 첨부, URL 미리보기, Post 수정은 현재 범위에서 제외한다.
+- 본문의 canonical 표현은 schema version이 식별된 document다. Plain Text는 작성 입력과 읽기·검색·접근성 projection이며 별도 canonical 저장값이 아니다.
+- 현재 document V1은 paragraph, text, hard break와 안전한 HTTP(S) link만 지원한다. `pre`와 rich-text editor는 지원하지 않는다.

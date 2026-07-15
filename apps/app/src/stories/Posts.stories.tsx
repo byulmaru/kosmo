@@ -1,5 +1,7 @@
+import { usePathname } from 'expo-router';
+import { Linking, Text } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Temporal } from 'temporal-polyfill';
 import { PostBody } from '@/components/post/PostBody';
 import { PostComposer } from '@/components/post/PostComposer';
@@ -59,6 +61,37 @@ const remoteAuthorPost = post({
     relativeHandle: '@user@remote.example',
   }),
 });
+const linkedPost = post({
+  bodyDocument: {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: '일반 텍스트와 ' },
+          {
+            type: 'text',
+            text: '안전한 외부 링크',
+            marks: [{ type: 'link', attrs: { href: 'https://example.com/path' } }],
+          },
+          { type: 'hard_break' },
+          { type: 'text', text: '강제 개행을 함께 표시합니다.' },
+        ],
+      },
+      { type: 'paragraph', content: [{ type: 'text', text: '두 번째 문단입니다.' }] },
+    ],
+  },
+  bodyText: '일반 텍스트와 안전한 외부 링크\n강제 개행을 함께 표시합니다.\n\n두 번째 문단입니다.',
+  id: 'linked',
+});
+const unsupportedDocumentPost = post({
+  bodyDocument: {
+    type: 'doc',
+    content: [{ type: 'pre', content: [{ type: 'text', text: '실행하면 안 되는 구조' }] }],
+  } as never,
+  bodyText: '미지원 문서는 안전한 Plain Text로 표시합니다.',
+  id: 'unsupported-document',
+});
 const storyPosts = [
   shortPost,
   longPost,
@@ -71,6 +104,8 @@ const storyPosts = [
   oldPost,
   ...visibilityPosts,
   remoteAuthorPost,
+  linkedPost,
+  unsupportedDocumentPost,
 ];
 const composerProfile = profile({ id: 'profile-composer' });
 const emptyPostsProfile = profileWithPosts([], { id: 'profile-posts-empty' });
@@ -176,6 +211,10 @@ function PostCatalog() {
           size="lg"
         />
         <PostBody post={requireFragment(requirePost(posts, 3).body, 'empty post body')} />
+        <PostBody post={requireFragment(requirePost(posts, 14).body, 'linked post body')} />
+        <PostBody
+          post={requireFragment(requirePost(posts, 15).body, 'unsupported document post body')}
+        />
       </Section>
 
       <Section title="List items · body states">
@@ -248,6 +287,18 @@ function ComposerStory() {
   );
 }
 
+function LinkedPostListItemStory() {
+  const { posts } = usePostsStoryData();
+  const pathname = usePathname();
+
+  return (
+    <Catalog>
+      <Text testID="current-story-pathname">{pathname}</Text>
+      <PostListItem post={requireFragment(requirePost(posts, 14).listItem, 'linked post item')} />
+    </Catalog>
+  );
+}
+
 const meta = {
   component: PostCatalog,
   parameters: {
@@ -271,16 +322,52 @@ type Story = StoryObj<typeof meta>;
 
 export const BodyTimeAndLayoutStates: Story = {
   play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
     expect(canvasElement.querySelector('a[href="/@user@remote.example"]')).toBeInTheDocument();
     expect(
       canvasElement.querySelector('a[href="/@user@remote.example/detail-remote"]'),
     ).toBeInTheDocument();
+    expect(
+      canvas.getByRole('link', { name: /안전한 외부 링크, https:\/\/example\.com\/path/ }),
+    ).toBeVisible();
+    expect(canvasElement.textContent).toContain('강제 개행을 함께 표시합니다.');
+    expect(canvasElement.textContent).toContain(
+      '강제 개행을 함께 표시합니다.\n\n두 번째 문단입니다.',
+    );
+    expect(canvas.getByText('미지원 문서는 안전한 Plain Text로 표시합니다.')).toBeVisible();
+    expect(canvas.queryByText('실행하면 안 되는 구조')).not.toBeInTheDocument();
   },
 };
 
 export const ListLoadingErrorEmptyAndContent: Story = { render: () => <PostListCatalog /> };
 
-export const ComposerDefault: Story = { render: () => <ComposerStory /> };
+export const LinkedBodyKeepsDetailNavigationIsolated: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const openURL = fn(async () => undefined);
+    const originalOpenURL = Linking.openURL;
+    Linking.openURL = openURL;
+
+    try {
+      await userEvent.click(canvas.getByLabelText('안전한 외부 링크, https://example.com/path'));
+      await expect(openURL).toHaveBeenCalledWith('https://example.com/path');
+      await expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+        '/@kosmo/post-1',
+      );
+    } finally {
+      Linking.openURL = originalOpenURL;
+    }
+  },
+  render: () => <LinkedPostListItemStory />,
+};
+
+export const ComposerDefault: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByRole('textbox', { name: '게시글 본문' })).not.toHaveAttribute('maxlength');
+  },
+  render: () => <ComposerStory />,
+};
 
 export const ComposerSubmitting: Story = {
   parameters: { relay: { mutationLoading: true } },

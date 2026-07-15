@@ -4,6 +4,7 @@ import * as Enum from './enums';
 import { createId, TableDiscriminator } from './id';
 import { datetime } from './types';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
+import type { PostContentDocumentV1 } from '../post-content';
 
 type JsonWebKeyRecord = Record<string, unknown>;
 
@@ -299,8 +300,7 @@ export const PostContents = pgTable(
     postId: uuid('post_id')
       .notNull()
       .references((): AnyPgColumn => Posts.id),
-    bodyText: text('body_text').notNull(),
-    contentWarning: text('content_warning'),
+    document: jsonb('document').$type<PostContentDocumentV1>().notNull(),
     createdAt: createdAt(),
   },
   (table) => [index().on(table.postId)],

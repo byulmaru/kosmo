@@ -1,5 +1,6 @@
 import { db, firstOrThrow, PostContents, Posts } from '@kosmo/core/db';
 import { PostState, PostVisibility } from '@kosmo/core/enums';
+import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { postBodyTextSchema } from '@kosmo/core/validation';
 import { eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
@@ -17,6 +18,7 @@ builder.mutationField('createPost', (t) =>
       visibility: t.input.field({ type: PostVisibility }),
     },
     resolve: async (_, { input }, ctx) => {
+      const body = postContentDocumentFromText(input.bodyText);
       const post = await db.transaction(async (tx) => {
         const post = await tx
           .insert(Posts)
@@ -32,7 +34,7 @@ builder.mutationField('createPost', (t) =>
           .insert(PostContents)
           .values({
             postId: post.id,
-            bodyText: input.bodyText,
+            document: body,
           })
           .returning()
           .then(firstOrThrow);

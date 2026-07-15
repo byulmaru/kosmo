@@ -120,8 +120,12 @@ type PostContent implements Node {
   bodyText: String!
   contentWarning: String
   createdAt: DateTime!
+  document: PostContentDocument!
   id: ID!
 }
+
+"""Kosmo versioned PostContent document JSON"""
+scalar PostContentDocument
 
 enum PostState {
   ACTIVE

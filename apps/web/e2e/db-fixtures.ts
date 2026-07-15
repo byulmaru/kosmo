@@ -22,6 +22,7 @@ import {
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
+import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { followProfile } from '@kosmo/core/services';
 import { eq } from 'drizzle-orm';
 import { Temporal } from 'temporal-polyfill';
@@ -189,6 +190,7 @@ export const createE2EFollow = (options: CreateE2EFollowOptions) =>
 
 export async function createE2EPost(options: CreateE2EPostOptions) {
   const bodyText = (options.body ?? '').trim();
+  const body = postContentDocumentFromText(bodyText);
   const createdAt = toInstant(options.createdAt);
 
   await waitForNextPostSeedTimestamp();
@@ -208,7 +210,7 @@ export async function createE2EPost(options: CreateE2EPostOptions) {
     const content = await tx
       .insert(PostContents)
       .values({
-        bodyText,
+        document: body,
         postId: post.id,
         ...(createdAt ? { createdAt } : {}),
       })

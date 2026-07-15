@@ -6,6 +6,10 @@
   "noSourceControl": true,
   "requireCustomScalarTypes": true,
   "customScalarTypes": {
-    "DateTime": "string"
+    "DateTime": "string",
+    "PostContentDocument": {
+      "name": "PostContentDocumentV1",
+      "path": "@kosmo/core/post-content"
+    }
   }
 }

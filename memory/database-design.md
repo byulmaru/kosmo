@@ -160,7 +160,7 @@ Drizzle query policy:
 - `profile`: social identity that writes posts, follows, and federates.
 - `account_profile`: account-profile N:N relationship and role.
 - `post`: post metadata, visibility, state, and current content pointer.
-- `post_content`: body revision, storing canonical Plain Text plus optional Content Warning, and eventually `(post_id, revision_number)` uniqueness when revisioning lands. It does not store TipTap JSON or executable HTML. The DB/API domain name is `content_warning`/`contentWarning`; ActivityPub adapters map it to Note `summary`.
+- `post_content`: authored-content revision, storing one canonical versioned `{ version, summary, body }` JSON document and eventually `(post_id, revision_number)` uniqueness when revisioning lands. V1 `summary` is nullable Plain Text Content Warning and `body` is the canonical ProseMirror document; GraphQL may keep `contentWarning` and `bodyText` as compatibility projections. Plain Text and executable HTML are never second canonical stored bodies. ActivityPub adapters map Note `summary` to document `summary`.
 - `profile_follow`: established follower/followee direction only; row existence means the follow relationship is active.
 - `profile_follow_request`: pending follower/followee request direction before a follow relationship is established. The row itself means the request is pending; accepted or rejected requests are removed instead of stored with a state.
 

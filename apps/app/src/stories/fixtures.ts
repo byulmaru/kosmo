@@ -1,4 +1,5 @@
 import { Temporal } from 'temporal-polyfill';
+import type { PostContentBodyDocumentV1 } from '@kosmo/core/post-content';
 
 export type StoryProfile = {
   __typename: 'Profile';
@@ -67,12 +68,14 @@ export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
 export type StoryPost = ReturnType<typeof post>;
 
 export function post({
+  bodyDocument,
   bodyText = '코스모에서 전하는 첫 번째 소식입니다.',
   createdAt = Temporal.Now.instant().subtract({ minutes: 5 }).toString(),
   id = 'post-1',
   profile: author = profile(),
   visibility = 'UNLISTED',
 }: {
+  bodyDocument?: PostContentBodyDocumentV1;
   bodyText?: string | null;
   createdAt?: string;
   id?: string;
@@ -86,6 +89,11 @@ export function post({
         ? null
         : {
             __typename: 'PostContent' as const,
+            document: {
+              body: bodyDocument ?? storyDocumentFromText(bodyText),
+              summary: null,
+              version: 1,
+            },
             bodyText,
             id: `content-${id}`,
           },
@@ -94,6 +102,20 @@ export function post({
     profile: author,
     state: 'ACTIVE',
     visibility,
+  };
+}
+
+function storyDocumentFromText(bodyText: string): PostContentBodyDocumentV1 {
+  const content = bodyText
+    .split('\n')
+    .flatMap((line, index) => [
+      ...(index > 0 ? ([{ type: 'hard_break' as const }] as const) : []),
+      ...(line ? ([{ type: 'text' as const, text: line }] as const) : []),
+    ]);
+
+  return {
+    type: 'doc',
+    content: [{ type: 'paragraph', ...(content.length > 0 ? { content } : {}) }],
   };
 }
 

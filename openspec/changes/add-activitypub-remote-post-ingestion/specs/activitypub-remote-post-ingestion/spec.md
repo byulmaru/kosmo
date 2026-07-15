@@ -132,11 +132,11 @@
 - **WHEN** 같은 remote actor의 기존 object URI가 서로 다른 activity ID의 `Create`에서 다시 전달된다
 - **AND** incoming Note를 다시 판정한 visibility가 기존 `Post.visibility`와 같다
 - **THEN** 시스템은 새 `Post`를 만들지 않고 기존 `Post`를 재사용한다
-- **AND** canonical `bodyJson` 구조가 변경되었으면 새 `PostContent` revision을 생성하고 `Post.currentContentId`를 교체한다
-- **AND** canonical `bodyJson`이 같으면 기존 `PostContent` revision을 재사용한다
+- **AND** canonical versioned PostContent document 의미가 변경되었으면 새 `PostContent` revision을 생성하고 `Post.currentContentId`를 교체한다
+- **AND** canonical versioned PostContent document가 같으면 기존 `PostContent` revision을 재사용한다
 - **AND** 시스템은 새 `toIds`에서 resolve된 Profile 집합과 일치하도록 `post_mention`을 추가 및 제거한다
 - **AND** 새 Direct recipient 후보가 모두 resolve되지 않더라도 incoming resolved mention 집합이 비어 있으면 기존 `post_mention`을 모두 제거한다
-- **AND** canonical `bodyJson`이 같고 resolved mention 집합만 달라졌으면 새 `PostContent` revision 없이 `post_mention`만 갱신한다
+- **AND** canonical content 의미가 같고 resolved mention 집합만 달라졌으면 새 `PostContent` revision 없이 `post_mention`만 갱신한다
 - **AND** 기존 `Post.visibility`, 최초 object mapping의 수신 시각과 원본 published 시각 및 기존 `Post.createdAt`을 수정하지 않는다
 
 #### Scenario: Reject duplicate Note visibility changes
@@ -150,9 +150,9 @@
 #### Scenario: Serialize duplicate Note content and mention updates
 
 - **WHEN** 같은 remote actor와 object URI의 서로 다른 `Create` delivery가 동시에 처리된다
-- **THEN** 시스템은 기존 object mapping 갱신을 transaction에서 수행하고 해당 `activitypub_object` row를 잠근 뒤 visibility, canonical `bodyJson`과 resolved mention 집합을 비교한다
-- **AND** canonical `bodyJson`이 기존 revision과 같으면 시스템은 새 `PostContent`를 만들지 않고 기존 revision을 재사용한다
-- **AND** 같은 canonical `bodyJson`으로 동시에 들어온 delivery는 동일한 revision을 중복 생성하거나 `Post.currentContentId`를 불필요하게 교체하지 않는다
+- **THEN** 시스템은 기존 object mapping 갱신을 transaction에서 수행하고 해당 `activitypub_object` row를 잠근 뒤 visibility, canonical versioned PostContent document와 resolved mention 집합을 비교한다
+- **AND** canonical content 의미가 기존 revision과 같으면 시스템은 새 `PostContent`를 만들지 않고 기존 revision을 재사용한다
+- **AND** 같은 canonical content 의미로 동시에 들어온 delivery는 동일한 revision을 중복 생성하거나 `Post.currentContentId`를 불필요하게 교체하지 않는다
 - **AND** 각 accepted delivery의 content와 resolved mention 집합은 같은 transaction에서 함께 반영되어 서로 다른 delivery의 content와 mention이 섞이지 않는다
 - **AND** transaction 실패 또는 object URI unique conflict는 부분 `Post`, `PostContent`, `post_mention`, ActivityPub object mapping row를 남기거나 기존 content/mention 집합을 부분 갱신하지 않는다
 
@@ -172,16 +172,17 @@
 - **AND** Note `published`가 미래이면 원본 값은 ActivityPub object mapping의 `publishedAt`에 보존한다
 - **AND** 기존 object URI 재전달에서는 Note `published` 유무와 값에 관계없이 기존 `Post.createdAt`을 유지한다
 - **AND** 최초 또는 변경 content revision의 `PostContent.createdAt`은 해당 delivery 수신 시각이다
-- **AND** remote Note HTML 원본은 저장하지 않고 `PostContent.bodyHtml = null`로 둔다
-- **AND** Fedify의 primary `Note.content`가 없으면 빈 canonical TipTap document와 여기서 추출한 빈 `bodyText`를 저장한다
+- **AND** remote Note HTML 원본과 파생 Plain Text는 저장하지 않는다
+- **AND** Fedify의 primary `Note.content`가 없으면 PROD-341 V1 canonical empty document를 저장한다
 - **AND** 단일 `Note.content`가 `LanguageString`이면 `.toString()` 문자열 값만 projection하고 `LanguageString.locale`은 저장하거나 선호 언어 선택에 사용하지 않는다
 - **AND** content가 있고 Note `mediaType`이 없으면 ActivityStreams 기본인 `text/html`로 취급한다
 - **AND** content가 있으면 media type parameter를 제외하고 type/subtype의 ASCII case를 정규화한 MIME essence를 판정한다
-- **AND** `text/html`은 `@kosmo/core/tiptap`의 server-side `@tiptap/html` `generateJSON()` helper와 기존 `Document`/`Paragraph`/`Text` extensions로 canonical `bodyJson`을 만든 뒤 trim된 `bodyText`를 추출한다
-- **AND** `text/plain`은 기존 plain-text-to-TipTap helper로 canonical `bodyJson`을 만든 뒤 같은 core helper로 trim된 `bodyText`를 추출한다
-- **AND** malformed/unsupported MIME essence 또는 TipTap 변환/정규화 실패는 Note를 materialize하지 않고 부분 row를 남기지 않는다
+- **AND** `text/html`은 PROD-259 전용 parser로 V1 paragraph/text/hard-break/link document에 projection하고 `@kosmo/core/post-content/server`로 검증·canonicalize한다
+- **AND** `pre`를 포함한 비지원 block은 전용 node 없이 visible text와 개행만 보존한다
+- **AND** `text/plain`은 PROD-341 Plain Text converter로 V1 canonical document를 만든다
+- **AND** malformed/unsupported MIME essence 또는 document 변환/검증 실패는 Note를 materialize하지 않고 부분 row를 남기지 않는다
 - **AND** attachment는 저장하지 않으며 content 없이 attachment만 있는 Note도 빈 본문으로 materialize한다
-- **AND** duplicate delivery의 revision identity는 canonical `bodyJson` structural equality이고 파생 `bodyText`는 별도로 비교하지 않는다
+- **AND** duplicate delivery의 revision identity는 canonical `{ version, summary, body }` PostContent document structural equality이고 파생 `bodyText`와 `contentWarning` 호환 필드는 별도로 비교하지 않는다
 
 #### Scenario: Return only materialized posts
 

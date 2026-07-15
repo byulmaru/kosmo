@@ -1,4 +1,5 @@
 import { PostVisibility } from '@kosmo/core/enums';
+import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
 import { AtSignIcon, GlobeIcon, LockIcon, MoonIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
@@ -74,7 +75,7 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [commit, submitting] = useMutation<PostComposerCreatePostMutation>(CreatePostMutation);
-  const bodyText = body.trim();
+  const bodyText = normalizePostContentPlainText(body);
   const remaining = postBodyMaxLength - bodyText.length;
   const disabled = submitting || bodyText.length === 0 || remaining < 0;
   const selectedVisibility =
@@ -231,7 +232,6 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
         aria-invalid={Boolean(error)}
         accessibilityLabel="게시글 본문"
         editable={!submitting}
-        maxLength={postBodyMaxLength + 1}
         onBlur={() => setEditorFocused(false)}
         onChangeText={setBody}
         onFocus={() => setEditorFocused(true)}
