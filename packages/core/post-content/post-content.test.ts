@@ -93,6 +93,20 @@ test('canonicalizes empty paragraphs, adjacent text, duplicate marks and URLs', 
   );
 });
 
+test('canonicalizes line endings inside document text nodes to hard breaks', () => {
+  assert.deepEqual(
+    canonicalizePostContentDocument({
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'a\r\nb\rc\nd' }] }],
+      },
+    }),
+    postContentDocumentFromText('a\nb\nc\nd'),
+  );
+});
+
 test('projects paragraph boundaries, hard breaks and link labels to Plain Text', () => {
   assert.equal(
     postContentDocumentToText({

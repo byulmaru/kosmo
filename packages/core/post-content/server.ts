@@ -6,6 +6,8 @@ import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import type {
   PostContentBodyDocumentV1,
   PostContentDocumentV1,
+  PostContentInlineNode,
+  PostContentLinkMark,
   PostContentSchemaVersion,
 } from './index';
 
@@ -91,23 +93,18 @@ export function postContentDocumentFromText(
   summary: string | null = null,
 ): PostContentDocumentV1 {
   const normalized = normalizePostContentPlainText(bodyText);
-  const content: unknown[] = [];
-
-  for (const [index, line] of normalized.split('\n').entries()) {
-    if (index > 0) {
-      content.push({ type: 'hard_break' });
-    }
-    if (line.length > 0) {
-      content.push({ type: 'text', text: line });
-    }
-  }
 
   return canonicalizePostContentDocument({
     version: postContentSchemaVersion,
     summary,
     body: {
       type: 'doc',
-      content: [{ type: 'paragraph', ...(content.length > 0 ? { content } : {}) }],
+      content: [
+        {
+          type: 'paragraph',
+          ...(normalized.length > 0 ? { content: [{ type: 'text', text: normalized }] } : {}),
+        },
+      ],
     },
   });
 }
@@ -173,8 +170,7 @@ function normalizeAllowedJson(value: unknown): PostContentBodyDocumentV1 {
       throw new TypeError('Paragraph content must be an array');
     }
 
-    const inline: NonNullable<PostContentBodyDocumentV1['content'][number]['content']>[number][] =
-      [];
+    const inline: PostContentInlineNode[] = [];
     for (const node of paragraph.content) {
       if (!isRecord(node)) {
         throw new TypeError('Inline node must be an object');
@@ -192,7 +188,7 @@ function normalizeAllowedJson(value: unknown): PostContentBodyDocumentV1 {
         throw new TypeError('Text nodes must contain non-empty text');
       }
       if (node.marks === undefined) {
-        inline.push({ type: 'text', text: node.text });
+        appendNormalizedText(inline, node.text);
         continue;
       }
       if (!Array.isArray(node.marks)) {
@@ -213,16 +209,35 @@ function normalizeAllowedJson(value: unknown): PostContentBodyDocumentV1 {
         throw new TypeError('Text cannot contain different nested links');
       }
       const href = hrefs.values().next().value;
-      inline.push({
-        type: 'text',
-        text: node.text,
-        ...(href ? { marks: [{ type: 'link', attrs: { href } }] } : {}),
-      });
+      appendNormalizedText(
+        inline,
+        node.text,
+        href ? [{ type: 'link', attrs: { href } }] : undefined,
+      );
     }
     paragraphs.push({ type: 'paragraph', ...(inline.length > 0 ? { content: inline } : {}) });
   }
 
   return { type: 'doc', content: paragraphs };
+}
+
+function appendNormalizedText(
+  inline: PostContentInlineNode[],
+  value: string,
+  marks?: readonly PostContentLinkMark[],
+): void {
+  for (const [index, text] of value
+    .replaceAll('\r\n', '\n')
+    .replaceAll('\r', '\n')
+    .split('\n')
+    .entries()) {
+    if (index > 0) {
+      inline.push({ type: 'hard_break' });
+    }
+    if (text.length > 0) {
+      inline.push({ type: 'text', text, ...(marks ? { marks } : {}) });
+    }
+  }
 }
 
 function normalizeHttpUrl(href: string): string {

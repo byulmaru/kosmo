@@ -59,7 +59,8 @@ PostContent 본문의 versioned ProseMirror document schema, 서버 검증·cano
 #### Scenario: 빈 node와 인접 text 정규화
 
 - **WHEN** 유효한 document를 canonicalize한다
-- **THEN** 시스템은 text와 hard break가 없는 paragraph를 제거한다
+- **THEN** text node 안의 CRLF와 CR을 LF로 통일하고 각 LF를 `hard_break`로 변환하며 앞뒤 text의 기존 mark를 유지한다
+- **AND** 시스템은 text와 hard break가 없는 paragraph를 제거한다
 - **AND** 모든 paragraph가 제거되면 빈 paragraph 하나를 유지한다
 - **AND** 같은 canonical mark 집합을 가진 인접 text node를 하나로 병합한다
 - **AND** 빈 text node는 저장하지 않는다
