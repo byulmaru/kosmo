@@ -118,12 +118,12 @@
 
 #### Scenario: Project initial delivery and published timestamps
 
-- **WHEN** Note published가 있고 `receivedAt + 5분` 이내다
-- **THEN** 최초 `Post.createdAt`에 published를 사용할 수 있다
-- **WHEN** published가 없거나 허용된 미래 범위를 넘는다
+- **WHEN** 유효한 Note published가 있다
+- **THEN** 최초 `Post.createdAt`은 published와 receivedAt 중 이른 시각을 사용한다
+- **WHEN** published가 없거나 유효하지 않다
 - **THEN** 최초 `Post.createdAt`은 receivedAt을 사용한다
 - **AND** mapping `receivedAt`과 first PostContent `createdAt`은 delivery receivedAt을 사용한다
-- **AND** 원본 published는 nullable mapping metadata로 보존한다
+- **AND** 미래 시각을 포함한 원본 published는 nullable mapping metadata로 보존한다
 - **AND** duplicate delivery는 최초 timestamp를 덮어쓰지 않는다
 
 ### Requirement: DB-only GraphQL read compatibility

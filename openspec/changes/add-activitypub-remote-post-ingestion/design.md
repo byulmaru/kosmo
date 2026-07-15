@@ -70,6 +70,7 @@ Fedify inbox listener
 
 - Fedify adapter는 remote vocabulary의 content/mediaType/summary만 primitive로 바꿔 PROD-259에 전달한다.
 - published는 PROD-260 materialization input에서 PROD-261 timestamp 정책으로 직접 전달한다.
+- PROD-261은 원본 published를 mapping metadata로 보존하되 `Post.createdAt`은 receivedAt 이후가 되지 않게 clamp한다.
 - PROD-259는 remote HTML/plain 입력 처리만 소유한다.
 - 저장 가능한 document의 node schema, canonicalization, equality와 renderer는 PROD-341의 canonical capability를 그대로 사용한다.
 - remote-post change는 PROD-341 V1 node 목록이나 revision equality를 복제하지 않는다.

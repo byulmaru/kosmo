@@ -123,7 +123,7 @@ actor-scoped/shared Fedify listener가 지원 delivery의 object identity, conte
 **Verification**
 
 - 실제 PostgreSQL 독립 connection으로 personal/shared/restart/concurrent duplicate, rollback/retry와 object URI conflict를 검증한다.
-- 최초 canonical document, Content Warning과 published/received timestamp를 검증한다.
+- 최초 canonical document, Content Warning, published/received timestamp와 미래 published clamp를 검증한다.
 
 - [ ] 6.1 object mapping/Post/first PostContent/currentContent를 하나의 transaction에서 commit/rollback한다.
 - [ ] 6.2 unique object URI conflict loser의 전체 transaction을 rollback하고 duplicate no-op으로 종료한다.
