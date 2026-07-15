@@ -7,7 +7,7 @@
 - actor-scoped/shared inbox의 verified typed `Create`를 Fedify listener에서 받되 저장된 ACTIVE 또는 UNRESPONSIVE ActivityPub actor만 처리한다.
 - object를 Fedify vocabulary로 hydrate한 뒤 attribution이 일치하는 PUBLIC/UNLISTED top-level `Note`만 materialization 대상으로 허용한다.
 - `Note.id.href`의 unique object mapping을 remote Post identity와 durable duplicate 판정으로 사용한다.
-- Fedify activity idempotency는 조기 최적화로만 사용하고 activity ID를 PostgreSQL receipt로 저장하지 않는다.
+- Fedify activity idempotency는 선택적인 조기 최적화로 사용할 수 있고 activity ID를 PostgreSQL receipt로 저장하지 않는다.
 - 최초 mapping, `Post`, `PostContent`와 `Post.currentContentId`를 하나의 transaction으로 저장한다. 같은 object URI의 concurrent loser는 전체 rollback 후 no-op한다.
 - duplicate `Create`는 first-write-wins로 기존 content, visibility와 timestamp를 변경하지 않는다. 원격 변경은 후속 PROD-365 `Update(Note)`/`Delete(Note)` lifecycle 계약으로 남긴다.
 - remote content adapter/projection은 PROD-259가 소유하고 결과 document의 schema, canonicalization과 equality는 PROD-341 계약을 재정의하지 않고 참조한다.

@@ -39,7 +39,7 @@
 - Decision Date: 2026-07-15
 - Status: Accepted
 - Context / Problem: 최초 public Note ingestion의 observable invariant는 같은 Note object가 Post를 둘 만들지 않는 것이다. activity receipt를 함께 저장하면 object와 activity 두 identity가 같은 중복 책임을 나눠 갖고 영구 데이터와 transaction 복잡도를 추가한다.
-- Decision Outcome: hydrated `Note.id.href`의 unique object mapping이 durable duplicate 판정이다. Fedify activity idempotency는 activity ID가 있을 때의 조기 최적화로만 사용하고 application은 activity ID를 저장하거나 materialization input으로 전달하지 않는다.
+- Decision Outcome: hydrated `Note.id.href`의 unique object mapping이 durable duplicate 판정이다. Fedify activity idempotency는 activity ID가 있을 때 선택적인 조기 최적화로 사용할 수 있고 application은 activity ID를 저장하거나 materialization input으로 전달하지 않는다.
 - Alternatives Considered: PostgreSQL global activity receipt, Fedify KV만 사용, activity ID를 object mapping에 함께 저장.
 - Consequences: Fedify global idempotency를 사용하면 같은 activity ID의 후속 delivery는 object URI와 무관하게 handler 전에 제거될 수 있다. handler에 도달한 delivery의 durable identity만 Note object URI로 판정한다. activity-level audit/exactly-once가 실제 요구되면 별도 이슈에서 receipt를 다시 검토한다.
 - Confirmation / Follow-up: PROD-255가 unique object mapping을, PROD-260이 activity ID 없는 delivery와 early idempotency 경계를 검증한다.

@@ -61,7 +61,7 @@ Fedify inbox listener
 #### Inbox adapter와 validation
 
 - actor-scoped/shared listener는 같은 `Create` handler를 사용한다.
-- `withIdempotency("global")`은 activity ID가 있을 때의 조기 중복 제거로만 둔다. 같은 activity ID의 후속 delivery는 object URI와 무관하게 handler 전에 제거될 수 있으며, application은 handler에 도달한 delivery의 activity ID를 materialization input이나 DB row로 만들지 않는다.
+- `withIdempotency("global")`은 activity ID가 있을 때 선택적인 조기 중복 제거로만 둘 수 있다. 사용하는 경우 같은 activity ID의 후속 delivery는 object URI와 무관하게 handler 전에 제거될 수 있으며, application은 handler에 도달한 delivery의 activity ID를 materialization input이나 DB row로 만들지 않는다.
 - handler는 진입 시 `receivedAt`을 한 번 캡처한다.
 - Note hydration 전에 저장된 `ActivityPubActor + Profile + Instance`를 조회하고 unknown/inactive/non-ActivityPub/SUSPENDED는 network/profile write 없이 종료한다.
 - object는 `Create.getObject({ documentLoader })`와 Fedify cross-origin 기본값을 사용한다.

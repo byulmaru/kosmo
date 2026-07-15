@@ -71,7 +71,7 @@ actor-scoped/shared Fedify listener가 지원 delivery의 object identity, conte
 - stored ACTIVE/UNRESPONSIVE ActivityPub actor만 허용하고 unknown actor/mention network/write를 수행하지 않는다.
 - public marker가 있는 top-level Note만 허용한다.
 - PROD-241의 activity-neutral inbox route를 재사용하고 `activitypub-actor-discovery`를 수정하지 않는다.
-- Fedify activity ID는 early idempotency 외에 전달·저장하지 않으며 missing activity ID만으로 delivery를 거부하지 않는다. global idempotency를 사용하면 같은 activity ID의 후속 delivery는 object URI와 무관하게 handler 전에 제거될 수 있다.
+- Fedify activity ID는 optional early idempotency 외에 전달·저장하지 않으며 missing activity ID만으로 delivery를 거부하지 않는다. global idempotency를 선택해 사용하면 같은 activity ID의 후속 delivery는 object URI와 무관하게 handler 전에 제거될 수 있다.
 - custom ActivityPub fetch/parser와 `trust`를 사용하지 않는다.
 
 **Verification**
