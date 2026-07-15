@@ -86,6 +86,25 @@ export const ActivityPubActorKeys = pgTable(
   (table) => [unique().on(table.activityPubActorId, table.kind)],
 );
 
+export const ActivityPubObjects = pgTable(
+  'activitypub_object',
+  {
+    id: id(),
+    uri: text('uri').unique().notNull(),
+    type: Enum.activityPubObjectType('type').notNull(),
+    activityPubActorId: uuid('activitypub_actor_id')
+      .notNull()
+      .references(() => ActivityPubActors.id, { onDelete: 'restrict' }),
+    postId: uuid('post_id')
+      .unique()
+      .notNull()
+      .references(() => Posts.id, { onDelete: 'cascade' }),
+    receivedAt: datetime('received_at').notNull(),
+    publishedAt: datetime('published_at'),
+  },
+  (table) => [index().on(table.activityPubActorId)],
+);
+
 export const Applications = pgTable(
   'application',
   {

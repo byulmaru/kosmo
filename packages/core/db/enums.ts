@@ -14,6 +14,10 @@ export const activityPubActorKeyKind = createPgEnum(
   'activitypub_actor_key_kind',
   Enum.ActivityPubActorKeyKind,
 );
+export const activityPubObjectType = createPgEnum(
+  'activitypub_object_type',
+  Enum.ActivityPubObjectType,
+);
 export const applicationState = createPgEnum('application_state', Enum.ApplicationState);
 export const applicationType = createPgEnum('application_type', Enum.ApplicationType);
 export const instanceKind = createPgEnum('instance_kind', Enum.InstanceKind);
