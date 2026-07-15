@@ -2,8 +2,8 @@
 
 - [x] 1.1 `Notifications`의 미사용 UUID v8 discriminator, `notification_kind`의 `FOLLOW` 값과 단일 `notification` Drizzle table/export/relation을 추가한다.
 - [x] 1.2 Recipient Profile FK/cascade, FK 없는 `source_id`, `data jsonb NOT NULL DEFAULT '{}'`, `(kind, source_id, recipient_profile_id)` unique constraint, Recipient 목록 index와 Unread partial index를 additive migration에 반영한다.
-- [ ] 1.3 migration/DB integration test로 Recipient FK, kind/data default, 직접 duplicate source 거부, `id DESC` index와 Unread partial index를 검증한다.
-- [ ] 1.4 DB schema check와 migration 검증으로 `notification_follow`, source FK, cleanup trigger, deferred integrity, 미래 kind/data와 GIN index가 선제 추가되지 않았는지 확인한다.
+- [x] 1.3 migration/DB integration test로 Recipient FK, kind/data default, 직접 duplicate source 거부, `id DESC` index와 Unread partial index를 검증한다.
+- [x] 1.4 DB schema check와 migration 검증으로 `notification_follow`, source FK, cleanup trigger, deferred integrity, 미래 kind/data와 GIN index가 선제 추가되지 않았는지 확인한다.
 
 ## 2. PROD-274 Follow Notification의 source·Recipient 저장 경계를 제공한다
 
