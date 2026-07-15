@@ -2,7 +2,7 @@ data "aws_iam_openid_connect_provider" "github_actions" {
   url = "https://token.actions.githubusercontent.com"
 }
 
-# main and stable are intentionally mutable; version and commit SHA tags remain immutable.
+# Operational tags are intentionally mutable; release version tags remain immutable.
 resource "aws_ecr_repository" "kosmo" { # nosemgrep: terraform.aws.security.aws-ecr-mutable-image-tags.aws-ecr-mutable-image-tags
   name                 = "kosmo"
   image_tag_mutability = "IMMUTABLE_WITH_EXCLUSION"
@@ -15,6 +15,16 @@ resource "aws_ecr_repository" "kosmo" { # nosemgrep: terraform.aws.security.aws-
 
   image_tag_mutability_exclusion_filter {
     filter      = "stable"
+    filter_type = "WILDCARD"
+  }
+
+  image_tag_mutability_exclusion_filter {
+    filter      = "branch-*"
+    filter_type = "WILDCARD"
+  }
+
+  image_tag_mutability_exclusion_filter {
+    filter      = "sha-*"
     filter_type = "WILDCARD"
   }
 
@@ -108,27 +118,9 @@ data "aws_iam_policy_document" "ecr_push_assume_role" {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
       values = [
-        "repo:${local.github_owner}/${local.github_repository}:ref:refs/heads/main",
+        "repo:${local.github_owner}/${local.github_repository}:ref:refs/heads/*",
         "repo:${local.github_owner}/${local.github_repository}:ref:refs/tags/*",
       ]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "token.actions.githubusercontent.com:repository_id"
-      values   = [local.github_repository_id]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "token.actions.githubusercontent.com:repository_owner_id"
-      values   = [local.github_owner_id]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "token.actions.githubusercontent.com:workflow"
-      values   = ["Docker Build"]
     }
   }
 }
