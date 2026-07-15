@@ -9,6 +9,8 @@ import {
 } from '../db';
 import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
 import { NotFoundError } from '../error';
+import { ensureProfileFollow } from './profile-follow-relation';
+import { ensureProfileFollowRequest } from './profile-follow-request';
 import type { Transaction } from '../db';
 
 const pairCondition = (
@@ -57,66 +59,11 @@ export const recordInboundFollow = async (
     }
 
     if (followee.followPolicy === ProfileFollowPolicy.APPROVAL_REQUIRED) {
-      const existingFollow = await tx
-        .select({ id: ProfileFollows.id })
-        .from(ProfileFollows)
-        .where(pairCondition(ProfileFollows, followerProfileId, followeeProfileId))
-        .limit(1)
-        .then(first);
-
-      if (existingFollow) {
-        await tx
-          .delete(ProfileFollowRequests)
-          .where(pairCondition(ProfileFollowRequests, followerProfileId, followeeProfileId));
-        return 'ESTABLISHED';
-      }
-
-      await tx
-        .insert(ProfileFollowRequests)
-        .values({
-          followeeProfileId,
-          followerProfileId,
-        })
-        .onConflictDoUpdate({
-          target: [
-            ProfileFollowRequests.followerProfileId,
-            ProfileFollowRequests.followeeProfileId,
-          ],
-          set: { id: sql`${ProfileFollowRequests.id}` },
-        });
-
-      return 'PENDING';
+      const result = await ensureProfileFollowRequest({ followeeProfileId, followerProfileId }, tx);
+      return result.kind;
     }
 
-    const profileFollow = await tx
-      .insert(ProfileFollows)
-      .values({
-        followeeProfileId,
-        followerProfileId,
-      })
-      .onConflictDoNothing({
-        target: [ProfileFollows.followerProfileId, ProfileFollows.followeeProfileId],
-      })
-      .returning({ id: ProfileFollows.id })
-      .then(first);
-
-    await tx
-      .delete(ProfileFollowRequests)
-      .where(pairCondition(ProfileFollowRequests, followerProfileId, followeeProfileId));
-
-    if (!profileFollow) {
-      return 'ESTABLISHED';
-    }
-
-    await tx
-      .update(Profiles)
-      .set({ followingCount: sql`${Profiles.followingCount} + 1` })
-      .where(eq(Profiles.id, followerProfileId));
-    await tx
-      .update(Profiles)
-      .set({ followersCount: sql`${Profiles.followersCount} + 1` })
-      .where(eq(Profiles.id, followeeProfileId));
-
+    await ensureProfileFollow({ followeeProfileId, followerProfileId }, tx);
     return 'ESTABLISHED';
   });
 
