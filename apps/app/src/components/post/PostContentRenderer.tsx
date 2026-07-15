@@ -1,5 +1,6 @@
 import { isPostContentDocumentV1 } from '@kosmo/core/post-content';
-import { Linking, StyleSheet, Text, View } from 'react-native';
+import { Fragment } from 'react';
+import { Linking, StyleSheet, Text } from 'react-native';
 import { match } from 'ts-pattern';
 import { useTheme } from '@/theme/ThemeProvider';
 import { typography } from '@/theme/tokens';
@@ -46,16 +47,21 @@ export function PostContentRenderer({
 function renderNode(node: PostContentNode, key: Key, context: RenderContext): ReactNode {
   return match(node)
     .with({ type: 'doc' }, (document) => (
-      <View key={key}>
-        {document.content.map((child, index) => renderNode(child, `${key}.${index}`, context))}
-      </View>
+      <Text key={key} style={context.bodyStyle}>
+        {document.content.map((child, index) => (
+          <Fragment key={`${key}.${index}`}>
+            {index > 0 ? '\n\n' : null}
+            {renderNode(child, `${key}.${index}`, context)}
+          </Fragment>
+        ))}
+      </Text>
     ))
     .with({ type: 'paragraph' }, (paragraph) => (
-      <Text key={key} style={context.bodyStyle}>
+      <Fragment key={key}>
         {(paragraph.content ?? []).map((child, index) =>
           renderNode(child, `${key}.${index}`, context),
         )}
-      </Text>
+      </Fragment>
     ))
     .with({ type: 'text' }, (text) => renderMarks(text, key))
     .with({ type: 'hard_break' }, () => '\n')

@@ -232,7 +232,6 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
         aria-invalid={Boolean(error)}
         accessibilityLabel="게시글 본문"
         editable={!submitting}
-        maxLength={postBodyMaxLength + 1}
         onBlur={() => setEditorFocused(false)}
         onChangeText={setBody}
         onFocus={() => setEditorFocused(true)}

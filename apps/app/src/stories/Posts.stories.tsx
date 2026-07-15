@@ -331,7 +331,9 @@ export const BodyTimeAndLayoutStates: Story = {
       canvas.getByRole('link', { name: /안전한 외부 링크, https:\/\/example\.com\/path/ }),
     ).toBeVisible();
     expect(canvasElement.textContent).toContain('강제 개행을 함께 표시합니다.');
-    expect(canvasElement.textContent).toContain('두 번째 문단입니다.');
+    expect(canvasElement.textContent).toContain(
+      '강제 개행을 함께 표시합니다.\n\n두 번째 문단입니다.',
+    );
     expect(canvas.getByText('미지원 문서는 안전한 Plain Text로 표시합니다.')).toBeVisible();
     expect(canvas.queryByText('실행하면 안 되는 구조')).not.toBeInTheDocument();
   },
@@ -359,7 +361,13 @@ export const LinkedBodyKeepsDetailNavigationIsolated: Story = {
   render: () => <LinkedPostListItemStory />,
 };
 
-export const ComposerDefault: Story = { render: () => <ComposerStory /> };
+export const ComposerDefault: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByRole('textbox', { name: '게시글 본문' })).not.toHaveAttribute('maxlength');
+  },
+  render: () => <ComposerStory />,
+};
 
 export const ComposerSubmitting: Story = {
   parameters: { relay: { mutationLoading: true } },
