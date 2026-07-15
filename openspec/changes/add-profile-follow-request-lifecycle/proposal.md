@@ -10,7 +10,7 @@
 - GraphQL에 participant 전용 `ProfileFollowRequest` Relay Node, Profile 소유 incoming/outgoing connection과 처리 mutation을 제공한다.
 - **BREAKING**: `FollowProfilePayload.profileFollow`을 `ProfileFollowResult` union 타입의 `FollowProfilePayload.result`로 교체한다. 승인은 영향받은 Profile과 삭제 ID를 반환하고, 거절은 행동자인 `followeeProfile`, 취소는 행동자인 `followerProfile`과 삭제 ID를 처리 mutation payload에 포함한다.
 - 기존 FollowButton은 union 결과를 안전하게 처리해 `OPEN` follow/unfollow 동작을 유지하되 요청 상태·취소·관리 UI는 추가하지 않는다.
-- Notification 생성·표시, Fedify inbox/Accept/Reject delivery, remote target follow/unfollow, inbound correlation/generation, Profile/Domain Block 정책·저장 기반과 새 DB migration은 포함하지 않는다.
+- Notification 생성·표시, Fedify inbox/Accept/Reject delivery, remote target follow/unfollow, ActivityPub Follow ID·actor URI·object URI·generation 저장과 해당 metadata migration/backfill, Profile/Domain Block 정책·저장 기반은 포함하지 않는다.
 
 ## Capabilities
 
@@ -30,5 +30,5 @@
 - `apps/api/src/graphql/resolvers/profile` 및 `apps/api/schema.graphql`: Node, loader/access, connections, union과 mutations가 추가·변경된다.
 - `apps/app/src/components/profile/FollowButton.tsx`, request transition Relay store test와 Relay/Storybook fixture: 새 union을 처리하고 actor Profile 소유 request connection의 삭제 edge 갱신 계약을 검증하도록 갱신된다.
 - 기존 `profile_follow_request` 테이블, unique/FK/index와 `TableDiscriminator`를 그대로 사용하므로 migration과 dependency 변경은 없다.
-- `add-activitypub-remote-follow`/PROD-243은 ActivityPub 검증·materialization·correlation/generation·조건부 삭제를 계속 소유하고, 이 change의 core lifecycle을 검증된 actor pair에 재사용한다.
-- 두 active change가 같은 `Follow profile mutation` requirement를 수정하므로 이 change를 먼저 구현·archive하고, PROD-361이 `add-activitypub-remote-follow` 최종 archive에서 이 change의 union/request 계약과 remote follow 계약을 누적 동기화한다.
+- `add-activitypub-remote-follow`/PROD-243은 ActivityPub recipient·actor·object 검증, actor materialization, remote pending request 생성과 Fedify Follow/Undo handler를 소유한다. 양쪽은 remote actor/follower와 local followee의 기존 pair/FK를 공통 식별 경계로 사용하고 protocol activity metadata나 generation을 저장하지 않는다. PROD-243의 exact-row 삭제 경계는 delete/refollow 경쟁에서 새 row를 지우지 않는 로컬 동시성 방어로만 사용하며 expected generation을 비교하지 않는다. remote request 승인·거절 뒤 필요한 protocol payload는 저장된 participant pair에서 재구성하고 delivery는 이 change 밖에 남긴다.
+- PROD-243과 PROD-272 구현은 기존 pair/FK 계약을 기준으로 병렬 진행한다. 두 active change가 같은 `Follow profile mutation` requirement를 수정하므로 이 change의 archive는 `add-activitypub-remote-follow` 최종 archive보다 먼저 수행하고, PROD-361이 최종 archive에서 이 change의 union/request 계약과 remote follow 계약을 누적 동기화한다.

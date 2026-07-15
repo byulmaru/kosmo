@@ -11,7 +11,7 @@
 - Context / Problem: Local approval request와 inbound remote Follow request가 같은 `profile_follow_request` 테이블을 사용하지만 생성 이후 조회·승인·거절·취소 책임이 없으면 transport별로 lifecycle과 권한 정책이 중복될 수 있다.
 - Decision Outcome: request row의 존재 자체를 Pending으로 해석하고 pair 조회, 승인, 거절과 취소를 local/remote 공통 core lifecycle로 제공한다. 승인하면 request를 삭제하고 relation을 생성하며, 거절·취소하면 request를 삭제한다. terminal status, 처리 시각과 처리 이력은 저장하지 않는다.
 - Alternatives Considered: Local/Remote service를 분리하면 같은 저장 불변 조건과 권한 검증이 중복된다. terminal status를 추가하면 PROD-323의 canonical 계약과 충돌한다.
-- Consequences: ActivityPub handler는 검증된 participant pair를 공통 lifecycle에 전달할 수 있지만 correlation/generation과 delivery는 계속 별도 port가 소유한다.
+- Consequences: ActivityPub handler는 검증된 participant pair를 공통 lifecycle에 전달하며 protocol activity metadata나 generation을 request/relation identity로 저장하지 않는다. exact row ID는 delete/refollow 경쟁에서 새 row를 보존하는 로컬 동시성 방어로만 사용하며 expected generation은 비교하지 않는다. Fedify handler와 delivery는 계속 별도 port가 소유한다.
 - Confirmation / Follow-up: Core DB-backed test에서 local/remote participant 조합의 동일 전이와 terminal column/migration 부재를 확인한다.
 
 ### Request·relation·count 전이는 caller transaction과 하나의 rollback 경계를 공유한다
@@ -78,20 +78,20 @@
 
 - Decision Date: 2026-07-15
 - Status: Accepted
-- Context / Problem: 공통 request lifecycle을 구현하면서 ActivityPub correlation/delivery나 Notification source까지 포함하면 병렬 이슈 경계와 독립 리뷰가 무너진다.
-- Decision Outcome: PROD-272는 local 생성과 이미 저장된 local/remote request의 공통 lifecycle만 소유한다. PROD-243은 inbox 검증·materialization·correlation/generation·exact-row 조건부 삭제를, PROD-321은 Follow Request Notification을 소유한다.
-- Alternatives Considered: 하나의 구현에서 federation과 notification을 함께 제공하면 범위가 커지고 transport·policy·UI 검증을 독립적으로 배포할 수 없다.
-- Consequences: core action은 ActivityPub 타입이나 Notification side effect에 의존하지 않고 검증된 profile ID와 transaction 경계만 소비한다.
-- Confirmation / Follow-up: 구현 diff와 tests에 Fedify handler, correlation schema, Notification 변경이 포함되지 않는지 검토한다.
+- Context / Problem: 공통 request lifecycle을 구현하면서 ActivityPub handler/delivery나 Notification source까지 포함하면 병렬 이슈 경계와 독립 리뷰가 무너진다. 원본 Follow ID·actor URI·object URI·generation을 저장 identity로 승격하면 실제 서버의 다양한 Undo 표현과 충돌하고 불필요한 migration·ordering 복잡도를 만든다.
+- Decision Outcome: PROD-272는 local 생성과 이미 저장된 local/remote request의 공통 lifecycle만 소유한다. PROD-243은 inbox recipient·actor·object 검증, actor materialization, remote pending request 생성과 Fedify Follow/Undo handler를, PROD-321은 Follow Request Notification을 소유한다. 두 follow 이슈는 remote actor/follower와 local followee의 기존 pair/FK를 authoritative identity로 사용하고 protocol activity metadata와 generation을 저장하지 않는다. Undo는 검증한 pair의 현재 저장 row를 대상으로 하며 원본 Follow URI 일치를 요구하지 않는다. exact row ID는 delete/refollow 경쟁의 로컬 동시성 방어로만 사용하고 expected generation은 비교하지 않는다.
+- Alternatives Considered: 하나의 구현에서 federation과 notification을 함께 제공하면 범위가 커지고 transport·policy·UI 검증을 독립적으로 배포할 수 없다. protocol activity ID와 generation을 durable identity로 저장하면 상호운용성이 낮아지고 현재 요구보다 복잡한 ordering 모델이 필요하다.
+- Consequences: core action은 ActivityPub 타입이나 Notification side effect에 의존하지 않고 검증된 participant pair와 transaction 경계만 소비한다. remote request 승인·거절 뒤 필요한 protocol payload는 저장된 pair에서 재구성하며 Accept/Reject delivery는 PROD-272 밖에 남는다.
+- Confirmation / Follow-up: 구현 diff와 tests에 protocol activity metadata/generation column, 해당 migration/backfill, Fedify handler와 Notification 변경이 포함되지 않는지 검토한다. PROD-243의 Undo test는 pair 검증, 원본 Follow URI 비의존과 exact-row delete/refollow 경쟁만 검증한다.
 
-### 겹치는 Follow profile mutation은 PROD-272를 먼저 archive한다
+### 겹치는 Follow profile mutation은 병렬 구현하고 PROD-272를 먼저 archive한다
 
 - Decision Date: 2026-07-15
 - Status: Accepted
 - Context / Problem: `add-profile-follow-request-lifecycle`과 active `add-activitypub-remote-follow`은 같은 `Follow profile mutation` requirement를 서로 다른 단계의 계약으로 수정한다. archive 순서와 최종 누적 동기화가 없으면 나중에 archive한 delta가 local request/union 또는 remote follow 계약을 덮어쓸 수 있다.
-- Decision Outcome: PROD-272의 spec-only PR, 구현과 `add-profile-follow-request-lifecycle` archive를 remote follow 구현 자식 및 `add-activitypub-remote-follow` 최종 archive보다 먼저 완료한다. PROD-361은 remote-follow 최종 archive 전에 해당 profile delta를 당시 active spec에 rebase해 PROD-272의 `FollowProfileResult`, local `APPROVAL_REQUIRED` request와 payload 계약을 보존하면서 remote `OPEN` follow 계약을 누적한다.
+- Decision Outcome: PROD-243과 PROD-272 구현은 기존 pair/FK 계약을 기준으로 서로의 구현·병합을 기다리지 않고 병렬 진행한다. `add-profile-follow-request-lifecycle` archive는 `add-activitypub-remote-follow` 최종 archive보다 먼저 완료한다. PROD-361은 remote-follow 최종 archive 전에 해당 profile delta를 당시 active spec에 rebase해 PROD-272의 `FollowProfileResult`, local `APPROVAL_REQUIRED` request와 payload 계약을 보존하면서 remote `OPEN` follow 계약을 누적한다.
 - Alternatives Considered: 이 change에 remote follow 시나리오를 복사하면 PROD-272가 구현하지 않는 ActivityPub delivery를 자기 완료 계약으로 소유하게 된다. 순서를 암묵적으로만 두면 독립 archive가 마지막 delta로 requirement를 덮어쓸 수 있다.
-- Consequences: PROD-272가 archive될 때까지 remote target follow는 현재처럼 지원되지 않으며, remote follow 구현은 archive된 pending-only boundary를 소비한다. 최종 remote contract 병합과 archive 책임은 계속 PROD-361에 있다.
+- Consequences: 두 구현 PR은 독립적으로 리뷰할 수 있지만 `add-activitypub-remote-follow` 최종 archive는 이 change archive 뒤에 수행해야 한다. 최종 remote contract 병합과 archive 책임은 계속 PROD-361에 있다.
 - Confirmation / Follow-up: 이 change archive 후 active profile spec의 local request/union을 검증하고, PROD-361 archive 전에는 그 계약과 remote follow 시나리오가 같은 최종 requirement에 함께 존재하는지 검증한다.
 
 ### 이번 앱 변경은 union 호환에 한정한다

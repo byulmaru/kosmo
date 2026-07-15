@@ -2,7 +2,7 @@
 
 현재 main에는 pending-only `profile_follow_request` 테이블과 pair unique/FK/index, 성립된 `ProfileFollow` 관계와 저장 count를 갱신하는 core service, `ProfileFollow` GraphQL Node와 follow/unfollow mutation이 있다. `followProfile`은 `LOCAL` `OPEN` 대상만 처리하고 `APPROVAL_REQUIRED` 대상은 conflict로 거부하며, request를 조회·승인·거절·취소하는 service와 GraphQL API는 없다.
 
-PROD-323은 request row의 존재 자체가 Pending이며 승인 시 삭제+relation 생성, 거절·취소 시 삭제하고 terminal state/history를 저장하지 않는 계약을 확정했다. PROD-272는 local 생성과 local/remote 공통 lifecycle을 소유하고, PROD-243은 ActivityPub actor/object/recipient 검증, materialization, correlation/generation과 exact-row 조건부 삭제를 소유한다. Notification과 request 관리 UI는 후속 작업이다.
+PROD-323은 request row의 존재 자체가 Pending이며 승인 시 삭제+relation 생성, 거절·취소 시 삭제하고 terminal state/history를 저장하지 않는 계약을 확정했다. PROD-272는 local 생성과 local/remote 공통 lifecycle을 소유하고, PROD-243은 ActivityPub recipient·actor·object 검증, actor materialization, remote pending request 생성과 Fedify Follow/Undo handler를 소유한다. 양쪽은 remote actor/follower와 local followee의 기존 pair/FK를 공통 식별 경계로 사용하며 protocol activity metadata나 generation을 저장하지 않는다. Notification과 request 관리 UI는 후속 작업이다.
 
 ## Goals / Non-Goals
 
@@ -20,7 +20,7 @@ PROD-323은 request row의 존재 자체가 Pending이며 승인 시 삭제+rela
 - requested 버튼 상태, 취소 UX와 incoming 관리 화면을 구현하지 않는다.
 - Notification Item 또는 Follow/Follow Request Notification을 생성·삭제·표시하지 않는다.
 - Fedify inbox parsing, Accept/Reject delivery, remote target follow/unfollow를 구현하지 않는다.
-- PROD-243의 inbound correlation/generation과 exact-row·expected-generation 삭제 primitive를 구현하지 않는다.
+- ActivityPub Follow ID·actor URI·object URI·generation 저장과 이를 위한 migration/backfill을 추가하지 않는다. Undo 처리에 원본 Follow URI 일치나 expected generation을 요구하지 않는다. PROD-243의 Fedify Follow/Undo handler, delete/refollow 경쟁을 막는 exact-row 로컬 동시성 방어와 pair 기반 Accept/Reject payload 재구성·delivery는 구현하지 않는다.
 - Profile/Domain Block 정책·저장 기반과 이를 사용하는 follow 생성·승인 검증은 후속 범위로 남긴다.
 
 ## Implementation Guidance
@@ -28,6 +28,7 @@ PROD-323은 request row의 존재 자체가 Pending이며 승인 시 삭제+rela
 ### Current Constraints
 
 - `profile_follow_request`는 pair unique, immutable `createdAt`과 kosmo UUID 및 participant별 index를 이미 가지므로 이번 lifecycle과 connection을 schema 변경 없이 제공한다.
+- remote actor/follower와 local followee의 기존 pair/FK가 local/remote 공통 authoritative identity이며 protocol activity metadata를 위한 별도 correlation column은 없다.
 - 기존 `profile-follow` service는 자체 transaction에서 relation 생성·삭제와 count를 처리하지만 caller transaction 입력을 받지 않는다. request 승인에서 이 service를 그대로 중첩 호출하면 request 삭제와 relation/count가 하나의 rollback 경계를 공유한다는 보장이 흐려진다.
 - production database implementation은 하나이며 core service는 `getDatabaseConnection(tx)`로 shared DB 또는 caller transaction을 선택한다. 여러 write를 수행하는 action은 선택된 connection의 transaction에 참여해야 한다.
 - 관계와 request 모두 pair unique이므로 사전 조회만으로 동시 실행을 직렬화할 수 없다. unique violation과 실제 insert/delete 결과를 기준으로 count를 한 번만 갱신해야 한다.
@@ -62,7 +63,7 @@ PROD-323은 request row의 존재 자체가 Pending이며 승인 시 삭제+rela
 - 다른 participant가 unavailable이라는 이유로 participant에게 request 자체를 숨기거나 거절·취소를 막으면 pair unique pending row를 정리하지 못한다.
 - cursor가 사용하는 정렬과 before/after 비교 방향이 다르면 페이지 사이에서 request가 중복되거나 누락될 수 있다.
 - 사전 존재 확인 뒤 무조건 count를 증가시키면 concurrent insert나 기존 relation 승인에서 count가 중복된다.
-- PROD-243의 correlation/generation column을 예상해 request row를 update하거나 ActivityPub delivery port를 임의로 고정하면 병렬 구현 경계를 침범한다.
+- ActivityPub Follow ID·actor URI·object URI·generation column을 예상해 request row를 update하거나 원본 Follow URI 일치를 처리 조건으로 고정하면 pair-based 상호운용 계약과 병렬 구현 경계를 침범한다.
 - Relay union 전환과 API schema를 따로 배포하면 기존 FollowButton operation이 깨질 수 있다.
 
 ## Risks / Trade-offs
@@ -71,8 +72,8 @@ PROD-323은 request row의 존재 자체가 Pending이며 승인 시 삭제+rela
 - [동시 approve/create에서 relation과 count가 어긋날 수 있다] → pair unique, 실제 insert/delete 결과와 DB-backed concurrency test로 한 번만 count를 변경한다.
 - [Profile disable 또는 instance suspension과 승인이 경쟁할 수 있다] → approve write transaction 안에서 participant 가용성을 다시 검증하고 경쟁 테스트를 추가한다.
 - [다른 participant가 unavailable해진 request가 stale row로 남을 수 있다] → 승인은 거부하되 active followee의 거절과 active follower의 취소는 request 존재와 역할만으로 허용한다.
-- [active remote-follow change와 같은 저장 경계를 수정한다] → 이 change는 공통 lifecycle만 소유하고 correlation/generation/exact-row 조건부 삭제는 PROD-243에 남긴다.
-- [두 active change가 같은 `Follow profile mutation` requirement를 서로 다른 단계의 계약으로 수정한다] → 이 change를 먼저 구현·archive하고, 이후 PROD-361이 remote-follow 최종 delta를 현재 active spec에 rebase해 union/request와 remote follow 계약을 함께 보존한다.
+- [active remote-follow change와 같은 저장 경계를 수정한다] → 이 change는 공통 lifecycle만 소유하고 두 이슈는 기존 participant pair/FK를 authoritative identity로 공유한다. Fedify Follow/Undo handler와 exact-row 로컬 동시성 방어는 PROD-243에 남기며 expected generation 비교는 사용하지 않는다.
+- [두 active change가 같은 `Follow profile mutation` requirement를 서로 다른 단계의 계약으로 수정한다] → PROD-243과 PROD-272 구현은 병렬 진행하되 이 change를 remote-follow 최종 archive 전에 archive한다. 이후 PROD-361이 remote-follow 최종 delta를 현재 active spec에 rebase해 union/request와 remote follow 계약을 함께 보존한다.
 - [rollback 뒤 생성된 pending row가 남을 수 있다] → caller transaction 참여와 rollback 통합 테스트를 완료 조건으로 둔다.
 - [requested UI 없이 request가 생성되면 사용자가 현재 상태를 확인하기 어렵다] → 이번 변경은 기존 화면 호환만 제공하며 requested/cancel/incoming UI는 명시적으로 후속 범위로 남긴다.
 
@@ -82,6 +83,6 @@ PROD-323은 request row의 존재 자체가 Pending이며 승인 시 삭제+rela
 2. 병합된 main에서 `prod-272` 구현 브랜치를 만들고 Core, GraphQL, app 변경을 하나의 Draft PR로 제공한다.
 3. 기존 테이블과 discriminator를 사용하므로 DB migration은 실행하지 않는다.
 4. Core DB-backed 테스트, API schema/integration 테스트, Relay compiler와 Storybook 검증을 통과한 뒤 API와 앱 변경을 함께 배포한다.
-5. `add-profile-follow-request-lifecycle`을 `add-activitypub-remote-follow`의 구현 자식 및 최종 archive보다 먼저 archive하고, archive 후 active `profile` spec에 local request와 follow result union 계약이 반영됐는지 검증한다.
+5. PROD-243과 PROD-272 구현은 서로의 구현·병합을 기다리지 않고 병렬 진행한다. `add-profile-follow-request-lifecycle`은 `add-activitypub-remote-follow` 최종 archive보다 먼저 archive하고, archive 후 active `profile` spec에 local request와 follow result union 계약이 반영됐는지 검증한다.
 6. 이후 PROD-361은 `add-activitypub-remote-follow`의 `Follow profile mutation` delta를 당시 active spec에 rebase해 이 change의 local request/union 계약과 remote `OPEN` follow 계약을 누적한 뒤 최종 archive한다.
 7. rollback은 구현 PR을 되돌린다. 이미 생성된 pending request row는 기존 schema에서 안전하게 보존되지만 구버전 API에서 조회·처리되지 않으므로 재배포 전 운영상 pending 상태임을 감수한다.
