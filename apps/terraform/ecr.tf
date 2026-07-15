@@ -1,12 +1,7 @@
-data "aws_iam_openid_connect_provider" "github_actions" {
-  url = "https://token.actions.githubusercontent.com"
-}
-
 # Operational tags are intentionally mutable; release version tags remain immutable.
 resource "aws_ecr_repository" "kosmo" { # nosemgrep: terraform.aws.security.aws-ecr-mutable-image-tags.aws-ecr-mutable-image-tags
   name                 = "kosmo"
   image_tag_mutability = "IMMUTABLE_WITH_EXCLUSION"
-  force_delete         = false
 
   image_tag_mutability_exclusion_filter {
     filter      = "main"
@@ -30,10 +25,6 @@ resource "aws_ecr_repository" "kosmo" { # nosemgrep: terraform.aws.security.aws-
 
   image_scanning_configuration {
     scan_on_push = true
-  }
-
-  encryption_configuration {
-    encryption_type = "AES256"
   }
 }
 
@@ -105,7 +96,7 @@ data "aws_iam_policy_document" "ecr_push_assume_role" {
 
     principals {
       type        = "Federated"
-      identifiers = [data.aws_iam_openid_connect_provider.github_actions.arn]
+      identifiers = ["arn:aws:iam::822638974464:oidc-provider/token.actions.githubusercontent.com"]
     }
 
     condition {

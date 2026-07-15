@@ -29,11 +29,3 @@ output "terraform_gcp_service_account" {
 output "terraform_gcp_workload_identity_provider" {
   value = google_iam_workload_identity_pool_provider.terraform.name
 }
-
-output "ecr_repository_url" {
-  value = aws_ecr_repository.kosmo.repository_url
-}
-
-output "ecr_push_role_arn" {
-  value = aws_iam_role.ecr_push.arn
-}
