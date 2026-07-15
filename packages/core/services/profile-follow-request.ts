@@ -99,6 +99,9 @@ export const ensureProfileFollowRequest = async (
         .where(pairCondition(ProfileFollowRequests, pair))
         .limit(1)
         .then(firstOrThrow));
+    if (!profileFollowRequest) {
+      throw new Error('Profile follow request not found after insert conflict');
+    }
 
     return {
       created: inserted !== undefined,

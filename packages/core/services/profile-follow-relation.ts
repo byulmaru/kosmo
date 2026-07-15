@@ -62,6 +62,9 @@ export const ensureProfileFollow = async (pair: ProfileFollowPair, tx?: Transact
         .where(pairCondition(ProfileFollows, pair))
         .limit(1)
         .then(firstOrThrow));
+    if (!profileFollow) {
+      throw new Error('Profile follow not found after insert conflict');
+    }
 
     await tx.delete(ProfileFollowRequests).where(pairCondition(ProfileFollowRequests, pair));
 
