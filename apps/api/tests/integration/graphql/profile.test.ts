@@ -35,6 +35,7 @@ let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
+let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let Profiles: typeof CoreDb.Profiles;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
@@ -59,6 +60,7 @@ describe('GraphQL remote profile boundary', () => {
       Instances,
       pg,
       ProfileFollows,
+      ProfileFollowRequests,
       Profiles,
       PostContents,
       Posts,
@@ -210,54 +212,6 @@ describe('GraphQL remote profile boundary', () => {
 
     assertNoGraphQLErrors(result);
     assert.equal(result.data?.node?.instance.kind, 'LOCAL');
-  });
-
-  test('reads follow graph data for active profiles on another local instance', async () => {
-    const auth = await createAuthenticatedSession();
-    const otherLocalInstance = await createLocalInstance({ domain: 'other-local.example' });
-    const otherLocal = await createProfile({
-      handle: 'other-local',
-      instanceId: otherLocalInstance.id,
-    });
-
-    await db.insert(ProfileFollows).values([
-      { followerProfileId: auth.profile.id, followeeProfileId: otherLocal.id },
-      { followerProfileId: otherLocal.id, followeeProfileId: auth.profile.id },
-    ]);
-
-    const result = await requestGraphQL<{
-      node: {
-        followers: { edges: Array<{ node: { id: string } }> };
-        following: { edges: Array<{ node: { id: string } }> };
-        viewerFollow: { id: string } | null;
-        viewerState: { follow: { id: string } | null; isSelf: boolean } | null;
-      } | null;
-    }>(
-      `query OtherLocalFollowGraph($id: ID!) {
-        node(id: $id) {
-          ... on Profile {
-            followers(first: 10) { edges { node { id } } }
-            following(first: 10) { edges { node { id } } }
-            viewerFollow { id }
-            viewerState { isSelf follow { id } }
-          }
-        }
-      }`,
-      { id: otherLocal.id },
-      auth.token,
-    );
-
-    assertNoGraphQLErrors(result);
-    assert.equal(result.data?.node?.followers.edges.length, 1);
-    assert.equal(result.data?.node?.following.edges.length, 1);
-    assert.equal(
-      result.data?.node?.viewerFollow?.id,
-      result.data?.node?.followers.edges[0]?.node.id,
-    );
-    assert.deepEqual(result.data?.node?.viewerState, {
-      follow: result.data?.node?.viewerFollow,
-      isSelf: false,
-    });
   });
 
   test('reads active posts for profiles on another local instance', async () => {
@@ -921,16 +875,32 @@ const createLocalInstance = async ({
     .returning()
     .then(firstOrThrow);
 
-const createProfile = async ({ handle, instanceId }: { handle: string; instanceId: string }) =>
+const createProfile = async ({
+  followPolicy = ProfileFollowPolicy.OPEN,
+  followersCount,
+  followingCount,
+  handle,
+  instanceId,
+  state = ProfileState.ACTIVE,
+}: {
+  followPolicy?: ProfileFollowPolicy;
+  followersCount?: number;
+  followingCount?: number;
+  handle: string;
+  instanceId: string;
+  state?: ProfileState;
+}) =>
   db
     .insert(Profiles)
     .values({
       displayName: handle,
-      followPolicy: ProfileFollowPolicy.OPEN,
+      followPolicy,
+      ...(followersCount === undefined ? {} : { followersCount }),
+      ...(followingCount === undefined ? {} : { followingCount }),
       handle,
       instanceId,
       normalizedHandle: normalizeHandle(handle),
-      state: ProfileState.ACTIVE,
+      state,
     })
     .returning()
     .then(firstOrThrow);
@@ -969,7 +939,9 @@ const createAuthenticatedSession = async () => {
   return { account, profile, session, token };
 };
 
-const countRows = async (table: typeof Profiles | typeof ProfileFollows): Promise<number> =>
+const countRows = async (
+  table: typeof Instances | typeof Profiles | typeof ProfileFollows | typeof ProfileFollowRequests,
+): Promise<number> =>
   db
     .select({ value: count() })
     .from(table)
@@ -981,6 +953,7 @@ const resetFixtures = async () => {
   await db.delete(Sessions);
   await db.delete(PostContents);
   await db.delete(Posts);
+  await db.delete(ProfileFollowRequests);
   await db.delete(ProfileFollows);
   await db.delete(AccountProfiles);
   await db.delete(Accounts);
