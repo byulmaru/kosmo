@@ -1,4 +1,6 @@
 locals {
+  aws_region = "ap-northeast-2"
+
   firebase_project_id  = "byulmaru-kosmo"
   github_owner         = "byulmaru"
   github_repository    = "kosmo"
@@ -23,6 +25,17 @@ locals {
     "roles/serviceusage.serviceUsageConsumer",
     "roles/viewer",
   ])
+}
+
+provider "aws" {
+  region = local.aws_region
+
+  default_tags {
+    tags = {
+      ManagedBy = "terraform"
+      Project   = "kosmo"
+    }
+  }
 }
 
 provider "google-beta" {
