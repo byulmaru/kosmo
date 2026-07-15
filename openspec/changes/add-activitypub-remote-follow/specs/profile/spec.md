@@ -169,7 +169,6 @@ active profile이 있는 인증자는 `followPolicy`가 `OPEN`인 다른 활성 
 
 active profile이 있는 인증자는 기존 local 또는 ActivityPub remote follow 관계를 해제할 수 있어야 한다(MUST).
 `UnfollowProfilePayload`는 삭제된 follow ID와 함께, 클라이언트 캐시 갱신을 위해 transaction 완료 시점의 `followerProfile`과 `followeeProfile`을 포함한다.
-단, `SUSPENDED` instance의 remote profile처럼 GraphQL `Profile` object로 노출하지 않는 대상의 local follow 관계만 정리하는 경우 `followeeProfile`은 `null`일 수 있다.
 
 #### Scenario: Unfollow active local profile
 
@@ -195,13 +194,12 @@ active profile이 있는 인증자는 기존 local 또는 ActivityPub remote fol
 - **AND** `profileFollowId`가 `null`이고 count를 변경하지 않은 최신 `followerProfile`과 `followeeProfile`을 포함한 `UnfollowProfilePayload`를 반환한다
 - **AND** 대상이 ActivityPub remote profile이면 ActivityPub `Undo(Follow)` activity를 발송하지 않는다
 
-#### Scenario: Unfollow suspended remote profile locally
+#### Scenario: Preserve suspended remote follow
 
 - **WHEN** active profile이 있는 인증자가 `SUSPENDED` instance의 ActivityPub remote profile을 이미 follow 중이고 unfollow를 요청한다
-- **THEN** 시스템은 local `ProfileFollow` 관계를 제거한다
+- **THEN** 시스템은 profile not found 오류를 반환한다
+- **AND** local `ProfileFollow` 관계와 양쪽 저장 count를 변경하지 않는다
 - **AND** ActivityPub `Undo(Follow)` activity를 발송하지 않는다
-- **AND** mutation은 `UnfollowProfilePayload.profileFollowId`로 삭제된 `ProfileFollow` ID를 반환한다
-- **AND** 대상 remote profile은 GraphQL `Profile` object로 노출하지 않으므로 `UnfollowProfilePayload.followeeProfile`은 `null`일 수 있다
 
 #### Scenario: Require active profile to unfollow
 
@@ -211,7 +209,7 @@ active profile이 있는 인증자는 기존 local 또는 ActivityPub remote fol
 
 #### Scenario: Unfollow missing or blocked profile
 
-- **WHEN** active profile이 있는 인증자가 없는 대상 프로필, 비활성인 대상 프로필, 또는 local `ProfileFollow` 관계가 없는 `SUSPENDED` instance의 remote profile unfollow를 요청한다
+- **WHEN** active profile이 있는 인증자가 없는 대상 프로필, 비활성인 대상 프로필, 또는 관계 유무와 관계없이 `SUSPENDED` instance의 remote profile unfollow를 요청한다
 - **THEN** 시스템은 profile not found 오류를 반환한다
 - **AND** local `ProfileFollow` 관계를 제거하지 않는다
 - **AND** ActivityPub `Undo(Follow)` activity를 발송하지 않는다

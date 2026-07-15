@@ -1,32 +1,35 @@
 ## Why
 
-remote ActivityPub actor가 kosmo `Profile`로 materialize되면, 다음 단계는 local profile과 remote profile 사이의 follow 관계를 실제 ActivityPub Follow protocol과 연결하는 것이다. 이 변경은 remote post ingestion 없이 follow graph, follow protocol inbox delivery, outbound follow activity 발송만 연다.
+[PROD-357](https://linear.app/byulmaru/issue/PROD-357)은 병합된 코드와 최신 Linear 자식 계약에 맞춰 `add-activitypub-remote-follow`의 공유 계약을 다시 정렬한다. 현재 change는 완료된 PROD-240/241/248/281/323의 실제 결과와 다르게 correlation·조건부 삭제를 PROD-240에 귀속하고, SUSPENDED 관계를 local-delete하며, PROD-243/244/272가 같은 저장·request 책임을 중복 소유한다.
+
+여러 구현 PR이 같은 active change를 서로 다른 방향으로 수정하지 않도록 이 spec-only slice를 구현보다 먼저 병합한다.
 
 ## What Changes
 
-- local profile이 `followPolicy = OPEN`인 remote `Profile`을 follow/unfollow할 때 kosmo DB의 established `ProfileFollow` 관계와 ActivityPub Follow/Undo activity를 연결한다.
-- remote actor가 local actor를 Follow/Undo하면 Fedify inbox listener가 전달한 typed activity를 `ProfileFollow` 관계 또는 `ProfileFollowRequest` 요청으로 materialize한다.
-- remote Accept/Reject activity가 저장된 outbound Follow와 actor/object 기준으로 일치하면 optimistic follow projection을 유지하거나 삭제한다.
-- `Profile`은 local/remote 여부와 관계없이 followers/following count를 DB에 저장하고, GraphQL `followersCount`/`followingCount`는 저장된 best-effort profile count를 사용한다. Remote `Profile`의 ActivityPub followers/following collection은 full mirror하지 않고, GraphQL connection은 kosmo DB의 known `ProfileFollow` 관계만 노출한다.
-- HTTP signature/key verification, inbox parsing, `sendActivity`는 Fedify에 맡기고, kosmo는 established follow/request projection과 activity correlation만 저장한다. Fedify delivery queue/retry 설정과 운영 검증은 후속 capability 범위로 둔다.
+- 완료된 저장 count, core action, remote actor materialization과 Fedify inbox route를 현재 기반으로 기록한다.
+- remote follow/unfollow mutation은 PROD-242, inbound Follow/Undo와 correlation/generation·조건부 삭제는 PROD-243, pending-only request lifecycle은 PROD-272, inbound Accept/Reject는 PROD-244가 소유하도록 분리한다.
+- PROD-243은 PROD-272의 검증된 request boundary를 호출하고, PROD-244는 PROD-243의 exact-row·expected-generation 삭제 primitive를 재사용한다.
+- `SUSPENDED` remote profile의 기존 relation/count를 보존하고 GraphQL follow/unfollow에서 NotFound로 숨긴다.
+- PROD-245의 DB-known follow graph와 PROD-263의 Web follow action을 별도 구현 slice로 유지한다.
+- PROD-354의 remote-post ingestion, receipt와 content 계약은 이 change에서 재정의하지 않는다.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `activitypub-remote-follow`: Fedify 기반 Follow/Accept/Reject/Undo activity 처리와 kosmo `ProfileFollow` projection 경계를 다룬다.
+- `activitypub-remote-follow`: Fedify 기반 Follow/Undo/Accept/Reject와 kosmo `ProfileFollow`/`ProfileFollowRequest` projection 경계를 정의한다.
 
 ### Modified Capabilities
 
-- `activitypub-actor-discovery`: actor-scoped inbox와 shared inbox가 follow protocol delivery를 Fedify listener로 받도록 discovery-only 404 경계를 좁힌다.
-- `data-model`: remote follow activity correlation metadata, 저장 profile count, inbound `ProfileFollowRequest` 연계 요구사항을 추가한다.
-- `profile`: remote profile 대상 follow/unfollow, viewerFollow, viewerState follow, `Profile.instance.kind` 기반 remote follow action, known follow graph visibility와 저장된 profile count 계약을 확장한다.
-- `web-app-shell`: remote profile에 대해 기존 follow action UI를 숨기지 않고 remote follow mutation 계약에 연결한다.
+- `activitypub-actor-discovery`: 병합된 actor-scoped/shared inbox route와 follow handler 위임 경계를 반영한다.
+- `data-model`: 저장 count와 inbound Follow correlation/generation, pending-only request 연계를 정의한다.
+- `profile`: remote follow mutation, DB-known follow graph, 저장 count와 SUSPENDED 관계 보존 계약을 정의한다.
+- `web-app-shell`: remote profile follow action의 구현 소유권을 PROD-263으로 고정한다.
 
 ## Impact
 
-- Depends on `add-activitypub-remote-profile-federation`.
-- `packages/fedify`: Fedify `sendActivity`와 inbox listener를 follow 도메인 handler에 연결한다.
-- `packages/core/db`: outbound Follow activity identity와 inbound Follow correlation metadata를 `ProfileFollow` 또는 inbound `ProfileFollowRequest`와 연결할 수 있어야 한다.
-- `apps/api`: remote target follow/unfollow와 viewerFollow/viewerState follow/follow graph resolver를 확장한다.
-- `apps/web`: follow button/status가 `Profile.instance.kind = ACTIVITYPUB`인 대상에서도 동작할 수 있다.
+- Contract owner: [PROD-357](https://linear.app/byulmaru/issue/PROD-357)
+- Parent integration: [PROD-235](https://linear.app/byulmaru/issue/PROD-235)
+- Completed foundations: PROD-240, PROD-241, PROD-248, PROD-281, PROD-323
+- Remaining implementation: PROD-242, PROD-243, PROD-244, PROD-245, PROD-263, PROD-272, PROD-282
+- PROD-243은 PROD-357과 PROD-272가 완료되기 전까지 blocked 상태를 유지한다.

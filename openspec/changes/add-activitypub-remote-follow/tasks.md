@@ -1,41 +1,138 @@
-## 1. Data Model
+## 1. PROD-240/241/248/281/323 완료된 Foundation
 
-- [ ] 1.1 원본 remote Follow activity id, actor/object URI, generation timestamp, Fedify `orderingKey`, inbound Follow response metadata를 `ProfileFollow` 또는 inbound `ProfileFollowRequest`에 연결할 수 있는 activity correlation metadata 저장 경계를 추가하고, Accept/Reject/Undo activity id durable history는 Fedify idempotency 또는 후속 activity log 범위로 둔다.
-- [ ] 1.2 outbound Follow activity identity는 생성된 `ProfileFollow.id`에서 파생한 kosmo outbound Follow URI로 새 logical Follow마다 고유하게 만들고, Fedify `orderingKey`는 follower actor URI와 followee actor URI pair에서 안정적으로 파생해 같은 pair의 모든 outbound Follow/Undo(Follow)에 재사용하며, 후속 Fedify transport retry가 같은 identity를 재사용할 수 있도록 저장 모델을 정렬하되 transport retry/queue 상태는 도메인 테이블에 중복 저장하지 않는다.
-- [ ] 1.3 #198로 archive된 `split-profile-follow-requests`의 상태 없는 `ProfileFollow`와 pending-only `ProfileFollowRequest` 구조에 맞춰 Drizzle table/relations/migration fixture를 갱신한다.
-- [x] 1.4 `profile` row에 followers/following count를 저장하고 기존 established `ProfileFollow` 전체에서 backfill하며, GraphQL follow/unfollow의 관계 생성/삭제와 같은 transaction에서 count를 증감한다. Profile/Instance lifecycle에 따른 follow count 정합성은 이 remote-follow change가 소유하되 PR #212에서는 count reconciliation을 구현하지 않고 현재 stored counter 동작을 유지한다.
+**Deliverable**
 
-## 2. Fedify Follow Integration
+Remote follow 구현이 재사용할 저장 count, core action, actor materialization과 Fedify transport/inbox 기반이 main에 있다.
 
-- [ ] 2.1 remote target `followProfile`에서 target `followPolicy`가 `OPEN`이면 established `ProfileFollow`를 생성 또는 idempotent 반환하고, 새 관계이며 remote instance가 `UNRESPONSIVE`가 아닐 때만 Fedify `sendActivity`로 `Follow` activity를 발송한다. `sendActivity` 실패나 `UNRESPONSIVE` 때문에 발송되지 않은 outbound Follow는 local `ProfileFollow`/count를 rollback하지 않고 durable pending delivery로도 저장하지 않으며, instance 회복 뒤 idempotent follow retry에서도 재발송하지 않는다.
-- [ ] 2.2 `followProfile`에서 target `followPolicy`가 `APPROVAL_REQUIRED`이면 후속 request flow 전까지 local/remote target 모두 conflict로 거부하고 `ProfileFollow`/`ProfileFollowRequest`/`Follow` activity를 만들지 않는다.
-- [ ] 2.3 remote target `unfollowProfile`에서 established `ProfileFollow`를 제거하고 remote instance가 `SUSPENDED` 또는 `UNRESPONSIVE`가 아닐 때만 Fedify `sendActivity`로 저장된 원본 Follow를 object로 하는 `Undo(Follow)` activity를 follower/followee actor pair의 stable `orderingKey`로 발송한다. `sendActivity`가 실패해도 local `ProfileFollow` 삭제와 count 갱신은 rollback하지 않는다.
-- [ ] 2.4 remote target `unfollowProfile`의 idempotent 응답, `SUSPENDED` instance 대상 기존 local follow 삭제, 또는 `UNRESPONSIVE` instance 대상 local 삭제는 ActivityPub `Undo(Follow)` activity를 발송하지 않는다.
-- [ ] 2.5 Fedify inbox listener에서 inbound `Follow`가 unknown remote actor를 참조하면 `Follow.object`와 personal inbox recipient가 active local actor를 가리키는지 먼저 확인한 뒤, actor URI host를 `acct:` domain으로 신뢰하지 않고 Fedify WebFinger URL-resource lookup 또는 기존 Fedify-backed materialization lookup으로 `acct:{handle}@{domain}` identity와 ActivityPub self link를 검증해 해당 `acct:` identity를 #182 materialization 입력으로 사용한다. materialization write 전에 해당 `acct:` domain의 existing instance 상태가 `SUSPENDED`이면 follow graph/request를 갱신하지 않고, 기존 instance 상태가 `UNRESPONSIVE`이면 inbound activity를 reachability signal로 보고 `ACTIVE`로 갱신한 뒤 materialization과 follow 처리를 계속한다. canonical actor URI가 activity actor URI와 일치하지 않거나 lookup이 실패해도 follow graph/request를 갱신하지 않는다.
-- [ ] 2.6 Fedify inbox listener에서 verified typed follow protocol activity를 받으면 remote actor instance를 확인하고, `SUSPENDED`이면 follow graph/request를 갱신하지 않으며, `UNRESPONSIVE`이면 inbound activity를 reachability signal로 보고 instance를 `ACTIVE`로 갱신한 뒤 follow protocol 처리를 계속한다.
-- [ ] 2.7 Fedify inbox listener에서 verified typed remote `Follow`를 받아 `Follow.actor`가 materialized remote actor URI와 일치하고 `Follow.object`가 active local actor URI와 일치하며, personal inbox recipient가 있으면 Fedify `ctx.recipient` identifier를 local actor/profile로 resolve해 canonical actor URI가 `Follow.object`와 일치하는지 검증한다.
-- [ ] 2.8 Fedify inbox listener에서 2.6과 2.7의 검증을 통과한 remote `Follow`에 대해 existing established `ProfileFollow`가 있으면 request를 만들지 않고 idempotent하게 유지하며 같은 pair의 pending `ProfileFollowRequest`를 같은 transaction 안에서 삭제하고, 저장된 inbound Follow response metadata를 갱신하지 않은 채 Fedify `sendActivity`로 현재 검증을 통과한 수신 Follow에 대한 `Accept(Follow)`를 발송한다.
-- [ ] 2.9 Fedify inbox listener에서 2.6과 2.7의 검증을 통과한 remote `Follow`에 대해 existing established `ProfileFollow`가 없고 local follow policy가 `OPEN`이면 established `ProfileFollow`를 만들고 같은 pair의 pending `ProfileFollowRequest`를 같은 transaction 안에서 삭제한 뒤 Fedify `sendActivity`로 현재 검증을 통과한 수신 Follow에 대한 `Accept(Follow)`를 발송한다.
-- [ ] 2.10 Fedify inbox listener에서 2.6과 2.7의 검증을 통과한 remote `Follow`에 대해 existing established `ProfileFollow`가 없고 local follow policy가 `APPROVAL_REQUIRED`이면 pending `ProfileFollowRequest`로 저장하되, 기존 request가 있으면 first wins로 기존 inbound Follow response metadata를 유지하고 이번 change에서는 Accept/Reject를 자동 발송하지 않는다.
-- [ ] 2.11 Fedify inbox listener에서 2.6의 검증을 통과한 verified typed remote `Undo(Follow)`를 받아 actor/object가 일치하고 personal inbox recipient가 있으면 Fedify `ctx.recipient` identifier를 local actor/profile로 resolve해 canonical actor URI가 undo 대상 Follow object local actor와 일치하는지 검증한다. 저장된 inbound Follow id가 다르거나 object id가 없어도 remote Follow id는 compatibility hint로만 보고 actor/object fallback으로 취소 의사를 처리하되, `Undo.published`가 현재 inbound Follow generation timestamp보다 오래된 것이 확인되면 side effect 없이 무시한다. `Undo.published`가 없으면 수신 시각을 activity timestamp로 사용하며, IRI-only `Undo.object`는 이번 capability에서 inbound Follow metadata로 역조회하지 않고 side effect 없이 무시한다.
-- [ ] 2.12 Fedify inbox listener에서 2.6의 검증을 통과한 verified typed remote `Accept`를 받아 `Accept.actor`가 저장된 outbound Follow의 remote followee actor와 일치하고, `Accept.object`가 embedded/typed Follow이면 그 actor/object를 검증하되 embedded/typed Follow의 id가 kosmo outbound Follow URI이면 현재 저장된 outbound Follow identity와도 일치해야 하며, id가 없거나 kosmo outbound Follow URI가 아니면 actor/object 검증으로 대응시키고, IRI-only kosmo outbound Follow URI이면 `ProfileFollow.id`로 저장된 outbound Follow actor/object metadata를 조회해 검증하며, actor/object를 확인할 수 없으면 side effect 없이 무시하고, personal inbox recipient가 있으면 Fedify `ctx.recipient` identifier를 local actor/profile로 resolve해 canonical actor URI가 저장된 outbound Follow의 local follower actor와 일치할 때 optimistic established `ProfileFollow` projection을 idempotent하게 유지하며, 이번 change에서는 outbound pending request를 승격하지 않는다.
-- [ ] 2.13 Fedify inbox listener에서 2.6의 검증을 통과한 verified typed remote `Reject`를 받아 `Reject.actor`가 저장된 outbound Follow의 remote followee actor와 일치하고, `Reject.object`가 embedded/typed Follow이면 그 actor/object를 검증하되 embedded/typed Follow의 id가 kosmo outbound Follow URI이면 현재 저장된 outbound Follow identity와도 일치해야 하며, id가 없거나 kosmo outbound Follow URI가 아니면 remote Follow id를 compatibility hint로만 보고 actor/object 검증으로 대응시킨다. IRI-only kosmo outbound Follow URI이면 `ProfileFollow.id`로 저장된 outbound Follow actor/object metadata를 조회해 검증하며, actor/object를 확인할 수 없으면 side effect 없이 무시하고, `Reject.published`가 현재 outbound Follow generation timestamp보다 오래된 것이 확인되면 side effect 없이 무시한다. `Reject.published`가 없으면 수신 시각을 activity timestamp로 사용하며, personal inbox recipient가 있으면 Fedify `ctx.recipient` identifier를 local actor/profile로 resolve해 canonical actor URI가 저장된 outbound Follow의 local follower actor와 일치할 때 optimistic established `ProfileFollow` projection을 삭제하고 rejected 상태를 저장하지 않는다.
-- [x] 2.14 actor-scoped `/ap/actor/{profile.id}/inbox`와 shared `/inbox`가 follow protocol delivery를 unsupported endpoint 404로 종료하지 않고 Fedify inbox listener로 처리하도록 연결하며, 해당 요청이 `/graphql` proxy나 API 서버로 전달되지 않는지 확인한다.
-- [x] 2.15 follow 관련 activity 외 Fedify inbox listener activity는 무시하고, outbox/followers/following collection 같은 미지원 federation endpoint는 404 경계를 유지하는지 확인한다.
+**Guardrails**
 
-## 3. GraphQL Profile Follow API
+- 완료된 이슈에 correlation/generation이나 handler 구현을 소급 귀속하지 않는다.
 
-- [ ] 3.1 `followProfile`과 `unfollowProfile`이 active remote profile target을 지원하도록 확장한다.
-- [ ] 3.1a Profile이 DISABLED/SUSPENDED로 전환되거나 instance가 SUSPENDED로 전환될 때 stored follow count를 visible follow graph 기준으로 reconciliation한다.
-- [ ] 3.1b Profile/Instance가 ACTIVE로 복구될 때 stored follow count 정합성을 복원한다.
-- [x] 3.2 `followersCount`/`followingCount`는 `profile` row의 저장 count를 반환한다. Connection과 가시성 정책은 변경하지 않는다.
-- [ ] 3.3 `viewerFollow`와 `viewerState.follow`가 local target과 remote target 모두에서 현재 active profile의 established `ProfileFollow` 관계를 반환하고 pending `ProfileFollowRequest`를 숨기도록 loader와 테스트를 갱신한다.
-- [ ] 3.4 GraphQL schema를 재생성하고 remote known follow graph connection, 저장된 profile count, profile 비활성화와 remote instance suspension/unsuspension 후 count 조정, follow/unfollow의 최신 `followerProfile`/`followeeProfile` payload, `SUSPENDED` remote target local unfollow에서 nullable `followeeProfile`을 포함한 remote follow mutation contract를 확인한다.
-- [ ] 3.5 `ProfileListItem`/`FollowButton`/profile page follow action이 활성 ActivityPub remote profile을 local profile과 같은 follow action 대상으로 취급하고, 기존 active profile/self/blocked/approval-required 정책에 따라 표시·숨김·disabled 상태와 follow/unfollow mutation을 연결하도록 갱신한다.
+**Verification**
 
-## 4. Verification
+- 병합된 schema/service/route와 각 이슈의 완료 상태를 확인한다.
 
-- [ ] 4.1 ActivityPub follow test로 Fedify `sendActivity` outbound Follow/Undo/Accept, `ProfileFollow.id` 기반 outbound Follow URI, follow/unfollow/refollow에서 같은 actor pair stable `orderingKey`의 Follow/Undo 발송, actor-scoped/shared inbox route의 Fedify listener 연결과 GraphQL proxy 미전달, Fedify inbox listener inbound Follow/Undo/Accept/Reject, embedded/typed Follow의 kosmo outbound Follow URI exact match와 id가 없는 embedded/typed Follow의 actor/object fallback, non-kosmo 또는 재사용 Follow id의 actor/object fallback, IRI-only kosmo outbound Follow URI의 Accept/Reject actor/object matching, IRI-only `Undo.object` 무시, `published`가 현재 generation보다 오래된 늦은 Reject/Undo 무시, `published`가 없는 Reject/Undo의 수신 시각 fallback, actor/object를 확인할 수 없는 Accept/Reject 무시, unknown actor lookup 전 local recipient 확인, WebFinger `acct:` identity/self link와 canonical actor URI 검증, materialization 전 instance guard, actor/object 및 personal inbox recipient identifier matching, active local actor 검증, unavailable remote actor guard, idempotent established inbound Follow, established 전환 시 pending request 삭제, duplicate pending/established inbound Follow first-wins metadata와 current Follow object Accept response 및 generation timestamp의 단조 갱신, established follow/request projection, unsupported inbox activity 무시, unsupported outbox/collection endpoint 404 유지를 검증한다.
-- [ ] 4.2 GraphQL follow test로 remote target follow/unfollow, active profile 부재 인증 scope 오류, local/remote `APPROVAL_REQUIRED` target 거부, viewerFollow, viewerState.follow, remote known follow graph connection, follow/unfollow payload 양쪽 Profile의 최신 저장 count, suspended instance target 신규 follow/lookup 차단, suspended instance의 기존 remote follow local 삭제와 nullable `followeeProfile`, `UNRESPONSIVE` instance가 follow/unfollow API action을 차단하지 않되 outbound Follow/Undo delivery만 억제함을 검증하고, web follow test로 remote profile list/profile-page follow action이 노출된 followPolicy/self/active state 기준으로 표시·숨김·mutation 연결 및 Relay cache의 양쪽 count 갱신을 검증한다.
-- [ ] 4.3 `pnpm lint:eslint`, 관련 package typecheck/test, GraphQL schema check, `openspec validate add-activitypub-remote-follow --strict`를 실행한다.
-- [ ] 4.4 Migration/backfill fixture로 기존 established `ProfileFollow` row에서 local/remote 저장 count를 채우되 비활성 profile 및 `SUSPENDED` instance 소속 remote profile 관계를 제외하는지 검증한다.
+- [x] 1.1 PROD-240이 저장 followers/following count와 relation/count transaction을 제공한다.
+- [x] 1.2 PROD-281이 follow/unfollow visibility와 저장 변경을 core service 책임으로 정렬한다.
+- [x] 1.3 PROD-248이 canonical remote actor materialization 경계를 제공한다.
+- [x] 1.4 PROD-241이 Fedify send helper와 actor-scoped/shared inbox route를 제공한다.
+- [x] 1.5 PROD-323이 Follow Request를 pending-only 계약으로 정렬한다.
+
+## 2. PROD-272 Pending-only Follow Request
+
+**Deliverable**
+
+Local/remote 공통 request 생성·조회·승인·거절·취소 domain boundary를 제공한다.
+
+**Guardrails**
+
+- request row 존재 자체만 Pending을 뜻하며 terminal state/history를 저장하지 않는다.
+- ActivityPub parsing과 inbound generation 정책은 PROD-243이 소유한다.
+
+**Verification**
+
+- local/remote create와 approve/reject/cancel이 같은 invariant와 transaction을 사용한다.
+
+- [ ] 2.1 PROD-272 OpenSpec과 구현 PR을 현재 main/pending-only canonical 계약에서 다시 작성한다.
+- [ ] 2.2 검증된 remote request input이 correlation metadata와 함께 공통 create boundary로 전달될 수 있게 한다.
+- [ ] 2.3 approve/reject/cancel의 원자 전이와 권한·중복 요청을 검증한다.
+
+## 3. PROD-242 Remote Follow/Unfollow Mutation
+
+**Deliverable**
+
+저장된 active remote OPEN profile에 대한 follow/unfollow mutation과 outbound Follow/Undo를 제공한다.
+
+**Guardrails**
+
+- network lookup 없이 DB identity를 사용한다.
+- UNRESPONSIVE는 local projection을 허용하고 delivery만 억제한다.
+- SUSPENDED는 NotFound로 숨기고 기존 relation/count를 보존한다.
+
+**Verification**
+
+- idempotency, delivery 실패, UNRESPONSIVE와 SUSPENDED 차이를 검증한다.
+
+- [ ] 3.1 PROD-242가 remote follow/unfollow와 PROD-241 transport 연결을 구현한다.
+- [ ] 3.2 Follow URI/actor/object/generation/ordering key를 accepted decision대로 파생한다.
+- [ ] 3.3 relation/count commit 이후 delivery 실패가 projection을 rollback하지 않는지 검증한다.
+
+## 4. PROD-243 Inbound Follow/Undo
+
+**Deliverable**
+
+Verified inbound Follow/Undo를 established relation 또는 PROD-272 pending request boundary에 연결한다.
+
+**Guardrails**
+
+- local recipient를 먼저 검증한 뒤에만 unknown actor materialization을 허용한다.
+- first-wins identity/response metadata와 monotonic generation을 보존한다.
+- unknown 또는 IRI-only Undo는 network lookup 없이 무시한다.
+
+**Verification**
+
+- duplicate Follow, delayed Undo, actor/object/recipient mismatch와 instance state race를 검증한다.
+
+- [ ] 4.1 inbound Follow correlation metadata와 generation 저장 경계를 relation/request에 추가한다.
+- [ ] 4.2 OPEN Follow의 relation/count transaction과 현재 수신 Follow object에 대한 Accept를 구현한다.
+- [ ] 4.3 APPROVAL_REQUIRED Follow를 PROD-272 request boundary로 전달한다.
+- [ ] 4.4 exact-row·expected-generation relation/request 삭제 primitive를 제공하고 relation이 삭제된 경우에만 count를 감소시킨다.
+- [ ] 4.5 기존 Fedify inbox listener에 Follow/Undo handler를 등록한다.
+- [ ] 4.6 `Follow(t1) → duplicate Follow(t3) → delayed Undo(t2)`, unknown/IRI-only Undo zero-network/write, SUSPENDED 무효와 UNRESPONSIVE CAS를 검증한다.
+
+## 5. PROD-244 Inbound Accept/Reject
+
+**Deliverable**
+
+PROD-242 outbound Follow projection에 대한 verified Accept/Reject를 처리한다.
+
+**Guardrails**
+
+- typed embedded Follow는 ID lookup 전에 actor/object를 검증한다.
+- Reject는 PROD-243 conditional-delete primitive를 재사용한다.
+- rejected state나 activity history를 새로 저장하지 않는다.
+
+**Verification**
+
+- kosmo/non-kosmo/missing ID, malformed URI, stale Reject와 refollow race를 검증한다.
+
+- [ ] 5.1 Accept를 optimistic established relation에 idempotent하게 연결한다.
+- [ ] 5.2 Reject를 exact row와 expected generation 조건으로 삭제한다.
+- [ ] 5.3 actor/object/recipient mismatch와 SUSPENDED/UNRESPONSIVE 상태를 검증한다.
+
+## 6. PROD-245/263 Graph와 Web Action
+
+**Deliverable**
+
+DB-known local/remote follow graph를 읽고 remote profile에서 follow action을 사용할 수 있다.
+
+**Guardrails**
+
+- remote collection을 fetch/mirror하지 않는다.
+- pending request는 established graph/viewer follow로 노출하지 않는다.
+- Web은 PROD-242 mutation과 normalized cache 응답을 재사용한다.
+
+**Verification**
+
+- DB-only GraphQL read와 remote OPEN/APPROVAL_REQUIRED/established Web behavior를 검증한다.
+
+- [ ] 6.1 PROD-245가 connection, stored count, viewerFollow/viewerState read 계약을 검증한다.
+- [ ] 6.2 PROD-263이 remote follow action과 양쪽 count/viewer state cache 갱신을 구현한다.
+
+## 7. PROD-282와 PROD-235 통합 Gate
+
+**Deliverable**
+
+SUSPENDED 관계 보존 회귀와 remote follow 전체 흐름이 최종 계약과 일치한다.
+
+**Guardrails**
+
+- 개별 PR 완료만으로 shared change를 archive하지 않는다.
+
+**Verification**
+
+- 모든 child PR, requirement scenario, schema/type generation과 전체 strict validation을 확인한다.
+
+- [ ] 7.1 PROD-282가 existing/no-relation SUSPENDED unfollow의 NotFound와 relation/count 불변을 GraphQL에서 검증한다.
+- [ ] 7.2 PROD-235가 Follow/Undo/Accept/Reject, graph와 Web action 통합 검증을 수행한다.
+- [ ] 7.3 전체 task 완료 후 delta spec을 동기화하고 `openspec validate --all --strict`를 통과한 뒤 change를 archive한다.
