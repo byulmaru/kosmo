@@ -18,6 +18,8 @@
 ## Comment Shape
 
 - 가능한 한 정확한 파일/라인에 단다.
+- inline comment를 제출하기 직전에 live diff를 다시 조회하고 실제 changed hunk의 추가·수정 라인에 anchor한다.
+- PR head가 force-push나 rebase로 바뀌었거나 `Line could not be resolved`가 반환되면 같은 line payload를 반복하지 말고 최신 diff에서 anchor를 다시 계산한다.
 - 코멘트에는 다음 중 필요한 것을 포함한다.
   - 현재 코드가 만드는 동작
   - 실제 영향 또는 깨지는 workflow

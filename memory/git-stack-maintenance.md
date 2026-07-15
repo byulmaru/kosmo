@@ -10,6 +10,9 @@
 
 - stack을 재작성하기 전에는 현재 브랜치 위치를 복구 가능한 백업 브랜치로 남긴다.
   - `git branch backup/<branch>-<timestamp> <branch>`
+- 원격 브랜치가 rebase나 force-push로 rewrite되어 일반 fetch가 non-fast-forward로 거절되면, 대상 브랜치와 PR head를 먼저 확인한 뒤 해당 ref만 명시적으로 갱신한다.
+  - `git fetch origin +refs/heads/<branch>:refs/remotes/origin/<branch>`
+  - 모든 remote branch에 broad force refspec을 적용하지 않는다.
 - 여러 층을 다시 쓰는 작업에서는 각 브랜치의 직전 부모 tip을 잃지 않도록 영향받는 하위 브랜치 tip을 모두 먼저 백업한다.
 - `git rebase --onto <new-base> <old-base> <branch>`의 `<old-base>`는 항상 해당 브랜치가 기존에 쌓여 있던 직전 부모의 이전 tip이어야 한다.
 - rebase 또는 reparent 후에는 `git range-diff`나 `git log --graph`로 의도한 커밋만 이동했는지 확인한다.
