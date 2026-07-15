@@ -57,12 +57,12 @@ Verified inbound Follow/Undo를 established relation 또는 remote pending reque
 
 - duplicate Follow, delayed Undo, actor/object/recipient mismatch와 instance state race를 검증한다.
 
-- [ ] 3.1 inbound Follow correlation metadata와 generation 저장 경계를 relation/request에 추가한다.
-- [ ] 3.2 OPEN Follow의 relation/count transaction과 현재 수신 Follow object에 대한 Accept를 구현한다.
-- [ ] 3.3 APPROVAL_REQUIRED Follow의 remote pending request를 correlation과 함께 생성한다.
-- [ ] 3.4 exact-row·expected-generation relation/request 삭제 primitive를 제공하고 relation이 삭제된 경우에만 count를 감소시킨다.
-- [ ] 3.5 기존 Fedify inbox listener에 Follow/Undo handler를 등록한다.
-- [ ] 3.6 `Follow(t1) → duplicate Follow(t3) → delayed Undo(t2)`, unknown/IRI-only Undo zero-network/write, SUSPENDED 무효와 UNRESPONSIVE CAS를 검증한다.
+- [x] 3.1 inbound Follow correlation metadata와 generation 저장 경계를 relation/request에 추가한다.
+- [x] 3.2 OPEN Follow의 relation/count transaction과 현재 수신 Follow object에 대한 Accept를 구현한다.
+- [x] 3.3 APPROVAL_REQUIRED Follow의 remote pending request를 correlation과 함께 생성한다.
+- [x] 3.4 exact-row·expected-generation relation/request 삭제 primitive를 제공하고 relation이 삭제된 경우에만 count를 감소시킨다.
+- [x] 3.5 기존 Fedify inbox listener에 Follow/Undo handler를 등록한다.
+- [x] 3.6 `Follow(t1) → duplicate Follow(t3) → delayed Undo(t2)`, unknown/IRI-only Undo zero-network/write, SUSPENDED 무효와 UNRESPONSIVE CAS를 검증한다.
 
 ## 4. PROD-244 Inbound Accept/Reject
 

@@ -6,6 +6,9 @@ export {
 } from './src/follow-delivery';
 export {
   findOrMaterializeRemoteProfileActor,
+  findOrMaterializeRemoteProfileActorByUri,
+  findStoredRemoteProfileActorByUri,
+  findUsableStoredRemoteProfileActorByUri,
   materializeRemoteProfileActor,
   RemoteActorMaterializationError,
 } from './src/remote-actor-materialization';
