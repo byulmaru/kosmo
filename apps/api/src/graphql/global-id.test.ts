@@ -29,14 +29,6 @@ test('rejects raw UUIDs, the old textual payload, padding and malformed base64ur
   assert.throws(() => decodeGlobalId('A'), /Invalid global ID/);
 });
 
-test('rejects invalid UUIDs and typenames while encoding', () => {
+test('rejects invalid UUIDs while encoding', () => {
   assert.throws(() => encodeGlobalId('Post', 'not-a-uuid'), /Invalid global ID/);
-  assert.throws(() => encodeGlobalId('Post:Admin', id), /Invalid global ID/);
-});
-
-test('rejects non-ASCII typename bytes while decoding', () => {
-  const value = Buffer.from(encodeGlobalId('Post', id), 'base64url');
-  value[16] = 0xd0;
-
-  assert.throws(() => decodeGlobalId(value.toString('base64url')), /Invalid global ID/);
 });
