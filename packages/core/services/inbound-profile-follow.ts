@@ -9,7 +9,7 @@ import {
 } from '../db';
 import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
 import { NotFoundError } from '../error';
-import { ensureProfileFollow } from './profile-follow-relation';
+import { ensureProfileFollow, lockProfileFollowPair } from './profile-follow-relation';
 import { ensureProfileFollowRequest } from './profile-follow-request';
 import type { Transaction } from '../db';
 
@@ -80,6 +80,8 @@ export const removeInboundFollow = async (
   tx?: Transaction,
 ): Promise<boolean> =>
   getDatabaseConnection(tx).transaction(async (tx) => {
+    await lockProfileFollowPair({ followeeProfileId, followerProfileId }, tx);
+
     const profileFollow = await tx
       .select({ id: ProfileFollows.id })
       .from(ProfileFollows)
