@@ -4,8 +4,22 @@ data "aws_iam_openid_connect_provider" "github_actions" {
 
 resource "aws_ecr_repository" "kosmo" {
   name                 = "kosmo"
-  image_tag_mutability = "MUTABLE"
+  image_tag_mutability = "IMMUTABLE_WITH_EXCLUSION"
   force_delete         = false
+
+  image_tag_mutability_exclusion_filter {
+    filter      = "main"
+    filter_type = "WILDCARD"
+  }
+
+  image_tag_mutability_exclusion_filter {
+    filter      = "stable"
+    filter_type = "WILDCARD"
+  }
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
 
   encryption_configuration {
     encryption_type = "AES256"
@@ -19,10 +33,10 @@ resource "aws_ecr_lifecycle_policy" "kosmo" {
     rules = [
       {
         rulePriority = 1
-        description  = "Protect the image tagged latest"
+        description  = "Protect the image tagged main"
         selection = {
           tagStatus      = "tagged"
-          tagPatternList = ["latest"]
+          tagPatternList = ["main"]
           countType      = "imageCountMoreThan"
           countNumber    = 1
         }
@@ -58,7 +72,7 @@ resource "aws_ecr_lifecycle_policy" "kosmo" {
       },
       {
         rulePriority = 4
-        description  = "Expire non-latest and non-stable images after seven days"
+        description  = "Expire non-main and non-stable images after seven days"
         selection = {
           tagStatus   = "any"
           countType   = "sinceImagePushed"

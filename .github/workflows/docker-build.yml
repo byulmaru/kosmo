@@ -64,7 +64,6 @@ jobs:
             type=sha
             type=ref,event=branch
             type=semver,pattern={{version}}
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=stable,enable=${{ startsWith(github.ref, 'refs/tags/') }}
 
       - name: Build and push Docker image

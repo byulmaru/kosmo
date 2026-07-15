@@ -11,7 +11,7 @@
 - 관리자 bootstrap으로 만드는 GitHub environment와 Actions 변수 (`native-test-distribution`, 승인형 `ios-device-onboarding`)
 - Firebase provider가 지원하지 않는 `native-testers` group의 멱등 REST bootstrap
 - `kosmo` ECR 저장소와 Docker Build 전용 GitHub Actions OIDC push role
-- ECR의 `latest`/`stable` 이미지 보호, untagged 1일 만료, 나머지 이미지 7일 만료 정책
+- ECR의 `main`/`stable` 이미지 보호, untagged 1일 만료, 나머지 이미지 7일 만료 정책
 
 Firebase를 Google Cloud 프로젝트에 추가하는 작업은 되돌릴 수 없다. 앱 리소스에는 `PREVENT` 삭제 정책을 적용한다.
 
@@ -42,7 +42,7 @@ GCP 리소스를 적용한 뒤 관리 권한이 있는 로컬 `gh` 인증으로 
 ./scripts/ensure-github.sh
 ```
 
-`1.2.0` 형식의 정식 SemVer Git tag를 push하면 Docker Build는 `1.2.0`과 `stable` 이미지 태그를 함께 갱신한다. `v1.2.0` 형식은 지원하지 않는다. Lifecycle policy는 현재 `latest` main 이미지와 현재 `stable` 릴리스 이미지를 보호하고, 이전 버전 이미지는 push 후 7일이 지나면 만료한다.
+main 브랜치를 push하면 Docker Build는 `main` 이미지 태그를 갱신한다. `1.2.0` 형식의 정식 SemVer Git tag를 push하면 `1.2.0`과 `stable` 이미지 태그를 함께 발행하며, `v1.2.0` 형식은 지원하지 않는다. ECR에서는 `main`과 `stable`만 갱신할 수 있고 버전 및 commit SHA 태그는 덮어쓸 수 없다. Lifecycle policy는 현재 `main` 이미지와 현재 `stable` 릴리스 이미지를 보호하고, 이전 버전 이미지는 push 후 7일이 지나면 만료한다.
 
 ECR repository URL과 push role ARN은 공개된 고정 식별자이므로 Docker Build workflow에 직접 선언한다. ECR 리소스가 생성된 뒤에는 별도 GitHub repository variable bootstrap 없이 GHCR과 ECR에 같은 태그를 함께 push한다.
 
