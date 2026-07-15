@@ -730,6 +730,8 @@ describe('GraphQL remote profile boundary', () => {
       .values({ followerProfileId: auth.profile.id, followeeProfileId: remote.id })
       .returning()
       .then(firstOrThrow);
+    await db.update(Profiles).set({ followingCount: 1 }).where(eq(Profiles.id, auth.profile.id));
+    await db.update(Profiles).set({ followersCount: 1 }).where(eq(Profiles.id, remote.id));
 
     const result = await requestGraphQL(
       `mutation UnfollowSuspendedRemote($id: ID!) {
@@ -747,6 +749,63 @@ describe('GraphQL remote profile boundary', () => {
       .limit(1)
       .then(firstOrThrow);
     assert.equal(preserved.id, follow.id);
+    assert.equal(await countRows(ProfileFollows), 1);
+
+    const [follower, followee] = await Promise.all([
+      db
+        .select({ followingCount: Profiles.followingCount })
+        .from(Profiles)
+        .where(eq(Profiles.id, auth.profile.id))
+        .limit(1)
+        .then(firstOrThrow),
+      db
+        .select({ followersCount: Profiles.followersCount })
+        .from(Profiles)
+        .where(eq(Profiles.id, remote.id))
+        .limit(1)
+        .then(firstOrThrow),
+    ]);
+    assert.equal(follower.followingCount, 1);
+    assert.equal(followee.followersCount, 1);
+  });
+
+  test('rejects unfollowing a suspended remote profile without a relationship', async () => {
+    const auth = await createAuthenticatedSession();
+    const remoteInstance = await createRemoteInstance({ state: InstanceState.SUSPENDED });
+    const remote = await createProfile({
+      handle: 'suspended-remote',
+      instanceId: remoteInstance.id,
+    });
+    await db.update(Profiles).set({ followingCount: 2 }).where(eq(Profiles.id, auth.profile.id));
+    await db.update(Profiles).set({ followersCount: 3 }).where(eq(Profiles.id, remote.id));
+
+    const result = await requestGraphQL(
+      `mutation UnfollowSuspendedRemoteWithoutRelationship($id: ID!) {
+        unfollowProfile(input: { id: $id }) { profileFollowId }
+      }`,
+      { id: remote.id },
+      auth.token,
+    );
+
+    assertGraphQLErrorCode(result, 'NOT_FOUND');
+    assert.equal(await countRows(ProfileFollows), 0);
+
+    const [follower, followee] = await Promise.all([
+      db
+        .select({ followingCount: Profiles.followingCount })
+        .from(Profiles)
+        .where(eq(Profiles.id, auth.profile.id))
+        .limit(1)
+        .then(firstOrThrow),
+      db
+        .select({ followersCount: Profiles.followersCount })
+        .from(Profiles)
+        .where(eq(Profiles.id, remote.id))
+        .limit(1)
+        .then(firstOrThrow),
+    ]);
+    assert.equal(follower.followingCount, 2);
+    assert.equal(followee.followersCount, 3);
   });
 
   test('allows creating a local profile when only a remote profile has the same handle', async () => {
