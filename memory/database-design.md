@@ -94,6 +94,7 @@ Current type-code registry examples. The source of truth is `TableDiscriminator`
 | `15` | `activitypub_actor`         | ActivityPub actor details            |
 | `16` | `activitypub_actor_key`     | ActivityPub actor key                |
 | `17` | `profile_follow_request`    | Profile follow request lifecycle     |
+| `18` | `notification`              | Profile-scoped notification item     |
 
 Relay global ID options:
 
