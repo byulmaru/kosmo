@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, describe, test } from 'node:test';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
-  ActivityPubActors,
   db,
   firstOrThrow,
   Instances,
@@ -11,13 +10,7 @@ import {
   ProfileFollows,
   Profiles,
 } from '../db';
-import {
-  ActivityPubActorType,
-  InstanceKind,
-  InstanceState,
-  ProfileFollowPolicy,
-  ProfileState,
-} from '../enums';
+import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
 import { recordInboundFollow, removeInboundFollow } from './inbound-profile-follow';
 
 after(async () => pg.end());
@@ -60,23 +53,7 @@ const createPair = async (followPolicy: ProfileFollowPolicy) => {
       },
     ])
     .returning();
-  const actorUri = `https://${remoteInstance!.domain}/users/${follower!.id}`;
-  const objectUri = `https://${localInstance!.domain}/ap/actor/${followee!.id}`;
-
-  await db.insert(ActivityPubActors).values([
-    {
-      profileId: follower!.id,
-      type: ActivityPubActorType.PERSON,
-      uri: actorUri,
-    },
-    {
-      profileId: followee!.id,
-      type: ActivityPubActorType.PERSON,
-      uri: objectUri,
-    },
-  ]);
-
-  return { actorUri, followee: followee!, follower: follower!, objectUri };
+  return { followee: followee!, follower: follower! };
 };
 
 const getProfiles = async (followerProfileId: string, followeeProfileId: string) => ({
@@ -99,22 +76,14 @@ describe('inbound profile follow service', () => {
     const first = await recordInboundFollow(input);
     const duplicate = await recordInboundFollow(input);
 
-    assert.equal(first.kind, 'ESTABLISHED');
-    assert.equal(first.created, true);
-    assert.equal(duplicate.kind, 'ESTABLISHED');
-    assert.equal(duplicate.created, false);
-    if (duplicate.kind !== 'ESTABLISHED') {
-      return;
-    }
+    assert.equal(first, 'ESTABLISHED');
+    assert.equal(duplicate, 'ESTABLISHED');
     assert.deepEqual(await getProfiles(follower.id, followee.id), {
       followee: { ...followee, followersCount: 1 },
       follower: { ...follower, followingCount: 1 },
     });
-    assert.deepEqual(await removeInboundFollow(input), {
-      deletedId: duplicate.profileFollow.id,
-      kind: 'ESTABLISHED',
-    });
-    assert.equal(await removeInboundFollow(input), null);
+    assert.equal(await removeInboundFollow(input), true);
+    assert.equal(await removeInboundFollow(input), false);
     assert.deepEqual(await getProfiles(follower.id, followee.id), {
       followee,
       follower,
@@ -127,23 +96,15 @@ describe('inbound profile follow service', () => {
     const first = await recordInboundFollow(input);
     const duplicate = await recordInboundFollow(input);
 
-    assert.equal(first.kind, 'PENDING');
-    assert.equal(first.created, true);
-    assert.equal(duplicate.kind, 'PENDING');
-    assert.equal(duplicate.created, false);
-    if (duplicate.kind !== 'PENDING') {
-      return;
-    }
+    assert.equal(first, 'PENDING');
+    assert.equal(duplicate, 'PENDING');
     assert.deepEqual(await getProfiles(follower.id, followee.id), { followee, follower });
-    assert.deepEqual(await removeInboundFollow(input), {
-      deletedId: duplicate.profileFollowRequest.id,
-      kind: 'PENDING',
-    });
+    assert.equal(await removeInboundFollow(input), true);
     assert.equal(
       await db
         .select()
         .from(ProfileFollowRequests)
-        .where(eq(ProfileFollowRequests.id, duplicate.profileFollowRequest.id))
+        .where(eq(ProfileFollowRequests.followerProfileId, follower.id))
         .then((rows) => rows.length),
       0,
     );
@@ -155,7 +116,15 @@ describe('inbound profile follow service', () => {
     const input = { followeeProfileId: followee.id, followerProfileId: follower.id };
     const results = await Promise.all([recordInboundFollow(input), recordInboundFollow(input)]);
 
-    assert.equal(results.filter(({ created }) => created).length, 1);
+    assert.deepEqual(results, ['ESTABLISHED', 'ESTABLISHED']);
+    assert.equal(
+      await db
+        .select()
+        .from(ProfileFollows)
+        .where(eq(ProfileFollows.followerProfileId, follower.id))
+        .then((rows) => rows.length),
+      1,
+    );
     assert.deepEqual(await getProfiles(follower.id, followee.id), {
       followee: { ...followee, followersCount: 1 },
       follower: { ...follower, followingCount: 1 },
@@ -167,7 +136,7 @@ describe('inbound profile follow service', () => {
     const input = { followeeProfileId: followee.id, followerProfileId: follower.id };
     const results = await Promise.all([recordInboundFollow(input), recordInboundFollow(input)]);
 
-    assert.equal(results.filter(({ created }) => created).length, 1);
+    assert.deepEqual(results, ['PENDING', 'PENDING']);
     assert.equal(
       await db
         .select()
@@ -209,8 +178,7 @@ describe('inbound profile follow service', () => {
         return recordInboundFollow(input, tx);
       });
 
-      assert.equal(duplicate.kind, 'ESTABLISHED');
-      assert.equal(duplicate.created, false);
+      assert.equal(duplicate, 'ESTABLISHED');
     } finally {
       releaseProfiles();
       await blocker;
@@ -219,11 +187,20 @@ describe('inbound profile follow service', () => {
 
   test('does not delete a new exact-row refollow that replaces the captured row', async () => {
     const { followee, follower } = await createPair(ProfileFollowPolicy.OPEN);
-    const original = await recordInboundFollow({
+    await recordInboundFollow({
       followeeProfileId: followee.id,
       followerProfileId: follower.id,
     });
-    assert.equal(original.kind, 'ESTABLISHED');
+    const original = await db
+      .select()
+      .from(ProfileFollows)
+      .where(
+        and(
+          eq(ProfileFollows.followerProfileId, follower.id),
+          eq(ProfileFollows.followeeProfileId, followee.id),
+        ),
+      )
+      .then(firstOrThrow);
 
     let releaseReplacement!: () => void;
     const replacementMayCommit = new Promise<void>((resolve) => {
@@ -237,11 +214,11 @@ describe('inbound profile follow service', () => {
       await tx
         .select()
         .from(ProfileFollows)
-        .where(eq(ProfileFollows.id, original.profileFollow.id))
+        .where(eq(ProfileFollows.id, original.id))
         .for('update', { of: ProfileFollows });
       captured();
       await replacementMayCommit;
-      await tx.delete(ProfileFollows).where(eq(ProfileFollows.id, original.profileFollow.id));
+      await tx.delete(ProfileFollows).where(eq(ProfileFollows.id, original.id));
       return tx
         .insert(ProfileFollows)
         .values({
@@ -254,7 +231,7 @@ describe('inbound profile follow service', () => {
 
     await rowCaptured;
     const removal = removeInboundFollow({
-      expectedRowId: original.profileFollow.id,
+      expectedRowId: original.id,
       followeeProfileId: followee.id,
       followerProfileId: follower.id,
     });
@@ -262,8 +239,8 @@ describe('inbound profile follow service', () => {
     releaseReplacement();
 
     const [newRelation, removalResult] = await Promise.all([replacement, removal]);
-    assert.equal(removalResult, null);
-    assert.notEqual(newRelation.id, original.profileFollow.id);
+    assert.equal(removalResult, false);
+    assert.notEqual(newRelation.id, original.id);
     assert.deepEqual(
       await db.select().from(ProfileFollows).where(eq(ProfileFollows.id, newRelation.id)),
       [newRelation],

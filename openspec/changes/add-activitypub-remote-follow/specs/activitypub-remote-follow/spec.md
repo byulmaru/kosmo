@@ -107,7 +107,7 @@
 - **WHEN** Fedify inbox listener가 verified follow protocol activity를 전달하고 remote actor가 저장된 ActivityPub remote `Profile`로 조회된다
 - **THEN** 시스템은 remote actor의 instance 상태를 확인한다
 - **AND** remote actor instance가 `SUSPENDED`이면 `ProfileFollow` 또는 `ProfileFollowRequest`를 생성, 갱신, 삭제하지 않고 outbound Accept 또는 Reject를 발송하지 않는다
-- **AND** remote actor instance가 `UNRESPONSIVE`이면 시스템은 해당 inbound activity를 reachability signal로 보고 instance 상태를 `ACTIVE`로 갱신한 뒤 follow protocol 처리를 계속한다
+- **AND** remote actor instance가 `UNRESPONSIVE`이면 시스템은 Fedify가 전달한 verified inbound activity 자체를 object 지원 여부와 무관한 reachability signal로 보고 instance 상태를 `ACTIVE`로 갱신한 뒤 지원되는 follow protocol 처리를 계속한다
 
 #### Scenario: Receive remote Follow for local actor
 
@@ -136,6 +136,7 @@
 - **WHEN** Fedify inbox listener가 verified remote `Undo(Follow)` activity를 전달한다
 - **THEN** `Undo.object`는 embedded Follow이거나 Fedify가 안전하게 typed Follow로 제공한 object여야 한다
 - **AND** `Undo.object`가 IRI-only이면 시스템은 이번 capability에서 지원하지 않는 Undo로 처리하고 local follow graph 또는 request를 제거하지 않는다
+- **AND** 저장된 `UNRESPONSIVE` actor가 보낸 verified IRI-only Undo는 network lookup이나 follow graph/request 변경 없이 instance 상태만 `ACTIVE`로 복구할 수 있다
 - **AND** `Undo.actor`는 undo 대상 Follow의 actor 및 remote follower actor URI와 일치해야 한다
 - **AND** undo 대상 Follow의 object는 local followee actor URI와 일치해야 한다
 - **AND** undo 대상 Follow id는 remote 서버가 누락하거나 재사용할 수 있으므로 actor/object 검증을 대체하는 필수 조건으로 사용하지 않는다

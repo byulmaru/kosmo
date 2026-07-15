@@ -41,7 +41,7 @@ PROD-243은 ActivityPub recipient·actor·object 검증 뒤 remote pending reque
 
 Follow 대상 local actor를 먼저 검증한 뒤에만 unknown remote actor materialization을 허용한다. 검증된 Follow는 inbound id/actor/object를 별도 저장하지 않고 follower/followee pair의 established relation 또는 pending request에 연결한다. OPEN Follow의 Accept는 현재 수신 Follow object를 사용한다.
 
-Undo는 저장된 actor pair에서 relation/request를 찾고 embedded Follow의 actor/object/recipient를 검증한다. 처리 중 확인한 exact row가 맞을 때만 삭제하며, relation이 실제 삭제된 경우에만 count를 같은 transaction에서 감소시킨다. unknown actor 또는 IRI-only Undo는 network lookup 없이 무시한다.
+Undo는 저장된 actor pair에서 relation/request를 찾고 embedded Follow의 actor/object/recipient를 검증한다. 처리 중 확인한 exact row가 맞을 때만 삭제하며, relation이 실제 삭제된 경우에만 count를 같은 transaction에서 감소시킨다. unknown actor 또는 IRI-only Undo는 network lookup 없이 follow graph/request side effect를 무시한다. 다만 저장된 actor가 보낸 verified activity는 object 지원 여부와 무관하게 server reachability 신호이므로 `UNRESPONSIVE → ACTIVE` 복구는 허용한다.
 
 #### PROD-244 outbound response
 
@@ -53,7 +53,7 @@ PROD-241이 설정한 actor-scoped/shared inbox listener에 실제 activity type
 
 #### Instance state
 
-`SUSPENDED` actor의 inbound activity는 side effect 없이 무시하고 기존 relation/count를 보존한다. verified inbound actor의 `UNRESPONSIVE → ACTIVE`만 compare-and-set으로 복구하며 concurrent SUSPENDED 전환을 덮어쓰지 않는다.
+`SUSPENDED` actor의 inbound activity는 side effect 없이 무시하고 기존 relation/count를 보존한다. 저장된 actor가 보낸 verified inbound activity는 activity object의 지원 여부가 아니라 server reachability 신호로 사용하며, `UNRESPONSIVE → ACTIVE`만 compare-and-set으로 복구하고 concurrent SUSPENDED 전환을 덮어쓰지 않는다.
 
 ### Allowed Alternatives
 

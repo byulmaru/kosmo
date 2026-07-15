@@ -481,28 +481,20 @@ export const materializeRemoteProfileActor = async ({
         return lockedInstances;
       };
 
-      const reactivateLockedInstances = async (
-        lockedInstances: ReadonlyMap<string, typeof Instances.$inferSelect>,
-      ) => {
+      const reactivateLockedInstances = async (instanceIds: readonly string[]) => {
         if (!reactivateUnresponsive) {
           return;
         }
 
-        const instanceIds = [...lockedInstances.values()]
-          .filter(({ state }) => state === InstanceState.UNRESPONSIVE)
-          .map(({ id }) => id);
-
-        if (instanceIds.length > 0) {
-          await tx
-            .update(Instances)
-            .set({ state: InstanceState.ACTIVE })
-            .where(
-              and(
-                inArray(Instances.id, instanceIds),
-                eq(Instances.state, InstanceState.UNRESPONSIVE),
-              ),
-            );
-        }
+        await tx
+          .update(Instances)
+          .set({ state: InstanceState.ACTIVE })
+          .where(
+            and(
+              inArray(Instances.id, instanceIds),
+              eq(Instances.state, InstanceState.UNRESPONSIVE),
+            ),
+          );
       };
 
       let existingActor = await findExistingActor();
@@ -513,7 +505,7 @@ export const materializeRemoteProfileActor = async ({
           requestedRemoteInstance.id,
           canonicalRemoteInstance.id,
         ]);
-        await reactivateLockedInstances(lockedInstances);
+        await reactivateLockedInstances([...lockedInstances.keys()]);
         lockedCanonicalRemoteInstance = lockedInstances.get(canonicalRemoteInstance.id);
         existingActor = await findExistingActor();
       }
@@ -535,7 +527,7 @@ export const materializeRemoteProfileActor = async ({
           requestedRemoteInstance.id,
           canonicalRemoteInstance.id,
         ]);
-        await reactivateLockedInstances(lockedInstances);
+        await reactivateLockedInstances([...lockedInstances.keys()]);
 
         if (existingActor.profile.state !== ProfileState.ACTIVE) {
           throw new RemoteActorMaterializationError('Remote profile is unavailable.');

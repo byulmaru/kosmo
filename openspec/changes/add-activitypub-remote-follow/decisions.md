@@ -94,6 +94,16 @@
 - Consequences: suspension 해제 뒤 기존 관계를 다시 사용할 수 있으며 PROD-282는 GraphQL 회귀 검증만 소유한다.
 - Confirmation / Follow-up: relation 유무 두 경우의 NotFound와 저장 count 불변을 검증한다.
 
+### Verified inbound activity는 object 지원 여부와 무관하게 reachability 신호다
+
+- Decision Date: 2026-07-15
+- Status: Accepted
+- Context / Problem: IRI-only 또는 지원하지 않는 object를 가진 Undo가 follow graph를 변경하지 않을 때, 저장된 `UNRESPONSIVE` actor의 instance 복구까지 금지해야 하는지가 불명확했다.
+- Decision Outcome: Fedify가 저장된 actor의 verified inbound activity를 전달한 사실 자체를 remote server reachability 신호로 사용한다. 따라서 object가 IRI-only이거나 follow graph 검증을 통과하지 못해도 `UNRESPONSIVE → ACTIVE` compare-and-set 복구는 허용한다. unknown actor는 materialize하지 않으며, relation/request와 count는 기존 검증을 통과한 경우에만 변경한다.
+- Alternatives Considered: embedded Follow의 actor/object/recipient 검증이 모두 통과한 뒤에만 instance 복구, IRI-only Undo의 모든 DB write 금지.
+- Consequences: 지원하지 않는 verified activity도 instance를 ACTIVE로 복구할 수 있지만 follow graph/request side effect는 만들지 않는다. `SUSPENDED`는 계속 복구하지 않는다.
+- Confirmation / Follow-up: 저장된 UNRESPONSIVE actor의 IRI-only Undo가 network lookup과 graph mutation 없이 instance만 ACTIVE로 복구하는지 검증한다.
+
 ### 기존 inbox route에 handler를 직접 등록한다
 
 - Decision Date: 2026-07-15

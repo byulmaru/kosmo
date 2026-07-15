@@ -109,56 +109,31 @@ describe('remote actor materialization', () => {
     assert.equal(stored.actor.lastFetchedAt?.toString(), now.toString());
   });
 
-  test('materializes an inbound actor URI only after WebFinger proves its acct identity', async () => {
-    const actor = createActor();
-    const lookupObject = mock.fn(async () => actor);
-    const lookupWebFinger = mock.fn(async () => ({
-      links: [
-        {
-          href: actor.id?.href,
-          rel: 'self',
-          type: 'application/activity+json',
-        },
-      ],
-      subject: `acct:alice@${remoteDomain}`,
-    }));
+  for (const mediaType of [
+    'application/activity+json',
+    'application/ld+json; profile="https://www.w3.org/ns/activitystreams"',
+  ]) {
+    test(`materializes an inbound actor URI from WebFinger self type ${mediaType}`, async () => {
+      const actor = createActor();
+      const lookupObject = mock.fn(async () => actor);
+      const lookupWebFinger = mock.fn(async () => ({
+        links: [{ href: actor.id?.href, rel: 'self', type: mediaType }],
+        subject: `acct:alice@${remoteDomain}`,
+      }));
 
-    const result = await findOrMaterializeRemoteProfileActorByUri({
-      actorUri: actor.id!,
-      context: { lookupObject, lookupWebFinger } as unknown as Context<void>,
+      const result = await findOrMaterializeRemoteProfileActorByUri({
+        actorUri: actor.id!,
+        context: { lookupObject, lookupWebFinger } as unknown as Context<void>,
+      });
+
+      assert.equal(result.actor.uri, actor.id?.href);
+      assert.equal(lookupWebFinger.mock.calls.length, 1);
+      assert.equal(
+        (lookupObject.mock.calls as unknown as Array<{ arguments: unknown[] }>)[0]?.arguments[0],
+        `acct:alice@${remoteDomain}`,
+      );
     });
-
-    assert.equal(result.actor.uri, actor.id?.href);
-    assert.equal(lookupWebFinger.mock.calls.length, 1);
-    assert.equal(
-      (lookupObject.mock.calls as unknown as Array<{ arguments: unknown[] }>)[0]?.arguments[0],
-      `acct:alice@${remoteDomain}`,
-    );
-  });
-
-  test('accepts an ActivityStreams JSON-LD WebFinger self type with parameters', async () => {
-    const actor = createActor();
-    const lookupObject = mock.fn(async () => actor);
-    const lookupWebFinger = mock.fn(async () => ({
-      links: [
-        {
-          href: actor.id?.href,
-          rel: 'self',
-          type: 'application/ld+json; profile="https://www.w3.org/ns/activitystreams"',
-        },
-      ],
-      subject: `acct:alice@${remoteDomain}`,
-    }));
-
-    const result = await findOrMaterializeRemoteProfileActorByUri({
-      actorUri: actor.id!,
-      context: { lookupObject, lookupWebFinger } as unknown as Context<void>,
-    });
-
-    assert.equal(result.actor.uri, actor.id?.href);
-    assert.equal(lookupWebFinger.mock.calls.length, 1);
-    assert.equal(lookupObject.mock.calls.length, 1);
-  });
+  }
 
   test('reactivates an unknown actor instance only after materialization succeeds', async () => {
     const instance = await createRemoteInstance({ state: InstanceState.UNRESPONSIVE });

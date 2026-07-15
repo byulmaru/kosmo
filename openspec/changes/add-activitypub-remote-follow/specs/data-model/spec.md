@@ -82,7 +82,7 @@
 - **AND** duplicate inbound Follow에 대한 `Accept(Follow)` response object는 현재 검증을 통과한 수신 Follow object를 사용해야 한다
 - **AND** inbound `Undo(Follow)`는 Follow id를 저장하거나 비교하지 않고 verified same actor/object이면 현재 관계 또는 request를 취소하는 의사로 처리할 수 있어야 한다
 - **AND** relation/request 삭제는 처리 중 확인한 exact row가 일치할 때만 적용되고, established relation을 실제 삭제한 transaction만 저장 count를 감소시켜야 한다
-- **AND** IRI-only `Undo.object`는 이번 capability에서 relation/request로 역조회하지 않고 side effect 없이 무시할 수 있어야 한다
+- **AND** IRI-only `Undo.object`는 이번 capability에서 relation/request로 역조회하지 않고 follow graph/request side effect 없이 무시할 수 있어야 하며, 저장된 actor instance의 reachability 복구는 이 제한에 포함하지 않는다
 - **AND** Fedify inbox idempotency는 조기 중복 제거로만 사용하고, durable relation/request side effect는 PostgreSQL unique 제약과 exact-row 조건이 source of truth여야 한다
 
 #### Scenario: Remove rejected remote follow projection

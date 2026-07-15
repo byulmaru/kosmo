@@ -15,10 +15,7 @@ import {
 import type { InboxContext } from '@fedify/fedify';
 import type { Recipient, Undo } from '@fedify/vocab';
 
-type LocalRecipient = {
-  actor: typeof ActivityPubActors.$inferSelect;
-  profile: typeof Profiles.$inferSelect;
-};
+type LocalRecipient = { profile: typeof Profiles.$inferSelect };
 
 const getNow = () => Temporal.Now.instant();
 
@@ -32,7 +29,7 @@ const isExpectedRemoteActorRejection = (error: unknown) =>
 
 const findActiveLocalRecipient = async (actorUri: URL): Promise<LocalRecipient | undefined> =>
   db
-    .select({ actor: getColumns(ActivityPubActors), profile: getColumns(Profiles) })
+    .select({ profile: getColumns(Profiles) })
     .from(ActivityPubActors)
     .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
@@ -114,7 +111,7 @@ export const handleInboundFollow = async (
     followerProfileId: remoteActor.profile.id,
   });
 
-  if (result.kind !== 'ESTABLISHED') {
+  if (result !== 'ESTABLISHED') {
     return;
   }
 
@@ -171,11 +168,7 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
   }
 
   const objectUri = embedded.objectId;
-  if (
-    !isHttpUri(objectUri) ||
-    embedded.actorId?.href !== actorUri.href ||
-    undo.actorId?.href !== embedded.actorId.href
-  ) {
+  if (!isHttpUri(objectUri) || embedded.actorId?.href !== actorUri.href) {
     return;
   }
 

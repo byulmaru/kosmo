@@ -209,7 +209,7 @@ describe('inbound Follow and Undo', () => {
   });
 
   test('keeps the projection when Accept delivery fails and ignores IRI-only Undo', async () => {
-    await createFixture();
+    const fixture = await createFixture();
     const context = createContext({
       recipient: localProfileId,
       sendActivity: mock.fn(async () => {
@@ -218,6 +218,10 @@ describe('inbound Follow and Undo', () => {
     });
     const follow = new Follow({ actor: remoteActorUri, object: localActorUri });
     await handleInboundFollow(context, follow);
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.UNRESPONSIVE })
+      .where(eq(Instances.id, fixture.remoteInstance.id));
 
     await handleInboundUndo(
       context,
@@ -225,6 +229,14 @@ describe('inbound Follow and Undo', () => {
     );
 
     assert.equal((await db.select().from(ProfileFollows)).length, 1);
+    assert.deepEqual(
+      await db
+        .select({ state: Instances.state })
+        .from(Instances)
+        .where(eq(Instances.id, fixture.remoteInstance.id))
+        .then(firstOrThrow),
+      { state: InstanceState.ACTIVE },
+    );
   });
 
   test('reactivates a stored UNRESPONSIVE actor from Undo without network lookup', async () => {

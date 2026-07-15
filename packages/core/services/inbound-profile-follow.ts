@@ -13,37 +13,6 @@ import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '
 import { NotFoundError } from '../error';
 import type { Transaction } from '../db';
 
-type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
-type ProfileFollowRequestRow = typeof ProfileFollowRequests.$inferSelect;
-
-export interface RecordInboundFollowInput {
-  readonly followeeProfileId: string;
-  readonly followerProfileId: string;
-}
-
-export type RecordInboundFollowResult =
-  | {
-      readonly created: boolean;
-      readonly kind: 'ESTABLISHED';
-      readonly profileFollow: ProfileFollowRow;
-    }
-  | {
-      readonly created: boolean;
-      readonly kind: 'PENDING';
-      readonly profileFollowRequest: ProfileFollowRequestRow;
-    };
-
-export interface RemoveInboundFollowInput {
-  readonly expectedRowId?: string;
-  readonly followeeProfileId: string;
-  readonly followerProfileId: string;
-}
-
-export type RemoveInboundFollowResult =
-  | { readonly deletedId: string; readonly kind: 'ESTABLISHED' }
-  | { readonly deletedId: string; readonly kind: 'PENDING' }
-  | null;
-
 const pairCondition = (
   table: typeof ProfileFollows | typeof ProfileFollowRequests,
   followerProfileId: string,
@@ -55,9 +24,12 @@ const pairCondition = (
   );
 
 export const recordInboundFollow = async (
-  { followeeProfileId, followerProfileId }: RecordInboundFollowInput,
+  {
+    followeeProfileId,
+    followerProfileId,
+  }: { readonly followeeProfileId: string; readonly followerProfileId: string },
   tx?: Transaction,
-): Promise<RecordInboundFollowResult> =>
+): Promise<'ESTABLISHED' | 'PENDING'> =>
   getDatabaseConnection(tx).transaction(async (tx) => {
     const participants = await tx
       .select({
@@ -88,7 +60,7 @@ export const recordInboundFollow = async (
 
     if (followee.followPolicy === ProfileFollowPolicy.APPROVAL_REQUIRED) {
       const existingFollow = await tx
-        .select()
+        .select({ id: ProfileFollows.id })
         .from(ProfileFollows)
         .where(pairCondition(ProfileFollows, followerProfileId, followeeProfileId))
         .limit(1)
@@ -98,16 +70,14 @@ export const recordInboundFollow = async (
         await tx
           .delete(ProfileFollowRequests)
           .where(pairCondition(ProfileFollowRequests, followerProfileId, followeeProfileId));
-        return { created: false, kind: 'ESTABLISHED', profileFollow: existingFollow };
+        return 'ESTABLISHED';
       }
 
-      const requestId = createId(TableDiscriminator.ProfileFollowRequests);
-      const profileFollowRequest = await tx
+      await tx
         .insert(ProfileFollowRequests)
         .values({
           followeeProfileId,
           followerProfileId,
-          id: requestId,
         })
         .onConflictDoUpdate({
           target: [
@@ -115,15 +85,9 @@ export const recordInboundFollow = async (
             ProfileFollowRequests.followeeProfileId,
           ],
           set: { id: sql`${ProfileFollowRequests.id}` },
-        })
-        .returning()
-        .then(first);
+        });
 
-      return {
-        created: profileFollowRequest!.id === requestId,
-        kind: 'PENDING',
-        profileFollowRequest: profileFollowRequest!,
-      };
+      return 'PENDING';
     }
 
     const followId = createId(TableDiscriminator.ProfileFollows);
@@ -138,7 +102,7 @@ export const recordInboundFollow = async (
         target: [ProfileFollows.followerProfileId, ProfileFollows.followeeProfileId],
         set: { id: sql`${ProfileFollows.id}` },
       })
-      .returning()
+      .returning({ id: ProfileFollows.id })
       .then(first);
 
     await tx
@@ -146,7 +110,7 @@ export const recordInboundFollow = async (
       .where(pairCondition(ProfileFollowRequests, followerProfileId, followeeProfileId));
 
     if (profileFollow!.id !== followId) {
-      return { created: false, kind: 'ESTABLISHED', profileFollow: profileFollow! };
+      return 'ESTABLISHED';
     }
 
     await tx
@@ -158,13 +122,21 @@ export const recordInboundFollow = async (
       .set({ followersCount: sql`${Profiles.followersCount} + 1` })
       .where(eq(Profiles.id, followeeProfileId));
 
-    return { created: true, kind: 'ESTABLISHED', profileFollow: profileFollow! };
+    return 'ESTABLISHED';
   });
 
 export const removeInboundFollow = async (
-  { expectedRowId, followeeProfileId, followerProfileId }: RemoveInboundFollowInput,
+  {
+    expectedRowId,
+    followeeProfileId,
+    followerProfileId,
+  }: {
+    readonly expectedRowId?: string;
+    readonly followeeProfileId: string;
+    readonly followerProfileId: string;
+  },
   tx?: Transaction,
-): Promise<RemoveInboundFollowResult> =>
+): Promise<boolean> =>
   getDatabaseConnection(tx).transaction(async (tx) => {
     const profileFollow = await tx
       .select({ id: ProfileFollows.id })
@@ -175,7 +147,7 @@ export const removeInboundFollow = async (
 
     if (profileFollow) {
       if (expectedRowId !== undefined && profileFollow.id !== expectedRowId) {
-        return null;
+        return false;
       }
 
       const deleted = await tx
@@ -185,7 +157,7 @@ export const removeInboundFollow = async (
         .then(first);
 
       if (!deleted) {
-        return null;
+        return false;
       }
 
       await tx
@@ -197,7 +169,7 @@ export const removeInboundFollow = async (
         .set({ followersCount: sql`greatest(${Profiles.followersCount} - 1, 0)` })
         .where(eq(Profiles.id, followeeProfileId));
 
-      return { deletedId: deleted.id, kind: 'ESTABLISHED' };
+      return true;
     }
 
     const profileFollowRequest = await tx
@@ -208,11 +180,11 @@ export const removeInboundFollow = async (
       .then(first);
 
     if (!profileFollowRequest) {
-      return null;
+      return false;
     }
 
     if (expectedRowId !== undefined && profileFollowRequest.id !== expectedRowId) {
-      return null;
+      return false;
     }
 
     const deleted = await tx
@@ -221,5 +193,5 @@ export const removeInboundFollow = async (
       .returning({ id: ProfileFollowRequests.id })
       .then(first);
 
-    return deleted ? { deletedId: deleted.id, kind: 'PENDING' } : null;
+    return deleted !== undefined;
   });
