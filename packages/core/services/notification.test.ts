@@ -10,7 +10,7 @@ import { followProfile, unfollowProfile } from './profile-follow';
 const instanceIds: string[] = [];
 const profileIds: string[] = [];
 
-const createProfile = async (kind = InstanceKind.LOCAL) => {
+const createProfile = async (kind: InstanceKind = InstanceKind.LOCAL) => {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const instance = await db
     .insert(Instances)
@@ -116,11 +116,13 @@ test('Follow 알림 생성과 삭제는 반복 및 동시 호출에 idempotent�
     followeeProfileId: followee.id,
   });
 
-  await createFollowNotification(profileFollow);
   await Promise.all([
     createFollowNotification(profileFollow),
     createFollowNotification(profileFollow),
   ]);
+  assert.equal((await readNotifications(profileFollow.id)).length, 1);
+
+  await createFollowNotification(profileFollow);
   assert.equal((await readNotifications(profileFollow.id)).length, 1);
 
   await deleteNotificationBySource(NotificationKind.FOLLOW, profileFollow.id);
