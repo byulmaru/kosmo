@@ -9,6 +9,10 @@ import {
   validateLocalPostContentDocument,
 } from './server';
 
+function serializeJson(value: unknown): unknown {
+  return JSON.parse(JSON.stringify(value));
+}
+
 test('converts trimmed Plain Text and normalized line endings to hard breaks', () => {
   const body = postContentDocumentFromText('  first\r\n\rsecond\n\nlast  ');
 
@@ -43,34 +47,36 @@ test('keeps one empty paragraph for an empty document', () => {
 
 test('canonicalizes empty paragraphs, adjacent text, duplicate marks and URLs', () => {
   assert.deepEqual(
-    canonicalizePostContentDocument({
-      version: 1,
-      summary: null,
-      body: {
-        type: 'doc',
-        content: [
-          { type: 'paragraph' },
-          {
-            type: 'paragraph',
-            content: [
-              {
-                type: 'text',
-                text: 'linked ',
-                marks: [
-                  { type: 'link', attrs: { href: 'HTTPS://EXAMPLE.COM:443/path' } },
-                  { type: 'link', attrs: { href: 'https://example.com/path' } },
-                ],
-              },
-              {
-                type: 'text',
-                text: 'text',
-                marks: [{ type: 'link', attrs: { href: 'https://example.com/path' } }],
-              },
-            ],
-          },
-        ],
-      },
-    }),
+    serializeJson(
+      canonicalizePostContentDocument({
+        version: 1,
+        summary: null,
+        body: {
+          type: 'doc',
+          content: [
+            { type: 'paragraph' },
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: 'linked ',
+                  marks: [
+                    { type: 'link', attrs: { href: 'HTTPS://EXAMPLE.COM:443/path' } },
+                    { type: 'link', attrs: { href: 'https://example.com/path' } },
+                  ],
+                },
+                {
+                  type: 'text',
+                  text: 'text',
+                  marks: [{ type: 'link', attrs: { href: 'https://example.com/path' } }],
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    ),
     {
       version: 1,
       summary: null,

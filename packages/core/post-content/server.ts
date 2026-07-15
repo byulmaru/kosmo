@@ -85,7 +85,7 @@ function canonicalizePostContentBody(
 
   const canonical = postContentSchemaV1.nodes.doc.create(null, paragraphs);
   canonical.check();
-  return JSON.parse(JSON.stringify(canonical.toJSON())) as PostContentBodyDocumentV1;
+  return canonical.toJSON() as PostContentBodyDocumentV1;
 }
 
 export function postContentDocumentFromText(
