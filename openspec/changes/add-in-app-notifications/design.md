@@ -36,7 +36,7 @@
 - `data jsonb NOT NULL DEFAULT '{}'`: kind별 애플리케이션 타입으로 검증하는 최소 추가 데이터.
 - `created_at`, nullable `read_at`: `read_at` nullability가 Unread/Read와 최초 Read 시각을 모두 표현한다.
 
-`(kind, source_id, recipient_profile_id)` unique constraint는 같은 source와 Recipient 조합의 item 하나를 보장하면서 하나의 source가 여러 Recipient에게 투영되는 후속 kind를 허용한다. column prefix `(kind, source_id)`는 source cleanup에도 사용할 수 있다. `(recipient_profile_id, id DESC)` index는 inbox pagination을, `read_at IS NULL` 조건의 Recipient partial index는 Unread count 후보를 지원한다. `created_at`은 표시 값이며 정렬 key로 중복 사용하지 않는다.
+`(recipient_profile_id, kind, source_id)` unique constraint는 같은 Recipient, kind와 source 조합의 item 하나를 보장하면서 하나의 source가 여러 Recipient에게 투영되는 후속 kind를 허용한다. Recipient-first 물리 순서는 Recipient 기준 접근을 우선한다. source-only cleanup을 위한 별도 `(kind, source_id)` index는 선제 추가하지 않고, 실제 cleanup 구현에서 필요가 확인될 때 별도 범위로 결정한다. `(recipient_profile_id, id DESC)` index는 inbox pagination을, `read_at IS NULL` 조건의 Recipient partial index는 Unread count 후보를 지원한다. `created_at`은 표시 값이며 정렬 key로 중복 사용하지 않는다.
 
 FOLLOW에서 `source_id`는 `profile_follow.id`이고 `data`는 `{}`다. Recipient는 Followee, Related Profile은 Follower에서 조회 시 파생한다. Profile ID, 이름·handle snapshot을 `data`에 복제하지 않는다. 별도 `notification_follow` table, type별 discriminator, source FK, cleanup trigger와 deferred integrity constraint는 만들지 않는다. 새 Profile-scoped kind가 생기면 그 시점에 enum, source mapping과 실제 필요한 data shape만 추가한다. Account-scoped Operational Notification의 저장 구조는 해당 kind의 별도 change가 결정한다.
 

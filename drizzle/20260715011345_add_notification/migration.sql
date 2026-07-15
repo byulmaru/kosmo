@@ -7,7 +7,7 @@ CREATE TABLE "notification" (
 	"data" jsonb DEFAULT '{}' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"read_at" timestamp with time zone,
-	CONSTRAINT "notification_kind_source_id_recipient_profile_id_unique" UNIQUE("kind","source_id","recipient_profile_id")
+	CONSTRAINT "notification_recipient_profile_id_kind_source_id_unique" UNIQUE("recipient_profile_id","kind","source_id")
 );
 --> statement-breakpoint
 CREATE INDEX "notification_recipient_profile_id_id_index" ON "notification" ("recipient_profile_id","id" DESC NULLS LAST);--> statement-breakpoint

@@ -112,7 +112,7 @@ test('creates the minimal Notification projection and query indexes', async () =
     assert.ok(
       constraints.some(
         ({ definition, type }) =>
-          type === 'u' && definition === 'UNIQUE (kind, source_id, recipient_profile_id)',
+          type === 'u' && definition === 'UNIQUE (recipient_profile_id, kind, source_id)',
       ),
     );
     assert.equal(
@@ -145,6 +145,10 @@ test('creates the minimal Notification projection and query indexes', async () =
     );
     assert.equal(
       indexes.some(({ definition }) => definition.includes('USING gin')),
+      false,
+    );
+    assert.equal(
+      indexes.some(({ definition }) => definition.includes('(kind, source_id)')),
       false,
     );
 

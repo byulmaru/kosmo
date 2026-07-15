@@ -3133,9 +3133,9 @@
     },
     {
       "nameExplicit": false,
-      "columns": ["kind", "source_id", "recipient_profile_id"],
+      "columns": ["recipient_profile_id", "kind", "source_id"],
       "nullsNotDistinct": false,
-      "name": "notification_kind_source_id_recipient_profile_id_unique",
+      "name": "notification_recipient_profile_id_kind_source_id_unique",
       "entityType": "uniques",
       "schema": "public",
       "table": "notification"

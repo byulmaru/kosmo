@@ -204,7 +204,7 @@ export const Notifications = pgTable(
     readAt: datetime('read_at'),
   },
   (table) => [
-    unique().on(table.kind, table.sourceId, table.recipientProfileId),
+    unique().on(table.recipientProfileId, table.kind, table.sourceId),
     index().on(table.recipientProfileId, table.id.desc()),
     index()
       .on(table.recipientProfileId)
