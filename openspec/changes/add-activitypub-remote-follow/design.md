@@ -81,15 +81,16 @@ PROD-241이 설정한 actor-scoped/shared inbox listener에 실제 activity type
 2. PROD-272가 공통 pending-only request boundary를 제공한다.
 3. PROD-242와 PROD-243을 독립적으로 구현한다.
 4. PROD-244가 두 구현과 PROD-243 primitive를 조합한다.
-5. PROD-245/263과 PROD-282 회귀 검증을 완료한다.
-6. PROD-235 통합 검증 뒤 전체 task가 완료됐을 때만 change를 archive한다.
+5. PROD-245, PROD-263과 PROD-282를 각 이슈의 독립 범위로 완료한다.
+6. PROD-361이 모든 구현 결과를 통합 검증하고 delta spec 동기화와 change archive PR을 소유한다.
+7. PROD-361의 검증·archive 근거가 확인되면 부모 PROD-235를 완료한다.
 
 Rollback은 PROD-357 spec-only commit을 되돌려 이전 contract 문서로 복귀할 수 있다. 구현·migration은 이 PR에 포함되지 않는다.
 
 ## Validation
 
 - 각 구현 issue가 자기 package/transaction 경계에서 독립 테스트를 제공한다.
-- PROD-235 통합 gate가 duplicate Follow, delayed Undo/Reject, SUSPENDED/UNRESPONSIVE, graph와 Web action을 검증한다.
+- PROD-361 통합 gate가 duplicate Follow, delayed Undo/Reject, SUSPENDED/UNRESPONSIVE, graph와 Web action을 검증한다.
 - spec-only PR은 `openspec validate add-activitypub-remote-follow --strict`와 전체 strict validation을 통과한다.
 
 ## Open Questions

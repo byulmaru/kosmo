@@ -74,6 +74,16 @@
 - Consequences: 새로운 HTTP foundation을 만들지 않고 PROD-241 transport를 재사용하며, remote-post change와 동일 discovery requirement를 서로 덮어쓰지 않는다.
 - Confirmation / Follow-up: actor-scoped/shared inbox 통합 테스트로 routing과 Follow handler 호출을 검증하고 unsupported activity가 follow side effect를 만들지 않는지 확인한다.
 
+### 최종 통합 검증과 archive는 PROD-361이 소유한다
+
+- Decision Date: 2026-07-15
+- Status: Accepted
+- Context / Problem: 부모 PROD-235는 자체 PR이 없지만 기존 task는 통합 검증과 archive git 변경을 PROD-235에 할당했고, PROD-282와도 하나의 task group으로 묶었다.
+- Decision Outcome: PROD-361을 최종 통합 검증·delta spec 동기화·archive PR 소유자로 두고, PROD-235는 모든 자식 완료 후 부모 계약의 완료 판단만 소유한다.
+- Alternatives Considered: PROD-235 명의의 별도 PR 생성, PROD-282 또는 다른 마지막 구현 자식에 archive 흡수.
+- Consequences: shared change는 모든 구현 자식이 끝날 때까지 active로 유지되며, PROD-361이 별도 branch/PR에서만 archive한다.
+- Confirmation / Follow-up: PROD-361 blocker와 완료 기준, archive 후 전체 strict validation을 확인한다.
+
 ## Remaining Decisions
 
 - authenticated shared-inbox document loader identity는 PROD-355가 소유한다.
