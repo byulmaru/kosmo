@@ -27,7 +27,7 @@
 ## Impact
 
 - Linear owner: [PROD-354](https://linear.app/byulmaru/issue/PROD-354)가 이 공유 change를 단독으로 갱신한다.
-- Completed foundations: [PROD-341](https://linear.app/byulmaru/issue/PROD-341)의 versioned PostContent document 계약과 PROD-357의 activity-neutral inbox 책임 정렬이 main에 병합됐다.
+- Completed foundations: [PROD-341](https://linear.app/byulmaru/issue/PROD-341)의 versioned PostContent document 계약, PROD-357의 activity-neutral inbox 책임 정렬과 PROD-366/PR #271의 PostgreSQL UUIDv7·GraphQL global ID 분리 계약이 main에 병합됐다.
 - Implementation slices: PROD-255 schema, PROD-259 projection, PROD-260 inbox validation과 PROD-262 authorization regression을 진행한 뒤 PROD-261이 최초 materialization transaction을 통합하고 PROD-256이 integration/archive를 소유한다.
 - Existing foundations: PROD-241의 activity-neutral actor/shared inbox route와 PR #212/PROD-257의 DB-only GraphQL read/authorization을 변경하지 않는다.
 - Ownership: parent-child 계층을 사용하지 않는다. 구현 slice PR은 이 공유 change를 수정하거나 archive하지 않고 각 이슈의 코드와 검증만 소유하며, Linear Block 관계가 전달 순서를 표현한다.
