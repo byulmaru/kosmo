@@ -18,6 +18,23 @@ test('exposes the Plain Text post contract without TipTap', () => {
   assert.equal(schema.getType('TipTapDocument'), undefined);
 });
 
+test('follow mutation payloads expose both updated profiles', () => {
+  const followPayload = schema.getType('FollowProfilePayload');
+  const unfollowPayload = schema.getType('UnfollowProfilePayload');
+
+  assert.ok(isObjectType(followPayload));
+  assert.ok(followPayload.getFields().followerProfile);
+  assert.ok(followPayload.getFields().followeeProfile);
+  assert.equal(followPayload.getFields().profile, undefined);
+
+  assert.ok(isObjectType(unfollowPayload));
+  assert.ok(unfollowPayload.getFields().followerProfile);
+  assert.ok(unfollowPayload.getFields().followeeProfile);
+  assert.equal(String(unfollowPayload.getFields().followerProfile?.type), 'Profile!');
+  assert.equal(String(unfollowPayload.getFields().followeeProfile?.type), 'Profile');
+  assert.equal(unfollowPayload.getFields().profile, undefined);
+});
+
 test('rejects empty and over-500-character Plain Text before creating a post', async () => {
   for (const [bodyText, message] of [
     [' \n ', '본문을 입력해주세요.'],

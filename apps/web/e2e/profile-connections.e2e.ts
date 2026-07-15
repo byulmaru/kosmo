@@ -1,4 +1,4 @@
-import { db, firstOrThrow, Profiles } from '@kosmo/core/db';
+import { db, firstOrThrow, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { eq } from 'drizzle-orm';
 import {
   createE2EFollow,
@@ -28,6 +28,8 @@ const mutateFollow = async (
             mutation E2EProfileFollow($id: ID!) {
               ${operation}(input: { id: $id }) {
                 ${operation === 'followProfile' ? 'profileFollow { id }' : 'profileFollowId'}
+                followerProfile { id followingCount }
+                followeeProfile { id followersCount }
               }
             }
           `,
@@ -55,6 +57,16 @@ test('동시 follow와 unfollow는 저장 count를 한 번만 갱신한다', asy
     mutateFollow(page, 'followProfile', target.id),
   ]);
   expect(followResponses.every((response) => !response.errors)).toBe(true);
+  for (const response of followResponses) {
+    expect(response.data.followProfile.followerProfile).toMatchObject({
+      followingCount: 1,
+      id: viewer.profile!.id,
+    });
+    expect(response.data.followProfile.followeeProfile).toMatchObject({
+      followersCount: 1,
+      id: target.id,
+    });
+  }
 
   const followedViewer = await db
     .select()
@@ -74,6 +86,16 @@ test('동시 follow와 unfollow는 저장 count를 한 번만 갱신한다', asy
     mutateFollow(page, 'unfollowProfile', target.id),
   ]);
   expect(unfollowResponses.every((response) => !response.errors)).toBe(true);
+  for (const response of unfollowResponses) {
+    expect(response.data.unfollowProfile.followerProfile).toMatchObject({
+      followingCount: 0,
+      id: viewer.profile!.id,
+    });
+    expect(response.data.unfollowProfile.followeeProfile).toMatchObject({
+      followersCount: 0,
+      id: target.id,
+    });
+  }
 
   const unfollowedViewer = await db
     .select()
@@ -92,7 +114,7 @@ test('동시 follow와 unfollow는 저장 count를 한 번만 갱신한다', asy
 test('unfollow 저장 count는 0 미만으로 감소하지 않는다', async ({ context, page }) => {
   const viewer = await createE2ESession({ handle: 'e2e-count-floor-viewer' });
   const target = await createE2EProfile({ handle: 'e2e-count-floor-target' });
-  await createE2EFollow({
+  await db.insert(ProfileFollows).values({
     followeeProfileId: target.id,
     followerProfileId: viewer.profile!.id,
   });

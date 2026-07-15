@@ -32,9 +32,11 @@
     "drizzle:generate": "node ../../scripts/vault-run.mjs -- drizzle-kit generate",
     "drizzle:push": "node ../../scripts/vault-run.mjs -- drizzle-kit push",
     "drizzle:studio": "node ../../scripts/vault-run.mjs -- drizzle-kit studio",
-    "test": "pnpm test:migrate && pnpm test:migration",
+    "test": "pnpm test:migrate && pnpm test:migration && pnpm test:services",
     "test:migrate": "cd ../.. && node scripts/test-db.mjs run -- pnpm --filter @kosmo/core exec node --import tsx --test db/migrate.test.ts",
-    "test:migration": "cd ../.. && node scripts/test-db.mjs run -- node --test --test-concurrency=1 'packages/core/db/*.migration.test.mjs'"
+    "test:migration": "cd ../.. && node scripts/test-db.mjs run -- node --test --test-concurrency=1 'packages/core/db/*.migration.test.mjs'",
+    "test:services": "cd ../.. && node scripts/test-db.mjs run -- pnpm --filter @kosmo/core test:services:database",
+    "test:services:database": "cd ../.. && pnpm db:test:push && pnpm --filter @kosmo/core exec node --import tsx --test --test-concurrency=1 services/profile-follow.test.ts services/profile.test.ts"
   },
   "devDependencies": {
     "drizzle-kit": "1.0.0-beta.22"

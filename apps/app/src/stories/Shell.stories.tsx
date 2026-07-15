@@ -1,6 +1,8 @@
 import { View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, userEvent, within } from 'storybook/test';
+import { FollowButton } from '@/components/profile/FollowButton';
+import { ProfileHero } from '@/components/profile/ProfileHero';
 import { BottomTabBar } from '@/components/shell/BottomTabBar';
 import { ProfileSwitcher } from '@/components/shell/ProfileSwitcher';
 import { RightRail } from '@/components/shell/RightRail';
@@ -19,7 +21,26 @@ const secondProfile = profile({
   relativeHandle: '@remote@space.example',
   viewerState: { follow: null, isSelf: true },
 });
-const query = shellQuery({ profiles: [profile(), secondProfile] });
+const selectedProfile = profile({
+  handle: 'selected',
+  id: 'profile-selected',
+  relativeHandle: '@selected',
+  viewerState: { follow: null, isSelf: true },
+});
+const followedProfile = profile({
+  followersCount: 17,
+  handle: 'followed',
+  id: 'profile-followed',
+  relativeHandle: '@followed',
+  viewerState: {
+    follow: { follower: { id: selectedProfile.id }, id: 'profile-follow-edge' },
+    isSelf: false,
+  },
+});
+const query = {
+  ...shellQuery({ profiles: [selectedProfile, secondProfile], selectedProfile }),
+  node: followedProfile,
+};
 
 const ShellStoriesQuery = graphql`
   query ShellStoriesQuery {
@@ -29,6 +50,13 @@ const ShellStoriesQuery = graphql`
       selectedProfile {
         ...BottomTabBar_profile
         ...RightRail_profile
+      }
+    }
+    node(id: "profile-followed") {
+      __typename
+      ... on Profile {
+        ...FollowButton_profile @alias(as: "followButton")
+        ...ProfileHero_profile @alias(as: "hero")
       }
     }
   }
@@ -82,6 +110,31 @@ function ProfileSwitcherStory() {
   );
 }
 
+function FollowCacheStory() {
+  const data = useLazyLoadQuery<ShellStoriesQueryType>(ShellStoriesQuery, {});
+  if (data.node?.__typename !== 'Profile' || !data.node.followButton || !data.node.hero) {
+    throw new Error('FollowCacheStory requires the followed profile fixture.');
+  }
+
+  return (
+    <Catalog width={760}>
+      <Section title="Sidebar and followed profile">
+        <View style={{ flexDirection: 'row', gap: spacing.lg }}>
+          <View style={{ height: 620, width: 320 }}>
+            <SidebarNavigation query={data} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <ProfileHero
+              action={<FollowButton profile={data.node.followButton} />}
+              profile={data.node.hero}
+            />
+          </View>
+        </View>
+      </Section>
+    </Catalog>
+  );
+}
+
 const meta = {
   component: NavigationCatalog,
   parameters: {
@@ -99,6 +152,84 @@ export const SharedNavigation: Story = {};
 export const BottomNavigation: Story = { render: () => <BottomNavigationStory /> };
 
 export const CompactSidebar: Story = { render: () => <CompactSidebarStory /> };
+
+export const FollowUpdatesBothProfileCounts: Story = {
+  parameters: {
+    relay: {
+      data: {
+        ...query,
+        node: {
+          ...followedProfile,
+          followersCount: 16,
+          viewerState: { follow: null, isSelf: false },
+        },
+      },
+      mutationResponse: {
+        followProfile: {
+          followeeProfile: followedProfile,
+          followerProfile: { ...selectedProfile, followingCount: 43 },
+          profileFollow: { id: 'profile-follow-edge' },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewerFollowing = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@selected/following"]',
+    );
+    const targetFollowers = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@followed/followers"]',
+    );
+    expect(viewerFollowing).not.toBeNull();
+    expect(targetFollowers).not.toBeNull();
+    expect(within(viewerFollowing!).getByText('42')).toBeVisible();
+    expect(within(targetFollowers!).getByText('16')).toBeVisible();
+
+    await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
+
+    await expect(within(viewerFollowing!).findByText('43')).resolves.toBeVisible();
+    await expect(within(targetFollowers!).findByText('17')).resolves.toBeVisible();
+  },
+  render: () => <FollowCacheStory />,
+};
+
+export const UnfollowUpdatesBothProfileCounts: Story = {
+  parameters: {
+    relay: {
+      mutationResponse: {
+        unfollowProfile: {
+          followeeProfile: {
+            ...followedProfile,
+            followersCount: 16,
+            viewerState: { follow: null, isSelf: false },
+          },
+          followerProfile: { ...selectedProfile, followingCount: 41 },
+          profileFollowId: 'profile-follow-edge',
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewerFollowing = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@selected/following"]',
+    );
+    const targetFollowers = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@followed/followers"]',
+    );
+    expect(viewerFollowing).not.toBeNull();
+    expect(targetFollowers).not.toBeNull();
+    expect(within(viewerFollowing!).getByText('42')).toBeVisible();
+    expect(within(targetFollowers!).getByText('17')).toBeVisible();
+
+    await userEvent.click(canvas.getByRole('button', { name: '팔로잉' }));
+
+    await expect(within(viewerFollowing!).findByText('41')).resolves.toBeVisible();
+    await expect(within(targetFollowers!).findByText('16')).resolves.toBeVisible();
+  },
+  render: () => <FollowCacheStory />,
+};
 
 export const ProfileSwitcherInteraction: Story = {
   parameters: {

@@ -9,7 +9,6 @@ import {
   pg,
   PostContents,
   Posts,
-  ProfileFollows,
   Profiles,
   Sessions,
 } from '@kosmo/core/db';
@@ -23,6 +22,7 @@ import {
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
+import { followProfile } from '@kosmo/core/services';
 import { eq } from 'drizzle-orm';
 import { Temporal } from 'temporal-polyfill';
 import type { BrowserContext } from '@playwright/test';
@@ -48,7 +48,6 @@ type CreateE2EProfileOptions = {
 };
 
 type CreateE2EFollowOptions = {
-  createdAt?: string;
   followeeProfileId: string;
   followerProfileId: string;
 };
@@ -185,19 +184,8 @@ export async function createE2EProfile(options: CreateE2EProfileOptions = {}) {
     .then(firstOrThrow);
 }
 
-export async function createE2EFollow(options: CreateE2EFollowOptions) {
-  const createdAt = toInstant(options.createdAt);
-
-  return await db
-    .insert(ProfileFollows)
-    .values({
-      followeeProfileId: options.followeeProfileId,
-      followerProfileId: options.followerProfileId,
-      ...(createdAt ? { createdAt } : {}),
-    })
-    .returning()
-    .then(firstOrThrow);
-}
+export const createE2EFollow = (options: CreateE2EFollowOptions) =>
+  followProfile(options).then(({ profileFollow }) => profileFollow);
 
 export async function createE2EPost(options: CreateE2EPostOptions) {
   const bodyText = (options.body ?? '').trim();
