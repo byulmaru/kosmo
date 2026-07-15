@@ -33,10 +33,6 @@ export const decodeGlobalId = (globalId: string) => {
 
   const value = Buffer.from(globalId, 'base64url');
 
-  if (value.length <= 16) {
-    throw invalidGlobalId();
-  }
-
   return {
     id: bufferToUuid(value.subarray(0, 16)),
     typename: value.subarray(16).toString('utf8'),

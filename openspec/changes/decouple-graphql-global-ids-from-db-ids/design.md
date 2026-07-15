@@ -35,7 +35,7 @@ DB ID 생성기도 같은 discriminator를 UUID v8의 implementation-defined 영
 
 ### Recommended Approach
 
-Pothos Relay plugin의 `encodeGlobalID`/`decodeGlobalID` hook에 strict unpadded base64url codec을 등록하고 `globalIdMap`을 제거한다. codec은 고정 폭인 DB UUID raw 16바이트를 앞에 두고 GraphQL typename ASCII bytes를 뒤에 이어 붙여 구분자나 길이 field 없이 framing한다. padding, raw UUID, 이전 textual payload와 non-canonical 입력을 거부한다. `createObjectRef`는 GraphQL type name과 loader만 받고 loadable Node ref를 만들며, Node field의 underlying ID resolver는 계속 DB UUID를 반환한다. Pothos가 `node`/`nodes` 입력에서 decode된 typename별 loader를 batch 호출하게 한다.
+Pothos Relay plugin의 `encodeGlobalID`/`decodeGlobalID` hook에 strict unpadded base64url codec을 등록하고 `globalIdMap`을 제거한다. codec은 고정 폭인 DB UUID raw 16바이트를 앞에 두고 GraphQL typename ASCII bytes를 뒤에 이어 붙여 구분자나 길이 field 없이 framing한다. padding, raw UUID와 이전 textual payload를 거부한다. `createObjectRef`는 GraphQL type name과 loader만 받고 loadable Node ref를 만들며, Node field의 underlying ID resolver는 계속 DB UUID를 반환한다. Pothos가 `node`/`nodes` 입력에서 decode된 typename별 loader를 batch 호출하게 한다.
 
 Node ID를 받는 mutation input은 일반 `ID`와 `z.uuid()` 조합 대신 Pothos `globalID({ for: ConcreteNodeRef })`를 사용한다. resolver는 decode된 `{ typename, id }` 중 `id`만 core service나 Drizzle query에 전달한다. 이 방식은 malformed ID와 raw UUID를 공통 decoder에서 거부하고 허용된 concrete type도 input 경계에서 제한한다.
 
