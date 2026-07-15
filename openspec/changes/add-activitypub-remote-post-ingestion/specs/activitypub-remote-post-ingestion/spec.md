@@ -9,6 +9,7 @@
 - **WHEN** Fedify listener가 verified typed `Create`를 handler에 전달한다
 - **THEN** 시스템은 handler 진입 시 `receivedAt`을 한 번 캡처한다
 - **AND** `Create.id`가 있으면 Fedify global idempotency가 personal/shared inbox 간 조기 중복 제거에 사용할 수 있다
+- **AND** 이 경우 같은 activity ID의 후속 delivery는 object URI와 무관하게 handler 전에 제거될 수 있다
 - **AND** 시스템은 activity ID를 materialization input이나 PostgreSQL domain row로 저장하지 않는다
 
 #### Scenario: Process a Create without an activity ID
@@ -78,7 +79,7 @@
 - **WHEN** Note `content` 또는 `summary`가 `LanguageString`이다
 - **THEN** Fedify adapter는 `.toString()`으로 문자열 값만 전달한다
 - **AND** locale 또는 Fedify vocabulary type을 core projection에 전달하지 않는다
-- **AND** content, media type, summary와 published를 검증 가능한 primitive input으로 전달한다
+- **AND** content, media type과 summary를 검증 가능한 primitive input으로 전달한다
 
 #### Scenario: Accept a canonical projection result
 

@@ -55,7 +55,7 @@ Fedify Note의 HTML/plain content와 summary를 안전한 primitive 경계에서
 - HTML/plain/absent/malformed/unsupported MIME, LanguageString, safe link와 Content Warning fixture를 검증한다.
 - 모든 성공 결과가 PROD-341 validator를 통과하고 구현 PR에 공유 OpenSpec diff가 없는지 확인한다.
 
-- [ ] 3.1 primitive adapter가 content/mediaType/summary/published를 locale 없이 projection input으로 만든다.
+- [ ] 3.1 primitive adapter가 content/mediaType/summary를 locale 없이 projection input으로 만든다.
 - [ ] 3.2 HTML/plain parser가 visible content와 safe link를 보존하고 unsafe subtree/scheme/attribute를 제거한다.
 - [ ] 3.3 projection 결과를 PROD-341 validator/canonicalizer에 전달하고 remote 전용 document 규칙을 만들지 않는다.
 - [ ] 3.4 absent/attachment-only content와 safety fixture 및 target package check를 통과시킨다.
@@ -64,14 +64,14 @@ Fedify Note의 HTML/plain content와 summary를 안전한 primitive 경계에서
 
 **Deliverable**
 
-actor-scoped/shared Fedify listener가 지원 delivery의 object identity, content primitive와 `receivedAt`만 후속 materialization에 전달한다.
+actor-scoped/shared Fedify listener가 지원 delivery의 object identity, content primitive, published와 `receivedAt`만 후속 materialization에 전달한다.
 
 **Guardrails**
 
 - stored ACTIVE/UNRESPONSIVE ActivityPub actor만 허용하고 unknown actor/mention network/write를 수행하지 않는다.
 - public marker가 있는 top-level Note만 허용한다.
 - PROD-241의 activity-neutral inbox route를 재사용하고 `activitypub-actor-discovery`를 수정하지 않는다.
-- Fedify activity ID는 early idempotency 외에 전달·저장하지 않으며 missing activity ID만으로 delivery를 거부하지 않는다.
+- Fedify activity ID는 early idempotency 외에 전달·저장하지 않으며 missing activity ID만으로 delivery를 거부하지 않는다. global idempotency를 사용하면 같은 activity ID의 후속 delivery는 object URI와 무관하게 handler 전에 제거될 수 있다.
 - custom ActivityPub fetch/parser와 `trust`를 사용하지 않는다.
 
 **Verification**
@@ -79,9 +79,9 @@ actor-scoped/shared Fedify listener가 지원 delivery의 object identity, conte
 - validation unit test와 실제 personal/shared inbox route test로 zero-side-effect rejection과 object URI input을 검증한다.
 - activity ID가 있는/없는 delivery, UNRESPONSIVE 복구와 concurrent SUSPENDED 전환을 검증한다.
 
-- [ ] 4.1 listener에 typed `Create` handler를 연결하고 optional Fedify global idempotency와 한 번 캡처한 `receivedAt`을 적용한다.
+- [ ] 4.1 listener에 typed `Create` handler를 연결하고 optional Fedify global idempotency의 activity ID prefilter 경계와 한 번 캡처한 `receivedAt`을 적용한다.
 - [ ] 4.2 actor/object URI cardinality와 stored actor/Profile/Instance eligibility를 hydration 전에 검증한다.
-- [ ] 4.3 Fedify documentLoader로 Note를 hydrate하고 ID, attribution, top-level 조건과 cross-origin safety를 검증한다.
+- [ ] 4.3 Fedify documentLoader로 Note를 hydrate하고 ID, attribution, top-level 조건, published primitive와 cross-origin safety를 검증한다.
 - [ ] 4.4 PUBLIC/UNLISTED addressing만 projection하고 unsupported/ambiguous audience를 side effect 없이 skip한다.
 - [ ] 4.5 success input에 activity ID가 없고 missing activity ID도 object URI 기반으로 처리되는 route test를 통과시킨다.
 
@@ -151,5 +151,5 @@ actor-scoped/shared Fedify listener가 지원 delivery의 object identity, conte
 - [ ] 7.1 PROD-341/255/259/260/262/261 PR 병합과 scoped validation 증거를 확인한다.
 - [ ] 7.2 personal/shared concurrent delivery가 같은 object URI에서 Post side effect를 한 번만 commit하는지 검증한다.
 - [ ] 7.3 PROD-341 canonical document/Content Warning과 initial timestamp가 existing GraphQL schema로 조회되는지 smoke 검증한다.
-- [ ] 7.4 canonical data-model/Post specs와 delta를 동기화하고 receipt/duplicate-update 계약이 남지 않았는지 확인한다.
+- [ ] 7.4 canonical activitypub-remote-post-ingestion/data-model specs와 delta를 동기화하고 기존 Post 계약에 diff가 없으며 receipt/duplicate-update 계약이 남지 않았는지 확인한다.
 - [ ] 7.5 proposal 전체 scope 완료 후 change를 archive하고 archive 후 strict validation을 통과시킨다.

@@ -46,10 +46,10 @@ Fedify inbox listener
   -> actor/object cardinality와 known actor 확인
   -> Fedify documentLoader로 Note hydration
   -> attribution/top-level/public addressing 검증
-  -> receivedAt과 remote primitive content 전달
-  -> PROD-259 projection
+  -> receivedAt, published와 remote primitive content 추출
+  -> remote primitive content를 PROD-259 projection
   -> PROD-341 canonical validator
-  -> PROD-261 PostgreSQL transaction
+  -> identity/visibility/timestamps + canonical document를 PROD-261 transaction
        Post
        first PostContent/currentContent
        unique object mapping
@@ -60,7 +60,7 @@ Fedify inbox listener
 #### Inbox adapter와 validation
 
 - actor-scoped/shared listener는 같은 `Create` handler를 사용한다.
-- `withIdempotency("global")`은 activity ID가 있을 때의 조기 중복 제거로만 둔다. application은 activity ID를 materialization input이나 DB row로 만들지 않는다.
+- `withIdempotency("global")`은 activity ID가 있을 때의 조기 중복 제거로만 둔다. 같은 activity ID의 후속 delivery는 object URI와 무관하게 handler 전에 제거될 수 있으며, application은 handler에 도달한 delivery의 activity ID를 materialization input이나 DB row로 만들지 않는다.
 - handler는 진입 시 `receivedAt`을 한 번 캡처한다.
 - Note hydration 전에 저장된 `ActivityPubActor + Profile + Instance`를 조회하고 unknown/inactive/non-ActivityPub/SUSPENDED는 network/profile write 없이 종료한다.
 - object는 `Create.getObject({ documentLoader })`와 Fedify cross-origin 기본값을 사용한다.
@@ -68,7 +68,8 @@ Fedify inbox listener
 
 #### Content projection handoff
 
-- Fedify adapter는 remote vocabulary 값을 primitive content/mediaType/summary/published로 바꿔 PROD-259에 전달한다.
+- Fedify adapter는 remote vocabulary의 content/mediaType/summary만 primitive로 바꿔 PROD-259에 전달한다.
+- published는 PROD-260 materialization input에서 PROD-261 timestamp 정책으로 직접 전달한다.
 - PROD-259는 remote HTML/plain 입력 처리만 소유한다.
 - 저장 가능한 document의 node schema, canonicalization, equality와 renderer는 PROD-341의 canonical capability를 그대로 사용한다.
 - remote-post change는 PROD-341 V1 node 목록이나 revision equality를 복제하지 않는다.
@@ -114,7 +115,7 @@ Fedify inbox listener
 ## Risks / Trade-offs
 
 - **동시 duplicate Create**: object URI unique constraint와 loser transaction rollback으로 Post를 하나만 남긴다.
-- **같은 activity ID가 다른 object를 가리킴**: activity ID는 domain identity가 아니므로 각 verified Note object URI를 독립적으로 처리한다.
+- **같은 activity ID가 다른 object를 가리킴**: Fedify global idempotency가 후속 delivery를 handler 전에 제거할 수 있다. 이 change는 handler에 도달한 delivery에서만 Note object URI를 durable identity로 판정한다.
 - **duplicate Create에 변경된 content가 포함됨**: first-write-wins로 무시하고 명시적인 `Update(Note)` 지원 전에는 remote 수정 동기화를 제공하지 않는다.
 - **unknown actor delivery 유실**: profile materialization을 명시적 선행 조건으로 두어 inbox abuse surface와 숨은 network/write를 줄인다.
 - **기존 resolver 결함**: PROD-262가 결함을 발견하면 implementation scope를 다시 열고 test-only 이슈에서 조용히 수정하지 않는다.
