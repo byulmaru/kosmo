@@ -127,11 +127,11 @@
 - **AND** established 관계가 없고 local profile follow policy가 `OPEN`이면 remote profile을 follower, local profile을 followee로 하는 established `ProfileFollow` 관계를 생성한다
 - **AND** established 관계가 없고 local profile follow policy가 `OPEN`이면 같은 pair의 pending `ProfileFollowRequest`를 같은 transaction 안에서 삭제한다
 - **AND** established 관계가 없고 local profile follow policy가 `APPROVAL_REQUIRED`이면 remote profile을 follower, local profile을 followee로 하는 `ProfileFollowRequest`를 생성하거나 기존 request를 유지한다
-- **AND** `APPROVAL_REQUIRED` request 생성은 local/remote 공통 pending-only request boundary를 사용하며 ActivityPub handler는 검증된 actor pair와 inbound correlation metadata를 전달한다
+- **AND** `APPROVAL_REQUIRED` remote request 생성은 ActivityPub handler가 검증한 actor pair와 inbound correlation metadata를 사용하고 pending-only 저장 계약을 지킨다
 - **AND** 기존 `ProfileFollowRequest`를 유지하는 duplicate Follow에서는 저장된 inbound Follow response metadata를 갱신하지 않는다
 - **AND** 기존 `ProfileFollowRequest`를 유지하는 duplicate Follow에서도 Undo freshness guard에 사용할 inbound follow generation timestamp를 현재 저장된 timestamp보다 최신인 검증된 Follow activity timestamp로 갱신할 수 있다
 - **AND** 이번 capability는 established 관계가 없는 `APPROVAL_REQUIRED` inbound Follow에 대한 Accept 또는 Reject를 자동 발송하지 않는다
-- **AND** pending remote follow request의 승인·거절 transition과 사용자 흐름은 PROD-272의 pending-only request 계약을 따르고, 그 결과 ActivityPub delivery는 follow protocol port로 위임한다
+- **AND** pending remote follow request의 조회·승인·거절·취소 transition과 사용자 흐름은 PROD-272의 pending-only request 계약을 따르고, 그 결과 ActivityPub delivery는 follow protocol port로 위임한다
 
 #### Scenario: Receive remote Undo Follow
 

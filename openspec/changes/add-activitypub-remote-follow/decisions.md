@@ -17,12 +17,22 @@
 ### Pending-only request lifecycle은 PROD-272가 소유한다
 
 - Decision Date: 2026-07-15
-- Status: Accepted
+- Status: Superseded
 - Context / Problem: PROD-243과 PROD-272가 remote request 생성 책임을 중복 기술했다.
 - Decision Outcome: PROD-272가 local/remote 공통 request 생성·조회·승인·거절·취소 domain lifecycle을 소유하고, PROD-243은 ActivityPub 검증과 correlation metadata 전달만 소유한다.
 - Alternatives Considered: PROD-243이 remote request service를 별도로 구현, request 전체를 PROD-243에 흡수.
 - Consequences: PROD-243은 PROD-272 boundary가 main에 병합될 때까지 blocked이며 request row에 terminal 상태를 저장하지 않는다.
 - Confirmation / Follow-up: PROD-272와 PROD-243 통합 테스트에서 같은 pending-only invariant를 검증한다.
+
+### Remote request 생성은 PROD-243이 소유하고 PROD-272와 병렬 구현한다
+
+- Decision Date: 2026-07-15
+- Status: Accepted
+- Context / Problem: `profile_follow_request`의 pending-only row와 actor pair uniqueness가 이미 고정되어 있어 PROD-243이 PROD-272의 service 구현을 기다려야 할 데이터 계약 의존성이 없으며, Linear에서도 blocker 관계와 선행 문구를 제거했다.
+- Decision Outcome: PROD-243은 ActivityPub 검증 뒤 remote pending request 생성과 inbound correlation/generation을 소유한다. PROD-272는 local request 생성과 local/remote 공통 조회·승인·거절·취소 lifecycle을 소유하며 두 이슈는 병렬 구현한다. 이 결정은 같은 날짜의 이전 "Pending-only request lifecycle은 PROD-272가 소유한다" 결정을 대체한다.
+- Alternatives Considered: PROD-272가 remote request 생성 service까지 먼저 제공, PROD-243이 전체 request lifecycle을 흡수.
+- Consequences: PROD-243은 PROD-272를 기다리지 않고 구현할 수 있지만, 두 구현은 동일한 pending-only invariant를 지켜야 하며 최종 통합은 PROD-361이 검증한다.
+- Confirmation / Follow-up: PROD-243은 remote request 생성·duplicate·Undo를, PROD-272는 local 생성과 local/remote 공통 처리 transition을 각자 검증한다.
 
 ### Inbound correlation과 조건부 삭제는 PROD-243이 소유한다
 

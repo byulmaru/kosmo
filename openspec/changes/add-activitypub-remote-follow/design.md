@@ -33,9 +33,9 @@ PROD-235와 구현 자식이 이 change의 source of truth다. PROD-323이 Follo
 
 ### Recommended Approach
 
-#### PROD-272 pending-only boundary
+#### PROD-243/272 pending-only boundary
 
-Local/remote 공통 request create/read/approve/reject/cancel service가 pending-only invariant를 소유한다. PROD-243은 recipient·actor·object 검증과 inbound correlation을 완료한 입력만 전달한다. 승인·거절 ActivityPub delivery는 request transition 이후 follow protocol port로 위임한다.
+PROD-243은 ActivityPub recipient·actor·object 검증 뒤 remote pending request 생성과 inbound correlation을 소유한다. PROD-272는 local request 생성과 local/remote 공통 read/approve/reject/cancel lifecycle을 소유한다. 두 구현은 기존 pending-only row와 actor pair uniqueness를 공유하지만 서로의 구현 또는 병합을 기다리지 않는다. 승인·거절 ActivityPub delivery는 request transition 이후 follow protocol port로 위임한다.
 
 #### PROD-243 inbound Follow/Undo
 
@@ -73,13 +73,13 @@ PROD-241이 설정한 actor-scoped/shared inbox listener에 실제 activity type
 
 - remote Follow에 `published`가 없으면 수신 시각 fallback으로 네트워크 순서를 완전히 복원할 수 없다. → actor/object/recipient와 monotonic generation으로 확인 가능한 stale activity만 차단한다.
 - local projection commit과 outbound delivery는 원자적이지 않다. → projection을 rollback하지 않고 queue/retry는 별도 capability로 남긴다.
-- spec-only gate가 남은 구현 착수를 늦춘다. → shared 계약이 구현보다 먼저 병합되어야 한다는 Issue → OpenSpec gate를 유지한다.
+- 구현 중 shared 계약을 정정하면 구현과 계약 diff가 섞인다. → PROD-243 PR의 첫 커밋에서 Linear와 OpenSpec을 먼저 정렬하고 strict validation을 통과한 뒤 runtime 구현을 시작한다.
 
 ## Migration Plan
 
 1. PROD-357 spec-only PR을 main에 병합한다.
-2. PROD-272가 공통 pending-only request boundary를 제공한다.
-3. PROD-242와 PROD-243을 독립적으로 구현한다.
+2. PROD-242, PROD-243과 PROD-272를 서로의 병합을 기다리지 않고 독립적으로 구현한다.
+3. PROD-243은 remote request 생성과 correlation을, PROD-272는 local request 생성과 공통 처리 lifecycle을 각자 검증한다.
 4. PROD-244가 두 구현과 PROD-243 primitive를 조합한다.
 5. PROD-245, PROD-263과 PROD-282를 각 이슈의 독립 범위로 완료한다.
 6. PROD-361이 모든 구현 결과를 통합 검증하고 delta spec 동기화와 change archive PR을 소유한다.

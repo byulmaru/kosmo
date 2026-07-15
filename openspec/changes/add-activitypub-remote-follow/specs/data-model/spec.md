@@ -69,7 +69,7 @@
 - **AND** outbound Follow activity identity는 kosmo가 발송하는 Follow/Undo transport identity로 안정적이어야 하지만, remote server가 후속 Accept/Reject object에서 이 identity를 보존한다는 것을 필수 전제로 삼지 않는다
 - **AND** Fedify `orderingKey`는 follower actor URI와 followee actor URI pair에서 안정적으로 파생되어 같은 pair의 모든 outbound Follow와 Undo(Follow)에 재사용되어야 한다
 - **AND** 후속 Fedify transport retry는 같은 `ProfileFollow` row에서 같은 Follow activity identity를 다시 파생할 수 있어야 한다
-- **AND** PROD-242 outbound mutation은 `ProfileFollowRequest`를 만들지 않으며, approval-required request lifecycle과 correlation은 PROD-272가 별도 경계에서 다룬다
+- **AND** PROD-242 outbound mutation은 `ProfileFollowRequest`를 만들지 않으며, inbound remote request 생성과 correlation은 PROD-243이, local request 생성과 local/remote 공통 처리 lifecycle은 PROD-272가 별도 경계에서 다룬다
 - **AND** Fedify delivery queue/retry 설정과 운영 검증은 후속 capability 범위이며, transport delivery retry와 queue 상태는 도메인 테이블에 중복 저장하지 않는다
 
 #### Scenario: Store inbound remote Follow correlation
