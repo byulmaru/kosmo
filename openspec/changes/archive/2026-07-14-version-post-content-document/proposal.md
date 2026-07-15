@@ -4,11 +4,12 @@
 
 ## What Changes
 
-- **BREAKING** `post_content.body_text`를 schema version과 canonical document JSON으로 교체한다. 현재 프로덕션 DB 자체가 존재하지 않으므로 기존 비프로덕션 `Post`/`PostContent` 데이터는 migration에서 모두 삭제한다.
+- **BREAKING** `post_content.body_text`와 별도 Content Warning을 `{ version, summary, body }` canonical PostContent document JSON 하나로 교체한다. 현재 프로덕션 DB 자체가 존재하지 않으므로 기존 비프로덕션 `Post`/`PostContent` 데이터는 migration에서 모두 삭제한다.
 - V1을 `doc`, `paragraph`, `text`, `hard_break` node와 안전한 absolute HTTP(S) `link` mark로 제한한다. `pre`와 그 밖의 rich-text node/mark는 지원하지 않는다.
 - 서버 전용 `prosemirror-model` `Schema`, `nodeFromJSON()`, `check()`, `toJSON()` 경계로 입력을 검증하고 결정적으로 canonicalize한다.
-- 로컬 `bodyText` 입력을 V1 document로 변환하고, 읽기·검색·접근성·500자 검증용 Plain Text를 document에서 결정적으로 파생한다.
-- GraphQL `PostContent`가 schema version과 document JSON을 노출하고, `bodyText`는 저장값이 아닌 호환용 파생 필드로 유지한다. 로컬 composer의 `CreatePostInput.bodyText`는 유지한다.
+- V1 `summary`는 nullable Plain Text Content Warning이고 `body`는 ProseMirror document다. 둘은 같은 revision의 authored content이지만 summary를 ProseMirror attr나 body node로 섞지 않는다.
+- 로컬 `bodyText` 입력을 V1 document로 변환하고, 읽기·검색·접근성·500자 검증용 Plain Text를 summary와 body에서 결정적으로 파생한다.
+- GraphQL `PostContent`가 canonical document JSON을 노출하고, `bodyText`와 `contentWarning`은 저장값이 아닌 호환용 파생 필드로 유지한다. 로컬 composer의 `CreatePostInput.bodyText`는 유지한다.
 - React Native/Web 앱은 ProseMirror runtime 없이 JSON 타입과 제한된 paragraph/text/hard-break/link renderer를 사용한다.
 - 활성 remote-post OpenSpec의 stale TipTap/Plain Text storage 전제를 이 공통 document 계약과 동기화하되 remote Note projection과 materialization 구현은 PROD-259/PROD-261에 남긴다.
 
@@ -25,7 +26,7 @@
 
 ## Impact
 
-- `packages/core`: native-safe document JSON 타입과 server-only ProseMirror schema/canonicalizer/Plain Text projection을 추가하고 `prosemirror-model`을 서버 전용 dependency로 사용한다.
+- `packages/core`: native-safe versioned envelope/body JSON 타입과 server-only ProseMirror body schema/canonicalizer/Plain Text projection을 추가하고 `prosemirror-model`을 서버 전용 dependency로 사용한다.
 - `packages/core/db`, `drizzle`: `post_content` 본문 컬럼과 destructive non-production migration을 변경한다.
 - `apps/api`: GraphQL document scalar/object, 파생 `bodyText`, 로컬 Plain Text 입력 변환과 revision output을 추가한다.
 - `apps/app`: Relay scalar mapping과 제한된 native/web renderer를 추가하되 editor/view runtime은 포함하지 않는다.

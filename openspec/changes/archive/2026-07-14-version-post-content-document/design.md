@@ -1,6 +1,6 @@
 ## Context
 
-현재 `post_content`는 non-null `body_text`와 nullable `content_warning`만 저장하고 GraphQL과 앱도 `bodyText`를 직접 읽는다. PROD-267은 TipTap runtime과 JSON/HTML 저장을 제거했지만, remote Note와 후속 Mention/Custom Emoji가 요구하는 구조적 의미를 Plain Text 하나로는 보존할 수 없다. PROD-341은 editor 기능을 다시 도입하지 않고 제한된 versioned document를 공통 canonical body로 만든다.
+현재 `post_content`는 non-null `body_text`와 nullable `content_warning`을 별도 canonical 값으로 저장하고 GraphQL과 앱도 `bodyText`를 직접 읽는다. PROD-267은 TipTap runtime과 JSON/HTML 저장을 제거했지만, remote Note와 후속 Mention/Custom Emoji가 요구하는 구조적 의미를 Plain Text 하나로는 보존할 수 없다. PROD-341은 editor 기능을 다시 도입하지 않고 `{ version, summary, body }` 형태의 제한된 versioned document를 공통 canonical revision snapshot으로 만든다.
 
 현재 프로덕션 DB 자체가 존재하지 않으며 사용자는 비프로덕션의 기존 Post 데이터를 보존하지 않아도 된다고 확정했다. 따라서 운영 중 구버전 workload와 rollback window를 위한 expand/transition/contract migration 대신 기존 Post/PostContent를 삭제하는 단일 breaking migration을 허용한다. remote Note projection과 materialization은 각각 PROD-259/PROD-261이 소유하며 이 변경은 그 입력·저장 계약만 제공한다.
 
@@ -9,7 +9,7 @@
 **Goals:**
 
 - V1 JSON 타입과 server-only `prosemirror-model` schema/canonicalizer를 분리한다.
-- 모든 저장 경계가 version과 canonical document를 함께 사용하고 Plain Text는 필요할 때 파생한다.
+- 모든 저장 경계가 version, nullable Plain Text summary와 canonical ProseMirror body를 하나의 document로 사용하고 호환 Plain Text는 필요할 때 파생한다.
 - 기존 local Plain Text composer를 공통 변환 경계에 연결한다.
 - GraphQL과 React Native/Web가 versioned document를 주고받고 제한된 renderer로 동일한 의미를 표시한다.
 - remote-post OpenSpec의 stale TipTap storage 전제를 공통 document 계약으로 바꾼다.
@@ -27,11 +27,11 @@
 
 V1 schema는 `doc: paragraph+`, `paragraph: inline*`, `text`, mark를 허용하지 않는 `hard_break`, `href` attr만 가진 `link` mark로 구성한다. 서버는 JSON을 `nodeFromJSON()`과 `check()`로 검증한 뒤 허용 attr를 다시 확인하고, tree를 재구성하면서 빈 paragraph, 인접 text, link mark와 URL을 정규화한 다음 다시 `nodeFromJSON()`/`check()`/`toJSON()`을 통과시킨다. Plain Text 입력은 기존 trim/500자 validation 후 line ending을 LF로 통일하고 하나의 paragraph 안의 LF를 hard break로 바꾼다.
 
-DB는 `post_content.body_schema_version integer not null`과 `body_document jsonb not null`을 저장하고 `body_text`를 제거한다. Drizzle row의 document는 native-safe JSON type으로 선언한다. Content Warning, revision ID, parent Post 소유 관계와 visibility access boundary는 유지한다.
+DB는 `post_content.document jsonb not null` 하나를 저장하고 `body_text`와 `content_warning`을 제거한다. V1 document는 exact `{ version: 1, summary: string | null, body: ProseMirrorDoc }` shape이며 Drizzle row는 native-safe JSON type으로 선언한다. summary와 body는 같은 revision에서 원자적으로 저장되고 revision ID, parent Post 소유 관계와 visibility access boundary는 유지한다. V1 summary는 Plain Text로 검증하며 실제 rich Content Warning 요구가 생기면 새 PostContent document version에서 별도 구조화 document로 승격한다.
 
-GraphQL은 output-only `PostContentDocument` scalar를 추가하고 Relay에는 `@kosmo/core/post-content`의 `PostContentDocumentV1` custom type import를 설정한다. `PostContent.body`는 `schemaVersion`과 `document`를 묶은 object이며, 기존 `bodyText`는 DB field expose가 아니라 server projection resolver다. `CreatePostInput.bodyText`는 변경하지 않고 mutation이 server converter 결과를 저장한다.
+GraphQL은 output-only `PostContentDocument` scalar를 추가하고 Relay에는 `@kosmo/core/post-content`의 `PostContentDocumentV1` custom type import를 설정한다. `PostContent.document`는 versioned envelope를 그대로 제공하며, 기존 `bodyText`와 `contentWarning`은 DB field expose가 아니라 각각 `document.body`와 `document.summary` projection resolver다. `CreatePostInput.bodyText`는 변경하지 않고 mutation이 summary `null`인 V1 document를 저장한다.
 
-앱 `PostBody`는 V1 document type guard를 통과한 document만 paragraph별 React Native `Text` tree로 렌더링한다. hard break는 LF로, link-marked text는 nested `Text`의 link action과 접근성 metadata로 표현한다. schema version이나 shape가 지원되지 않거나 link가 안전하지 않으면 GraphQL `bodyText`를 표시한다.
+앱 `PostBody`는 V1 envelope type guard를 통과한 `document.body`만 paragraph별 React Native `Text` tree로 렌더링한다. hard break는 LF로, link-marked text는 nested `Text`의 link action과 접근성 metadata로 표현한다. document version이나 shape가 지원되지 않거나 link가 안전하지 않으면 GraphQL `bodyText`를 표시한다.
 
 ## Risks / Trade-offs
 
@@ -45,7 +45,7 @@ GraphQL은 output-only `PostContentDocument` scalar를 추가하고 Relay에는 
 ## Migration Plan
 
 1. migration에서 `post.current_content_id`를 null로 만들고 `post_content`, `post` 순서로 기존 행을 삭제한다.
-2. `body_text`를 제거하고 non-null `body_schema_version`, `body_document`를 추가한다. 기존 행이 없으므로 default나 backfill 값을 두지 않는다.
+2. `body_text`와 `content_warning`을 제거하고 non-null `document` JSONB를 추가한다. 기존 행이 없으므로 default나 backfill 값을 두지 않는다.
 3. 같은 release에서 core server boundary, API write/read와 앱 renderer를 배포한다.
 4. migration test는 이전 schema에 여러 revision과 Content Warning을 넣은 뒤 migration 후 Post/PostContent가 비었고 새 필수 컬럼만 존재하는지 검증한다.
 

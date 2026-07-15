@@ -1,11 +1,12 @@
 import { isDeepStrictEqual } from 'node:util';
 import { Schema } from 'prosemirror-model';
+import { postBodyMaxLength } from '../validation/post-policy';
 import { normalizePostContentPlainText, postContentSchemaVersion } from './index';
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import type {
+  PostContentBodyDocumentV1,
   PostContentDocumentV1,
   PostContentSchemaVersion,
-  VersionedPostContentDocument,
 } from './index';
 
 export const postContentSchemaV1 = new Schema({
@@ -24,12 +25,36 @@ export const postContentSchemaV1 = new Schema({
   },
 });
 
-export function canonicalizePostContentDocument(
-  schemaVersion: number,
-  document: unknown,
-): PostContentDocumentV1 {
-  assertSupportedVersion(schemaVersion);
-  const normalizedInput = normalizeAllowedJson(document);
+export function canonicalizePostContentDocument(document: unknown): PostContentDocumentV1 {
+  if (!isRecordWithExactKeys(document, ['version', 'summary', 'body'])) {
+    throw new TypeError('PostContent document must contain only version, summary, and body');
+  }
+  assertSupportedVersion(document.version);
+
+  let summary: string | null;
+  if (document.summary === null) {
+    summary = null;
+  } else if (typeof document.summary === 'string') {
+    summary = normalizePostContentPlainText(document.summary);
+    if (summary.length === 0) {
+      throw new TypeError('PostContent summary must not be empty');
+    }
+  } else {
+    throw new TypeError('PostContent summary must be a string or null');
+  }
+
+  return {
+    version: document.version,
+    summary,
+    body: canonicalizePostContentBody(document.version, document.body),
+  };
+}
+
+function canonicalizePostContentBody(
+  schemaVersion: PostContentSchemaVersion,
+  body: unknown,
+): PostContentBodyDocumentV1 {
+  const normalizedInput = normalizeAllowedJson(body);
 
   const parsed = postContentSchemaV1.nodeFromJSON(normalizedInput);
   parsed.check();
@@ -58,13 +83,13 @@ export function canonicalizePostContentDocument(
 
   const canonical = postContentSchemaV1.nodes.doc.create(null, paragraphs);
   canonical.check();
-  const json = JSON.parse(JSON.stringify(canonical.toJSON())) as PostContentDocumentV1;
-  postContentSchemaV1.nodeFromJSON(json).check();
-
-  return json;
+  return JSON.parse(JSON.stringify(canonical.toJSON())) as PostContentBodyDocumentV1;
 }
 
-export function postContentDocumentFromText(bodyText: string): VersionedPostContentDocument {
+export function postContentDocumentFromText(
+  bodyText: string,
+  summary: string | null = null,
+): PostContentDocumentV1 {
   const normalized = normalizePostContentPlainText(bodyText);
   const content: unknown[] = [];
 
@@ -77,21 +102,33 @@ export function postContentDocumentFromText(bodyText: string): VersionedPostCont
     }
   }
 
-  return {
-    schemaVersion: postContentSchemaVersion,
-    document: canonicalizePostContentDocument(postContentSchemaVersion, {
+  return canonicalizePostContentDocument({
+    version: postContentSchemaVersion,
+    summary,
+    body: {
       type: 'doc',
       content: [{ type: 'paragraph', ...(content.length > 0 ? { content } : {}) }],
-    }),
-  };
+    },
+  });
 }
 
-export function postContentDocumentToText(body: {
-  readonly schemaVersion: number;
-  readonly document: unknown;
-}): string {
-  const document = canonicalizePostContentDocument(body.schemaVersion, body.document);
+export function postContentDocumentToText(value: unknown): string {
+  return postContentBodyToText(canonicalizePostContentDocument(value).body);
+}
 
+export function validateLocalPostContentDocument(value: unknown): PostContentDocumentV1 {
+  const document = canonicalizePostContentDocument(value);
+  const authoredTextLength =
+    (document.summary?.length ?? 0) + postContentBodyToText(document.body).length;
+
+  if (authoredTextLength > postBodyMaxLength) {
+    throw new RangeError(`PostContent authored text exceeds ${postBodyMaxLength} characters`);
+  }
+
+  return document;
+}
+
+function postContentBodyToText(document: PostContentBodyDocumentV1): string {
   return document.content
     .map((paragraph) =>
       (paragraph.content ?? []).map((node) => (node.type === 'text' ? node.text : '\n')).join(''),
@@ -99,27 +136,22 @@ export function postContentDocumentToText(body: {
     .join('\n\n');
 }
 
-export function arePostContentRevisionsEqual(
-  left: VersionedPostContentDocument & { readonly contentWarning: string | null },
-  right: VersionedPostContentDocument & { readonly contentWarning: string | null },
-): boolean {
-  const leftDocument = canonicalizePostContentDocument(left.schemaVersion, left.document);
-  const rightDocument = canonicalizePostContentDocument(right.schemaVersion, right.document);
+export function arePostContentRevisionsEqual(left: unknown, right: unknown): boolean {
+  const leftDocument = canonicalizePostContentDocument(left);
+  const rightDocument = canonicalizePostContentDocument(right);
 
-  return (
-    left.contentWarning === right.contentWarning && isDeepStrictEqual(leftDocument, rightDocument)
-  );
+  return isDeepStrictEqual(leftDocument, rightDocument);
 }
 
 function assertSupportedVersion(
-  schemaVersion: number,
+  schemaVersion: unknown,
 ): asserts schemaVersion is PostContentSchemaVersion {
   if (schemaVersion !== postContentSchemaVersion) {
     throw new RangeError(`Unsupported PostContent schema version: ${schemaVersion}`);
   }
 }
 
-function normalizeAllowedJson(value: unknown): PostContentDocumentV1 {
+function normalizeAllowedJson(value: unknown): PostContentBodyDocumentV1 {
   if (!isRecordWithExactKeys(value, ['type', 'content']) || value.type !== 'doc') {
     throw new TypeError('PostContent document must be a doc with content');
   }
@@ -127,7 +159,7 @@ function normalizeAllowedJson(value: unknown): PostContentDocumentV1 {
     throw new TypeError('PostContent doc must contain at least one paragraph');
   }
 
-  const paragraphs: PostContentDocumentV1['content'][number][] = [];
+  const paragraphs: PostContentBodyDocumentV1['content'][number][] = [];
   for (const paragraph of value.content) {
     if (!isRecord(paragraph) || paragraph.type !== 'paragraph') {
       throw new TypeError('PostContent doc only accepts paragraph blocks');
@@ -141,7 +173,8 @@ function normalizeAllowedJson(value: unknown): PostContentDocumentV1 {
       throw new TypeError('Paragraph content must be an array');
     }
 
-    const inline: NonNullable<PostContentDocumentV1['content'][number]['content']>[number][] = [];
+    const inline: NonNullable<PostContentBodyDocumentV1['content'][number]['content']>[number][] =
+      [];
     for (const node of paragraph.content) {
       if (!isRecord(node)) {
         throw new TypeError('Inline node must be an object');

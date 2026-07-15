@@ -398,8 +398,7 @@ describe('GraphQL remote profile boundary', () => {
     const suspendedContent = await db
       .insert(PostContents)
       .values({
-        bodySchemaVersion: 1,
-        bodyDocument: postContentDocumentFromText('suspended content').document,
+        document: postContentDocumentFromText('suspended content'),
         postId: suspendedPost.id,
       })
       .returning()
@@ -470,7 +469,7 @@ describe('GraphQL remote profile boundary', () => {
       createPost: {
         post: {
           content: {
-            body: { document: unknown; schemaVersion: number };
+            document: unknown;
             bodyText: string;
           } | null;
         };
@@ -479,7 +478,7 @@ describe('GraphQL remote profile boundary', () => {
       `mutation CreatePostWithOtherLocalSession($bodyText: String!) {
         createPost(input: { bodyText: $bodyText, visibility: UNLISTED }) {
           post {
-            content { body { schemaVersion document } bodyText }
+            content { document bodyText }
           }
         }
       }`,
@@ -489,8 +488,10 @@ describe('GraphQL remote profile boundary', () => {
 
     assertNoGraphQLErrors(result);
     assert.deepEqual(result.data?.createPost.post.content, {
-      body: {
-        document: {
+      document: {
+        version: 1,
+        summary: null,
+        body: {
           type: 'doc',
           content: [
             {
@@ -503,7 +504,6 @@ describe('GraphQL remote profile boundary', () => {
             },
           ],
         },
-        schemaVersion: 1,
       },
       bodyText: 'first\nsecond',
     });

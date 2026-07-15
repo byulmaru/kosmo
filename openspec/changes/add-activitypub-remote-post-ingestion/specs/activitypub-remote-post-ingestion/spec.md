@@ -132,8 +132,8 @@
 - **WHEN** 같은 remote actor의 기존 object URI가 서로 다른 activity ID의 `Create`에서 다시 전달된다
 - **AND** incoming Note를 다시 판정한 visibility가 기존 `Post.visibility`와 같다
 - **THEN** 시스템은 새 `Post`를 만들지 않고 기존 `Post`를 재사용한다
-- **AND** schema version, canonical document 또는 Content Warning 의미가 변경되었으면 새 `PostContent` revision을 생성하고 `Post.currentContentId`를 교체한다
-- **AND** schema version, canonical document와 Content Warning이 모두 같으면 기존 `PostContent` revision을 재사용한다
+- **AND** canonical versioned PostContent document 의미가 변경되었으면 새 `PostContent` revision을 생성하고 `Post.currentContentId`를 교체한다
+- **AND** canonical versioned PostContent document가 같으면 기존 `PostContent` revision을 재사용한다
 - **AND** 시스템은 새 `toIds`에서 resolve된 Profile 집합과 일치하도록 `post_mention`을 추가 및 제거한다
 - **AND** 새 Direct recipient 후보가 모두 resolve되지 않더라도 incoming resolved mention 집합이 비어 있으면 기존 `post_mention`을 모두 제거한다
 - **AND** canonical content 의미가 같고 resolved mention 집합만 달라졌으면 새 `PostContent` revision 없이 `post_mention`만 갱신한다
@@ -150,7 +150,7 @@
 #### Scenario: Serialize duplicate Note content and mention updates
 
 - **WHEN** 같은 remote actor와 object URI의 서로 다른 `Create` delivery가 동시에 처리된다
-- **THEN** 시스템은 기존 object mapping 갱신을 transaction에서 수행하고 해당 `activitypub_object` row를 잠근 뒤 visibility, schema version, canonical document, Content Warning과 resolved mention 집합을 비교한다
+- **THEN** 시스템은 기존 object mapping 갱신을 transaction에서 수행하고 해당 `activitypub_object` row를 잠근 뒤 visibility, canonical versioned PostContent document와 resolved mention 집합을 비교한다
 - **AND** canonical content 의미가 기존 revision과 같으면 시스템은 새 `PostContent`를 만들지 않고 기존 revision을 재사용한다
 - **AND** 같은 canonical content 의미로 동시에 들어온 delivery는 동일한 revision을 중복 생성하거나 `Post.currentContentId`를 불필요하게 교체하지 않는다
 - **AND** 각 accepted delivery의 content와 resolved mention 집합은 같은 transaction에서 함께 반영되어 서로 다른 delivery의 content와 mention이 섞이지 않는다
@@ -182,7 +182,7 @@
 - **AND** `text/plain`은 PROD-341 Plain Text converter로 V1 canonical document를 만든다
 - **AND** malformed/unsupported MIME essence 또는 document 변환/검증 실패는 Note를 materialize하지 않고 부분 row를 남기지 않는다
 - **AND** attachment는 저장하지 않으며 content 없이 attachment만 있는 Note도 빈 본문으로 materialize한다
-- **AND** duplicate delivery의 revision identity는 schema version, canonical document structural equality와 nullable Content Warning이고 파생 `bodyText`는 별도로 비교하지 않는다
+- **AND** duplicate delivery의 revision identity는 canonical `{ version, summary, body }` PostContent document structural equality이고 파생 `bodyText`와 `contentWarning` 호환 필드는 별도로 비교하지 않는다
 
 #### Scenario: Return only materialized posts
 

@@ -1445,19 +1445,6 @@
       "table": "post_content"
     },
     {
-      "type": "integer",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "body_schema_version",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_content"
-    },
-    {
       "type": "jsonb",
       "typeSchema": null,
       "notNull": true,
@@ -1465,20 +1452,7 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "body_document",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "post_content"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "content_warning",
+      "name": "document",
       "entityType": "columns",
       "schema": "public",
       "table": "post_content"

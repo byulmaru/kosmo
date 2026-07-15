@@ -276,9 +276,7 @@ export const PostContents = pgTable(
     postId: uuid('post_id')
       .notNull()
       .references((): AnyPgColumn => Posts.id),
-    bodySchemaVersion: integer('body_schema_version').notNull(),
-    bodyDocument: jsonb('body_document').$type<PostContentDocumentV1>().notNull(),
-    contentWarning: text('content_warning'),
+    document: jsonb('document').$type<PostContentDocumentV1>().notNull(),
     createdAt: createdAt(),
   },
   (table) => [index().on(table.postId)],

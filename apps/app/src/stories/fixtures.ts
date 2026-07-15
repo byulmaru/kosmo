@@ -1,6 +1,5 @@
-import { postContentSchemaVersion } from '@kosmo/core/post-content';
 import { Temporal } from 'temporal-polyfill';
-import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
+import type { PostContentBodyDocumentV1 } from '@kosmo/core/post-content';
 
 export type StoryProfile = {
   __typename: 'Profile';
@@ -76,7 +75,7 @@ export function post({
   profile: author = profile(),
   visibility = 'UNLISTED',
 }: {
-  bodyDocument?: PostContentDocumentV1;
+  bodyDocument?: PostContentBodyDocumentV1;
   bodyText?: string | null;
   createdAt?: string;
   id?: string;
@@ -90,9 +89,10 @@ export function post({
         ? null
         : {
             __typename: 'PostContent' as const,
-            body: {
-              document: bodyDocument ?? storyDocumentFromText(bodyText),
-              schemaVersion: postContentSchemaVersion,
+            document: {
+              body: bodyDocument ?? storyDocumentFromText(bodyText),
+              summary: null,
+              version: 1,
             },
             bodyText,
             id: `content-${id}`,
@@ -105,7 +105,7 @@ export function post({
   };
 }
 
-function storyDocumentFromText(bodyText: string): PostContentDocumentV1 {
+function storyDocumentFromText(bodyText: string): PostContentBodyDocumentV1 {
   const content = bodyText
     .split('\n')
     .flatMap((line, index) => [

@@ -40,8 +40,8 @@
 - **AND** 기존 object mapping의 `activityPubActorId`가 이번 delivery actor URI로 조회한 `activitypub_actor.id`와 같다
 - **AND** incoming Note를 다시 판정한 visibility가 기존 `Post.visibility`와 같다
 - **THEN** 시스템은 새 `Post`를 만들지 않고 기존 object mapping과 연결된 `Post`를 재사용한다
-- **AND** 재전달된 Note의 schema version, canonical document 또는 Content Warning 의미가 변경되었으면 시스템은 새 `PostContent` revision을 생성하고 기존 `Post.currentContentId`를 새 revision으로 교체한다
-- **AND** schema version, canonical document와 Content Warning이 모두 같으면 시스템은 기존 `PostContent` revision을 재사용한다
+- **AND** 재전달된 Note의 canonical versioned PostContent document 의미가 변경되었으면 시스템은 새 `PostContent` revision을 생성하고 기존 `Post.currentContentId`를 새 revision으로 교체한다
+- **AND** canonical versioned PostContent document가 같으면 시스템은 기존 `PostContent` revision을 재사용한다
 - **AND** 시스템은 최초 `Post.visibility`를 갱신하지 않는다
 - **AND** 시스템은 최초 object mapping의 수신 시각과 원본 published 시각을 갱신하지 않는다
 - **AND** 시스템은 기존 `Post.createdAt`을 갱신하지 않는다
@@ -55,7 +55,7 @@
 #### Scenario: Serialize existing remote object content and mention updates
 
 - **WHEN** 같은 remote actor의 기존 ActivityPub object URI가 서로 다른 `Create` delivery에서 동시에 갱신된다
-- **THEN** 시스템은 기존 object mapping 갱신을 transaction에서 수행하고 해당 `activitypub_object` row를 잠근 뒤 visibility, schema version, canonical document, Content Warning과 resolved mention 집합을 비교한다
+- **THEN** 시스템은 기존 object mapping 갱신을 transaction에서 수행하고 해당 `activitypub_object` row를 잠근 뒤 visibility, canonical versioned PostContent document와 resolved mention 집합을 비교한다
 - **AND** 같은 canonical content 의미의 동시 재전달은 동일 `PostContent` revision을 중복 생성하지 않는다
 - **AND** 시스템은 비교 결과에 따라 최대 하나의 새 revision을 생성하고 `Post.currentContentId`를 해당 revision으로 교체하거나 기존 revision을 재사용하며, 같은 delivery의 resolved mention 집합을 함께 반영한다
 - **AND** 시스템은 서로 다른 delivery의 content와 mention이 섞인 상태를 노출하지 않는다
@@ -141,7 +141,7 @@
 #### Scenario: 게시물 콘텐츠 저장
 
 - **WHEN** 게시물 본문이 저장된다
-- **THEN** 시스템은 게시물, document schema version, canonical document JSON, 선택적 Content Warning과 생성 시각을 저장한다
+- **THEN** 시스템은 게시물, canonical `{ version, summary, body }` PostContent document JSON과 생성 시각을 저장한다
 - **AND** 게시물 콘텐츠는 `post.id`를 참조해야 한다
 
 #### Scenario: 리모트 게시물 콘텐츠 projection 저장

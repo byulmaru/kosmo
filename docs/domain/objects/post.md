@@ -34,13 +34,12 @@ Post는 Profile이 작성하고 배포하는 짧은 게시 단위다. 게시 본
 
 ## 속성
 
-| 속성            | 타입/nullability             | 검증 정책                                                         | 존재 조건                         | 조회 조건           | 조회 권한 |
-| --------------- | ---------------------------- | ----------------------------------------------------------------- | --------------------------------- | ------------------- | --------- |
-| 본문            | Versioned Document, nullable | 파생 Plain Text가 500자 이하이며 Media가 없으면 비어 있을 수 없다 | Form이 Original, Reply 또는 Quote | Post 조회 정책 통과 | 없음      |
-| Content Warning | 문자열, nullable             | 존재할 때 빈 문자열이 아니다                                      | Form이 Original, Reply 또는 Quote | Post 조회 정책 통과 | 없음      |
-| Sensitive Media | boolean, 필수                | Post에 연결된 모든 Media 표시에 함께 적용한다                     | Form이 Original, Reply 또는 Quote | Post 조회 정책 통과 | 없음      |
-| 생성 시각       | 시각, 필수                   | 생성 결과로 기록하며 변경 불가                                    | 항상                              | Post 조회 정책 통과 | 없음      |
-| 삭제 시각       | 시각, nullable               | Tombstone 전이 결과로 기록하며 변경 불가                          | Lifecycle이 Tombstone             | Tombstone 조회 정책 | 없음      |
+| 속성             | 타입/nullability         | 검증 정책                                                                                                                                                  | 존재 조건                         | 조회 조건           | 조회 권한 |
+| ---------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | ------------------- | --------- |
+| Content Document | Versioned JSON, nullable | `{ version, summary, body }`; V1 summary는 nullable Plain Text이고 summary와 body Plain Text 합계가 500자 이하이며 Media가 없으면 body가 비어 있을 수 없다 | Form이 Original, Reply 또는 Quote | Post 조회 정책 통과 | 없음      |
+| Sensitive Media  | boolean, 필수            | Post에 연결된 모든 Media 표시에 함께 적용한다                                                                                                              | Form이 Original, Reply 또는 Quote | Post 조회 정책 통과 | 없음      |
+| 생성 시각        | 시각, 필수               | 생성 결과로 기록하며 변경 불가                                                                                                                             | 항상                              | Post 조회 정책 통과 | 없음      |
+| 삭제 시각        | 시각, nullable           | Tombstone 전이 결과로 기록하며 변경 불가                                                                                                                   | Lifecycle이 Tombstone             | Tombstone 조회 정책 | 없음      |
 
 ## 관계
 

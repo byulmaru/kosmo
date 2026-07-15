@@ -1,4 +1,4 @@
-import { isPostContentDocumentV1, postContentSchemaVersion } from '@kosmo/core/post-content';
+import { isPostContentDocumentV1 } from '@kosmo/core/post-content';
 import { Linking, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -10,10 +10,7 @@ const PostBodyFragment = graphql`
     id
     content {
       id
-      body {
-        schemaVersion
-        document
-      }
+      document
       bodyText
     }
   }
@@ -34,11 +31,7 @@ export function PostBody({
     return null;
   }
 
-  const document =
-    content.body.schemaVersion === postContentSchemaVersion &&
-    isPostContentDocumentV1(content.body.document)
-      ? content.body.document
-      : null;
+  const document = isPostContentDocumentV1(content.document) ? content.document.body : null;
 
   if (!document) {
     return content.bodyText ? (

@@ -1,18 +1,20 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { isPostContentDocumentV1, postContentSchemaVersion } from './index';
+import { isPostContentDocumentV1 } from './index';
 import {
   arePostContentRevisionsEqual,
   canonicalizePostContentDocument,
   postContentDocumentFromText,
   postContentDocumentToText,
+  validateLocalPostContentDocument,
 } from './server';
 
 test('converts trimmed Plain Text and normalized line endings to hard breaks', () => {
   const body = postContentDocumentFromText('  first\r\n\rsecond\n\nlast  ');
 
-  assert.equal(body.schemaVersion, 1);
-  assert.deepEqual(body.document, {
+  assert.equal(body.version, 1);
+  assert.equal(body.summary, null);
+  assert.deepEqual(body.body, {
     type: 'doc',
     content: [
       {
@@ -33,7 +35,7 @@ test('converts trimmed Plain Text and normalized line endings to hard breaks', (
 });
 
 test('keeps one empty paragraph for an empty document', () => {
-  assert.deepEqual(postContentDocumentFromText(' \r\n ').document, {
+  assert.deepEqual(postContentDocumentFromText(' \r\n ').body, {
     type: 'doc',
     content: [{ type: 'paragraph' }],
   });
@@ -41,44 +43,52 @@ test('keeps one empty paragraph for an empty document', () => {
 
 test('canonicalizes empty paragraphs, adjacent text, duplicate marks and URLs', () => {
   assert.deepEqual(
-    canonicalizePostContentDocument(1, {
-      type: 'doc',
-      content: [
-        { type: 'paragraph' },
-        {
-          type: 'paragraph',
-          content: [
-            {
-              type: 'text',
-              text: 'linked ',
-              marks: [
-                { type: 'link', attrs: { href: 'HTTPS://EXAMPLE.COM:443/path' } },
-                { type: 'link', attrs: { href: 'https://example.com/path' } },
-              ],
-            },
-            {
-              type: 'text',
-              text: 'text',
-              marks: [{ type: 'link', attrs: { href: 'https://example.com/path' } }],
-            },
-          ],
-        },
-      ],
+    canonicalizePostContentDocument({
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          { type: 'paragraph' },
+          {
+            type: 'paragraph',
+            content: [
+              {
+                type: 'text',
+                text: 'linked ',
+                marks: [
+                  { type: 'link', attrs: { href: 'HTTPS://EXAMPLE.COM:443/path' } },
+                  { type: 'link', attrs: { href: 'https://example.com/path' } },
+                ],
+              },
+              {
+                type: 'text',
+                text: 'text',
+                marks: [{ type: 'link', attrs: { href: 'https://example.com/path' } }],
+              },
+            ],
+          },
+        ],
+      },
     }),
     {
-      type: 'doc',
-      content: [
-        {
-          type: 'paragraph',
-          content: [
-            {
-              type: 'text',
-              text: 'linked text',
-              marks: [{ type: 'link', attrs: { href: 'https://example.com/path' } }],
-            },
-          ],
-        },
-      ],
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              {
+                type: 'text',
+                text: 'linked text',
+                marks: [{ type: 'link', attrs: { href: 'https://example.com/path' } }],
+              },
+            ],
+          },
+        ],
+      },
     },
   );
 });
@@ -86,8 +96,9 @@ test('canonicalizes empty paragraphs, adjacent text, duplicate marks and URLs', 
 test('projects paragraph boundaries, hard breaks and link labels to Plain Text', () => {
   assert.equal(
     postContentDocumentToText({
-      schemaVersion: 1,
-      document: {
+      version: 1,
+      summary: null,
+      body: {
         type: 'doc',
         content: [
           {
@@ -154,22 +165,29 @@ for (const [name, document] of [
   ],
 ] as const) {
   test(`rejects ${name}`, () => {
-    assert.throws(() => canonicalizePostContentDocument(1, document));
+    assert.throws(() =>
+      canonicalizePostContentDocument({ version: 1, summary: null, body: document }),
+    );
   });
 }
 
 test('rejects unsupported schema versions', () => {
   assert.throws(
-    () => canonicalizePostContentDocument(2, { type: 'doc', content: [{ type: 'paragraph' }] }),
+    () =>
+      canonicalizePostContentDocument({
+        version: 2,
+        summary: null,
+        body: { type: 'doc', content: [{ type: 'paragraph' }] },
+      }),
     /Unsupported PostContent schema version/,
   );
 });
 
-test('compares canonical document and Content Warning meaning', () => {
+test('compares canonical body and summary meaning', () => {
   const first = {
-    schemaVersion: postContentSchemaVersion,
-    contentWarning: null,
-    document: {
+    version: 1,
+    summary: null,
+    body: {
       type: 'doc' as const,
       content: [
         {
@@ -182,25 +200,44 @@ test('compares canonical document and Content Warning meaning', () => {
       ],
     },
   };
-  const second = {
-    ...postContentDocumentFromText('ab'),
-    contentWarning: null,
-  };
+  const second = postContentDocumentFromText('ab');
 
   assert.equal(arePostContentRevisionsEqual(first, second), true);
+  assert.equal(arePostContentRevisionsEqual(first, { ...second, summary: 'warning' }), false);
+});
+
+test('native-safe guard accepts only the V1 JSON contract', () => {
+  assert.equal(isPostContentDocumentV1(postContentDocumentFromText('body')), true);
   assert.equal(
-    arePostContentRevisionsEqual(first, { ...second, contentWarning: 'warning' }),
+    isPostContentDocumentV1({
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'pre', text: 'body' }] }],
+      },
+    }),
     false,
   );
 });
 
-test('native-safe guard accepts only the V1 JSON contract', () => {
-  assert.equal(isPostContentDocumentV1(postContentDocumentFromText('body').document), true);
+test('normalizes summary as authored revision content', () => {
+  const document = postContentDocumentFromText('body', '  warning\r\ntext  ');
+
+  assert.equal(document.summary, 'warning\ntext');
   assert.equal(
-    isPostContentDocumentV1({
-      type: 'doc',
-      content: [{ type: 'paragraph', content: [{ type: 'pre', text: 'body' }] }],
-    }),
+    arePostContentRevisionsEqual(document, { ...document, summary: 'different warning' }),
     false,
+  );
+  assert.throws(() => postContentDocumentFromText('body', ' \n '), /must not be empty/);
+});
+
+test('validates the combined local summary and body length', () => {
+  assert.doesNotThrow(() =>
+    validateLocalPostContentDocument(postContentDocumentFromText('가'.repeat(499), '나')),
+  );
+  assert.throws(
+    () => validateLocalPostContentDocument(postContentDocumentFromText('가'.repeat(500), '나')),
+    /exceeds 500 characters/,
   );
 });

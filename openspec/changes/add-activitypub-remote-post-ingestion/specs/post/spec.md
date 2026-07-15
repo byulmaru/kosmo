@@ -57,10 +57,10 @@ API는 활성 게시글의 current 또는 historical 콘텐츠 revision을 Graph
 
 - **WHEN** 클라이언트가 게시글의 현재 콘텐츠를 조회한다
 - **THEN** 시스템은 `PostContent` object를 반환한다
-- **AND** `PostContent`는 `id`, `body`, `bodyText`, `contentWarning`, `createdAt` 필드를 포함한다
-- **AND** `body`는 저장된 schema version과 canonical document JSON을 포함한다
-- **AND** `bodyText`는 canonical document에서 파생한다
-- **AND** `contentWarning`은 값이 없을 수 있다
+- **AND** `PostContent`는 `id`, `document`, `bodyText`, `contentWarning`, `createdAt` 필드를 포함한다
+- **AND** `document`는 canonical `{ version, summary, body }` JSON이다
+- **AND** `bodyText`는 `document.body`에서 파생한다
+- **AND** `contentWarning`은 nullable `document.summary`에서 파생한다
 
 #### Scenario: current 게시글 콘텐츠 직접 조회
 

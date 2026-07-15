@@ -31,10 +31,8 @@ test('deletes non-production posts before requiring versioned documents', async 
     assert.equal((await sql`SELECT id FROM post`).length, 0);
     assert.equal((await sql`SELECT id FROM post_content`).length, 0);
     assert.deepEqual(await columns(sql), [
-      { columnName: 'body_document', isNullable: 'NO' },
-      { columnName: 'body_schema_version', isNullable: 'NO' },
-      { columnName: 'content_warning', isNullable: 'YES' },
       { columnName: 'created_at', isNullable: 'NO' },
+      { columnName: 'document', isNullable: 'NO' },
       { columnName: 'id', isNullable: 'NO' },
       { columnName: 'post_id', isNullable: 'NO' },
     ]);
@@ -51,15 +49,11 @@ test('deletes non-production posts before requiring versioned documents', async 
       INSERT INTO post_content (
         id,
         post_id,
-        body_schema_version,
-        body_document,
-        content_warning
+        document
       ) VALUES (
         '00000000-0000-8000-8000-000000000007',
         '00000000-0000-8000-8000-000000000006',
-        1,
-        '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"새 본문"}]}]}',
-        '내용 경고'
+        '{"version":1,"summary":"내용 경고","body":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"새 본문"}]}]}}'
       );
 
       UPDATE post
@@ -71,20 +65,20 @@ test('deletes non-production posts before requiring versioned documents', async 
       [
         ...(await sql`
       SELECT
-        body_schema_version AS "bodySchemaVersion",
-        body_document AS "bodyDocument",
-        content_warning AS "contentWarning"
+        document
       FROM post_content
     `),
       ],
       [
         {
-          bodySchemaVersion: 1,
-          bodyDocument: {
-            type: 'doc',
-            content: [{ type: 'paragraph', content: [{ type: 'text', text: '새 본문' }] }],
+          document: {
+            version: 1,
+            summary: '내용 경고',
+            body: {
+              type: 'doc',
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: '새 본문' }] }],
+            },
           },
-          contentWarning: '내용 경고',
         },
       ],
     );
@@ -125,19 +119,12 @@ async function seedPlainTextPost(sql) {
     );
 
     INSERT INTO post_content (id, post_id, body_text, content_warning)
-    VALUES
-      (
-        '00000000-0000-8000-8000-000000000004',
-        '00000000-0000-8000-8000-000000000003',
-        E'첫 revision\n본문',
-        NULL
-      ),
-      (
-        '00000000-0000-8000-8000-000000000005',
-        '00000000-0000-8000-8000-000000000003',
-        E'현재 revision\n본문',
-        '기존 내용 경고'
-      );
+    VALUES (
+      '00000000-0000-8000-8000-000000000005',
+      '00000000-0000-8000-8000-000000000003',
+      E'현재 revision\n본문',
+      '기존 내용 경고'
+    );
 
     UPDATE post
     SET current_content_id = '00000000-0000-8000-8000-000000000005'

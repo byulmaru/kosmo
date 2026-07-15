@@ -8,7 +8,7 @@ test('exposes the versioned PostContent document and Plain Text composer contrac
   const createPostInput = schema.getType('CreatePostInput');
 
   assert.ok(isObjectType(postContent));
-  assert.ok(postContent.getFields().body);
+  assert.ok(postContent.getFields().document);
   assert.ok(postContent.getFields().bodyText);
   assert.ok(postContent.getFields().contentWarning);
   assert.equal(postContent.getFields().spoilerText, undefined);
@@ -18,7 +18,7 @@ test('exposes the versioned PostContent document and Plain Text composer contrac
   assert.equal(createPostInput.getFields().content, undefined);
   assert.equal(String(createPostInput.getFields().bodyText?.type), 'String!');
   assert.equal(schema.getType('TipTapDocument'), undefined);
-  assert.ok(isObjectType(schema.getType('PostContentBody')));
+  assert.equal(schema.getType('PostContentBody'), undefined);
   assert.equal(String(schema.getType('PostContentDocument')), 'PostContentDocument');
 });
 

@@ -48,26 +48,14 @@ export const PostContent = createObjectRef(
 
 PostContent.implement({
   fields: (t) => ({
-    body: t.field({
-      type: builder.simpleObject('PostContentBody', {
-        fields: (field) => ({
-          schemaVersion: field.int(),
-          document: field.field({ type: 'PostContentDocument' }),
-        }),
-      }),
-      resolve: (content) => ({
-        schemaVersion: content.bodySchemaVersion,
-        document: content.bodyDocument,
-      }),
-    }),
+    document: t.expose('document', { type: 'PostContentDocument' }),
     bodyText: t.string({
-      resolve: (content) =>
-        postContentDocumentToText({
-          schemaVersion: content.bodySchemaVersion,
-          document: content.bodyDocument,
-        }),
+      resolve: (content) => postContentDocumentToText(content.document),
     }),
-    contentWarning: t.exposeString('contentWarning', { nullable: true }),
+    contentWarning: t.string({
+      nullable: true,
+      resolve: (content) => content.document.summary,
+    }),
     createdAt: t.expose('createdAt', { type: 'DateTime' }),
   }),
 });

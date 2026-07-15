@@ -26,14 +26,15 @@ export interface PostContentParagraphNode {
   readonly content?: readonly PostContentInlineNode[];
 }
 
-export interface PostContentDocumentV1 {
+export interface PostContentBodyDocumentV1 {
   readonly type: 'doc';
   readonly content: readonly PostContentParagraphNode[];
 }
 
-export interface VersionedPostContentDocument {
-  readonly schemaVersion: PostContentSchemaVersion;
-  readonly document: PostContentDocumentV1;
+export interface PostContentDocumentV1 {
+  readonly version: PostContentSchemaVersion;
+  readonly summary: string | null;
+  readonly body: PostContentBodyDocumentV1;
 }
 
 export function normalizePostContentPlainText(bodyText: string): string {
@@ -41,6 +42,18 @@ export function normalizePostContentPlainText(bodyText: string): string {
 }
 
 export function isPostContentDocumentV1(value: unknown): value is PostContentDocumentV1 {
+  return (
+    isRecordWithKeys(value, ['version', 'summary', 'body']) &&
+    value.version === postContentSchemaVersion &&
+    (value.summary === null ||
+      (typeof value.summary === 'string' &&
+        value.summary.length > 0 &&
+        normalizePostContentPlainText(value.summary) === value.summary)) &&
+    isPostContentBodyDocumentV1(value.body)
+  );
+}
+
+export function isPostContentBodyDocumentV1(value: unknown): value is PostContentBodyDocumentV1 {
   if (!isRecordWithKeys(value, ['type', 'content']) || value.type !== 'doc') {
     return false;
   }

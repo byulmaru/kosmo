@@ -101,7 +101,7 @@ builder.scalarType('DateTime', {
 });
 
 builder.scalarType('PostContentDocument', {
-  description: 'Kosmo PostContent ProseMirror document JSON',
+  description: 'Kosmo versioned PostContent document JSON',
   serialize: (value) => value,
   parseValue: () => {
     throw new Error('PostContentDocument is output-only');

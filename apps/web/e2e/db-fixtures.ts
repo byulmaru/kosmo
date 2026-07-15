@@ -210,8 +210,7 @@ export async function createE2EPost(options: CreateE2EPostOptions) {
     const content = await tx
       .insert(PostContents)
       .values({
-        bodySchemaVersion: body.schemaVersion,
-        bodyDocument: body.document,
+        document: body,
         postId: post.id,
         ...(createdAt ? { createdAt } : {}),
       })
