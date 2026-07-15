@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
   first,
   firstOrThrow,
@@ -14,6 +14,14 @@ type ProfileFollowPair = {
   readonly followerProfileId: string;
 };
 
+export const lockProfileFollowPair = (pair: ProfileFollowPair, tx: Transaction) =>
+  tx
+    .select({ id: Profiles.id })
+    .from(Profiles)
+    .where(inArray(Profiles.id, [pair.followerProfileId, pair.followeeProfileId]))
+    .orderBy(Profiles.id)
+    .for('update', { of: Profiles });
+
 const pairCondition = (
   table: typeof ProfileFollows | typeof ProfileFollowRequests,
   { followeeProfileId, followerProfileId }: ProfileFollowPair,
@@ -25,6 +33,30 @@ const pairCondition = (
 
 export const ensureProfileFollow = async (pair: ProfileFollowPair, tx?: Transaction) =>
   getDatabaseConnection(tx).transaction(async (tx) => {
+    const existing = await tx
+      .select()
+      .from(ProfileFollows)
+      .where(pairCondition(ProfileFollows, pair))
+      .limit(1)
+      .then(first);
+    if (existing) {
+      await tx.delete(ProfileFollowRequests).where(pairCondition(ProfileFollowRequests, pair));
+      return { created: false, profileFollow: existing };
+    }
+
+    await lockProfileFollowPair(pair, tx);
+
+    const concurrent = await tx
+      .select()
+      .from(ProfileFollows)
+      .where(pairCondition(ProfileFollows, pair))
+      .limit(1)
+      .then(first);
+    if (concurrent) {
+      await tx.delete(ProfileFollowRequests).where(pairCondition(ProfileFollowRequests, pair));
+      return { created: false, profileFollow: concurrent };
+    }
+
     const inserted = await tx
       .insert(ProfileFollows)
       .values(pair)
