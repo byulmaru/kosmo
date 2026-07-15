@@ -21,6 +21,26 @@ enum AccountState {
   SUSPENDED
 }
 
+input ApproveProfileFollowRequestInput {
+  id: ID!
+}
+
+type ApproveProfileFollowRequestPayload {
+  followeeProfile: Profile!
+  followerProfile: Profile!
+  profileFollow: ProfileFollow!
+  profileFollowRequestId: ID!
+}
+
+input CancelProfileFollowRequestInput {
+  id: ID!
+}
+
+type CancelProfileFollowRequestPayload {
+  followerProfile: Profile!
+  profileFollowRequestId: ID!
+}
+
 input CreatePostInput {
   bodyText: String!
   visibility: PostVisibility!
@@ -74,7 +94,7 @@ input FollowProfileInput {
 type FollowProfilePayload {
   followeeProfile: Profile!
   followerProfile: Profile!
-  profileFollow: ProfileFollow!
+  result: ProfileFollowResult!
 }
 
 enum InstanceKind {
@@ -92,12 +112,15 @@ type MarkNotificationReadPayload {
 }
 
 type Mutation {
+  approveProfileFollowRequest(input: ApproveProfileFollowRequestInput!): ApproveProfileFollowRequestPayload!
+  cancelProfileFollowRequest(input: CancelProfileFollowRequestInput!): CancelProfileFollowRequestPayload!
   createPost(input: CreatePostInput!): CreatePostPayload!
   createProfile(input: CreateProfileInput!): CreateProfilePayload!
   deleteProfile(input: DeleteProfileInput!): DeleteProfilePayload!
   exchangeNativeOidcSession(input: ExchangeNativeOidcSessionInput!): ExchangeNativeOidcSessionPayload!
   followProfile(input: FollowProfileInput!): FollowProfilePayload!
   markNotificationRead(input: MarkNotificationReadInput!): MarkNotificationReadPayload!
+  rejectProfileFollowRequest(input: RejectProfileFollowRequestInput!): RejectProfileFollowRequestPayload!
   selectProfile(input: SelectProfileInput!): SelectProfilePayload!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
   updateProfile(input: UpdateProfileInput!): UpdateProfilePayload!
@@ -183,8 +206,10 @@ type Profile implements Node {
   followingCount: Int!
   handle: String!
   id: ID!
+  incomingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileIncomingProfileFollowRequestsConnection
   instance: ProfileInstance!
   notifications(after: String, before: String, first: Int, last: Int): NotificationConnection!
+  outgoingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileOutgoingProfileFollowRequestsConnection
   posts(after: String, before: String, first: Int, last: Int): PostConnection!
   relativeHandle: String!
   unreadNotificationCount: Int!
@@ -203,6 +228,15 @@ enum ProfileFollowPolicy {
   APPROVAL_REQUIRED
   OPEN
 }
+
+type ProfileFollowRequest implements Node {
+  createdAt: DateTime!
+  followee: Profile
+  follower: Profile
+  id: ID!
+}
+
+union ProfileFollowResult = ProfileFollow | ProfileFollowRequest
 
 type ProfileFollowersConnection {
   edges: [ProfileFollowersConnectionEdge!]!
@@ -224,8 +258,28 @@ type ProfileFollowingConnectionEdge {
   node: ProfileFollow!
 }
 
+type ProfileIncomingProfileFollowRequestsConnection {
+  edges: [ProfileIncomingProfileFollowRequestsConnectionEdge!]!
+  pageInfo: PageInfo!
+}
+
+type ProfileIncomingProfileFollowRequestsConnectionEdge {
+  cursor: String!
+  node: ProfileFollowRequest!
+}
+
 type ProfileInstance {
   kind: InstanceKind!
+}
+
+type ProfileOutgoingProfileFollowRequestsConnection {
+  edges: [ProfileOutgoingProfileFollowRequestsConnectionEdge!]!
+  pageInfo: PageInfo!
+}
+
+type ProfileOutgoingProfileFollowRequestsConnectionEdge {
+  cursor: String!
+  node: ProfileFollowRequest!
 }
 
 enum ProfileState {
@@ -246,6 +300,15 @@ type Query {
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
   profileByHandle(handle: String!): Profile
+}
+
+input RejectProfileFollowRequestInput {
+  id: ID!
+}
+
+type RejectProfileFollowRequestPayload {
+  followeeProfile: Profile!
+  profileFollowRequestId: ID!
 }
 
 input SelectProfileInput {

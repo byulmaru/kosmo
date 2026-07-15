@@ -73,6 +73,9 @@ test('disableProfile은 profile lifecycle과 active session 정리를 소유한�
       followerProfileId: follower.id,
       followeeProfileId: profile.id,
     });
+    if (outgoing.result.kind !== 'ESTABLISHED' || incoming.result.kind !== 'ESTABLISHED') {
+      assert.fail('Expected established profile follows');
+    }
     await db.update(Profiles).set({ followersCount: 0 }).where(eq(Profiles.id, followee.id));
 
     await disableProfile(profile.id);
@@ -87,7 +90,12 @@ test('disableProfile은 profile lifecycle과 active session 정리를 소유한�
       await db
         .select()
         .from(ProfileFollows)
-        .where(inArray(ProfileFollows.id, [outgoing.profileFollow.id, incoming.profileFollow.id]))
+        .where(
+          inArray(ProfileFollows.id, [
+            outgoing.result.profileFollow.id,
+            incoming.result.profileFollow.id,
+          ]),
+        )
         .then((rows) => rows.length),
       2,
     );

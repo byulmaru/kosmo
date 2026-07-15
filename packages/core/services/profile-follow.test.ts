@@ -1,9 +1,17 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { eq, inArray, or } from 'drizzle-orm';
-import { db, firstOrThrow, Instances, pg, ProfileFollows, Profiles } from '../db';
+import {
+  db,
+  firstOrThrow,
+  Instances,
+  pg,
+  ProfileFollowRequests,
+  ProfileFollows,
+  Profiles,
+} from '../db';
 import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
-import { ConflictError, NotFoundError } from '../error';
+import { NotFoundError } from '../error';
 import { disableProfile } from './profile';
 import { followProfile, unfollowProfile } from './profile-follow';
 
@@ -42,6 +50,13 @@ const createProfile = async (followPolicy = ProfileFollowPolicy.OPEN) => {
 const readProfile = (id: string) =>
   db.select().from(Profiles).where(eq(Profiles.id, id)).then(firstOrThrow);
 
+const getEstablishedFollow = (result: Awaited<ReturnType<typeof followProfile>>) => {
+  if (result.result.kind !== 'ESTABLISHED') {
+    assert.fail('Expected an established profile follow');
+  }
+  return result.result.profileFollow;
+};
+
 after(async () => {
   if (profileIds.length > 0) {
     await db
@@ -70,7 +85,7 @@ test('follow action은 관계와 저장 count를 idempotent하게 갱신한다',
   ]);
 
   assert.equal(results.filter(({ created }) => created).length, 1);
-  assert.equal(results[0].profileFollow.id, results[1].profileFollow.id);
+  assert.equal(getEstablishedFollow(results[0]).id, getEstablishedFollow(results[1]).id);
   assert.equal(results[0].followerProfile.followingCount, 1);
   assert.equal(results[0].followeeProfile.followersCount, 1);
   assert.equal(results[1].followerProfile.followingCount, 1);
@@ -79,13 +94,59 @@ test('follow action은 관계와 저장 count를 idempotent하게 갱신한다',
   assert.equal((await readProfile(followee.id)).followersCount, 1);
 });
 
-test('follow action의 도메인 오류는 GraphQL field 이름을 포함하지 않는다', async () => {
+test('follow action은 승인 필요 profile에 pending request를 만들고 count를 유지한다', async () => {
   const follower = await createProfile();
   const followee = await createProfile(ProfileFollowPolicy.APPROVAL_REQUIRED);
 
+  const result = await followProfile({
+    followerProfileId: follower.id,
+    followeeProfileId: followee.id,
+  });
+
+  assert.equal(result.result.kind, 'PENDING');
+  if (result.result.kind !== 'PENDING') {
+    assert.fail('Expected a pending profile follow request');
+  }
+  assert.ok(result.result.profileFollowRequest.id);
+  assert.equal(
+    await db
+      .select()
+      .from(ProfileFollowRequests)
+      .where(eq(ProfileFollowRequests.followerProfileId, follower.id))
+      .then((rows) => rows.length),
+    1,
+  );
+  assert.equal((await readProfile(follower.id)).followingCount, 0);
+  assert.equal((await readProfile(followee.id)).followersCount, 0);
+});
+
+test('follow action은 unavailable follower의 relation과 request 생성을 거부한다', async () => {
+  const follower = await createProfile();
+  const followee = await createProfile(ProfileFollowPolicy.APPROVAL_REQUIRED);
+  await db
+    .update(Profiles)
+    .set({ state: ProfileState.DISABLED })
+    .where(eq(Profiles.id, follower.id));
+
   await assert.rejects(
     followProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
-    (error: unknown) => error instanceof ConflictError && error.field === undefined,
+    NotFoundError,
+  );
+  assert.equal(
+    await db
+      .select()
+      .from(ProfileFollowRequests)
+      .where(eq(ProfileFollowRequests.followerProfileId, follower.id))
+      .then((rows) => rows.length),
+    0,
+  );
+  assert.equal(
+    await db
+      .select()
+      .from(ProfileFollows)
+      .where(eq(ProfileFollows.followerProfileId, follower.id))
+      .then((rows) => rows.length),
+    0,
   );
 });
 
@@ -106,10 +167,11 @@ test('follow action은 SUSPENDED instance의 profile을 숨긴다', async () => 
 test('unfollow action은 SUSPENDED instance의 관계를 보존한다', async () => {
   const follower = await createProfile();
   const followee = await createProfile();
-  const { profileFollow } = await followProfile({
+  const result = await followProfile({
     followerProfileId: follower.id,
     followeeProfileId: followee.id,
   });
+  const profileFollow = getEstablishedFollow(result);
   await db
     .update(Instances)
     .set({ state: InstanceState.SUSPENDED })

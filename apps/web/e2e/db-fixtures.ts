@@ -186,7 +186,13 @@ export async function createE2EProfile(options: CreateE2EProfileOptions = {}) {
 }
 
 export const createE2EFollow = (options: CreateE2EFollowOptions) =>
-  followProfile(options).then(({ profileFollow }) => profileFollow);
+  followProfile(options).then(({ result }) => {
+    if (result.kind !== 'ESTABLISHED') {
+      throw new Error('E2E follow fixture requires an established relationship');
+    }
+
+    return result.profileFollow;
+  });
 
 export async function createE2EPost(options: CreateE2EPostOptions) {
   const bodyText = (options.body ?? '').trim();

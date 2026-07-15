@@ -6,6 +6,7 @@ import { createObjectRef } from '@/graphql/utils';
 import { formatRelativeHandle } from '@/profile/identity';
 import { visibleProfileWhere } from '@/profile/visibility';
 import { profileFollowByIdLoader } from './loader/follow';
+import { profileFollowRequestByIdLoader } from './loader/follow-request';
 import { profileInstanceByIdLoader } from './loader/instance';
 
 export const Profile = createObjectRef('Profile', (ids) =>
@@ -66,6 +67,18 @@ export const ProfileFollow = createObjectRef('ProfileFollow', (ids, ctx) =>
 );
 
 ProfileFollow.implement({
+  fields: (t) => ({
+    createdAt: t.expose('createdAt', {
+      type: 'DateTime',
+    }),
+  }),
+});
+
+export const ProfileFollowRequest = createObjectRef('ProfileFollowRequest', (ids, ctx) =>
+  profileFollowRequestByIdLoader(ctx).loadMany(ids),
+);
+
+ProfileFollowRequest.implement({
   fields: (t) => ({
     createdAt: t.expose('createdAt', {
       type: 'DateTime',
