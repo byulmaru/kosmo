@@ -58,6 +58,11 @@ export const MediaSource = {
 } as const;
 export type MediaSource = keyof typeof MediaSource;
 
+export const NotificationKind = {
+  FOLLOW: 'FOLLOW',
+} as const;
+export type NotificationKind = keyof typeof NotificationKind;
+
 export const OAuthTokenState = {
   ACTIVE: 'ACTIVE',
   REVOKED: 'REVOKED',
