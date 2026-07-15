@@ -1,15 +1,24 @@
 import { MIMEType } from 'node:util';
 import { Parser } from 'htmlparser2';
+import { normalizePostContentPlainText, postContentSchemaVersion } from './post-content/index';
+import { normalizeLinkHref } from './post-content/schema/marks/link';
+import {
+  canonicalizePostContentDocument,
+  postContentDocumentFromText,
+  postContentDocumentToText,
+} from './post-content/server';
+import type {
+  PostContentBodyDocumentV1,
+  PostContentDocumentV1,
+  PostContentInlineNode,
+  PostContentLinkMark,
+  PostContentParagraphNode,
+} from './post-content/index';
 
 export interface RemoteNoteContentInput {
   content: string | null;
   summary: string | null;
   mediaType: string | null;
-}
-
-export interface RemoteNoteContentProjection {
-  bodyText: string;
-  contentWarning: string | null;
 }
 
 const blockTags = new Set([
@@ -47,22 +56,77 @@ const blockTags = new Set([
 ]);
 const ignoredTags = new Set(['head', 'script', 'style', 'template']);
 
-function htmlToPlainText(html: string): string {
+function htmlToBodyDocument(html: string): PostContentBodyDocumentV1 {
+  const paragraphs: PostContentInlineNode[][] = [[]];
+  const linkStack: Array<string | null> = [];
   let ignoredDepth = 0;
-  let pendingSpace = false;
+  let pendingSpace: { href: string | null } | null = null;
   let preDepth = 0;
-  let text = '';
 
-  const appendBreak = () => {
-    pendingSpace = false;
-    if (text.length > 0 && !text.endsWith('\n')) {
-      text += '\n';
+  const currentParagraph = () => paragraphs.at(-1)!;
+  const currentHref = () => linkStack.at(-1) ?? null;
+  const marksForHref = (href: string | null): readonly PostContentLinkMark[] | undefined =>
+    href === null ? undefined : [{ type: 'link', attrs: { href } }];
+
+  const appendText = (text: string, href = currentHref()) => {
+    if (text.length === 0) {
+      return;
+    }
+    currentParagraph().push({
+      type: 'text',
+      text,
+      ...(marksForHref(href) ? { marks: marksForHref(href) } : {}),
+    });
+  };
+
+  const startParagraph = () => {
+    pendingSpace = null;
+    if (currentParagraph().length > 0) {
+      paragraphs.push([]);
+    }
+  };
+
+  const appendHardBreak = () => {
+    pendingSpace = null;
+    currentParagraph().push({ type: 'hard_break' });
+  };
+
+  const appendPreformattedText = (value: string) => {
+    pendingSpace = null;
+    for (const [index, text] of value
+      .replaceAll('\r\n', '\n')
+      .replaceAll('\r', '\n')
+      .split('\n')
+      .entries()) {
+      if (index > 0) {
+        appendHardBreak();
+      }
+      appendText(text);
+    }
+  };
+
+  const appendCollapsedText = (value: string) => {
+    for (const part of value.split(/(\s+)/u)) {
+      if (part.length === 0) {
+        continue;
+      }
+      if (/^\s+$/u.test(part)) {
+        if (currentParagraph().length > 0) {
+          pendingSpace = { href: currentHref() };
+        }
+        continue;
+      }
+      if (pendingSpace !== null) {
+        appendText(' ', pendingSpace.href);
+      }
+      pendingSpace = null;
+      appendText(part);
     }
   };
 
   const parser = new Parser(
     {
-      onopentag(name) {
+      onopentag(name, attributes) {
         if (ignoredDepth > 0) {
           ignoredDepth += 1;
           return;
@@ -71,17 +135,25 @@ function htmlToPlainText(html: string): string {
           ignoredDepth = 1;
           return;
         }
+        if (name === 'a') {
+          try {
+            linkStack.push(normalizeLinkHref(attributes.href));
+          } catch {
+            linkStack.push(null);
+          }
+          return;
+        }
         if (name === 'pre') {
-          appendBreak();
+          startParagraph();
           preDepth += 1;
           return;
         }
-        if (name === 'br' || name === 'hr') {
-          appendBreak();
+        if (name === 'br') {
+          appendHardBreak();
           return;
         }
-        if (preDepth === 0 && blockTags.has(name)) {
-          appendBreak();
+        if (name === 'hr' || blockTags.has(name)) {
+          startParagraph();
         }
       },
       ontext(value) {
@@ -89,24 +161,9 @@ function htmlToPlainText(html: string): string {
           return;
         }
         if (preDepth > 0) {
-          pendingSpace = false;
-          text += value.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
-          return;
-        }
-
-        for (const part of value.split(/(\s+)/u)) {
-          if (part.length === 0) {
-            continue;
-          }
-          if (/^\s+$/u.test(part)) {
-            pendingSpace = text.length > 0 && !text.endsWith('\n');
-            continue;
-          }
-          if (pendingSpace) {
-            text += ' ';
-          }
-          text += part;
-          pendingSpace = false;
+          appendPreformattedText(value);
+        } else {
+          appendCollapsedText(value);
         }
       },
       onclosetag(name) {
@@ -114,13 +171,17 @@ function htmlToPlainText(html: string): string {
           ignoredDepth -= 1;
           return;
         }
-        if (name === 'pre') {
-          preDepth = Math.max(0, preDepth - 1);
-          appendBreak();
+        if (name === 'a') {
+          linkStack.pop();
           return;
         }
-        if (preDepth === 0 && blockTags.has(name)) {
-          appendBreak();
+        if (name === 'pre') {
+          preDepth = Math.max(0, preDepth - 1);
+          startParagraph();
+          return;
+        }
+        if (blockTags.has(name)) {
+          startParagraph();
         }
       },
     },
@@ -128,40 +189,70 @@ function htmlToPlainText(html: string): string {
   );
   parser.end(html);
 
-  return text.replace(/^\n+|\n+$/gu, '');
+  const content = paragraphs
+    .filter((paragraph) => paragraph.length > 0)
+    .map((paragraph): PostContentParagraphNode => ({ type: 'paragraph', content: paragraph }));
+
+  return {
+    type: 'doc',
+    content: content.length > 0 ? content : [{ type: 'paragraph' }],
+  };
 }
 
-function projectText(value: string | null, mediaType: string | null): string {
-  if (value == null) {
-    return '';
-  }
-
-  let essence: string;
+function mediaTypeEssence(mediaType: string | null): string {
   try {
-    essence = new MIMEType(mediaType ?? 'text/html').essence;
+    return new MIMEType(mediaType ?? 'text/html').essence;
   } catch (error) {
     throw new TypeError(`Malformed remote Note media type: ${mediaType}`, { cause: error });
   }
+}
 
+function projectBody(value: string | null, mediaType: string | null): PostContentBodyDocumentV1 {
+  if (value === null) {
+    return postContentDocumentFromText('').body;
+  }
+
+  const essence = mediaTypeEssence(mediaType);
   if (essence === 'text/plain') {
-    return value.replaceAll('\r\n', '\n').replaceAll('\r', '\n').trim();
+    return postContentDocumentFromText(value).body;
   }
   if (essence === 'text/html') {
-    return htmlToPlainText(value);
+    return htmlToBodyDocument(value);
   }
   throw new TypeError(`Unsupported remote Note media type: ${essence}`);
+}
+
+function projectSummary(value: string | null, mediaType: string | null): string | null {
+  if (value === null) {
+    return null;
+  }
+
+  const essence = mediaTypeEssence(mediaType);
+  const summary =
+    essence === 'text/plain'
+      ? normalizePostContentPlainText(value)
+      : essence === 'text/html'
+        ? postContentDocumentToText({
+            version: postContentSchemaVersion,
+            summary: null,
+            body: htmlToBodyDocument(value),
+          })
+        : null;
+  if (summary === null) {
+    throw new TypeError(`Unsupported remote Note media type: ${essence}`);
+  }
+
+  return normalizePostContentPlainText(summary) || null;
 }
 
 export function projectRemoteNoteContent({
   content,
   summary,
   mediaType,
-}: RemoteNoteContentInput): RemoteNoteContentProjection {
-  const bodyText = projectText(content, mediaType);
-  const projectedSummary = projectText(summary, mediaType);
-
-  return {
-    bodyText,
-    contentWarning: projectedSummary === '' ? null : projectedSummary,
-  };
+}: RemoteNoteContentInput): PostContentDocumentV1 {
+  return canonicalizePostContentDocument({
+    version: postContentSchemaVersion,
+    summary: projectSummary(summary, mediaType),
+    body: projectBody(content, mediaType),
+  });
 }

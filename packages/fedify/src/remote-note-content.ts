@@ -1,4 +1,4 @@
-import { projectRemoteNoteContent } from '@kosmo/core/activitypub-note-content';
+import { projectRemoteNoteContent } from '@kosmo/core/activitypub-note-content/server';
 import type { Note } from '@fedify/vocab';
 
 export function projectFedifyNoteContent(note: Pick<Note, 'content' | 'mediaType' | 'summary'>) {

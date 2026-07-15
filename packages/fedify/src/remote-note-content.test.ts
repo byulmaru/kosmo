@@ -9,7 +9,14 @@ describe('projectFedifyNoteContent', () => {
       projectFedifyNoteContent(
         new Note({ content: '<p>body</p>', summary: '<p>warning</p>', mediaType: 'text/html' }),
       ),
-      { bodyText: 'body', contentWarning: 'warning' },
+      {
+        version: 1,
+        summary: 'warning',
+        body: {
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'body' }] }],
+        },
+      },
     );
   });
 
@@ -22,7 +29,14 @@ describe('projectFedifyNoteContent', () => {
           mediaType: 'text/html',
         }),
       ),
-      { bodyText: '본문', contentWarning: '주의' },
+      {
+        version: 1,
+        summary: '주의',
+        body: {
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: '본문' }] }],
+        },
+      },
     );
   });
 });
