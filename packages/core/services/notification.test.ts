@@ -1,7 +1,17 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { eq, inArray, or } from 'drizzle-orm';
-import { db, firstOrThrow, Instances, Notifications, pg, ProfileFollows, Profiles } from '../db';
+import {
+  createId,
+  db,
+  firstOrThrow,
+  Instances,
+  Notifications,
+  pg,
+  ProfileFollows,
+  Profiles,
+  TableDiscriminator,
+} from '../db';
 import { InstanceKind, InstanceState, NotificationKind, ProfileFollowPolicy } from '../enums';
 import { NotFoundError } from '../error';
 import { createFollowNotification, deleteNotificationBySource } from './notification';
@@ -68,7 +78,7 @@ test('Follow 알림은 source에서 Local Recipient와 Related Profile을 파생
     followeeProfileId: followee.id,
   });
 
-  await createFollowNotification(profileFollow);
+  await createFollowNotification(profileFollow.id);
 
   const [notification] = await readNotifications(profileFollow.id);
   assert.ok(notification);
@@ -88,7 +98,7 @@ test('Follow 알림은 materialize된 Remote Follower도 같은 mapping으로 �
     followeeProfileId: followee.id,
   });
 
-  await createFollowNotification(profileFollow);
+  await createFollowNotification(profileFollow.id);
 
   const [notification] = await readNotifications(profileFollow.id);
   assert.equal(notification?.recipientProfileId, followee.id);
@@ -104,7 +114,24 @@ test('Follow 알림은 Remote Recipient source를 거부한다', async () => {
     .returning()
     .then(firstOrThrow);
 
-  await assert.rejects(createFollowNotification(profileFollow), NotFoundError);
+  await assert.rejects(createFollowNotification(profileFollow.id), NotFoundError);
+  assert.deepEqual(await readNotifications(profileFollow.id), []);
+});
+
+test('Follow 알림은 존재하지 않거나 삭제된 source를 거부한다', async () => {
+  const missingSourceId = createId(TableDiscriminator.ProfileFollows);
+  await assert.rejects(createFollowNotification(missingSourceId), NotFoundError);
+  assert.deepEqual(await readNotifications(missingSourceId), []);
+
+  const follower = await createProfile();
+  const followee = await createProfile();
+  const { profileFollow } = await followProfile({
+    followerProfileId: follower.id,
+    followeeProfileId: followee.id,
+  });
+  await unfollowProfile({ followerProfileId: follower.id, followeeProfileId: followee.id });
+
+  await assert.rejects(createFollowNotification(profileFollow.id), NotFoundError);
   assert.deepEqual(await readNotifications(profileFollow.id), []);
 });
 
@@ -117,12 +144,12 @@ test('Follow 알림 생성과 삭제는 반복 및 동시 호출에 idempotent�
   });
 
   await Promise.all([
-    createFollowNotification(profileFollow),
-    createFollowNotification(profileFollow),
+    createFollowNotification(profileFollow.id),
+    createFollowNotification(profileFollow.id),
   ]);
   assert.equal((await readNotifications(profileFollow.id)).length, 1);
 
-  await createFollowNotification(profileFollow);
+  await createFollowNotification(profileFollow.id);
   assert.equal((await readNotifications(profileFollow.id)).length, 1);
 
   await deleteNotificationBySource(NotificationKind.FOLLOW, profileFollow.id);
@@ -137,7 +164,7 @@ test('Unfollow 뒤 Re-follow는 새 source ID로 새 알림을 저장한다', as
     followerProfileId: follower.id,
     followeeProfileId: followee.id,
   });
-  await createFollowNotification(firstFollow.profileFollow);
+  await createFollowNotification(firstFollow.profileFollow.id);
 
   const deleted = await unfollowProfile({
     followerProfileId: follower.id,
@@ -150,7 +177,7 @@ test('Unfollow 뒤 Re-follow는 새 source ID로 새 알림을 저장한다', as
     followerProfileId: follower.id,
     followeeProfileId: followee.id,
   });
-  await createFollowNotification(secondFollow.profileFollow);
+  await createFollowNotification(secondFollow.profileFollow.id);
 
   assert.notEqual(secondFollow.profileFollow.id, firstFollow.profileFollow.id);
   assert.deepEqual(await readNotifications(firstFollow.profileFollow.id), []);

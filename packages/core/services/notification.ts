@@ -1,35 +1,32 @@
 import { and, eq } from 'drizzle-orm';
-import { db, firstOrThrowWith, Instances, Notifications, Profiles } from '../db';
+import { db, firstOrThrowWith, Instances, Notifications, ProfileFollows, Profiles } from '../db';
 import { InstanceKind, NotificationKind } from '../enums';
 import { NotFoundError } from '../error';
-import type { ProfileFollows } from '../db';
 
-type ProfileFollowSource = Pick<
-  typeof ProfileFollows.$inferSelect,
-  'id' | 'followerProfileId' | 'followeeProfileId'
->;
+export const createFollowNotification = async (sourceId: string): Promise<void> =>
+  db.transaction(async (tx) => {
+    const source = await tx
+      .select({ id: ProfileFollows.id, recipientProfileId: ProfileFollows.followeeProfileId })
+      .from(ProfileFollows)
+      .innerJoin(Profiles, eq(Profiles.id, ProfileFollows.followeeProfileId))
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(and(eq(ProfileFollows.id, sourceId), eq(Instances.kind, InstanceKind.LOCAL)))
+      .limit(1)
+      .for('key share', { of: ProfileFollows })
+      .then(firstOrThrowWith(() => new NotFoundError('Profile follow not found')));
 
-export const createFollowNotification = async (source: ProfileFollowSource): Promise<void> => {
-  await db
-    .select({ id: Profiles.id })
-    .from(Profiles)
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(and(eq(Profiles.id, source.followeeProfileId), eq(Instances.kind, InstanceKind.LOCAL)))
-    .limit(1)
-    .then(firstOrThrowWith(() => new NotFoundError('Profile not found')));
-
-  await db
-    .insert(Notifications)
-    .values({
-      data: {},
-      kind: NotificationKind.FOLLOW,
-      recipientProfileId: source.followeeProfileId,
-      sourceId: source.id,
-    })
-    .onConflictDoNothing({
-      target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
-    });
-};
+    await tx
+      .insert(Notifications)
+      .values({
+        data: {},
+        kind: NotificationKind.FOLLOW,
+        recipientProfileId: source.recipientProfileId,
+        sourceId: source.id,
+      })
+      .onConflictDoNothing({
+        target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
+      });
+  });
 
 export const deleteNotificationBySource = async (
   kind: NotificationKind,
