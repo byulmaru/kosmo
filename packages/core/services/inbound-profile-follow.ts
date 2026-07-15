@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNotNull, lte, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import {
   ActivityPubActors,
   first,
@@ -18,7 +18,6 @@ type ProfileFollowRequestRow = typeof ProfileFollowRequests.$inferSelect;
 export interface InboundFollowCorrelation {
   readonly activityId: string | null;
   readonly actorUri: string;
-  readonly generation: Temporal.Instant;
   readonly objectUri: string;
 }
 
@@ -42,7 +41,6 @@ export type RecordInboundFollowResult =
 
 export interface RemoveInboundFollowInput {
   readonly actorUri: string;
-  readonly expectedGeneration: Temporal.Instant;
   readonly followeeProfileId: string;
   readonly followerProfileId: string;
   readonly objectUri: string;
@@ -63,17 +61,10 @@ const pairCondition = (
     eq(table.followeeProfileId, followeeProfileId),
   );
 
-const laterGeneration = (
-  current: Temporal.Instant | null,
-  incoming: Temporal.Instant,
-): Temporal.Instant =>
-  current === null || Temporal.Instant.compare(current, incoming) < 0 ? incoming : current;
-
 const correlationUpdate = <
   Row extends {
     inboundFollowActivityId: string | null;
     inboundFollowActorUri: string | null;
-    inboundFollowGeneration: Temporal.Instant | null;
     inboundFollowObjectUri: string | null;
   },
 >(
@@ -82,14 +73,12 @@ const correlationUpdate = <
 ) => ({
   inboundFollowActivityId: row.inboundFollowActivityId ?? correlation.activityId,
   inboundFollowActorUri: row.inboundFollowActorUri ?? correlation.actorUri,
-  inboundFollowGeneration: laterGeneration(row.inboundFollowGeneration, correlation.generation),
   inboundFollowObjectUri: row.inboundFollowObjectUri ?? correlation.objectUri,
 });
 
 const correlationValues = (correlation: InboundFollowCorrelation) => ({
   inboundFollowActivityId: correlation.activityId,
   inboundFollowActorUri: correlation.actorUri,
-  inboundFollowGeneration: correlation.generation,
   inboundFollowObjectUri: correlation.objectUri,
 });
 
@@ -216,13 +205,7 @@ export const recordInboundFollow = async (
   });
 
 export const removeInboundFollow = async (
-  {
-    actorUri,
-    expectedGeneration,
-    followeeProfileId,
-    followerProfileId,
-    objectUri,
-  }: RemoveInboundFollowInput,
+  { actorUri, followeeProfileId, followerProfileId, objectUri }: RemoveInboundFollowInput,
   tx?: Transaction,
 ): Promise<RemoveInboundFollowResult> =>
   getDatabaseConnection(tx).transaction(async (tx) => {
@@ -241,8 +224,6 @@ export const removeInboundFollow = async (
             eq(ProfileFollows.id, profileFollow.id),
             eq(ProfileFollows.inboundFollowActorUri, actorUri),
             eq(ProfileFollows.inboundFollowObjectUri, objectUri),
-            isNotNull(ProfileFollows.inboundFollowGeneration),
-            lte(ProfileFollows.inboundFollowGeneration, expectedGeneration),
           ),
         )
         .returning({ id: ProfileFollows.id })
@@ -282,8 +263,6 @@ export const removeInboundFollow = async (
           eq(ProfileFollowRequests.id, profileFollowRequest.id),
           eq(ProfileFollowRequests.inboundFollowActorUri, actorUri),
           eq(ProfileFollowRequests.inboundFollowObjectUri, objectUri),
-          isNotNull(ProfileFollowRequests.inboundFollowGeneration),
-          lte(ProfileFollowRequests.inboundFollowGeneration, expectedGeneration),
         ),
       )
       .returning({ id: ProfileFollowRequests.id })

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, describe, test } from 'node:test';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import {
   ActivityPubActors,
   db,
@@ -19,11 +19,6 @@ import {
   ProfileState,
 } from '../enums';
 import { recordInboundFollow, removeInboundFollow } from './inbound-profile-follow';
-
-const t1 = Temporal.Instant.from('2026-07-15T01:00:00Z');
-const t2 = Temporal.Instant.from('2026-07-15T02:00:00Z');
-const t3 = Temporal.Instant.from('2026-07-15T03:00:00Z');
-const t4 = Temporal.Instant.from('2026-07-15T04:00:00Z');
 
 after(async () => pg.end());
 
@@ -84,12 +79,11 @@ const createPair = async (followPolicy: ProfileFollowPolicy) => {
   return { actorUri, followee: followee!, follower: follower!, objectUri };
 };
 
-const correlation = (
-  actorUri: string,
-  objectUri: string,
-  activityId: string,
-  generation: Temporal.Instant,
-) => ({ activityId, actorUri, generation, objectUri });
+const correlation = (actorUri: string, objectUri: string, activityId: string) => ({
+  activityId,
+  actorUri,
+  objectUri,
+});
 
 const getProfiles = async (followerProfileId: string, followeeProfileId: string) => ({
   followee: await db
@@ -105,16 +99,16 @@ const getProfiles = async (followerProfileId: string, followeeProfileId: string)
 });
 
 describe('inbound profile follow service', () => {
-  test('keeps first metadata, advances generation, and rejects delayed Undo', async () => {
+  test('keeps first metadata and removes the current relation by matching Undo', async () => {
     const { actorUri, followee, follower, objectUri } = await createPair(ProfileFollowPolicy.OPEN);
     const input = { followeeProfileId: followee.id, followerProfileId: follower.id };
     const first = await recordInboundFollow({
       ...input,
-      correlation: correlation(actorUri, objectUri, 'https://remote.example/follow/1', t1),
+      correlation: correlation(actorUri, objectUri, 'https://remote.example/follow/1'),
     });
     const duplicate = await recordInboundFollow({
       ...input,
-      correlation: correlation(actorUri, objectUri, 'https://remote.example/follow/3', t3),
+      correlation: correlation(actorUri, objectUri, 'https://remote.example/follow/3'),
     });
 
     assert.equal(first.kind, 'ESTABLISHED');
@@ -128,41 +122,33 @@ describe('inbound profile follow service', () => {
       duplicate.profileFollow.inboundFollowActivityId,
       'https://remote.example/follow/1',
     );
-    assert.equal(duplicate.profileFollow.inboundFollowGeneration?.equals(t3), true);
     assert.equal(
       await removeInboundFollow({
         ...input,
-        actorUri,
-        expectedGeneration: t2,
+        actorUri: `${actorUri}/mismatch`,
         objectUri,
       }),
       null,
     );
-
-    const preserved = await db
-      .select()
-      .from(ProfileFollows)
-      .where(
-        and(
-          eq(ProfileFollows.followerProfileId, follower.id),
-          eq(ProfileFollows.followeeProfileId, followee.id),
-        ),
-      )
-      .then(firstOrThrow);
-    assert.equal(preserved.id, duplicate.profileFollow.id);
     assert.deepEqual(await getProfiles(follower.id, followee.id), {
       followee: { ...followee, followersCount: 1 },
       follower: { ...follower, followingCount: 1 },
     });
-
     assert.deepEqual(
       await removeInboundFollow({
         ...input,
         actorUri,
-        expectedGeneration: t4,
         objectUri,
       }),
-      { deletedId: preserved.id, kind: 'ESTABLISHED' },
+      { deletedId: duplicate.profileFollow.id, kind: 'ESTABLISHED' },
+    );
+    assert.equal(
+      await removeInboundFollow({
+        ...input,
+        actorUri,
+        objectUri,
+      }),
+      null,
     );
     assert.deepEqual(await getProfiles(follower.id, followee.id), {
       followee,
@@ -177,11 +163,11 @@ describe('inbound profile follow service', () => {
     const input = { followeeProfileId: followee.id, followerProfileId: follower.id };
     const first = await recordInboundFollow({
       ...input,
-      correlation: correlation(actorUri, objectUri, 'https://remote.example/follow/1', t1),
+      correlation: correlation(actorUri, objectUri, 'https://remote.example/follow/1'),
     });
     const duplicate = await recordInboundFollow({
       ...input,
-      correlation: correlation(actorUri, objectUri, 'https://remote.example/follow/3', t3),
+      correlation: correlation(actorUri, objectUri, 'https://remote.example/follow/3'),
     });
 
     assert.equal(first.kind, 'PENDING');
@@ -195,13 +181,11 @@ describe('inbound profile follow service', () => {
       duplicate.profileFollowRequest.inboundFollowActivityId,
       'https://remote.example/follow/1',
     );
-    assert.equal(duplicate.profileFollowRequest.inboundFollowGeneration?.equals(t3), true);
     assert.deepEqual(await getProfiles(follower.id, followee.id), { followee, follower });
     assert.deepEqual(
       await removeInboundFollow({
         ...input,
         actorUri,
-        expectedGeneration: t4,
         objectUri,
       }),
       { deletedId: duplicate.profileFollowRequest.id, kind: 'PENDING' },
@@ -223,11 +207,11 @@ describe('inbound profile follow service', () => {
     const results = await Promise.all([
       recordInboundFollow({
         ...input,
-        correlation: correlation(actorUri, objectUri, 'https://remote.example/follow/1', t1),
+        correlation: correlation(actorUri, objectUri, 'https://remote.example/follow/1'),
       }),
       recordInboundFollow({
         ...input,
-        correlation: correlation(actorUri, objectUri, 'https://remote.example/follow/3', t3),
+        correlation: correlation(actorUri, objectUri, 'https://remote.example/follow/3'),
       }),
     ]);
 
@@ -241,7 +225,7 @@ describe('inbound profile follow service', () => {
   test('does not delete a new exact-row refollow that replaces the captured row', async () => {
     const { actorUri, followee, follower, objectUri } = await createPair(ProfileFollowPolicy.OPEN);
     const original = await recordInboundFollow({
-      correlation: correlation(actorUri, objectUri, 'https://remote.example/follow/1', t1),
+      correlation: correlation(actorUri, objectUri, 'https://remote.example/follow/1'),
       followeeProfileId: followee.id,
       followerProfileId: follower.id,
     });
@@ -269,7 +253,6 @@ describe('inbound profile follow service', () => {
         .values({
           inboundFollowActivityId: 'https://remote.example/follow/3',
           inboundFollowActorUri: actorUri,
-          inboundFollowGeneration: t3,
           inboundFollowObjectUri: objectUri,
           followeeProfileId: followee.id,
           followerProfileId: follower.id,
@@ -281,7 +264,6 @@ describe('inbound profile follow service', () => {
     await rowCaptured;
     const removal = removeInboundFollow({
       actorUri,
-      expectedGeneration: t4,
       followeeProfileId: followee.id,
       followerProfileId: follower.id,
       objectUri,
@@ -309,7 +291,7 @@ describe('inbound profile follow service', () => {
       db.transaction(async (tx) => {
         await recordInboundFollow(
           {
-            correlation: correlation(actorUri, objectUri, 'https://remote.example/follow/1', t1),
+            correlation: correlation(actorUri, objectUri, 'https://remote.example/follow/1'),
             followeeProfileId: followee.id,
             followerProfileId: follower.id,
           },

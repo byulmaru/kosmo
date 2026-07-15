@@ -98,12 +98,10 @@ export const handleInboundFollow = async (
     return;
   }
 
-  const generation = follow.published ?? now;
   const result = await recordInboundFollow({
     correlation: {
       activityId: follow.id?.href ?? null,
       actorUri: actorUri.href,
-      generation,
       objectUri: objectUri.href,
     },
     followeeProfileId: localRecipient.profile.id,
@@ -135,11 +133,7 @@ const noNetworkDocumentLoader = async (url: string) => {
   throw new Error(`Network lookup is disabled for inbound Undo: ${url}`);
 };
 
-export const handleInboundUndo = async (
-  context: InboxContext<void>,
-  undo: Undo,
-  now: Temporal.Instant = getNow(),
-): Promise<void> => {
+export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo): Promise<void> => {
   const actorUri = undo.actorId;
   if (!isHttpUri(actorUri)) {
     return;
@@ -182,7 +176,6 @@ export const handleInboundUndo = async (
 
   await removeInboundFollow({
     actorUri: actorUri.href,
-    expectedGeneration: undo.published ?? now,
     followeeProfileId: localRecipient.profile.id,
     followerProfileId: remoteActor.profile.id,
     objectUri: objectUri.href,

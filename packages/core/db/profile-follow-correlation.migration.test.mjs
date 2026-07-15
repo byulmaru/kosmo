@@ -80,14 +80,12 @@ test('adds nullable inbound correlation without backfilling existing follow rows
         SELECT
           inbound_follow_activity_id,
           inbound_follow_actor_uri,
-          inbound_follow_object_uri,
-          inbound_follow_generation
+          inbound_follow_object_uri
         FROM ${table}
       `);
       assert.deepEqual(row, {
         inbound_follow_activity_id: null,
         inbound_follow_actor_uri: null,
-        inbound_follow_generation: null,
         inbound_follow_object_uri: null,
       });
     }

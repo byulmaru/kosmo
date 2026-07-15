@@ -1655,19 +1655,6 @@
     {
       "type": "timestamp with time zone",
       "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "inbound_follow_generation",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "profile_follow_request"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": "now()",
@@ -1752,19 +1739,6 @@
       "generated": null,
       "identity": null,
       "name": "inbound_follow_object_uri",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "profile_follow"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "inbound_follow_generation",
       "entityType": "columns",
       "schema": "public",
       "table": "profile_follow"

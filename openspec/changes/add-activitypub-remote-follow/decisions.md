@@ -29,15 +29,15 @@
 - Decision Date: 2026-07-15
 - Status: Accepted
 - Context / Problem: `profile_follow_request`의 pending-only row와 actor pair uniqueness가 이미 고정되어 있어 PROD-243이 PROD-272의 service 구현을 기다려야 할 데이터 계약 의존성이 없으며, Linear에서도 blocker 관계와 선행 문구를 제거했다.
-- Decision Outcome: PROD-243은 ActivityPub 검증 뒤 remote pending request 생성과 inbound correlation/generation을 소유한다. PROD-272는 local request 생성과 local/remote 공통 조회·승인·거절·취소 lifecycle을 소유하며 두 이슈는 병렬 구현한다. 이 결정은 같은 날짜의 이전 "Pending-only request lifecycle은 PROD-272가 소유한다" 결정을 대체한다.
+- Decision Outcome: PROD-243은 ActivityPub 검증 뒤 remote pending request 생성과 inbound correlation을 소유한다. PROD-272는 local request 생성과 local/remote 공통 조회·승인·거절·취소 lifecycle을 소유하며 두 이슈는 병렬 구현한다. 이 결정은 같은 날짜의 이전 "Pending-only request lifecycle은 PROD-272가 소유한다" 결정을 대체한다.
 - Alternatives Considered: PROD-272가 remote request 생성 service까지 먼저 제공, PROD-243이 전체 request lifecycle을 흡수.
 - Consequences: PROD-243은 PROD-272를 기다리지 않고 구현할 수 있지만, 두 구현은 동일한 pending-only invariant를 지켜야 하며 최종 통합은 PROD-361이 검증한다.
 - Confirmation / Follow-up: PROD-243은 remote request 생성·duplicate·Undo를, PROD-272는 local 생성과 local/remote 공통 처리 transition을 각자 검증한다.
 
-### Inbound correlation과 조건부 삭제는 PROD-243이 소유한다
+### Inbound correlation과 generation 조건부 삭제는 PROD-243이 소유한다
 
 - Decision Date: 2026-07-15
-- Status: Accepted
+- Status: Superseded
 - Context / Problem: 완료된 PROD-240에는 correlation/generation이 없고 PROD-243/244가 삭제 primitive 소유권을 다르게 기술했다.
 - Decision Outcome: PROD-243이 inbound first-wins identity/response metadata, monotonic generation, exact-row·expected-generation relation/request 삭제와 relation count transaction을 제공한다. PROD-244는 이 primitive를 재사용한다.
 - Alternatives Considered: PROD-240을 다시 열기, PROD-244가 primitive를 구현, 별도 foundation 이슈 추가.
@@ -57,12 +57,22 @@
 ### Remote Follow ID는 advisory이고 generation은 단조 증가한다
 
 - Decision Date: 2026-07-15
-- Status: Accepted
+- Status: Superseded
 - Context / Problem: remote 서버가 Follow ID를 누락·재사용할 수 있고 늦은 Undo가 새 관계를 삭제할 수 있다.
 - Decision Outcome: actor/object/recipient가 canonical correlation 조건이며 ID는 hint로만 사용한다. first-wins metadata는 보존하고 verified duplicate Follow의 generation만 max 갱신한다.
 - Alternatives Considered: Follow ID exact match 필수, 모든 activity ID를 durable log에 저장.
 - Consequences: published가 없는 activity는 수신 시각 fallback을 사용하며 완전한 네트워크 순서 복원은 보장하지 않는다.
 - Confirmation / Follow-up: duplicate Follow와 delayed Undo 순서를 테스트한다.
+
+### Inbound Undo는 generation 없이 actor/object와 exact row로 처리한다
+
+- Decision Date: 2026-07-15
+- Status: Accepted
+- Context / Problem: remote `published`는 clock skew와 누락 가능성이 있고, 누락 시 사용하는 local 수신 시각은 다른 시간 기준이다. 두 값을 관계 generation으로 혼합해 지연 Undo를 차단하는 것은 durable activity history가 없는 현재 projection에 비해 과도한 방어다.
+- Decision Outcome: PROD-243은 inbound Follow activity identity와 actor/object response metadata만 first-wins로 저장하고 generation을 저장하지 않는다. 검증된 embedded Undo(Follow)는 actor/object/recipient가 일치하면 같은 pair의 현재 unfollow 의사로 처리하며, 처리 중 확인한 exact row id가 일치할 때 relation/request를 삭제한다. 이 결정은 "Inbound correlation과 generation 조건부 삭제는 PROD-243이 소유한다"와 "Remote Follow ID는 advisory이고 generation은 단조 증가한다"의 inbound generation 결정을 대체한다.
+- Alternatives Considered: remote `published`와 수신 시각으로 monotonic generation 유지, durable activity log로 logical Follow generation 추적.
+- Consequences: actor/object가 같은 지연 Undo가 현재 같은-pair 관계를 제거할 수 있으며 이를 remote actor의 현재 unfollow 의사로 받아들인다. exact-row 조건은 삭제 대기 중 새 row로 교체된 refollow를 보호하고, durable 순서 복원이 필요해지면 별도 activity log capability에서 다룬다.
+- Confirmation / Follow-up: duplicate Follow/Undo idempotency, exact-row refollow race와 actor/object/recipient mismatch를 테스트한다.
 
 ### SUSPENDED 관계는 보존한다
 
@@ -101,6 +111,6 @@
 
 ## Superseded Decisions
 
-- 초기 design의 “PROD-240이 correlation/generation과 조건부 삭제를 제공한다”는 가정은 PROD-243 소유 결정으로 대체한다. PROD-240의 실제 병합 범위는 저장 count와 relation/count transaction 기반이다.
+- 초기 design의 “PROD-240이 correlation/generation과 조건부 삭제를 제공한다”는 가정은 PROD-243 소유 결정으로 대체한다. PROD-240의 실제 병합 범위는 저장 count와 relation/count transaction 기반이다. 이후 PROD-243의 inbound generation 선택은 generation 없는 exact-row 결정으로 다시 대체됐다.
 - 초기 design의 SUSPENDED local-only deletion과 nullable unfollow payload는 SUSPENDED 관계 보존·NotFound 결정으로 대체한다.
 - 초기 design의 outbound correlation metadata 저장 요구는 `ProfileFollow.id`/`createdAt`과 actor identity에서 파생하는 결정으로 대체한다.

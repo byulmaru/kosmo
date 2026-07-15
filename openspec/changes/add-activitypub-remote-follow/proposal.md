@@ -7,8 +7,8 @@
 ## What Changes
 
 - 완료된 저장 count, core action, remote actor materialization과 Fedify inbox route를 현재 기반으로 기록한다.
-- remote follow/unfollow mutation은 PROD-242, inbound Follow/Undo와 remote pending request 생성·correlation/generation·조건부 삭제는 PROD-243, local request 생성과 local/remote 공통 처리 lifecycle은 PROD-272, inbound Accept/Reject는 PROD-244가 소유하도록 분리한다.
-- PROD-243과 PROD-272는 고정된 pending-only DB 계약을 기준으로 병렬 구현하고, PROD-244는 PROD-243의 exact-row·expected-generation 삭제 primitive를 재사용한다.
+- remote follow/unfollow mutation은 PROD-242, inbound Follow/Undo와 remote pending request 생성·correlation·조건부 삭제는 PROD-243, local request 생성과 local/remote 공통 처리 lifecycle은 PROD-272, inbound Accept/Reject는 PROD-244가 소유하도록 분리한다.
+- PROD-243과 PROD-272는 고정된 pending-only DB 계약을 기준으로 병렬 구현하고, PROD-244는 PROD-243의 exact-row 삭제 primitive를 재사용한다.
 - `SUSPENDED` remote profile의 기존 relation/count를 보존하고 GraphQL follow/unfollow에서 NotFound로 숨긴다.
 - PROD-245의 DB-known follow graph와 PROD-263의 Web follow action을 별도 구현 slice로 유지한다.
 - PROD-282의 SUSPENDED 회귀 검증과 PROD-361의 최종 통합 검증·archive를 별도 구현 slice로 유지하고, 부모 PROD-235는 자체 PR 없이 전체 완료 판단만 소유한다.
@@ -24,7 +24,7 @@
 ### Modified Capabilities
 
 - `activitypub-actor-discovery`: 병합된 actor-scoped/shared inbox route와 activity-neutral handler 위임 경계를 반영한다.
-- `data-model`: 저장 count와 inbound Follow correlation/generation, pending-only request 연계를 정의한다.
+- `data-model`: 저장 count와 inbound Follow correlation, pending-only request 연계를 정의한다.
 - `profile`: remote follow mutation, DB-known follow graph, 저장 count와 SUSPENDED 관계 보존 계약을 정의한다.
 - `web-app-shell`: remote profile follow action의 구현 소유권을 PROD-263으로 고정한다.
 

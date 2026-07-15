@@ -343,7 +343,6 @@ export const ProfileFollows = pgTable(
     inboundFollowActivityId: text('inbound_follow_activity_id'),
     inboundFollowActorUri: text('inbound_follow_actor_uri'),
     inboundFollowObjectUri: text('inbound_follow_object_uri'),
-    inboundFollowGeneration: datetime('inbound_follow_generation'),
     createdAt: createdAt(),
   },
   (table) => [
@@ -368,7 +367,6 @@ export const ProfileFollowRequests = pgTable(
     inboundFollowActivityId: text('inbound_follow_activity_id'),
     inboundFollowActorUri: text('inbound_follow_actor_uri'),
     inboundFollowObjectUri: text('inbound_follow_object_uri'),
-    inboundFollowGeneration: datetime('inbound_follow_generation'),
     createdAt: createdAt(),
   },
   (table) => [

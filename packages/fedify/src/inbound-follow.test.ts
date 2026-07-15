@@ -172,7 +172,6 @@ describe('inbound Follow and Undo', () => {
       followeeProfileId: fixture.localProfile.id,
       followerProfileId: fixture.remoteProfile.id,
       inboundFollowActorUri: remoteActorUri.href,
-      inboundFollowGeneration: Temporal.Instant.from('2026-07-15T00:00:00Z'),
       inboundFollowObjectUri: localActorUri.href,
     });
     await db.update(Profiles).set({ followersCount: 1 }).where(eq(Profiles.id, localProfileId));

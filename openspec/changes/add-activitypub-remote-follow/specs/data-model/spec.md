@@ -33,7 +33,7 @@
 - **THEN** 시스템은 같은 transaction에서 follower profile의 following count와 followee profile의 followers count를 1씩 감소시킨다
 - **AND** 저장 count는 0보다 작아질 수 없다
 - **AND** follow 관계가 없어 idempotent unfollow로 처리되는 경우에는 저장 count를 변경하지 않는다
-- **AND** 조건부 삭제가 expected row/generation 불일치로 적용되지 않으면 저장 count도 변경하지 않는다
+- **AND** 조건부 삭제가 expected row 불일치로 적용되지 않으면 저장 count도 변경하지 않는다
 
 #### Scenario: Preserve stored relation and counts when a remote instance is suspended
 
@@ -76,15 +76,14 @@
 
 - **WHEN** remote ActivityPub profile이 local profile을 follow한다
 - **THEN** 시스템은 local follow policy에 따라 remote follower와 local followee 사이의 established `ProfileFollow` 관계 또는 pending `ProfileFollowRequest` 요청을 저장한다
-- **AND** inbound Follow activity identity, response metadata, generation timestamp는 duplicate correlation, Undo freshness guard, Accept/Reject response 구성에 사용할 수 있어야 한다
+- **AND** inbound Follow activity identity와 response metadata는 duplicate correlation과 Accept/Reject response 구성에 사용할 수 있어야 한다
 - **AND** 같은 remote follower와 local followee pair의 pending `ProfileFollowRequest`가 이미 있으면 기존 inbound Follow activity identity 또는 response metadata를 유지하고 새 duplicate Follow의 metadata로 갱신하지 않는다
 - **AND** 같은 remote follower와 local followee pair의 established `ProfileFollow`가 이미 있으면 기존 inbound Follow response metadata를 유지하고 같은 id의 재전달 또는 새 Follow id를 가진 duplicate Follow의 metadata로 갱신하지 않는다
-- **AND** duplicate Follow가 검증되면 first-wins response metadata를 유지하더라도 inbound Follow generation timestamp는 현재 저장된 timestamp보다 최신인 Follow activity timestamp로 갱신할 수 있어야 한다
 - **AND** duplicate inbound Follow에 대한 `Accept(Follow)` response object는 저장된 first-wins metadata가 아니라 현재 검증을 통과한 수신 Follow object를 사용할 수 있어야 한다
-- **AND** inbound `Undo(Follow)`는 저장된 inbound Follow id가 다르거나 object id가 없더라도 verified same actor/object이고 activity timestamp가 현재 inbound Follow generation timestamp보다 오래되지 않았으면 해당 관계 또는 request를 취소하는 의사로 처리할 수 있어야 한다
-- **AND** relation/request 삭제는 exact row와 expected generation이 모두 일치할 때만 적용되고, established relation을 실제 삭제한 transaction만 저장 count를 감소시켜야 한다
+- **AND** inbound `Undo(Follow)`는 저장된 inbound Follow id가 다르거나 object id가 없더라도 verified same actor/object이면 현재 관계 또는 request를 취소하는 의사로 처리할 수 있어야 한다
+- **AND** relation/request 삭제는 처리 중 확인한 exact row가 일치할 때만 적용되고, established relation을 실제 삭제한 transaction만 저장 count를 감소시켜야 한다
 - **AND** IRI-only `Undo.object`는 이번 capability에서 inbound Follow metadata로 역조회하지 않고 side effect 없이 무시할 수 있어야 한다
-- **AND** Fedify inbox idempotency는 조기 중복 제거로만 사용하고, durable relation/request side effect는 PostgreSQL unique 제약과 correlation/generation 조건이 source of truth여야 한다
+- **AND** Fedify inbox idempotency는 조기 중복 제거로만 사용하고, durable relation/request side effect는 PostgreSQL unique 제약과 exact-row 조건이 source of truth여야 한다
 
 #### Scenario: Remove rejected remote follow projection
 
@@ -110,7 +109,7 @@
 #### Scenario: 원격 팔로우 activity correlation 추적
 
 - **WHEN** 팔로우 관계가 ActivityPub remote profile을 포함한다
-- **THEN** inbound Follow activity identity, actor/object URI, generation과 response metadata는 해당 `ProfileFollow` 관계 또는 inbound `ProfileFollowRequest` 요청과 연결할 수 있어야 한다
+- **THEN** inbound Follow activity identity, actor/object URI와 response metadata는 해당 `ProfileFollow` 관계 또는 inbound `ProfileFollowRequest` 요청과 연결할 수 있어야 한다
 - **AND** outbound Follow identity, actor/object URI, generation과 Fedify `orderingKey`는 established `ProfileFollow`와 저장된 actor identity에서 안정적으로 파생할 수 있어야 한다
 - **AND** Accept, Reject, Undo activity identity의 durable history 저장은 이번 domain table 요구사항이 아니며 Fedify idempotency 또는 후속 activity log capability의 책임이다
 - **AND** transport delivery retry와 queue metadata는 Fedify가 소유하며 local-only follow 관계의 필수 값이 아니다
