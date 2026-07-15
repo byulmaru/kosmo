@@ -107,7 +107,7 @@
 - **WHEN** Fedify inbox listener가 verified follow protocol activity를 전달하고 remote actor가 저장된 ActivityPub remote `Profile`로 조회된다
 - **THEN** 시스템은 remote actor의 instance 상태를 확인한다
 - **AND** remote actor instance가 `SUSPENDED`이면 `ProfileFollow` 또는 `ProfileFollowRequest`를 생성, 갱신, 삭제하지 않고 outbound Accept 또는 Reject를 발송하지 않는다
-- **AND** remote actor instance가 `UNRESPONSIVE`이면 시스템은 해당 inbound activity를 reachability signal로 보고 instance 상태를 `ACTIVE`로 갱신한 뒤 follow protocol 처리를 계속한다
+- **AND** remote actor instance가 `UNRESPONSIVE`이면 시스템은 Fedify가 전달한 verified inbound activity 자체를 object 지원 여부와 무관한 reachability signal로 보고 instance 상태를 `ACTIVE`로 갱신한 뒤 지원되는 follow protocol 처리를 계속한다
 
 #### Scenario: Receive remote Follow for local actor
 
@@ -121,33 +121,31 @@
 - **AND** `Follow.object`가 활성 local followee profile을 식별하지 못하면 `ProfileFollow` 또는 `ProfileFollowRequest`를 생성하거나 갱신하지 않고 `Accept(Follow)`도 발송하지 않는다
 - **AND** remote follower와 local followee 사이에 established `ProfileFollow` 관계가 이미 있으면 시스템은 해당 관계를 idempotent하게 유지하고 `ProfileFollowRequest`를 생성하지 않는다
 - **AND** remote follower와 local followee 사이에 established `ProfileFollow` 관계가 이미 있으면 같은 pair의 pending `ProfileFollowRequest`를 같은 transaction 안에서 삭제한다
-- **AND** existing established 관계에 대해 같은 id의 Follow가 재전달되거나 같은 pair의 새 Follow id가 전달되어도 시스템은 저장된 inbound Follow response metadata를 갱신하지 않는다
-- **AND** existing established 관계에 대해 같은 id의 Follow가 재전달되거나 같은 pair의 새 Follow id가 전달되면 시스템은 response metadata를 갱신하지 않더라도 Undo freshness guard에 사용할 inbound follow generation timestamp를 현재 저장된 timestamp보다 최신인 검증된 Follow activity timestamp로 갱신할 수 있다
+- **AND** existing established 관계에 대해 같은 id의 Follow가 재전달되거나 같은 pair의 새 Follow id가 전달되어도 시스템은 별도 inbound correlation metadata를 저장하지 않고 기존 관계를 유지한다
 - **AND** existing established 관계가 있거나 local profile follow policy가 `OPEN`이면 Fedify `sendActivity`로 현재 검증을 통과한 수신 Follow를 object로 하는 `Accept(Follow)` activity를 remote actor에게 발송한다
 - **AND** established 관계가 없고 local profile follow policy가 `OPEN`이면 remote profile을 follower, local profile을 followee로 하는 established `ProfileFollow` 관계를 생성한다
 - **AND** established 관계가 없고 local profile follow policy가 `OPEN`이면 같은 pair의 pending `ProfileFollowRequest`를 같은 transaction 안에서 삭제한다
 - **AND** established 관계가 없고 local profile follow policy가 `APPROVAL_REQUIRED`이면 remote profile을 follower, local profile을 followee로 하는 `ProfileFollowRequest`를 생성하거나 기존 request를 유지한다
-- **AND** `APPROVAL_REQUIRED` request 생성은 local/remote 공통 pending-only request boundary를 사용하며 ActivityPub handler는 검증된 actor pair와 inbound correlation metadata를 전달한다
-- **AND** 기존 `ProfileFollowRequest`를 유지하는 duplicate Follow에서는 저장된 inbound Follow response metadata를 갱신하지 않는다
-- **AND** 기존 `ProfileFollowRequest`를 유지하는 duplicate Follow에서도 Undo freshness guard에 사용할 inbound follow generation timestamp를 현재 저장된 timestamp보다 최신인 검증된 Follow activity timestamp로 갱신할 수 있다
+- **AND** `APPROVAL_REQUIRED` remote request 생성은 ActivityPub handler가 검증한 actor pair와 pending-only 저장 계약을 사용하며 inbound Follow id/actor/object를 별도 저장하지 않는다
+- **AND** 기존 `ProfileFollowRequest`를 유지하는 duplicate Follow에서는 별도 inbound correlation metadata 없이 기존 request를 유지한다
 - **AND** 이번 capability는 established 관계가 없는 `APPROVAL_REQUIRED` inbound Follow에 대한 Accept 또는 Reject를 자동 발송하지 않는다
-- **AND** pending remote follow request의 승인·거절 transition과 사용자 흐름은 PROD-272의 pending-only request 계약을 따르고, 그 결과 ActivityPub delivery는 follow protocol port로 위임한다
+- **AND** pending remote follow request의 조회·승인·거절·취소 transition과 사용자 흐름은 PROD-272의 pending-only request 계약을 따르고, 그 결과 ActivityPub delivery는 follow protocol port로 위임한다
 
 #### Scenario: Receive remote Undo Follow
 
 - **WHEN** Fedify inbox listener가 verified remote `Undo(Follow)` activity를 전달한다
 - **THEN** `Undo.object`는 embedded Follow이거나 Fedify가 안전하게 typed Follow로 제공한 object여야 한다
 - **AND** `Undo.object`가 IRI-only이면 시스템은 이번 capability에서 지원하지 않는 Undo로 처리하고 local follow graph 또는 request를 제거하지 않는다
+- **AND** 저장된 `UNRESPONSIVE` actor가 보낸 verified IRI-only Undo는 network lookup이나 follow graph/request 변경 없이 instance 상태만 `ACTIVE`로 복구할 수 있다
 - **AND** `Undo.actor`는 undo 대상 Follow의 actor 및 remote follower actor URI와 일치해야 한다
 - **AND** undo 대상 Follow의 object는 local followee actor URI와 일치해야 한다
 - **AND** undo 대상 Follow id는 remote 서버가 누락하거나 재사용할 수 있으므로 actor/object 검증을 대체하는 필수 조건으로 사용하지 않는다
-- **AND** undo 대상 Follow id가 없거나 저장된 inbound Follow id와 달라도 actor/object와 recipient가 일치하면 해당 `Undo(Follow)`는 현재 관계 또는 request를 취소하려는 의사로 처리할 수 있다
-- **AND** `Undo.published`가 있고 그 값이 현재 inbound follow generation timestamp보다 오래되면 stale Undo로 처리하고 local follow graph 또는 request를 제거하지 않는다
-- **AND** `Undo.published`가 없으면 시스템은 수신 시각을 activity timestamp로 사용해 actor/object fallback 호환성을 유지한다
+- **AND** undo 대상 Follow id는 저장하거나 비교하지 않으며 id가 없거나 이전 Follow와 달라도 actor/object와 recipient가 일치하면 해당 `Undo(Follow)`는 현재 관계 또는 request를 취소하려는 의사로 처리할 수 있다
 - **AND** personal inbox에서 Fedify `ctx.recipient`가 제공되면 시스템은 해당 recipient identifier를 local actor/profile로 resolve하고, 그 canonical actor URI가 undo 대상 Follow의 object local actor URI와 일치해야 한다
 - **AND** Fedify `ctx.recipient`가 없으면 shared inbox로 간주하고 undo 대상 Follow object로 local followee를 검증한다
 - **AND** 검증이 통과하면 시스템은 해당 remote follower와 local followee 사이의 established `ProfileFollow` 관계 또는 pending `ProfileFollowRequest`를 제거한다
-- **AND** 삭제는 현재 row와 expected inbound generation이 모두 일치할 때만 수행하고, established relation이 실제 삭제된 경우에만 같은 transaction에서 저장 count를 감소시킨다
+- **AND** actor/object/recipient 검증이 통과한 `Undo(Follow)`는 같은 actor pair의 현재 unfollow 의사로 처리하며 activity timestamp로 순서를 추정하지 않는다
+- **AND** 삭제는 처리 중 확인한 현재 row의 exact id가 일치할 때만 수행하고, established relation이 실제 삭제된 경우에만 같은 transaction에서 저장 count를 감소시킨다
 - **AND** 시스템은 같은 remote Undo를 idempotent하게 처리한다
 - **AND** actor, object, 또는 recipient가 일치하지 않는 `Undo(Follow)`는 local follow graph 또는 request를 제거하지 않는다
 

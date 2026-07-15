@@ -1,5 +1,7 @@
 import { createFederation, MemoryKvStore } from '@fedify/fedify';
+import { Follow, Undo } from '@fedify/vocab';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
+import { handleInboundFollow, handleInboundUndo } from './inbound-follow';
 import { ensureDrizzleLocalProfileActor } from './local-actor-store';
 import { createLocalProfilePerson } from './local-profile-person';
 import { resolveLocalActorIdentifierByHandle } from './webfinger';
@@ -55,4 +57,7 @@ federation
     return result ? [...result.keyPairs] : [];
   });
 
-federation.setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox');
+federation
+  .setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox')
+  .on(Follow, handleInboundFollow)
+  .on(Undo, handleInboundUndo);
