@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import { Schema } from 'prosemirror-model';
 import { normalizePostContentPlainText, postContentSchemaVersion } from './index';
-import type { Mark, Node as ProseMirrorNode } from 'prosemirror-model';
+import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import type {
   PostContentDocumentV1,
   PostContentSchemaVersion,
@@ -40,7 +40,7 @@ export function canonicalizePostContentDocument(
 
     paragraph.forEach((node) => {
       if (node.isText) {
-        inline.push(postContentSchemaV1.text(node.text!, normalizeMarks(node.marks)));
+        inline.push(postContentSchemaV1.text(node.text!, node.marks));
       } else {
         inline.push(postContentSchemaV1.nodes.hard_break.create());
       }
@@ -103,17 +103,12 @@ export function arePostContentRevisionsEqual(
   left: VersionedPostContentDocument & { readonly contentWarning: string | null },
   right: VersionedPostContentDocument & { readonly contentWarning: string | null },
 ): boolean {
-  const leftDocument = migrateToCurrentVersion(left.schemaVersion, left.document);
-  const rightDocument = migrateToCurrentVersion(right.schemaVersion, right.document);
+  const leftDocument = canonicalizePostContentDocument(left.schemaVersion, left.document);
+  const rightDocument = canonicalizePostContentDocument(right.schemaVersion, right.document);
 
   return (
     left.contentWarning === right.contentWarning && isDeepStrictEqual(leftDocument, rightDocument)
   );
-}
-
-function migrateToCurrentVersion(schemaVersion: number, document: unknown): PostContentDocumentV1 {
-  assertSupportedVersion(schemaVersion);
-  return canonicalizePostContentDocument(schemaVersion, document);
 }
 
 function assertSupportedVersion(
@@ -195,14 +190,6 @@ function normalizeAllowedJson(value: unknown): PostContentDocumentV1 {
   }
 
   return { type: 'doc', content: paragraphs };
-}
-
-function normalizeMarks(marks: readonly Mark[]): readonly Mark[] {
-  if (marks.length === 0) {
-    return [];
-  }
-  const href = normalizeHttpUrl(String(marks[0]!.attrs.href));
-  return [postContentSchemaV1.marks.link.create({ href })];
 }
 
 function normalizeHttpUrl(href: string): string {

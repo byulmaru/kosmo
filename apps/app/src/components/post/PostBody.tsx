@@ -51,7 +51,7 @@ export function PostBody({
   }
 
   return (
-    <View style={styles.document}>
+    <View>
       {document.content.map((paragraph, paragraphIndex) => (
         <Text
           key={paragraphIndex}
@@ -93,6 +93,5 @@ export function PostBody({
 
 const styles = StyleSheet.create({
   body: { fontFamily: 'Pretendard' },
-  document: { gap: 0 },
   link: { textDecorationLine: 'underline' },
 });
