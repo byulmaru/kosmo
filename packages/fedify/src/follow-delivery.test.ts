@@ -104,6 +104,22 @@ describe('Fedify follow delivery', () => {
     assert.equal(fixture.calls.length, 0);
   });
 
+  test('rejects a recipient without an inbox before delivery', async () => {
+    const fixture = createContextFixture();
+    const recipient = { id: remoteActorUri, inboxId: null };
+
+    await assert.rejects(
+      sendFollowActivity({
+        context: fixture.context,
+        profileFollowId,
+        recipientActor: recipient,
+        senderProfileId,
+      }),
+      /must have an inbox/,
+    );
+    assert.equal(fixture.calls.length, 0);
+  });
+
   test('rejects an Undo whose original Follow does not match the delivery endpoints', async () => {
     const fixture = createContextFixture();
     const originalFollow = new Follow({

@@ -38,7 +38,7 @@ export const sendFollowActivity = async ({
   senderProfileId,
 }: SendFollowActivityOptions): Promise<Follow> => {
   const actor = context.getActorUri(senderProfileId);
-  const object = requireRecipientId(recipientActor);
+  const object = requireDeliveryRecipientId(recipientActor);
   const activity = new Follow({
     actor,
     id: getFollowActivityUri(context.canonicalOrigin, profileFollowId),
@@ -60,7 +60,7 @@ export const sendUndoFollowActivity = async ({
   senderProfileId,
 }: SendUndoFollowActivityOptions): Promise<Undo> => {
   const actor = context.getActorUri(senderProfileId);
-  const recipientId = requireRecipientId(recipientActor);
+  const recipientId = requireDeliveryRecipientId(recipientActor);
   requireFollowEndpoints(originalFollow, actor, recipientId);
   const activity = new Undo({
     actor,
@@ -82,7 +82,7 @@ export const sendAcceptFollowActivity = async ({
   senderProfileId,
 }: SendAcceptFollowActivityOptions): Promise<Accept> => {
   const actor = context.getActorUri(senderProfileId);
-  const recipientId = requireRecipientId(recipientActor);
+  const recipientId = requireDeliveryRecipientId(recipientActor);
   requireFollowEndpoints(receivedFollow, recipientId, actor);
   const activity = new Accept({
     actor,
@@ -95,9 +95,13 @@ export const sendAcceptFollowActivity = async ({
   return activity;
 };
 
-const requireRecipientId = (recipient: Recipient): URL => {
+const requireDeliveryRecipientId = (recipient: Recipient): URL => {
   if (recipient.id == null) {
     throw new TypeError('ActivityPub follow recipient must have an actor id.');
+  }
+
+  if (recipient.inboxId == null) {
+    throw new TypeError('ActivityPub follow recipient must have an inbox.');
   }
 
   return recipient.id;
