@@ -2,7 +2,7 @@
 
 ### Requirement: Local actor document
 
-시스템은 local active profile의 actor URI에서 read-only ActivityPub `Person` document를 반환하고, follow protocol에 필요한 inbox delivery는 Fedify inbox listener로 연결해야 한다(MUST).
+시스템은 local active profile의 actor URI에서 read-only ActivityPub `Person` document를 반환하고, 지원되는 ActivityPub inbox delivery는 Fedify inbox listener로 연결해야 한다(MUST).
 
 #### Scenario: Read local actor document
 
@@ -22,7 +22,7 @@
 - **WHEN** actor URI의 UUID와 일치하는 local active profile이 없다
 - **THEN** 시스템은 HTTP 404로 응답한다
 
-#### Scenario: Advertise follow protocol endpoints
+#### Scenario: Advertise inbox endpoints
 
 - **WHEN** 시스템이 local actor document를 반환한다
 - **THEN** document는 ActivityPub actor 필수 속성인 `inbox`, `outbox` 값을 포함한다
@@ -41,11 +41,13 @@
 - **AND** 공개 key material은 저장된 `RSA_PKCS1_V1_5` 또는 `ED25519` public JWK에서 import한 `CryptoKey`를 사용한다
 - **AND** 시스템은 PEM, Multibase, Multicodec, JSON-LD 직렬화를 직접 구현하지 않고 Fedify `CryptographicKey`/`Multikey` serialization에 맡긴다
 
-#### Scenario: Handle follow protocol inbox delivery
+#### Scenario: Delegate supported inbox delivery
 
-- **WHEN** 외부 서버가 actor-scoped `/ap/actor/{profile.id}/inbox` 또는 shared `/inbox`로 ActivityPub follow protocol activity를 전달한다
+- **WHEN** 외부 서버가 actor-scoped `/ap/actor/{profile.id}/inbox` 또는 shared `/inbox`로 ActivityPub activity를 전달한다
 - **THEN** 시스템은 해당 요청을 unsupported endpoint 404로 종료하지 않고 Fedify inbox listener로 처리한다
-- **AND** Fedify가 verified typed `Follow`, `Undo(Follow)`, `Accept(Follow)`, 또는 `Reject(Follow)`를 제공하면 시스템은 `activitypub-remote-follow` handler로 위임한다
+- **AND** Fedify가 verified typed activity를 제공하고 해당 activity capability의 handler가 등록되어 있으면 시스템은 그 handler로 위임한다
+- **AND** Follow, Undo(Follow), Accept(Follow), Reject(Follow)의 검증과 side effect는 `activitypub-remote-follow` capability를 따른다
+- **AND** 다른 activity의 지원 여부와 side effect는 해당 activity capability가 정의하며 local actor discovery는 이를 직접 정의하지 않는다
 - **AND** 시스템은 해당 요청을 `/graphql` proxy 또는 API 서버로 전달하지 않는다
 
 #### Scenario: Unsupported ActivityPub endpoint request
@@ -56,13 +58,19 @@
 
 ### Requirement: ActivityPub discovery scope boundary
 
-local actor discovery 경계는 actor document와 follow protocol inbox delivery만 열고, outbox submission/collection과 follow graph 외 ActivityPub delivery는 별도 capability가 열기 전까지 제공하지 않아야 한다(MUST).
+local actor discovery 경계는 actor document와 Fedify inbox transport만 열고, activity별 행동은 해당 capability에 위임하며 outbox submission/collection은 별도 capability가 열기 전까지 제공하지 않아야 한다(MUST).
 
-#### Scenario: Remote follow protocol is handled by follow capability
+#### Scenario: Follow protocol is handled by follow capability
 
 - **WHEN** 원격 서버가 actor-scoped inbox 또는 shared inbox로 `Follow`, `Undo(Follow)`, `Accept(Follow)`, 또는 `Reject(Follow)` activity를 보낸다
-- **THEN** 시스템은 discovery-only 404 경계 대신 `activitypub-remote-follow` capability의 Fedify inbox listener와 follow handler 계약을 따른다
-- **AND** follow protocol activity가 아닌 inbox delivery는 이번 capability에서 follow graph side effect를 만들지 않는다
+- **THEN** 시스템은 `activitypub-remote-follow` capability의 handler 계약을 따른다
+- **AND** 다른 activity는 follow graph side effect를 만들지 않는다
+
+#### Scenario: Other inbox activities are owned by their capabilities
+
+- **WHEN** 원격 서버가 actor-scoped inbox 또는 shared inbox로 follow protocol이 아닌 activity를 보낸다
+- **THEN** local actor discovery는 그 activity의 검증, 저장 또는 side effect를 정의하지 않는다
+- **AND** 등록된 별도 capability handler가 없으면 시스템은 activity-specific side effect 없이 처리한다
 
 #### Scenario: Outbox behavior remains out of scope
 

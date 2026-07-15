@@ -131,7 +131,7 @@
 - **AND** 기존 `ProfileFollowRequest`를 유지하는 duplicate Follow에서는 저장된 inbound Follow response metadata를 갱신하지 않는다
 - **AND** 기존 `ProfileFollowRequest`를 유지하는 duplicate Follow에서도 Undo freshness guard에 사용할 inbound follow generation timestamp를 현재 저장된 timestamp보다 최신인 검증된 Follow activity timestamp로 갱신할 수 있다
 - **AND** 이번 capability는 established 관계가 없는 `APPROVAL_REQUIRED` inbound Follow에 대한 Accept 또는 Reject를 자동 발송하지 않는다
-- **AND** pending remote follow request를 승인 또는 거절하고 그 결과 activity를 발송하는 UX는 후속 capability에서 다룬다
+- **AND** pending remote follow request의 승인·거절 transition과 사용자 흐름은 PROD-272의 pending-only request 계약을 따르고, 그 결과 ActivityPub delivery는 follow protocol port로 위임한다
 
 #### Scenario: Receive remote Undo Follow
 
@@ -151,8 +151,8 @@
 - **AND** 시스템은 같은 remote Undo를 idempotent하게 처리한다
 - **AND** actor, object, 또는 recipient가 일치하지 않는 `Undo(Follow)`는 local follow graph 또는 request를 제거하지 않는다
 
-#### Scenario: Ignore unsupported inbox activity
+#### Scenario: Do not apply follow side effects for other inbox activities
 
 - **WHEN** Fedify inbox listener가 follow graph에 필요한 ActivityPub activity가 아닌 verified activity를 전달한다
-- **THEN** 시스템은 이번 capability에서 지원하지 않는 activity로 처리하지 않고 무시한다
-- **AND** 시스템은 post delivery, mention, like, announce 같은 후속 activity를 처리하지 않는다
+- **THEN** `activitypub-remote-follow` capability는 그 activity를 처리하거나 follow graph/request side effect를 만들지 않는다
+- **AND** 다른 capability에 등록된 handler의 처리 여부를 금지하거나 정의하지 않는다

@@ -1,16 +1,16 @@
 ## Context
 
-이 기록은 [PROD-357](https://linear.app/byulmaru/issue/PROD-357), 부모 PROD-235, 최신 자식 이슈와 현재 main을 반영한다. 2026-06-29에 작성된 초기 design 이후 저장 count, core service, actor materialization, inbox route와 pending-only request 계약이 병합됐으므로 구현 slice가 공유해야 할 선택을 다시 고정한다.
+이 기록은 [PROD-357](https://linear.app/byulmaru/issue/PROD-357), 부모 PROD-235와 구현 자식 이슈를 source of truth로 사용한다. 2026-06-29에 작성된 초기 active change는 이후 생긴 이슈 구조를 정의하지 않으며, 저장 count, core service, actor materialization, inbox route와 pending-only request 계약이 확정된 뒤의 구현 slice가 공유해야 할 선택을 기록한다.
 
 ## Decision Records
 
-### Shared OpenSpec은 PROD-357이 먼저 정렬한다
+### Linear 계약을 PROD-357 OpenSpec으로 먼저 구체화한다
 
 - Decision Date: 2026-07-15
 - Status: Accepted
-- Context / Problem: 여러 구현 PR이 같은 active change를 서로 다른 책임과 완료 상태로 수정하고 있다.
-- Decision Outcome: PROD-357의 spec-only PR이 shared proposal/spec/design/decisions/tasks를 소유하고 PROD-243을 merge 전까지 block한다.
-- Alternatives Considered: 각 구현 PR이 자기 task만 수정, 기존 change를 archive하고 이슈별 change를 새로 생성.
+- Context / Problem: 기존 active change가 Linear 이슈 구조보다 먼저 만들어져 여러 구현 PR이 같은 change를 서로 다른 책임으로 해석했다.
+- Decision Outcome: PROD-235와 구현 이슈가 source of truth이며, PROD-357의 spec-only PR이 이를 proposal/spec/design/decisions/tasks로 번역하고 남은 구현 자식을 merge 전까지 block한다.
+- Alternatives Considered: 기존 OpenSpec을 source of truth로 두고 이슈를 맞추기, 각 구현 PR이 자기 task만 수정.
 - Consequences: 구현 PR은 shared 계약을 재정의하지 않으며 PROD-235 전체 범위가 끝날 때까지 change를 archive하지 않는다.
 - Confirmation / Follow-up: PROD-357 PR의 strict validation과 Linear dependency를 확인한다.
 
@@ -69,10 +69,10 @@
 - Decision Date: 2026-07-15
 - Status: Accepted
 - Context / Problem: PR #247이 actor-scoped/shared inbox route를 이미 병합했으며 추가 registry는 현재 소비자가 없다.
-- Decision Outcome: 각 activity 구현 slice는 중앙 싱글톤 federation의 기존 inbox listener에 typed handler를 등록한다.
+- Decision Outcome: 공통 actor-scoped/shared inbox route는 activity-neutral transport 경계로 유지하고, 각 activity 구현 slice는 중앙 싱글톤 federation의 기존 inbox listener에 typed handler를 등록한다. Follow change는 Follow/Undo/Accept/Reject 행동만 소유하며 다른 activity를 금지하거나 정의하지 않는다.
 - Alternatives Considered: 별도 listener registry export, placeholder handler, slice별 federation instance.
-- Consequences: 새로운 HTTP foundation을 만들지 않고 PROD-241 transport를 재사용한다.
-- Confirmation / Follow-up: actor-scoped/shared inbox 통합 테스트로 routing과 handler 호출을 검증한다.
+- Consequences: 새로운 HTTP foundation을 만들지 않고 PROD-241 transport를 재사용하며, remote-post change와 동일 discovery requirement를 서로 덮어쓰지 않는다.
+- Confirmation / Follow-up: actor-scoped/shared inbox 통합 테스트로 routing과 Follow handler 호출을 검증하고 unsupported activity가 follow side effect를 만들지 않는지 확인한다.
 
 ## Remaining Decisions
 
