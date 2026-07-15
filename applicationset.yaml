@@ -12,7 +12,7 @@ spec:
             webDomain: dev.kos.moe
             apiDomain: dev-api.kos.moe
             image: ghcr.io/byulmaru/kosmo
-            version: latest
+            version: main
   template:
     metadata:
       name: 'kosmo-{{env}}'

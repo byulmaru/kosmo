@@ -17,7 +17,7 @@ test('dev 차트는 제한된 PreSync 마이그레이션 Job을 렌더링한다'
   assert.match(job, /argocd\.argoproj\.io\/hook: PreSync/);
   assert.match(job, /argocd\.argoproj\.io\/hook-delete-policy: BeforeHookCreation,HookSucceeded/);
   assert.match(job, /argocd\.argoproj\.io\/sync-wave: "-1"/);
-  assert.match(job, /image: "ghcr\.io\/byulmaru\/kosmo:latest"/);
+  assert.match(job, /image: "ghcr\.io\/byulmaru\/kosmo:main"/);
   assert.match(job, /args:\s+- migrate/);
   assert.match(job, /name: DATABASE_URL/);
   assert.match(job, /backoffLimit: 0/);

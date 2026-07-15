@@ -1,3 +1,3 @@
 env:
 image: ghcr.io/byulmaru/kosmo
-version: latest
+version: main
