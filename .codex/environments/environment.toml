@@ -48,6 +48,7 @@ if git merge-base --is-ancestor HEAD "$remote_main_commit"; then
 fi
 
 mise trust
+eval "$(mise env -s bash)"
 pnpm install
 '''
 
