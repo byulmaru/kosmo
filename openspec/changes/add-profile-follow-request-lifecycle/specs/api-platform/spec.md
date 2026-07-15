@@ -53,10 +53,20 @@ API는 request 승인·거절·취소 결과가 Relay cache에서 삭제된 requ
 
 - **WHEN** follow request 거절이 성공한다
 - **THEN** payload는 삭제된 `ProfileFollowRequest` global ID를 반환한다
+- **AND** 행동자인 non-null `followeeProfile`을 반환한다
+- **AND** unavailable일 수 있는 follower Profile은 payload에 포함하지 않는다
 - **AND** 삭제된 `ProfileFollowRequest` Node 자체를 반환하지 않는다
 
 #### Scenario: Return cancellation payload
 
 - **WHEN** follow request 취소가 성공한다
 - **THEN** payload는 삭제된 `ProfileFollowRequest` global ID를 반환한다
+- **AND** 행동자인 non-null `followerProfile`을 반환한다
+- **AND** unavailable일 수 있는 followee Profile은 payload에 포함하지 않는다
 - **AND** 삭제된 `ProfileFollowRequest` Node 자체를 반환하지 않는다
+
+#### Scenario: Identify the actor connection edge to remove
+
+- **WHEN** follow request 거절 또는 취소가 성공한다
+- **THEN** payload의 actor Profile은 갱신할 incoming 또는 outgoing request connection의 소유자를 식별한다
+- **AND** payload의 삭제된 `ProfileFollowRequest` global ID는 해당 connection edge를 제거할 수 있게 한다
