@@ -1,11 +1,13 @@
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
+  createId,
   first,
   getDatabaseConnection,
   Instances,
   ProfileFollowRequests,
   ProfileFollows,
   Profiles,
+  TableDiscriminator,
 } from '../db';
 import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
 import { NotFoundError } from '../error';
@@ -67,9 +69,7 @@ export const recordInboundFollow = async (
       })
       .from(Profiles)
       .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .where(inArray(Profiles.id, [followerProfileId, followeeProfileId]))
-      .orderBy(asc(Profiles.id))
-      .for('update', { of: Profiles });
+      .where(inArray(Profiles.id, [followerProfileId, followeeProfileId]));
     const follower = participants.find(({ profileId }) => profileId === followerProfileId);
     const followee = participants.find(({ profileId }) => profileId === followeeProfileId);
 
@@ -86,61 +86,68 @@ export const recordInboundFollow = async (
       throw new NotFoundError('Profile not found');
     }
 
-    const existingFollow = await tx
-      .select()
-      .from(ProfileFollows)
-      .where(pairCondition(ProfileFollows, followerProfileId, followeeProfileId))
-      .limit(1)
-      .for('update', { of: ProfileFollows })
-      .then(first);
-
-    if (existingFollow) {
-      await tx
-        .delete(ProfileFollowRequests)
-        .where(pairCondition(ProfileFollowRequests, followerProfileId, followeeProfileId));
-      return { created: false, kind: 'ESTABLISHED', profileFollow: existingFollow };
-    }
-
     if (followee.followPolicy === ProfileFollowPolicy.APPROVAL_REQUIRED) {
-      const existingRequest = await tx
+      const existingFollow = await tx
         .select()
-        .from(ProfileFollowRequests)
-        .where(pairCondition(ProfileFollowRequests, followerProfileId, followeeProfileId))
+        .from(ProfileFollows)
+        .where(pairCondition(ProfileFollows, followerProfileId, followeeProfileId))
         .limit(1)
-        .for('update', { of: ProfileFollowRequests })
         .then(first);
 
-      if (existingRequest) {
-        return {
-          created: false,
-          kind: 'PENDING',
-          profileFollowRequest: existingRequest,
-        };
+      if (existingFollow) {
+        await tx
+          .delete(ProfileFollowRequests)
+          .where(pairCondition(ProfileFollowRequests, followerProfileId, followeeProfileId));
+        return { created: false, kind: 'ESTABLISHED', profileFollow: existingFollow };
       }
 
+      const requestId = createId(TableDiscriminator.ProfileFollowRequests);
       const profileFollowRequest = await tx
         .insert(ProfileFollowRequests)
         .values({
           followeeProfileId,
           followerProfileId,
+          id: requestId,
+        })
+        .onConflictDoUpdate({
+          target: [
+            ProfileFollowRequests.followerProfileId,
+            ProfileFollowRequests.followeeProfileId,
+          ],
+          set: { id: sql`${ProfileFollowRequests.id}` },
         })
         .returning()
         .then(first);
 
-      return { created: true, kind: 'PENDING', profileFollowRequest: profileFollowRequest! };
+      return {
+        created: profileFollowRequest!.id === requestId,
+        kind: 'PENDING',
+        profileFollowRequest: profileFollowRequest!,
+      };
     }
 
-    await tx
-      .delete(ProfileFollowRequests)
-      .where(pairCondition(ProfileFollowRequests, followerProfileId, followeeProfileId));
+    const followId = createId(TableDiscriminator.ProfileFollows);
     const profileFollow = await tx
       .insert(ProfileFollows)
       .values({
         followeeProfileId,
         followerProfileId,
+        id: followId,
+      })
+      .onConflictDoUpdate({
+        target: [ProfileFollows.followerProfileId, ProfileFollows.followeeProfileId],
+        set: { id: sql`${ProfileFollows.id}` },
       })
       .returning()
       .then(first);
+
+    await tx
+      .delete(ProfileFollowRequests)
+      .where(pairCondition(ProfileFollowRequests, followerProfileId, followeeProfileId));
+
+    if (profileFollow!.id !== followId) {
+      return { created: false, kind: 'ESTABLISHED', profileFollow: profileFollow! };
+    }
 
     await tx
       .update(Profiles)

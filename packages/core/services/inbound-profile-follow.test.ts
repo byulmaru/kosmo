@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, describe, test } from 'node:test';
-import { eq } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import {
   ActivityPubActors,
   db,
@@ -160,6 +160,61 @@ describe('inbound profile follow service', () => {
       followee: { ...followee, followersCount: 1 },
       follower: { ...follower, followingCount: 1 },
     });
+  });
+
+  test('serializes concurrent duplicate pending Follow without changing counts', async () => {
+    const { followee, follower } = await createPair(ProfileFollowPolicy.APPROVAL_REQUIRED);
+    const input = { followeeProfileId: followee.id, followerProfileId: follower.id };
+    const results = await Promise.all([recordInboundFollow(input), recordInboundFollow(input)]);
+
+    assert.equal(results.filter(({ created }) => created).length, 1);
+    assert.equal(
+      await db
+        .select()
+        .from(ProfileFollowRequests)
+        .where(eq(ProfileFollowRequests.followerProfileId, follower.id))
+        .then((rows) => rows.length),
+      1,
+    );
+    assert.deepEqual(await getProfiles(follower.id, followee.id), { followee, follower });
+  });
+
+  test('does not lock participant profiles for an established duplicate Follow', async () => {
+    const { followee, follower } = await createPair(ProfileFollowPolicy.OPEN);
+    const input = { followeeProfileId: followee.id, followerProfileId: follower.id };
+    await recordInboundFollow(input);
+
+    let releaseProfiles!: () => void;
+    const profilesReleased = new Promise<void>((resolve) => {
+      releaseProfiles = resolve;
+    });
+    let profilesLocked!: () => void;
+    const profilesAreLocked = new Promise<void>((resolve) => {
+      profilesLocked = resolve;
+    });
+    const blocker = db.transaction(async (tx) => {
+      await tx
+        .select({ id: Profiles.id })
+        .from(Profiles)
+        .where(inArray(Profiles.id, [follower.id, followee.id]))
+        .for('update', { of: Profiles });
+      profilesLocked();
+      await profilesReleased;
+    });
+
+    await profilesAreLocked;
+    try {
+      const duplicate = await db.transaction(async (tx) => {
+        await tx.execute(sql`set local lock_timeout = '100ms'`);
+        return recordInboundFollow(input, tx);
+      });
+
+      assert.equal(duplicate.kind, 'ESTABLISHED');
+      assert.equal(duplicate.created, false);
+    } finally {
+      releaseProfiles();
+      await blocker;
+    }
   });
 
   test('does not delete a new exact-row refollow that replaces the captured row', async () => {
