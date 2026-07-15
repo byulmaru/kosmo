@@ -1,10 +1,10 @@
 ## 1. Data Model
 
 - [ ] 1.1 ActivityPub object URI와 kosmo `Post`를 연결하는 `activitypub_object` 테이블을 추가하고 `id`, `uri`, `type`, `activityPubActorId`, `postId`, `receivedAt`, nullable `publishedAt`을 저장한다.
-- [ ] 1.2 `ActivityPubObjectType.NOTE`, `TableDiscriminator.ActivityPubObjects`, `uri` unique, `postId` unique, `activityPubActorId -> activitypub_actor.id` non-unique indexed foreign key, `postId -> post.id` foreign key를 추가하고 actor URI를 중복 저장하거나 object type에 unique constraint를 두지 않는다.
+- [ ] 1.2 `ActivityPubObjectType.NOTE`, UUIDv7 primary key, `uri` unique, `postId` unique, `activityPubActorId -> activitypub_actor.id` non-unique indexed foreign key, `postId -> post.id` foreign key를 추가하고 actor URI를 중복 저장하거나 object type에 unique constraint를 두지 않는다.
 - [ ] 1.3 `activitypub_actor`에 nullable `followersUri`를 추가하고 remote actor materialization/refresh에서 Fedify actor `followersId?.href`를 저장하되 actor URI path에서 followers collection을 추론하지 않는다.
 - [ ] 1.4 `post_mention` 테이블에 `id`, `postId`, `profileId`, `createdAt`을 추가하고 `(postId, profileId)` unique, 두 foreign key index와 cascade deletion을 구성한다. unresolved raw actor URI나 nullable recipient row는 저장하지 않는다.
-- [ ] 1.5 `TableDiscriminator.PostMentions`, Drizzle table/relations와 migration fixture를 추가하고 remote post 최초 materialization transaction이 `Post`, `PostContent`, resolved `post_mention`, `activitypub_object`를 함께 생성하도록 저장 경계를 준비한다.
+- [ ] 1.5 UUIDv7 primary key를 사용하는 `post_mention` Drizzle table/relations와 migration fixture를 추가하고 remote post 최초 materialization transaction이 `Post`, `PostContent`, resolved `post_mention`, `activitypub_object`를 함께 생성하도록 저장 경계를 준비한다.
 
 ## 2. Remote Post Materialization
 

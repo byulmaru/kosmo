@@ -7,7 +7,7 @@ import SimpleObjectsPlugin from '@pothos/plugin-simple-objects';
 import ValidationPlugin from '@pothos/plugin-validation';
 import WithInputPlugin from '@pothos/plugin-with-input';
 import * as R from 'remeda';
-import { globalIdMap } from './utils';
+import { decodeGlobalId, encodeGlobalId } from './global-id';
 import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
 import type { SessionContext, SessionWithProfileContext, UserContext } from '@/context';
 
@@ -57,16 +57,8 @@ export const builder = new SchemaBuilder<{
     },
   },
   relay: {
-    encodeGlobalID: (_, id) => String(id),
-    decodeGlobalID: (id) => {
-      const typename = globalIdMap.get(Number.parseInt(id.replaceAll('-', '').slice(13, 16), 16));
-
-      if (!typename) {
-        throw new Error(`Unknown global id type code`);
-      }
-
-      return { id, typename };
-    },
+    decodeGlobalID: decodeGlobalId,
+    encodeGlobalID: encodeGlobalId,
   },
   scopeAuth: {
     authScopes: async (ctx) => ({

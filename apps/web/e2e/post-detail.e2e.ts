@@ -7,7 +7,12 @@ import {
   setE2ESessionCookie,
 } from './db-fixtures';
 import { expect, test } from './fixtures';
-import { isGraphQLOperation, readGraphQLOperation, waitForGraphQLOperation } from './graphql';
+import {
+  isGraphQLOperation,
+  readGraphQLOperation,
+  toGlobalId,
+  waitForGraphQLOperation,
+} from './graphql';
 
 test.beforeEach(async () => {
   await resetE2EDatabase();
@@ -27,6 +32,7 @@ test('게시글 목록에서 상세로 이동하고 뒤로 가며 deep-link hand
     profileId: viewer.profile!.id,
     visibility: PostVisibility.PUBLIC,
   });
+  const postId = toGlobalId('Post', post.id);
   await setE2ESessionCookie(context, viewer.token);
   await page.goto('/home');
 
@@ -36,8 +42,10 @@ test('게시글 목록에서 상세로 이동하고 뒤로 가며 deep-link hand
   const operation = readGraphQLOperation(response.request().postData());
 
   expect(operation?.operationName).toBe('PostDetailQuery');
-  expect(operation?.variables).toMatchObject({ postId: post.id });
-  await expect(page).toHaveURL(new RegExp(`/@${viewer.profile!.handle}/${post.id}$`));
+  expect(operation?.variables).toMatchObject({ postId });
+  await expect
+    .poll(() => decodeURIComponent(new URL(page.url()).pathname))
+    .toBe(`/@${viewer.profile!.handle}/${postId}`);
   await expect(page.getByText('게시글', { exact: true }).last()).toBeVisible();
   await expect(page.getByText(body)).toBeVisible();
   await expect(page.getByText(/전체 공개$/)).toBeVisible();
@@ -46,8 +54,10 @@ test('게시글 목록에서 상세로 이동하고 뒤로 가며 deep-link hand
   await expect(page).toHaveURL(/\/home$/);
   await expect(page.getByText(body)).toBeVisible();
 
-  await page.goto(`/@wrong-handle/${post.id}`);
-  await expect(page).toHaveURL(new RegExp(`/@${viewer.profile!.handle}/${post.id}$`));
+  await page.goto(`/@wrong-handle/${postId}`);
+  await expect
+    .poll(() => decodeURIComponent(new URL(page.url()).pathname))
+    .toBe(`/@${viewer.profile!.handle}/${postId}`);
   await expect(page.getByText(body)).toBeVisible();
 });
 
@@ -60,6 +70,7 @@ test('연합 프로필 게시글은 relativeHandle URL을 유지하고 정규화
     profileId: author.id,
     visibility: PostVisibility.PUBLIC,
   });
+  const postId = toGlobalId('Post', post.id);
   const relativeHandle = `@${author.handle}@remote.example`;
 
   await setE2ESessionCookie(context, viewer.token);
@@ -86,13 +97,13 @@ test('연합 프로필 게시글은 relativeHandle URL을 유지하고 정규화
     });
   });
 
-  const canonicalPath = `/${relativeHandle}/${post.id}`;
+  const canonicalPath = `/${relativeHandle}/${postId}`;
 
   await page.goto(canonicalPath);
-  await expect(page).toHaveURL(new RegExp(`${canonicalPath}$`));
+  await expect.poll(() => decodeURIComponent(new URL(page.url()).pathname)).toBe(canonicalPath);
   await expect(page.getByText(body)).toBeVisible();
 
-  await page.goto(`/@wrong-handle/${post.id}`);
-  await expect(page).toHaveURL(new RegExp(`${canonicalPath}$`));
+  await page.goto(`/@wrong-handle/${postId}`);
+  await expect.poll(() => decodeURIComponent(new URL(page.url()).pathname)).toBe(canonicalPath);
   await expect(page.getByText(body)).toBeVisible();
 });

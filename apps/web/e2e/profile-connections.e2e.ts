@@ -8,7 +8,7 @@ import {
   setE2ESessionCookie,
 } from './db-fixtures';
 import { expect, test } from './fixtures';
-import { readGraphQLOperation, waitForGraphQLOperation } from './graphql';
+import { readGraphQLOperation, toGlobalId, waitForGraphQLOperation } from './graphql';
 import type { Page } from '@playwright/test';
 
 test.beforeEach(async () => {
@@ -48,23 +48,25 @@ const mutateFollow = async (
 test('동시 follow와 unfollow는 저장 count를 한 번만 갱신한다', async ({ context, page }) => {
   const viewer = await createE2ESession({ handle: 'e2e-count-viewer' });
   const target = await createE2EProfile({ handle: 'e2e-count-target' });
+  const targetId = toGlobalId('Profile', target.id);
+  const viewerId = toGlobalId('Profile', viewer.profile!.id);
 
   await setE2ESessionCookie(context, viewer.token);
   await page.goto('/home');
 
   const followResponses = await Promise.all([
-    mutateFollow(page, 'followProfile', target.id),
-    mutateFollow(page, 'followProfile', target.id),
+    mutateFollow(page, 'followProfile', targetId),
+    mutateFollow(page, 'followProfile', targetId),
   ]);
   expect(followResponses.every((response) => !response.errors)).toBe(true);
   for (const response of followResponses) {
     expect(response.data.followProfile.followerProfile).toMatchObject({
       followingCount: 1,
-      id: viewer.profile!.id,
+      id: viewerId,
     });
     expect(response.data.followProfile.followeeProfile).toMatchObject({
       followersCount: 1,
-      id: target.id,
+      id: targetId,
     });
   }
 
@@ -82,18 +84,18 @@ test('동시 follow와 unfollow는 저장 count를 한 번만 갱신한다', asy
   expect(followedTarget.followersCount).toBe(1);
 
   const unfollowResponses = await Promise.all([
-    mutateFollow(page, 'unfollowProfile', target.id),
-    mutateFollow(page, 'unfollowProfile', target.id),
+    mutateFollow(page, 'unfollowProfile', targetId),
+    mutateFollow(page, 'unfollowProfile', targetId),
   ]);
   expect(unfollowResponses.every((response) => !response.errors)).toBe(true);
   for (const response of unfollowResponses) {
     expect(response.data.unfollowProfile.followerProfile).toMatchObject({
       followingCount: 0,
-      id: viewer.profile!.id,
+      id: viewerId,
     });
     expect(response.data.unfollowProfile.followeeProfile).toMatchObject({
       followersCount: 0,
-      id: target.id,
+      id: targetId,
     });
   }
 
@@ -121,7 +123,7 @@ test('unfollow 저장 count는 0 미만으로 감소하지 않는다', async ({ 
 
   await setE2ESessionCookie(context, viewer.token);
   await page.goto('/home');
-  const response = await mutateFollow(page, 'unfollowProfile', target.id);
+  const response = await mutateFollow(page, 'unfollowProfile', toGlobalId('Profile', target.id));
   expect(response.errors).toBeUndefined();
 
   const profiles = await db.select().from(Profiles).where(eq(Profiles.id, viewer.profile!.id));

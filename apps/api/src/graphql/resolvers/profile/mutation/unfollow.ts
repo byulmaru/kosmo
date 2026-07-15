@@ -1,7 +1,6 @@
 import { unfollowProfile } from '@kosmo/core/services';
-import { z } from 'zod';
 import { builder } from '@/graphql/builder';
-import { Profile } from '../ref';
+import { Profile, ProfileFollow } from '../ref';
 
 builder.mutationField('unfollowProfile', (t) =>
   t.withAuth({ usingProfile: true }).fieldWithInput({
@@ -9,16 +8,22 @@ builder.mutationField('unfollowProfile', (t) =>
       fields: (field) => ({
         followeeProfile: field.field({ nullable: true, type: Profile }),
         followerProfile: field.field({ type: Profile }),
-        profileFollowId: field.id({ nullable: true }),
+        profileFollowId: field.globalID({
+          nullable: true,
+          resolve: (payload) => {
+            const { profileFollowId } = payload as { profileFollowId: string | null };
+            return profileFollowId ? { id: profileFollowId, type: ProfileFollow } : null;
+          },
+        }),
       }),
     }),
     input: {
-      id: t.input.id({ validate: z.uuid() }),
+      id: t.input.globalID({ for: Profile }),
     },
     resolve: (_, { input }, ctx) =>
       unfollowProfile({
         followerProfileId: ctx.session.profileId,
-        followeeProfileId: input.id,
+        followeeProfileId: input.id.id,
       }),
   }),
 );

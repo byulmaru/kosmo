@@ -1,13 +1,11 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
-  createId,
   first,
   getDatabaseConnection,
   Instances,
   ProfileFollowRequests,
   ProfileFollows,
   Profiles,
-  TableDiscriminator,
 } from '../db';
 import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
 import { NotFoundError } from '../error';
@@ -90,17 +88,14 @@ export const recordInboundFollow = async (
       return 'PENDING';
     }
 
-    const followId = createId(TableDiscriminator.ProfileFollows);
     const profileFollow = await tx
       .insert(ProfileFollows)
       .values({
         followeeProfileId,
         followerProfileId,
-        id: followId,
       })
-      .onConflictDoUpdate({
+      .onConflictDoNothing({
         target: [ProfileFollows.followerProfileId, ProfileFollows.followeeProfileId],
-        set: { id: sql`${ProfileFollows.id}` },
       })
       .returning({ id: ProfileFollows.id })
       .then(first);
@@ -109,7 +104,7 @@ export const recordInboundFollow = async (
       .delete(ProfileFollowRequests)
       .where(pairCondition(ProfileFollowRequests, followerProfileId, followeeProfileId));
 
-    if (profileFollow!.id !== followId) {
+    if (!profileFollow) {
       return 'ESTABLISHED';
     }
 
