@@ -1,9 +1,9 @@
 export { federation } from './src/federation';
 export {
   sendAcceptFollowActivity,
-  sendOutboundFollowActivity,
-  sendOutboundUndoFollowActivity,
-} from './src/follow-transport';
+  sendFollowActivity,
+  sendUndoFollowActivity,
+} from './src/follow-delivery';
 export {
   findOrMaterializeRemoteProfileActor,
   materializeRemoteProfileActor,

@@ -2,14 +2,14 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { Accept, Follow, Person, Undo } from '@fedify/vocab';
 import {
+  getFollowActivityUri,
   getFollowOrderingKey,
-  getOutboundFollowActivityUri,
   sendAcceptFollowActivity,
-  sendOutboundFollowActivity,
-  sendOutboundUndoFollowActivity,
-} from './follow-transport';
+  sendFollowActivity,
+  sendUndoFollowActivity,
+} from './follow-delivery';
 import type { Activity, Recipient } from '@fedify/vocab';
-import type { FollowTransportContext } from './follow-transport';
+import type { FollowDeliveryContext } from './follow-delivery';
 
 const canonicalOrigin = 'https://kos.moe';
 const senderProfileId = '019f6f67-1111-7777-8888-123456789abc';
@@ -21,10 +21,10 @@ const recipientActor = new Person({
   inbox: new URL('https://remote.example/users/alice/inbox'),
 });
 
-describe('Fedify follow transport', () => {
-  test('sends an outbound Follow with stable relation identity and ordering', async () => {
+describe('Fedify follow delivery', () => {
+  test('sends Follow with stable relation identity and ordering', async () => {
     const fixture = createContextFixture();
-    const activity = await sendOutboundFollowActivity({
+    const activity = await sendFollowActivity({
       context: fixture.context,
       profileFollowId,
       recipientActor,
@@ -53,10 +53,10 @@ describe('Fedify follow transport', () => {
     const fixture = createContextFixture();
     const originalFollow = new Follow({
       actor: localActorUri,
-      id: getOutboundFollowActivityUri(canonicalOrigin, profileFollowId),
+      id: getFollowActivityUri(canonicalOrigin, profileFollowId),
       object: remoteActorUri,
     });
-    const activity = await sendOutboundUndoFollowActivity({
+    const activity = await sendUndoFollowActivity({
       context: fixture.context,
       originalFollow,
       recipientActor,
@@ -93,7 +93,7 @@ describe('Fedify follow transport', () => {
     const recipient = { id: null, inboxId: new URL('https://remote.example/inbox') };
 
     await assert.rejects(
-      sendOutboundFollowActivity({
+      sendFollowActivity({
         context: fixture.context,
         profileFollowId,
         recipientActor: recipient,
@@ -112,7 +112,7 @@ describe('Fedify follow transport', () => {
     });
 
     await assert.rejects(
-      sendOutboundUndoFollowActivity({
+      sendUndoFollowActivity({
         context: fixture.context,
         originalFollow,
         recipientActor,
@@ -163,7 +163,7 @@ const createContextFixture = () => {
     ) => {
       calls.push({ activity, options, recipient, sender });
     },
-  } as FollowTransportContext;
+  } as FollowDeliveryContext;
 
   return { calls, context };
 };

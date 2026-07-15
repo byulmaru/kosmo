@@ -6,25 +6,21 @@ import {
   MemoryKvStore,
   signRequest,
 } from '@fedify/fedify';
-import { Accept, CryptographicKey, Follow, Person, Reject, Undo } from '@fedify/vocab';
+import { CryptographicKey, Follow, Person } from '@fedify/vocab';
 import { getDocumentLoader } from '@fedify/vocab-runtime';
-import { registerFollowInboxListeners, unhandledFollowInboxHandlers } from './follow-inbox';
-import type { FollowInboxHandlers } from './follow-inbox';
+import type { InboxContext } from '@fedify/fedify';
+
+type FollowHandler = (context: InboxContext<void>, activity: Follow) => void | Promise<void>;
 
 const localProfileId = '019f6f67-1111-7777-8888-123456789abc';
 const remoteActorUri = new URL('https://remote.example/users/alice');
 const remoteKeyUri = new URL('#main-key', remoteActorUri);
 
-describe('Fedify follow inbox routes', () => {
+describe('Fedify inbox routes', () => {
   test('signed Follow reaches the handler through personal and shared inboxes', async () => {
     const calls: Array<{ activity: Follow; recipient: string | null }> = [];
-    const fixture = await createInboxFixture({
-      onAccept: () => undefined,
-      onFollow: (context, activity) => {
-        calls.push({ activity, recipient: context.recipient });
-      },
-      onReject: () => undefined,
-      onUndo: () => undefined,
+    const fixture = await createInboxFixture((context, activity) => {
+      calls.push({ activity, recipient: context.recipient });
     });
 
     const personalResponse = await fixture.federation.fetch(
@@ -51,7 +47,7 @@ describe('Fedify follow inbox routes', () => {
   });
 
   test('unhandled Follow fails so the sender can retry delivery', async () => {
-    const fixture = await createInboxFixture(unhandledFollowInboxHandlers);
+    const fixture = await createInboxFixture(throwUnhandledInboxActivity);
     const response = await fixture.federation.fetch(
       await fixture.createSignedFollowRequest(
         `/ap/actor/${localProfileId}/inbox`,
@@ -65,12 +61,9 @@ describe('Fedify follow inbox routes', () => {
 
   test('keeps unsupported follow collections and outbox paths in the 404 fallback', async () => {
     const federation = createFederation<void>({ kv: new MemoryKvStore() });
-    registerFollowInboxListeners(federation, {
-      onAccept: () => undefined,
-      onFollow: () => undefined,
-      onReject: () => undefined,
-      onUndo: () => undefined,
-    });
+    federation
+      .setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox')
+      .on(Follow, () => undefined);
     const unsupportedPaths = [
       '/ap/actor/local-profile/outbox',
       '/ap/actor/local-profile/followers',
@@ -86,38 +79,9 @@ describe('Fedify follow inbox routes', () => {
       assert.equal(response.status, 404);
     }
   });
-
-  test('registers only the four follow protocol activity types', () => {
-    const registered: Array<typeof Follow | typeof Undo | typeof Accept | typeof Reject> = [];
-    const setters = {
-      on(type: typeof Follow | typeof Undo | typeof Accept | typeof Reject) {
-        registered.push(type);
-        return setters;
-      },
-    };
-    const federation = {
-      setInboxListeners(personalPath: string, sharedPath: string) {
-        assert.equal(personalPath, '/ap/actor/{identifier}/inbox');
-        assert.equal(sharedPath, '/inbox');
-        return setters;
-      },
-    };
-
-    registerFollowInboxListeners(
-      federation as unknown as Parameters<typeof registerFollowInboxListeners>[0],
-      {
-        onAccept: () => undefined,
-        onFollow: () => undefined,
-        onReject: () => undefined,
-        onUndo: () => undefined,
-      },
-    );
-
-    assert.deepEqual(registered, [Follow, Undo, Accept, Reject]);
-  });
 });
 
-const createInboxFixture = async (handlers: FollowInboxHandlers) => {
+const createInboxFixture = async (onFollow: FollowHandler) => {
   const remoteKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
   const remoteKey = new CryptographicKey({
     id: remoteKeyUri,
@@ -155,7 +119,7 @@ const createInboxFixture = async (handlers: FollowInboxHandlers) => {
       identifier === localProfileId ? new Person({ id: context.getActorUri(identifier) }) : null,
     )
     .setKeyPairsDispatcher(() => [localKeyPair]);
-  registerFollowInboxListeners(federation, handlers);
+  federation.setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox').on(Follow, onFollow);
 
   const createSignedFollowRequest = async (path: string, id: string): Promise<Request> => {
     const activity = new Follow({
@@ -174,3 +138,7 @@ const createInboxFixture = async (handlers: FollowInboxHandlers) => {
 
   return { createSignedFollowRequest, federation };
 };
+
+function throwUnhandledInboxActivity(): never {
+  throw new Error('ActivityPub inbox handler is not implemented.');
+}

@@ -2,22 +2,22 @@ import { Accept, Follow, Undo } from '@fedify/vocab';
 import type { Context } from '@fedify/fedify';
 import type { Recipient } from '@fedify/vocab';
 
-export type FollowTransportContext = Pick<
+export type FollowDeliveryContext = Pick<
   Context<void>,
   'canonicalOrigin' | 'getActorUri' | 'sendActivity'
 >;
 
 interface FollowDeliveryOptions {
-  readonly context: FollowTransportContext;
+  readonly context: FollowDeliveryContext;
   readonly recipientActor: Recipient;
   readonly senderProfileId: string;
 }
 
-export interface SendOutboundFollowActivityOptions extends FollowDeliveryOptions {
+export interface SendFollowActivityOptions extends FollowDeliveryOptions {
   readonly profileFollowId: string;
 }
 
-export interface SendOutboundUndoFollowActivityOptions extends FollowDeliveryOptions {
+export interface SendUndoFollowActivityOptions extends FollowDeliveryOptions {
   readonly originalFollow: Follow;
 }
 
@@ -25,25 +25,23 @@ export interface SendAcceptFollowActivityOptions extends FollowDeliveryOptions {
   readonly receivedFollow: Follow;
 }
 
-export const getOutboundFollowActivityUri = (
-  canonicalOrigin: string,
-  profileFollowId: string,
-): URL => new URL(`/ap/follow/${encodeURIComponent(profileFollowId)}`, canonicalOrigin);
+export const getFollowActivityUri = (canonicalOrigin: string, profileFollowId: string): URL =>
+  new URL(`/ap/follow/${encodeURIComponent(profileFollowId)}`, canonicalOrigin);
 
 export const getFollowOrderingKey = (followerActorUri: URL, followeeActorUri: URL): string =>
   `profile-follow:${followerActorUri.href}\n${followeeActorUri.href}`;
 
-export const sendOutboundFollowActivity = async ({
+export const sendFollowActivity = async ({
   context,
   profileFollowId,
   recipientActor,
   senderProfileId,
-}: SendOutboundFollowActivityOptions): Promise<Follow> => {
+}: SendFollowActivityOptions): Promise<Follow> => {
   const actor = context.getActorUri(senderProfileId);
   const object = requireRecipientId(recipientActor);
   const activity = new Follow({
     actor,
-    id: getOutboundFollowActivityUri(context.canonicalOrigin, profileFollowId),
+    id: getFollowActivityUri(context.canonicalOrigin, profileFollowId),
     object,
     tos: [object],
   });
@@ -55,12 +53,12 @@ export const sendOutboundFollowActivity = async ({
   return activity;
 };
 
-export const sendOutboundUndoFollowActivity = async ({
+export const sendUndoFollowActivity = async ({
   context,
   originalFollow,
   recipientActor,
   senderProfileId,
-}: SendOutboundUndoFollowActivityOptions): Promise<Undo> => {
+}: SendUndoFollowActivityOptions): Promise<Undo> => {
   const actor = context.getActorUri(senderProfileId);
   const recipientId = requireRecipientId(recipientActor);
   requireFollowEndpoints(originalFollow, actor, recipientId);
