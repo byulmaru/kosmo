@@ -12,7 +12,6 @@
     "./local-instance": "./local-instance.ts",
     "./polyfill": "./polyfill.ts",
     "./profile": "./profile.ts",
-    "./services": "./services/index.ts",
     "./search": "./search.ts",
     "./services": "./services/index.ts",
     "./utils": "./utils.ts",
