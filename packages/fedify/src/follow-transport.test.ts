@@ -12,11 +12,11 @@ import type { Activity, Recipient } from '@fedify/vocab';
 import type { FollowTransportContext } from './follow-transport';
 
 const canonicalOrigin = 'https://kos.moe';
-const localProfileId = '019f6f67-1111-7777-8888-123456789abc';
+const senderProfileId = '019f6f67-1111-7777-8888-123456789abc';
 const profileFollowId = '019f6f67-2222-7777-8888-123456789abc';
-const localActorUri = new URL(`${canonicalOrigin}/ap/actor/${localProfileId}`);
+const localActorUri = new URL(`${canonicalOrigin}/ap/actor/${senderProfileId}`);
 const remoteActorUri = new URL('https://remote.example/users/alice');
-const remoteActor = new Person({
+const recipientActor = new Person({
   id: remoteActorUri,
   inbox: new URL('https://remote.example/users/alice/inbox'),
 });
@@ -26,9 +26,9 @@ describe('Fedify follow transport', () => {
     const fixture = createContextFixture();
     const activity = await sendOutboundFollowActivity({
       context: fixture.context,
-      localProfileId,
       profileFollowId,
-      remoteActor,
+      recipientActor,
+      senderProfileId,
     });
 
     assert.ok(activity instanceof Follow);
@@ -43,8 +43,8 @@ describe('Fedify follow transport', () => {
       {
         activity,
         options: { orderingKey: getFollowOrderingKey(localActorUri, remoteActorUri) },
-        recipient: remoteActor,
-        sender: { identifier: localProfileId },
+        recipient: recipientActor,
+        sender: { identifier: senderProfileId },
       },
     ]);
   });
@@ -58,9 +58,9 @@ describe('Fedify follow transport', () => {
     });
     const activity = await sendOutboundUndoFollowActivity({
       context: fixture.context,
-      localProfileId,
       originalFollow,
-      remoteActor,
+      recipientActor,
+      senderProfileId,
     });
 
     assert.ok(activity instanceof Undo);
@@ -76,15 +76,15 @@ describe('Fedify follow transport', () => {
     const receivedFollow = new Follow({ actor: remoteActorUri, object: localActorUri });
     const activity = await sendAcceptFollowActivity({
       context: fixture.context,
-      localProfileId,
+      recipientActor,
       receivedFollow,
-      remoteActor,
+      senderProfileId,
     });
 
     assert.ok(activity instanceof Accept);
     assert.equal(activity.actorId?.href, localActorUri.href);
     assert.equal(await activity.getObject(), receivedFollow);
-    assert.equal(fixture.calls[0]?.recipient, remoteActor);
+    assert.equal(fixture.calls[0]?.recipient, recipientActor);
     assert.equal(fixture.calls[0]?.options, undefined);
   });
 
@@ -95,11 +95,49 @@ describe('Fedify follow transport', () => {
     await assert.rejects(
       sendOutboundFollowActivity({
         context: fixture.context,
-        localProfileId,
         profileFollowId,
-        remoteActor: recipient,
+        recipientActor: recipient,
+        senderProfileId,
       }),
       /must have an actor id/,
+    );
+    assert.equal(fixture.calls.length, 0);
+  });
+
+  test('rejects an Undo whose original Follow does not match the delivery endpoints', async () => {
+    const fixture = createContextFixture();
+    const originalFollow = new Follow({
+      actor: new URL('https://kos.moe/ap/actor/someone-else'),
+      object: remoteActorUri,
+    });
+
+    await assert.rejects(
+      sendOutboundUndoFollowActivity({
+        context: fixture.context,
+        originalFollow,
+        recipientActor,
+        senderProfileId,
+      }),
+      /must match the delivery endpoints/,
+    );
+    assert.equal(fixture.calls.length, 0);
+  });
+
+  test('rejects an Accept whose received Follow does not match the delivery endpoints', async () => {
+    const fixture = createContextFixture();
+    const receivedFollow = new Follow({
+      actor: new URL('https://remote.example/users/someone-else'),
+      object: localActorUri,
+    });
+
+    await assert.rejects(
+      sendAcceptFollowActivity({
+        context: fixture.context,
+        recipientActor,
+        receivedFollow,
+        senderProfileId,
+      }),
+      /must match the delivery endpoints/,
     );
     assert.equal(fixture.calls.length, 0);
   });

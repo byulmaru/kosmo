@@ -1,49 +1,66 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { createFederation, MemoryKvStore } from '@fedify/fedify';
-import { Accept, Follow, Person, Reject, Undo } from '@fedify/vocab';
-import { registerFollowInboxListeners } from './follow-inbox';
+import {
+  createFederation,
+  generateCryptoKeyPair,
+  MemoryKvStore,
+  signRequest,
+} from '@fedify/fedify';
+import { Accept, CryptographicKey, Follow, Person, Reject, Undo } from '@fedify/vocab';
+import { getDocumentLoader } from '@fedify/vocab-runtime';
+import { registerFollowInboxListeners, unhandledFollowInboxHandlers } from './follow-inbox';
+import type { FollowInboxHandlers } from './follow-inbox';
+
+const localProfileId = '019f6f67-1111-7777-8888-123456789abc';
+const remoteActorUri = new URL('https://remote.example/users/alice');
+const remoteKeyUri = new URL('#main-key', remoteActorUri);
 
 describe('Fedify follow inbox routes', () => {
-  test('claims personal and shared inbox POSTs before the application fallback', async () => {
-    const federation = createFederation<void>({ kv: new MemoryKvStore() });
-    federation
-      .setActorDispatcher('/ap/actor/{identifier}', (context, identifier) =>
-        identifier === 'local-profile' ? new Person({ id: context.getActorUri(identifier) }) : null,
-      )
-      .setKeyPairsDispatcher(() => []);
-    registerFollowInboxListeners(federation, {
+  test('signed Follow reaches the handler through personal and shared inboxes', async () => {
+    const calls: Array<{ activity: Follow; recipient: string | null }> = [];
+    const fixture = await createInboxFixture({
       onAccept: () => undefined,
-      onFollow: () => undefined,
+      onFollow: (context, activity) => {
+        calls.push({ activity, recipient: context.recipient });
+      },
       onReject: () => undefined,
       onUndo: () => undefined,
     });
-    let fallbackCalls = 0;
 
-    for (const path of ['/ap/actor/local-profile/inbox', '/inbox']) {
-      const response = await federation.fetch(
-        new Request(new URL(path, 'https://kos.moe'), {
-          body: JSON.stringify({
-            '@context': 'https://www.w3.org/ns/activitystreams',
-            actor: 'https://remote.example/users/alice',
-            object: 'https://kos.moe/ap/actor/local-profile',
-            type: 'Follow',
-          }),
-          headers: { 'content-type': 'application/activity+json' },
-          method: 'POST',
-        }),
-        {
-          contextData: undefined,
-          onNotFound: () => {
-            fallbackCalls += 1;
-            return new Response('application fallback', { status: 418 });
-          },
-        },
-      );
+    const personalResponse = await fixture.federation.fetch(
+      await fixture.createSignedFollowRequest(
+        `/ap/actor/${localProfileId}/inbox`,
+        'personal-follow',
+      ),
+      { contextData: undefined },
+    );
+    const sharedResponse = await fixture.federation.fetch(
+      await fixture.createSignedFollowRequest('/inbox', 'shared-follow'),
+      { contextData: undefined },
+    );
 
-      assert.notEqual(response.status, 418);
-    }
-    assert.equal(fallbackCalls, 0);
+    assert.equal(personalResponse.status, 202, await personalResponse.text());
+    assert.equal(sharedResponse.status, 202, await sharedResponse.text());
+    assert.deepEqual(
+      calls.map(({ activity, recipient }) => ({ id: activity.id?.href, recipient })),
+      [
+        { id: 'https://remote.example/activities/personal-follow', recipient: localProfileId },
+        { id: 'https://remote.example/activities/shared-follow', recipient: null },
+      ],
+    );
+  });
+
+  test('unhandled Follow fails so the sender can retry delivery', async () => {
+    const fixture = await createInboxFixture(unhandledFollowInboxHandlers);
+    const response = await fixture.federation.fetch(
+      await fixture.createSignedFollowRequest(
+        `/ap/actor/${localProfileId}/inbox`,
+        'unhandled-follow',
+      ),
+      { contextData: undefined },
+    );
+
+    assert.equal(response.status, 500, await response.text());
   });
 
   test('keeps unsupported follow collections and outbox paths in the 404 fallback', async () => {
@@ -99,3 +116,73 @@ describe('Fedify follow inbox routes', () => {
     assert.deepEqual(registered, [Follow, Undo, Accept, Reject]);
   });
 });
+
+const createInboxFixture = async (handlers: FollowInboxHandlers) => {
+  const remoteKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+  const remoteKey = new CryptographicKey({
+    id: remoteKeyUri,
+    owner: remoteActorUri,
+    publicKey: remoteKeyPair.publicKey,
+  });
+  const remoteActor = new Person({
+    id: remoteActorUri,
+    publicKey: remoteKey,
+  });
+  const remoteActorDocument = await remoteActor.toJsonLd({ format: 'expand' });
+  const remoteKeyDocument = await remoteKey.toJsonLd({ format: 'expand' });
+  const documentLoader = async (url: string) => {
+    if (url !== remoteActorUri.href && url !== remoteKeyUri.href) {
+      throw new Error(`Unexpected document URL: ${url}`);
+    }
+
+    return {
+      contextUrl: null,
+      document: url === remoteKeyUri.href ? remoteKeyDocument : remoteActorDocument,
+      documentUrl: url,
+    };
+  };
+  const kv = new MemoryKvStore();
+  const federation = createFederation<void>({
+    authenticatedDocumentLoaderFactory: () => documentLoader,
+    contextLoaderFactory: () => getDocumentLoader(),
+    documentLoaderFactory: () => documentLoader,
+    kv,
+  });
+  const localKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+  federation
+    .setActorDispatcher('/ap/actor/{identifier}', (context, identifier) =>
+      identifier === localProfileId ? new Person({ id: context.getActorUri(identifier) }) : null,
+    )
+    .setKeyPairsDispatcher(() => [localKeyPair]);
+  registerFollowInboxListeners(federation, handlers);
+
+  const createSignedFollowRequest = async (path: string, id: string): Promise<Request> => {
+    const request = new Request(new URL(path, 'https://kos.moe'), {
+      body: JSON.stringify({
+        '@context': {
+          Follow: 'https://www.w3.org/ns/activitystreams#Follow',
+          actor: {
+            '@id': 'https://www.w3.org/ns/activitystreams#actor',
+            '@type': '@id',
+          },
+          id: '@id',
+          object: {
+            '@id': 'https://www.w3.org/ns/activitystreams#object',
+            '@type': '@id',
+          },
+          type: '@type',
+        },
+        actor: remoteActorUri.href,
+        id: new URL(`/activities/${id}`, remoteActorUri).href,
+        object: new URL(`/ap/actor/${localProfileId}`, 'https://kos.moe').href,
+        type: 'Follow',
+      }),
+      headers: { 'content-type': 'application/activity+json' },
+      method: 'POST',
+    });
+
+    return signRequest(request, remoteKeyPair.privateKey, remoteKeyUri);
+  };
+
+  return { createSignedFollowRequest, federation };
+};

@@ -9,8 +9,8 @@ export type FollowTransportContext = Pick<
 
 interface FollowDeliveryOptions {
   readonly context: FollowTransportContext;
-  readonly localProfileId: string;
-  readonly remoteActor: Recipient;
+  readonly recipientActor: Recipient;
+  readonly senderProfileId: string;
 }
 
 export interface SendOutboundFollowActivityOptions extends FollowDeliveryOptions {
@@ -35,12 +35,12 @@ export const getFollowOrderingKey = (followerActorUri: URL, followeeActorUri: UR
 
 export const sendOutboundFollowActivity = async ({
   context,
-  localProfileId,
   profileFollowId,
-  remoteActor,
+  recipientActor,
+  senderProfileId,
 }: SendOutboundFollowActivityOptions): Promise<Follow> => {
-  const actor = context.getActorUri(localProfileId);
-  const object = requireRecipientId(remoteActor);
+  const actor = context.getActorUri(senderProfileId);
+  const object = requireRecipientId(recipientActor);
   const activity = new Follow({
     actor,
     id: getOutboundFollowActivityUri(context.canonicalOrigin, profileFollowId),
@@ -48,7 +48,7 @@ export const sendOutboundFollowActivity = async ({
     tos: [object],
   });
 
-  await context.sendActivity({ identifier: localProfileId }, remoteActor, activity, {
+  await context.sendActivity({ identifier: senderProfileId }, recipientActor, activity, {
     orderingKey: getFollowOrderingKey(actor, object),
   });
 
@@ -57,19 +57,20 @@ export const sendOutboundFollowActivity = async ({
 
 export const sendOutboundUndoFollowActivity = async ({
   context,
-  localProfileId,
   originalFollow,
-  remoteActor,
+  recipientActor,
+  senderProfileId,
 }: SendOutboundUndoFollowActivityOptions): Promise<Undo> => {
-  const actor = context.getActorUri(localProfileId);
-  const recipientId = requireRecipientId(remoteActor);
+  const actor = context.getActorUri(senderProfileId);
+  const recipientId = requireRecipientId(recipientActor);
+  requireFollowEndpoints(originalFollow, actor, recipientId);
   const activity = new Undo({
     actor,
     object: originalFollow,
     tos: [recipientId],
   });
 
-  await context.sendActivity({ identifier: localProfileId }, remoteActor, activity, {
+  await context.sendActivity({ identifier: senderProfileId }, recipientActor, activity, {
     orderingKey: getFollowOrderingKey(actor, recipientId),
   });
 
@@ -78,18 +79,20 @@ export const sendOutboundUndoFollowActivity = async ({
 
 export const sendAcceptFollowActivity = async ({
   context,
-  localProfileId,
+  recipientActor,
   receivedFollow,
-  remoteActor,
+  senderProfileId,
 }: SendAcceptFollowActivityOptions): Promise<Accept> => {
-  const recipientId = requireRecipientId(remoteActor);
+  const actor = context.getActorUri(senderProfileId);
+  const recipientId = requireRecipientId(recipientActor);
+  requireFollowEndpoints(receivedFollow, recipientId, actor);
   const activity = new Accept({
-    actor: context.getActorUri(localProfileId),
+    actor,
     object: receivedFollow,
     tos: [recipientId],
   });
 
-  await context.sendActivity({ identifier: localProfileId }, remoteActor, activity);
+  await context.sendActivity({ identifier: senderProfileId }, recipientActor, activity);
 
   return activity;
 };
@@ -100,4 +103,10 @@ const requireRecipientId = (recipient: Recipient): URL => {
   }
 
   return recipient.id;
+};
+
+const requireFollowEndpoints = (follow: Follow, actor: URL, object: URL): void => {
+  if (follow.actorId?.href !== actor.href || follow.objectId?.href !== object.href) {
+    throw new TypeError('ActivityPub Follow actor and object must match the delivery endpoints.');
+  }
 };

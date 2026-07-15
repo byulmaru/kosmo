@@ -14,11 +14,15 @@ export interface FollowInboxHandlers {
 }
 
 export const unhandledFollowInboxHandlers: FollowInboxHandlers = {
-  onAccept: () => undefined,
-  onFollow: () => undefined,
-  onReject: () => undefined,
-  onUndo: () => undefined,
+  onAccept: throwUnhandledFollowInboxActivity,
+  onFollow: throwUnhandledFollowInboxActivity,
+  onReject: throwUnhandledFollowInboxActivity,
+  onUndo: throwUnhandledFollowInboxActivity,
 };
+
+function throwUnhandledFollowInboxActivity(): never {
+  throw new Error('ActivityPub follow inbox handler is not implemented.');
+}
 
 export const registerFollowInboxListeners = (
   federation: Federation<void>,
