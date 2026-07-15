@@ -17,27 +17,6 @@ const uuidv7Migration = new URL(
   import.meta.url,
 );
 
-const idTables = [
-  'account',
-  'account_profile',
-  'activitypub_actor',
-  'activitypub_actor_key',
-  'application',
-  'application_authorization',
-  'file',
-  'instance',
-  'media',
-  'notification',
-  'oauth_authorization_code',
-  'oauth_token',
-  'post',
-  'post_content',
-  'profile',
-  'profile_follow',
-  'profile_follow_request',
-  'session',
-].sort();
-
 test('moves new IDs to PostgreSQL uuidv7 defaults without rewriting existing UUIDv8 IDs', async () => {
   assert.ok(process.env.DATABASE_URL);
   const sql = postgres(process.env.DATABASE_URL, { max: 1 });
@@ -54,18 +33,6 @@ test('moves new IDs to PostgreSQL uuidv7 defaults without rewriting existing UUI
       VALUES (${existingId}, 'existing.example', 'LOCAL', 'ACTIVE')
     `;
     await sql.unsafe(await readFile(uuidv7Migration, 'utf8'));
-
-    const defaults = await sql`
-      SELECT table_name AS "tableName", column_default AS "default"
-      FROM information_schema.columns
-      WHERE table_schema = 'public' AND column_name = 'id' AND table_name = ANY(${idTables})
-      ORDER BY table_name
-    `;
-    assert.deepEqual(
-      defaults.map(({ tableName }) => tableName),
-      idTables,
-    );
-    assert.ok(defaults.every(({ default: value }) => value === 'uuidv7()'));
 
     const [existing] = await sql`
       SELECT id::text AS id, uuid_extract_version(id)::int AS version

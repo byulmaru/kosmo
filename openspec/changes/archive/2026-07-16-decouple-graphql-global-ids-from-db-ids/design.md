@@ -19,7 +19,7 @@ DB ID 생성기도 같은 discriminator를 UUID v8의 implementation-defined 영
 - 기존 DB primary key 또는 foreign key 재작성.
 - UUID version 통일 migration.
 - Notification schema, concrete Notification type 또는 UI 구현.
-- persisted Relay cache migration이나 legacy GraphQL ID compatibility window.
+- persisted Relay cache migration, legacy GraphQL ID compatibility window 또는 기존 raw UUID 게시글 URL 호환.
 
 ## Implementation Guidance
 

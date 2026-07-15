@@ -14,15 +14,15 @@
 - Consequences: 같은 DB table의 row도 concrete GraphQL type마다 올바른 typename을 포함할 수 있다. typename/UUID mismatch에서는 다른 loader를 추론해 재시도하지 않으며 visibility는 concrete loader가 적용한다.
 - Confirmation / Follow-up: typename별 round trip, unknown/interface typename, mismatch, batch order/null API test로 확인한다.
 
-### Legacy raw UUID GraphQL ID를 즉시 중단한다
+### Legacy raw UUID GraphQL ID와 게시글 URL을 즉시 중단한다
 
 - Decision Date: 2026-07-15
 - Status: Accepted
-- Context / Problem: raw UUID fallback을 유지하면 배포와 client migration은 완만해지지만 discriminator 기반 typename 추론을 compatibility path에 남겨야 한다.
-- Decision Outcome: 배포 즉시 새 global ID만 GraphQL Node ID 입력으로 허용한다. raw UUID는 compatibility window나 dual decoder 없이 invalid global ID로 처리한다.
-- Alternatives Considered: 한 release 동안 dual decode, versioned API field, raw UUID에서 discriminator를 읽는 영구 fallback. 현재 지원 Relay store가 메모리 기반이고 persisted cache migration이 필요하지 않으며, compatibility 경로가 제거하려는 결합을 보존하므로 채택하지 않았다.
-- Consequences: 기존 응답에서 raw UUID를 저장한 외부 소비자는 새 schema 응답의 global ID로 갱신해야 한다. 기존 DB UUID의 저장 유효성과 GraphQL input 호환성은 별개다.
-- Confirmation / Follow-up: raw UUID Node query와 mutation input 거부 test, client cache 구성 점검으로 확인한다.
+- Context / Problem: raw UUID fallback을 유지하면 배포와 client migration은 완만해지지만 discriminator 기반 typename 추론을 compatibility path에 남겨야 한다. 게시글 route에서 raw UUID를 `Post` global ID로 감싸는 별도 호환도 가능하지만 공개 URL 계약을 이중화한다.
+- Decision Outcome: 배포 즉시 새 global ID만 GraphQL Node ID 입력과 게시글 URL에 허용한다. raw UUID는 compatibility window, dual decoder 또는 route-level 변환 없이 invalid global ID로 처리한다.
+- Alternatives Considered: 한 release 동안 dual decode, versioned API field, raw UUID에서 discriminator를 읽는 영구 fallback, 게시글 route에서 raw UUID를 `Post` global ID로 변환. 현재 지원 Relay store가 메모리 기반이고 persisted cache migration이 필요하지 않으며, compatibility 경로가 제거하려는 결합과 이중 URL 계약을 보존하므로 채택하지 않았다.
+- Consequences: 기존 응답에서 raw UUID를 저장한 외부 소비자와 과거 raw UUID 게시글 URL을 공유·북마크한 사용자는 새 schema 응답의 global ID URL로 갱신해야 한다. 기존 DB UUID의 저장 유효성과 GraphQL input·URL 호환성은 별개다.
+- Confirmation / Follow-up: raw UUID Node query와 mutation input 거부 test, 새 global ID를 그대로 사용하는 post detail E2E와 client cache 구성 점검으로 확인한다.
 
 ### 신규 DB ID는 UUIDv7이고 기존 UUIDv8은 재작성하지 않는다
 

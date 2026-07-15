@@ -5,7 +5,7 @@
 ## What Changes
 
 - **BREAKING** GraphQL Node ID를 raw DB UUID에서 concrete GraphQL typename과 DB UUID를 담은 unpadded base64url opaque global ID로 변경한다.
-- **BREAKING** 배포 즉시 새 global ID만 GraphQL Node ID 입력으로 허용하고 legacy raw UUID fallback은 제공하지 않는다.
+- **BREAKING** 배포 즉시 새 global ID만 GraphQL Node ID 입력과 게시글 URL에 허용하고 legacy raw UUID fallback이나 route-level 변환은 제공하지 않는다.
 - `node(id:)`, `nodes(ids:)`와 Node ID를 받는 query·mutation이 global ID의 concrete typename을 기준으로 올바른 loader에 라우팅되도록 변경한다.
 - 신규 DB row의 ID를 PostgreSQL 18.4 내장 `uuidv7()` column default로 생성하고 애플리케이션 ID generator, `TableDiscriminator` registry와 호출부 의존성을 제거한다.
 - 기존 UUIDv8 primary key와 foreign key는 재작성하지 않고 신규 UUIDv7과 함께 계속 조회한다.
