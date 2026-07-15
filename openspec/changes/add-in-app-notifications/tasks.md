@@ -1,6 +1,6 @@
 ## 1. PROD-325 Notification 단일 테이블 스키마와 조회 인덱스를 도입한다
 
-- [x] 1.1 `Notifications`의 미사용 UUID v8 discriminator, `notification_kind`의 `FOLLOW` 값과 단일 `notification` Drizzle table/export를 추가한다.
+- [x] 1.1 UUID primary key, `notification_kind`의 `FOLLOW` 값과 단일 `notification` Drizzle table/export를 추가한다. 기존 생성 당시의 UUIDv8 ID는 PROD-366 이후에도 재작성하지 않는다.
 - [x] 1.2 Recipient Profile FK/cascade, FK 없는 `source_id`, `data jsonb NOT NULL DEFAULT '{}'`, `(recipient_profile_id, kind, source_id)` unique constraint, Recipient 목록 index와 Unread partial index를 additive migration에 반영한다.
 - [x] 1.3 migration/DB integration test로 Recipient FK, kind/data default, Recipient-first unique 순서와 직접 duplicate source 거부, `id DESC` index와 Unread partial index를 검증한다.
 - [x] 1.4 DB schema check와 migration 검증으로 `notification_follow`, source FK, cleanup trigger, source-only cleanup index, deferred integrity, 미래 kind/data와 GIN index가 선제 추가되지 않았는지 확인한다.
@@ -14,7 +14,7 @@
 
 ## 3. PROD-275 권한이 있는 Profile의 알림 목록·읽음·Unread count API를 제공한다
 
-- [ ] 3.1 `Notification implements Node` interface와 `FollowNotification implements Notification & Node` concrete object를 추가하고, 현재 discriminator→단일 typename Node 경로가 shared discriminator를 처리하지 못하는 문제를 해결해 단일 `Notifications` discriminator의 row가 kind에 맞는 concrete object로 resolve되게 한다. Notification 전용 Node route 또는 동등한 방식을 사용할 수 있지만 같은 discriminator를 concrete type마다 중복 등록하거나 loader 없는 interface typename으로 직접 등록해서는 안 된다. `FollowNotification.relatedProfile`은 non-null로 제공하고 raw kind/source/data/snapshot은 노출하지 않는다.
+- [ ] 3.1 `Notification implements Node` interface와 `FollowNotification implements Notification & Node` concrete object를 추가하고 FollowNotification concrete global ID가 해당 loader로 직접 route되어 row의 `kind = FOLLOW`와 visibility를 검증하게 한다. interface typename을 Node ID로 encode하거나 mismatch에서 다른 loader를 추론하지 않는다. `FollowNotification.relatedProfile`은 non-null로 제공하고 raw kind/source/data/snapshot은 노출하지 않는다.
 - [ ] 3.2 `Profile.notifications`와 `Profile.unreadNotificationCount`에 role-independent Account-Profile membership 권한을 적용하고 selected Profile 부재·불일치와 API 권한을 분리한다.
 - [ ] 3.3 Recipient Profile API visibility, source 존재, source Followee와 저장 Recipient 일치, Recipient Profile 기준 Related Profile visibility를 SQL page limit 전에 적용한 `id DESC` opaque cursor connection과 동일 predicate의 visible Unread count를 구현한다.
 - [ ] 3.4 `markNotificationRead(input: { id })`가 membership·visible predicate와 최초 `readAt`을 보존하고 `notification`·`recipientProfile` payload 및 field/Node/Read error matrix를 따르게 한다.

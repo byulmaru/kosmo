@@ -154,6 +154,16 @@
 - Consequences: UI 구현 이슈는 코드를 작성하기 전에 선택지를 결정하고 이 change를 갱신해야 한다.
 - Confirmation / Follow-up: `PROD-277`은 `notification` UI requirements/design/decision을, `PROD-324`는 `web-app-shell` delta와 관련 design/decision을 먼저 추가한다.
 
+### Notification Node는 concrete global ID 계약을 따른다
+
+- Decision Date: 2026-07-15
+- Status: Accepted
+- Context / Problem: PROD-366이 DB UUID discriminator 기반 Node routing을 concrete typename 기반 opaque global ID로 대체하고 신규 DB ID를 UUIDv7으로 전환했다.
+- Decision Outcome: FollowNotification은 자신의 concrete typename과 Notification DB UUID를 global ID로 반환하고, 해당 typename의 loader가 row를 batch load해 `kind = FOLLOW`와 visibility를 검증한다. 기존 Notification UUIDv8은 재작성하지 않고 신규 UUIDv7과 공존한다.
+- Alternatives Considered: 기존 Notifications discriminator 전용 route 유지, interface typename encode, raw UUID fallback. 모두 PROD-366의 공개 identity 계약과 충돌해 채택하지 않았다.
+- Consequences: 기존의 “단일 Notifications discriminator로 kind-aware route” 구현 지침은 폐기된다. Notification connection cursor는 계속 DB UUID를 사용하므로 GraphQL global ID encoding과 분리된다.
+- Confirmation / Follow-up: `PROD-275`가 concrete global ID round trip, row kind mismatch, hidden row, batch 순서와 기존 UUIDv8 fixture를 검증한다.
+
 ## Remaining Decisions
 
 - 실제 Profile Mute·Profile Block·Domain Block evaluator 연결과 정책별 억제 test는 후속 `PROD-327`의 별도 OpenSpec에서 결정한다.
@@ -165,3 +175,4 @@
 - 이 PR의 초기 draft가 제안한 기존 이름의 `notification_item` base + `notification_follow` extension, source FK/cascade, cleanup trigger와 deferred integrity constraint는 단일 `notification` projection 결정으로 대체한다.
 - 이 PR의 초기 draft가 제안한 selected Profile 전용 API 권한은 role-independent Account-Profile membership 권한으로 대체한다.
 - 이 PR의 초기 draft가 제안한 `relatedProfile: null` generic fallback, Read 허용과 Unread count 포함은 unavailable item 전면 숨김으로 대체한다.
+- 2026-07-14의 Notification 단일 table 결정 중 “UUIDv8 `Notifications` discriminator를 신규 ID와 GraphQL Node routing에 사용한다”는 부분은 PROD-366의 신규 UUIDv7·기존 UUIDv8 무마이그레이션 공존과 concrete global ID 결정으로 대체한다. 단일 table projection 결정 자체는 유지한다.

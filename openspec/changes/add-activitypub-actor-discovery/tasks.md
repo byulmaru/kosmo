@@ -12,7 +12,7 @@
 - [x] 2.3 `profile.normalized_handle` 전역 unique를 `(instance_id, normalized_handle)` unique로 교체하고 관련 index/relation을 갱신한다.
 - [x] 2.4 ActivityPub actor metadata 테이블을 추가해 profile과 actor URI/type을 저장하고, actor URI 중복과 profile당 actor metadata 중복을 막는다.
 - [x] 2.5 ActivityPub actor key 테이블을 추가해 local actor의 public/private JWK와 remote actor의 선택적 public key metadata를 저장할 수 있게 하고 `(activitypub_actor_id, kind)` 중복을 막는다.
-- [x] 2.6 새 테이블의 `TableDiscriminator`, Drizzle relations, schema exports, OpenSpec data-model 계약과 일치하는 테스트 fixture를 갱신한다.
+- [x] 2.6 새 테이블의 UUID primary key default, Drizzle relations, schema exports, OpenSpec data-model 계약과 일치하는 테스트 fixture를 갱신한다. 이후 PROD-366에서 신규 default는 UUIDv7으로 전환되며 기존 UUIDv8 값은 유지된다.
 
 ## 3. Profile GraphQL Contract
 

@@ -1,6 +1,5 @@
 import { ConflictError } from '@kosmo/core/error';
 import { followProfile } from '@kosmo/core/services';
-import { z } from 'zod';
 import { builder } from '@/graphql/builder';
 import { Profile, ProfileFollow } from '../ref';
 
@@ -14,12 +13,12 @@ builder.mutationField('followProfile', (t) =>
       }),
     }),
     input: {
-      id: t.input.id({ validate: z.uuid() }),
+      id: t.input.globalID({ for: Profile }),
     },
     resolve: (_, { input }, ctx) =>
       followProfile({
         followerProfileId: ctx.session.profileId,
-        followeeProfileId: input.id,
+        followeeProfileId: input.id.id,
       }).catch((error: unknown) => {
         if (error instanceof ConflictError) {
           throw new ConflictError({ message: error.message, field: 'id' });

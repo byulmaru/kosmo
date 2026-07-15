@@ -130,7 +130,7 @@ describe('GraphQL remote profile boundary', () => {
 
       assertNoGraphQLErrors(result);
       assert.deepEqual(result.data?.profileByHandle, {
-        id,
+        id: globalId('Profile', id),
         instance: { kind },
         relativeHandle,
       });
@@ -151,7 +151,11 @@ describe('GraphQL remote profile boundary', () => {
 
   test('loads an active remote profile through the Node interface', async () => {
     const remoteInstance = await createRemoteInstance();
-    const remote = await createProfile({ handle: 'alice', instanceId: remoteInstance.id });
+    const remote = await createProfile({
+      handle: 'alice',
+      id: '00000000-0000-8006-8000-000000000001',
+      instanceId: remoteInstance.id,
+    });
 
     const result = await requestGraphQL<{
       node: {
@@ -171,16 +175,53 @@ describe('GraphQL remote profile boundary', () => {
           }
         }
       }`,
-      { id: remote.id },
+      { id: globalId('Profile', remote.id) },
     );
 
     assertNoGraphQLErrors(result);
     assert.deepEqual(result.data?.node, {
       __typename: 'Profile',
-      id: remote.id,
+      id: globalId('Profile', remote.id),
       instance: { kind: 'ACTIVITYPUB' },
       relativeHandle: `@alice@${remoteDomain}`,
     });
+  });
+
+  test('keeps mixed Node batch order and does not retry a mismatched typename', async () => {
+    const remoteInstance = await createRemoteInstance();
+    const firstProfile = await createProfile({
+      handle: 'batch-first',
+      instanceId: remoteInstance.id,
+    });
+    const secondProfile = await createProfile({
+      handle: 'batch-second',
+      instanceId: remoteInstance.id,
+    });
+    const missingId = crypto.randomUUID();
+
+    const result = await requestGraphQL<{
+      nodes: Array<{ __typename: string; id: string } | null>;
+    }>(
+      `query Nodes($ids: [ID!]!) {
+        nodes(ids: $ids) { __typename id }
+      }`,
+      {
+        ids: [
+          globalId('Profile', firstProfile.id),
+          globalId('Profile', missingId),
+          globalId('Post', secondProfile.id),
+          globalId('Profile', secondProfile.id),
+        ],
+      },
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.nodes, [
+      { __typename: 'Profile', id: globalId('Profile', firstProfile.id) },
+      null,
+      null,
+      { __typename: 'Profile', id: globalId('Profile', secondProfile.id) },
+    ]);
   });
 
   test('reports the owning instance kind for a profile outside the configured local instance', async () => {
@@ -207,7 +248,7 @@ describe('GraphQL remote profile boundary', () => {
           ... on Profile { instance { kind } }
         }
       }`,
-      { id: profile.id },
+      { id: globalId('Profile', profile.id) },
     );
 
     assertNoGraphQLErrors(result);
@@ -240,13 +281,13 @@ describe('GraphQL remote profile boundary', () => {
           ... on Profile { posts(first: 10) { edges { node { id } } } }
         }
       }`,
-      { postId: post.id, profileId: otherLocal.id },
+      { postId: globalId('Post', post.id), profileId: globalId('Profile', otherLocal.id) },
     );
 
     assertNoGraphQLErrors(result);
     assert.deepEqual(result.data, {
-      post: { id: post.id },
-      node: { posts: { edges: [{ node: { id: post.id } }] } },
+      post: { id: globalId('Post', post.id) },
+      node: { posts: { edges: [{ node: { id: globalId('Post', post.id) } }] } },
     });
   });
 
@@ -276,13 +317,13 @@ describe('GraphQL remote profile boundary', () => {
           ... on Profile { posts(first: 10) { edges { node { id } } } }
         }
       }`,
-      { postId: post.id, profileId: remote.id },
+      { postId: globalId('Post', post.id), profileId: globalId('Profile', remote.id) },
     );
 
     assertNoGraphQLErrors(result);
     assert.deepEqual(result.data, {
-      post: { id: post.id },
-      node: { posts: { edges: [{ node: { id: post.id } }] } },
+      post: { id: globalId('Post', post.id) },
+      node: { posts: { edges: [{ node: { id: globalId('Post', post.id) } }] } },
     });
   });
 
@@ -320,7 +361,7 @@ describe('GraphQL remote profile boundary', () => {
         }
         homeTimeline(first: 10) { edges { node { id } } }
       }`,
-      { suspendedPostId: suspendedPost.id },
+      { suspendedPostId: globalId('Post', suspendedPost.id) },
       auth.token,
     );
 
@@ -366,7 +407,7 @@ describe('GraphQL remote profile boundary', () => {
           ... on PostContent { id }
         }
       }`,
-      { suspendedContentId: suspendedContent.id },
+      { suspendedContentId: globalId('PostContent', suspendedContent.id) },
     );
 
     assertNoGraphQLErrors(result);
@@ -399,7 +440,10 @@ describe('GraphQL remote profile boundary', () => {
     );
 
     assertNoGraphQLErrors(result);
-    assert.deepEqual(result.data?.me?.profiles, [{ id: auth.profile.id }, { id: otherLocal.id }]);
+    assert.deepEqual(result.data?.me?.profiles, [
+      { id: globalId('Profile', auth.profile.id) },
+      { id: globalId('Profile', otherLocal.id) },
+    ]);
   });
 
   test('restores an active profile from another local instance in the session context', async () => {
@@ -485,14 +529,19 @@ describe('GraphQL remote profile boundary', () => {
           session { selectedProfile { id instance { kind } } }
         }
       }`,
-      { id: remote.id },
+      { id: globalId('Profile', remote.id) },
       auth.token,
     );
 
     assertNoGraphQLErrors(selected);
     assert.deepEqual(selected.data?.selectProfile, {
-      profile: { id: remote.id, instance: { kind: 'ACTIVITYPUB' } },
-      session: { selectedProfile: { id: remote.id, instance: { kind: 'ACTIVITYPUB' } } },
+      profile: { id: globalId('Profile', remote.id), instance: { kind: 'ACTIVITYPUB' } },
+      session: {
+        selectedProfile: {
+          id: globalId('Profile', remote.id),
+          instance: { kind: 'ACTIVITYPUB' },
+        },
+      },
     });
 
     const restored = await requestGraphQL<{
@@ -507,7 +556,7 @@ describe('GraphQL remote profile boundary', () => {
 
     assertNoGraphQLErrors(restored);
     assert.deepEqual(restored.data?.currentSession?.selectedProfile, {
-      id: remote.id,
+      id: globalId('Profile', remote.id),
       instance: { kind: 'ACTIVITYPUB' },
     });
   });
@@ -535,7 +584,7 @@ describe('GraphQL remote profile boundary', () => {
         `mutation SelectUnownedRemote($id: ID!) {
           selectProfile(input: { id: $id }) { profile { id } }
         }`,
-        { id },
+        { id: globalId('Profile', id) },
         auth.token,
       );
 
@@ -573,7 +622,7 @@ describe('GraphQL remote profile boundary', () => {
       `mutation SelectInactiveRemote($id: ID!) {
         selectProfile(input: { id: $id }) { profile { id } }
       }`,
-      { id: remote.id },
+      { id: globalId('Profile', remote.id) },
       auth.token,
     );
 
@@ -589,7 +638,7 @@ describe('GraphQL remote profile boundary', () => {
       `mutation SelectSuspendedRemote($id: ID!) {
         selectProfile(input: { id: $id }) { profile { id } }
       }`,
-      { id: remote.id },
+      { id: globalId('Profile', remote.id) },
       auth.token,
     );
 
@@ -623,7 +672,7 @@ describe('GraphQL remote profile boundary', () => {
       `mutation FollowRemote($id: ID!) {
         followProfile(input: { id: $id }) { profileFollow { id } }
       }`,
-      { id: remote.id },
+      { id: globalId('Profile', remote.id) },
       auth.token,
     );
 
@@ -655,7 +704,7 @@ describe('GraphQL remote profile boundary', () => {
           profileFollowId
         }
       }`,
-      { id: remote.id },
+      { id: globalId('Profile', remote.id) },
       auth.token,
     );
 
@@ -663,11 +712,11 @@ describe('GraphQL remote profile boundary', () => {
     assert.deepEqual(result.data?.unfollowProfile, {
       followeeProfile: {
         followersCount: 0,
-        id: remote.id,
+        id: globalId('Profile', remote.id),
         instance: { kind: 'ACTIVITYPUB' },
       },
-      followerProfile: { followingCount: 0, id: auth.profile.id },
-      profileFollowId: follow.id,
+      followerProfile: { followingCount: 0, id: globalId('Profile', auth.profile.id) },
+      profileFollowId: globalId('ProfileFollow', follow.id),
     });
     assert.equal(await countRows(ProfileFollows), 0);
   });
@@ -691,7 +740,7 @@ describe('GraphQL remote profile boundary', () => {
       `mutation UnfollowSuspendedRemote($id: ID!) {
         unfollowProfile(input: { id: $id }) { profileFollowId }
       }`,
-      { id: remote.id },
+      { id: globalId('Profile', remote.id) },
       auth.token,
     );
 
@@ -737,7 +786,7 @@ describe('GraphQL remote profile boundary', () => {
       `mutation UnfollowSuspendedRemoteWithoutRelationship($id: ID!) {
         unfollowProfile(input: { id: $id }) { profileFollowId }
       }`,
-      { id: remote.id },
+      { id: globalId('Profile', remote.id) },
       auth.token,
     );
 
@@ -785,7 +834,7 @@ describe('GraphQL remote profile boundary', () => {
     const created = await db
       .select()
       .from(Profiles)
-      .where(eq(Profiles.id, result.data!.createProfile!.profile.id))
+      .where(and(eq(Profiles.instanceId, localInstanceId), eq(Profiles.normalizedHandle, 'alice')))
       .limit(1)
       .then(firstOrThrow);
     assert.equal(created.instanceId, localInstanceId);
@@ -829,6 +878,9 @@ const requestGraphQL = async <TData = Record<string, unknown>>(
   assert.equal(response.status, 200);
   return (await response.json()) as GraphQLResult<TData>;
 };
+
+const globalId = (typename: string, id: string) =>
+  Buffer.from(`${typename}:${id}`).toString('base64');
 
 const assertNoGraphQLErrors = (result: GraphQLResult<unknown>) => {
   assert.equal(result.errors, undefined, JSON.stringify(result.errors));
@@ -880,6 +932,7 @@ const createProfile = async ({
   followersCount,
   followingCount,
   handle,
+  id,
   instanceId,
   state = ProfileState.ACTIVE,
 }: {
@@ -887,6 +940,7 @@ const createProfile = async ({
   followersCount?: number;
   followingCount?: number;
   handle: string;
+  id?: string;
   instanceId: string;
   state?: ProfileState;
 }) =>
@@ -898,6 +952,7 @@ const createProfile = async ({
       ...(followersCount === undefined ? {} : { followersCount }),
       ...(followingCount === undefined ? {} : { followingCount }),
       handle,
+      ...(id === undefined ? {} : { id }),
       instanceId,
       normalizedHandle: normalizeHandle(handle),
       state,

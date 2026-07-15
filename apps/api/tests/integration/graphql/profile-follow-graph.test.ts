@@ -183,9 +183,9 @@ describe('GraphQL profile follow graph', () => {
         edges: [
           {
             node: {
-              followee: { id: remote.id },
-              follower: { id: publicFollower.id },
-              id: followerFollow!.id,
+              followee: { id: globalId('Profile', remote.id) },
+              follower: { id: globalId('Profile', publicFollower.id) },
+              id: globalId('ProfileFollow', followerFollow!.id),
             },
           },
         ],
@@ -195,9 +195,9 @@ describe('GraphQL profile follow graph', () => {
         edges: [
           {
             node: {
-              followee: { id: publicFollowee.id },
-              follower: { id: remote.id },
-              id: followingFollow!.id,
+              followee: { id: globalId('Profile', publicFollowee.id) },
+              follower: { id: globalId('Profile', remote.id) },
+              id: globalId('ProfileFollow', followingFollow!.id),
             },
           },
         ],
@@ -239,9 +239,9 @@ describe('GraphQL profile follow graph', () => {
         edges: [
           {
             node: {
-              followee: { id: remote.id },
-              follower: { id: auth.profile.id },
-              id: viewerFollow!.id,
+              followee: { id: globalId('Profile', remote.id) },
+              follower: { id: globalId('Profile', auth.profile.id) },
+              id: globalId('ProfileFollow', viewerFollow!.id),
             },
           },
         ],
@@ -251,16 +251,19 @@ describe('GraphQL profile follow graph', () => {
         edges: [
           {
             node: {
-              followee: { id: auth.profile.id },
-              follower: { id: remote.id },
-              id: reverseViewerFollow!.id,
+              followee: { id: globalId('Profile', auth.profile.id) },
+              follower: { id: globalId('Profile', remote.id) },
+              id: globalId('ProfileFollow', reverseViewerFollow!.id),
             },
           },
         ],
       },
       followingCount: 0,
-      viewerFollow: { id: viewerFollow!.id },
-      viewerState: { follow: { id: viewerFollow!.id }, isSelf: false },
+      viewerFollow: { id: globalId('ProfileFollow', viewerFollow!.id) },
+      viewerState: {
+        follow: { id: globalId('ProfileFollow', viewerFollow!.id) },
+        isSelf: false,
+      },
     });
   });
 
@@ -421,7 +424,7 @@ const requestNodeFollowGraph = (id: string, token: string) =>
         ... on Profile { ${followGraphFields} }
       }
     }`,
-    { id },
+    { id: globalId('Profile', id) },
     token,
   );
 
@@ -437,6 +440,9 @@ const requestFollowGraph = (handle: string, token?: string) =>
     { handle },
     token,
   );
+
+const globalId = (typename: string, id: string) =>
+  Buffer.from(`${typename}:${id}`).toString('base64');
 
 const assertRemoteFollowGraphHidesCounterparts = async ({
   followPolicy = ProfileFollowPolicy.OPEN,

@@ -40,7 +40,7 @@
     "test:migration": "cd ../.. && node scripts/test-db.mjs run -- node --test --test-concurrency=1 'packages/core/db/*.migration.test.mjs'",
     "test:services": "cd ../.. && node scripts/test-db.mjs run -- pnpm --filter @kosmo/core test:services:database",
     "test:services:database": "cd ../.. && pnpm db:test:push && pnpm --filter @kosmo/core exec node --import tsx --test --test-concurrency=1 services/inbound-profile-follow.test.ts services/profile-follow.test.ts services/profile.test.ts",
-    "test:unit": "node --import tsx --test 'post-content/**/*.test.ts'"
+    "test:unit": "node --import tsx --test 'db/id.test.ts' 'post-content/**/*.test.ts'"
   },
   "devDependencies": {
     "drizzle-kit": "1.0.0-beta.22"

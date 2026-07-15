@@ -7,7 +7,6 @@ import {
   ProfileFollowRequests,
   ProfileFollows,
   Profiles,
-  TableDiscriminator,
 } from '../db';
 import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
 import { NotFoundError } from '../error';
@@ -90,7 +89,7 @@ export const recordInboundFollow = async (
       return 'PENDING';
     }
 
-    const followId = createId(TableDiscriminator.ProfileFollows);
+    const followId = createId();
     const profileFollow = await tx
       .insert(ProfileFollows)
       .values({

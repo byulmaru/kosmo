@@ -1,8 +1,8 @@
-import { db, Sessions, TableDiscriminator } from '@kosmo/core/db';
+import { db, Sessions } from '@kosmo/core/db';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { createObjectRef } from '@/graphql/utils';
 
-export const Session = createObjectRef('Session', TableDiscriminator.Sessions, (ids, ctx) =>
+export const Session = createObjectRef('Session', (ids, ctx) =>
   db
     .select()
     .from(Sessions)

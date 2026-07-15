@@ -1,4 +1,4 @@
-import { AccountProfiles, db, Instances, Profiles, TableDiscriminator } from '@kosmo/core/db';
+import { AccountProfiles, db, Instances, Profiles } from '@kosmo/core/db';
 import { AccountProfileRole, ProfileFollowPolicy } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
@@ -8,7 +8,7 @@ import { visibleProfileWhere } from '@/profile/visibility';
 import { profileFollowByIdLoader } from './loader/follow';
 import { profileInstanceByIdLoader } from './loader/instance';
 
-export const Profile = createObjectRef('Profile', TableDiscriminator.Profiles, (ids) =>
+export const Profile = createObjectRef('Profile', (ids) =>
   db
     .select(getColumns(Profiles))
     .from(Profiles)
@@ -49,10 +49,8 @@ Profile.implement({
   }),
 });
 
-export const AccountProfile = createObjectRef(
-  'AccountProfile',
-  TableDiscriminator.AccountProfiles,
-  (ids) => db.select().from(AccountProfiles).where(inArray(AccountProfiles.id, ids)),
+export const AccountProfile = createObjectRef('AccountProfile', (ids) =>
+  db.select().from(AccountProfiles).where(inArray(AccountProfiles.id, ids)),
 );
 
 AccountProfile.implement({
@@ -63,10 +61,8 @@ AccountProfile.implement({
   }),
 });
 
-export const ProfileFollow = createObjectRef(
-  'ProfileFollow',
-  TableDiscriminator.ProfileFollows,
-  (ids, ctx) => profileFollowByIdLoader(ctx).loadMany(ids),
+export const ProfileFollow = createObjectRef('ProfileFollow', (ids, ctx) =>
+  profileFollowByIdLoader(ctx).loadMany(ids),
 );
 
 ProfileFollow.implement({

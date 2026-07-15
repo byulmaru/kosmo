@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { index, integer, jsonb, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
 import * as Enum from './enums';
-import { createId, TableDiscriminator } from './id';
+import { createId } from './id';
 import { datetime } from './types';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { PostContentDocumentV1 } from '../post-content';
@@ -19,9 +19,7 @@ const updatedAt = () =>
     .default(sql`now()`);
 
 export const Accounts = pgTable('account', {
-  id: uuid('id')
-    .primaryKey()
-    .$defaultFn(() => createId(TableDiscriminator.Accounts)),
+  id: uuid('id').primaryKey().$defaultFn(createId),
   oidcSubject: text('oidc_subject').unique().notNull(),
   displayName: text('display_name').notNull(),
   state: Enum.accountState('state').notNull(),
@@ -31,9 +29,7 @@ export const Accounts = pgTable('account', {
 export const AccountProfiles = pgTable(
   'account_profile',
   {
-    id: uuid('id')
-      .primaryKey()
-      .$defaultFn(() => createId(TableDiscriminator.AccountProfiles)),
+    id: uuid('id').primaryKey().$defaultFn(createId),
     accountId: uuid('account_id')
       .notNull()
       .references(() => Accounts.id, { onDelete: 'cascade' }),
@@ -53,9 +49,7 @@ export const AccountProfiles = pgTable(
 export const ActivityPubActors = pgTable(
   'activitypub_actor',
   {
-    id: uuid('id')
-      .primaryKey()
-      .$defaultFn(() => createId(TableDiscriminator.ActivityPubActors)),
+    id: uuid('id').primaryKey().$defaultFn(createId),
     profileId: uuid('profile_id')
       .notNull()
       .references(() => Profiles.id, { onDelete: 'cascade' }),
@@ -76,9 +70,7 @@ export const ActivityPubActors = pgTable(
 export const ActivityPubActorKeys = pgTable(
   'activitypub_actor_key',
   {
-    id: uuid('id')
-      .primaryKey()
-      .$defaultFn(() => createId(TableDiscriminator.ActivityPubActorKeys)),
+    id: uuid('id').primaryKey().$defaultFn(createId),
     activityPubActorId: uuid('activitypub_actor_id')
       .notNull()
       .references(() => ActivityPubActors.id, { onDelete: 'cascade' }),
@@ -93,9 +85,7 @@ export const ActivityPubActorKeys = pgTable(
 export const Applications = pgTable(
   'application',
   {
-    id: uuid('id')
-      .primaryKey()
-      .$defaultFn(() => createId(TableDiscriminator.Applications)),
+    id: uuid('id').primaryKey().$defaultFn(createId),
     ownerAccountId: uuid('owner_account_id').references(() => Accounts.id, {
       onDelete: 'set null',
     }),
@@ -114,9 +104,7 @@ export const Applications = pgTable(
 export const ApplicationAuthorizations = pgTable(
   'application_authorization',
   {
-    id: uuid('id')
-      .primaryKey()
-      .$defaultFn(() => createId(TableDiscriminator.ApplicationAuthorizations)),
+    id: uuid('id').primaryKey().$defaultFn(createId),
     applicationId: uuid('application_id')
       .notNull()
       .references(() => Applications.id, { onDelete: 'cascade' }),
@@ -136,9 +124,7 @@ export const ApplicationAuthorizations = pgTable(
 );
 
 export const Files = pgTable('file', {
-  id: uuid('id')
-    .primaryKey()
-    .$defaultFn(() => createId(TableDiscriminator.Files)),
+  id: uuid('id').primaryKey().$defaultFn(createId),
   storageKey: text('storage_key').unique().notNull(),
   sha256: text('sha256'),
   mimeType: text('mime_type').notNull(),
@@ -151,9 +137,7 @@ export const Files = pgTable('file', {
 export const Instances = pgTable(
   'instance',
   {
-    id: uuid('id')
-      .primaryKey()
-      .$defaultFn(() => createId(TableDiscriminator.Instances)),
+    id: uuid('id').primaryKey().$defaultFn(createId),
     domain: text('domain').unique().notNull(),
     canonicalOrigin: text('canonical_origin'),
     kind: Enum.instanceKind('kind').notNull(),
@@ -167,9 +151,7 @@ export const Instances = pgTable(
 export const Media = pgTable(
   'media',
   {
-    id: uuid('id')
-      .primaryKey()
-      .$defaultFn(() => createId(TableDiscriminator.Media)),
+    id: uuid('id').primaryKey().$defaultFn(createId),
     source: Enum.mediaSource('source').notNull(),
     accountId: uuid('account_id').references(() => Accounts.id),
     profileId: uuid('profile_id')
@@ -192,9 +174,7 @@ export const Media = pgTable(
 export const Notifications = pgTable(
   'notification',
   {
-    id: uuid('id')
-      .primaryKey()
-      .$defaultFn(() => createId(TableDiscriminator.Notifications)),
+    id: uuid('id').primaryKey().$defaultFn(createId),
     recipientProfileId: uuid('recipient_profile_id')
       .notNull()
       .references(() => Profiles.id, { onDelete: 'cascade' }),
@@ -216,9 +196,7 @@ export const Notifications = pgTable(
 export const OAuthAuthorizationCodes = pgTable(
   'oauth_authorization_code',
   {
-    id: uuid('id')
-      .primaryKey()
-      .$defaultFn(() => createId(TableDiscriminator.OAuthAuthorizationCodes)),
+    id: uuid('id').primaryKey().$defaultFn(createId),
     codeHash: text('code_hash').notNull(),
     applicationId: uuid('application_id')
       .notNull()
@@ -245,9 +223,7 @@ export const OAuthAuthorizationCodes = pgTable(
 export const OAuthTokens = pgTable(
   'oauth_token',
   {
-    id: uuid('id')
-      .primaryKey()
-      .$defaultFn(() => createId(TableDiscriminator.OAuthTokens)),
+    id: uuid('id').primaryKey().$defaultFn(createId),
     accessTokenHash: text('access_token_hash').notNull(),
     refreshTokenHash: text('refresh_token_hash'),
     applicationId: uuid('application_id')
@@ -276,9 +252,7 @@ export const OAuthTokens = pgTable(
 export const Posts = pgTable(
   'post',
   {
-    id: uuid('id')
-      .primaryKey()
-      .$defaultFn(() => createId(TableDiscriminator.Posts)),
+    id: uuid('id').primaryKey().$defaultFn(createId),
     profileId: uuid('profile_id')
       .notNull()
       .references(() => Profiles.id),
@@ -294,9 +268,7 @@ export const Posts = pgTable(
 export const PostContents = pgTable(
   'post_content',
   {
-    id: uuid('id')
-      .primaryKey()
-      .$defaultFn(() => createId(TableDiscriminator.PostContents)),
+    id: uuid('id').primaryKey().$defaultFn(createId),
     postId: uuid('post_id')
       .notNull()
       .references((): AnyPgColumn => Posts.id),
@@ -309,9 +281,7 @@ export const PostContents = pgTable(
 export const Profiles = pgTable(
   'profile',
   {
-    id: uuid('id')
-      .primaryKey()
-      .$defaultFn(() => createId(TableDiscriminator.Profiles)),
+    id: uuid('id').primaryKey().$defaultFn(createId),
     instanceId: uuid('instance_id')
       .notNull()
       .references(() => Instances.id),
@@ -331,9 +301,7 @@ export const Profiles = pgTable(
 export const ProfileFollows = pgTable(
   'profile_follow',
   {
-    id: uuid('id')
-      .primaryKey()
-      .$defaultFn(() => createId(TableDiscriminator.ProfileFollows)),
+    id: uuid('id').primaryKey().$defaultFn(createId),
     followerProfileId: uuid('follower_profile_id')
       .notNull()
       .references(() => Profiles.id, { onDelete: 'cascade' }),
@@ -352,9 +320,7 @@ export const ProfileFollows = pgTable(
 export const ProfileFollowRequests = pgTable(
   'profile_follow_request',
   {
-    id: uuid('id')
-      .primaryKey()
-      .$defaultFn(() => createId(TableDiscriminator.ProfileFollowRequests)),
+    id: uuid('id').primaryKey().$defaultFn(createId),
     followerProfileId: uuid('follower_profile_id')
       .notNull()
       .references(() => Profiles.id, { onDelete: 'cascade' }),
@@ -373,9 +339,7 @@ export const ProfileFollowRequests = pgTable(
 export const Sessions = pgTable(
   'session',
   {
-    id: uuid('id')
-      .primaryKey()
-      .$defaultFn(() => createId(TableDiscriminator.Sessions)),
+    id: uuid('id').primaryKey().$defaultFn(createId),
     accountId: uuid('account_id')
       .notNull()
       .references(() => Accounts.id),

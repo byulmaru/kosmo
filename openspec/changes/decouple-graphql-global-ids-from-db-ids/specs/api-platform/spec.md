@@ -22,12 +22,17 @@ API는 concrete GraphQL typename과 DB UUID를 포함하는 opaque global ID를 
 - **WHEN** 클라이언트가 raw DB UUID를 GraphQL Node ID로 제공한다
 - **THEN** 시스템은 compatibility fallback 없이 invalid global ID로 처리한다
 
-#### Scenario: Notification concrete Node resolve
+#### Scenario: Reject invalid or unsupported typename
 
-- **WHEN** 클라이언트가 concrete FollowNotification global ID를 제공한다
-- **THEN** 시스템은 FollowNotification loader로 notification row를 batch load한다
-- **AND** row의 kind가 FOLLOW이고 visibility 조건을 만족할 때 FollowNotification concrete object를 반환한다
-- **AND** interface typename, 지원하지 않는 kind 또는 hidden row는 다른 concrete type으로 오라우팅하지 않고 object 없음으로 처리한다
+- **WHEN** 클라이언트가 문법적으로 잘못된 global ID, 알 수 없는 typename 또는 loadable concrete Node가 아닌 typename을 제공한다
+- **THEN** 시스템은 해당 ID를 유효한 Node로 resolve하지 않는다
+- **AND** interface typename을 concrete loader 대신 사용하지 않는다
+
+#### Scenario: Do not trust mismatched typename
+
+- **WHEN** global ID의 typename에 등록된 loader가 underlying DB UUID에 해당하는 조회 가능한 row를 찾지 못한다
+- **THEN** 시스템은 다른 table이나 type을 추론해 재시도하지 않는다
+- **AND** 해당 ID는 object 없음으로 처리한다
 
 #### Scenario: Batch load nodes
 

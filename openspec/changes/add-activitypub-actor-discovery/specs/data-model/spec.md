@@ -103,8 +103,8 @@
 #### Scenario: Generate IDs for federation storage rows
 
 - **WHEN** `instance`, `activitypub_actor`, `activitypub_actor_key` 행이 생성된다
-- **THEN** 시스템은 해당 테이블의 `TableDiscriminator` 값을 포함한 UUID 문자열을 기본 키로 생성한다
-- **AND** 테이블 식별자는 12비트 범위 안에 있어야 한다
+- **THEN** 시스템은 table discriminator가 없는 표준 UUIDv7 문자열을 기본 키로 생성한다
+- **AND** ID는 PostgreSQL `uuid` column에 저장된다
 
 #### Scenario: Store federation enum values
 

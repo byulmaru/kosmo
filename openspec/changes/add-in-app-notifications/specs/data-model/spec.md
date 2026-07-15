@@ -2,13 +2,19 @@
 
 ### Requirement: UUID 기반 테이블 식별자
 
-시스템은 주요 도메인 테이블의 기본 키를 PostgreSQL `uuid` 값으로 저장하고, 애플리케이션에서 생성한 시간 정렬 가능 ID에 테이블 식별자를 포함해야 한다(MUST).
+시스템은 주요 도메인 테이블의 기본 키를 PostgreSQL `uuid` 값으로 저장하고 신규 행의 ID를 애플리케이션에서 표준 UUIDv7으로 생성해야 한다(MUST).
 
 #### Scenario: 새 도메인 행 생성
 
-- **WHEN** `account`, `account_profile`, `application`, `application_authorization`, `file`, `media`, `notification`, `oauth_authorization_code`, `oauth_token`, `post`, `post_content`, `profile`, `profile_follow`, `profile_follow_request`, `session`, `instance`, `activitypub_actor`, `activitypub_actor_key` 행이 생성된다
-- **THEN** 시스템은 해당 테이블의 `TableDiscriminator` 값을 포함한 UUID 문자열을 기본 키로 생성한다
-- **AND** 테이블 식별자는 12비트 범위 안에 있어야 한다
+- **WHEN** 주요 도메인 테이블의 신규 행이 생성된다
+- **THEN** 시스템은 table discriminator가 없는 표준 UUIDv7 문자열을 기본 키로 생성한다
+- **AND** ID는 PostgreSQL `uuid` column에 저장된다
+
+#### Scenario: 기존 UUIDv8 행 유지
+
+- **WHEN** 기존 table discriminator 포함 UUIDv8 primary key 또는 이를 참조하는 foreign key가 존재한다
+- **THEN** 시스템은 해당 ID 값을 삭제, backfill 또는 재작성하지 않는다
+- **AND** 기존 UUIDv8 row는 신규 UUIDv7 row와 같은 query, relation 및 loader 경로에서 계속 조회될 수 있다
 
 ## ADDED Requirements
 
@@ -19,8 +25,8 @@
 #### Scenario: Follow Notification row 저장
 
 - **WHEN** Follow Notification을 생성한다
-- **THEN** 시스템은 `notification`에 UUID v8 `id`, non-null `recipient_profile_id`, `kind = FOLLOW`, non-null `source_id`, `data = {}`, `created_at`과 nullable `read_at`을 저장한다
-- **AND** `notification.id`는 `Notification` Relay Node의 `TableDiscriminator`를 가진다
+- **THEN** 시스템은 `notification`에 PostgreSQL `uuid` `id`, non-null `recipient_profile_id`, `kind = FOLLOW`, non-null `source_id`, `data = {}`, `created_at`과 nullable `read_at`을 저장한다
+- **AND** 신규 `notification.id`는 표준 UUIDv7으로 생성되고 기존 UUIDv8 Notification ID도 그대로 유효하다
 - **AND** `read_at = null`은 Unread를, non-null `read_at`은 Read와 최초 Read 시각을 나타낸다
 - **AND** `data`는 PostgreSQL `jsonb NOT NULL DEFAULT '{}'::jsonb`이며 애플리케이션이 kind별 shape를 검증한다
 - **AND** 별도 Read State enum, type-specific extension table, 미래 source column이나 mutable `updated_at`을 저장하지 않는다
@@ -71,7 +77,7 @@
 
 - **WHEN** 후속 change가 새 Profile-scoped Notification kind를 구현한다
 - **THEN** 그 change는 `notification_kind` 값, GraphQL concrete object, kind resolution, 해당 kind의 `source_id` 의미와 `data` validation을 함께 정의한다
-- **AND** 새 kind가 실제로 별도 durable table을 필요로 하지 않는 한 type-specific Notification extension table이나 추가 `TableDiscriminator`를 만들지 않는다
+- **AND** 새 kind가 실제로 별도 durable table을 필요로 하지 않는 한 type-specific Notification extension table을 만들지 않는다
 
 #### Scenario: Account-scoped Operational Notification
 

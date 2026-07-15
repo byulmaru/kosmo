@@ -61,3 +61,36 @@ test('rejects empty and over-500-character Plain Text before creating a post', a
     assert.equal(result.errors?.[0]?.message, message);
   }
 });
+
+test('rejects legacy raw UUID and unknown typename Node IDs', async () => {
+  for (const id of [
+    '00000000-0000-8006-8000-000000000001',
+    Buffer.from('Unknown:00000000-0000-8006-8000-000000000001').toString('base64'),
+  ]) {
+    const result = await graphql({
+      schema,
+      source: `query Node($id: ID!) { node(id: $id) { id } }`,
+      variableValues: { id },
+      contextValue: {},
+    });
+
+    assert.equal(result.data?.node, null);
+    assert.ok(result.errors?.[0]);
+  }
+});
+
+test('rejects a global ID with the wrong concrete mutation input type', async () => {
+  const result = await graphql({
+    schema,
+    source: `mutation UpdateProfile($id: ID!) {
+      updateProfile(input: { id: $id }) { profile { id } }
+    }`,
+    variableValues: {
+      id: Buffer.from('Post:00000000-0000-8006-8000-000000000001').toString('base64'),
+    },
+    contextValue: { session: { accountId: 'account', id: 'session' } },
+  });
+
+  assert.equal(result.data, null);
+  assert.match(result.errors?.[0]?.message ?? '', /is not of type: Profile/);
+});

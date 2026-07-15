@@ -1,6 +1,6 @@
 # Database Design Memory
 
-Use this memory when designing or reviewing the kosmo PostgreSQL/Drizzle database schema, especially for ID strategy, kosmo UUID v8 type codes, GraphQL Relay ID representation, naming conventions, media/file table boundaries, post content versioning, soft deletes, ActivityPub/AT Protocol data boundaries, and MVP versus follow-up migrations.
+Use this memory when designing or reviewing the kosmo PostgreSQL/Drizzle database schema, especially for UUIDv7 ID strategy, GraphQL Relay ID separation, naming conventions, media/file table boundaries, post content versioning, soft deletes, ActivityPub/AT Protocol data boundaries, and MVP versus follow-up migrations.
 
 ## Review Posture
 
@@ -44,77 +44,46 @@ Use this memory when designing or reviewing the kosmo PostgreSQL/Drizzle databas
 
 ## ID Strategy
 
-Prefer kosmo's custom UUID v8 stored as PostgreSQL `uuid` for database primary keys. Reconsider table-prefix text IDs such as `PRFL0...`.
+Prefer standard UUIDv7 stored as PostgreSQL `uuid` for new database primary keys. Reconsider table-prefix text IDs such as `PRFL0...`.
 
 Recommended direction:
 
 - Do not store string prefixes in DB primary keys.
 - Prefer PostgreSQL native `uuid` over text IDs for joins, index size, cache locality, and throughput.
-- kosmo's custom UUID v8 provides time-ordering and distributed generation, making it a strong default for a social product.
-- The current `createId` layout stores a millisecond timestamp followed by a random tail. IDs are time-grouped but are
+- Standard UUIDv7 provides time grouping and distributed application-side generation without coupling DB identity to a table registry.
+- The current `createId` layout stores a 48-bit millisecond timestamp followed by a random tail. IDs are time-grouped but are
   not monotonic within the same millisecond.
-- Generate kosmo UUID v8 in the web server/application before insert.
-- Keep GraphQL Relay global IDs opaque.
-- For GraphQL Relay Node type discrimination, reserve part of the custom UUID v8 implementation-defined area for a table type code.
-- Node resolvers can decode the UUID type code to choose the target table.
-- Map type codes to human-readable type names for API responses or logs when needed.
-
-Kosmo UUID v8 type-code policy:
-
-- Never modify UUID version bits, variant bits, or timestamp bits.
-- Store the type code in a fixed implementation-defined part of the kosmo UUID v8 layout.
-- Choose enough type-code width early, for example 8 bits for 256 types or 12 bits for 4096 types.
-- Document that the type code reduces random collision space, and calculate whether the remaining random bits are sufficient.
-- Generate IDs only through a shared `generateId(tableType)` utility.
-- Decode IDs only through a shared `decodeIdType(id)` utility.
+- Generate UUIDv7 in the web server/application before insert through the shared `createId()` utility.
+- Keep DB UUID and GraphQL Relay global ID as separate responsibilities. GraphQL ID contains the concrete typename and DB UUID as an opaque value.
+- Do not reserve or decode table discriminator bits for GraphQL type routing.
+- Existing kosmo UUIDv8 primary keys and foreign keys remain valid permanently. Do not delete, backfill, or rewrite them to UUIDv7.
+- Existing UUIDv8 and new UUIDv7 share the same 48-bit millisecond timestamp position and can coexist in PostgreSQL `uuid` columns, relations, loaders, and time-grouped ordering.
 - Store IDs as PostgreSQL `uuid`, not as string prefixes.
 - An ID-only keyset is valid when arbitrary ordering and page placement within the same millisecond are acceptable.
   When persisted timestamp ordering matters, use an immutable timestamp plus an ID tie-breaker. When insertion order
   must also be monotonic for identical timestamps, use a database ordering key or change the generator in a separately
   reviewed platform change.
 
-Current type-code registry examples. The source of truth is `TableDiscriminator` in `packages/core/db/id.ts`.
+Relay global ID policy:
 
-| Code | Table                       | Description                          |
-| ---: | --------------------------- | ------------------------------------ |
-|  `1` | `account`                   | Login unit mapped to an OIDC account |
-|  `2` | `account_profile`           | Account-profile relationship         |
-|  `3` | `application`               | App/client connecting to kosmo       |
-|  `4` | `post`                      | Post metadata                        |
-|  `5` | `post_content`              | Post body revision                   |
-|  `6` | `profile`                   | Social profile                       |
-|  `7` | `profile_follow`            | Established profile follow           |
-|  `8` | `session`                   | Account and application session      |
-|  `9` | `application_authorization` | OAuth application authorization      |
-| `10` | `oauth_authorization_code`  | OAuth authorization code             |
-| `11` | `oauth_token`               | OAuth access/refresh token           |
-| `12` | `file`                      | Object Storage file                  |
-| `13` | `media`                     | Uploaded or remote logical media     |
-| `14` | `instance`                  | Local or remote service instance     |
-| `15` | `activitypub_actor`         | ActivityPub actor details            |
-| `16` | `activitypub_actor_key`     | ActivityPub actor key                |
-| `17` | `profile_follow_request`    | Profile follow request lifecycle     |
-| `18` | `notification`              | Profile-scoped notification item     |
-
-Relay global ID options:
-
-- The opaque payload can contain only the UUID, with the Node resolver reading the UUID type code.
-- The opaque payload can contain `typeCode:id`, with validation that the payload type code matches the UUID type code.
-- Clients should not depend on UUID structure or type codes.
+- Encode the concrete GraphQL typename and underlying DB UUID in the opaque global ID.
+- Route directly to the concrete Node loader selected by the decoded typename.
+- Do not accept raw DB UUID as a legacy GraphQL Node ID input.
+- Do not retry another loader when the typename and underlying row do not match.
+- Clients must not depend on typename, UUID, or encoding structure.
 
 Benchmark candidates:
 
 - `TEXT prefix + ULID`
 - `CHAR(26) ULID`
-- kosmo custom `UUID v8`
-- kosmo custom `UUID v8` with reserved type-code bits
+- standard `UUIDv7`
 
 Queries to check:
 
 - `post.profile_id -> profile.id` joins
 - `post_media.media_asset_id -> media_asset.id` joins
 - `(profile_id, created_at DESC)` timeline pagination
-- GraphQL Node ID decode followed by single-row lookup
+- GraphQL global ID decode followed by concrete loader lookup
 - Index size, query plan, insert locality, cache hit ratio, and maximum throughput
 
 ## Relationship Modeling
@@ -212,10 +181,11 @@ Thumbnail policy:
 - Are business identifiers avoided as primary keys?
 - Are internal DB IDs separated from GraphQL/REST external IDs?
 - Is there a real reason to store prefixed IDs in the database?
-- Is the kosmo UUID v8 type-code bit reservation approach considered for GraphQL type discrimination?
+- Are new DB IDs standard UUIDv7 without table discriminator coupling?
 - Are UUID version, variant, and timestamp bit preservation rules documented?
-- Is there a table type-code map and a policy for adding or retiring codes?
-- Is kosmo UUID v8 with PostgreSQL `uuid` considered before text IDs?
+- Are existing UUIDv8 IDs preserved without data migration?
+- Are GraphQL global IDs and DB UUIDs kept as separate responsibilities?
+- Is PostgreSQL `uuid` considered before text IDs?
 - Can enum/status columns handle near-future state expansion?
 - Are N:N relationships with role/state/order/timestamp represented as join tables?
 - Is deletion policy clear per table?

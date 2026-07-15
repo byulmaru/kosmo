@@ -5,16 +5,22 @@ import { disableProfile } from '@kosmo/core/services';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { visibleProfileWhere } from '@/profile/visibility';
+import { Profile } from '../ref';
 
 builder.mutationField('deleteProfile', (t) =>
   t.withAuth({ login: true }).fieldWithInput({
     type: builder.simpleObject('DeleteProfilePayload', {
       fields: (field) => ({
-        profileId: field.id(),
+        profileId: field.globalID({
+          resolve: (payload) => ({
+            id: (payload as { profileId: string }).profileId,
+            type: Profile,
+          }),
+        }),
       }),
     }),
     input: {
-      id: t.input.id({ required: true }),
+      id: t.input.globalID({ for: Profile }),
     },
     resolve: async (_, { input }, ctx) => {
       const profile = await db
@@ -24,7 +30,7 @@ builder.mutationField('deleteProfile', (t) =>
         .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
         .where(
           and(
-            eq(Profiles.id, input.id),
+            eq(Profiles.id, input.id.id),
             eq(AccountProfiles.accountId, ctx.session.accountId),
             visibleProfileWhere({ profile: Profiles, instance: Instances }),
           ),
@@ -36,7 +42,7 @@ builder.mutationField('deleteProfile', (t) =>
         throw new PermissionDeniedError('Profile owner permission is required');
       }
 
-      await disableProfile(input.id);
+      await disableProfile(input.id.id);
 
       return { profileId: profile.id };
     },

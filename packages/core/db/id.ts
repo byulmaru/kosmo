@@ -1,46 +1,9 @@
-import type * as Tables from './tables';
-
-export const TableDiscriminator = {
-  Accounts: 0x001,
-  AccountProfiles: 0x002,
-  ActivityPubActors: 0x00f,
-  ActivityPubActorKeys: 0x010,
-  Applications: 0x003,
-  ApplicationAuthorizations: 0x009,
-  Files: 0x00c,
-  Instances: 0x00e,
-  Media: 0x00d,
-  Notifications: 0x012,
-  OAuthAuthorizationCodes: 0x00a,
-  OAuthTokens: 0x00b,
-  Posts: 0x004,
-  PostContents: 0x005,
-  Profiles: 0x006,
-  ProfileFollows: 0x007,
-  ProfileFollowRequests: 0x011,
-  Sessions: 0x008,
-} as const satisfies Record<keyof typeof Tables, number>;
-
-const assertTableDiscriminator = (tableDiscriminator: number) => {
-  if (
-    !Number.isInteger(tableDiscriminator) ||
-    tableDiscriminator < 0 ||
-    tableDiscriminator > 0xfff
-  ) {
-    throw new RangeError('tableDiscriminator must fit in 12 bits');
-  }
-};
-
 const formatUuid = (bytes: Uint8Array) => {
   const hex = bytes.toHex();
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 };
 
-export const createId = (
-  tableDiscriminator: (typeof TableDiscriminator)[keyof typeof TableDiscriminator],
-) => {
-  assertTableDiscriminator(tableDiscriminator);
-
+export const createId = () => {
   const timestamp = Date.now();
   const bytes = new Uint8Array(16);
 
@@ -51,11 +14,8 @@ export const createId = (
   bytes[4] = (timestamp / 0x100) & 0xff;
   bytes[5] = timestamp & 0xff;
 
-  bytes[6] = 0x80 | (tableDiscriminator >> 8);
-  bytes[7] = tableDiscriminator & 0xff;
-
-  // 성능 최적화를 위해 9바이트 랜덤을 만든 후 첫 비트만 10으로 만들어줌
-  crypto.getRandomValues(bytes.subarray(8));
+  crypto.getRandomValues(bytes.subarray(6));
+  bytes[6] = 0x70 | (bytes[6] & 0x0f);
   bytes[8] = 0x80 | (bytes[8] & 0x3f);
 
   return formatUuid(bytes);
