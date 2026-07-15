@@ -51,7 +51,7 @@
 - Context / Problem: duplicate `Create`로 기존 content를 갱신하면 canonical equality, revision write, mapping lock과 conflict recovery가 따라오지만 첫 ingestion에는 remote update 동기화 요구가 없다.
 - Decision Outcome: 최초 object URI delivery만 mapping/Post/first PostContent를 만든다. 이미 mapping된 object URI의 duplicate `Create`는 content, visibility와 timestamp를 변경하지 않는다. concurrent loser transaction은 unique conflict에서 전체 rollback 후 no-op한다.
 - Alternatives Considered: duplicate Create를 upsert/update로 사용, existing mapping을 `FOR UPDATE`로 잠가 revision 생성, activity receipt로 선직렬화.
-- Consequences: remote content 변경은 `Update(Note)` 지원 전까지 반영되지 않는다. recovery transaction과 row lock이 필요하지 않다.
+- Consequences: remote content 변경은 PROD-365 `Update(Note)`/`Delete(Note)` lifecycle 지원 전까지 반영되지 않는다. recovery transaction과 row lock이 필요하지 않다.
 - Confirmation / Follow-up: PROD-261이 object URI당 Post 하나, loser rollback과 partial row 부재를 실제 PostgreSQL에서 검증한다.
 
 ### Canonical content 세부는 PROD-341을 참조하고 재정의하지 않는다
@@ -86,7 +86,7 @@
 
 ## Remaining Decisions
 
-- `Update(Note)`/`Delete(Note)`와 remote revision 동기화는 별도 이슈와 OpenSpec이 소유한다.
+- PROD-365가 `Update(Note)`/`Delete(Note)`와 remote revision 동기화를 별도 OpenSpec으로 소유한다.
 - activity-level audit 또는 object와 무관한 side effect가 생길 때만 PostgreSQL receipt 필요성을 다시 결정한다.
 - authenticated shared-inbox document loader identity는 PROD-355가 소유한다.
 - ActivityStreams Mention은 PROD-340이 소유한다.

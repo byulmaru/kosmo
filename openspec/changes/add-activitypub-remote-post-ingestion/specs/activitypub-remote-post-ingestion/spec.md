@@ -110,7 +110,7 @@
 - **WHEN** 이미 mapping된 object URI의 `Create`가 다시 전달된다
 - **THEN** 시스템은 기존 mapping, Post, PostContent, visibility와 timestamp를 변경하지 않는다
 - **AND** duplicate `Create`로 새 revision을 만들지 않는다
-- **AND** remote content 변경은 후속 `Update(Note)` 계약에 남긴다
+- **AND** remote content 변경은 후속 PROD-365 `Update(Note)`/`Delete(Note)` lifecycle 계약에 남긴다
 
 ### Requirement: Initial timestamp projection
 

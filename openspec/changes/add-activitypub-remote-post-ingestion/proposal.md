@@ -9,7 +9,7 @@
 - `Note.id.href`의 unique object mapping을 remote Post identity와 durable duplicate 판정으로 사용한다.
 - Fedify activity idempotency는 조기 최적화로만 사용하고 activity ID를 PostgreSQL receipt로 저장하지 않는다.
 - 최초 mapping, `Post`, `PostContent`와 `Post.currentContentId`를 하나의 transaction으로 저장한다. 같은 object URI의 concurrent loser는 전체 rollback 후 no-op한다.
-- duplicate `Create`는 first-write-wins로 기존 content, visibility와 timestamp를 변경하지 않는다. 원격 변경은 후속 `Update(Note)` 계약으로 남긴다.
+- duplicate `Create`는 first-write-wins로 기존 content, visibility와 timestamp를 변경하지 않는다. 원격 변경은 후속 PROD-365 `Update(Note)`/`Delete(Note)` lifecycle 계약으로 남긴다.
 - remote content adapter/projection은 PROD-259가 소유하고 결과 document의 schema, canonicalization과 equality는 PROD-341 계약을 재정의하지 않고 참조한다.
 - GraphQL은 PR #212가 제공한 공통 authorization과 DB-only read path를 그대로 사용하고 PROD-262는 저장 fixture 기반 회귀 검증만 담당한다.
 - unknown actor/mention materialization, Post-level mention relation, remote outbox fetch/backfill과 resolver/schema 변경은 포함하지 않는다. Reply/thread는 [PROD-358](https://linear.app/byulmaru/issue/PROD-358), FOLLOWERS audience는 [PROD-360](https://linear.app/byulmaru/issue/PROD-360), DIRECT recipient authorization은 [PROD-359](https://linear.app/byulmaru/issue/PROD-359)가 별도 계약으로 소유한다.
@@ -31,4 +31,4 @@
 - Implementation slices: PROD-255 schema, PROD-259 projection, PROD-260 inbox validation과 PROD-262 authorization regression을 진행한 뒤 PROD-261이 최초 materialization transaction을 통합하고 PROD-256이 integration/archive를 소유한다.
 - Existing foundations: PROD-241의 activity-neutral actor/shared inbox route와 PR #212/PROD-257의 DB-only GraphQL read/authorization을 변경하지 않는다.
 - Ownership: 구현 자식 PR은 이 공유 change를 수정하거나 archive하지 않고 각 이슈의 코드와 검증만 소유한다.
-- Deferred contracts: PostgreSQL activity receipt, duplicate Create revision 갱신, object conflict recovery lock과 `Update(Note)`는 현재 필요가 생길 때 별도 Issue → OpenSpec으로 결정한다.
+- Deferred contracts: `Update(Note)`/`Delete(Note)` lifecycle은 PROD-365가 별도 Issue → OpenSpec으로 소유한다. PostgreSQL activity receipt, duplicate Create revision 갱신과 object conflict recovery lock은 실제 필요가 생길 때 별도 계약으로 결정한다.

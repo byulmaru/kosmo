@@ -139,7 +139,7 @@ actor-scoped/shared Fedify listener가 지원 delivery의 object identity, conte
 **Guardrails**
 
 - activity receipt, duplicate Create revision, PROD-340, authenticated shared-inbox identity, queue/worker와 fetch/backfill을 archive gate로 끌어오지 않는다.
-- Reply/thread(PROD-358), FOLLOWERS(PROD-360), DIRECT(PROD-359)과 Update/Delete는 별도 OpenSpec으로 진행한다.
+- Reply/thread(PROD-358), FOLLOWERS(PROD-360), DIRECT(PROD-359)과 Update/Delete lifecycle(PROD-365)은 별도 OpenSpec으로 진행한다.
 - 구현 PR은 자기 slice의 코드/검증만 소유하고 이 공유 change를 별도로 수정하지 않는다.
 - 개별 PR 완료만으로 change를 조기 archive하지 않는다.
 
