@@ -54,3 +54,5 @@ federation
 
     return result ? [...result.keyPairs] : [];
   });
+
+federation.setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox');

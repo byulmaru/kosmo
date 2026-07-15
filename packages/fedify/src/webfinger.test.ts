@@ -126,6 +126,26 @@ describe('WebFinger local profile handle mapping', () => {
       assert.equal(response.status, 404);
     }
   });
+
+  test('advertises the registered personal and shared inbox routes', async () => {
+    const profile = await createProfile({ handle: 'alice', instanceId: localInstanceId });
+    const response = await federation.fetch(
+      new Request(`${publicOrigin}/ap/actor/${profile.id}`, {
+        headers: { accept: 'application/activity+json' },
+      }),
+      { contextData: undefined },
+    );
+    const actor = (await response.json()) as {
+      endpoints?: { sharedInbox?: string };
+      inbox?: string;
+      outbox?: string;
+    };
+
+    assert.equal(response.status, 200);
+    assert.equal(actor.inbox, `${publicOrigin}/ap/actor/${profile.id}/inbox`);
+    assert.equal(actor.endpoints?.sharedInbox, `${publicOrigin}/inbox`);
+    assert.equal(actor.outbox, `${publicOrigin}/ap/actor/${profile.id}/outbox`);
+  });
 });
 
 const truncateDatabase = async () => {
