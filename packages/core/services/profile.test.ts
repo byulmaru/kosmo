@@ -31,42 +31,22 @@ test('disableProfile은 profile lifecycle과 active session 정리를 소유한�
     .values({ domain: `${suffix}.example`, kind: InstanceKind.LOCAL, state: InstanceState.ACTIVE })
     .returning()
     .then(firstOrThrow);
-  const profile = await db
-    .insert(Profiles)
-    .values({
-      displayName: suffix,
-      followPolicy: ProfileFollowPolicy.OPEN,
-      handle: suffix,
-      instanceId: instance.id,
-      normalizedHandle: suffix,
-      state: ProfileState.ACTIVE,
-    })
-    .returning()
-    .then(firstOrThrow);
-  const followee = await db
-    .insert(Profiles)
-    .values({
-      displayName: `${suffix}-followee`,
-      followPolicy: ProfileFollowPolicy.OPEN,
-      handle: `${suffix}-followee`,
-      instanceId: instance.id,
-      normalizedHandle: `${suffix}-followee`,
-      state: ProfileState.ACTIVE,
-    })
-    .returning()
-    .then(firstOrThrow);
-  const follower = await db
-    .insert(Profiles)
-    .values({
-      displayName: `${suffix}-follower`,
-      followPolicy: ProfileFollowPolicy.OPEN,
-      handle: `${suffix}-follower`,
-      instanceId: instance.id,
-      normalizedHandle: `${suffix}-follower`,
-      state: ProfileState.ACTIVE,
-    })
-    .returning()
-    .then(firstOrThrow);
+  const createProfile = (handle: string) =>
+    db
+      .insert(Profiles)
+      .values({
+        displayName: handle,
+        followPolicy: ProfileFollowPolicy.OPEN,
+        handle,
+        instanceId: instance.id,
+        normalizedHandle: handle,
+        state: ProfileState.ACTIVE,
+      })
+      .returning()
+      .then(firstOrThrow);
+  const profile = await createProfile(suffix);
+  const followee = await createProfile(`${suffix}-followee`);
+  const follower = await createProfile(`${suffix}-follower`);
   const account = await db
     .insert(Accounts)
     .values({ displayName: suffix, oidcSubject: suffix, state: AccountState.ACTIVE })

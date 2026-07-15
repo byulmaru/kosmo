@@ -1,6 +1,6 @@
-import { and, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, eq, getColumns, inArray, ne, sql } from 'drizzle-orm';
 import { db, first, firstOrThrowWith, Instances, ProfileFollows, Profiles } from '../db';
-import { InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
+import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
 import { ConflictError, NotFoundError } from '../error';
 
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
@@ -29,6 +29,7 @@ export const followProfile = async ({
         and(
           eq(Profiles.id, followeeProfileId),
           eq(Profiles.state, ProfileState.ACTIVE),
+          eq(Instances.kind, InstanceKind.LOCAL),
           ne(Instances.state, InstanceState.SUSPENDED),
         ),
       )
@@ -115,9 +116,16 @@ export const unfollowProfile = async ({
 }> =>
   db.transaction(async (tx) => {
     const target = await tx
-      .select()
+      .select(getColumns(Profiles))
       .from(Profiles)
-      .where(and(eq(Profiles.id, followeeProfileId), eq(Profiles.state, ProfileState.ACTIVE)))
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(
+        and(
+          eq(Profiles.id, followeeProfileId),
+          eq(Profiles.state, ProfileState.ACTIVE),
+          ne(Instances.state, InstanceState.SUSPENDED),
+        ),
+      )
       .limit(1)
       .then(firstOrThrowWith(() => new NotFoundError('Profile not found')));
 

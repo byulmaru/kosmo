@@ -103,6 +103,46 @@ test('follow action은 SUSPENDED instance의 profile을 숨긴다', async () => 
   );
 });
 
+test('unfollow action은 SUSPENDED instance의 관계를 보존한다', async () => {
+  const follower = await createProfile();
+  const followee = await createProfile();
+  const { profileFollow } = await followProfile({
+    followerProfileId: follower.id,
+    followeeProfileId: followee.id,
+  });
+  await db
+    .update(Instances)
+    .set({ state: InstanceState.SUSPENDED })
+    .where(eq(Instances.id, followee.instanceId));
+
+  await assert.rejects(
+    unfollowProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
+    NotFoundError,
+  );
+  assert.equal(
+    await db
+      .select()
+      .from(ProfileFollows)
+      .where(eq(ProfileFollows.id, profileFollow.id))
+      .then((rows) => rows.length),
+    1,
+  );
+});
+
+test('follow action은 federation delivery가 없는 remote profile을 숨긴다', async () => {
+  const follower = await createProfile();
+  const followee = await createProfile();
+  await db
+    .update(Instances)
+    .set({ kind: InstanceKind.ACTIVITYPUB })
+    .where(eq(Instances.id, followee.instanceId));
+
+  await assert.rejects(
+    followProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
+    NotFoundError,
+  );
+});
+
 test('unfollow action은 대상 조회, 관계 삭제와 count 감소를 함께 소유한다', async () => {
   const follower = await createProfile();
   const followee = await createProfile();
