@@ -62,7 +62,7 @@ describe('inbound Follow and Undo', () => {
     await pg.end();
   });
 
-  test('routes personal Follow, sends Accept with the received object, and removes it by Undo', async () => {
+  test('routes personal Follow, sends Accept, and removes by actor pair despite a different Follow id', async () => {
     const fixture = await createFixture();
     const sendActivity = mock.fn(async () => undefined);
     const context = createContext({ recipient: localProfileId, sendActivity });
@@ -88,7 +88,11 @@ describe('inbound Follow and Undo', () => {
       context,
       new Undo({
         actor: remoteActorUri,
-        object: follow,
+        object: new Follow({
+          actor: remoteActorUri,
+          id: new URL('https://remote.example/activities/different-follow-id'),
+          object: localActorUri,
+        }),
         published: Temporal.Instant.from('2026-07-15T00:00:01Z'),
       }),
     );
@@ -104,6 +108,38 @@ describe('inbound Follow and Undo', () => {
     ]);
     assert.equal(local.followersCount, 0);
     assert.equal(remote.followingCount, 0);
+  });
+
+  test('preserves the projection for embedded Undo actor or object mismatch', async () => {
+    await createFixture();
+    const context = createContext({ recipient: localProfileId });
+    await handleInboundFollow(
+      context,
+      new Follow({ actor: remoteActorUri, object: localActorUri }),
+    );
+
+    await handleInboundUndo(
+      context,
+      new Undo({
+        actor: remoteActorUri,
+        object: new Follow({
+          actor: new URL('https://remote.example/users/mallory'),
+          object: localActorUri,
+        }),
+      }),
+    );
+    await handleInboundUndo(
+      context,
+      new Undo({
+        actor: remoteActorUri,
+        object: new Follow({
+          actor: remoteActorUri,
+          object: new URL(`${publicOrigin}/ap/actor/019f6f67-2222-7777-8888-123456789abc`),
+        }),
+      }),
+    );
+
+    assert.equal((await db.select().from(ProfileFollows)).length, 1);
   });
 
   test('routes shared-inbox approval-required Follow without Accept', async () => {
@@ -171,8 +207,6 @@ describe('inbound Follow and Undo', () => {
     await db.insert(ProfileFollows).values({
       followeeProfileId: fixture.localProfile.id,
       followerProfileId: fixture.remoteProfile.id,
-      inboundFollowActorUri: remoteActorUri.href,
-      inboundFollowObjectUri: localActorUri.href,
     });
     await db.update(Profiles).set({ followersCount: 1 }).where(eq(Profiles.id, localProfileId));
     await db

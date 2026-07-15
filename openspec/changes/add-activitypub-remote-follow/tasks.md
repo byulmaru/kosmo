@@ -49,7 +49,7 @@ Verified inbound Follow/Undo를 established relation 또는 remote pending reque
 **Guardrails**
 
 - local recipient를 먼저 검증한 뒤에만 unknown actor materialization을 허용한다.
-- first-wins identity/response metadata를 보존한다.
+- inbound Follow id/actor/object를 별도 저장하지 않고 actor pair projection을 재사용한다.
 - unknown 또는 IRI-only Undo는 network lookup 없이 무시한다.
 - APPROVAL_REQUIRED remote request 생성은 기존 pending-only 저장 계약을 직접 따르고, 조회·승인·거절·취소 lifecycle은 PROD-272가 별도 구현한다.
 
@@ -57,9 +57,9 @@ Verified inbound Follow/Undo를 established relation 또는 remote pending reque
 
 - duplicate Follow/Undo, actor/object/recipient mismatch와 instance state race를 검증한다.
 
-- [x] 3.1 inbound Follow correlation metadata 저장 경계를 relation/request에 추가한다.
+- [x] 3.1 inbound Follow correlation schema/migration 없이 profile FK와 저장 actor identity에서 actor pair를 파생한다.
 - [x] 3.2 OPEN Follow의 relation/count transaction과 현재 수신 Follow object에 대한 Accept를 구현한다.
-- [x] 3.3 APPROVAL_REQUIRED Follow의 remote pending request를 correlation과 함께 생성한다.
+- [x] 3.3 APPROVAL_REQUIRED Follow의 remote pending request를 별도 correlation metadata 없이 생성한다.
 - [x] 3.4 exact-row relation/request 삭제 primitive를 제공하고 relation이 삭제된 경우에만 count를 감소시킨다.
 - [x] 3.5 기존 Fedify inbox listener에 Follow/Undo handler를 등록한다.
 - [x] 3.6 duplicate Follow/Undo idempotency, unknown/IRI-only Undo zero-network/write, SUSPENDED 무효와 UNRESPONSIVE CAS를 검증한다.

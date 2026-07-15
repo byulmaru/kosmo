@@ -340,9 +340,6 @@ export const ProfileFollows = pgTable(
     followeeProfileId: uuid('followee_profile_id')
       .notNull()
       .references(() => Profiles.id, { onDelete: 'cascade' }),
-    inboundFollowActivityId: text('inbound_follow_activity_id'),
-    inboundFollowActorUri: text('inbound_follow_actor_uri'),
-    inboundFollowObjectUri: text('inbound_follow_object_uri'),
     createdAt: createdAt(),
   },
   (table) => [
@@ -364,9 +361,6 @@ export const ProfileFollowRequests = pgTable(
     followeeProfileId: uuid('followee_profile_id')
       .notNull()
       .references(() => Profiles.id, { onDelete: 'cascade' }),
-    inboundFollowActivityId: text('inbound_follow_activity_id'),
-    inboundFollowActorUri: text('inbound_follow_actor_uri'),
-    inboundFollowObjectUri: text('inbound_follow_object_uri'),
     createdAt: createdAt(),
   },
   (table) => [

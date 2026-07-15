@@ -1,5 +1,4 @@
 export {
-  type InboundFollowCorrelation,
   recordInboundFollow,
   type RecordInboundFollowInput,
   type RecordInboundFollowResult,

@@ -99,11 +99,6 @@ export const handleInboundFollow = async (
   }
 
   const result = await recordInboundFollow({
-    correlation: {
-      activityId: follow.id?.href ?? null,
-      actorUri: actorUri.href,
-      objectUri: objectUri.href,
-    },
     followeeProfileId: localRecipient.profile.id,
     followerProfileId: remoteActor.profile.id,
   });
@@ -175,9 +170,7 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
   }
 
   await removeInboundFollow({
-    actorUri: actorUri.href,
     followeeProfileId: localRecipient.profile.id,
     followerProfileId: remoteActor.profile.id,
-    objectUri: objectUri.href,
   });
 };

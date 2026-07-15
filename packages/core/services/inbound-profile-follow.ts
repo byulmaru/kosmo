@@ -1,6 +1,5 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import {
-  ActivityPubActors,
   first,
   getDatabaseConnection,
   Instances,
@@ -15,14 +14,7 @@ import type { Transaction } from '../db';
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
 type ProfileFollowRequestRow = typeof ProfileFollowRequests.$inferSelect;
 
-export interface InboundFollowCorrelation {
-  readonly activityId: string | null;
-  readonly actorUri: string;
-  readonly objectUri: string;
-}
-
 export interface RecordInboundFollowInput {
-  readonly correlation: InboundFollowCorrelation;
   readonly followeeProfileId: string;
   readonly followerProfileId: string;
 }
@@ -40,10 +32,9 @@ export type RecordInboundFollowResult =
     };
 
 export interface RemoveInboundFollowInput {
-  readonly actorUri: string;
+  readonly expectedRowId?: string;
   readonly followeeProfileId: string;
   readonly followerProfileId: string;
-  readonly objectUri: string;
 }
 
 export type RemoveInboundFollowResult =
@@ -61,35 +52,13 @@ const pairCondition = (
     eq(table.followeeProfileId, followeeProfileId),
   );
 
-const correlationUpdate = <
-  Row extends {
-    inboundFollowActivityId: string | null;
-    inboundFollowActorUri: string | null;
-    inboundFollowObjectUri: string | null;
-  },
->(
-  row: Row,
-  correlation: InboundFollowCorrelation,
-) => ({
-  inboundFollowActivityId: row.inboundFollowActivityId ?? correlation.activityId,
-  inboundFollowActorUri: row.inboundFollowActorUri ?? correlation.actorUri,
-  inboundFollowObjectUri: row.inboundFollowObjectUri ?? correlation.objectUri,
-});
-
-const correlationValues = (correlation: InboundFollowCorrelation) => ({
-  inboundFollowActivityId: correlation.activityId,
-  inboundFollowActorUri: correlation.actorUri,
-  inboundFollowObjectUri: correlation.objectUri,
-});
-
 export const recordInboundFollow = async (
-  { correlation, followeeProfileId, followerProfileId }: RecordInboundFollowInput,
+  { followeeProfileId, followerProfileId }: RecordInboundFollowInput,
   tx?: Transaction,
 ): Promise<RecordInboundFollowResult> =>
   getDatabaseConnection(tx).transaction(async (tx) => {
     const participants = await tx
       .select({
-        actorUri: ActivityPubActors.uri,
         followPolicy: Profiles.followPolicy,
         instanceKind: Instances.kind,
         instanceState: Instances.state,
@@ -98,7 +67,6 @@ export const recordInboundFollow = async (
       })
       .from(Profiles)
       .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
       .where(inArray(Profiles.id, [followerProfileId, followeeProfileId]))
       .orderBy(asc(Profiles.id))
       .for('update', { of: Profiles });
@@ -110,12 +78,10 @@ export const recordInboundFollow = async (
       follower.profileState !== ProfileState.ACTIVE ||
       follower.instanceKind !== InstanceKind.ACTIVITYPUB ||
       follower.instanceState !== InstanceState.ACTIVE ||
-      follower.actorUri !== correlation.actorUri ||
       !followee ||
       followee.profileState !== ProfileState.ACTIVE ||
       followee.instanceKind !== InstanceKind.LOCAL ||
-      followee.instanceState !== InstanceState.ACTIVE ||
-      followee.actorUri !== correlation.objectUri
+      followee.instanceState !== InstanceState.ACTIVE
     ) {
       throw new NotFoundError('Profile not found');
     }
@@ -132,14 +98,7 @@ export const recordInboundFollow = async (
       await tx
         .delete(ProfileFollowRequests)
         .where(pairCondition(ProfileFollowRequests, followerProfileId, followeeProfileId));
-      const profileFollow = await tx
-        .update(ProfileFollows)
-        .set(correlationUpdate(existingFollow, correlation))
-        .where(eq(ProfileFollows.id, existingFollow.id))
-        .returning()
-        .then(first);
-
-      return { created: false, kind: 'ESTABLISHED', profileFollow: profileFollow! };
+      return { created: false, kind: 'ESTABLISHED', profileFollow: existingFollow };
     }
 
     if (followee.followPolicy === ProfileFollowPolicy.APPROVAL_REQUIRED) {
@@ -152,24 +111,16 @@ export const recordInboundFollow = async (
         .then(first);
 
       if (existingRequest) {
-        const profileFollowRequest = await tx
-          .update(ProfileFollowRequests)
-          .set(correlationUpdate(existingRequest, correlation))
-          .where(eq(ProfileFollowRequests.id, existingRequest.id))
-          .returning()
-          .then(first);
-
         return {
           created: false,
           kind: 'PENDING',
-          profileFollowRequest: profileFollowRequest!,
+          profileFollowRequest: existingRequest,
         };
       }
 
       const profileFollowRequest = await tx
         .insert(ProfileFollowRequests)
         .values({
-          ...correlationValues(correlation),
           followeeProfileId,
           followerProfileId,
         })
@@ -185,7 +136,6 @@ export const recordInboundFollow = async (
     const profileFollow = await tx
       .insert(ProfileFollows)
       .values({
-        ...correlationValues(correlation),
         followeeProfileId,
         followerProfileId,
       })
@@ -205,7 +155,7 @@ export const recordInboundFollow = async (
   });
 
 export const removeInboundFollow = async (
-  { actorUri, followeeProfileId, followerProfileId, objectUri }: RemoveInboundFollowInput,
+  { expectedRowId, followeeProfileId, followerProfileId }: RemoveInboundFollowInput,
   tx?: Transaction,
 ): Promise<RemoveInboundFollowResult> =>
   getDatabaseConnection(tx).transaction(async (tx) => {
@@ -217,15 +167,13 @@ export const removeInboundFollow = async (
       .then(first);
 
     if (profileFollow) {
+      if (expectedRowId !== undefined && profileFollow.id !== expectedRowId) {
+        return null;
+      }
+
       const deleted = await tx
         .delete(ProfileFollows)
-        .where(
-          and(
-            eq(ProfileFollows.id, profileFollow.id),
-            eq(ProfileFollows.inboundFollowActorUri, actorUri),
-            eq(ProfileFollows.inboundFollowObjectUri, objectUri),
-          ),
-        )
+        .where(eq(ProfileFollows.id, profileFollow.id))
         .returning({ id: ProfileFollows.id })
         .then(first);
 
@@ -256,15 +204,13 @@ export const removeInboundFollow = async (
       return null;
     }
 
+    if (expectedRowId !== undefined && profileFollowRequest.id !== expectedRowId) {
+      return null;
+    }
+
     const deleted = await tx
       .delete(ProfileFollowRequests)
-      .where(
-        and(
-          eq(ProfileFollowRequests.id, profileFollowRequest.id),
-          eq(ProfileFollowRequests.inboundFollowActorUri, actorUri),
-          eq(ProfileFollowRequests.inboundFollowObjectUri, objectUri),
-        ),
-      )
+      .where(eq(ProfileFollowRequests.id, profileFollowRequest.id))
       .returning({ id: ProfileFollowRequests.id })
       .then(first);
 
