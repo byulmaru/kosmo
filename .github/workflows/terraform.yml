@@ -26,6 +26,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  ARGOCD_SERVER: argocd-aws.tail1fdd55.ts.net:443
   AWS_REGION: ap-northeast-2
   TF_IN_AUTOMATION: 'true'
   TF_PLAN_ARTIFACT: terraform-plan
@@ -58,6 +59,40 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
           cleanup_credentials: true
+
+      - name: Authenticate to Argo CD
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const githubToken = await core.getIDToken();
+            core.setSecret(githubToken);
+
+            const response = await fetch(`https://${process.env.ARGOCD_SERVER}/api/dex/token`, {
+              method: "POST",
+              headers: {
+                authorization: `Basic ${Buffer.from("argo-cd-cli:").toString("base64")}`,
+              },
+              body: new URLSearchParams({
+                connector_id: "github-actions",
+                grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+                scope: "openid email profile federated:id",
+                requested_token_type: "urn:ietf:params:oauth:token-type:access_token",
+                subject_token: githubToken,
+                subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
+              }),
+            });
+
+            if (!response.ok) {
+              throw new Error(`Dex token exchange failed: ${response.status} ${await response.text()}`);
+            }
+
+            const { access_token: dexToken } = await response.json();
+            if (!dexToken) {
+              throw new Error("Dex token response did not include an access token.");
+            }
+
+            core.setSecret(dexToken);
+            core.exportVariable("ARGOCD_AUTH_TOKEN", dexToken);
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
@@ -196,6 +231,40 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
           cleanup_credentials: true
+
+      - name: Authenticate to Argo CD
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const githubToken = await core.getIDToken();
+            core.setSecret(githubToken);
+
+            const response = await fetch(`https://${process.env.ARGOCD_SERVER}/api/dex/token`, {
+              method: "POST",
+              headers: {
+                authorization: `Basic ${Buffer.from("argo-cd-cli:").toString("base64")}`,
+              },
+              body: new URLSearchParams({
+                connector_id: "github-actions",
+                grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+                scope: "openid email profile federated:id",
+                requested_token_type: "urn:ietf:params:oauth:token-type:access_token",
+                subject_token: githubToken,
+                subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
+              }),
+            });
+
+            if (!response.ok) {
+              throw new Error(`Dex token exchange failed: ${response.status} ${await response.text()}`);
+            }
+
+            const { access_token: dexToken } = await response.json();
+            if (!dexToken) {
+              throw new Error("Dex token response did not include an access token.");
+            }
+
+            core.setSecret(dexToken);
+            core.exportVariable("ARGOCD_AUTH_TOKEN", dexToken);
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1

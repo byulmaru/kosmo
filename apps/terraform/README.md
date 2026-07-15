@@ -12,6 +12,7 @@
 - Firebase provider가 지원하지 않는 `native-testers` group의 멱등 REST bootstrap
 - `kosmo` ECR 저장소와 Docker Build 전용 GitHub Actions OIDC push role
 - ECR의 `main`/`stable` 이미지 보호, untagged 1일 만료, 나머지 이미지 7일 만료 정책
+- Argo CD `kosmo` ApplicationSet과 여기서 생성하는 `kosmo-dev` Application의 선언
 
 Firebase를 Google Cloud 프로젝트에 추가하는 작업은 되돌릴 수 없다. 앱 리소스에는 `PREVENT` 삭제 정책을 적용한다.
 
@@ -26,7 +27,7 @@ gcloud auth login
 
 GitHub bootstrap은 `gh auth token`을 사용한다. `gh auth status`가 성공해야 한다.
 
-Terraform 실행 시에는 장기 credential 파일 대신 현재 `gcloud` 계정의 단기 token을 주입한다.
+Terraform 실행 시에는 장기 credential 파일 대신 현재 `gcloud` 계정의 단기 token을 주입한다. Argo CD 리소스를 읽는 plan에는 `ARGOCD_SERVER=argocd-aws.tail1fdd55.ts.net:443`과 SSO로 발급받은 `ARGOCD_AUTH_TOKEN`도 필요하다. CI는 GitHub OIDC token을 Argo CD Dex에서 교환해 장기 token 없이 인증한다.
 
 ## 검증과 적용
 
@@ -59,6 +60,8 @@ ECR repository URL과 push role ARN은 공개된 고정 식별자이므로 Docke
 ```sh
 export AWS_PROFILE=default
 export GOOGLE_OAUTH_ACCESS_TOKEN="$(gcloud auth print-access-token)"
+export ARGOCD_SERVER=argocd-aws.tail1fdd55.ts.net:443
+export ARGOCD_AUTH_TOKEN='<SSO access token>'
 
 terraform fmt -check
 terraform init
