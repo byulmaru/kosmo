@@ -42,9 +42,9 @@ GCP 리소스를 적용한 뒤 관리 권한이 있는 로컬 `gh` 인증으로 
 ./scripts/ensure-github.sh
 ```
 
-이 단계에서 `AWS_ECR_PUSH_ROLE_ARN`과 `AWS_ECR_REPOSITORY_URL` repository variable도 설정된다. 두 변수가 준비되기 전까지 Docker Build는 기존 GHCR에만 push하고, 설정된 뒤부터 같은 태그를 GHCR과 ECR에 함께 push한다.
-
 `1.2.0` 형식의 정식 SemVer Git tag를 push하면 Docker Build는 `1.2.0`과 `stable` 이미지 태그를 함께 갱신한다. `v1.2.0` 형식은 지원하지 않는다. Lifecycle policy는 현재 `latest` main 이미지와 현재 `stable` 릴리스 이미지를 보호하고, 이전 버전 이미지는 push 후 7일이 지나면 만료한다.
+
+ECR repository URL과 push role ARN은 공개된 고정 식별자이므로 Docker Build workflow에 직접 선언한다. ECR 리소스가 생성된 뒤에는 별도 GitHub repository variable bootstrap 없이 GHCR과 ECR에 같은 태그를 함께 push한다.
 
 `ios-device-onboarding`은 `robin-maki`의 승인을 요구하며, Firebase WIF 입력과 `MATCH_GIT_URL`을 일반 배포 환경과 별도로 받는다. Apple signing secret과 공개 native test 설정은 `apps/app/README.md`의 iOS Ad Hoc 배포 절차에 따라 해당 environment에 수동으로 넣는다.
 

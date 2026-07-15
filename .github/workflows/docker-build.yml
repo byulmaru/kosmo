@@ -14,6 +14,7 @@ permissions:
 
 env:
   AWS_REGION: ap-northeast-2
+  AWS_ECR_REPOSITORY_URL: 822638974464.dkr.ecr.ap-northeast-2.amazonaws.com/kosmo
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -44,14 +45,12 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure AWS credentials
-        if: vars.AWS_ECR_PUSH_ROLE_ARN != '' && vars.AWS_ECR_REPOSITORY_URL != ''
         uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
         with:
-          role-to-assume: ${{ vars.AWS_ECR_PUSH_ROLE_ARN }}
+          role-to-assume: arn:aws:iam::822638974464:role/github-actions-kosmo-ecr-push
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Log in to ECR
-        if: vars.AWS_ECR_PUSH_ROLE_ARN != '' && vars.AWS_ECR_REPOSITORY_URL != ''
         uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64 # v2.1.6
 
       - name: Extract Docker metadata
@@ -60,7 +59,7 @@ jobs:
         with:
           images: |
             ghcr.io/${{ github.repository }}
-            name=${{ vars.AWS_ECR_REPOSITORY_URL }},enable=${{ vars.AWS_ECR_PUSH_ROLE_ARN != '' && vars.AWS_ECR_REPOSITORY_URL != '' }}
+            ${{ env.AWS_ECR_REPOSITORY_URL }}
           tags: |
             type=sha
             type=ref,event=branch

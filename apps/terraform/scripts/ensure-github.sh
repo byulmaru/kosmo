@@ -63,8 +63,6 @@ for environment in "${native_environment}" "${onboarding_environment}"; do
 done
 
 gh variable set AWS_TERRAFORM_ROLE_ARN --repo "${repository}" --body arn:aws:iam::822638974464:role/github-actions-kosmo-terraform
-gh variable set AWS_ECR_PUSH_ROLE_ARN --repo "${repository}" --body "$(terraform_output ecr_push_role_arn)"
-gh variable set AWS_ECR_REPOSITORY_URL --repo "${repository}" --body "$(terraform_output ecr_repository_url)"
 gh variable set GCP_TERRAFORM_PROVIDER --repo "${repository}" --body "$(terraform_output terraform_gcp_workload_identity_provider)"
 gh variable set GCP_TERRAFORM_SERVICE_ACCOUNT --repo "${repository}" --body "$(terraform_output terraform_gcp_service_account)"
 
