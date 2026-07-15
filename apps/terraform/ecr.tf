@@ -2,7 +2,8 @@ data "aws_iam_openid_connect_provider" "github_actions" {
   url = "https://token.actions.githubusercontent.com"
 }
 
-resource "aws_ecr_repository" "kosmo" {
+# main and stable are intentionally mutable; version and commit SHA tags remain immutable.
+resource "aws_ecr_repository" "kosmo" { # nosemgrep: terraform.aws.security.aws-ecr-mutable-image-tags.aws-ecr-mutable-image-tags
   name                 = "kosmo"
   image_tag_mutability = "IMMUTABLE_WITH_EXCLUSION"
   force_delete         = false
