@@ -22,25 +22,4 @@
 
 - **WHEN** 같은 object URI 또는 같은 Post mapping을 둘 이상 직접 저장한다
 - **THEN** PostgreSQL unique constraint가 duplicate row를 거부한다
-
-### Requirement: Durable global inbox activity receipt storage
-
-시스템은 성공한 inbound ActivityPub activity의 global identity를 재시작과 여러 instance/worker에 걸쳐 보존해야 한다(MUST).
-
-#### Scenario: Store a global activity receipt
-
-- **WHEN** 지원 delivery의 PostgreSQL receipt claim이 성공한다
-- **THEN** 시스템은 `activitypub_inbox_activity_receipt`에 PostgreSQL `uuidv7()` default로 생성한 `id`, unique `activityId`와 최초 성공 delivery의 `receivedAt`을 저장한다
-- **AND** activityId는 `Create.id.href`이고 actor, object, route, recipient 또는 worker scope를 저장하지 않는다
-
-#### Scenario: Preserve receipt independently from domain rows
-
-- **WHEN** receipt schema를 정의한다
-- **THEN** receipt는 Post, ActivityPub object 또는 actor foreign key를 갖지 않는다
-- **AND** Post/profile 삭제 뒤에도 replay 방지를 위해 receipt를 보존한다
-- **AND** TTL, cleanup과 partitioning을 추가하지 않는다
-
-#### Scenario: Reject a duplicate global activity
-
-- **WHEN** 같은 activityId를 둘 이상 직접 저장한다
-- **THEN** PostgreSQL unique constraint가 duplicate receipt를 거부한다
+- **AND** 시스템은 별도 inbox activity receipt나 activity ID column을 요구하지 않는다
