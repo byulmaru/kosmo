@@ -39,10 +39,11 @@
 - **AND** `kind`가 source table과 `data` shape를 결정한다
 - **AND** FOLLOW의 `source_id`는 `profile_follow.id`를 의미하고 `data`에는 Recipient, Related Profile, 이름 또는 handle snapshot을 복제하지 않는다
 
-#### Scenario: 동일 kind와 source와 Recipient 직접 중복 insert
+#### Scenario: 동일 Recipient와 kind와 source 직접 중복 insert
 
-- **WHEN** 같은 `(kind, source_id, recipient_profile_id)`로 두 번째 Notification을 직접 저장하려 한다
-- **THEN** database unique constraint는 insert를 거부한다
+- **WHEN** 같은 Recipient, kind와 source로 두 번째 Notification을 직접 저장하려 한다
+- **THEN** `(recipient_profile_id, kind, source_id)` database unique constraint는 insert를 거부한다
+- **AND** source-only cleanup을 위한 별도 `(kind, source_id)` index를 선제 추가하지 않는다
 
 #### Scenario: 같은 source의 여러 Recipient projection
 

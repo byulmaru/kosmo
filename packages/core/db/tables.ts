@@ -188,6 +188,30 @@ export const Media = pgTable(
   ],
 );
 
+export const Notifications = pgTable(
+  'notification',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => createId(TableDiscriminator.Notifications)),
+    recipientProfileId: uuid('recipient_profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    kind: Enum.notificationKind('kind').notNull(),
+    sourceId: uuid('source_id').notNull(),
+    data: jsonb('data').$type<Record<string, never>>().notNull().default({}),
+    createdAt: createdAt(),
+    readAt: datetime('read_at'),
+  },
+  (table) => [
+    unique().on(table.recipientProfileId, table.kind, table.sourceId),
+    index().on(table.recipientProfileId, table.id),
+    index()
+      .on(table.recipientProfileId)
+      .where(sql`${table.readAt} IS NULL`),
+  ],
+);
+
 export const OAuthAuthorizationCodes = pgTable(
   'oauth_authorization_code',
   {

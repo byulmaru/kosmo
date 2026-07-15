@@ -29,10 +29,20 @@
 - Decision Date: 2026-07-14
 - Status: Accepted
 - Context / Problem: 여러 Notification source table을 하나의 FK로 표현할 수 없지만 type별 extension을 만들 필요도 없다. 미래 payload를 선제 설계하거나 표시 snapshot을 저장하면 schema가 실제 요구보다 커진다.
-- Decision Outcome: PostgreSQL `notification_kind`에는 현재 `FOLLOW`만 두고, `source_id uuid`에는 의도적으로 FK를 만들지 않는다. `(kind, source_id, recipient_profile_id)`는 unique다. `data jsonb NOT NULL DEFAULT '{}'`는 kind별 애플리케이션 타입으로 검증하며 FOLLOW는 `{}`를 사용한다.
+- Decision Outcome: PostgreSQL `notification_kind`에는 현재 `FOLLOW`만 두고, `source_id uuid`에는 의도적으로 FK를 만들지 않는다. Recipient, kind와 source 조합은 unique다. `data jsonb NOT NULL DEFAULT '{}'`는 kind별 애플리케이션 타입으로 검증하며 FOLLOW는 `{}`를 사용한다.
 - Alternatives Considered: source FK가 있는 extension table, 범용 untyped payload, Recipient/Related Profile과 이름·handle snapshot 복제.
 - Consequences: kind가 source table과 data shape를 결정한다. 같은 source가 여러 Recipient에게 투영될 수 있고, raw source/data는 API에 노출하지 않으며 GIN index나 범용 payload framework를 선제 추가하지 않는다.
 - Confirmation / Follow-up: 후속 Profile-scoped kind는 실제 필요가 생길 때 enum value, source mapping과 최소 data validation을 함께 추가한다. Account-scoped kind는 별도 저장 결정을 가진다.
+
+### source uniqueness는 Recipient-first 물리 순서로 둔다
+
+- Decision Date: 2026-07-15
+- Status: Accepted
+- Context / Problem: source uniqueness의 논리적 의미는 같지만 물리 column 순서는 Recipient 기준 접근과 source-only cleanup 중 어느 경로를 우선할지 결정한다. 현재 PROD-325는 Recipient inbox 기반을 먼저 제공하며 source cleanup 조회 최적화는 아직 구현 범위가 아니다.
+- Decision Outcome: unique constraint의 물리 순서는 `(recipient_profile_id, kind, source_id)`로 둔다. source-only cleanup을 위한 별도 `(kind, source_id)` index는 선제 추가하지 않는다.
+- Alternatives Considered: `(kind, source_id, recipient_profile_id)` 순서로 source cleanup prefix까지 제공, Recipient-first unique와 별도 `(kind, source_id)` index를 함께 추가.
+- Consequences: 같은 Recipient, kind와 source의 직접 중복은 계속 거부되고 같은 source의 여러 Recipient projection도 허용된다. 이 unique index만으로는 `(kind, source_id)` source-only 조회를 지원하지 않으며, 실제 cleanup 구현에서 필요가 확인되면 별도 Issue/OpenSpec 범위로 index를 추가한다.
+- Confirmation / Follow-up: `PROD-325`가 migration과 DB test로 정확한 column 순서를 검증한다. `PROD-274` 이후 cleanup 구현은 현재 index가 cleanup 조회를 지원한다고 가정하지 않는다.
 
 ### GraphQL은 Notification interface와 kind별 concrete object를 사용한다
 

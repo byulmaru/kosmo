@@ -94,6 +94,7 @@ Current type-code registry examples. The source of truth is `TableDiscriminator`
 | `15` | `activitypub_actor`         | ActivityPub actor details            |
 | `16` | `activitypub_actor_key`     | ActivityPub actor key                |
 | `17` | `profile_follow_request`    | Profile follow request lifecycle     |
+| `18` | `notification`              | Profile-scoped notification item     |
 
 Relay global ID options:
 
@@ -132,9 +133,10 @@ relationship 금지 규칙에 다음 한정 예외를 둔다.
 - `notification` 하나에 `kind` enum과 `source_id uuid`를 저장하며 `source_id`에는 의도적으로 foreign
   key를 만들지 않는다. `kind`가 실제 source table과 application validation을 결정한다.
 - 명확한 소유 관계인 `recipient_profile_id`는 `profile.id` foreign key와 물리 삭제 cascade를 유지한다.
-- source 중복은 `(kind, source_id, recipient_profile_id)` unique constraint로 막고, 정상 source
+- source 중복은 `(recipient_profile_id, kind, source_id)` unique constraint로 막고, 정상 source
   생성·삭제 action이 Notification 저장·정리를 호출한다. 같은 source가 여러 Recipient에게 투영되는 kind를
-  허용한다.
+  허용한다. source-only cleanup용 `(kind, source_id)` index는 선제 추가하지 않고 실제 조회 경로가 이를
+  요구할 때 별도 migration으로 결정한다.
 - `data jsonb`는 kind별 최소 추가 데이터만 저장한다. 범용 payload framework나 GIN index를 선제 추가하지
   않으며 Follow는 `{}`를 사용하고 Profile ID·이름·handle snapshot을 복제하지 않는다.
 - loose source가 없어지거나 Related Profile을 Recipient 기준으로 조회할 수 없으면 API는 해당 item을 목록,

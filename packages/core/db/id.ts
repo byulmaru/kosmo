@@ -10,6 +10,7 @@ export const TableDiscriminator = {
   Files: 0x00c,
   Instances: 0x00e,
   Media: 0x00d,
+  Notifications: 0x012,
   OAuthAuthorizationCodes: 0x00a,
   OAuthTokens: 0x00b,
   Posts: 0x004,
