@@ -142,9 +142,10 @@ const createInboxFixture = async (handlers: FollowInboxHandlers) => {
     };
   };
   const kv = new MemoryKvStore();
+  const contextLoader = getDocumentLoader();
   const federation = createFederation<void>({
     authenticatedDocumentLoaderFactory: () => documentLoader,
-    contextLoaderFactory: () => getDocumentLoader(),
+    contextLoaderFactory: () => contextLoader,
     documentLoaderFactory: () => documentLoader,
     kv,
   });
@@ -157,26 +158,13 @@ const createInboxFixture = async (handlers: FollowInboxHandlers) => {
   registerFollowInboxListeners(federation, handlers);
 
   const createSignedFollowRequest = async (path: string, id: string): Promise<Request> => {
+    const activity = new Follow({
+      actor: remoteActorUri,
+      id: new URL(`/activities/${id}`, remoteActorUri),
+      object: new URL(`/ap/actor/${localProfileId}`, 'https://kos.moe'),
+    });
     const request = new Request(new URL(path, 'https://kos.moe'), {
-      body: JSON.stringify({
-        '@context': {
-          Follow: 'https://www.w3.org/ns/activitystreams#Follow',
-          actor: {
-            '@id': 'https://www.w3.org/ns/activitystreams#actor',
-            '@type': '@id',
-          },
-          id: '@id',
-          object: {
-            '@id': 'https://www.w3.org/ns/activitystreams#object',
-            '@type': '@id',
-          },
-          type: '@type',
-        },
-        actor: remoteActorUri.href,
-        id: new URL(`/activities/${id}`, remoteActorUri).href,
-        object: new URL(`/ap/actor/${localProfileId}`, 'https://kos.moe').href,
-        type: 'Follow',
-      }),
+      body: JSON.stringify(await activity.toJsonLd({ contextLoader })),
       headers: { 'content-type': 'application/activity+json' },
       method: 'POST',
     });
