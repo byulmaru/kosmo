@@ -1,4 +1,4 @@
-## 1. PROD-341 외부 선행: versioned PostContent document 계약을 제공한다
+## 1. PROD-341 외부 선행: versioned PostContent document 계약을 제공한다 (완료)
 
 **Deliverable**
 
@@ -11,11 +11,11 @@ remote ingestion이 참조할 `{ version, summary, body }` canonical PostContent
 
 **Verification**
 
-- PROD-341이 이 change를 수정하지 않고 독립 PostContent 계약으로 main에 병합됐는지 확인한다.
+- PROD-341의 PostContent 계약이 main에 병합됐고 PROD-354가 현재 remote-post change의 최종 delta를 소유하는지 확인한다.
 - PROD-341의 schema, migration, GraphQL/app renderer와 validation이 통과했는지 확인한다.
 
-- [ ] 1.1 PROD-341 PR이 remote-post OpenSpec diff 없이 main에 병합되고 versioned PostContent document active spec이 제공된다.
-- [ ] 1.2 PROD-259/261이 참조할 canonicalization, structural equality와 Content Warning 계약을 확인한다.
+- [x] 1.1 PROD-341 PR이 main에 병합되고 versioned PostContent document active spec이 제공된다.
+- [x] 1.2 PROD-259/261이 참조할 canonicalization, structural equality와 Content Warning 계약을 확인한다.
 
 ## 2. PROD-255 ActivityPub object mapping과 durable receipt schema를 추가한다
 

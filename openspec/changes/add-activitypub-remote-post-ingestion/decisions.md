@@ -22,7 +22,7 @@
 - Decision Outcome: 이 change는 `activitypub-actor-discovery` delta를 갖지 않는다. PROD-260이 기존 route에 verified typed `Create` handler와 remote-post 전용 validation을 등록하고, 지원하지 않는 delivery의 Post side effect만 차단한다.
 - Alternatives Considered: discovery requirement에 Follow와 Create allowlist를 다시 열거, remote-post 전용 HTTP inbox route 추가.
 - Consequences: 공통 route와 transport는 PROD-241/remote-follow 계약을 재사용하고, Create validation과 materialization은 remote-post capability 안에서만 진화한다.
-- Confirmation / Follow-up: PR #260 위의 stacked diff와 전체 strict validation에서 `activitypub-actor-discovery` 중복 delta가 없는지 확인한다.
+- Confirmation / Follow-up: 현재 main 기준 diff와 전체 strict validation에서 `activitypub-actor-discovery` 중복 delta가 없는지 확인한다.
 
 ### Public top-level Note만 첫 ingestion 범위로 지원한다
 
