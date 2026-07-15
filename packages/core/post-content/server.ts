@@ -1,7 +1,8 @@
 import { isDeepStrictEqual } from 'node:util';
 import { postBodyMaxLength } from '../validation/post-policy';
 import { normalizePostContentPlainText, postContentSchemaVersion } from './index';
-import { postContentSchemaV1 } from './schema-v1';
+import { postContentSchema } from './schema';
+import { normalizeLinkHref } from './schema/marks/link';
 import type { Mark, Node as ProseMirrorNode } from 'prosemirror-model';
 import type {
   PostContentBodyDocumentV1,
@@ -39,7 +40,7 @@ function canonicalizePostContentBody(
   body: unknown,
 ): PostContentBodyDocumentV1 {
   assertPostContentJsonKeys(body);
-  const parsed = postContentSchemaV1.nodeFromJSON(canonicalizeDuplicateLinkMarks(body));
+  const parsed = postContentSchema.nodeFromJSON(canonicalizeDuplicateLinkMarks(body));
   parsed.check();
 
   const paragraphs: ProseMirrorNode[] = [];
@@ -50,21 +51,21 @@ function canonicalizePostContentBody(
       if (node.isText) {
         appendNormalizedText(inline, node.text!, node.marks);
       } else {
-        inline.push(postContentSchemaV1.nodes.hard_break.create());
+        inline.push(postContentSchema.nodes.hard_break.create());
       }
     });
 
-    const canonicalParagraph = postContentSchemaV1.nodes.paragraph.create(null, inline);
+    const canonicalParagraph = postContentSchema.nodes.paragraph.create(null, inline);
     if (canonicalParagraph.childCount > 0) {
       paragraphs.push(canonicalParagraph);
     }
   });
 
   if (paragraphs.length === 0) {
-    paragraphs.push(postContentSchemaV1.nodes.paragraph.create());
+    paragraphs.push(postContentSchema.nodes.paragraph.create());
   }
 
-  const canonical = postContentSchemaV1.nodes.doc.create(null, paragraphs);
+  const canonical = postContentSchema.nodes.doc.create(null, paragraphs);
   canonical.check();
   return canonical.toJSON() as PostContentBodyDocumentV1;
 }
@@ -140,10 +141,10 @@ function appendNormalizedText(
     .split('\n')
     .entries()) {
     if (index > 0) {
-      inline.push(postContentSchemaV1.nodes.hard_break.create());
+      inline.push(postContentSchema.nodes.hard_break.create());
     }
     if (text.length > 0) {
-      inline.push(postContentSchemaV1.text(text, marks));
+      inline.push(postContentSchema.text(text, marks));
     }
   }
 }
@@ -199,8 +200,8 @@ function canonicalizeDuplicateLinkMarks(value: unknown): unknown {
 
   const hrefs = new Set(
     value.marks.map((mark) => {
-      const parsed = postContentSchemaV1.markFromJSON(mark);
-      return new URL(String(parsed.attrs.href)).href;
+      const parsed = postContentSchema.markFromJSON(mark);
+      return normalizeLinkHref(parsed.attrs.href);
     }),
   );
   if (hrefs.size > 1) {
@@ -209,7 +210,7 @@ function canonicalizeDuplicateLinkMarks(value: unknown): unknown {
   const href = hrefs.values().next().value;
   return {
     ...value,
-    marks: href ? [postContentSchemaV1.marks.link.create({ href }).toJSON()] : [],
+    marks: href ? [postContentSchema.marks.link.create({ href }).toJSON()] : [],
   };
 }
 
