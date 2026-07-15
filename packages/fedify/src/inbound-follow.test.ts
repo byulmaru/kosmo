@@ -180,6 +180,34 @@ describe('inbound Follow and Undo', () => {
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
   });
 
+  test('ignores expected actor validation failures but propagates lookup outages', async () => {
+    await createFixture();
+    const unknownActorUri = new URL('https://unknown.example/users/mallory');
+    const follow = new Follow({ actor: unknownActorUri, object: localActorUri });
+
+    await handleInboundFollow(
+      createContext({
+        lookupWebFinger: mock.fn(async () => null),
+        recipient: localProfileId,
+      }),
+      follow,
+    );
+
+    await assert.rejects(
+      handleInboundFollow(
+        createContext({
+          lookupWebFinger: mock.fn(async () => {
+            throw new Error('WebFinger unavailable');
+          }),
+          recipient: localProfileId,
+        }),
+        follow,
+      ),
+      /WebFinger unavailable/,
+    );
+    assert.equal((await db.select().from(ProfileFollows)).length, 0);
+  });
+
   test('keeps the projection when Accept delivery fails and ignores IRI-only Undo', async () => {
     await createFixture();
     const context = createContext({
@@ -229,6 +257,29 @@ describe('inbound Follow and Undo', () => {
       .where(eq(Instances.id, fixture.remoteInstance.id))
       .then(firstOrThrow);
     assert.equal(remoteInstance.state, InstanceState.ACTIVE);
+    assert.equal(lookupObject.mock.calls.length, 0);
+    assert.equal(lookupWebFinger.mock.calls.length, 0);
+  });
+
+  test('ignores Undo from a stored SUSPENDED actor without network lookup', async () => {
+    const fixture = await createFixture({ remoteInstanceState: InstanceState.SUSPENDED });
+    const lookupObject = mock.fn(async () => null);
+    const lookupWebFinger = mock.fn(async () => null);
+    const context = createContext({ lookupObject, lookupWebFinger, recipient: localProfileId });
+    await db.insert(ProfileFollows).values({
+      followeeProfileId: fixture.localProfile.id,
+      followerProfileId: fixture.remoteProfile.id,
+    });
+
+    await handleInboundUndo(
+      context,
+      new Undo({
+        actor: remoteActorUri,
+        object: new Follow({ actor: remoteActorUri, object: localActorUri }),
+      }),
+    );
+
+    assert.equal((await db.select().from(ProfileFollows)).length, 1);
     assert.equal(lookupObject.mock.calls.length, 0);
     assert.equal(lookupWebFinger.mock.calls.length, 0);
   });

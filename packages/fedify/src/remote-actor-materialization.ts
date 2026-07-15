@@ -46,6 +46,7 @@ type RemoteActorMaterializationOptions = {
   context: RemoteActorLookupContext;
   handle: string;
   now?: Temporal.Instant;
+  reactivateUnresponsive?: boolean;
 };
 
 type FindOrMaterializeRemoteActorOptions = RemoteActorMaterializationOptions & {
@@ -141,19 +142,28 @@ const projectActor = (actor: ActorWithKosmoFields, requestedNormalizedHandle: st
   } satisfies ActorProjection;
 };
 
-const requireAvailableRemoteInstance = (instance: typeof Instances.$inferSelect) => {
+const requireAvailableRemoteInstance = (
+  instance: typeof Instances.$inferSelect,
+  { allowUnresponsive = false }: { allowUnresponsive?: boolean } = {},
+) => {
   if (instance.kind !== InstanceKind.ACTIVITYPUB) {
     throw new RemoteActorMaterializationError('Remote instance is not an ActivityPub instance.');
   }
 
-  if (instance.state === InstanceState.SUSPENDED || instance.state === InstanceState.UNRESPONSIVE) {
+  if (
+    instance.state === InstanceState.SUSPENDED ||
+    (!allowUnresponsive && instance.state === InstanceState.UNRESPONSIVE)
+  ) {
     throw new RemoteActorMaterializationError('Remote instance is unavailable.');
   }
 
   return instance;
 };
 
-const ensureRemoteInstance = async (domain: string) => {
+const ensureRemoteInstance = async (
+  domain: string,
+  { allowUnresponsive = false }: { allowUnresponsive?: boolean } = {},
+) => {
   const existing = await db
     .select()
     .from(Instances)
@@ -162,7 +172,7 @@ const ensureRemoteInstance = async (domain: string) => {
     .then(first);
 
   if (existing) {
-    return requireAvailableRemoteInstance(existing);
+    return requireAvailableRemoteInstance(existing, { allowUnresponsive });
   }
 
   return db
@@ -190,7 +200,7 @@ const ensureRemoteInstance = async (domain: string) => {
         throw error;
       }
 
-      return requireAvailableRemoteInstance(concurrent);
+      return requireAvailableRemoteInstance(concurrent, { allowUnresponsive });
     });
 };
 
@@ -306,7 +316,9 @@ const resolveActorHandleByUri = async (
     ({ href, rel, type }) =>
       rel === 'self' &&
       href === actorUri.href &&
-      (type === 'application/activity+json' || type === 'application/ld+json'),
+      ['application/activity+json', 'application/ld+json'].includes(
+        type?.split(';', 1)[0]?.trim().toLowerCase() ?? '',
+      ),
   );
 
   if (!subject?.startsWith('acct:') || !self) {
@@ -314,26 +326,6 @@ const resolveActorHandleByUri = async (
   }
 
   return subject.slice('acct:'.length);
-};
-
-const reactivateRequestedInstance = async (handle: string) => {
-  const localInstance = await resolveConfiguredLocalInstance();
-  const parsed = parseProfileHandle(handle, { configuredLocalDomain: localInstance.domain });
-
-  if (!parsed || parsed.kind !== 'remote') {
-    throw new RemoteActorMaterializationError('WebFinger subject is not a remote handle.');
-  }
-
-  await db
-    .update(Instances)
-    .set({ state: InstanceState.ACTIVE })
-    .where(
-      and(
-        eq(Instances.domain, parsed.domain),
-        eq(Instances.kind, InstanceKind.ACTIVITYPUB),
-        eq(Instances.state, InstanceState.UNRESPONSIVE),
-      ),
-    );
 };
 
 export const findOrMaterializeRemoteProfileActorByUri = async ({
@@ -352,8 +344,7 @@ export const findOrMaterializeRemoteProfileActorByUri = async ({
   }
 
   const handle = await resolveActorHandleByUri(context, actorUri);
-  await reactivateRequestedInstance(handle);
-  await materializeRemoteProfileActor({ context, handle, now });
+  await materializeRemoteProfileActor({ context, handle, now, reactivateUnresponsive: true });
 
   const materialized = await findStoredRemoteProfileActorByUri(actorUri);
 
@@ -415,6 +406,7 @@ export const materializeRemoteProfileActor = async ({
   context,
   handle,
   now = getNow(),
+  reactivateUnresponsive = false,
 }: RemoteActorMaterializationOptions) => {
   const localInstance = await resolveConfiguredLocalInstance();
   const parsed = parseProfileHandle(handle, { configuredLocalDomain: localInstance.domain });
@@ -423,7 +415,9 @@ export const materializeRemoteProfileActor = async ({
     throw new RemoteActorMaterializationError('Remote materialization requires a remote handle.');
   }
 
-  const requestedRemoteInstance = await ensureRemoteInstance(parsed.domain);
+  const requestedRemoteInstance = await ensureRemoteInstance(parsed.domain, {
+    allowUnresponsive: reactivateUnresponsive,
+  });
   const actor = await lookupRemoteActor(context, `${parsed.handle}@${parsed.domain}`);
   const actorId = actor.id!;
 
@@ -442,6 +436,7 @@ export const materializeRemoteProfileActor = async ({
   const canonicalActorHostname = actorId.hostname.toLowerCase().replace(/\.$/, '');
   const canonicalRemoteInstance = await ensureRemoteInstance(
     actorId.port ? `${canonicalActorHostname}:${actorId.port}` : canonicalActorHostname,
+    { allowUnresponsive: reactivateUnresponsive },
   );
 
   const persistActor = () =>
@@ -469,7 +464,11 @@ export const materializeRemoteProfileActor = async ({
           .limit(1)
           .for('update', { of: Instances })
           .then(firstOrThrow)
-          .then(requireAvailableRemoteInstance);
+          .then((instance) =>
+            requireAvailableRemoteInstance(instance, {
+              allowUnresponsive: reactivateUnresponsive,
+            }),
+          );
 
       const lockRemoteInstances = async (instanceIds: readonly string[]) => {
         const lockedInstances = new Map<string, typeof Instances.$inferSelect>();
@@ -482,6 +481,30 @@ export const materializeRemoteProfileActor = async ({
         return lockedInstances;
       };
 
+      const reactivateLockedInstances = async (
+        lockedInstances: ReadonlyMap<string, typeof Instances.$inferSelect>,
+      ) => {
+        if (!reactivateUnresponsive) {
+          return;
+        }
+
+        const instanceIds = [...lockedInstances.values()]
+          .filter(({ state }) => state === InstanceState.UNRESPONSIVE)
+          .map(({ id }) => id);
+
+        if (instanceIds.length > 0) {
+          await tx
+            .update(Instances)
+            .set({ state: InstanceState.ACTIVE })
+            .where(
+              and(
+                inArray(Instances.id, instanceIds),
+                eq(Instances.state, InstanceState.UNRESPONSIVE),
+              ),
+            );
+        }
+      };
+
       let existingActor = await findExistingActor();
       let lockedCanonicalRemoteInstance: typeof Instances.$inferSelect | undefined;
 
@@ -490,6 +513,7 @@ export const materializeRemoteProfileActor = async ({
           requestedRemoteInstance.id,
           canonicalRemoteInstance.id,
         ]);
+        await reactivateLockedInstances(lockedInstances);
         lockedCanonicalRemoteInstance = lockedInstances.get(canonicalRemoteInstance.id);
         existingActor = await findExistingActor();
       }
@@ -506,11 +530,12 @@ export const materializeRemoteProfileActor = async ({
           throw new ConflictError({ message: 'Remote actor collides with a local actor' });
         }
 
-        await lockRemoteInstances([
+        const lockedInstances = await lockRemoteInstances([
           existingInstanceId,
           requestedRemoteInstance.id,
           canonicalRemoteInstance.id,
         ]);
+        await reactivateLockedInstances(lockedInstances);
 
         if (existingActor.profile.state !== ProfileState.ACTIVE) {
           throw new RemoteActorMaterializationError('Remote profile is unavailable.');

@@ -3,12 +3,14 @@ import '@kosmo/core/polyfill';
 import { Follow } from '@fedify/vocab';
 import { ActivityPubActors, db, first, Instances, Profiles } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
+import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { recordInboundFollow, removeInboundFollow } from '@kosmo/core/services';
 import { and, eq, getColumns } from 'drizzle-orm';
 import { sendAcceptFollowActivity } from './follow-delivery';
 import {
   findOrMaterializeRemoteProfileActorByUri,
   findUsableStoredRemoteProfileActorByUri,
+  RemoteActorMaterializationError,
 } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Recipient, Undo } from '@fedify/vocab';
@@ -22,6 +24,11 @@ const getNow = () => Temporal.Now.instant();
 
 const isHttpUri = (uri: URL | null): uri is URL =>
   uri !== null && (uri.protocol === 'http:' || uri.protocol === 'https:');
+
+const isExpectedRemoteActorRejection = (error: unknown) =>
+  error instanceof RemoteActorMaterializationError ||
+  error instanceof NotFoundError ||
+  error instanceof ConflictError;
 
 const findActiveLocalRecipient = async (actorUri: URL): Promise<LocalRecipient | undefined> =>
   db
@@ -94,8 +101,12 @@ export const handleInboundFollow = async (
 
   try {
     remoteActor = await findOrMaterializeRemoteProfileActorByUri({ actorUri, context, now });
-  } catch {
-    return;
+  } catch (error) {
+    if (isExpectedRemoteActorRejection(error)) {
+      return;
+    }
+
+    throw error;
   }
 
   const result = await recordInboundFollow({
@@ -139,8 +150,12 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
 
   try {
     remoteActor = await findUsableStoredRemoteProfileActorByUri(actorUri);
-  } catch {
-    return;
+  } catch (error) {
+    if (isExpectedRemoteActorRejection(error)) {
+      return;
+    }
+
+    throw error;
   }
 
   if (!remoteActor || remoteActor.instance.state !== InstanceState.ACTIVE) {

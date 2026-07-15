@@ -136,6 +136,79 @@ describe('remote actor materialization', () => {
     );
   });
 
+  test('accepts an ActivityStreams JSON-LD WebFinger self type with parameters', async () => {
+    const actor = createActor();
+    const lookupObject = mock.fn(async () => actor);
+    const lookupWebFinger = mock.fn(async () => ({
+      links: [
+        {
+          href: actor.id?.href,
+          rel: 'self',
+          type: 'application/ld+json; profile="https://www.w3.org/ns/activitystreams"',
+        },
+      ],
+      subject: `acct:alice@${remoteDomain}`,
+    }));
+
+    const result = await findOrMaterializeRemoteProfileActorByUri({
+      actorUri: actor.id!,
+      context: { lookupObject, lookupWebFinger } as unknown as Context<void>,
+    });
+
+    assert.equal(result.actor.uri, actor.id?.href);
+    assert.equal(lookupWebFinger.mock.calls.length, 1);
+    assert.equal(lookupObject.mock.calls.length, 1);
+  });
+
+  test('reactivates an unknown actor instance only after materialization succeeds', async () => {
+    const instance = await createRemoteInstance({ state: InstanceState.UNRESPONSIVE });
+    const actor = createActor();
+    const lookupObject = mock.fn(async () => actor);
+    const lookupWebFinger = mock.fn(async () => ({
+      links: [{ href: actor.id?.href, rel: 'self', type: 'application/activity+json' }],
+      subject: `acct:alice@${remoteDomain}`,
+    }));
+
+    await findOrMaterializeRemoteProfileActorByUri({
+      actorUri: actor.id!,
+      context: { lookupObject, lookupWebFinger } as unknown as Context<void>,
+    });
+
+    const reactivated = await db
+      .select()
+      .from(Instances)
+      .where(eq(Instances.id, instance.id))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(reactivated.state, InstanceState.ACTIVE);
+  });
+
+  test('keeps an unknown actor instance UNRESPONSIVE when materialization fails', async () => {
+    const instance = await createRemoteInstance({ state: InstanceState.UNRESPONSIVE });
+    const actor = createActor();
+    const lookupObject = mock.fn(async () => null);
+    const lookupWebFinger = mock.fn(async () => ({
+      links: [{ href: actor.id?.href, rel: 'self', type: 'application/activity+json' }],
+      subject: `acct:alice@${remoteDomain}`,
+    }));
+
+    await assert.rejects(
+      findOrMaterializeRemoteProfileActorByUri({
+        actorUri: actor.id!,
+        context: { lookupObject, lookupWebFinger } as unknown as Context<void>,
+      }),
+      RemoteActorMaterializationError,
+    );
+
+    const preserved = await db
+      .select()
+      .from(Instances)
+      .where(eq(Instances.id, instance.id))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(preserved.state, InstanceState.UNRESPONSIVE);
+  });
+
   test('reuses a stored inbound actor and reactivates UNRESPONSIVE with compare-and-set', async () => {
     const stored = await createStoredRemoteActor({ instanceState: InstanceState.UNRESPONSIVE });
     const lookupObject = mock.fn(async () => createActor());
