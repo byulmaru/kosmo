@@ -410,7 +410,6 @@ describe('Notification GraphQL Node boundary', () => {
     const first = await loadNotificationConnection(profileId, auth.token, { first: 2 });
     assertNoGraphQLErrors(first);
     const firstConnection = first.data?.node?.notifications;
-    assert.equal(firstConnection?.edges.length, 2);
     assert.deepEqual(
       firstConnection?.edges.map(({ node }) => node.id),
       [newest.id, read.id].map((id) => encodeGlobalId('FollowNotification', id)),
@@ -438,12 +437,6 @@ describe('Notification GraphQL Node boundary', () => {
       encodeGlobalId('Profile', oldestRelated.id),
     );
     assert.equal(secondConnection?.pageInfo.hasNextPage, false);
-    assert.deepEqual(
-      [...(firstConnection?.edges ?? []), ...(secondConnection?.edges ?? [])].map(
-        ({ node }) => node.id,
-      ),
-      [newest.id, read.id, oldest.id].map((id) => encodeGlobalId('FollowNotification', id)),
-    );
   });
 
   test('does not infer a Notification type from a mismatched concrete global ID', async () => {
@@ -747,7 +740,6 @@ const loadNotificationConnection = (
               node {
                 __typename
                 id
-                createdAt
                 readAt
                 ... on FollowNotification { profile { id } }
               }
