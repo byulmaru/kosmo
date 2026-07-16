@@ -6,12 +6,12 @@
 
 - actor-scoped/shared inbox의 verified typed `Create`를 Fedify listener에서 받되 저장된 ACTIVE 또는 UNRESPONSIVE ActivityPub actor만 처리한다.
 - object를 Fedify vocabulary로 hydrate한 뒤 attribution이 일치하는 PUBLIC/UNLISTED top-level `Note`만 materialization 대상으로 허용한다.
-- `Note.id.href`의 unique object mapping을 remote Post identity와 durable duplicate 판정으로 사용한다.
+- `Note.id.href`의 unique ActivityPub Post mapping을 remote Post identity와 durable duplicate 판정으로 사용한다.
 - Fedify activity idempotency는 선택적인 조기 최적화로 사용할 수 있고 activity ID를 PostgreSQL receipt로 저장하지 않는다.
 - 최초 mapping, `Post`, `PostContent`와 `Post.currentContentId`를 하나의 transaction으로 저장한다. 같은 object URI의 concurrent loser는 전체 rollback 후 no-op한다.
 - duplicate `Create`는 first-write-wins로 기존 content, visibility와 timestamp를 변경하지 않는다. 원격 변경은 후속 PROD-365 `Update(Note)`/`Delete(Note)` lifecycle 계약으로 남긴다.
 - remote content adapter/projection은 PROD-259가 소유하고 결과 document의 schema, canonicalization과 equality는 PROD-341 계약을 재정의하지 않고 참조한다.
-- GraphQL은 PR #212가 제공한 공통 authorization과 DB-only read path를 그대로 사용한다. 각 구현 이슈는 자신의 결과를 검증하고 PROD-256은 실제 materializer가 만든 row와 post-materialization 상태 전환을 사용해 GraphQL authorization/connection matrix를 검증한다.
+- GraphQL은 PR #212가 제공한 공통 authorization과 DB-only read path를 그대로 사용하고 PROD-256은 실제 materialized row 기반 compatibility matrix와 smoke를 담당한다.
 - unknown actor/mention materialization, Post-level mention relation, remote outbox fetch/backfill과 resolver/schema 변경은 포함하지 않는다. Reply/thread는 [PROD-358](https://linear.app/byulmaru/issue/PROD-358), FOLLOWERS audience는 [PROD-360](https://linear.app/byulmaru/issue/PROD-360), DIRECT recipient authorization은 [PROD-359](https://linear.app/byulmaru/issue/PROD-359)가 별도 계약으로 소유한다.
 
 ## Capabilities
@@ -22,13 +22,13 @@
 
 ### Modified Capabilities
 
-- `data-model`: ActivityPub Note object URI와 Post identity mapping만 추가한다.
+- `data-model`: ActivityPub Post URI와 kosmo Post identity의 최소 mapping만 추가하고 raw object type과 작성자 identity는 중복 저장하지 않는다.
 
 ## Impact
 
-- Linear owner: [PROD-354](https://linear.app/byulmaru/issue/PROD-354)가 이 공유 change를 단독으로 갱신한다.
+- Linear owner: [PROD-354](https://linear.app/byulmaru/issue/PROD-354)가 전체 계약을 소유하고, [PROD-255](https://linear.app/byulmaru/issue/PROD-255)가 아직 미병합된 schema slice에서 확정된 Post 전용 mapping 결정을 이 change에 동기화한다.
 - Completed foundations: [PROD-341](https://linear.app/byulmaru/issue/PROD-341)의 versioned PostContent document 계약, PROD-357의 activity-neutral inbox 책임 정렬과 PROD-366/PR #271의 PostgreSQL UUIDv7·GraphQL global ID 분리 계약이 main에 병합됐다.
-- Implementation slices: PROD-255가 schema, PROD-259가 projection, PROD-260이 inbox validation부터 최초 materialization transaction까지 소유하고 PROD-256이 실제 materialized-row GraphQL compatibility matrix와 integration/archive를 소유한다.
+- Implementation slices: PROD-255 schema와 PROD-259 projection을 진행한 뒤 PROD-260이 inbox validation과 최초 materialization transaction을 통합하고 PROD-256이 actual-row GraphQL smoke, integration, canonical spec sync와 archive를 소유한다.
 - Existing foundations: PROD-241의 activity-neutral actor/shared inbox route와 PR #212/PROD-257의 DB-only GraphQL read/authorization을 변경하지 않는다.
-- Ownership: parent-child 계층을 사용하지 않는다. 구현 slice PR은 이 공유 change를 수정하거나 archive하지 않고 각 이슈의 코드와 검증만 소유하며, Linear Block 관계가 전달 순서를 표현한다.
+- Ownership: parent-child 계층을 사용하지 않는다. 구현 PR은 자기 코드와 scoped verification을 소유하고, 실제 materialized row GraphQL smoke, canonical spec sync와 archive는 PROD-256만 소유한다. Linear Block 관계가 전달 순서를 표현한다.
 - Deferred contracts: `Update(Note)`/`Delete(Note)` lifecycle은 PROD-365가 별도 Issue → OpenSpec으로 소유한다. activity-level audit 또는 object와 무관한 side effect가 실제로 필요해질 때만 PostgreSQL activity receipt를 별도 계약으로 재검토한다. duplicate `Create` revision 갱신과 object conflict recovery lock은 first-write-wins 결정으로 대체되며 deferred scope가 아니다.

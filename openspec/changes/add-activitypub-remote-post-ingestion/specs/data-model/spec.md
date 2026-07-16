@@ -1,21 +1,22 @@
 ## ADDED Requirements
 
-### Requirement: ActivityPub object mapping storage
+### Requirement: ActivityPub Post mapping storage
 
-시스템은 remote ActivityPub Note object URI와 kosmo Post identity를 하나의 mapping으로 저장해야 한다(MUST).
+시스템은 materialize된 remote ActivityPub Post URI와 kosmo Post identity를 하나의 최소 mapping으로 저장해야 한다(MUST).
 
 #### Scenario: Store a remote Note mapping
 
 - **WHEN** remote Note가 최초로 materialize된다
-- **THEN** 시스템은 ActivityPub Post mapping에 PostgreSQL `uuidv7()` default로 생성한 `id`, unique `uri`, unique `postId`, `receivedAt`과 nullable `publishedAt`을 저장한다
+- **THEN** 시스템은 `activitypub_post`에 PostgreSQL `uuidv7()` default로 생성한 `id`, unique `uri`, unique `postId`, `receivedAt`과 nullable `publishedAt`만 저장한다
 - **AND** `postId` foreign key는 Post 삭제 시 mapping을 CASCADE 삭제한다
-- **AND** object type, actor foreign key와 actor URI를 mapping에 중복 저장하지 않는다
+- **AND** 일반 Post soft delete는 mapping을 보존한다
 
-#### Scenario: Assign mapping identity metadata
+#### Scenario: Keep protocol validation outside the mapping
 
-- **WHEN** ActivityPub object mapping schema를 추가한다
-- **THEN** mapping ID는 table discriminator와 application-side generator가 없는 PostgreSQL UUIDv7 default를 사용한다
-- **AND** 기존 UUIDv8 Post ID를 backfill하거나 재작성하지 않는다
+- **WHEN** 지원되는 remote Note가 Post로 materialize된다
+- **THEN** mapping은 raw ActivityPub object type을 저장하지 않는다
+- **AND** mapping은 `activityPubActorId`를 저장하지 않고 작성자 identity를 `Post.profileId`와 unique `ActivityPubActor.profileId` 관계에서 도출한다
+- **AND** `activitypub_post.id`는 table discriminator가 없는 PostgreSQL UUIDv7 default를 사용한다
 
 #### Scenario: Reject duplicate object identity
 

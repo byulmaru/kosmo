@@ -62,7 +62,7 @@
 - **WHEN** object hydration이 실패하거나 object가 Note가 아니다
 - **OR** hydrated Note ID, attribution 또는 top-level 조건이 맞지 않는다
 - **OR** public marker가 없거나 addressing이 ambiguous하다
-- **THEN** 시스템은 Profile, object mapping, Post와 content side effect 없이 delivery를 skip한다
+- **THEN** 시스템은 Profile, ActivityPub Post mapping, Post와 content side effect 없이 delivery를 skip한다
 
 ### Requirement: Remote Note projection handoff
 
@@ -84,12 +84,12 @@
 
 ### Requirement: Atomic first remote Post materialization
 
-시스템은 최초 ActivityPub object mapping, Post와 PostContent side effect를 하나의 PostgreSQL transaction에서 처리해야 한다(MUST).
+시스템은 최초 ActivityPub Post mapping, Post와 PostContent side effect를 하나의 PostgreSQL transaction에서 처리해야 한다(MUST).
 
 #### Scenario: Materialize the first object atomically
 
 - **WHEN** valid materialization input의 Note object URI가 아직 저장되지 않았다
-- **THEN** 시스템은 ActivityPub object mapping, ACTIVE Post, first PostContent와 `Post.currentContentId`를 같은 transaction에서 생성한다
+- **THEN** 시스템은 ActivityPub Post mapping, ACTIVE Post, first PostContent와 `Post.currentContentId`를 같은 transaction에서 생성한다
 - **AND** 하나의 write라도 실패하면 모든 row를 rollback해 같은 object를 재시도할 수 있게 한다
 
 #### Scenario: Resolve a concurrent duplicate with the unique mapping
@@ -129,7 +129,7 @@
 - **WHEN** client가 remote `Post` Node, current/historical `PostContent`, `Profile.posts` 또는 `homeTimeline`을 조회한다
 - **THEN** 시스템은 저장된 Profile/Post/PostContent만 사용한다
 - **AND** remote actor outbox, object refresh 또는 backfill network 호출을 수행하지 않는다
-- **AND** ActivityPub object mapping 존재를 read authorization prerequisite로 요구하지 않는다
+- **AND** ActivityPub Post mapping 존재를 read authorization prerequisite로 요구하지 않는다
 - **AND** connection ordering/cursor는 기존 `Post.id DESC` 계약을 유지한다
 
 #### Scenario: Reuse existing parent authorization

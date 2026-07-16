@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 [PROD-354](https://linear.app/byulmaru/issue/PROD-354), 최종 통합·archive gate [PROD-256](https://linear.app/byulmaru/issue/PROD-256), 독립 구현 이슈 PROD-255/259/260과 완료된 [PROD-341](https://linear.app/byulmaru/issue/PROD-341)의 최신 계약을 반영한다. 이 이슈들은 parent-child 계층 대신 Linear Block 관계로 전달 순서를 표현한다. PR #258의 이전 activity receipt, duplicate revision과 lock recovery 설계는 source of truth가 아니다.
+이 기록은 [PROD-354](https://linear.app/byulmaru/issue/PROD-354), 최종 통합·archive gate [PROD-256](https://linear.app/byulmaru/issue/PROD-256), 독립 구현 이슈 PROD-255/259/260과 완료된 [PROD-341](https://linear.app/byulmaru/issue/PROD-341)의 최신 계약을 반영한다. PROD-261은 PROD-260으로 중복 처리됐고 PROD-262는 취소됐으며, 실제 materialized row GraphQL smoke는 PROD-256으로 이동했다. 이 이슈들은 parent-child 계층 대신 Linear Block 관계로 전달 순서를 표현한다. PR #258의 이전 activity receipt, duplicate revision과 lock recovery 설계는 source of truth가 아니다.
 
 ## Decision Records
 
@@ -42,7 +42,17 @@
 - Decision Outcome: hydrated `Note.id.href`의 unique object mapping이 durable duplicate 판정이다. Fedify activity idempotency는 activity ID가 있을 때 선택적인 조기 최적화로 사용할 수 있고 application은 activity ID를 저장하거나 materialization input으로 전달하지 않는다.
 - Alternatives Considered: PostgreSQL global activity receipt, Fedify KV만 사용, activity ID를 object mapping에 함께 저장.
 - Consequences: Fedify global idempotency를 사용하면 같은 activity ID의 후속 delivery는 object URI와 무관하게 handler 전에 제거될 수 있다. handler에 도달한 delivery의 durable identity만 Note object URI로 판정한다. activity-level audit/exactly-once가 실제 요구되면 별도 이슈에서 receipt를 다시 검토한다.
-- Confirmation / Follow-up: PROD-255가 unique object mapping을, PROD-260이 activity ID 없는 delivery와 early idempotency 경계를 검증한다.
+- Confirmation / Follow-up: PROD-255가 unique ActivityPub Post mapping을, PROD-260이 activity ID 없는 delivery와 early idempotency 경계를 검증한다.
+
+### Materialized Post mapping에는 protocol type과 작성자를 중복 저장하지 않는다
+
+- Decision Date: 2026-07-16
+- Status: Accepted
+- Context / Problem: ActivityStreams raw type은 확장 가능하지만 이번 storage row는 지원 검증을 통과해 kosmo Post로 materialize된 결과만 나타낸다. 또한 작성자는 `Post.profileId -> ActivityPubActor.profileId` 관계로 이미 유일하게 도출할 수 있다.
+- Decision Outcome: 범용 `activitypub_object`와 `ActivityPubObjectType` enum 대신 Post 전용 `activitypub_post` mapping을 사용하고, `type`과 `activityPubActorId`를 저장하지 않는다. mapping은 unique URI/Post, delivery `receivedAt`과 원본 nullable `publishedAt`만 소유한다.
+- Alternatives Considered: 범용 URI registry와 polymorphic kosmo target, nullable target FK와 CHECK, 범용 registry + subtype table, Post mapping에 enum/actor FK 유지.
+- Consequences: actor와 Post URI의 cross-table global uniqueness는 제공하지 않고 actor physical delete를 remote Post mapping FK로 제한하지 않는다. 향후 원본 type에 따른 저장 동작이 실제로 필요할 때 별도 계약과 migration으로 추가한다.
+- Confirmation / Follow-up: PROD-255가 catalog test로 type/actor FK 부재, Post cascade와 UUIDv7 default를 검증한다.
 
 ### Duplicate Create는 first-write-wins no-op으로 처리한다
 
@@ -79,10 +89,20 @@
 - Decision Date: 2026-07-15
 - Status: Accepted
 - Context / Problem: PR #212가 remote Profile/Post의 공통 visibility, instance 상태와 parent PostContent authorization을 이미 구현했다.
-- Decision Outcome: remote ingestion은 기존 `Post`/`PostContent`/connection schema와 resolver를 변경하지 않는다. 별도 synthetic-fixture authorization 이슈를 두지 않고 각 구현 이슈가 자신의 결과를 검증하며, PROD-256은 PROD-260 materializer의 실제 output과 post-materialization 상태 전환으로 네 GraphQL surface의 authorization/connection matrix와 zero-network read를 검증한다.
+- Decision Outcome: remote ingestion은 기존 `Post`/`PostContent`/connection schema와 resolver를 변경하지 않는다. PROD-256은 PROD-260이 실제로 materialize한 row로 현재 authorization compatibility matrix와 zero-network read를 smoke 검증한다.
 - Alternatives Considered: remote 전용 resolver, object mapping을 read prerequisite로 사용, resolver 변경을 ingestion slice에 포함.
 - Consequences: 테스트가 결함을 발견하면 Linear/OpenSpec 구현 범위를 다시 연다.
-- Confirmation / Follow-up: PROD-256 통합 gate가 public schema 불변, actual materialized-row DB-only read, ACTIVE/UNRESPONSIVE allow, SUSPENDED/inactive deny와 `Post.id DESC` ordering/cursor를 검증한다.
+- Confirmation / Follow-up: PROD-256 통합 gate가 actual-row GraphQL smoke로 public schema 불변과 DB-only read를 검증한다.
+
+### Validation과 atomic materialization은 PROD-260, actual-row GraphQL smoke는 PROD-256이 소유한다
+
+- Decision Date: 2026-07-16
+- Status: Accepted
+- Context / Problem: validation, transaction과 GraphQL regression을 별도 handoff 이슈로 나누면 실제 delivery graph보다 소유권 경계가 많아지고 통합 증거가 분산된다.
+- Decision Outcome: PROD-260이 known-actor public Create validation부터 projection handoff와 atomic mapping/Post/PostContent materialization까지 소유한다. PROD-256은 실제 materialized row 기반 GraphQL compatibility matrix와 smoke, canonical spec sync와 archive를 소유한다.
+- Alternatives Considered: PROD-261 transaction과 PROD-262 test-only regression을 독립 구현 이슈로 유지한다.
+- Consequences: PROD-261은 PROD-260의 duplicate로 종료하고 PROD-262는 취소한다. 기존 concurrency, rollback, timestamp와 GraphQL authorization 검증 요구는 삭제하지 않고 새 소유 이슈의 완료 조건으로 이동한다.
+- Confirmation / Follow-up: Linear Block 순서를 PROD-255/259 → PROD-260 → PROD-256으로 유지하고 각 이슈의 scoped validation 증거를 최종 gate에서 확인한다.
 
 ## Remaining Decisions
 
