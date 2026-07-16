@@ -89,6 +89,22 @@ test('exposes Notification interface and FollowNotification without raw storage 
   assert.equal(notificationNodeType('UNSUPPORTED'), null);
 });
 
+test('exposes the typed Notification Read mutation payload', () => {
+  const mutation = schema.getMutationType();
+  const input = schema.getType('MarkNotificationReadInput');
+  const payload = schema.getType('MarkNotificationReadPayload');
+
+  assert.equal(
+    String(mutation?.getFields().markNotificationRead?.type),
+    'MarkNotificationReadPayload!',
+  );
+  assert.ok(isInputObjectType(input));
+  assert.equal(String(input.getFields().id.type), 'ID!');
+  assert.ok(isObjectType(payload));
+  assert.equal(String(payload.getFields().notification.type), 'Notification!');
+  assert.equal(String(payload.getFields().recipientProfile.type), 'Profile!');
+});
+
 test('rejects legacy raw UUID and unknown typename Node IDs', async () => {
   for (const id of [
     '00000000-0000-8006-8000-000000000001',
@@ -120,4 +136,20 @@ test('rejects a global ID with the wrong concrete mutation input type', async ()
 
   assert.equal(result.data, null);
   assert.match(result.errors?.[0]?.message ?? '', /is not of type: Profile/);
+});
+
+test('rejects a non-FollowNotification global ID for Notification Read', async () => {
+  const result = await graphql({
+    schema,
+    source: `mutation MarkNotificationRead($id: ID!) {
+      markNotificationRead(input: { id: $id }) { notification { id } }
+    }`,
+    variableValues: {
+      id: encodeGlobalId('Profile', '00000000-0000-8006-8000-000000000001'),
+    },
+    contextValue: { session: { accountId: 'account', id: 'session' } },
+  });
+
+  assert.equal(result.data, null);
+  assert.match(result.errors?.[0]?.message ?? '', /is not of type: FollowNotification/);
 });

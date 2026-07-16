@@ -12,7 +12,7 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import { normalizeHandle } from '@kosmo/core/utils';
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, isNull, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -262,6 +262,153 @@ describe('Notification GraphQL Node boundary', () => {
       ids.map(() => null),
     );
   });
+
+  test('marks a visible Notification Read once without depending on the selected Profile', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('read-recipient');
+    const related = await createProfile('read-related');
+    const otherRelated = await createProfile('other-unread-related');
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.ADMIN);
+    const notification = await createFollowNotification(recipient.id, related.id);
+    const otherNotification = await createFollowNotification(recipient.id, otherRelated.id);
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: null })
+      .where(eq(Sessions.id, auth.session.id));
+
+    assert.equal(await countUnreadNotificationRows(recipient.id), 2);
+    const id = encodeGlobalId('FollowNotification', notification.id);
+    const first = await markNotificationRead(id, auth.token);
+    assertNoGraphQLErrors(first);
+    assert.equal(first.data?.markNotificationRead.notification.id, id);
+    assert.equal(
+      first.data?.markNotificationRead.notification.profile.id,
+      encodeGlobalId('Profile', related.id),
+    );
+    assert.equal(
+      first.data?.markNotificationRead.recipientProfile.id,
+      encodeGlobalId('Profile', recipient.id),
+    );
+    assert.ok(first.data?.markNotificationRead.notification.readAt);
+    assert.equal(await countUnreadNotificationRows(recipient.id), 1);
+
+    const repeated = await markNotificationRead(id, auth.token);
+    assertNoGraphQLErrors(repeated);
+    assert.equal(
+      repeated.data?.markNotificationRead.notification.readAt,
+      first.data?.markNotificationRead.notification.readAt,
+    );
+    assert.equal(await countUnreadNotificationRows(recipient.id), 1);
+    assert.equal(
+      await db
+        .select({ readAt: Notifications.readAt })
+        .from(Notifications)
+        .where(eq(Notifications.id, otherNotification.id))
+        .then(firstOrThrow)
+        .then(({ readAt }) => readAt),
+      null,
+    );
+  });
+
+  test('preserves the same first readAt across concurrent Read requests', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('concurrent-recipient');
+    const related = await createProfile('concurrent-related');
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.MEMBER);
+    const notification = await createFollowNotification(recipient.id, related.id);
+    const id = encodeGlobalId('FollowNotification', notification.id);
+
+    const results = await Promise.all([
+      markNotificationRead(id, auth.token),
+      markNotificationRead(id, auth.token),
+    ]);
+    results.forEach(assertNoGraphQLErrors);
+    const readAt = results.map((result) => result.data?.markNotificationRead.notification.readAt);
+    assert.ok(readAt[0]);
+    assert.equal(readAt[1], readAt[0]);
+    assert.equal(await countUnreadNotificationRows(recipient.id), 0);
+  });
+
+  test('returns PERMISSION_DENIED for an unauthenticated Read', async () => {
+    const recipient = await createProfile('unauthenticated-recipient');
+    const related = await createProfile('unauthenticated-related');
+    const notification = await createFollowNotification(recipient.id, related.id);
+
+    const result = await markNotificationRead(
+      encodeGlobalId('FollowNotification', notification.id),
+    );
+    assert.equal(result.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+    assert.equal(await notificationReadAt(notification.id), null);
+  });
+
+  test('normalizes missing, unauthorized and hidden Notification Reads to NOT_FOUND', async () => {
+    const auth = await createAuthenticatedSession();
+
+    const unauthorizedRecipient = await createProfile('unauthorized-recipient');
+    const unauthorizedRelated = await createProfile('unauthorized-related');
+    const unauthorized = await createFollowNotification(
+      unauthorizedRecipient.id,
+      unauthorizedRelated.id,
+    );
+
+    const inactiveRecipient = await createProfile('read-inactive-recipient');
+    const inactiveRelated = await createProfile('read-inactive-related');
+    await addMembership(auth.account.id, inactiveRecipient.id, AccountProfileRole.OWNER);
+    const inactive = await createFollowNotification(inactiveRecipient.id, inactiveRelated.id);
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, inactiveRecipient.id));
+
+    const missingSourceRecipient = await createProfile('read-missing-source-recipient');
+    await addMembership(auth.account.id, missingSourceRecipient.id, AccountProfileRole.OWNER);
+    const missingSource = await db
+      .insert(Notifications)
+      .values({
+        kind: NotificationKind.FOLLOW,
+        recipientProfileId: missingSourceRecipient.id,
+        sourceId: crypto.randomUUID(),
+      })
+      .returning()
+      .then(firstOrThrow);
+
+    const mismatchRecipient = await createProfile('read-mismatch-recipient');
+    const actualFollowee = await createProfile('read-actual-followee');
+    const mismatchRelated = await createProfile('read-mismatch-related');
+    await addMembership(auth.account.id, mismatchRecipient.id, AccountProfileRole.OWNER);
+    const mismatchSource = await createFollow(actualFollowee.id, mismatchRelated.id);
+    const mismatch = await db
+      .insert(Notifications)
+      .values({
+        kind: NotificationKind.FOLLOW,
+        recipientProfileId: mismatchRecipient.id,
+        sourceId: mismatchSource.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+
+    const hiddenRecipient = await createProfile('read-hidden-recipient');
+    const hiddenRelated = await createProfile('read-hidden-related');
+    await addMembership(auth.account.id, hiddenRecipient.id, AccountProfileRole.OWNER);
+    const hidden = await createFollowNotification(hiddenRecipient.id, hiddenRelated.id);
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.SUSPENDED })
+      .where(eq(Profiles.id, hiddenRelated.id));
+
+    const unavailable = [unauthorized, inactive, missingSource, mismatch, hidden];
+    const ids = [crypto.randomUUID(), ...unavailable.map(({ id }) => id)].map((id) =>
+      encodeGlobalId('FollowNotification', id),
+    );
+    for (const id of ids) {
+      const result = await markNotificationRead(id, auth.token);
+      assert.equal(result.errors?.[0]?.extensions?.code, 'NOT_FOUND');
+    }
+    assert.deepEqual(
+      await Promise.all(unavailable.map(({ id }) => notificationReadAt(id))),
+      unavailable.map(() => null),
+    );
+  });
 });
 
 type NotificationNode = {
@@ -311,9 +458,47 @@ const loadNodes = async (ids: string[], token: string) => {
   return result.data!.nodes;
 };
 
+const markNotificationRead = (id: string, token?: string) =>
+  requestGraphQL<{
+    markNotificationRead: {
+      notification: NotificationNode;
+      recipientProfile: { id: string };
+    };
+  }>(
+    `mutation MarkNotificationRead($id: ID!) {
+      markNotificationRead(input: { id: $id }) {
+        notification {
+          id
+          readAt
+          ... on FollowNotification { profile { id } }
+        }
+        recipientProfile { id }
+      }
+    }`,
+    { id },
+    token,
+  );
+
 const assertNoGraphQLErrors = (result: GraphQLResult<unknown>) => {
   assert.equal(result.errors, undefined, JSON.stringify(result.errors));
 };
+
+const countUnreadNotificationRows = (recipientProfileId: string) =>
+  db
+    .select({ id: Notifications.id })
+    .from(Notifications)
+    .where(
+      and(eq(Notifications.recipientProfileId, recipientProfileId), isNull(Notifications.readAt)),
+    )
+    .then((rows) => rows.length);
+
+const notificationReadAt = (id: string) =>
+  db
+    .select({ readAt: Notifications.readAt })
+    .from(Notifications)
+    .where(eq(Notifications.id, id))
+    .then(firstOrThrow)
+    .then(({ readAt }) => readAt);
 
 const createProfile = (name: string) => {
   const handle = `${name}-${crypto.randomUUID().slice(0, 8)}`;
