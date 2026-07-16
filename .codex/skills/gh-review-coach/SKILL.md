@@ -1,6 +1,6 @@
 ---
 name: gh-review-coach
-description: Inspect GitHub pull requests as the human reviewer’s evidence-gathering and drafting partner. Orchestrate parallel review subagents, using a ponytail simplification pass when available, while the main agent maps implementation responsibilities and execution flow. Compare updated heads, separate confirmed findings from suspicions, ask the user to decide ambiguous policy, draft detailed junior-friendly Korean review comments, publish only after explicit approval, and resolve only feedback actually reflected in code. When the current thread already contains an active PR review and reviewed head, treat follow-up review requests or skill invocations as re-reviews of that PR without asking for its number again. Use for PR review, 재리뷰, 구조 또는 책임 분리 검토, review comment drafting, request-changes decisions, scope-splitting feedback, or review-thread cleanup.
+description: Inspect GitHub pull requests as the human reviewer’s evidence-gathering and drafting partner. Delegate a bounded correctness review and add a parallel ponytail simplification pass when available, while the main agent maps implementation responsibilities and execution flow. Compare updated heads, separate confirmed findings from suspicions, ask the user to decide ambiguous policy, draft detailed junior-friendly Korean review comments, publish only after explicit approval, and resolve only feedback actually reflected in code. When the current thread already contains an active PR review and reviewed head, treat follow-up review requests or skill invocations as re-reviews of that PR without asking for its number again. Use for PR review, 재리뷰, 구조 또는 책임 분리 검토, review comment drafting, request-changes decisions, scope-splitting feedback, or review-thread cleanup.
 ---
 
 # GitHub Review Coach
@@ -32,18 +32,17 @@ Treat the user as the reviewer and final decision-maker. Act as the reviewer’s
 
 Use thread-aware GitHub reads when resolution or inline context matters. Do not infer current state from a flat comment list.
 
-### 2. Start parallel evidence review
+### 2. Start delegated evidence review
 
-After fixing the target, base SHA, head SHA, and repository guidance, always spawn at least two review subagents in parallel before drawing conclusions.
+After fixing the target, base SHA, head SHA, and repository guidance, spawn one review subagent before drawing conclusions.
 
 - Assign one subagent a bounded correctness surface such as contracts, authorization, transactions, persistence, concurrency, fixtures, tests, or unresolved-thread regressions.
-- When the `ponytail:ponytail-review` skill is available, assign one subagent to apply it only to find deletable code, speculative abstractions without a current caller, avoidable dependencies, duplicated native behavior, and scope that belongs with a later caller.
-- When the ponytail skill is unavailable, assign that subagent another non-overlapping responsibility or execution-flow slice and continue the review.
-- Divide work by independent responsibility or execution-flow slices. Do not assign overlapping whole-PR rereads merely to increase agent count.
+- When the `ponytail:ponytail-review` skill is available, spawn a second subagent in parallel and assign it to find only deletable code, speculative abstractions without a current caller, avoidable dependencies, duplicated native behavior, and scope that belongs with a later caller.
+- When the ponytail skill is unavailable, continue with the single correctness subagent.
+- When multiple subagents run, divide work by independent responsibility or execution-flow slices. Do not assign overlapping whole-PR rereads merely to increase agent count.
 - Give every subagent the same repository, PR number, base SHA, head SHA, applicable guidance, and a bounded question.
 - Require exact file/line evidence, the path or invariant checked, confirmed findings separated from suspicions, the smallest relevant validation and its result, and an explicit no-finding result when the assigned surface is sound.
 - Forbid subagents from GitHub writes, code edits, product-policy decisions, severity decisions, and final review recommendations.
-- If agent capacity prevents at least two parallel review subagents, report that the required review protocol is incomplete instead of silently falling back to a single-agent review.
 
 While they run, the main agent must independently trace and share a compact responsibility map and execution-flow summary. Do not wait idle and do not delegate this synthesis. The main agent owns freshness checks, final verification, deduplication, severity, drafting, and every GitHub write.
 
