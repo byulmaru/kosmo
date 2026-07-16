@@ -1,35 +1,155 @@
-## 1. Data Model
+## 1. PROD-341 외부 선행: versioned PostContent document 계약을 제공한다 (완료)
 
-- [ ] 1.1 ActivityPub object URI와 kosmo `Post`를 연결하는 `activitypub_object` 테이블을 추가하고 `id`, `uri`, `type`, `activityPubActorId`, `postId`, `receivedAt`, nullable `publishedAt`을 저장한다.
-- [ ] 1.2 `ActivityPubObjectType.NOTE`, UUIDv7 primary key, `uri` unique, `postId` unique, `activityPubActorId -> activitypub_actor.id` non-unique indexed foreign key, `postId -> post.id` foreign key를 추가하고 actor URI를 중복 저장하거나 object type에 unique constraint를 두지 않는다.
-- [ ] 1.3 `activitypub_actor`에 nullable `followersUri`를 추가하고 remote actor materialization/refresh에서 Fedify actor `followersId?.href`를 저장하되 actor URI path에서 followers collection을 추론하지 않는다.
-- [ ] 1.4 `post_mention` 테이블에 `id`, `postId`, `profileId`, `createdAt`을 추가하고 `(postId, profileId)` unique, 두 foreign key index와 cascade deletion을 구성한다. unresolved raw actor URI나 nullable recipient row는 저장하지 않는다.
-- [ ] 1.5 UUIDv7 primary key를 사용하는 `post_mention` Drizzle table/relations와 migration fixture를 추가하고 remote post 최초 materialization transaction이 `Post`, `PostContent`, resolved `post_mention`, `activitypub_object`를 함께 생성하도록 저장 경계를 준비한다.
+**Deliverable**
 
-## 2. Remote Post Materialization
+remote ingestion이 참조할 canonical PostContent document와 server-only validation 경계가 main에 제공된다.
 
-- [ ] 2.1 actor-scoped inbox와 shared inbox가 verified typed `Create`를 unsupported endpoint 404가 아니라 Fedify inbox listener를 거쳐 post materialization handler로 연결하고, 같은 activity ID 재전달은 Fedify inbox idempotency에 맡긴다.
-- [ ] 2.2 verified typed `Create.actorIds`의 서로 다른 URL `.href`를 정확히 하나로 제한한다. 저장된 active ActivityPub remote Profile이 없으면 object hydration 전에 Fedify `ctx.lookupWebFinger(actorUri)` URL-resource lookup으로 `acct:` subject와 ActivityPub self link를 확인하고 기존 remote actor materialization service를 사용하며, inbound actor URI와 self link 및 materialization 결과 actor URI가 모두 exact match할 때만 계속한다. URL의 `ctx.lookupObject(actorUri)` 직접 fetch만으로 WebFinger 검증을 대신하지 않고 author lookup에는 local recipient나 follow 관계를 요구하지 않는다.
-- [ ] 2.3 author instance가 `SUSPENDED`이면 lookup/object hydration/side effect를 차단하고, verified inbound author의 existing `UNRESPONSIVE` instance는 reachability signal로 `ACTIVE` 전환한 뒤 계속한다. 저장된 stale actor는 DB row를 그대로 사용해 profile refresh를 예약/수행하지 않고, 성공적으로 materialize된 author Profile은 이후 Note 검증 실패와 독립적으로 유지한다.
-- [ ] 2.4 author precondition 뒤 서로 다른 `Create.objectIds`의 URL `.href`를 정확히 하나로 제한하고 `Create.getObject({ documentLoader: ctx.documentLoader })`로 embedded/IRI-only object를 resolve한다. Fedify의 default `crossOrigin: "ignore"`를 유지하고 custom HTTP fetch/parser를 구현하지 않는다. resolved object는 object URI가 있는 단일 top-level `Note`여야 하고, 단일 `attributionIds` URI는 activity author/materialized actor URI와 exact match하며 `replyTargetIds`는 비어 있어야 한다.
-- [ ] 2.5 Note `toIds`에서 Public, author `followersUri`와 author URI를 제외한 actor URI를 mention 후보로 열거하고 visibility를 `toIds` Public의 `PUBLIC`, `ccIds` Public의 `UNLISTED`, `toIds` exact author followers URI의 `FOLLOWERS`, 나머지 `toIds` mention 후보 URI의 `DIRECT` 순서로 판정한다. Direct 판정은 Profile lookup 성공과 분리한다. 새 `FOLLOWERS`/`DIRECT`는 unknown remote mention lookup 전에 local actor URI와 DB established follow 관계만으로 active local relevance를 preflight하고, 실패하면 remote mention WebFinger/Profile side effect 없이 skip한다. personal inbox의 `ctx.recipient`는 해당 local 접근 대상이어야 하며 shared inbox도 같은 local actor/follow 근거를 사용한다. unknown author lookup, 새 `PUBLIC`/`UNLISTED`와 기존 same-visibility duplicate는 이 mention preflight를 적용하지 않는다.
-- [ ] 2.6 mention lookup 대상 Note는 local actor URI와 저장된 remote actor URI를 active Profile로 resolve하고 unknown remote actor URI를 author와 같은 WebFinger/self-link/materialization 경계로 best-effort lookup한다. 개별 실패 또는 unavailable instance는 해당 mention만 제외하고, `ccIds` actor URI나 unresolved raw URI는 mention으로 저장하지 않는다. 새 private Note는 preflight 통과 뒤에만 이 단계를 수행하고, 기존 same-visibility duplicate에서는 local relevance가 사라지거나 새 Direct 후보 lookup이 모두 실패해도 stale mention 접근 제거를 허용한다.
-- [ ] 2.7 PROD-259 경계에서 Fedify의 단일 `Note.content`가 `LanguageString`이면 `.toString()` 문자열 값만 사용하고 locale을 저장하지 않는다. content가 있으면 MIME essence를 정규화하고 absent media type은 `text/html`로 취급한다. HTML/plain content를 PROD-341 V1 paragraph/text/hard-break/link document로 projection하고 server-only schema로 검증·canonicalize한다. `pre`를 포함한 비지원 block은 전용 node 없이 visible text와 개행만 보존한다. malformed/unsupported content는 부분 row 없이 skip하고, content가 없거나 attachment-only이면 attachment를 저장하지 않은 채 canonical empty document로 materialize하며 HTML 원본과 파생 Plain Text는 저장하지 않는다.
-- [ ] 2.8 새 remote Note를 `ACTIVE` `Post`와 `PostContent`로 materialize한다. Note `published`가 없거나 수신 시각보다 미래이면 최초 `Post.createdAt`에 수신 시각을 사용하고, 미래 원본은 mapping `publishedAt`에 보존하며 missing 원본은 `null`로 저장한다. 유효한 `published <= receivedAt`은 최초 `Post.createdAt`에 사용하고 각 최초/변경 `PostContent.createdAt`은 delivery 수신 시각으로 저장한다.
-- [ ] 2.9 중복 object URI 재전달은 같은 `activityPubActorId`이고 incoming visibility가 기존 `Post.visibility`와 같을 때만 기존 `Post`를 재사용한다. mapping row를 transaction에서 잠근 뒤 canonical versioned PostContent document 의미가 달라진 경우에만 새 revision과 `currentContentId` 교체를 수행하고, 같으면 기존 revision을 재사용한다. 같은 delivery의 resolved mention 집합을 authoritative set으로 `post_mention`에 추가/제거하되 body가 같고 mention만 달라도 relation은 동기화하며, local relevance가 사라진 duplicate도 stale mention 접근은 제거한다. visibility가 다르거나 actor가 다른 duplicate는 content/mention/mapping을 갱신하지 않고, transaction/unique conflict는 부분 row나 서로 다른 delivery의 content/mention 조합을 남기지 않는다. 최초 visibility, mapping 시각, 원본 published와 `Post.createdAt`은 유지한다.
+**Guardrails**
 
-## 3. GraphQL Post API
+- PROD-341 구현과 archive는 이 change가 소유하지 않는다.
+- remote ingestion 전용 document shape나 별도 canonical storage를 만들지 않는다.
 
-- [ ] 3.1 origin 공통 Post visibility predicate에 `post_mention`을 연결해 `FOLLOWERS`는 작성자, established follower 또는 mentioned Profile에게, `DIRECT`는 작성자 또는 mentioned Profile에게 노출한다. local compose에는 mention 입력 경로가 없으므로 이번 change에서는 remote inbox 최초 materialization만 `post_mention`을 생성한다.
-- [ ] 3.2 기존 origin 공통 `Profile.posts` resolver가 remote 전용 fetch/분기 없이 materialized posts를 기존 `Post.id` 기반 ordering/cursor로 반환하고, local/remote author 모두 공통 mention visibility와 작성자 profile/instance visibility를 적용하도록 정렬한다.
-- [ ] 3.3 기존 origin 공통 `homeTimeline` resolver가 established local/remote followee의 viewer-visible `PUBLIC`, `UNLISTED`, `FOLLOWERS`와 mentioned-viewer 대상 `DIRECT` materialized posts를 기존 `Post.id` 기반 ordering/cursor로 포함하도록 정렬한다. non-followee mention만으로 home timeline 후보를 확장하지 않는다.
-- [ ] 3.4 `PostContent` Node 직접 조회가 parent `Post.state = ACTIVE`인 경우 current와 historical revision을 모두 지원하고, 두 경우 모두 현재 `post_mention`/established follow 관계를 포함한 parent visibility와 작성자 profile/instance visibility를 적용하되 historical revision에는 `Post.currentContentId` 일치나 revision별 audience snapshot을 요구하지 않도록 정렬한다.
-- [ ] 3.5 `SUSPENDED` instance의 기존 materialized remote post를 `Post` Node, current/historical `PostContent` Node, remote `Profile.posts`, `homeTimeline`에서 숨기고, GraphQL schema shape가 바뀌지 않는지 확인한다.
+**Verification**
 
-## 4. Verification
+- PROD-341의 PostContent 계약이 main에 병합됐고 이 change가 schema/canonicalization/equality를 재정의하지 않는지 확인한다.
 
-- [ ] 4.1 inbox/author test로 actor-scoped/shared listener 연결, activity ID idempotency, single actor URI cardinality, known/stale actor의 refresh 없는 사용, unknown author의 object hydration 전 `ctx.lookupWebFinger(actorUri)` 호출과 `acct:` subject/exact self-link/materialized URI 검증, URL `ctx.lookupObject(actorUri)` 직접 fetch만으로는 검증하지 않음, lookup 실패 시 object hydration 없음, `SUSPENDED` 차단, verified inbound author의 `UNRESPONSIVE -> ACTIVE`, 이후 Note 검증 실패에도 성공한 author Profile 유지를 검증한다.
-- [ ] 4.2 object/addressing test로 embedded/IRI-only 단일 Note hydration, 복수 object의 hydration 없는 skip, hydration 실패/non-Note/missing URI/attribution mismatch/reply skip, `PUBLIC > UNLISTED > FOLLOWERS > DIRECT` 우선순위, Direct 후보 판정과 Profile lookup 성공의 분리, exact nullable followers URI와 path 추론 금지, unknown mention best-effort lookup과 부분 실패, `ccIds` mention 미저장을 검증한다. 새 followers/direct Note는 local actor/follow preflight 실패 시 unknown remote mention WebFinger 호출과 Profile row 없이 skip하고, 통과 시에만 lookup하며, public/unlisted와 existing same-visibility duplicate는 이 preflight에 막히지 않는지 personal/shared inbox에서 확인한다.
-- [ ] 4.3 content/storage test로 `LanguageString.toString()`과 locale 미저장, MIME essence 정규화, V1 canonical `{ version, summary, body }` document와 파생 Plain Text, `pre` 비지원 visible-text fallback, 빈 content/attachment-only, malformed content의 원자적 skip, HTML/파생 Plain Text 미저장, 최초 `Post.state = ACTIVE`, `published == receivedAt` 사용과 1ms라도 미래인 값/missing 값의 received fallback 및 원본 보존, duplicate에서 `Post.createdAt` 유지, versioned document revision 비교, same-visibility mention 동기화, visibility mismatch와 다른 actor duplicate의 content/mention 갱신 거부, 동시 duplicate 직렬화와 content/mention 원자성을 검증한다.
-- [ ] 4.4 data model/GraphQL test로 nullable `followersUri`, `post_mention` uniqueness/index/cascade/transaction, unresolved URI 미저장, same-visibility Direct duplicate의 mention A→B 교체 시 A 접근 제거와 B 접근 허용 및 historical revision도 현재 B audience를 따름, 같은 body의 mention-only 변경에서 revision 미생성, local relevance가 사라진 duplicate와 새 Direct 후보가 모두 unresolved인 duplicate의 stale local mention 제거, 작성자/established follower/mentioned viewer의 `FOLLOWERS` 접근, 작성자/mentioned viewer의 `DIRECT` 접근, `Profile.posts`의 mention 접근, followee home의 followers와 mentioned direct 포함, non-followee mention home 제외, DB-only read와 `Post.id` ordering/cursor, `SUSPENDED` read 차단 및 active parent historical revision 접근을 검증한다.
-- [ ] 4.5 `pnpm lint:eslint`, 관련 package typecheck/test, GraphQL schema check, DB migration/schema check, `openspec validate add-activitypub-remote-post-ingestion --strict`를 실행한다.
+- [x] 1.1 PROD-341 PR이 main에 병합되고 versioned PostContent document active spec이 제공된다.
+- [x] 1.2 PROD-259/261이 참조할 canonical validator와 storage 계약을 확인한다.
+
+## 2. PROD-255 ActivityPub object mapping schema를 추가한다
+
+**Deliverable**
+
+remote Note object URI와 Post identity를 PostgreSQL unique constraint로 보존한다.
+
+**Guardrails**
+
+- object mapping은 actor URI를 중복 저장하지 않고 actor RESTRICT/Post CASCADE를 사용한다.
+- inbox activity receipt, activity ID column/table, TTL과 cleanup policy를 추가하지 않는다.
+- 별도 production migration runner나 범용 KV backend를 만들지 않는다.
+
+**Verification**
+
+- clean test DB schema push와 catalog/constraint test로 object URI, Post mapping uniqueness와 FK 정책을 검증한다.
+- PROD-255 구현 PR에 object mapping schema/migration과 자체 검증만 남는지 확인한다.
+
+- [ ] 2.1 `ActivityPubObjectType.NOTE`, PostgreSQL `uuidv7()` primary-key default와 mapping table의 Drizzle schema/export를 추가한다.
+- [ ] 2.2 unique URI/Post, actor index+RESTRICT, Post CASCADE와 nullable published metadata를 migration에 반영한다.
+- [ ] 2.3 DB migration/catalog test에서 mapping ID의 PostgreSQL `uuidv7()` default와 기존 UUIDv8 row 호환을 검증하고 reset/push를 통과시키며 receipt, `TableDiscriminator` 또는 application-side ID 생성이 추가되지 않았는지 확인한다.
+
+## 3. PROD-259 remote Note content를 canonical document input으로 projection한다
+
+**Deliverable**
+
+Fedify Note의 HTML/plain content와 summary를 안전한 primitive 경계에서 PROD-341 canonical validator가 수락하는 document로 projection한다.
+
+**Guardrails**
+
+- Fedify adapter 밖으로 vocabulary type/locale을 전달하지 않는다.
+- raw HTML, executable markup/URL, image와 파생 Plain Text를 canonical storage로 만들지 않는다.
+- document schema, canonicalization과 equality를 이 change나 PROD-259에서 재정의하지 않는다.
+- ActivityStreams Mention identity/relation은 PROD-340으로 남긴다.
+
+**Verification**
+
+- HTML/plain/absent/malformed/unsupported MIME, LanguageString, safe link와 Content Warning fixture를 검증한다.
+- 모든 성공 결과가 PROD-341 validator를 통과하고 구현 PR에 공유 OpenSpec diff가 없는지 확인한다.
+
+- [ ] 3.1 primitive adapter가 content/mediaType/summary를 locale 없이 projection input으로 만든다.
+- [ ] 3.2 HTML/plain parser가 visible content와 safe link를 보존하고 unsafe subtree/scheme/attribute를 제거한다.
+- [ ] 3.3 projection 결과를 PROD-341 validator/canonicalizer에 전달하고 remote 전용 document 규칙을 만들지 않는다.
+- [ ] 3.4 absent/attachment-only content와 safety fixture 및 target package check를 통과시킨다.
+
+## 4. PROD-260 known-actor public Create(Note)를 materialization input으로 검증한다
+
+**Deliverable**
+
+actor-scoped/shared Fedify listener가 지원 delivery의 object identity, content primitive, published와 `receivedAt`만 후속 materialization에 전달한다.
+
+**Guardrails**
+
+- stored ACTIVE/UNRESPONSIVE ActivityPub actor만 허용하고 unknown actor/mention network/write를 수행하지 않는다.
+- public marker가 있는 top-level Note만 허용한다.
+- PROD-241의 activity-neutral inbox route를 재사용하고 `activitypub-actor-discovery`를 수정하지 않는다.
+- Fedify activity ID는 optional early idempotency 외에 전달·저장하지 않으며 missing activity ID만으로 delivery를 거부하지 않는다. global idempotency를 선택해 사용하면 같은 activity ID의 후속 delivery는 object URI와 무관하게 handler 전에 제거될 수 있다.
+- custom ActivityPub fetch/parser와 `trust`를 사용하지 않는다.
+
+**Verification**
+
+- validation unit test와 실제 personal/shared inbox route test로 zero-side-effect rejection과 object URI input을 검증한다.
+- activity ID가 있는/없는 delivery와 SUSPENDED actor 차단을 검증한다.
+
+- [ ] 4.1 listener에 typed `Create` handler를 연결하고 optional Fedify global idempotency의 activity ID prefilter 경계와 한 번 캡처한 `receivedAt`을 적용한다.
+- [ ] 4.2 actor/object URI cardinality와 stored actor/Profile/Instance eligibility를 hydration 전에 검증한다.
+- [ ] 4.3 Fedify documentLoader로 Note를 hydrate하고 ID, attribution, top-level 조건, published primitive와 cross-origin safety를 검증한다.
+- [ ] 4.4 PUBLIC/UNLISTED addressing만 projection하고 unsupported/ambiguous audience를 side effect 없이 skip한다.
+- [ ] 4.5 success input에 activity ID가 없고 missing activity ID도 object URI 기반으로 처리되는 route test를 통과시킨다.
+
+## 5. PROD-262 DB-only GraphQL authorization 회귀를 검증한다
+
+**Deliverable**
+
+저장된 remote Post가 기존 GraphQL authorization, connection과 zero-network read 계약을 우회하지 않는다는 회귀 증거를 제공한다.
+
+**Guardrails**
+
+- resolver, visibility predicate와 공개 GraphQL schema를 변경하지 않는다.
+- ActivityPub object mapping을 read prerequisite로 사용하지 않는다.
+- 테스트가 production 결함을 발견하면 Linear/OpenSpec 구현 범위를 다시 연다.
+
+**Verification**
+
+- mapping 없는 remote fixture로 Post Node, current/historical PostContent, Profile.posts와 homeTimeline을 검증한다.
+- ACTIVE/UNRESPONSIVE allow, SUSPENDED/inactive deny, local visibility/order/cursor와 remote fetch 0회를 검증한다.
+
+- [ ] 5.1 mapping 없는 remote Profile/Post/PostContent DB fixture와 network-fail spy를 준비한다.
+- [ ] 5.2 네 GraphQL surface의 parent authorization과 current/historical content visibility를 검증한다.
+- [ ] 5.3 remote followee home 포함, non-followee 제외와 `Post.id DESC` ordering/cursor 회귀를 검증한다.
+- [ ] 5.4 API integration/unit/schema/typecheck와 lint를 통과시키고 production code diff가 없는지 확인한다.
+
+## 6. PROD-261 remote Note 최초 저장을 원자적으로 materialize한다
+
+**Deliverable**
+
+최초 object mapping, Post와 canonical PostContent가 하나의 PostgreSQL transaction 결과로 저장된다.
+
+**Guardrails**
+
+- unique Note object URI가 durable duplicate 판정이다.
+- duplicate Create는 first-write-wins no-op이며 existing Post를 갱신하지 않는다.
+- activity receipt, activity ID persistence, recovery transaction과 `FOR UPDATE` lock을 만들지 않는다.
+- conflict loser가 partial Post나 orphan PostContent를 남기지 않는다.
+
+**Verification**
+
+- 실제 PostgreSQL 독립 connection으로 personal/shared/restart/concurrent duplicate, rollback/retry와 object URI conflict를 검증한다.
+- 최초 canonical document, Content Warning, published/received timestamp와 미래 published clamp를 검증한다.
+
+- [ ] 6.1 object mapping/Post/first PostContent/currentContent를 하나의 transaction에서 commit/rollback한다.
+- [ ] 6.2 unique object URI conflict loser의 전체 transaction을 rollback하고 duplicate no-op으로 종료한다.
+- [ ] 6.3 duplicate Create가 existing content/visibility/timestamp를 바꾸지 않고 새 revision을 만들지 않게 한다.
+- [ ] 6.4 concurrency/failure/timestamp integration test를 통과시키고 receipt·recovery lock 구현이 없는지 확인한다.
+
+## 7. PROD-256 remote post ingestion 통합 검증과 archive를 완료한다
+
+**Deliverable**
+
+모든 implementation slice가 object URI 기반 public first-ingestion 계약으로 통합되고 canonical specs와 archive가 완료된다.
+
+**Guardrails**
+
+- activity receipt, duplicate Create revision, PROD-340, authenticated shared-inbox identity, queue/worker와 fetch/backfill을 archive gate로 끌어오지 않는다.
+- Reply/thread(PROD-358), FOLLOWERS(PROD-360), DIRECT(PROD-359)과 Update/Delete lifecycle(PROD-365)은 별도 OpenSpec으로 진행한다.
+- 구현 PR은 자기 slice의 코드/검증만 소유하고 이 공유 change를 별도로 수정하지 않는다.
+- 개별 PR 완료만으로 change를 조기 archive하지 않는다.
+
+**Verification**
+
+- 실제 materialized row smoke, object URI당 Post 하나, loser rollback과 DB-only GraphQL read를 end-to-end로 확인한다.
+- canonical specs sync, 전체 task 완료, strict validation과 workspace required checks를 확인한다.
+
+- [ ] 7.1 PROD-341/255/259/260/262/261 PR 병합과 scoped validation 증거를 확인한다.
+- [ ] 7.2 personal/shared concurrent delivery가 같은 object URI에서 Post side effect를 한 번만 commit하는지 검증한다.
+- [ ] 7.3 PROD-341 canonical document/Content Warning과 initial timestamp가 existing GraphQL schema로 조회되는지 smoke 검증한다.
+- [ ] 7.4 canonical activitypub-remote-post-ingestion/data-model specs와 delta를 동기화하고 기존 Post 계약에 diff가 없으며 receipt/duplicate-update 계약이 남지 않았는지 확인한다.
+- [ ] 7.5 proposal 전체 scope 완료 후 change를 archive하고 archive 후 strict validation을 통과시킨다.

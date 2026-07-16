@@ -7,10 +7,10 @@
 
 ## 2. PROD-274 Follow Notification의 source·Recipient 저장 경계를 제공한다
 
-- [ ] 2.1 established `ProfileFollow`에서 Followee Recipient와 Follower Related Profile을 파생하고 Local Recipient만 허용하는 source-only create 경계를 구현한다.
-- [ ] 2.2 `kind=FOLLOW`, `source_id=ProfileFollow.id`, `recipient_profile_id=Followee.id`, `data={}`인 row를 저장하고 existing source·Recipient 또는 concurrent unique conflict를 기존 item 성공이나 idempotent no-op으로 정규화한다.
-- [ ] 2.3 `(kind, source_id)`를 받는 idempotent delete 경계를 구현하고 이미 없는 row도 성공한 no-op으로 정규화한다.
-- [ ] 2.4 service/data-access test로 정확한 파생, Remote Recipient 거부, Local/Remote Follower, 동일 source 재호출, concurrent create와 반복 delete를 검증하고 target package check를 통과시킨다.
+- [x] 2.1 established `ProfileFollow`에서 Followee Recipient와 Follower Related Profile을 파생하고 Local Recipient만 허용하는 source-only create 경계를 구현한다.
+- [x] 2.2 `kind=FOLLOW`, `source_id=ProfileFollow.id`, `recipient_profile_id=Followee.id`, `data={}`인 row를 저장하고 existing source·Recipient 또는 concurrent unique conflict를 기존 item 성공이나 idempotent no-op으로 정규화한다.
+- [x] 2.3 `(kind, source_id)`를 받는 idempotent delete 경계를 구현하고 이미 없는 row도 성공한 no-op으로 정규화한다.
+- [x] 2.4 service/data-access test로 정확한 파생, Remote Recipient 거부, Local/Remote Follower, 동일 source 재호출, concurrent create와 반복 delete를 검증하고 target package check를 통과시킨다.
 
 ## 3. PROD-275 Notification GraphQL 타입·Node와 공통 visible 조회 기반을 제공한다
 
