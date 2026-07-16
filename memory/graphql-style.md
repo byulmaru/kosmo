@@ -159,8 +159,8 @@ GraphQL enum은 `apps/api/src/graphql/enums.ts`에서 전역 등록한다.
 - Node decode는 global ID의 concrete typename으로 해당 loadable Node ref를 찾고 underlying DB UUID를 loader에 전달한다. UUID version이나 table discriminator로 GraphQL type을 추론하지 않는다.
 - Node를 식별하는 query·mutation input은 `t.input.globalID({ for: ConcreteNodeRef })`로 허용된 concrete type을 제한하고 resolver에서는 decode된 `id`만 core service나 DB query에 전달한다.
 - legacy raw UUID GraphQL ID fallback은 제공하지 않는다. 기존 UUIDv8 DB row도 새 global ID로 감싸서만 GraphQL에 입력한다.
-- interface typename을 concrete Node loader 대신 encode하지 않는다. Notification처럼 하나의 table이 여러 concrete object에 대응할 때는 row의 kind에 맞는 concrete object ref가 자기 typename으로 ID를 encode한다.
-- typename과 underlying UUID가 일치하지 않아 concrete loader가 row를 찾지 못하면 다른 type을 추론해 재시도하지 않는다.
+- interface typename을 concrete Node loader 대신 encode하지 않는다. Notification처럼 하나의 table이 여러 concrete object에 대응할 때는 row의 kind에 맞는 concrete object ref가 자기 typename으로 ID를 encode하고, 해당 typename의 loader가 예상 row discriminator와 visibility를 검증한다. typename과 row가 일치하지 않으면 object 없음으로 처리해 Node가 `null`을 반환한다.
+- 하나의 table discriminator를 먼저 해석하는 공통 Node route를 두지 않고, concrete loader가 row를 찾지 못하거나 discriminator가 일치하지 않아도 다른 type을 추론해 재시도하지 않는다.
 - 삭제·해제 payload가 Node ID를 반환하면 `field.globalID`로 실제 concrete typename과 삭제된 row의 DB UUID를 encode한다.
 - 클라이언트는 ID 내부 구조에 의존하면 안 된다.
 
