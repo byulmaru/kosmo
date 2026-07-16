@@ -1,10 +1,8 @@
 import '@kosmo/core/polyfill';
 
-import { Note, PUBLIC_COLLECTION } from '@fedify/vocab';
-import { InstanceState, PostVisibility } from '@kosmo/core/enums';
-import { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
-import type { InboxContext } from '@fedify/fedify';
-import type { Create, LanguageString } from '@fedify/vocab';
+import { PUBLIC_COLLECTION } from '@fedify/vocab';
+import { PostVisibility } from '@kosmo/core/enums';
+import type { LanguageString, Note } from '@fedify/vocab';
 import type { PostVisibility as PostVisibilityValue } from '@kosmo/core/enums';
 
 export type InboundCreateNoteMaterializationInput = {
@@ -17,8 +15,6 @@ export type InboundCreateNoteMaterializationInput = {
   summary: string | null;
   visibility: PostVisibilityValue;
 };
-
-const getNow = () => Temporal.Now.instant();
 
 const uniqueHref = (uris: URL[]): string | undefined => {
   const hrefs = new Set(uris.map((uri) => uri.href));
@@ -41,60 +37,43 @@ const resolveVisibility = (note: Note): PostVisibilityValue | undefined => {
   return undefined;
 };
 
-export const handleInboundCreateNote = async (
-  context: InboxContext<void>,
-  create: Create,
-  receivedAt: Temporal.Instant = getNow(),
-): Promise<InboundCreateNoteMaterializationInput | undefined> => {
-  const actorUri = uniqueHref(create.actorIds);
-  const objectUri = uniqueHref(create.objectIds);
-
-  if (!actorUri || !objectUri) {
+export const handleInboundCreateNote = ({
+  actorUri,
+  note,
+  objectUri,
+  receivedAt,
+}: {
+  actorUri: string;
+  note: Note;
+  objectUri: string;
+  receivedAt: Temporal.Instant;
+}): InboundCreateNoteMaterializationInput | undefined => {
+  if (note.id?.href !== objectUri) {
     return undefined;
   }
 
-  const storedActor = await findStoredRemoteProfileActorByUri(actorUri);
-  if (
-    !storedActor ||
-    (storedActor.instance.state !== InstanceState.ACTIVE &&
-      storedActor.instance.state !== InstanceState.UNRESPONSIVE)
-  ) {
-    return undefined;
-  }
-
-  let object;
-  try {
-    object = await create.getObject({ documentLoader: context.documentLoader });
-  } catch {
-    return undefined;
-  }
-
-  if (!(object instanceof Note) || object.id?.href !== objectUri) {
-    return undefined;
-  }
-
-  const attributionUri = uniqueHref(object.attributionIds);
+  const attributionUri = uniqueHref(note.attributionIds);
   if (
     attributionUri !== actorUri ||
-    object.replyTargetIds.length > 0 ||
-    object.replyTargetId !== null
+    note.replyTargetIds.length > 0 ||
+    note.replyTargetId !== null
   ) {
     return undefined;
   }
 
-  const visibility = resolveVisibility(object);
+  const visibility = resolveVisibility(note);
   if (!visibility) {
     return undefined;
   }
 
   return {
     actorUri,
-    content: toPrimitiveString(object.content),
-    mediaType: object.mediaType,
+    content: toPrimitiveString(note.content),
+    mediaType: note.mediaType,
     objectUri,
-    published: object.published,
+    published: note.published,
     receivedAt,
-    summary: toPrimitiveString(object.summary),
+    summary: toPrimitiveString(note.summary),
     visibility,
   };
 };
