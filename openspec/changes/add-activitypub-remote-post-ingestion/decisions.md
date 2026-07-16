@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 [PROD-354](https://linear.app/byulmaru/issue/PROD-354), 최종 통합·archive gate [PROD-256](https://linear.app/byulmaru/issue/PROD-256), 독립 구현 이슈 PROD-255/259/260과 완료된 [PROD-341](https://linear.app/byulmaru/issue/PROD-341)의 최신 계약을 반영한다. PROD-261은 PROD-260으로 중복 처리됐고 PROD-262는 취소됐으며, 실제 materialized row GraphQL smoke는 PROD-256으로 이동했다. 이 이슈들은 parent-child 계층 대신 Linear Block 관계로 전달 순서를 표현한다. PR #258의 이전 activity receipt, duplicate revision과 lock recovery 설계는 source of truth가 아니다.
+이 기록은 [PROD-354](https://linear.app/byulmaru/issue/PROD-354), 최종 통합·archive gate [PROD-256](https://linear.app/byulmaru/issue/PROD-256), 독립 구현 이슈 PROD-255/259/260과 완료된 [PROD-341](https://linear.app/byulmaru/issue/PROD-341)의 최신 계약을 반영한다. 이 이슈들은 parent-child 계층 대신 Linear Block 관계로 전달 순서를 표현한다. PR #258의 이전 activity receipt, duplicate revision과 lock recovery 설계는 source of truth가 아니다.
 
 ## Decision Records
 
@@ -89,20 +89,10 @@
 - Decision Date: 2026-07-15
 - Status: Accepted
 - Context / Problem: PR #212가 remote Profile/Post의 공통 visibility, instance 상태와 parent PostContent authorization을 이미 구현했다.
-- Decision Outcome: remote ingestion은 기존 `Post`/`PostContent`/connection schema와 resolver를 변경하지 않는다. PROD-256은 PROD-260이 실제로 materialize한 row로 현재 authorization compatibility matrix와 zero-network read를 smoke 검증한다.
+- Decision Outcome: remote ingestion은 기존 `Post`/`PostContent`/connection schema와 resolver를 변경하지 않는다. 별도 synthetic-fixture authorization 이슈를 두지 않고 각 구현 이슈가 자신의 결과를 검증하며, PROD-256은 PROD-260 materializer의 실제 output과 post-materialization 상태 전환으로 네 GraphQL surface의 authorization/connection matrix와 zero-network read를 검증한다.
 - Alternatives Considered: remote 전용 resolver, object mapping을 read prerequisite로 사용, resolver 변경을 ingestion slice에 포함.
 - Consequences: 테스트가 결함을 발견하면 Linear/OpenSpec 구현 범위를 다시 연다.
-- Confirmation / Follow-up: PROD-256 통합 gate가 actual-row GraphQL smoke로 public schema 불변과 DB-only read를 검증한다.
-
-### Validation과 atomic materialization은 PROD-260, actual-row GraphQL smoke는 PROD-256이 소유한다
-
-- Decision Date: 2026-07-16
-- Status: Accepted
-- Context / Problem: validation, transaction과 GraphQL regression을 별도 handoff 이슈로 나누면 실제 delivery graph보다 소유권 경계가 많아지고 통합 증거가 분산된다.
-- Decision Outcome: PROD-260이 known-actor public Create validation부터 projection handoff와 atomic mapping/Post/PostContent materialization까지 소유한다. PROD-256은 실제 materialized row 기반 GraphQL compatibility matrix와 smoke, canonical spec sync와 archive를 소유한다.
-- Alternatives Considered: PROD-261 transaction과 PROD-262 test-only regression을 독립 구현 이슈로 유지한다.
-- Consequences: PROD-261은 PROD-260의 duplicate로 종료하고 PROD-262는 취소한다. 기존 concurrency, rollback, timestamp와 GraphQL authorization 검증 요구는 삭제하지 않고 새 소유 이슈의 완료 조건으로 이동한다.
-- Confirmation / Follow-up: Linear Block 순서를 PROD-255/259 → PROD-260 → PROD-256으로 유지하고 각 이슈의 scoped validation 증거를 최종 gate에서 확인한다.
+- Confirmation / Follow-up: PROD-256 통합 gate가 public schema 불변, actual materialized-row DB-only read, ACTIVE/UNRESPONSIVE allow, SUSPENDED/inactive deny와 `Post.id DESC` ordering/cursor를 검증한다.
 
 ## Remaining Decisions
 
