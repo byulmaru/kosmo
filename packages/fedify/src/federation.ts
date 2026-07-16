@@ -1,6 +1,7 @@
 import { createFederation, MemoryKvStore } from '@fedify/fedify';
-import { Follow, Undo } from '@fedify/vocab';
+import { Create, Follow, Undo } from '@fedify/vocab';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
+import { handleInboundCreate } from './inbound-create';
 import { handleInboundFollow, handleInboundUndo } from './inbound-follow';
 import { ensureDrizzleLocalProfileActor } from './local-actor-store';
 import { createLocalProfilePerson } from './local-profile-person';
@@ -59,5 +60,8 @@ federation
 
 federation
   .setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox')
+  .on(Create, async (context, create) => {
+    await handleInboundCreate(context, create);
+  })
   .on(Follow, handleInboundFollow)
   .on(Undo, handleInboundUndo);

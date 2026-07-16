@@ -85,11 +85,11 @@ actor-scoped/shared Fedify listener가 지원 delivery를 검증하고 최초 Ac
 - 실제 PostgreSQL 독립 connection으로 personal/shared/restart/concurrent duplicate, rollback/retry와 object URI conflict를 검증한다.
 - 최초 canonical document, Content Warning, published/received timestamp와 미래 published clamp를 검증한다.
 
-- [ ] 4.1 listener에 typed `Create` handler를 연결하고 optional Fedify global idempotency의 activity ID prefilter 경계와 한 번 캡처한 `receivedAt`을 적용한다.
-- [ ] 4.2 actor/object URI cardinality와 stored actor/Profile/Instance eligibility를 hydration 전에 검증한다.
-- [ ] 4.3 Fedify documentLoader로 Note를 hydrate하고 ID, attribution, top-level 조건, published primitive와 cross-origin safety를 검증한다.
-- [ ] 4.4 PUBLIC/UNLISTED addressing만 projection하고 unsupported/ambiguous audience를 side effect 없이 skip한다.
-- [ ] 4.5 success input에 activity ID가 없고 missing activity ID도 object URI 기반으로 처리되는 route test를 통과시킨다.
+- [x] 4.1 listener에 typed `Create` handler를 연결하고 optional Fedify global idempotency의 activity ID prefilter 경계와 한 번 캡처한 `receivedAt`을 적용한다.
+- [x] 4.2 actor/object URI cardinality와 stored actor/Profile/Instance eligibility를 hydration 전에 검증한다.
+- [x] 4.3 Fedify documentLoader로 Note를 hydrate하고 ID, attribution, top-level 조건, published primitive와 cross-origin safety를 검증한다.
+- [x] 4.4 PUBLIC/UNLISTED addressing만 projection하고 unsupported/ambiguous audience를 side effect 없이 skip한다.
+- [x] 4.5 success input에 activity ID가 없고 missing activity ID도 object URI 기반으로 처리되는 route test를 통과시킨다.
 - [ ] 4.6 PROD-259 projection 결과와 ActivityPub Post mapping/Post/first PostContent/currentContent를 하나의 transaction에서 commit/rollback한다.
 - [ ] 4.7 unique object URI conflict loser의 전체 transaction을 rollback하고 duplicate no-op으로 종료한다.
 - [ ] 4.8 duplicate Create가 existing content/visibility/timestamp를 바꾸지 않고 새 revision을 만들지 않게 한다.
