@@ -12,36 +12,12 @@ import {
 } from '@kosmo/core/db';
 import { PostState, PostVisibility } from '@kosmo/core/enums';
 import { eq } from 'drizzle-orm';
-import type { LanguageString, Note } from '@fedify/vocab';
-import type { PostVisibility as PostVisibilityValue } from '@kosmo/core/enums';
-
-type InboundCreateNoteProjection = {
-  content: string | null;
-  mediaType: string | null;
-  published: Temporal.Instant | null;
-  summary: string | null;
-  visibility: PostVisibilityValue;
-};
+import type { Note } from '@fedify/vocab';
 
 const uniqueHref = (uris: URL[]): string | undefined => {
   const hrefs = new Set(uris.map((uri) => uri.href));
 
   return hrefs.size === 1 ? hrefs.values().next().value : undefined;
-};
-
-const toPrimitiveString = (value: string | LanguageString | null): string | null =>
-  value === null ? null : value.toString();
-
-const resolveVisibility = (note: Note): PostVisibilityValue | undefined => {
-  if (note.toIds.some((uri) => uri.href === PUBLIC_COLLECTION.href)) {
-    return PostVisibility.PUBLIC;
-  }
-
-  if (note.ccIds.some((uri) => uri.href === PUBLIC_COLLECTION.href)) {
-    return PostVisibility.UNLISTED;
-  }
-
-  return undefined;
 };
 
 const hasReplyTarget = async (note: Note): Promise<boolean> => {
@@ -70,38 +46,6 @@ const isActivityPubPostUriConflict = (error: unknown): boolean => {
   );
 };
 
-export const projectInboundCreateNote = async ({
-  actorUri,
-  note,
-  objectUri,
-}: {
-  actorUri: string;
-  note: Note;
-  objectUri: string;
-}): Promise<InboundCreateNoteProjection | undefined> => {
-  if (note.id?.href !== objectUri) {
-    return undefined;
-  }
-
-  const attributionUri = uniqueHref(note.attributionIds);
-  if (attributionUri !== actorUri || (await hasReplyTarget(note))) {
-    return undefined;
-  }
-
-  const visibility = resolveVisibility(note);
-  if (!visibility) {
-    return undefined;
-  }
-
-  return {
-    content: toPrimitiveString(note.content),
-    mediaType: note.mediaType,
-    published: note.published,
-    summary: toPrimitiveString(note.summary),
-    visibility,
-  };
-};
-
 export const handleInboundCreateNote = async ({
   actorUri,
   note,
@@ -115,14 +59,31 @@ export const handleInboundCreateNote = async ({
   profileId: string;
   receivedAt: Temporal.Instant;
 }): Promise<void> => {
-  const projection = await projectInboundCreateNote({ actorUri, note, objectUri });
-  if (!projection) {
+  if (note.id?.href !== objectUri) {
+    return;
+  }
+
+  const attributionUri = uniqueHref(note.attributionIds);
+  if (attributionUri !== actorUri || (await hasReplyTarget(note))) {
+    return;
+  }
+
+  const visibility = note.toIds.some((uri) => uri.href === PUBLIC_COLLECTION.href)
+    ? PostVisibility.PUBLIC
+    : note.ccIds.some((uri) => uri.href === PUBLIC_COLLECTION.href)
+      ? PostVisibility.UNLISTED
+      : undefined;
+  if (!visibility) {
     return;
   }
 
   let document;
   try {
-    document = projectRemoteNoteContent(projection);
+    document = projectRemoteNoteContent({
+      content: note.content?.toString() ?? null,
+      mediaType: note.mediaType,
+      summary: note.summary?.toString() ?? null,
+    });
   } catch (error) {
     if (error instanceof TypeError) {
       return;
@@ -131,8 +92,8 @@ export const handleInboundCreateNote = async ({
   }
 
   const createdAt =
-    projection.published && Temporal.Instant.compare(projection.published, receivedAt) < 0
-      ? projection.published
+    note.published && Temporal.Instant.compare(note.published, receivedAt) < 0
+      ? note.published
       : receivedAt;
 
   try {
@@ -143,14 +104,14 @@ export const handleInboundCreateNote = async ({
           createdAt,
           profileId,
           state: PostState.ACTIVE,
-          visibility: projection.visibility,
+          visibility,
         })
         .returning()
         .then(firstOrThrow);
 
       await tx.insert(ActivityPubPosts).values({
         postId: post.id,
-        publishedAt: projection.published,
+        publishedAt: note.published,
         receivedAt,
         uri: objectUri,
       });

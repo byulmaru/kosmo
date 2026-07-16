@@ -8,7 +8,15 @@ import {
   MemoryKvStore,
   signRequest,
 } from '@fedify/fedify';
-import { Article, Create, CryptographicKey, Note, Person, PUBLIC_COLLECTION } from '@fedify/vocab';
+import {
+  Article,
+  Create,
+  CryptographicKey,
+  LanguageString,
+  Note,
+  Person,
+  PUBLIC_COLLECTION,
+} from '@fedify/vocab';
 import { getDocumentLoader } from '@fedify/vocab-runtime';
 import {
   ActivityPubActorType,
@@ -84,9 +92,11 @@ describe('inbound Create dispatch', () => {
     const profile = await createStoredRemoteActor();
     const note = new Note({
       attribution: remoteActorUri,
-      content: 'Hello',
+      cc: PUBLIC_COLLECTION,
+      content: new LanguageString('<p>Hello</p>', 'en'),
       id: remoteObjectUri,
-      to: PUBLIC_COLLECTION,
+      mediaType: 'text/html',
+      summary: new LanguageString('<p>Content warning</p>', 'en'),
     });
     const create = new Create({
       actor: remoteActorUri,
@@ -100,6 +110,8 @@ describe('inbound Create dispatch', () => {
     assert.equal(mapping.uri, remoteObjectUri.href);
     assert.equal(post.profileId, profile.id);
     assert.equal(post.currentContentId, content.id);
+    assert.equal(post.visibility, 'UNLISTED');
+    assert.equal(content.document.summary, 'Content warning');
     assert.equal(postContentDocumentToText(content.document), 'Hello');
   });
 
@@ -208,6 +220,68 @@ describe('inbound Create dispatch', () => {
     );
     assert.equal(failedLoader.mock.calls.length, 1);
     assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
+  });
+
+  test('rejects mismatched identity, attribution, replies, and non-public Notes', async () => {
+    await createStoredRemoteActor();
+    const notes = [
+      new Note({ id: remoteObjectUri, to: PUBLIC_COLLECTION }),
+      new Note({
+        attribution: new URL('https://remote.example/users/mallory'),
+        id: remoteObjectUri,
+        to: PUBLIC_COLLECTION,
+      }),
+      new Note({
+        attributions: [remoteActorUri, new URL('https://remote.example/users/mallory')],
+        id: remoteObjectUri,
+        to: PUBLIC_COLLECTION,
+      }),
+      new Note({
+        attribution: remoteActorUri,
+        id: remoteObjectUri,
+        replyTarget: new URL('https://remote.example/notes/parent'),
+        to: PUBLIC_COLLECTION,
+      }),
+      new Note({
+        attribution: remoteActorUri,
+        id: remoteObjectUri,
+        replyTarget: new Note({ content: 'Parent without an ID' }),
+        to: PUBLIC_COLLECTION,
+      }),
+      new Note({
+        attribution: remoteActorUri,
+        id: remoteObjectUri,
+        to: new URL('https://remote.example/users/bob'),
+      }),
+    ];
+
+    for (const note of notes) {
+      await handleInboundCreate(
+        createContext(),
+        new Create({ actor: remoteActorUri, object: note }),
+        receivedAt,
+      );
+    }
+
+    const mismatchedNote = new Note({
+      attribution: remoteActorUri,
+      id: new URL('https://remote.example/notes/different'),
+      to: PUBLIC_COLLECTION,
+    });
+    const mismatchedLoader = mock.fn(async (url: string) => ({
+      contextUrl: null,
+      document: await mismatchedNote.toJsonLd({ format: 'expand' }),
+      documentUrl: url,
+    }));
+    await handleInboundCreate(
+      createContext(mismatchedLoader),
+      new Create({ actor: remoteActorUri, object: remoteObjectUri }),
+      receivedAt,
+    );
+
+    assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
+    assert.equal((await db.select().from(Posts)).length, 0);
+    assert.equal((await db.select().from(PostContents)).length, 0);
   });
 
   test('uses Fedify defaults to hydrate a cross-origin Note before dispatch', async () => {
