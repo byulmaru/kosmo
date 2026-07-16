@@ -27,11 +27,6 @@ export const ActivityPubActorKeyKind = {
 } as const;
 export type ActivityPubActorKeyKind = keyof typeof ActivityPubActorKeyKind;
 
-export const ActivityPubObjectType = {
-  NOTE: 'NOTE',
-} as const;
-export type ActivityPubObjectType = keyof typeof ActivityPubObjectType;
-
 export const ApplicationState = {
   ACTIVE: 'ACTIVE',
   DISABLED: 'DISABLED',
