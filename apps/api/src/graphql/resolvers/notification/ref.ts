@@ -28,6 +28,16 @@ Notification.implement({
   resolveType: (notification) => notificationNodeType(notification.kind),
 });
 
+export const NotificationConnection = builder.connectionObject(
+  {
+    type: Notification,
+    name: 'NotificationConnection',
+  },
+  {
+    name: 'NotificationConnectionEdge',
+  },
+);
+
 export const FollowNotification = createObjectRef<FollowNotificationRow>(
   'FollowNotification',
   async (ids, ctx) => {

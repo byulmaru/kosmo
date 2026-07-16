@@ -285,6 +285,160 @@ describe('Notification GraphQL Node boundary', () => {
     assert.deepEqual(inactiveResult.data?.nodes, [null]);
   });
 
+  test('lists notifications for every membership role without using the selected Profile', async () => {
+    const auth = await createAuthenticatedSession();
+    const profileIds: string[] = [];
+
+    for (const role of Object.values(AccountProfileRole)) {
+      const recipient = await createProfile(`list-recipient-${role.toLowerCase()}`);
+      const related = await createProfile(`list-related-${role.toLowerCase()}`);
+      await addMembership(auth.account.id, recipient.id, role);
+      await createFollowNotification(recipient.id, related.id);
+      profileIds.push(encodeGlobalId('Profile', recipient.id));
+    }
+
+    for (const profileId of profileIds) {
+      const result = await loadNotificationConnection(profileId, auth.token, { first: 10 });
+      assertNoGraphQLErrors(result);
+      assert.equal(result.data?.node?.notifications.edges.length, 1);
+      assert.equal(
+        result.data?.node?.notifications.edges[0]?.node.__typename,
+        'FollowNotification',
+      );
+    }
+
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: null })
+      .where(eq(Sessions.id, auth.session.id));
+    const withoutSelection = await loadNotificationConnection(profileIds[0]!, auth.token, {
+      first: 10,
+    });
+    assertNoGraphQLErrors(withoutSelection);
+    assert.equal(withoutSelection.data?.node?.notifications.edges.length, 1);
+
+    const unrelated = await createAuthenticatedSession();
+    const withoutMembership = await loadNotificationConnection(profileIds[0]!, unrelated.token, {
+      first: 10,
+    });
+    assert.equal(withoutMembership.data?.node, null);
+    assert.equal(withoutMembership.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+
+    const unauthenticated = await loadNotificationConnection(profileIds[0]!, undefined, {
+      first: 10,
+    });
+    assert.equal(unauthenticated.data?.node, null);
+    assert.equal(unauthenticated.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+
+    const inactiveRecipient = await createProfile('list-inactive-recipient');
+    const inactiveRelated = await createProfile('list-inactive-related');
+    await addMembership(auth.account.id, inactiveRecipient.id, AccountProfileRole.OWNER);
+    await createFollowNotification(inactiveRecipient.id, inactiveRelated.id);
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, inactiveRecipient.id));
+    const inactiveResult = await loadNotificationConnection(
+      encodeGlobalId('Profile', inactiveRecipient.id),
+      auth.token,
+      { first: 10 },
+    );
+    assertNoGraphQLErrors(inactiveResult);
+    assert.equal(inactiveResult.data?.node, null);
+  });
+
+  test('paginates visible notifications by ID after filtering hidden rows', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('page-recipient');
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.OWNER);
+
+    const newestRelated = await createProfile('page-newest-related');
+    const newest = await createFollowNotification(
+      recipient.id,
+      newestRelated.id,
+      '00000000-0000-8006-8000-000000000900',
+    );
+
+    await db.insert(Notifications).values({
+      id: '00000000-0000-8006-8000-000000000800',
+      kind: NotificationKind.FOLLOW,
+      recipientProfileId: recipient.id,
+      sourceId: crypto.randomUUID(),
+    });
+
+    const readRelated = await createProfile('page-read-related');
+    const read = await createFollowNotification(
+      recipient.id,
+      readRelated.id,
+      '00000000-0000-8006-8000-000000000700',
+    );
+    const readResult = await markNotificationRead(
+      encodeGlobalId('FollowNotification', read.id),
+      auth.token,
+    );
+    assertNoGraphQLErrors(readResult);
+
+    const actualFollowee = await createProfile('page-actual-followee');
+    const mismatchRelated = await createProfile('page-mismatch-related');
+    const mismatchSource = await createFollow(actualFollowee.id, mismatchRelated.id);
+    await db.insert(Notifications).values({
+      id: '00000000-0000-8006-8000-000000000600',
+      kind: NotificationKind.FOLLOW,
+      recipientProfileId: recipient.id,
+      sourceId: mismatchSource.id,
+    });
+
+    const oldestRelated = await createProfile('page-oldest-related');
+    const oldest = await createFollowNotification(
+      recipient.id,
+      oldestRelated.id,
+      '00000000-0000-8006-8000-000000000500',
+    );
+
+    const hiddenRelated = await createProfile('page-hidden-related');
+    await createFollowNotification(
+      recipient.id,
+      hiddenRelated.id,
+      '00000000-0000-8006-8000-000000000400',
+    );
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.SUSPENDED })
+      .where(eq(Profiles.id, hiddenRelated.id));
+
+    const profileId = encodeGlobalId('Profile', recipient.id);
+    const first = await loadNotificationConnection(profileId, auth.token, { first: 2 });
+    assertNoGraphQLErrors(first);
+    const firstConnection = first.data?.node?.notifications;
+    assert.deepEqual(
+      firstConnection?.edges.map(({ node }) => node.id),
+      [newest.id, read.id].map((id) => encodeGlobalId('FollowNotification', id)),
+    );
+    assert.equal(
+      firstConnection?.edges[1]?.node.profile.id,
+      encodeGlobalId('Profile', readRelated.id),
+    );
+    assert.ok(firstConnection?.edges[1]?.node.readAt);
+    assert.equal(firstConnection?.pageInfo.hasNextPage, true);
+    assert.equal(firstConnection?.pageInfo.endCursor, firstConnection?.edges[1]?.cursor);
+
+    const second = await loadNotificationConnection(profileId, auth.token, {
+      after: firstConnection?.pageInfo.endCursor,
+      first: 2,
+    });
+    assertNoGraphQLErrors(second);
+    const secondConnection = second.data?.node?.notifications;
+    assert.deepEqual(
+      secondConnection?.edges.map(({ node }) => node.id),
+      [encodeGlobalId('FollowNotification', oldest.id)],
+    );
+    assert.equal(
+      secondConnection?.edges[0]?.node.profile.id,
+      encodeGlobalId('Profile', oldestRelated.id),
+    );
+    assert.equal(secondConnection?.pageInfo.hasNextPage, false);
+  });
+
   test('does not infer a Notification type from a mismatched concrete global ID', async () => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile('mismatched-recipient');
@@ -527,6 +681,11 @@ type NotificationNode = {
   profile: { id: string };
 };
 
+type NotificationConnection = {
+  edges: Array<{ cursor: string; node: NotificationNode }>;
+  pageInfo: { endCursor: string | null; hasNextPage: boolean };
+};
+
 type ProfileNode = { __typename: 'Profile'; id: string };
 
 type GraphQLResult<TData> = {
@@ -565,6 +724,34 @@ const loadNodes = async (ids: string[], token: string) => {
   assertNoGraphQLErrors(result);
   return result.data!.nodes;
 };
+
+const loadNotificationConnection = (
+  id: string,
+  token: string | undefined,
+  variables: { after?: string | null; first: number },
+) =>
+  requestGraphQL<{ node: { notifications: NotificationConnection } | null }>(
+    `query ProfileNotifications($id: ID!, $first: Int!, $after: String) {
+      node(id: $id) {
+        ... on Profile {
+          notifications(first: $first, after: $after) {
+            edges {
+              cursor
+              node {
+                __typename
+                id
+                readAt
+                ... on FollowNotification { profile { id } }
+              }
+            }
+            pageInfo { endCursor hasNextPage }
+          }
+        }
+      }
+    }`,
+    { id, ...variables },
+    token,
+  );
 
 const markNotificationRead = (id: string, token?: string) =>
   requestGraphQL<{
