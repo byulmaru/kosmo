@@ -90,10 +90,10 @@ actor-scoped/shared Fedify listener가 지원 delivery를 검증하고 최초 Ac
 - [x] 4.3 Fedify documentLoader로 Note를 hydrate하고 ID, attribution, top-level 조건, published와 content/summary primitive adaptation, cross-origin safety를 검증한다.
 - [x] 4.4 PUBLIC/UNLISTED addressing만 projection하고 unsupported/ambiguous audience를 side effect 없이 skip한다.
 - [x] 4.5 success input에 activity ID가 없고 missing activity ID도 object URI 기반으로 처리되는 route test를 통과시킨다.
-- [ ] 4.6 PROD-259 projection 결과와 ActivityPub Post mapping/Post/first PostContent/currentContent를 하나의 transaction에서 commit/rollback한다.
-- [ ] 4.7 unique object URI conflict loser의 전체 transaction을 rollback하고 duplicate no-op으로 종료한다.
-- [ ] 4.8 duplicate Create가 existing content/visibility/timestamp를 바꾸지 않고 새 revision을 만들지 않게 한다.
-- [ ] 4.9 concurrency/failure/timestamp integration test를 통과시키고 receipt·recovery lock 구현이 없는지 확인한다.
+- [x] 4.6 PROD-259 projection 결과와 ActivityPub Post mapping/Post/first PostContent/currentContent를 하나의 transaction에서 commit/rollback한다.
+- [x] 4.7 unique object URI conflict loser의 전체 transaction을 rollback하고 duplicate no-op으로 종료한다.
+- [x] 4.8 duplicate Create가 existing content/visibility/timestamp를 바꾸지 않고 새 revision을 만들지 않게 한다.
+- [x] 4.9 concurrency/failure/timestamp integration test를 통과시키고 receipt·recovery lock 구현이 없는지 확인한다.
 
 ## 5. PROD-256 remote post ingestion 통합 검증과 archive를 완료한다
 

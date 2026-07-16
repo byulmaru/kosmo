@@ -1,17 +1,24 @@
 import '@kosmo/core/polyfill';
 
 import { PUBLIC_COLLECTION } from '@fedify/vocab';
-import { PostVisibility } from '@kosmo/core/enums';
+import { projectRemoteNoteContent } from '@kosmo/core/activitypub-note-content/server';
+import {
+  ActivityPubPosts,
+  db,
+  firstOrThrow,
+  isUniqueViolation,
+  PostContents,
+  Posts,
+} from '@kosmo/core/db';
+import { PostState, PostVisibility } from '@kosmo/core/enums';
+import { eq } from 'drizzle-orm';
 import type { LanguageString, Note } from '@fedify/vocab';
 import type { PostVisibility as PostVisibilityValue } from '@kosmo/core/enums';
 
-export type InboundCreateNoteMaterializationInput = {
-  actorUri: string;
+type InboundCreateNoteProjection = {
   content: string | null;
   mediaType: string | null;
-  objectUri: string;
   published: Temporal.Instant | null;
-  receivedAt: Temporal.Instant;
   summary: string | null;
   visibility: PostVisibilityValue;
 };
@@ -49,17 +56,29 @@ const hasReplyTarget = async (note: Note): Promise<boolean> => {
   }
 };
 
-export const handleInboundCreateNote = async ({
+const isActivityPubPostUriConflict = (error: unknown): boolean => {
+  if (!isUniqueViolation(error) || !error || typeof error !== 'object' || !('cause' in error)) {
+    return false;
+  }
+
+  const { cause } = error;
+  return (
+    !!cause &&
+    typeof cause === 'object' &&
+    'constraint_name' in cause &&
+    cause.constraint_name === 'activitypub_post_uri_key'
+  );
+};
+
+export const projectInboundCreateNote = async ({
   actorUri,
   note,
   objectUri,
-  receivedAt,
 }: {
   actorUri: string;
   note: Note;
   objectUri: string;
-  receivedAt: Temporal.Instant;
-}): Promise<InboundCreateNoteMaterializationInput | undefined> => {
+}): Promise<InboundCreateNoteProjection | undefined> => {
   if (note.id?.href !== objectUri) {
     return undefined;
   }
@@ -75,13 +94,78 @@ export const handleInboundCreateNote = async ({
   }
 
   return {
-    actorUri,
     content: toPrimitiveString(note.content),
     mediaType: note.mediaType,
-    objectUri,
     published: note.published,
-    receivedAt,
     summary: toPrimitiveString(note.summary),
     visibility,
   };
+};
+
+export const handleInboundCreateNote = async ({
+  actorUri,
+  note,
+  objectUri,
+  profileId,
+  receivedAt,
+}: {
+  actorUri: string;
+  note: Note;
+  objectUri: string;
+  profileId: string;
+  receivedAt: Temporal.Instant;
+}): Promise<void> => {
+  const projection = await projectInboundCreateNote({ actorUri, note, objectUri });
+  if (!projection) {
+    return;
+  }
+
+  let document;
+  try {
+    document = projectRemoteNoteContent(projection);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      return;
+    }
+    throw error;
+  }
+
+  const createdAt =
+    projection.published && Temporal.Instant.compare(projection.published, receivedAt) < 0
+      ? projection.published
+      : receivedAt;
+
+  try {
+    await db.transaction(async (tx) => {
+      const post = await tx
+        .insert(Posts)
+        .values({
+          createdAt,
+          profileId,
+          state: PostState.ACTIVE,
+          visibility: projection.visibility,
+        })
+        .returning()
+        .then(firstOrThrow);
+
+      await tx.insert(ActivityPubPosts).values({
+        postId: post.id,
+        publishedAt: projection.published,
+        receivedAt,
+        uri: objectUri,
+      });
+
+      const content = await tx
+        .insert(PostContents)
+        .values({ createdAt: receivedAt, document, postId: post.id })
+        .returning()
+        .then(firstOrThrow);
+
+      await tx.update(Posts).set({ currentContentId: content.id }).where(eq(Posts.id, post.id));
+    });
+  } catch (error) {
+    if (!isActivityPubPostUriConflict(error)) {
+      throw error;
+    }
+  }
 };

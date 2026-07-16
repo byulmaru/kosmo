@@ -17,7 +17,8 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '@kosmo/core/enums';
-import { ne } from 'drizzle-orm';
+import { postContentDocumentToText } from '@kosmo/core/post-content/server';
+import { eq, ne } from 'drizzle-orm';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -32,10 +33,13 @@ const remoteObjectUri = new URL('https://remote.example/notes/1');
 const receivedAt = Temporal.Instant.from('2026-07-16T00:00:00Z');
 
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
+let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
+let PostContents: typeof CoreDb.PostContents;
+let Posts: typeof CoreDb.Posts;
 let Profiles: typeof CoreDb.Profiles;
 let handleInboundCreate: typeof handleInboundCreateType;
 let localInstanceId: string;
@@ -44,8 +48,17 @@ describe('inbound Create dispatch', () => {
   before(async () => {
     process.env.DATABASE_URL = databaseUrl;
     process.env.PUBLIC_ORIGIN = publicOrigin;
-    ({ ActivityPubActors, db, firstOrThrow, Instances, pg, Profiles } =
-      await import('@kosmo/core/db'));
+    ({
+      ActivityPubActors,
+      ActivityPubPosts,
+      db,
+      firstOrThrow,
+      Instances,
+      pg,
+      PostContents,
+      Posts,
+      Profiles,
+    } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ handleInboundCreate } = await import('./inbound-create'));
     const { localInstance } = await seedDatabase({ publicOrigin });
@@ -53,16 +66,22 @@ describe('inbound Create dispatch', () => {
   });
 
   beforeEach(async () => {
+    await db.update(Posts).set({ currentContentId: null });
+    await db.delete(PostContents);
+    await db.delete(Posts);
     await db.delete(Profiles);
     await db.delete(Instances).where(ne(Instances.id, localInstanceId));
   });
 
   after(async () => {
+    await db.update(Posts).set({ currentContentId: null });
+    await db.delete(PostContents);
+    await db.delete(Posts);
     await pg.end();
   });
 
-  test('dispatches a hydrated Note without carrying the activity id', async () => {
-    await createStoredRemoteActor();
+  test('materializes a hydrated Note without persisting the activity id', async () => {
+    const profile = await createStoredRemoteActor();
     const note = new Note({
       attribution: remoteActorUri,
       content: 'Hello',
@@ -75,10 +94,13 @@ describe('inbound Create dispatch', () => {
       object: note,
     });
 
-    const result = await handleInboundCreate(createContext(), create, receivedAt);
+    await handleInboundCreate(createContext(), create, receivedAt);
+    const { content, mapping, post } = await getMaterializedPost(remoteObjectUri);
 
-    assert.equal(result?.objectUri, remoteObjectUri.href);
-    assert.equal('activityId' in result!, false);
+    assert.equal(mapping.uri, remoteObjectUri.href);
+    assert.equal(post.profileId, profile.id);
+    assert.equal(post.currentContentId, content.id);
+    assert.equal(postContentDocumentToText(content.document), 'Hello');
   });
 
   test('deduplicates actor and object hrefs before dispatch', async () => {
@@ -93,10 +115,9 @@ describe('inbound Create dispatch', () => {
       objects: [note, new URL(remoteObjectUri.href)],
     });
 
-    assert.equal(
-      (await handleInboundCreate(createContext(), create, receivedAt))?.objectUri,
-      remoteObjectUri.href,
-    );
+    await handleInboundCreate(createContext(), create, receivedAt);
+
+    assert.equal((await getMaterializedPost(remoteObjectUri)).mapping.uri, remoteObjectUri.href);
   });
 
   test('rejects unknown, inactive, non-ActivityPub, and SUSPENDED actors before hydration', async () => {
@@ -186,6 +207,7 @@ describe('inbound Create dispatch', () => {
       undefined,
     );
     assert.equal(failedLoader.mock.calls.length, 1);
+    assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
   });
 
   test('uses Fedify defaults to hydrate a cross-origin Note before dispatch', async () => {
@@ -202,24 +224,20 @@ describe('inbound Create dispatch', () => {
       documentUrl: url,
     }));
 
-    assert.equal(
-      (
-        await handleInboundCreate(
-          createContext(documentLoader),
-          new Create({ actor: remoteActorUri, object: objectUri }),
-          receivedAt,
-        )
-      )?.objectUri,
-      objectUri.href,
+    await handleInboundCreate(
+      createContext(documentLoader),
+      new Create({ actor: remoteActorUri, object: objectUri }),
+      receivedAt,
     );
+
+    assert.equal((await getMaterializedPost(objectUri)).mapping.uri, objectUri.href);
     assert.equal(documentLoader.mock.calls.length, 1);
   });
 
   test('signed Create reaches the dispatcher through personal and shared inboxes', async () => {
     await createStoredRemoteActor();
-    const calls: Array<Awaited<ReturnType<typeof handleInboundCreate>>> = [];
     const fixture = await createInboxFixture(async (context, activity) => {
-      calls.push(await handleInboundCreate(context, activity, receivedAt));
+      await handleInboundCreate(context, activity, receivedAt);
     });
 
     const personalResponse = await fixture.federation.fetch(
@@ -241,11 +259,192 @@ describe('inbound Create dispatch', () => {
 
     assert.equal(personalResponse.status, 202, await personalResponse.text());
     assert.equal(sharedResponse.status, 202, await sharedResponse.text());
-    assert.deepEqual(
-      calls.map((input) => input?.objectUri),
-      ['https://remote.example/notes/personal', 'https://remote.example/notes/shared'],
+    assert.deepEqual((await db.select().from(ActivityPubPosts)).map(({ uri }) => uri).sort(), [
+      'https://remote.example/notes/personal',
+      'https://remote.example/notes/shared',
+    ]);
+  });
+
+  test('skips unsupported remote content without writing rows', async () => {
+    await createStoredRemoteActor();
+    const note = new Note({
+      attribution: remoteActorUri,
+      content: 'not an image',
+      id: remoteObjectUri,
+      mediaType: 'image/png',
+      to: PUBLIC_COLLECTION,
+    });
+
+    await handleInboundCreate(
+      createContext(),
+      new Create({ actor: remoteActorUri, object: note }),
+      receivedAt,
     );
-    assert.ok(calls.every((input) => input && !('activityId' in input)));
+
+    assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
+    assert.equal((await db.select().from(Posts)).length, 0);
+    assert.equal((await db.select().from(PostContents)).length, 0);
+  });
+
+  test('keeps the first content, visibility, and timestamps for duplicate Create', async () => {
+    await createStoredRemoteActor();
+    const publishedAt = Temporal.Instant.from('2026-07-15T12:00:00Z');
+    const first = new Note({
+      attribution: remoteActorUri,
+      content: '<p>First</p>',
+      id: remoteObjectUri,
+      mediaType: 'text/html',
+      published: publishedAt,
+      summary: '<p>Content warning</p>',
+      to: PUBLIC_COLLECTION,
+    });
+
+    await handleInboundCreate(
+      createContext(),
+      new Create({ actor: remoteActorUri, object: first }),
+      receivedAt,
+    );
+    await handleInboundCreate(
+      createContext(),
+      new Create({
+        actor: remoteActorUri,
+        object: new Note({
+          attribution: remoteActorUri,
+          cc: PUBLIC_COLLECTION,
+          content: 'Changed',
+          id: remoteObjectUri,
+          mediaType: 'text/plain',
+          published: receivedAt.add({ hours: 1 }),
+        }),
+      }),
+      receivedAt.add({ hours: 2 }),
+    );
+
+    const { content, mapping, post } = await getMaterializedPost(remoteObjectUri);
+    assert.equal(post.visibility, 'PUBLIC');
+    assert.equal(post.createdAt.toString(), publishedAt.toString());
+    assert.equal(mapping.receivedAt.toString(), receivedAt.toString());
+    assert.equal(mapping.publishedAt?.toString(), publishedAt.toString());
+    assert.equal(content.createdAt.toString(), receivedAt.toString());
+    assert.equal(content.document.summary, 'Content warning');
+    assert.equal(postContentDocumentToText(content.document), 'First');
+    assert.equal((await db.select().from(PostContents)).length, 1);
+
+    const futureObjectUri = new URL('https://remote.example/notes/future');
+    const futurePublishedAt = receivedAt.add({ hours: 24 });
+    await handleInboundCreate(
+      createContext(),
+      new Create({
+        actor: remoteActorUri,
+        object: new Note({
+          attribution: remoteActorUri,
+          id: futureObjectUri,
+          published: futurePublishedAt,
+          to: PUBLIC_COLLECTION,
+        }),
+      }),
+      receivedAt,
+    );
+
+    const future = await getMaterializedPost(futureObjectUri);
+    assert.equal(future.post.createdAt.toString(), receivedAt.toString());
+    assert.equal(future.mapping.publishedAt?.toString(), futurePublishedAt.toString());
+  });
+
+  test('rolls back the concurrent object URI loser on independent connections', async () => {
+    const profile = await createStoredRemoteActor();
+    await pg`create sequence inbound_create_attempts`;
+    await pg`
+      create function synchronize_inbound_create() returns trigger
+      language plpgsql as $function$
+      declare
+        attempt bigint;
+      begin
+        attempt := nextval('inbound_create_attempts');
+        if attempt <= 2 then
+          while (select last_value from inbound_create_attempts) < 2 loop
+            perform pg_sleep(0.01);
+          end loop;
+        end if;
+        return new;
+      end
+      $function$
+    `;
+    await pg`
+      create trigger synchronize_inbound_create
+      before insert on activitypub_post
+      for each row execute function synchronize_inbound_create()
+    `;
+
+    const create = () =>
+      new Create({
+        actor: remoteActorUri,
+        object: new Note({
+          attribution: remoteActorUri,
+          content: 'Concurrent',
+          id: remoteObjectUri,
+          to: PUBLIC_COLLECTION,
+        }),
+      });
+
+    try {
+      await Promise.all([
+        handleInboundCreate(createContext(), create(), receivedAt),
+        handleInboundCreate(createContext(), create(), receivedAt),
+      ]);
+      const [{ attempts }] = await pg<
+        { attempts: number }[]
+      >`select last_value::integer as attempts from inbound_create_attempts`;
+      assert.equal(attempts, 2);
+    } finally {
+      await pg`drop trigger synchronize_inbound_create on activitypub_post`;
+      await pg`drop function synchronize_inbound_create()`;
+      await pg`drop sequence inbound_create_attempts`;
+    }
+
+    assert.equal((await db.select().from(ActivityPubPosts)).length, 1);
+    assert.equal((await db.select().from(Posts).where(eq(Posts.profileId, profile.id))).length, 1);
+    assert.equal((await db.select().from(PostContents)).length, 1);
+  });
+
+  test('rolls back a partial materialization and allows retry', async () => {
+    await createStoredRemoteActor();
+    const create = () =>
+      new Create({
+        actor: remoteActorUri,
+        object: new Note({
+          attribution: remoteActorUri,
+          content: 'Retryable',
+          id: remoteObjectUri,
+          to: PUBLIC_COLLECTION,
+        }),
+      });
+    await pg`
+      create function fail_inbound_post_content() returns trigger
+      language plpgsql as $function$
+      begin
+        raise exception 'intentional post content failure';
+      end
+      $function$
+    `;
+    await pg`
+      create trigger fail_inbound_post_content
+      before insert on post_content
+      for each row execute function fail_inbound_post_content()
+    `;
+
+    try {
+      await assert.rejects(handleInboundCreate(createContext(), create(), receivedAt));
+      assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
+      assert.equal((await db.select().from(Posts)).length, 0);
+      assert.equal((await db.select().from(PostContents)).length, 0);
+    } finally {
+      await pg`drop trigger fail_inbound_post_content on post_content`;
+      await pg`drop function fail_inbound_post_content()`;
+    }
+
+    await handleInboundCreate(createContext(), create(), receivedAt);
+    assert.equal((await getMaterializedPost(remoteObjectUri)).mapping.uri, remoteObjectUri.href);
   });
 });
 
@@ -292,6 +491,25 @@ const createStoredRemoteActor = async ({
     type: ActivityPubActorType.PERSON,
     uri: remoteActorUri.href,
   });
+
+  return profile;
+};
+
+const getMaterializedPost = async (objectUri: URL) => {
+  const mapping = await db
+    .select()
+    .from(ActivityPubPosts)
+    .where(eq(ActivityPubPosts.uri, objectUri.href))
+    .then(firstOrThrow);
+  const post = await db.select().from(Posts).where(eq(Posts.id, mapping.postId)).then(firstOrThrow);
+  assert.ok(post.currentContentId);
+  const content = await db
+    .select()
+    .from(PostContents)
+    .where(eq(PostContents.id, post.currentContentId))
+    .then(firstOrThrow);
+
+  return { content, mapping, post };
 };
 
 const createInboxFixture = async (

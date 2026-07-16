@@ -6,7 +6,6 @@ import { handleInboundCreateNote } from './inbound-create-note';
 import { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Create } from '@fedify/vocab';
-import type { InboundCreateNoteMaterializationInput } from './inbound-create-note';
 
 const uniqueHref = (uris: URL[]): string | undefined => {
   const hrefs = new Set(uris.map((uri) => uri.href));
@@ -18,7 +17,7 @@ export const handleInboundCreate = async (
   context: InboxContext<void>,
   create: Create,
   receivedAt: Temporal.Instant = Temporal.Now.instant(),
-): Promise<InboundCreateNoteMaterializationInput | undefined> => {
+): Promise<void> => {
   const actorUri = uniqueHref(create.actorIds);
   const objectUri = uniqueHref(create.objectIds);
 
@@ -43,8 +42,12 @@ export const handleInboundCreate = async (
   }
 
   if (object instanceof Note) {
-    return handleInboundCreateNote({ actorUri, note: object, objectUri, receivedAt });
+    await handleInboundCreateNote({
+      actorUri,
+      note: object,
+      objectUri,
+      profileId: storedActor.profile.id,
+      receivedAt,
+    });
   }
-
-  return undefined;
 };

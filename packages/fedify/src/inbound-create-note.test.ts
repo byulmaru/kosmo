@@ -4,14 +4,12 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { LanguageString, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
 import { PostVisibility } from '@kosmo/core/enums';
-import { handleInboundCreateNote } from './inbound-create-note';
+import { projectInboundCreateNote } from './inbound-create-note';
 
 const actorUri = 'https://remote.example/users/alice';
 const objectUri = 'https://remote.example/notes/1';
-const receivedAt = Temporal.Instant.from('2026-07-16T00:00:00Z');
-
 describe('inbound Create(Note)', () => {
-  test('projects a public Note to primitive materialization input', async () => {
+  test('projects a public Note to primitive content input', async () => {
     const published = Temporal.Instant.from('2026-07-15T12:00:00Z');
     const note = new Note({
       attribution: new URL(actorUri),
@@ -23,15 +21,12 @@ describe('inbound Create(Note)', () => {
       to: PUBLIC_COLLECTION,
     });
 
-    const result = await handleInboundCreateNote({ actorUri, note, objectUri, receivedAt });
+    const result = await projectInboundCreateNote({ actorUri, note, objectUri });
 
     assert.deepEqual(result, {
-      actorUri,
       content: '<p>Hello</p>',
       mediaType: 'text/html',
-      objectUri,
       published,
-      receivedAt,
       summary: 'Content warning',
       visibility: PostVisibility.PUBLIC,
     });
@@ -46,7 +41,7 @@ describe('inbound Create(Note)', () => {
     });
 
     assert.equal(
-      (await handleInboundCreateNote({ actorUri, note, objectUri, receivedAt }))?.visibility,
+      (await projectInboundCreateNote({ actorUri, note, objectUri }))?.visibility,
       PostVisibility.UNLISTED,
     );
   });
@@ -58,10 +53,7 @@ describe('inbound Create(Note)', () => {
       to: PUBLIC_COLLECTION,
     });
 
-    assert.equal(
-      await handleInboundCreateNote({ actorUri, note, objectUri, receivedAt }),
-      undefined,
-    );
+    assert.equal(await projectInboundCreateNote({ actorUri, note, objectUri }), undefined);
   });
 
   test('rejects missing, multiple, or mismatched attribution', async () => {
@@ -80,10 +72,7 @@ describe('inbound Create(Note)', () => {
     ];
 
     for (const note of notes) {
-      assert.equal(
-        await handleInboundCreateNote({ actorUri, note, objectUri, receivedAt }),
-        undefined,
-      );
+      assert.equal(await projectInboundCreateNote({ actorUri, note, objectUri }), undefined);
     }
   });
 
@@ -109,10 +98,7 @@ describe('inbound Create(Note)', () => {
     ];
 
     for (const note of notes) {
-      assert.equal(
-        await handleInboundCreateNote({ actorUri, note, objectUri, receivedAt }),
-        undefined,
-      );
+      assert.equal(await projectInboundCreateNote({ actorUri, note, objectUri }), undefined);
     }
   });
 });
