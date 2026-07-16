@@ -111,12 +111,12 @@ describe('Notification GraphQL Node boundary', () => {
         node(id: $id) {
           __typename
           ... on Notification { id createdAt readAt }
-          ... on FollowNotification { relatedProfile { id } }
+          ... on FollowNotification { profile { id } }
         }
         nodes(ids: $ids) {
           __typename
           ... on Notification { id createdAt readAt }
-          ... on FollowNotification { relatedProfile { id } }
+          ... on FollowNotification { profile { id } }
           ... on Profile { id }
         }
       }`,
@@ -127,7 +127,7 @@ describe('Notification GraphQL Node boundary', () => {
     assertNoGraphQLErrors(result);
     assert.equal(result.data?.node?.__typename, 'FollowNotification');
     assert.equal(result.data?.node?.id, notificationIds[0]);
-    assert.equal(result.data?.node?.relatedProfile.id, relatedProfileIds[0]);
+    assert.equal(result.data?.node?.profile.id, relatedProfileIds[0]);
     assert.deepEqual(
       result.data?.nodes.map((node) => [node?.__typename, node?.id]),
       [
@@ -136,14 +136,8 @@ describe('Notification GraphQL Node boundary', () => {
         ['FollowNotification', notificationIds[0]],
       ],
     );
-    assert.equal(
-      (result.data?.nodes[0] as NotificationNode).relatedProfile.id,
-      relatedProfileIds[1],
-    );
-    assert.equal(
-      (result.data?.nodes[2] as NotificationNode).relatedProfile.id,
-      relatedProfileIds[0],
-    );
+    assert.equal((result.data?.nodes[0] as NotificationNode).profile.id, relatedProfileIds[1]);
+    assert.equal((result.data?.nodes[2] as NotificationNode).profile.id, relatedProfileIds[0]);
   });
 
   test('uses every membership role without depending on the selected Profile', async () => {
@@ -275,7 +269,7 @@ type NotificationNode = {
   createdAt: string;
   id: string;
   readAt: string | null;
-  relatedProfile: { id: string };
+  profile: { id: string };
 };
 
 type ProfileNode = { __typename: 'Profile'; id: string };

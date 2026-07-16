@@ -59,7 +59,7 @@ Notification resolver module은 `Notification` interface, kind별 concrete objec
 - `Profile.notifications`: target Profile의 visible `NotificationConnection`.
 - `Profile.unreadNotificationCount`: 같은 visible predicate를 만족하는 unread item 수.
 - `Notification implements Node`: 모든 kind가 공유하는 `id`, `createdAt`, nullable `readAt`.
-- `FollowNotification implements Notification & Node`: Follow 전용 non-null `relatedProfile`.
+- `FollowNotification implements Notification & Node`: Follow 전용 non-null `profile`.
 - `markNotificationRead(input: { id })`: `MarkNotificationReadPayload.notification`과 `.recipientProfile`을 반환한다.
 
 Profile fields와 Read mutation의 authorization은 session의 selected Profile이 아니라 로그인 Account와 target Recipient Profile 사이의 Account-Profile membership이다. membership의 role은 권한 판정에 사용하지 않는다. selected Profile이 없거나 target과 달라도 membership이 있으면 API는 성공한다.
@@ -84,13 +84,13 @@ FOLLOW item은 다음 조건을 모두 만족할 때만 API에 존재한다.
 
 Connection query는 이 predicate를 SQL에서 적용한 뒤 `id DESC` keyset limit을 적용한다. page를 먼저 가져온 뒤 hidden row를 애플리케이션에서 버리지 않는다. Unread count, Node와 Read mutation도 같은 source/visibility predicate를 재사용한다. 이로써 hidden row가 short page, 잘못된 page info, badge drift나 Read side channel을 만들지 않는다.
 
-opaque cursor에는 마지막 Notification DB UUID를 담고 다음 page는 `id < cursor`를 사용한다. 기존 UUIDv8과 신규 UUIDv7은 같은 millisecond timestamp 위치 뒤에 random tail을 사용하므로 함께 정렬할 수 있지만 같은 millisecond의 생성 순서와 새 item의 page 배치는 보장하지 않는다. 이 제한은 현재 제품 범위에서 허용한다. 반환되는 `FollowNotification`은 Related Profile이 실제로 조회 가능한 경우뿐이므로 `relatedProfile`은 non-null이다. raw `kind`, `source_id`와 `data`는 API에 노출하지 않는다.
+opaque cursor에는 마지막 Notification DB UUID를 담고 다음 page는 `id < cursor`를 사용한다. 기존 UUIDv8과 신규 UUIDv7은 같은 millisecond timestamp 위치 뒤에 random tail을 사용하므로 함께 정렬할 수 있지만 같은 millisecond의 생성 순서와 새 item의 page 배치는 보장하지 않는다. 이 제한은 현재 제품 범위에서 허용한다. 반환되는 `FollowNotification`은 Related Profile이 실제로 조회 가능한 경우뿐이므로 `profile`은 non-null이다. raw `kind`, `source_id`와 `data`는 API에 노출하지 않는다.
 
 Read update는 membership과 visible predicate를 같은 SQL 경계에 포함하고 `read_at = coalesce(read_at, now())` 의미로 최초 시각을 보존한다. payload의 Recipient Profile을 함께 반환해 Relay가 item `readAt`과 정확한 Profile의 count를 함께 갱신할 수 있게 한다.
 
 ### unavailable 상태와 후속 cleanup
 
-위 공통 visible predicate를 만족하지 않는 item은 connection, Unread count, Node와 Read mutation에서 모두 없는 것으로 취급한다. generic item, `relatedProfile: null` Follow fallback, 이름·handle snapshot 또는 client-side filtering을 제공하지 않는다.
+위 공통 visible predicate를 만족하지 않는 item은 connection, Unread count, Node와 Read mutation에서 모두 없는 것으로 취급한다. generic item, `profile: null` Follow fallback, 이름·handle snapshot 또는 client-side filtering을 제공하지 않는다.
 
 DB row와 기존 `read_at`은 비동기 cleanup 전까지 남을 수 있다. cleanup 전에 visibility가 회복되면 같은 row가 기존 Read 상태로 다시 나타날 수 있다. 이 임시 상태는 첫 delivery에서 허용한다.
 

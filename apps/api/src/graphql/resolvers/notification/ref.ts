@@ -11,7 +11,7 @@ import {
 } from './access/visibility';
 
 export type NotificationRow = typeof Notifications.$inferSelect;
-export type FollowNotificationRow = NotificationRow & { relatedProfileId: string };
+export type FollowNotificationRow = NotificationRow & { profileId: string };
 
 export const notificationNodeType = (kind: string) =>
   kind === NotificationKind.FOLLOW ? ('FollowNotification' as const) : null;
@@ -34,7 +34,7 @@ export const FollowNotification = createObjectRef<FollowNotificationRow>(
     const rows = await db
       .select({
         ...getColumns(Notifications),
-        relatedProfileId: ProfileFollows.followerProfileId,
+        profileId: ProfileFollows.followerProfileId,
       })
       .from(Notifications)
       .innerJoin(ProfileFollows, eq(ProfileFollows.id, Notifications.sourceId))

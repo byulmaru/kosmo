@@ -73,7 +73,8 @@ test('exposes Notification interface and FollowNotification without raw storage 
     followNotification.getInterfaces().map(({ name }) => name),
     ['Node', 'Notification'],
   );
-  assert.equal(String(followNotification.getFields().relatedProfile.type), 'Profile!');
+  assert.equal(String(followNotification.getFields().profile.type), 'Profile!');
+  assert.equal(followNotification.getFields().relatedProfile, undefined);
   assert.equal(followNotification.getFields().kind, undefined);
   assert.equal(followNotification.getFields().sourceId, undefined);
   assert.equal(followNotification.getFields().data, undefined);

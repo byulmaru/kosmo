@@ -14,7 +14,7 @@
 
 ## 3. PROD-275 Notification GraphQL 타입·Node와 공통 visible 조회 기반을 제공한다
 
-- [x] 3.1 `Notification implements Node` interface와 `FollowNotification implements Notification & Node` concrete object를 추가하고 FollowNotification concrete global ID가 해당 loader로 직접 route되어 row의 `kind = FOLLOW`와 visibility를 검증하게 한다. interface typename을 Node ID로 encode하거나 mismatch에서 다른 loader를 추론하지 않는다. `FollowNotification.relatedProfile`은 non-null로 제공하고 raw kind/source/data/snapshot은 노출하지 않는다.
+- [x] 3.1 `Notification implements Node` interface와 `FollowNotification implements Notification & Node` concrete object를 추가하고 FollowNotification concrete global ID가 해당 loader로 직접 route되어 row의 `kind = FOLLOW`와 visibility를 검증하게 한다. interface typename을 Node ID로 encode하거나 mismatch에서 다른 loader를 추론하지 않는다. `FollowNotification.profile`은 non-null로 제공하고 raw kind/source/data/snapshot은 노출하지 않는다.
 - [x] 3.2 role-independent Account-Profile membership, Recipient Profile API visibility, source 존재, source Followee와 저장 Recipient 일치, Recipient Profile 기준 Related Profile visibility를 하나의 재사용 가능한 SQL-visible predicate로 제공한다. selected Profile은 권한 판정에 사용하지 않고 hidden row는 Node와 후속 API에서 존재하지 않는 것으로 취급한다.
 - [x] 3.3 API test로 FollowNotification concrete global ID round trip, `Notification` inline fragment, 여러 concrete Node ID batch 결과 순서, typename mismatch에서 다른 loader를 추론하지 않는 동작, hidden row의 `null`, 기존 UUIDv8 Notification fixture, 현재 membership role 전체, 비선택 Profile, selected Profile 부재, inactive Recipient, missing source, Recipient mismatch와 hidden Related Profile을 검증하고 generated schema/typecheck/lint를 통과시킨다.
 

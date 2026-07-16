@@ -128,7 +128,7 @@ API는 로그인 Account가 Account-Profile membership을 가진 Profile의 Noti
 
 - **WHEN** GraphQL schema를 생성한다
 - **THEN** `Notification implements Node` interface는 `id`, `createdAt`, nullable `readAt`을 제공한다
-- **AND** `FollowNotification implements Notification & Node` concrete object는 non-null `relatedProfile`을 제공한다
+- **AND** `FollowNotification implements Notification & Node` concrete object는 non-null `profile`을 제공한다
 - **AND** `notification.kind = FOLLOW`인 row는 `FollowNotification`으로 resolve된다
 - **AND** 각 concrete Notification object는 자신의 concrete typename과 notification DB UUID를 opaque global ID로 반환한다
 - **AND** `Profile.notifications`는 `NotificationConnection`을, `Profile.unreadNotificationCount`는 음수가 아닌 정수를 반환한다
@@ -273,7 +273,7 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 #### Scenario: generic fallback 금지
 
 - **WHEN** item이 unavailable이다
-- **THEN** API와 client는 `relatedProfile: null` Follow item, 이름·handle snapshot 또는 type-only generic item을 반환·표시하지 않는다
+- **THEN** API와 client는 `profile: null` Follow item, 이름·handle snapshot 또는 type-only generic item을 반환·표시하지 않는다
 - **AND** client는 서버가 반환한 page나 count를 unavailable 기준으로 다시 필터링하지 않는다
 
 #### Scenario: 후속 비동기 삭제 경계

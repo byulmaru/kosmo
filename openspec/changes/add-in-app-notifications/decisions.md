@@ -49,7 +49,7 @@
 - Decision Date: 2026-07-14
 - Status: Accepted
 - Context / Problem: 공통 `type` enum과 nullable kind별 field를 한 object에 모으면 새 kind가 추가될 때 공통 object가 넓어지고, 클라이언트도 실제 제공 field와 무관한 enum 분기를 해야 한다.
-- Decision Outcome: `Notification implements Node` interface는 `id`, `createdAt`, nullable `readAt`만 제공한다. `FollowNotification implements Notification & Node`는 non-null `relatedProfile`을 제공한다. 저장 row의 `kind`가 concrete GraphQL type을 결정하며 public `NotificationType` enum과 공통 `type` field는 노출하지 않는다. 각 concrete object는 자신의 typename과 Notification DB UUID를 global ID로 반환하고, 해당 typename에 등록된 Pothos loader가 DB UUID로 row를 직접 조회해 예상 `kind`와 visibility를 검증한다. 단일 `Notifications` discriminator를 먼저 해석하는 공통 Node route는 두지 않는다.
+- Decision Outcome: `Notification implements Node` interface는 `id`, `createdAt`, nullable `readAt`만 제공한다. `FollowNotification implements Notification & Node`는 non-null `profile`을 제공한다. 저장 row의 `kind`가 concrete GraphQL type을 결정하며 public `NotificationType` enum과 공통 `type` field는 노출하지 않는다. 각 concrete object는 자신의 typename과 Notification DB UUID를 global ID로 반환하고, 해당 typename에 등록된 Pothos loader가 DB UUID로 row를 직접 조회해 예상 `kind`와 visibility를 검증한다. 단일 `Notifications` discriminator를 먼저 해석하는 공통 Node route는 두지 않는다.
 - Alternatives Considered: `Notification` 단일 object와 `NotificationType` enum, nullable kind별 field를 가진 wide object, kind마다 서로 무관한 connection.
 - Consequences: `Profile.notifications`는 `NotificationConnection`을 반환하고 클라이언트는 `... on FollowNotification` inline fragment로 kind별 field를 선택한다. unavailable Follow item은 숨기므로 generic object나 nullable Related Profile fallback이 없다. concrete typename과 row의 `kind`가 일치하지 않거나 visibility를 만족하지 않으면 loader는 object 없음으로 처리해 Node가 `null`을 반환한다. interface typename으로 route하거나 mismatch에서 다른 concrete loader를 추론해 재시도하지 않는다.
 - Confirmation / Follow-up: `PROD-275`가 `node(id:)`에서 FOLLOW row를 `FollowNotification` loader로 직접 resolve하고 typename/row mismatch, hidden·unsupported row와 batch 순서를 검증하며, `PROD-352`가 같은 concrete resolution을 connection에서 검증한다. 후속 kind는 자신의 concrete object와 Pothos loader를 추가하며 공통 interface에는 모든 kind가 공유하는 field만 추가한다.
@@ -120,7 +120,7 @@
 - Status: Accepted
 - Context / Problem: source 또는 Related Profile을 조회할 수 없는 Follow item은 사용자에게 의미가 없고 generic fallback을 반환하면 정보 노출과 count drift를 만든다. 다만 첫 delivery에는 즉시 물리 삭제할 비동기 기반이 없다.
 - Decision Outcome: Recipient Profile 자체가 API에 노출되지 않거나 source가 없거나 source Followee가 저장 Recipient와 다르거나 Recipient Profile을 viewer로 Related Profile을 조회할 수 없는 item은 connection, Unread count, Node와 Read에서 존재하지 않는 것으로 취급한다. SQL visible predicate를 pagination limit 전에 적용하며 count도 같은 predicate를 사용한다.
-- Alternatives Considered: `relatedProfile: null` generic item, snapshot fallback, count에는 포함하고 목록만 숨김, page fetch 뒤 client filtering.
+- Alternatives Considered: `profile: null` generic item, snapshot fallback, count에는 포함하고 목록만 숨김, page fetch 뒤 client filtering.
 - Consequences: DB row와 기존 `read_at`은 cleanup 전까지 남을 수 있고 visibility가 회복되면 기존 상태로 다시 노출될 수 있다. raw source/data와 generic unavailable UI는 없다.
 - Confirmation / Follow-up: `PROD-275`가 공통 predicate와 Node 숨김을 검증하고, `PROD-352`·`PROD-351`·`PROD-350`이 list/count/Read에서 동일 predicate를 재사용하는지 검증한다.
 
@@ -174,5 +174,5 @@
 
 - 이 PR의 초기 draft가 제안한 기존 이름의 `notification_item` base + `notification_follow` extension, source FK/cascade, cleanup trigger와 deferred integrity constraint는 단일 `notification` projection 결정으로 대체한다.
 - 이 PR의 초기 draft가 제안한 selected Profile 전용 API 권한은 role-independent Account-Profile membership 권한으로 대체한다.
-- 이 PR의 초기 draft가 제안한 `relatedProfile: null` generic fallback, Read 허용과 Unread count 포함은 unavailable item 전면 숨김으로 대체한다.
+- 이 PR의 초기 draft가 제안한 `profile: null` generic fallback, Read 허용과 Unread count 포함은 unavailable item 전면 숨김으로 대체한다.
 - 2026-07-14의 Notification 단일 table 결정 중 “UUIDv8 `Notifications` discriminator를 신규 ID와 GraphQL Node routing에 사용한다”는 부분은 PROD-366의 신규 UUIDv7·기존 UUIDv8 무마이그레이션 공존과 concrete global ID 결정으로 대체한다. 단일 table projection 결정 자체는 유지한다.

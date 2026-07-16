@@ -63,8 +63,8 @@ type ExchangeNativeOidcSessionPayload {
 type FollowNotification implements Node & Notification {
   createdAt: DateTime!
   id: ID!
+  profile: Profile!
   readAt: DateTime
-  relatedProfile: Profile!
 }
 
 input FollowProfileInput {
