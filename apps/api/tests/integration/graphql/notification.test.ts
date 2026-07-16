@@ -18,8 +18,7 @@ import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
 import type { yoga as YogaRouter } from '../../../src/graphql';
-import type * as NotificationRef from '../../../src/graphql/resolvers/notification/ref';
-import type * as GraphQLUtils from '../../../src/graphql/utils';
+import type { encodeGlobalId as EncodeGlobalId } from '../../../src/graphql/global-id';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -37,8 +36,7 @@ let Sessions: typeof CoreDb.Sessions;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let deriveContext: typeof DeriveContext;
 let yoga: typeof YogaRouter;
-let globalNodeRouteMap: typeof GraphQLUtils.globalNodeRouteMap;
-let resolveNotificationNode: typeof NotificationRef.resolveNotificationNode;
+let encodeGlobalId: typeof EncodeGlobalId;
 let app: Hono<Env>;
 let localInstanceId: string;
 
@@ -68,8 +66,7 @@ describe('Notification GraphQL Node boundary', () => {
 
     ({ deriveContext } = await import('../../../src/context'));
     ({ yoga } = await import('../../../src/graphql'));
-    ({ globalNodeRouteMap } = await import('../../../src/graphql/utils'));
-    ({ resolveNotificationNode } = await import('../../../src/graphql/resolvers/notification/ref'));
+    ({ encodeGlobalId } = await import('../../../src/graphql/global-id'));
 
     app = new Hono<Env>();
     app.use('*', async (c, next) => {
@@ -93,9 +90,18 @@ describe('Notification GraphQL Node boundary', () => {
     const relatedProfiles = await Promise.all([createProfile('first'), createProfile('second')]);
     await addMembership(auth.account.id, recipient.id, AccountProfileRole.ADMIN);
     const notifications = await Promise.all(
-      relatedProfiles.map((related) => createFollowNotification(recipient.id, related.id)),
+      relatedProfiles.map((related, index) =>
+        createFollowNotification(
+          recipient.id,
+          related.id,
+          index === 0 ? '00000000-0000-8006-8000-000000000275' : undefined,
+        ),
+      ),
     );
-    const mixedIds = [notifications[1]!.id, auth.profile.id, notifications[0]!.id];
+    const notificationIds = notifications.map(({ id }) => encodeGlobalId('FollowNotification', id));
+    const profileId = encodeGlobalId('Profile', auth.profile.id);
+    const relatedProfileIds = relatedProfiles.map(({ id }) => encodeGlobalId('Profile', id));
+    const mixedIds = [notificationIds[1]!, profileId, notificationIds[0]!];
 
     const result = await requestGraphQL<{
       node: NotificationNode | null;
@@ -114,29 +120,29 @@ describe('Notification GraphQL Node boundary', () => {
           ... on Profile { id }
         }
       }`,
-      { id: notifications[0]!.id, ids: mixedIds },
+      { id: notificationIds[0]!, ids: mixedIds },
       auth.token,
     );
 
     assertNoGraphQLErrors(result);
     assert.equal(result.data?.node?.__typename, 'FollowNotification');
-    assert.equal(result.data?.node?.id, notifications[0]!.id);
-    assert.equal(result.data?.node?.relatedProfile.id, relatedProfiles[0]!.id);
+    assert.equal(result.data?.node?.id, notificationIds[0]);
+    assert.equal(result.data?.node?.relatedProfile.id, relatedProfileIds[0]);
     assert.deepEqual(
       result.data?.nodes.map((node) => [node?.__typename, node?.id]),
       [
-        ['FollowNotification', notifications[1]!.id],
-        ['Profile', auth.profile.id],
-        ['FollowNotification', notifications[0]!.id],
+        ['FollowNotification', notificationIds[1]],
+        ['Profile', profileId],
+        ['FollowNotification', notificationIds[0]],
       ],
     );
     assert.equal(
       (result.data?.nodes[0] as NotificationNode).relatedProfile.id,
-      relatedProfiles[1]!.id,
+      relatedProfileIds[1],
     );
     assert.equal(
       (result.data?.nodes[2] as NotificationNode).relatedProfile.id,
-      relatedProfiles[0]!.id,
+      relatedProfileIds[0],
     );
   });
 
@@ -148,7 +154,12 @@ describe('Notification GraphQL Node boundary', () => {
       const recipient = await createProfile(`recipient-${role.toLowerCase()}`);
       const related = await createProfile(`related-${role.toLowerCase()}`);
       await addMembership(auth.account.id, recipient.id, role);
-      notificationIds.push((await createFollowNotification(recipient.id, related.id)).id);
+      notificationIds.push(
+        encodeGlobalId(
+          'FollowNotification',
+          (await createFollowNotification(recipient.id, related.id)).id,
+        ),
+      );
     }
 
     const selectedElsewhere = await loadNodes(notificationIds, auth.token);
@@ -174,45 +185,22 @@ describe('Notification GraphQL Node boundary', () => {
     );
   });
 
-  test('does not route an unsupported Notification kind to a GraphQL object', async () => {
+  test('does not infer a Notification type from a mismatched concrete global ID', async () => {
     const auth = await createAuthenticatedSession();
-    const recipient = await createProfile('unsupported-recipient');
-    const related = await createProfile('unsupported-related');
+    const recipient = await createProfile('mismatched-recipient');
+    const related = await createProfile('mismatched-related');
     await addMembership(auth.account.id, recipient.id, AccountProfileRole.OWNER);
     const notification = await createFollowNotification(recipient.id, related.id);
-    const originalRoute = globalNodeRouteMap.get('$Notifications');
-    assert.ok(originalRoute);
-
-    globalNodeRouteMap.set('$Notifications', async (ids) =>
-      ids.map((id) =>
-        id === notification.id
-          ? resolveNotificationNode({
-              ...notification,
-              kind: 'UNSUPPORTED',
-              relatedProfileId: related.id,
-            })
-          : null,
-      ),
+    const result = await requestGraphQL<{ node: ProfileNode | null }>(
+      `query MismatchedNotification($id: ID!) {
+        node(id: $id) { __typename ... on Profile { id } }
+      }`,
+      { id: encodeGlobalId('Profile', notification.id) },
+      auth.token,
     );
 
-    try {
-      const result = await requestGraphQL<{
-        node: NotificationNode | null;
-        nodes: Array<NotificationNode | null>;
-      }>(
-        `query UnsupportedNotification($id: ID!) {
-          node(id: $id) { __typename ... on Notification { id } }
-          nodes(ids: [$id]) { __typename ... on Notification { id } }
-        }`,
-        { id: notification.id },
-        auth.token,
-      );
-
-      assertNoGraphQLErrors(result);
-      assert.deepEqual(result.data, { node: null, nodes: [null] });
-    } finally {
-      globalNodeRouteMap.set('$Notifications', originalRoute);
-    }
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.node, null);
   });
 
   test('hides notifications when the shared visible predicate fails', async () => {
@@ -274,7 +262,7 @@ describe('Notification GraphQL Node boundary', () => {
       missingSourceNotification.id,
       mismatchNotification.id,
       hiddenRelatedNotification.id,
-    ];
+    ].map((id) => encodeGlobalId('FollowNotification', id));
     assert.deepEqual(
       await loadNodes(ids, auth.token),
       ids.map(() => null),
@@ -360,11 +348,15 @@ const createFollow = (followeeProfileId: string, followerProfileId: string) =>
     .returning()
     .then(firstOrThrow);
 
-const createFollowNotification = async (recipientProfileId: string, relatedProfileId: string) => {
+const createFollowNotification = async (
+  recipientProfileId: string,
+  relatedProfileId: string,
+  id?: string,
+) => {
   const source = await createFollow(recipientProfileId, relatedProfileId);
   return db
     .insert(Notifications)
-    .values({ kind: NotificationKind.FOLLOW, recipientProfileId, sourceId: source.id })
+    .values({ id, kind: NotificationKind.FOLLOW, recipientProfileId, sourceId: source.id })
     .returning()
     .then(firstOrThrow);
 };

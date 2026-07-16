@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18.4-alpine
     ports:
       - '${POSTGRES_PORT:-54329}:5432'
     environment:

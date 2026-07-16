@@ -130,15 +130,15 @@ API는 로그인 Account가 Account-Profile membership을 가진 Profile의 Noti
 - **THEN** `Notification implements Node` interface는 `id`, `createdAt`, nullable `readAt`을 제공한다
 - **AND** `FollowNotification implements Notification & Node` concrete object는 non-null `relatedProfile`을 제공한다
 - **AND** `notification.kind = FOLLOW`인 row는 `FollowNotification`으로 resolve된다
-- **AND** 단일 `Notifications` discriminator의 Node 조회는 row의 kind에 맞는 concrete object를 반환하며 concrete object typename 하나나 loadable ref가 없는 interface typename에 직접 매핑되지 않는다
+- **AND** 각 concrete Notification object는 자신의 concrete typename과 notification DB UUID를 opaque global ID로 반환한다
 - **AND** `Profile.notifications`는 `NotificationConnection`을, `Profile.unreadNotificationCount`는 음수가 아닌 정수를 반환한다
 - **AND** API는 public `NotificationType` enum, 공통 `type` field, raw `kind`, `source_id`, `data`나 과거 이름·handle snapshot을 노출하지 않는다
 - **AND** 클라이언트는 `... on FollowNotification` inline fragment로 Follow 전용 field를 선택한다
 
-#### Scenario: Shared discriminator Notification Node 조회
+#### Scenario: Concrete global ID Notification Node 조회
 
-- **WHEN** 클라이언트가 visible FOLLOW Notification ID를 `node(id:)`에 제공한다
-- **THEN** API는 `Notifications` discriminator의 ID를 batch load하고 row의 kind를 확인한다
+- **WHEN** 클라이언트가 visible FollowNotification global ID를 `node(id:)`에 제공한다
+- **THEN** API는 global ID의 concrete typename으로 FollowNotification loader를 선택하고 DB UUID로 row를 batch load한다
 - **AND** membership과 visible predicate를 적용한 뒤 `kind = FOLLOW` row를 `FollowNotification` concrete object로 반환한다
 - **AND** 지원하지 않는 kind, membership이 없는 Recipient 또는 hidden row는 다른 concrete type이나 generic Notification으로 잘못 route하지 않고 `null`을 반환한다
 
@@ -176,7 +176,7 @@ API는 로그인 Account가 Account-Profile membership을 가진 Profile의 Noti
 
 ### Requirement: Visible ID-ordered Notification pagination
 
-API는 source가 저장 Recipient와 일치하고 Related Profile을 조회할 수 있는 Notification만 Kosmo UUID v8 ID 순서의 stable Relay connection에 포함해야 한다(MUST). 같은 millisecond에 생성된 item 사이의 생성 순서와 concurrent insert snapshot은 보장하지 않는다.
+API는 source가 저장 Recipient와 일치하고 Related Profile을 조회할 수 있는 Notification만 DB UUID ID 순서의 stable Relay connection에 포함해야 한다(MUST). 기존 UUIDv8과 신규 UUIDv7은 함께 조회되며 같은 millisecond에 생성된 item 사이의 생성 순서와 concurrent insert snapshot은 보장하지 않는다.
 
 #### Scenario: 첫 페이지 정렬과 filtering
 

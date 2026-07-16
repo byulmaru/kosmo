@@ -33,7 +33,7 @@
 - **THEN** 시스템은 같은 transaction에서 follower profile의 following count와 followee profile의 followers count를 1씩 감소시킨다
 - **AND** 저장 count는 0보다 작아질 수 없다
 - **AND** follow 관계가 없어 idempotent unfollow로 처리되는 경우에는 저장 count를 변경하지 않는다
-- **AND** 조건부 삭제가 expected row/generation 불일치로 적용되지 않으면 저장 count도 변경하지 않는다
+- **AND** 조건부 삭제가 expected row 불일치로 적용되지 않으면 저장 count도 변경하지 않는다
 
 #### Scenario: Preserve stored relation and counts when a remote instance is suspended
 
@@ -52,9 +52,9 @@
 - **AND** remote collection count가 kosmo가 저장한 known `ProfileFollow` edge를 이미 포함하더라도 이번 capability는 해당 edge를 deduplicate하는 별도 count reconciliation model을 두지 않는다
 - **AND** refresh에서 collection count를 확인할 수 없으면 기존 저장 count를 임의로 0으로 덮어쓰지 않는다
 
-### Requirement: Remote follow activity correlation storage
+### Requirement: Remote follow activity projection
 
-시스템은 ActivityPub remote Follow activity를 established `ProfileFollow` 관계 또는 inbound pending `ProfileFollowRequest` 요청에 연결해 후속 Accept/Reject/Undo 처리에 필요한 correlation 정보를 저장할 수 있어야 한다(MUST).
+시스템은 ActivityPub remote Follow activity를 established `ProfileFollow` 관계 또는 inbound pending `ProfileFollowRequest` 요청으로 투영하고, 별도 inbound correlation 저장 없이 actor pair와 현재 저장 identity로 후속 처리를 검증할 수 있어야 한다(MUST).
 
 #### Scenario: Derive outbound remote Follow correlation
 
@@ -69,22 +69,21 @@
 - **AND** outbound Follow activity identity는 kosmo가 발송하는 Follow/Undo transport identity로 안정적이어야 하지만, remote server가 후속 Accept/Reject object에서 이 identity를 보존한다는 것을 필수 전제로 삼지 않는다
 - **AND** Fedify `orderingKey`는 follower actor URI와 followee actor URI pair에서 안정적으로 파생되어 같은 pair의 모든 outbound Follow와 Undo(Follow)에 재사용되어야 한다
 - **AND** 후속 Fedify transport retry는 같은 `ProfileFollow` row에서 같은 Follow activity identity를 다시 파생할 수 있어야 한다
-- **AND** PROD-242 outbound mutation은 `ProfileFollowRequest`를 만들지 않으며, approval-required request lifecycle과 correlation은 PROD-272가 별도 경계에서 다룬다
+- **AND** PROD-242 outbound mutation은 `ProfileFollowRequest`를 만들지 않으며, inbound remote request 생성은 PROD-243이, local request 생성과 local/remote 공통 처리 lifecycle은 PROD-272가 별도 경계에서 다룬다
 - **AND** Fedify delivery queue/retry 설정과 운영 검증은 후속 capability 범위이며, transport delivery retry와 queue 상태는 도메인 테이블에 중복 저장하지 않는다
 
-#### Scenario: Store inbound remote Follow correlation
+#### Scenario: Project inbound remote Follow without correlation storage
 
 - **WHEN** remote ActivityPub profile이 local profile을 follow한다
 - **THEN** 시스템은 local follow policy에 따라 remote follower와 local followee 사이의 established `ProfileFollow` 관계 또는 pending `ProfileFollowRequest` 요청을 저장한다
-- **AND** inbound Follow activity identity, response metadata, generation timestamp는 duplicate correlation, Undo freshness guard, Accept/Reject response 구성에 사용할 수 있어야 한다
-- **AND** 같은 remote follower와 local followee pair의 pending `ProfileFollowRequest`가 이미 있으면 기존 inbound Follow activity identity 또는 response metadata를 유지하고 새 duplicate Follow의 metadata로 갱신하지 않는다
-- **AND** 같은 remote follower와 local followee pair의 established `ProfileFollow`가 이미 있으면 기존 inbound Follow response metadata를 유지하고 같은 id의 재전달 또는 새 Follow id를 가진 duplicate Follow의 metadata로 갱신하지 않는다
-- **AND** duplicate Follow가 검증되면 first-wins response metadata를 유지하더라도 inbound Follow generation timestamp는 현재 저장된 timestamp보다 최신인 Follow activity timestamp로 갱신할 수 있어야 한다
-- **AND** duplicate inbound Follow에 대한 `Accept(Follow)` response object는 저장된 first-wins metadata가 아니라 현재 검증을 통과한 수신 Follow object를 사용할 수 있어야 한다
-- **AND** inbound `Undo(Follow)`는 저장된 inbound Follow id가 다르거나 object id가 없더라도 verified same actor/object이고 activity timestamp가 현재 inbound Follow generation timestamp보다 오래되지 않았으면 해당 관계 또는 request를 취소하는 의사로 처리할 수 있어야 한다
-- **AND** relation/request 삭제는 exact row와 expected generation이 모두 일치할 때만 적용되고, established relation을 실제 삭제한 transaction만 저장 count를 감소시켜야 한다
-- **AND** IRI-only `Undo.object`는 이번 capability에서 inbound Follow metadata로 역조회하지 않고 side effect 없이 무시할 수 있어야 한다
-- **AND** Fedify inbox idempotency는 조기 중복 제거로만 사용하고, durable relation/request side effect는 PostgreSQL unique 제약과 correlation/generation 조건이 source of truth여야 한다
+- **AND** inbound Follow activity id, actor URI와 object URI를 `ProfileFollow` 또는 `ProfileFollowRequest`에 별도 저장하지 않아야 한다
+- **AND** 같은 remote follower와 local followee pair의 pending `ProfileFollowRequest`가 이미 있으면 새 duplicate Follow metadata를 저장하지 않고 기존 request를 유지한다
+- **AND** 같은 remote follower와 local followee pair의 established `ProfileFollow`가 이미 있으면 같은 id의 재전달 또는 새 Follow id를 가진 duplicate Follow에서도 기존 관계를 유지한다
+- **AND** duplicate inbound Follow에 대한 `Accept(Follow)` response object는 현재 검증을 통과한 수신 Follow object를 사용해야 한다
+- **AND** inbound `Undo(Follow)`는 Follow id를 저장하거나 비교하지 않고 verified same actor/object이면 현재 관계 또는 request를 취소하는 의사로 처리할 수 있어야 한다
+- **AND** relation/request 삭제는 처리 중 확인한 exact row가 일치할 때만 적용되고, established relation을 실제 삭제한 transaction만 저장 count를 감소시켜야 한다
+- **AND** IRI-only `Undo.object`는 이번 capability에서 relation/request로 역조회하지 않고 follow graph/request side effect 없이 무시할 수 있어야 하며, 저장된 actor instance의 reachability 복구는 이 제한에 포함하지 않는다
+- **AND** Fedify inbox idempotency는 조기 중복 제거로만 사용하고, durable relation/request side effect는 PostgreSQL unique 제약과 exact-row 조건이 source of truth여야 한다
 
 #### Scenario: Remove rejected remote follow projection
 
@@ -107,10 +106,10 @@
 - **AND** 동일한 팔로워와 팔로위 조합은 중복될 수 없다
 - **AND** 팔로워 또는 팔로위 프로필이 삭제되면 팔로우 관계도 함께 삭제된다
 
-#### Scenario: 원격 팔로우 activity correlation 추적
+#### Scenario: 원격 팔로우 activity projection 추적
 
 - **WHEN** 팔로우 관계가 ActivityPub remote profile을 포함한다
-- **THEN** inbound Follow activity identity, actor/object URI, generation과 response metadata는 해당 `ProfileFollow` 관계 또는 inbound `ProfileFollowRequest` 요청과 연결할 수 있어야 한다
+- **THEN** inbound Follow는 별도 activity identity나 actor/object metadata 없이 actor pair의 `ProfileFollow` 관계 또는 inbound `ProfileFollowRequest` 요청으로 투영해야 한다
 - **AND** outbound Follow identity, actor/object URI, generation과 Fedify `orderingKey`는 established `ProfileFollow`와 저장된 actor identity에서 안정적으로 파생할 수 있어야 한다
 - **AND** Accept, Reject, Undo activity identity의 durable history 저장은 이번 domain table 요구사항이 아니며 Fedify idempotency 또는 후속 activity log capability의 책임이다
 - **AND** transport delivery retry와 queue metadata는 Fedify가 소유하며 local-only follow 관계의 필수 값이 아니다

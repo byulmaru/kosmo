@@ -10,7 +10,6 @@ import { AccountProfileRole, ProfileFollowPolicy } from '@kosmo/core/enums';
 import { NotFoundError, PermissionDeniedError } from '@kosmo/core/error';
 import { profileBioSchema, profileDisplayNameSchema } from '@kosmo/core/validation';
 import { and, eq } from 'drizzle-orm';
-import { z } from 'zod';
 import { builder } from '@/graphql/builder';
 import { visibleProfileWhere } from '@/profile/visibility';
 import { Profile } from '../ref';
@@ -23,7 +22,7 @@ builder.mutationField('updateProfile', (t) =>
       }),
     }),
     input: {
-      id: t.input.id({ validate: z.uuid() }),
+      id: t.input.globalID({ for: Profile }),
       displayName: t.input.string({
         required: false,
         validate: profileDisplayNameSchema.optional(),
@@ -39,7 +38,7 @@ builder.mutationField('updateProfile', (t) =>
         .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
         .where(
           and(
-            eq(Profiles.id, input.id),
+            eq(Profiles.id, input.id.id),
             eq(AccountProfiles.accountId, ctx.session.accountId),
             visibleProfileWhere({ profile: Profiles, instance: Instances }),
           ),
@@ -61,7 +60,7 @@ builder.mutationField('updateProfile', (t) =>
           bio: input.bio,
           followPolicy: input.followPolicy ?? undefined,
         })
-        .where(eq(Profiles.id, input.id))
+        .where(eq(Profiles.id, input.id.id))
         .returning()
         .then(firstOrThrow);
 

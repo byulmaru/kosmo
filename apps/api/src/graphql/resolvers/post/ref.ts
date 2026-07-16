@@ -1,4 +1,4 @@
-import { db, Instances, PostContents, Posts, Profiles, TableDiscriminator } from '@kosmo/core/db';
+import { db, Instances, PostContents, Posts, Profiles } from '@kosmo/core/db';
 import { PostState, PostVisibility } from '@kosmo/core/enums';
 import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
@@ -6,7 +6,7 @@ import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
 import { postVisibilityAccessWhere } from './access/visibility';
 
-export const Post = createObjectRef('Post', TableDiscriminator.Posts, (ids, ctx) =>
+export const Post = createObjectRef('Post', (ids, ctx) =>
   db
     .select(getColumns(Posts))
     .from(Posts)
@@ -33,17 +33,14 @@ export const PostConnection = builder.connectionObject(
   },
 );
 
-export const PostContent = createObjectRef(
-  'PostContent',
-  TableDiscriminator.PostContents,
-  (ids, ctx) =>
-    db
-      .select(getColumns(PostContents))
-      .from(PostContents)
-      .innerJoin(Posts, eq(Posts.id, PostContents.postId))
-      .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .where(and(inArray(PostContents.id, ids), postVisibilityAccessWhere({ ctx }))),
+export const PostContent = createObjectRef('PostContent', (ids, ctx) =>
+  db
+    .select(getColumns(PostContents))
+    .from(PostContents)
+    .innerJoin(Posts, eq(Posts.id, PostContents.postId))
+    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .where(and(inArray(PostContents.id, ids), postVisibilityAccessWhere({ ctx }))),
 );
 
 PostContent.implement({

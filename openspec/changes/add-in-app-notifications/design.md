@@ -29,7 +29,7 @@
 
 `notification` 하나가 저장 projection이며 GraphQL에서는 공통 `Notification` interface와 kind별 concrete object로 해석된다.
 
-- `id uuid`: Kosmo UUID v8과 하나의 `Notifications` discriminator.
+- `id uuid`: 기존 UUIDv8과 신규 UUIDv7이 공존하는 Notification DB identity. GraphQL concrete type은 ID bit가 아니라 global ID typename과 저장 `kind`로 검증한다.
 - `recipient_profile_id uuid`: `profile.id` foreign key. Recipient Profile 물리 삭제에는 cascade한다.
 - `kind notification_kind`: 현재 `FOLLOW`만 지원한다.
 - `source_id uuid`: kind가 가리키는 source ID. 의도적으로 foreign key를 만들지 않는다.
@@ -38,7 +38,7 @@
 
 `(recipient_profile_id, kind, source_id)` unique constraint는 같은 Recipient, kind와 source 조합의 item 하나를 보장하면서 하나의 source가 여러 Recipient에게 투영되는 후속 kind를 허용한다. Recipient-first 물리 순서는 Recipient 기준 접근을 우선한다. source-only cleanup을 위한 별도 `(kind, source_id)` index는 선제 추가하지 않고, 실제 cleanup 구현에서 필요가 확인될 때 별도 범위로 결정한다. `(recipient_profile_id, id DESC)` index는 inbox pagination을, `read_at IS NULL` 조건의 Recipient partial index는 Unread count 후보를 지원한다. `created_at`은 표시 값이며 정렬 key로 중복 사용하지 않는다.
 
-FOLLOW에서 `source_id`는 `profile_follow.id`이고 `data`는 `{}`다. Recipient는 Followee, Related Profile은 Follower에서 조회 시 파생한다. Profile ID, 이름·handle snapshot을 `data`에 복제하지 않는다. 별도 `notification_follow` table, type별 discriminator, source FK, cleanup trigger와 deferred integrity constraint는 만들지 않는다. 새 Profile-scoped kind가 생기면 그 시점에 enum, source mapping과 실제 필요한 data shape만 추가한다. Account-scoped Operational Notification의 저장 구조는 해당 kind의 별도 change가 결정한다.
+FOLLOW에서 `source_id`는 `profile_follow.id`이고 `data`는 `{}`다. Recipient는 Followee, Related Profile은 Follower에서 조회 시 파생한다. Profile ID, 이름·handle snapshot을 `data`에 복제하지 않는다. 별도 `notification_follow` table, source FK, cleanup trigger와 deferred integrity constraint는 만들지 않는다. 새 Profile-scoped kind가 생기면 그 시점에 enum, source mapping과 실제 필요한 data shape만 추가한다. Account-scoped Operational Notification의 저장 구조는 해당 kind의 별도 change가 결정한다.
 
 ### source 저장·삭제와 failure boundary
 
@@ -54,7 +54,7 @@ FOLLOW에서 `source_id`는 `profile_follow.id`이고 `data`는 `{}`다. Recipie
 
 Notification resolver module은 `Notification` interface, kind별 concrete object, kind-aware Node resolution, connection, Profile fields와 Read mutation을 소유한다. 저장 row의 `kind`가 concrete GraphQL type을 결정하며 `kind` 자체는 public enum이나 공통 field로 노출하지 않는다.
 
-현재 공용 Node decode는 UUID discriminator를 `globalIdMap`의 단일 object typename으로 바꾸고 해당 loadable Node ref를 찾으므로 shared discriminator를 그대로 처리할 수 없다. `Notifications` discriminator를 `FollowNotification`에 직접 등록하거나 loadable Node ref가 없는 `Notification` interface 이름에 등록해서는 안 된다. 권장 접근은 Notification 전용 Node route가 ID를 batch load하고 membership과 visible predicate를 적용한 뒤 row의 `kind`에 따라 concrete object type을 부여하는 것이다. 구현자는 같은 불변 조건을 만족하는 동등한 Node resolution 방식을 선택할 수 있으며, 구체적인 registry와 loader 구조는 `PROD-275` 구현에서 결정한다. 현재 `FOLLOW`는 `FollowNotification`으로 resolve하고 지원하지 않는 kind나 hidden row는 Node 없음으로 정규화한다.
+공용 Node decode는 global ID의 concrete typename으로 loadable Node ref를 직접 선택한다. `FollowNotification` ref는 decode된 Notification DB UUID를 batch load하고 membership·visible predicate와 `kind = FOLLOW`를 함께 검증한다. `Notification` interface typename을 ID에 encode하거나 typename/row mismatch에서 다른 concrete loader를 추론하지 않는다. 후속 kind는 자신의 concrete ref와 loader를 추가하며 지원하지 않는 kind나 hidden row는 Node 없음으로 정규화한다.
 
 - `Profile.notifications`: target Profile의 visible `NotificationConnection`.
 - `Profile.unreadNotificationCount`: 같은 visible predicate를 만족하는 unread item 수.
@@ -84,7 +84,7 @@ FOLLOW item은 다음 조건을 모두 만족할 때만 API에 존재한다.
 
 Connection query는 이 predicate를 SQL에서 적용한 뒤 `id DESC` keyset limit을 적용한다. page를 먼저 가져온 뒤 hidden row를 애플리케이션에서 버리지 않는다. Unread count, Node와 Read mutation도 같은 source/visibility predicate를 재사용한다. 이로써 hidden row가 short page, 잘못된 page info, badge drift나 Read side channel을 만들지 않는다.
 
-opaque cursor에는 마지막 Notification ID를 담고 다음 page는 `id < cursor`를 사용한다. 현재 `createId`의 UUID v8은 millisecond timestamp 뒤에 random tail을 사용하므로 같은 millisecond의 생성 순서와 새 item의 page 배치는 보장하지 않는다. 이 제한은 현재 제품 범위에서 허용한다. 반환되는 `FollowNotification`은 Related Profile이 실제로 조회 가능한 경우뿐이므로 `relatedProfile`은 non-null이다. raw `kind`, `source_id`와 `data`는 API에 노출하지 않는다.
+opaque cursor에는 마지막 Notification DB UUID를 담고 다음 page는 `id < cursor`를 사용한다. 기존 UUIDv8과 신규 UUIDv7은 같은 millisecond timestamp 위치 뒤에 random tail을 사용하므로 함께 정렬할 수 있지만 같은 millisecond의 생성 순서와 새 item의 page 배치는 보장하지 않는다. 이 제한은 현재 제품 범위에서 허용한다. 반환되는 `FollowNotification`은 Related Profile이 실제로 조회 가능한 경우뿐이므로 `relatedProfile`은 non-null이다. raw `kind`, `source_id`와 `data`는 API에 노출하지 않는다.
 
 Read update는 membership과 visible predicate를 같은 SQL 경계에 포함하고 `read_at = coalesce(read_at, now())` 의미로 최초 시각을 보존한다. payload의 Recipient Profile을 함께 반환해 Relay가 item `readAt`과 정확한 Profile의 count를 함께 갱신할 수 있게 한다.
 
@@ -125,7 +125,7 @@ DB row와 기존 `read_at`은 비동기 cleanup 전까지 남을 수 있다. cle
 
 ## Migration Plan
 
-1. `PROD-325`에서 additive `notification` schema, `notification_kind`, discriminator, Recipient FK, source uniqueness와 조회 index를 배포한다. 기존 `ProfileFollow`는 backfill하지 않는다.
+1. `PROD-325`에서 additive `notification` schema, `notification_kind`, Recipient FK, source uniqueness와 조회 index를 배포한다. 기존 Notification UUIDv8과 `ProfileFollow`는 backfill하지 않는다.
 2. `PROD-274` 저장 경계와 `PROD-275` GraphQL/Node·공통 visible 조회 기반을 schema 위에 병렬로 구현한다.
 3. `PROD-275` 뒤 `PROD-352` connection, `PROD-351` Unread count와 `PROD-350` Read mutation을 독립 PR로 구현한다.
 4. `PROD-281`의 공용 ProfileFollow action과 `PROD-274`가 준비되면 `PROD-276` create/delete source integration을 연결한다.

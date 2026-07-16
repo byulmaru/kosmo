@@ -10,7 +10,6 @@
 
 - Git 브랜치 ancestry와 GitHub PR의 `baseRefName`/`headRefName`을 source of truth로 삼는다.
 - stacked PR에서는 GitHub PR base가 리뷰 순서를 결정하므로 모든 PR의 `baseRefName`이 의도한 부모 브랜치를 가리키는지 확인한다.
-- Codex sandbox에서 `gh` CLI 인증은 실패하므로 `gh` 명령은 escalated permissions로 실행한다.
 
 ## Common Checks
 

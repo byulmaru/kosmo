@@ -10,6 +10,18 @@
 - 관련 리뷰를 작성하거나 수정할 때는 실제 재현 로그 없이 재귀 실행을 단정하지 않는다.
 - 루트 script 래퍼 구조를 바꾸는 경우, 이 메모의 전제가 여전히 맞는지 확인하고 변경 사항을 업데이트한다.
 
+## Non-interactive pnpm execution
+
+- `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY`가 발생하면 같은 명령을 그대로 반복하지 않는다.
+- 이미 설치된 workspace 도구를 실행하려는 경우에는 repository script 또는 `./node_modules/.bin/<tool>`을 우선 사용한다.
+- dependency 동기화가 실제로 필요한 경우에만 `CI=true pnpm install`을 한 번 실행한 뒤 원래 검증 명령을 다시 실행한다.
+
+## Disposable test database
+
+- 공용 `kosmo_test` schema가 현재 코드보다 뒤처져 DB-backed 테스트가 실패하면 `pnpm db:test:reset && pnpm db:test:push`로 초기화한 뒤 다시 검증한다.
+- 병렬 작업이나 테스트 간 격리가 필요하면 `node scripts/test-db.mjs run -- <command>`로 고유 test database를 할당한다.
+- test database의 schema 불일치를 구현 결함으로 판단하기 전에 위 초기화 또는 격리 절차로 재현 여부를 확인한다.
+
 ## Script And Tooling Review
 
 - 실행 스크립트는 명령이 성공하는지만 보지 말고 사용자가 기대하는 visible workflow까지 확인한다.

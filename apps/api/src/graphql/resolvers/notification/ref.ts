@@ -1,8 +1,8 @@
-import { db, Notifications, ProfileFollows, TableDiscriminator } from '@kosmo/core/db';
+import { db, Notifications, ProfileFollows } from '@kosmo/core/db';
 import { NotificationKind } from '@kosmo/core/enums';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { registerNodeRoute } from '@/graphql/utils';
+import { createObjectRef } from '@/graphql/utils';
 import {
   NotificationRecipientInstances,
   NotificationRecipientProfiles,
@@ -36,45 +36,42 @@ Notification.implement({
   resolveType: (notification) => notificationNodeType(notification.kind),
 });
 
-export const FollowNotification = builder.objectRef<FollowNotificationRow>('FollowNotification');
+export const FollowNotification = createObjectRef<FollowNotificationRow>(
+  'FollowNotification',
+  async (ids, ctx) => {
+    const rows = await db
+      .select({
+        ...getColumns(Notifications),
+        relatedProfileId: ProfileFollows.followerProfileId,
+      })
+      .from(Notifications)
+      .innerJoin(ProfileFollows, eq(ProfileFollows.id, Notifications.sourceId))
+      .innerJoin(
+        NotificationRecipientProfiles,
+        eq(NotificationRecipientProfiles.id, Notifications.recipientProfileId),
+      )
+      .innerJoin(
+        NotificationRecipientInstances,
+        eq(NotificationRecipientInstances.id, NotificationRecipientProfiles.instanceId),
+      )
+      .innerJoin(
+        NotificationRelatedProfiles,
+        eq(NotificationRelatedProfiles.id, ProfileFollows.followerProfileId),
+      )
+      .innerJoin(
+        NotificationRelatedInstances,
+        eq(NotificationRelatedInstances.id, NotificationRelatedProfiles.instanceId),
+      )
+      .where(and(inArray(Notifications.id, ids), visibleFollowNotificationWhere({ ctx })));
+
+    return rows;
+  },
+);
 
 FollowNotification.implement({
-  interfaces: [builder.nodeInterfaceRef(), Notification],
+  interfaces: [Notification],
   fields: (t) => ({
-    id: t.id({ resolve: (notification) => notification.id }),
     createdAt: t.expose('createdAt', { type: 'DateTime' }),
     readAt: t.expose('readAt', { type: 'DateTime', nullable: true }),
   }),
-});
-
-registerNodeRoute('$Notifications', TableDiscriminator.Notifications, async (ids, ctx) => {
-  const rows = await db
-    .select({
-      ...getColumns(Notifications),
-      relatedProfileId: ProfileFollows.followerProfileId,
-    })
-    .from(Notifications)
-    .innerJoin(ProfileFollows, eq(ProfileFollows.id, Notifications.sourceId))
-    .innerJoin(
-      NotificationRecipientProfiles,
-      eq(NotificationRecipientProfiles.id, Notifications.recipientProfileId),
-    )
-    .innerJoin(
-      NotificationRecipientInstances,
-      eq(NotificationRecipientInstances.id, NotificationRecipientProfiles.instanceId),
-    )
-    .innerJoin(
-      NotificationRelatedProfiles,
-      eq(NotificationRelatedProfiles.id, ProfileFollows.followerProfileId),
-    )
-    .innerJoin(
-      NotificationRelatedInstances,
-      eq(NotificationRelatedInstances.id, NotificationRelatedProfiles.instanceId),
-    )
-    .where(and(inArray(Notifications.id, ids), visibleFollowNotificationWhere({ ctx })));
-
-  return rows.flatMap((row) => {
-    const notification = resolveNotificationNode(row);
-    return notification ? [notification] : [];
-  });
 });

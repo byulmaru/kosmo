@@ -7,19 +7,9 @@ import SimpleObjectsPlugin from '@pothos/plugin-simple-objects';
 import ValidationPlugin from '@pothos/plugin-validation';
 import WithInputPlugin from '@pothos/plugin-with-input';
 import * as R from 'remeda';
-import { globalIdMap, globalNodeRouteMap } from './utils';
+import { decodeGlobalId, encodeGlobalId } from './global-id';
 import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
 import type { SessionContext, SessionWithProfileContext, UserContext } from '@/context';
-
-const resolveGlobalNode = async (id: { id: string; typename: string }, ctx: UserContext) => {
-  const load = globalNodeRouteMap.get(id.typename);
-
-  if (!load) {
-    throw new Error(`Unknown node route`);
-  }
-
-  return (await load([id.id], ctx))[0] ?? null;
-};
 
 export const builder = new SchemaBuilder<{
   AuthContexts: {
@@ -67,22 +57,8 @@ export const builder = new SchemaBuilder<{
     },
   },
   relay: {
-    encodeGlobalID: (_, id) => String(id),
-    decodeGlobalID: (id) => {
-      const typename = globalIdMap.get(Number.parseInt(id.replaceAll('-', '').slice(13, 16), 16));
-
-      if (!typename) {
-        throw new Error(`Unknown global id type code`);
-      }
-
-      return { id, typename };
-    },
-    nodeQueryOptions: {
-      resolve: (_, { id }, ctx) => resolveGlobalNode(id, ctx),
-    },
-    nodesQueryOptions: {
-      resolve: (_, { ids }, ctx) => Promise.all(ids.map((id) => resolveGlobalNode(id, ctx))),
-    },
+    decodeGlobalID: decodeGlobalId,
+    encodeGlobalID: encodeGlobalId,
   },
   scopeAuth: {
     authScopes: async (ctx) => ({

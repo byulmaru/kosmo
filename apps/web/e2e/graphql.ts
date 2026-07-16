@@ -1,4 +1,8 @@
+import { parse as parseUuid } from 'uuid';
 import type { Page } from '@playwright/test';
+
+export const toGlobalId = (typename: string, id: string) =>
+  Buffer.concat([Buffer.from(parseUuid(id)), Buffer.from(typename, 'ascii')]).toString('base64url');
 
 export type GraphQLOperation = {
   operationName?: string | null;

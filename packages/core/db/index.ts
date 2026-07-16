@@ -3,7 +3,6 @@ import postgres from 'postgres';
 import * as enums from './enums';
 import * as tables from './tables';
 
-export * from './id';
 export * from './tables';
 export * from './utils';
 

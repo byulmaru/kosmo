@@ -31,6 +31,7 @@ let pg: typeof CoreDb.pg;
 let Profiles: typeof CoreDb.Profiles;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let findOrMaterializeRemoteProfileActor: typeof Materialization.findOrMaterializeRemoteProfileActor;
+let findOrMaterializeRemoteProfileActorByUri: typeof Materialization.findOrMaterializeRemoteProfileActorByUri;
 let materializeRemoteProfileActor: typeof Materialization.materializeRemoteProfileActor;
 let RemoteActorMaterializationError: typeof Materialization.RemoteActorMaterializationError;
 
@@ -46,6 +47,7 @@ describe('remote actor materialization', () => {
     ({ seedDatabase } = await import('@kosmo/core/db/seed'));
     ({
       findOrMaterializeRemoteProfileActor,
+      findOrMaterializeRemoteProfileActorByUri,
       materializeRemoteProfileActor,
       RemoteActorMaterializationError,
     } = await import('./remote-actor-materialization'));
@@ -81,7 +83,10 @@ describe('remote actor materialization', () => {
     assert.equal(profile.followPolicy, ProfileFollowPolicy.APPROVAL_REQUIRED);
     assert.equal(profile.createdAt.toString(), '2024-01-02T03:04:05Z');
     assert.equal(lookupObject.mock.calls.length, 1);
-    assert.equal(lookupObject.mock.calls[0]?.arguments[0], `acct:alice@${remoteDomain}`);
+    assert.equal(
+      (lookupObject.mock.calls as unknown as Array<{ arguments: unknown[] }>)[0]?.arguments[0],
+      `acct:alice@${remoteDomain}`,
+    );
 
     const stored = await db
       .select({ actor: ActivityPubActors, instance: Instances })
@@ -102,6 +107,113 @@ describe('remote actor materialization', () => {
     assert.equal(stored.actor.followingUri, `https://${remoteDomain}/users/alice/following`);
     assert.equal(stored.actor.sharedInboxUri, `https://${remoteDomain}/inbox`);
     assert.equal(stored.actor.lastFetchedAt?.toString(), now.toString());
+  });
+
+  for (const mediaType of [
+    'application/activity+json',
+    'application/ld+json; profile="https://www.w3.org/ns/activitystreams"',
+  ]) {
+    test(`materializes an inbound actor URI from WebFinger self type ${mediaType}`, async () => {
+      const actor = createActor();
+      const lookupObject = mock.fn(async () => actor);
+      const lookupWebFinger = mock.fn(async () => ({
+        links: [{ href: actor.id?.href, rel: 'self', type: mediaType }],
+        subject: `acct:alice@${remoteDomain}`,
+      }));
+
+      const result = await findOrMaterializeRemoteProfileActorByUri({
+        actorUri: actor.id!,
+        context: { lookupObject, lookupWebFinger } as unknown as Context<void>,
+      });
+
+      assert.equal(result.actor.uri, actor.id?.href);
+      assert.equal(lookupWebFinger.mock.calls.length, 1);
+      assert.equal(
+        (lookupObject.mock.calls as unknown as Array<{ arguments: unknown[] }>)[0]?.arguments[0],
+        `acct:alice@${remoteDomain}`,
+      );
+    });
+  }
+
+  test('reactivates an unknown actor instance only after materialization succeeds', async () => {
+    const instance = await createRemoteInstance({ state: InstanceState.UNRESPONSIVE });
+    const actor = createActor();
+    const lookupObject = mock.fn(async () => actor);
+    const lookupWebFinger = mock.fn(async () => ({
+      links: [{ href: actor.id?.href, rel: 'self', type: 'application/activity+json' }],
+      subject: `acct:alice@${remoteDomain}`,
+    }));
+
+    await findOrMaterializeRemoteProfileActorByUri({
+      actorUri: actor.id!,
+      context: { lookupObject, lookupWebFinger } as unknown as Context<void>,
+    });
+
+    const reactivated = await db
+      .select()
+      .from(Instances)
+      .where(eq(Instances.id, instance.id))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(reactivated.state, InstanceState.ACTIVE);
+  });
+
+  test('keeps an unknown actor instance UNRESPONSIVE when materialization fails', async () => {
+    const instance = await createRemoteInstance({ state: InstanceState.UNRESPONSIVE });
+    const actor = createActor();
+    const lookupObject = mock.fn(async () => null);
+    const lookupWebFinger = mock.fn(async () => ({
+      links: [{ href: actor.id?.href, rel: 'self', type: 'application/activity+json' }],
+      subject: `acct:alice@${remoteDomain}`,
+    }));
+
+    await assert.rejects(
+      findOrMaterializeRemoteProfileActorByUri({
+        actorUri: actor.id!,
+        context: { lookupObject, lookupWebFinger } as unknown as Context<void>,
+      }),
+      RemoteActorMaterializationError,
+    );
+
+    const preserved = await db
+      .select()
+      .from(Instances)
+      .where(eq(Instances.id, instance.id))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(preserved.state, InstanceState.UNRESPONSIVE);
+  });
+
+  test('reuses a stored inbound actor and reactivates UNRESPONSIVE with compare-and-set', async () => {
+    const stored = await createStoredRemoteActor({ instanceState: InstanceState.UNRESPONSIVE });
+    const lookupObject = mock.fn(async () => createActor());
+    const lookupWebFinger = mock.fn(async () => null);
+
+    const result = await findOrMaterializeRemoteProfileActorByUri({
+      actorUri: new URL(stored.actor.uri),
+      context: { lookupObject, lookupWebFinger } as unknown as Context<void>,
+    });
+
+    assert.equal(result.profile.id, stored.profile.id);
+    assert.equal(result.instance.state, InstanceState.ACTIVE);
+    assert.equal(lookupObject.mock.calls.length, 0);
+    assert.equal(lookupWebFinger.mock.calls.length, 0);
+  });
+
+  test('ignores a stored SUSPENDED inbound actor without network access', async () => {
+    const stored = await createStoredRemoteActor({ instanceState: InstanceState.SUSPENDED });
+    const lookupObject = mock.fn(async () => createActor());
+    const lookupWebFinger = mock.fn(async () => null);
+
+    await assert.rejects(
+      findOrMaterializeRemoteProfileActorByUri({
+        actorUri: new URL(stored.actor.uri),
+        context: { lookupObject, lookupWebFinger } as unknown as Context<void>,
+      }),
+      /Profile not found/,
+    );
+    assert.equal(lookupObject.mock.calls.length, 0);
+    assert.equal(lookupWebFinger.mock.calls.length, 0);
   });
 
   test('preserves the original handle casing during lookup', async () => {

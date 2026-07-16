@@ -1,8 +1,8 @@
-import { Accounts, db, TableDiscriminator } from '@kosmo/core/db';
+import { Accounts, db } from '@kosmo/core/db';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { createObjectRef } from '@/graphql/utils';
 
-export const Account = createObjectRef('Account', TableDiscriminator.Accounts, (ids, ctx) =>
+export const Account = createObjectRef('Account', (ids, ctx) =>
   db
     .select()
     .from(Accounts)
