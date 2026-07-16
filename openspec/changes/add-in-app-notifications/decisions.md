@@ -94,6 +94,16 @@
 - Consequences: `PROD-274`와 `PROD-276` target test만 Remote compatibility를 확인하고 대표 E2E는 Local→Local Follow를 사용한다.
 - Confirmation / Follow-up: 실제 inbound flow는 `PROD-243`과 그 선행 이슈가 소유한다.
 
+### Follow Notification create 경계가 eligibility를 소유한다
+
+- Decision Date: 2026-07-16
+- Status: Accepted
+- Context / Problem: ProfileFollow action이 eligibility와 저장 경계를 각각 호출하면 source에서 Recipient와 Related Profile을 파생하는 책임이 action과 Notification service에 나뉘고, 다른 호출자가 eligibility를 우회할 수 있다.
+- Decision Outcome: `createFollowNotification`은 established `ProfileFollow` source에서 Recipient와 Related Profile을 파생한 뒤 공통 eligibility evaluator를 먼저 호출하고, allow일 때만 기존 idempotent insert를 수행한다. evaluator가 없을 때는 default allow다. evaluator·source·저장 오류는 caller에 반환하며 ProfileFollow action이 commit 이후 이를 `await`하고 catch한다.
+- Alternatives Considered: ProfileFollow action이 eligibility와 저장 경계를 별도로 호출, 별도 policy-aware facade 추가, create 경계가 evaluator 오류를 내부에서 정상 no-op으로 삼킴.
+- Consequences: 모든 Follow Notification create 호출이 같은 eligibility 경계를 통과하고 후속 `PROD-327`은 evaluator만 연결할 수 있다. deny는 정상 no-op이지만 evaluator 오류는 source action에서 격리되며 direct caller는 오류를 관찰한다.
+- Confirmation / Follow-up: `PROD-276`이 default allow, deny, evaluator 오류, 저장 실패와 source action commit 보존을 검증한다.
+
 ### Notification API 권한은 Account-Profile membership이다
 
 - Decision Date: 2026-07-14

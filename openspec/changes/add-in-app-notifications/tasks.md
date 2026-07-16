@@ -35,8 +35,8 @@
 
 ## 7. PROD-276 ProfileFollow 생성·삭제에서 Follow 알림을 동기화한다
 
-- [ ] 7.1 `PROD-281` 공용 ProfileFollow action merge 뒤 새 Local Follow 관계에 공통 Notification eligibility port와 `PROD-274` create port를 연결하고 정책 미연결 기본값을 allow로 둔다.
-- [ ] 7.2 Follow transaction commit 뒤 eligibility/create를 같은 request에서 await하고 deny·fail-closed evaluator error·저장 실패를 catch해 Follow 성공을 보존한다.
+- [ ] 7.1 `PROD-274`의 Follow Notification create 경계가 source에서 Recipient·Related Profile을 파생한 뒤 공통 eligibility evaluator를 먼저 호출하고 정책 미연결 기본값을 allow로 사용하게 한다.
+- [ ] 7.2 `PROD-281`의 공용 Follow action이 transaction commit 뒤 eligibility를 포함하는 create 경계를 같은 request에서 await하고 deny·fail-closed evaluator error·저장 실패에도 Follow 성공을 보존하게 한다.
 - [ ] 7.3 정상 ProfileFollow 삭제 transaction commit 뒤 delete-by-source port를 같은 request에서 await하고 cleanup 실패가 Unfollow 성공을 바꾸지 않게 한다.
 - [ ] 7.4 동일 source integration 재진입과 정상 delete는 idempotent하게 만들고 사용자 duplicate Follow는 integration을 다시 호출하지 않으며 materialized Remote Follower도 origin 분기 없이 같은 port를 사용하게 한다.
 - [ ] 7.5 action test로 allow/deny/evaluator error, create/delete failure, duplicate/re-entry, Local/Remote Follower와 정상 cleanup을 검증하고 fire-and-forget, outbox/message queue, retry, backfill과 ActivityPub ingress가 추가되지 않았는지 확인한다.
