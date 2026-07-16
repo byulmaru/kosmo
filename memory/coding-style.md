@@ -41,6 +41,7 @@
 
 - API와 BFF가 공유하는 server business use case는 `packages/core/services`가 소유한다. GraphQL resolver와 HTTP route는 transport validation과 actor context를 처리한 뒤 service를 호출한다.
 - service는 production database implementation이 하나인 현재 구조에서 `getDatabaseConnection(tx)`로 optional transaction 또는 shared `db`를 선택한다. 여러 DB 작업을 원자적으로 수행하는 service는 선택한 connection에서 transaction 경계를 열어, caller transaction이 있으면 savepoint로 합류하고 없으면 shared `db`에서 transaction을 시작한다. test seam이나 복수 implementation 요구 없이 generic `Database`를 전달하는 추상화는 만들지 않는다.
+- 명시적 비관적 DB 락은 동시성 위반이 금전 거래처럼 심각하고 되돌리기 어려운 피해를 만드는 use case에만 사용한다. 팔로우 요청처럼 드문 race의 영향이 작고 복구 가능한 social interaction은 락으로 완전 직렬화하지 않으며, 상세 판단과 리뷰 근거는 `memory/database-design.md`의 Runtime Locking Policy를 따른다.
 - `packages/core/db`는 DB client, schema, relation과 DB 전용 utility를 소유하고 account/session 생성 같은 application transaction은 소유하지 않는다.
 - OIDC discovery와 code exchange처럼 transport 또는 protocol-specific 검증은 API/BFF 경계에 남기고, core service에는 검증된 identity와 business input만 전달한다.
 
