@@ -1,10 +1,12 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
-import { after, before, beforeEach, describe, test } from 'node:test';
+import { after, before, beforeEach, describe, mock, test } from 'node:test';
+import { Create, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
 import {
   AccountProfileRole,
   AccountState,
+  ActivityPubActorType,
   InstanceKind,
   InstanceState,
   PostState,
@@ -21,6 +23,7 @@ import { Hono } from 'hono';
 import { encodeGlobalId as globalId } from '../../../src/graphql/global-id';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type { handleInboundCreate as HandleInboundCreate } from '../../../../../packages/fedify/src/inbound-create';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
 import type { yoga as YogaRouter } from '../../../src/graphql';
 
@@ -31,6 +34,8 @@ const databaseUrl = 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
+let ActivityPubActors: typeof CoreDb.ActivityPubActors;
+let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
@@ -44,6 +49,7 @@ let Sessions: typeof CoreDb.Sessions;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let deriveContext: typeof DeriveContext;
 let yoga: typeof YogaRouter;
+let handleInboundCreate: typeof HandleInboundCreate;
 let app: Hono<Env>;
 let localInstanceId: string;
 
@@ -56,6 +62,8 @@ describe('GraphQL remote profile boundary', () => {
     ({
       AccountProfiles,
       Accounts,
+      ActivityPubActors,
+      ActivityPubPosts,
       db,
       firstOrThrow,
       Instances,
@@ -68,6 +76,7 @@ describe('GraphQL remote profile boundary', () => {
       Sessions,
     } = await import('@kosmo/core/db'));
     ({ seedDatabase } = await import('@kosmo/core/db/seed'));
+    ({ handleInboundCreate } = await import('../../../../../packages/fedify/src/inbound-create'));
 
     await truncateDatabase();
     const { localInstance } = await seedDatabase({ publicOrigin });
@@ -1077,6 +1086,276 @@ describe('GraphQL remote profile boundary', () => {
       .then(firstOrThrow);
     assert.equal(ownership.accountId, auth.account.id);
   });
+
+  test('reads a materialized remote Post and its history without the ActivityPub mapping or network', async () => {
+    const auth = await createAuthenticatedSession();
+    const author = await createStoredActivityPubAuthor({
+      domain: 'materialized.example',
+      handle: 'materialized',
+    });
+    const publishedAt = Temporal.Instant.from('2026-07-15T12:00:00Z');
+    const receivedAt = Temporal.Instant.from('2026-07-16T00:00:00Z');
+    const publishedAtGraphQL = publishedAt.toString({ smallestUnit: 'millisecond' });
+    const receivedAtGraphQL = receivedAt.toString({ smallestUnit: 'millisecond' });
+    const materialized = await materializeRemotePost({
+      actorUri: author.actorUri,
+      content: '<p>Hello from ActivityPub</p>',
+      objectUri: 'https://materialized.example/notes/1',
+      publishedAt,
+      receivedAt,
+      summary: '<p>Content warning</p>',
+      visibility: PostVisibility.PUBLIC,
+    });
+    const historicalCreatedAt = receivedAt.subtract({ hours: 1 });
+    const historical = await db
+      .insert(PostContents)
+      .values({
+        createdAt: historicalCreatedAt,
+        document: postContentDocumentFromText('Historical content'),
+        postId: materialized.post.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db.insert(ProfileFollows).values({
+      followerProfileId: auth.profile.id,
+      followeeProfileId: author.profile.id,
+    });
+
+    const variables = {
+      nodeIds: [
+        globalId('Post', materialized.post.id),
+        globalId('PostContent', materialized.content.id),
+        globalId('PostContent', historical.id),
+      ],
+      profileId: globalId('Profile', author.profile.id),
+    };
+    const beforeMappingRemoval = await requestRemotePostRead({
+      ...variables,
+      first: 10,
+      token: auth.token,
+    });
+
+    assertNoGraphQLErrors(beforeMappingRemoval);
+    assert.deepEqual(beforeMappingRemoval.data?.nodes, [
+      {
+        __typename: 'Post',
+        content: {
+          bodyText: 'Hello from ActivityPub',
+          contentWarning: 'Content warning',
+          createdAt: receivedAtGraphQL,
+          document: materialized.content.document,
+          id: globalId('PostContent', materialized.content.id),
+        },
+        createdAt: publishedAtGraphQL,
+        id: globalId('Post', materialized.post.id),
+        visibility: 'PUBLIC',
+      },
+      {
+        __typename: 'PostContent',
+        bodyText: 'Hello from ActivityPub',
+        contentWarning: 'Content warning',
+        createdAt: receivedAtGraphQL,
+        document: materialized.content.document,
+        id: globalId('PostContent', materialized.content.id),
+      },
+      {
+        __typename: 'PostContent',
+        bodyText: 'Historical content',
+        contentWarning: null,
+        createdAt: historicalCreatedAt.toString({ smallestUnit: 'millisecond' }),
+        document: historical.document,
+        id: globalId('PostContent', historical.id),
+      },
+    ]);
+    assert.deepEqual(connectionIds(beforeMappingRemoval.data?.profile?.posts), [
+      globalId('Post', materialized.post.id),
+    ]);
+    assert.deepEqual(connectionIds(beforeMappingRemoval.data?.homeTimeline), [
+      globalId('Post', materialized.post.id),
+    ]);
+
+    await db.delete(ActivityPubPosts).where(eq(ActivityPubPosts.id, materialized.mapping.id));
+    const fetchMock = mock.method(globalThis, 'fetch', async () => {
+      throw new Error('GraphQL remote Post reads must not use the network');
+    });
+    try {
+      const afterMappingRemoval = await requestRemotePostRead({
+        ...variables,
+        first: 10,
+        token: auth.token,
+      });
+
+      assertNoGraphQLErrors(afterMappingRemoval);
+      assert.deepEqual(afterMappingRemoval.data, beforeMappingRemoval.data);
+      assert.equal(fetchMock.mock.calls.length, 0);
+    } finally {
+      fetchMock.mock.restore();
+    }
+  });
+
+  test('applies the existing parent authorization matrix to materialized remote Posts', async () => {
+    const auth = await createAuthenticatedSession();
+    const author = await createStoredActivityPubAuthor({
+      domain: 'authorization.example',
+      handle: 'authorization',
+    });
+    const publicPost = await materializeRemotePost({
+      actorUri: author.actorUri,
+      objectUri: 'https://authorization.example/notes/public',
+      visibility: PostVisibility.PUBLIC,
+    });
+    const unlistedPost = await materializeRemotePost({
+      actorUri: author.actorUri,
+      objectUri: 'https://authorization.example/notes/unlisted',
+      visibility: PostVisibility.UNLISTED,
+    });
+    const historical = await db
+      .insert(PostContents)
+      .values({
+        document: postContentDocumentFromText('Historical authorization content'),
+        postId: publicPost.post.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db.insert(ProfileFollows).values({
+      followerProfileId: auth.profile.id,
+      followeeProfileId: author.profile.id,
+    });
+
+    const nodeIds = [
+      globalId('Post', publicPost.post.id),
+      globalId('PostContent', publicPost.content.id),
+      globalId('PostContent', historical.id),
+      globalId('Post', unlistedPost.post.id),
+      globalId('PostContent', unlistedPost.content.id),
+    ];
+    const read = () =>
+      requestRemotePostRead({
+        first: 10,
+        nodeIds,
+        profileId: globalId('Profile', author.profile.id),
+        token: auth.token,
+      });
+
+    for (const instanceState of [InstanceState.ACTIVE, InstanceState.UNRESPONSIVE]) {
+      await db
+        .update(Instances)
+        .set({ state: instanceState })
+        .where(eq(Instances.id, author.instance.id));
+      const allowed = await read();
+      assertNoGraphQLErrors(allowed);
+      assert.deepEqual(
+        allowed.data?.nodes.map((node) => node?.__typename),
+        ['Post', 'PostContent', 'PostContent', 'Post', 'PostContent'],
+      );
+      assert.deepEqual(
+        new Set(connectionIds(allowed.data?.profile?.posts)),
+        new Set([globalId('Post', publicPost.post.id), globalId('Post', unlistedPost.post.id)]),
+      );
+      assert.deepEqual(
+        new Set(connectionIds(allowed.data?.homeTimeline)),
+        new Set([globalId('Post', publicPost.post.id), globalId('Post', unlistedPost.post.id)]),
+      );
+    }
+
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.SUSPENDED })
+      .where(eq(Instances.id, author.instance.id));
+    assertRemotePostReadDenied(await read(), nodeIds.length, false);
+
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.ACTIVE })
+      .where(eq(Instances.id, author.instance.id));
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, author.profile.id));
+    assertRemotePostReadDenied(await read(), nodeIds.length, false);
+
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.ACTIVE })
+      .where(eq(Profiles.id, author.profile.id));
+    await db
+      .update(Posts)
+      .set({ state: PostState.DELETED })
+      .where(eq(Posts.profileId, author.profile.id));
+    assertRemotePostReadDenied(await read(), nodeIds.length, true);
+  });
+
+  test('orders and paginates materialized followee Posts while excluding a non-followee', async () => {
+    const auth = await createAuthenticatedSession();
+    const followee = await createStoredActivityPubAuthor({
+      domain: 'followee.example',
+      handle: 'followee',
+    });
+    const nonFollowee = await createStoredActivityPubAuthor({
+      domain: 'non-followee.example',
+      handle: 'non-followee',
+    });
+    const followeePosts = await Promise.all(
+      ['one', 'two', 'three'].map((suffix) =>
+        materializeRemotePost({
+          actorUri: followee.actorUri,
+          objectUri: `https://followee.example/notes/${suffix}`,
+          visibility: PostVisibility.PUBLIC,
+        }),
+      ),
+    );
+    const excluded = await materializeRemotePost({
+      actorUri: nonFollowee.actorUri,
+      objectUri: 'https://non-followee.example/notes/excluded',
+      visibility: PostVisibility.PUBLIC,
+    });
+    await db.insert(ProfileFollows).values({
+      followerProfileId: auth.profile.id,
+      followeeProfileId: followee.profile.id,
+    });
+
+    const expectedIds = followeePosts
+      .map(({ post }) => post.id)
+      .toSorted((left, right) => (left < right ? 1 : left > right ? -1 : 0))
+      .map((id) => globalId('Post', id));
+    const firstPage = await requestRemotePostRead({
+      first: 2,
+      nodeIds: [],
+      profileId: globalId('Profile', followee.profile.id),
+      token: auth.token,
+    });
+
+    assertNoGraphQLErrors(firstPage);
+    assert.deepEqual(connectionIds(firstPage.data?.profile?.posts), expectedIds.slice(0, 2));
+    assert.deepEqual(connectionIds(firstPage.data?.homeTimeline), expectedIds.slice(0, 2));
+    assert.equal(firstPage.data?.profile?.posts.pageInfo.hasNextPage, true);
+    assert.equal(firstPage.data?.homeTimeline?.pageInfo.hasNextPage, true);
+    assert.ok(firstPage.data?.profile?.posts.pageInfo.endCursor);
+    assert.equal(
+      firstPage.data?.profile?.posts.pageInfo.endCursor,
+      firstPage.data?.homeTimeline?.pageInfo.endCursor,
+    );
+
+    const secondPage = await requestRemotePostRead({
+      after: firstPage.data?.profile?.posts.pageInfo.endCursor,
+      first: 2,
+      nodeIds: [],
+      profileId: globalId('Profile', followee.profile.id),
+      token: auth.token,
+    });
+    assertNoGraphQLErrors(secondPage);
+    assert.deepEqual(connectionIds(secondPage.data?.profile?.posts), expectedIds.slice(2));
+    assert.deepEqual(connectionIds(secondPage.data?.homeTimeline), expectedIds.slice(2));
+    assert.equal(secondPage.data?.profile?.posts.pageInfo.hasNextPage, false);
+    assert.equal(secondPage.data?.homeTimeline?.pageInfo.hasNextPage, false);
+    assert.equal(
+      [
+        ...connectionIds(firstPage.data?.homeTimeline),
+        ...connectionIds(secondPage.data?.homeTimeline),
+      ].includes(globalId('Post', excluded.post.id)),
+      false,
+    );
+  });
 });
 
 type GraphQLErrorResult = {
@@ -1087,6 +1366,41 @@ type GraphQLErrorResult = {
 type GraphQLResult<TData = Record<string, unknown>> = {
   data?: TData;
   errors?: GraphQLErrorResult[];
+};
+
+type RemotePostNode =
+  | {
+      __typename: 'Post';
+      content: {
+        bodyText: string;
+        contentWarning: string | null;
+        createdAt: string;
+        document: unknown;
+        id: string;
+      } | null;
+      createdAt: string;
+      id: string;
+      visibility: string;
+    }
+  | {
+      __typename: 'PostContent';
+      bodyText: string;
+      contentWarning: string | null;
+      createdAt: string;
+      document: unknown;
+      id: string;
+    }
+  | null;
+
+type RemotePostConnection = {
+  edges: Array<{ cursor: string; node: { id: string } }>;
+  pageInfo: { endCursor: string | null; hasNextPage: boolean };
+};
+
+type RemotePostReadData = {
+  nodes: RemotePostNode[];
+  profile: { posts: RemotePostConnection } | null;
+  homeTimeline: RemotePostConnection | null;
 };
 
 const requestGraphQL = async <TData = Record<string, unknown>>(
@@ -1109,6 +1423,65 @@ const requestGraphQL = async <TData = Record<string, unknown>>(
   return (await response.json()) as GraphQLResult<TData>;
 };
 
+const requestRemotePostRead = ({
+  after,
+  first,
+  nodeIds,
+  profileId,
+  token,
+}: {
+  after?: string | null;
+  first: number;
+  nodeIds: string[];
+  profileId: string;
+  token: string;
+}) =>
+  requestGraphQL<RemotePostReadData>(
+    `query MaterializedRemotePostRead(
+      $after: String
+      $first: Int!
+      $nodeIds: [ID!]!
+      $profileId: ID!
+    ) {
+      nodes(ids: $nodeIds) {
+        __typename
+        ... on Post {
+          id
+          createdAt
+          visibility
+          content {
+            id
+            document
+            bodyText
+            contentWarning
+            createdAt
+          }
+        }
+        ... on PostContent {
+          id
+          document
+          bodyText
+          contentWarning
+          createdAt
+        }
+      }
+      profile: node(id: $profileId) {
+        ... on Profile {
+          posts(first: $first, after: $after) {
+            edges { cursor node { id } }
+            pageInfo { endCursor hasNextPage }
+          }
+        }
+      }
+      homeTimeline(first: $first, after: $after) {
+        edges { cursor node { id } }
+        pageInfo { endCursor hasNextPage }
+      }
+    }`,
+    { after: after ?? null, first, nodeIds, profileId },
+    token,
+  );
+
 const assertNoGraphQLErrors = (result: GraphQLResult<unknown>) => {
   assert.equal(result.errors, undefined, JSON.stringify(result.errors));
 };
@@ -1116,6 +1489,28 @@ const assertNoGraphQLErrors = (result: GraphQLResult<unknown>) => {
 const assertGraphQLErrorCode = (result: GraphQLResult<unknown>, code: string) => {
   assert.equal(result.data, null);
   assert.equal(result.errors?.[0]?.extensions?.code, code, JSON.stringify(result.errors));
+};
+
+const connectionIds = (connection: RemotePostConnection | null | undefined) =>
+  connection?.edges.map(({ node }) => node.id) ?? [];
+
+const assertRemotePostReadDenied = (
+  result: GraphQLResult<RemotePostReadData>,
+  nodeCount: number,
+  profileVisible: boolean,
+) => {
+  assertNoGraphQLErrors(result);
+  assert.deepEqual(
+    result.data?.nodes,
+    Array.from({ length: nodeCount }, () => null),
+  );
+  if (profileVisible) {
+    assert.ok(result.data?.profile);
+    assert.deepEqual(connectionIds(result.data.profile.posts), []);
+  } else {
+    assert.equal(result.data?.profile, null);
+  }
+  assert.deepEqual(connectionIds(result.data?.homeTimeline), []);
 };
 
 const createRemoteInstance = async ({
@@ -1186,6 +1581,80 @@ const createProfile = async ({
     })
     .returning()
     .then(firstOrThrow);
+
+const createStoredActivityPubAuthor = async ({
+  domain,
+  handle,
+}: {
+  domain: string;
+  handle: string;
+}) => {
+  const instance = await createRemoteInstance({ domain });
+  const profile = await createProfile({ handle, instanceId: instance.id });
+  const actorUri = `https://${domain}/users/${handle}`;
+  await db.insert(ActivityPubActors).values({
+    profileId: profile.id,
+    type: ActivityPubActorType.PERSON,
+    uri: actorUri,
+  });
+
+  return { actorUri, instance, profile };
+};
+
+const materializeRemotePost = async ({
+  actorUri,
+  content = '<p>Materialized content</p>',
+  objectUri,
+  publishedAt = null,
+  receivedAt = Temporal.Instant.from('2026-07-16T00:00:00Z'),
+  summary = null,
+  visibility,
+}: {
+  actorUri: string;
+  content?: string;
+  objectUri: string;
+  publishedAt?: Temporal.Instant | null;
+  receivedAt?: Temporal.Instant;
+  summary?: string | null;
+  visibility: typeof PostVisibility.PUBLIC | typeof PostVisibility.UNLISTED;
+}) => {
+  const note = new Note({
+    attribution: new URL(actorUri),
+    ...(visibility === PostVisibility.PUBLIC
+      ? { to: PUBLIC_COLLECTION }
+      : { cc: PUBLIC_COLLECTION }),
+    content,
+    id: new URL(objectUri),
+    mediaType: 'text/html',
+    published: publishedAt,
+    summary,
+  });
+  const documentLoader = mock.fn(async () => {
+    throw new Error('Embedded Note materialization must not fetch');
+  });
+
+  await handleInboundCreate(
+    { documentLoader } as unknown as Parameters<typeof handleInboundCreate>[0],
+    new Create({ actor: new URL(actorUri), object: note }),
+    receivedAt,
+  );
+  assert.equal(documentLoader.mock.calls.length, 0);
+
+  const mapping = await db
+    .select()
+    .from(ActivityPubPosts)
+    .where(eq(ActivityPubPosts.uri, objectUri))
+    .then(firstOrThrow);
+  const post = await db.select().from(Posts).where(eq(Posts.id, mapping.postId)).then(firstOrThrow);
+  assert.ok(post.currentContentId);
+  const materializedContent = await db
+    .select()
+    .from(PostContents)
+    .where(eq(PostContents.id, post.currentContentId))
+    .then(firstOrThrow);
+
+  return { content: materializedContent, mapping, post };
+};
 
 const createAuthenticatedSession = async () => {
   const account = await db
