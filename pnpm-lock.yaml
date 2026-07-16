@@ -92,6 +92,9 @@ importers:
       '@kosmo/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@kosmo/fedify':
+        specifier: workspace:*
+        version: link:../../packages/fedify
       '@pothos/core':
         specifier: ^4.12.0
         version: 4.12.0(graphql@16.14.0)

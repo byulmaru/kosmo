@@ -15,6 +15,7 @@
     "@hono/node-server": "^1.19.14",
     "@hono/standard-validator": "^0.2.2",
     "@kosmo/core": "workspace:*",
+    "@kosmo/fedify": "workspace:*",
     "@pothos/core": "^4.12.0",
     "@pothos/plugin-dataloader": "^4.4.3",
     "@pothos/plugin-relay": "^4.7.0",

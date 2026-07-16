@@ -14,6 +14,7 @@ import type { FollowDeliveryContext } from './follow-delivery';
 const canonicalOrigin = 'https://kos.moe';
 const senderProfileId = '019f6f67-1111-7777-8888-123456789abc';
 const profileFollowId = '019f6f67-2222-7777-8888-123456789abc';
+const profileFollowCreatedAt = Temporal.Instant.from('2026-07-16T00:00:00Z');
 const localActorUri = new URL(`${canonicalOrigin}/ap/actor/${senderProfileId}`);
 const remoteActorUri = new URL('https://remote.example/users/alice');
 const recipientActor = new Person({
@@ -26,6 +27,7 @@ describe('Fedify follow delivery', () => {
     const fixture = createContextFixture();
     const activity = await sendFollowActivity({
       context: fixture.context,
+      profileFollowCreatedAt,
       profileFollowId,
       recipientActor,
       senderProfileId,
@@ -35,6 +37,7 @@ describe('Fedify follow delivery', () => {
     assert.equal(activity.id?.href, `${canonicalOrigin}/ap/follow/${profileFollowId}`);
     assert.equal(activity.actorId?.href, localActorUri.href);
     assert.equal(activity.objectId?.href, remoteActorUri.href);
+    assert.equal(activity.published?.toString(), profileFollowCreatedAt.toString());
     assert.deepEqual(
       activity.toIds.map((uri) => uri.href),
       [remoteActorUri.href],
@@ -95,6 +98,7 @@ describe('Fedify follow delivery', () => {
     await assert.rejects(
       sendFollowActivity({
         context: fixture.context,
+        profileFollowCreatedAt,
         profileFollowId,
         recipientActor: recipient,
         senderProfileId,
@@ -111,6 +115,7 @@ describe('Fedify follow delivery', () => {
     await assert.rejects(
       sendFollowActivity({
         context: fixture.context,
+        profileFollowCreatedAt,
         profileFollowId,
         recipientActor: recipient,
         senderProfileId,

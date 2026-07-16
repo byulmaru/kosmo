@@ -14,6 +14,7 @@ interface FollowDeliveryOptions {
 }
 
 export interface SendFollowActivityOptions extends FollowDeliveryOptions {
+  readonly profileFollowCreatedAt: Temporal.Instant;
   readonly profileFollowId: string;
 }
 
@@ -33,6 +34,7 @@ export const getFollowOrderingKey = (followerActorUri: URL, followeeActorUri: UR
 
 export const sendFollowActivity = async ({
   context,
+  profileFollowCreatedAt,
   profileFollowId,
   recipientActor,
   senderProfileId,
@@ -43,6 +45,7 @@ export const sendFollowActivity = async ({
     actor,
     id: getFollowActivityUri(context.canonicalOrigin, profileFollowId),
     object,
+    published: profileFollowCreatedAt,
     tos: [object],
   });
 
