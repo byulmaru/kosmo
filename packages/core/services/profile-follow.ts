@@ -46,9 +46,7 @@ export const followProfile = async ({
           eq(Profiles.state, ProfileState.ACTIVE),
           ne(Instances.state, InstanceState.SUSPENDED),
         ),
-      )
-      .orderBy(Profiles.id)
-      .for('update', { of: Profiles });
+      );
     const follower = participants.find(({ id }) => id === followerProfileId);
     const target = participants.find(({ id }) => id === followeeProfileId);
     if (
