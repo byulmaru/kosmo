@@ -27,7 +27,7 @@ const mutateFollow = async (
           query: `
             mutation E2EProfileFollow($id: ID!) {
               ${operation}(input: { id: $id }) {
-                ${operation === 'followProfile' ? 'profileFollow { id }' : 'profileFollowId'}
+                ${operation === 'unfollowProfile' ? 'profileFollowId' : ''}
                 followerProfile { id followingCount }
                 followeeProfile { id followersCount }
               }

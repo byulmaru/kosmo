@@ -62,7 +62,7 @@
 - Decision Outcome: 공개 mutation 이름은 `approveProfileFollowRequest`, `rejectProfileFollowRequest`, `cancelProfileFollowRequest`로 한다. 승인은 `ProfileFollow`, 삭제된 request global ID와 follower/followee Profile을 반환한다. 거절은 삭제된 request global ID와 행동자인 non-null `followeeProfile`, 취소는 삭제된 request global ID와 행동자인 non-null `followerProfile`을 반환하며 unavailable일 수 있는 상대 Profile은 payload에 포함하지 않는다. 삭제된 request Node는 반환하지 않는다.
 - Alternatives Considered: boolean success는 cache에서 정확한 request를 제거할 수 없다. 삭제된 Node 반환은 존재하지 않는 row를 다시 load해야 한다. 거절·취소에서 상대 Profile까지 필수 반환하면 unavailable counterpart cleanup을 payload 가용성에 결합한다. actor Profile도 생략하면 normalized cache에서 어느 Profile 소유 connection을 갱신할지 payload만으로 식별하기 어렵다. 하나의 범용 transition mutation은 actor 역할과 허용 transition을 input 값에 숨긴다.
 - Consequences: mutation별 payload와 권한 테스트가 추가되며 앱은 actor Profile이 소유한 connection에서 삭제 ID에 해당하는 edge를 제거할 수 있다. relation과 count 갱신은 승인 payload에만 필요하다.
-- Confirmation / Follow-up: 공개 이름과 payload field, reject의 `followeeProfile`, cancel의 `followerProfile` 및 삭제 ID 반환은 schema snapshot과 API integration test로 고정한다. actor Profile이 소유한 connection의 실제 edge 제거는 UI와 독립된 Relay store test로 검증한다.
+- Confirmation / Follow-up: 공개 이름과 payload field, reject의 `followeeProfile`, cancel의 `followerProfile` 및 삭제 ID 반환은 schema snapshot과 API integration test로 고정한다. 실제 request 관리 UI가 추가될 때 mutation을 소비 컴포넌트에 colocate하고 actor Profile 소유 connection의 edge 제거 사용자 흐름을 검증한다.
 
 ### Request connection은 시간순을 공개 계약으로 고정하지 않는다
 
@@ -94,15 +94,15 @@
 - Consequences: 두 구현 PR은 독립적으로 리뷰할 수 있지만 `add-activitypub-remote-follow` 최종 archive는 이 change archive 뒤에 수행해야 한다. 최종 remote contract 병합과 archive 책임은 계속 PROD-361에 있다.
 - Confirmation / Follow-up: 이 change archive 후 active profile spec의 local request/union을 검증하고, PROD-361 archive 전에는 그 계약과 remote follow 시나리오가 같은 최종 requirement에 함께 존재하는지 검증한다.
 
-### 이번 앱 변경은 union 호환에 한정한다
+### 이번 앱 변경은 새 payload의 기존 OPEN 동작 유지에 한정한다
 
 - Decision Date: 2026-07-15
 - Status: Accepted
 - Context / Problem: 새 request 결과를 앱이 처리해야 하지만 requested 상태·취소와 incoming 관리 UI는 별도 제품 흐름과 Notification 계약이 필요하다.
-- Decision Outcome: FollowButton은 union을 안전하게 소비하고 `ProfileFollow` 결과의 기존 Relay cache/count 갱신을 유지한다. `ProfileFollowRequest` 결과는 runtime/type 오류 없이 성공으로 처리하되 새 버튼 상태, 취소 action과 관리 화면은 제공하지 않는다.
+- Decision Outcome: FollowButton은 아직 결과 종류를 소비하지 않으므로 union `result`를 선택하지 않고 follower/followee Profile payload로 기존 Relay cache/count 갱신을 유지한다. 새 버튼 상태, 취소 action과 관리 화면은 제공하지 않는다. union 공개 계약은 API schema/integration test가 검증한다.
 - Alternatives Considered: pending UI를 함께 구현하면 조회·취소·탐색 UX와 copy 결정을 이 spec에 추가해야 한다. request 결과를 오류로 처리하면 API의 성공 계약과 충돌한다.
 - Consequences: 사용자는 새 request가 생성돼도 현재 버튼에서 지속 상태를 확인하지 못하며 후속 UI 이슈가 필요하다.
-- Confirmation / Follow-up: Relay compiler, OPEN follow/unfollow Storybook과 request union fixture를 검증한다.
+- Confirmation / Follow-up: Relay compiler와 OPEN follow/unfollow Storybook fixture를 검증한다. 결과 종류를 사용하는 UI가 추가될 때 해당 컴포넌트에서 union selection과 request fixture를 함께 추가한다.
 
 ## Remaining Decisions
 

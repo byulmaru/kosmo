@@ -12,7 +12,7 @@ PROD-323은 request row의 존재 자체가 Pending이며 승인 시 삭제+rela
 - Local/Remote request가 재사용하는 pair 조회와 승인·거절·취소 transaction 경계를 제공한다.
 - request/relation/count 전이를 원자적으로 처리하고 caller transaction rollback에 참여한다.
 - participant에게만 보이는 Relay Node, Profile 소유 connection과 처리 mutation을 제공한다.
-- FollowButton의 기존 OPEN Relay cache/count 갱신을 유지하면서 새 success union을 안전하게 처리한다.
+- FollowButton의 기존 OPEN Relay cache/count 갱신을 유지하면서 새 payload로 전환한다.
 
 **Non-Goals:**
 
@@ -46,9 +46,9 @@ PROD-323은 request row의 존재 자체가 Pending이며 승인 시 삭제+rela
 4. approve action은 request와 두 participant의 가용성을 조회·검증한 뒤 relation 생성 또는 기존 relation 확인, request 삭제와 새 relation의 count 증가를 하나의 transaction에서 처리한다. request row를 잠그지 않으며 relation이 이미 있으면 request만 삭제하고 count를 증가시키지 않는다.
 5. reject/cancel action은 각각 followee/follower 권한과 request 존재만 검증한 뒤 request를 삭제하며 count를 변경하지 않는다. 다른 participant가 비활성이거나 remote instance가 `SUSPENDED`여도 cleanup을 허용하고, 이미 삭제된 request ID는 not found로 처리한다.
 6. GraphQL은 `ProfileFollowRequest` loadable Node와 participant access를 추가하고, 현재 active Profile과 동일한 Profile에서만 incoming/outgoing connection을 반환한다. 다른 participant가 unavailable이어도 request Node와 connection은 현재 active participant에게 보이고 unavailable Profile 필드만 visibility 계약에 따라 `null`일 수 있다. connection은 기존 API의 Relay pagination 관례를 재사용하고 시간순 필드나 정렬 방향을 공개 계약으로 고정하지 않는다.
-7. `followProfile`은 `FollowProfilePayload.result`의 `ProfileFollowResult` union을 반환한다. approve mutation은 `ProfileFollow`, 삭제된 request ID와 follower/followee Profile을 반환한다. reject mutation은 삭제된 request ID와 행동자인 non-null `followeeProfile`, cancel mutation은 삭제된 request ID와 행동자인 non-null `followerProfile`을 반환하며 unavailable일 수 있는 상대 Profile은 payload에 포함하지 않는다. 삭제된 request Node는 반환하지 않는다. UI와 독립된 Relay store test는 actor Profile이 소유한 incoming/outgoing connection에서 삭제 ID에 해당하는 edge가 제거되는지 검증한다.
-8. FollowButton은 `__typename`과 inline fragment로 union을 처리한다. `ProfileFollow`일 때만 기존 connection/count updater를 적용하고 `ProfileFollowRequest`는 타입/runtime 오류 없이 성공으로 소비하되 requested UI 상태는 만들지 않는다.
-9. Core DB-backed 테스트가 transaction/concurrency/count를, API schema/integration 테스트가 Node/visibility/connection/payload를, app Relay store test가 reject/cancel edge 제거를, FollowButton Relay/Storybook 검증이 기존 OPEN 호환을 소유한다.
+7. `followProfile`은 `FollowProfilePayload.result`의 `ProfileFollowResult` union을 반환한다. approve mutation은 `ProfileFollow`, 삭제된 request ID와 follower/followee Profile을 반환한다. reject mutation은 삭제된 request ID와 행동자인 non-null `followeeProfile`, cancel mutation은 삭제된 request ID와 행동자인 non-null `followerProfile`을 반환하며 unavailable일 수 있는 상대 Profile은 payload에 포함하지 않는다. 삭제된 request Node는 반환하지 않는다.
+8. FollowButton은 아직 결과 종류에 따른 UI가 없으므로 union `result`를 선택하지 않고 follower/followee Profile payload로 기존 connection/count updater를 유지한다. requested UI 상태는 만들지 않는다.
+9. Core DB-backed 테스트가 transaction/concurrency/count를, API schema/integration 테스트가 Node/visibility/connection/union/payload를, FollowButton Relay/Storybook 검증이 기존 OPEN 호환을 소유한다.
 
 ### Allowed Alternatives
 
