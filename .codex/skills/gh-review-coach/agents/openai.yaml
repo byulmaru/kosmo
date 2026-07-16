@@ -1,0 +1,4 @@
+interface:
+  display_name: 'GitHub Review Coach'
+  short_description: 'PR 리뷰 증거 수집과 한국어 피드백 초안 작성'
+  default_prompt: 'Use $gh-review-coach to inspect this pull request and prepare an evidence-backed Korean review draft.'
