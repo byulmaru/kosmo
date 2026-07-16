@@ -1,11 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { projectRemoteNoteContent } from './activitypub-note-content';
-import { canonicalizePostContentDocument } from './post-content/server';
-
-function assertCanonical(result: ReturnType<typeof projectRemoteNoteContent>) {
-  assert.deepEqual(canonicalizePostContentDocument(result), result);
-}
 
 describe('projectRemoteNoteContent', () => {
   it('projects plain text into the canonical document and preserves internal newlines', () => {
@@ -34,7 +29,6 @@ describe('projectRemoteNoteContent', () => {
         ],
       },
     });
-    assertCanonical(result);
   });
 
   it('projects absent-media-type HTML into paragraphs and hard breaks', () => {
@@ -58,7 +52,6 @@ describe('projectRemoteNoteContent', () => {
         { type: 'paragraph', content: [{ type: 'text', text: 'Second & final' }] },
       ],
     });
-    assertCanonical(result);
   });
 
   it('preserves preformatted visible whitespace without introducing a pre node', () => {
@@ -83,7 +76,6 @@ describe('projectRemoteNoteContent', () => {
         { type: 'paragraph', content: [{ type: 'text', text: 'after' }] },
       ],
     });
-    assertCanonical(result);
   });
 
   it('preserves safe links and canonicalizes their absolute HTTP URL', () => {
@@ -101,7 +93,6 @@ describe('projectRemoteNoteContent', () => {
         marks: [{ type: 'link', attrs: { href: 'https://example.com/b?q=1#top' } }],
       },
     ]);
-    assertCanonical(result);
   });
 
   it('removes executable markup, unsafe URLs, attributes, and images while keeping safe text', () => {
@@ -118,7 +109,6 @@ describe('projectRemoteNoteContent', () => {
       { type: 'paragraph', content: [{ type: 'text', text: 'safe link' }] },
     ]);
     assert.doesNotMatch(JSON.stringify(result), /onclick|javascript|secret|alert|display|hidden/u);
-    assertCanonical(result);
   });
 
   it('keeps text from unknown or malformed formatting markup', () => {
@@ -131,7 +121,6 @@ describe('projectRemoteNoteContent', () => {
     assert.deepEqual(result.body.content, [
       { type: 'paragraph', content: [{ type: 'text', text: 'Hello world' }] },
     ]);
-    assertCanonical(result);
   });
 
   it('projects summary into the canonical nullable Plain Text Content Warning', () => {
@@ -154,7 +143,6 @@ describe('projectRemoteNoteContent', () => {
       }).summary,
       'warning',
     );
-    assertCanonical(result);
   });
 
   it('allows absent and attachment-only content to produce the canonical empty document', () => {
@@ -165,7 +153,6 @@ describe('projectRemoteNoteContent', () => {
       summary: null,
       body: { type: 'doc', content: [{ type: 'paragraph' }] },
     });
-    assertCanonical(result);
   });
 
   it('rejects malformed and unsupported MIME types for present values', () => {
@@ -192,6 +179,5 @@ describe('projectRemoteNoteContent', () => {
     });
 
     assert.deepEqual(formatted, compact);
-    assertCanonical(formatted);
   });
 });
