@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { graphql, isInputObjectType, isObjectType } from 'graphql';
+import { graphql, isInputObjectType, isInterfaceType, isObjectType } from 'graphql';
 import { encodeGlobalId } from './global-id';
+import { notificationNodeType } from './resolvers/notification/ref';
 import { schema } from './schema';
 
 test('exposes the versioned PostContent document and Plain Text composer contract', () => {
@@ -61,6 +62,31 @@ test('rejects empty and over-500-character Plain Text before creating a post', a
     assert.equal(result.data == null, true);
     assert.equal(result.errors?.[0]?.message, message);
   }
+});
+
+test('exposes Notification interface and FollowNotification without raw storage fields', () => {
+  const notification = schema.getType('Notification');
+  const followNotification = schema.getType('FollowNotification');
+
+  assert.ok(isObjectType(followNotification));
+  assert.deepEqual(
+    followNotification.getInterfaces().map(({ name }) => name),
+    ['Node', 'Notification'],
+  );
+  assert.equal(String(followNotification.getFields().profile.type), 'Profile!');
+  assert.equal(followNotification.getFields().relatedProfile, undefined);
+  assert.equal(followNotification.getFields().kind, undefined);
+  assert.equal(followNotification.getFields().sourceId, undefined);
+  assert.equal(followNotification.getFields().data, undefined);
+  assert.equal(schema.getType('NotificationType'), undefined);
+
+  assert.ok(isInterfaceType(notification));
+  assert.deepEqual(
+    notification.getInterfaces().map(({ name }) => name),
+    ['Node'],
+  );
+  assert.equal(notificationNodeType('FOLLOW'), 'FollowNotification');
+  assert.equal(notificationNodeType('UNSUPPORTED'), null);
 });
 
 test('rejects legacy raw UUID and unknown typename Node IDs', async () => {

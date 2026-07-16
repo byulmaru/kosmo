@@ -60,6 +60,13 @@ type ExchangeNativeOidcSessionPayload {
   token: String!
 }
 
+type FollowNotification implements Node & Notification {
+  createdAt: DateTime!
+  id: ID!
+  profile: Profile!
+  readAt: DateTime
+}
+
 input FollowProfileInput {
   id: ID!
 }
@@ -88,6 +95,12 @@ type Mutation {
 
 interface Node {
   id: ID!
+}
+
+interface Notification implements Node {
+  createdAt: DateTime!
+  id: ID!
+  readAt: DateTime
 }
 
 type PageInfo {

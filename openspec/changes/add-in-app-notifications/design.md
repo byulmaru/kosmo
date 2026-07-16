@@ -2,7 +2,7 @@
 
 `docs/domain/objects/notification.md`는 Notification의 Recipient, Read State, type별 source와 삭제·억제 정책을 canonical 계약으로 정의한다. 현재 저장소에는 Notification table, GraphQL API와 실제 목록이 없고 `/notifications`는 placeholder다. 선행 `PROD-323`과 PR #244가 Follow Request를 pending-only 모델로 정렬했으므로, Follow와 Follow Request의 충돌 없이 첫 Notification source를 설계할 수 있다.
 
-이 change는 `PROD-271`이 소유하는 하나의 행동 계약을 `PROD-325`, `PROD-274`, `PROD-275`, `PROD-276`, `PROD-277`, `PROD-324`, `PROD-278`의 리뷰 가능한 구현 PR로 나눈다. spec-only PR인 `PROD-273`은 구현 코드를 포함하지 않으며, 마지막 통합 이슈 `PROD-278`이 전체 scope 검증과 archive를 소유한다.
+이 change는 `PROD-271`이 소유하는 하나의 행동 계약을 `PROD-325`, `PROD-274`, `PROD-275`, `PROD-352`, `PROD-351`, `PROD-350`, `PROD-276`, `PROD-277`, `PROD-324`, `PROD-278`의 리뷰 가능한 구현 PR로 나눈다. spec-only PR인 `PROD-273`은 구현 코드를 포함하지 않으며, 마지막 통합 이슈 `PROD-278`이 전체 scope 검증과 archive를 소유한다.
 
 ## Goals / Non-Goals
 
@@ -59,7 +59,7 @@ Notification resolver module은 `Notification` interface, kind별 concrete objec
 - `Profile.notifications`: target Profile의 visible `NotificationConnection`.
 - `Profile.unreadNotificationCount`: 같은 visible predicate를 만족하는 unread item 수.
 - `Notification implements Node`: 모든 kind가 공유하는 `id`, `createdAt`, nullable `readAt`.
-- `FollowNotification implements Notification & Node`: Follow 전용 non-null `relatedProfile`.
+- `FollowNotification implements Notification & Node`: Follow 전용 non-null `profile`.
 - `markNotificationRead(input: { id })`: `MarkNotificationReadPayload.notification`과 `.recipientProfile`을 반환한다.
 
 Profile fields와 Read mutation의 authorization은 session의 selected Profile이 아니라 로그인 Account와 target Recipient Profile 사이의 Account-Profile membership이다. membership의 role은 권한 판정에 사용하지 않는다. selected Profile이 없거나 target과 달라도 membership이 있으면 API는 성공한다.
@@ -84,13 +84,13 @@ FOLLOW item은 다음 조건을 모두 만족할 때만 API에 존재한다.
 
 Connection query는 이 predicate를 SQL에서 적용한 뒤 `id DESC` keyset limit을 적용한다. page를 먼저 가져온 뒤 hidden row를 애플리케이션에서 버리지 않는다. Unread count, Node와 Read mutation도 같은 source/visibility predicate를 재사용한다. 이로써 hidden row가 short page, 잘못된 page info, badge drift나 Read side channel을 만들지 않는다.
 
-opaque cursor에는 마지막 Notification DB UUID를 담고 다음 page는 `id < cursor`를 사용한다. 기존 UUIDv8과 신규 UUIDv7은 같은 millisecond timestamp 위치 뒤에 random tail을 사용하므로 함께 정렬할 수 있지만 같은 millisecond의 생성 순서와 새 item의 page 배치는 보장하지 않는다. 이 제한은 현재 제품 범위에서 허용한다. 반환되는 `FollowNotification`은 Related Profile이 실제로 조회 가능한 경우뿐이므로 `relatedProfile`은 non-null이다. raw `kind`, `source_id`와 `data`는 API에 노출하지 않는다.
+opaque cursor에는 마지막 Notification DB UUID를 담고 다음 page는 `id < cursor`를 사용한다. 기존 UUIDv8과 신규 UUIDv7은 같은 millisecond timestamp 위치 뒤에 random tail을 사용하므로 함께 정렬할 수 있지만 같은 millisecond의 생성 순서와 새 item의 page 배치는 보장하지 않는다. 이 제한은 현재 제품 범위에서 허용한다. 반환되는 `FollowNotification`은 Related Profile이 실제로 조회 가능한 경우뿐이므로 `profile`은 non-null이다. raw `kind`, `source_id`와 `data`는 API에 노출하지 않는다.
 
 Read update는 membership과 visible predicate를 같은 SQL 경계에 포함하고 `read_at = coalesce(read_at, now())` 의미로 최초 시각을 보존한다. payload의 Recipient Profile을 함께 반환해 Relay가 item `readAt`과 정확한 Profile의 count를 함께 갱신할 수 있게 한다.
 
 ### unavailable 상태와 후속 cleanup
 
-위 공통 visible predicate를 만족하지 않는 item은 connection, Unread count, Node와 Read mutation에서 모두 없는 것으로 취급한다. generic item, `relatedProfile: null` Follow fallback, 이름·handle snapshot 또는 client-side filtering을 제공하지 않는다.
+위 공통 visible predicate를 만족하지 않는 item은 connection, Unread count, Node와 Read mutation에서 모두 없는 것으로 취급한다. generic item, `profile: null` Follow fallback, 이름·handle snapshot 또는 client-side filtering을 제공하지 않는다.
 
 DB row와 기존 `read_at`은 비동기 cleanup 전까지 남을 수 있다. cleanup 전에 visibility가 회복되면 같은 row가 기존 Read 상태로 다시 나타날 수 있다. 이 임시 상태는 첫 delivery에서 허용한다.
 
@@ -106,7 +106,10 @@ DB row와 기존 `read_at`은 비동기 cleanup 전까지 남을 수 있다. cle
 
 - `PROD-325`: migration/DB integration으로 kind enum, 단일 table, Recipient FK, loose source ID, JSONB default, unique constraint와 조회 index를 검증한다.
 - `PROD-274`: storage test로 source-only create/delete, Recipient/Related Profile 파생, Local/Remote Follower, existing/concurrent idempotency를 검증한다.
-- `PROD-275`: schema/resolver test로 role-independent membership, 비선택 Profile 접근, cursor, SQL visible filtering, Node/Read 숨김, 반복·동시 Read와 visible count를 검증한다.
+- `PROD-275`: schema/resolver test로 kind-aware Node resolution, batch 순서, role-independent membership, 비선택 Profile 접근과 공통 SQL visible predicate를 검증한다.
+- `PROD-352`: connection test로 `id DESC` keyset pagination과 limit 전 visible filtering을 검증한다.
+- `PROD-351`: count test로 공통 predicate를 만족하는 visible Unread item만 계산하는지 검증한다.
+- `PROD-350`: mutation test로 Node와 같은 hidden predicate, 최초 `readAt`, 반복·동시 Read와 payload를 검증한다.
 - `PROD-276`: action test로 allow/deny/evaluator error/create·delete storage failure, integration 재진입, 정상 source cleanup과 origin-neutral port 호출을 검증한다.
 - `PROD-277`·`PROD-324`: 정상 item UI 계약을 Storybook interaction/a11y, Relay cache integration과 결정된 platform smoke로 검증한다.
 - `PROD-278`: 실제 Local Follow/Unfollow action을 사용하는 Web E2E와 관련 workspace 검증을 통과한 뒤 archive 전후 strict validation을 실행한다.
@@ -123,10 +126,11 @@ DB row와 기존 `read_at`은 비동기 cleanup 전까지 남을 수 있다. cle
 ## Migration Plan
 
 1. `PROD-325`에서 additive `notification` schema, `notification_kind`, Recipient FK, source uniqueness와 조회 index를 배포한다. 기존 Notification UUIDv8과 `ProfileFollow`는 backfill하지 않는다.
-2. `PROD-274` 저장 경계와 `PROD-275` API를 schema 위에 병렬로 구현한다.
-3. `PROD-281`의 공용 ProfileFollow action과 `PROD-274`가 준비되면 `PROD-276` create/delete source integration을 연결한다.
-4. API가 안정되면 `PROD-277` 목록과 `PROD-324` badge를 병렬로 배포한다.
-5. `PROD-278`에서 vertical E2E, canonical 문서/task sync와 archive 전후 validation을 완료한다.
+2. `PROD-274` 저장 경계와 `PROD-275` GraphQL/Node·공통 visible 조회 기반을 schema 위에 병렬로 구현한다.
+3. `PROD-275` 뒤 `PROD-352` connection, `PROD-351` Unread count와 `PROD-350` Read mutation을 독립 PR로 구현한다.
+4. `PROD-281`의 공용 ProfileFollow action과 `PROD-274`가 준비되면 `PROD-276` create/delete source integration을 연결한다.
+5. API가 안정되면 `PROD-277` 목록과 `PROD-324` badge를 병렬로 배포한다.
+6. `PROD-278`에서 vertical E2E, canonical 문서/task sync와 archive 전후 validation을 완료한다.
 
 애플리케이션 rollback은 additive table을 유지하고 Notification source 호출·API·UI만 이전 버전으로 되돌린다. 데이터가 생성된 뒤 table을 자동 drop하는 down migration은 사용하지 않는다. schema 자체를 제거해야 한다면 Notification 쓰기를 먼저 중단하고 데이터 보존/삭제 결정을 별도 migration으로 수행한다.
 
