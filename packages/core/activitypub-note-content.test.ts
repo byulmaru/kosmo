@@ -136,15 +136,23 @@ describe('projectRemoteNoteContent', () => {
 
   it('projects summary into the canonical nullable Plain Text Content Warning', () => {
     const result = projectRemoteNoteContent({
-      content: '<p>body</p>',
+      content: 'body',
       summary: '<p>CW <a href="https://example.com">label</a><script>hidden</script></p>',
-      mediaType: 'text/html',
+      mediaType: 'text/plain',
     });
 
     assert.equal(result.summary, 'CW label');
     assert.equal(
       projectRemoteNoteContent({ content: 'body', summary: '  ', mediaType: 'text/plain' }).summary,
       null,
+    );
+    assert.equal(
+      projectRemoteNoteContent({
+        content: null,
+        summary: '<em>warning</em>',
+        mediaType: 'image/png',
+      }).summary,
+      'warning',
     );
     assertCanonical(result);
   });
@@ -167,10 +175,6 @@ describe('projectRemoteNoteContent', () => {
     );
     assert.throws(
       () => projectRemoteNoteContent({ content: 'body', summary: null, mediaType: 'image/png' }),
-      /Unsupported remote Note media type/u,
-    );
-    assert.throws(
-      () => projectRemoteNoteContent({ content: null, summary: 'CW', mediaType: 'image/png' }),
       /Unsupported remote Note media type/u,
     );
   });

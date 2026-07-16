@@ -49,25 +49,16 @@ function projectBody(value: string | null, mediaType: string | null): PostConten
   throw new TypeError(`Unsupported remote Note media type: ${essence}`);
 }
 
-function projectSummary(value: string | null, mediaType: string | null): string | null {
+function projectSummary(value: string | null): string | null {
   if (value === null) {
     return null;
   }
 
-  const essence = mediaTypeEssence(mediaType);
-  const summary =
-    essence === 'text/plain'
-      ? normalizePostContentPlainText(value)
-      : essence === 'text/html'
-        ? postContentDocumentToText({
-            version: postContentSchemaVersion,
-            summary: null,
-            body: htmlToBodyDocument(value),
-          })
-        : null;
-  if (summary === null) {
-    throw new TypeError(`Unsupported remote Note media type: ${essence}`);
-  }
+  const summary = postContentDocumentToText({
+    version: postContentSchemaVersion,
+    summary: null,
+    body: htmlToBodyDocument(value),
+  });
 
   return normalizePostContentPlainText(summary) || null;
 }
@@ -79,7 +70,7 @@ export function projectRemoteNoteContent({
 }: RemoteNoteContentInput): PostContentDocumentV1 {
   return canonicalizePostContentDocument({
     version: postContentSchemaVersion,
-    summary: projectSummary(summary, mediaType),
+    summary: projectSummary(summary),
     body: projectBody(content, mediaType),
   });
 }
