@@ -60,8 +60,6 @@ federation
 
 federation
   .setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox')
-  .on(Create, async (context, create) => {
-    await handleInboundCreate(context, create);
-  })
+  .on(Create, handleInboundCreate)
   .on(Follow, handleInboundFollow)
   .on(Undo, handleInboundUndo);

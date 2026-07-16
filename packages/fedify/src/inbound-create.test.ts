@@ -310,9 +310,7 @@ describe('inbound Create dispatch', () => {
 
   test('signed Create reaches the dispatcher through personal and shared inboxes', async () => {
     await createStoredRemoteActor();
-    const fixture = await createInboxFixture(async (context, activity) => {
-      await handleInboundCreate(context, activity, receivedAt);
-    });
+    const fixture = await createInboxFixture();
 
     const personalResponse = await fixture.federation.fetch(
       await fixture.createSignedCreateRequest(
@@ -586,9 +584,7 @@ const getMaterializedPost = async (objectUri: URL) => {
   return { content, mapping, post };
 };
 
-const createInboxFixture = async (
-  onCreate: (context: InboxContext<void>, activity: Create) => Promise<void>,
-) => {
+const createInboxFixture = async () => {
   const remoteKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
   const remoteKey = new CryptographicKey({
     id: remoteKeyUri,
@@ -621,7 +617,9 @@ const createInboxFixture = async (
       identifier === localProfileId ? new Person({ id: context.getActorUri(identifier) }) : null,
     )
     .setKeyPairsDispatcher(() => [localKeyPair]);
-  federation.setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox').on(Create, onCreate);
+  federation
+    .setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox')
+    .on(Create, handleInboundCreate);
 
   const createSignedCreateRequest = async (
     path: string,
