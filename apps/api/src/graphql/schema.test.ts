@@ -67,8 +67,10 @@ test('rejects empty and over-500-character Plain Text before creating a post', a
 test('exposes Notification interface and FollowNotification without raw storage fields', () => {
   const notification = schema.getType('Notification');
   const followNotification = schema.getType('FollowNotification');
+  const profile = schema.getType('Profile');
 
   assert.ok(isObjectType(followNotification));
+  assert.ok(isObjectType(profile));
   assert.deepEqual(
     followNotification.getInterfaces().map(({ name }) => name),
     ['Node', 'Notification'],
@@ -87,6 +89,7 @@ test('exposes Notification interface and FollowNotification without raw storage 
   );
   assert.equal(notificationNodeType('FOLLOW'), 'FollowNotification');
   assert.equal(notificationNodeType('UNSUPPORTED'), null);
+  assert.equal(String(profile.getFields().unreadNotificationCount?.type), 'Int!');
 });
 
 test('rejects legacy raw UUID and unknown typename Node IDs', async () => {

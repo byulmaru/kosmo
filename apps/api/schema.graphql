@@ -166,6 +166,7 @@ type Profile implements Node {
   instance: ProfileInstance!
   posts(after: String, before: String, first: Int, last: Int): PostConnection!
   relativeHandle: String!
+  unreadNotificationCount: Int!
   viewerFollow: ProfileFollow
   viewerState: ProfileViewerState
 }

@@ -179,6 +179,112 @@ describe('Notification GraphQL Node boundary', () => {
     );
   });
 
+  test('counts unread notifications for every membership role without using the selected Profile', async () => {
+    const auth = await createAuthenticatedSession();
+    const profileIds: string[] = [];
+
+    for (const role of Object.values(AccountProfileRole)) {
+      const recipient = await createProfile(`count-recipient-${role.toLowerCase()}`);
+      const related = await createProfile(`count-related-${role.toLowerCase()}`);
+      await addMembership(auth.account.id, recipient.id, role);
+      await createFollowNotification(recipient.id, related.id);
+      profileIds.push(encodeGlobalId('Profile', recipient.id));
+    }
+
+    const selectedElsewhere = await loadUnreadNotificationCounts(profileIds, auth.token);
+    assertNoGraphQLErrors(selectedElsewhere);
+    assert.deepEqual(
+      selectedElsewhere.data?.nodes.map((profile) => profile?.unreadNotificationCount),
+      profileIds.map(() => 1),
+    );
+
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: null })
+      .where(eq(Sessions.id, auth.session.id));
+    const withoutSelection = await loadUnreadNotificationCounts(profileIds, auth.token);
+    assertNoGraphQLErrors(withoutSelection);
+    assert.deepEqual(
+      withoutSelection.data?.nodes.map((profile) => profile?.unreadNotificationCount),
+      profileIds.map(() => 1),
+    );
+
+    const unrelated = await createAuthenticatedSession();
+    const withoutMembership = await loadUnreadNotificationCounts(profileIds, unrelated.token);
+    assert.deepEqual(
+      withoutMembership.data?.nodes,
+      profileIds.map(() => null),
+    );
+    assert.equal(withoutMembership.errors?.length, profileIds.length);
+    assert.ok(
+      withoutMembership.errors?.every(({ extensions }) => extensions?.code === 'PERMISSION_DENIED'),
+    );
+
+    const unauthenticated = await loadUnreadNotificationCounts([profileIds[0]!]);
+    assert.deepEqual(unauthenticated.data?.nodes, [null]);
+    assert.equal(unauthenticated.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+  });
+
+  test('counts only visible unread notifications', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('count-visible-recipient');
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.OWNER);
+
+    const visibleRelated = await createProfile('count-visible-related');
+    await createFollowNotification(recipient.id, visibleRelated.id);
+    const readRelated = await createProfile('count-read-related');
+    const readNotification = await createFollowNotification(recipient.id, readRelated.id);
+    await db
+      .update(Notifications)
+      .set({ readAt: Temporal.Now.instant() })
+      .where(eq(Notifications.id, readNotification.id));
+
+    await db.insert(Notifications).values({
+      kind: NotificationKind.FOLLOW,
+      recipientProfileId: recipient.id,
+      sourceId: crypto.randomUUID(),
+    });
+
+    const actualFollowee = await createProfile('count-actual-followee');
+    const mismatchRelated = await createProfile('count-mismatch-related');
+    const mismatchSource = await createFollow(actualFollowee.id, mismatchRelated.id);
+    await db.insert(Notifications).values({
+      kind: NotificationKind.FOLLOW,
+      recipientProfileId: recipient.id,
+      sourceId: mismatchSource.id,
+    });
+
+    const hiddenRelated = await createProfile('count-hidden-related');
+    await createFollowNotification(recipient.id, hiddenRelated.id);
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.SUSPENDED })
+      .where(eq(Profiles.id, hiddenRelated.id));
+
+    const result = await loadUnreadNotificationCounts(
+      [encodeGlobalId('Profile', recipient.id)],
+      auth.token,
+    );
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.nodes[0]?.unreadNotificationCount, 1);
+
+    const inactiveRecipient = await createProfile('count-inactive-recipient');
+    const inactiveRelated = await createProfile('count-inactive-related');
+    await addMembership(auth.account.id, inactiveRecipient.id, AccountProfileRole.OWNER);
+    await createFollowNotification(inactiveRecipient.id, inactiveRelated.id);
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, inactiveRecipient.id));
+
+    const inactiveResult = await loadUnreadNotificationCounts(
+      [encodeGlobalId('Profile', inactiveRecipient.id)],
+      auth.token,
+    );
+    assertNoGraphQLErrors(inactiveResult);
+    assert.deepEqual(inactiveResult.data?.nodes, [null]);
+  });
+
   test('does not infer a Notification type from a mismatched concrete global ID', async () => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile('mismatched-recipient');
@@ -310,6 +416,19 @@ const loadNodes = async (ids: string[], token: string) => {
   assertNoGraphQLErrors(result);
   return result.data!.nodes;
 };
+
+const loadUnreadNotificationCounts = (ids: string[], token?: string) =>
+  requestGraphQL<{
+    nodes: Array<{ id: string; unreadNotificationCount: number } | null>;
+  }>(
+    `query NotificationUnreadCounts($ids: [ID!]!) {
+      nodes(ids: $ids) {
+        ... on Profile { id unreadNotificationCount }
+      }
+    }`,
+    { ids },
+    token,
+  );
 
 const assertNoGraphQLErrors = (result: GraphQLResult<unknown>) => {
   assert.equal(result.errors, undefined, JSON.stringify(result.errors));
