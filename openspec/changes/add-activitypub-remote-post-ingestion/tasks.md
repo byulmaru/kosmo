@@ -77,7 +77,7 @@ actor-scoped/shared Fedify listener가 지원 delivery의 object identity, conte
 **Verification**
 
 - validation unit test와 실제 personal/shared inbox route test로 zero-side-effect rejection과 object URI input을 검증한다.
-- activity ID가 있는/없는 delivery, UNRESPONSIVE 복구와 concurrent SUSPENDED 전환을 검증한다.
+- activity ID가 있는/없는 delivery와 SUSPENDED actor 차단을 검증한다.
 
 - [ ] 4.1 listener에 typed `Create` handler를 연결하고 optional Fedify global idempotency의 activity ID prefilter 경계와 한 번 캡처한 `receivedAt`을 적용한다.
 - [ ] 4.2 actor/object URI cardinality와 stored actor/Profile/Instance eligibility를 hydration 전에 검증한다.

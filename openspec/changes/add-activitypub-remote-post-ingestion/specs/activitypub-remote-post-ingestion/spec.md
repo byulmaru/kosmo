@@ -36,12 +36,6 @@
 - **OR** 서로 다른 actor URI가 없거나 둘 이상이다
 - **THEN** 시스템은 object hydration과 remote profile network/write 없이 delivery를 skip한다
 
-#### Scenario: Recover a verified unresponsive instance with compare-and-set
-
-- **WHEN** 저장된 UNRESPONSIVE actor가 hydration과 attribution 검증을 통과한 지원 Note를 전달한다
-- **THEN** 시스템은 `WHERE state = UNRESPONSIVE` 조건으로만 Instance를 ACTIVE로 복구할 수 있다
-- **AND** concurrent SUSPENDED 전환을 덮어쓰지 않는다
-
 ### Requirement: Public top-level Note validation
 
 시스템은 actor와 attribution이 일치하는 PUBLIC 또는 UNLISTED top-level `Note`만 materialization input으로 허용해야 한다(MUST).
