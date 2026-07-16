@@ -1,17 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { eq, inArray, or } from 'drizzle-orm';
-import {
-  createId,
-  db,
-  firstOrThrow,
-  Instances,
-  Notifications,
-  pg,
-  ProfileFollows,
-  Profiles,
-  TableDiscriminator,
-} from '../db';
+import { db, firstOrThrow, Instances, Notifications, pg, ProfileFollows, Profiles } from '../db';
 import { InstanceKind, InstanceState, NotificationKind, ProfileFollowPolicy } from '../enums';
 import { NotFoundError } from '../error';
 import { createFollowNotification, deleteNotificationBySource } from './notification';
@@ -119,7 +109,7 @@ test('Follow 알림은 Remote Recipient source를 거부한다', async () => {
 });
 
 test('Follow 알림은 존재하지 않거나 삭제된 source를 거부한다', async () => {
-  const missingSourceId = createId(TableDiscriminator.ProfileFollows);
+  const missingSourceId = crypto.randomUUID();
   await assert.rejects(createFollowNotification(missingSourceId), NotFoundError);
   assert.deepEqual(await readNotifications(missingSourceId), []);
 
