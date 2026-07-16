@@ -115,7 +115,6 @@ export const approveProfileFollowRequest = async (
       .from(ProfileFollowRequests)
       .where(eq(ProfileFollowRequests.id, profileFollowRequestId))
       .limit(1)
-      .for('update', { of: ProfileFollowRequests })
       .then(firstOrThrowWith(() => new NotFoundError('Profile follow request not found')));
 
     if (request.followeeProfileId !== actorProfileId) {
@@ -186,7 +185,6 @@ const deleteProfileFollowRequestAsActor = async (
       .from(ProfileFollowRequests)
       .where(eq(ProfileFollowRequests.id, profileFollowRequestId))
       .limit(1)
-      .for('update', { of: ProfileFollowRequests })
       .then(firstOrThrowWith(() => new NotFoundError('Profile follow request not found')));
     const expectedActorProfileId =
       actorRole === 'FOLLOWEE' ? request.followeeProfileId : request.followerProfileId;
