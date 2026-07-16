@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import {
   db,
   firstOrThrow,
@@ -12,7 +12,6 @@ import {
 } from '../db';
 import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
 import { NotFoundError, PermissionDeniedError } from '../error';
-import { disableProfile } from './profile';
 import * as profileFollowRequestLifecycle from './profile-follow-request';
 import type { Transaction } from '../db';
 
@@ -451,55 +450,6 @@ test('동시 승인은 relation과 count를 한 번만 만들고 request를 제�
   );
 });
 
-test('request 생성과 승인은 pair를 직렬화해 relation과 request가 함께 남지 않게 한다', async () => {
-  const { followee, follower, request } = await createPendingRequest();
-  let releaseRelationTable!: () => void;
-  const relationTableReleased = new Promise<void>((resolve) => {
-    releaseRelationTable = resolve;
-  });
-  let relationTableLocked!: () => void;
-  const relationTableIsLocked = new Promise<void>((resolve) => {
-    relationTableLocked = resolve;
-  });
-  const blocker = db.transaction(async (tx) => {
-    await tx.execute(sql`lock table ${ProfileFollows} in access exclusive mode`);
-    relationTableLocked();
-    await relationTableReleased;
-  });
-  await relationTableIsLocked;
-
-  const approval = lifecycle.approveProfileFollowRequest!({
-    actorProfileId: followee.id,
-    profileFollowRequestId: request.id,
-  });
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  const duplicate = lifecycle.ensureProfileFollowRequest({
-    followeeProfileId: followee.id,
-    followerProfileId: follower.id,
-  });
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  releaseRelationTable();
-
-  const [, duplicateResult] = await Promise.all([approval, duplicate, blocker]);
-  assert.equal(duplicateResult.kind, 'ESTABLISHED');
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollowRequests)
-      .where(eq(ProfileFollowRequests.followerProfileId, follower.id))
-      .then((rows) => rows.length),
-    0,
-  );
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(eq(ProfileFollows.followerProfileId, follower.id))
-      .then((rows) => rows.length),
-    1,
-  );
-});
-
 test('caller rollback은 승인 request/relation/count 전이를 모두 되돌린다', async () => {
   const { followee, follower, request } = await createPendingRequest();
 
@@ -534,75 +484,6 @@ test('caller rollback은 승인 request/relation/count 전이를 모두 되돌�
     (await db.select().from(Profiles).where(eq(Profiles.id, follower.id)).then(firstOrThrow))
       .followingCount,
     0,
-  );
-  assert.equal(
-    (await db.select().from(Profiles).where(eq(Profiles.id, followee.id)).then(firstOrThrow))
-      .followersCount,
-    0,
-  );
-});
-
-test('승인은 participant Profile을 잠가 disable 경쟁을 직렬화한다', async () => {
-  const { followee, follower, request } = await createPendingRequest();
-  let releaseRelationTable!: () => void;
-  const relationTableReleased = new Promise<void>((resolve) => {
-    releaseRelationTable = resolve;
-  });
-  let relationTableLocked!: () => void;
-  const relationTableIsLocked = new Promise<void>((resolve) => {
-    relationTableLocked = resolve;
-  });
-  const blocker = db.transaction(async (tx) => {
-    await tx.execute(sql`lock table ${ProfileFollows} in access exclusive mode`);
-    relationTableLocked();
-    await relationTableReleased;
-  });
-  await relationTableIsLocked;
-
-  const approval = lifecycle.approveProfileFollowRequest!({
-    actorProfileId: followee.id,
-    profileFollowRequestId: request.id,
-  });
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  let disableSettled = false;
-  const disabling = disableProfile(follower.id).finally(() => {
-    disableSettled = true;
-  });
-
-  let disabledBeforeApprovalReleased: boolean;
-  let outcomes: PromiseSettledResult<unknown>[];
-  try {
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    disabledBeforeApprovalReleased = disableSettled;
-  } finally {
-    releaseRelationTable();
-    outcomes = await Promise.allSettled([blocker, approval, disabling]);
-  }
-
-  assert.equal(disabledBeforeApprovalReleased, false);
-  assert.deepEqual(
-    outcomes.map(({ status }) => status),
-    ['fulfilled', 'fulfilled', 'fulfilled'],
-  );
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollowRequests)
-      .where(eq(ProfileFollowRequests.id, request.id))
-      .then((rows) => rows.length),
-    0,
-  );
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(eq(ProfileFollows.followerProfileId, follower.id))
-      .then((rows) => rows.length),
-    1,
-  );
-  assert.equal(
-    (await db.select().from(Profiles).where(eq(Profiles.id, follower.id)).then(firstOrThrow)).state,
-    ProfileState.DISABLED,
   );
   assert.equal(
     (await db.select().from(Profiles).where(eq(Profiles.id, followee.id)).then(firstOrThrow))

@@ -11,7 +11,7 @@ import {
 } from '../db';
 import { InstanceState, ProfileState } from '../enums';
 import { NotFoundError, PermissionDeniedError } from '../error';
-import { ensureProfileFollow, lockProfileFollowPair } from './profile-follow-relation';
+import { ensureProfileFollow } from './profile-follow-relation';
 import type { Transaction } from '../db';
 
 export type ProfileFollowRequestRow = typeof ProfileFollowRequests.$inferSelect;
@@ -70,19 +70,6 @@ export const ensureProfileFollowRequest = async (
       return { created: false, kind: 'ESTABLISHED', profileFollow };
     }
 
-    await lockProfileFollowPair(pair, tx);
-
-    const concurrent = await tx
-      .select()
-      .from(ProfileFollows)
-      .where(pairCondition(ProfileFollows, pair))
-      .limit(1)
-      .then(first);
-    if (concurrent) {
-      await tx.delete(ProfileFollowRequests).where(pairCondition(ProfileFollowRequests, pair));
-      return { created: false, kind: 'ESTABLISHED', profileFollow: concurrent };
-    }
-
     const inserted = await tx
       .insert(ProfileFollowRequests)
       .values(pair)
@@ -123,25 +110,6 @@ export const approveProfileFollowRequest = async (
   readonly profileFollowRequestId: string;
 }> =>
   getDatabaseConnection(tx).transaction(async (tx) => {
-    const candidateRequest = await tx
-      .select()
-      .from(ProfileFollowRequests)
-      .where(eq(ProfileFollowRequests.id, profileFollowRequestId))
-      .limit(1)
-      .then(firstOrThrowWith(() => new NotFoundError('Profile follow request not found')));
-
-    if (candidateRequest.followeeProfileId !== actorProfileId) {
-      throw new PermissionDeniedError();
-    }
-
-    await lockProfileFollowPair(
-      {
-        followeeProfileId: candidateRequest.followeeProfileId,
-        followerProfileId: candidateRequest.followerProfileId,
-      },
-      tx,
-    );
-
     const request = await tx
       .select()
       .from(ProfileFollowRequests)
@@ -168,8 +136,7 @@ export const approveProfileFollowRequest = async (
           ne(Instances.state, InstanceState.SUSPENDED),
         ),
       )
-      .orderBy(Profiles.id)
-      .for('update', { of: Profiles });
+      .orderBy(Profiles.id);
     const followerProfile = participants.find(
       ({ profile }) => profile.id === request.followerProfileId,
     )?.profile;

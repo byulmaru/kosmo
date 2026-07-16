@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import {
   first,
   firstOrThrow,
@@ -14,14 +14,6 @@ type ProfileFollowPair = {
   readonly followerProfileId: string;
 };
 
-export const lockProfileFollowPair = (pair: ProfileFollowPair, tx: Transaction) =>
-  tx
-    .select({ id: Profiles.id })
-    .from(Profiles)
-    .where(inArray(Profiles.id, [pair.followerProfileId, pair.followeeProfileId]))
-    .orderBy(Profiles.id)
-    .for('no key update', { of: Profiles });
-
 const pairCondition = (
   table: typeof ProfileFollows | typeof ProfileFollowRequests,
   { followeeProfileId, followerProfileId }: ProfileFollowPair,
@@ -33,8 +25,6 @@ const pairCondition = (
 
 export const ensureProfileFollow = async (pair: ProfileFollowPair, tx?: Transaction) =>
   getDatabaseConnection(tx).transaction(async (tx) => {
-    await lockProfileFollowPair(pair, tx);
-
     const existing = await tx
       .select()
       .from(ProfileFollows)
