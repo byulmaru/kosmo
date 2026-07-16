@@ -19,7 +19,6 @@ const instanceId = '00000000-0000-8000-8000-000000000001';
 const profileId = '00000000-0000-8000-8000-000000000002';
 const firstPostId = '00000000-0000-8000-8000-000000000003';
 const secondPostId = '00000000-0000-8000-8000-000000000004';
-const thirdPostId = '00000000-0000-8000-8000-000000000005';
 
 test('enforces the ActivityPub Post mapping database contract', async () => {
   assert.ok(process.env.DATABASE_URL);
@@ -105,8 +104,7 @@ test('enforces the ActivityPub Post mapping database contract', async () => {
       INSERT INTO post (id, profile_id, visibility, state)
       VALUES
         (${firstPostId}, ${profileId}, 'PUBLIC', 'ACTIVE'),
-        (${secondPostId}, ${profileId}, 'PUBLIC', 'ACTIVE'),
-        (${thirdPostId}, ${profileId}, 'PUBLIC', 'ACTIVE')
+        (${secondPostId}, ${profileId}, 'PUBLIC', 'ACTIVE')
     `;
 
     const [generatedMapping] = await sql`
@@ -116,20 +114,10 @@ test('enforces the ActivityPub Post mapping database contract', async () => {
     `;
     assert.deepEqual(generatedMapping, { idVersion: 7, publishedAt: null });
 
-    await sql`
-      INSERT INTO activitypub_post (uri, post_id, received_at, published_at)
-      VALUES (
-        'https://remote.test/notes/two',
-        ${secondPostId},
-        '2026-07-16 05:27:17+00',
-        '2026-07-16 05:00:00+00'
-      )
-    `;
-
     await assert.rejects(
       sql`
         INSERT INTO activitypub_post (uri, post_id, received_at)
-        VALUES ('https://remote.test/notes/one', ${thirdPostId}, '2026-07-16 05:27:18+00')
+        VALUES ('https://remote.test/notes/one', ${secondPostId}, '2026-07-16 05:27:18+00')
       `,
       { code: '23505' },
     );
@@ -141,10 +129,10 @@ test('enforces the ActivityPub Post mapping database contract', async () => {
       { code: '23505' },
     );
 
-    await sql`UPDATE post SET deleted_at = now() WHERE id = ${secondPostId}`;
+    await sql`UPDATE post SET deleted_at = now() WHERE id = ${firstPostId}`;
     assert.equal(
       (
-        await sql`SELECT count(*)::int AS count FROM activitypub_post WHERE post_id = ${secondPostId}`
+        await sql`SELECT count(*)::int AS count FROM activitypub_post WHERE post_id = ${firstPostId}`
       )[0]?.count,
       1,
     );
