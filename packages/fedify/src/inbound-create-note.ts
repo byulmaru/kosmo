@@ -7,7 +7,7 @@ import type { InboxContext } from '@fedify/fedify';
 import type { Create, LanguageString } from '@fedify/vocab';
 import type { PostVisibility as PostVisibilityValue } from '@kosmo/core/enums';
 
-export type InboundCreateMaterializationInput = {
+export type InboundCreateNoteMaterializationInput = {
   actorUri: string;
   content: string | null;
   mediaType: string | null;
@@ -41,11 +41,11 @@ const resolveVisibility = (note: Note): PostVisibilityValue | undefined => {
   return undefined;
 };
 
-export const handleInboundCreate = async (
+export const handleInboundCreateNote = async (
   context: InboxContext<void>,
   create: Create,
   receivedAt: Temporal.Instant = getNow(),
-): Promise<InboundCreateMaterializationInput | undefined> => {
+): Promise<InboundCreateNoteMaterializationInput | undefined> => {
   const actorUri = uniqueHref(create.actorIds);
   const objectUri = uniqueHref(create.objectIds);
 

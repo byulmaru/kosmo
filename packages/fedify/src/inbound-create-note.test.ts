@@ -30,7 +30,7 @@ import { eq, ne } from 'drizzle-orm';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
-import type * as InboundCreate from './inbound-create';
+import type * as InboundCreateNote from './inbound-create-note';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -46,7 +46,7 @@ let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
 let Profiles: typeof CoreDb.Profiles;
-let handleInboundCreate: typeof InboundCreate.handleInboundCreate;
+let handleInboundCreateNote: typeof InboundCreateNote.handleInboundCreateNote;
 let localInstanceId: string;
 
 describe('inbound Create(Note)', () => {
@@ -56,7 +56,7 @@ describe('inbound Create(Note)', () => {
     ({ ActivityPubActors, db, firstOrThrow, Instances, pg, Profiles } =
       await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
-    ({ handleInboundCreate } = await import('./inbound-create'));
+    ({ handleInboundCreateNote } = await import('./inbound-create-note'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
   });
@@ -88,7 +88,7 @@ describe('inbound Create(Note)', () => {
       object: note,
     });
 
-    const result = await handleInboundCreate(createContext(), create, receivedAt);
+    const result = await handleInboundCreateNote(createContext(), create, receivedAt);
 
     assert.deepEqual(result, {
       actorUri: remoteActorUri.href,
@@ -116,7 +116,7 @@ describe('inbound Create(Note)', () => {
       objects: [note, new URL(remoteObjectUri.href)],
     });
 
-    const result = await handleInboundCreate(createContext(), create, receivedAt);
+    const result = await handleInboundCreateNote(createContext(), create, receivedAt);
 
     assert.equal(result?.visibility, PostVisibility.UNLISTED);
     assert.equal(result?.objectUri, remoteObjectUri.href);
@@ -152,7 +152,7 @@ describe('inbound Create(Note)', () => {
       const create = new Create({ actor: remoteActorUri, object: remoteObjectUri });
 
       assert.equal(
-        await handleInboundCreate(createContext(documentLoader), create, receivedAt),
+        await handleInboundCreateNote(createContext(documentLoader), create, receivedAt),
         undefined,
         name,
       );
@@ -176,7 +176,7 @@ describe('inbound Create(Note)', () => {
 
     for (const create of activities) {
       assert.equal(
-        await handleInboundCreate(createContext(documentLoader), create, receivedAt),
+        await handleInboundCreateNote(createContext(documentLoader), create, receivedAt),
         undefined,
       );
     }
@@ -213,7 +213,7 @@ describe('inbound Create(Note)', () => {
 
     for (const object of invalidObjects) {
       const create = new Create({ actor: remoteActorUri, object });
-      assert.equal(await handleInboundCreate(createContext(), create, receivedAt), undefined);
+      assert.equal(await handleInboundCreateNote(createContext(), create, receivedAt), undefined);
     }
 
     const mismatchedNote = new Note({
@@ -227,7 +227,7 @@ describe('inbound Create(Note)', () => {
       documentUrl: url,
     }));
     assert.equal(
-      await handleInboundCreate(
+      await handleInboundCreateNote(
         createContext(mismatchedDocumentLoader),
         new Create({ actor: remoteActorUri, object: remoteObjectUri }),
         receivedAt,
@@ -256,7 +256,7 @@ describe('inbound Create(Note)', () => {
     });
 
     assert.equal(
-      (await handleInboundCreate(createContext(documentLoader), create, receivedAt))?.objectUri,
+      (await handleInboundCreateNote(createContext(documentLoader), create, receivedAt))?.objectUri,
       crossOriginObjectUri.href,
     );
     assert.equal(documentLoader.mock.calls.length, 1);
@@ -265,7 +265,7 @@ describe('inbound Create(Note)', () => {
       throw new Error('remote object unavailable');
     });
     assert.equal(
-      await handleInboundCreate(
+      await handleInboundCreateNote(
         createContext(failedLoader),
         new Create({ actor: remoteActorUri, object: remoteObjectUri }),
         receivedAt,
@@ -277,9 +277,9 @@ describe('inbound Create(Note)', () => {
 
   test('signed Create reaches the same validation boundary through personal and shared inboxes', async () => {
     await createStoredRemoteActor();
-    const calls: Array<InboundCreate.InboundCreateMaterializationInput | undefined> = [];
+    const calls: Array<InboundCreateNote.InboundCreateNoteMaterializationInput | undefined> = [];
     const fixture = await createInboxFixture(async (context, activity) => {
-      calls.push(await handleInboundCreate(context, activity, receivedAt));
+      calls.push(await handleInboundCreateNote(context, activity, receivedAt));
     });
 
     const personalResponse = await fixture.federation.fetch(
