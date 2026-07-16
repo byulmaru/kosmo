@@ -8,16 +8,28 @@ import {
 } from './follow-delivery';
 import type { Context } from '@fedify/fedify';
 import type { Recipient } from '@fedify/vocab';
-import type { ProfileFollowDelivery, RemoteProfileFollowActor } from '@kosmo/core/services';
 
-type CreateContext = () => Promise<Context<void>>;
+type RemoteProfileFollowActor = {
+  inboxUri: string | null;
+  sharedInboxUri: string | null;
+  uri: string;
+};
 
-const createFederationContext: CreateContext = async () => {
+type ProfileFollowDeliveryOptions = {
+  actor: RemoteProfileFollowActor;
+  profileFollow: {
+    createdAt: Temporal.Instant;
+    id: string;
+  };
+  senderProfileId: string;
+};
+
+const createFederationContext = async (): Promise<Context<void>> => {
   const localInstance = await resolveConfiguredLocalInstance();
   return federation.createContext(new URL(localInstance.canonicalOrigin), undefined);
 };
 
-const toRecipient = (actor: RemoteProfileFollowActor): Recipient => {
+export const toProfileFollowRecipient = (actor: RemoteProfileFollowActor): Recipient => {
   if (!actor.inboxUri) {
     throw new TypeError('ActivityPub follow recipient must have an inbox.');
   }
@@ -29,37 +41,40 @@ const toRecipient = (actor: RemoteProfileFollowActor): Recipient => {
   };
 };
 
-export const createProfileFollowDelivery = (
-  createContext: CreateContext = createFederationContext,
-): ProfileFollowDelivery => ({
-  sendFollow: async ({ actor, profileFollow, senderProfileId }) => {
-    const recipientActor = toRecipient(actor);
-    const context = await createContext();
-    await sendFollowActivity({
-      context,
-      profileFollowCreatedAt: profileFollow.createdAt,
-      profileFollowId: profileFollow.id,
-      recipientActor,
-      senderProfileId,
-    });
-  },
-  sendUndo: async ({ actor, profileFollow, senderProfileId }) => {
-    const recipientActor = toRecipient(actor);
-    const context = await createContext();
-    const originalFollow = new Follow({
-      actor: context.getActorUri(senderProfileId),
-      id: getFollowActivityUri(context.canonicalOrigin, profileFollow.id),
-      object: new URL(actor.uri),
-      published: profileFollow.createdAt,
-    });
+export const sendProfileFollow = async ({
+  actor,
+  profileFollow,
+  senderProfileId,
+}: ProfileFollowDeliveryOptions): Promise<void> => {
+  const recipientActor = toProfileFollowRecipient(actor);
+  const context = await createFederationContext();
+  await sendFollowActivity({
+    context,
+    profileFollowCreatedAt: profileFollow.createdAt,
+    profileFollowId: profileFollow.id,
+    recipientActor,
+    senderProfileId,
+  });
+};
 
-    await sendUndoFollowActivity({
-      context,
-      originalFollow,
-      recipientActor,
-      senderProfileId,
-    });
-  },
-});
+export const sendProfileUnfollow = async ({
+  actor,
+  profileFollow,
+  senderProfileId,
+}: ProfileFollowDeliveryOptions): Promise<void> => {
+  const recipientActor = toProfileFollowRecipient(actor);
+  const context = await createFederationContext();
+  const originalFollow = new Follow({
+    actor: context.getActorUri(senderProfileId),
+    id: getFollowActivityUri(context.canonicalOrigin, profileFollow.id),
+    object: new URL(actor.uri),
+    published: profileFollow.createdAt,
+  });
 
-export const profileFollowDelivery = createProfileFollowDelivery();
+  await sendUndoFollowActivity({
+    context,
+    originalFollow,
+    recipientActor,
+    senderProfileId,
+  });
+};

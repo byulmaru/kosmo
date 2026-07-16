@@ -33,7 +33,7 @@ type ProfileFollowInput = {
   followeeProfileId: string;
 };
 
-export type RemoteProfileFollowActor = Pick<
+type RemoteProfileFollowActor = Pick<
   typeof ActivityPubActors.$inferSelect,
   'inboxUri' | 'sharedInboxUri' | 'uri'
 >;
@@ -44,40 +44,24 @@ type ProfileFollowDeliveryOptions = {
   senderProfileId: string;
 };
 
-export type ProfileFollowDelivery = {
-  sendFollow(options: ProfileFollowDeliveryOptions): Promise<void>;
-  sendUndo(options: ProfileFollowDeliveryOptions): Promise<void>;
-};
-
 type DeliveryCommand = ProfileFollowDeliveryOptions & {
   kind: 'FOLLOW' | 'UNDO';
 };
 
-const deliver = async (
-  delivery: ProfileFollowDelivery,
-  command: DeliveryCommand | undefined,
-): Promise<void> => {
+const deliver = async (command: DeliveryCommand | undefined): Promise<void> => {
   if (!command) {
     return;
   }
 
-  try {
-    if (command.kind === 'FOLLOW') {
-      await delivery.sendFollow(command);
-    } else {
-      await delivery.sendUndo(command);
-    }
-  } catch (cause) {
-    console.error('Failed to deliver ActivityPub profile follow activity', {
-      actorUri: command.actor.uri,
-      activity: command.kind,
-      cause,
-      profileFollowId: command.profileFollow.id,
-    });
+  const { sendProfileFollow, sendProfileUnfollow } = await import('@kosmo/fedify');
+  if (command.kind === 'FOLLOW') {
+    await sendProfileFollow(command);
+  } else {
+    await sendProfileUnfollow(command);
   }
 };
 
-const createService = (delivery: ProfileFollowDelivery | undefined) => ({
+const service = {
   followProfile: async ({
     followerProfileId,
     followeeProfileId,
@@ -123,7 +107,7 @@ const createService = (delivery: ProfileFollowDelivery | undefined) => ({
       if (!isRemote && target.instanceKind !== InstanceKind.LOCAL) {
         throw new NotFoundError('Profile not found');
       }
-      if (isRemote && (!delivery || !target.actorUri)) {
+      if (isRemote && !target.actorUri) {
         throw new NotFoundError('Profile not found');
       }
 
@@ -189,9 +173,7 @@ const createService = (delivery: ProfileFollowDelivery | undefined) => ({
       await createFollowNotification(result.result.profileFollow.id).catch(() => undefined);
     }
 
-    if (delivery) {
-      await deliver(delivery, command);
-    }
+    await deliver(command);
     return result;
   },
 
@@ -227,7 +209,7 @@ const createService = (delivery: ProfileFollowDelivery | undefined) => ({
         .then(firstOrThrowWith(() => new NotFoundError('Profile not found')));
 
       const isRemote = target.instanceKind === InstanceKind.ACTIVITYPUB;
-      if (isRemote && (!delivery || !target.actorUri)) {
+      if (isRemote && !target.actorUri) {
         throw new NotFoundError('Profile not found');
       }
 
@@ -292,14 +274,9 @@ const createService = (delivery: ProfileFollowDelivery | undefined) => ({
       );
     }
 
-    if (delivery) {
-      await deliver(delivery, command);
-    }
+    await deliver(command);
     return result;
   },
-});
+};
 
-export const createProfileFollowService = ({ delivery }: { delivery: ProfileFollowDelivery }) =>
-  createService(delivery);
-
-export const { followProfile, unfollowProfile } = createService(undefined);
+export const { followProfile, unfollowProfile } = service;

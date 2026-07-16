@@ -4,7 +4,7 @@ export {
   sendFollowActivity,
   sendUndoFollowActivity,
 } from './src/follow-delivery';
-export { profileFollowDelivery } from './src/profile-follow-delivery';
+export { sendProfileFollow, sendProfileUnfollow } from './src/profile-follow-delivery';
 export {
   findOrMaterializeRemoteProfileActor,
   materializeRemoteProfileActor,

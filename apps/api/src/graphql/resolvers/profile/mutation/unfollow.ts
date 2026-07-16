@@ -1,5 +1,5 @@
+import { unfollowProfile } from '@kosmo/core/services';
 import { builder } from '@/graphql/builder';
-import { unfollowProfile } from '@/profile/follow-service';
 import { Profile, ProfileFollow } from '../ref';
 
 builder.mutationField('unfollowProfile', (t) =>

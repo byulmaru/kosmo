@@ -1,6 +1,6 @@
 import { ConflictError } from '@kosmo/core/error';
+import { followProfile } from '@kosmo/core/services';
 import { builder } from '@/graphql/builder';
-import { followProfile } from '@/profile/follow-service';
 import { Profile, ProfileFollow, ProfileFollowRequest } from '../ref';
 
 const ProfileFollowResult = builder.unionType('ProfileFollowResult', {
