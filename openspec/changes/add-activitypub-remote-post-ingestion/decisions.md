@@ -42,7 +42,17 @@
 - Decision Outcome: hydrated `Note.id.href`의 unique object mapping이 durable duplicate 판정이다. Fedify activity idempotency는 activity ID가 있을 때 선택적인 조기 최적화로 사용할 수 있고 application은 activity ID를 저장하거나 materialization input으로 전달하지 않는다.
 - Alternatives Considered: PostgreSQL global activity receipt, Fedify KV만 사용, activity ID를 object mapping에 함께 저장.
 - Consequences: Fedify global idempotency를 사용하면 같은 activity ID의 후속 delivery는 object URI와 무관하게 handler 전에 제거될 수 있다. handler에 도달한 delivery의 durable identity만 Note object URI로 판정한다. activity-level audit/exactly-once가 실제 요구되면 별도 이슈에서 receipt를 다시 검토한다.
-- Confirmation / Follow-up: PROD-255가 unique object mapping을, PROD-260이 activity ID 없는 delivery와 early idempotency 경계를 검증한다.
+- Confirmation / Follow-up: PROD-255가 unique ActivityPub Post mapping을, PROD-260이 activity ID 없는 delivery와 early idempotency 경계를 검증한다.
+
+### Materialized Post mapping에는 protocol type과 작성자를 중복 저장하지 않는다
+
+- Decision Date: 2026-07-16
+- Status: Accepted
+- Context / Problem: ActivityStreams raw type은 확장 가능하지만 이번 storage row는 지원 검증을 통과해 kosmo Post로 materialize된 결과만 나타낸다. 또한 작성자는 `Post.profileId -> ActivityPubActor.profileId` 관계로 이미 유일하게 도출할 수 있다.
+- Decision Outcome: 범용 `activitypub_object`와 `ActivityPubObjectType` enum 대신 Post 전용 `activitypub_post` mapping을 사용하고, `type`과 `activityPubActorId`를 저장하지 않는다. mapping은 unique URI/Post, delivery `receivedAt`과 원본 nullable `publishedAt`만 소유한다.
+- Alternatives Considered: 범용 URI registry와 polymorphic kosmo target, nullable target FK와 CHECK, 범용 registry + subtype table, Post mapping에 enum/actor FK 유지.
+- Consequences: actor와 Post URI의 cross-table global uniqueness는 제공하지 않고 actor physical delete를 remote Post mapping FK로 제한하지 않는다. 향후 원본 type에 따른 저장 동작이 실제로 필요할 때 별도 계약과 migration으로 추가한다.
+- Confirmation / Follow-up: PROD-255가 catalog test로 type/actor FK 부재, Post cascade와 UUIDv7 default를 검증한다.
 
 ### Duplicate Create는 first-write-wins no-op으로 처리한다
 

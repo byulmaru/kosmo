@@ -86,6 +86,17 @@ export const ActivityPubActorKeys = pgTable(
   (table) => [unique().on(table.activityPubActorId, table.kind)],
 );
 
+export const ActivityPubPosts = pgTable('activitypub_post', {
+  id: id(),
+  uri: text('uri').unique().notNull(),
+  postId: uuid('post_id')
+    .unique()
+    .notNull()
+    .references(() => Posts.id, { onDelete: 'cascade' }),
+  receivedAt: datetime('received_at').notNull(),
+  publishedAt: datetime('published_at'),
+});
+
 export const Applications = pgTable(
   'application',
   {
