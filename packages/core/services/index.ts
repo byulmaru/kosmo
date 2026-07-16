@@ -2,4 +2,10 @@ export { recordInboundFollow, removeInboundFollow } from './inbound-profile-foll
 export { createFollowNotification, deleteNotificationBySource } from './notification';
 export { disableProfile } from './profile';
 export { followProfile, unfollowProfile } from './profile-follow';
+export {
+  approveProfileFollowRequest,
+  cancelProfileFollowRequest,
+  findProfileFollowRequestByPair,
+  rejectProfileFollowRequest,
+} from './profile-follow-request';
 export { createOidcSession } from './session';
