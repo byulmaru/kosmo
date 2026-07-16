@@ -120,6 +120,26 @@ Drizzle query policy:
 - Define database foreign keys in `packages/core/db/tables.ts` with `.references()`; relation metadata is not a substitute for database constraints.
 - If a future change adopts the relational query API, introduce only the relation definitions required by concrete query paths and update this policy in the same change.
 
+## Runtime Locking Policy
+
+- Application use cases must not add explicit pessimistic locks such as `SELECT ... FOR UPDATE`, table locks,
+  or advisory locks merely to make every concurrent outcome perfectly serialized.
+- Use an explicit lock only when a concrete race can violate a critical invariant and the resulting damage is severe or
+  difficult to reverse, such as duplicate financial settlement, overspending a balance, or another transaction with
+  equivalent correctness requirements.
+- Prefer database constraints, atomic conditional `INSERT`/`UPDATE`/`DELETE`, upsert/conflict handling, idempotency
+  keys, and bounded retry before considering a lock. A short transaction and the locks PostgreSQL acquires inherently
+  while executing normal DML are not prohibited by this policy.
+- Social interactions whose rare race is benign or repairable should favor availability and simpler code over strict
+  serialization. In particular, Follow Request creation, acceptance, rejection, or cancellation must not lock the
+  participant Profile or Follow Request rows solely to preserve perfect request consistency; use uniqueness and atomic
+  writes and tolerate a harmless concurrent winner instead.
+- A PR that introduces an explicit lock must explain the protected invariant, the exact race and user/business impact,
+  why constraint/atomic/idempotent approaches are insufficient, the smallest lock scope and stable acquisition order,
+  and how lock duration, deadlock, timeout, and concurrent behavior were verified.
+- Infrastructure coordination locks with a separate operational purpose, such as the migration runner advisory lock,
+  are reviewed under that workflow and are not precedent for adding locks to product use cases.
+
 ## Base Table Responsibilities
 
 - `account`: maps an OIDC account to a kosmo internal account. Authentication secrets remain owned by the OIDC server.
@@ -193,6 +213,10 @@ Thumbnail policy:
 - Are CDN URL and Object Storage key responsibilities kept separate?
 - Are ActivityPub/AT Protocol detail tables deferred until implementation needs are concrete?
 - Is the MVP schema small while preserving expensive-to-change boundaries?
+- Does each explicit application lock protect a documented critical invariant whose failure would cause severe or
+  difficult-to-reverse harm?
+- Could a constraint, atomic conditional write, conflict handling, idempotency, or bounded retry replace the lock?
+- Are benign social races, especially Follow Request races, handled without explicit pessimistic locking?
 
 ## Response Shape For Reviews
 
