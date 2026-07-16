@@ -4,7 +4,6 @@ import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
 import {
-  NotificationRecipientInstances,
   NotificationRecipientProfiles,
   NotificationRelatedInstances,
   NotificationRelatedProfiles,
@@ -16,13 +15,6 @@ export type FollowNotificationRow = NotificationRow & { relatedProfileId: string
 
 export const notificationNodeType = (kind: string) =>
   kind === NotificationKind.FOLLOW ? ('FollowNotification' as const) : null;
-
-export const resolveNotificationNode = (
-  notification: Omit<FollowNotificationRow, 'kind'> & { kind: string },
-) => {
-  const __typename = notificationNodeType(notification.kind);
-  return __typename ? { ...notification, __typename } : null;
-};
 
 export const Notification = builder.interfaceRef<NotificationRow>('Notification');
 
@@ -49,10 +41,6 @@ export const FollowNotification = createObjectRef<FollowNotificationRow>(
       .innerJoin(
         NotificationRecipientProfiles,
         eq(NotificationRecipientProfiles.id, Notifications.recipientProfileId),
-      )
-      .innerJoin(
-        NotificationRecipientInstances,
-        eq(NotificationRecipientInstances.id, NotificationRecipientProfiles.instanceId),
       )
       .innerJoin(
         NotificationRelatedProfiles,

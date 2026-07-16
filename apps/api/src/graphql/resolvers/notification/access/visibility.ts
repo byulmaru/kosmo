@@ -6,7 +6,7 @@ import {
   ProfileFollows,
   Profiles,
 } from '@kosmo/core/db';
-import { NotificationKind } from '@kosmo/core/enums';
+import { NotificationKind, ProfileState } from '@kosmo/core/enums';
 import { and, eq, exists, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { visibleProfileWhere } from '@/profile/visibility';
@@ -14,7 +14,6 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { UserContext } from '@/context';
 
 export const NotificationRecipientProfiles = alias(Profiles, 'notification_recipient_profile');
-export const NotificationRecipientInstances = alias(Instances, 'notification_recipient_instance');
 export const NotificationRelatedProfiles = alias(Profiles, 'notification_related_profile');
 export const NotificationRelatedInstances = alias(Instances, 'notification_related_instance');
 
@@ -44,10 +43,7 @@ export const visibleFollowNotificationWhere = ({ ctx }: { ctx: UserContext }) =>
     accountId ? notificationMembershipWhere({ accountId }) : sql`1=0`,
     eq(Notifications.kind, NotificationKind.FOLLOW),
     eq(ProfileFollows.followeeProfileId, Notifications.recipientProfileId),
-    visibleProfileWhere({
-      instance: NotificationRecipientInstances,
-      profile: NotificationRecipientProfiles,
-    }),
+    eq(NotificationRecipientProfiles.state, ProfileState.ACTIVE),
     visibleProfileWhere({
       instance: NotificationRelatedInstances,
       profile: NotificationRelatedProfiles,
