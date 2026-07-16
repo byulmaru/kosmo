@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 [PROD-354](https://linear.app/byulmaru/issue/PROD-354), 최종 통합·archive gate [PROD-256](https://linear.app/byulmaru/issue/PROD-256), 독립 구현 이슈 PROD-255/259/260/261/262와 완료된 [PROD-341](https://linear.app/byulmaru/issue/PROD-341)의 최신 계약을 반영한다. 이 이슈들은 parent-child 계층 대신 Linear Block 관계로 전달 순서를 표현한다. PR #258의 이전 activity receipt, duplicate revision과 lock recovery 설계는 source of truth가 아니다.
+이 기록은 [PROD-354](https://linear.app/byulmaru/issue/PROD-354), 최종 통합·archive gate [PROD-256](https://linear.app/byulmaru/issue/PROD-256), 독립 구현 이슈 PROD-255/259/260과 완료된 [PROD-341](https://linear.app/byulmaru/issue/PROD-341)의 최신 계약을 반영한다. 이 이슈들은 parent-child 계층 대신 Linear Block 관계로 전달 순서를 표현한다. PR #258의 이전 activity receipt, duplicate revision과 lock recovery 설계는 source of truth가 아니다.
 
 ## Decision Records
 
@@ -52,7 +52,7 @@
 - Decision Outcome: 최초 object URI delivery만 mapping/Post/first PostContent를 만든다. 이미 mapping된 object URI의 duplicate `Create`는 content, visibility와 timestamp를 변경하지 않는다. concurrent loser transaction은 unique conflict에서 전체 rollback 후 no-op한다.
 - Alternatives Considered: duplicate Create를 upsert/update로 사용, existing mapping을 `FOR UPDATE`로 잠가 revision 생성, activity receipt로 선직렬화.
 - Consequences: remote content 변경은 PROD-365 `Update(Note)`/`Delete(Note)` lifecycle 지원 전까지 반영되지 않는다. recovery transaction과 row lock이 필요하지 않다.
-- Confirmation / Follow-up: PROD-261이 object URI당 Post 하나, loser rollback과 partial row 부재를 실제 PostgreSQL에서 검증한다.
+- Confirmation / Follow-up: PROD-260이 object URI당 Post 하나, loser rollback과 partial row 부재를 실제 PostgreSQL에서 검증한다.
 
 ### Canonical content 세부는 PROD-341을 참조하고 재정의하지 않는다
 
@@ -62,7 +62,7 @@
 - Decision Outcome: PROD-259는 ActivityStreams content/mediaType/summary를 primitive projection input으로 바꾸고 PROD-341 validator가 수락한 canonical document를 반환한다. 이 change는 document schema, canonicalization, equality와 renderer를 다시 정의하지 않는다.
 - Alternatives Considered: remote-ingestion 전용 document shape, PROD-341 V1 세부 복제, raw HTML 또는 Plain Text 저장.
 - Consequences: remote-specific parsing과 safety는 PROD-259가, canonical document 의미는 PROD-341이 각각 단독 소유한다.
-- Confirmation / Follow-up: PROD-259가 projection handoff를 검증하고 PROD-261은 검증된 최초 document만 저장한다.
+- Confirmation / Follow-up: PROD-259가 projection handoff를 검증하고 PROD-260은 검증된 최초 document만 저장한다.
 
 ### Post-level mention relation을 이번 change에 만들지 않는다
 
@@ -79,10 +79,10 @@
 - Decision Date: 2026-07-15
 - Status: Accepted
 - Context / Problem: PR #212가 remote Profile/Post의 공통 visibility, instance 상태와 parent PostContent authorization을 이미 구현했다.
-- Decision Outcome: remote ingestion은 기존 `Post`/`PostContent`/connection schema와 resolver를 변경하지 않는다. PROD-262는 mapping 없는 DB fixture로 현재 authorization과 zero-network read를 회귀 검증한다.
+- Decision Outcome: remote ingestion은 기존 `Post`/`PostContent`/connection schema와 resolver를 변경하지 않는다. 별도 synthetic-fixture authorization 이슈를 두지 않고 각 구현 이슈가 자신의 결과를 검증하며, PROD-256은 PROD-260 materializer의 실제 output으로 현재 authorization과 zero-network read를 smoke 검증한다.
 - Alternatives Considered: remote 전용 resolver, object mapping을 read prerequisite로 사용, resolver 변경을 ingestion slice에 포함.
 - Consequences: 테스트가 결함을 발견하면 Linear/OpenSpec 구현 범위를 다시 연다.
-- Confirmation / Follow-up: PROD-262와 PROD-256 통합 gate가 public schema 불변과 DB-only read를 검증한다.
+- Confirmation / Follow-up: PROD-256 통합 gate가 public schema 불변과 actual materialized-row DB-only read를 검증한다.
 
 ## Remaining Decisions
 

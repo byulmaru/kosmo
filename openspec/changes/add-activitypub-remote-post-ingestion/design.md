@@ -50,7 +50,7 @@ Fedify inbox listener
   -> receivedAt, published와 remote primitive content 추출
   -> remote primitive content를 PROD-259 projection
   -> PROD-341 canonical validator
-  -> identity/visibility/timestamps + canonical document를 PROD-261 transaction
+  -> identity/visibility/timestamps + canonical document를 PROD-260 transaction
        Post
        first PostContent/currentContent
        unique object mapping
@@ -70,8 +70,8 @@ Fedify inbox listener
 #### Content projection handoff
 
 - Fedify adapter는 remote vocabulary의 content/mediaType/summary만 primitive로 바꿔 PROD-259에 전달한다.
-- published는 PROD-260 materialization input에서 PROD-261 timestamp 정책으로 직접 전달한다.
-- PROD-261은 원본 published를 mapping metadata로 보존하되 `Post.createdAt`은 receivedAt 이후가 되지 않게 clamp한다.
+- published는 PROD-260 materialization input의 timestamp 정책으로 직접 전달한다.
+- PROD-260은 원본 published를 mapping metadata로 보존하되 `Post.createdAt`은 receivedAt 이후가 되지 않게 clamp한다.
 - PROD-259는 remote HTML/plain 입력 처리만 소유한다.
 - 저장 가능한 document의 node schema, canonicalization, equality와 renderer는 PROD-341의 canonical capability를 그대로 사용한다.
 - remote-post change는 PROD-341 V1 node 목록이나 revision equality를 복제하지 않는다.
@@ -79,22 +79,23 @@ Fedify inbox listener
 #### First materialization과 concurrency
 
 - PROD-255는 unique object URI/Post mapping을 제공한다.
-- PROD-261은 최초 delivery의 mapping, Post, first PostContent와 currentContent를 하나의 transaction으로 저장한다.
+- PROD-260은 최초 delivery의 mapping, Post, first PostContent와 currentContent를 하나의 transaction으로 저장한다.
 - 같은 object URI의 concurrent delivery는 unique mapping insert에서 한 transaction만 성공한다.
 - loser transaction은 자신이 만든 Post/PostContent를 rollback하고 no-op한다. existing mapping을 다시 읽거나 잠그지 않는다.
 - 이미 mapping된 object URI의 duplicate Create는 first-write-wins no-op이다. 원격 수정·삭제는 후속 PROD-365가 소유한다.
 
-#### GraphQL regression boundary
+#### GraphQL integration boundary
 
 - remote Post 전용 resolver, object mapping join과 request-time fetch를 추가하지 않는다.
-- PROD-262는 object mapping 없이 remote Profile/Post/PostContent fixture를 만들어 existing authorization을 검증한다.
+- 각 구현 이슈는 자신이 소유한 schema, projection 또는 materialization 결과를 자체 검증한다.
+- PROD-256은 PROD-260의 실제 materializer가 만든 row로 existing authorization과 zero-network DB-only read를 smoke 검증한다.
 - connection ordering/cursor는 기존 `Post.id DESC`를 유지한다.
 
 ### Allowed Alternatives
 
 - transaction 안의 Post, PostContent와 mapping insert 순서는 달라질 수 있지만 unique conflict에서 partial row 없이 전부 rollback되어야 한다.
 - HTML/plain parser와 adapter의 내부 구조는 달라질 수 있지만 PROD-259 입력 안전성과 PROD-341 validator 경계를 만족해야 한다.
-- PROD-262의 fixture와 spy 구성은 달라질 수 있지만 production resolver/schema diff 없이 DB-only read를 검증해야 한다.
+- PROD-256의 smoke fixture와 spy 구성은 달라질 수 있지만 실제 materializer output을 사용하고 production resolver/schema diff 없이 DB-only read를 검증해야 한다.
 
 ### Known Traps
 
@@ -109,9 +110,9 @@ Fedify inbox listener
 
 1. main에 병합된 PROD-341 document와 PROD-357 inbox foundation을 사용한다.
 2. PROD-354 spec-only PR을 main에 병합한다.
-3. PROD-255/259/260/262 구현 PR은 각 schema/projection/validation/regression 결과만 전달한다.
-4. PROD-261이 PROD-255/259/260 결과를 최초 materialization transaction으로 통합한다.
-5. PROD-256이 전체 slice, canonical spec sync와 archive를 검증한다.
+3. PROD-255/259 구현 PR은 각 schema/projection 결과와 자체 검증만 전달한다.
+4. PROD-260이 validation부터 최초 materialization transaction까지 통합하고 자체 검증한다.
+5. PROD-256이 실제 materialized row의 GraphQL smoke, 전체 slice, canonical spec sync와 archive를 검증한다.
 6. 후속 이슈가 Reply/FOLLOWERS/DIRECT/Update와 다른 deferred contract를 별도 OpenSpec으로 확장한다.
 
 ## Risks / Trade-offs
@@ -120,7 +121,7 @@ Fedify inbox listener
 - **같은 activity ID가 다른 object를 가리킴**: Fedify global idempotency가 후속 delivery를 handler 전에 제거할 수 있다. 이 change는 handler에 도달한 delivery에서만 Note object URI를 durable identity로 판정한다.
 - **duplicate Create에 변경된 content가 포함됨**: first-write-wins로 무시하고 PROD-365 `Update(Note)` 지원 전에는 remote 수정 동기화를 제공하지 않는다.
 - **unknown actor delivery 유실**: profile materialization을 명시적 선행 조건으로 두어 inbox abuse surface와 숨은 network/write를 줄인다.
-- **기존 resolver 결함**: PROD-262가 결함을 발견하면 implementation scope를 다시 열고 test-only 이슈에서 조용히 수정하지 않는다.
+- **기존 resolver 결함**: PROD-256 actual-row smoke가 결함을 발견하면 resolver 소유 이슈의 Linear/OpenSpec scope를 다시 열고 통합 gate에서 조용히 수정하지 않는다.
 
 ## Migration Plan
 
