@@ -1,12 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  graphql,
-  isInputObjectType,
-  isInterfaceType,
-  isObjectType,
-  isUnionType,
-} from 'graphql';
+import { graphql, isInputObjectType, isInterfaceType, isObjectType, isUnionType } from 'graphql';
 import { encodeGlobalId } from './global-id';
 import { notificationNodeType } from './resolvers/notification/ref';
 import { schema } from './schema';
