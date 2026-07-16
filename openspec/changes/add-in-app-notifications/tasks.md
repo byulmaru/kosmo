@@ -25,7 +25,7 @@
 
 ## 5. PROD-351 권한이 있는 Profile의 visible Unread count API를 제공한다
 
-- [ ] 5.1 `Profile.unreadNotificationCount`에 membership 권한과 공통 visible predicate 및 `read_at IS NULL`을 적용한다.
+- [x] 5.1 `Profile.unreadNotificationCount`에 membership 권한과 공통 visible predicate 및 `read_at IS NULL`을 적용한다.
 - [ ] 5.2 API test로 membership·비선택 Profile과 inactive Recipient·missing source·Recipient mismatch·hidden Related Profile·read item 제외를 검증한다.
 
 ## 6. PROD-350 권한이 있는 Profile의 Notification Read mutation을 제공한다
