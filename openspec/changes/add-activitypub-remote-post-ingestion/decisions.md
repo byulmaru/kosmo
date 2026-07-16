@@ -79,10 +79,10 @@
 - Decision Date: 2026-07-15
 - Status: Accepted
 - Context / Problem: PR #212가 remote Profile/Post의 공통 visibility, instance 상태와 parent PostContent authorization을 이미 구현했다.
-- Decision Outcome: remote ingestion은 기존 `Post`/`PostContent`/connection schema와 resolver를 변경하지 않는다. 별도 synthetic-fixture authorization 이슈를 두지 않고 각 구현 이슈가 자신의 결과를 검증하며, PROD-256은 PROD-260 materializer의 실제 output으로 현재 authorization과 zero-network read를 smoke 검증한다.
+- Decision Outcome: remote ingestion은 기존 `Post`/`PostContent`/connection schema와 resolver를 변경하지 않는다. 별도 synthetic-fixture authorization 이슈를 두지 않고 각 구현 이슈가 자신의 결과를 검증하며, PROD-256은 PROD-260 materializer의 실제 output과 post-materialization 상태 전환으로 네 GraphQL surface의 authorization/connection matrix와 zero-network read를 검증한다.
 - Alternatives Considered: remote 전용 resolver, object mapping을 read prerequisite로 사용, resolver 변경을 ingestion slice에 포함.
 - Consequences: 테스트가 결함을 발견하면 Linear/OpenSpec 구현 범위를 다시 연다.
-- Confirmation / Follow-up: PROD-256 통합 gate가 public schema 불변과 actual materialized-row DB-only read를 검증한다.
+- Confirmation / Follow-up: PROD-256 통합 gate가 public schema 불변, actual materialized-row DB-only read, ACTIVE/UNRESPONSIVE allow, SUSPENDED/inactive deny와 `Post.id DESC` ordering/cursor를 검증한다.
 
 ## Remaining Decisions
 

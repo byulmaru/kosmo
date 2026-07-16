@@ -88,14 +88,16 @@ Fedify inbox listener
 
 - remote Post 전용 resolver, object mapping join과 request-time fetch를 추가하지 않는다.
 - 각 구현 이슈는 자신이 소유한 schema, projection 또는 materialization 결과를 자체 검증한다.
-- PROD-256은 PROD-260의 실제 materializer가 만든 row로 existing authorization과 zero-network DB-only read를 smoke 검증한다.
+- PROD-256은 PROD-260의 실제 materializer가 만든 row로 existing authorization과 zero-network DB-only read를 검증한다.
+- materialization 뒤 Instance/Profile/Post 상태를 전환하고 historical content/follow 관계를 구성해 Post Node, current/historical PostContent, `Profile.posts`와 `homeTimeline`의 allow/deny/connection matrix를 확인한다.
+- object mapping이 read authorization prerequisite가 아님을 확인할 때는 materialized row의 mapping을 제거하거나 동등한 supplemental fixture를 사용할 수 있다.
 - connection ordering/cursor는 기존 `Post.id DESC`를 유지한다.
 
 ### Allowed Alternatives
 
 - transaction 안의 Post, PostContent와 mapping insert 순서는 달라질 수 있지만 unique conflict에서 partial row 없이 전부 rollback되어야 한다.
 - HTML/plain parser와 adapter의 내부 구조는 달라질 수 있지만 PROD-259 입력 안전성과 PROD-341 validator 경계를 만족해야 한다.
-- PROD-256의 smoke fixture와 spy 구성은 달라질 수 있지만 실제 materializer output을 사용하고 production resolver/schema diff 없이 DB-only read를 검증해야 한다.
+- PROD-256의 matrix fixture와 spy 구성은 달라질 수 있지만 최소 하나의 실제 materializer output에서 시작하고 production resolver/schema diff 없이 네 GraphQL surface, parent authorization, ordering/cursor와 DB-only read를 검증해야 한다.
 
 ### Known Traps
 
@@ -112,7 +114,7 @@ Fedify inbox listener
 2. PROD-354 spec-only PR을 main에 병합한다.
 3. PROD-255/259 구현 PR은 각 schema/projection 결과와 자체 검증만 전달한다.
 4. PROD-260이 validation부터 최초 materialization transaction까지 통합하고 자체 검증한다.
-5. PROD-256이 실제 materialized row의 GraphQL smoke, 전체 slice, canonical spec sync와 archive를 검증한다.
+5. PROD-256이 실제 materialized row의 GraphQL compatibility matrix, 전체 slice, canonical spec sync와 archive를 검증한다.
 6. 후속 이슈가 Reply/FOLLOWERS/DIRECT/Update와 다른 deferred contract를 별도 OpenSpec으로 확장한다.
 
 ## Risks / Trade-offs
@@ -121,7 +123,7 @@ Fedify inbox listener
 - **같은 activity ID가 다른 object를 가리킴**: Fedify global idempotency가 후속 delivery를 handler 전에 제거할 수 있다. 이 change는 handler에 도달한 delivery에서만 Note object URI를 durable identity로 판정한다.
 - **duplicate Create에 변경된 content가 포함됨**: first-write-wins로 무시하고 PROD-365 `Update(Note)` 지원 전에는 remote 수정 동기화를 제공하지 않는다.
 - **unknown actor delivery 유실**: profile materialization을 명시적 선행 조건으로 두어 inbox abuse surface와 숨은 network/write를 줄인다.
-- **기존 resolver 결함**: PROD-256 actual-row smoke가 결함을 발견하면 resolver 소유 이슈의 Linear/OpenSpec scope를 다시 열고 통합 gate에서 조용히 수정하지 않는다.
+- **기존 resolver 결함**: PROD-256 actual-row matrix가 결함을 발견하면 resolver 소유 이슈의 Linear/OpenSpec scope를 다시 열고 통합 gate에서 조용히 수정하지 않는다.
 
 ## Migration Plan
 

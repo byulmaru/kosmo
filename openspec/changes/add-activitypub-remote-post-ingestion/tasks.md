@@ -110,12 +110,15 @@ actor-scoped/shared Fedify listener가 지원 delivery를 검증하고 최초 ob
 
 **Verification**
 
-- 실제 materialized row smoke, object URI당 Post 하나, loser rollback과 DB-only GraphQL read를 end-to-end로 확인한다.
+- 실제 materialized row, object URI당 Post 하나, loser rollback과 DB-only GraphQL read를 end-to-end로 확인한다.
+- materialization 뒤 상태/관계 전환과 필요한 supplemental fixture로 네 GraphQL surface의 allow/deny, ordering/cursor와 zero-network read matrix를 확인한다.
 - canonical specs sync, 전체 task 완료, strict validation과 workspace required checks를 확인한다.
 
 - [ ] 5.1 PROD-341/255/259/260 PR 병합과 각 구현 이슈의 scoped validation 증거를 확인한다.
 - [ ] 5.2 personal/shared concurrent delivery가 같은 object URI에서 Post side effect를 한 번만 commit하는지 검증한다.
 - [ ] 5.3 PROD-260 materializer가 실제로 만든 canonical document/Content Warning과 initial timestamp가 existing GraphQL schema로 조회되는지 검증한다.
-- [ ] 5.4 actual materialized row가 기존 Post/PostContent parent authorization을 따르고 GraphQL request 중 remote network 호출이 없는지 smoke 검증한다.
-- [ ] 5.5 canonical activitypub-remote-post-ingestion/data-model specs와 delta를 동기화하고 기존 Post 계약에 diff가 없으며 receipt/duplicate-update 계약이 남지 않았는지 확인한다.
-- [ ] 5.6 proposal 전체 scope 완료 후 change를 archive하고 archive 후 strict validation을 통과시킨다.
+- [ ] 5.4 actual materialized row에 historical PostContent를 추가한 뒤 Post Node, current/historical PostContent, `Profile.posts`와 `homeTimeline`을 조회하고 mapping 제거 뒤에도 authorization이 유지되며 remote network 호출이 없는지 검증한다.
+- [ ] 5.5 materialization 뒤 Instance/Profile/Post 상태를 전환해 ACTIVE/UNRESPONSIVE PUBLIC/UNLISTED allow와 SUSPENDED Instance, inactive author Profile, inactive Post의 current/historical content deny를 검증한다.
+- [ ] 5.6 실제 materialized row와 follow 관계를 사용해 remote followee의 `homeTimeline` 포함, non-followee 제외 및 `Profile.posts`/`homeTimeline`의 `Post.id DESC` ordering/cursor를 검증한다.
+- [ ] 5.7 canonical activitypub-remote-post-ingestion/data-model specs와 delta를 동기화하고 기존 Post 계약에 diff가 없으며 receipt/duplicate-update 계약이 남지 않았는지 확인한다.
+- [ ] 5.8 proposal 전체 scope 완료 후 change를 archive하고 archive 후 strict validation을 통과시킨다.
