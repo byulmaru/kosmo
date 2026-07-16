@@ -1,7 +1,14 @@
 import { and, eq, getColumns, inArray, ne, sql } from 'drizzle-orm';
 import { db, first, firstOrThrowWith, Instances, ProfileFollows, Profiles } from '../db';
-import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
+import {
+  InstanceKind,
+  InstanceState,
+  NotificationKind,
+  ProfileFollowPolicy,
+  ProfileState,
+} from '../enums';
 import { ConflictError, NotFoundError } from '../error';
+import { createFollowNotification, deleteNotificationBySource } from './notification';
 
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
 type ProfileRow = typeof Profiles.$inferSelect;
@@ -11,16 +18,27 @@ type ProfileFollowInput = {
   followeeProfileId: string;
 };
 
-export const followProfile = async ({
-  followerProfileId,
-  followeeProfileId,
-}: ProfileFollowInput): Promise<{
+type FollowProfileResult = {
   created: boolean;
   followeeProfile: ProfileRow;
   followerProfile: ProfileRow;
   profileFollow: ProfileFollowRow;
-}> =>
-  db.transaction(async (tx) => {
+};
+
+type UnfollowProfileResult = {
+  followeeProfile: ProfileRow;
+  followerProfile: ProfileRow;
+  profileFollowId: string | null;
+};
+
+type CreateFollowNotification = (sourceId: string) => Promise<void>;
+type DeleteFollowNotification = (sourceId: string) => Promise<void>;
+
+export const followProfile = async (
+  { followerProfileId, followeeProfileId }: ProfileFollowInput,
+  createNotification: CreateFollowNotification = createFollowNotification,
+): Promise<FollowProfileResult> => {
+  const result = await db.transaction(async (tx) => {
     const target = await tx
       .select({ followPolicy: Profiles.followPolicy, id: Profiles.id })
       .from(Profiles)
@@ -106,15 +124,23 @@ export const followProfile = async ({
     return { ...result, followeeProfile, followerProfile };
   });
 
-export const unfollowProfile = async ({
-  followerProfileId,
-  followeeProfileId,
-}: ProfileFollowInput): Promise<{
-  followeeProfile: ProfileRow;
-  followerProfile: ProfileRow;
-  profileFollowId: string | null;
-}> =>
-  db.transaction(async (tx) => {
+  if (result.created) {
+    try {
+      await createNotification(result.profileFollow.id);
+    } catch {
+      // Notification delivery is best-effort and must not change the committed Follow result.
+    }
+  }
+
+  return result;
+};
+
+export const unfollowProfile = async (
+  { followerProfileId, followeeProfileId }: ProfileFollowInput,
+  deleteNotification: DeleteFollowNotification = (sourceId) =>
+    deleteNotificationBySource(NotificationKind.FOLLOW, sourceId),
+): Promise<UnfollowProfileResult> => {
+  const result = await db.transaction(async (tx) => {
     const target = await tx
       .select(getColumns(Profiles))
       .from(Profiles)
@@ -163,3 +189,14 @@ export const unfollowProfile = async ({
 
     return { followeeProfile, followerProfile, profileFollowId: deleted?.id ?? null };
   });
+
+  if (result.profileFollowId) {
+    try {
+      await deleteNotification(result.profileFollowId);
+    } catch {
+      // Notification cleanup is best-effort and must not change the committed Unfollow result.
+    }
+  }
+
+  return result;
+};

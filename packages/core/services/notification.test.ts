@@ -40,6 +40,7 @@ const createProfile = async (kind: InstanceKind = InstanceKind.LOCAL) => {
 
 const readNotifications = (sourceId: string) =>
   db.select().from(Notifications).where(eq(Notifications.sourceId, sourceId));
+const skipNotification = () => Promise.resolve();
 
 after(async () => {
   if (profileIds.length > 0) {
@@ -63,12 +64,23 @@ after(async () => {
 test('Follow 알림은 source에서 Local Recipient와 Related Profile을 파생한다', async () => {
   const follower = await createProfile();
   const followee = await createProfile();
-  const { profileFollow } = await followProfile({
-    followerProfileId: follower.id,
-    followeeProfileId: followee.id,
+  const { profileFollow } = await followProfile(
+    { followerProfileId: follower.id, followeeProfileId: followee.id },
+    skipNotification,
+  );
+
+  let evaluated = false;
+  await createFollowNotification(profileFollow.id, (input) => {
+    evaluated = true;
+    assert.deepEqual(input, {
+      kind: NotificationKind.FOLLOW,
+      recipientProfileId: followee.id,
+      relatedProfileId: follower.id,
+    });
+    return Promise.resolve(true);
   });
 
-  await createFollowNotification(profileFollow.id);
+  assert.equal(evaluated, true);
 
   const [notification] = await readNotifications(profileFollow.id);
   assert.ok(notification);
@@ -80,13 +92,42 @@ test('Follow 알림은 source에서 Local Recipient와 Related Profile을 파생
   assert.equal(notification.readAt, null);
 });
 
+test('Follow 알림 eligibility가 deny이면 저장하지 않는다', async () => {
+  const follower = await createProfile();
+  const followee = await createProfile();
+  const { profileFollow } = await followProfile(
+    { followerProfileId: follower.id, followeeProfileId: followee.id },
+    skipNotification,
+  );
+
+  await createFollowNotification(profileFollow.id, () => Promise.resolve(false));
+
+  assert.deepEqual(await readNotifications(profileFollow.id), []);
+});
+
+test('Follow 알림 eligibility 오류는 fail-closed로 저장하지 않고 반환한다', async () => {
+  const follower = await createProfile();
+  const followee = await createProfile();
+  const { profileFollow } = await followProfile(
+    { followerProfileId: follower.id, followeeProfileId: followee.id },
+    skipNotification,
+  );
+  const error = new Error('eligibility failed');
+
+  await assert.rejects(
+    createFollowNotification(profileFollow.id, () => Promise.reject(error)),
+    error,
+  );
+  assert.deepEqual(await readNotifications(profileFollow.id), []);
+});
+
 test('Follow 알림은 materialize된 Remote Follower도 같은 mapping으로 저장한다', async () => {
   const follower = await createProfile(InstanceKind.ACTIVITYPUB);
   const followee = await createProfile();
-  const { profileFollow } = await followProfile({
-    followerProfileId: follower.id,
-    followeeProfileId: followee.id,
-  });
+  const { profileFollow } = await followProfile(
+    { followerProfileId: follower.id, followeeProfileId: followee.id },
+    skipNotification,
+  );
 
   await createFollowNotification(profileFollow.id);
 
@@ -115,11 +156,14 @@ test('Follow 알림은 존재하지 않거나 삭제된 source를 거부한다',
 
   const follower = await createProfile();
   const followee = await createProfile();
-  const { profileFollow } = await followProfile({
-    followerProfileId: follower.id,
-    followeeProfileId: followee.id,
-  });
-  await unfollowProfile({ followerProfileId: follower.id, followeeProfileId: followee.id });
+  const { profileFollow } = await followProfile(
+    { followerProfileId: follower.id, followeeProfileId: followee.id },
+    skipNotification,
+  );
+  await unfollowProfile(
+    { followerProfileId: follower.id, followeeProfileId: followee.id },
+    skipNotification,
+  );
 
   await assert.rejects(createFollowNotification(profileFollow.id), NotFoundError);
   assert.deepEqual(await readNotifications(profileFollow.id), []);
@@ -128,10 +172,12 @@ test('Follow 알림은 존재하지 않거나 삭제된 source를 거부한다',
 test('Follow 알림 생성과 삭제는 반복 및 동시 호출에 idempotent하다', async () => {
   const follower = await createProfile();
   const followee = await createProfile();
-  const { profileFollow } = await followProfile({
-    followerProfileId: follower.id,
-    followeeProfileId: followee.id,
-  });
+  const { profileFollow } = await followProfile(
+    { followerProfileId: follower.id, followeeProfileId: followee.id },
+    skipNotification,
+  );
+
+  assert.deepEqual(await readNotifications(profileFollow.id), []);
 
   await Promise.all([
     createFollowNotification(profileFollow.id),
@@ -150,23 +196,23 @@ test('Follow 알림 생성과 삭제는 반복 및 동시 호출에 idempotent�
 test('Unfollow 뒤 Re-follow는 새 source ID로 새 알림을 저장한다', async () => {
   const follower = await createProfile();
   const followee = await createProfile();
-  const firstFollow = await followProfile({
-    followerProfileId: follower.id,
-    followeeProfileId: followee.id,
-  });
+  const firstFollow = await followProfile(
+    { followerProfileId: follower.id, followeeProfileId: followee.id },
+    skipNotification,
+  );
   await createFollowNotification(firstFollow.profileFollow.id);
 
-  const deleted = await unfollowProfile({
-    followerProfileId: follower.id,
-    followeeProfileId: followee.id,
-  });
+  const deleted = await unfollowProfile(
+    { followerProfileId: follower.id, followeeProfileId: followee.id },
+    skipNotification,
+  );
   assert.equal(deleted.profileFollowId, firstFollow.profileFollow.id);
   await deleteNotificationBySource(NotificationKind.FOLLOW, firstFollow.profileFollow.id);
 
-  const secondFollow = await followProfile({
-    followerProfileId: follower.id,
-    followeeProfileId: followee.id,
-  });
+  const secondFollow = await followProfile(
+    { followerProfileId: follower.id, followeeProfileId: followee.id },
+    skipNotification,
+  );
   await createFollowNotification(secondFollow.profileFollow.id);
 
   assert.notEqual(secondFollow.profileFollow.id, firstFollow.profileFollow.id);

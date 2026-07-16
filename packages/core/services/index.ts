@@ -1,5 +1,9 @@
 export { recordInboundFollow, removeInboundFollow } from './inbound-profile-follow';
-export { createFollowNotification, deleteNotificationBySource } from './notification';
+export {
+  createFollowNotification,
+  deleteNotificationBySource,
+  type NotificationEligibilityEvaluator,
+} from './notification';
 export { disableProfile } from './profile';
 export { followProfile, unfollowProfile } from './profile-follow';
 export {
