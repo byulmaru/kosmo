@@ -3,6 +3,7 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
+    "./activitypub-note-content/server": "./activitypub-note-content.ts",
     "./datetime": "./datetime.ts",
     "./db": "./db/index.ts",
     "./db/seed": "./db/seed/index.ts",
@@ -24,6 +25,7 @@
   "dependencies": {
     "core-js": "^3.49.0",
     "drizzle-orm": "1.0.0-beta.22",
+    "jsdom": "^29.1.1",
     "postgres": "^3.4.9",
     "prosemirror-model": "^1.25.10",
     "temporal-polyfill": "^0.3.2",
@@ -41,9 +43,10 @@
     "test:services": "node --import tsx --test --test-concurrency=1 'services/*.test.ts'",
     "test:services:database": "cd ../.. && node scripts/test-db.mjs run -- pnpm --filter @kosmo/core test:services:isolated",
     "test:services:isolated": "cd ../.. && pnpm db:test:push && pnpm --filter @kosmo/core test:services",
-    "test:unit": "node --import tsx --test 'post-content/**/*.test.ts'"
+    "test:unit": "node --import tsx --test activitypub-note-content.test.ts 'post-content/**/*.test.ts'"
   },
   "devDependencies": {
+    "@types/jsdom": "^28.0.3",
     "drizzle-kit": "1.0.0-beta.22"
   }
 }
