@@ -20,8 +20,8 @@
 
 ## 4. PROD-352 권한이 있는 Profile의 알림 목록 API를 제공한다
 
-- [ ] 4.1 `Profile.notifications`에 membership 권한과 공통 visible predicate를 SQL page limit 전에 적용한 `id DESC` opaque cursor connection을 구현한다.
-- [ ] 4.2 API test로 FOLLOW concrete resolution, membership·비선택 Profile, inactive Recipient, ID keyset page 경계와 hidden source·Recipient mismatch·Related Profile의 pre-limit filtering을 검증한다.
+- [x] 4.1 `Profile.notifications`에 membership 권한과 공통 visible predicate를 SQL page limit 전에 적용한 `id DESC` opaque cursor connection을 구현한다.
+- [x] 4.2 API test로 FOLLOW concrete resolution, membership·비선택 Profile, inactive Recipient, ID keyset page 경계와 hidden source·Recipient mismatch·Related Profile의 pre-limit filtering을 검증한다.
 
 ## 5. PROD-351 권한이 있는 Profile의 visible Unread count API를 제공한다
 
