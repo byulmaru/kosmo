@@ -292,7 +292,7 @@ describe('GraphQL remote profile boundary', () => {
     });
   });
 
-  test('applies parent authorization to stored remote Post surfaces without network reads', async () => {
+  test('applies parent authorization to stored remote Post surfaces without network reads', async (t) => {
     const auth = await createAuthenticatedSession();
     const activeInstance = await createRemoteInstance();
     const unresponsiveInstance = await createRemoteInstance({
@@ -335,45 +335,50 @@ describe('GraphQL remote profile boundary', () => {
       { followerProfileId: auth.profile.id, followeeProfileId: activeAuthor.id },
       { followerProfileId: auth.profile.id, followeeProfileId: unresponsiveAuthor.id },
       { followerProfileId: auth.profile.id, followeeProfileId: suspendedAuthor.id },
+      { followerProfileId: auth.profile.id, followeeProfileId: inactiveAuthor.id },
     ]);
-    const originalFetch = globalThis.fetch;
-    let fetchCalls = 0;
-    globalThis.fetch = (() => {
-      fetchCalls += 1;
+    const fetchMock = t.mock.method(globalThis, 'fetch', () => {
       throw new Error('GraphQL materialized Post reads must not use fetch');
-    }) as typeof fetch;
+    });
 
-    try {
-      const result = await requestGraphQL<{
-        activeCurrent: { id: string } | null;
-        activeHistorical: { id: string } | null;
-        activePost: { id: string } | null;
-        activeProfile: { posts: { edges: Array<{ node: { id: string } }> } } | null;
-        homeTimeline: { edges: Array<{ node: { id: string } }> } | null;
-        inactivePost: { id: string } | null;
-        inactivePostContent: { id: string } | null;
-        inactiveProfileContent: { id: string } | null;
-        inactiveProfilePost: { id: string } | null;
-        suspendedContent: { id: string } | null;
-        suspendedPost: { id: string } | null;
-        suspendedProfile: { posts: { edges: unknown[] } } | null;
-        unresponsiveCurrent: { id: string } | null;
-        unresponsiveHistorical: { id: string } | null;
-        unresponsivePost: { id: string } | null;
-        unresponsiveProfile: {
-          posts: { edges: Array<{ node: { id: string } }> };
-        } | null;
-      }>(
-        `query RemotePostAuthorization(
+    const result = await requestGraphQL<{
+      activeCurrent: { id: string } | null;
+      activeHistorical: { id: string } | null;
+      activePost: { id: string } | null;
+      activeProfile: { posts: { edges: Array<{ node: { id: string } }> } } | null;
+      homeTimeline: { edges: Array<{ node: { id: string } }> } | null;
+      inactivePost: { id: string } | null;
+      inactivePostContent: { id: string } | null;
+      inactivePostHistorical: { id: string } | null;
+      inactiveProfile: { posts: { edges: unknown[] } } | null;
+      inactiveProfileContent: { id: string } | null;
+      inactiveProfileHistorical: { id: string } | null;
+      inactiveProfilePost: { id: string } | null;
+      suspendedContent: { id: string } | null;
+      suspendedHistorical: { id: string } | null;
+      suspendedPost: { id: string } | null;
+      suspendedProfile: { posts: { edges: unknown[] } } | null;
+      unresponsiveCurrent: { id: string } | null;
+      unresponsiveHistorical: { id: string } | null;
+      unresponsivePost: { id: string } | null;
+      unresponsiveProfile: {
+        posts: { edges: Array<{ node: { id: string } }> };
+      } | null;
+    }>(
+      `query RemotePostAuthorization(
           $activeContentId: ID!
           $activeHistoricalId: ID!
           $activePostId: ID!
           $activeProfileId: ID!
           $inactivePostContentId: ID!
+          $inactivePostHistoricalId: ID!
           $inactivePostId: ID!
           $inactiveProfileContentId: ID!
+          $inactiveProfileHistoricalId: ID!
+          $inactiveProfileId: ID!
           $inactiveProfilePostId: ID!
           $suspendedContentId: ID!
+          $suspendedHistoricalId: ID!
           $suspendedPostId: ID!
           $suspendedProfileId: ID!
           $unresponsiveContentId: ID!
@@ -399,72 +404,112 @@ describe('GraphQL remote profile boundary', () => {
           }
           suspendedPost: node(id: $suspendedPostId) { ... on Post { id } }
           suspendedContent: node(id: $suspendedContentId) { ... on PostContent { id } }
+          suspendedHistorical: node(id: $suspendedHistoricalId) {
+            ... on PostContent { id }
+          }
           suspendedProfile: node(id: $suspendedProfileId) {
+            ... on Profile { posts(first: 10) { edges { node { id } } } }
+          }
+          inactiveProfile: node(id: $inactiveProfileId) {
             ... on Profile { posts(first: 10) { edges { node { id } } } }
           }
           inactiveProfilePost: node(id: $inactiveProfilePostId) { ... on Post { id } }
           inactiveProfileContent: node(id: $inactiveProfileContentId) {
             ... on PostContent { id }
           }
+          inactiveProfileHistorical: node(id: $inactiveProfileHistoricalId) {
+            ... on PostContent { id }
+          }
           inactivePost: node(id: $inactivePostId) { ... on Post { id } }
           inactivePostContent: node(id: $inactivePostContentId) {
             ... on PostContent { id }
           }
+          inactivePostHistorical: node(id: $inactivePostHistoricalId) {
+            ... on PostContent { id }
+          }
           homeTimeline(first: 10) { edges { node { id } } }
         }`,
-        {
-          activeContentId: globalId('PostContent', active.current.id),
-          activeHistoricalId: globalId('PostContent', active.historical.id),
-          activePostId: globalId('Post', active.post.id),
-          activeProfileId: globalId('Profile', activeAuthor.id),
-          inactivePostContentId: globalId('PostContent', inactivePost.current.id),
-          inactivePostId: globalId('Post', inactivePost.post.id),
-          inactiveProfileContentId: globalId('PostContent', inactiveProfile.current.id),
-          inactiveProfilePostId: globalId('Post', inactiveProfile.post.id),
-          suspendedContentId: globalId('PostContent', suspended.current.id),
-          suspendedPostId: globalId('Post', suspended.post.id),
-          suspendedProfileId: globalId('Profile', suspendedAuthor.id),
-          unresponsiveContentId: globalId('PostContent', unresponsive.current.id),
-          unresponsiveHistoricalId: globalId('PostContent', unresponsive.historical.id),
-          unresponsivePostId: globalId('Post', unresponsive.post.id),
-          unresponsiveProfileId: globalId('Profile', unresponsiveAuthor.id),
-        },
-        auth.token,
-      );
+      {
+        activeContentId: globalId('PostContent', active.current.id),
+        activeHistoricalId: globalId('PostContent', active.historical.id),
+        activePostId: globalId('Post', active.post.id),
+        activeProfileId: globalId('Profile', activeAuthor.id),
+        inactivePostContentId: globalId('PostContent', inactivePost.current.id),
+        inactivePostHistoricalId: globalId('PostContent', inactivePost.historical.id),
+        inactivePostId: globalId('Post', inactivePost.post.id),
+        inactiveProfileContentId: globalId('PostContent', inactiveProfile.current.id),
+        inactiveProfileHistoricalId: globalId('PostContent', inactiveProfile.historical.id),
+        inactiveProfileId: globalId('Profile', inactiveAuthor.id),
+        inactiveProfilePostId: globalId('Post', inactiveProfile.post.id),
+        suspendedContentId: globalId('PostContent', suspended.current.id),
+        suspendedHistoricalId: globalId('PostContent', suspended.historical.id),
+        suspendedPostId: globalId('Post', suspended.post.id),
+        suspendedProfileId: globalId('Profile', suspendedAuthor.id),
+        unresponsiveContentId: globalId('PostContent', unresponsive.current.id),
+        unresponsiveHistoricalId: globalId('PostContent', unresponsive.historical.id),
+        unresponsivePostId: globalId('Post', unresponsive.post.id),
+        unresponsiveProfileId: globalId('Profile', unresponsiveAuthor.id),
+      },
+      auth.token,
+    );
 
-      assertNoGraphQLErrors(result);
-      assert.deepEqual(result.data, {
-        activeCurrent: { id: globalId('PostContent', active.current.id) },
-        activeHistorical: { id: globalId('PostContent', active.historical.id) },
-        activePost: { id: globalId('Post', active.post.id) },
-        activeProfile: {
-          posts: { edges: [{ node: { id: globalId('Post', active.post.id) } }] },
-        },
-        homeTimeline: {
-          edges: [unresponsive, active]
-            .sort((a, b) => b.post.id.localeCompare(a.post.id))
-            .map(({ post }) => ({ node: { id: globalId('Post', post.id) } })),
-        },
-        inactivePost: null,
-        inactivePostContent: null,
-        inactiveProfileContent: null,
-        inactiveProfilePost: null,
-        suspendedContent: null,
-        suspendedPost: null,
-        suspendedProfile: null,
-        unresponsiveCurrent: { id: globalId('PostContent', unresponsive.current.id) },
-        unresponsiveHistorical: {
-          id: globalId('PostContent', unresponsive.historical.id),
-        },
-        unresponsivePost: { id: globalId('Post', unresponsive.post.id) },
-        unresponsiveProfile: {
-          posts: { edges: [{ node: { id: globalId('Post', unresponsive.post.id) } }] },
-        },
-      });
-      assert.equal(fetchCalls, 0);
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+    const anonymous = await requestGraphQL<{
+      post: { id: string } | null;
+      profile: { posts: { edges: Array<{ node: { id: string } }> } } | null;
+    }>(
+      `query AnonymousRemotePost($postId: ID!, $profileId: ID!) {
+        post: node(id: $postId) { ... on Post { id } }
+        profile: node(id: $profileId) {
+          ... on Profile { posts(first: 10) { edges { node { id } } } }
+        }
+      }`,
+      {
+        postId: globalId('Post', active.post.id),
+        profileId: globalId('Profile', activeAuthor.id),
+      },
+    );
+
+    assertNoGraphQLErrors(result);
+    assertNoGraphQLErrors(anonymous);
+    assert.deepEqual(anonymous.data, {
+      post: { id: globalId('Post', active.post.id) },
+      profile: {
+        posts: { edges: [{ node: { id: globalId('Post', active.post.id) } }] },
+      },
+    });
+    assert.deepEqual(result.data, {
+      activeCurrent: { id: globalId('PostContent', active.current.id) },
+      activeHistorical: { id: globalId('PostContent', active.historical.id) },
+      activePost: { id: globalId('Post', active.post.id) },
+      activeProfile: {
+        posts: { edges: [{ node: { id: globalId('Post', active.post.id) } }] },
+      },
+      homeTimeline: {
+        edges: [unresponsive, active]
+          .sort((a, b) => b.post.id.localeCompare(a.post.id))
+          .map(({ post }) => ({ node: { id: globalId('Post', post.id) } })),
+      },
+      inactivePost: null,
+      inactivePostContent: null,
+      inactivePostHistorical: null,
+      inactiveProfile: null,
+      inactiveProfileContent: null,
+      inactiveProfileHistorical: null,
+      inactiveProfilePost: null,
+      suspendedContent: null,
+      suspendedHistorical: null,
+      suspendedPost: null,
+      suspendedProfile: null,
+      unresponsiveCurrent: { id: globalId('PostContent', unresponsive.current.id) },
+      unresponsiveHistorical: {
+        id: globalId('PostContent', unresponsive.historical.id),
+      },
+      unresponsivePost: { id: globalId('Post', unresponsive.post.id) },
+      unresponsiveProfile: {
+        posts: { edges: [{ node: { id: globalId('Post', unresponsive.post.id) } }] },
+      },
+    });
+    assert.equal(fetchMock.mock.callCount(), 0);
   });
 
   test('includes established remote followees and excludes other remote authors from home', async () => {
@@ -479,7 +524,7 @@ describe('GraphQL remote profile boundary', () => {
       instanceId: activeInstance.id,
     });
     const active = await createPostWithContents({ profileId: activeFollowee.id });
-    const unrelated = await createPostWithContents({ profileId: nonFollowee.id });
+    await createPostWithContents({ profileId: nonFollowee.id });
     await db.insert(ProfileFollows).values({
       followerProfileId: auth.profile.id,
       followeeProfileId: activeFollowee.id,
@@ -499,12 +544,6 @@ describe('GraphQL remote profile boundary', () => {
     assert.deepEqual(result.data?.homeTimeline?.edges, [
       { node: { id: globalId('Post', active.post.id) } },
     ]);
-    assert.equal(
-      result.data?.homeTimeline?.edges.some(
-        (edge) => edge.node.id === globalId('Post', unrelated.post.id),
-      ),
-      false,
-    );
   });
 
   test('preserves local visibility and Post ID cursor pagination', async () => {
