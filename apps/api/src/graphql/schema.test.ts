@@ -89,7 +89,16 @@ test('exposes Notification interface and FollowNotification without raw storage 
   );
   assert.equal(notificationNodeType('FOLLOW'), 'FollowNotification');
   assert.equal(notificationNodeType('UNSUPPORTED'), null);
+  assert.equal(String(profile.getFields().notifications?.type), 'NotificationConnection!');
   assert.equal(String(profile.getFields().unreadNotificationCount?.type), 'Int!');
+
+  const connection = schema.getType('NotificationConnection');
+  const edge = schema.getType('NotificationConnectionEdge');
+  assert.ok(isObjectType(connection));
+  assert.ok(isObjectType(edge));
+  assert.equal(String(connection.getFields().pageInfo.type), 'PageInfo!');
+  assert.equal(String(edge.getFields().cursor.type), 'String!');
+  assert.equal(String(edge.getFields().node.type), 'Notification!');
 });
 
 test('exposes the typed Notification Read mutation payload', () => {

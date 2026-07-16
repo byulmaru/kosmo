@@ -113,6 +113,16 @@ interface Notification implements Node {
   readAt: DateTime
 }
 
+type NotificationConnection {
+  edges: [NotificationConnectionEdge!]!
+  pageInfo: PageInfo!
+}
+
+type NotificationConnectionEdge {
+  cursor: String!
+  node: Notification!
+}
+
 type PageInfo {
   endCursor: String
   hasNextPage: Boolean!
@@ -174,6 +184,7 @@ type Profile implements Node {
   handle: String!
   id: ID!
   instance: ProfileInstance!
+  notifications(after: String, before: String, first: Int, last: Int): NotificationConnection!
   posts(after: String, before: String, first: Int, last: Int): PostConnection!
   relativeHandle: String!
   unreadNotificationCount: Int!
