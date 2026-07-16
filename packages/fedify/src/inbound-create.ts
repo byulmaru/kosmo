@@ -4,14 +4,9 @@ import { Note } from '@fedify/vocab';
 import { InstanceState } from '@kosmo/core/enums';
 import { handleInboundCreateNote } from './inbound-create-note';
 import { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
+import { uniqueHref } from './unique-href';
 import type { InboxContext } from '@fedify/fedify';
 import type { Create } from '@fedify/vocab';
-
-const uniqueHref = (uris: URL[]): string | undefined => {
-  const hrefs = new Set(uris.map((uri) => uri.href));
-
-  return hrefs.size === 1 ? hrefs.values().next().value : undefined;
-};
 
 export const handleInboundCreate = async (
   context: InboxContext<void>,

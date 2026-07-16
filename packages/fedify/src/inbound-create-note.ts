@@ -12,13 +12,8 @@ import {
 } from '@kosmo/core/db';
 import { PostState, PostVisibility } from '@kosmo/core/enums';
 import { eq } from 'drizzle-orm';
+import { uniqueHref } from './unique-href';
 import type { Note } from '@fedify/vocab';
-
-const uniqueHref = (uris: URL[]): string | undefined => {
-  const hrefs = new Set(uris.map((uri) => uri.href));
-
-  return hrefs.size === 1 ? hrefs.values().next().value : undefined;
-};
 
 const hasReplyTarget = async (note: Note): Promise<boolean> => {
   if (note.replyTargetIds.length > 0) {
