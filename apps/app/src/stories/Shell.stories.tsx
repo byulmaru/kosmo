@@ -168,7 +168,6 @@ export const FollowUpdatesBothProfileCounts: Story = {
         followProfile: {
           followeeProfile: followedProfile,
           followerProfile: { ...selectedProfile, followingCount: 43 },
-          result: { __typename: 'ProfileFollow', id: 'profile-follow-edge' },
         },
       },
     },

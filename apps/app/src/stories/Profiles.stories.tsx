@@ -315,27 +315,6 @@ export const FollowErrorInteraction: Story = {
   render: () => <FollowButtonStory />,
 };
 
-export const PendingFollowRequestSucceedsWithoutEstablishedState: Story = {
-  parameters: {
-    relay: {
-      mutationResponse: {
-        followProfile: {
-          followeeProfile: followable,
-          followerProfile: followingContent,
-          result: { __typename: 'ProfileFollowRequest', id: 'pending-follow-request' },
-        },
-      },
-    },
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
-    await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeEnabled();
-    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
-  },
-  render: () => <FollowButtonStory />,
-};
-
 export const RemoteFollowIsHidden: Story = {
   play: ({ canvasElement }) => {
     expect(within(canvasElement).queryByRole('button', { name: '팔로우' })).not.toBeInTheDocument();

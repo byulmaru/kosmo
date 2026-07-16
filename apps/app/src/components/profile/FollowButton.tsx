@@ -36,15 +36,6 @@ const followButtonProfileFragment = graphql`
 const followProfileMutation = graphql`
   mutation FollowButtonFollowProfileMutation($id: ID!) {
     followProfile(input: { id: $id }) {
-      result {
-        __typename
-        ... on ProfileFollow {
-          id
-        }
-        ... on ProfileFollowRequest {
-          id
-        }
-      }
       followerProfile {
         id
         followingCount
