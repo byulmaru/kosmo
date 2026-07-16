@@ -4,8 +4,6 @@ export {
   sendFollowActivity,
   sendUndoFollowActivity,
 } from './src/follow-delivery';
-export type { InboundCreateMaterializationInput } from './src/inbound-create';
-export { handleInboundCreate } from './src/inbound-create';
 export {
   findOrMaterializeRemoteProfileActor,
   materializeRemoteProfileActor,

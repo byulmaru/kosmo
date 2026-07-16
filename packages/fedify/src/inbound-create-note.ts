@@ -37,7 +37,19 @@ const resolveVisibility = (note: Note): PostVisibilityValue | undefined => {
   return undefined;
 };
 
-export const handleInboundCreateNote = ({
+const hasReplyTarget = async (note: Note): Promise<boolean> => {
+  if (note.replyTargetIds.length > 0) {
+    return true;
+  }
+
+  try {
+    return (await note.getReplyTarget()) !== null;
+  } catch {
+    return true;
+  }
+};
+
+export const handleInboundCreateNote = async ({
   actorUri,
   note,
   objectUri,
@@ -47,17 +59,13 @@ export const handleInboundCreateNote = ({
   note: Note;
   objectUri: string;
   receivedAt: Temporal.Instant;
-}): InboundCreateNoteMaterializationInput | undefined => {
+}): Promise<InboundCreateNoteMaterializationInput | undefined> => {
   if (note.id?.href !== objectUri) {
     return undefined;
   }
 
   const attributionUri = uniqueHref(note.attributionIds);
-  if (
-    attributionUri !== actorUri ||
-    note.replyTargetIds.length > 0 ||
-    note.replyTargetId !== null
-  ) {
+  if (attributionUri !== actorUri || (await hasReplyTarget(note))) {
     return undefined;
   }
 

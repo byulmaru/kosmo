@@ -8,10 +8,6 @@ import type { InboxContext } from '@fedify/fedify';
 import type { Create } from '@fedify/vocab';
 import type { InboundCreateNoteMaterializationInput } from './inbound-create-note';
 
-export type InboundCreateMaterializationInput = InboundCreateNoteMaterializationInput;
-
-const getNow = () => Temporal.Now.instant();
-
 const uniqueHref = (uris: URL[]): string | undefined => {
   const hrefs = new Set(uris.map((uri) => uri.href));
 
@@ -21,8 +17,8 @@ const uniqueHref = (uris: URL[]): string | undefined => {
 export const handleInboundCreate = async (
   context: InboxContext<void>,
   create: Create,
-  receivedAt: Temporal.Instant = getNow(),
-): Promise<InboundCreateMaterializationInput | undefined> => {
+  receivedAt: Temporal.Instant = Temporal.Now.instant(),
+): Promise<InboundCreateNoteMaterializationInput | undefined> => {
   const actorUri = uniqueHref(create.actorIds);
   const objectUri = uniqueHref(create.objectIds);
 

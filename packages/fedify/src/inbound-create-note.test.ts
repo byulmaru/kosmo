@@ -11,7 +11,7 @@ const objectUri = 'https://remote.example/notes/1';
 const receivedAt = Temporal.Instant.from('2026-07-16T00:00:00Z');
 
 describe('inbound Create(Note)', () => {
-  test('projects a public Note to primitive materialization input', () => {
+  test('projects a public Note to primitive materialization input', async () => {
     const published = Temporal.Instant.from('2026-07-15T12:00:00Z');
     const note = new Note({
       attribution: new URL(actorUri),
@@ -23,7 +23,7 @@ describe('inbound Create(Note)', () => {
       to: PUBLIC_COLLECTION,
     });
 
-    const result = handleInboundCreateNote({ actorUri, note, objectUri, receivedAt });
+    const result = await handleInboundCreateNote({ actorUri, note, objectUri, receivedAt });
 
     assert.deepEqual(result, {
       actorUri,
@@ -37,7 +37,7 @@ describe('inbound Create(Note)', () => {
     });
   });
 
-  test('deduplicates attribution hrefs and projects cc Public as UNLISTED', () => {
+  test('deduplicates attribution hrefs and projects cc Public as UNLISTED', async () => {
     const note = new Note({
       attributions: [new URL(actorUri), new URL(actorUri)],
       cc: PUBLIC_COLLECTION,
@@ -46,22 +46,25 @@ describe('inbound Create(Note)', () => {
     });
 
     assert.equal(
-      handleInboundCreateNote({ actorUri, note, objectUri, receivedAt })?.visibility,
+      (await handleInboundCreateNote({ actorUri, note, objectUri, receivedAt }))?.visibility,
       PostVisibility.UNLISTED,
     );
   });
 
-  test('rejects mismatched object identity', () => {
+  test('rejects mismatched object identity', async () => {
     const note = new Note({
       attribution: new URL(actorUri),
       id: new URL('https://remote.example/notes/different'),
       to: PUBLIC_COLLECTION,
     });
 
-    assert.equal(handleInboundCreateNote({ actorUri, note, objectUri, receivedAt }), undefined);
+    assert.equal(
+      await handleInboundCreateNote({ actorUri, note, objectUri, receivedAt }),
+      undefined,
+    );
   });
 
-  test('rejects missing, multiple, or mismatched attribution', () => {
+  test('rejects missing, multiple, or mismatched attribution', async () => {
     const notes = [
       new Note({ id: new URL(objectUri), to: PUBLIC_COLLECTION }),
       new Note({
@@ -77,11 +80,14 @@ describe('inbound Create(Note)', () => {
     ];
 
     for (const note of notes) {
-      assert.equal(handleInboundCreateNote({ actorUri, note, objectUri, receivedAt }), undefined);
+      assert.equal(
+        await handleInboundCreateNote({ actorUri, note, objectUri, receivedAt }),
+        undefined,
+      );
     }
   });
 
-  test('rejects replies and non-public addressing', () => {
+  test('rejects IRI and ID-less embedded replies and non-public addressing', async () => {
     const notes = [
       new Note({
         attribution: new URL(actorUri),
@@ -92,12 +98,21 @@ describe('inbound Create(Note)', () => {
       new Note({
         attribution: new URL(actorUri),
         id: new URL(objectUri),
+        replyTarget: new Note({ content: 'Parent without an ID' }),
+        to: PUBLIC_COLLECTION,
+      }),
+      new Note({
+        attribution: new URL(actorUri),
+        id: new URL(objectUri),
         to: new URL('https://remote.example/users/bob'),
       }),
     ];
 
     for (const note of notes) {
-      assert.equal(handleInboundCreateNote({ actorUri, note, objectUri, receivedAt }), undefined);
+      assert.equal(
+        await handleInboundCreateNote({ actorUri, note, objectUri, receivedAt }),
+        undefined,
+      );
     }
   });
 });

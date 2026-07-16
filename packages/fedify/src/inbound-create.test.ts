@@ -21,7 +21,7 @@ import { ne } from 'drizzle-orm';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
-import type * as InboundCreate from './inbound-create';
+import type { handleInboundCreate as handleInboundCreateType } from './inbound-create';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -37,7 +37,7 @@ let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
 let Profiles: typeof CoreDb.Profiles;
-let handleInboundCreate: typeof InboundCreate.handleInboundCreate;
+let handleInboundCreate: typeof handleInboundCreateType;
 let localInstanceId: string;
 
 describe('inbound Create dispatch', () => {
@@ -217,7 +217,7 @@ describe('inbound Create dispatch', () => {
 
   test('signed Create reaches the dispatcher through personal and shared inboxes', async () => {
     await createStoredRemoteActor();
-    const calls: Array<InboundCreate.InboundCreateMaterializationInput | undefined> = [];
+    const calls: Array<Awaited<ReturnType<typeof handleInboundCreate>>> = [];
     const fixture = await createInboxFixture(async (context, activity) => {
       calls.push(await handleInboundCreate(context, activity, receivedAt));
     });
