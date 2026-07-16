@@ -30,8 +30,8 @@
 
 ## 6. PROD-350 권한이 있는 Profile의 Notification Read mutation을 제공한다
 
-- [ ] 6.1 `markNotificationRead(input: { id })`가 membership·공통 visible predicate와 최초 `readAt`을 보존하고 `notification`·`recipientProfile` payload 및 Read error matrix를 따르게 한다.
-- [ ] 6.2 API test로 없는 ID·membership 부재·hidden item, 반복·동시 Read, 최초 timestamp 보존과 visible Unread count 일관성을 검증한다.
+- [x] 6.1 `markNotificationRead(input: { id })`가 membership·공통 visible predicate와 최초 `readAt`을 보존하고 `notification`·`recipientProfile` payload 및 Read error matrix를 따르게 한다.
+- [x] 6.2 API test로 없는 ID·membership 부재·hidden item, 반복·동시 Read, 최초 timestamp 보존과 visible Unread count 일관성을 검증한다.
 
 ## 7. PROD-276 ProfileFollow 생성·삭제에서 Follow 알림을 동기화한다
 

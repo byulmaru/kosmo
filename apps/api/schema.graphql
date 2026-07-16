@@ -82,12 +82,22 @@ enum InstanceKind {
   LOCAL
 }
 
+input MarkNotificationReadInput {
+  id: ID!
+}
+
+type MarkNotificationReadPayload {
+  notification: Notification!
+  recipientProfile: Profile!
+}
+
 type Mutation {
   createPost(input: CreatePostInput!): CreatePostPayload!
   createProfile(input: CreateProfileInput!): CreateProfilePayload!
   deleteProfile(input: DeleteProfileInput!): DeleteProfilePayload!
   exchangeNativeOidcSession(input: ExchangeNativeOidcSessionInput!): ExchangeNativeOidcSessionPayload!
   followProfile(input: FollowProfileInput!): FollowProfilePayload!
+  markNotificationRead(input: MarkNotificationReadInput!): MarkNotificationReadPayload!
   selectProfile(input: SelectProfileInput!): SelectProfilePayload!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
   updateProfile(input: UpdateProfileInput!): UpdateProfilePayload!
