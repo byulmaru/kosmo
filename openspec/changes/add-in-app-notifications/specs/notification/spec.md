@@ -283,6 +283,50 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 - **AND** Recipient Profile 자체의 일시 비활성화·정지가 물리 삭제 원인인지도 `PROD-328`이 결정한다
 - **AND** 이번 capability의 구현 task와 archive gate에는 포함하지 않는다
 
+### Requirement: Selected Profile Follow Notification 목록 UI
+
+클라이언트는 selected Profile의 visible Follow Notification을 모바일과 Web에서 같은 단일 목록으로 제공하고 Relay connection과 actor cache를 Profile별로 격리해야 한다(MUST).
+
+#### Scenario: 단일 Follow item 표시와 Profile link
+
+- **WHEN** selected Profile의 connection이 Related Profile 한 명을 가진 visible Follow Notification을 반환한다
+- **THEN** 목록은 initials Avatar 하나, `OOO님이 팔로우했습니다` 문구와 상대 시각을 표시한다
+- **AND** Avatar와 본문은 `Profile.relativeHandle`의 Profile route를 가리키는 link다
+- **AND** 탭, 날짜별 heading, inline 맞팔로우, snippet, image avatar와 복수 사용자 aggregation을 만들지 않는다
+
+#### Scenario: Read와 Unread 표시
+
+- **WHEN** Follow item의 `readAt`이 `null`이다
+- **THEN** item은 `surface` 배경과 접근성 Unread 상태를 제공한다
+- **AND** `readAt`이 존재하면 `card` 배경을 사용하고 Unread 상태를 제공하지 않는다
+
+#### Scenario: Profile 이동과 Read side effect 분리
+
+- **WHEN** 사용자가 Follow item의 Avatar 또는 본문 link를 활성화한다
+- **THEN** 클라이언트는 Related Profile navigation을 즉시 시작한다
+- **AND** Read mutation의 pending, 실패 또는 재시도는 navigation을 지연, 취소 또는 되돌리지 않는다
+- **AND** client Read mutation과 Unread count cache 갱신은 `PROD-372`가 소유한다
+
+#### Scenario: Initial loading, error와 empty
+
+- **WHEN** selected Profile 목록의 첫 query가 진행 중이거나 실패하거나 visible edge 없이 성공한다
+- **THEN** 화면은 각 상태에 맞는 loading, 안전한 한국어 error와 retry, empty UI를 구분해 표시한다
+- **AND** backend error 원문이나 unavailable generic fallback을 표시하지 않는다
+
+#### Scenario: Refresh와 다음 page
+
+- **WHEN** 사용자가 native pull-to-refresh 또는 Web의 keyboard-accessible refresh action을 실행한다
+- **THEN** 클라이언트는 selected Profile query를 다시 가져온다
+- **AND** 다음 page는 20개 단위 Relay connection으로 요청하고 요청 중 중복 호출을 막는다
+- **AND** 다음 page가 실패하면 기존 item을 유지하고 같은 위치에서 재시도할 수 있다
+- **AND** route state가 edge를 수동 병합하거나 client-side filtering하지 않는다
+
+#### Scenario: selected Profile 전환
+
+- **WHEN** 사용자가 Recipient Profile A에서 B로 selected Profile을 전환한다
+- **THEN** actor별 Relay Environment와 Store가 바뀌고 목록은 Profile B를 target으로 다시 조회한다
+- **AND** Profile A의 edge, loading, error 또는 pagination 상태를 Profile B 목록에 재사용하지 않는다
+
 ### Requirement: Local Follow vertical verification
 
 시스템은 실제 Local Follow action부터 Notification, API, 목록 UI, badge, Read와 정상 source cleanup까지의 Profile 격리를 Web E2E로 검증해야 한다(MUST).
@@ -298,7 +342,8 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 #### Scenario: Follow item Read와 이동
 
 - **WHEN** Recipient가 visible Follow item을 활성화한다
-- **THEN** 결정된 UI 순서에 따라 item은 최초 Read로 전환되고 badge는 한 번 감소하며 Related Profile로 이동한다
+- **THEN** Related Profile 이동은 즉시 시작되고 Read pending·실패·재시도에 의해 지연, 취소 또는 되돌려지지 않는다
+- **AND** PROD-372의 Read 동작이 성공하면 item은 최초 Read로 전환되고 PROD-324의 badge는 한 번 감소한다
 - **AND** 같은 item을 다시 읽어도 최초 `readAt`과 count가 유지된다
 
 #### Scenario: Unfollow cleanup
