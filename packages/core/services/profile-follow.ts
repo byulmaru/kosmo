@@ -11,6 +11,7 @@ import { ConflictError, NotFoundError } from '../error';
 import { createFollowNotification, deleteNotificationBySource } from './notification';
 import { ensureProfileFollow } from './profile-follow-relation';
 import { ensureProfileFollowRequest } from './profile-follow-request';
+import type { Transaction } from '../db';
 import type { ProfileFollowRequestRow } from './profile-follow-request';
 
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
@@ -23,6 +24,45 @@ export type FollowProfileResult =
 type ProfileFollowInput = {
   followerProfileId: string;
   followeeProfileId: string;
+};
+
+const loadProfileFollowParticipants = async (
+  tx: Transaction,
+  { followerProfileId, followeeProfileId }: ProfileFollowInput,
+) => {
+  const participants = await tx
+    .select({
+      actorInboxUri: ActivityPubActors.inboxUri,
+      actorSharedInboxUri: ActivityPubActors.sharedInboxUri,
+      actorUri: ActivityPubActors.uri,
+      followPolicy: Profiles.followPolicy,
+      id: Profiles.id,
+      instanceKind: Instances.kind,
+      instanceState: Instances.state,
+    })
+    .from(Profiles)
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
+    .where(
+      and(
+        inArray(Profiles.id, [followerProfileId, followeeProfileId]),
+        eq(Profiles.state, ProfileState.ACTIVE),
+        ne(Instances.state, InstanceState.SUSPENDED),
+      ),
+    );
+
+  const follower = participants.find(({ id }) => id === followerProfileId);
+  const target = participants.find(({ id }) => id === followeeProfileId);
+  if (!follower || follower.instanceKind !== InstanceKind.LOCAL || !target) {
+    throw new NotFoundError('Profile not found');
+  }
+
+  const isRemote = target.instanceKind === InstanceKind.ACTIVITYPUB;
+  if ((!isRemote && target.instanceKind !== InstanceKind.LOCAL) || (isRemote && !target.actorUri)) {
+    throw new NotFoundError('Profile not found');
+  }
+
+  return { isRemote, target };
 };
 
 export const followProfile = async ({
@@ -39,40 +79,10 @@ export const followProfile = async ({
       throw new ConflictError({ message: 'Profile cannot follow itself' });
     }
 
-    const participants = await tx
-      .select({
-        actorInboxUri: ActivityPubActors.inboxUri,
-        actorSharedInboxUri: ActivityPubActors.sharedInboxUri,
-        actorUri: ActivityPubActors.uri,
-        followPolicy: Profiles.followPolicy,
-        id: Profiles.id,
-        instanceKind: Instances.kind,
-        instanceState: Instances.state,
-      })
-      .from(Profiles)
-      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
-      .where(
-        and(
-          inArray(Profiles.id, [followerProfileId, followeeProfileId]),
-          eq(Profiles.state, ProfileState.ACTIVE),
-          ne(Instances.state, InstanceState.SUSPENDED),
-        ),
-      );
-
-    const follower = participants.find(({ id }) => id === followerProfileId);
-    const target = participants.find(({ id }) => id === followeeProfileId);
-    if (!follower || follower.instanceKind !== InstanceKind.LOCAL || !target) {
-      throw new NotFoundError('Profile not found');
-    }
-
-    const isRemote = target.instanceKind === InstanceKind.ACTIVITYPUB;
-    if (!isRemote && target.instanceKind !== InstanceKind.LOCAL) {
-      throw new NotFoundError('Profile not found');
-    }
-    if (isRemote && !target.actorUri) {
-      throw new NotFoundError('Profile not found');
-    }
+    const { isRemote, target } = await loadProfileFollowParticipants(tx, {
+      followerProfileId,
+      followeeProfileId,
+    });
 
     let created: boolean;
     let followResult: FollowProfileResult;
@@ -151,39 +161,10 @@ export const unfollowProfile = async ({
   profileFollowId: string | null;
 }> => {
   const { command, result } = await db.transaction(async (tx) => {
-    const participants = await tx
-      .select({
-        actorInboxUri: ActivityPubActors.inboxUri,
-        actorSharedInboxUri: ActivityPubActors.sharedInboxUri,
-        actorUri: ActivityPubActors.uri,
-        id: Profiles.id,
-        instanceKind: Instances.kind,
-        instanceState: Instances.state,
-      })
-      .from(Profiles)
-      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
-      .where(
-        and(
-          inArray(Profiles.id, [followerProfileId, followeeProfileId]),
-          eq(Profiles.state, ProfileState.ACTIVE),
-          ne(Instances.state, InstanceState.SUSPENDED),
-        ),
-      );
-
-    const follower = participants.find(({ id }) => id === followerProfileId);
-    const target = participants.find(({ id }) => id === followeeProfileId);
-    if (!follower || follower.instanceKind !== InstanceKind.LOCAL || !target) {
-      throw new NotFoundError('Profile not found');
-    }
-
-    const isRemote = target.instanceKind === InstanceKind.ACTIVITYPUB;
-    if (!isRemote && target.instanceKind !== InstanceKind.LOCAL) {
-      throw new NotFoundError('Profile not found');
-    }
-    if (isRemote && !target.actorUri) {
-      throw new NotFoundError('Profile not found');
-    }
+    const { isRemote, target } = await loadProfileFollowParticipants(tx, {
+      followerProfileId,
+      followeeProfileId,
+    });
 
     const deleted = await tx
       .delete(ProfileFollows)
