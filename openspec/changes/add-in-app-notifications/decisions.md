@@ -79,10 +79,20 @@
 - Decision Date: 2026-07-14
 - Status: Accepted
 - Context / Problem: Notification을 Follow transaction에 넣으면 정책/저장 오류가 핵심 Follow 결과를 rollback한다. fire-and-forget은 request 종료와 unhandled rejection 때문에 실행 보장이 없고 현재 durable queue가 없다.
-- Decision Outcome: ProfileFollow 생성·삭제 transaction을 먼저 commit한 뒤 같은 request에서 eligibility와 Notification create/delete를 순서대로 `await`하고 오류를 catch한다. 정책 미연결은 default allow, 명시 deny와 evaluator 오류는 미생성, evaluator 오류는 fail-closed다.
+- Decision Outcome: ProfileFollow 생성·삭제 transaction을 먼저 commit한 뒤 같은 request에서 Notification create/delete를 `await`하고 오류를 catch한다.
 - Alternatives Considered: 동일 transaction 원자성, savepoint, fire-and-forget, outbox/message queue/worker.
 - Consequences: item 유실과 orphan을 첫 delivery에서 받아들이며 자동 retry/reconciliation을 제공하지 않는다. Follow response latency에는 Notification 경계 await 비용이 포함된다.
-- Confirmation / Follow-up: `PROD-276`이 allow, deny, evaluator error, create/delete failure와 source action commit 보존을 검증한다. durable delivery가 필요하면 별도 Issue → OpenSpec으로 결정한다.
+- Confirmation / Follow-up: `PROD-276`이 실제 Notification row의 생성·정리와 source action의 best-effort 오류 격리 구조를 검증한다. durable delivery가 필요하면 별도 Issue → OpenSpec으로 결정한다.
+
+### 공개 Follow source action이 top-level transaction과 post-commit effect를 소유한다
+
+- Decision Date: 2026-07-17
+- Status: Accepted
+- Context / Problem: Follow Request 승인 service가 caller transaction을 받으면 함수 반환 시점에는 outer transaction이 commit되지 않았을 수 있다. 이때 shared database connection에서 Notification source를 다시 읽으면 uncommitted `ProfileFollow`를 찾지 못해 오류가 격리된 채 item이 누락된다.
+- Decision Outcome: 직접 Follow와 Follow Request 승인의 공개 action은 top-level source transaction을 소유하고, 새 established relation이 commit된 뒤 같은 request에서 Follow Notification create 경계를 await/catch한다. transaction 조합이 필요한 request/relation 변경은 post-commit effect를 호출하지 않는 내부 primitive로 분리한다.
+- Alternatives Considered: optional transaction을 유지하면서 함수 반환 전에 Notification을 호출, outer caller가 실행할 post-commit callback 등록 계약 추가, Notification을 source transaction에 포함.
+- Consequences: 공개 승인 action은 caller transaction에 직접 합류하지 않는다. 내부 primitive는 transaction 조합성을 유지하지만 Notification integration은 공개 action의 commit 이후에만 실행된다. 기존 relationship을 재사용하는 승인은 새 source가 아니므로 integration을 호출하거나 누락 item을 backfill하지 않는다.
+- Confirmation / Follow-up: `PROD-276`은 신규 승인 Notification 하나, 기존 relation 재사용 제외, Notification 실패에도 승인 결과 보존을 검증한다. `PROD-321`은 후속 Follow Request Notification 제거만 소유하고 Follow item을 직접 만들지 않는다.
 
 ### Remote compatibility는 materialized source mapping까지만 origin-neutral하다
 
@@ -93,6 +103,26 @@
 - Alternatives Considered: Local source만 허용, ActivityPub inbound Follow/Undo 전체를 archive gate에 포함.
 - Consequences: `PROD-274`와 `PROD-276` target test만 Remote compatibility를 확인하고 대표 E2E는 Local→Local Follow를 사용한다.
 - Confirmation / Follow-up: 실제 inbound flow는 `PROD-243`과 그 선행 이슈가 소유한다.
+
+### Follow Notification create 경계가 eligibility를 소유한다
+
+- Decision Date: 2026-07-16
+- Status: Superseded
+- Context / Problem: ProfileFollow action이 eligibility와 저장 경계를 각각 호출하면 source에서 Recipient와 Related Profile을 파생하는 책임이 action과 Notification service에 나뉘고, 다른 호출자가 eligibility를 우회할 수 있다.
+- Decision Outcome: `createFollowNotification`은 established `ProfileFollow` source에서 Recipient와 Related Profile을 파생한 뒤 공통 eligibility evaluator를 먼저 호출하고, allow일 때만 기존 idempotent insert를 수행한다. evaluator가 없을 때는 default allow다. evaluator·source·저장 오류는 caller에 반환하며 ProfileFollow action이 commit 이후 이를 `await`하고 catch한다.
+- Alternatives Considered: ProfileFollow action이 eligibility와 저장 경계를 별도로 호출, 별도 policy-aware facade 추가, create 경계가 evaluator 오류를 내부에서 정상 no-op으로 삼킴.
+- Consequences: 모든 Follow Notification create 호출이 같은 eligibility 경계를 통과하고 후속 `PROD-327`은 evaluator만 연결할 수 있다. deny는 정상 no-op이지만 evaluator 오류는 source action에서 격리되며 direct caller는 오류를 관찰한다.
+- Confirmation / Follow-up: `PROD-276`이 default allow, deny, evaluator 오류, 저장 실패와 source action commit 보존을 검증한다.
+
+### 현재 Follow Notification 경계에는 정책 주입점을 노출하지 않는다
+
+- Decision Date: 2026-07-17
+- Status: Accepted
+- Context / Problem: 실제 Mute·Block 정책 구현과 production composition이 없는 상태에서 evaluator와 action callback을 먼저 공개하면 테스트가 production 계약을 결정하고 caller가 알림 생명주기나 후속 정책을 우회할 수 있다.
+- Decision Outcome: `createFollowNotification(sourceId)`는 established source에서 Recipient를 파생해 idempotent insert를 직접 수행한다. `followProfile`과 `unfollowProfile`은 Notification create/delete를 내부에서 직접 호출하며 테스트용 callback이나 evaluator를 받지 않는다. 실제 정책과 구체 연결 지점은 `PROD-327`이 구현과 함께 결정한다.
+- Alternatives Considered: default allow evaluator를 공개 인자로 유지, 별도 policy-aware facade를 미리 추가, action에 create/delete callback을 유지.
+- Consequences: 현재 공개 서비스 계약은 실제 production 경로만 표현하고 pending Follow Request나 caller가 알림 생명주기를 선택적으로 우회할 수 없다. deny와 policy error 시나리오는 실제 정책이 구현될 때까지 이 change의 검증 범위에서 제외한다.
+- Confirmation / Follow-up: `PROD-276`은 established 생성, pending·duplicate 제외, 정상 cleanup을 실제 Notification row로 검증한다. 이 결정은 2026-07-16의 “Follow Notification create 경계가 eligibility를 소유한다” 결정을 대체한다.
 
 ### Notification API 권한은 Account-Profile membership이다
 
@@ -166,7 +196,7 @@
 
 ## Remaining Decisions
 
-- 실제 Profile Mute·Profile Block·Domain Block evaluator 연결과 정책별 억제 test는 후속 `PROD-327`의 별도 OpenSpec에서 결정한다.
+- 실제 Profile Mute·Profile Block·Domain Block 정책과 구체 연결 지점 및 정책별 억제 test는 후속 `PROD-327`의 별도 OpenSpec에서 결정한다.
 - invalid source·unavailable Related Profile item의 원인별 event, queue/scan, retry, 허용 지연과 대량 처리 및 Recipient inactivity cleanup 여부는 `PROD-328`의 별도 OpenSpec에서 결정한다.
 - outbox/message queue, delivery retry/reconciliation, Push/realtime과 다른 Notification kind는 필요를 소유하는 별도 Linear 이슈와 OpenSpec에서 결정한다.
 
@@ -176,3 +206,4 @@
 - 이 PR의 초기 draft가 제안한 selected Profile 전용 API 권한은 role-independent Account-Profile membership 권한으로 대체한다.
 - 이 PR의 초기 draft가 제안한 `profile: null` generic fallback, Read 허용과 Unread count 포함은 unavailable item 전면 숨김으로 대체한다.
 - 2026-07-14의 Notification 단일 table 결정 중 “UUIDv8 `Notifications` discriminator를 신규 ID와 GraphQL Node routing에 사용한다”는 부분은 PROD-366의 신규 UUIDv7·기존 UUIDv8 무마이그레이션 공존과 concrete global ID 결정으로 대체한다. 단일 table projection 결정 자체는 유지한다.
+- 2026-07-16의 공개 eligibility evaluator와 default allow 결정은 2026-07-17의 production 경로 전용 계약 결정으로 대체한다.

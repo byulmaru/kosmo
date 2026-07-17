@@ -5,6 +5,7 @@ import {
   db,
   firstOrThrow,
   Instances,
+  Notifications,
   pg,
   ProfileFollowRequests,
   ProfileFollows,
@@ -49,6 +50,8 @@ const createProfile = async (followPolicy = ProfileFollowPolicy.OPEN) => {
 
 const readProfile = (id: string) =>
   db.select().from(Profiles).where(eq(Profiles.id, id)).then(firstOrThrow);
+const readNotifications = (sourceId: string) =>
+  db.select().from(Notifications).where(eq(Notifications.sourceId, sourceId));
 
 const getEstablishedFollow = (result: Awaited<ReturnType<typeof followProfile>>) => {
   if (result.result.kind !== 'ESTABLISHED') {
@@ -59,6 +62,7 @@ const getEstablishedFollow = (result: Awaited<ReturnType<typeof followProfile>>)
 
 after(async () => {
   if (profileIds.length > 0) {
+    await db.delete(Notifications).where(inArray(Notifications.recipientProfileId, profileIds));
     await db
       .delete(ProfileFollows)
       .where(
@@ -92,6 +96,7 @@ test('follow action은 관계와 저장 count를 idempotent하게 갱신한다',
   assert.equal(results[1].followeeProfile.followersCount, 1);
   assert.equal((await readProfile(follower.id)).followingCount, 1);
   assert.equal((await readProfile(followee.id)).followersCount, 1);
+  assert.equal((await readNotifications(getEstablishedFollow(results[0]).id)).length, 1);
 });
 
 test('follow action은 승인 필요 profile에 pending request를 만들고 count를 유지한다', async () => {
@@ -118,6 +123,14 @@ test('follow action은 승인 필요 profile에 pending request를 만들고 cou
   );
   assert.equal((await readProfile(follower.id)).followingCount, 0);
   assert.equal((await readProfile(followee.id)).followersCount, 0);
+  assert.equal(
+    await db
+      .select()
+      .from(Notifications)
+      .where(eq(Notifications.recipientProfileId, followee.id))
+      .then((rows) => rows.length),
+    0,
+  );
 });
 
 test('follow action은 unavailable follower의 relation과 request 생성을 거부한다', async () => {
@@ -208,7 +221,10 @@ test('follow action은 federation delivery가 없는 remote profile을 숨긴다
 test('unfollow action은 대상 조회, 관계 삭제와 count 감소를 함께 소유한다', async () => {
   const follower = await createProfile();
   const followee = await createProfile();
-  await followProfile({ followerProfileId: follower.id, followeeProfileId: followee.id });
+  const profileFollow = getEstablishedFollow(
+    await followProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
+  );
+  assert.equal((await readNotifications(profileFollow.id)).length, 1);
 
   const deleted = await unfollowProfile({
     followerProfileId: follower.id,
@@ -227,6 +243,7 @@ test('unfollow action은 대상 조회, 관계 삭제와 count 감소를 함께 
   assert.equal(duplicate.followeeProfile.followersCount, 0);
   assert.equal((await readProfile(follower.id)).followingCount, 0);
   assert.equal((await readProfile(followee.id)).followersCount, 0);
+  assert.deepEqual(await readNotifications(profileFollow.id), []);
 
   await disableProfile(followee.id);
   assert.equal(deleted.followeeProfile.state, ProfileState.ACTIVE);

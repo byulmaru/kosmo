@@ -1,7 +1,14 @@
 import { and, eq, getColumns, inArray, ne, sql } from 'drizzle-orm';
 import { db, first, firstOrThrowWith, Instances, ProfileFollows, Profiles } from '../db';
-import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
+import {
+  InstanceKind,
+  InstanceState,
+  NotificationKind,
+  ProfileFollowPolicy,
+  ProfileState,
+} from '../enums';
 import { ConflictError, NotFoundError } from '../error';
+import { createFollowNotification, deleteNotificationBySource } from './notification';
 import { ensureProfileFollow } from './profile-follow-relation';
 import { ensureProfileFollowRequest } from './profile-follow-request';
 import type { ProfileFollowRequestRow } from './profile-follow-request';
@@ -26,8 +33,8 @@ export const followProfile = async ({
   followeeProfile: ProfileRow;
   followerProfile: ProfileRow;
   result: FollowProfileResult;
-}> =>
-  db.transaction(async (tx) => {
+}> => {
+  const result = await db.transaction(async (tx) => {
     if (followerProfileId === followeeProfileId) {
       throw new ConflictError({ message: 'Profile cannot follow itself' });
     }
@@ -92,6 +99,14 @@ export const followProfile = async ({
     return { created, followeeProfile, followerProfile, result };
   });
 
+  if (result.created && result.result.kind === 'ESTABLISHED') {
+    // Notification delivery is best-effort and must not change the committed Follow result.
+    await createFollowNotification(result.result.profileFollow.id).catch(() => undefined);
+  }
+
+  return result;
+};
+
 export const unfollowProfile = async ({
   followerProfileId,
   followeeProfileId,
@@ -99,8 +114,8 @@ export const unfollowProfile = async ({
   followeeProfile: ProfileRow;
   followerProfile: ProfileRow;
   profileFollowId: string | null;
-}> =>
-  db.transaction(async (tx) => {
+}> => {
+  const result = await db.transaction(async (tx) => {
     const target = await tx
       .select(getColumns(Profiles))
       .from(Profiles)
@@ -149,3 +164,13 @@ export const unfollowProfile = async ({
 
     return { followeeProfile, followerProfile, profileFollowId: deleted?.id ?? null };
   });
+
+  if (result.profileFollowId) {
+    // Notification cleanup is best-effort and must not change the committed Unfollow result.
+    await deleteNotificationBySource(NotificationKind.FOLLOW, result.profileFollowId).catch(
+      () => undefined,
+    );
+  }
+
+  return result;
+};

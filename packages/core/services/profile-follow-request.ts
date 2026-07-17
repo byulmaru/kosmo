@@ -1,5 +1,6 @@
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import {
+  db,
   first,
   firstOrThrow,
   firstOrThrowWith,
@@ -11,6 +12,7 @@ import {
 } from '../db';
 import { InstanceState, ProfileState } from '../enums';
 import { NotFoundError, PermissionDeniedError } from '../error';
+import { createFollowNotification } from './notification';
 import { ensureProfileFollow } from './profile-follow-relation';
 import type { Transaction } from '../db';
 
@@ -97,75 +99,96 @@ export const ensureProfileFollowRequest = async (
     };
   });
 
-export const approveProfileFollowRequest = async (
-  {
-    actorProfileId,
-    profileFollowRequestId,
-  }: { readonly actorProfileId: string; readonly profileFollowRequestId: string },
-  tx?: Transaction,
-): Promise<{
+type ApproveProfileFollowRequestResult = {
   readonly followeeProfile: typeof Profiles.$inferSelect;
   readonly followerProfile: typeof Profiles.$inferSelect;
   readonly profileFollow: ProfileFollowRow;
   readonly profileFollowRequestId: string;
-}> =>
-  getDatabaseConnection(tx).transaction(async (tx) => {
-    const request = await tx
-      .select()
-      .from(ProfileFollowRequests)
-      .where(eq(ProfileFollowRequests.id, profileFollowRequestId))
-      .limit(1)
-      .then(firstOrThrowWith(() => new NotFoundError('Profile follow request not found')));
+};
 
-    if (request.followeeProfileId !== actorProfileId) {
-      throw new PermissionDeniedError();
-    }
+const approveProfileFollowRequestInTransaction = async (
+  {
+    actorProfileId,
+    profileFollowRequestId,
+  }: { readonly actorProfileId: string; readonly profileFollowRequestId: string },
+  tx: Transaction,
+): Promise<ApproveProfileFollowRequestResult & { readonly created: boolean }> => {
+  const request = await tx
+    .select()
+    .from(ProfileFollowRequests)
+    .where(eq(ProfileFollowRequests.id, profileFollowRequestId))
+    .limit(1)
+    .then(firstOrThrowWith(() => new NotFoundError('Profile follow request not found')));
 
-    const participants = await tx
-      .select({
-        instanceState: Instances.state,
-        profile: Profiles,
-      })
-      .from(Profiles)
-      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .where(
-        and(
-          inArray(Profiles.id, [request.followerProfileId, request.followeeProfileId]),
-          eq(Profiles.state, ProfileState.ACTIVE),
-          ne(Instances.state, InstanceState.SUSPENDED),
-        ),
-      )
-      .orderBy(Profiles.id);
-    const followerProfile = participants.find(
-      ({ profile }) => profile.id === request.followerProfileId,
-    )?.profile;
-    const followeeProfile = participants.find(
-      ({ profile }) => profile.id === request.followeeProfileId,
-    )?.profile;
-    if (!followerProfile || !followeeProfile) {
-      throw new NotFoundError('Profile not found');
-    }
+  if (request.followeeProfileId !== actorProfileId) {
+    throw new PermissionDeniedError();
+  }
 
-    const { profileFollow } = await ensureProfileFollow(
-      {
-        followeeProfileId: request.followeeProfileId,
-        followerProfileId: request.followerProfileId,
-      },
-      tx,
-    );
+  const participants = await tx
+    .select({
+      instanceState: Instances.state,
+      profile: Profiles,
+    })
+    .from(Profiles)
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .where(
+      and(
+        inArray(Profiles.id, [request.followerProfileId, request.followeeProfileId]),
+        eq(Profiles.state, ProfileState.ACTIVE),
+        ne(Instances.state, InstanceState.SUSPENDED),
+      ),
+    )
+    .orderBy(Profiles.id);
+  const followerProfile = participants.find(
+    ({ profile }) => profile.id === request.followerProfileId,
+  )?.profile;
+  const followeeProfile = participants.find(
+    ({ profile }) => profile.id === request.followeeProfileId,
+  )?.profile;
+  if (!followerProfile || !followeeProfile) {
+    throw new NotFoundError('Profile not found');
+  }
 
-    const updatedProfiles = await tx
-      .select()
-      .from(Profiles)
-      .where(inArray(Profiles.id, [request.followerProfileId, request.followeeProfileId]));
+  const { created, profileFollow } = await ensureProfileFollow(
+    {
+      followeeProfileId: request.followeeProfileId,
+      followerProfileId: request.followerProfileId,
+    },
+    tx,
+  );
 
-    return {
-      followeeProfile: updatedProfiles.find(({ id }) => id === request.followeeProfileId)!,
-      followerProfile: updatedProfiles.find(({ id }) => id === request.followerProfileId)!,
-      profileFollow,
-      profileFollowRequestId: request.id,
-    };
-  });
+  const updatedProfiles = await tx
+    .select()
+    .from(Profiles)
+    .where(inArray(Profiles.id, [request.followerProfileId, request.followeeProfileId]));
+
+  return {
+    created,
+    followeeProfile: updatedProfiles.find(({ id }) => id === request.followeeProfileId)!,
+    followerProfile: updatedProfiles.find(({ id }) => id === request.followerProfileId)!,
+    profileFollow,
+    profileFollowRequestId: request.id,
+  };
+};
+
+export const approveProfileFollowRequest = async ({
+  actorProfileId,
+  profileFollowRequestId,
+}: {
+  readonly actorProfileId: string;
+  readonly profileFollowRequestId: string;
+}): Promise<ApproveProfileFollowRequestResult> => {
+  const { created, ...approved } = await db.transaction((tx) =>
+    approveProfileFollowRequestInTransaction({ actorProfileId, profileFollowRequestId }, tx),
+  );
+
+  if (created) {
+    // Notification delivery is best-effort and must not change the committed approval result.
+    await createFollowNotification(approved.profileFollow.id).catch(() => undefined);
+  }
+
+  return approved;
+};
 
 const deleteProfileFollowRequestAsActor = async (
   {

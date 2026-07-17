@@ -35,11 +35,11 @@
 
 ## 7. PROD-276 ProfileFollow 생성·삭제에서 Follow 알림을 동기화한다
 
-- [ ] 7.1 `PROD-281` 공용 ProfileFollow action merge 뒤 새 Local Follow 관계에 공통 Notification eligibility port와 `PROD-274` create port를 연결하고 정책 미연결 기본값을 allow로 둔다.
-- [ ] 7.2 Follow transaction commit 뒤 eligibility/create를 같은 request에서 await하고 deny·fail-closed evaluator error·저장 실패를 catch해 Follow 성공을 보존한다.
-- [ ] 7.3 정상 ProfileFollow 삭제 transaction commit 뒤 delete-by-source port를 같은 request에서 await하고 cleanup 실패가 Unfollow 성공을 바꾸지 않게 한다.
-- [ ] 7.4 동일 source integration 재진입과 정상 delete는 idempotent하게 만들고 사용자 duplicate Follow는 integration을 다시 호출하지 않으며 materialized Remote Follower도 origin 분기 없이 같은 port를 사용하게 한다.
-- [ ] 7.5 action test로 allow/deny/evaluator error, create/delete failure, duplicate/re-entry, Local/Remote Follower와 정상 cleanup을 검증하고 fire-and-forget, outbox/message queue, retry, backfill과 ActivityPub ingress가 추가되지 않았는지 확인한다.
+- [x] 7.1 `PROD-274`의 Follow Notification create 경계가 established source에서 Recipient를 파생해 idempotent insert를 직접 수행하고 테스트 전용 evaluator를 공개 계약에 추가하지 않게 한다.
+- [x] 7.2 직접 Follow와 Follow Request 승인 public action이 top-level transaction을 소유하고, 새 established 관계 commit 뒤 create 경계를 같은 request에서 await하며 저장 실패에도 source action 성공을 보존하게 한다. pending request 생성과 기존 relation 재사용에는 호출하지 않는다.
+- [x] 7.3 정상 ProfileFollow 삭제 transaction commit 뒤 delete-by-source port를 같은 request에서 await하고 cleanup 실패가 Unfollow 성공을 바꾸지 않게 한다.
+- [x] 7.4 동일 source integration 재진입과 정상 delete는 idempotent하게 만들고 사용자 duplicate Follow는 integration을 다시 호출하지 않으며 materialized Remote Follower도 origin 분기 없이 같은 port를 사용하게 한다.
+- [x] 7.5 action test로 직접 Follow와 승인에서 실제 Notification row의 새 established 생성, pending·기존 relation 재사용·duplicate 제외, Local Follower와 정상 cleanup을 검증하고 테스트 전용 callback, fire-and-forget, outbox/message queue, retry, backfill과 ActivityPub ingress가 추가되지 않았는지 확인한다.
 
 ## 8. PROD-277 알림 목록 화면과 항목 읽음·Profile 이동 흐름을 제공한다
 

@@ -78,8 +78,6 @@ test('Follow 알림은 source에서 Local Recipient와 Related Profile을 파생
     }),
   );
 
-  await createFollowNotification(profileFollow.id);
-
   const [notification] = await readNotifications(profileFollow.id);
   assert.ok(notification);
   assert.equal(notification.kind, NotificationKind.FOLLOW);
@@ -183,14 +181,11 @@ test('Unfollow 뒤 Re-follow는 새 source ID로 새 알림을 저장한다', as
       followeeProfileId: followee.id,
     }),
   );
-  await createFollowNotification(firstFollow.id);
-
   const deleted = await unfollowProfile({
     followerProfileId: follower.id,
     followeeProfileId: followee.id,
   });
   assert.equal(deleted.profileFollowId, firstFollow.id);
-  await deleteNotificationBySource(NotificationKind.FOLLOW, firstFollow.id);
 
   const secondFollow = getEstablishedFollow(
     await followProfile({
@@ -198,8 +193,6 @@ test('Unfollow 뒤 Re-follow는 새 source ID로 새 알림을 저장한다', as
       followeeProfileId: followee.id,
     }),
   );
-  await createFollowNotification(secondFollow.id);
-
   assert.notEqual(secondFollow.id, firstFollow.id);
   assert.deepEqual(await readNotifications(firstFollow.id), []);
   assert.equal((await readNotifications(secondFollow.id)).length, 1);

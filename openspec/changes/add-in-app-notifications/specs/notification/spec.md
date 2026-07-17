@@ -6,10 +6,17 @@
 
 #### Scenario: 새 Local Follow에서 알림 생성
 
-- **WHEN** Local Follower Profile이 Local Followee Profile과 새 `ProfileFollow` 관계를 만들고 Notification eligibility 결과가 allow이다
+- **WHEN** Local Follower Profile이 Local Followee Profile과 새 established `ProfileFollow` 관계를 만든다
 - **THEN** 시스템은 `kind = FOLLOW`, `source_id = ProfileFollow.id`, `recipient_profile_id = Followee.id`, `data = {}`인 Notification 하나를 생성한다
 - **AND** Related Profile은 source의 Follower에서 파생한다
 - **AND** 새 item의 `readAt`은 `null`이다
+
+#### Scenario: Follow Request 승인에서 새 관계 생성
+
+- **WHEN** Follow Request 승인 action이 새 established `ProfileFollow` 관계를 생성하고 commit한다
+- **THEN** 시스템은 직접 Follow와 같은 source integration을 사용해 해당 `ProfileFollow.id`의 Follow Notification을 하나 생성한다
+- **AND** 공개 승인 action은 같은 request에서 Notification 저장을 await하고 오류를 catch한다
+- **AND** 승인 전에 이미 존재하던 관계를 재사용하면 Notification integration을 다시 호출하거나 과거 누락 item을 backfill하지 않는다
 
 #### Scenario: source-only 저장 입력
 
@@ -46,7 +53,7 @@
 
 - **WHEN** 기존 관계를 Unfollow한 뒤 같은 Follower와 Followee가 다시 Follow하여 새 `ProfileFollow.id`를 만든다
 - **THEN** 정상 cleanup이 성공한 이전 source의 Notification은 남지 않는다
-- **AND** eligibility가 allow이고 저장이 성공하면 시스템은 새 source에 대해 Follow Notification을 정확히 하나 생성한다
+- **AND** 저장이 성공하면 시스템은 새 source에 대해 Follow Notification을 정확히 하나 생성한다
 
 #### Scenario: 이미 materialize된 Remote Follower source
 
@@ -59,38 +66,20 @@
 - **WHEN** Notification 기능 배포 전에 이미 존재하던 `ProfileFollow` 관계가 있다
 - **THEN** 시스템은 historical Follow Notification을 backfill하지 않는다
 
-### Requirement: Notification eligibility와 Follow 실패 격리
+### Requirement: Follow Notification 실패 격리
 
-시스템은 모든 source integration에서 공통 Notification eligibility 경계를 먼저 평가해야 하며(MUST), Notification-side deny·오류·저장 실패가 `ProfileFollow` 결과를 rollback하거나 실패 응답으로 바꾸어서는 안 된다(MUST NOT).
-
-#### Scenario: 실제 정책이 연결되지 않은 기본 결과
-
-- **WHEN** Profile Mute, Profile Block, Domain Block의 실제 판정 구현이 아직 eligibility 경계에 연결되지 않았다
-- **THEN** eligibility 경계는 명시적인 기본 allow를 반환한다
-- **AND** 시스템은 새 관계의 Notification 저장을 시도한다
-
-#### Scenario: 명시적인 policy deny
-
-- **WHEN** eligibility 경계가 deny를 반환한다
-- **THEN** 시스템은 Notification을 생성하지 않는다
-- **AND** 새 `ProfileFollow` 관계와 Follow 성공 응답은 유지한다
-
-#### Scenario: policy 평가 오류
-
-- **WHEN** eligibility 평가가 오류로 끝난다
-- **THEN** 시스템은 privacy-safe한 fail-closed 결과로 Notification을 생성하지 않는다
-- **AND** 새 `ProfileFollow` 관계와 Follow 성공 응답은 유지한다
+시스템은 Notification-side 저장 실패가 `ProfileFollow` 결과를 rollback하거나 실패 응답으로 바꾸어서는 안 된다(MUST NOT).
 
 #### Scenario: Notification 저장 실패
 
-- **WHEN** eligibility가 allow이지만 Notification 저장이 실패한다
+- **WHEN** Notification 저장이 실패한다
 - **THEN** 시스템은 새 `ProfileFollow` 관계와 Follow 성공 응답을 유지한다
 - **AND** 이번 capability는 누락된 Notification을 retry, outbox, message queue, duplicate Follow 또는 reconciliation으로 자동 복구하지 않는다
 
 #### Scenario: commit 이후 같은 request에서 처리
 
 - **WHEN** 새 `ProfileFollow` transaction이 commit된다
-- **THEN** source action은 같은 request에서 eligibility와 Notification 저장을 순서대로 await하고 오류를 catch한다
+- **THEN** source action은 같은 request에서 Notification 저장을 await하고 오류를 catch한다
 - **AND** Notification을 source transaction/savepoint에 포함하거나 fire-and-forget으로 실행하지 않는다
 
 ### Requirement: Follow source 생명주기 정리
