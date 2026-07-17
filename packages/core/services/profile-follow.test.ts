@@ -222,6 +222,43 @@ test('follow action은 unavailable follower의 relation과 request 생성을 거
   );
 });
 
+test('remote follower의 outbound follow와 unfollow를 거부하고 기존 관계를 보존한다', async () => {
+  const follower = await createRemoteProfile();
+  const followee = await createRemoteProfile({ state: InstanceState.UNRESPONSIVE });
+
+  await assert.rejects(
+    followProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
+    NotFoundError,
+  );
+
+  const relation = await db.transaction(async (tx) => {
+    const created = await tx
+      .insert(ProfileFollows)
+      .values({ followerProfileId: follower.id, followeeProfileId: followee.id })
+      .returning()
+      .then(firstOrThrow);
+    await tx.update(Profiles).set({ followingCount: 1 }).where(eq(Profiles.id, follower.id));
+    await tx.update(Profiles).set({ followersCount: 1 }).where(eq(Profiles.id, followee.id));
+    return created;
+  });
+
+  await assert.rejects(
+    unfollowProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
+    NotFoundError,
+  );
+
+  assert.equal(
+    await db
+      .select()
+      .from(ProfileFollows)
+      .where(eq(ProfileFollows.id, relation.id))
+      .then((rows) => rows.length),
+    1,
+  );
+  assert.equal((await readProfile(follower.id)).followingCount, 1);
+  assert.equal((await readProfile(followee.id)).followersCount, 1);
+});
+
 test('follow action은 SUSPENDED instance의 profile을 숨긴다', async () => {
   const follower = await createProfile();
   const followee = await createProfile();
