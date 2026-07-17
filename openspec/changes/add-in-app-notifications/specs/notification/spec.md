@@ -11,6 +11,13 @@
 - **AND** Related Profile은 source의 Follower에서 파생한다
 - **AND** 새 item의 `readAt`은 `null`이다
 
+#### Scenario: Follow Request 승인에서 새 관계 생성
+
+- **WHEN** Follow Request 승인 action이 새 established `ProfileFollow` 관계를 생성하고 commit한다
+- **THEN** 시스템은 직접 Follow와 같은 source integration을 사용해 해당 `ProfileFollow.id`의 Follow Notification을 하나 생성한다
+- **AND** 공개 승인 action은 같은 request에서 Notification 저장을 await하고 오류를 catch한다
+- **AND** 승인 전에 이미 존재하던 관계를 재사용하면 Notification integration을 다시 호출하거나 과거 누락 item을 backfill하지 않는다
+
 #### Scenario: source-only 저장 입력
 
 - **WHEN** 저장 경계가 하나의 established `ProfileFollow` source를 입력으로 받는다

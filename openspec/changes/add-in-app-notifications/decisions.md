@@ -84,6 +84,16 @@
 - Consequences: item 유실과 orphan을 첫 delivery에서 받아들이며 자동 retry/reconciliation을 제공하지 않는다. Follow response latency에는 Notification 경계 await 비용이 포함된다.
 - Confirmation / Follow-up: `PROD-276`이 실제 Notification row의 생성·정리와 source action의 best-effort 오류 격리 구조를 검증한다. durable delivery가 필요하면 별도 Issue → OpenSpec으로 결정한다.
 
+### 공개 Follow source action이 top-level transaction과 post-commit effect를 소유한다
+
+- Decision Date: 2026-07-17
+- Status: Accepted
+- Context / Problem: Follow Request 승인 service가 caller transaction을 받으면 함수 반환 시점에는 outer transaction이 commit되지 않았을 수 있다. 이때 shared database connection에서 Notification source를 다시 읽으면 uncommitted `ProfileFollow`를 찾지 못해 오류가 격리된 채 item이 누락된다.
+- Decision Outcome: 직접 Follow와 Follow Request 승인의 공개 action은 top-level source transaction을 소유하고, 새 established relation이 commit된 뒤 같은 request에서 Follow Notification create 경계를 await/catch한다. transaction 조합이 필요한 request/relation 변경은 post-commit effect를 호출하지 않는 내부 primitive로 분리한다.
+- Alternatives Considered: optional transaction을 유지하면서 함수 반환 전에 Notification을 호출, outer caller가 실행할 post-commit callback 등록 계약 추가, Notification을 source transaction에 포함.
+- Consequences: 공개 승인 action은 caller transaction에 직접 합류하지 않는다. 내부 primitive는 transaction 조합성을 유지하지만 Notification integration은 공개 action의 commit 이후에만 실행된다. 기존 relationship을 재사용하는 승인은 새 source가 아니므로 integration을 호출하거나 누락 item을 backfill하지 않는다.
+- Confirmation / Follow-up: `PROD-276`은 신규 승인 Notification 하나, 기존 relation 재사용 제외, Notification 실패에도 승인 결과 보존을 검증한다. `PROD-321`은 후속 Follow Request Notification 제거만 소유하고 Follow item을 직접 만들지 않는다.
+
 ### Remote compatibility는 materialized source mapping까지만 origin-neutral하다
 
 - Decision Date: 2026-07-14
