@@ -1,31 +1,52 @@
-import { ScrollView, StyleSheet, Text } from 'react-native';
-import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { useState } from 'react';
+import { graphql, useLazyLoadQuery } from 'react-relay';
+import {
+  NotificationList,
+  NotificationListState,
+} from '@/components/notification/NotificationList';
+import { RouteBoundary } from '@/components/RouteBoundary';
+import { useRelayActor } from '@/relay/RelayActorProvider';
+import type { NotificationsPageQuery } from './__generated__/NotificationsPageQuery.graphql';
+
+const NotificationsQuery = graphql`
+  query NotificationsPageQuery {
+    currentSession {
+      id
+      selectedProfile {
+        id
+        ...NotificationList_profile
+      }
+    }
+  }
+`;
 
 export default function NotificationsScreen() {
-  const theme = useTheme();
+  const { revision } = useRelayActor();
+  const [fetchKey, setFetchKey] = useState(0);
+
   return (
-    <ScrollView contentContainerStyle={styles.root}>
-      <Text style={[styles.eyebrow, { color: theme.textSecondary }]}>KOSMO</Text>
-      <Text accessibilityRole="header" style={[styles.heading, { color: theme.text }]}>
-        알림
-      </Text>
-      <Text style={[styles.description, { color: theme.textSecondary }]}>
-        활동 알림과 업데이트를 확인합니다.
-      </Text>
-    </ScrollView>
+    <RouteBoundary
+      error={(retry) => <NotificationListState onRetry={retry} state="error" />}
+      loading={<NotificationListState state="loading" />}
+      onRetry={() => setFetchKey((key) => key + 1)}
+      title="알림을 불러오지 못했어요"
+    >
+      <NotificationsContent fetchKey={`${revision}:${fetchKey}`} />
+    </RouteBoundary>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flexGrow: 1, paddingHorizontal: spacing.xl, paddingVertical: spacing.xxl },
-  eyebrow: {
-    fontFamily: 'SUIT',
-    fontWeight: '600',
-    letterSpacing: 1.6,
-    marginBottom: spacing.md,
-    ...typography.xsm,
-  },
-  heading: { fontFamily: 'SUIT', fontSize: 48, fontWeight: '700', lineHeight: 44 },
-  description: { fontFamily: 'SUIT', marginTop: spacing.md, maxWidth: 360, ...typography.md },
-});
+function NotificationsContent({ fetchKey }: { fetchKey: string }) {
+  const data = useLazyLoadQuery<NotificationsPageQuery>(
+    NotificationsQuery,
+    {},
+    { fetchKey, fetchPolicy: 'store-and-network' },
+  );
+  const profile = data.currentSession?.selectedProfile ?? null;
+
+  return profile ? (
+    <NotificationList profile={profile} />
+  ) : (
+    <NotificationListState state="profileRequired" />
+  );
+}

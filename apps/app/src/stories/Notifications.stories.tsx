@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, userEvent, within } from 'storybook/test';
+import NotificationsScreen from '@/app/(tabs)/(protected)/notifications';
 import {
   NotificationList,
   NotificationListState,
@@ -110,6 +111,9 @@ function NotificationCatalog() {
       <Section title="Error and retry">
         <NotificationListState onRetry={() => undefined} state="error" />
       </Section>
+      <Section title="Profile required">
+        <NotificationListState state="profileRequired" />
+      </Section>
       <Section title="Empty">
         <NotificationList profile={requireProfile(profiles, 0).notificationList!} />
       </Section>
@@ -201,6 +205,17 @@ export const WebRefreshLoading: Story = {
   render: () => <RefreshList />,
 };
 
+export const KeyboardFocusableProfileLink: Story = {
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const link = canvas.getByRole('link', { name: /별빛 여행자님이 팔로우했습니다/ });
+    link.focus();
+    expect(link).toHaveFocus();
+    expect(link).toHaveAttribute('href', '/@starlight');
+  },
+  render: () => <RefreshList />,
+};
+
 export const SelectedProfileSwitch: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -214,4 +229,32 @@ export const SelectedProfileSwitch: Story = {
     ).not.toBeInTheDocument();
   },
   render: () => <ProfileSwitchList />,
+};
+
+export const SelectedProfileScreen: Story = {
+  parameters: {
+    relay: {
+      data: { currentSession: { id: 'notification-session', selectedProfile: contentProfile } },
+    },
+  },
+  play: ({ canvasElement }) => {
+    expect(
+      within(canvasElement).getByRole('link', {
+        name: /별빛 여행자님이 팔로우했습니다.*읽지 않은 알림/,
+      }),
+    ).toBeVisible();
+  },
+  render: () => <NotificationsScreen />,
+};
+
+export const NoSelectedProfileScreen: Story = {
+  parameters: {
+    relay: { data: { currentSession: { id: 'notification-session', selectedProfile: null } } },
+  },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByRole('heading', { name: '알림' })).toBeVisible();
+    expect(canvas.getByText('프로필이 필요해요')).toBeVisible();
+  },
+  render: () => <NotificationsScreen />,
 };

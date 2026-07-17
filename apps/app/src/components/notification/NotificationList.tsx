@@ -40,7 +40,6 @@ export function NotificationList({ profile }: NotificationListProps) {
     NotificationList_profile$key
   >(notificationListFragment, profile);
   const [loadError, setLoadError] = useState(false);
-  const [refreshError, setRefreshError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [, startTransition] = useTransition();
   const notifications = pagination.data.notifications.edges.flatMap(({ node }) =>
@@ -63,16 +62,14 @@ export function NotificationList({ profile }: NotificationListProps) {
       return;
     }
 
-    setRefreshError(false);
     setRefreshing(true);
     startTransition(() => {
       pagination.refetch(
         { count: 20 },
         {
           fetchPolicy: 'network-only',
-          onComplete: (error) => {
+          onComplete: () => {
             setRefreshing(false);
-            setRefreshError(Boolean(error));
           },
         },
       );
@@ -112,14 +109,6 @@ export function NotificationList({ profile }: NotificationListProps) {
       >
         모두
       </Text>
-      {refreshError ? (
-        <View accessibilityRole="alert" style={styles.inlineState}>
-          <Text style={[styles.stateTitle, { color: theme.text }]}>새로고침하지 못했어요</Text>
-          <Button onPress={refresh} tone="secondary">
-            다시 시도
-          </Button>
-        </View>
-      ) : null}
       {notifications.length ? (
         notifications.map((notification) => (
           <NotificationListItem key={notification.id} notification={notification.follow} />
@@ -161,7 +150,7 @@ export function NotificationListState({
   state,
 }: {
   onRetry?: () => void;
-  state: 'error' | 'loading';
+  state: 'error' | 'loading' | 'profileRequired';
 }) {
   const theme = useTheme();
 
@@ -199,7 +188,7 @@ export function NotificationListState({
             알림을 불러오는 중입니다.
           </Text>
         </>
-      ) : (
+      ) : state === 'error' ? (
         <View accessibilityRole="alert" style={styles.state}>
           <Text style={[styles.stateTitle, { color: theme.text }]}>알림을 불러오지 못했어요</Text>
           <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>
@@ -210,6 +199,13 @@ export function NotificationListState({
               다시 시도
             </Button>
           ) : null}
+        </View>
+      ) : (
+        <View style={styles.state}>
+          <Text style={[styles.stateTitle, { color: theme.text }]}>프로필이 필요해요</Text>
+          <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>
+            알림을 보려면 사용할 프로필을 먼저 선택해주세요.
+          </Text>
         </View>
       )}
     </ScrollView>
@@ -246,13 +242,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xxxl,
-  },
-  inlineState: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.md,
-    justifyContent: 'space-between',
-    padding: spacing.lg,
   },
   stateTitle: { fontFamily: 'SUIT', fontWeight: '700', textAlign: 'center', ...typography.md },
   stateDescription: { fontFamily: 'SUIT', textAlign: 'center', ...typography.sm },
