@@ -337,6 +337,37 @@ describe('inbound Create dispatch', () => {
     ]);
   });
 
+  test('commits one Post for concurrent personal and shared deliveries of the same object', async () => {
+    const profile = await createStoredRemoteActor();
+    const fixture = await createInboxFixture();
+    const objectUri = new URL('https://remote.example/notes/concurrent-inboxes');
+
+    const [personalResponse, sharedResponse] = await Promise.all([
+      fixture.federation.fetch(
+        await fixture.createSignedCreateRequest(
+          `/ap/actor/${localProfileId}/inbox`,
+          objectUri,
+          new URL('https://remote.example/activities/create-concurrent-personal'),
+        ),
+        { contextData: undefined },
+      ),
+      fixture.federation.fetch(
+        await fixture.createSignedCreateRequest(
+          '/inbox',
+          objectUri,
+          new URL('https://remote.example/activities/create-concurrent-shared'),
+        ),
+        { contextData: undefined },
+      ),
+    ]);
+
+    assert.equal(personalResponse.status, 202, await personalResponse.text());
+    assert.equal(sharedResponse.status, 202, await sharedResponse.text());
+    assert.equal((await db.select().from(ActivityPubPosts)).length, 1);
+    assert.equal((await db.select().from(Posts).where(eq(Posts.profileId, profile.id))).length, 1);
+    assert.equal((await db.select().from(PostContents)).length, 1);
+  });
+
   test('skips unsupported remote content without writing rows', async () => {
     await createStoredRemoteActor();
     const note = new Note({
