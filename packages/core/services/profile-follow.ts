@@ -100,11 +100,8 @@ export const followProfile = async ({
   });
 
   if (result.created && result.result.kind === 'ESTABLISHED') {
-    try {
-      await createFollowNotification(result.result.profileFollow.id);
-    } catch {
-      // Notification delivery is best-effort and must not change the committed Follow result.
-    }
+    // Notification delivery is best-effort and must not change the committed Follow result.
+    await createFollowNotification(result.result.profileFollow.id).catch(() => undefined);
   }
 
   return result;
@@ -169,11 +166,10 @@ export const unfollowProfile = async ({
   });
 
   if (result.profileFollowId) {
-    try {
-      await deleteNotificationBySource(NotificationKind.FOLLOW, result.profileFollowId);
-    } catch {
-      // Notification cleanup is best-effort and must not change the committed Unfollow result.
-    }
+    // Notification cleanup is best-effort and must not change the committed Unfollow result.
+    await deleteNotificationBySource(NotificationKind.FOLLOW, result.profileFollowId).catch(
+      () => undefined,
+    );
   }
 
   return result;

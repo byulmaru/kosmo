@@ -5,10 +5,7 @@ import { NotFoundError } from '../error';
 
 export const createFollowNotification = async (sourceId: string): Promise<void> => {
   const source = await db
-    .select({
-      id: ProfileFollows.id,
-      recipientProfileId: ProfileFollows.followeeProfileId,
-    })
+    .select({ id: ProfileFollows.id, recipientProfileId: ProfileFollows.followeeProfileId })
     .from(ProfileFollows)
     .innerJoin(Profiles, eq(Profiles.id, ProfileFollows.followeeProfileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
