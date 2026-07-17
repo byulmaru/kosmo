@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { graphql, isInputObjectType, isInterfaceType, isObjectType } from 'graphql';
+import { graphql, isInputObjectType, isInterfaceType, isObjectType, isUnionType } from 'graphql';
 import { encodeGlobalId } from './global-id';
 import { notificationNodeType } from './resolvers/notification/ref';
 import { schema } from './schema';
@@ -39,6 +39,61 @@ test('follow mutation payloads expose both updated profiles', () => {
   assert.equal(String(unfollowPayload.getFields().followerProfile?.type), 'Profile!');
   assert.equal(String(unfollowPayload.getFields().followeeProfile?.type), 'Profile');
   assert.equal(unfollowPayload.getFields().profile, undefined);
+});
+
+test('exposes the profile follow request lifecycle contract', () => {
+  const profile = schema.getType('Profile');
+  const request = schema.getType('ProfileFollowRequest');
+  const result = schema.getType('ProfileFollowResult');
+  const followPayload = schema.getType('FollowProfilePayload');
+  const approvePayload = schema.getType('ApproveProfileFollowRequestPayload');
+  const rejectPayload = schema.getType('RejectProfileFollowRequestPayload');
+  const cancelPayload = schema.getType('CancelProfileFollowRequestPayload');
+
+  assert.ok(isObjectType(profile));
+  assert.equal(
+    String(profile.getFields().incomingProfileFollowRequests?.type),
+    'ProfileIncomingProfileFollowRequestsConnection',
+  );
+  assert.equal(
+    String(profile.getFields().outgoingProfileFollowRequests?.type),
+    'ProfileOutgoingProfileFollowRequestsConnection',
+  );
+
+  assert.ok(isObjectType(request));
+  assert.equal(String(request.getFields().follower?.type), 'Profile');
+  assert.equal(String(request.getFields().followee?.type), 'Profile');
+
+  assert.ok(isUnionType(result));
+  assert.deepEqual(
+    result
+      .getTypes()
+      .map(({ name }) => name)
+      .sort(),
+    ['ProfileFollow', 'ProfileFollowRequest'],
+  );
+
+  assert.ok(isObjectType(followPayload));
+  assert.equal(String(followPayload.getFields().result?.type), 'ProfileFollowResult!');
+  assert.equal(followPayload.getFields().profileFollow, undefined);
+
+  assert.ok(isObjectType(approvePayload));
+  assert.equal(String(approvePayload.getFields().profileFollow?.type), 'ProfileFollow!');
+  assert.equal(String(approvePayload.getFields().profileFollowRequestId?.type), 'ID!');
+  assert.equal(String(approvePayload.getFields().followerProfile?.type), 'Profile!');
+  assert.equal(String(approvePayload.getFields().followeeProfile?.type), 'Profile!');
+
+  assert.ok(isObjectType(rejectPayload));
+  assert.equal(String(rejectPayload.getFields().profileFollowRequestId?.type), 'ID!');
+  assert.equal(String(rejectPayload.getFields().followeeProfile?.type), 'Profile!');
+  assert.equal(rejectPayload.getFields().followerProfile, undefined);
+  assert.equal(rejectPayload.getFields().profileFollowRequest, undefined);
+
+  assert.ok(isObjectType(cancelPayload));
+  assert.equal(String(cancelPayload.getFields().profileFollowRequestId?.type), 'ID!');
+  assert.equal(String(cancelPayload.getFields().followerProfile?.type), 'Profile!');
+  assert.equal(cancelPayload.getFields().followeeProfile, undefined);
+  assert.equal(cancelPayload.getFields().profileFollowRequest, undefined);
 });
 
 test('rejects empty and over-500-character Plain Text before creating a post', async () => {

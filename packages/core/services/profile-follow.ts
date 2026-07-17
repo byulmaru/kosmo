@@ -9,106 +9,81 @@ import {
 } from '../enums';
 import { ConflictError, NotFoundError } from '../error';
 import { createFollowNotification, deleteNotificationBySource } from './notification';
+import { ensureProfileFollow } from './profile-follow-relation';
+import { ensureProfileFollowRequest } from './profile-follow-request';
+import type { ProfileFollowRequestRow } from './profile-follow-request';
 
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
 type ProfileRow = typeof Profiles.$inferSelect;
+
+export type FollowProfileResult =
+  | { readonly kind: 'ESTABLISHED'; readonly profileFollow: ProfileFollowRow }
+  | { readonly kind: 'PENDING'; readonly profileFollowRequest: ProfileFollowRequestRow };
 
 type ProfileFollowInput = {
   followerProfileId: string;
   followeeProfileId: string;
 };
 
-type FollowProfileResult = {
+export const followProfile = async ({
+  followerProfileId,
+  followeeProfileId,
+}: ProfileFollowInput): Promise<{
   created: boolean;
   followeeProfile: ProfileRow;
   followerProfile: ProfileRow;
-  profileFollow: ProfileFollowRow;
-};
-
-type UnfollowProfileResult = {
-  followeeProfile: ProfileRow;
-  followerProfile: ProfileRow;
-  profileFollowId: string | null;
-};
-
-type CreateFollowNotification = (sourceId: string) => Promise<void>;
-type DeleteFollowNotification = (sourceId: string) => Promise<void>;
-
-export const followProfile = async (
-  { followerProfileId, followeeProfileId }: ProfileFollowInput,
-  createNotification: CreateFollowNotification = createFollowNotification,
-): Promise<FollowProfileResult> => {
+  result: FollowProfileResult;
+}> => {
   const result = await db.transaction(async (tx) => {
-    const target = await tx
-      .select({ followPolicy: Profiles.followPolicy, id: Profiles.id })
+    if (followerProfileId === followeeProfileId) {
+      throw new ConflictError({ message: 'Profile cannot follow itself' });
+    }
+
+    const participants = await tx
+      .select({
+        followPolicy: Profiles.followPolicy,
+        id: Profiles.id,
+        instanceKind: Instances.kind,
+      })
       .from(Profiles)
       .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
       .where(
         and(
-          eq(Profiles.id, followeeProfileId),
+          inArray(Profiles.id, [followerProfileId, followeeProfileId]),
           eq(Profiles.state, ProfileState.ACTIVE),
-          eq(Instances.kind, InstanceKind.LOCAL),
           ne(Instances.state, InstanceState.SUSPENDED),
         ),
-      )
-      .limit(1)
-      .then(firstOrThrowWith(() => new NotFoundError('Profile not found')));
-
-    if (followerProfileId === target.id) {
-      throw new ConflictError({ message: 'Profile cannot follow itself' });
+      );
+    const follower = participants.find(({ id }) => id === followerProfileId);
+    const target = participants.find(({ id }) => id === followeeProfileId);
+    if (
+      !follower ||
+      follower.instanceKind !== InstanceKind.LOCAL ||
+      !target ||
+      target.instanceKind !== InstanceKind.LOCAL
+    ) {
+      throw new NotFoundError('Profile not found');
     }
 
-    const existing = await tx
-      .select()
-      .from(ProfileFollows)
-      .where(
-        and(
-          eq(ProfileFollows.followerProfileId, followerProfileId),
-          eq(ProfileFollows.followeeProfileId, target.id),
-        ),
-      )
-      .limit(1)
-      .then(first);
-
-    let result: { created: boolean; profileFollow: ProfileFollowRow };
-    if (existing) {
-      result = { created: false, profileFollow: existing };
+    let created: boolean;
+    let result: FollowProfileResult;
+    if (target.followPolicy === ProfileFollowPolicy.APPROVAL_REQUIRED) {
+      const ensured = await ensureProfileFollowRequest(
+        { followeeProfileId: target.id, followerProfileId },
+        tx,
+      );
+      created = ensured.created;
+      result =
+        ensured.kind === 'ESTABLISHED'
+          ? { kind: 'ESTABLISHED', profileFollow: ensured.profileFollow }
+          : { kind: 'PENDING', profileFollowRequest: ensured.profileFollowRequest };
     } else {
-      if (target.followPolicy !== ProfileFollowPolicy.OPEN) {
-        throw new ConflictError({ message: 'Profile requires follow request' });
-      }
-
-      const inserted = await tx
-        .insert(ProfileFollows)
-        .values({ followerProfileId, followeeProfileId: target.id })
-        .onConflictDoNothing()
-        .returning()
-        .then(first);
-
-      if (inserted) {
-        await tx
-          .update(Profiles)
-          .set({ followingCount: sql`${Profiles.followingCount} + 1` })
-          .where(eq(Profiles.id, followerProfileId));
-        await tx
-          .update(Profiles)
-          .set({ followersCount: sql`${Profiles.followersCount} + 1` })
-          .where(eq(Profiles.id, target.id));
-        result = { created: true, profileFollow: inserted };
-      } else {
-        const concurrent = await tx
-          .select()
-          .from(ProfileFollows)
-          .where(
-            and(
-              eq(ProfileFollows.followerProfileId, followerProfileId),
-              eq(ProfileFollows.followeeProfileId, target.id),
-            ),
-          )
-          .limit(1)
-          .then(firstOrThrowWith(() => new ConflictError({ message: 'Profile follow failed' })));
-        result = { created: false, profileFollow: concurrent };
-      }
+      const ensured = await ensureProfileFollow(
+        { followeeProfileId: target.id, followerProfileId },
+        tx,
+      );
+      created = ensured.created;
+      result = { kind: 'ESTABLISHED', profileFollow: ensured.profileFollow };
     }
 
     const profiles = await tx
@@ -121,12 +96,12 @@ export const followProfile = async (
       throw new NotFoundError('Profile not found');
     }
 
-    return { ...result, followeeProfile, followerProfile };
+    return { created, followeeProfile, followerProfile, result };
   });
 
-  if (result.created) {
+  if (result.created && result.result.kind === 'ESTABLISHED') {
     try {
-      await createNotification(result.profileFollow.id);
+      await createFollowNotification(result.result.profileFollow.id);
     } catch {
       // Notification delivery is best-effort and must not change the committed Follow result.
     }
@@ -135,11 +110,14 @@ export const followProfile = async (
   return result;
 };
 
-export const unfollowProfile = async (
-  { followerProfileId, followeeProfileId }: ProfileFollowInput,
-  deleteNotification: DeleteFollowNotification = (sourceId) =>
-    deleteNotificationBySource(NotificationKind.FOLLOW, sourceId),
-): Promise<UnfollowProfileResult> => {
+export const unfollowProfile = async ({
+  followerProfileId,
+  followeeProfileId,
+}: ProfileFollowInput): Promise<{
+  followeeProfile: ProfileRow;
+  followerProfile: ProfileRow;
+  profileFollowId: string | null;
+}> => {
   const result = await db.transaction(async (tx) => {
     const target = await tx
       .select(getColumns(Profiles))
@@ -192,7 +170,7 @@ export const unfollowProfile = async (
 
   if (result.profileFollowId) {
     try {
-      await deleteNotification(result.profileFollowId);
+      await deleteNotificationBySource(NotificationKind.FOLLOW, result.profileFollowId);
     } catch {
       // Notification cleanup is best-effort and must not change the committed Unfollow result.
     }

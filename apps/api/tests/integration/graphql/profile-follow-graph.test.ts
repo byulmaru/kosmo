@@ -148,6 +148,184 @@ describe('GraphQL profile follow graph', () => {
     });
   });
 
+  test('exposes request nodes only to participants and keeps unavailable counterparts nullable', async () => {
+    const followerAuth = await createAuthenticatedSession();
+    const followeeAuth = await createAuthenticatedSession();
+    const outsiderAuth = await createAuthenticatedSession();
+    const request = await db
+      .insert(ProfileFollowRequests)
+      .values({
+        followerProfileId: followerAuth.profile.id,
+        followeeProfileId: followeeAuth.profile.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+
+    const readNode = (token?: string) =>
+      requestGraphQL<{
+        node: {
+          followee: { id: string } | null;
+          follower: { id: string } | null;
+          id: string;
+        } | null;
+      }>(
+        `query ProfileFollowRequestNode($id: ID!) {
+          node(id: $id) {
+            ... on ProfileFollowRequest { id follower { id } followee { id } }
+          }
+        }`,
+        { id: globalId('ProfileFollowRequest', request.id) },
+        token,
+      );
+
+    const followerResult = await readNode(followerAuth.token);
+    assertNoGraphQLErrors(followerResult);
+    assert.deepEqual(followerResult.data?.node, {
+      followee: { id: globalId('Profile', followeeAuth.profile.id) },
+      follower: { id: globalId('Profile', followerAuth.profile.id) },
+      id: globalId('ProfileFollowRequest', request.id),
+    });
+
+    for (const token of [outsiderAuth.token, undefined]) {
+      const hidden = await readNode(token);
+      assertNoGraphQLErrors(hidden);
+      assert.equal(hidden.data?.node, null);
+    }
+
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, followeeAuth.profile.id));
+    const cleanupResult = await readNode(followerAuth.token);
+    assertNoGraphQLErrors(cleanupResult);
+    assert.deepEqual(cleanupResult.data?.node, {
+      followee: null,
+      follower: { id: globalId('Profile', followerAuth.profile.id) },
+      id: globalId('ProfileFollowRequest', request.id),
+    });
+  });
+
+  test('returns only actor-owned request connections with stable forward and backward pagination', async () => {
+    const auth = await createAuthenticatedSession();
+    const profiles = await Promise.all(
+      ['request-a', 'request-b', 'request-c'].map((handle) =>
+        createProfile({ handle, instanceId: localInstanceId }),
+      ),
+    );
+    const requests = await db
+      .insert(ProfileFollowRequests)
+      .values(
+        profiles.map((profile) => ({
+          followerProfileId: profile.id,
+          followeeProfileId: auth.profile.id,
+        })),
+      )
+      .returning();
+    const expectedIds = requests
+      .map(({ id }) => id)
+      .sort()
+      .reverse()
+      .map((id) => globalId('ProfileFollowRequest', id));
+
+    const firstPage = await requestGraphQL<{
+      node: {
+        incomingProfileFollowRequests: {
+          edges: Array<{ cursor: string; node: { id: string } }>;
+          pageInfo: { endCursor: string | null; hasNextPage: boolean };
+        } | null;
+        outgoingProfileFollowRequests: { edges: unknown[] } | null;
+      } | null;
+    }>(
+      `query IncomingRequests($id: ID!) {
+        node(id: $id) {
+          ... on Profile {
+            incomingProfileFollowRequests(first: 2) {
+              edges { cursor node { id } }
+              pageInfo { endCursor hasNextPage }
+            }
+            outgoingProfileFollowRequests(first: 2) { edges { node { id } } }
+          }
+        }
+      }`,
+      { id: globalId('Profile', auth.profile.id) },
+      auth.token,
+    );
+    assertNoGraphQLErrors(firstPage);
+    assert.deepEqual(
+      firstPage.data?.node?.incomingProfileFollowRequests?.edges.map(({ node }) => node.id),
+      expectedIds.slice(0, 2),
+    );
+    assert.equal(firstPage.data?.node?.incomingProfileFollowRequests?.pageInfo.hasNextPage, true);
+    assert.deepEqual(firstPage.data?.node?.outgoingProfileFollowRequests?.edges, []);
+
+    const endCursor = firstPage.data?.node?.incomingProfileFollowRequests?.pageInfo.endCursor;
+    assert.ok(endCursor);
+    const secondPage = await requestGraphQL<{
+      node: {
+        incomingProfileFollowRequests: { edges: Array<{ node: { id: string } }> } | null;
+      } | null;
+    }>(
+      `query IncomingRequestsAfter($id: ID!, $after: String!) {
+        node(id: $id) {
+          ... on Profile {
+            incomingProfileFollowRequests(first: 2, after: $after) { edges { node { id } } }
+          }
+        }
+      }`,
+      { after: endCursor, id: globalId('Profile', auth.profile.id) },
+      auth.token,
+    );
+    assertNoGraphQLErrors(secondPage);
+    assert.deepEqual(
+      secondPage.data?.node?.incomingProfileFollowRequests?.edges.map(({ node }) => node.id),
+      expectedIds.slice(2),
+    );
+
+    const otherProfile = await requestGraphQL<{
+      node: {
+        incomingProfileFollowRequests: unknown;
+        outgoingProfileFollowRequests: unknown;
+      } | null;
+    }>(
+      `query OtherRequestConnections($id: ID!) {
+        node(id: $id) {
+          ... on Profile {
+            incomingProfileFollowRequests(first: 1) { edges { node { id } } }
+            outgoingProfileFollowRequests(last: 1) { edges { node { id } } }
+          }
+        }
+      }`,
+      { id: globalId('Profile', profiles[0]!.id) },
+      auth.token,
+    );
+    assertNoGraphQLErrors(otherProfile);
+    assert.deepEqual(otherProfile.data?.node, {
+      incomingProfileFollowRequests: null,
+      outgoingProfileFollowRequests: null,
+    });
+
+    const backward = await requestGraphQL<{
+      node: {
+        incomingProfileFollowRequests: { edges: Array<{ node: { id: string } }> } | null;
+      } | null;
+    }>(
+      `query LastIncomingRequest($id: ID!) {
+        node(id: $id) {
+          ... on Profile {
+            incomingProfileFollowRequests(last: 1) { edges { node { id } } }
+          }
+        }
+      }`,
+      { id: globalId('Profile', auth.profile.id) },
+      auth.token,
+    );
+    assertNoGraphQLErrors(backward);
+    assert.deepEqual(
+      backward.data?.node?.incomingProfileFollowRequests?.edges.map(({ node }) => node.id),
+      expectedIds.slice(-1),
+    );
+  });
+
   test('reads visible established relationships and stored counts for a remote profile', async () => {
     const remoteInstance = await createRemoteInstance();
     const counterpartInstance = await createRemoteInstance({

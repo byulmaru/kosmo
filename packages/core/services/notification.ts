@@ -3,25 +3,11 @@ import { db, firstOrThrowWith, Instances, Notifications, ProfileFollows, Profile
 import { InstanceKind, NotificationKind } from '../enums';
 import { NotFoundError } from '../error';
 
-export type NotificationEligibilityEvaluator = (
-  input: Readonly<{
-    kind: NotificationKind;
-    recipientProfileId: string;
-    relatedProfileId: string;
-  }>,
-) => Promise<boolean>;
-
-const allowNotification: NotificationEligibilityEvaluator = () => Promise.resolve(true);
-
-export const createFollowNotification = async (
-  sourceId: string,
-  evaluateEligibility: NotificationEligibilityEvaluator = allowNotification,
-): Promise<void> => {
+export const createFollowNotification = async (sourceId: string): Promise<void> => {
   const source = await db
     .select({
       id: ProfileFollows.id,
       recipientProfileId: ProfileFollows.followeeProfileId,
-      relatedProfileId: ProfileFollows.followerProfileId,
     })
     .from(ProfileFollows)
     .innerJoin(Profiles, eq(Profiles.id, ProfileFollows.followeeProfileId))
@@ -29,15 +15,6 @@ export const createFollowNotification = async (
     .where(and(eq(ProfileFollows.id, sourceId), eq(Instances.kind, InstanceKind.LOCAL)))
     .limit(1)
     .then(firstOrThrowWith(() => new NotFoundError('Profile follow not found')));
-
-  const eligible = await evaluateEligibility({
-    kind: NotificationKind.FOLLOW,
-    recipientProfileId: source.recipientProfileId,
-    relatedProfileId: source.relatedProfileId,
-  });
-  if (!eligible) {
-    return;
-  }
 
   await db
     .insert(Notifications)

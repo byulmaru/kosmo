@@ -12,6 +12,7 @@ import {
 } from '../db';
 import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
 import { NotFoundError, PermissionDeniedError } from '../error';
+import { followProfile } from './profile-follow';
 import * as profileFollowRequestLifecycle from './profile-follow-request';
 import type { Transaction } from '../db';
 
@@ -96,15 +97,15 @@ const createLocalProfile = (followPolicy = ProfileFollowPolicy.OPEN) =>
 const createPendingRequest = async () => {
   const follower = await createLocalProfile();
   const followee = await createLocalProfile(ProfileFollowPolicy.APPROVAL_REQUIRED);
-  const followed = await profileFollowRequestLifecycle.ensureProfileFollowRequest({
+  const followed = await followProfile({
     followeeProfileId: followee.id,
     followerProfileId: follower.id,
   });
-  assert.equal(followed.kind, 'PENDING');
-  if (followed.kind !== 'PENDING') {
+  assert.equal(followed.result.kind, 'PENDING');
+  if (followed.result.kind !== 'PENDING') {
     assert.fail('Expected a pending profile follow request');
   }
-  return { followee, follower, request: followed.profileFollowRequest };
+  return { followee, follower, request: followed.result.profileFollowRequest };
 };
 
 test('pair 조회와 승인은 request를 relation으로 원자적으로 전환한다', async () => {
@@ -112,12 +113,12 @@ test('pair 조회와 승인은 request를 relation으로 원자적으로 전환�
 
   const follower = await createLocalProfile();
   const followee = await createLocalProfile(ProfileFollowPolicy.APPROVAL_REQUIRED);
-  const followed = await profileFollowRequestLifecycle.ensureProfileFollowRequest({
+  const followed = await followProfile({
     followeeProfileId: followee.id,
     followerProfileId: follower.id,
   });
-  assert.equal(followed.kind, 'PENDING');
-  if (followed.kind !== 'PENDING') {
+  assert.equal(followed.result.kind, 'PENDING');
+  if (followed.result.kind !== 'PENDING') {
     assert.fail('Expected a pending profile follow request');
   }
 
@@ -125,7 +126,7 @@ test('pair 조회와 승인은 request를 relation으로 원자적으로 전환�
     followeeProfileId: followee.id,
     followerProfileId: follower.id,
   });
-  assert.equal(found?.id, followed.profileFollowRequest.id);
+  assert.equal(found?.id, followed.result.profileFollowRequest.id);
 
   const approved = await lifecycle.approveProfileFollowRequest!({
     actorProfileId: followee.id,
@@ -243,22 +244,25 @@ test('participant가 아닌 actor는 request transition을 실행할 수 없다'
   );
 });
 
-test('pending request 생성은 같은 pair에서 멱등이다', async () => {
+test('local pending request 생성은 같은 pair에서 멱등이다', async () => {
   const follower = await createLocalProfile();
   const followee = await createLocalProfile(ProfileFollowPolicy.APPROVAL_REQUIRED);
   const input = { followeeProfileId: followee.id, followerProfileId: follower.id };
 
   const [firstResult, secondResult] = await Promise.all([
-    profileFollowRequestLifecycle.ensureProfileFollowRequest(input),
-    profileFollowRequestLifecycle.ensureProfileFollowRequest(input),
+    followProfile(input),
+    followProfile(input),
   ]);
-  assert.equal(firstResult.kind, 'PENDING');
-  assert.equal(secondResult.kind, 'PENDING');
-  if (firstResult.kind !== 'PENDING' || secondResult.kind !== 'PENDING') {
+  assert.equal(firstResult.result.kind, 'PENDING');
+  assert.equal(secondResult.result.kind, 'PENDING');
+  if (firstResult.result.kind !== 'PENDING' || secondResult.result.kind !== 'PENDING') {
     assert.fail('Expected pending profile follow requests');
   }
 
-  assert.equal(firstResult.profileFollowRequest.id, secondResult.profileFollowRequest.id);
+  assert.equal(
+    firstResult.result.profileFollowRequest.id,
+    secondResult.result.profileFollowRequest.id,
+  );
   assert.equal([firstResult, secondResult].filter(({ created }) => created).length, 1);
   assert.equal(
     await db

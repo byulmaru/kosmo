@@ -44,7 +44,7 @@ FOLLOW에서 `source_id`는 `profile_follow.id`이고 `data`는 `{}`다. Recipie
 
 공통 Follow Notification 저장 경계는 established `ProfileFollow` 하나만 입력으로 받고, 호출자에게 Recipient나 Related Profile ID를 받지 않는다. source row를 읽어 Followee를 Recipient, Follower를 Related Profile로 파생하고 Recipient가 Local Profile인지 검증한다. 기존 `(FOLLOW, source_id, recipient_profile_id)` 행 또는 concurrent unique conflict는 기존 item을 나타내는 성공 결과로 정규화한다. Follower origin은 분기 기준이 아니며 이미 materialize된 Remote Follower source도 같은 경계를 사용한다.
 
-공용 ProfileFollow 생성 action은 새 관계 transaction을 먼저 commit한다. 그 뒤 같은 request 안에서 eligibility를 포함하는 Follow Notification create 경계를 `await`하고 모든 Notification-side 오류를 catch한다. create 경계는 source에서 Recipient와 Related Profile을 파생한 뒤 eligibility를 먼저 평가하며, 실제 Mute/Block evaluator가 연결되기 전에는 기본 allow를 사용한다. 명시 deny와 evaluator 오류는 item을 만들지 않고 evaluator 오류는 privacy-safe fail-closed다.
+공용 ProfileFollow 생성 action은 새 established 관계 transaction을 먼저 commit한다. 그 뒤 같은 request 안에서 Follow Notification create 경계를 `await`하고 모든 Notification-side 오류를 catch한다. create 경계는 source에서 Recipient를 파생해 idempotent insert를 직접 수행한다. 아직 실제 Mute/Block 정책이 없으므로 테스트 전용 evaluator나 callback 주입점을 공개 계약에 추가하지 않으며, 정책과 구체 연결 지점은 `PROD-327`이 구현할 때 결정한다. pending Follow Request에는 Follow Notification을 생성하지 않는다.
 
 정상 ProfileFollow 삭제 action도 source transaction을 먼저 commit한 뒤 `(FOLLOW, source_id)` delete 경계를 같은 request에서 `await`하고 오류를 catch한다. create/delete Notification 오류는 모두 source action 성공을 바꾸지 않는다. 같은 DB transaction/savepoint에 넣거나 fire-and-forget 호출을 사용하지 않는다.
 
@@ -110,7 +110,7 @@ DB row와 기존 `read_at`은 비동기 cleanup 전까지 남을 수 있다. cle
 - `PROD-352`: connection test로 `id DESC` keyset pagination과 limit 전 visible filtering을 검증한다.
 - `PROD-351`: count test로 공통 predicate를 만족하는 visible Unread item만 계산하는지 검증한다.
 - `PROD-350`: mutation test로 Node와 같은 hidden predicate, 최초 `readAt`, 반복·동시 Read와 payload를 검증한다.
-- `PROD-276`: action test로 allow/deny/evaluator error/create·delete storage failure, integration 재진입, 정상 source cleanup과 origin-neutral port 호출을 검증한다.
+- `PROD-276`: action test로 established 생성, pending·duplicate 제외, 정상 source cleanup과 실제 Notification row를 검증하고 source action의 best-effort 오류 격리 구조를 확인한다.
 - `PROD-277`·`PROD-324`: 정상 item UI 계약을 Storybook interaction/a11y, Relay cache integration과 결정된 platform smoke로 검증한다.
 - `PROD-278`: 실제 Local Follow/Unfollow action을 사용하는 Web E2E와 관련 workspace 검증을 통과한 뒤 archive 전후 strict validation을 실행한다.
 

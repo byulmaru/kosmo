@@ -43,36 +43,34 @@ Participant가 pending request를 Relay Node와 자기 Profile 소유 connection
 
 - Schema test로 Node, union, Profile fields와 mutation payload shape를 고정한다.
 - Integration test로 participant/non-participant access, 다른 Profile의 nullable connection, unavailable counterpart cleanup visibility, pagination, mutation 권한, transition별 actor Profile과 삭제 ID 반환을 검증한다.
-- UI와 독립된 Relay store test로 reject payload가 followee의 incoming connection에서, cancel payload가 follower의 outgoing connection에서 삭제 ID에 해당하는 edge를 제거하는지 검증한다.
 
 - [ ] 2.1 `ProfileFollowRequest` Relay Node, participant loader/access, unavailable counterpart cleanup visibility와 follower/followee field의 schema·권한 테스트를 추가하고 구현한다.
 - [ ] 2.2 자기 active Profile의 incoming/outgoing request connection과 중복·누락 없는 forward/backward pagination 테스트를 추가하고 구현한다.
 - [ ] 2.3 `followProfile` 성공 union과 follower/followee Profile payload의 OPEN/request/idempotent 결과를 테스트하고 구현한다.
 - [ ] 2.4 승인·거절·취소 mutation의 역할 검증, reject의 `followeeProfile`, cancel의 `followerProfile`, unavailable counterpart cleanup, relation/count 결과와 not-found 재처리를 테스트하고 구현한다.
-- [ ] 2.5 UI를 추가하지 않고 Relay store test operation/updater로 actor Profile 소유 incoming/outgoing connection에서 삭제 ID에 해당하는 edge 제거를 검증한다.
-- [ ] 2.6 API unit/schema/integration test, Relay store test와 관련 타입·포맷 check를 통과시킨다.
+- [ ] 2.5 API unit/schema/integration test와 관련 타입·포맷 check를 통과시킨다.
 
 ## 3. PROD-272 FollowButton union compatibility
 
 **Deliverable**
 
-현재 앱이 새 follow success union을 안전하게 소비하면서 기존 `OPEN` follow/unfollow Relay cache와 count 동작을 유지한다.
+현재 앱이 새 follow payload에서 기존 `OPEN` follow/unfollow Relay cache와 count 동작을 유지한다.
 
 **Guardrails**
 
 - requested 버튼 상태, 취소 action과 incoming 관리 화면을 추가하지 않는다.
-- `ProfileFollow` 결과에서만 기존 relation connection과 count updater를 적용한다.
-- `ProfileFollowRequest` 결과를 오류나 established relation으로 처리하지 않는다.
+- 아직 소비하지 않는 `ProfileFollowResult`를 FollowButton operation에서 선택하지 않는다.
+- follower/followee Profile payload로 기존 relation connection과 count updater를 유지한다.
 - Relay document는 소비 컴포넌트에 colocate하고 generated artifact를 commit하지 않는다.
 
 **Verification**
 
 - Relay compiler와 TypeScript check를 통과시킨다.
-- Storybook/fixture에서 OPEN follow/unfollow와 request union 결과가 runtime 오류 없이 처리되는지 검증한다.
+- Storybook/fixture에서 OPEN follow/unfollow가 runtime 오류 없이 처리되는지 검증한다.
 
-- [ ] 3.1 FollowButton operation과 updater가 승인된 union/payload 계약을 사용하도록 실패하는 Relay·타입 검증을 먼저 확인한다.
-- [ ] 3.2 `__typename`과 inline fragment로 established relation과 pending request 결과를 분리해 처리한다.
-- [ ] 3.3 OPEN follow/unfollow와 pending request 결과의 Storybook Relay fixture를 갱신한다.
+- [ ] 3.1 FollowButton operation과 updater가 새 payload 계약을 사용하도록 실패하는 Relay·타입 검증을 먼저 확인한다.
+- [ ] 3.2 소비하지 않는 union result selection 없이 follower/followee Profile payload로 기존 updater를 유지한다.
+- [ ] 3.3 OPEN follow/unfollow Storybook Relay fixture를 갱신한다.
 - [ ] 3.4 Relay compiler, 앱 unit/type check와 Storybook 검증을 통과시키고 generated artifact가 diff에 포함되지 않았는지 확인한다.
 
 ## 4. PROD-272 Integrated verification and archive
