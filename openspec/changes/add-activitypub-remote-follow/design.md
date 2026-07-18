@@ -1,6 +1,6 @@
 ## Context
 
-현재 main에는 local/remote 공통 `ProfileFollow`/`ProfileFollowRequest`, 저장 follow count, core follow action, remote actor materialization, Fedify send helper와 actor-scoped/shared inbox route가 있다. 반면 Follow/Undo/Accept/Reject handler는 없다.
+현재 main에는 local/remote 공통 `ProfileFollow`/`ProfileFollowRequest`, 저장 follow count, core follow action, remote actor materialization, Fedify Follow/Undo send helper와 actor-scoped/shared inbox route, inbound Follow/Undo handler가 있다. Remote OPEN follow/unfollow는 구현됐지만 outbound APPROVAL_REQUIRED request delivery와 inbound Accept/Reject는 아직 없다.
 
 PROD-235와 구현 자식이 이 change의 source of truth다. PROD-323이 Follow Request를 pending-only로 확정했고, PROD-281이 relation/count transaction을 core service 책임으로 옮겼다. 닫힌 미병합 PR #232와 #234 및 기존 active change의 오래된 가정은 현재 계약이 아니며, PR #247 이후 inbox listener 경로는 새 registry 없이 싱글톤 federation에 activity handler를 등록할 수 있다.
 
@@ -27,7 +27,7 @@ PROD-235와 구현 자식이 이 change의 source of truth다. PROD-323이 Follo
 
 - `ProfileFollow`와 `ProfileFollowRequest`는 follower/followee pair unique이며 request row의 존재 자체가 Pending이다.
 - 저장 count는 established relation의 생성·삭제 transaction에서만 바뀌며 pending request는 count에 기여하지 않는다.
-- `ProfileFollow.id`와 immutable `createdAt`이 outbound Follow identity와 generation을 파생할 수 있다.
+- `ProfileFollow`와 `ProfileFollowRequest`의 id와 immutable `createdAt`이 outbound Follow identity와 generation을 파생할 수 있다.
 - inbound remote Follow ID는 누락·재사용될 수 있으므로 actor/object 검증을 대체하지 않는다.
 - Fedify `MemoryKvStore` idempotency는 process-local 최적화일 뿐 relation/request side effect의 durable source of truth가 아니다.
 
@@ -43,9 +43,11 @@ Follow 대상 local actor를 먼저 검증한 뒤에만 unknown remote actor mat
 
 Undo는 저장된 actor pair에서 relation/request를 찾고 embedded Follow의 actor/object/recipient를 검증한다. 처리 중 확인한 exact row가 맞을 때만 삭제하며, relation이 실제 삭제된 경우에만 count를 같은 transaction에서 감소시킨다. unknown actor 또는 IRI-only Undo는 network lookup 없이 follow graph/request side effect를 무시한다. 다만 저장된 actor가 보낸 verified activity는 object 지원 여부와 무관하게 server reachability 신호이므로 `UNRESPONSIVE → ACTIVE` 복구는 허용한다.
 
-#### PROD-244 outbound response
+#### PROD-244 APPROVAL_REQUIRED round trip
 
-outbound Follow URI는 canonical origin과 `ProfileFollow.id`, actor/object는 저장된 profile actor identity, generation은 immutable `ProfileFollow.createdAt`에서 파생한다. Accept는 relation을 유지하고 Reject는 PROD-243의 조건부 삭제 primitive를 재사용한다.
+Remote APPROVAL_REQUIRED follow는 pending request를 생성한 transaction이 끝난 뒤 새 ACTIVE request에 대해서만 Follow를 발송한다. URI와 generation은 request id/createdAt에서 파생하며, cancel은 실제 request 삭제 뒤 같은 identity의 Undo를 발송한다.
+
+Accept/Reject handler는 embedded Follow의 actor/object/recipient를 ID lookup 전에 검증한다. canonical origin과 canonical UUID를 만족하는 kosmo URI만 row id shortcut으로 사용하고, non-kosmo 또는 missing id는 verified actor pair fallback만 허용한다. Accept는 exact pending request 삭제와 relation/count 생성을 한 transaction에서 수행하고 established relation은 유지한다. Reject는 exact request/relation row만 삭제하며 stale generation은 무시한다.
 
 #### Inbox registration
 
@@ -81,7 +83,7 @@ PROD-241이 설정한 actor-scoped/shared inbox listener에 실제 activity type
 1. PROD-357 spec-only PR을 main에 병합한다.
 2. PROD-242, PROD-243과 PROD-272를 서로의 병합을 기다리지 않고 독립적으로 구현한다.
 3. PROD-243은 별도 DB migration 없이 remote request 생성을, PROD-272는 local request 생성과 공통 처리 lifecycle을 각자 검증한다.
-4. PROD-244가 두 구현과 PROD-243 primitive를 조합한다.
+4. PROD-244가 두 구현과 PROD-243 exact-row primitive를 조합해 outbound pending request, cancel Undo와 inbound Accept/Reject 왕복을 완성한다.
 5. PROD-245, PROD-263과 PROD-282를 각 이슈의 독립 범위로 완료한다.
 6. PROD-361이 모든 구현 결과를 통합 검증하고 delta spec 동기화와 change archive PR을 소유한다.
 7. PROD-361의 검증·archive 근거가 확인되면 부모 PROD-235를 완료한다.

@@ -36,9 +36,9 @@ Remote follow 구현이 재사용할 저장 count, core action, actor materializ
 
 - idempotency, delivery 실패, UNRESPONSIVE와 SUSPENDED 차이를 검증한다.
 
-- [ ] 2.1 PROD-242가 remote follow/unfollow와 PROD-241 transport 연결을 구현한다.
-- [ ] 2.2 Follow URI/actor/object/generation/ordering key를 accepted decision대로 파생한다.
-- [ ] 2.3 relation/count commit 이후 delivery 실패가 projection을 rollback하지 않는지 검증한다.
+- [x] 2.1 PROD-242가 remote follow/unfollow와 PROD-241 transport 연결을 구현한다.
+- [x] 2.2 Follow URI/actor/object/generation/ordering key를 accepted decision대로 파생한다.
+- [x] 2.3 relation/count commit 이후 delivery 실패가 projection을 rollback하지 않는지 검증한다.
 
 ## 3. PROD-243 Inbound Follow/Undo
 
@@ -64,25 +64,29 @@ Verified inbound Follow/Undo를 established relation 또는 remote pending reque
 - [x] 3.5 기존 Fedify inbox listener에 Follow/Undo handler를 등록한다.
 - [x] 3.6 duplicate Follow/Undo idempotency, unknown/IRI-only Undo zero-network/graph-write, SUSPENDED 무효와 verified activity의 UNRESPONSIVE CAS를 검증한다.
 
-## 4. PROD-244 Inbound Accept/Reject
+## 4. PROD-244 Remote APPROVAL_REQUIRED Round Trip
 
 **Deliverable**
 
-PROD-242 outbound Follow projection에 대한 verified Accept/Reject를 처리한다.
+Remote APPROVAL_REQUIRED follow를 pending request로 발송·취소하고 verified Accept/Reject로 처리한다.
 
 **Guardrails**
 
+- request row의 존재만 Pending을 나타내며 terminal state, activity history 또는 retry metadata를 저장하지 않는다.
+- Follow identity/generation은 immutable request 또는 relation의 id/createdAt에서 파생한다.
 - typed embedded Follow는 ID lookup 전에 actor/object를 검증한다.
-- Reject는 PROD-243 conditional-delete primitive를 재사용한다.
-- rejected state나 activity history를 새로 저장하지 않는다.
+- Accept/Reject/cancel은 조회한 exact row에만 적용하고 relation count는 실제 relation 생성·삭제에서만 변경한다.
+- UNRESPONSIVE에서는 local request lifecycle만 적용하고 delivery와 durable retry를 만들지 않는다.
 
 **Verification**
 
-- kosmo/non-kosmo/missing ID, malformed URI, stale Reject와 refollow race를 검증한다.
+- duplicate/concurrent Follow와 cancel, kosmo/non-kosmo/missing ID, malformed URI, stale Reject와 transition race를 검증한다.
 
-- [ ] 4.1 Accept를 optimistic established relation에 idempotent하게 연결한다.
-- [ ] 4.2 Reject를 exact row 조건으로 삭제한다.
-- [ ] 4.3 actor/object/recipient mismatch와 SUSPENDED/UNRESPONSIVE 상태를 검증한다.
+- [x] 4.1 APPROVAL_REQUIRED remote follow를 pending request로 생성하고 새 ACTIVE request에만 Follow를 발송한다.
+- [x] 4.2 remote pending cancel이 exact request를 삭제하고 ACTIVE에서만 원래 Follow identity의 Undo를 발송한다.
+- [x] 4.3 verified Accept는 pending request를 relation/count로 원자적으로 승격하고 established relation에는 idempotent하다.
+- [x] 4.4 verified Reject는 pending request 또는 optimistic established relation의 exact row만 삭제한다.
+- [x] 4.5 actor/object/recipient/URI mismatch, duplicate/concurrent transition과 SUSPENDED/UNRESPONSIVE 상태를 검증한다.
 
 ## 5. PROD-245 Remote Follow Graph GraphQL API
 

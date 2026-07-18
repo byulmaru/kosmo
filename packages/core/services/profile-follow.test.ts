@@ -16,6 +16,7 @@ import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '
 import { NotFoundError } from '../error';
 import { disableProfile } from './profile';
 import { followProfile, unfollowProfile } from './profile-follow';
+import { cancelProfileFollowRequest } from './profile-follow-request';
 
 const instanceIds: string[] = [];
 const profileIds: string[] = [];
@@ -355,6 +356,115 @@ test('UNRESPONSIVE remote follow와 unfollow는 local projection만 변경한다
   assert.equal(unfollowed.profileFollowId, getEstablishedFollow(followed).id);
   assert.equal((await readProfile(follower.id)).followingCount, 0);
   assert.equal((await readProfile(followee.id)).followersCount, 0);
+});
+
+test('UNRESPONSIVE approval request는 저장만 하고 cancel delivery 실패도 전이를 rollback하지 않는다', async () => {
+  const follower = await createProfile();
+  const followee = await createRemoteProfile({
+    followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
+    state: InstanceState.UNRESPONSIVE,
+    withInbox: false,
+  });
+
+  const first = await followProfile({
+    followerProfileId: follower.id,
+    followeeProfileId: followee.id,
+  });
+  const duplicate = await followProfile({
+    followerProfileId: follower.id,
+    followeeProfileId: followee.id,
+  });
+  assert.equal(first.result.kind, 'PENDING');
+  assert.equal(duplicate.result.kind, 'PENDING');
+  if (first.result.kind !== 'PENDING' || duplicate.result.kind !== 'PENDING') {
+    assert.fail('Expected pending profile follow requests');
+  }
+  assert.equal(first.created, true);
+  assert.equal(duplicate.created, false);
+  assert.equal(duplicate.result.profileFollowRequest.id, first.result.profileFollowRequest.id);
+  assert.equal((await readProfile(follower.id)).followingCount, 0);
+  assert.equal((await readProfile(followee.id)).followersCount, 0);
+
+  await db
+    .update(Instances)
+    .set({ state: InstanceState.ACTIVE })
+    .where(eq(Instances.id, followee.instanceId));
+  await assert.rejects(
+    cancelProfileFollowRequest({
+      actorProfileId: follower.id,
+      profileFollowRequestId: first.result.profileFollowRequest.id,
+    }),
+    /must have an inbox/,
+  );
+  assert.equal(
+    await db
+      .select()
+      .from(ProfileFollowRequests)
+      .where(eq(ProfileFollowRequests.id, first.result.profileFollowRequest.id))
+      .then((rows) => rows.length),
+    0,
+  );
+});
+
+test('approval request Follow delivery 실패는 pending row를 보존하고 duplicate는 재발송하지 않는다', async () => {
+  const follower = await createProfile();
+  const followee = await createRemoteProfile({
+    followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
+    withInbox: false,
+  });
+
+  await assert.rejects(
+    followProfile({ followerProfileId: follower.id, followeeProfileId: followee.id }),
+    /must have an inbox/,
+  );
+  const request = await db
+    .select()
+    .from(ProfileFollowRequests)
+    .where(eq(ProfileFollowRequests.followeeProfileId, followee.id))
+    .then(firstOrThrow);
+  const duplicate = await followProfile({
+    followerProfileId: follower.id,
+    followeeProfileId: followee.id,
+  });
+
+  assert.equal(duplicate.created, false);
+  assert.equal(duplicate.result.kind, 'PENDING');
+  if (duplicate.result.kind !== 'PENDING') {
+    assert.fail('Expected a pending profile follow request');
+  }
+  assert.equal(duplicate.result.profileFollowRequest.id, request.id);
+});
+
+test('UNRESPONSIVE approval request cancel은 local row만 제거한다', async () => {
+  const follower = await createProfile();
+  const followee = await createRemoteProfile({
+    followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
+    state: InstanceState.UNRESPONSIVE,
+    withInbox: false,
+  });
+  const followed = await followProfile({
+    followerProfileId: follower.id,
+    followeeProfileId: followee.id,
+  });
+  assert.equal(followed.result.kind, 'PENDING');
+  if (followed.result.kind !== 'PENDING') {
+    assert.fail('Expected a pending profile follow request');
+  }
+
+  const canceled = await cancelProfileFollowRequest({
+    actorProfileId: follower.id,
+    profileFollowRequestId: followed.result.profileFollowRequest.id,
+  });
+
+  assert.equal(canceled.profileFollowRequestId, followed.result.profileFollowRequest.id);
+  assert.equal(
+    await db
+      .select()
+      .from(ProfileFollowRequests)
+      .where(eq(ProfileFollowRequests.id, followed.result.profileFollowRequest.id))
+      .then((rows) => rows.length),
+    0,
+  );
 });
 
 test('remote Undo delivery 실패는 commit된 relation 삭제와 count를 rollback하지 않는다', async () => {

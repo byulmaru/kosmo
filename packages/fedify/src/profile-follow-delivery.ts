@@ -17,7 +17,7 @@ type RemoteProfileFollowActor = {
 
 type ProfileFollowDeliveryOptions = {
   actor: RemoteProfileFollowActor;
-  profileFollow: {
+  outboundFollow: {
     createdAt: Temporal.Instant;
     id: string;
   };
@@ -43,15 +43,15 @@ export const toProfileFollowRecipient = (actor: RemoteProfileFollowActor): Recip
 
 export const sendProfileFollow = async ({
   actor,
-  profileFollow,
+  outboundFollow,
   senderProfileId,
 }: ProfileFollowDeliveryOptions): Promise<void> => {
   const recipientActor = toProfileFollowRecipient(actor);
   const context = await createFederationContext();
   await sendFollowActivity({
     context,
-    profileFollowCreatedAt: profileFollow.createdAt,
-    profileFollowId: profileFollow.id,
+    profileFollowCreatedAt: outboundFollow.createdAt,
+    profileFollowId: outboundFollow.id,
     recipientActor,
     senderProfileId,
   });
@@ -59,16 +59,16 @@ export const sendProfileFollow = async ({
 
 export const sendProfileUnfollow = async ({
   actor,
-  profileFollow,
+  outboundFollow,
   senderProfileId,
 }: ProfileFollowDeliveryOptions): Promise<void> => {
   const recipientActor = toProfileFollowRecipient(actor);
   const context = await createFederationContext();
   const originalFollow = new Follow({
     actor: context.getActorUri(senderProfileId),
-    id: getFollowActivityUri(context.canonicalOrigin, profileFollow.id),
+    id: getFollowActivityUri(context.canonicalOrigin, outboundFollow.id),
     object: new URL(actor.uri),
-    published: profileFollow.createdAt,
+    published: outboundFollow.createdAt,
   });
 
   await sendUndoFollowActivity({

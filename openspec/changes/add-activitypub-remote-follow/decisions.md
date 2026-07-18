@@ -54,6 +54,16 @@
 - Consequences: outbound-only metadata를 중복 저장하지 않으며 retry/history가 필요하면 별도 capability에서 다룬다.
 - Confirmation / Follow-up: PROD-242/244가 refollow identity와 actor/object 검증을 테스트한다.
 
+### Outbound pending request도 immutable request identity를 사용한다
+
+- Decision Date: 2026-07-18
+- Status: Accepted
+- Context / Problem: PROD-242의 optimistic established relation과 달리 APPROVAL_REQUIRED remote follow는 Accept 전까지 `ProfileFollowRequest`만 존재하므로 outbound Follow와 cancel Undo identity를 별도 저장할지 결정해야 한다.
+- Decision Outcome: outbound pending Follow URI와 generation은 `ProfileFollowRequest.id`와 immutable `createdAt`에서 파생하고 actor/object와 ordering key는 저장 actor pair에서 파생한다. Accept는 exact request 삭제와 relation/count 생성을 원자적으로 수행하며, cancel과 Reject는 조회한 exact request/relation row에만 적용한다.
+- Alternatives Considered: 별도 outbound activity table, request에 correlation/status column 추가, actor pair만으로 stable Follow URI 생성.
+- Consequences: terminal state와 delivery history를 저장하지 않으며 Accept 후 relation은 새 identity를 갖는다. 늦은 request ID의 Reject/cancel은 새 relation/request를 삭제할 수 없다.
+- Confirmation / Follow-up: PROD-244가 duplicate/concurrent Follow·cancel, Accept/Reject/cancel 경쟁과 refollow exact-row 보호를 검증한다.
+
 ### Remote Follow ID는 advisory이고 generation은 단조 증가한다
 
 - Decision Date: 2026-07-15

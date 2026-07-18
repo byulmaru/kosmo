@@ -59,17 +59,17 @@
 #### Scenario: Derive outbound remote Follow correlation
 
 - **WHEN** local profile이 remote ActivityPub profile을 follow하고 outbound Follow activity를 보낸다
-- **THEN** 시스템은 outbound Follow activity identity를 configured canonical origin과 established `ProfileFollow.id`에서 파생해야 한다
-- **AND** actor/object URI는 저장된 follower/followee actor identity에서, generation timestamp는 immutable `ProfileFollow.createdAt`에서 파생해야 한다
+- **THEN** 시스템은 outbound Follow activity identity를 configured canonical origin과 `ProfileFollow` 또는 `ProfileFollowRequest` id에서 파생해야 한다
+- **AND** actor/object URI는 저장된 follower/followee actor identity에서, generation timestamp는 해당 row의 immutable createdAt에서 파생해야 한다
 - **AND** remote Accept 또는 Reject는 object로 전달되거나 참조된 Follow가 kosmo outbound Follow URI를 id로 포함하거나 참조하면 그 URI가 현재 저장된 outbound Follow identity와 일치해야 기존 follow 관계에 대응시킬 수 있어야 한다
 - **AND** object로 전달되거나 참조된 Follow에 kosmo outbound Follow URI가 없으면 remote Follow id를 compatibility hint로만 취급하고 actor/object가 relation과 저장된 actor identity에서 파생한 actor/object와 일치할 때 기존 follow 관계에 대응시킬 수 있어야 한다
 - **AND** remote Reject의 activity timestamp가 현재 outbound Follow generation timestamp보다 오래된 것이 확인되면 actor/object가 일치해도 기존 follow 관계를 제거하지 않을 수 있어야 한다
-- **AND** outbound Follow activity identity는 생성된 `ProfileFollow.id`에서 파생한 kosmo outbound Follow URI여야 한다
+- **AND** outbound Follow activity identity는 생성된 request 또는 relation id에서 파생한 kosmo outbound Follow URI여야 한다
 - **AND** outbound Follow activity identity는 follower actor URI와 followee actor URI만으로 파생하지 않고 새 logical outbound Follow activity마다 고유해야 한다
 - **AND** outbound Follow activity identity는 kosmo가 발송하는 Follow/Undo transport identity로 안정적이어야 하지만, remote server가 후속 Accept/Reject object에서 이 identity를 보존한다는 것을 필수 전제로 삼지 않는다
 - **AND** Fedify `orderingKey`는 follower actor URI와 followee actor URI pair에서 안정적으로 파생되어 같은 pair의 모든 outbound Follow와 Undo(Follow)에 재사용되어야 한다
-- **AND** 후속 Fedify transport retry는 같은 `ProfileFollow` row에서 같은 Follow activity identity를 다시 파생할 수 있어야 한다
-- **AND** PROD-242 outbound mutation은 `ProfileFollowRequest`를 만들지 않으며, inbound remote request 생성은 PROD-243이, local request 생성과 local/remote 공통 처리 lifecycle은 PROD-272가 별도 경계에서 다룬다
+- **AND** 후속 Fedify transport retry는 같은 request 또는 relation row에서 같은 Follow activity identity를 다시 파생할 수 있어야 한다
+- **AND** PROD-244 outbound mutation은 APPROVAL_REQUIRED remote `ProfileFollowRequest`를 만들며, inbound remote request 생성은 PROD-243이, local request 생성과 local/remote 공통 처리 lifecycle은 PROD-272가 별도 경계에서 다룬다
 - **AND** Fedify delivery queue/retry 설정과 운영 검증은 후속 capability 범위이며, transport delivery retry와 queue 상태는 도메인 테이블에 중복 저장하지 않는다
 
 #### Scenario: Project inbound remote Follow without correlation storage
@@ -88,7 +88,7 @@
 #### Scenario: Remove rejected remote follow projection
 
 - **WHEN** remote actor가 저장된 outbound Follow의 actor/object와 일치하는 Follow를 object로 하는 Reject를 보낸다
-- **THEN** 시스템은 해당 Reject의 activity timestamp가 현재 outbound Follow generation timestamp보다 오래되지 않았으면 그 Follow에 연결된 optimistic established `ProfileFollow` projection을 제거해야 한다
+- **THEN** 시스템은 해당 Reject의 activity timestamp가 현재 outbound Follow generation timestamp보다 오래되지 않았으면 그 Follow에 연결된 pending request 또는 optimistic established relation의 exact row를 제거해야 한다
 - **AND** 시스템은 거절 상태 값을 저장하지 않는다
 
 ## MODIFIED Requirements

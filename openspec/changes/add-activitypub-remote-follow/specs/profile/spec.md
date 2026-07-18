@@ -134,12 +134,13 @@ active profile이 있는 인증자는 `followPolicy`가 `OPEN`인 다른 활성 
 - **AND** 오류로 처리하지 않는다
 - **AND** 대상이 ActivityPub remote profile이면 ActivityPub `Follow` activity를 다시 발송하지 않는다
 
-#### Scenario: Reject unsupported approval-required follow
+#### Scenario: Follow approval-required active profile
 
-- **WHEN** active profile이 있는 인증자가 `followPolicy`가 `APPROVAL_REQUIRED`인 활성 local profile 또는 ActivityPub remote profile follow를 요청하고 follow request 생성 플로우가 아직 제공되지 않는다
-- **THEN** 시스템은 conflict code를 가진 GraphQL 오류로 요청을 거부한다
-- **AND** `ProfileFollow` 관계와 `ProfileFollowRequest` 요청을 생성하지 않는다
-- **AND** 대상이 ActivityPub remote profile이면 ActivityPub `Follow` activity를 발송하지 않는다
+- **WHEN** active profile이 있는 인증자가 `followPolicy`가 `APPROVAL_REQUIRED`인 활성 local 또는 ActivityPub remote profile follow를 요청한다
+- **THEN** 시스템은 pending `ProfileFollowRequest`를 생성하거나 기존 request를 반환한다
+- **AND** mutation은 `FollowProfilePayload.result`로 `ProfileFollowRequest`를 반환한다
+- **AND** relation과 저장 count를 변경하지 않는다
+- **AND** 대상이 ActivityPub remote profile이면 `activitypub-remote-follow`의 ACTIVE/UNRESPONSIVE delivery 정책을 따른다
 
 #### Scenario: Prevent self follow
 

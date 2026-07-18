@@ -1,5 +1,6 @@
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import {
+  ActivityPubActors,
   db,
   first,
   firstOrThrow,
@@ -10,7 +11,7 @@ import {
   ProfileFollows,
   Profiles,
 } from '../db';
-import { InstanceState, ProfileState } from '../enums';
+import { InstanceKind, InstanceState, ProfileState } from '../enums';
 import { NotFoundError, PermissionDeniedError } from '../error';
 import { createFollowNotification } from './notification';
 import { ensureProfileFollow } from './profile-follow-relation';
@@ -229,13 +230,13 @@ const deleteProfileFollowRequestAsActor = async (
       .limit(1)
       .then(firstOrThrowWith(() => new NotFoundError('Profile not found')));
 
-    const deleted = await tx
+    await tx
       .delete(ProfileFollowRequests)
       .where(eq(ProfileFollowRequests.id, request.id))
       .returning({ id: ProfileFollowRequests.id })
       .then(firstOrThrowWith(() => new NotFoundError('Profile follow request not found')));
 
-    return { actorProfile: actorProfile.profile, profileFollowRequestId: deleted.id };
+    return { actorProfile: actorProfile.profile, request };
   });
 
 export const rejectProfileFollowRequest = async (
@@ -248,20 +249,64 @@ export const rejectProfileFollowRequest = async (
   const result = await deleteProfileFollowRequestAsActor({ ...input, actorRole: 'FOLLOWEE' }, tx);
   return {
     followeeProfile: result.actorProfile,
-    profileFollowRequestId: result.profileFollowRequestId,
+    profileFollowRequestId: result.request.id,
   };
 };
 
-export const cancelProfileFollowRequest = async (
-  input: { readonly actorProfileId: string; readonly profileFollowRequestId: string },
-  tx?: Transaction,
-): Promise<{
+export const cancelProfileFollowRequest = async (input: {
+  readonly actorProfileId: string;
+  readonly profileFollowRequestId: string;
+}): Promise<{
   readonly followerProfile: typeof Profiles.$inferSelect;
   readonly profileFollowRequestId: string;
 }> => {
-  const result = await deleteProfileFollowRequestAsActor({ ...input, actorRole: 'FOLLOWER' }, tx);
-  return {
-    followerProfile: result.actorProfile,
-    profileFollowRequestId: result.profileFollowRequestId,
-  };
+  const { command, result } = await db.transaction(async (tx) => {
+    const deleted = await deleteProfileFollowRequestAsActor(
+      { ...input, actorRole: 'FOLLOWER' },
+      tx,
+    );
+    const target = await tx
+      .select({
+        actorInboxUri: ActivityPubActors.inboxUri,
+        actorSharedInboxUri: ActivityPubActors.sharedInboxUri,
+        actorUri: ActivityPubActors.uri,
+        instanceKind: Instances.kind,
+        instanceState: Instances.state,
+      })
+      .from(Profiles)
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
+      .where(eq(Profiles.id, deleted.request.followeeProfileId))
+      .limit(1)
+      .then(first);
+    const command =
+      target?.instanceKind === InstanceKind.ACTIVITYPUB &&
+      target.instanceState === InstanceState.ACTIVE &&
+      target.actorUri
+        ? {
+            actor: {
+              inboxUri: target.actorInboxUri,
+              sharedInboxUri: target.actorSharedInboxUri,
+              uri: target.actorUri,
+            },
+            outboundFollow: deleted.request,
+            senderProfileId: input.actorProfileId,
+          }
+        : undefined;
+
+    return {
+      command,
+      result: {
+        followerProfile: deleted.actorProfile,
+        profileFollowRequestId: deleted.request.id,
+      },
+    };
+  });
+
+  if (command) {
+    const { sendProfileUnfollow } = await import('@kosmo/fedify');
+    await sendProfileUnfollow(command);
+  }
+
+  return result;
 };
