@@ -101,12 +101,8 @@ describe('GraphQL profile follow graph', () => {
     assertNoGraphQLErrors(result);
     assert.equal(result.data?.node?.followers.edges.length, 1);
     assert.equal(result.data?.node?.following.edges.length, 1);
-    assert.equal(
-      result.data?.node?.viewerFollow?.id,
-      result.data?.node?.followers.edges[0]?.node.id,
-    );
     assert.deepEqual(result.data?.node?.viewerState, {
-      follow: result.data?.node?.viewerFollow,
+      follow: { id: result.data?.node?.followers.edges[0]!.node.id },
       isSelf: false,
     });
   });
@@ -120,7 +116,6 @@ describe('GraphQL profile follow graph', () => {
     assert.deepEqual(result.data?.node, {
       followers: { edges: [] },
       following: { edges: [] },
-      viewerFollow: null,
       viewerState: { follow: null, isSelf: true },
     });
   });
@@ -143,7 +138,6 @@ describe('GraphQL profile follow graph', () => {
     assert.deepEqual(result.data?.node, {
       followers: { edges: [] },
       following: { edges: [] },
-      viewerFollow: null,
       viewerState: { follow: null, isSelf: false },
     });
   });
@@ -382,7 +376,6 @@ describe('GraphQL profile follow graph', () => {
         ],
       },
       followingCount: 43,
-      viewerFollow: null,
       viewerState: null,
     });
   });
@@ -438,7 +431,6 @@ describe('GraphQL profile follow graph', () => {
         ],
       },
       followingCount: 0,
-      viewerFollow: { id: globalId('ProfileFollow', viewerFollow!.id) },
       viewerState: {
         follow: { id: globalId('ProfileFollow', viewerFollow!.id) },
         isSelf: false,
@@ -462,11 +454,10 @@ describe('GraphQL profile follow graph', () => {
     });
   });
 
-  test('does not return viewer follow for a reverse-only relationship', async () => {
+  test('does not return viewer state follow for a reverse-only relationship', async () => {
     const { result } = await requestViewerFollowScenario('reverse');
 
     assertNoGraphQLErrors(result);
-    assert.equal(result.data?.profileByHandle?.viewerFollow, null);
     assert.deepEqual(result.data?.profileByHandle?.viewerState, {
       follow: null,
       isSelf: false,
@@ -484,7 +475,6 @@ describe('GraphQL profile follow graph', () => {
     const result = await requestFollowGraph(`no-active-profile-target@${remoteDomain}`, auth.token);
 
     assertNoGraphQLErrors(result);
-    assert.equal(result.data?.profileByHandle?.viewerFollow, null);
     assert.equal(result.data?.profileByHandle?.viewerState, null);
   });
 
@@ -500,7 +490,6 @@ describe('GraphQL profile follow graph', () => {
       followersCount: 47,
       following: { edges: [] },
       followingCount: 53,
-      viewerFollow: null,
       viewerState: { follow: null, isSelf: false },
     });
   });
@@ -553,7 +542,7 @@ describe('GraphQL profile follow graph', () => {
     }
 
     assertNoGraphQLErrors(result!);
-    assert.ok(result!.data?.profileByHandle?.viewerFollow);
+    assert.ok(result!.data?.profileByHandle?.viewerState?.follow);
     assert.equal(await readFollowGraphState(), stateBefore);
   });
 });
@@ -573,7 +562,6 @@ type FollowGraphProfile = {
   followersCount: number;
   following: { edges: Array<{ node: ProfileFollowNode }> };
   followingCount: number;
-  viewerFollow: { id: string } | null;
   viewerState: { follow: { id: string } | null; isSelf: boolean } | null;
 };
 
@@ -592,7 +580,6 @@ type NodeFollowGraph = {
 const followGraphFields = `
   followers(first: 10) { edges { node { id follower { id } followee { id } } } }
   following(first: 10) { edges { node { id follower { id } followee { id } } } }
-  viewerFollow { id }
   viewerState { isSelf follow { id } }
 `;
 

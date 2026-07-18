@@ -108,11 +108,6 @@ builder.objectFields(Profile, (t) => ({
   }),
   followersCount: t.exposeInt('followersCount'),
   followingCount: t.exposeInt('followingCount'),
-  viewerFollow: t.field({
-    type: ProfileFollow,
-    nullable: true,
-    resolve: (profile, _, ctx) => viewerFollowLoader(ctx).load(profile.id),
-  }),
   viewerState: t.withAuth({ usingProfile: true }).field({
     type: ProfileViewerState,
     nullable: true,

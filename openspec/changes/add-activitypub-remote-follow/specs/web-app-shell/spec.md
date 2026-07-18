@@ -45,7 +45,7 @@
 - **WHEN** active profile이 있는 사용자가 자기 자신이 아닌 활성 ActivityPub remote profile을 `ProfileListItem`, 프로필 페이지, 또는 동등한 follow action surface에서 본다
 - **THEN** 시스템은 local profile 대상과 같은 `FollowButton` 표시 정책을 적용한다
 - **AND** 대상 remote profile의 `followPolicy`가 `OPEN`이면 follow action을 사용할 수 있으며, remote instance 상태 차단은 `followProfile` mutation이 source of truth로 처리한다
-- **AND** follow action은 `followProfile` mutation을 호출하고 optimistic UI는 `viewerState.follow`, `viewerFollow`, followersCount 갱신 정책을 따른다
+- **AND** follow action은 `followProfile` mutation을 호출하고 optimistic UI는 `viewerState.follow`와 followersCount 갱신 정책을 따른다
 - **AND** 대상이 ActivityPub remote profile이어도 mutation의 `followerProfile.followingCount`와 `followeeProfile.followersCount`를 Relay normalized cache에 반영한다
 
 #### Scenario: Hide or disable unsupported remote follow action
@@ -59,5 +59,5 @@
 - **WHEN** active profile이 있는 사용자가 established `ProfileFollow`로 follow 중인 활성 ActivityPub remote profile을 본다
 - **THEN** 시스템은 local profile 대상과 같은 unfollow action을 표시한다
 - **AND** 대상 remote profile의 `followPolicy`가 `APPROVAL_REQUIRED`로 바뀌어도 established follow의 unfollow action은 숨기지 않는다
-- **AND** unfollow action은 `unfollowProfile` mutation을 호출하고 optimistic UI는 `viewerState.follow`, `viewerFollow`, followersCount 갱신 정책을 따른다
+- **AND** unfollow action은 `unfollowProfile` mutation을 호출하고 optimistic UI는 `viewerState.follow`와 followersCount 갱신 정책을 따른다
 - **AND** 대상이 ActivityPub remote profile이어도 mutation의 `followerProfile.followingCount`와 `followeeProfile.followersCount`를 Relay normalized cache에 반영한다
