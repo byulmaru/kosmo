@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne } from 'drizzle-orm';
+import { and, eq, inArray, ne, notExists, or } from 'drizzle-orm';
 import {
   ActivityPubActors,
   db,
@@ -110,12 +110,23 @@ export const acceptProfileFollowRequest = async (
       return established.id === expectedRowId;
     }
 
+    const unavailableParticipants = tx
+      .select({ id: Profiles.id })
+      .from(Profiles)
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(
+        and(
+          inArray(Profiles.id, [followerProfileId, followeeProfileId]),
+          or(ne(Profiles.state, ProfileState.ACTIVE), eq(Instances.state, InstanceState.SUSPENDED)),
+        ),
+      );
     const deleted = await tx
       .delete(ProfileFollowRequests)
       .where(
         and(
           eq(ProfileFollowRequests.id, expectedRowId),
           pairCondition(ProfileFollowRequests, pair),
+          notExists(unavailableParticipants),
         ),
       )
       .returning({ id: ProfileFollowRequests.id })
