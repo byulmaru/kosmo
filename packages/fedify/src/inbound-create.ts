@@ -2,9 +2,9 @@ import '@kosmo/core/polyfill';
 
 import { Note } from '@fedify/vocab';
 import { InstanceState } from '@kosmo/core/enums';
+import { uniqueHref } from './activitypub-uri';
 import { handleInboundCreateNote } from './inbound-create-note';
 import { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
-import { uniqueHref } from './unique-href';
 import type { InboxContext } from '@fedify/fedify';
 import type { Create } from '@fedify/vocab';
 

@@ -34,7 +34,7 @@ let handleInboundAccept: typeof InboundAccept.handleInboundAccept;
 let handleInboundReject: typeof InboundReject.handleInboundReject;
 let localInstanceId: string;
 
-describe('inbound Accept(Follow) and Reject(Follow)', () => {
+describe('inbound Accept and Reject', () => {
   before(async () => {
     process.env.DATABASE_URL = databaseUrl;
     process.env.PUBLIC_ORIGIN = publicOrigin;
