@@ -46,14 +46,8 @@ API는 local profile과 ActivityPub remote profile이 참여하는 visible follo
 #### Scenario: Hide follow request from follow graph
 
 - **WHEN** local 또는 ActivityPub remote profile 사이에 pending `ProfileFollowRequest`가 있다
-- **THEN** 시스템은 해당 요청을 followers/following connection, followersCount, followingCount, viewerFollow, viewerState.follow 결과에 `ProfileFollow`로 노출하지 않는다
+- **THEN** 시스템은 해당 요청을 followers/following connection, followersCount, followingCount, `viewerState.follow` 결과에 `ProfileFollow`로 노출하지 않는다
 - **AND** pending request는 local profile 또는 ActivityPub remote profile의 저장 count를 변경하지 않는다
-
-#### Scenario: Read viewer follow for local or remote target
-
-- **WHEN** active profile이 있는 인증자가 다른 활성 local profile 또는 활성 ActivityPub remote profile에 대한 viewer follow 관계를 조회한다
-- **THEN** 시스템은 viewer active profile이 대상 프로필을 follow하는 `ProfileFollow` 관계를 반환한다
-- **AND** follow 관계가 없으면 없음으로 응답한다
 
 #### Scenario: Read viewer state
 
