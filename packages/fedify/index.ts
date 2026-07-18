@@ -1,9 +1,5 @@
 export { federation } from './src/federation';
-export {
-  sendAcceptFollowActivity,
-  sendFollowActivity,
-  sendUndoFollowActivity,
-} from './src/follow-delivery';
+export { sendAcceptFollowActivity } from './src/follow-delivery';
 export { sendProfileFollow, sendProfileUnfollow } from './src/profile-follow-delivery';
 export {
   findOrMaterializeRemoteProfileActor,

@@ -47,6 +47,8 @@ Undo는 저장된 actor pair에서 relation/request를 찾고 embedded Follow의
 
 Remote APPROVAL_REQUIRED follow는 pending request를 생성한 transaction이 끝난 뒤 새 ACTIVE request에 대해서만 Follow를 발송한다. URI와 generation은 request id/createdAt에서 파생하며, cancel은 실제 request 삭제 뒤 같은 identity의 Undo를 발송한다.
 
+Outbound Follow/Undo는 core lifecycle이 검증·commit한 projection을 받는 `sendProfileFollow`/`sendProfileUnfollow`만 전송 진입점으로 둔다. 이 진입점이 Fedify activity 구성과 `sendActivity` 호출까지 소유하며, lifecycle 정책을 우회해 직접 호출할 수 있는 하위 Follow/Undo 전송 함수는 두지 않는다. Follow URI와 actor-pair ordering key처럼 side effect가 없는 wire identity 계산만 공통 유틸리티로 유지한다.
+
 Generic Accept/Reject handler는 Fedify `getObject()`와 typed Follow 분기를 직접 소유하고, typed Follow만 concrete Accept(Follow)/Reject(Follow) action으로 전달한다. concrete action은 actor/object/recipient를 검증한 뒤 현재 relation/request를 자기 행동 안에서 직접 조회하며, 별도 Follow response projection resolver나 DB lookup utility를 두지 않는다. local recipient와 remote actor identity처럼 Follow 외 inbound activity에도 적용되는 Fedify trust boundary만 공통 모듈을 재사용한다.
 
 typed Follow의 id가 canonical kosmo Follow URI이면 현재 row에서 파생한 URI와 정확히 일치해야 하고, non-kosmo 또는 missing id는 verified actor pair fallback만 허용한다. Fedify가 typed Follow로 제공하지 못한 IRI-only object를 kosmo가 별도 parser와 DB lookup으로 복원하지 않는다. Accept는 exact pending request 삭제와 relation/count 생성을 한 transaction에서 수행하고 established relation은 유지한다. Reject는 exact request/relation row만 삭제하며 stale generation은 무시한다.
@@ -69,6 +71,7 @@ PROD-241이 설정한 actor-scoped/shared inbox listener에 실제 activity type
 - inbound actor/object URI를 relation/request에 중복 저장하면 profile FK와 canonical actor identity로 이미 표현되는 pair를 별도 스냅샷 계약으로 만든다.
 - remote `published`와 local 수신 시각을 관계 세대로 혼합하면 clock skew와 network 순서를 도메인 상태로 잘못 해석할 수 있다.
 - request row를 terminal history로 남기면 pending-only canonical 계약과 충돌한다.
+- core lifecycle을 모르는 하위 Follow/Undo 전송 함수를 노출하면 idempotency, instance state와 commit-after-delivery 순서를 우회할 수 있다.
 - SUSPENDED relation을 삭제하면 moderation 해제 뒤 관계 복구와 저장 count 계약을 깨뜨린다.
 - PR #232/#234의 브랜치를 통째로 복구하면 현재 main과 책임 경계를 되돌린다.
 - 공통 discovery requirement에 Follow-only 허용 목록을 두면 remote-post change와 archive 순서에 따라 지원 activity가 사라질 수 있다.
