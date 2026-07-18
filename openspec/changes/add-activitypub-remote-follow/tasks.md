@@ -74,13 +74,13 @@ Remote APPROVAL_REQUIRED follow를 pending request로 발송·취소하고 verif
 
 - request row의 존재만 Pending을 나타내며 terminal state, activity history 또는 retry metadata를 저장하지 않는다.
 - Follow identity/generation은 immutable request 또는 relation의 id/createdAt에서 파생한다.
-- typed embedded Follow는 ID lookup 전에 actor/object를 검증한다.
+- Fedify가 typed Follow로 제공한 object만 처리하고 ID lookup 전에 actor/object를 검증하며, IRI-only object를 별도 역조회하지 않는다.
 - Accept/Reject/cancel은 조회한 exact row에만 적용하고 relation count는 실제 relation 생성·삭제에서만 변경한다.
 - UNRESPONSIVE에서는 local request lifecycle만 적용하고 delivery와 durable retry를 만들지 않는다.
 
 **Verification**
 
-- duplicate/concurrent Follow와 cancel, kosmo/non-kosmo/missing ID, malformed URI, stale Reject와 transition race를 검증한다.
+- duplicate/concurrent Follow와 cancel, typed Follow의 kosmo/non-kosmo/missing ID, malformed URI, 무시되는 IRI-only object, stale Reject와 transition race를 검증한다.
 
 - [x] 4.1 APPROVAL_REQUIRED remote follow를 pending request로 생성하고 새 ACTIVE request에만 Follow를 발송한다.
 - [x] 4.2 remote pending cancel이 exact request를 삭제하고 ACTIVE에서만 원래 Follow identity의 Undo를 발송한다.

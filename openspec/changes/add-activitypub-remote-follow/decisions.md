@@ -64,6 +64,16 @@
 - Consequences: terminal state와 delivery history를 저장하지 않으며 Accept 후 relation은 새 identity를 갖는다. 늦은 request ID의 Reject/cancel은 새 relation/request를 삭제할 수 없다.
 - Confirmation / Follow-up: PROD-244가 duplicate/concurrent Follow·cancel, Accept/Reject/cancel 경쟁과 refollow exact-row 보호를 검증한다.
 
+### Accept/Reject object 지원은 Fedify typed Follow 해석 범위로 제한한다
+
+- Decision Date: 2026-07-18
+- Status: Accepted
+- Context / Problem: Fedify `getObject()`가 typed Follow를 제공하는 표준 경로 외에 kosmo가 IRI-only `objectId`를 직접 parse하고 저장 projection으로 역조회하는 호환 계층을 유지할지 결정해야 했다.
+- Decision Outcome: Accept/Reject는 Fedify `getObject()`가 typed Follow로 제공한 object만 follow response로 처리한다. typed Follow의 actor/object/recipient와 optional id는 기존 계약대로 검증하지만, Fedify가 typed Follow로 제공하지 못한 IRI-only object를 kosmo가 별도 parser나 DB lookup으로 복원하지 않는다.
+- Alternatives Considered: canonical kosmo Follow IRI를 직접 parse해 request/relation을 역조회, `/ap/follow/{id}` object dispatcher를 추가해 Fedify dereference 지원.
+- Consequences: 별도 IRI-only 호환 코드와 공개 Follow object endpoint를 만들지 않는다. IRI-only Accept/Reject는 instance reachability 신호로 사용할 수 있지만 follow graph/request side effect 없이 무시하며, 실제 상호운용성 필요가 확인되면 별도 호환성 범위로 추가한다.
+- Confirmation / Follow-up: Fedify typed embedded/resolved Follow는 처리되고 IRI-only 및 unsupported object는 projection/count를 변경하지 않는지 PROD-244와 PROD-361에서 검증한다.
+
 ### Remote Follow ID는 advisory이고 generation은 단조 증가한다
 
 - Decision Date: 2026-07-15

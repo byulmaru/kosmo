@@ -47,7 +47,7 @@ Undo는 저장된 actor pair에서 relation/request를 찾고 embedded Follow의
 
 Remote APPROVAL_REQUIRED follow는 pending request를 생성한 transaction이 끝난 뒤 새 ACTIVE request에 대해서만 Follow를 발송한다. URI와 generation은 request id/createdAt에서 파생하며, cancel은 실제 request 삭제 뒤 같은 identity의 Undo를 발송한다.
 
-Accept/Reject handler는 embedded Follow의 actor/object/recipient를 ID lookup 전에 검증한다. canonical origin과 canonical UUID를 만족하는 kosmo URI만 row id shortcut으로 사용하고, non-kosmo 또는 missing id는 verified actor pair fallback만 허용한다. Accept는 exact pending request 삭제와 relation/count 생성을 한 transaction에서 수행하고 established relation은 유지한다. Reject는 exact request/relation row만 삭제하며 stale generation은 무시한다.
+Accept/Reject handler는 Fedify `getObject()`가 typed Follow로 제공한 object만 처리하고 그 actor/object/recipient를 ID lookup 전에 검증한다. canonical origin과 canonical UUID를 만족하는 kosmo URI만 typed Follow의 row id shortcut으로 사용하고, non-kosmo 또는 missing id는 verified actor pair fallback만 허용한다. Fedify가 typed Follow로 제공하지 못한 IRI-only object를 kosmo가 별도 parser와 DB lookup으로 복원하지 않는다. Accept는 exact pending request 삭제와 relation/count 생성을 한 transaction에서 수행하고 established relation은 유지한다. Reject는 exact request/relation row만 삭제하며 stale generation은 무시한다.
 
 #### Inbox registration
 

@@ -10,7 +10,7 @@ import {
   ProfileFollowPolicy,
 } from '@kosmo/core/enums';
 import { eq, ne } from 'drizzle-orm';
-import type { InboxContext } from '@fedify/fedify';
+import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as InboundAccept from './inbound-accept';
@@ -109,11 +109,17 @@ describe('inbound Accept(Follow) and Reject(Follow)', () => {
     assert.deepEqual(await readCounts(fixture), { localFollowing: 1, remoteFollowers: 1 });
   });
 
-  test('promotes an exact pending request from an IRI-only Accept', async () => {
+  test('uses Fedify to resolve an IRI-only Accept object', async () => {
     const fixture = await createFixture({ projection: 'PENDING' });
+    const follow = createOutboundFollow(fixture.projection);
+    const documentLoader: DocumentLoader = async (url) => ({
+      contextUrl: null,
+      document: await follow.toJsonLd({ format: 'expand' }),
+      documentUrl: url,
+    });
 
     await handleInboundAccept(
-      createContext(localProfileId),
+      createContext(localProfileId, documentLoader),
       new Accept({
         actor: remoteActorUri,
         object: new URL(`/ap/follow/${fixture.projection.id}`, publicOrigin),
@@ -123,6 +129,19 @@ describe('inbound Accept(Follow) and Reject(Follow)', () => {
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
     assert.equal((await db.select().from(ProfileFollows)).length, 1);
     assert.deepEqual(await readCounts(fixture), { localFollowing: 1, remoteFollowers: 1 });
+  });
+
+  test('ignores IRI-only response objects that Fedify cannot resolve', async () => {
+    const fixture = await createFixture({ projection: 'PENDING' });
+    const object = new URL(`/ap/follow/${fixture.projection.id}`, publicOrigin);
+    const context = createContext(localProfileId);
+
+    await handleInboundAccept(context, new Accept({ actor: remoteActorUri, object }));
+    await handleInboundReject(context, new Reject({ actor: remoteActorUri, object }));
+
+    assert.deepEqual(await db.select().from(ProfileFollowRequests), [fixture.projection]);
+    assert.equal((await db.select().from(ProfileFollows)).length, 0);
+    assert.deepEqual(await readCounts(fixture), { localFollowing: 0, remoteFollowers: 0 });
   });
 
   test('keeps an exact established relation idempotently on Accept', async () => {
@@ -196,16 +215,15 @@ describe('inbound Accept(Follow) and Reject(Follow)', () => {
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
   });
 
-  test('handles IRI-only exact Reject and ignores stale Reject', async () => {
+  test('handles an exact Reject and ignores a stale Reject', async () => {
     const fixture = await createFixture({ projection: 'ESTABLISHED' });
-    const object = new URL(`/ap/follow/${fixture.projection.id}`, publicOrigin);
     const context = createContext(localProfileId);
 
     await handleInboundReject(
       context,
       new Reject({
         actor: remoteActorUri,
-        object,
+        object: createOutboundFollow(fixture.projection),
         published: fixture.projection.createdAt.subtract({ seconds: 1 }),
       }),
     );
@@ -215,7 +233,7 @@ describe('inbound Accept(Follow) and Reject(Follow)', () => {
       context,
       new Reject({
         actor: remoteActorUri,
-        object,
+        object: createOutboundFollow(fixture.projection),
         published: fixture.projection.createdAt,
       }),
     );
@@ -350,9 +368,15 @@ const createOutboundFollow = (projection?: { readonly id: string }) =>
     object: remoteActorUri,
   });
 
-const createContext = (recipient: string | null): InboxContext<void> =>
+const createContext = (
+  recipient: string | null,
+  documentLoader: DocumentLoader = async (url) => {
+    throw new Error(`Unexpected document URL: ${url}`);
+  },
+): InboxContext<void> =>
   ({
     canonicalOrigin: publicOrigin,
+    documentLoader,
     getActorUri: (identifier: string) => new URL(`/ap/actor/${identifier}`, publicOrigin),
     recipient,
   }) as unknown as InboxContext<void>;

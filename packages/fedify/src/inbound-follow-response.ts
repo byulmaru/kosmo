@@ -39,10 +39,6 @@ type LocalProfileActor = {
 const isHttpUri = (uri: URL | null): uri is URL =>
   uri !== null && (uri.protocol === 'http:' || uri.protocol === 'https:');
 
-const noNetworkDocumentLoader = async (url: string) => {
-  throw new Error(`Network lookup is disabled for inbound Follow response: ${url}`);
-};
-
 const parseKosmoFollowActivityUri = (
   uri: URL,
   canonicalOrigin: string,
@@ -146,7 +142,7 @@ const findOutboundProfileFollowProjectionByPair = ({
     )!,
   );
 
-const resolveEmbeddedProjection = async (
+const resolveFollowProjection = async (
   context: InboxContext<void>,
   responseActorUri: URL,
   remoteProfileId: string,
@@ -190,47 +186,6 @@ const resolveEmbeddedProjection = async (
     : undefined;
 };
 
-const resolveIriProjection = async (
-  context: InboxContext<void>,
-  remoteProfileId: string,
-  objectUri: URL,
-): Promise<OutboundProfileFollowProjection | undefined> => {
-  const parsed = parseKosmoFollowActivityUri(objectUri, context.canonicalOrigin);
-  if (parsed?.kind !== 'KOSMO') {
-    return undefined;
-  }
-
-  const projection = await findOutboundProfileFollowProjectionById(parsed.rowId);
-  if (!projection) {
-    return undefined;
-  }
-
-  const localProfileActor = await db
-    .select({
-      actor: getColumns(ActivityPubActors),
-      profile: getColumns(Profiles),
-    })
-    .from(ActivityPubActors)
-    .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(
-      and(
-        eq(Profiles.id, projection.followerProfileId),
-        eq(Instances.kind, InstanceKind.LOCAL),
-        eq(Instances.state, InstanceState.ACTIVE),
-        eq(Profiles.state, ProfileState.ACTIVE),
-      ),
-    )
-    .limit(1)
-    .then(first);
-
-  return localProfileActor &&
-    remoteProfileId === projection.followeeProfileId &&
-    recipientMatches(context, localProfileActor)
-    ? projection
-    : undefined;
-};
-
 export const resolveInboundFollowResponseProjection = async (
   context: InboxContext<void>,
   response: FollowResponse,
@@ -246,20 +201,13 @@ export const resolveInboundFollowResponseProjection = async (
     return undefined;
   }
 
-  const embedded = await response.getObject({
+  const object = await response.getObject({
     crossOrigin: 'trust',
-    documentLoader: noNetworkDocumentLoader,
+    documentLoader: context.documentLoader,
     suppressError: true,
   });
-  if (embedded instanceof Follow) {
-    return resolveEmbeddedProjection(context, responseActorUri, remoteActor.profile.id, embedded);
-  }
-  if (embedded !== null) {
+  if (!(object instanceof Follow)) {
     return undefined;
   }
-
-  const objectUri = response.objectId;
-  return isHttpUri(objectUri)
-    ? resolveIriProjection(context, remoteActor.profile.id, objectUri)
-    : undefined;
+  return resolveFollowProjection(context, responseActorUri, remoteActor.profile.id, object);
 };
