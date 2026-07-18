@@ -13,6 +13,7 @@ export type StoryProfile = {
     pageInfo: StoryPageInfo;
   };
   followersCount: number;
+  followPolicy: 'APPROVAL_REQUIRED' | 'OPEN';
   following: {
     edges: Array<{
       cursor: string;
@@ -27,7 +28,7 @@ export type StoryProfile = {
   relativeHandle: string;
   unreadNotificationCount: number;
   viewerState: {
-    follow: { follower?: { id: string } | null; id: string } | null;
+    follow: { follower?: { followingCount: number; id: string } | null; id: string } | null;
     isSelf: boolean;
   } | null;
 };
@@ -55,6 +56,7 @@ export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
     displayName: '코스모 작가',
     followers: { edges: [], pageInfo: pageInfo() },
     followersCount: 128,
+    followPolicy: 'OPEN',
     following: { edges: [], pageInfo: pageInfo() },
     followingCount: 42,
     handle: 'kosmo',

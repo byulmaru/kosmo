@@ -38,26 +38,30 @@
 
 ### Requirement: Remote profile follow actions
 
-웹 앱은 활성 ActivityPub remote profile을 local profile과 같은 follow action 대상으로 취급하고, remote profile이라는 이유만으로 follow/unfollow UI를 숨기거나 비활성화하지 않아야 한다(MUST).
+웹 앱은 visible profile의 origin이나 `followPolicy`를 action surface에서 구분하지 않고 local/remote profile에 같은 follow/unfollow UI를 적용해야 한다(MUST). Follow Relationship과 Follow Request 생성 가능 여부는 `followProfile` mutation이 판단해야 하며, pending request 전용 버튼 상태와 취소 UX는 별도 capability가 제공하기 전까지 이 requirement에서 만들지 않아야 한다(MUST NOT).
 
 #### Scenario: Show remote follow action
 
 - **WHEN** active profile이 있는 사용자가 자기 자신이 아닌 활성 ActivityPub remote profile을 `ProfileListItem`, 프로필 페이지, 또는 동등한 follow action surface에서 본다
 - **THEN** 시스템은 local profile 대상과 같은 `FollowButton` 표시 정책을 적용한다
-- **AND** 대상 remote profile의 `followPolicy`가 `OPEN`이면 follow action을 사용할 수 있으며, remote instance 상태 차단은 `followProfile` mutation이 source of truth로 처리한다
-- **AND** follow action은 `followProfile` mutation을 호출하고 optimistic UI는 `viewerState.follow`와 followersCount 갱신 정책을 따른다
+- **AND** 대상 profile의 origin이나 `followPolicy`를 클라이언트 버튼 노출 또는 mutation 호출 조건으로 사용하지 않는다
+- **AND** follow action은 `followProfile` mutation을 호출하고 mutation 결과의 `viewerState.follow`와 followersCount를 normalized cache에 반영한다
 - **AND** 대상이 ActivityPub remote profile이어도 mutation의 `followerProfile.followingCount`와 `followeeProfile.followersCount`를 Relay normalized cache에 반영한다
+- **AND** mutation 진행 중 별도 `처리 중` 버튼 상태를 표시하지 않고 관계와 양쪽 count를 optimistic하게 반영하며 mutation 오류에서는 이전 상태로 rollback한다
+- **AND** follow 성공 시 이미 열린 followers/following connection에 새 relation edge를 직접 삽입하지 않고 다음 connection query 결과에 membership 갱신을 맡긴다
 
-#### Scenario: Hide or disable remote request action before Web integration
+#### Scenario: Defer pending request action state
 
-- **WHEN** 대상 ActivityPub remote profile에 대한 established viewer `ProfileFollow`가 없고, 대상이 자기 자신이거나, 비활성 profile이거나, `followPolicy`가 `APPROVAL_REQUIRED`이고 PROD-263 Web request action이 아직 제공되지 않는다
-- **THEN** 시스템은 local profile 대상의 기존 self/blocked/unsupported 정책과 같은 방식으로 새 follow action을 숨기거나 사용할 수 없게 한다
-- **AND** 사용할 수 없는 action은 ActivityPub `Follow` activity를 발송하는 mutation을 호출하지 않는다
+- **WHEN** local 또는 ActivityPub remote profile의 follow mutation이 pending `ProfileFollowRequest`를 반환하거나 아직 제공되지 않은 remote request flow 때문에 실패한다
+- **THEN** 시스템은 profile origin이나 `followPolicy`에 따른 별도 버튼 노출 정책을 만들지 않는다
+- **AND** pending request의 `요청됨` 상태, 취소 action과 승인·거절 후 버튼 전환은 PROD-377이 소유한다
+- **AND** 자기 자신이거나 API visibility 계약상 노출되지 않는 profile에는 기존 공통 action surface를 적용하지 않는다
 
 #### Scenario: Show remote unfollow action
 
 - **WHEN** active profile이 있는 사용자가 established `ProfileFollow`로 follow 중인 활성 ActivityPub remote profile을 본다
 - **THEN** 시스템은 local profile 대상과 같은 unfollow action을 표시한다
-- **AND** 대상 remote profile의 `followPolicy`가 `APPROVAL_REQUIRED`로 바뀌어도 established follow의 unfollow action은 숨기지 않는다
-- **AND** unfollow action은 `unfollowProfile` mutation을 호출하고 optimistic UI는 `viewerState.follow`와 followersCount 갱신 정책을 따른다
+- **AND** 대상 remote profile의 origin이나 `followPolicy`를 established follow의 unfollow action 조건으로 사용하지 않는다
+- **AND** unfollow action은 `unfollowProfile` mutation을 호출하고 mutation 결과의 `viewerState.follow`와 followersCount를 normalized cache에 반영한다
 - **AND** 대상이 ActivityPub remote profile이어도 mutation의 `followerProfile.followingCount`와 `followeeProfile.followersCount`를 Relay normalized cache에 반영한다
+- **AND** mutation 진행 중 별도 `처리 중` 버튼 상태를 표시하지 않고 관계와 양쪽 count 및 열린 connection의 기존 relation edge 제거를 optimistic하게 반영하며 mutation 오류에서는 이전 상태로 rollback한다

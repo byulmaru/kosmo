@@ -41,6 +41,7 @@
 - Parallel contract: PROD-272 local request creation and local/remote pending request processing lifecycle
 - Cross-capability integration: PROD-380 verified inbound Follow/Undo → common core lifecycle → Follow Notification
 - Final integration and archive owner: PROD-361
+- Deferred Web pending-request state and cancel UX: PROD-377
 - PROD-242/243/244/245/263/282/361은 PROD-357이 완료되기 전까지 blocked 상태를 유지한다.
 - PROD-243과 PROD-272는 서로의 구현 또는 병합을 선행 조건으로 두지 않는다.
 - PROD-380은 PROD-244 병합 후 inbound Follow/Undo와 Follow Notification lifecycle을 통합한다.

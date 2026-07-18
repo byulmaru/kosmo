@@ -1,5 +1,5 @@
 import { db, firstOrThrow, ProfileFollowRequests, ProfileFollows, Profiles } from '@kosmo/core/db';
-import { ProfileFollowPolicy } from '@kosmo/core/enums';
+import { InstanceState, ProfileFollowPolicy } from '@kosmo/core/enums';
 import { eq } from 'drizzle-orm';
 import {
   createE2EFollow,
@@ -30,7 +30,7 @@ const mutateGraphQL = async (page: Page, query: string, variables: Record<string
     { query, variables },
   );
 
-const mutateFollow = (
+const mutateFollow = async (
   page: Page,
   operation: 'followProfile' | 'unfollowProfile',
   profileId: string,
@@ -46,6 +46,56 @@ const mutateFollow = (
     }`,
     { id: profileId },
   );
+
+test('UNRESPONSIVE remote profile은 Web에서 follow와 unfollow할 수 있다', async ({
+  context,
+  page,
+}) => {
+  const domain = 'e2e-unresponsive.remote.example';
+  const viewer = await createE2ESession({ handle: 'e2e-remote-viewer' });
+  const remote = await createE2ERemoteProfile({
+    domain,
+    handle: 'e2e-unresponsive',
+    instanceState: InstanceState.UNRESPONSIVE,
+  });
+  const relativeHandle = `@${remote.handle}@${domain}`;
+
+  await setE2ESessionCookie(context, viewer.token);
+  await page.goto(`/${relativeHandle}`);
+
+  const followersLink = page.locator(`a[href="/${relativeHandle}/followers"]`);
+  await expect(page.getByRole('button', { name: '팔로우' })).toBeVisible();
+  await expect(followersLink.getByText('0', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: '팔로우' }).click();
+
+  await expect(page.getByRole('button', { name: '팔로잉' })).toBeVisible();
+  await expect(followersLink.getByText('1', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: '팔로잉' }).click();
+
+  await expect(page.getByRole('button', { name: '팔로우' })).toBeVisible();
+  await expect(followersLink.getByText('0', { exact: true })).toBeVisible();
+});
+
+test('SUSPENDED remote profile은 Web action surface에 노출되지 않는다', async ({
+  context,
+  page,
+}) => {
+  const domain = 'e2e-suspended.remote.example';
+  const viewer = await createE2ESession({ handle: 'e2e-suspended-viewer' });
+  const remote = await createE2ERemoteProfile({
+    domain,
+    handle: 'e2e-suspended',
+    instanceState: InstanceState.SUSPENDED,
+  });
+
+  await setE2ESessionCookie(context, viewer.token);
+  await page.goto(`/@${remote.handle}@${domain}`);
+
+  await expect(page.getByText('프로필을 찾을 수 없어요')).toBeVisible();
+  await expect(page.getByRole('button', { name: /팔로우/ })).toHaveCount(0);
+});
 
 test('post-commit delivery 실패에도 Web GraphQL payload와 DB 상태가 일치한다', async ({
   context,

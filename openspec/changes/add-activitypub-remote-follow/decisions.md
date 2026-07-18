@@ -4,6 +4,16 @@
 
 ## Decision Records
 
+### Web follow action은 profile origin과 follow policy를 구분하지 않는다
+
+- Decision Date: 2026-07-18
+- Status: Accepted
+- Context / Problem: PROD-263의 Web action에 remote `OPEN`/`APPROVAL_REQUIRED` 분기를 두면 Follow Request 생성과 pending 버튼 UX 책임이 Web follow 연결 slice에 섞이고, local profile에는 없는 origin별 정책이 생긴다.
+- Decision Outcome: FollowButton은 visible non-self profile에 local/remote 구분 없이 같은 action surface를 적용하고 `followPolicy`를 클라이언트 분기 조건으로 읽지 않는다. Follow Relationship 또는 Follow Request 생성 가능 여부는 mutation이 판단하며 pending `요청됨` 상태와 취소 UX는 PROD-377이 소유한다. Follow/unfollow action은 별도 `처리 중` 문구 없이 관계와 양쪽 count를 Relay optimistic layer에 즉시 반영하고 오류 시 rollback한다. 성공한 follow는 mutation 결과의 established 관계만 normalized cache에 반영하고 이미 열린 followers/following connection에 새 edge를 직접 삽입하지 않으며, 기존 unfollow의 relation edge 제거만 유지한다.
+- Alternatives Considered: remote `APPROVAL_REQUIRED` action을 숨김, remote policy에 따라 disabled 처리, mutation 완료까지 중립적인 loading 문구 유지, follow 성공 시 열린 양쪽 connection에 새 edge 삽입.
+- Consequences: PROD-244가 remote pending request flow를 제공하기 전에는 remote `APPROVAL_REQUIRED` action이 mutation 오류로 끝날 수 있고, PROD-377 전에는 local/remote pending request가 별도 버튼 상태로 표시되지 않는다. Follow의 optimistic established 상태는 pending 또는 오류 응답에서 rollback되며, 이미 열린 connection의 새 membership은 다음 query 전까지 갱신되지 않을 수 있다.
+- Confirmation / Follow-up: PROD-263은 local/remote action parity, optimistic 관계/count와 rollback, established 응답 cache 갱신 및 unfollow edge 제거를 검증하고, PROD-377은 pending 생성·취소·승인·거절 후 버튼 전환을 검증한다.
+
 ### Linear 계약을 PROD-357 OpenSpec으로 먼저 구체화한다
 
 - Decision Date: 2026-07-15

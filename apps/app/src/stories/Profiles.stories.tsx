@@ -18,7 +18,10 @@ const followingOwnerId = 'profile-following-content';
 const followed = profile({
   id: 'profile-followed',
   viewerState: {
-    follow: { follower: { id: followingOwnerId }, id: 'following-edge-0' },
+    follow: {
+      follower: { followingCount: 42, id: followingOwnerId },
+      id: 'following-edge-0',
+    },
     isSelf: false,
   },
 });
@@ -34,6 +37,13 @@ const remote = profile({
   id: 'profile-remote',
   instance: { kind: 'ACTIVITYPUB' },
   relativeHandle: '@remote-user@very-long-instance.example',
+});
+const remoteApprovalRequired = profile({
+  followPolicy: 'APPROVAL_REQUIRED',
+  handle: 'approval-required',
+  id: 'profile-remote-approval-required',
+  instance: { kind: 'ACTIVITYPUB' },
+  relativeHandle: '@approval-required@remote.example',
 });
 const noBio = profile({ bio: null, id: 'profile-no-bio' });
 const noViewer = profile({ id: 'profile-no-viewer', viewerState: null });
@@ -59,6 +69,7 @@ const storyProfiles = [
   followersContent,
   followingEmpty,
   followingContent,
+  remoteApprovalRequired,
 ];
 
 const ProfilesStoriesQuery = graphql`
@@ -144,8 +155,18 @@ function FollowButtonStory() {
   return <FollowButton profile={requireFragment(profile.followButton, 'follow button')} />;
 }
 
+function UnfollowButtonStory() {
+  const profile = requireProfile(useStoryProfiles(), 1);
+  return <FollowButton profile={requireFragment(profile.followButton, 'follow button')} />;
+}
+
 function RemoteFollowButtonStory() {
   const profile = requireProfile(useStoryProfiles(), 3);
+  return <FollowButton profile={requireFragment(profile.followButton, 'follow button')} />;
+}
+
+function RemoteApprovalRequiredFollowButtonStory() {
+  const profile = requireProfile(useStoryProfiles(), 10);
   return <FollowButton profile={requireFragment(profile.followButton, 'follow button')} />;
 }
 
@@ -289,6 +310,7 @@ export const ListAndFollowStates: Story = {
     expect(
       canvasElement.querySelector('a[href="/@remote-user@very-long-instance.example"]'),
     ).toBeInTheDocument();
+    expect(within(canvasElement).getAllByRole('button', { name: '팔로우' })).toHaveLength(2);
   },
   render: () => <ProfileListCatalog />,
 };
@@ -298,9 +320,21 @@ export const FollowSubmitting: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
-    await expect(canvas.findByRole('button', { name: '처리 중' })).resolves.toBeDisabled();
+    await expect(canvas.findByRole('button', { name: '팔로잉' })).resolves.toBeDisabled();
+    expect(canvas.queryByRole('button', { name: '처리 중' })).not.toBeInTheDocument();
   },
   render: () => <FollowButtonStory />,
+};
+
+export const UnfollowSubmitting: Story = {
+  parameters: { relay: { mutationLoading: true } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '팔로잉' }));
+    await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeDisabled();
+    expect(canvas.queryByRole('button', { name: '처리 중' })).not.toBeInTheDocument();
+  },
+  render: () => <UnfollowButtonStory />,
 };
 
 export const FollowErrorInteraction: Story = {
@@ -311,15 +345,36 @@ export const FollowErrorInteraction: Story = {
     await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
       '팔로우 상태를 변경하지 못했습니다.',
     );
+    await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeEnabled();
   },
   render: () => <FollowButtonStory />,
 };
 
-export const RemoteFollowIsHidden: Story = {
+export const UnfollowErrorInteraction: Story = {
+  parameters: { relay: { mutationError: '언팔로우 실패' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '팔로잉' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '팔로우 상태를 변경하지 못했습니다.',
+    );
+    await expect(canvas.findByRole('button', { name: '팔로잉' })).resolves.toBeEnabled();
+  },
+  render: () => <UnfollowButtonStory />,
+};
+
+export const RemoteFollowUsesSameActionSurface: Story = {
   play: ({ canvasElement }) => {
-    expect(within(canvasElement).queryByRole('button', { name: '팔로우' })).not.toBeInTheDocument();
+    expect(within(canvasElement).getByRole('button', { name: '팔로우' })).toBeVisible();
   },
   render: () => <RemoteFollowButtonStory />,
+};
+
+export const RemoteApprovalRequiredUsesSameActionSurface: Story = {
+  play: ({ canvasElement }) => {
+    expect(within(canvasElement).getByRole('button', { name: '팔로우' })).toBeVisible();
+  },
+  render: () => <RemoteApprovalRequiredFollowButtonStory />,
 };
 
 export const UnfollowRemovesCachedConnectionEdge: Story = {

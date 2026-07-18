@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { graphql, useFragment, useMutation } from 'react-relay';
+import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { ConnectionHandler } from 'relay-runtime';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
 import type { StyleProp, ViewStyle } from 'react-native';
+import type { RecordProxy, RecordSourceSelectorProxy } from 'relay-runtime';
 import type { FollowButton_profile$key } from './__generated__/FollowButton_profile.graphql';
 import type { FollowButtonFollowProfileMutation } from './__generated__/FollowButtonFollowProfileMutation.graphql';
 import type { FollowButtonUnfollowProfileMutation } from './__generated__/FollowButtonUnfollowProfileMutation.graphql';
@@ -18,15 +19,14 @@ type FollowButtonProps = {
 const followButtonProfileFragment = graphql`
   fragment FollowButton_profile on Profile {
     id
-    instance {
-      kind
-    }
+    followersCount
     viewerState {
       isSelf
       follow {
         id
         follower {
           id
+          followingCount
         }
       }
     }
@@ -66,8 +66,23 @@ const unfollowProfileMutation = graphql`
   }
 `;
 
+const updateProfileCount = (
+  profile: RecordProxy | null | undefined,
+  field: 'followersCount' | 'followingCount',
+  delta: -1 | 1,
+) => {
+  const count = profile?.getValue(field);
+  if (typeof count === 'number') {
+    profile?.setValue(Math.max(count + delta, 0), field);
+  }
+};
+
+const getSelectedProfile = (store: RecordSourceSelectorProxy) =>
+  store.getRoot().getLinkedRecord('currentSession')?.getLinkedRecord('selectedProfile');
+
 export function FollowButton({ profile, style }: FollowButtonProps) {
   const theme = useTheme();
+  const environment = useRelayEnvironment();
   const data = useFragment(followButtonProfileFragment, profile);
   const [commitFollow, following] =
     useMutation<FollowButtonFollowProfileMutation>(followProfileMutation);
@@ -75,16 +90,15 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
     useMutation<FollowButtonUnfollowProfileMutation>(unfollowProfileMutation);
   const [error, setError] = useState(false);
   const viewerState = data.viewerState;
-  const isLocalProfile = data.instance.kind === 'LOCAL';
   const isFollowing = Boolean(viewerState?.follow);
   const loading = following || unfollowing;
 
-  if (!isLocalProfile || !viewerState || viewerState.isSelf) {
+  if (!viewerState || viewerState.isSelf) {
     return null;
   }
 
   const toggleFollow = () => {
-    if (loading || !isLocalProfile) {
+    if (loading) {
       return;
     }
 
@@ -96,17 +110,58 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
     };
 
     if (isFollowing) {
-      const followerId = viewerState.follow?.follower?.id;
+      const follower = viewerState.follow?.follower;
+      const followerId = follower?.id;
+      const profileFollowId = viewerState.follow?.id;
+      const source = environment.getStore().getSource();
       const connections = [
         ConnectionHandler.getConnectionID(data.id, 'ProfileConnectionList_followers'),
         ...(followerId
           ? [ConnectionHandler.getConnectionID(followerId, 'ProfileConnectionList_following')]
           : []),
-      ];
+      ].filter((connectionId) => source.has(connectionId));
 
-      commitUnfollow({ ...callbacks, variables: { connections, id: data.id } });
+      commitUnfollow({
+        ...callbacks,
+        optimisticResponse:
+          follower && profileFollowId
+            ? {
+                unfollowProfile: {
+                  followeeProfile: {
+                    followersCount: Math.max(data.followersCount - 1, 0),
+                    id: data.id,
+                    viewerState: { follow: null, isSelf: viewerState.isSelf },
+                  },
+                  followerProfile: {
+                    followingCount: Math.max(follower.followingCount - 1, 0),
+                    id: follower.id,
+                  },
+                  profileFollowId,
+                },
+              }
+            : undefined,
+        variables: { connections, id: data.id },
+      });
     } else {
-      commitFollow({ ...callbacks, variables: { id: data.id } });
+      commitFollow({
+        ...callbacks,
+        optimisticUpdater: (store) => {
+          const followee = store.get(data.id);
+          const follower = getSelectedProfile(store);
+          const profileFollow = store.create(
+            `client:ProfileFollow:${follower?.getDataID() ?? 'viewer'}:${data.id}`,
+            'ProfileFollow',
+          );
+
+          if (follower) {
+            profileFollow.setLinkedRecord(follower, 'follower');
+          }
+          followee?.getLinkedRecord('viewerState')?.setLinkedRecord(profileFollow, 'follow');
+          updateProfileCount(followee, 'followersCount', 1);
+          updateProfileCount(follower, 'followingCount', 1);
+        },
+        variables: { id: data.id },
+      });
     }
   };
 
@@ -121,7 +176,7 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
         style={styles.button}
         tone={isFollowing ? 'secondary' : 'primary'}
       >
-        {loading ? '처리 중' : isFollowing ? '팔로잉' : '팔로우'}
+        {isFollowing ? '팔로잉' : '팔로우'}
       </Button>
       {error ? (
         <Text accessibilityRole="alert" style={[styles.error, { color: theme.textSecondary }]}>
