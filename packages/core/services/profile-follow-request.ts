@@ -100,6 +100,46 @@ export const ensureProfileFollowRequest = async (
     };
   });
 
+export const acceptProfileFollowRequest = async (
+  {
+    expectedRowId,
+    followeeProfileId,
+    followerProfileId,
+  }: ProfileFollowPair & { readonly expectedRowId: string },
+  tx?: Transaction,
+): Promise<boolean> =>
+  getDatabaseConnection(tx).transaction(async (tx) => {
+    const pair = { followeeProfileId, followerProfileId };
+    const established = await tx
+      .select({ id: ProfileFollows.id })
+      .from(ProfileFollows)
+      .where(pairCondition(ProfileFollows, pair))
+      .limit(1)
+      .then(first);
+
+    if (established) {
+      return established.id === expectedRowId;
+    }
+
+    const deleted = await tx
+      .delete(ProfileFollowRequests)
+      .where(
+        and(
+          eq(ProfileFollowRequests.id, expectedRowId),
+          pairCondition(ProfileFollowRequests, pair),
+        ),
+      )
+      .returning({ id: ProfileFollowRequests.id })
+      .then(first);
+
+    if (!deleted) {
+      return false;
+    }
+
+    await ensureProfileFollow(pair, tx);
+    return true;
+  });
+
 type ApproveProfileFollowRequestResult = {
   readonly followeeProfile: typeof Profiles.$inferSelect;
   readonly followerProfile: typeof Profiles.$inferSelect;

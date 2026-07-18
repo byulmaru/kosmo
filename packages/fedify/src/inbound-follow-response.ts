@@ -1,24 +1,37 @@
 import '@kosmo/core/polyfill';
 
 import { Follow } from '@fedify/vocab';
-import { ActivityPubActors, db, first, Instances, Profiles } from '@kosmo/core/db';
+import {
+  ActivityPubActors,
+  db,
+  first,
+  Instances,
+  ProfileFollowRequests,
+  ProfileFollows,
+  Profiles,
+} from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
-import {
-  acceptOutboundProfileFollow,
-  findOutboundProfileFollowProjectionById,
-  findOutboundProfileFollowProjectionByPair,
-  removeInboundFollow,
-} from '@kosmo/core/services';
+import { acceptProfileFollowRequest, removeInboundFollow } from '@kosmo/core/services';
 import { and, eq, getColumns } from 'drizzle-orm';
 import { findUsableStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Accept, Reject } from '@fedify/vocab';
-import type { OutboundProfileFollowProjection } from '@kosmo/core/services';
+import type { SQL } from 'drizzle-orm';
 
 const canonicalUuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 type FollowResponse = Accept | Reject;
+type OutboundProfileFollowProjection = {
+  readonly createdAt: Temporal.Instant;
+  readonly followeeProfileId: string;
+  readonly followerProfileId: string;
+  readonly id: string;
+};
+type OutboundProfileFollowPair = Pick<
+  OutboundProfileFollowProjection,
+  'followeeProfileId' | 'followerProfileId'
+>;
 type LocalProfileActor = {
   readonly actor: typeof ActivityPubActors.$inferSelect;
   readonly profile: typeof Profiles.$inferSelect;
@@ -99,6 +112,40 @@ const findUsableRemoteActor = async (actorUri: URL) => {
     throw error;
   }
 };
+
+const findOutboundProfileFollowProjection = async (
+  relationCondition: SQL,
+  requestCondition: SQL,
+): Promise<OutboundProfileFollowProjection | undefined> => {
+  const established = await db
+    .select()
+    .from(ProfileFollows)
+    .where(relationCondition)
+    .limit(1)
+    .then(first);
+  return (
+    established ??
+    (await db.select().from(ProfileFollowRequests).where(requestCondition).limit(1).then(first))
+  );
+};
+
+const findOutboundProfileFollowProjectionById = (id: string) =>
+  findOutboundProfileFollowProjection(eq(ProfileFollows.id, id), eq(ProfileFollowRequests.id, id));
+
+const findOutboundProfileFollowProjectionByPair = ({
+  followeeProfileId,
+  followerProfileId,
+}: OutboundProfileFollowPair) =>
+  findOutboundProfileFollowProjection(
+    and(
+      eq(ProfileFollows.followerProfileId, followerProfileId),
+      eq(ProfileFollows.followeeProfileId, followeeProfileId),
+    )!,
+    and(
+      eq(ProfileFollowRequests.followerProfileId, followerProfileId),
+      eq(ProfileFollowRequests.followeeProfileId, followeeProfileId),
+    )!,
+  );
 
 const resolveEmbeddedProjection = async (
   context: InboxContext<void>,
@@ -223,7 +270,7 @@ export const handleInboundAccept = async (
     return;
   }
 
-  await acceptOutboundProfileFollow({
+  await acceptProfileFollowRequest({
     expectedRowId: projection.id,
     followeeProfileId: projection.followeeProfileId,
     followerProfileId: projection.followerProfileId,
