@@ -26,6 +26,8 @@ type ProfileFollowInput = {
   followeeProfileId: string;
 };
 
+type ProfileFollowDirection = 'ACTIVITYPUB_INBOUND' | 'ACTIVITYPUB_OUTBOUND' | 'LOCAL';
+
 const loadProfileFollowParticipants = async (
   tx: Transaction,
   { followerProfileId, followeeProfileId }: ProfileFollowInput,
@@ -53,16 +55,32 @@ const loadProfileFollowParticipants = async (
 
   const follower = participants.find(({ id }) => id === followerProfileId);
   const target = participants.find(({ id }) => id === followeeProfileId);
-  if (!follower || follower.instanceKind !== InstanceKind.LOCAL || !target) {
+  if (!follower || !target) {
     throw new NotFoundError('Profile not found');
   }
 
-  const isRemote = target.instanceKind === InstanceKind.ACTIVITYPUB;
-  if ((!isRemote && target.instanceKind !== InstanceKind.LOCAL) || (isRemote && !target.actorUri)) {
+  let direction: ProfileFollowDirection;
+  if (follower.instanceKind === InstanceKind.LOCAL && target.instanceKind === InstanceKind.LOCAL) {
+    direction = 'LOCAL';
+  } else if (
+    follower.instanceKind === InstanceKind.LOCAL &&
+    target.instanceKind === InstanceKind.ACTIVITYPUB &&
+    target.actorUri
+  ) {
+    direction = 'ACTIVITYPUB_OUTBOUND';
+  } else if (
+    follower.instanceKind === InstanceKind.ACTIVITYPUB &&
+    follower.instanceState === InstanceState.ACTIVE &&
+    follower.actorUri &&
+    target.instanceKind === InstanceKind.LOCAL &&
+    target.instanceState === InstanceState.ACTIVE
+  ) {
+    direction = 'ACTIVITYPUB_INBOUND';
+  } else {
     throw new NotFoundError('Profile not found');
   }
 
-  return { isRemote, target };
+  return { direction, target };
 };
 
 export const followProfile = async ({
@@ -79,7 +97,7 @@ export const followProfile = async ({
       throw new ConflictError({ message: 'Profile cannot follow itself' });
     }
 
-    const { isRemote, target } = await loadProfileFollowParticipants(tx, {
+    const { direction, target } = await loadProfileFollowParticipants(tx, {
       followerProfileId,
       followeeProfileId,
     });
@@ -117,7 +135,10 @@ export const followProfile = async ({
 
     const result = { created, followeeProfile, followerProfile, result: followResult };
     const command =
-      created && isRemote && target.instanceState === InstanceState.ACTIVE && target.actorUri
+      created &&
+      direction === 'ACTIVITYPUB_OUTBOUND' &&
+      target.instanceState === InstanceState.ACTIVE &&
+      target.actorUri
         ? {
             actor: {
               inboxUri: target.actorInboxUri,
@@ -156,10 +177,13 @@ export const unfollowProfile = async ({
   profileFollowId: string | null;
 }> => {
   const { command, result } = await db.transaction(async (tx) => {
-    const { isRemote, target } = await loadProfileFollowParticipants(tx, {
+    const { direction, target } = await loadProfileFollowParticipants(tx, {
       followerProfileId,
       followeeProfileId,
     });
+    if (direction === 'ACTIVITYPUB_INBOUND') {
+      throw new NotFoundError('Profile not found');
+    }
 
     const deleted = await tx
       .delete(ProfileFollows)
@@ -199,7 +223,10 @@ export const unfollowProfile = async ({
       profileFollowId: deleted?.id ?? null,
     };
     const command =
-      deleted && isRemote && target.instanceState === InstanceState.ACTIVE && target.actorUri
+      deleted &&
+      direction === 'ACTIVITYPUB_OUTBOUND' &&
+      target.instanceState === InstanceState.ACTIVE &&
+      target.actorUri
         ? {
             actor: {
               inboxUri: target.actorInboxUri,

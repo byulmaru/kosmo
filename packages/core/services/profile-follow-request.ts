@@ -18,9 +18,9 @@ import { ensureProfileFollow } from './profile-follow-relation';
 import type { Transaction } from '../db';
 
 export type ProfileFollowRequestRow = typeof ProfileFollowRequests.$inferSelect;
-export type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
+type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
 
-export type ProfileFollowPair = {
+type ProfileFollowPair = {
   readonly followeeProfileId: string;
   readonly followerProfileId: string;
 };
@@ -33,17 +33,6 @@ const pairCondition = (
     eq(table.followerProfileId, followerProfileId),
     eq(table.followeeProfileId, followeeProfileId),
   );
-
-export const findProfileFollowRequestByPair = (
-  pair: ProfileFollowPair,
-  tx?: Transaction,
-): Promise<ProfileFollowRequestRow | undefined> =>
-  getDatabaseConnection(tx)
-    .select()
-    .from(ProfileFollowRequests)
-    .where(pairCondition(ProfileFollowRequests, pair))
-    .limit(1)
-    .then(first);
 
 export const ensureProfileFollowRequest = async (
   pair: ProfileFollowPair,

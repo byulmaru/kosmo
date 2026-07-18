@@ -49,13 +49,14 @@ Verified inbound Follow/Undo를 established relation 또는 remote pending reque
 **Guardrails**
 
 - local recipient를 먼저 검증한 뒤에만 unknown actor materialization을 허용한다.
+- 검증된 inbound actor pair는 GraphQL local follow와 동일한 core profile follow action을 사용하며 별도 inbound graph/request 생성 service를 두지 않는다.
 - inbound Follow id/actor/object를 별도 저장하지 않고 actor pair projection을 재사용한다.
 - unknown 또는 IRI-only Undo는 network lookup 없이 relation/request 변경을 무시하되, 저장된 actor의 verified activity는 instance reachability 복구에 사용할 수 있다.
 - APPROVAL_REQUIRED remote request 생성은 기존 pending-only 저장 계약을 직접 따르고, 조회·승인·거절·취소 lifecycle은 PROD-272가 별도 구현한다.
 
 **Verification**
 
-- duplicate Follow/Undo, actor/object/recipient mismatch와 instance state race를 검증한다.
+- GraphQL과 Fedify가 같은 core follow entrypoint를 사용하며, duplicate Follow/Undo, actor/object/recipient mismatch와 instance state race를 검증한다.
 
 - [x] 3.1 inbound Follow correlation schema/migration 없이 profile FK와 저장 actor identity에서 actor pair를 파생한다.
 - [x] 3.2 OPEN Follow의 relation/count transaction과 현재 수신 Follow object에 대한 Accept를 구현한다.
@@ -73,6 +74,7 @@ Remote APPROVAL_REQUIRED follow를 pending request로 발송·취소하고 verif
 **Guardrails**
 
 - request row의 존재만 Pending을 나타내며 terminal state, activity history 또는 retry metadata를 저장하지 않는다.
+- outbound와 verified inbound Follow projection은 같은 core profile follow action을 사용하며 adapter별 graph/request 생성 service를 두지 않는다.
 - Follow identity/generation은 immutable request 또는 relation의 id/createdAt에서 파생한다.
 - Fedify가 기본 cross-origin 검증을 통과한 typed Follow로 제공한 object만 처리하고 ID lookup 전에 actor/object를 검증하며, IRI-only object를 별도 역조회하지 않는다.
 - Accept/Reject/cancel은 조회한 exact row에만 적용하고 relation count는 실제 relation 생성·삭제에서만 변경한다.

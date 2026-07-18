@@ -7,6 +7,7 @@
 ## What Changes
 
 - 완료된 저장 count, core action, remote actor materialization과 Fedify inbox route를 현재 기반으로 기록한다.
+- GraphQL local action과 verified Fedify inbound Follow가 같은 core follow action을 사용하고, adapter별 별도 follow graph 생성 진입점을 두지 않는 경계를 기록한다.
 - remote OPEN follow/unfollow mutation은 PROD-242, inbound Follow/Undo와 remote pending request 생성·조건부 삭제는 PROD-243, local request 생성과 local/remote 공통 처리 lifecycle은 PROD-272, outbound APPROVAL_REQUIRED request 왕복과 inbound Accept/Reject는 PROD-244가 소유하도록 분리한다.
 - PROD-243과 PROD-272는 고정된 pending-only DB 계약을 기준으로 병렬 구현하고, PROD-244는 PROD-243의 exact-row 삭제 primitive를 재사용한다.
 - `SUSPENDED` remote profile의 기존 relation/count를 보존하고 GraphQL follow/unfollow에서 NotFound로 숨긴다.

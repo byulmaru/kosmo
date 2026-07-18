@@ -10,6 +10,7 @@ PROD-235와 구현 자식이 이 change의 source of truth다. PROD-323이 Follo
 
 - shared change의 요구사항과 task를 Linear 구현 이슈에 일대일로 대응한다.
 - inbound Follow를 기존 actor pair projection에 idempotent하게 연결하고 duplicate side effect를 막는다.
+- GraphQL과 Fedify가 검증한 follow pair를 하나의 core follow application entrypoint로 연결해 profile/instance 상태, follow policy와 relation/request 전이가 adapter별로 갈라지지 않게 한다.
 - request domain lifecycle과 ActivityPub protocol adapter를 분리한다.
 - SUSPENDED 관계 보존과 UNRESPONSIVE reachability 복구를 명확히 구분한다.
 - 공통 inbox route와 activity별 handler 책임을 분리해 remote-post 계약과 archive 순서 충돌을 만들지 않는다.
@@ -39,7 +40,7 @@ PROD-243은 ActivityPub recipient·actor·object 검증 뒤 remote pending reque
 
 #### PROD-243 inbound Follow/Undo
 
-Follow 대상 local actor를 먼저 검증한 뒤에만 unknown remote actor materialization을 허용한다. 검증된 Follow는 inbound id/actor/object를 별도 저장하지 않고 follower/followee pair의 established relation 또는 pending request에 연결한다. OPEN Follow의 Accept는 현재 수신 Follow object를 사용한다.
+Follow 대상 local actor를 먼저 검증한 뒤에만 unknown remote actor materialization을 허용한다. 검증된 Follow는 inbound id/actor/object를 별도 저장하지 않고 GraphQL local follow와 같은 core `followProfile` application entrypoint에 follower/followee pair를 전달한다. Core action은 local→local, local→ActivityPub, ActivityPub→local 방향의 participant/instance 상태와 followee policy를 한곳에서 검증하고 established relation 또는 pending request 전이를 소유하며, ActivityPub→ActivityPub 방향은 거부한다. Fedify handler는 별도 inbound graph-creation service를 두거나 relation/request를 직접 생성하지 않는다. OPEN Follow의 Accept는 core action의 established 결과와 현재 수신 Follow object를 사용한다.
 
 Undo는 저장된 actor pair에서 relation/request를 찾고 embedded Follow의 actor/object/recipient를 검증한다. 처리 중 확인한 exact row가 맞을 때만 삭제하며, relation이 실제 삭제된 경우에만 count를 같은 transaction에서 감소시킨다. unknown actor 또는 IRI-only Undo는 network lookup 없이 follow graph/request side effect를 무시한다. 다만 저장된 actor가 보낸 verified activity는 object 지원 여부와 무관하게 server reachability 신호이므로 `UNRESPONSIVE → ACTIVE` 복구는 허용한다.
 
@@ -72,6 +73,7 @@ PROD-241이 설정한 actor-scoped/shared inbox listener에 실제 activity type
 - remote `published`와 local 수신 시각을 관계 세대로 혼합하면 clock skew와 network 순서를 도메인 상태로 잘못 해석할 수 있다.
 - request row를 terminal history로 남기면 pending-only canonical 계약과 충돌한다.
 - core lifecycle을 모르는 하위 Follow/Undo 전송 함수를 노출하면 idempotency, instance state와 commit-after-delivery 순서를 우회할 수 있다.
+- GraphQL과 Fedify에 별도 follow graph 생성 service를 두면 profile/instance 상태, follow policy, count와 notification 정책이 한쪽에서 누락되거나 서로 달라질 수 있다.
 - Accept/Reject object에서 Fedify `crossOrigin: "trust"`를 사용하면 remote activity가 다른 origin의 identity에 대해 주장한 embedded content를 authoritative fetch 없이 신뢰하게 된다.
 - SUSPENDED relation을 삭제하면 moderation 해제 뒤 관계 복구와 저장 count 계약을 깨뜨린다.
 - PR #232/#234의 브랜치를 통째로 복구하면 현재 main과 책임 경계를 되돌린다.
