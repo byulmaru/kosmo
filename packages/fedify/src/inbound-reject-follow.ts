@@ -1,20 +1,18 @@
 import '@kosmo/core/polyfill';
 
 import { removeInboundFollow } from '@kosmo/core/services';
-import { resolveInboundFollowResponseProjection } from './inbound-follow-response';
-import type { InboxContext } from '@fedify/fedify';
-import type { Reject } from '@fedify/vocab';
+import type { OutboundProfileFollowProjection } from './inbound-follow-response';
 
-export const handleInboundRejectFollow = async (
-  context: InboxContext<void>,
-  reject: Reject,
-): Promise<void> => {
-  const receivedAt = Temporal.Now.instant();
-  const projection = await resolveInboundFollowResponseProjection(context, reject);
-  if (
-    !projection ||
-    Temporal.Instant.compare(reject.published ?? receivedAt, projection.createdAt) < 0
-  ) {
+export const handleInboundRejectFollow = async ({
+  projection,
+  publishedAt,
+  receivedAt,
+}: {
+  projection: OutboundProfileFollowProjection;
+  publishedAt: Temporal.Instant | null;
+  receivedAt: Temporal.Instant;
+}): Promise<void> => {
+  if (Temporal.Instant.compare(publishedAt ?? receivedAt, projection.createdAt) < 0) {
     return;
   }
 

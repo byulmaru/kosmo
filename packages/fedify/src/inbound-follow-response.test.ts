@@ -2,7 +2,7 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, test } from 'node:test';
-import { Accept, Follow, Reject } from '@fedify/vocab';
+import { Accept, Follow, Note, Reject } from '@fedify/vocab';
 import {
   ActivityPubActorType,
   InstanceKind,
@@ -13,8 +13,8 @@ import { eq, ne } from 'drizzle-orm';
 import type { InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
-import type * as InboundAcceptFollow from './inbound-accept-follow';
-import type * as InboundRejectFollow from './inbound-reject-follow';
+import type * as InboundAccept from './inbound-accept';
+import type * as InboundReject from './inbound-reject';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -30,8 +30,8 @@ let pg: typeof CoreDb.pg;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
-let handleInboundAcceptFollow: typeof InboundAcceptFollow.handleInboundAcceptFollow;
-let handleInboundRejectFollow: typeof InboundRejectFollow.handleInboundRejectFollow;
+let handleInboundAccept: typeof InboundAccept.handleInboundAccept;
+let handleInboundReject: typeof InboundReject.handleInboundReject;
 let localInstanceId: string;
 
 describe('inbound Accept(Follow) and Reject(Follow)', () => {
@@ -49,8 +49,8 @@ describe('inbound Accept(Follow) and Reject(Follow)', () => {
       Profiles,
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
-    ({ handleInboundAcceptFollow } = await import('./inbound-accept-follow'));
-    ({ handleInboundRejectFollow } = await import('./inbound-reject-follow'));
+    ({ handleInboundAccept } = await import('./inbound-accept'));
+    ({ handleInboundReject } = await import('./inbound-reject'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
   });
@@ -70,8 +70,8 @@ describe('inbound Accept(Follow) and Reject(Follow)', () => {
     const accept = new Accept({ actor: remoteActorUri, object: follow });
     const context = createContext(localProfileId);
 
-    await handleInboundAcceptFollow(context, accept);
-    await handleInboundAcceptFollow(context, accept);
+    await handleInboundAccept(context, accept);
+    await handleInboundAccept(context, accept);
 
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
     assert.equal((await db.select().from(ProfileFollows)).length, 1);
@@ -86,7 +86,7 @@ describe('inbound Accept(Follow) and Reject(Follow)', () => {
       object: remoteActorUri,
     });
 
-    await handleInboundAcceptFollow(
+    await handleInboundAccept(
       createContext(null),
       new Accept({ actor: remoteActorUri, object: follow }),
     );
@@ -99,7 +99,7 @@ describe('inbound Accept(Follow) and Reject(Follow)', () => {
   test('uses verified actor pair fallback for an embedded Follow without an id', async () => {
     const fixture = await createFixture({ projection: 'PENDING' });
 
-    await handleInboundAcceptFollow(
+    await handleInboundAccept(
       createContext(localProfileId),
       new Accept({ actor: remoteActorUri, object: createOutboundFollow() }),
     );
@@ -112,7 +112,7 @@ describe('inbound Accept(Follow) and Reject(Follow)', () => {
   test('promotes an exact pending request from an IRI-only Accept', async () => {
     const fixture = await createFixture({ projection: 'PENDING' });
 
-    await handleInboundAcceptFollow(
+    await handleInboundAccept(
       createContext(localProfileId),
       new Accept({
         actor: remoteActorUri,
@@ -128,7 +128,7 @@ describe('inbound Accept(Follow) and Reject(Follow)', () => {
   test('keeps an exact established relation idempotently on Accept', async () => {
     const fixture = await createFixture({ projection: 'ESTABLISHED' });
 
-    await handleInboundAcceptFollow(
+    await handleInboundAccept(
       createContext(localProfileId),
       new Accept({ actor: remoteActorUri, object: createOutboundFollow(fixture.projection) }),
     );
@@ -136,6 +136,35 @@ describe('inbound Accept(Follow) and Reject(Follow)', () => {
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
     assert.deepEqual(await db.select().from(ProfileFollows), [fixture.projection]);
     assert.deepEqual(await readCounts(fixture), { localFollowing: 1, remoteFollowers: 1 });
+  });
+
+  test('ignores embedded non-Follow responses with a canonical Follow-shaped id', async () => {
+    const fixture = await createFixture({ projection: 'PENDING' });
+    const note = new Note({
+      id: new URL(`/ap/follow/${fixture.projection.id}`, publicOrigin),
+    });
+    const context = createContext(localProfileId);
+    const accept = await Accept.fromJsonLd(
+      await new Accept({
+        actor: remoteActorUri,
+        id: new URL('https://remote.example/activities/accept-note'),
+        object: note,
+      }).toJsonLd(),
+    );
+    const reject = await Reject.fromJsonLd(
+      await new Reject({
+        actor: remoteActorUri,
+        id: new URL('https://remote.example/activities/reject-note'),
+        object: note,
+      }).toJsonLd(),
+    );
+
+    await handleInboundAccept(context, accept);
+    await handleInboundReject(context, reject);
+
+    assert.deepEqual(await db.select().from(ProfileFollowRequests), [fixture.projection]);
+    assert.equal((await db.select().from(ProfileFollows)).length, 0);
+    assert.deepEqual(await readCounts(fixture), { localFollowing: 0, remoteFollowers: 0 });
   });
 
   test('rejects malformed kosmo IDs and actor or recipient mismatches', async () => {
@@ -150,15 +179,15 @@ describe('inbound Accept(Follow) and Reject(Follow)', () => {
       object: new URL('https://remote.example/users/mallory'),
     });
 
-    await handleInboundAcceptFollow(
+    await handleInboundAccept(
       createContext(localProfileId),
       new Accept({ actor: remoteActorUri, object: malformed }),
     );
-    await handleInboundAcceptFollow(
+    await handleInboundAccept(
       createContext(localProfileId),
       new Accept({ actor: remoteActorUri, object: mismatchedActor }),
     );
-    await handleInboundAcceptFollow(
+    await handleInboundAccept(
       createContext('019f73b1-9999-7777-8888-123456789abc'),
       new Accept({ actor: remoteActorUri, object: createOutboundFollow() }),
     );
@@ -172,7 +201,7 @@ describe('inbound Accept(Follow) and Reject(Follow)', () => {
     const object = new URL(`/ap/follow/${fixture.projection.id}`, publicOrigin);
     const context = createContext(localProfileId);
 
-    await handleInboundRejectFollow(
+    await handleInboundReject(
       context,
       new Reject({
         actor: remoteActorUri,
@@ -182,7 +211,7 @@ describe('inbound Accept(Follow) and Reject(Follow)', () => {
     );
     assert.equal((await db.select().from(ProfileFollows)).length, 1);
 
-    await handleInboundRejectFollow(
+    await handleInboundReject(
       context,
       new Reject({
         actor: remoteActorUri,
@@ -199,7 +228,7 @@ describe('inbound Accept(Follow) and Reject(Follow)', () => {
       projection: 'PENDING',
       remoteInstanceState: InstanceState.UNRESPONSIVE,
     });
-    await handleInboundAcceptFollow(
+    await handleInboundAccept(
       createContext(localProfileId),
       new Accept({ actor: remoteActorUri, object: createOutboundFollow(unresponsive.projection) }),
     );
@@ -220,7 +249,7 @@ describe('inbound Accept(Follow) and Reject(Follow)', () => {
       projection: 'PENDING',
       remoteInstanceState: InstanceState.SUSPENDED,
     });
-    await handleInboundAcceptFollow(
+    await handleInboundAccept(
       createContext(localProfileId),
       new Accept({ actor: remoteActorUri, object: createOutboundFollow(suspended.projection) }),
     );

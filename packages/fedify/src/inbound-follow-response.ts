@@ -21,7 +21,7 @@ import type { SQL } from 'drizzle-orm';
 const canonicalUuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 type FollowResponse = Accept | Reject;
-type OutboundProfileFollowProjection = {
+export type OutboundProfileFollowProjection = {
   readonly createdAt: Temporal.Instant;
   readonly followeeProfileId: string;
   readonly followerProfileId: string;
@@ -247,11 +247,15 @@ export const resolveInboundFollowResponseProjection = async (
   }
 
   const embedded = await response.getObject({
+    crossOrigin: 'trust',
     documentLoader: noNetworkDocumentLoader,
     suppressError: true,
   });
   if (embedded instanceof Follow) {
     return resolveEmbeddedProjection(context, responseActorUri, remoteActor.profile.id, embedded);
+  }
+  if (embedded !== null) {
+    return undefined;
   }
 
   const objectUri = response.objectId;
