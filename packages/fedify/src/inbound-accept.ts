@@ -29,7 +29,6 @@ export const handleInboundAccept = async (
   }
 
   const object = await accept.getObject({
-    crossOrigin: 'trust',
     documentLoader: context.documentLoader,
     suppressError: true,
   });

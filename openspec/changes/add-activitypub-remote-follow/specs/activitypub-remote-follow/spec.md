@@ -70,7 +70,8 @@
 - **WHEN** remote actor가 local actor가 보낸 Follow에 대한 `Accept` activity를 보낸다
 - **THEN** 시스템은 pending `ProfileFollowRequest`이면 request 삭제와 established `ProfileFollow`/count 생성을 같은 transaction에서 수행하고, 이미 established이면 idempotent하게 처리한다
 - **AND** `Accept.actor`는 해당 outbound Follow의 remote followee actor URI와 일치해야 한다
-- **AND** `Accept.object`는 Fedify `getObject()`가 typed Follow로 제공한 경우에만 follow response로 처리하며, 그 Follow의 actor/object는 해당 outbound Follow의 local follower actor URI와 remote followee actor URI에 대응해야 한다
+- **AND** `Accept.object`는 Fedify `getObject()`의 기본 cross-origin 검증을 통과해 typed Follow로 제공된 경우에만 follow response로 처리하며, handler는 `crossOrigin: "trust"`로 embedded object의 origin 검증을 우회하지 않는다
+- **AND** cross-origin embedded Follow는 Fedify가 authoritative origin에서 조회해 typed Follow로 제공한 경우에만 처리하며, 그 Follow의 actor/object는 해당 outbound Follow의 local follower actor URI와 remote followee actor URI에 대응해야 한다
 - **AND** embedded/typed Follow가 id를 포함하고 그 id가 kosmo outbound Follow URI이면 해당 URI는 configured canonical origin과 canonical request/relation UUID를 만족해야 한다
 - **AND** embedded/typed Follow의 kosmo outbound Follow URI가 현재 row id와 다르면 local follow graph 또는 request를 갱신하지 않는다
 - **AND** embedded/typed Follow의 id가 없거나 kosmo outbound Follow URI가 아니면 시스템은 actor/object 검증 결과로 해당 outbound Follow와 대응시킬 수 있다
@@ -86,7 +87,8 @@
 - **THEN** 시스템은 해당 outbound Follow가 pending request 또는 optimistic established relation으로 투영되어 있으면 조회한 exact row를 제거해야 한다
 - **AND** 시스템은 거절 상태 값을 저장하지 않는다
 - **AND** `Reject.actor`는 해당 outbound Follow의 remote followee actor URI와 일치해야 한다
-- **AND** `Reject.object`는 Fedify `getObject()`가 typed Follow로 제공한 경우에만 follow response로 처리하며, 그 Follow의 actor/object는 해당 outbound Follow의 local follower actor URI와 remote followee actor URI에 대응해야 한다
+- **AND** `Reject.object`는 Fedify `getObject()`의 기본 cross-origin 검증을 통과해 typed Follow로 제공된 경우에만 follow response로 처리하며, handler는 `crossOrigin: "trust"`로 embedded object의 origin 검증을 우회하지 않는다
+- **AND** cross-origin embedded Follow는 Fedify가 authoritative origin에서 조회해 typed Follow로 제공한 경우에만 처리하며, 그 Follow의 actor/object는 해당 outbound Follow의 local follower actor URI와 remote followee actor URI에 대응해야 한다
 - **AND** embedded/typed Follow가 id를 포함하고 그 id가 kosmo outbound Follow URI이면 해당 URI는 configured canonical origin과 canonical request/relation UUID를 만족해야 한다
 - **AND** embedded/typed Follow의 kosmo outbound Follow URI가 현재 row id와 다르면 local follow graph 또는 request를 갱신하지 않는다
 - **AND** embedded/typed Follow의 id가 없거나 kosmo outbound Follow URI가 아니면 시스템은 remote Follow id를 compatibility hint로만 취급하고 actor/object 검증 결과로 해당 outbound Follow와 대응시킬 수 있다

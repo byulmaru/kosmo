@@ -32,7 +32,6 @@ export const handleInboundReject = async (
   }
 
   const object = await reject.getObject({
-    crossOrigin: 'trust',
     documentLoader: context.documentLoader,
     suppressError: true,
   });

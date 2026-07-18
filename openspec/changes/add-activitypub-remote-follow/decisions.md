@@ -74,6 +74,16 @@
 - Consequences: 별도 IRI-only 호환 코드와 공개 Follow object endpoint를 만들지 않는다. IRI-only Accept/Reject는 instance reachability 신호로 사용할 수 있지만 follow graph/request side effect 없이 무시하며, 실제 상호운용성 필요가 확인되면 별도 호환성 범위로 추가한다.
 - Confirmation / Follow-up: Fedify typed embedded/resolved Follow는 처리되고 IRI-only 및 unsupported object는 projection/count를 변경하지 않는지 PROD-244와 PROD-361에서 검증한다.
 
+### Accept/Reject object는 Fedify 기본 cross-origin 검증을 유지한다
+
+- Decision Date: 2026-07-18
+- Status: Accepted
+- Context / Problem: remote Accept/Reject가 kosmo origin의 outbound Follow를 embedded object로 포함하면 parent activity와 object identity의 origin이 다르다. Fedify `crossOrigin: "trust"`는 이 object를 authoritative origin에서 확인하지 않고 반환하므로 content spoofing 방어를 우회한다.
+- Decision Outcome: Accept/Reject handler는 `getObject()`에서 `crossOrigin: "trust"`를 사용하지 않고 Fedify 기본 origin 검증을 유지한다. ID 없는 embedded Follow와 parent activity와 같은 origin의 embedded Follow는 Fedify가 typed object로 제공할 수 있으며, cross-origin embedded 또는 IRI-only Follow는 Fedify document loader가 authoritative object를 조회해 typed Follow로 제공한 경우에만 처리한다.
+- Alternatives Considered: 모든 embedded Follow에 `crossOrigin: "trust"` 사용, canonical kosmo Follow URI에만 조건부 trust, `/ap/follow/{id}` object dispatcher 추가.
+- Consequences: kosmo outbound Follow ID를 embedded object로 돌려주는 구현도 authoritative document를 조회할 수 없으면 Accept/Reject side effect 없이 무시된다. 이번 capability는 object dispatcher를 추가하지 않으며 실제 상호운용성 요구가 확인되면 별도 보안·호환성 범위에서 다룬다.
+- Confirmation / Follow-up: unverified cross-origin embedded Follow가 projection/count를 변경하지 않고, same-origin/id-less embedded 및 document loader가 resolve한 Follow만 기존 검증으로 처리되는지 PROD-244와 PROD-361에서 확인한다.
+
 ### Remote Follow ID는 advisory이고 generation은 단조 증가한다
 
 - Decision Date: 2026-07-15

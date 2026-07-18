@@ -67,29 +67,49 @@ describe('inbound Accept and Reject', () => {
   test('promotes an exact pending request once from embedded Accept', async () => {
     const fixture = await createFixture({ projection: 'PENDING' });
     const follow = createOutboundFollow(fixture.projection);
-    const accept = new Accept({ actor: remoteActorUri, object: follow });
-    const context = createContext(localProfileId);
+    const accept = await Accept.fromJsonLd(
+      await new Accept({
+        actor: remoteActorUri,
+        id: new URL('https://remote.example/activities/accept-exact'),
+        object: follow,
+      }).toJsonLd(),
+    );
+    const loadedUrls: string[] = [];
+    const documentLoader: DocumentLoader = async (url) => {
+      loadedUrls.push(url);
+      return {
+        contextUrl: null,
+        document: await follow.toJsonLd({ format: 'expand' }),
+        documentUrl: url,
+      };
+    };
+    const context = createContext(localProfileId, documentLoader);
 
     await handleInboundAccept(context, accept);
     await handleInboundAccept(context, accept);
 
+    assert.deepEqual(loadedUrls, [`${publicOrigin}/ap/follow/${fixture.projection.id}`]);
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
     assert.equal((await db.select().from(ProfileFollows)).length, 1);
     assert.deepEqual(await readCounts(fixture), { localFollowing: 1, remoteFollowers: 1 });
   });
 
-  test('uses verified actor pair fallback for non-kosmo embedded Follow', async () => {
+  test('uses verified actor pair fallback for same-origin non-kosmo embedded Follow', async () => {
     const fixture = await createFixture({ projection: 'PENDING' });
     const follow = new Follow({
       actor: localActorUri,
-      id: new URL(`https://foreign.example/ap/follow/${crypto.randomUUID()}`),
+      id: new URL(`https://remote.example/activities/follow-${crypto.randomUUID()}`),
       object: remoteActorUri,
     });
-
-    await handleInboundAccept(
-      createContext(null),
-      new Accept({ actor: remoteActorUri, object: follow }),
+    const accept = await Accept.fromJsonLd(
+      await new Accept({
+        actor: remoteActorUri,
+        id: new URL('https://remote.example/activities/accept-same-origin'),
+        object: follow,
+      }).toJsonLd(),
     );
+
+    await handleInboundAccept(createContext(null), accept);
 
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
     assert.equal((await db.select().from(ProfileFollows)).length, 1);
@@ -98,15 +118,46 @@ describe('inbound Accept and Reject', () => {
 
   test('uses verified actor pair fallback for an embedded Follow without an id', async () => {
     const fixture = await createFixture({ projection: 'PENDING' });
-
-    await handleInboundAccept(
-      createContext(localProfileId),
-      new Accept({ actor: remoteActorUri, object: createOutboundFollow() }),
+    const accept = await Accept.fromJsonLd(
+      await new Accept({
+        actor: remoteActorUri,
+        id: new URL('https://remote.example/activities/accept-without-follow-id'),
+        object: createOutboundFollow(),
+      }).toJsonLd(),
     );
+
+    await handleInboundAccept(createContext(localProfileId), accept);
 
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
     assert.equal((await db.select().from(ProfileFollows)).length, 1);
     assert.deepEqual(await readCounts(fixture), { localFollowing: 1, remoteFollowers: 1 });
+  });
+
+  test('ignores cross-origin embedded Follow that is not resolved from its origin', async () => {
+    const fixture = await createFixture({ projection: 'PENDING' });
+    const follow = createOutboundFollow(fixture.projection);
+    const accept = await Accept.fromJsonLd(
+      await new Accept({
+        actor: remoteActorUri,
+        id: new URL('https://remote.example/activities/accept-untrusted'),
+        object: follow,
+      }).toJsonLd(),
+    );
+    const reject = await Reject.fromJsonLd(
+      await new Reject({
+        actor: remoteActorUri,
+        id: new URL('https://remote.example/activities/reject-untrusted'),
+        object: follow,
+      }).toJsonLd(),
+    );
+    const context = createContext(localProfileId);
+
+    await handleInboundAccept(context, accept);
+    await handleInboundReject(context, reject);
+
+    assert.deepEqual(await db.select().from(ProfileFollowRequests), [fixture.projection]);
+    assert.equal((await db.select().from(ProfileFollows)).length, 0);
+    assert.deepEqual(await readCounts(fixture), { localFollowing: 0, remoteFollowers: 0 });
   });
 
   test('uses Fedify to resolve an IRI-only Accept object', async () => {
@@ -146,11 +197,15 @@ describe('inbound Accept and Reject', () => {
 
   test('keeps an exact established relation idempotently on Accept', async () => {
     const fixture = await createFixture({ projection: 'ESTABLISHED' });
-
-    await handleInboundAccept(
-      createContext(localProfileId),
-      new Accept({ actor: remoteActorUri, object: createOutboundFollow(fixture.projection) }),
+    const accept = await Accept.fromJsonLd(
+      await new Accept({
+        actor: remoteActorUri,
+        id: new URL('https://remote.example/activities/accept-established'),
+        object: createOutboundFollow(),
+      }).toJsonLd(),
     );
+
+    await handleInboundAccept(createContext(localProfileId), accept);
 
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
     assert.deepEqual(await db.select().from(ProfileFollows), [fixture.projection]);
@@ -215,7 +270,7 @@ describe('inbound Accept and Reject', () => {
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
   });
 
-  test('handles an exact Reject and ignores a stale Reject', async () => {
+  test('handles a Reject and ignores a stale Reject', async () => {
     const fixture = await createFixture({ projection: 'ESTABLISHED' });
     const context = createContext(localProfileId);
 
@@ -223,7 +278,7 @@ describe('inbound Accept and Reject', () => {
       context,
       new Reject({
         actor: remoteActorUri,
-        object: createOutboundFollow(fixture.projection),
+        object: createOutboundFollow(),
         published: fixture.projection.createdAt.subtract({ seconds: 1 }),
       }),
     );
@@ -233,7 +288,7 @@ describe('inbound Accept and Reject', () => {
       context,
       new Reject({
         actor: remoteActorUri,
-        object: createOutboundFollow(fixture.projection),
+        object: createOutboundFollow(),
         published: fixture.projection.createdAt,
       }),
     );
@@ -248,7 +303,7 @@ describe('inbound Accept and Reject', () => {
     });
     await handleInboundAccept(
       createContext(localProfileId),
-      new Accept({ actor: remoteActorUri, object: createOutboundFollow(unresponsive.projection) }),
+      new Accept({ actor: remoteActorUri, object: createOutboundFollow() }),
     );
     assert.equal((await db.select().from(ProfileFollows)).length, 1);
     assert.equal(
@@ -263,13 +318,13 @@ describe('inbound Accept and Reject', () => {
 
     await db.delete(Profiles);
     await db.delete(Instances).where(ne(Instances.id, localInstanceId));
-    const suspended = await createFixture({
+    await createFixture({
       projection: 'PENDING',
       remoteInstanceState: InstanceState.SUSPENDED,
     });
     await handleInboundAccept(
       createContext(localProfileId),
-      new Accept({ actor: remoteActorUri, object: createOutboundFollow(suspended.projection) }),
+      new Accept({ actor: remoteActorUri, object: createOutboundFollow() }),
     );
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 1);
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
