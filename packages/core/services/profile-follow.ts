@@ -1,5 +1,5 @@
-import { and, eq, getColumns, inArray, ne, sql } from 'drizzle-orm';
-import { db, first, firstOrThrowWith, Instances, ProfileFollows, Profiles } from '../db';
+import { and, eq, inArray, ne, sql } from 'drizzle-orm';
+import { ActivityPubActors, db, first, Instances, ProfileFollows, Profiles } from '../db';
 import {
   InstanceKind,
   InstanceState,
@@ -11,6 +11,7 @@ import { ConflictError, NotFoundError } from '../error';
 import { createFollowNotification, deleteNotificationBySource } from './notification';
 import { ensureProfileFollow } from './profile-follow-relation';
 import { ensureProfileFollowRequest } from './profile-follow-request';
+import type { Transaction } from '../db';
 import type { ProfileFollowRequestRow } from './profile-follow-request';
 
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
@@ -25,6 +26,45 @@ type ProfileFollowInput = {
   followeeProfileId: string;
 };
 
+const loadProfileFollowParticipants = async (
+  tx: Transaction,
+  { followerProfileId, followeeProfileId }: ProfileFollowInput,
+) => {
+  const participants = await tx
+    .select({
+      actorInboxUri: ActivityPubActors.inboxUri,
+      actorSharedInboxUri: ActivityPubActors.sharedInboxUri,
+      actorUri: ActivityPubActors.uri,
+      followPolicy: Profiles.followPolicy,
+      id: Profiles.id,
+      instanceKind: Instances.kind,
+      instanceState: Instances.state,
+    })
+    .from(Profiles)
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
+    .where(
+      and(
+        inArray(Profiles.id, [followerProfileId, followeeProfileId]),
+        eq(Profiles.state, ProfileState.ACTIVE),
+        ne(Instances.state, InstanceState.SUSPENDED),
+      ),
+    );
+
+  const follower = participants.find(({ id }) => id === followerProfileId);
+  const target = participants.find(({ id }) => id === followeeProfileId);
+  if (!follower || follower.instanceKind !== InstanceKind.LOCAL || !target) {
+    throw new NotFoundError('Profile not found');
+  }
+
+  const isRemote = target.instanceKind === InstanceKind.ACTIVITYPUB;
+  if ((!isRemote && target.instanceKind !== InstanceKind.LOCAL) || (isRemote && !target.actorUri)) {
+    throw new NotFoundError('Profile not found');
+  }
+
+  return { isRemote, target };
+};
+
 export const followProfile = async ({
   followerProfileId,
   followeeProfileId,
@@ -34,46 +74,29 @@ export const followProfile = async ({
   followerProfile: ProfileRow;
   result: FollowProfileResult;
 }> => {
-  const result = await db.transaction(async (tx) => {
+  const { command, result } = await db.transaction(async (tx) => {
     if (followerProfileId === followeeProfileId) {
       throw new ConflictError({ message: 'Profile cannot follow itself' });
     }
 
-    const participants = await tx
-      .select({
-        followPolicy: Profiles.followPolicy,
-        id: Profiles.id,
-        instanceKind: Instances.kind,
-      })
-      .from(Profiles)
-      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .where(
-        and(
-          inArray(Profiles.id, [followerProfileId, followeeProfileId]),
-          eq(Profiles.state, ProfileState.ACTIVE),
-          ne(Instances.state, InstanceState.SUSPENDED),
-        ),
-      );
-    const follower = participants.find(({ id }) => id === followerProfileId);
-    const target = participants.find(({ id }) => id === followeeProfileId);
-    if (
-      !follower ||
-      follower.instanceKind !== InstanceKind.LOCAL ||
-      !target ||
-      target.instanceKind !== InstanceKind.LOCAL
-    ) {
-      throw new NotFoundError('Profile not found');
-    }
+    const { isRemote, target } = await loadProfileFollowParticipants(tx, {
+      followerProfileId,
+      followeeProfileId,
+    });
 
     let created: boolean;
-    let result: FollowProfileResult;
+    let followResult: FollowProfileResult;
     if (target.followPolicy === ProfileFollowPolicy.APPROVAL_REQUIRED) {
+      if (isRemote) {
+        throw new ConflictError({ message: 'Profile requires follow request' });
+      }
+
       const ensured = await ensureProfileFollowRequest(
         { followeeProfileId: target.id, followerProfileId },
         tx,
       );
       created = ensured.created;
-      result =
+      followResult =
         ensured.kind === 'ESTABLISHED'
           ? { kind: 'ESTABLISHED', profileFollow: ensured.profileFollow }
           : { kind: 'PENDING', profileFollowRequest: ensured.profileFollowRequest };
@@ -83,7 +106,7 @@ export const followProfile = async ({
         tx,
       );
       created = ensured.created;
-      result = { kind: 'ESTABLISHED', profileFollow: ensured.profileFollow };
+      followResult = { kind: 'ESTABLISHED', profileFollow: ensured.profileFollow };
     }
 
     const profiles = await tx
@@ -96,7 +119,25 @@ export const followProfile = async ({
       throw new NotFoundError('Profile not found');
     }
 
-    return { created, followeeProfile, followerProfile, result };
+    const result = { created, followeeProfile, followerProfile, result: followResult };
+    const command =
+      created &&
+      isRemote &&
+      target.instanceState === InstanceState.ACTIVE &&
+      target.actorUri &&
+      followResult.kind === 'ESTABLISHED'
+        ? {
+            actor: {
+              inboxUri: target.actorInboxUri,
+              sharedInboxUri: target.actorSharedInboxUri,
+              uri: target.actorUri,
+            },
+            profileFollow: followResult.profileFollow,
+            senderProfileId: followerProfileId,
+          }
+        : undefined;
+
+    return { command, result };
   });
 
   if (result.created && result.result.kind === 'ESTABLISHED') {
@@ -104,6 +145,10 @@ export const followProfile = async ({
     await createFollowNotification(result.result.profileFollow.id).catch(() => undefined);
   }
 
+  if (command) {
+    const { sendProfileFollow } = await import('@kosmo/fedify');
+    await sendProfileFollow(command);
+  }
   return result;
 };
 
@@ -115,20 +160,11 @@ export const unfollowProfile = async ({
   followerProfile: ProfileRow;
   profileFollowId: string | null;
 }> => {
-  const result = await db.transaction(async (tx) => {
-    const target = await tx
-      .select(getColumns(Profiles))
-      .from(Profiles)
-      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .where(
-        and(
-          eq(Profiles.id, followeeProfileId),
-          eq(Profiles.state, ProfileState.ACTIVE),
-          ne(Instances.state, InstanceState.SUSPENDED),
-        ),
-      )
-      .limit(1)
-      .then(firstOrThrowWith(() => new NotFoundError('Profile not found')));
+  const { command, result } = await db.transaction(async (tx) => {
+    const { isRemote, target } = await loadProfileFollowParticipants(tx, {
+      followerProfileId,
+      followeeProfileId,
+    });
 
     const deleted = await tx
       .delete(ProfileFollows)
@@ -138,7 +174,7 @@ export const unfollowProfile = async ({
           eq(ProfileFollows.followeeProfileId, target.id),
         ),
       )
-      .returning({ id: ProfileFollows.id })
+      .returning()
       .then(first);
 
     if (deleted) {
@@ -162,7 +198,25 @@ export const unfollowProfile = async ({
       throw new NotFoundError('Profile not found');
     }
 
-    return { followeeProfile, followerProfile, profileFollowId: deleted?.id ?? null };
+    const result = {
+      followeeProfile,
+      followerProfile,
+      profileFollowId: deleted?.id ?? null,
+    };
+    const command =
+      deleted && isRemote && target.instanceState === InstanceState.ACTIVE && target.actorUri
+        ? {
+            actor: {
+              inboxUri: target.actorInboxUri,
+              sharedInboxUri: target.actorSharedInboxUri,
+              uri: target.actorUri,
+            },
+            profileFollow: deleted,
+            senderProfileId: followerProfileId,
+          }
+        : undefined;
+
+    return { command, result };
   });
 
   if (result.profileFollowId) {
@@ -172,5 +226,9 @@ export const unfollowProfile = async ({
     );
   }
 
+  if (command) {
+    const { sendProfileUnfollow } = await import('@kosmo/fedify');
+    await sendProfileUnfollow(command);
+  }
   return result;
 };

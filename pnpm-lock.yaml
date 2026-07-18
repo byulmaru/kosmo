@@ -329,6 +329,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@kosmo/fedify':
+        specifier: workspace:*
+        version: link:../fedify
       core-js:
         specifier: ^3.49.0
         version: 3.49.0
