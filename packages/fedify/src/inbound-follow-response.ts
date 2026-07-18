@@ -12,7 +12,6 @@ import {
 } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
-import { acceptProfileFollowRequest, removeInboundFollow } from '@kosmo/core/services';
 import { and, eq, getColumns } from 'drizzle-orm';
 import { findUsableStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
@@ -232,7 +231,7 @@ const resolveIriProjection = async (
     : undefined;
 };
 
-const resolveOutboundProjection = async (
+export const resolveInboundFollowResponseProjection = async (
   context: InboxContext<void>,
   response: FollowResponse,
 ): Promise<OutboundProfileFollowProjection | undefined> => {
@@ -259,40 +258,4 @@ const resolveOutboundProjection = async (
   return isHttpUri(objectUri)
     ? resolveIriProjection(context, remoteActor.profile.id, objectUri)
     : undefined;
-};
-
-export const handleInboundAccept = async (
-  context: InboxContext<void>,
-  accept: Accept,
-): Promise<void> => {
-  const projection = await resolveOutboundProjection(context, accept);
-  if (!projection) {
-    return;
-  }
-
-  await acceptProfileFollowRequest({
-    expectedRowId: projection.id,
-    followeeProfileId: projection.followeeProfileId,
-    followerProfileId: projection.followerProfileId,
-  });
-};
-
-export const handleInboundReject = async (
-  context: InboxContext<void>,
-  reject: Reject,
-): Promise<void> => {
-  const receivedAt = Temporal.Now.instant();
-  const projection = await resolveOutboundProjection(context, reject);
-  if (
-    !projection ||
-    Temporal.Instant.compare(reject.published ?? receivedAt, projection.createdAt) < 0
-  ) {
-    return;
-  }
-
-  await removeInboundFollow({
-    expectedRowId: projection.id,
-    followeeProfileId: projection.followeeProfileId,
-    followerProfileId: projection.followerProfileId,
-  });
 };
