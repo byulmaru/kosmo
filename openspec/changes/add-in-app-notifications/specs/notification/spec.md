@@ -304,8 +304,10 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 #### Scenario: Read와 Unread 표시
 
 - **WHEN** Follow item의 `readAt`이 `null`이다
-- **THEN** item은 `surface` 배경과 접근성 Unread 상태를 제공한다
-- **AND** `readAt`이 존재하면 `card` 배경을 사용하고 Unread 상태를 제공하지 않는다
+- **THEN** item은 `card` 기본 배경과 접근성 Unread 상태를 제공한다
+- **AND** `readAt`이 존재하면 같은 `card` 기본 배경을 사용하고 Unread 상태를 제공하지 않는다
+- **AND** Web에서는 pointer hover 중인 item만 `surface` 배경으로 강조한다
+- **AND** hover가 없는 native 화면은 Read 상태와 관계없이 `card` 기본 배경을 유지한다
 
 #### Scenario: Profile 이동과 Read side effect 분리
 

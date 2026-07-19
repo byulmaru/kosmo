@@ -179,9 +179,9 @@
 - Decision Date: 2026-07-17
 - Status: Accepted
 - Context / Problem: item 활성화가 Read network 완료를 기다리면 느리거나 실패한 요청이 사용자의 명시적 Profile 이동을 막는다.
-- Decision Outcome: Avatar와 본문 link 활성화는 Related Profile navigation을 즉시 시작한다. Read pending·failure·retry는 navigation을 지연, 취소 또는 되돌리지 않는다. `readAt = null`은 `surface`, Read는 `card` 배경과 접근성 Unread 상태로 구분한다.
+- Decision Outcome: Avatar와 본문 link 활성화는 Related Profile navigation을 즉시 시작한다. Read pending·failure·retry는 navigation을 지연, 취소 또는 되돌리지 않는다. 2026-07-20 UI 보정으로 Read 여부와 관계없이 기본 배경은 `card`로 통일하고 Web pointer hover 중에만 `surface`로 강조한다. native에는 hover 배경을 추가하지 않으며 `readAt = null`은 접근성 Unread 상태로 전달한다.
 - Alternatives Considered: Read 성공 뒤 이동, 이동을 optimistic Read 성공으로 간주, item 전체를 link가 아닌 mutation button으로 만들기.
-- Consequences: link의 Web keyboard/browser semantics를 유지한다. client Read mutation과 정확한 Unread count cache 갱신은 `PROD-372`, shell badge 표시는 `PROD-324`가 소유한다.
+- Consequences: link의 Web keyboard/browser semantics를 유지한다. 시각적 hover는 Read 상태를 나타내지 않고 pointer 위치만 피드백하며, Unread 구분은 접근성 정보와 후속 badge에 의존한다. client Read mutation과 정확한 Unread count cache 갱신은 `PROD-372`, shell badge 표시는 `PROD-324`가 소유한다.
 - Confirmation / Follow-up: PROD-277은 link 이동과 read/unread 표시를 검증하고 PROD-372가 mutation 성공·실패·재시도와 cache 수렴을 추가한다.
 
 ### Notification Node는 concrete global ID 계약을 따른다
