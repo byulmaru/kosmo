@@ -27,6 +27,7 @@ export default function NotificationsScreen() {
   return (
     <RouteBoundary
       error={(retry) => <NotificationListState onRetry={retry} state="error" />}
+      key={revision}
       loading={<NotificationListState state="loading" />}
       onRetry={() => setFetchKey((key) => key + 1)}
       title="알림을 불러오지 못했어요"

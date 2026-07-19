@@ -7,6 +7,7 @@ import {
   NotificationListState,
 } from '@/components/notification/NotificationList';
 import { Button } from '@/components/ui/Button';
+import { useRelayActor } from '@/relay/RelayActorProvider';
 import { followNotification, notificationsProfile, profile } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -147,6 +148,17 @@ function ProfileSwitchList() {
   );
 }
 
+function ActorResetNotificationScreen() {
+  const { resetActor } = useRelayActor();
+
+  return (
+    <>
+      <Button onPress={() => resetActor('notification-profile-after-switch')}>프로필 전환</Button>
+      <NotificationsScreen />
+    </>
+  );
+}
+
 const meta = {
   component: NotificationCatalog,
   parameters: {
@@ -229,6 +241,30 @@ export const SelectedProfileSwitch: Story = {
     ).not.toBeInTheDocument();
   },
   render: () => <ProfileSwitchList />,
+};
+
+export const ActorResetClearsPaginationError: Story = {
+  parameters: {
+    relay: {
+      data: {
+        currentSession: { id: 'notification-session', selectedProfile: paginationProfile },
+      },
+      paginationError: true,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '더 불러오기' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '알림을 더 불러오지 못했어요',
+    );
+
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 전환' }));
+
+    await expect(canvas.findByRole('button', { name: '더 불러오기' })).resolves.toBeVisible();
+    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+  },
+  render: () => <ActorResetNotificationScreen />,
 };
 
 export const SelectedProfileScreen: Story = {
