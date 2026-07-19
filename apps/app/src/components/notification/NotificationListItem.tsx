@@ -51,41 +51,44 @@ export function NotificationListItem({ notification }: NotificationListItemProps
       >
         <UserPlus color={theme.text} size={18} strokeWidth={2} />
       </View>
-      <Link asChild href={profileHref}>
-        <Pressable
-          accessibilityLabel={`${name} 프로필로 이동`}
-          accessibilityRole="link"
-          style={styles.avatarLink}
-        >
-          <Avatar label={name} size={40} />
-        </Pressable>
-      </Link>
-      <Link asChild href={profileHref}>
-        <Pressable
-          accessibilityLabel={actionLabel}
-          accessibilityRole="link"
-          style={styles.copyLink}
-        >
-          <Text style={[styles.copy, { color: theme.text }]}>
-            <Text style={styles.name}>{name}</Text>님이 팔로우했습니다
-          </Text>
-          <Text style={[styles.time, { color: theme.textSecondary }]}>{timestamp}</Text>
-        </Pressable>
-      </Link>
+      <View style={styles.content}>
+        <Link asChild href={profileHref}>
+          <Pressable
+            accessibilityLabel={`${name} 프로필로 이동`}
+            accessibilityRole="link"
+            style={styles.avatarLink}
+          >
+            <Avatar label={name} size={40} />
+          </Pressable>
+        </Link>
+        <Link asChild href={profileHref}>
+          <Pressable
+            accessibilityLabel={actionLabel}
+            accessibilityRole="link"
+            style={styles.copyLink}
+          >
+            <Text style={[styles.copy, { color: theme.text }]}>
+              <Text style={styles.name}>{name}</Text>님이 팔로우했습니다
+            </Text>
+            <Text style={[styles.time, { color: theme.textSecondary }]}>{timestamp}</Text>
+          </Pressable>
+        </Link>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     borderBottomWidth: 1,
     flexDirection: 'row',
     gap: spacing.md,
-    minHeight: 72,
+    minHeight: 120,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.lg,
   },
+  content: { flex: 1, gap: spacing.sm, minWidth: 0 },
   kind: {
     alignItems: 'center',
     borderRadius: radii.full,

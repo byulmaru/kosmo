@@ -1,5 +1,14 @@
+import { Settings } from 'lucide-react-native';
 import { useState, useTransition } from 'react';
-import { Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/StateView';
@@ -85,30 +94,7 @@ export function NotificationList({ profile }: NotificationListProps) {
         )
       }
     >
-      <View style={styles.heading}>
-        <View>
-          <Text style={[styles.eyebrow, { color: theme.textSecondary }]}>KOSMO</Text>
-          <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
-            알림
-          </Text>
-        </View>
-        {Platform.OS === 'web' ? (
-          <Button
-            accessibilityState={{ busy: refreshing, disabled: refreshing }}
-            disabled={refreshing}
-            onPress={refresh}
-            tone="secondary"
-          >
-            {refreshing ? '새로고침 중' : '새로고침'}
-          </Button>
-        ) : null}
-      </View>
-      <Text
-        accessibilityRole="header"
-        style={[styles.sectionTitle, { borderColor: theme.border, color: theme.text }]}
-      >
-        모두
-      </Text>
+      <NotificationHeader />
       {notifications.length ? (
         notifications.map((notification) => (
           <NotificationListItem key={notification.id} notification={notification.follow} />
@@ -156,30 +142,19 @@ export function NotificationListState({
 
   return (
     <ScrollView contentContainerStyle={styles.root}>
-      <View style={styles.heading}>
-        <View>
-          <Text style={[styles.eyebrow, { color: theme.textSecondary }]}>KOSMO</Text>
-          <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
-            알림
-          </Text>
-        </View>
-      </View>
-      <Text
-        accessibilityRole="header"
-        style={[styles.sectionTitle, { borderColor: theme.border, color: theme.text }]}
-      >
-        모두
-      </Text>
+      <NotificationHeader />
       {state === 'loading' ? (
         <>
           <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
             {[0, 1, 2].map((item) => (
               <View key={item} style={[styles.skeletonItem, { borderColor: theme.border }]}>
                 <View style={[styles.kindSkeleton, { backgroundColor: theme.surface }]} />
-                <View style={[styles.avatarSkeleton, { backgroundColor: theme.surface }]} />
-                <View style={styles.skeletonCopy}>
-                  <Skeleton height={12} width="80%" />
-                  <Skeleton height={12} width={72} />
+                <View style={styles.skeletonContent}>
+                  <View style={[styles.avatarSkeleton, { backgroundColor: theme.surface }]} />
+                  <View style={styles.skeletonCopy}>
+                    <Skeleton height={12} width="80%" />
+                    <Skeleton height={12} width={72} />
+                  </View>
                 </View>
               </View>
             ))}
@@ -212,30 +187,45 @@ export function NotificationListState({
   );
 }
 
+function NotificationHeader() {
+  const theme = useTheme();
+
+  return (
+    <View style={[styles.heading, { borderColor: theme.border }]}>
+      <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
+        알림
+      </Text>
+      <Pressable
+        accessibilityLabel="알림 설정 (준비 중)"
+        accessibilityRole="button"
+        accessibilityState={{ disabled: true }}
+        disabled
+        style={styles.settingsButton}
+      >
+        <Settings color={theme.textSecondary} size={24} strokeWidth={1.5} />
+      </Pressable>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flexGrow: 1, paddingBottom: spacing.xxxl },
   heading: {
     alignItems: 'center',
+    borderBottomWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.xxl,
-  },
-  eyebrow: {
-    fontFamily: 'SUIT',
-    fontWeight: '600',
-    letterSpacing: 1.6,
-    marginBottom: spacing.sm,
-    ...typography.xsm,
-  },
-  title: { fontFamily: 'SUIT', fontSize: 36, fontWeight: '700', lineHeight: 40 },
-  sectionTitle: {
-    borderBottomWidth: 1,
-    fontFamily: 'SUIT',
-    fontWeight: '700',
-    paddingBottom: spacing.md,
+    minHeight: 64,
     paddingHorizontal: spacing.lg,
-    ...typography.md,
+    paddingVertical: spacing.sm,
+  },
+  title: { fontFamily: 'SUIT', fontWeight: '700', ...typography.xl },
+  settingsButton: {
+    alignItems: 'center',
+    height: 44,
+    justifyContent: 'center',
+    opacity: 0.45,
+    width: 44,
   },
   state: {
     alignItems: 'center',
@@ -247,16 +237,17 @@ const styles = StyleSheet.create({
   stateDescription: { fontFamily: 'SUIT', textAlign: 'center', ...typography.sm },
   pagination: { alignItems: 'center', borderTopWidth: 1, gap: spacing.md, padding: spacing.lg },
   skeletonItem: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     borderBottomWidth: 1,
     flexDirection: 'row',
     gap: spacing.md,
-    minHeight: 72,
+    minHeight: 120,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.lg,
   },
   kindSkeleton: { borderRadius: radii.full, height: 32, width: 32 },
   avatarSkeleton: { borderRadius: radii.full, height: 40, width: 40 },
+  skeletonContent: { flex: 1, gap: spacing.sm, minWidth: 0 },
   skeletonCopy: { flex: 1, gap: spacing.sm, minWidth: 0 },
   srOnly: {
     height: 1,

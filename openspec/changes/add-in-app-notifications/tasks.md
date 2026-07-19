@@ -48,6 +48,8 @@
 - [x] 8.3 API가 반환한 visible Follow item의 Related Profile 정보만 표시하고 unavailable generic fallback, snapshot 또는 client-side filtering을 추가하지 않는다.
 - [x] 8.4 Storybook story와 interaction/a11y test로 결정된 loading/error/empty/unread/read/긴 텍스트/pagination/Profile 전환과 Read/navigation 흐름을 검증한다.
 - [x] 8.5 app check, Relay compiler, Storybook build/test를 통과시키고 결정된 Android/iOS/Web smoke 항목을 확인한다.
+- [x] 8.6 `알림` 제목과 disabled 설정 placeholder, 탭·section heading 없는 단일 목록, Figma Like 위계를 적용한 Follow 행으로 화면을 정렬하고 Web refresh action을 제거하되 native pull-to-refresh는 유지한다.
+- [x] 8.7 Storybook interaction/a11y로 header·설정 placeholder·Web refresh action 부재·Follow 행 링크를 검증하고 app check, Storybook test/build와 platform smoke를 다시 통과시킨다.
 
 ## 9. PROD-324 모든 알림 셸 진입점에 Profile별 Unread badge를 제공한다
 

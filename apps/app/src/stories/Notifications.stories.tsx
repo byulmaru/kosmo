@@ -207,12 +207,14 @@ export const NextPageFailureAndRetry: Story = {
   render: () => <PaginationList />,
 };
 
-export const WebRefreshLoading: Story = {
-  parameters: { relay: { paginationLoading: true } },
-  play: async ({ canvasElement }) => {
+export const HeaderAndWebRefreshPolicy: Story = {
+  play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '새로고침' }));
-    await expect(canvas.findByRole('button', { name: '새로고침 중' })).resolves.toBeDisabled();
+    expect(canvas.getByRole('heading', { name: '알림' })).toBeVisible();
+    expect(canvas.getByRole('button', { name: '알림 설정 (준비 중)' })).toBeDisabled();
+    expect(canvas.queryByText('KOSMO')).not.toBeInTheDocument();
+    expect(canvas.queryByRole('heading', { name: '모두' })).not.toBeInTheDocument();
+    expect(canvas.queryByRole('button', { name: '새로고침' })).not.toBeInTheDocument();
   },
   render: () => <RefreshList />,
 };
