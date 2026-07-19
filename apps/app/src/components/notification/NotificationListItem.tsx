@@ -1,6 +1,7 @@
 import { Link } from 'expo-router';
 import { UserPlus } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
@@ -27,6 +28,7 @@ const notificationFragment = graphql`
 
 export function NotificationListItem({ notification }: NotificationListItemProps) {
   const theme = useTheme();
+  const [hovered, setHovered] = useState(false);
   const data = useFragment(notificationFragment, notification);
   const name = data.profile.displayName || data.profile.handle;
   const profileHref = `/${data.profile.relativeHandle}` as Href;
@@ -35,11 +37,13 @@ export function NotificationListItem({ notification }: NotificationListItemProps
   const actionLabel = `${name}님이 팔로우했습니다. ${timestamp}.${unread ? ' 읽지 않은 알림.' : ''} 프로필로 이동`;
 
   return (
-    <View
+    <Pressable
+      onHoverIn={Platform.OS === 'web' ? () => setHovered(true) : undefined}
+      onHoverOut={Platform.OS === 'web' ? () => setHovered(false) : undefined}
       style={[
         styles.root,
         {
-          backgroundColor: unread ? theme.surface : theme.card,
+          backgroundColor: hovered ? theme.surface : theme.card,
           borderColor: theme.border,
         },
       ]}
@@ -76,7 +80,7 @@ export function NotificationListItem({ notification }: NotificationListItemProps
           </Pressable>
         </Link>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

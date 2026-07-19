@@ -263,6 +263,23 @@ export const FigmaFollowRowHierarchy: Story = {
   render: () => <RefreshList />,
 };
 
+export const HoverBackgroundFeedback: Story = {
+  play: async ({ canvasElement }) => {
+    const copyLink = within(canvasElement).getByRole('link', {
+      name: /별빛 여행자님이 팔로우했습니다/,
+    });
+    const row = copyLink.parentElement?.parentElement;
+
+    expect(row).not.toBeNull();
+    expect(row).toHaveStyle({ backgroundColor: 'rgb(255, 255, 255)' });
+    await userEvent.hover(row!);
+    expect(row).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
+    await userEvent.unhover(row!);
+    expect(row).toHaveStyle({ backgroundColor: 'rgb(255, 255, 255)' });
+  },
+  render: () => <RefreshList />,
+};
+
 export const SelectedProfileSwitch: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
