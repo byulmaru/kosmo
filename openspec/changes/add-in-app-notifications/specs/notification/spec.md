@@ -290,7 +290,7 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 #### Scenario: 단일 Follow item 표시와 Profile link
 
 - **WHEN** selected Profile의 connection이 Related Profile 한 명을 가진 visible Follow Notification을 반환한다
-- **THEN** 목록은 Figma Like 알림 행의 왼쪽 kind icon과 오른쪽 콘텐츠 column 위계로 initials Avatar 하나, `OOO님이 팔로우했습니다` 문구와 상대 시각을 표시한다
+- **THEN** 목록은 Figma Like 알림 행처럼 왼쪽 28px kind icon과 오른쪽 콘텐츠 column을 같은 상단선에 두고, 콘텐츠 첫 Avatar row에 28px initials Avatar와 상대 시각을 배치한 뒤 `OOO님이 팔로우했습니다` 문구를 그 아래에 표시한다
 - **AND** Avatar와 본문은 `Profile.relativeHandle`의 Profile route를 가리키는 link다
 - **AND** inline 맞팔로우, 빈 action 영역, snippet, image avatar와 복수 사용자 aggregation을 만들지 않는다
 

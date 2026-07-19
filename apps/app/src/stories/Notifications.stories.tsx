@@ -230,6 +230,39 @@ export const KeyboardFocusableProfileLink: Story = {
   render: () => <RefreshList />,
 };
 
+export const FigmaFollowRowHierarchy: Story = {
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const avatar = canvas.getAllByLabelText('별빛 여행자 프로필 이미지')[0];
+    const avatarLink = avatar?.closest('a');
+    let content = avatarLink?.parentElement;
+    while (content && !content.previousElementSibling) {
+      content = content.parentElement;
+    }
+    const kindIcon = content?.previousElementSibling;
+    const copyLink = canvas.getByRole('link', {
+      name: /별빛 여행자님이 팔로우했습니다/,
+    });
+    const copy = copyLink.querySelector('[dir="auto"]');
+    const timestamp = canvas.getAllByText('5분 전')[0];
+
+    expect(kindIcon).not.toBeNull();
+    expect(avatar).toBeVisible();
+    expect(copy).toBeVisible();
+    expect(timestamp).toBeVisible();
+
+    const kindRect = kindIcon!.getBoundingClientRect();
+    const avatarRect = avatar!.getBoundingClientRect();
+    expect(kindRect.width).toBe(28);
+    expect(kindRect.height).toBe(28);
+    expect(avatarRect.width).toBe(28);
+    expect(avatarRect.height).toBe(28);
+    expect(avatarRect.top).toBe(kindRect.top);
+    expect(timestamp!.getBoundingClientRect().top).toBeLessThan(copy!.getBoundingClientRect().top);
+  },
+  render: () => <RefreshList />,
+};
+
 export const SelectedProfileSwitch: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

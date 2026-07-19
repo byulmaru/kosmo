@@ -150,10 +150,12 @@ export function NotificationListState({
               <View key={item} style={[styles.skeletonItem, { borderColor: theme.border }]}>
                 <View style={[styles.kindSkeleton, { backgroundColor: theme.surface }]} />
                 <View style={styles.skeletonContent}>
-                  <View style={[styles.avatarSkeleton, { backgroundColor: theme.surface }]} />
+                  <View style={styles.skeletonAvatarRow}>
+                    <View style={[styles.avatarSkeleton, { backgroundColor: theme.surface }]} />
+                    <Skeleton height={12} width={48} />
+                  </View>
                   <View style={styles.skeletonCopy}>
                     <Skeleton height={12} width="80%" />
-                    <Skeleton height={12} width={72} />
                   </View>
                 </View>
               </View>
@@ -241,12 +243,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     flexDirection: 'row',
     gap: spacing.md,
-    minHeight: 120,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.lg,
   },
-  kindSkeleton: { borderRadius: radii.full, height: 32, width: 32 },
-  avatarSkeleton: { borderRadius: radii.full, height: 40, width: 40 },
+  kindSkeleton: { borderRadius: radii.full, height: 28, width: 28 },
+  avatarSkeleton: { borderRadius: radii.full, height: 28, width: 28 },
+  skeletonAvatarRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    height: 28,
+    justifyContent: 'space-between',
+  },
   skeletonContent: { flex: 1, gap: spacing.sm, minWidth: 0 },
   skeletonCopy: { flex: 1, gap: spacing.sm, minWidth: 0 },
   srOnly: {

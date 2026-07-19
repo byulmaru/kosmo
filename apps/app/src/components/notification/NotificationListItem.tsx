@@ -52,15 +52,18 @@ export function NotificationListItem({ notification }: NotificationListItemProps
         <UserPlus color={theme.text} size={18} strokeWidth={2} />
       </View>
       <View style={styles.content}>
-        <Link asChild href={profileHref}>
-          <Pressable
-            accessibilityLabel={`${name} 프로필로 이동`}
-            accessibilityRole="link"
-            style={styles.avatarLink}
-          >
-            <Avatar label={name} size={40} />
-          </Pressable>
-        </Link>
+        <View style={styles.avatarRow}>
+          <Link asChild href={profileHref}>
+            <Pressable
+              accessibilityLabel={`${name} 프로필로 이동`}
+              accessibilityRole="link"
+              style={styles.avatarLink}
+            >
+              <Avatar label={name} size={28} />
+            </Pressable>
+          </Link>
+          <Text style={[styles.time, { color: theme.textSecondary }]}>{timestamp}</Text>
+        </View>
         <Link asChild href={profileHref}>
           <Pressable
             accessibilityLabel={actionLabel}
@@ -70,7 +73,6 @@ export function NotificationListItem({ notification }: NotificationListItemProps
             <Text style={[styles.copy, { color: theme.text }]}>
               <Text style={styles.name}>{name}</Text>님이 팔로우했습니다
             </Text>
-            <Text style={[styles.time, { color: theme.textSecondary }]}>{timestamp}</Text>
           </Pressable>
         </Link>
       </View>
@@ -84,7 +86,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     flexDirection: 'row',
     gap: spacing.md,
-    minHeight: 120,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.lg,
   },
@@ -92,13 +93,25 @@ const styles = StyleSheet.create({
   kind: {
     alignItems: 'center',
     borderRadius: radii.full,
-    height: 32,
+    height: 28,
     justifyContent: 'center',
-    width: 32,
+    width: 28,
   },
-  avatarLink: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
-  copyLink: { flex: 1, justifyContent: 'center', minHeight: 44, minWidth: 0 },
+  avatarRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    height: 28,
+    justifyContent: 'space-between',
+  },
+  avatarLink: {
+    alignItems: 'center',
+    height: 44,
+    justifyContent: 'center',
+    margin: -spacing.sm,
+    width: 44,
+  },
+  copyLink: { flex: 1, minHeight: 44, minWidth: 0 },
   copy: { fontFamily: 'SUIT', ...typography.sm },
   name: { fontFamily: 'SUIT', fontWeight: '700' },
-  time: { fontFamily: 'SUIT', marginTop: spacing.xs, ...typography.xsm },
+  time: { fontFamily: 'SUIT', ...typography.xsm },
 });

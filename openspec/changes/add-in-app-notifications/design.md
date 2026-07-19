@@ -98,7 +98,7 @@ DB row와 기존 `read_at`은 비동기 cleanup 전까지 남을 수 있다. cle
 
 ### Follow 알림 목록 UI와 Relay 경계
 
-`PROD-277`의 `/notifications`는 모바일과 Web이 공유하는 단일 목록이다. 상단에는 Figma 화면 구조에 맞춘 `알림` 제목과 44px 알림 설정 control을 두되, 설정 route가 없는 현재 slice에서는 `알림 설정 (준비 중)`으로 식별되는 disabled placeholder로 표시한다. `모두`·`멘션` 탭이나 단독 section heading, 날짜별 heading은 추가하지 않는다. Follow item은 Figma Like 알림 행의 정보 위계를 Follow에 맞게 적용해 왼쪽 kind icon과 오른쪽 콘텐츠 column 안의 initials Avatar 하나, `OOO님이 팔로우했습니다` 문구와 상대 시각을 표시한다. inline 맞팔로우, 본문 snippet과 빈 action 영역은 만들지 않는다. 현재 `FollowNotification.profile`이 단수이고 Profile image field가 없으므로 복수 사용자 집계와 이미지 avatar를 client에서 합성하지 않는다. 복수 사용자 문구와 겹친 avatar는 server aggregation 계약이 생기는 후속 이슈가 소유한다.
+`PROD-277`의 `/notifications`는 모바일과 Web이 공유하는 단일 목록이다. 상단에는 Figma 화면 구조에 맞춘 `알림` 제목과 44px 알림 설정 control을 두되, 설정 route가 없는 현재 slice에서는 `알림 설정 (준비 중)`으로 식별되는 disabled placeholder로 표시한다. `모두`·`멘션` 탭이나 단독 section heading, 날짜별 heading은 추가하지 않는다. Follow item은 Figma Like 알림 행의 정보 위계를 Follow에 맞게 적용한다. 행의 왼쪽 28px kind icon과 오른쪽 콘텐츠 column은 같은 상단선에 놓고, 콘텐츠의 첫 Avatar row에는 28px initials Avatar와 오른쪽 상대 시각을 둔 뒤 `OOO님이 팔로우했습니다` 문구를 그 아래에 표시한다. inline 맞팔로우, 본문 snippet과 빈 action 영역은 만들지 않는다. 현재 `FollowNotification.profile`이 단수이고 Profile image field가 없으므로 복수 사용자 집계와 이미지 avatar를 client에서 합성하지 않는다. 복수 사용자 문구와 겹친 avatar는 server aggregation 계약이 생기는 후속 이슈가 소유한다.
 
 Avatar와 본문은 모두 `Profile.relativeHandle`의 Profile route를 가리키는 실제 link다. 활성화는 즉시 navigation을 시작하며 Read mutation의 pending·실패·재시도는 navigation을 지연하거나 취소하거나 되돌리지 않는다. `readAt = null` item은 `surface`, Read item은 `card` 배경을 사용하고 접근성 label에 Unread 상태를 포함한다. client Read mutation과 Unread count cache 갱신은 `PROD-372`, shell badge surface는 `PROD-324`가 소유한다.
 

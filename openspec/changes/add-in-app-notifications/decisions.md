@@ -159,7 +159,7 @@
 - Decision Date: 2026-07-19
 - Status: Accepted
 - Context / Problem: Figma의 Like 알림은 여러 avatar를 묶는 표현을 제공하지만 현재 API의 Follow item은 `profile: Profile!` 한 명만 반환하고 Profile image field나 aggregation identity·count를 제공하지 않는다.
-- Decision Outcome: 모바일과 Web 모두 탭이나 section heading 없는 단일 목록을 사용한다. 상단은 `알림` 제목과 44px 알림 설정 control로 구성하고 설정 route가 없는 동안 control은 `알림 설정 (준비 중)` disabled placeholder로 둔다. Follow item은 Figma Like 알림 행의 왼쪽 kind icon·오른쪽 콘텐츠 column 위계를 적용하고, 그 안에 initials Avatar 하나, `OOO님이 팔로우했습니다` 문구와 상대 시각을 표시하며 Avatar와 본문을 Related Profile link로 제공한다. inline 맞팔로우, 빈 action 영역, snippet, image avatar와 client-side 복수 사용자 aggregation은 추가하지 않는다.
+- Decision Outcome: 모바일과 Web 모두 탭이나 section heading 없는 단일 목록을 사용한다. 상단은 `알림` 제목과 44px 알림 설정 control로 구성하고 설정 route가 없는 동안 control은 `알림 설정 (준비 중)` disabled placeholder로 둔다. Follow item은 Figma Like 알림 행처럼 왼쪽 28px kind icon과 오른쪽 콘텐츠 column을 같은 상단선에 놓고, 콘텐츠 첫 Avatar row에 28px initials Avatar와 오른쪽 상대 시각을 둔 뒤 `OOO님이 팔로우했습니다` 문구를 아래에 표시한다. Avatar와 본문은 Related Profile link로 제공한다. inline 맞팔로우, 빈 action 영역, snippet, image avatar와 client-side 복수 사용자 aggregation은 추가하지 않는다.
 - Alternatives Considered: 기존 `KOSMO` eyebrow와 `모두` section heading 유지, 설정 control 숨김, 준비 중 안내를 실행하는 active control, 동일 사용자의 인접 item을 client에서 묶기, Figma Follow variant의 맞팔로우 영역을 빈 채 유지하기.
 - Consequences: 설정 기능 없이도 향후 header layout을 보존하되 작동하지 않는 control을 실행 가능하게 오인시키지 않는다. 이번 UI는 현재 GraphQL 계약과 pagination·readAt identity를 보존한다. `N명이 팔로우했습니다`와 겹친 avatar는 aggregation key·count·대표 Profile 목록·pagination/read 의미를 함께 정의하는 후속 API 이슈가 필요하다.
 - Confirmation / Follow-up: Storybook은 header placeholder, 탭·section heading 부재, 단일 Follow item과 긴 이름·handle을 검증하고 복수 사용자 fixture를 만들지 않는다.
