@@ -138,6 +138,24 @@ export const ApplicationAuthorizations = pgTable(
   ],
 );
 
+export const Bookmarks = pgTable(
+  'bookmark',
+  {
+    id: id(),
+    profileId: uuid('profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    postId: uuid('post_id')
+      .notNull()
+      .references(() => Posts.id),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    unique().on(table.profileId, table.postId),
+    index().on(table.profileId, table.createdAt.desc(), table.id.desc()),
+  ],
+);
+
 export const Files = pgTable('file', {
   id: id(),
   storageKey: text('storage_key').unique().notNull(),
