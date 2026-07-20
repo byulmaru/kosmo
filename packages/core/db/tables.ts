@@ -147,12 +147,12 @@ export const Bookmarks = pgTable(
       .references(() => Profiles.id, { onDelete: 'cascade' }),
     postId: uuid('post_id')
       .notNull()
-      .references(() => Posts.id),
+      .references(() => Posts.id, { onDelete: 'cascade' }),
     createdAt: createdAt(),
   },
   (table) => [
     unique().on(table.profileId, table.postId),
-    index().on(table.profileId, table.createdAt.desc(), table.id.desc()),
+    index().on(table.profileId, table.id.desc()),
   ],
 );
 

@@ -17,7 +17,7 @@
 ### Bookmark 저장 식별자와 안정적 최신순 index
 
 - Decision Date: 2026-07-20
-- Status: Accepted
+- Status: Superseded by `UUIDv7 ID-only 저장과 pagination`
 - Context / Problem: Profile/Post 유일성을 경쟁 요청에서도 보장하고 같은 millisecond에 생성된 row를 포함해 최신순 cursor pagination을 안정적으로 지원해야 한다.
 - Decision Outcome: Bookmark는 UUIDv7 surrogate primary key, 필수 Owner Profile FK, 필수 Target Post FK와 immutable `createdAt`을 가진다. 데이터베이스는 `(profileId, postId)` unique 제약과 `(profileId, createdAt DESC, id DESC)` 목록 index를 제공한다.
 - Alternatives Considered: Profile/Post composite primary key — 독립 Relay Node 식별과 immutable 생성 시각 기반 pagination에 불필요한 결합을 만들어 채택하지 않는다. `(profileId, id DESC)` index — UUIDv7이 같은 millisecond 안의 단조 순서를 보장하지 않아 채택하지 않는다. Target Post 단독 index — 현재 reverse lookup 요구가 없어 미리 추가하지 않는다.
@@ -27,7 +27,7 @@
 ### Target Post 가시성과 Bookmark FK lifecycle 분리
 
 - Decision Date: 2026-07-20
-- Status: Accepted
+- Status: Superseded by `Target Post 상태와 물리 삭제 lifecycle 분리`
 - Context / Problem: Target Post가 Tombstone이 되거나 Block·공개 범위 때문에 보이지 않아도 Bookmark 관계를 유지해야 한다. 물리 FK cascade를 잘못 사용하면 canonical 계약을 우회해 관계가 사라진다.
 - Decision Outcome: Target Post FK에는 cascade delete를 사용하지 않고, Post 상태·가시성 변경은 Bookmark row를 수정하거나 삭제하지 않는다. Owner Profile FK는 Profile 소유 관계의 기존 관례에 따라 cascade를 기본 선택으로 한다.
 - Alternatives Considered: Target Post cascade — 관계 유지·재노출 요구를 위반해 채택하지 않는다. Target FK 제거 또는 nullable snapshot — `Bookmark -> Post` 필수 관계와 referential integrity를 약화해 채택하지 않는다. Owner Profile FK restrict — 소유자가 없어진 private row를 남길 이유가 없어 기본안에서 제외한다.
@@ -37,12 +37,32 @@
 ### 가시성 필터 이후 composite pagination
 
 - Decision Date: 2026-07-20
-- Status: Accepted
+- Status: Superseded by `UUIDv7 ID-only 저장과 pagination`
 - Context / Problem: Bookmark row를 먼저 limit하고 Target Post를 나중에 숨기면 page limit, cursor와 재노출 순서가 깨지고 비공개 Target 정보가 우회 노출될 수 있다.
 - Decision Outcome: Owner equality와 기존 Target Post visibility predicate를 Bookmark query의 SQL 조건에 적용한 뒤 `(createdAt, id)` cursor, 내림차순 정렬과 limit을 적용한다. Bookmark Node의 owner 권한과 `Bookmark.post`의 Target 가시성은 분리해 Owner가 숨겨진 Target의 관계도 삭제할 수 있게 한다.
 - Alternatives Considered: Node resolver 또는 JavaScript post-filter — 짧거나 빈 페이지를 만들기 때문에 채택하지 않는다. 숨겨진 Bookmark 자동 삭제 — canonical 관계 유지 계약을 위반한다.
 - Consequences: 목록 query는 Post·작성자 Profile·Instance visibility join을 재사용해야 한다. visibility 변화로 보이는 항목은 달라질 수 있지만 Bookmark cursor tuple과 생성 시각은 변하지 않는다.
 - Confirmation / Follow-up: 2026-07-20 OpenSpec Gate에서 승인했다. `PROD-410`에서 숨겨진 최신 row 뒤의 조회 가능한 row로 page limit을 채우고, 숨김·재노출·동률 cursor를 검증한다.
+
+### UUIDv7 ID-only 저장과 pagination
+
+- Decision Date: 2026-07-20
+- Status: Accepted
+- Context / Problem: Bookmark 목록의 저장 index와 API cursor가 하나의 정렬 키를 공유하면서 Profile별 최신순 pagination을 단순하고 안정적으로 제공해야 한다.
+- Decision Outcome: Bookmark는 UUIDv7 surrogate primary key, 필수 Owner Profile FK, 필수 Target Post FK와 immutable `createdAt`을 가진다. 데이터베이스는 `(profileId, postId)` unique 제약과 `(profileId, id DESC)` 목록 index를 제공한다. 목록은 Target 가시성을 limit 전에 적용한 뒤 UUIDv7 `id DESC`로 정렬하고 ID만 cursor로 사용한다.
+- Alternatives Considered: `(profileId, createdAt DESC, id DESC)` composite index와 cursor — 실제 생성 시각을 더 정밀하게 반영하지만 storage와 API가 두 정렬 키를 공유해야 하므로 채택하지 않는다. Profile/Post composite primary key — 독립 Relay Node 식별을 불필요하게 결합해 채택하지 않는다.
+- Consequences: UUIDv7은 millisecond 간 시간 순서를 제공하지만 같은 millisecond 안에서는 실제 생성 순서와 UUID 순서가 다를 수 있으며 이 임의 순서를 제품이 수용한다. migration은 additive하고 backfill이 없다. 생성 경쟁의 최종 보장은 DB unique 제약이 맡는다.
+- Confirmation / Follow-up: 2026-07-20 PR #298 리뷰 결정과 사용자 승인을 반영했다. `PROD-396`은 ID-only index와 same-millisecond 결과를 기록하고, `PROD-410`은 ID-only cursor의 중복·누락과 visibility-before-limit을 검증한다.
+
+### Target Post 상태와 물리 삭제 lifecycle 분리
+
+- Decision Date: 2026-07-20
+- Status: Accepted
+- Context / Problem: Target Post의 Tombstone·가시성 변화에는 Bookmark를 유지해야 하지만, Target Post row가 물리적으로 사라진 뒤 유효하지 않은 필수 관계를 남겨서는 안 된다.
+- Decision Outcome: Target Post FK는 `ON DELETE CASCADE`를 사용한다. Tombstone·Block·공개 범위 같은 상태와 가시성 변화는 Post row를 유지하므로 Bookmark를 삭제하지 않으며, Target Post가 물리적으로 삭제될 때만 연결된 Bookmark를 함께 삭제한다. Owner Profile FK도 소유 관계에 따라 cascade한다.
+- Alternatives Considered: Target Post FK `NO ACTION` — 물리 삭제를 차단하고 삭제된 Target의 private 관계를 정리하지 못해 채택하지 않는다. Target FK 제거 또는 nullable snapshot — 필수 관계와 referential integrity를 약화해 채택하지 않는다. 상태 변화 때 application cascade — Tombstone·재노출 계약을 위반해 채택하지 않는다.
+- Consequences: Tombstone과 hard-delete 테스트를 분리해야 한다. 물리 삭제는 복구 가능한 상태 변화가 아니며 Bookmark도 함께 사라진다.
+- Confirmation / Follow-up: 2026-07-20 PR #298 리뷰 결정과 사용자 승인을 반영했다. `PROD-396` DB 검증에서 Tombstone 유지와 Target Post hard-delete cascade를 각각 확인한다.
 
 ### 보호된 공용 Bookmark route와 Profile별 Relay 격리
 
@@ -66,4 +86,5 @@
 
 ## Superseded Decisions
 
-- 없음.
+- `Bookmark 저장 식별자와 안정적 최신순 index`와 `가시성 필터 이후 composite pagination`은 `UUIDv7 ID-only 저장과 pagination`으로 대체했다.
+- `Target Post 가시성과 Bookmark FK lifecycle 분리`는 `Target Post 상태와 물리 삭제 lifecycle 분리`로 대체했다.

@@ -28,8 +28,9 @@ Accepted
   Reaction Type의 표시 순서를 정의하지 않으며 동률 표시에는 별도 순서 규칙을 두지 않는다.
 - Reaction 조회 결과는 Reaction Type별 개수와 Reaction을 남긴 Profile 목록을 제공한다. Reaction Type은
   개수 내림차순으로 표시한다.
-- Bookmark 목록은 최신 Bookmark부터 표시한다. 대상 Post를 조회할 수 없는 동안에는 목록에서 숨기되 Bookmark
-  관계는 유지한다.
+- Bookmark 목록은 UUIDv7 ID 내림차순으로 표시하고 ID만 cursor로 사용한다. 같은 millisecond 안에서는 실제 생성
+  순서와 UUID 순서가 다를 수 있다. 대상 Post를 조회할 수 없는 동안에는 목록에서 숨기되 Bookmark 관계는 유지하고,
+  대상 Post가 물리적으로 삭제되면 연결된 Bookmark도 함께 삭제한다.
 - Post/Reply/Quote에 연결하는 Media는 Local이어야 하고 Media의 Upload Account가 행동을 요청한 Account와
   같아야 한다. Media Profile과 Post Author Profile은 같은 Account 안에서 달라도 되며, Upload Account는
   연결되지 않은 Local Media를 조회할 수 있다.

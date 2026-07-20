@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "321b65cd-2915-49fd-84b3-ec2b573619a0",
+  "id": "1e40bcbd-da41-44e2-8b36-b49817d24e48",
   "prevIds": ["7eb8fe8e-87ad-4ba2-91a8-07de7031681f"],
   "ddl": [
     {
@@ -2273,13 +2273,6 @@
           "opclass": null
         },
         {
-          "value": "created_at",
-          "isExpression": false,
-          "asc": false,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
           "value": "id",
           "isExpression": false,
           "asc": false,
@@ -2292,7 +2285,7 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "bookmark_profile_id_created_at_id_index",
+      "name": "bookmark_profile_id_id_index",
       "entityType": "indexes",
       "schema": "public",
       "table": "bookmark"
@@ -2840,7 +2833,7 @@
       "tableTo": "post",
       "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
+      "onDelete": "CASCADE",
       "name": "bookmark_post_id_post_id_fkey",
       "entityType": "fks",
       "schema": "public",

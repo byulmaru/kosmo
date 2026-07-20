@@ -39,9 +39,11 @@ Bookmark는 Profile이 Post를 개인적으로 저장한 결과다.
 ## 조회 정책
 
 - Bookmark는 저장한 Profile에게만 보인다.
-- Profile의 Bookmark 목록은 생성 시각이 최신인 Bookmark부터 표시한다.
+- Profile의 Bookmark 목록은 UUIDv7 ID 내림차순으로 표시하고 ID만 cursor로 사용한다. UUIDv7은 millisecond 간
+  최신순을 제공하지만 같은 millisecond 안의 실제 생성 순서와 ID 순서는 다를 수 있다.
 - 대상 Post가 Tombstone이거나 저장한 Profile이 대상 Post 조회 정책을 통과하지 못하면 Bookmark를 목록에서 숨기되
   Bookmark 관계는 유지한다.
+- 대상 Post가 물리적으로 삭제되면 연결된 Bookmark도 함께 삭제한다.
 - Bookmark 생성은 Post Author에게 Notification을 만들지 않는다.
 - Profile Block이 생성되어도 Bookmark는 제거하지 않는다. Block 조회 정책 때문에 대상 Post를 볼 수 없는 동안은
   저장 관계만 유지한다.

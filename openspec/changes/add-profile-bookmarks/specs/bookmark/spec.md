@@ -64,13 +64,13 @@
 
 ### Requirement: Owner 전용 최신순 Bookmark 목록
 
-시스템은 현재 행동 주체인 Owner Profile에게만 자신의 Bookmark 목록을 제공해야 한다(MUST). 목록은 생성 시각 내림차순과 ID 내림차순 tie-breaker로 안정적으로 정렬해야 하며(MUST), cursor pagination에서도 중복이나 누락 없이 같은 순서를 유지해야 한다(MUST).
+시스템은 현재 행동 주체인 Owner Profile에게만 자신의 Bookmark 목록을 제공해야 한다(MUST). 목록은 UUIDv7 ID 내림차순으로 정렬하고 ID만 cursor로 사용해야 하며(MUST), cursor pagination에서도 중복이나 누락 없이 같은 순서를 유지해야 한다(MUST). 같은 millisecond에 생성된 Bookmark의 실제 생성 순서와 UUID 순서는 다를 수 있다.
 
 #### Scenario: Owner가 최신 Bookmark부터 조회함
 
 - **WHEN** Owner Profile이 자신의 Bookmark 첫 페이지를 조회한다
-- **THEN** 시스템은 생성 시각이 최신인 Bookmark부터 반환한다
-- **AND** 생성 시각이 같은 Bookmark는 ID 내림차순으로 정렬한다
+- **THEN** 시스템은 UUIDv7 ID가 큰 Bookmark부터 반환한다
+- **AND** 같은 millisecond 안의 실제 생성 순서를 별도로 보장하지 않는다
 
 #### Scenario: 다른 Profile의 Bookmark를 조회함
 
@@ -100,7 +100,12 @@
 #### Scenario: Target Post 가시성이 회복됨
 
 - **WHEN** 관계를 유지한 Target Post를 Owner Profile이 다시 조회할 수 있게 된다
-- **THEN** 시스템은 원래 생성 시각에 따른 위치에서 해당 Bookmark를 목록에 다시 포함한다
+- **THEN** 시스템은 원래 UUIDv7 ID 순서의 위치에서 해당 Bookmark를 목록에 다시 포함한다
+
+#### Scenario: Target Post가 물리적으로 삭제됨
+
+- **WHEN** Target Post row가 물리적으로 삭제된다
+- **THEN** 시스템은 해당 Post를 참조하는 Bookmark를 함께 삭제한다
 
 ### Requirement: Profile별 Bookmark action
 
