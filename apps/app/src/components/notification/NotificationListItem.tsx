@@ -34,7 +34,8 @@ export function NotificationListItem({ notification }: NotificationListItemProps
   const profileHref = `/${data.profile.relativeHandle}` as Href;
   const timestamp = formatTimelineTimestamp(data.createdAt);
   const unread = data.readAt === null;
-  const actionLabel = `${name}님이 팔로우했습니다. ${timestamp}.${unread ? ' 읽지 않은 알림.' : ''} 프로필로 이동`;
+  const unreadDescription = unread ? ' 읽지 않은 알림.' : '';
+  const actionLabel = `${name}님이 팔로우했습니다. ${timestamp}.${unreadDescription} 프로필로 이동`;
 
   return (
     <Pressable
@@ -59,7 +60,7 @@ export function NotificationListItem({ notification }: NotificationListItemProps
         <View style={styles.avatarRow}>
           <Link asChild href={profileHref}>
             <Pressable
-              accessibilityLabel={`${name} 프로필로 이동`}
+              accessibilityLabel={`${name} 프로필로 이동.${unreadDescription}`}
               accessibilityRole="link"
               style={styles.avatarLink}
             >

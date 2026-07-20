@@ -223,9 +223,19 @@ export const KeyboardFocusableProfileLink: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const link = canvas.getByRole('link', { name: /별빛 여행자님이 팔로우했습니다/ });
+    const unreadAvatarLink = canvas.getByRole('link', {
+      name: '별빛 여행자 프로필로 이동. 읽지 않은 알림.',
+    });
+    const readAvatarLink = canvas.getByRole('link', {
+      name: '은하 기록자 프로필로 이동.',
+    });
+
     link.focus();
     expect(link).toHaveFocus();
     expect(link).toHaveAttribute('href', '/@starlight');
+    expect(unreadAvatarLink).toHaveAttribute('href', '/@starlight');
+    expect(readAvatarLink).toHaveAttribute('href', '/@galaxy');
+    expect(readAvatarLink).not.toHaveAccessibleName(/읽지 않은 알림/);
   },
   render: () => <RefreshList />,
 };
