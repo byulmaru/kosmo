@@ -20,10 +20,10 @@ Accepted
   직접 참조하는 eligible Active Repost만 포함한다.
 - Public/Unlisted Post의 Repost는 Unlisted가 된다. Followers Only Post는 Source Author만 Repost할 수 있고
   결과도 Followers Only가 된다. Mentioned Profiles Post는 Repost할 수 없다.
-- Reaction Type은 `❤️`, `👍`, `😂`, `😮`, `😢` 중 하나다. 같은 Profile/Post/Reaction Type 조합에는
-  Reaction이 하나만 존재하며 다른 Reaction Type은 함께 존재할 수 있다.
+- 같은 Profile/Post/Reaction Type 조합에는 Reaction이 하나만 존재하며 다른 Reaction Type은 함께 존재할 수
+  있다.
 - Reaction 조회 결과는 Reaction Type별 개수와 Reaction을 남긴 Profile 목록을 제공한다. Reaction Type은
-  개수 내림차순, 동률이면 허용 목록 순서로 표시한다.
+  개수 내림차순으로 표시한다.
 - Bookmark 목록은 최신 Bookmark부터 표시한다. 대상 Post를 조회할 수 없는 동안에는 목록에서 숨기되 Bookmark
   관계는 유지한다.
 - Post/Reply/Quote에 연결하는 Media는 Local이어야 하고 Media의 Upload Account가 행동을 요청한 Account와
@@ -32,6 +32,7 @@ Accepted
   전이는 대응하는 Notification 제거를 Best Effort로 요청하며 제거 실패가 원인 행동을 되돌리지 않는다.
 
 이 ADR은 Quote의 기존 도메인 계약을 변경하지 않는다.
+초기 허용 Reaction Type 목록은 이 ADR에서 결정하지 않고 별도 도메인 결정이 소유한다.
 
 ## 대체한 결정
 
@@ -43,7 +44,7 @@ Accepted
 ## 문서 반영
 
 - [Post](../objects/post.md)는 Reply/Repost 관계, 생성 조건, 상세 조회와 Repost 수를 정의한다.
-- [Reaction](../objects/reaction.md)은 허용 Reaction Type과 조회 순서를 정의한다.
+- [Reaction](../objects/reaction.md)은 Reaction uniqueness와 조회 결과·순서를 정의한다.
 - [Bookmark](../objects/bookmark.md)은 개인 목록 순서와 숨김 정책을 정의한다.
 - [Media](../objects/media.md)는 Local Media를 Post에 연결할 Account 경계를 정의한다.
 - [Notification](../objects/notification.md)은 자기 행동 알림 억제와 취소 시 Best Effort 제거를 정의한다.
