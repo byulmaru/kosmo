@@ -38,9 +38,9 @@ export function NotificationListItem({ notification }: NotificationListItemProps
   const actionLabel = `${name}님이 팔로우했습니다. ${timestamp}.${unreadDescription} 프로필로 이동`;
 
   return (
-    <Pressable
-      onHoverIn={Platform.OS === 'web' ? () => setHovered(true) : undefined}
-      onHoverOut={Platform.OS === 'web' ? () => setHovered(false) : undefined}
+    <View
+      onPointerEnter={Platform.OS === 'web' ? () => setHovered(true) : undefined}
+      onPointerLeave={Platform.OS === 'web' ? () => setHovered(false) : undefined}
       style={[
         styles.root,
         {
@@ -73,6 +73,7 @@ export function NotificationListItem({ notification }: NotificationListItemProps
           <Pressable
             accessibilityLabel={actionLabel}
             accessibilityRole="link"
+            hitSlop={spacing.md}
             style={styles.copyLink}
           >
             <Text style={[styles.copy, { color: theme.text }]}>
@@ -81,7 +82,7 @@ export function NotificationListItem({ notification }: NotificationListItemProps
           </Pressable>
         </Link>
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -115,7 +116,7 @@ const styles = StyleSheet.create({
     margin: -spacing.sm,
     width: 44,
   },
-  copyLink: { flex: 1, minHeight: 44, minWidth: 0 },
+  copyLink: { flex: 1, minWidth: 0 },
   copy: { fontFamily: 'SUIT', ...typography.sm },
   name: { fontFamily: 'SUIT', fontWeight: '700' },
   time: { fontFamily: 'SUIT', ...typography.xsm },

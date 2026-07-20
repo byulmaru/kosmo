@@ -275,7 +275,11 @@ export const FigmaFollowRowHierarchy: Story = {
 
 export const HoverBackgroundFeedback: Story = {
   play: async ({ canvasElement }) => {
-    const copyLink = within(canvasElement).getByRole('link', {
+    const canvas = within(canvasElement);
+    const avatarLink = canvas.getByRole('link', {
+      name: '별빛 여행자 프로필로 이동. 읽지 않은 알림.',
+    });
+    const copyLink = canvas.getByRole('link', {
       name: /별빛 여행자님이 팔로우했습니다/,
     });
     const row = copyLink.parentElement?.parentElement;
@@ -284,8 +288,30 @@ export const HoverBackgroundFeedback: Story = {
     expect(row).toHaveStyle({ backgroundColor: 'rgb(255, 255, 255)' });
     await userEvent.hover(row!);
     expect(row).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
-    await userEvent.unhover(row!);
+    await userEvent.hover(copyLink);
+    expect(row).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
+    await userEvent.unhover(copyLink);
     expect(row).toHaveStyle({ backgroundColor: 'rgb(255, 255, 255)' });
+    await userEvent.hover(row!);
+    expect(row).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
+    await userEvent.hover(avatarLink);
+    expect(row).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
+    await userEvent.unhover(avatarLink);
+    expect(row).toHaveStyle({ backgroundColor: 'rgb(255, 255, 255)' });
+  },
+  render: () => <RefreshList />,
+};
+
+export const NonInteractiveRowAndCompactCopyLink: Story = {
+  play: ({ canvasElement }) => {
+    const copyLink = within(canvasElement).getByRole('link', {
+      name: /별빛 여행자님이 팔로우했습니다/,
+    });
+    const row = copyLink.parentElement?.parentElement;
+
+    expect(row).not.toBeNull();
+    expect(row).not.toHaveAttribute('tabindex');
+    expect(copyLink.getBoundingClientRect().height).toBeLessThan(44);
   },
   render: () => <RefreshList />,
 };
