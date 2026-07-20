@@ -69,7 +69,8 @@ Post는 Profile이 작성하고 배포하는 짧은 게시 단위다. 게시 본
 
 Post/Reply/Quote 작성에서 Attached Media는 입력 순서를 유지한다. 모든 Attached Media는 Source=Local이고
 Media의 Upload Account가 행동을 요청한 Account와 같아야 한다. Media의 Profile은 Author Profile과 달라도 같은
-Upload Account를 가지면 연결할 수 있다. Tombstone Post에는 다른 상태 전이를 적용하지 않는다.
+Upload Account를 가지면 연결할 수 있다. 저장 참조만 발급되고 이미지 저장 성공이 확인되지 않은 입력은 Local
+Media 또는 Attached Media로 취급하지 않는다. Tombstone Post에는 다른 상태 전이를 적용하지 않는다.
 
 ## 권한
 
