@@ -4,8 +4,9 @@
 
 ## What Changes
 
-- active profile 선택 requirement의 대상을 정상 제품 경로에서 계정에 연결되는 활성 local profile로 명확히 한다.
+- 정상 제품 경로의 `AccountProfile` membership이 configured local profile만 연결한다는 제품 모델을 active profile 선택 requirement에 명확히 한다.
 - 도달 불가능한 owned remote profile 선택 성공 시나리오를 계약에서 제거한다.
+- synthetic remote membership의 선택 또는 거부 동작은 새 계약으로 정의하지 않는다.
 - canonical profile spec과 아직 active인 actor-discovery delta의 겹치는 requirement를 동일한 최종 계약으로 동기화한다.
 - actor-discovery proposal, design, tasks에서 remote profile 선택·session restore를 현재 capability나 verification 대상으로 요구하는 문구를 제거한다.
 - GraphQL resolver와 integration test를 포함한 런타임 동작은 변경하지 않는다.
@@ -18,7 +19,7 @@
 
 ### Modified Capabilities
 
-- `profile`: active profile 선택 requirement에서 실제 제품 경로에 없는 remote profile 선택 보장을 제거하고 local-only 모델을 명확히 한다.
+- `profile`: active profile 선택 requirement에서 실제 제품 경로에 없는 remote profile 선택 보장을 제거하고 정상 제품 경로의 local-only membership 모델을 명확히 한다.
 
 ## Impact
 

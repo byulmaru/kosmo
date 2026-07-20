@@ -7,7 +7,7 @@ active profile 선택 계약은 계정에 연결된 remote profile 선택을 보
 **Goals:**
 
 - canonical spec과 actor-discovery의 proposal, design, tasks, delta spec에서 도달 불가능한 remote profile 선택 보장을 제거한다.
-- active profile 선택 계약을 현재 local-only 계정 profile 모델에 맞춘다.
+- active profile 선택 계약을 정상 제품 경로의 local-only 계정 profile 모델에 맞추되, synthetic membership의 런타임 동작까지 규정하지 않는다.
 - 런타임 동작을 변경하지 않는다.
 
 **Non-Goals:**
@@ -26,7 +26,7 @@ active profile 선택 계약은 계정에 연결된 remote profile 선택을 보
 
 ### Recommended Approach
 
-canonical profile spec과 actor-discovery delta의 전체 active profile selection requirement를 동일한 local-only 문구로 동기화한다. actor-discovery proposal, design, tasks에서도 remote profile 선택·session restore를 capability, accepted approach 또는 verification 대상으로 요구하지 않게 정렬한다. 도달 불가능한 remote membership에 대한 오류 동작은 새 계약으로 만들지 않고, resolver와 integration test는 그대로 둔다.
+canonical profile spec과 actor-discovery delta의 전체 active profile selection requirement를 동일한 문구로 동기화한다. requirement는 정상 제품 경로의 `AccountProfile` membership이 local profile만 연결한다는 모델과 기존 membership·visibility 기반 선택 동작을 기술하고, synthetic remote membership의 선택 또는 거부 동작은 정의하지 않는다. actor-discovery proposal, design, tasks에서도 remote profile 선택·session restore를 capability, accepted approach 또는 verification 대상으로 요구하지 않게 정렬한다. resolver와 integration test는 그대로 둔다.
 
 ### Allowed Alternatives
 

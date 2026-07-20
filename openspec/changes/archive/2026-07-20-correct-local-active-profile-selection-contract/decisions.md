@@ -19,10 +19,10 @@
 - Decision Date: 2026-07-20
 - Status: Accepted
 - Context / Problem: 운영 코드의 `AccountProfile` 생성 경로는 local profile만 연결하므로 owned remote profile 선택 상태는 정상 제품 경로로 도달할 수 없다. 선택 resolver 하나의 guard는 session 생성·복원 경로까지 데이터 불변 조건을 보장하지도 않는다.
-- Decision Outcome: active profile requirement에서 remote profile 선택 보장을 제거하고 local-only 제품 모델을 명확히 하되, resolver와 test를 포함한 런타임 동작은 변경하지 않는다.
+- Decision Outcome: active profile requirement에서 remote profile 선택 보장을 제거하고 정상 제품 경로의 `AccountProfile`이 local profile만 연결한다는 모델을 명확히 한다. synthetic remote membership의 선택 또는 거부 동작은 계약하지 않으며, resolver와 test를 포함한 런타임 동작은 변경하지 않는다.
 - Alternatives Considered: 선택 resolver에만 local instance guard를 추가하는 방안은 실제 도달 경로가 없는 상태를 부분적으로 방어하므로 채택하지 않는다. DB·service·session 경계 전체에서 불변 조건을 강제하는 방안은 별도 요구사항 없이 이번 계약 정정 범위를 확장하므로 채택하지 않는다.
 - Consequences: 이번 change는 spec-only다. synthetic remote membership을 방어해야 하는 실제 요구가 생기면 전체 생성·session 경계를 소유하는 별도 이슈가 필요하다.
-- Confirmation / Follow-up: canonical spec과 actor-discovery delta가 동일한 최종 requirement인지 확인하고, actor-discovery proposal·design·tasks에 superseded remote selection 전제가 남지 않았는지 검색한 뒤 OpenSpec strict validation을 통과시킨다.
+- Confirmation / Follow-up: canonical spec과 actor-discovery delta가 동일한 최종 requirement인지 확인하고, local-only membership 모델이 synthetic remote membership 거부 보장으로 읽히지 않는지 검토하며, actor-discovery proposal·design·tasks에 superseded remote selection 전제가 남지 않았는지 검색한 뒤 OpenSpec strict validation을 통과시킨다.
 
 ## Remaining Decisions
 
@@ -31,4 +31,4 @@
 ## Superseded Decisions
 
 - 2026-07-20: 2026-07-17의 resolver guard와 synthetic rejection test 결정은 “정상 제품 경로와 계약만 정렬한다” 결정으로 대체한다. 해당 상태가 제품 경로로 도달할 수 없고 선택 resolver만 수정해서는 데이터 불변 조건을 완전하게 강제할 수 없기 때문이다.
-- 2026-07-20: `add-activitypub-actor-discovery`의 “instance kind와 무관한 active profile 선택” 계약은 local-only 제품 모델로 대체한다. remote profile membership은 정상 제품 경로에 존재하지 않는다.
+- 2026-07-20: `add-activitypub-actor-discovery`의 “instance kind와 무관한 active profile 선택” 계약은 정상 제품 경로의 local-only membership 모델로 대체한다. remote profile membership은 정상 제품 경로에 존재하지 않으며, synthetic membership의 선택 또는 거부는 이 계약에서 정의하지 않는다.
