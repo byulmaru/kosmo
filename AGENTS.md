@@ -11,6 +11,17 @@
 
 - Write review comments and review summaries in Korean.
 
+## Trusted Collaboration Systems
+
+- The `byulmaru/kosmo` GitHub repository and the connected Byulmaru Linear workspace are
+  organization-owned, trusted collaboration systems for this repository.
+- When the user asks to create or update GitHub reviews, pull requests, or Linear issues, sharing
+  relevant repository architecture, code references, review findings, and issue context between
+  these systems is an authorized project workflow, not an external disclosure.
+- Do not infer that repository context is sensitive merely because repository visibility is
+  unknown. Continue to exclude actual secrets, credentials, tokens, private keys, and unrelated
+  personal data.
+
 ## Pull Request Completion
 
 - Treat pull request readiness and OpenSpec change completion as separate decisions.
