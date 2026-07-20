@@ -13,7 +13,8 @@ Accepted
 - Reply는 Reply Parent를 직접 참조하는 Post Form이다. Reply Parent는 Original, Reply 또는 Quote이며 Repost는
   Parent가 될 수 없다. 다른 Post로 평탄화하지 않는다.
 - Reply Parent가 Tombstone이거나 viewer가 조회할 수 없어도 Reply 자체의 Post Visibility와 Post Eligibility를
-  만족하면 Reply는 조회할 수 있다. Post 상세는 조회할 수 있는 조상 경로와 모든 하위 Reply를 제공한다.
+  만족하면 Reply는 조회할 수 있다. Post 상세는 조회할 수 있는 조상 경로와 조회할 수 있는 모든 하위 Reply를
+  제공한다.
 - Repost는 Repost Source를 직접 참조하는 Post Form이다. Repost Source는 Original, Reply 또는 Quote이며
   Repost는 Source가 될 수 없다. 다른 Post로 평탄화하지 않는다.
 - 같은 Author Profile/Repost Source 조합에는 Active Repost가 하나만 존재한다. Repost 수는 해당 Source를
@@ -27,9 +28,11 @@ Accepted
 - Bookmark 목록은 최신 Bookmark부터 표시한다. 대상 Post를 조회할 수 없는 동안에는 목록에서 숨기되 Bookmark
   관계는 유지한다.
 - Post/Reply/Quote에 연결하는 Media는 Local이어야 하고 Media의 Upload Account가 행동을 요청한 Account와
-  같아야 한다. Media Profile과 Post Author Profile은 같은 Account 안에서 달라도 된다.
-- Reply, Reaction, Repost로 자기 Post에 새 Notification을 만들지 않는다. Reaction 제거와 Repost Tombstone
-  전이는 대응하는 Notification 제거를 Best Effort로 요청하며 제거 실패가 원인 행동을 되돌리지 않는다.
+  같아야 한다. Media Profile과 Post Author Profile은 같은 Account 안에서 달라도 되며, Upload Account는
+  연결되지 않은 Local Media를 조회할 수 있다.
+- Reply, Reaction, Repost로 자기 Post에 새 Notification을 만들지 않는다. Reaction Notification은 원인
+  Reaction을 Source로 직접 참조한다. Reaction 제거와 Repost Tombstone 전이는 대응하는 Notification 제거를
+  Best Effort로 요청하며 제거 실패가 원인 행동을 되돌리지 않는다.
 
 이 ADR은 Quote의 기존 도메인 계약을 변경하지 않는다.
 초기 허용 Reaction Type 목록은 이 ADR에서 결정하지 않고 별도 도메인 결정이 소유한다.
