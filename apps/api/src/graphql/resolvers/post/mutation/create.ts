@@ -1,8 +1,7 @@
-import { db, firstOrThrow, PostContents, Posts } from '@kosmo/core/db';
-import { PostState, PostVisibility } from '@kosmo/core/enums';
+import { PostVisibility } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
+import { createPost } from '@kosmo/core/services';
 import { postBodyTextSchema } from '@kosmo/core/validation';
-import { eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Post } from '../ref';
 
@@ -18,33 +17,11 @@ builder.mutationField('createPost', (t) =>
       visibility: t.input.field({ type: PostVisibility }),
     },
     resolve: async (_, { input }, ctx) => {
-      const body = postContentDocumentFromText(input.bodyText);
-      const post = await db.transaction(async (tx) => {
-        const post = await tx
-          .insert(Posts)
-          .values({
-            profileId: ctx.session.profileId,
-            visibility: input.visibility,
-            state: PostState.ACTIVE,
-          })
-          .returning()
-          .then(firstOrThrow);
-
-        const content = await tx
-          .insert(PostContents)
-          .values({
-            postId: post.id,
-            document: body,
-          })
-          .returning()
-          .then(firstOrThrow);
-
-        return await tx
-          .update(Posts)
-          .set({ currentContentId: content.id })
-          .where(eq(Posts.id, post.id))
-          .returning()
-          .then(firstOrThrow);
+      const { post } = await createPost({
+        document: postContentDocumentFromText(input.bodyText),
+        origin: 'LOCAL',
+        profileId: ctx.session.profileId,
+        visibility: input.visibility,
       });
 
       return { post };

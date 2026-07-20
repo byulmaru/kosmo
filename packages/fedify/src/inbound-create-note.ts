@@ -2,16 +2,8 @@ import '@kosmo/core/polyfill';
 
 import { PUBLIC_COLLECTION } from '@fedify/vocab';
 import { projectRemoteNoteContent } from '@kosmo/core/activitypub-note-content/server';
-import {
-  ActivityPubPosts,
-  db,
-  firstOrThrow,
-  isUniqueViolation,
-  PostContents,
-  Posts,
-} from '@kosmo/core/db';
-import { PostState, PostVisibility } from '@kosmo/core/enums';
-import { eq } from 'drizzle-orm';
+import { PostVisibility } from '@kosmo/core/enums';
+import { createPost } from '@kosmo/core/services';
 import { uniqueHref } from './unique-href';
 import type { Note } from '@fedify/vocab';
 
@@ -25,20 +17,6 @@ const hasReplyTarget = async (note: Note): Promise<boolean> => {
   } catch {
     return true;
   }
-};
-
-const isActivityPubPostUriConflict = (error: unknown): boolean => {
-  if (!isUniqueViolation(error) || !error || typeof error !== 'object' || !('cause' in error)) {
-    return false;
-  }
-
-  const { cause } = error;
-  return (
-    !!cause &&
-    typeof cause === 'object' &&
-    'constraint_name' in cause &&
-    cause.constraint_name === 'activitypub_post_uri_key'
-  );
 };
 
 export const handleInboundCreateNote = async ({
@@ -86,42 +64,13 @@ export const handleInboundCreateNote = async ({
     throw error;
   }
 
-  const createdAt =
-    note.published && Temporal.Instant.compare(note.published, receivedAt) < 0
-      ? note.published
-      : receivedAt;
-
-  try {
-    await db.transaction(async (tx) => {
-      const post = await tx
-        .insert(Posts)
-        .values({
-          createdAt,
-          profileId,
-          state: PostState.ACTIVE,
-          visibility,
-        })
-        .returning()
-        .then(firstOrThrow);
-
-      await tx.insert(ActivityPubPosts).values({
-        postId: post.id,
-        publishedAt: note.published,
-        receivedAt,
-        uri: objectUri,
-      });
-
-      const content = await tx
-        .insert(PostContents)
-        .values({ createdAt: receivedAt, document, postId: post.id })
-        .returning()
-        .then(firstOrThrow);
-
-      await tx.update(Posts).set({ currentContentId: content.id }).where(eq(Posts.id, post.id));
-    });
-  } catch (error) {
-    if (!isActivityPubPostUriConflict(error)) {
-      throw error;
-    }
-  }
+  await createPost({
+    document,
+    objectUri,
+    origin: 'ACTIVITYPUB',
+    profileId,
+    publishedAt: note.published,
+    receivedAt,
+    visibility,
+  });
 };
