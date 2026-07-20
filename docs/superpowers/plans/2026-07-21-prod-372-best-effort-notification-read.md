@@ -616,7 +616,7 @@ git push origin prod-372
 
 Expected: 검증 상태 문서만 마지막 checkpoint에 포함되고 push가 성공한다.
 
-- [ ] **Step 5: Draft PR 본문 최종 갱신**
+- [x] **Step 5: Draft PR 본문 최종 갱신**
 
 최종 본문은 다음 내용을 사용한다.
 
