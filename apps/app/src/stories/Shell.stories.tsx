@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { commitLocalUpdate } from 'relay-runtime';
@@ -328,6 +329,20 @@ function UniversalShellStory() {
   );
 }
 
+function RemountableUniversalShellStory() {
+  const [visible, setVisible] = useState(true);
+
+  return (
+    <>
+      {visible ? <UniversalShellStory /> : null}
+      <StoryButton
+        label={visible ? '셸 숨기기' : '셸 다시 열기'}
+        onPress={() => setVisible((current) => !current)}
+      />
+    </>
+  );
+}
+
 function StoryButton({ label, onPress }: { label: string; onPress: () => void }) {
   return (
     <Pressable accessibilityLabel={label} accessibilityRole="button" onPress={onPress}>
@@ -498,6 +513,24 @@ export const UnreadBadgeUsesNormalizedRelayProfileRecord: Story = {
       <SetUnreadNotificationCount count={100} />
     </>
   ),
+};
+
+export const UnreadBadgeRestoresWarmCacheAfterShellRemount: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: unreadBadgeParameters(7),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.findByRole('link', { name: '알림, 읽지 않은 알림 7개' }),
+    ).resolves.toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '셸 숨기기' }));
+    expect(canvas.queryByRole('link', { name: '알림, 읽지 않은 알림 7개' })).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: '셸 다시 열기' }));
+    await expect(
+      canvas.findByRole('link', { name: '알림, 읽지 않은 알림 7개' }),
+    ).resolves.toBeVisible();
+  },
+  render: () => <RemountableUniversalShellStory />,
 };
 
 export const UnreadBadgeKeepsSameProfileCountAcrossFailedRefresh: Story = {

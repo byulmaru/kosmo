@@ -61,7 +61,9 @@ export function UnreadNotificationBadgeController({ children }: PropsWithChildre
         });
       }
     };
-    const subscription = environment.subscribe(environment.lookup(operation.fragment), updateCount);
+    const snapshot = environment.lookup(operation.fragment);
+    updateCount(snapshot);
+    const subscription = environment.subscribe(snapshot, updateCount);
     const request = fetchQuery<UnreadNotificationBadgeControllerQuery>(
       environment,
       UnreadNotificationBadgeControllerQuery,
