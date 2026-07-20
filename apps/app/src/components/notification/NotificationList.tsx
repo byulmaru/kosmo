@@ -15,6 +15,7 @@ import { Skeleton } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { NotificationListItem } from './NotificationListItem';
+import { resolvePaginationLoadErrorAfterRefresh } from './notificationListState';
 import type { NotificationList_profile$key } from './__generated__/NotificationList_profile.graphql';
 import type { NotificationListNextPageQuery } from './__generated__/NotificationListNextPageQuery.graphql';
 
@@ -77,7 +78,8 @@ export function NotificationList({ profile }: NotificationListProps) {
         { count: 20 },
         {
           fetchPolicy: 'network-only',
-          onComplete: () => {
+          onComplete: (error) => {
+            setLoadError((current) => resolvePaginationLoadErrorAfterRefresh(current, error));
             setRefreshing(false);
           },
         },
