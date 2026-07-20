@@ -57,8 +57,10 @@ Reaction 삭제의 멱등 재시도는 기존 Reaction에 대한 `Reaction.Owner
 ## 조회 정책
 
 - Reaction은 대상 Post 조회 정책을 그대로 따른다.
-- Post의 Reaction 조회 결과는 viewer가 조회할 수 있는 Profile이 남긴 Reaction만 대상으로 Reaction Type별
-  개수와 Reaction을 남긴 Profile 목록을 제공한다.
+- Post의 Reaction 조회 결과는 Reaction Type별 개수와 Reaction을 남긴 Profile 목록을 제공한다.
+- Reaction Type별 개수는 대상 Post에 현재 존재하는 모든 Reaction을 포함하며, Post를 조회할 수 있는
+  viewer 사이에서 달라지지 않는다.
+- Profile 목록에는 viewer가 조회할 수 있는 Profile의 Reaction만 포함한다.
 - Reaction Type은 개수가 많은 순서로 표시한다.
 - Profile Block 생성 결과로 제거되는 Reaction 범위는 [Profile Block](./profile-block.md)이 정의한다.
 
