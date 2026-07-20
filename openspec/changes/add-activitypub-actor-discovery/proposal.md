@@ -13,7 +13,7 @@ kosmo는 로컬 프로필, 게시글, 팔로우의 SNS 뼈대가 갖춰졌지만
 - `profile`을 local/ActivityPub 공통 social identity로 확장하고, handle uniqueness를 instance 범위로 변경한다.
 - ActivityPub actor metadata와 actor key 저장 경계를 추가한다. local actor key는 RSA-PKCS#1-v1.5와 Ed25519 key pair를 lazy 생성한다.
 - GraphQL `Profile.relativeHandle`을 추가해 configured local profile은 `@handle`, 그 외 instance의 profile은 `@handle@domain`으로 표시 문자열을 서버에서 완성한다.
-- 저장된 remote profile은 GraphQL Node 조회 대상으로 열고, active profile 선택과 session restore는 account ownership 및 active/non-`SUSPENDED` visibility를 기준으로 instance kind와 무관하게 처리한다. 기존 handle 조회와 신규 remote follow 생성, UI 연결, remote post fetch/ingestion은 후속 capability로 유지하되, 이미 저장된 visible follow 관계의 조회와 unfollow 및 저장된 Post 조회는 instance kind로 차단하지 않는다.
+- 저장된 remote profile은 GraphQL Node 조회 대상으로 열되, remote profile을 계정이나 session에 연결하는 제품 write path는 추가하지 않는다. active profile 선택과 session restore는 기존 account membership·visibility 동작을 유지하며, 제품 경로 밖의 synthetic remote membership 동작은 이번 capability에서 정의하지 않는다. 기존 handle 조회와 신규 remote follow 생성, UI 연결, remote post fetch/ingestion은 후속 capability로 유지하되, 이미 저장된 visible follow 관계의 조회와 unfollow 및 저장된 Post 조회는 instance kind로 차단하지 않는다.
 
 ## Capabilities
 
@@ -24,7 +24,7 @@ kosmo는 로컬 프로필, 게시글, 팔로우의 SNS 뼈대가 갖춰졌지만
 ### Modified Capabilities
 
 - `data-model`: `instance`, ActivityPub actor metadata/key 저장 경계, profile의 instance 소속과 instance-scoped handle uniqueness를 추가한다.
-- `profile`: `Profile.relativeHandle`과 저장된 remote profile 조회 계약을 추가하고, 기존 handle 기반 조회 및 신규 follow 생성의 local 경계와 ownership/visibility 기반 선택·기존 follow 관계 접근 경계를 구분한다.
+- `profile`: `Profile.relativeHandle`과 저장된 remote profile 조회 계약을 추가하고, 기존 handle 기반 조회 및 신규 follow 생성의 local 경계와 기존 follow 관계 접근 경계를 구분한다.
 - `post`: 저장된 active remote profile의 Post는 일반 게시글 공개 범위로 읽되, `Profile.posts` 조회가 remote actor/post/collection fetch나 Post materialization을 수행하지 않는다고 명확히 한다.
 
 ## Impact
@@ -32,6 +32,6 @@ kosmo는 로컬 프로필, 게시글, 팔로우의 SNS 뼈대가 갖춰졌지만
 - `apps/web`: SvelteKit `hooks.server.ts`에서 `packages/fedify`가 제공하는 federation 구성과 Fedify SvelteKit hook adapter를 연결한다.
 - `packages/fedify`: Fedify root federation singleton, actor dispatcher 설정, WebFinger handle mapping dispatcher, key pair dispatcher, ActivityPub object assembly를 소유하고, federation request 처리와 HTTP 응답 조립은 Fedify hook/fetch 흐름에 맡긴다. 이번 workspace 경계 PR에서는 임시 `MemoryKvStore`를 사용하며, production durable KV store 선택은 후속 구현에서 교체한다.
 - `packages/core/db`: `instance`와 ActivityPub actor 관련 테이블, `profile.instance_id`, 관련 UUID primary key default, unique/index/relation이 추가된다.
-- `apps/api`: GraphQL `Profile.relativeHandle` 필드, remote profile Node 조회, ownership/visibility 기반 active profile 선택·session restore, visible follow 관계 조회·unfollow, remote 신규 follow 차단, 저장된 remote profile Post의 일반 공개 범위 적용과 federation fetch 없는 조회 정책을 반영한다.
+- `apps/api`: GraphQL `Profile.relativeHandle` 필드, remote profile Node 조회, visible follow 관계 조회·unfollow, remote 신규 follow 차단, 저장된 remote profile Post의 일반 공개 범위 적용과 federation fetch 없는 조회 정책을 반영한다.
 - dependency: 이번 workspace 경계 PR에서는 `packages/fedify`에 `@fedify/fedify`를 추가하고, `apps/web`에는 `@kosmo/fedify`와 공식 SvelteKit hook adapter인 `@fedify/sveltekit`을 추가한다.
 - 환경/운영: configured local instance canonical origin/domain은 DB row가 source of truth이며, `PUBLIC_ORIGIN`은 초기 local instance bootstrap 입력과 runtime local instance 검증 입력으로 사용한다.
