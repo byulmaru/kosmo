@@ -10,10 +10,10 @@ Reaction은 Profile이 Post에 남기는 유니코드 이모지 반응이다.
 
 ## 속성
 
-| 속성          | 타입/nullability | 검증 정책                      | 존재 조건 | 조회 조건           | 조회 권한 |
-| ------------- | ---------------- | ------------------------------ | --------- | ------------------- | --------- |
-| Reaction Type | 문자열, 필수     | 하나의 유니코드 이모지         | 항상      | Post 조회 정책 통과 | 없음      |
-| 생성 시각     | 시각, 필수       | 생성 결과로 기록하며 변경 불가 | 항상      | Post 조회 정책 통과 | 없음      |
+| 속성          | 타입/nullability | 검증 정책                            | 존재 조건 | 조회 조건           | 조회 권한 |
+| ------------- | ---------------- | ------------------------------------ | --------- | ------------------- | --------- |
+| Reaction Type | 문자열, 필수     | `❤️`, `👍`, `😂`, `😮`, `😢` 중 하나 | 항상      | Post 조회 정책 통과 | 없음      |
+| 생성 시각     | 시각, 필수       | 생성 결과로 기록하며 변경 불가       | 항상      | Post 조회 정책 통과 | 없음      |
 
 ## 관계
 
@@ -26,10 +26,10 @@ Reaction은 Profile이 Post에 남기는 유니코드 이모지 반응이다.
 
 ## 행동
 
-| 행동          | 행동 주체 Profile | 대상 객체 | 입력값      | 권한                               | 조건                                                                                              | 결과                |
-| ------------- | ----------------- | --------- | ----------- | ---------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------- |
-| Reaction 추가 | Profile           | Reaction  | Post, Emoji | `Account.Active`, `Profile.Member` | 행동 주체가 Active/Normal Local Profile이고 Post 조회 정책을 통과하며 같은 조합의 Reaction이 없다 | Reaction이 생성된다 |
-| Reaction 삭제 | Profile           | Reaction  | 없음        | `Account.Active`, `Reaction.Owner` | Reaction이 존재한다                                                                               | Reaction이 제거된다 |
+| 행동          | 행동 주체 Profile | 대상 객체 | 입력값      | 권한                               | 조건                                                                                              | 결과                                                           |
+| ------------- | ----------------- | --------- | ----------- | ---------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Reaction 추가 | Profile           | Reaction  | Post, Emoji | `Account.Active`, `Profile.Member` | 행동 주체가 Active/Normal Local Profile이고 Post 조회 정책을 통과하며 같은 조합의 Reaction이 없다 | Reaction이 생성된다                                            |
+| Reaction 삭제 | Profile           | Reaction  | 없음        | `Account.Active`, `Reaction.Owner` | Reaction이 존재한다                                                                               | Reaction이 제거되고 대응하는 Notification 제거 경계를 호출한다 |
 
 ## 권한
 
@@ -40,6 +40,9 @@ Reaction은 Profile이 Post에 남기는 유니코드 이모지 반응이다.
 ## 조회 정책
 
 - Reaction은 대상 Post 조회 정책을 그대로 따른다.
+- Post의 Reaction 조회 결과는 Reaction Type별 개수와 Reaction을 남긴 Profile 목록을 제공한다.
+- Reaction Type은 개수가 많은 순서로 표시하고, 개수가 같으면 `❤️`, `👍`, `😂`, `😮`, `😢` 순서를 사용한다.
+- Profile 목록에는 viewer가 조회할 수 있는 Profile의 Reaction만 포함한다.
 - Profile Block 생성 결과로 제거되는 Reaction 범위는 [Profile Block](./profile-block.md)이 정의한다.
 
 ## 확정 용어

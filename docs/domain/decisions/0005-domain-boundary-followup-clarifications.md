@@ -8,6 +8,9 @@ Accepted
 
 2026-06-29
 
+다른 Profile Media 재사용 보류 결정은 [ADR 0010](./0010-post-interaction-contracts.md)의 같은 Upload
+Account Local Media 허용과 다른 Account Media 제외 결정으로 대체되었다. 나머지 결정은 유지한다.
+
 ## 결정
 
 - Post는 작성 시 Attached Media 관계와 순서를 원자적으로 만들며 게시 뒤 연결/해제를 지원하지 않는다.

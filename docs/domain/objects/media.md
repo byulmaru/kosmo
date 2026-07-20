@@ -36,6 +36,10 @@ Alt Text, File 표현, 접근 결과를 소유한다.
 Local Media의 Profile은 upload를 수행한 Local Profile이다. Remote Media의 Profile은 원본 Remote Profile이며,
 Instance는 이 Profile에서 파생한다.
 
+Post에 Attached Media 관계를 만드는 요청은 Source=Local이고 행동을 요청한 Account와 Upload Account가 같은
+Media만 사용할 수 있다. 같은 Upload Account를 가진 Local Media는 Media Profile과 Post Author Profile이
+달라도 연결할 수 있다.
+
 ## 행동
 
 | 행동              | 행동 주체 | 대상 객체 | 입력값                               | 권한                               | 조건                                                                                  | 결과                                                                                                  |
@@ -78,6 +82,6 @@ Instance는 이 Profile에서 파생한다.
 - 완료 전 업로드 취소는 upload lifecycle 상태가 확정되지 않아 현재 행동에서 제외한다.
 - Media Proxy 조회는 Mutation이 아니므로 행동에서 제외한다.
 - 동영상, GIF, 개인 파일함, 과거 업로드 재사용 라이브러리는 현재 범위에서 제외한다.
-- 다른 Profile이 Media를 Post 또는 Profile 표현에 재사용할 수 있는지는 후속 결정 대상으로 둔다.
+- 다른 Account의 Local Media와 Remote Media를 Local Post 작성에 연결하는 것은 현재 범위에서 제외한다.
 - 구체 MIME type 목록, Hash, EXIF, dedupe, 이미지 변환 실패 삭제 정책, 바이러스 스캔, 성인물 탐지는
   구현/OpenSpec에서 다룬다.
