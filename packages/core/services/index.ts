@@ -1,5 +1,6 @@
 export { recordInboundFollow, removeInboundFollow } from './inbound-profile-follow';
 export { createFollowNotification, deleteNotificationBySource } from './notification';
+export { createPost } from './post';
 export { disableProfile } from './profile';
 export { followProfile, unfollowProfile } from './profile-follow';
 export {
