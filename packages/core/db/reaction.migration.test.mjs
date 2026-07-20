@@ -15,11 +15,10 @@ const existingMigrations = [
   '20260716052716_swift_speed',
 ].map((name) => new URL(`../../../drizzle/${name}/migration.sql`, import.meta.url));
 const reactionMigration = new URL(
-  '../../../drizzle/20260720131640_powerful_bloodstorm/migration.sql',
+  '../../../drizzle/20260720151915_dapper_lady_mastermind/migration.sql',
   import.meta.url,
 );
 
-const builtInUnicode = new Set(['🥹', '❤️', '🎉', '👀', '☘️', '🌈']);
 const instanceId = '00000000-0000-8000-8000-000000000001';
 const authorProfileId = '00000000-0000-8000-8000-000000000002';
 const firstReactorProfileId = '00000000-0000-8000-8000-000000000003';
@@ -47,7 +46,6 @@ test('adds the Reaction storage contract without rewriting existing rows', async
     assert.deepEqual(await rowIds(sql, 'post'), existingPostIds);
 
     await verifyCatalog(sql);
-    await verifyBuiltInTypes(sql);
     await verifyIntegrity(sql);
   } finally {
     await sql.end();
@@ -55,29 +53,17 @@ test('adds the Reaction storage contract without rewriting existing rows', async
 });
 
 async function verifyCatalog(sql) {
+  const [{ relation: reactionTypeRelation }] = await sql`
+    SELECT to_regclass('public.reaction_type') AS relation
+  `;
+  assert.equal(reactionTypeRelation, null);
+
   assert.deepEqual(
     [
       ...(await sql`
         SELECT
           column_name AS name,
-          is_nullable AS "isNullable",
-          column_default AS "default"
-        FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'reaction_type'
-        ORDER BY ordinal_position
-      `),
-    ],
-    [
-      { name: 'id', isNullable: 'NO', default: 'uuidv7()' },
-      { name: 'unicode', isNullable: 'NO', default: null },
-      { name: 'created_at', isNullable: 'NO', default: 'now()' },
-    ],
-  );
-  assert.deepEqual(
-    [
-      ...(await sql`
-        SELECT
-          column_name AS name,
+          data_type AS "dataType",
           is_nullable AS "isNullable",
           column_default AS "default"
         FROM information_schema.columns
@@ -86,11 +72,16 @@ async function verifyCatalog(sql) {
       `),
     ],
     [
-      { name: 'id', isNullable: 'NO', default: 'uuidv7()' },
-      { name: 'profile_id', isNullable: 'NO', default: null },
-      { name: 'post_id', isNullable: 'NO', default: null },
-      { name: 'reaction_type_id', isNullable: 'NO', default: null },
-      { name: 'created_at', isNullable: 'NO', default: 'now()' },
+      { name: 'id', dataType: 'uuid', isNullable: 'NO', default: 'uuidv7()' },
+      { name: 'profile_id', dataType: 'uuid', isNullable: 'NO', default: null },
+      { name: 'post_id', dataType: 'uuid', isNullable: 'NO', default: null },
+      { name: 'type', dataType: 'text', isNullable: 'NO', default: null },
+      {
+        name: 'created_at',
+        dataType: 'timestamp with time zone',
+        isNullable: 'NO',
+        default: 'now()',
+      },
     ],
   );
 
@@ -113,9 +104,15 @@ async function verifyCatalog(sql) {
     [
       { column: 'post_id', deleteType: 'c' },
       { column: 'profile_id', deleteType: 'c' },
-      { column: 'reaction_type_id', deleteType: 'r' },
     ],
   );
+
+  const [{ checkCount }] = await sql`
+    SELECT count(*)::int AS "checkCount"
+    FROM pg_constraint
+    WHERE conrelid = 'reaction'::regclass AND contype = 'c'
+  `;
+  assert.equal(checkCount, 0);
 
   const indexes = await sql`
     SELECT indexname AS name, indexdef AS definition
@@ -127,9 +124,9 @@ async function verifyCatalog(sql) {
   `;
   assert.equal(indexes.length, 2);
   assert.match(
-    indexes.find(({ name }) => name === 'reaction_post_id_reaction_type_id_profile_id_unique')
-      ?.definition ?? '',
-    /CREATE UNIQUE INDEX .+ \(post_id, reaction_type_id, profile_id\)$/,
+    indexes.find(({ name }) => name === 'reaction_post_id_type_profile_id_unique')?.definition ??
+      '',
+    /CREATE UNIQUE INDEX .+ \(post_id, type, profile_id\)$/,
   );
   assert.match(
     indexes.find(({ name }) => name === 'reaction_profile_id_index')?.definition ?? '',
@@ -137,93 +134,64 @@ async function verifyCatalog(sql) {
   );
 }
 
-async function verifyBuiltInTypes(sql) {
-  const types = await sql`
-    SELECT
-      unicode,
-      uuid_extract_version(id)::int AS "idVersion",
-      created_at AS "createdAt"
-    FROM reaction_type
-  `;
-
-  assert.equal(types.length, builtInUnicode.size);
-  assert.deepEqual(new Set(types.map(({ unicode }) => unicode)), builtInUnicode);
-  assert.ok(types.every(({ idVersion }) => idVersion === 7));
-  assert.ok(types.every(({ createdAt }) => createdAt instanceof Date));
-
-  await assert.rejects(sql`INSERT INTO reaction_type (unicode) VALUES ('🥹')`, { code: '23505' });
-}
-
 async function verifyIntegrity(sql) {
-  const [holdingBackTears] = await sql`
-    SELECT id FROM reaction_type WHERE unicode = '🥹'
-  `;
-  const [heart] = await sql`
-    SELECT id FROM reaction_type WHERE unicode = '❤️'
-  `;
-  assert.ok(holdingBackTears);
-  assert.ok(heart);
-
   const [reaction] = await sql`
-    INSERT INTO reaction (profile_id, post_id, reaction_type_id)
-    VALUES (${firstReactorProfileId}, ${firstPostId}, ${holdingBackTears.id})
+    INSERT INTO reaction (profile_id, post_id, type)
+    VALUES (${firstReactorProfileId}, ${firstPostId}, '🥹')
     RETURNING
+      type,
       uuid_extract_version(id)::int AS "idVersion",
       created_at AS "createdAt"
   `;
+  assert.equal(reaction?.type, '🥹');
   assert.equal(reaction?.idVersion, 7);
   assert.ok(reaction?.createdAt instanceof Date);
 
   await assert.rejects(
     sql`
-      INSERT INTO reaction (profile_id, post_id, reaction_type_id)
-      VALUES (${firstReactorProfileId}, ${firstPostId}, ${holdingBackTears.id})
+      INSERT INTO reaction (profile_id, post_id, type)
+      VALUES (${firstReactorProfileId}, ${firstPostId}, '🥹')
     `,
     { code: '23505' },
   );
   await sql`
-    INSERT INTO reaction (profile_id, post_id, reaction_type_id)
-    VALUES (${firstReactorProfileId}, ${firstPostId}, ${heart.id})
+    INSERT INTO reaction (profile_id, post_id, type)
+    VALUES (${firstReactorProfileId}, ${firstPostId}, '❤️')
   `;
   assert.equal(await reactionCount(sql, { profileId: firstReactorProfileId }), 2);
+
+  await sql`
+    INSERT INTO reaction (profile_id, post_id, type)
+    VALUES (${secondReactorProfileId}, ${secondPostId}, 'application-validates-this')
+  `;
+  assert.equal(await reactionCount(sql, { postId: secondPostId }), 1);
 
   const missingId = '00000000-0000-8000-8000-000000000099';
   await assert.rejects(
     sql`
-      INSERT INTO reaction (profile_id, post_id, reaction_type_id)
-      VALUES (${missingId}, ${firstPostId}, ${holdingBackTears.id})
+      INSERT INTO reaction (profile_id, post_id, type)
+      VALUES (${missingId}, ${firstPostId}, '🥹')
     `,
     { code: '23503' },
   );
   await assert.rejects(
     sql`
-      INSERT INTO reaction (profile_id, post_id, reaction_type_id)
-      VALUES (${secondReactorProfileId}, ${missingId}, ${holdingBackTears.id})
+      INSERT INTO reaction (profile_id, post_id, type)
+      VALUES (${secondReactorProfileId}, ${missingId}, '🥹')
     `,
     { code: '23503' },
   );
-  await assert.rejects(
-    sql`
-      INSERT INTO reaction (profile_id, post_id, reaction_type_id)
-      VALUES (${secondReactorProfileId}, ${firstPostId}, ${missingId})
-    `,
-    { code: '23503' },
-  );
-  await assert.rejects(sql`DELETE FROM reaction_type WHERE id = ${holdingBackTears.id}`, {
-    code: '23001',
-  });
 
   await sql`DELETE FROM profile WHERE id = ${firstReactorProfileId}`;
   assert.equal(await reactionCount(sql, { profileId: firstReactorProfileId }), 0);
 
   await sql`
-    INSERT INTO reaction (profile_id, post_id, reaction_type_id)
-    VALUES (${secondReactorProfileId}, ${firstPostId}, ${holdingBackTears.id})
+    INSERT INTO reaction (profile_id, post_id, type)
+    VALUES (${secondReactorProfileId}, ${firstPostId}, '🥹')
   `;
   await sql`DELETE FROM post WHERE id = ${firstPostId}`;
   assert.equal(await reactionCount(sql, { postId: firstPostId }), 0);
   assert.deepEqual(await rowIds(sql, 'post'), [secondPostId]);
-  assert.equal((await sql`SELECT count(*)::int AS count FROM reaction_type`)[0]?.count, 6);
 }
 
 async function seedExistingRows(sql) {

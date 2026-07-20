@@ -361,22 +361,11 @@ export const Reactions = pgTable(
     postId: uuid('post_id')
       .notNull()
       .references(() => Posts.id, { onDelete: 'cascade' }),
-    reactionTypeId: uuid('reaction_type_id')
-      .notNull()
-      .references(() => ReactionTypes.id, { onDelete: 'restrict' }),
+    type: text('type').notNull(),
     createdAt: createdAt(),
   },
-  (table) => [
-    unique().on(table.postId, table.reactionTypeId, table.profileId),
-    index().on(table.profileId),
-  ],
+  (table) => [unique().on(table.postId, table.type, table.profileId), index().on(table.profileId)],
 );
-
-export const ReactionTypes = pgTable('reaction_type', {
-  id: id(),
-  unicode: text('unicode').unique().notNull(),
-  createdAt: createdAt(),
-});
 
 export const Sessions = pgTable(
   'session',

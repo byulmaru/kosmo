@@ -8,14 +8,14 @@
 
 **Goals:**
 
-- Reaction Type identity와 Reaction 관계를 custom emoji 확장에 견딜 수 있는 저장 경계로 추가한다.
+- Canonical Reaction Type 문자열과 Reaction 관계를 현재 여섯 Unicode 계약에 맞는 저장 경계로 추가한다.
 - 유일성·멱등 mutation·viewer-independent count·viewer-filtered Profile 목록을 같은 도메인 계약으로 구현한다.
 - 기존 Notification projection과 universal client 경계를 재사용해 Reaction UI와 Notification lifecycle을 연결한다.
 - 각 Linear 자식이 독립적으로 구현·검증되면서 부모 PROD-390이 최종 통합과 archive를 소유하게 한다.
 
 **Non-Goals:**
 
-- 이미지형 custom emoji의 업로드, 소유·사용 범위, shortcode, file/media, 비활성화와 삭제 정책
+- 임의 Unicode와 사용자 정의 Reaction
 - ActivityPub federation과 remote delivery
 - 범용 Notification framework, retry/outbox/queue/cron/backfill/bulk cleanup
 - 여러 Post action을 공통 Action Bar와 실제 surface에 조립하는 PROD-432 범위
@@ -25,7 +25,7 @@
 
 ### Current Constraints
 
-- DB schema는 `packages/core/db/tables.ts`와 공용 UUIDv7/created-at helper를 사용한다. migration SQL의 seed는 schema push로 실행되지 않으므로 service/API test fixture가 built-in Type을 별도로 준비해야 한다.
+- DB schema는 `packages/core/db/tables.ts`와 공용 UUIDv7/created-at helper를 사용한다. 현재 허용 Type 검증은 PROD-404 application service가 소유하며 database enum, seed registry 또는 `CHECK` constraint로 목록을 고정하지 않는다.
 - Post visibility predicate는 API 경계에 있고 core service의 `usingProfile`만으로 Local actor와 Post 조회 권한이 보장되지 않는다. mutation은 검증된 actor·Post context를 service에 전달하거나 동등한 검증 경계를 명확히 유지해야 한다.
 - Notification create/delete는 기존 Follow와 같이 source transaction commit 뒤 같은 request에서 await/catch한다. Notification 실패를 source transaction에 포함하거나 fire-and-forget으로 처리하지 않는다.
 - 현재 Notification Node/list/count/read query는 Follow source inner join에 고정돼 있어 enum과 concrete type만 추가하면 Reaction item이 누락된다.
@@ -34,7 +34,7 @@
 
 ### Recommended Approach
 
-1. PROD-395는 `reaction_type` registry와 `reaction` 관계 테이블을 additive migration으로 추가한다. built-in 여섯 Type은 migration에서 seed하고 Reaction은 registry ID를 참조한다. 기존 행은 backfill하거나 재작성하지 않는다.
+1. PROD-395는 `reaction` 관계 테이블을 additive migration으로 추가하고 Type을 non-null text로 저장한다. built-in 여섯 Type은 database에 seed하거나 `CHECK`로 고정하지 않으며 기존 행은 backfill하거나 재작성하지 않는다.
 2. PROD-404의 core service는 짧은 transaction에서 actor·Post·Type을 검증하고 `(post, type, profile)` insert를 conflict-safe하게 수행한다. 새 행이 만들어졌는지를 결과에 포함해 commit 뒤 Notification 호출 여부를 구분한다. 명시적 pessimistic lock은 사용하지 않는다.
 3. PROD-405는 actor가 소유한 Profile/Post/Type 조합을 transaction에서 삭제하고 실제 삭제된 source ID를 반환한다. Post의 현재 visibility는 삭제 권한을 대신하지 않는다.
 4. PROD-406 count query는 Post visibility만 통과한 뒤 viewer Profile filtering 없이 현재 Reaction을 group/count한다. PROD-407 Profile connection은 Type을 격리하고 기존 Profile visibility를 SQL page limit 전에 적용한다.
@@ -50,9 +50,9 @@
 
 ### Known Traps
 
-- emoji 값 자체를 PostgreSQL enum이나 `reaction` raw 문자열로 저장하지 않는다.
+- Reaction Type을 PostgreSQL enum, `CHECK` constraint 또는 별도 seed registry로 고정하지 않는다.
 - exact Unicode variation selector를 정규화·제거하거나 비슷해 보이는 문자열을 같은 Type으로 취급하지 않는다.
-- built-in seed UUID를 client 상수로 하드코딩하거나 환경 간 동일하다고 가정하지 않는다.
+- 허용 목록 검증을 database 제약에만 의존하지 않는다.
 - 같은 Reaction의 멱등성을 명시적 DB lock이나 check-then-insert만으로 구현하지 않는다.
 - viewer가 볼 수 없는 Profile의 Reaction을 count에서 제외하지 않는다.
 - Profile visibility filtering을 page fetch 뒤 애플리케이션에서 수행하지 않는다.
@@ -63,7 +63,7 @@
 
 ## Risks / Trade-offs
 
-- [Reaction Type registry가 현재 여섯 Type에는 lookup 비용을 추가함] → custom emoji에서 관계 identity와 metadata를 분리할 장기 경계를 우선하고, Unicode unique index와 작은 seed table로 비용을 제한한다.
+- [문자열 Type은 미래 사용자 정의 Reaction 저장 구조를 선결정하지 않음] → 현재 canonical/Linear 범위만 구현하고, 사용자 정의 Reaction이 실제 제품 요구가 되면 Domain Gate와 Issue Gate에서 identity·asset lifecycle·migration을 먼저 결정한다.
 - [Profile/Post cascade가 audit 요구를 잃을 수 있음] → 현재 Reaction은 별도 상태·history가 없는 존재 기반 관계라는 canonical 계약에 한정하고, future audit/history는 별도 capability로 다룬다.
 - [Profile 목록 정렬이 아직 고정되지 않음] → PROD-395에서는 유일성·cleanup index만 추가하고, PROD-407에서 공개 pagination 순서를 결정한 뒤 필요한 ordering index를 forward migration으로 추가한다.
 - [Notification active change와 migration/snapshot 충돌 가능] → Notification kind migration과 UI 확장은 `add-in-app-notifications` archive 뒤 별도 slice에서 적용하고 PROD-395 migration에는 포함하지 않는다.
@@ -72,9 +72,9 @@
 
 ## Migration Plan
 
-1. PROD-395에서 `reaction_type`과 `reaction` table, built-in seed, foreign key, unique/index를 하나의 additive migration으로 추가한다.
-2. migration SQL과 schema가 exact seed, UUIDv7 default, 관계 무결성, 중복 거부, 다른 Type 공존, cascade/restrict와 index를 일치시키는지 실제 PostgreSQL에서 검증한다.
-3. rollback이 필요하고 아직 consumer가 배포되지 않았다면 신규 table을 역순으로 제거할 수 있다. consumer 배포 뒤에는 기존 migration을 수정하지 않고 forward migration으로 고친다.
+1. PROD-395에서 `reaction` table과 Type text, Profile/Post foreign key, unique/index를 하나의 additive migration으로 추가한다.
+2. migration SQL과 schema가 UUIDv7 default, Type text, 관계 무결성, 중복 거부, 다른 Type 공존, cascade와 index를 일치시키는지 실제 PostgreSQL에서 검증한다.
+3. rollback이 필요하고 아직 consumer가 배포되지 않았다면 신규 table을 제거할 수 있다. consumer 배포 뒤에는 기존 migration을 수정하지 않고 forward migration으로 고친다.
 4. PROD-404~407에서 mutation과 조회를 추가한다. 필요한 pagination ordering index는 공개 순서 결정 뒤 별도 forward migration으로 추가한다.
 5. `add-in-app-notifications` archive 뒤 PROD-413/419에서 `REACTION` kind와 multi-kind visibility/API/UI migration을 별도로 추가한다.
 6. PROD-417/418은 독립 UI와 Storybook/integration 검증을 전달하고 실제 Post surface 조립은 PROD-432로 넘긴다.

@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "d1542e15-9067-4767-a855-89522815bb7c",
+  "id": "1e457a5c-4dba-46a1-b5d4-d8d15e4e2b4b",
   "prevIds": ["7eb8fe8e-87ad-4ba2-91a8-07de7031681f"],
   "ddl": [
     {
@@ -205,12 +205,6 @@
     {
       "isRlsEnabled": false,
       "name": "profile",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": false,
-      "name": "reaction_type",
       "entityType": "tables",
       "schema": "public"
     },
@@ -2005,45 +1999,6 @@
       "name": "id",
       "entityType": "columns",
       "schema": "public",
-      "table": "reaction_type"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "unicode",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "reaction_type"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "reaction_type"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "uuidv7()",
-      "generated": null,
-      "identity": null,
-      "name": "id",
-      "entityType": "columns",
-      "schema": "public",
       "table": "reaction"
     },
     {
@@ -2073,14 +2028,14 @@
       "table": "reaction"
     },
     {
-      "type": "uuid",
+      "type": "text",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "reaction_type_id",
+      "name": "type",
       "entityType": "columns",
       "schema": "public",
       "table": "reaction"
@@ -3139,19 +3094,6 @@
     },
     {
       "nameExplicit": false,
-      "columns": ["reaction_type_id"],
-      "schemaTo": "public",
-      "tableTo": "reaction_type",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "RESTRICT",
-      "name": "reaction_reaction_type_id_reaction_type_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "reaction"
-    },
-    {
-      "nameExplicit": false,
       "columns": ["account_id"],
       "schemaTo": "public",
       "tableTo": "account",
@@ -3336,14 +3278,6 @@
     {
       "columns": ["id"],
       "nameExplicit": false,
-      "name": "reaction_type_pkey",
-      "schema": "public",
-      "table": "reaction_type",
-      "entityType": "pks"
-    },
-    {
-      "columns": ["id"],
-      "nameExplicit": false,
       "name": "reaction_pkey",
       "schema": "public",
       "table": "reaction",
@@ -3467,9 +3401,9 @@
     },
     {
       "nameExplicit": false,
-      "columns": ["post_id", "reaction_type_id", "profile_id"],
+      "columns": ["post_id", "type", "profile_id"],
       "nullsNotDistinct": false,
-      "name": "reaction_post_id_reaction_type_id_profile_id_unique",
+      "name": "reaction_post_id_type_profile_id_unique",
       "entityType": "uniques",
       "schema": "public",
       "table": "reaction"
@@ -3526,15 +3460,6 @@
       "name": "instance_domain_key",
       "schema": "public",
       "table": "instance",
-      "entityType": "uniques"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["unicode"],
-      "nullsNotDistinct": false,
-      "name": "reaction_type_unicode_key",
-      "schema": "public",
-      "table": "reaction_type",
       "entityType": "uniques"
     },
     {

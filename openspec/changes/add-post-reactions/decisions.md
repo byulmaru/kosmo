@@ -1,6 +1,6 @@
 ## Context
 
-이 결정 기록은 PROD-386에서 확정한 canonical Reaction Type, PROD-390과 구현 자식들의 Linear 범위, `reaction`·`data-model`·`post`·`post-reaction-ui`·`notification` specs, 그리고 현재 PostgreSQL/Drizzle·GraphQL·Relay·Notification 구현 제약을 반영한다. 2026-07-20 사용자 확인으로 이미지형 custom emoji의 장기 확장과 안정적인 `reaction_type` 참조 경계를 반영했다.
+이 결정 기록은 PROD-386에서 확정한 canonical Reaction Type, PROD-390과 구현 자식들의 Linear 범위, `reaction`·`data-model`·`post`·`post-reaction-ui`·`notification` specs, 그리고 현재 PostgreSQL/Drizzle·GraphQL·Relay·Notification 구현 제약을 반영한다. 현재 계약은 정확한 여섯 Unicode Reaction만 포함하며 사용자 정의 Reaction 저장 방향을 선결정하지 않는다.
 
 ## Decision Records
 
@@ -21,38 +21,28 @@
 - Context / Problem: 최초 구현이 허용할 Type과 정확한 Unicode 표현, count 동률 순서를 고정해야 한다.
 - Decision Outcome: 현재 허용 Type은 `🥹` (`U+1F979`), `❤️` (`U+2764 U+FE0F`), `🎉` (`U+1F389`), `👀` (`U+1F440`), `☘️` (`U+2618 U+FE0F`), `🌈` (`U+1F308`)만 사용한다. 목록 나열은 count 동률 표시 순서를 정의하지 않는다.
 - Alternatives Considered: 임의 Unicode, variation selector 정규화, 동률 fallback 순서는 canonical Domain Gate에서 제외하거나 보장하지 않기로 했다.
-- Consequences: validation과 seed는 exact 문자열을 유지한다. custom emoji와 임의 Unicode는 이번 mutation·UI에서 거부한다.
-- Confirmation / Follow-up: PROD-395 migration test와 PROD-404 validation, PROD-417 selector fixture에서 여섯 exact 표현을 검증한다.
+- Consequences: application validation은 exact 문자열을 유지한다. 임의 Unicode와 사용자 정의 Reaction은 이번 mutation·UI에서 거부한다.
+- Confirmation / Follow-up: PROD-404 validation과 PROD-417 selector fixture에서 여섯 exact 표현을 검증한다.
 
-### Reaction은 안정적인 Reaction Type identity를 참조한다
+### Reaction Type은 현재 canonical 문자열로 저장한다
 
-- Decision Date: 2026-07-20
+- Decision Date: 2026-07-21
 - Status: Accepted
-- Context / Problem: Reaction 값을 PostgreSQL enum이나 raw 문자열로 저장하면 사용자가 업로드하는 이미지형 custom emoji로 확장할 때 기존 Reaction 관계를 다시 식별·전환해야 한다.
-- Decision Outcome: 별도 `reaction_type` identity registry를 두고 `reaction`은 그 UUID를 참조한다. 현재 built-in Unicode는 registry의 unique 표현으로 seed한다. future custom emoji metadata는 같은 identity를 사용하는 별도 subtype/metadata 경계가 소유한다.
-- Alternatives Considered: PostgreSQL enum은 runtime custom value마다 DDL이 필요하고 삭제·rename·rollback이 어렵다. `reaction.type text + CHECK`는 현재는 작지만 custom emoji 전환 때 모든 Reaction 관계를 migration해야 한다. 지금 custom emoji 전체 schema를 설계하는 것은 소유·범위·asset lifecycle이 미정이라 채택하지 않았다.
-- Consequences: 현재 여섯 Type에도 lookup과 seed가 필요하다. custom emoji 업로드·소유 범위·shortcode·asset·비활성화·삭제 정책은 후속 계약이 추가한다.
-- Confirmation / Follow-up: PROD-395는 raw Type column/enum 부재, Type foreign key와 exact built-in seed를 검증한다.
-
-### built-in Type UUID는 database가 생성하고 공개 상수로 고정하지 않는다
-
-- Decision Date: 2026-07-20
-- Status: Accepted
-- Context / Problem: seed identity를 환경마다 같은 UUID로 고정할지, migration 적용 시 database가 UUIDv7을 생성할지 결정해야 한다.
-- Decision Outcome: migration은 각 database에서 `uuidv7()`로 built-in Type identity를 생성하고 서비스는 exact Unicode unique key로 현재 identity를 resolve한다. client와 test는 UUID 값을 하드코딩하지 않는다.
-- Alternatives Considered: 고정 UUID seed는 cross-environment fixture를 단순화하지만 DB identity를 공개·배포 상수로 만들고 UUIDv7 생성 규칙과 결합한다.
-- Consequences: built-in Type ID는 환경마다 다를 수 있다. 향후 Type ID를 API에 노출하면 client는 server에서 받은 opaque ID만 사용해야 한다.
-- Confirmation / Follow-up: 2026-07-20 OpenSpec Gate에서 승인됐다. migration/service test가 ID hardcode 없이 동작하는지 확인한다.
+- Context / Problem: Canonical Reaction은 Type을 문자열로 정의하고 PROD-386·390은 정확한 여섯 Unicode만 현재 범위에 포함한다. 별도 Type identity와 사용자 정의 Reaction 확장은 상위 계약에서 승인되지 않았다.
+- Decision Outcome: `reaction.type`은 non-null text로 exact Unicode를 저장한다. 현재 허용 목록은 PROD-404 application service가 검증하며 database enum, seed registry 또는 `CHECK` constraint로 고정하지 않는다.
+- Alternatives Considered: PostgreSQL enum과 `CHECK`는 허용 목록 변경을 schema migration에 결합한다. 별도 `reaction_type` registry는 미래 사용자 정의 Reaction을 전제로 identity와 lifecycle 방향을 현재 범위에서 선결정한다.
+- Consequences: database에 직접 쓰면 허용 목록 밖 문자열도 저장할 수 있으므로 모든 production write는 application validation을 통과해야 한다. 미래 사용자 정의 Reaction이 승인되면 Domain Gate와 Issue Gate에서 저장 identity와 기존 row migration을 새로 결정한다.
+- Confirmation / Follow-up: 2026-07-21 PR #299 review에서 canonical/Linear 불일치를 확인해 정정했다. PROD-395 migration test는 text column과 DB 허용 목록 제약 부재를 검증하고 PROD-404가 exact 허용 목록을 검증한다.
 
 ### Reaction foreign key lifecycle과 index를 존재 기반 관계에 맞춘다
 
 - Decision Date: 2026-07-20
 - Status: Accepted
-- Context / Problem: Profile/Post/Type 물리 삭제와 후속 count·Profile 조회를 지원하는 최소 제약·index를 정해야 한다.
-- Decision Outcome: Profile/Post 삭제는 Reaction을 cascade하고 사용 중인 Reaction Type 삭제는 restrict한다. unique index는 `(post_id, reaction_type_id, profile_id)` 순서로 count·Type별 Profile lookup과 멱등 conflict target을 함께 지원하며, Profile cascade/cleanup을 위해 `(profile_id)` index를 추가한다. Profile connection ordering index는 PROD-407까지 유예한다.
-- Alternatives Considered: 모든 foreign key `NO ACTION`은 orphan 방지 삭제 순서를 caller에게 분산한다. `(profile_id, post_id, reaction_type_id)` unique와 별도 post/type index는 같은 세 열을 중복 저장한다. 미래 cursor index 선제 추가는 미확정 정렬을 고정한다.
+- Context / Problem: Profile/Post 물리 삭제와 후속 count·Profile 조회를 지원하는 최소 제약·index를 정해야 한다.
+- Decision Outcome: Profile/Post 삭제는 Reaction을 cascade한다. unique index는 `(post_id, type, profile_id)` 순서로 count·Type별 Profile lookup과 멱등 conflict target을 함께 지원하며, Profile cascade/cleanup을 위해 `(profile_id)` index를 추가한다. Profile connection ordering index는 PROD-407까지 유예한다.
+- Alternatives Considered: 모든 foreign key `NO ACTION`은 orphan 방지 삭제 순서를 caller에게 분산한다. `(profile_id, post_id, type)` unique와 별도 post/type index는 같은 세 값을 중복 저장한다. 미래 cursor index 선제 추가는 미확정 정렬을 고정한다.
 - Consequences: Profile/Post 물리 삭제 뒤 Reaction history는 남지 않는다. future audit/history가 필요하면 별도 capability가 소유한다.
-- Confirmation / Follow-up: 2026-07-20 OpenSpec Gate에서 승인됐다. catalog·migration test로 cascade/restrict와 실제 index 순서를 검증한다.
+- Confirmation / Follow-up: catalog·migration test로 Profile/Post cascade와 실제 index 순서를 검증한다.
 
 ### Reaction mutation은 database 제약으로 멱등성을 보장한다
 
@@ -101,9 +91,8 @@
 - PROD-407: Profile connection ordering·cursor와 Profile row 표시 범위
 - PROD-417/418: zero-count Type 공급 API, selector·Profile 목록 UX, optimistic update 사용 여부
 - PROD-413: multi-kind Notification visible projection의 `UNION ALL` 기본안과 `LEFT JOIN` 대안 중 최종 구현, PROD-277 Read/navigation 순서
-- 이미지형 custom emoji 후속 계약: 업로더와 사용 범위, shortcode uniqueness, file/media, availability와 삭제 lifecycle
 
 ## Superseded Decisions
 
-- 2026-07-20 초기 검토의 “Reaction Type을 PostgreSQL enum으로 저장한다” 제안은 이미지형 custom emoji 확장 요구를 반영한 “안정적인 `reaction_type` identity를 참조한다” 결정으로 같은 날 대체됐다.
-- 2026-07-20 후속 검토의 “Reaction 행에 `text + CHECK`로 현재 Type을 저장한다” 제안도 같은 identity registry 결정으로 대체됐다.
+- 2026-07-20의 “안정적인 `reaction_type` identity를 참조한다”와 “built-in Type UUID를 database가 생성한다” 결정은 상위 canonical/Linear에 없는 사용자 정의 Reaction 확장을 전제로 했으므로 2026-07-21의 “Reaction Type은 현재 canonical 문자열로 저장한다” 결정으로 대체됐다.
+- PostgreSQL enum과 `text + CHECK` 제안은 허용 목록 변경을 schema migration에 결합하므로 채택하지 않았다.

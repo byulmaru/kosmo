@@ -2,24 +2,18 @@
 
 ### Requirement: 초기 Reaction Type 계약
 
-시스템은 현재 Reaction Type으로 `🥹`, `❤️`, `🎉`, `👀`, `☘️`, `🌈`의 정확한 Unicode 표현만 허용해야 한다(MUST). Reaction은 값 자체가 아니라 저장 계층의 안정적인 Reaction Type identity를 참조해야 한다(MUST).
+시스템은 현재 Reaction Type으로 `🥹`, `❤️`, `🎉`, `👀`, `☘️`, `🌈`의 정확한 Unicode 표현만 허용해야 한다(MUST).
 
 #### Scenario: 허용된 built-in Type
 
 - **WHEN** Profile이 허용된 여섯 Reaction Type 중 하나로 Reaction을 추가한다
-- **THEN** 시스템은 입력의 정확한 Unicode 표현에 대응하는 Reaction Type identity를 사용한다
+- **THEN** 시스템은 입력의 정확한 Unicode 문자열을 Reaction Type으로 사용한다
 
 #### Scenario: 허용되지 않은 Type
 
-- **WHEN** Profile이 임의 Unicode, variation selector가 다른 값 또는 custom emoji로 Reaction을 추가한다
+- **WHEN** Profile이 임의 Unicode, variation selector가 다른 값 또는 사용자 정의 Reaction을 추가한다
 - **THEN** 시스템은 요청을 validation 오류로 거부한다
 - **AND** Reaction을 저장하지 않는다
-
-#### Scenario: custom emoji 확장 경계
-
-- **WHEN** 후속 변경이 사용자가 업로드하는 이미지형 custom emoji를 도입한다
-- **THEN** 그 변경은 기존 Reaction Type identity 참조를 재사용한다
-- **AND** 업로더·사용 범위·shortcode·asset·비활성화와 삭제 정책을 별도 계약으로 정의한다
 
 ### Requirement: Reaction 유일성과 공존
 
