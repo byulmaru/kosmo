@@ -96,11 +96,15 @@ DB row와 기존 `read_at`은 비동기 cleanup 전까지 남을 수 있다. cle
 
 도메인 방향은 source가 없거나 Recipient와 일치하지 않거나 Related Profile이 Recipient 기준으로 unavailable이 되면 item을 비동기적이고 idempotent하게 삭제하는 것이다. Recipient Profile 자체의 일시 비활성화·정지만으로 item을 삭제할지는 재활성화 의미와 함께 `PROD-328`에서 결정한다. 원인별 event, message queue 또는 fallback scan, retry, worker, 허용 지연과 대량 처리는 별도 `PROD-328`의 Issue → OpenSpec → Implementation 흐름이 소유한다. `PROD-328`은 이 change의 task나 archive gate가 아니다.
 
-### 후속 UI 결정 경계
+### Follow 알림 목록 UI와 Relay 경계
 
-`PROD-277`은 정상 Follow item의 loading/error/empty/read 상태, item activation과 Read/navigation 순서, fetch·refresh·pagination·Profile 전환 cache 경계를 결정하고 구현 전에 이 change를 갱신한다. `PROD-324`는 shell surface, count cap, 접근성, loading/error와 Profile 전환 cache 경계를 결정하고 구현 전에 `web-app-shell` delta와 관련 design/decisions를 추가한다.
+`PROD-277`의 `/notifications`는 모바일과 Web이 공유하는 단일 목록이다. 상단에는 Figma 화면 구조에 맞춘 `알림` 제목과 44px 알림 설정 control을 두되, 설정 route가 없는 현재 slice에서는 `알림 설정 (준비 중)`으로 식별되는 disabled placeholder로 표시한다. `모두`·`멘션` 탭이나 단독 section heading, 날짜별 heading은 추가하지 않는다. Follow item은 Figma Like 알림 행의 정보 위계를 Follow에 맞게 적용한다. 행의 왼쪽 28px kind icon과 오른쪽 콘텐츠 column은 같은 상단선에 놓고, 콘텐츠의 첫 Avatar row에는 28px initials Avatar와 오른쪽 상대 시각을 둔 뒤 `OOO님이 팔로우했습니다` 문구를 그 아래에 표시한다. inline 맞팔로우, 본문 snippet과 빈 action 영역은 만들지 않는다. 현재 `FollowNotification.profile`이 단수이고 Profile image field가 없으므로 복수 사용자 집계와 이미지 avatar를 client에서 합성하지 않는다. 복수 사용자 문구와 겹친 avatar는 server aggregation 계약이 생기는 후속 이슈가 소유한다.
 
-두 UI slice 모두 API에서 반환된 visible item과 count만 소비한다. unavailable item을 client가 다시 판정하거나 generic fallback으로 표현하는 UX는 없다.
+Avatar와 본문은 모두 `Profile.relativeHandle`의 Profile route를 가리키는 실제 link다. 활성화는 즉시 navigation을 시작하며 Read mutation의 pending·실패·재시도는 navigation을 지연하거나 취소하거나 되돌리지 않는다. Read 여부와 관계없이 item의 기본 배경은 `card`로 통일하고, Web pointer hover 중에만 `surface`로 강조한다. native에는 hover 배경을 합성하지 않는다. `readAt = null`은 배경색 대신 접근성 label의 Unread 상태로 전달한다. client Read mutation과 Unread count cache 갱신은 `PROD-372`, shell badge surface는 `PROD-324`가 소유한다.
+
+route query는 selected Profile을 target으로 `store-and-network` fetch를 수행한다. 초기 loading/error/retry/empty를 구분하고 native에는 pull-to-refresh를 제공한다. Web에는 별도 in-app refresh control을 만들지 않으며 browser의 표준 document reload가 새 Relay Environment에서 query를 다시 실행한다. 목록은 한 번에 20개씩 Relay connection pagination을 사용하며, 다음 page 요청 중 중복 호출을 막고 실패해도 기존 item을 유지한 채 같은 위치에서 재시도한다. Relay가 edge 누적과 중복 제거를 소유하고 route state는 edge를 수동 병합하지 않는다. selected Profile 전환은 actor별 Relay Environment/Store 재생성과 query target 변경으로 격리한다.
+
+목록은 API에서 반환한 visible item만 표시한다. unavailable item을 client가 다시 판정하거나 generic fallback, snapshot 또는 client-side filtering으로 표현하지 않는다. `PROD-324`는 shell surface, count cap, 접근성, loading/error와 Profile 전환 cache 경계를 결정하고 구현 전에 `web-app-shell` delta와 관련 design/decisions를 추가한다.
 
 ## Verification Strategy
 

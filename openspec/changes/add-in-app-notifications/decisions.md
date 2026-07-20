@@ -184,6 +184,36 @@
 - Consequences: UI 구현 이슈는 코드를 작성하기 전에 선택지를 결정하고 이 change를 갱신해야 한다.
 - Confirmation / Follow-up: `PROD-277`은 `notification` UI requirements/design/decision을, `PROD-324`는 `web-app-shell` delta와 관련 design/decision을 먼저 추가한다.
 
+### Follow 알림 목록은 단일 목록과 단수 Related Profile 표현을 사용한다
+
+- Decision Date: 2026-07-19
+- Status: Accepted
+- Context / Problem: Figma의 Like 알림은 여러 avatar를 묶는 표현을 제공하지만 현재 API의 Follow item은 `profile: Profile!` 한 명만 반환하고 Profile image field나 aggregation identity·count를 제공하지 않는다.
+- Decision Outcome: 모바일과 Web 모두 탭이나 section heading 없는 단일 목록을 사용한다. 상단은 `알림` 제목과 44px 알림 설정 control로 구성하고 설정 route가 없는 동안 control은 `알림 설정 (준비 중)` disabled placeholder로 둔다. Follow item은 Figma Like 알림 행처럼 왼쪽 28px kind icon과 오른쪽 콘텐츠 column을 같은 상단선에 놓고, 콘텐츠 첫 Avatar row에 28px initials Avatar와 오른쪽 상대 시각을 둔 뒤 `OOO님이 팔로우했습니다` 문구를 아래에 표시한다. Avatar와 본문은 Related Profile link로 제공한다. inline 맞팔로우, 빈 action 영역, snippet, image avatar와 client-side 복수 사용자 aggregation은 추가하지 않는다.
+- Alternatives Considered: 기존 `KOSMO` eyebrow와 `모두` section heading 유지, 설정 control 숨김, 준비 중 안내를 실행하는 active control, 동일 사용자의 인접 item을 client에서 묶기, Figma Follow variant의 맞팔로우 영역을 빈 채 유지하기.
+- Consequences: 설정 기능 없이도 향후 header layout을 보존하되 작동하지 않는 control을 실행 가능하게 오인시키지 않는다. 이번 UI는 현재 GraphQL 계약과 pagination·readAt identity를 보존한다. `N명이 팔로우했습니다`와 겹친 avatar는 aggregation key·count·대표 Profile 목록·pagination/read 의미를 함께 정의하는 후속 API 이슈가 필요하다.
+- Confirmation / Follow-up: Storybook은 header placeholder, 탭·section heading 부재, 단일 Follow item과 긴 이름·handle을 검증하고 복수 사용자 fixture를 만들지 않는다.
+
+### 목록 조회·refresh·pagination은 selected Profile Relay connection으로 격리한다
+
+- Decision Date: 2026-07-19
+- Status: Accepted
+- Context / Problem: 목록이 selected Profile을 바꿀 때 이전 Recipient edge를 재사용하거나 route state에서 page를 직접 합치면 Profile 간 노출과 pagination drift가 발생할 수 있다.
+- Decision Outcome: route query는 selected Profile을 target으로 `store-and-network` fetch를 사용하고 initial loading/error/retry/empty를 구분한다. native는 pull-to-refresh를 제공한다. Web은 별도 in-app refresh action 없이 browser의 표준 document reload를 사용하며 reload 뒤 새 Relay Environment가 query를 다시 실행한다. pagination은 20개 단위 Relay connection으로 수행하고 next-page 요청 중복을 막으며 실패 시 기존 item과 cursor 위치를 유지해 재시도한다. actor별 Environment/Store 재생성이 Profile cache 격리를 소유한다.
+- Alternatives Considered: Web에 별도 keyboard-accessible refresh button 유지, route local array/cursor 누적, selected Profile ID를 무시한 단일 connection, native refresh 없이 화면 재진입에만 의존.
+- Consequences: Relay가 edge 누적과 중복 제거를 소유하고 Profile 전환은 새 actor query를 실행한다. unavailable item client filtering은 없다.
+- Confirmation / Follow-up: Storybook interaction은 initial query 상태, next-page loading/failure/retry, Web refresh control 부재와 selected Profile 전환을 검증한다. native pull-to-refresh는 platform smoke로 확인한다.
+
+### Profile 이동은 Read side effect와 독립적으로 즉시 시작한다
+
+- Decision Date: 2026-07-17
+- Status: Accepted
+- Context / Problem: item 활성화가 Read network 완료를 기다리면 느리거나 실패한 요청이 사용자의 명시적 Profile 이동을 막는다.
+- Decision Outcome: Avatar와 본문 link 활성화는 Related Profile navigation을 즉시 시작한다. Read pending·failure·retry는 navigation을 지연, 취소 또는 되돌리지 않는다. 2026-07-20 UI 보정으로 Read 여부와 관계없이 기본 배경은 `card`로 통일하고 Web pointer hover 중에만 `surface`로 강조한다. native에는 hover 배경을 추가하지 않으며 `readAt = null`은 접근성 Unread 상태로 전달한다.
+- Alternatives Considered: Read 성공 뒤 이동, 이동을 optimistic Read 성공으로 간주, item 전체를 link가 아닌 mutation button으로 만들기.
+- Consequences: link의 Web keyboard/browser semantics를 유지한다. 시각적 hover는 Read 상태를 나타내지 않고 pointer 위치만 피드백하며, Unread 구분은 접근성 정보와 후속 badge에 의존한다. client Read mutation과 정확한 Unread count cache 갱신은 `PROD-372`, shell badge 표시는 `PROD-324`가 소유한다.
+- Confirmation / Follow-up: PROD-277은 link 이동과 read/unread 표시를 검증하고 PROD-372가 mutation 성공·실패·재시도와 cache 수렴을 추가한다.
+
 ### Notification Node는 concrete global ID 계약을 따른다
 
 - Decision Date: 2026-07-15

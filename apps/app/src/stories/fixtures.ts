@@ -180,6 +180,46 @@ export function followingProfile(profiles: StoryProfile[], metadata: PaginationM
   };
 }
 
+export function followNotification({
+  createdAt = Temporal.Now.instant().subtract({ minutes: 5 }).toString(),
+  id = 'notification-follow-1',
+  profile: relatedProfile = profile(),
+  readAt = null,
+}: {
+  createdAt?: string;
+  id?: string;
+  profile?: StoryProfile;
+  readAt?: string | null;
+} = {}) {
+  return {
+    __typename: 'FollowNotification' as const,
+    createdAt,
+    id,
+    profile: relatedProfile,
+    readAt,
+  };
+}
+
+export function notificationsProfile(
+  notifications: ReturnType<typeof followNotification>[],
+  metadata: PaginationMetadata = {},
+  overrides: Partial<StoryProfile> = {},
+) {
+  return {
+    ...profile(overrides),
+    notifications: {
+      edges: notifications.map((node, index) => ({
+        cursor: `notification-cursor-${index}`,
+        node,
+      })),
+      pageInfo: pageInfo(
+        Boolean(metadata.hasNext),
+        notifications.length ? `notification-cursor-${notifications.length - 1}` : null,
+      ),
+    },
+  };
+}
+
 export const longBody =
   '긴 Plain Text 본문도 목록과 상세 화면에서 같은 내용으로 렌더링합니다. '.repeat(8) +
   '\n두 번째 문단의 줄바꿈과 빈 줄도 유지되어야 합니다.\n\n마지막 문단입니다.';
