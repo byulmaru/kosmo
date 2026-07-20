@@ -89,15 +89,12 @@ export const ensureProfileFollowRequest = async (
     };
   });
 
-export const acceptProfileFollowRequest = async (
-  {
-    expectedRowId,
-    followeeProfileId,
-    followerProfileId,
-  }: ProfileFollowPair & { readonly expectedRowId: string },
-  tx?: Transaction,
-): Promise<boolean> =>
-  getDatabaseConnection(tx).transaction(async (tx) => {
+export const acceptProfileFollowRequest = async ({
+  expectedRowId,
+  followeeProfileId,
+  followerProfileId,
+}: ProfileFollowPair & { readonly expectedRowId: string }): Promise<boolean> =>
+  db.transaction(async (tx) => {
     const pair = { followeeProfileId, followerProfileId };
     const established = await tx
       .select({ id: ProfileFollows.id })
