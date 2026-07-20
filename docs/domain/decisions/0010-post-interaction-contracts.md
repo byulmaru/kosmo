@@ -34,7 +34,7 @@ Accepted
   각각 원인 Reaction/Repost Post를 Source로 직접 참조한다. 원인 Reaction이 제거되거나 Repost가 Tombstone이면
   대응하는 Notification은 시점과 성공을 보장하지 않는 Best Effort 정리 대상이 된다.
 
-이 ADR은 Quote의 기존 도메인 계약을 변경하지 않는다.
+이 ADR은 Quote의 Post Form과 Source 계약을 변경하지 않는다. 위 Media 연결 조건은 Quote에도 적용한다.
 초기 허용 Reaction Type 목록은 이 ADR에서 결정하지 않고 별도 도메인 결정이 소유한다.
 
 ## 대체한 결정
