@@ -201,7 +201,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
             <Slot />
           </View>
           {mobile ? (
-            <View style={web ? webFixedBottomBar : undefined}>
+            <View aria-hidden={drawerOpen || undefined} style={web ? webFixedBottomBar : undefined}>
               <BottomTabBar profile={profile} />
             </View>
           ) : null}

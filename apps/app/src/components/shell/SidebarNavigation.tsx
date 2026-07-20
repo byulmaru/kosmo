@@ -209,11 +209,7 @@ export function SidebarNavigation({
           { borderColor: theme.border },
         ]}
       >
-        <View
-          accessibilityLabel={surface === 'drawer' ? '사이드바 메뉴' : '주요 메뉴'}
-          role="navigation"
-          style={styles.navigation}
-        >
+        <View accessibilityLabel="주요 메뉴" role="navigation" style={styles.navigation}>
           {navigation.map((item) => {
             const { active, href } = resolveItem(item);
             const control = (

@@ -401,9 +401,11 @@ export const UniversalMobileUnreadBadge: Story = {
     expect(badge.closest('[aria-hidden="true"]')).not.toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
     const page = within(canvasElement.ownerDocument.body);
+    const drawerNavigation = await page.findByRole('navigation', { name: '주요 메뉴' });
     await expect(
-      page.findAllByRole('link', { name: '알림, 읽지 않은 알림 100개' }),
-    ).resolves.toHaveLength(2);
+      within(drawerNavigation).findByRole('link', { name: '알림, 읽지 않은 알림 100개' }),
+    ).resolves.toBeVisible();
+    expect(page.getAllByRole('link', { name: '알림, 읽지 않은 알림 100개' })).toHaveLength(1);
   },
   render: () => (
     <View style={{ height: 844 }}>

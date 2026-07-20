@@ -500,7 +500,7 @@ test.describe('로그인 사용자 보호 라우트', () => {
       `${canonicalProfilePath}/followers`,
     );
     const profileLinks = await page.getByRole('link', { exact: true, name: '프로필' }).all();
-    expect(profileLinks).toHaveLength(2);
+    expect(profileLinks).toHaveLength(1);
     for (const profileLink of profileLinks) {
       await expect(profileLink).toHaveAttribute('href', canonicalProfilePath);
     }
