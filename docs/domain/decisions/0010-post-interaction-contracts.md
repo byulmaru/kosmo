@@ -23,6 +23,9 @@ Accepted
   결과도 Followers Only가 된다. Mentioned Profiles Post는 Repost할 수 없다.
 - 같은 Profile/Post/Reaction Type 조합에는 Reaction이 하나만 존재하며 다른 Reaction Type은 함께 존재할 수
   있다.
+- 초기 Reaction Type은 `🥹` (`U+1F979`), `❤️` (`U+2764 U+FE0F`), `🎉` (`U+1F389`), `👀`
+  (`U+1F440`), `☘️` (`U+2618 U+FE0F`), `🌈` (`U+1F308`)만 허용한다. 이 나열 순서는 개수가 같은
+  Reaction Type의 표시 순서를 정의하지 않으며 동률 표시에는 별도 순서 규칙을 두지 않는다.
 - Reaction 조회 결과는 Reaction Type별 개수와 Reaction을 남긴 Profile 목록을 제공한다. Reaction Type은
   개수 내림차순으로 표시한다.
 - Bookmark 목록은 최신 Bookmark부터 표시한다. 대상 Post를 조회할 수 없는 동안에는 목록에서 숨기되 Bookmark
@@ -35,7 +38,6 @@ Accepted
   대응하는 Notification은 시점과 성공을 보장하지 않는 Best Effort 정리 대상이 된다.
 
 이 ADR은 Quote의 Post Kind와 Source 계약을 변경하지 않는다. 위 Media 연결 조건은 Quote에도 적용한다.
-초기 허용 Reaction Type 목록은 이 ADR에서 결정하지 않고 별도 도메인 결정이 소유한다.
 
 ## 대체한 결정
 
