@@ -100,7 +100,7 @@ DB row와 기존 `read_at`은 비동기 cleanup 전까지 남을 수 있다. cle
 
 `PROD-277`의 `/notifications`는 모바일과 Web이 공유하는 단일 목록이다. 상단에는 Figma 화면 구조에 맞춘 `알림` 제목과 44px 알림 설정 control을 두되, 설정 route가 없는 현재 slice에서는 `알림 설정 (준비 중)`으로 식별되는 disabled placeholder로 표시한다. `모두`·`멘션` 탭이나 단독 section heading, 날짜별 heading은 추가하지 않는다. Follow item은 Figma Like 알림 행의 정보 위계를 Follow에 맞게 적용한다. 행의 왼쪽 28px kind icon과 오른쪽 콘텐츠 column은 같은 상단선에 놓고, 콘텐츠의 첫 Avatar row에는 28px initials Avatar와 오른쪽 상대 시각을 둔 뒤 `OOO님이 팔로우했습니다` 문구를 그 아래에 표시한다. inline 맞팔로우, 본문 snippet과 빈 action 영역은 만들지 않는다. 현재 `FollowNotification.profile`이 단수이고 Profile image field가 없으므로 복수 사용자 집계와 이미지 avatar를 client에서 합성하지 않는다. 복수 사용자 문구와 겹친 avatar는 server aggregation 계약이 생기는 후속 이슈가 소유한다.
 
-Avatar와 본문은 모두 `Profile.relativeHandle`의 Profile route를 가리키는 실제 link다. 활성화는 즉시 navigation을 시작하며 Read mutation의 pending·실패·재시도는 navigation을 지연하거나 취소하거나 되돌리지 않는다. Read 여부와 관계없이 item의 기본 배경은 `card`로 통일하고, Web pointer hover 중에만 `surface`로 강조한다. native에는 hover 배경을 합성하지 않는다. `readAt = null`은 배경색 대신 접근성 label의 Unread 상태로 전달한다. client Read mutation과 Unread count cache 갱신은 `PROD-372`, shell badge surface는 `PROD-324`가 소유한다.
+Avatar와 본문은 모두 `Profile.relativeHandle`의 Profile route를 가리키는 실제 link다. 각 활성화는 즉시 navigation을 시작하면서 같은 event에서 Read mutation 하나를 비차단으로 시작하며, mutation의 pending·실패·재시도는 navigation을 지연하거나 취소하거나 되돌리지 않는다. 앱 수준 자동 retry, optimistic Read, client-side count 산술과 성공 뒤 추가 refetch는 두지 않는다. 성공 payload는 `notification { id readAt }`과 `recipientProfile { id unreadNotificationCount }`를 선택하고 Relay normalization이 반환된 ID의 item과 Recipient Profile record를 갱신한다. 현재 selected Profile을 cache target으로 다시 추론하지 않으며, 실패 시 cache를 보정하지 않고 이후 activation 또는 refetch에서 서버 source of truth로 수렴한다. Read 여부와 관계없이 item의 기본 배경은 `card`로 통일하고, Web pointer hover 중에만 `surface`로 강조한다. native에는 hover 배경을 합성하지 않는다. `readAt = null`은 배경색 대신 접근성 label의 Unread 상태로 전달한다. client Read mutation과 item/count cache 동기화는 `PROD-372`, shell badge surface는 `PROD-324`가 소유한다.
 
 route query는 selected Profile을 target으로 `store-and-network` fetch를 수행한다. 초기 loading/error/retry/empty를 구분하고 native에는 pull-to-refresh를 제공한다. Web에는 별도 in-app refresh control을 만들지 않으며 browser의 표준 document reload가 새 Relay Environment에서 query를 다시 실행한다. 목록은 한 번에 20개씩 Relay connection pagination을 사용하며, 다음 page 요청 중 중복 호출을 막고 실패해도 기존 item을 유지한 채 같은 위치에서 재시도한다. Relay가 edge 누적과 중복 제거를 소유하고 route state는 edge를 수동 병합하지 않는다. selected Profile 전환은 actor별 Relay Environment/Store 재생성과 query target 변경으로 격리한다.
 
@@ -115,7 +115,9 @@ route query는 selected Profile을 target으로 `store-and-network` fetch를 수
 - `PROD-351`: count test로 공통 predicate를 만족하는 visible Unread item만 계산하는지 검증한다.
 - `PROD-350`: mutation test로 Node와 같은 hidden predicate, 최초 `readAt`, 반복·동시 Read와 payload를 검증한다.
 - `PROD-276`: action test로 직접 Follow와 승인에 의한 새 established 생성, pending·기존 relation 재사용·duplicate 제외, 정상 source cleanup과 실제 Notification row를 검증하고 source action의 best-effort 오류 격리 구조를 확인한다.
-- `PROD-277`·`PROD-324`: 정상 item UI 계약을 Storybook interaction/a11y, Relay cache integration과 결정된 platform smoke로 검증한다.
+- `PROD-277`: 정상 item의 목록·Related Profile link·read/unread 접근성 UI를 Storybook interaction/a11y와 결정된 platform smoke로 검증한다.
+- `PROD-372`: Avatar와 본문 activation이 Read pending·실패 중에도 즉시 이동하는지 Storybook interaction으로 검증하고, Relay store integration으로 성공 payload의 정확한 item/Recipient count normalization, 반복·동시 응답과 Profile 격리를 검증한다.
+- `PROD-324`: shell badge의 count cap·접근성·loading/error/lifecycle과 `PROD-372`가 정규화한 Recipient count 소비를 Storybook interaction/a11y, Relay cache integration과 결정된 platform smoke로 검증한다.
 - `PROD-278`: 실제 Local Follow/Unfollow action을 사용하는 Web E2E와 관련 workspace 검증을 통과한 뒤 archive 전후 strict validation을 실행한다.
 
 ## Risks / Trade-offs
@@ -125,7 +127,7 @@ route query는 selected Profile을 target으로 `store-and-network` fetch를 수
 - [hidden row를 조회 후 버리면 page가 짧아지고 count와 불일치한다] → 공통 visible predicate를 SQL에서 limit 전에 적용하고 모든 API 표면이 같은 predicate를 사용한다.
 - [Account membership 권한과 selected Profile UI scope를 혼동할 수 있다] → resolver는 membership만 검사하고 client query/cache는 selected Profile ID를 명시하는 test를 각각 둔다.
 - [JSONB가 범용 extension framework가 될 수 있다] → kind별 최소 type validation만 두고 FOLLOW는 `{}`, GIN index와 snapshot은 추가하지 않는다.
-- [UI 구현이 공통 API 계약과 다른 cache 또는 interaction을 선택할 수 있다] → `PROD-277`·`PROD-324`의 첫 task를 OpenSpec 갱신 gate로 두고 구현·검증을 그 뒤에 진행한다.
+- [UI 구현이 공통 API 계약과 다른 cache 또는 interaction을 선택할 수 있다] → `PROD-277`·`PROD-372`·`PROD-324`의 task ownership을 분리하고 각 구현·검증을 승인된 OpenSpec 뒤에 진행한다.
 
 ## Migration Plan
 
@@ -133,11 +135,11 @@ route query는 selected Profile을 target으로 `store-and-network` fetch를 수
 2. `PROD-274` 저장 경계와 `PROD-275` GraphQL/Node·공통 visible 조회 기반을 schema 위에 병렬로 구현한다.
 3. `PROD-275` 뒤 `PROD-352` connection, `PROD-351` Unread count와 `PROD-350` Read mutation을 독립 PR로 구현한다.
 4. `PROD-281`의 공용 ProfileFollow action과 `PROD-274`가 준비되면 `PROD-276` create/delete source integration을 연결한다.
-5. API가 안정되면 `PROD-277` 목록과 `PROD-324` badge를 병렬로 배포한다.
+5. API가 안정되면 `PROD-277` 목록 위에 `PROD-372` best-effort Read/cache 동기화를 연결하고, `PROD-324` badge는 정규화된 Recipient count를 소비하도록 병렬로 배포한다.
 6. `PROD-278`에서 vertical E2E, canonical 문서/task sync와 archive 전후 validation을 완료한다.
 
 애플리케이션 rollback은 additive table을 유지하고 Notification source 호출·API·UI만 이전 버전으로 되돌린다. 데이터가 생성된 뒤 table을 자동 drop하는 down migration은 사용하지 않는다. schema 자체를 제거해야 한다면 Notification 쓰기를 먼저 중단하고 데이터 보존/삭제 결정을 별도 migration으로 수행한다.
 
 ## Open Questions
 
-현재 공통 저장·API 계약의 구현을 막는 열린 질문은 없다. 목록과 badge의 세부 UX는 소유 이슈인 `PROD-277`·`PROD-324`가 구현 전에 결정한다. 실제 Mute/Block 연결은 `PROD-327`, invalid source·unavailable Related Profile item의 비동기 삭제 방식과 Recipient inactivity cleanup 여부는 `PROD-328`, delivery queue/retry와 다른 Notification kind는 각각 별도 Issue → OpenSpec 흐름에서 결정한다.
+현재 공통 저장·API 계약과 `PROD-372` client Read/cache 동기화를 막는 열린 질문은 없다. badge의 세부 UX는 소유 이슈인 `PROD-324`가 구현 전에 결정한다. 실제 Mute/Block 연결은 `PROD-327`, invalid source·unavailable Related Profile item의 비동기 삭제 방식과 Recipient inactivity cleanup 여부는 `PROD-328`, delivery queue/retry와 다른 Notification kind는 각각 별도 Issue → OpenSpec 흐름에서 결정한다.

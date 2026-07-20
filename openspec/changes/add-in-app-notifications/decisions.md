@@ -214,6 +214,16 @@
 - Consequences: link의 Web keyboard/browser semantics를 유지한다. 시각적 hover는 Read 상태를 나타내지 않고 pointer 위치만 피드백하며, Unread 구분은 접근성 정보와 후속 badge에 의존한다. client Read mutation과 정확한 Unread count cache 갱신은 `PROD-372`, shell badge 표시는 `PROD-324`가 소유한다.
 - Confirmation / Follow-up: PROD-277은 link 이동과 read/unread 표시를 검증하고 PROD-372가 mutation 성공·실패·재시도와 cache 수렴을 추가한다.
 
+### client Read cache는 성공 payload의 Relay normalization으로 동기화한다
+
+- Decision Date: 2026-07-21
+- Status: Accepted
+- Context / Problem: client가 selected Profile이나 기존 `readAt`을 기준으로 count를 직접 감소시키면 Profile 전환, 반복 activation과 동시 응답에서 다른 Recipient record를 오염시키거나 count를 중복 감소시킬 수 있다. Read 실패를 앱이 retry하거나 optimistic 상태로 표시하면 navigation과 독립적인 best-effort 경계도 복잡해진다.
+- Decision Outcome: Avatar와 본문 link의 각 activation은 navigation을 기다리게 하지 않는 Read mutation 하나를 시작한다. mutation은 `notification { id readAt }`과 `recipientProfile { id unreadNotificationCount }`를 선택하고 Relay가 성공 payload의 ID로 두 record를 정규화하게 한다. explicit updater, optimistic update, client-side count 산술, 성공 뒤 추가 refetch와 앱 수준 자동 retry는 두지 않는다. 실패는 navigation이나 cache를 바꾸지 않으며 이후 activation 또는 refetch에서 서버 상태로 수렴한다.
+- Alternatives Considered: selected Profile record를 explicit updater로 감소, optimistic Read와 rollback, 성공 뒤 Recipient query refetch, 앱 자체 retry/backoff.
+- Consequences: 반복·동시 요청의 최초 `readAt`과 count 일관성은 idempotent server mutation과 각 성공 payload가 소유한다. actor별 Relay Environment/Store는 Profile cache 격리를 유지하며, 실패 뒤에는 다음 성공이나 refetch 전까지 기존 cache가 남을 수 있다.
+- Confirmation / Follow-up: `PROD-372`는 두 link의 pending/error navigation과 item/Recipient record normalization을 Storybook 및 Relay store integration으로 검증한다. `PROD-324`는 별도 Read updater 없이 정규화된 `unreadNotificationCount`를 badge에 표시한다.
+
 ### Notification Node는 concrete global ID 계약을 따른다
 
 - Decision Date: 2026-07-15

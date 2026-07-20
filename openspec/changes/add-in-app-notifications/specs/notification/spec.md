@@ -305,6 +305,19 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 - **AND** Read mutation의 pending, 실패 또는 재시도는 navigation을 지연, 취소 또는 되돌리지 않는다
 - **AND** client Read mutation과 Unread count cache 갱신은 `PROD-372`가 소유한다
 
+#### Scenario: 성공 payload 기반 item과 Recipient count 동기화
+
+- **WHEN** Avatar 또는 본문 link activation에서 시작한 Read mutation이 `notification`과 `recipientProfile` payload로 성공한다
+- **THEN** 클라이언트는 payload가 반환한 ID를 기준으로 item의 `readAt`과 정확한 Recipient Profile의 `unreadNotificationCount`를 Relay cache에 정규화한다
+- **AND** 현재 selected Profile을 cache target으로 다시 추론하거나 client-side count 산술, optimistic update와 성공 뒤 추가 refetch를 수행하지 않는다
+- **AND** 반복 activation과 동시 성공 응답은 서버가 보존한 최초 `readAt`과 visible Unread count로 같은 record를 수렴시키고 다른 Profile cache를 변경하지 않는다
+
+#### Scenario: client Read 실패와 수렴
+
+- **WHEN** navigation과 독립적으로 시작한 Read mutation이 pending이거나 실패한다
+- **THEN** 클라이언트는 navigation을 유지하고 item 또는 count cache를 보정하지 않는다
+- **AND** 앱 수준 자동 retry나 오류 UI를 추가하지 않으며 이후 activation 또는 refetch에서 서버 source of truth로 수렴한다
+
 #### Scenario: Initial loading, error와 empty
 
 - **WHEN** selected Profile 목록의 첫 query가 진행 중이거나 실패하거나 visible edge 없이 성공한다
@@ -336,7 +349,7 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 - **THEN** Profile B의 UI에는 A의 Notification이나 Unread count가 노출되지 않는다
 - **AND** Profile A에서는 Follower를 가리키는 Unread item과 count가 보인다
 - **AND** API authorization은 Account가 가진 membership을 사용하되 UI query와 Relay cache는 selected Profile A/B를 섞지 않는다
-- **AND** `PROD-277`·`PROD-324`가 구현 전에 추가한 목록·Read·navigation·badge 요구사항을 같은 item으로 검증한다
+- **AND** `PROD-277`·`PROD-372`·`PROD-324`가 추가한 목록·Read·navigation·badge 요구사항을 같은 item으로 검증한다
 
 #### Scenario: Follow item Read와 이동
 
