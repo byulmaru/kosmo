@@ -49,6 +49,8 @@ Notification은 다른 객체의 행동 결과를 Recipient Profile 또는 Recip
 | Related Follow Relationship | [Follow Relationship](./follow-relationship.md) | Notification -> Follow Relationship | 1 -> 0..1   | Type이 Follow 또는 Followee Post            | Recipient만 조회 | `Notification.Recipient` |
 
 Notification은 Recipient Profile과 Recipient Account 중 정확히 하나를 가진다.
+Reply Notification의 Related Post는 원인 행동으로 생성된 Reply Post이고 Related Profile은 Reply Author
+Profile이다.
 Reaction Notification의 Source Reaction은 알림을 만든 원인 Reaction이다. Related Post와 Related Profile은
 각각 Source Reaction의 Post와 Profile에 일치해야 한다.
 Repost Notification의 Source Repost는 알림을 만든 원인 Repost Post다. Related Post와 Related Profile은
