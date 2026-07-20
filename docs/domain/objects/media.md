@@ -27,7 +27,7 @@ Alt Text, File 표현, 접근 결과를 소유한다.
 | 관계                   | 대상                    | 방향             | cardinality | 존재 조건                                  | 조회 조건              | 조회 권한             |
 | ---------------------- | ----------------------- | ---------------- | ----------- | ------------------------------------------ | ---------------------- | --------------------- |
 | Profile                | [Profile](./profile.md) | Media -> Profile | 1 -> 1      | 항상                                       | Media 조회 정책 통과   | `Media.Profile`       |
-| Upload Account         | [Account](./account.md) | Media -> Account | 1 -> 1      | Source가 Local                             | 업로드 감사 조회       | `Media.UploadAccount` |
+| Upload Account         | [Account](./account.md) | Media -> Account | 1 -> 1      | Source가 Local                             | Media 조회 정책 통과   | `Media.UploadAccount` |
 | Original File          | [File](./file.md)       | Media -> File    | 1 -> 1      | Source가 Local                             | Media 조회 정책 통과   | 없음                  |
 | Derived File           | [File](./file.md)       | Media -> File    | 1 -> 0..N   | Source가 Local이고 파생 표현이 생성된 경우 | Media 조회 정책 통과   | 없음                  |
 | Attached Post          | [Post](./post.md)       | Media <- Post    | 1 -> 0..N   | Post에 첨부된 경우                         | Post 조회 정책 통과    | 없음                  |
@@ -35,6 +35,10 @@ Alt Text, File 표현, 접근 결과를 소유한다.
 
 Local Media의 Profile은 upload를 수행한 Local Profile이다. Remote Media의 Profile은 원본 Remote Profile이며,
 Instance는 이 Profile에서 파생한다.
+
+Post에 Attached Media 관계를 만드는 요청은 Source=Local이고 행동을 요청한 Account와 Upload Account가 같은
+Media만 사용할 수 있다. 같은 Upload Account를 가진 Local Media는 Media Profile과 Post Author Profile이
+달라도 연결할 수 있다.
 
 ## 행동
 
@@ -57,7 +61,8 @@ Instance는 이 Profile에서 파생한다.
 
 - Post에 연결된 Media는 해당 Post 조회 정책을 통과한 viewer만 조회할 수 있다.
 - Profile avatar/header Media는 해당 Profile 조회 정책을 통과한 viewer만 조회할 수 있다.
-- 아직 Post나 Profile에 연결되지 않은 Local Media는 Media의 Profile만 조회할 수 있다.
+- 아직 Post나 Profile에 연결되지 않은 Local Media는 요청 Account가 Media의 Upload Account일 때 조회할 수
+  있다.
 - Remote Media는 Profile의 Instance Safety State가 Domain Block이 아니어야 한다.
 - viewer의 Profile Domain Block 대상 Instance에서 온 Remote Media는 viewer에게 없는 것처럼 취급한다.
 - Profile의 Instance Reachability State가 Unreachable이거나 Service State가 Suspended이면 새 fetch와 원본
@@ -77,7 +82,5 @@ Instance는 이 Profile에서 파생한다.
 
 - 완료 전 업로드 취소는 upload lifecycle 상태가 확정되지 않아 현재 행동에서 제외한다.
 - Media Proxy 조회는 Mutation이 아니므로 행동에서 제외한다.
-- 동영상, GIF, 개인 파일함, 과거 업로드 재사용 라이브러리는 현재 범위에서 제외한다.
-- 다른 Profile이 Media를 Post 또는 Profile 표현에 재사용할 수 있는지는 후속 결정 대상으로 둔다.
 - 구체 MIME type 목록, Hash, EXIF, dedupe, 이미지 변환 실패 삭제 정책, 바이러스 스캔, 성인물 탐지는
   구현/OpenSpec에서 다룬다.

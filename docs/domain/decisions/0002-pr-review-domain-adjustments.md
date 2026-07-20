@@ -8,6 +8,9 @@ Accepted
 
 2026-06-29
 
+중첩 Repost 평탄화 결정은 [ADR 0010](./0010-post-interaction-contracts.md)의 직접 Source 참조와 Repost 입력
+거절 결정으로 대체되었다. 나머지 결정은 유지한다.
+
 ## 결정
 
 - Post List의 canonical term은 `Post List`다. Home, Profile, Hashtag Post List만 현재 범위로 둔다.

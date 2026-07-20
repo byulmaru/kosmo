@@ -40,6 +40,9 @@ Reaction은 Profile이 Post에 남기는 유니코드 이모지 반응이다.
 ## 조회 정책
 
 - Reaction은 대상 Post 조회 정책을 그대로 따른다.
+- Post의 Reaction 조회 결과는 Reaction Type별 개수와 Reaction을 남긴 Profile 목록을 제공한다.
+- Reaction Type은 개수가 많은 순서로 표시한다.
+- Profile 목록에는 viewer가 조회할 수 있는 Profile의 Reaction만 포함한다.
 - Profile Block 생성 결과로 제거되는 Reaction 범위는 [Profile Block](./profile-block.md)이 정의한다.
 
 ## 확정 용어
