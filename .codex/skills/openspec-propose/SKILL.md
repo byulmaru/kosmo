@@ -16,7 +16,7 @@ I'll create a change with artifacts:
 - proposal.md (what & why)
 - `specs/**/*.md` (requirements)
 - design.md (how)
-- decisions.md (accepted, deferred, and superseded decisions)
+- decisions.md (active, blocked, and superseded authority-traced decisions)
 - tasks.md (implementation steps)
 
 When ready to implement, run /opsx:apply
@@ -38,6 +38,13 @@ When ready to implement, run /opsx:apply
    **IMPORTANT**: Do NOT proceed without understanding what the user wants to build.
 
 2. **Create the change directory**
+
+   Before creating it:
+   - Read the applicable canonical `docs/domain` and `docs/design` documents.
+   - Fetch the latest Linear contract and implementation issue bodies, relations,
+     and contract-changing comments independently of any existing OpenSpec.
+   - Confirm the Domain Gate and Issue Gate have been approved. OpenSpec cannot be
+     used as evidence that either upstream gate passed.
 
    ```bash
    openspec new change "<name>"
@@ -104,7 +111,10 @@ After completing all artifacts, summarize:
 **Artifact Creation Guidelines**
 
 - Follow the `instruction` field from `openspec instructions` for each artifact type
-- The schema defines what each artifact should contain - follow it
+  - The schema defines what each artifact should contain - follow it
+  - Treat canonical documents and the latest Linear contract as inputs to every
+    artifact. OpenSpec artifacts, PRs, tests, future issues, and excluded scope are
+    not upstream authority.
 - Read dependency artifacts for context before creating new ones
 - Use `template` as the structure for your output file - fill in its sections
 - **IMPORTANT**: `context` and `rules` are constraints for YOU, not content for the file
@@ -114,6 +124,9 @@ After completing all artifacts, summarize:
 **Guardrails**
 
 - Create ALL artifacts needed for implementation (as defined by schema's `apply.requires`)
+- If a product requirement has no current canonical or Linear authority, record it
+  as `Upstream Change Required` with `Status: Blocked`; do not put it in normative
+  specs or implementation tasks until the upstream owner is updated and approved.
 - Always read dependency artifacts before creating a new one
 - If context is critically unclear, ask the user - but prefer making reasonable decisions to keep momentum
 - If a change with that name already exists, ask if user wants to continue it or create a new one

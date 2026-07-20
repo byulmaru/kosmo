@@ -6,7 +6,7 @@
 
 **Guardrails**
 
-<!-- Binding constraints from specs, public contracts, and accepted decisions; use 없음. when empty -->
+<!-- Binding constraints from specs, public contracts, and independently verified decisions; use 없음. when empty -->
 
 **Verification**
 
@@ -23,7 +23,7 @@
 
 **Guardrails**
 
-<!-- Binding constraints from specs, public contracts, and accepted decisions; use 없음. when empty -->
+<!-- Binding constraints from specs, public contracts, and independently verified decisions; use 없음. when empty -->
 
 **Verification**
 

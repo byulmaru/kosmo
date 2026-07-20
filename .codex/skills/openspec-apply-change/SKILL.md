@@ -51,7 +51,21 @@ Implement tasks from an OpenSpec change.
    - If `state: "all_done"`: congratulate, suggest archive
    - Otherwise: proceed to implementation
 
-4. **Read context files**
+4. **Verify authority independently**
+
+   Before treating any OpenSpec text as binding:
+   - Re-read the applicable canonical `docs/domain` and `docs/design` files from the
+     current branch.
+   - Fetch the latest Linear issue bodies, relations, and contract-changing comments
+     directly from Linear. Do not rely on summaries copied into OpenSpec.
+
+   OpenSpec, a PR, a test, a future issue, or an excluded scope cannot prove that an
+   upstream product requirement exists. `Status: Active` means only that the
+   authority-traced decision currently applies inside the change. If a decision is
+   `Upstream Change Required` or `Blocked`, do not implement it; update and approve
+   canonical/Linear upstream sources first.
+
+5. **Read context files**
 
    Read every file path listed under `contextFiles` from the apply instructions output.
    The files depend on the schema being used:
@@ -59,7 +73,7 @@ Implement tasks from an OpenSpec change.
    - **spec-driven**: proposal, specs, design, tasks
    - Other schemas: follow the contextFiles from CLI output
 
-5. **Show current progress**
+6. **Show current progress**
 
    Display:
    - Schema being used
@@ -67,7 +81,7 @@ Implement tasks from an OpenSpec change.
    - Remaining tasks overview
    - Dynamic instruction from CLI
 
-6. **Implement tasks (loop until done or blocked)**
+7. **Implement tasks (loop until done or blocked)**
 
    For each pending task:
    - Show which task is being worked on
@@ -77,12 +91,17 @@ Implement tasks from an OpenSpec change.
    - Continue to next task
 
    **Pause if:**
+   - OpenSpec conflicts with current canonical or Linear authority → treat upstream
+     as authoritative, pause implementation, and align artifacts in canonical →
+     Linear → OpenSpec order
+   - A task cites a blocked decision or OpenSpec-only product behavior → pause until
+     the upstream change is approved
    - Task is unclear → ask for clarification
    - Implementation reveals a design issue → suggest updating artifacts
    - Error or blocker encountered → report and wait for guidance
    - User interrupts
 
-7. **On completion or pause, show status**
+8. **On completion or pause, show status**
 
    Display:
    - Tasks completed this session
@@ -145,6 +164,9 @@ What would you like to do?
 
 - Keep going through tasks until done or blocked
 - Always read context files before starting (from the apply instructions output)
+- Always verify canonical and Linear authority independently before reading OpenSpec
+  as an implementation contract
+- Never cite OpenSpec as evidence for an upstream requirement
 - If task is ambiguous, pause and ask before implementing
 - If implementation reveals issues, pause and suggest artifact updates
 - Keep code changes minimal and scoped to each task

@@ -24,7 +24,7 @@
 
 ### Allowed Alternatives
 
-<!-- Other approaches allowed when specs and accepted decisions remain satisfied, or 없음. -->
+<!-- Other approaches allowed when specs and independently verified decisions remain satisfied, or 없음. -->
 
 ### Known Traps
 
