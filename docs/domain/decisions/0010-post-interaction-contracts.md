@@ -10,13 +10,13 @@ Accepted
 
 ## 결정
 
-- Reply는 Reply Parent를 직접 참조하는 Post Form이다. Reply Parent는 Original, Reply 또는 Quote이며 Repost는
-  Parent가 될 수 없다. 다른 Post로 평탄화하지 않는다.
+- Reply는 Reply Parent를 직접 참조하고 Kind가 Reply인 Post다. Reply Parent는 Original, Reply 또는 Quote이며
+  Repost는 Parent가 될 수 없다. 다른 Post로 평탄화하지 않는다.
 - Reply Parent가 Tombstone이거나 viewer가 조회할 수 없어도 Reply 자체의 Post Visibility와 Post Eligibility를
   만족하면 Reply는 조회할 수 있다. Post 상세는 조회할 수 있는 조상 경로와 조회할 수 있는 모든 하위 Reply를
   제공한다.
-- Repost는 Repost Source를 직접 참조하는 Post Form이다. Repost Source는 Original, Reply 또는 Quote이며
-  Repost는 Source가 될 수 없다. 다른 Post로 평탄화하지 않는다.
+- Repost는 Repost Source를 직접 참조하고 Kind가 Repost인 Post다. Repost Source는 Original, Reply 또는
+  Quote이며 Repost는 Source가 될 수 없다. 다른 Post로 평탄화하지 않는다.
 - 같은 Author Profile/Repost Source 조합에는 Active Repost가 하나만 존재한다. Repost 수는 해당 Source를
   직접 참조하는 eligible Active Repost만 포함한다.
 - Public/Unlisted Post의 Repost는 Unlisted가 된다. Followers Only Post는 Source Author만 Repost할 수 있고
@@ -34,7 +34,7 @@ Accepted
   각각 원인 Reaction/Repost Post를 Source로 직접 참조한다. 원인 Reaction이 제거되거나 Repost가 Tombstone이면
   대응하는 Notification은 시점과 성공을 보장하지 않는 Best Effort 정리 대상이 된다.
 
-이 ADR은 Quote의 Post Form과 Source 계약을 변경하지 않는다. 위 Media 연결 조건은 Quote에도 적용한다.
+이 ADR은 Quote의 Post Kind와 Source 계약을 변경하지 않는다. 위 Media 연결 조건은 Quote에도 적용한다.
 초기 허용 Reaction Type 목록은 이 ADR에서 결정하지 않고 별도 도메인 결정이 소유한다.
 
 ## 대체한 결정
