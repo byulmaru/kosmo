@@ -576,6 +576,52 @@ const readRemotePairCounts = async ({
     .then(({ count }) => count),
 });
 
+test('원격 Accept는 비활성 local participant의 pending을 보존한다', async () => {
+  const fixture = await createRemotePendingRequest();
+  await db
+    .update(Profiles)
+    .set({ state: ProfileState.DISABLED })
+    .where(eq(Profiles.id, fixture.follower.id));
+
+  assert.equal(
+    await lifecycle.acceptProfileFollowRequest({
+      expectedRowId: fixture.request.id,
+      followeeProfileId: fixture.followee.id,
+      followerProfileId: fixture.follower.id,
+    }),
+    false,
+  );
+  assert.equal(await countRemotePairRows(ProfileFollowRequests, fixture), 1);
+  assert.equal(await countRemotePairRows(ProfileFollows, fixture), 0);
+  assert.deepEqual(await readRemotePairCounts(fixture), {
+    followeeFollowers: 0,
+    followerFollowing: 0,
+  });
+});
+
+test('원격 Reject는 비활성 local participant의 pending을 보존한다', async () => {
+  const fixture = await createRemotePendingRequest();
+  await db
+    .update(Profiles)
+    .set({ state: ProfileState.DISABLED })
+    .where(eq(Profiles.id, fixture.follower.id));
+
+  assert.equal(
+    await removeInboundFollow({
+      expectedRowId: fixture.request.id,
+      followeeProfileId: fixture.followee.id,
+      followerProfileId: fixture.follower.id,
+    }),
+    false,
+  );
+  assert.equal(await countRemotePairRows(ProfileFollowRequests, fixture), 1);
+  assert.equal(await countRemotePairRows(ProfileFollows, fixture), 0);
+  assert.deepEqual(await readRemotePairCounts(fixture), {
+    followeeFollowers: 0,
+    followerFollowing: 0,
+  });
+});
+
 test('원격 Accept 동시 처리는 pending을 한 번만 relation으로 승격한다', async () => {
   const fixture = await createRemotePendingRequest();
   const input = {

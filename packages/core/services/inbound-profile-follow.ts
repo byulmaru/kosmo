@@ -7,7 +7,8 @@ import {
   ProfileFollows,
   Profiles,
 } from '../db';
-import { InstanceState, ProfileState } from '../enums';
+import { InstanceState, NotificationKind, ProfileState } from '../enums';
+import { deleteNotificationBySource } from './notification';
 import type { Transaction } from '../db';
 
 const pairCondition = (
@@ -31,8 +32,11 @@ export const removeInboundFollow = async (
     readonly followerProfileId: string;
   },
   tx?: Transaction,
-): Promise<boolean> =>
-  getDatabaseConnection(tx).transaction(async (tx) => {
+): Promise<boolean> => {
+  const result: {
+    readonly profileFollowId: string | null;
+    readonly removed: boolean;
+  } = await getDatabaseConnection(tx).transaction(async (tx) => {
     const unavailableParticipants = tx
       .select({ id: Profiles.id })
       .from(Profiles)
@@ -52,7 +56,7 @@ export const removeInboundFollow = async (
 
     if (profileFollow) {
       if (expectedRowId !== undefined && profileFollow.id !== expectedRowId) {
-        return false;
+        return { profileFollowId: null, removed: false };
       }
 
       const deleted = await tx
@@ -62,7 +66,7 @@ export const removeInboundFollow = async (
         .then(first);
 
       if (!deleted) {
-        return false;
+        return { profileFollowId: null, removed: false };
       }
 
       await tx
@@ -74,7 +78,7 @@ export const removeInboundFollow = async (
         .set({ followersCount: sql`greatest(${Profiles.followersCount} - 1, 0)` })
         .where(eq(Profiles.id, followeeProfileId));
 
-      return true;
+      return { profileFollowId: deleted.id, removed: true };
     }
 
     const profileFollowRequest = await tx
@@ -85,11 +89,11 @@ export const removeInboundFollow = async (
       .then(first);
 
     if (!profileFollowRequest) {
-      return false;
+      return { profileFollowId: null, removed: false };
     }
 
     if (expectedRowId !== undefined && profileFollowRequest.id !== expectedRowId) {
-      return false;
+      return { profileFollowId: null, removed: false };
     }
 
     const deleted = await tx
@@ -103,5 +107,14 @@ export const removeInboundFollow = async (
       .returning({ id: ProfileFollowRequests.id })
       .then(first);
 
-    return deleted !== undefined;
+    return { profileFollowId: null, removed: deleted !== undefined };
   });
+
+  if (result.profileFollowId) {
+    await deleteNotificationBySource(NotificationKind.FOLLOW, result.profileFollowId, tx).catch(
+      () => undefined,
+    );
+  }
+
+  return result.removed;
+};

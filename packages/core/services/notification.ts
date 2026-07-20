@@ -1,7 +1,16 @@
 import { and, eq } from 'drizzle-orm';
-import { db, firstOrThrowWith, Instances, Notifications, ProfileFollows, Profiles } from '../db';
+import {
+  db,
+  firstOrThrowWith,
+  getDatabaseConnection,
+  Instances,
+  Notifications,
+  ProfileFollows,
+  Profiles,
+} from '../db';
 import { InstanceKind, NotificationKind } from '../enums';
 import { NotFoundError } from '../error';
+import type { Transaction } from '../db';
 
 export const createFollowNotification = async (sourceId: string): Promise<void> => {
   const source = await db
@@ -29,8 +38,11 @@ export const createFollowNotification = async (sourceId: string): Promise<void> 
 export const deleteNotificationBySource = async (
   kind: NotificationKind,
   sourceId: string,
+  tx?: Transaction,
 ): Promise<void> => {
-  await db
-    .delete(Notifications)
-    .where(and(eq(Notifications.kind, kind), eq(Notifications.sourceId, sourceId)));
+  await getDatabaseConnection(tx).transaction(async (tx) => {
+    await tx
+      .delete(Notifications)
+      .where(and(eq(Notifications.kind, kind), eq(Notifications.sourceId, sourceId)));
+  });
 };

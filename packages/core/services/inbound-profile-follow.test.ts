@@ -6,12 +6,19 @@ import {
   db,
   firstOrThrow,
   Instances,
+  Notifications,
   pg,
   ProfileFollowRequests,
   ProfileFollows,
   Profiles,
 } from '../db';
-import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
+import {
+  InstanceKind,
+  InstanceState,
+  NotificationKind,
+  ProfileFollowPolicy,
+  ProfileState,
+} from '../enums';
 import { removeInboundFollow } from './inbound-profile-follow';
 import { followProfile } from './profile-follow';
 
@@ -95,8 +102,44 @@ describe('profile follow core entrypoint and inbound removal', () => {
       followee: { ...followee, followersCount: 1 },
       follower: { ...follower, followingCount: 1 },
     });
+    const profileFollow = await db
+      .select()
+      .from(ProfileFollows)
+      .where(
+        and(
+          eq(ProfileFollows.followerProfileId, follower.id),
+          eq(ProfileFollows.followeeProfileId, followee.id),
+        ),
+      )
+      .then(firstOrThrow);
+    assert.equal(
+      await db
+        .select()
+        .from(Notifications)
+        .where(
+          and(
+            eq(Notifications.kind, NotificationKind.FOLLOW),
+            eq(Notifications.sourceId, profileFollow.id),
+          ),
+        )
+        .then((rows) => rows.length),
+      1,
+    );
     assert.equal(await removeInboundFollow(input), true);
     assert.equal(await removeInboundFollow(input), false);
+    assert.equal(
+      await db
+        .select()
+        .from(Notifications)
+        .where(
+          and(
+            eq(Notifications.kind, NotificationKind.FOLLOW),
+            eq(Notifications.sourceId, profileFollow.id),
+          ),
+        )
+        .then((rows) => rows.length),
+      0,
+    );
     assert.deepEqual(await getProfiles(follower.id, followee.id), {
       followee,
       follower,

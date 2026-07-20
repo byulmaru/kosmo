@@ -8,7 +8,6 @@ import {
   InstanceKind,
   InstanceState,
   ProfileFollowPolicy,
-  ProfileState,
 } from '@kosmo/core/enums';
 import { eq, ne } from 'drizzle-orm';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
@@ -353,28 +352,6 @@ describe('inbound Accept and Reject', () => {
     assert.deepEqual(await readCounts(fixture), { localFollowing: 0, remoteFollowers: 0 });
   });
 
-  test('preserves a pending request when the local profile is disabled after Accept verification', async () => {
-    const fixture = await createFixture({ projection: 'PENDING' });
-    const follow = createOutboundFollow(fixture.projection);
-    const loading = blockDocumentLoad(follow);
-    const handling = handleInboundAccept(
-      createContext(localProfileId, loading.documentLoader),
-      new Accept({ actor: remoteActorUri, object: follow.id }),
-    );
-
-    await loading.started;
-    await db
-      .update(Profiles)
-      .set({ state: ProfileState.DISABLED })
-      .where(eq(Profiles.id, fixture.localProfile.id));
-    loading.release();
-    await handling;
-
-    assert.deepEqual(await db.select().from(ProfileFollowRequests), [fixture.projection]);
-    assert.equal((await db.select().from(ProfileFollows)).length, 0);
-    assert.deepEqual(await readCounts(fixture), { localFollowing: 0, remoteFollowers: 0 });
-  });
-
   test('preserves an established relation when the remote instance is suspended after Reject verification', async () => {
     const fixture = await createFixture({ projection: 'ESTABLISHED' });
     const follow = createOutboundFollow(fixture.projection);
@@ -398,32 +375,6 @@ describe('inbound Accept and Reject', () => {
 
     assert.deepEqual(await db.select().from(ProfileFollows), [fixture.projection]);
     assert.deepEqual(await readCounts(fixture), { localFollowing: 1, remoteFollowers: 1 });
-  });
-
-  test('preserves a pending request when the local profile is disabled after Reject verification', async () => {
-    const fixture = await createFixture({ projection: 'PENDING' });
-    const follow = createOutboundFollow(fixture.projection);
-    const loading = blockDocumentLoad(follow);
-    const handling = handleInboundReject(
-      createContext(localProfileId, loading.documentLoader),
-      new Reject({
-        actor: remoteActorUri,
-        object: follow.id,
-        published: fixture.projection.createdAt,
-      }),
-    );
-
-    await loading.started;
-    await db
-      .update(Profiles)
-      .set({ state: ProfileState.DISABLED })
-      .where(eq(Profiles.id, fixture.localProfile.id));
-    loading.release();
-    await handling;
-
-    assert.deepEqual(await db.select().from(ProfileFollowRequests), [fixture.projection]);
-    assert.equal((await db.select().from(ProfileFollows)).length, 0);
-    assert.deepEqual(await readCounts(fixture), { localFollowing: 0, remoteFollowers: 0 });
   });
 });
 
