@@ -49,8 +49,3 @@ Bookmark는 Profile이 Post를 개인적으로 저장한 결과다.
 ## 확정 용어
 
 - 북마크: Bookmark
-
-## 제외/보류
-
-- Collection은 현재 도메인 범위에서 제외한다.
-- 공개 Bookmark 수와 Bookmark를 만든 Profile 목록은 현재 범위에서 제외한다.

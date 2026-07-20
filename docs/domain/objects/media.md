@@ -81,7 +81,5 @@ Media만 사용할 수 있다. 같은 Upload Account를 가진 Local Media는 Me
 
 - 완료 전 업로드 취소는 upload lifecycle 상태가 확정되지 않아 현재 행동에서 제외한다.
 - Media Proxy 조회는 Mutation이 아니므로 행동에서 제외한다.
-- 동영상, GIF, 개인 파일함, 과거 업로드 재사용 라이브러리는 현재 범위에서 제외한다.
-- 다른 Account의 Local Media와 Remote Media를 Local Post 작성에 연결하는 것은 현재 범위에서 제외한다.
 - 구체 MIME type 목록, Hash, EXIF, dedupe, 이미지 변환 실패 삭제 정책, 바이러스 스캔, 성인물 탐지는
   구현/OpenSpec에서 다룬다.
