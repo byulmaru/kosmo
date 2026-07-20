@@ -80,7 +80,7 @@ Remote APPROVAL_REQUIRED follow를 pending request로 발송·취소하고 verif
 
 **Verification**
 
-- duplicate/concurrent Follow와 cancel, typed Follow의 kosmo/non-kosmo/missing ID, malformed URI, 기본 origin 검증에서 무시되는 cross-origin embedded/IRI-only object, stale Reject와 transition race를 검증한다.
+- duplicate/concurrent Follow와 cancel, typed Follow의 kosmo/non-kosmo/missing ID, fallback Follow의 missing/mismatched/current `published`, malformed URI, 기본 origin 검증에서 무시되는 cross-origin embedded/IRI-only object, stale Accept/Reject와 transition race를 검증한다.
 
 - [x] 4.1 APPROVAL_REQUIRED remote follow를 pending request로 생성하고 새 ACTIVE request에만 Follow를 발송한다.
 - [x] 4.2 remote pending cancel이 exact request를 삭제하고 ACTIVE에서만 원래 Follow identity의 Undo를 발송한다.

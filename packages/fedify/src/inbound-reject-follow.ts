@@ -4,7 +4,7 @@ import { db, first, ProfileFollowRequests, ProfileFollows } from '@kosmo/core/db
 import { removeInboundFollow } from '@kosmo/core/services';
 import { and, eq } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
-import { isCompatibleOutboundFollowActivityId } from './follow-delivery';
+import { isCompatibleOutboundFollowActivity } from './follow-delivery';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
 import type { InboxContext } from '@fedify/fedify';
 import type { Follow } from '@fedify/vocab';
@@ -66,7 +66,12 @@ export const handleInboundRejectFollow = async ({
 
   if (
     !projection ||
-    !isCompatibleOutboundFollowActivityId(context.canonicalOrigin, follow.id, projection.id)
+    !isCompatibleOutboundFollowActivity(
+      context.canonicalOrigin,
+      follow.id,
+      follow.published,
+      projection,
+    )
   ) {
     return;
   }

@@ -52,7 +52,7 @@ Outbound Follow/Undo는 core lifecycle이 검증·commit한 projection을 받는
 
 Generic Accept/Reject handler는 Fedify `getObject()`와 typed Follow 분기를 직접 소유하되 `crossOrigin: "trust"`를 사용하지 않고 Fedify의 기본 origin 검증을 유지한다. cross-origin embedded object는 authoritative origin에서 조회돼 typed Follow로 제공된 경우에만 concrete Accept(Follow)/Reject(Follow) action으로 전달한다. concrete action은 actor/object/recipient를 검증한 뒤 현재 relation/request를 자기 행동 안에서 직접 조회하며, 별도 Follow response projection resolver나 DB lookup utility를 두지 않는다. local recipient와 remote actor identity처럼 Follow 외 inbound activity에도 적용되는 Fedify trust boundary만 공통 모듈을 재사용한다.
 
-typed Follow의 id가 canonical kosmo Follow URI이면 현재 row에서 파생한 URI와 정확히 일치해야 하고, non-kosmo 또는 missing id는 verified actor pair fallback만 허용한다. Fedify가 typed Follow로 제공하지 못한 IRI-only object를 kosmo가 별도 parser와 DB lookup으로 복원하지 않는다. Accept는 exact pending request 삭제와 relation/count 생성을 한 transaction에서 수행하고 established relation은 유지한다. Reject는 exact request/relation row만 삭제하며 stale generation은 무시한다.
+typed Follow의 id가 canonical kosmo Follow URI이면 현재 row에서 파생한 URI와 정확히 일치해야 한다. non-kosmo 또는 missing id fallback은 verified actor pair와 함께 embedded Follow의 `published`가 현재 row의 immutable `createdAt`과 정확히 일치할 때만 같은 outbound generation으로 인정한다. 이 값은 Kosmo가 outbound Follow에 기록한 generation이므로 remote Accept/Reject activity 시각이나 local 수신 시각을 섞지 않는다. Fedify가 typed Follow로 제공하지 못한 IRI-only object를 kosmo가 별도 parser와 DB lookup으로 복원하지 않는다. Accept는 exact pending request 삭제와 relation/count 생성을 한 transaction에서 수행하고 established relation은 유지한다. Reject는 exact request/relation row만 삭제하며 stale generation은 무시한다.
 
 #### Inbox registration
 
@@ -70,7 +70,7 @@ PROD-241이 설정한 actor-scoped/shared inbox listener에 실제 activity type
 
 - remote Follow ID를 strict primary key로 취급하면 ID 누락·재사용 서버와 호환되지 않는다.
 - inbound actor/object URI를 relation/request에 중복 저장하면 profile FK와 canonical actor identity로 이미 표현되는 pair를 별도 스냅샷 계약으로 만든다.
-- remote `published`와 local 수신 시각을 관계 세대로 혼합하면 clock skew와 network 순서를 도메인 상태로 잘못 해석할 수 있다.
+- remote Accept/Reject `published`와 local 수신 시각을 관계 세대로 혼합하면 clock skew와 network 순서를 도메인 상태로 잘못 해석할 수 있다. 반면 embedded Follow의 `published`는 outbound projection `createdAt`에서 직접 파생한 값이므로 ID fallback의 exact generation 검증에 사용할 수 있다.
 - request row를 terminal history로 남기면 pending-only canonical 계약과 충돌한다.
 - core lifecycle을 모르는 하위 Follow/Undo 전송 함수를 노출하면 idempotency, instance state와 commit-after-delivery 순서를 우회할 수 있다.
 - PROD-244에서 inbound Follow/Undo core integration 또는 Notification side effect까지 함께 변경하면 PROD-380과 구현·테스트 소유권이 중복된다.

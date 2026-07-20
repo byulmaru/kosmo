@@ -100,6 +100,7 @@ describe('inbound Accept and Reject', () => {
       actor: localActorUri,
       id: new URL(`https://remote.example/activities/follow-${crypto.randomUUID()}`),
       object: remoteActorUri,
+      published: fixture.projection.createdAt,
     });
     const accept = await Accept.fromJsonLd(
       await new Accept({
@@ -122,7 +123,7 @@ describe('inbound Accept and Reject', () => {
       await new Accept({
         actor: remoteActorUri,
         id: new URL('https://remote.example/activities/accept-without-follow-id'),
-        object: createOutboundFollow(),
+        object: createOutboundFollow(fixture.projection, { includeId: false }),
       }).toJsonLd(),
     );
 
@@ -131,6 +132,54 @@ describe('inbound Accept and Reject', () => {
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
     assert.equal((await db.select().from(ProfileFollows)).length, 1);
     assert.deepEqual(await readCounts(fixture), { localFollowing: 1, remoteFollowers: 1 });
+  });
+
+  test('ignores fallback responses without the current outbound Follow generation', async () => {
+    const fixture = await createFixture({ projection: 'PENDING' });
+    const context = createContext(localProfileId);
+
+    await handleInboundAccept(
+      context,
+      new Accept({
+        actor: remoteActorUri,
+        object: createOutboundFollow(),
+      }),
+    );
+    assert.deepEqual(await db.select().from(ProfileFollowRequests), [fixture.projection]);
+
+    const previousFollow = createOutboundFollow(fixture.projection, { includeId: false });
+    await db
+      .delete(ProfileFollowRequests)
+      .where(eq(ProfileFollowRequests.id, fixture.projection.id));
+    const replacement = await db
+      .insert(ProfileFollowRequests)
+      .values({
+        createdAt: fixture.projection.createdAt.add({ seconds: 1 }),
+        followeeProfileId: fixture.projection.followeeProfileId,
+        followerProfileId: fixture.projection.followerProfileId,
+      })
+      .returning()
+      .then(firstOrThrow);
+
+    await handleInboundAccept(
+      context,
+      new Accept({
+        actor: remoteActorUri,
+        object: previousFollow,
+      }),
+    );
+    await handleInboundReject(
+      context,
+      new Reject({
+        actor: remoteActorUri,
+        object: previousFollow,
+        published: replacement.createdAt,
+      }),
+    );
+
+    assert.deepEqual(await db.select().from(ProfileFollowRequests), [replacement]);
+    assert.equal((await db.select().from(ProfileFollows)).length, 0);
+    assert.deepEqual(await readCounts(fixture), { localFollowing: 0, remoteFollowers: 0 });
   });
 
   test('ignores cross-origin embedded Follow that is not resolved from its origin', async () => {
@@ -201,7 +250,7 @@ describe('inbound Accept and Reject', () => {
       await new Accept({
         actor: remoteActorUri,
         id: new URL('https://remote.example/activities/accept-established'),
-        object: createOutboundFollow(),
+        object: createOutboundFollow(fixture.projection, { includeId: false }),
       }).toJsonLd(),
     );
 
@@ -278,7 +327,7 @@ describe('inbound Accept and Reject', () => {
       context,
       new Reject({
         actor: remoteActorUri,
-        object: createOutboundFollow(),
+        object: createOutboundFollow(fixture.projection, { includeId: false }),
         published: fixture.projection.createdAt.subtract({ seconds: 1 }),
       }),
     );
@@ -288,7 +337,7 @@ describe('inbound Accept and Reject', () => {
       context,
       new Reject({
         actor: remoteActorUri,
-        object: createOutboundFollow(),
+        object: createOutboundFollow(fixture.projection, { includeId: false }),
         published: fixture.projection.createdAt,
       }),
     );
@@ -303,7 +352,10 @@ describe('inbound Accept and Reject', () => {
     });
     await handleInboundAccept(
       createContext(localProfileId),
-      new Accept({ actor: remoteActorUri, object: createOutboundFollow() }),
+      new Accept({
+        actor: remoteActorUri,
+        object: createOutboundFollow(unresponsive.projection, { includeId: false }),
+      }),
     );
     assert.equal((await db.select().from(ProfileFollows)).length, 1);
     assert.equal(
@@ -463,11 +515,18 @@ const createFixture = async ({
   };
 };
 
-const createOutboundFollow = (projection?: { readonly id: string }) =>
+const createOutboundFollow = (
+  projection?: {
+    readonly createdAt: Temporal.Instant;
+    readonly id: string;
+  },
+  { includeId = true }: { readonly includeId?: boolean } = {},
+) =>
   new Follow({
     actor: localActorUri,
-    id: projection ? new URL(`/ap/follow/${projection.id}`, publicOrigin) : null,
+    id: projection && includeId ? new URL(`/ap/follow/${projection.id}`, publicOrigin) : null,
     object: remoteActorUri,
+    published: projection?.createdAt,
   });
 
 const blockDocumentLoad = (follow: Follow) => {

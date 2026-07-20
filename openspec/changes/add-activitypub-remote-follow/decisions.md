@@ -94,6 +94,16 @@
 - Consequences: kosmo outbound Follow ID를 embedded object로 돌려주는 구현도 authoritative document를 조회할 수 없으면 Accept/Reject side effect 없이 무시된다. 이번 capability는 object dispatcher를 추가하지 않으며 실제 상호운용성 요구가 확인되면 별도 보안·호환성 범위에서 다룬다.
 - Confirmation / Follow-up: unverified cross-origin embedded Follow가 projection/count를 변경하지 않고, same-origin/id-less embedded 및 document loader가 resolve한 Follow만 기존 검증으로 처리되는지 PROD-244와 PROD-361에서 확인한다.
 
+### Accept/Reject compatibility fallback도 outbound Follow generation을 검증한다
+
+- Decision Date: 2026-07-21
+- Status: Accepted
+- Context / Problem: actor/object만 일치하는 ID-less 또는 non-kosmo Follow fallback은 이전 request R1을 취소하고 같은 pair의 R2를 만든 뒤 도착한 늦은 R1 Accept/Reject를 현재 R2에 잘못 적용할 수 있다.
+- Decision Outcome: canonical kosmo Follow ID가 현재 projection ID와 정확히 일치하면 기존처럼 처리한다. ID-less 또는 non-kosmo Follow fallback은 embedded Follow의 `published`가 존재하고 현재 request/relation의 immutable `createdAt`과 정확히 일치할 때만 같은 outbound generation으로 인정한다. remote Accept/Reject activity의 `published`나 local 수신 시각은 이 fallback generation 판정에 사용하지 않는다.
+- Alternatives Considered: actor/object-only fallback 유지, compatibility fallback 전체 제거, terminal history나 correlation metadata 추가, remote Accept activity timestamp로 순서 추정.
+- Consequences: 원본 outbound Follow의 `published`를 보존하지 않는 구현의 ID-less/non-kosmo response는 side effect 없이 무시한다. 새 schema, history, lock 또는 reconciliation 흐름 없이 이전 generation response가 새 projection을 변경하지 못한다.
+- Confirmation / Follow-up: 같은-generation fallback Accept/Reject는 처리하고 missing/mismatched Follow `published`와 cancel-refollow 뒤 늦은 fallback Accept는 새 request/relation을 변경하지 않는지 PROD-244가 검증한다.
+
 ### Remote Follow ID는 advisory이고 generation은 단조 증가한다
 
 - Decision Date: 2026-07-15

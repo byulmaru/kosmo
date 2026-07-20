@@ -2,7 +2,7 @@ import { db, first, ProfileFollowRequests, ProfileFollows } from '@kosmo/core/db
 import { acceptProfileFollowRequest } from '@kosmo/core/services';
 import { and, eq } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
-import { isCompatibleOutboundFollowActivityId } from './follow-delivery';
+import { isCompatibleOutboundFollowActivity } from './follow-delivery';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
 import type { InboxContext } from '@fedify/fedify';
 import type { Follow } from '@fedify/vocab';
@@ -34,7 +34,7 @@ export const handleInboundAcceptFollow = async ({
   }
 
   const profileFollow = await db
-    .select({ id: ProfileFollows.id })
+    .select({ createdAt: ProfileFollows.createdAt, id: ProfileFollows.id })
     .from(ProfileFollows)
     .where(
       and(
@@ -47,7 +47,7 @@ export const handleInboundAcceptFollow = async ({
   const projection =
     profileFollow ??
     (await db
-      .select({ id: ProfileFollowRequests.id })
+      .select({ createdAt: ProfileFollowRequests.createdAt, id: ProfileFollowRequests.id })
       .from(ProfileFollowRequests)
       .where(
         and(
@@ -60,7 +60,12 @@ export const handleInboundAcceptFollow = async ({
 
   if (
     !projection ||
-    !isCompatibleOutboundFollowActivityId(context.canonicalOrigin, follow.id, projection.id)
+    !isCompatibleOutboundFollowActivity(
+      context.canonicalOrigin,
+      follow.id,
+      follow.published,
+      projection,
+    )
   ) {
     return;
   }

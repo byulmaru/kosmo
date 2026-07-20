@@ -20,20 +20,27 @@ export interface SendAcceptFollowActivityOptions extends FollowDeliveryOptions {
 export const getFollowActivityUri = (canonicalOrigin: string, profileFollowId: string): URL =>
   new URL(`/ap/follow/${encodeURIComponent(profileFollowId)}`, canonicalOrigin);
 
-export const isCompatibleOutboundFollowActivityId = (
+export const isCompatibleOutboundFollowActivity = (
   canonicalOrigin: string,
   followId: URL | null,
-  profileFollowId: string,
+  followPublished: Temporal.Instant | null,
+  profileFollow: {
+    readonly createdAt: Temporal.Instant;
+    readonly id: string;
+  },
 ): boolean => {
-  if (!followId) {
-    return true;
+  const origin = new URL(canonicalOrigin);
+  if (
+    followId &&
+    followId.origin === origin.origin &&
+    followId.pathname.startsWith('/ap/follow/')
+  ) {
+    return followId.href === getFollowActivityUri(canonicalOrigin, profileFollow.id).href;
   }
 
-  const origin = new URL(canonicalOrigin);
   return (
-    followId.origin !== origin.origin ||
-    !followId.pathname.startsWith('/ap/follow/') ||
-    followId.href === getFollowActivityUri(canonicalOrigin, profileFollowId).href
+    followPublished !== null &&
+    Temporal.Instant.compare(followPublished, profileFollow.createdAt) === 0
   );
 };
 
