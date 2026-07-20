@@ -23,6 +23,7 @@ import { RightRail } from './RightRail';
 import { ShellChromeProvider } from './ShellChromeContext';
 import { getShellLayout } from './shellLayout';
 import { SidebarNavigation } from './SidebarNavigation';
+import { UnreadNotificationBadgeController } from './UnreadNotificationBadgeController';
 import type { ViewStyle } from 'react-native';
 import type { UniversalShellQuery } from './__generated__/UniversalShellQuery.graphql';
 
@@ -68,13 +69,15 @@ export function UniversalShell() {
   const { retry, revision } = useRelayActor();
 
   return (
-    <RouteBoundary
-      loading={<Splash label="앱을 불러오는 중입니다." />}
-      onRetry={retry}
-      title="앱을 불러오지 못했어요"
-    >
-      <UniversalShellContent revision={revision} />
-    </RouteBoundary>
+    <UnreadNotificationBadgeController>
+      <RouteBoundary
+        loading={<Splash label="앱을 불러오는 중입니다." />}
+        onRetry={retry}
+        title="앱을 불러오지 못했어요"
+      >
+        <UniversalShellContent revision={revision} />
+      </RouteBoundary>
+    </UnreadNotificationBadgeController>
   );
 }
 

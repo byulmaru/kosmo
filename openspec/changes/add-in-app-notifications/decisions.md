@@ -224,6 +224,16 @@
 - Consequences: link의 Web keyboard/browser semantics를 유지한다. 시각적 hover는 Read 상태를 나타내지 않고 pointer 위치만 피드백하며, Unread 구분은 접근성 정보와 후속 badge에 의존한다. client Read mutation과 정확한 Unread count cache 갱신은 `PROD-372`, shell badge 표시는 `PROD-324`가 소유한다.
 - Confirmation / Follow-up: PROD-277은 link 이동과 read/unread 표시를 검증하고 PROD-372가 mutation 성공·실패·재시도와 cache 수렴을 추가한다.
 
+### Unread badge는 기존 셸 알림 아이콘에 selected Profile count만 겹쳐 표시한다
+
+- Decision Date: 2026-07-20
+- Status: Accepted
+- Context / Problem: Web Figma 화면에는 아직 Unread badge가 없고 모바일 Figma의 badge 예시는 현재 공용 셸 코드의 label 구조와 다르다. 새 badge가 기존 내비게이션 layout을 바꾸거나 Profile 전환 중 다른 Recipient count를 노출하지 않으면서 모든 Android/iOS/Web 셸 surface에서 일관되게 동작해야 한다.
+- Decision Outcome: 하단 탭 바, 모바일 drawer, Web compact 레일과 full 사이드바의 기존 알림 아이콘에만 badge를 overlay한다. 기존 label과 내비게이션 구조는 유지하고 label 옆 별도 pill을 만들지 않는다. `0`은 숨기고 `1..99`는 정확한 숫자, `100` 이상은 `99+`로 표시하며 기존 light/dark neutral token 조합으로 대비를 확보한다. control은 양수 count에서 capped 표시값이 아닌 실제 서버 count를 사용한 `알림, 읽지 않은 알림 N개`, 그 외에는 `알림`으로 읽고 시각 badge는 accessibility tree에서 숨긴다. 최초 성공 전과 Profile 전환 직후에는 숨긴다. badge count 조회와 `{ selectedProfileId, lastSuccessfulCount }` 상태는 전체 셸 query의 Suspense/Error boundary와 분리된 non-suspending controller가 소유해 같은 Profile의 environment 교체나 조회 실패 중에도 마지막 성공값과 셸 진입점을 유지한다. controller는 Relay operation/store를 사용하며 count 오류를 셸 boundary로 throw하지 않는다. count-only 오류를 위한 메시지나 retry control은 추가하지 않고 다음 Profile 전환, 셸 load·재진입 또는 기존 셸 오류 retry에서 다시 조회한다. 자동 foreground/reconnect listener나 `NetInfo`는 추가하지 않는다.
+- Alternatives Considered: label 옆 count pill, count 없는 dot, Figma mobile의 primary/card 색 조합, danger 색, badge 전용 또는 `onPrimary` token 추가, `NetInfo` 기반 즉시 reconnect refresh.
+- Consequences: badge는 셸 layout과 touch target을 바꾸지 않고 모든 surface에서 같은 normalized Profile field를 표시한다. count controller는 셸 query와 별도의 오류/상태 경계를 가지지만 ad hoc network stack을 만들지 않는다. 최초 count-only 실패는 다음 기존 refresh까지 badge 없이 남고, 성공 뒤 오류나 활성 상태 reconnect만 발생하면 마지막 성공 count가 다음 기존 refresh까지 stale할 수 있다. Profile 전환은 다른 Profile의 마지막 값을 재사용하지 않고 같은 Profile의 count 오류는 전체 셸 오류로 승격하지 않는다. Read mutation과 optimistic/cache orchestration은 `PROD-372`가 소유하며 badge consumer는 목록 길이나 hidden item으로 보정하지 않는다.
+- Confirmation / Follow-up: `PROD-324`가 `web-app-shell` delta, shell/Storybook/Relay cache test와 platform smoke를 소유한다. `PROD-372`는 Read 결과의 `recipientProfile.unreadNotificationCount` cache 반영을 소유하고 `PROD-278`이 최종 Follow→badge→Read 수렴을 Web E2E로 검증한다.
+
 ### Notification Node는 concrete global ID 계약을 따른다
 
 - Decision Date: 2026-07-15
