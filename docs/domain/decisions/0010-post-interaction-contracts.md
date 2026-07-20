@@ -30,9 +30,9 @@ Accepted
 - Post/Reply/Quote에 연결하는 Media는 Local이어야 하고 Media의 Upload Account가 행동을 요청한 Account와
   같아야 한다. Media Profile과 Post Author Profile은 같은 Account 안에서 달라도 되며, Upload Account는
   연결되지 않은 Local Media를 조회할 수 있다.
-- Reply, Reaction, Repost로 자기 Post에 새 Notification을 만들지 않는다. Reaction Notification은 원인
-  Reaction을 Source로 직접 참조한다. Reaction 제거와 Repost Tombstone 전이는 대응하는 Notification 제거를
-  Best Effort로 요청하며 제거 실패가 원인 행동을 되돌리지 않는다.
+- Reply, Reaction, Repost로 자기 Post에 새 Notification을 만들지 않는다. Reaction/Repost Notification은
+  각각 원인 Reaction/Repost Post를 Source로 직접 참조한다. 원인 Reaction이 제거되거나 Repost가 Tombstone이면
+  대응하는 Notification은 시점과 성공을 보장하지 않는 Best Effort 정리 대상이 된다.
 
 이 ADR은 Quote의 기존 도메인 계약을 변경하지 않는다.
 초기 허용 Reaction Type 목록은 이 ADR에서 결정하지 않고 별도 도메인 결정이 소유한다.
@@ -41,8 +41,6 @@ Accepted
 
 - [ADR 0002](./0002-pr-review-domain-adjustments.md)의 중첩 Repost 평탄화 결정을 직접 Source 참조와 Repost
   입력 거절 결정으로 대체한다.
-- [ADR 0005](./0005-domain-boundary-followup-clarifications.md)의 다른 Profile Media 재사용 보류를 같은
-  Upload Account의 Local Media 허용과 다른 Account Media 제외 결정으로 대체한다.
 
 ## 문서 반영
 
