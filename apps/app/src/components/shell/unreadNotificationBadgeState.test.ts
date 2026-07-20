@@ -5,7 +5,6 @@ import {
   getUnreadNotificationAccessibilityLabel,
   getUnreadNotificationCountForProfile,
   getVisibleUnreadNotificationCount,
-  reduceUnreadNotificationBadgeState,
 } from './unreadNotificationBadgeState';
 
 describe('unread notification badge state', () => {
@@ -21,42 +20,12 @@ describe('unread notification badge state', () => {
     assert.equal(getUnreadNotificationAccessibilityLabel(127), '알림, 읽지 않은 알림 127개');
   });
 
-  it('hides the previous count on the first render after a profile switch', () => {
-    const previous = { activeProfileId: 'profile-a', lastSuccessCount: 12 };
+  it('shows the last successful count only for its profile', () => {
+    const lastSuccess = { profileId: 'profile-a', count: 7 };
 
-    assert.equal(getVisibleUnreadNotificationCount(previous, 'profile-b'), null);
-    assert.deepEqual(
-      reduceUnreadNotificationBadgeState(previous, { type: 'select', profileId: 'profile-b' }),
-      {
-        activeProfileId: 'profile-b',
-        lastSuccessCount: null,
-      },
-    );
-  });
-
-  it('keeps a same-profile successful count after a fetch error', () => {
-    const successful = reduceUnreadNotificationBadgeState(
-      { activeProfileId: 'profile-a', lastSuccessCount: null },
-      { type: 'success', profileId: 'profile-a', count: 7 },
-    );
-
-    assert.deepEqual(
-      reduceUnreadNotificationBadgeState(successful, { type: 'error', profileId: 'profile-a' }),
-      successful,
-    );
-  });
-
-  it('rejects a stale result from a previously selected profile', () => {
-    const selected = { activeProfileId: 'profile-b', lastSuccessCount: null };
-
-    assert.deepEqual(
-      reduceUnreadNotificationBadgeState(selected, {
-        type: 'success',
-        profileId: 'profile-a',
-        count: 7,
-      }),
-      selected,
-    );
+    assert.equal(getVisibleUnreadNotificationCount(lastSuccess, 'profile-a'), 7);
+    assert.equal(getVisibleUnreadNotificationCount(lastSuccess, 'profile-b'), null);
+    assert.equal(getVisibleUnreadNotificationCount(null, 'profile-a'), null);
   });
 
   it('ignores a snapshot count whose profile ID differs from the selected profile', () => {

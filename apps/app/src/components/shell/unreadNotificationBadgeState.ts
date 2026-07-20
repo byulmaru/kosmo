@@ -1,12 +1,7 @@
-export type UnreadNotificationBadgeState = {
-  activeProfileId: string | null;
-  lastSuccessCount: number | null;
+export type UnreadNotificationBadgeLastSuccess = {
+  profileId: string;
+  count: number;
 };
-
-export type UnreadNotificationBadgeAction =
-  | { type: 'select'; profileId: string | null }
-  | { type: 'success'; profileId: string; count: number }
-  | { type: 'error'; profileId: string };
 
 export function formatUnreadNotificationBadge(count: number | null): string | null {
   if (!count || count < 1) {
@@ -30,26 +25,8 @@ export function getUnreadNotificationCountForProfile(
 }
 
 export function getVisibleUnreadNotificationCount(
-  state: UnreadNotificationBadgeState,
+  lastSuccess: UnreadNotificationBadgeLastSuccess | null,
   selectedProfileId: string | null,
 ): number | null {
-  return state.activeProfileId === selectedProfileId ? state.lastSuccessCount : null;
-}
-
-export function reduceUnreadNotificationBadgeState(
-  state: UnreadNotificationBadgeState,
-  action: UnreadNotificationBadgeAction,
-): UnreadNotificationBadgeState {
-  switch (action.type) {
-    case 'select':
-      return state.activeProfileId === action.profileId
-        ? state
-        : { activeProfileId: action.profileId, lastSuccessCount: null };
-    case 'success':
-      return state.activeProfileId === action.profileId
-        ? { ...state, lastSuccessCount: action.count }
-        : state;
-    case 'error':
-      return state;
-  }
+  return lastSuccess?.profileId === selectedProfileId ? lastSuccess.count : null;
 }
