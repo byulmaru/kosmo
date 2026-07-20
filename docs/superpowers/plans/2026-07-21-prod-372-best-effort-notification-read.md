@@ -158,7 +158,7 @@ gh pr create --draft --base main --head prod-372 \
 - Consumes: `markNotificationRead(input: { id })`, `MarkNotificationReadPayload.notification`, `MarkNotificationReadPayload.recipientProfile`
 - Produces: `NotificationListItemMarkReadMutation($id: ID!)` operation selecting normalized item and Recipient Profile fields
 
-- [ ] **Step 1: 실패하는 Relay store test 작성**
+- [x] **Step 1: 실패하는 Relay store test 작성**
 
 Create `NotificationListItem.test.ts`:
 
@@ -273,7 +273,7 @@ describe('NotificationListItem Read cache', () => {
 });
 ```
 
-- [ ] **Step 2: RED 확인**
+- [x] **Step 2: RED 확인**
 
 Run:
 
@@ -283,7 +283,7 @@ pnpm --filter @kosmo/app test:unit
 
 Expected: `NotificationListItemMarkReadMutation.graphql` module이 아직 없어 FAIL한다. 다른 기존 unit test 실패는 없어야 한다.
 
-- [ ] **Step 3: fragment ID와 mutation document 추가**
+- [x] **Step 3: fragment ID와 mutation document 추가**
 
 Modify `NotificationListItem.tsx`의 GraphQL documents:
 
@@ -319,7 +319,7 @@ export const notificationListItemMarkReadMutation = graphql`
 
 exported document는 같은 component가 소유하며 공용 query helper로 이동하지 않는다. generated type import는 실제로 사용하는 Task 3에서 추가한다.
 
-- [ ] **Step 4: GREEN 확인**
+- [x] **Step 4: GREEN 확인**
 
 Run:
 
@@ -331,7 +331,7 @@ pnpm --filter @kosmo/app check
 
 Expected: Relay compiler가 mutation artifact를 생성하고 store test와 기존 unit test가 PASS하며 TypeScript check가 exit code 0이다.
 
-- [ ] **Step 5: payload contract 체크포인트 commit과 push**
+- [x] **Step 5: payload contract 체크포인트 commit과 push**
 
 Run:
 

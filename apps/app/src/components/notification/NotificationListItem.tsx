@@ -16,12 +16,28 @@ type NotificationListItemProps = {
 
 const notificationFragment = graphql`
   fragment NotificationListItem_notification on FollowNotification {
+    id
     createdAt
     readAt
     profile {
       displayName
       handle
       relativeHandle
+    }
+  }
+`;
+
+export const notificationListItemMarkReadMutation = graphql`
+  mutation NotificationListItemMarkReadMutation($id: ID!) {
+    markNotificationRead(input: { id: $id }) {
+      notification {
+        id
+        readAt
+      }
+      recipientProfile {
+        id
+        unreadNotificationCount
+      }
     }
   }
 `;
