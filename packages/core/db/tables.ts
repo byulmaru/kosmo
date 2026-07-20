@@ -351,12 +351,6 @@ export const ProfileFollowRequests = pgTable(
   ],
 );
 
-export const ReactionTypes = pgTable('reaction_type', {
-  id: id(),
-  unicode: text('unicode').unique().notNull(),
-  createdAt: createdAt(),
-});
-
 export const Reactions = pgTable(
   'reaction',
   {
@@ -377,6 +371,12 @@ export const Reactions = pgTable(
     index().on(table.profileId),
   ],
 );
+
+export const ReactionTypes = pgTable('reaction_type', {
+  id: id(),
+  unicode: text('unicode').unique().notNull(),
+  createdAt: createdAt(),
+});
 
 export const Sessions = pgTable(
   'session',
