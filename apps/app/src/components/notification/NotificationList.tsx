@@ -50,8 +50,7 @@ export function NotificationList({ profile }: NotificationListProps) {
     NotificationList_profile$key
   >(notificationListFragment, profile);
   const [loadError, setLoadError] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [, startTransition] = useTransition();
+  const [refreshing, startTransition] = useTransition();
   const notifications = pagination.data.notifications.edges.flatMap(({ node }) =>
     node.__typename === 'FollowNotification' && node.follow
       ? [{ ...node, follow: node.follow }]
@@ -72,7 +71,6 @@ export function NotificationList({ profile }: NotificationListProps) {
       return;
     }
 
-    setRefreshing(true);
     startTransition(() => {
       pagination.refetch(
         { count: 20 },
@@ -80,7 +78,6 @@ export function NotificationList({ profile }: NotificationListProps) {
           fetchPolicy: 'network-only',
           onComplete: (error) => {
             setLoadError((current) => resolvePaginationLoadErrorAfterRefresh(current, error));
-            setRefreshing(false);
           },
         },
       );
