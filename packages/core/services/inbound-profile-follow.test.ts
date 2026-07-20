@@ -1,26 +1,17 @@
 import assert from 'node:assert/strict';
 import { after, describe, test } from 'node:test';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
-  ActivityPubActors,
   db,
   firstOrThrow,
   Instances,
-  Notifications,
   pg,
   ProfileFollowRequests,
   ProfileFollows,
   Profiles,
 } from '../db';
-import {
-  InstanceKind,
-  InstanceState,
-  NotificationKind,
-  ProfileFollowPolicy,
-  ProfileState,
-} from '../enums';
-import { removeInboundFollow } from './inbound-profile-follow';
-import { followProfile } from './profile-follow';
+import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
+import { recordInboundFollow, removeInboundFollow } from './inbound-profile-follow';
 
 after(async () => pg.end());
 
@@ -62,19 +53,8 @@ const createPair = async (followPolicy: ProfileFollowPolicy) => {
       },
     ])
     .returning();
-  await db.insert(ActivityPubActors).values({
-    inboxUri: `https://${remoteInstance!.domain}/users/${follower!.id}/inbox`,
-    profileId: follower!.id,
-    sharedInboxUri: `https://${remoteInstance!.domain}/inbox`,
-    type: 'PERSON',
-    uri: `https://${remoteInstance!.domain}/users/${follower!.id}`,
-  });
   return { followee: followee!, follower: follower! };
 };
-
-const followKind = (
-  input: Parameters<typeof followProfile>[0],
-): Promise<'ESTABLISHED' | 'PENDING'> => followProfile(input).then(({ result }) => result.kind);
 
 const getProfiles = async (followerProfileId: string, followeeProfileId: string) => ({
   followee: await db
@@ -89,12 +69,12 @@ const getProfiles = async (followerProfileId: string, followeeProfileId: string)
     .then(firstOrThrow),
 });
 
-describe('profile follow core entrypoint and inbound removal', () => {
+describe('inbound profile follow service', () => {
   test('reuses the current relation and removes it idempotently', async () => {
     const { followee, follower } = await createPair(ProfileFollowPolicy.OPEN);
     const input = { followeeProfileId: followee.id, followerProfileId: follower.id };
-    const first = await followKind(input);
-    const duplicate = await followKind(input);
+    const first = await recordInboundFollow(input);
+    const duplicate = await recordInboundFollow(input);
 
     assert.equal(first, 'ESTABLISHED');
     assert.equal(duplicate, 'ESTABLISHED');
@@ -102,44 +82,8 @@ describe('profile follow core entrypoint and inbound removal', () => {
       followee: { ...followee, followersCount: 1 },
       follower: { ...follower, followingCount: 1 },
     });
-    const profileFollow = await db
-      .select()
-      .from(ProfileFollows)
-      .where(
-        and(
-          eq(ProfileFollows.followerProfileId, follower.id),
-          eq(ProfileFollows.followeeProfileId, followee.id),
-        ),
-      )
-      .then(firstOrThrow);
-    assert.equal(
-      await db
-        .select()
-        .from(Notifications)
-        .where(
-          and(
-            eq(Notifications.kind, NotificationKind.FOLLOW),
-            eq(Notifications.sourceId, profileFollow.id),
-          ),
-        )
-        .then((rows) => rows.length),
-      1,
-    );
     assert.equal(await removeInboundFollow(input), true);
     assert.equal(await removeInboundFollow(input), false);
-    assert.equal(
-      await db
-        .select()
-        .from(Notifications)
-        .where(
-          and(
-            eq(Notifications.kind, NotificationKind.FOLLOW),
-            eq(Notifications.sourceId, profileFollow.id),
-          ),
-        )
-        .then((rows) => rows.length),
-      0,
-    );
     assert.deepEqual(await getProfiles(follower.id, followee.id), {
       followee,
       follower,
@@ -149,8 +93,8 @@ describe('profile follow core entrypoint and inbound removal', () => {
   test('creates and removes a pending-only request without changing counts', async () => {
     const { followee, follower } = await createPair(ProfileFollowPolicy.APPROVAL_REQUIRED);
     const input = { followeeProfileId: followee.id, followerProfileId: follower.id };
-    const first = await followKind(input);
-    const duplicate = await followKind(input);
+    const first = await recordInboundFollow(input);
+    const duplicate = await recordInboundFollow(input);
 
     assert.equal(first, 'PENDING');
     assert.equal(duplicate, 'PENDING');
@@ -170,7 +114,7 @@ describe('profile follow core entrypoint and inbound removal', () => {
   test('serializes concurrent duplicate Follow and increments counts once', async () => {
     const { followee, follower } = await createPair(ProfileFollowPolicy.OPEN);
     const input = { followeeProfileId: followee.id, followerProfileId: follower.id };
-    const results = await Promise.all([followKind(input), followKind(input)]);
+    const results = await Promise.all([recordInboundFollow(input), recordInboundFollow(input)]);
 
     assert.deepEqual(results, ['ESTABLISHED', 'ESTABLISHED']);
     assert.equal(
@@ -190,7 +134,7 @@ describe('profile follow core entrypoint and inbound removal', () => {
   test('serializes concurrent duplicate pending Follow without changing counts', async () => {
     const { followee, follower } = await createPair(ProfileFollowPolicy.APPROVAL_REQUIRED);
     const input = { followeeProfileId: followee.id, followerProfileId: follower.id };
-    const results = await Promise.all([followKind(input), followKind(input)]);
+    const results = await Promise.all([recordInboundFollow(input), recordInboundFollow(input)]);
 
     assert.deepEqual(results, ['PENDING', 'PENDING']);
     assert.equal(
@@ -204,9 +148,46 @@ describe('profile follow core entrypoint and inbound removal', () => {
     assert.deepEqual(await getProfiles(follower.id, followee.id), { followee, follower });
   });
 
+  test('does not lock participant profiles for an established duplicate Follow', async () => {
+    const { followee, follower } = await createPair(ProfileFollowPolicy.OPEN);
+    const input = { followeeProfileId: followee.id, followerProfileId: follower.id };
+    await recordInboundFollow(input);
+
+    let releaseProfiles!: () => void;
+    const profilesReleased = new Promise<void>((resolve) => {
+      releaseProfiles = resolve;
+    });
+    let profilesLocked!: () => void;
+    const profilesAreLocked = new Promise<void>((resolve) => {
+      profilesLocked = resolve;
+    });
+    const blocker = db.transaction(async (tx) => {
+      await tx
+        .select({ id: Profiles.id })
+        .from(Profiles)
+        .where(inArray(Profiles.id, [follower.id, followee.id]))
+        .for('update', { of: Profiles });
+      profilesLocked();
+      await profilesReleased;
+    });
+
+    await profilesAreLocked;
+    try {
+      const duplicate = await db.transaction(async (tx) => {
+        await tx.execute(sql`set local lock_timeout = '100ms'`);
+        return recordInboundFollow(input, tx);
+      });
+
+      assert.equal(duplicate, 'ESTABLISHED');
+    } finally {
+      releaseProfiles();
+      await blocker;
+    }
+  });
+
   test('does not delete a new exact-row refollow that replaces the captured row', async () => {
     const { followee, follower } = await createPair(ProfileFollowPolicy.OPEN);
-    await followProfile({
+    await recordInboundFollow({
       followeeProfileId: followee.id,
       followerProfileId: follower.id,
     });
@@ -268,5 +249,33 @@ describe('profile follow core entrypoint and inbound removal', () => {
       followee: { ...followee, followersCount: 1 },
       follower: { ...follower, followingCount: 1 },
     });
+  });
+
+  test('joins a caller transaction and rolls back relation and counts', async () => {
+    const { followee, follower } = await createPair(ProfileFollowPolicy.OPEN);
+
+    await assert.rejects(
+      db.transaction(async (tx) => {
+        await recordInboundFollow(
+          {
+            followeeProfileId: followee.id,
+            followerProfileId: follower.id,
+          },
+          tx,
+        );
+        throw new Error('rollback');
+      }),
+      /rollback/,
+    );
+
+    assert.equal(
+      await db
+        .select()
+        .from(ProfileFollows)
+        .where(eq(ProfileFollows.followerProfileId, follower.id))
+        .then((rows) => rows.length),
+      0,
+    );
+    assert.deepEqual(await getProfiles(follower.id, followee.id), { followee, follower });
   });
 });

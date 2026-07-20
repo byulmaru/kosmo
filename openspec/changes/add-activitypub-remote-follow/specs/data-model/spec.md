@@ -78,7 +78,6 @@
 
 - **WHEN** remote ActivityPub profile이 local profile을 follow한다
 - **THEN** 시스템은 local follow policy에 따라 remote follower와 local followee 사이의 established `ProfileFollow` 관계 또는 pending `ProfileFollowRequest` 요청을 저장한다
-- **AND** 이 relation/request 전이는 local GraphQL follow와 동일한 core profile follow action을 통해 수행해야 한다
 - **AND** inbound Follow activity id, actor URI와 object URI를 `ProfileFollow` 또는 `ProfileFollowRequest`에 별도 저장하지 않아야 한다
 - **AND** 같은 remote follower와 local followee pair의 pending `ProfileFollowRequest`가 이미 있으면 새 duplicate Follow metadata를 저장하지 않고 기존 request를 유지한다
 - **AND** 같은 remote follower와 local followee pair의 established `ProfileFollow`가 이미 있으면 같은 id의 재전달 또는 새 Follow id를 가진 duplicate Follow에서도 기존 관계를 유지한다

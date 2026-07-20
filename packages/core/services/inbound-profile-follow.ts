@@ -7,8 +7,10 @@ import {
   ProfileFollows,
   Profiles,
 } from '../db';
-import { InstanceState, NotificationKind, ProfileState } from '../enums';
-import { deleteNotificationBySource } from './notification';
+import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
+import { NotFoundError } from '../error';
+import { ensureProfileFollow } from './profile-follow-relation';
+import { ensureProfileFollowRequest } from './profile-follow-request';
 import type { Transaction } from '../db';
 
 const pairCondition = (
@@ -21,6 +23,50 @@ const pairCondition = (
     eq(table.followeeProfileId, followeeProfileId),
   );
 
+export const recordInboundFollow = async (
+  {
+    followeeProfileId,
+    followerProfileId,
+  }: { readonly followeeProfileId: string; readonly followerProfileId: string },
+  tx?: Transaction,
+): Promise<'ESTABLISHED' | 'PENDING'> =>
+  getDatabaseConnection(tx).transaction(async (tx) => {
+    const participants = await tx
+      .select({
+        followPolicy: Profiles.followPolicy,
+        instanceKind: Instances.kind,
+        instanceState: Instances.state,
+        profileId: Profiles.id,
+        profileState: Profiles.state,
+      })
+      .from(Profiles)
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(inArray(Profiles.id, [followerProfileId, followeeProfileId]));
+    const follower = participants.find(({ profileId }) => profileId === followerProfileId);
+    const followee = participants.find(({ profileId }) => profileId === followeeProfileId);
+
+    if (
+      !follower ||
+      follower.profileState !== ProfileState.ACTIVE ||
+      follower.instanceKind !== InstanceKind.ACTIVITYPUB ||
+      follower.instanceState !== InstanceState.ACTIVE ||
+      !followee ||
+      followee.profileState !== ProfileState.ACTIVE ||
+      followee.instanceKind !== InstanceKind.LOCAL ||
+      followee.instanceState !== InstanceState.ACTIVE
+    ) {
+      throw new NotFoundError('Profile not found');
+    }
+
+    if (followee.followPolicy === ProfileFollowPolicy.APPROVAL_REQUIRED) {
+      const result = await ensureProfileFollowRequest({ followeeProfileId, followerProfileId }, tx);
+      return result.kind;
+    }
+
+    await ensureProfileFollow({ followeeProfileId, followerProfileId }, tx);
+    return 'ESTABLISHED';
+  });
+
 export const removeInboundFollow = async (
   {
     expectedRowId,
@@ -32,11 +78,8 @@ export const removeInboundFollow = async (
     readonly followerProfileId: string;
   },
   tx?: Transaction,
-): Promise<boolean> => {
-  const result: {
-    readonly profileFollowId: string | null;
-    readonly removed: boolean;
-  } = await getDatabaseConnection(tx).transaction(async (tx) => {
+): Promise<boolean> =>
+  getDatabaseConnection(tx).transaction(async (tx) => {
     const unavailableParticipants = tx
       .select({ id: Profiles.id })
       .from(Profiles)
@@ -56,7 +99,7 @@ export const removeInboundFollow = async (
 
     if (profileFollow) {
       if (expectedRowId !== undefined && profileFollow.id !== expectedRowId) {
-        return { profileFollowId: null, removed: false };
+        return false;
       }
 
       const deleted = await tx
@@ -66,7 +109,7 @@ export const removeInboundFollow = async (
         .then(first);
 
       if (!deleted) {
-        return { profileFollowId: null, removed: false };
+        return false;
       }
 
       await tx
@@ -78,7 +121,7 @@ export const removeInboundFollow = async (
         .set({ followersCount: sql`greatest(${Profiles.followersCount} - 1, 0)` })
         .where(eq(Profiles.id, followeeProfileId));
 
-      return { profileFollowId: deleted.id, removed: true };
+      return true;
     }
 
     const profileFollowRequest = await tx
@@ -89,11 +132,11 @@ export const removeInboundFollow = async (
       .then(first);
 
     if (!profileFollowRequest) {
-      return { profileFollowId: null, removed: false };
+      return false;
     }
 
     if (expectedRowId !== undefined && profileFollowRequest.id !== expectedRowId) {
-      return { profileFollowId: null, removed: false };
+      return false;
     }
 
     const deleted = await tx
@@ -107,14 +150,5 @@ export const removeInboundFollow = async (
       .returning({ id: ProfileFollowRequests.id })
       .then(first);
 
-    return { profileFollowId: null, removed: deleted !== undefined };
+    return deleted !== undefined;
   });
-
-  if (result.profileFollowId) {
-    await deleteNotificationBySource(NotificationKind.FOLLOW, result.profileFollowId, tx).catch(
-      () => undefined,
-    );
-  }
-
-  return result.removed;
-};

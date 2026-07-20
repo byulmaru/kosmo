@@ -1,18 +1,10 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { eq, inArray, or } from 'drizzle-orm';
-import {
-  ActivityPubActors,
-  db,
-  firstOrThrow,
-  Instances,
-  Notifications,
-  pg,
-  ProfileFollows,
-  Profiles,
-} from '../db';
+import { and, eq, inArray, or } from 'drizzle-orm';
+import { db, firstOrThrow, Instances, Notifications, pg, ProfileFollows, Profiles } from '../db';
 import { InstanceKind, InstanceState, NotificationKind, ProfileFollowPolicy } from '../enums';
 import { NotFoundError } from '../error';
+import { recordInboundFollow } from './inbound-profile-follow';
 import { createFollowNotification, deleteNotificationBySource } from './notification';
 import { followProfile, unfollowProfile } from './profile-follow';
 
@@ -44,15 +36,6 @@ const createProfile = async (kind: InstanceKind = InstanceKind.LOCAL) => {
     .returning()
     .then(firstOrThrow);
   profileIds.push(profile.id);
-  if (kind === InstanceKind.ACTIVITYPUB) {
-    await db.insert(ActivityPubActors).values({
-      inboxUri: `https://${instance.domain}/users/${profile.id}/inbox`,
-      profileId: profile.id,
-      sharedInboxUri: `https://${instance.domain}/inbox`,
-      type: 'PERSON',
-      uri: `https://${instance.domain}/users/${profile.id}`,
-    });
-  }
   return profile;
 };
 
@@ -108,12 +91,25 @@ test('Follow 알림은 source에서 Local Recipient와 Related Profile을 파생
 test('Follow 알림은 materialize된 Remote Follower도 같은 mapping으로 저장한다', async () => {
   const follower = await createProfile(InstanceKind.ACTIVITYPUB);
   const followee = await createProfile();
-  const profileFollow = getEstablishedFollow(
-    await followProfile({
+  assert.equal(
+    await recordInboundFollow({
       followerProfileId: follower.id,
       followeeProfileId: followee.id,
     }),
+    'ESTABLISHED',
   );
+  const profileFollow = await db
+    .select()
+    .from(ProfileFollows)
+    .where(
+      and(
+        eq(ProfileFollows.followerProfileId, follower.id),
+        eq(ProfileFollows.followeeProfileId, followee.id),
+      ),
+    )
+    .then(firstOrThrow);
+
+  await createFollowNotification(profileFollow.id);
 
   const [notification] = await readNotifications(profileFollow.id);
   assert.equal(notification?.recipientProfileId, followee.id);

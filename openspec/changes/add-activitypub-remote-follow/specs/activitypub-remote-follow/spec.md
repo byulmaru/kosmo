@@ -17,19 +17,6 @@
 - **THEN** Fedify inbox listener는 verified typed activity를 kosmo follow handler에 전달한다
 - **AND** 시스템은 request parsing, signature verification, remote actor key verification을 직접 구현하지 않는다
 
-### Requirement: Core profile follow action boundary
-
-시스템은 local action과 verified inbound ActivityPub Follow가 만드는 follow graph/request 전이를 하나의 core profile follow action으로 처리해야 한다(MUST).
-
-#### Scenario: Route every profile Follow through the core action
-
-- **WHEN** GraphQL이 active local profile의 follow action을 전달하거나 Fedify handler가 remote follower와 local followee actor pair를 검증한다
-- **THEN** 두 adapter는 동일한 core profile follow action을 호출해야 한다
-- **AND** core action은 participant profile/instance 상태, 허용되는 local/ActivityPub 방향, followee의 follow policy, established relation 또는 pending request 전이와 저장 count를 판단해야 한다
-- **AND** Fedify handler는 별도 inbound follow graph/request 생성 service나 직접 DB write로 core action을 우회하지 않아야 한다
-- **AND** GraphQL actor authorization, ActivityPub actor/object/recipient 검증과 remote actor materialization은 각 adapter 경계에 남아야 한다
-- **AND** outbound Follow와 inbound Accept처럼 수신 activity 또는 transport context가 필요한 protocol delivery는 core action 결과를 사용하되 해당 transport 경계가 수행할 수 있다
-
 #### Scenario: Materialize unknown remote actor through lookup
 
 - **WHEN** follow protocol handler가 remote actor URI를 참조하지만 저장된 ActivityPub remote `Profile`이 없다
@@ -145,7 +132,7 @@
 
 - **WHEN** Fedify inbox listener가 verified remote `Follow` activity를 전달한다
 - **THEN** 시스템은 remote actor를 `Profile`로 materialize하거나 기존 remote `Profile`을 조회한다
-- **AND** actor/object/recipient 검증과 materialization이 끝나면 GraphQL local follow와 동일한 core profile follow action에 remote follower와 local followee pair를 전달한다
+- **AND** actor/object/recipient 검증과 materialization이 끝나면 inbound Follow lifecycle에 remote follower와 local followee pair를 전달한다
 - **AND** `Follow.actor`는 materialized remote actor URI와 일치해야 한다
 - **AND** `Follow.object`는 kosmo local actor URI로 parse되어야 하며 활성 local followee profile을 식별해야 한다
 - **AND** personal inbox에서 Fedify `ctx.recipient`가 제공되면 시스템은 해당 recipient identifier를 local actor/profile로 resolve하고, 그 canonical actor URI가 `Follow.object`와 일치해야 한다

@@ -10,8 +10,8 @@ PROD-235와 구현 자식이 이 change의 source of truth다. PROD-323이 Follo
 
 - shared change의 요구사항과 task를 Linear 구현 이슈에 일대일로 대응한다.
 - inbound Follow를 기존 actor pair projection에 idempotent하게 연결하고 duplicate side effect를 막는다.
-- GraphQL과 Fedify가 검증한 follow pair를 하나의 core follow application entrypoint로 연결해 profile/instance 상태, follow policy와 relation/request 전이가 adapter별로 갈라지지 않게 한다.
 - request domain lifecycle과 ActivityPub protocol adapter를 분리한다.
+- PROD-244의 outbound pending/cancel 및 Accept/Reject 왕복과 PROD-380의 inbound Follow/Undo Notification integration을 서로 다른 구현 경계로 유지한다.
 - SUSPENDED 관계 보존과 UNRESPONSIVE reachability 복구를 명확히 구분한다.
 - 공통 inbox route와 activity별 handler 책임을 분리해 remote-post 계약과 archive 순서 충돌을 만들지 않는다.
 
@@ -40,7 +40,7 @@ PROD-243은 ActivityPub recipient·actor·object 검증 뒤 remote pending reque
 
 #### PROD-243 inbound Follow/Undo
 
-Follow 대상 local actor를 먼저 검증한 뒤에만 unknown remote actor materialization을 허용한다. 검증된 Follow는 inbound id/actor/object를 별도 저장하지 않고 GraphQL local follow와 같은 core `followProfile` application entrypoint에 follower/followee pair를 전달한다. Core action은 local→local, local→ActivityPub, ActivityPub→local 방향의 participant/instance 상태와 followee policy를 한곳에서 검증하고 established relation 또는 pending request 전이를 소유하며, ActivityPub→ActivityPub 방향은 거부한다. Fedify handler는 별도 inbound graph-creation service를 두거나 relation/request를 직접 생성하지 않는다. OPEN Follow의 Accept는 core action의 established 결과와 현재 수신 Follow object를 사용한다.
+Follow 대상 local actor를 먼저 검증한 뒤에만 unknown remote actor materialization을 허용한다. PROD-243에서 병합된 inbound Follow service는 inbound id/actor/object를 별도 저장하지 않고 검증된 follower/followee pair를 established relation 또는 pending request로 전환한다. OPEN Follow의 Accept는 이 service 결과와 현재 수신 Follow object를 사용한다. 이 기존 runtime을 공통 core Follow lifecycle과 Notification source lifecycle에 연결하는 변경은 PROD-380이 PROD-244 병합 후 소유한다.
 
 Undo는 저장된 actor pair에서 relation/request를 찾고 embedded Follow의 actor/object/recipient를 검증한다. 처리 중 확인한 exact row가 맞을 때만 삭제하며, relation이 실제 삭제된 경우에만 count를 같은 transaction에서 감소시킨다. unknown actor 또는 IRI-only Undo는 network lookup 없이 follow graph/request side effect를 무시한다. 다만 저장된 actor가 보낸 verified activity는 object 지원 여부와 무관하게 server reachability 신호이므로 `UNRESPONSIVE → ACTIVE` 복구는 허용한다.
 
@@ -73,7 +73,7 @@ PROD-241이 설정한 actor-scoped/shared inbox listener에 실제 activity type
 - remote `published`와 local 수신 시각을 관계 세대로 혼합하면 clock skew와 network 순서를 도메인 상태로 잘못 해석할 수 있다.
 - request row를 terminal history로 남기면 pending-only canonical 계약과 충돌한다.
 - core lifecycle을 모르는 하위 Follow/Undo 전송 함수를 노출하면 idempotency, instance state와 commit-after-delivery 순서를 우회할 수 있다.
-- GraphQL과 Fedify에 별도 follow graph 생성 service를 두면 profile/instance 상태, follow policy, count와 notification 정책이 한쪽에서 누락되거나 서로 달라질 수 있다.
+- PROD-244에서 inbound Follow/Undo core integration 또는 Notification side effect까지 함께 변경하면 PROD-380과 구현·테스트 소유권이 중복된다.
 - Accept/Reject object에서 Fedify `crossOrigin: "trust"`를 사용하면 remote activity가 다른 origin의 identity에 대해 주장한 embedded content를 authoritative fetch 없이 신뢰하게 된다.
 - SUSPENDED relation을 삭제하면 moderation 해제 뒤 관계 복구와 저장 count 계약을 깨뜨린다.
 - PR #232/#234의 브랜치를 통째로 복구하면 현재 main과 책임 경계를 되돌린다.
@@ -94,14 +94,16 @@ PROD-241이 설정한 actor-scoped/shared inbox listener에 실제 activity type
 3. PROD-243은 별도 DB migration 없이 remote request 생성을, PROD-272는 local request 생성과 공통 처리 lifecycle을 각자 검증한다.
 4. PROD-244가 두 구현과 PROD-243 exact-row primitive를 조합해 outbound pending request, cancel Undo와 inbound Accept/Reject 왕복을 완성한다.
 5. PROD-245, PROD-263과 PROD-282를 각 이슈의 독립 범위로 완료한다.
-6. PROD-361이 모든 구현 결과를 통합 검증하고 delta spec 동기화와 change archive PR을 소유한다.
-7. PROD-361의 검증·archive 근거가 확인되면 부모 PROD-235를 완료한다.
+6. PROD-380이 PROD-244 병합 후 inbound Follow/Undo와 Follow Notification lifecycle을 공통 core action에서 통합한다.
+7. PROD-361이 모든 구현 결과를 통합 검증하고 delta spec 동기화와 change archive PR을 소유한다.
+8. PROD-361의 검증·archive 근거가 확인되면 부모 PROD-235를 완료한다.
 
 Rollback은 PROD-357 spec-only commit을 되돌려 이전 contract 문서로 복귀할 수 있다. 구현·migration은 이 PR에 포함되지 않는다.
 
 ## Validation
 
 - 각 구현 issue가 자기 package/transaction 경계에서 독립 테스트를 제공한다.
+- PROD-380이 production listener부터 core relation/request와 Notification create/delete까지의 integration을 검증한다.
 - PROD-361 통합 gate가 duplicate Follow/Undo, Reject refollow race, SUSPENDED/UNRESPONSIVE, graph와 Web action을 검증한다.
 - spec-only PR은 `openspec validate add-activitypub-remote-follow --strict`와 전체 strict validation을 통과한다.
 

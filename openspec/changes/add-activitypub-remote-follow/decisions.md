@@ -64,15 +64,15 @@
 - Consequences: terminal state와 delivery history를 저장하지 않으며 Accept 후 relation은 새 identity를 갖는다. 늦은 request ID의 Reject/cancel은 새 relation/request를 삭제할 수 없다.
 - Confirmation / Follow-up: PROD-244가 duplicate/concurrent Follow·cancel, Accept/Reject/cancel 경쟁과 refollow exact-row 보호를 검증한다.
 
-### Profile Follow 생성은 하나의 core application entrypoint를 사용한다
+### Inbound Follow/Undo core·Notification integration은 PROD-380이 소유한다
 
-- Decision Date: 2026-07-19
+- Decision Date: 2026-07-20
 - Status: Accepted
-- Context / Problem: GraphQL local follow는 core `followProfile`을 사용하지만 verified inbound Follow는 별도 core service에서 participant 상태, follow policy와 relation/request 전이를 다시 구현하고 있어 한쪽 정책 변경이 다른 경로에서 누락될 수 있었다.
-- Decision Outcome: local→local, local→ActivityPub, ActivityPub→local follow creation과 idempotent reuse는 하나의 core `followProfile` application entrypoint를 사용한다. Core action은 participant profile/instance 상태, 허용 방향, followee policy, established/pending 전이, 저장 count와 공통 domain side effect를 소유한다. Fedify는 actor/object/recipient 검증과 actor materialization을 마친 pair를 이 entrypoint에 전달하고, 수신 Follow object가 필요한 Accept 같은 protocol response만 core 결과 이후 수행한다.
-- Alternatives Considered: GraphQL과 Fedify가 각각 별도 core service를 유지하고 relation/request persistence primitive만 공유, 새 세 번째 transition helper를 두고 두 service가 호출.
-- Consequences: 별도 inbound graph-creation service를 제거하며 adapter별 정책 drift를 막는다. Core action은 방향별 허용 instance 상태와 outbound delivery 여부를 명시해야 하고, Fedify handler는 established/pending 결과를 기존보다 풍부한 공통 결과 shape에서 읽는다.
-- Confirmation / Follow-up: core service tests가 세 허용 방향과 ActivityPub→ActivityPub 거부를 검증하고, Fedify Follow tests가 같은 core entrypoint 결과로 Accept/pending 행동을 유지하는지 확인한다.
+- Context / Problem: PROD-244 PR이 outbound APPROVAL_REQUIRED 왕복뿐 아니라 inbound Follow의 core entrypoint 전환과 Undo Notification cleanup까지 포함해, Follow Notification source lifecycle을 소유한 PROD-380과 runtime 및 테스트가 중복됐다.
+- Decision Outcome: PROD-244는 local→remote pending request 생성·Follow 발송, pending cancel·Undo 발송, inbound Accept/Reject 검증과 exact-row transition만 소유한다. `handleInboundFollow`의 공통 core action 전환, `followProfile`의 ActivityPub→local 방향, inbound 전용 service 제거와 inbound Follow/Undo Notification 생성·정리는 PROD-380이 PROD-244 병합 후 구현한다.
+- Alternatives Considered: PROD-244가 integration을 유지하고 PROD-380을 축소, 두 PR이 같은 runtime을 각각 구현.
+- Consequences: PR #285는 기존 inbound Follow/Undo runtime을 회귀 대상으로만 유지한다. 공통 core entrypoint와 Notification source lifecycle의 최종 형태는 PROD-380에서 `add-in-app-notifications` 계약과 함께 검증한다.
+- Confirmation / Follow-up: PROD-244는 inbound Follow/Undo 관련 runtime·Notification diff가 없는지 확인하고, PROD-380은 production listener → concrete handler → core lifecycle → DB/Notification integration test를 제공한다.
 
 ### Accept/Reject object 지원은 Fedify typed Follow 해석 범위로 제한한다
 

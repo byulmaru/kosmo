@@ -1,4 +1,4 @@
-export { removeInboundFollow } from './inbound-profile-follow';
+export { recordInboundFollow, removeInboundFollow } from './inbound-profile-follow';
 export { createFollowNotification, deleteNotificationBySource } from './notification';
 export { createPost } from './post';
 export { disableProfile } from './profile';

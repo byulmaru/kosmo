@@ -223,7 +223,7 @@ test('follow action은 unavailable follower의 relation과 request 생성을 거
   );
 });
 
-test('ActivityPub profile 사이 follow와 unfollow를 거부하고 기존 관계를 보존한다', async () => {
+test('remote follower의 outbound follow와 unfollow를 거부하고 기존 관계를 보존한다', async () => {
   const follower = await createRemoteProfile();
   const followee = await createRemoteProfile({ state: InstanceState.UNRESPONSIVE });
 
