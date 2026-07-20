@@ -15,6 +15,7 @@ export function UnreadNotificationBadge({ count }: { count: number | null }) {
     <View
       accessible={false}
       accessibilityElementsHidden
+      aria-hidden={true}
       importantForAccessibility="no-hide-descendants"
       style={[styles.badge, { backgroundColor: theme.text }]}
     >

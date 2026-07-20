@@ -27,6 +27,7 @@ const preview: Preview = {
               paginationError={relay.paginationError}
               paginationLoading={relay.paginationLoading}
               paginationResponse={relay.paginationResponse}
+              operationResponses={relay.operationResponses}
               queryData={relay.data}
             >
               <RouterMockProvider
