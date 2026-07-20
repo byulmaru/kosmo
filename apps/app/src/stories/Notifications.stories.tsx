@@ -307,11 +307,15 @@ export const NonInteractiveRowAndCompactCopyLink: Story = {
     const copyLink = within(canvasElement).getByRole('link', {
       name: /별빛 여행자님이 팔로우했습니다/,
     });
+    const copy = copyLink.querySelector('[dir="auto"]');
     const row = copyLink.parentElement?.parentElement;
 
+    expect(copy).not.toBeNull();
     expect(row).not.toBeNull();
     expect(row).not.toHaveAttribute('tabindex');
-    expect(copyLink.getBoundingClientRect().height).toBeLessThan(44);
+    expect(copyLink.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(copy!.getBoundingClientRect().height).toBeLessThan(44);
+    expect(row!.getBoundingClientRect().height).toBeLessThan(100);
   },
   render: () => <RefreshList />,
 };

@@ -73,7 +73,6 @@ export function NotificationListItem({ notification }: NotificationListItemProps
           <Pressable
             accessibilityLabel={actionLabel}
             accessibilityRole="link"
-            hitSlop={spacing.md}
             style={styles.copyLink}
           >
             <Text style={[styles.copy, { color: theme.text }]}>
@@ -116,7 +115,12 @@ const styles = StyleSheet.create({
     margin: -spacing.sm,
     width: 44,
   },
-  copyLink: { flex: 1, minWidth: 0 },
+  copyLink: {
+    flex: 1,
+    marginVertical: -spacing.md,
+    minWidth: 0,
+    paddingVertical: spacing.md,
+  },
   copy: { fontFamily: 'SUIT', ...typography.sm },
   name: { fontFamily: 'SUIT', fontWeight: '700' },
   time: { fontFamily: 'SUIT', ...typography.xsm },
