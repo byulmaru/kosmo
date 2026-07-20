@@ -1,4 +1,6 @@
+import { usePathname } from 'expo-router';
 import { useState } from 'react';
+import { Text } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, userEvent, within } from 'storybook/test';
 import NotificationsScreen from '@/app/(tabs)/(protected)/notifications';
@@ -135,6 +137,32 @@ function RefreshList() {
   return <NotificationList profile={profileNode.notificationList!} />;
 }
 
+function ReadNavigationList() {
+  const pathname = usePathname();
+
+  return (
+    <>
+      <Text testID="notification-story-pathname">{pathname}</Text>
+      <RefreshList />
+    </>
+  );
+}
+
+const readMutationResponse = {
+  markNotificationRead: {
+    notification: {
+      __typename: 'FollowNotification',
+      id: 'notification-unread',
+      readAt: '2026-07-21T12:00:00Z',
+    },
+    recipientProfile: {
+      __typename: 'Profile',
+      id: 'notification-profile-content',
+      unreadNotificationCount: 2,
+    },
+  },
+};
+
 function ProfileSwitchList() {
   const profiles = useStoryProfiles();
   const [selected, setSelected] = useState<3 | 4>(3);
@@ -238,6 +266,65 @@ export const KeyboardFocusableProfileLink: Story = {
     expect(readAvatarLink).not.toHaveAccessibleName(/읽지 않은 알림/);
   },
   render: () => <RefreshList />,
+};
+
+export const ReadSuccessNormalizesAndNavigates: Story = {
+  parameters: { relay: { mutationResponse: readMutationResponse } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('link', { name: /별빛 여행자님이 팔로우했습니다/ }));
+    await expect(canvas.findByText('/@starlight')).resolves.toBeVisible();
+    await expect(
+      canvas.findByRole('link', { name: '별빛 여행자 프로필로 이동.' }),
+    ).resolves.toBeVisible();
+  },
+  render: () => <ReadNavigationList />,
+};
+
+export const ReadPendingDoesNotBlockAvatarNavigation: Story = {
+  parameters: { relay: { mutationLoading: true } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole('link', {
+        name: '별빛 여행자 프로필로 이동. 읽지 않은 알림.',
+      }),
+    );
+    await expect(canvas.findByText('/@starlight')).resolves.toBeVisible();
+    expect(
+      canvas.getByRole('link', {
+        name: '별빛 여행자 프로필로 이동. 읽지 않은 알림.',
+      }),
+    ).toBeVisible();
+  },
+  render: () => <ReadNavigationList />,
+};
+
+export const ReadNetworkErrorDoesNotBlockCopyNavigation: Story = {
+  parameters: { relay: { mutationError: 'Read failed' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('link', { name: /별빛 여행자님이 팔로우했습니다/ }));
+    await expect(canvas.findByText('/@starlight')).resolves.toBeVisible();
+    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+  },
+  render: () => <ReadNavigationList />,
+};
+
+export const ReadGraphQLErrorDoesNotBlockNavigation: Story = {
+  parameters: {
+    relay: {
+      mutationGraphQLErrors: ['Read failed'],
+      mutationResponse: { markNotificationRead: null },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('link', { name: /별빛 여행자님이 팔로우했습니다/ }));
+    await expect(canvas.findByText('/@starlight')).resolves.toBeVisible();
+    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+  },
+  render: () => <ReadNavigationList />,
 };
 
 export const FigmaFollowRowHierarchy: Story = {

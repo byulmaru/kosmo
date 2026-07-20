@@ -356,13 +356,14 @@ Expected: generated artifact는 staged되지 않고 component document, unit tes
 
 - Modify: `apps/app/src/stories/Notifications.stories.tsx`
 - Modify: `apps/app/src/components/notification/NotificationListItem.tsx`
+- Modify: `apps/app/.storybook/mocks/expo-router.tsx` (test harness의 client-navigation emulation이 browser 기본 navigation을 막고 mock pathname만 갱신)
 
 **Interfaces:**
 
 - Consumes: `notificationListItemMarkReadMutation`, `NotificationListItemMarkReadMutation`, Storybook `relay.mutationResponse/error/loading`, Router mock `usePathname`
 - Produces: 두 기존 Profile link에서 `commitMarkRead({ variables: { id } })`를 시작하되 navigation을 그대로 유지하는 interaction
 
-- [ ] **Step 1: 실패하는 Storybook interaction 작성**
+- [x] **Step 1: 실패하는 Storybook interaction 작성**
 
 Add imports and a pathname probe to `Notifications.stories.tsx`:
 
@@ -454,7 +455,7 @@ export const ReadGraphQLErrorDoesNotBlockNavigation: Story = {
 };
 ```
 
-- [ ] **Step 2: RED 확인**
+- [x] **Step 2: RED 확인**
 
 Run:
 
@@ -465,7 +466,7 @@ pnpm --filter @kosmo/app test:storybook -- Notifications
 
 Expected: 기존 Link navigation assertion은 통과하지만 success story의 item은 계속 Unread이므로 `별빛 여행자 프로필로 이동.` 기대에서 FAIL한다.
 
-- [ ] **Step 3: `useMutation`과 두 link handler 연결**
+- [x] **Step 3: `useMutation`과 두 link handler 연결**
 
 Modify `NotificationListItem.tsx`:
 
@@ -512,7 +513,7 @@ Add the same non-blocking handler to both existing child `Pressable`s:
 
 Do not inspect loading state, await the commit, call `preventDefault`, add local error state, or dispose the request during navigation.
 
-- [ ] **Step 4: GREEN과 focused 회귀 확인**
+- [x] **Step 4: GREEN과 focused 회귀 확인**
 
 Run:
 
@@ -525,7 +526,7 @@ pnpm --filter @kosmo/app check
 
 Expected: success/pending/network error/GraphQL error stories와 기존 Notifications stories가 모두 PASS; store tests와 TypeScript check도 exit code 0.
 
-- [ ] **Step 5: interaction 체크포인트 commit과 push**
+- [x] **Step 5: interaction 체크포인트 commit과 push**
 
 Run:
 
