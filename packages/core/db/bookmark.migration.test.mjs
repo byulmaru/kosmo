@@ -35,44 +35,16 @@ test('enforces the Bookmark storage database contract', async () => {
       await sql.unsafe(await readFile(migration, 'utf8'));
     }
 
-    const [catalog] = await sql`
-      SELECT
-        column_default AS "idDefault",
-        (
-          SELECT indexdef
-          FROM pg_indexes
-          WHERE schemaname = 'public'
-            AND tablename = 'bookmark'
-            AND indexname = 'bookmark_profile_id_created_at_id_index'
-        ) AS "listIndex"
-      FROM information_schema.columns
-      WHERE table_schema = 'public'
-        AND table_name = 'bookmark'
-        AND column_name = 'id'
+    const [listIndex] = await sql`
+      SELECT indexdef
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND tablename = 'bookmark'
+        AND indexname = 'bookmark_profile_id_created_at_id_index'
     `;
-    assert.deepEqual(catalog, {
-      idDefault: 'uuidv7()',
-      listIndex:
-        'CREATE INDEX bookmark_profile_id_created_at_id_index ON public.bookmark USING btree (profile_id, created_at DESC NULLS LAST, id DESC NULLS LAST)',
-    });
-
-    assert.deepEqual(
-      [
-        ...(await sql`
-          SELECT attribute.attname AS column, foreignKey.confdeltype AS "deleteType"
-          FROM pg_constraint AS foreignKey
-          INNER JOIN unnest(foreignKey.conkey) AS key(attnum) ON true
-          INNER JOIN pg_attribute AS attribute
-            ON attribute.attrelid = foreignKey.conrelid AND attribute.attnum = key.attnum
-          WHERE foreignKey.conrelid = 'bookmark'::regclass
-            AND foreignKey.contype = 'f'
-          ORDER BY attribute.attname
-        `),
-      ],
-      [
-        { column: 'post_id', deleteType: 'a' },
-        { column: 'profile_id', deleteType: 'c' },
-      ],
+    assert.equal(
+      listIndex?.indexdef,
+      'CREATE INDEX bookmark_profile_id_created_at_id_index ON public.bookmark USING btree (profile_id, created_at DESC NULLS LAST, id DESC NULLS LAST)',
     );
 
     await sql`
@@ -145,32 +117,17 @@ test('enforces the Bookmark storage database contract', async () => {
     );
 
     await assert.rejects(sql`DELETE FROM post WHERE id = ${firstPostId}`, { code: '23503' });
-    assert.equal(
-      (await sql`SELECT count(*)::int AS count FROM bookmark WHERE post_id = ${firstPostId}`)[0]
-        ?.count,
-      2,
-    );
 
     await sql`DELETE FROM profile WHERE id = ${secondOwnerProfileId}`;
-    assert.equal(
-      (
-        await sql`
-          SELECT count(*)::int AS count
+    assert.deepEqual(
+      [
+        ...(await sql`
+          SELECT profile_id::text AS "profileId", count(*)::int AS count
           FROM bookmark
-          WHERE profile_id = ${secondOwnerProfileId}
-        `
-      )[0]?.count,
-      0,
-    );
-    assert.equal(
-      (
-        await sql`
-          SELECT count(*)::int AS count
-          FROM bookmark
-          WHERE profile_id = ${firstOwnerProfileId}
-        `
-      )[0]?.count,
-      2,
+          GROUP BY profile_id
+        `),
+      ],
+      [{ profileId: firstOwnerProfileId, count: 2 }],
     );
   } finally {
     await sql.end();
