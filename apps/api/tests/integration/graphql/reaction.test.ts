@@ -243,11 +243,6 @@ describe('GraphQL Reaction', () => {
     const added = await requestAddReaction(post.id, '🎉', owner.token);
     const reactionId = added.data?.addReaction.reaction.id;
     assert.ok(reactionId);
-    const stored = await db
-      .select()
-      .from(Reactions)
-      .where(eq(Reactions.postId, post.id))
-      .then(firstOrThrow);
 
     const result = await requestDeleteReaction(reactionId, attacker.token);
 
@@ -256,7 +251,7 @@ describe('GraphQL Reaction', () => {
       await db
         .select()
         .from(Reactions)
-        .where(eq(Reactions.id, stored.id))
+        .where(eq(Reactions.postId, post.id))
         .then((rows) => rows.length),
       1,
     );
@@ -423,7 +418,7 @@ const resetFixtures = async () => {
 const truncateDatabase = async () => {
   const databaseUrl = new URL(process.env.DATABASE_URL ?? '');
   assert.ok(['127.0.0.1', '[::1]', 'localhost'].includes(databaseUrl.hostname));
-  assert.match(databaseUrl.pathname, /^\/kosmo_test(?:_[a-z0-9_]+)?$/);
+  assert.match(decodeURIComponent(databaseUrl.pathname.slice(1)), /^kosmo_test(?:_[a-z0-9_]+)?$/);
   await pg.unsafe(`
     DO $$
     DECLARE truncate_statement text;
