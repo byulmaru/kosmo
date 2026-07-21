@@ -84,6 +84,7 @@ artifacts:
       ## REMOVED Requirements
 
       ### Requirement: Legacy export
+      **Authority / Provenance:** `docs/domain/data-export.md`, `PROD-123`
       **Reason**: Replaced by new export system
       **Migration**: Use new export endpoint at /api/v2/export
       ```
