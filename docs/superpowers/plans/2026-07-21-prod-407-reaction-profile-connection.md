@@ -546,7 +546,7 @@ Expected: public schema, query, cursor와 기본 integration coverage가 한 loc
 - Consumes: Task 2 connection
 - Produces: same-timestamp tie-break, full visible pages, forward/backward pagination, hidden Post and malformed cursor evidence
 
-- [ ] **Step 1: visibility-before-limit와 same-timestamp fixture 작성**
+- [x] **Step 1: visibility-before-limit와 same-timestamp fixture 작성**
 
 같은 Post/Type에 다음 canonical order를 만든다.
 
@@ -567,7 +567,7 @@ const visibleLowReactionId = '00000000-0000-8000-8000-000000000023';
 
 첫 요청 `first: 2`는 hidden 두 row를 건너뛰고 `visible-high-id`, `visible-low-id` 두 개를 모두 채우며 `hasNextPage: true`여야 한다. `after: endCursor, first: 2`는 `visible-oldest`만 반환하고 이전 page node와 중복되지 않아야 한다.
 
-- [ ] **Step 2: backward pagination과 cursor opacity test 작성**
+- [x] **Step 2: backward pagination과 cursor opacity test 작성**
 
 첫 page의 `endCursor`가 raw Reaction UUID, raw timestamp, Profile global ID 어느 것과도 같지 않음을 확인한다. 두 번째 page의 `startCursor`를 기준으로 `last: 2, before: startCursor`를 요청해 canonical order로 첫 page를 복원하고, malformed cursor `not-a-valid-cursor`는 GraphQL error를 반환하는지 검증한다.
 
@@ -577,14 +577,14 @@ assert.doesNotMatch(firstPage.pageInfo.endCursor, /2026-07-21/);
 assert.equal(new Set([...firstHandles, ...secondHandles]).size, 3);
 ```
 
-- [ ] **Step 3: Profile/Post visibility security test 작성**
+- [x] **Step 3: Profile/Post visibility security test 작성**
 
 - Profile state `DISABLED`와 Instance state `SUSPENDED`를 각각 넣어 둘 다 connection에서 빠지는지 검증한다.
 - `PostVisibility.DIRECT` Post를 비소유 viewer가 global Node ID로 조회하면 `node: null`이고 `reactionProfiles`가 노출되지 않는지 검증한다.
 - 존재하지 않는 Post global ID도 동일하게 `node: null`인지 확인해 existence oracle을 만들지 않는다.
 - 허용 목록 밖 `type: "👍"`는 `VALIDATION`, `field: "type"`으로 거부되는지 검증한다.
 
-- [ ] **Step 4: RED/GREEN 반복**
+- [x] **Step 4: RED/GREEN 반복**
 
 각 test 묶음을 추가한 직후 아래 명령으로 RED를 확인하고, 실패가 실제 구현 결함일 때만 `post.ts`를 최소 수정한다.
 
@@ -598,7 +598,7 @@ pnpm --filter @kosmo/api exec tsx --test --test-concurrency=1 tests/integration/
 
 Expected: 최종적으로 page fullness, 같은 timestamp ID DESC, forward/backward no-duplicate/no-gap, cursor rejection, Profile/Post visibility, Type validation을 모두 PASS한다.
 
-- [ ] **Step 5: OpenSpec task 완료 표시**
+- [x] **Step 5: OpenSpec task 완료 표시**
 
 증거가 모두 통과한 뒤에만 `tasks.md`를 다음처럼 갱신한다.
 
@@ -609,7 +609,7 @@ Expected: 최종적으로 page fullness, 같은 timestamp ID DESC, forward/backw
 
 PROD-390이 소유한 나머지 task나 change archive 상태는 수정하지 않는다.
 
-- [ ] **Step 6: pagination/security checkpoint local commit**
+- [x] **Step 6: pagination/security checkpoint local commit**
 
 ```bash
 git add apps/api/tests/integration/graphql/reaction.test.ts apps/api/src/graphql/resolvers/reaction/field/post.ts openspec/changes/add-post-reactions/tasks.md docs/superpowers/plans/2026-07-21-prod-407-reaction-profile-connection.md

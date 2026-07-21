@@ -1,6 +1,6 @@
 import { db, Instances, Profiles, Reactions } from '@kosmo/core/db';
+import { ValidationError } from '@kosmo/core/error';
 import { reactionTypeSchema } from '@kosmo/core/validation';
-import { PothosValidationError } from '@pothos/core';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, lt, or } from 'drizzle-orm';
 import { parse as parseUuid } from 'uuid';
@@ -50,7 +50,7 @@ const decodeReactionProfileCursor = (cursor: string): ReactionProfileCursor => {
 
     return { createdAt: Temporal.Instant.from(createdAt), id };
   } catch {
-    throw new PothosValidationError('Invalid Reaction Profile cursor');
+    throw new ValidationError('Invalid Reaction Profile cursor');
   }
 };
 

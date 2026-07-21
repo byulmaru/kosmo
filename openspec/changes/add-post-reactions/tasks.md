@@ -107,8 +107,8 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 - Type 격리, viewer별 Profile 숨김, page fullness, cursor 경계와 중복·누락 없는 pagination을 integration test로 검증한다.
 
 - [x] 5.1 PROD-407이 소유한 Profile ordering·cursor와 row 표시 범위를 확정해 specs·decisions를 갱신하고 strict validation을 통과시킨다.
-- [ ] 5.2 Type별 visible Profile connection과 필요한 forward index를 구현한다.
-- [ ] 5.3 visibility-before-limit과 다중 page pagination 검증을 추가하고 core/API check를 통과시킨다.
+- [x] 5.2 Type별 visible Profile connection과 필요한 forward index를 구현한다.
+- [x] 5.3 visibility-before-limit과 다중 page pagination 검증을 추가하고 core/API check를 통과시킨다.
 
 ## 6. PROD-413 Reaction Notification 생성·inbox 통합
 

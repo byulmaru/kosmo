@@ -5,6 +5,8 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 import {
   AccountProfileRole,
   AccountState,
+  InstanceKind,
+  InstanceState,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -12,7 +14,7 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import { normalizeHandle } from '@kosmo/core/utils';
-import { eq } from 'drizzle-orm';
+import { eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { encodeGlobalId as globalId } from '../../../src/graphql/global-id';
 import type * as CoreDb from '@kosmo/core/db';
@@ -25,6 +27,7 @@ let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
+let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
 let Posts: typeof CoreDb.Posts;
 let Profiles: typeof CoreDb.Profiles;
@@ -39,8 +42,18 @@ describe('GraphQL Reaction', () => {
     process.env.NODE_ENV = 'production';
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
-    ({ AccountProfiles, Accounts, db, firstOrThrow, pg, Posts, Profiles, Reactions, Sessions } =
-      await import('@kosmo/core/db'));
+    ({
+      AccountProfiles,
+      Accounts,
+      db,
+      firstOrThrow,
+      Instances,
+      pg,
+      Posts,
+      Profiles,
+      Reactions,
+      Sessions,
+    } = await import('@kosmo/core/db'));
     const { seedDatabase } = await import('@kosmo/core/db/seed');
 
     await truncateDatabase();
@@ -360,6 +373,138 @@ describe('GraphQL Reaction', () => {
       ['newest', 'oldest'],
     );
   });
+
+  test('Reaction Profile은 숨겨진 최신 row보다 먼저 visible page를 채우고 양방향 경계를 유지한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const post = await createPost(auth.profile.id);
+    const suspendedInstance = await createRemoteInstance({ state: InstanceState.SUSPENDED });
+    const suspendedInstanceProfile = await createProfile('suspended-instance-profile', {
+      instanceId: suspendedInstance.id,
+    });
+    const disabledProfile = await createProfile('disabled-profile', {
+      state: ProfileState.DISABLED,
+    });
+    const visibleHigh = await createProfile('visible-high-id');
+    const visibleLow = await createProfile('visible-low-id');
+    const visibleOldest = await createProfile('visible-oldest');
+    const visibleHighReactionId = '00000000-0000-8000-8000-000000000024';
+    const visibleLowReactionId = '00000000-0000-8000-8000-000000000023';
+
+    await Promise.all([
+      insertReaction({
+        id: '00000000-0000-8000-8000-000000000026',
+        postId: post.id,
+        profileId: suspendedInstanceProfile.id,
+        type: '❤️',
+        createdAt: '2026-07-21T00:00:05Z',
+      }),
+      insertReaction({
+        id: '00000000-0000-8000-8000-000000000025',
+        postId: post.id,
+        profileId: disabledProfile.id,
+        type: '❤️',
+        createdAt: '2026-07-21T00:00:04Z',
+      }),
+      insertReaction({
+        id: visibleHighReactionId,
+        postId: post.id,
+        profileId: visibleHigh.id,
+        type: '❤️',
+        createdAt: '2026-07-21T00:00:03Z',
+      }),
+      insertReaction({
+        id: visibleLowReactionId,
+        postId: post.id,
+        profileId: visibleLow.id,
+        type: '❤️',
+        createdAt: '2026-07-21T00:00:03Z',
+      }),
+      insertReaction({
+        id: '00000000-0000-8000-8000-000000000022',
+        postId: post.id,
+        profileId: visibleOldest.id,
+        type: '❤️',
+        createdAt: '2026-07-21T00:00:01Z',
+      }),
+    ]);
+
+    const firstPage = await requestReactionProfiles(post.id, '❤️', { first: 2 });
+    assertNoGraphQLErrors(firstPage);
+    const firstConnection = firstPage.data?.node?.reactionProfiles;
+    assert.ok(firstConnection);
+    const firstHandles = firstConnection.edges.map(({ node }) => node.handle);
+    assert.deepEqual(firstHandles, ['visible-high-id', 'visible-low-id']);
+    assert.equal(firstConnection.pageInfo.hasNextPage, true);
+    assert.equal(firstConnection.pageInfo.hasPreviousPage, false);
+    assert.notEqual(firstConnection.pageInfo.endCursor, visibleLowReactionId);
+    assert.doesNotMatch(firstConnection.pageInfo.endCursor ?? '', /2026-07-21/);
+    assert.notEqual(firstConnection.pageInfo.endCursor, globalId('Profile', visibleLow.id));
+
+    const secondPage = await requestReactionProfiles(post.id, '❤️', {
+      after: firstConnection.pageInfo.endCursor,
+      first: 2,
+    });
+    assertNoGraphQLErrors(secondPage);
+    const secondConnection = secondPage.data?.node?.reactionProfiles;
+    assert.ok(secondConnection);
+    const secondHandles = secondConnection.edges.map(({ node }) => node.handle);
+    assert.deepEqual(secondHandles, ['visible-oldest']);
+    assert.equal(secondConnection.pageInfo.hasNextPage, false);
+    assert.equal(secondConnection.pageInfo.hasPreviousPage, true);
+    assert.equal(new Set([...firstHandles, ...secondHandles]).size, 3);
+
+    const backwardPage = await requestReactionProfiles(post.id, '❤️', {
+      before: secondConnection.pageInfo.startCursor,
+      last: 2,
+    });
+    assertNoGraphQLErrors(backwardPage);
+    const backwardConnection = backwardPage.data?.node?.reactionProfiles;
+    assert.ok(backwardConnection);
+    assert.deepEqual(
+      backwardConnection.edges.map(({ node }) => node.handle),
+      firstHandles,
+    );
+    assert.equal(backwardConnection.pageInfo.hasPreviousPage, false);
+    assert.equal(backwardConnection.pageInfo.hasNextPage, true);
+  });
+
+  test('Reaction Profile은 Post visibility와 cursor 및 Type validation 경계를 우회하지 않는다', async () => {
+    const viewer = await createAuthenticatedSession();
+    const author = await createProfile('direct-author');
+    const directPost = await createPost(author.id, PostVisibility.DIRECT);
+
+    for (const postId of [directPost.id, crypto.randomUUID()]) {
+      const result = await requestReactionProfiles(postId, '❤️', { first: 1 });
+      assertNoGraphQLErrors(result);
+      assert.equal(result.data?.node, null);
+    }
+
+    const publicPost = await createPost(viewer.profile.id);
+    const malformedCursor = await requestReactionProfiles(publicPost.id, '❤️', {
+      after: 'not-a-valid-cursor',
+      first: 1,
+    });
+    assert.equal(malformedCursor.errors?.[0]?.extensions?.code, 'VALIDATION');
+
+    const invalidType = await requestReactionProfiles(publicPost.id, '👍', { first: 1 });
+    assert.equal(invalidType.errors?.[0]?.extensions?.code, 'VALIDATION');
+    assert.equal(invalidType.errors?.[0]?.extensions?.field, 'type');
+
+    const metadata = await requestGraphQL(
+      `query ReactionProfileMetadata($postId: ID!, $type: String!) {
+        node(id: $postId) {
+          ... on Post {
+            reactionProfiles(type: $type) {
+              edges { reactionId reactedAt reaction { id createdAt } }
+            }
+          }
+        }
+      }`,
+      { postId: globalId('Post', publicPost.id), type: '❤️' },
+    );
+    assert.ok(metadata.errors?.[0]);
+    assert.equal(metadata.data, undefined);
+  });
 });
 
 type ReactionNode = {
@@ -417,19 +562,30 @@ const requestNode = (id: string) =>
     { id },
   );
 
-const requestReactionProfiles = (postId: string, type: string) =>
+const requestReactionProfiles = (
+  postId: string,
+  type: string,
+  pagination: { after?: string | null; before?: string | null; first?: number; last?: number } = {},
+) =>
   requestGraphQL<{ node: ReactionProfilesNode | null }>(
-    `query ReactionProfiles($postId: ID!, $type: String!) {
+    `query ReactionProfiles(
+      $postId: ID!
+      $type: String!
+      $first: Int
+      $after: String
+      $last: Int
+      $before: String
+    ) {
       node(id: $postId) {
         ... on Post {
-          reactionProfiles(type: $type) {
+          reactionProfiles(type: $type, first: $first, after: $after, last: $last, before: $before) {
             edges { cursor node { __typename id handle } }
             pageInfo { startCursor endCursor hasPreviousPage hasNextPage }
           }
         }
       }
     }`,
-    { postId: globalId('Post', postId), type },
+    { postId: globalId('Post', postId), type, ...pagination },
   );
 
 const requestGraphQL = async <TData>(
@@ -454,16 +610,22 @@ const assertNoGraphQLErrors = (result: GraphQLResult<unknown>) => {
   assert.equal(result.errors, undefined, JSON.stringify(result.errors));
 };
 
-const createProfile = (handle: string) =>
+const createProfile = (
+  handle: string,
+  {
+    instanceId = localInstanceId,
+    state = ProfileState.ACTIVE,
+  }: { instanceId?: string; state?: ProfileState } = {},
+) =>
   db
     .insert(Profiles)
     .values({
       displayName: handle,
       followPolicy: ProfileFollowPolicy.OPEN,
       handle,
-      instanceId: localInstanceId,
+      instanceId,
       normalizedHandle: normalizeHandle(handle),
-      state: ProfileState.ACTIVE,
+      state,
     })
     .returning()
     .then(firstOrThrow);
@@ -474,6 +636,20 @@ const createPost = (profileId: string, visibility: PostVisibility = PostVisibili
     .values({ profileId, state: PostState.ACTIVE, visibility })
     .returning()
     .then(firstOrThrow);
+
+const createRemoteInstance = ({ state }: { state: InstanceState }) => {
+  const domain = `remote-${crypto.randomUUID()}.example`;
+  return db
+    .insert(Instances)
+    .values({
+      canonicalOrigin: `https://${domain}`,
+      domain,
+      kind: InstanceKind.ACTIVITYPUB,
+      state,
+    })
+    .returning()
+    .then(firstOrThrow);
+};
 
 const insertReaction = ({
   createdAt,
@@ -518,6 +694,7 @@ const resetFixtures = async () => {
   await db.delete(AccountProfiles);
   await db.delete(Accounts);
   await db.delete(Profiles);
+  await db.delete(Instances).where(ne(Instances.id, localInstanceId));
 };
 
 const truncateDatabase = async () => {
