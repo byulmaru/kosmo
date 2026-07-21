@@ -19,7 +19,7 @@ import type * as CoreDb from '@kosmo/core/db';
 import type { Env } from '../../../src/context';
 
 const publicOrigin = 'http://127.0.0.1:4173';
-const databaseUrl = 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
@@ -166,6 +166,33 @@ describe('GraphQL Reaction 추가', () => {
     }
   });
 
+  test('비활성 Account이거나 active Profile membership이 없으면 요청을 거부한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const post = await createPost(auth.profile.id);
+
+    await db
+      .update(Accounts)
+      .set({ state: AccountState.DISABLED })
+      .where(eq(Accounts.id, auth.account.id));
+    const disabledAccount = await requestAddReaction(post.id, '🎉', auth.token);
+    assert.equal(disabledAccount.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+
+    await db
+      .update(Accounts)
+      .set({ state: AccountState.ACTIVE })
+      .where(eq(Accounts.id, auth.account.id));
+    await db.delete(AccountProfiles).where(eq(AccountProfiles.accountId, auth.account.id));
+    const missingMembership = await requestAddReaction(post.id, '🎉', auth.token);
+    assert.equal(missingMembership.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+    assert.equal(
+      await db
+        .select()
+        .from(Reactions)
+        .then((rows) => rows.length),
+      0,
+    );
+  });
+
   test('Reaction Node는 Post 조회 정책을 그대로 적용한다', async () => {
     const auth = await createAuthenticatedSession();
     const post = await createPost(auth.profile.id);
@@ -283,7 +310,7 @@ const createAuthenticatedSession = async ({
     state: SessionState.ACTIVE,
     token,
   });
-  return { profile, token };
+  return { account, profile, token };
 };
 
 const resetFixtures = async () => {
@@ -296,7 +323,9 @@ const resetFixtures = async () => {
 };
 
 const truncateDatabase = async () => {
-  assert.equal(new URL(process.env.DATABASE_URL ?? '').pathname, '/kosmo_test');
+  const databaseUrl = new URL(process.env.DATABASE_URL ?? '');
+  assert.ok(['127.0.0.1', '[::1]', 'localhost'].includes(databaseUrl.hostname));
+  assert.match(databaseUrl.pathname, /^\/kosmo_test(?:_[a-z0-9_]+)?$/);
   await pg.unsafe(`
     DO $$
     DECLARE truncate_statement text;

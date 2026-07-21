@@ -1,29 +1,18 @@
 import { and, eq } from 'drizzle-orm';
-import {
-  AccountProfiles,
-  Accounts,
-  first,
-  getDatabaseConnection,
-  Instances,
-  Posts,
-  Profiles,
-  Reactions,
-} from '../db';
-import { AccountState, InstanceKind, InstanceState, PostState, ProfileState } from '../enums';
+import { first, getDatabaseConnection, Instances, Posts, Profiles, Reactions } from '../db';
+import { InstanceKind, InstanceState, PostState, ProfileState } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import { reactionTypeSchema } from '../validation';
 import type { Transaction } from '../db';
 
 export const addReaction = async (
   {
-    accountId,
+    actorProfileId,
     postId,
-    profileId,
     type,
   }: {
-    readonly accountId: string;
+    readonly actorProfileId: string;
     readonly postId: string;
-    readonly profileId: string;
     readonly type: string;
   },
   tx?: Transaction,
@@ -37,17 +26,11 @@ export const addReaction = async (
     const actor = await tx
       .select({ id: Profiles.id })
       .from(Profiles)
-      .innerJoin(
-        AccountProfiles,
-        and(eq(AccountProfiles.profileId, Profiles.id), eq(AccountProfiles.accountId, accountId)),
-      )
-      .innerJoin(Accounts, eq(Accounts.id, AccountProfiles.accountId))
       .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
       .where(
         and(
-          eq(Profiles.id, profileId),
+          eq(Profiles.id, actorProfileId),
           eq(Profiles.state, ProfileState.ACTIVE),
-          eq(Accounts.state, AccountState.ACTIVE),
           eq(Instances.kind, InstanceKind.LOCAL),
           eq(Instances.state, InstanceState.ACTIVE),
         ),
@@ -70,7 +53,7 @@ export const addReaction = async (
 
     const inserted = await tx
       .insert(Reactions)
-      .values({ postId, profileId, type: parsedType.data })
+      .values({ postId, profileId: actorProfileId, type: parsedType.data })
       .onConflictDoNothing({
         target: [Reactions.postId, Reactions.type, Reactions.profileId],
       })
@@ -84,7 +67,7 @@ export const addReaction = async (
         .where(
           and(
             eq(Reactions.postId, postId),
-            eq(Reactions.profileId, profileId),
+            eq(Reactions.profileId, actorProfileId),
             eq(Reactions.type, parsedType.data),
           ),
         )

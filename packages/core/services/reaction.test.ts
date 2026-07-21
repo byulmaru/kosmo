@@ -1,20 +1,8 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { and, eq } from 'drizzle-orm';
+import { db, firstOrThrow, Instances, pg, Posts, Profiles, Reactions } from '../db';
 import {
-  AccountProfiles,
-  Accounts,
-  db,
-  firstOrThrow,
-  Instances,
-  pg,
-  Posts,
-  Profiles,
-  Reactions,
-} from '../db';
-import {
-  AccountProfileRole,
-  AccountState,
   InstanceKind,
   InstanceState,
   PostState,
@@ -31,17 +19,13 @@ after(async () => {
 });
 
 const createFixture = async ({
-  accountState = AccountState.ACTIVE,
   instanceKind = InstanceKind.LOCAL,
   instanceState = InstanceState.ACTIVE,
-  member = true,
   postState = PostState.ACTIVE,
   profileState = ProfileState.ACTIVE,
 }: {
-  accountState?: AccountState;
   instanceKind?: InstanceKind;
   instanceState?: InstanceState;
-  member?: boolean;
   postState?: PostState;
   profileState?: ProfileState;
 } = {}) => {
@@ -52,15 +36,6 @@ const createFixture = async ({
       domain: `${suffix}.example`,
       kind: instanceKind,
       state: instanceState,
-    })
-    .returning()
-    .then(firstOrThrow);
-  const account = await db
-    .insert(Accounts)
-    .values({
-      displayName: suffix,
-      oidcSubject: suffix,
-      state: accountState,
     })
     .returning()
     .then(firstOrThrow);
@@ -76,13 +51,6 @@ const createFixture = async ({
     })
     .returning()
     .then(firstOrThrow);
-  if (member) {
-    await db.insert(AccountProfiles).values({
-      accountId: account.id,
-      profileId: profile.id,
-      role: AccountProfileRole.MEMBER,
-    });
-  }
   const post = await db
     .insert(Posts)
     .values({
@@ -94,7 +62,7 @@ const createFixture = async ({
     .then(firstOrThrow);
 
   return {
-    input: { accountId: account.id, postId: post.id, profileId: profile.id },
+    input: { actorProfileId: profile.id, postId: post.id },
     post,
     profile,
   };
@@ -149,12 +117,10 @@ test('반복·동시 추가는 하나의 Reaction을 반환한다', async () => 
   assert.equal(await countReactions(input.postId), 1);
 });
 
-test('활성 Local member actor가 아니면 Reaction을 만들지 않는다', async () => {
+test('활성 Local actor가 아니면 Reaction을 만들지 않는다', async () => {
   const fixtures = await Promise.all([
-    createFixture({ accountState: AccountState.DISABLED }),
     createFixture({ instanceKind: InstanceKind.ACTIVITYPUB }),
     createFixture({ instanceState: InstanceState.SUSPENDED }),
-    createFixture({ member: false }),
     createFixture({ profileState: ProfileState.DISABLED }),
   ]);
 

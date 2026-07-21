@@ -26,7 +26,7 @@
 ### Current Constraints
 
 - DB schema는 `packages/core/db/tables.ts`와 공용 UUIDv7/created-at helper를 사용한다. 현재 허용 Type 검증은 PROD-404 application service가 소유하며 database enum, seed registry 또는 `CHECK` constraint로 목록을 고정하지 않는다.
-- Post visibility predicate는 API 경계에 있고 core service의 `usingProfile`만으로 Local actor와 Post 조회 권한이 보장되지 않는다. mutation은 검증된 actor·Post context를 service에 전달하거나 동등한 검증 경계를 명확히 유지해야 한다.
+- Post visibility predicate와 Account/session membership 검증은 API 경계에 있다. `usingProfile` entry point는 Active Account의 Member인 selected Profile을 보장하고, mutation은 검증된 actor Profile과 Post context를 service에 전달한다. core service는 transport session을 다시 조회하지 않고 Active/Normal Local actor, Post, Type과 멱등 저장을 검증한다.
 - GraphQL의 create 계열 mutation은 `fieldWithInput`, concrete Node global ID와 simple payload object를 사용한다. `addReaction`은 이 관례를 따라 Post global ID와 Type 문자열을 받고 최소 Reaction Node를 반환한다.
 - Notification create/delete는 기존 Follow와 같이 source transaction commit 뒤 같은 request에서 await/catch한다. Notification 실패를 source transaction에 포함하거나 fire-and-forget으로 처리하지 않는다.
 - 현재 Notification Node/list/count/read query는 Follow source inner join에 고정돼 있어 enum과 concrete type만 추가하면 Reaction item이 누락된다.
@@ -36,7 +36,7 @@
 ### Recommended Approach
 
 1. PROD-395는 `reaction` 관계 테이블을 additive migration으로 추가하고 Type을 non-null text로 저장한다. built-in 여섯 Type은 database에 seed하거나 `CHECK`로 고정하지 않으며 기존 행은 backfill하거나 재작성하지 않는다.
-2. PROD-404의 core service는 짧은 transaction에서 actor·Post·Type을 검증하고 `(post, type, profile)` insert를 conflict-safe하게 수행한다. `addReaction(postId: ID!, type: String!)`의 GraphQL payload는 현재 `Reaction` Node만 반환한다. PROD-404는 Notification side effect와 신규 source 구분을 미리 구현하지 않으며, 실제 caller가 생기는 PROD-413이 service 결과를 확장해 신규 source에만 Best Effort Notification을 연결한다. 명시적 pessimistic lock은 사용하지 않는다.
+2. PROD-404의 GraphQL `usingProfile` entry point는 Account/session membership과 Post visibility를 검증하고, core service는 검증된 actor Profile identity를 받아 짧은 transaction에서 Active/Normal Local actor·Post·Type을 검증한 뒤 `(post, type, profile)` insert를 conflict-safe하게 수행한다. `addReaction(postId: ID!, type: String!)`의 GraphQL payload는 현재 `Reaction` Node만 반환한다. PROD-404는 Notification side effect와 신규 source 구분을 미리 구현하지 않으며, 실제 caller가 생기는 PROD-413이 service 결과를 확장해 신규 source에만 Best Effort Notification을 연결한다. 명시적 pessimistic lock은 사용하지 않는다.
 3. PROD-405는 actor가 소유한 Profile/Post/Type 조합을 transaction에서 삭제하고 실제 삭제된 source ID를 반환한다. Post의 현재 visibility는 삭제 권한을 대신하지 않는다.
 4. PROD-406 count query는 Post visibility만 통과한 뒤 viewer Profile filtering 없이 현재 Reaction을 group/count한다. PROD-407 Profile connection은 Type을 격리하고 기존 Profile visibility를 SQL page limit 전에 적용한다.
 5. PROD-413은 Reaction source에서 Recipient, Related Profile, Target Post와 Type을 파생하고 자기 Post·Remote Recipient를 no-op 처리한다. multi-kind Notification 목록은 kind별 visible projection을 `UNION ALL`한 뒤 공통 `id DESC` pagination/count를 적용하는 방식을 기본으로 한다.

@@ -114,6 +114,16 @@
 - Consequences: client는 missing과 unreadable Post를 구분하지 않는다. 오류 뒤에는 Reaction과 Notification이 생성되지 않는다.
 - Confirmation / Follow-up: 존재하지 않는 Post와 visibility별 unreadable Post가 같은 code를 반환하고 database rollback 뒤 Reaction이 남지 않는지 검증한다.
 
+### Reaction add의 session 권한과 도메인 검증 책임을 분리한다
+
+- Decision Date: 2026-07-21
+- Status: Accepted
+- Context / Problem: GraphQL context는 Active Account, selected Profile membership과 Profile visibility를 검증하지만 core `addReaction`이 `accountId`를 받아 같은 membership을 다시 조회해 transport session 정책에 결합하고 있었다.
+- Decision Outcome: GraphQL `usingProfile` entry point가 Active Account와 Account–Profile membership을 검증하고, core service에는 검증된 actor Profile identity만 전달한다. core는 actor가 Active/Normal Local Profile인지와 Post, Type, 멱등 저장을 계속 검증한다.
+- Alternatives Considered: core가 `accountId`와 membership을 계속 재검증하면 session 정책을 중복 소유한다. actor 검증 전체를 API에 두면 core caller가 Local/Instance 상태를 우회할 수 있어 채택하지 않았다.
+- Consequences: Account 또는 membership 변경과 core transaction 사이에는 context snapshot 기준의 짧은 시간차가 있을 수 있다. commit 시점의 membership 재검증이 필요해지면 transport identity를 core에 다시 결합하지 않고 entry point의 transaction-aware 검증으로 별도 설계한다.
+- Confirmation / Follow-up: core test는 Local/Profile/Instance/Post/Type/멱등성에 집중하고, API integration test는 비활성 Account와 membership 부재가 `PERMISSION_DENIED`로 거부되는지 검증한다. PROD-405 등 후속 mutation도 같은 책임 경계를 따른다.
+
 ## Remaining Decisions
 
 - PROD-405: delete input/payload와 이미 제거한 관계를 식별할 stable key
