@@ -672,7 +672,7 @@ Expected: 모든 명령이 exit code 0이고 status에는 의도한 PROD-407 파
 - GraphQL schema에 Reaction metadata custom edge field나 top-level query가 없다.
 - PROD-406 count, PROD-405 delete, PROD-418 UI, PROD-413 Notification 변경이 섞이지 않았다.
 
-- [ ] **Step 4: push와 stacked Draft PR 생성안 제시**
+- [x] **Step 4: push와 stacked Draft PR 생성안 제시**
 
 사용자에게 `codex/prod-407` push, `PROD-404 <- codex/prod-407` Draft PR target과 아래 본문을 먼저 보여주고 확인받은 뒤에만 원격 상태를 변경한다.
 
@@ -710,7 +710,7 @@ git push -u origin codex/prod-407
 gh pr create --draft --base PROD-404 --head codex/prod-407 --title "Reaction Type별 반응 Profile을 최신순으로 조회한다" --body-file /private/tmp/prod-407-pr-body.md
 ```
 
-- [ ] **Step 5: 완료 조건 보고**
+- [x] **Step 5: 완료 조건 보고**
 
 다음을 사용자에게 근거와 함께 보고한다.
 
