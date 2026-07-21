@@ -90,7 +90,9 @@ describe('inbound Accept and Reject', () => {
 
     assert.deepEqual(loadedUrls, [`${publicOrigin}/ap/follow/${fixture.projection.id}`]);
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
-    assert.equal((await db.select().from(ProfileFollows)).length, 1);
+    const relation = await db.select().from(ProfileFollows).then(firstOrThrow);
+    assert.equal(relation.id, fixture.projection.id);
+    assert.equal(relation.createdAt.toString(), fixture.projection.createdAt.toString());
     assert.deepEqual(await readCounts(fixture), { localFollowing: 1, remoteFollowers: 1 });
   });
 

@@ -126,14 +126,14 @@ export const acceptProfileFollowRequest = async ({
           notExists(unavailableParticipants),
         ),
       )
-      .returning({ id: ProfileFollowRequests.id })
+      .returning({ createdAt: ProfileFollowRequests.createdAt, id: ProfileFollowRequests.id })
       .then(first);
 
     if (!deleted) {
       return false;
     }
 
-    await ensureProfileFollow(pair, tx);
+    await ensureProfileFollow({ ...pair, createdAt: deleted.createdAt, id: deleted.id }, tx);
     return true;
   });
 
@@ -189,8 +189,10 @@ const approveProfileFollowRequestInTransaction = async (
 
   const { created, profileFollow } = await ensureProfileFollow(
     {
+      createdAt: request.createdAt,
       followeeProfileId: request.followeeProfileId,
       followerProfileId: request.followerProfileId,
+      id: request.id,
     },
     tx,
   );
