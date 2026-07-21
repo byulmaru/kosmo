@@ -9,6 +9,5 @@ export {
   findProfileFollowRequestByPair,
   rejectProfileFollowRequest,
 } from './profile-follow-request';
-export type { ReactionRow } from './reaction';
 export { addReaction } from './reaction';
 export { createOidcSession } from './session';

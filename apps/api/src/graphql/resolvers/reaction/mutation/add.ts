@@ -20,26 +20,31 @@ builder.mutationField('addReaction', (t) =>
       type: t.input.string({ validate: reactionTypeSchema }),
     },
     resolve: async (_, { input }, ctx) => {
-      const post = await db
-        .select({ id: Posts.id })
-        .from(Posts)
-        .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
-        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-        .where(and(eq(Posts.id, input.postId.id), postVisibilityAccessWhere({ ctx })))
-        .limit(1)
-        .then(first);
-      if (!post) {
-        throw new NotFoundError('Post not found');
-      }
+      return db.transaction(async (tx) => {
+        const post = await tx
+          .select({ id: Posts.id })
+          .from(Posts)
+          .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
+          .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+          .where(and(eq(Posts.id, input.postId.id), postVisibilityAccessWhere({ ctx })))
+          .limit(1)
+          .then(first);
+        if (!post) {
+          throw new NotFoundError('Post not found');
+        }
 
-      const { reaction } = await addReaction({
-        accountId: ctx.session.accountId,
-        postId: post.id,
-        profileId: ctx.session.profileId,
-        type: input.type,
+        const reaction = await addReaction(
+          {
+            accountId: ctx.session.accountId,
+            postId: post.id,
+            profileId: ctx.session.profileId,
+            type: input.type,
+          },
+          tx,
+        );
+
+        return { reaction };
       });
-
-      return { reaction };
     },
   }),
 );

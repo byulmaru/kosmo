@@ -1,29 +1,39 @@
 import { and, eq } from 'drizzle-orm';
-import { AccountProfiles, Accounts, db, first, Instances, Posts, Profiles, Reactions } from '../db';
+import {
+  AccountProfiles,
+  Accounts,
+  first,
+  getDatabaseConnection,
+  Instances,
+  Posts,
+  Profiles,
+  Reactions,
+} from '../db';
 import { AccountState, InstanceKind, InstanceState, PostState, ProfileState } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import { reactionTypeSchema } from '../validation';
-import type { ReactionType } from '../validation';
+import type { Transaction } from '../db';
 
-export type ReactionRow = typeof Reactions.$inferSelect;
-
-export const addReaction = async ({
-  accountId,
-  postId,
-  profileId,
-  type,
-}: {
-  readonly accountId: string;
-  readonly postId: string;
-  readonly profileId: string;
-  readonly type: string;
-}): Promise<{ readonly created: boolean; readonly reaction: ReactionRow }> => {
+export const addReaction = async (
+  {
+    accountId,
+    postId,
+    profileId,
+    type,
+  }: {
+    readonly accountId: string;
+    readonly postId: string;
+    readonly profileId: string;
+    readonly type: string;
+  },
+  tx?: Transaction,
+): Promise<typeof Reactions.$inferSelect> => {
   const parsedType = reactionTypeSchema.safeParse(type);
   if (!parsedType.success) {
     throw new ValidationError(parsedType.error.issues[0]?.message, { field: 'type' });
   }
 
-  return db.transaction(async (tx) => {
+  return getDatabaseConnection(tx).transaction(async (tx) => {
     const actor = await tx
       .select({ id: Profiles.id })
       .from(Profiles)
@@ -60,7 +70,7 @@ export const addReaction = async ({
 
     const inserted = await tx
       .insert(Reactions)
-      .values({ postId, profileId, type: parsedType.data satisfies ReactionType })
+      .values({ postId, profileId, type: parsedType.data })
       .onConflictDoNothing({
         target: [Reactions.postId, Reactions.type, Reactions.profileId],
       })
@@ -84,6 +94,6 @@ export const addReaction = async ({
       throw new Error('Reaction not found after insert conflict');
     }
 
-    return { created: inserted !== undefined, reaction };
+    return reaction;
   });
 };

@@ -16,9 +16,7 @@ import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { encodeGlobalId as globalId } from '../../../src/graphql/global-id';
 import type * as CoreDb from '@kosmo/core/db';
-import type * as CoreSeed from '@kosmo/core/db/seed';
-import type { deriveContext as DeriveContext, Env } from '../../../src/context';
-import type { yoga as YogaRouter } from '../../../src/graphql';
+import type { Env } from '../../../src/context';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -32,9 +30,6 @@ let Posts: typeof CoreDb.Posts;
 let Profiles: typeof CoreDb.Profiles;
 let Reactions: typeof CoreDb.Reactions;
 let Sessions: typeof CoreDb.Sessions;
-let seedDatabase: typeof CoreSeed.seedDatabase;
-let deriveContext: typeof DeriveContext;
-let yoga: typeof YogaRouter;
 let app: Hono<Env>;
 let localInstanceId: string;
 
@@ -46,14 +41,14 @@ describe('GraphQL Reaction 추가', () => {
 
     ({ AccountProfiles, Accounts, db, firstOrThrow, pg, Posts, Profiles, Reactions, Sessions } =
       await import('@kosmo/core/db'));
-    ({ seedDatabase } = await import('@kosmo/core/db/seed'));
+    const { seedDatabase } = await import('@kosmo/core/db/seed');
 
     await truncateDatabase();
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
 
-    ({ deriveContext } = await import('../../../src/context'));
-    ({ yoga } = await import('../../../src/graphql'));
+    const { deriveContext } = await import('../../../src/context');
+    const { yoga } = await import('../../../src/graphql');
     app = new Hono<Env>();
     app.use('*', async (c, next) => {
       c.set('context', await deriveContext(c));
