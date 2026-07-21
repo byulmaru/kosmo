@@ -257,6 +257,37 @@ describe('GraphQL Reaction', () => {
     );
   });
 
+  test('비활성 Account이거나 active Profile membership이 없으면 삭제를 거부한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const post = await createPost(auth.profile.id);
+    const added = await requestAddReaction(post.id, '☘️', auth.token);
+    const reactionId = added.data?.addReaction.reaction.id;
+    assert.ok(reactionId);
+
+    await db
+      .update(Accounts)
+      .set({ state: AccountState.DISABLED })
+      .where(eq(Accounts.id, auth.account.id));
+    const disabledAccount = await requestDeleteReaction(reactionId, auth.token);
+    assert.equal(disabledAccount.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+
+    await db
+      .update(Accounts)
+      .set({ state: AccountState.ACTIVE })
+      .where(eq(Accounts.id, auth.account.id));
+    await db.delete(AccountProfiles).where(eq(AccountProfiles.accountId, auth.account.id));
+    const missingMembership = await requestDeleteReaction(reactionId, auth.token);
+    assert.equal(missingMembership.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+    assert.equal(
+      await db
+        .select()
+        .from(Reactions)
+        .where(eq(Reactions.postId, post.id))
+        .then((rows) => rows.length),
+      1,
+    );
+  });
+
   test('이미 없는 ID와 stale ID는 성공하고 다시 생성된 Reaction은 유지한다', async () => {
     const auth = await createAuthenticatedSession();
     const post = await createPost(auth.profile.id);
