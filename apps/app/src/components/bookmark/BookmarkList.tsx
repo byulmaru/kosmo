@@ -66,6 +66,7 @@ export function BookmarkList({
                   onLoadMore();
                 }
               }}
+              style={styles.actionButton}
               tone="secondary"
             >
               {isLoadingMore ? '불러오는 중' : '더 불러오기'}
@@ -146,7 +147,7 @@ function BookmarkListState({
       <Text style={[styles.stateTitle, { color: theme.text }]}>{title}</Text>
       <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>{description}</Text>
       {onRetry ? (
-        <Button onPress={onRetry} tone="secondary">
+        <Button onPress={onRetry} style={styles.actionButton} tone="secondary">
           다시 시도
         </Button>
       ) : null}
@@ -174,6 +175,7 @@ const styles = StyleSheet.create({
   state: { alignItems: 'center', gap: spacing.sm, padding: spacing.xxxl },
   stateTitle: { fontFamily: 'SUIT', fontWeight: '700', textAlign: 'center', ...typography.md },
   stateDescription: { fontFamily: 'SUIT', textAlign: 'center', ...typography.sm },
+  actionButton: { minHeight: 44 },
   pagination: { alignItems: 'center', padding: spacing.lg },
   srOnly: { height: 1, left: 0, overflow: 'hidden', position: 'absolute', top: 0, width: 1 },
 });
