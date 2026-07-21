@@ -1,8 +1,10 @@
-import { db, firstOrThrow, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { db, firstOrThrow, ProfileFollowRequests, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { ProfileFollowPolicy } from '@kosmo/core/enums';
 import { eq } from 'drizzle-orm';
 import {
   createE2EFollow,
   createE2EProfile,
+  createE2ERemoteProfile,
   createE2ESession,
   resetE2EDatabase,
   setE2ESessionCookie,
@@ -15,35 +17,110 @@ test.beforeEach(async () => {
   await resetE2EDatabase();
 });
 
-const mutateFollow = async (
+const mutateGraphQL = async (page: Page, query: string, variables: Record<string, string>) =>
+  page.evaluate(
+    async ({ query, variables }) => {
+      const response = await fetch('/graphql', {
+        body: JSON.stringify({ query, variables }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      return response.json();
+    },
+    { query, variables },
+  );
+
+const mutateFollow = (
   page: Page,
   operation: 'followProfile' | 'unfollowProfile',
   profileId: string,
 ) =>
-  page.evaluate(
-    async ({ operation, profileId }) => {
-      const response = await fetch('/graphql', {
-        body: JSON.stringify({
-          query: `
-            mutation E2EProfileFollow($id: ID!) {
-              ${operation}(input: { id: $id }) {
-                ${operation === 'unfollowProfile' ? 'profileFollowId' : ''}
-                followerProfile { id followingCount }
-                followeeProfile { id followersCount }
-              }
-            }
-          `,
-          operationName: 'E2EProfileFollow',
-          variables: { id: profileId },
-        }),
-        headers: { 'content-type': 'application/json' },
-        method: 'POST',
-      });
-
-      return response.json();
-    },
-    { operation, profileId },
+  mutateGraphQL(
+    page,
+    `mutation E2EProfileFollow($id: ID!) {
+      ${operation}(input: { id: $id }) {
+        ${operation === 'unfollowProfile' ? 'profileFollowId' : ''}
+        followerProfile { id followingCount }
+        followeeProfile { id followersCount }
+      }
+    }`,
+    { id: profileId },
   );
+
+test('post-commit delivery 실패에도 Web GraphQL payload와 DB 상태가 일치한다', async ({
+  context,
+  page,
+}) => {
+  const viewer = await createE2ESession({ handle: 'e2e-delivery-viewer' });
+  const openRemote = await createE2ERemoteProfile({ handle: 'e2e-delivery-open' });
+  const approvalRemote = await createE2ERemoteProfile({
+    followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
+    handle: 'e2e-delivery-approval',
+  });
+  await setE2ESessionCookie(context, viewer.token);
+  await page.goto('/home');
+
+  const follow = await mutateFollow(page, 'followProfile', toGlobalId('Profile', openRemote.id));
+  expect(follow.errors).toBeUndefined();
+  expect(follow.data.followProfile).toMatchObject({
+    followeeProfile: { followersCount: 1 },
+    followerProfile: { followingCount: 1 },
+  });
+  expect(await db.select().from(ProfileFollows)).toHaveLength(1);
+
+  const unfollow = await mutateFollow(
+    page,
+    'unfollowProfile',
+    toGlobalId('Profile', openRemote.id),
+  );
+  expect(unfollow.errors).toBeUndefined();
+  expect(unfollow.data.unfollowProfile).toMatchObject({
+    followeeProfile: { followersCount: 0 },
+    followerProfile: { followingCount: 0 },
+  });
+  expect(unfollow.data.unfollowProfile.profileFollowId).toBeTruthy();
+  expect(await db.select().from(ProfileFollows)).toHaveLength(0);
+
+  const requested = await mutateGraphQL(
+    page,
+    `mutation RequestRemoteFollow($id: ID!) {
+      followProfile(input: { id: $id }) {
+        followeeProfile { followersCount }
+        followerProfile { followingCount }
+        result { __typename ... on ProfileFollowRequest { id } }
+      }
+    }`,
+    { id: toGlobalId('Profile', approvalRemote.id) },
+  );
+  expect(requested.errors).toBeUndefined();
+  expect(requested.data.followProfile).toMatchObject({
+    followeeProfile: { followersCount: 0 },
+    followerProfile: { followingCount: 0 },
+    result: { __typename: 'ProfileFollowRequest' },
+  });
+  expect(await db.select().from(ProfileFollowRequests)).toHaveLength(1);
+
+  const requestId = requested.data.followProfile.result.id;
+  const canceled = await mutateGraphQL(
+    page,
+    `mutation CancelRemoteFollow($id: ID!) {
+      cancelProfileFollowRequest(input: { id: $id }) {
+        followerProfile { followingCount id }
+        profileFollowRequestId
+      }
+    }`,
+    { id: requestId },
+  );
+  expect(canceled.errors).toBeUndefined();
+  expect(canceled.data.cancelProfileFollowRequest).toMatchObject({
+    followerProfile: {
+      followingCount: 0,
+      id: toGlobalId('Profile', viewer.profile!.id),
+    },
+    profileFollowRequestId: requestId,
+  });
+  expect(await db.select().from(ProfileFollowRequests)).toHaveLength(0);
+});
 
 test('동시 follow와 unfollow는 저장 count를 한 번만 갱신한다', async ({ context, page }) => {
   const viewer = await createE2ESession({ handle: 'e2e-count-viewer' });

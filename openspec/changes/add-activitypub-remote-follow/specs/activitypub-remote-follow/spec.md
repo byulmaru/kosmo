@@ -39,6 +39,7 @@
 - **THEN** 시스템은 local profile을 follower, remote profile을 followee로 하는 established `ProfileFollow` 관계를 생성하거나 기존 관계를 반환한다
 - **AND** 새 `ProfileFollow` 관계가 생성되고 remote instance 상태가 `UNRESPONSIVE`가 아닌 경우에만 Fedify `sendActivity`로 ActivityPub `Follow` activity를 발송한다
 - **AND** Fedify `sendActivity`가 실패하더라도 이번 capability는 생성된 local `ProfileFollow` 관계와 저장 count를 rollback하지 않는다
+- **AND** delivery 실패를 관측 가능하게 기록하되 application action은 committed `ProfileFollow`와 양쪽 저장 count 결과를 성공으로 반환한다
 - **AND** 새 `ProfileFollow` 관계가 생성되었지만 remote instance 상태가 `UNRESPONSIVE`이면 시스템은 local follow graph만 갱신하고 ActivityPub `Follow` activity를 발송하지 않는다
 - **AND** `UNRESPONSIVE` 상태에서 발송이 억제된 `Follow`는 이번 capability에서 durable pending delivery로 저장하지 않으며, instance가 `ACTIVE`로 회복된 뒤의 idempotent follow retry에서도 재발송하지 않는다
 - **AND** 새 logical outbound Follow activity의 id는 configured canonical origin과 생성된 `ProfileFollow.id`에서 파생한 kosmo outbound Follow URI로 고정한다
@@ -55,6 +56,7 @@
 - **AND** `UNRESPONSIVE`에서는 pending request만 저장하고 delivery 또는 durable retry 상태를 만들지 않는다
 - **AND** duplicate 또는 concurrent 요청은 기존 request를 반환하고 Follow를 중복 발송하지 않는다
 - **AND** delivery 실패는 commit된 pending request를 rollback하지 않는다
+- **AND** delivery 실패를 관측 가능하게 기록하되 application action은 committed `ProfileFollowRequest` 결과를 성공으로 반환한다
 
 #### Scenario: Cancel approval-required remote follow
 
@@ -64,6 +66,7 @@
 - **AND** `UNRESPONSIVE` 또는 `SUSPENDED`이면 local request만 삭제하고 Undo 또는 durable retry 상태를 만들지 않는다
 - **AND** duplicate 또는 concurrent cancel은 Undo를 중복 발송하지 않는다
 - **AND** delivery 실패는 commit된 request 삭제를 rollback하지 않는다
+- **AND** delivery 실패를 관측 가능하게 기록하되 application action은 삭제된 request id와 committed follower profile 결과를 성공으로 반환한다
 
 #### Scenario: Remote follow accepted
 
@@ -108,6 +111,7 @@
 - **THEN** 시스템은 해당 `ProfileFollow` 관계를 제거한다
 - **AND** remote instance 상태가 `UNRESPONSIVE`가 아니면 시스템은 Fedify `sendActivity`로 기존 Follow에 대한 `Undo` activity를 발송한다
 - **AND** Fedify `sendActivity`가 실패하더라도 이번 capability는 삭제된 local `ProfileFollow` 관계와 저장 count를 rollback하지 않는다
+- **AND** delivery 실패를 관측 가능하게 기록하되 application action은 삭제된 relation id와 양쪽 저장 count 결과를 성공으로 반환한다
 - **AND** remote instance 상태가 `UNRESPONSIVE`이면 시스템은 ActivityPub `Undo(Follow)` activity를 발송하지 않는다
 - **AND** 시스템은 현재 `ProfileFollow.id`와 저장된 local/remote actor identity에서 파생한 원본 Follow activity id, actor URI, object URI를 `Undo.object`의 대상 Follow에 사용한다
 - **AND** `Undo(Follow)`를 발송할 때 시스템은 같은 local follower actor URI와 remote followee actor URI pair의 모든 Follow/Undo(Follow)에 사용하는 stable Fedify `orderingKey`를 사용한다

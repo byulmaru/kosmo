@@ -12,6 +12,7 @@
 - PROD-243과 PROD-272는 고정된 pending-only DB 계약을 기준으로 병렬 구현하고, PROD-244는 PROD-243의 exact-row 삭제 primitive를 재사용한다.
 - `SUSPENDED` remote profile의 기존 relation/count를 보존하고 GraphQL follow/unfollow에서 NotFound로 숨긴다.
 - PROD-245의 DB-known follow graph와 PROD-263의 Web follow action을 별도 구현 slice로 유지한다.
+- PROD-447이 post-commit Follow/Undo delivery 실패를 관측 경계에서 격리하고 mutation의 committed 결과 payload를 보존하도록 한다.
 - PROD-282의 SUSPENDED 회귀 검증과 PROD-361의 최종 통합 검증·archive를 별도 구현 slice로 유지하고, 부모 PROD-235는 자체 PR 없이 전체 완료 판단만 소유한다.
 - PROD-380이 기존 verified inbound Follow/Undo를 공통 core Follow lifecycle에 연결해 Local Recipient의 Follow Notification source lifecycle을 보존하도록 cross-capability 경계를 정렬한다. 새 ActivityPub protocol 동작은 추가하지 않는다.
 - PROD-241이 제공한 actor-scoped/shared inbox route를 activity-neutral handler delegation으로 표현하고, 공통 discovery 경계를 Follow-only 허용 목록으로 축소하지 않는다.
@@ -35,8 +36,8 @@
 - Contract owner: [PROD-357](https://linear.app/byulmaru/issue/PROD-357)
 - Parent integration: [PROD-235](https://linear.app/byulmaru/issue/PROD-235)
 - Completed foundations: PROD-240, PROD-241, PROD-248, PROD-281, PROD-323
-- Completed implementation: PROD-242, PROD-243, PROD-244, PROD-245, PROD-282
-- Remaining implementation: PROD-263, PROD-380, PROD-361
+- Completed implementation: PROD-242, PROD-243, PROD-244, PROD-245, PROD-282, PROD-380, PROD-447
+- Remaining implementation: PROD-263, PROD-361
 - Parallel contract: PROD-272 local request creation and local/remote pending request processing lifecycle
 - Cross-capability integration: PROD-380 verified inbound Follow/Undo → common core lifecycle → Follow Notification
 - Final integration and archive owner: PROD-361

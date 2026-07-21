@@ -3,6 +3,7 @@ import { sessionName } from '@kosmo/core';
 import {
   AccountProfiles,
   Accounts,
+  ActivityPubActors,
   db,
   firstOrThrow,
   Instances,
@@ -16,6 +17,9 @@ import { seedDatabase } from '@kosmo/core/db/seed';
 import {
   AccountProfileRole,
   AccountState,
+  ActivityPubActorType,
+  InstanceKind,
+  InstanceState,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -89,6 +93,7 @@ export async function resetE2EDatabase() {
       END IF;
     END $$;
   `);
+  await db.delete(Instances).where(eq(Instances.kind, InstanceKind.ACTIVITYPUB));
 
   await seedDatabase({ publicOrigin: webOrigin });
 }
@@ -128,7 +133,12 @@ export async function createE2ESession(options: CreateE2ESessionOptions = {}) {
   let profile: typeof Profiles.$inferSelect | null = null;
 
   if (options.profile ?? true) {
-    const instance = await db.select().from(Instances).limit(1).then(firstOrThrow);
+    const instance = await db
+      .select()
+      .from(Instances)
+      .where(eq(Instances.kind, InstanceKind.LOCAL))
+      .limit(1)
+      .then(firstOrThrow);
 
     profile = await db
       .insert(Profiles)
@@ -169,7 +179,12 @@ export async function createE2EProfile(options: CreateE2EProfileOptions = {}) {
   const suffix = randomUUID().slice(0, 8);
   const displayName = options.displayName ?? `E2E Profile ${suffix}`;
   const handle = options.handle ?? `e2e-profile-${suffix}`;
-  const instance = await db.select().from(Instances).limit(1).then(firstOrThrow);
+  const instance = await db
+    .select()
+    .from(Instances)
+    .where(eq(Instances.kind, InstanceKind.LOCAL))
+    .limit(1)
+    .then(firstOrThrow);
 
   return await db
     .insert(Profiles)
@@ -183,6 +198,44 @@ export async function createE2EProfile(options: CreateE2EProfileOptions = {}) {
     })
     .returning()
     .then(firstOrThrow);
+}
+
+export async function createE2ERemoteProfile(options: CreateE2EProfileOptions = {}) {
+  const suffix = randomUUID().slice(0, 8);
+  const domain = `e2e-${suffix}.remote.example`;
+  const handle = options.handle ?? `e2e-remote-${suffix}`;
+  const instance = await db
+    .insert(Instances)
+    .values({
+      canonicalOrigin: `https://${domain}`,
+      domain,
+      kind: InstanceKind.ACTIVITYPUB,
+      state: InstanceState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  const profile = await db
+    .insert(Profiles)
+    .values({
+      displayName: options.displayName ?? `E2E Remote ${suffix}`,
+      followPolicy: options.followPolicy ?? ProfileFollowPolicy.OPEN,
+      handle,
+      instanceId: instance.id,
+      normalizedHandle: handle.toLowerCase(),
+      state: options.state ?? ProfileState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+  await db.insert(ActivityPubActors).values({
+    inboxUri: null,
+    profileId: profile.id,
+    sharedInboxUri: `https://${domain}/inbox`,
+    type: ActivityPubActorType.PERSON,
+    uri: `https://${domain}/users/${handle}`,
+  });
+
+  return profile;
 }
 
 export const createE2EFollow = (options: CreateE2EFollowOptions) =>

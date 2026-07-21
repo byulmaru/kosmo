@@ -74,6 +74,18 @@
 - Consequences: PR #285는 기존 inbound Follow/Undo runtime을 회귀 대상으로만 유지한다. 공통 core entrypoint와 Notification source lifecycle의 최종 형태는 PROD-380에서 `add-in-app-notifications` 계약과 함께 검증한다.
 - Confirmation / Follow-up: PROD-244는 inbound Follow/Undo 관련 runtime·Notification diff가 없는지 확인하고, PROD-380은 production listener → concrete handler → core lifecycle → DB/Notification integration test를 제공한다.
 
+### Post-commit outbound delivery 실패는 committed mutation 결과와 분리한다
+
+- Decision Date: 2026-07-21
+- Decision Class: Derived Contract
+- Authority / Provenance: 현재 post-commit delivery 격리 계약은 [PROD-447](https://linear.app/byulmaru/issue/PROD-447)의 최신 본문·관계에서, 이 임시 경계를 대체하는 durable outbox·Fedify Queue 순서는 [PROD-448](https://linear.app/byulmaru/issue/PROD-448)의 최신 본문·관계에서 파생한다.
+- Status: Active
+- Context / Problem: remote OPEN/APPROVAL_REQUIRED follow, established unfollow와 pending cancel은 relation/request/count transaction을 먼저 commit하지만 이후 Follow/Undo delivery 오류를 throw해 GraphQL 실패와 실제 DB 상태가 어긋난다.
+- Decision Outcome: PROD-447은 transaction-before-delivery 순서를 유지한다. Post-commit `sendProfileFollow`/`sendProfileUnfollow` 실패는 관측 가능하게 기록하고 application action 밖으로 전파하지 않으며, `followProfile`, `unfollowProfile`, `cancelProfileFollowRequest`는 transaction에서 확정한 payload를 반환한다.
+- Alternatives Considered: delivery를 transaction 안으로 이동해 rollback, GraphQL 실패를 유지하고 Web에서 refetch, durable retry/outbox/history를 함께 도입.
+- Consequences: 호출자는 committed relation/request/count와 일치하는 성공 payload를 받는다. delivery 보장은 추가되지 않으며 retry/outbox/history와 Web 오류 후 refetch workaround는 별도 범위다. 이 catch/log 처리는 application action이 Fedify delivery를 직접 호출하는 동안만 유지하는 임시 안전장치다.
+- Confirmation / Follow-up: core service, GraphQL integration과 Web E2E에서 delivery 실패에도 성공 payload와 DB projection이 일치하는지 검증한다. PROD-263과 inbound Accept/Reject/Follow/Undo lifecycle은 변경하지 않는다. [PROD-448](https://linear.app/byulmaru/issue/PROD-448)는 domain state와 outbound delivery intent를 같은 PostgreSQL transaction에서 저장한 뒤 relay가 Fedify Queue에 handoff하도록 전환하고, mutation의 직접 delivery 호출과 이 catch/log 경계를 제거한다. PostgreSQL commit 전 NATS/Fedify Queue 직접 enqueue는 rollback된 state의 activity를 처리할 수 있으므로 대안으로 사용하지 않는다.
+
 ### Accept/Reject object 지원은 Fedify typed Follow 해석 범위로 제한한다
 
 - Decision Date: 2026-07-18
@@ -197,7 +209,7 @@
 ## Remaining Decisions
 
 - authenticated shared-inbox document loader identity는 PROD-355가 소유한다.
-- delivery queue/retry/history와 durable activity log는 별도 이슈와 OpenSpec에서 결정한다.
+- outbound delivery intent, transactional outbox와 Fedify Queue handoff는 PROD-448의 별도 OpenSpec에서 결정한다. Fedify retry/history와 durable activity log는 해당 소유 이슈가 별도로 결정한다.
 
 ## Superseded Decisions
 
