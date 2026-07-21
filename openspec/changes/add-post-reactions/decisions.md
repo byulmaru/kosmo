@@ -84,9 +84,48 @@
 - Consequences: 공유 Reaction change는 Notification baseline에 대한 명시적 의존성을 유지한다. 부모 PROD-390 archive는 Notification 자식 완료를 기다린다.
 - Confirmation / Follow-up: PROD-413 착수 전에 archived `notification`·`data-model` baseline과 PROD-277 Read/navigation 결정을 다시 읽는다.
 
+### Reaction Type과 add mutation은 canonical 문자열 계약을 그대로 노출한다
+
+- Decision Date: 2026-07-21
+- Status: Accepted
+- Context / Problem: PROD-404는 exact Unicode Type을 GraphQL에서 표현하고 Post와 현재 Type을 식별하는 add input 및 멱등 payload를 확정해야 한다.
+- Decision Outcome: GraphQL은 `addReaction(input: { postId: ID!, type: String! })`을 제공한다. `postId`는 concrete `Post` global ID만 허용하고 `type`은 canonical Unicode 문자열을 그대로 받는다. 성공 payload는 `AddReactionPayload.reaction: Reaction!`만 반환하며 신규 생성 여부는 공개하지 않는다.
+- Alternatives Considered: GraphQL enum은 canonical Unicode와 별도 symbolic mapping을 만들고 허용 목록 변경을 schema 변경에 결합한다. 별도 Reaction Type object나 opaque Type ID는 승인되지 않은 registry identity를 선결정한다. payload의 `created` boolean은 Notification 내부 분기를 공개 API에 누출한다.
+- Consequences: 허용 목록 밖 문자열은 `VALIDATION`과 `field = type`으로 거부한다. 반복 add는 기존 Reaction과 같은 Node ID를 반환한다. 신규 source 구분은 실제 caller가 생기는 PROD-413에서 service 결과에 추가한다.
+- Confirmation / Follow-up: GraphQL schema snapshot과 API integration test에서 input/payload shape, exact 문자열 validation, 반복 요청의 동일 Node ID를 검증한다.
+
+### Reaction은 최소 필드의 Relay Node로 노출한다
+
+- Decision Date: 2026-07-21
+- Status: Accepted
+- Context / Problem: 멱등 add 결과와 후속 selector·delete cache가 동일한 durable Reaction 관계를 안정적으로 식별해야 하지만 아직 관계 navigation field의 구체 사용 사례는 확정되지 않았다.
+- Decision Outcome: `Reaction`은 Relay Node이며 현재 `id`, `type`, `createdAt`을 노출한다. Node loader는 대상 Post의 기존 조회 정책을 적용한다. Profile·Post 관계 field는 구체 client query가 소유하는 후속 slice 전까지 공개하지 않는다.
+- Alternatives Considered: non-Node payload는 같은 관계의 반복 결과와 후속 cache 제거 대상을 안정적으로 식별하지 못한다. Profile·Post field를 지금 모두 노출하는 방식은 현재 사용 사례와 별도 visibility 계약 없이 API 표면을 넓힌다.
+- Consequences: client는 opaque Reaction global ID로 관계 identity를 유지한다. 조회할 수 없는 Post의 Reaction Node는 `null`이며 database UUID나 typename encoding에 의존할 수 없다.
+- Confirmation / Follow-up: Node global ID round-trip, readable/unreadable Post loader와 mutation payload의 concrete `Reaction` typename을 검증한다.
+
+### 조회할 수 없는 Post의 add는 존재를 숨긴다
+
+- Decision Date: 2026-07-21
+- Status: Accepted
+- Context / Problem: add mutation이 존재하지 않는 Post와 존재하지만 viewer가 조회할 수 없는 Post를 다른 오류로 구분하면 Post 존재를 추가로 노출한다.
+- Decision Outcome: `addReaction`은 대상 Post가 없거나 기존 Post 조회 정책을 통과하지 못하면 모두 `NOT_FOUND`를 반환한다. 로그인 또는 selected Profile scope 자체가 없으면 기존 scope auth의 `PERMISSION_DENIED`를 유지한다.
+- Alternatives Considered: unreadable Post에 `PERMISSION_DENIED`를 반환하면 원인은 명확하지만 global Node 조회의 숨김 계약과 달리 Post 존재를 확인시킨다.
+- Consequences: client는 missing과 unreadable Post를 구분하지 않는다. 오류 뒤에는 Reaction과 Notification이 생성되지 않는다.
+- Confirmation / Follow-up: 존재하지 않는 Post와 visibility별 unreadable Post가 같은 code를 반환하고 database rollback 뒤 Reaction이 남지 않는지 검증한다.
+
+### Reaction add의 session 권한과 도메인 검증 책임을 분리한다
+
+- Decision Date: 2026-07-21
+- Status: Accepted
+- Context / Problem: GraphQL context는 Active Account, selected Profile membership과 Profile visibility를 검증하지만 core `addReaction`이 `accountId`를 받아 같은 membership을 다시 조회해 transport session 정책에 결합하고 있었다.
+- Decision Outcome: GraphQL `usingProfile` entry point가 Active Account와 Account–Profile membership을 검증하고, core service에는 검증된 actor Profile identity만 전달한다. core는 actor가 Active/Normal Local Profile인지와 Post, Type, 멱등 저장을 계속 검증한다.
+- Alternatives Considered: core가 `accountId`와 membership을 계속 재검증하면 session 정책을 중복 소유한다. actor 검증 전체를 API에 두면 core caller가 Local/Instance 상태를 우회할 수 있어 채택하지 않았다.
+- Consequences: Account 또는 membership 변경과 core transaction 사이에는 context snapshot 기준의 짧은 시간차가 있을 수 있다. commit 시점의 membership 재검증이 필요해지면 transport identity를 core에 다시 결합하지 않고 entry point의 transaction-aware 검증으로 별도 설계한다.
+- Confirmation / Follow-up: core test는 Local/Profile/Instance/Post/Type/멱등성에 집중하고, API integration test는 비활성 Account와 membership 부재가 `PERMISSION_DENIED`로 거부되는지 검증한다. PROD-405 등 후속 mutation도 같은 책임 경계를 따른다.
+
 ## Remaining Decisions
 
-- PROD-404: Reaction Type의 GraphQL 표현, add input/payload, Reaction Node 노출 여부와 Post 권한 오류 계약
 - PROD-405: delete input/payload와 이미 제거한 관계를 식별할 stable key
 - PROD-407: Profile connection ordering·cursor와 Profile row 표시 범위
 - PROD-417/418: zero-count Type 공급 API, selector·Profile 목록 UX, optimistic update 사용 여부

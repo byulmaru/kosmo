@@ -41,6 +41,28 @@ test('follow mutation payloads expose both updated profiles', () => {
   assert.equal(unfollowPayload.getFields().profile, undefined);
 });
 
+test('exposes the minimal idempotent Reaction add contract', () => {
+  const mutation = schema.getMutationType();
+  const input = schema.getType('AddReactionInput');
+  const payload = schema.getType('AddReactionPayload');
+  const reaction = schema.getType('Reaction');
+
+  assert.equal(String(mutation?.getFields().addReaction?.type), 'AddReactionPayload!');
+  assert.ok(isInputObjectType(input));
+  assert.equal(String(input.getFields().postId.type), 'ID!');
+  assert.equal(String(input.getFields().type.type), 'String!');
+  assert.ok(isObjectType(payload));
+  assert.equal(String(payload.getFields().reaction.type), 'Reaction!');
+  assert.equal(payload.getFields().created, undefined);
+  assert.ok(isObjectType(reaction));
+  assert.deepEqual(
+    reaction.getInterfaces().map(({ name }) => name),
+    ['Node'],
+  );
+  assert.equal(String(reaction.getFields().type.type), 'String!');
+  assert.equal(String(reaction.getFields().createdAt.type), 'DateTime!');
+});
+
 test('exposes the Bookmark creation and relationship contract', () => {
   const mutation = schema.getMutationType();
   const input = schema.getType('CreateBookmarkInput');
