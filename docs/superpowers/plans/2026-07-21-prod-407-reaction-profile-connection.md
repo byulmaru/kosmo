@@ -222,7 +222,7 @@ Expected: 생성된 migration 두 파일, schema 선언, catalog test만 local c
 - Consumes: `Post`, `Profile`, `ProfileConnection`, `Reactions`, `reactionTypeSchema`, `visibleProfileWhere`, `resolveCursorConnection`
 - Produces: `Post.reactionProfiles(type: String!): ProfileConnection!` with opaque composite cursors and Profile-only nodes
 
-- [ ] **Step 1: schema 계약 test 작성**
+- [x] **Step 1: schema 계약 test 작성**
 
 `schema.test.ts`에 exact public shape와 비노출 범위를 먼저 고정한다.
 
@@ -246,7 +246,7 @@ test('exposes Reaction Profiles as the shared Profile connection without Reactio
 });
 ```
 
-- [ ] **Step 2: latest/type isolation integration test 작성**
+- [x] **Step 2: latest/type isolation integration test 작성**
 
 PR #308의 `reaction.test.ts` fixture를 확장해 deterministic Reaction row를 직접 삽입한다. GraphQL operation은 기존 Post Node visibility를 타도록 `node(id:)` 아래에서 field를 조회한다.
 
@@ -325,7 +325,7 @@ const insertReaction = ({
 }) => db.insert(Reactions).values({ ...values, createdAt: Temporal.Instant.from(createdAt) });
 ```
 
-- [ ] **Step 3: RED 확인**
+- [x] **Step 3: RED 확인**
 
 Run:
 
@@ -338,7 +338,7 @@ pnpm --filter @kosmo/api exec tsx --test --test-concurrency=1 tests/integration/
 
 Expected: schema test는 `reactionProfiles`/`ProfileConnection` 부재로 FAIL하고 integration query는 GraphQL field validation 오류로 FAIL한다.
 
-- [ ] **Step 4: shared ProfileConnection 등록**
+- [x] **Step 4: shared ProfileConnection 등록**
 
 `profile/ref.ts`에서 `Profile` 정의 직후 명시적 shared connection을 만든다.
 
@@ -366,7 +366,7 @@ export {
 } from './ref';
 ```
 
-- [ ] **Step 5: Reaction field module 조립**
+- [x] **Step 5: Reaction field module 조립**
 
 `reaction/index.ts`는 field registration을 mutation과 함께 로드한다.
 
@@ -383,7 +383,7 @@ export { Reaction } from './ref';
 import './post';
 ```
 
-- [ ] **Step 6: strict opaque cursor와 SQL keyset resolver 구현**
+- [x] **Step 6: strict opaque cursor와 SQL keyset resolver 구현**
 
 `reaction/field/post.ts`를 다음 책임으로 구현한다. helper는 PROD-407 전용이므로 별도 범용 cursor abstraction으로 올리지 않는다.
 
@@ -506,7 +506,7 @@ builder.objectFields(Post, (t) => ({
 }));
 ```
 
-- [ ] **Step 7: GREEN 확인**
+- [x] **Step 7: GREEN 확인**
 
 Run:
 
@@ -520,7 +520,7 @@ pnpm --filter @kosmo/api lint:tsc
 
 Expected: schema, latest order, Type isolation, existing add mutation/Reaction Node integration tests가 모두 PASS하고 TypeScript 오류가 없다.
 
-- [ ] **Step 8: connection checkpoint local commit**
+- [x] **Step 8: connection checkpoint local commit**
 
 ```bash
 git add apps/api/src/graphql/schema.test.ts apps/api/src/graphql/resolvers/profile/ref.ts apps/api/src/graphql/resolvers/profile/index.ts apps/api/src/graphql/resolvers/reaction/index.ts apps/api/src/graphql/resolvers/reaction/field apps/api/tests/integration/graphql/reaction.test.ts

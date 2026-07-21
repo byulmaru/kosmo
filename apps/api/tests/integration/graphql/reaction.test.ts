@@ -324,6 +324,42 @@ describe('GraphQL Reaction', () => {
 
     assert.ok(result.errors?.[0]);
   });
+  test('Reaction Profile은 Type별로 최신 Reaction순 Profile connection을 반환한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const post = await createPost(auth.profile.id);
+    const oldest = await createProfile('oldest');
+    const newest = await createProfile('newest');
+    const otherType = await createProfile('other-type');
+    await insertReaction({
+      id: '00000000-0000-8000-8000-000000000011',
+      postId: post.id,
+      profileId: oldest.id,
+      type: '❤️',
+      createdAt: '2026-07-21T00:00:00Z',
+    });
+    await insertReaction({
+      id: '00000000-0000-8000-8000-000000000012',
+      postId: post.id,
+      profileId: newest.id,
+      type: '❤️',
+      createdAt: '2026-07-21T00:00:01Z',
+    });
+    await insertReaction({
+      id: '00000000-0000-8000-8000-000000000013',
+      postId: post.id,
+      profileId: otherType.id,
+      type: '🎉',
+      createdAt: '2026-07-21T00:00:02Z',
+    });
+
+    const result = await requestReactionProfiles(post.id, '❤️');
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(
+      result.data?.node?.reactionProfiles.edges.map(({ node }) => node.handle),
+      ['newest', 'oldest'],
+    );
+  });
 });
 
 type ReactionNode = {
@@ -331,6 +367,18 @@ type ReactionNode = {
   createdAt: string;
   id: string;
   type: string;
+};
+
+type ReactionProfilesNode = {
+  reactionProfiles: {
+    edges: Array<{ cursor: string; node: { __typename: 'Profile'; handle: string; id: string } }>;
+    pageInfo: {
+      endCursor: string | null;
+      hasNextPage: boolean;
+      hasPreviousPage: boolean;
+      startCursor: string | null;
+    };
+  };
 };
 
 type GraphQLResult<TData> = {
@@ -367,6 +415,21 @@ const requestNode = (id: string) =>
       node(id: $id) { ... on Reaction { type } }
     }`,
     { id },
+  );
+
+const requestReactionProfiles = (postId: string, type: string) =>
+  requestGraphQL<{ node: ReactionProfilesNode | null }>(
+    `query ReactionProfiles($postId: ID!, $type: String!) {
+      node(id: $postId) {
+        ... on Post {
+          reactionProfiles(type: $type) {
+            edges { cursor node { __typename id handle } }
+            pageInfo { startCursor endCursor hasPreviousPage hasNextPage }
+          }
+        }
+      }
+    }`,
+    { postId: globalId('Post', postId), type },
   );
 
 const requestGraphQL = async <TData>(
@@ -411,6 +474,17 @@ const createPost = (profileId: string, visibility: PostVisibility = PostVisibili
     .values({ profileId, state: PostState.ACTIVE, visibility })
     .returning()
     .then(firstOrThrow);
+
+const insertReaction = ({
+  createdAt,
+  ...values
+}: {
+  createdAt: string;
+  id: string;
+  postId: string;
+  profileId: string;
+  type: string;
+}) => db.insert(Reactions).values({ ...values, createdAt: Temporal.Instant.from(createdAt) });
 
 const createAuthenticatedSession = async ({
   activeProfile = true,
