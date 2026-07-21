@@ -2,6 +2,8 @@
 
 ### Requirement: <!-- requirement name -->
 
+**Authority / Provenance:** <!-- exact canonical documents and current Linear contract -->
+
 <!-- requirement text -->
 
 #### Scenario: <!-- scenario name -->

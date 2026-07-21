@@ -1,12 +1,16 @@
 ## 1. <!-- Linear Issue ID and Task Group Name -->
 
+**Authority / Provenance**
+
+<!-- Exact canonical documents and current Linear issues supporting this group -->
+
 **Deliverable**
 
 <!-- Observable result without prescribing an internal mechanism -->
 
 **Guardrails**
 
-<!-- Binding constraints from specs, public contracts, and accepted decisions; use 없음. when empty -->
+<!-- Binding constraints from specs, public contracts, and independently verified decisions; use 없음. when empty -->
 
 **Verification**
 
@@ -17,13 +21,17 @@
 
 ## 2. <!-- Linear Issue ID and Task Group Name -->
 
+**Authority / Provenance**
+
+<!-- Exact canonical documents and current Linear issues supporting this group -->
+
 **Deliverable**
 
 <!-- Observable result without prescribing an internal mechanism -->
 
 **Guardrails**
 
-<!-- Binding constraints from specs, public contracts, and accepted decisions; use 없음. when empty -->
+<!-- Binding constraints from specs, public contracts, and independently verified decisions; use 없음. when empty -->
 
 **Verification**
 

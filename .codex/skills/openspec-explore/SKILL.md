@@ -122,6 +122,16 @@ If the user mentions a change or you detect one is relevant:
 
 3. **Offer to capture when decisions are made**
 
+   Before creating or updating an OpenSpec artifact, independently read the
+   applicable canonical documents and latest Linear issue bodies, relations, and
+   contract-changing comments. Existing OpenSpec artifacts may help discover those
+   references but cannot prove their authority. Confirm the Domain and Issue Gates
+   before writing normative specs or implementation tasks.
+
+   If exploration discovers product behavior or scope without current upstream
+   authority, update canonical/Linear first or record only a `Blocked`
+   `Upstream Change Required` decision. Do not add it to normative specs or tasks.
+
    | Insight Type               | Where to Capture                                       |
    | -------------------------- | ------------------------------------------------------ |
    | New requirement discovered | `specs/<capability>/spec.md`                           |
@@ -296,6 +306,7 @@ But this summary is optional. Sometimes the thinking IS the value.
 - **Don't rush** - Discovery is thinking time, not task time
 - **Don't force structure** - Let patterns emerge naturally
 - **Don't auto-capture** - Offer to save insights, don't just do it
+- **Don't bypass upstream gates** - Artifact writes require independent canonical and Linear verification
 - **Do visualize** - A good diagram is worth many paragraphs
 - **Do explore the codebase** - Ground discussions in reality
 - **Do question assumptions** - Including the user's and your own
