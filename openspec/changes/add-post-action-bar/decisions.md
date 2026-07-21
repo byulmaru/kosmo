@@ -68,11 +68,11 @@
 
 - Decision Date: 2026-07-21
 - Status: Accepted
-- Context / Problem: Post Kind·Post Visibility·권한에 따라 액션을 생략하면 고정 구성의 위치가 흔들리고 사용자가 기능의 존재와 현재 사용할 수 없는 이유를 구분하기 어렵다.
-- Decision Outcome: production Post surface는 다섯 액션을 모두 렌더한다. canonical 정책상 실행할 수 없는 액션은 optional prop을 생략하지 않고 disabled 상태로 제공한다. Repost Kind는 Reply·Repost를 disabled로 표시한다. guest의 Reply·Repost·Reaction·Bookmark는 인증 여부만으로 숨기거나 비활성화하지 않고 상위 인증 진입 callback으로 위임한다.
+- Context / Problem: Post Kind·Post Visibility·권한에 따라 액션을 생략하면 고정 구성의 위치가 흔들리고 사용자가 기능의 존재와 현재 사용할 수 없는 이유를 구분하기 어렵다. 또한 canonical action 계약의 `Account.Active`·`Profile.Member` 같은 현재 세션 전제를 대상 Post의 액션 적격성과 합쳐 사용하면 guest의 인증 진입 callback이 항상 disabled 뒤에 가려진다.
+- Decision Outcome: production Post surface는 다섯 액션을 모두 렌더한다. surface adapter는 Post Kind·Post Visibility·대상 관련 조건으로 결정되는 대상 적격성과 현재 실행 주체·세션의 실행 권한을 분리한다. 대상 자체가 부적격하거나 인증된 실행 주체가 권한을 갖지 못한 액션은 optional prop을 생략하지 않고 disabled 상태로 제공하며, Repost Kind는 Reply·Repost를 disabled로 표시한다. guest의 Reply·Repost·Reaction·Bookmark는 `Account.Active`·`Profile.Member`·선택 Profile 부재만으로 숨기거나 비활성화하지 않고, 대상 자체가 적격할 때만 상위 인증 진입 callback으로 위임한다.
 - Alternatives Considered: 정책상 불가능한 액션을 숨기는 방식은 고정 구성을 깨므로 채택하지 않았다. guest 액션을 disabled로 두는 방식은 인증·가입 진입점을 제공하지 못하므로 채택하지 않았다.
-- Consequences: 실제 허용 여부는 canonical 문서와 선행 action 계약이 소유하고 Action Bar는 전달된 disabled 상태만 표현한다. guest 인증 목적지·화면 전환·임시 화면은 이 change에서 구현하지 않는다.
-- Confirmation / Follow-up: PROD-432 통합 검증에서 Repost Kind, Visibility·권한 제한, guest 인증 위임을 확인한다.
+- Consequences: 실제 대상 적격성과 실행 권한은 canonical 문서와 선행 action 계약이 소유하고 Action Bar는 adapter가 전달한 disabled 상태만 표현한다. guest 인증 목적지·화면 전환·임시 화면은 이 change에서 구현하지 않는다.
+- Confirmation / Follow-up: PROD-432 통합 검증에서 Repost Kind·Visibility 등 대상 자체 제한, 인증된 실행 주체의 권한 제한, 대상이 적격한 guest의 인증 위임과 대상이 부적격한 guest의 disabled 유지를 각각 확인한다.
 
 ## Remaining Decisions
 

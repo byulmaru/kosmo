@@ -146,7 +146,7 @@ Action Bar는 mobile·compact·full의 지원 폭에서 액션을 한 행에 배
 
 ### Requirement: Production Post surface 배치
 
-지원되는 Home Post List, Profile Post List 및 Post 상세 surface의 게시글은 공통 Post Action Bar 계약을 사용해야 한다(MUST). surface는 canonical Post Kind·Post Visibility·권한 계약과 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425의 action 계약이 허용 여부를 판단하게 하고(MUST), Action Bar가 정책을 자체 판단하게 하지 않아야 한다(MUST). 실행할 수 없는 액션은 설정을 생략하지 않고 disabled 상태로 제공해야 한다(MUST). surface 배치는 게시글의 기존 상세 navigation 및 다른 interactive control의 입력을 가로채지 않아야 한다(MUST).
+지원되는 Home Post List, Profile Post List 및 Post 상세 surface의 게시글은 공통 Post Action Bar 계약을 사용해야 한다(MUST). surface adapter는 canonical Post Kind·Post Visibility·권한 계약과 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425의 action 계약에서 대상 Post 자체의 액션 적격성과 현재 실행 주체·세션의 실행 권한을 분리해 판단해야 하고(MUST), Action Bar가 정책을 자체 판단하게 하지 않아야 한다(MUST). 대상 Post가 적격하지 않거나 인증된 실행 주체가 실행 권한을 갖지 못한 액션은 설정을 생략하지 않고 disabled 상태로 제공해야 한다(MUST). 인증하지 않은 guest에게 `Account.Active`·`Profile.Member`·선택 Profile 같은 현재 세션 전제가 없다는 이유만으로 조회 가능하고 대상 자체가 적격한 액션을 disabled로 제공해서는 안 되며(MUST NOT), 활성화는 상위 인증 진입 callback에 위임해야 한다(MUST). surface 배치는 게시글의 기존 상세 navigation 및 다른 interactive control의 입력을 가로채지 않아야 한다(MUST).
 
 #### Scenario: 목록과 상세의 공통 계약
 
@@ -158,15 +158,25 @@ Action Bar는 mobile·compact·full의 지원 폭에서 액션을 한 행에 배
 - **WHEN** Post Kind가 Repost다
 - **THEN** surface는 Reply와 Repost를 렌더하되 disabled로 제공하고 Reaction·Bookmark·More는 다른 정책이 허용하는 상태를 유지한다
 
-#### Scenario: Visibility 또는 권한상 실행 불가
+#### Scenario: 대상 자체가 액션에 부적격
 
-- **WHEN** Post를 조회할 수 있지만 canonical Post Visibility 또는 권한 계약이 특정 액션 실행을 허용하지 않는다
+- **WHEN** Post를 조회할 수 있지만 Post Kind·Post Visibility 또는 대상 관련 canonical 조건이 특정 액션의 대상 적격성을 허용하지 않는다
+- **THEN** surface는 해당 액션을 숨기지 않고 disabled 상태로 렌더한다
+
+#### Scenario: 인증된 실행 주체의 권한 부족
+
+- **WHEN** 인증된 실행 주체가 대상 자체는 적격한 특정 액션의 canonical 실행 권한을 갖지 못한다
 - **THEN** surface는 해당 액션을 숨기지 않고 disabled 상태로 렌더한다
 
 #### Scenario: guest의 소셜 액션 활성화
 
-- **WHEN** 인증하지 않은 guest가 조회 가능하고 canonical 정책상 허용되는 Post의 Reply·Repost·Reaction·Bookmark를 활성화한다
-- **THEN** surface는 해당 액션을 인증 여부만으로 숨기거나 비활성화하지 않고 상위 인증·가입·온보딩 진입 callback에 위임한다
+- **WHEN** 인증하지 않은 guest가 조회할 수 있고 대상 자체가 적격한 Post의 Reply·Repost·Reaction·Bookmark를 활성화한다
+- **THEN** surface는 `Account.Active`·`Profile.Member`·선택 Profile 부재만으로 해당 액션을 숨기거나 비활성화하지 않고 상위 인증·가입·온보딩 진입 callback에 위임한다
+
+#### Scenario: guest에게도 대상 자체가 부적격
+
+- **WHEN** 인증하지 않은 guest가 Post를 조회할 수 있지만 Post Kind·Post Visibility 또는 대상 관련 canonical 조건상 특정 액션의 대상 적격성이 없다
+- **THEN** surface는 인증 진입 callback을 호출하지 않고 해당 액션을 disabled 상태로 렌더한다
 
 #### Scenario: 중첩 입력 경계
 

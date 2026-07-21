@@ -56,30 +56,30 @@ Home·Profile Post List와 Post 상세가 같은 Post Action Bar를 본문 inter
 
 **Deliverable**
 
-준비된 Reply·Repost·Reaction·Bookmark 구현 결과가 Home·Profile Post List와 Post 상세의 공통 Action Bar에서 선택 Profile, 처리 상태, Post Kind·Post Visibility·권한 정책을 지키며 동작하고, More 링크 복사를 포함한 전체 계약을 검증한 공유 OpenSpec을 archive한다.
+준비된 Reply·Repost·Reaction·Bookmark 구현 결과가 Home·Profile Post List와 Post 상세의 공통 Action Bar에서 선택 Profile, 처리 상태와 대상 적격성·현재 세션 실행 권한을 분리한 Post Kind·Post Visibility·권한 정책을 지키며 동작하고, More 링크 복사를 포함한 전체 계약을 검증한 공유 OpenSpec을 archive한다.
 
 **Guardrails**
 
 - 각 action의 schema, 저장, mutation, count 집계, selected 의미, 권한과 개별 UI 계약을 재구현하지 않고 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425의 완료 결과를 소비한다.
 - 선행 action 계약이 제공하는 viewer-independent count와 선택 Profile별 selected 상태의 기존 Relay cache 경계를 유지하고, count 계약이 없는 액션에 0이나 새 집계를 합성하지 않는다.
 - pending·error는 액션별로 격리하고, 한 액션 요청이 다른 액션을 불필요하게 차단하지 않는다.
-- 목록과 상세는 다섯 액션을 같은 위치에 유지하고 canonical 정책상 실행할 수 없는 액션을 disabled로 제공한다.
-- guest의 소셜 액션은 상위 인증 진입 계약으로 위임하고 임시 인증 화면을 추가하지 않는다. More 링크 복사는 guest에게도 허용한다.
+- 목록과 상세는 다섯 액션을 같은 위치에 유지하고, 대상 자체가 부적격하거나 인증된 실행 주체가 실행 권한을 갖지 못한 액션을 disabled로 제공한다.
+- guest에게 `Account.Active`·`Profile.Member`·선택 Profile이 없다는 이유만으로 대상 자체가 적격한 소셜 액션을 disabled로 만들지 않고 상위 인증 진입 계약으로 위임한다. 대상 자체 제한은 guest에게도 disabled로 유지하고 임시 인증 화면은 추가하지 않는다. More 링크 복사는 guest에게도 허용한다.
 - 구현 자식 하나의 완료만으로 공유 change를 부분 archive하지 않는다.
 
 **Verification**
 
 - 선택 Profile 전환 시 제공된 count 공유와 selected 격리를 검증한다.
 - Reply·Repost·Reaction·Bookmark 각각의 성공, action별 pending 중복 차단, 실패 표시와 재시도를 검증한다.
-- Post Kind·Post Visibility·권한상 불가능한 액션의 disabled 표시, guest 인증 위임과 Home·Profile 목록·상세의 동일 계약을 검증한다.
+- Post Kind·Post Visibility 등 대상 자체가 부적격한 액션과 인증된 실행 주체의 권한이 부족한 액션의 disabled 표시, 대상이 적격한 guest의 인증 위임, 대상이 부적격한 guest의 disabled 유지와 Home·Profile 목록·상세의 동일 계약을 검증한다.
 - More 팝업의 단일 `링크 복사` 항목, canonical Post URL clipboard 복사와 guest 사용을 검증한다.
 - 모든 구현 자식과 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425 완료, OpenSpec task 정합성과 canonical 문서·Linear·OpenSpec·코드 일치를 확인한다.
 - archive 전후 strict validation을 통과시킨다.
 
 - [ ] 3.1 구현 자식과 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425의 완료·공개 계약을 확인하고, 특히 PROD-417·PROD-418의 Reaction count·selected 의미가 확정된 뒤 실제 Post 상태를 공통 Action Bar 입력으로 연결할 경계를 정리한다.
 - [ ] 3.2 목록·상세에서 기존 Reply·Repost·Reaction·Bookmark의 callback과 액션별 처리 상태를 공통 Action Bar에 연결하고, 선행 계약이 제공하는 액션에만 optional count를, Repost·Bookmark 및 공개 계약이 의미를 제공한 Reaction에만 selected를 연결한다.
-- [ ] 3.3 선택 Profile cache 경계, Post Kind·Post Visibility·권한별 disabled, guest 인증 위임과 action별 pending·failure·retry 동작을 적용한다.
+- [ ] 3.3 선택 Profile cache 경계를 유지하면서 대상 적격성과 현재 실행 주체·세션의 실행 권한을 분리하고, Post Kind·Post Visibility·권한별 disabled, 대상이 적격한 guest의 인증 위임, 대상이 부적격한 guest의 disabled 유지와 action별 pending·failure·retry 동작을 적용한다.
 - [ ] 3.4 More callback에 접근 가능한 최소 팝업과 guest도 사용할 수 있는 canonical Post URL `링크 복사`를 연결한다. Web의 현재 origin 또는 Native의 검증된 `EXPO_PUBLIC_WEB_ORIGIN`과 `/{relativeHandle}/{postId}`를 결합한 query·hash 없는 절대 URL을 사용하고, 공유 clipboard 추상화가 없으면 Expo 호환 clipboard package를 추가해 native·Web 동작을 검증한다.
-- [ ] 3.5 Home·Profile 목록·Post 상세의 실제 성공·중복 차단·실패 복구·Profile 전환·disabled 정책·guest 위임·More 링크 복사 통합 테스트를 추가하고 전체 관련 검증을 통과시킨다.
+- [ ] 3.5 Home·Profile 목록·Post 상세의 실제 성공·중복 차단·실패 복구·Profile 전환, 대상 적격성·현재 세션 실행 권한의 분리, guest 위임·대상 제한과 More 링크 복사 통합 테스트를 추가하고 전체 관련 검증을 통과시킨다.
 - [ ] 3.6 canonical 문서·Linear·OpenSpec·구현과 모든 task의 정합성을 확인하고 archive 전 strict validation을 통과시킨다.
 - [ ] 3.7 전체 계약 완료 승인을 받은 뒤 공유 change를 archive하고 archive 후 strict validation을 통과시킨다.
