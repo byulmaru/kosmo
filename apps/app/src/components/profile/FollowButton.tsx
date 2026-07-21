@@ -55,8 +55,6 @@ const followProfileMutation = graphql`
         followingCount
       }
       followeeProfile {
-        id
-        followersCount
         ...FollowButton_profile
       }
     }
@@ -80,8 +78,6 @@ const unfollowProfileMutation = graphql`
         followingCount
       }
       followeeProfile {
-        id
-        followersCount
         ...FollowButton_profile
       }
     }
