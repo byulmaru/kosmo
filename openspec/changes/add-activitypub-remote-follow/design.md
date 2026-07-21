@@ -54,6 +54,8 @@ Outbound Follow/Undo는 core lifecycle이 검증·commit한 projection을 받는
 
 Core application action은 transaction에서 relation/request/count와 반환 payload를 확정한 뒤 delivery를 호출한다. 이 post-commit delivery가 실패하면 오류를 관측 가능하게 기록하되 application action은 committed 결과를 그대로 반환한다. Retry/outbox/history를 만들거나 delivery 실패를 이유로 projection을 rollback하지 않는다.
 
+이 catch/log 경계는 application action이 Fedify delivery를 직접 호출하는 현재 구조에만 필요한 임시 안전장치다. [PROD-448](https://linear.app/byulmaru/issue/PROD-448)는 domain state와 durable outbound delivery intent를 같은 PostgreSQL transaction에서 확정하고, commit 이후 relay가 Fedify Queue에 handoff하도록 전환한다. 그 구조에서는 mutation이 원격 delivery나 NATS enqueue를 직접 수행하지 않으므로 이 catch/log 경계를 제거한다. PostgreSQL commit 전에 NATS/Fedify Queue에 직접 enqueue하면 rollback된 domain state의 activity가 처리될 수 있으므로, commit 전에 허용되는 enqueue는 같은 DB transaction의 outbox intent 저장뿐이다.
+
 Generic Accept/Reject handler는 Fedify `getObject()`와 typed Follow 분기를 직접 소유하되 `crossOrigin: "trust"`를 사용하지 않고 Fedify의 기본 origin 검증을 유지한다. cross-origin embedded object는 authoritative origin에서 조회돼 typed Follow로 제공된 경우에만 concrete Accept(Follow)/Reject(Follow) action으로 전달한다. concrete action은 actor/object/recipient를 검증한 뒤 현재 relation/request를 자기 행동 안에서 직접 조회하며, 별도 Follow response projection resolver나 DB lookup utility를 두지 않는다. local recipient와 remote actor identity처럼 Follow 외 inbound activity에도 적용되는 Fedify trust boundary만 공통 모듈을 재사용한다.
 
 typed Follow의 id가 canonical kosmo Follow URI이면 현재 row에서 파생한 URI와 정확히 일치해야 한다. non-kosmo 또는 missing id fallback은 verified actor pair와 함께 embedded Follow의 `published`가 현재 row의 immutable `createdAt`과 정확히 일치할 때만 같은 outbound generation으로 인정한다. 이 값은 Kosmo가 outbound Follow에 기록한 generation이므로 remote Accept/Reject activity 시각이나 local 수신 시각을 섞지 않는다. Fedify가 typed Follow로 제공하지 못한 IRI-only object를 kosmo가 별도 parser와 DB lookup으로 복원하지 않는다. Accept는 exact pending request 삭제와 relation/count 생성을 한 transaction에서 수행하고 established relation은 유지한다. Reject는 exact request/relation row만 삭제하며 stale generation은 무시한다.
@@ -92,7 +94,7 @@ PROD-241이 설정한 actor-scoped/shared inbox listener에 실제 activity type
 - actor/object가 같은 지연 Undo는 현재 같은-pair 관계를 제거할 수 있다. → 이를 remote actor의 현재 unfollow 의사로 해석하고, durable activity history가 필요해질 때 별도 capability에서 순서 모델을 도입한다.
 - 승인 대기 중인 inbound Follow의 원본 ID는 보존하지 않는다. → 후속 protocol response는 저장 actor pair에서 Follow object를 구성하며, remote Follow ID exact match를 상호운용성 전제로 두지 않는다.
 - remote Accept/Reject가 kosmo origin Follow ID를 embedded object로 보내도 Fedify가 그 authoritative document를 조회하지 못하면 응답을 적용하지 않는다. → content spoofing 방어를 우선하고 실제 상호운용성 요구가 확인되면 별도 authenticated object dispatcher 범위에서 다룬다.
-- local projection commit과 outbound delivery는 원자적이지 않다. → projection을 rollback하거나 mutation 실패로 바꾸지 않고 오류를 관측 경계에서 격리하며 queue/retry는 별도 capability로 남긴다.
+- local projection commit과 outbound delivery는 원자적이지 않다. → 현재 direct-delivery 구조에서는 projection을 rollback하거나 mutation 실패로 바꾸지 않고 오류를 관측 경계에서 격리한다. 장기적으로는 PROD-448이 같은 DB transaction의 outbox intent와 commit 이후 Fedify Queue handoff로 이 임시 경계를 대체한다.
 - 구현 중 shared 계약을 정정하면 구현과 계약 diff가 섞인다. → PROD-243 PR의 첫 커밋에서 Linear와 OpenSpec을 먼저 정렬하고 strict validation을 통과한 뒤 runtime 구현을 시작한다.
 
 ## Migration Plan
