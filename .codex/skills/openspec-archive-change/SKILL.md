@@ -52,17 +52,18 @@ Archive a completed change in the experimental workflow.
 
 4. **Revalidate upstream authority and unresolved decisions**
 
-   Read proposal, specs, decisions, and tasks to discover their declared upstream
-   references; do not treat the OpenSpec text itself as authority. Independently
-   re-read the applicable canonical documents and latest Linear issue bodies,
-   relations, and contract-changing comments.
+   Use the artifact list from `openspec status` and read only the proposal, specs,
+   decisions, and tasks that exist for this change. Use them to discover declared
+   upstream references; do not treat the OpenSpec text itself as authority.
+   Independently re-read the applicable canonical documents and latest Linear issue
+   bodies, relations, and contract-changing comments.
 
    Check every current normative requirement, `Active` or legacy `Accepted` decision,
    task Deliverable, and Guardrail against those sources. If any item lacks or
    conflicts with upstream authority, stop the archive and align canonical → Linear →
    OpenSpec first.
 
-   Also stop if any decision has `Status: Blocked`, or has
+   When a decisions artifact exists, also stop if any decision has `Status: Blocked`, or has
    `Decision Class: Upstream Change Required` without being `Superseded`. Require the
    upstream change to be approved and the decision to be reclassified, or explicitly
    superseded if it was abandoned. These are hard stops, not confirmable warnings.

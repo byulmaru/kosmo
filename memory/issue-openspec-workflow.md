@@ -199,11 +199,12 @@ OpenSpec Gate로 넘어가지 않는다.
 
 OpenSpec은 저장소의 `spec-driven-decisions` schema를 따른다.
 
-- `proposal.md`: Linear 이슈를 영향받는 capability와 repository impact로 번역한다.
-- `specs/**/spec.md`: 규범적이고 검증 가능한 행동을 정의한다.
+- `proposal.md`: Linear 이슈를 영향받는 capability와 repository impact로 번역하고 적용되는 canonical·Linear source를 기록한다.
+- `specs/**/spec.md`: 규범적이고 검증 가능한 행동을 정의하며 requirement마다 정확한 canonical·Linear provenance를 기록한다.
 - `design.md`: 현재 구현 제약, 비규범적 권장 접근, 허용 가능한 대안과 알려진 함정, 위험, migration과 rollback을 설명한다.
 - `decisions.md`: 구현자가 반드시 지켜야 하는 durable choice, 대안, 결과와 남은 결정을 권위 유형과 함께 기록한다. 파일명, 함수, helper나 자료구조는 장기 호환성·보안·rollout 또는 여러 구현 slice가 정확한 선택을 공유해야 할 때만 고정한다.
-- `tasks.md`: 승인된 구현 이슈를 의존 순서의 검증 가능한 작업으로 구체화한다. 각 task group은 결과 수준의
+- `tasks.md`: 승인된 구현 이슈를 의존 순서의 검증 가능한 작업으로 구체화한다. 각 task group은 정확한
+  canonical·Linear provenance와 결과 수준의
   Deliverable, specs·공개 계약·Active decision에서 파생한 Guardrails, 완료를 증명할 Verification을 checkbox와
   분리해 제공한다.
 

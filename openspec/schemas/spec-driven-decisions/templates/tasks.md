@@ -1,5 +1,9 @@
 ## 1. <!-- Linear Issue ID and Task Group Name -->
 
+**Authority / Provenance**
+
+<!-- Exact canonical documents and current Linear issues supporting this group -->
+
 **Deliverable**
 
 <!-- Observable result without prescribing an internal mechanism -->
@@ -16,6 +20,10 @@
 - [ ] 1.2 <!-- Task description -->
 
 ## 2. <!-- Linear Issue ID and Task Group Name -->
+
+**Authority / Provenance**
+
+<!-- Exact canonical documents and current Linear issues supporting this group -->
 
 **Deliverable**
 
