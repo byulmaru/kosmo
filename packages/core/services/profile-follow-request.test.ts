@@ -19,8 +19,7 @@ import {
   ProfileState,
 } from '../enums';
 import { NotFoundError, PermissionDeniedError } from '../error';
-import { removeInboundFollow } from './inbound-profile-follow';
-import { followProfile } from './profile-follow';
+import { followProfile, removeInboundFollow } from './profile-follow';
 import * as profileFollowRequestLifecycle from './profile-follow-request';
 import type { Transaction } from '../db';
 

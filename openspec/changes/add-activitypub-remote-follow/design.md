@@ -1,6 +1,6 @@
 ## Context
 
-현재 main에는 local/remote 공통 `ProfileFollow`/`ProfileFollowRequest`, 저장 follow count, core follow action, remote actor materialization, Fedify Follow/Undo send helper와 actor-scoped/shared inbox route, inbound Follow/Undo handler가 있다. Remote OPEN follow/unfollow는 구현됐지만 outbound APPROVAL_REQUIRED request delivery와 inbound Accept/Reject는 아직 없다.
+현재 main에는 local/remote 공통 `ProfileFollow`/`ProfileFollowRequest`, 저장 follow count, core follow action, remote actor materialization, Fedify Follow/Undo send helper와 actor-scoped/shared inbox route, inbound Follow/Undo handler, outbound APPROVAL_REQUIRED request delivery와 inbound Accept/Reject가 있다. Verified inbound Follow/Undo는 아직 공통 core Follow lifecycle과 Follow Notification source integration을 함께 통과하지 않는다.
 
 PROD-235와 구현 자식이 이 change의 source of truth다. PROD-323이 Follow Request를 pending-only로 확정했고, PROD-281이 relation/count transaction을 core service 책임으로 옮겼다. 닫힌 미병합 PR #232와 #234 및 기존 active change의 오래된 가정은 현재 계약이 아니며, PR #247 이후 inbox listener 경로는 새 registry 없이 싱글톤 federation에 activity handler를 등록할 수 있다.
 
@@ -14,12 +14,14 @@ PROD-235와 구현 자식이 이 change의 source of truth다. PROD-323이 Follo
 - PROD-244의 outbound pending/cancel 및 Accept/Reject 왕복과 PROD-380의 inbound Follow/Undo Notification integration을 서로 다른 구현 경계로 유지한다.
 - SUSPENDED 관계 보존과 UNRESPONSIVE reachability 복구를 명확히 구분한다.
 - 공통 inbox route와 activity별 handler 책임을 분리해 remote-post 계약과 archive 순서 충돌을 만들지 않는다.
+- verified inbound Follow/Undo의 relation/request/count 변경이 공통 core lifecycle을 통과해 Notification source integration을 보존하도록 cross-capability 경계를 명시한다.
 
 **Non-Goals:**
 
 - 이 spec-only PR에서 코드, migration 또는 generated schema를 변경하는 일.
 - remote-post Create validation, global receipt, PostContent/ProseMirror와 authenticated shared-inbox identity.
 - delivery queue/retry/history, ActivityPub activity log.
+- Follow Notification 저장 모델이나 새 ActivityPub protocol 동작. Notification side effect는 `add-in-app-notifications`와 PROD-380이 소유한다.
 - remote followers/following collection mirror.
 
 ## Implementation Guidance
@@ -53,6 +55,10 @@ Outbound Follow/Undo는 core lifecycle이 검증·commit한 projection을 받는
 Generic Accept/Reject handler는 Fedify `getObject()`와 typed Follow 분기를 직접 소유하되 `crossOrigin: "trust"`를 사용하지 않고 Fedify의 기본 origin 검증을 유지한다. cross-origin embedded object는 authoritative origin에서 조회돼 typed Follow로 제공된 경우에만 concrete Accept(Follow)/Reject(Follow) action으로 전달한다. concrete action은 actor/object/recipient를 검증한 뒤 현재 relation/request를 자기 행동 안에서 직접 조회하며, 별도 Follow response projection resolver나 DB lookup utility를 두지 않는다. local recipient와 remote actor identity처럼 Follow 외 inbound activity에도 적용되는 Fedify trust boundary만 공통 모듈을 재사용한다.
 
 typed Follow의 id가 canonical kosmo Follow URI이면 현재 row에서 파생한 URI와 정확히 일치해야 한다. non-kosmo 또는 missing id fallback은 verified actor pair와 함께 embedded Follow의 `published`가 현재 row의 immutable `createdAt`과 정확히 일치할 때만 같은 outbound generation으로 인정한다. 이 값은 Kosmo가 outbound Follow에 기록한 generation이므로 remote Accept/Reject activity 시각이나 local 수신 시각을 섞지 않는다. Fedify가 typed Follow로 제공하지 못한 IRI-only object를 kosmo가 별도 parser와 DB lookup으로 복원하지 않는다. Accept는 exact pending request 삭제와 relation/count 생성을 한 transaction에서 수행하고 established relation은 유지한다. Reject는 exact request/relation row만 삭제하며 stale generation은 무시한다.
+
+#### PROD-380 inbound Follow/Undo Notification integration
+
+Concrete Follow/Undo handler는 검증 뒤 relation/request/count 변경을 공통 core public action에 위임한다. core action은 caller가 별도 direction 값을 전달하지 않아도 저장된 Follower/Followee Profile origin pair에서 Local→Local, Local→ActivityPub outbound와 ActivityPub→Local inbound 흐름을 파생하고 ActivityPub→ActivityPub 조합을 거부한다. Activity 검증은 계속 Fedify handler가 소유하며 caller-supplied direction 문자열을 verification 증거로 사용하지 않는다. core action은 transaction commit 이후에만 `add-in-app-notifications`가 정의한 Follow Notification create/delete effect를 await/catch한다. pending request, duplicate/no-op에는 established Notification lifecycle을 실행하지 않으며 Fedify adapter에 relation mutation이나 Notification 호출을 중복 구현하지 않는다.
 
 #### Inbox registration
 
@@ -94,7 +100,7 @@ PROD-241이 설정한 actor-scoped/shared inbox listener에 실제 activity type
 3. PROD-243은 별도 DB migration 없이 remote request 생성을, PROD-272는 local request 생성과 공통 처리 lifecycle을 각자 검증한다.
 4. PROD-244가 두 구현과 PROD-243 exact-row primitive를 조합해 outbound pending request, cancel Undo와 inbound Accept/Reject 왕복을 완성한다.
 5. PROD-245, PROD-263과 PROD-282를 각 이슈의 독립 범위로 완료한다.
-6. PROD-380이 PROD-244 병합 후 inbound Follow/Undo와 Follow Notification lifecycle을 공통 core action에서 통합한다.
+6. PROD-380이 기존 verified Follow/Undo handler를 공통 core lifecycle과 Follow Notification integration에 연결하고 scoped production-wiring test를 제공한다.
 7. PROD-361이 모든 구현 결과를 통합 검증하고 delta spec 동기화와 change archive PR을 소유한다.
 8. PROD-361의 검증·archive 근거가 확인되면 부모 PROD-235를 완료한다.
 
@@ -103,7 +109,7 @@ Rollback은 PROD-357 spec-only commit을 되돌려 이전 contract 문서로 복
 ## Validation
 
 - 각 구현 issue가 자기 package/transaction 경계에서 독립 테스트를 제공한다.
-- PROD-380이 production listener부터 core relation/request와 Notification create/delete까지의 integration을 검증한다.
+- PROD-380이 production listener → concrete Follow/Undo handler → core action → DB/Notification 경로와 best-effort 실패 격리를 검증한다.
 - PROD-361 통합 gate가 duplicate Follow/Undo, Reject refollow race, SUSPENDED/UNRESPONSIVE, graph와 Web action을 검증한다.
 - spec-only PR은 `openspec validate add-activitypub-remote-follow --strict`와 전체 strict validation을 통과한다.
 

@@ -164,6 +164,26 @@
 - Consequences: 새로운 HTTP foundation을 만들지 않고 PROD-241 transport를 재사용하며, remote-post change와 동일 discovery requirement를 서로 덮어쓰지 않는다.
 - Confirmation / Follow-up: actor-scoped/shared inbox 통합 테스트로 routing과 Follow handler 호출을 검증하고 unsupported activity가 follow side effect를 만들지 않는지 확인한다.
 
+### Inbound Follow/Undo는 공통 core lifecycle의 Notification source integration을 보존한다
+
+- Decision Date: 2026-07-20
+- Status: Accepted
+- Context / Problem: PROD-243의 verified handler가 relation/request/count를 변경하지만, Notification 계약이 ActivityPub ingress를 제외해 Local Recipient의 새 established source에 Follow Notification이 누락되고 Undo cleanup도 실행되지 않았다.
+- Decision Outcome: concrete Follow/Undo handler는 기존 Activity 검증 뒤 공통 core public action을 호출한다. core action은 relation/request/count transaction commit 이후 `add-in-app-notifications`의 Notification create/delete를 await/catch하며, Fedify adapter는 relation mutation이나 Notification 호출을 중복 구현하지 않는다.
+- Alternatives Considered: Fedify handler에서 Notification 직접 호출, 기존 ingress 제외 유지, Notification을 relation transaction에 포함.
+- Consequences: OPEN 신규 established relation만 create lifecycle을 실행하고 APPROVAL_REQUIRED pending·duplicate/no-op은 실행하지 않는다. Undo도 established relation을 실제 삭제한 경우만 cleanup하며 Notification 오류는 ActivityPub 성공이나 source transaction을 rollback하지 않는다. Follow/Undo의 Activity 검증, correlation, actor materialization과 transport 계약은 바뀌지 않는다.
+- Confirmation / Follow-up: PROD-380이 production listener부터 DB/Notification까지의 wiring, duplicate/concurrent idempotency, pending/no-op 제외와 create/delete 실패 격리를 검증하고 PROD-361 archive gate를 block한다.
+
+### Follow flow는 저장된 Profile origin pair에서 파생한다
+
+- Decision Date: 2026-07-21
+- Status: Accepted
+- Context / Problem: 공통 core action이 caller에게 `ACTIVITYPUB_INBOUND`/`LOCAL_OUTBOUND` direction을 받으면 DB에 저장된 Profile origin과 같은 사실을 중복 표현하고, 값과 실제 pair가 어긋나는 불가능한 조합을 추가한다. direction 문자열 자체는 Activity가 검증됐다는 증거도 아니다.
+- Decision Outcome: `followProfile`과 `unfollowProfile`은 caller-supplied direction을 받지 않는다. core action은 저장된 Follower/Followee Profile과 Instance kind/state를 조회해 Local→Local, Local→ActivityPub outbound와 ActivityPub→Local inbound를 파생하고 ActivityPub→ActivityPub을 거부한다. verified Activity actor/object/recipient 판정은 계속 Fedify concrete handler가 소유한다.
+- Alternatives Considered: public direction enum 유지, local/outbound/inbound별 public core entrypoint 분리.
+- Consequences: GraphQL과 Fedify caller가 같은 profile-pair input을 사용하며 origin pair가 lifecycle과 delivery 분기의 단일 source of truth가 된다. 임의 core caller가 verified Activity를 증명하는 별도 token은 추가하지 않으며, Fedify 검증 경계는 production listener 통합 테스트로 고정한다.
+- Confirmation / Follow-up: PROD-380이 origin pair matrix와 production listener → concrete handler → common core → DB/Notification 흐름을 검증한다.
+
 ### 최종 통합 검증과 archive는 PROD-361이 소유한다
 
 - Decision Date: 2026-07-15
