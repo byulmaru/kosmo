@@ -11,7 +11,7 @@
 **Goals:**
 
 - 하나의 고정된 공개 `PostActionBar` API로 다섯 액션의 순서, optional 표시, 상태와 callback 경계를 제공한다.
-- selected와 처리 상태를 독립적으로 모델링해 selected+pending을 손실 없이 표현한다.
+- selected를 지원하는 Repost·Bookmark 및 선행 계약이 의미를 제공한 Reaction에서 selected와 처리 상태를 독립적으로 모델링해 selected+pending을 손실 없이 표현한다. Reply에는 selected를 만들지 않는다.
 - count를 K/M 단위의 최대 네 글자 표현으로 제한해 지원 폭에서 한 행 배치를 검증 가능하게 한다.
 - 같은 React Native 구현이 native와 Web에서 최소 44×44 입력 영역과 접근성 metadata를 제공한다.
 - UI, surface 배치, 실제 데이터 연결을 각 구현 이슈가 독립적으로 리뷰·검증할 수 있게 하면서 하나의 공유 spec으로 최종 결과를 묶는다.
@@ -36,15 +36,15 @@
 
 ### Recommended Approach
 
-PROD-433에서는 `apps/app/src/components/post`에 공개 `PostActionBar` 하나를 추가하고, 반복되는 Pressable·icon·count·spinner·접근성 처리는 같은 모듈의 비공개 control로 캡슐화한다. 공개 props는 `reply`, `repost`, `reaction`, `bookmark`, `more`의 명시적 optional key로 고정한다. Reply·Repost·Reaction·Bookmark는 callback, 선택적 count, selected 여부와 default·pending·disabled·error 처리 상태를 받는다. More는 callback과 접근성 label만 소비하며 count·selected·처리 상태를 받지 않는다.
+PROD-433에서는 `apps/app/src/components/post`에 공개 `PostActionBar` 하나를 추가하고, 반복되는 Pressable·icon·count·spinner·접근성 처리는 같은 모듈의 비공개 control로 캡슐화한다. 공개 props는 `reply`, `repost`, `reaction`, `bookmark`, `more`의 명시적 optional key로 고정한다. Reply·Repost·Reaction·Bookmark는 callback, 선택적 count와 default·pending·disabled·error 처리 상태를 받는다. Repost·Bookmark와 선행 계약이 의미를 제공한 Reaction만 selected 여부를 추가로 받고, Reply는 selected를 받지 않는다. More는 callback과 접근성 label만 소비하며 count·selected·처리 상태를 받지 않는다.
 
-각 control은 최소 44×44 layout을 사용하고, 내부 glyph는 Figma의 16px icon/count와 4px 간격을 기준으로 배치한다. 행은 전체 사용 가능 폭을 사용하면서 고정 순서로 한 줄에 분배한다. count는 0~999 원문, K/M 단위, 10 미만 단위의 소수 한 자리, `.0` 생략, K→M 반올림 승격과 1,000M 도달 시 `999M` 상한 규칙으로 최대 네 글자를 유지한다. 색상·spacing·typography는 기존 theme token을 사용하고 icon은 기존 `lucide-react-native`에서 시각적으로 대응하는 glyph를 선택한다. pending은 icon 영역만 동일 크기의 spinner로 대체해 count와 행 배치가 흔들리지 않게 한다.
+각 control은 최소 44×44 layout을 사용하고, 내부 glyph는 Figma의 16px icon/count와 4px 간격을 기준으로 배치한다. 행은 전체 사용 가능 폭을 사용하면서 고정 순서로 한 줄에 분배한다. count는 0~999 원문, K/M 단위, 10 미만 단위의 소수 한 자리, `.0` 생략, K→M 반올림 승격과 1,000M 도달 시 `999M` 상한 규칙으로 최대 네 글자를 유지한다. 색상·spacing·typography는 기존 theme token을 사용하고 icon은 기존 `lucide-react-native`에서 시각적으로 대응하는 glyph를 선택한다. pending은 icon 영역만 동일 크기의 spinner로 대체해 count와 행 배치가 흔들리지 않게 한다. 폭 검증은 기존 Storybook의 `kosmoMobile` 390px, `kosmoCompact` 900px, `kosmoFull` 1400px viewport에서 실제 목록·상세 surface 콘텐츠 폭을 사용한다.
 
-PROD-433의 Storybook은 기본, 선택, selected+pending, selected+disabled, selected+error, disabled, error, compact count 경계, count 없음, optional 액션, More callback-only, compact/mobile/web 폭을 각각 검토할 수 있게 한다. 처리 상태의 시각 표현은 selected의 primary 표현보다 우선하되 selected의 의미와 접근성 상태는 유지한다. 상호작용 검증은 default·selected·error의 callback 호출, pending·disabled의 차단, More callback, keyboard/touch activation과 접근성 state를 확인한다. 이 단계에서는 `PostListItem`, `PostLayout`, route나 Relay 생성물을 수정하지 않는다.
+PROD-433의 Storybook은 Reply의 기본·pending·disabled·error, selected 지원 액션의 기본·선택·selected+pending·selected+disabled·selected+error·disabled·error, compact count 경계, count 없음, optional 액션, More callback-only와 390px·900px·1400px 폭을 각각 검토할 수 있게 한다. 처리 상태의 시각 표현은 selected의 primary 표현보다 우선하되 selected의 의미와 접근성 상태는 유지한다. 상호작용 검증은 default·selected·error의 callback 호출, pending·disabled의 차단, More callback, keyboard/touch activation과 접근성 state를 확인한다. 이 단계에서는 `PostListItem`, `PostLayout`, route나 Relay 생성물을 수정하지 않는다.
 
 PROD-434는 준비된 `PostActionBar`를 목록·상세의 게시글 콘텐츠 영역에 배치하고, 게시글 상세 navigation과 action Pressable이 중첩 활성화되지 않도록 현재 surface의 interactive layer 경계를 정리한다. production surface는 다섯 액션을 모두 제공하며, Post Kind·Post Visibility·권한상 실행할 수 없는 액션은 optional prop을 생략하지 않고 disabled 상태로 표현한다.
 
-PROD-432는 선행 action 구현의 실제 fragment/mutation 결과를 surface adapter에서 `PostActionBar` 상태로 변환한다. viewer-independent count와 선택 Profile별 selected 상태의 기존 Relay cache 경계를 유지하고, action별 pending/error를 분리한다. guest의 Reply·Repost·Reaction·Bookmark activation은 인증 여부만으로 숨기거나 비활성화하지 않고 상위 인증 진입 계약으로 위임하되 이 change에서 임시 인증 화면이나 목적지를 만들지 않는다. More callback은 surface에서 접근 가능한 최소 팝업을 열고 guest도 사용할 수 있는 `링크 복사`로 canonical Post URL을 clipboard에 복사한다. 모든 자식과 선행 action이 준비된 뒤 목록·상세의 동일 계약, Profile 전환, 성공·실패·재시도, disabled 정책 및 More 링크 복사를 통합 검증하고 공유 change를 archive한다.
+PROD-432는 선행 action 구현의 실제 fragment/mutation 결과를 surface adapter에서 `PostActionBar` 상태로 변환한다. viewer-independent count와 선택 Profile별 selected 상태의 기존 Relay cache 경계를 유지하고, action별 pending/error를 분리한다. Reply는 작성 이력이나 composer 열림을 selected로 변환하지 않는다. guest의 Reply·Repost·Reaction·Bookmark activation은 인증 여부만으로 숨기거나 비활성화하지 않고 상위 인증 진입 계약으로 위임하되 이 change에서 임시 인증 화면이나 목적지를 만들지 않는다. More callback은 surface에서 접근 가능한 최소 팝업을 열고 guest도 사용할 수 있는 `링크 복사`로 canonical Post URL을 clipboard에 복사한다. canonical URL은 Web의 현재 origin 또는 Native의 검증된 `EXPO_PUBLIC_WEB_ORIGIN`과 기존 `/{relativeHandle}/{postId}` route를 결합하며 API origin·native deep link·query·hash를 사용하지 않는다. 모든 자식과 선행 action이 준비된 뒤 목록·상세의 동일 계약, Profile 전환, 성공·실패·재시도, disabled 정책 및 More 링크 복사를 통합 검증하고 공유 change를 archive한다.
 
 ### Allowed Alternatives
 
@@ -70,6 +70,7 @@ PROD-432는 선행 action 구현의 실제 fragment/mutation 결과를 surface a
 - [선행 action 이슈의 공개 결과가 달라질 수 있음] → Action Bar는 표시 상태와 callback만 소비하고, adapter는 PROD-432에서 선행 계약이 확정된 뒤 연결한다.
 - [More 팝업 구현이 공통 컴포넌트에 결합될 수 있음] → PROD-433은 callback-only로 유지하고 PROD-432 surface 통합이 팝업과 clipboard를 소유한다.
 - [공유 clipboard 추상화가 없어 링크 복사를 구현할 수 없음] → PROD-432 구현 시점에 기존 추상화를 다시 확인하고, 없으면 Expo 호환 clipboard package만 제한적으로 추가한다.
+- [Web과 Native가 서로 다른 링크 authority를 사용할 수 있음] → canonical web origin과 기존 Post route로 절대 URL을 만들고 API origin·native deep link를 배제한 동일 fixture를 공유한다.
 
 ## Migration Plan
 
