@@ -208,10 +208,6 @@ async function verifyCatalog(sql) {
     WHERE schemaname = 'public' AND tablename = 'post'
   `;
   assert.match(
-    indexes.find(({ name }) => name === 'post_repost_source_id_index')?.definition ?? '',
-    /CREATE INDEX .+ \(repost_source_id\)$/,
-  );
-  assert.match(
     indexes.find(({ name }) => name === 'post_active_repost_profile_source_unique')?.definition ??
       '',
     /CREATE UNIQUE INDEX .+ \(profile_id, repost_source_id\) WHERE .+state.+ACTIVE.+current_content_id IS NULL.+repost_source_id IS NOT NULL/,

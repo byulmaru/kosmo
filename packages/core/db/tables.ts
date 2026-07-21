@@ -307,7 +307,6 @@ export const Posts = pgTable(
   },
   (table) => [
     index().on(table.profileId, table.id.desc()),
-    index().on(table.repostSourceId),
     uniqueIndex('post_active_repost_profile_source_unique')
       .on(table.profileId, table.repostSourceId)
       .where(
