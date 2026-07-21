@@ -25,3 +25,6 @@ apps/app/ios/
 
 # Figma MCP 등 에이전트 도구가 레포 루트에 떨어뜨리는 임시 산출물(스크린샷 등).
 .tmp-*
+
+# 로컬 Superpowers 설계·계획 문서는 에이전트가 생성한 산출물입니다.
+/docs/superpowers/
