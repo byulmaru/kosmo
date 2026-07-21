@@ -399,7 +399,11 @@ export const Reactions = pgTable(
     type: text('type').notNull(),
     createdAt: createdAt(),
   },
-  (table) => [unique().on(table.postId, table.type, table.profileId), index().on(table.profileId)],
+  (table) => [
+    unique().on(table.postId, table.type, table.profileId),
+    index().on(table.profileId),
+    index().on(table.postId, table.type, table.createdAt.desc(), table.id.desc()),
+  ],
 );
 
 export const Sessions = pgTable(
