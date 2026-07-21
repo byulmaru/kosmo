@@ -88,7 +88,7 @@ GraphQL API는 `addReaction` mutation의 input으로 `postId: ID!`와 `type: Str
 #### Scenario: 허용되지 않은 GraphQL Type
 
 - **WHEN** `addReaction`의 `type`에 허용 목록 밖 문자열을 전달한다
-- **THEN** GraphQL API는 `VALIDATION_ERROR` 오류를 반환한다
+- **THEN** GraphQL API는 `VALIDATION` 오류를 반환한다
 - **AND** 오류의 field는 `type`이다
 - **AND** Reaction을 저장하지 않는다
 

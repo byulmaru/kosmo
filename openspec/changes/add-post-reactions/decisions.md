@@ -91,7 +91,7 @@
 - Context / Problem: PROD-404는 exact Unicode Type을 GraphQL에서 표현하고 Post와 현재 Type을 식별하는 add input 및 멱등 payload를 확정해야 한다.
 - Decision Outcome: GraphQL은 `addReaction(input: { postId: ID!, type: String! })`을 제공한다. `postId`는 concrete `Post` global ID만 허용하고 `type`은 canonical Unicode 문자열을 그대로 받는다. 성공 payload는 `AddReactionPayload.reaction: Reaction!`만 반환하며 신규 생성 여부는 공개하지 않는다.
 - Alternatives Considered: GraphQL enum은 canonical Unicode와 별도 symbolic mapping을 만들고 허용 목록 변경을 schema 변경에 결합한다. 별도 Reaction Type object나 opaque Type ID는 승인되지 않은 registry identity를 선결정한다. payload의 `created` boolean은 Notification 내부 분기를 공개 API에 누출한다.
-- Consequences: 허용 목록 밖 문자열은 `VALIDATION_ERROR`와 `field = type`으로 거부한다. 반복 add는 기존 Reaction과 같은 Node ID를 반환한다. service는 후속 Notification 연결을 위해 신규/기존 관계를 내부적으로 구분할 수 있다.
+- Consequences: 허용 목록 밖 문자열은 `VALIDATION`과 `field = type`으로 거부한다. 반복 add는 기존 Reaction과 같은 Node ID를 반환한다. service는 후속 Notification 연결을 위해 신규/기존 관계를 내부적으로 구분할 수 있다.
 - Confirmation / Follow-up: GraphQL schema snapshot과 API integration test에서 input/payload shape, exact 문자열 validation, 반복 요청의 동일 Node ID를 검증한다.
 
 ### Reaction은 최소 필드의 Relay Node로 노출한다
