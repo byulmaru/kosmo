@@ -15,6 +15,23 @@
 - **THEN** 시스템은 요청을 validation 오류로 거부한다
 - **AND** Reaction을 저장하지 않는다
 
+### Requirement: Reaction GraphQL Node 계약
+
+API는 Reaction을 opaque global ID, 현재 Type 문자열과 생성 시각을 제공하는 Relay Node로 노출해야 한다(MUST). Reaction Node 조회는 대상 Post의 기존 조회 정책을 그대로 적용해야 한다(MUST).
+
+#### Scenario: Reaction Node 노출
+
+- **WHEN** viewer가 조회할 수 있는 Post의 Reaction Node를 조회한다
+- **THEN** API는 `id`, `type`, `createdAt`을 제공한다
+- **AND** `id`는 concrete `Reaction` typename과 database UUID를 포함한 opaque global ID다
+- **AND** `type`은 저장된 정확한 Unicode 문자열이다
+
+#### Scenario: 조회할 수 없는 Reaction Node
+
+- **WHEN** viewer가 대상 Post를 조회할 수 없는 Reaction global ID를 조회한다
+- **THEN** Node 조회는 `null`을 반환한다
+- **AND** API는 Reaction 또는 Post의 존재 여부를 추가로 노출하지 않는다
+
 ### Requirement: Reaction 유일성과 공존
 
 시스템은 같은 Profile/Post/Reaction Type 조합에 Reaction을 하나만 유지해야 하며(MUST), 같은 Profile과 Post에 서로 다른 Reaction Type이 함께 존재하는 것을 허용해야 한다(MUST).
@@ -33,6 +50,15 @@
 
 Active Account의 Member인 Active/Normal Local Profile은 조회할 수 있는 Post에 허용 Reaction Type을 추가할 수 있어야 하며(MUST), 같은 조합의 반복·동시 추가는 기존 Reaction을 유지한 성공 결과여야 한다(MUST).
 
+GraphQL API는 `addReaction` mutation의 input으로 `postId: ID!`와 `type: String!`을 받아야 하며(MUST), 성공 payload는 `reaction: Reaction!`을 반환해야 한다(MUST). 공개 payload는 신규 생성 여부를 노출해서는 안 된다(MUST NOT).
+
+#### Scenario: GraphQL Reaction 추가 계약
+
+- **WHEN** 권한 있는 Profile이 `addReaction`에 Post global ID와 허용 Type 문자열을 전달한다
+- **THEN** API는 `AddReactionPayload.reaction`으로 현재 Reaction Node를 반환한다
+- **AND** `postId`는 concrete `Post` global ID만 허용한다
+- **AND** payload는 `created` 또는 동등한 신규 생성 여부를 노출하지 않는다
+
 #### Scenario: 새 Reaction 추가
 
 - **WHEN** 권한 있는 Local Profile이 조회 가능한 Post에 아직 없는 허용 Reaction Type을 추가한다
@@ -44,6 +70,7 @@ Active Account의 Member인 Active/Normal Local Profile은 조회할 수 있는 
 - **WHEN** 권한 있는 Profile이 이미 존재하는 같은 Post/Type Reaction을 다시 추가한다
 - **THEN** 시스템은 기존 Reaction을 유지한 멱등 성공 결과를 반환한다
 - **AND** 추가 Reaction을 생성하지 않는다
+- **AND** GraphQL payload는 기존 Reaction과 같은 global ID의 Node를 반환한다
 
 #### Scenario: 같은 Reaction 동시 추가
 
@@ -54,8 +81,16 @@ Active Account의 Member인 Active/Normal Local Profile은 조회할 수 있는 
 #### Scenario: 조회할 수 없는 Post
 
 - **WHEN** 행동 주체 Profile이 대상 Post의 조회 정책을 통과하지 못한다
-- **THEN** 시스템은 Reaction 추가를 권한 오류로 거부한다
+- **THEN** GraphQL API는 `NOT_FOUND` 오류로 요청을 거부한다
+- **AND** 존재하지 않는 Post와 조회할 수 없는 Post를 구분하지 않는다
 - **AND** Reaction과 Notification을 생성하지 않는다
+
+#### Scenario: 허용되지 않은 GraphQL Type
+
+- **WHEN** `addReaction`의 `type`에 허용 목록 밖 문자열을 전달한다
+- **THEN** GraphQL API는 `VALIDATION_ERROR` 오류를 반환한다
+- **AND** 오류의 field는 `type`이다
+- **AND** Reaction을 저장하지 않는다
 
 ### Requirement: Owner의 멱등 Reaction 삭제
 
