@@ -51,27 +51,30 @@ Implement tasks from an OpenSpec change.
    - If `state: "all_done"`: congratulate, suggest archive
    - Otherwise: proceed to implementation
 
-4. **Verify authority independently**
+4. **Read context files and discover upstream references**
+
+   Read every file path listed under `contextFiles` from the apply instructions output.
+   Use these artifacts to identify their declared canonical documents, Linear issues,
+   and requirement statements, but do not treat the OpenSpec text as authority yet.
+   The files depend on the schema being used:
+   - **spec-driven-decisions**: proposal, specs, design, decisions, tasks
+   - **spec-driven**: proposal, specs, design, tasks
+   - Other schemas: follow the contextFiles from CLI output
+
+5. **Verify authority independently**
 
    Before treating any OpenSpec text as binding:
-   - Re-read the applicable canonical `docs/domain` and `docs/design` files from the
+   - Re-read the referenced canonical `docs/domain` and `docs/design` files from the
      current branch.
-   - Fetch the latest Linear issue bodies, relations, and contract-changing comments
-     directly from Linear. Do not rely on summaries copied into OpenSpec.
+   - Fetch the referenced Linear issue bodies, relations, and contract-changing
+     comments directly from Linear. Do not rely on summaries copied into OpenSpec.
+   - If an upstream reference is missing or ambiguous, pause instead of guessing.
 
    OpenSpec, a PR, a test, a future issue, or an excluded scope cannot prove that an
    upstream product requirement exists. `Status: Active` means only that the
    authority-traced decision currently applies inside the change. If a decision is
    `Upstream Change Required` or `Blocked`, do not implement it; update and approve
    canonical/Linear upstream sources first.
-
-5. **Read context files**
-
-   Read every file path listed under `contextFiles` from the apply instructions output.
-   The files depend on the schema being used:
-   - **spec-driven-decisions**: proposal, specs, design, decisions, tasks
-   - **spec-driven**: proposal, specs, design, tasks
-   - Other schemas: follow the contextFiles from CLI output
 
 6. **Show current progress**
 
