@@ -19,10 +19,10 @@
 - Decision Date: 2026-07-21
 - Status: Accepted
 - Context / Problem: Reply·Repost·Reaction·Bookmark의 selected를 pending·disabled·error와 같은 단일 상태 값으로 모델링하면 selected 액션이 요청 중일 때 선택 의미를 잃고 조합 상태를 표현할 수 없다. More의 누름이나 팝업 열림은 지속적인 의미적 선택 상태가 아니다.
-- Decision Outcome: Reply·Repost·Reaction·Bookmark의 `selected` 의미는 처리 상태(default·pending·disabled·error)와 독립적으로 유지한다. pending은 icon을 spinner로 바꾸고 입력을 차단하지만 selected 접근성 의미를 보존한다. disabled는 입력을 차단하고, error는 danger 표현과 재시도 입력을 허용한다. More는 count·selected·처리 상태 없이 callback과 접근성 label만 받는다.
+- Decision Outcome: Reply·Repost·Reaction·Bookmark의 `selected` 의미는 처리 상태(default·pending·disabled·error)와 독립적으로 유지한다. 처리 상태의 시각 표현은 selected의 primary 표현보다 우선한다. pending은 icon을 spinner로 바꾸고 입력을 차단하며, disabled는 비활성 표현으로 입력을 차단하고, error는 danger 표현으로 재시도 입력을 허용한다. 세 조합 모두 selected의 의미와 접근성 상태를 보존한다. More는 count·selected·처리 상태 없이 callback과 접근성 label만 받는다.
 - Alternatives Considered: 하나의 상태 enum에 selected·pending·disabled·error를 모두 넣는 방식은 조합 수가 늘고 selected+pending을 자연스럽게 표현하지 못하므로 채택하지 않았다. pending 동안 selected를 숨기는 방식은 실제 viewer-relative 상태를 왜곡하므로 채택하지 않았다.
-- Consequences: 상위 계층은 선택 여부와 요청 처리 상태를 별도로 공급한다. component test와 통합 테스트에 selected+pending 조합이 필수다.
-- Confirmation / Follow-up: Storybook과 component test에서 selected+pending, callback 차단 및 접근성 selected+busy를 함께 검증한다.
+- Consequences: 상위 계층은 선택 여부와 요청 처리 상태를 별도로 공급한다. component test와 통합 테스트에 selected+pending·selected+disabled·selected+error 조합이 필수다.
+- Confirmation / Follow-up: Storybook과 component test에서 세 조합의 시각 우선순위, callback 허용 여부 및 접근성 selected와 처리 상태를 함께 검증한다.
 
 ### More 컴포넌트 경계와 링크 복사 통합을 분리
 
@@ -76,7 +76,7 @@
 
 ## Remaining Decisions
 
-- 없음.
+- Reaction count 집계와 selected 의미는 PROD-417·PROD-418이 해당 기능의 공개 계약에서 결정한다. PROD-432는 그 결과를 재정의하지 않고 소비하며, 두 의미가 확정되기 전에는 실제 Reaction 상태 연결과 최종 archive를 완료하지 않는다.
 
 ## Superseded Decisions
 

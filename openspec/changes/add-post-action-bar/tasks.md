@@ -16,15 +16,15 @@ Android·iOS·Web에서 공유하며 고정 순서, optional 액션, compact cou
 **Verification**
 
 - 고정 순서, optional 표시, count 유무와 compact count 경계를 렌더링 검증한다.
-- Reply·Repost·Reaction·Bookmark의 default·selected·selected+pending·disabled·error 시각 표현과 callback 호출·차단·재시도를 검증한다.
+- Reply·Repost·Reaction·Bookmark의 default·selected·selected+pending·selected+disabled·selected+error·disabled·error 시각 표현과 callback 호출·차단·재시도를 검증한다.
 - compact·mobile·web Storybook에서 한 행, 44×44 target과 layout을 검토한다.
 - keyboard/touch activation과 role·label·selected·busy·disabled metadata를 검증한다.
 - React Native type/Relay check, Storybook build와 관련 component test를 통과시킨다.
 
 - [ ] 1.1 고정 공개 API와 optional 액션으로 Post Action Bar의 표시·입력 계약을 구현한다.
 - [ ] 1.2 theme token과 기존 icon dependency를 사용해 상태 표현, compact count, 한 행 반응형 배치, 최소 interactive target 및 접근성 metadata를 구현한다.
-- [ ] 1.3 기본·선택·selected+pending·disabled·error·compact count 경계·optional 액션·More callback-only·지원 폭의 Storybook 상태 카탈로그를 추가한다.
-- [ ] 1.4 callback 호출·입력 차단·재시도·count 경계·More 상태 제외·접근성 계약의 component test를 추가하고 관련 검증 명령을 통과시킨다.
+- [ ] 1.3 기본·선택·selected+pending·selected+disabled·selected+error·disabled·error·compact count 경계·optional 액션·More callback-only·지원 폭의 Storybook 상태 카탈로그를 추가한다.
+- [ ] 1.4 처리 상태의 시각 우선순위, callback 호출·입력 차단·재시도·count 경계·More 상태 제외·접근성 계약의 component test를 추가하고 관련 검증 명령을 통과시킨다.
 
 ## 2. PROD-434 Post surface 배치
 
@@ -76,10 +76,10 @@ Home·Profile Post List와 Post 상세가 같은 Post Action Bar를 본문 inter
 - 모든 구현 자식과 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425 완료, OpenSpec task 정합성과 canonical 문서·Linear·OpenSpec·코드 일치를 확인한다.
 - archive 전후 strict validation을 통과시킨다.
 
-- [ ] 3.1 구현 자식과 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425의 완료·공개 계약을 확인하고 실제 Post 상태를 공통 Action Bar 입력으로 연결할 경계를 정리한다.
+- [ ] 3.1 구현 자식과 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425의 완료·공개 계약을 확인하고, 특히 PROD-417·PROD-418의 Reaction count·selected 의미가 확정된 뒤 실제 Post 상태를 공통 Action Bar 입력으로 연결할 경계를 정리한다.
 - [ ] 3.2 목록·상세에서 기존 Reply·Repost·Reaction·Bookmark의 count, selected, callback과 액션별 처리 상태를 공통 Action Bar에 연결한다.
 - [ ] 3.3 선택 Profile cache 경계, Post Kind·Post Visibility·권한별 disabled, guest 인증 위임과 action별 pending·failure·retry 동작을 적용한다.
-- [ ] 3.4 More callback에 접근 가능한 최소 팝업과 guest도 사용할 수 있는 canonical Post URL `링크 복사`를 연결한다.
+- [ ] 3.4 More callback에 접근 가능한 최소 팝업과 guest도 사용할 수 있는 canonical Post URL `링크 복사`를 연결한다. 공유 clipboard 추상화가 없으면 Expo 호환 clipboard package를 추가하고 native·Web 동작을 검증한다.
 - [ ] 3.5 Home·Profile 목록·Post 상세의 실제 성공·중복 차단·실패 복구·Profile 전환·disabled 정책·guest 위임·More 링크 복사 통합 테스트를 추가하고 전체 관련 검증을 통과시킨다.
 - [ ] 3.6 canonical 문서·Linear·OpenSpec·구현과 모든 task의 정합성을 확인하고 archive 전 strict validation을 통과시킨다.
 - [ ] 3.7 전체 계약 완료 승인을 받은 뒤 공유 change를 archive하고 archive 후 strict validation을 통과시킨다.
