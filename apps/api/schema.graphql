@@ -32,6 +32,13 @@ type ApproveProfileFollowRequestPayload {
   profileFollowRequestId: ID!
 }
 
+type Bookmark implements Node {
+  createdAt: DateTime!
+  id: ID!
+  post: Post!
+  profile: Profile!
+}
+
 input CancelProfileFollowRequestInput {
   id: ID!
 }
@@ -39,6 +46,14 @@ input CancelProfileFollowRequestInput {
 type CancelProfileFollowRequestPayload {
   followerProfile: Profile!
   profileFollowRequestId: ID!
+}
+
+input CreateBookmarkInput {
+  postId: ID!
+}
+
+type CreateBookmarkPayload {
+  bookmark: Bookmark!
 }
 
 input CreatePostInput {
@@ -114,6 +129,7 @@ type MarkNotificationReadPayload {
 type Mutation {
   approveProfileFollowRequest(input: ApproveProfileFollowRequestInput!): ApproveProfileFollowRequestPayload!
   cancelProfileFollowRequest(input: CancelProfileFollowRequestInput!): CancelProfileFollowRequestPayload!
+  createBookmark(input: CreateBookmarkInput!): CreateBookmarkPayload!
   createPost(input: CreatePostInput!): CreatePostPayload!
   createProfile(input: CreateProfileInput!): CreateProfilePayload!
   deleteProfile(input: DeleteProfileInput!): DeleteProfilePayload!

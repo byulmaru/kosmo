@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 `proposal.md`, 네 capability의 delta specs, `design.md`, canonical Bookmark 문서와 `PROD-391` 부모/자식 이슈 구조를 반영한다. 현재 요청인 `PROD-396` 저장 slice에 필요한 선택과 후속 API·client 구현 전에 확정할 선택을 구분한다. 저장, pagination과 공용 route에 관한 제안은 2026-07-20 OpenSpec Gate에서 승인되었다.
+이 기록은 `proposal.md`, 네 capability의 delta specs, `design.md`, canonical Bookmark 문서와 `PROD-391` 부모/자식 이슈 구조를 반영한다. 초기 `PROD-396` 저장 slice에서 확정한 선택과 현재 `PROD-408` 생성 slice 및 후속 API·client 구현 전에 확정할 선택을 구분한다. 저장, pagination과 공용 route에 관한 제안은 2026-07-20 OpenSpec Gate에서 승인되었다.
 
 ## Decision Records
 
@@ -74,15 +74,38 @@
 - Consequences: guest는 `/`로 이동하고, 선택 Profile이 없으면 목록 query를 실행하지 않는다. 목록 카드의 control은 상세 navigation보다 자기 동작을 우선해야 한다.
 - Confirmation / Follow-up: 2026-07-20 OpenSpec Gate에서 승인했다. `PROD-420/421`에서 세 플랫폼 route parity, guest/no-Profile, Profile 전환, action event 경계와 connection 격리를 검증한다.
 
+### 멱등 Bookmark 생성 mutation 계약
+
+- Decision Date: 2026-07-21
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/bookmark.md`, `PROD-408` 본문과 2026-07-21 생성 API·책임 경계 확정 댓글
+- Status: Active
+- Context / Problem: Profile/Post 유일성은 확정되어 있지만 순차·동시 중복 요청의 외부 응답과 생성 mutation의 exact GraphQL shape가 열려 있었다.
+- Decision Outcome: `createBookmark(input: { postId })`는 현재 `usingProfile`을 Owner로 사용하고 `CreateBookmarkPayload.bookmark`를 반환한다. Bookmark Node는 ID, Owner Profile, Target Post와 불변 생성 시각을 제공한다. 같은 Profile/Post 요청이 이미 존재하거나 경쟁에서 패하면 기존 Bookmark를 성공으로 반환하고 `createdAt`을 변경하지 않는다.
+- Alternatives Considered: duplicate conflict — 경쟁 winner와 loser의 외부 의미가 달라지고 client 재시도를 복잡하게 만들어 채택하지 않는다. Owner Profile ID 입력 — 현재 actor가 아닌 Profile을 지정할 여지를 만들어 채택하지 않는다. 생성 여부 boolean — 현재 client 계약에 필요한 관계 Node 외 상태를 추가하므로 채택하지 않는다.
+- Consequences: DB unique 제약이 최종 유일성을 보장하며 mutation 응답은 생성·기존 경로에서 같은 shape를 가진다. Relay는 반환된 Bookmark의 Owner/Target 관계를 현재 actor store에 정규화할 수 있다.
+- Confirmation / Follow-up: `PROD-408` core/API 검증에서 순차·동시 중복이 같은 ID와 기존 생성 시각을 반환하는지 확인한다.
+
+### GraphQL 권한 검사와 core persistence 책임 분리
+
+- Decision Date: 2026-07-21
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-408` 본문과 2026-07-21 생성 API·책임 경계 확정 댓글
+- Status: Active
+- Context / Problem: GraphQL context가 이미 Account와 현재 `usingProfile`을 소유하는데 생성 core service가 인증·Account·membership·가시성을 다시 조회하면 권한 경계와 persistence 책임이 중복된다.
+- Decision Outcome: GraphQL resolver가 하나의 transaction 안에서 Account 활성 상태, `usingProfile` membership·상태·locality와 Target Post 조회 가능성을 모두 검증한다. Core service는 검증된 `profileId`, `postId`와 선택적 transaction connection만 받아 Bookmark insert, unique 경쟁 정규화와 row 반환만 수행하며 인증이나 Account·권한·가시성 조회를 하지 않는다.
+- Alternatives Considered: core service가 actor와 Target 권한을 재검증 — transport context와 business persistence 책임을 섞고 같은 조회를 반복해 채택하지 않는다. GraphQL이 DB insert까지 직접 수행 — 공통 생성 persistence action과 집중된 경쟁 처리를 잃어 채택하지 않는다.
+- Consequences: 권한·가시성 실패는 GraphQL integration test가 소유하고 core test는 생성·멱등성·Profile 격리·transaction 참여를 검증한다. Resolver는 권한 검사와 core 호출이 같은 transaction connection을 사용하게 해야 한다.
+- Confirmation / Follow-up: API 검증에서 사용할 수 없는 actor는 `PERMISSION_DENIED`, 없거나 숨겨진 Post는 동일 `NOT_FOUND`인지 확인하고, core test에서 Account 조회 없이 검증된 ID만으로 생성되는지 확인한다.
+
 ## Remaining Decisions
 
-- **PROD-408 — duplicate create 응답:** 기존 Bookmark를 반환하는 idempotent success를 기본안으로 검토한다. 명시적 conflict를 선택할 수도 있으나 어느 쪽이든 row는 하나이며 기존 `createdAt`은 바뀌지 않는다. `PROD-408` 구현 전에 확정한다.
 - **PROD-409 — missing/non-owner delete 응답:** 둘을 구분하지 않는 idempotent success와 nullable deleted ID를 기본안으로 검토한다. 구분 불가능한 not-found 의미도 허용 후보이며 `PROD-409` 구현 전에 확정한다.
-- **PROD-408/410 — GraphQL 공유 shape:** `usingProfile` actor context, `Profile.bookmarks`, owner-only `Bookmark` Node, Post의 viewer-relative Bookmark 관계와 mutation payload를 기본안으로 검토한다. 정확한 공개 field/payload는 두 이슈 구현 전에 함께 확정한다.
+- **PROD-410/420 — GraphQL 목록·viewer-relative shape:** `Profile.bookmarks`와 Post의 viewer-relative Bookmark 관계를 기본안으로 검토한다. 생성 mutation과 Bookmark Node의 기본 관계 shape는 확정됐으며, 목록 connection과 Post 상태 field는 두 이슈 구현 전에 함께 확정한다.
 - **PROD-420 — mutation feedback:** 기존 client 관례인 response-driven 갱신을 기본안으로 검토한다. Relay optimistic update를 선택하면 actor 전환 race와 rollback을 추가 검증한다.
 - **PROD-421 — mobile navigation entry:** `/bookmarks` route는 고정하되 sidebar 외 mobile shell에서의 정확한 진입 control은 구현 전에 확정한다.
 
-위 Remaining Decisions는 `PROD-396` 저장 table·migration·DB 검증의 공개 동작이나 schema shape를 바꾸지 않으므로 해당 slice의 OpenSpec Gate 승인을 막지 않는다. 각 owner 이슈에 착수하기 전 관련 결정을 `Decision Records`에 추가하고 사용자 승인을 받아야 한다.
+위 Remaining Decisions는 현재 `PROD-408` 생성 mutation 계약을 막지 않는다. 각 owner 이슈에 착수하기 전 관련 결정을 `Decision Records`에 추가하고 사용자 승인을 받아야 한다.
 
 ## Superseded Decisions
 

@@ -41,6 +41,23 @@ test('follow mutation payloads expose both updated profiles', () => {
   assert.equal(unfollowPayload.getFields().profile, undefined);
 });
 
+test('exposes the Bookmark creation and relationship contract', () => {
+  const mutation = schema.getMutationType();
+  const input = schema.getType('CreateBookmarkInput');
+  const payload = schema.getType('CreateBookmarkPayload');
+  const bookmark = schema.getType('Bookmark');
+
+  assert.equal(String(mutation?.getFields().createBookmark?.type), 'CreateBookmarkPayload!');
+  assert.ok(isInputObjectType(input));
+  assert.equal(String(input.getFields().postId.type), 'ID!');
+  assert.ok(isObjectType(payload));
+  assert.equal(String(payload.getFields().bookmark.type), 'Bookmark!');
+  assert.ok(isObjectType(bookmark));
+  assert.equal(String(bookmark.getFields().profile.type), 'Profile!');
+  assert.equal(String(bookmark.getFields().post.type), 'Post!');
+  assert.equal(String(bookmark.getFields().createdAt.type), 'DateTime!');
+});
+
 test('exposes the profile follow request lifecycle contract', () => {
   const profile = schema.getType('Profile');
   const request = schema.getType('ProfileFollowRequest');
