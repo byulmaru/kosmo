@@ -61,7 +61,6 @@
 - **WHEN** local profile이 remote ActivityPub profile을 follow하고 outbound Follow activity를 보낸다
 - **THEN** 시스템은 outbound Follow activity identity를 configured canonical origin과 `ProfileFollow` 또는 `ProfileFollowRequest` id에서 파생해야 한다
 - **AND** actor/object URI는 저장된 follower/followee actor identity에서, generation timestamp는 해당 row의 immutable createdAt에서 파생해야 한다
-- **AND** outbound approval-required request가 Accept로 established relation에 승격되면 `ProfileFollowRequest.id`와 `createdAt`을 새 `ProfileFollow` row에 그대로 사용해 하나의 logical Follow identity/generation을 유지해야 한다
 - **AND** remote Accept 또는 Reject에서 Fedify의 기본 cross-origin 검증을 통과한 typed Follow가 kosmo outbound Follow URI를 id로 포함하면 그 URI가 현재 저장된 outbound Follow identity와 일치해야 기존 follow 관계에 대응시킬 수 있어야 한다
 - **AND** 시스템은 cross-origin embedded Follow를 신뢰하도록 Fedify origin 검증을 우회하지 않아야 하며, authoritative origin에서 조회되지 않은 cross-origin object는 follow graph/request side effect 없이 무시할 수 있어야 한다
 - **AND** Fedify가 typed object로 제공한 Follow에 kosmo outbound Follow URI가 없으면 remote Follow id를 compatibility hint로만 취급하고 actor/object가 relation과 저장된 actor identity에서 파생한 actor/object와 일치하며 Follow의 `published`가 현재 request/relation의 immutable `createdAt`과 정확히 일치할 때만 기존 follow generation에 대응시킬 수 있어야 한다

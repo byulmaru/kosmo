@@ -104,16 +104,6 @@
 - Consequences: 원본 outbound Follow의 `published`를 보존하지 않는 구현의 ID-less/non-kosmo response는 side effect 없이 무시한다. 새 schema, history, lock 또는 reconciliation 흐름 없이 이전 generation response가 새 projection을 변경하지 못한다.
 - Confirmation / Follow-up: 같은-generation fallback Accept/Reject는 처리하고 missing/mismatched Follow `published`와 cancel-refollow 뒤 늦은 fallback Accept는 새 request/relation을 변경하지 않는지 PROD-244가 검증한다.
 
-### Accept 승격은 outbound Follow identity와 generation을 relation에 승계한다
-
-- Decision Date: 2026-07-21
-- Status: Accepted
-- Context / Problem: APPROVAL_REQUIRED outbound Follow는 request id/createdAt으로 발송되지만 Accept가 새 id/createdAt의 relation을 만들면 이후 unfollow Undo가 remote가 받은 원본 Follow와 다른 identity를 가리킨다.
-- Decision Outcome: Accept는 pending request를 삭제하고 established relation을 만들 때 request의 id와 immutable createdAt을 그대로 사용한다. 이후 기존 unfollow 경로는 relation projection만으로 최초 outbound Follow를 재구성한다.
-- Alternatives Considered: 별도 outbound activity/correlation column 저장, 승인 전 request row를 terminal history로 보존, unfollow에 과거 request lookup 추가.
-- Consequences: schema/history/lookup을 추가하지 않고 request와 relation의 서로 다른 테이블에서 같은 logical Follow identity를 순차적으로 소유한다. 두 row는 한 transaction에서 교체되므로 동시에 존재할 필요가 없다.
-- Confirmation / Follow-up: Accept 승격 relation이 request id/createdAt을 유지하고 승인 후 unfollow의 Undo object가 최초 Follow ID/published/actor/object를 재사용하는지 PROD-244가 검증한다.
-
 ### Remote Follow ID는 advisory이고 generation은 단조 증가한다
 
 - Decision Date: 2026-07-15

@@ -69,7 +69,6 @@
 
 - **WHEN** remote actor가 local actor가 보낸 Follow에 대한 `Accept` activity를 보낸다
 - **THEN** 시스템은 pending `ProfileFollowRequest`이면 request 삭제와 established `ProfileFollow`/count 생성을 같은 transaction에서 수행하고, 이미 established이면 idempotent하게 처리한다
-- **AND** pending request를 established relation으로 승격할 때 `ProfileFollowRequest.id`와 immutable `createdAt`을 `ProfileFollow`에 그대로 승계해 같은 logical outbound Follow identity와 generation을 유지한다
 - **AND** `Accept.actor`는 해당 outbound Follow의 remote followee actor URI와 일치해야 한다
 - **AND** `Accept.object`는 Fedify `getObject()`의 기본 cross-origin 검증을 통과해 typed Follow로 제공된 경우에만 follow response로 처리하며, handler는 `crossOrigin: "trust"`로 embedded object의 origin 검증을 우회하지 않는다
 - **AND** cross-origin embedded Follow는 Fedify가 authoritative origin에서 조회해 typed Follow로 제공한 경우에만 처리하며, 그 Follow의 actor/object는 해당 outbound Follow의 local follower actor URI와 remote followee actor URI에 대응해야 한다
@@ -111,7 +110,6 @@
 - **AND** Fedify `sendActivity`가 실패하더라도 이번 capability는 삭제된 local `ProfileFollow` 관계와 저장 count를 rollback하지 않는다
 - **AND** remote instance 상태가 `UNRESPONSIVE`이면 시스템은 ActivityPub `Undo(Follow)` activity를 발송하지 않는다
 - **AND** 시스템은 현재 `ProfileFollow.id`와 저장된 local/remote actor identity에서 파생한 원본 Follow activity id, actor URI, object URI를 `Undo.object`의 대상 Follow에 사용한다
-- **AND** approval-required Follow에서 승격된 `ProfileFollow`는 최초 request의 id/createdAt을 유지하므로 승인 후 Undo도 remote에 처음 발송한 Follow activity id와 published generation을 사용한다
 - **AND** `Undo(Follow)`를 발송할 때 시스템은 같은 local follower actor URI와 remote followee actor URI pair의 모든 Follow/Undo(Follow)에 사용하는 stable Fedify `orderingKey`를 사용한다
 
 #### Scenario: Preserve suspended remote follow

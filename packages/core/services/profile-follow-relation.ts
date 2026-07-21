@@ -9,38 +9,36 @@ import {
 } from '../db';
 import type { Transaction } from '../db';
 
-type ProfileFollowInput = {
-  readonly createdAt?: Temporal.Instant;
+type ProfileFollowPair = {
   readonly followeeProfileId: string;
   readonly followerProfileId: string;
-  readonly id?: string;
 };
 
 const pairCondition = (
   table: typeof ProfileFollows | typeof ProfileFollowRequests,
-  { followeeProfileId, followerProfileId }: ProfileFollowInput,
+  { followeeProfileId, followerProfileId }: ProfileFollowPair,
 ) =>
   and(
     eq(table.followerProfileId, followerProfileId),
     eq(table.followeeProfileId, followeeProfileId),
   );
 
-export const ensureProfileFollow = async (input: ProfileFollowInput, tx?: Transaction) =>
+export const ensureProfileFollow = async (pair: ProfileFollowPair, tx?: Transaction) =>
   getDatabaseConnection(tx).transaction(async (tx) => {
     const existing = await tx
       .select()
       .from(ProfileFollows)
-      .where(pairCondition(ProfileFollows, input))
+      .where(pairCondition(ProfileFollows, pair))
       .limit(1)
       .then(first);
     if (existing) {
-      await tx.delete(ProfileFollowRequests).where(pairCondition(ProfileFollowRequests, input));
+      await tx.delete(ProfileFollowRequests).where(pairCondition(ProfileFollowRequests, pair));
       return { created: false, profileFollow: existing };
     }
 
     const inserted = await tx
       .insert(ProfileFollows)
-      .values(input)
+      .values(pair)
       .onConflictDoNothing({
         target: [ProfileFollows.followerProfileId, ProfileFollows.followeeProfileId],
       })
@@ -51,25 +49,25 @@ export const ensureProfileFollow = async (input: ProfileFollowInput, tx?: Transa
       (await tx
         .select()
         .from(ProfileFollows)
-        .where(pairCondition(ProfileFollows, input))
+        .where(pairCondition(ProfileFollows, pair))
         .limit(1)
         .then(firstOrThrow));
     if (!profileFollow) {
       throw new Error('Profile follow not found after insert conflict');
     }
 
-    await tx.delete(ProfileFollowRequests).where(pairCondition(ProfileFollowRequests, input));
+    await tx.delete(ProfileFollowRequests).where(pairCondition(ProfileFollowRequests, pair));
 
     const created = inserted !== undefined;
     if (created) {
       await tx
         .update(Profiles)
         .set({ followingCount: sql`${Profiles.followingCount} + 1` })
-        .where(eq(Profiles.id, input.followerProfileId));
+        .where(eq(Profiles.id, pair.followerProfileId));
       await tx
         .update(Profiles)
         .set({ followersCount: sql`${Profiles.followersCount} + 1` })
-        .where(eq(Profiles.id, input.followeeProfileId));
+        .where(eq(Profiles.id, pair.followeeProfileId));
     }
 
     return { created, profileFollow };
