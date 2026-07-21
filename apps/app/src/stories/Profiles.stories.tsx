@@ -465,6 +465,18 @@ export const UnfollowRemovesCachedConnectionEdge: Story = {
   render: () => <FollowingWithFollowedProfile />,
 };
 
+export const UnfollowErrorRestoresCachedConnectionEdge: Story = {
+  parameters: { relay: { mutationError: '언팔로우 실패' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '팔로잉' }));
+    await expect(canvas.findByRole('button', { name: '팔로잉' })).resolves.toBeEnabled();
+    expect(canvas.getByText('코스모 작가')).toBeVisible();
+    expect(canvas.queryByText('아직 팔로잉이 없어요')).not.toBeInTheDocument();
+  },
+  render: () => <FollowingWithFollowedProfile />,
+};
+
 export const ConnectionLoadingErrorEmptyAndContent: Story = {
   render: () => <ConnectionCatalog />,
 };

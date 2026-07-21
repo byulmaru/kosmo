@@ -399,6 +399,31 @@ export const UnfollowOptimisticallyUpdatesBothProfileCounts: Story = {
   render: () => <FollowCacheStory />,
 };
 
+export const UnfollowErrorRollsBackBothProfileCounts: Story = {
+  parameters: { relay: { mutationError: '언팔로우 실패' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewerFollowing = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@selected/following"]',
+    );
+    const targetFollowers = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@followed@remote.example/followers"]',
+    );
+    expect(viewerFollowing).not.toBeNull();
+    expect(targetFollowers).not.toBeNull();
+
+    await userEvent.click(canvas.getByRole('button', { name: '팔로잉' }));
+
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '팔로우 상태를 변경하지 못했습니다.',
+    );
+    await expect(canvas.findByRole('button', { name: '팔로잉' })).resolves.toBeEnabled();
+    expect(within(viewerFollowing!).getByText('42')).toBeVisible();
+    expect(within(targetFollowers!).getByText('17')).toBeVisible();
+  },
+  render: () => <FollowCacheStory />,
+};
+
 export const ProfileSwitcherInteraction: Story = {
   parameters: {
     relay: {
