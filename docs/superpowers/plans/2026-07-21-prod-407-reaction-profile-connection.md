@@ -633,7 +633,7 @@ Expected: 검증 test, 필요한 최소 수정, OpenSpec task 증거만 local co
 
 - Produces: reviewable PROD-407 local branch, complete verification evidence, user-approved stacked Draft PR proposal
 
-- [ ] **Step 1: focused database/API verification**
+- [x] **Step 1: focused database/API verification**
 
 Run:
 
@@ -647,7 +647,7 @@ pnpm --filter @kosmo/api test:integration
 
 Expected: core migration catalog, API typecheck/unit/schema, 전체 API integration test가 모두 PASS한다.
 
-- [ ] **Step 2: repository policy verification**
+- [x] **Step 2: repository policy verification**
 
 Run:
 
@@ -661,7 +661,7 @@ git status --short --branch
 
 Expected: 모든 명령이 exit code 0이고 status에는 의도한 PROD-407 파일만 남거나 clean이다. Prettier가 실패하면 formatter로 해당 파일만 고친 뒤 같은 명령을 다시 실행한다.
 
-- [ ] **Step 3: migration/API diff audit**
+- [x] **Step 3: migration/API diff audit**
 
 다음을 수동으로 확인한다.
 
