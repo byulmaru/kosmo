@@ -4,7 +4,7 @@
 
 [KOSMO Action 컴포넌트](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=88-1005)는 Reply → Repost → Reaction → Bookmark → More 순서, 16px icon/count, 4px 내부 간격, 약 50px 액션 영역과 보조 텍스트 색상을 보여 준다. 다만 현재 Figma에는 pending·disabled·error와 44×44 interactive target이 없다. Figma는 이 change에서 수정하지 않으며 비규범적 시각 참고로만 사용한다. `docs/domain`·`docs/design`은 제품·디자인의 canonical source, Linear는 범위·소유권·의존성의 source, `post-action-bar` spec은 상태·입력·접근성·통합 동작의 규범 계약이다.
 
-공유 change의 계약 부모는 PROD-432다. PROD-433은 독립 UI와 상태 카탈로그를, PROD-434는 production surface 배치를, PROD-432는 준비된 실제 action 상태 연결·More 링크 복사·최종 통합 검증·archive를 소유한다. Reply·Repost·Reaction·Bookmark 자체의 저장·GraphQL·count 집계·selected 의미·권한·Post Kind·Post Visibility 정책은 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425와 canonical 문서의 계약을 재사용한다.
+공유 change의 계약 부모는 PROD-432다. PROD-433은 독립 UI와 상태 카탈로그를, PROD-434는 production surface 배치를, PROD-432는 준비된 실제 action 상태 연결·More 링크 복사·최종 통합 검증·archive를 소유한다. Reply·Repost·Reaction·Bookmark 자체의 저장·GraphQL·count 집계·selected 의미·권한·Content·Reply Parent·Repost Source 관계 조합 및 Post Visibility 정책은 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425와 canonical 문서의 계약을 재사용한다.
 
 ## Goals / Non-Goals
 
@@ -18,7 +18,7 @@
 
 **Non-Goals:**
 
-- Action Bar 내부에서 Relay fragment, mutation, navigation, cache 정책 또는 Post Kind 정책을 소유하는 것
+- Action Bar 내부에서 Relay fragment, mutation, navigation, cache 정책 또는 Content·Reply Parent·Repost Source 관계 조합 정책을 소유하는 것
 - `PostActionBar` 컴포넌트가 More 팝업·clipboard·메뉴 상태를 직접 소유하는 것
 - 링크 복사 외의 More 메뉴 항목이나 guest 인증 목적지·임시 인증 화면을 구현하는 것
 - 액션을 임의 배열로 조립하는 범용 toolbar API나 공개 action leaf 컴포넌트를 제공하는 것
@@ -44,7 +44,7 @@ PROD-433의 Storybook은 Reply의 기본·pending·disabled·error, selected 지
 
 PROD-434는 준비된 `PostActionBar`를 목록·상세의 게시글 콘텐츠 영역에 배치하고, 게시글 상세 navigation과 action Pressable이 중첩 활성화되지 않도록 현재 surface의 interactive layer 경계를 정리한다. production surface는 다섯 액션을 모두 제공하며, PROD-432의 surface adapter가 전달하는 disabled 상태를 optional prop 생략 없이 표현할 수 있게 한다.
 
-PROD-432는 선행 action 구현의 실제 fragment/mutation 결과를 surface adapter에서 `PostActionBar` 상태로 변환한다. adapter는 canonical 계약 전체를 하나의 boolean으로 재사용하지 않고, Post Kind·Post Visibility·대상 관련 조건으로 결정되는 대상 적격성과 현재 실행 주체·세션의 실행 권한을 분리한다. 대상 자체가 부적격하거나 인증된 실행 주체가 권한을 갖지 못하면 disabled를 전달한다. guest에게 `Account.Active`·`Profile.Member`·선택 Profile이 없다는 이유만으로 대상 자체가 적격한 Reply·Repost·Reaction·Bookmark를 disabled로 만들지 않고 상위 인증 진입 계약으로 위임하되, 대상 자체 제한은 guest에게도 disabled로 유지한다. 이 change에서는 임시 인증 화면이나 목적지를 만들지 않는다. count는 선행 action 계약이 제공하는 경우에만 optional로 연결하고, 계약이 없는 액션에 0이나 새 집계를 합성하지 않는다. 제공된 viewer-independent count와 선택 Profile별 selected 상태의 기존 Relay cache 경계를 유지하고, action별 pending/error를 분리한다. Reply는 작성 이력이나 composer 열림을 selected로 변환하지 않는다. More callback은 surface에서 접근 가능한 최소 팝업을 열고 guest도 사용할 수 있는 `링크 복사`로 canonical Post URL을 clipboard에 복사한다. canonical URL은 Web의 현재 origin 또는 Native의 검증된 `EXPO_PUBLIC_WEB_ORIGIN`과 기존 `/{relativeHandle}/{postId}` route를 결합하며 API origin·native deep link·query·hash를 사용하지 않는다. 모든 자식과 선행 action이 준비된 뒤 목록·상세의 동일 계약, Profile 전환, 성공·실패·재시도, disabled 정책 및 More 링크 복사를 통합 검증하고 공유 change를 archive한다.
+PROD-432는 선행 action 구현의 실제 fragment/mutation 결과를 surface adapter에서 `PostActionBar` 상태로 변환한다. adapter는 canonical 계약 전체를 하나의 boolean으로 재사용하지 않고, Content·Reply Parent·Repost Source 관계 조합, Post Visibility와 대상 관련 조건으로 결정되는 대상 적격성과 현재 실행 주체·세션의 실행 권한을 분리한다. Content와 Reply Parent가 없고 Repost Source만 있는 Repost는 Reply·Repost를 disabled로 제공하고, Content가 있는 Post는 관계 조합만으로 네 소셜 액션을 차단하지 않는다. 대상 자체가 부적격하거나 인증된 실행 주체가 권한을 갖지 못하면 disabled를 전달한다. guest에게 `Account.Active`·`Profile.Member`·선택 Profile이 없다는 이유만으로 대상 자체가 적격한 Reply·Repost·Reaction·Bookmark를 disabled로 만들지 않고 상위 인증 진입 계약으로 위임하되, 대상 자체 제한은 guest에게도 disabled로 유지한다. 이 change에서는 임시 인증 화면이나 목적지를 만들지 않는다. count는 선행 action 계약이 제공하는 경우에만 optional로 연결하고, 계약이 없는 액션에 0이나 새 집계를 합성하지 않는다. 제공된 viewer-independent count와 선택 Profile별 selected 상태의 기존 Relay cache 경계를 유지하고, action별 pending/error를 분리한다. Reply는 작성 이력이나 composer 열림을 selected로 변환하지 않는다. More callback은 surface에서 접근 가능한 최소 팝업을 열고 guest도 사용할 수 있는 `링크 복사`로 canonical Post URL을 clipboard에 복사한다. canonical URL은 Web의 현재 origin 또는 Native의 검증된 `EXPO_PUBLIC_WEB_ORIGIN`과 기존 `/{relativeHandle}/{postId}` route를 결합하며 API origin·native deep link·query·hash를 사용하지 않는다. 모든 자식과 선행 action이 준비된 뒤 목록·상세의 동일 계약, Profile 전환, 성공·실패·재시도, disabled 정책 및 More 링크 복사를 통합 검증하고 공유 change를 archive한다.
 
 ### Allowed Alternatives
 
