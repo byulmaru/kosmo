@@ -5,6 +5,26 @@ import { NotFoundError, PermissionDeniedError, ValidationError } from '../error'
 import { reactionTypeSchema } from '../validation';
 import type { Transaction } from '../db';
 
+const requireReactionActor = async (tx: Transaction, actorProfileId: string): Promise<void> => {
+  const actor = await tx
+    .select({ id: Profiles.id })
+    .from(Profiles)
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .where(
+      and(
+        eq(Profiles.id, actorProfileId),
+        eq(Profiles.state, ProfileState.ACTIVE),
+        eq(Instances.kind, InstanceKind.LOCAL),
+        eq(Instances.state, InstanceState.ACTIVE),
+      ),
+    )
+    .limit(1)
+    .then(first);
+  if (!actor) {
+    throw new PermissionDeniedError();
+  }
+};
+
 export const addReaction = async (
   {
     actorProfileId,
@@ -23,23 +43,7 @@ export const addReaction = async (
   }
 
   return getDatabaseConnection(tx).transaction(async (tx) => {
-    const actor = await tx
-      .select({ id: Profiles.id })
-      .from(Profiles)
-      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .where(
-        and(
-          eq(Profiles.id, actorProfileId),
-          eq(Profiles.state, ProfileState.ACTIVE),
-          eq(Instances.kind, InstanceKind.LOCAL),
-          eq(Instances.state, InstanceState.ACTIVE),
-        ),
-      )
-      .limit(1)
-      .then(first);
-    if (!actor) {
-      throw new PermissionDeniedError();
-    }
+    await requireReactionActor(tx, actorProfileId);
 
     const post = await tx
       .select({ id: Posts.id })
@@ -92,23 +96,7 @@ export const deleteReaction = async (
   tx?: Transaction,
 ): Promise<{ readonly reactionId: string }> =>
   getDatabaseConnection(tx).transaction(async (tx) => {
-    const actor = await tx
-      .select({ id: Profiles.id })
-      .from(Profiles)
-      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .where(
-        and(
-          eq(Profiles.id, actorProfileId),
-          eq(Profiles.state, ProfileState.ACTIVE),
-          eq(Instances.kind, InstanceKind.LOCAL),
-          eq(Instances.state, InstanceState.ACTIVE),
-        ),
-      )
-      .limit(1)
-      .then(first);
-    if (!actor) {
-      throw new PermissionDeniedError();
-    }
+    await requireReactionActor(tx, actorProfileId);
 
     const reaction = await tx
       .select({ profileId: Reactions.profileId })

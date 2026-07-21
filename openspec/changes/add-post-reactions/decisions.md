@@ -49,7 +49,7 @@
 - Decision Date: 2026-07-20
 - Status: Accepted
 - Context / Problem: 반복·동시 요청이 중복 Reaction이나 불필요한 실패를 만들 수 있다.
-- Decision Outcome: add는 unique conflict를 원자적으로 처리하고 기존 Reaction을 성공 결과로 반환한다. delete는 Owner의 현재 관계를 원자적으로 제거하며 자신이 이미 제거한 같은 조합의 재시도는 성공 no-op으로 처리한다. 명시적 pessimistic lock을 사용하지 않는다.
+- Decision Outcome: add는 unique conflict를 원자적으로 처리하고 기존 Reaction을 성공 결과로 반환한다. delete는 Owner의 현재 관계를 원자적으로 제거하며 자신이 이미 제거한 같은 Reaction ID의 재시도는 성공 no-op으로 처리한다. 명시적 pessimistic lock을 사용하지 않는다.
 - Alternatives Considered: check-then-write만 사용하는 방식은 race가 있고, 명시적 row/table/advisory lock은 복구 가능한 social interaction에 과도하다.
 - Consequences: 실제 caller가 생기기 전에는 service 결과에 신규 생성·실제 삭제 여부를 선제 노출하지 않는다. Notification side effect를 연결하는 PROD-413·419가 필요한 결과 확장과 실패 처리를 함께 검증한다.
 - Confirmation / Follow-up: PROD-404·405의 database-backed concurrency test에서 단일 row와 반복 결과를 검증한다.
