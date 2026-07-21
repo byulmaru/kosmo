@@ -9,7 +9,7 @@ import {
   InstanceState,
   ProfileFollowPolicy,
 } from '@kosmo/core/enums';
-import { eq, ne } from 'drizzle-orm';
+import { eq, ne, sql } from 'drizzle-orm';
 import type { InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -25,6 +25,7 @@ let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
+let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
@@ -42,6 +43,7 @@ describe('inbound Follow and Undo', () => {
       db,
       firstOrThrow,
       Instances,
+      Notifications,
       pg,
       ProfileFollowRequests,
       ProfileFollows,
@@ -78,6 +80,14 @@ describe('inbound Follow and Undo', () => {
     const relation = await db.select().from(ProfileFollows).limit(1).then(firstOrThrow);
     assert.equal(relation.followerProfileId, fixture.remoteProfile.id);
     assert.equal(relation.followeeProfileId, fixture.localProfile.id);
+    assert.equal(
+      await db
+        .select()
+        .from(Notifications)
+        .where(eq(Notifications.sourceId, relation.id))
+        .then((rows) => rows.length),
+      1,
+    );
     assert.equal(sendActivity.mock.calls.length, 1);
     const accept = (sendActivity.mock.calls as unknown as Array<{ arguments: unknown[] }>)[0]
       ?.arguments[2];
@@ -98,6 +108,14 @@ describe('inbound Follow and Undo', () => {
     );
 
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
+    assert.equal(
+      await db
+        .select()
+        .from(Notifications)
+        .where(eq(Notifications.sourceId, relation.id))
+        .then((rows) => rows.length),
+      0,
+    );
     const [local, remote] = await Promise.all([
       db.select().from(Profiles).where(eq(Profiles.id, fixture.localProfile.id)).then(firstOrThrow),
       db
@@ -142,6 +160,45 @@ describe('inbound Follow and Undo', () => {
     assert.equal((await db.select().from(ProfileFollows)).length, 1);
   });
 
+  test('deduplicates concurrent inbound Follow relation, counts, and Notification', async () => {
+    const fixture = await createFixture();
+    const context = createContext({ recipient: localProfileId });
+    const follow = new Follow({ actor: remoteActorUri, object: localActorUri });
+
+    await Promise.all([handleInboundFollow(context, follow), handleInboundFollow(context, follow)]);
+
+    const relation = await db.select().from(ProfileFollows).limit(1).then(firstOrThrow);
+    assert.equal((await db.select().from(ProfileFollows)).length, 1);
+    assert.equal(
+      await db
+        .select()
+        .from(Notifications)
+        .where(eq(Notifications.sourceId, relation.id))
+        .then((rows) => rows.length),
+      1,
+    );
+    assert.equal(
+      (
+        await db
+          .select()
+          .from(Profiles)
+          .where(eq(Profiles.id, fixture.localProfile.id))
+          .then(firstOrThrow)
+      ).followersCount,
+      1,
+    );
+    assert.equal(
+      (
+        await db
+          .select()
+          .from(Profiles)
+          .where(eq(Profiles.id, fixture.remoteProfile.id))
+          .then(firstOrThrow)
+      ).followingCount,
+      1,
+    );
+  });
+
   test('routes shared-inbox approval-required Follow without Accept', async () => {
     await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
     const sendActivity = mock.fn(async () => undefined);
@@ -154,7 +211,97 @@ describe('inbound Follow and Undo', () => {
 
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 1);
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
+    assert.equal((await db.select().from(Notifications)).length, 0);
     assert.equal(sendActivity.mock.calls.length, 0);
+
+    await handleInboundUndo(
+      context,
+      new Undo({
+        actor: remoteActorUri,
+        object: new Follow({ actor: remoteActorUri, object: localActorUri }),
+      }),
+    );
+    assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
+    assert.equal((await db.select().from(Notifications)).length, 0);
+  });
+
+  test('keeps inbound Follow successful when Notification creation fails', async () => {
+    const fixture = await createFixture();
+    await db.execute(
+      sql`ALTER TABLE ${Notifications} ADD CONSTRAINT notification_inbound_handler_create_failure CHECK (false) NOT VALID`,
+    );
+
+    try {
+      await handleInboundFollow(
+        createContext({ recipient: localProfileId }),
+        new Follow({ actor: remoteActorUri, object: localActorUri }),
+      );
+    } finally {
+      await db.execute(
+        sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_inbound_handler_create_failure`,
+      );
+    }
+
+    assert.equal((await db.select().from(ProfileFollows)).length, 1);
+    assert.equal((await db.select().from(Notifications)).length, 0);
+    assert.equal(
+      (
+        await db
+          .select()
+          .from(Profiles)
+          .where(eq(Profiles.id, fixture.localProfile.id))
+          .then(firstOrThrow)
+      ).followersCount,
+      1,
+    );
+  });
+
+  test('keeps inbound Undo successful when Notification cleanup fails', async () => {
+    await createFixture();
+    const context = createContext({ recipient: localProfileId });
+    await handleInboundFollow(
+      context,
+      new Follow({ actor: remoteActorUri, object: localActorUri }),
+    );
+    const relation = await db.select().from(ProfileFollows).limit(1).then(firstOrThrow);
+    await db.execute(sql`
+      CREATE FUNCTION fail_inbound_notification_delete() RETURNS trigger
+      LANGUAGE plpgsql AS $$
+      BEGIN
+        RAISE EXCEPTION 'notification delete failed';
+      END;
+      $$
+    `);
+    await db.execute(sql`
+      CREATE TRIGGER notification_inbound_handler_delete_failure
+      BEFORE DELETE ON ${Notifications}
+      FOR EACH ROW EXECUTE FUNCTION fail_inbound_notification_delete()
+    `);
+
+    try {
+      await handleInboundUndo(
+        context,
+        new Undo({
+          actor: remoteActorUri,
+          object: new Follow({ actor: remoteActorUri, object: localActorUri }),
+        }),
+      );
+    } finally {
+      await db.execute(
+        sql`DROP TRIGGER notification_inbound_handler_delete_failure ON ${Notifications}`,
+      );
+      await db.execute(sql`DROP FUNCTION fail_inbound_notification_delete()`);
+    }
+
+    assert.equal((await db.select().from(ProfileFollows)).length, 0);
+    assert.equal(
+      await db
+        .select()
+        .from(Notifications)
+        .where(eq(Notifications.sourceId, relation.id))
+        .then((rows) => rows.length),
+      1,
+    );
   });
 
   test('validates the personal recipient before any unknown-actor network lookup', async () => {

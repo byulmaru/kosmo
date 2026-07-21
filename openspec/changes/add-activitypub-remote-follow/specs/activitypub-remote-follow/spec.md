@@ -146,6 +146,9 @@
 - **AND** existing established 관계에 대해 같은 id의 Follow가 재전달되거나 같은 pair의 새 Follow id가 전달되어도 시스템은 별도 inbound correlation metadata를 저장하지 않고 기존 관계를 유지한다
 - **AND** existing established 관계가 있거나 local profile follow policy가 `OPEN`이면 Fedify `sendActivity`로 현재 검증을 통과한 수신 Follow를 object로 하는 `Accept(Follow)` activity를 remote actor에게 발송한다
 - **AND** established 관계가 없고 local profile follow policy가 `OPEN`이면 remote profile을 follower, local profile을 followee로 하는 established `ProfileFollow` 관계를 생성한다
+- **AND** 새 established 관계가 commit되면 공통 core public action은 Local Followee의 Follow Notification create를 같은 request에서 await하고 오류를 격리한다
+- **AND** existing established 관계를 재사용하는 duplicate Follow 또는 pending request 생성에는 established Follow Notification lifecycle을 실행하지 않는다
+- **AND** Fedify handler는 relation mutation이나 Notification 호출을 중복 구현하지 않는다
 - **AND** established 관계가 없고 local profile follow policy가 `OPEN`이면 같은 pair의 pending `ProfileFollowRequest`를 같은 transaction 안에서 삭제한다
 - **AND** established 관계가 없고 local profile follow policy가 `APPROVAL_REQUIRED`이면 remote profile을 follower, local profile을 followee로 하는 `ProfileFollowRequest`를 생성하거나 기존 request를 유지한다
 - **AND** `APPROVAL_REQUIRED` remote request 생성은 ActivityPub handler가 검증한 actor pair와 pending-only 저장 계약을 사용하며 inbound Follow id/actor/object를 별도 저장하지 않는다
@@ -168,6 +171,9 @@
 - **AND** 검증이 통과하면 시스템은 해당 remote follower와 local followee 사이의 established `ProfileFollow` 관계 또는 pending `ProfileFollowRequest`를 제거한다
 - **AND** actor/object/recipient 검증이 통과한 `Undo(Follow)`는 같은 actor pair의 현재 unfollow 의사로 처리하며 activity timestamp로 순서를 추정하지 않는다
 - **AND** 삭제는 처리 중 확인한 현재 row의 exact id가 일치할 때만 수행하고, established relation이 실제 삭제된 경우에만 같은 transaction에서 저장 count를 감소시킨다
+- **AND** established relation 삭제가 commit되면 공통 core public action은 같은 source의 Follow Notification cleanup을 같은 request에서 await하고 오류를 격리한다
+- **AND** pending request만 삭제하거나 established relation 삭제가 no-op이면 Follow Notification cleanup을 실행하지 않는다
+- **AND** Notification cleanup 실패는 relation/count 삭제와 ActivityPub handler 성공을 rollback하지 않는다
 - **AND** 시스템은 같은 remote Undo를 idempotent하게 처리한다
 - **AND** actor, object, 또는 recipient가 일치하지 않는 `Undo(Follow)`는 local follow graph 또는 request를 제거하지 않는다
 

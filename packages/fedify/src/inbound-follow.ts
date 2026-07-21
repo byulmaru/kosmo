@@ -3,7 +3,7 @@ import '@kosmo/core/polyfill';
 import { Follow } from '@fedify/vocab';
 import { InstanceState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
-import { recordInboundFollow, removeInboundFollow } from '@kosmo/core/services';
+import { followProfile, unfollowProfile } from '@kosmo/core/services';
 import { isHttpUri } from './activitypub-uri';
 import { sendAcceptFollowActivity } from './follow-delivery';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
@@ -65,12 +65,13 @@ export const handleInboundFollow = async (
     throw error;
   }
 
-  const result = await recordInboundFollow({
+  const result = await followProfile({
+    direction: 'ACTIVITYPUB_INBOUND',
     followeeProfileId: localRecipient.id,
     followerProfileId: remoteActor.profile.id,
   });
 
-  if (result !== 'ESTABLISHED') {
+  if (result.result.kind !== 'ESTABLISHED') {
     return;
   }
 
@@ -136,7 +137,8 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
     return;
   }
 
-  await removeInboundFollow({
+  await unfollowProfile({
+    direction: 'ACTIVITYPUB_INBOUND',
     followeeProfileId: localRecipient.id,
     followerProfileId: remoteActor.profile.id,
   });

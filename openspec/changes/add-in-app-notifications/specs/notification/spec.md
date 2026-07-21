@@ -61,6 +61,19 @@
 - **THEN** 시스템은 Follower origin에 따른 별도 분기 없이 Local Follower와 같은 source·Recipient mapping을 사용한다
 - **AND** 이 검증은 ActivityPub ingress, actor materialization, Follow 또는 Undo transport를 수행하지 않는다
 
+#### Scenario: verified inbound Follow에서 새 established source 생성
+
+- **WHEN** verified ActivityPub inbound Follow가 Remote Follower와 Local OPEN Followee 사이에 새 established `ProfileFollow`를 생성하고 commit한다
+- **THEN** 공통 core public action은 Follower origin이나 relation 생성 진입점을 분기하지 않고 같은 Follow Notification create 경계를 await한다
+- **AND** 저장이 성공하면 Local Followee를 Recipient, Remote Follower를 Related Profile로 하는 Notification이 정확히 하나 존재한다
+- **AND** Fedify adapter는 relation mutation이나 Notification 호출을 중복 구현하지 않는다
+
+#### Scenario: inbound pending 또는 duplicate Follow
+
+- **WHEN** verified ActivityPub inbound Follow가 APPROVAL_REQUIRED Followee의 pending `ProfileFollowRequest`만 생성하거나, existing established relation 또는 duplicate/concurrent Follow를 no-op으로 재사용한다
+- **THEN** 시스템은 established Follow Notification create lifecycle을 실행하지 않는다
+- **AND** pending request나 duplicate Follow를 과거 누락 Notification의 backfill 계기로 사용하지 않는다
+
 #### Scenario: 배포 전 관계
 
 - **WHEN** Notification 기능 배포 전에 이미 존재하던 `ProfileFollow` 관계가 있다
@@ -75,6 +88,12 @@
 - **WHEN** Notification 저장이 실패한다
 - **THEN** 시스템은 새 `ProfileFollow` 관계와 Follow 성공 응답을 유지한다
 - **AND** 이번 capability는 누락된 Notification을 retry, outbox, message queue, duplicate Follow 또는 reconciliation으로 자동 복구하지 않는다
+
+#### Scenario: inbound Follow Notification 저장 실패
+
+- **WHEN** verified ActivityPub inbound Follow가 새 established relation을 commit한 뒤 Notification 저장이 실패한다
+- **THEN** 시스템은 relation과 저장 count 및 ActivityPub handler 성공을 유지한다
+- **AND** pending request나 relation transaction을 rollback하지 않는다
 
 #### Scenario: commit 이후 같은 request에서 처리
 
@@ -102,6 +121,17 @@
 - **WHEN** source 삭제 뒤 Notification delete가 실패하거나 process가 종료된다
 - **THEN** `ProfileFollow` 삭제와 Unfollow 성공 응답은 유지된다
 - **AND** 남은 row는 source를 찾을 수 없으므로 모든 Notification API 표면에서 숨겨진다
+
+#### Scenario: verified inbound Undo로 source 삭제
+
+- **WHEN** verified ActivityPub inbound Undo(Follow)가 established `ProfileFollow`를 exact-row 조건으로 실제 삭제하고 commit한다
+- **THEN** 공통 core public action은 같은 source의 Follow Notification delete 경계를 await한다
+- **AND** cleanup 실패는 relation/count 삭제와 ActivityPub handler 성공을 rollback하지 않는다
+
+#### Scenario: inbound Undo의 pending 또는 no-op 삭제
+
+- **WHEN** verified ActivityPub inbound Undo(Follow)가 pending `ProfileFollowRequest`만 삭제하거나 established relation 삭제가 no-op이다
+- **THEN** 시스템은 established Follow Notification cleanup을 실행하지 않는다
 
 #### Scenario: action 밖에서 source row 삭제
 
@@ -349,3 +379,14 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 
 - **WHEN** Follower가 정상 Unfollow action으로 source를 삭제하고 Notification cleanup이 성공한다
 - **THEN** 같은 source item은 Recipient의 목록, count, Node와 Read에서 더 이상 보이지 않는다
+
+### Requirement: ActivityPub Follow Notification integration verification
+
+시스템은 기존 production Fedify listener와 concrete Follow/Undo handler가 공통 core lifecycle을 통해 Notification 저장·정리에 도달하는 흐름을 검증해야 한다(MUST).
+
+#### Scenario: production inbound integration path
+
+- **WHEN** production federation listener가 verified inbound Follow 또는 Undo(Follow)를 concrete handler에 dispatch한다
+- **THEN** integration은 concrete handler → 공통 core public action → relation/request/count transaction → commit 이후 Notification effect의 실제 production wiring을 통과한다
+- **AND** OPEN 신규 relation과 Notification 하나, APPROVAL_REQUIRED pending-only, duplicate/concurrent no-op, established Undo cleanup, pending/no-op Undo 제외를 검증한다
+- **AND** Notification create/delete 실패가 ActivityPub 처리 성공과 source transaction을 rollback하지 않는지 검증한다

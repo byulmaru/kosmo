@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 [PROD-273](https://linear.app/byulmaru/issue/PROD-273), canonical Notification·Follow Relationship 문서, `add-in-app-notifications` proposal/specs/design과 `PROD-325`, `PROD-274`, `PROD-275`, `PROD-352`, `PROD-351`, `PROD-350`, `PROD-276`, `PROD-277`, `PROD-324`, `PROD-278` 구현 이슈 경계를 반영한다. `PROD-323`과 PR #244가 Follow Request를 pending-only 모델로 먼저 정렬했으며, 이번 change는 Follow를 재사용 가능한 Profile-scoped Notification 기반의 첫 sample source로 사용한다.
+이 기록은 [PROD-273](https://linear.app/byulmaru/issue/PROD-273), canonical Notification·Follow Relationship 문서, `add-in-app-notifications` proposal/specs/design과 `PROD-325`, `PROD-274`, `PROD-275`, `PROD-352`, `PROD-351`, `PROD-350`, `PROD-276`, `PROD-380`, `PROD-277`, `PROD-324` 구현 이슈 및 계약 부모 `PROD-271`의 통합·archive 경계를 반영한다. `PROD-323`과 PR #244가 Follow Request를 pending-only 모델로 먼저 정렬했으며, 이번 change는 Follow를 재사용 가능한 Profile-scoped Notification 기반의 첫 sample source로 사용한다.
 
 ## Decision Records
 
@@ -9,9 +9,9 @@
 - Decision Date: 2026-07-14
 - Status: Accepted
 - Context / Problem: 저장, API, source action, 목록, badge와 E2E가 같은 사용자 결과를 만들지만 각각 별도 PR로 전달된다.
-- Decision Outcome: `notification` 하나의 새 capability와 `data-model`, `api-platform` delta를 사용한다. 구현은 `PROD-325`, `274`, `275`, `352`, `351`, `350`, `276`, `277`, `324`, `278` heading으로 나누되 모든 slice가 이 change를 공유한다.
+- Decision Outcome: `notification` 하나의 새 capability와 `data-model`, `api-platform` delta를 사용한다. 구현은 `PROD-325`, `274`, `275`, `352`, `351`, `350`, `276`, `380`, `277`, `324` heading으로 나누고 계약 부모 `PROD-271`이 통합·archive heading을 소유하되 모든 slice가 이 change를 공유한다.
 - Alternatives Considered: DB/API/UI별 OpenSpec 분리, `PROD-271` Project 전체를 하나의 장기 change로 유지, 기존 `profile` capability에 모든 요구사항 추가.
-- Consequences: 각 구현 PR은 자기 Linear 이슈와 검증만 소유하고, 전체 task·canonical 문서 sync와 archive는 마지막 `PROD-278`이 수행한다.
+- Consequences: 각 구현 PR은 자기 Linear 이슈와 검증만 소유하고, 전체 task·canonical 문서 sync와 archive는 계약 부모 `PROD-271`이 수행한다. 취소된 `PROD-278`의 별도 test/archive 책임은 부모에 흡수한다.
 - Confirmation / Follow-up: `tasks.md` 최상위 heading과 Linear 구현 이슈를 1:1로 유지하고 archive gate에서 전체 PR merge를 확인한다.
 
 ### Notification은 단일 table projection으로 저장한다
@@ -97,12 +97,22 @@
 ### Remote compatibility는 materialized source mapping까지만 origin-neutral하다
 
 - Decision Date: 2026-07-14
-- Status: Accepted
+- Status: Superseded
 - Context / Problem: Local/Remote Profile이 같은 `ProfileFollow` 모델을 쓰지만 이번 change에 ActivityPub ingress와 actor materialization을 포함하면 별도 federation capability와 결합된다.
 - Decision Outcome: 이미 materialize된 Remote Follower와 Local Followee의 established `ProfileFollow`를 저장 경계에 입력할 때 origin 분기 없이 같은 mapping을 사용한다.
 - Alternatives Considered: Local source만 허용, ActivityPub inbound Follow/Undo 전체를 archive gate에 포함.
 - Consequences: `PROD-274`와 `PROD-276` target test만 Remote compatibility를 확인하고 대표 E2E는 Local→Local Follow를 사용한다.
 - Confirmation / Follow-up: 실제 inbound flow는 `PROD-243`과 그 선행 이슈가 소유한다.
+
+### 새 established Follow source의 생성 진입점과 Follower origin은 Notification 조건이 아니다
+
+- Decision Date: 2026-07-20
+- Status: Accepted
+- Context / Problem: 저장 경계는 established `ProfileFollow`를 source로 origin-neutral하게 해석하지만 이전 계약은 ActivityPub ingress를 전체 제외해, verified inbound Follow가 새 relation을 만들어도 Local Followee에게 Notification을 만들지 않는 모순이 있었다.
+- Decision Outcome: Local Recipient에게 새 established `ProfileFollow`가 생성되면 Local action, Follow Request 승인 또는 verified ActivityPub inbound Follow 중 어떤 진입점인지와 Follower가 Local/Remote인지에 관계없이 공통 core public action이 commit 이후 같은 Follow Notification create 경계를 await/catch한다. verified inbound Undo는 established relation을 실제 삭제했을 때만 같은 public action의 delete-by-source effect를 실행한다.
+- Alternatives Considered: ActivityPub ingress를 계속 제외, Fedify handler가 Notification을 직접 호출, relation transaction 내부에서 Notification을 원자적으로 저장·삭제.
+- Consequences: pending request, duplicate Follow, 기존 relation 재사용과 relation/request 삭제 no-op은 established Notification lifecycle을 실행하지 않는다. Notification 실패는 relation/request/count transaction이나 ActivityPub handler 성공을 rollback하지 않으며, Fedify adapter는 relation mutation과 Notification 호출을 중복 구현하지 않는다.
+- Confirmation / Follow-up: `PROD-380`이 production listener → concrete handler → core action → DB/Notification integration, duplicate/concurrent idempotency, pending/no-op 제외와 create/delete 실패 격리를 검증한다. `add-activitypub-remote-follow`에는 새 protocol 동작 없이 이 cross-capability 경계만 동기화한다.
 
 ### Follow Notification create 경계가 eligibility를 소유한다
 

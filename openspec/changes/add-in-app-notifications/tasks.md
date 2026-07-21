@@ -39,7 +39,7 @@
 - [x] 7.2 직접 Follow와 Follow Request 승인 public action이 top-level transaction을 소유하고, 새 established 관계 commit 뒤 create 경계를 같은 request에서 await하며 저장 실패에도 source action 성공을 보존하게 한다. pending request 생성과 기존 relation 재사용에는 호출하지 않는다.
 - [x] 7.3 정상 ProfileFollow 삭제 transaction commit 뒤 delete-by-source port를 같은 request에서 await하고 cleanup 실패가 Unfollow 성공을 바꾸지 않게 한다.
 - [x] 7.4 동일 source integration 재진입과 정상 delete는 idempotent하게 만들고 사용자 duplicate Follow는 integration을 다시 호출하지 않으며 materialized Remote Follower도 origin 분기 없이 같은 port를 사용하게 한다.
-- [x] 7.5 action test로 직접 Follow와 승인에서 실제 Notification row의 새 established 생성, pending·기존 relation 재사용·duplicate 제외, Local Follower와 정상 cleanup을 검증하고 테스트 전용 callback, fire-and-forget, outbox/message queue, retry, backfill과 ActivityPub ingress가 추가되지 않았는지 확인한다.
+- [x] 7.5 action test로 직접 Follow와 승인에서 실제 Notification row의 새 established 생성, pending·기존 relation 재사용·duplicate 제외, Local Follower와 정상 cleanup을 검증하고 테스트 전용 callback, fire-and-forget, outbox/message queue, retry, backfill을 추가하지 않으며 이 slice가 ActivityPub ingress를 중복 구현하지 않았는지 확인한다.
 
 ## 8. PROD-277 알림 목록 화면과 항목 읽음·Profile 이동 흐름을 제공한다
 
@@ -58,10 +58,18 @@
 - [ ] 9.3 Read 성공/실패/반복/동시 요청 뒤 cache가 최초 visible 전이만 반영하고 refetch에서 서버 count로 수렴하게 하며 hidden item client 보정 로직을 만들지 않는다.
 - [ ] 9.4 Storybook/interaction/Relay cache test와 app check로 0/1/다수/큰 수, Profile 전환, lifecycle, loading/error/stale와 count 일관성을 검증한다.
 
-## 10. PROD-278 Local Follow Web E2E와 OpenSpec archive를 완료한다
+## 10. PROD-380 ActivityPub inbound Follow/Undo를 Follow Notification lifecycle에 연결한다
 
-- [ ] 10.1 모든 선행 slice가 merge되고 scoped validation을 통과했는지 확인한 뒤 Local Account/Profile A/B와 실제 Follow/Unfollow action을 사용하는 Web E2E fixture를 준비한다.
-- [ ] 10.2 Follow 뒤 Recipient selected Profile 목록에 visible unread item이 나타나고 badge가 증가하며 다른 selected Profile UI/cache에는 섞이지 않는지 검증한다.
-- [ ] 10.3 item의 Read·Related Profile 이동·반복 Read와 정상 Unfollow 뒤 목록/count/Node/Read cleanup을 end-to-end로 검증한다.
-- [ ] 10.4 workspace required checks, canonical Notification 문서와 delta spec sync, 전체 task 완료 및 `openspec validate add-in-app-notifications --strict`를 확인한다.
-- [ ] 10.5 proposal 전체 scope가 완료된 뒤 change를 archive하고 archive 후 strict validation을 통과시키되 `PROD-327`, `PROD-328`, delivery queue/retry, Push/realtime과 ActivityPub ingress를 archive gate로 끌어오지 않는다.
+- [x] 10.1 verified inbound Follow/Undo concrete handler가 relation/request/count transaction과 exact-row 경쟁 보호를 공통 core public action에 위임하고 Fedify adapter에 relation mutation이나 Notification 호출을 중복 구현하지 않게 한다.
+- [x] 10.2 OPEN 신규 established relation commit 뒤 같은 request에서 Follow Notification create를 await/catch하고, APPROVAL_REQUIRED pending·existing relation·duplicate/concurrent Follow에는 lifecycle을 실행하지 않게 한다.
+- [x] 10.3 inbound Undo가 established relation을 실제 삭제한 commit 뒤에만 같은 source Notification delete를 await/catch하고, pending request 삭제와 relation 삭제 no-op에는 cleanup을 실행하지 않게 한다.
+- [x] 10.4 production listener → concrete Follow/Undo handler → core action → DB/Notification integration test로 신규 생성, duplicate/concurrent no-op, pending-only, established cleanup과 pending/no-op cleanup 제외를 검증한다.
+- [x] 10.5 Notification create/delete 실패가 relation/request/count transaction과 ActivityPub handler 성공을 rollback하지 않는지 검증하고 core/Fedify test, typecheck와 strict OpenSpec validation을 통과시킨다.
+
+## 11. PROD-271 Local Follow Web E2E와 OpenSpec archive를 완료한다
+
+- [ ] 11.1 모든 선행 slice가 merge되고 scoped validation을 통과했는지 확인한 뒤 Local Account/Profile A/B와 실제 Follow/Unfollow action을 사용하는 Web E2E fixture를 준비한다.
+- [ ] 11.2 Follow 뒤 Recipient selected Profile 목록에 visible unread item이 나타나고 badge가 증가하며 다른 selected Profile UI/cache에는 섞이지 않는지 검증한다.
+- [ ] 11.3 item의 Read·Related Profile 이동·반복 Read와 정상 Unfollow 뒤 목록/count/Node/Read cleanup을 end-to-end로 검증한다.
+- [ ] 11.4 `PROD-380` production ActivityPub integration evidence, workspace required checks, canonical Notification 문서와 delta spec sync, 전체 task 완료 및 `openspec validate add-in-app-notifications --strict`를 확인한다.
+- [ ] 11.5 proposal 전체 scope가 완료된 뒤 change를 archive하고 archive 후 strict validation을 통과시키되 `PROD-327`, `PROD-328`, delivery queue/retry, Push/realtime, ActivityPub transport 재구현과 remote network E2E를 archive gate로 끌어오지 않는다.
