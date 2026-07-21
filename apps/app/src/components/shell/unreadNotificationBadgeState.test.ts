@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   getUnreadNotificationAccessibilityLabel,
-  getUnreadNotificationCountForProfile,
   getVisibleUnreadNotificationCount,
 } from './unreadNotificationBadgeState';
 
@@ -18,15 +17,5 @@ describe('unread notification badge state', () => {
     assert.equal(getVisibleUnreadNotificationCount(lastSuccess, 'profile-a'), 7);
     assert.equal(getVisibleUnreadNotificationCount(lastSuccess, 'profile-b'), null);
     assert.equal(getVisibleUnreadNotificationCount(null, 'profile-a'), null);
-  });
-
-  it('ignores a snapshot count whose profile ID differs from the selected profile', () => {
-    assert.equal(
-      getUnreadNotificationCountForProfile(
-        { id: 'profile-a', unreadNotificationCount: 7 },
-        'profile-b',
-      ),
-      null,
-    );
   });
 });

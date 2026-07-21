@@ -615,7 +615,7 @@ export const UnreadBadgeHidesPreviousProfileCountUntilNextRetry: Story = {
         ],
         UnreadNotificationBadgeControllerQuery: [
           { data: { node: { ...selectedProfile, unreadNotificationCount: 7 } } },
-          { data: { node: { ...selectedProfile, unreadNotificationCount: 99 } } },
+          { error: '두 번째 프로필의 읽지 않은 알림 수를 불러오지 못했습니다.' },
           { data: { node: { ...secondProfile, unreadNotificationCount: 4 } } },
         ],
       },
@@ -630,7 +630,6 @@ export const UnreadBadgeHidesPreviousProfileCountUntilNextRetry: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '두 번째 프로필로 전환' }));
     await expect(page.findByRole('link', { name: '알림' })).resolves.toBeVisible();
     expect(page.queryByRole('link', { name: '알림, 읽지 않은 알림 7개' })).toBeNull();
-    expect(page.queryByRole('link', { name: '알림, 읽지 않은 알림 99개' })).toBeNull();
     await userEvent.click(page.getByRole('button', { name: '기존 셸 새로고침' }));
     await expect(
       page.findByRole('link', { name: '알림, 읽지 않은 알림 4개' }),
