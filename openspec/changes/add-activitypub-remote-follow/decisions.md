@@ -77,7 +77,9 @@
 ### Post-commit outbound delivery 실패는 committed mutation 결과와 분리한다
 
 - Decision Date: 2026-07-21
-- Status: Accepted
+- Decision Class: Derived Contract
+- Authority / Provenance: 현재 post-commit delivery 격리 계약은 [PROD-447](https://linear.app/byulmaru/issue/PROD-447)의 최신 본문·관계에서, 이 임시 경계를 대체하는 durable outbox·Fedify Queue 순서는 [PROD-448](https://linear.app/byulmaru/issue/PROD-448)의 최신 본문·관계에서 파생한다.
+- Status: Active
 - Context / Problem: remote OPEN/APPROVAL_REQUIRED follow, established unfollow와 pending cancel은 relation/request/count transaction을 먼저 commit하지만 이후 Follow/Undo delivery 오류를 throw해 GraphQL 실패와 실제 DB 상태가 어긋난다.
 - Decision Outcome: PROD-447은 transaction-before-delivery 순서를 유지한다. Post-commit `sendProfileFollow`/`sendProfileUnfollow` 실패는 관측 가능하게 기록하고 application action 밖으로 전파하지 않으며, `followProfile`, `unfollowProfile`, `cancelProfileFollowRequest`는 transaction에서 확정한 payload를 반환한다.
 - Alternatives Considered: delivery를 transaction 안으로 이동해 rollback, GraphQL 실패를 유지하고 Web에서 refetch, durable retry/outbox/history를 함께 도입.
