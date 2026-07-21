@@ -14,7 +14,7 @@
 - Decision Outcome: 일반 Post, Reply, Repost와 Quote는 Content, Reply Parent와 Repost Source의 존재 조합으로만 판별한다. Reply이면서 Quote를 허용하고 Repost/Quote는 하나의 Repost Source 관계를 공유한다.
 - Alternatives Considered: Post Kind enum, 별도 Repost/Quote table, 별도 Quote Source. 모두 관계와 상태를 중복하고 조합 불일치 가능성을 만든다.
 - Consequences: 모든 DB/core/API/UI/Notification slice는 nullable 관계 조합을 사용해야 하며 `content === null`만으로 Repost를 판별할 수 없다.
-- Confirmation / Follow-up: PROD-394 DB/core 구조 테스트와 PROD-453 presentation 상태에서 모든 허용·거부 조합을 검증한다.
+- Confirmation / Follow-up: PROD-394 migration DB test에서 저장 가능한 관계 조합을 검증하고, PROD-401 전용 Repost action과 향후 Quote 작성 action에서 각 caller의 허용·거부 정책을 검증한다. PROD-453은 presentation 상태를 검증한다.
 
 ### Repost Source는 direct immutable relation으로 보존한다
 
@@ -26,7 +26,7 @@
 - Decision Outcome: Repost와 Quote는 입력 Source Post를 직접 참조하고 Source의 Source로 평탄화하지 않는다. Repost 또는 Source가 Tombstone이 되어도 저장 관계를 제거하거나 다른 Post로 바꾸지 않는다.
 - Alternatives Considered: 최상위 Source로 평탄화, Source snapshot 저장, Tombstone cascade/nullification. 모두 direct 관계와 lifecycle 계약을 잃는다.
 - Consequences: 조회 계층이 unavailable Source chain을 숨기며, 저장 계층은 관계 보존과 조회 eligibility를 분리한다.
-- Confirmation / Follow-up: migration/core 테스트와 Post Node·목록 integration에서 direct ID와 Tombstone 뒤 보존을 검증한다.
+- Confirmation / Follow-up: PROD-394 migration DB test에서 direct ID와 Tombstone 뒤 관계 보존을 검증하고, 후속 action과 Post Node·목록 integration에서 생성·조회 정책을 검증한다.
 
 ### Active Repost 유일성은 partial unique index와 멱등 core 경계가 함께 보장한다
 

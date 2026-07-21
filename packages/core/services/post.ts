@@ -1,28 +1,15 @@
 import { eq } from 'drizzle-orm';
 import { ActivityPubPosts, db, firstOrThrow, isUniqueViolation, PostContents, Posts } from '../db';
 import { PostState } from '../enums';
-import { ValidationError } from '../error';
-import { validatePostStructure } from '../validation';
 import type { PostVisibility } from '../enums';
 import type { PostContentDocumentV1 } from '../post-content';
 
-type LocalPostInputBase = {
+type LocalPostInput = {
+  document: PostContentDocumentV1;
   origin: 'LOCAL';
   profileId: string;
   visibility: PostVisibility;
 };
-
-type LocalContentPostInput = LocalPostInputBase & {
-  document: PostContentDocumentV1;
-  repostSourceId?: string | null;
-};
-
-type LocalRepostInput = LocalPostInputBase & {
-  document: null;
-  repostSourceId: string;
-};
-
-type LocalPostInput = LocalContentPostInput | LocalRepostInput;
 
 type ActivityPubPostInput = {
   document: PostContentDocumentV1;
@@ -34,14 +21,8 @@ type ActivityPubPostInput = {
   visibility: PostVisibility;
 };
 
-type CreatedContentPost = {
+type CreatedPost = {
   content: typeof PostContents.$inferSelect;
-  created: true;
-  post: typeof Posts.$inferSelect;
-};
-
-type CreatedRepost = {
-  content: null;
   created: true;
   post: typeof Posts.$inferSelect;
 };
@@ -62,41 +43,13 @@ const isActivityPubPostUriConflict = (error: unknown): boolean => {
   );
 };
 
-export function createPost(input: LocalContentPostInput): Promise<CreatedContentPost>;
-export function createPost(input: LocalRepostInput): Promise<CreatedRepost>;
-export function createPost(
-  input: ActivityPubPostInput,
-): Promise<CreatedContentPost | DuplicatePost>;
+export function createPost(input: LocalPostInput): Promise<CreatedPost>;
+export function createPost(input: ActivityPubPostInput): Promise<CreatedPost | DuplicatePost>;
 export async function createPost(
   input: LocalPostInput | ActivityPubPostInput,
-): Promise<CreatedContentPost | CreatedRepost | DuplicatePost> {
-  const repostSourceId = 'repostSourceId' in input ? (input.repostSourceId ?? null) : null;
-  if (input.origin === 'ACTIVITYPUB' && repostSourceId) {
-    throw new ValidationError('ActivityPub repost sources are not supported', {
-      field: 'repostSourceId',
-    });
-  }
-  validatePostStructure({
-    hasContent: input.document !== null,
-    hasReplyParent: false,
-    repostSourceId,
-  });
-
+): Promise<CreatedPost | DuplicatePost> {
   try {
     return await db.transaction(async (tx) => {
-      if (repostSourceId) {
-        const source = await tx
-          .select({ currentContentId: Posts.currentContentId, state: Posts.state })
-          .from(Posts)
-          .where(eq(Posts.id, repostSourceId))
-          .then((rows) => rows[0]);
-        if (!source || source.state !== PostState.ACTIVE || !source.currentContentId) {
-          throw new ValidationError('Repost source must be an active post with content', {
-            field: 'repostSourceId',
-          });
-        }
-      }
-
       const createdAt =
         input.origin === 'ACTIVITYPUB' &&
         input.publishedAt &&
@@ -110,7 +63,6 @@ export async function createPost(
         .values({
           createdAt,
           profileId: input.profileId,
-          repostSourceId: input.document === null ? repostSourceId : null,
           state: PostState.ACTIVE,
           visibility: input.visibility,
         })
@@ -126,10 +78,6 @@ export async function createPost(
         });
       }
 
-      if (input.document === null) {
-        return { content: null, created: true, post };
-      }
-
       const content = await tx
         .insert(PostContents)
         .values({
@@ -141,7 +89,7 @@ export async function createPost(
         .then(firstOrThrow);
       const linkedPost = await tx
         .update(Posts)
-        .set({ currentContentId: content.id, repostSourceId })
+        .set({ currentContentId: content.id })
         .where(eq(Posts.id, post.id))
         .returning()
         .then(firstOrThrow);

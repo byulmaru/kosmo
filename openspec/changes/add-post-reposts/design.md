@@ -8,7 +8,7 @@ PROD-389는 Repost 저장부터 생성·취소, GraphQL 조회·count, Home/Prof
 
 **Goals:**
 
-- Repost와 Quote가 공유하는 direct Source 관계와 구조 검증을 additive migration으로 도입한다.
+- Repost와 Quote가 공유하는 direct Source 관계와 Active Repost 유일성의 저장 기반을 additive migration으로 도입한다.
 - 권한·visibility·멱등성을 지키는 Repost 생성과 Post Tombstone 취소를 제공한다.
 - Post Node, count, selected Profile 상태, Home/Profile 후보와 UI가 같은 Source eligibility를 사용한다.
 - 기존 Notification projection·Node·inbox·Read·badge 경계에 Repost kind를 추가하고 실패를 source action과 격리한다.
@@ -35,8 +35,8 @@ PROD-389는 Repost 저장부터 생성·취소, GraphQL 조회·count, Home/Prof
 
 ### Recommended Approach
 
-1. PROD-394에서 nullable `repost_source_id` self-reference와 Active contentless Repost용 partial unique index를 추가한다. 공통 순수 구조 validator와 source row 검증을 두고, Local content/Quote/Repost 입력을 discriminated union으로 표현해 기존 contentful caller의 non-null 반환 타입을 보존한다. ActivityPub overload는 이번 change에서 contentful Note만 유지한다.
-2. PROD-401은 별도 public Repost use case가 actor 권한, Source visibility, derived visibility와 duplicate/concurrent idempotency를 소유하게 한다. 같은 Author/Source unique conflict는 기존 Active Repost를 다시 조회해 성공 결과로 정규화한다.
+1. PROD-394에서 nullable `repost_source_id` self-reference와 Active contentless Repost용 partial unique index를 추가하고 migration·snapshot·DB 검증을 완료한다. 기존 `createPost`의 contentful Local/ActivityPub 계약과 non-null Content 반환은 변경하지 않는다.
+2. PROD-401은 실제 caller와 함께 전용 public Repost action을 처음 추가하고 actor 권한, Source visibility/eligibility, derived visibility와 duplicate/concurrent idempotency를 하나의 transaction 경계에서 소유한다. 같은 Author/Source unique conflict는 기존 Active Repost를 다시 조회해 성공 결과로 정규화한다. Quote Source 연결은 실제 Quote 작성 action이 생기는 후속 작업에서 소유한다.
 3. PROD-402·403은 direct `repostSource`와 batched count/selected Profile relation loader를 추가한다. viewer-independent count query와 viewer-relative Node loader를 분리한다.
 4. Post Node와 목록 query는 full Source chain eligibility를 SQL recursive CTE 또는 동등한 단일-query predicate로 판정한다. Home/Profile connection은 hidden source 후보를 page limit 전에 제거한다. Source link는 생성 때 정해진 direct relation을 그대로 유지하고 flatten하지 않는다.
 5. PROD-411은 Author와 Active 상태를 한 transaction에서 확인해 Post를 Tombstone으로 전이하고 최초 `deletedAt`과 `repostSourceId`를 보존한다. 일반 Post 삭제 경계를 재사용하되 이 slice는 Repost 취소·멱등성·유일성 해제를 검증한다.
@@ -49,7 +49,7 @@ PROD-389는 Repost 저장부터 생성·취소, GraphQL 조회·count, Home/Prof
 - Source chain을 정확히 끝까지 판정하고 pagination 전에 적용한다면 recursive CTE를 캡슐화한 SQL helper, query builder fragment 또는 동등한 set-based query를 사용할 수 있다.
 - Notification mixed-kind projection은 kind별 `UNION ALL` 또는 nullable join과 discriminator별 predicate로 구성할 수 있다. 어느 방식이든 filter-before-limit, concrete typename route와 Recipient 기준 visibility를 만족해야 한다.
 - Repost·Quote Source preview는 공용 leaf fragment component로 분리하거나 list item 안에 유지할 수 있다. 실제 재사용 경계와 중첩 Link 회피가 확인되는 쪽을 선택한다.
-- core의 구조 validator는 `packages/core/validation` 또는 Post service 내부의 순수 함수로 둘 수 있다. GraphQL input 전체를 core schema로 복제하지 않는다.
+- PROD-401의 Repost 정책 검증은 전용 action의 transaction 경계에 둔다. caller 없는 저수준 Repost insert helper나 기존 `createPost`의 nullable overload를 미리 추가하지 않는다.
 
 ### Known Traps
 
@@ -74,7 +74,7 @@ PROD-389는 Repost 저장부터 생성·취소, GraphQL 조회·count, Home/Prof
 
 ## Migration Plan
 
-1. PROD-394에서 nullable `repost_source_id`와 partial unique index를 포함한 expand migration, core structure/source validation과 DB/service tests를 배포한다. 기존 workload는 새 column을 비워 둔 채 계속 동작한다.
+1. PROD-394에서 nullable `repost_source_id`와 partial unique index를 포함한 expand migration, Drizzle schema·snapshot과 DB migration tests를 배포한다. 기존 workload와 contentful `createPost` 계약은 새 column을 비워 둔 채 계속 동작한다.
 2. PROD-401·402·403에서 생성, direct Source, count와 viewer relation API를 추가하고 PROD-411에서 Tombstone 취소를 연결한다.
 3. PROD-430에서 Home/Profile candidate query를 전환하고 PROD-453·415·414에서 presentation, 목록 연결과 action을 단계적으로 제공한다.
 4. Notification 기반 선행 이슈가 완료된 뒤 PROD-412에서 enum/API/inbox를 확장하고 PROD-416에서 Tombstone cleanup을 연결한다.

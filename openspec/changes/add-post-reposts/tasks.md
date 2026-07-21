@@ -10,25 +10,26 @@
 
 **Deliverable**
 
-Repost와 Quote가 같은 nullable direct Repost Source를 저장하고, 허용된 관계 조합·Source와 Active Repost 유일성을 DB/core 경계에서 검증한다.
+Repost와 Quote가 같은 nullable direct Repost Source를 저장할 수 있게 하고, Active contentless Repost 유일성을 데이터베이스 경계에서 보장한다.
 
 **Guardrails**
 
 - 별도 Post Kind, Repost table 또는 Quote Source를 추가하지 않는다.
-- Content가 있는 일반 Post·Reply·Quote만 Source로 허용하고 Content 없는 Repost와 self-reference를 거부한다.
+- actor 권한, Source visibility/eligibility, 결과 visibility와 멱등 application action은 PROD-401에서 실제 caller와 함께 구현한다.
+- Quote Source 연결은 실제 Quote 작성 action을 소유하는 후속 작업에서 구현한다.
 - Tombstone에서 Repost Source를 제거하지 않고 Source Tombstone도 참조를 cascade/nullify하지 않는다.
 - DB constraint trigger와 명시적 비관적 row lock을 추가하지 않는다.
 - GraphQL mutation·조회, 목록, UI와 Notification을 이 slice에 포함하지 않는다.
 
 **Verification**
 
-- additive migration의 기존 row 보존, nullable self-FK, Active contentless Repost 유일성, Tombstone 관계 보존과 재Repost를 catalog·DB test로 검증한다.
-- 일반 Post·Quote·Repost·Reply+Quote 조합과 empty/contentless Reply, self/source-Repost/Tombstone Source 거부를 core service test로 검증한다.
+- additive migration의 기존 row 보존, nullable self-FK, Active contentless Repost 유일성, direct 관계, Tombstone 관계 보존과 재Repost를 catalog·DB test로 검증한다.
+- 기존 contentful Local/ActivityPub `createPost` 계약과 non-null Content 반환이 유지되는지 기존 core check로 확인한다.
 
 - [x] 1.1 nullable direct Repost Source와 Active Repost 유일성을 저장하고 기존 Post row·workload를 보존하는 additive migration을 생성한다.
-- [x] 1.2 기존 contentful caller contract를 보존하면서 Local Post·Quote·Repost 구조와 Source를 원자적으로 검증·저장하는 core 경계를 구현한다.
+- [x] 1.2 Drizzle schema와 migration snapshot에 nullable self-reference와 partial unique index를 동기화한다.
 - [x] 1.3 migration catalog, 기존 row, direct FK, 순차·동시 유일성, Repost·Source Tombstone과 재Repost 검증을 추가한다.
-- [x] 1.4 허용·거부 구조와 Source 검증을 추가하고 core 관련 check를 통과시킨다.
+- [x] 1.4 기존 contentful `createPost` 계약을 변경하지 않고 core 관련 check를 통과시킨다.
 
 ## 2. PROD-401 Repost 생성
 
