@@ -310,7 +310,7 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 - **WHEN** Avatar 또는 본문 link activation에서 시작한 Read mutation이 `notification`과 `recipientProfile` payload로 성공한다
 - **THEN** 클라이언트는 payload가 반환한 ID를 기준으로 item의 `readAt`과 정확한 Recipient Profile의 `unreadNotificationCount`를 Relay cache에 정규화한다
 - **AND** 현재 selected Profile을 cache target으로 다시 추론하거나 client-side count 산술, optimistic update와 성공 뒤 추가 refetch를 수행하지 않는다
-- **AND** 반복 activation과 동시 성공 응답은 서버가 보존한 최초 `readAt`과 visible Unread count로 같은 record를 수렴시키고 다른 Profile cache를 변경하지 않는다
+- **AND** 같은 Unread item에 대한 반복 activation 또는 동시 Read의 성공 payload는 서버가 보존한 동일 `readAt`과 일관된 visible Unread count를 반환하며, 어떤 순서로 적용되어도 같은 item/Recipient record로 수렴하고 다른 Profile cache를 변경하지 않는다
 
 #### Scenario: client Read 실패와 수렴
 

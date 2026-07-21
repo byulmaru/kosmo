@@ -67,13 +67,13 @@
 **Verification**
 
 - 두 link activation의 pending·실패·성공 navigation 독립성을 Storybook interaction으로 검증한다.
-- Relay store integration으로 item `readAt`, Recipient `unreadNotificationCount`, 반복·동시 응답과 Profile 격리를 검증한다.
+- Relay store integration으로 item `readAt`, Recipient `unreadNotificationCount`, 같은 item의 반복·동시 성공 payload 수렴과 Profile 격리를 검증한다.
 
 - [x] 9.1 proposal/spec/design/decisions/tasks를 PROD-372 ownership과 합의한 best-effort Read/cache 계약으로 정렬하고 strict validation과 사용자 OpenSpec Gate 승인을 받는다.
 - [x] 9.2 item fragment와 `markNotificationRead` mutation이 성공 payload의 `notification { id readAt }`과 `recipientProfile { id unreadNotificationCount }`를 Relay normalization에 제공하게 한다.
 - [x] 9.3 Avatar와 본문 link의 각 activation에서 mutation 하나를 비차단으로 시작하고 pending·실패가 navigation이나 cache를 바꾸지 않게 한다.
 - [x] 9.4 Storybook interaction으로 두 link의 즉시 이동과 mutation pending·network error·GraphQL error·success를 검증한다.
-- [x] 9.5 Relay store integration으로 정확한 item/Recipient record 갱신, 반복·동시 성공 응답, 실패 무변경과 actor별 Profile cache 격리를 검증한다.
+- [x] 9.5 Relay store integration으로 정확한 item/Recipient record 갱신, 같은 item의 반복·동시 성공 payload 수렴, 실패 무변경과 actor별 Profile cache 격리를 검증한다.
 - [x] 9.6 Relay compiler, app check/unit test, Storybook test/build와 Web smoke를 통과시키며, native smoke를 실행할 수 없으면 iOS/Android별 환경 blocker와 미검증 동작을 기록한다.
 
 ## 10. PROD-324 모든 알림 셸 진입점에 Profile별 Unread badge를 제공한다

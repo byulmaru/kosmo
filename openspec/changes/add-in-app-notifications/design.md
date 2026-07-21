@@ -116,7 +116,7 @@ route query는 selected Profile을 target으로 `store-and-network` fetch를 수
 - `PROD-350`: mutation test로 Node와 같은 hidden predicate, 최초 `readAt`, 반복·동시 Read와 payload를 검증한다.
 - `PROD-276`: action test로 직접 Follow와 승인에 의한 새 established 생성, pending·기존 relation 재사용·duplicate 제외, 정상 source cleanup과 실제 Notification row를 검증하고 source action의 best-effort 오류 격리 구조를 확인한다.
 - `PROD-277`: 정상 item의 목록·Related Profile link·read/unread 접근성 UI를 Storybook interaction/a11y와 결정된 platform smoke로 검증한다.
-- `PROD-372`: Avatar와 본문 activation이 Read pending·실패 중에도 즉시 이동하는지 Storybook interaction으로 검증하고, Relay store integration으로 성공 payload의 정확한 item/Recipient count normalization, 반복·동시 응답과 Profile 격리를 검증한다.
+- `PROD-372`: Avatar와 본문 activation이 Read pending·실패 중에도 즉시 이동하는지 Storybook interaction으로 검증하고, Relay store integration으로 성공 payload의 정확한 item/Recipient count normalization, 같은 item의 반복·동시 성공 payload 수렴과 Profile 격리를 검증한다.
 - `PROD-324`: shell badge의 count cap·접근성·loading/error/lifecycle과 `PROD-372`가 정규화한 Recipient count 소비를 Storybook interaction/a11y, Relay cache integration과 결정된 platform smoke로 검증한다.
 - `PROD-278`: 실제 Local Follow/Unfollow action을 사용하는 Web E2E와 관련 workspace 검증을 통과한 뒤 archive 전후 strict validation을 실행한다.
 
