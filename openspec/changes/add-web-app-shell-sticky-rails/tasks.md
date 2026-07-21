@@ -20,7 +20,7 @@
 - [x] 3.1 `md` 이상 좌측 sidebar/icon rail wrapper를 grid flow 안에서 `sticky top-0`와 viewport height 경계로 유지한다.
 - [x] 3.2 `SidebarNavigation`과 mobile drawer의 public props/API를 유지하고, sticky shell 안에서 필요한 height/overflow class만 보정한다.
 - [x] 3.3 `xl` 이상 우측 rail wrapper를 grid flow 안에서 `sticky top-0`와 viewport height 경계로 유지한다.
-- [x] 3.4 우측 rail 내용이 viewport보다 길어질 때만 rail 내부 overflow가 가능하도록 구조를 둔다.
+- [ ] 3.4 `PROD-454`: 우측 rail 내용이 viewport보다 길어질 때만 rail 내부 세로 overflow가 가능하도록 하고, 짧은 rail에서는 강제 scrollbar chrome과 가로 overflow를 만들지 않는다.
 - [x] 3.5 좌우 rail을 `position: fixed` layer로 빼지 않는다. fixed가 필요하다고 판단되면 후속 change로 분리한다.
 
 ## 4. Route 호환성과 bottom tab
@@ -46,3 +46,4 @@
 - [ ] 6.4 구현 PR에서 `/home`, `/search`, `/notifications`, `/menu`, `/compose`, 프로필/팔로우 목록/게시글 상세 route를 smoke로 확인한다. 현재 fresh browser route smoke는 보호 route 리다이렉트와 공개 프로필 계열 렌더링까지만 확인했다.
 - [ ] 6.5 구현 PR에서 drawer open/close, bottom tab, icon rail/full sidebar, RightRail 위치, 검색 `noScroll`, 게시글 상세 sticky header를 확인한다. 현재 viewport smoke는 document scroll, bottom tab fixed, icon rail/full sidebar, RightRail 위치까지 확인했다.
 - [x] 6.6 반응형 앱 내비게이션 E2E suite 전체는 구현하지 않고, 필요 검증은 `PROD-233` 후속 범위로 남긴다.
+- [ ] 6.7 `PROD-454`: `UniversalFull` Storybook browser test와 Chrome `xl+` smoke에서 짧은 RightRail의 조건부 overflow, 가로 overflow 부재와 sticky 배치를 확인한다.

@@ -49,6 +49,11 @@ const webStickyRail = {
   top: 0,
 } as unknown as ViewStyle;
 
+const webRightRailOverflow = {
+  overflowX: 'hidden',
+  overflowY: 'auto',
+} as unknown as ViewStyle;
+
 const webStickyHeader = {
   position: 'sticky',
   top: 0,
@@ -208,7 +213,14 @@ function UniversalShellContent({ revision }: { revision: number }) {
         </View>
 
         {full ? (
-          <View style={[styles.rightRail, web && webStickyRail, { borderColor: theme.border }]}>
+          <View
+            style={[
+              styles.rightRail,
+              web && webStickyRail,
+              web && webRightRailOverflow,
+              { borderColor: theme.border },
+            ]}
+          >
             {profile ? <RightRail profile={profile} /> : null}
           </View>
         ) : null}
@@ -258,7 +270,6 @@ const styles = StyleSheet.create({
   nativeRoute: { flex: 1 },
   webMobileRoute: { paddingBottom: 56 },
   rightRail: {
-    overflow: 'scroll',
     paddingLeft: spacing.xl,
     paddingTop: spacing.lg,
     width: 350,
