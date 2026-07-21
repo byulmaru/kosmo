@@ -247,12 +247,14 @@
 ### 모든 셸 Unread badge는 accent dot으로 통일한다
 
 - Decision Date: 2026-07-21
-- Status: Accepted
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/colors.md`, `docs/design/breakpoints.md`, `PROD-324`
+- Status: Active
 - Context / Problem: 숫자 count badge는 아이콘보다 시각적으로 크고 셸 표면마다 다른 정보 밀도와 정렬을 만들었다. 정확한 count는 screen reader에 계속 제공할 수 있으므로, 시각적으로는 모든 셸 진입점에서 Unread 존재 여부만 일관되게 알리는 편이 낫다. badge 색도 `text`에 직접 결합하면 후속 강조색 변경이 여러 component에 퍼진다.
-- Decision Outcome: Android/iOS와 좁은 Web의 하단 탭 바·모바일 drawer, Web compact 레일과 full 사이드바 모두 양수 count를 같은 숫자 없는 8px dot으로 알림 아이콘에 overlay한다. dot은 icon wrapper 기준 `right: 2px`, `top: -1px`에 놓고 semantic `accent` token을 사용한다. `onAccent`는 향후 accent 배경 위 foreground content를 위한 짝 토큰으로 함께 정의하지만 현재 dot은 content가 없어 사용하지 않는다. `0`과 최초 성공 전에는 dot을 숨긴다. 모든 진입점은 양수 count에서 실제 서버 count를 사용한 `알림, 읽지 않은 알림 N개`라는 하나의 accessible name을 유지하며 dot은 accessibility tree에서 숨긴다. 공용 badge component는 시각 variant나 count formatter 없이 양수 여부만 렌더링한다. count controller의 Profile 격리, 같은 Profile의 마지막 성공값, normalized Relay record 구독, non-suspending 오류 경계와 기존 refresh 수렴 계약은 유지한다.
-- Alternatives Considered: 하단 탭·Web에는 count를 남기고 drawer만 dot으로 표시, `1..99`/`99+` count를 모든 표면에 유지, badge 전용 color token, 짝 foreground token 없는 `accent`만 추가.
-- Consequences: 사용자는 모든 표면에서 같은 위치와 크기의 표시로 Unread 존재 여부를 보고, 정확한 숫자는 접근성 이름으로만 얻는다. 시각 count cap과 formatter·variant가 사라져 공용 component가 단순해진다. 현재 light/dark `accent` 값은 기존 dot 외관을 보존하지만 후속 색 변경은 token 매핑만 수정하면 된다. 기존 route, label, row/touch target, count controller와 Profile 격리·오류 동작은 바뀌지 않는다.
-- Confirmation / Follow-up: Storybook interaction은 0/1/99/100과 하단 탭·drawer·compact/full에서 숫자가 없고 같은 dot geometry를 사용하는지, 실제 count accessible name과 normalized Relay 갱신·Profile 전환·마지막 성공값 계약이 유지되는지 검증한다. 이 결정은 2026-07-20 결정과 같은 날의 drawer-only dot 결정을 대체한다.
+- Decision Outcome: Android/iOS와 좁은 Web의 하단 탭 바·모바일 drawer, Web compact 레일과 full 사이드바 모두 양수 count를 같은 숫자 없는 8px dot으로 알림 아이콘에 overlay한다. dot은 icon wrapper 기준 `right: 2px`, `top: -1px`에 놓고 semantic `accent` token을 사용한다. 현재 dot은 foreground content가 없으므로 짝 토큰을 선제 정의하지 않고 실제 소비자가 생길 때 함께 결정한다. `0`과 최초 성공 전에는 dot을 숨긴다. 모든 진입점은 양수 count에서 실제 서버 count를 사용한 `알림, 읽지 않은 알림 N개`라는 하나의 accessible name을 유지하며 dot은 accessibility tree에서 숨긴다. 공용 badge component는 시각 variant나 count formatter 없이 양수 여부만 렌더링한다. count controller의 Profile 격리, 같은 Profile의 마지막 성공값, normalized Relay record 구독, non-suspending 오류 경계와 기존 refresh 수렴 계약은 유지한다.
+- Alternatives Considered: 하단 탭·Web에는 count를 남기고 drawer만 dot으로 표시, `1..99`/`99+` count를 모든 표면에 유지, badge 전용 color token, 사용처 없는 foreground 짝 토큰을 함께 선제 정의.
+- Consequences: 사용자는 모든 표면에서 같은 위치와 크기의 표시로 Unread 존재 여부를 보고, 정확한 숫자는 접근성 이름으로만 얻는다. 시각 count cap과 formatter·variant가 사라져 공용 component가 단순해진다. 현재 light/dark `accent` 값은 기존 dot 외관을 보존하지만 후속 색 변경은 token 매핑만 수정하면 된다. foreground content가 실제로 생기기 전에는 관련 짝 토큰과 범용 paired-token 규칙을 도입하지 않는다. 기존 route, label, row/touch target, count controller와 Profile 격리·오류 동작은 바뀌지 않는다.
+- Confirmation / Follow-up: Storybook interaction은 0/1/99/100과 하단 탭·drawer·compact/full에서 숫자가 없고 같은 dot geometry를 사용하는지, 실제 count accessible name과 normalized Relay 갱신·Profile 전환·마지막 성공값 계약이 유지되는지 검증한다. 이 결정은 2026-07-20 결정과 같은 날의 drawer-only dot 결정을 대체한다. 2026-07-22 리뷰에서 초기 `onAccent` 선제 정의 부분만 사용처가 생길 때 결정하는 방향으로 조정했다.
 
 ### Notification Node는 concrete global ID 계약을 따른다
 

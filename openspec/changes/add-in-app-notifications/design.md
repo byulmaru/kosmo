@@ -112,7 +112,7 @@ route query는 selected Profile을 target으로 `store-and-network` fetch를 수
 
 `PROD-324`는 기존 셸의 내비게이션 구조를 바꾸지 않고 알림 아이콘 wrapper에 selected Profile의 `unreadNotificationCount` badge를 겹쳐 표시한다. 대상은 Android/iOS와 좁은 Web의 하단 탭 바, 모바일 drawer, 중간 Web의 compact 아이콘 레일, 넓은 Web의 full 사이드바다. 모바일 하단 탭과 label이 있는 full/drawer 항목은 현재 코드의 label을 유지하고 compact 레일은 icon-only 구조를 유지한다. badge를 별도 label 옆 pill이나 독립 진입점으로 만들지 않는다. 모든 표면은 양수 count를 같은 숫자 없는 8px dot으로 표시한다.
 
-count `0`은 모든 표면에서 badge를 숨기고 양수 count는 시각 숫자 없이 Unread 존재만 표시한다. dot은 `8px`이며 아이콘 wrapper 기준 `right: 2px`, `top: -1px`에 놓고 semantic `accent` color token을 사용한다. `onAccent`는 후속 foreground content를 위한 짝 토큰으로 함께 정의하지만 현재 dot은 content가 없어 사용하지 않는다. 모든 badge는 내비게이션 layout이나 touch target을 밀지 않는다. 알림 control의 accessible name은 count가 양수일 때 실제 서버 count를 사용한 `알림, 읽지 않은 알림 N개`, `0` 또는 최초 성공 전에는 `알림`이다. 시각적 badge는 별도 focus나 중복 announcement 대상이 아니다.
+count `0`은 모든 표면에서 badge를 숨기고 양수 count는 시각 숫자 없이 Unread 존재만 표시한다. dot은 `8px`이며 아이콘 wrapper 기준 `right: 2px`, `top: -1px`에 놓고 semantic `accent` color token을 사용한다. 현재 dot은 foreground content가 없으므로 짝 토큰을 선제 정의하지 않고 실제 소비자가 생길 때 함께 결정한다. 모든 badge는 내비게이션 layout이나 touch target을 밀지 않는다. 알림 control의 accessible name은 count가 양수일 때 실제 서버 count를 사용한 `알림, 읽지 않은 알림 N개`, `0` 또는 최초 성공 전에는 `알림`이다. 시각적 badge는 별도 focus나 중복 announcement 대상이 아니다.
 
 badge count 조회와 마지막 성공 상태는 전체 `UniversalShell` query의 Suspense/Error boundary와 분리된 non-suspending controller가 소유한다. controller는 `{ selectedProfileId, lastSuccessfulCount }`를 함께 보존하고 Relay count 요청 오류를 셸 boundary로 throw하지 않는다. Profile이 바뀌면 ID가 일치하지 않는 마지막 값을 즉시 숨기고 새 Profile의 첫 성공 결과만 표시한다. 같은 Profile에서 actor revision이 올라가 environment가 교체되거나 후속 count 조회가 실패해도 마지막 성공값을 `0`이나 empty로 덮어쓰지 않고 셸 알림 진입점을 유지한다.
 
