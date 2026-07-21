@@ -2,7 +2,7 @@
 
 ### Requirement: Post Reaction 조회
 
-API는 조회 가능한 Post에 현재 Reaction Type별 count와 Type별 Reaction Profile connection을 제공해야 한다(MUST).
+API는 조회 가능한 Post에 현재 Reaction Type별 count와 Type별 Reaction Profile connection을 제공해야 한다(MUST). GraphQL API는 `Post.reactionProfiles(type: String!): ProfileConnection!`을 제공하고 canonical Reaction Type 문자열 검증을 적용해야 한다(MUST).
 
 #### Scenario: Post Reaction summary 조회
 
@@ -15,6 +15,7 @@ API는 조회 가능한 Post에 현재 Reaction Type별 count와 Type별 Reactio
 
 - **WHEN** viewer가 조회할 수 있는 Post에서 한 Reaction Type의 Profile connection을 요청한다
 - **THEN** Post object는 해당 Type에 Reaction을 남겼고 viewer가 조회할 수 있는 Profile만 반환한다
+- **AND** GraphQL field는 `reactionProfiles(type: String!): ProfileConnection!` 계약을 사용한다
 - **AND** connection은 cursor pagination을 지원한다
 
 #### Scenario: Post 조회 정책 재사용

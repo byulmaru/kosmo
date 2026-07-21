@@ -164,7 +164,7 @@ Post의 Reaction Type별 count는 대상 Post에 현재 존재하는 모든 Reac
 
 ### Requirement: viewer별 Reaction Profile 목록
 
-시스템은 Post와 Reaction Type별로 Reaction을 남긴 Profile의 Relay connection을 제공해야 하며(MUST), 대상 Post와 Profile의 기존 조회 정책을 각각 적용해야 한다(MUST).
+시스템은 Post와 Reaction Type별로 Reaction을 남긴 Profile의 Relay connection을 제공해야 하며(MUST), 대상 Post와 Profile의 기존 조회 정책을 각각 적용해야 한다(MUST). GraphQL API는 `Post.reactionProfiles(type: String!): ProfileConnection!` field로 이 목록을 제공하고 canonical Reaction Type 문자열 검증을 적용해야 한다(MUST).
 
 #### Scenario: 조회 가능한 Profile만 반환
 
@@ -172,10 +172,20 @@ Post의 Reaction Type별 count는 대상 Post에 현재 존재하는 모든 Reac
 - **THEN** 시스템은 현재 viewer가 조회할 수 있는 Profile만 반환한다
 - **AND** 다른 Reaction Type의 Profile을 섞지 않는다
 
+#### Scenario: Profile connection node 범위
+
+- **WHEN** viewer가 Reaction Profile connection의 node를 조회한다
+- **THEN** 시스템은 기존 Profile 객체를 반환한다
+- **AND** Reaction 객체, Reaction ID 또는 Reaction 생성 시각을 공개 row field로 노출하지 않는다
+- **AND** Reaction 생성 시각과 ID는 최신순 pagination의 opaque cursor 경계에만 사용한다
+
 #### Scenario: Profile pagination
 
 - **WHEN** viewer가 Reaction Profile connection을 여러 page로 조회한다
-- **THEN** 시스템은 같은 Profile을 중복 반환하지 않는 안정적인 cursor pagination을 제공한다
+- **THEN** 시스템은 Reaction 생성 시각 내림차순으로 Profile을 반환한다
+- **AND** 생성 시각이 같으면 Reaction ID 내림차순으로 안정적인 순서를 결정한다
+- **AND** cursor는 생성 시각과 Reaction ID 경계를 opaque하게 표현한다
+- **AND** 시스템은 같은 Profile을 중복 반환하지 않는 안정적인 cursor pagination을 제공한다
 - **AND** 숨겨진 Profile 때문에 visible item이 page 경계에서 누락되지 않게 filtering 후 page limit을 적용한다
 
 #### Scenario: 조회할 수 없는 Post의 Reaction 조회
