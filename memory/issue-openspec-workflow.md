@@ -345,6 +345,7 @@ validation 확인 전에는 Implementation Gate로 넘어가지 않는다.
 - 구현 이슈와 PR이 완료됐다.
 - 계약 부모가 requirement scenario와 여러 구현 결과를 연결하는 통합 사용자·시스템 흐름을 검증했다.
 - 현재 OpenSpec tasks가 완료됐다.
+- `Blocked` 또는 아직 supersede되지 않은 `Upstream Change Required` decision이 남아 있지 않다.
 - 구현, canonical 문서와 OpenSpec 사이에 불일치가 없다.
 - OpenSpec change를 active specs에 archive했다.
 - archive 후 validation이 통과한다.

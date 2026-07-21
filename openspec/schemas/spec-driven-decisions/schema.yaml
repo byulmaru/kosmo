@@ -220,7 +220,7 @@ apply:
   instruction: |
     Read proposal, specs, design, decisions, and tasks before implementation.
     Independently re-read the applicable canonical files and the latest Linear issue body and contract-changing comments. OpenSpec is not evidence that an upstream requirement exists.
-    Treat only specs and decisions that still agree with independently verified upstream authority, plus each task group's Guardrails, as binding. A legacy `Accepted` label is not proof of that authority.
+    Treat only specs, decisions, and task Guardrails that still agree with independently verified upstream authority as binding. If any of them conflicts with or lacks upstream authority, pause instead of implementing it. A legacy `Accepted` label is not proof of that authority.
     A Blocked `Upstream Change Required` decision cannot authorize a task or implementation. Update canonical and Linear upstream sources first, then reclassify it.
     Treat design's Recommended Approach as a non-normative default: an alternative is allowed when it preserves the Deliverable, Guardrails, Verification, specs, and independently verified decisions.
     Before taking a materially different approach, compare it with Current Constraints, Allowed Alternatives, and Known Traps.
