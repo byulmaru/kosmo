@@ -54,6 +54,56 @@
 - Consequences: outbound-only metadata를 중복 저장하지 않으며 retry/history가 필요하면 별도 capability에서 다룬다.
 - Confirmation / Follow-up: PROD-242/244가 refollow identity와 actor/object 검증을 테스트한다.
 
+### Outbound pending request도 immutable request identity를 사용한다
+
+- Decision Date: 2026-07-18
+- Status: Accepted
+- Context / Problem: PROD-242의 optimistic established relation과 달리 APPROVAL_REQUIRED remote follow는 Accept 전까지 `ProfileFollowRequest`만 존재하므로 outbound Follow와 cancel Undo identity를 별도 저장할지 결정해야 한다.
+- Decision Outcome: outbound pending Follow URI와 generation은 `ProfileFollowRequest.id`와 immutable `createdAt`에서 파생하고 actor/object와 ordering key는 저장 actor pair에서 파생한다. Accept는 exact request 삭제와 relation/count 생성을 원자적으로 수행하며, cancel과 Reject는 조회한 exact request/relation row에만 적용한다.
+- Alternatives Considered: 별도 outbound activity table, request에 correlation/status column 추가, actor pair만으로 stable Follow URI 생성.
+- Consequences: terminal state와 delivery history를 저장하지 않으며 Accept 후 relation은 새 identity를 갖는다. 늦은 request ID의 Reject/cancel은 새 relation/request를 삭제할 수 없다.
+- Confirmation / Follow-up: PROD-244가 duplicate/concurrent Follow·cancel, Accept/Reject/cancel 경쟁과 refollow exact-row 보호를 검증한다.
+
+### Inbound Follow/Undo core·Notification integration은 PROD-380이 소유한다
+
+- Decision Date: 2026-07-20
+- Status: Accepted
+- Context / Problem: PROD-244 PR이 outbound APPROVAL_REQUIRED 왕복뿐 아니라 inbound Follow의 core entrypoint 전환과 Undo Notification cleanup까지 포함해, Follow Notification source lifecycle을 소유한 PROD-380과 runtime 및 테스트가 중복됐다.
+- Decision Outcome: PROD-244는 local→remote pending request 생성·Follow 발송, pending cancel·Undo 발송, inbound Accept/Reject 검증과 exact-row transition만 소유한다. `handleInboundFollow`의 공통 core action 전환, `followProfile`의 ActivityPub→local 방향, inbound 전용 service 제거와 inbound Follow/Undo Notification 생성·정리는 PROD-380이 PROD-244 병합 후 구현한다.
+- Alternatives Considered: PROD-244가 integration을 유지하고 PROD-380을 축소, 두 PR이 같은 runtime을 각각 구현.
+- Consequences: PR #285는 기존 inbound Follow/Undo runtime을 회귀 대상으로만 유지한다. 공통 core entrypoint와 Notification source lifecycle의 최종 형태는 PROD-380에서 `add-in-app-notifications` 계약과 함께 검증한다.
+- Confirmation / Follow-up: PROD-244는 inbound Follow/Undo 관련 runtime·Notification diff가 없는지 확인하고, PROD-380은 production listener → concrete handler → core lifecycle → DB/Notification integration test를 제공한다.
+
+### Accept/Reject object 지원은 Fedify typed Follow 해석 범위로 제한한다
+
+- Decision Date: 2026-07-18
+- Status: Accepted
+- Context / Problem: Fedify `getObject()`가 typed Follow를 제공하는 표준 경로 외에 kosmo가 IRI-only `objectId`를 직접 parse하고 저장 projection으로 역조회하는 호환 계층을 유지할지 결정해야 했다.
+- Decision Outcome: Accept/Reject는 Fedify `getObject()`가 typed Follow로 제공한 object만 follow response로 처리한다. typed Follow의 actor/object/recipient와 optional id는 기존 계약대로 검증하지만, Fedify가 typed Follow로 제공하지 못한 IRI-only object를 kosmo가 별도 parser나 DB lookup으로 복원하지 않는다.
+- Alternatives Considered: canonical kosmo Follow IRI를 직접 parse해 request/relation을 역조회, `/ap/follow/{id}` object dispatcher를 추가해 Fedify dereference 지원.
+- Consequences: 별도 IRI-only 호환 코드와 공개 Follow object endpoint를 만들지 않는다. IRI-only Accept/Reject는 instance reachability 신호로 사용할 수 있지만 follow graph/request side effect 없이 무시하며, 실제 상호운용성 필요가 확인되면 별도 호환성 범위로 추가한다.
+- Confirmation / Follow-up: Fedify typed embedded/resolved Follow는 처리되고 IRI-only 및 unsupported object는 projection/count를 변경하지 않는지 PROD-244와 PROD-361에서 검증한다.
+
+### Accept/Reject object는 Fedify 기본 cross-origin 검증을 유지한다
+
+- Decision Date: 2026-07-18
+- Status: Accepted
+- Context / Problem: remote Accept/Reject가 kosmo origin의 outbound Follow를 embedded object로 포함하면 parent activity와 object identity의 origin이 다르다. Fedify `crossOrigin: "trust"`는 이 object를 authoritative origin에서 확인하지 않고 반환하므로 content spoofing 방어를 우회한다.
+- Decision Outcome: Accept/Reject handler는 `getObject()`에서 `crossOrigin: "trust"`를 사용하지 않고 Fedify 기본 origin 검증을 유지한다. ID 없는 embedded Follow와 parent activity와 같은 origin의 embedded Follow는 Fedify가 typed object로 제공할 수 있으며, cross-origin embedded 또는 IRI-only Follow는 Fedify document loader가 authoritative object를 조회해 typed Follow로 제공한 경우에만 처리한다.
+- Alternatives Considered: 모든 embedded Follow에 `crossOrigin: "trust"` 사용, canonical kosmo Follow URI에만 조건부 trust, `/ap/follow/{id}` object dispatcher 추가.
+- Consequences: kosmo outbound Follow ID를 embedded object로 돌려주는 구현도 authoritative document를 조회할 수 없으면 Accept/Reject side effect 없이 무시된다. 이번 capability는 object dispatcher를 추가하지 않으며 실제 상호운용성 요구가 확인되면 별도 보안·호환성 범위에서 다룬다.
+- Confirmation / Follow-up: unverified cross-origin embedded Follow가 projection/count를 변경하지 않고, same-origin/id-less embedded 및 document loader가 resolve한 Follow만 기존 검증으로 처리되는지 PROD-244와 PROD-361에서 확인한다.
+
+### Accept/Reject compatibility fallback도 outbound Follow generation을 검증한다
+
+- Decision Date: 2026-07-21
+- Status: Accepted
+- Context / Problem: actor/object만 일치하는 ID-less 또는 non-kosmo Follow fallback은 이전 request R1을 취소하고 같은 pair의 R2를 만든 뒤 도착한 늦은 R1 Accept/Reject를 현재 R2에 잘못 적용할 수 있다.
+- Decision Outcome: canonical kosmo Follow ID가 현재 projection ID와 정확히 일치하면 기존처럼 처리한다. ID-less 또는 non-kosmo Follow fallback은 embedded Follow의 `published`가 존재하고 현재 request/relation의 immutable `createdAt`과 정확히 일치할 때만 같은 outbound generation으로 인정한다. remote Accept/Reject activity의 `published`나 local 수신 시각은 이 fallback generation 판정에 사용하지 않는다.
+- Alternatives Considered: actor/object-only fallback 유지, compatibility fallback 전체 제거, terminal history나 correlation metadata 추가, remote Accept activity timestamp로 순서 추정.
+- Consequences: 원본 outbound Follow의 `published`를 보존하지 않는 구현의 ID-less/non-kosmo response는 side effect 없이 무시한다. 새 schema, history, lock 또는 reconciliation 흐름 없이 이전 generation response가 새 projection을 변경하지 못한다.
+- Confirmation / Follow-up: 같은-generation fallback Accept/Reject는 처리하고 missing/mismatched Follow `published`와 cancel-refollow 뒤 늦은 fallback Accept는 새 request/relation을 변경하지 않는지 PROD-244가 검증한다.
+
 ### Remote Follow ID는 advisory이고 generation은 단조 증가한다
 
 - Decision Date: 2026-07-15

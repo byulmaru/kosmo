@@ -7,7 +7,8 @@
 ## What Changes
 
 - 완료된 저장 count, core action, remote actor materialization과 Fedify inbox route를 현재 기반으로 기록한다.
-- remote follow/unfollow mutation은 PROD-242, inbound Follow/Undo와 remote pending request 생성·조건부 삭제는 PROD-243, local request 생성과 local/remote 공통 처리 lifecycle은 PROD-272, inbound Accept/Reject는 PROD-244가 소유하도록 분리한다.
+- remote OPEN follow/unfollow mutation은 PROD-242, inbound Follow/Undo와 remote pending request 생성·조건부 삭제는 PROD-243, local request 생성과 local/remote 공통 처리 lifecycle은 PROD-272, outbound APPROVAL_REQUIRED request 왕복과 inbound Accept/Reject는 PROD-244가 소유하도록 분리한다.
+- verified inbound Follow/Undo와 Follow Notification lifecycle의 공통 core integration은 PROD-380이 소유하고, PROD-244는 해당 runtime과 결정을 포함하지 않는다.
 - PROD-243과 PROD-272는 고정된 pending-only DB 계약을 기준으로 병렬 구현하고, PROD-244는 PROD-243의 exact-row 삭제 primitive를 재사용한다.
 - `SUSPENDED` remote profile의 기존 relation/count를 보존하고 GraphQL follow/unfollow에서 NotFound로 숨긴다.
 - PROD-245의 DB-known follow graph와 PROD-263의 Web follow action을 별도 구현 slice로 유지한다.
@@ -33,8 +34,10 @@
 - Contract owner: [PROD-357](https://linear.app/byulmaru/issue/PROD-357)
 - Parent integration: [PROD-235](https://linear.app/byulmaru/issue/PROD-235)
 - Completed foundations: PROD-240, PROD-241, PROD-248, PROD-281, PROD-323
-- Remaining implementation: PROD-242, PROD-243, PROD-244, PROD-245, PROD-263, PROD-282, PROD-361
+- Completed implementation: PROD-242, PROD-243, PROD-245, PROD-282
+- Remaining implementation: PROD-244, PROD-263, PROD-380, PROD-361
 - Parallel contract: PROD-272 local request creation and local/remote pending request processing lifecycle
 - Final integration and archive owner: PROD-361
 - PROD-242/243/244/245/263/282/361은 PROD-357이 완료되기 전까지 blocked 상태를 유지한다.
 - PROD-243과 PROD-272는 서로의 구현 또는 병합을 선행 조건으로 두지 않는다.
+- PROD-380은 PROD-244 병합 후 inbound Follow/Undo와 Follow Notification lifecycle을 통합한다.

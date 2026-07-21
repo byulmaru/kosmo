@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, ne, notExists, or, sql } from 'drizzle-orm';
 import {
   first,
   getDatabaseConnection,
@@ -80,6 +80,16 @@ export const removeInboundFollow = async (
   tx?: Transaction,
 ): Promise<boolean> =>
   getDatabaseConnection(tx).transaction(async (tx) => {
+    const unavailableParticipants = tx
+      .select({ id: Profiles.id })
+      .from(Profiles)
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(
+        and(
+          inArray(Profiles.id, [followerProfileId, followeeProfileId]),
+          or(ne(Profiles.state, ProfileState.ACTIVE), eq(Instances.state, InstanceState.SUSPENDED)),
+        ),
+      );
     const profileFollow = await tx
       .select({ id: ProfileFollows.id })
       .from(ProfileFollows)
@@ -94,7 +104,7 @@ export const removeInboundFollow = async (
 
       const deleted = await tx
         .delete(ProfileFollows)
-        .where(eq(ProfileFollows.id, profileFollow.id))
+        .where(and(eq(ProfileFollows.id, profileFollow.id), notExists(unavailableParticipants)))
         .returning({ id: ProfileFollows.id })
         .then(first);
 
@@ -131,7 +141,12 @@ export const removeInboundFollow = async (
 
     const deleted = await tx
       .delete(ProfileFollowRequests)
-      .where(eq(ProfileFollowRequests.id, profileFollowRequest.id))
+      .where(
+        and(
+          eq(ProfileFollowRequests.id, profileFollowRequest.id),
+          notExists(unavailableParticipants),
+        ),
+      )
       .returning({ id: ProfileFollowRequests.id })
       .then(first);
 

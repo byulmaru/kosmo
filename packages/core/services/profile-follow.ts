@@ -87,10 +87,6 @@ export const followProfile = async ({
     let created: boolean;
     let followResult: FollowProfileResult;
     if (target.followPolicy === ProfileFollowPolicy.APPROVAL_REQUIRED) {
-      if (isRemote) {
-        throw new ConflictError({ message: 'Profile requires follow request' });
-      }
-
       const ensured = await ensureProfileFollowRequest(
         { followeeProfileId: target.id, followerProfileId },
         tx,
@@ -121,18 +117,17 @@ export const followProfile = async ({
 
     const result = { created, followeeProfile, followerProfile, result: followResult };
     const command =
-      created &&
-      isRemote &&
-      target.instanceState === InstanceState.ACTIVE &&
-      target.actorUri &&
-      followResult.kind === 'ESTABLISHED'
+      created && isRemote && target.instanceState === InstanceState.ACTIVE && target.actorUri
         ? {
             actor: {
               inboxUri: target.actorInboxUri,
               sharedInboxUri: target.actorSharedInboxUri,
               uri: target.actorUri,
             },
-            profileFollow: followResult.profileFollow,
+            outboundFollow:
+              followResult.kind === 'ESTABLISHED'
+                ? followResult.profileFollow
+                : followResult.profileFollowRequest,
             senderProfileId: followerProfileId,
           }
         : undefined;
@@ -211,7 +206,7 @@ export const unfollowProfile = async ({
               sharedInboxUri: target.actorSharedInboxUri,
               uri: target.actorUri,
             },
-            profileFollow: deleted,
+            outboundFollow: deleted,
             senderProfileId: followerProfileId,
           }
         : undefined;

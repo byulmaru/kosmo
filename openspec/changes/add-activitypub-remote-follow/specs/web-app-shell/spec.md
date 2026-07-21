@@ -48,9 +48,9 @@
 - **AND** follow action은 `followProfile` mutation을 호출하고 optimistic UI는 `viewerState.follow`와 followersCount 갱신 정책을 따른다
 - **AND** 대상이 ActivityPub remote profile이어도 mutation의 `followerProfile.followingCount`와 `followeeProfile.followersCount`를 Relay normalized cache에 반영한다
 
-#### Scenario: Hide or disable unsupported remote follow action
+#### Scenario: Hide or disable remote request action before Web integration
 
-- **WHEN** 대상 ActivityPub remote profile에 대한 established viewer `ProfileFollow`가 없고, 대상이 자기 자신이거나, 비활성 profile이거나, `followPolicy`가 `APPROVAL_REQUIRED`이고 request flow가 아직 제공되지 않는다
+- **WHEN** 대상 ActivityPub remote profile에 대한 established viewer `ProfileFollow`가 없고, 대상이 자기 자신이거나, 비활성 profile이거나, `followPolicy`가 `APPROVAL_REQUIRED`이고 PROD-263 Web request action이 아직 제공되지 않는다
 - **THEN** 시스템은 local profile 대상의 기존 self/blocked/unsupported 정책과 같은 방식으로 새 follow action을 숨기거나 사용할 수 없게 한다
 - **AND** 사용할 수 없는 action은 ActivityPub `Follow` activity를 발송하는 mutation을 호출하지 않는다
 

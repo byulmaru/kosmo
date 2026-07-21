@@ -792,7 +792,7 @@ describe('GraphQL remote profile boundary', () => {
     });
   });
 
-  test('rejects approval-required remote follow without creating a relation', async () => {
+  test('creates and cancels an approval-required remote request with one Follow and Undo', async () => {
     const auth = await createAuthenticatedSession();
     const remoteInstance = await createRemoteInstance();
     const remote = await createProfile({
@@ -801,17 +801,97 @@ describe('GraphQL remote profile boundary', () => {
       instanceId: remoteInstance.id,
     });
     await createRemoteActor(remote.id, remoteInstance.domain);
-
-    const result = await requestGraphQL(
-      `mutation FollowApprovalRequiredRemote($id: ID!) {
-        followProfile(input: { id: $id }) { result { __typename } }
-      }`,
-      { id: globalId('Profile', remote.id) },
-      auth.token,
+    const requests: Request[] = [];
+    const fetchMock = mock.method(
+      globalThis,
+      'fetch',
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const request = input instanceof Request ? input : new Request(input, init);
+        requests.push(request.clone());
+        return new Response(null, { status: 202 });
+      },
     );
 
-    assertGraphQLErrorCode(result, 'CONFLICT');
+    let profileFollowRequest: typeof ProfileFollowRequests.$inferSelect;
+    try {
+      const follow = () =>
+        requestGraphQL<{
+          followProfile: {
+            followeeProfile: { followersCount: number };
+            followerProfile: { followingCount: number };
+            result: { __typename: string; id: string };
+          };
+        }>(
+          `mutation FollowApprovalRequiredRemote($id: ID!) {
+            followProfile(input: { id: $id }) {
+              followeeProfile { followersCount }
+              followerProfile { followingCount }
+              result { __typename ... on ProfileFollowRequest { id } }
+            }
+          }`,
+          { id: globalId('Profile', remote.id) },
+          auth.token,
+        );
+      const [first, duplicate] = await Promise.all([follow(), follow()]);
+      assertNoGraphQLErrors(first);
+      assertNoGraphQLErrors(duplicate);
+      assert.deepEqual(duplicate.data?.followProfile.result, first.data?.followProfile.result);
+      assert.equal(first.data?.followProfile.result.__typename, 'ProfileFollowRequest');
+      assert.equal(first.data?.followProfile.followeeProfile.followersCount, 0);
+      assert.equal(first.data?.followProfile.followerProfile.followingCount, 0);
+
+      profileFollowRequest = await db
+        .select()
+        .from(ProfileFollowRequests)
+        .where(
+          and(
+            eq(ProfileFollowRequests.followerProfileId, auth.profile.id),
+            eq(ProfileFollowRequests.followeeProfileId, remote.id),
+          ),
+        )
+        .limit(1)
+        .then(firstOrThrow);
+
+      const cancel = () =>
+        requestGraphQL(
+          `mutation CancelApprovalRequiredRemote($id: ID!) {
+            cancelProfileFollowRequest(input: { id: $id }) { profileFollowRequestId }
+          }`,
+          { id: globalId('ProfileFollowRequest', profileFollowRequest.id) },
+          auth.token,
+        );
+      const canceled = await Promise.all([cancel(), cancel()]);
+      assert.equal(canceled.filter(({ errors }) => !errors).length, 1);
+      assert.equal(canceled.filter(({ errors }) => errors).length, 1);
+    } finally {
+      fetchMock.mock.restore();
+    }
+
     assert.equal(await countRows(ProfileFollows), 0);
+    assert.equal(await countRows(ProfileFollowRequests), 0);
+    assert.equal(requests.length, 2);
+
+    const [follow, undo] = await Promise.all(
+      requests.map(async (request) => (await request.json()) as Record<string, unknown>),
+    );
+    const actorUri = `${publicOrigin}/ap/actor/${auth.profile.id}`;
+    const remoteActorUri = `https://${remoteInstance.domain}/users/remote`;
+    const followUri = `${publicOrigin}/ap/follow/${profileFollowRequest.id}`;
+    assert.equal(follow?.type, 'Follow');
+    assert.equal(follow?.actor, actorUri);
+    assert.equal(follow?.id, followUri);
+    assert.equal(follow?.object, remoteActorUri);
+    assert.equal(follow?.published, profileFollowRequest.createdAt.toString());
+    assert.equal(follow?.to, remoteActorUri);
+    assert.equal(undo?.type, 'Undo');
+    assert.equal(undo?.actor, actorUri);
+    assert.deepEqual(undo?.object, {
+      actor: actorUri,
+      id: followUri,
+      object: remoteActorUri,
+      published: profileFollowRequest.createdAt.toString(),
+      type: 'Follow',
+    });
   });
 
   test('rejects following a suspended remote profile without creating a relation', async () => {

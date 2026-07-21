@@ -4,7 +4,7 @@ import { PUBLIC_COLLECTION } from '@fedify/vocab';
 import { projectRemoteNoteContent } from '@kosmo/core/activitypub-note-content/server';
 import { PostVisibility } from '@kosmo/core/enums';
 import { createPost } from '@kosmo/core/services';
-import { uniqueHref } from './unique-href';
+import { uniqueHref } from './activitypub-uri';
 import type { Note } from '@fedify/vocab';
 
 const hasReplyTarget = async (note: Note): Promise<boolean> => {
