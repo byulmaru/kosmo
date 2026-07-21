@@ -171,9 +171,9 @@ Owner Profile이 조회 가능한 Target의 Bookmark를 안정적인 최신순 c
 - fixture만으로 loading·error·empty·populated와 추가 로딩 상태를 Storybook에서 재현한다.
 - 기존 Post 카드의 canonical detail href, error retry, pagination 요청과 loading 중 중복 방지를 component interaction 수준에서 검증한다.
 
-- [ ] 6.1 기존 `PostListItem`을 사용하는 Bookmark 목록 presentation과 loading·error·empty·populated 상태를 구현한다.
-- [ ] 6.2 실제 connection 없이 pagination callback과 추가 로딩 상태를 제공하고 Storybook 상태 조합을 추가한다.
-- [ ] 6.3 canonical detail href, retry·pagination interaction과 접근성 검증을 추가하고 관련 check를 통과시킨다.
+- [x] 6.1 기존 `PostListItem`을 사용하는 Bookmark 목록 presentation과 loading·error·empty·populated 상태를 구현한다.
+- [x] 6.2 실제 connection 없이 pagination callback과 추가 로딩 상태를 제공하고 Storybook 상태 조합을 추가한다.
+- [x] 6.3 canonical detail href, retry·pagination interaction과 접근성 검증을 추가하고 관련 check를 통과시킨다.
 
 ## 7. PROD-421 Bookmark 목록 화면을 제공한다
 
