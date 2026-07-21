@@ -411,9 +411,11 @@ export const UniversalMobileUnreadBadge: Story = {
       canvas.findByRole('link', { name: '알림, 읽지 않은 알림 100개' }),
     ).resolves.toBeVisible();
     expect(canvas.getAllByRole('link', { name: '알림, 읽지 않은 알림 100개' })).toHaveLength(1);
-    const badge = canvas.getByText('99+');
-    expect(badge).toBeVisible();
-    expect(badge.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(canvas.queryByText('99+')).toBeNull();
+    const bottomTabDot = canvas.getByTestId('unread-notification-dot');
+    expect(bottomTabDot).toBeVisible();
+    expect(bottomTabDot).toHaveStyle({ height: '8px', right: '2px', top: '-1px', width: '8px' });
+    expect(bottomTabDot.closest('[aria-hidden="true"]')).not.toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
     const page = within(canvasElement.ownerDocument.body);
     const drawerNavigation = await page.findByRole('navigation', { name: '주요 메뉴' });
@@ -421,6 +423,10 @@ export const UniversalMobileUnreadBadge: Story = {
       within(drawerNavigation).findByRole('link', { name: '알림, 읽지 않은 알림 100개' }),
     ).resolves.toBeVisible();
     expect(page.getAllByRole('link', { name: '알림, 읽지 않은 알림 100개' })).toHaveLength(1);
+    const drawerDot = within(drawerNavigation).getByTestId('unread-notification-dot');
+    expect(drawerDot).toBeVisible();
+    expect(drawerDot).toHaveStyle({ height: '8px', right: '2px', top: '-1px', width: '8px' });
+    expect(within(drawerNavigation).queryByText('99+')).toBeNull();
   },
   render: () => (
     <View style={{ height: 844 }}>
@@ -436,8 +442,7 @@ export const UniversalMobileUnreadBadgeZero: Story = {
     const canvas = within(canvasElement);
     const notification = await canvas.findByRole('link', { name: '알림' });
     expect(notification).toBeVisible();
-    expect(within(notification).queryByText('0')).toBeNull();
-    expect(within(notification).queryByText('99+')).toBeNull();
+    expect(canvas.queryByTestId('unread-notification-dot')).toBeNull();
   },
   render: () => <UniversalShellStory />,
 };
@@ -459,8 +464,7 @@ export const UniversalMobileUnreadBadgeInitialFailure: Story = {
     const canvas = within(canvasElement);
     const notification = await canvas.findByRole('link', { name: '알림' });
     expect(notification).toBeVisible();
-    expect(within(notification).queryByText('0')).toBeNull();
-    expect(within(notification).queryByText('99+')).toBeNull();
+    expect(canvas.queryByTestId('unread-notification-dot')).toBeNull();
     expect(canvas.queryByText('읽지 않은 알림 수를 불러오지 못했습니다.')).toBeNull();
     expect(canvas.queryByRole('button', { name: /알림.*(재시도|다시)/ })).toBeNull();
   },
@@ -475,7 +479,13 @@ export const UniversalCompactUnreadBadge: Story = {
     await expect(
       canvas.findByRole('link', { name: '알림, 읽지 않은 알림 99개' }),
     ).resolves.toBeVisible();
-    expect(canvas.getByText('99')).toBeVisible();
+    expect(canvas.queryByText('99')).toBeNull();
+    expect(canvas.getByTestId('unread-notification-dot')).toHaveStyle({
+      height: '8px',
+      right: '2px',
+      top: '-1px',
+      width: '8px',
+    });
   },
   render: () => <UniversalShellStory />,
 };
@@ -488,7 +498,13 @@ export const UniversalFullUnreadBadge: Story = {
     await expect(
       canvas.findByRole('link', { name: '알림, 읽지 않은 알림 1개' }),
     ).resolves.toBeVisible();
-    expect(canvas.getByText('1')).toBeVisible();
+    expect(canvas.queryByText('1')).toBeNull();
+    expect(canvas.getByTestId('unread-notification-dot')).toHaveStyle({
+      height: '8px',
+      right: '2px',
+      top: '-1px',
+      width: '8px',
+    });
   },
   render: () => <UniversalShellStory />,
 };
@@ -505,7 +521,8 @@ export const UnreadBadgeUsesNormalizedRelayProfileRecord: Story = {
     await expect(
       canvas.findByRole('link', { name: '알림, 읽지 않은 알림 100개' }),
     ).resolves.toBeVisible();
-    expect(canvas.getByText('99+')).toBeVisible();
+    expect(canvas.queryByText('99+')).toBeNull();
+    expect(canvas.getByTestId('unread-notification-dot')).toBeVisible();
   },
   render: () => (
     <>

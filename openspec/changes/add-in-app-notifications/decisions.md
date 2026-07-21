@@ -227,12 +227,32 @@
 ### Unread badge는 기존 셸 알림 아이콘에 selected Profile count만 겹쳐 표시한다
 
 - Decision Date: 2026-07-20
-- Status: Accepted
+- Status: Superseded
 - Context / Problem: Web Figma 화면에는 아직 Unread badge가 없고 모바일 Figma의 badge 예시는 현재 공용 셸 코드의 label 구조와 다르다. 새 badge가 기존 내비게이션 layout을 바꾸거나 Profile 전환 중 다른 Recipient count를 노출하지 않으면서 모든 Android/iOS/Web 셸 surface에서 일관되게 동작해야 한다.
 - Decision Outcome: 하단 탭 바, 모바일 drawer, Web compact 레일과 full 사이드바의 기존 알림 아이콘에만 badge를 overlay한다. 기존 label과 내비게이션 구조는 유지하고 label 옆 별도 pill을 만들지 않는다. `0`은 숨기고 `1..99`는 정확한 숫자, `100` 이상은 `99+`로 표시하며 기존 light/dark neutral token 조합으로 대비를 확보한다. control은 양수 count에서 capped 표시값이 아닌 실제 서버 count를 사용한 `알림, 읽지 않은 알림 N개`, 그 외에는 `알림`으로 읽고 시각 badge는 accessibility tree에서 숨긴다. 최초 성공 전과 Profile 전환 직후에는 숨긴다. badge count 조회와 `{ selectedProfileId, lastSuccessfulCount }` 상태는 전체 셸 query의 Suspense/Error boundary와 분리된 non-suspending controller가 소유해 같은 Profile의 environment 교체나 조회 실패 중에도 마지막 성공값과 셸 진입점을 유지한다. controller는 Relay operation/store를 사용하며 count 오류를 셸 boundary로 throw하지 않는다. count-only 오류를 위한 메시지나 retry control은 추가하지 않고 다음 Profile 전환, 셸 load·재진입 또는 기존 셸 오류 retry에서 다시 조회한다. 자동 foreground/reconnect listener나 `NetInfo`는 추가하지 않는다.
 - Alternatives Considered: label 옆 count pill, count 없는 dot, Figma mobile의 primary/card 색 조합, danger 색, badge 전용 또는 `onPrimary` token 추가, `NetInfo` 기반 즉시 reconnect refresh.
 - Consequences: badge는 셸 layout과 touch target을 바꾸지 않고 모든 surface에서 같은 normalized Profile field를 표시한다. count controller는 셸 query와 별도의 오류/상태 경계를 가지지만 ad hoc network stack을 만들지 않는다. 최초 count-only 실패는 다음 기존 refresh까지 badge 없이 남고, 성공 뒤 오류나 활성 상태 reconnect만 발생하면 마지막 성공 count가 다음 기존 refresh까지 stale할 수 있다. Profile 전환은 다른 Profile의 마지막 값을 재사용하지 않고 같은 Profile의 count 오류는 전체 셸 오류로 승격하지 않는다. Read mutation과 optimistic/cache orchestration은 `PROD-372`가 소유하며 badge consumer는 목록 길이나 hidden item으로 보정하지 않는다.
 - Confirmation / Follow-up: `PROD-324`가 `web-app-shell` delta, shell/Storybook/Relay cache test와 platform smoke를 소유한다. `PROD-372`는 Read 결과의 `recipientProfile.unreadNotificationCount` cache 반영을 소유하고 `PROD-278`이 최종 Follow→badge→Read 수렴을 Web E2E로 검증한다.
+
+### 모바일 drawer는 숫자 대신 작은 Unread dot을 표시한다
+
+- Decision Date: 2026-07-21
+- Status: Superseded
+- Context / Problem: 같은 16px count badge를 24px 하단 탭 아이콘과 20px drawer 아이콘에 재사용하면 drawer에서 badge가 아이콘보다 시각적으로 우세하고 `99+`가 행 정렬을 어수선하게 만든다. 모바일 drawer가 열리기 전부터 하단 탭이 정확한 count를 제공하므로 drawer에서는 Unread 존재 여부만으로 충분하다.
+- Decision Outcome: 모바일 drawer의 기존 알림 행과 accessible name은 유지하되 양수 count는 알림 아이콘 우상단의 숫자 없는 8px dot으로 표시한다. 하단 탭과 Web compact/full 사이드바는 기존 `1..99`와 `99+` count 정책을 유지하며, 하단 탭 count badge는 padding과 offset을 줄여 24px 아이콘과 정렬한다. 모든 표면은 동일한 실제 서버 count를 accessible name으로 읽고 `0` 또는 최초 성공 전에는 badge를 숨긴다. 공용 badge component 하나가 count와 dot 시각 variant를 제공한다.
+- Alternatives Considered: 모든 표면에 같은 count badge 유지, drawer 알림 행 제거, 전체 모바일 drawer 내비게이션 재설계, 모든 표면을 dot으로 통일.
+- Consequences: drawer는 정확한 숫자를 시각적으로 중복하지 않아 더 가볍게 보이지만 screen reader는 실제 count를 계속 얻는다. 기존 route, label, row, touch target, controller와 Profile 격리·오류 계약은 바뀌지 않는다. 전체 drawer 정보 구조 변경은 PROD-324 범위에 포함하지 않는다.
+- Confirmation / Follow-up: Storybook interaction은 같은 count에서 하단 탭의 `99+`, drawer의 dot과 두 진입점의 실제 count accessible name을 검증한다. 이 결정은 2026-07-20 결정의 “모든 surface에서 같은 formatted count를 표시한다”는 시각적 부분만 대체하고 나머지 상태·접근성·lifecycle 결정은 유지한다.
+
+### 모든 셸 Unread badge는 accent dot으로 통일한다
+
+- Decision Date: 2026-07-21
+- Status: Accepted
+- Context / Problem: 숫자 count badge는 아이콘보다 시각적으로 크고 셸 표면마다 다른 정보 밀도와 정렬을 만들었다. 정확한 count는 screen reader에 계속 제공할 수 있으므로, 시각적으로는 모든 셸 진입점에서 Unread 존재 여부만 일관되게 알리는 편이 낫다. badge 색도 `text`에 직접 결합하면 후속 강조색 변경이 여러 component에 퍼진다.
+- Decision Outcome: Android/iOS와 좁은 Web의 하단 탭 바·모바일 drawer, Web compact 레일과 full 사이드바 모두 양수 count를 같은 숫자 없는 8px dot으로 알림 아이콘에 overlay한다. dot은 icon wrapper 기준 `right: 2px`, `top: -1px`에 놓고 semantic `accent` token을 사용한다. `onAccent`는 향후 accent 배경 위 foreground content를 위한 짝 토큰으로 함께 정의하지만 현재 dot은 content가 없어 사용하지 않는다. `0`과 최초 성공 전에는 dot을 숨긴다. 모든 진입점은 양수 count에서 실제 서버 count를 사용한 `알림, 읽지 않은 알림 N개`라는 하나의 accessible name을 유지하며 dot은 accessibility tree에서 숨긴다. 공용 badge component는 시각 variant나 count formatter 없이 양수 여부만 렌더링한다. count controller의 Profile 격리, 같은 Profile의 마지막 성공값, normalized Relay record 구독, non-suspending 오류 경계와 기존 refresh 수렴 계약은 유지한다.
+- Alternatives Considered: 하단 탭·Web에는 count를 남기고 drawer만 dot으로 표시, `1..99`/`99+` count를 모든 표면에 유지, badge 전용 color token, 짝 foreground token 없는 `accent`만 추가.
+- Consequences: 사용자는 모든 표면에서 같은 위치와 크기의 표시로 Unread 존재 여부를 보고, 정확한 숫자는 접근성 이름으로만 얻는다. 시각 count cap과 formatter·variant가 사라져 공용 component가 단순해진다. 현재 light/dark `accent` 값은 기존 dot 외관을 보존하지만 후속 색 변경은 token 매핑만 수정하면 된다. 기존 route, label, row/touch target, count controller와 Profile 격리·오류 동작은 바뀌지 않는다.
+- Confirmation / Follow-up: Storybook interaction은 0/1/99/100과 하단 탭·drawer·compact/full에서 숫자가 없고 같은 dot geometry를 사용하는지, 실제 count accessible name과 normalized Relay 갱신·Profile 전환·마지막 성공값 계약이 유지되는지 검증한다. 이 결정은 2026-07-20 결정과 같은 날의 drawer-only dot 결정을 대체한다.
 
 ### Notification Node는 concrete global ID 계약을 따른다
 

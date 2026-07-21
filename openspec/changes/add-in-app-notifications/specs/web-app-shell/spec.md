@@ -2,7 +2,7 @@
 
 ### Requirement: Profile-scoped unread notification badge
 
-유니버설 앱 셸은 selected Profile의 서버 제공 `Profile.unreadNotificationCount`를 모든 알림 내비게이션 진입점에 표시해야 한다(MUST). 지원 진입점은 Android/iOS와 `compact` 미만 Web의 하단 탭 바, 모바일 drawer 사이드바, `compact` 이상 `full` 미만 Web의 아이콘 레일, `full` 이상 Web의 풀 사이드바다(MUST). badge는 기존 알림 아이콘에 겹쳐 표시하고 셸의 라벨, 행 배치, 클릭 영역과 내비게이션 구조를 바꾸지 않아야 한다(MUST).
+유니버설 앱 셸은 selected Profile의 서버 제공 `Profile.unreadNotificationCount`가 양수인지 모든 알림 내비게이션 진입점에 표시해야 한다(MUST). 지원 진입점은 Android/iOS와 `compact` 미만 Web의 하단 탭 바, 모바일 drawer 사이드바, `compact` 이상 `full` 미만 Web의 아이콘 레일, `full` 이상 Web의 풀 사이드바다(MUST). 모든 표면은 양수 count를 숫자 없는 8px dot으로 기존 알림 아이콘의 같은 위치에 겹쳐 표시해야 한다(MUST). badge는 셸의 라벨, 행 배치, 클릭 영역과 내비게이션 구조를 바꾸지 않아야 한다(MUST).
 
 #### Scenario: Hide a zero count
 
@@ -11,27 +11,27 @@
 - **THEN** 시스템은 시각적 badge를 표시하지 않는다
 - **AND** 진입점의 accessible name은 `알림`이다
 
-#### Scenario: Show an exact count from one through ninety-nine
+#### Scenario: Show unread presence for a positive count
 
-- **GIVEN** selected Profile의 `unreadNotificationCount`가 `1` 이상 `99` 이하다
+- **GIVEN** selected Profile의 `unreadNotificationCount`가 양수 `N`이다
 - **WHEN** 시스템이 지원하는 알림 셸 진입점을 렌더링한다
-- **THEN** 시스템은 알림 아이콘 우상단의 badge에 정확한 숫자를 표시한다
+- **THEN** 시스템은 알림 아이콘 우상단에 숫자 없는 8px dot을 표시한다
 - **AND** 기존 라벨과 내비게이션 layout은 그대로 유지된다
 - **AND** 진입점의 accessible name은 실제 서버 count를 사용한 `알림, 읽지 않은 알림 N개`다
 
-#### Scenario: Cap a large count
+#### Scenario: Keep a large count numberless
 
 - **GIVEN** selected Profile의 `unreadNotificationCount`가 `127`이다
 - **WHEN** 시스템이 지원하는 알림 셸 진입점을 렌더링한다
-- **THEN** 시스템은 알림 아이콘 우상단의 badge에 `99+`를 표시한다
-- **AND** 진입점의 accessible name은 capped 표시값이 아닌 실제 서버 count를 사용한 `알림, 읽지 않은 알림 127개`다
+- **THEN** 시스템은 다른 양수 count와 같은 숫자 없는 8px dot을 표시한다
+- **AND** 진입점의 accessible name은 실제 서버 count를 사용한 `알림, 읽지 않은 알림 127개`다
 - **AND** 시각적 badge는 별도 focus 대상이나 중복 accessibility element로 노출되지 않는다
 
 #### Scenario: Render every supported shell surface
 
 - **GIVEN** selected Profile의 `unreadNotificationCount`가 양수다
 - **WHEN** 시스템이 하단 탭 바, 모바일 drawer, Web 아이콘 레일 또는 Web 풀 사이드바를 렌더링한다
-- **THEN** 각 surface의 알림 아이콘은 같은 formatted count의 badge를 표시한다
+- **THEN** 모든 표면은 같은 8px 숫자 없는 dot badge를 같은 위치와 스타일로 표시한다
 - **AND** compact surface는 기존 icon-only 구조를, label이 있는 surface는 기존 label을 유지한다
 
 #### Scenario: Expose one accessible navigation entry

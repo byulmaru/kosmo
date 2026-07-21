@@ -3,14 +3,6 @@ export type UnreadNotificationBadgeLastSuccess = {
   count: number;
 };
 
-export function formatUnreadNotificationBadge(count: number | null): string | null {
-  if (!count || count < 1) {
-    return null;
-  }
-
-  return count > 99 ? '99+' : String(count);
-}
-
 export function getUnreadNotificationAccessibilityLabel(count: number | null): string {
   return count && count > 0 ? `알림, 읽지 않은 알림 ${count}개` : '알림';
 }
