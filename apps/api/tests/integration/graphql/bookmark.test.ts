@@ -6,6 +6,7 @@ import {
   AccountProfileRole,
   AccountState,
   InstanceKind,
+  InstanceState,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -158,17 +159,24 @@ describe('GraphQL Bookmark 생성', () => {
     const author = await createProfile('actor-check-author');
     const post = await createPost(author.id);
     const suffix = crypto.randomUUID();
-    const remoteInstance = await db
-      .insert(Instances)
-      .values({ domain: `${suffix}.example`, kind: InstanceKind.ACTIVITYPUB })
-      .returning()
-      .then(firstOrThrow);
+    const remoteInstanceId = crypto.randomUUID();
+    const unresponsiveInstanceId = crypto.randomUUID();
+    await db.insert(Instances).values([
+      { id: remoteInstanceId, domain: `remote-${suffix}.example`, kind: InstanceKind.ACTIVITYPUB },
+      {
+        id: unresponsiveInstanceId,
+        domain: `unresponsive-${suffix}.example`,
+        kind: InstanceKind.LOCAL,
+        state: InstanceState.UNRESPONSIVE,
+      },
+    ]);
     const actors = await Promise.all([
       createAuthenticatedSession({ activeProfile: false }),
       createAuthenticatedSession({ accountState: AccountState.DISABLED }),
       createAuthenticatedSession({ member: false }),
       createAuthenticatedSession({ profileState: ProfileState.DISABLED }),
-      createAuthenticatedSession({ instanceId: remoteInstance.id }),
+      createAuthenticatedSession({ instanceId: remoteInstanceId }),
+      createAuthenticatedSession({ instanceId: unresponsiveInstanceId }),
     ]);
 
     for (const token of [undefined, ...actors.map(({ token }) => token)]) {
