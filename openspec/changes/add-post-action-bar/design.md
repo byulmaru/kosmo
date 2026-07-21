@@ -32,7 +32,7 @@
 - `Button`의 40px 일반 버튼 metric과 loading/disabled 표현은 Action Bar의 16px icon/count, 44px target, selected+pending 조합에 맞지 않는다.
 - React Native Web을 공유하므로 DOM element, CSS selector, Web 전용 event에 의존한 구현은 native 계약을 깨뜨린다.
 - Figma의 시각 행 높이 약 27~28px는 interactive target 요구사항보다 작다. 보이는 glyph metric은 유지하되 control layout 자체가 44px 이상이어야 한다.
-- 실제 count와 viewer-relative selected 상태의 cache 소유권은 Action Bar가 아니라 상위 Relay/surface 계층에 있다.
+- 선행 action 계약이 제공하는 count와 viewer-relative selected 상태의 cache 소유권은 Action Bar가 아니라 상위 Relay/surface 계층에 있다.
 
 ### Recommended Approach
 
@@ -44,14 +44,14 @@ PROD-433의 Storybook은 Reply의 기본·pending·disabled·error, selected 지
 
 PROD-434는 준비된 `PostActionBar`를 목록·상세의 게시글 콘텐츠 영역에 배치하고, 게시글 상세 navigation과 action Pressable이 중첩 활성화되지 않도록 현재 surface의 interactive layer 경계를 정리한다. production surface는 다섯 액션을 모두 제공하며, Post Kind·Post Visibility·권한상 실행할 수 없는 액션은 optional prop을 생략하지 않고 disabled 상태로 표현한다.
 
-PROD-432는 선행 action 구현의 실제 fragment/mutation 결과를 surface adapter에서 `PostActionBar` 상태로 변환한다. viewer-independent count와 선택 Profile별 selected 상태의 기존 Relay cache 경계를 유지하고, action별 pending/error를 분리한다. Reply는 작성 이력이나 composer 열림을 selected로 변환하지 않는다. guest의 Reply·Repost·Reaction·Bookmark activation은 인증 여부만으로 숨기거나 비활성화하지 않고 상위 인증 진입 계약으로 위임하되 이 change에서 임시 인증 화면이나 목적지를 만들지 않는다. More callback은 surface에서 접근 가능한 최소 팝업을 열고 guest도 사용할 수 있는 `링크 복사`로 canonical Post URL을 clipboard에 복사한다. canonical URL은 Web의 현재 origin 또는 Native의 검증된 `EXPO_PUBLIC_WEB_ORIGIN`과 기존 `/{relativeHandle}/{postId}` route를 결합하며 API origin·native deep link·query·hash를 사용하지 않는다. 모든 자식과 선행 action이 준비된 뒤 목록·상세의 동일 계약, Profile 전환, 성공·실패·재시도, disabled 정책 및 More 링크 복사를 통합 검증하고 공유 change를 archive한다.
+PROD-432는 선행 action 구현의 실제 fragment/mutation 결과를 surface adapter에서 `PostActionBar` 상태로 변환한다. count는 선행 action 계약이 제공하는 경우에만 optional로 연결하고, 계약이 없는 액션에 0이나 새 집계를 합성하지 않는다. 제공된 viewer-independent count와 선택 Profile별 selected 상태의 기존 Relay cache 경계를 유지하고, action별 pending/error를 분리한다. Reply는 작성 이력이나 composer 열림을 selected로 변환하지 않는다. guest의 Reply·Repost·Reaction·Bookmark activation은 인증 여부만으로 숨기거나 비활성화하지 않고 상위 인증 진입 계약으로 위임하되 이 change에서 임시 인증 화면이나 목적지를 만들지 않는다. More callback은 surface에서 접근 가능한 최소 팝업을 열고 guest도 사용할 수 있는 `링크 복사`로 canonical Post URL을 clipboard에 복사한다. canonical URL은 Web의 현재 origin 또는 Native의 검증된 `EXPO_PUBLIC_WEB_ORIGIN`과 기존 `/{relativeHandle}/{postId}` route를 결합하며 API origin·native deep link·query·hash를 사용하지 않는다. 모든 자식과 선행 action이 준비된 뒤 목록·상세의 동일 계약, Profile 전환, 성공·실패·재시도, disabled 정책 및 More 링크 복사를 통합 검증하고 공유 change를 archive한다.
 
 ### Allowed Alternatives
 
 - 비공개 control은 직접 `Pressable`을 사용하거나 기존 primitive를 조합할 수 있다. 어느 쪽이든 공개 leaf 컴포넌트를 추가하지 않고 specs의 입력·상태·44×44·접근성 계약을 충족해야 한다.
 - spinner는 React Native `ActivityIndicator` 또는 이미 존재하는 동등한 theme-aware primitive를 사용할 수 있다. Post Action Bar UI를 위한 외부 dependency는 추가하지 않는다.
 - PROD-432의 링크 복사는 구현 시점에 공유 clipboard 추상화가 없으면 Expo 호환 clipboard package를 추가할 수 있다. package 선택과 dependency 변경은 PROD-432 구현 PR에서 검증한다.
-- surface adapter의 정확한 fragment 배치는 각 선행 action 계약과 당시 코드 구조를 따를 수 있다. count와 selected의 cache 경계 및 action별 처리 상태는 바꾸지 않는다.
+- surface adapter의 정확한 fragment 배치는 각 선행 action 계약과 당시 코드 구조를 따를 수 있다. 선행 계약이 제공하는 count와 selected의 cache 경계 및 action별 처리 상태는 바꾸지 않는다.
 
 ### Known Traps
 

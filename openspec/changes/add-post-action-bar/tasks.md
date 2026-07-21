@@ -61,7 +61,7 @@ Home·Profile Post List와 Post 상세가 같은 Post Action Bar를 본문 inter
 **Guardrails**
 
 - 각 action의 schema, 저장, mutation, count 집계, selected 의미, 권한과 개별 UI 계약을 재구현하지 않고 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425의 완료 결과를 소비한다.
-- viewer-independent count와 선택 Profile별 selected 상태의 기존 Relay cache 경계를 유지한다.
+- 선행 action 계약이 제공하는 viewer-independent count와 선택 Profile별 selected 상태의 기존 Relay cache 경계를 유지하고, count 계약이 없는 액션에 0이나 새 집계를 합성하지 않는다.
 - pending·error는 액션별로 격리하고, 한 액션 요청이 다른 액션을 불필요하게 차단하지 않는다.
 - 목록과 상세는 다섯 액션을 같은 위치에 유지하고 canonical 정책상 실행할 수 없는 액션을 disabled로 제공한다.
 - guest의 소셜 액션은 상위 인증 진입 계약으로 위임하고 임시 인증 화면을 추가하지 않는다. More 링크 복사는 guest에게도 허용한다.
@@ -69,7 +69,7 @@ Home·Profile Post List와 Post 상세가 같은 Post Action Bar를 본문 inter
 
 **Verification**
 
-- 선택 Profile 전환 시 count 공유와 selected 격리를 검증한다.
+- 선택 Profile 전환 시 제공된 count 공유와 selected 격리를 검증한다.
 - Reply·Repost·Reaction·Bookmark 각각의 성공, action별 pending 중복 차단, 실패 표시와 재시도를 검증한다.
 - Post Kind·Post Visibility·권한상 불가능한 액션의 disabled 표시, guest 인증 위임과 Home·Profile 목록·상세의 동일 계약을 검증한다.
 - More 팝업의 단일 `링크 복사` 항목, canonical Post URL clipboard 복사와 guest 사용을 검증한다.
@@ -77,7 +77,7 @@ Home·Profile Post List와 Post 상세가 같은 Post Action Bar를 본문 inter
 - archive 전후 strict validation을 통과시킨다.
 
 - [ ] 3.1 구현 자식과 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425의 완료·공개 계약을 확인하고, 특히 PROD-417·PROD-418의 Reaction count·selected 의미가 확정된 뒤 실제 Post 상태를 공통 Action Bar 입력으로 연결할 경계를 정리한다.
-- [ ] 3.2 목록·상세에서 기존 Reply·Repost·Reaction·Bookmark의 count, callback과 액션별 처리 상태를 공통 Action Bar에 연결하고, Repost·Bookmark 및 공개 계약이 의미를 제공한 Reaction에만 selected를 연결한다.
+- [ ] 3.2 목록·상세에서 기존 Reply·Repost·Reaction·Bookmark의 callback과 액션별 처리 상태를 공통 Action Bar에 연결하고, 선행 계약이 제공하는 액션에만 optional count를, Repost·Bookmark 및 공개 계약이 의미를 제공한 Reaction에만 selected를 연결한다.
 - [ ] 3.3 선택 Profile cache 경계, Post Kind·Post Visibility·권한별 disabled, guest 인증 위임과 action별 pending·failure·retry 동작을 적용한다.
 - [ ] 3.4 More callback에 접근 가능한 최소 팝업과 guest도 사용할 수 있는 canonical Post URL `링크 복사`를 연결한다. Web의 현재 origin 또는 Native의 검증된 `EXPO_PUBLIC_WEB_ORIGIN`과 `/{relativeHandle}/{postId}`를 결합한 query·hash 없는 절대 URL을 사용하고, 공유 clipboard 추상화가 없으면 Expo 호환 clipboard package를 추가해 native·Web 동작을 검증한다.
 - [ ] 3.5 Home·Profile 목록·Post 상세의 실제 성공·중복 차단·실패 복구·Profile 전환·disabled 정책·guest 위임·More 링크 복사 통합 테스트를 추가하고 전체 관련 검증을 통과시킨다.
