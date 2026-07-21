@@ -244,11 +244,7 @@ describe('Bookmark GraphQL 경계', () => {
     });
 
     const owned = await loadBookmarkConnection(ownerProfileId, owner.token, { first: 10 });
-    assertNoGraphQLErrors(owned);
-    assert.deepEqual(
-      owned.data?.node?.bookmarks.edges.map(({ node }) => node.id),
-      [bookmarkId],
-    );
+    assertBookmarkIds(owned, [bookmarkId]);
 
     const wrongProfile = await loadBookmarkConnection(
       encodeGlobalId('Profile', other.profile.id),
@@ -266,11 +262,12 @@ describe('Bookmark GraphQL 경계', () => {
     assert.equal(unauthenticated.data?.node, null);
     assert.equal(unauthenticated.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
 
-    assert.deepEqual(await loadBookmarkNodes([bookmarkId], owner.token), [
-      { id: bookmarkId, post: { id: encodeGlobalId('Post', target.id) } },
-    ]);
-    assert.deepEqual(await loadBookmarkNodes([bookmarkId], other.token), [null]);
-    assert.deepEqual(await loadBookmarkNodes([bookmarkId]), [null]);
+    assert.deepEqual(await loadBookmarkNode(bookmarkId, owner.token), {
+      id: bookmarkId,
+      post: { id: encodeGlobalId('Post', target.id) },
+    });
+    assert.equal(await loadBookmarkNode(bookmarkId, other.token), null);
+    assert.equal(await loadBookmarkNode(bookmarkId), null);
   });
 
   test('filters with the shared Post policy before applying ID-only pagination', async () => {
@@ -298,9 +295,8 @@ describe('Bookmark GraphQL 경계', () => {
     const profileId = encodeGlobalId('Profile', owner.profile.id);
 
     const first = await loadBookmarkConnection(profileId, owner.token, { first: 2 });
-    assertNoGraphQLErrors(first);
-    assert.deepEqual(
-      first.data?.node?.bookmarks.edges.map(({ node }) => node.id),
+    assertBookmarkIds(
+      first,
       [bookmarks[0]!, bookmarks[2]!].map(({ id }) => encodeGlobalId('Bookmark', id)),
     );
     assert.equal(first.data?.node?.bookmarks.pageInfo.hasNextPage, true);
@@ -309,11 +305,7 @@ describe('Bookmark GraphQL 경계', () => {
       after: first.data?.node?.bookmarks.pageInfo.endCursor,
       first: 2,
     });
-    assertNoGraphQLErrors(second);
-    assert.deepEqual(
-      second.data?.node?.bookmarks.edges.map(({ node }) => node.id),
-      [encodeGlobalId('Bookmark', bookmarks[4]!.id)],
-    );
+    assertBookmarkIds(second, [encodeGlobalId('Bookmark', bookmarks[4]!.id)]);
     assert.equal(second.data?.node?.bookmarks.pageInfo.hasNextPage, false);
   });
 
@@ -322,7 +314,7 @@ describe('Bookmark GraphQL 경계', () => {
     const followedAuthor = await createProfile('followed-author');
     const hiddenAuthor = await createProfile('hidden-author');
     const suspendedAuthor = await createProfile('suspended-author');
-    const suspendedInstance = await createInstance('suspended.example', InstanceState.SUSPENDED);
+    const suspendedInstance = await createSuspendedInstance('suspended.example');
     const suspendedInstanceAuthor = await createProfile('suspended-instance-author', {
       instanceId: suspendedInstance.id,
     });
@@ -351,30 +343,27 @@ describe('Bookmark GraphQL 경계', () => {
 
     const profileId = encodeGlobalId('Profile', owner.profile.id);
     const initial = await loadBookmarkConnection(profileId, owner.token, { first: 10 });
-    assertNoGraphQLErrors(initial);
-    assert.deepEqual(
-      initial.data?.node?.bookmarks.edges.map(({ node }) => node.id),
-      [encodeGlobalId('Bookmark', followed.id)],
-    );
+    assertBookmarkIds(initial, [encodeGlobalId('Bookmark', followed.id)]);
 
     const hiddenNodeId = encodeGlobalId('Bookmark', hidden.id);
-    assert.deepEqual(await loadBookmarkNodes([hiddenNodeId], owner.token), [
-      { id: hiddenNodeId, post: null },
-    ]);
+    assert.deepEqual(await loadBookmarkNode(hiddenNodeId, owner.token), {
+      id: hiddenNodeId,
+      post: null,
+    });
 
     await db.insert(ProfileFollows).values({
       followeeProfileId: hiddenAuthor.id,
       followerProfileId: owner.profile.id,
     });
     const reexposed = await loadBookmarkConnection(profileId, owner.token, { first: 10 });
-    assertNoGraphQLErrors(reexposed);
-    assert.deepEqual(
-      reexposed.data?.node?.bookmarks.edges.map(({ node }) => node.id),
+    assertBookmarkIds(
+      reexposed,
       [followed.id, hidden.id].map((id) => encodeGlobalId('Bookmark', id)),
     );
-    assert.deepEqual(await loadBookmarkNodes([hiddenNodeId], owner.token), [
-      { id: hiddenNodeId, post: { id: encodeGlobalId('Post', hiddenPost.id) } },
-    ]);
+    assert.deepEqual(await loadBookmarkNode(hiddenNodeId, owner.token), {
+      id: hiddenNodeId,
+      post: { id: encodeGlobalId('Post', hiddenPost.id) },
+    });
 
     const retained = await db
       .select({ id: Bookmarks.id })
@@ -468,29 +457,37 @@ const loadBookmarkConnection = (
     token,
   );
 
-const loadBookmarkNodes = async (ids: string[], token?: string) => {
-  const result = await requestGraphQL<{ nodes: Array<BookmarkNodeSummary | null> }>(
-    `query BookmarkNodes($ids: [ID!]!) {
-      nodes(ids: $ids) { ... on Bookmark { id post { id } } }
+const loadBookmarkNode = async (id: string, token?: string) => {
+  const result = await requestGraphQL<{ node: BookmarkNodeSummary | null }>(
+    `query BookmarkNode($id: ID!) {
+      node(id: $id) { ... on Bookmark { id post { id } } }
     }`,
-    { ids },
+    { id },
     token,
   );
   assertNoGraphQLErrors(result);
-  return result.data!.nodes;
+  return result.data!.node;
+};
+
+const assertBookmarkIds = (
+  result: GraphQLResult<{ node: { bookmarks: BookmarkConnection } | null }>,
+  expected: string[],
+) => {
+  assertNoGraphQLErrors(result);
+  assert.deepEqual(
+    result.data?.node?.bookmarks.edges.map(({ node }) => node.id),
+    expected,
+  );
 };
 
 const assertNoGraphQLErrors = (result: GraphQLResult<unknown>) => {
   assert.equal(result.errors, undefined, JSON.stringify(result.errors));
 };
 
-const createInstance = (
-  domain: string,
-  state: (typeof InstanceState)[keyof typeof InstanceState] = InstanceState.ACTIVE,
-) =>
+const createSuspendedInstance = (domain: string) =>
   db
     .insert(Instances)
-    .values({ domain, kind: InstanceKind.ACTIVITYPUB, state })
+    .values({ domain, kind: InstanceKind.ACTIVITYPUB, state: InstanceState.SUSPENDED })
     .returning()
     .then(firstOrThrow);
 
