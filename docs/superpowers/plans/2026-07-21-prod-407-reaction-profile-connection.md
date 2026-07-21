@@ -41,8 +41,8 @@
 
 **Interfaces:**
 
-- Consumes: PR #308의 `Reaction` Node, `reactionTypeSchema`, `addReaction(postId: ID!, type: String!)`
-- Produces: 승인된 `Post.reactionProfiles(type: String!): ProfileConnection!` 계약과 최신 `main` 기반 구현 브랜치
+- Consumes: PR #308의 `Reaction` Node, `reactionTypeSchema`, `addReaction(input: { postId: ID!, type: String! })`
+- Produces: 승인된 `Post.reactionProfiles(type: String!): ProfileConnection!` 계약과 확인된 PR #308 (PROD-404) head 위 stacked 구현 브랜치
 
 - [x] **Step 1: PR #308의 현재 head와 base 확인**
 
