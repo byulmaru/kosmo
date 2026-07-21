@@ -80,3 +80,52 @@ export const addReaction = async (
     return reaction;
   });
 };
+
+export const deleteReaction = async (
+  {
+    actorProfileId,
+    reactionId,
+  }: {
+    readonly actorProfileId: string;
+    readonly reactionId: string;
+  },
+  tx?: Transaction,
+): Promise<{ readonly reactionId: string }> =>
+  getDatabaseConnection(tx).transaction(async (tx) => {
+    const actor = await tx
+      .select({ id: Profiles.id })
+      .from(Profiles)
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(
+        and(
+          eq(Profiles.id, actorProfileId),
+          eq(Profiles.state, ProfileState.ACTIVE),
+          eq(Instances.kind, InstanceKind.LOCAL),
+          eq(Instances.state, InstanceState.ACTIVE),
+        ),
+      )
+      .limit(1)
+      .then(first);
+    if (!actor) {
+      throw new PermissionDeniedError();
+    }
+
+    const reaction = await tx
+      .select({ profileId: Reactions.profileId })
+      .from(Reactions)
+      .where(eq(Reactions.id, reactionId))
+      .limit(1)
+      .then(first);
+    if (!reaction) {
+      return { reactionId };
+    }
+    if (reaction.profileId !== actorProfileId) {
+      throw new PermissionDeniedError('Reaction owner permission is required');
+    }
+
+    await tx
+      .delete(Reactions)
+      .where(and(eq(Reactions.id, reactionId), eq(Reactions.profileId, actorProfileId)));
+
+    return { reactionId };
+  });

@@ -80,6 +80,20 @@ test('exposes the Bookmark creation and relationship contract', () => {
   assert.equal(String(bookmark.getFields().createdAt.type), 'DateTime!');
 });
 
+test('exposes the ID-based idempotent Reaction delete contract', () => {
+  const mutation = schema.getMutationType();
+  const input = schema.getType('DeleteReactionInput');
+  const payload = schema.getType('DeleteReactionPayload');
+
+  assert.equal(String(mutation?.getFields().deleteReaction?.type), 'DeleteReactionPayload!');
+  assert.ok(isInputObjectType(input));
+  assert.equal(String(input.getFields().id.type), 'ID!');
+  assert.ok(isObjectType(payload));
+  assert.equal(String(payload.getFields().reactionId.type), 'ID!');
+  assert.equal(payload.getFields().reaction, undefined);
+  assert.equal(payload.getFields().deleted, undefined);
+});
+
 test('exposes the profile follow request lifecycle contract', () => {
   const profile = schema.getType('Profile');
   const request = schema.getType('ProfileFollowRequest');

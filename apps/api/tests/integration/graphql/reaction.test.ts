@@ -33,7 +33,7 @@ let Sessions: typeof CoreDb.Sessions;
 let app: Hono<Env>;
 let localInstanceId: string;
 
-describe('GraphQL Reaction 추가', () => {
+describe('GraphQL Reaction', () => {
   before(async () => {
     process.env.DATABASE_URL = databaseUrl;
     process.env.NODE_ENV = 'production';
@@ -209,6 +209,95 @@ describe('GraphQL Reaction 추가', () => {
     assertNoGraphQLErrors(hiddenNode);
     assert.equal(hiddenNode.data?.node, null);
   });
+
+  test('Owner는 Post를 조회할 수 없게 된 뒤에도 Reaction을 삭제하고 같은 ID로 재시도한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const author = await createProfile('hidden-post-author');
+    const post = await createPost(author.id);
+    const added = await requestAddReaction(post.id, '❤️', auth.token);
+    const reactionId = added.data?.addReaction.reaction.id;
+    assert.ok(reactionId);
+    await db.update(Posts).set({ visibility: PostVisibility.DIRECT }).where(eq(Posts.id, post.id));
+
+    const deleted = await requestDeleteReaction(reactionId, auth.token);
+    const repeated = await requestDeleteReaction(reactionId, auth.token);
+
+    assertNoGraphQLErrors(deleted);
+    assertNoGraphQLErrors(repeated);
+    assert.equal(deleted.data?.deleteReaction.reactionId, reactionId);
+    assert.equal(repeated.data?.deleteReaction.reactionId, reactionId);
+    assert.equal(
+      await db
+        .select()
+        .from(Reactions)
+        .where(eq(Reactions.postId, post.id))
+        .then((rows) => rows.length),
+      0,
+    );
+  });
+
+  test('현재 타인 소유 Reaction 삭제는 PERMISSION_DENIED로 거부한다', async () => {
+    const owner = await createAuthenticatedSession();
+    const attacker = await createAuthenticatedSession();
+    const post = await createPost(owner.profile.id);
+    const added = await requestAddReaction(post.id, '🎉', owner.token);
+    const reactionId = added.data?.addReaction.reaction.id;
+    assert.ok(reactionId);
+    const stored = await db
+      .select()
+      .from(Reactions)
+      .where(eq(Reactions.postId, post.id))
+      .then(firstOrThrow);
+
+    const result = await requestDeleteReaction(reactionId, attacker.token);
+
+    assert.equal(result.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+    assert.equal(
+      await db
+        .select()
+        .from(Reactions)
+        .where(eq(Reactions.id, stored.id))
+        .then((rows) => rows.length),
+      1,
+    );
+  });
+
+  test('이미 없는 ID와 stale ID는 성공하고 다시 생성된 Reaction은 유지한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const post = await createPost(auth.profile.id);
+    const missingId = globalId('Reaction', crypto.randomUUID());
+    const missing = await requestDeleteReaction(missingId, auth.token);
+    assertNoGraphQLErrors(missing);
+    assert.equal(missing.data?.deleteReaction.reactionId, missingId);
+
+    const first = await requestAddReaction(post.id, '👀', auth.token);
+    const firstId = first.data?.addReaction.reaction.id;
+    assert.ok(firstId);
+    assertNoGraphQLErrors(await requestDeleteReaction(firstId, auth.token));
+    const recreated = await requestAddReaction(post.id, '👀', auth.token);
+    const recreatedId = recreated.data?.addReaction.reaction.id;
+    assert.ok(recreatedId);
+    assert.notEqual(recreatedId, firstId);
+
+    const stale = await requestDeleteReaction(firstId, auth.token);
+    assertNoGraphQLErrors(stale);
+    assert.equal(stale.data?.deleteReaction.reactionId, firstId);
+    assert.equal(
+      await db
+        .select()
+        .from(Reactions)
+        .where(eq(Reactions.postId, post.id))
+        .then((rows) => rows.length),
+      1,
+    );
+  });
+
+  test('Reaction이 아닌 concrete global ID를 delete input에서 거부한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const result = await requestDeleteReaction(globalId('Profile', auth.profile.id), auth.token);
+
+    assert.ok(result.errors?.[0]);
+  });
 });
 
 type ReactionNode = {
@@ -234,6 +323,15 @@ const requestAddReaction = (postId: string, type: string, token?: string) =>
       }
     }`,
     { input: { postId: globalId('Post', postId), type } },
+    token,
+  );
+
+const requestDeleteReaction = (reactionId: string, token?: string) =>
+  requestGraphQL<{ deleteReaction: { reactionId: string } }>(
+    `mutation DeleteReaction($input: DeleteReactionInput!) {
+      deleteReaction(input: $input) { reactionId }
+    }`,
+    { input: { id: reactionId } },
     token,
   );
 
