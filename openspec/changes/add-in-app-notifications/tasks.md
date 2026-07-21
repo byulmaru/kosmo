@@ -60,7 +60,7 @@
 
 ## 10. PROD-380 ActivityPub inbound Follow/Undo를 Follow Notification lifecycle에 연결한다
 
-- [x] 10.1 verified inbound Follow/Undo concrete handler가 relation/request/count transaction과 exact-row 경쟁 보호를 공통 core public action에 위임하고 Fedify adapter에 relation mutation이나 Notification 호출을 중복 구현하지 않게 한다.
+- [x] 10.1 verified inbound Follow/Undo concrete handler가 caller-supplied direction 없이 Profile origin pair에서 flow를 파생하는 공통 core public action에 relation/request/count transaction과 exact-row 경쟁 보호를 위임하고 Fedify adapter에 relation mutation이나 Notification 호출을 중복 구현하지 않게 한다.
 - [x] 10.2 OPEN 신규 established relation commit 뒤 같은 request에서 Follow Notification create를 await/catch하고, APPROVAL_REQUIRED pending·existing relation·duplicate/concurrent Follow에는 lifecycle을 실행하지 않게 한다.
 - [x] 10.3 inbound Undo가 established relation을 실제 삭제한 commit 뒤에만 같은 source Notification delete를 await/catch하고, pending request 삭제와 relation 삭제 no-op에는 cleanup을 실행하지 않게 한다.
 - [x] 10.4 production listener → concrete Follow/Undo handler → core action → DB/Notification integration test로 신규 생성, duplicate/concurrent no-op, pending-only, established cleanup과 pending/no-op cleanup 제외를 검증한다.

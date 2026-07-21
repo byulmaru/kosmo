@@ -135,6 +135,7 @@
 - **WHEN** Fedify inbox listener가 verified remote `Follow` activity를 전달한다
 - **THEN** 시스템은 remote actor를 `Profile`로 materialize하거나 기존 remote `Profile`을 조회한다
 - **AND** actor/object/recipient 검증과 materialization이 끝나면 inbound Follow lifecycle에 remote follower와 local followee pair를 전달한다
+- **AND** 공통 core action은 caller-supplied direction 없이 저장된 ActivityPub follower와 Local followee origin pair에서 inbound 흐름을 파생하며 direction 문자열을 Activity 검증 증거로 사용하지 않는다
 - **AND** `Follow.actor`는 materialized remote actor URI와 일치해야 한다
 - **AND** `Follow.object`는 kosmo local actor URI로 parse되어야 하며 활성 local followee profile을 식별해야 한다
 - **AND** personal inbox에서 Fedify `ctx.recipient`가 제공되면 시스템은 해당 recipient identifier를 local actor/profile로 resolve하고, 그 canonical actor URI가 `Follow.object`와 일치해야 한다
@@ -169,6 +170,7 @@
 - **AND** personal inbox에서 Fedify `ctx.recipient`가 제공되면 시스템은 해당 recipient identifier를 local actor/profile로 resolve하고, 그 canonical actor URI가 undo 대상 Follow의 object local actor URI와 일치해야 한다
 - **AND** Fedify `ctx.recipient`가 없으면 shared inbox로 간주하고 undo 대상 Follow object로 local followee를 검증한다
 - **AND** 검증이 통과하면 시스템은 해당 remote follower와 local followee 사이의 established `ProfileFollow` 관계 또는 pending `ProfileFollowRequest`를 제거한다
+- **AND** 공통 core action은 caller-supplied direction 없이 저장된 ActivityPub follower와 Local followee origin pair에서 inbound Undo 흐름을 파생한다
 - **AND** actor/object/recipient 검증이 통과한 `Undo(Follow)`는 같은 actor pair의 현재 unfollow 의사로 처리하며 activity timestamp로 순서를 추정하지 않는다
 - **AND** 삭제는 처리 중 확인한 현재 row의 exact id가 일치할 때만 수행하고, established relation이 실제 삭제된 경우에만 같은 transaction에서 저장 count를 감소시킨다
 - **AND** established relation 삭제가 commit되면 공통 core public action은 같은 source의 Follow Notification cleanup을 같은 request에서 await하고 오류를 격리한다

@@ -30,20 +30,13 @@ export type FollowProfileResult =
   | { readonly kind: 'PENDING'; readonly profileFollowRequest: ProfileFollowRequestRow };
 
 type ProfileFollowInput = {
-  direction?: 'ACTIVITYPUB_INBOUND' | 'LOCAL_OUTBOUND';
   followerProfileId: string;
   followeeProfileId: string;
 };
 
 const loadProfileFollowParticipants = async (
   tx: Transaction,
-  {
-    direction,
-    followerProfileId,
-    followeeProfileId,
-  }: ProfileFollowInput & {
-    direction: NonNullable<ProfileFollowInput['direction']>;
-  },
+  { followerProfileId, followeeProfileId }: ProfileFollowInput,
 ) => {
   const participants = await tx
     .select({
@@ -72,16 +65,16 @@ const loadProfileFollowParticipants = async (
     throw new NotFoundError('Profile not found');
   }
 
-  const isActivityPubInbound = direction === 'ACTIVITYPUB_INBOUND';
   const isRemoteTarget = target.instanceKind === InstanceKind.ACTIVITYPUB;
-  const validDirection = isActivityPubInbound
-    ? follower.instanceKind === InstanceKind.ACTIVITYPUB &&
-      follower.instanceState === InstanceState.ACTIVE &&
-      target.instanceKind === InstanceKind.LOCAL &&
+  const isActivityPubInbound =
+    follower.instanceKind === InstanceKind.ACTIVITYPUB &&
+    target.instanceKind === InstanceKind.LOCAL;
+  const validOriginPair = isActivityPubInbound
+    ? follower.instanceState === InstanceState.ACTIVE &&
       target.instanceState === InstanceState.ACTIVE
     : follower.instanceKind === InstanceKind.LOCAL &&
       (target.instanceKind === InstanceKind.LOCAL || (isRemoteTarget && target.actorUri));
-  if (!validDirection) {
+  if (!validOriginPair) {
     throw new NotFoundError('Profile not found');
   }
 
@@ -89,7 +82,6 @@ const loadProfileFollowParticipants = async (
 };
 
 export const followProfile = async ({
-  direction = 'LOCAL_OUTBOUND',
   followerProfileId,
   followeeProfileId,
 }: ProfileFollowInput): Promise<{
@@ -106,7 +98,6 @@ export const followProfile = async ({
     const { isActivityPubInbound, isRemoteTarget, target } = await loadProfileFollowParticipants(
       tx,
       {
-        direction,
         followerProfileId,
         followeeProfileId,
       },
@@ -180,7 +171,6 @@ export const followProfile = async ({
 };
 
 export const unfollowProfile = async ({
-  direction = 'LOCAL_OUTBOUND',
   followerProfileId,
   followeeProfileId,
 }: ProfileFollowInput): Promise<{
@@ -192,7 +182,6 @@ export const unfollowProfile = async ({
     const { isActivityPubInbound, isRemoteTarget, target } = await loadProfileFollowParticipants(
       tx,
       {
-        direction,
         followerProfileId,
         followeeProfileId,
       },

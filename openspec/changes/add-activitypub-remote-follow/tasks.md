@@ -149,15 +149,17 @@ Verified inbound Follow/Undo가 공통 core Follow lifecycle을 통해 Local Rec
 - PROD-244의 outbound pending/cancel 또는 Accept/Reject protocol 동작을 재구현하지 않는다.
 - 새 ActivityPub protocol 동작, actor materialization, transport나 correlation 저장을 추가하지 않는다.
 - Fedify adapter에 relation mutation이나 Notification 호출을 중복 구현하지 않는다.
+- caller-supplied direction을 public core 입력에 추가하지 않고 저장된 Profile origin pair에서 flow를 파생한다.
 - pending request, duplicate/no-op에는 established Follow Notification side effect를 만들지 않는다.
 - GraphQL/DB schema와 ActivityPub object 지원 범위를 변경하지 않는다.
 
 **Verification**
 
 - production Fedify listener → concrete handler → core action → relation/request/count → Notification 흐름을 검증한다.
+- Local→Local, Local→ActivityPub, ActivityPub→Local과 거부되는 ActivityPub→ActivityPub origin pair matrix를 검증한다.
 - Notification create/delete 실패가 committed relation/request/count를 rollback하지 않는지 검증한다.
 
-- [x] 8.1 PROD-380이 verified inbound Follow/Undo를 공통 core lifecycle과 Follow Notification source integration에 연결하고 scoped integration test를 통과시킨다.
+- [x] 8.1 PROD-380이 verified inbound Follow/Undo를 origin-pair 기반 공통 core lifecycle과 Follow Notification source integration에 연결하고 scoped production-wiring integration test를 통과시킨다.
 
 ## 9. PROD-361 최종 통합 검증과 OpenSpec Archive
 

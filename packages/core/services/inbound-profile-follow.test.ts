@@ -79,7 +79,6 @@ const recordInboundFollow = async (input: {
 }) =>
   (
     await followProfile({
-      direction: 'ACTIVITYPUB_INBOUND',
       ...input,
     })
   ).result.kind;
@@ -87,7 +86,7 @@ const recordInboundFollow = async (input: {
 const removeInboundFollowThroughLifecycle = (input: {
   readonly followeeProfileId: string;
   readonly followerProfileId: string;
-}) => unfollowProfile({ direction: 'ACTIVITYPUB_INBOUND', ...input });
+}) => unfollowProfile(input);
 
 describe('ActivityPub inbound profile follow lifecycle', () => {
   test('reuses the current relation and removes it idempotently', async () => {

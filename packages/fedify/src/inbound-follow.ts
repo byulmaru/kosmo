@@ -66,7 +66,6 @@ export const handleInboundFollow = async (
   }
 
   const result = await followProfile({
-    direction: 'ACTIVITYPUB_INBOUND',
     followeeProfileId: localRecipient.id,
     followerProfileId: remoteActor.profile.id,
   });
@@ -138,7 +137,6 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
   }
 
   await unfollowProfile({
-    direction: 'ACTIVITYPUB_INBOUND',
     followeeProfileId: localRecipient.id,
     followerProfileId: remoteActor.profile.id,
   });
