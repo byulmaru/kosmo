@@ -17,6 +17,9 @@ import { Avatar } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { ProfileSwitcher } from './ProfileSwitcher';
+import { UnreadNotificationBadge } from './UnreadNotificationBadge';
+import { useUnreadNotificationCount } from './UnreadNotificationBadgeController';
+import { getUnreadNotificationAccessibilityLabel } from './unreadNotificationBadgeState';
 import type { Href } from 'expo-router';
 import type { LucideIcon } from 'lucide-react-native';
 import type { ViewStyle } from 'react-native';
@@ -96,6 +99,7 @@ export function SidebarNavigation({
   const theme = useTheme();
   const pathname = usePathname();
   const data = useFragment(SidebarNavigationFragment, query);
+  const unreadNotificationCount = useUnreadNotificationCount();
   const profile = data.currentSession?.selectedProfile ?? null;
   const hasProfiles = (data.me?.profiles?.length ?? 0) > 0;
 
@@ -211,7 +215,11 @@ export function SidebarNavigation({
             const control = (
               <Pressable
                 aria-current={active ? 'page' : undefined}
-                accessibilityLabel={item.label}
+                accessibilityLabel={
+                  item.label === '알림'
+                    ? getUnreadNotificationAccessibilityLabel(unreadNotificationCount)
+                    : item.label
+                }
                 accessibilityRole={href ? 'link' : 'button'}
                 accessibilityState={{ disabled: !href }}
                 disabled={!href}
@@ -227,12 +235,17 @@ export function SidebarNavigation({
               >
                 {({ pressed }) => (
                   <>
-                    <item.Icon
-                      color={theme.text}
-                      size={20}
-                      strokeWidth={2}
-                      style={pressed && styles.pressedContent}
-                    />
+                    <View style={styles.iconWithBadge}>
+                      <item.Icon
+                        color={theme.text}
+                        size={20}
+                        strokeWidth={2}
+                        style={pressed && styles.pressedContent}
+                      />
+                      {item.label === '알림' ? (
+                        <UnreadNotificationBadge count={unreadNotificationCount} />
+                      ) : null}
+                    </View>
                     {!compact ? (
                       <Text
                         style={[
@@ -331,6 +344,7 @@ export function SidebarNavigation({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  iconWithBadge: { position: 'relative' },
   compactRoot: {
     alignItems: 'center',
     gap: spacing.sm,

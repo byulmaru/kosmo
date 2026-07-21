@@ -1,3 +1,4 @@
+export { createBookmark } from './bookmark';
 export { createFollowNotification, deleteNotificationBySource } from './notification';
 export { createPost } from './post';
 export { disableProfile } from './profile';
@@ -8,4 +9,5 @@ export {
   cancelProfileFollowRequest,
   rejectProfileFollowRequest,
 } from './profile-follow-request';
+export { addReaction } from './reaction';
 export { createOidcSession } from './session';

@@ -10,3 +10,9 @@
 ## 라이트/다크 듀얼 모드
 
 Color 변수 컬렉션은 라이트/다크 두 모드를 가진다. 새 컬러 토큰을 추가할 때는 반드시 양쪽 모드 값을 모두 정의한다.
+
+## Accent
+
+- `accent`는 Unread dot처럼 작지만 분명한 강조 표시에 사용한다.
+- `accent` 배경 위 foreground content를 실제로 사용하는 컴포넌트가 생기기 전에는 별도의 짝 토큰을 선제 정의하지 않는다.
+- 현재 Unread dot의 light/dark 외관은 각각 기존 `text`와 같은 값을 사용하지만, component는 `text`가 아니라 `accent`를 참조해 향후 강조색 변경을 한 곳에서 수행할 수 있게 한다.

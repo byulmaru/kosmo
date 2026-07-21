@@ -25,6 +25,7 @@ export type StoryProfile = {
   id: string;
   instance: { kind: 'ACTIVITYPUB' | 'LOCAL' };
   relativeHandle: string;
+  unreadNotificationCount: number;
   viewerState: {
     follow: { follower?: { id: string } | null; id: string } | null;
     isSelf: boolean;
@@ -60,6 +61,7 @@ export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
     id: 'profile-kosmo',
     instance: { kind: 'LOCAL' },
     relativeHandle: '@kosmo',
+    unreadNotificationCount: 0,
     viewerState: { follow: null, isSelf: false },
     ...overrides,
   };
