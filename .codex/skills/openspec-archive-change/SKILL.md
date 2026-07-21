@@ -50,13 +50,22 @@ Archive a completed change in the experimental workflow.
 
    **If no tasks file exists:** Proceed without task-related warning.
 
-4. **Check for unresolved authority decisions**
+4. **Revalidate upstream authority and unresolved decisions**
 
-   Read `decisions.md` when it exists. If any decision has `Status: Blocked`, or has
-   `Decision Class: Upstream Change Required` without being `Superseded`, stop the
-   archive. List the unresolved decisions and require the canonical/Linear upstream
-   change to be approved and the decision to be reclassified, or explicitly
-   superseded if it was abandoned. This is a hard stop, not a confirmable warning.
+   Read proposal, specs, decisions, and tasks to discover their declared upstream
+   references; do not treat the OpenSpec text itself as authority. Independently
+   re-read the applicable canonical documents and latest Linear issue bodies,
+   relations, and contract-changing comments.
+
+   Check every current normative requirement, `Active` or legacy `Accepted` decision,
+   task Deliverable, and Guardrail against those sources. If any item lacks or
+   conflicts with upstream authority, stop the archive and align canonical → Linear →
+   OpenSpec first.
+
+   Also stop if any decision has `Status: Blocked`, or has
+   `Decision Class: Upstream Change Required` without being `Superseded`. Require the
+   upstream change to be approved and the decision to be reclassified, or explicitly
+   superseded if it was abandoned. These are hard stops, not confirmable warnings.
 
 5. **Assess delta spec sync state**
 
@@ -118,6 +127,7 @@ All artifacts complete. All tasks complete.
 - Always prompt for change selection if not provided
 - Use artifact graph (openspec status --json) for completion checking
 - Don't block archive on incomplete artifact/task warnings - just inform and confirm
+- Revalidate current requirements, decisions, Deliverables, and Guardrails against upstream authority before sync
 - Block archive when an unresolved `Blocked` or non-superseded `Upstream Change Required` decision remains
 - Preserve .openspec.yaml when moving to archive (it moves with the directory)
 - Show clear summary of what happened

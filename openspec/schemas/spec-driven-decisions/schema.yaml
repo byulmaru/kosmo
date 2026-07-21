@@ -156,7 +156,7 @@ artifacts:
 
       Keep decisions separate from tasks and design notes. design.md can explain the implementation approach, but decisions.md is the durable decision record agents should read before implementation only after its authority has been independently verified. Use one section per decision rather than one long mixed bullet list.
       Record a filename, function, helper, registry, data structure, or other internal mechanism as a decision only when compatibility, security, rollout, or multiple implementation slices require that exact choice. Otherwise keep it as non-normative Implementation Guidance in design.md.
-      Append decision records in chronological order. When records conflict, the decision with the later date wins. If a decision changes on the same date, the later record MUST explicitly identify the earlier record it supersedes.
+      Append decision records in chronological order for history only. A later record supersedes an earlier one only when it explicitly identifies the record it replaces and its class and provenance remain valid against current upstream authority. No OpenSpec record or date can override current canonical or Linear authority.
     requires:
       - design
 
