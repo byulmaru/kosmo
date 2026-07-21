@@ -59,7 +59,6 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 | 조회할 수 없는 Media | Exclude                        | Exclude                    | Exclude                    |
 | Reply Parent 있음    | Home 후보 정책 통과 시 Include | Exclude                    | Exclude                    |
 | Content 없는 Repost  | Home 후보 정책 통과 시 Include | Target 작성 시 Include     | Exclude                    |
-| Repost Source 있음   | 다른 구조 조건과 함께 판정     | 다른 구조 조건과 함께 판정 | 다른 구조 조건과 함께 판정 |
 
 - 모든 후보는 먼저 Post Visibility와 Post Eligibility를 통과해야 한다.
 - Repost에는 Repost Author와 Source Post Author에 대한 Profile Block/Profile Mute를 모두 적용한다.

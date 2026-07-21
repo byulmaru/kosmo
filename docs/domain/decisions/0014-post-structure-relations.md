@@ -2,7 +2,7 @@
 
 ## 상태
 
-Proposed
+Accepted
 
 ## 날짜
 
@@ -23,23 +23,13 @@ Proposed
 - Media-only 여부는 Post 구조를 구분하는 조건이 아니다. Content가 있는 Post의 본문/Media 제약은 별도로
   적용한다.
 
-## 공개 API 호환성
-
-- GraphQL은 기존 단일 `Post` Node, global ID, route, connection과 mutation payload를 유지한다.
-- Content, Reply Parent와 Repost Source는 nullable field로 제공하며, 별도 Reply, Repost, Quote concrete
-  object type을 만들지 않는다.
-- client는 배타적인 typename이나 Kind 값이 아니라 필요한 Content와 관계 field를 사용한다.
-
 ## 이유
 
 Reply와 Quote는 동시에 성립할 수 있으므로 배타적인 상태 값으로 모델링할 수 없다. Repost와 Quote도 같은
 Source 관계를 사용하며 자체 Content의 존재 여부만 다르다. 관계 자체가 이미 필요한 정보를 보존하므로 같은
 의미를 Kind 값으로 중복 저장하면 조합 불일치와 추가 검증 경계가 생긴다.
 
-단일 `Post` Node를 유지하면 같은 durable identity, 권한, route와 connection을 모든 구조가 함께 사용한다는 현재
-모델을 보존할 수 있다.
-
-## 대체할 결정
+## 대체한 결정
 
 - [ADR 0011](./0011-post-kind-terminology.md)의 Post Kind 상태 차원과 값 전체를 대체한다.
 - [ADR 0010](./0010-post-interaction-contracts.md)의 Kind 기반 Reply/Repost 정의와 별도 Quote Source 전제를
