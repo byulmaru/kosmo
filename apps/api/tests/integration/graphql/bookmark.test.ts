@@ -22,7 +22,7 @@ import type { yoga as YogaRouter } from '../../../src/graphql';
 import type { encodeGlobalId as EncodeGlobalId } from '../../../src/graphql/global-id';
 
 const publicOrigin = 'http://127.0.0.1:4173';
-const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
@@ -33,6 +33,7 @@ let Instances: typeof CoreDb.Instances;
 let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
 let Posts: typeof CoreDb.Posts;
+let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
 let Sessions: typeof CoreDb.Sessions;
 let deriveContext: typeof DeriveContext;
@@ -41,9 +42,8 @@ let encodeGlobalId: typeof EncodeGlobalId;
 let app: Hono<Env>;
 let localInstanceId: string;
 
-describe('GraphQL Bookmark 생성', () => {
+describe('Bookmark GraphQL 경계', () => {
   before(async () => {
-    process.env.DATABASE_URL = databaseUrl;
     process.env.NODE_ENV = 'production';
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
@@ -57,6 +57,7 @@ describe('GraphQL Bookmark 생성', () => {
       Notifications,
       pg,
       Posts,
+      ProfileFollows,
       Profiles,
       Sessions,
     } = await import('@kosmo/core/db'));
@@ -228,6 +229,159 @@ describe('GraphQL Bookmark 생성', () => {
     }
     assert.equal(await db.$count(Notifications), 0);
   });
+
+  test('allows only the selected owner Profile to read the connection and Bookmark Node', async () => {
+    const owner = await createAuthenticatedSession();
+    const other = await createAuthenticatedSession();
+    const target = await createPost((await createProfile('author')).id);
+    const bookmark = await createBookmark(owner.profile.id, target.id);
+    const ownerProfileId = encodeGlobalId('Profile', owner.profile.id);
+    const bookmarkId = encodeGlobalId('Bookmark', bookmark.id);
+    await db.insert(AccountProfiles).values({
+      accountId: owner.account.id,
+      profileId: other.profile.id,
+      role: AccountProfileRole.MEMBER,
+    });
+
+    const owned = await loadBookmarkConnection(ownerProfileId, owner.token, { first: 10 });
+    assertNoGraphQLErrors(owned);
+    assert.deepEqual(
+      owned.data?.node?.bookmarks.edges.map(({ node }) => node.id),
+      [bookmarkId],
+    );
+
+    const wrongProfile = await loadBookmarkConnection(
+      encodeGlobalId('Profile', other.profile.id),
+      owner.token,
+      { first: 10 },
+    );
+    assert.equal(wrongProfile.data?.node, null);
+    assert.equal(wrongProfile.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+
+    const otherViewer = await loadBookmarkConnection(ownerProfileId, other.token, { first: 10 });
+    assert.equal(otherViewer.data?.node, null);
+    assert.equal(otherViewer.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+
+    const unauthenticated = await loadBookmarkConnection(ownerProfileId, undefined, { first: 10 });
+    assert.equal(unauthenticated.data?.node, null);
+    assert.equal(unauthenticated.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+
+    assert.deepEqual(await loadBookmarkNodes([bookmarkId], owner.token), [
+      { id: bookmarkId, post: { id: encodeGlobalId('Post', target.id) } },
+    ]);
+    assert.deepEqual(await loadBookmarkNodes([bookmarkId], other.token), [null]);
+    assert.deepEqual(await loadBookmarkNodes([bookmarkId]), [null]);
+  });
+
+  test('filters with the shared Post policy before applying ID-only pagination', async () => {
+    const owner = await createAuthenticatedSession();
+    const author = await createProfile('page-author');
+    const visibleNewest = await createPost(author.id, { visibility: PostVisibility.PUBLIC });
+    const hiddenNewest = await createPost(author.id, { state: PostState.DELETED });
+    const visibleMiddle = await createPost(author.id, { visibility: PostVisibility.UNLISTED });
+    const hiddenMiddle = await createPost(author.id, { visibility: PostVisibility.FOLLOWERS });
+    const visibleOldest = await createPost(owner.profile.id, {
+      visibility: PostVisibility.FOLLOWERS,
+    });
+
+    const bookmarks = await Promise.all([
+      createBookmark(owner.profile.id, visibleNewest.id, uuid(900)),
+      createBookmark(owner.profile.id, hiddenNewest.id, uuid(850)),
+      createBookmark(owner.profile.id, visibleMiddle.id, uuid(800)),
+      createBookmark(owner.profile.id, hiddenMiddle.id, uuid(750)),
+      createBookmark(owner.profile.id, visibleOldest.id, uuid(700)),
+    ]);
+    await db
+      .update(Bookmarks)
+      .set({ createdAt: Temporal.Instant.from('2026-07-21T00:00:00Z') })
+      .where(eq(Bookmarks.profileId, owner.profile.id));
+    const profileId = encodeGlobalId('Profile', owner.profile.id);
+
+    const first = await loadBookmarkConnection(profileId, owner.token, { first: 2 });
+    assertNoGraphQLErrors(first);
+    assert.deepEqual(
+      first.data?.node?.bookmarks.edges.map(({ node }) => node.id),
+      [bookmarks[0]!, bookmarks[2]!].map(({ id }) => encodeGlobalId('Bookmark', id)),
+    );
+    assert.equal(first.data?.node?.bookmarks.pageInfo.hasNextPage, true);
+
+    const second = await loadBookmarkConnection(profileId, owner.token, {
+      after: first.data?.node?.bookmarks.pageInfo.endCursor,
+      first: 2,
+    });
+    assertNoGraphQLErrors(second);
+    assert.deepEqual(
+      second.data?.node?.bookmarks.edges.map(({ node }) => node.id),
+      [encodeGlobalId('Bookmark', bookmarks[4]!.id)],
+    );
+    assert.equal(second.data?.node?.bookmarks.pageInfo.hasNextPage, false);
+  });
+
+  test('inherits author Profile, Instance and follower visibility and re-exposes retained rows', async () => {
+    const owner = await createAuthenticatedSession();
+    const followedAuthor = await createProfile('followed-author');
+    const hiddenAuthor = await createProfile('hidden-author');
+    const suspendedAuthor = await createProfile('suspended-author');
+    const suspendedInstance = await createInstance('suspended.example', InstanceState.SUSPENDED);
+    const suspendedInstanceAuthor = await createProfile('suspended-instance-author', {
+      instanceId: suspendedInstance.id,
+    });
+    await db.insert(ProfileFollows).values({
+      followeeProfileId: followedAuthor.id,
+      followerProfileId: owner.profile.id,
+    });
+
+    const followedPost = await createPost(followedAuthor.id, {
+      visibility: PostVisibility.FOLLOWERS,
+    });
+    const hiddenPost = await createPost(hiddenAuthor.id, {
+      visibility: PostVisibility.FOLLOWERS,
+    });
+    const suspendedAuthorPost = await createPost(suspendedAuthor.id);
+    const suspendedInstancePost = await createPost(suspendedInstanceAuthor.id);
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.SUSPENDED })
+      .where(eq(Profiles.id, suspendedAuthor.id));
+
+    const followed = await createBookmark(owner.profile.id, followedPost.id, uuid(900));
+    const hidden = await createBookmark(owner.profile.id, hiddenPost.id, uuid(800));
+    await createBookmark(owner.profile.id, suspendedAuthorPost.id, uuid(700));
+    await createBookmark(owner.profile.id, suspendedInstancePost.id, uuid(600));
+
+    const profileId = encodeGlobalId('Profile', owner.profile.id);
+    const initial = await loadBookmarkConnection(profileId, owner.token, { first: 10 });
+    assertNoGraphQLErrors(initial);
+    assert.deepEqual(
+      initial.data?.node?.bookmarks.edges.map(({ node }) => node.id),
+      [encodeGlobalId('Bookmark', followed.id)],
+    );
+
+    const hiddenNodeId = encodeGlobalId('Bookmark', hidden.id);
+    assert.deepEqual(await loadBookmarkNodes([hiddenNodeId], owner.token), [
+      { id: hiddenNodeId, post: null },
+    ]);
+
+    await db.insert(ProfileFollows).values({
+      followeeProfileId: hiddenAuthor.id,
+      followerProfileId: owner.profile.id,
+    });
+    const reexposed = await loadBookmarkConnection(profileId, owner.token, { first: 10 });
+    assertNoGraphQLErrors(reexposed);
+    assert.deepEqual(
+      reexposed.data?.node?.bookmarks.edges.map(({ node }) => node.id),
+      [followed.id, hidden.id].map((id) => encodeGlobalId('Bookmark', id)),
+    );
+    assert.deepEqual(await loadBookmarkNodes([hiddenNodeId], owner.token), [
+      { id: hiddenNodeId, post: { id: encodeGlobalId('Post', hiddenPost.id) } },
+    ]);
+
+    const retained = await db
+      .select({ id: Bookmarks.id })
+      .from(Bookmarks)
+      .where(eq(Bookmarks.profileId, owner.profile.id));
+    assert.equal(retained.length, 4);
+  });
 });
 
 type BookmarkNode = {
@@ -237,7 +391,11 @@ type BookmarkNode = {
   post: { id: string } | null;
   profile: { id: string };
 };
-
+type BookmarkNodeSummary = { id: string; post: { id: string } | null };
+type BookmarkConnection = {
+  edges: Array<{ cursor: string; node: BookmarkNodeSummary }>;
+  pageInfo: { endCursor: string | null; hasNextPage: boolean };
+};
 type GraphQLResult<TData> = {
   data?: TData;
   errors?: Array<{
@@ -290,9 +448,51 @@ const requestGraphQL = async <TData>(
   return (await response.json()) as GraphQLResult<TData>;
 };
 
+const loadBookmarkConnection = (
+  id: string,
+  token: string | undefined,
+  variables: { after?: string | null; first: number },
+) =>
+  requestGraphQL<{ node: { bookmarks: BookmarkConnection } | null }>(
+    `query ProfileBookmarks($id: ID!, $first: Int!, $after: String) {
+      node(id: $id) {
+        ... on Profile {
+          bookmarks(first: $first, after: $after) {
+            edges { cursor node { id createdAt post { id } } }
+            pageInfo { endCursor hasNextPage }
+          }
+        }
+      }
+    }`,
+    { id, ...variables },
+    token,
+  );
+
+const loadBookmarkNodes = async (ids: string[], token?: string) => {
+  const result = await requestGraphQL<{ nodes: Array<BookmarkNodeSummary | null> }>(
+    `query BookmarkNodes($ids: [ID!]!) {
+      nodes(ids: $ids) { ... on Bookmark { id post { id } } }
+    }`,
+    { ids },
+    token,
+  );
+  assertNoGraphQLErrors(result);
+  return result.data!.nodes;
+};
+
 const assertNoGraphQLErrors = (result: GraphQLResult<unknown>) => {
   assert.equal(result.errors, undefined, JSON.stringify(result.errors));
 };
+
+const createInstance = (
+  domain: string,
+  state: (typeof InstanceState)[keyof typeof InstanceState] = InstanceState.ACTIVE,
+) =>
+  db
+    .insert(Instances)
+    .values({ domain, kind: InstanceKind.ACTIVITYPUB, state })
+    .returning()
+    .then(firstOrThrow);
 
 const createProfile = (
   handle: string,
@@ -321,6 +521,9 @@ const createPost = (
     visibility = PostVisibility.PUBLIC,
   }: { state?: PostState; visibility?: PostVisibility } = {},
 ) => db.insert(Posts).values({ profileId, state, visibility }).returning().then(firstOrThrow);
+
+const createBookmark = (profileId: string, postId: string, id?: string) =>
+  db.insert(Bookmarks).values({ id, profileId, postId }).returning().then(firstOrThrow);
 
 const createAuthenticatedSession = async ({
   accountState = AccountState.ACTIVE,
@@ -357,7 +560,7 @@ const createAuthenticatedSession = async ({
     token,
   });
 
-  return { profile, token };
+  return { account, profile, token };
 };
 
 const countBookmarks = () => db.$count(Bookmarks);
@@ -365,8 +568,9 @@ const countBookmarks = () => db.$count(Bookmarks);
 const resetFixtures = async () => {
   await db.delete(Bookmarks);
   await db.delete(Notifications);
-  await db.delete(Posts);
   await db.delete(Sessions);
+  await db.delete(ProfileFollows);
+  await db.delete(Posts);
   await db.delete(AccountProfiles);
   await db.delete(Accounts);
   await db.delete(Profiles);
@@ -387,3 +591,5 @@ const truncateDatabase = async () => {
     END $$;
   `);
 };
+
+const uuid = (suffix: number) => `00000000-0000-8006-8000-${suffix.toString().padStart(12, '0')}`;

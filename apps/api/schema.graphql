@@ -21,6 +21,15 @@ enum AccountState {
   SUSPENDED
 }
 
+input AddReactionInput {
+  postId: ID!
+  type: String!
+}
+
+type AddReactionPayload {
+  reaction: Reaction!
+}
+
 input ApproveProfileFollowRequestInput {
   id: ID!
 }
@@ -37,6 +46,16 @@ type Bookmark implements Node {
   id: ID!
   post: Post
   profile: Profile!
+}
+
+type BookmarkConnection {
+  edges: [BookmarkConnectionEdge!]!
+  pageInfo: PageInfo!
+}
+
+type BookmarkConnectionEdge {
+  cursor: String!
+  node: Bookmark!
 }
 
 input CancelProfileFollowRequestInput {
@@ -127,6 +146,7 @@ type MarkNotificationReadPayload {
 }
 
 type Mutation {
+  addReaction(input: AddReactionInput!): AddReactionPayload!
   approveProfileFollowRequest(input: ApproveProfileFollowRequestInput!): ApproveProfileFollowRequestPayload!
   cancelProfileFollowRequest(input: CancelProfileFollowRequestInput!): CancelProfileFollowRequestPayload!
   createBookmark(input: CreateBookmarkInput!): CreateBookmarkPayload!
@@ -213,6 +233,7 @@ enum PostVisibility {
 
 type Profile implements Node {
   bio: String
+  bookmarks(after: String, before: String, first: Int, last: Int): BookmarkConnection!
   createdAt: DateTime!
   displayName: String!
   followPolicy: ProfileFollowPolicy!
@@ -315,6 +336,12 @@ type Query {
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
   profileByHandle(handle: String!): Profile
+}
+
+type Reaction implements Node {
+  createdAt: DateTime!
+  id: ID!
+  type: String!
 }
 
 input RejectProfileFollowRequestInput {
