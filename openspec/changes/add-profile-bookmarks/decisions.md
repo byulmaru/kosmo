@@ -81,7 +81,7 @@
 - Authority / Provenance: `docs/domain/objects/bookmark.md`, `PROD-408` 본문과 2026-07-21 생성 API·책임 경계 확정 댓글
 - Status: Active
 - Context / Problem: Profile/Post 유일성은 확정되어 있지만 순차·동시 중복 요청의 외부 응답과 생성 mutation의 exact GraphQL shape가 열려 있었다.
-- Decision Outcome: `createBookmark(input: { postId })`는 현재 `usingProfile`을 Owner로 사용하고 `CreateBookmarkPayload.bookmark`를 반환한다. Bookmark Node는 ID, Owner Profile, Target Post와 불변 생성 시각을 제공한다. 같은 Profile/Post 요청이 이미 존재하거나 경쟁에서 패하면 기존 Bookmark를 성공으로 반환하고 `createdAt`을 변경하지 않는다.
+- Decision Outcome: `createBookmark(input: { postId })`는 현재 `usingProfile`을 Owner로 사용하고 `CreateBookmarkPayload.bookmark`를 반환한다. Bookmark Node는 ID, Owner Profile, 현재 조회 가능한 Target Post와 불변 생성 시각을 제공한다. Target Post가 나중에 조회 불가능해져도 Owner의 Bookmark Node는 유지하며 `post`는 `null`을 반환한다. 같은 Profile/Post 요청이 이미 존재하거나 경쟁에서 패하면 기존 Bookmark를 성공으로 반환하고 `createdAt`을 변경하지 않는다.
 - Alternatives Considered: duplicate conflict — 경쟁 winner와 loser의 외부 의미가 달라지고 client 재시도를 복잡하게 만들어 채택하지 않는다. Owner Profile ID 입력 — 현재 actor가 아닌 Profile을 지정할 여지를 만들어 채택하지 않는다. 생성 여부 boolean — 현재 client 계약에 필요한 관계 Node 외 상태를 추가하므로 채택하지 않는다.
 - Consequences: DB unique 제약이 최종 유일성을 보장하며 mutation 응답은 생성·기존 경로에서 같은 shape를 가진다. Relay는 반환된 Bookmark의 Owner/Target 관계를 현재 actor store에 정규화할 수 있다.
 - Confirmation / Follow-up: `PROD-408` core/API 검증에서 순차·동시 중복이 같은 ID와 기존 생성 시각을 반환하는지 확인한다.

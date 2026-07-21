@@ -21,7 +21,7 @@ import type { yoga as YogaRouter } from '../../../src/graphql';
 import type { encodeGlobalId as EncodeGlobalId } from '../../../src/graphql/global-id';
 
 const publicOrigin = 'http://127.0.0.1:4173';
-const databaseUrl = 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
@@ -136,14 +136,7 @@ describe('GraphQL Bookmark 생성', () => {
       first.data?.createBookmark.bookmark.id,
       second.data?.createBookmark.bookmark.id,
     );
-    assert.equal(
-      await db
-        .select()
-        .from(Bookmarks)
-        .where(eq(Bookmarks.postId, post.id))
-        .then((rows) => rows.length),
-      2,
-    );
+    assert.equal(await db.$count(Bookmarks, eq(Bookmarks.postId, post.id)), 2);
   });
 
   test('없거나 조회할 수 없는 Post는 같은 NOT_FOUND로 숨긴다', async () => {
@@ -164,7 +157,12 @@ describe('GraphQL Bookmark 생성', () => {
   test('비로그인·비활성 Account·사용 불가 Profile은 PERMISSION_DENIED로 거부한다', async () => {
     const author = await createProfile('actor-check-author');
     const post = await createPost(author.id);
-    const remoteInstance = await createInstance(InstanceKind.ACTIVITYPUB);
+    const suffix = crypto.randomUUID();
+    const remoteInstance = await db
+      .insert(Instances)
+      .values({ domain: `${suffix}.example`, kind: InstanceKind.ACTIVITYPUB })
+      .returning()
+      .then(firstOrThrow);
     const actors = await Promise.all([
       createAuthenticatedSession({ activeProfile: false }),
       createAuthenticatedSession({ accountState: AccountState.DISABLED }),
@@ -197,7 +195,8 @@ describe('GraphQL Bookmark 생성', () => {
   test('Bookmark Node는 Owner에게만 관계를 공개하고 Notification을 만들지 않는다', async () => {
     const owner = await createAuthenticatedSession();
     const other = await createAuthenticatedSession();
-    const post = await createPost(owner.profile.id);
+    const author = await createProfile('bookmark-node-author');
+    const post = await createPost(author.id);
     const created = await requestCreateBookmark(post.id, owner.token);
     const bookmarkId = created.data?.createBookmark.bookmark.id;
     assert.ok(bookmarkId);
@@ -206,18 +205,20 @@ describe('GraphQL Bookmark 생성', () => {
     assertNoGraphQLErrors(ownerNode);
     assert.deepEqual(ownerNode.data?.node, created.data?.createBookmark.bookmark);
 
+    await db.update(Posts).set({ visibility: PostVisibility.DIRECT }).where(eq(Posts.id, post.id));
+    const hiddenPostNode = await requestBookmarkNode(bookmarkId, owner.token);
+    assertNoGraphQLErrors(hiddenPostNode);
+    assert.deepEqual(hiddenPostNode.data?.node, {
+      ...created.data?.createBookmark.bookmark,
+      post: null,
+    });
+
     for (const token of [other.token, undefined]) {
       const hiddenNode = await requestBookmarkNode(bookmarkId, token);
       assertNoGraphQLErrors(hiddenNode);
       assert.equal(hiddenNode.data?.node, null);
     }
-    assert.equal(
-      await db
-        .select()
-        .from(Notifications)
-        .then((rows) => rows.length),
-      0,
-    );
+    assert.equal(await db.$count(Notifications), 0);
   });
 });
 
@@ -225,7 +226,7 @@ type BookmarkNode = {
   __typename: 'Bookmark';
   createdAt: string;
   id: string;
-  post: { id: string };
+  post: { id: string } | null;
   profile: { id: string };
 };
 
@@ -285,15 +286,6 @@ const assertNoGraphQLErrors = (result: GraphQLResult<unknown>) => {
   assert.equal(result.errors, undefined, JSON.stringify(result.errors));
 };
 
-const createInstance = (kind: InstanceKind) => {
-  const suffix = crypto.randomUUID();
-  return db
-    .insert(Instances)
-    .values({ domain: `${suffix}.example`, kind })
-    .returning()
-    .then(firstOrThrow);
-};
-
 const createProfile = (
   handle: string,
   {
@@ -350,25 +342,17 @@ const createAuthenticatedSession = async ({
     });
   }
   const token = `token-${suffix}`;
-  const session = await db
-    .insert(Sessions)
-    .values({
-      accountId: account.id,
-      activeProfileId: activeProfile ? profile.id : null,
-      state: SessionState.ACTIVE,
-      token,
-    })
-    .returning()
-    .then(firstOrThrow);
+  await db.insert(Sessions).values({
+    accountId: account.id,
+    activeProfileId: activeProfile ? profile.id : null,
+    state: SessionState.ACTIVE,
+    token,
+  });
 
-  return { account, profile, session, token };
+  return { profile, token };
 };
 
-const countBookmarks = () =>
-  db
-    .select()
-    .from(Bookmarks)
-    .then((rows) => rows.length);
+const countBookmarks = () => db.$count(Bookmarks);
 
 const resetFixtures = async () => {
   await db.delete(Bookmarks);
@@ -382,7 +366,9 @@ const resetFixtures = async () => {
 };
 
 const truncateDatabase = async () => {
-  assert.equal(new URL(process.env.DATABASE_URL ?? '').pathname, '/kosmo_test');
+  const databaseUrl = new URL(process.env.DATABASE_URL ?? '');
+  assert.ok(new Set(['127.0.0.1', '[::1]', 'localhost']).has(databaseUrl.hostname));
+  assert.match(databaseUrl.pathname, /^\/kosmo_test(?:_[a-z0-9_]+)?$/);
   await pg.unsafe(`
     DO $$
     DECLARE truncate_statement text;

@@ -35,7 +35,7 @@ type ApproveProfileFollowRequestPayload {
 type Bookmark implements Node {
   createdAt: DateTime!
   id: ID!
-  post: Post!
+  post: Post
   profile: Profile!
 }
 

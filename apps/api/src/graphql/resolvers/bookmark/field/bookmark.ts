@@ -9,6 +9,7 @@ builder.objectFields(Bookmark, (t) => ({
     resolve: (bookmark) => bookmark.profileId,
   }),
   post: t.field({
+    nullable: true,
     type: Post,
     resolve: (bookmark) => bookmark.postId,
   }),

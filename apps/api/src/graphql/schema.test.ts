@@ -54,7 +54,7 @@ test('exposes the Bookmark creation and relationship contract', () => {
   assert.equal(String(payload.getFields().bookmark.type), 'Bookmark!');
   assert.ok(isObjectType(bookmark));
   assert.equal(String(bookmark.getFields().profile.type), 'Profile!');
-  assert.equal(String(bookmark.getFields().post.type), 'Post!');
+  assert.equal(String(bookmark.getFields().post.type), 'Post');
   assert.equal(String(bookmark.getFields().createdAt.type), 'DateTime!');
 });
 
