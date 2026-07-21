@@ -1,5 +1,7 @@
-import { View } from 'react-native';
-import { graphql, useLazyLoadQuery } from 'react-relay';
+import { useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
+import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
+import { commitLocalUpdate } from 'relay-runtime';
 import { expect, userEvent, within } from 'storybook/test';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
@@ -8,6 +10,8 @@ import { ProfileSwitcher } from '@/components/shell/ProfileSwitcher';
 import { RightRail } from '@/components/shell/RightRail';
 import { SidebarNavigation } from '@/components/shell/SidebarNavigation';
 import { UniversalShell } from '@/components/shell/UniversalShell';
+import { useRelayActor } from '@/relay/RelayActorProvider';
+import { SessionProvider } from '@/session/SessionProvider';
 import { spacing } from '@/theme/tokens';
 import { profile, shellQuery } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
@@ -317,13 +321,326 @@ const universalParameters = {
   router: { pathname: '/home', slotLabel: '홈 타임라인' },
 };
 
+function UniversalShellStory() {
+  return (
+    <SessionProvider>
+      <UniversalShell />
+    </SessionProvider>
+  );
+}
+
+function RemountableUniversalShellStory() {
+  const [visible, setVisible] = useState(true);
+
+  return (
+    <>
+      {visible ? <UniversalShellStory /> : null}
+      <StoryButton
+        label={visible ? '셸 숨기기' : '셸 다시 열기'}
+        onPress={() => setVisible((current) => !current)}
+      />
+    </>
+  );
+}
+
+function StoryButton({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable accessibilityLabel={label} accessibilityRole="button" onPress={onPress}>
+      <Text>{label}</Text>
+    </Pressable>
+  );
+}
+
+function SetUnreadNotificationCount({ count }: { count: number }) {
+  const environment = useRelayEnvironment();
+
+  return (
+    <StoryButton
+      label={`읽지 않은 알림 수를 ${count}개로 변경`}
+      onPress={() =>
+        commitLocalUpdate(environment, (store) => {
+          store.get(selectedProfile.id)?.setValue(count, 'unreadNotificationCount');
+        })
+      }
+    />
+  );
+}
+
+function RetryRelayActor() {
+  const { retry } = useRelayActor();
+
+  return <StoryButton label="기존 셸 새로고침" onPress={retry} />;
+}
+
+function ResetRelayActorToSecondProfile() {
+  const { resetActor } = useRelayActor();
+
+  return <StoryButton label="두 번째 프로필로 전환" onPress={() => resetActor(secondProfile.id)} />;
+}
+
+function unreadBadgeParameters(count: number) {
+  return {
+    ...universalParameters,
+    relay: {
+      data: query,
+      operationResponses: {
+        UnreadNotificationBadgeControllerQuery: {
+          data: { node: { ...selectedProfile, unreadNotificationCount: count } },
+        },
+      },
+    },
+  };
+}
+
 export const UniversalMobile: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   parameters: universalParameters,
   render: () => (
     <View style={{ height: 844 }}>
-      <UniversalShell />
+      <UniversalShellStory />
     </View>
+  ),
+};
+
+export const UniversalMobileUnreadBadge: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: unreadBadgeParameters(100),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.findByRole('link', { name: '알림, 읽지 않은 알림 100개' }),
+    ).resolves.toBeVisible();
+    expect(canvas.getAllByRole('link', { name: '알림, 읽지 않은 알림 100개' })).toHaveLength(1);
+    expect(canvas.queryByText('99+')).toBeNull();
+    const bottomTabDot = canvas.getByTestId('unread-notification-dot');
+    expect(bottomTabDot).toBeVisible();
+    expect(bottomTabDot).toHaveStyle({ height: '8px', right: '2px', top: '-1px', width: '8px' });
+    expect(bottomTabDot.closest('[aria-hidden="true"]')).not.toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
+    const page = within(canvasElement.ownerDocument.body);
+    const drawerNavigation = await page.findByRole('navigation', { name: '주요 메뉴' });
+    await expect(
+      within(drawerNavigation).findByRole('link', { name: '알림, 읽지 않은 알림 100개' }),
+    ).resolves.toBeVisible();
+    expect(page.getAllByRole('link', { name: '알림, 읽지 않은 알림 100개' })).toHaveLength(1);
+    const drawerDot = within(drawerNavigation).getByTestId('unread-notification-dot');
+    expect(drawerDot).toBeVisible();
+    expect(drawerDot).toHaveStyle({ height: '8px', right: '2px', top: '-1px', width: '8px' });
+    expect(within(drawerNavigation).queryByText('99+')).toBeNull();
+  },
+  render: () => (
+    <View style={{ height: 844 }}>
+      <UniversalShellStory />
+    </View>
+  ),
+};
+
+export const UniversalMobileUnreadBadgeZero: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: unreadBadgeParameters(0),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const notification = await canvas.findByRole('link', { name: '알림' });
+    expect(notification).toBeVisible();
+    expect(canvas.queryByTestId('unread-notification-dot')).toBeNull();
+  },
+  render: () => <UniversalShellStory />,
+};
+
+export const UniversalMobileUnreadBadgeInitialFailure: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    ...universalParameters,
+    relay: {
+      data: query,
+      operationResponses: {
+        UnreadNotificationBadgeControllerQuery: {
+          error: '읽지 않은 알림 수를 불러오지 못했습니다.',
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const notification = await canvas.findByRole('link', { name: '알림' });
+    expect(notification).toBeVisible();
+    expect(canvas.queryByTestId('unread-notification-dot')).toBeNull();
+    expect(canvas.queryByText('읽지 않은 알림 수를 불러오지 못했습니다.')).toBeNull();
+    expect(canvas.queryByRole('button', { name: /알림.*(재시도|다시)/ })).toBeNull();
+  },
+  render: () => <UniversalShellStory />,
+};
+
+export const UniversalCompactUnreadBadge: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: unreadBadgeParameters(99),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.findByRole('link', { name: '알림, 읽지 않은 알림 99개' }),
+    ).resolves.toBeVisible();
+    expect(canvas.queryByText('99')).toBeNull();
+    expect(canvas.getByTestId('unread-notification-dot')).toHaveStyle({
+      height: '8px',
+      right: '2px',
+      top: '-1px',
+      width: '8px',
+    });
+  },
+  render: () => <UniversalShellStory />,
+};
+
+export const UniversalFullUnreadBadge: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
+  parameters: unreadBadgeParameters(1),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.findByRole('link', { name: '알림, 읽지 않은 알림 1개' }),
+    ).resolves.toBeVisible();
+    expect(canvas.queryByText('1')).toBeNull();
+    expect(canvas.getByTestId('unread-notification-dot')).toHaveStyle({
+      height: '8px',
+      right: '2px',
+      top: '-1px',
+      width: '8px',
+    });
+  },
+  render: () => <UniversalShellStory />,
+};
+
+export const UnreadBadgeUsesNormalizedRelayProfileRecord: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: unreadBadgeParameters(7),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.findByRole('link', { name: '알림, 읽지 않은 알림 7개' }),
+    ).resolves.toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '읽지 않은 알림 수를 100개로 변경' }));
+    await expect(
+      canvas.findByRole('link', { name: '알림, 읽지 않은 알림 100개' }),
+    ).resolves.toBeVisible();
+    expect(canvas.queryByText('99+')).toBeNull();
+    expect(canvas.getByTestId('unread-notification-dot')).toBeVisible();
+  },
+  render: () => (
+    <>
+      <UniversalShellStory />
+      <SetUnreadNotificationCount count={100} />
+    </>
+  ),
+};
+
+export const UnreadBadgeRestoresWarmCacheAfterShellRemount: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: unreadBadgeParameters(7),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.findByRole('link', { name: '알림, 읽지 않은 알림 7개' }),
+    ).resolves.toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '셸 숨기기' }));
+    expect(canvas.queryByRole('link', { name: '알림, 읽지 않은 알림 7개' })).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: '셸 다시 열기' }));
+    await expect(
+      canvas.findByRole('link', { name: '알림, 읽지 않은 알림 7개' }),
+    ).resolves.toBeVisible();
+  },
+  render: () => <RemountableUniversalShellStory />,
+};
+
+export const UnreadBadgeKeepsSameProfileCountAcrossFailedRefresh: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    ...universalParameters,
+    relay: {
+      data: query,
+      operationResponses: {
+        UnreadNotificationBadgeControllerQuery: [
+          { data: { node: { ...selectedProfile, unreadNotificationCount: 7 } } },
+          { error: '읽지 않은 알림 수를 불러오지 못했습니다.' },
+          { data: { node: { ...selectedProfile, unreadNotificationCount: 9 } } },
+        ],
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    await expect(
+      canvas.findByRole('link', { name: '알림, 읽지 않은 알림 7개' }),
+    ).resolves.toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '기존 셸 새로고침' }));
+    await expect(
+      page.findByRole('link', { name: '알림, 읽지 않은 알림 7개' }),
+    ).resolves.toBeVisible();
+    expect(page.queryByRole('button', { name: /알림.*다시/ })).toBeNull();
+    expect(page.queryByText('읽지 않은 알림 수를 불러오지 못했습니다.')).toBeNull();
+    await userEvent.click(page.getByRole('button', { name: '기존 셸 새로고침' }));
+    await expect(
+      page.findByRole('link', { name: '알림, 읽지 않은 알림 9개' }),
+    ).resolves.toBeVisible();
+  },
+  render: () => (
+    <>
+      <UniversalShellStory />
+      <RetryRelayActor />
+    </>
+  ),
+};
+
+const transitionedQuery = {
+  ...query,
+  currentSession: { ...query.currentSession, selectedProfile: secondProfile },
+  me: { ...query.me, profiles: [selectedProfile, secondProfile] },
+};
+
+export const UnreadBadgeHidesPreviousProfileCountUntilNextRetry: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    ...universalParameters,
+    relay: {
+      data: query,
+      operationResponses: {
+        SessionProviderQuery: [
+          { data: query },
+          { data: transitionedQuery },
+          { data: transitionedQuery },
+        ],
+        UniversalShellQuery: [
+          { data: query },
+          { data: transitionedQuery },
+          { data: transitionedQuery },
+        ],
+        UnreadNotificationBadgeControllerQuery: [
+          { data: { node: { ...selectedProfile, unreadNotificationCount: 7 } } },
+          { error: '두 번째 프로필의 읽지 않은 알림 수를 불러오지 못했습니다.' },
+          { data: { node: { ...secondProfile, unreadNotificationCount: 4 } } },
+        ],
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    await expect(
+      canvas.findByRole('link', { name: '알림, 읽지 않은 알림 7개' }),
+    ).resolves.toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '두 번째 프로필로 전환' }));
+    await expect(page.findByRole('link', { name: '알림' })).resolves.toBeVisible();
+    expect(page.queryByRole('link', { name: '알림, 읽지 않은 알림 7개' })).toBeNull();
+    await userEvent.click(page.getByRole('button', { name: '기존 셸 새로고침' }));
+    await expect(
+      page.findByRole('link', { name: '알림, 읽지 않은 알림 4개' }),
+    ).resolves.toBeVisible();
+  },
+  render: () => (
+    <>
+      <UniversalShellStory />
+      <ResetRelayActorToSecondProfile />
+      <RetryRelayActor />
+    </>
   ),
 };
 
@@ -332,7 +649,7 @@ export const UniversalCompact: Story = {
   parameters: universalParameters,
   render: () => (
     <View style={{ height: 900 }}>
-      <UniversalShell />
+      <UniversalShellStory />
     </View>
   ),
 };
@@ -355,7 +672,7 @@ export const UniversalFull: Story = {
   },
   render: () => (
     <View style={{ height: 1800 }}>
-      <UniversalShell />
+      <UniversalShellStory />
     </View>
   ),
 };

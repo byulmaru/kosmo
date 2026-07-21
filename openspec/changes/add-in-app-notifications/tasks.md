@@ -53,10 +53,25 @@
 
 ## 9. PROD-324 모든 알림 셸 진입점에 Profile별 Unread badge를 제공한다
 
-- [ ] 9.1 구현 전에 shell surface, count cap, 접근성, loading/error/stale, app lifecycle과 Profile 전환 cache 선택을 결정하고 `web-app-shell` delta 및 관련 design/decisions를 추가한다.
-- [ ] 9.2 모든 지원 shell 진입점이 selected Profile의 서버 제공 `unreadNotificationCount`를 표시하고 Profile 전환 시 다른 Recipient count를 재사용하지 않게 한다.
-- [ ] 9.3 Read 성공/실패/반복/동시 요청 뒤 cache가 최초 visible 전이만 반영하고 refetch에서 서버 count로 수렴하게 하며 hidden item client 보정 로직을 만들지 않는다.
-- [ ] 9.4 Storybook/interaction/Relay cache test와 app check로 0/1/다수/큰 수, Profile 전환, lifecycle, loading/error/stale와 count 일관성을 검증한다.
+**Deliverable**
+
+Android/iOS와 Web의 모든 지원 셸 알림 진입점이 selected Profile의 서버 제공 Unread count를 접근 가능하고 Profile 격리된 아이콘 badge로 표시한다.
+
+**Guardrails**
+
+- 기존 셸 label, row/touch target, route와 breakpoint 구조를 바꾸지 않고 알림 아이콘에만 badge를 overlay한다.
+- Notification 목록 길이, hidden item 또는 client visibility 판정으로 count를 계산하거나 보정하지 않는다.
+- 자동 foreground/reconnect listener, `NetInfo`, Push/realtime과 PROD-372가 소유하는 Read mutation/cache orchestration을 추가하지 않는다.
+
+**Verification**
+
+- 하단 탭 바, 모바일 drawer와 Web compact/full sidebar의 공통 숫자 없는 dot 표시와 각 표면의 하나의 accessible navigation entry를 검증한다.
+- 최초 loading/count-only error의 badge 숨김과 전용 retry 부재, 같은 Profile의 마지막 성공값, Profile 전환 격리와 normalized Relay Profile count 반영을 검증한다.
+
+- [x] 9.1 shell surface, 숫자 없는 Unread presence dot과 accent token, 접근성, loading/error/stale, app lifecycle과 Profile 전환 cache 선택을 결정하고 `web-app-shell` delta 및 관련 design/decisions를 추가한다.
+- [x] 9.2 전체 셸 query의 Suspense/Error boundary와 분리된 non-suspending count controller와 공용 badge 표시 경계를 만들고, 모든 지원 shell 알림 아이콘이 selected Profile의 서버 제공 `unreadNotificationCount`를 표시하며 Profile 전환 시 다른 Recipient count를 재사용하지 않게 한다.
+- [x] 9.3 normalized `Profile.unreadNotificationCount` 변경을 모든 셸 surface가 반영하고 기존 actor revision/refetch에서 서버 count로 수렴하게 하되 Read updater, speculative decrement와 hidden item client 보정 로직을 만들지 않는다.
+- [x] 9.4 state 단위 test와 Storybook interaction/a11y·Relay cache test로 하단 탭, drawer, compact/full의 공통 dot, 0/1/99/100에서 숫자 없는 표시, 실제 count를 사용하는 접근성 이름, Profile 전환, 기존 lifecycle, loading/error/stale와 count 일관성을 검증한다. 최초 count-only 실패에는 badge와 전용 retry control이 없고, 성공 count `7` 뒤 같은 Profile의 count 조회 실패에도 셸 진입점과 해당 surface의 badge가 유지되며 다음 기존 refresh에서 수렴하는 회귀 test를 포함한다. app check·Relay compiler·Storybook build/test를 통과시킨다.
 
 ## 10. PROD-380 ActivityPub inbound Follow/Undo를 Follow Notification lifecycle에 연결한다
 
