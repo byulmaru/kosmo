@@ -42,6 +42,40 @@
 - **WHEN** 행동 주체가 Local Profile이 아니거나 Active/Normal 상태가 아니거나 현재 Account의 멤버가 아니다
 - **THEN** 시스템은 Bookmark를 생성하지 않는다
 
+### Requirement: Bookmark 생성 GraphQL 계약
+
+**Authority / Provenance:** `docs/domain/objects/bookmark.md`, `PROD-408` 본문과 2026-07-21 생성 API·책임 경계 확정 댓글 — 시스템은 현재 `usingProfile`을 Owner로 사용하는 `createBookmark(input: { postId })` GraphQL mutation을 제공해야 한다(MUST). 성공 payload는 `bookmark` 필드로 Owner Profile, 현재 조회 가능한 Target Post와 생성 시각을 식별할 수 있는 Bookmark Node를 반환해야 한다(MUST). 이후 Target Post가 조회 불가능해져도 Owner의 Bookmark Node는 유지되고 `post` 필드는 `null`이어야 한다(MUST). 같은 Profile/Post의 순차·동시 중복 요청은 기존 Bookmark를 반환하는 성공으로 정규화하고 기존 생성 시각을 변경하지 않아야 한다(MUST).
+
+#### Scenario: GraphQL로 Bookmark를 생성함
+
+- **WHEN** 유효한 Account의 Active/Normal Local `usingProfile`이 조회 가능한 Post ID로 `createBookmark`를 요청한다
+- **THEN** 시스템은 현재 `usingProfile`을 Owner로 하는 Bookmark를 생성한다
+- **AND** `CreateBookmarkPayload.bookmark`로 Bookmark ID, Owner Profile, Target Post와 생성 시각을 반환한다
+
+#### Scenario: 생성 뒤 Target Post를 조회할 수 없게 됨
+
+- **WHEN** Owner가 저장한 Bookmark Node를 조회하지만 Target Post가 현재 조회 정책을 통과하지 못한다
+- **THEN** 시스템은 Owner의 Bookmark Node와 저장 관계를 유지한다
+- **AND** `Bookmark.post`는 `null`을 반환한다
+
+#### Scenario: GraphQL 중복 생성을 요청함
+
+- **WHEN** 같은 Profile/Post에 대한 `createBookmark` 요청이 순차 또는 동시에 반복된다
+- **THEN** 모든 성공 응답은 같은 기존 Bookmark를 반환한다
+- **AND** 기존 Bookmark의 생성 시각을 변경하지 않는다
+
+#### Scenario: 사용할 수 없는 actor로 GraphQL 생성을 요청함
+
+- **WHEN** 현재 Account가 활성 상태가 아니거나 `usingProfile`이 현재 Account의 Active/Normal Local Member가 아니다
+- **THEN** 시스템은 `PERMISSION_DENIED` 오류로 요청을 거부한다
+- **AND** Bookmark를 생성하지 않는다
+
+#### Scenario: 없거나 조회할 수 없는 Post로 GraphQL 생성을 요청함
+
+- **WHEN** Target Post가 없거나 현재 `usingProfile`의 조회 정책을 통과하지 못한다
+- **THEN** 시스템은 두 경우를 구분하지 않는 `NOT_FOUND` 오류로 요청을 거부한다
+- **AND** Bookmark를 생성하지 않는다
+
 ### Requirement: Owner 전용 Bookmark 삭제
 
 시스템은 Bookmark의 Owner Profile만 해당 Bookmark를 삭제할 수 있게 해야 한다(MUST). Target Post가 현재 조회 불가능하더라도 Owner는 저장 관계를 삭제할 수 있어야 한다(MUST).
