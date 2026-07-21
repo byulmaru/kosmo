@@ -72,6 +72,9 @@ artifacts:
       ## ADDED Requirements
 
       ### Requirement: User can export data
+
+      **Authority / Provenance:** `docs/domain/data-export.md`, `PROD-123`
+
       The system SHALL allow users to export their data in CSV format.
 
       #### Scenario: Successful export
