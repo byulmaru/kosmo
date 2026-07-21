@@ -8,6 +8,9 @@ Accepted
 
 2026-07-20
 
+[ADR 0014](./0014-post-structure-relations.md)가 Kind 기반 Reply/Repost 정의와 별도 Quote Source 전제를 관계
+조합 정의로 대체했다. 나머지 결정은 유지한다.
+
 ## 결정
 
 - Reply는 Reply Parent를 직접 참조하고 Kind가 Reply인 Post다. Reply Parent는 Original, Reply 또는 Quote이며

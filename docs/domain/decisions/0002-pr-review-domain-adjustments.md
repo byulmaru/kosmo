@@ -9,7 +9,8 @@ Accepted
 2026-06-29
 
 중첩 Repost 평탄화 결정은 [ADR 0010](./0010-post-interaction-contracts.md)의 직접 Source 참조와 Repost 입력
-거절 결정으로 대체되었다. 나머지 결정은 유지한다.
+거절 결정으로 대체되었다. Kind 기반 Post 구조와 목록 후보 판별은
+[ADR 0014](./0014-post-structure-relations.md)의 관계 조합 결정으로 대체되었다. 나머지 결정은 유지한다.
 
 ## 결정
 

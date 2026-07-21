@@ -8,6 +8,9 @@ Accepted
 
 2026-06-28
 
+[ADR 0014](./0014-post-structure-relations.md)가 Repost와 Quote의 Kind 기반 정의를 관계 조합 정의로
+대체했다. 나머지 결정은 유지한다.
+
 ## 결정
 
 Kosmo 도메인의 핵심 보편 언어를 다음처럼 확정한다.
