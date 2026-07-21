@@ -28,7 +28,7 @@ const notificationFragment = graphql`
   }
 `;
 
-export const notificationListItemMarkReadMutation = graphql`
+const notificationListItemMarkReadMutation = graphql`
   mutation NotificationListItemMarkReadMutation($id: ID!) {
     markNotificationRead(input: { id: $id }) {
       notification {

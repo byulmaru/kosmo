@@ -142,7 +142,7 @@ function ReadNavigationList() {
 
   return (
     <>
-      <Text testID="notification-story-pathname">{pathname}</Text>
+      <Text>{pathname}</Text>
       <RefreshList />
     </>
   );
