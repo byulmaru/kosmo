@@ -148,7 +148,34 @@ Owner Profile이 조회 가능한 Target의 Bookmark를 안정적인 최신순 c
 - [x] 5.3 저장·미저장·guest·selected Profile 없음·Profile 격리와 여러 Post batch 조회 API 검증을 추가한다.
 - [x] 5.4 API 정적 검사·통합 테스트와 OpenSpec strict validation을 실행해 PROD-420 결과를 검증한다.
 
-## 6. PROD-421 Bookmark 목록 화면을 제공한다
+## 6. PROD-452 Bookmark 목록의 프레젠테이션 상태를 구현한다
+
+**Authority / Provenance**
+
+- `docs/domain/objects/bookmark.md`
+- [PROD-452](https://linear.app/byulmaru/issue/PROD-452/bookmark-%EB%AA%A9%EB%A1%9D%EC%9D%98-%ED%94%84%EB%A0%88%EC%A0%A0%ED%85%8C%EC%9D%B4%EC%85%98-%EC%83%81%ED%83%9C%EB%A5%BC-%EA%B5%AC%ED%98%84%ED%95%9C%EB%8B%A4)
+
+**Deliverable**
+
+실제 Bookmark connection 없이도 Bookmark 목록의 loading·error·empty·populated와 추가 로딩 상태를 재현하고, Target Post는 기존 Post 카드의 canonical navigation 동작으로 표시한다.
+
+**Guardrails**
+
+- 기존 `PostListItem`의 Profile·Post canonical Link를 재사용하고 Bookmark 전용 Target 선택 callback이나 navigation·side-view를 추가하지 않는다.
+- private route, 실제 Bookmark connection·Relay pagination, unavailable Target 제거와 selected Profile 격리를 구현하지 않는다.
+- 목록 상태와 pagination 요청은 실제 route가 나중에 연결할 수 있는 presentation props와 mock callback 경계로 제공한다.
+- 기존 Post 카드의 Relay fragment 계약을 유지하고 raw object cast로 우회하지 않는다.
+
+**Verification**
+
+- fixture만으로 loading·error·empty·populated와 추가 로딩 상태를 Storybook에서 재현한다.
+- 기존 Post 카드의 canonical detail href, error retry, pagination 요청과 loading 중 중복 방지를 component interaction 수준에서 검증한다.
+
+- [ ] 6.1 기존 `PostListItem`을 사용하는 Bookmark 목록 presentation과 loading·error·empty·populated 상태를 구현한다.
+- [ ] 6.2 실제 connection 없이 pagination callback과 추가 로딩 상태를 제공하고 Storybook 상태 조합을 추가한다.
+- [ ] 6.3 canonical detail href, retry·pagination interaction과 접근성 검증을 추가하고 관련 check를 통과시킨다.
+
+## 7. PROD-421 Bookmark 목록 화면을 제공한다
 
 **Authority / Provenance**
 
@@ -163,6 +190,7 @@ Owner Profile이 조회 가능한 Target의 Bookmark를 안정적인 최신순 c
 **Guardrails**
 
 - Android·iOS·Web은 같은 Expo route와 공용 component·Relay 계약을 사용한다.
+- PROD-452의 목록 presentation을 재사용하고 기존 Post 카드의 canonical navigation을 Bookmark 전용 callback으로 대체하지 않는다.
 - selected Profile이 없으면 목록 query를 실행하지 않고, Profile 전환 뒤 이전 edge·cursor를 재사용하지 않는다.
 - 서버가 숨긴 Target Post를 client fallback으로 복원하거나 노출하지 않는다.
 - mobile navigation entry는 구현 전에 Remaining Decisions에서 확정한다.
@@ -171,12 +199,12 @@ Owner Profile이 조회 가능한 Target의 Bookmark를 안정적인 최신순 c
 
 - guest redirect, no-selected-Profile, loading·error·retry·empty·pagination, Target 이동, Profile 격리, mobile entry와 Web direct navigation을 route/component integration 수준에서 검증한다.
 
-- [ ] 6.1 mobile shell의 `/bookmarks` navigation entry를 사용자와 확정하고 specs·decisions에 반영한다.
-- [ ] 6.2 selected Profile별 pagination connection을 사용하는 공용 Bookmark 목록 route와 화면 상태를 구현한다.
-- [ ] 6.3 desktop·mobile navigation과 Target Post 이동을 canonical route에 연결한다.
-- [ ] 6.4 세 플랫폼 route parity와 목록 상태·pagination·Profile 격리·direct navigation 검증을 추가하고 관련 check를 통과시킨다.
+- [ ] 7.1 mobile shell의 `/bookmarks` navigation entry를 사용자와 확정하고 specs·decisions에 반영한다.
+- [ ] 7.2 selected Profile별 pagination connection과 PROD-452 presentation을 연결하는 공용 Bookmark 목록 route를 구현한다.
+- [ ] 7.3 desktop·mobile navigation entry와 기존 Post 카드의 canonical detail Link가 shell/router 정책으로 동작하게 한다.
+- [ ] 7.4 세 플랫폼 route parity와 실제 connection의 목록 상태·pagination·Profile 격리·direct navigation 검증을 추가하고 관련 check를 통과시킨다.
 
-## 7. PROD-391 Bookmark 계약 통합 검증과 archive
+## 8. PROD-391 Bookmark 계약 통합 검증과 archive
 
 **Authority / Provenance**
 
@@ -200,7 +228,7 @@ Owner Profile이 조회 가능한 Target의 Bookmark를 안정적인 최신순 c
 - 선택 Profile의 저장 → `Post.viewerBookmark`/목록 조회 → Target 숨김·관계 유지·재노출 → 해제 vertical flow를 검증한다.
 - 모든 requirement scenario, 자식 검증 증거, canonical 문서·active specs 정합성, archive 전후 strict validation을 확인한다.
 
-- [ ] 7.1 여섯 구현 자식의 결과·테스트와 Remaining Decisions 해소 상태를 대조한다.
-- [ ] 7.2 Bookmark vertical flow와 Profile·가시성·pagination 경계의 최종 통합 검증을 실행한다.
-- [ ] 7.3 구현에서 확정된 계약을 canonical 문서·OpenSpec artifacts와 동기화하고 archive diff를 검토한다.
-- [ ] 7.4 Completion Gate 승인 후 change를 archive하고 archive 후 strict validation을 통과시킨다.
+- [ ] 8.1 일곱 구현 이슈의 결과·테스트와 Remaining Decisions 해소 상태를 대조한다.
+- [ ] 8.2 Bookmark vertical flow와 Profile·가시성·pagination 경계의 최종 통합 검증을 실행한다.
+- [ ] 8.3 구현에서 확정된 계약을 canonical 문서·OpenSpec artifacts와 동기화하고 archive diff를 검토한다.
+- [ ] 8.4 Completion Gate 승인 후 change를 archive하고 archive 후 strict validation을 통과시킨다.

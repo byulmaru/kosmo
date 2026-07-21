@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 `proposal.md`, 네 capability의 delta specs, `design.md`, canonical Bookmark 문서와 `PROD-391` 부모/자식 이슈 구조를 반영한다. `PROD-396` 저장 slice와 `PROD-408` 생성 slice는 완료됐고, `PROD-410` 목록 slice의 공개 GraphQL 경계와 공용 Post 조회 정책 위임을 확정한다. 기존 기록의 legacy `Accepted` 상태는 해당 결정을 실제로 수정하거나 대체할 때 새 형식으로 전환한다.
+이 기록은 `proposal.md`, 네 capability의 delta specs, `design.md`, canonical Bookmark 문서와 `PROD-391` 부모/자식 이슈 구조를 반영한다. `PROD-396` 저장, `PROD-408` 생성, `PROD-409` 삭제, `PROD-410` 목록, `PROD-420` viewer-relative 조회 API slice가 완료된 현재 구현 상태와 `PROD-452` 목록 presentation·`PROD-421` 실제 route 통합의 분리 책임을 반영한다. 기존 기록의 legacy `Accepted` 상태는 해당 결정을 실제로 수정하거나 대체할 때 새 형식으로 전환한다.
 
 ## Decision Records
 
@@ -9,7 +9,7 @@
 - Decision Date: 2026-07-20
 - Status: Accepted
 - Context / Problem: 저장, 생성, 삭제, 목록과 UI를 별도 PR로 리뷰하면서도 같은 사용자 결과와 lifecycle·권한·pagination 계약을 공유해야 한다.
-- Decision Outcome: 부모 `PROD-391`이 단일 `add-profile-bookmarks` OpenSpec, 최종 통합 검증과 archive를 소유한다. `PROD-396`, `PROD-408`, `PROD-409`, `PROD-410`, `PROD-420`, `PROD-421`은 각각 자기 구현 결과와 테스트를 소유한다.
+- Decision Outcome: 부모 `PROD-391`이 단일 `add-profile-bookmarks` OpenSpec, 최종 통합 검증과 archive를 소유한다. `PROD-396`, `PROD-408`, `PROD-409`, `PROD-410`, `PROD-420`, `PROD-452`, `PROD-421`은 각각 자기 구현 결과와 테스트를 소유한다. `PROD-452`는 실제 connection 없는 목록 presentation을 제공하고, `PROD-421`은 그 결과를 Relay connection·route·navigation에 통합한다.
 - Alternatives Considered: DB/API/UI별 OpenSpec 분리 — 같은 계약을 중복하고 일부 계층만 배포해도 완료로 보일 수 있어 채택하지 않았다. 모든 구현을 부모 한 PR에 포함 — 독립 리뷰·전달 책임을 잃어 채택하지 않았다.
 - Consequences: `tasks.md`의 최상위 구현 group은 Linear 자식 이슈와 1:1로 대응한다. 개별 PR 완료만으로 change를 archive하지 않는다.
 - Confirmation / Follow-up: Linear 부모/자식 관계와 각 이슈의 검증 책임을 기준으로 확인한다.
@@ -147,6 +147,18 @@
 - Alternatives Considered: Bookmark 전용 predicate 복제 — 정책 drift를 만들어 채택하지 않는다. 누락된 Post 정책과 데이터 모델을 `PROD-410`에 포함 — 승인된 이슈 범위를 확장하므로 채택하지 않는다. 현재 helper 동작을 전체 canonical 정책 충족으로 간주 — 검증되지 않은 지원을 주장하므로 채택하지 않는다.
 - Consequences: pagination query와 nullable Target 조회는 같은 공용 판정을 공유해야 한다. 현재 API 검증은 도달 가능한 정책과 위임 경계를 증명하고, 미래 공용 정책 검증은 해당 정책 소유 이슈와 부모 통합 검증이 담당한다.
 - Confirmation / Follow-up: `PROD-410` 검증에서 공용 predicate가 숨긴 최신 row 뒤의 조회 가능한 row로 page limit을 채우고, 숨김·관계 유지·재노출과 Node/connection 경계를 확인한다.
+
+### Bookmark 목록에서 기존 Post 카드 navigation 재사용
+
+- Decision Date: 2026-07-21
+- Decision Class: Implementation Choice
+- Authority / Provenance: [PROD-452](https://linear.app/byulmaru/issue/PROD-452/bookmark-%EB%AA%A9%EB%A1%9D%EC%9D%98-%ED%94%84%EB%A0%88%EC%A0%A0%ED%85%8C%EC%9D%B4%EC%85%98-%EC%83%81%ED%83%9C%EB%A5%BC-%EA%B5%AC%ED%98%84%ED%95%9C%EB%8B%A4), 2026-07-21 사용자 결정
+- Status: Active
+- Context / Problem: 실제 Bookmark connection 없이 목록 presentation을 먼저 검증하면서도 Target Post의 상세 화면 또는 desktop side-view 동작이 기존 Post 표면과 갈라지지 않아야 한다.
+- Decision Outcome: `PROD-452`의 populated 상태는 기존 `PostListItem` Relay fragment와 Profile·Post canonical Link를 그대로 재사용한다. Bookmark 전용 `onTargetPostPress` callback, navigation route 또는 side-view를 추가하지 않는다. 목록 props는 loading·error·empty·pagination 상태와 retry/load-more callback만 소유하고, 실제 Bookmark connection과 route 연결은 `PROD-421`이 담당한다.
+- Alternatives Considered: Bookmark 전용 Post 카드를 복제 — Post 표시와 navigation 계약이 갈라져 채택하지 않는다. `PostListItem`에 Target 선택 callback을 추가 — shell/router가 이미 canonical Link에 따라 상세 화면 또는 side-view를 결정하므로 불필요한 두 번째 navigation 계약이 되어 채택하지 않는다.
+- Consequences: Storybook fixture는 Relay mock으로 `PostListItem_post$key`를 제공해야 하며 raw object cast로 fragment 계약을 우회하지 않는다. component interaction은 callback 대신 canonical detail href를 확인하고, presentation callback 검증은 retry와 pagination에 한정한다.
+- Confirmation / Follow-up: 2026-07-21 PROD-452 Linear 본문과 사용자 확인을 반영했다. `PROD-452`는 fixture 상태와 canonical href를 검증하고, `PROD-421`은 실제 connection·route·shell 동작을 통합 검증한다.
 
 ## Remaining Decisions
 
