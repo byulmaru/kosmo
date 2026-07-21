@@ -23,13 +23,13 @@ const secondProfile = profile({
   handle: 'remote',
   id: 'profile-remote',
   relativeHandle: '@remote@space.example',
-  viewerState: { follow: null, isSelf: true },
+  viewerState: { follow: null, followRequest: null, isSelf: true },
 });
 const selectedProfile = profile({
   handle: 'selected',
   id: 'profile-selected',
   relativeHandle: '@selected',
-  viewerState: { follow: null, isSelf: true },
+  viewerState: { follow: null, followRequest: null, isSelf: true },
 });
 const followedProfile = profile({
   followersCount: 17,
@@ -42,6 +42,7 @@ const followedProfile = profile({
       follower: { followingCount: selectedProfile.followingCount, id: selectedProfile.id },
       id: 'profile-follow-edge',
     },
+    followRequest: null,
     isSelf: false,
   },
 });
@@ -169,11 +170,12 @@ export const FollowUpdatesBothProfileCounts: Story = {
         node: {
           ...followedProfile,
           followersCount: 16,
-          viewerState: { follow: null, isSelf: false },
+          viewerState: { follow: null, followRequest: null, isSelf: false },
         },
       },
       mutationResponse: {
         followProfile: {
+          result: { __typename: 'ProfileFollow', id: 'profile-follow-edge' },
           followeeProfile: {
             ...followedProfile,
             viewerState: {
@@ -181,6 +183,7 @@ export const FollowUpdatesBothProfileCounts: Story = {
                 follower: { followingCount: 43, id: selectedProfile.id },
                 id: 'profile-follow-edge',
               },
+              followRequest: null,
               isSelf: false,
             },
           },
@@ -219,7 +222,7 @@ export const FollowOptimisticallyUpdatesBothProfileCounts: Story = {
         node: {
           ...followedProfile,
           followersCount: 16,
-          viewerState: { follow: null, isSelf: false },
+          viewerState: { follow: null, followRequest: null, isSelf: false },
         },
       },
       mutationLoading: true,
@@ -245,6 +248,97 @@ export const FollowOptimisticallyUpdatesBothProfileCounts: Story = {
   render: () => <FollowCacheStory />,
 };
 
+export const ApprovalRequiredFollowKeepsProfileCounts: Story = {
+  parameters: {
+    relay: {
+      data: {
+        ...query,
+        node: {
+          ...followedProfile,
+          followPolicy: 'APPROVAL_REQUIRED',
+          followersCount: 16,
+          viewerState: { follow: null, followRequest: null, isSelf: false },
+        },
+      },
+      mutationResponse: {
+        followProfile: {
+          result: { __typename: 'ProfileFollowRequest', id: 'profile-follow-request' },
+          followeeProfile: {
+            ...followedProfile,
+            followPolicy: 'APPROVAL_REQUIRED',
+            followersCount: 16,
+            viewerState: {
+              follow: null,
+              followRequest: { id: 'profile-follow-request' },
+              isSelf: false,
+            },
+          },
+          followerProfile: selectedProfile,
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewerFollowing = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@selected/following"]',
+    );
+    const targetFollowers = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@followed@remote.example/followers"]',
+    );
+    expect(viewerFollowing).not.toBeNull();
+    expect(targetFollowers).not.toBeNull();
+
+    await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
+
+    await expect(canvas.findByRole('button', { name: '요청됨' })).resolves.toBeVisible();
+    expect(within(viewerFollowing!).getByText('42')).toBeVisible();
+    expect(within(targetFollowers!).getByText('16')).toBeVisible();
+  },
+  render: () => <FollowCacheStory />,
+};
+
+export const PendingCancelKeepsProfileCounts: Story = {
+  parameters: {
+    relay: {
+      data: {
+        ...query,
+        node: {
+          ...followedProfile,
+          followPolicy: 'APPROVAL_REQUIRED',
+          followersCount: 16,
+          viewerState: {
+            follow: null,
+            followRequest: { id: 'profile-follow-request' },
+            isSelf: false,
+          },
+        },
+      },
+      mutationResponse: {
+        cancelProfileFollowRequest: { profileFollowRequestId: 'profile-follow-request' },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewerFollowing = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@selected/following"]',
+    );
+    const targetFollowers = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@followed@remote.example/followers"]',
+    );
+    expect(viewerFollowing).not.toBeNull();
+    expect(targetFollowers).not.toBeNull();
+
+    await userEvent.click(canvas.getByRole('button', { name: '요청됨' }));
+
+    await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeVisible();
+    expect(within(viewerFollowing!).getByText('42')).toBeVisible();
+    expect(within(targetFollowers!).getByText('16')).toBeVisible();
+  },
+  render: () => <FollowCacheStory />,
+};
+
 export const UnfollowUpdatesBothProfileCounts: Story = {
   parameters: {
     relay: {
@@ -253,7 +347,7 @@ export const UnfollowUpdatesBothProfileCounts: Story = {
           followeeProfile: {
             ...followedProfile,
             followersCount: 16,
-            viewerState: { follow: null, isSelf: false },
+            viewerState: { follow: null, followRequest: null, isSelf: false },
           },
           followerProfile: { ...selectedProfile, followingCount: 41 },
           profileFollowId: 'profile-follow-edge',

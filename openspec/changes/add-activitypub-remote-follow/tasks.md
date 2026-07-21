@@ -124,25 +124,31 @@ Remote OPEN/APPROVAL_REQUIRED follow, established unfollow와 pending cancel이 
 
 - [x] 6.1 PROD-447이 post-commit Follow/Undo delivery 오류를 격리하고 committed 결과를 반환한다.
 
-## 7. PROD-263 Remote Profile Web Follow Action
+## 7. PROD-263 FollowButton Established/Pending Action
 
 **Deliverable**
 
-Remote profile에서 follow action을 사용하고 normalized cache가 최신 관계와 count를 반영한다.
+Local/remote profile의 FollowButton이 NONE/PENDING/ESTABLISHED 상태를 표시하고 normalized cache가 최신 relation/request와 count를 반영한다.
 
 **Guardrails**
 
-- PROD-242 mutation과 PROD-245 read 계약을 재사용한다.
-- profile origin이나 follow policy를 Web action 조건으로 사용하지 않는다.
-- pending request 버튼 상태와 취소 UX는 PROD-377에 맡긴다.
-- Fedify handler, GraphQL resolver와 follow 저장 모델을 수정하지 않는다.
+- PROD-242/244 mutation과 PROD-245 read 계약을 재사용한다.
+- `ProfileViewerState.followRequest`만 추가하고 `Profile.viewerFollowRequest`는 만들지 않는다.
+- 완료된 PROD-378의 canonical `viewerState.follow` 계약을 사용하고 제거된 `Profile.viewerFollow`를 복원하거나 이중 cache slot을 만들지 않는다.
+- profile origin을 Web action 조건으로 사용하지 않고 `followPolicy`는 optimistic 결과 예측에만 사용할 수 있으며 실제 `followProfile.result` union을 최종 권위로 사용한다.
+- Fedify handler, core follow lifecycle, DB schema와 follow 저장 모델을 수정하지 않는다.
+- remote Accept/Reject의 refetch 없는 실시간 UI 전환을 구현하지 않는다.
 
 **Verification**
 
-- local/remote action parity, optimistic established 상태와 양쪽 count/viewer cache 갱신, 오류 rollback과 unfollow connection edge 제거를 검증한다.
-- follow 성공 시 열린 connection에 새 edge를 직접 삽입하지 않고 mutation 관계 응답만 normalized cache에 반영하는 경계를 검증한다.
+- API exact viewer/target pair의 nullable `viewerState.followRequest`, 권한과 relation/request 상호배타성을 검증한다.
+- local/remote의 NONE/PENDING/ESTABLISHED component behavior, OPEN established count +1, APPROVAL_REQUIRED pending count 불변, duplicate request 멱등, pending cancel과 established unfollow 및 각 오류 rollback을 검증한다.
+- follow 성공 시 열린 connection에 새 edge를 직접 삽입하지 않고 established unfollow의 기존 edge만 제거하는 경계를 Relay-backed Storybook과 Web E2E로 검증한다.
+- self/viewer 없음/SUSPENDED 비노출과 UNRESPONSIVE action 허용, 다음 server-backed read의 Accept/Reject 상태 반영을 검증한다.
 
-- [x] 7.1 PROD-263이 remote follow action과 양쪽 count/viewer state cache 갱신을 구현한다.
+- [x] 7.1 PROD-263이 `ProfileViewerState.followRequest` exact-pair read 계약과 API 검증을 구현한다.
+- [x] 7.2 PROD-263이 `followProfile.result` union, pending cancel과 relation/request/count cache 전이를 구현한다.
+- [x] 7.3 PROD-263이 local/remote 3상태 component behavior와 Web E2E를 검증한다.
 
 ## 8. PROD-282 SUSPENDED 관계 보존 회귀 검증
 

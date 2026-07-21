@@ -38,30 +38,53 @@
 
 ### Requirement: Remote profile follow actions
 
-웹 앱은 visible profile의 origin이나 `followPolicy`를 action surface에서 구분하지 않고 local/remote profile에 같은 follow/unfollow UI를 적용해야 한다(MUST). Follow Relationship과 Follow Request 생성 가능 여부는 `followProfile` mutation이 판단해야 하며, pending request 전용 버튼 상태와 취소 UX는 별도 capability가 제공하기 전까지 이 requirement에서 만들지 않아야 한다(MUST NOT).
+웹 앱은 visible profile의 origin을 action surface 조건으로 사용하지 않고 local/remote profile에 같은 NONE/PENDING/ESTABLISHED FollowButton 상태 머신을 적용해야 한다(MUST). `followProfile.result` union이 established relation과 pending request의 최종 권위여야 하며(MUST), `followPolicy`는 action을 숨기거나 막는 조건이 아니라 예상 optimistic state 선택에만 사용할 수 있다(MAY).
 
 #### Scenario: Show remote follow action
 
 - **WHEN** active profile이 있는 사용자가 자기 자신이 아닌 활성 ActivityPub remote profile을 `ProfileListItem`, 프로필 페이지, 또는 동등한 follow action surface에서 본다
 - **THEN** 시스템은 local profile 대상과 같은 `FollowButton` 표시 정책을 적용한다
-- **AND** 대상 profile의 origin이나 `followPolicy`를 클라이언트 버튼 노출 또는 mutation 호출 조건으로 사용하지 않는다
-- **AND** follow action은 `followProfile` mutation을 호출하고 mutation 결과의 `viewerState.follow`와 followersCount를 normalized cache에 반영한다
-- **AND** 대상이 ActivityPub remote profile이어도 mutation의 `followerProfile.followingCount`와 `followeeProfile.followersCount`를 Relay normalized cache에 반영한다
-- **AND** mutation 진행 중 별도 `처리 중` 버튼 상태를 표시하지 않고 관계와 양쪽 count를 optimistic하게 반영하며 mutation 오류에서는 이전 상태로 rollback한다
+- **AND** `viewerState.follow`과 `viewerState.followRequest`가 모두 없으면 `팔로우`를 표시하고 클릭 시 `followProfile` mutation을 호출한다
+- **AND** 대상 profile의 origin이나 `followPolicy`를 버튼 노출 또는 mutation 호출 조건으로 사용하지 않는다
+- **AND** mutation 진행 중 별도 `처리 중` 문구를 표시하지 않고 `followPolicy`로 예상되는 optimistic relation/request 상태를 선택하며 오류에서는 이전 상태로 rollback한다
+
+#### Scenario: Confirm established follow result
+
+- **WHEN** local 또는 ActivityPub remote profile의 `followProfile.result`가 `ProfileFollow`다
+- **THEN** 시스템은 `viewerState.follow`에 relation을 반영하고 `viewerState.followRequest`를 없음으로 유지하며 `팔로잉`을 표시한다
+- **AND** mutation의 `followerProfile.followingCount`와 `followeeProfile.followersCount`를 normalized cache에 반영한다
 - **AND** follow 성공 시 이미 열린 followers/following connection에 새 relation edge를 직접 삽입하지 않고 다음 connection query 결과에 membership 갱신을 맡긴다
 
-#### Scenario: Defer pending request action state
+#### Scenario: Confirm pending follow result
 
-- **WHEN** local 또는 ActivityPub remote profile의 follow mutation이 pending `ProfileFollowRequest`를 반환하거나 아직 제공되지 않은 remote request flow 때문에 실패한다
-- **THEN** 시스템은 profile origin이나 `followPolicy`에 따른 별도 버튼 노출 정책을 만들지 않는다
-- **AND** pending request의 `요청됨` 상태, 취소 action과 승인·거절 후 버튼 전환은 PROD-377이 소유한다
-- **AND** 자기 자신이거나 API visibility 계약상 노출되지 않는 profile에는 기존 공통 action surface를 적용하지 않는다
+- **WHEN** local 또는 ActivityPub remote profile의 `followProfile.result`가 `ProfileFollowRequest`다
+- **THEN** 시스템은 `viewerState.followRequest`에 request를 반영하고 `viewerState.follow`를 없음으로 유지하며 `요청됨`을 표시한다
+- **AND** 양쪽 followers/following count를 변경하지 않는다
+- **AND** duplicate follow 결과가 같은 request를 반환해도 request 상태와 count를 중복 변경하지 않는다
+
+#### Scenario: Cancel pending follow request
+
+- **WHEN** `viewerState.followRequest`가 있는 profile에서 사용자가 `요청됨`을 누른다
+- **THEN** 시스템은 exact request ID로 `cancelProfileFollowRequest`를 호출하고 optimistic하게 `viewerState.followRequest`를 없음으로 전환해 `팔로우`를 표시한다
+- **AND** 양쪽 followers/following count를 변경하지 않는다
+- **AND** mutation 오류에서는 이전 pending request와 `요청됨` 상태로 rollback한다
 
 #### Scenario: Show remote unfollow action
 
 - **WHEN** active profile이 있는 사용자가 established `ProfileFollow`로 follow 중인 활성 ActivityPub remote profile을 본다
 - **THEN** 시스템은 local profile 대상과 같은 unfollow action을 표시한다
 - **AND** 대상 remote profile의 origin이나 `followPolicy`를 established follow의 unfollow action 조건으로 사용하지 않는다
-- **AND** unfollow action은 `unfollowProfile` mutation을 호출하고 mutation 결과의 `viewerState.follow`와 followersCount를 normalized cache에 반영한다
+- **AND** `팔로잉` 클릭은 `unfollowProfile` mutation을 호출하고 optimistic하게 `viewerState.follow`을 없음으로 전환한다
 - **AND** 대상이 ActivityPub remote profile이어도 mutation의 `followerProfile.followingCount`와 `followeeProfile.followersCount`를 Relay normalized cache에 반영한다
-- **AND** mutation 진행 중 별도 `처리 중` 버튼 상태를 표시하지 않고 관계와 양쪽 count 및 열린 connection의 기존 relation edge 제거를 optimistic하게 반영하며 mutation 오류에서는 이전 상태로 rollback한다
+- **AND** 양쪽 count 감소와 열린 connection의 기존 relation edge 제거를 optimistic하게 반영하며 mutation 오류에서는 이전 상태로 rollback한다
+
+#### Scenario: Reflect remote Accept or Reject on a later read
+
+- **WHEN** remote Accept 또는 Reject가 pending request를 서버에서 전이한 뒤 profile을 다시 query하거나 navigation한다
+- **THEN** Accept 결과는 `viewerState.follow`만 있는 `팔로잉`, Reject 결과는 relation/request가 없는 `팔로우`로 표시한다
+- **AND** subscription, push 또는 polling 없이 현재 화면을 refetch 없이 자동 전환하지 않는다
+
+#### Scenario: Hide common unsupported action surface
+
+- **WHEN** 대상이 자기 자신이거나 viewer active profile이 없거나 API visibility 계약상 profile이 노출되지 않는다
+- **THEN** 시스템은 local/remote 공통 정책에 따라 FollowButton action surface를 표시하지 않는다

@@ -29,6 +29,7 @@ export type StoryProfile = {
   unreadNotificationCount: number;
   viewerState: {
     follow: { follower?: { followingCount: number; id: string } | null; id: string } | null;
+    followRequest: { id: string } | null;
     isSelf: boolean;
   } | null;
 };
@@ -64,7 +65,7 @@ export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
     instance: { kind: 'LOCAL' },
     relativeHandle: '@kosmo',
     unreadNotificationCount: 0,
-    viewerState: { follow: null, isSelf: false },
+    viewerState: { follow: null, followRequest: null, isSelf: false },
     ...overrides,
   };
 }
@@ -136,7 +137,7 @@ export function profileWithPosts(posts: StoryPost[], overrides: Partial<StoryPro
 }
 
 export function shellQuery({
-  profiles = [profile({ viewerState: { follow: null, isSelf: true } })],
+  profiles = [profile({ viewerState: { follow: null, followRequest: null, isSelf: true } })],
   selectedProfile = profiles[0] ?? null,
 }: {
   profiles?: StoryProfile[];

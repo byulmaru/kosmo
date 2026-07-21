@@ -1,6 +1,6 @@
 import { db, firstOrThrow, ProfileFollowRequests, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { InstanceState, ProfileFollowPolicy } from '@kosmo/core/enums';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import {
   createE2EFollow,
   createE2EProfile,
@@ -76,6 +76,70 @@ test('UNRESPONSIVE remote profile은 Web에서 follow와 unfollow할 수 있다'
 
   await expect(page.getByRole('button', { name: '팔로우' })).toBeVisible();
   await expect(followersLink.getByText('0', { exact: true })).toBeVisible();
+});
+
+test('APPROVAL_REQUIRED remote follow request와 cancel은 count를 변경하지 않는다', async ({
+  context,
+  page,
+}) => {
+  const domain = 'e2e-pending.remote.example';
+  const viewer = await createE2ESession({ handle: 'e2e-pending-viewer' });
+  const remote = await createE2ERemoteProfile({
+    domain,
+    followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
+    handle: 'e2e-pending-target',
+    instanceState: InstanceState.UNRESPONSIVE,
+  });
+  const relativeHandle = `@${remote.handle}@${domain}`;
+
+  await setE2ESessionCookie(context, viewer.token);
+  await page.goto(`/${relativeHandle}`);
+
+  const viewerFollowing = page.locator(`a[href="/@${viewer.profile!.handle}/following"]`);
+  const targetFollowers = page.locator(`a[href="/${relativeHandle}/followers"]`);
+  await expect(viewerFollowing.getByText('0', { exact: true })).toBeVisible();
+  await expect(targetFollowers.getByText('0', { exact: true })).toBeVisible();
+
+  const followResponse = waitForGraphQLOperation(page, 'FollowButtonFollowProfileMutation');
+  await page.getByRole('button', { name: '팔로우' }).click();
+
+  await expect(page.getByRole('button', { name: '요청됨' })).toBeVisible();
+  await followResponse;
+  await expect(viewerFollowing.getByText('0', { exact: true })).toBeVisible();
+  await expect(targetFollowers.getByText('0', { exact: true })).toBeVisible();
+  expect(
+    await db
+      .select()
+      .from(ProfileFollowRequests)
+      .where(
+        and(
+          eq(ProfileFollowRequests.followerProfileId, viewer.profile!.id),
+          eq(ProfileFollowRequests.followeeProfileId, remote.id),
+        ),
+      ),
+  ).toHaveLength(1);
+
+  const cancelResponse = waitForGraphQLOperation(
+    page,
+    'FollowButtonCancelProfileFollowRequestMutation',
+  );
+  await page.getByRole('button', { name: '요청됨' }).click();
+
+  await expect(page.getByRole('button', { name: '팔로우' })).toBeVisible();
+  await cancelResponse;
+  await expect(viewerFollowing.getByText('0', { exact: true })).toBeVisible();
+  await expect(targetFollowers.getByText('0', { exact: true })).toBeVisible();
+  expect(
+    await db
+      .select()
+      .from(ProfileFollowRequests)
+      .where(
+        and(
+          eq(ProfileFollowRequests.followerProfileId, viewer.profile!.id),
+          eq(ProfileFollowRequests.followeeProfileId, remote.id),
+        ),
+      ),
+  ).toHaveLength(0);
 });
 
 test('SUSPENDED remote profile은 Web action surface에 노출되지 않는다', async ({

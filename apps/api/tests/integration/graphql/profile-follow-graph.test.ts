@@ -103,6 +103,7 @@ describe('GraphQL profile follow graph', () => {
     assert.equal(result.data?.node?.following.edges.length, 1);
     assert.deepEqual(result.data?.node?.viewerState, {
       follow: { id: result.data?.node?.followers.edges[0]!.node.id },
+      followRequest: null,
       isSelf: false,
     });
   });
@@ -116,7 +117,7 @@ describe('GraphQL profile follow graph', () => {
     assert.deepEqual(result.data?.node, {
       followers: { edges: [] },
       following: { edges: [] },
-      viewerState: { follow: null, isSelf: true },
+      viewerState: { follow: null, followRequest: null, isSelf: true },
     });
   });
 
@@ -127,10 +128,13 @@ describe('GraphQL profile follow graph', () => {
       handle: 'pending-local',
       instanceId: otherLocalInstance.id,
     });
-    await db.insert(ProfileFollowRequests).values([
-      { followerProfileId: auth.profile.id, followeeProfileId: otherLocal.id },
-      { followerProfileId: otherLocal.id, followeeProfileId: auth.profile.id },
-    ]);
+    const [outgoingRequest] = await db
+      .insert(ProfileFollowRequests)
+      .values([
+        { followerProfileId: auth.profile.id, followeeProfileId: otherLocal.id },
+        { followerProfileId: otherLocal.id, followeeProfileId: auth.profile.id },
+      ])
+      .returning();
 
     const result = await requestNodeFollowGraph(otherLocal.id, auth.token);
 
@@ -138,7 +142,11 @@ describe('GraphQL profile follow graph', () => {
     assert.deepEqual(result.data?.node, {
       followers: { edges: [] },
       following: { edges: [] },
-      viewerState: { follow: null, isSelf: false },
+      viewerState: {
+        follow: null,
+        followRequest: { id: globalId('ProfileFollowRequest', outgoingRequest!.id) },
+        isSelf: false,
+      },
     });
   });
 
@@ -433,6 +441,7 @@ describe('GraphQL profile follow graph', () => {
       followingCount: 0,
       viewerState: {
         follow: { id: globalId('ProfileFollow', viewerFollow!.id) },
+        followRequest: null,
         isSelf: false,
       },
     });
@@ -460,6 +469,7 @@ describe('GraphQL profile follow graph', () => {
     assertNoGraphQLErrors(result);
     assert.deepEqual(result.data?.profileByHandle?.viewerState, {
       follow: null,
+      followRequest: null,
       isSelf: false,
     });
   });
@@ -478,8 +488,8 @@ describe('GraphQL profile follow graph', () => {
     assert.equal(result.data?.profileByHandle?.viewerState, null);
   });
 
-  test('does not expose pending requests as remote follow relationships', async () => {
-    const { result } = await requestViewerFollowScenario('pending', {
+  test('exposes only the viewer-to-target pending request without changing the graph', async () => {
+    const { outgoingRequest, result } = await requestViewerFollowScenario('pending', {
       followersCount: 47,
       followingCount: 53,
     });
@@ -490,7 +500,22 @@ describe('GraphQL profile follow graph', () => {
       followersCount: 47,
       following: { edges: [] },
       followingCount: 53,
-      viewerState: { follow: null, isSelf: false },
+      viewerState: {
+        follow: null,
+        followRequest: { id: globalId('ProfileFollowRequest', outgoingRequest!.id) },
+        isSelf: false,
+      },
+    });
+  });
+
+  test('does not expose an incoming pending request as viewer follow state', async () => {
+    const { result } = await requestViewerFollowScenario('incoming-pending');
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.profileByHandle?.viewerState, {
+      follow: null,
+      followRequest: null,
+      isSelf: false,
     });
   });
 
@@ -562,7 +587,11 @@ type FollowGraphProfile = {
   followersCount: number;
   following: { edges: Array<{ node: ProfileFollowNode }> };
   followingCount: number;
-  viewerState: { follow: { id: string } | null; isSelf: boolean } | null;
+  viewerState: {
+    follow: { id: string } | null;
+    followRequest: { id: string } | null;
+    isSelf: boolean;
+  } | null;
 };
 
 type ProfileFollowNode = {
@@ -580,7 +609,7 @@ type NodeFollowGraph = {
 const followGraphFields = `
   followers(first: 10) { edges { node { id follower { id } followee { id } } } }
   following(first: 10) { edges { node { id follower { id } followee { id } } } }
-  viewerState { isSelf follow { id } }
+  viewerState { isSelf follow { id } followRequest { id } }
 `;
 
 const requestNodeFollowGraph = (id: string, token: string) =>
@@ -652,7 +681,7 @@ const assertRemoteFollowGraphHidesCounterparts = async ({
 };
 
 const requestViewerFollowScenario = async (
-  relation: 'pending' | 'reverse',
+  relation: 'incoming-pending' | 'pending' | 'reverse',
   { followersCount, followingCount }: { followersCount?: number; followingCount?: number } = {},
 ) => {
   const auth = await createAuthenticatedSession();
@@ -664,19 +693,28 @@ const requestViewerFollowScenario = async (
     instanceId: remoteInstance.id,
   });
 
+  let outgoingRequest: typeof ProfileFollowRequests.$inferSelect | undefined;
+
   if (relation === 'reverse') {
     await db
       .insert(ProfileFollows)
       .values({ followerProfileId: remote.id, followeeProfileId: auth.profile.id });
+  } else if (relation === 'incoming-pending') {
+    await db
+      .insert(ProfileFollowRequests)
+      .values({ followerProfileId: remote.id, followeeProfileId: auth.profile.id });
   } else {
-    await db.insert(ProfileFollowRequests).values([
-      { followerProfileId: auth.profile.id, followeeProfileId: remote.id },
-      { followerProfileId: remote.id, followeeProfileId: auth.profile.id },
-    ]);
+    [outgoingRequest] = await db
+      .insert(ProfileFollowRequests)
+      .values([
+        { followerProfileId: auth.profile.id, followeeProfileId: remote.id },
+        { followerProfileId: remote.id, followeeProfileId: auth.profile.id },
+      ])
+      .returning();
   }
 
   const result = await requestFollowGraph(`viewer-${relation}-remote@${remoteDomain}`, auth.token);
-  return { result };
+  return { outgoingRequest, result };
 };
 
 const requestGraphQL = async <TData = Record<string, unknown>>(

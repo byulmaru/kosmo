@@ -8,6 +8,7 @@ import { spacing, typography } from '@/theme/tokens';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { RecordProxy, RecordSourceSelectorProxy } from 'relay-runtime';
 import type { FollowButton_profile$key } from './__generated__/FollowButton_profile.graphql';
+import type { FollowButtonCancelProfileFollowRequestMutation } from './__generated__/FollowButtonCancelProfileFollowRequestMutation.graphql';
 import type { FollowButtonFollowProfileMutation } from './__generated__/FollowButtonFollowProfileMutation.graphql';
 import type { FollowButtonUnfollowProfileMutation } from './__generated__/FollowButtonUnfollowProfileMutation.graphql';
 
@@ -19,6 +20,7 @@ type FollowButtonProps = {
 const followButtonProfileFragment = graphql`
   fragment FollowButton_profile on Profile {
     id
+    followPolicy
     followersCount
     viewerState {
       isSelf
@@ -29,6 +31,9 @@ const followButtonProfileFragment = graphql`
           followingCount
         }
       }
+      followRequest {
+        id
+      }
     }
   }
 `;
@@ -36,6 +41,15 @@ const followButtonProfileFragment = graphql`
 const followProfileMutation = graphql`
   mutation FollowButtonFollowProfileMutation($id: ID!) {
     followProfile(input: { id: $id }) {
+      result {
+        __typename
+        ... on ProfileFollow {
+          id
+        }
+        ... on ProfileFollowRequest {
+          id
+        }
+      }
       followerProfile {
         id
         followingCount
@@ -45,6 +59,14 @@ const followProfileMutation = graphql`
         followersCount
         ...FollowButton_profile
       }
+    }
+  }
+`;
+
+const cancelProfileFollowRequestMutation = graphql`
+  mutation FollowButtonCancelProfileFollowRequestMutation($id: ID!) {
+    cancelProfileFollowRequest(input: { id: $id }) {
+      profileFollowRequestId @deleteRecord
     }
   }
 `;
@@ -86,12 +108,16 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
   const data = useFragment(followButtonProfileFragment, profile);
   const [commitFollow, following] =
     useMutation<FollowButtonFollowProfileMutation>(followProfileMutation);
+  const [commitCancel, cancelling] = useMutation<FollowButtonCancelProfileFollowRequestMutation>(
+    cancelProfileFollowRequestMutation,
+  );
   const [commitUnfollow, unfollowing] =
     useMutation<FollowButtonUnfollowProfileMutation>(unfollowProfileMutation);
   const [error, setError] = useState(false);
   const viewerState = data.viewerState;
   const isFollowing = Boolean(viewerState?.follow);
-  const loading = following || unfollowing;
+  const isPending = Boolean(viewerState?.followRequest);
+  const loading = following || cancelling || unfollowing;
 
   if (!viewerState || viewerState.isSelf) {
     return null;
@@ -128,9 +154,14 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
             ? {
                 unfollowProfile: {
                   followeeProfile: {
+                    followPolicy: data.followPolicy,
                     followersCount: Math.max(data.followersCount - 1, 0),
                     id: data.id,
-                    viewerState: { follow: null, isSelf: viewerState.isSelf },
+                    viewerState: {
+                      follow: null,
+                      followRequest: null,
+                      isSelf: viewerState.isSelf,
+                    },
                   },
                   followerProfile: {
                     followingCount: Math.max(follower.followingCount - 1, 0),
@@ -142,23 +173,59 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
             : undefined,
         variables: { connections, id: data.id },
       });
+    } else if (viewerState.followRequest) {
+      commitCancel({
+        ...callbacks,
+        optimisticResponse: {
+          cancelProfileFollowRequest: {
+            profileFollowRequestId: viewerState.followRequest.id,
+          },
+        },
+        variables: { id: viewerState.followRequest.id },
+      });
     } else {
       commitFollow({
         ...callbacks,
         optimisticUpdater: (store) => {
           const followee = store.get(data.id);
           const follower = getSelectedProfile(store);
-          const profileFollow = store.create(
+          const state = followee?.getLinkedRecord('viewerState');
+
+          if (data.followPolicy === 'APPROVAL_REQUIRED') {
+            const request = store.create(
+              `client:ProfileFollowRequest:${follower?.getDataID() ?? 'viewer'}:${data.id}`,
+              'ProfileFollowRequest',
+            );
+            state?.setValue(null, 'follow');
+            state?.setLinkedRecord(request, 'followRequest');
+            return;
+          }
+
+          const follow = store.create(
             `client:ProfileFollow:${follower?.getDataID() ?? 'viewer'}:${data.id}`,
             'ProfileFollow',
           );
 
           if (follower) {
-            profileFollow.setLinkedRecord(follower, 'follower');
+            follow.setLinkedRecord(follower, 'follower');
           }
-          followee?.getLinkedRecord('viewerState')?.setLinkedRecord(profileFollow, 'follow');
+          state?.setLinkedRecord(follow, 'follow');
+          state?.setValue(null, 'followRequest');
           updateProfileCount(followee, 'followersCount', 1);
           updateProfileCount(follower, 'followingCount', 1);
+        },
+        updater: (store) => {
+          const payload = store.getRootField('followProfile');
+          const result = payload?.getLinkedRecord('result');
+          const state = payload?.getLinkedRecord('followeeProfile')?.getLinkedRecord('viewerState');
+
+          if (result?.getType() === 'ProfileFollow') {
+            state?.setLinkedRecord(result, 'follow');
+            state?.setValue(null, 'followRequest');
+          } else if (result?.getType() === 'ProfileFollowRequest') {
+            state?.setValue(null, 'follow');
+            state?.setLinkedRecord(result, 'followRequest');
+          }
         },
         variables: { id: data.id },
       });
@@ -168,15 +235,19 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
   return (
     <View style={[styles.root, style]}>
       <Button
-        aria-pressed={isFollowing}
-        accessibilityState={{ busy: loading, disabled: loading, selected: isFollowing }}
+        aria-pressed={isFollowing || isPending}
+        accessibilityState={{
+          busy: loading,
+          disabled: loading,
+          selected: isFollowing || isPending,
+        }}
         disabled={loading}
         hitSlop={6}
         onPress={toggleFollow}
         style={styles.button}
-        tone={isFollowing ? 'secondary' : 'primary'}
+        tone={isFollowing || isPending ? 'secondary' : 'primary'}
       >
-        {isFollowing ? '팔로잉' : '팔로우'}
+        {isFollowing ? '팔로잉' : isPending ? '요청됨' : '팔로우'}
       </Button>
       {error ? (
         <Text accessibilityRole="alert" style={[styles.error, { color: theme.textSecondary }]}>

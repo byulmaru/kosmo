@@ -104,6 +104,7 @@ test('exposes the ID-based idempotent Reaction delete contract', () => {
 
 test('exposes the profile follow request lifecycle contract', () => {
   const profile = schema.getType('Profile');
+  const viewerState = schema.getType('ProfileViewerState');
   const request = schema.getType('ProfileFollowRequest');
   const result = schema.getType('ProfileFollowResult');
   const followPayload = schema.getType('FollowProfilePayload');
@@ -112,6 +113,8 @@ test('exposes the profile follow request lifecycle contract', () => {
   const cancelPayload = schema.getType('CancelProfileFollowRequestPayload');
 
   assert.ok(isObjectType(profile));
+  assert.equal(profile.getFields().viewerFollowRequest, undefined);
+  assert.equal(profile.getFields().viewerFollow, undefined);
   assert.equal(
     String(profile.getFields().incomingProfileFollowRequests?.type),
     'ProfileIncomingProfileFollowRequestsConnection',
@@ -124,6 +127,10 @@ test('exposes the profile follow request lifecycle contract', () => {
   assert.ok(isObjectType(request));
   assert.equal(String(request.getFields().follower?.type), 'Profile');
   assert.equal(String(request.getFields().followee?.type), 'Profile');
+
+  assert.ok(isObjectType(viewerState));
+  assert.equal(String(viewerState.getFields().follow?.type), 'ProfileFollow');
+  assert.equal(String(viewerState.getFields().followRequest?.type), 'ProfileFollowRequest');
 
   assert.ok(isUnionType(result));
   assert.deepEqual(
