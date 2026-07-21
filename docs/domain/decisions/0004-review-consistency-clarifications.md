@@ -8,6 +8,9 @@ Accepted
 
 2026-06-29
 
+[ADR 0014](./0014-post-structure-relations.md)가 Home/Hashtag Post List의 Kind 기반 후보 판별을 관계 조합
+판별로 대체했다. 나머지 결정은 유지한다.
+
 ## 결정
 
 - Followers Only Post는 Author, Author를 팔로우한 Profile, Mentioned Profile이 볼 수 있다.

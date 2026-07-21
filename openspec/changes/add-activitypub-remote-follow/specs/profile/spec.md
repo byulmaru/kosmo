@@ -121,6 +121,7 @@ active profile이 있는 인증자는 `followPolicy`가 `OPEN`인 다른 활성 
 - **THEN** 시스템은 local active profile을 follower, remote profile을 followee로 하는 established `ProfileFollow` 관계를 생성하거나 기존 관계를 반환한다
 - **AND** 새 `ProfileFollow` 관계가 생성되고 remote instance 상태가 `UNRESPONSIVE`가 아니면 Fedify `sendActivity`를 통해 remote actor로 ActivityPub `Follow` activity를 발송한다
 - **AND** Fedify `sendActivity`가 실패하더라도 생성된 local `ProfileFollow` 관계와 저장 count를 rollback하지 않는다
+- **AND** delivery 실패는 GraphQL mutation 실패로 노출하지 않고 committed `ProfileFollow`, `followerProfile`, `followeeProfile` payload를 반환한다
 - **AND** 새 `ProfileFollow` 관계가 생성되었지만 remote instance 상태가 `UNRESPONSIVE`이면 ActivityPub `Follow` activity를 발송하지 않는다
 - **AND** 기존 `ProfileFollow` 관계를 반환하는 idempotent 요청에서는 ActivityPub `Follow` activity를 다시 발송하지 않는다
 - **AND** mutation은 `FollowProfilePayload.profileFollow`로 `ProfileFollow`를 반환한다
@@ -134,12 +135,14 @@ active profile이 있는 인증자는 `followPolicy`가 `OPEN`인 다른 활성 
 - **AND** 오류로 처리하지 않는다
 - **AND** 대상이 ActivityPub remote profile이면 ActivityPub `Follow` activity를 다시 발송하지 않는다
 
-#### Scenario: Reject unsupported approval-required follow
+#### Scenario: Follow approval-required active profile
 
-- **WHEN** active profile이 있는 인증자가 `followPolicy`가 `APPROVAL_REQUIRED`인 활성 local profile 또는 ActivityPub remote profile follow를 요청하고 follow request 생성 플로우가 아직 제공되지 않는다
-- **THEN** 시스템은 conflict code를 가진 GraphQL 오류로 요청을 거부한다
-- **AND** `ProfileFollow` 관계와 `ProfileFollowRequest` 요청을 생성하지 않는다
-- **AND** 대상이 ActivityPub remote profile이면 ActivityPub `Follow` activity를 발송하지 않는다
+- **WHEN** active profile이 있는 인증자가 `followPolicy`가 `APPROVAL_REQUIRED`인 활성 local 또는 ActivityPub remote profile follow를 요청한다
+- **THEN** 시스템은 pending `ProfileFollowRequest`를 생성하거나 기존 request를 반환한다
+- **AND** mutation은 `FollowProfilePayload.result`로 `ProfileFollowRequest`를 반환한다
+- **AND** relation과 저장 count를 변경하지 않는다
+- **AND** 대상이 ActivityPub remote profile이면 `activitypub-remote-follow`의 ACTIVE/UNRESPONSIVE delivery 정책을 따른다
+- **AND** remote delivery 실패는 GraphQL mutation 실패로 노출하지 않고 committed `ProfileFollowRequest`, `followerProfile`, `followeeProfile` payload를 반환한다
 
 #### Scenario: Prevent self follow
 
@@ -177,6 +180,7 @@ active profile이 있는 인증자는 기존 local 또는 ActivityPub remote fol
 - **THEN** 시스템은 해당 follow 관계를 제거한다
 - **AND** remote instance 상태가 `UNRESPONSIVE`가 아니면 시스템은 Fedify `sendActivity`를 통해 기존 Follow에 대한 ActivityPub `Undo` activity를 발송한다
 - **AND** Fedify `sendActivity`가 실패하더라도 삭제된 local `ProfileFollow` 관계와 저장 count를 rollback하지 않는다
+- **AND** delivery 실패는 GraphQL mutation 실패로 노출하지 않고 삭제된 relation id와 committed `followerProfile`, `followeeProfile` payload를 반환한다
 - **AND** remote instance 상태가 `UNRESPONSIVE`이면 ActivityPub `Undo(Follow)` activity를 발송하지 않는다
 - **AND** mutation은 `UnfollowProfilePayload.profileFollowId`로 삭제된 `ProfileFollow` ID를 반환한다
 - **AND** mutation은 감소된 저장 count를 가진 `followerProfile`과 `followeeProfile`을 함께 반환한다

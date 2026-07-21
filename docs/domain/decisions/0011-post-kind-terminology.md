@@ -2,13 +2,16 @@
 
 ## 상태
 
-Accepted
+Superseded by [ADR 0014](./0014-post-structure-relations.md)
 
 ## 날짜
 
 2026-07-20
 
 ## 결정
+
+[ADR 0014](./0014-post-structure-relations.md)가 Post 구조를 Content와 관계 조합으로 재정의하며 이 결정을
+전체 대체했다. 아래 내용은 당시 결정의 이력을 보존한다.
 
 - Post가 Original, Reply, Repost 또는 Quote 중 어떤 게시 형태인지 구분하는 상태 차원의 canonical term은
   `Post Kind`다.

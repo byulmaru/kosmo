@@ -1,5 +1,5 @@
 name: spec-driven-decisions
-version: 1
+version: 2
 description: Default OpenSpec workflow - proposal → specs → design → decisions → tasks
 artifacts:
   - id: proposal
@@ -12,6 +12,7 @@ artifacts:
       Sections:
       - **Why**: 1-2 sentences on the problem or opportunity. What problem does this solve? Why now?
       - **What Changes**: Bullet list of changes. Be specific about new capabilities, modifications, or removals. Mark breaking changes with **BREAKING**.
+      - **Authority / Provenance**: Exact applicable canonical document paths, current Linear contract issue, and current implementation issues or `없음.`.
       - **Capabilities**: Identify which specs will be created or modified:
         - **New Capabilities**: List capabilities being introduced. Each becomes a new `specs/<name>/spec.md`. Use kebab-case names (e.g., `user-auth`, `data-export`).
         - **Modified Capabilities**: List existing capabilities whose REQUIREMENTS are changing. Only include if spec-level behavior changes (not just implementation details). Each needs a delta spec file. Check `openspec/specs/` for existing spec names. Leave empty if no requirement changes.
@@ -46,10 +47,16 @@ artifacts:
 
       Format requirements:
       - Each requirement: `### Requirement: <name>` followed by description
+      - Each requirement MUST include `**Authority / Provenance:**` with exact canonical documents and current Linear contract before its normative text.
       - Use SHALL/MUST for normative requirements (avoid should/may)
       - Each scenario: `#### Scenario: <name>` with WHEN/THEN format
       - **CRITICAL**: Scenarios MUST use exactly 4 hashtags (`####`). Using 3 hashtags or bullets will fail silently.
       - Every requirement MUST have at least one scenario.
+      - OpenSpec, another requirement, a decision, a design note, a task, a PR, or
+        a test cannot serve as authority for product behavior.
+      - If a requirement has no current canonical or Linear authority, do not add
+        it as a normative requirement. Record it as a blocked
+        `Upstream Change Required` decision and update the upstream owner first.
 
       MODIFIED requirements workflow:
       1. Locate the existing requirement in openspec/specs/<capability>/spec.md
@@ -65,6 +72,9 @@ artifacts:
       ## ADDED Requirements
 
       ### Requirement: User can export data
+
+      **Authority / Provenance:** `docs/domain/data-export.md`, `PROD-123`
+
       The system SHALL allow users to export their data in CSV format.
 
       #### Scenario: Successful export
@@ -74,6 +84,7 @@ artifacts:
       ## REMOVED Requirements
 
       ### Requirement: Legacy export
+      **Authority / Provenance:** `docs/domain/data-export.md`, `PROD-123`
       **Reason**: Replaced by new export system
       **Migration**: Use new export endpoint at /api/v2/export
       ```
@@ -98,14 +109,14 @@ artifacts:
       - **Implementation Guidance**: Non-normative handoff guidance split into:
         - **Current Constraints**: Relevant code paths, existing architecture, and why the straightforward implementation may fail
         - **Recommended Approach**: A practical default path and rationale
-        - **Allowed Alternatives**: Other approaches that may be used when they preserve specs and accepted decisions
+        - **Allowed Alternatives**: Other approaches that may be used when they preserve specs and independently verified decisions
         - **Known Traps**: Incorrect shortcuts, security or compatibility hazards, and likely review failures
       - **Risks / Trade-offs**: Known limitations, things that could go wrong. Format: [Risk] → Mitigation
       - **Migration Plan**: Steps to deploy, rollback strategy (if applicable)
       - **Open Questions**: Outstanding decisions or unknowns to resolve
 
       Focus on architecture and approach, not line-by-line implementation.
-      Implementation Guidance is explicitly non-normative. It should help an implementer start safely without fixing filenames, function names, helpers, registries, or data structures unless a spec, existing public contract, or accepted decision requires them.
+      Implementation Guidance is explicitly non-normative. It should help an implementer start safely without fixing filenames, function names, helpers, registries, or data structures unless a spec, existing public contract, or independently verified decision requires them.
       Recommend one default approach for non-trivial work, explain why it fits the current code, and name acceptable alternatives. Put binding behavior in specs and durable constraints in decisions.
       Do not invent alternatives for trivial work; write `없음.` when there is no meaningful alternative or trap.
       If the design establishes a durable choice, summarize the approach here and capture the choice, rationale, alternatives, and consequences in decisions.md.
@@ -117,16 +128,18 @@ artifacts:
 
   - id: decisions
     generates: decisions.md
-    description: ADR-style decision log with accepted, deferred, and superseded choices
+    description: Authority-traced decision log with active, blocked, and superseded choices
     template: decisions.md
     instruction: |
       Create the ADR-style decision log that records durable choices made for this change.
 
       Sections:
       - **Context**: Briefly state the proposal/spec/design inputs this decision log reflects.
-      - **Decision Records**: Accepted or proposed choices. For each decision include:
+      - **Decision Records**: Authority-traced choices. For each decision include:
         - decision date in `YYYY-MM-DD` format
-        - status
+        - Decision Class: `Derived Contract`, `Implementation Choice`, or `Upstream Change Required`
+        - exact canonical documents and current Linear issues under Authority / Provenance, or `없음.` only for an upstream change
+        - Status: `Active`, `Blocked`, or `Superseded`
         - context/problem
         - decision outcome
         - alternatives considered
@@ -135,9 +148,21 @@ artifacts:
       - **Remaining Decisions**: Open or deferred choices that must stay searchable. Use "없음." if there are none.
       - **Superseded Decisions**: Choices replaced during the change. Include what replaced them and why. Use "없음." if there are none.
 
-      Keep decisions separate from tasks and design notes. design.md can explain the implementation approach, but decisions.md is the durable decision record agents should read before implementation. Use one section per decision rather than one long mixed bullet list.
+      `Derived Contract` restates a current canonical or Linear contract and cannot
+      add product behavior. `Implementation Choice` chooses a mechanism inside an
+      upstream-approved scope and cannot use a future issue, excluded scope, test,
+      PR, or OpenSpec statement as proof that the mechanism is required.
+      `Upstream Change Required` records newly discovered product behavior. It has
+      no current Authority and remains Blocked until canonical and Linear sources
+      are updated and independently approved.
+
+      The word `Accepted` is not a valid status because it hides what authority
+      approved which kind of decision. An OpenSpec decision cannot cite OpenSpec
+      itself as authority.
+
+      Keep decisions separate from tasks and design notes. design.md can explain the implementation approach, but decisions.md is the durable decision record agents should read before implementation only after its authority has been independently verified. Use one section per decision rather than one long mixed bullet list.
       Record a filename, function, helper, registry, data structure, or other internal mechanism as a decision only when compatibility, security, rollout, or multiple implementation slices require that exact choice. Otherwise keep it as non-normative Implementation Guidance in design.md.
-      Append decision records in chronological order. When records conflict, the decision with the later date wins. If a decision changes on the same date, the later record MUST explicitly identify the earlier record it supersedes.
+      Append decision records in chronological order for history only. A later record supersedes an earlier one only when it explicitly identifies the record it replaces and its class and provenance remain valid against current upstream authority. No OpenSpec record or date can override current canonical or Linear authority.
     requires:
       - design
 
@@ -155,19 +180,28 @@ artifacts:
       - Group related tasks under ## numbered headings
       - When implementation issues already exist, identify the owning Linear issue in the heading
       - Every task group MUST include these handoff fields before its checkboxes:
+        - **Authority / Provenance**: exact canonical documents and current Linear issues supporting the Deliverable and Guardrails
         - **Deliverable**: the observable result owned by the task group, stated without prescribing an internal mechanism
-        - **Guardrails**: binding constraints derived from specs, existing public contracts, and accepted decisions; write `없음.` when there are none
+        - **Guardrails**: binding constraints derived from specs, existing public contracts, and independently verified decisions; write `없음.` when there are none
         - **Verification**: concrete tests, checks, or evidence that prove the deliverable and guardrails
       - Each task MUST be a checkbox: `- [ ] X.Y Task description`
       - Tasks should be small enough to complete in one session
       - Order tasks by dependency (what must be done first?)
       - Do not copy Recommended Approach into a binding checkbox. Link to design guidance when an implementer needs a starting point.
-      - Do not require a filename, function, helper, registry, or data structure unless a spec, existing public contract, or accepted decision requires it.
+      - Do not require a filename, function, helper, registry, or data structure unless a spec, existing public contract, or independently verified decision requires it.
       - Do not invent Guardrails to make the section look complete.
+      - Never cite a Blocked decision in Guardrails or a checkbox.
+      - A future issue, excluded scope, test, PR, design recommendation, or OpenSpec
+        artifact is not authority for current implementation.
 
       Example:
       ```
       ## 1. PROD-123 Data export
+
+      **Authority / Provenance**
+
+      - `docs/domain/data-export.md`
+      - `PROD-123`
 
       **Deliverable**
 
@@ -185,7 +219,7 @@ artifacts:
       - [ ] 1.2 성공·권한 실패 검증을 추가하고 관련 check를 통과시킨다.
       ```
 
-      Reference specs for what needs to be built, design for implementation approach, and decisions for accepted constraints and deferred choices.
+      Reference specs for what needs to be built, design for implementation approach, and decisions for independently verified constraints and blocked choices.
       Each task should be verifiable - you know when it's done.
     requires:
       - specs
@@ -197,13 +231,15 @@ apply:
   tracks: tasks.md
   instruction: |
     Read proposal, specs, design, decisions, and tasks before implementation.
-    Treat specs, accepted decisions, and each task group's Guardrails as binding.
-    Treat design's Recommended Approach as a non-normative default: an alternative is allowed when it preserves the Deliverable, Guardrails, Verification, specs, and accepted decisions.
+    Independently re-read the applicable canonical files and the latest Linear issue body and contract-changing comments. OpenSpec is not evidence that an upstream requirement exists.
+    Treat only specs, decisions, and task Guardrails that still agree with independently verified upstream authority as binding. If any of them conflicts with or lacks upstream authority, pause instead of implementing it. A legacy `Accepted` label is not proof of that authority.
+    A Blocked `Upstream Change Required` decision cannot authorize a task or implementation. Update canonical and Linear upstream sources first, then reclassify it.
+    Treat design's Recommended Approach as a non-normative default: an alternative is allowed when it preserves the Deliverable, Guardrails, Verification, specs, and independently verified decisions.
     Before taking a materially different approach, compare it with Current Constraints, Allowed Alternatives, and Known Traps.
     Pause and update the Linear issue and OpenSpec artifacts first if the alternative changes scope, observable behavior, a public contract, or a durable decision.
-    During planning and implementation, when a material choice is not already covered by an accepted decision, AI may compare alternatives and trade-offs but MUST pause for a human to make the final choice and state the reason. A choice is material when it has meaningful alternatives and affects observable behavior, data, security, compatibility, rollout, reversibility, or the direction of later work.
+    During planning and implementation, when a material choice is not already covered by an independently verified decision, AI may compare alternatives and trade-offs but MUST pause for a human to make the final choice and state the reason. A choice is material when it has meaningful alternatives and affects observable behavior, data, security, compatibility, rollout, reversibility, or the direction of later work.
     Before opening or updating the implementation PR, identify the material implementation decisions that were actually made. AI may draft the PR decision record from established choices and reasons, but MUST NOT infer or invent a missing choice or rationale; ask the human decision owner when the record is unclear.
-    Record material implementation decisions in the PR with the chosen option, alternatives considered, rationale, and accepted consequences. If the PR only applies accepted OpenSpec decisions without making a new material decision, state that explicitly instead of inventing one.
-    Link to accepted durable decisions rather than duplicating them in the PR. If implementation reveals a new durable decision, pause and update the Linear issue and OpenSpec artifacts before treating it as decided in the PR.
+    Record material implementation decisions in the PR with the chosen option, alternatives considered, rationale, and consequences. If the PR only applies independently verified OpenSpec decisions without making a new material decision, state that explicitly instead of inventing one.
+    Link to durable decisions rather than duplicating them in the PR, and link canonical/Linear sources as the actual contract evidence. If implementation reveals a new durable decision, pause and update canonical documents or Linear as applicable before updating OpenSpec and treating it as decided in the PR.
     Work through pending checkbox tasks and mark a task complete only after its verification evidence exists.
     Pause if you hit blockers or need clarification.

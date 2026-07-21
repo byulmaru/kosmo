@@ -134,6 +134,24 @@ Show this classification to the user before posting. Ask concise questions for e
 
 When code and spec disagree, do not assume the spec is correct. Code and spec may also agree on a premature abstraction or test-only escape hatch; agreement alone does not prove the design is necessary. Explain the consequence of changing each and ask which contract the user wants.
 
+#### Audit OpenSpec authority independently
+
+When a PR adds, changes, or relies on OpenSpec:
+
+- Read the applicable canonical `docs/domain` and `docs/design` files and fetch the
+  latest Linear issue bodies, relations, and contract-changing comments independently.
+- Treat OpenSpec as a downstream translation, never as evidence that an upstream
+  requirement or approval exists.
+- Check every changed Requirement, Decision, task Deliverable, and Guardrail against
+  current canonical and Linear authority. A PR, test, future issue, excluded scope,
+  design recommendation, or another OpenSpec statement is not product authority.
+- Distinguish `Derived Contract`, `Implementation Choice`, and
+  `Upstream Change Required`. A `Blocked` upstream change cannot justify current code.
+- Passing tests and strict OpenSpec validation prove conformance to written
+  artifacts, not that those artifacts were authorized.
+- Flag authority laundering as a contract finding: OpenSpec and code agreeing with
+  each other does not cure conflict with newer canonical or Linear authority.
+
 ### 6. Recommend PR splits when scope expands
 
 Recommend splitting when the PR combines changes that have different:
@@ -152,11 +170,11 @@ After classifying self-review findings, distinguish a defect fix from a newly ch
 
 - Update Linear first when scope, ownership, deliverables, blockers, or issue relationships change.
 - Update OpenSpec `decisions.md` before code when a durable choice or public contract shared by implementation slices changes. Record superseded decisions instead of silently overwriting them.
-- Record important implementation choices within accepted contracts in the PR body with decision-maker, choice, alternatives, reason, consequences, and links.
+- Record important implementation choices within independently verified upstream contracts in the PR body with decision-maker, choice, alternatives, reason, consequences, and links.
 - Update applicable `memory/*.md` only for reusable repository conventions, and `docs/design/*.md` for documented product or UI design decisions.
-- Do not invent a decision, rationale, or decision-maker. Ask the user when a material choice remains open. Do not create ceremonial records when the implementation merely follows an accepted decision.
+- Do not invent a decision, rationale, or decision-maker. Ask the user when a material choice remains open. Do not create ceremonial records when the implementation merely follows an independently verified OpenSpec decision.
 
-Return a decision ledger with new decisions and their recorded locations, accepted decisions applied unchanged, and unresolved decisions. After self-review fixes, apply the snapshot-change rule above before declaring publication readiness.
+Return a decision ledger with new decisions and their recorded locations, independently verified decisions applied unchanged, and unresolved decisions. After self-review fixes, apply the snapshot-change rule above before declaring publication readiness.
 
 ### 8. Draft junior-friendly external review comments
 

@@ -1,5 +1,6 @@
-import { and, eq, inArray, ne } from 'drizzle-orm';
+import { and, eq, inArray, ne, notExists, or } from 'drizzle-orm';
 import {
+  ActivityPubActors,
   db,
   first,
   firstOrThrow,
@@ -10,16 +11,16 @@ import {
   ProfileFollows,
   Profiles,
 } from '../db';
-import { InstanceState, ProfileState } from '../enums';
+import { InstanceKind, InstanceState, ProfileState } from '../enums';
 import { NotFoundError, PermissionDeniedError } from '../error';
 import { createFollowNotification } from './notification';
 import { ensureProfileFollow } from './profile-follow-relation';
 import type { Transaction } from '../db';
 
 export type ProfileFollowRequestRow = typeof ProfileFollowRequests.$inferSelect;
-export type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
+type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
 
-export type ProfileFollowPair = {
+type ProfileFollowPair = {
   readonly followeeProfileId: string;
   readonly followerProfileId: string;
 };
@@ -32,17 +33,6 @@ const pairCondition = (
     eq(table.followerProfileId, followerProfileId),
     eq(table.followeeProfileId, followeeProfileId),
   );
-
-export const findProfileFollowRequestByPair = (
-  pair: ProfileFollowPair,
-  tx?: Transaction,
-): Promise<ProfileFollowRequestRow | undefined> =>
-  getDatabaseConnection(tx)
-    .select()
-    .from(ProfileFollowRequests)
-    .where(pairCondition(ProfileFollowRequests, pair))
-    .limit(1)
-    .then(first);
 
 export const ensureProfileFollowRequest = async (
   pair: ProfileFollowPair,
@@ -97,6 +87,54 @@ export const ensureProfileFollowRequest = async (
       kind: 'PENDING',
       profileFollowRequest,
     };
+  });
+
+export const acceptProfileFollowRequest = async ({
+  expectedRowId,
+  followeeProfileId,
+  followerProfileId,
+}: ProfileFollowPair & { readonly expectedRowId: string }): Promise<boolean> =>
+  db.transaction(async (tx) => {
+    const pair = { followeeProfileId, followerProfileId };
+    const established = await tx
+      .select({ id: ProfileFollows.id })
+      .from(ProfileFollows)
+      .where(pairCondition(ProfileFollows, pair))
+      .limit(1)
+      .then(first);
+
+    if (established) {
+      return established.id === expectedRowId;
+    }
+
+    const unavailableParticipants = tx
+      .select({ id: Profiles.id })
+      .from(Profiles)
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(
+        and(
+          inArray(Profiles.id, [followerProfileId, followeeProfileId]),
+          or(ne(Profiles.state, ProfileState.ACTIVE), eq(Instances.state, InstanceState.SUSPENDED)),
+        ),
+      );
+    const deleted = await tx
+      .delete(ProfileFollowRequests)
+      .where(
+        and(
+          eq(ProfileFollowRequests.id, expectedRowId),
+          pairCondition(ProfileFollowRequests, pair),
+          notExists(unavailableParticipants),
+        ),
+      )
+      .returning({ id: ProfileFollowRequests.id })
+      .then(first);
+
+    if (!deleted) {
+      return false;
+    }
+
+    await ensureProfileFollow(pair, tx);
+    return true;
   });
 
 type ApproveProfileFollowRequestResult = {
@@ -229,13 +267,13 @@ const deleteProfileFollowRequestAsActor = async (
       .limit(1)
       .then(firstOrThrowWith(() => new NotFoundError('Profile not found')));
 
-    const deleted = await tx
+    await tx
       .delete(ProfileFollowRequests)
       .where(eq(ProfileFollowRequests.id, request.id))
       .returning({ id: ProfileFollowRequests.id })
       .then(firstOrThrowWith(() => new NotFoundError('Profile follow request not found')));
 
-    return { actorProfile: actorProfile.profile, profileFollowRequestId: deleted.id };
+    return { actorProfile: actorProfile.profile, request };
   });
 
 export const rejectProfileFollowRequest = async (
@@ -248,20 +286,72 @@ export const rejectProfileFollowRequest = async (
   const result = await deleteProfileFollowRequestAsActor({ ...input, actorRole: 'FOLLOWEE' }, tx);
   return {
     followeeProfile: result.actorProfile,
-    profileFollowRequestId: result.profileFollowRequestId,
+    profileFollowRequestId: result.request.id,
   };
 };
 
-export const cancelProfileFollowRequest = async (
-  input: { readonly actorProfileId: string; readonly profileFollowRequestId: string },
-  tx?: Transaction,
-): Promise<{
+export const cancelProfileFollowRequest = async (input: {
+  readonly actorProfileId: string;
+  readonly profileFollowRequestId: string;
+}): Promise<{
   readonly followerProfile: typeof Profiles.$inferSelect;
   readonly profileFollowRequestId: string;
 }> => {
-  const result = await deleteProfileFollowRequestAsActor({ ...input, actorRole: 'FOLLOWER' }, tx);
-  return {
-    followerProfile: result.actorProfile,
-    profileFollowRequestId: result.profileFollowRequestId,
-  };
+  const { command, result } = await db.transaction(async (tx) => {
+    const deleted = await deleteProfileFollowRequestAsActor(
+      { ...input, actorRole: 'FOLLOWER' },
+      tx,
+    );
+    const target = await tx
+      .select({
+        actorInboxUri: ActivityPubActors.inboxUri,
+        actorSharedInboxUri: ActivityPubActors.sharedInboxUri,
+        actorUri: ActivityPubActors.uri,
+        instanceKind: Instances.kind,
+        instanceState: Instances.state,
+      })
+      .from(Profiles)
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
+      .where(eq(Profiles.id, deleted.request.followeeProfileId))
+      .limit(1)
+      .then(first);
+    const command =
+      target?.instanceKind === InstanceKind.ACTIVITYPUB &&
+      target.instanceState === InstanceState.ACTIVE &&
+      target.actorUri
+        ? {
+            actor: {
+              inboxUri: target.actorInboxUri,
+              sharedInboxUri: target.actorSharedInboxUri,
+              uri: target.actorUri,
+            },
+            outboundFollow: deleted.request,
+            senderProfileId: input.actorProfileId,
+          }
+        : undefined;
+
+    return {
+      command,
+      result: {
+        followerProfile: deleted.actorProfile,
+        profileFollowRequestId: deleted.request.id,
+      },
+    };
+  });
+
+  if (command) {
+    try {
+      const { sendProfileUnfollow } = await import('@kosmo/fedify');
+      await sendProfileUnfollow(command);
+    } catch (error) {
+      console.error('Post-commit ActivityPub Undo delivery failed', {
+        error,
+        profileFollowRequestId: result.profileFollowRequestId,
+        requesterProfileId: input.actorProfileId,
+      });
+    }
+  }
+
+  return result;
 };

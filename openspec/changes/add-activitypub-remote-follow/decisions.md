@@ -54,6 +54,68 @@
 - Consequences: outbound-only metadata를 중복 저장하지 않으며 retry/history가 필요하면 별도 capability에서 다룬다.
 - Confirmation / Follow-up: PROD-242/244가 refollow identity와 actor/object 검증을 테스트한다.
 
+### Outbound pending request도 immutable request identity를 사용한다
+
+- Decision Date: 2026-07-18
+- Status: Accepted
+- Context / Problem: PROD-242의 optimistic established relation과 달리 APPROVAL_REQUIRED remote follow는 Accept 전까지 `ProfileFollowRequest`만 존재하므로 outbound Follow와 cancel Undo identity를 별도 저장할지 결정해야 한다.
+- Decision Outcome: outbound pending Follow URI와 generation은 `ProfileFollowRequest.id`와 immutable `createdAt`에서 파생하고 actor/object와 ordering key는 저장 actor pair에서 파생한다. Accept는 exact request 삭제와 relation/count 생성을 원자적으로 수행하며, cancel과 Reject는 조회한 exact request/relation row에만 적용한다.
+- Alternatives Considered: 별도 outbound activity table, request에 correlation/status column 추가, actor pair만으로 stable Follow URI 생성.
+- Consequences: terminal state와 delivery history를 저장하지 않으며 Accept 후 relation은 새 identity를 갖는다. 늦은 request ID의 Reject/cancel은 새 relation/request를 삭제할 수 없다.
+- Confirmation / Follow-up: PROD-244가 duplicate/concurrent Follow·cancel, Accept/Reject/cancel 경쟁과 refollow exact-row 보호를 검증한다.
+
+### Inbound Follow/Undo core·Notification integration은 PROD-380이 소유한다
+
+- Decision Date: 2026-07-20
+- Status: Accepted
+- Context / Problem: PROD-244 PR이 outbound APPROVAL_REQUIRED 왕복뿐 아니라 inbound Follow의 core entrypoint 전환과 Undo Notification cleanup까지 포함해, Follow Notification source lifecycle을 소유한 PROD-380과 runtime 및 테스트가 중복됐다.
+- Decision Outcome: PROD-244는 local→remote pending request 생성·Follow 발송, pending cancel·Undo 발송, inbound Accept/Reject 검증과 exact-row transition만 소유한다. `handleInboundFollow`의 공통 core action 전환, `followProfile`의 ActivityPub→local 방향, inbound 전용 service 제거와 inbound Follow/Undo Notification 생성·정리는 PROD-380이 PROD-244 병합 후 구현한다.
+- Alternatives Considered: PROD-244가 integration을 유지하고 PROD-380을 축소, 두 PR이 같은 runtime을 각각 구현.
+- Consequences: PR #285는 기존 inbound Follow/Undo runtime을 회귀 대상으로만 유지한다. 공통 core entrypoint와 Notification source lifecycle의 최종 형태는 PROD-380에서 `add-in-app-notifications` 계약과 함께 검증한다.
+- Confirmation / Follow-up: PROD-244는 inbound Follow/Undo 관련 runtime·Notification diff가 없는지 확인하고, PROD-380은 production listener → concrete handler → core lifecycle → DB/Notification integration test를 제공한다.
+
+### Post-commit outbound delivery 실패는 committed mutation 결과와 분리한다
+
+- Decision Date: 2026-07-21
+- Decision Class: Derived Contract
+- Authority / Provenance: 현재 post-commit delivery 격리 계약은 [PROD-447](https://linear.app/byulmaru/issue/PROD-447)의 최신 본문·관계에서, 이 임시 경계를 대체하는 durable outbox·Fedify Queue 순서는 [PROD-448](https://linear.app/byulmaru/issue/PROD-448)의 최신 본문·관계에서 파생한다.
+- Status: Active
+- Context / Problem: remote OPEN/APPROVAL_REQUIRED follow, established unfollow와 pending cancel은 relation/request/count transaction을 먼저 commit하지만 이후 Follow/Undo delivery 오류를 throw해 GraphQL 실패와 실제 DB 상태가 어긋난다.
+- Decision Outcome: PROD-447은 transaction-before-delivery 순서를 유지한다. Post-commit `sendProfileFollow`/`sendProfileUnfollow` 실패는 관측 가능하게 기록하고 application action 밖으로 전파하지 않으며, `followProfile`, `unfollowProfile`, `cancelProfileFollowRequest`는 transaction에서 확정한 payload를 반환한다.
+- Alternatives Considered: delivery를 transaction 안으로 이동해 rollback, GraphQL 실패를 유지하고 Web에서 refetch, durable retry/outbox/history를 함께 도입.
+- Consequences: 호출자는 committed relation/request/count와 일치하는 성공 payload를 받는다. delivery 보장은 추가되지 않으며 retry/outbox/history와 Web 오류 후 refetch workaround는 별도 범위다. 이 catch/log 처리는 application action이 Fedify delivery를 직접 호출하는 동안만 유지하는 임시 안전장치다.
+- Confirmation / Follow-up: core service, GraphQL integration과 Web E2E에서 delivery 실패에도 성공 payload와 DB projection이 일치하는지 검증한다. PROD-263과 inbound Accept/Reject/Follow/Undo lifecycle은 변경하지 않는다. [PROD-448](https://linear.app/byulmaru/issue/PROD-448)는 domain state와 outbound delivery intent를 같은 PostgreSQL transaction에서 저장한 뒤 relay가 Fedify Queue에 handoff하도록 전환하고, mutation의 직접 delivery 호출과 이 catch/log 경계를 제거한다. PostgreSQL commit 전 NATS/Fedify Queue 직접 enqueue는 rollback된 state의 activity를 처리할 수 있으므로 대안으로 사용하지 않는다.
+
+### Accept/Reject object 지원은 Fedify typed Follow 해석 범위로 제한한다
+
+- Decision Date: 2026-07-18
+- Status: Accepted
+- Context / Problem: Fedify `getObject()`가 typed Follow를 제공하는 표준 경로 외에 kosmo가 IRI-only `objectId`를 직접 parse하고 저장 projection으로 역조회하는 호환 계층을 유지할지 결정해야 했다.
+- Decision Outcome: Accept/Reject는 Fedify `getObject()`가 typed Follow로 제공한 object만 follow response로 처리한다. typed Follow의 actor/object/recipient와 optional id는 기존 계약대로 검증하지만, Fedify가 typed Follow로 제공하지 못한 IRI-only object를 kosmo가 별도 parser나 DB lookup으로 복원하지 않는다.
+- Alternatives Considered: canonical kosmo Follow IRI를 직접 parse해 request/relation을 역조회, `/ap/follow/{id}` object dispatcher를 추가해 Fedify dereference 지원.
+- Consequences: 별도 IRI-only 호환 코드와 공개 Follow object endpoint를 만들지 않는다. IRI-only Accept/Reject는 instance reachability 신호로 사용할 수 있지만 follow graph/request side effect 없이 무시하며, 실제 상호운용성 필요가 확인되면 별도 호환성 범위로 추가한다.
+- Confirmation / Follow-up: Fedify typed embedded/resolved Follow는 처리되고 IRI-only 및 unsupported object는 projection/count를 변경하지 않는지 PROD-244와 PROD-361에서 검증한다.
+
+### Accept/Reject object는 Fedify 기본 cross-origin 검증을 유지한다
+
+- Decision Date: 2026-07-18
+- Status: Accepted
+- Context / Problem: remote Accept/Reject가 kosmo origin의 outbound Follow를 embedded object로 포함하면 parent activity와 object identity의 origin이 다르다. Fedify `crossOrigin: "trust"`는 이 object를 authoritative origin에서 확인하지 않고 반환하므로 content spoofing 방어를 우회한다.
+- Decision Outcome: Accept/Reject handler는 `getObject()`에서 `crossOrigin: "trust"`를 사용하지 않고 Fedify 기본 origin 검증을 유지한다. ID 없는 embedded Follow와 parent activity와 같은 origin의 embedded Follow는 Fedify가 typed object로 제공할 수 있으며, cross-origin embedded 또는 IRI-only Follow는 Fedify document loader가 authoritative object를 조회해 typed Follow로 제공한 경우에만 처리한다.
+- Alternatives Considered: 모든 embedded Follow에 `crossOrigin: "trust"` 사용, canonical kosmo Follow URI에만 조건부 trust, `/ap/follow/{id}` object dispatcher 추가.
+- Consequences: kosmo outbound Follow ID를 embedded object로 돌려주는 구현도 authoritative document를 조회할 수 없으면 Accept/Reject side effect 없이 무시된다. 이번 capability는 object dispatcher를 추가하지 않으며 실제 상호운용성 요구가 확인되면 별도 보안·호환성 범위에서 다룬다.
+- Confirmation / Follow-up: unverified cross-origin embedded Follow가 projection/count를 변경하지 않고, same-origin/id-less embedded 및 document loader가 resolve한 Follow만 기존 검증으로 처리되는지 PROD-244와 PROD-361에서 확인한다.
+
+### Accept/Reject compatibility fallback도 outbound Follow generation을 검증한다
+
+- Decision Date: 2026-07-21
+- Status: Accepted
+- Context / Problem: actor/object만 일치하는 ID-less 또는 non-kosmo Follow fallback은 이전 request R1을 취소하고 같은 pair의 R2를 만든 뒤 도착한 늦은 R1 Accept/Reject를 현재 R2에 잘못 적용할 수 있다.
+- Decision Outcome: canonical kosmo Follow ID가 현재 projection ID와 정확히 일치하면 기존처럼 처리한다. ID-less 또는 non-kosmo Follow fallback은 embedded Follow의 `published`가 존재하고 현재 request/relation의 immutable `createdAt`과 정확히 일치할 때만 같은 outbound generation으로 인정한다. remote Accept/Reject activity의 `published`나 local 수신 시각은 이 fallback generation 판정에 사용하지 않는다.
+- Alternatives Considered: actor/object-only fallback 유지, compatibility fallback 전체 제거, terminal history나 correlation metadata 추가, remote Accept activity timestamp로 순서 추정.
+- Consequences: 원본 outbound Follow의 `published`를 보존하지 않는 구현의 ID-less/non-kosmo response는 side effect 없이 무시한다. 새 schema, history, lock 또는 reconciliation 흐름 없이 이전 generation response가 새 projection을 변경하지 못한다.
+- Confirmation / Follow-up: 같은-generation fallback Accept/Reject는 처리하고 missing/mismatched Follow `published`와 cancel-refollow 뒤 늦은 fallback Accept는 새 request/relation을 변경하지 않는지 PROD-244가 검증한다.
+
 ### Remote Follow ID는 advisory이고 generation은 단조 증가한다
 
 - Decision Date: 2026-07-15
@@ -114,6 +176,26 @@
 - Consequences: 새로운 HTTP foundation을 만들지 않고 PROD-241 transport를 재사용하며, remote-post change와 동일 discovery requirement를 서로 덮어쓰지 않는다.
 - Confirmation / Follow-up: actor-scoped/shared inbox 통합 테스트로 routing과 Follow handler 호출을 검증하고 unsupported activity가 follow side effect를 만들지 않는지 확인한다.
 
+### Inbound Follow/Undo는 공통 core lifecycle의 Notification source integration을 보존한다
+
+- Decision Date: 2026-07-20
+- Status: Accepted
+- Context / Problem: PROD-243의 verified handler가 relation/request/count를 변경하지만, Notification 계약이 ActivityPub ingress를 제외해 Local Recipient의 새 established source에 Follow Notification이 누락되고 Undo cleanup도 실행되지 않았다.
+- Decision Outcome: concrete Follow/Undo handler는 기존 Activity 검증 뒤 공통 core public action을 호출한다. core action은 relation/request/count transaction commit 이후 `add-in-app-notifications`의 Notification create/delete를 await/catch하며, Fedify adapter는 relation mutation이나 Notification 호출을 중복 구현하지 않는다.
+- Alternatives Considered: Fedify handler에서 Notification 직접 호출, 기존 ingress 제외 유지, Notification을 relation transaction에 포함.
+- Consequences: OPEN 신규 established relation만 create lifecycle을 실행하고 APPROVAL_REQUIRED pending·duplicate/no-op은 실행하지 않는다. Undo도 established relation을 실제 삭제한 경우만 cleanup하며 Notification 오류는 ActivityPub 성공이나 source transaction을 rollback하지 않는다. Follow/Undo의 Activity 검증, correlation, actor materialization과 transport 계약은 바뀌지 않는다.
+- Confirmation / Follow-up: PROD-380이 production listener부터 DB/Notification까지의 wiring, duplicate/concurrent idempotency, pending/no-op 제외와 create/delete 실패 격리를 검증하고 PROD-361 archive gate를 block한다.
+
+### Follow flow는 저장된 Profile origin pair에서 파생한다
+
+- Decision Date: 2026-07-21
+- Status: Accepted
+- Context / Problem: 공통 core action이 caller에게 `ACTIVITYPUB_INBOUND`/`LOCAL_OUTBOUND` direction을 받으면 DB에 저장된 Profile origin과 같은 사실을 중복 표현하고, 값과 실제 pair가 어긋나는 불가능한 조합을 추가한다. direction 문자열 자체는 Activity가 검증됐다는 증거도 아니다.
+- Decision Outcome: `followProfile`과 `unfollowProfile`은 caller-supplied direction을 받지 않는다. core action은 저장된 Follower/Followee Profile과 Instance kind/state를 조회해 Local→Local, Local→ActivityPub outbound와 ActivityPub→Local inbound를 파생하고 ActivityPub→ActivityPub을 거부한다. verified Activity actor/object/recipient 판정은 계속 Fedify concrete handler가 소유한다.
+- Alternatives Considered: public direction enum 유지, local/outbound/inbound별 public core entrypoint 분리.
+- Consequences: GraphQL과 Fedify caller가 같은 profile-pair input을 사용하며 origin pair가 lifecycle과 delivery 분기의 단일 source of truth가 된다. 임의 core caller가 verified Activity를 증명하는 별도 token은 추가하지 않으며, Fedify 검증 경계는 production listener 통합 테스트로 고정한다.
+- Confirmation / Follow-up: PROD-380이 origin pair matrix와 production listener → concrete handler → common core → DB/Notification 흐름을 검증한다.
+
 ### 최종 통합 검증과 archive는 PROD-361이 소유한다
 
 - Decision Date: 2026-07-15
@@ -127,7 +209,7 @@
 ## Remaining Decisions
 
 - authenticated shared-inbox document loader identity는 PROD-355가 소유한다.
-- delivery queue/retry/history와 durable activity log는 별도 이슈와 OpenSpec에서 결정한다.
+- outbound delivery intent, transactional outbox와 Fedify Queue handoff는 PROD-448의 별도 OpenSpec에서 결정한다. Fedify retry/history와 durable activity log는 해당 소유 이슈가 별도로 결정한다.
 
 ## Superseded Decisions
 

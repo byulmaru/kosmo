@@ -1,17 +1,18 @@
 import assert from 'node:assert/strict';
 import { after, describe, test } from 'node:test';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import {
   db,
   firstOrThrow,
   Instances,
+  Notifications,
   pg,
   ProfileFollowRequests,
   ProfileFollows,
   Profiles,
 } from '../db';
 import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
-import { recordInboundFollow, removeInboundFollow } from './inbound-profile-follow';
+import { followProfile, removeInboundFollow, unfollowProfile } from './profile-follow';
 
 after(async () => pg.end());
 
@@ -69,7 +70,25 @@ const getProfiles = async (followerProfileId: string, followeeProfileId: string)
     .then(firstOrThrow),
 });
 
-describe('inbound profile follow service', () => {
+const readNotifications = (sourceId: string) =>
+  db.select().from(Notifications).where(eq(Notifications.sourceId, sourceId));
+
+const recordInboundFollow = async (input: {
+  readonly followeeProfileId: string;
+  readonly followerProfileId: string;
+}) =>
+  (
+    await followProfile({
+      ...input,
+    })
+  ).result.kind;
+
+const removeInboundFollowThroughLifecycle = (input: {
+  readonly followeeProfileId: string;
+  readonly followerProfileId: string;
+}) => unfollowProfile(input);
+
+describe('ActivityPub inbound profile follow lifecycle', () => {
   test('reuses the current relation and removes it idempotently', async () => {
     const { followee, follower } = await createPair(ProfileFollowPolicy.OPEN);
     const input = { followeeProfileId: followee.id, followerProfileId: follower.id };
@@ -82,8 +101,15 @@ describe('inbound profile follow service', () => {
       followee: { ...followee, followersCount: 1 },
       follower: { ...follower, followingCount: 1 },
     });
-    assert.equal(await removeInboundFollow(input), true);
-    assert.equal(await removeInboundFollow(input), false);
+    const relation = await db
+      .select()
+      .from(ProfileFollows)
+      .where(eq(ProfileFollows.followerProfileId, follower.id))
+      .then(firstOrThrow);
+    assert.equal((await readNotifications(relation.id)).length, 1);
+    assert.equal((await removeInboundFollowThroughLifecycle(input)).profileFollowId, relation.id);
+    assert.deepEqual(await readNotifications(relation.id), []);
+    assert.equal((await removeInboundFollowThroughLifecycle(input)).profileFollowId, null);
     assert.deepEqual(await getProfiles(follower.id, followee.id), {
       followee,
       follower,
@@ -99,7 +125,15 @@ describe('inbound profile follow service', () => {
     assert.equal(first, 'PENDING');
     assert.equal(duplicate, 'PENDING');
     assert.deepEqual(await getProfiles(follower.id, followee.id), { followee, follower });
-    assert.equal(await removeInboundFollow(input), true);
+    assert.equal(
+      await db
+        .select()
+        .from(Notifications)
+        .where(eq(Notifications.recipientProfileId, followee.id))
+        .then((rows) => rows.length),
+      0,
+    );
+    assert.equal((await removeInboundFollowThroughLifecycle(input)).profileFollowId, null);
     assert.equal(
       await db
         .select()
@@ -129,6 +163,12 @@ describe('inbound profile follow service', () => {
       followee: { ...followee, followersCount: 1 },
       follower: { ...follower, followingCount: 1 },
     });
+    const relation = await db
+      .select()
+      .from(ProfileFollows)
+      .where(eq(ProfileFollows.followerProfileId, follower.id))
+      .then(firstOrThrow);
+    assert.equal((await readNotifications(relation.id)).length, 1);
   });
 
   test('serializes concurrent duplicate pending Follow without changing counts', async () => {
@@ -146,43 +186,6 @@ describe('inbound profile follow service', () => {
       1,
     );
     assert.deepEqual(await getProfiles(follower.id, followee.id), { followee, follower });
-  });
-
-  test('does not lock participant profiles for an established duplicate Follow', async () => {
-    const { followee, follower } = await createPair(ProfileFollowPolicy.OPEN);
-    const input = { followeeProfileId: followee.id, followerProfileId: follower.id };
-    await recordInboundFollow(input);
-
-    let releaseProfiles!: () => void;
-    const profilesReleased = new Promise<void>((resolve) => {
-      releaseProfiles = resolve;
-    });
-    let profilesLocked!: () => void;
-    const profilesAreLocked = new Promise<void>((resolve) => {
-      profilesLocked = resolve;
-    });
-    const blocker = db.transaction(async (tx) => {
-      await tx
-        .select({ id: Profiles.id })
-        .from(Profiles)
-        .where(inArray(Profiles.id, [follower.id, followee.id]))
-        .for('update', { of: Profiles });
-      profilesLocked();
-      await profilesReleased;
-    });
-
-    await profilesAreLocked;
-    try {
-      const duplicate = await db.transaction(async (tx) => {
-        await tx.execute(sql`set local lock_timeout = '100ms'`);
-        return recordInboundFollow(input, tx);
-      });
-
-      assert.equal(duplicate, 'ESTABLISHED');
-    } finally {
-      releaseProfiles();
-      await blocker;
-    }
   });
 
   test('does not delete a new exact-row refollow that replaces the captured row', async () => {
@@ -251,22 +254,25 @@ describe('inbound profile follow service', () => {
     });
   });
 
-  test('joins a caller transaction and rolls back relation and counts', async () => {
+  test('keeps an established inbound Follow when Notification creation fails', async () => {
     const { followee, follower } = await createPair(ProfileFollowPolicy.OPEN);
-
-    await assert.rejects(
-      db.transaction(async (tx) => {
-        await recordInboundFollow(
-          {
-            followeeProfileId: followee.id,
-            followerProfileId: follower.id,
-          },
-          tx,
-        );
-        throw new Error('rollback');
-      }),
-      /rollback/,
+    await db.execute(
+      sql`ALTER TABLE ${Notifications} ADD CONSTRAINT notification_inbound_create_failure CHECK (false) NOT VALID`,
     );
+
+    try {
+      assert.equal(
+        await recordInboundFollow({
+          followeeProfileId: followee.id,
+          followerProfileId: follower.id,
+        }),
+        'ESTABLISHED',
+      );
+    } finally {
+      await db.execute(
+        sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_inbound_create_failure`,
+      );
+    }
 
     assert.equal(
       await db
@@ -274,8 +280,19 @@ describe('inbound profile follow service', () => {
         .from(ProfileFollows)
         .where(eq(ProfileFollows.followerProfileId, follower.id))
         .then((rows) => rows.length),
+      1,
+    );
+    assert.deepEqual(await getProfiles(follower.id, followee.id), {
+      followee: { ...followee, followersCount: 1 },
+      follower: { ...follower, followingCount: 1 },
+    });
+    assert.equal(
+      await db
+        .select()
+        .from(Notifications)
+        .where(eq(Notifications.recipientProfileId, followee.id))
+        .then((rows) => rows.length),
       0,
     );
-    assert.deepEqual(await getProfiles(follower.id, followee.id), { followee, follower });
   });
 });

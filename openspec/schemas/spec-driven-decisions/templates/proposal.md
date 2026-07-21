@@ -6,6 +6,12 @@
 
 <!-- Describe what will change. Be specific about new capabilities, modifications, or removals. -->
 
+## Authority / Provenance
+
+- Canonical: <!-- exact applicable docs/domain and docs/design paths -->
+- Linear Contract: <!-- current contract issue -->
+- Linear Implementations: <!-- current implementation issues, or 없음. -->
+
 ## Capabilities
 
 ### New Capabilities

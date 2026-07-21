@@ -1,12 +1,12 @@
 import '@kosmo/core/polyfill';
 
 import { Follow } from '@fedify/vocab';
-import { ActivityPubActors, db, first, Instances, Profiles } from '@kosmo/core/db';
-import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
+import { InstanceState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
-import { recordInboundFollow, removeInboundFollow } from '@kosmo/core/services';
-import { and, eq, getColumns } from 'drizzle-orm';
+import { followProfile, unfollowProfile } from '@kosmo/core/services';
+import { isHttpUri } from './activitypub-uri';
 import { sendAcceptFollowActivity } from './follow-delivery';
+import { resolveInboundLocalRecipient } from './inbound-local-recipient';
 import {
   findOrMaterializeRemoteProfileActorByUri,
   findUsableStoredRemoteProfileActorByUri,
@@ -14,55 +14,14 @@ import {
 } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Recipient, Undo } from '@fedify/vocab';
-
-type LocalRecipient = { profile: typeof Profiles.$inferSelect };
+import type { ActivityPubActors } from '@kosmo/core/db';
 
 const getNow = () => Temporal.Now.instant();
-
-const isHttpUri = (uri: URL | null): uri is URL =>
-  uri !== null && (uri.protocol === 'http:' || uri.protocol === 'https:');
 
 const isExpectedRemoteActorRejection = (error: unknown) =>
   error instanceof RemoteActorMaterializationError ||
   error instanceof NotFoundError ||
   error instanceof ConflictError;
-
-const findActiveLocalRecipient = async (actorUri: URL): Promise<LocalRecipient | undefined> =>
-  db
-    .select({ profile: getColumns(Profiles) })
-    .from(ActivityPubActors)
-    .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(
-      and(
-        eq(ActivityPubActors.uri, actorUri.href),
-        eq(Instances.kind, InstanceKind.LOCAL),
-        eq(Instances.state, InstanceState.ACTIVE),
-        eq(Profiles.state, ProfileState.ACTIVE),
-      ),
-    )
-    .limit(1)
-    .then(first);
-
-const resolveLocalRecipient = async (
-  context: InboxContext<void>,
-  objectUri: URL,
-): Promise<LocalRecipient | undefined> => {
-  if (
-    context.recipient !== null &&
-    context.getActorUri(context.recipient).href !== objectUri.href
-  ) {
-    return undefined;
-  }
-
-  const recipient = await findActiveLocalRecipient(objectUri);
-
-  if (context.recipient !== null && recipient?.profile.id !== context.recipient) {
-    return undefined;
-  }
-
-  return recipient;
-};
 
 const toRecipient = (actor: typeof ActivityPubActors.$inferSelect): Recipient | undefined => {
   if (!actor.inboxUri) {
@@ -89,7 +48,7 @@ export const handleInboundFollow = async (
   }
 
   // Local validation intentionally precedes every remote lookup.
-  const localRecipient = await resolveLocalRecipient(context, objectUri);
+  const localRecipient = await resolveInboundLocalRecipient(context, objectUri);
   if (!localRecipient) {
     return;
   }
@@ -106,12 +65,12 @@ export const handleInboundFollow = async (
     throw error;
   }
 
-  const result = await recordInboundFollow({
-    followeeProfileId: localRecipient.profile.id,
+  const result = await followProfile({
+    followeeProfileId: localRecipient.id,
     followerProfileId: remoteActor.profile.id,
   });
 
-  if (result !== 'ESTABLISHED') {
+  if (result.result.kind !== 'ESTABLISHED') {
     return;
   }
 
@@ -125,7 +84,7 @@ export const handleInboundFollow = async (
       context,
       receivedFollow: follow,
       recipientActor,
-      senderProfileId: localRecipient.profile.id,
+      senderProfileId: localRecipient.id,
     });
   } catch {
     // The projection is authoritative; delivery retries belong to a separate slice.
@@ -172,13 +131,13 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
     return;
   }
 
-  const localRecipient = await resolveLocalRecipient(context, objectUri);
+  const localRecipient = await resolveInboundLocalRecipient(context, objectUri);
   if (!localRecipient) {
     return;
   }
 
-  await removeInboundFollow({
-    followeeProfileId: localRecipient.profile.id,
+  await unfollowProfile({
+    followeeProfileId: localRecipient.id,
     followerProfileId: remoteActor.profile.id,
   });
 };

@@ -14,11 +14,13 @@
 
 계획·구현 중 최종 선택과 이유는 사람이 결정합니다. AI는 그 결과를 이 PR의 결정문으로 정리할 수 있지만,
 근거가 없거나 불명확한 선택과 이유를 새로 추론해서는 안 됩니다.
-accepted OpenSpec decision은 전문을 복제하지 말고 링크와 적용 결과를 적어 주세요.
+OpenSpec은 상위 요구의 근거가 아닙니다. 적용한 decision은 전문을 복제하지 말고 링크와 적용 결과를
+적되, 실제 계약 근거인 최신 canonical 문서와 Linear도 독립적으로 확인하고 함께 링크해 주세요.
+`Blocked` 또는 `Upstream Change Required` decision은 현재 구현 근거로 사용할 수 없습니다.
 새 durable decision이 필요하다면 PR에만 남기지 말고 Linear와 OpenSpec을 먼저 갱신해 주세요.
 
 새로 내린 중요한 결정이 없다면 아래 항목을 지우고
-"없음. 승인된 OpenSpec 결정을 변경 없이 적용했다."라고 적어 주세요.
+"없음. 최신 canonical·Linear와 대조한 OpenSpec 결정을 변경 없이 적용했다."라고 적어 주세요.
 -->
 
 ### 결정 제목
