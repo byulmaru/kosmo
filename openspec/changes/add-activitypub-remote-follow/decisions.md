@@ -74,6 +74,16 @@
 - Consequences: PR #285는 기존 inbound Follow/Undo runtime을 회귀 대상으로만 유지한다. 공통 core entrypoint와 Notification source lifecycle의 최종 형태는 PROD-380에서 `add-in-app-notifications` 계약과 함께 검증한다.
 - Confirmation / Follow-up: PROD-244는 inbound Follow/Undo 관련 runtime·Notification diff가 없는지 확인하고, PROD-380은 production listener → concrete handler → core lifecycle → DB/Notification integration test를 제공한다.
 
+### Post-commit outbound delivery 실패는 committed mutation 결과와 분리한다
+
+- Decision Date: 2026-07-21
+- Status: Accepted
+- Context / Problem: remote OPEN/APPROVAL_REQUIRED follow, established unfollow와 pending cancel은 relation/request/count transaction을 먼저 commit하지만 이후 Follow/Undo delivery 오류를 throw해 GraphQL 실패와 실제 DB 상태가 어긋난다.
+- Decision Outcome: PROD-447은 transaction-before-delivery 순서를 유지한다. Post-commit `sendProfileFollow`/`sendProfileUnfollow` 실패는 관측 가능하게 기록하고 application action 밖으로 전파하지 않으며, `followProfile`, `unfollowProfile`, `cancelProfileFollowRequest`는 transaction에서 확정한 payload를 반환한다.
+- Alternatives Considered: delivery를 transaction 안으로 이동해 rollback, GraphQL 실패를 유지하고 Web에서 refetch, durable retry/outbox/history를 함께 도입.
+- Consequences: 호출자는 committed relation/request/count와 일치하는 성공 payload를 받는다. delivery 보장은 추가되지 않으며 retry/outbox/history와 Web 오류 후 refetch workaround는 별도 범위다.
+- Confirmation / Follow-up: core service, GraphQL integration과 Web E2E에서 delivery 실패에도 성공 payload와 DB projection이 일치하는지 검증한다. PROD-263과 inbound Accept/Reject/Follow/Undo lifecycle은 변경하지 않는다.
+
 ### Accept/Reject object 지원은 Fedify typed Follow 해석 범위로 제한한다
 
 - Decision Date: 2026-07-18

@@ -164,8 +164,16 @@ export const followProfile = async ({
   }
 
   if (command) {
-    const { sendProfileFollow } = await import('@kosmo/fedify');
-    await sendProfileFollow(command);
+    try {
+      const { sendProfileFollow } = await import('@kosmo/fedify');
+      await sendProfileFollow(command);
+    } catch (error) {
+      console.error('Post-commit ActivityPub Follow delivery failed', {
+        error,
+        followeeProfileId,
+        followerProfileId,
+      });
+    }
   }
   return result;
 };
@@ -239,8 +247,16 @@ export const unfollowProfile = async ({
   }
 
   if (command) {
-    const { sendProfileUnfollow } = await import('@kosmo/fedify');
-    await sendProfileUnfollow(command);
+    try {
+      const { sendProfileUnfollow } = await import('@kosmo/fedify');
+      await sendProfileUnfollow(command);
+    } catch (error) {
+      console.error('Post-commit ActivityPub Undo delivery failed', {
+        error,
+        followeeProfileId,
+        followerProfileId,
+      });
+    }
   }
   return result;
 };

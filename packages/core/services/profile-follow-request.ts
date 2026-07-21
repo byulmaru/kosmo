@@ -341,8 +341,16 @@ export const cancelProfileFollowRequest = async (input: {
   });
 
   if (command) {
-    const { sendProfileUnfollow } = await import('@kosmo/fedify');
-    await sendProfileUnfollow(command);
+    try {
+      const { sendProfileUnfollow } = await import('@kosmo/fedify');
+      await sendProfileUnfollow(command);
+    } catch (error) {
+      console.error('Post-commit ActivityPub Undo delivery failed', {
+        error,
+        profileFollowRequestId: result.profileFollowRequestId,
+        requesterProfileId: input.actorProfileId,
+      });
+    }
   }
 
   return result;

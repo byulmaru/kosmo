@@ -704,6 +704,127 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(await countRows(ProfileFollows), 1);
   });
 
+  test('returns committed GraphQL payloads when post-commit Follow and Undo delivery fails', async () => {
+    const auth = await createAuthenticatedSession();
+    const openInstance = await createRemoteInstance({ domain: 'delivery-open.remote.example' });
+    const openRemote = await createProfile({
+      handle: 'delivery-open',
+      instanceId: openInstance.id,
+    });
+    await createRemoteActor(openRemote.id, openInstance.domain, { withInbox: false });
+    const errorLog = mock.method(console, 'error', () => undefined);
+
+    try {
+      const followed = await requestGraphQL<{
+        followProfile: {
+          followeeProfile: { followersCount: number; id: string };
+          followerProfile: { followingCount: number; id: string };
+          result: { __typename: string; id: string };
+        };
+      }>(
+        `mutation FollowRemoteAfterDeliveryFailure($id: ID!) {
+          followProfile(input: { id: $id }) {
+            followeeProfile { followersCount id }
+            followerProfile { followingCount id }
+            result { __typename ... on ProfileFollow { id } }
+          }
+        }`,
+        { id: globalId('Profile', openRemote.id) },
+        auth.token,
+      );
+      assertNoGraphQLErrors(followed);
+      assert.equal(followed.data?.followProfile.result.__typename, 'ProfileFollow');
+      assert.equal(followed.data?.followProfile.followerProfile.followingCount, 1);
+      assert.equal(followed.data?.followProfile.followeeProfile.followersCount, 1);
+      assert.equal(await countRows(ProfileFollows), 1);
+
+      const unfollowed = await requestGraphQL<{
+        unfollowProfile: {
+          followeeProfile: { followersCount: number };
+          followerProfile: { followingCount: number };
+          profileFollowId: string;
+        };
+      }>(
+        `mutation UnfollowRemoteAfterDeliveryFailure($id: ID!) {
+          unfollowProfile(input: { id: $id }) {
+            followeeProfile { followersCount }
+            followerProfile { followingCount }
+            profileFollowId
+          }
+        }`,
+        { id: globalId('Profile', openRemote.id) },
+        auth.token,
+      );
+      assertNoGraphQLErrors(unfollowed);
+      assert.ok(unfollowed.data?.unfollowProfile.profileFollowId);
+      assert.equal(unfollowed.data?.unfollowProfile.followerProfile.followingCount, 0);
+      assert.equal(unfollowed.data?.unfollowProfile.followeeProfile.followersCount, 0);
+      assert.equal(await countRows(ProfileFollows), 0);
+
+      const approvalInstance = await createRemoteInstance({
+        domain: 'delivery-approval.remote.example',
+      });
+      const approvalRemote = await createProfile({
+        followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
+        handle: 'delivery-approval',
+        instanceId: approvalInstance.id,
+      });
+      await createRemoteActor(approvalRemote.id, approvalInstance.domain, { withInbox: false });
+
+      const requested = await requestGraphQL<{
+        followProfile: {
+          followeeProfile: { followersCount: number };
+          followerProfile: { followingCount: number };
+          result: { __typename: string; id: string };
+        };
+      }>(
+        `mutation RequestRemoteFollowAfterDeliveryFailure($id: ID!) {
+          followProfile(input: { id: $id }) {
+            followeeProfile { followersCount }
+            followerProfile { followingCount }
+            result { __typename ... on ProfileFollowRequest { id } }
+          }
+        }`,
+        { id: globalId('Profile', approvalRemote.id) },
+        auth.token,
+      );
+      assertNoGraphQLErrors(requested);
+      assert.equal(requested.data?.followProfile.result.__typename, 'ProfileFollowRequest');
+      assert.equal(requested.data?.followProfile.followerProfile.followingCount, 0);
+      assert.equal(requested.data?.followProfile.followeeProfile.followersCount, 0);
+      assert.equal(await countRows(ProfileFollowRequests), 1);
+
+      const requestId = requested.data!.followProfile.result.id;
+      const canceled = await requestGraphQL<{
+        cancelProfileFollowRequest: {
+          followerProfile: { followingCount: number; id: string };
+          profileFollowRequestId: string;
+        };
+      }>(
+        `mutation CancelRemoteFollowAfterDeliveryFailure($id: ID!) {
+          cancelProfileFollowRequest(input: { id: $id }) {
+            followerProfile { followingCount id }
+            profileFollowRequestId
+          }
+        }`,
+        { id: requestId },
+        auth.token,
+      );
+      assertNoGraphQLErrors(canceled);
+      assert.deepEqual(canceled.data?.cancelProfileFollowRequest, {
+        followerProfile: {
+          followingCount: 0,
+          id: globalId('Profile', auth.profile.id),
+        },
+        profileFollowRequestId: requestId,
+      });
+      assert.equal(await countRows(ProfileFollowRequests), 0);
+      assert.equal(errorLog.mock.callCount(), 4);
+    } finally {
+      errorLog.mock.restore();
+    }
+  });
+
   test('delivers signed Follow and Undo activities for an active remote profile', async () => {
     const auth = await createAuthenticatedSession();
     const remoteInstance = await createRemoteInstance();
@@ -1882,9 +2003,13 @@ const materializeRemotePost = async ({
   return { content: materializedContent, mapping, post };
 };
 
-const createRemoteActor = (profileId: string, domain: string) =>
+const createRemoteActor = (
+  profileId: string,
+  domain: string,
+  { withInbox = true }: { withInbox?: boolean } = {},
+) =>
   db.insert(ActivityPubActors).values({
-    inboxUri: `https://${domain}/users/remote/inbox`,
+    inboxUri: withInbox ? `https://${domain}/users/remote/inbox` : null,
     profileId,
     sharedInboxUri: `https://${domain}/inbox`,
     type: 'PERSON',
