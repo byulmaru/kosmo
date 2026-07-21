@@ -351,6 +351,22 @@ export const ProfileFollowRequests = pgTable(
   ],
 );
 
+export const Reactions = pgTable(
+  'reaction',
+  {
+    id: id(),
+    profileId: uuid('profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    postId: uuid('post_id')
+      .notNull()
+      .references(() => Posts.id, { onDelete: 'cascade' }),
+    type: text('type').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [unique().on(table.postId, table.type, table.profileId), index().on(table.profileId)],
+);
+
 export const Sessions = pgTable(
   'session',
   {
