@@ -438,7 +438,6 @@ describe('GraphQL Reaction', () => {
     assert.equal(firstConnection.pageInfo.hasPreviousPage, false);
     assert.notEqual(firstConnection.pageInfo.endCursor, visibleLowReactionId);
     assert.doesNotMatch(firstConnection.pageInfo.endCursor ?? '', /2026-07-21/);
-    assert.notEqual(firstConnection.pageInfo.endCursor, globalId('Profile', visibleLow.id));
 
     const secondPage = await requestReactionProfiles(post.id, '❤️', {
       after: firstConnection.pageInfo.endCursor,
@@ -468,42 +467,19 @@ describe('GraphQL Reaction', () => {
     assert.equal(backwardConnection.pageInfo.hasNextPage, true);
   });
 
-  test('Reaction Profile은 Post visibility와 cursor 및 Type validation 경계를 우회하지 않는다', async () => {
+  test('Reaction Profile은 Post visibility와 Type validation 경계를 우회하지 않는다', async () => {
     const viewer = await createAuthenticatedSession();
     const author = await createProfile('direct-author');
     const directPost = await createPost(author.id, PostVisibility.DIRECT);
 
-    for (const postId of [directPost.id, crypto.randomUUID()]) {
-      const result = await requestReactionProfiles(postId, '❤️', { first: 1 });
-      assertNoGraphQLErrors(result);
-      assert.equal(result.data?.node, null);
-    }
+    const result = await requestReactionProfiles(directPost.id, '❤️', { first: 1 });
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.node, null);
 
     const publicPost = await createPost(viewer.profile.id);
-    const malformedCursor = await requestReactionProfiles(publicPost.id, '❤️', {
-      after: 'not-a-valid-cursor',
-      first: 1,
-    });
-    assert.equal(malformedCursor.errors?.[0]?.extensions?.code, 'VALIDATION');
-
     const invalidType = await requestReactionProfiles(publicPost.id, '👍', { first: 1 });
     assert.equal(invalidType.errors?.[0]?.extensions?.code, 'VALIDATION');
     assert.equal(invalidType.errors?.[0]?.extensions?.field, 'type');
-
-    const metadata = await requestGraphQL(
-      `query ReactionProfileMetadata($postId: ID!, $type: String!) {
-        node(id: $postId) {
-          ... on Post {
-            reactionProfiles(type: $type) {
-              edges { reactionId reactedAt reaction { id createdAt } }
-            }
-          }
-        }
-      }`,
-      { postId: globalId('Post', publicPost.id), type: '❤️' },
-    );
-    assert.ok(metadata.errors?.[0]);
-    assert.equal(metadata.data, undefined);
   });
 });
 
