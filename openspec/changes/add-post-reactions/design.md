@@ -1,8 +1,8 @@
 ## Context
 
-현재 `main`에는 PROD-395가 전달한 Reaction 저장 schema와 migration이 있고, PROD-404 구현 stack에는 Reaction Node와 멱등 add core service·GraphQL mutation이 있다. PostgreSQL/Drizzle은 UUIDv7 default, 명시적 foreign key와 SQL-like query builder를 사용하며, Post 조회 권한은 API의 기존 Post visibility predicate가 소유한다. Profile-scoped Notification 저장과 Follow source backend는 이미 병합됐지만 list/count/read visibility SQL은 Follow join에 고정돼 있고, `add-in-app-notifications`의 목록 UI·badge·E2E·archive는 아직 완료되지 않았다.
+현재 `main`에는 PROD-395가 전달한 Reaction 저장 schema와 migration, PROD-404가 전달한 멱등 생성 service·GraphQL mutation, PROD-405가 전달한 Owner 멱등 삭제 service·GraphQL mutation이 있다. 아직 `main`에 없는 범위는 Type별 count·Profile connection과 UI·Reaction Notification lifecycle이다. PostgreSQL/Drizzle은 UUIDv7 default, 명시적 foreign key와 SQL-like query builder를 사용하며, Post 조회 권한은 API의 기존 Post visibility predicate가 소유한다. Profile-scoped Notification 저장과 Follow source backend는 이미 병합됐지만 list/count/read visibility SQL은 Follow join에 고정돼 있고, `add-in-app-notifications`의 목록 UI·badge·E2E·archive는 아직 완료되지 않았다.
 
-이 change는 PROD-390이 소유한 공유 계약이며 구현은 PROD-395, PROD-404, PROD-405, PROD-406, PROD-407, PROD-413, PROD-417, PROD-418, PROD-419의 독립 PR로 나뉜다. PROD-395 저장과 PROD-404 멱등 생성 slice는 완료됐고 이번 적용 대상은 PROD-405의 Owner 멱등 삭제 slice다. 나머지 slice는 자신의 blocker와 미결정을 해소한 뒤 같은 change를 이어서 사용한다.
+이 change는 PROD-390이 소유한 공유 계약이며 구현은 PROD-395, PROD-404, PROD-405, PROD-406, PROD-407, PROD-413, PROD-417, PROD-418, PROD-419의 독립 PR로 나뉜다. PROD-395 저장 slice, PROD-404 멱등 생성 slice, PROD-405 Owner 멱등 삭제 slice는 완료됐고 이번 적용 대상은 PROD-407의 Type별 Profile connection slice다. 나머지 slice는 자신의 blocker와 미결정을 해소한 뒤 같은 change를 이어서 사용한다.
 
 ## Goals / Non-Goals
 
