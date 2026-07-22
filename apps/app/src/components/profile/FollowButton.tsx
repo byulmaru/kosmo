@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
-import { ConnectionHandler } from 'relay-runtime';
+import { graphql, useFragment, useMutation } from 'react-relay';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
@@ -70,9 +69,8 @@ const cancelProfileFollowRequestMutation = graphql`
 `;
 
 const unfollowProfileMutation = graphql`
-  mutation FollowButtonUnfollowProfileMutation($connections: [ID!]!, $id: ID!) {
+  mutation FollowButtonUnfollowProfileMutation($id: ID!) {
     unfollowProfile(input: { id: $id }) {
-      profileFollowId @deleteEdge(connections: $connections)
       followerProfile {
         id
         followingCount
@@ -100,7 +98,6 @@ const getSelectedProfile = (store: RecordSourceSelectorProxy) =>
 
 export function FollowButton({ profile, style }: FollowButtonProps) {
   const theme = useTheme();
-  const environment = useRelayEnvironment();
   const data = useFragment(followButtonProfileFragment, profile);
   const [commitFollow, following] =
     useMutation<FollowButtonFollowProfileMutation>(followProfileMutation);
@@ -133,41 +130,30 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
 
     if (isFollowing) {
       const follower = viewerState.follow?.follower;
-      const followerId = follower?.id;
-      const profileFollowId = viewerState.follow?.id;
-      const source = environment.getStore().getSource();
-      const connections = [
-        ConnectionHandler.getConnectionID(data.id, 'ProfileConnectionList_followers'),
-        ...(followerId
-          ? [ConnectionHandler.getConnectionID(followerId, 'ProfileConnectionList_following')]
-          : []),
-      ].filter((connectionId) => source.has(connectionId));
 
       commitUnfollow({
         ...callbacks,
-        optimisticResponse:
-          follower && profileFollowId
-            ? {
-                unfollowProfile: {
-                  followeeProfile: {
-                    followPolicy: data.followPolicy,
-                    followersCount: Math.max(data.followersCount - 1, 0),
-                    id: data.id,
-                    viewerState: {
-                      follow: null,
-                      followRequest: null,
-                      isSelf: viewerState.isSelf,
-                    },
+        optimisticResponse: follower
+          ? {
+              unfollowProfile: {
+                followeeProfile: {
+                  followPolicy: data.followPolicy,
+                  followersCount: Math.max(data.followersCount - 1, 0),
+                  id: data.id,
+                  viewerState: {
+                    follow: null,
+                    followRequest: null,
+                    isSelf: viewerState.isSelf,
                   },
-                  followerProfile: {
-                    followingCount: Math.max(follower.followingCount - 1, 0),
-                    id: follower.id,
-                  },
-                  profileFollowId: null,
                 },
-              }
-            : undefined,
-        variables: { connections, id: data.id },
+                followerProfile: {
+                  followingCount: Math.max(follower.followingCount - 1, 0),
+                  id: follower.id,
+                },
+              },
+            }
+          : undefined,
+        variables: { id: data.id },
       });
     } else if (viewerState.followRequest) {
       commitCancel({

@@ -438,7 +438,7 @@ export const PendingCancelErrorRollsBack: Story = {
   render: () => <PendingFollowButtonStory />,
 };
 
-export const UnfollowRemovesCachedConnectionEdge: Story = {
+export const UnfollowKeepsConnectionRowAfterSuccess: Story = {
   parameters: {
     relay: {
       mutationResponse: {
@@ -452,7 +452,6 @@ export const UnfollowRemovesCachedConnectionEdge: Story = {
             ...followingContent,
             followingCount: followingContent.followingCount - 1,
           },
-          profileFollowId: 'following-edge-0',
         },
       },
     },
@@ -460,7 +459,9 @@ export const UnfollowRemovesCachedConnectionEdge: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: '팔로잉' }));
-    await expect(canvas.findByText('아직 팔로잉이 없어요')).resolves.toBeVisible();
+    await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeEnabled();
+    expect(canvas.getByText('코스모 작가')).toBeVisible();
+    expect(canvas.queryByText('아직 팔로잉이 없어요')).not.toBeInTheDocument();
   },
   render: () => <FollowingWithFollowedProfile />,
 };
