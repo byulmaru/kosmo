@@ -3,14 +3,18 @@ import { Linking, Text } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Temporal } from 'temporal-polyfill';
+import { BookmarkAction } from '@/components/post/BookmarkAction';
 import { PostBody } from '@/components/post/PostBody';
 import { PostComposer } from '@/components/post/PostComposer';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostList } from '@/components/post/PostList';
 import { PostListItem } from '@/components/post/PostListItem';
+import { Button } from '@/components/ui/Button';
+import { useRelayActor } from '@/relay/RelayActorProvider';
 import { longBody, post, profile, profileWithPosts, timeline } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { BookmarkActorStoryQuery as BookmarkActorStoryQueryType } from './__generated__/BookmarkActorStoryQuery.graphql';
 import type { PostsStoriesQuery as PostsStoriesQueryType } from './__generated__/PostsStoriesQuery.graphql';
 
 const shortPost = post({ bodyText: '짧은 본문 한 줄.', id: 'short' });
@@ -92,6 +96,11 @@ const unsupportedDocumentPost = post({
   bodyText: '미지원 문서는 안전한 Plain Text로 표시합니다.',
   id: 'unsupported-document',
 });
+const bookmarkActionPost = post({ id: 'bookmark-action-unsaved', viewerBookmark: null });
+const bookmarkedActionPost = post({
+  id: 'bookmark-action-saved',
+  viewerBookmark: { __typename: 'Bookmark', id: 'bookmark-existing' },
+});
 const storyPosts = [
   shortPost,
   longPost,
@@ -106,6 +115,8 @@ const storyPosts = [
   remoteAuthorPost,
   linkedPost,
   unsupportedDocumentPost,
+  bookmarkActionPost,
+  bookmarkedActionPost,
 ];
 const composerProfile = profile({ id: 'profile-composer' });
 const emptyPostsProfile = profileWithPosts([], { id: 'profile-posts-empty' });
@@ -113,6 +124,18 @@ const contentPostsProfile = profileWithPosts([shortPost, longPost, emptyPost], {
   id: 'profile-posts-content',
 });
 const homeTimeline = timeline(shortPost, multilinePost);
+
+const BookmarkActorStoryQuery = graphql`
+  query BookmarkActorStoryQuery {
+    node(id: "bookmark-actor-post") {
+      __typename
+      ... on Post {
+        id
+        ...BookmarkAction_post @alias(as: "action")
+      }
+    }
+  }
+`;
 
 const PostsStoriesQuery = graphql`
   query PostsStoriesQuery($ids: [ID!]!) {
@@ -299,6 +322,49 @@ function LinkedPostListItemStory() {
   );
 }
 
+function BookmarkActionListStory({ enabled = true }: { enabled?: boolean }) {
+  const { posts } = usePostsStoryData();
+  const pathname = usePathname();
+
+  return (
+    <Catalog>
+      <Text testID="current-story-pathname">{pathname}</Text>
+      <PostListItem
+        canBookmark={enabled}
+        post={requireFragment(requirePost(posts, 16).listItem, 'bookmark action post item')}
+      />
+    </Catalog>
+  );
+}
+
+function BookmarkedActionDetailStory() {
+  const { posts } = usePostsStoryData();
+
+  return (
+    <Catalog>
+      <PostLayout
+        canBookmark
+        post={requireFragment(requirePost(posts, 17).layout, 'bookmarked action post layout')}
+      />
+    </Catalog>
+  );
+}
+
+function BookmarkActorStory() {
+  const { resetActor } = useRelayActor();
+  const data = useLazyLoadQuery<BookmarkActorStoryQueryType>(BookmarkActorStoryQuery, {});
+  if (data.node?.__typename !== 'Post' || !data.node.action) {
+    throw new Error('BookmarkActorStoryQuery must return a Post action fragment.');
+  }
+
+  return (
+    <Catalog>
+      <Button onPress={() => resetActor('bookmark-profile-after-switch')}>프로필 전환</Button>
+      <BookmarkAction enabled post={data.node.action} />
+    </Catalog>
+  );
+}
+
 const meta = {
   component: PostCatalog,
   parameters: {
@@ -359,6 +425,116 @@ export const LinkedBodyKeepsDetailNavigationIsolated: Story = {
     }
   },
   render: () => <LinkedPostListItemStory />,
+};
+
+export const BookmarkSaveKeepsDetailNavigationIsolated: Story = {
+  parameters: {
+    relay: {
+      mutationResponse: {
+        createBookmark: {
+          bookmark: {
+            id: 'bookmark-created',
+            post: {
+              id: 'bookmark-action-unsaved',
+              viewerBookmark: { id: 'bookmark-created' },
+            },
+          },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '북마크 저장' }));
+    await expect(canvas.findByRole('button', { name: '북마크 해제' })).resolves.toBeVisible();
+    await expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent('/@kosmo/post-1');
+  },
+  render: () => <BookmarkActionListStory />,
+};
+
+export const BookmarkDeleteOnDetail: Story = {
+  parameters: {
+    relay: {
+      mutationResponse: {
+        deleteBookmark: {
+          bookmarkId: 'bookmark-existing',
+          post: { id: 'bookmark-action-saved', viewerBookmark: null },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '북마크 해제' }));
+    await expect(canvas.findByRole('button', { name: '북마크 저장' })).resolves.toBeVisible();
+  },
+  render: () => <BookmarkedActionDetailStory />,
+};
+
+export const BookmarkPendingKeepsConfirmedState: Story = {
+  parameters: { relay: { mutationLoading: true } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const action = canvas.getByRole('button', { name: '북마크 저장' });
+    await userEvent.click(action);
+    await expect(action).toBeDisabled();
+    await expect(action).toHaveAttribute('aria-busy', 'true');
+    await expect(action).toHaveAttribute('aria-pressed', 'false');
+  },
+  render: () => <BookmarkActionListStory />,
+};
+
+export const BookmarkFailureKeepsConfirmedStateAndRetry: Story = {
+  parameters: { relay: { mutationError: '북마크 저장 실패' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '북마크 저장' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '북마크 상태를 변경하지 못했습니다. 다시 시도해주세요.',
+    );
+    await expect(canvas.getByRole('button', { name: '북마크 저장' })).toBeEnabled();
+  },
+  render: () => <BookmarkActionListStory />,
+};
+
+export const BookmarkHiddenWithoutSelectedProfile: Story = {
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.queryByRole('button', { name: /북마크/ })).not.toBeInTheDocument();
+  },
+  render: () => <BookmarkActionListStory enabled={false} />,
+};
+
+export const BookmarkActorStoreIsolation: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        BookmarkActorStoryQuery: [
+          {
+            data: {
+              node: { __typename: 'Post', id: 'bookmark-actor-post', viewerBookmark: null },
+            },
+          },
+          {
+            data: {
+              node: {
+                __typename: 'Post',
+                id: 'bookmark-actor-post',
+                viewerBookmark: { __typename: 'Bookmark', id: 'bookmark-after-switch' },
+              },
+            },
+          },
+        ],
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByRole('button', { name: '북마크 저장' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 전환' }));
+    await expect(canvas.findByRole('button', { name: '북마크 해제' })).resolves.toBeVisible();
+  },
+  render: () => <BookmarkActorStory />,
 };
 
 export const ComposerDefault: Story = {

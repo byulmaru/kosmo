@@ -6,6 +6,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
+import { BookmarkAction } from './BookmarkAction';
 import { PostBody } from './PostBody';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
 
@@ -23,11 +24,18 @@ const PostListItemFragment = graphql`
       displayName
       ...ProfileNameBlock_profile
     }
+    ...BookmarkAction_post
     ...PostBody_post
   }
 `;
 
-export function PostListItem({ post: postKey }: { post: PostListItem_post$key }) {
+export function PostListItem({
+  canBookmark = false,
+  post: postKey,
+}: {
+  canBookmark?: boolean;
+  post: PostListItem_post$key;
+}) {
   const theme = useTheme();
   const post = useFragment(PostListItemFragment, postKey);
   const profileHref = `/${post.profile.relativeHandle}` as const;
@@ -66,6 +74,7 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
             </Pressable>
           </Link>
         ) : null}
+        <BookmarkAction enabled={canBookmark} post={post} />
       </View>
     </View>
   );

@@ -214,6 +214,7 @@ type Post implements Node {
   id: ID!
   profile: Profile!
   state: PostState!
+  viewerBookmark: Bookmark
   visibility: PostVisibility!
 }
 

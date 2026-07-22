@@ -79,6 +79,7 @@ export function post({
   id = 'post-1',
   profile: author = profile(),
   visibility = 'UNLISTED',
+  viewerBookmark = null,
 }: {
   bodyDocument?: PostContentBodyDocumentV1;
   bodyText?: string | null;
@@ -86,6 +87,7 @@ export function post({
   id?: string;
   profile?: StoryProfile;
   visibility?: 'DIRECT' | 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
+  viewerBookmark?: { __typename: 'Bookmark'; id: string } | null;
 } = {}) {
   return {
     __typename: 'Post' as const,
@@ -107,6 +109,7 @@ export function post({
     profile: author,
     state: 'ACTIVE',
     visibility,
+    viewerBookmark,
   };
 }
 

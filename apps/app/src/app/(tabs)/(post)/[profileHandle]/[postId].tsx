@@ -13,6 +13,11 @@ import type { PostDetailQuery } from './__generated__/PostDetailQuery.graphql';
 
 const PostQuery = graphql`
   query PostDetailQuery($postId: ID!) {
+    currentSession {
+      selectedProfile {
+        id
+      }
+    }
     node(id: $postId) {
       __typename
       ... on Post {
@@ -105,7 +110,10 @@ function PostDetailContent({
     />
   ) : (
     <View style={styles.post}>
-      <PostLayout post={post.PostLayout_post} />
+      <PostLayout
+        canBookmark={Boolean(data.currentSession?.selectedProfile)}
+        post={post.PostLayout_post}
+      />
     </View>
   );
 }
