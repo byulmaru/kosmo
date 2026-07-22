@@ -78,23 +78,37 @@
 
 ### Requirement: Owner 전용 Bookmark 삭제
 
-시스템은 Bookmark의 Owner Profile만 해당 Bookmark를 삭제할 수 있게 해야 한다(MUST). Target Post가 현재 조회 불가능하더라도 Owner는 저장 관계를 삭제할 수 있어야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/bookmark.md`, `PROD-391`, `PROD-409`와 2026-07-22 삭제 API 승인 — 시스템은 Bookmark의 Owner Profile만 해당 Bookmark를 삭제할 수 있게 해야 한다(MUST). Target Post가 현재 조회 불가능하더라도 Owner는 저장 관계를 삭제할 수 있어야 한다(MUST).
+
+GraphQL은 현재 `usingProfile`을 Owner로 사용하는 `deleteBookmark(input: { id })` mutation을 제공해야 한다(MUST). 성공 payload는 nullable `bookmarkId`와 nullable `post`를 반환해야 한다(MUST). Owner가 존재하는 Bookmark를 처음 삭제하면 `bookmarkId`로 삭제된 Bookmark 관계를 정확히 식별하고, `post`는 현재 조회 가능한 Target Post를 반환해야 한다(MUST). Target Post가 현재 조회 불가능하면 삭제는 그대로 성공하되 `post`는 `null`이어야 한다(MUST).
+
+Bookmark가 없거나 현재 `usingProfile`의 소유가 아니거나 순차·동시 요청에서 이미 삭제되었으면 시스템은 서로 구분되지 않는 멱등 성공으로 정규화하고 `bookmarkId`와 `post`를 모두 `null`로 반환해야 한다(MUST). 다른 Profile에는 Bookmark 존재 여부를 노출하지 않아야 한다(MUST NOT).
 
 #### Scenario: Owner가 Bookmark를 삭제함
 
 - **WHEN** 행동 주체 Profile이 Bookmark의 Owner이고 삭제를 요청한다
 - **THEN** 시스템은 해당 Bookmark 관계를 제거한다
+- **AND** `DeleteBookmarkPayload.bookmarkId`로 삭제된 Bookmark 관계를 식별한다
+- **AND** Target Post가 현재 조회 가능하면 `DeleteBookmarkPayload.post`로 해당 Post를 반환한다
 
 #### Scenario: 다른 Profile이 Bookmark 삭제를 시도함
 
 - **WHEN** 행동 주체 Profile이 Bookmark의 Owner가 아니다
 - **THEN** 시스템은 Bookmark를 제거하지 않는다
+- **AND** 오류 없이 `bookmarkId: null`, `post: null`을 반환한다
 - **AND** 비공개 Bookmark의 존재 여부를 노출하지 않는다
+
+#### Scenario: 없거나 이미 삭제된 Bookmark를 삭제함
+
+- **WHEN** 입력 Bookmark가 없거나 순차·동시 삭제 요청에서 앞선 요청이 이미 관계를 제거했다
+- **THEN** 시스템은 오류 없이 `bookmarkId: null`, `post: null`을 반환한다
+- **AND** missing, non-owner와 경쟁 loser를 외부 응답으로 구분하지 않는다
 
 #### Scenario: 숨겨진 Target의 Bookmark를 삭제함
 
 - **WHEN** Target Post가 Tombstone이거나 Owner Profile이 현재 조회할 수 없는 상태에서 Owner가 Bookmark 삭제를 요청한다
 - **THEN** 시스템은 Target Post의 현재 가시성과 관계없이 Bookmark를 제거한다
+- **AND** 삭제된 `bookmarkId`와 `post: null`을 반환한다
 
 ### Requirement: Owner 전용 최신순 Bookmark 목록
 

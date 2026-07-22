@@ -38,11 +38,12 @@ Bookmark의 도메인 계약은 `docs/domain/objects/bookmark.md`와 Accepted AD
 ### Recommended Approach
 
 1. **PROD-396 저장 계층**: 별도 Bookmark table에 UUIDv7 ID, Owner Profile FK, Target Post FK와 생성 시각을 저장한다. `(profileId, postId)` unique 제약과 `(profileId, id DESC)` index를 둔다. Owner Profile과 Target Post FK는 물리 삭제에 cascade하되 Target Post의 Tombstone·가시성 변화에는 Bookmark를 유지한다. additive Drizzle migration과 focused DB 검증을 함께 추가한다.
-2. **PROD-408 생성**: GraphQL mutation이 transaction 안에서 session Account 활성 상태, 현재 `usingProfile`의 membership·상태·locality와 Target Post 가시성을 모두 검증한다. 검증된 `profileId`·`postId`와 transaction connection을 core service에 전달하고, core service는 Account나 인증 정보를 조회하지 않은 채 Bookmark insert와 unique 경쟁 정규화만 수행한다. 같은 조합이 이미 있으면 기존 Bookmark를 반환하며, payload의 Bookmark Node로 Owner Profile·Target Post 관계를 정규화한다. `PROD-409` 삭제의 exact 응답과 책임 경계는 해당 Remaining Decision을 확정한 뒤 정렬한다.
-3. **PROD-410 목록**: owner-scoped connection query에서 Bookmark와 Target Post·작성자 Profile·Instance를 결합하고 기존 Post 가시성 predicate를 SQL `WHERE`에 적용한 뒤 UUIDv7 ID-only cursor, order, limit을 적용한다. Bookmark Node 자체는 Owner가 숨겨진 Target의 관계도 삭제할 수 있도록 owner 권한과 Target 표시 권한을 분리하되, `Bookmark.post`와 목록 edge는 Target 가시성을 우회하지 않는다.
-4. **PROD-420 action UI**: 공용 Post fragment에 viewer-relative Bookmark 상태를 포함하고 재사용 가능한 action component를 `PostListItem`과 Post detail 표면에 둔다. 현재 프로젝트 관례인 응답 기반 갱신, pending disable, 실패 후 확정 상태 유지 방식을 기본으로 하며, mutation 응답으로 현재 actor store만 정규화한다.
-5. **PROD-421 목록 UI**: `/bookmarks` route의 selected Profile fragment에 `@refetchable`·`@connection` pagination 계약을 두고 loading·error·empty·load-more를 기존 connection component 관례와 맞춘다. 선택 Profile이 없으면 query를 실행하지 않고, Profile 전환 뒤에는 새 connection/cursor를 사용한다. 현재 `/menu` placeholder인 사이드바 Bookmark 항목을 canonical route로 연결하고 mobile 진입 경계도 함께 검증한다.
-6. **PROD-391 통합**: 저장 → 생성 → action/목록 반영 → Target 숨김·재노출 → 삭제를 하나의 사용자 흐름으로 검증하고, 모든 자식의 검증 증거와 canonical/OpenSpec 정합성을 확인한 뒤 archive한다.
+2. **PROD-408 생성**: GraphQL mutation이 transaction 안에서 session Account 활성 상태, 현재 `usingProfile`의 membership·상태·locality와 Target Post 가시성을 모두 검증한다. 검증된 `profileId`·`postId`와 transaction connection을 core service에 전달하고, core service는 Account나 인증 정보를 조회하지 않은 채 Bookmark insert와 unique 경쟁 정규화만 수행한다. 같은 조합이 이미 있으면 기존 Bookmark를 반환하며, payload의 Bookmark Node로 Owner Profile·Target Post 관계를 정규화한다.
+3. **PROD-409 삭제**: `deleteBookmark(input: { id })`는 현재 `usingProfile`과 Bookmark ID를 함께 조건으로 원자적 삭제를 수행한다. 첫 Owner 삭제는 삭제된 Bookmark ID와 현재 조회 가능한 Target Post를 반환하고, 숨겨진 Target이면 Post를 `null`로 반환한다. missing·non-owner·반복 또는 동시 삭제 loser는 같은 `bookmarkId: null`, `post: null` 성공으로 정규화하며 별도 비관적 lock을 추가하지 않는다.
+4. **PROD-410 목록**: owner-scoped connection query에서 Bookmark와 Target Post·작성자 Profile·Instance를 결합하고 기존 Post 가시성 predicate를 SQL `WHERE`에 적용한 뒤 UUIDv7 ID-only cursor, order, limit을 적용한다. Bookmark Node 자체는 Owner가 숨겨진 Target의 관계도 삭제할 수 있도록 owner 권한과 Target 표시 권한을 분리하되, `Bookmark.post`와 목록 edge는 Target 가시성을 우회하지 않는다.
+5. **PROD-420 action UI**: 공용 Post fragment에 viewer-relative Bookmark 상태를 포함하고 재사용 가능한 action component를 `PostListItem`과 Post detail 표면에 둔다. 현재 프로젝트 관례인 응답 기반 갱신, pending disable, 실패 후 확정 상태 유지 방식을 기본으로 하며, mutation 응답으로 현재 actor store만 정규화한다.
+6. **PROD-421 목록 UI**: `/bookmarks` route의 selected Profile fragment에 `@refetchable`·`@connection` pagination 계약을 두고 loading·error·empty·load-more를 기존 connection component 관례와 맞춘다. 선택 Profile이 없으면 query를 실행하지 않고, Profile 전환 뒤에는 새 connection/cursor를 사용한다. 현재 `/menu` placeholder인 사이드바 Bookmark 항목을 canonical route로 연결하고 mobile 진입 경계도 함께 검증한다.
+7. **PROD-391 통합**: 저장 → 생성 → action/목록 반영 → Target 숨김·재노출 → 삭제를 하나의 사용자 흐름으로 검증하고, 모든 자식의 검증 증거와 canonical/OpenSpec 정합성을 확인한 뒤 archive한다.
 
 ### Allowed Alternatives
 
@@ -79,7 +80,6 @@ Bookmark의 도메인 계약은 `docs/domain/objects/bookmark.md`와 Accepted AD
 
 ## Open Questions
 
-- **PROD-409**: 이미 없거나 비소유인 Bookmark 삭제를 구분 불가능한 idempotent success로 할지, 구분 불가능한 not-found 의미로 할지 확정해야 한다.
 - **PROD-410/420**: `Profile.bookmarks`와 Post의 viewer-relative Bookmark 관계의 exact GraphQL shape를 두 구현 slice가 시작되기 전에 함께 확정해야 한다. 생성 mutation과 Bookmark Node의 기본 관계 shape는 `PROD-408`에서 확정했다.
 - **PROD-420**: 기존 관례의 response-driven 갱신을 유지할지 optimistic update를 도입할지 확정해야 한다.
 - **PROD-421**: desktop sidebar 외 mobile shell에서 `/bookmarks`로 들어가는 정확한 navigation entry를 확정해야 한다.
