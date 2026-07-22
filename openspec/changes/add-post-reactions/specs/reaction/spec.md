@@ -96,11 +96,9 @@ GraphQL API는 `addReaction` mutation의 input으로 `postId: ID!`와 `type: Str
 
 ### Requirement: Owner의 멱등 Reaction 삭제
 
-Reaction Owner는 대상 Post의 현재 조회 가능성과 무관하게 자신의 Reaction을 삭제할 수 있어야 하며(MUST), 자신이 이미 제거한 동일 Reaction의 반복·동시 삭제는 상태를 바꾸지 않는 성공 결과여야 한다(MUST).
+**Authority / Provenance:** [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0012](../../../../../docs/domain/decisions/0012-post-interaction-followup-clarifications.md), [PROD-405](https://linear.app/byulmaru/issue/PROD-405/reaction을-삭제한다) — Reaction Owner는 대상 Post의 현재 조회 가능성과 무관하게 자신의 Reaction을 삭제할 수 있어야 하며(MUST), 자신이 이미 제거한 동일 Reaction의 반복·동시 삭제는 상태를 바꾸지 않는 성공 결과여야 한다(MUST).
 
 GraphQL API는 `deleteReaction` mutation의 input으로 `id: ID!`를 받아야 하며(MUST), 성공 payload는 `reactionId: ID!`를 반환해야 한다(MUST). input과 payload의 ID는 concrete `Reaction` global ID여야 하며(MUST), payload는 실제 삭제 여부를 노출해서는 안 된다(MUST NOT).
-
-**Authority / Provenance:** [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0012](../../../../../docs/domain/decisions/0012-post-interaction-followup-clarifications.md), [PROD-405](https://linear.app/byulmaru/issue/PROD-405/reaction을-삭제한다)
 
 #### Scenario: GraphQL Reaction 삭제 계약
 
