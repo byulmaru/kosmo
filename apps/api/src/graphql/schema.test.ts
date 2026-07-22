@@ -63,17 +63,25 @@ test('exposes the minimal idempotent Reaction add contract', () => {
   assert.equal(String(reaction.getFields().createdAt.type), 'DateTime!');
 });
 
-test('exposes the Bookmark creation and relationship contract', () => {
+test('exposes the Bookmark mutation and relationship contract', () => {
   const mutation = schema.getMutationType();
-  const input = schema.getType('CreateBookmarkInput');
-  const payload = schema.getType('CreateBookmarkPayload');
+  const createInput = schema.getType('CreateBookmarkInput');
+  const createPayload = schema.getType('CreateBookmarkPayload');
+  const deleteInput = schema.getType('DeleteBookmarkInput');
+  const deletePayload = schema.getType('DeleteBookmarkPayload');
   const bookmark = schema.getType('Bookmark');
 
   assert.equal(String(mutation?.getFields().createBookmark?.type), 'CreateBookmarkPayload!');
-  assert.ok(isInputObjectType(input));
-  assert.equal(String(input.getFields().postId.type), 'ID!');
-  assert.ok(isObjectType(payload));
-  assert.equal(String(payload.getFields().bookmark.type), 'Bookmark!');
+  assert.ok(isInputObjectType(createInput));
+  assert.equal(String(createInput.getFields().postId.type), 'ID!');
+  assert.ok(isObjectType(createPayload));
+  assert.equal(String(createPayload.getFields().bookmark.type), 'Bookmark!');
+  assert.equal(String(mutation?.getFields().deleteBookmark?.type), 'DeleteBookmarkPayload!');
+  assert.ok(isInputObjectType(deleteInput));
+  assert.equal(String(deleteInput.getFields().id.type), 'ID!');
+  assert.ok(isObjectType(deletePayload));
+  assert.equal(String(deletePayload.getFields().bookmarkId.type), 'ID');
+  assert.equal(String(deletePayload.getFields().post.type), 'Post');
   assert.ok(isObjectType(bookmark));
   assert.equal(String(bookmark.getFields().profile.type), 'Profile!');
   assert.equal(String(bookmark.getFields().post.type), 'Post');

@@ -21,6 +21,15 @@ enum AccountState {
   SUSPENDED
 }
 
+input AddReactionInput {
+  postId: ID!
+  type: String!
+}
+
+type AddReactionPayload {
+  reaction: Reaction!
+}
+
 input ApproveProfileFollowRequestInput {
   id: ID!
 }
@@ -77,6 +86,15 @@ type CreateProfilePayload {
 """RFC9557 formatted string"""
 scalar DateTime
 
+input DeleteBookmarkInput {
+  id: ID!
+}
+
+type DeleteBookmarkPayload {
+  bookmarkId: ID
+  post: Post
+}
+
 input DeleteProfileInput {
   id: ID!
 }
@@ -127,11 +145,13 @@ type MarkNotificationReadPayload {
 }
 
 type Mutation {
+  addReaction(input: AddReactionInput!): AddReactionPayload!
   approveProfileFollowRequest(input: ApproveProfileFollowRequestInput!): ApproveProfileFollowRequestPayload!
   cancelProfileFollowRequest(input: CancelProfileFollowRequestInput!): CancelProfileFollowRequestPayload!
   createBookmark(input: CreateBookmarkInput!): CreateBookmarkPayload!
   createPost(input: CreatePostInput!): CreatePostPayload!
   createProfile(input: CreateProfileInput!): CreateProfilePayload!
+  deleteBookmark(input: DeleteBookmarkInput!): DeleteBookmarkPayload!
   deleteProfile(input: DeleteProfileInput!): DeleteProfilePayload!
   exchangeNativeOidcSession(input: ExchangeNativeOidcSessionInput!): ExchangeNativeOidcSessionPayload!
   followProfile(input: FollowProfileInput!): FollowProfilePayload!
@@ -315,6 +335,12 @@ type Query {
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
   profileByHandle(handle: String!): Profile
+}
+
+type Reaction implements Node {
+  createdAt: DateTime!
+  id: ID!
+  type: String!
 }
 
 input RejectProfileFollowRequestInput {
