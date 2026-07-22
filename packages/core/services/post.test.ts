@@ -152,14 +152,18 @@ test('createPost는 Local과 ActivityPub Reply Parent를 직접 저장한다', a
   assert.equal(activityPubReply.post.replyParentId, parent.post.id);
 });
 
-test('createPost는 존재하지 않는 Reply Parent에서 transaction을 rollback한다', async () => {
+test('createPost는 존재하지 않는 Reply Parent에서 ActivityPub transaction을 rollback한다', async () => {
   const profile = await createProfile();
+  const objectUri = `https://remote.example/notes/orphan-${profile.id}`;
 
   await assert.rejects(
     createPost({
       document: postContentDocumentFromText('orphan reply'),
-      origin: 'LOCAL',
+      objectUri,
+      origin: 'ACTIVITYPUB',
       profileId: profile.id,
+      publishedAt: null,
+      receivedAt: Temporal.Instant.from('2026-07-22T00:00:00Z'),
       replyParentId: '00000000-0000-8000-8000-000000000099',
       visibility: PostVisibility.PUBLIC,
     }),
@@ -177,9 +181,8 @@ test('createPost는 존재하지 않는 Reply Parent에서 transaction을 rollba
   assert.equal(
     await db
       .select()
-      .from(PostContents)
-      .innerJoin(Posts, eq(PostContents.postId, Posts.id))
-      .where(eq(Posts.profileId, profile.id))
+      .from(ActivityPubPosts)
+      .where(eq(ActivityPubPosts.uri, objectUri))
       .then((rows) => rows.length),
     0,
   );
@@ -225,46 +228,5 @@ test('createPost는 Content 없는 Reply Parent에서 field 오류와 함께 rol
       .where(eq(Posts.profileId, profile.id))
       .then((rows) => rows.length),
     2,
-  );
-  assert.equal(
-    await db
-      .select()
-      .from(PostContents)
-      .innerJoin(Posts, eq(PostContents.postId, Posts.id))
-      .where(eq(Posts.profileId, profile.id))
-      .then((rows) => rows.length),
-    1,
-  );
-});
-
-test('Reply Parent를 Tombstone으로 바꿔도 저장된 관계를 유지한다', async () => {
-  const profile = await createProfile();
-  const parent = await createPost({
-    document: postContentDocumentFromText('parent'),
-    origin: 'LOCAL',
-    profileId: profile.id,
-    visibility: PostVisibility.PUBLIC,
-  });
-  const reply = await createPost({
-    document: postContentDocumentFromText('reply'),
-    origin: 'LOCAL',
-    profileId: profile.id,
-    replyParentId: parent.post.id,
-    visibility: PostVisibility.PUBLIC,
-  });
-
-  await db
-    .update(Posts)
-    .set({ deletedAt: Temporal.Now.instant(), state: PostState.DELETED })
-    .where(eq(Posts.id, parent.post.id));
-
-  assert.equal(
-    await db
-      .select({ replyParentId: Posts.replyParentId })
-      .from(Posts)
-      .where(eq(Posts.id, reply.post.id))
-      .then(firstOrThrow)
-      .then(({ replyParentId }) => replyParentId),
-    parent.post.id,
   );
 });

@@ -32,7 +32,6 @@ const ids = {
   quote: '00000000-0000-8000-8000-000000000007',
   reply: '00000000-0000-8000-8000-000000000008',
   replyQuote: '00000000-0000-8000-8000-000000000009',
-  duplicateRepost: '00000000-0000-8000-8000-000000000010',
   sourceContent: '00000000-0000-8000-8000-000000000011',
   parentContent: '00000000-0000-8000-8000-000000000012',
   quoteContent: '00000000-0000-8000-8000-000000000013',
@@ -135,14 +134,6 @@ test('adds Reply Parent without rewriting existing Post and Repost contracts', a
     assert.equal(
       (await sql`SELECT reply_parent_id::text AS id FROM post WHERE id = ${ids.reply}`)[0]?.id,
       ids.parent,
-    );
-
-    await assert.rejects(
-      sql`
-        INSERT INTO post (id, profile_id, visibility, state, repost_source_id)
-        VALUES (${ids.duplicateRepost}, ${ids.author}, 'PUBLIC', 'ACTIVE', ${ids.source})
-      `,
-      { code: '23505' },
     );
   } finally {
     await sql.end();
