@@ -35,7 +35,7 @@ const CreateBookmarkMutation = graphql`
 const DeleteBookmarkMutation = graphql`
   mutation BookmarkActionDeleteBookmarkMutation($id: ID!) {
     deleteBookmark(input: { id: $id }) {
-      bookmarkId @deleteRecord
+      bookmarkId
       post {
         id
         viewerBookmark {
@@ -72,6 +72,20 @@ export function BookmarkAction({ post: postKey }: { post: BookmarkAction_post$ke
     if (bookmark) {
       commitDelete({
         ...callbacks,
+        updater: (store) => {
+          const payload = store.getRootField('deleteBookmark');
+          const deletedBookmarkId = payload?.getValue('bookmarkId');
+          const postRecord = store.get(post.id);
+          const currentBookmark = postRecord?.getLinkedRecord('viewerBookmark');
+
+          if (typeof deletedBookmarkId === 'string') {
+            store.delete(deletedBookmarkId);
+          }
+
+          if (currentBookmark?.getDataID() === bookmark.id) {
+            postRecord?.setValue(null, 'viewerBookmark');
+          }
+        },
         variables: { id: bookmark.id },
       });
       return;

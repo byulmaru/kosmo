@@ -471,6 +471,25 @@ export const BookmarkDeleteWhenPostResponseIsNull: Story = {
   render: () => <BookmarkedActionDetailStory />,
 };
 
+export const BookmarkIdempotentDeleteClearsConfirmedState: Story = {
+  parameters: {
+    relay: {
+      mutationResponse: {
+        deleteBookmark: {
+          bookmarkId: null,
+          post: null,
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '북마크 해제' }));
+    await expect(canvas.findByRole('button', { name: '북마크 저장' })).resolves.toBeVisible();
+  },
+  render: () => <BookmarkedActionDetailStory />,
+};
+
 export const BookmarkPendingKeepsConfirmedState: Story = {
   parameters: { relay: { mutationLoading: true } },
   play: async ({ canvasElement }) => {
