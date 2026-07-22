@@ -516,6 +516,24 @@ export const BookmarkFailureKeepsConfirmedStateAndRetry: Story = {
   render: () => <BookmarkActionListStory />,
 };
 
+export const BookmarkDeleteGraphQLErrorKeepsConfirmedStateAndRetry: Story = {
+  parameters: {
+    relay: {
+      mutationGraphQLErrors: ['북마크 해제 실패'],
+      mutationResponse: { deleteBookmark: null },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '북마크 해제' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '북마크 상태를 변경하지 못했습니다. 다시 시도해주세요.',
+    );
+    await expect(canvas.getByRole('button', { name: '북마크 해제' })).toBeEnabled();
+  },
+  render: () => <BookmarkedActionDetailStory />,
+};
+
 export const BookmarkHiddenWithoutSelectedProfile: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);

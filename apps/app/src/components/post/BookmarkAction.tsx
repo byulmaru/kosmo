@@ -74,7 +74,11 @@ export function BookmarkAction({ post: postKey }: { post: BookmarkAction_post$ke
         ...callbacks,
         updater: (store) => {
           const payload = store.getRootField('deleteBookmark');
-          const deletedBookmarkId = payload?.getValue('bookmarkId');
+          if (!payload) {
+            return;
+          }
+
+          const deletedBookmarkId = payload.getValue('bookmarkId');
           const postRecord = store.get(post.id);
           const currentBookmark = postRecord?.getLinkedRecord('viewerBookmark');
 
