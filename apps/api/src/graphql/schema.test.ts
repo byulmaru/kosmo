@@ -88,6 +88,20 @@ test('exposes the Bookmark mutation and relationship contract', () => {
   assert.equal(String(bookmark.getFields().createdAt.type), 'DateTime!');
 });
 
+test('exposes the ID-based idempotent Reaction delete contract', () => {
+  const mutation = schema.getMutationType();
+  const input = schema.getType('DeleteReactionInput');
+  const payload = schema.getType('DeleteReactionPayload');
+
+  assert.equal(String(mutation?.getFields().deleteReaction?.type), 'DeleteReactionPayload!');
+  assert.ok(isInputObjectType(input));
+  assert.equal(String(input.getFields().id.type), 'ID!');
+  assert.ok(isObjectType(payload));
+  assert.equal(String(payload.getFields().reactionId.type), 'ID!');
+  assert.equal(payload.getFields().reaction, undefined);
+  assert.equal(payload.getFields().deleted, undefined);
+});
+
 test('exposes the profile follow request lifecycle contract', () => {
   const profile = schema.getType('Profile');
   const request = schema.getType('ProfileFollowRequest');
@@ -217,6 +231,31 @@ test('exposes the typed Notification Read mutation payload', () => {
   assert.ok(isObjectType(payload));
   assert.equal(String(payload.getFields().notification.type), 'Notification!');
   assert.equal(String(payload.getFields().recipientProfile.type), 'Profile!');
+});
+
+test('exposes the private Bookmark Node and Profile connection contract', () => {
+  const bookmark = schema.getType('Bookmark');
+  const profile = schema.getType('Profile');
+  const connection = schema.getType('BookmarkConnection');
+  const edge = schema.getType('BookmarkConnectionEdge');
+
+  assert.ok(isObjectType(bookmark));
+  assert.ok(isObjectType(profile));
+  assert.deepEqual(
+    bookmark.getInterfaces().map(({ name }) => name),
+    ['Node'],
+  );
+  assert.equal(String(bookmark.getFields().createdAt.type), 'DateTime!');
+  assert.equal(String(bookmark.getFields().post.type), 'Post');
+  assert.equal(String(bookmark.getFields().profile.type), 'Profile!');
+  assert.equal(bookmark.getFields().postId, undefined);
+  assert.equal(String(profile.getFields().bookmarks?.type), 'BookmarkConnection!');
+
+  assert.ok(isObjectType(connection));
+  assert.ok(isObjectType(edge));
+  assert.equal(String(connection.getFields().pageInfo.type), 'PageInfo!');
+  assert.equal(String(edge.getFields().cursor.type), 'String!');
+  assert.equal(String(edge.getFields().node.type), 'Bookmark!');
 });
 
 test('rejects legacy raw UUID and unknown typename Node IDs', async () => {

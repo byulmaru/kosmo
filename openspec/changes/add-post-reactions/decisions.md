@@ -47,11 +47,13 @@
 ### Reaction mutation은 database 제약으로 멱등성을 보장한다
 
 - Decision Date: 2026-07-20
-- Status: Accepted
+- Decision Class: Implementation Choice
+- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0012](../../../docs/domain/decisions/0012-post-interaction-followup-clarifications.md), [PROD-404](https://linear.app/byulmaru/issue/PROD-404/reaction을-추가한다), [PROD-405](https://linear.app/byulmaru/issue/PROD-405/reaction을-삭제한다)
+- Status: Active
 - Context / Problem: 반복·동시 요청이 중복 Reaction이나 불필요한 실패를 만들 수 있다.
-- Decision Outcome: add는 unique conflict를 원자적으로 처리하고 기존 Reaction을 성공 결과로 반환한다. delete는 Owner의 현재 관계를 원자적으로 제거하며 자신이 이미 제거한 같은 조합의 재시도는 성공 no-op으로 처리한다. 명시적 pessimistic lock을 사용하지 않는다.
+- Decision Outcome: add는 unique conflict를 원자적으로 처리하고 기존 Reaction을 성공 결과로 반환한다. delete는 Owner의 현재 관계를 원자적으로 제거하며 자신이 이미 제거한 같은 Reaction ID의 재시도는 성공 no-op으로 처리한다. 명시적 pessimistic lock을 사용하지 않는다.
 - Alternatives Considered: check-then-write만 사용하는 방식은 race가 있고, 명시적 row/table/advisory lock은 복구 가능한 social interaction에 과도하다.
-- Consequences: service 결과는 새로 생성·실제 삭제 여부를 구분해 Notification side effect를 한 번만 시작할 수 있어야 한다.
+- Consequences: 실제 caller가 생기기 전에는 service 결과에 신규 생성·실제 삭제 여부를 선제 노출하지 않는다. Notification side effect를 연결하는 PROD-413·419가 필요한 결과 확장과 실패 처리를 함께 검증한다.
 - Confirmation / Follow-up: PROD-404·405의 database-backed concurrency test에서 단일 row와 반복 결과를 검증한다.
 
 ### count와 Profile 목록의 visibility 책임을 분리한다
@@ -124,9 +126,20 @@
 - Consequences: Account 또는 membership 변경과 core transaction 사이에는 context snapshot 기준의 짧은 시간차가 있을 수 있다. commit 시점의 membership 재검증이 필요해지면 transport identity를 core에 다시 결합하지 않고 entry point의 transaction-aware 검증으로 별도 설계한다.
 - Confirmation / Follow-up: core test는 Local/Profile/Instance/Post/Type/멱등성에 집중하고, API integration test는 비활성 Account와 membership 부재가 `PERMISSION_DENIED`로 거부되는지 검증한다. PROD-405 등 후속 mutation도 같은 책임 경계를 따른다.
 
+### Reaction 삭제는 관계의 global ID로 식별한다
+
+- Decision Date: 2026-07-21
+- Decision Class: Implementation Choice
+- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0012](../../../docs/domain/decisions/0012-post-interaction-followup-clarifications.md), [PROD-405](https://linear.app/byulmaru/issue/PROD-405/reaction을-삭제한다)
+- Status: Active
+- Context / Problem: PROD-405는 현재 Reaction Owner를 검증하면서 이미 제거한 관계의 반복·동시 삭제를 성공시켜야 한다. Profile/Post/Type 조합을 input으로 사용하면 오래된 삭제 재시도가 같은 조합으로 다시 생성된 새 Reaction까지 제거하는 ABA 문제가 생긴다.
+- Decision Outcome: GraphQL은 `deleteReaction(input: { id: ID! })`을 제공하고 concrete `Reaction` global ID만 허용한다. 성공 payload는 입력과 같은 `DeleteReactionPayload.reactionId: ID!`를 반환하며 실제 삭제 여부를 공개하지 않는다. service는 유효한 actor를 먼저 검증하고, 현재 행이 타인 소유면 `PERMISSION_DENIED`로 거부하며, Owner 행은 ID와 actor를 조건으로 삭제한다. 이미 없는 ID는 같은 ID를 반환하는 성공 no-op이다. Post visibility는 조회하지 않는다.
+- Alternatives Considered: `(postId, type)` input은 actor의 현재 조합만 주소화하지만 타인 소유 행 거부를 표현하지 못하고 오래된 요청의 ABA 삭제를 허용한다. soft delete나 idempotency ledger는 과거 Owner를 증명할 수 있지만 Reaction의 존재 기반 lifecycle과 현재 저장 범위를 확장한다.
+- Consequences: 존재하지 않는 Reaction ID의 성공은 과거 소유권을 증명하지 않지만 어떤 현재 행도 변경하지 않는다. 삭제 뒤 같은 조합으로 다시 생성된 Reaction은 새 ID를 가지므로 이전 요청에서 보호된다. Notification cleanup 연결과 필요한 service 결과 확장은 실제 caller를 구현하는 PROD-419가 소유한다.
+- Confirmation / Follow-up: GraphQL schema/payload, Owner·non-owner·unavailable Post, 이미 없는 ID, 반복·동시 요청과 삭제 후 같은 조합 재생성을 core/API test로 검증한다.
+
 ## Remaining Decisions
 
-- PROD-405: delete input/payload와 이미 제거한 관계를 식별할 stable key
 - PROD-407: Profile connection ordering·cursor와 Profile row 표시 범위
 - PROD-417/418: zero-count Type 공급 API, selector·Profile 목록 UX, optimistic update 사용 여부
 - PROD-413: multi-kind Notification visible projection의 `UNION ALL` 기본안과 `LEFT JOIN` 대안 중 최종 구현, PROD-277 Read/navigation 순서

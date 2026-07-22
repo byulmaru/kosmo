@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 `proposal.md`, 네 capability의 delta specs, `design.md`, canonical Bookmark 문서와 `PROD-391` 부모/자식 이슈 구조를 반영한다. 초기 `PROD-396` 저장 slice에서 확정한 선택과 현재 `PROD-408` 생성 slice 및 후속 API·client 구현 전에 확정할 선택을 구분한다. 저장, pagination과 공용 route에 관한 제안은 2026-07-20 OpenSpec Gate에서 승인되었다.
+이 기록은 `proposal.md`, 네 capability의 delta specs, `design.md`, canonical Bookmark 문서와 `PROD-391` 부모/자식 이슈 구조를 반영한다. `PROD-396` 저장 slice와 `PROD-408` 생성 slice는 완료됐고, `PROD-410` 목록 slice의 공개 GraphQL 경계와 공용 Post 조회 정책 위임을 확정한다. 기존 기록의 legacy `Accepted` 상태는 해당 결정을 실제로 수정하거나 대체할 때 새 형식으로 전환한다.
 
 ## Decision Records
 
@@ -110,13 +110,36 @@
 - Consequences: client는 nullable ID로 실제 삭제 여부를 구분하되 null 이유를 추론할 수 없다. Target Post visibility는 삭제 권한을 막지 않으며 `post` loader가 현재 가시성을 적용한다. 원자적 조건부 `DELETE ... RETURNING`으로 경쟁 winner 하나만 ID를 얻고, actor 권한 재검증도 같은 statement에 포함해 별도 비관적 lock은 사용하지 않는다. 생성 persistence action은 검증된 ID만 받는 기존 책임을 유지하고, 삭제 persistence action만 권한 상실 경합을 닫는 데 필요한 Account ID를 추가로 받는다.
 - Confirmation / Follow-up: core/API 검증에서 Owner 성공, missing·non-owner의 동일 payload, 순차·동시 한 요청만 deleted ID 반환, 숨겨진 Target의 `post: null`, transaction rollback과 검증 직후 Profile 비활성화·membership 제거 경합을 확인한다.
 
+### PROD-410 Owner-scoped GraphQL 조회 shape
+
+- Decision Date: 2026-07-21
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/bookmark.md`, `PROD-391`, `PROD-410`
+- Status: Active
+- Context / Problem: private Bookmark 목록과 개별 관계를 Relay Node로 제공하면서 Owner 격리, Target Post 가시성, pagination과 global ID 우회 방지를 하나의 공개 GraphQL 계약으로 고정해야 한다.
+- Decision Outcome: 현재 선택된 Profile의 `Profile.bookmarks`를 owner-only connection으로 제공하고 `Bookmark`를 Owner만 조회할 수 있는 Relay Node로 제공한다. 다른 Profile의 connection 접근은 `PERMISSION_DENIED`, 비Owner의 Bookmark Node 조회는 `null`로 정규화한다. Owner가 조회한 `Bookmark.post`는 nullable이며 숨겨진 Target은 `null`을 반환하고, 목록에서는 같은 Bookmark edge를 cursor·order·limit 전에 제외한다.
+- Alternatives Considered: top-level viewer Bookmark query — Profile 소유 관계와 Relay cache identity가 약해 채택하지 않는다. 비Owner 목록에 빈 connection 반환 — 권한 실패와 실제 empty 결과를 혼합해 채택하지 않는다. 숨겨진 Target 때문에 Bookmark Node 자체를 숨김 — Owner의 관계 관리 경로를 막아 채택하지 않는다.
+- Consequences: connection field, Bookmark Node loader와 `Bookmark.post`가 각각 Owner와 Target 가시성 경계를 일관되게 적용해야 한다. global ID 입력으로 owner 범위를 우회할 수 없어야 한다.
+- Confirmation / Follow-up: `PROD-410` API 검증에서 Owner/non-Owner connection, Bookmark Node ID 우회, 숨겨진 Target의 nullable `post`와 목록 edge 제외를 확인한다.
+
+### PROD-410 공용 Post 조회 정책 위임과 단계적 적용
+
+- Decision Date: 2026-07-21
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/bookmark.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-391`, `PROD-410`
+- Status: Active
+- Context / Problem: Bookmark가 Target Post 조회 가능성을 독자적으로 재구현하면 Post Node와 목록의 정책이 어긋난다. 동시에 Block·Mentioned Profiles·Domain Block 등 일부 canonical Post 정책은 현재 공용 데이터 모델과 predicate에 아직 도입되지 않았다.
+- Decision Outcome: Bookmark connection과 `Bookmark.post`는 현재 공용 Post 조회 predicate의 판정을 사용하고 Bookmark 전용 가시성 subset을 만들지 않는다. `PROD-410`은 현재 도달 가능한 ACTIVE Post, 작성자 Profile/Instance 상태, Public/Unlisted, 작성자 본인과 Followers Only follower 조건을 검증한다. 아직 공용 계층에 없는 정책은 이 이슈에서 새로 구현하지 않으며, 후속 공용 predicate 확장을 Bookmark 조회가 자동으로 상속한다. 미구현 정책을 지원 완료로 주장하지 않는다.
+- Alternatives Considered: Bookmark 전용 predicate 복제 — 정책 drift를 만들어 채택하지 않는다. 누락된 Post 정책과 데이터 모델을 `PROD-410`에 포함 — 승인된 이슈 범위를 확장하므로 채택하지 않는다. 현재 helper 동작을 전체 canonical 정책 충족으로 간주 — 검증되지 않은 지원을 주장하므로 채택하지 않는다.
+- Consequences: pagination query와 nullable Target 조회는 같은 공용 판정을 공유해야 한다. 현재 API 검증은 도달 가능한 정책과 위임 경계를 증명하고, 미래 공용 정책 검증은 해당 정책 소유 이슈와 부모 통합 검증이 담당한다.
+- Confirmation / Follow-up: `PROD-410` 검증에서 공용 predicate가 숨긴 최신 row 뒤의 조회 가능한 row로 page limit을 채우고, 숨김·관계 유지·재노출과 Node/connection 경계를 확인한다.
+
 ## Remaining Decisions
 
-- **PROD-410/420 — GraphQL 목록·viewer-relative shape:** `Profile.bookmarks`와 Post의 viewer-relative Bookmark 관계를 기본안으로 검토한다. 생성 mutation과 Bookmark Node의 기본 관계 shape는 확정됐으며, 목록 connection과 Post 상태 field는 두 이슈 구현 전에 함께 확정한다.
 - **PROD-420 — mutation feedback:** 기존 client 관례인 response-driven 갱신을 기본안으로 검토한다. Relay optimistic update를 선택하면 actor 전환 race와 rollback을 추가 검증한다.
 - **PROD-421 — mobile navigation entry:** `/bookmarks` route는 고정하되 sidebar 외 mobile shell에서의 정확한 진입 control은 구현 전에 확정한다.
 
-위 Remaining Decisions는 현재 `PROD-408` 생성 mutation과 `PROD-409` 삭제 mutation 계약을 바꾸지 않는다. 각 owner 이슈에 착수하기 전 관련 결정을 `Decision Records`에 추가하고 사용자 승인을 받아야 한다.
+위 Remaining Decisions는 `PROD-408`의 생성 mutation, `PROD-409`의 삭제 mutation, `PROD-410`의 owner connection·Bookmark Node·nullable Target·pagination 계약을 바꾸지 않는다. 각 owner 이슈에 착수하기 전 관련 결정을 `Decision Records`에 추가하고 사용자 승인을 받아야 한다.
 
 ## Superseded Decisions
 

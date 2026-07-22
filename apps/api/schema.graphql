@@ -48,6 +48,16 @@ type Bookmark implements Node {
   profile: Profile!
 }
 
+type BookmarkConnection {
+  edges: [BookmarkConnectionEdge!]!
+  pageInfo: PageInfo!
+}
+
+type BookmarkConnectionEdge {
+  cursor: String!
+  node: Bookmark!
+}
+
 input CancelProfileFollowRequestInput {
   id: ID!
 }
@@ -103,6 +113,14 @@ type DeleteProfilePayload {
   profileId: ID!
 }
 
+input DeleteReactionInput {
+  id: ID!
+}
+
+type DeleteReactionPayload {
+  reactionId: ID!
+}
+
 input ExchangeNativeOidcSessionInput {
   code: String!
   codeVerifier: String!
@@ -153,6 +171,7 @@ type Mutation {
   createProfile(input: CreateProfileInput!): CreateProfilePayload!
   deleteBookmark(input: DeleteBookmarkInput!): DeleteBookmarkPayload!
   deleteProfile(input: DeleteProfileInput!): DeleteProfilePayload!
+  deleteReaction(input: DeleteReactionInput!): DeleteReactionPayload!
   exchangeNativeOidcSession(input: ExchangeNativeOidcSessionInput!): ExchangeNativeOidcSessionPayload!
   followProfile(input: FollowProfileInput!): FollowProfilePayload!
   markNotificationRead(input: MarkNotificationReadInput!): MarkNotificationReadPayload!
@@ -233,6 +252,7 @@ enum PostVisibility {
 
 type Profile implements Node {
   bio: String
+  bookmarks(after: String, before: String, first: Int, last: Int): BookmarkConnection!
   createdAt: DateTime!
   displayName: String!
   followPolicy: ProfileFollowPolicy!
