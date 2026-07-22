@@ -82,6 +82,44 @@ test('UNRESPONSIVE remote profile은 Web에서 follow와 unfollow할 수 있다'
   await expect(followersLink.getByText('0', { exact: true })).toBeVisible();
 });
 
+test('열린 팔로잉 목록은 unfollow 성공 후 기존 행을 유지한다', async ({ context, page }) => {
+  const domain = 'e2e-retained-row.remote.example';
+  const viewer = await createE2ESession({ handle: 'e2e-retained-row-viewer' });
+  const remote = await createE2ERemoteProfile({
+    displayName: '행 유지 대상',
+    domain,
+    handle: 'e2e-retained-row-target',
+    instanceState: InstanceState.UNRESPONSIVE,
+  });
+  await createE2EFollow({
+    followeeProfileId: remote.id,
+    followerProfileId: viewer.profile!.id,
+  });
+
+  await setE2ESessionCookie(context, viewer.token);
+  await page.goto(`/@${viewer.profile!.handle}/following`);
+
+  await expect(page.getByText('행 유지 대상', { exact: true })).toBeVisible();
+  const unfollowResponse = waitForGraphQLOperation(page, 'FollowButtonUnfollowProfileMutation');
+  await page.getByRole('button', { name: '팔로잉' }).click();
+
+  await expect(page.getByRole('button', { name: '팔로우' })).toBeVisible();
+  await unfollowResponse;
+  await expect(page.getByText('행 유지 대상', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '팔로우' })).toBeEnabled();
+  expect(
+    await db
+      .select()
+      .from(ProfileFollows)
+      .where(
+        and(
+          eq(ProfileFollows.followerProfileId, viewer.profile!.id),
+          eq(ProfileFollows.followeeProfileId, remote.id),
+        ),
+      ),
+  ).toHaveLength(0);
+});
+
 test('APPROVAL_REQUIRED remote follow request와 cancel은 count를 변경하지 않는다', async ({
   context,
   page,
