@@ -134,9 +134,20 @@
 - Consequences: pagination query와 nullable Target 조회는 같은 공용 판정을 공유해야 한다. 현재 API 검증은 도달 가능한 정책과 위임 경계를 증명하고, 미래 공용 정책 검증은 해당 정책 소유 이슈와 부모 통합 검증이 담당한다.
 - Confirmation / Follow-up: `PROD-410` 검증에서 공용 predicate가 숨긴 최신 row 뒤의 조회 가능한 row로 page limit을 채우고, 숨김·관계 유지·재노출과 Node/connection 경계를 확인한다.
 
+### Post viewerBookmark 관계와 응답 기반 action feedback
+
+- Decision Date: 2026-07-22
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/bookmark.md`, `PROD-420` 본문과 2026-07-22 사용자 승인
+- Status: Active
+- Context / Problem: Post 목록·상세가 현재 선택 Profile의 Bookmark 관계와 삭제에 필요한 ID를 알아야 하지만 기존 Post GraphQL 계약에는 actor-relative Bookmark 상태가 없다. Mutation feedback도 즉시 optimistic 상태를 보여줄지 서버가 확정한 응답 뒤에 반영할지 열려 있었다.
+- Decision Outcome: GraphQL은 현재 `usingProfile`이 해당 Post에 소유한 Bookmark를 nullable `Post.viewerBookmark` 관계로 제공한다. 관계가 없거나 실행 가능한 선택 Profile이 없으면 `null`을 반환한다. 클라이언트는 optimistic state를 만들지 않고 create/delete 응답으로 요청 당시 actor store의 `viewerBookmark`를 정규화한다. Pending 동안 마지막 확정 상태를 유지하고 control을 비활성화하며, GraphQL 또는 network 오류가 발생하면 상태를 바꾸지 않고 한국어 오류와 재시도 경로를 제공한다.
+- Alternatives Considered: `Post.viewerState.bookmark` wrapper — 현재 Post에 다른 viewer-relative 묶음 계약이 없고 단일 관계를 위한 wrapper가 되어 채택하지 않는다. `isBookmarked` boolean — 삭제에 필요한 Bookmark ID와 관계 Node의 cache identity를 잃어 채택하지 않는다. Relay optimistic update — 즉시 반응은 제공하지만 selected Profile 전환 직전 rollback과 늦은 callback의 actor race 검증 비용이 커 현재 범위에서는 채택하지 않는다.
+- Consequences: Post 목록·상세 fragment는 `viewerBookmark { id }`를 선택하고, create/delete mutation 응답은 영향받은 Post의 같은 필드를 반환해 Relay normalized store를 갱신해야 한다. 삭제 대상이 이미 사라져 payload Post가 `null`인 멱등 성공도 요청 당시 Post의 관계를 응답 완료 뒤 `null`로 정규화해야 한다. Profile 전환은 새 Environment/Store에서 같은 필드를 다시 조회한다.
+- Confirmation / Follow-up: `PROD-420` component/API 검증에서 저장 전·후·해제, pending 중복 방지, 실패 시 확정 상태 유지, 멱등 삭제, Profile 전환 격리와 목록 navigation 경계를 확인한다.
+
 ## Remaining Decisions
 
-- **PROD-420 — mutation feedback:** 기존 client 관례인 response-driven 갱신을 기본안으로 검토한다. Relay optimistic update를 선택하면 actor 전환 race와 rollback을 추가 검증한다.
 - **PROD-421 — mobile navigation entry:** `/bookmarks` route는 고정하되 sidebar 외 mobile shell에서의 정확한 진입 control은 구현 전에 확정한다.
 
 위 Remaining Decisions는 `PROD-408`의 생성 mutation, `PROD-409`의 삭제 mutation, `PROD-410`의 owner connection·Bookmark Node·nullable Target·pagination 계약을 바꾸지 않는다. 각 owner 이슈에 착수하기 전 관련 결정을 `Decision Records`에 추가하고 사용자 승인을 받아야 한다.

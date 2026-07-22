@@ -43,7 +43,7 @@ Bookmark의 도메인 계약은 `docs/domain/objects/bookmark.md`와 Accepted AD
 2. **PROD-408 생성**: GraphQL mutation이 transaction 안에서 session Account 활성 상태, 현재 `usingProfile`의 membership·상태·locality와 Target Post 가시성을 모두 검증한다. 검증된 `profileId`·`postId`와 transaction connection을 core service에 전달하고, core service는 Account나 인증 정보를 조회하지 않은 채 Bookmark insert와 unique 경쟁 정규화만 수행한다. 같은 조합이 이미 있으면 기존 Bookmark를 반환하며, payload의 Bookmark Node로 Owner Profile·Target Post 관계를 정규화한다.
 3. **PROD-409 삭제**: `deleteBookmark(input: { id })`는 현재 `usingProfile`, session Account와 Bookmark ID를 함께 조건으로 원자적 삭제를 수행한다. Resolver의 사전 권한 검증 뒤 Profile 비활성화나 membership 제거가 경합해도 삭제 statement가 Account/Profile membership과 Account·Profile·local Instance의 활성 상태를 다시 확인하며 별도 비관적 lock은 추가하지 않는다. 첫 Owner 삭제는 삭제된 Bookmark ID와 현재 조회 가능한 Target Post를 반환하고, 숨겨진 Target이면 Post를 `null`로 반환한다. missing·non-owner·반복 또는 동시 삭제 loser와 검증 직후 actor 권한이 사라진 요청은 같은 `bookmarkId: null`, `post: null` 성공으로 정규화한다.
 4. **PROD-410 목록**: 현재 선택된 Profile의 `Profile.bookmarks` owner-only connection query에서 Bookmark와 Target Post·작성자 Profile·Instance를 결합하고 기존 Post 가시성 predicate를 SQL `WHERE`에 적용한 뒤 UUIDv7 ID-only cursor, order, limit을 적용한다. `Bookmark`는 Owner만 조회하는 Relay Node로 두고, Owner가 숨겨진 Target의 관계도 관리할 수 있도록 `Bookmark.post`는 nullable로 둔다. 개별 Node의 숨겨진 Target은 `null`, 목록의 같은 Bookmark edge는 결과 제외로 처리한다. 다른 Profile의 connection은 일반적인 권한 거부, 비Owner Node 조회는 `null`로 정규화한다.
-5. **PROD-420 action UI**: 공용 Post fragment에 viewer-relative Bookmark 상태를 포함하고 재사용 가능한 action component를 `PostListItem`과 Post detail 표면에 둔다. 현재 프로젝트 관례인 응답 기반 갱신, pending disable, 실패 후 확정 상태 유지 방식을 기본으로 하며, mutation 응답으로 현재 actor store만 정규화한다.
+5. **PROD-420 action UI**: 공용 Post fragment에 nullable `viewerBookmark { id }`를 포함하고 재사용 가능한 action component를 `PostListItem`과 Post detail 표면에 둔다. Optimistic state를 만들지 않는 응답 기반 갱신, pending disable, 실패 후 확정 상태 유지 방식을 사용하며, create/delete 응답으로 요청 당시 actor store의 Post 관계만 정규화한다. 멱등 삭제 응답에서 Post가 `null`이면 요청 당시 Post의 `viewerBookmark`를 응답 완료 뒤 좁은 updater로 비운다.
 6. **PROD-421 목록 UI**: `/bookmarks` route의 selected Profile fragment에 `@refetchable`·`@connection` pagination 계약을 두고 loading·error·empty·load-more를 기존 connection component 관례와 맞춘다. 선택 Profile이 없으면 query를 실행하지 않고, Profile 전환 뒤에는 새 connection/cursor를 사용한다. 현재 `/menu` placeholder인 사이드바 Bookmark 항목을 canonical route로 연결하고 mobile 진입 경계도 함께 검증한다.
 7. **PROD-391 통합**: 저장 → 생성 → action/목록 반영 → Target 숨김·재노출 → 삭제를 하나의 사용자 흐름으로 검증하고, 모든 자식의 검증 증거와 canonical/OpenSpec 정합성을 확인한 뒤 archive한다.
 
@@ -51,8 +51,7 @@ Bookmark의 도메인 계약은 `docs/domain/objects/bookmark.md`와 Accepted AD
 
 - `createBookmark(input: { postId })`, `CreateBookmarkPayload.bookmark`, `deleteBookmark(input: { id })`와 nullable 삭제 payload는 확정 계약이다.
 - `PROD-410`의 owner connection·Node·nullable Target shape는 공개 계약으로 확정됐다. 이를 바꾸는 대안은 먼저 Linear와 specs·decisions를 갱신한 경우에만 허용한다.
-- 아직 열려 있는 Post의 viewer-relative Bookmark 관계는 owner 격리와 Relay 정규화를 동일하게 충족하는 다른 shape도 가능하며, 관련 구현 slice 전에 `decisions.md`에 확정해야 한다.
-- response-driven action 대신 Relay optimistic update와 자동 rollback을 사용할 수 있다. selected Profile actor store 격리, pending 중 중복 방지와 실패 복구를 증명하고 구현 전에 deferred decision을 확정해야 한다.
+- `Post.viewerBookmark`와 response-driven feedback을 다른 공개 GraphQL shape 또는 optimistic update로 바꾸려면 `PROD-420`의 사용자 승인을 다시 받고 specs·decisions를 먼저 갱신해야 한다.
 - action의 정확한 시각적 배치는 Post 목록·상세의 독립 control 계약과 공통 Action Bar 제외 범위를 지키는 한 조정할 수 있다.
 - Target Post reverse lookup이나 정리 경로가 실제로 필요해지면 `postId` 보조 index를 추가할 수 있다. 현재 개인 최신순 조회만으로는 미리 추가하지 않는다.
 
@@ -85,6 +84,4 @@ Bookmark의 도메인 계약은 `docs/domain/objects/bookmark.md`와 Accepted AD
 
 ## Open Questions
 
-- **PROD-420**: 확정된 생성 mutation과 owner-only Bookmark 조회 계약을 전제로 Post의 viewer-relative Bookmark 관계의 exact GraphQL shape를 확정해야 한다.
-- **PROD-420**: 기존 관례의 response-driven 갱신을 유지할지 optimistic update를 도입할지 확정해야 한다.
 - **PROD-421**: desktop sidebar 외 mobile shell에서 `/bookmarks`로 들어가는 정확한 navigation entry를 확정해야 한다.

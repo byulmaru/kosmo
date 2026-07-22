@@ -176,10 +176,20 @@ Owner가 개별 Bookmark Node를 조회할 때 `Bookmark.post`는 nullable이어
 
 **Authority / Provenance:** `docs/domain/objects/bookmark.md`, `PROD-391`, `PROD-420` — 클라이언트는 조회 가능한 Post에 대해 현재 선택된 Profile의 Bookmark 상태를 표시하고 저장 또는 해제 동작을 제공해야 한다(MUST). 동작 중에는 같은 의도의 중복 요청을 막아야 하며(MUST), 실패하면 직전의 확정 상태를 복구하고 재시도 가능한 오류를 알려야 한다(MUST). 선택 Profile이 바뀌면 이전 Profile의 상태를 새 Profile의 상태로 재사용하지 않아야 한다(MUST NOT).
 
+GraphQL은 현재 `usingProfile`이 소유한 Bookmark 관계를 nullable `Post.viewerBookmark`로 제공해야 한다(MUST). 현재 actor가 해당 Post를 저장하지 않았거나 실행 가능한 선택 Profile이 없으면 `viewerBookmark`는 `null`이어야 한다(MUST). 관계가 있으면 삭제 mutation 입력과 Relay 정규화에 사용할 Bookmark Node ID를 제공해야 한다(MUST).
+
+클라이언트는 생성·삭제 mutation의 서버 응답이 돌아온 뒤 `Post.viewerBookmark`를 갱신하는 response-driven feedback을 사용해야 한다(MUST). Pending 동안에는 마지막으로 확정된 상태를 유지하고 같은 control의 중복 입력을 막아야 하며(MUST), GraphQL 또는 network 오류가 발생하면 확정 상태를 변경하지 않고 재시도 가능한 한국어 오류를 표시해야 한다(MUST).
+
 #### Scenario: 저장되지 않은 Post를 저장함
 
 - **WHEN** 유효한 선택 Profile이 저장되지 않은 Post의 Bookmark action을 활성화한다
 - **THEN** 클라이언트는 생성 요청을 보내고 성공한 Bookmark 상태를 해당 Profile의 Post 표면에 반영한다
+
+#### Scenario: Post의 현재 Bookmark 관계를 조회함
+
+- **WHEN** 유효한 선택 Profile이 Post를 조회한다
+- **THEN** `Post.viewerBookmark`는 그 Profile이 소유한 Bookmark Node를 반환하거나 저장하지 않은 경우 `null`을 반환한다
+- **AND** 다른 Profile이 소유한 동일 Post의 Bookmark를 반환하지 않는다
 
 #### Scenario: 저장된 Post를 해제함
 
@@ -191,6 +201,12 @@ Owner가 개별 Bookmark Node를 조회할 때 `Bookmark.post`는 nullable이어
 - **WHEN** 생성 또는 삭제 요청이 실패한다
 - **THEN** 클라이언트는 마지막으로 확정된 Bookmark 상태를 표시한다
 - **AND** 사용자가 재시도할 수 있는 오류 상태를 제공한다
+
+#### Scenario: Bookmark action이 pending 중임
+
+- **WHEN** 생성 또는 삭제 mutation 응답을 기다리고 있다
+- **THEN** 클라이언트는 마지막으로 확정된 Bookmark 상태를 계속 표시한다
+- **AND** 같은 control의 추가 입력을 실행하지 않는다
 
 #### Scenario: 선택 Profile을 전환함
 
