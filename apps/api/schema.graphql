@@ -48,6 +48,16 @@ type Bookmark implements Node {
   profile: Profile!
 }
 
+type BookmarkConnection {
+  edges: [BookmarkConnectionEdge!]!
+  pageInfo: PageInfo!
+}
+
+type BookmarkConnectionEdge {
+  cursor: String!
+  node: Bookmark!
+}
+
 input CancelProfileFollowRequestInput {
   id: ID!
 }
@@ -232,6 +242,7 @@ enum PostVisibility {
 
 type Profile implements Node {
   bio: String
+  bookmarks(after: String, before: String, first: Int, last: Int): BookmarkConnection!
   createdAt: DateTime!
   displayName: String!
   followPolicy: ProfileFollowPolicy!

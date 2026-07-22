@@ -225,6 +225,31 @@ test('exposes the typed Notification Read mutation payload', () => {
   assert.equal(String(payload.getFields().recipientProfile.type), 'Profile!');
 });
 
+test('exposes the private Bookmark Node and Profile connection contract', () => {
+  const bookmark = schema.getType('Bookmark');
+  const profile = schema.getType('Profile');
+  const connection = schema.getType('BookmarkConnection');
+  const edge = schema.getType('BookmarkConnectionEdge');
+
+  assert.ok(isObjectType(bookmark));
+  assert.ok(isObjectType(profile));
+  assert.deepEqual(
+    bookmark.getInterfaces().map(({ name }) => name),
+    ['Node'],
+  );
+  assert.equal(String(bookmark.getFields().createdAt.type), 'DateTime!');
+  assert.equal(String(bookmark.getFields().post.type), 'Post');
+  assert.equal(String(bookmark.getFields().profile.type), 'Profile!');
+  assert.equal(bookmark.getFields().postId, undefined);
+  assert.equal(String(profile.getFields().bookmarks?.type), 'BookmarkConnection!');
+
+  assert.ok(isObjectType(connection));
+  assert.ok(isObjectType(edge));
+  assert.equal(String(connection.getFields().pageInfo.type), 'PageInfo!');
+  assert.equal(String(edge.getFields().cursor.type), 'String!');
+  assert.equal(String(edge.getFields().node.type), 'Bookmark!');
+});
+
 test('rejects legacy raw UUID and unknown typename Node IDs', async () => {
   for (const id of [
     '00000000-0000-8006-8000-000000000001',
