@@ -1,5 +1,14 @@
 import { sql } from 'drizzle-orm';
-import { index, integer, jsonb, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
+import {
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  unique,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import * as Enum from './enums';
 import { datetime } from './types';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
@@ -292,10 +301,18 @@ export const Posts = pgTable(
     visibility: Enum.postVisibility('visibility').notNull(),
     state: Enum.postState('state').notNull(),
     currentContentId: uuid('current_content_id').references((): AnyPgColumn => PostContents.id),
+    repostSourceId: uuid('repost_source_id').references((): AnyPgColumn => Posts.id),
     createdAt: createdAt(),
     deletedAt: datetime('deleted_at'),
   },
-  (table) => [index().on(table.profileId, table.id.desc())],
+  (table) => [
+    index().on(table.profileId, table.id.desc()),
+    uniqueIndex('post_active_repost_profile_source_unique')
+      .on(table.profileId, table.repostSourceId)
+      .where(
+        sql`${table.state} = 'ACTIVE' AND ${table.currentContentId} IS NULL AND ${table.repostSourceId} IS NOT NULL`,
+      ),
+  ],
 );
 
 export const PostContents = pgTable(
