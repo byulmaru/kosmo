@@ -37,6 +37,7 @@ Repost와 Quote가 같은 nullable direct Repost Source를 저장할 수 있게 
 
 - `docs/domain/objects/post.md`
 - `docs/domain/decisions/0010-post-interaction-contracts.md`
+- `docs/domain/decisions/0014-post-structure-relations.md`
 - `PROD-389`
 - `PROD-401`
 
@@ -47,17 +48,19 @@ Repost와 Quote가 같은 nullable direct Repost Source를 저장할 수 있게 
 **Guardrails**
 
 - Public/Unlisted Source의 Repost는 Unlisted, Followers Only Source는 Source Author만 Followers Only로 생성한다.
+- Account.Active와 Profile.Member 권한 및 Active/Normal Local 행동 Profile을 core action 경계에서 검증한다.
 - Mentioned Profiles, Tombstone, unavailable, Content 없는 Repost Source를 거부한다.
+- 누락·Tombstone·조회 불가 Source는 `NOT_FOUND`, 조회 가능한 허용 불가 Source는 `VALIDATION_ERROR(sourceId)`, actor 권한 실패는 `PERMISSION_DENIED`로 처리한다.
 - duplicate/concurrent 생성은 같은 Active Repost identity로 수렴한다.
 - Quote 작성과 ActivityPub Repost ingress·delivery를 포함하지 않는다.
 
 **Verification**
 
-- visibility·권한별 성공/거부, direct Source, 순차·동시 duplicate, selected Profile 권한과 GraphQL payload를 core/API integration test로 검증한다.
+- visibility·권한별 성공/거부와 error code/field, direct Source, 순차·동시 duplicate, 실패 transaction rollback, selected Profile 권한과 GraphQL payload를 core/API integration test로 검증한다.
 
-- [ ] 2.1 actor 권한, Source visibility와 derived visibility를 적용하는 멱등 Repost core action을 구현한다.
-- [ ] 2.2 `repostPost` mutation과 `RepostPostPayload.repost`를 기존 Post global ID 계약에 맞춰 제공한다.
-- [ ] 2.3 성공·거부·순차/동시 멱등성과 GraphQL schema/payload 검증을 추가하고 core/API check를 통과시킨다.
+- [x] 2.1 actor 권한, Source visibility와 derived visibility를 적용하는 멱등 Repost core action을 구현한다.
+- [x] 2.2 `repostPost` mutation과 `RepostPostPayload.repost`를 기존 Post global ID 계약에 맞춰 제공한다.
+- [x] 2.3 성공·거부·순차/동시 멱등성과 GraphQL schema/payload 검증을 추가하고 core/API check를 통과시킨다.
 
 ## 3. PROD-402 Repost와 Quote의 Source 조회
 

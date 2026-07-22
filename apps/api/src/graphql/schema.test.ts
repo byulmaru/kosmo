@@ -63,6 +63,19 @@ test('exposes the minimal idempotent Reaction add contract', () => {
   assert.equal(String(reaction.getFields().createdAt.type), 'DateTime!');
 });
 
+test('exposes the idempotent Repost creation contract', () => {
+  const mutation = schema.getMutationType();
+  const input = schema.getType('RepostPostInput');
+  const payload = schema.getType('RepostPostPayload');
+
+  assert.equal(String(mutation?.getFields().repostPost?.type), 'RepostPostPayload!');
+  assert.ok(isInputObjectType(input));
+  assert.equal(String(input.getFields().sourceId.type), 'ID!');
+  assert.ok(isObjectType(payload));
+  assert.equal(String(payload.getFields().repost.type), 'Post!');
+  assert.equal(payload.getFields().created, undefined);
+});
+
 test('exposes the Bookmark mutation and relationship contract', () => {
   const mutation = schema.getMutationType();
   const createInput = schema.getType('CreateBookmarkInput');

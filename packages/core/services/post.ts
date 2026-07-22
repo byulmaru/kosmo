@@ -1,14 +1,37 @@
-import { eq } from 'drizzle-orm';
-import { ActivityPubPosts, db, firstOrThrow, isUniqueViolation, PostContents, Posts } from '../db';
-import { PostState } from '../enums';
-import type { PostVisibility } from '../enums';
+import { and, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm';
+import {
+  AccountProfiles,
+  Accounts,
+  ActivityPubPosts,
+  db,
+  first,
+  firstOrThrow,
+  getDatabaseConnection,
+  Instances,
+  isUniqueViolation,
+  PostContents,
+  Posts,
+  ProfileFollows,
+  Profiles,
+} from '../db';
+import {
+  AccountState,
+  InstanceKind,
+  InstanceState,
+  PostState,
+  PostVisibility,
+  ProfileState,
+} from '../enums';
+import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
+import type { Transaction } from '../db';
+import type { PostVisibility as PostVisibilityType } from '../enums';
 import type { PostContentDocumentV1 } from '../post-content';
 
 type LocalPostInput = {
   document: PostContentDocumentV1;
   origin: 'LOCAL';
   profileId: string;
-  visibility: PostVisibility;
+  visibility: PostVisibilityType;
 };
 
 type ActivityPubPostInput = {
@@ -18,7 +41,7 @@ type ActivityPubPostInput = {
   profileId: string;
   publishedAt: Temporal.Instant | null;
   receivedAt: Temporal.Instant;
-  visibility: PostVisibility;
+  visibility: PostVisibilityType;
 };
 
 type CreatedPost = {
@@ -42,6 +65,162 @@ const isActivityPubPostUriConflict = (error: unknown): boolean => {
     cause.constraint_name === 'activitypub_post_uri_key'
   );
 };
+
+type VisiblePost = Pick<
+  typeof Posts.$inferSelect,
+  'currentContentId' | 'id' | 'profileId' | 'repostSourceId' | 'visibility'
+>;
+
+const findVisiblePost = async (
+  tx: Transaction,
+  { actorProfileId, postId }: { actorProfileId: string; postId: string },
+): Promise<VisiblePost | undefined> =>
+  tx
+    .select({
+      currentContentId: Posts.currentContentId,
+      id: Posts.id,
+      profileId: Posts.profileId,
+      repostSourceId: Posts.repostSourceId,
+      visibility: Posts.visibility,
+    })
+    .from(Posts)
+    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .leftJoin(
+      ProfileFollows,
+      and(
+        eq(ProfileFollows.followerProfileId, actorProfileId),
+        eq(ProfileFollows.followeeProfileId, Posts.profileId),
+      ),
+    )
+    .where(
+      and(
+        eq(Posts.id, postId),
+        eq(Posts.state, PostState.ACTIVE),
+        eq(Profiles.state, ProfileState.ACTIVE),
+        ne(Instances.state, InstanceState.SUSPENDED),
+        or(
+          inArray(Posts.visibility, [PostVisibility.PUBLIC, PostVisibility.UNLISTED]),
+          eq(Posts.profileId, actorProfileId),
+          and(eq(Posts.visibility, PostVisibility.FOLLOWERS), isNotNull(ProfileFollows.id)),
+        ),
+      ),
+    )
+    .limit(1)
+    .then(first);
+
+export const repostPost = async (
+  {
+    accountId,
+    actorProfileId,
+    sourcePostId,
+  }: {
+    readonly accountId: string;
+    readonly actorProfileId: string;
+    readonly sourcePostId: string;
+  },
+  tx?: Transaction,
+): Promise<typeof Posts.$inferSelect> =>
+  getDatabaseConnection(tx).transaction(async (tx) => {
+    const actor = await tx
+      .select({ id: Profiles.id })
+      .from(Profiles)
+      .innerJoin(
+        AccountProfiles,
+        and(eq(AccountProfiles.profileId, Profiles.id), eq(AccountProfiles.accountId, accountId)),
+      )
+      .innerJoin(Accounts, eq(Accounts.id, AccountProfiles.accountId))
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(
+        and(
+          eq(Profiles.id, actorProfileId),
+          eq(Profiles.state, ProfileState.ACTIVE),
+          eq(Accounts.state, AccountState.ACTIVE),
+          eq(Instances.kind, InstanceKind.LOCAL),
+          eq(Instances.state, InstanceState.ACTIVE),
+        ),
+      )
+      .limit(1)
+      .then(first);
+    if (!actor) {
+      throw new PermissionDeniedError();
+    }
+
+    const source = await findVisiblePost(tx, { actorProfileId, postId: sourcePostId });
+    if (!source) {
+      throw new NotFoundError('Post not found');
+    }
+    if (source.currentContentId === null) {
+      throw new ValidationError('Post cannot be reposted', { field: 'sourceId' });
+    }
+
+    let visibility: PostVisibilityType;
+    if (
+      source.visibility === PostVisibility.PUBLIC ||
+      source.visibility === PostVisibility.UNLISTED
+    ) {
+      visibility = PostVisibility.UNLISTED;
+    } else if (
+      source.visibility === PostVisibility.FOLLOWERS &&
+      source.profileId === actorProfileId
+    ) {
+      visibility = PostVisibility.FOLLOWERS;
+    } else {
+      throw new ValidationError('Post cannot be reposted', { field: 'sourceId' });
+    }
+
+    const visited = new Set([source.id]);
+    let nestedSourceId = source.repostSourceId;
+    while (nestedSourceId !== null) {
+      if (visited.has(nestedSourceId)) {
+        throw new NotFoundError('Post not found');
+      }
+      visited.add(nestedSourceId);
+
+      const nestedSource = await findVisiblePost(tx, {
+        actorProfileId,
+        postId: nestedSourceId,
+      });
+      if (!nestedSource || nestedSource.currentContentId === null) {
+        throw new NotFoundError('Post not found');
+      }
+      nestedSourceId = nestedSource.repostSourceId;
+    }
+
+    const inserted = await tx
+      .insert(Posts)
+      .values({
+        profileId: actorProfileId,
+        repostSourceId: source.id,
+        state: PostState.ACTIVE,
+        visibility,
+      })
+      .onConflictDoNothing()
+      .returning()
+      .then(first);
+    if (inserted) {
+      return inserted;
+    }
+
+    const existing = await tx
+      .select()
+      .from(Posts)
+      .where(
+        and(
+          eq(Posts.profileId, actorProfileId),
+          eq(Posts.repostSourceId, source.id),
+          eq(Posts.state, PostState.ACTIVE),
+          isNull(Posts.currentContentId),
+        ),
+      )
+      .limit(1)
+      .then(first);
+    if (!existing) {
+      throw new Error('Repost not found after insert conflict');
+    }
+
+    return existing;
+  });
 
 export function createPost(input: LocalPostInput): Promise<CreatedPost>;
 export function createPost(input: ActivityPubPostInput): Promise<CreatedPost | DuplicatePost>;
