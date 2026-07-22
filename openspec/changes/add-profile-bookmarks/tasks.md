@@ -68,7 +68,7 @@ Bookmark Owner Profile이 Target Post의 현재 가시성과 관계없이 자신
 - Owner 성공, 비Owner·missing의 동일 외부 의미, 반복·동시 삭제, 숨겨진 Target 삭제, exact deleted relation 식별과 transaction 결과를 core/API 수준에서 검증한다.
 
 - [x] 3.1 missing/non-owner 삭제 응답과 삭제 mutation의 공유 GraphQL 계약을 사용자와 확정하고 specs·decisions에 반영한다.
-- [ ] 3.2 Owner 권한과 숨겨진 Target 관계 삭제를 보장하는 core 동작을 구현한다.
+- [x] 3.2 Owner 권한과 숨겨진 Target 관계 삭제를 보장하는 core 동작을 구현한다.
 - [ ] 3.3 Relay가 제거할 관계와 영향받은 Post 상태를 식별할 수 있는 삭제 mutation 계약을 구현한다.
 - [ ] 3.4 Owner·비Owner·missing·반복/동시 삭제와 숨겨진 Target 삭제 검증을 추가하고 관련 check를 통과시킨다.
 

@@ -9,7 +9,7 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '../enums';
-import { createBookmark } from './bookmark';
+import { createBookmark, deleteBookmark } from './bookmark';
 
 after(async () => {
   await pg.end();
@@ -101,4 +101,62 @@ test('호출 transaction이 rollback되면 생성한 Bookmark도 남지 않는�
   );
 
   assert.equal((await loadPostBookmarks(post.id)).length, 0);
+});
+
+test('Owner는 Target Post 상태와 관계없이 Bookmark를 삭제한다', async () => {
+  const { post, profile } = await createFixture();
+  const bookmark = await createBookmark({ postId: post.id, profileId: profile.id });
+  await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, post.id));
+
+  const deleted = await deleteBookmark({ bookmarkId: bookmark.id, profileId: profile.id });
+
+  assert.deepEqual(deleted, bookmark);
+  assert.equal((await loadPostBookmarks(post.id)).length, 0);
+});
+
+test('missing과 non-owner 삭제는 같은 null 결과이며 기존 관계를 노출하거나 제거하지 않는다', async () => {
+  const { instance, post, profile } = await createFixture();
+  const otherProfile = await createProfile(instance.id);
+  const bookmark = await createBookmark({ postId: post.id, profileId: profile.id });
+
+  const [missing, nonOwner] = await Promise.all([
+    deleteBookmark({ bookmarkId: crypto.randomUUID(), profileId: profile.id }),
+    deleteBookmark({ bookmarkId: bookmark.id, profileId: otherProfile.id }),
+  ]);
+
+  assert.equal(missing, null);
+  assert.equal(nonOwner, null);
+  assert.deepEqual(await loadPostBookmarks(post.id), [bookmark]);
+});
+
+test('순차·동시 삭제에서 한 요청만 삭제된 Bookmark를 반환한다', async () => {
+  const { post, profile } = await createFixture();
+  const bookmark = await createBookmark({ postId: post.id, profileId: profile.id });
+  const input = { bookmarkId: bookmark.id, profileId: profile.id };
+
+  const concurrent = await Promise.all(Array.from({ length: 4 }, () => deleteBookmark(input)));
+  const repeated = await deleteBookmark(input);
+
+  assert.deepEqual(
+    concurrent.filter((result) => result !== null),
+    [bookmark],
+  );
+  assert.equal(repeated, null);
+  assert.equal((await loadPostBookmarks(post.id)).length, 0);
+});
+
+test('호출 transaction이 rollback되면 삭제한 Bookmark가 복구된다', async () => {
+  const { post, profile } = await createFixture();
+  const bookmark = await createBookmark({ postId: post.id, profileId: profile.id });
+
+  await assert.rejects(
+    db.transaction(async (tx) => {
+      const deleted = await deleteBookmark({ bookmarkId: bookmark.id, profileId: profile.id }, tx);
+      assert.equal(deleted?.id, bookmark.id);
+      throw new Error('rollback');
+    }),
+    /rollback/,
+  );
+
+  assert.deepEqual(await loadPostBookmarks(post.id), [bookmark]);
 });

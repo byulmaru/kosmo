@@ -34,3 +34,20 @@ export const createBookmark = async (
 
   return bookmark;
 };
+
+export const deleteBookmark = async (
+  {
+    bookmarkId,
+    profileId,
+  }: {
+    readonly bookmarkId: string;
+    readonly profileId: string;
+  },
+  tx?: Transaction,
+): Promise<typeof Bookmarks.$inferSelect | null> =>
+  getDatabaseConnection(tx)
+    .delete(Bookmarks)
+    .where(and(eq(Bookmarks.id, bookmarkId), eq(Bookmarks.profileId, profileId)))
+    .returning()
+    .then(first)
+    .then((bookmark) => bookmark ?? null);
