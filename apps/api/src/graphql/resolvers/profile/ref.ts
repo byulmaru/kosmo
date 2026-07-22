@@ -2,6 +2,7 @@ import { AccountProfiles, db, Instances, Profiles } from '@kosmo/core/db';
 import { AccountProfileRole, ProfileFollowPolicy } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
+import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
 import { formatRelativeHandle } from '@/profile/identity';
 import { visibleProfileWhere } from '@/profile/visibility';
@@ -49,6 +50,16 @@ Profile.implement({
     }),
   }),
 });
+
+export const ProfileConnection = builder.connectionObject(
+  {
+    type: Profile,
+    name: 'ProfileConnection',
+  },
+  {
+    name: 'ProfileConnectionEdge',
+  },
+);
 
 export const AccountProfile = createObjectRef('AccountProfile', (ids) =>
   db.select().from(AccountProfiles).where(inArray(AccountProfiles.id, ids)),
