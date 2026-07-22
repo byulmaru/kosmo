@@ -34,25 +34,55 @@
 - **THEN** component는 서버가 확인한 이전 선택 상태로 복구한다
 - **AND** 사용자가 다시 시도할 수 있는 오류 상태를 제공한다
 
-### Requirement: Reaction 요약 component
+### Requirement: Reaction 요약 프레젠테이션 component
 
-클라이언트는 Post의 viewer-independent Type별 count를 내림차순으로 표시하고, Type별로 viewer가 조회할 수 있는 Profile 목록을 열어 page 단위로 탐색할 수 있어야 한다(MUST).
+클라이언트는 공급된 viewer-independent Type별 count와 viewer가 조회할 수 있는 Profile 목록을 props-only 프레젠테이션 component로 표시할 수 있어야 한다(MUST). 실제 Post query, Relay connection, modal/route와 cache 통합은 PROD-418이 소유한다.
 
-#### Scenario: Type별 count 표시
+#### Scenario: supplied-order Type별 count 표시
 
-- **WHEN** Post에 현재 Reaction이 존재한다
-- **THEN** component는 Type과 count를 count 내림차순으로 표시한다
-- **AND** count 동률 Type의 순서에 의존하지 않는다
+- **WHEN** caller가 Type과 count entry를 supplied order로 제공한다
+- **THEN** component는 Type과 count를 받은 순서대로 표시한다
+- **AND** zero-count Type을 만들거나 제거·정렬·필터링하지 않는다
 
-#### Scenario: Type별 Profile 목록 진입
+#### Scenario: loading, empty, error, populated 상태
 
-- **WHEN** 사용자가 한 Reaction Type 요약을 연다
-- **THEN** component는 그 Type의 Profile connection만 표시한다
-- **AND** server가 viewer 기준으로 숨긴 Profile을 client에서 복구하거나 count에서 빼지 않는다
+- **WHEN** caller가 loading, empty, error 또는 populated 상태를 제공한다
+- **THEN** component는 해당 상태를 프레젠테이션으로 표시한다
+- **AND** retry callback이 제공된 error 상태에서는 caller가 연결한 재시도를 노출한다
 
-#### Scenario: Profile 목록 추가 page
+#### Scenario: 복수 Type과 count 동률
 
-- **WHEN** Type별 Profile 목록에 다음 page가 있다
+- **WHEN** caller가 count가 같은 여러 Type을 포함한 entry를 제공한다
+- **THEN** component는 supplied order를 보존해 모든 entry를 표시한다
+- **AND** 동률 Type 사이에 별도 순서를 유도하지 않는다
+
+#### Scenario: supplied Type 선택 callback
+
+- **WHEN** supplied Reaction Type entry가 활성화된다
+- **THEN** `ReactionSummary`는 supplied selection callback을 정확히 그 supplied Type과 함께 호출한다
+- **AND** component는 modal 또는 route navigation을 소유하지 않는다
+
+#### Scenario: 기존 Profile row 표시
+
+- **WHEN** caller가 한 Type의 조회 가능한 Profile Relay fragment ref를 제공한다
+- **THEN** component는 각 row에 기존 `ProfileListItem`을 사용한다
+- **AND** Avatar, name, handle, bio와 Follow button의 별도 raw-scalar row를 만들지 않는다
+
+#### Scenario: mock retry와 pagination callback
+
+- **WHEN** caller가 retry 또는 다음 page callback을 제공한다
+- **THEN** component는 해당 callback을 호출할 수 있는 프레젠테이션 입력을 제공한다
+- **AND** 자체 Relay connection이나 pagination query를 소유하지 않는다
+
+#### Scenario: Storybook Relay mock fragment ref
+
+- **WHEN** Storybook이 populated Profile row 또는 callback interaction 상태를 구성한다
+- **THEN** Storybook fixture는 실제 Relay `Profile` fragment data shape의 mock fragment ref를 사용한다
+- **AND** raw `$key` cast로 fixture를 만들지 않는다
+
+#### Scenario: PROD-418 end-state Relay pagination
+
+- **WHEN** PROD-418이 실제 Type별 Profile 목록을 연결한다
 - **THEN** component는 Relay cursor로 다음 page를 불러온다
 - **AND** 이미 표시한 Profile을 중복 추가하지 않는다
 
@@ -63,7 +93,8 @@ Reaction 선택과 요약 UI는 공통 Post Action Bar rollout과 분리된 comp
 #### Scenario: component 상태 검증
 
 - **WHEN** Reaction component catalog와 interaction test를 실행한다
-- **THEN** 선택·해제·복수 Type·pending·오류 복구·count 정렬·Profile pagination 상태를 실제 Relay data shape로 검증한다
+- **THEN** 선택·해제·복수 Type·pending·오류 복구와 PROD-449의 supplied-order count·Type selection callback·loading/empty/error/populated·기존 Profile row·mock callback 상태를 실제 Relay data shape로 검증한다
+- **AND** PROD-418은 실제 connection pagination의 component/integration 검증을 추가한다
 
 #### Scenario: Post Action Bar 제외
 
