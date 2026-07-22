@@ -61,7 +61,14 @@ builder.mutationField('deleteBookmark', (t) =>
           throw new PermissionDeniedError();
         }
 
-        const deleted = await deleteBookmark({ bookmarkId: input.id.id, profileId: actor.id }, tx);
+        const deleted = await deleteBookmark(
+          {
+            accountId: ctx.session.accountId,
+            bookmarkId: input.id.id,
+            profileId: actor.id,
+          },
+          tx,
+        );
 
         return {
           bookmarkId: deleted?.id ?? null,

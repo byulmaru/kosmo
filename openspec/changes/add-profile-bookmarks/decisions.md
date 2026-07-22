@@ -105,10 +105,10 @@
 - Authority / Provenance: `docs/domain/objects/bookmark.md`, `PROD-409` 본문과 2026-07-22 사용자 승인
 - Status: Active
 - Context / Problem: Owner 전용 삭제와 반복·동시 삭제 검증은 확정됐지만, missing·non-owner·경쟁 loser의 외부 의미와 Relay가 정규화할 exact payload가 열려 있었다.
-- Decision Outcome: `deleteBookmark(input: { id })`는 현재 `usingProfile`과 Bookmark ID를 함께 조건으로 삭제한다. 첫 Owner 삭제는 nullable `DeleteBookmarkPayload.bookmarkId`로 삭제된 Bookmark 관계를 정확히 식별하고 nullable `post`로 현재 조회 가능한 Target Post를 반환한다. Target이 숨겨졌으면 관계는 삭제하되 `post`는 `null`이다. missing·non-owner·순차 반복·동시 loser는 오류 없이 `bookmarkId: null`, `post: null`인 동일 성공으로 정규화한다.
+- Decision Outcome: `deleteBookmark(input: { id })`는 현재 `usingProfile`, session Account와 Bookmark ID를 함께 조건으로 삭제한다. Resolver가 actor 권한을 먼저 검증해 사용할 수 없는 actor에는 `PERMISSION_DENIED`를 반환하고, core의 원자적 DELETE가 같은 Account/Profile membership과 Account·Profile·local Instance의 활성 상태를 다시 조건으로 결합해 검증 직후 권한이 사라지는 경합을 막는다. 첫 Owner 삭제는 nullable `DeleteBookmarkPayload.bookmarkId`로 삭제된 Bookmark 관계를 정확히 식별하고 nullable `post`로 현재 조회 가능한 Target Post를 반환한다. Target이 숨겨졌으면 관계는 삭제하되 `post`는 `null`이다. missing·non-owner·순차 반복·동시 loser와 검증 직후 actor 권한이 사라진 요청은 오류 없이 `bookmarkId: null`, `post: null`인 동일 성공으로 정규화한다.
 - Alternatives Considered: missing·non-owner 모두 `NOT_FOUND` — 존재는 숨기지만 client 재시도와 경쟁 loser를 오류로 만들기 때문에 채택하지 않는다. non-owner만 `PERMISSION_DENIED` — 비공개 Bookmark 존재를 노출해 채택하지 않는다. 삭제 성공 boolean — Relay가 제거할 exact 관계를 식별하지 못해 채택하지 않는다.
-- Consequences: client는 nullable ID로 실제 삭제 여부를 구분하되 null 이유를 추론할 수 없다. Target Post visibility는 삭제 권한을 막지 않으며 `post` loader가 현재 가시성을 적용한다. 원자적 조건부 `DELETE ... RETURNING`으로 경쟁 winner 하나만 ID를 얻고 별도 비관적 lock은 사용하지 않는다.
-- Confirmation / Follow-up: core/API 검증에서 Owner 성공, missing·non-owner의 동일 payload, 순차·동시 한 요청만 deleted ID 반환, 숨겨진 Target의 `post: null`, transaction rollback을 확인한다.
+- Consequences: client는 nullable ID로 실제 삭제 여부를 구분하되 null 이유를 추론할 수 없다. Target Post visibility는 삭제 권한을 막지 않으며 `post` loader가 현재 가시성을 적용한다. 원자적 조건부 `DELETE ... RETURNING`으로 경쟁 winner 하나만 ID를 얻고, actor 권한 재검증도 같은 statement에 포함해 별도 비관적 lock은 사용하지 않는다. 생성 persistence action은 검증된 ID만 받는 기존 책임을 유지하고, 삭제 persistence action만 권한 상실 경합을 닫는 데 필요한 Account ID를 추가로 받는다.
+- Confirmation / Follow-up: core/API 검증에서 Owner 성공, missing·non-owner의 동일 payload, 순차·동시 한 요청만 deleted ID 반환, 숨겨진 Target의 `post: null`, transaction rollback과 검증 직후 Profile 비활성화·membership 제거 경합을 확인한다.
 
 ## Remaining Decisions
 
