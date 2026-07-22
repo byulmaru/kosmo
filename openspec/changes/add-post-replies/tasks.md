@@ -24,9 +24,9 @@ Content가 있는 Post가 nullable 직접 Reply Parent를 저장하고 Repost So
 - Local/ActivityPub Post·Reply 저장과 Parent의 missing/contentless 실패 및 transaction rollback을 service test로 검증한다. package 내부 구조 validator 단위 test로 Post·Reply·Quote·Reply+Quote·Repost와 동일 Parent/Source, self-reference 및 contentless+Reply 조합을 검증하고 DB CHECK test로 직접 Parent self-reference를 검증한다.
 - core 전체 test, migration runner·contract test, lint·format과 strict OpenSpec validation을 통과시킨다.
 
-- [ ] 1.1 Reply Parent additive schema·migration과 DB 관계·회귀 검증을 구현한다.
-- [ ] 1.2 package 내부 공통 Post 구조 validator와 Parent 대상 검증을 구현하고 Local/ActivityPub `createPost`에 optional `replyParentId` 저장을 추가한다.
-- [ ] 1.3 validator 허용·거부 조합, DB CHECK, Parent error field, rollback과 기존 생성 계약 회귀 test를 추가하고 관련 check를 통과시킨다.
+- [x] 1.1 Reply Parent additive schema·migration과 DB 관계·회귀 검증을 구현한다.
+- [x] 1.2 package 내부 공통 Post 구조 validator와 Parent 대상 검증을 구현하고 Local/ActivityPub `createPost`에 optional `replyParentId` 저장을 추가한다.
+- [x] 1.3 validator 허용·거부 조합, DB CHECK, Parent error field, rollback과 기존 생성 계약 회귀 test를 추가하고 관련 check를 통과시킨다.
 
 ## 2. PROD-398 직접 Reply Parent 조회
 

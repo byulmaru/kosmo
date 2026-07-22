@@ -19,6 +19,7 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '../enums';
+import { NotFoundError, ValidationError } from '../error';
 import { postContentDocumentFromText } from '../post-content/server';
 import { createPost } from './post';
 
@@ -117,5 +118,153 @@ test('createPost는 ActivityPub first-write-wins와 timestamp 계약을 보존�
       .where(eq(PostContents.postId, first.post.id))
       .then((rows) => rows.length),
     1,
+  );
+});
+
+test('createPost는 Local과 ActivityPub Reply Parent를 직접 저장한다', async () => {
+  const profile = await createProfile();
+  const parent = await createPost({
+    document: postContentDocumentFromText('parent'),
+    origin: 'LOCAL',
+    profileId: profile.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const localReply = await createPost({
+    document: postContentDocumentFromText('local reply'),
+    origin: 'LOCAL',
+    profileId: profile.id,
+    replyParentId: parent.post.id,
+    visibility: PostVisibility.UNLISTED,
+  });
+  const activityPubReply = await createPost({
+    document: postContentDocumentFromText('remote reply'),
+    objectUri: `https://remote.example/notes/reply-${profile.id}`,
+    origin: 'ACTIVITYPUB',
+    profileId: profile.id,
+    publishedAt: null,
+    receivedAt: Temporal.Instant.from('2026-07-22T00:00:00Z'),
+    replyParentId: parent.post.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+
+  assert.equal(localReply.post.replyParentId, parent.post.id);
+  assert.equal(activityPubReply.created, true);
+  assert.equal(activityPubReply.post.replyParentId, parent.post.id);
+});
+
+test('createPost는 존재하지 않는 Reply Parent에서 transaction을 rollback한다', async () => {
+  const profile = await createProfile();
+
+  await assert.rejects(
+    createPost({
+      document: postContentDocumentFromText('orphan reply'),
+      origin: 'LOCAL',
+      profileId: profile.id,
+      replyParentId: '00000000-0000-8000-8000-000000000099',
+      visibility: PostVisibility.PUBLIC,
+    }),
+    (error) => error instanceof NotFoundError && error.message === 'Post not found',
+  );
+
+  assert.equal(
+    await db
+      .select()
+      .from(Posts)
+      .where(eq(Posts.profileId, profile.id))
+      .then((rows) => rows.length),
+    0,
+  );
+  assert.equal(
+    await db
+      .select()
+      .from(PostContents)
+      .innerJoin(Posts, eq(PostContents.postId, Posts.id))
+      .where(eq(Posts.profileId, profile.id))
+      .then((rows) => rows.length),
+    0,
+  );
+});
+
+test('createPost는 Content 없는 Reply Parent에서 field 오류와 함께 rollback한다', async () => {
+  const profile = await createProfile();
+  const source = await createPost({
+    document: postContentDocumentFromText('source'),
+    origin: 'LOCAL',
+    profileId: profile.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const contentlessParent = await db
+    .insert(Posts)
+    .values({
+      profileId: profile.id,
+      repostSourceId: source.post.id,
+      state: PostState.ACTIVE,
+      visibility: PostVisibility.PUBLIC,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+  await assert.rejects(
+    createPost({
+      document: postContentDocumentFromText('invalid reply'),
+      origin: 'LOCAL',
+      profileId: profile.id,
+      replyParentId: contentlessParent.id,
+      visibility: PostVisibility.PUBLIC,
+    }),
+    (error) =>
+      error instanceof ValidationError &&
+      error.field === 'replyParentId' &&
+      error.message === 'Reply Parent must have content',
+  );
+
+  assert.equal(
+    await db
+      .select()
+      .from(Posts)
+      .where(eq(Posts.profileId, profile.id))
+      .then((rows) => rows.length),
+    2,
+  );
+  assert.equal(
+    await db
+      .select()
+      .from(PostContents)
+      .innerJoin(Posts, eq(PostContents.postId, Posts.id))
+      .where(eq(Posts.profileId, profile.id))
+      .then((rows) => rows.length),
+    1,
+  );
+});
+
+test('Reply Parent를 Tombstone으로 바꿔도 저장된 관계를 유지한다', async () => {
+  const profile = await createProfile();
+  const parent = await createPost({
+    document: postContentDocumentFromText('parent'),
+    origin: 'LOCAL',
+    profileId: profile.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const reply = await createPost({
+    document: postContentDocumentFromText('reply'),
+    origin: 'LOCAL',
+    profileId: profile.id,
+    replyParentId: parent.post.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+
+  await db
+    .update(Posts)
+    .set({ deletedAt: Temporal.Now.instant(), state: PostState.DELETED })
+    .where(eq(Posts.id, parent.post.id));
+
+  assert.equal(
+    await db
+      .select({ replyParentId: Posts.replyParentId })
+      .from(Posts)
+      .where(eq(Posts.id, reply.post.id))
+      .then(firstOrThrow)
+      .then(({ replyParentId }) => replyParentId),
+    parent.post.id,
   );
 });
