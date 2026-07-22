@@ -173,8 +173,8 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 - PROD-418은 실제 Relay data shape의 count·viewer별 Profile 숨김·Type 격리·다중 page pagination과 modal/route 통합을 component/integration test로 검증한다.
 
 - [x] 8.1 최종 `post-reaction-ui` spec이 변경되지 않음을 확인하고, PROD-449 fixture-first props 경계와 기존 Profile row 재사용 결정을 decisions·design·tasks에 동기화하고 strict validation을 통과시킨다.
-- [ ] 8.2 PROD-449 props-only `ReactionSummary`와 `ReactionProfileList`를 구현한다.
-- [ ] 8.3 PROD-449 Storybook과 component interaction에서 Relay mock fragment ref의 supplied-order·Type selection·상태·retry/pagination callback 조합을 검증한다.
+- [x] 8.2 PROD-449 props-only `ReactionSummary`와 `ReactionProfileList`를 구현한다.
+- [x] 8.3 PROD-449 Storybook과 component interaction에서 Relay mock fragment ref의 supplied-order·Type selection·상태·retry/pagination callback 조합을 검증한다.
 - [ ] 8.4 PROD-418 zero-count/modal-route 결정 뒤 실제 count query·Relay connection·selected Profile/viewer cache 통합과 component/integration 검증을 구현한다.
 
 ## 9. PROD-419 Reaction Notification Best Effort 정리
