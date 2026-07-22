@@ -47,7 +47,7 @@ Bookmark의 도메인 계약은 `docs/domain/objects/bookmark.md`와 Accepted AD
 
 ### Allowed Alternatives
 
-- `createBookmark(input: { postId })`와 `CreateBookmarkPayload.bookmark`는 확정 계약이다. 아직 열려 있는 `Profile.bookmarks`, Post의 viewer-relative Bookmark 관계와 삭제 payload는 owner 격리, Relay 정규화, exact deleted edge 식별과 pagination 계약을 동일하게 충족하는 다른 shape도 가능하며, 관련 구현 slice 전에 `decisions.md`에 확정해야 한다.
+- `createBookmark(input: { postId })`, `CreateBookmarkPayload.bookmark`, `deleteBookmark(input: { id })`와 nullable 삭제 payload는 확정 계약이다. 아직 열려 있는 `Profile.bookmarks`와 Post의 viewer-relative Bookmark 관계는 owner 격리, Relay 정규화와 pagination 계약을 동일하게 충족하는 다른 shape도 가능하며, 관련 구현 slice 전에 `decisions.md`에 확정해야 한다.
 - response-driven action 대신 Relay optimistic update와 자동 rollback을 사용할 수 있다. selected Profile actor store 격리, pending 중 중복 방지와 실패 복구를 증명하고 구현 전에 deferred decision을 확정해야 한다.
 - action의 정확한 시각적 배치는 Post 목록·상세의 독립 control 계약과 공통 Action Bar 제외 범위를 지키는 한 조정할 수 있다.
 - Target Post reverse lookup이나 정리 경로가 실제로 필요해지면 `postId` 보조 index를 추가할 수 있다. 현재 개인 최신순 조회만으로는 미리 추가하지 않는다.
