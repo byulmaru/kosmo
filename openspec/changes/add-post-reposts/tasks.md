@@ -50,7 +50,7 @@ Repost와 Quote가 같은 nullable direct Repost Source를 저장할 수 있게 
 - Public/Unlisted Source의 Repost는 Unlisted, Followers Only Source는 Source Author만 Followers Only로 생성한다.
 - Account.Active와 Profile.Member 권한 및 Active/Normal Local 행동 Profile을 core action 경계에서 검증한다.
 - Mentioned Profiles, Tombstone, unavailable, Content 없는 Repost Source를 거부한다.
-- 누락·Tombstone·조회 불가 Source는 `NOT_FOUND`, 조회 가능한 허용 불가 Source는 `VALIDATION_ERROR(sourceId)`, actor 권한 실패는 `PERMISSION_DENIED`로 처리한다.
+- 누락·Tombstone·조회 불가 Source는 `NOT_FOUND`, 조회 가능한 허용 불가 Source는 `VALIDATION(sourceId)`, actor 권한 실패는 `PERMISSION_DENIED`로 처리한다.
 - duplicate/concurrent 생성은 같은 Active Repost identity로 수렴한다.
 - Quote 작성과 ActivityPub Repost ingress·delivery를 포함하지 않는다.
 

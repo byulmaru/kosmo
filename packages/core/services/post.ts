@@ -15,6 +15,7 @@ import {
   Profiles,
 } from '../db';
 import {
+  AccountProfileRole,
   AccountState,
   InstanceKind,
   InstanceState,
@@ -24,14 +25,13 @@ import {
 } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import type { Transaction } from '../db';
-import type { PostVisibility as PostVisibilityType } from '../enums';
 import type { PostContentDocumentV1 } from '../post-content';
 
 type LocalPostInput = {
   document: PostContentDocumentV1;
   origin: 'LOCAL';
   profileId: string;
-  visibility: PostVisibilityType;
+  visibility: PostVisibility;
 };
 
 type ActivityPubPostInput = {
@@ -41,7 +41,7 @@ type ActivityPubPostInput = {
   profileId: string;
   publishedAt: Temporal.Instant | null;
   receivedAt: Temporal.Instant;
-  visibility: PostVisibilityType;
+  visibility: PostVisibility;
 };
 
 type CreatedPost = {
@@ -66,15 +66,10 @@ const isActivityPubPostUriConflict = (error: unknown): boolean => {
   );
 };
 
-type VisiblePost = Pick<
-  typeof Posts.$inferSelect,
-  'currentContentId' | 'id' | 'profileId' | 'repostSourceId' | 'visibility'
->;
-
 const findVisiblePost = async (
   tx: Transaction,
   { actorProfileId, postId }: { actorProfileId: string; postId: string },
-): Promise<VisiblePost | undefined> =>
+) =>
   tx
     .select({
       currentContentId: Posts.currentContentId,
@@ -136,6 +131,7 @@ export const repostPost = async (
           eq(Profiles.id, actorProfileId),
           eq(Profiles.state, ProfileState.ACTIVE),
           eq(Accounts.state, AccountState.ACTIVE),
+          inArray(AccountProfiles.role, [AccountProfileRole.OWNER, AccountProfileRole.MEMBER]),
           eq(Instances.kind, InstanceKind.LOCAL),
           eq(Instances.state, InstanceState.ACTIVE),
         ),
@@ -154,7 +150,7 @@ export const repostPost = async (
       throw new ValidationError('Post cannot be reposted', { field: 'sourceId' });
     }
 
-    let visibility: PostVisibilityType;
+    let visibility: PostVisibility;
     if (
       source.visibility === PostVisibility.PUBLIC ||
       source.visibility === PostVisibility.UNLISTED

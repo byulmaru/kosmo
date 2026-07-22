@@ -28,22 +28,14 @@ import { createPost, repostPost } from './post';
 
 after(async () => pg.end());
 
-const createProfile = async ({
-  instanceKind = InstanceKind.LOCAL,
-  instanceState = InstanceState.ACTIVE,
-  profileState = ProfileState.ACTIVE,
-}: {
-  instanceKind?: InstanceKind;
-  instanceState?: InstanceState;
-  profileState?: ProfileState;
-} = {}) => {
+const createProfile = async () => {
   const suffix = crypto.randomUUID();
   const instance = await db
     .insert(Instances)
     .values({
       domain: `${suffix}.example`,
-      kind: instanceKind,
-      state: instanceState,
+      kind: InstanceKind.LOCAL,
+      state: InstanceState.ACTIVE,
     })
     .returning()
     .then(firstOrThrow);
@@ -55,7 +47,7 @@ const createProfile = async ({
       handle: suffix,
       instanceId: instance.id,
       normalizedHandle: suffix,
-      state: profileState,
+      state: ProfileState.ACTIVE,
     })
     .returning()
     .then(firstOrThrow);
@@ -63,7 +55,7 @@ const createProfile = async ({
   return { instance, profile };
 };
 
-const createActor = async () => {
+const createActor = async (role: AccountProfileRole = AccountProfileRole.MEMBER) => {
   const { instance, profile } = await createProfile();
   const suffix = crypto.randomUUID();
   const account = await db
@@ -78,7 +70,7 @@ const createActor = async () => {
   await db.insert(AccountProfiles).values({
     accountId: account.id,
     profileId: profile.id,
-    role: AccountProfileRole.MEMBER,
+    role,
   });
 
   return { account, instance, profile };
@@ -187,6 +179,15 @@ test('repostPost는 Account membership과 Active/Normal Local actor를 검증한
   const sourceAuthor = await createProfile();
   const source = await createContentPost(sourceAuthor.profile.id);
 
+  const ownerActor = await createActor(AccountProfileRole.OWNER);
+  await repostPost({
+    accountId: ownerActor.account.id,
+    actorProfileId: ownerActor.profile.id,
+    sourcePostId: source.id,
+  });
+
+  const adminActor = await createActor(AccountProfileRole.ADMIN);
+
   const disabledAccountActor = await createActor();
   await db
     .update(Accounts)
@@ -211,6 +212,7 @@ test('repostPost는 Account membership과 Active/Normal Local actor를 검증한
     .where(eq(Instances.id, remoteActor.instance.id));
 
   for (const actor of [
+    adminActor,
     disabledAccountActor,
     missingMembershipActor,
     disabledProfileActor,
@@ -267,14 +269,14 @@ test('repostPost의 순차·동시 요청은 같은 Active Repost identity로 �
     sourcePostId: source.id,
   };
 
-  const first = await repostPost(input);
-  const repeated = await repostPost(input);
   const concurrent = await Promise.all(Array.from({ length: 4 }, () => repostPost(input)));
+  const first = concurrent[0]!;
+  const repeated = await repostPost(input);
 
   assert.equal(repeated.id, first.id);
   assert.deepEqual(
     concurrent.map(({ id }) => id),
-    Array.from({ length: 4 }, () => first.id),
+    Array(4).fill(first.id),
   );
   assert.equal(
     await db
