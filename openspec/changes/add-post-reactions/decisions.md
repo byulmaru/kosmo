@@ -66,6 +66,34 @@
 - Consequences: summary count와 visible Profile 목록 길이는 다를 수 있으며 client가 이를 다시 맞추지 않는다.
 - Confirmation / Follow-up: PROD-406·407과 PROD-418에서 서로 다른 viewer, unavailable Profile과 pagination을 함께 검증한다.
 
+### Type별 Profile connection은 최신 Reaction순으로 정렬한다
+
+- Decision Date: 2026-07-21
+- Decision Class: Implementation Choice
+- Authority / Provenance:
+  - `docs/domain/objects/reaction.md`
+  - `PROD-407`
+- Status: Active
+- Context / Problem: PROD-407은 중복 없는 stable cursor pagination을 요구하지만 Profile 목록의 순서와 cursor 경계는 정하지 않았다. 같은 Post·Type에서 Profile마다 Reaction은 하나뿐이므로 count는 Profile 사이의 순서를 만들지 못한다.
+- Decision Outcome: Type별 Profile connection은 `Reaction.createdAt DESC, Reaction.id DESC` 순서로 반환한다. opaque cursor는 두 값을 함께 표현하고, Profile visibility는 이 cursor 경계와 page limit을 적용하기 전에 SQL에서 필터링한다.
+- Alternatives Considered: Profile 이름·handle 순서는 mutable 값과 collation에 pagination이 결합된다. Reaction ID만 사용하는 방식은 단순하지만 같은 millisecond에 생성된 UUIDv7의 실제 생성 순서를 명시적으로 보장하지 않는다. Profile별 Reaction count는 같은 Post·Type에서 모두 1이므로 정렬 기준이 되지 않는다.
+- Consequences: 새 Reaction은 목록 앞에 나타나며 기존 page의 older 방향 keyset 경계는 안정적으로 유지된다. 조회 query는 `(post_id, type, created_at DESC, id DESC)` 순서를 지원하는 forward index가 필요하다.
+- Confirmation / Follow-up: PROD-407 integration test에서 최신순, 동일 생성 시각 tie-break, 다중 page cursor 경계, 중복·누락 방지와 visibility-before-limit을 검증한다.
+
+### Profile connection은 기존 Profile node만 공개한다
+
+- Decision Date: 2026-07-21
+- Decision Class: Implementation Choice
+- Authority / Provenance:
+  - `docs/domain/objects/reaction.md`
+  - `PROD-407`
+- Status: Active
+- Context / Problem: PROD-407의 전달 결과는 Reaction을 남긴 Profile 목록이며 전체 Reaction event history는 제외한다. 공개 row에 Reaction metadata를 포함하면 Reaction Node와 event history 계약을 추가로 정의해야 한다.
+- Decision Outcome: Type별 조회 결과는 `Post.reactionProfiles(type: String!): ProfileConnection!` field에서 기존 Profile 객체를 node로 제공한다. `type`은 canonical Reaction Type 문자열 검증을 적용한다. Reaction 객체, Reaction ID와 `reactedAt`은 공개하지 않고 `createdAt`과 ID는 최신순 opaque cursor를 계산하는 내부 ordering key로만 사용한다.
+- Alternatives Considered: `ReactionConnection`은 source 객체와 lifecycle을 공개 계약으로 확장한다. custom edge의 `reactedAt`은 현재 UI 전달 결과에 필요하지 않고 event history 제외 범위를 흐린다.
+- Consequences: client는 기존 Profile fragment를 재사용할 수 있지만 각 Profile의 정확한 Reaction 시각은 표시할 수 없다. 시각 또는 Reaction event가 제품 요구가 되면 별도 Domain·Issue Gate에서 공개 계약을 확장해야 한다.
+- Confirmation / Follow-up: PROD-407 schema와 integration test에서 node가 기존 Profile이고 Reaction metadata field를 새로 노출하지 않는지 확인한다.
+
 ### Reaction Notification은 source 밖의 Best Effort projection으로 처리한다
 
 - Decision Date: 2026-07-20
@@ -140,7 +168,6 @@
 
 ## Remaining Decisions
 
-- PROD-407: Profile connection ordering·cursor와 Profile row 표시 범위
 - PROD-417/418: zero-count Type 공급 API, selector·Profile 목록 UX, optimistic update 사용 여부
 - PROD-413: multi-kind Notification visible projection의 `UNION ALL` 기본안과 `LEFT JOIN` 대안 중 최종 구현, PROD-277 Read/navigation 순서
 

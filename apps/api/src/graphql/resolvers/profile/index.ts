@@ -2,4 +2,10 @@ import './field';
 import './mutation';
 import './query';
 
-export { AccountProfile, Profile, ProfileFollow, ProfileFollowRequest } from './ref';
+export {
+  AccountProfile,
+  Profile,
+  ProfileConnection,
+  ProfileFollow,
+  ProfileFollowRequest,
+} from './ref';

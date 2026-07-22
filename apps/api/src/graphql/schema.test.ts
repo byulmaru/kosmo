@@ -115,6 +115,24 @@ test('exposes the ID-based idempotent Reaction delete contract', () => {
   assert.equal(payload.getFields().deleted, undefined);
 });
 
+test('exposes Reaction Profiles as the shared Profile connection without Reaction metadata', () => {
+  const post = schema.getType('Post');
+  const connection = schema.getType('ProfileConnection');
+  const edge = schema.getType('ProfileConnectionEdge');
+
+  assert.ok(isObjectType(post));
+  const field = post.getFields().reactionProfiles;
+  assert.equal(String(field?.type), 'ProfileConnection!');
+  assert.equal(String(field?.args.find(({ name }) => name === 'type')?.type), 'String!');
+
+  assert.ok(isObjectType(connection));
+  assert.ok(isObjectType(edge));
+  assert.equal(String(edge.getFields().node.type), 'Profile!');
+  assert.equal(edge.getFields().reaction, undefined);
+  assert.equal(edge.getFields().reactionId, undefined);
+  assert.equal(edge.getFields().reactedAt, undefined);
+});
+
 test('exposes the profile follow request lifecycle contract', () => {
   const profile = schema.getType('Profile');
   const viewerState = schema.getType('ProfileViewerState');

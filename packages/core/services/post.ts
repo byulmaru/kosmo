@@ -6,6 +6,7 @@ import {
   db,
   first,
   firstOrThrow,
+  firstOrThrowWith,
   getDatabaseConnection,
   Instances,
   isUniqueViolation,
@@ -24,6 +25,7 @@ import {
   ProfileState,
 } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
+import { validatePostStructure } from './post-structure';
 import type { Transaction } from '../db';
 import type { PostContentDocumentV1 } from '../post-content';
 
@@ -31,6 +33,7 @@ type LocalPostInput = {
   document: PostContentDocumentV1;
   origin: 'LOCAL';
   profileId: string;
+  replyParentId?: string;
   visibility: PostVisibility;
 };
 
@@ -41,6 +44,7 @@ type ActivityPubPostInput = {
   profileId: string;
   publishedAt: Temporal.Instant | null;
   receivedAt: Temporal.Instant;
+  replyParentId?: string;
   visibility: PostVisibility;
 };
 
@@ -262,9 +266,30 @@ export async function createPost(
         })
         .returning()
         .then(firstOrThrow);
+
+      validatePostStructure({
+        currentContentId: content.id,
+        id: post.id,
+        replyParentId: input.replyParentId ?? null,
+        repostSourceId: post.repostSourceId,
+      });
+
+      if (input.replyParentId !== undefined) {
+        const replyParent = await tx
+          .select({ currentContentId: Posts.currentContentId })
+          .from(Posts)
+          .where(eq(Posts.id, input.replyParentId))
+          .then(firstOrThrowWith(() => new NotFoundError('Post not found')));
+        if (replyParent.currentContentId === null) {
+          throw new ValidationError('Reply Parent must have content', {
+            field: 'replyParentId',
+          });
+        }
+      }
+
       const linkedPost = await tx
         .update(Posts)
-        .set({ currentContentId: content.id })
+        .set({ currentContentId: content.id, replyParentId: input.replyParentId ?? null })
         .where(eq(Posts.id, post.id))
         .returning()
         .then(firstOrThrow);
