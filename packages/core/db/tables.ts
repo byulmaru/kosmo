@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  check,
   index,
   integer,
   jsonb,
@@ -301,11 +302,16 @@ export const Posts = pgTable(
     visibility: Enum.postVisibility('visibility').notNull(),
     state: Enum.postState('state').notNull(),
     currentContentId: uuid('current_content_id').references((): AnyPgColumn => PostContents.id),
+    replyParentId: uuid('reply_parent_id').references((): AnyPgColumn => Posts.id),
     repostSourceId: uuid('repost_source_id').references((): AnyPgColumn => Posts.id),
     createdAt: createdAt(),
     deletedAt: datetime('deleted_at'),
   },
   (table) => [
+    check(
+      'post_reply_parent_not_self',
+      sql`${table.replyParentId} IS NULL OR ${table.replyParentId} <> ${table.id}`,
+    ),
     index().on(table.profileId, table.id.desc()),
     uniqueIndex('post_active_repost_profile_source_unique')
       .on(table.profileId, table.repostSourceId)
