@@ -47,7 +47,13 @@ export const PostContent = createObjectRef('PostContent', (ids, ctx) =>
     .innerJoin(Posts, eq(Posts.id, PostContents.postId))
     .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(and(inArray(PostContents.id, ids), postVisibilityAccessWhere({ ctx }))),
+    .where(
+      and(
+        inArray(PostContents.id, ids),
+        postVisibilityAccessWhere({ ctx }),
+        postSourceChainAccessWhere({ ctx, postId: Posts.id }),
+      ),
+    ),
 );
 
 PostContent.implement({

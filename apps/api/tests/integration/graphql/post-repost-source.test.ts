@@ -286,6 +286,22 @@ describe('GraphQL Post Repost Source', () => {
     await assertPostNodeUnavailable(outer.id);
   });
 
+  test('direct Source Tombstone을 가진 Quote PostContent Node는 반환하지 않는다', async () => {
+    const profile = await insertProfile();
+    const source = await insertPost({
+      bodyText: 'deleted source',
+      profileId: profile.id,
+      state: PostState.DELETED,
+    });
+    const quote = await insertPost({
+      bodyText: 'quote body',
+      profileId: profile.id,
+      repostSourceId: source.id,
+    });
+
+    await assertPostContentNodeUnavailable(quote.currentContentId!);
+  });
+
   test('nested Quote의 indirect Source Tombstone을 가진 outer Post Node는 반환하지 않는다', async () => {
     const profile = await insertProfile();
     const deletedSource = await insertPost({
@@ -515,6 +531,16 @@ const assertPostNodeUnavailable = async (postId: string, token?: string) => {
   const result = await requestGraphQL<{ node: { id: string } | null }>(
     'query PostNode($id: ID!) { node(id: $id) { ... on Post { id } } }',
     { id: globalId('Post', postId) },
+    token,
+  );
+  assertNoGraphQLErrors(result);
+  assert.equal(result.data?.node, null);
+};
+
+const assertPostContentNodeUnavailable = async (contentId: string, token?: string) => {
+  const result = await requestGraphQL<{ node: { bodyText: string } | null }>(
+    'query PostContentNode($id: ID!) { node(id: $id) { ... on PostContent { bodyText } } }',
+    { id: globalId('PostContent', contentId) },
     token,
   );
   assertNoGraphQLErrors(result);
