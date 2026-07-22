@@ -2,7 +2,17 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, test } from 'node:test';
-import { PostState, PostVisibility, ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
+import {
+  AccountProfileRole,
+  AccountState,
+  InstanceKind,
+  InstanceState,
+  PostState,
+  PostVisibility,
+  ProfileFollowPolicy,
+  ProfileState,
+  SessionState,
+} from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { eq, ne } from 'drizzle-orm';
@@ -14,13 +24,17 @@ import type { Env } from '../../../src/context';
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
+let AccountProfiles: typeof CoreDb.AccountProfiles;
+let Accounts: typeof CoreDb.Accounts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
+let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
+let Sessions: typeof CoreDb.Sessions;
 let app: Hono<Env>;
 let localInstanceId: string;
 
@@ -30,8 +44,19 @@ describe('GraphQL Post Repost Source', () => {
     process.env.NODE_ENV = 'production';
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
-    ({ db, firstOrThrow, Instances, pg, PostContents, Posts, Profiles } =
-      await import('@kosmo/core/db'));
+    ({
+      AccountProfiles,
+      Accounts,
+      db,
+      firstOrThrow,
+      Instances,
+      pg,
+      PostContents,
+      Posts,
+      ProfileFollows,
+      Profiles,
+      Sessions,
+    } = await import('@kosmo/core/db'));
     const { seedDatabase } = await import('@kosmo/core/db/seed');
 
     await truncateDatabase();
@@ -52,6 +77,10 @@ describe('GraphQL Post Repost Source', () => {
     await db.update(Posts).set({ currentContentId: null });
     await db.delete(PostContents);
     await db.delete(Posts);
+    await db.delete(ProfileFollows);
+    await db.delete(Sessions);
+    await db.delete(AccountProfiles);
+    await db.delete(Accounts);
     await db.delete(Profiles);
     await db.delete(Instances).where(ne(Instances.id, localInstanceId));
   });
@@ -132,9 +161,152 @@ describe('GraphQL Post Repost Source', () => {
     assert.equal(result.data?.node?.repostSource?.id, globalId('Post', source.id));
     assert.notEqual(result.data?.node?.repostSource?.id, globalId('Post', root.id));
   });
+
+  test('author는 자신의 DIRECT Source를 가진 Post Node를 조회할 수 있다', async () => {
+    const auth = await createAuthenticatedSession();
+    const source = await insertPost({
+      bodyText: 'direct source',
+      profileId: auth.profile.id,
+      visibility: PostVisibility.DIRECT,
+    });
+    const outer = await insertPost({
+      profileId: auth.profile.id,
+      repostSourceId: source.id,
+    });
+
+    const result = await requestRepostSource(outer.id, auth.token);
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.node?.repostSource?.id, globalId('Post', source.id));
+  });
+
+  test('follower는 FOLLOWERS Source를 가진 Post Node를 조회할 수 있다', async () => {
+    const auth = await createAuthenticatedSession();
+    const sourceAuthor = await insertProfile();
+    await db.insert(ProfileFollows).values({
+      followerProfileId: auth.profile.id,
+      followeeProfileId: sourceAuthor.id,
+    });
+    const source = await insertPost({
+      bodyText: 'followers source',
+      profileId: sourceAuthor.id,
+      visibility: PostVisibility.FOLLOWERS,
+    });
+    const outer = await insertPost({
+      profileId: sourceAuthor.id,
+      repostSourceId: source.id,
+    });
+
+    const result = await requestRepostSource(outer.id, auth.token);
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.node?.repostSource?.id, globalId('Post', source.id));
+  });
+
+  test('direct Source Tombstone을 가진 outer Post Node는 반환하지 않는다', async () => {
+    const profile = await insertProfile();
+    const source = await insertPost({
+      bodyText: 'deleted source',
+      profileId: profile.id,
+      state: PostState.DELETED,
+    });
+    const outer = await insertPost({ profileId: profile.id, repostSourceId: source.id });
+
+    await assertPostNodeUnavailable(outer.id);
+  });
+
+  test('nested Quote의 indirect Source Tombstone을 가진 outer Post Node는 반환하지 않는다', async () => {
+    const profile = await insertProfile();
+    const deletedSource = await insertPost({
+      bodyText: 'deleted source',
+      profileId: profile.id,
+      state: PostState.DELETED,
+    });
+    const directSource = await insertPost({
+      bodyText: 'direct source quote',
+      profileId: profile.id,
+      repostSourceId: deletedSource.id,
+    });
+    const outer = await insertPost({
+      bodyText: 'outer quote',
+      profileId: profile.id,
+      repostSourceId: directSource.id,
+    });
+
+    await assertPostNodeUnavailable(outer.id);
+  });
+
+  test('unauthorized viewer에게 DIRECT direct Source를 가진 outer Post Node는 반환하지 않는다', async () => {
+    const profile = await insertProfile();
+    const source = await insertPost({
+      bodyText: 'direct source',
+      profileId: profile.id,
+      visibility: PostVisibility.DIRECT,
+    });
+    const outer = await insertPost({ profileId: profile.id, repostSourceId: source.id });
+
+    await assertPostNodeUnavailable(outer.id);
+  });
+
+  test('indirect Source author의 suspended Instance를 가진 outer Post Node는 반환하지 않는다', async () => {
+    const profile = await insertProfile();
+    const suspendedInstance = await insertSuspendedInstance();
+    const sourceAuthor = await insertProfile({ instanceId: suspendedInstance.id });
+    const indirectSource = await insertPost({
+      bodyText: 'suspended source',
+      profileId: sourceAuthor.id,
+    });
+    const directSource = await insertPost({
+      bodyText: 'direct source quote',
+      profileId: profile.id,
+      repostSourceId: indirectSource.id,
+    });
+    const outer = await insertPost({
+      bodyText: 'outer quote',
+      profileId: profile.id,
+      repostSourceId: directSource.id,
+    });
+
+    await assertPostNodeUnavailable(outer.id);
+  });
+
+  test('contentless pure Repost Source를 가진 outer Post Node는 반환하지 않는다', async () => {
+    const profile = await insertProfile();
+    const root = await insertPost({ bodyText: 'root', profileId: profile.id });
+    const contentlessRepost = await insertPost({
+      profileId: profile.id,
+      repostSourceId: root.id,
+    });
+    const outer = await insertPost({
+      bodyText: 'outer quote',
+      profileId: profile.id,
+      repostSourceId: contentlessRepost.id,
+    });
+
+    await assertPostNodeUnavailable(outer.id);
+  });
+
+  test('cycle이 생긴 Source chain을 가진 outer Post Node는 반환하지 않는다', async () => {
+    const profile = await insertProfile();
+    const firstQuote = await insertPost({ bodyText: 'first quote', profileId: profile.id });
+    const secondQuote = await insertPost({
+      bodyText: 'second quote',
+      profileId: profile.id,
+      repostSourceId: firstQuote.id,
+    });
+    await db
+      .update(Posts)
+      .set({ repostSourceId: secondQuote.id })
+      .where(eq(Posts.id, firstQuote.id));
+    const outer = await insertPost({
+      bodyText: 'outer quote',
+      profileId: profile.id,
+      repostSourceId: firstQuote.id,
+    });
+
+    await assertPostNodeUnavailable(outer.id);
+  });
 });
 
-const insertProfile = () => {
+const insertProfile = ({ instanceId = localInstanceId }: { instanceId?: string } = {}) => {
   const handle = `profile-${crypto.randomUUID()}`;
   return db
     .insert(Profiles)
@@ -142,7 +314,7 @@ const insertProfile = () => {
       displayName: handle,
       followPolicy: ProfileFollowPolicy.OPEN,
       handle,
-      instanceId: localInstanceId,
+      instanceId,
       normalizedHandle: normalizeHandle(handle),
       state: ProfileState.ACTIVE,
     })
@@ -150,17 +322,56 @@ const insertProfile = () => {
     .then(firstOrThrow);
 };
 
+const insertSuspendedInstance = () => {
+  const domain = `suspended-${crypto.randomUUID()}.example`;
+  return db
+    .insert(Instances)
+    .values({
+      canonicalOrigin: `https://${domain}`,
+      domain,
+      kind: InstanceKind.ACTIVITYPUB,
+      state: InstanceState.SUSPENDED,
+    })
+    .returning()
+    .then(firstOrThrow);
+};
+
+const createAuthenticatedSession = async () => {
+  const suffix = crypto.randomUUID();
+  const account = await db
+    .insert(Accounts)
+    .values({ displayName: suffix, oidcSubject: suffix, state: AccountState.ACTIVE })
+    .returning()
+    .then(firstOrThrow);
+  const profile = await insertProfile();
+  await db.insert(AccountProfiles).values({
+    accountId: account.id,
+    profileId: profile.id,
+    role: AccountProfileRole.OWNER,
+  });
+  const token = `token-${suffix}`;
+  await db.insert(Sessions).values({
+    accountId: account.id,
+    activeProfileId: profile.id,
+    state: SessionState.ACTIVE,
+    token,
+  });
+  return { profile, token };
+};
+
 const insertPost = async ({
   bodyText,
   profileId,
   replyParentId = null,
   repostSourceId = null,
+  state = PostState.ACTIVE,
   visibility = PostVisibility.PUBLIC,
 }: {
   bodyText?: string;
   profileId: string;
   replyParentId?: string | null;
   repostSourceId?: string | null;
+  state?: PostState;
   visibility?: PostVisibility;
 }) => {
   const post = await db
@@ -170,7 +381,7 @@ const insertPost = async ({
       profileId,
       replyParentId,
       repostSourceId,
-      state: PostState.ACTIVE,
+      state,
       visibility,
     })
     .returning()
@@ -194,7 +405,7 @@ const insertPost = async ({
     .then(firstOrThrow);
 };
 
-const requestRepostSource = (id: string) =>
+const requestRepostSource = (id: string, token?: string) =>
   requestGraphQL<{ node: PostNode | null }>(
     `query RepostSourceNode($id: ID!) {
       node(id: $id) {
@@ -207,12 +418,31 @@ const requestRepostSource = (id: string) =>
       }
     }`,
     { id: globalId('Post', id) },
+    token,
   );
 
-const requestGraphQL = async <TData>(query: string, variables: Record<string, unknown>) => {
+const assertPostNodeUnavailable = async (postId: string, token?: string) => {
+  const result = await requestGraphQL<{ node: { id: string } | null }>(
+    'query PostNode($id: ID!) { node(id: $id) { ... on Post { id } } }',
+    { id: globalId('Post', postId) },
+    token,
+  );
+  assertNoGraphQLErrors(result);
+  assert.equal(result.data?.node, null);
+};
+
+const requestGraphQL = async <TData>(
+  query: string,
+  variables: Record<string, unknown>,
+  token?: string,
+) => {
+  const headers = new Headers({ 'content-type': 'application/json' });
+  if (token) {
+    headers.set('authorization', `Bearer ${token}`);
+  }
   const response = await app.request('/graphql', {
     body: JSON.stringify({ query, variables }),
-    headers: new Headers({ 'content-type': 'application/json' }),
+    headers,
     method: 'POST',
   });
   assert.equal(response.status, 200);
