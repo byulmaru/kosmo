@@ -26,19 +26,19 @@
 - Decision Outcome: 새 Post는 이미 존재하는 Parent만 직접 참조하고 생성 뒤 Reply Parent를 변경하는 action/API를 제공하지 않는다. Reply Parent 직접 self-reference는 DB CHECK와 core에서 거부하고 Repost Source 직접 self-reference도 core에서 거부한다. 정상 생성 경로에는 recursive cycle scan이나 constraint trigger를 추가하지 않는다.
 - Alternatives Considered: 관계 변경 API, 매 생성 시 recursive graph scan, database constraint trigger. 현재 생성 전용 계약에 불필요하고 write 비용·복잡도를 늘리므로 제외한다.
 - Consequences: 정상 core write는 구조적으로 다단계 cycle을 만들지 않지만 raw SQL이나 미래 update 경로가 만든 비정상 cycle은 조회 경계에서 방어해야 한다.
-- Confirmation / Follow-up: PROD-393은 변경 API가 없고 self-reference가 rollback되는지 검증하며 PROD-399·400은 재귀 조회가 유한하게 종료되는지 검증한다.
+- Confirmation / Follow-up: PROD-393은 package 내부 구조 validator 단위 test와 DB CHECK test로 직접 self-reference 거부를 검증하며 PROD-399·400은 깊이 제한 없이 cycle에서 유한하게 종료되는지 검증한다.
 
-### Parent와 Source는 contentful Post여야 한다
+### Reply Parent는 contentful Post여야 한다
 
 - Decision Date: 2026-07-22
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/objects/post.md`, `PROD-393`
 - Status: Active
-- Context / Problem: Content 없는 Repost가 Reply Parent나 Repost Source가 되면 canonical Post 구조와 사용자에게 보여줄 직접 대상을 만족하지 못한다.
-- Decision Outcome: Parent와 Source는 존재하고 `currentContentId`가 있어야 한다. 두 관계가 같은 contentful Post를 가리키는 것은 허용하며, 대상이 나중에 Tombstone이 되어도 저장 ID는 유지한다.
+- Context / Problem: Content 없는 Repost가 Reply Parent가 되면 canonical Post 구조와 사용자에게 보여줄 직접 대상을 만족하지 못한다.
+- Decision Outcome: Reply Parent는 존재하고 `currentContentId`가 있어야 한다. Parent가 나중에 Tombstone이 되어도 저장 ID는 유지한다. Source 대상에는 같은 canonical 규칙을 적용하되 실제 검증은 Source caller를 소유한 후속 이슈에서 구현한다.
 - Alternatives Considered: Content 없는 Repost를 관계 대상으로 허용, Source와 Parent가 같은 대상인 조합 거부, Tombstone 시 FK null 처리. canonical 계약과 충돌하므로 사용하지 않는다.
-- Consequences: 생성 시 대상 존재와 Content를 검사하고 조회 시 lifecycle·visibility·eligibility를 별도로 적용한다.
-- Confirmation / Follow-up: PROD-393은 missing/contentless/same-target/Tombstone 시나리오를 검증한다.
+- Consequences: Reply 생성 시 Parent 존재와 Content를 검사하고 조회 시 lifecycle·visibility·eligibility를 별도로 적용한다.
+- Confirmation / Follow-up: PROD-393은 Parent의 missing/contentless/Tombstone 시나리오와 구조 validator의 동일 Parent/Source 조합을 검증한다.
 
 ### 관계 입력 실패를 기존 core error 계약으로 매핑한다
 
@@ -46,11 +46,11 @@
 - Decision Class: Implementation Choice
 - Authority / Provenance: `PROD-393`, `memory/graphql-style.md`
 - Status: Active
-- Context / Problem: optional Parent/Source 입력의 실패를 caller가 기존 domain error 경계에서 일관되게 처리해야 한다.
-- Decision Outcome: 존재하지 않는 Parent/Source는 `NotFoundError('Post not found')`, Content 없는 대상과 구조·self-reference 위반은 원인이 된 `replyParentId` 또는 `repostSourceId` field의 `ValidationError`로 반환한다.
+- Context / Problem: 관계 입력과 구조 검증의 실패를 caller가 기존 domain error 경계에서 일관되게 처리해야 한다.
+- Decision Outcome: 존재하지 않는 Parent는 `NotFoundError('Post not found')`, Content 없는 Parent와 Reply 구조·self-reference 위반은 `replyParentId` field의 `ValidationError`로 반환한다. package 내부 구조 validator는 원인이 된 관계 field를 보존한다.
 - Alternatives Considered: 모든 실패를 Not Found로 마스킹, DB constraint error 직접 노출, 새 error type 추가. field 귀속성과 기존 error 계층을 잃거나 불필요한 공개 계약을 추가하므로 사용하지 않는다.
 - Consequences: core validator는 입력 field를 보존하고 transaction 밖으로 DB 세부 오류를 노출하지 않아야 한다.
-- Confirmation / Follow-up: PROD-393 service test에서 error class, message·field와 rollback을 확인한다.
+- Confirmation / Follow-up: PROD-393 service test에서 Parent error class, message·field와 rollback을 확인하고 package 내부 validator 단위 test에서 Source를 포함한 구조 조합의 error field를 확인한다.
 
 ### PROD-393은 additive Reply migration만 소유한다
 
@@ -64,17 +64,17 @@
 - Consequences: 구버전 workload는 새 nullable column을 무시할 수 있고 PROD-400 전까지 descendant production query는 제공하지 않는다.
 - Confirmation / Follow-up: migration catalog·기존 row·Repost index 회귀와 lock/table rewrite 위험을 검증한다.
 
-### Content와 두 관계를 최종 Post update에서 연결한다
+### Content와 Reply Parent를 최종 Post update에서 연결한다
 
 - Decision Date: 2026-07-22
 - Decision Class: Implementation Choice
 - Authority / Provenance: `PROD-393`, `memory/coding-style.md`
 - Status: Active
 - Context / Problem: DB가 생성하는 새 Post ID로 self-reference를 검사하면서 기존 contentful `createPost` 반환·ActivityPub first-write-wins 계약과 원자성을 보존해야 한다.
-- Decision Outcome: transaction에서 빈 관계의 Post와 Content를 생성하고 공통 구조·대상 검증을 수행한 뒤 `currentContentId`, `replyParentId`, `repostSourceId`를 마지막 Post update에서 함께 연결한다. 기존 Local/ActivityPub 입력에는 두 nullable 관계 ID만 optional로 추가하고 반환 shape는 유지한다.
+- Decision Outcome: transaction에서 빈 관계의 Post와 Content를 생성하고 공통 구조 검증과 Parent 대상 검증을 수행한 뒤 `currentContentId`와 `replyParentId`를 마지막 Post update에서 함께 연결한다. 기존 Local/ActivityPub 입력에는 nullable `replyParentId`만 추가하고 반환 shape는 유지한다. `repostSourceId`를 실제로 연결하는 입력은 Quote·Reply+Quote 또는 Repost caller를 소유한 후속 이슈에서 추가한다.
 - Alternatives Considered: 관계를 순차 update, caller별 validator 복제, 새 public generic action 추가. 부분 상태와 검증 중복 또는 현재 이슈 밖의 API를 만들므로 제외한다.
-- Consequences: 실패하면 Post, ActivityPub mapping과 Content까지 모두 rollback되며 후속 Repost/Quote caller가 같은 구조 경계를 재사용할 수 있다.
-- Confirmation / Follow-up: PROD-393 service test에서 Local/ActivityPub 회귀, 조합 저장과 모든 실패 rollback을 확인한다.
+- Consequences: 실패하면 Post, ActivityPub mapping과 Content까지 모두 rollback된다. 공통 구조 validator는 package 내부에 남아 후속 Source caller가 생길 때 재사용할 수 있다.
+- Confirmation / Follow-up: PROD-393 service test에서 Local/ActivityPub 회귀, Reply 저장과 실패 rollback을 확인하고 package 내부 validator 단위 test로 나머지 허용·거부 조합을 검증한다.
 
 ### Reply 조회는 관계별 visibility 경계를 유지한다
 
@@ -94,18 +94,8 @@
 - Decision Class: Upstream Change Required
 - Authority / Provenance: 없음.
 - Status: Blocked
-- Context / Problem: PROD-399·400은 관찰 가능한 관계·visibility 행동을 정의하지만 field 이름, list/connection, pagination과 정렬 방향은 정의하지 않는다.
-- Decision Outcome: 현재 change에서 임의의 공개 GraphQL shape를 규범 계약으로 만들지 않는다. PROD-399·400 구현 전에 Linear에서 각 shape를 확정하고 이 decision을 authority가 있는 Active decision으로 대체한다.
+- Context / Problem: PROD-399·400은 관찰 가능한 관계·visibility 행동을 정의하지만 field 이름, list/connection, pagination과 정렬 방향은 정의하지 않고, PROD-422의 thread 배치·중첩 표현도 PROD-451과의 경계가 확정되지 않았다.
+- Decision Outcome: 현재 change에서 임의의 공개 GraphQL shape나 thread 표현을 규범 계약으로 만들지 않는다. 각 구현 전에 Linear에서 shape와 책임 경계를 확정하고 이 decision을 authority가 있는 Active decision으로 대체한다.
 - Alternatives Considered: `replyAncestors`/`replyDescendants` 이름과 connection·정렬을 OpenSpec만으로 즉시 확정. 공개 API를 upstream 근거 없이 추가하므로 보류한다.
-- Consequences: PROD-393·398은 이 결정과 무관하게 진행할 수 있지만 PROD-399·400 및 이를 소비하는 PROD-422는 이 decision이 Blocked인 동안 구현할 수 없다.
+- Consequences: PROD-393·398은 이 결정과 무관하게 진행할 수 있지만 PROD-399·400 및 이를 소비하는 PROD-422는 해당 책임의 decision이 Blocked인 동안 구현할 수 없다.
 - Confirmation / Follow-up: 해당 Linear 이슈 본문·댓글 갱신과 별도 Issue Gate 승인 뒤 specs·design·tasks를 갱신한다.
-
-## Remaining Decisions
-
-- PROD-399 조상 경로의 GraphQL field 이름, collection shape와 순서 방향
-- PROD-400 descendant의 GraphQL field 이름, connection·pagination과 정렬 계약
-- PROD-422 thread의 세부 배치·중첩 표현 중 PROD-451 presentation 범위와 겹치지 않는 integration 경계
-
-## Superseded Decisions
-
-- 없음.

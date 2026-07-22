@@ -8,12 +8,12 @@
 
 **Deliverable**
 
-Content가 있는 Post가 nullable 직접 Reply Parent를 저장하고 Repost Source와 독립적으로 공존하며, core 생성 경계가 허용된 Post 관계 조합과 관계 대상을 원자적으로 검증한다.
+Content가 있는 Post가 nullable 직접 Reply Parent를 저장하고 Repost Source와 독립적으로 공존하며, core 생성 경계가 허용된 Post 관계 조합과 Reply Parent 대상을 원자적으로 검증한다.
 
 **Guardrails**
 
 - PROD-394의 Repost Source migration과 partial unique index를 변경하거나 재구현하지 않는다.
-- Reply Parent와 Source는 존재하는 contentful Post여야 하고 같은 대상 Post를 가리킬 수 있다.
+- Reply Parent는 존재하는 contentful Post여야 하며 구조 validator는 Parent와 Source가 같은 대상 Post를 가리키는 조합을 허용한다.
 - Content 없는 Reply와 양 관계의 직접 self-reference를 거부한다.
 - Reply Parent 변경 API, recursive cycle scan, constraint trigger와 하위 Reply 조회 index를 추가하지 않는다.
 - 기존 Local/ActivityPub contentful 호출과 반환 shape 및 ActivityPub first-write-wins를 유지한다.
@@ -21,12 +21,12 @@ Content가 있는 Post가 nullable 직접 Reply Parent를 저장하고 Repost So
 **Verification**
 
 - 기존 row가 있는 PROD-394 schema에 additive migration을 적용해 nullable FK·직접 self CHECK·기존 Repost index와 Tombstone 관계 보존을 검증한다.
-- Post·Reply·Quote·Reply+Quote·동일 Parent/Source 저장과 missing/contentless/self/contentless+Reply 실패 및 transaction rollback을 검증한다.
+- Local/ActivityPub Post·Reply 저장과 Parent의 missing/contentless 실패 및 transaction rollback을 service test로 검증한다. package 내부 구조 validator 단위 test로 Post·Reply·Quote·Reply+Quote·Repost와 동일 Parent/Source, self-reference 및 contentless+Reply 조합을 검증하고 DB CHECK test로 직접 Parent self-reference를 검증한다.
 - core 전체 test, migration runner·contract test, lint·format과 strict OpenSpec validation을 통과시킨다.
 
 - [ ] 1.1 Reply Parent additive schema·migration과 DB 관계·회귀 검증을 구현한다.
-- [ ] 1.2 공통 Post 구조·대상 검증과 Local/ActivityPub optional 관계 저장을 구현한다.
-- [ ] 1.3 허용·거부 조합, error field, rollback과 기존 생성 계약 회귀 test를 추가하고 관련 check를 통과시킨다.
+- [ ] 1.2 package 내부 공통 Post 구조 validator와 Parent 대상 검증을 구현하고 Local/ActivityPub `createPost`에 optional `replyParentId` 저장을 추가한다.
+- [ ] 1.3 validator 허용·거부 조합, DB CHECK, Parent error field, rollback과 기존 생성 계약 회귀 test를 추가하고 관련 check를 통과시킨다.
 
 ## 2. PROD-398 직접 Reply Parent 조회
 

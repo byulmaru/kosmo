@@ -41,34 +41,33 @@
 
 ### Requirement: Reply 관계 생성 검증
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `PROD-393` 시스템은 Reply Parent와 Repost Source를 생성 시 한 번만 직접 연결해야 하며(MUST), 각 대상은 이미 존재하고 Content를 가진 Post여야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `PROD-393` 시스템은 Reply Parent를 생성 시 한 번만 직접 연결해야 하며(MUST), Parent는 이미 존재하고 Content를 가진 Post여야 한다(MUST).
 
-#### Scenario: 존재하는 contentful Parent와 Source 연결
+#### Scenario: 존재하는 contentful Parent 연결
 
-- **WHEN** 새 contentful Post가 이미 존재하는 contentful Parent와 Source를 입력받는다
-- **THEN** 시스템은 Content, Reply Parent와 Repost Source를 같은 transaction에서 연결한다
-- **AND** Parent와 Source가 같은 Post여도 허용한다
+- **WHEN** 새 contentful Post가 이미 존재하는 contentful Parent를 입력받는다
+- **THEN** 시스템은 Content와 Reply Parent를 같은 transaction에서 연결한다
 
 #### Scenario: 존재하지 않는 관계 대상
 
-- **WHEN** 입력 Reply Parent 또는 Repost Source가 존재하지 않는다
+- **WHEN** 입력 Reply Parent가 존재하지 않는다
 - **THEN** 시스템은 `NotFoundError('Post not found')`로 생성을 거부한다
 - **AND** transaction에서 생성한 Post와 Content를 남기지 않는다
 
 #### Scenario: Content 없는 관계 대상
 
-- **WHEN** 입력 Reply Parent 또는 Repost Source가 Content를 가지지 않는다
-- **THEN** 시스템은 해당 입력 field의 `ValidationError`로 생성을 거부한다
+- **WHEN** 입력 Reply Parent가 Content를 가지지 않는다
+- **THEN** 시스템은 `replyParentId` field의 `ValidationError`로 생성을 거부한다
 - **AND** transaction에서 생성한 Post와 Content를 남기지 않는다
 
 #### Scenario: 직접 self-reference 입력
 
-- **WHEN** 새 Post의 식별자가 Reply Parent 또는 Repost Source로 입력된다
-- **THEN** 시스템은 해당 입력 field의 `ValidationError`로 생성을 거부한다
+- **WHEN** 새 Post의 식별자가 Reply Parent로 입력된다
+- **THEN** 시스템은 `replyParentId` field의 `ValidationError`로 생성을 거부한다
 
 #### Scenario: 생성 전용 acyclic 관계
 
-- **WHEN** 새 Post가 이미 존재하는 Parent 또는 Source만 직접 참조하고 생성 후 관계 변경 경로를 제공하지 않는다
+- **WHEN** 새 Post가 이미 존재하는 Parent만 직접 참조하고 생성 후 Reply Parent 변경 경로를 제공하지 않는다
 - **THEN** 정상 core 생성 경로는 다단계 cycle을 만들지 않는다
 - **AND** 시스템은 정상 생성에 재귀 cycle 탐색이나 constraint trigger를 요구하지 않는다
 
