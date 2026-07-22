@@ -18,14 +18,26 @@ const followingOwnerId = 'profile-following-content';
 const followed = profile({
   id: 'profile-followed',
   viewerState: {
-    follow: { follower: { id: followingOwnerId }, id: 'following-edge-0' },
+    follow: {
+      follower: { followingCount: 42, id: followingOwnerId },
+      id: 'following-edge-0',
+    },
+    followRequest: null,
+    isSelf: false,
+  },
+});
+const pending = profile({
+  id: 'profile-pending',
+  viewerState: {
+    follow: null,
+    followRequest: { id: 'follow-request-0' },
     isSelf: false,
   },
 });
 const self = profile({
   displayName: '내 프로필',
   id: 'profile-self',
-  viewerState: { follow: null, isSelf: true },
+  viewerState: { follow: null, followRequest: null, isSelf: true },
 });
 const remote = profile({
   bio: '먼 인스턴스에서 온 아주 긴 한 줄 소개가 컨테이너 폭을 넘겨도 레이아웃은 유지됩니다.',
@@ -34,6 +46,13 @@ const remote = profile({
   id: 'profile-remote',
   instance: { kind: 'ACTIVITYPUB' },
   relativeHandle: '@remote-user@very-long-instance.example',
+});
+const remoteApprovalRequired = profile({
+  followPolicy: 'APPROVAL_REQUIRED',
+  handle: 'approval-required',
+  id: 'profile-remote-approval-required',
+  instance: { kind: 'ACTIVITYPUB' },
+  relativeHandle: '@approval-required@remote.example',
 });
 const noBio = profile({ bio: null, id: 'profile-no-bio' });
 const noViewer = profile({ id: 'profile-no-viewer', viewerState: null });
@@ -59,6 +78,8 @@ const storyProfiles = [
   followersContent,
   followingEmpty,
   followingContent,
+  remoteApprovalRequired,
+  pending,
 ];
 
 const ProfilesStoriesQuery = graphql`
@@ -146,6 +167,16 @@ function FollowButtonStory() {
 
 function RemoteFollowButtonStory() {
   const profile = requireProfile(useStoryProfiles(), 3);
+  return <FollowButton profile={requireFragment(profile.followButton, 'follow button')} />;
+}
+
+function RemoteApprovalRequiredFollowButtonStory() {
+  const profile = requireProfile(useStoryProfiles(), 10);
+  return <FollowButton profile={requireFragment(profile.followButton, 'follow button')} />;
+}
+
+function PendingFollowButtonStory() {
+  const profile = requireProfile(useStoryProfiles(), 11);
   return <FollowButton profile={requireFragment(profile.followButton, 'follow button')} />;
 }
 
@@ -289,6 +320,7 @@ export const ListAndFollowStates: Story = {
     expect(
       canvasElement.querySelector('a[href="/@remote-user@very-long-instance.example"]'),
     ).toBeInTheDocument();
+    expect(within(canvasElement).getAllByRole('button', { name: '팔로우' })).toHaveLength(2);
   },
   render: () => <ProfileListCatalog />,
 };
@@ -298,7 +330,8 @@ export const FollowSubmitting: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
-    await expect(canvas.findByRole('button', { name: '처리 중' })).resolves.toBeDisabled();
+    await expect(canvas.findByRole('button', { name: '팔로잉' })).resolves.toBeDisabled();
+    expect(canvas.queryByRole('button', { name: '처리 중' })).not.toBeInTheDocument();
   },
   render: () => <FollowButtonStory />,
 };
@@ -311,18 +344,72 @@ export const FollowErrorInteraction: Story = {
     await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
       '팔로우 상태를 변경하지 못했습니다.',
     );
+    await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeEnabled();
   },
   render: () => <FollowButtonStory />,
 };
 
-export const RemoteFollowIsHidden: Story = {
+export const RemoteFollowUsesSameActionSurface: Story = {
   play: ({ canvasElement }) => {
-    expect(within(canvasElement).queryByRole('button', { name: '팔로우' })).not.toBeInTheDocument();
+    expect(within(canvasElement).getByRole('button', { name: '팔로우' })).toBeVisible();
   },
   render: () => <RemoteFollowButtonStory />,
 };
 
-export const UnfollowRemovesCachedConnectionEdge: Story = {
+export const RemoteApprovalRequiredUsesSameActionSurface: Story = {
+  play: ({ canvasElement }) => {
+    expect(within(canvasElement).getByRole('button', { name: '팔로우' })).toBeVisible();
+  },
+  render: () => <RemoteApprovalRequiredFollowButtonStory />,
+};
+
+export const ApprovalRequiredFollowSubmitting: Story = {
+  parameters: { relay: { mutationLoading: true } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
+    await expect(canvas.findByRole('button', { name: '요청됨' })).resolves.toBeDisabled();
+  },
+  render: () => <RemoteApprovalRequiredFollowButtonStory />,
+};
+
+export const ApprovalRequiredFollowErrorRollsBack: Story = {
+  parameters: { relay: { mutationError: '요청 실패' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '팔로우 상태를 변경하지 못했습니다.',
+    );
+    await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeEnabled();
+  },
+  render: () => <RemoteApprovalRequiredFollowButtonStory />,
+};
+
+export const PendingCancelSubmitting: Story = {
+  parameters: { relay: { mutationLoading: true } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '요청됨' }));
+    await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeDisabled();
+  },
+  render: () => <PendingFollowButtonStory />,
+};
+
+export const PendingCancelErrorRollsBack: Story = {
+  parameters: { relay: { mutationError: '취소 실패' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '요청됨' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '팔로우 상태를 변경하지 못했습니다.',
+    );
+    await expect(canvas.findByRole('button', { name: '요청됨' })).resolves.toBeEnabled();
+  },
+  render: () => <PendingFollowButtonStory />,
+};
+
+export const UnfollowKeepsConnectionRowAfterSuccess: Story = {
   parameters: {
     relay: {
       mutationResponse: {
@@ -330,13 +417,12 @@ export const UnfollowRemovesCachedConnectionEdge: Story = {
           followeeProfile: {
             ...followed,
             followersCount: followed.followersCount - 1,
-            viewerState: { follow: null, isSelf: false },
+            viewerState: { follow: null, followRequest: null, isSelf: false },
           },
           followerProfile: {
             ...followingContent,
             followingCount: followingContent.followingCount - 1,
           },
-          profileFollowId: 'following-edge-0',
         },
       },
     },
@@ -344,7 +430,36 @@ export const UnfollowRemovesCachedConnectionEdge: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: '팔로잉' }));
-    await expect(canvas.findByText('아직 팔로잉이 없어요')).resolves.toBeVisible();
+    await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeEnabled();
+    expect(canvas.getByText('코스모 작가')).toBeVisible();
+    expect(canvas.queryByText('아직 팔로잉이 없어요')).not.toBeInTheDocument();
+  },
+  render: () => <FollowingWithFollowedProfile />,
+};
+
+export const UnfollowKeepsCachedConnectionEdgeWhileSubmitting: Story = {
+  parameters: { relay: { mutationLoading: true } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '팔로잉' }));
+    await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeDisabled();
+    expect(canvas.getByText('코스모 작가')).toBeVisible();
+    expect(canvas.queryByText('아직 팔로잉이 없어요')).not.toBeInTheDocument();
+  },
+  render: () => <FollowingWithFollowedProfile />,
+};
+
+export const UnfollowErrorKeepsCachedConnectionEdge: Story = {
+  parameters: { relay: { mutationError: '언팔로우 실패' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '팔로잉' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '팔로우 상태를 변경하지 못했습니다.',
+    );
+    await expect(canvas.findByRole('button', { name: '팔로잉' })).resolves.toBeEnabled();
+    expect(canvas.getByText('코스모 작가')).toBeVisible();
+    expect(canvas.queryByText('아직 팔로잉이 없어요')).not.toBeInTheDocument();
   },
   render: () => <FollowingWithFollowedProfile />,
 };

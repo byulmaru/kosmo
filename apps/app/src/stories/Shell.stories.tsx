@@ -23,21 +23,26 @@ const secondProfile = profile({
   handle: 'remote',
   id: 'profile-remote',
   relativeHandle: '@remote@space.example',
-  viewerState: { follow: null, isSelf: true },
+  viewerState: { follow: null, followRequest: null, isSelf: true },
 });
 const selectedProfile = profile({
   handle: 'selected',
   id: 'profile-selected',
   relativeHandle: '@selected',
-  viewerState: { follow: null, isSelf: true },
+  viewerState: { follow: null, followRequest: null, isSelf: true },
 });
 const followedProfile = profile({
   followersCount: 17,
   handle: 'followed',
   id: 'profile-followed',
-  relativeHandle: '@followed',
+  instance: { kind: 'ACTIVITYPUB' },
+  relativeHandle: '@followed@remote.example',
   viewerState: {
-    follow: { follower: { id: selectedProfile.id }, id: 'profile-follow-edge' },
+    follow: {
+      follower: { followingCount: selectedProfile.followingCount, id: selectedProfile.id },
+      id: 'profile-follow-edge',
+    },
+    followRequest: null,
     isSelf: false,
   },
 });
@@ -165,12 +170,23 @@ export const FollowUpdatesBothProfileCounts: Story = {
         node: {
           ...followedProfile,
           followersCount: 16,
-          viewerState: { follow: null, isSelf: false },
+          viewerState: { follow: null, followRequest: null, isSelf: false },
         },
       },
       mutationResponse: {
         followProfile: {
-          followeeProfile: followedProfile,
+          result: { __typename: 'ProfileFollow', id: 'profile-follow-edge' },
+          followeeProfile: {
+            ...followedProfile,
+            viewerState: {
+              follow: {
+                follower: { followingCount: 43, id: selectedProfile.id },
+                id: 'profile-follow-edge',
+              },
+              followRequest: null,
+              isSelf: false,
+            },
+          },
           followerProfile: { ...selectedProfile, followingCount: 43 },
         },
       },
@@ -182,7 +198,7 @@ export const FollowUpdatesBothProfileCounts: Story = {
       'a[href="/@selected/following"]',
     );
     const targetFollowers = canvasElement.querySelector<HTMLAnchorElement>(
-      'a[href="/@followed/followers"]',
+      'a[href="/@followed@remote.example/followers"]',
     );
     expect(viewerFollowing).not.toBeNull();
     expect(targetFollowers).not.toBeNull();
@@ -191,8 +207,134 @@ export const FollowUpdatesBothProfileCounts: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
 
+    await expect(canvas.findByRole('button', { name: '팔로잉' })).resolves.toBeVisible();
     await expect(within(viewerFollowing!).findByText('43')).resolves.toBeVisible();
     await expect(within(targetFollowers!).findByText('17')).resolves.toBeVisible();
+  },
+  render: () => <FollowCacheStory />,
+};
+
+export const FollowOptimisticallyUpdatesBothProfileCounts: Story = {
+  parameters: {
+    relay: {
+      data: {
+        ...query,
+        node: {
+          ...followedProfile,
+          followersCount: 16,
+          viewerState: { follow: null, followRequest: null, isSelf: false },
+        },
+      },
+      mutationLoading: true,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewerFollowing = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@selected/following"]',
+    );
+    const targetFollowers = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@followed@remote.example/followers"]',
+    );
+    expect(viewerFollowing).not.toBeNull();
+    expect(targetFollowers).not.toBeNull();
+
+    await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
+
+    await expect(canvas.findByRole('button', { name: '팔로잉' })).resolves.toBeDisabled();
+    await expect(within(viewerFollowing!).findByText('43')).resolves.toBeVisible();
+    await expect(within(targetFollowers!).findByText('17')).resolves.toBeVisible();
+  },
+  render: () => <FollowCacheStory />,
+};
+
+export const ApprovalRequiredFollowKeepsProfileCounts: Story = {
+  parameters: {
+    relay: {
+      data: {
+        ...query,
+        node: {
+          ...followedProfile,
+          followPolicy: 'APPROVAL_REQUIRED',
+          followersCount: 16,
+          viewerState: { follow: null, followRequest: null, isSelf: false },
+        },
+      },
+      mutationResponse: {
+        followProfile: {
+          result: { __typename: 'ProfileFollowRequest', id: 'profile-follow-request' },
+          followeeProfile: {
+            ...followedProfile,
+            followPolicy: 'APPROVAL_REQUIRED',
+            followersCount: 16,
+            viewerState: {
+              follow: null,
+              followRequest: { id: 'profile-follow-request' },
+              isSelf: false,
+            },
+          },
+          followerProfile: selectedProfile,
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewerFollowing = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@selected/following"]',
+    );
+    const targetFollowers = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@followed@remote.example/followers"]',
+    );
+    expect(viewerFollowing).not.toBeNull();
+    expect(targetFollowers).not.toBeNull();
+
+    await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
+
+    await expect(canvas.findByRole('button', { name: '요청됨' })).resolves.toBeVisible();
+    expect(within(viewerFollowing!).getByText('42')).toBeVisible();
+    expect(within(targetFollowers!).getByText('16')).toBeVisible();
+  },
+  render: () => <FollowCacheStory />,
+};
+
+export const PendingCancelKeepsProfileCounts: Story = {
+  parameters: {
+    relay: {
+      data: {
+        ...query,
+        node: {
+          ...followedProfile,
+          followPolicy: 'APPROVAL_REQUIRED',
+          followersCount: 16,
+          viewerState: {
+            follow: null,
+            followRequest: { id: 'profile-follow-request' },
+            isSelf: false,
+          },
+        },
+      },
+      mutationResponse: {
+        cancelProfileFollowRequest: { profileFollowRequestId: 'profile-follow-request' },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewerFollowing = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@selected/following"]',
+    );
+    const targetFollowers = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@followed@remote.example/followers"]',
+    );
+    expect(viewerFollowing).not.toBeNull();
+    expect(targetFollowers).not.toBeNull();
+
+    await userEvent.click(canvas.getByRole('button', { name: '요청됨' }));
+
+    await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeVisible();
+    expect(within(viewerFollowing!).getByText('42')).toBeVisible();
+    expect(within(targetFollowers!).getByText('16')).toBeVisible();
   },
   render: () => <FollowCacheStory />,
 };
@@ -205,7 +347,7 @@ export const UnfollowUpdatesBothProfileCounts: Story = {
           followeeProfile: {
             ...followedProfile,
             followersCount: 16,
-            viewerState: { follow: null, isSelf: false },
+            viewerState: { follow: null, followRequest: null, isSelf: false },
           },
           followerProfile: { ...selectedProfile, followingCount: 41 },
           profileFollowId: 'profile-follow-edge',
@@ -219,7 +361,7 @@ export const UnfollowUpdatesBothProfileCounts: Story = {
       'a[href="/@selected/following"]',
     );
     const targetFollowers = canvasElement.querySelector<HTMLAnchorElement>(
-      'a[href="/@followed/followers"]',
+      'a[href="/@followed@remote.example/followers"]',
     );
     expect(viewerFollowing).not.toBeNull();
     expect(targetFollowers).not.toBeNull();
@@ -228,8 +370,56 @@ export const UnfollowUpdatesBothProfileCounts: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: '팔로잉' }));
 
+    await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeVisible();
     await expect(within(viewerFollowing!).findByText('41')).resolves.toBeVisible();
     await expect(within(targetFollowers!).findByText('16')).resolves.toBeVisible();
+  },
+  render: () => <FollowCacheStory />,
+};
+
+export const UnfollowOptimisticallyUpdatesBothProfileCounts: Story = {
+  parameters: { relay: { mutationLoading: true } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewerFollowing = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@selected/following"]',
+    );
+    const targetFollowers = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@followed@remote.example/followers"]',
+    );
+    expect(viewerFollowing).not.toBeNull();
+    expect(targetFollowers).not.toBeNull();
+
+    await userEvent.click(canvas.getByRole('button', { name: '팔로잉' }));
+
+    await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeDisabled();
+    await expect(within(viewerFollowing!).findByText('41')).resolves.toBeVisible();
+    await expect(within(targetFollowers!).findByText('16')).resolves.toBeVisible();
+  },
+  render: () => <FollowCacheStory />,
+};
+
+export const UnfollowErrorRollsBackBothProfileCounts: Story = {
+  parameters: { relay: { mutationError: '언팔로우 실패' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewerFollowing = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@selected/following"]',
+    );
+    const targetFollowers = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@followed@remote.example/followers"]',
+    );
+    expect(viewerFollowing).not.toBeNull();
+    expect(targetFollowers).not.toBeNull();
+
+    await userEvent.click(canvas.getByRole('button', { name: '팔로잉' }));
+
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '팔로우 상태를 변경하지 못했습니다.',
+    );
+    await expect(canvas.findByRole('button', { name: '팔로잉' })).resolves.toBeEnabled();
+    expect(within(viewerFollowing!).getByText('42')).toBeVisible();
+    expect(within(targetFollowers!).getByText('17')).toBeVisible();
   },
   render: () => <FollowCacheStory />,
 };

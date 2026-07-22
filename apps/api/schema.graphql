@@ -345,6 +345,7 @@ enum ProfileState {
 
 type ProfileViewerState {
   follow: ProfileFollow
+  followRequest: ProfileFollowRequest
   isSelf: Boolean!
 }
 

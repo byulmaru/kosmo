@@ -52,6 +52,11 @@ type CreateE2EProfileOptions = {
   state?: ProfileState;
 };
 
+type CreateE2ERemoteProfileOptions = CreateE2EProfileOptions & {
+  domain?: string;
+  instanceState?: InstanceState;
+};
+
 type CreateE2EFollowOptions = {
   followeeProfileId: string;
   followerProfileId: string;
@@ -200,9 +205,9 @@ export async function createE2EProfile(options: CreateE2EProfileOptions = {}) {
     .then(firstOrThrow);
 }
 
-export async function createE2ERemoteProfile(options: CreateE2EProfileOptions = {}) {
+export async function createE2ERemoteProfile(options: CreateE2ERemoteProfileOptions = {}) {
   const suffix = randomUUID().slice(0, 8);
-  const domain = `e2e-${suffix}.remote.example`;
+  const domain = options.domain ?? `e2e-${suffix}.remote.example`;
   const handle = options.handle ?? `e2e-remote-${suffix}`;
   const instance = await db
     .insert(Instances)
@@ -210,7 +215,7 @@ export async function createE2ERemoteProfile(options: CreateE2EProfileOptions = 
       canonicalOrigin: `https://${domain}`,
       domain,
       kind: InstanceKind.ACTIVITYPUB,
-      state: InstanceState.ACTIVE,
+      state: options.instanceState ?? InstanceState.ACTIVE,
     })
     .returning()
     .then(firstOrThrow);
