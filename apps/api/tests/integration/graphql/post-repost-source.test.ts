@@ -162,6 +162,79 @@ describe('GraphQL Post Repost Source', () => {
     assert.notEqual(result.data?.node?.repostSource?.id, globalId('Post', root.id));
   });
 
+  test('nodes는 Source chain 접근 정책을 적용하면서 입력 순서와 direct Source identity를 보존한다', async () => {
+    const profile = await insertProfile();
+    const secondProfile = await insertProfile();
+    const root = await insertPost({ bodyText: 'visible root', profileId: profile.id });
+    const firstQuote = await insertPost({
+      bodyText: 'visible first quote',
+      profileId: profile.id,
+      repostSourceId: root.id,
+    });
+    const sharedSource = await insertPost({
+      bodyText: 'visible shared quote',
+      profileId: profile.id,
+      repostSourceId: firstQuote.id,
+    });
+    const nestedQuote = await insertPost({
+      bodyText: 'visible nested quote',
+      profileId: profile.id,
+      repostSourceId: sharedSource.id,
+    });
+    const sharedRepost = await insertPost({
+      bodyText: 'visible shared quote peer',
+      profileId: secondProfile.id,
+      repostSourceId: sharedSource.id,
+    });
+    const unavailableRoot = await insertPost({
+      bodyText: 'unavailable root',
+      profileId: profile.id,
+      state: PostState.DELETED,
+    });
+    const unavailableFirstQuote = await insertPost({
+      bodyText: 'unavailable first quote',
+      profileId: profile.id,
+      repostSourceId: unavailableRoot.id,
+    });
+    const unavailableSecondQuote = await insertPost({
+      bodyText: 'unavailable second quote',
+      profileId: profile.id,
+      repostSourceId: unavailableFirstQuote.id,
+    });
+    const unavailableOuter = await insertPost({
+      bodyText: 'unavailable outer quote',
+      profileId: profile.id,
+      repostSourceId: unavailableSecondQuote.id,
+    });
+
+    const result = await requestRepostSourceNodes([
+      nestedQuote.id,
+      unavailableOuter.id,
+      sharedRepost.id,
+    ]);
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.nodes, [
+      {
+        __typename: 'Post',
+        id: globalId('Post', nestedQuote.id),
+        repostSource: {
+          id: globalId('Post', sharedSource.id),
+          repostSource: { id: globalId('Post', firstQuote.id) },
+        },
+      },
+      null,
+      {
+        __typename: 'Post',
+        id: globalId('Post', sharedRepost.id),
+        repostSource: {
+          id: globalId('Post', sharedSource.id),
+          repostSource: { id: globalId('Post', firstQuote.id) },
+        },
+      },
+    ]);
+  });
+
   test('author는 자신의 DIRECT Source를 가진 Post Node를 조회할 수 있다', async () => {
     const auth = await createAuthenticatedSession();
     const source = await insertPost({
@@ -421,6 +494,23 @@ const requestRepostSource = (id: string, token?: string) =>
     token,
   );
 
+const requestRepostSourceNodes = (ids: string[]) =>
+  requestGraphQL<{ nodes: Array<PostRepostSourceNode | null> }>(
+    `query RepostSourceNodes($ids: [ID!]!) {
+      nodes(ids: $ids) {
+        __typename
+        ... on Post {
+          id
+          repostSource {
+            id
+            repostSource { id }
+          }
+        }
+      }
+    }`,
+    { ids: ids.map((id) => globalId('Post', id)) },
+  );
+
 const assertPostNodeUnavailable = async (postId: string, token?: string) => {
   const result = await requestGraphQL<{ node: { id: string } | null }>(
     'query PostNode($id: ID!) { node(id: $id) { ... on Post { id } } }',
@@ -474,4 +564,12 @@ type PostNode = {
   content: { id: string } | null;
   id: string;
   repostSource: { id: string } | null;
+};
+type PostRepostSourceNode = {
+  __typename: 'Post';
+  id: string;
+  repostSource: {
+    id: string;
+    repostSource: { id: string } | null;
+  } | null;
 };
