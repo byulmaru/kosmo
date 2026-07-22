@@ -5,6 +5,13 @@ import { encodeGlobalId } from './global-id';
 import { notificationNodeType } from './resolvers/notification/ref';
 import { schema } from './schema';
 
+test('Post는 nullable Repost Source를 제공한다', () => {
+  const post = schema.getType('Post');
+
+  assert.ok(isObjectType(post));
+  assert.equal(String(post.getFields().repostSource?.type), 'Post');
+});
+
 test('exposes the versioned PostContent document and Plain Text composer contract', () => {
   const postContent = schema.getType('PostContent');
   const createPostInput = schema.getType('CreatePostInput');
