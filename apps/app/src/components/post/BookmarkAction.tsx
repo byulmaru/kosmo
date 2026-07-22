@@ -21,7 +21,6 @@ const CreateBookmarkMutation = graphql`
   mutation BookmarkActionCreateBookmarkMutation($postId: ID!) {
     createBookmark(input: { postId: $postId }) {
       bookmark {
-        id
         post {
           id
           viewerBookmark {
@@ -36,7 +35,7 @@ const CreateBookmarkMutation = graphql`
 const DeleteBookmarkMutation = graphql`
   mutation BookmarkActionDeleteBookmarkMutation($id: ID!) {
     deleteBookmark(input: { id: $id }) {
-      bookmarkId
+      bookmarkId @deleteRecord
       post {
         id
         viewerBookmark {
@@ -47,13 +46,7 @@ const DeleteBookmarkMutation = graphql`
   }
 `;
 
-export function BookmarkAction({
-  enabled,
-  post: postKey,
-}: {
-  enabled: boolean;
-  post: BookmarkAction_post$key;
-}) {
+export function BookmarkAction({ post: postKey }: { post: BookmarkAction_post$key }) {
   const theme = useTheme();
   const post = useFragment(BookmarkActionFragment, postKey);
   const [commitCreate, creating] =
@@ -63,10 +56,6 @@ export function BookmarkAction({
   const [error, setError] = useState(false);
   const bookmark = post.viewerBookmark;
   const loading = creating || deleting;
-
-  if (!enabled) {
-    return null;
-  }
 
   const toggleBookmark = () => {
     if (loading) {

@@ -74,7 +74,7 @@ export function PostListItem({
             </Pressable>
           </Link>
         ) : null}
-        <BookmarkAction enabled={canBookmark} post={post} />
+        {canBookmark ? <BookmarkAction post={post} /> : null}
       </View>
     </View>
   );

@@ -360,7 +360,7 @@ function BookmarkActorStory() {
   return (
     <Catalog>
       <Button onPress={() => resetActor('bookmark-profile-after-switch')}>프로필 전환</Button>
-      <BookmarkAction enabled post={data.node.action} />
+      <BookmarkAction post={data.node.action} />
     </Catalog>
   );
 }
@@ -452,13 +452,13 @@ export const BookmarkSaveKeepsDetailNavigationIsolated: Story = {
   render: () => <BookmarkActionListStory />,
 };
 
-export const BookmarkDeleteOnDetail: Story = {
+export const BookmarkDeleteWhenPostResponseIsNull: Story = {
   parameters: {
     relay: {
       mutationResponse: {
         deleteBookmark: {
           bookmarkId: 'bookmark-existing',
-          post: { id: 'bookmark-action-saved', viewerBookmark: null },
+          post: null,
         },
       },
     },

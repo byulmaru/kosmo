@@ -68,7 +68,7 @@ export function PostLayout({
             {formatPostDate(post.createdAt)} ·{' '}
             {visibilityLabels[post.visibility] ?? post.visibility}
           </Text>
-          <BookmarkAction enabled={canBookmark} post={post} />
+          {canBookmark ? <BookmarkAction post={post} /> : null}
         </View>
       </View>
     </View>
