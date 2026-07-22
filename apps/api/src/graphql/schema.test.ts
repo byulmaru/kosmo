@@ -24,6 +24,14 @@ test('exposes the versioned PostContent document and Plain Text composer contrac
   assert.equal(String(schema.getType('PostContentDocument')), 'PostContentDocument');
 });
 
+test('exposes Reply Parent through the existing nullable Post Node contract', () => {
+  const post = schema.getType('Post');
+
+  assert.ok(isObjectType(post));
+  assert.equal(String(post.getFields().replyParent?.type), 'Post');
+  assert.equal(post.getFields().replyParentId, undefined);
+});
+
 test('follow mutation payloads expose both updated profiles', () => {
   const followPayload = schema.getType('FollowProfilePayload');
   const unfollowPayload = schema.getType('UnfollowProfilePayload');

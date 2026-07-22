@@ -49,8 +49,8 @@ Content가 있는 Post가 nullable 직접 Reply Parent를 저장하고 Repost So
 
 - Parent 없음, 조회 가능, Tombstone, visibility/eligibility 실패와 Reply+Quote의 직접 Parent를 API integration test로 검증한다.
 
-- [ ] 2.1 nullable `Post.replyParent` 공개 계약과 resolver를 구현한다.
-- [ ] 2.2 Parent 독립 조회 정책과 schema·API 회귀 test를 추가하고 관련 check를 통과시킨다.
+- [x] 2.1 nullable `Post.replyParent` 공개 계약과 resolver를 구현한다.
+- [x] 2.2 Parent 독립 조회 정책과 schema·API 회귀 test를 추가하고 관련 check를 통과시킨다.
 
 ## 3. PROD-399 Reply 조상 경로 조회
 
