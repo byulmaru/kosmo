@@ -7,11 +7,13 @@
 ### Web follow action은 mutation의 established/pending 결과를 구분한다
 
 - Decision Date: 2026-07-18
-- Status: Accepted
+- Decision Class: Derived Contract
+- Authority / Provenance: [PROD-263](https://linear.app/byulmaru/issue/PROD-263)의 최신 본문에 정의된 NONE/PENDING/ESTABLISHED 상태 머신과 established unfollow의 optimistic cache/connection membership 경계에서 파생한다.
+- Status: Active
 - Context / Problem: 모든 follow를 임시 established `ProfileFollow`와 count 증가로 표현하면 `APPROVAL_REQUIRED` mutation이 pending `ProfileFollowRequest`를 성공적으로 반환한 뒤 버튼이 `팔로잉`에서 `팔로우`로 되돌아가고 서버의 pending 상태를 표시하거나 취소할 수 없다.
-- Decision Outcome: FollowButton은 profile origin을 action surface 조건으로 사용하지 않고 local/remote에 같은 NONE/PENDING/ESTABLISHED 상태 머신을 적용한다. `ProfileViewerState.follow`은 established relation, `followRequest`는 current viewer→target pending request를 나타내며 둘은 상호배타적이다. `followPolicy`는 OPEN/APPROVAL_REQUIRED의 예상 optimistic state를 선택하는 데만 사용할 수 있고 `followProfile.result` union이 최종 권위다. established 결과만 양쪽 count를 변경하며 pending 생성·취소는 count를 유지한다. 완료된 PROD-378에 따라 `viewerState.follow`을 canonical relation field로 사용하고 제거된 `Profile.viewerFollow`를 복원하지 않으며, `Profile.viewerFollowRequest`도 추가하지 않는다. follow 성공 시 열린 connection에 edge를 추가하지 않고 established unfollow의 기존 edge 제거만 유지한다.
-- Alternatives Considered: 모든 follow를 established로 optimistic 처리, mutation 완료까지 중립적인 loading 상태 유지, pending UX를 PROD-377에 계속 분리, `Profile.viewerFollowRequest` 대칭 필드 추가, follow 성공 시 열린 connection에 새 edge 삽입.
-- Consequences: `요청됨` 클릭은 `cancelProfileFollowRequest`, `팔로잉` 클릭은 `unfollowProfile`을 사용하고 실패하면 Relay optimistic layer가 이전 상태로 rollback한다. remote Accept/Reject는 subscription·push·polling 없이 현재 화면을 실시간 전환하지 않으며 다음 server-backed profile read에서 반영된다. relation/request cache는 `viewerState` 한 경로만 갱신한다.
+- Decision Outcome: FollowButton은 profile origin을 action surface 조건으로 사용하지 않고 local/remote에 같은 NONE/PENDING/ESTABLISHED 상태 머신을 적용한다. `ProfileViewerState.follow`은 established relation, `followRequest`는 current viewer→target pending request를 나타내며 둘은 상호배타적이다. `followPolicy`는 OPEN/APPROVAL_REQUIRED의 예상 optimistic state를 선택하는 데만 사용할 수 있고 `followProfile.result` union이 최종 권위다. established 결과만 양쪽 count를 변경하며 pending 생성·취소는 count를 유지한다. 완료된 PROD-378에 따라 `viewerState.follow`을 canonical relation field로 사용하고 제거된 `Profile.viewerFollow`를 복원하지 않으며, `Profile.viewerFollowRequest`도 추가하지 않는다. follow 성공 시 열린 connection에 edge를 추가하지 않는다. established unfollow는 relation/count/button을 optimistic하게 전환하되 열린 connection row는 mutation 진행 중 유지하고, 성공 payload의 `profileFollowId`로만 기존 edge를 제거한다.
+- Alternatives Considered: 모든 follow를 established로 optimistic 처리, mutation 완료까지 중립적인 loading 상태 유지, pending UX를 PROD-377에 계속 분리, `Profile.viewerFollowRequest` 대칭 필드 추가, follow 성공 시 열린 connection에 새 edge 삽입, established unfollow에서 connection edge도 optimistic하게 제거.
+- Consequences: `요청됨` 클릭은 `cancelProfileFollowRequest`, `팔로잉` 클릭은 `unfollowProfile`을 사용하고 실패하면 Relay optimistic layer가 이전 relation/count/button 상태로 rollback한다. established unfollow 중에는 action row가 유지되므로 실패 시 같은 행의 공통 오류 UI를 표시할 수 있고 성공 응답에서만 edge가 제거된다. remote Accept/Reject는 subscription·push·polling 없이 현재 화면을 실시간 전환하지 않으며 다음 server-backed profile read에서 반영된다. relation/request cache는 `viewerState` 한 경로만 갱신한다.
 - Confirmation / Follow-up: PROD-263은 exact-pair viewer request API, result union별 count/cache 전이, cancel/unfollow rollback, local/remote 동일 상태 머신과 API·Relay-backed component·Web E2E를 검증한다. PROD-361은 최종 통합과 archive를 소유한다.
 
 ### Linear 계약을 PROD-357 OpenSpec으로 먼저 구체화한다

@@ -465,11 +465,26 @@ export const UnfollowRemovesCachedConnectionEdge: Story = {
   render: () => <FollowingWithFollowedProfile />,
 };
 
-export const UnfollowErrorRestoresCachedConnectionEdge: Story = {
+export const UnfollowKeepsCachedConnectionEdgeWhileSubmitting: Story = {
+  parameters: { relay: { mutationLoading: true } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '팔로잉' }));
+    await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeDisabled();
+    expect(canvas.getByText('코스모 작가')).toBeVisible();
+    expect(canvas.queryByText('아직 팔로잉이 없어요')).not.toBeInTheDocument();
+  },
+  render: () => <FollowingWithFollowedProfile />,
+};
+
+export const UnfollowErrorKeepsCachedConnectionEdge: Story = {
   parameters: { relay: { mutationError: '언팔로우 실패' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: '팔로잉' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '팔로우 상태를 변경하지 못했습니다.',
+    );
     await expect(canvas.findByRole('button', { name: '팔로잉' })).resolves.toBeEnabled();
     expect(canvas.getByText('코스모 작가')).toBeVisible();
     expect(canvas.queryByText('아직 팔로잉이 없어요')).not.toBeInTheDocument();

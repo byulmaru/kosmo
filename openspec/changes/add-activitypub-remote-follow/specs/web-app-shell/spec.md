@@ -76,7 +76,9 @@
 - **AND** 대상 remote profile의 origin이나 `followPolicy`를 established follow의 unfollow action 조건으로 사용하지 않는다
 - **AND** `팔로잉` 클릭은 `unfollowProfile` mutation을 호출하고 optimistic하게 `viewerState.follow`을 없음으로 전환한다
 - **AND** 대상이 ActivityPub remote profile이어도 mutation의 `followerProfile.followingCount`와 `followeeProfile.followersCount`를 Relay normalized cache에 반영한다
-- **AND** 양쪽 count 감소와 열린 connection의 기존 relation edge 제거를 optimistic하게 반영하며 mutation 오류에서는 이전 상태로 rollback한다
+- **AND** 양쪽 count 감소는 optimistic하게 반영하되 열린 connection의 기존 relation row는 mutation 진행 중 유지한다
+- **AND** mutation 성공 payload의 `profileFollowId`로만 열린 connection edge를 제거한다
+- **AND** mutation 오류에서는 relation, 양쪽 count와 버튼 상태를 이전 상태로 rollback하고 유지된 행에서 공통 오류 UI를 표시한다
 
 #### Scenario: Reflect remote Accept or Reject on a later read
 

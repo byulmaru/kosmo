@@ -163,7 +163,7 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
                     followingCount: Math.max(follower.followingCount - 1, 0),
                     id: follower.id,
                   },
-                  profileFollowId,
+                  profileFollowId: null,
                 },
               }
             : undefined,

@@ -72,8 +72,12 @@ test('UNRESPONSIVE remote profile은 Web에서 follow와 unfollow할 수 있다'
   await expect(page.getByRole('button', { name: '팔로잉' })).toBeVisible();
   await expect(followersLink.getByText('1', { exact: true })).toBeVisible();
 
+  const unfollowResponse = waitForGraphQLOperation(page, 'FollowButtonUnfollowProfileMutation');
   await page.getByRole('button', { name: '팔로잉' }).click();
 
+  await expect(page.getByRole('button', { name: '팔로우' })).toBeVisible();
+  await expect(followersLink.getByText('0', { exact: true })).toBeVisible();
+  await unfollowResponse;
   await expect(page.getByRole('button', { name: '팔로우' })).toBeVisible();
   await expect(followersLink.getByText('0', { exact: true })).toBeVisible();
 });
