@@ -230,6 +230,106 @@ describe('Bookmark GraphQL 경계', () => {
     assert.equal(await db.$count(Notifications), 0);
   });
 
+  test('Owner 삭제와 반복 삭제는 exact ID와 멱등 payload를 반환한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const post = await createPost(auth.profile.id);
+    const created = await requestCreateBookmark(post.id, auth.token);
+    const bookmarkId = created.data?.createBookmark.bookmark.id;
+    assert.ok(bookmarkId);
+
+    const deleted = await requestDeleteBookmark(bookmarkId, auth.token);
+    const repeated = await requestDeleteBookmark(bookmarkId, auth.token);
+
+    assertNoGraphQLErrors(deleted);
+    assertNoGraphQLErrors(repeated);
+    assert.deepEqual(deleted.data?.deleteBookmark, {
+      bookmarkId,
+      post: { id: encodeGlobalId('Post', post.id) },
+    });
+    assert.deepEqual(repeated.data?.deleteBookmark, { bookmarkId: null, post: null });
+    assert.equal(await countBookmarks(), 0);
+  });
+
+  test('missing과 non-owner 삭제는 같은 null payload를 반환하고 관계를 보존한다', async () => {
+    const owner = await createAuthenticatedSession();
+    const other = await createAuthenticatedSession();
+    const post = await createPost(owner.profile.id);
+    const created = await requestCreateBookmark(post.id, owner.token);
+    const bookmarkId = created.data?.createBookmark.bookmark.id;
+    assert.ok(bookmarkId);
+
+    const [missing, nonOwner] = await Promise.all([
+      requestDeleteBookmark(encodeGlobalId('Bookmark', crypto.randomUUID()), owner.token),
+      requestDeleteBookmark(bookmarkId, other.token),
+    ]);
+
+    assertNoGraphQLErrors(missing);
+    assertNoGraphQLErrors(nonOwner);
+    assert.deepEqual(missing.data?.deleteBookmark, { bookmarkId: null, post: null });
+    assert.deepEqual(nonOwner.data?.deleteBookmark, { bookmarkId: null, post: null });
+    assert.equal(await countBookmarks(), 1);
+  });
+
+  test('동시 삭제는 한 요청에만 삭제된 Bookmark ID를 반환한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const post = await createPost(auth.profile.id);
+    const created = await requestCreateBookmark(post.id, auth.token);
+    const bookmarkId = created.data?.createBookmark.bookmark.id;
+    assert.ok(bookmarkId);
+
+    const results = await Promise.all(
+      Array.from({ length: 4 }, () => requestDeleteBookmark(bookmarkId, auth.token)),
+    );
+
+    results.forEach(assertNoGraphQLErrors);
+    const payloads = results.map(({ data }) => data?.deleteBookmark);
+    assert.equal(payloads.filter((payload) => payload?.bookmarkId === bookmarkId).length, 1);
+    assert.equal(payloads.filter((payload) => payload?.bookmarkId === null).length, 3);
+    assert.equal(await countBookmarks(), 0);
+  });
+
+  test('숨겨진 Target의 Bookmark는 ID를 반환하며 삭제하고 Post는 숨긴다', async () => {
+    const auth = await createAuthenticatedSession();
+    const author = await createProfile('hidden-delete-author');
+    const post = await createPost(author.id);
+    const created = await requestCreateBookmark(post.id, auth.token);
+    const bookmarkId = created.data?.createBookmark.bookmark.id;
+    assert.ok(bookmarkId);
+    await db.update(Posts).set({ visibility: PostVisibility.DIRECT }).where(eq(Posts.id, post.id));
+
+    const deleted = await requestDeleteBookmark(bookmarkId, auth.token);
+
+    assertNoGraphQLErrors(deleted);
+    assert.deepEqual(deleted.data?.deleteBookmark, { bookmarkId, post: null });
+    assert.equal(await countBookmarks(), 0);
+  });
+
+  test('사용할 수 없는 actor와 잘못된 concrete ID는 Bookmark를 삭제하지 않는다', async () => {
+    const auth = await createAuthenticatedSession();
+    const post = await createPost(auth.profile.id);
+    const created = await requestCreateBookmark(post.id, auth.token);
+    const bookmarkId = created.data?.createBookmark.bookmark.id;
+    assert.ok(bookmarkId);
+    await db
+      .update(Accounts)
+      .set({ state: AccountState.DISABLED })
+      .where(eq(Accounts.id, auth.account.id));
+
+    const denied = await requestDeleteBookmark(bookmarkId, auth.token);
+    assert.equal(denied.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+
+    await db
+      .update(Accounts)
+      .set({ state: AccountState.ACTIVE })
+      .where(eq(Accounts.id, auth.account.id));
+    const wrongId = await requestDeleteBookmark(
+      encodeGlobalId('Profile', auth.profile.id),
+      auth.token,
+    );
+    assert.ok(wrongId.errors?.[0]);
+    assert.equal(await countBookmarks(), 1);
+  });
+
   test('allows only the selected owner Profile to read the connection and Bookmark Node', async () => {
     const owner = await createAuthenticatedSession();
     const other = await createAuthenticatedSession();
@@ -380,6 +480,11 @@ type BookmarkNode = {
   post: { id: string } | null;
   profile: { id: string };
 };
+type DeleteBookmarkPayload = {
+  bookmarkId: string | null;
+  post: { id: string } | null;
+};
+
 type BookmarkNodeSummary = { id: string; post: { id: string } | null };
 type BookmarkConnection = {
   edges: Array<{ cursor: string; node: BookmarkNodeSummary }>;
@@ -407,6 +512,15 @@ const requestCreateBookmark = (postId: string, token?: string) =>
       createBookmark(input: $input) { bookmark { ${bookmarkSelection} } }
     }`,
     { input: { postId: encodeGlobalId('Post', postId) } },
+    token,
+  );
+
+const requestDeleteBookmark = (id: string, token?: string) =>
+  requestGraphQL<{ deleteBookmark: DeleteBookmarkPayload }>(
+    `mutation DeleteBookmark($input: DeleteBookmarkInput!) {
+      deleteBookmark(input: $input) { bookmarkId post { id } }
+    }`,
+    { input: { id } },
     token,
   );
 

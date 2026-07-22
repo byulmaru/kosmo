@@ -98,6 +98,18 @@
 - Consequences: 권한·가시성 실패는 GraphQL integration test가 소유하고 core test는 생성·멱등성·Profile 격리·transaction 참여를 검증한다. Resolver는 권한 검사와 core 호출이 같은 transaction connection을 사용하게 해야 한다.
 - Confirmation / Follow-up: API 검증에서 사용할 수 없는 actor는 `PERMISSION_DENIED`, 없거나 숨겨진 Post는 동일 `NOT_FOUND`인지 확인하고, core test에서 Account 조회 없이 검증된 ID만으로 생성되는지 확인한다.
 
+### 존재를 숨기는 멱등 Bookmark 삭제 mutation 계약
+
+- Decision Date: 2026-07-22
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/bookmark.md`, `PROD-409` 본문과 2026-07-22 사용자 승인
+- Status: Active
+- Context / Problem: Owner 전용 삭제와 반복·동시 삭제 검증은 확정됐지만, missing·non-owner·경쟁 loser의 외부 의미와 Relay가 정규화할 exact payload가 열려 있었다.
+- Decision Outcome: `deleteBookmark(input: { id })`는 현재 `usingProfile`, session Account와 Bookmark ID를 함께 조건으로 삭제한다. Resolver가 actor 권한을 먼저 검증해 사용할 수 없는 actor에는 `PERMISSION_DENIED`를 반환하고, core의 원자적 DELETE가 같은 Account/Profile membership과 Account·Profile·local Instance의 활성 상태를 다시 조건으로 결합해 검증 직후 권한이 사라지는 경합을 막는다. 첫 Owner 삭제는 nullable `DeleteBookmarkPayload.bookmarkId`로 삭제된 Bookmark 관계를 정확히 식별하고 nullable `post`로 현재 조회 가능한 Target Post를 반환한다. Target이 숨겨졌으면 관계는 삭제하되 `post`는 `null`이다. missing·non-owner·순차 반복·동시 loser와 검증 직후 actor 권한이 사라진 요청은 오류 없이 `bookmarkId: null`, `post: null`인 동일 성공으로 정규화한다.
+- Alternatives Considered: missing·non-owner 모두 `NOT_FOUND` — 존재는 숨기지만 client 재시도와 경쟁 loser를 오류로 만들기 때문에 채택하지 않는다. non-owner만 `PERMISSION_DENIED` — 비공개 Bookmark 존재를 노출해 채택하지 않는다. 삭제 성공 boolean — Relay가 제거할 exact 관계를 식별하지 못해 채택하지 않는다.
+- Consequences: client는 nullable ID로 실제 삭제 여부를 구분하되 null 이유를 추론할 수 없다. Target Post visibility는 삭제 권한을 막지 않으며 `post` loader가 현재 가시성을 적용한다. 원자적 조건부 `DELETE ... RETURNING`으로 경쟁 winner 하나만 ID를 얻고, actor 권한 재검증도 같은 statement에 포함해 별도 비관적 lock은 사용하지 않는다. 생성 persistence action은 검증된 ID만 받는 기존 책임을 유지하고, 삭제 persistence action만 권한 상실 경합을 닫는 데 필요한 Account ID를 추가로 받는다.
+- Confirmation / Follow-up: core/API 검증에서 Owner 성공, missing·non-owner의 동일 payload, 순차·동시 한 요청만 deleted ID 반환, 숨겨진 Target의 `post: null`, transaction rollback과 검증 직후 Profile 비활성화·membership 제거 경합을 확인한다.
+
 ### PROD-410 Owner-scoped GraphQL 조회 shape
 
 - Decision Date: 2026-07-21
@@ -124,11 +136,10 @@
 
 ## Remaining Decisions
 
-- **PROD-409 — missing/non-owner delete 응답:** 둘을 구분하지 않는 idempotent success와 nullable deleted ID를 기본안으로 검토한다. 구분 불가능한 not-found 의미도 허용 후보이며 `PROD-409` 구현 전에 확정한다.
 - **PROD-420 — mutation feedback:** 기존 client 관례인 response-driven 갱신을 기본안으로 검토한다. Relay optimistic update를 선택하면 actor 전환 race와 rollback을 추가 검증한다.
 - **PROD-421 — mobile navigation entry:** `/bookmarks` route는 고정하되 sidebar 외 mobile shell에서의 정확한 진입 control은 구현 전에 확정한다.
 
-위 Remaining Decisions는 `PROD-408`에서 확정한 생성 mutation과 `PROD-410`에서 확정한 owner connection·Bookmark Node·nullable Target·pagination 계약을 바꾸지 않는다. 각 owner 이슈에 착수하기 전 관련 결정을 `Decision Records`에 추가하고 사용자 승인을 받아야 한다.
+위 Remaining Decisions는 `PROD-408`의 생성 mutation, `PROD-409`의 삭제 mutation, `PROD-410`의 owner connection·Bookmark Node·nullable Target·pagination 계약을 바꾸지 않는다. 각 owner 이슈에 착수하기 전 관련 결정을 `Decision Records`에 추가하고 사용자 승인을 받아야 한다.
 
 ## Superseded Decisions
 

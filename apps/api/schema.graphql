@@ -96,6 +96,15 @@ type CreateProfilePayload {
 """RFC9557 formatted string"""
 scalar DateTime
 
+input DeleteBookmarkInput {
+  id: ID!
+}
+
+type DeleteBookmarkPayload {
+  bookmarkId: ID
+  post: Post
+}
+
 input DeleteProfileInput {
   id: ID!
 }
@@ -160,6 +169,7 @@ type Mutation {
   createBookmark(input: CreateBookmarkInput!): CreateBookmarkPayload!
   createPost(input: CreatePostInput!): CreatePostPayload!
   createProfile(input: CreateProfileInput!): CreateProfilePayload!
+  deleteBookmark(input: DeleteBookmarkInput!): DeleteBookmarkPayload!
   deleteProfile(input: DeleteProfileInput!): DeleteProfilePayload!
   deleteReaction(input: DeleteReactionInput!): DeleteReactionPayload!
   exchangeNativeOidcSession(input: ExchangeNativeOidcSessionInput!): ExchangeNativeOidcSessionPayload!

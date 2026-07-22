@@ -1,4 +1,4 @@
-export { createBookmark } from './bookmark';
+export { createBookmark, deleteBookmark } from './bookmark';
 export { createFollowNotification, deleteNotificationBySource } from './notification';
 export { createPost } from './post';
 export { disableProfile } from './profile';
