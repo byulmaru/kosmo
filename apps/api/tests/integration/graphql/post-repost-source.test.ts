@@ -88,7 +88,7 @@ describe('GraphQL Post Repost Source', () => {
       replyParentId: normal.id,
     });
     const source = await insertPost({ bodyText: 'source', profileId: profile.id });
-    const repost = await insertPost({ profileId: profile.id, repostSourceId: source.id });
+    const repost = await insertPost({ profileId: profile.id, repostSourceId: reply.id });
     const quoteProfile = await insertProfile();
     const quote = await insertPost({
       bodyText: 'quote',
@@ -157,7 +157,7 @@ describe('GraphQL Post Repost Source', () => {
         __typename: 'Post',
         content: null,
         id: globalId('Post', repost.id),
-        repostSource: { id: globalId('Post', source.id) },
+        repostSource: { id: globalId('Post', reply.id) },
       },
       {
         __typename: 'Post',
@@ -180,7 +180,7 @@ describe('GraphQL Post Repost Source', () => {
     ]);
   });
 
-  test('nodes는 unavailable direct Source의 Repost만 숨기고 Quote와 Content는 유지한다', async () => {
+  test('nodes는 unavailable direct Source의 Repost만 숨기고 Quote와 Reply+Quote Content는 유지한다', async () => {
     const profile = await insertProfile();
     const tombstone = await insertPost({
       bodyText: 'deleted source',
@@ -217,6 +217,12 @@ describe('GraphQL Post Repost Source', () => {
       profileId: quoteProfile.id,
       repostSourceId: tombstone.id,
     });
+    const replyQuoteWithTombstoneSource = await insertPost({
+      bodyText: 'reply quote',
+      profileId: quoteProfile.id,
+      replyParentId: indirectTombstoneOuter.id,
+      repostSourceId: tombstone.id,
+    });
 
     const result = await requestGraphQL<{
       nodes: Array<
@@ -251,6 +257,7 @@ describe('GraphQL Post Repost Source', () => {
           globalId('Post', unauthorizedOuter.id),
           globalId('Post', quoteWithTombstoneSource.id),
           globalId('PostContent', quoteWithTombstoneSource.currentContentId!),
+          globalId('Post', replyQuoteWithTombstoneSource.id),
         ],
       },
     );
@@ -275,6 +282,12 @@ describe('GraphQL Post Repost Source', () => {
         __typename: 'PostContent',
         bodyText: 'quote',
         id: globalId('PostContent', quoteWithTombstoneSource.currentContentId!),
+      },
+      {
+        __typename: 'Post',
+        content: { id: globalId('PostContent', replyQuoteWithTombstoneSource.currentContentId!) },
+        id: globalId('Post', replyQuoteWithTombstoneSource.id),
+        repostSource: null,
       },
     ]);
   });
