@@ -34,6 +34,7 @@ type Icon = ComponentType<{ color: string; fill?: string; size: number }>;
 type ActionControlProps = {
   accessibilityLabel: string;
   active?: boolean;
+  alignToEnd?: boolean;
   count?: number;
   expanded?: boolean;
   fillActive?: boolean;
@@ -94,6 +95,7 @@ export function PostActionBar({ bookmark, more, reaction, reply, repost }: PostA
       {more ? (
         <ActionControl
           accessibilityLabel={more.accessibilityLabel}
+          alignToEnd
           icon={MoreHorizontal}
           onPress={more.onPress}
           stateful={false}
@@ -107,6 +109,7 @@ export function PostActionBar({ bookmark, more, reaction, reply, repost }: PostA
 function ActionControl({
   accessibilityLabel,
   active = false,
+  alignToEnd = false,
   count,
   expanded,
   fillActive = false,
@@ -145,6 +148,7 @@ function ActionControl({
       testID={`post-action-${testID}`}
       style={({ pressed }) => [
         styles.action,
+        alignToEnd ? styles.alignToEnd : undefined,
         blocked ? styles.blocked : pressed ? styles.pressed : undefined,
       ]}
     >
@@ -153,7 +157,7 @@ function ActionControl({
           accessible={false}
           aria-hidden
           color={color}
-          size={16}
+          size={14}
           style={styles.icon}
           testID={`post-action-${testID}-spinner`}
         />
@@ -179,12 +183,15 @@ function ActionControl({
 const styles = StyleSheet.create({
   action: {
     alignItems: 'center',
-    flex: 1,
     flexDirection: 'row',
     gap: spacing.xs,
     justifyContent: 'center',
     minHeight: 44,
     minWidth: 44,
+  },
+  alignToEnd: {
+    justifyContent: 'flex-end',
+    paddingRight: spacing.sm,
   },
   blocked: { opacity: 0.45 },
   count: {

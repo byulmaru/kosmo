@@ -261,6 +261,16 @@ export const ProcessingAccessibility: Story = {
     expect(canvas.getByTestId('post-action-reply-spinner')).toBeVisible();
     expect(canvas.getByTestId('post-action-repost-spinner')).toBeVisible();
     expect(canvas.queryByTestId('post-action-bookmark-spinner')).toBeNull();
+    const replySpinner = canvas.getByTestId('post-action-reply-spinner');
+    const replySpinnerVisual = replySpinner.firstElementChild as HTMLElement;
+    const replySpinnerBounds = replySpinnerVisual.getBoundingClientRect();
+    const replyCountBounds = replyButton.querySelector('[dir="auto"]')!.getBoundingClientRect();
+    expect(replySpinnerVisual.clientWidth).toBe(14);
+    expect(replySpinnerVisual.clientHeight).toBe(14);
+    expect(replySpinnerBounds.top + replySpinnerBounds.height / 2).toBeCloseTo(
+      replyCountBounds.top + replyCountBounds.height / 2,
+      0,
+    );
     expect(
       canvas.getByTestId('post-action-bookmark-icon').querySelector('svg'),
     ).not.toHaveAttribute('fill', 'none');
@@ -300,6 +310,11 @@ export const AccessibilityAndMinimumTarget: Story = {
       expect(bounds.width).toBeGreaterThanOrEqual(44);
       expect(bounds.height).toBeGreaterThanOrEqual(44);
     }
+    const actionBarBounds = actionBar.getBoundingClientRect();
+    const moreButtonBounds = buttons[4]!.getBoundingClientRect();
+    const moreIconBounds = canvas.getByTestId('post-action-more-icon').getBoundingClientRect();
+    expect(moreButtonBounds.right).toBeCloseTo(actionBarBounds.right, 0);
+    expect(moreIconBounds.right).toBeCloseTo(actionBarBounds.right - spacing.sm, 0);
   },
   render: () => <PostActionBar {...actionBarProps} />,
 };
