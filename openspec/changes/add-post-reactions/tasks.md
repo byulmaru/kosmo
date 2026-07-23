@@ -153,8 +153,8 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 - PROD-417은 실제 mutation 성공·실패 복구, selected Profile cache와 actor 전환을 component/integration test로 검증한다.
 
 - [x] 7.1 최종 `post-reaction-ui` spec이 변경되지 않음을 확인하고, PROD-450 supplied-option Quick Picker 프레젠테이션과 PROD-417 통합 경계를 proposal·design·decisions·tasks에 동기화해 strict validation을 통과시킨다.
-- [ ] 7.2 PROD-450 props-only `ReactionSelector` Quick Picker panel을 구현한다.
-- [ ] 7.3 PROD-450 Storybook/component interaction에서 supplied order·현재 여섯 fixture·선택·해제·복수 Type·option별 상태·disabled와 callback을 검증하고 app check를 통과시킨다.
+- [x] 7.2 PROD-450 props-only `ReactionSelector` Quick Picker panel을 구현한다.
+- [x] 7.3 PROD-450 Storybook/component interaction에서 supplied order·현재 여섯 fixture·선택·해제·복수 Type·option별 상태·disabled와 callback을 검증하고 app check를 통과시킨다.
 - [ ] 7.4 PROD-417이 소유한 zero-count option 공급, selector 통합 UX와 optimistic update 결정을 확정해 specs·decisions를 갱신하고 strict validation을 통과시킨다.
 - [ ] 7.5 add/delete mutation과 selected Profile cache를 PROD-450 presentation seam에 연결한다.
 - [ ] 7.6 실제 Relay data shape의 mutation 성공·실패 복구와 selected Profile 전환을 component/integration test로 검증하고 app check를 통과시킨다.

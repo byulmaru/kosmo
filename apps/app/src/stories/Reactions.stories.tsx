@@ -205,6 +205,45 @@ function QuickPickerInteractionCatalog() {
   );
 }
 
+function QuickPickerStateCatalog() {
+  const [blockedToggleCount, setBlockedToggleCount] = useState(0);
+  const [retryCount, setRetryCount] = useState(0);
+
+  return (
+    <Catalog width={360}>
+      <Section title="Pending">
+        <ReactionSelector
+          onToggle={() => setBlockedToggleCount((count) => count + 1)}
+          options={quickReactionOptions}
+          pendingOptionIds={['❤️']}
+          selectedOptionIds={['❤️', '👀']}
+        />
+      </Section>
+      <Section title="Error Retry">
+        <ReactionSelector
+          errorOptionIds={['🎉']}
+          onToggle={({ optionId }) => {
+            if (optionId === '🎉') {
+              setRetryCount((count) => count + 1);
+            }
+          }}
+          options={quickReactionOptions}
+          selectedOptionIds={['🎉']}
+        />
+        <Text>{`재시도: ${retryCount}`}</Text>
+      </Section>
+      <Section title="Disabled">
+        <ReactionSelector
+          disabled
+          onToggle={() => setBlockedToggleCount((count) => count + 1)}
+          options={quickReactionOptions}
+        />
+      </Section>
+      <Text>{`차단된 동작: ${blockedToggleCount}`}</Text>
+    </Catalog>
+  );
+}
+
 const meta = {
   component: ReactionSummaryCatalog,
   parameters: {
@@ -304,4 +343,38 @@ export const QuickPickerInteraction: Story = {
     expect(canvas.getByText('마지막 동작: 🎉:선택')).toBeVisible();
   },
   render: () => <QuickPickerInteractionCatalog />,
+};
+
+export const QuickPickerStates: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const pendingSection = within(canvas.getByText('Pending').parentElement!);
+    const errorSection = within(canvas.getByText('Error Retry').parentElement!);
+    const disabledSection = within(canvas.getByText('Disabled').parentElement!);
+
+    const pendingHeart = pendingSection.getByRole('button', {
+      name: '❤️ 반응, 처리 중',
+    });
+    expect(pendingHeart).toBeDisabled();
+    expect(pendingHeart).toHaveAttribute('aria-busy', 'true');
+    expect(pendingHeart).toHaveAttribute('aria-pressed', 'true');
+    expect(pendingSection.getByRole('button', { name: '👀 반응' })).toBeEnabled();
+    await userEvent.click(pendingHeart, { pointerEventsCheck: 0 });
+    expect(canvas.getByText('차단된 동작: 0')).toBeVisible();
+
+    const errorParty = errorSection.getByRole('button', {
+      name: '🎉 반응, 오류, 다시 시도',
+    });
+    expect(errorParty).toBeEnabled();
+    expect(errorParty).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(errorParty);
+    expect(canvas.getByText('재시도: 1')).toBeVisible();
+
+    const disabledButtons = disabledSection.getAllByRole('button');
+    expect(disabledButtons).toHaveLength(6);
+    disabledButtons.forEach((button) => expect(button).toBeDisabled());
+    await userEvent.click(disabledButtons[0]!, { pointerEventsCheck: 0 });
+    expect(canvas.getByText('차단된 동작: 0')).toBeVisible();
+  },
+  render: () => <QuickPickerStateCatalog />,
 };
