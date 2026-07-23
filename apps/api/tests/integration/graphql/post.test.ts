@@ -261,6 +261,8 @@ describe('Post Reply GraphQL 경계', () => {
         id: encodeGlobalId('Post', id),
       })),
     });
+  });
+
   test('직접·간접 Reply와 Reply+Quote descendant를 시간순으로 반환한다', async () => {
     const author = await createProfile('descendant-author');
     const root = await createContentfulPost(author.id);
@@ -504,6 +506,8 @@ const requestPostAncestors = (postId: string) =>
       }
     }`,
     { postId: encodeGlobalId('Post', postId) },
+  );
+
 const requestReplyDescendants = (
   postId: string,
   variables: {

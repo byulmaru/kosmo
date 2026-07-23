@@ -69,7 +69,6 @@
 - [Risk] `add-post-reposts`와 `add-post-replies`가 active `data-model`·`post` capability를 함께 확장한다. → 기존 change를 수정하지 않고 독립 ADDED requirement를 사용하며 두 change와 전체 OpenSpec을 strict validation한다.
 - [Risk] descendant 전체 탐색은 데이터 증가에 따라 비싸질 수 있다. → PROD-400이 실제 query와 실행 계획을 소유하고 그때 `reply_parent_id` index와 pagination을 결정한다.
 - [Risk] 손상 데이터가 매우 긴 ancestor chain을 만들면 depth 상한 없는 recursive query 비용이 커질 수 있다. → 정상 write는 immutable 직접 관계로 cycle을 만들 수 없게 유지하고, visited path로 cycle을 종료하며 실제 query와 깊은 fixture를 검증한다. 운영 상한이 필요해지면 부분 절단을 추가하지 않고 PROD-399의 공개 error 계약을 먼저 갱신한다.
-- [Risk] 현재 Drizzle runner는 migration 전체를 transaction으로 적용하므로 `CREATE INDEX CONCURRENTLY`를 직접 사용할 수 없고 일반 index build 동안 Post write가 대기할 수 있다. → 실제 production row 수와 허용 lock 시간을 배포 전에 확인하며, 허용 범위를 넘으면 runner/배포 경계를 소유하는 별도 이슈에서 concurrent index 적용을 분리한다.
 - [Risk] `reply_parent_id`와 정렬 column을 함께 둔 index가 전역 descendant 정렬까지 해결한다고 오판할 수 있다. → 실제 recursive query의 `EXPLAIN (ANALYZE, BUFFERS)`에서 traversal lookup과 최종 sort를 나눠 확인하고 측정으로 증명된 최소 index만 추가한다.
 - [Trade-off] Parent Tombstone 뒤 ID를 보존하면 저장 관계와 노출 관계가 달라진다. → resolver와 list policy에서 visibility/eligibility를 적용하고 DB 참조는 audit·thread 구조를 위해 유지한다.
 

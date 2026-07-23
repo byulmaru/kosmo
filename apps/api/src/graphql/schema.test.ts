@@ -38,6 +38,8 @@ test('exposes Reply ancestors as a non-null Post list without pagination', () =>
   assert.ok(isObjectType(post));
   assert.equal(String(post.getFields().replyAncestors?.type), '[Post!]!');
   assert.deepEqual(post.getFields().replyAncestors?.args, []);
+});
+
 test('exposes Reply descendants through the shared Post connection', () => {
   const post = schema.getType('Post');
 
