@@ -67,15 +67,17 @@ Reply가 저장된 직접 Parent 관계 순서를 보존한 조회 가능한 조
 
 - 조회 불가능한 Parent에서 경로를 중단하고 숨겨진 조상을 건너뛰거나 평탄화하지 않는다.
 - 각 요소는 기존 단일 `Post` Node를 사용하고 비정상 cycle에서도 유한하게 종료한다.
-- field 이름, collection shape와 순서 방향은 Linear와 OpenSpec에서 승인되기 전 구현하지 않는다.
+- 공개 field는 pagination 없는 `Post.replyAncestors: [Post!]!`이며 직접 Parent부터 root 방향으로 반환하고 조상이 없으면 빈 배열이다.
+- 정상 경로를 임의의 최대 깊이로 절단하지 않으며 단일 recursive query와 visited path로 단계별 N+1 조회와 cycle을 방어한다.
 
 **Verification**
 
-- 일반·다단계·Reply+Quote 조상, unavailable 중단, 숨은 조상 비노출과 cycle 방어를 API test로 검증한다.
+- Parent 없음, 일반·다단계·Reply+Quote 조상의 직접 Parent 우선 순서, unavailable 중단, 숨은 조상 비노출과 cycle 방어를 API test로 검증한다.
+- schema contract에서 non-null list와 pagination 미노출을 확인하고, query count·긴 경로 fixture로 단일 조회와 임의 절단이 없음을 확인한다.
 
-- [ ] 3.1 조상 경로의 공개 GraphQL field·collection·순서 계약을 Linear에서 확정하고 OpenSpec decision을 갱신한다.
-- [ ] 3.2 승인된 공개 계약에 따라 직접 Parent 기반 조상 조회를 구현한다.
-- [ ] 3.3 권한 중단·비평탄화·cycle 방어 test와 관련 check를 통과시킨다.
+- [x] 3.1 조상 경로의 공개 GraphQL field·collection·순서 계약을 Linear에서 확정하고 OpenSpec decision을 갱신한다.
+- [x] 3.2 승인된 공개 계약에 따라 `Post.replyAncestors`와 단일 recursive 조상 조회를 구현한다.
+- [x] 3.3 권한 중단·비평탄화·cycle 방어 test와 관련 check를 통과시킨다.
 
 ## 4. PROD-400 하위 Reply 조회
 

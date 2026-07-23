@@ -119,11 +119,136 @@ describe('Post Reply Parent GraphQL 경계', () => {
       });
     }
   });
+
+  test('Reply Parent가 없으면 조상 경로는 빈 배열이다', async () => {
+    const author = await createProfile('ancestor-empty-author');
+    const post = await createContentfulPost(author.id);
+
+    const result = await requestPostAncestors(post.id);
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.node, {
+      id: encodeGlobalId('Post', post.id),
+      replyAncestors: [],
+    });
+  });
+
+  test('Reply와 Reply+Quote 조상은 직접 Parent부터 root 방향으로 반환한다', async () => {
+    const author = await createProfile('ancestor-order-author');
+    const root = await createContentfulPost(author.id);
+    const source = await createContentfulPost(author.id);
+    const replyQuote = await createContentfulPost(author.id, {
+      replyParentId: root.id,
+      repostSourceId: source.id,
+    });
+    const reply = await createContentfulPost(author.id, { replyParentId: replyQuote.id });
+
+    const result = await requestPostAncestors(reply.id);
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.node, {
+      id: encodeGlobalId('Post', reply.id),
+      replyAncestors: [replyQuote.id, root.id].map((id) => ({
+        id: encodeGlobalId('Post', id),
+      })),
+    });
+  });
+
+  test('조회 불가능한 중간 Parent에서 조상 경로를 중단하고 그 위를 노출하지 않는다', async () => {
+    const author = await createProfile('ancestor-boundary-author');
+    const root = await createContentfulPost(author.id);
+    const boundaries = [
+      await createContentfulPost(author.id, {
+        replyParentId: root.id,
+        visibility: PostVisibility.DIRECT,
+      }),
+      await createContentfulPost(author.id, {
+        replyParentId: root.id,
+        state: PostState.DELETED,
+      }),
+    ];
+
+    for (const boundary of boundaries) {
+      const visibleParent = await createContentfulPost(author.id, {
+        replyParentId: boundary.id,
+      });
+      const reply = await createContentfulPost(author.id, {
+        replyParentId: visibleParent.id,
+      });
+
+      const result = await requestPostAncestors(reply.id);
+
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(result.data?.node, {
+        id: encodeGlobalId('Post', reply.id),
+        replyAncestors: [{ id: encodeGlobalId('Post', visibleParent.id) }],
+      });
+    }
+  });
+
+  test('비정상 cycle에서도 현재 Post와 같은 조상을 반복 노출하지 않는다', async () => {
+    const author = await createProfile('ancestor-cycle-author');
+    const current = await createContentfulPost(author.id);
+    const directParent = await createContentfulPost(author.id);
+    const grandparent = await createContentfulPost(author.id);
+
+    await db.update(Posts).set({ replyParentId: directParent.id }).where(eq(Posts.id, current.id));
+    await db
+      .update(Posts)
+      .set({ replyParentId: grandparent.id })
+      .where(eq(Posts.id, directParent.id));
+    await db.update(Posts).set({ replyParentId: current.id }).where(eq(Posts.id, grandparent.id));
+
+    const result = await requestPostAncestors(current.id);
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.node, {
+      id: encodeGlobalId('Post', current.id),
+      replyAncestors: [directParent.id, grandparent.id].map((id) => ({
+        id: encodeGlobalId('Post', id),
+      })),
+    });
+  });
+
+  test('100단계를 넘는 정상 조상 경로도 단일 조회로 임의 절단 없이 반환한다', async (t) => {
+    const author = await createProfile('ancestor-depth-author');
+    const root = await createContentfulPost(author.id);
+    const pathFromRoot = [root];
+
+    for (let depth = 0; depth < 100; depth += 1) {
+      pathFromRoot.push(
+        await createContentfulPost(author.id, {
+          replyParentId: pathFromRoot.at(-1)!.id,
+        }),
+      );
+    }
+
+    const reply = await createContentfulPost(author.id, {
+      replyParentId: pathFromRoot.at(-1)!.id,
+    });
+    const executeMock = t.mock.method(db, 'execute');
+
+    const result = await requestPostAncestors(reply.id);
+
+    assertNoGraphQLErrors(result);
+    assert.equal(executeMock.mock.callCount(), 1);
+    assert.deepEqual(result.data?.node, {
+      id: encodeGlobalId('Post', reply.id),
+      replyAncestors: [...pathFromRoot].reverse().map(({ id }) => ({
+        id: encodeGlobalId('Post', id),
+      })),
+    });
+  });
 });
 
 type PostNode = {
   id: string;
   replyParent: { id: string } | null;
+};
+
+type PostAncestorsNode = {
+  id: string;
+  replyAncestors: Array<{ id: string }>;
 };
 
 type GraphQLResult<TData> = {
@@ -155,6 +280,16 @@ const requestPostAndParent = (postId: string, parentId: string) =>
       parentId: encodeGlobalId('Post', parentId),
       postId: encodeGlobalId('Post', postId),
     },
+  );
+
+const requestPostAncestors = (postId: string) =>
+  requestGraphQL<{ node: PostAncestorsNode | null }>(
+    `query PostReplyAncestors($postId: ID!) {
+      node(id: $postId) {
+        ... on Post { id replyAncestors { id } }
+      }
+    }`,
+    { postId: encodeGlobalId('Post', postId) },
   );
 
 const requestGraphQL = async <TData>(

@@ -32,6 +32,14 @@ test('exposes Reply Parent through the existing nullable Post Node contract', ()
   assert.equal(post.getFields().replyParentId, undefined);
 });
 
+test('exposes Reply ancestors as a non-null Post list without pagination', () => {
+  const post = schema.getType('Post');
+
+  assert.ok(isObjectType(post));
+  assert.equal(String(post.getFields().replyAncestors?.type), '[Post!]!');
+  assert.deepEqual(post.getFields().replyAncestors?.args, []);
+});
+
 test('follow mutation payloads expose both updated profiles', () => {
   const followPayload = schema.getType('FollowProfilePayload');
   const unfollowPayload = schema.getType('UnfollowProfilePayload');
