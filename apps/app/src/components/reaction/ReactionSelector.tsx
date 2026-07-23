@@ -64,26 +64,36 @@ export function ReactionSelector({
             disabled={optionDisabled}
             key={option.id}
             onPress={() => onToggle({ nextSelected: !selected, optionId: option.id })}
-            style={({ pressed }) => [
-              styles.option,
-              {
-                backgroundColor: selected
-                  ? pressed
-                    ? theme.primaryHover
-                    : theme.primary
-                  : pressed
-                    ? theme.surface
-                    : theme.card,
-                opacity: pressed ? 0.85 : 1,
-              },
-            ]}
+            style={styles.option}
           >
-            <Text style={styles.emoji}>{option.emoji}</Text>
-            {pending ? (
-              <View accessibilityElementsHidden aria-hidden style={styles.pendingOverlay}>
-                <ActivityIndicator color={theme.text} size="large" />
-              </View>
-            ) : null}
+            {({ pressed }) => (
+              <>
+                <View
+                  style={[
+                    styles.optionBackground,
+                    {
+                      backgroundColor: selected
+                        ? pressed
+                          ? theme.primaryHover
+                          : theme.primary
+                        : pressed
+                          ? theme.surface
+                          : theme.card,
+                      opacity: selected ? 0.7 : 1,
+                    },
+                  ]}
+                  testID={selected ? 'reaction-selected-background' : undefined}
+                />
+                <Text style={styles.emoji} testID="reaction-emoji">
+                  {option.emoji}
+                </Text>
+                {pending ? (
+                  <View accessibilityElementsHidden aria-hidden style={styles.pendingOverlay}>
+                    <ActivityIndicator color={theme.text} size="large" />
+                  </View>
+                ) : null}
+              </>
+            )}
           </Pressable>
         );
       })}
@@ -108,6 +118,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'relative',
     width: 44,
+  },
+  optionBackground: {
+    borderRadius: radii.md,
+    bottom: 0,
+    left: 0,
+    pointerEvents: 'none',
+    position: 'absolute',
+    right: 0,
+    top: 0,
   },
   emoji: { fontSize: 24, lineHeight: 32 },
   pendingOverlay: {

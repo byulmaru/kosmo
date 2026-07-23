@@ -334,6 +334,14 @@ export const QuickPickerInteraction: Story = {
     const heart = canvas.getByRole('button', { name: '❤️ 반응' });
     const party = canvas.getByRole('button', { name: '🎉 반응' });
     const eyes = canvas.getByRole('button', { name: '👀 반응' });
+    const heartBackground = heart.querySelector('[data-testid="reaction-selected-background"]');
+    const heartEmoji = heart.querySelector('[data-testid="reaction-emoji"]');
+
+    expect(heartBackground).not.toBeNull();
+    expect(getComputedStyle(heartBackground!).opacity).toBe('0.7');
+    expect(heartEmoji).not.toBeNull();
+    expect(getComputedStyle(heartEmoji!).opacity).toBe('1');
+    expect(party.querySelector('[data-testid="reaction-selected-background"]')).toBeNull();
 
     expect(heart).toHaveAttribute('aria-pressed', 'true');
     expect(eyes).toHaveAttribute('aria-pressed', 'true');
