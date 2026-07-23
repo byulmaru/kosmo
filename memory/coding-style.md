@@ -39,8 +39,9 @@
 
 ## Core Services
 
-- 의존 방향은 GraphQL API, Web BFF, ActivityPub handler, worker에서 `packages/core/services`로 향하고,
-  core는 `packages/core/db`에 의존한다. core가 특정 진입점의 타입이나 표현에 의존하게 하지 않는다.
+- state-changing 진입점은 `packages/core/services`에, core service는 `packages/core/db`에 의존한다.
+  read-only query와 loader는 service를 거치지 않고 query 계층에서 DB와 공유 조회 policy를 사용한다.
+  core가 특정 진입점의 타입이나 표현에 의존하게 하지 않는다.
 - 진입점은 transport·protocol의 인증과 actor context를 처리하고, core는 검증된 actor와 business input에
   대한 공통 domain policy, transaction, persistence와 멱등성을 처리한다. 상세 책임은
   `docs/architecture/core-services.md`를 따른다.

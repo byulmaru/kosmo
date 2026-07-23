@@ -2,15 +2,16 @@
 
 ## 목적과 의존 방향
 
-`packages/core/services`는 GraphQL API, Web BFF, ActivityPub handler와 worker가 공유하는 application
-action 경계다. 진입점이 달라도 같은 도메인 정책, transaction, persistence와 멱등성 결과를 보장한다.
+`packages/core/services`는 GraphQL API, Web BFF, ActivityPub handler와 worker가 공유하는
+state-changing application action 경계다. 진입점이 달라도 같은 도메인 정책, transaction, persistence와
+멱등성 결과를 보장한다.
 
-의존 방향은 항상 진입점에서 core로 향한다.
+의존 방향은 항상 진입점에서 core로 향한다. 상태를 바꾸지 않는 조회는 application action이 아니므로
+`packages/core/services`를 거치지 않는다.
 
 ```text
-GraphQL / BFF / ActivityPub / worker
-  -> packages/core/services
-    -> packages/core/db
+Mutation / state-changing entry -> packages/core/services -> packages/core/db
+Read query / loader -------------------------------------> packages/core/db
 ```
 
 core는 GraphQL context·payload·Global ID, HTTP session, ActivityPub object처럼 특정 진입점에서만 의미가
@@ -18,11 +19,11 @@ core는 GraphQL context·payload·Global ID, HTTP session, ActivityPub object처
 
 ## 책임
 
-| 계층                                                            | 책임                                                                                           |
-| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| GraphQL resolver, HTTP route, ActivityPub handler, worker entry | transport 입력 해석, caller·actor 인증, protocol별 권한 증거 검증, 외부 ID와 응답·오류 mapping |
-| `packages/core/services`                                        | 검증된 actor와 business input에 대한 공통 domain policy, transaction, persistence와 멱등성     |
-| `packages/core/db`                                              | DB client, schema, migration 지원과 DB 전용 utility                                            |
+| 계층                                                            | 책임                                                                                       |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| GraphQL resolver, HTTP route, ActivityPub handler, worker entry | transport 입력 해석, caller·actor 인증, 조회·loader, 외부 ID와 응답·오류 mapping           |
+| `packages/core/services`                                        | 검증된 actor와 business input에 대한 공통 domain policy, transaction, persistence와 멱등성 |
+| `packages/core/db`                                              | DB client, schema, migration 지원과 DB 전용 utility                                        |
 
 Account session이나 ActivityPub signature처럼 actor identity를 신뢰하기 위한 증거는 진입점이 검증한다.
 Post.Author, Source visibility와 lifecycle처럼 검증된 actor와 domain object 사이의 공통 권한은 core가
@@ -47,6 +48,8 @@ ingress는 signature와 Remote actor를 검증한다. 두 진입점은 검증된
 - GraphQL은 core 결과를 schema 타입과 payload로 mapping하고, presentation에만 필요한 값은
   resolver·loader에서 조합한다. 어떤 값이 모든 caller가 알아야 하는 domain outcome일 때만 core
   반환값에 포함한다.
+- read-only query, lookup, list와 loader는 진입점의 query 계층에서 DB와 공유 조회 policy를 사용한다.
+  계층을 맞추기 위한 pass-through core service를 만들지 않는다.
 - 여러 DB 변경이 원자적이어야 하면 core action이 transaction 경계를 소유한다. 실제 caller
   transaction과 합류해야 할 때만 optional transaction을 받는다.
 - core는 공통 domain error를 반환하고 각 진입점이 외부 오류 표현으로 mapping한다.
