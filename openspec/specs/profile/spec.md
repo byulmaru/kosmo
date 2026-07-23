@@ -219,7 +219,6 @@ API는 local profile과 ActivityPub remote profile이 참여하는 visible follo
 
 - **WHEN** active profile이 비활성화된다
 - **THEN** 시스템은 profile follow row를 삭제하지 않고 남은 active profile들의 저장 followersCount/followingCount에서 해당 비활성 profile과의 관계를 제외한다
-- **AND** 이 전이는 migration 전에 이미 비활성화된 profile 관계의 historical count를 별도로 reconciliation하지 않는다
 
 #### Scenario: Read public follow
 
