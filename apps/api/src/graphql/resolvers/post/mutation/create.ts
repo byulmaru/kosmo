@@ -1,11 +1,5 @@
-import { AccountProfiles, Accounts, db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
-import {
-  AccountState,
-  InstanceKind,
-  InstanceState,
-  PostVisibility,
-  ProfileState,
-} from '@kosmo/core/enums';
+import { db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
+import { InstanceKind, InstanceState, PostVisibility } from '@kosmo/core/enums';
 import { NotFoundError, PermissionDeniedError } from '@kosmo/core/error';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { createPost } from '@kosmo/core/services';
@@ -29,30 +23,20 @@ builder.mutationField('createPost', (t) =>
     },
     resolve: async (_, { input }, ctx) =>
       db.transaction(async (tx) => {
-        const actor = await tx
-          .select({ id: Profiles.id })
+        const instance = await tx
+          .select({ id: Instances.id })
           .from(Profiles)
-          .innerJoin(
-            AccountProfiles,
-            and(
-              eq(AccountProfiles.profileId, Profiles.id),
-              eq(AccountProfiles.accountId, ctx.session.accountId),
-            ),
-          )
-          .innerJoin(Accounts, eq(Accounts.id, AccountProfiles.accountId))
           .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
           .where(
             and(
               eq(Profiles.id, ctx.session.profileId),
-              eq(Profiles.state, ProfileState.ACTIVE),
-              eq(Accounts.state, AccountState.ACTIVE),
               eq(Instances.kind, InstanceKind.LOCAL),
               eq(Instances.state, InstanceState.ACTIVE),
             ),
           )
           .limit(1)
           .then(first);
-        if (!actor) {
+        if (!instance) {
           throw new PermissionDeniedError();
         }
 
@@ -75,7 +59,7 @@ builder.mutationField('createPost', (t) =>
           {
             document: postContentDocumentFromText(input.bodyText),
             origin: 'LOCAL',
-            profileId: actor.id,
+            profileId: ctx.session.profileId,
             replyParentId,
             visibility: input.visibility,
           },
