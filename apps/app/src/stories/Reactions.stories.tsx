@@ -323,6 +323,14 @@ export const QuickPickerInteraction: Story = {
       '🌈',
     ]);
 
+    const firstOptionStyle = getComputedStyle(buttons[0]!);
+    const pickerStyle = getComputedStyle(buttons[0]!.parentElement!);
+
+    expect(firstOptionStyle.borderTopWidth).toBe('0px');
+    expect(firstOptionStyle.borderRadius).toBe('12px');
+    expect(pickerStyle.borderTopWidth).toBe('1px');
+    expect(pickerStyle.borderRadius).toBe('16px');
+
     const heart = canvas.getByRole('button', { name: '❤️ 반응' });
     const party = canvas.getByRole('button', { name: '🎉 반응' });
     const eyes = canvas.getByRole('button', { name: '👀 반응' });
@@ -358,6 +366,11 @@ export const QuickPickerStates: Story = {
     expect(pendingHeart).toBeDisabled();
     expect(pendingHeart).toHaveAttribute('aria-busy', 'true');
     expect(pendingHeart).toHaveAttribute('aria-pressed', 'true');
+    expect(pendingHeart).toHaveTextContent('❤️');
+    const pendingOverlay = pendingHeart.querySelector('[aria-hidden="true"]');
+    expect(pendingOverlay).not.toBeNull();
+    expect(pendingOverlay!.getBoundingClientRect().width).toBe(44);
+    expect(pendingOverlay!.getBoundingClientRect().height).toBe(44);
     expect(pendingSection.getByRole('button', { name: '👀 반응' })).toBeEnabled();
     await userEvent.click(pendingHeart, { pointerEventsCheck: 0 });
     expect(canvas.getByText('차단된 동작: 0')).toBeVisible();
@@ -367,13 +380,11 @@ export const QuickPickerStates: Story = {
     });
     expect(errorParty).toBeEnabled();
     expect(errorParty).toHaveAttribute('aria-pressed', 'true');
+    expect(getComputedStyle(errorParty).borderTopWidth).toBe('0px');
     await userEvent.click(errorParty);
     expect(canvas.getByText('재시도: 1')).toBeVisible();
 
-    const disabledButtons = disabledSection.getAllByRole('button');
-    expect(disabledButtons).toHaveLength(6);
-    disabledButtons.forEach((button) => expect(button).toBeDisabled());
-    await userEvent.click(disabledButtons[0]!, { pointerEventsCheck: 0 });
+    expect(disabledSection.queryAllByRole('button')).toHaveLength(0);
     expect(canvas.getByText('차단된 동작: 0')).toBeVisible();
   },
   render: () => <QuickPickerStateCatalog />,

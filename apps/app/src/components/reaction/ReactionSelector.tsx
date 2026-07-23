@@ -30,8 +30,13 @@ export function ReactionSelector({
   options,
   pendingOptionIds = [],
   selectedOptionIds = [],
-}: ReactionSelectorProps): React.ReactElement {
+}: ReactionSelectorProps): React.ReactElement | null {
   const theme = useTheme();
+
+  if (disabled) {
+    return null;
+  }
+
   const errorIds = new Set(errorOptionIds);
   const pendingIds = new Set(pendingOptionIds);
   const selectedIds = new Set(selectedOptionIds);
@@ -42,7 +47,7 @@ export function ReactionSelector({
         const error = errorIds.has(option.id);
         const pending = pendingIds.has(option.id);
         const selected = selectedIds.has(option.id);
-        const optionDisabled = disabled || pending;
+        const optionDisabled = pending;
         const accessibilityLabel = error
           ? `${option.label} 반응, 오류, 다시 시도`
           : pending
@@ -69,20 +74,15 @@ export function ReactionSelector({
                   : pressed
                     ? theme.surface
                     : theme.card,
-                borderColor: error ? theme.danger : selected ? theme.accent : theme.border,
-                opacity: optionDisabled ? 0.55 : pressed ? 0.85 : 1,
+                opacity: pressed ? 0.85 : 1,
               },
             ]}
           >
             <Text style={styles.emoji}>{option.emoji}</Text>
             {pending ? (
-              <ActivityIndicator
-                accessibilityElementsHidden
-                aria-hidden
-                color={theme.text}
-                size="small"
-                style={[styles.pendingIndicator, styles.pendingIndicatorPointerEvents]}
-              />
+              <View accessibilityElementsHidden aria-hidden style={styles.pendingOverlay}>
+                <ActivityIndicator color={theme.text} size="large" />
+              </View>
             ) : null}
           </Pressable>
         );
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
   root: {
     alignItems: 'center',
     alignSelf: 'flex-start',
-    borderRadius: radii.full,
+    borderRadius: radii.lg,
     borderWidth: 1,
     flexDirection: 'row',
     gap: spacing.xs,
@@ -103,19 +103,21 @@ const styles = StyleSheet.create({
   },
   option: {
     alignItems: 'center',
-    borderRadius: radii.full,
-    borderWidth: 1,
+    borderRadius: radii.md,
     height: 44,
     justifyContent: 'center',
     position: 'relative',
     width: 44,
   },
   emoji: { fontSize: 24, lineHeight: 32 },
-  pendingIndicator: {
+  pendingOverlay: {
+    alignItems: 'center',
     bottom: 0,
+    justifyContent: 'center',
+    left: 0,
+    pointerEvents: 'none',
     position: 'absolute',
     right: 0,
-    transform: [{ scale: 0.55 }],
+    top: 0,
   },
-  pendingIndicatorPointerEvents: { pointerEvents: 'none' },
 });
