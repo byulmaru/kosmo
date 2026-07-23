@@ -3,7 +3,7 @@ import { PermissionDeniedError } from '@kosmo/core/error';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { postVisibilityAccessWhere } from '@/graphql/resolvers/post/access/visibility';
+import { postAccessWhere } from '@/graphql/resolvers/post/access';
 import { Profile } from '@/graphql/resolvers/profile';
 import { Bookmark, BookmarkConnection } from '../ref';
 import type { BookmarkRow } from '../ref';
@@ -32,7 +32,7 @@ builder.objectField(Profile, 'bookmarks', (t) =>
               .where(
                 and(
                   eq(Bookmarks.profileId, profile.id),
-                  postVisibilityAccessWhere({ ctx }),
+                  postAccessWhere({ ctx }),
                   before ? gt(Bookmarks.id, before) : undefined,
                   after ? lt(Bookmarks.id, after) : undefined,
                 ),

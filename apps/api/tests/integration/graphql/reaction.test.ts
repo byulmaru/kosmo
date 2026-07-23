@@ -130,8 +130,16 @@ describe('GraphQL Reaction', () => {
     const auth = await createAuthenticatedSession();
     const author = await createProfile('private-author');
     const hiddenPost = await createPost(author.id, PostVisibility.DIRECT);
+    const unavailableSource = await createPost(author.id);
+    const unavailableRepost = await createPost(auth.profile.id, PostVisibility.PUBLIC, {
+      repostSourceId: unavailableSource.id,
+    });
+    await db
+      .update(Posts)
+      .set({ visibility: PostVisibility.DIRECT })
+      .where(eq(Posts.id, unavailableSource.id));
 
-    for (const postId of [hiddenPost.id, crypto.randomUUID()]) {
+    for (const postId of [hiddenPost.id, unavailableRepost.id, crypto.randomUUID()]) {
       const result = await requestAddReaction(postId, '👀', auth.token);
       assert.equal(result.errors?.[0]?.extensions?.code, 'NOT_FOUND');
     }
@@ -208,6 +216,7 @@ describe('GraphQL Reaction', () => {
 
   test('Reaction Node는 Post 조회 정책을 그대로 적용한다', async () => {
     const auth = await createAuthenticatedSession();
+    const source = await createPost(auth.profile.id);
     const post = await createPost(auth.profile.id);
     const added = await requestAddReaction(post.id, '🌈', auth.token);
     const reactionId = added.data?.addReaction.reaction.id;
@@ -217,7 +226,11 @@ describe('GraphQL Reaction', () => {
     assertNoGraphQLErrors(publicNode);
     assert.equal(publicNode.data?.node?.type, '🌈');
 
-    await db.update(Posts).set({ visibility: PostVisibility.DIRECT }).where(eq(Posts.id, post.id));
+    await db.update(Posts).set({ repostSourceId: source.id }).where(eq(Posts.id, post.id));
+    await db
+      .update(Posts)
+      .set({ visibility: PostVisibility.DIRECT })
+      .where(eq(Posts.id, source.id));
     const hiddenNode = await requestNode(reactionId);
     assertNoGraphQLErrors(hiddenNode);
     assert.equal(hiddenNode.data?.node, null);
@@ -606,10 +619,14 @@ const createProfile = (
     .returning()
     .then(firstOrThrow);
 
-const createPost = (profileId: string, visibility: PostVisibility = PostVisibility.PUBLIC) =>
+const createPost = (
+  profileId: string,
+  visibility: PostVisibility = PostVisibility.PUBLIC,
+  { repostSourceId }: { repostSourceId?: string } = {},
+) =>
   db
     .insert(Posts)
-    .values({ profileId, state: PostState.ACTIVE, visibility })
+    .values({ profileId, repostSourceId, state: PostState.ACTIVE, visibility })
     .returning()
     .then(firstOrThrow);
 

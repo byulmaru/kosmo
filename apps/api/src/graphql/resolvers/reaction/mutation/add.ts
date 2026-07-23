@@ -5,7 +5,7 @@ import { reactionTypeSchema } from '@kosmo/core/validation';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Post } from '../../post';
-import { postVisibilityAccessWhere } from '../../post/access/visibility';
+import { postAccessWhere } from '../../post/access';
 import { Reaction } from '../ref';
 
 builder.mutationField('addReaction', (t) =>
@@ -26,7 +26,7 @@ builder.mutationField('addReaction', (t) =>
           .from(Posts)
           .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
           .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-          .where(and(eq(Posts.id, input.postId.id), postVisibilityAccessWhere({ ctx })))
+          .where(and(eq(Posts.id, input.postId.id), postAccessWhere({ ctx })))
           .limit(1)
           .then(first);
         if (!post) {

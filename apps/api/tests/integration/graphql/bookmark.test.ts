@@ -148,8 +148,21 @@ describe('Bookmark GraphQL 경계', () => {
       visibility: PostVisibility.DIRECT,
     });
     const deletedPost = await createPost(author.id, { state: PostState.DELETED });
+    const unavailableSource = await createPost(author.id);
+    const unavailableRepost = await createPost(auth.profile.id, {
+      repostSourceId: unavailableSource.id,
+    });
+    await db
+      .update(Posts)
+      .set({ visibility: PostVisibility.DIRECT })
+      .where(eq(Posts.id, unavailableSource.id));
 
-    for (const postId of [hiddenPost.id, deletedPost.id, crypto.randomUUID()]) {
+    for (const postId of [
+      hiddenPost.id,
+      deletedPost.id,
+      unavailableRepost.id,
+      crypto.randomUUID(),
+    ]) {
       const result = await requestCreateBookmark(postId, auth.token);
       assert.equal(result.errors?.[0]?.extensions?.code, 'NOT_FOUND');
     }
@@ -205,6 +218,7 @@ describe('Bookmark GraphQL 경계', () => {
     const owner = await createAuthenticatedSession();
     const other = await createAuthenticatedSession();
     const author = await createProfile('bookmark-node-author');
+    const source = await createPost(author.id);
     const post = await createPost(author.id);
     const created = await requestCreateBookmark(post.id, owner.token);
     const bookmarkId = created.data?.createBookmark.bookmark.id;
@@ -214,7 +228,11 @@ describe('Bookmark GraphQL 경계', () => {
     assertNoGraphQLErrors(ownerNode);
     assert.deepEqual(ownerNode.data?.node, created.data?.createBookmark.bookmark);
 
-    await db.update(Posts).set({ visibility: PostVisibility.DIRECT }).where(eq(Posts.id, post.id));
+    await db.update(Posts).set({ repostSourceId: source.id }).where(eq(Posts.id, post.id));
+    await db
+      .update(Posts)
+      .set({ visibility: PostVisibility.DIRECT })
+      .where(eq(Posts.id, source.id));
     const hiddenPostNode = await requestBookmarkNode(bookmarkId, owner.token);
     assertNoGraphQLErrors(hiddenPostNode);
     assert.deepEqual(hiddenPostNode.data?.node, {
@@ -374,7 +392,8 @@ describe('Bookmark GraphQL 경계', () => {
     const owner = await createAuthenticatedSession();
     const author = await createProfile('page-author');
     const visibleNewest = await createPost(author.id, { visibility: PostVisibility.PUBLIC });
-    const hiddenNewest = await createPost(author.id, { state: PostState.DELETED });
+    const unavailableSource = await createPost(author.id, { visibility: PostVisibility.DIRECT });
+    const hiddenNewest = await createPost(author.id, { repostSourceId: unavailableSource.id });
     const visibleMiddle = await createPost(author.id, { visibility: PostVisibility.UNLISTED });
     const hiddenMiddle = await createPost(author.id, { visibility: PostVisibility.FOLLOWERS });
     const visibleOldest = await createPost(owner.profile.id, {
@@ -628,10 +647,16 @@ const createProfile = (
 const createPost = (
   profileId: string,
   {
+    repostSourceId,
     state = PostState.ACTIVE,
     visibility = PostVisibility.PUBLIC,
-  }: { state?: PostState; visibility?: PostVisibility } = {},
-) => db.insert(Posts).values({ profileId, state, visibility }).returning().then(firstOrThrow);
+  }: { repostSourceId?: string; state?: PostState; visibility?: PostVisibility } = {},
+) =>
+  db
+    .insert(Posts)
+    .values({ profileId, repostSourceId, state, visibility })
+    .returning()
+    .then(firstOrThrow);
 
 const createBookmark = (profileId: string, postId: string, id?: string) =>
   db.insert(Bookmarks).values({ id, profileId, postId }).returning().then(firstOrThrow);
