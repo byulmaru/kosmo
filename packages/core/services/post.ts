@@ -1,7 +1,5 @@
 import { and, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm';
 import {
-  AccountProfiles,
-  Accounts,
   ActivityPubPosts,
   db,
   first,
@@ -15,15 +13,7 @@ import {
   ProfileFollows,
   Profiles,
 } from '../db';
-import {
-  AccountProfileRole,
-  AccountState,
-  InstanceKind,
-  InstanceState,
-  PostState,
-  PostVisibility,
-  ProfileState,
-} from '../enums';
+import { InstanceState, PostState, PostVisibility, ProfileState } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import { validatePostStructure } from './post-structure';
 import type { Transaction } from '../db';
@@ -110,11 +100,9 @@ const findVisiblePost = async (
 
 export const repostPost = async (
   {
-    accountId,
     actorProfileId,
     sourcePostId,
   }: {
-    readonly accountId: string;
     readonly actorProfileId: string;
     readonly sourcePostId: string;
   },
@@ -124,20 +112,12 @@ export const repostPost = async (
     const actor = await tx
       .select({ id: Profiles.id })
       .from(Profiles)
-      .innerJoin(
-        AccountProfiles,
-        and(eq(AccountProfiles.profileId, Profiles.id), eq(AccountProfiles.accountId, accountId)),
-      )
-      .innerJoin(Accounts, eq(Accounts.id, AccountProfiles.accountId))
       .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
       .where(
         and(
           eq(Profiles.id, actorProfileId),
           eq(Profiles.state, ProfileState.ACTIVE),
-          eq(Accounts.state, AccountState.ACTIVE),
-          inArray(AccountProfiles.role, [AccountProfileRole.OWNER, AccountProfileRole.MEMBER]),
-          eq(Instances.kind, InstanceKind.LOCAL),
-          eq(Instances.state, InstanceState.ACTIVE),
+          ne(Instances.state, InstanceState.SUSPENDED),
         ),
       )
       .limit(1)

@@ -5,6 +5,8 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 import {
   AccountProfileRole,
   AccountState,
+  InstanceKind,
+  InstanceState,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -26,6 +28,7 @@ let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
+let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
@@ -40,8 +43,18 @@ describe('GraphQL Repost', () => {
     process.env.NODE_ENV = 'production';
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
-    ({ AccountProfiles, Accounts, db, firstOrThrow, pg, PostContents, Posts, Profiles, Sessions } =
-      await import('@kosmo/core/db'));
+    ({
+      AccountProfiles,
+      Accounts,
+      db,
+      firstOrThrow,
+      Instances,
+      pg,
+      PostContents,
+      Posts,
+      Profiles,
+      Sessions,
+    } = await import('@kosmo/core/db'));
     const { seedDatabase } = await import('@kosmo/core/db/seed');
 
     await truncateDatabase();
@@ -97,6 +110,19 @@ describe('GraphQL Repost', () => {
     });
   });
 
+  test('Owner와 Member가 Local Active Profile로 Repost할 수 있다', async () => {
+    const sourceAuthor = await createProfile('member-source-author');
+    const source = await createContentPost(sourceAuthor.id);
+
+    for (const role of [AccountProfileRole.OWNER, AccountProfileRole.MEMBER]) {
+      const auth = await createAuthenticatedSession({ role });
+      const result = await requestRepost(source.id, auth.token);
+
+      assertNoGraphQLErrors(result);
+      assert.ok(result.data?.repostPost.repost.id);
+    }
+  });
+
   test('조회 가능한 허용 불가 Source는 VALIDATION sourceId로 거부한다', async () => {
     const auth = await createAuthenticatedSession();
     const contentSource = await createContentPost(auth.profile.id);
@@ -136,34 +162,51 @@ describe('GraphQL Repost', () => {
     }
   });
 
-  test('비로그인·active Profile 부재·비활성 Account·membership 부재를 거부한다', async () => {
-    const auth = await createAuthenticatedSession();
-    const source = await createContentPost(auth.profile.id);
+  test('비로그인·active Profile 부재·비활성 Account를 거부한다', async () => {
+    const sourceAuthor = await createProfile('unauthorized-source-author');
+    const source = await createContentPost(sourceAuthor.id);
     const noActiveProfile = await createAuthenticatedSession({ activeProfile: false });
+    const disabledAccount = await createAuthenticatedSession({
+      accountState: AccountState.DISABLED,
+    });
 
-    for (const token of [undefined, noActiveProfile.token]) {
+    for (const token of [undefined, noActiveProfile.token, disabledAccount.token]) {
       const result = await requestRepost(source.id, token);
       assert.equal(result.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
     }
+  });
+
+  test('Admin·membership 부재·비활성 Profile을 거부한다', async () => {
+    const sourceAuthor = await createProfile('membership-source-author');
+    const source = await createContentPost(sourceAuthor.id);
+    const admin = await createAuthenticatedSession({ role: AccountProfileRole.ADMIN });
+    const missingMembership = await createAuthenticatedSession();
+    const disabledProfile = await createAuthenticatedSession({
+      profileState: ProfileState.DISABLED,
+    });
 
     await db
-      .update(Accounts)
-      .set({ state: AccountState.DISABLED })
-      .where(eq(Accounts.id, auth.account.id));
-    assert.equal(
-      (await requestRepost(source.id, auth.token)).errors?.[0]?.extensions?.code,
-      'PERMISSION_DENIED',
-    );
+      .delete(AccountProfiles)
+      .where(eq(AccountProfiles.accountId, missingMembership.account.id));
 
-    await db
-      .update(Accounts)
-      .set({ state: AccountState.ACTIVE })
-      .where(eq(Accounts.id, auth.account.id));
-    await db.delete(AccountProfiles).where(eq(AccountProfiles.accountId, auth.account.id));
-    assert.equal(
-      (await requestRepost(source.id, auth.token)).errors?.[0]?.extensions?.code,
-      'PERMISSION_DENIED',
-    );
+    for (const token of [admin.token, missingMembership.token, disabledProfile.token]) {
+      const result = await requestRepost(source.id, token);
+      assert.equal(result.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+    }
+  });
+
+  test('Remote 또는 Active가 아닌 Local Instance의 Profile을 거부한다', async () => {
+    const sourceAuthor = await createProfile('instance-source-author');
+    const source = await createContentPost(sourceAuthor.id);
+    const remote = await createAuthenticatedSession({ instanceKind: InstanceKind.ACTIVITYPUB });
+    const inactiveLocal = await createAuthenticatedSession({
+      instanceState: InstanceState.UNRESPONSIVE,
+    });
+
+    for (const token of [remote.token, inactiveLocal.token]) {
+      const result = await requestRepost(source.id, token);
+      assert.equal(result.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+    }
   });
 
   test('Post가 아닌 concrete global ID를 sourceId에서 거부한다', async () => {
@@ -228,16 +271,22 @@ const assertNoGraphQLErrors = (result: GraphQLResult<unknown>) => {
   assert.equal(result.errors, undefined, JSON.stringify(result.errors));
 };
 
-const createProfile = (handle: string) =>
+const createProfile = (
+  handle: string,
+  {
+    instanceId = localInstanceId,
+    state = ProfileState.ACTIVE,
+  }: { instanceId?: string; state?: ProfileState } = {},
+) =>
   db
     .insert(Profiles)
     .values({
       displayName: handle,
       followPolicy: ProfileFollowPolicy.OPEN,
       handle,
-      instanceId: localInstanceId,
+      instanceId,
       normalizedHandle: normalizeHandle(handle),
-      state: ProfileState.ACTIVE,
+      state,
     })
     .returning()
     .then(firstOrThrow);
@@ -270,18 +319,43 @@ const createContentPost = async (
 
 const createAuthenticatedSession = async ({
   activeProfile = true,
-}: { activeProfile?: boolean } = {}) => {
+  accountState = AccountState.ACTIVE,
+  instanceKind = InstanceKind.LOCAL,
+  instanceState = InstanceState.ACTIVE,
+  profileState = ProfileState.ACTIVE,
+  role = AccountProfileRole.OWNER,
+}: {
+  activeProfile?: boolean;
+  accountState?: AccountState;
+  instanceKind?: InstanceKind;
+  instanceState?: InstanceState;
+  profileState?: ProfileState;
+  role?: AccountProfileRole;
+} = {}) => {
   const suffix = crypto.randomUUID();
   const account = await db
     .insert(Accounts)
-    .values({ displayName: suffix, oidcSubject: suffix, state: AccountState.ACTIVE })
+    .values({ displayName: suffix, oidcSubject: suffix, state: accountState })
     .returning()
     .then(firstOrThrow);
-  const profile = await createProfile(`viewer-${suffix}`);
+  const instanceId =
+    instanceKind === InstanceKind.LOCAL && instanceState === InstanceState.ACTIVE
+      ? localInstanceId
+      : await db
+          .insert(Instances)
+          .values({
+            domain: `${suffix}.example`,
+            kind: instanceKind,
+            state: instanceState,
+          })
+          .returning({ id: Instances.id })
+          .then(firstOrThrow)
+          .then(({ id }) => id);
+  const profile = await createProfile(`viewer-${suffix}`, { instanceId, state: profileState });
   await db.insert(AccountProfiles).values({
     accountId: account.id,
     profileId: profile.id,
-    role: AccountProfileRole.OWNER,
+    role,
   });
   const token = `token-${suffix}`;
   await db.insert(Sessions).values({
