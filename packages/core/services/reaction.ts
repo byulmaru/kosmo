@@ -25,18 +25,16 @@ const requireReactionActor = async (tx: Transaction, actorProfileId: string): Pr
   }
 };
 
-export const addReaction = async (
-  {
-    actorProfileId,
-    postId,
-    type,
-  }: {
-    readonly actorProfileId: string;
-    readonly postId: string;
-    readonly type: string;
-  },
+type AddReactionInput = {
+  readonly actorProfileId: string;
+  readonly postId: string;
+  readonly type: string;
+};
+
+export const addReactionWithStatus = async (
+  { actorProfileId, postId, type }: AddReactionInput,
   tx?: Transaction,
-): Promise<typeof Reactions.$inferSelect> => {
+): Promise<{ readonly created: boolean; readonly reaction: typeof Reactions.$inferSelect }> => {
   const parsedType = reactionTypeSchema.safeParse(type);
   if (!parsedType.success) {
     throw new ValidationError(parsedType.error.issues[0]?.message, { field: 'type' });
@@ -81,9 +79,12 @@ export const addReaction = async (
       throw new Error('Reaction not found after insert conflict');
     }
 
-    return reaction;
+    return { created: inserted !== undefined, reaction };
   });
 };
+
+export const addReaction = async (input: AddReactionInput, tx?: Transaction) =>
+  (await addReactionWithStatus(input, tx)).reaction;
 
 export const deleteReaction = async (
   {

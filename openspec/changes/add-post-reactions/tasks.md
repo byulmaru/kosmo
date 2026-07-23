@@ -112,13 +112,20 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 
 ## 6. PROD-413 Reaction Notification 생성·inbox 통합
 
+**Authority / Provenance**
+
+- [Notification canonical 객체](../../../docs/domain/objects/notification.md)
+- [Reaction canonical 객체](../../../docs/domain/objects/reaction.md)
+- [ADR 0010](../../../docs/domain/decisions/0010-post-interaction-contracts.md)
+- [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4)
+
 **Deliverable**
 
 다른 Local Profile의 Post에 새 Reaction이 생성되면 기존 Profile inbox에 source와 상관된 Reaction Notification이 Best Effort로 나타나고 이동·읽음 처리된다.
 
 **Guardrails**
 
-- `add-in-app-notifications`의 capability와 공통 목록 UI·badge·Read/navigation 계약이 archive된 뒤 착수한다.
+- PROD-277·324·372가 전달한 공통 목록 UI·badge·Read/navigation 계약을 유지한다.
 - 자기 Post와 Remote Recipient에는 Local Notification을 만들지 않는다.
 - Recipient, Related Profile, Target Post와 Type은 Reaction source에서 파생하고 snapshot을 복제하지 않는다.
 - Notification 실패가 Reaction 결과를 rollback하지 않는다.
@@ -128,10 +135,10 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 - source mapping, 동일 source uniqueness, 자기 알림 억제, Remote Recipient no-op과 실패 격리를 database-backed test로 검증한다.
 - multi-kind Node/list/count/read, selected Profile 격리, inbox 표시·Post 이동과 badge/cache 일관성을 API/client integration test로 검증한다.
 
-- [ ] 6.1 PROD-413이 소유한 multi-kind visible projection과 PROD-277 Read/navigation 결정을 반영해 specs·decisions를 갱신하고 strict validation을 통과시킨다.
-- [ ] 6.2 Reaction Notification kind, source 저장 경계와 multi-kind GraphQL visibility·Node/list/count/read를 구현한다.
-- [ ] 6.3 Reaction Notification inbox item과 Post 이동·읽음·badge/cache 동기화를 구현한다.
-- [ ] 6.4 source correlation·실패 격리·API visibility와 client integration 검증을 추가하고 관련 check를 통과시킨다.
+- [x] 6.1 PROD-413이 소유한 multi-kind visible projection과 PROD-277 Read/navigation 결정을 반영해 specs·decisions를 갱신하고 strict validation을 통과시킨다.
+- [x] 6.2 Reaction Notification kind, source 저장 경계와 multi-kind GraphQL visibility·Node/list/count/read를 구현한다.
+- [x] 6.3 Reaction Notification inbox item과 Post 이동·읽음·badge/cache 동기화를 구현한다.
+- [x] 6.4 source correlation·실패 격리·API visibility와 client integration 검증을 추가하고 관련 check를 통과시킨다.
 
 ## 7. PROD-417 Reaction 선택 UI
 

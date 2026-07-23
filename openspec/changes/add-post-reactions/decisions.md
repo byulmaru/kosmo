@@ -121,12 +121,50 @@
 ### Reaction Notification은 기존 Notification baseline 뒤에 확장한다
 
 - Decision Date: 2026-07-20
-- Status: Accepted
+- Decision Class: Implementation Choice
+- Authority / Provenance: [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4)
+- Status: Superseded
 - Context / Problem: Notification backend는 병합됐지만 공통 목록 UI·badge·E2E와 active capability archive가 남아 있고 현재 SQL은 Follow source에 고정돼 있다.
 - Decision Outcome: PROD-395와 Reaction mutation/query slice는 Notification UI 완료를 기다리지 않는다. `REACTION` kind migration, multi-kind list/count/read와 client item은 `add-in-app-notifications` archive 뒤 PROD-413·419가 추가한다.
 - Alternatives Considered: active Notification change에 Reaction을 끼우면 PROD-273 범위와 archive 책임을 바꾸고 migration/snapshot 충돌을 만든다.
 - Consequences: 공유 Reaction change는 Notification baseline에 대한 명시적 의존성을 유지한다. 부모 PROD-390 archive는 Notification 자식 완료를 기다린다.
-- Confirmation / Follow-up: PROD-413 착수 전에 archived `notification`·`data-model` baseline과 PROD-277 Read/navigation 결정을 다시 읽는다.
+- Confirmation / Follow-up: 2026-07-23의 “Reaction Notification 구현 gate는 완료된 직접 선행 slice로 판단한다”가 최신 Linear dependency를 반영해 이 기록을 대체한다.
+
+### Reaction Notification 구현 gate는 완료된 직접 선행 slice로 판단한다
+
+- Decision Date: 2026-07-23
+- Decision Class: Derived Contract
+- Authority / Provenance: [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4), PROD-277, PROD-324, PROD-372
+- Status: Active
+- Context / Problem: 이전 기록은 `add-in-app-notifications` 전체 archive를 착수 조건으로 뒀지만 최신 PROD-413은 필요한 저장·API·UI 구현 이슈를 직접 blocker로 관리한다.
+- Decision Outcome: PROD-413은 직접 blocker인 Notification 목록·badge·Read/navigation slice가 완료되면 착수한다. 부모 Notification change의 남은 E2E·archive는 별도 통합 책임이며 PROD-413을 차단하지 않는다.
+- Alternatives Considered: 부모 change 전체 archive까지 기다리면 이미 승인·병합된 직접 기반을 사용하지 못하고 두 계약의 독립 구현 순서를 불필요하게 결합한다.
+- Consequences: PROD-413은 현재 병합된 baseline을 독립 확인해 확장하며 `add-in-app-notifications`의 남은 task나 archive를 대신 완료하지 않는다.
+- Confirmation / Follow-up: PROD-277·324·372의 Done 상태와 현재 `main`의 목록·badge·Read/cache 구현을 착수 전에 확인했다.
+
+### Multi-kind Notification은 kind별 visible projection을 합친다
+
+- Decision Date: 2026-07-23
+- Decision Class: Implementation Choice
+- Authority / Provenance: [Notification canonical 객체](../../../docs/domain/objects/notification.md), [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4)
+- Status: Active
+- Context / Problem: Follow와 Reaction은 서로 다른 source 관계와 visibility predicate를 가지지만 Node·list·count·Read는 같은 visible Notification 집합을 사용해야 한다.
+- Decision Outcome: 각 kind가 source correlation과 visibility를 검증한 동일 shape의 projection을 만들고 이를 `UNION ALL`로 합친 뒤 공통 ID cursor pagination, unread count와 Read 대상을 결정한다.
+- Alternatives Considered: kind-guarded `LEFT JOIN`과 `OR` predicate는 nullable source join과 kind 조건을 Node·list·count·Read마다 반복해 새 kind 추가 시 predicate drift 위험이 크다.
+- Consequences: kind별 predicate는 독립적으로 검증할 수 있고 공통 표면은 합쳐진 projection만 소비한다. projection column shape와 cursor ordering은 kind 사이에서 같아야 한다.
+- Confirmation / Follow-up: Follow와 Reaction 혼합 목록·count·Node·Read, unavailable source의 filter-before-limit을 API integration test로 검증한다.
+
+### Notification item 이동과 Read를 분리한다
+
+- Decision Date: 2026-07-23
+- Decision Class: Derived Contract
+- Authority / Provenance: [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4), [PROD-372](https://linear.app/byulmaru/issue/PROD-372/%EC%95%8C%EB%A6%BC-%ED%95%AD%EB%AA%A9-%EC%9D%BD%EC%9D%8C-%EC%83%81%ED%83%9C%EB%A5%BC-best-effort%EB%A1%9C-%EB%8F%99%EA%B8%B0%ED%99%94%ED%95%9C%EB%8B%A4)
+- Status: Active
+- Context / Problem: Reaction item은 Related Profile이 아니라 Target Post로 이동하지만 기존 Read/cache 동기화의 비차단 계약을 유지해야 한다.
+- Decision Outcome: item 활성화는 Target Post 이동을 즉시 시작하고 Read mutation은 응답을 기다리지 않는 Best Effort 요청으로 실행한다. Read pending·실패·재시도는 이동 결과를 바꾸지 않으며 성공 payload만 Recipient item/count cache를 갱신한다.
+- Alternatives Considered: Read 성공 뒤 이동하면 network 실패가 핵심 navigation을 차단한다. 이동 뒤 별도 화면에서 Read를 시작하면 item activation과 source ID 상관관계를 잃기 쉽다.
+- Consequences: Follow와 Reaction item은 목적지는 달라도 같은 Read/cache orchestration을 공유하며 selected Profile별 Relay Store 격리를 유지한다.
+- Confirmation / Follow-up: 즉시 navigation, Read 실패·반복·Profile 전환과 성공 payload cache 반영을 client integration test로 검증한다.
 
 ### Reaction Type과 add mutation은 canonical 문자열 계약을 그대로 노출한다
 
@@ -182,10 +220,7 @@
 
 ## Remaining Decisions
 
-- PROD-417/418: zero-count Type 공급 API
-- PROD-417: selector optimistic update 사용 여부
-- PROD-418: Profile 목록 modal/route UX
-- PROD-413: multi-kind Notification visible projection의 `UNION ALL` 기본안과 `LEFT JOIN` 대안 중 최종 구현, PROD-277 Read/navigation 순서
+- PROD-417/418: zero-count Type 공급 API, selector·Profile 목록 UX, optimistic update 사용 여부
 
 ## Superseded Decisions
 

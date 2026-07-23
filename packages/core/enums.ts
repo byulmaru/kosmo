@@ -60,6 +60,7 @@ export type MediaSource = keyof typeof MediaSource;
 
 export const NotificationKind = {
   FOLLOW: 'FOLLOW',
+  REACTION: 'REACTION',
 } as const;
 export type NotificationKind = keyof typeof NotificationKind;
 

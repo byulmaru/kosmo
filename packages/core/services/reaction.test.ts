@@ -12,7 +12,7 @@ import {
 } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import { reactionTypes } from '../validation';
-import { addReaction, deleteReaction } from './reaction';
+import { addReaction, addReactionWithStatus, deleteReaction } from './reaction';
 
 after(async () => {
   await pg.end();
@@ -115,6 +115,16 @@ test('반복·동시 추가는 하나의 Reaction을 반환한다', async () => 
   assert.equal(new Set(concurrent.map(({ id }) => id)).size, 1);
   assert.equal(repeated.id, concurrent[0]!.id);
   assert.equal(await countReactions(input.postId), 1);
+});
+
+test('Notification caller용 결과는 새 source만 구분한다', async () => {
+  const { input } = await createFixture();
+  const first = await addReactionWithStatus({ ...input, type: '🎉' });
+  const repeated = await addReactionWithStatus({ ...input, type: '🎉' });
+
+  assert.equal(first.created, true);
+  assert.equal(repeated.created, false);
+  assert.equal(repeated.reaction.id, first.reaction.id);
 });
 
 test('활성 Local actor가 아니면 Reaction을 만들지 않는다', async () => {
