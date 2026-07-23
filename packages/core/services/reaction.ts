@@ -1,6 +1,6 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { first, getDatabaseConnection, Instances, Posts, Profiles, Reactions } from '../db';
-import { InstanceKind, InstanceState, PostState, ProfileState } from '../enums';
+import { InstanceState, PostState, ProfileState } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import { reactionTypeSchema } from '../validation';
 import type { Transaction } from '../db';
@@ -14,8 +14,7 @@ const requireReactionActor = async (tx: Transaction, actorProfileId: string): Pr
       and(
         eq(Profiles.id, actorProfileId),
         eq(Profiles.state, ProfileState.ACTIVE),
-        eq(Instances.kind, InstanceKind.LOCAL),
-        eq(Instances.state, InstanceState.ACTIVE),
+        ne(Instances.state, InstanceState.SUSPENDED),
       ),
     )
     .limit(1)
