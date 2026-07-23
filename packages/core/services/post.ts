@@ -1,9 +1,9 @@
 import { eq } from 'drizzle-orm';
 import {
   ActivityPubPosts,
-  db,
   firstOrThrow,
   firstOrThrowWith,
+  getDatabaseConnection,
   isUniqueViolation,
   PostContents,
   Posts,
@@ -11,6 +11,7 @@ import {
 import { PostState } from '../enums';
 import { NotFoundError, ValidationError } from '../error';
 import { validatePostStructure } from './post-structure';
+import type { Transaction } from '../db';
 import type { PostVisibility } from '../enums';
 import type { PostContentDocumentV1 } from '../post-content';
 
@@ -55,13 +56,17 @@ const isActivityPubPostUriConflict = (error: unknown): boolean => {
   );
 };
 
-export function createPost(input: LocalPostInput): Promise<CreatedPost>;
-export function createPost(input: ActivityPubPostInput): Promise<CreatedPost | DuplicatePost>;
+export function createPost(input: LocalPostInput, tx?: Transaction): Promise<CreatedPost>;
+export function createPost(
+  input: ActivityPubPostInput,
+  tx?: Transaction,
+): Promise<CreatedPost | DuplicatePost>;
 export async function createPost(
   input: LocalPostInput | ActivityPubPostInput,
+  tx?: Transaction,
 ): Promise<CreatedPost | DuplicatePost> {
   try {
-    return await db.transaction(async (tx) => {
+    return await getDatabaseConnection(tx).transaction(async (tx) => {
       const createdAt =
         input.origin === 'ACTIVITYPUB' &&
         input.publishedAt &&

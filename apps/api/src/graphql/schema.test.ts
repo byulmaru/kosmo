@@ -19,6 +19,7 @@ test('exposes the versioned PostContent document and Plain Text composer contrac
   assert.ok(isInputObjectType(createPostInput));
   assert.equal(createPostInput.getFields().content, undefined);
   assert.equal(String(createPostInput.getFields().bodyText?.type), 'String!');
+  assert.equal(String(createPostInput.getFields().replyParentId?.type), 'ID');
   assert.equal(schema.getType('TipTapDocument'), undefined);
   assert.equal(schema.getType('PostContentBody'), undefined);
   assert.equal(String(schema.getType('PostContentDocument')), 'PostContentDocument');
