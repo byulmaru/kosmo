@@ -6,7 +6,7 @@ import { formatPostActionCount } from './postActionCount';
 import type { ComponentType } from 'react';
 import type { AccessibilityState, StyleProp, ViewStyle } from 'react-native';
 
-type ProcessingState = 'default' | 'pending' | 'disabled' | 'error';
+type ProcessingState = 'default' | 'pending' | 'disabled';
 
 type SocialActionConfig = {
   accessibilityLabel: string;
@@ -119,15 +119,12 @@ function ActionControl({
   const theme = useTheme();
   const isPending = processing === 'pending';
   const isDisabled = processing === 'disabled';
-  const isError = processing === 'error';
   const blocked = isPending || isDisabled;
-  const color = isError
-    ? theme.danger
-    : blocked
-      ? theme.textSecondary
-      : active || expanded
-        ? theme.primary
-        : theme.textSecondary;
+  const color = blocked
+    ? theme.textSecondary
+    : active || expanded
+      ? theme.primary
+      : theme.textSecondary;
   const accessibilityState: AccessibilityState = {
     busy: isPending,
     disabled: blocked,
@@ -140,8 +137,7 @@ function ActionControl({
       aria-expanded={stateful ? expanded : undefined}
       aria-busy={stateful && isPending ? true : undefined}
       aria-pressed={stateful && expanded === undefined ? active : undefined}
-      accessibilityHint={isError ? '재시도하려면 활성화하세요.' : undefined}
-      accessibilityLabel={isError ? `${accessibilityLabel} 재시도` : accessibilityLabel}
+      accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
       accessibilityState={stateful ? accessibilityState : undefined}
       disabled={blocked}

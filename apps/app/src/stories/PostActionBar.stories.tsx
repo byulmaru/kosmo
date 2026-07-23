@@ -7,6 +7,7 @@ import { spacing, typography } from '@/theme/tokens';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ViewStyle } from 'react-native';
+import type { PostActionBarProps } from '@/components/post/PostActionBar';
 
 const reply = fn();
 const repost = fn();
@@ -44,6 +45,12 @@ const actionBarProps = {
   },
 };
 
+type BookmarkProcessingState = NonNullable<PostActionBarProps['bookmark']>['processing'];
+
+// @ts-expect-error Public processing states must not retain an error state.
+const rejectedErrorProcessingState: BookmarkProcessingState = 'error';
+void rejectedErrorProcessingState;
+
 function CatalogStory() {
   return (
     <Catalog>
@@ -64,12 +71,12 @@ function CatalogStory() {
           repost={{ ...actionBarProps.repost, hasReposted: true }}
         />
       </Section>
-      <Section title="Processing · pending / disabled / error">
+      <Section title="Processing · pending / disabled">
         <PostActionBar
-          bookmark={{ ...actionBarProps.bookmark, hasBookmarked: true, processing: 'error' }}
+          bookmark={{ ...actionBarProps.bookmark, hasBookmarked: true, processing: 'disabled' }}
           reaction={{ ...actionBarProps.reaction, hasReacted: true, processing: 'disabled' }}
           reply={{ ...actionBarProps.reply, expanded: true, processing: 'pending' }}
-          repost={{ ...actionBarProps.repost, hasReposted: true, processing: 'error' }}
+          repost={{ ...actionBarProps.repost, hasReposted: true, processing: 'pending' }}
         />
       </Section>
       <Section title="Optional actions · More callback only">
@@ -106,9 +113,9 @@ function ControlledReplyStory() {
 function InteractionStory() {
   return (
     <Catalog>
-      <Section title="Default and error invoke callbacks">
+      <Section title="Default invokes callbacks">
         <PostActionBar
-          bookmark={{ ...actionBarProps.bookmark, processing: 'error' }}
+          bookmark={actionBarProps.bookmark}
           more={actionBarProps.more}
           reaction={actionBarProps.reaction}
           reply={actionBarProps.reply}
@@ -194,7 +201,7 @@ export const InteractionContract: Story = {
     more.mockClear();
 
     const labels = canvas.getAllByRole('button').map((button) => button.getAttribute('aria-label'));
-    expect(labels).toEqual(['답글', '재게시', '반응', '북마크 재시도', '더보기', '반응', '북마크']);
+    expect(labels).toEqual(['답글', '재게시', '반응', '북마크', '더보기', '반응', '북마크']);
 
     const replyButton = canvas.getByRole('button', { name: '답글' });
     replyButton.focus();
@@ -202,10 +209,10 @@ export const InteractionContract: Story = {
     await userEvent.keyboard(' ');
     await userEvent.click(canvas.getByRole('button', { name: '재게시' }));
     await userEvent.click(canvas.getAllByRole('button', { name: '반응' })[0]!);
-    await userEvent.click(canvas.getByRole('button', { name: '북마크 재시도' }));
+    await userEvent.click(canvas.getAllByRole('button', { name: '북마크' })[0]!);
     await userEvent.click(canvas.getByRole('button', { name: '더보기' }));
     const pendingReaction = canvas.getAllByRole('button', { name: '반응' })[1]!;
-    const disabledBookmark = canvas.getByRole('button', { name: '북마크' });
+    const disabledBookmark = canvas.getAllByRole('button', { name: '북마크' })[1]!;
     expect(pendingReaction).toBeDisabled();
     expect(disabledBookmark).toBeDisabled();
     expect(pendingReaction).toHaveAttribute('tabindex', '-1');
@@ -232,7 +239,7 @@ export const ProcessingAccessibility: Story = {
     const replyButton = canvas.getByRole('button', { name: '답글' });
     const repostButton = canvas.getByRole('button', { name: '재게시' });
     const reactionButton = canvas.getByRole('button', { name: '반응' });
-    const bookmarkButton = canvas.getByRole('button', { name: '북마크 재시도' });
+    const bookmarkButton = canvas.getByRole('button', { name: '북마크' });
     const moreButton = canvas.getByRole('button', { name: '더보기' });
 
     expect(replyButton).toHaveAttribute('aria-expanded', 'true');
@@ -246,6 +253,7 @@ export const ProcessingAccessibility: Story = {
     expect(bookmarkButton).toHaveAttribute('aria-pressed', 'true');
     expect(bookmarkButton).not.toHaveAttribute('aria-busy');
     expect(bookmarkButton).not.toHaveAttribute('aria-disabled');
+    expect(bookmarkButton).not.toHaveAttribute('aria-description');
     expect(moreButton).not.toHaveAttribute('aria-pressed');
     expect(moreButton).not.toHaveAttribute('aria-expanded');
     expect(moreButton).not.toHaveAttribute('aria-busy');
@@ -253,14 +261,13 @@ export const ProcessingAccessibility: Story = {
     expect(canvas.getByTestId('post-action-reply-spinner')).toBeVisible();
     expect(canvas.getByTestId('post-action-repost-spinner')).toBeVisible();
     expect(canvas.queryByTestId('post-action-bookmark-spinner')).toBeNull();
-    expect(canvas.getByTestId('post-action-bookmark-icon').querySelector('svg')).toHaveAttribute(
-      'stroke',
-      '#aa1010',
-    );
+    expect(
+      canvas.getByTestId('post-action-bookmark-icon').querySelector('svg'),
+    ).not.toHaveAttribute('fill', 'none');
   },
   render: () => (
     <PostActionBar
-      bookmark={{ ...actionBarProps.bookmark, hasBookmarked: true, processing: 'error' }}
+      bookmark={{ ...actionBarProps.bookmark, hasBookmarked: true }}
       more={actionBarProps.more}
       reaction={{ ...actionBarProps.reaction, hasReacted: true, processing: 'disabled' }}
       reply={{ ...actionBarProps.reply, expanded: true, processing: 'pending' }}

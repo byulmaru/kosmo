@@ -46,9 +46,9 @@
 - Decision Class: Derived Contract
 - Authority / Provenance: `memory/issue-openspec-workflow.md`, `PROD-432`
 - Status: Active
-- Context / Problem: 현재 Figma에는 pending·disabled·error와 최소 44×44 interactive target이 없고, 도구를 통한 수정 결과를 신뢰할 수 있는 동기화 기준으로 삼기 어렵다. 동시에 제품 정책과 작업 범위, 규범적 UI 계약의 소유권을 구분해야 한다.
+- Context / Problem: 현재 Figma에는 pending·disabled, 접근 가능한 실패 toast와 최소 44×44 interactive target이 없고, 도구를 통한 수정 결과를 신뢰할 수 있는 동기화 기준으로 삼기 어렵다. 동시에 제품 정책과 작업 범위, 규범적 UI 계약의 소유권을 구분해야 한다.
 - Decision Outcome: `docs/domain`·`docs/design`은 제품·디자인의 canonical source, Linear는 범위·소유권·의존성의 source, 이 OpenSpec은 상태·입력·접근성·통합 동작의 규범 계약으로 사용한다. Figma Action node는 배치·간격·icon·색상의 비규범적 시각 참고로만 사용하며 이 change에서 수정하지 않는다.
-- Alternatives Considered: 구현 전에 Figma variant와 touch target 설명을 추가하는 방식은 도구 반영 신뢰도가 낮고 사용자가 필요할 때 직접 정렬하기로 했으므로 채택하지 않았다. Figma에 없는 상태를 구현하지 않는 방식은 PROD-433의 승인된 완료 조건을 위반하므로 채택하지 않았다.
+- Alternatives Considered: 구현 전에 Figma variant와 touch target 설명을 추가하는 방식은 도구 반영 신뢰도가 낮고 사용자가 필요할 때 직접 정렬하기로 했으므로 채택하지 않았다. Figma에 없는 상태와 실패 피드백을 구현하지 않는 방식은 Linear와 OpenSpec의 승인된 완료 조건을 위반하므로 채택하지 않았다.
 - Consequences: 일정 기간 Figma와 구현 상태 카탈로그 사이의 차이를 허용한다. 향후 Figma를 정렬할 때 canonical 문서·Linear·OpenSpec·코드의 소유 경계를 기준으로 역동기화해야 한다.
 - Confirmation / Follow-up: OpenSpec strict validation과 구현 PR 검토에서 Linear·OpenSpec·코드 정합성을 확인한다. Figma 수정은 이 change의 task에 포함하지 않는다.
 
@@ -81,12 +81,24 @@
 - Decision Date: 2026-07-23
 - Decision Class: Derived Contract
 - Authority / Provenance: `PROD-432`, `PROD-433`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425`
-- Status: Active
+- Status: Superseded
 - Context / Problem: 범용 `selected`는 Reply Composer의 열림, Repost 수행 여부, 하나 이상의 Reaction 존재와 Bookmark 여부처럼 서로 다른 제품 의미를 하나의 이름으로 축약해 상위 adapter와 컴포넌트 계약을 모호하게 만든다.
 - Decision Outcome: 공개 UI 상태는 Reply의 controlled `expanded`, Repost의 `hasReposted`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`로 표현하고 default·pending·disabled·error 처리 상태와 독립적으로 유지한다. Reply 활성화는 상위 Composer를 열거나 focus할 뿐 `expanded`를 자체 전환하지 않는다. Reaction은 현재 Profile이 하나 이상의 Reaction Type을 남겼는지만 `hasReacted`로 나타내며 Reaction과 Bookmark는 count를 받지 않는다. `hasReacted` 또는 `hasBookmarked`가 true이면 pending spinner를 제외한 Heart·Bookmark 내부를 현재 처리 상태 색상으로 채우고 default에서는 primary 색상을 사용한다. More는 callback과 접근성 label만 받는다.
 - Alternatives Considered: 범용 `selected`는 도메인 의미와 소유 계층을 숨기므로 채택하지 않았다. Reply가 내부 상태로 Composer 열림을 전환하는 방식은 controlled surface 계약과 충돌하므로 채택하지 않았다.
 - Consequences: surface adapter가 도메인별 값을 공급하고, 처리 상태의 시각 표현이 primary 표현보다 우선해도 도메인 의미, Reaction·Bookmark의 채워진 형태와 접근성 상태는 보존한다. React Native 접근성 구현 내부에서는 플랫폼의 `selected`·`pressed`·`expanded` 용어를 사용할 수 있다.
 - Confirmation / Follow-up: Storybook과 component test에서 `expanded`·`hasReposted`·`hasReacted`·`hasBookmarked`와 pending·disabled·error의 조합, active Reaction·Bookmark의 채워진 형태, callback 허용 여부 및 접근성 상태를 검증한다.
+
+### 공개 도메인 상태와 일시적 실패 피드백을 분리
+
+- Decision Date: 2026-07-23
+- Decision Class: Derived Contract
+- Authority / Provenance: `PROD-432`, `PROD-433` Linear comment `2abceb83-7f74-4fb3-a436-145dde45195c`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425`
+- Status: Active
+- Context / Problem: `expanded`·`hasReposted`·`hasReacted`·`hasBookmarked`는 현재 확정된 제품 상태이지만, 마지막 요청 실패는 일시적 실행 결과다. 실패를 Action Bar의 지속 `error`·danger 상태로 남기면 현재 도메인 상태와 위험·파괴적 의미로 읽힐 수 있는 실패 표현이 하나의 control에 섞인다.
+- Decision Outcome: 공개 UI 상태는 Reply의 controlled `expanded`, Repost의 `hasReposted`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`로 표현하고 default·pending·disabled 처리 상태와 독립적으로 유지한다. Reaction과 Bookmark는 count를 받지 않고 active이면 pending spinner를 제외한 현재 처리 상태 색상으로 icon 내부를 채운다. 요청 실패 시 production surface는 pending을 종료하고 직전의 확정된 도메인 상태와 count를 유지한 채 default로 복귀한다. PROD-432의 action adapter 계층은 액션별 한국어 toast와 동일한 보조 기술 안내를 제공한다. 별도 retry 상태나 toast 버튼은 두지 않고 같은 액션의 다음 입력을 재시도로 처리한다. `PostActionBar`는 toast를 소유하지 않는다.
+- Alternatives Considered: danger `error` 상태만 유지하는 방식은 구현은 단순하지만 일시적 실패와 도메인 상태를 섞고 실패 문구를 제공하지 못해 채택하지 않았다. toast와 danger 상태를 함께 두는 방식은 중복 피드백과 상태 수명 복잡도를 만들어 채택하지 않았다. toast 내 retry 버튼은 같은 액션의 다음 입력이 자연스러운 재시도 경로이므로 추가하지 않았다.
+- Consequences: PROD-433은 공개 `error` 처리 상태, danger 표현, 재시도 label·hint와 관련 Storybook·component test를 제거한다. PROD-432는 실제 mutation 실패에서 이전 확정 상태 복원, 접근 가능한 toast, 다음 입력 재시도를 통합 검증한다. cross-platform toast primitive·package 선택은 PROD-432 구현 계획에서 별도로 결정한다.
+- Confirmation / Follow-up: PROD-433 Storybook과 component test는 `expanded`·`hasReposted`·`hasReacted`·`hasBookmarked`와 default·pending·disabled 조합을 검증한다. PROD-432는 Web·Android·iOS에서 액션별 toast, 보조 기술 즉시 안내, 이전 확정 상태 유지와 다음 입력 재시도를 검증한다.
 
 ### More callback 경계와 Post Share Reference 통합을 분리
 
@@ -131,5 +143,6 @@
 ## Superseded Decisions
 
 - 2026-07-21 `선택 상태와 처리 상태의 분리`는 2026-07-23 `공개 도메인 상태와 처리 상태를 분리`로 대체했다.
+- 2026-07-23 `공개 도메인 상태와 처리 상태를 분리`는 2026-07-23 `공개 도메인 상태와 일시적 실패 피드백을 분리`로 대체했다.
 - 2026-07-21 `More 컴포넌트 경계와 링크 복사 통합을 분리`는 2026-07-23 `More callback 경계와 Post Share Reference 통합을 분리`로 대체했다.
 - 2026-07-21 `count는 K/M 단위 최대 네 글자로 표시`는 2026-07-23 `locale-aware 표준 compact number formatting을 사용`으로 대체했다.
