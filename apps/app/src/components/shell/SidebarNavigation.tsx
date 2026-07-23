@@ -59,7 +59,7 @@ const navigation: NavigationItem[] = [
   { href: '/search', Icon: Search, label: '검색' },
   { href: '/notifications', Icon: Bell, label: '알림' },
   { href: '/menu', Icon: UserRound, label: '프로필', profile: true },
-  { href: '/menu', Icon: Bookmark, label: '북마크' },
+  { href: '/bookmarks', Icon: Bookmark, label: '북마크' },
   { href: '/menu', Icon: UserRoundPlus, label: '팔로워 요청' },
   { href: '/menu', Icon: Settings, label: '프로필 설정' },
 ];

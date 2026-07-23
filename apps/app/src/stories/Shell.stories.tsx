@@ -156,11 +156,22 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const SharedNavigation: Story = {};
+export const SharedNavigation: Story = {
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByRole('link', { name: '북마크' })).toHaveAttribute('href', '/bookmarks');
+  },
+};
 
 export const BottomNavigation: Story = { render: () => <BottomNavigationStory /> };
 
-export const CompactSidebar: Story = { render: () => <CompactSidebarStory /> };
+export const CompactSidebar: Story = {
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByRole('link', { name: '북마크' })).toHaveAttribute('href', '/bookmarks');
+  },
+  render: () => <CompactSidebarStory />,
+};
 
 export const FollowUpdatesBothProfileCounts: Story = {
   parameters: {
@@ -585,6 +596,17 @@ function unreadBadgeParameters(count: number) {
 export const UniversalMobile: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   parameters: universalParameters,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.queryByRole('link', { name: '북마크' })).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
+    const page = within(canvasElement.ownerDocument.body);
+    const drawer = await page.findByRole('navigation', { name: '주요 메뉴' });
+    expect(within(drawer).getByRole('link', { name: '북마크' })).toHaveAttribute(
+      'href',
+      '/bookmarks',
+    );
+  },
   render: () => (
     <View style={{ height: 844 }}>
       <UniversalShellStory />
