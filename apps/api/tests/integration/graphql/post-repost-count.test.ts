@@ -217,6 +217,52 @@ describe('Post Repost 상태 GraphQL 경계', () => {
     assert.equal(deletedProfileAResult.data?.nodes[0]?.viewerRepost, null);
     assert.equal(deletedProfileAResult.data?.nodes[0]?.repostCount, 1);
   });
+
+  test('Repost가 없는 조회 가능한 Source Post의 repostCount를 0으로 반환한다', async () => {
+    const sourceAuthor = await createProfile('zero-count-source-author');
+    const source = await createContentPost(sourceAuthor.id, 'zero-count-source');
+
+    const result = await requestRepostState([source.id]);
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.nodes, [
+      { id: encodeGlobalId('Post', source.id), repostCount: 0, viewerRepost: null },
+    ]);
+  });
+
+  test('같은 Session에서 selected Profile 전환 후 viewerRepost identity를 갱신한다', async () => {
+    const sourceAuthor = await createProfile('profile-transition-source-author');
+    const source = await createContentPost(sourceAuthor.id, 'profile-transition-source');
+    const profileA = await createProfile('profile-transition-a');
+    const profileB = await createProfile('profile-transition-b');
+    const viewer = await createAuthenticatedSession({ activeProfileId: profileA.id });
+    await db.insert(AccountProfiles).values({
+      accountId: viewer.accountId,
+      profileId: profileB.id,
+      role: AccountProfileRole.OWNER,
+    });
+    const repostA = await createRepost(profileA.id, source.id);
+    const repostB = await createRepost(profileB.id, source.id);
+
+    const beforeTransition = await requestRepostState([source.id], viewer.token);
+    assertNoGraphQLErrors(beforeTransition);
+    assert.equal(
+      beforeTransition.data?.nodes[0]?.viewerRepost?.id,
+      encodeGlobalId('Post', repostA.id),
+    );
+
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: profileB.id })
+      .where(eq(Sessions.id, viewer.sessionId));
+
+    const afterTransition = await requestRepostState([source.id], viewer.token);
+    assertNoGraphQLErrors(afterTransition);
+    assert.equal(
+      afterTransition.data?.nodes[0]?.viewerRepost?.id,
+      encodeGlobalId('Post', repostB.id),
+    );
+  });
 });
 
 const createProfile = (
@@ -299,7 +345,7 @@ const createAuthenticatedSession = async ({
   activeProfileId,
 }: {
   activeProfileId: string | null;
-}): Promise<{ accountId: string; token: string }> => {
+}): Promise<{ accountId: string; sessionId: string; token: string }> => {
   const suffix = crypto.randomUUID();
   const account = await db
     .insert(Accounts)
@@ -314,13 +360,17 @@ const createAuthenticatedSession = async ({
     });
   }
   const token = `token-${suffix}`;
-  await db.insert(Sessions).values({
-    accountId: account.id,
-    activeProfileId,
-    state: SessionState.ACTIVE,
-    token,
-  });
-  return { accountId: account.id, token };
+  const session = await db
+    .insert(Sessions)
+    .values({
+      accountId: account.id,
+      activeProfileId,
+      state: SessionState.ACTIVE,
+      token,
+    })
+    .returning()
+    .then(firstOrThrow);
+  return { accountId: account.id, sessionId: session.id, token };
 };
 
 const requestRepostState = (sourceIds: string[], token?: string) =>
