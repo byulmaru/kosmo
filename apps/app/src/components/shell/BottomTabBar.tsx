@@ -6,6 +6,9 @@ import { graphql, useFragment } from 'react-relay';
 import { Avatar } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
+import { UnreadNotificationBadge } from './UnreadNotificationBadge';
+import { useUnreadNotificationCount } from './UnreadNotificationBadgeController';
+import { getUnreadNotificationAccessibilityLabel } from './unreadNotificationBadgeState';
 import type { Href } from 'expo-router';
 import type { LucideIcon } from 'lucide-react-native';
 import type { BottomTabBar_profile$key } from './__generated__/BottomTabBar_profile.graphql';
@@ -39,6 +42,7 @@ export function BottomTabBar({
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
   const profile = useFragment(BottomTabBarFragment, profileKey ?? null);
+  const unreadNotificationCount = useUnreadNotificationCount();
   const tabs: Tab[] = [
     ...baseTabs,
     {
@@ -61,7 +65,11 @@ export function BottomTabBar({
         const content = (
           <Pressable
             aria-current={active ? 'page' : undefined}
-            accessibilityLabel={tab.label}
+            accessibilityLabel={
+              tab.label === '알림'
+                ? getUnreadNotificationAccessibilityLabel(unreadNotificationCount)
+                : tab.label
+            }
             accessibilityRole={tab.href ? 'link' : 'button'}
             accessibilityState={{ disabled: !tab.href }}
             disabled={!tab.href}
@@ -82,12 +90,17 @@ export function BottomTabBar({
                     style={pressed && styles.pressedContent}
                   />
                 ) : tab.Icon ? (
-                  <tab.Icon
-                    color={active ? theme.text : theme.textSecondary}
-                    size={24}
-                    strokeWidth={2}
-                    style={pressed && styles.pressedContent}
-                  />
+                  <View style={styles.iconWithBadge}>
+                    <tab.Icon
+                      color={active ? theme.text : theme.textSecondary}
+                      size={24}
+                      strokeWidth={2}
+                      style={pressed && styles.pressedContent}
+                    />
+                    {tab.label === '알림' ? (
+                      <UnreadNotificationBadge count={unreadNotificationCount} />
+                    ) : null}
+                  </View>
                 ) : null}
                 <Text
                   style={[
@@ -128,6 +141,7 @@ const styles = StyleSheet.create({
     minHeight: 56,
     paddingVertical: spacing.xs,
   },
+  iconWithBadge: { position: 'relative' },
   label: { fontFamily: 'SUIT', fontWeight: '700', ...typography.xsm },
   pressedContent: { opacity: 0.7 },
 });

@@ -16,6 +16,8 @@
     "lint:syncpack": "syncpack lint --dependency-types prod,dev,peer",
     "prepare": "husky || true",
     "test": "pnpm --recursive --workspace-concurrency=1 --if-present test",
+    "test:api:integration:bookmark": "node scripts/test-db.mjs run -- pnpm test:api:integration:bookmark:database",
+    "test:api:integration:bookmark:database": "pnpm db:test:push && pnpm --filter @kosmo/api exec node --import tsx --test --test-concurrency=1 tests/integration/graphql/bookmark.test.ts",
     "test:e2e": "node scripts/test-db.mjs run -- pnpm test:e2e:database",
     "test:e2e:database": "pnpm db:test:push && pnpm --filter @kosmo/web test:e2e",
     "test:fedify": "node scripts/test-db.mjs run -- pnpm test:fedify:database",

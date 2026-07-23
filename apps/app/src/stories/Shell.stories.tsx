@@ -1,5 +1,7 @@
-import { View } from 'react-native';
-import { graphql, useLazyLoadQuery } from 'react-relay';
+import { useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
+import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
+import { commitLocalUpdate } from 'relay-runtime';
 import { expect, userEvent, within } from 'storybook/test';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
@@ -8,6 +10,8 @@ import { ProfileSwitcher } from '@/components/shell/ProfileSwitcher';
 import { RightRail } from '@/components/shell/RightRail';
 import { SidebarNavigation } from '@/components/shell/SidebarNavigation';
 import { UniversalShell } from '@/components/shell/UniversalShell';
+import { useRelayActor } from '@/relay/RelayActorProvider';
+import { SessionProvider } from '@/session/SessionProvider';
 import { spacing } from '@/theme/tokens';
 import { profile, shellQuery } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
@@ -19,21 +23,26 @@ const secondProfile = profile({
   handle: 'remote',
   id: 'profile-remote',
   relativeHandle: '@remote@space.example',
-  viewerState: { follow: null, isSelf: true },
+  viewerState: { follow: null, followRequest: null, isSelf: true },
 });
 const selectedProfile = profile({
   handle: 'selected',
   id: 'profile-selected',
   relativeHandle: '@selected',
-  viewerState: { follow: null, isSelf: true },
+  viewerState: { follow: null, followRequest: null, isSelf: true },
 });
 const followedProfile = profile({
   followersCount: 17,
   handle: 'followed',
   id: 'profile-followed',
-  relativeHandle: '@followed',
+  instance: { kind: 'ACTIVITYPUB' },
+  relativeHandle: '@followed@remote.example',
   viewerState: {
-    follow: { follower: { id: selectedProfile.id }, id: 'profile-follow-edge' },
+    follow: {
+      follower: { followingCount: selectedProfile.followingCount, id: selectedProfile.id },
+      id: 'profile-follow-edge',
+    },
+    followRequest: null,
     isSelf: false,
   },
 });
@@ -161,12 +170,23 @@ export const FollowUpdatesBothProfileCounts: Story = {
         node: {
           ...followedProfile,
           followersCount: 16,
-          viewerState: { follow: null, isSelf: false },
+          viewerState: { follow: null, followRequest: null, isSelf: false },
         },
       },
       mutationResponse: {
         followProfile: {
-          followeeProfile: followedProfile,
+          result: { __typename: 'ProfileFollow', id: 'profile-follow-edge' },
+          followeeProfile: {
+            ...followedProfile,
+            viewerState: {
+              follow: {
+                follower: { followingCount: 43, id: selectedProfile.id },
+                id: 'profile-follow-edge',
+              },
+              followRequest: null,
+              isSelf: false,
+            },
+          },
           followerProfile: { ...selectedProfile, followingCount: 43 },
         },
       },
@@ -178,7 +198,7 @@ export const FollowUpdatesBothProfileCounts: Story = {
       'a[href="/@selected/following"]',
     );
     const targetFollowers = canvasElement.querySelector<HTMLAnchorElement>(
-      'a[href="/@followed/followers"]',
+      'a[href="/@followed@remote.example/followers"]',
     );
     expect(viewerFollowing).not.toBeNull();
     expect(targetFollowers).not.toBeNull();
@@ -187,8 +207,134 @@ export const FollowUpdatesBothProfileCounts: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
 
+    await expect(canvas.findByRole('button', { name: '팔로잉' })).resolves.toBeVisible();
     await expect(within(viewerFollowing!).findByText('43')).resolves.toBeVisible();
     await expect(within(targetFollowers!).findByText('17')).resolves.toBeVisible();
+  },
+  render: () => <FollowCacheStory />,
+};
+
+export const FollowOptimisticallyUpdatesBothProfileCounts: Story = {
+  parameters: {
+    relay: {
+      data: {
+        ...query,
+        node: {
+          ...followedProfile,
+          followersCount: 16,
+          viewerState: { follow: null, followRequest: null, isSelf: false },
+        },
+      },
+      mutationLoading: true,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewerFollowing = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@selected/following"]',
+    );
+    const targetFollowers = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@followed@remote.example/followers"]',
+    );
+    expect(viewerFollowing).not.toBeNull();
+    expect(targetFollowers).not.toBeNull();
+
+    await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
+
+    await expect(canvas.findByRole('button', { name: '팔로잉' })).resolves.toBeDisabled();
+    await expect(within(viewerFollowing!).findByText('43')).resolves.toBeVisible();
+    await expect(within(targetFollowers!).findByText('17')).resolves.toBeVisible();
+  },
+  render: () => <FollowCacheStory />,
+};
+
+export const ApprovalRequiredFollowKeepsProfileCounts: Story = {
+  parameters: {
+    relay: {
+      data: {
+        ...query,
+        node: {
+          ...followedProfile,
+          followPolicy: 'APPROVAL_REQUIRED',
+          followersCount: 16,
+          viewerState: { follow: null, followRequest: null, isSelf: false },
+        },
+      },
+      mutationResponse: {
+        followProfile: {
+          result: { __typename: 'ProfileFollowRequest', id: 'profile-follow-request' },
+          followeeProfile: {
+            ...followedProfile,
+            followPolicy: 'APPROVAL_REQUIRED',
+            followersCount: 16,
+            viewerState: {
+              follow: null,
+              followRequest: { id: 'profile-follow-request' },
+              isSelf: false,
+            },
+          },
+          followerProfile: selectedProfile,
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewerFollowing = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@selected/following"]',
+    );
+    const targetFollowers = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@followed@remote.example/followers"]',
+    );
+    expect(viewerFollowing).not.toBeNull();
+    expect(targetFollowers).not.toBeNull();
+
+    await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
+
+    await expect(canvas.findByRole('button', { name: '요청됨' })).resolves.toBeVisible();
+    expect(within(viewerFollowing!).getByText('42')).toBeVisible();
+    expect(within(targetFollowers!).getByText('16')).toBeVisible();
+  },
+  render: () => <FollowCacheStory />,
+};
+
+export const PendingCancelKeepsProfileCounts: Story = {
+  parameters: {
+    relay: {
+      data: {
+        ...query,
+        node: {
+          ...followedProfile,
+          followPolicy: 'APPROVAL_REQUIRED',
+          followersCount: 16,
+          viewerState: {
+            follow: null,
+            followRequest: { id: 'profile-follow-request' },
+            isSelf: false,
+          },
+        },
+      },
+      mutationResponse: {
+        cancelProfileFollowRequest: { profileFollowRequestId: 'profile-follow-request' },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewerFollowing = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@selected/following"]',
+    );
+    const targetFollowers = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@followed@remote.example/followers"]',
+    );
+    expect(viewerFollowing).not.toBeNull();
+    expect(targetFollowers).not.toBeNull();
+
+    await userEvent.click(canvas.getByRole('button', { name: '요청됨' }));
+
+    await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeVisible();
+    expect(within(viewerFollowing!).getByText('42')).toBeVisible();
+    expect(within(targetFollowers!).getByText('16')).toBeVisible();
   },
   render: () => <FollowCacheStory />,
 };
@@ -201,7 +347,7 @@ export const UnfollowUpdatesBothProfileCounts: Story = {
           followeeProfile: {
             ...followedProfile,
             followersCount: 16,
-            viewerState: { follow: null, isSelf: false },
+            viewerState: { follow: null, followRequest: null, isSelf: false },
           },
           followerProfile: { ...selectedProfile, followingCount: 41 },
           profileFollowId: 'profile-follow-edge',
@@ -215,7 +361,7 @@ export const UnfollowUpdatesBothProfileCounts: Story = {
       'a[href="/@selected/following"]',
     );
     const targetFollowers = canvasElement.querySelector<HTMLAnchorElement>(
-      'a[href="/@followed/followers"]',
+      'a[href="/@followed@remote.example/followers"]',
     );
     expect(viewerFollowing).not.toBeNull();
     expect(targetFollowers).not.toBeNull();
@@ -224,8 +370,56 @@ export const UnfollowUpdatesBothProfileCounts: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: '팔로잉' }));
 
+    await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeVisible();
     await expect(within(viewerFollowing!).findByText('41')).resolves.toBeVisible();
     await expect(within(targetFollowers!).findByText('16')).resolves.toBeVisible();
+  },
+  render: () => <FollowCacheStory />,
+};
+
+export const UnfollowOptimisticallyUpdatesBothProfileCounts: Story = {
+  parameters: { relay: { mutationLoading: true } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewerFollowing = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@selected/following"]',
+    );
+    const targetFollowers = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@followed@remote.example/followers"]',
+    );
+    expect(viewerFollowing).not.toBeNull();
+    expect(targetFollowers).not.toBeNull();
+
+    await userEvent.click(canvas.getByRole('button', { name: '팔로잉' }));
+
+    await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeDisabled();
+    await expect(within(viewerFollowing!).findByText('41')).resolves.toBeVisible();
+    await expect(within(targetFollowers!).findByText('16')).resolves.toBeVisible();
+  },
+  render: () => <FollowCacheStory />,
+};
+
+export const UnfollowErrorRollsBackBothProfileCounts: Story = {
+  parameters: { relay: { mutationError: '언팔로우 실패' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewerFollowing = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@selected/following"]',
+    );
+    const targetFollowers = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@followed@remote.example/followers"]',
+    );
+    expect(viewerFollowing).not.toBeNull();
+    expect(targetFollowers).not.toBeNull();
+
+    await userEvent.click(canvas.getByRole('button', { name: '팔로잉' }));
+
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '팔로우 상태를 변경하지 못했습니다.',
+    );
+    await expect(canvas.findByRole('button', { name: '팔로잉' })).resolves.toBeEnabled();
+    expect(within(viewerFollowing!).getByText('42')).toBeVisible();
+    expect(within(targetFollowers!).getByText('17')).toBeVisible();
   },
   render: () => <FollowCacheStory />,
 };
@@ -317,13 +511,326 @@ const universalParameters = {
   router: { pathname: '/home', slotLabel: '홈 타임라인' },
 };
 
+function UniversalShellStory() {
+  return (
+    <SessionProvider>
+      <UniversalShell />
+    </SessionProvider>
+  );
+}
+
+function RemountableUniversalShellStory() {
+  const [visible, setVisible] = useState(true);
+
+  return (
+    <>
+      {visible ? <UniversalShellStory /> : null}
+      <StoryButton
+        label={visible ? '셸 숨기기' : '셸 다시 열기'}
+        onPress={() => setVisible((current) => !current)}
+      />
+    </>
+  );
+}
+
+function StoryButton({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable accessibilityLabel={label} accessibilityRole="button" onPress={onPress}>
+      <Text>{label}</Text>
+    </Pressable>
+  );
+}
+
+function SetUnreadNotificationCount({ count }: { count: number }) {
+  const environment = useRelayEnvironment();
+
+  return (
+    <StoryButton
+      label={`읽지 않은 알림 수를 ${count}개로 변경`}
+      onPress={() =>
+        commitLocalUpdate(environment, (store) => {
+          store.get(selectedProfile.id)?.setValue(count, 'unreadNotificationCount');
+        })
+      }
+    />
+  );
+}
+
+function RetryRelayActor() {
+  const { retry } = useRelayActor();
+
+  return <StoryButton label="기존 셸 새로고침" onPress={retry} />;
+}
+
+function ResetRelayActorToSecondProfile() {
+  const { resetActor } = useRelayActor();
+
+  return <StoryButton label="두 번째 프로필로 전환" onPress={() => resetActor(secondProfile.id)} />;
+}
+
+function unreadBadgeParameters(count: number) {
+  return {
+    ...universalParameters,
+    relay: {
+      data: query,
+      operationResponses: {
+        UnreadNotificationBadgeControllerQuery: {
+          data: { node: { ...selectedProfile, unreadNotificationCount: count } },
+        },
+      },
+    },
+  };
+}
+
 export const UniversalMobile: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   parameters: universalParameters,
   render: () => (
     <View style={{ height: 844 }}>
-      <UniversalShell />
+      <UniversalShellStory />
     </View>
+  ),
+};
+
+export const UniversalMobileUnreadBadge: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: unreadBadgeParameters(100),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.findByRole('link', { name: '알림, 읽지 않은 알림 100개' }),
+    ).resolves.toBeVisible();
+    expect(canvas.getAllByRole('link', { name: '알림, 읽지 않은 알림 100개' })).toHaveLength(1);
+    expect(canvas.queryByText('99+')).toBeNull();
+    const bottomTabDot = canvas.getByTestId('unread-notification-dot');
+    expect(bottomTabDot).toBeVisible();
+    expect(bottomTabDot).toHaveStyle({ height: '8px', right: '2px', top: '-1px', width: '8px' });
+    expect(bottomTabDot.closest('[aria-hidden="true"]')).not.toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
+    const page = within(canvasElement.ownerDocument.body);
+    const drawerNavigation = await page.findByRole('navigation', { name: '주요 메뉴' });
+    await expect(
+      within(drawerNavigation).findByRole('link', { name: '알림, 읽지 않은 알림 100개' }),
+    ).resolves.toBeVisible();
+    expect(page.getAllByRole('link', { name: '알림, 읽지 않은 알림 100개' })).toHaveLength(1);
+    const drawerDot = within(drawerNavigation).getByTestId('unread-notification-dot');
+    expect(drawerDot).toBeVisible();
+    expect(drawerDot).toHaveStyle({ height: '8px', right: '2px', top: '-1px', width: '8px' });
+    expect(within(drawerNavigation).queryByText('99+')).toBeNull();
+  },
+  render: () => (
+    <View style={{ height: 844 }}>
+      <UniversalShellStory />
+    </View>
+  ),
+};
+
+export const UniversalMobileUnreadBadgeZero: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: unreadBadgeParameters(0),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const notification = await canvas.findByRole('link', { name: '알림' });
+    expect(notification).toBeVisible();
+    expect(canvas.queryByTestId('unread-notification-dot')).toBeNull();
+  },
+  render: () => <UniversalShellStory />,
+};
+
+export const UniversalMobileUnreadBadgeInitialFailure: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    ...universalParameters,
+    relay: {
+      data: query,
+      operationResponses: {
+        UnreadNotificationBadgeControllerQuery: {
+          error: '읽지 않은 알림 수를 불러오지 못했습니다.',
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const notification = await canvas.findByRole('link', { name: '알림' });
+    expect(notification).toBeVisible();
+    expect(canvas.queryByTestId('unread-notification-dot')).toBeNull();
+    expect(canvas.queryByText('읽지 않은 알림 수를 불러오지 못했습니다.')).toBeNull();
+    expect(canvas.queryByRole('button', { name: /알림.*(재시도|다시)/ })).toBeNull();
+  },
+  render: () => <UniversalShellStory />,
+};
+
+export const UniversalCompactUnreadBadge: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: unreadBadgeParameters(99),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.findByRole('link', { name: '알림, 읽지 않은 알림 99개' }),
+    ).resolves.toBeVisible();
+    expect(canvas.queryByText('99')).toBeNull();
+    expect(canvas.getByTestId('unread-notification-dot')).toHaveStyle({
+      height: '8px',
+      right: '2px',
+      top: '-1px',
+      width: '8px',
+    });
+  },
+  render: () => <UniversalShellStory />,
+};
+
+export const UniversalFullUnreadBadge: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
+  parameters: unreadBadgeParameters(1),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.findByRole('link', { name: '알림, 읽지 않은 알림 1개' }),
+    ).resolves.toBeVisible();
+    expect(canvas.queryByText('1')).toBeNull();
+    expect(canvas.getByTestId('unread-notification-dot')).toHaveStyle({
+      height: '8px',
+      right: '2px',
+      top: '-1px',
+      width: '8px',
+    });
+  },
+  render: () => <UniversalShellStory />,
+};
+
+export const UnreadBadgeUsesNormalizedRelayProfileRecord: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: unreadBadgeParameters(7),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.findByRole('link', { name: '알림, 읽지 않은 알림 7개' }),
+    ).resolves.toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '읽지 않은 알림 수를 100개로 변경' }));
+    await expect(
+      canvas.findByRole('link', { name: '알림, 읽지 않은 알림 100개' }),
+    ).resolves.toBeVisible();
+    expect(canvas.queryByText('99+')).toBeNull();
+    expect(canvas.getByTestId('unread-notification-dot')).toBeVisible();
+  },
+  render: () => (
+    <>
+      <UniversalShellStory />
+      <SetUnreadNotificationCount count={100} />
+    </>
+  ),
+};
+
+export const UnreadBadgeRestoresWarmCacheAfterShellRemount: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: unreadBadgeParameters(7),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.findByRole('link', { name: '알림, 읽지 않은 알림 7개' }),
+    ).resolves.toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '셸 숨기기' }));
+    expect(canvas.queryByRole('link', { name: '알림, 읽지 않은 알림 7개' })).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: '셸 다시 열기' }));
+    await expect(
+      canvas.findByRole('link', { name: '알림, 읽지 않은 알림 7개' }),
+    ).resolves.toBeVisible();
+  },
+  render: () => <RemountableUniversalShellStory />,
+};
+
+export const UnreadBadgeKeepsSameProfileCountAcrossFailedRefresh: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    ...universalParameters,
+    relay: {
+      data: query,
+      operationResponses: {
+        UnreadNotificationBadgeControllerQuery: [
+          { data: { node: { ...selectedProfile, unreadNotificationCount: 7 } } },
+          { error: '읽지 않은 알림 수를 불러오지 못했습니다.' },
+          { data: { node: { ...selectedProfile, unreadNotificationCount: 9 } } },
+        ],
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    await expect(
+      canvas.findByRole('link', { name: '알림, 읽지 않은 알림 7개' }),
+    ).resolves.toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '기존 셸 새로고침' }));
+    await expect(
+      page.findByRole('link', { name: '알림, 읽지 않은 알림 7개' }),
+    ).resolves.toBeVisible();
+    expect(page.queryByRole('button', { name: /알림.*다시/ })).toBeNull();
+    expect(page.queryByText('읽지 않은 알림 수를 불러오지 못했습니다.')).toBeNull();
+    await userEvent.click(page.getByRole('button', { name: '기존 셸 새로고침' }));
+    await expect(
+      page.findByRole('link', { name: '알림, 읽지 않은 알림 9개' }),
+    ).resolves.toBeVisible();
+  },
+  render: () => (
+    <>
+      <UniversalShellStory />
+      <RetryRelayActor />
+    </>
+  ),
+};
+
+const transitionedQuery = {
+  ...query,
+  currentSession: { ...query.currentSession, selectedProfile: secondProfile },
+  me: { ...query.me, profiles: [selectedProfile, secondProfile] },
+};
+
+export const UnreadBadgeHidesPreviousProfileCountUntilNextRetry: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    ...universalParameters,
+    relay: {
+      data: query,
+      operationResponses: {
+        SessionProviderQuery: [
+          { data: query },
+          { data: transitionedQuery },
+          { data: transitionedQuery },
+        ],
+        UniversalShellQuery: [
+          { data: query },
+          { data: transitionedQuery },
+          { data: transitionedQuery },
+        ],
+        UnreadNotificationBadgeControllerQuery: [
+          { data: { node: { ...selectedProfile, unreadNotificationCount: 7 } } },
+          { error: '두 번째 프로필의 읽지 않은 알림 수를 불러오지 못했습니다.' },
+          { data: { node: { ...secondProfile, unreadNotificationCount: 4 } } },
+        ],
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    await expect(
+      canvas.findByRole('link', { name: '알림, 읽지 않은 알림 7개' }),
+    ).resolves.toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '두 번째 프로필로 전환' }));
+    await expect(page.findByRole('link', { name: '알림' })).resolves.toBeVisible();
+    expect(page.queryByRole('link', { name: '알림, 읽지 않은 알림 7개' })).toBeNull();
+    await userEvent.click(page.getByRole('button', { name: '기존 셸 새로고침' }));
+    await expect(
+      page.findByRole('link', { name: '알림, 읽지 않은 알림 4개' }),
+    ).resolves.toBeVisible();
+  },
+  render: () => (
+    <>
+      <UniversalShellStory />
+      <ResetRelayActorToSecondProfile />
+      <RetryRelayActor />
+    </>
   ),
 };
 
@@ -332,7 +839,7 @@ export const UniversalCompact: Story = {
   parameters: universalParameters,
   render: () => (
     <View style={{ height: 900 }}>
-      <UniversalShell />
+      <UniversalShellStory />
     </View>
   ),
 };
@@ -342,20 +849,29 @@ export const UniversalFull: Story = {
   parameters: universalParameters,
   play: async ({ canvasElement }) => {
     const view = canvasElement.ownerDocument.defaultView;
-    let rail: HTMLElement | null = within(canvasElement).getByRole('navigation', {
+    const canvas = within(canvasElement);
+    let leftRail: HTMLElement | null = canvas.getByRole('navigation', {
       name: '주요 메뉴',
     });
 
-    while (rail && view?.getComputedStyle(rail).position !== 'sticky') {
-      rail = rail.parentElement;
+    while (leftRail && view?.getComputedStyle(leftRail).position !== 'sticky') {
+      leftRail = leftRail.parentElement;
     }
 
-    expect(rail).not.toBeNull();
-    expect(rail?.getBoundingClientRect().height).toBeLessThanOrEqual(view?.innerHeight ?? 0);
+    const rightRail = canvas.getByLabelText('새 게시글 작성').parentElement;
+    const rightRailStyle = rightRail ? view?.getComputedStyle(rightRail) : undefined;
+
+    expect(leftRail).not.toBeNull();
+    expect(leftRail?.getBoundingClientRect().height).toBeLessThanOrEqual(view?.innerHeight ?? 0);
+    expect(rightRail).not.toBeNull();
+    expect(rightRailStyle?.position).toBe('sticky');
+    expect(rightRailStyle?.overflowX).toBe('hidden');
+    expect(rightRailStyle?.overflowY).toBe('auto');
+    expect(rightRail?.scrollWidth ?? 1).toBeLessThanOrEqual(rightRail?.clientWidth ?? 0);
   },
   render: () => (
     <View style={{ height: 1800 }}>
-      <UniversalShell />
+      <UniversalShellStory />
     </View>
   ),
 };

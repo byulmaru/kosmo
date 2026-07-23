@@ -41,35 +41,75 @@
 - [x] 7.4 동일 source integration 재진입과 정상 delete는 idempotent하게 만들고 사용자 duplicate Follow는 integration을 다시 호출하지 않으며 materialized Remote Follower도 origin 분기 없이 같은 port를 사용하게 한다.
 - [x] 7.5 action test로 직접 Follow와 승인에서 실제 Notification row의 새 established 생성, pending·기존 relation 재사용·duplicate 제외, Local Follower와 정상 cleanup을 검증하고 테스트 전용 callback, fire-and-forget, outbox/message queue, retry, backfill을 추가하지 않으며 이 slice가 ActivityPub ingress를 중복 구현하지 않았는지 확인한다.
 
-## 8. PROD-277 알림 목록 화면과 항목 읽음·Profile 이동 흐름을 제공한다
+## 8. PROD-277 알림 목록 화면과 Related Profile 이동 흐름을 제공한다
 
-- [x] 8.1 구현 전에 정상 item의 loading/error/empty/read 상태, activation과 Read/navigation 순서, fetch·refresh·pagination·Profile 전환 cache 선택을 결정하고 `notification` requirements/design/decisions를 갱신한다.
+- [x] 8.1 구현 전에 정상 item의 loading/error/empty/read 상태, Related Profile link, fetch·refresh·pagination·Profile 전환 cache 선택을 결정하고 `notification` requirements/design/decisions를 갱신한다.
 - [x] 8.2 갱신된 계약에 따라 `/notifications` placeholder를 selected Profile connection을 사용하는 공유 Expo Router/Relay 화면으로 교체한다.
 - [x] 8.3 API가 반환한 visible Follow item의 Related Profile 정보만 표시하고 unavailable generic fallback, snapshot 또는 client-side filtering을 추가하지 않는다.
-- [x] 8.4 Storybook story와 interaction/a11y test로 결정된 loading/error/empty/unread/read/긴 텍스트/pagination/Profile 전환과 Read/navigation 흐름을 검증한다.
+- [x] 8.4 Storybook story와 interaction/a11y test로 결정된 loading/error/empty/unread/read/긴 텍스트/pagination/Profile 전환과 Related Profile link를 검증한다.
 - [x] 8.5 app check, Relay compiler, Storybook build/test를 통과시키고 결정된 Android/iOS/Web smoke 항목을 확인한다.
 - [x] 8.6 `알림` 제목과 disabled 설정 placeholder, 탭·section heading 없는 단일 목록, Figma Like 위계를 적용한 Follow 행으로 화면을 정렬하고 Web refresh action을 제거하되 native pull-to-refresh는 유지한다.
 - [x] 8.7 Storybook interaction/a11y로 header·설정 placeholder·Web refresh action 부재·Follow 행 링크를 검증하고 app check, Storybook test/build와 platform smoke를 다시 통과시킨다.
 
 ## 9. PROD-324 모든 알림 셸 진입점에 Profile별 Unread badge를 제공한다
 
-- [ ] 9.1 구현 전에 shell surface, count cap, 접근성, loading/error/stale, app lifecycle과 Profile 전환 cache 선택을 결정하고 `web-app-shell` delta 및 관련 design/decisions를 추가한다.
-- [ ] 9.2 모든 지원 shell 진입점이 selected Profile의 서버 제공 `unreadNotificationCount`를 표시하고 Profile 전환 시 다른 Recipient count를 재사용하지 않게 한다.
-- [ ] 9.3 Read 성공/실패/반복/동시 요청 뒤 cache가 최초 visible 전이만 반영하고 refetch에서 서버 count로 수렴하게 하며 hidden item client 보정 로직을 만들지 않는다.
-- [ ] 9.4 Storybook/interaction/Relay cache test와 app check로 0/1/다수/큰 수, Profile 전환, lifecycle, loading/error/stale와 count 일관성을 검증한다.
+**Deliverable**
 
-## 10. PROD-380 ActivityPub inbound Follow/Undo를 Follow Notification lifecycle에 연결한다
+Android/iOS와 Web의 모든 지원 셸 알림 진입점이 selected Profile의 서버 제공 Unread count를 접근 가능하고 Profile 격리된 아이콘 badge로 표시한다.
 
-- [x] 10.1 verified inbound Follow/Undo concrete handler가 caller-supplied direction 없이 Profile origin pair에서 flow를 파생하는 공통 core public action에 relation/request/count transaction과 exact-row 경쟁 보호를 위임하고 Fedify adapter에 relation mutation이나 Notification 호출을 중복 구현하지 않게 한다.
-- [x] 10.2 OPEN 신규 established relation commit 뒤 같은 request에서 Follow Notification create를 await/catch하고, APPROVAL_REQUIRED pending·existing relation·duplicate/concurrent Follow에는 lifecycle을 실행하지 않게 한다.
-- [x] 10.3 inbound Undo가 established relation을 실제 삭제한 commit 뒤에만 같은 source Notification delete를 await/catch하고, pending request 삭제와 relation 삭제 no-op에는 cleanup을 실행하지 않게 한다.
-- [x] 10.4 production listener → concrete Follow/Undo handler → core action → DB/Notification integration test로 신규 생성, duplicate/concurrent no-op, pending-only, established cleanup과 pending/no-op cleanup 제외를 검증한다.
-- [x] 10.5 Notification create/delete 실패가 relation/request/count transaction과 ActivityPub handler 성공을 rollback하지 않는지 검증하고 core/Fedify test, typecheck와 strict OpenSpec validation을 통과시킨다.
+**Guardrails**
 
-## 11. PROD-271 Local Follow Web E2E와 OpenSpec archive를 완료한다
+- 기존 셸 label, row/touch target, route와 breakpoint 구조를 바꾸지 않고 알림 아이콘에만 badge를 overlay한다.
+- Notification 목록 길이, hidden item 또는 client visibility 판정으로 count를 계산하거나 보정하지 않는다.
+- 자동 foreground/reconnect listener, `NetInfo`, Push/realtime과 PROD-372가 소유하는 Read mutation/cache orchestration을 추가하지 않는다.
 
-- [ ] 11.1 모든 선행 slice가 merge되고 scoped validation을 통과했는지 확인한 뒤 Local Account/Profile A/B와 실제 Follow/Unfollow action을 사용하는 Web E2E fixture를 준비한다.
-- [ ] 11.2 Follow 뒤 Recipient selected Profile 목록에 visible unread item이 나타나고 badge가 증가하며 다른 selected Profile UI/cache에는 섞이지 않는지 검증한다.
-- [ ] 11.3 item의 Read·Related Profile 이동·반복 Read와 정상 Unfollow 뒤 목록/count/Node/Read cleanup을 end-to-end로 검증한다.
-- [ ] 11.4 `PROD-380` production ActivityPub integration evidence, workspace required checks, canonical Notification 문서와 delta spec sync, 전체 task 완료 및 `openspec validate add-in-app-notifications --strict`를 확인한다.
-- [ ] 11.5 proposal 전체 scope가 완료된 뒤 change를 archive하고 archive 후 strict validation을 통과시키되 `PROD-327`, `PROD-328`, delivery queue/retry, Push/realtime, ActivityPub transport 재구현과 remote network E2E를 archive gate로 끌어오지 않는다.
+**Verification**
+
+- 하단 탭 바, 모바일 drawer와 Web compact/full sidebar의 공통 숫자 없는 dot 표시와 각 표면의 하나의 accessible navigation entry를 검증한다.
+- 최초 loading/count-only error의 badge 숨김과 전용 retry 부재, 같은 Profile의 마지막 성공값, Profile 전환 격리와 normalized Relay Profile count 반영을 검증한다.
+
+- [x] 9.1 shell surface, 숫자 없는 Unread presence dot과 accent token, 접근성, loading/error/stale, app lifecycle과 Profile 전환 cache 선택을 결정하고 `web-app-shell` delta 및 관련 design/decisions를 추가한다.
+- [x] 9.2 전체 셸 query의 Suspense/Error boundary와 분리된 non-suspending count controller와 공용 badge 표시 경계를 만들고, 모든 지원 shell 알림 아이콘이 selected Profile의 서버 제공 `unreadNotificationCount`를 표시하며 Profile 전환 시 다른 Recipient count를 재사용하지 않게 한다.
+- [x] 9.3 normalized `Profile.unreadNotificationCount` 변경을 모든 셸 surface가 반영하고 기존 actor revision/refetch에서 서버 count로 수렴하게 하되 Read updater, speculative decrement와 hidden item client 보정 로직을 만들지 않는다.
+- [x] 9.4 state 단위 test와 Storybook interaction/a11y·Relay cache test로 하단 탭, drawer, compact/full의 공통 dot, 0/1/99/100에서 숫자 없는 표시, 실제 count를 사용하는 접근성 이름, Profile 전환, 기존 lifecycle, loading/error/stale와 count 일관성을 검증한다. 최초 count-only 실패에는 badge와 전용 retry control이 없고, 성공 count `7` 뒤 같은 Profile의 count 조회 실패에도 셸 진입점과 해당 surface의 badge가 유지되며 다음 기존 refresh에서 수렴하는 회귀 test를 포함한다. app check·Relay compiler·Storybook build/test를 통과시킨다.
+
+## 10. PROD-372 알림 항목 읽음 상태를 best-effort로 동기화한다
+
+**Deliverable**
+
+사용자가 visible Follow Notification의 Avatar 또는 본문 link를 활성화하면 Related Profile 이동이 즉시 시작되고, 독립적인 Read 요청의 성공 payload가 정확한 Recipient item과 visible Unread count Relay cache를 동기화한다.
+
+**Guardrails**
+
+- navigation은 Read pending·실패·재시도를 기다리거나 되돌리지 않는다.
+- 앱 수준 자동 retry, optimistic update, explicit updater, client-side count 산술과 성공 뒤 추가 refetch를 추가하지 않는다.
+- payload가 반환한 Recipient Profile ID를 cache target으로 사용하고 다른 actor Store를 변경하지 않는다.
+- API·DB 계약과 shell badge UI는 변경하지 않는다.
+
+**Verification**
+
+- 두 link activation의 pending·실패·성공 navigation 독립성을 Storybook interaction으로 검증한다.
+- Relay store integration으로 item `readAt`, Recipient `unreadNotificationCount`, 같은 item의 반복·동시 성공 payload 수렴과 Profile 격리를 검증한다.
+
+- [x] 10.1 proposal/spec/design/decisions/tasks를 PROD-372 ownership과 합의한 best-effort Read/cache 계약으로 정렬하고 strict validation과 사용자 OpenSpec Gate 승인을 받는다.
+- [x] 10.2 item fragment와 `markNotificationRead` mutation이 성공 payload의 `notification { id readAt }`과 `recipientProfile { id unreadNotificationCount }`를 Relay normalization에 제공하게 한다.
+- [x] 10.3 Avatar와 본문 link의 각 activation에서 mutation 하나를 비차단으로 시작하고 pending·실패가 navigation이나 cache를 바꾸지 않게 한다.
+- [x] 10.4 Storybook interaction으로 두 link의 즉시 이동과 mutation pending·network error·GraphQL error·success를 검증한다.
+- [x] 10.5 Relay store integration으로 정확한 item/Recipient record 갱신, 같은 item의 반복·동시 성공 payload 수렴, 실패 무변경과 actor별 Profile cache 격리를 검증한다.
+- [x] 10.6 Relay compiler, app check/unit test, Storybook test/build와 Web smoke를 통과시키며, native smoke를 실행할 수 없으면 iOS/Android별 환경 blocker와 미검증 동작을 기록한다.
+
+## 11. PROD-380 ActivityPub inbound Follow/Undo를 Follow Notification lifecycle에 연결한다
+
+- [x] 11.1 verified inbound Follow/Undo concrete handler가 caller-supplied direction 없이 Profile origin pair에서 flow를 파생하는 공통 core public action에 relation/request/count transaction과 exact-row 경쟁 보호를 위임하고 Fedify adapter에 relation mutation이나 Notification 호출을 중복 구현하지 않게 한다.
+- [x] 11.2 OPEN 신규 established relation commit 뒤 같은 request에서 Follow Notification create를 await/catch하고, APPROVAL_REQUIRED pending·existing relation·duplicate/concurrent Follow에는 lifecycle을 실행하지 않게 한다.
+- [x] 11.3 inbound Undo가 established relation을 실제 삭제한 commit 뒤에만 같은 source Notification delete를 await/catch하고, pending request 삭제와 relation 삭제 no-op에는 cleanup을 실행하지 않게 한다.
+- [x] 11.4 production listener → concrete Follow/Undo handler → core action → DB/Notification integration test로 신규 생성, duplicate/concurrent no-op, pending-only, established cleanup과 pending/no-op cleanup 제외를 검증한다.
+- [x] 11.5 Notification create/delete 실패가 relation/request/count transaction과 ActivityPub handler 성공을 rollback하지 않는지 검증하고 core/Fedify test, typecheck와 strict OpenSpec validation을 통과시킨다.
+
+## 12. PROD-271 Local Follow Web E2E와 OpenSpec archive를 완료한다
+
+- [ ] 12.1 모든 선행 slice가 merge되고 scoped validation을 통과했는지 확인한 뒤 Local Account/Profile A/B와 실제 Follow/Unfollow action을 사용하는 Web E2E fixture를 준비한다.
+- [ ] 12.2 Follow 뒤 Recipient selected Profile 목록에 visible unread item이 나타나고 badge가 증가하며 다른 selected Profile UI/cache에는 섞이지 않는지 검증한다.
+- [ ] 12.3 item의 Read·Related Profile 이동·반복 Read와 정상 Unfollow 뒤 목록/count/Node/Read cleanup을 end-to-end로 검증한다.
+- [ ] 12.4 `PROD-380` production ActivityPub integration evidence, workspace required checks, canonical Notification 문서와 delta spec sync, 전체 task 완료 및 `openspec validate add-in-app-notifications --strict`를 확인한다.
+- [ ] 12.5 proposal 전체 scope가 완료된 뒤 change를 archive하고 archive 후 strict validation을 통과시키되 `PROD-327`, `PROD-328`, delivery queue/retry, Push/realtime, ActivityPub transport 재구현과 remote network E2E를 archive gate로 끌어오지 않는다.

@@ -75,14 +75,18 @@ export function Link({
   const { setPathname } = useContext(RouterContext);
   if (
     !asChild ||
-    !isValidElement<{ href?: string; onPress?: (event: unknown) => void }>(children)
+    !isValidElement<{
+      href?: string;
+      onPress?: (event: { preventDefault?: () => void }) => void;
+    }>(children)
   ) {
     return <Fragment>{children}</Fragment>;
   }
 
   return cloneElement(children, {
     href: typeof href === 'string' ? href : href.pathname,
-    onPress: (event: unknown) => {
+    onPress: (event: { preventDefault?: () => void }) => {
+      event.preventDefault?.();
       children.props.onPress?.(event);
       setPathname(href);
     },

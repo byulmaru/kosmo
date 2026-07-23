@@ -5,7 +5,8 @@ import { alias } from 'drizzle-orm/pg-core';
 import { builder } from '@/graphql/builder';
 import { profileFollowAccessWhere } from '../access/follow';
 import { viewerFollowLoader } from '../loader/follow';
-import { Profile, ProfileFollow } from '../ref';
+import { viewerFollowRequestLoader } from '../loader/follow-request';
+import { Profile, ProfileFollow, ProfileFollowRequest } from '../ref';
 
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
 
@@ -17,6 +18,7 @@ const ProfileViewerState = builder.simpleObject('ProfileViewerState', {
   fields: (field) => ({
     isSelf: field.boolean(),
     follow: field.field({ type: ProfileFollow, nullable: true }),
+    followRequest: field.field({ type: ProfileFollowRequest, nullable: true }),
   }),
 });
 
@@ -114,10 +116,15 @@ builder.objectFields(Profile, (t) => ({
     unauthorizedResolver: () => null,
     resolve: async (profile, _, ctx) => {
       const viewerProfileId = ctx.session.profileId;
+      const [follow, followRequest] = await Promise.all([
+        viewerFollowLoader(ctx).load(profile.id),
+        viewerFollowRequestLoader(ctx).load(profile.id),
+      ]);
 
       return {
         isSelf: viewerProfileId === profile.id,
-        follow: await viewerFollowLoader(ctx).load(profile.id),
+        follow,
+        followRequest: follow ? null : followRequest,
       };
     },
   }),

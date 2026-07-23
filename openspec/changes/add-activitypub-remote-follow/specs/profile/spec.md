@@ -56,7 +56,11 @@ API는 local profile과 ActivityPub remote profile이 참여하는 visible follo
 - **AND** 현재 요청에 active profile이 없으면 없음으로 응답한다
 - **AND** 조회 대상 프로필이 viewer active profile 자신인지 `isSelf`로 반환한다
 - **AND** viewer active profile이 대상 프로필을 follow하는 established `ProfileFollow` 관계가 있으면 `viewerState.follow`로 반환하고, 없으면 없음으로 응답한다
-- **AND** pending `ProfileFollowRequest`만 있으면 `viewerState.follow`는 없음으로 응답한다
+- **AND** viewer active profile이 대상 프로필에 보낸 pending `ProfileFollowRequest`가 있으면 `viewerState.followRequest`로 반환하고, 없으면 없음으로 응답한다
+- **AND** `viewerState.follow`과 `viewerState.followRequest`는 같은 viewer/target pair에서 동시에 존재하지 않는다
+- **AND** pending `ProfileFollowRequest`만 있으면 `viewerState.follow`는 없음으로 응답하고 저장 count를 변경하지 않는다
+- **AND** 완료된 PROD-378 계약에 따라 `Profile.viewerState.follow`을 canonical established relation field로 사용하고 제거된 `Profile.viewerFollow`를 복원하지 않는다
+- **AND** API는 `Profile.viewerFollowRequest` top-level 대칭 필드를 추가하지 않는다
 - **AND** 대상 프로필이 ActivityPub remote profile이어도 remote followers/following collection을 fetch하거나 mirror하지 않는다
 
 #### Scenario: Read ProfileFollow profiles
@@ -105,13 +109,13 @@ API는 같은 `Profile` 타입 안에서 소속 instance의 `kind`를 `Profile.i
 
 ### Requirement: Follow profile mutation
 
-active profile이 있는 인증자는 `followPolicy`가 `OPEN`인 다른 활성 local profile 또는 ActivityPub remote profile을 follow할 수 있어야 한다(MUST).
+active profile이 있는 인증자는 다른 활성 local profile 또는 ActivityPub remote profile에 established follow 또는 pending follow request를 생성할 수 있어야 하며, mutation은 결과를 `ProfileFollowResult` union으로 반환해야 한다(MUST).
 
 #### Scenario: Follow open active local profile
 
 - **WHEN** active profile이 있는 인증자가 `followPolicy`가 `OPEN`인 다른 활성 local profile follow를 요청한다
 - **THEN** 시스템은 established `ProfileFollow` 관계를 생성하거나 기존 관계를 반환한다
-- **AND** mutation은 `FollowProfilePayload.profileFollow`로 `ProfileFollow`를 반환한다
+- **AND** mutation은 `FollowProfilePayload.result`로 `ProfileFollow`를 반환한다
 - **AND** mutation은 `FollowProfilePayload.followerProfile`과 `FollowProfilePayload.followeeProfile`로 transaction 완료 시점의 양쪽 `Profile`을 반환한다
 - **AND** `followerProfile.followingCount`와 `followeeProfile.followersCount`는 생성된 관계가 반영된 저장 count다
 
@@ -124,13 +128,13 @@ active profile이 있는 인증자는 `followPolicy`가 `OPEN`인 다른 활성 
 - **AND** delivery 실패는 GraphQL mutation 실패로 노출하지 않고 committed `ProfileFollow`, `followerProfile`, `followeeProfile` payload를 반환한다
 - **AND** 새 `ProfileFollow` 관계가 생성되었지만 remote instance 상태가 `UNRESPONSIVE`이면 ActivityPub `Follow` activity를 발송하지 않는다
 - **AND** 기존 `ProfileFollow` 관계를 반환하는 idempotent 요청에서는 ActivityPub `Follow` activity를 다시 발송하지 않는다
-- **AND** mutation은 `FollowProfilePayload.profileFollow`로 `ProfileFollow`를 반환한다
+- **AND** mutation은 `FollowProfilePayload.result`로 `ProfileFollow`를 반환한다
 - **AND** mutation은 최신 저장 count를 가진 `followerProfile`과 `followeeProfile`을 반환한다
 
 #### Scenario: Follow profile idempotently
 
 - **WHEN** active profile이 있는 인증자가 이미 follow 중인 프로필 follow를 요청한다
-- **THEN** 시스템은 `FollowProfilePayload.profileFollow`로 기존 `ProfileFollow`를 반환한다
+- **THEN** 시스템은 `FollowProfilePayload.result`로 기존 `ProfileFollow`를 반환한다
 - **AND** mutation은 count를 중복 증가시키지 않은 최신 `followerProfile`과 `followeeProfile`을 반환한다
 - **AND** 오류로 처리하지 않는다
 - **AND** 대상이 ActivityPub remote profile이면 ActivityPub `Follow` activity를 다시 발송하지 않는다

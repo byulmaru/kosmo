@@ -2,7 +2,7 @@
 
 ### Requirement: Profile별 개인 Bookmark
 
-시스템은 Bookmark를 Owner Profile이 Target Post를 개인적으로 저장한 결과로 취급해야 한다(MUST). Bookmark는 하나의 Owner Profile, 하나의 Target Post와 변경할 수 없는 생성 시각을 가져야 하며(MUST), 같은 Profile/Post 조합에는 하나만 존재해야 한다(MUST). 서로 다른 Profile은 같은 Post를 독립적으로 저장할 수 있어야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/bookmark.md`, `PROD-391`, `PROD-396` — 시스템은 Bookmark를 Owner Profile이 Target Post를 개인적으로 저장한 결과로 취급해야 한다(MUST). Bookmark는 하나의 Owner Profile, 하나의 Target Post와 변경할 수 없는 생성 시각을 가져야 하며(MUST), 같은 Profile/Post 조합에는 하나만 존재해야 한다(MUST). 서로 다른 Profile은 같은 Post를 독립적으로 저장할 수 있어야 한다(MUST).
 
 #### Scenario: 처음 Post를 저장함
 
@@ -23,7 +23,7 @@
 
 ### Requirement: Bookmark 생성 권한과 대상 조건
 
-시스템은 유효한 세션의 Account가 멤버인 Active/Normal Local Profile을 행동 주체로 선택했고 그 Profile이 Target Post 조회 정책을 통과할 때만 Bookmark 생성을 허용해야 한다(MUST). 생성은 Post Author에게 Notification을 만들지 않아야 한다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/bookmark.md`, `PROD-391`, `PROD-408` — 시스템은 유효한 세션의 Account가 멤버인 Active/Normal Local Profile을 행동 주체로 선택했고 그 Profile이 Target Post 조회 정책을 통과할 때만 Bookmark 생성을 허용해야 한다(MUST). 생성은 Post Author에게 Notification을 만들지 않아야 한다(MUST NOT).
 
 #### Scenario: 조회 가능한 Post를 저장함
 
@@ -78,27 +78,43 @@
 
 ### Requirement: Owner 전용 Bookmark 삭제
 
-시스템은 Bookmark의 Owner Profile만 해당 Bookmark를 삭제할 수 있게 해야 한다(MUST). Target Post가 현재 조회 불가능하더라도 Owner는 저장 관계를 삭제할 수 있어야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/bookmark.md`, `PROD-391`, `PROD-409`와 2026-07-22 삭제 API 승인 — 시스템은 Bookmark의 Owner Profile만 해당 Bookmark를 삭제할 수 있게 해야 한다(MUST). Target Post가 현재 조회 불가능하더라도 Owner는 저장 관계를 삭제할 수 있어야 한다(MUST).
+
+GraphQL은 현재 `usingProfile`을 Owner로 사용하는 `deleteBookmark(input: { id })` mutation을 제공해야 한다(MUST). 성공 payload는 nullable `bookmarkId`와 nullable `post`를 반환해야 한다(MUST). Owner가 존재하는 Bookmark를 처음 삭제하면 `bookmarkId`로 삭제된 Bookmark 관계를 정확히 식별하고, `post`는 현재 조회 가능한 Target Post를 반환해야 한다(MUST). Target Post가 현재 조회 불가능하면 삭제는 그대로 성공하되 `post`는 `null`이어야 한다(MUST).
+
+Bookmark가 없거나 현재 `usingProfile`의 소유가 아니거나 순차·동시 요청에서 이미 삭제되었으면 시스템은 서로 구분되지 않는 멱등 성공으로 정규화하고 `bookmarkId`와 `post`를 모두 `null`로 반환해야 한다(MUST). 다른 Profile에는 Bookmark 존재 여부를 노출하지 않아야 한다(MUST NOT).
 
 #### Scenario: Owner가 Bookmark를 삭제함
 
 - **WHEN** 행동 주체 Profile이 Bookmark의 Owner이고 삭제를 요청한다
 - **THEN** 시스템은 해당 Bookmark 관계를 제거한다
+- **AND** `DeleteBookmarkPayload.bookmarkId`로 삭제된 Bookmark 관계를 식별한다
+- **AND** Target Post가 현재 조회 가능하면 `DeleteBookmarkPayload.post`로 해당 Post를 반환한다
 
 #### Scenario: 다른 Profile이 Bookmark 삭제를 시도함
 
 - **WHEN** 행동 주체 Profile이 Bookmark의 Owner가 아니다
 - **THEN** 시스템은 Bookmark를 제거하지 않는다
+- **AND** 오류 없이 `bookmarkId: null`, `post: null`을 반환한다
 - **AND** 비공개 Bookmark의 존재 여부를 노출하지 않는다
+
+#### Scenario: 없거나 이미 삭제된 Bookmark를 삭제함
+
+- **WHEN** 입력 Bookmark가 없거나 순차·동시 삭제 요청에서 앞선 요청이 이미 관계를 제거했다
+- **THEN** 시스템은 오류 없이 `bookmarkId: null`, `post: null`을 반환한다
+- **AND** missing, non-owner와 경쟁 loser를 외부 응답으로 구분하지 않는다
 
 #### Scenario: 숨겨진 Target의 Bookmark를 삭제함
 
 - **WHEN** Target Post가 Tombstone이거나 Owner Profile이 현재 조회할 수 없는 상태에서 Owner가 Bookmark 삭제를 요청한다
 - **THEN** 시스템은 Target Post의 현재 가시성과 관계없이 Bookmark를 제거한다
+- **AND** 삭제된 `bookmarkId`와 `post: null`을 반환한다
 
 ### Requirement: Owner 전용 최신순 Bookmark 목록
 
-시스템은 현재 행동 주체인 Owner Profile에게만 자신의 Bookmark 목록을 제공해야 한다(MUST). 목록은 UUIDv7 ID 내림차순으로 정렬하고 ID만 cursor로 사용해야 하며(MUST), cursor pagination에서도 중복이나 누락 없이 같은 순서를 유지해야 한다(MUST). 같은 millisecond에 생성된 Bookmark의 실제 생성 순서와 UUID 순서는 다를 수 있다.
+**Authority / Provenance:** `docs/domain/objects/bookmark.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-391`, `PROD-410` — 시스템은 현재 행동 주체인 Owner Profile에게만 자신의 Bookmark 목록을 제공해야 한다(MUST). GraphQL은 현재 선택된 Profile의 `Profile.bookmarks` owner-only connection과 owner-only `Bookmark` Node를 제공해야 한다(MUST). 다른 Profile의 connection 접근은 `PERMISSION_DENIED`로 거부해야 하며(MUST), 비Owner의 Bookmark Node 조회는 존재 여부를 구분하지 않는 `null`을 반환해야 한다(MUST).
+
+목록은 UUIDv7 ID 내림차순으로 정렬하고 ID만 cursor로 사용해야 하며(MUST), cursor pagination에서도 중복이나 누락 없이 같은 순서를 유지해야 한다(MUST). 같은 millisecond에 생성된 Bookmark의 실제 생성 순서와 UUID 순서는 다를 수 있다.
 
 #### Scenario: Owner가 최신 Bookmark부터 조회함
 
@@ -106,10 +122,17 @@
 - **THEN** 시스템은 UUIDv7 ID가 큰 Bookmark부터 반환한다
 - **AND** 같은 millisecond 안의 실제 생성 순서를 별도로 보장하지 않는다
 
-#### Scenario: 다른 Profile의 Bookmark를 조회함
+#### Scenario: 다른 Profile의 Bookmark connection을 조회함
 
-- **WHEN** 요청 Profile이 다른 Profile 소유의 Bookmark 목록 또는 Bookmark Node에 접근한다
-- **THEN** 시스템은 해당 Bookmark와 그 존재 여부를 공개하지 않는다
+- **WHEN** 요청 Profile이 다른 Profile의 `Profile.bookmarks` connection에 접근한다
+- **THEN** 시스템은 일반적인 `PERMISSION_DENIED`로 요청을 거부한다
+- **AND** edge, 개수 또는 cursor를 공개하지 않는다
+
+#### Scenario: Bookmark Node ID로 Owner 경계를 우회함
+
+- **WHEN** 비Owner가 다른 Profile 소유의 Bookmark global ID로 Node 조회를 요청한다
+- **THEN** 시스템은 `null`을 반환한다
+- **AND** Bookmark의 존재 여부와 Target Post를 공개하지 않는다
 
 #### Scenario: 다음 페이지를 조회함
 
@@ -118,13 +141,21 @@
 
 ### Requirement: 조회 불가능한 Target 숨김과 관계 유지
 
-시스템은 Target Post가 Tombstone이거나 Owner Profile이 Post 조회 정책을 통과하지 못하면 해당 Bookmark를 목록 결과에서 숨겨야 한다(MUST). 가시성 필터는 page limit을 적용하기 전에 실행해야 하며(MUST), 숨겨진 동안에도 Bookmark 관계와 생성 시각을 유지해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/bookmark.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-391`, `PROD-410` — 시스템은 Target Post가 Tombstone이거나 Owner Profile이 공용 Post 조회 정책을 통과하지 못하면 해당 Bookmark를 목록 결과에서 숨겨야 한다(MUST). Bookmark 조회는 별도 가시성 규칙을 만들지 않고 현재 공용 Post 조회 정책의 판정을 사용해야 하며(MUST), 공용 정책이 확장되면 같은 판정을 자동으로 적용해야 한다(MUST). 가시성 필터는 page limit을 적용하기 전에 실행해야 하며(MUST), 숨겨진 동안에도 Bookmark 관계와 생성 시각을 유지해야 한다(MUST).
+
+Owner가 개별 Bookmark Node를 조회할 때 `Bookmark.post`는 nullable이어야 하며(MUST), 현재 조회할 수 없는 Target은 `null`로 반환해야 한다(MUST). 목록 connection은 같은 Bookmark edge를 결과에서 제외해야 한다(MUST).
 
 #### Scenario: Target Post가 조회 불가능해짐
 
-- **WHEN** 저장한 Target Post가 Tombstone이 되거나 Block·공개 범위 등으로 Owner Profile에게 조회 불가능해진다
+- **WHEN** 저장한 Target Post가 Tombstone이 되거나 현재 공용 Post 조회 정책이 Owner Profile에게 조회 불가능하다고 판정한다
 - **THEN** 시스템은 해당 Bookmark를 Owner의 목록 결과에서 제외한다
 - **AND** Bookmark 저장 관계는 삭제하거나 변경하지 않는다
+
+#### Scenario: 숨겨진 Target의 Bookmark Node를 조회함
+
+- **WHEN** Owner가 관계를 유지 중이지만 Target Post를 현재 조회할 수 없는 Bookmark Node를 조회한다
+- **THEN** 시스템은 Owner의 Bookmark Node를 반환한다
+- **AND** `Bookmark.post`는 `null`을 반환한다
 
 #### Scenario: 숨겨진 Target 때문에 페이지가 비지 않음
 
@@ -141,35 +172,40 @@
 - **WHEN** Target Post row가 물리적으로 삭제된다
 - **THEN** 시스템은 해당 Post를 참조하는 Bookmark를 함께 삭제한다
 
-### Requirement: Profile별 Bookmark action
+### Requirement: Post의 viewer-relative Bookmark 관계
 
-클라이언트는 조회 가능한 Post에 대해 현재 선택된 Profile의 Bookmark 상태를 표시하고 저장 또는 해제 동작을 제공해야 한다(MUST). 동작 중에는 같은 의도의 중복 요청을 막아야 하며(MUST), 실패하면 직전의 확정 상태를 복구하고 재시도 가능한 오류를 알려야 한다(MUST). 선택 Profile이 바뀌면 이전 Profile의 상태를 새 Profile의 상태로 재사용하지 않아야 한다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/bookmark.md`, `PROD-391`, `PROD-420` — GraphQL은 인증된 세션의 현재 selected Profile이 Post를 저장한 Bookmark 관계를 nullable `Post.viewerBookmark`로 제공해야 한다(MUST). 반환하는 Bookmark는 현재 selected Profile과 요청 Post의 관계여야 하며(MUST), guest, selected Profile이 없는 세션 또는 저장하지 않은 Post에는 `null`을 반환해야 한다(MUST). 서로 다른 selected Profile의 관계를 섞거나 노출해서는 안 된다(MUST NOT).
 
-#### Scenario: 저장되지 않은 Post를 저장함
+#### Scenario: selected Profile이 저장한 Post를 조회함
 
-- **WHEN** 유효한 선택 Profile이 저장되지 않은 Post의 Bookmark action을 활성화한다
-- **THEN** 클라이언트는 생성 요청을 보내고 성공한 Bookmark 상태를 해당 Profile의 Post 표면에 반영한다
+- **WHEN** 인증된 세션의 selected Profile이 저장한 Post를 조회한다
+- **THEN** `Post.viewerBookmark`는 그 Profile과 Post를 연결하는 Bookmark를 반환한다
 
-#### Scenario: 저장된 Post를 해제함
+#### Scenario: selected Profile이 저장하지 않은 Post를 조회함
 
-- **WHEN** Owner Profile이 저장된 Post의 Bookmark action을 활성화한다
-- **THEN** 클라이언트는 삭제 요청을 보내고 성공 후 저장되지 않은 상태를 반영한다
+- **WHEN** 인증된 세션의 selected Profile이 저장하지 않은 Post를 조회한다
+- **THEN** `Post.viewerBookmark`는 `null`을 반환한다
 
-#### Scenario: Bookmark action이 실패함
+#### Scenario: 실행 가능한 selected Profile이 없음
 
-- **WHEN** 생성 또는 삭제 요청이 실패한다
-- **THEN** 클라이언트는 마지막으로 확정된 Bookmark 상태를 표시한다
-- **AND** 사용자가 재시도할 수 있는 오류 상태를 제공한다
+- **WHEN** guest 또는 selected Profile이 없는 세션이 Post를 조회한다
+- **THEN** `Post.viewerBookmark`는 `null`을 반환한다
 
-#### Scenario: 선택 Profile을 전환함
+#### Scenario: 서로 다른 selected Profile이 같은 Post를 조회함
 
-- **WHEN** 사용자가 같은 Post를 보는 동안 선택 Profile을 변경한다
-- **THEN** 클라이언트는 새 Profile의 Bookmark 상태를 조회해 표시한다
-- **AND** 이전 Profile의 pending 또는 확정 상태를 새 Profile에 적용하지 않는다
+- **WHEN** 서로 다른 selected Profile이 같은 Post를 각각 조회한다
+- **THEN** 각 응답은 요청 당시 selected Profile 소유의 Bookmark만 반환한다
+- **AND** 다른 Profile의 Bookmark 존재 여부를 노출하지 않는다
+
+#### Scenario: 여러 Post의 viewer Bookmark를 함께 조회함
+
+- **WHEN** 하나의 GraphQL 요청이 여러 Post의 `viewerBookmark`를 조회한다
+- **THEN** 시스템은 요청의 selected Profile에 한정된 관계를 batch로 조회한다
+- **AND** Post별로 해당 Bookmark 또는 `null`을 반환한다
 
 ### Requirement: 비공개 Bookmark 목록 화면
 
-클라이언트는 유효한 세션과 선택 Profile이 있는 사용자에게 개인 Bookmark 목록 화면을 제공해야 한다(MUST). 화면은 최신순 pagination과 Target Post 이동을 지원하고(MUST), loading·error·empty 상태를 구분해야 하며(MUST), 서버가 숨긴 Target Post를 별도 경로로 복원하거나 노출하지 않아야 한다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/bookmark.md`, `PROD-391`, `PROD-421` — 클라이언트는 유효한 세션과 선택 Profile이 있는 사용자에게 개인 Bookmark 목록 화면을 제공해야 한다(MUST). 화면은 최신순 pagination과 Target Post 이동을 지원하고(MUST), loading·error·empty 상태를 구분해야 하며(MUST), 서버가 숨긴 Target Post를 별도 경로로 복원하거나 노출하지 않아야 한다(MUST NOT).
 
 #### Scenario: Bookmark 목록을 탐색함
 

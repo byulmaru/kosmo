@@ -1,0 +1,1 @@
+CREATE INDEX "reaction_post_id_type_created_at_id_index" ON "reaction" ("post_id","type","created_at" DESC NULLS LAST,"id" DESC NULLS LAST);

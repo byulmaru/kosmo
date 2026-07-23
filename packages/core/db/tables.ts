@@ -1,5 +1,15 @@
 import { sql } from 'drizzle-orm';
-import { index, integer, jsonb, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
+import {
+  check,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  unique,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import * as Enum from './enums';
 import { datetime } from './types';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
@@ -292,10 +302,23 @@ export const Posts = pgTable(
     visibility: Enum.postVisibility('visibility').notNull(),
     state: Enum.postState('state').notNull(),
     currentContentId: uuid('current_content_id').references((): AnyPgColumn => PostContents.id),
+    replyParentId: uuid('reply_parent_id').references((): AnyPgColumn => Posts.id),
+    repostSourceId: uuid('repost_source_id').references((): AnyPgColumn => Posts.id),
     createdAt: createdAt(),
     deletedAt: datetime('deleted_at'),
   },
-  (table) => [index().on(table.profileId, table.id.desc())],
+  (table) => [
+    check(
+      'post_reply_parent_not_self',
+      sql`${table.replyParentId} IS NULL OR ${table.replyParentId} <> ${table.id}`,
+    ),
+    index().on(table.profileId, table.id.desc()),
+    uniqueIndex('post_active_repost_profile_source_unique')
+      .on(table.profileId, table.repostSourceId)
+      .where(
+        sql`${table.state} = 'ACTIVE' AND ${table.currentContentId} IS NULL AND ${table.repostSourceId} IS NOT NULL`,
+      ),
+  ],
 );
 
 export const PostContents = pgTable(
@@ -382,7 +405,11 @@ export const Reactions = pgTable(
     type: text('type').notNull(),
     createdAt: createdAt(),
   },
-  (table) => [unique().on(table.postId, table.type, table.profileId), index().on(table.profileId)],
+  (table) => [
+    unique().on(table.postId, table.type, table.profileId),
+    index().on(table.profileId),
+    index().on(table.postId, table.type, table.createdAt.desc(), table.id.desc()),
+  ],
 );
 
 export const Sessions = pgTable(

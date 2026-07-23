@@ -13,6 +13,7 @@ export type StoryProfile = {
     pageInfo: StoryPageInfo;
   };
   followersCount: number;
+  followPolicy: 'APPROVAL_REQUIRED' | 'OPEN';
   following: {
     edges: Array<{
       cursor: string;
@@ -25,8 +26,10 @@ export type StoryProfile = {
   id: string;
   instance: { kind: 'ACTIVITYPUB' | 'LOCAL' };
   relativeHandle: string;
+  unreadNotificationCount: number;
   viewerState: {
-    follow: { follower?: { id: string } | null; id: string } | null;
+    follow: { follower?: { followingCount: number; id: string } | null; id: string } | null;
+    followRequest: { id: string } | null;
     isSelf: boolean;
   } | null;
 };
@@ -54,13 +57,15 @@ export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
     displayName: '코스모 작가',
     followers: { edges: [], pageInfo: pageInfo() },
     followersCount: 128,
+    followPolicy: 'OPEN',
     following: { edges: [], pageInfo: pageInfo() },
     followingCount: 42,
     handle: 'kosmo',
     id: 'profile-kosmo',
     instance: { kind: 'LOCAL' },
     relativeHandle: '@kosmo',
-    viewerState: { follow: null, isSelf: false },
+    unreadNotificationCount: 0,
+    viewerState: { follow: null, followRequest: null, isSelf: false },
     ...overrides,
   };
 }
@@ -132,7 +137,7 @@ export function profileWithPosts(posts: StoryPost[], overrides: Partial<StoryPro
 }
 
 export function shellQuery({
-  profiles = [profile({ viewerState: { follow: null, isSelf: true } })],
+  profiles = [profile({ viewerState: { follow: null, followRequest: null, isSelf: true } })],
   selectedProfile = profiles[0] ?? null,
 }: {
   profiles?: StoryProfile[];

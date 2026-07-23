@@ -21,6 +21,15 @@ enum AccountState {
   SUSPENDED
 }
 
+input AddReactionInput {
+  postId: ID!
+  type: String!
+}
+
+type AddReactionPayload {
+  reaction: Reaction!
+}
+
 input ApproveProfileFollowRequestInput {
   id: ID!
 }
@@ -37,6 +46,16 @@ type Bookmark implements Node {
   id: ID!
   post: Post
   profile: Profile!
+}
+
+type BookmarkConnection {
+  edges: [BookmarkConnectionEdge!]!
+  pageInfo: PageInfo!
+}
+
+type BookmarkConnectionEdge {
+  cursor: String!
+  node: Bookmark!
 }
 
 input CancelProfileFollowRequestInput {
@@ -77,12 +96,29 @@ type CreateProfilePayload {
 """RFC9557 formatted string"""
 scalar DateTime
 
+input DeleteBookmarkInput {
+  id: ID!
+}
+
+type DeleteBookmarkPayload {
+  bookmarkId: ID
+  post: Post
+}
+
 input DeleteProfileInput {
   id: ID!
 }
 
 type DeleteProfilePayload {
   profileId: ID!
+}
+
+input DeleteReactionInput {
+  id: ID!
+}
+
+type DeleteReactionPayload {
+  reactionId: ID!
 }
 
 input ExchangeNativeOidcSessionInput {
@@ -127,12 +163,15 @@ type MarkNotificationReadPayload {
 }
 
 type Mutation {
+  addReaction(input: AddReactionInput!): AddReactionPayload!
   approveProfileFollowRequest(input: ApproveProfileFollowRequestInput!): ApproveProfileFollowRequestPayload!
   cancelProfileFollowRequest(input: CancelProfileFollowRequestInput!): CancelProfileFollowRequestPayload!
   createBookmark(input: CreateBookmarkInput!): CreateBookmarkPayload!
   createPost(input: CreatePostInput!): CreatePostPayload!
   createProfile(input: CreateProfileInput!): CreateProfilePayload!
+  deleteBookmark(input: DeleteBookmarkInput!): DeleteBookmarkPayload!
   deleteProfile(input: DeleteProfileInput!): DeleteProfilePayload!
+  deleteReaction(input: DeleteReactionInput!): DeleteReactionPayload!
   exchangeNativeOidcSession(input: ExchangeNativeOidcSessionInput!): ExchangeNativeOidcSessionPayload!
   followProfile(input: FollowProfileInput!): FollowProfilePayload!
   markNotificationRead(input: MarkNotificationReadInput!): MarkNotificationReadPayload!
@@ -174,7 +213,9 @@ type Post implements Node {
   createdAt: DateTime!
   id: ID!
   profile: Profile!
+  reactionProfiles(after: String, before: String, first: Int, last: Int, type: String!): ProfileConnection!
   state: PostState!
+  viewerBookmark: Bookmark
   visibility: PostVisibility!
 }
 
@@ -213,6 +254,7 @@ enum PostVisibility {
 
 type Profile implements Node {
   bio: String
+  bookmarks(after: String, before: String, first: Int, last: Int): BookmarkConnection!
   createdAt: DateTime!
   displayName: String!
   followPolicy: ProfileFollowPolicy!
@@ -230,6 +272,16 @@ type Profile implements Node {
   relativeHandle: String!
   unreadNotificationCount: Int!
   viewerState: ProfileViewerState
+}
+
+type ProfileConnection {
+  edges: [ProfileConnectionEdge!]!
+  pageInfo: PageInfo!
+}
+
+type ProfileConnectionEdge {
+  cursor: String!
+  node: Profile!
 }
 
 type ProfileFollow implements Node {
@@ -305,6 +357,7 @@ enum ProfileState {
 
 type ProfileViewerState {
   follow: ProfileFollow
+  followRequest: ProfileFollowRequest
   isSelf: Boolean!
 }
 
@@ -315,6 +368,12 @@ type Query {
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
   profileByHandle(handle: String!): Profile
+}
+
+type Reaction implements Node {
+  createdAt: DateTime!
+  id: ID!
+  type: String!
 }
 
 input RejectProfileFollowRequestInput {

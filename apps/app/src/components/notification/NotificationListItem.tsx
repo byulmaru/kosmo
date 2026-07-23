@@ -2,13 +2,14 @@ import { Link } from 'expo-router';
 import { UserPlus } from 'lucide-react-native';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { graphql, useFragment } from 'react-relay';
+import { graphql, useFragment, useMutation } from 'react-relay';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { NotificationListItem_notification$key } from './__generated__/NotificationListItem_notification.graphql';
+import type { NotificationListItemMarkReadMutation } from './__generated__/NotificationListItemMarkReadMutation.graphql';
 
 type NotificationListItemProps = {
   notification: NotificationListItem_notification$key;
@@ -16,6 +17,7 @@ type NotificationListItemProps = {
 
 const notificationFragment = graphql`
   fragment NotificationListItem_notification on FollowNotification {
+    id
     createdAt
     readAt
     profile {
@@ -26,16 +28,40 @@ const notificationFragment = graphql`
   }
 `;
 
+const notificationListItemMarkReadMutation = graphql`
+  mutation NotificationListItemMarkReadMutation($id: ID!) {
+    markNotificationRead(input: { id: $id }) {
+      notification {
+        id
+        readAt
+      }
+      recipientProfile {
+        id
+        unreadNotificationCount
+      }
+    }
+  }
+`;
+
 export function NotificationListItem({ notification }: NotificationListItemProps) {
   const theme = useTheme();
   const [hovered, setHovered] = useState(false);
   const data = useFragment(notificationFragment, notification);
+  const [commitMarkRead] = useMutation<NotificationListItemMarkReadMutation>(
+    notificationListItemMarkReadMutation,
+  );
   const name = data.profile.displayName || data.profile.handle;
   const profileHref = `/${data.profile.relativeHandle}` as Href;
   const timestamp = formatTimelineTimestamp(data.createdAt);
   const unread = data.readAt === null;
   const unreadDescription = unread ? ' 읽지 않은 알림.' : '';
   const actionLabel = `${name}님이 팔로우했습니다. ${timestamp}.${unreadDescription} 프로필로 이동`;
+  const markRead = () => {
+    commitMarkRead({
+      onError: () => undefined,
+      variables: { id: data.id },
+    });
+  };
 
   return (
     <View
@@ -62,6 +88,7 @@ export function NotificationListItem({ notification }: NotificationListItemProps
             <Pressable
               accessibilityLabel={`${name} 프로필로 이동.${unreadDescription}`}
               accessibilityRole="link"
+              onPress={markRead}
               style={styles.avatarLink}
             >
               <Avatar label={name} size={28} />
@@ -73,6 +100,7 @@ export function NotificationListItem({ notification }: NotificationListItemProps
           <Pressable
             accessibilityLabel={actionLabel}
             accessibilityRole="link"
+            onPress={markRead}
             style={styles.copyLink}
           >
             <Text style={[styles.copy, { color: theme.text }]}>

@@ -23,6 +23,7 @@ import { RightRail } from './RightRail';
 import { ShellChromeProvider } from './ShellChromeContext';
 import { getShellLayout } from './shellLayout';
 import { SidebarNavigation } from './SidebarNavigation';
+import { UnreadNotificationBadgeController } from './UnreadNotificationBadgeController';
 import type { ViewStyle } from 'react-native';
 import type { UniversalShellQuery } from './__generated__/UniversalShellQuery.graphql';
 
@@ -48,6 +49,11 @@ const webStickyRail = {
   top: 0,
 } as unknown as ViewStyle;
 
+const webRightRailOverflow = {
+  overflowX: 'hidden',
+  overflowY: 'auto',
+} as unknown as ViewStyle;
+
 const webStickyHeader = {
   position: 'sticky',
   top: 0,
@@ -68,13 +74,15 @@ export function UniversalShell() {
   const { retry, revision } = useRelayActor();
 
   return (
-    <RouteBoundary
-      loading={<Splash label="앱을 불러오는 중입니다." />}
-      onRetry={retry}
-      title="앱을 불러오지 못했어요"
-    >
-      <UniversalShellContent revision={revision} />
-    </RouteBoundary>
+    <UnreadNotificationBadgeController>
+      <RouteBoundary
+        loading={<Splash label="앱을 불러오는 중입니다." />}
+        onRetry={retry}
+        title="앱을 불러오지 못했어요"
+      >
+        <UniversalShellContent revision={revision} />
+      </RouteBoundary>
+    </UnreadNotificationBadgeController>
   );
 }
 
@@ -198,14 +206,21 @@ function UniversalShellContent({ revision }: { revision: number }) {
             <Slot />
           </View>
           {mobile ? (
-            <View style={web ? webFixedBottomBar : undefined}>
+            <View aria-hidden={drawerOpen || undefined} style={web ? webFixedBottomBar : undefined}>
               <BottomTabBar profile={profile} />
             </View>
           ) : null}
         </View>
 
         {full ? (
-          <View style={[styles.rightRail, web && webStickyRail, { borderColor: theme.border }]}>
+          <View
+            style={[
+              styles.rightRail,
+              web && webStickyRail,
+              web && webRightRailOverflow,
+              { borderColor: theme.border },
+            ]}
+          >
             {profile ? <RightRail profile={profile} /> : null}
           </View>
         ) : null}
@@ -255,7 +270,6 @@ const styles = StyleSheet.create({
   nativeRoute: { flex: 1 },
   webMobileRoute: { paddingBottom: 56 },
   rightRail: {
-    overflow: 'scroll',
     paddingLeft: spacing.xl,
     paddingTop: spacing.lg,
     width: 350,

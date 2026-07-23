@@ -18,6 +18,10 @@ const reactionMigration = new URL(
   '../../../drizzle/20260720151915_dapper_lady_mastermind/migration.sql',
   import.meta.url,
 );
+const reactionProfileOrderingMigration = new URL(
+  '../../../drizzle/20260721114209_prod_407_reaction_profile_ordering/migration.sql',
+  import.meta.url,
+);
 
 const instanceId = '00000000-0000-8000-8000-000000000001';
 const authorProfileId = '00000000-0000-8000-8000-000000000002';
@@ -41,6 +45,7 @@ test('adds the Reaction storage contract without rewriting existing rows', async
     const existingPostIds = await rowIds(sql, 'post');
 
     await sql.unsafe(await readFile(reactionMigration, 'utf8'));
+    await sql.unsafe(await readFile(reactionProfileOrderingMigration, 'utf8'));
 
     assert.deepEqual(await rowIds(sql, 'profile'), existingProfileIds);
     assert.deepEqual(await rowIds(sql, 'post'), existingPostIds);
@@ -122,7 +127,7 @@ async function verifyCatalog(sql) {
       AND indexname <> 'reaction_pkey'
     ORDER BY indexname
   `;
-  assert.equal(indexes.length, 2);
+  assert.equal(indexes.length, 3);
   assert.match(
     indexes.find(({ name }) => name === 'reaction_post_id_type_profile_id_unique')?.definition ??
       '',
@@ -131,6 +136,11 @@ async function verifyCatalog(sql) {
   assert.match(
     indexes.find(({ name }) => name === 'reaction_profile_id_index')?.definition ?? '',
     /CREATE INDEX .+ \(profile_id\)$/,
+  );
+  assert.match(
+    indexes.find(({ name }) => name === 'reaction_post_id_type_created_at_id_index')?.definition ??
+      '',
+    /CREATE INDEX .+ \(post_id, type, created_at DESC NULLS LAST, id DESC NULLS LAST\)$/,
   );
 }
 

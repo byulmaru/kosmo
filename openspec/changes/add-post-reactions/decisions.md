@@ -47,11 +47,13 @@
 ### Reaction mutation은 database 제약으로 멱등성을 보장한다
 
 - Decision Date: 2026-07-20
-- Status: Accepted
+- Decision Class: Implementation Choice
+- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0012](../../../docs/domain/decisions/0012-post-interaction-followup-clarifications.md), [PROD-404](https://linear.app/byulmaru/issue/PROD-404/reaction을-추가한다), [PROD-405](https://linear.app/byulmaru/issue/PROD-405/reaction을-삭제한다)
+- Status: Active
 - Context / Problem: 반복·동시 요청이 중복 Reaction이나 불필요한 실패를 만들 수 있다.
-- Decision Outcome: add는 unique conflict를 원자적으로 처리하고 기존 Reaction을 성공 결과로 반환한다. delete는 Owner의 현재 관계를 원자적으로 제거하며 자신이 이미 제거한 같은 조합의 재시도는 성공 no-op으로 처리한다. 명시적 pessimistic lock을 사용하지 않는다.
+- Decision Outcome: add는 unique conflict를 원자적으로 처리하고 기존 Reaction을 성공 결과로 반환한다. delete는 Owner의 현재 관계를 원자적으로 제거하며 자신이 이미 제거한 같은 Reaction ID의 재시도는 성공 no-op으로 처리한다. 명시적 pessimistic lock을 사용하지 않는다.
 - Alternatives Considered: check-then-write만 사용하는 방식은 race가 있고, 명시적 row/table/advisory lock은 복구 가능한 social interaction에 과도하다.
-- Consequences: service 결과는 새로 생성·실제 삭제 여부를 구분해 Notification side effect를 한 번만 시작할 수 있어야 한다.
+- Consequences: 실제 caller가 생기기 전에는 service 결과에 신규 생성·실제 삭제 여부를 선제 노출하지 않는다. Notification side effect를 연결하는 PROD-413·419가 필요한 결과 확장과 실패 처리를 함께 검증한다.
 - Confirmation / Follow-up: PROD-404·405의 database-backed concurrency test에서 단일 row와 반복 결과를 검증한다.
 
 ### count와 Profile 목록의 visibility 책임을 분리한다
@@ -63,6 +65,48 @@
 - Alternatives Considered: count에도 viewer Profile visibility를 적용하는 방식은 viewer마다 count가 달라지고 canonical 계약과 충돌한다. client filtering은 pagination을 깨뜨린다.
 - Consequences: summary count와 visible Profile 목록 길이는 다를 수 있으며 client가 이를 다시 맞추지 않는다.
 - Confirmation / Follow-up: PROD-406·407과 PROD-418에서 서로 다른 viewer, unavailable Profile과 pagination을 함께 검증한다.
+
+### Type별 Profile connection은 최신 Reaction순으로 정렬한다
+
+- Decision Date: 2026-07-21
+- Decision Class: Implementation Choice
+- Authority / Provenance:
+  - `docs/domain/objects/reaction.md`
+  - `PROD-407`
+- Status: Active
+- Context / Problem: PROD-407은 중복 없는 stable cursor pagination을 요구하지만 Profile 목록의 순서와 cursor 경계는 정하지 않았다. 같은 Post·Type에서 Profile마다 Reaction은 하나뿐이므로 count는 Profile 사이의 순서를 만들지 못한다.
+- Decision Outcome: Type별 Profile connection은 `Reaction.createdAt DESC, Reaction.id DESC` 순서로 반환한다. opaque cursor는 두 값을 함께 표현하고, Profile visibility는 이 cursor 경계와 page limit을 적용하기 전에 SQL에서 필터링한다.
+- Alternatives Considered: Profile 이름·handle 순서는 mutable 값과 collation에 pagination이 결합된다. Reaction ID만 사용하는 방식은 단순하지만 같은 millisecond에 생성된 UUIDv7의 실제 생성 순서를 명시적으로 보장하지 않는다. Profile별 Reaction count는 같은 Post·Type에서 모두 1이므로 정렬 기준이 되지 않는다.
+- Consequences: 새 Reaction은 목록 앞에 나타나며 기존 page의 older 방향 keyset 경계는 안정적으로 유지된다. 조회 query는 `(post_id, type, created_at DESC, id DESC)` 순서를 지원하는 forward index가 필요하다.
+- Confirmation / Follow-up: PROD-407 integration test에서 최신순, 동일 생성 시각 tie-break, 다중 page cursor 경계, 중복·누락 방지와 visibility-before-limit을 검증한다.
+
+### Profile connection은 기존 Profile node만 공개한다
+
+- Decision Date: 2026-07-21
+- Decision Class: Implementation Choice
+- Authority / Provenance:
+  - `docs/domain/objects/reaction.md`
+  - `PROD-407`
+- Status: Active
+- Context / Problem: PROD-407의 전달 결과는 Reaction을 남긴 Profile 목록이며 전체 Reaction event history는 제외한다. 공개 row에 Reaction metadata를 포함하면 Reaction Node와 event history 계약을 추가로 정의해야 한다.
+- Decision Outcome: Type별 조회 결과는 `Post.reactionProfiles(type: String!): ProfileConnection!` field에서 기존 Profile 객체를 node로 제공한다. `type`은 canonical Reaction Type 문자열 검증을 적용한다. Reaction 객체, Reaction ID와 `reactedAt`은 공개하지 않고 `createdAt`과 ID는 최신순 opaque cursor를 계산하는 내부 ordering key로만 사용한다.
+- Alternatives Considered: `ReactionConnection`은 source 객체와 lifecycle을 공개 계약으로 확장한다. custom edge의 `reactedAt`은 현재 UI 전달 결과에 필요하지 않고 event history 제외 범위를 흐린다.
+- Consequences: client는 기존 Profile fragment를 재사용할 수 있지만 각 Profile의 정확한 Reaction 시각은 표시할 수 없다. 시각 또는 Reaction event가 제품 요구가 되면 별도 Domain·Issue Gate에서 공개 계약을 확장해야 한다.
+- Confirmation / Follow-up: PROD-407 schema와 integration test에서 node가 기존 Profile이고 Reaction metadata field를 새로 노출하지 않는지 확인한다.
+
+### PROD-449는 fixture-first props 경계로 Reaction 요약 프레젠테이션을 전달한다
+
+- Decision Date: 2026-07-22
+- Decision Class: Implementation Choice
+- Authority / Provenance:
+  - `docs/domain/objects/reaction.md`
+  - `PROD-449`
+- Status: Active
+- Context / Problem: canonical Reaction 계약의 최종 UI는 viewer-independent Type별 count와 viewer-filtered Profile connection을 연결해 탐색해야 한다. PROD-449의 독립 전달 범위는 실제 Relay query·connection·modal/route 조립 전의 프레젠테이션과 상태 검증이므로, 이후 통합에도 재사용할 seam이 필요하다.
+- Decision Outcome: PROD-449는 props-only `ReactionSummary`와 props-only `ReactionProfileList` seam을 먼저 제공하고, PROD-418은 같은 seam에 실제 Post count query와 `reactionProfiles` connection을 연결한다. seam은 supplied count order를 보존하고 zero-count Type을 만들거나 제거·정렬·필터링하지 않으며, loading/empty/error/populated 상태와 selection·retry·pagination callback을 받을 수 있다. Profile row는 기존 `ProfileListItem`에 Relay `Profile` fragment ref를 전달해 재사용하며, Storybook은 raw `$key` cast 없이 Relay mock fragment ref를 사용한다.
+- Alternatives Considered: component 안에서 직접 Relay connection을 조회·페이지네이션하는 방식은 실제 connection과 cache/route 책임을 PROD-449에 앞당긴다. raw scalar로 새 Profile row를 만드는 방식은 기존 Avatar/name/handle/bio/Follow surface와 fragment contract를 중복한다.
+- Consequences: 실제 `Post` count query와 `reactionProfiles` connection, modal/route, selected Profile/viewer cache 통합은 PROD-418에 남는다. supplied order는 server가 제공한 count 내림차순과 동률 무보장 계약을 그대로 보존하며, component는 이를 재해석하지 않는다. 이 선택은 최종 `post-reaction-ui` spec을 축소하거나 대체하지 않으며, 나중에 되돌릴 중간 제품 계약이 아니다.
+- Confirmation / Follow-up: PROD-449는 fixture state, 복수 Type·동률, 기존 Profile row, callback interaction과 Relay mock fragment Storybook을 component 수준에서 검증한다. PROD-418은 같은 seam을 유지한 채 실제 query/connection, zero-count와 modal/route UX, cache 통합 및 최종 spec의 pagination 검증을 수행한다.
 
 ### Reaction Notification은 source 밖의 Best Effort projection으로 처리한다
 
@@ -124,11 +168,23 @@
 - Consequences: Account 또는 membership 변경과 core transaction 사이에는 context snapshot 기준의 짧은 시간차가 있을 수 있다. commit 시점의 membership 재검증이 필요해지면 transport identity를 core에 다시 결합하지 않고 entry point의 transaction-aware 검증으로 별도 설계한다.
 - Confirmation / Follow-up: core test는 Local/Profile/Instance/Post/Type/멱등성에 집중하고, API integration test는 비활성 Account와 membership 부재가 `PERMISSION_DENIED`로 거부되는지 검증한다. PROD-405 등 후속 mutation도 같은 책임 경계를 따른다.
 
+### Reaction 삭제는 관계의 global ID로 식별한다
+
+- Decision Date: 2026-07-21
+- Decision Class: Implementation Choice
+- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0012](../../../docs/domain/decisions/0012-post-interaction-followup-clarifications.md), [PROD-405](https://linear.app/byulmaru/issue/PROD-405/reaction을-삭제한다)
+- Status: Active
+- Context / Problem: PROD-405는 현재 Reaction Owner를 검증하면서 이미 제거한 관계의 반복·동시 삭제를 성공시켜야 한다. Profile/Post/Type 조합을 input으로 사용하면 오래된 삭제 재시도가 같은 조합으로 다시 생성된 새 Reaction까지 제거하는 ABA 문제가 생긴다.
+- Decision Outcome: GraphQL은 `deleteReaction(input: { id: ID! })`을 제공하고 concrete `Reaction` global ID만 허용한다. 성공 payload는 입력과 같은 `DeleteReactionPayload.reactionId: ID!`를 반환하며 실제 삭제 여부를 공개하지 않는다. service는 유효한 actor를 먼저 검증하고, 현재 행이 타인 소유면 `PERMISSION_DENIED`로 거부하며, Owner 행은 ID와 actor를 조건으로 삭제한다. 이미 없는 ID는 같은 ID를 반환하는 성공 no-op이다. Post visibility는 조회하지 않는다.
+- Alternatives Considered: `(postId, type)` input은 actor의 현재 조합만 주소화하지만 타인 소유 행 거부를 표현하지 못하고 오래된 요청의 ABA 삭제를 허용한다. soft delete나 idempotency ledger는 과거 Owner를 증명할 수 있지만 Reaction의 존재 기반 lifecycle과 현재 저장 범위를 확장한다.
+- Consequences: 존재하지 않는 Reaction ID의 성공은 과거 소유권을 증명하지 않지만 어떤 현재 행도 변경하지 않는다. 삭제 뒤 같은 조합으로 다시 생성된 Reaction은 새 ID를 가지므로 이전 요청에서 보호된다. Notification cleanup 연결과 필요한 service 결과 확장은 실제 caller를 구현하는 PROD-419가 소유한다.
+- Confirmation / Follow-up: GraphQL schema/payload, Owner·non-owner·unavailable Post, 이미 없는 ID, 반복·동시 요청과 삭제 후 같은 조합 재생성을 core/API test로 검증한다.
+
 ## Remaining Decisions
 
-- PROD-405: delete input/payload와 이미 제거한 관계를 식별할 stable key
-- PROD-407: Profile connection ordering·cursor와 Profile row 표시 범위
-- PROD-417/418: zero-count Type 공급 API, selector·Profile 목록 UX, optimistic update 사용 여부
+- PROD-417/418: zero-count Type 공급 API
+- PROD-417: selector optimistic update 사용 여부
+- PROD-418: Profile 목록 modal/route UX
 - PROD-413: multi-kind Notification visible projection의 `UNION ALL` 기본안과 `LEFT JOIN` 대안 중 최종 구현, PROD-277 Read/navigation 순서
 
 ## Superseded Decisions

@@ -12,7 +12,7 @@ import {
 } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import { reactionTypes } from '../validation';
-import { addReaction } from './reaction';
+import { addReaction, deleteReaction } from './reaction';
 
 after(async () => {
   await pg.end();
@@ -162,4 +162,95 @@ test('caller transaction이 rollback되면 추가한 Reaction도 남지 않는�
   );
 
   assert.equal(await countReactions(input.postId), 0);
+});
+
+test('Owner는 Post가 unavailable해져도 Reaction을 삭제하고 입력 ID를 반환한다', async () => {
+  const fixture = await createFixture();
+  const reaction = await addReaction({ ...fixture.input, type: '❤️' });
+  await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, fixture.post.id));
+
+  const result = await deleteReaction({
+    actorProfileId: fixture.profile.id,
+    reactionId: reaction.id,
+  });
+
+  assert.deepEqual(result, { reactionId: reaction.id });
+  assert.equal(await countReactions(fixture.post.id), 0);
+});
+
+test('반복·동시 삭제는 모두 입력 ID를 반환하는 성공으로 끝난다', async () => {
+  const fixture = await createFixture();
+  const reaction = await addReaction({ ...fixture.input, type: '🎉' });
+  const input = {
+    actorProfileId: fixture.profile.id,
+    reactionId: reaction.id,
+  };
+
+  const concurrent = await Promise.all(Array.from({ length: 4 }, () => deleteReaction(input)));
+  const repeated = await deleteReaction(input);
+
+  assert.equal(
+    concurrent.every(({ reactionId }) => reactionId === reaction.id),
+    true,
+  );
+  assert.equal(repeated.reactionId, reaction.id);
+  assert.equal(await countReactions(fixture.post.id), 0);
+});
+
+test('이미 없는 ID와 이전 ID의 재시도는 현재 Reaction을 제거하지 않는다', async () => {
+  const fixture = await createFixture();
+  const missingId = crypto.randomUUID();
+  const missing = await deleteReaction({
+    actorProfileId: fixture.profile.id,
+    reactionId: missingId,
+  });
+  assert.deepEqual(missing, { reactionId: missingId });
+
+  const first = await addReaction({ ...fixture.input, type: '👀' });
+  await deleteReaction({
+    actorProfileId: fixture.profile.id,
+    reactionId: first.id,
+  });
+  const recreated = await addReaction({ ...fixture.input, type: '👀' });
+  const staleRetry = await deleteReaction({
+    actorProfileId: fixture.profile.id,
+    reactionId: first.id,
+  });
+
+  assert.notEqual(recreated.id, first.id);
+  assert.equal(staleRetry.reactionId, first.id);
+  assert.deepEqual(await db.select().from(Reactions).where(eq(Reactions.id, recreated.id)), [
+    recreated,
+  ]);
+});
+
+test('타인 소유의 현재 Reaction과 유효하지 않은 actor 삭제를 거부한다', async () => {
+  const owner = await createFixture();
+  const attacker = await createFixture();
+  const invalidActors = await Promise.all([
+    createFixture({ instanceKind: InstanceKind.ACTIVITYPUB }),
+    createFixture({ instanceState: InstanceState.SUSPENDED }),
+    createFixture({ profileState: ProfileState.DISABLED }),
+  ]);
+  const reaction = await addReaction({ ...owner.input, type: '🌈' });
+
+  await assert.rejects(
+    deleteReaction({
+      actorProfileId: attacker.profile.id,
+      reactionId: reaction.id,
+    }),
+    PermissionDeniedError,
+  );
+  for (const invalidActor of invalidActors) {
+    await assert.rejects(
+      deleteReaction({
+        actorProfileId: invalidActor.profile.id,
+        reactionId: crypto.randomUUID(),
+      }),
+      PermissionDeniedError,
+    );
+  }
+  assert.deepEqual(await db.select().from(Reactions).where(eq(Reactions.id, reaction.id)), [
+    reaction,
+  ]);
 });
