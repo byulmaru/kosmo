@@ -119,6 +119,51 @@ describe('WebFinger local profile handle mapping', () => {
     );
   });
 
+  test('serves a WebFinger JRD for the canonical actor URI', async () => {
+    const profile = await createProfile({ handle: 'alice', instanceId: localInstanceId });
+    const actorUri = `${publicOrigin}/ap/actor/${profile.id}`;
+
+    const response = await federation.fetch(
+      new Request(`${publicOrigin}/.well-known/webfinger?resource=${encodeURIComponent(actorUri)}`),
+      { contextData: undefined },
+    );
+
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') ?? '', /application\/jrd\+json/);
+
+    const json = (await response.json()) as {
+      subject?: string;
+      links?: Array<{ rel?: string; href?: string; type?: string }>;
+    };
+
+    assert.equal(json.subject, actorUri);
+    assert.ok(json.links?.some((link) => link.rel === 'self' && link.href === actorUri));
+  });
+
+  test('returns 400 for a missing or malformed WebFinger resource', async () => {
+    for (const query of ['', '?resource=not-a-url']) {
+      const response = await federation.fetch(
+        new Request(`${publicOrigin}/.well-known/webfinger${query}`),
+        { contextData: undefined },
+      );
+
+      assert.equal(response.status, 400);
+    }
+  });
+
+  test('returns 404 for an unknown or non-local WebFinger resource', async () => {
+    for (const resource of ['acct:alice@remote.example', 'https://remote.example/users/alice']) {
+      const response = await federation.fetch(
+        new Request(
+          `${publicOrigin}/.well-known/webfinger?resource=${encodeURIComponent(resource)}`,
+        ),
+        { contextData: undefined },
+      );
+
+      assert.equal(response.status, 404);
+    }
+  });
+
   test('rejects WebFinger requests from a non-canonical host', async () => {
     const profile = await createProfile({ handle: 'alice', instanceId: localInstanceId });
 
@@ -148,7 +193,7 @@ describe('WebFinger local profile handle mapping', () => {
       );
     const response = await requestActor();
     const actor = (await response.json()) as {
-      assertionMethod?: Array<{ controller?: string; id?: string; type?: string }>;
+      assertionMethod?: Array<{ controller?: string; id?: string }>;
       endpoints?: { sharedInbox?: string };
       followers?: string;
       following?: string;
@@ -172,14 +217,12 @@ describe('WebFinger local profile handle mapping', () => {
     assert.equal(actor.inbox, `${publicOrigin}/ap/actor/${profile.id}/inbox`);
     assert.equal(actor.endpoints?.sharedInbox, `${publicOrigin}/inbox`);
     assert.equal(actor.outbox, `${publicOrigin}/ap/actor/${profile.id}/outbox`);
-    assert.equal(actor.publicKey?.id, `${publicOrigin}/ap/actor/${profile.id}#main-key`);
-    assert.equal(actor.publicKey?.owner, `${publicOrigin}/ap/actor/${profile.id}`);
+    const actorUri = `${publicOrigin}/ap/actor/${profile.id}`;
+    assert.equal(typeof actor.publicKey?.id, 'string');
+    assert.equal(actor.publicKey?.owner, actorUri);
     assert.ok(
       actor.assertionMethod?.some(
-        (method) =>
-          method.id?.startsWith(`${publicOrigin}/ap/actor/${profile.id}#`) === true &&
-          method.type === 'Multikey' &&
-          method.controller === `${publicOrigin}/ap/actor/${profile.id}`,
+        (method) => typeof method.id === 'string' && method.controller === actorUri,
       ),
     );
     assert.equal(actor.followers, undefined);

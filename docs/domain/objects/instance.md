@@ -52,15 +52,16 @@ Remote Instance를 구분하고, safety 정책, 통신 실패 관측, 서비스 
 | ------- | ----------------------- | ------------------- | ----------- | ------------------- | -------------------- | --------- |
 | Profile | [Profile](./profile.md) | Instance <- Profile | 1 -> 0..N   | Profile이 존재할 때 | 각 Profile 조회 정책 | 없음      |
 
-하나의 정규화된 Domain은 하나의 Instance만 식별하고 현재 Kosmo에는 Local Instance가 하나만 존재한다. 모든
-Profile은 Instance 하나와 연결되며 Profile Origin은 연결된 Instance Type과 같다. Post와 Media의 Instance는 각각
-Author Profile과 Media Profile에서 파생한다.
+하나의 정규화된 Domain은 하나의 Instance만 식별한다. Kosmo는 서로 다른 Domain의 Local Instance를 여러 개
+저장할 수 있으며, 현재 deployment가 사용하는 configured Local Instance는 배포 설정의 public origin과 일치하는
+Instance 하나로 결정한다. 모든 Profile은 Instance 하나와 연결되며 Profile Origin은 연결된 Instance Type과 같다.
+Post와 Media의 Instance는 각각 Author Profile과 Media Profile에서 파생한다.
 
 ## 행동
 
 | 행동                 | 행동 주체      | 대상 객체 | 입력값    | 권한                                 | 조건                                                                | 결과                                                                                     |
 | -------------------- | -------------- | --------- | --------- | ------------------------------------ | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Local Instance 등록  | 시스템         | Instance  | Domain    | `System.LocalInstanceSource`         | Local Instance가 없고 Domain이 현재 Kosmo Host다                    | Type=Local, Safety=Normal, Reachability=Reachable, Service=Active인 Instance가 생성된다  |
+| Local Instance 등록  | 시스템         | Instance  | Domain    | `System.LocalInstanceSource`         | 같은 Domain의 Instance가 없고 Domain이 Kosmo가 운영하는 Host다      | Type=Local, Safety=Normal, Reachability=Reachable, Service=Active인 Instance가 생성된다  |
 | Remote Instance 등록 | 시스템         | Instance  | Domain    | `System.RemoteInstanceSource`        | 같은 Domain의 Instance가 없고 원격 식별이 성공했다                  | Type=Remote, Safety=Normal, Reachability=Reachable, Service=Active인 Instance가 생성된다 |
 | Domain Limit 적용    | 운영자 Account | Instance  | 사유      | `Account.Active`, `Account.Operator` | Type이 Remote이고 Safety State가 Domain Limit이 아니다              | Safety State가 Domain Limit이 되고 Safety 사유가 기록된다                                |
 | Domain Block 적용    | 운영자 Account | Instance  | 사유      | `Account.Active`, `Account.Operator` | Type이 Remote이고 Safety State가 Domain Block이 아니다              | Safety State가 Domain Block이 되고 Safety 사유가 기록된다                                |
@@ -74,11 +75,11 @@ Author Profile과 Media Profile에서 파생한다.
 
 ## 권한
 
-| 권한                          | 종류 | 성립 조건                                    |
-| ----------------------------- | ---- | -------------------------------------------- |
-| `System.LocalInstanceSource`  | 독립 | 시스템이 현재 Kosmo Instance 설정의 원본이다 |
-| `System.RemoteInstanceSource` | 독립 | 시스템이 원격 Instance 식별 결과의 원본이다  |
-| `System.InstanceStateSource`  | 독립 | 시스템이 연결/서비스 상태 관측의 원본이다    |
+| 권한                          | 종류 | 성립 조건                                                |
+| ----------------------------- | ---- | -------------------------------------------------------- |
+| `System.LocalInstanceSource`  | 독립 | 시스템이 Kosmo가 운영하는 Local Instance 설정의 원본이다 |
+| `System.RemoteInstanceSource` | 독립 | 시스템이 원격 Instance 식별 결과의 원본이다              |
+| `System.InstanceStateSource`  | 독립 | 시스템이 연결/서비스 상태 관측의 원본이다                |
 
 ## 조회 정책
 
