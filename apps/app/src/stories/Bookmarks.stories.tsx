@@ -9,7 +9,7 @@ import { BookmarkConnectionList } from '@/components/bookmark/BookmarkConnection
 import { BookmarkList } from '@/components/bookmark/BookmarkList';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
-import { SessionProvider } from '@/session/SessionProvider';
+import { SessionErrorProvider, SessionProvider } from '@/session/SessionProvider';
 import { post, profile } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -166,6 +166,14 @@ function BookmarksRouteStory() {
     <SessionProvider>
       <BookmarksScreen />
     </SessionProvider>
+  );
+}
+
+function SessionErrorBookmarksRoute() {
+  return (
+    <SessionErrorProvider>
+      <BookmarksScreen />
+    </SessionErrorProvider>
   );
 }
 
@@ -440,6 +448,26 @@ export const NoSelectedProfileSkipsBookmarkQuery: Story = {
     await expect(within(canvasElement).findByText('프로필이 필요해요')).resolves.toBeVisible();
   },
   render: () => <BookmarksRouteStory />,
+};
+
+export const SessionErrorStillUsesBookmarkQuery: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        BookmarksPageQuery: {
+          data: {
+            currentSession: { id: 'bookmark-session', selectedProfile: bookmarkOwner },
+          },
+        },
+      },
+    },
+  },
+  render: () => <SessionErrorBookmarksRoute />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.findAllByRole('article')).resolves.toHaveLength(2);
+    expect(canvas.queryByText('프로필이 필요해요')).not.toBeInTheDocument();
+  },
 };
 
 export const InitialRouteErrorAndRetry: Story = {

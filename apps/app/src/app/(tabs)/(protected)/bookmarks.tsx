@@ -21,10 +21,10 @@ const BookmarksQuery = graphql`
 
 export default function BookmarksScreen() {
   const { revision } = useRelayActor();
-  const { selectedProfileId } = useSession();
+  const { selectedProfileId, status } = useSession();
   const [fetchKey, setFetchKey] = useState(0);
 
-  if (!selectedProfileId) {
+  if (status !== 'error' && !selectedProfileId) {
     return <BookmarkList profileRequired />;
   }
 
