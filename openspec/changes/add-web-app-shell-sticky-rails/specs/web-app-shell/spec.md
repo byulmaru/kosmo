@@ -44,6 +44,22 @@
 - **THEN** 해당 rail은 document scroll과 별도로 내부 overflow를 처리할 수 있다
 - **AND** rail 내부 overflow는 중앙 `main`을 internal scroller로 바꾸는 요구사항이 아니다
 
+### Requirement: Conditional right rail overflow
+
+**Authority / Provenance:** `docs/design/breakpoints.md`의 스크롤 소유권 계약과 [PROD-454](https://linear.app/byulmaru/issue/PROD-454/web-우측-컴포저-레일의-강제-스크롤바-표시를-제거한다)의 기대 결과·완료 조건에서 파생한다. Web 풀 3열 레이아웃의 우측 rail은 콘텐츠가 viewport 안에 들어오는 동안 overflow 정책만으로 가로·세로 scrollbar track, gutter 또는 corner를 강제로 만들어서는 안 된다(MUST NOT). 우측 rail은 가로 overflow를 허용해서는 안 되며(MUST NOT), 콘텐츠가 viewport보다 길어지면 세로 방향으로 계속 접근할 수 있어야 한다(MUST). 이 조건부 rail overflow는 document/window의 기본 scroll ownership과 grid flow 안의 sticky 배치를 유지해야 한다(MUST).
+
+#### Scenario: Do not force scrollbar chrome for a short right rail
+
+- **WHEN** Web 풀 3열 레이아웃의 우측 rail 콘텐츠가 viewport 안에 들어온다
+- **THEN** rail의 overflow 정책은 가로·세로 scrollbar track, gutter 또는 corner를 강제로 만들지 않는다
+- **AND** 우측 rail에 가로 overflow가 생기지 않는다
+
+#### Scenario: Keep a long right rail vertically accessible
+
+- **WHEN** Web 풀 3열 레이아웃의 우측 rail 콘텐츠가 viewport 높이보다 길다
+- **THEN** 사용자는 rail 내부의 긴 콘텐츠에 세로 방향으로 접근할 수 있다
+- **AND** 중앙 route는 document/window scroll을 기본으로 유지하며 우측 rail은 grid flow 안에서 sticky로 남는다
+
 ### Requirement: Mobile bottom tab overlap policy
 
 모바일 하단 탭은 safe-area를 포함한 fixed bottom chrome으로 유지되어야 한다(MUST). `(tabs)` 라우트 콘텐츠는 fixed bottom tab과 safe-area에 가려지지 않도록 하단 padding 또는 scroll padding을 제공해야 한다(MUST). 이 변경은 하단 탭 IA를 바꾸지 않아야 한다(MUST NOT).

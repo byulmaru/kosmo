@@ -10,7 +10,8 @@ PROD-394가 main에 merge되어 현재 `post` table은 nullable `repost_source_i
 
 - Repost와 Quote가 공유하는 direct Source 관계와 Active Repost 유일성의 저장 기반을 additive migration으로 도입한다.
 - 권한·visibility·멱등성을 지키는 Repost 생성과 Post Tombstone 취소를 제공한다.
-- Post Node, count, selected Profile 상태, Home/Profile 후보와 UI가 같은 Source eligibility를 사용한다.
+- Content 없는 Repost는 Source 접근 가능성을 자신의 eligibility에 포함하고, Content 있는 Quote는 Source와
+  독립적으로 자신의 Node·Content·목록 후보를 유지한다.
 - 기존 Notification projection·Node·inbox·Read·badge 경계에 Repost kind를 추가하고 실패를 source action과 격리한다.
 - 각 Linear 구현 이슈가 자기 구현과 테스트를 소유하고 부모가 최종 vertical flow와 archive를 검증하게 한다.
 
@@ -29,8 +30,10 @@ PROD-394가 main에 merge되어 현재 `post` table은 nullable `repost_source_i
 - PROD-394의 partial unique index는 현재 `state = ACTIVE`, `current_content_id IS NULL`, `repost_source_id IS NOT NULL` 조합을 Author/Source별로 제한한다. PROD-393의 Reply Parent가 merge되기 전에는 해당 column을 입력할 수 없으며, merge 뒤에는 Repost insert가 `reply_parent_id = null`을 유지하는지 다시 확인해야 한다.
 - 기존 `createPost` caller는 Local GraphQL content creation과 ActivityPub Note ingestion뿐이며 `content` non-null 반환을 기대한다. 단순히 모든 반환을 nullable로 넓히면 기존 caller contract가 불필요하게 약해진다.
 - 현재 `postVisibilityAccessWhere`는 API context와 전역 DB connection에 결합되어 core service가 직접 재사용할 수 없다. Local GraphQL entry는 Account.Active, Owner/Member membership과 Active/Normal Local actor를 검증하고, 공통 Repost action은 검증된 actor Profile의 가용성과 이번 action에 필요한 Source visibility 조건을 자체 transaction에서 검증하되 API helper를 core로 역참조하지 않아야 한다.
-- Source eligibility는 한 단계 검증으로 끝나지 않는다. Content가 있는 Quote를 또 다른 Repost/Quote의 Source로 사용할 수 있으므로 direct·indirect Source chain 전체가 viewer 기준으로 eligible해야 한다.
-- Node/Home/Profile/Bookmark가 공유하는 현재 Post visibility predicate에는 Source chain이 없다. PROD-430의 목록 변경을 Node나 다른 surface에 조용히 확장하면 구현 이슈 책임과 pagination 결과가 달라질 수 있다.
+- Source 접근 실패는 nullable 관계 field의 결과이며 Content 있는 Quote 자체의 eligibility를 바꾸지 않는다.
+  Content 없는 Repost만 직접 Source가 viewer 기준으로 조회 가능해야 한다.
+- Node/Home/Profile/Bookmark가 공유하는 현재 Post visibility predicate는 Post 자체를 판정한다. Source 조건을
+  전역 predicate에 추가하면 Quote와 Quote Content까지 잘못 숨기므로 구조별 조건을 분리해야 한다.
 - Repost count는 viewer-independent지만 Post Node와 `viewerRepost`는 viewer-dependent다. viewer의 block/mute 결과를 count에 섞으면 동일 Post의 count가 viewer마다 달라진다.
 - Notification connection/count/read와 client row는 Follow source에 하드코딩되어 있다. Repost를 join 하나만 덧붙이면 kind discriminator와 limit-before-filter가 어긋날 수 있다.
 - Home/Profile은 공용 Post list item fragment를 쓰지만 Post detail은 별도 fragment다. PROD-415는 목록 연결을 소유하고 detail/action surface 조립은 관련 이슈 경계를 존중해야 한다.
@@ -40,7 +43,10 @@ PROD-394가 main에 merge되어 현재 `post` table은 nullable `repost_source_i
 1. 완료된 PROD-394의 nullable `repost_source_id`, Active contentless Repost partial unique index와 migration 검증을 저장 경계로 재사용한다. 기존 `createPost`의 contentful Local/ActivityPub 계약과 non-null Content 반환은 변경하지 않는다.
 2. PROD-401은 Local GraphQL entry와 공통 Repost action을 하나의 transaction으로 조합한다. GraphQL entry는 Account.Active, Owner/Member membership과 Active/Normal Local actor를 검증하고, core action은 `actorProfileId`와 `sourcePostId`만 받아 Active Profile과 Suspended가 아닌 Instance라는 공통 actor 가용성, Source visibility/eligibility, derived visibility와 duplicate/concurrent idempotency를 소유한다. insert conflict가 발생하지 않게 미리 조회하는 것만으로 동시성을 보장하지 않고, DB conflict 뒤 기존 Active Repost를 다시 조회해 성공 결과로 정규화한다. 이 입력 경계는 검증된 Remote actor도 재사용할 수 있지만 ActivityPub ingress·delivery는 구현하지 않는다. Quote Source 연결은 실제 Quote 작성 action이 생기는 후속 작업에서 소유한다.
 3. PROD-402·403은 direct `repostSource`와 batched count/selected Profile relation loader를 추가한다. viewer-independent count query와 viewer-relative Node loader를 분리한다.
-4. Post Node와 목록 query는 full Source chain eligibility를 SQL recursive CTE 또는 동등한 단일-query predicate로 판정한다. Home/Profile connection은 hidden source 후보를 page limit 전에 제거한다. Source link는 생성 때 정해진 direct relation을 그대로 유지하고 flatten하지 않는다.
+4. Post Node와 목록 query는 Content 없는 Repost에만 direct Source visibility/eligibility를 적용하고 hidden
+   Source Repost 후보를 page limit 전에 제거한다. Quote는 자신의 visibility/eligibility로 반환하며 nullable
+   `repostSource`는 direct Source를 독립 조회해 unavailable이면 `null`로 정규화한다. Source link는 생성 때
+   정해진 direct relation을 그대로 유지하고 flatten하지 않는다.
 5. PROD-411은 Author와 Active 상태를 한 transaction에서 확인해 Post를 Tombstone으로 전이하고 최초 `deletedAt`과 `repostSourceId`를 보존한다. 일반 Post 삭제 경계를 재사용하되 이 slice는 Repost 취소·멱등성·유일성 해제를 검증한다.
 6. PROD-453은 production fragment 형태를 따르는 Relay fixture/Storybook으로 Repost·Quote presentation과 mock navigation을 먼저 검증한다. PROD-415는 공용 list item fragment에 결과를 연결하고, PROD-414는 별도 Repost action fragment/mutations와 normalized payload로 actor Store를 갱신한다.
 7. PROD-412는 기존 Notification table에 `REPOST` kind를 추가하고 source-only create 경계에서 Recipient·Related Profile·Related Post를 파생한다. kind별 visible projection을 connection/count/Node/Read에서 공통 조립하고, client는 concrete inline fragment로 Source Post 이동과 Read/cache를 처리한다.
@@ -48,7 +54,8 @@ PROD-394가 main에 merge되어 현재 `post` table은 nullable `repost_source_i
 
 ### Allowed Alternatives
 
-- Source chain을 정확히 끝까지 판정하고 pagination 전에 적용한다면 recursive CTE를 캡슐화한 SQL helper, query builder fragment 또는 동등한 set-based query를 사용할 수 있다.
+- Content 없는 Repost의 direct Source 접근 조건은 alias 가능한 SQL helper, query builder fragment 또는
+  동등한 set-based query로 캡슐화할 수 있다.
 - PROD-401의 duplicate 정규화는 `ON CONFLICT DO NOTHING` 뒤 기존 identity를 조회하거나, partial unique index 위반만 식별해 savepoint 밖에서 기존 identity를 다시 조회하는 방식 중 transaction을 실패 상태로 남기지 않는 쪽을 사용할 수 있다.
 - Notification mixed-kind projection은 kind별 `UNION ALL` 또는 nullable join과 discriminator별 predicate로 구성할 수 있다. 어느 방식이든 filter-before-limit, concrete typename route와 Recipient 기준 visibility를 만족해야 한다.
 - Repost·Quote Source preview는 공용 leaf fragment component로 분리하거나 list item 안에 유지할 수 있다. 실제 재사용 경계와 중첩 Link 회피가 확인되는 쪽을 선택한다.
@@ -59,7 +66,10 @@ PROD-394가 main에 merge되어 현재 `post` table은 nullable `repost_source_i
 - `content === null`만으로 Repost를 판별하지 않는다. Repost는 non-null Repost Source와 no Reply Parent까지 함께 만족해야 한다.
 - 기존 contentful `createPost` 입력·반환을 nullable Repost 용도로 넓히거나 API context 전용 visibility helper를 core service에서 import하지 않는다.
 - Repost Source를 Source의 Source로 평탄화하거나 source snapshot을 저장하지 않는다.
-- self-reference 거부만으로 source 유효성 검증을 끝내지 않는다. Content 없는 Repost, Tombstone, 권한 없는 Source와 indirect unavailable Source를 구분한다.
+- self-reference 거부만으로 Source 유효성 검증을 끝내지 않는다. 생성 시 Content 없는 Repost Source,
+  Tombstone과 권한 없는 Source를 거부하고, 조회 시 Repost와 Quote의 unavailable Source 결과를 구분한다.
+- 전역 Post/PostContent loader에 Source 접근 조건을 적용해 Source가 unavailable인 Quote와 자체 Content를
+  함께 숨기지 않는다.
 - count에 viewer block/mute를 적용하거나 resolver별 count query를 실행해 viewer-dependent 값 또는 N+1을 만들지 않는다.
 - hidden Repost/Notification을 page limit 뒤 application filtering해 짧은 page와 cursor 누락을 만들지 않는다.
 - Tombstone에서 `repost_source_id`를 null로 만들거나 Source Tombstone에 cascade delete를 적용하지 않는다.
@@ -69,7 +79,8 @@ PROD-394가 main에 merge되어 현재 `post` table은 nullable `repost_source_i
 
 ## Risks / Trade-offs
 
-- [Source chain recursive query 비용] → direct Source index와 실행 계획을 검증하고 Node batch/list query에서 set-based로 평가한다. 임의 깊이 제한은 제품 계약 없이 도입하지 않는다.
+- [Content 없는 Repost의 Source join 비용] → direct Source index와 실행 계획을 검증하고 Node batch/list
+  query에서 page limit 전에 set-based로 평가한다.
 - [nullable self-reference와 partial index의 migration lock] → additive migration으로 분류하고 실제 기존 schema와 migration test에서 catalog, lock 범위와 기존 row 보존을 확인한다.
 - [동시 Source Tombstone과 Repost 생성] → 명시적 row lock을 추가하지 않고 transaction 시점의 Source 검증과 Post eligibility를 사용한다. 이후 Source가 Tombstone이면 생성된 Repost는 조회 후보에서 사라지며 관계는 보존된다.
 - [Notification 기반 change와 archive 순서] → `add-in-app-notifications`의 실제 schema/API 기반이 완료된 뒤 PROD-412/416을 구현하고, 그 change를 authority로 사용하지 않으며 canonical·Linear 계약을 독립 대조한다.

@@ -25,7 +25,8 @@
 - Context / Problem: 중첩 Quote와 Tombstone 뒤에도 사용자가 실제로 선택한 Source 관계를 잃지 않아야 한다.
 - Decision Outcome: Repost와 Quote는 입력 Source Post를 직접 참조하고 Source의 Source로 평탄화하지 않는다. Repost 또는 Source가 Tombstone이 되어도 저장 관계를 제거하거나 다른 Post로 바꾸지 않는다.
 - Alternatives Considered: 최상위 Source로 평탄화, Source snapshot 저장, Tombstone cascade/nullification. 모두 direct 관계와 lifecycle 계약을 잃는다.
-- Consequences: 조회 계층이 unavailable Source chain을 숨기며, 저장 계층은 관계 보존과 조회 eligibility를 분리한다.
+- Consequences: 조회 계층은 Content 없는 Repost와 Content 있는 Quote를 구분하고 unavailable Source 관계만
+  숨기며, 저장 계층은 관계 보존과 조회 eligibility를 분리한다.
 - Confirmation / Follow-up: PROD-394 migration DB test에서 direct ID와 Tombstone 뒤 관계 보존을 검증하고, 후속 action과 Post Node·목록 integration에서 생성·조회 정책을 검증한다.
 
 ### Active Repost 유일성은 partial unique index와 멱등 core 경계가 함께 보장한다
@@ -52,17 +53,27 @@
 - Consequences: API와 Relay fragments는 concrete Post global ID를 유지하고, mutation payload는 Source Post의 count/viewer 상태를 normalized cache가 갱신할 수 있게 함께 제공해야 한다.
 - Confirmation / Follow-up: GraphQL schema snapshot, Node/field/mutation integration과 client Relay compile·cache 테스트에서 확인한다.
 
-### Source chain eligibility는 깊이 제한 없이 set-based로 평가한다
+### Source 접근 실패는 Repost와 Quote에 다르게 적용한다
 
-- Decision Date: 2026-07-21
-- Decision Class: Implementation Choice
+- Decision Date: 2026-07-23
+- Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-389`, `PROD-402`, `PROD-430`
 - Status: Active
-- Context / Problem: Quote는 또 다른 Quote의 Source가 될 수 있어 direct Source 한 단계만 검사하면 indirect Tombstone 또는 unavailable Source를 가진 Post가 노출될 수 있다.
-- Decision Outcome: Post Node와 Home/Profile 후보는 direct·indirect Repost Source chain 전체의 Post Visibility와 Post Eligibility를 recursive CTE 또는 동등한 set-based query로 평가한다. 임의 최대 깊이를 두지 않고 hidden 후보는 page limit 전에 제외한다.
-- Alternatives Considered: direct Source만 검사, application 반복 query, 고정 depth. direct-only와 고정 depth는 canonical chain을 잘못 노출하고 반복 query는 N+1과 pagination drift를 만든다.
-- Consequences: query plan과 Source index를 검증해야 하며, Post 생성 시 direct relation이 기존 Post만 가리키는 구조를 이용해 cycle 없는 traversal을 유지한다.
-- Confirmation / Follow-up: nested Quote, indirect Tombstone, mixed visibility와 page boundary integration test 및 query plan을 검증한다.
+- Context / Problem: Source를 조회할 수 없다는 이유로 Content 있는 Quote까지 숨기면 Quote Author가 작성한
+  독립 Content와 Visibility가 Source lifecycle에 종속된다. 반면 Content 없는 Repost는 Source 없이 표시할
+  내용이 없다.
+- Decision Outcome: Content 없는 Repost는 direct Source가 viewer 기준 Post Visibility와 Post Eligibility를
+  통과할 때만 Node와 목록 후보로 반환한다. Content 있는 Quote와 Reply+Quote는 자신의 조회 정책을 통과하면
+  Source와 무관하게 반환하고, direct Source를 조회할 수 없으면 nullable `repostSource`만 `null`로 반환한다.
+  Source의 Source까지 재귀 판정해 바깥 Quote를 숨기지 않는다.
+- Alternatives Considered: Repost와 Quote 모두 전체 Source chain으로 제외, 두 구조 모두 Source와 독립
+  노출. 전자는 Quote Content를 Source lifecycle에 종속시키고 후자는 내용 없는 Repost를 불완전하게
+  노출하므로 사용하지 않는다.
+- Consequences: 전역 Post/PostContent loader에는 Source 조건을 적용하지 않는다. Content 없는 Repost 후보
+  query만 direct Source를 page limit 전에 검증하고 `repostSource` relation loader는 직접 Source를 독립
+  조회한다.
+- Confirmation / Follow-up: PROD-402는 unavailable Source의 Repost 제외와 Quote 유지·nullable Source를,
+  PROD-430은 mixed Repost/Quote pagination을 검증한다.
 
 ### Repost count와 viewer relation query를 분리한다
 

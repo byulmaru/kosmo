@@ -69,7 +69,6 @@ const findVisiblePost = async (
       currentContentId: Posts.currentContentId,
       id: Posts.id,
       profileId: Posts.profileId,
-      repostSourceId: Posts.repostSourceId,
       visibility: Posts.visibility,
     })
     .from(Posts)
@@ -147,24 +146,6 @@ export const repostPost = async (
       visibility = PostVisibility.FOLLOWERS;
     } else {
       throw new ValidationError('Post cannot be reposted', { field: 'sourceId' });
-    }
-
-    const visited = new Set([source.id]);
-    let nestedSourceId = source.repostSourceId;
-    while (nestedSourceId !== null) {
-      if (visited.has(nestedSourceId)) {
-        throw new NotFoundError('Post not found');
-      }
-      visited.add(nestedSourceId);
-
-      const nestedSource = await findVisiblePost(tx, {
-        actorProfileId,
-        postId: nestedSourceId,
-      });
-      if (!nestedSource || nestedSource.currentContentId === null) {
-        throw new NotFoundError('Post not found');
-      }
-      nestedSourceId = nestedSource.repostSourceId;
     }
 
     const inserted = await tx

@@ -76,22 +76,28 @@ Repost와 Quote가 같은 nullable direct Repost Source를 저장할 수 있게 
 
 **Deliverable**
 
-기존 단일 GraphQL `Post` Node가 Repost와 Quote의 nullable direct `repostSource`를 제공하고 unavailable Source chain을 가진 Post를 노출하지 않는다.
+기존 단일 GraphQL `Post` Node가 Repost와 Quote의 nullable direct `repostSource`를 제공한다. unavailable
+Source를 가진 Content 없는 Repost는 숨기고 Content 있는 Quote는 자체 Content와 함께 유지한다.
 
 **Guardrails**
 
 - Source를 평탄화하거나 별도 concrete Post type으로 노출하지 않는다.
-- direct·indirect Source chain 전체의 viewer 기준 visibility와 eligibility를 적용한다.
-- incomplete Post를 노출한 뒤 `repostSource`만 null로 숨기지 않는다.
+- Content 없는 Repost는 direct Source의 viewer 기준 visibility와 eligibility를 적용한다.
+- Content 있는 Quote와 Reply+Quote는 Source와 독립적으로 유지하고 unavailable direct Source는
+  `repostSource: null`로 반환한다.
+- 전역 Post/PostContent 조회 경계에 Source 조건을 적용하지 않는다.
 - resolver별 반복 조회로 N+1을 만들지 않는다.
 
 **Verification**
 
-- Repost·Quote·Reply+Quote direct Source, nested Quote, direct/indirect Tombstone·권한 실패, Node/global ID와 fragment 호환을 GraphQL integration test로 검증한다.
+- Repost·Quote·Reply+Quote direct Source, unavailable Source의 Repost 제외와 Quote Content 유지,
+  nested Quote의 독립 nullable Source, Node/global ID와 fragment 호환을 GraphQL integration test로 검증한다.
 
 - [ ] 3.1 기존 Post Node에 nullable direct `repostSource` field와 batched loading을 추가한다.
-- [ ] 3.2 Source chain 전체의 visibility·eligibility를 Post Node 조회 경계에 적용한다.
-- [ ] 3.3 direct/nested Source, unavailable chain과 기존 Post Node 회귀 검증을 추가하고 API check를 통과시킨다.
+- [ ] 3.2 Content 없는 Repost에는 direct Source eligibility를 적용하고 Quote는 nullable direct Source와
+      독립적으로 유지한다.
+- [ ] 3.3 direct/nested Source, unavailable Source의 Repost·Quote 분리와 기존 Post Node 회귀 검증을
+      추가하고 API check를 통과시킨다.
 
 ## 4. PROD-403 Repost count와 현재 Profile의 Active Repost 조회
 
@@ -132,22 +138,27 @@ Post가 모든 viewer에게 같은 direct Active Repost count와 현재 selected
 
 **Deliverable**
 
-Home과 Profile Post List가 Repost Author와 전체 Source chain의 visibility·eligibility를 적용해 Repost 후보를 pagination 전에 선택한다.
+Home과 Profile Post List가 Content 없는 Repost의 Author와 direct Source visibility·eligibility를 적용해
+Repost 후보를 pagination 전에 선택하고, Content 있는 Quote는 자신의 조회 정책으로 선택한다.
 
 **Guardrails**
 
 - Home은 viewer 또는 followee Repost, Profile은 Target Profile Repost만 포함한다.
 - Reply Parent가 있는 Post는 Profile 목록에서 제외하고 Hashtag 목록에는 Content 없는 Repost를 포함하지 않는다.
-- hidden Source 후보를 page limit 뒤 application filtering하지 않는다.
+- hidden Source를 가진 Content 없는 Repost를 page limit 뒤 application filtering하지 않는다.
+- unavailable Source를 이유로 Content 있는 Quote를 제외하지 않는다.
 - 렌더링, action과 Notification을 포함하지 않는다.
 
 **Verification**
 
-- Home/Profile 작성자·팔로우 관계, Repost/Quote/Reply 후보, unavailable direct·indirect Source와 cursor page boundary를 API integration test로 검증한다.
+- Home/Profile 작성자·팔로우 관계, Repost/Quote/Reply 후보, unavailable direct Source의 Repost 제외와
+  Quote 유지 및 cursor page boundary를 API integration test로 검증한다.
 
-- [ ] 5.1 canonical Home/Profile 후보와 full Source chain eligibility를 기존 connection query에 적용한다.
+- [ ] 5.1 canonical Home/Profile 후보와 Content 없는 Repost의 direct Source eligibility를 기존 connection
+      query에 적용한다.
 - [ ] 5.2 Hashtag 목록의 Content 없는 Repost 제외와 Source Hashtag 비상속을 보존한다.
-- [ ] 5.3 mixed candidate pagination, unavailable Source filter-before-limit와 기존 목록 회귀 검증을 추가하고 API check를 통과시킨다.
+- [ ] 5.3 mixed candidate pagination, unavailable Source의 Repost filter-before-limit·Quote 유지와 기존
+      목록 회귀 검증을 추가하고 API check를 통과시킨다.
 
 ## 6. PROD-411 Repost 취소
 

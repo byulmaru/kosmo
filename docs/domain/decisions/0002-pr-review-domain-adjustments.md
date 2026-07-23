@@ -10,7 +10,8 @@ Accepted
 
 중첩 Repost 평탄화 결정은 [ADR 0010](./0010-post-interaction-contracts.md)의 직접 Source 참조와 Repost 입력
 거절 결정으로 대체되었다. Kind 기반 Post 구조와 목록 후보 판별은
-[ADR 0014](./0014-post-structure-relations.md)의 관계 조합 결정으로 대체되었다. 나머지 결정은 유지한다.
+[ADR 0014](./0014-post-structure-relations.md)의 관계 조합 결정으로 대체되었다. Quote Eligibility의 Source
+조회 가능성 의존은 2026-07-23 정정으로 제거되었다. 나머지 결정은 유지한다.
 
 ## 결정
 
@@ -24,8 +25,9 @@ Accepted
 - Mentioned Profiles Post는 Repost할 수 없다.
 - Repost 입력이 Repost면 그 Repost의 Source를 사용해 중첩 Repost를 평탄화한다. Repost Source는 Original,
   Reply 또는 Quote Post다.
-- Quote는 자체 본문 또는 Media와 Quote Source를 가지고 Kind가 Quote인 Post다. Quote 입력은 Source Kind와
-  관계없이 입력 Post 자체를 참조하며, Quote Eligibility는 Quote Source 조회 가능성도 요구한다.
+- Quote는 자체 Content와 Repost Source를 함께 가진 Post다. Quote 입력은 Source 구조와 관계없이 입력 Post
+  자체를 직접 참조한다. Quote와 Reply이면서 Quote인 Post는 Source를 조회할 수 없어도 자체 Content,
+  Visibility와 Eligibility를 기준으로 후보를 유지하며 Repost Source 관계만 표시하지 않는다.
 - Reaction은 같은 Post/Profile/Emoji 조합에 하나만 존재하며 다른 Emoji Reaction은 함께 존재할 수 있다.
 - Post 본문은 500자 이하이고 Media가 있으면 비어 있을 수 있다.
 - 게시 후 Post Visibility와 Attached Media 관계는 바꾸지 않는다.
@@ -42,7 +44,8 @@ Accepted
 
 ## 문서 반영
 
-- [Post](../objects/post.md)는 본문, Post Kind, Post Visibility, Content Warning, Sensitive Media를 정의한다.
+- [Post](../objects/post.md)는 Content, Reply Parent와 Repost Source의 관계 조합, Post Visibility, Content
+  Warning, Sensitive Media와 Post Eligibility를 정의한다.
 - [Media](../objects/media.md)는 이미지 중심의 Media와 Alt Text를 정의한다.
 - [Post List Policy](../policies/post-list.md)는 후보 합성과 제어 결정을 정의한다.
 - [Notification](../objects/notification.md)은 개별 알림과 Read State만 소유한다.

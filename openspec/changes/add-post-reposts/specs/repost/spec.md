@@ -108,11 +108,17 @@
 - **THEN** API는 저장된 직접 Source를 기존 `Post` Node로 반환한다
 - **AND** 중첩 Source를 다른 Post로 평탄화하지 않는다
 
-#### Scenario: Source를 조회할 수 없는 Post
+#### Scenario: Source를 조회할 수 없는 Repost
 
-- **WHEN** Repost Source 또는 그 Source chain이 Tombstone이거나 요청 viewer 기준 Post Visibility와 Post Eligibility를 통과하지 못한다
-- **THEN** API는 해당 Repost 또는 Quote를 Post Node와 Post List 후보로 노출하지 않는다
-- **AND** nullable `repostSource`만 숨긴 채 불완전한 Repost 또는 Quote를 대신 노출하지 않는다
+- **WHEN** Content 없는 Repost의 direct Source가 Tombstone이거나 요청 viewer 기준 Post Visibility와 Post Eligibility를 통과하지 못한다
+- **THEN** API는 해당 Repost를 Post Node와 Post List 후보로 노출하지 않는다
+
+#### Scenario: Source를 조회할 수 없는 Quote
+
+- **WHEN** Content 있는 Quote 또는 Reply이면서 Quote인 Post 자체는 조회 가능하지만 direct Source는 조회할 수 없다
+- **THEN** API는 Quote Post와 자체 Content를 Post Node와 Post List 후보로 유지한다
+- **AND** nullable `repostSource`만 `null`로 반환한다
+- **AND** Source의 Source가 unavailable하다는 이유로 바깥 Quote를 숨기지 않는다
 
 #### Scenario: viewer-independent Repost count
 

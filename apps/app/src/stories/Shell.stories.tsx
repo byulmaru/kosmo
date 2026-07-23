@@ -849,16 +849,25 @@ export const UniversalFull: Story = {
   parameters: universalParameters,
   play: async ({ canvasElement }) => {
     const view = canvasElement.ownerDocument.defaultView;
-    let rail: HTMLElement | null = within(canvasElement).getByRole('navigation', {
+    const canvas = within(canvasElement);
+    let leftRail: HTMLElement | null = canvas.getByRole('navigation', {
       name: '주요 메뉴',
     });
 
-    while (rail && view?.getComputedStyle(rail).position !== 'sticky') {
-      rail = rail.parentElement;
+    while (leftRail && view?.getComputedStyle(leftRail).position !== 'sticky') {
+      leftRail = leftRail.parentElement;
     }
 
-    expect(rail).not.toBeNull();
-    expect(rail?.getBoundingClientRect().height).toBeLessThanOrEqual(view?.innerHeight ?? 0);
+    const rightRail = canvas.getByLabelText('새 게시글 작성').parentElement;
+    const rightRailStyle = rightRail ? view?.getComputedStyle(rightRail) : undefined;
+
+    expect(leftRail).not.toBeNull();
+    expect(leftRail?.getBoundingClientRect().height).toBeLessThanOrEqual(view?.innerHeight ?? 0);
+    expect(rightRail).not.toBeNull();
+    expect(rightRailStyle?.position).toBe('sticky');
+    expect(rightRailStyle?.overflowX).toBe('hidden');
+    expect(rightRailStyle?.overflowY).toBe('auto');
+    expect(rightRail?.scrollWidth ?? 1).toBeLessThanOrEqual(rightRail?.clientWidth ?? 0);
   },
   render: () => (
     <View style={{ height: 1800 }}>
