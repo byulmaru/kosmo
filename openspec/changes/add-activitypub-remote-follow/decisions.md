@@ -4,6 +4,18 @@
 
 ## Decision Records
 
+### Remote Follow은 Fedify 결과 계약만 소유하고 공통 discovery를 수정하지 않는다
+
+- Decision Date: 2026-07-23
+- Decision Class: Derived Contract
+- Authority / Provenance: [PROD-241](https://linear.app/byulmaru/issue/PROD-241)의 공통 actor-scoped/shared inbox와 activity-neutral delegation 계약, current active `activitypub-actor-discovery`, [PROD-361](https://linear.app/byulmaru/issue/PROD-361)의 최종 정합성 결정에서 파생한다.
+- Status: Active
+- Context / Problem: legacy Remote Follow delta가 actor document, key identifier, endpoint 404와 handler 목록을 다시 정의하고, protocol/data-model/profile requirement가 Fedify accessor·option·context 표현을 반복해 같은 신뢰 경계를 유지하는 라이브러리 변경까지 capability 위반으로 만들었다.
+- Decision Outcome: 이 change는 `activitypub-actor-discovery` delta를 소유하지 않는다. Remote Follow은 Fedify가 제공하는 inbox, signature, key와 delivery 경계를 재사용하고, normative contract에는 trusted typed Follow, verified local delivery target, actor/object/generation 검증과 projection 결과만 둔다. `getObject()`, `crossOrigin`, inbox context와 delivery option 같은 현재 API 선택은 design과 adapter test에서 검증한다. Profile은 GraphQL payload와 post-commit failure isolation을, data model은 저장 identity와 transport metadata 비저장만 소유한다.
+- Alternatives Considered: legacy actor-discovery delta 유지, key identifier만 최신 값으로 수정, 모든 Fedify 경계 문구 제거.
+- Consequences: current main runtime, migration, GraphQL과 Web 동작은 바뀌지 않는다. Fedify가 같은 보안·delivery 보장을 다른 API로 제공해도 normative spec을 다시 수정할 필요가 없고, 공통 discovery 계약은 다른 activity capability와 독립적으로 유지된다.
+- Confirmation / Follow-up: Remote Follow delta에 actor-discovery modification과 Fedify accessor/option 표현이 남지 않는지 확인하고 strict OpenSpec validation 및 기존 Fedify adapter/integration test를 통과시킨다.
+
 ### Web follow action은 mutation의 established/pending 결과를 구분한다
 
 - Decision Date: 2026-07-18

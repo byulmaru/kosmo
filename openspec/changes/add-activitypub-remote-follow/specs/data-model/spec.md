@@ -61,18 +61,12 @@
 - **WHEN** local profile이 remote ActivityPub profile을 follow하고 outbound Follow activity를 보낸다
 - **THEN** 시스템은 outbound Follow activity identity를 configured canonical origin과 `ProfileFollow` 또는 `ProfileFollowRequest` id에서 파생해야 한다
 - **AND** actor/object URI는 저장된 follower/followee actor identity에서, generation timestamp는 해당 row의 immutable createdAt에서 파생해야 한다
-- **AND** remote Accept 또는 Reject에서 Fedify의 기본 cross-origin 검증을 통과한 typed Follow가 kosmo outbound Follow URI를 id로 포함하면 그 URI가 현재 저장된 outbound Follow identity와 일치해야 기존 follow 관계에 대응시킬 수 있어야 한다
-- **AND** 시스템은 cross-origin embedded Follow를 신뢰하도록 Fedify origin 검증을 우회하지 않아야 하며, authoritative origin에서 조회되지 않은 cross-origin object는 follow graph/request side effect 없이 무시할 수 있어야 한다
-- **AND** Fedify가 typed object로 제공한 Follow에 kosmo outbound Follow URI가 없으면 remote Follow id를 compatibility hint로만 취급하고 actor/object가 relation과 저장된 actor identity에서 파생한 actor/object와 일치하며 Follow의 `published`가 현재 request/relation의 immutable `createdAt`과 정확히 일치할 때만 기존 follow generation에 대응시킬 수 있어야 한다
-- **AND** Fedify가 Accept 또는 Reject object를 typed Follow로 제공하지 못하면 시스템은 IRI-only object를 relation/request로 역조회하지 않고 follow graph/request side effect 없이 무시할 수 있어야 한다
-- **AND** remote `Reject.published`와 local 수신 시각은 outbound Follow generation 또는 Reject freshness 판정에 사용하지 않아야 한다
 - **AND** outbound Follow activity identity는 생성된 request 또는 relation id에서 파생한 kosmo outbound Follow URI여야 한다
 - **AND** outbound Follow activity identity는 follower actor URI와 followee actor URI만으로 파생하지 않고 새 logical outbound Follow activity마다 고유해야 한다
 - **AND** outbound Follow activity identity는 kosmo가 발송하는 Follow/Undo transport identity로 안정적이어야 하지만, remote server가 후속 Accept/Reject object에서 이 identity를 보존한다는 것을 필수 전제로 삼지 않는다
-- **AND** Fedify `orderingKey`는 follower actor URI와 followee actor URI pair에서 안정적으로 파생되어 같은 pair의 모든 outbound Follow와 Undo(Follow)에 재사용되어야 한다
-- **AND** 후속 Fedify transport retry는 같은 request 또는 relation row에서 같은 Follow activity identity를 다시 파생할 수 있어야 한다
+- **AND** 후속 transport retry가 필요해도 같은 request 또는 relation row에서 같은 Follow activity identity를 다시 파생할 수 있어야 한다
 - **AND** PROD-244 outbound mutation은 APPROVAL_REQUIRED remote `ProfileFollowRequest`를 만들며, inbound remote request 생성은 PROD-243이, local request 생성과 local/remote 공통 처리 lifecycle은 PROD-272가 별도 경계에서 다룬다
-- **AND** Fedify delivery queue/retry 설정과 운영 검증은 후속 capability 범위이며, transport delivery retry와 queue 상태는 도메인 테이블에 중복 저장하지 않는다
+- **AND** delivery ordering, retry, queue와 history 같은 transport metadata는 도메인 테이블에 중복 저장하지 않는다
 
 #### Scenario: Project inbound remote Follow without correlation storage
 
@@ -85,7 +79,7 @@
 - **AND** inbound `Undo(Follow)`는 Follow id를 저장하거나 비교하지 않고 verified same actor/object이면 현재 관계 또는 request를 취소하는 의사로 처리할 수 있어야 한다
 - **AND** relation/request 삭제는 처리 중 확인한 exact row가 일치할 때만 적용되고, established relation을 실제 삭제한 transaction만 저장 count를 감소시켜야 한다
 - **AND** IRI-only `Undo.object`는 이번 capability에서 relation/request로 역조회하지 않고 follow graph/request side effect 없이 무시할 수 있어야 하며, 저장된 actor instance의 reachability 복구는 이 제한에 포함하지 않는다
-- **AND** Fedify inbox idempotency는 조기 중복 제거로만 사용하고, durable relation/request side effect는 PostgreSQL unique 제약과 exact-row 조건이 source of truth여야 한다
+- **AND** transport의 조기 중복 제거와 무관하게 durable relation/request side effect는 PostgreSQL unique 제약과 exact-row 조건이 source of truth여야 한다
 
 #### Scenario: Remove rejected remote follow projection
 
@@ -113,6 +107,5 @@
 
 - **WHEN** 팔로우 관계가 ActivityPub remote profile을 포함한다
 - **THEN** inbound Follow는 별도 activity identity나 actor/object metadata 없이 actor pair의 `ProfileFollow` 관계 또는 inbound `ProfileFollowRequest` 요청으로 투영해야 한다
-- **AND** outbound Follow identity, actor/object URI, generation과 Fedify `orderingKey`는 established `ProfileFollow`와 저장된 actor identity에서 안정적으로 파생할 수 있어야 한다
-- **AND** Accept, Reject, Undo activity identity의 durable history 저장은 이번 domain table 요구사항이 아니며 Fedify idempotency 또는 후속 activity log capability의 책임이다
-- **AND** transport delivery retry와 queue metadata는 Fedify가 소유하며 local-only follow 관계의 필수 값이 아니다
+- **AND** outbound Follow identity, actor/object URI와 generation은 established `ProfileFollow`와 저장된 actor identity에서 안정적으로 파생할 수 있어야 한다
+- **AND** Accept, Reject, Undo activity identity의 durable history와 delivery ordering, retry, queue metadata는 이번 domain table 요구사항이 아니다
