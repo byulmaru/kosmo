@@ -17,6 +17,10 @@ Read query / loader -------------------------------------> packages/core/db
 core는 GraphQL context·payload·Global ID, HTTP session, ActivityPub object처럼 특정 진입점에서만 의미가
 있는 타입이나 표현을 알지 않는다.
 
+Protocol별 post-commit side effect는 진입점이나 delivery 계층이 core의 commit 결과를 받아 처리한다. 현재
+`followProfile`과 `unfollowProfile`이 commit 뒤 `@kosmo/fedify`를 직접 호출하는 경로는 기존 예외이며,
+새 action에서 반복할 기준이 아니다.
+
 ## 책임
 
 | 계층                                                            | 책임                                                                                       |
@@ -35,9 +39,9 @@ Post.Author, Source visibility와 lifecycle처럼 검증된 actor와 domain obje
 조건이지 모든 소셜 action의 공통 조건이 아니다. Account 자체가 domain participant이거나 Locality가
 action의 의미일 때만 core contract에 포함한다.
 
-예를 들어 Local Repost mutation은 session과 selected Profile membership을 검증하고, ActivityPub
-ingress는 signature와 Remote actor를 검증한다. 두 진입점은 검증된 `actorProfileId`와
-`sourcePostId`를 같은 core action에 전달하고, core는 Source 정책, visibility와 멱등 저장을 처리한다.
+현재 Repost caller인 Local mutation은 session과 selected Profile membership을 검증한 뒤 core action에
+`actorProfileId`와 `sourcePostId`를 전달한다. 향후 ActivityPub Repost ingress가 생기면 signature와
+Remote actor 검증 뒤 같은 action을 재사용할 수 있지만, ingress와 delivery는 현재 Repost 범위가 아니다.
 
 ## Public contract
 
