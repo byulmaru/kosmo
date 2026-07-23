@@ -10,7 +10,13 @@ import {
 } from '@/components/notification/NotificationList';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
-import { followNotification, notificationsProfile, profile } from './fixtures';
+import {
+  followNotification,
+  notificationsProfile,
+  post,
+  profile,
+  reactionNotification,
+} from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { NotificationsStoriesQuery as NotificationsStoriesQueryType } from './__generated__/NotificationsStoriesQuery.graphql';
@@ -33,6 +39,10 @@ const longFollower = profile({
   id: 'notification-follower-long',
   relativeHandle: '@a-very-long-remote-follower@very-long-instance.example',
 });
+const notificationRecipient = profile({
+  id: 'notification-profile-content',
+  relativeHandle: '@recipient',
+});
 
 const emptyProfile = notificationsProfile([], {}, { id: 'notification-profile-empty' });
 const contentProfile = notificationsProfile(
@@ -44,9 +54,15 @@ const contentProfile = notificationsProfile(
       readAt: '2026-07-17T02:00:00Z',
     }),
     followNotification({ id: 'notification-long', profile: longFollower }),
+    reactionNotification({
+      id: 'notification-reaction',
+      post: post({ id: 'notification-related-post', profile: notificationRecipient }),
+      profile: unreadFollower,
+      type: '🎉',
+    }),
   ],
   {},
-  { id: 'notification-profile-content' },
+  notificationRecipient,
 );
 const paginationProfile = notificationsProfile(
   [followNotification({ id: 'notification-page-1', profile: unreadFollower })],
@@ -209,6 +225,9 @@ export const StatesAndFollowItems: Story = {
       }),
     ).toBeVisible();
     expect(canvasElement.querySelector('a[href="/@starlight"]')).toBeInTheDocument();
+    expect(
+      canvas.getByRole('link', { name: /별빛 여행자님이 🎉 반응을 남겼습니다/ }),
+    ).toHaveAttribute('href', '/@recipient/notification-related-post');
   },
 };
 

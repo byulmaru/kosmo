@@ -77,6 +77,7 @@ type CreateBookmarkPayload {
 
 input CreatePostInput {
   bodyText: String!
+  replyParentId: ID
   visibility: PostVisibility!
 }
 
@@ -218,9 +219,11 @@ type Post implements Node {
   replyAncestors: [Post!]!
   replyDescendants(after: String, before: String, first: Int, last: Int): PostConnection!
   replyParent: Post
+  repostCount: Int!
   repostSource: Post
   state: PostState!
   viewerBookmark: Bookmark
+  viewerRepost: Post
   visibility: PostVisibility!
 }
 
@@ -378,6 +381,15 @@ type Query {
 type Reaction implements Node {
   createdAt: DateTime!
   id: ID!
+  type: String!
+}
+
+type ReactionNotification implements Node & Notification {
+  createdAt: DateTime!
+  id: ID!
+  post: Post!
+  profile: Profile!
+  readAt: DateTime
   type: String!
 }
 

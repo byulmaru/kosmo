@@ -1,10 +1,10 @@
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
-import { FollowNotification } from '../ref';
+import { FollowNotification, getNotificationSource } from '../ref';
 
 builder.objectField(FollowNotification, 'profile', (t) =>
   t.field({
     type: Profile,
-    resolve: (notification) => notification.profileId,
+    resolve: async (notification) => (await getNotificationSource(notification)).profileId,
   }),
 );

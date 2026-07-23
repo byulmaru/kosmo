@@ -1,5 +1,9 @@
 export { createBookmark, deleteBookmark } from './bookmark';
-export { createFollowNotification, deleteNotificationBySource } from './notification';
+export {
+  createFollowNotification,
+  createReactionNotification,
+  deleteNotificationBySource,
+} from './notification';
 export { createPost, repostPost } from './post';
 export { disableProfile } from './profile';
 export { followProfile, removeInboundFollow, unfollowProfile } from './profile-follow';

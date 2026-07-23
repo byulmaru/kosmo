@@ -3,7 +3,7 @@ import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, exists, getColumns, gt, isNull, lt, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { builder } from '@/graphql/builder';
-import { postVisibilityAccessWhere } from '../access/visibility';
+import { postAccessWhere } from '../access';
 import { Post, PostConnection } from '../ref';
 
 type PostRow = typeof Posts.$inferSelect;
@@ -72,7 +72,7 @@ builder.queryField('homeTimeline', (t) =>
               .where(
                 and(
                   homeCandidateWhere,
-                  postVisibilityAccessWhere({ ctx }),
+                  postAccessWhere({ ctx }),
                   before ? gt(Posts.id, before) : undefined,
                   after ? lt(Posts.id, after) : undefined,
                 ),

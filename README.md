@@ -1,5 +1,10 @@
 # kosmo
 
+## Architecture
+
+- [Core service boundary](docs/architecture/core-services.md)
+- [Domain model and policies](docs/domain/README.md)
+
 ## Infrastructure
 
 AWS Terraform root is documented in [apps/terraform/README.md](apps/terraform/README.md).

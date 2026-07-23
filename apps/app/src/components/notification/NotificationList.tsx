@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
-import { NotificationListItem } from './NotificationListItem';
+import { NotificationListItem, ReactionNotificationListItem } from './NotificationListItem';
 import type { NotificationList_profile$key } from './__generated__/NotificationList_profile.graphql';
 import type { NotificationListNextPageQuery } from './__generated__/NotificationListNextPageQuery.graphql';
 
@@ -36,6 +36,9 @@ const notificationListFragment = graphql`
           ... on FollowNotification {
             ...NotificationListItem_notification @alias(as: "follow")
           }
+          ... on ReactionNotification {
+            ...ReactionNotificationListItem_notification @alias(as: "reaction")
+          }
         }
       }
     }
@@ -50,11 +53,15 @@ export function NotificationList({ profile }: NotificationListProps) {
   >(notificationListFragment, profile);
   const [loadError, setLoadError] = useState(false);
   const [refreshing, startTransition] = useTransition();
-  const notifications = pagination.data.notifications.edges.flatMap(({ node }) =>
-    node.__typename === 'FollowNotification' && node.follow
-      ? [{ ...node, follow: node.follow }]
-      : [],
-  );
+  const notifications = pagination.data.notifications.edges.flatMap(({ node }) => {
+    if (node.__typename === 'FollowNotification' && node.follow) {
+      return <NotificationListItem key={node.id} notification={node.follow} />;
+    }
+    if (node.__typename === 'ReactionNotification' && node.reaction) {
+      return <ReactionNotificationListItem key={node.id} notification={node.reaction} />;
+    }
+    return [];
+  });
 
   const loadMore = () => {
     if (pagination.isLoadingNext) {
@@ -94,14 +101,12 @@ export function NotificationList({ profile }: NotificationListProps) {
     >
       <NotificationHeader />
       {notifications.length ? (
-        notifications.map((notification) => (
-          <NotificationListItem key={notification.id} notification={notification.follow} />
-        ))
+        notifications
       ) : (
         <View style={styles.state}>
           <Text style={[styles.stateTitle, { color: theme.text }]}>아직 알림이 없어요</Text>
           <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>
-            새로운 팔로우 알림이 생기면 여기에 표시돼요.
+            새로운 팔로우나 반응 알림이 생기면 여기에 표시돼요.
           </Text>
         </View>
       )}

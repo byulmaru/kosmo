@@ -2,7 +2,7 @@
 
 ### Requirement: Reaction Notification source correlation
 
-시스템은 다른 Profile의 Local Post에 새 Reaction이 생성되면 Reaction을 source로 하는 Profile-scoped Notification을 Best Effort로 생성해야 한다(MUST).
+**Authority / Provenance:** [Notification canonical 객체](../../../../../docs/domain/objects/notification.md), [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0010](../../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4) 시스템은 다른 Profile의 Local Post에 새 Reaction이 생성되면 Reaction을 source로 하는 Profile-scoped Notification을 Best Effort로 생성해야 한다(MUST).
 
 #### Scenario: 다른 Profile의 Post Reaction
 
@@ -31,7 +31,7 @@
 
 ### Requirement: Reaction Notification 실패 격리
 
-Reaction Notification 생성 실패는 Reaction 생성 transaction이나 성공 결과를 rollback하거나 실패로 바꾸어서는 안 된다(MUST NOT).
+**Authority / Provenance:** [Notification canonical 객체](../../../../../docs/domain/objects/notification.md), [ADR 0010](../../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4) Reaction Notification 생성 실패는 Reaction 생성 transaction이나 성공 결과를 rollback하거나 실패로 바꾸어서는 안 된다(MUST NOT).
 
 #### Scenario: Notification 저장 실패
 
@@ -41,7 +41,7 @@ Reaction Notification 생성 실패는 Reaction 생성 transaction이나 성공 
 
 ### Requirement: Reaction Notification GraphQL과 inbox 계약
 
-API와 클라이언트는 visible Reaction Notification을 기존 Notification interface·connection·Unread count·Read 계약에 통합해야 한다(MUST).
+**Authority / Provenance:** [Notification canonical 객체](../../../../../docs/domain/objects/notification.md), [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4), [PROD-372](https://linear.app/byulmaru/issue/PROD-372/%EC%95%8C%EB%A6%BC-%ED%95%AD%EB%AA%A9-%EC%9D%BD%EC%9D%8C-%EC%83%81%ED%83%9C%EB%A5%BC-best-effort%EB%A1%9C-%EB%8F%99%EA%B8%B0%ED%99%94%ED%95%9C%EB%8B%A4) API와 클라이언트는 visible Reaction Notification을 기존 Notification interface·connection·Unread count·Read 계약에 통합해야 한다(MUST).
 
 #### Scenario: Reaction Notification concrete object
 
@@ -55,6 +55,8 @@ API와 클라이언트는 visible Reaction Notification을 기존 Notification i
 - **WHEN** membership이 있는 Account가 Recipient Profile의 Notification inbox를 조회한다
 - **THEN** visible Reaction Notification은 기존 connection 정렬과 pagination, Unread count와 Read 계약을 따른다
 - **AND** client item은 Reaction Author, Type과 Target Post를 표시하고 해당 Post로 이동할 수 있다
+- **AND** item 활성화는 Read 응답을 기다리지 않고 Target Post 이동을 즉시 시작한다
+- **AND** Read 요청의 pending·실패·재시도는 이동을 지연·취소·복원하지 않는다
 
 #### Scenario: selected Profile 격리
 
@@ -63,7 +65,7 @@ API와 클라이언트는 visible Reaction Notification을 기존 Notification i
 
 ### Requirement: unavailable Reaction Notification 숨김
 
-시스템은 Reaction source가 없거나 source의 Post·Author·Recipient 관계가 저장 Recipient와 일치하지 않거나 Recipient 기준 Related Profile 또는 Target Post를 조회할 수 없는 Reaction Notification을 모든 API 표면에서 숨겨야 한다(MUST).
+**Authority / Provenance:** [Notification canonical 객체](../../../../../docs/domain/objects/notification.md), [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4) 시스템은 Reaction source가 없거나 source의 Post·Author·Recipient 관계가 저장 Recipient와 일치하지 않거나 Recipient 기준 Related Profile 또는 Target Post를 조회할 수 없는 Reaction Notification을 모든 API 표면에서 숨겨야 한다(MUST).
 
 #### Scenario: source가 없는 item
 
