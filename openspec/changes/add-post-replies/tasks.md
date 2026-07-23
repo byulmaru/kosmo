@@ -168,8 +168,8 @@ PROD-451은 조상·현재·하위 Reply를 기존 Post rendering과 fixture용 
 - PROD-422는 조상·현재·하위 Reply 조합, Reply+Quote, unavailable 조상 경계, 각 Post 상세 이동과 fragment·route integration을 client test로 검증한다.
 
 - [x] 6.1 최종 `post-reply-ui` spec이 변경되지 않음을 확인하고 PROD-451 presentation seam과 PROD-422 integration 경계를 proposal·design·decisions·tasks에 동기화해 strict validation을 통과시킨다.
-- [ ] 6.2 PROD-451 props-only Reply thread layout과 fixture용 optional Post 선택 adapter를 구현한다.
-- [ ] 6.3 PROD-451 Storybook/component interaction에서 일반 Reply, role별 기존 renderer 선택, 직접 connector, 직접 연결된 마지막 visible Reply의 supplied boundary, Reply+Quote-shaped subtree와 optional mock callback을 검증하고 Light 390px/600px visual QA 및 app check를 통과시킨다. 현재 미지원 Dark appearance는 검증 완료로 기록하지 않는다.
+- [x] 6.2 PROD-451 props-only Reply thread layout과 fixture용 optional Post 선택 adapter를 구현한다.
+- [x] 6.3 PROD-451 Storybook/component interaction에서 일반 Reply, role별 기존 renderer 선택, 직접 connector, 직접 연결된 마지막 visible Reply의 supplied boundary, Reply+Quote-shaped subtree와 optional mock callback을 검증하고 Light 390px/600px visual QA 및 app check를 통과시킨다. 현재 미지원 Dark appearance는 검증 완료로 기록하지 않는다.
 - [ ] 6.4 승인된 Parent·조상·descendant 결과를 Post 상세 query와 colocated fragment에 연결하고 ancestor reverse와 descendant `replyParent { id }` 비교로 direct connector metadata를 만든다.
 - [ ] 6.5 thread 맥락과 각 Post 상세 이동을 유니버설 route에 연결한다.
 - [ ] 6.6 Reply+Quote·권한 경계·fragment integration test와 관련 client check를 통과시킨다.
