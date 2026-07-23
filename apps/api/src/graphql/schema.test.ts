@@ -5,6 +5,13 @@ import { encodeGlobalId } from './global-id';
 import { notificationNodeType } from './resolvers/notification/ref';
 import { schema } from './schema';
 
+test('Post는 nullable Repost Source를 제공한다', () => {
+  const post = schema.getType('Post');
+
+  assert.ok(isObjectType(post));
+  assert.equal(String(post.getFields().repostSource?.type), 'Post');
+});
+
 test('exposes the versioned PostContent document and Plain Text composer contract', () => {
   const postContent = schema.getType('PostContent');
   const createPostInput = schema.getType('CreatePostInput');
@@ -98,6 +105,7 @@ test('exposes the Bookmark mutation and relationship contract', () => {
   const deleteInput = schema.getType('DeleteBookmarkInput');
   const deletePayload = schema.getType('DeleteBookmarkPayload');
   const bookmark = schema.getType('Bookmark');
+  const post = schema.getType('Post');
 
   assert.equal(String(mutation?.getFields().createBookmark?.type), 'CreateBookmarkPayload!');
   assert.ok(isInputObjectType(createInput));
@@ -114,6 +122,8 @@ test('exposes the Bookmark mutation and relationship contract', () => {
   assert.equal(String(bookmark.getFields().profile.type), 'Profile!');
   assert.equal(String(bookmark.getFields().post.type), 'Post');
   assert.equal(String(bookmark.getFields().createdAt.type), 'DateTime!');
+  assert.ok(isObjectType(post));
+  assert.equal(String(post.getFields().viewerBookmark.type), 'Bookmark');
 });
 
 test('exposes the ID-based idempotent Reaction delete contract', () => {

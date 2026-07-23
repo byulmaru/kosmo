@@ -1,7 +1,7 @@
 import { db, Instances, Posts, Profiles, Reactions } from '@kosmo/core/db';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { createObjectRef } from '@/graphql/utils';
-import { postVisibilityAccessWhere } from '../post/access/visibility';
+import { postAccessWhere } from '../post/access';
 
 export const Reaction = createObjectRef('Reaction', (ids, ctx) =>
   db
@@ -10,7 +10,7 @@ export const Reaction = createObjectRef('Reaction', (ids, ctx) =>
     .innerJoin(Posts, eq(Posts.id, Reactions.postId))
     .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(and(inArray(Reactions.id, ids), postVisibilityAccessWhere({ ctx }))),
+    .where(and(inArray(Reactions.id, ids), postAccessWhere({ ctx }))),
 );
 
 Reaction.implement({

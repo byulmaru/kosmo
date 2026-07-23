@@ -22,20 +22,14 @@
 
 ## ADDED Requirements
 
-### Requirement: Universal Bookmark client behavior
+### Requirement: Universal Bookmark list behavior
 
-Android, iOS, Web 클라이언트는 `/bookmarks` route와 Post Bookmark action에 같은 공용 route·component·Relay 계약을 사용해야 한다(MUST). 플랫폼별 차이는 safe area와 native navigation 같은 표현 경계로 제한해야 하며(MUST), Profile별 Bookmark 상태와 pagination cache key는 선택 Profile을 포함해 격리해야 한다(MUST).
+Android, iOS, Web 클라이언트는 `/bookmarks` route에 같은 공용 route·component·Relay 계약을 사용해야 한다(MUST). 플랫폼별 차이는 safe area와 native navigation 같은 표현 경계로 제한해야 하며(MUST), Profile별 pagination cache key는 선택 Profile을 포함해 격리해야 한다(MUST).
 
 #### Scenario: Render Bookmark list on every platform
 
 - **WHEN** 사용자가 Android, iOS 또는 Web에서 `/bookmarks`를 연다
 - **THEN** 각 플랫폼은 같은 공용 Bookmark 목록 route와 Relay query 계약을 사용한다
-
-#### Scenario: Normalize a Bookmark mutation
-
-- **WHEN** Bookmark 생성 또는 삭제 mutation이 영향받은 Post와 Bookmark 상태를 반환한다
-- **THEN** Relay store는 현재 선택 Profile과 해당 Post 조합의 상태만 갱신한다
-- **AND** 다른 Profile의 동일 Post 상태는 변경하지 않는다
 
 #### Scenario: Isolate Bookmark pagination by Profile
 

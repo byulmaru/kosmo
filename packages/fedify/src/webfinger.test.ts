@@ -12,6 +12,8 @@ const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhos
 
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
+let ActivityPubActorKeys: typeof CoreDb.ActivityPubActorKeys;
+let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
 let Profiles: typeof CoreDb.Profiles;
@@ -27,7 +29,8 @@ describe('WebFinger local profile handle mapping', () => {
     process.env.DATABASE_URL = databaseUrl;
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
-    ({ db, firstOrThrow, Instances, pg, Profiles } = await import('@kosmo/core/db'));
+    ({ ActivityPubActorKeys, ActivityPubActors, db, firstOrThrow, Instances, pg, Profiles } =
+      await import('@kosmo/core/db'));
     ({ federation } = await import('./federation'));
     ({ seedDatabase } = await import('@kosmo/core/db/seed'));
     ({ resolveLocalActorIdentifierByHandle } = await import('./webfinger'));
@@ -107,6 +110,65 @@ describe('WebFinger local profile handle mapping', () => {
           link.type === 'application/activity+json',
       ),
     );
+    assert.ok(
+      json.links?.some(
+        (link) =>
+          link.rel === 'http://webfinger.net/rel/profile-page' &&
+          link.href === `${publicOrigin}/@alice`,
+      ),
+    );
+  });
+
+  test('serves a WebFinger JRD for the canonical actor URI', async () => {
+    const profile = await createProfile({ handle: 'alice', instanceId: localInstanceId });
+    const actorUri = `${publicOrigin}/ap/actor/${profile.id}`;
+
+    const response = await federation.fetch(
+      new Request(`${publicOrigin}/.well-known/webfinger?resource=${encodeURIComponent(actorUri)}`),
+      { contextData: undefined },
+    );
+
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') ?? '', /application\/jrd\+json/);
+
+    const json = (await response.json()) as {
+      subject?: string;
+      links?: Array<{ rel?: string; href?: string; type?: string }>;
+    };
+
+    assert.equal(json.subject, actorUri);
+    assert.ok(
+      json.links?.some(
+        (link) =>
+          link.rel === 'self' &&
+          link.href === actorUri &&
+          link.type === 'application/activity+json',
+      ),
+    );
+  });
+
+  test('returns 400 for a missing or malformed WebFinger resource', async () => {
+    for (const query of ['', '?resource=not-a-url']) {
+      const response = await federation.fetch(
+        new Request(`${publicOrigin}/.well-known/webfinger${query}`),
+        { contextData: undefined },
+      );
+
+      assert.equal(response.status, 400);
+    }
+  });
+
+  test('returns 404 for an unknown or non-local WebFinger resource', async () => {
+    for (const resource of ['acct:alice@remote.example', 'https://remote.example/users/alice']) {
+      const response = await federation.fetch(
+        new Request(
+          `${publicOrigin}/.well-known/webfinger?resource=${encodeURIComponent(resource)}`,
+        ),
+        { contextData: undefined },
+      );
+
+      assert.equal(response.status, 404);
+    }
   });
 
   test('rejects WebFinger requests from a non-canonical host', async () => {
@@ -127,24 +189,74 @@ describe('WebFinger local profile handle mapping', () => {
     }
   });
 
-  test('advertises the registered personal and shared inbox routes', async () => {
+  test('serves the canonical actor document and reuses its stored key pairs', async () => {
     const profile = await createProfile({ handle: 'alice', instanceId: localInstanceId });
+    const requestActor = () =>
+      federation.fetch(
+        new Request(`${publicOrigin}/ap/actor/${profile.id}`, {
+          headers: { accept: 'application/activity+json' },
+        }),
+        { contextData: undefined },
+      );
+    const response = await requestActor();
+    const actor = (await response.json()) as {
+      assertionMethod?: Array<{ controller?: string; id?: string }>;
+      endpoints?: { sharedInbox?: string };
+      followers?: string;
+      following?: string;
+      id?: string;
+      inbox?: string;
+      name?: string;
+      outbox?: string;
+      preferredUsername?: string;
+      publicKey?: { id?: string; owner?: string };
+      published?: string;
+      url?: string;
+    };
+
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') ?? '', /application\/activity\+json/);
+    assert.equal(actor.id, `${publicOrigin}/ap/actor/${profile.id}`);
+    assert.equal(actor.preferredUsername, 'alice');
+    assert.equal(actor.name, 'alice');
+    assert.equal(actor.url, `${publicOrigin}/@alice`);
+    assert.equal(actor.published, profile.createdAt.toString());
+    assert.equal(actor.inbox, `${publicOrigin}/ap/actor/${profile.id}/inbox`);
+    assert.equal(actor.endpoints?.sharedInbox, `${publicOrigin}/inbox`);
+    assert.equal(actor.outbox, `${publicOrigin}/ap/actor/${profile.id}/outbox`);
+    const actorUri = `${publicOrigin}/ap/actor/${profile.id}`;
+    assert.equal(typeof actor.publicKey?.id, 'string');
+    assert.equal(actor.publicKey?.owner, actorUri);
+    assert.ok(
+      actor.assertionMethod?.some(
+        (method) => typeof method.id === 'string' && method.controller === actorUri,
+      ),
+    );
+    assert.equal(actor.followers, undefined);
+    assert.equal(actor.following, undefined);
+
+    const actorsAfterFirstRequest = await db.select().from(ActivityPubActors);
+    const keysAfterFirstRequest = await db.select().from(ActivityPubActorKeys);
+    assert.equal(actorsAfterFirstRequest.length, 1);
+    assert.equal(keysAfterFirstRequest.length, 2);
+
+    assert.equal((await requestActor()).status, 200);
+
+    const actorsAfterSecondRequest = await db.select().from(ActivityPubActors);
+    const keysAfterSecondRequest = await db.select().from(ActivityPubActorKeys);
+    assert.deepEqual(actorsAfterSecondRequest, actorsAfterFirstRequest);
+    assert.deepEqual(keysAfterSecondRequest, keysAfterFirstRequest);
+  });
+
+  test('returns 404 for a missing local actor document', async () => {
     const response = await federation.fetch(
-      new Request(`${publicOrigin}/ap/actor/${profile.id}`, {
+      new Request(`${publicOrigin}/ap/actor/019f6f67-1111-7777-8888-123456789abc`, {
         headers: { accept: 'application/activity+json' },
       }),
       { contextData: undefined },
     );
-    const actor = (await response.json()) as {
-      endpoints?: { sharedInbox?: string };
-      inbox?: string;
-      outbox?: string;
-    };
 
-    assert.equal(response.status, 200);
-    assert.equal(actor.inbox, `${publicOrigin}/ap/actor/${profile.id}/inbox`);
-    assert.equal(actor.endpoints?.sharedInbox, `${publicOrigin}/inbox`);
-    assert.equal(actor.outbox, `${publicOrigin}/ap/actor/${profile.id}/outbox`);
+    assert.equal(response.status, 404);
   });
 });
 
