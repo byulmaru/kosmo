@@ -1783,7 +1783,7 @@ describe('GraphQL remote profile boundary', () => {
       repostSourceId: ordinarySource.id,
     });
     const homeUnavailableRepost = await createPost({
-      id: '019f8ed0-0000-7000-8000-000000000230',
+      id: '019f8ed0-0000-7000-8000-000000000215',
       profileId: homeAuthor.profile.id,
       repostSourceId: unavailableSource.id,
     });
@@ -1833,7 +1833,7 @@ describe('GraphQL remote profile boundary', () => {
     );
 
     const homeFirstPage = await requestRemotePostRead({
-      first: 2,
+      first: 1,
       nodeIds: [],
       profileId: globalId('Profile', homeAuthor.profile.id),
       token: auth.token,
@@ -1842,13 +1842,28 @@ describe('GraphQL remote profile boundary', () => {
     assertNoGraphQLErrors(homeFirstPage);
     assert.deepEqual(connectionIds(homeFirstPage.data?.homeTimeline), [
       globalId('Post', homeEligibleRepost.id),
+    ]);
+    assert.equal(homeFirstPage.data?.homeTimeline?.pageInfo.hasNextPage, true);
+    assert.ok(homeFirstPage.data?.homeTimeline?.pageInfo.endCursor);
+
+    const homeSecondPage = await requestRemotePostRead({
+      after: homeFirstPage.data?.homeTimeline?.pageInfo.endCursor,
+      first: 1,
+      nodeIds: [],
+      profileId: globalId('Profile', homeAuthor.profile.id),
+      token: auth.token,
+    });
+
+    assertNoGraphQLErrors(homeSecondPage);
+    assert.deepEqual(connectionIds(homeSecondPage.data?.homeTimeline), [
       globalId('Post', homeRetainedQuote.id),
     ]);
-    assert.equal(homeFirstPage.data?.homeTimeline?.pageInfo.hasNextPage, false);
+    assert.equal(homeSecondPage.data?.homeTimeline?.pageInfo.hasNextPage, false);
     assert.equal(
-      connectionIds(homeFirstPage.data?.homeTimeline).includes(
-        globalId('Post', homeUnavailableRepost.id),
-      ),
+      [
+        ...connectionIds(homeFirstPage.data?.homeTimeline),
+        ...connectionIds(homeSecondPage.data?.homeTimeline),
+      ].includes(globalId('Post', homeUnavailableRepost.id)),
       false,
     );
   });
