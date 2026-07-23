@@ -11,7 +11,7 @@
 - 기존 Repost Source 기반을 보존하면서 nullable Reply Parent를 additive하게 저장한다.
 - Content, Reply Parent와 Repost Source의 허용 조합을 공통 core 경계에서 판정하고 Reply Parent 대상 유효성을 검증한다.
 - 직접 Parent, 조상과 descendant를 조회할 때 서로 다른 visibility/eligibility 경계를 유지한다.
-- Home/Profile/Hashtag 후보 정책과 Post 상세 thread가 같은 직접 관계를 사용하게 한다.
+- Home/Profile 후보 정책과 Post 상세 thread가 같은 직접 관계를 사용하게 한다.
 - 각 Linear 구현 이슈가 자신의 구현과 검증을 소유하고 부모 PROD-388이 최종 통합·archive를 소유하게 한다.
 
 **Non-Goals:**

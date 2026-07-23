@@ -73,7 +73,7 @@
 
 ### Requirement: Reply의 Post List 후보 정책
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-388`, `PROD-429` 시스템은 각 Post의 Visibility와 Eligibility를 먼저 적용한 뒤 Home Post List에 승인된 Reply 후보를 포함하고 Profile·Hashtag Post List에서는 Reply Parent가 있는 Post를 제외해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-388`, `PROD-429` 시스템은 각 Post의 Visibility와 Eligibility를 먼저 적용한 뒤 Home Post List에 승인된 Reply 후보를 포함하고 Profile Post List에서는 Reply Parent가 있는 Post를 제외해야 한다(MUST).
 
 #### Scenario: Home에서 viewer 관련 Reply 포함
 
@@ -90,11 +90,6 @@
 
 - **WHEN** Target Profile이 Reply Parent가 있는 Post를 작성했다
 - **THEN** 시스템은 Reply이면서 Quote인 경우를 포함해 그 Post를 Profile Post List 후보에서 제외한다
-
-#### Scenario: Hashtag에서 Reply 제외
-
-- **WHEN** Public Post가 Target Hashtag를 포함하지만 Reply Parent를 가진다
-- **THEN** 시스템은 그 Post를 Hashtag Post List 후보에서 제외한다
 
 ### Requirement: Reply 조상 경로 조회
 
