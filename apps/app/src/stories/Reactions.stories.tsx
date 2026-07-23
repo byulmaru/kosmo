@@ -379,6 +379,16 @@ export const QuickPickerStates: Story = {
     expect(pendingOverlay).not.toBeNull();
     expect(pendingOverlay!.getBoundingClientRect().width).toBe(44);
     expect(pendingOverlay!.getBoundingClientRect().height).toBe(44);
+    const spinner = pendingOverlay!.querySelector('[data-testid="reaction-pending-spinner"]');
+    expect(spinner).not.toBeNull();
+    expect(spinner!.getBoundingClientRect().width).toBe(24);
+    expect(spinner!.getBoundingClientRect().height).toBe(24);
+
+    const arcSegments = spinner!.querySelectorAll('path');
+    expect(arcSegments).toHaveLength(18);
+    expect(arcSegments[0]).toHaveAttribute('stroke-opacity', '0');
+    expect(arcSegments[17]).toHaveAttribute('stroke-opacity', '1');
+    expect(spinner!.querySelector('circle')).toBeNull();
     expect(pendingSection.getByRole('button', { name: '👀 반응' })).toBeEnabled();
     await userEvent.click(pendingHeart, { pointerEventsCheck: 0 });
     expect(canvas.getByText('차단된 동작: 0')).toBeVisible();

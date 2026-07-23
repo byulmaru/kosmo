@@ -1,6 +1,7 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/tokens';
+import { ReactionPendingSpinner } from './ReactionPendingSpinner';
 import type React from 'react';
 
 export type ReactionOption = Readonly<{
@@ -89,7 +90,7 @@ export function ReactionSelector({
                 </Text>
                 {pending ? (
                   <View accessibilityElementsHidden aria-hidden style={styles.pendingOverlay}>
-                    <ActivityIndicator color={theme.text} size="large" />
+                    <ReactionPendingSpinner />
                   </View>
                 ) : null}
               </>
