@@ -273,36 +273,28 @@ type GraphQLResult<TData> = {
   }>;
 };
 
-const requestCreatePost = (
+const requestCreatePost = async (
   input: { bodyText: string; replyParentId?: string; visibility: PostVisibility },
   token?: string,
-) =>
-  requestGraphQL<{ createPost: { post: PostNode } }>(
-    `mutation CreatePost($input: CreatePostInput!) {
-      createPost(input: $input) {
-        post { __typename id state visibility }
-      }
-    }`,
-    { input },
-    token,
-  );
-
-const requestGraphQL = async <TData>(
-  query: string,
-  variables: Record<string, unknown>,
-  token?: string,
-): Promise<GraphQLResult<TData>> => {
+): Promise<GraphQLResult<{ createPost: { post: PostNode } }>> => {
   const headers = new Headers({ 'content-type': 'application/json' });
   if (token) {
     headers.set('authorization', `Bearer ${token}`);
   }
   const response = await app.request('/graphql', {
-    body: JSON.stringify({ query, variables }),
+    body: JSON.stringify({
+      query: `mutation CreatePost($input: CreatePostInput!) {
+      createPost(input: $input) {
+        post { __typename id state visibility }
+      }
+    }`,
+      variables: { input },
+    }),
     headers,
     method: 'POST',
   });
   assert.equal(response.status, 200);
-  return (await response.json()) as GraphQLResult<TData>;
+  return (await response.json()) as GraphQLResult<{ createPost: { post: PostNode } }>;
 };
 
 const assertNoGraphQLErrors = (result: GraphQLResult<unknown>) => {

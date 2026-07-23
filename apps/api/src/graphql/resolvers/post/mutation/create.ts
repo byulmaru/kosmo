@@ -6,7 +6,7 @@ import {
   PostVisibility,
   ProfileState,
 } from '@kosmo/core/enums';
-import { NotFoundError, PermissionDeniedError, ValidationError } from '@kosmo/core/error';
+import { NotFoundError, PermissionDeniedError } from '@kosmo/core/error';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { createPost } from '@kosmo/core/services';
 import { postBodyTextSchema } from '@kosmo/core/validation';
@@ -56,25 +56,19 @@ builder.mutationField('createPost', (t) =>
           throw new PermissionDeniedError();
         }
 
-        let replyParentId: string | undefined;
-        if (input.replyParentId) {
+        const replyParentId = input.replyParentId?.id;
+        if (replyParentId) {
           const parent = await tx
-            .select({ currentContentId: Posts.currentContentId, id: Posts.id })
+            .select({ id: Posts.id })
             .from(Posts)
             .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
             .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-            .where(and(eq(Posts.id, input.replyParentId.id), postVisibilityAccessWhere({ ctx })))
+            .where(and(eq(Posts.id, replyParentId), postVisibilityAccessWhere({ ctx })))
             .limit(1)
             .then(first);
           if (!parent) {
             throw new NotFoundError('Post not found');
           }
-          if (parent.currentContentId === null) {
-            throw new ValidationError('Reply Parent must have content', {
-              field: 'replyParentId',
-            });
-          }
-          replyParentId = parent.id;
         }
 
         const { post } = await createPost(
