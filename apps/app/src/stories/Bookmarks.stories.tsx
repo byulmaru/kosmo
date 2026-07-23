@@ -33,11 +33,11 @@ const bookmarkOwner = {
     edges: [
       {
         cursor: 'bookmark-cursor-2',
-        node: { __typename: 'Bookmark', id: 'bookmark-2', post: targetPosts[0] },
+        node: { __typename: 'Bookmark', id: 'bookmark-2', post: targetPosts[1] },
       },
       {
         cursor: 'bookmark-cursor-1',
-        node: { __typename: 'Bookmark', id: 'bookmark-1', post: targetPosts[1] },
+        node: { __typename: 'Bookmark', id: 'bookmark-1', post: targetPosts[0] },
       },
       {
         cursor: 'bookmark-cursor-null',
@@ -58,7 +58,7 @@ const bookmarkNextPage = {
             __typename: 'Bookmark',
             id: 'bookmark-0',
             post: post({
-              bodyText: '세 번째로 저장한 게시글입니다.',
+              bodyText: '더 이전에 저장한 게시글입니다.',
               id: 'bookmark-target-3',
               profile: author,
             }),
@@ -377,7 +377,10 @@ export const SelectedProfileRoute: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.findAllByRole('article')).resolves.toHaveLength(2);
+    const articles = await canvas.findAllByRole('article');
+    expect(articles).toHaveLength(2);
+    expect(articles[0]).toHaveTextContent('두 번째로 저장한 게시글입니다.');
+    expect(articles[1]).toHaveTextContent('첫 번째로 저장한 게시글입니다.');
     expect(
       canvasElement.querySelector('a[href="/@space-writer/bookmark-target-1"]'),
     ).toBeInTheDocument();
