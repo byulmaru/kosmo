@@ -40,6 +40,18 @@ test('exposes Reply ancestors as a non-null Post list without pagination', () =>
   assert.deepEqual(post.getFields().replyAncestors?.args, []);
 });
 
+test('exposes Reply descendants through the shared Post connection', () => {
+  const post = schema.getType('Post');
+
+  assert.ok(isObjectType(post));
+  const field = post.getFields().replyDescendants;
+  assert.equal(String(field?.type), 'PostConnection!');
+  assert.deepEqual(
+    field?.args.map(({ name }) => name),
+    ['after', 'before', 'first', 'last'],
+  );
+});
+
 test('follow mutation payloads expose both updated profiles', () => {
   const followPayload = schema.getType('FollowProfilePayload');
   const unfollowPayload = schema.getType('UnfollowProfilePayload');

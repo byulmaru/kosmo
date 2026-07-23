@@ -94,17 +94,20 @@ Reply가 저장된 직접 Parent 관계 순서를 보존한 조회 가능한 조
 
 - 숨겨진 Parent Content를 노출하지 않으면서 그 아래의 independently visible Reply를 Parent 비노출만으로 제거하지 않는다.
 - Reply+Quote descendant를 같은 관계로 처리하고 별도 Reply type을 만들지 않는다.
-- field 이름, connection·pagination·정렬과 index는 Linear 계약 및 실제 query plan이 확정되기 전 구현하지 않는다.
+- 기존 단일 `Post` Node의 non-null `replyDescendants: PostConnection!` field에서 `first`/`after`와 `last`/`before`를 지원하고 `createdAt ASC, id ASC`로 정렬한다.
+- 임의의 최대 Reply 깊이를 두지 않고 cycle에서 같은 Post를 반복하지 않으며 Parent-before-child 위상 순서를 별도로 보장하지 않는다.
+- 구조 traversal 뒤 각 descendant의 visibility/eligibility를 pagination 전에 적용하고, index는 실제 recursive query plan으로 필요한 최소 형태만 선택한다.
 
 **Verification**
 
 - 직접·간접·Reply+Quote descendant, 각 Post의 visibility/eligibility, 숨겨진 Parent 아래 visible Reply,
   unavailable Source를 가진 Reply+Quote 유지와 cycle 방어를 API test로 검증한다.
-- 실제 query와 실행 계획으로 pagination·index 선택을 검증한다.
+- 동일 생성 시각 tie-break, 양방향 pageInfo, 잘못된 cursor와 filter-before-limit을 API test로 검증한다.
+- 대표 fan-out·depth 데이터의 실제 query와 `EXPLAIN (ANALYZE, BUFFERS)`로 pagination·index 선택을 검증한다.
 
-- [ ] 4.1 descendant 공개 GraphQL field·connection·pagination·정렬 계약을 Linear에서 확정하고 OpenSpec decision을 갱신한다.
-- [ ] 4.2 승인된 공개 계약에 따라 descendant 조회와 필요한 index를 구현한다.
-- [ ] 4.3 독립 조회 정책·숨겨진 Parent 경계·query plan test와 관련 check를 통과시킨다.
+- [x] 4.1 descendant 공개 GraphQL field·connection·pagination·정렬 계약을 Linear에서 확정하고 OpenSpec decision을 갱신한다.
+- [x] 4.2 승인된 공개 계약에 따라 descendant 조회와 필요한 index를 구현한다.
+- [x] 4.3 독립 조회 정책·숨겨진 Parent 경계·query plan test와 관련 check를 통과시킨다.
 
 ## 5. PROD-429 Home/Profile/Hashtag Reply 후보 정책
 

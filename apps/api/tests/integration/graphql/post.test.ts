@@ -2,7 +2,15 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, test } from 'node:test';
-import { PostState, PostVisibility, ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
+import {
+  AccountProfileRole,
+  AccountState,
+  PostState,
+  PostVisibility,
+  ProfileFollowPolicy,
+  ProfileState,
+  SessionState,
+} from '@kosmo/core/enums';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -15,25 +23,40 @@ const publicOrigin = 'http://127.0.0.1:4173';
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
 let db: typeof CoreDb.db;
+let AccountProfiles: typeof CoreDb.AccountProfiles;
+let Accounts: typeof CoreDb.Accounts;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
+let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Posts: typeof CoreDb.Posts;
 let Profiles: typeof CoreDb.Profiles;
+let Sessions: typeof CoreDb.Sessions;
 let deriveContext: typeof DeriveContext;
 let yoga: typeof YogaRouter;
 let encodeGlobalId: typeof EncodeGlobalId;
 let app: Hono<Env>;
 let localInstanceId: string;
 
-describe('Post Reply Parent GraphQL 경계', () => {
+describe('Post Reply GraphQL 경계', () => {
   before(async () => {
     process.env.NODE_ENV = 'production';
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
-    ({ db, firstOrThrow, Instances, pg, PostContents, Posts, Profiles } =
-      await import('@kosmo/core/db'));
+    ({
+      AccountProfiles,
+      Accounts,
+      db,
+      firstOrThrow,
+      Instances,
+      pg,
+      PostContents,
+      ProfileFollows,
+      Posts,
+      Profiles,
+      Sessions,
+    } = await import('@kosmo/core/db'));
     const { seedDatabase } = await import('@kosmo/core/db/seed');
 
     await truncateDatabase();
@@ -239,6 +262,186 @@ describe('Post Reply Parent GraphQL 경계', () => {
       })),
     });
   });
+
+  test('직접·간접 Reply와 Reply+Quote descendant를 시간순으로 반환한다', async () => {
+    const author = await createProfile('descendant-author');
+    const root = await createContentfulPost(author.id);
+    const source = await createContentfulPost(author.id);
+    const direct = await createContentfulPost(author.id, {
+      createdAt: Temporal.Instant.from('2026-07-23T00:00:02Z'),
+      id: uuid(20),
+      replyParentId: root.id,
+    });
+    const nested = await createContentfulPost(author.id, {
+      createdAt: Temporal.Instant.from('2026-07-23T00:00:03Z'),
+      id: uuid(30),
+      replyParentId: direct.id,
+    });
+    const replyQuote = await createContentfulPost(author.id, {
+      createdAt: Temporal.Instant.from('2026-07-23T00:00:01Z'),
+      id: uuid(10),
+      replyParentId: root.id,
+      repostSourceId: source.id,
+    });
+    await createContentfulPost(author.id);
+
+    const result = await requestReplyDescendants(root.id, { first: 10 });
+
+    assertReplyDescendantIds(result, [replyQuote.id, direct.id, nested.id]);
+  });
+
+  test('조회 불가능한 Source와 무관하게 Reply+Quote descendant와 자체 Content를 유지한다', async () => {
+    const author = await createProfile('unavailable-source-author');
+    const root = await createContentfulPost(author.id);
+    const source = await createContentfulPost(author.id);
+    const replyQuote = await createContentfulPost(author.id, {
+      replyParentId: root.id,
+      repostSourceId: source.id,
+    });
+    await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, source.id));
+
+    const result = await requestReplyDescendants(root.id, { first: 10 });
+
+    assertReplyDescendantIds(result, [replyQuote.id]);
+    assert.deepEqual(result.data?.node?.replyDescendants.edges[0]?.node.content, {
+      bodyText: replyQuote.id,
+    });
+  });
+
+  test('숨겨진 Parent와 ineligible Parent 아래의 visible descendant를 filter-before-limit으로 유지한다', async () => {
+    const rootAuthor = await createProfile('boundary-root-author');
+    const hiddenAuthor = await createProfile('boundary-hidden-author');
+    const suspendedAuthor = await createProfile(
+      'boundary-suspended-author',
+      ProfileState.SUSPENDED,
+    );
+    const visibleAuthor = await createProfile('boundary-visible-author');
+    const root = await createContentfulPost(rootAuthor.id);
+    const hiddenParent = await createContentfulPost(hiddenAuthor.id, {
+      createdAt: Temporal.Instant.from('2026-07-23T00:00:01Z'),
+      replyParentId: root.id,
+      visibility: PostVisibility.DIRECT,
+    });
+    const visibleUnderHidden = await createContentfulPost(visibleAuthor.id, {
+      createdAt: Temporal.Instant.from('2026-07-23T00:00:02Z'),
+      replyParentId: hiddenParent.id,
+    });
+    const suspendedParent = await createContentfulPost(suspendedAuthor.id, {
+      createdAt: Temporal.Instant.from('2026-07-23T00:00:03Z'),
+      replyParentId: root.id,
+    });
+    const visibleUnderSuspended = await createContentfulPost(visibleAuthor.id, {
+      createdAt: Temporal.Instant.from('2026-07-23T00:00:04Z'),
+      replyParentId: suspendedParent.id,
+    });
+    const visibleLast = await createContentfulPost(visibleAuthor.id, {
+      createdAt: Temporal.Instant.from('2026-07-23T00:00:05Z'),
+      replyParentId: root.id,
+    });
+
+    const first = await requestReplyDescendants(root.id, { first: 2 });
+    assertReplyDescendantIds(first, [visibleUnderHidden.id, visibleUnderSuspended.id]);
+    assert.equal(first.data?.node?.replyDescendants.pageInfo.hasNextPage, true);
+
+    const second = await requestReplyDescendants(root.id, {
+      after: first.data?.node?.replyDescendants.pageInfo.endCursor,
+      first: 2,
+    });
+    assertReplyDescendantIds(second, [visibleLast.id]);
+    assert.equal(second.data?.node?.replyDescendants.pageInfo.hasNextPage, false);
+  });
+
+  test('viewer별 Followers visibility를 각 descendant에 독립 적용한다', async () => {
+    const viewer = await createAuthenticatedSession();
+    const rootAuthor = await createProfile('viewer-root-author');
+    const followedAuthor = await createProfile('viewer-followed-author');
+    const hiddenAuthor = await createProfile('viewer-hidden-author');
+    const root = await createContentfulPost(rootAuthor.id);
+    const followedReply = await createContentfulPost(followedAuthor.id, {
+      replyParentId: root.id,
+      visibility: PostVisibility.FOLLOWERS,
+    });
+    await createContentfulPost(hiddenAuthor.id, {
+      replyParentId: root.id,
+      visibility: PostVisibility.FOLLOWERS,
+    });
+    await db.insert(ProfileFollows).values({
+      followeeProfileId: followedAuthor.id,
+      followerProfileId: viewer.profile.id,
+    });
+
+    const authenticated = await requestReplyDescendants(root.id, { first: 10 }, viewer.token);
+    assertReplyDescendantIds(authenticated, [followedReply.id]);
+
+    const anonymous = await requestReplyDescendants(root.id, { first: 10 });
+    assertReplyDescendantIds(anonymous, []);
+  });
+
+  test('같은 생성 시각을 ID로 안정 정렬하고 양방향 Relay page를 제공한다', async () => {
+    const author = await createProfile('pagination-author');
+    const root = await createContentfulPost(author.id);
+    const createdAt = Temporal.Instant.from('2026-07-23T00:00:00Z');
+    const descendants = await Promise.all(
+      [10, 20, 30, 40].map((suffix) =>
+        createContentfulPost(author.id, {
+          createdAt,
+          id: uuid(suffix),
+          replyParentId: root.id,
+        }),
+      ),
+    );
+
+    const first = await requestReplyDescendants(root.id, { first: 2 });
+    assertReplyDescendantIds(
+      first,
+      descendants.slice(0, 2).map(({ id }) => id),
+    );
+    const firstConnection = first.data?.node?.replyDescendants;
+    assert.ok(firstConnection);
+    assert.equal(firstConnection.pageInfo.hasNextPage, true);
+    assert.equal(firstConnection.pageInfo.hasPreviousPage, false);
+    assert.notEqual(firstConnection.pageInfo.endCursor, descendants[1]?.id);
+    assert.doesNotMatch(firstConnection.pageInfo.endCursor ?? '', /2026-07-23/);
+
+    const second = await requestReplyDescendants(root.id, {
+      after: firstConnection.pageInfo.endCursor,
+      first: 2,
+    });
+    assertReplyDescendantIds(
+      second,
+      descendants.slice(2).map(({ id }) => id),
+    );
+    const secondConnection = second.data?.node?.replyDescendants;
+    assert.ok(secondConnection);
+    assert.equal(secondConnection.pageInfo.hasNextPage, false);
+    assert.equal(secondConnection.pageInfo.hasPreviousPage, true);
+
+    const backward = await requestReplyDescendants(root.id, {
+      before: secondConnection.pageInfo.startCursor,
+      last: 2,
+    });
+    assertReplyDescendantIds(
+      backward,
+      descendants.slice(0, 2).map(({ id }) => id),
+    );
+    assert.equal(backward.data?.node?.replyDescendants.pageInfo.hasNextPage, true);
+    assert.equal(backward.data?.node?.replyDescendants.pageInfo.hasPreviousPage, false);
+
+    const invalid = await requestReplyDescendants(root.id, { after: 'not+a+cursor', first: 1 });
+    assert.equal(invalid.errors?.[0]?.message, 'Invalid Reply Descendant cursor');
+  });
+
+  test('비정상 cycle에서도 root를 descendant로 반복하지 않고 유한하게 종료한다', async () => {
+    const author = await createProfile('cycle-author');
+    const root = await createContentfulPost(author.id);
+    const first = await createContentfulPost(author.id, { replyParentId: root.id });
+    const second = await createContentfulPost(author.id, { replyParentId: first.id });
+    await db.update(Posts).set({ replyParentId: second.id }).where(eq(Posts.id, root.id));
+
+    const result = await requestReplyDescendants(root.id, { first: 10 });
+
+    assertReplyDescendantIds(result, [first.id, second.id]);
+  });
 });
 
 type PostNode = {
@@ -254,6 +457,19 @@ type PostAncestorsNode = {
 type GraphQLResult<TData> = {
   data?: TData;
   errors?: Array<{ message: string }>;
+};
+
+type ReplyDescendantConnection = {
+  edges: Array<{
+    cursor: string;
+    node: { content: { bodyText: string } | null; id: string };
+  }>;
+  pageInfo: {
+    endCursor: string | null;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+    startCursor: string | null;
+  };
 };
 
 const requestPostNode = (postId: string) =>
@@ -292,13 +508,49 @@ const requestPostAncestors = (postId: string) =>
     { postId: encodeGlobalId('Post', postId) },
   );
 
+const requestReplyDescendants = (
+  postId: string,
+  variables: {
+    after?: string | null;
+    before?: string | null;
+    first?: number | null;
+    last?: number | null;
+  },
+  token?: string,
+) =>
+  requestGraphQL<{ node: { replyDescendants: ReplyDescendantConnection } | null }>(
+    `query PostReplyDescendants(
+      $postId: ID!
+      $first: Int
+      $after: String
+      $last: Int
+      $before: String
+    ) {
+      node(id: $postId) {
+        ... on Post {
+          replyDescendants(first: $first, after: $after, last: $last, before: $before) {
+            edges { cursor node { id content { bodyText } } }
+            pageInfo { endCursor hasNextPage hasPreviousPage startCursor }
+          }
+        }
+      }
+    }`,
+    { postId: encodeGlobalId('Post', postId), ...variables },
+    token,
+  );
+
 const requestGraphQL = async <TData>(
   query: string,
   variables: Record<string, unknown>,
+  token?: string,
 ): Promise<GraphQLResult<TData>> => {
+  const headers = new Headers({ 'content-type': 'application/json' });
+  if (token) {
+    headers.set('authorization', `Bearer ${token}`);
+  }
   const response = await app.request('/graphql', {
     body: JSON.stringify({ query, variables }),
-    headers: { 'content-type': 'application/json' },
+    headers,
     method: 'POST',
   });
   assert.equal(response.status, 200);
@@ -307,6 +559,17 @@ const requestGraphQL = async <TData>(
 
 const assertNoGraphQLErrors = (result: GraphQLResult<unknown>) => {
   assert.equal(result.errors, undefined, JSON.stringify(result.errors));
+};
+
+const assertReplyDescendantIds = (
+  result: GraphQLResult<{ node: { replyDescendants: ReplyDescendantConnection } | null }>,
+  expected: string[],
+) => {
+  assertNoGraphQLErrors(result);
+  assert.deepEqual(
+    result.data?.node?.replyDescendants.edges.map(({ node }) => node.id),
+    expected.map((id) => encodeGlobalId('Post', id)),
+  );
 };
 
 const createProfile = (handle: string, state: ProfileState = ProfileState.ACTIVE) =>
@@ -326,11 +589,15 @@ const createProfile = (handle: string, state: ProfileState = ProfileState.ACTIVE
 const createContentfulPost = async (
   profileId: string,
   {
+    createdAt,
+    id,
     replyParentId,
     repostSourceId,
     state = PostState.ACTIVE,
     visibility = PostVisibility.PUBLIC,
   }: {
+    createdAt?: Temporal.Instant;
+    id?: string;
     replyParentId?: string;
     repostSourceId?: string;
     state?: PostState;
@@ -339,7 +606,7 @@ const createContentfulPost = async (
 ) => {
   const post = await db
     .insert(Posts)
-    .values({ profileId, replyParentId, repostSourceId, state, visibility })
+    .values({ createdAt, id, profileId, replyParentId, repostSourceId, state, visibility })
     .returning()
     .then(firstOrThrow);
   const content = await db
@@ -366,10 +633,38 @@ const createContentfulPost = async (
     .then(firstOrThrow);
 };
 
+const createAuthenticatedSession = async () => {
+  const suffix = crypto.randomUUID();
+  const account = await db
+    .insert(Accounts)
+    .values({ displayName: suffix, oidcSubject: suffix, state: AccountState.ACTIVE })
+    .returning()
+    .then(firstOrThrow);
+  const profile = await createProfile(`viewer-${suffix}`);
+  await db.insert(AccountProfiles).values({
+    accountId: account.id,
+    profileId: profile.id,
+    role: AccountProfileRole.OWNER,
+  });
+  const token = `token-${suffix}`;
+  await db.insert(Sessions).values({
+    accountId: account.id,
+    activeProfileId: profile.id,
+    state: SessionState.ACTIVE,
+    token,
+  });
+
+  return { profile, token };
+};
+
 const resetFixtures = async () => {
   await db.update(Posts).set({ currentContentId: null, replyParentId: null, repostSourceId: null });
   await db.delete(PostContents);
   await db.delete(Posts);
+  await db.delete(ProfileFollows);
+  await db.delete(Sessions);
+  await db.delete(AccountProfiles);
+  await db.delete(Accounts);
   await db.delete(Profiles);
   await db.delete(Instances).where(ne(Instances.id, localInstanceId));
 };
@@ -388,3 +683,5 @@ const truncateDatabase = async () => {
     END $$;
   `);
 };
+
+const uuid = (suffix: number) => `00000000-0000-8006-8000-${suffix.toString().padStart(12, '0')}`;

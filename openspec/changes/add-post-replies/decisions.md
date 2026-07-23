@@ -98,10 +98,10 @@
 - Authority / Provenance: 없음.
 - Status: Superseded
 - Context / Problem: PROD-399·400은 관찰 가능한 관계·visibility 행동을 정의하지만 field 이름, list/connection, pagination과 정렬 방향은 정의하지 않고, PROD-422의 thread 배치·중첩 표현도 PROD-451과의 경계가 확정되지 않았다.
-- Decision Outcome: 현재 change에서 임의의 공개 GraphQL shape나 thread 표현을 규범 계약으로 만들지 않는다. 각 구현 전에 Linear에서 shape와 책임 경계를 확정한다.
+- Decision Outcome: 현재 change에서 임의의 공개 GraphQL shape나 thread 표현을 규범 계약으로 만들지 않는다. 각 구현 전에 Linear에서 shape와 책임 경계를 확정한다. 이 혼합 기록은 PROD-399·400 계약 승인 뒤 각 Active decision과 thread Blocked 기록으로 분리해 대체한다.
 - Alternatives Considered: `replyAncestors`/`replyDescendants` 이름과 connection·정렬을 OpenSpec만으로 즉시 확정. 공개 API를 upstream 근거 없이 추가하므로 보류한다.
-- Consequences: PROD-393·398은 이 결정과 무관하게 진행할 수 있지만 PROD-399·400 및 이를 소비하는 PROD-422는 각 책임의 decision이 Blocked인 동안 구현할 수 없다.
-- Confirmation / Follow-up: PROD-399 조상 계약은 2026-07-23 Linear에서 확정되어 아래 두 Active decision으로 대체됐다. PROD-400 descendant 계약은 별도 Blocked decision으로 남는다.
+- Consequences: PROD-393·398은 이 결정과 무관하게 진행할 수 있었고 PROD-399·400 및 이를 소비하는 PROD-422는 각자 해당 책임의 upstream decision을 기다렸다.
+- Confirmation / Follow-up: PROD-399·400은 2026-07-23 Linear에서 각각 확정되어 아래 Active decision으로 대체됐다. PROD-422의 thread 표현만 별도 Blocked decision으로 남는다.
 
 ### Reply 조상 경로는 non-null list로 직접 Parent부터 반환한다
 
@@ -127,22 +127,34 @@
 - Consequences: 정상 경로의 실제 깊이만큼 recursive work가 발생하지만 DB round trip은 한 번이며 cycle에서도 유한하게 종료한다. 운영 상한이 필요해지면 Linear 공개 error 계약을 먼저 갱신해야 한다.
 - Confirmation / Follow-up: query count, 직접 Parent 우선 순서, 긴 경로와 2-node cycle fixture로 확인한다.
 
-### descendant 공개 GraphQL collection shape를 확정해야 한다
+### thread 표현을 확정해야 한다
 
 - Decision Date: 2026-07-23
 - Decision Class: Upstream Change Required
 - Authority / Provenance: 없음.
 - Status: Blocked
-- Context / Problem: PROD-400은 descendant의 관계·visibility 행동을 정의하지만 field 이름, connection·pagination, 정렬과 index를 확정하지 않았다.
-- Decision Outcome: PROD-400 Linear에서 공개 collection과 조회 책임을 확정하기 전 descendant API를 구현하지 않는다.
-- Alternatives Considered: 현재 change에서 임의로 connection·pagination·정렬을 선택. 공개 API를 upstream 근거 없이 추가하므로 보류한다.
-- Consequences: PROD-399는 진행할 수 있지만 PROD-400과 이를 소비하는 PROD-422의 descendant 범위는 계속 Blocked다.
-- Confirmation / Follow-up: PROD-400 본문·결정 댓글과 Issue Gate 승인 뒤 specs·design·tasks를 갱신한다.
+- Context / Problem: PROD-422의 thread 배치·중첩 표현은 최신 Linear에서 아직 확정되지 않았다.
+- Decision Outcome: PROD-422의 thread 표현을 현재 change에서 임의로 만들지 않는다. 구현 전에 해당 Linear 이슈에서 책임 경계를 확정하고 authority가 있는 Active decision으로 대체한다.
+- Alternatives Considered: PROD-400의 descendant connection 결정을 조상과 client thread에 그대로 확장. 서로 다른 visibility 중단·표현 책임을 가진 별도 구현 이슈의 계약을 대신 결정하므로 사용하지 않는다.
+- Consequences: PROD-399·400은 진행할 수 있지만 두 결과를 소비하는 PROD-422의 관련 task는 이 decision이 Blocked인 동안 구현할 수 없다.
+- Confirmation / Follow-up: PROD-422의 Linear 본문·계약 변경 댓글 승인 뒤 specs·design·tasks를 갱신한다.
+
+### descendant는 replyDescendants Relay connection으로 시간순 제공한다
+
+- Decision Date: 2026-07-23
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/post.md`, `PROD-400`
+- Status: Active
+- Context / Problem: 모든 조회 가능한 descendant를 hidden Parent와 독립적으로 제공하면서 client가 안정적으로 양방향 pagination할 공개 field와 순서를 확정해야 한다.
+- Decision Outcome: 기존 단일 GraphQL `Post` Node에 non-null `replyDescendants: PostConnection!` field를 추가한다. `first`/`after`와 `last`/`before`를 지원하고 `createdAt ASC, id ASC`로 정렬한다. 임의의 최대 깊이를 두지 않고 비정상 cycle에서 같은 Post를 반복하지 않으며, 구조 전체를 탐색한 뒤 각 descendant의 visibility/eligibility를 pagination 전에 적용한다.
+- Alternatives Considered: `replies` field, forward-only pagination, 최신순 정렬, depth 기반 Parent-before-child 정렬. 직접 Reply로 오해될 이름, 기존 connection과의 비대칭, thread 시간 흐름 역전 또는 hidden depth·cursor 복잡성을 만들므로 사용하지 않는다.
+- Consequences: 시간순과 deterministic tie-break를 보장하지만 비정상 timestamp에서도 Parent-before-child 위상 순서를 별도로 보장하지 않는다. 구현은 구조 traversal과 viewer filtering을 분리하고 실제 query plan으로 최소 index를 선택해야 한다.
+- Confirmation / Follow-up: PROD-400 API test에서 direct·indirect·Reply+Quote, 양방향 pageInfo, 동일 시각 tie-break, hidden Parent 아래 visible Reply, filter-before-limit와 cycle 종료를 검증한다.
 
 ## Remaining Decisions
 
-- PROD-400 descendant field 이름, connection·pagination·정렬과 index.
+- PROD-422 thread 표현은 위 Blocked decision에서 추적한다.
 
 ## Superseded Decisions
 
-- 2026-07-22의 `조상·descendant 공개 GraphQL collection shape를 확정해야 한다`는 공동 Blocked 기록은 PROD-399 조상 계약 확정으로 조상 Active decision과 PROD-400 descendant Blocked decision으로 분리됐다.
+- 2026-07-22 `조상·descendant 공개 GraphQL collection shape를 확정해야 한다` 기록은 2026-07-23 조상·descendant Active 기록과 thread Blocked 기록으로 분리해 대체했다.
