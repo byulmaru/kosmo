@@ -39,9 +39,10 @@
 
 ## Core Services
 
-- GraphQL API, Web BFF, ActivityPub handler와 worker가 공유하는 server business use case는
-  `packages/core/services`가 소유한다. GraphQL resolver, HTTP route와 ActivityPub handler는 각
-  transport·protocol의 인증과 actor context를 처리한 뒤 service를 호출한다. 상세 책임은
+- 의존 방향은 GraphQL API, Web BFF, ActivityPub handler, worker에서 `packages/core/services`로 향하고,
+  core는 `packages/core/db`에 의존한다. core가 특정 진입점의 타입이나 표현에 의존하게 하지 않는다.
+- 진입점은 transport·protocol의 인증과 actor context를 처리하고, core는 검증된 actor와 business input에
+  대한 공통 domain policy, transaction, persistence와 멱등성을 처리한다. 상세 책임은
   `docs/architecture/core-services.md`를 따른다.
 - Local GraphQL의 Account/session/selected Profile membership과 Locality, ActivityPub의
   signature/actor/object/recipient 검증처럼 caller마다 다른 권한 증거는 진입점이 소유한다. core service에는
@@ -52,6 +53,9 @@
   `InstanceKind.LOCAL`을 강제하지 않는다.
 - core service는 caller들이 공유하는 Profile/Post lifecycle, 관계 구조, visibility·eligibility, domain
   error, transaction, persistence, uniqueness와 idempotency를 소유한다.
+- core는 transport-neutral domain 결과만 반환한다. GraphQL payload, object ref, connection이나
+  resolver 편의에만 필요한 조회 결과는 resolver·loader에서 조합하고, 모든 caller가 알아야 하는 domain
+  outcome일 때만 core 반환값에 포함한다.
 - service는 production database implementation이 하나인 현재 구조에서 `getDatabaseConnection(tx)`로 optional transaction 또는 shared `db`를 선택한다. 여러 DB 작업을 원자적으로 수행하는 service는 선택한 connection에서 transaction 경계를 열어, caller transaction이 있으면 savepoint로 합류하고 없으면 shared `db`에서 transaction을 시작한다. test seam이나 복수 implementation 요구 없이 generic `Database`를 전달하는 추상화는 만들지 않는다.
 - 명시적 비관적 DB 락은 동시성 위반이 금전 거래처럼 심각하고 되돌리기 어려운 피해를 만드는 use case에만 사용한다. 팔로우 요청처럼 드문 race의 영향이 작고 복구 가능한 social interaction은 락으로 완전 직렬화하지 않으며, 상세 판단과 리뷰 근거는 `memory/database-design.md`의 Runtime Locking Policy를 따른다.
 - `packages/core/db`는 DB client, schema, relation과 DB 전용 utility를 소유하고 account/session 생성 같은 application transaction은 소유하지 않는다.
