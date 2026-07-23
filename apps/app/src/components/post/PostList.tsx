@@ -36,7 +36,6 @@ const PostListHomeTimelineFragment = graphql`
 `;
 
 type Props = {
-  canBookmark?: boolean;
   error?: boolean;
   homeTimeline?: PostList_homeTimeline$key | null;
   loading?: boolean;
@@ -45,7 +44,6 @@ type Props = {
 };
 
 export function PostList({
-  canBookmark = false,
   error = false,
   homeTimeline: timelineKey,
   loading = false,
@@ -84,7 +82,7 @@ export function PostList({
   return (
     <View style={styles.root}>
       {edges.map((edge) => (
-        <PostListItem canBookmark={canBookmark} key={edge.cursor} post={edge.node} />
+        <PostListItem key={edge.cursor} post={edge.node} />
       ))}
     </View>
   );

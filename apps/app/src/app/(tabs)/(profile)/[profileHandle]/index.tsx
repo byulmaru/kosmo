@@ -8,11 +8,6 @@ import type { ProfilePostListPageQuery as ProfilePostListPageQueryType } from '.
 
 const ProfilePostListPageQuery = graphql`
   query ProfilePostListPageQuery($handle: String!) {
-    currentSession {
-      selectedProfile {
-        id
-      }
-    }
     profileByHandle(handle: $handle) {
       id
       ...PostList_profile
@@ -45,10 +40,5 @@ function ProfilePostListPageContent({ fetchKey, handle }: { fetchKey: string; ha
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
 
-  return (
-    <PostList
-      canBookmark={Boolean(data.currentSession?.selectedProfile)}
-      profile={data.profileByHandle}
-    />
-  );
+  return <PostList profile={data.profileByHandle} />;
 }

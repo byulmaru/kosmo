@@ -6,7 +6,6 @@ import { Avatar } from '@/components/ui/Avatar';
 import { formatPostDate } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
-import { BookmarkAction } from './BookmarkAction';
 import { PostBody } from './PostBody';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
 
@@ -22,7 +21,6 @@ const PostLayoutFragment = graphql`
       displayName
       ...ProfileNameBlock_profile
     }
-    ...BookmarkAction_post
     ...PostBody_post
   }
 `;
@@ -34,13 +32,7 @@ const visibilityLabels: Record<string, string> = {
   DIRECT: '다이렉트',
 };
 
-export function PostLayout({
-  canBookmark = false,
-  post: postKey,
-}: {
-  canBookmark?: boolean;
-  post: PostLayout_post$key;
-}) {
+export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
   const theme = useTheme();
   const post = useFragment(PostLayoutFragment, postKey);
   const profileHref = `/${post.profile.relativeHandle}` as const;
@@ -68,7 +60,6 @@ export function PostLayout({
             {formatPostDate(post.createdAt)} ·{' '}
             {visibilityLabels[post.visibility] ?? post.visibility}
           </Text>
-          {canBookmark ? <BookmarkAction post={post} /> : null}
         </View>
       </View>
     </View>

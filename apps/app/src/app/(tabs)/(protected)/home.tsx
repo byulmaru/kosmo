@@ -88,7 +88,7 @@ function HomeContent({ fetchKey }: { fetchKey: string }) {
           홈
         </Text>
       </View>
-      <PostList canBookmark homeTimeline={data.homeTimeline} />
+      <PostList homeTimeline={data.homeTimeline} />
     </ScrollView>
   );
 }

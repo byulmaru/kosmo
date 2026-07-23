@@ -149,6 +149,7 @@ describe('Bookmark GraphQL 경계', () => {
     ]);
     const author = await createProfile('viewer-bookmark-author');
     const post = await createPost(author.id);
+    const secondPost = await createPost(author.id);
 
     assert.equal(await loadPostViewerBookmark(post.id, firstAuth.token), null);
     assert.equal(await loadPostViewerBookmark(post.id, secondAuth.token), null);
@@ -157,10 +158,13 @@ describe('Bookmark GraphQL 경계', () => {
 
     const firstCreated = await requestCreateBookmark(post.id, firstAuth.token);
     const secondCreated = await requestCreateBookmark(post.id, secondAuth.token);
+    const firstSecondPostCreated = await requestCreateBookmark(secondPost.id, firstAuth.token);
     const firstBookmarkId = firstCreated.data?.createBookmark.bookmark.id;
     const secondBookmarkId = secondCreated.data?.createBookmark.bookmark.id;
+    const firstSecondPostBookmarkId = firstSecondPostCreated.data?.createBookmark.bookmark.id;
     assert.ok(firstBookmarkId);
     assert.ok(secondBookmarkId);
+    assert.ok(firstSecondPostBookmarkId);
 
     assert.deepEqual(await loadPostViewerBookmark(post.id, firstAuth.token), {
       id: firstBookmarkId,
@@ -168,6 +172,10 @@ describe('Bookmark GraphQL 경계', () => {
     assert.deepEqual(await loadPostViewerBookmark(post.id, secondAuth.token), {
       id: secondBookmarkId,
     });
+    assert.deepEqual(await loadPostViewerBookmarks([post.id, secondPost.id], firstAuth.token), [
+      { id: firstBookmarkId },
+      { id: firstSecondPostBookmarkId },
+    ]);
 
     const deleted = await requestDeleteBookmark(firstBookmarkId, firstAuth.token);
     assertNoGraphQLErrors(deleted);
@@ -631,6 +639,20 @@ const loadPostViewerBookmark = async (postId: string, token?: string) => {
   );
   assertNoGraphQLErrors(result);
   return result.data?.node?.viewerBookmark ?? null;
+};
+
+const loadPostViewerBookmarks = async (postIds: string[], token?: string) => {
+  const result = await requestGraphQL<{
+    nodes: ({ viewerBookmark: { id: string } | null } | null)[];
+  }>(
+    `query PostViewerBookmarks($ids: [ID!]!) {
+      nodes(ids: $ids) { ... on Post { viewerBookmark { id } } }
+    }`,
+    { ids: postIds.map((postId) => encodeGlobalId('Post', postId)) },
+    token,
+  );
+  assertNoGraphQLErrors(result);
+  return result.data?.nodes.map((node) => node?.viewerBookmark ?? null) ?? [];
 };
 
 const assertBookmarkIds = (

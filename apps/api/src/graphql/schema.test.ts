@@ -70,6 +70,7 @@ test('exposes the Bookmark mutation and relationship contract', () => {
   const deleteInput = schema.getType('DeleteBookmarkInput');
   const deletePayload = schema.getType('DeleteBookmarkPayload');
   const bookmark = schema.getType('Bookmark');
+  const post = schema.getType('Post');
 
   assert.equal(String(mutation?.getFields().createBookmark?.type), 'CreateBookmarkPayload!');
   assert.ok(isInputObjectType(createInput));
@@ -86,6 +87,8 @@ test('exposes the Bookmark mutation and relationship contract', () => {
   assert.equal(String(bookmark.getFields().profile.type), 'Profile!');
   assert.equal(String(bookmark.getFields().post.type), 'Post');
   assert.equal(String(bookmark.getFields().createdAt.type), 'DateTime!');
+  assert.ok(isObjectType(post));
+  assert.equal(String(post.getFields().viewerBookmark.type), 'Bookmark');
 });
 
 test('exposes the ID-based idempotent Reaction delete contract', () => {
