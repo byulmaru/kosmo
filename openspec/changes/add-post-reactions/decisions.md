@@ -199,12 +199,26 @@
 ### Reaction add의 session 권한과 도메인 검증 책임을 분리한다
 
 - Decision Date: 2026-07-21
-- Status: Accepted
+- Decision Class: Implementation Choice
+- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [Core 서비스 경계](../../../docs/architecture/core-services.md), [PROD-404](https://linear.app/byulmaru/issue/PROD-404/reaction을-생성한다)
+- Status: Superseded
 - Context / Problem: GraphQL context는 Active Account, selected Profile membership과 Profile visibility를 검증하지만 core `addReaction`이 `accountId`를 받아 같은 membership을 다시 조회해 transport session 정책에 결합하고 있었다.
 - Decision Outcome: GraphQL `usingProfile` entry point가 Active Account와 Account–Profile membership을 검증하고, core service에는 검증된 actor Profile identity만 전달한다. core는 actor가 Active/Normal Local Profile인지와 Post, Type, 멱등 저장을 계속 검증한다.
 - Alternatives Considered: core가 `accountId`와 membership을 계속 재검증하면 session 정책을 중복 소유한다. actor 검증 전체를 API에 두면 core caller가 Local/Instance 상태를 우회할 수 있어 채택하지 않았다.
 - Consequences: Account 또는 membership 변경과 core transaction 사이에는 context snapshot 기준의 짧은 시간차가 있을 수 있다. commit 시점의 membership 재검증이 필요해지면 transport identity를 core에 다시 결합하지 않고 entry point의 transaction-aware 검증으로 별도 설계한다.
 - Confirmation / Follow-up: core test는 Local/Profile/Instance/Post/Type/멱등성에 집중하고, API integration test는 비활성 Account와 membership 부재가 `PERMISSION_DENIED`로 거부되는지 검증한다. PROD-405 등 후속 mutation도 같은 책임 경계를 따른다.
+
+### Reaction core actor 검증은 origin과 reachability에 중립적이다
+
+- Decision Date: 2026-07-23
+- Decision Class: Implementation Choice
+- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [Core 서비스 경계](../../../docs/architecture/core-services.md), [PROD-404](https://linear.app/byulmaru/issue/PROD-404/reaction을-생성한다), [PROD-405](https://linear.app/byulmaru/issue/PROD-405/reaction을-삭제한다)
+- Status: Active
+- Context / Problem: 이전 결정은 Local GraphQL caller의 Account·membership·selected Profile 조건과 여러 진입점이 공유할 수 있는 Reaction core actor 조건을 섞어 core에서 Local Instance와 Reachable 상태를 강제했다.
+- Decision Outcome: Local GraphQL `usingProfile` entry point는 Active Account와 Account–Profile membership을 검증하며, 정상 제품 경로의 selected Profile은 membership 모델상 Local이다. core add/delete는 검증된 actor identity를 받아 Active/Normal Profile과 non-Suspended Instance를 검증하되 Instance Type과 Unresponsive Reachability를 권한 조건으로 사용하지 않는다.
+- Alternatives Considered: Local Instance를 core에서 계속 강제하면 향후 protocol entry가 같은 domain action을 재사용하지 못한다. actor 상태를 전부 entry에 맡기면 공통 Profile/Instance 가용성 정책을 우회할 수 있어 채택하지 않았다.
+- Consequences: 현재 GraphQL 사용자가 선택할 수 있는 actor 범위와 ActivityPub federation 제외 범위는 바뀌지 않는다. 향후 ActivityPub entry는 signature, actor/object/recipient와 Post 접근 조건을 먼저 검증한 뒤 같은 core action을 사용할 수 있다.
+- Confirmation / Follow-up: core database-backed test는 Active/Normal ACTIVITYPUB Unresponsive actor의 add/delete 성공과 Suspended Instance·비활성 Profile 거부를 검증한다. API integration test는 Account와 membership 조건을 계속 검증한다.
 
 ### Reaction 삭제는 관계의 global ID로 식별한다
 
