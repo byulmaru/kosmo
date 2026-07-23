@@ -41,7 +41,7 @@ type GraphQLResult<TData> = {
   errors?: Array<{ message: string }>;
 };
 
-describe('Post repostCount GraphQL 경계', () => {
+describe('Post Repost 상태 GraphQL 경계', () => {
   before(async () => {
     process.env.DATABASE_URL = databaseUrl;
     process.env.NODE_ENV = 'production';
@@ -73,17 +73,22 @@ describe('Post repostCount GraphQL 경계', () => {
     await pg.end();
   });
 
-  test('모든 viewer에게 eligible direct Repost만 같은 수로 반환한다', async () => {
+  test('모든 viewer에게 eligible direct Repost 수와 현재 Profile의 Repost를 반환한다', async () => {
     const sourceAuthor = await createProfile('source-author');
     const sourceA = await createContentPost(sourceAuthor.id, 'source A');
     const sourceB = await createContentPost(sourceAuthor.id, 'source B');
     const viewerAProfile = await createProfile('viewer-a');
     const viewerBProfile = await createProfile('viewer-b');
+    const viewerWithoutRepostProfile = await createProfile('viewer-without-repost');
     const viewerA = await createAuthenticatedSession({ activeProfileId: viewerAProfile.id });
     const viewerB = await createAuthenticatedSession({ activeProfileId: viewerBProfile.id });
+    const viewerWithoutRepost = await createAuthenticatedSession({
+      activeProfileId: viewerWithoutRepostProfile.id,
+    });
+    const noSelectedProfile = await createAuthenticatedSession({ activeProfileId: null });
 
-    await createRepost((await createProfile('reposter-a')).id, sourceA.id);
-    await createRepost((await createProfile('reposter-b')).id, sourceA.id);
+    const repostA = await createRepost(viewerAProfile.id, sourceA.id);
+    const repostB = await createRepost(viewerBProfile.id, sourceA.id);
     const quote = await createRepost((await createProfile('quoter')).id, sourceA.id);
     const quoteContent = await db
       .insert(PostContents)
@@ -104,27 +109,57 @@ describe('Post repostCount GraphQL 경계', () => {
     await createRepost((await createProfile('source-b-reposter')).id, sourceB.id);
     await createRepost((await createProfile('quote-reposter')).id, quote.id);
 
-    const [anonymous, viewerAResult, viewerBResult] = await Promise.all([
-      requestRepostCounts([sourceA.id, sourceB.id]),
-      requestRepostCounts([sourceA.id, sourceB.id], viewerA.token),
-      requestRepostCounts([sourceA.id, sourceB.id], viewerB.token),
+    const [
+      anonymousResult,
+      profileAResult,
+      profileBResult,
+      profileWithoutRepostResult,
+      noSelectedProfileResult,
+    ] = await Promise.all([
+      requestRepostState([sourceA.id, sourceB.id]),
+      requestRepostState([sourceA.id, sourceB.id], viewerA.token),
+      requestRepostState([sourceA.id, sourceB.id], viewerB.token),
+      requestRepostState([sourceA.id, sourceB.id], viewerWithoutRepost.token),
+      requestRepostState([sourceA.id, sourceB.id], noSelectedProfile.token),
     ]);
 
-    assertNoGraphQLErrors(anonymous);
-    assertNoGraphQLErrors(viewerAResult);
-    assertNoGraphQLErrors(viewerBResult);
-    assert.deepEqual(anonymous.data?.nodes, [
-      { id: encodeGlobalId('Post', sourceA.id), repostCount: 2 },
-      { id: encodeGlobalId('Post', sourceB.id), repostCount: 1 },
+    assertNoGraphQLErrors(anonymousResult);
+    assertNoGraphQLErrors(profileAResult);
+    assertNoGraphQLErrors(profileBResult);
+    assertNoGraphQLErrors(profileWithoutRepostResult);
+    assertNoGraphQLErrors(noSelectedProfileResult);
+    assert.deepEqual(anonymousResult.data?.nodes, [
+      { id: encodeGlobalId('Post', sourceA.id), repostCount: 2, viewerRepost: null },
+      { id: encodeGlobalId('Post', sourceB.id), repostCount: 1, viewerRepost: null },
     ]);
-    assert.deepEqual(viewerAResult.data?.nodes, anonymous.data?.nodes);
-    assert.deepEqual(viewerBResult.data?.nodes, anonymous.data?.nodes);
+    assert.equal(
+      profileAResult.data?.nodes[0]?.viewerRepost?.id,
+      encodeGlobalId('Post', repostA.id),
+    );
+    assert.equal(
+      profileBResult.data?.nodes[0]?.viewerRepost?.id,
+      encodeGlobalId('Post', repostB.id),
+    );
+    assert.equal(profileWithoutRepostResult.data?.nodes[0]?.viewerRepost, null);
+    assert.equal(noSelectedProfileResult.data?.nodes[0]?.viewerRepost, null);
+    assert.equal(anonymousResult.data?.nodes[0]?.viewerRepost, null);
+    assert.equal(
+      profileAResult.data?.nodes[0]?.repostCount,
+      profileBResult.data?.nodes[0]?.repostCount,
+    );
 
-    const quoteCount = await requestRepostCounts([quote.id]);
-    assertNoGraphQLErrors(quoteCount);
-    assert.deepEqual(quoteCount.data?.nodes, [
-      { id: encodeGlobalId('Post', quote.id), repostCount: 1 },
+    const quoteState = await requestRepostState([quote.id]);
+    assertNoGraphQLErrors(quoteState);
+    assert.deepEqual(quoteState.data?.nodes, [
+      { id: encodeGlobalId('Post', quote.id), repostCount: 1, viewerRepost: null },
     ]);
+
+    await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, repostA.id));
+
+    const deletedProfileAResult = await requestRepostState([sourceA.id], viewerA.token);
+    assertNoGraphQLErrors(deletedProfileAResult);
+    assert.equal(deletedProfileAResult.data?.nodes[0]?.viewerRepost, null);
+    assert.equal(deletedProfileAResult.data?.nodes[0]?.repostCount, 1);
   });
 });
 
@@ -222,13 +257,18 @@ const createAuthenticatedSession = async ({
   return { accountId: account.id, token };
 };
 
-const requestRepostCounts = (sourceIds: string[], token?: string) =>
-  requestGraphQL<{ nodes: Array<{ id: string; repostCount: number } | null> }>(
-    `query RepostCounts($sourceIds: [ID!]!) {
+const requestRepostState = (sourceIds: string[], token?: string) =>
+  requestGraphQL<{
+    nodes: Array<{ id: string; repostCount: number; viewerRepost: { id: string } | null } | null>;
+  }>(
+    `query RepostState($sourceIds: [ID!]!) {
       nodes(ids: $sourceIds) {
         ... on Post {
           id
           repostCount
+          viewerRepost {
+            id
+          }
         }
       }
     }`,

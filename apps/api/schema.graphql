@@ -222,6 +222,7 @@ type Post implements Node {
   repostSource: Post
   state: PostState!
   viewerBookmark: Bookmark
+  viewerRepost: Post
   visibility: PostVisibility!
 }
 
