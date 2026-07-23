@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import {
   ActivityPubPosts,
   first,
@@ -96,6 +96,44 @@ const findVisiblePost = async (
     .limit(1)
     .then(first);
 
+export const deletePost = async (
+  {
+    actorProfileId,
+    postId,
+  }: {
+    readonly actorProfileId: string;
+    readonly postId: string;
+  },
+  tx?: Transaction,
+): Promise<{ readonly postId: string }> =>
+  getDatabaseConnection(tx).transaction(async (tx) => {
+    const post = await tx
+      .select({ profileId: Posts.profileId })
+      .from(Posts)
+      .where(eq(Posts.id, postId))
+      .limit(1)
+      .then(first);
+    if (!post) {
+      throw new NotFoundError('Post not found');
+    }
+    if (post.profileId !== actorProfileId) {
+      throw new PermissionDeniedError('Post author permission is required');
+    }
+
+    await tx
+      .update(Posts)
+      .set({ deletedAt: sql`now()`, state: PostState.DELETED })
+      .where(
+        and(
+          eq(Posts.id, postId),
+          eq(Posts.profileId, actorProfileId),
+          eq(Posts.state, PostState.ACTIVE),
+        ),
+      );
+
+    return { postId };
+  });
+
 export const repostPost = async (
   {
     actorProfileId,
@@ -157,7 +195,7 @@ export const repostPost = async (
       })
       .onConflictDoNothing()
       .returning()
-      .then(first);
+    .then(first);
     if (inserted) {
       return inserted;
     }
@@ -181,7 +219,6 @@ export const repostPost = async (
 
     return existing;
   });
-
 export function createPost(input: LocalPostInput, tx?: Transaction): Promise<CreatedPost>;
 export function createPost(
   input: ActivityPubPostInput,
