@@ -143,18 +143,19 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 
 - PROD-450 seam은 부모가 공급한 ordered option을 그대로 표시하고 현재 여섯 Type을 component 내부에 고정하지 않는다.
 - PROD-450은 표시 문자열과 분리된 opaque option identity별 selected/pending/error controlled 상태와 toggle callback만 소유하며 서로 다른 Type의 기존 선택을 유지한다.
+- PROD-450 Quick Picker는 16px 둥근 외부 컨테이너 안에 border 없는 44×44px·12px radius option을 표시한다. selected는 배경색으로만 구분하고 error는 빨간 border를 추가하지 않으며, pending은 이모지 위 full-size 투명 overlay의 원형 spinner로 표시하고 전체 disabled이면 panel을 렌더링하지 않는다.
 - PROD-450은 mutation, Relay fragment/cache, 실제 서버 실패 복구, trigger·popover, Post Action Bar/surface 배치와 custom emoji Full Picker·palette·검색을 포함하지 않는다.
 - PROD-417은 Type별 pending/error를 격리하고 selected Profile의 Relay Environment 사이에서 상태를 공유하지 않는다.
 - 사용자 정의 Reaction identity·asset·federation 계약을 포함하지 않는다.
 
 **Verification**
 
-- PROD-450은 supplied order와 현재 여섯 fixture, 선택·해제·복수 Type, option별 pending/error·중복 입력 방지, 전체 disabled와 callback을 Storybook/component interaction으로 검증한다.
+- PROD-450은 supplied order와 현재 여섯 fixture, 선택·해제·복수 Type, option별 border·radius·pending overlay·error·중복 입력 방지, 전체 disabled 미렌더링과 callback을 Storybook/component interaction으로 검증한다.
 - PROD-417은 실제 mutation 성공·실패 복구, selected Profile cache와 actor 전환을 component/integration test로 검증한다.
 
 - [x] 7.1 최종 `post-reaction-ui` spec이 변경되지 않음을 확인하고, PROD-450 supplied-option Quick Picker 프레젠테이션과 PROD-417 통합 경계를 proposal·design·decisions·tasks에 동기화해 strict validation을 통과시킨다.
-- [x] 7.2 PROD-450 props-only `ReactionSelector` Quick Picker panel을 구현한다.
-- [x] 7.3 PROD-450 Storybook/component interaction에서 supplied order·현재 여섯 fixture·선택·해제·복수 Type·option별 상태·disabled와 callback을 검증하고 app check를 통과시킨다.
+- [ ] 7.2 PROD-450 props-only `ReactionSelector` Quick Picker panel을 canonical 시각 계약에 맞게 구현한다.
+- [ ] 7.3 PROD-450 Storybook/component interaction에서 supplied option 동작과 border·radius·pending overlay·error·disabled 미렌더링을 검증하고 app check를 통과시킨다.
 - [ ] 7.4 PROD-417이 소유한 zero-count option 공급, selector 통합 UX와 optimistic update 결정을 확정해 specs·decisions를 갱신하고 strict validation을 통과시킨다.
 - [ ] 7.5 add/delete mutation과 selected Profile cache를 PROD-450 presentation seam에 연결한다.
 - [ ] 7.6 실제 Relay data shape의 mutation 성공·실패 복구와 selected Profile 전환을 component/integration test로 검증하고 app check를 통과시킨다.
