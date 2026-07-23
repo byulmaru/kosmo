@@ -10,7 +10,6 @@ type PostRow = typeof Posts.$inferSelect;
 type RawReplyAncestorRow = Omit<PostRow, 'createdAt' | 'deletedAt'> & {
   readonly createdAt: string;
   readonly deletedAt: string | null;
-  readonly depth: number;
 };
 
 const loadReplyAncestors = async (post: PostRow, ctx: UserContext): Promise<PostRow[]> => {
@@ -69,20 +68,13 @@ const loadReplyAncestors = async (post: PostRow, ctx: UserContext): Promise<Post
       reply_parent_id AS "replyParentId",
       repost_source_id AS "repostSourceId",
       created_at AS "createdAt",
-      deleted_at AS "deletedAt",
-      depth
+      deleted_at AS "deletedAt"
     FROM reply_ancestor
     ORDER BY depth
   `);
 
   return ancestors.map((ancestor) => ({
-    id: ancestor.id,
-    profileId: ancestor.profileId,
-    visibility: ancestor.visibility,
-    state: ancestor.state,
-    currentContentId: ancestor.currentContentId,
-    replyParentId: ancestor.replyParentId,
-    repostSourceId: ancestor.repostSourceId,
+    ...ancestor,
     createdAt: Temporal.Instant.from(ancestor.createdAt),
     deletedAt: ancestor.deletedAt ? Temporal.Instant.from(ancestor.deletedAt) : null,
   }));

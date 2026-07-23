@@ -197,10 +197,7 @@ describe('Post Reply Parent GraphQL 경계', () => {
       .update(Posts)
       .set({ replyParentId: grandparent.id })
       .where(eq(Posts.id, directParent.id));
-    await db
-      .update(Posts)
-      .set({ replyParentId: directParent.id })
-      .where(eq(Posts.id, grandparent.id));
+    await db.update(Posts).set({ replyParentId: current.id }).where(eq(Posts.id, grandparent.id));
 
     const result = await requestPostAncestors(current.id);
 
@@ -213,7 +210,7 @@ describe('Post Reply Parent GraphQL 경계', () => {
     });
   });
 
-  test('100단계를 넘는 정상 조상 경로도 임의로 절단하지 않는다', async () => {
+  test('100단계를 넘는 정상 조상 경로도 단일 조회로 임의 절단 없이 반환한다', async (t) => {
     const author = await createProfile('ancestor-depth-author');
     const root = await createContentfulPost(author.id);
     const pathFromRoot = [root];
@@ -229,9 +226,12 @@ describe('Post Reply Parent GraphQL 경계', () => {
     const reply = await createContentfulPost(author.id, {
       replyParentId: pathFromRoot.at(-1)!.id,
     });
+    const executeMock = t.mock.method(db, 'execute');
+
     const result = await requestPostAncestors(reply.id);
 
     assertNoGraphQLErrors(result);
+    assert.equal(executeMock.mock.callCount(), 1);
     assert.deepEqual(result.data?.node, {
       id: encodeGlobalId('Post', reply.id),
       replyAncestors: [...pathFromRoot].reverse().map(({ id }) => ({
