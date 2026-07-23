@@ -26,12 +26,14 @@ API는 local profile과 ActivityPub remote profile이 참여하는 visible follo
 - **THEN** 시스템은 `profile` row에 저장된 followers count 또는 following count를 반환한다
 - **AND** GraphQL count 조회 중 `ProfileFollow` aggregate query 또는 remote collection fetch를 수행하지 않는다
 - **AND** 반환 count는 GraphQL non-null count 계약을 유지한다
-- **AND** 조회 대상이 ActivityPub remote profile이면 반환 count는 best-effort 저장 count이며, followers/following connection의 edge 수와 같을 필요가 없다
+- **AND** local/remote profile 모두 반환 count는 화면 표시와 mutation cache 갱신을 위한 best-effort 값이며, followers/following connection의 edge 수와 같을 필요가 없다
+- **AND** followers/following connection이 visible relation membership의 source of truth다
 
 #### Scenario: Exclude disabled profiles from stored counts
 
 - **WHEN** active profile이 비활성화된다
 - **THEN** 시스템은 profile follow row를 삭제하지 않고 남은 active profile들의 저장 followersCount/followingCount에서 해당 비활성 profile과의 관계를 제외한다
+- **AND** 이 전이는 migration 전에 이미 비활성화된 profile 관계의 historical count를 별도로 reconciliation하지 않는다
 
 #### Scenario: Read public follow
 

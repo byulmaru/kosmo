@@ -18,6 +18,7 @@
 - **WHEN** followers/following 저장 count column을 기존 DB에 추가한다
 - **THEN** migration은 기존 established `ProfileFollow` row를 기준으로 각 profile의 followers count와 following count를 채운다
 - **AND** backfill은 기존 established relation 전체를 사용하며 profile/instance 가시성 상태를 이유로 relation을 삭제하거나 제외하지 않는다
+- **AND** 이 one-time snapshot은 migration 전에 이미 비활성화된 profile 관계를 별도로 reconciliation하지 않으며 visible connection edge 수와의 상시 일치를 보장하지 않는다
 
 #### Scenario: Update stored counts for established follow changes
 

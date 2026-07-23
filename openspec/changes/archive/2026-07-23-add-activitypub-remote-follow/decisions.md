@@ -4,6 +4,18 @@
 
 ## Decision Records
 
+### 저장 follow count는 visible relation membership의 exact source of truth가 아니다
+
+- Decision Date: 2026-07-23
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/follow-relationship.md`, [PROD-240](https://linear.app/byulmaru/issue/PROD-240)의 전체 established relation backfill, [PROD-281](https://linear.app/byulmaru/issue/PROD-281)의 이후 profile disable count 조정과 [PROD-361](https://linear.app/byulmaru/issue/PROD-361)의 최종 정합성 결정에서 파생한다.
+- Status: Active
+- Context / Problem: 초기 count migration은 기존 established relation 전체를 snapshot으로 집계하지만, 이후 profile disable lifecycle은 relation row를 보존하면서 남은 active 상대의 count를 조정한다. migration 전에 이미 disabled인 profile 관계까지 historical state로 재구성하려면 별도 reconciliation이 필요하지만, 저장 count는 visible connection membership을 판정하는 source of truth가 아니다.
+- Decision Outcome: local/remote profile의 저장 followers/following count는 화면 표시와 mutation cache 갱신을 위한 best-effort 값으로 취급한다. 초기 migration은 기존 established relation 전체를 집계하고 migration 이전 disabled relation을 별도로 reconciliation하지 않는다. 이후 follow/unfollow와 profile disable 전이는 현재 transaction 계약에 따라 count를 갱신하며, visible followers/following connection이 실제 membership의 권위다.
+- Alternatives Considered: backfill에서 disabled profile relation 제외, additive reconciliation migration 추가, 저장 count와 visible connection edge 수의 상시 일치 보장.
+- Consequences: historical disabled relation 때문에 저장 count와 visible connection edge 수가 다를 수 있다. 이 차이만을 복구하는 migration이나 별도 이슈는 만들지 않으며, SUSPENDED remote relation/count 보존 계약도 변경하지 않는다.
+- Confirmation / Follow-up: active/archived data-model과 profile spec이 one-time backfill, 이후 disable transition과 best-effort count 경계를 함께 명시하는지 확인한다.
+
 ### Remote Follow은 Fedify 결과 계약만 소유하고 공통 discovery를 수정하지 않는다
 
 - Decision Date: 2026-07-23
