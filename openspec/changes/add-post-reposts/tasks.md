@@ -123,8 +123,8 @@ Post가 모든 viewer에게 같은 direct Active Repost count와 현재 selected
 
 - 서로 다른 viewer의 동일 count, Quote/Tombstone 제외, selected Profile 전환·부재와 active Repost identity를 batched GraphQL integration test로 검증한다.
 
-- [ ] 4.1 viewer-independent `repostCount`와 selected Profile별 nullable `viewerRepost`를 batched query 경계로 제공한다.
-- [ ] 4.2 count membership, actor 격리, selected Profile 부재와 N+1 회귀 검증을 추가하고 API check를 통과시킨다.
+- [x] 4.1 viewer-independent `repostCount`와 selected Profile별 nullable `viewerRepost`를 batched query 경계로 제공한다.
+- [x] 4.2 count membership, actor 격리, selected Profile 부재와 N+1 회귀 검증을 추가하고 API check를 통과시킨다.
 
 ## 5. PROD-430 Home과 Profile Post List Repost 후보 정책
 

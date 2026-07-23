@@ -218,9 +218,11 @@ type Post implements Node {
   replyAncestors: [Post!]!
   replyDescendants(after: String, before: String, first: Int, last: Int): PostConnection!
   replyParent: Post
+  repostCount: Int!
   repostSource: Post
   state: PostState!
   viewerBookmark: Bookmark
+  viewerRepost: Post
   visibility: PostVisibility!
 }
 
