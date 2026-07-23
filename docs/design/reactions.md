@@ -13,7 +13,7 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 ## Pending과 Disabled
 
 - pending option의 이모지는 그대로 표시한다.
-- 투명한 44×44px overlay를 `StyleSheet.absoluteFillObject`로 option 위에 배치하고, 가운데의 큰 원형 loading animation만 표시한다.
+- 투명한 overlay가 option의 네 방향을 0으로 채워 44×44px 전체를 덮고, 가운데의 큰 원형 loading animation만 표시한다.
 - overlay는 이모지 뒤에 렌더되는 sibling의 paint order를 사용하며 별도 `zIndex`를 두지 않는다.
 - pending option만 입력을 막고 다른 option은 계속 선택할 수 있다.
 - Picker 전체가 disabled이면 비활성 UI를 표시하지 않고 Picker를 렌더링하지 않는다.
