@@ -127,17 +127,17 @@
 - Consequences: 정상 경로의 실제 깊이만큼 recursive work가 발생하지만 DB round trip은 한 번이며 cycle에서도 유한하게 종료한다. 운영 상한이 필요해지면 Linear 공개 error 계약을 먼저 갱신해야 한다.
 - Confirmation / Follow-up: query count, 직접 Parent 우선 순서, 긴 경로와 2-node cycle fixture로 확인한다.
 
-### thread 표현을 확정해야 한다
+### Reply thread는 현재 Post를 상세 앵커로 두고 supplied 직접 관계만 연결한다
 
 - Decision Date: 2026-07-23
-- Decision Class: Upstream Change Required
-- Authority / Provenance: 없음.
-- Status: Blocked
-- Context / Problem: PROD-422의 thread 배치·중첩 표현은 최신 Linear에서 아직 확정되지 않았다.
-- Decision Outcome: PROD-422의 thread 표현을 현재 change에서 임의로 만들지 않는다. 구현 전에 해당 Linear 이슈에서 책임 경계를 확정하고 authority가 있는 Active decision으로 대체한다.
-- Alternatives Considered: PROD-400의 descendant connection 결정을 조상과 client thread에 그대로 확장. 서로 다른 visibility 중단·표현 책임을 가진 별도 구현 이슈의 계약을 대신 결정하므로 사용하지 않는다.
-- Consequences: PROD-399·400은 진행할 수 있지만 두 결과를 소비하는 PROD-422의 관련 task는 이 decision이 Blocked인 동안 구현할 수 없다.
-- Confirmation / Follow-up: PROD-422의 Linear 본문·계약 변경 댓글 승인 뒤 specs·design·tasks를 갱신한다.
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-451`, `PROD-422`, `memory/frontend-react-native.md`
+- Status: Active
+- Context / Problem: 조상·현재·하위 Reply를 구분하면서도 기존 Post rendering을 유지하고, API가 제공하지 않은 관계나 visibility 경계를 client가 추론하지 않는 presentation 경계가 필요하다.
+- Decision Outcome: 조상과 하위 Reply는 기존 목록 Post와 같은 정보 밀도로 표시하고 현재 Post만 기존 상세 rendering을 사용해 앵커로 강조한다. presentation은 부모가 공급한 순서와 인접 Post의 직접 관계 metadata만 사용하며, 관계가 확인된 구간에만 connector를 그리고 supplied 경계에서 자연스럽게 종료한다. PROD-451은 caller가 기존 Post renderer를 공급하는 layout과 fixture용 optional Post 선택 adapter를 소유하되 기존 Link를 감싸거나 대체하지 않는다. PROD-422는 실제 Reply fragment·visibility 결과에서 relation metadata를 만들고 기존 route-aware Post renderer를 같은 layout에 공급한다.
+- Alternatives Considered: 조상을 축소·희미하게 만드는 compact chain, 모든 Post를 같은 강조도로 잇는 linear feed, 모든 descendant를 depth tree나 하나의 연속선으로 추론하는 layout. compact chain은 일반 Post 밀도를 잃고, 동일 강조는 현재 상세 Post의 앵커를 약화하며, tree·연속선은 API가 공급하지 않은 직접 관계를 암시할 수 있어 사용하지 않는다.
+- Consequences: 현재 Post의 상세 맥락과 주변 Reply의 일반 읽기 밀도를 함께 유지하고 API visibility 경계를 누출하지 않는다. presentation seam은 새 Quote Source·Action Bar·Reaction/Repost UI를 소유하지 않으며 caller가 공급한 기존 Post rendering과 link semantics를 보존해야 한다. Reply+Quote의 실제 Source preview 외관과 상호작용은 production Post renderer 소유 범위에서 별도로 검증한다.
+- Confirmation / Follow-up: PROD-451 Storybook/component interaction은 role별 기존 renderer 선택, supplied 직접 connector, 직접 연결된 마지막 visible Reply에서의 경계 종료, Reply+Quote-shaped subtree 보존과 optional mock callback adapter를 검증한다. 실제 spacing·typography 밀도는 현재 `ThemeProvider`가 지원하는 Light appearance의 390px/600px visual QA로 확인하고 Dark appearance는 완료한 것으로 기록하지 않는다. PROD-422는 ancestor reverse와 descendant `replyParent { id }` 기반 metadata, 실제 fragment·route integration을 별도로 검증한다.
 
 ### descendant는 replyDescendants Relay connection으로 시간순 제공한다
 
@@ -153,8 +153,9 @@
 
 ## Remaining Decisions
 
-- PROD-422 thread 표현은 위 Blocked decision에서 추적한다.
+- 없음.
 
 ## Superseded Decisions
 
 - 2026-07-22 `조상·descendant 공개 GraphQL collection shape를 확정해야 한다` 기록은 2026-07-23 조상·descendant Active 기록과 thread Blocked 기록으로 분리해 대체했다.
+- 2026-07-23 `thread 표현을 확정해야 한다` Blocked 기록은 PROD-451의 presentation 책임과 PROD-422의 실제 integration 책임을 분리한 Active 구현 선택으로 대체했다.
