@@ -9,6 +9,7 @@ import { PostLayout } from '@/components/post/PostLayout';
 import { PostList } from '@/components/post/PostList';
 import { PostListItem } from '@/components/post/PostListItem';
 import { PostSourcePresentationView } from '@/components/post/PostSourcePresentationView';
+import { formatTimelineTimestamp } from '@/lib/date';
 import { longBody, post, profile, profileWithPosts, timeline } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -578,6 +579,9 @@ export const Quote: Story = {
     const root = within(canvasElement).getByTestId('post-source-presentation');
     const canvas = within(root);
     expect(canvas.getByText('이 원문에 덧붙이는 인용자의 본문입니다.')).toBeVisible();
+    expect(canvas.getByTestId('post-timestamp')).toHaveTextContent(
+      formatTimelineTimestamp(quotePost.createdAt),
+    );
     const preview = canvas.getByTestId('source-post-preview');
     expect(preview.textContent).toContain('원문 작성자의 긴 본문과 줄바꿈을 표시합니다.');
     expect(canvas.getAllByRole('link')).toHaveLength(3);
@@ -631,6 +635,9 @@ export const OrdinaryPost: Story = {
     const root = within(canvasElement).getByTestId('post-source-presentation');
     const canvas = within(root);
     expect(canvas.getByText('짧은 본문 한 줄.')).toBeVisible();
+    expect(canvas.getByTestId('post-timestamp')).toHaveTextContent(
+      formatTimelineTimestamp(shortPost.createdAt),
+    );
     expect(canvas.queryByTestId('source-post-preview')).not.toBeInTheDocument();
     expect(canvas.getAllByRole('link')).toHaveLength(1);
   },
