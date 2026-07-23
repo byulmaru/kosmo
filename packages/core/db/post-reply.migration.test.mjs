@@ -21,6 +21,10 @@ const replyMigration = new URL(
   '../../../drizzle/20260722082715_large_scalphunter/migration.sql',
   import.meta.url,
 );
+const descendantMigration = new URL(
+  '../../../drizzle/20260723021105_amused_brood/migration.sql',
+  import.meta.url,
+);
 
 const ids = {
   instance: '00000000-0000-8000-8000-000000000001',
@@ -140,6 +144,77 @@ test('adds Reply Parent without rewriting existing Post and Repost contracts', a
   }
 });
 
+test('adds the measured Reply descendant traversal index without changing Post rows', async () => {
+  assert.ok(process.env.DATABASE_URL);
+  const sql = postgres(process.env.DATABASE_URL, { max: 1 });
+
+  try {
+    await sql.unsafe('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
+    for (const migration of previousMigrations) {
+      await sql.unsafe(await readFile(migration, 'utf8'));
+    }
+    await seedRows(sql);
+    await sql.unsafe(await readFile(replyMigration, 'utf8'));
+    await insertContentfulPost(sql, {
+      contentId: ids.replyContent,
+      id: ids.reply,
+      replyParentId: ids.parent,
+    });
+    await insertContentfulPost(sql, {
+      contentId: ids.replyQuoteContent,
+      id: ids.replyQuote,
+      replyParentId: ids.reply,
+      repostSourceId: ids.source,
+    });
+
+    const rowsBefore = await getPostRows(sql);
+
+    await sql.unsafe(await readFile(descendantMigration, 'utf8'));
+
+    assert.deepEqual(await getPostRows(sql), rowsBefore);
+    assert.match(
+      (
+        await sql`
+          SELECT indexdef AS definition
+          FROM pg_indexes
+          WHERE schemaname = 'public'
+            AND tablename = 'post'
+            AND indexname = 'post_reply_parent_id_index'
+        `
+      )[0]?.definition ?? '',
+      /USING btree \(reply_parent_id\) WHERE \(reply_parent_id IS NOT NULL\)$/,
+    );
+
+    await sql`
+      INSERT INTO post (profile_id, visibility, state)
+      SELECT ${ids.author}, 'PUBLIC', 'ACTIVE'
+      FROM generate_series(1, 2000)
+    `;
+    await sql.unsafe('ANALYZE post');
+
+    const plan = await sql`
+      EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
+      WITH RECURSIVE reply_descendants(id, path) AS (
+        SELECT child.id, ARRAY[${ids.parent}::uuid, child.id]
+        FROM post AS child
+        WHERE child.reply_parent_id = ${ids.parent}
+
+        UNION ALL
+
+        SELECT child.id, reply_descendants.path || child.id
+        FROM post AS child
+        INNER JOIN reply_descendants ON child.reply_parent_id = reply_descendants.id
+        WHERE NOT child.id = ANY(reply_descendants.path)
+      )
+      SELECT id FROM reply_descendants
+    `;
+
+    assert.match(JSON.stringify(plan), /post_reply_parent_id_index/);
+  } finally {
+    await sql.end();
+  }
+});
+
 async function verifyCatalog(sql, repostIndexBefore) {
   assert.deepEqual(
     [
@@ -191,6 +266,20 @@ async function getRepostIndexDefinition(sql) {
         AND indexname = 'post_active_repost_profile_source_unique'
     `
   )[0]?.definition;
+}
+
+async function getPostRows(sql) {
+  return [
+    ...(await sql`
+      SELECT
+        id::text,
+        current_content_id::text AS "currentContentId",
+        reply_parent_id::text AS "replyParentId",
+        repost_source_id::text AS "repostSourceId"
+      FROM post
+      ORDER BY id
+    `),
+  ];
 }
 
 async function seedRows(sql) {

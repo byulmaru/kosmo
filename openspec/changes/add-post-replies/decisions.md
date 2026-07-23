@@ -151,9 +151,22 @@
 - Consequences: 시간순과 deterministic tie-break를 보장하지만 비정상 timestamp에서도 Parent-before-child 위상 순서를 별도로 보장하지 않는다. 구현은 구조 traversal과 viewer filtering을 분리하고 실제 query plan으로 최소 index를 선택해야 한다.
 - Confirmation / Follow-up: PROD-400 API test에서 direct·indirect·Reply+Quote, 양방향 pageInfo, 동일 시각 tie-break, hidden Parent 아래 visible Reply, filter-before-limit와 cycle 종료를 검증한다.
 
+### Reply+Quote descendant eligibility는 PROD-402의 Source chain 정책에 선행 의존한다
+
+- Decision Date: 2026-07-23
+- Decision Class: Upstream Input
+- Authority / Provenance: `docs/domain/objects/post.md`, `PROD-400`, `PROD-402`, `add-post-reposts`
+- Status: Blocked
+- Context / Problem: descendant 자체의 lifecycle·visibility만 검사하면 조회 불가능한 Repost Source를 가진 Reply+Quote가 노출될 수 있다. Source chain eligibility의 구현 소유권은 `add-post-reposts`의 PROD-402에 있으므로 PROD-400에서 별도 재귀 판정을 중복 구현할 수 없다.
+- Decision Outcome: Linear에서 PROD-402를 PROD-400의 blocker로 추가한다. PROD-400은 traversal·connection·index 초안을 유지하되 PROD-402의 공통 Source chain eligibility를 재사용하고 negative integration test를 통과하기 전 완료하지 않는다.
+- Alternatives Considered: PROD-400에 Source chain 재귀 판정을 중복 구현, 현재 descendant 자체 조건만으로 완료. 전자는 이슈·change 소유권을 침범하고 후자는 canonical eligibility를 위반하므로 사용하지 않는다.
+- Consequences: PROD-400 구현과 Draft PR은 PROD-402 완료까지 보류한다. 의존성이 해소되면 Reply+Quote Source tombstone/unavailable 시나리오와 resolver-equivalent query plan 검증을 추가한다.
+- Confirmation / Follow-up: PROD-402 완료 뒤 공통 eligibility API와 SQL 적용 지점을 재확인하고 Linear → OpenSpec → implementation 순서로 재개한다.
+
 ## Remaining Decisions
 
 - PROD-422 thread 표현은 위 Blocked decision에서 추적한다.
+- PROD-400 Reply+Quote descendant eligibility는 PROD-402의 Source chain 정책이 완료될 때까지 위 Blocked decision에서 추적한다.
 
 ## Superseded Decisions
 

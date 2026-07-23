@@ -33,7 +33,7 @@
 - 조상 조회는 조회 불가능한 Parent에서 중단한다. descendant 조회는 구조 탐색과 viewer 필터를 분리해야 숨겨진 Parent 아래의 visible Reply를 함께 제거하지 않는다.
 - PROD-399의 공개 계약은 pagination 없는 `Post.replyAncestors: [Post!]!`이며 직접 Parent부터 root 방향으로 반환한다. Parent가 없거나 첫 Parent가 unavailable이면 빈 배열이다.
 - 조상 경로는 임의의 최대 깊이로 절단하지 않으므로 단계별 Node load를 반복하지 않고 cycle을 식별하면서 한 번에 탐색해야 한다.
-- PROD-400은 `Post.replyDescendants: PostConnection!`, full Relay pagination과 `createdAt ASC, id ASC` 정렬을 공개 계약으로 확정했다. 기존 Post connection helper와 같은 양방향 page 계약을 유지하되 ID 단독 cursor로 축약하지 않는다.
+- PROD-400은 `Post.replyDescendants: PostConnection!`, full Relay pagination과 `createdAt ASC, id ASC` 정렬을 공개 계약으로 확정했다. 기존 Post connection helper와 같은 양방향 page 계약을 유지하되 ID 단독 cursor로 축약하지 않는다. Reply+Quote descendant의 eligibility는 PROD-402가 제공할 Repost Source chain 조회 정책을 재사용하며, 그 전에는 PROD-400을 완료하지 않는다.
 
 ### Recommended Approach
 
@@ -41,7 +41,7 @@
 - `createPost` transaction은 빈 관계의 Post를 먼저 만들고 Content를 생성한 뒤, 공통 내부 validator로 Content/Reply Parent/Repost Source 조합을 판정하고 Parent의 존재·Content를 확인한다. 마지막 Post update에서는 `currentContentId`와 `replyParentId`만 함께 연결한다.
 - validator는 package 공개 barrel에 노출하지 않는다. PROD-393은 기존 Local/ActivityPub `createPost`에 `replyParentId`만 추가해 Post와 Reply를 저장한다. Source를 실제로 연결하는 Quote·Reply+Quote와 Repost 경로는 각 caller를 소유한 후속 이슈에서 추가한다.
 - PROD-398은 Post 관계 field resolver에서 저장 ID를 기존 loadable `Post` Node에 전달하고 Parent가 조회 불가능하면 `null`로 정규화한다.
-- PROD-399는 직접 Parent를 seed로 하는 recursive query에서 현재 Post와 방문한 조상 ID를 path로 추적한다. 각 단계에 기존 `Post` 조회 경계를 적용해 unavailable Parent에서 중단하고, 반환 순서는 직접 Parent부터 유지한다. PROD-400은 recursive traversal에서 visibility를 적용하지 않고 cycle 방문을 방어하며 전체 descendant ID를 찾은 뒤, 최종 Post 후보에 visibility/eligibility를 적용하고 `createdAt ASC, id ASC` cursor와 page limit을 적용한다. 대표 fan-out·depth 데이터의 실제 query plan으로 `reply_parent_id` index 필요성과 형태를 결정한다.
+- PROD-399는 직접 Parent를 seed로 하는 recursive query에서 현재 Post와 방문한 조상 ID를 path로 추적한다. 각 단계에 기존 `Post` 조회 경계를 적용해 unavailable Parent에서 중단하고, 반환 순서는 직접 Parent부터 유지한다. PROD-400은 recursive traversal에서 visibility를 적용하지 않고 cycle 방문을 방어하며 전체 descendant ID를 찾은 뒤, 최종 Post 후보에 visibility/eligibility와 PROD-402가 소유한 Repost Source chain eligibility를 적용하고 `createdAt ASC, id ASC` cursor와 page limit을 적용한다. 대표 fan-out·depth 데이터의 실제 query plan으로 `reply_parent_id` index 필요성과 형태를 결정한다.
 - PROD-429는 Reply 후보 판정을 page limit 이전에 적용한다. PROD-422는 route가 thread query를 소유하고 각 Post 표시 컴포넌트가 colocated Relay fragment를 유지하게 연결한다.
 - `add-post-replies`는 `add-post-reposts` artifact를 수정하지 않는다. 겹치는 active capability는 새 독립 requirement로 추가하고 두 change와 전체 OpenSpec을 함께 strict validation한다.
 
