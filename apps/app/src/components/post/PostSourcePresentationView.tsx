@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
   displayName: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
   handle: { flexShrink: 1, fontFamily: 'SUIT', ...typography.xsm },
   sourceHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, minWidth: 0 },
-  timestamp: { fontFamily: 'SUIT', minHeight: 44, paddingTop: 12, ...typography.xsm },
+  timestamp: { fontFamily: 'SUIT', minHeight: 44, minWidth: 44, paddingTop: 12, ...typography.xsm },
   sourceBody: { minWidth: 0 },
   preview: { borderRadius: radii.lg, borderWidth: 1, gap: spacing.sm, padding: spacing.md },
 });
