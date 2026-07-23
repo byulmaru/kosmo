@@ -38,7 +38,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
   검증상 Reply Parent를 가질 수 없으므로 PROD-401의 Repost insert와 core/API 테스트는
   `reply_parent_id = null`을 명시적으로 유지·확인해야 한다.
 - 기존 `createPost` caller는 Local GraphQL content creation과 ActivityPub Note ingestion뿐이며 `content` non-null 반환을 기대한다. 단순히 모든 반환을 nullable로 넓히면 기존 caller contract가 불필요하게 약해진다.
-- 현재 `postVisibilityAccessWhere`는 API context와 전역 DB connection에 결합되어 core service가 직접 재사용할 수 없다. Local GraphQL entry는 Account.Active, Owner/Member membership과 Active/Normal Local actor를 검증하고, 공통 Repost action은 검증된 actor Profile의 가용성과 이번 action에 필요한 Source visibility 조건을 자체 transaction에서 검증하되 API helper를 core로 역참조하지 않아야 한다.
+- 현재 `postVisibilityAccessWhere`는 API context와 전역 DB connection에 결합되어 core service가 직접 재사용할 수 없다. Local GraphQL entry의 공통 `usingProfile` 인증은 Account.Active와 선택된 Local Profile membership·visibility를 검증하고, 공통 Repost action은 전달받은 actor Profile의 가용성과 이번 action에 필요한 Source visibility 조건을 자체 transaction에서 검증하되 API helper를 core로 역참조하지 않아야 한다.
 - Source 접근 실패는 nullable 관계 field의 결과이며 Content 있는 Quote 자체의 eligibility를 바꾸지 않는다.
   Content 없는 Repost만 직접 Source가 viewer 기준으로 조회 가능해야 한다.
 - Node/Home/Profile/Bookmark가 공유하는 현재 Post visibility predicate는 Post 자체를 판정한다. Source 조건을
@@ -50,7 +50,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 ### Recommended Approach
 
 1. 완료된 PROD-394의 nullable `repost_source_id`, Active contentless Repost partial unique index와 migration 검증을 저장 경계로 재사용한다. 기존 `createPost`의 contentful Local/ActivityPub 계약과 non-null Content 반환은 변경하지 않는다.
-2. PROD-401은 Local GraphQL entry와 공통 Repost action을 하나의 transaction으로 조합한다. GraphQL entry는 Account.Active, Owner/Member membership과 Active/Normal Local actor를 검증하고, core action은 `actorProfileId`와 `sourcePostId`만 받아 Active Profile과 Suspended가 아닌 Instance라는 공통 actor 가용성, Source visibility/eligibility, derived visibility와 duplicate/concurrent idempotency를 소유한다. insert conflict가 발생하지 않게 미리 조회하는 것만으로 동시성을 보장하지 않고, DB conflict 뒤 기존 Active Repost를 다시 조회해 성공 결과로 정규화한다. 이 입력 경계는 검증된 Remote actor도 재사용할 수 있지만 ActivityPub ingress·delivery는 구현하지 않는다. Quote Source 연결은 실제 Quote 작성 action이 생기는 후속 작업에서 소유한다.
+2. PROD-401의 Local GraphQL entry는 공통 `usingProfile` 인증이 검증한 `ctx.session.profileId`를 별도 역할 제한 없이 공통 Repost action에 전달한다. core action은 `actorProfileId`와 `sourcePostId`만 받아 자체 transaction에서 Active Profile과 Suspended가 아닌 Instance라는 공통 actor 가용성, Source visibility/eligibility, derived visibility와 duplicate/concurrent idempotency를 소유한다. insert conflict가 발생하지 않게 미리 조회하는 것만으로 동시성을 보장하지 않고, DB conflict 뒤 기존 Active Repost를 다시 조회해 성공 결과로 정규화한다. 이 입력 경계는 검증된 Remote actor도 재사용할 수 있지만 ActivityPub ingress·delivery는 구현하지 않는다. Quote Source 연결은 실제 Quote 작성 action이 생기는 후속 작업에서 소유한다.
 3. PROD-402·403은 direct `repostSource`와 batched count/selected Profile relation loader를 추가한다. viewer-independent count query와 viewer-relative Node loader를 분리한다.
 4. Post Node와 목록 query는 Content 없는 Repost에만 direct Source visibility/eligibility를 적용하고 hidden
    Source Repost 후보를 page limit 전에 제거한다. Quote는 자신의 visibility/eligibility로 반환하며 nullable

@@ -29,7 +29,7 @@
 
 ### Requirement: Repost 생성
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `PROD-389`, `PROD-401` 시스템은 `Account.Active`와 `Profile.Member` 권한을 가진 Active/Normal Local Profile이 조회 가능한 Content Post를 Repost하는 멱등 action과 GraphQL mutation을 제공해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `PROD-389`, `PROD-401` 시스템은 `Account.Active`와 `Profile.Member` 권한을 가진 선택된 Active/Normal Local Profile이 조회 가능한 Content Post를 Repost하는 멱등 action과 GraphQL mutation을 제공해야 한다(MUST). `Profile.Member`는 Owner, Admin, Member 역할을 모두 포함하며 GraphQL entry는 공통 `usingProfile` 인증을 통과한 선택 Profile에 역할별 제한을 다시 적용하지 않는다.
 
 #### Scenario: Public 또는 Unlisted Source Repost
 
@@ -50,7 +50,7 @@
 
 #### Scenario: Repost 행동 권한 거부
 
-- **WHEN** Account가 Active가 아니거나 행동 Profile의 Member가 아니거나 행동 Profile이 Active/Normal Local Profile이 아니다
+- **WHEN** Account가 Active가 아니거나 선택된 Profile과의 Membership이 없거나 행동 Profile이 Active/Normal Local Profile이 아니다
 - **THEN** 시스템은 Repost를 생성하지 않고 권한 오류로 요청을 거부한다
 
 #### Scenario: Repost 생성 transaction rollback
