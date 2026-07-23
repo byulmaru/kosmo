@@ -108,6 +108,21 @@
 - Consequences: 실제 `Post` count query와 `reactionProfiles` connection, modal/route, selected Profile/viewer cache 통합은 PROD-418에 남는다. supplied order는 server가 제공한 count 내림차순과 동률 무보장 계약을 그대로 보존하며, component는 이를 재해석하지 않는다. 이 선택은 최종 `post-reaction-ui` spec을 축소하거나 대체하지 않으며, 나중에 되돌릴 중간 제품 계약이 아니다.
 - Confirmation / Follow-up: PROD-449는 fixture state, 복수 Type·동률, 기존 Profile row, callback interaction과 Relay mock fragment Storybook을 component 수준에서 검증한다. PROD-418은 같은 seam을 유지한 채 실제 query/connection, zero-count와 modal/route UX, cache 통합 및 최종 spec의 pagination 검증을 수행한다.
 
+### PROD-450은 supplied option 기반 Quick Picker 프레젠테이션을 먼저 전달한다
+
+- Decision Date: 2026-07-23
+- Decision Class: Implementation Choice
+- Authority / Provenance:
+  - `docs/domain/objects/reaction.md`
+  - `PROD-450`
+  - `openspec/changes/add-post-reactions/specs/post-reaction-ui/spec.md`
+- Status: Active
+- Context / Problem: 최종 Reaction selector는 selected Profile의 실제 add/delete mutation과 Relay cache를 연결해야 하지만, PROD-450은 API 없이 독립 검증 가능한 프레젠테이션과 상태 경계만 소유한다. 현재는 canonical 여섯 Unicode를 GitHub Reaction 선택기처럼 빠르게 고르는 panel이 필요하고, 장기 custom emoji 탐색은 별도 제품·federation 계약이 필요하다.
+- Decision Outcome: PROD-450은 부모가 공급한 ordered option을 한 줄로 표시하는 props-only `ReactionSelector` Quick Picker panel을 제공한다. option의 선택 identity는 표시 문자열과 분리된 opaque 값으로 취급하고 selected·pending·error를 option별 controlled 상태로 받으며, toggle intent만 callback으로 전달한다. 현재 fixture는 `🥹`, `❤️`, `🎉`, `👀`, `☘️`, `🌈`을 사용하고 서로 다른 Type의 선택 상태를 함께 유지한다. trigger, popover 위치·열림 상태, Post Action Bar 배치와 실제 mutation·Relay/cache·서버 실패 복구는 소유하지 않는다.
+- Alternatives Considered: component 내부에 현재 여섯 Type을 고정하면 option 공급과 미래 확장을 가로막는다. Promise callback으로 비동기 상태를 내부 소유하면 PROD-417의 mutation·rollback 책임을 앞당긴다. 지금 custom emoji Full Picker까지 구현하면 identity, asset lifecycle, animation, sensitive/local-remote permission, 검색·category·최근 사용을 상위 계약 없이 선결정한다.
+- Consequences: PROD-417은 같은 seam에 실제 option data, add/delete adapter와 selected Profile cache를 연결할 수 있다. 장기 Misskey형 palette·Full Picker와 custom emoji renderer는 별도 Domain Gate와 Issue Gate 뒤 option 공급자로 연결할 수 있지만, 이번 결정은 custom emoji identity나 wire format을 정하지 않는다. 이 presentation slice는 최종 `post-reaction-ui` spec을 축소하거나 대체하지 않는다.
+- Confirmation / Follow-up: PROD-450 Storybook/component interaction에서 supplied order, 현재 여섯 fixture, 선택·해제·복수 Type, option별 pending/error, 전체 disabled와 callback을 검증한다. PROD-417은 실제 Relay data shape, mutation 성공·실패 복구와 selected Profile 전환을 별도로 검증한다.
+
 ### Reaction Notification은 source 밖의 Best Effort projection으로 처리한다
 
 - Decision Date: 2026-07-20

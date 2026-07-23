@@ -1,8 +1,8 @@
 ## Context
 
-현재 `main`에는 PROD-395가 전달한 Reaction 저장 schema와 migration, PROD-404가 전달한 멱등 생성 service·GraphQL mutation, PROD-405가 전달한 Owner 멱등 삭제 service·GraphQL mutation, PROD-407의 Type별 Profile connection이 있다. 아직 `main`에 없는 범위는 Type별 count와 UI·Reaction Notification lifecycle이다. PostgreSQL/Drizzle은 UUIDv7 default, 명시적 foreign key와 SQL-like query builder를 사용하며, Post 조회 권한은 API의 기존 Post visibility predicate가 소유한다. Profile-scoped Notification 저장과 Follow source backend는 이미 병합됐지만 list/count/read visibility SQL은 Follow join에 고정돼 있고, `add-in-app-notifications`의 목록 UI·badge·E2E·archive는 아직 완료되지 않았다.
+현재 `main`에는 PROD-395가 전달한 Reaction 저장 schema와 migration, PROD-404가 전달한 멱등 생성 service·GraphQL mutation, PROD-405가 전달한 Owner 멱등 삭제 service·GraphQL mutation, PROD-407의 Type별 Profile connection과 PROD-449의 요약 프레젠테이션 seam이 있다. 아직 `main`에 없는 범위는 Type별 count, selector와 실제 data를 연결한 UI integration, Reaction Notification lifecycle이다. PostgreSQL/Drizzle은 UUIDv7 default, 명시적 foreign key와 SQL-like query builder를 사용하며, Post 조회 권한은 API의 기존 Post visibility predicate가 소유한다. Profile-scoped Notification 저장과 Follow source backend는 이미 병합됐지만 list/count/read visibility SQL은 Follow join에 고정돼 있고, `add-in-app-notifications`의 목록 UI·badge·E2E·archive는 아직 완료되지 않았다.
 
-이 change는 PROD-390이 소유한 공유 계약이며 구현은 PROD-395, PROD-404, PROD-405, PROD-406, PROD-407, PROD-413, PROD-417, PROD-418, PROD-419의 독립 PR로 나뉜다. PROD-395 저장 slice, PROD-404 멱등 생성 slice, PROD-405 Owner 멱등 삭제 slice와 PROD-407 Type별 Profile connection slice는 `main`에 병합됐다. 현재 적용 대상은 PROD-449의 fixture-first Reaction 요약 프레젠테이션 slice이며, 나머지 slice는 자신의 blocker와 미결정을 해소한 뒤 같은 change를 이어서 사용한다.
+이 change는 PROD-390이 소유한 공유 계약이며 구현은 PROD-395, PROD-404, PROD-405, PROD-406, PROD-407, PROD-413, PROD-450, PROD-417, PROD-418, PROD-419의 독립 PR로 나뉜다. PROD-395 저장 slice, PROD-404 멱등 생성 slice, PROD-405 Owner 멱등 삭제 slice, PROD-407 Type별 Profile connection slice와 PROD-449 Reaction 요약 프레젠테이션 slice는 `main`에 병합됐다. 현재 적용 대상은 PROD-450의 fixture-first Reaction Quick Picker 프레젠테이션 slice이며, 나머지 slice는 자신의 blocker와 미결정을 해소한 뒤 같은 change를 이어서 사용한다.
 
 ## Goals / Non-Goals
 
@@ -32,6 +32,7 @@
 - 현재 Notification Node/list/count/read query는 Follow source inner join에 고정돼 있어 enum과 concrete type만 추가하면 Reaction item이 누락된다.
 - selected Profile이 바뀌면 앱의 Relay Environment가 교체된다. Reaction pending/error/cache 상태를 actor 사이에 공유하면 안 된다.
 - `SelectMenu`는 단일 radio 선택 후 닫히는 UI라 복수 Reaction toggle에 그대로 사용할 수 없다. 공통 Post Action Bar와 surface 배치는 이번 change 밖이다.
+- PROD-450은 부모가 공급한 ordered option과 controlled selected/pending/error 상태를 표시하는 펼쳐진 Quick Picker panel만 소유한다. 현재 fixture는 canonical 여섯 Unicode를 사용하지만 component가 허용 목록, trigger·popover, mutation·Relay/cache, custom emoji Full Picker와 palette·검색·category·최근 사용 정책을 소유하지 않는다.
 
 ### Recommended Approach
 
@@ -41,8 +42,10 @@
 4. PROD-406 count query는 Post visibility만 통과한 뒤 viewer Profile filtering 없이 현재 Reaction을 group/count한다. PROD-407 Profile connection은 기존 Profile node만 반환하고, Type을 격리하며 기존 Profile visibility를 SQL page limit 전에 적용한 뒤 `Reaction.createdAt DESC, Reaction.id DESC` keyset으로 최신 Reaction부터 반환한다. Reaction metadata는 공개 row field로 노출하지 않는다.
 5. PROD-413은 Reaction source에서 Recipient, Related Profile, Target Post와 Type을 파생하고 자기 Post·Remote Recipient를 no-op 처리한다. multi-kind Notification 목록은 kind별 visible projection을 `UNION ALL`한 뒤 공통 `id DESC` pagination/count를 적용하는 방식을 기본으로 한다.
 6. PROD-449는 먼저 props-only `ReactionSummary`와 `ReactionProfileList`의 fixture 상태 catalog를 전달한다. supplied count entry는 order·zero-count를 바꾸지 않고 렌더하며, Profile row는 기존 `ProfileListItem` Relay fragment ref를 재사용하고 Storybook은 Relay mock fragment ref로 상태를 구성한다. 이 구현 단계는 최종 `post-reaction-ui` spec을 변경하지 않는다.
-7. PROD-418은 이후 실제 Post count query와 `reactionProfiles` Relay connection을 같은 props seam에 연결하고, zero-count와 modal/route UX 및 cache 통합을 결정·검증한다. seam은 PROD-418 통합에서도 유지한다. PROD-417 selector는 Type별 pending/error를 격리하고 서버가 확인한 상태를 기준으로 복구한다.
-8. `add-in-app-notifications`의 공통 목록 UI·badge·read/navigation 계약이 archive된 뒤 Reaction Notification item을 확장한다. PROD-390은 모든 자식 뒤 사용자 흐름과 canonical/OpenSpec 정합성을 검증한다.
+7. PROD-450은 부모가 공급한 option 순서를 그대로 사용하는 props-only `ReactionSelector` Quick Picker panel을 먼저 제공한다. 선택·pending·error는 표시 문자열과 분리된 opaque option identity별 controlled 상태로 받고, 현재 Storybook fixture는 canonical 여섯 Unicode와 복수 Type 공존을 검증한다. 이 단계는 최종 `post-reaction-ui` spec을 변경하지 않는다.
+8. PROD-417은 같은 presentation seam에 zero-count option 공급, add/delete mutation과 selected Profile Relay cache를 연결하고, Type별 pending/error를 격리해 서버가 확인한 상태를 기준으로 복구한다. optimistic update 여부는 이 통합 slice에서 결정한다.
+9. PROD-418은 실제 Post count query와 `reactionProfiles` Relay connection을 기존 summary/list props seam에 연결하고, zero-count와 modal/route UX 및 cache 통합을 결정·검증한다. seam은 PROD-418 통합에서도 유지한다.
+10. `add-in-app-notifications`의 공통 목록 UI·badge·read/navigation 계약이 archive된 뒤 Reaction Notification item을 확장한다. PROD-390은 모든 자식 뒤 사용자 흐름과 canonical/OpenSpec 정합성을 검증한다.
 
 ### Allowed Alternatives
 
@@ -63,6 +66,7 @@
 - Notification kind와 concrete object만 추가한 채 Follow 전용 list/count/read join을 유지하지 않는다.
 - Notification 저장·cleanup 실패로 Reaction mutation을 rollback하지 않는다.
 - 하나의 shared pending boolean로 모든 Reaction Type 입력을 막거나 selected Profile 사이에서 상태를 공유하지 않는다.
+- Quick Picker가 현재 여섯 Type을 내부 상수로 고정하거나 option identity를 Unicode 표시 문자열에서 추론하지 않는다.
 - 독립 component 완료를 이유로 PROD-432의 Action Bar/surface 범위를 이 change에 포함하지 않는다.
 
 ## Risks / Trade-offs
@@ -82,10 +86,10 @@
 3. rollback이 필요하고 아직 consumer가 배포되지 않았다면 신규 table을 제거할 수 있다. consumer 배포 뒤에는 기존 migration을 수정하지 않고 forward migration으로 고친다.
 4. PROD-404~407에서 mutation과 조회를 추가한다. PROD-407은 `(post_id, type, created_at DESC, id DESC)` pagination ordering index를 별도 forward migration으로 추가한다.
 5. `add-in-app-notifications` archive 뒤 PROD-413/419에서 `REACTION` kind와 multi-kind visibility/API/UI migration을 별도로 추가한다.
-6. PROD-417/418은 독립 UI와 Storybook/integration 검증을 전달하고 실제 Post surface 조립은 PROD-432로 넘긴다.
+6. PROD-449/450은 props-only presentation과 Storybook 검증을 먼저 전달하고, PROD-417/418은 같은 seam에 실제 Relay data와 mutation/cache integration을 연결한다. 실제 Post surface 조립은 PROD-432로 넘긴다.
 7. 모든 자식 완료 뒤 PROD-390이 통합 검증, canonical·delta 정합성, archive와 archive 후 strict validation을 수행한다.
 
 ## Open Questions
 
-- PROD-417/418 전에 zero-count Type 공급 API를 결정해야 한다. PROD-417은 selector optimistic UX를, PROD-418은 Profile 목록 modal/route UX를 각각 결정해야 한다.
+- PROD-417/418 전에 zero-count Type 공급 API를 결정해야 한다. PROD-450은 이 API나 optimistic update를 선결정하지 않고 supplied option fixture만 사용한다. PROD-417은 selector optimistic UX를, PROD-418은 Profile 목록 modal/route UX를 각각 결정해야 한다.
 - PROD-413 전에 mixed-kind Notification SQL의 `UNION ALL` 기본안과 `LEFT JOIN` 대안 중 구현을 선택하고, PROD-277이 정할 Read/navigation 순서를 반영해야 한다.
