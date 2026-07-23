@@ -1803,7 +1803,7 @@ describe('GraphQL remote profile boundary', () => {
       id: pageBoundaryExcludedId,
       profileId: unrelatedAuthor.profile.id,
       state: PostState.ACTIVE,
-      visibility: PostVisibility.FOLLOWERS,
+      visibility: PostVisibility.PUBLIC,
     });
     const pageBoundaryExcludedContent = await db
       .insert(PostContents)
@@ -1817,7 +1817,7 @@ describe('GraphQL remote profile boundary', () => {
       .update(Posts)
       .set({
         currentContentId: pageBoundaryExcludedContent.id,
-        replyParentId: viewerParent.post.id,
+        replyParentId: unrelatedParent.post.id,
       })
       .where(eq(Posts.id, pageBoundaryExcludedId));
     await createContentPost({
@@ -2281,5 +2281,9 @@ const truncateDatabase = async () => {
 };
 
 const assertTestDatabaseUrl = () => {
-  assert.match(new URL(process.env.DATABASE_URL ?? '').pathname, /^\/kosmo_test(?:_[a-z0-9_]+)?$/);
+  const testDatabaseUrl = new URL(process.env.DATABASE_URL ?? '');
+  const loopbackHosts = new Set(['127.0.0.1', '[::1]', 'localhost']);
+
+  assert.ok(loopbackHosts.has(testDatabaseUrl.hostname));
+  assert.match(testDatabaseUrl.pathname, /^\/kosmo_test(?:_[a-z0-9_]+)?$/);
 };
