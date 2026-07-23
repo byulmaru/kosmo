@@ -1,7 +1,6 @@
 import { and, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm';
 import {
   ActivityPubPosts,
-  db,
   first,
   firstOrThrow,
   firstOrThrowWith,
@@ -183,13 +182,17 @@ export const repostPost = async (
     return existing;
   });
 
-export function createPost(input: LocalPostInput): Promise<CreatedPost>;
-export function createPost(input: ActivityPubPostInput): Promise<CreatedPost | DuplicatePost>;
+export function createPost(input: LocalPostInput, tx?: Transaction): Promise<CreatedPost>;
+export function createPost(
+  input: ActivityPubPostInput,
+  tx?: Transaction,
+): Promise<CreatedPost | DuplicatePost>;
 export async function createPost(
   input: LocalPostInput | ActivityPubPostInput,
+  tx?: Transaction,
 ): Promise<CreatedPost | DuplicatePost> {
   try {
-    return await db.transaction(async (tx) => {
+    return await getDatabaseConnection(tx).transaction(async (tx) => {
       const createdAt =
         input.origin === 'ACTIVITYPUB' &&
         input.publishedAt &&

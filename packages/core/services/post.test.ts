@@ -152,6 +152,30 @@ test('createPost는 Local과 ActivityPub Reply Parent를 직접 저장한다', a
   assert.equal(activityPubReply.post.replyParentId, parent.post.id);
 });
 
+test('createPost는 caller transaction rollback에 Post와 Content를 남기지 않는다', async () => {
+  const profile = await createProfile();
+  const contentCount = await db.$count(PostContents);
+
+  await assert.rejects(
+    db.transaction(async (tx) => {
+      await createPost(
+        {
+          document: postContentDocumentFromText('rollback'),
+          origin: 'LOCAL',
+          profileId: profile.id,
+          visibility: PostVisibility.PUBLIC,
+        },
+        tx,
+      );
+      throw new Error('rollback caller transaction');
+    }),
+    /rollback caller transaction/,
+  );
+
+  assert.equal(await db.$count(Posts, eq(Posts.profileId, profile.id)), 0);
+  assert.equal(await db.$count(PostContents), contentCount);
+});
+
 test('createPost는 존재하지 않는 Reply Parent에서 ActivityPub transaction을 rollback한다', async () => {
   const profile = await createProfile();
   const objectUri = `https://remote.example/notes/orphan-${profile.id}`;
