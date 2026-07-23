@@ -221,7 +221,7 @@ Reaction Type 선택·해제와 Type별 count·Profile 목록은 PROD-417·PROD-
 
 ### Requirement: More 링크 복사 통합
 
-**Authority / Provenance:** `docs/domain/decisions/0015-post-share-reference.md`, `docs/domain/objects/post.md`, `PROD-432`, `PROD-433` — Production surface는 More callback이 활성화되면 접근 가능한 팝업을 열고(MUST) 현재 범위에서는 `링크 복사` 항목 하나를 제공해야 한다(MUST). 링크 복사는 canonical Web origin과 `/{relativeHandle}/{postId}` 경로를 결합한 query·hash 없는 절대 Post Share Reference를 clipboard에 복사해야 하며(MUST), Web·Android·iOS는 모두 배포 환경에 설정되고 검증된 `EXPO_PUBLIC_WEB_ORIGIN`을 canonical Web origin으로 사용해야 한다(MUST). Web의 현재 browser origin이 설정된 canonical Web origin과 달라도 현재 browser origin을 공유 참조에 사용하지 않아야 한다(MUST NOT). API origin이나 플랫폼 전용 native deep link를 공유 참조로 사용하지 않아야 하며(MUST), 인증하지 않은 guest도 조회할 수 있는 Post의 공유 참조를 복사할 수 있어야 한다(MUST). 링크 복사는 Post Visibility와 Post Eligibility가 허용하지 않은 조회 범위를 넓히지 않아야 한다(MUST). PostActionBar 컴포넌트는 팝업, clipboard 또는 메뉴 상태를 직접 소유하지 않아야 하며(MUST), 링크 복사 외의 More 항목은 이 change에 포함하지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/decisions/0015-post-share-reference.md`, `docs/domain/objects/post.md`, `PROD-432`, `PROD-433` — Production surface는 More callback이 활성화되면 접근 가능한 팝업을 열고(MUST) 현재 범위에서는 `링크 복사` 항목 하나를 제공해야 한다(MUST). 링크 복사는 현재 deployment가 사용하는 configured Local Instance의 `canonical_origin`과 `/{relativeHandle}/{postId}` 경로를 결합한 query·hash 없는 절대 Post Share Reference를 clipboard에 복사해야 하며(MUST), Web·Android·iOS는 모두 이 canonical Web origin을 사용해야 한다(MUST). 클라이언트 설정은 configured Local Instance의 `canonical_origin`을 전달하는 projection이어야 하며(MUST) 독립적인 공유 링크 authority가 되지 않아야 한다(MUST NOT). Web의 현재 browser origin이 canonical Web origin과 달라도 현재 browser origin을 공유 참조에 사용하지 않아야 한다(MUST NOT). API origin이나 플랫폼 전용 native deep link를 공유 참조로 사용하지 않아야 하며(MUST), 인증하지 않은 guest도 조회할 수 있는 Post의 공유 참조를 복사할 수 있어야 한다(MUST). 링크 복사는 Post Visibility와 Post Eligibility가 허용하지 않은 조회 범위를 넓히지 않아야 한다(MUST). PostActionBar 컴포넌트는 팝업, clipboard 또는 메뉴 상태를 직접 소유하지 않아야 하며(MUST), 링크 복사 외의 More 항목은 이 change에 포함하지 않아야 한다(MUST).
 
 #### Scenario: More 팝업 열기
 
@@ -239,10 +239,10 @@ Reaction Type 선택·해제와 Type별 count·Profile 목록은 PROD-417·PROD-
 - **THEN** 두 플랫폼은 같은 canonical web origin과 `/{relativeHandle}/{postId}` 경로의 절대 URL을 복사한다
 - **AND** 복사된 URL에는 query나 hash가 포함되지 않는다
 
-#### Scenario: Web이 canonical origin과 다른 Host에서 실행됨
+#### Scenario: Web이 Local Instance canonical origin과 다른 Host에서 실행됨
 
-- **WHEN** Web의 현재 browser origin이 검증된 `EXPO_PUBLIC_WEB_ORIGIN`과 다른 preview 또는 별도 Host다
-- **THEN** Web은 현재 browser origin이 아니라 설정된 canonical Web origin으로 Post Share Reference를 복사한다
+- **WHEN** Web의 현재 browser origin이 configured Local Instance의 `canonical_origin`과 다른 preview 또는 별도 Host다
+- **THEN** Web은 현재 browser origin이 아니라 Local Instance의 canonical Web origin으로 Post Share Reference를 복사한다
 
 ### Requirement: 상태 카탈로그와 통합 검증
 
