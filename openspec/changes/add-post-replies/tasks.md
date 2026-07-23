@@ -76,8 +76,8 @@ Reply가 저장된 직접 Parent 관계 순서를 보존한 조회 가능한 조
 - schema contract에서 non-null list와 pagination 미노출을 확인하고, query count·긴 경로 fixture로 단일 조회와 임의 절단이 없음을 확인한다.
 
 - [x] 3.1 조상 경로의 공개 GraphQL field·collection·순서 계약을 Linear에서 확정하고 OpenSpec decision을 갱신한다.
-- [ ] 3.2 승인된 공개 계약에 따라 `Post.replyAncestors`와 단일 recursive 조상 조회를 구현한다.
-- [ ] 3.3 권한 중단·비평탄화·cycle 방어 test와 관련 check를 통과시킨다.
+- [x] 3.2 승인된 공개 계약에 따라 `Post.replyAncestors`와 단일 recursive 조상 조회를 구현한다.
+- [x] 3.3 권한 중단·비평탄화·cycle 방어 test와 관련 check를 통과시킨다.
 
 ## 4. PROD-400 하위 Reply 조회
 
