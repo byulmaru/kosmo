@@ -2,6 +2,7 @@ export { createBookmark, deleteBookmark } from './bookmark';
 export {
   createFollowNotification,
   createReactionNotification,
+  createRepostNotification,
   deleteNotificationBySource,
 } from './notification';
 export { createPost, repostPost } from './post';

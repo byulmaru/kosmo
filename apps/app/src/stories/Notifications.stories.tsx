@@ -16,6 +16,7 @@ import {
   post,
   profile,
   reactionNotification,
+  repostNotification,
 } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -59,6 +60,11 @@ const contentProfile = notificationsProfile(
       post: post({ id: 'notification-related-post', profile: notificationRecipient }),
       profile: unreadFollower,
       type: '🎉',
+    }),
+    repostNotification({
+      id: 'notification-repost',
+      post: post({ id: 'notification-repost-related-post', profile: notificationRecipient }),
+      profile: readFollower,
     }),
   ],
   {},
@@ -179,6 +185,21 @@ const readMutationResponse = {
   },
 };
 
+const repostReadMutationResponse = {
+  markNotificationRead: {
+    notification: {
+      __typename: 'RepostNotification',
+      id: 'notification-repost',
+      readAt: '2026-07-21T12:00:00Z',
+    },
+    recipientProfile: {
+      __typename: 'Profile',
+      id: 'notification-profile-content',
+      unreadNotificationCount: 2,
+    },
+  },
+};
+
 function ProfileSwitchList() {
   const profiles = useStoryProfiles();
   const [selected, setSelected] = useState<3 | 4>(3);
@@ -228,6 +249,9 @@ export const StatesAndFollowItems: Story = {
     expect(
       canvas.getByRole('link', { name: /별빛 여행자님이 🎉 반응을 남겼습니다/ }),
     ).toHaveAttribute('href', '/@recipient/notification-related-post');
+    expect(
+      canvas.getByRole('link', { name: /은하 기록자님이 게시물을 재게시했습니다/ }),
+    ).toHaveAttribute('href', '/@recipient/notification-repost-related-post');
   },
 };
 
@@ -295,6 +319,23 @@ export const ReadSuccessNormalizesAndNavigates: Story = {
     await expect(canvas.findByText('/@starlight')).resolves.toBeVisible();
     await expect(
       canvas.findByRole('link', { name: '별빛 여행자 프로필로 이동.' }),
+    ).resolves.toBeVisible();
+  },
+  render: () => <ReadNavigationList />,
+};
+
+export const RepostReadNormalizesAndNavigates: Story = {
+  parameters: { relay: { mutationResponse: repostReadMutationResponse } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole('link', { name: /은하 기록자님이 게시물을 재게시했습니다/ }),
+    );
+    await expect(
+      canvas.findByText('/@recipient/notification-repost-related-post'),
+    ).resolves.toBeVisible();
+    await expect(
+      canvas.findByRole('link', { name: '은하 기록자 게시글로 이동.' }),
     ).resolves.toBeVisible();
   },
   render: () => <ReadNavigationList />,

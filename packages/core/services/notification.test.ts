@@ -7,6 +7,7 @@ import {
   Instances,
   Notifications,
   pg,
+  PostContents,
   Posts,
   ProfileFollows,
   Profiles,
@@ -21,11 +22,14 @@ import {
   ProfileFollowPolicy,
 } from '../enums';
 import { NotFoundError } from '../error';
+import { postContentDocumentFromText } from '../post-content/server';
 import {
   createFollowNotification,
   createReactionNotification,
+  createRepostNotification,
   deleteNotificationBySource,
 } from './notification';
+import { createPost, repostPost } from './post';
 import { followProfile, unfollowProfile } from './profile-follow';
 
 const instanceIds: string[] = [];
@@ -80,6 +84,14 @@ const createReaction = async (authorProfileId: string, recipientProfileId: strin
     .then(firstOrThrow);
 };
 
+const createContentPost = (profileId: string) =>
+  createPost({
+    document: postContentDocumentFromText(crypto.randomUUID()),
+    origin: 'LOCAL',
+    profileId,
+    visibility: PostVisibility.PUBLIC,
+  }).then(({ post }) => post);
+
 const getEstablishedFollow = (result: Awaited<ReturnType<typeof followProfile>>) => {
   if (result.result.kind !== 'ESTABLISHED') {
     assert.fail('Expected an established profile follow');
@@ -91,6 +103,15 @@ after(async () => {
   if (profileIds.length > 0) {
     await db.delete(Notifications).where(inArray(Notifications.recipientProfileId, profileIds));
     await db.delete(Reactions).where(inArray(Reactions.profileId, profileIds));
+    const postIds = await db
+      .select({ id: Posts.id })
+      .from(Posts)
+      .where(inArray(Posts.profileId, profileIds))
+      .then((rows) => rows.map(({ id }) => id));
+    if (postIds.length > 0) {
+      await db.update(Posts).set({ currentContentId: null }).where(inArray(Posts.id, postIds));
+      await db.delete(PostContents).where(inArray(PostContents.postId, postIds));
+    }
     await db.delete(Posts).where(inArray(Posts.profileId, profileIds));
     await db
       .delete(ProfileFollows)
@@ -258,4 +279,61 @@ test('Reaction 알림은 자기 Post와 Remote Recipient에서 no-op이다', asy
 
 test('Reaction 알림은 존재하지 않는 source를 거부한다', async () => {
   await assert.rejects(createReactionNotification(crypto.randomUUID()), NotFoundError);
+});
+
+test('Repost 알림은 direct Source에서 Recipient와 Related 객체를 파생하고 idempotent하다', async () => {
+  const author = await createProfile();
+  const recipient = await createProfile();
+  const original = await createContentPost(recipient.id);
+  const reply = await createContentPost(recipient.id);
+  await db.update(Posts).set({ replyParentId: original.id }).where(eq(Posts.id, reply.id));
+  const quote = await createContentPost(recipient.id);
+  await db.update(Posts).set({ repostSourceId: original.id }).where(eq(Posts.id, quote.id));
+
+  for (const relatedPost of [original, reply, quote]) {
+    const { repost } = await repostPost({
+      actorProfileId: author.id,
+      sourcePostId: relatedPost.id,
+    });
+
+    await Promise.all([createRepostNotification(repost.id), createRepostNotification(repost.id)]);
+
+    const [notification] = await readNotifications(repost.id);
+    assert.ok(notification);
+    assert.equal(notification.kind, NotificationKind.REPOST);
+    assert.equal(notification.recipientProfileId, recipient.id);
+    assert.equal(notification.sourceId, repost.id);
+    assert.equal(repost.profileId, author.id);
+    assert.equal(repost.repostSourceId, relatedPost.id);
+    assert.deepEqual(notification.data, {});
+  }
+});
+
+test('Repost 알림은 자기 Post와 Remote Recipient에서 no-op이다', async () => {
+  const self = await createProfile();
+  const selfSource = await createContentPost(self.id);
+  const { repost: selfRepost } = await repostPost({
+    actorProfileId: self.id,
+    sourcePostId: selfSource.id,
+  });
+  await createRepostNotification(selfRepost.id);
+  assert.deepEqual(await readNotifications(selfRepost.id), []);
+
+  const author = await createProfile();
+  const remoteRecipient = await createProfile(InstanceKind.ACTIVITYPUB);
+  const remoteSource = await createContentPost(remoteRecipient.id);
+  const { repost: remoteRepost } = await repostPost({
+    actorProfileId: author.id,
+    sourcePostId: remoteSource.id,
+  });
+  await createRepostNotification(remoteRepost.id);
+  assert.deepEqual(await readNotifications(remoteRepost.id), []);
+});
+
+test('Repost 알림은 존재하지 않거나 pure Repost가 아닌 source를 거부한다', async () => {
+  await assert.rejects(createRepostNotification(crypto.randomUUID()), NotFoundError);
+
+  const author = await createProfile();
+  const contentPost = await createContentPost(author.id);
+  await assert.rejects(createRepostNotification(contentPost.id), NotFoundError);
 });

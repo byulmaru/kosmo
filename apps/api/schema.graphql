@@ -399,6 +399,14 @@ type RejectProfileFollowRequestPayload {
   profileFollowRequestId: ID!
 }
 
+type RepostNotification implements Node & Notification {
+  createdAt: DateTime!
+  id: ID!
+  post: Post!
+  profile: Profile!
+  readAt: DateTime
+}
+
 input RepostPostInput {
   sourceId: ID!
 }

@@ -67,7 +67,7 @@ test('repostPost는 Public과 Unlisted Source를 direct Unlisted Repost로 생�
 
   for (const sourceVisibility of [PostVisibility.PUBLIC, PostVisibility.UNLISTED]) {
     const source = await createContentPost(actor.profile.id, sourceVisibility);
-    const repost = await repostPost({
+    const { repost } = await repostPost({
       actorProfileId: actor.profile.id,
       sourcePostId: source.id,
     });
@@ -85,7 +85,7 @@ test('repostPost는 자신의 Followers Only Source를 Followers Only로 생성�
   const actor = await createProfile();
   const source = await createContentPost(actor.profile.id, PostVisibility.FOLLOWERS);
 
-  const repost = await repostPost({
+  const { repost } = await repostPost({
     actorProfileId: actor.profile.id,
     sourcePostId: source.id,
   });
@@ -158,7 +158,7 @@ test('repostPost는 Active Local과 Remote actor가 공통 action을 사용할 �
       instanceState: InstanceState.UNRESPONSIVE,
     }),
   ]) {
-    const repost = await repostPost({
+    const { repost } = await repostPost({
       actorProfileId: actor.profile.id,
       sourcePostId: source.id,
     });
@@ -193,7 +193,7 @@ test('repostPost는 조회 가능한 Quote의 Source 상태와 무관하게 Quot
   const quote = await createContentPost(actor.profile.id);
   await db.update(Posts).set({ repostSourceId: base.id }).where(eq(Posts.id, quote.id));
 
-  const repost = await repostPost({
+  const { repost } = await repostPost({
     actorProfileId: actor.profile.id,
     sourcePostId: quote.id,
   });
@@ -207,7 +207,7 @@ test('repostPost는 조회 가능한 Quote의 Source 상태와 무관하게 Quot
     .where(eq(Posts.id, unavailableQuote.id));
   await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, hiddenBase.id));
 
-  const unavailableSourceRepost = await repostPost({
+  const { repost: unavailableSourceRepost } = await repostPost({
     actorProfileId: actor.profile.id,
     sourcePostId: unavailableQuote.id,
   });
@@ -223,12 +223,15 @@ test('repostPost의 순차·동시 요청은 같은 Active Repost identity로 �
   };
 
   const concurrent = await Promise.all(Array.from({ length: 4 }, () => repostPost(input)));
-  const first = concurrent[0]!;
-  const repeated = await repostPost(input);
+  const first = concurrent[0]!.repost;
+  const repeatedResult = await repostPost(input);
+  const repeated = repeatedResult.repost;
 
   assert.equal(repeated.id, first.id);
+  assert.equal(concurrent.filter(({ created }) => created).length, 1);
+  assert.equal(repeatedResult.created, false);
   assert.deepEqual(
-    concurrent.map(({ id }) => id),
+    concurrent.map(({ repost }) => repost.id),
     Array(4).fill(first.id),
   );
   assert.equal(
