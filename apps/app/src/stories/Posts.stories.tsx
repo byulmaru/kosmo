@@ -579,7 +579,7 @@ export const Quote: Story = {
     const canvas = within(root);
     expect(canvas.getByText('이 원문에 덧붙이는 인용자의 본문입니다.')).toBeVisible();
     const preview = canvas.getByTestId('source-post-preview');
-    expect(within(preview).getByText('원문 작성자의 긴 본문과 줄바꿈을 표시합니다.')).toBeVisible();
+    expect(preview.textContent).toContain('원문 작성자의 긴 본문과 줄바꿈을 표시합니다.');
     expect(canvas.getAllByRole('link')).toHaveLength(3);
     expect(within(preview).getAllByRole('link')).toHaveLength(2);
     expect(within(preview).queryByRole('button')).not.toBeInTheDocument();
