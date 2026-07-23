@@ -37,6 +37,7 @@ Repost와 Quote가 같은 nullable direct Repost Source를 저장할 수 있게 
 
 - `docs/domain/objects/post.md`
 - `docs/domain/decisions/0010-post-interaction-contracts.md`
+- `docs/domain/decisions/0014-post-structure-relations.md`
 - `PROD-389`
 - `PROD-401`
 
@@ -47,17 +48,21 @@ Repost와 Quote가 같은 nullable direct Repost Source를 저장할 수 있게 
 **Guardrails**
 
 - Public/Unlisted Source의 Repost는 Unlisted, Followers Only Source는 Source Author만 Followers Only로 생성한다.
+- Local GraphQL entry는 공통 `usingProfile` 인증이 검증한 Account.Active와 선택된 Local Profile membership·visibility를 사용하며 역할별 제한을 다시 적용하지 않는다.
+- 공통 core action은 검증된 actor Profile ID와 Source Post ID만 받고 Active Profile과 Suspended가 아닌 Instance라는 공통 actor 가용성, Source visibility/eligibility와 저장 정책을 검증한다.
 - Mentioned Profiles, Tombstone, unavailable, Content 없는 Repost Source를 거부한다.
+- 누락·Tombstone·조회 불가 Source는 `NOT_FOUND`, 조회 가능한 허용 불가 Source는 `VALIDATION(sourceId)`, actor 권한 실패는 `PERMISSION_DENIED`로 처리한다.
 - duplicate/concurrent 생성은 같은 Active Repost identity로 수렴한다.
 - Quote 작성과 ActivityPub Repost ingress·delivery를 포함하지 않는다.
 
 **Verification**
 
-- visibility·권한별 성공/거부, direct Source, 순차·동시 duplicate, selected Profile 권한과 GraphQL payload를 core/API integration test로 검증한다.
+- core DB test는 검증된 Local/Remote actor의 공통 action 사용, 비활성 Profile·Suspended Instance 거부, visibility·Source 정책, direct Source, 순차·동시 duplicate와 실패 transaction rollback을 검증한다.
+- GraphQL integration test는 Owner/Admin/Member 성공과 membership 부재·비활성 Account/Profile 거부, 기존 error code/field와 payload를 검증한다.
 
-- [ ] 2.1 actor 권한, Source visibility와 derived visibility를 적용하는 멱등 Repost core action을 구현한다.
-- [ ] 2.2 `repostPost` mutation과 `RepostPostPayload.repost`를 기존 Post global ID 계약에 맞춰 제공한다.
-- [ ] 2.3 성공·거부·순차/동시 멱등성과 GraphQL schema/payload 검증을 추가하고 core/API check를 통과시킨다.
+- [x] 2.1 검증된 actor의 공통 가용성, Source visibility와 derived visibility를 적용하는 멱등 Repost core action을 구현한다.
+- [x] 2.2 `repostPost` mutation과 `RepostPostPayload.repost`를 기존 Post global ID 계약에 맞춰 제공한다.
+- [x] 2.3 GraphQL Local 인증과 core 공통 actor/Source 정책의 성공·거부, 순차/동시 멱등성 및 schema/payload 검증을 추가하고 core/API check를 통과시킨다.
 
 ## 3. PROD-402 Repost와 Quote의 Source 조회
 

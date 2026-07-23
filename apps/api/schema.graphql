@@ -176,6 +176,7 @@ type Mutation {
   followProfile(input: FollowProfileInput!): FollowProfilePayload!
   markNotificationRead(input: MarkNotificationReadInput!): MarkNotificationReadPayload!
   rejectProfileFollowRequest(input: RejectProfileFollowRequestInput!): RejectProfileFollowRequestPayload!
+  repostPost(input: RepostPostInput!): RepostPostPayload!
   selectProfile(input: SelectProfileInput!): SelectProfilePayload!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
   updateProfile(input: UpdateProfileInput!): UpdateProfilePayload!
@@ -384,6 +385,14 @@ input RejectProfileFollowRequestInput {
 type RejectProfileFollowRequestPayload {
   followeeProfile: Profile!
   profileFollowRequestId: ID!
+}
+
+input RepostPostInput {
+  sourceId: ID!
+}
+
+type RepostPostPayload {
+  repost: Post!
 }
 
 input SelectProfileInput {
