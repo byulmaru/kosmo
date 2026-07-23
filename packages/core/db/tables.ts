@@ -313,6 +313,9 @@ export const Posts = pgTable(
       sql`${table.replyParentId} IS NULL OR ${table.replyParentId} <> ${table.id}`,
     ),
     index().on(table.profileId, table.id.desc()),
+    index('post_reply_parent_id_index')
+      .on(table.replyParentId)
+      .where(sql`${table.replyParentId} IS NOT NULL`),
     uniqueIndex('post_active_repost_profile_source_unique')
       .on(table.profileId, table.repostSourceId)
       .where(

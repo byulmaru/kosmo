@@ -1,17 +1,19 @@
 ## Context
 
-이 기록은 `proposal.md`, 네 capability의 delta specs, `design.md`, canonical Bookmark 문서와 `PROD-391` 부모/자식 이슈 구조를 반영한다. `PROD-396` 저장 slice와 `PROD-408` 생성 slice는 완료됐고, `PROD-410` 목록 slice의 공개 GraphQL 경계와 공용 Post 조회 정책 위임을 확정한다. 기존 기록의 legacy `Accepted` 상태는 해당 결정을 실제로 수정하거나 대체할 때 새 형식으로 전환한다.
+이 기록은 `proposal.md`, 네 capability의 delta specs, `design.md`, canonical Bookmark 문서와 `PROD-391` 부모/자식 이슈 구조를 반영한다. `PROD-396` 저장, `PROD-408` 생성, `PROD-409` 삭제, `PROD-410` 목록, `PROD-420` viewer-relative 조회 API slice가 완료된 현재 구현 상태와 `PROD-452` 목록 presentation·`PROD-421` 실제 route 통합의 분리 책임을 반영한다. 기존 기록의 legacy `Accepted` 상태는 해당 결정을 실제로 수정하거나 대체할 때 새 형식으로 전환한다.
 
 ## Decision Records
 
 ### 하나의 Bookmark 계약과 이슈별 구현 소유권
 
 - Decision Date: 2026-07-20
-- Status: Accepted
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/bookmark.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-391`, `PROD-396`, `PROD-408`, `PROD-409`, `PROD-410`, `PROD-420`, `PROD-452`, `PROD-421`
+- Status: Active
 - Context / Problem: 저장, 생성, 삭제, 목록과 UI를 별도 PR로 리뷰하면서도 같은 사용자 결과와 lifecycle·권한·pagination 계약을 공유해야 한다.
-- Decision Outcome: 부모 `PROD-391`이 단일 `add-profile-bookmarks` OpenSpec, 최종 통합 검증과 archive를 소유한다. `PROD-396`, `PROD-408`, `PROD-409`, `PROD-410`, `PROD-420`, `PROD-421`은 각각 자기 구현 결과와 테스트를 소유한다.
+- Decision Outcome: 부모 `PROD-391`이 단일 `add-profile-bookmarks` OpenSpec, 최종 통합 검증과 archive를 소유한다. `PROD-396`, `PROD-408`, `PROD-409`, `PROD-410`, `PROD-420`, `PROD-452`, `PROD-421`은 각각 자기 구현 결과와 테스트를 소유한다. `PROD-452`는 실제 connection 없는 목록 presentation을 제공하고, `PROD-421`은 그 결과를 Relay connection·route·navigation에 통합한다.
 - Alternatives Considered: DB/API/UI별 OpenSpec 분리 — 같은 계약을 중복하고 일부 계층만 배포해도 완료로 보일 수 있어 채택하지 않았다. 모든 구현을 부모 한 PR에 포함 — 독립 리뷰·전달 책임을 잃어 채택하지 않았다.
-- Consequences: `tasks.md`의 최상위 구현 group은 Linear 자식 이슈와 1:1로 대응한다. 개별 PR 완료만으로 change를 archive하지 않는다.
+- Consequences: `tasks.md`의 최상위 구현 group은 직접·중첩 child를 포함한 Linear 구현 이슈와 1:1로 대응한다. 개별 PR 완료만으로 change를 archive하지 않는다.
 - Confirmation / Follow-up: Linear 부모/자식 관계와 각 이슈의 검증 책임을 기준으로 확인한다.
 
 ### Bookmark 저장 식별자와 안정적 최신순 index
@@ -64,15 +66,29 @@
 - Consequences: Tombstone과 hard-delete 테스트를 분리해야 한다. 물리 삭제는 복구 가능한 상태 변화가 아니며 Bookmark도 함께 사라진다.
 - Confirmation / Follow-up: 2026-07-20 PR #298 리뷰 결정과 사용자 승인을 반영했다. `PROD-396` DB 검증에서 Tombstone 유지와 Target Post hard-delete cascade를 각각 확인한다.
 
-### 보호된 공용 Bookmark route와 Profile별 Relay 격리
+### 보호된 공용 Bookmark route와 Profile별 목록 격리
 
-- Decision Date: 2026-07-20
-- Status: Accepted
-- Context / Problem: Android·iOS·Web이 같은 개인 목록을 제공하면서 selected Profile 전환 때 Bookmark 상태와 pagination cache가 섞이지 않아야 한다.
-- Decision Outcome: `/bookmarks`를 `(tabs)` 아래의 보호된 universal Expo route로 사용한다. action과 목록 connection은 현재 Relay actor store 안에서 selected Profile별로 식별하며, Profile 전환은 새 Environment/Store와 connection/cursor를 사용한다. Post action은 목록·상세의 독립 control로 제공하고 공통 Post Action Bar rollout과 분리한다.
-- Alternatives Considered: `/menu` placeholder 유지 — canonical 목록 route와 direct navigation을 제공하지 못해 채택하지 않는다. `apps/web` 별도 화면 — universal route/component 계약을 중복해 채택하지 않는다. app-global Bookmark store — Profile 간 비공개 상태를 섞을 수 있어 채택하지 않는다.
-- Consequences: guest는 `/`로 이동하고, 선택 Profile이 없으면 목록 query를 실행하지 않는다. 목록 카드의 control은 상세 navigation보다 자기 동작을 우선해야 한다.
-- Confirmation / Follow-up: 2026-07-20 OpenSpec Gate에서 승인했다. `PROD-420/421`에서 세 플랫폼 route parity, guest/no-Profile, Profile 전환, action event 경계와 connection 격리를 검증한다.
+- Decision Date: 2026-07-23
+- Decision Class: Derived Contract
+- Authority / Provenance: `PROD-391`, `PROD-421`
+- Status: Active
+- Context / Problem: Android·iOS·Web이 같은 개인 목록을 제공하면서 selected Profile 전환 때 pagination cache가 섞이지 않아야 한다.
+- Decision Outcome: `/bookmarks`를 `(tabs)` 아래의 보호된 universal Expo route로 사용한다. 목록 connection은 현재 Relay actor store 안에서 selected Profile별로 식별하며, Profile 전환은 새 Environment/Store와 connection/cursor를 사용한다.
+- Alternatives Considered: `/menu` placeholder 유지 — canonical 목록 route와 direct navigation을 제공하지 못해 채택하지 않는다. `apps/web` 별도 화면 — universal route/component 계약을 중복해 채택하지 않는다. app-global Bookmark 목록 store — Profile 간 비공개 목록을 섞을 수 있어 채택하지 않는다.
+- Consequences: guest는 `/`로 이동하고, 선택 Profile이 없으면 목록 query를 실행하지 않는다. Bookmark action adapter와 production Post surface는 `PROD-432/433/434`가 별도로 소유한다.
+- Confirmation / Follow-up: `PROD-421`에서 세 플랫폼 route parity, guest/no-Profile, Profile 전환과 connection 격리를 검증한다.
+
+### Post.viewerBookmark viewer-relative 조회 계약
+
+- Decision Date: 2026-07-23
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/bookmark.md`, `PROD-391`, `PROD-420` 본문과 2026-07-23 책임 경계 승인
+- Status: Active
+- Context / Problem: Post Action Bar가 selected Profile의 Bookmark 상태를 소비하려면 private Bookmark 관계를 다른 Profile과 섞지 않는 선행 GraphQL 조회 계약이 필요하다.
+- Decision Outcome: GraphQL은 nullable `Post.viewerBookmark`로 현재 selected Profile과 Post를 연결하는 Bookmark를 반환한다. guest, selected Profile 없음과 미저장 상태는 `null`이며, resolver는 request-scoped batch loader로 여러 Post의 관계를 조회한다.
+- Alternatives Considered: `isBookmarked` boolean — 삭제와 정규화에 필요한 Bookmark identity를 잃어 채택하지 않는다. `Post.viewerState.bookmark` wrapper — 현재 단일 관계에 불필요한 wrapper를 추가해 채택하지 않는다. top-level viewer query — Post fragment에서 재사용할 viewer-relative 상태를 분리해 채택하지 않는다.
+- Consequences: PROD-420은 GraphQL field·batch loader·API 검증만 소유한다. Bookmark action adapter, mutation orchestration, pending·실패 UX와 Relay cache/production surface는 `PROD-432/433/434`가 소유한다.
+- Confirmation / Follow-up: PROD-420 API 통합 검증에서 저장·미저장·guest·selected Profile 없음·Profile 격리와 여러 Post batch 조회를 확인한다.
 
 ### 멱등 Bookmark 생성 mutation 계약
 
@@ -134,12 +150,23 @@
 - Consequences: pagination query와 nullable Target 조회는 같은 공용 판정을 공유해야 한다. 현재 API 검증은 도달 가능한 정책과 위임 경계를 증명하고, 미래 공용 정책 검증은 해당 정책 소유 이슈와 부모 통합 검증이 담당한다.
 - Confirmation / Follow-up: `PROD-410` 검증에서 공용 predicate가 숨긴 최신 row 뒤의 조회 가능한 row로 page limit을 채우고, 숨김·관계 유지·재노출과 Node/connection 경계를 확인한다.
 
+### Bookmark 목록에서 기존 Post 카드 navigation 재사용
+
+- Decision Date: 2026-07-21
+- Decision Class: Implementation Choice
+- Authority / Provenance: [PROD-452](https://linear.app/byulmaru/issue/PROD-452/bookmark-%EB%AA%A9%EB%A1%9D%EC%9D%98-%ED%94%84%EB%A0%88%EC%A0%A0%ED%85%8C%EC%9D%B4%EC%85%98-%EC%83%81%ED%83%9C%EB%A5%BC-%EA%B5%AC%ED%98%84%ED%95%9C%EB%8B%A4), 2026-07-21 사용자 결정
+- Status: Active
+- Context / Problem: 실제 Bookmark connection 없이 목록 presentation을 먼저 검증하면서도 Target Post의 상세 화면 또는 desktop side-view 동작이 기존 Post 표면과 갈라지지 않아야 한다.
+- Decision Outcome: `PROD-452`의 populated 상태는 기존 `PostListItem` Relay fragment와 Profile·Post canonical Link를 그대로 재사용한다. Bookmark 전용 `onTargetPostPress` callback, navigation route 또는 side-view를 추가하지 않는다. 목록 props는 loading·error·empty·pagination 상태와 retry/load-more callback만 소유하고, 실제 Bookmark connection과 route 연결은 `PROD-421`이 담당한다.
+- Alternatives Considered: Bookmark 전용 Post 카드를 복제 — Post 표시와 navigation 계약이 갈라져 채택하지 않는다. `PostListItem`에 Target 선택 callback을 추가 — shell/router가 이미 canonical Link에 따라 상세 화면 또는 side-view를 결정하므로 불필요한 두 번째 navigation 계약이 되어 채택하지 않는다.
+- Consequences: Storybook fixture는 Relay mock으로 `PostListItem_post$key`를 제공해야 하며 raw object cast로 fragment 계약을 우회하지 않는다. component interaction은 callback 대신 canonical detail href를 확인하고, presentation callback 검증은 retry와 pagination에 한정한다.
+- Confirmation / Follow-up: 2026-07-21 PROD-452 Linear 본문과 사용자 확인을 반영했다. `PROD-452`는 fixture 상태와 canonical href를 검증하고, `PROD-421`은 실제 connection·route·shell 동작을 통합 검증한다.
+
 ## Remaining Decisions
 
-- **PROD-420 — mutation feedback:** 기존 client 관례인 response-driven 갱신을 기본안으로 검토한다. Relay optimistic update를 선택하면 actor 전환 race와 rollback을 추가 검증한다.
 - **PROD-421 — mobile navigation entry:** `/bookmarks` route는 고정하되 sidebar 외 mobile shell에서의 정확한 진입 control은 구현 전에 확정한다.
 
-위 Remaining Decisions는 `PROD-408`의 생성 mutation, `PROD-409`의 삭제 mutation, `PROD-410`의 owner connection·Bookmark Node·nullable Target·pagination 계약을 바꾸지 않는다. 각 owner 이슈에 착수하기 전 관련 결정을 `Decision Records`에 추가하고 사용자 승인을 받아야 한다.
+위 Remaining Decisions는 `PROD-408`의 생성 mutation, `PROD-409`의 삭제 mutation, `PROD-410`의 owner connection·Bookmark Node·nullable Target·pagination 계약과 `PROD-420`의 `Post.viewerBookmark` 계약을 바꾸지 않는다. 각 owner 이슈에 착수하기 전 관련 결정을 `Decision Records`에 추가하고 사용자 승인을 받아야 한다.
 
 ## Superseded Decisions
 

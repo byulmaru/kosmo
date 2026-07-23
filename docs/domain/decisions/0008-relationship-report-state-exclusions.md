@@ -11,7 +11,7 @@ Accepted
 ## 결정
 
 - Account-Profile Membership은 별도 lifecycle 상태 차원을 갖지 않는다.
-- Account Profile Role은 Owner와 Member 값을 가진다.
+- Account Profile Role은 Owner, Admin, Member 값을 가진다.
 - Membership 생성, Role 변경, Owner 지위 양도, 제거 조건은 행동에 정의한다.
 - Membership 행동은 관계 권한과 별도로 행동 주체의 `Account.Active`를 요구한다.
 - Local Profile에는 Owner Membership이 항상 하나 이상 존재하며 각 행동 조건에서 이를 보장한다.

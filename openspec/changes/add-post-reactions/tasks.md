@@ -153,25 +153,29 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 - [ ] 7.2 add/delete mutation과 selected Profile cache를 사용하는 독립 Reaction selector component를 구현한다.
 - [ ] 7.3 실제 Relay data shape의 Storybook/component interaction 검증을 추가하고 app check를 통과시킨다.
 
-## 8. PROD-418 Reaction 요약 UI
+## 8. PROD-449 Reaction 요약 프레젠테이션과 PROD-418 통합
 
 **Deliverable**
 
-사용자가 Post의 Type별 count 요약과 viewer가 조회할 수 있는 Type별 Profile 목록을 page 단위로 확인한다.
+사용자가 Post의 viewer-independent Type별 count와 viewer가 조회할 수 있는 Type별 Profile 목록을 실제 page 단위로 확인한다. PROD-449는 이를 위한 재사용 presentation seam을 전달하고, PROD-418은 실제 data와 surface 통합을 전달한다.
 
 **Guardrails**
 
-- server count와 정렬을 그대로 사용하고 client에서 visible Profile 수로 count를 재계산하지 않는다.
+- PROD-449 seam은 supplied count order를 그대로 사용하고 zero-count Type을 만들거나 제거·정렬·필터링하지 않으며, visible Profile 수로 count를 재계산하지 않는다.
+- PROD-449 row는 기존 `ProfileListItem`의 Relay `Profile` fragment ref를 재사용하고, Storybook은 raw `$key` cast 대신 Relay mock fragment ref를 사용한다.
+- PROD-449는 실제 query/connection, selected Profile/viewer cache, modal/route와 zero-count UX를 소유하지 않는다.
 - 공통 Post Action Bar와 실제 surface 조립을 포함하지 않는다.
 - selector, 사용자 정의 Reaction과 Reaction history를 구현하지 않는다.
 
 **Verification**
 
-- count 내림차순·동률 무보장, viewer별 Profile 숨김, Type 격리와 다중 page pagination을 component/integration test로 검증한다.
+- PROD-449는 supplied-order count, Type selection callback, loading/empty/error/populated, 복수 Type·동률, 기존 Profile row와 mock retry/pagination callback을 Storybook/component interaction으로 검증한다.
+- PROD-418은 실제 Relay data shape의 count·viewer별 Profile 숨김·Type 격리·다중 page pagination과 modal/route 통합을 component/integration test로 검증한다.
 
-- [ ] 8.1 PROD-418이 소유한 Profile 목록 modal/route와 Profile row 표시 결정을 확정해 specs·decisions를 갱신하고 strict validation을 통과시킨다.
-- [ ] 8.2 독립 Reaction summary와 Type별 Profile pagination component를 구현한다.
-- [ ] 8.3 실제 Relay data shape의 Storybook/component pagination 검증을 추가하고 app check를 통과시킨다.
+- [x] 8.1 최종 `post-reaction-ui` spec이 변경되지 않음을 확인하고, PROD-449 fixture-first props 경계와 기존 Profile row 재사용 결정을 decisions·design·tasks에 동기화하고 strict validation을 통과시킨다.
+- [x] 8.2 PROD-449 props-only `ReactionSummary`와 `ReactionProfileList`를 구현한다.
+- [x] 8.3 PROD-449 Storybook과 component interaction에서 Relay mock fragment ref의 supplied-order·Type selection·상태·retry/pagination callback 조합을 검증한다.
+- [ ] 8.4 PROD-418 zero-count/modal-route 결정 뒤 실제 count query·Relay connection·selected Profile/viewer cache 통합과 component/integration 검증을 구현한다.
 
 ## 9. PROD-419 Reaction Notification Best Effort 정리
 
