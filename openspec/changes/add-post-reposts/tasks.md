@@ -151,8 +151,9 @@ Repost 후보를 pagination 전에 선택하고, Content 있는 Quote는 자신�
 
 **Verification**
 
-- Home/Profile 작성자·팔로우 관계, Repost/Quote/Reply 후보, unavailable direct Source의 Repost 제외와
-  Quote 유지 및 cursor page boundary를 API integration test로 검증한다.
+- Home/Profile 작성자·팔로우 관계, 익명 Profile과 인증 Home의 Repost/Quote/Reply 후보, Source Post와
+  Source Profile lifecycle 뒤 unavailable direct Source Repost의 filter-before-limit 제외, Quote 유지,
+  Node/global ID 은닉과 cursor page boundary를 API integration test로 검증한다.
 
 - [x] 5.1 canonical Home/Profile 후보와 Content 없는 Repost의 direct Source eligibility를 기존 connection
       query에 적용한다.

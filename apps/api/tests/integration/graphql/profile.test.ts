@@ -1866,6 +1866,43 @@ describe('GraphQL remote profile boundary', () => {
       ].includes(globalId('Post', homeUnavailableRepost.id)),
       false,
     );
+
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, sourceAuthor.profile.id));
+
+    const disabledSourceHome = await requestRemotePostRead({
+      first: 10,
+      nodeIds: [globalId('Post', homeEligibleRepost.id), globalId('Post', homeRetainedQuote.id)],
+      profileId: globalId('Profile', homeAuthor.profile.id),
+      token: auth.token,
+    });
+
+    assertNoGraphQLErrors(disabledSourceHome);
+    assert.deepEqual(connectionIds(disabledSourceHome.data?.homeTimeline), [
+      globalId('Post', homeRetainedQuote.id),
+    ]);
+    assert.deepEqual(
+      disabledSourceHome.data?.nodes.map((node) => node?.id ?? null),
+      [null, globalId('Post', homeRetainedQuote.id)],
+    );
+
+    const disabledSourceProfile = await requestRemotePostRead({
+      first: 10,
+      nodeIds: [globalId('Post', ordinaryRepost.id), globalId('Post', retainedQuote.id)],
+      profileId: globalId('Profile', profileAuthor.profile.id),
+    });
+
+    assertNoGraphQLErrors(disabledSourceProfile);
+    assert.deepEqual(connectionIds(disabledSourceProfile.data?.profile?.posts), [
+      globalId('Post', retainedQuote.id),
+    ]);
+    assert.deepEqual(
+      disabledSourceProfile.data?.nodes.map((node) => node?.id ?? null),
+      [null, globalId('Post', retainedQuote.id)],
+    );
+    assert.equal(disabledSourceProfile.data?.homeTimeline, null);
   });
 });
 
@@ -1945,7 +1982,7 @@ const requestRemotePostRead = ({
   first: number;
   nodeIds: string[];
   profileId: string;
-  token: string;
+  token?: string;
 }) =>
   requestGraphQL<RemotePostReadData>(
     `query MaterializedRemotePostRead(
