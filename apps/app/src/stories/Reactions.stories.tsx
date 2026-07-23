@@ -3,10 +3,12 @@ import { Text } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, userEvent, within } from 'storybook/test';
 import { ReactionProfileList } from '@/components/reaction/ReactionProfileList';
+import { ReactionSelector } from '@/components/reaction/ReactionSelector';
 import { ReactionSummary } from '@/components/reaction/ReactionSummary';
 import { profile } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { ReactionOption, ReactionToggleIntent } from '@/components/reaction/ReactionSelector';
 import type { ReactionsStoriesQuery as ReactionsStoriesQueryType } from './__generated__/ReactionsStoriesQuery.graphql';
 
 const tiedEntries = [
@@ -23,6 +25,15 @@ const profileCopy = {
   loadErrorTitle: '반응한 프로필을 더 불러오지 못했어요',
   loadingTitle: '반응한 프로필을 불러오는 중입니다.',
 } as const;
+
+const quickReactionOptions = [
+  { emoji: '🥹', id: '🥹', label: '🥹' },
+  { emoji: '❤️', id: '❤️', label: '❤️' },
+  { emoji: '🎉', id: '🎉', label: '🎉' },
+  { emoji: '👀', id: '👀', label: '👀' },
+  { emoji: '☘️', id: '☘️', label: '☘️' },
+  { emoji: '🌈', id: '🌈', label: '🌈' },
+] satisfies ReadonlyArray<ReactionOption>;
 
 const storyProfiles = [
   profile({
@@ -163,6 +174,37 @@ function ReactionProfileListCatalog() {
   );
 }
 
+function QuickPickerInteractionCatalog() {
+  const [selectedOptionIds, setSelectedOptionIds] = useState<ReadonlyArray<string>>(['❤️', '👀']);
+  const [lastIntent, setLastIntent] = useState('없음');
+
+  function handleToggle({ nextSelected, optionId }: ReactionToggleIntent) {
+    setSelectedOptionIds((current) =>
+      nextSelected ? [...current, optionId] : current.filter((id) => id !== optionId),
+    );
+    setLastIntent(`${optionId}:${nextSelected ? '선택' : '해제'}`);
+  }
+
+  const selectedInOptionOrder = quickReactionOptions
+    .filter((option) => selectedOptionIds.includes(option.id))
+    .map((option) => option.emoji)
+    .join(' ');
+
+  return (
+    <Catalog width={360}>
+      <Section title="Interactive Quick Picker">
+        <ReactionSelector
+          onToggle={handleToggle}
+          options={quickReactionOptions}
+          selectedOptionIds={selectedOptionIds}
+        />
+        <Text>{`선택: ${selectedInOptionOrder || '없음'}`}</Text>
+        <Text>{`마지막 동작: ${lastIntent}`}</Text>
+      </Section>
+    </Catalog>
+  );
+}
+
 const meta = {
   component: ReactionSummaryCatalog,
   parameters: {
@@ -226,4 +268,40 @@ export const ProfileListStates: Story = {
     expect(loadingMoreButton).toHaveAttribute('aria-busy', 'true');
   },
   render: () => <ReactionProfileListCatalog />,
+};
+
+export const QuickPickerInteraction: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const buttons = canvas.getAllByRole('button');
+
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      '🥹',
+      '❤️',
+      '🎉',
+      '👀',
+      '☘️',
+      '🌈',
+    ]);
+
+    const heart = canvas.getByRole('button', { name: '❤️ 반응' });
+    const party = canvas.getByRole('button', { name: '🎉 반응' });
+    const eyes = canvas.getByRole('button', { name: '👀 반응' });
+
+    expect(heart).toHaveAttribute('aria-pressed', 'true');
+    expect(eyes).toHaveAttribute('aria-pressed', 'true');
+    expect(party).toHaveAttribute('aria-pressed', 'false');
+
+    await userEvent.click(heart);
+    expect(heart).toHaveAttribute('aria-pressed', 'false');
+    expect(eyes).toHaveAttribute('aria-pressed', 'true');
+    expect(canvas.getByText('마지막 동작: ❤️:해제')).toBeVisible();
+
+    await userEvent.click(party);
+    expect(party).toHaveAttribute('aria-pressed', 'true');
+    expect(eyes).toHaveAttribute('aria-pressed', 'true');
+    expect(canvas.getByText('선택: 🎉 👀')).toBeVisible();
+    expect(canvas.getByText('마지막 동작: 🎉:선택')).toBeVisible();
+  },
+  render: () => <QuickPickerInteractionCatalog />,
 };
