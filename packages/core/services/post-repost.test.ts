@@ -74,6 +74,7 @@ test('repostPost는 Public과 Unlisted Source를 direct Unlisted Repost로 생�
 
     assert.equal(repost.profileId, actor.profile.id);
     assert.equal(repost.currentContentId, null);
+    assert.equal(repost.replyParentId, null);
     assert.equal(repost.repostSourceId, source.id);
     assert.equal(repost.state, PostState.ACTIVE);
     assert.equal(repost.visibility, PostVisibility.UNLISTED);

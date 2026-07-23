@@ -2,7 +2,13 @@
 
 PROD-389는 Repost 저장부터 생성·취소, GraphQL 조회·count, Home/Profile 목록, 유니버설 UI와 Notification lifecycle까지 하나의 계약으로 통합 검증한다. Domain Gate는 `docs/domain/objects/post.md`, `docs/domain/objects/notification.md`, `docs/domain/policies/post-list.md`와 ADR 0010·0014에서 확정됐고, 구현은 10개 직접 자식과 PROD-415의 하위 presentation slice인 PROD-453으로 나뉜다.
 
-PROD-394가 main에 merge되어 현재 `post` table은 nullable `repost_source_id` self-reference와 Active contentless Repost용 partial unique index를 가진다. 최신 main에는 Reply Parent 관계가 아직 없고, core `createPost`는 Local과 ActivityPub Content Post만 생성하며 `repostPost`와 Post Tombstone service는 없다. API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source eligibility를 모르며, 앱의 공용 Post list item도 Author·Content만 표시한다. Notification 기반은 단일 loose source projection과 Follow 전용 visible query/API/UI를 제공하지만 kind별 projection으로 일반화되지 않았다.
+PROD-394와 PROD-393이 main에 merge되어 현재 `post` table은 nullable `repost_source_id`와
+`reply_parent_id` self-reference, Active contentless Repost용 partial unique index를 가진다. core
+`createPost`는 Local과 ActivityPub Content Post에 선택적 Reply Parent를 직접 저장하며, PROD-401의
+`repostPost`는 Content와 Reply Parent 없이 direct Source를 저장한다. Post Tombstone service는 아직 없고,
+API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source eligibility를 모르며, 앱의
+공용 Post list item도 Author·Content만 표시한다. Notification 기반은 단일 loose source projection과 Follow
+전용 visible query/API/UI를 제공하지만 kind별 projection으로 일반화되지 않았다.
 
 ## Goals / Non-Goals
 
@@ -27,7 +33,10 @@ PROD-394가 main에 merge되어 현재 `post` table은 nullable `repost_source_i
 ### Current Constraints
 
 - `Posts`와 `PostContents`는 서로의 nullable foreign key를 사용해 content를 transaction 안에서 연결한다. self-reference를 추가할 때 Drizzle의 순환 column typing과 migration snapshot을 함께 검증해야 한다.
-- PROD-394의 partial unique index는 현재 `state = ACTIVE`, `current_content_id IS NULL`, `repost_source_id IS NOT NULL` 조합을 Author/Source별로 제한한다. PROD-393의 Reply Parent가 merge되기 전에는 해당 column을 입력할 수 없으며, merge 뒤에는 Repost insert가 `reply_parent_id = null`을 유지하는지 다시 확인해야 한다.
+- PROD-394의 partial unique index는 `state = ACTIVE`, `current_content_id IS NULL`,
+  `repost_source_id IS NOT NULL` predicate로 Author/Source 조합을 제한한다. 유효한 contentless Post는 구조
+  검증상 Reply Parent를 가질 수 없으므로 PROD-401의 Repost insert와 core/API 테스트는
+  `reply_parent_id = null`을 명시적으로 유지·확인해야 한다.
 - 기존 `createPost` caller는 Local GraphQL content creation과 ActivityPub Note ingestion뿐이며 `content` non-null 반환을 기대한다. 단순히 모든 반환을 nullable로 넓히면 기존 caller contract가 불필요하게 약해진다.
 - 현재 `postVisibilityAccessWhere`는 API context와 전역 DB connection에 결합되어 core service가 직접 재사용할 수 없다. Local GraphQL entry는 Account.Active, Owner/Member membership과 Active/Normal Local actor를 검증하고, 공통 Repost action은 검증된 actor Profile의 가용성과 이번 action에 필요한 Source visibility 조건을 자체 transaction에서 검증하되 API helper를 core로 역참조하지 않아야 한다.
 - Source 접근 실패는 nullable 관계 field의 결과이며 Content 있는 Quote 자체의 eligibility를 바꾸지 않는다.

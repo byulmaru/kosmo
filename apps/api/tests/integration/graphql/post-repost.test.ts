@@ -101,6 +101,7 @@ describe('GraphQL Repost', () => {
     const stored = await db.select().from(Posts).where(eq(Posts.repostSourceId, source.id));
     assert.equal(stored.length, 1);
     assert.equal(stored[0]?.currentContentId, null);
+    assert.equal(stored[0]?.replyParentId, null);
     assert.equal(stored[0]?.profileId, auth.profile.id);
     assert.deepEqual(first.data?.repostPost.repost, {
       __typename: 'Post',

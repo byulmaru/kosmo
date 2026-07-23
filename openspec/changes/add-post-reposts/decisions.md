@@ -36,7 +36,11 @@
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-389`, `PROD-394`, `PROD-401`, `PROD-411`
 - Status: Active
 - Context / Problem: 순차·동시 duplicate Repost를 하나로 수렴시키면서 Quote와 Tombstone Repost는 같은 Author/Source 조합으로 공존할 수 있어야 한다.
-- Decision Outcome: `(profile_id, repost_source_id)`에 Active이고 Content와 Reply Parent가 없는 행만 포함하는 partial unique index를 사용한다. core Repost action은 unique conflict 뒤 기존 Active Repost를 조회해 같은 성공 결과로 정규화한다. DB constraint trigger와 명시적 비관적 row lock은 추가하지 않는다.
+- Decision Outcome: `(profile_id, repost_source_id)`에 `state = ACTIVE`, `current_content_id IS NULL`,
+  `repost_source_id IS NOT NULL` predicate를 적용한 partial unique index를 사용한다. 유효한 contentless Post는
+  구조 검증상 Reply Parent를 가질 수 없고 Repost action은 `reply_parent_id = null`을 유지한다. core Repost
+  action은 unique conflict 뒤 기존 Active Repost를 조회해 같은 성공 결과로 정규화한다. DB constraint
+  trigger와 명시적 비관적 row lock은 추가하지 않는다.
 - Alternatives Considered: application pre-check만 사용, constraint trigger, `SELECT FOR UPDATE`. pre-check만으로는 동시성을 막지 못하고 trigger/lock은 social interaction에 과도한 결합과 운영 위험을 만든다.
 - Consequences: DB가 최종 동시성 경계가 되고 Tombstone 전이가 index membership을 해제한다. conflict 판정은 기존 DB helper와 constraint identity를 사용해야 한다.
 - Confirmation / Follow-up: PROD-394 migration catalog·concurrent insert 테스트, PROD-401 순차·동시 멱등 테스트와 PROD-411 재Repost 테스트를 수행한다.
