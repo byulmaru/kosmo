@@ -59,7 +59,11 @@ export function ReactionSelector({
           <Pressable
             accessibilityLabel={accessibilityLabel}
             accessibilityRole="button"
-            accessibilityState={{ busy: pending, disabled: optionDisabled }}
+            accessibilityState={{
+              busy: pending,
+              disabled: optionDisabled,
+              selected,
+            }}
             aria-busy={pending}
             aria-pressed={selected}
             disabled={optionDisabled}
