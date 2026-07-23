@@ -137,7 +137,14 @@ describe('WebFinger local profile handle mapping', () => {
     };
 
     assert.equal(json.subject, actorUri);
-    assert.ok(json.links?.some((link) => link.rel === 'self' && link.href === actorUri));
+    assert.ok(
+      json.links?.some(
+        (link) =>
+          link.rel === 'self' &&
+          link.href === actorUri &&
+          link.type === 'application/activity+json',
+      ),
+    );
   });
 
   test('returns 400 for a missing or malformed WebFinger resource', async () => {
