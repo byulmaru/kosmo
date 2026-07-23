@@ -193,13 +193,14 @@ Owner Profile이 조회 가능한 Target의 Bookmark를 안정적인 최신순 c
 - PROD-452의 목록 presentation을 재사용하고 기존 Post 카드의 canonical navigation을 Bookmark 전용 callback으로 대체하지 않는다.
 - selected Profile이 없으면 목록 query를 실행하지 않고, Profile 전환 뒤 이전 edge·cursor를 재사용하지 않는다.
 - 서버가 숨긴 Target Post를 client fallback으로 복원하거나 노출하지 않는다.
-- mobile navigation entry는 구현 전에 Remaining Decisions에서 확정한다.
+- 다음 페이지 요청이 실패하면 기존 Post 카드를 유지하고 목록 아래에 alert와 retry action을 제공한다.
+- Web full·compact sidebar와 mobile drawer는 공용 `SidebarNavigation`의 Bookmark 항목을 `/bookmarks`로 연결하고, mobile bottom tab이나 별도 header 버튼을 추가하지 않는다.
 
 **Verification**
 
-- guest redirect, no-selected-Profile, loading·error·retry·empty·pagination, Target 이동, Profile 격리, mobile entry와 Web direct navigation을 route/component integration 수준에서 검증한다.
+- guest redirect, no-selected-Profile, loading·initial error·empty·pagination, 다음 페이지 실패 시 기존 edge 유지·retry, Target 이동, Profile 격리, mobile entry와 Web direct navigation을 route/component integration 수준에서 검증한다.
 
-- [ ] 7.1 mobile shell의 `/bookmarks` navigation entry를 사용자와 확정하고 specs·decisions에 반영한다.
+- [x] 7.1 Web full·compact sidebar와 mobile drawer의 공용 Bookmark 메뉴를 `/bookmarks`로 연결하고 bottom tab은 유지하기로 사용자와 확정해 specs·decisions에 반영한다.
 - [ ] 7.2 selected Profile별 pagination connection과 PROD-452 presentation을 연결하는 공용 Bookmark 목록 route를 구현한다.
 - [ ] 7.3 desktop·mobile navigation entry와 기존 Post 카드의 canonical detail Link가 shell/router 정책으로 동작하게 한다.
 - [ ] 7.4 세 플랫폼 route parity와 실제 connection의 목록 상태·pagination·Profile 격리·direct navigation 검증을 추가하고 관련 check를 통과시킨다.

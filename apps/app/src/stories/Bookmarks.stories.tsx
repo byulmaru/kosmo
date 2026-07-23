@@ -2,10 +2,14 @@ import { useState } from 'react';
 import { Text } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, userEvent, within } from 'storybook/test';
+import { BookmarkConnectionList } from '@/components/bookmark/BookmarkConnectionList';
 import { BookmarkList } from '@/components/bookmark/BookmarkList';
+import { Button } from '@/components/ui/Button';
 import { post, profile } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { BookmarksIntegrationStoriesQuery as BookmarksIntegrationStoriesQueryType } from './__generated__/BookmarksIntegrationStoriesQuery.graphql';
+import type { BookmarksProfileSwitchStoriesQuery as BookmarksProfileSwitchStoriesQueryType } from './__generated__/BookmarksProfileSwitchStoriesQuery.graphql';
 import type { BookmarksStoriesQuery as BookmarksStoriesQueryType } from './__generated__/BookmarksStoriesQuery.graphql';
 
 const author = profile({
@@ -18,6 +22,60 @@ const targetPosts = [
   post({ bodyText: '첫 번째로 저장한 게시글입니다.', id: 'bookmark-target-1', profile: author }),
   post({ bodyText: '두 번째로 저장한 게시글입니다.', id: 'bookmark-target-2', profile: author }),
 ];
+const bookmarkOwner = {
+  ...profile({ id: 'bookmark-owner' }),
+  bookmarks: {
+    edges: [
+      {
+        cursor: 'bookmark-cursor-2',
+        node: { __typename: 'Bookmark', id: 'bookmark-2', post: targetPosts[0] },
+      },
+      {
+        cursor: 'bookmark-cursor-1',
+        node: { __typename: 'Bookmark', id: 'bookmark-1', post: targetPosts[1] },
+      },
+      {
+        cursor: 'bookmark-cursor-null',
+        node: { __typename: 'Bookmark', id: 'bookmark-null', post: null },
+      },
+    ],
+    pageInfo: { endCursor: 'bookmark-cursor-1', hasNextPage: true },
+  },
+};
+const bookmarkNextPage = {
+  node: {
+    ...bookmarkOwner,
+    bookmarks: {
+      edges: [
+        {
+          cursor: 'bookmark-cursor-0',
+          node: {
+            __typename: 'Bookmark',
+            id: 'bookmark-0',
+            post: post({
+              bodyText: '세 번째로 저장한 게시글입니다.',
+              id: 'bookmark-target-3',
+              profile: author,
+            }),
+          },
+        },
+      ],
+      pageInfo: { endCursor: 'bookmark-cursor-0', hasNextPage: false },
+    },
+  },
+};
+const bookmarkOtherOwner = {
+  ...profile({ id: 'bookmark-owner-b' }),
+  bookmarks: {
+    edges: [
+      {
+        cursor: 'bookmark-b-cursor-1',
+        node: { __typename: 'Bookmark', id: 'bookmark-b-1', post: targetPosts[0] },
+      },
+    ],
+    pageInfo: { endCursor: 'bookmark-b-cursor-1', hasNextPage: true },
+  },
+};
 
 const BookmarksStoriesQuery = graphql`
   query BookmarksStoriesQuery($ids: [ID!]!) {
@@ -30,6 +88,65 @@ const BookmarksStoriesQuery = graphql`
     }
   }
 `;
+
+const BookmarksIntegrationStoriesQuery = graphql`
+  query BookmarksIntegrationStoriesQuery {
+    node(id: "bookmark-owner") {
+      __typename
+      ... on Profile {
+        ...BookmarkConnectionList_profile @alias(as: "bookmarkConnection")
+      }
+    }
+  }
+`;
+
+const BookmarksProfileSwitchStoriesQuery = graphql`
+  query BookmarksProfileSwitchStoriesQuery {
+    first: node(id: "bookmark-owner") {
+      __typename
+      ... on Profile {
+        ...BookmarkConnectionList_profile @alias(as: "bookmarkConnection")
+      }
+    }
+    second: node(id: "bookmark-owner-b") {
+      __typename
+      ... on Profile {
+        ...BookmarkConnectionList_profile @alias(as: "bookmarkConnection")
+      }
+    }
+  }
+`;
+
+function BookmarkConnectionStory() {
+  const data = useLazyLoadQuery<BookmarksIntegrationStoriesQueryType>(
+    BookmarksIntegrationStoriesQuery,
+    {},
+  );
+  if (data.node?.__typename !== 'Profile' || !data.node.bookmarkConnection) {
+    throw new Error('Missing Bookmark connection Profile fixture.');
+  }
+  return <BookmarkConnectionList profile={data.node.bookmarkConnection} />;
+}
+
+function BookmarkConnectionProfileSwitchStory() {
+  const data = useLazyLoadQuery<BookmarksProfileSwitchStoriesQueryType>(
+    BookmarksProfileSwitchStoriesQuery,
+    {},
+  );
+  const [selectedProfile, setSelectedProfile] = useState<'first' | 'second'>('first');
+  const profile = data[selectedProfile];
+  if (profile?.__typename !== 'Profile' || !profile.bookmarkConnection) {
+    throw new Error('Missing Bookmark connection Profile switch fixture.');
+  }
+  return (
+    <>
+      <Button onPress={() => setSelectedProfile('second')} tone="secondary">
+        B 프로필로 전환
+      </Button>
+      <BookmarkConnectionList profile={profile.bookmarkConnection} />
+    </>
+  );
+}
 
 function useBookmarkItems() {
   const data = useLazyLoadQuery<BookmarksStoriesQueryType>(BookmarksStoriesQuery, {
@@ -131,6 +248,51 @@ export const NextPageLoading: Story = {
     const button = within(canvasElement).getByRole('button', { name: '불러오는 중' });
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute('aria-busy', 'true');
+  },
+};
+
+export const ConnectionNextPageFailureRetrySucceeds: Story = {
+  parameters: {
+    relay: {
+      data: { node: bookmarkOwner },
+      paginationResponses: [
+        { error: '다음 페이지를 불러오지 못했습니다.' },
+        { data: bookmarkNextPage },
+      ],
+    },
+  },
+  render: () => <BookmarkConnectionStory />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getAllByRole('article')).toHaveLength(2);
+    await userEvent.click(canvas.getByRole('button', { name: '더 불러오기' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '북마크를 더 불러오지 못했어요',
+    );
+    expect(canvas.getAllByRole('article')).toHaveLength(2);
+    await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
+    await expect(canvas.findAllByRole('article')).resolves.toHaveLength(3);
+    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+  },
+};
+
+export const ConnectionProfileSwitchClearsPaginationError: Story = {
+  parameters: {
+    relay: {
+      data: { first: bookmarkOwner, second: bookmarkOtherOwner },
+      paginationResponses: [{ error: '다음 페이지를 불러오지 못했습니다.' }],
+    },
+  },
+  render: () => <BookmarkConnectionProfileSwitchStory />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '더 불러오기' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '북마크를 더 불러오지 못했어요',
+    );
+    await userEvent.click(canvas.getByRole('button', { name: 'B 프로필로 전환' }));
+    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+    expect(canvas.getByRole('button', { name: '더 불러오기' })).toBeVisible();
   },
 };
 

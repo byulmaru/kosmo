@@ -207,6 +207,8 @@ Owner가 개별 Bookmark Node를 조회할 때 `Bookmark.post`는 nullable이어
 
 **Authority / Provenance:** `docs/domain/objects/bookmark.md`, `PROD-391`, `PROD-421` — 클라이언트는 유효한 세션과 선택 Profile이 있는 사용자에게 개인 Bookmark 목록 화면을 제공해야 한다(MUST). 화면은 최신순 pagination과 Target Post 이동을 지원하고(MUST), loading·error·empty 상태를 구분해야 하며(MUST), 서버가 숨긴 Target Post를 별도 경로로 복원하거나 노출하지 않아야 한다(MUST NOT).
 
+**Authority / Provenance:** `PROD-421`, 2026-07-23 사용자 결정 — 다음 페이지 요청이 실패하면 클라이언트는 이미 표시한 Bookmark edge를 유지해야 하며(MUST), 목록 아래에 실패 alert와 같은 다음 cursor를 다시 요청하는 retry action을 제공해야 한다(MUST).
+
 #### Scenario: Bookmark 목록을 탐색함
 
 - **WHEN** 선택 Profile에 조회 가능한 Bookmark가 있다
@@ -217,6 +219,13 @@ Owner가 개별 Bookmark Node를 조회할 때 `Bookmark.post`는 nullable이어
 
 - **WHEN** 선택 Profile에 표시할 Bookmark가 없다
 - **THEN** 클라이언트는 loading 또는 error와 구분되는 비공개 목록의 empty 상태를 표시한다
+
+#### Scenario: 다음 페이지 요청이 실패함
+
+- **WHEN** 클라이언트가 기존 Bookmark를 표시한 상태에서 다음 페이지 요청에 실패한다
+- **THEN** 클라이언트는 기존 Bookmark 카드를 계속 표시한다
+- **AND** 목록 아래에 `북마크를 더 불러오지 못했어요` alert와 `다시 시도` action을 표시한다
+- **AND** 사용자가 재시도하면 같은 connection의 다음 cursor를 다시 요청한다
 
 #### Scenario: 선택 Profile별 목록을 격리함
 

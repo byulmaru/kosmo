@@ -78,6 +78,30 @@
 - Consequences: guest는 `/`로 이동하고, 선택 Profile이 없으면 목록 query를 실행하지 않는다. Bookmark action adapter와 production Post surface는 `PROD-432/433/434`가 별도로 소유한다.
 - Confirmation / Follow-up: `PROD-421`에서 세 플랫폼 route parity, guest/no-Profile, Profile 전환과 connection 격리를 검증한다.
 
+### 공용 SidebarNavigation으로 Bookmark 진입점 통일
+
+- Decision Date: 2026-07-23
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-421`, 2026-07-23 사용자 결정
+- Status: Active
+- Context / Problem: Web full·compact sidebar와 mobile drawer가 같은 `SidebarNavigation`을 사용하지만 Bookmark 항목은 현재 일반 `/menu` placeholder를 가리킨다. Mobile bottom tab은 홈·검색·글쓰기·알림·Profile의 다섯 항목을 고정으로 제공한다.
+- Decision Outcome: Web full·compact sidebar와 mobile drawer의 공용 Bookmark 메뉴 항목을 모두 canonical `/bookmarks` route로 연결한다. Mobile은 기존 메뉴 drawer를 Bookmark 진입점으로 사용하며 bottom tab이나 별도 header 버튼을 추가하지 않는다.
+- Alternatives Considered: Bookmark bottom tab 추가 — 기존 다섯 항목의 shell 계약과 배치를 바꾸므로 채택하지 않는다. Mobile header에 별도 Bookmark 버튼 추가 — drawer의 공용 메뉴와 진입 계약을 중복하므로 채택하지 않는다. `/menu` placeholder 유지 — canonical route로 직접 이동하지 못하므로 채택하지 않는다.
+- Consequences: `SidebarNavigation`의 단일 Bookmark 항목이 Web과 mobile에서 같은 route를 제공한다. Drawer는 기존 `onNavigate` 흐름으로 이동 뒤 닫히며, 다른 `/menu` placeholder 항목과 bottom tab 구성은 이 결정에서 바꾸지 않는다.
+- Confirmation / Follow-up: `PROD-421` task 7.3에서 Web full·compact sidebar와 mobile drawer의 href·이동을 검증하고, task 7.4에서 세 플랫폼 route parity를 확인한다.
+
+### Bookmark 다음 페이지 실패 시 기존 목록 유지
+
+- Decision Date: 2026-07-23
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-421`, 2026-07-23 사용자 결정
+- Status: Active
+- Context / Problem: 첫 목록 요청 실패와 기존 edge를 표시한 뒤의 다음 페이지 요청 실패는 보존할 수 있는 사용자 데이터가 다르다. 다음 페이지 실패를 전체 error 화면으로 바꾸면 이미 조회한 Bookmark를 불필요하게 숨긴다.
+- Decision Outcome: 첫 목록 요청이 실패하고 표시할 edge가 없으면 전체 목록 error·retry 상태를 표시한다. 기존 edge가 있는 상태에서 다음 페이지 요청이 실패하면 기존 Post 카드를 유지하고 목록 아래에 `북마크를 더 불러오지 못했어요` alert와 `다시 시도` action을 표시한다. 재시도는 같은 connection의 다음 cursor를 다시 요청하며 성공하면 pagination error를 지운다.
+- Alternatives Considered: 다음 페이지 실패 때 전체 목록 교체 — 이미 성공한 edge를 숨겨 채택하지 않는다. 오류를 표시하지 않고 load-more action만 유지 — 실패와 재시도 의미를 사용자에게 전달하지 못해 채택하지 않는다. 자동 재시도 — 요청 횟수와 실패 상태를 숨기므로 채택하지 않는다.
+- Consequences: `BookmarkList`는 items가 있는 error 상태에서도 Post 카드를 유지하고 pagination error·retry를 렌더링해야 한다. Relay connection edge와 cursor를 수동으로 지우거나 재구성하지 않는다.
+- Confirmation / Follow-up: `PROD-421` task 7.2에서 실제 `loadNext` error state를 presentation props에 연결하고, task 7.4에서 기존 edge 유지·alert·재시도 성공을 검증한다.
+
 ### Post.viewerBookmark viewer-relative 조회 계약
 
 - Decision Date: 2026-07-23
@@ -164,9 +188,7 @@
 
 ## Remaining Decisions
 
-- **PROD-421 — mobile navigation entry:** `/bookmarks` route는 고정하되 sidebar 외 mobile shell에서의 정확한 진입 control은 구현 전에 확정한다.
-
-위 Remaining Decisions는 `PROD-408`의 생성 mutation, `PROD-409`의 삭제 mutation, `PROD-410`의 owner connection·Bookmark Node·nullable Target·pagination 계약과 `PROD-420`의 `Post.viewerBookmark` 계약을 바꾸지 않는다. 각 owner 이슈에 착수하기 전 관련 결정을 `Decision Records`에 추가하고 사용자 승인을 받아야 한다.
+없음.
 
 ## Superseded Decisions
 

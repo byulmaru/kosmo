@@ -12,6 +12,7 @@ type RelayMockValue = {
   paginationError?: string | boolean;
   paginationLoading?: boolean;
   paginationResponse?: unknown;
+  paginationResponses?: StoryOperationResponse[];
   operationResponses?: Record<string, StoryOperationResponse | StoryOperationResponse[]>;
   queryData?: unknown;
 };
@@ -30,6 +31,7 @@ export function RelayStoryProvider({
   paginationError,
   paginationLoading,
   paginationResponse,
+  paginationResponses,
   operationResponses,
   queryData,
 }: PropsWithChildren<RelayMockValue>) {
@@ -42,6 +44,7 @@ export function RelayStoryProvider({
       paginationError,
       paginationLoading,
       paginationResponse,
+      paginationResponses,
       operationResponses,
       queryData,
     }),
@@ -53,6 +56,7 @@ export function RelayStoryProvider({
       paginationError,
       paginationLoading,
       paginationResponse,
+      paginationResponses,
       operationResponses,
       queryData,
     ],
@@ -71,8 +75,11 @@ export function RelayStoryProvider({
 }
 
 function createStoryEnvironment(mock: RelayMockValue, environmentIndex: number): Environment {
+  let paginationResponseIndex = 0;
   return new Environment({
-    network: Network.create((request) => executeStoryOperation(request, mock, environmentIndex)),
+    network: Network.create((request) =>
+      executeStoryOperation(request, mock, environmentIndex, () => paginationResponseIndex++),
+    ),
     store: new Store(new RecordSource()),
   });
 }
@@ -81,6 +88,7 @@ function executeStoryOperation(
   request: RequestParameters,
   mock: RelayMockValue,
   environmentIndex: number,
+  nextPaginationResponseIndex: () => number,
 ): Promise<GraphQLResponse> {
   if (request.operationKind === 'mutation') {
     if (mock.mutationError) {
@@ -97,6 +105,16 @@ function executeStoryOperation(
   }
 
   if (request.name.endsWith('NextPageQuery')) {
+    const configuredResponse =
+      mock.paginationResponses?.[
+        Math.min(nextPaginationResponseIndex(), mock.paginationResponses.length - 1)
+      ];
+    if (configuredResponse?.error) {
+      return Promise.reject(new Error(configuredResponse.error));
+    }
+    if (configuredResponse) {
+      return Promise.resolve({ data: (configuredResponse.data ?? {}) as GraphQLResponse['data'] });
+    }
     if (mock.paginationError) {
       return Promise.reject(
         new Error(
