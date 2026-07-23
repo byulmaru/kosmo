@@ -201,9 +201,9 @@ Owner Profile이 조회 가능한 Target의 Bookmark를 안정적인 최신순 c
 - guest redirect, no-selected-Profile, loading·initial error·empty·pagination, 다음 페이지 실패 시 기존 edge 유지·retry, Target 이동, Profile 격리, mobile entry와 Web direct navigation을 route/component integration 수준에서 검증한다.
 
 - [x] 7.1 Web full·compact sidebar와 mobile drawer의 공용 Bookmark 메뉴를 `/bookmarks`로 연결하고 bottom tab은 유지하기로 사용자와 확정해 specs·decisions에 반영한다.
-- [ ] 7.2 selected Profile별 pagination connection과 PROD-452 presentation을 연결하는 공용 Bookmark 목록 route를 구현한다.
-- [ ] 7.3 desktop·mobile navigation entry와 기존 Post 카드의 canonical detail Link가 shell/router 정책으로 동작하게 한다.
-- [ ] 7.4 세 플랫폼 route parity와 실제 connection의 목록 상태·pagination·Profile 격리·direct navigation 검증을 추가하고 관련 check를 통과시킨다.
+- [x] 7.2 selected Profile별 pagination connection과 PROD-452 presentation을 연결하는 공용 Bookmark 목록 route를 구현한다.
+- [x] 7.3 desktop·mobile navigation entry와 기존 Post 카드의 canonical detail Link가 shell/router 정책으로 동작하게 한다.
+- [x] 7.4 세 플랫폼 route parity와 실제 connection의 목록 상태·pagination·Profile 격리·direct navigation 검증을 추가하고 관련 check를 통과시킨다.
 
 ## 8. PROD-391 Bookmark 계약 통합 검증과 archive
 
