@@ -1703,6 +1703,155 @@ describe('GraphQL remote profile boundary', () => {
       false,
     );
   });
+
+  test('applies Repost candidate eligibility before Profile and Home pagination', async () => {
+    const auth = await createAuthenticatedSession();
+    const profileAuthor = await createStoredActivityPubAuthor({
+      domain: 'repost-list.example',
+      handle: 'repost-list',
+    });
+    const homeAuthor = await createStoredActivityPubAuthor({
+      domain: 'home-repost-list.example',
+      handle: 'home-repost-list',
+    });
+    const sourceAuthor = await createStoredActivityPubAuthor({
+      domain: 'repost-source.example',
+      handle: 'repost-source',
+    });
+    await db.insert(ProfileFollows).values({
+      followerProfileId: auth.profile.id,
+      followeeProfileId: homeAuthor.profile.id,
+    });
+
+    const ordinarySource = await createContentfulPost({ profileId: sourceAuthor.profile.id });
+    const replyParent = await createContentfulPost({ profileId: sourceAuthor.profile.id });
+    const replySource = await createContentfulPost({
+      profileId: sourceAuthor.profile.id,
+      replyParentId: replyParent.id,
+    });
+    const quoteSource = await createContentfulPost({
+      profileId: sourceAuthor.profile.id,
+      repostSourceId: ordinarySource.id,
+    });
+    const replyQuoteSource = await createContentfulPost({ profileId: sourceAuthor.profile.id });
+    const unavailableSource = await createContentfulPost({ profileId: sourceAuthor.profile.id });
+    await db
+      .update(Posts)
+      .set({ state: PostState.DELETED })
+      .where(eq(Posts.id, unavailableSource.id));
+
+    const ordinaryRepost = await createPost({
+      id: '019f8ed0-0000-7000-8000-000000000110',
+      profileId: profileAuthor.profile.id,
+      repostSourceId: ordinarySource.id,
+    });
+    const replyRepost = await createPost({
+      id: '019f8ed0-0000-7000-8000-000000000111',
+      profileId: profileAuthor.profile.id,
+      repostSourceId: replySource.id,
+    });
+    const quoteRepost = await createPost({
+      id: '019f8ed0-0000-7000-8000-000000000112',
+      profileId: profileAuthor.profile.id,
+      repostSourceId: quoteSource.id,
+    });
+    const unavailableRepost = await createPost({
+      id: '019f8ed0-0000-7000-8000-000000000130',
+      profileId: profileAuthor.profile.id,
+      repostSourceId: unavailableSource.id,
+    });
+    const retainedQuote = await createContentfulPost({
+      id: '019f8ed0-0000-7000-8000-000000000120',
+      profileId: profileAuthor.profile.id,
+      repostSourceId: unavailableSource.id,
+    });
+    const excludedReplyQuote = await createContentfulPost({
+      id: '019f8ed0-0000-7000-8000-000000000140',
+      profileId: profileAuthor.profile.id,
+      replyParentId: ordinarySource.id,
+      repostSourceId: replyQuoteSource.id,
+    });
+
+    const homeRetainedQuote = await createContentfulPost({
+      id: '019f8ed0-0000-7000-8000-000000000210',
+      profileId: homeAuthor.profile.id,
+      repostSourceId: unavailableSource.id,
+    });
+    const homeEligibleRepost = await createPost({
+      id: '019f8ed0-0000-7000-8000-000000000220',
+      profileId: homeAuthor.profile.id,
+      repostSourceId: ordinarySource.id,
+    });
+    const homeUnavailableRepost = await createPost({
+      id: '019f8ed0-0000-7000-8000-000000000230',
+      profileId: homeAuthor.profile.id,
+      repostSourceId: unavailableSource.id,
+    });
+
+    const profileExpectedIds = [retainedQuote, quoteRepost, replyRepost, ordinaryRepost].map(
+      ({ id }) => globalId('Post', id),
+    );
+    const profileFirstPage = await requestRemotePostRead({
+      first: 2,
+      nodeIds: [],
+      profileId: globalId('Profile', profileAuthor.profile.id),
+      token: auth.token,
+    });
+
+    assertNoGraphQLErrors(profileFirstPage);
+    assert.deepEqual(
+      connectionIds(profileFirstPage.data?.profile?.posts),
+      profileExpectedIds.slice(0, 2),
+    );
+    assert.equal(profileFirstPage.data?.profile?.posts.pageInfo.hasNextPage, true);
+
+    const profileSecondPage = await requestRemotePostRead({
+      after: profileFirstPage.data?.profile?.posts.pageInfo.endCursor,
+      first: 2,
+      nodeIds: [],
+      profileId: globalId('Profile', profileAuthor.profile.id),
+      token: auth.token,
+    });
+
+    assertNoGraphQLErrors(profileSecondPage);
+    assert.deepEqual(
+      connectionIds(profileSecondPage.data?.profile?.posts),
+      profileExpectedIds.slice(2),
+    );
+    assert.equal(profileSecondPage.data?.profile?.posts.pageInfo.hasNextPage, false);
+    assert.equal(
+      connectionIds(profileSecondPage.data?.profile?.posts).includes(
+        globalId('Post', unavailableRepost.id),
+      ),
+      false,
+    );
+    assert.equal(
+      connectionIds(profileSecondPage.data?.profile?.posts).includes(
+        globalId('Post', excludedReplyQuote.id),
+      ),
+      false,
+    );
+
+    const homeFirstPage = await requestRemotePostRead({
+      first: 2,
+      nodeIds: [],
+      profileId: globalId('Profile', homeAuthor.profile.id),
+      token: auth.token,
+    });
+
+    assertNoGraphQLErrors(homeFirstPage);
+    assert.deepEqual(connectionIds(homeFirstPage.data?.homeTimeline), [
+      globalId('Post', homeEligibleRepost.id),
+      globalId('Post', homeRetainedQuote.id),
+    ]);
+    assert.equal(homeFirstPage.data?.homeTimeline?.pageInfo.hasNextPage, false);
+    assert.equal(
+      connectionIds(homeFirstPage.data?.homeTimeline).includes(
+        globalId('Post', homeUnavailableRepost.id),
+      ),
+      false,
+    );
+  });
 });
 
 type GraphQLErrorResult = {
@@ -2001,6 +2150,66 @@ const materializeRemotePost = async ({
     .then(firstOrThrow);
 
   return { content: materializedContent, mapping, post };
+};
+
+const createPost = async ({
+  id,
+  profileId,
+  repostSourceId,
+}: {
+  id?: string;
+  profileId: string;
+  repostSourceId: string;
+}) =>
+  db
+    .insert(Posts)
+    .values({
+      ...(id === undefined ? {} : { id }),
+      profileId,
+      repostSourceId,
+      state: PostState.ACTIVE,
+      visibility: PostVisibility.PUBLIC,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+const createContentfulPost = async ({
+  id,
+  profileId,
+  replyParentId,
+  repostSourceId,
+}: {
+  id?: string;
+  profileId: string;
+  replyParentId?: string;
+  repostSourceId?: string;
+}) => {
+  const post = await db
+    .insert(Posts)
+    .values({
+      ...(id === undefined ? {} : { id }),
+      profileId,
+      state: PostState.ACTIVE,
+      visibility: PostVisibility.PUBLIC,
+    })
+    .returning()
+    .then(firstOrThrow);
+  const content = await db
+    .insert(PostContents)
+    .values({ document: postContentDocumentFromText('content'), postId: post.id })
+    .returning()
+    .then(firstOrThrow);
+
+  return db
+    .update(Posts)
+    .set({
+      currentContentId: content.id,
+      ...(replyParentId === undefined ? {} : { replyParentId }),
+      ...(repostSourceId === undefined ? {} : { repostSourceId }),
+    })
+    .where(eq(Posts.id, post.id))
+    .returning()
+    .then(firstOrThrow);
 };
 
 const createRemoteActor = (
