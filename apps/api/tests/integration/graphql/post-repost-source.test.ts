@@ -180,7 +180,7 @@ describe('GraphQL Post Repost Source', () => {
     ]);
   });
 
-  test('nodes는 unavailable Source chain과 Quote PostContent를 null로 반환한다', async () => {
+  test('nodes는 unavailable direct Source의 Repost만 숨기고 Quote와 Content는 유지한다', async () => {
     const profile = await insertProfile();
     const tombstone = await insertPost({
       bodyText: 'deleted source',
@@ -219,13 +219,29 @@ describe('GraphQL Post Repost Source', () => {
     });
 
     const result = await requestGraphQL<{
-      nodes: Array<{ __typename: 'Post' | 'PostContent'; id: string } | null>;
+      nodes: Array<
+        | {
+            __typename: 'Post';
+            content: { id: string } | null;
+            id: string;
+            repostSource: { id: string } | null;
+          }
+        | { __typename: 'PostContent'; bodyText: string; id: string }
+        | null
+      >;
     }>(
       `query UnavailableRepostSourceContracts($ids: [ID!]!) {
         nodes(ids: $ids) {
           __typename
-          ... on Post { id }
-          ... on PostContent { id }
+          ... on Post {
+            id
+            content { id }
+            repostSource { id }
+          }
+          ... on PostContent {
+            id
+            bodyText
+          }
         }
       }`,
       {
@@ -233,13 +249,34 @@ describe('GraphQL Post Repost Source', () => {
           globalId('Post', directTombstoneOuter.id),
           globalId('Post', indirectTombstoneOuter.id),
           globalId('Post', unauthorizedOuter.id),
+          globalId('Post', quoteWithTombstoneSource.id),
           globalId('PostContent', quoteWithTombstoneSource.currentContentId!),
         ],
       },
     );
 
     assert.equal(result.errors, undefined, JSON.stringify(result.errors));
-    assert.deepEqual(result.data?.nodes, [null, null, null, null]);
+    assert.deepEqual(result.data?.nodes, [
+      null,
+      {
+        __typename: 'Post',
+        content: { id: globalId('PostContent', indirectTombstoneOuter.currentContentId!) },
+        id: globalId('Post', indirectTombstoneOuter.id),
+        repostSource: { id: globalId('Post', indirectSource.id) },
+      },
+      null,
+      {
+        __typename: 'Post',
+        content: { id: globalId('PostContent', quoteWithTombstoneSource.currentContentId!) },
+        id: globalId('Post', quoteWithTombstoneSource.id),
+        repostSource: null,
+      },
+      {
+        __typename: 'PostContent',
+        bodyText: 'quote',
+        id: globalId('PostContent', quoteWithTombstoneSource.currentContentId!),
+      },
+    ]);
   });
 });
 

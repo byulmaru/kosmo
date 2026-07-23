@@ -4,7 +4,7 @@ import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
-import { postSourceChainAccessWhere } from './access/source-chain';
+import { postRepostSourceAccessWhere } from './access/repost-source';
 import { postVisibilityAccessWhere } from './access/visibility';
 
 export const Post = createObjectRef('Post', (ids, ctx) =>
@@ -17,7 +17,7 @@ export const Post = createObjectRef('Post', (ids, ctx) =>
       and(
         inArray(Posts.id, ids),
         postVisibilityAccessWhere({ ctx }),
-        postSourceChainAccessWhere({ ctx, postId: Posts.id }),
+        postRepostSourceAccessWhere({ ctx }),
       ),
     ),
 );
@@ -47,13 +47,7 @@ export const PostContent = createObjectRef('PostContent', (ids, ctx) =>
     .innerJoin(Posts, eq(Posts.id, PostContents.postId))
     .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(
-      and(
-        inArray(PostContents.id, ids),
-        postVisibilityAccessWhere({ ctx }),
-        postSourceChainAccessWhere({ ctx, postId: Posts.id }),
-      ),
-    ),
+    .where(and(inArray(PostContents.id, ids), postVisibilityAccessWhere({ ctx }))),
 );
 
 PostContent.implement({
