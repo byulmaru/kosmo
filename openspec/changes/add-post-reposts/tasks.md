@@ -155,11 +155,9 @@ Repost 후보를 pagination 전에 선택하고, Content 있는 Quote는 자신�
   Source Profile lifecycle 뒤 unavailable direct Source Repost의 filter-before-limit 제외, Quote 유지,
   Node/global ID 은닉과 cursor page boundary를 API integration test로 검증한다.
 
-- [x] 5.1 canonical Home/Profile 후보와 Content 없는 Repost의 direct Source eligibility를 기존 connection
-      query에 적용한다.
+- [x] 5.1 Home/Profile connection에서 Content 없는 Repost의 direct Source eligibility를 pagination 전에 적용한다.
 - [ ] 5.2 Hashtag 목록의 Content 없는 Repost 제외와 Source Hashtag 비상속을 보존한다.
-- [x] 5.3 mixed candidate pagination, unavailable Source의 Repost filter-before-limit·Quote 유지와 기존
-      목록 회귀 검증을 추가하고 API check를 통과시킨다.
+- [x] 5.3 unavailable Source Repost의 filter-before-limit, Quote 유지와 Repost cursor 경계를 API integration test로 검증한다.
 
 ## 6. PROD-411 Repost 취소
 
