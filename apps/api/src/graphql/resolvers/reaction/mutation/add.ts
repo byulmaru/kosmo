@@ -1,6 +1,6 @@
 import { db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
 import { NotFoundError } from '@kosmo/core/error';
-import { addReactionWithStatus, createReactionNotification } from '@kosmo/core/services';
+import { addReaction, createReactionNotification } from '@kosmo/core/services';
 import { reactionTypeSchema } from '@kosmo/core/validation';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
@@ -33,7 +33,7 @@ builder.mutationField('addReaction', (t) =>
           throw new NotFoundError('Post not found');
         }
 
-        return addReactionWithStatus(
+        return addReaction(
           {
             actorProfileId: ctx.session.profileId,
             postId: post.id,

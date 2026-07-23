@@ -31,7 +31,7 @@ type AddReactionInput = {
   readonly type: string;
 };
 
-export const addReactionWithStatus = async (
+export const addReaction = async (
   { actorProfileId, postId, type }: AddReactionInput,
   tx?: Transaction,
 ): Promise<{ readonly created: boolean; readonly reaction: typeof Reactions.$inferSelect }> => {
@@ -82,9 +82,6 @@ export const addReactionWithStatus = async (
     return { created: inserted !== undefined, reaction };
   });
 };
-
-export const addReaction = async (input: AddReactionInput, tx?: Transaction) =>
-  (await addReactionWithStatus(input, tx)).reaction;
 
 export const deleteReaction = async (
   {

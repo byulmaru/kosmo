@@ -13,5 +13,5 @@ export {
   cancelProfileFollowRequest,
   rejectProfileFollowRequest,
 } from './profile-follow-request';
-export { addReaction, addReactionWithStatus, deleteReaction } from './reaction';
+export { addReaction, deleteReaction } from './reaction';
 export { createOidcSession } from './session';
