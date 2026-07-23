@@ -36,7 +36,11 @@
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-389`, `PROD-394`, `PROD-401`, `PROD-411`
 - Status: Active
 - Context / Problem: 순차·동시 duplicate Repost를 하나로 수렴시키면서 Quote와 Tombstone Repost는 같은 Author/Source 조합으로 공존할 수 있어야 한다.
-- Decision Outcome: `(profile_id, repost_source_id)`에 Active이고 Content와 Reply Parent가 없는 행만 포함하는 partial unique index를 사용한다. core Repost action은 unique conflict 뒤 기존 Active Repost를 조회해 같은 성공 결과로 정규화한다. DB constraint trigger와 명시적 비관적 row lock은 추가하지 않는다.
+- Decision Outcome: `(profile_id, repost_source_id)`에 `state = ACTIVE`, `current_content_id IS NULL`,
+  `repost_source_id IS NOT NULL` predicate를 적용한 partial unique index를 사용한다. 유효한 contentless Post는
+  구조 검증상 Reply Parent를 가질 수 없고 Repost action은 `reply_parent_id = null`을 유지한다. core Repost
+  action은 unique conflict 뒤 기존 Active Repost를 조회해 같은 성공 결과로 정규화한다. DB constraint
+  trigger와 명시적 비관적 row lock은 추가하지 않는다.
 - Alternatives Considered: application pre-check만 사용, constraint trigger, `SELECT FOR UPDATE`. pre-check만으로는 동시성을 막지 못하고 trigger/lock은 social interaction에 과도한 결합과 운영 위험을 만든다.
 - Consequences: DB가 최종 동시성 경계가 되고 Tombstone 전이가 index membership을 해제한다. conflict 판정은 기존 DB helper와 constraint identity를 사용해야 한다.
 - Confirmation / Follow-up: PROD-394 migration catalog·concurrent insert 테스트, PROD-401 순차·동시 멱등 테스트와 PROD-411 재Repost 테스트를 수행한다.
@@ -134,6 +138,18 @@
 - Alternatives Considered: child별 OpenSpec, 중간 slice archive, Project 전체 backlog change. 모두 공유 계약을 복제하거나 완료 상태를 잘못 표현한다.
 - Consequences: PROD-394가 완료돼도 나머지 task는 미완료로 유지되고 change는 active 상태를 유지한다.
 - Confirmation / Follow-up: 부모 Completion Gate에서 child/PR, requirement scenario, integration과 archive diff를 함께 검증한다.
+
+### Repost Source 오류는 조회 가능성과 Repost 가능성을 구분한다
+
+- Decision Date: 2026-07-22
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-401`
+- Status: Active
+- Context / Problem: Source가 없거나 조회 불가능한 경우에는 존재와 비공개 상태를 숨겨야 하지만, 호출자가 이미 조회할 수 있는 Content 없는 Repost, Mentioned Profiles와 타인 Followers Only Source는 존재를 숨겨도 입력을 수정할 근거가 부족하다.
+- Decision Outcome: 누락·Tombstone·viewer 기준 조회 불가 Source는 `NOT_FOUND`로 처리한다. 호출자가 조회할 수 있지만 구조 또는 Repost visibility 정책상 허용되지 않는 Source는 `VALIDATION`과 `sourceId` field로 처리한다. Account/Profile membership 또는 actor 상태 실패는 `PERMISSION_DENIED`로 처리한다.
+- Alternatives Considered: 모든 허용되지 않는 Source를 `NOT_FOUND`로 통일하는 방식은 비공개 정보 보호는 단순하지만 이미 조회 권한이 있는 입력에도 수정 가능한 field 오류를 제공하지 못한다. 세부 원인별 error type을 늘리는 방식은 현재 GraphQL error 계약에 비해 과도하다.
+- Consequences: core action은 viewer 기준 Source 조회 가능성을 먼저 확인한 뒤 Repost 전용 구조·visibility 정책을 검증해야 하며, GraphQL은 기존 domain error mapping을 그대로 사용한다.
+- Confirmation / Follow-up: 누락·Tombstone·비공개 Source의 `NOT_FOUND`, 조회 가능한 허용 불가 Source의 `VALIDATION(sourceId)`, actor 실패의 `PERMISSION_DENIED`를 core/API integration test로 검증한다.
 
 ## Remaining Decisions
 

@@ -1,0 +1,1 @@
+CREATE INDEX "post_reply_parent_id_index" ON "post" ("reply_parent_id") WHERE "reply_parent_id" IS NOT NULL;

@@ -1,10 +1,31 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { eq, inArray, or } from 'drizzle-orm';
-import { db, firstOrThrow, Instances, Notifications, pg, ProfileFollows, Profiles } from '../db';
-import { InstanceKind, InstanceState, NotificationKind, ProfileFollowPolicy } from '../enums';
+import {
+  db,
+  firstOrThrow,
+  Instances,
+  Notifications,
+  pg,
+  Posts,
+  ProfileFollows,
+  Profiles,
+  Reactions,
+} from '../db';
+import {
+  InstanceKind,
+  InstanceState,
+  NotificationKind,
+  PostState,
+  PostVisibility,
+  ProfileFollowPolicy,
+} from '../enums';
 import { NotFoundError } from '../error';
-import { createFollowNotification, deleteNotificationBySource } from './notification';
+import {
+  createFollowNotification,
+  createReactionNotification,
+  deleteNotificationBySource,
+} from './notification';
 import { followProfile, unfollowProfile } from './profile-follow';
 
 const instanceIds: string[] = [];
@@ -41,6 +62,24 @@ const createProfile = async (kind: InstanceKind = InstanceKind.LOCAL) => {
 const readNotifications = (sourceId: string) =>
   db.select().from(Notifications).where(eq(Notifications.sourceId, sourceId));
 
+const createReaction = async (authorProfileId: string, recipientProfileId: string) => {
+  const post = await db
+    .insert(Posts)
+    .values({
+      profileId: recipientProfileId,
+      state: PostState.ACTIVE,
+      visibility: PostVisibility.PUBLIC,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+  return db
+    .insert(Reactions)
+    .values({ postId: post.id, profileId: authorProfileId, type: '🎉' })
+    .returning()
+    .then(firstOrThrow);
+};
+
 const getEstablishedFollow = (result: Awaited<ReturnType<typeof followProfile>>) => {
   if (result.result.kind !== 'ESTABLISHED') {
     assert.fail('Expected an established profile follow');
@@ -51,6 +90,8 @@ const getEstablishedFollow = (result: Awaited<ReturnType<typeof followProfile>>)
 after(async () => {
   if (profileIds.length > 0) {
     await db.delete(Notifications).where(inArray(Notifications.recipientProfileId, profileIds));
+    await db.delete(Reactions).where(inArray(Reactions.profileId, profileIds));
+    await db.delete(Posts).where(inArray(Posts.profileId, profileIds));
     await db
       .delete(ProfileFollows)
       .where(
@@ -182,4 +223,39 @@ test('Unfollow 뒤 Re-follow는 새 source ID로 새 알림을 저장한다', as
   assert.notEqual(secondFollow.id, firstFollow.id);
   assert.deepEqual(await readNotifications(firstFollow.id), []);
   assert.equal((await readNotifications(secondFollow.id)).length, 1);
+});
+
+test('Reaction 알림은 source에서 Recipient와 Related 객체를 파생하고 idempotent하다', async () => {
+  const author = await createProfile();
+  const recipient = await createProfile();
+  const reaction = await createReaction(author.id, recipient.id);
+
+  await Promise.all([
+    createReactionNotification(reaction.id),
+    createReactionNotification(reaction.id),
+  ]);
+
+  const [notification] = await readNotifications(reaction.id);
+  assert.ok(notification);
+  assert.equal(notification.kind, NotificationKind.REACTION);
+  assert.equal(notification.recipientProfileId, recipient.id);
+  assert.equal(notification.sourceId, reaction.id);
+  assert.deepEqual(notification.data, {});
+});
+
+test('Reaction 알림은 자기 Post와 Remote Recipient에서 no-op이다', async () => {
+  const self = await createProfile();
+  const selfReaction = await createReaction(self.id, self.id);
+  await createReactionNotification(selfReaction.id);
+  assert.deepEqual(await readNotifications(selfReaction.id), []);
+
+  const author = await createProfile();
+  const remoteRecipient = await createProfile(InstanceKind.ACTIVITYPUB);
+  const remoteReaction = await createReaction(author.id, remoteRecipient.id);
+  await createReactionNotification(remoteReaction.id);
+  assert.deepEqual(await readNotifications(remoteReaction.id), []);
+});
+
+test('Reaction 알림은 존재하지 않는 source를 거부한다', async () => {
+  await assert.rejects(createReactionNotification(crypto.randomUUID()), NotFoundError);
 });

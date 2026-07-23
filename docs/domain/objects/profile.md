@@ -79,11 +79,11 @@ Request의 상태나 존재를 바꾸지 않는다.
 
 ## 권한
 
-| 권한                         | 종류      | 성립 조건                                                       |
-| ---------------------------- | --------- | --------------------------------------------------------------- |
-| `Profile.Member`             | 객체 종속 | Account가 Local Profile의 Owner 또는 Member Membership을 가진다 |
-| `Profile.Owner`              | 객체 종속 | Account가 Local Profile의 Owner Membership을 가진다             |
-| `System.RemoteProfileSource` | 독립      | 시스템이 Remote Profile 원본 정보를 반영하는 주체다             |
+| 권한                         | 종류      | 성립 조건                                                              |
+| ---------------------------- | --------- | ---------------------------------------------------------------------- |
+| `Profile.Member`             | 객체 종속 | Account가 Local Profile의 Owner, Admin 또는 Member Membership을 가진다 |
+| `Profile.Owner`              | 객체 종속 | Account가 Local Profile의 Owner Membership을 가진다                    |
+| `System.RemoteProfileSource` | 독립      | 시스템이 Remote Profile 원본 정보를 반영하는 주체다                    |
 
 ## 조회 정책
 

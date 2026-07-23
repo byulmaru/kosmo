@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { PostListItem } from '@/components/post/PostListItem';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/StateView';
@@ -17,6 +17,7 @@ export type BookmarkListProps = {
   loading?: boolean;
   onLoadMore?: () => void;
   onRetry?: () => void;
+  profileRequired?: boolean;
 };
 
 export function BookmarkList({
@@ -27,11 +28,19 @@ export function BookmarkList({
   loading = false,
   onLoadMore,
   onRetry,
+  profileRequired = false,
 }: BookmarkListProps): React.JSX.Element {
   const hasData = items.length > 0;
   let content: ReactNode;
 
-  if (loading && !hasData) {
+  if (profileRequired) {
+    content = (
+      <BookmarkListState
+        description="북마크를 보려면 사용할 프로필을 먼저 선택해주세요."
+        title="프로필이 필요해요"
+      />
+    );
+  } else if (loading && !hasData) {
     content = <BookmarkListSkeleton />;
   } else if (error && !hasData) {
     content = (
@@ -55,7 +64,14 @@ export function BookmarkList({
         {items.map((item) => (
           <PostListItem key={item.id} post={item.post} />
         ))}
-        {hasNext && onLoadMore ? (
+        {error ? (
+          <BookmarkListState
+            alert
+            description="기존 북마크는 그대로 유지돼요."
+            onRetry={onRetry}
+            title="북마크를 더 불러오지 못했어요"
+          />
+        ) : hasNext && onLoadMore ? (
           <View style={styles.pagination}>
             <Button
               aria-busy={isLoadingMore}
@@ -78,10 +94,10 @@ export function BookmarkList({
   }
 
   return (
-    <View style={styles.root}>
+    <ScrollView contentContainerStyle={styles.root} testID="bookmark-list-scroll">
       <BookmarkListTitle />
       {content}
-    </View>
+    </ScrollView>
   );
 }
 
@@ -156,7 +172,7 @@ function BookmarkListState({
 }
 
 const styles = StyleSheet.create({
-  root: { width: '100%' },
+  root: { flexGrow: 1, width: '100%' },
   titleBar: { justifyContent: 'center', minHeight: 43, paddingHorizontal: spacing.lg },
   title: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
   skeletonItem: {

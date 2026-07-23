@@ -47,7 +47,7 @@ Bookmark의 도메인 계약은 `docs/domain/objects/bookmark.md`와 Accepted AD
 4. **PROD-410 목록**: 현재 선택된 Profile의 `Profile.bookmarks` owner-only connection query에서 Bookmark와 Target Post·작성자 Profile·Instance를 결합하고 기존 Post 가시성 predicate를 SQL `WHERE`에 적용한 뒤 UUIDv7 ID-only cursor, order, limit을 적용한다. `Bookmark`는 Owner만 조회하는 Relay Node로 두고, Owner가 숨겨진 Target의 관계도 관리할 수 있도록 `Bookmark.post`는 nullable로 둔다. 개별 Node의 숨겨진 Target은 `null`, 목록의 같은 Bookmark edge는 결과 제외로 처리한다. 다른 Profile의 connection은 일반적인 권한 거부, 비Owner Node 조회는 `null`로 정규화한다.
 5. **PROD-420 viewer-relative 조회 API**: nullable `Post.viewerBookmark`를 추가하고 request-scoped batch loader가 현재 selected Profile과 요청 Post ID들에 해당하는 Bookmark만 조회하게 한다. guest, selected Profile 없음과 미저장 상태는 `null`로 정규화하고 여러 Post 조회에서 N+1을 만들지 않는다.
 6. **PROD-452 목록 presentation**: 실제 Bookmark connection 없이 loading·error·empty·populated와 추가 로딩 상태를 props로 제공하고 fixture로 검증한다. populated 상태는 기존 `PostListItem` fragment를 그대로 렌더링해 Profile·Post canonical Link를 유지한다. Storybook은 Relay mock fixture로 fragment ref를 만들고, error retry와 mock pagination callback만 presentation 상호작용으로 검증한다.
-7. **PROD-421 목록 route 통합**: `/bookmarks` route의 selected Profile fragment에 `@refetchable`·`@connection` pagination 계약을 두고 PROD-452 presentation에 실제 상태와 edge를 전달한다. 선택 Profile이 없으면 query를 실행하지 않고, Profile 전환 뒤에는 새 connection/cursor를 사용한다. 현재 `/menu` placeholder인 사이드바 Bookmark 항목을 canonical route로 연결하고 mobile 진입 경계도 함께 검증한다.
+7. **PROD-421 목록 route 통합**: `/bookmarks` route의 selected Profile fragment에 `@refetchable`·`@connection` pagination 계약을 두고 PROD-452 presentation에 실제 상태와 edge를 전달한다. 선택 Profile이 없으면 query를 실행하지 않고, Profile 전환 뒤에는 새 connection/cursor를 사용한다. 다음 페이지 요청이 실패하면 기존 edge를 유지한 채 목록 아래에 retry를 제공한다. Web full·compact sidebar와 mobile drawer가 공유하는 `SidebarNavigation`의 Bookmark 항목을 `/menu` placeholder에서 canonical route로 바꾸며, mobile bottom tab이나 별도 header 버튼은 추가하지 않는다.
 8. **PROD-391 통합**: 저장 → 생성 → `Post.viewerBookmark`/목록 조회 → Target 숨김·재노출 → 삭제를 하나의 계약 흐름으로 검증하고, 모든 구현 이슈의 검증 증거와 canonical/OpenSpec 정합성을 확인한 뒤 archive한다.
 
 ### Allowed Alternatives
@@ -86,4 +86,4 @@ Bookmark의 도메인 계약은 `docs/domain/objects/bookmark.md`와 Accepted AD
 
 ## Open Questions
 
-- **PROD-421**: desktop sidebar 외 mobile shell에서 `/bookmarks`로 들어가는 정확한 navigation entry를 확정해야 한다.
+없음.

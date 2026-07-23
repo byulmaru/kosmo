@@ -7,6 +7,8 @@ import {
   AccountState,
   InstanceKind,
   NotificationKind,
+  PostState,
+  PostVisibility,
   ProfileFollowPolicy,
   ProfileState,
   SessionState,
@@ -21,7 +23,7 @@ import type { yoga as YogaRouter } from '../../../src/graphql';
 import type { encodeGlobalId as EncodeGlobalId } from '../../../src/graphql/global-id';
 
 const publicOrigin = 'http://127.0.0.1:4173';
-const databaseUrl = 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
@@ -30,8 +32,10 @@ let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
+let Posts: typeof CoreDb.Posts;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
+let Reactions: typeof CoreDb.Reactions;
 let Sessions: typeof CoreDb.Sessions;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let deriveContext: typeof DeriveContext;
@@ -54,8 +58,10 @@ describe('Notification GraphQL Node boundary', () => {
       Instances,
       Notifications,
       pg,
+      Posts,
       ProfileFollows,
       Profiles,
+      Reactions,
       Sessions,
     } = await import('@kosmo/core/db'));
     ({ seedDatabase } = await import('@kosmo/core/db/seed'));
@@ -177,6 +183,54 @@ describe('Notification GraphQL Node boundary', () => {
       await loadNodes(notificationIds, unrelated.token),
       notificationIds.map(() => null),
     );
+  });
+
+  test('integrates Reaction rows into Node, mixed list, unread count and Read', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('reaction-recipient');
+    const author = await createProfile('reaction-author');
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.OWNER);
+    const follow = await createFollowNotification(recipient.id, author.id);
+    const reaction = await createReactionNotification(recipient.id, author.id, '🎉');
+    await db
+      .update(Posts)
+      .set({ visibility: PostVisibility.DIRECT })
+      .where(eq(Posts.id, reaction.post.id));
+    const recipientId = encodeGlobalId('Profile', recipient.id);
+    const reactionId = encodeGlobalId('ReactionNotification', reaction.notification.id);
+
+    const node = await requestGraphQL<{ node: NotificationNode | null }>(
+      `query ReactionNotificationNode($id: ID!) {
+        node(id: $id) {
+          __typename
+          ... on Notification { id createdAt readAt }
+          ... on ReactionNotification { type profile { id } post { id } }
+        }
+      }`,
+      { id: reactionId },
+      auth.token,
+    );
+    assertNoGraphQLErrors(node);
+    assert.equal(node.data?.node?.__typename, 'ReactionNotification');
+    assert.equal(node.data?.node?.type, '🎉');
+    assert.equal(node.data?.node?.profile.id, encodeGlobalId('Profile', author.id));
+    assert.equal(node.data?.node?.post?.id, encodeGlobalId('Post', reaction.post.id));
+
+    const connection = await loadNotificationConnection(recipientId, auth.token, { first: 10 });
+    assertNoGraphQLErrors(connection);
+    assert.deepEqual(
+      new Set(connection.data?.node?.notifications.edges.map(({ node }) => node.__typename)),
+      new Set(['FollowNotification', 'ReactionNotification']),
+    );
+
+    const initialCount = await loadUnreadNotificationCounts([recipientId], auth.token);
+    assert.equal(initialCount.data?.nodes[0]?.unreadNotificationCount, 2);
+
+    const read = await markNotificationRead(reactionId, auth.token);
+    assertNoGraphQLErrors(read);
+    assert.equal(read.data?.markNotificationRead.notification.id, reactionId);
+    assert.equal(read.data?.markNotificationRead.recipientProfile.unreadNotificationCount, 1);
+    assert.equal(await notificationReadAt(follow.id), null);
   });
 
   test('counts unread notifications for every membership role without using the selected Profile', async () => {
@@ -523,6 +577,71 @@ describe('Notification GraphQL Node boundary', () => {
     );
   });
 
+  test('hides unavailable Reaction notifications from every API surface', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('reaction-hidden-recipient');
+    const author = await createProfile('reaction-hidden-author');
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.OWNER);
+
+    const missingSource = await db
+      .insert(Notifications)
+      .values({
+        kind: NotificationKind.REACTION,
+        recipientProfileId: recipient.id,
+        sourceId: crypto.randomUUID(),
+      })
+      .returning()
+      .then(firstOrThrow);
+
+    const actualRecipient = await createProfile('reaction-actual-recipient');
+    const mismatchSource = await createReactionNotification(actualRecipient.id, author.id, '👀');
+    const mismatch = await db
+      .update(Notifications)
+      .set({ recipientProfileId: recipient.id })
+      .where(eq(Notifications.id, mismatchSource.notification.id))
+      .returning()
+      .then(firstOrThrow);
+
+    const deletedPost = await createReactionNotification(recipient.id, author.id, '👍');
+    await db
+      .update(Posts)
+      .set({ state: PostState.DELETED })
+      .where(eq(Posts.id, deletedPost.post.id));
+
+    const hiddenAuthor = await createProfile('reaction-suspended-author');
+    const hidden = await createReactionNotification(recipient.id, hiddenAuthor.id, '🎉');
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.SUSPENDED })
+      .where(eq(Profiles.id, hiddenAuthor.id));
+
+    const notifications = [missingSource, mismatch, deletedPost.notification, hidden.notification];
+    const ids = notifications.map(({ id }) => encodeGlobalId('ReactionNotification', id));
+    const recipientId = encodeGlobalId('Profile', recipient.id);
+
+    assert.deepEqual(
+      await loadNodes(ids, auth.token),
+      ids.map(() => null),
+    );
+
+    const connection = await loadNotificationConnection(recipientId, auth.token, { first: 10 });
+    assertNoGraphQLErrors(connection);
+    assert.deepEqual(connection.data?.node?.notifications.edges, []);
+
+    const count = await loadUnreadNotificationCounts([recipientId], auth.token);
+    assertNoGraphQLErrors(count);
+    assert.equal(count.data?.nodes[0]?.unreadNotificationCount, 0);
+
+    for (const id of ids) {
+      const result = await markNotificationRead(id, auth.token);
+      assert.equal(result.errors?.[0]?.extensions?.code, 'NOT_FOUND');
+    }
+    assert.deepEqual(
+      await Promise.all(notifications.map(({ id }) => notificationReadAt(id))),
+      notifications.map(() => null),
+    );
+  });
+
   test('marks a visible Notification Read once without depending on the selected Profile', async () => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile('read-recipient');
@@ -679,6 +798,8 @@ type NotificationNode = {
   id: string;
   readAt: string | null;
   profile: { id: string };
+  post?: { id: string };
+  type?: string;
 };
 
 type NotificationConnection = {
@@ -742,6 +863,7 @@ const loadNotificationConnection = (
                 id
                 readAt
                 ... on FollowNotification { profile { id } }
+                ... on ReactionNotification { type profile { id } post { id } }
               }
             }
             pageInfo { endCursor hasNextPage }
@@ -766,6 +888,7 @@ const markNotificationRead = (id: string, token?: string) =>
           id
           readAt
           ... on FollowNotification { profile { id } }
+          ... on ReactionNotification { type profile { id } post { id } }
         }
         recipientProfile { id unreadNotificationCount }
       }
@@ -839,6 +962,38 @@ const createFollowNotification = async (
     .then(firstOrThrow);
 };
 
+const createReactionNotification = async (
+  recipientProfileId: string,
+  authorProfileId: string,
+  type: string,
+) => {
+  const post = await db
+    .insert(Posts)
+    .values({
+      profileId: recipientProfileId,
+      state: PostState.ACTIVE,
+      visibility: PostVisibility.PUBLIC,
+    })
+    .returning()
+    .then(firstOrThrow);
+  const reaction = await db
+    .insert(Reactions)
+    .values({ postId: post.id, profileId: authorProfileId, type })
+    .returning()
+    .then(firstOrThrow);
+  const notification = await db
+    .insert(Notifications)
+    .values({
+      kind: NotificationKind.REACTION,
+      recipientProfileId,
+      sourceId: reaction.id,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+  return { notification, post, reaction };
+};
+
 const createAuthenticatedSession = async () => {
   const account = await db
     .insert(Accounts)
@@ -870,6 +1025,8 @@ const resetFixtures = async () => {
   await db.delete(Notifications);
   await db.delete(Sessions);
   await db.delete(ProfileFollows);
+  await db.delete(Reactions);
+  await db.delete(Posts);
   await db.delete(AccountProfiles);
   await db.delete(Accounts);
   await db.delete(Profiles);
@@ -879,7 +1036,9 @@ const resetFixtures = async () => {
 };
 
 const truncateDatabase = async () => {
-  assert.equal(new URL(process.env.DATABASE_URL ?? '').pathname, '/kosmo_test');
+  const databaseUrl = new URL(process.env.DATABASE_URL ?? '');
+  assert.ok(['127.0.0.1', '[::1]', 'localhost'].includes(databaseUrl.hostname));
+  assert.match(decodeURIComponent(databaseUrl.pathname.slice(1)), /^kosmo_test(?:_[a-z0-9_]+)?$/);
   await pg.unsafe(`
     DO $$
     DECLARE truncate_statement text;

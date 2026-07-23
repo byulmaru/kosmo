@@ -31,6 +31,12 @@ Android, iOS, Web 클라이언트는 `/bookmarks` route에 같은 공용 route·
 - **WHEN** 사용자가 Android, iOS 또는 Web에서 `/bookmarks`를 연다
 - **THEN** 각 플랫폼은 같은 공용 Bookmark 목록 route와 Relay query 계약을 사용한다
 
+#### Scenario: Navigate from the mobile Bookmark menu
+
+- **WHEN** 사용자가 Android, iOS 또는 mobile layout의 Web에서 메뉴 drawer의 Bookmark 항목을 선택한다
+- **THEN** 시스템은 canonical `/bookmarks` route로 이동한다
+- **AND** Bookmark 전용 bottom tab이나 별도 header action을 요구하지 않는다
+
 #### Scenario: Isolate Bookmark pagination by Profile
 
 - **WHEN** 사용자가 선택 Profile을 바꾼 뒤 `/bookmarks` 목록을 조회한다
