@@ -12,6 +12,13 @@ test('Post는 nullable Repost Source를 제공한다', () => {
   assert.equal(String(post.getFields().repostSource?.type), 'Post');
 });
 
+test('exposes viewer-independent Repost count on Post', () => {
+  const post = schema.getType('Post');
+
+  assert.ok(isObjectType(post));
+  assert.equal(String(post.getFields().repostCount?.type), 'Int!');
+});
+
 test('exposes the versioned PostContent document and Plain Text composer contract', () => {
   const postContent = schema.getType('PostContent');
   const createPostInput = schema.getType('CreatePostInput');
