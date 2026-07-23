@@ -57,12 +57,24 @@
 - Decision Date: 2026-07-23
 - Decision Class: Implementation Choice
 - Authority / Provenance: `PROD-433`, 2026-07-23 KST 사용자 결정
-- Status: Active
+- Status: Superseded
 - Context / Problem: 같은 16px과 Lucide 기본 `strokeWidth` 2를 사용하면 내부 여백이 큰 Repost는 다른 glyph보다 작고 가늘게 보이고, Reply는 count보다 크게 느껴지며 수직 중심이 어긋나 보인다. Reaction Heart도 상대적으로 작고 모든 action glyph의 선 가독성이 부족하다.
 - Decision Outcome: Reply는 16px slot 중앙의 14px glyph, Repost는 20px glyph, Reaction Heart는 18px glyph, Bookmark·More는 16px glyph를 사용한다. Reply·Reaction·Bookmark·More의 Lucide `strokeWidth`는 3.5, 추가 강조가 필요한 Repost는 4를 사용한다. active Heart·Bookmark의 fill은 유지한다. pending spinner는 14px을 각 액션의 default glyph slot 중앙에 배치하고, 모든 control은 최소 44×44 interactive target을 유지한다.
 - Alternatives Considered: 모든 glyph를 16px과 기본 선 두께로 유지하는 방식은 확인된 광학 불균형과 가독성 문제를 남겨 채택하지 않았다. 모든 glyph를 같은 크기로 일괄 확대·축소하는 방식은 이미 적절한 Bookmark·More까지 바꾸므로 채택하지 않았다. Reply나 Repost를 한 축으로만 늘리는 방식은 Lucide 비율을 왜곡하므로 채택하지 않았다.
 - Consequences: action별 visual glyph와 slot 폭이 달라지지만 공개 props, 순서, 최소 입력 영역과 접근성 계약은 바뀌지 않는다. Repost의 default↔pending 전환은 20px slot을 유지하고 다른 action도 자기 slot 중앙에서 spinner를 표시하므로 count와 행 배치가 흔들리지 않는다.
 - Confirmation / Follow-up: PROD-433 Storybook에서 다섯 glyph의 크기와 선 두께, Reply·Repost의 count 중앙선, pending slot과 390px·900px·1400px 한 행 배치를 검증한다.
+
+### Reply·Repost의 실제 획 높이를 count와 맞춘다
+
+- Decision Date: 2026-07-23
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-433`, 2026-07-23 KST 사용자 결정
+- Status: Active
+- Context / Problem: Reply·Repost의 SVG element box와 16px count line box 중심을 같게 배치해도 실제 icon path와 글자 획의 높이가 달라 수평선이 맞지 않아 보인다. 특히 Repeat2를 20×20px과 `strokeWidth` 4로 균등 확대하면 원래 y=6~18만 사용하는 가로형 path는 계속 눌려 보이면서 선만 과도하게 두꺼워진다. 비정사각 scaling 뒤에도 SUIT count의 font ink가 icon optical center보다 높게 느껴진다. 14×16 Reply와 16×24 Repost는 세로 대비 가로가 부족해 과도하게 길어 보인다.
+- Decision Outcome: Reply는 16×16px slot 중앙의 16×16px glyph, Repost는 18×24px slot의 18×24px glyph를 사용한다. Reply·Reaction·Bookmark·More의 `strokeWidth`는 3.5를 유지하고, 가로 path가 과도하게 무거워 보이지 않도록 Repost만 2.7을 사용한다. Reply는 가로폭을 16px로 넓혀 세로와 같은 비율로 맞춘다. Repost는 24×24 viewBox의 y=6~18 path가 실제 약 16px 높이로 보이도록 세로 24px을 유지하고, 가로폭은 18px로 넓혀 세로로 과도하게 늘어난 비율을 완화한다. React Native SVG의 기본 비율 보존이 비정사각 viewport 안에 정사각 content를 letterbox하지 않도록 Reply·Repost에만 `preserveAspectRatio="none"`을 전달한다. count는 모든 ActionControl에서 lineHeight와 layout 위치를 바꾸지 않고 내부 typography transform으로 시각적으로 2px 아래에 둔다. pending spinner는 14px 크기와 각 액션 slot layout을 유지한 채 시각만 1px 아래로 이동해 count 중심보다 1px 위에 둔다. Reaction Heart 18×18px, Bookmark·More 16×16px, active fill과 최소 44×44 interactive target은 유지한다.
+- Alternatives Considered: Repost 20×20px과 `strokeWidth` 4는 path 비율을 개선하지 못하고 선만 과도하게 두꺼워 채택하지 않았다. Repost 16×20px은 path가 사용하는 세로 영역이 실제 약 10px로 남아 16px count 획 높이와 계속 차이가 나므로 채택하지 않았다. 비정사각 width·height만 전달하고 기본 `preserveAspectRatio="xMidYMid meet"`를 유지하는 방식은 정사각 content를 letterbox해 실제 path 비율을 바꾸지 못하므로 채택하지 않았다. count lineHeight나 layout 위치를 바꾸는 방식은 Reply·Repost 이외의 typography와 플랫폼별 font metric까지 넓게 바꾸므로 채택하지 않았다. action별 icon `translateY`는 spinner slot과 default glyph 중심 계약을 바꾸므로 채택하지 않았다.
+- Consequences: 내부 icon renderer가 width와 height를 별도로 처리하지만 공개 `PostActionBarProps`, 액션 순서, count 계약, 입력·접근성 상태는 바뀌지 않는다. Reply·Repost의 default와 pending slot은 각각 16×16px·18×24px로 유지하므로 icon↔spinner 전환 때 행 배치가 흔들리지 않는다. Repost glyph와 slot 폭을 같게 해 Android View clipping을 피하고 플랫폼별로 같은 18px glyph를 보장한다. count는 렌더링만 2px 내려가며 lineHeight와 action target은 유지하고, pending spinner만 렌더링 1px 내려간다.
+- Confirmation / Follow-up: PROD-433 Storybook에서 Reply 16×16px, Repost 18×24px와 `strokeWidth` 2.7, 나머지 glyph의 `strokeWidth` 3.5, Reply·Repost count의 icon 중심보다 2px 낮은 렌더 위치와 pending spinner의 count 중심보다 1px 높은 렌더 위치, 실제 광학 정렬과 390px·900px·1400px 한 행 배치를 검증한다.
 
 ### 공유 change와 부모 소유의 최종 archive
 
@@ -158,3 +170,4 @@
 - 2026-07-23 `공개 도메인 상태와 처리 상태를 분리`는 2026-07-23 `공개 도메인 상태와 일시적 실패 피드백을 분리`로 대체했다.
 - 2026-07-21 `More 컴포넌트 경계와 링크 복사 통합을 분리`는 2026-07-23 `More callback 경계와 Post Share Reference 통합을 분리`로 대체했다.
 - 2026-07-21 `count는 K/M 단위 최대 네 글자로 표시`는 2026-07-23 `locale-aware 표준 compact number formatting을 사용`으로 대체했다.
+- 2026-07-23 `액션별 광학 크기와 선 두께를 조정`은 같은 날 `Reply·Repost의 실제 획 높이를 count와 맞춘다`로 대체했다.

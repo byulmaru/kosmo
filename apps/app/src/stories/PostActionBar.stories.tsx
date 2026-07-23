@@ -169,26 +169,35 @@ export const ActionBarCatalog: Story = {
     const defaultToolbar = canvas.getAllByRole('toolbar')[0]!;
     const defaultToolbarCanvas = within(defaultToolbar);
     const iconMetrics = [
-      ['답글', 14, '3.5'],
-      ['재게시', 20, '4'],
-      ['반응', 18, '3.5'],
-      ['북마크', 16, '3.5'],
-      ['더보기', 16, '3.5'],
+      ['답글', 16, 16, '3.5'],
+      ['재게시', 18, 24, '2.7'],
+      ['반응', 18, 18, '3.5'],
+      ['북마크', 16, 16, '3.5'],
+      ['더보기', 16, 16, '3.5'],
     ] as const;
 
-    for (const [label, size, strokeWidth] of iconMetrics) {
+    for (const [label, width, height, strokeWidth] of iconMetrics) {
       const icon = defaultToolbarCanvas.getByRole('button', { name: label }).querySelector('svg');
-      expect(icon).toHaveAttribute('width', String(size));
-      expect(icon).toHaveAttribute('height', String(size));
+      expect(icon).toHaveAttribute('width', String(width));
+      expect(icon).toHaveAttribute('height', String(height));
       expect(icon).toHaveAttribute('stroke-width', strokeWidth);
     }
+    expect(
+      defaultToolbarCanvas.getByRole('button', { name: '답글' }).querySelector('svg'),
+    ).toHaveAttribute('preserveAspectRatio', 'none');
+    expect(
+      defaultToolbarCanvas.getByRole('button', { name: '재게시' }).querySelector('svg'),
+    ).toHaveAttribute('preserveAspectRatio', 'none');
+    expect(
+      defaultToolbarCanvas.getByTestId('post-action-repost-icon').getBoundingClientRect().width,
+    ).toBe(18);
 
     for (const label of ['답글', '재게시'] as const) {
       const button = defaultToolbarCanvas.getByRole('button', { name: label });
       const iconBounds = button.querySelector('svg')!.getBoundingClientRect();
       const countBounds = button.querySelector('[dir="auto"]')!.getBoundingClientRect();
-      expect(iconBounds.top + iconBounds.height / 2).toBeCloseTo(
-        countBounds.top + countBounds.height / 2,
+      expect(countBounds.top + countBounds.height / 2).toBeCloseTo(
+        iconBounds.top + iconBounds.height / 2 + 2,
         0,
       );
     }
@@ -291,10 +300,18 @@ export const ProcessingAccessibility: Story = {
     const replySpinnerVisual = replySpinner.firstElementChild as HTMLElement;
     const replySpinnerBounds = replySpinnerVisual.getBoundingClientRect();
     const replyCountBounds = replyButton.querySelector('[dir="auto"]')!.getBoundingClientRect();
+    const repostSpinner = canvas.getByTestId('post-action-repost-spinner');
+    const repostSpinnerVisual = repostSpinner.firstElementChild as HTMLElement;
+    const repostSpinnerBounds = repostSpinnerVisual.getBoundingClientRect();
+    const repostCountBounds = repostButton.querySelector('[dir="auto"]')!.getBoundingClientRect();
     expect(replySpinnerVisual.clientWidth).toBe(14);
     expect(replySpinnerVisual.clientHeight).toBe(14);
     expect(replySpinnerBounds.top + replySpinnerBounds.height / 2).toBeCloseTo(
-      replyCountBounds.top + replyCountBounds.height / 2,
+      replyCountBounds.top + replyCountBounds.height / 2 - 1,
+      0,
+    );
+    expect(repostSpinnerBounds.top + repostSpinnerBounds.height / 2).toBeCloseTo(
+      repostCountBounds.top + repostCountBounds.height / 2 - 1,
       0,
     );
     expect(
