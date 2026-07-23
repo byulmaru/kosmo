@@ -12,6 +12,11 @@ builder.objectFields(Post, (t) => ({
     nullable: true,
     resolve: (post) => post.currentContentId,
   }),
+  replyParent: t.field({
+    type: Post,
+    nullable: true,
+    resolve: (post) => post.replyParentId,
+  }),
   repostSource: t.field({
     type: Post,
     nullable: true,

@@ -215,6 +215,9 @@ type Post implements Node {
   id: ID!
   profile: Profile!
   reactionProfiles(after: String, before: String, first: Int, last: Int, type: String!): ProfileConnection!
+  replyAncestors: [Post!]!
+  replyDescendants(after: String, before: String, first: Int, last: Int): PostConnection!
+  replyParent: Post
   repostSource: Post
   state: PostState!
   viewerBookmark: Bookmark

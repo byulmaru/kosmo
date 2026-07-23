@@ -31,6 +31,34 @@ test('exposes the versioned PostContent document and Plain Text composer contrac
   assert.equal(String(schema.getType('PostContentDocument')), 'PostContentDocument');
 });
 
+test('exposes Reply Parent through the existing nullable Post Node contract', () => {
+  const post = schema.getType('Post');
+
+  assert.ok(isObjectType(post));
+  assert.equal(String(post.getFields().replyParent?.type), 'Post');
+  assert.equal(post.getFields().replyParentId, undefined);
+});
+
+test('exposes Reply ancestors as a non-null Post list without pagination', () => {
+  const post = schema.getType('Post');
+
+  assert.ok(isObjectType(post));
+  assert.equal(String(post.getFields().replyAncestors?.type), '[Post!]!');
+  assert.deepEqual(post.getFields().replyAncestors?.args, []);
+});
+
+test('exposes Reply descendants through the shared Post connection', () => {
+  const post = schema.getType('Post');
+
+  assert.ok(isObjectType(post));
+  const field = post.getFields().replyDescendants;
+  assert.equal(String(field?.type), 'PostConnection!');
+  assert.deepEqual(
+    field?.args.map(({ name }) => name),
+    ['after', 'before', 'first', 'last'],
+  );
+});
+
 test('follow mutation payloads expose both updated profiles', () => {
   const followPayload = schema.getType('FollowProfilePayload');
   const unfollowPayload = schema.getType('UnfollowProfilePayload');
