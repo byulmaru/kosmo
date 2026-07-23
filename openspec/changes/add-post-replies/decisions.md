@@ -83,7 +83,10 @@
 - Authority / Provenance: `docs/domain/objects/post.md`, `PROD-398`, `PROD-399`, `PROD-400`, `PROD-422`
 - Status: Active
 - Context / Problem: Parent·조상·descendant의 조회 가능성이 현재 Post와 다를 수 있어 단일한 thread 단위 권한 필터가 숨은 Content를 노출하거나 visible Reply를 제거할 수 있다.
-- Decision Outcome: 직접 Parent는 unavailable이면 nullable field만 숨기고 현재 Post를 유지한다. 조상 경로는 unavailable Parent에서 중단하며 건너뛰지 않는다. descendant는 각각 독립 판정하여 숨겨진 Parent 아래의 visible Reply를 Parent 비노출만으로 제거하지 않는다.
+- Decision Outcome: 직접 Parent는 unavailable이면 nullable field만 숨기고 현재 Post를 유지한다. 조상
+  경로는 unavailable Parent에서 중단하며 건너뛰지 않는다. descendant는 각각 독립 판정하여 숨겨진 Parent
+  아래의 visible Reply를 Parent 비노출만으로 제거하지 않는다. Reply+Quote는 Source가 unavailable이어도
+  자체 Content와 Reply 관계를 유지하고 nullable Source만 숨긴다.
 - Alternatives Considered: Parent와 현재 Post를 함께 숨김, 숨은 조상 평탄화, 숨은 Parent에서 descendant 탐색 중단. canonical 조회 정책과 충돌하므로 제외한다.
 - Consequences: ancestor와 descendant traversal은 서로 다른 filtering 지점을 가지며 client는 API 경계를 그대로 표시해야 한다.
 - Confirmation / Follow-up: PROD-398·399·400의 API test와 PROD-422 client integration test에서 각각 검증한다.

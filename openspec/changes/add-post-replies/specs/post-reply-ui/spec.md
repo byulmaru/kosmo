@@ -14,6 +14,8 @@
 
 - **WHEN** thread에 Reply Parent와 Repost Source를 함께 가진 Post가 포함된다
 - **THEN** 클라이언트는 Reply thread 맥락과 Quote의 Content·Repost Source 맥락을 함께 유지한다
+- **AND** Repost Source를 조회할 수 없으면 Reply thread와 Quote의 자체 Content를 유지하고 Source preview만
+  표시하지 않는다
 
 #### Scenario: 조회 불가능한 조상 경계
 

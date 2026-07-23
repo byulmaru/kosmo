@@ -43,7 +43,7 @@
 
 - **WHEN** Repost 또는 Quote가 직접 참조하는 Source Post가 Tombstone으로 전이된다
 - **THEN** 데이터베이스는 Repost와 Quote 행 및 `repost_source_id`를 보존한다
-- **AND** 조회 계층은 보존된 관계를 Post Eligibility에 따라 숨긴다
+- **AND** 조회 계층은 Content 없는 Repost와 Content 있는 Quote의 조회 정책을 구분하면서 조회 불가능한 Source 관계를 표시하지 않는다
 
 #### Scenario: Repost Source additive migration
 

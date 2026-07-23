@@ -51,8 +51,10 @@
 
 #### Scenario: unavailable Source 결과
 
-- **WHEN** API가 Source eligibility 실패로 Repost 또는 Quote를 connection에서 제외한다
-- **THEN** 앱은 불완전한 placeholder row를 합성하지 않는다
+- **WHEN** API가 unavailable Source를 가진 Content 없는 Repost를 connection에서 제외한다
+- **THEN** 앱은 불완전한 Repost placeholder row를 합성하지 않는다
+- **AND** API가 Source 없는 Quote를 반환하면 Quote Author와 자체 Content를 표시하고 Source preview와 이동
+  affordance만 생략한다
 
 ### Requirement: selected Profile별 Repost action
 

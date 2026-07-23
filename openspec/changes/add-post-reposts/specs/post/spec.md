@@ -13,9 +13,9 @@
 - **AND** `content`는 게시글의 nullable 현재 콘텐츠를 가리킨다
 - **AND** `repostSource`는 저장된 nullable 직접 Source Post를 가리킨다
 
-#### Scenario: Repost와 Quote object 조회
+#### Scenario: 조회 가능한 Source를 가진 Repost와 Quote object 조회
 
-- **WHEN** 클라이언트가 조회 가능한 Repost 또는 Quote Node를 조회한다
+- **WHEN** 클라이언트가 direct Source까지 조회 가능한 Repost 또는 Quote Node를 조회한다
 - **THEN** Repost는 `content = null`과 non-null `repostSource`를 제공한다
 - **AND** Quote는 non-null `content`와 non-null `repostSource`를 제공한다
 - **AND** Reply이면서 Quote인 Post도 같은 `Post` Node에서 Reply Parent와 Repost Source를 독립적으로 제공할 수 있다
@@ -23,17 +23,17 @@
 #### Scenario: 공개 게시글 object 조회
 
 - **WHEN** 클라이언트가 `PUBLIC` 또는 `UNLISTED` 공개 범위의 활성 게시글 Node를 조회한다
-- **THEN** 시스템은 Post와 모든 Repost Source chain이 Post Eligibility를 통과할 때 `Post` object를 반환한다
+- **THEN** 시스템은 Post 자체가 Post Eligibility를 통과할 때 `Post` object를 반환한다
 
 #### Scenario: 작성자 본인의 비공개 게시글 object 조회
 
 - **WHEN** 현재 active profile이 게시글 작성자이고 `FOLLOWERS` 또는 `DIRECT` 공개 범위의 활성 게시글 Node를 조회한다
-- **THEN** 시스템은 Post와 모든 Repost Source chain이 Post Eligibility를 통과할 때 `Post` object를 반환한다
+- **THEN** 시스템은 Post 자체가 Post Eligibility를 통과할 때 `Post` object를 반환한다
 
 #### Scenario: follower의 팔로워 공개 게시글 object 조회
 
 - **WHEN** 현재 active profile이 게시글 작성자를 팔로우하고 `FOLLOWERS` 공개 범위의 활성 게시글 Node를 조회한다
-- **THEN** 시스템은 Post와 모든 Repost Source chain이 Post Eligibility를 통과할 때 `Post` object를 반환한다
+- **THEN** 시스템은 Post 자체가 Post Eligibility를 통과할 때 `Post` object를 반환한다
 
 #### Scenario: 접근 권한 없는 viewer의 비공개 게시글 object 조회
 
@@ -46,11 +46,17 @@
 - **WHEN** 게시글 상태가 `ACTIVE`가 아니다
 - **THEN** 시스템은 해당 게시글을 GraphQL `Post` object로 노출하지 않는다
 
-#### Scenario: unavailable Repost Source를 가진 Post 조회
+#### Scenario: unavailable Repost Source를 가진 Content 없는 Repost 조회
 
-- **WHEN** Repost 또는 Quote의 직접·간접 Source 중 하나가 Tombstone이거나 viewer 기준 Post Visibility 또는 Post Eligibility를 통과하지 못한다
-- **THEN** 시스템은 해당 Repost 또는 Quote를 GraphQL `Post` object로 노출하지 않는다
-- **AND** Source만 `null`로 바꾼 불완전한 object를 반환하지 않는다
+- **WHEN** Content 없는 Repost의 direct Source가 Tombstone이거나 viewer 기준 Post Visibility 또는 Post Eligibility를 통과하지 못한다
+- **THEN** 시스템은 해당 Repost를 GraphQL `Post` object로 노출하지 않는다
+
+#### Scenario: unavailable Repost Source를 가진 Quote 조회
+
+- **WHEN** Content 있는 Quote 또는 Reply이면서 Quote인 Post 자체는 조회 가능하지만 direct Source는 조회할 수 없다
+- **THEN** 시스템은 Quote Post와 자체 Content를 GraphQL `Post` object로 반환한다
+- **AND** nullable `repostSource`는 `null`을 반환한다
+- **AND** direct Source의 Source가 unavailable하다는 이유로 바깥 Quote를 숨기지 않는다
 
 ### Requirement: 프로필 게시글 목록 connection
 
@@ -60,7 +66,7 @@
 
 - **WHEN** 인증되지 않았거나 현재 active profile이 조회 대상 프로필을 팔로우하지 않는 클라이언트가 프로필의 `posts` connection을 조회한다
 - **THEN** 시스템은 Target Profile이 작성한 `PUBLIC` 또는 `UNLISTED` 범위의 eligible Active Post 중 Reply Parent가 없는 Content Post와 Repost를 반환한다
-- **AND** Repost는 Repost Post와 전체 Source chain이 각각 viewer 기준 조회 가능할 때만 포함한다
+- **AND** Content 없는 Repost는 Repost Post와 direct Source가 각각 viewer 기준 조회 가능할 때만 포함한다
 - **AND** 게시글은 최신순으로 정렬되고 connection은 cursor 기반 페이지네이션을 지원한다
 
 #### Scenario: 작성자 본인의 프로필 게시글 목록 조회
@@ -76,11 +82,12 @@
 - **AND** `DIRECT` 공개 범위의 게시글은 반환하지 않는다
 - **AND** 게시글은 최신순으로 정렬되고 connection은 cursor 기반 페이지네이션을 지원한다
 
-#### Scenario: Reply 또는 unavailable Source Post 제외
+#### Scenario: Reply 또는 unavailable Source Repost 제외
 
-- **WHEN** Target Profile이 Reply Parent가 있는 Post를 작성했거나 Repost·Quote의 Source chain이 viewer 기준 unavailable하다
+- **WHEN** Target Profile이 Reply Parent가 있는 Post를 작성했거나 Content 없는 Repost의 direct Source가 viewer 기준 unavailable하다
 - **THEN** 시스템은 그 Post를 Profile Post List에서 page limit 적용 전에 제외한다
 - **AND** Reply이면서 Quote인 Post도 Reply Parent가 있으므로 제외한다
+- **AND** Reply Parent가 없는 Content 있는 Quote는 Source가 unavailable해도 Quote 자체의 조회 정책을 통과하면 유지한다
 
 #### Scenario: 게시글이 없는 프로필 목록 조회
 
@@ -100,7 +107,7 @@
 
 - **WHEN** active profile이 있는 인증자가 `homeTimeline` connection을 조회한다
 - **THEN** 시스템은 현재 active profile이 작성한 eligible Active Content Post 중 Reply Parent가 없는 Post와 eligible Repost를 반환한다
-- **AND** Repost는 Repost Post와 전체 Source chain이 viewer 기준 조회 가능할 때만 포함한다
+- **AND** Content 없는 Repost는 Repost Post와 direct Source가 viewer 기준 조회 가능할 때만 포함한다
 - **AND** 게시글은 최신순으로 정렬되고 connection은 cursor 기반 페이지네이션을 지원한다
 
 #### Scenario: followee Content Post와 Repost 포함
@@ -125,10 +132,11 @@
 - **WHEN** active profile이 있는 인증자가 `homeTimeline` connection을 조회하고 다른 프로필이 현재 active profile을 팔로우하지만 현재 active profile은 그 프로필을 팔로우하지 않는다
 - **THEN** 시스템은 Home Reply 후보 규칙에 해당하지 않는 해당 팔로워의 게시글을 반환하지 않는다
 
-#### Scenario: unavailable Source 후보 제외
+#### Scenario: unavailable Source 후보 분리
 
-- **WHEN** Repost 또는 Quote의 직접·간접 Source가 viewer 기준 unavailable하다
-- **THEN** 시스템은 그 Post를 page limit 적용 전에 Home 후보에서 제외한다
+- **WHEN** Content 없는 Repost 또는 Content 있는 Quote의 direct Source가 viewer 기준 unavailable하다
+- **THEN** 시스템은 Content 없는 Repost를 page limit 적용 전에 Home 후보에서 제외한다
+- **AND** Content 있는 Quote는 Quote 자체의 조회 정책을 통과하면 Home 후보로 유지한다
 
 #### Scenario: active profile 없는 홈 타임라인 조회
 
@@ -150,5 +158,5 @@
 
 #### Scenario: Quote 후보
 
-- **WHEN** Public Quote가 Content와 Target Hashtag를 직접 가지며 Reply Parent가 없고 전체 Source chain이 eligible하다
+- **WHEN** Public Quote가 Content와 Target Hashtag를 직접 가지며 Reply Parent가 없고 Quote 자체가 eligible하다
 - **THEN** 시스템은 Quote 자체를 Hashtag Post List 후보로 포함할 수 있다
