@@ -1,5 +1,6 @@
 import { usePathname } from 'expo-router';
-import { Linking, Text } from 'react-native';
+import { useState } from 'react';
+import { Linking, Pressable, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Temporal } from 'temporal-polyfill';
@@ -8,6 +9,7 @@ import { PostComposer } from '@/components/post/PostComposer';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostList } from '@/components/post/PostList';
 import { PostListItem } from '@/components/post/PostListItem';
+import { PostThreadLayout } from '@/components/post/PostThreadLayout';
 import { longBody, post, profile, profileWithPosts, timeline } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -92,6 +94,35 @@ const unsupportedDocumentPost = post({
   bodyText: '미지원 문서는 안전한 Plain Text로 표시합니다.',
   id: 'unsupported-document',
 });
+const threadRootPost = post({ bodyText: '대화의 시작입니다.', id: 'thread-root' });
+const threadParentPost = post({ bodyText: '직접 Parent Reply입니다.', id: 'thread-parent' });
+const threadCurrentPost = post({ bodyText: '지금 보고 있는 Reply입니다.', id: 'thread-current' });
+const threadChildPost = post({ bodyText: '현재 Reply에 이어진 답글입니다.', id: 'thread-child' });
+const threadSiblingPost = post({ bodyText: '별도 분기의 답글입니다.', id: 'thread-sibling' });
+const threadReplyQuotePost = post({
+  bodyText: 'Reply이면서 Quote인 Post의 자체 Content입니다.',
+  id: 'thread-reply-quote',
+});
+const threadItems = {
+  ancestors: [
+    { connectedToPrevious: false, id: threadRootPost.id },
+    { connectedToPrevious: true, id: threadParentPost.id },
+  ],
+  current: { connectedToPrevious: true, id: threadCurrentPost.id },
+  descendants: [
+    { connectedToPrevious: true, id: threadChildPost.id },
+    { connectedToPrevious: false, id: threadSiblingPost.id },
+    { connectedToPrevious: true, id: threadReplyQuotePost.id },
+  ],
+} as const;
+const threadStoryPosts = [
+  threadRootPost,
+  threadParentPost,
+  threadCurrentPost,
+  threadChildPost,
+  threadSiblingPost,
+  threadReplyQuotePost,
+];
 const storyPosts = [
   shortPost,
   longPost,
@@ -106,6 +137,7 @@ const storyPosts = [
   remoteAuthorPost,
   linkedPost,
   unsupportedDocumentPost,
+  ...threadStoryPosts,
 ];
 const composerProfile = profile({ id: 'profile-composer' });
 const emptyPostsProfile = profileWithPosts([], { id: 'profile-posts-empty' });
@@ -195,6 +227,14 @@ function requirePost(posts: ReadonlyArray<PostNode>, index: number): PostNode {
   const result = posts[index];
   if (!result) {
     throw new Error(`Missing post fixture at index ${index}.`);
+  }
+  return result;
+}
+
+function requirePostById(posts: ReadonlyArray<PostNode>, id: string): PostNode {
+  const result = posts.find((postNode) => postNode.id === id);
+  if (!result) {
+    throw new Error(`Missing post fixture ${id}.`);
   }
   return result;
 }
@@ -299,6 +339,76 @@ function LinkedPostListItemStory() {
   );
 }
 
+function ThreadCatalog() {
+  const { posts } = usePostsStoryData();
+
+  return (
+    <Catalog width={600}>
+      <Section title="Reply thread · current anchor">
+        <PostThreadLayout
+          ancestors={threadItems.ancestors.map((item) => ({
+            ...item,
+            post: requirePostById(posts, item.id),
+          }))}
+          current={{
+            ...threadItems.current,
+            post: requirePostById(posts, threadItems.current.id),
+          }}
+          descendants={threadItems.descendants.map((item) => ({
+            ...item,
+            post: requirePostById(posts, item.id),
+          }))}
+          renderPost={({ item, role }) => (
+            <View>
+              {role === 'current' ? (
+                <View testID={`post-thread-renderer-detail-${item.id}`}>
+                  <PostLayout post={requireFragment(item.post.layout, 'thread current layout')} />
+                </View>
+              ) : (
+                <View testID={`post-thread-renderer-list-${item.id}`}>
+                  <PostListItem post={requireFragment(item.post.listItem, 'thread list item')} />
+                </View>
+              )}
+              {item.id === threadReplyQuotePost.id ? (
+                <View testID="reply-quote-source-subtree-sentinel" />
+              ) : null}
+            </View>
+          )}
+        />
+      </Section>
+    </Catalog>
+  );
+}
+
+function ThreadNavigationCatalog() {
+  const [selectedPostId, setSelectedPostId] = useState('없음');
+  const items = [
+    { connectedToPrevious: false, id: 'thread-current', post: '현재 Post' },
+    { connectedToPrevious: true, id: 'thread-child', post: '하위 Reply' },
+  ] as const;
+
+  return (
+    <Catalog width={390}>
+      <PostThreadLayout
+        ancestors={[]}
+        current={items[0]}
+        descendants={[items[1]]}
+        onPostPress={setSelectedPostId}
+        renderPost={({ item, onPress }) => (
+          <Pressable
+            accessibilityLabel={`${item.post} 상세 선택`}
+            accessibilityRole="link"
+            onPress={onPress}
+          >
+            <Text>{item.post}</Text>
+          </Pressable>
+        )}
+      />
+      <Text testID="selected-thread-post">{selectedPostId}</Text>
+    </Catalog>
+  );
+}
+
 const meta = {
   component: PostCatalog,
   parameters: {
@@ -359,6 +469,86 @@ export const LinkedBodyKeepsDetailNavigationIsolated: Story = {
     }
   },
   render: () => <LinkedPostListItemStory />,
+};
+
+export const ReplyThreadPresentation: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const thread = canvas.getByTestId('post-thread');
+
+    expect(Array.from(thread.children).map((row) => row.getAttribute('data-testid'))).toEqual([
+      'post-thread-item-thread-root',
+      'post-thread-item-thread-parent',
+      'post-thread-current-thread-current',
+      'post-thread-item-thread-child',
+      'post-thread-item-thread-sibling',
+      'post-thread-item-thread-reply-quote',
+    ]);
+    expect(thread.textContent).toContain('대화의 시작입니다.');
+    expect(thread.textContent).toContain('지금 보고 있는 Reply입니다.');
+    expect(thread.textContent).toContain('현재 Reply에 이어진 답글입니다.');
+    expect(canvas.getByTestId('post-thread-current-thread-current')).toBeVisible();
+    expect(canvas.getByTestId('post-thread-renderer-list-thread-root')).toBeVisible();
+    expect(canvas.getByTestId('post-thread-renderer-list-thread-parent')).toBeVisible();
+    expect(canvas.getByTestId('post-thread-renderer-detail-thread-current')).toBeVisible();
+    expect(canvas.getByTestId('post-thread-renderer-list-thread-child')).toBeVisible();
+    expect(canvas.getByTestId('post-thread-renderer-list-thread-reply-quote')).toBeVisible();
+    expect(
+      canvasElement.querySelector(
+        '[data-testid^="post-thread-connector-"][data-testid$="-thread-root-before"]',
+      ),
+    ).toBeNull();
+    expect(
+      canvas.getByTestId('post-thread-connector-thread-root-thread-parent-after'),
+    ).toBeVisible();
+    expect(
+      canvas.getByTestId('post-thread-connector-thread-root-thread-parent-before'),
+    ).toBeVisible();
+    expect(
+      canvas.getByTestId('post-thread-connector-thread-parent-thread-current-after'),
+    ).toBeVisible();
+    expect(
+      canvas.getByTestId('post-thread-connector-thread-parent-thread-current-before'),
+    ).toBeVisible();
+    expect(
+      canvas.getByTestId('post-thread-connector-thread-current-thread-child-after'),
+    ).toBeVisible();
+    expect(
+      canvas.getByTestId('post-thread-connector-thread-current-thread-child-before'),
+    ).toBeVisible();
+    expect(
+      canvas.queryByTestId('post-thread-connector-thread-child-thread-sibling-after'),
+    ).toBeNull();
+    expect(
+      canvas.queryByTestId('post-thread-connector-thread-child-thread-sibling-before'),
+    ).toBeNull();
+    expect(
+      canvas.getByTestId('post-thread-connector-thread-sibling-thread-reply-quote-after'),
+    ).toBeVisible();
+    expect(
+      canvas.getByTestId('post-thread-connector-thread-sibling-thread-reply-quote-before'),
+    ).toBeVisible();
+    expect(
+      canvasElement.querySelector(
+        '[data-testid^="post-thread-connector-thread-reply-quote-"][data-testid$="-after"]',
+      ),
+    ).toBeNull();
+
+    const replyQuote = within(canvas.getByTestId('post-thread-item-thread-reply-quote'));
+    expect(replyQuote.getByText('Reply이면서 Quote인 Post의 자체 Content입니다.')).toBeVisible();
+    expect(replyQuote.getByTestId('reply-quote-source-subtree-sentinel')).toBeEmptyDOMElement();
+    expect(canvas.queryByText('인용된 Source 본문입니다.')).toBeNull();
+  },
+  render: () => <ThreadCatalog />,
+};
+
+export const ReplyThreadMockNavigation: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('link', { name: '하위 Reply 상세 선택' }));
+    expect(canvas.getByTestId('selected-thread-post')).toHaveTextContent('thread-child');
+  },
+  render: () => <ThreadNavigationCatalog />,
 };
 
 export const ComposerDefault: Story = {
