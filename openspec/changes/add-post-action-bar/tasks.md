@@ -106,14 +106,14 @@ Home·Profile Post List와 Post 상세가 같은 Post Action Bar를 본문 inter
 - 선택 Profile 전환 시 제공된 non-Reaction count 공유와 `hasReposted`·`hasReacted`·`hasBookmarked` 격리, 상위 Composer가 제어하는 Reply `expanded`를 검증한다.
 - Reply·Repost·Reaction·Bookmark 각각의 성공, action별 pending 중복 차단, 실패 표시와 재시도를 검증한다.
 - Content·Reply Parent·Repost Source 관계 조합, Post Visibility 등 대상 자체가 부적격한 액션과 인증된 실행 주체의 권한이 부족한 액션의 disabled 표시, 대상이 적격한 guest의 인증 위임, 대상이 부적격한 guest의 disabled 유지와 Home·Profile 목록·상세의 동일 계약을 검증한다.
-- More 팝업의 단일 `링크 복사` 항목, ADR 0015 Post Share Reference의 clipboard 복사, guest 사용과 Visibility 우회 방지를 검증한다.
+- More 팝업의 단일 `링크 복사` 항목, Web·Android·iOS가 검증된 동일 canonical origin을 사용하는 ADR 0015 Post Share Reference의 clipboard 복사, Web current Host 불일치, guest 사용과 Visibility 우회 방지를 검증한다.
 - 모든 구현 자식과 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425 완료, OpenSpec task 정합성과 canonical 문서·Linear·OpenSpec·코드 일치를 확인한다.
 - archive 전후 strict validation을 통과시킨다.
 
 - [ ] 3.1 구현 자식과 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425의 완료·공개 계약을 확인하고, Reaction은 하나 이상의 Reaction Type 존재를 `hasReacted`로 연결하되 count는 연결하지 않는 등 실제 Post 상태를 공통 Action Bar 입력으로 연결할 경계를 정리한다.
 - [ ] 3.2 목록·상세에서 기존 Reply·Repost·Reaction·Bookmark의 callback과 액션별 처리 상태를 공통 Action Bar에 연결하고, Reply에는 상위 Composer의 `expanded`, Repost·Reaction·Bookmark에는 각각 `hasReposted`·`hasReacted`·`hasBookmarked`, 선행 계약이 제공하는 non-Reaction 액션에만 optional count를 연결한다.
 - [ ] 3.3 선택 Profile cache 경계를 유지하면서 대상 적격성과 현재 실행 주체·세션의 실행 권한을 분리하고, Content·Reply Parent·Repost Source 관계 조합, Post Visibility·권한별 disabled, 대상이 적격한 guest의 인증 위임, 대상이 부적격한 guest의 disabled 유지와 action별 pending·failure·retry 동작을 적용한다.
-- [ ] 3.4 More callback에 접근 가능한 최소 팝업과 guest도 사용할 수 있는 ADR 0015 Post Share Reference `링크 복사`를 연결한다. Web의 현재 origin 또는 Native의 검증된 `EXPO_PUBLIC_WEB_ORIGIN`과 `/{relativeHandle}/{postId}`를 결합한 query·hash 없는 절대 URL을 사용하고, 공유 clipboard 추상화가 없으면 Expo 호환 clipboard package를 추가해 native·Web 동작을 검증한다.
-- [ ] 3.5 Home·Profile 목록·Post 상세의 실제 성공·중복 차단·실패 복구·controlled Reply Composer·Profile별 도메인 상태, 대상 적격성·현재 세션 실행 권한의 분리, guest 위임·대상 제한과 ADR 0015 More 링크 복사 통합 테스트를 추가하고 전체 관련 검증을 통과시킨다.
+- [ ] 3.4 More callback에 접근 가능한 최소 팝업과 guest도 사용할 수 있는 ADR 0015 Post Share Reference `링크 복사`를 연결한다. Web·Android·iOS 모두 검증된 `EXPO_PUBLIC_WEB_ORIGIN`과 `/{relativeHandle}/{postId}`를 결합한 query·hash 없는 절대 URL을 사용하고, Web의 현재 browser origin은 공유 참조에 사용하지 않는다. 공유 clipboard 추상화가 없으면 Expo 호환 clipboard package를 추가해 native·Web 동작을 검증한다.
+- [ ] 3.5 Home·Profile 목록·Post 상세의 실제 성공·중복 차단·실패 복구·controlled Reply Composer·Profile별 도메인 상태, 대상 적격성·현재 세션 실행 권한의 분리, guest 위임·대상 제한, Web current Host가 canonical origin과 다른 경우를 포함한 ADR 0015 More 링크 복사 통합 테스트를 추가하고 전체 관련 검증을 통과시킨다.
 - [ ] 3.6 canonical 문서·Linear·OpenSpec·구현과 모든 task의 정합성을 확인하고 archive 전 strict validation을 통과시킨다.
 - [ ] 3.7 전체 계약 완료 승인을 받은 뒤 공유 change를 archive하고 archive 후 strict validation을 통과시킨다.
