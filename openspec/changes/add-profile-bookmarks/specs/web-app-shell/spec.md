@@ -40,6 +40,11 @@
 - **WHEN** 유효한 세션과 선택 Profile이 있는 사용자가 `/bookmarks`로 이동한다
 - **THEN** 시스템은 `(tabs)` 셸을 유지하며 선택 Profile의 개인 Bookmark 목록 화면을 표시한다
 
+#### Scenario: Navigate from the Web Bookmark menu
+
+- **WHEN** 사용자가 Web full 또는 compact sidebar의 Bookmark 메뉴 항목을 선택한다
+- **THEN** 시스템은 `/menu`를 경유하지 않고 canonical `/bookmarks` route로 이동한다
+
 #### Scenario: Open without a selected Profile
 
 - **WHEN** 유효한 세션은 있지만 선택 Profile이 없는 사용자가 `/bookmarks`로 이동한다
