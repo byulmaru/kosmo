@@ -209,5 +209,5 @@ Remote follow 전체 흐름이 최종 계약과 일치하고 shared change가 ac
 - archive 이후 active specs와 현재 main이 일치하는지 검증한다.
 - actor-discovery modification이 없고 profile/data-model delta가 Fedify transport API를 중복 소유하지 않는지 검증한다.
 
-- [ ] 10.1 PROD-361이 Follow/Undo/Accept/Reject, graph와 Web action 및 PROD-380 Notification integration evidence를 통합 검증한다.
-- [ ] 10.2 PROD-361이 전체 task 완료 후 delta specs를 동기화하고 change를 archive한 뒤 `openspec validate --all --strict`를 통과한다.
+- [x] 10.1 PROD-361이 Follow/Undo/Accept/Reject, graph와 Web action 및 PROD-380 Notification integration evidence를 통합 검증한다.
+- [x] 10.2 PROD-361이 전체 task 완료 후 delta specs를 동기화하고 change를 archive한 뒤 `openspec validate --all --strict`를 통과한다.
