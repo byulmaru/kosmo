@@ -288,6 +288,24 @@ describe('Post Reply GraphQL 경계', () => {
     assertReplyDescendantIds(result, [replyQuote.id, direct.id, nested.id]);
   });
 
+  test('조회 불가능한 Source와 무관하게 Reply+Quote descendant와 자체 Content를 유지한다', async () => {
+    const author = await createProfile('unavailable-source-author');
+    const root = await createContentfulPost(author.id);
+    const source = await createContentfulPost(author.id);
+    const replyQuote = await createContentfulPost(author.id, {
+      replyParentId: root.id,
+      repostSourceId: source.id,
+    });
+    await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, source.id));
+
+    const result = await requestReplyDescendants(root.id, { first: 10 });
+
+    assertReplyDescendantIds(result, [replyQuote.id]);
+    assert.deepEqual(result.data?.node?.replyDescendants.edges[0]?.node.content, {
+      bodyText: replyQuote.id,
+    });
+  });
+
   test('숨겨진 Parent와 ineligible Parent 아래의 visible descendant를 filter-before-limit으로 유지한다', async () => {
     const rootAuthor = await createProfile('boundary-root-author');
     const hiddenAuthor = await createProfile('boundary-hidden-author');
@@ -440,7 +458,10 @@ type GraphQLResult<TData> = {
 };
 
 type ReplyDescendantConnection = {
-  edges: Array<{ cursor: string; node: { id: string } }>;
+  edges: Array<{
+    cursor: string;
+    node: { content: { bodyText: string } | null; id: string };
+  }>;
   pageInfo: {
     endCursor: string | null;
     hasNextPage: boolean;
@@ -504,7 +525,7 @@ const requestReplyDescendants = (
       node(id: $postId) {
         ... on Post {
           replyDescendants(first: $first, after: $after, last: $last, before: $before) {
-            edges { cursor node { id } }
+            edges { cursor node { id content { bodyText } } }
             pageInfo { endCursor hasNextPage hasPreviousPage startCursor }
           }
         }

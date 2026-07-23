@@ -85,7 +85,6 @@ Reply가 저장된 직접 Parent 관계 순서를 보존한 조회 가능한 조
 
 - `docs/domain/objects/post.md`
 - `PROD-400`
-- `PROD-402` (Reply+Quote Source chain eligibility blocker)
 
 **Deliverable**
 
@@ -98,7 +97,6 @@ Reply가 저장된 직접 Parent 관계 순서를 보존한 조회 가능한 조
 - 기존 단일 `Post` Node의 non-null `replyDescendants: PostConnection!` field에서 `first`/`after`와 `last`/`before`를 지원하고 `createdAt ASC, id ASC`로 정렬한다.
 - 임의의 최대 Reply 깊이를 두지 않고 cycle에서 같은 Post를 반복하지 않으며 Parent-before-child 위상 순서를 별도로 보장하지 않는다.
 - 구조 traversal 뒤 각 descendant의 visibility/eligibility를 pagination 전에 적용하고, index는 실제 recursive query plan으로 필요한 최소 형태만 선택한다.
-- Reply+Quote의 Source chain eligibility를 PROD-400에서 중복 구현하지 않고 PROD-402가 제공하는 공통 정책을 재사용한다.
 
 **Verification**
 
@@ -106,10 +104,11 @@ Reply가 저장된 직접 Parent 관계 순서를 보존한 조회 가능한 조
   unavailable Source를 가진 Reply+Quote 유지와 cycle 방어를 API test로 검증한다.
 - 동일 생성 시각 tie-break, 양방향 pageInfo, 잘못된 cursor와 filter-before-limit을 API test로 검증한다.
 - 대표 fan-out·depth 데이터의 실제 query와 `EXPLAIN (ANALYZE, BUFFERS)`로 pagination·index 선택을 검증한다.
+- 현재 transaction migration runner에서 일반 `CREATE INDEX`가 갖는 Post write lock을 검토하고 production row 수·허용 lock 시간에 맞는 배포 경계를 확인한다.
 
 - [x] 4.1 descendant 공개 GraphQL field·connection·pagination·정렬 계약을 Linear에서 확정하고 OpenSpec decision을 갱신한다.
-- [ ] 4.2 승인된 공개 계약에 따라 descendant 조회와 필요한 index를 구현한다. (PROD-402 Source chain eligibility 대기)
-- [ ] 4.3 독립 조회 정책·숨겨진 Parent 경계·query plan test와 관련 check를 통과시킨다.
+- [x] 4.2 승인된 공개 계약에 따라 descendant 조회와 필요한 index를 구현한다.
+- [ ] 4.3 독립 조회 정책·숨겨진 Parent 경계·query plan test와 관련 check를 통과시킨다. (PR #328 merge 반영과 production migration lock gate 대기)
 
 ## 5. PROD-429 Home/Profile/Hashtag Reply 후보 정책
 
