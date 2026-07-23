@@ -195,13 +195,11 @@ function Author({ profile, showAvatar }: { profile: PresentationProfile; showAva
 
 const styles = StyleSheet.create({
   root: { gap: spacing.sm, minWidth: 0 },
-  repostAttribution: { alignItems: 'center', flexDirection: 'row', gap: spacing.xs, minHeight: 44 },
+  repostAttribution: { alignItems: 'center', flexDirection: 'row', gap: spacing.xs },
   repeat: { fontFamily: 'SUIT', ...typography.sm },
   repostLabel: {
     fontFamily: 'SUIT',
     fontWeight: '700',
-    minHeight: 44,
-    paddingTop: 12,
     ...typography.sm,
   },
   author: {

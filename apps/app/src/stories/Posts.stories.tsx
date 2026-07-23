@@ -10,6 +10,7 @@ import { PostList } from '@/components/post/PostList';
 import { PostListItem } from '@/components/post/PostListItem';
 import { PostSourcePresentationView } from '@/components/post/PostSourcePresentationView';
 import { formatTimelineTimestamp } from '@/lib/date';
+import { spacing, typography } from '@/theme/tokens';
 import { longBody, post, profile, profileWithPosts, timeline } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -552,6 +553,14 @@ export const PureRepost: Story = {
     const root = within(canvasElement).getByTestId('post-source-presentation');
     const canvas = within(root);
     expect(canvas.getAllByRole('link')).toHaveLength(3);
+    const repostLabel = canvas.getByText('재게시한 코스모 사용자님이 재게시함');
+    const sourceAuthorLink = canvas.getByLabelText('아주 긴 Source 작성자 표시 이름 프로필 보기');
+    expect(repostLabel.getBoundingClientRect().height).toBeLessThanOrEqual(
+      typography.sm.lineHeight,
+    );
+    const attributionGap =
+      sourceAuthorLink.getBoundingClientRect().top - repostLabel.getBoundingClientRect().bottom;
+    expect(attributionGap).toBeLessThanOrEqual(spacing.sm);
     await userEvent.click(canvas.getByLabelText('재게시한 코스모 사용자 프로필 보기'));
     await expect(args.onPostAuthor).toHaveBeenCalledTimes(1);
     await expect(args.onSourceAuthor).toHaveBeenCalledTimes(0);
