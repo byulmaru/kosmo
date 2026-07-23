@@ -38,6 +38,7 @@ export function ReactionProfileList({
   isLoadingMore,
   items,
   loadMoreError,
+  loading,
   onLoadMore,
   onRetry,
   reactionType,
@@ -102,8 +103,10 @@ export function ReactionProfileList({
           onAction={onRetry}
           title={copy.errorTitle}
         />
-      ) : (
+      ) : loading ? (
         <StateView loading title={copy.loadingTitle} />
+      ) : (
+        <StateView description={copy.emptyDescription} title={copy.emptyTitle} />
       )}
     </View>
   );

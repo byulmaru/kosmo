@@ -81,17 +81,20 @@ function ReactionSummaryCatalog() {
   return (
     <Catalog>
       <Section title="Loading">
-        <ReactionSummary loading={false} />
+        <ReactionSummary loading />
       </Section>
       <Section title="Error">
-        <ReactionSummary error onRetry={() => setRetryCount((count) => count + 1)} />
+        <ReactionSummary error loading onRetry={() => setRetryCount((count) => count + 1)} />
         <Text>{`재시도: ${retryCount}`}</Text>
       </Section>
+      <Section title="Idle without data">
+        <ReactionSummary loading={false} />
+      </Section>
       <Section title="Empty">
-        <ReactionSummary entries={[]} />
+        <ReactionSummary entries={[]} loading />
       </Section>
       <Section title="Populated">
-        <ReactionSummary entries={tiedEntries} onSelectType={setSelectedType} />
+        <ReactionSummary entries={tiedEntries} loading onSelectType={setSelectedType} />
         {selectedType ? <Text>{`선택: ${selectedType}`}</Text> : null}
       </Section>
     </Catalog>
@@ -110,21 +113,25 @@ function ReactionProfileListCatalog() {
   return (
     <Catalog>
       <Section title="Loading">
-        <ReactionProfileList loading={false} reactionType="❤️" />
+        <ReactionProfileList loading reactionType="❤️" />
       </Section>
       <Section title="Initial error and retry">
         <ReactionProfileList
           error
+          loading
           onRetry={() => setInitialRetryCount((count) => count + 1)}
           reactionType="❤️"
         />
         <Text>{`초기 재시도: ${initialRetryCount}`}</Text>
       </Section>
+      <Section title="Idle without data">
+        <ReactionProfileList loading={false} reactionType="❤️" />
+      </Section>
       <Section title="Empty">
-        <ReactionProfileList items={[]} reactionType="❤️" />
+        <ReactionProfileList items={[]} loading reactionType="❤️" />
       </Section>
       <Section title="Populated">
-        <ReactionProfileList items={items} reactionType="❤️" />
+        <ReactionProfileList items={items} loading reactionType="❤️" />
       </Section>
       <Section title="Pagination">
         <ReactionProfileList
@@ -177,7 +184,7 @@ export const AllStates: Story = {
       canvas.getByRole('progressbar', { name: '반응 요약을 불러오는 중입니다.' }),
     ).toBeVisible();
     expect(canvas.getByRole('alert')).toHaveTextContent('반응을 불러오지 못했어요');
-    expect(canvas.getByText('아직 반응이 없어요')).toBeVisible();
+    expect(canvas.getAllByText('아직 반응이 없어요')).toHaveLength(2);
     expect(
       canvas
         .getAllByRole('button', { name: /반응 \d+개 보기/ })
@@ -200,7 +207,7 @@ export const ProfileListStates: Story = {
     expect(canvas.getByText(profileCopy.loadingTitle)).toBeVisible();
     expect(canvas.getByRole('progressbar', { name: profileCopy.loadingTitle })).toBeVisible();
     expect(canvas.getAllByText(profileCopy.errorTitle)).toHaveLength(1);
-    expect(canvas.getByText(profileCopy.emptyTitle)).toBeVisible();
+    expect(canvas.getAllByText(profileCopy.emptyTitle)).toHaveLength(2);
     expect(canvasElement.querySelector('a[href="/@starlight"]')).toBeInTheDocument();
     expect(canvasElement.querySelector('a[href="/@milky-way"]')).toBeInTheDocument();
 

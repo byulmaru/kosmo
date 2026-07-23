@@ -26,6 +26,7 @@ const copy = {
 export function ReactionSummary({
   entries,
   error,
+  loading,
   onRetry,
   onSelectType,
 }: ReactionSummaryProps): React.ReactElement {
@@ -83,8 +84,10 @@ export function ReactionSummary({
           onAction={onRetry}
           title={copy.errorTitle}
         />
-      ) : (
+      ) : loading ? (
         <StateView loading title={copy.loadingTitle} />
+      ) : (
+        <StateView description={copy.emptyDescription} title={copy.emptyTitle} />
       )}
     </View>
   );
