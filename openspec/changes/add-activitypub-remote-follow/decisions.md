@@ -120,13 +120,16 @@
 
 ### Accept/Reject compatibility fallback도 outbound Follow generation을 검증한다
 
-- Decision Date: 2026-07-21
-- Status: Accepted
+- Decision Date: 2026-07-23
+- Decision Class: Derived Contract
+- Authority / Provenance: [PROD-244](https://linear.app/byulmaru/issue/PROD-244)의 최신 Inbound Accept/Reject 계약과 [PROD-361](https://linear.app/byulmaru/issue/PROD-361)의 timestamp 범위 정정에서 파생한다.
+- Status: Active
 - Context / Problem: actor/object만 일치하는 ID-less 또는 non-kosmo Follow fallback은 이전 request R1을 취소하고 같은 pair의 R2를 만든 뒤 도착한 늦은 R1 Accept/Reject를 현재 R2에 잘못 적용할 수 있다.
-- Decision Outcome: canonical kosmo Follow ID가 현재 projection ID와 정확히 일치하면 기존처럼 처리한다. ID-less 또는 non-kosmo Follow fallback은 embedded Follow의 `published`가 존재하고 현재 request/relation의 immutable `createdAt`과 정확히 일치할 때만 같은 outbound generation으로 인정한다. remote Accept/Reject activity의 `published`나 local 수신 시각은 이 fallback generation 판정에 사용하지 않는다.
-- Alternatives Considered: actor/object-only fallback 유지, compatibility fallback 전체 제거, terminal history나 correlation metadata 추가, remote Accept activity timestamp로 순서 추정.
+- Decision Outcome: canonical kosmo Follow ID가 현재 projection ID와 정확히 일치하면 기존처럼 처리한다. ID-less 또는 non-kosmo Follow fallback은 embedded Follow의 `published`가 존재하고 현재 request/relation의 immutable `createdAt`과 정확히 일치할 때만 같은 outbound generation으로 인정한다. remote Accept/Reject activity의 `published`와 local 수신 시각은 generation 또는 freshness 판정에 사용하지 않는다. Reject는 exact generation 검증 뒤 `expectedRowId`가 여전히 현재 row인 경우에만 제거한다.
+- Supersedes: 2026-07-22에 정한 local `receivedAt` freshness gate. application clock과 DB `createdAt` clock을 비교하면 clock skew로 현재 Reject를 무시할 수 있고, exact generation과 `expectedRowId` 재검증이 이미 replacement를 보호하므로 해당 gate는 불필요하다.
+- Alternatives Considered: actor/object-only fallback 유지, compatibility fallback 전체 제거, terminal history나 correlation metadata 추가, remote `Reject.published` 사용, application local 수신 시각 비교, DB clock을 별도 조회해 비교하는 방식.
 - Consequences: 원본 outbound Follow의 `published`를 보존하지 않는 구현의 ID-less/non-kosmo response는 side effect 없이 무시한다. 새 schema, history, lock 또는 reconciliation 흐름 없이 이전 generation response가 새 projection을 변경하지 못한다.
-- Confirmation / Follow-up: 같은-generation fallback Accept/Reject는 처리하고 missing/mismatched Follow `published`와 cancel-refollow 뒤 늦은 fallback Accept는 새 request/relation을 변경하지 않는지 PROD-244가 검증한다.
+- Confirmation / Follow-up: PROD-361은 같은-generation fallback Reject가 remote `Reject.published` 및 application/DB clock skew와 무관하게 처리되고, missing/mismatched embedded Follow `published`와 cancel-refollow 뒤 늦은 fallback response는 새 projection을 변경하지 않는지 검증한다.
 
 ### Remote Follow ID는 advisory이고 generation은 단조 증가한다
 

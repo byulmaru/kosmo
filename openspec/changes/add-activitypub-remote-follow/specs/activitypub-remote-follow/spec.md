@@ -98,8 +98,8 @@
 - **AND** embedded/typed Follow의 id가 없거나 kosmo outbound Follow URI가 아니면 시스템은 remote Follow id를 compatibility hint로만 취급하고 actor/object가 일치하며 Follow의 `published`가 현재 request/relation의 immutable `createdAt`과 정확히 일치할 때만 해당 outbound Follow generation과 대응시킬 수 있다
 - **AND** compatibility fallback Follow의 `published`가 없거나 현재 generation과 다르면 local follow graph 또는 request를 갱신하지 않는다
 - **AND** Fedify가 `Reject.object`를 typed Follow로 제공하지 못하면 IRI-only object를 kosmo outbound Follow URI에서 별도 복원하지 않고 local follow graph 또는 request를 갱신하지 않는다
-- **AND** `Reject.published`가 있고 그 값이 현재 outbound request/relation의 generation timestamp보다 오래되면 stale Reject로 처리하고 local follow graph 또는 request를 갱신하지 않는다
-- **AND** `Reject.published`가 없으면 시스템은 수신 시각을 activity timestamp로 사용해 actor/object fallback 호환성을 유지한다
+- **AND** 시스템은 remote `Reject.published`나 local 수신 시각을 generation 또는 freshness 판정에 사용하지 않는다
+- **AND** 시스템은 embedded Follow generation이 현재 projection과 일치하고 transaction에서 `expectedRowId`가 여전히 현재 row인 경우에만 그 projection을 제거한다
 - **AND** personal inbox에서 Fedify `ctx.recipient`가 제공되면 시스템은 해당 recipient identifier를 local actor/profile로 resolve하고, 그 canonical actor URI가 해당 outbound Follow의 local follower actor URI와 일치해야 한다
 - **AND** Fedify `ctx.recipient`가 없으면 shared inbox로 간주하고 actor/object 조건으로 recipient를 검증한다
 - **AND** actor, object, 또는 recipient가 일치하지 않는 `Reject`는 local follow graph 또는 request를 갱신하지 않는다

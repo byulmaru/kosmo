@@ -65,7 +65,7 @@
 - **AND** 시스템은 cross-origin embedded Follow를 신뢰하도록 Fedify origin 검증을 우회하지 않아야 하며, authoritative origin에서 조회되지 않은 cross-origin object는 follow graph/request side effect 없이 무시할 수 있어야 한다
 - **AND** Fedify가 typed object로 제공한 Follow에 kosmo outbound Follow URI가 없으면 remote Follow id를 compatibility hint로만 취급하고 actor/object가 relation과 저장된 actor identity에서 파생한 actor/object와 일치하며 Follow의 `published`가 현재 request/relation의 immutable `createdAt`과 정확히 일치할 때만 기존 follow generation에 대응시킬 수 있어야 한다
 - **AND** Fedify가 Accept 또는 Reject object를 typed Follow로 제공하지 못하면 시스템은 IRI-only object를 relation/request로 역조회하지 않고 follow graph/request side effect 없이 무시할 수 있어야 한다
-- **AND** remote Reject의 activity timestamp가 현재 outbound Follow generation timestamp보다 오래된 것이 확인되면 actor/object가 일치해도 기존 follow 관계를 제거하지 않을 수 있어야 한다
+- **AND** remote `Reject.published`와 local 수신 시각은 outbound Follow generation 또는 Reject freshness 판정에 사용하지 않아야 한다
 - **AND** outbound Follow activity identity는 생성된 request 또는 relation id에서 파생한 kosmo outbound Follow URI여야 한다
 - **AND** outbound Follow activity identity는 follower actor URI와 followee actor URI만으로 파생하지 않고 새 logical outbound Follow activity마다 고유해야 한다
 - **AND** outbound Follow activity identity는 kosmo가 발송하는 Follow/Undo transport identity로 안정적이어야 하지만, remote server가 후속 Accept/Reject object에서 이 identity를 보존한다는 것을 필수 전제로 삼지 않는다
@@ -90,7 +90,8 @@
 #### Scenario: Remove rejected remote follow projection
 
 - **WHEN** remote actor가 저장된 outbound Follow의 actor/object와 일치하는 Follow를 object로 하는 Reject를 보낸다
-- **THEN** 시스템은 해당 Reject의 activity timestamp가 현재 outbound Follow generation timestamp보다 오래되지 않았으면 그 Follow에 연결된 pending request 또는 optimistic established relation의 exact row를 제거해야 한다
+- **THEN** 시스템은 embedded Follow가 현재 outbound Follow generation과 일치하고 transaction에서 expected row가 여전히 현재 projection이면 pending request 또는 optimistic established relation의 exact row를 제거해야 한다
+- **AND** remote `Reject.published`와 local 수신 시각은 이 판정에 사용하지 않는다
 - **AND** 시스템은 거절 상태 값을 저장하지 않는다
 
 ## MODIFIED Requirements
