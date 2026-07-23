@@ -18,7 +18,7 @@ type SocialActionConfig = {
 type ReplyActionConfig = SocialActionConfig & { expanded: boolean };
 type RepostActionConfig = SocialActionConfig & { hasReposted: boolean };
 type ReactionActionConfig = Omit<SocialActionConfig, 'count'> & { hasReacted: boolean };
-type BookmarkActionConfig = SocialActionConfig & { hasBookmarked: boolean };
+type BookmarkActionConfig = Omit<SocialActionConfig, 'count'> & { hasBookmarked: boolean };
 type MoreActionConfig = { accessibilityLabel: string; onPress: () => void };
 
 export type PostActionBarProps = {
@@ -29,13 +29,14 @@ export type PostActionBarProps = {
   repost?: RepostActionConfig;
 };
 
-type Icon = ComponentType<{ color: string; size: number }>;
+type Icon = ComponentType<{ color: string; fill?: string; size: number }>;
 
 type ActionControlProps = {
   accessibilityLabel: string;
   active?: boolean;
   count?: number;
   expanded?: boolean;
+  fillActive?: boolean;
   icon: Icon;
   onPress: () => void;
   processing?: ProcessingState;
@@ -72,6 +73,7 @@ export function PostActionBar({ bookmark, more, reaction, reply, repost }: PostA
         <ActionControl
           accessibilityLabel={reaction.accessibilityLabel}
           active={reaction.hasReacted}
+          fillActive
           icon={Heart}
           onPress={reaction.onPress}
           processing={reaction.processing}
@@ -82,7 +84,7 @@ export function PostActionBar({ bookmark, more, reaction, reply, repost }: PostA
         <ActionControl
           accessibilityLabel={bookmark.accessibilityLabel}
           active={bookmark.hasBookmarked}
-          count={bookmark.count}
+          fillActive
           icon={Bookmark}
           onPress={bookmark.onPress}
           processing={bookmark.processing}
@@ -107,6 +109,7 @@ function ActionControl({
   active = false,
   count,
   expanded,
+  fillActive = false,
   icon: Icon,
   onPress,
   processing = 'default',
@@ -165,7 +168,7 @@ function ActionControl({
           style={styles.icon}
           testID={`post-action-${testID}-icon`}
         >
-          <Icon color={color} size={16} />
+          <Icon color={color} fill={fillActive && active ? color : 'none'} size={16} />
         </View>
       )}
       {formattedCount ? (

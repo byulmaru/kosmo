@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-test('formats supplied non-Reaction counts with standard compact notation', async () => {
+test('formats supplied Reply and Repost counts with standard compact notation', async () => {
   const module = await import('./postActionCount').catch(() => null);
 
   assert.ok(module, 'post action count formatter module must exist');

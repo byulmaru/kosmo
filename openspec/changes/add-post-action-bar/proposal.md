@@ -6,7 +6,7 @@ Reply·Repost·Reaction·Bookmark를 실제 게시글 화면에 일관되게 연
 
 - 고정 순서 Reply → Repost → Reaction → Bookmark → More를 표시하는 공통 `PostActionBar`를 추가한다.
 - Reply·Repost·Reaction·Bookmark의 처리 상태(default·pending·disabled·error), 선택적 count, callback 및 접근성 metadata 계약을 정의한다. 공개 제품 상태는 Reply의 controlled `expanded`, Repost의 `hasReposted`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`로 표현하고 범용 `selected` prop을 노출하지 않는다. More는 callback과 접근성 label만 소비한다.
-- Reaction에는 count를 표시하지 않는다. 다른 액션은 선행 계약이 제공한 count만 실행 환경 locale의 표준 compact notation으로 표시하고, 수동 K/M 반올림·단위 승격·상한 알고리즘을 만들지 않는다.
+- Reaction과 Bookmark에는 count를 표시하지 않는다. Reply와 Repost는 선행 계약이 제공한 count만 실행 환경 locale의 표준 compact notation으로 표시하고, 수동 K/M 반올림·단위 승격·상한 알고리즘을 만들지 않는다.
 - production Post surface는 다섯 액션을 유지하고 대상 Post 자체의 액션 적격성과 현재 실행 주체·세션의 실행 권한을 분리한다. Content와 Reply Parent가 없고 Repost Source만 있는 Repost의 Reply·Repost처럼 대상 자체가 부적격하거나 인증된 실행 주체가 권한을 갖지 못한 액션은 disabled로 표시한다. guest에게 인증 전제가 없다는 이유만으로 대상 자체가 적격한 소셜 액션을 disabled로 만들지 않고 향후 인증 진입 계약으로 위임한다.
 - More의 공통 UI 경계는 callback-only로 유지하고, PROD-432의 production 통합에서 최소 팝업과 ADR 0015의 Post Share Reference를 복사하는 `링크 복사` 항목을 제공한다.
 - 공통 컴포넌트, production Post surface 배치, 실제 action 데이터 연결과 최종 통합 검증을 각각 PROD-433, PROD-434, PROD-432가 소유하도록 공유 구현 순서를 정의한다.

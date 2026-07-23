@@ -83,10 +83,10 @@
 - Authority / Provenance: `PROD-432`, `PROD-433`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425`
 - Status: Active
 - Context / Problem: 범용 `selected`는 Reply Composer의 열림, Repost 수행 여부, 하나 이상의 Reaction 존재와 Bookmark 여부처럼 서로 다른 제품 의미를 하나의 이름으로 축약해 상위 adapter와 컴포넌트 계약을 모호하게 만든다.
-- Decision Outcome: 공개 UI 상태는 Reply의 controlled `expanded`, Repost의 `hasReposted`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`로 표현하고 default·pending·disabled·error 처리 상태와 독립적으로 유지한다. Reply 활성화는 상위 Composer를 열거나 focus할 뿐 `expanded`를 자체 전환하지 않는다. Reaction은 현재 Profile이 하나 이상의 Reaction Type을 남겼는지만 `hasReacted`로 나타내고 count를 받지 않는다. More는 callback과 접근성 label만 받는다.
+- Decision Outcome: 공개 UI 상태는 Reply의 controlled `expanded`, Repost의 `hasReposted`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`로 표현하고 default·pending·disabled·error 처리 상태와 독립적으로 유지한다. Reply 활성화는 상위 Composer를 열거나 focus할 뿐 `expanded`를 자체 전환하지 않는다. Reaction은 현재 Profile이 하나 이상의 Reaction Type을 남겼는지만 `hasReacted`로 나타내며 Reaction과 Bookmark는 count를 받지 않는다. `hasReacted` 또는 `hasBookmarked`가 true이면 pending spinner를 제외한 Heart·Bookmark 내부를 현재 처리 상태 색상으로 채우고 default에서는 primary 색상을 사용한다. More는 callback과 접근성 label만 받는다.
 - Alternatives Considered: 범용 `selected`는 도메인 의미와 소유 계층을 숨기므로 채택하지 않았다. Reply가 내부 상태로 Composer 열림을 전환하는 방식은 controlled surface 계약과 충돌하므로 채택하지 않았다.
-- Consequences: surface adapter가 도메인별 값을 공급하고, 처리 상태의 시각 표현이 primary 표현보다 우선해도 도메인 의미와 접근성 상태는 보존한다. React Native 접근성 구현 내부에서는 플랫폼의 `selected`·`pressed`·`expanded` 용어를 사용할 수 있다.
-- Confirmation / Follow-up: Storybook과 component test에서 `expanded`·`hasReposted`·`hasReacted`·`hasBookmarked`와 pending·disabled·error의 조합, callback 허용 여부 및 접근성 상태를 검증한다.
+- Consequences: surface adapter가 도메인별 값을 공급하고, 처리 상태의 시각 표현이 primary 표현보다 우선해도 도메인 의미, Reaction·Bookmark의 채워진 형태와 접근성 상태는 보존한다. React Native 접근성 구현 내부에서는 플랫폼의 `selected`·`pressed`·`expanded` 용어를 사용할 수 있다.
+- Confirmation / Follow-up: Storybook과 component test에서 `expanded`·`hasReposted`·`hasReacted`·`hasBookmarked`와 pending·disabled·error의 조합, active Reaction·Bookmark의 채워진 형태, callback 허용 여부 및 접근성 상태를 검증한다.
 
 ### More callback 경계와 Post Share Reference 통합을 분리
 
@@ -107,7 +107,7 @@
 - Authority / Provenance: `PROD-432`, `PROD-433`
 - Status: Active
 - Context / Problem: Action Bar가 K/M 반올림·단위 승격·`999M` 상한을 수동 구현하면 JavaScript 표준의 locale-aware compact formatting을 중복하고 한국어의 천·만·억 같은 실행 환경 표기를 막는다.
-- Decision Outcome: Reaction과 More를 제외하고 선행 action 계약이 제공한 optional count는 실행 환경 locale의 표준 `Intl.NumberFormat` compact notation을 사용한다. Action Bar는 K/M 단위, 반올림 경계, 단위 승격과 표시 상한을 자체 구현하지 않고 locale별 정확한 문자열을 규범으로 고정하지 않는다. Reaction은 count를 받지 않으며 count 계약이 없는 액션에는 `0`이나 placeholder를 합성하지 않는다.
+- Decision Outcome: 선행 action 계약이 Reply와 Repost에 제공한 optional count는 실행 환경 locale의 표준 `Intl.NumberFormat` compact notation을 사용한다. Action Bar는 K/M 단위, 반올림 경계, 단위 승격과 표시 상한을 자체 구현하지 않고 locale별 정확한 문자열을 규범으로 고정하지 않는다. Reaction·Bookmark·More는 count를 받지 않으며 count 계약이 없는 Reply·Repost에는 `0`이나 placeholder를 합성하지 않는다.
 - Alternatives Considered: 수동 K/M formatter는 표준 기능을 중복하고 locale 출력을 제거하므로 채택하지 않았다. raw count는 좁은 폭에서 길이를 제한하지 못하므로 채택하지 않았다.
 - Consequences: locale과 플랫폼의 표준 데이터에 따라 단위와 반올림 결과가 달라질 수 있다. 레이아웃은 최대 네 글자 가정 대신 한국어·영어 대표 compact fixture에서 한 행과 비겹침을 검증한다.
 - Confirmation / Follow-up: PROD-433 구현에서 기존 `Intl.NumberFormat` 사용 관례를 재사용하고 Web Storybook과 Android·iOS runtime에서 대표 fixture를 검증한다.

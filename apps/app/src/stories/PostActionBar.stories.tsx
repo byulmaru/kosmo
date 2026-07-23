@@ -17,7 +17,6 @@ const more = fn();
 const actionBarProps = {
   bookmark: {
     accessibilityLabel: '북마크',
-    count: 12_345,
     hasBookmarked: false,
     onPress: bookmark,
     processing: 'default' as const,
@@ -48,10 +47,10 @@ const actionBarProps = {
 function CatalogStory() {
   return (
     <Catalog>
-      <Section title="Default · count / no count / reaction count omitted">
+      <Section title="Default · Reply/Repost count / no count / Reaction/Bookmark count omitted">
         <PostActionBar {...actionBarProps} />
         <PostActionBar
-          bookmark={{ ...actionBarProps.bookmark, count: undefined }}
+          bookmark={actionBarProps.bookmark}
           reaction={actionBarProps.reaction}
           reply={{ ...actionBarProps.reply, count: undefined }}
           repost={{ ...actionBarProps.repost, count: undefined }}
@@ -150,7 +149,27 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const ActionBarCatalog: Story = {};
+export const ActionBarCatalog: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const buttons = canvas.getAllByRole('button');
+    const reactionButtons = buttons.filter(
+      (button) => button.getAttribute('aria-label') === '반응',
+    );
+    const bookmarkButtons = buttons.filter((button) =>
+      button.getAttribute('aria-label')?.startsWith('북마크'),
+    );
+
+    for (const button of bookmarkButtons) {
+      expect(button).not.toHaveTextContent(/\S/);
+    }
+
+    expect(reactionButtons[0]?.querySelector('svg')).toHaveAttribute('fill', 'none');
+    expect(bookmarkButtons[0]?.querySelector('svg')).toHaveAttribute('fill', 'none');
+    expect(reactionButtons[2]?.querySelector('svg')).not.toHaveAttribute('fill', 'none');
+    expect(bookmarkButtons[2]?.querySelector('svg')).not.toHaveAttribute('fill', 'none');
+  },
+};
 
 export const ControlledReply: Story = {
   play: async ({ canvasElement }) => {
