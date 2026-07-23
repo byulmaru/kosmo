@@ -166,6 +166,32 @@ export const ActionBarCatalog: Story = {
     const bookmarkButtons = buttons.filter((button) =>
       button.getAttribute('aria-label')?.startsWith('북마크'),
     );
+    const defaultToolbar = canvas.getAllByRole('toolbar')[0]!;
+    const defaultToolbarCanvas = within(defaultToolbar);
+    const iconMetrics = [
+      ['답글', 14, '3.5'],
+      ['재게시', 20, '4'],
+      ['반응', 18, '3.5'],
+      ['북마크', 16, '3.5'],
+      ['더보기', 16, '3.5'],
+    ] as const;
+
+    for (const [label, size, strokeWidth] of iconMetrics) {
+      const icon = defaultToolbarCanvas.getByRole('button', { name: label }).querySelector('svg');
+      expect(icon).toHaveAttribute('width', String(size));
+      expect(icon).toHaveAttribute('height', String(size));
+      expect(icon).toHaveAttribute('stroke-width', strokeWidth);
+    }
+
+    for (const label of ['답글', '재게시'] as const) {
+      const button = defaultToolbarCanvas.getByRole('button', { name: label });
+      const iconBounds = button.querySelector('svg')!.getBoundingClientRect();
+      const countBounds = button.querySelector('[dir="auto"]')!.getBoundingClientRect();
+      expect(iconBounds.top + iconBounds.height / 2).toBeCloseTo(
+        countBounds.top + countBounds.height / 2,
+        0,
+      );
+    }
 
     for (const button of bookmarkButtons) {
       expect(button).not.toHaveTextContent(/\S/);

@@ -1,8 +1,8 @@
 ## Context
 
-`apps/app`은 Android·iOS·Web을 공유하는 React Native 애플리케이션이며, 게시글 목록과 상세는 현재 작성자·시간·본문을 렌더하지만 공통 Post Action Bar나 이를 위한 Relay fragment는 없다. UI theme에는 `textSecondary`, `primary`, spacing·typography token과 compact/full breakpoint가 있고 `lucide-react-native`가 이미 설치되어 있다. 기존 공용 `Button`은 일반 텍스트 버튼에 맞춘 최소 높이 40px 계약이어서, 16px icon/count 표현과 최소 44×44 interactive target을 함께 요구하는 Action Bar control에 그대로 사용하기 어렵다.
+`apps/app`은 Android·iOS·Web을 공유하는 React Native 애플리케이션이며, 게시글 목록과 상세는 현재 작성자·시간·본문을 렌더하지만 공통 Post Action Bar나 이를 위한 Relay fragment는 없다. UI theme에는 `textSecondary`, `primary`, spacing·typography token과 compact/full breakpoint가 있고 `lucide-react-native`가 이미 설치되어 있다. 기존 공용 `Button`은 일반 텍스트 버튼에 맞춘 최소 높이 40px 계약이어서, icon/count의 광학 크기와 최소 44×44 interactive target을 함께 요구하는 Action Bar control에 그대로 사용하기 어렵다.
 
-[KOSMO Action 컴포넌트](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=88-1005)는 Reply → Repost → Reaction → Bookmark → More 순서, 16px icon/count, 4px 내부 간격, 약 50px 액션 영역과 보조 텍스트 색상을 보여 준다. 다만 현재 Figma에는 pending·disabled, 접근 가능한 실패 toast와 44×44 interactive target이 없다. Figma는 이 change에서 수정하지 않으며 비규범적 시각 참고로만 사용한다. `docs/domain`·`docs/design`은 제품·디자인의 canonical source, Linear는 범위·소유권·의존성의 source, `post-action-bar` spec은 상태·입력·접근성·통합 동작의 규범 계약이다.
+[KOSMO Action 컴포넌트](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=88-1005)는 Reply → Repost → Reaction → Bookmark → More 순서, 16px icon/count, 4px 내부 간격, 약 50px 액션 영역과 보조 텍스트 색상을 보여 준다. 실제 `lucide-react-native` glyph는 같은 16px에서도 내부 여백과 path 모양 때문에 광학 크기와 선 가독성이 달라, 2026-07-23 KST 사용자 결정으로 액션별 크기와 선 두께를 보정한다. 현재 Figma에는 이 광학 보정, pending·disabled, 접근 가능한 실패 toast와 44×44 interactive target이 없다. Figma는 이 change에서 수정하지 않으며 비규범적 시각 참고로만 사용한다. `docs/domain`·`docs/design`은 제품·디자인의 canonical source, Linear는 범위·소유권·의존성의 source, `post-action-bar` spec은 상태·입력·접근성·통합 동작의 규범 계약이다.
 
 공유 change의 계약 부모는 PROD-432다. PROD-433은 독립 UI와 상태 카탈로그를, PROD-434는 production surface 배치를, PROD-432는 준비된 실제 action 상태 연결·More 링크 복사·최종 통합 검증·archive를 소유한다. Reply·Repost·Reaction·Bookmark 자체의 저장·GraphQL·count 집계·도메인 상태 의미·권한·Content·Reply Parent·Repost Source 관계 조합 및 Post Visibility 정책은 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425와 canonical 문서의 계약을 재사용한다. Post Share Reference는 ADR 0015와 Post 객체 문서를 따른다.
 
@@ -29,7 +29,7 @@
 ### Current Constraints
 
 - 게시글 렌더 경로는 route → `PostLayout`/`PostList` → `PostListItem`이며, Action Bar를 넣을 기존 slot이나 fragment가 없다. PROD-433에서 이 surface들을 먼저 수정하면 PROD-434의 소유권과 검증 경계를 침범한다.
-- `Button`의 40px 일반 버튼 metric과 loading/disabled 표현은 Action Bar의 16px icon/count, 44px target, 도메인 상태+pending 조합에 맞지 않는다.
+- `Button`의 40px 일반 버튼 metric과 loading/disabled 표현은 Action Bar의 액션별 14~20px icon, 16px count, 44px target, 도메인 상태+pending 조합에 맞지 않는다.
 - React Native Web을 공유하므로 DOM element, CSS selector, Web 전용 event에 의존한 구현은 native 계약을 깨뜨린다.
 - Figma의 시각 행 높이 약 27~28px는 interactive target 요구사항보다 작다. 보이는 glyph metric은 유지하되 control layout 자체가 44px 이상이어야 한다.
 - 선행 action 계약이 제공하는 Reply·Repost count와 viewer-relative 도메인 상태의 cache 소유권은 Action Bar가 아니라 상위 Relay/surface 계층에 있다.
@@ -38,7 +38,7 @@
 
 PROD-433에서는 `apps/app/src/components/post`에 공개 `PostActionBar` 하나를 추가하고, 반복되는 Pressable·icon·count·spinner·접근성 처리는 같은 모듈의 비공개 control로 캡슐화한다. 공개 props는 `reply`, `repost`, `reaction`, `bookmark`, `more`의 명시적 optional key로 고정한다. Reply는 callback, 외부 Composer의 controlled `expanded`와 default·pending·disabled 처리 상태를 받는다. Repost는 `hasReposted`, Reaction은 `hasReacted`, Bookmark는 `hasBookmarked`를 같은 처리 상태와 독립적으로 받는다. Reaction과 Bookmark는 count를 받지 않고, Reply와 Repost는 선행 계약이 제공한 count만 optional로 받는다. `hasReacted` 또는 `hasBookmarked`가 true이면 pending spinner를 제외한 Heart·Bookmark 내부를 현재 처리 상태 색상으로 채우며 default에서는 primary 색상을 사용한다. More는 callback과 접근성 label만 소비하며 count·도메인 상태·처리 상태를 받지 않는다.
 
-각 control은 최소 44×44 layout을 사용하고, 내부 glyph는 Figma의 16px icon/count와 4px 간격을 기준으로 배치한다. 행은 전체 사용 가능 폭을 사용하면서 고정 순서로 한 줄에 분배한다. count는 저장소에 이미 사용 중인 `Intl.NumberFormat` compact notation 관례를 재사용해 실행 환경의 기본 locale에 맞게 표시하고, K/M 반올림·단위 승격·상한을 수동 구현하지 않는다. exact precision option은 표준 compact 동작을 유지하는 범위에서 PROD-433 구현이 정하되 locale별 문자열을 제품 계약으로 복제하지 않는다. 색상·spacing·typography는 기존 theme token을 사용하고 icon은 기존 `lucide-react-native`에서 시각적으로 대응하는 glyph를 선택한다. pending은 icon 영역만 동일 크기의 spinner로 대체해 count와 행 배치가 흔들리지 않게 한다. 폭 검증은 기존 Storybook의 `kosmoMobile` 390px, `kosmoCompact` 900px, `kosmoFull` 1400px viewport에서 실제 목록·상세 surface 콘텐츠 폭과 한국어·영어 대표 compact fixture를 사용한다.
+각 control은 최소 44×44 layout을 사용하고 count와의 내부 간격은 4px로 유지한다. 광학 크기는 Reply 14px, Repost 20px, Reaction Heart 18px, Bookmark·More 16px을 사용하고, Lucide 선 두께는 Reply·Reaction·Bookmark·More에 `strokeWidth` 3.5, 추가 강조가 필요한 Repost에 4를 사용한다. Reply는 16px slot 중앙에 배치하고 나머지는 glyph 크기와 같은 slot을 사용한다. pending spinner는 14px을 해당 액션의 slot 중앙에 배치해 count 중앙선과 default↔pending 행 배치를 유지한다. More는 44px interactive target을 행 오른쪽 끝에 두고 icon 오른쪽에 8px inset을 둔다. 행은 전체 사용 가능 폭을 사용하면서 고정 순서로 한 줄에 분배한다. count는 저장소에 이미 사용 중인 `Intl.NumberFormat` compact notation 관례를 재사용해 실행 환경의 기본 locale에 맞게 표시하고, K/M 반올림·단위 승격·상한을 수동 구현하지 않는다. exact precision option은 표준 compact 동작을 유지하는 범위에서 PROD-433 구현이 정하되 locale별 문자열을 제품 계약으로 복제하지 않는다. 색상·spacing·typography는 기존 theme token을 사용하고 icon은 기존 `lucide-react-native`에서 시각적으로 대응하는 glyph를 선택한다. 폭 검증은 기존 Storybook의 `kosmoMobile` 390px, `kosmoCompact` 900px, `kosmoFull` 1400px viewport에서 실제 목록·상세 surface 콘텐츠 폭과 한국어·영어 대표 compact fixture를 사용한다.
 
 PROD-433의 Storybook은 Reply `expanded`, Repost `hasReposted`, Reaction `hasReacted`, Bookmark `hasBookmarked`와 각 액션의 기본·pending·disabled 조합, active Reaction·Bookmark의 채워진 icon, Reaction·Bookmark count 제외, 한국어·영어 compact count, count 없음, optional 액션, More callback-only와 390px·900px·1400px 폭을 각각 검토할 수 있게 한다. 처리 상태의 시각 표현은 도메인 상태의 primary 표현보다 우선하되 의미와 접근성 상태는 유지한다. 상호작용 검증은 default의 callback 호출, pending·disabled의 차단, controlled `expanded`, More callback, keyboard/touch activation과 접근성 state를 확인한다. 이 단계에서는 `PostListItem`, `PostLayout`, route나 Relay 생성물을 수정하지 않는다.
 
@@ -66,7 +66,7 @@ PROD-432는 선행 action 구현의 실제 fragment/mutation 결과를 surface a
 
 ## Risks / Trade-offs
 
-- [44px target 때문에 Figma의 27~28px 시각 행보다 실제 layout 높이가 커질 수 있음] → glyph 크기와 내부 시각 간격은 유지하고, Storybook에서 게시글 카드 전체 리듬과 interactive target을 함께 검토한다.
+- [44px target과 액션별 14~20px 광학 보정 때문에 Figma의 27~28px 시각 행과 glyph metric이 달라질 수 있음] → 4px 내부 간격과 최소 interactive target을 유지하고, Storybook에서 게시글 카드 전체 리듬·아이콘별 크기·선 두께를 함께 검토한다.
 - [native와 Web의 접근성 state 지원 차이] → 공통 `accessibilityRole`·`accessibilityLabel`·`accessibilityState`를 우선하고 Storybook 상호작용 테스트와 각 플랫폼의 실제 보조 기술 점검을 분리한다.
 - [locale data와 compact 반올림 결과가 플랫폼별로 달라질 수 있음] → 수동 formatter로 결과를 강제하지 않고 한국어·영어 대표 fixture를 Web Storybook과 Android·iOS runtime에서 각각 확인한다.
 - [선행 action 이슈의 공개 결과가 달라질 수 있음] → Action Bar는 표시 상태와 callback만 소비하고, adapter는 PROD-432에서 선행 계약이 확정된 뒤 연결한다.

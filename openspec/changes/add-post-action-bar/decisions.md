@@ -52,6 +52,18 @@
 - Consequences: 일정 기간 Figma와 구현 상태 카탈로그 사이의 차이를 허용한다. 향후 Figma를 정렬할 때 canonical 문서·Linear·OpenSpec·코드의 소유 경계를 기준으로 역동기화해야 한다.
 - Confirmation / Follow-up: OpenSpec strict validation과 구현 PR 검토에서 Linear·OpenSpec·코드 정합성을 확인한다. Figma 수정은 이 change의 task에 포함하지 않는다.
 
+### 액션별 광학 크기와 선 두께를 조정
+
+- Decision Date: 2026-07-23
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-433`, 2026-07-23 KST 사용자 결정
+- Status: Active
+- Context / Problem: 같은 16px과 Lucide 기본 `strokeWidth` 2를 사용하면 내부 여백이 큰 Repost는 다른 glyph보다 작고 가늘게 보이고, Reply는 count보다 크게 느껴지며 수직 중심이 어긋나 보인다. Reaction Heart도 상대적으로 작고 모든 action glyph의 선 가독성이 부족하다.
+- Decision Outcome: Reply는 16px slot 중앙의 14px glyph, Repost는 20px glyph, Reaction Heart는 18px glyph, Bookmark·More는 16px glyph를 사용한다. Reply·Reaction·Bookmark·More의 Lucide `strokeWidth`는 3.5, 추가 강조가 필요한 Repost는 4를 사용한다. active Heart·Bookmark의 fill은 유지한다. pending spinner는 14px을 각 액션의 default glyph slot 중앙에 배치하고, 모든 control은 최소 44×44 interactive target을 유지한다.
+- Alternatives Considered: 모든 glyph를 16px과 기본 선 두께로 유지하는 방식은 확인된 광학 불균형과 가독성 문제를 남겨 채택하지 않았다. 모든 glyph를 같은 크기로 일괄 확대·축소하는 방식은 이미 적절한 Bookmark·More까지 바꾸므로 채택하지 않았다. Reply나 Repost를 한 축으로만 늘리는 방식은 Lucide 비율을 왜곡하므로 채택하지 않았다.
+- Consequences: action별 visual glyph와 slot 폭이 달라지지만 공개 props, 순서, 최소 입력 영역과 접근성 계약은 바뀌지 않는다. Repost의 default↔pending 전환은 20px slot을 유지하고 다른 action도 자기 slot 중앙에서 spinner를 표시하므로 count와 행 배치가 흔들리지 않는다.
+- Confirmation / Follow-up: PROD-433 Storybook에서 다섯 glyph의 크기와 선 두께, Reply·Repost의 count 중앙선, pending slot과 390px·900px·1400px 한 행 배치를 검증한다.
+
 ### 공유 change와 부모 소유의 최종 archive
 
 - Decision Date: 2026-07-21

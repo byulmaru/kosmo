@@ -29,7 +29,12 @@ export type PostActionBarProps = {
   repost?: RepostActionConfig;
 };
 
-type Icon = ComponentType<{ color: string; fill?: string; size: number }>;
+type Icon = ComponentType<{
+  color: string;
+  fill?: string;
+  size: number;
+  strokeWidth?: number;
+}>;
 
 type ActionControlProps = {
   accessibilityLabel: string;
@@ -39,6 +44,8 @@ type ActionControlProps = {
   expanded?: boolean;
   fillActive?: boolean;
   icon: Icon;
+  iconSize?: number;
+  iconStrokeWidth?: number;
   onPress: () => void;
   processing?: ProcessingState;
   stateful?: boolean;
@@ -54,6 +61,7 @@ export function PostActionBar({ bookmark, more, reaction, reply, repost }: PostA
           count={reply.count}
           expanded={reply.expanded}
           icon={MessageCircle}
+          iconSize={14}
           onPress={reply.onPress}
           processing={reply.processing}
           testID="reply"
@@ -65,6 +73,8 @@ export function PostActionBar({ bookmark, more, reaction, reply, repost }: PostA
           active={repost.hasReposted}
           count={repost.count}
           icon={Repeat2}
+          iconSize={20}
+          iconStrokeWidth={4}
           onPress={repost.onPress}
           processing={repost.processing}
           testID="repost"
@@ -76,6 +86,7 @@ export function PostActionBar({ bookmark, more, reaction, reply, repost }: PostA
           active={reaction.hasReacted}
           fillActive
           icon={Heart}
+          iconSize={18}
           onPress={reaction.onPress}
           processing={reaction.processing}
           testID="reaction"
@@ -114,6 +125,8 @@ function ActionControl({
   expanded,
   fillActive = false,
   icon: Icon,
+  iconSize = 16,
+  iconStrokeWidth = 3.5,
   onPress,
   processing = 'default',
   stateful = true,
@@ -134,6 +147,8 @@ function ActionControl({
     ...(expanded === undefined ? { selected: active } : { expanded }),
   };
   const formattedCount = formatPostActionCount(count);
+  const iconSlotSize = Math.max(16, iconSize);
+  const iconSlotStyle = { height: iconSlotSize, width: iconSlotSize };
 
   return (
     <Pressable
@@ -158,17 +173,22 @@ function ActionControl({
           aria-hidden
           color={color}
           size={14}
-          style={styles.icon}
+          style={[styles.icon, iconSlotStyle]}
           testID={`post-action-${testID}-spinner`}
         />
       ) : (
         <View
           accessible={false}
           aria-hidden
-          style={styles.icon}
+          style={[styles.icon, iconSlotStyle]}
           testID={`post-action-${testID}-icon`}
         >
-          <Icon color={color} fill={fillActive && active ? color : 'none'} size={16} />
+          <Icon
+            color={color}
+            fill={fillActive && active ? color : 'none'}
+            size={iconSize}
+            strokeWidth={iconStrokeWidth}
+          />
         </View>
       )}
       {formattedCount ? (
@@ -200,7 +220,7 @@ const styles = StyleSheet.create({
     fontSize: typography.md.fontSize,
     lineHeight: typography.md.fontSize,
   },
-  icon: { height: 16, width: 16 },
+  icon: { alignItems: 'center', justifyContent: 'center' },
   pressed: { opacity: 0.72 },
   root: {
     alignItems: 'center',
