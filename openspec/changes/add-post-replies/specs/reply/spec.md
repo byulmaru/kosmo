@@ -98,12 +98,12 @@
 
 ### Requirement: Reply 조상 경로 조회
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `PROD-388`, `PROD-399` 시스템은 Reply의 저장된 직접 Reply Parent 관계를 따라 viewer가 조회할 수 있는 조상 Post 경로를 제공해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `PROD-388`, `PROD-399` 시스템은 Reply의 저장된 직접 Reply Parent 관계를 따라 viewer가 조회할 수 있는 조상 Post 경로를 제공해야 하며(MUST), 임의의 최대 깊이로 정상 경로를 절단해서는 안 된다(MUST NOT).
 
 #### Scenario: 조회 가능한 조상 경로
 
 - **WHEN** viewer가 여러 단계의 조회 가능한 Reply Parent를 가진 Reply를 조회한다
-- **THEN** 시스템은 저장된 직접 Parent 관계 순서를 보존한 조상 Post들을 제공한다
+- **THEN** 시스템은 직접 Parent를 첫 요소로 두고 저장된 Parent 관계를 따라 root 방향으로 조상 Post들을 제공한다
 - **AND** 각 조상은 기존 단일 `Post` Node 계약을 사용한다
 
 #### Scenario: 조회 불가능한 조상에서 중단
@@ -117,6 +117,7 @@
 - **WHEN** 정상 생성 경로 밖의 데이터로 조상 관계에 cycle이 존재한다
 - **THEN** 시스템은 조회를 유한하게 종료한다
 - **AND** 같은 Post를 반복 노출하지 않는다
+- **AND** 조회를 시작한 현재 Post를 조상으로 노출하지 않는다
 
 ### Requirement: 하위 Reply 조회
 
