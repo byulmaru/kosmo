@@ -211,7 +211,7 @@ Owner Profile이 조회 가능한 Target의 Bookmark를 안정적인 최신순 c
 - `docs/domain/objects/bookmark.md`
 - `docs/domain/decisions/0010-post-interaction-contracts.md`
 - `PROD-391`
-- `PROD-396`, `PROD-408`, `PROD-409`, `PROD-410`, `PROD-420`, `PROD-421`
+- `PROD-396`, `PROD-408`, `PROD-409`, `PROD-410`, `PROD-420`, `PROD-452`, `PROD-421`
 
 **Deliverable**
 

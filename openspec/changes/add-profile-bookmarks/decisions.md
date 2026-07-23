@@ -7,11 +7,13 @@
 ### 하나의 Bookmark 계약과 이슈별 구현 소유권
 
 - Decision Date: 2026-07-20
-- Status: Accepted
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/bookmark.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-391`, `PROD-396`, `PROD-408`, `PROD-409`, `PROD-410`, `PROD-420`, `PROD-452`, `PROD-421`
+- Status: Active
 - Context / Problem: 저장, 생성, 삭제, 목록과 UI를 별도 PR로 리뷰하면서도 같은 사용자 결과와 lifecycle·권한·pagination 계약을 공유해야 한다.
 - Decision Outcome: 부모 `PROD-391`이 단일 `add-profile-bookmarks` OpenSpec, 최종 통합 검증과 archive를 소유한다. `PROD-396`, `PROD-408`, `PROD-409`, `PROD-410`, `PROD-420`, `PROD-452`, `PROD-421`은 각각 자기 구현 결과와 테스트를 소유한다. `PROD-452`는 실제 connection 없는 목록 presentation을 제공하고, `PROD-421`은 그 결과를 Relay connection·route·navigation에 통합한다.
 - Alternatives Considered: DB/API/UI별 OpenSpec 분리 — 같은 계약을 중복하고 일부 계층만 배포해도 완료로 보일 수 있어 채택하지 않았다. 모든 구현을 부모 한 PR에 포함 — 독립 리뷰·전달 책임을 잃어 채택하지 않았다.
-- Consequences: `tasks.md`의 최상위 구현 group은 Linear 자식 이슈와 1:1로 대응한다. 개별 PR 완료만으로 change를 archive하지 않는다.
+- Consequences: `tasks.md`의 최상위 구현 group은 직접·중첩 child를 포함한 Linear 구현 이슈와 1:1로 대응한다. 개별 PR 완료만으로 change를 archive하지 않는다.
 - Confirmation / Follow-up: Linear 부모/자식 관계와 각 이슈의 검증 책임을 기준으로 확인한다.
 
 ### Bookmark 저장 식별자와 안정적 최신순 index
