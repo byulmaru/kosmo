@@ -51,7 +51,7 @@ export function ReactionPendingSpinner(): React.ReactElement {
         duration: ROTATION_DURATION_MS,
         easing: Easing.linear,
         toValue: 1,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     );
 

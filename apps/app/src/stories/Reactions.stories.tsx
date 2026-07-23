@@ -381,8 +381,8 @@ export const QuickPickerStates: Story = {
     expect(pendingOverlay!.getBoundingClientRect().height).toBe(44);
     const spinner = pendingOverlay!.querySelector('[data-testid="reaction-pending-spinner"]');
     expect(spinner).not.toBeNull();
-    expect(spinner!.getBoundingClientRect().width).toBe(24);
-    expect(spinner!.getBoundingClientRect().height).toBe(24);
+    expect(getComputedStyle(spinner!).width).toBe('24px');
+    expect(getComputedStyle(spinner!).height).toBe('24px');
 
     const arcSegments = spinner!.querySelectorAll('path');
     expect(arcSegments).toHaveLength(18);
