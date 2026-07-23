@@ -31,10 +31,10 @@ Android·iOS·Web에서 공유하며 고정 순서, optional 액션, compact cou
 - keyboard/touch activation과 role·label·expanded·pressed·selected·busy·disabled metadata를 공개 도메인 상태에 맞게 검증한다.
 - React Native type/Relay check, Storybook build와 관련 component test를 통과시킨다.
 
-- [ ] 1.1 고정 공개 API와 optional 액션으로 Post Action Bar의 표시·입력 계약을 구현한다.
-- [ ] 1.2 theme token과 기존 icon dependency를 사용해 도메인·처리 상태 표현, locale-aware compact count, 한 행 반응형 배치, 최소 interactive target 및 접근성 metadata를 구현한다.
-- [ ] 1.3 Reply `expanded`와 Repost·Reaction·Bookmark의 `has*` 상태, 각 처리 상태 조합, Reaction count 제외·한국어와 영어 compact count·count 없음·optional 액션·More callback-only 및 390px·900px·1400px 폭의 Storybook 상태 카탈로그를 추가한다.
-- [ ] 1.4 처리 상태의 시각 우선순위, callback 호출·입력 차단·재시도·도메인 상태 유지·locale compact count·More 상태 제외·접근성 계약의 component test를 추가하고 관련 검증 명령을 통과시킨다.
+- [x] 1.1 고정 공개 API와 optional 액션으로 Post Action Bar의 표시·입력 계약을 구현한다.
+- [x] 1.2 theme token과 기존 icon dependency를 사용해 도메인·처리 상태 표현, locale-aware compact count, 한 행 반응형 배치, 최소 interactive target 및 접근성 metadata를 구현한다.
+- [x] 1.3 Reply `expanded`와 Repost·Reaction·Bookmark의 `has*` 상태, 각 처리 상태 조합, Reaction count 제외·한국어와 영어 compact count·count 없음·optional 액션·More callback-only 및 390px·900px·1400px 폭의 Storybook 상태 카탈로그를 추가한다.
+- [x] 1.4 처리 상태의 시각 우선순위, callback 호출·입력 차단·재시도·도메인 상태 유지·locale compact count·More 상태 제외·접근성 계약의 component test를 추가하고 관련 검증 명령을 통과시킨다.
 
 ## 2. PROD-434 Post surface 배치
 

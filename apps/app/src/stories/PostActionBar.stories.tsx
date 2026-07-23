@@ -1,0 +1,352 @@
+import { useState } from 'react';
+import { Text, View } from 'react-native';
+import { expect, fn, userEvent, within } from 'storybook/test';
+import { PostActionBar } from '@/components/post/PostActionBar';
+import { formatPostActionCount } from '@/components/post/postActionCount';
+import { spacing, typography } from '@/theme/tokens';
+import { Catalog, Section } from './StoryFrame';
+import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { ViewStyle } from 'react-native';
+
+const reply = fn();
+const repost = fn();
+const reaction = fn();
+const bookmark = fn();
+const more = fn();
+
+const actionBarProps = {
+  bookmark: {
+    accessibilityLabel: '북마크',
+    count: 12_345,
+    hasBookmarked: false,
+    onPress: bookmark,
+    processing: 'default' as const,
+  },
+  more: { accessibilityLabel: '더보기', onPress: more },
+  reaction: {
+    accessibilityLabel: '반응',
+    hasReacted: false,
+    onPress: reaction,
+    processing: 'default' as const,
+  },
+  reply: {
+    accessibilityLabel: '답글',
+    count: 12_345,
+    expanded: false,
+    onPress: reply,
+    processing: 'default' as const,
+  },
+  repost: {
+    accessibilityLabel: '재게시',
+    count: 12_345,
+    hasReposted: false,
+    onPress: repost,
+    processing: 'default' as const,
+  },
+};
+
+function CatalogStory() {
+  return (
+    <Catalog>
+      <Section title="Default · count / no count / reaction count omitted">
+        <PostActionBar {...actionBarProps} />
+        <PostActionBar
+          bookmark={{ ...actionBarProps.bookmark, count: undefined }}
+          reaction={actionBarProps.reaction}
+          reply={{ ...actionBarProps.reply, count: undefined }}
+          repost={{ ...actionBarProps.repost, count: undefined }}
+        />
+      </Section>
+      <Section title="Domain active · Reply / Repost / Reaction / Bookmark">
+        <PostActionBar
+          bookmark={{ ...actionBarProps.bookmark, hasBookmarked: true }}
+          reaction={{ ...actionBarProps.reaction, hasReacted: true }}
+          reply={{ ...actionBarProps.reply, expanded: true }}
+          repost={{ ...actionBarProps.repost, hasReposted: true }}
+        />
+      </Section>
+      <Section title="Processing · pending / disabled / error">
+        <PostActionBar
+          bookmark={{ ...actionBarProps.bookmark, hasBookmarked: true, processing: 'error' }}
+          reaction={{ ...actionBarProps.reaction, hasReacted: true, processing: 'disabled' }}
+          reply={{ ...actionBarProps.reply, expanded: true, processing: 'pending' }}
+          repost={{ ...actionBarProps.repost, hasReposted: true, processing: 'error' }}
+        />
+      </Section>
+      <Section title="Optional actions · More callback only">
+        <PostActionBar more={actionBarProps.more} reaction={actionBarProps.reaction} />
+      </Section>
+      <Section title="Standard compact formatting · runtime component / locale seam">
+        <Text style={styles.localeCopy}>
+          ko-KR: {formatPostActionCount(12_345, 'ko-KR')} · en-US:{' '}
+          {formatPostActionCount(12_345, 'en-US')}
+        </Text>
+        <PostActionBar {...actionBarProps} />
+      </Section>
+    </Catalog>
+  );
+}
+
+function ControlledReplyStory() {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <View style={styles.controlled}>
+      <PostActionBar
+        reply={{
+          ...actionBarProps.reply,
+          expanded,
+          onPress: () => setExpanded((value) => !value),
+        }}
+      />
+      <Text>{expanded ? 'Composer expanded' : 'Composer collapsed'}</Text>
+    </View>
+  );
+}
+
+function InteractionStory() {
+  return (
+    <Catalog>
+      <Section title="Default and error invoke callbacks">
+        <PostActionBar
+          bookmark={{ ...actionBarProps.bookmark, processing: 'error' }}
+          more={actionBarProps.more}
+          reaction={actionBarProps.reaction}
+          reply={actionBarProps.reply}
+          repost={actionBarProps.repost}
+        />
+      </Section>
+      <Section title="Pending and disabled block callbacks">
+        <PostActionBar
+          bookmark={{ ...actionBarProps.bookmark, processing: 'disabled' }}
+          reaction={{ ...actionBarProps.reaction, processing: 'pending' }}
+        />
+      </Section>
+    </Catalog>
+  );
+}
+
+function ActionBarFixtures() {
+  return (
+    <View style={styles.fixture}>
+      <View style={styles.detailSurface}>
+        <PostActionBar {...actionBarProps} />
+      </View>
+      <View style={styles.listCard}>
+        <View style={styles.avatarFixture} />
+        <View style={styles.listContent}>
+          <PostActionBar {...actionBarProps} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const meta = {
+  component: CatalogStory,
+  title: 'KOSMO/Post/Action Bar',
+} satisfies Meta<typeof CatalogStory>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const ActionBarCatalog: Story = {};
+
+export const ControlledReply: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const button = canvas.getByRole('button', { name: '답글' });
+
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(button);
+    await expect(canvas.findByText('Composer expanded')).resolves.toBeVisible();
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+  },
+  render: () => <ControlledReplyStory />,
+};
+
+export const InteractionContract: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    reply.mockClear();
+    repost.mockClear();
+    reaction.mockClear();
+    bookmark.mockClear();
+    more.mockClear();
+
+    const labels = canvas.getAllByRole('button').map((button) => button.getAttribute('aria-label'));
+    expect(labels).toEqual(['답글', '재게시', '반응', '북마크 재시도', '더보기', '반응', '북마크']);
+
+    const replyButton = canvas.getByRole('button', { name: '답글' });
+    replyButton.focus();
+    await userEvent.keyboard('{Enter}');
+    await userEvent.keyboard(' ');
+    await userEvent.click(canvas.getByRole('button', { name: '재게시' }));
+    await userEvent.click(canvas.getAllByRole('button', { name: '반응' })[0]!);
+    await userEvent.click(canvas.getByRole('button', { name: '북마크 재시도' }));
+    await userEvent.click(canvas.getByRole('button', { name: '더보기' }));
+    const pendingReaction = canvas.getAllByRole('button', { name: '반응' })[1]!;
+    const disabledBookmark = canvas.getByRole('button', { name: '북마크' });
+    expect(pendingReaction).toBeDisabled();
+    expect(disabledBookmark).toBeDisabled();
+    expect(pendingReaction).toHaveAttribute('tabindex', '-1');
+    expect(disabledBookmark).toHaveAttribute('tabindex', '-1');
+    pendingReaction.focus();
+    expect(canvasElement.ownerDocument.activeElement).not.toBe(pendingReaction);
+    disabledBookmark.focus();
+    expect(canvasElement.ownerDocument.activeElement).not.toBe(disabledBookmark);
+    pendingReaction.click();
+    disabledBookmark.click();
+
+    expect(reply).toHaveBeenCalledTimes(2);
+    expect(repost).toHaveBeenCalledTimes(1);
+    expect(bookmark).toHaveBeenCalledTimes(1);
+    expect(more).toHaveBeenCalledTimes(1);
+    expect(reaction).toHaveBeenCalledTimes(1);
+  },
+  render: () => <InteractionStory />,
+};
+
+export const ProcessingAccessibility: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const replyButton = canvas.getByRole('button', { name: '답글' });
+    const repostButton = canvas.getByRole('button', { name: '재게시' });
+    const reactionButton = canvas.getByRole('button', { name: '반응' });
+    const bookmarkButton = canvas.getByRole('button', { name: '북마크 재시도' });
+    const moreButton = canvas.getByRole('button', { name: '더보기' });
+
+    expect(replyButton).toHaveAttribute('aria-expanded', 'true');
+    expect(replyButton).toHaveAttribute('aria-busy', 'true');
+    expect(replyButton).toHaveAttribute('aria-disabled', 'true');
+    expect(repostButton).toHaveAttribute('aria-pressed', 'true');
+    expect(repostButton).toHaveAttribute('aria-busy', 'true');
+    expect(repostButton).toHaveAttribute('aria-disabled', 'true');
+    expect(reactionButton).toHaveAttribute('aria-pressed', 'true');
+    expect(reactionButton).toHaveAttribute('aria-disabled', 'true');
+    expect(bookmarkButton).toHaveAttribute('aria-pressed', 'true');
+    expect(bookmarkButton).not.toHaveAttribute('aria-busy');
+    expect(bookmarkButton).not.toHaveAttribute('aria-disabled');
+    expect(moreButton).not.toHaveAttribute('aria-pressed');
+    expect(moreButton).not.toHaveAttribute('aria-expanded');
+    expect(moreButton).not.toHaveAttribute('aria-busy');
+    expect(moreButton).not.toHaveAttribute('aria-disabled');
+    expect(canvas.getByTestId('post-action-reply-spinner')).toBeVisible();
+    expect(canvas.getByTestId('post-action-repost-spinner')).toBeVisible();
+    expect(canvas.queryByTestId('post-action-bookmark-spinner')).toBeNull();
+    expect(canvas.getByTestId('post-action-bookmark-icon').querySelector('svg')).toHaveAttribute(
+      'stroke',
+      '#aa1010',
+    );
+  },
+  render: () => (
+    <PostActionBar
+      bookmark={{ ...actionBarProps.bookmark, hasBookmarked: true, processing: 'error' }}
+      more={actionBarProps.more}
+      reaction={{ ...actionBarProps.reaction, hasReacted: true, processing: 'disabled' }}
+      reply={{ ...actionBarProps.reply, expanded: true, processing: 'pending' }}
+      repost={{ ...actionBarProps.repost, hasReposted: true, processing: 'pending' }}
+    />
+  ),
+};
+
+export const AccessibilityAndMinimumTarget: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const actionBar = canvas.getByRole('toolbar');
+    const buttons = within(actionBar).getAllByRole('button');
+
+    expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual([
+      '답글',
+      '재게시',
+      '반응',
+      '북마크',
+      '더보기',
+    ]);
+    expect(buttons[0]).toHaveAttribute('aria-expanded', 'false');
+    expect(buttons[1]).toHaveAttribute('aria-pressed', 'false');
+    expect(buttons[2]).toHaveAttribute('aria-pressed', 'false');
+    expect(buttons[3]).toHaveAttribute('aria-pressed', 'false');
+    expect(buttons[4]).not.toHaveAttribute('aria-pressed');
+    for (const button of buttons) {
+      const bounds = button.getBoundingClientRect();
+      expect(bounds.width).toBeGreaterThanOrEqual(44);
+      expect(bounds.height).toBeGreaterThanOrEqual(44);
+    }
+  },
+  render: () => <PostActionBar {...actionBarProps} />,
+};
+
+export const Compact390: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: { layout: 'fullscreen' },
+  play: verifyFixtures(358, 314),
+  render: () => <ActionBarFixtures />,
+};
+
+export const Compact900: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: { layout: 'fullscreen' },
+  play: verifyFixtures(568, 524),
+  render: () => <ActionBarFixtures />,
+};
+
+export const Full1400: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
+  parameters: { layout: 'fullscreen' },
+  play: verifyFixtures(568, 524),
+  render: () => <ActionBarFixtures />,
+};
+
+const styles = {
+  controlled: { gap: spacing.sm },
+  avatarFixture: { height: 48, width: 48 },
+  detailSurface: { paddingHorizontal: spacing.lg },
+  fixture: {
+    alignSelf: 'center',
+    gap: spacing.lg,
+    maxWidth: 600,
+    width: '100%',
+  } satisfies ViewStyle,
+  listCard: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    paddingHorizontal: spacing.sm,
+  } satisfies ViewStyle,
+  listContent: { flex: 1, minWidth: 0 } satisfies ViewStyle,
+  localeCopy: { fontFamily: 'SUIT', ...typography.sm },
+};
+
+function verifyFixtures(expectedDetailWidth: number, expectedListWidth: number) {
+  return async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+    const canvas = within(canvasElement);
+    const toolbars = canvas.getAllByRole('toolbar');
+
+    expect(toolbars).toHaveLength(2);
+    verifySingleRow(toolbars[0]!, expectedDetailWidth);
+    verifySingleRow(toolbars[1]!, expectedListWidth);
+  };
+}
+
+function verifySingleRow(toolbar: HTMLElement, expectedContentWidth: number) {
+  const toolbarBounds = toolbar.getBoundingClientRect();
+  const buttons = within(toolbar).getAllByRole('button');
+  const firstBounds = buttons[0]!.getBoundingClientRect();
+  let previousRight = toolbarBounds.left;
+
+  expect(toolbarBounds.width).toBeCloseTo(expectedContentWidth, 0);
+  for (const button of buttons) {
+    const bounds = button.getBoundingClientRect();
+    expect(bounds.width).toBeGreaterThanOrEqual(44);
+    expect(bounds.height).toBeGreaterThanOrEqual(44);
+    expect(bounds.top).toBe(firstBounds.top);
+    expect(bounds.bottom).toBe(firstBounds.bottom);
+    expect(bounds.top).toBeGreaterThanOrEqual(toolbarBounds.top);
+    expect(bounds.bottom).toBeLessThanOrEqual(toolbarBounds.bottom);
+    expect(bounds.left).toBeGreaterThanOrEqual(previousRight);
+    expect(bounds.right).toBeLessThanOrEqual(toolbarBounds.right);
+    previousRight = bounds.right;
+  }
+}

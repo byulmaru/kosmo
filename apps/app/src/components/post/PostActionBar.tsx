@@ -1,0 +1,206 @@
+import { Bookmark, Heart, MessageCircle, MoreHorizontal, Repeat2 } from 'lucide-react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useTheme } from '@/theme/ThemeProvider';
+import { spacing, typography } from '@/theme/tokens';
+import { formatPostActionCount } from './postActionCount';
+import type { ComponentType } from 'react';
+import type { AccessibilityState, StyleProp, ViewStyle } from 'react-native';
+
+type ProcessingState = 'default' | 'pending' | 'disabled' | 'error';
+
+type SocialActionConfig = {
+  accessibilityLabel: string;
+  count?: number;
+  onPress: () => void;
+  processing: ProcessingState;
+};
+
+type ReplyActionConfig = SocialActionConfig & { expanded: boolean };
+type RepostActionConfig = SocialActionConfig & { hasReposted: boolean };
+type ReactionActionConfig = Omit<SocialActionConfig, 'count'> & { hasReacted: boolean };
+type BookmarkActionConfig = SocialActionConfig & { hasBookmarked: boolean };
+type MoreActionConfig = { accessibilityLabel: string; onPress: () => void };
+
+export type PostActionBarProps = {
+  bookmark?: BookmarkActionConfig;
+  more?: MoreActionConfig;
+  reaction?: ReactionActionConfig;
+  reply?: ReplyActionConfig;
+  repost?: RepostActionConfig;
+};
+
+type Icon = ComponentType<{ color: string; size: number }>;
+
+type ActionControlProps = {
+  accessibilityLabel: string;
+  active?: boolean;
+  count?: number;
+  expanded?: boolean;
+  icon: Icon;
+  onPress: () => void;
+  processing?: ProcessingState;
+  stateful?: boolean;
+  testID: string;
+};
+
+export function PostActionBar({ bookmark, more, reaction, reply, repost }: PostActionBarProps) {
+  return (
+    <View accessibilityRole="toolbar" style={styles.root}>
+      {reply ? (
+        <ActionControl
+          accessibilityLabel={reply.accessibilityLabel}
+          count={reply.count}
+          expanded={reply.expanded}
+          icon={MessageCircle}
+          onPress={reply.onPress}
+          processing={reply.processing}
+          testID="reply"
+        />
+      ) : null}
+      {repost ? (
+        <ActionControl
+          accessibilityLabel={repost.accessibilityLabel}
+          active={repost.hasReposted}
+          count={repost.count}
+          icon={Repeat2}
+          onPress={repost.onPress}
+          processing={repost.processing}
+          testID="repost"
+        />
+      ) : null}
+      {reaction ? (
+        <ActionControl
+          accessibilityLabel={reaction.accessibilityLabel}
+          active={reaction.hasReacted}
+          icon={Heart}
+          onPress={reaction.onPress}
+          processing={reaction.processing}
+          testID="reaction"
+        />
+      ) : null}
+      {bookmark ? (
+        <ActionControl
+          accessibilityLabel={bookmark.accessibilityLabel}
+          active={bookmark.hasBookmarked}
+          count={bookmark.count}
+          icon={Bookmark}
+          onPress={bookmark.onPress}
+          processing={bookmark.processing}
+          testID="bookmark"
+        />
+      ) : null}
+      {more ? (
+        <ActionControl
+          accessibilityLabel={more.accessibilityLabel}
+          icon={MoreHorizontal}
+          onPress={more.onPress}
+          stateful={false}
+          testID="more"
+        />
+      ) : null}
+    </View>
+  );
+}
+
+function ActionControl({
+  accessibilityLabel,
+  active = false,
+  count,
+  expanded,
+  icon: Icon,
+  onPress,
+  processing = 'default',
+  stateful = true,
+  testID,
+}: ActionControlProps) {
+  const theme = useTheme();
+  const isPending = processing === 'pending';
+  const isDisabled = processing === 'disabled';
+  const isError = processing === 'error';
+  const blocked = isPending || isDisabled;
+  const color = isError
+    ? theme.danger
+    : blocked
+      ? theme.textSecondary
+      : active || expanded
+        ? theme.primary
+        : theme.textSecondary;
+  const accessibilityState: AccessibilityState = {
+    busy: isPending,
+    disabled: blocked,
+    ...(expanded === undefined ? { selected: active } : { expanded }),
+  };
+  const formattedCount = formatPostActionCount(count);
+
+  return (
+    <Pressable
+      aria-expanded={stateful ? expanded : undefined}
+      aria-busy={stateful && isPending ? true : undefined}
+      aria-pressed={stateful && expanded === undefined ? active : undefined}
+      accessibilityHint={isError ? '재시도하려면 활성화하세요.' : undefined}
+      accessibilityLabel={isError ? `${accessibilityLabel} 재시도` : accessibilityLabel}
+      accessibilityRole="button"
+      accessibilityState={stateful ? accessibilityState : undefined}
+      disabled={blocked}
+      onPress={onPress}
+      testID={`post-action-${testID}`}
+      style={({ pressed }) => [
+        styles.action,
+        blocked ? styles.blocked : pressed ? styles.pressed : undefined,
+      ]}
+    >
+      {isPending ? (
+        <ActivityIndicator
+          accessible={false}
+          aria-hidden
+          color={color}
+          size={16}
+          style={styles.icon}
+          testID={`post-action-${testID}-spinner`}
+        />
+      ) : (
+        <View
+          accessible={false}
+          aria-hidden
+          style={styles.icon}
+          testID={`post-action-${testID}-icon`}
+        >
+          <Icon color={color} size={16} />
+        </View>
+      )}
+      {formattedCount ? (
+        <Text numberOfLines={1} style={[styles.count, { color }]}>
+          {formattedCount}
+        </Text>
+      ) : null}
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  action: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
+  },
+  blocked: { opacity: 0.45 },
+  count: {
+    flexShrink: 1,
+    fontFamily: 'SUIT',
+    fontSize: typography.md.fontSize,
+    lineHeight: typography.md.fontSize,
+  },
+  icon: { height: 16, width: 16 },
+  pressed: { opacity: 0.72 },
+  root: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    justifyContent: 'space-between',
+    width: '100%',
+  } satisfies StyleProp<ViewStyle>,
+});
