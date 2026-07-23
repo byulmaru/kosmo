@@ -2,7 +2,7 @@ import { db, Instances, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, exists, getColumns, gt, lt, or } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { postVisibilityAccessWhere } from '../access/visibility';
+import { postAccessWhere } from '../access';
 import { Post, PostConnection } from '../ref';
 
 type PostRow = typeof Posts.$inferSelect;
@@ -40,7 +40,7 @@ builder.queryField('homeTimeline', (t) =>
               .where(
                 and(
                   or(eq(Posts.profileId, ctx.session.profileId), followeeWhere),
-                  postVisibilityAccessWhere({ ctx }),
+                  postAccessWhere({ ctx }),
                   before ? gt(Posts.id, before) : undefined,
                   after ? lt(Posts.id, after) : undefined,
                 ),
