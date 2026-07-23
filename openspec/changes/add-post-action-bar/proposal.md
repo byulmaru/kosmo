@@ -5,16 +5,16 @@ Reply·Repost·Reaction·Bookmark를 실제 게시글 화면에 일관되게 연
 ## What Changes
 
 - 고정 순서 Reply → Repost → Reaction → Bookmark → More를 표시하는 공통 `PostActionBar`를 추가한다.
-- Reply·Repost·Reaction·Bookmark의 처리 상태(default·pending·disabled·error), 선택적 count, callback 및 접근성 metadata 계약을 정의한다. selected는 Repost·Bookmark와 선행 계약이 의미를 제공한 Reaction에만 적용하고, Reply와 More에는 적용하지 않는다. More는 callback과 접근성 label만 소비한다.
-- count를 K/M 단위의 최대 네 글자 표현으로 축약해 compact·mobile·web 폭에서 같은 액션 순서와 최소 44×44 interactive target을 유지한다.
+- Reply·Repost·Reaction·Bookmark의 처리 상태(default·pending·disabled·error), 선택적 count, callback 및 접근성 metadata 계약을 정의한다. 공개 제품 상태는 Reply의 controlled `expanded`, Repost의 `hasReposted`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`로 표현하고 범용 `selected` prop을 노출하지 않는다. More는 callback과 접근성 label만 소비한다.
+- Reaction에는 count를 표시하지 않는다. 다른 액션은 선행 계약이 제공한 count만 실행 환경 locale의 표준 compact notation으로 표시하고, 수동 K/M 반올림·단위 승격·상한 알고리즘을 만들지 않는다.
 - production Post surface는 다섯 액션을 유지하고 대상 Post 자체의 액션 적격성과 현재 실행 주체·세션의 실행 권한을 분리한다. Content와 Reply Parent가 없고 Repost Source만 있는 Repost의 Reply·Repost처럼 대상 자체가 부적격하거나 인증된 실행 주체가 권한을 갖지 못한 액션은 disabled로 표시한다. guest에게 인증 전제가 없다는 이유만으로 대상 자체가 적격한 소셜 액션을 disabled로 만들지 않고 향후 인증 진입 계약으로 위임한다.
-- More의 공통 UI 경계는 callback-only로 유지하고, PROD-432의 production 통합에서 최소 팝업과 `링크 복사` 항목을 제공한다.
+- More의 공통 UI 경계는 callback-only로 유지하고, PROD-432의 production 통합에서 최소 팝업과 ADR 0015의 Post Share Reference를 복사하는 `링크 복사` 항목을 제공한다.
 - 공통 컴포넌트, production Post surface 배치, 실제 action 데이터 연결과 최종 통합 검증을 각각 PROD-433, PROD-434, PROD-432가 소유하도록 공유 구현 순서를 정의한다.
 - `docs/domain`·`docs/design`은 제품·디자인의 canonical source, Linear는 범위·소유권·의존성의 source, 이 OpenSpec은 상태·입력·접근성·통합 동작의 규범 계약으로 사용한다. Figma Action 노드는 시각 참고 자료로만 사용하고 수정하지 않는다.
 
 ## Authority / Provenance
 
-- Canonical: `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `docs/domain/objects/profile.md`, `docs/domain/README.md`, `docs/design/breakpoints.md`
+- Canonical: `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/decisions/0015-post-share-reference.md`, `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `docs/domain/objects/profile.md`, `docs/domain/README.md`, `docs/design/breakpoints.md`
 - Linear Contract: `PROD-432`
 - Linear Implementations: `PROD-433`, `PROD-434`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425`
 
@@ -34,5 +34,5 @@ Reply·Repost·Reaction·Bookmark를 실제 게시글 화면에 일관되게 연
 - 구현 자식: [PROD-433](https://linear.app/byulmaru/issue/PROD-433/post-action-bar-ui-%EC%BB%B4%ED%8F%AC%EB%84%8C%ED%8A%B8%EB%A5%BC-%EA%B5%AC%ED%98%84%ED%95%9C%EB%8B%A4), [PROD-434](https://linear.app/byulmaru/issue/PROD-434/post-action-bar%EB%A5%BC-%EA%B2%8C%EC%8B%9C%EA%B8%80-%EB%AA%A9%EB%A1%9D%EC%83%81%EC%84%B8-surface%EC%97%90-%EB%B0%B0%EC%B9%98%ED%95%9C%EB%8B%A4)
 - 예상 코드 영역: `apps/app/src/components/post`, `apps/app/src/stories`, 게시글 목록·상세 surface와 관련 Relay fragment
 - 기존 theme token과 `lucide-react-native`를 재사용한다. PROD-432의 링크 복사는 구현 시점에 공유 clipboard 추상화가 없을 때 Expo 호환 clipboard package를 추가할 수 있으며, 그 외 새 runtime dependency는 추가하지 않는다.
-- Reply·Repost·Reaction·Bookmark의 저장소·GraphQL mutation·count 집계·selected 의미·권한·Content·Reply Parent·Repost Source 관계 조합 및 Post Visibility 정책은 선행 이슈 [PROD-414](https://linear.app/byulmaru/issue/PROD-414/repost-action%EC%9D%84-%EC%A0%9C%EA%B3%B5%ED%95%9C%EB%8B%A4), [PROD-417](https://linear.app/byulmaru/issue/PROD-417/reaction-%EC%84%A0%ED%83%9D-ui%EB%A5%BC-%EC%A0%9C%EA%B3%B5%ED%95%9C%EB%8B%A4), [PROD-418](https://linear.app/byulmaru/issue/PROD-418/reaction-%EC%9A%94%EC%95%BD-ui%EB%A5%BC-%EC%A0%9C%EA%B3%B5%ED%95%9C%EB%8B%A4), [PROD-420](https://linear.app/byulmaru/issue/PROD-420/bookmark-action%EC%9D%84-%EC%A0%9C%EA%B3%B5%ED%95%9C%EB%8B%A4), [PROD-425](https://linear.app/byulmaru/issue/PROD-425/reply-%EC%9E%91%EC%84%B1-ui%EB%A5%BC-%EC%A0%9C%EA%B3%B5%ED%95%9C%EB%8B%A4)와 canonical 문서의 기존 계약을 소비하며 이 change에서 재정의하지 않는다.
+- Reply·Repost·Reaction·Bookmark의 저장소·GraphQL mutation·count 집계·도메인 상태 의미·권한·Content·Reply Parent·Repost Source 관계 조합 및 Post Visibility 정책은 선행 이슈 [PROD-414](https://linear.app/byulmaru/issue/PROD-414/repost-action%EC%9D%84-%EC%A0%9C%EA%B3%B5%ED%95%9C%EB%8B%A4), [PROD-417](https://linear.app/byulmaru/issue/PROD-417/reaction-%EC%84%A0%ED%83%9D-ui%EB%A5%BC-%EC%A0%9C%EA%B3%B5%ED%95%9C%EB%8B%A4), [PROD-418](https://linear.app/byulmaru/issue/PROD-418/reaction-%EC%9A%94%EC%95%BD-ui%EB%A5%BC-%EC%A0%9C%EA%B3%B5%ED%95%9C%EB%8B%A4), [PROD-420](https://linear.app/byulmaru/issue/PROD-420/bookmark-action%EC%9D%84-%EC%A0%9C%EA%B3%B5%ED%95%9C%EB%8B%A4), [PROD-425](https://linear.app/byulmaru/issue/PROD-425/reply-%EC%9E%91%EC%84%B1-ui%EB%A5%BC-%EC%A0%9C%EA%B3%B5%ED%95%9C%EB%8B%A4)와 canonical 문서의 기존 계약을 소비하며 이 change에서 재정의하지 않는다. Reaction Type별 count와 Profile 목록은 Reaction Summary에 남고 Action Bar에는 연결하지 않는다.
 - 시각 참고: [KOSMO Action 컴포넌트](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=88-1005)

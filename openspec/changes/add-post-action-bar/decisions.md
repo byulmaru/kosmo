@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 PROD-432·PROD-433·PROD-434의 Linear 경계, `post-action-bar` spec, 현재 React Native 코드 구조와 2026-07-21 KST 사용자 논의에서 확정한 선택을 반영한다. Figma Action node는 비규범적 시각 참고 자료다.
+이 기록은 PROD-432·PROD-433·PROD-434의 Linear 경계, `post-action-bar` spec, 현재 React Native 코드 구조와 2026-07-21·2026-07-23 KST 사용자 논의에서 확정한 선택을 반영한다. Figma Action node는 비규범적 시각 참고 자료다.
 
 ## Decision Records
 
@@ -21,7 +21,7 @@
 - Decision Date: 2026-07-21
 - Decision Class: Derived Contract
 - Authority / Provenance: `PROD-433`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425`
-- Status: Active
+- Status: Superseded
 - Context / Problem: selected를 pending·disabled·error와 같은 단일 상태 값으로 모델링하면 selected 액션이 요청 중일 때 선택 의미를 잃고 조합 상태를 표현할 수 없다. 반대로 Reply처럼 지속적인 선택 의미가 없는 액션까지 selected를 강제하면 작성 이력이나 composer 열림을 임의의 선택 상태로 해석하게 된다. More의 누름이나 팝업 열림도 지속적인 의미적 선택 상태가 아니다.
 - Decision Outcome: Repost·Bookmark와 PROD-417·PROD-418의 공개 계약이 selected 의미를 제공한 Reaction만 `selected`를 처리 상태(default·pending·disabled·error)와 독립적으로 유지한다. Reply는 selected를 받지 않는다. 처리 상태의 시각 표현은 selected의 primary 표현보다 우선한다. pending은 icon을 spinner로 바꾸고 입력을 차단하며, disabled는 비활성 표현으로 입력을 차단하고, error는 danger 표현으로 재시도 입력을 허용한다. 세 조합 모두 지원 액션의 selected 의미와 접근성 상태를 보존한다. More는 count·selected·처리 상태 없이 callback과 접근성 label만 받는다.
 - Alternatives Considered: 하나의 상태 enum에 selected·pending·disabled·error를 모두 넣는 방식은 조합 수가 늘고 selected+pending을 자연스럽게 표현하지 못하므로 채택하지 않았다. pending 동안 selected를 숨기는 방식은 실제 viewer-relative 상태를 왜곡하므로 채택하지 않았다.
@@ -33,7 +33,7 @@
 - Decision Date: 2026-07-21
 - Decision Class: Derived Contract
 - Authority / Provenance: `PROD-432`, `PROD-433`
-- Status: Active
+- Status: Superseded
 - Context / Problem: More는 현재 링크 복사 하나만 필요하지만 공통 Action Bar가 팝업·clipboard·플랫폼별 메뉴 상태까지 소유하면 UI 컴포넌트와 production surface 책임이 결합된다.
 - Decision Outcome: `PostActionBar`는 optional More icon, callback과 접근성 label만 제공한다. PROD-432의 production surface 통합은 callback으로 접근 가능한 최소 팝업을 열고 `링크 복사` 한 항목을 제공한다. 공유 URL은 기존 `/{relativeHandle}/{postId}` route를 canonical web origin에 결합한 query·hash 없는 절대 URL이며, Web은 현재 browser origin, Android·iOS는 검증된 `EXPO_PUBLIC_WEB_ORIGIN`을 사용한다. API origin이나 native deep link는 사용하지 않고 guest도 링크 복사를 인증 없이 사용할 수 있다.
 - Alternatives Considered: More를 완전히 생략하면 production 계약을 다시 변경해야 하므로 채택하지 않았다. 공통 컴포넌트가 팝업과 clipboard를 직접 소유하는 방식은 surface 통합 책임을 침범하므로 채택하지 않았다. 여러 메뉴 항목을 미리 추가하는 방식은 승인된 범위를 넘으므로 채택하지 않았다.
@@ -69,12 +69,48 @@
 - Decision Date: 2026-07-21
 - Decision Class: Derived Contract
 - Authority / Provenance: `PROD-432`, `PROD-433`
-- Status: Active
+- Status: Superseded
 - Context / Problem: 원본 count 길이를 제한하지 않으면 compact 폭에서 다섯 액션, 16px icon/count와 44×44 target을 한 행으로 유지하는 요구사항을 검증할 수 없다.
 - Decision Outcome: 0~999는 원문, 1,000 이상은 K, 1,000,000 이상은 M 단위를 사용한다. 단위 값이 10 미만일 때만 소수 한 자리를 반올림하고 `.0`은 생략하며, 그 이상은 정수로 반올림한다. K 반올림 결과가 1,000K면 M으로 승격하고, M 반올림 결과가 1,000M에 도달하거나 원본 count가 10억 이상이면 `999M`으로 상한 표시해 최대 네 글자를 유지한다.
 - Alternatives Considered: 무제한 원본 숫자는 compact layout 계약과 충돌하므로 채택하지 않았다. locale별 장문 표기와 B 단위는 현재 필요하지 않고 폭 계약을 넓히므로 채택하지 않았다.
 - Consequences: count의 정확한 원본 값과 집계 의미는 선행 action 계약이 소유하고, Action Bar는 동일한 compact 표시 규칙만 소유한다.
 - Confirmation / Follow-up: 999, 1,000, 1,234, 9,999, 999,999, 1,000,000과 1,000,000,000 경계를 component test에서 검증한다.
+
+### 공개 도메인 상태와 처리 상태를 분리
+
+- Decision Date: 2026-07-23
+- Decision Class: Derived Contract
+- Authority / Provenance: `PROD-432`, `PROD-433`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425`
+- Status: Active
+- Context / Problem: 범용 `selected`는 Reply Composer의 열림, Repost 수행 여부, 하나 이상의 Reaction 존재와 Bookmark 여부처럼 서로 다른 제품 의미를 하나의 이름으로 축약해 상위 adapter와 컴포넌트 계약을 모호하게 만든다.
+- Decision Outcome: 공개 UI 상태는 Reply의 controlled `expanded`, Repost의 `hasReposted`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`로 표현하고 default·pending·disabled·error 처리 상태와 독립적으로 유지한다. Reply 활성화는 상위 Composer를 열거나 focus할 뿐 `expanded`를 자체 전환하지 않는다. Reaction은 현재 Profile이 하나 이상의 Reaction Type을 남겼는지만 `hasReacted`로 나타내고 count를 받지 않는다. More는 callback과 접근성 label만 받는다.
+- Alternatives Considered: 범용 `selected`는 도메인 의미와 소유 계층을 숨기므로 채택하지 않았다. Reply가 내부 상태로 Composer 열림을 전환하는 방식은 controlled surface 계약과 충돌하므로 채택하지 않았다.
+- Consequences: surface adapter가 도메인별 값을 공급하고, 처리 상태의 시각 표현이 primary 표현보다 우선해도 도메인 의미와 접근성 상태는 보존한다. React Native 접근성 구현 내부에서는 플랫폼의 `selected`·`pressed`·`expanded` 용어를 사용할 수 있다.
+- Confirmation / Follow-up: Storybook과 component test에서 `expanded`·`hasReposted`·`hasReacted`·`hasBookmarked`와 pending·disabled·error의 조합, callback 허용 여부 및 접근성 상태를 검증한다.
+
+### More callback 경계와 Post Share Reference 통합을 분리
+
+- Decision Date: 2026-07-23
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/decisions/0015-post-share-reference.md`, `docs/domain/objects/post.md`, `PROD-432`, `PROD-433`
+- Status: Active
+- Context / Problem: More의 callback-only 컴포넌트 경계와 사용자가 복사할 URL의 제품 정책은 서로 다른 authority와 구현 소유자를 가진다.
+- Decision Outcome: `PostActionBar`는 optional More icon, callback과 접근성 label만 제공한다. PROD-432의 production surface 통합은 접근 가능한 최소 팝업과 `링크 복사` 한 항목을 제공하고 ADR 0015의 Post Share Reference를 복사한다. guest도 조회할 수 있는 Post의 공유 참조를 인증 없이 복사할 수 있지만 링크는 Post Visibility와 Post Eligibility를 우회하지 않는다.
+- Alternatives Considered: 공통 컴포넌트가 팝업과 clipboard를 소유하는 방식은 surface 통합 책임을 침범하므로 채택하지 않았다. 현재 화면 URL 전체, API origin과 native deep link는 ADR 0015의 대안 검토에 따라 채택하지 않았다.
+- Consequences: PROD-433은 More의 표시·접근성·callback만 검증하고 PROD-432가 팝업·clipboard·platform별 origin 연결과 guest 동작을 통합 검증한다. 링크 복사 외 메뉴 항목은 후속 제품 계약을 요구한다.
+- Confirmation / Follow-up: PROD-433 component test와 PROD-432 integration test의 검증 책임을 분리하고, PROD-432는 canonical URL fixture를 platform별로 검증한다.
+
+### locale-aware 표준 compact number formatting을 사용
+
+- Decision Date: 2026-07-23
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-432`, `PROD-433`
+- Status: Active
+- Context / Problem: Action Bar가 K/M 반올림·단위 승격·`999M` 상한을 수동 구현하면 JavaScript 표준의 locale-aware compact formatting을 중복하고 한국어의 천·만·억 같은 실행 환경 표기를 막는다.
+- Decision Outcome: Reaction과 More를 제외하고 선행 action 계약이 제공한 optional count는 실행 환경 locale의 표준 `Intl.NumberFormat` compact notation을 사용한다. Action Bar는 K/M 단위, 반올림 경계, 단위 승격과 표시 상한을 자체 구현하지 않고 locale별 정확한 문자열을 규범으로 고정하지 않는다. Reaction은 count를 받지 않으며 count 계약이 없는 액션에는 `0`이나 placeholder를 합성하지 않는다.
+- Alternatives Considered: 수동 K/M formatter는 표준 기능을 중복하고 locale 출력을 제거하므로 채택하지 않았다. raw count는 좁은 폭에서 길이를 제한하지 못하므로 채택하지 않았다.
+- Consequences: locale과 플랫폼의 표준 데이터에 따라 단위와 반올림 결과가 달라질 수 있다. 레이아웃은 최대 네 글자 가정 대신 한국어·영어 대표 compact fixture에서 한 행과 비겹침을 검증한다.
+- Confirmation / Follow-up: PROD-433 구현에서 기존 `Intl.NumberFormat` 사용 관례를 재사용하고 Web Storybook과 Android·iOS runtime에서 대표 fixture를 검증한다.
 
 ### 실행할 수 없는 액션은 숨기지 않고 disabled로 유지
 
@@ -90,8 +126,10 @@
 
 ## Remaining Decisions
 
-- Reaction count 집계와 selected 의미는 PROD-417·PROD-418이 해당 기능의 공개 계약에서 결정한다. PROD-432는 그 결과를 재정의하지 않고 소비하며, 두 의미가 확정되기 전에는 실제 Reaction 상태 연결과 최종 archive를 완료하지 않는다.
+- 없음.
 
 ## Superseded Decisions
 
-- 없음.
+- 2026-07-21 `선택 상태와 처리 상태의 분리`는 2026-07-23 `공개 도메인 상태와 처리 상태를 분리`로 대체했다.
+- 2026-07-21 `More 컴포넌트 경계와 링크 복사 통합을 분리`는 2026-07-23 `More callback 경계와 Post Share Reference 통합을 분리`로 대체했다.
+- 2026-07-21 `count는 K/M 단위 최대 네 글자로 표시`는 2026-07-23 `locale-aware 표준 compact number formatting을 사용`으로 대체했다.
