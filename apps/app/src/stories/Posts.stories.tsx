@@ -337,13 +337,22 @@ function requirePostById(posts: ReadonlyArray<PostNode>, id: string): PostNode {
 }
 
 function toPostSourcePresentationData(post: PostNode): PostSourcePresentationData {
+  const repostSource = post.repostSource ?? null;
+
   return {
-    content: post.content,
+    content: post.content ?? null,
     createdAt: post.createdAt,
     id: post.id,
     profile: post.profile,
-    replyParent: post.replyParent,
-    repostSource: post.repostSource,
+    replyParent: post.replyParent ?? null,
+    repostSource: repostSource
+      ? {
+          content: repostSource.content ?? null,
+          createdAt: repostSource.createdAt,
+          id: repostSource.id,
+          profile: repostSource.profile,
+        }
+      : null,
   };
 }
 
@@ -544,12 +553,15 @@ export const PureRepost: Story = {
     expect(canvas.getAllByRole('link')).toHaveLength(3);
     await userEvent.click(canvas.getByLabelText('재게시한 코스모 사용자 프로필 보기'));
     await expect(args.onPostAuthor).toHaveBeenCalledTimes(1);
-    expect(args.onSourceAuthor).not.toHaveBeenCalled();
-    expect(args.onSourcePost).not.toHaveBeenCalled();
+    await expect(args.onSourceAuthor).toHaveBeenCalledTimes(0);
+    await expect(args.onSourcePost).toHaveBeenCalledTimes(0);
     await userEvent.click(canvas.getByLabelText('아주 긴 Source 작성자 표시 이름 프로필 보기'));
+    await expect(args.onPostAuthor).toHaveBeenCalledTimes(1);
     await expect(args.onSourceAuthor).toHaveBeenCalledTimes(1);
-    expect(args.onSourcePost).not.toHaveBeenCalled();
+    await expect(args.onSourcePost).toHaveBeenCalledTimes(0);
     await userEvent.click(canvas.getByLabelText('원문 게시글 보기'));
+    await expect(args.onPostAuthor).toHaveBeenCalledTimes(1);
+    await expect(args.onSourceAuthor).toHaveBeenCalledTimes(1);
     await expect(args.onSourcePost).toHaveBeenCalledTimes(1);
   },
   render: (args) => (
