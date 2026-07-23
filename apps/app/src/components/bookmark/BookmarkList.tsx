@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { PostListItem } from '@/components/post/PostListItem';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/StateView';
@@ -94,10 +94,10 @@ export function BookmarkList({
   }
 
   return (
-    <View style={styles.root}>
+    <ScrollView contentContainerStyle={styles.root} testID="bookmark-list-scroll">
       <BookmarkListTitle />
       {content}
-    </View>
+    </ScrollView>
   );
 }
 
@@ -172,7 +172,7 @@ function BookmarkListState({
 }
 
 const styles = StyleSheet.create({
-  root: { width: '100%' },
+  root: { flexGrow: 1, width: '100%' },
   titleBar: { justifyContent: 'center', minHeight: 43, paddingHorizontal: spacing.lg },
   title: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
   skeletonItem: {

@@ -1,6 +1,6 @@
 import { usePathname } from 'expo-router';
 import { useState } from 'react';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, spyOn, userEvent, within } from 'storybook/test';
 import ProtectedLayout from '@/app/(tabs)/(protected)/_layout';
@@ -244,6 +244,26 @@ function LoadingMoreCatalog() {
   );
 }
 
+function ScrollableListCatalog() {
+  const items = useBookmarkItems();
+  const [loadCount, setLoadCount] = useState(0);
+  const longItems = Array.from({ length: 12 }, (_, index) => ({
+    id: `bookmark-scroll-${index}`,
+    post: items[index % items.length]!.post,
+  }));
+
+  return (
+    <View style={{ height: 320 }}>
+      <Text testID="bookmark-scroll-load-count">load:{loadCount}</Text>
+      <BookmarkList
+        hasNext
+        items={longItems}
+        onLoadMore={() => setLoadCount((count) => count + 1)}
+      />
+    </View>
+  );
+}
+
 const meta = {
   component: StateCatalog,
   parameters: {
@@ -291,6 +311,20 @@ export const NextPageLoading: Story = {
     const button = within(canvasElement).getByRole('button', { name: '불러오는 중' });
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute('aria-busy', 'true');
+  },
+};
+
+export const LongListScrollsToPagination: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  render: () => <ScrollableListCatalog />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const scroller = canvas.getByTestId('bookmark-list-scroll');
+    expect(scroller.scrollHeight).toBeGreaterThan(scroller.clientHeight);
+    scroller.scrollTop = scroller.scrollHeight;
+    expect(scroller.scrollTop).toBeGreaterThan(0);
+    await userEvent.click(canvas.getByRole('button', { name: '더 불러오기' }));
+    expect(canvas.getByTestId('bookmark-scroll-load-count')).toHaveTextContent('load:1');
   },
 };
 
