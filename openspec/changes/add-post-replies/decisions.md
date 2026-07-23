@@ -102,3 +102,15 @@
 - Alternatives Considered: `replyAncestors`/`replyDescendants` 이름과 connection·정렬을 OpenSpec만으로 즉시 확정. 공개 API를 upstream 근거 없이 추가하므로 보류한다.
 - Consequences: PROD-393·398은 이 결정과 무관하게 진행할 수 있지만 PROD-399·400 및 이를 소비하는 PROD-422는 해당 책임의 decision이 Blocked인 동안 구현할 수 없다.
 - Confirmation / Follow-up: 해당 Linear 이슈 본문·댓글 갱신과 별도 Issue Gate 승인 뒤 specs·design·tasks를 갱신한다.
+
+### PROD-429의 Hashtag 후보 정책 구현 경계를 분리한다
+
+- Decision Date: 2026-07-23
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/policies/post-list.md`, [PROD-429](https://linear.app/byulmaru/issue/PROD-429/home-post-list에-reply-후보-정책을-적용한다)의 최신 scope 결정
+- Status: Active
+- Context / Problem: canonical Post List Policy는 Hashtag Post List에서 Reply Parent가 있는 Post를 제외하지만, 현재 API에는 Hashtag Post List query/resolver 표면이 없다. 이를 PROD-429의 완료 조건으로 남기면 구현할 수 없는 검증을 주장하게 되고, OpenSpec에서 제거하면 shared 계약이 사라진다.
+- Decision Outcome: canonical Hashtag Reply 제외 정책과 `reply` spec의 requirement/scenario는 유지한다. PROD-429는 Home/Profile Reply 후보 구현과 검증만 소유하고, Hashtag capability 도입 시 해당 구현 slice가 Hashtag requirement와 회귀 검증을 소유한다. 부모 PROD-388은 Hashtag 검증을 포함한 전체 통합·archive 전에 이 책임 경계를 다시 확인한다.
+- Alternatives Considered: 현재 PR에서 Hashtag query를 새로 구현하는 것은 범위를 확장하고, spec에서 Hashtag 계약을 삭제하는 것은 canonical 정책을 잃게 하며, canonical 정책을 변경하는 것은 제품 결정 권한 없이 수행할 수 없으므로 선택하지 않는다.
+- Consequences: 현재 Task 5는 Hashtag query 없이도 완료할 수 있지만, 부모 통합 task와 change archive는 Hashtag capability의 소유 이슈와 검증이 정렬되기 전까지 완료를 주장하지 않는다.
+- Confirmation / Follow-up: PROD-429 본문과 이 OpenSpec의 Task 5 범위를 정렬했다. Hashtag capability 착수 시 새 구현 이슈와 OpenSpec 범위에서 이 requirement의 구현·검증 책임을 다시 확정한다.

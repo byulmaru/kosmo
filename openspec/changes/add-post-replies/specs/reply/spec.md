@@ -71,7 +71,7 @@
 - **THEN** 정상 core 생성 경로는 다단계 cycle을 만들지 않는다
 - **AND** 시스템은 정상 생성에 재귀 cycle 탐색이나 constraint trigger를 요구하지 않는다
 
-### Requirement: Reply의 Post List 후보 정책
+### Requirement: Reply의 Home/Profile Post List 후보 정책
 
 **Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-388`, `PROD-429` 시스템은 각 Post의 Visibility와 Eligibility를 먼저 적용한 뒤 Home Post List에 승인된 Reply 후보를 포함하고 Profile Post List에서는 Reply Parent가 있는 Post를 제외해야 한다(MUST).
 
@@ -90,6 +90,17 @@
 
 - **WHEN** Target Profile이 Reply Parent가 있는 Post를 작성했다
 - **THEN** 시스템은 Reply이면서 Quote인 경우를 포함해 그 Post를 Profile Post List 후보에서 제외한다
+
+### Requirement: Hashtag Post List의 Reply 제외 정책
+
+**Authority / Provenance:** `docs/domain/policies/post-list.md`, `PROD-388` 시스템은 Public Visibility와 Content, Hashtag 조건을 충족하더라도 Reply Parent가 있는 Post를 Hashtag Post List 후보에 포함하지 않아야 한다(MUST).
+
+> 현재 Hashtag Post List query/resolver 표면은 없으므로 이 requirement의 구현·회귀 검증은 PROD-429의 현재 구현 slice가 아니라 Hashtag capability를 도입하는 후속 구현 slice와 부모 통합 검증에서 소유한다.
+
+#### Scenario: Hashtag에서 Reply 제외
+
+- **WHEN** Public Post가 Target Hashtag를 포함하지만 Reply Parent를 가진다
+- **THEN** 시스템은 그 Post를 Hashtag Post List 후보에서 제외한다
 
 ### Requirement: Reply 조상 경로 조회
 
