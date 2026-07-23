@@ -133,3 +133,9 @@
 - **WHEN** 중간 Parent는 viewer가 조회할 수 없지만 그 아래 descendant Reply는 독립적으로 조회할 수 있다
 - **THEN** 시스템은 숨겨진 Parent의 Content를 노출하지 않는다
 - **AND** 조회 가능한 descendant Reply를 Parent 비노출만을 이유로 제거하지 않는다
+
+#### Scenario: Source를 조회할 수 없는 Reply이면서 Quote
+
+- **WHEN** Reply이면서 Quote인 descendant 자체는 조회 가능하지만 Repost Source는 조회할 수 없다
+- **THEN** 시스템은 그 descendant와 자체 Content를 하위 Reply 결과에 유지한다
+- **AND** nullable Repost Source 관계만 독립적으로 숨긴다

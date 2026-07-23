@@ -96,7 +96,8 @@ Reply가 저장된 직접 Parent 관계 순서를 보존한 조회 가능한 조
 
 **Verification**
 
-- 직접·간접·Reply+Quote descendant, 각 Post의 visibility/eligibility, 숨겨진 Parent 아래 visible Reply와 cycle 방어를 API test로 검증한다.
+- 직접·간접·Reply+Quote descendant, 각 Post의 visibility/eligibility, 숨겨진 Parent 아래 visible Reply,
+  unavailable Source를 가진 Reply+Quote 유지와 cycle 방어를 API test로 검증한다.
 - 실제 query와 실행 계획으로 pagination·index 선택을 검증한다.
 
 - [ ] 4.1 descendant 공개 GraphQL field·connection·pagination·정렬 계약을 Linear에서 확정하고 OpenSpec decision을 갱신한다.
