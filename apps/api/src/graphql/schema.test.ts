@@ -5,6 +5,13 @@ import { encodeGlobalId } from './global-id';
 import { notificationNodeType } from './resolvers/notification/ref';
 import { schema } from './schema';
 
+test('Post는 nullable Repost Source를 제공한다', () => {
+  const post = schema.getType('Post');
+
+  assert.ok(isObjectType(post));
+  assert.equal(String(post.getFields().repostSource?.type), 'Post');
+});
+
 test('exposes the versioned PostContent document and Plain Text composer contract', () => {
   const postContent = schema.getType('PostContent');
   const createPostInput = schema.getType('CreatePostInput');
@@ -22,6 +29,34 @@ test('exposes the versioned PostContent document and Plain Text composer contrac
   assert.equal(schema.getType('TipTapDocument'), undefined);
   assert.equal(schema.getType('PostContentBody'), undefined);
   assert.equal(String(schema.getType('PostContentDocument')), 'PostContentDocument');
+});
+
+test('exposes Reply Parent through the existing nullable Post Node contract', () => {
+  const post = schema.getType('Post');
+
+  assert.ok(isObjectType(post));
+  assert.equal(String(post.getFields().replyParent?.type), 'Post');
+  assert.equal(post.getFields().replyParentId, undefined);
+});
+
+test('exposes Reply ancestors as a non-null Post list without pagination', () => {
+  const post = schema.getType('Post');
+
+  assert.ok(isObjectType(post));
+  assert.equal(String(post.getFields().replyAncestors?.type), '[Post!]!');
+  assert.deepEqual(post.getFields().replyAncestors?.args, []);
+});
+
+test('exposes Reply descendants through the shared Post connection', () => {
+  const post = schema.getType('Post');
+
+  assert.ok(isObjectType(post));
+  const field = post.getFields().replyDescendants;
+  assert.equal(String(field?.type), 'PostConnection!');
+  assert.deepEqual(
+    field?.args.map(({ name }) => name),
+    ['after', 'before', 'first', 'last'],
+  );
 });
 
 test('follow mutation payloads expose both updated profiles', () => {
@@ -61,6 +96,19 @@ test('exposes the minimal idempotent Reaction add contract', () => {
   );
   assert.equal(String(reaction.getFields().type.type), 'String!');
   assert.equal(String(reaction.getFields().createdAt.type), 'DateTime!');
+});
+
+test('exposes the idempotent Repost creation contract', () => {
+  const mutation = schema.getMutationType();
+  const input = schema.getType('RepostPostInput');
+  const payload = schema.getType('RepostPostPayload');
+
+  assert.equal(String(mutation?.getFields().repostPost?.type), 'RepostPostPayload!');
+  assert.ok(isInputObjectType(input));
+  assert.equal(String(input.getFields().sourceId.type), 'ID!');
+  assert.ok(isObjectType(payload));
+  assert.equal(String(payload.getFields().repost.type), 'Post!');
+  assert.equal(payload.getFields().created, undefined);
 });
 
 test('exposes the Bookmark mutation and relationship contract', () => {

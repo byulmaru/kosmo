@@ -176,6 +176,7 @@ type Mutation {
   followProfile(input: FollowProfileInput!): FollowProfilePayload!
   markNotificationRead(input: MarkNotificationReadInput!): MarkNotificationReadPayload!
   rejectProfileFollowRequest(input: RejectProfileFollowRequestInput!): RejectProfileFollowRequestPayload!
+  repostPost(input: RepostPostInput!): RepostPostPayload!
   selectProfile(input: SelectProfileInput!): SelectProfilePayload!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
   updateProfile(input: UpdateProfileInput!): UpdateProfilePayload!
@@ -214,6 +215,10 @@ type Post implements Node {
   id: ID!
   profile: Profile!
   reactionProfiles(after: String, before: String, first: Int, last: Int, type: String!): ProfileConnection!
+  replyAncestors: [Post!]!
+  replyDescendants(after: String, before: String, first: Int, last: Int): PostConnection!
+  replyParent: Post
+  repostSource: Post
   state: PostState!
   viewerBookmark: Bookmark
   visibility: PostVisibility!
@@ -383,6 +388,14 @@ input RejectProfileFollowRequestInput {
 type RejectProfileFollowRequestPayload {
   followeeProfile: Profile!
   profileFollowRequestId: ID!
+}
+
+input RepostPostInput {
+  sourceId: ID!
+}
+
+type RepostPostPayload {
+  repost: Post!
 }
 
 input SelectProfileInput {

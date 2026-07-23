@@ -94,6 +94,20 @@
 - Consequences: client는 기존 Profile fragment를 재사용할 수 있지만 각 Profile의 정확한 Reaction 시각은 표시할 수 없다. 시각 또는 Reaction event가 제품 요구가 되면 별도 Domain·Issue Gate에서 공개 계약을 확장해야 한다.
 - Confirmation / Follow-up: PROD-407 schema와 integration test에서 node가 기존 Profile이고 Reaction metadata field를 새로 노출하지 않는지 확인한다.
 
+### PROD-449는 fixture-first props 경계로 Reaction 요약 프레젠테이션을 전달한다
+
+- Decision Date: 2026-07-22
+- Decision Class: Implementation Choice
+- Authority / Provenance:
+  - `docs/domain/objects/reaction.md`
+  - `PROD-449`
+- Status: Active
+- Context / Problem: canonical Reaction 계약의 최종 UI는 viewer-independent Type별 count와 viewer-filtered Profile connection을 연결해 탐색해야 한다. PROD-449의 독립 전달 범위는 실제 Relay query·connection·modal/route 조립 전의 프레젠테이션과 상태 검증이므로, 이후 통합에도 재사용할 seam이 필요하다.
+- Decision Outcome: PROD-449는 props-only `ReactionSummary`와 props-only `ReactionProfileList` seam을 먼저 제공하고, PROD-418은 같은 seam에 실제 Post count query와 `reactionProfiles` connection을 연결한다. seam은 supplied count order를 보존하고 zero-count Type을 만들거나 제거·정렬·필터링하지 않으며, loading/empty/error/populated 상태와 selection·retry·pagination callback을 받을 수 있다. Profile row는 기존 `ProfileListItem`에 Relay `Profile` fragment ref를 전달해 재사용하며, Storybook은 raw `$key` cast 없이 Relay mock fragment ref를 사용한다.
+- Alternatives Considered: component 안에서 직접 Relay connection을 조회·페이지네이션하는 방식은 실제 connection과 cache/route 책임을 PROD-449에 앞당긴다. raw scalar로 새 Profile row를 만드는 방식은 기존 Avatar/name/handle/bio/Follow surface와 fragment contract를 중복한다.
+- Consequences: 실제 `Post` count query와 `reactionProfiles` connection, modal/route, selected Profile/viewer cache 통합은 PROD-418에 남는다. supplied order는 server가 제공한 count 내림차순과 동률 무보장 계약을 그대로 보존하며, component는 이를 재해석하지 않는다. 이 선택은 최종 `post-reaction-ui` spec을 축소하거나 대체하지 않으며, 나중에 되돌릴 중간 제품 계약이 아니다.
+- Confirmation / Follow-up: PROD-449는 fixture state, 복수 Type·동률, 기존 Profile row, callback interaction과 Relay mock fragment Storybook을 component 수준에서 검증한다. PROD-418은 같은 seam을 유지한 채 실제 query/connection, zero-count와 modal/route UX, cache 통합 및 최종 spec의 pagination 검증을 수행한다.
+
 ### Reaction Notification은 source 밖의 Best Effort projection으로 처리한다
 
 - Decision Date: 2026-07-20
@@ -168,7 +182,9 @@
 
 ## Remaining Decisions
 
-- PROD-417/418: zero-count Type 공급 API, selector·Profile 목록 UX, optimistic update 사용 여부
+- PROD-417/418: zero-count Type 공급 API
+- PROD-417: selector optimistic update 사용 여부
+- PROD-418: Profile 목록 modal/route UX
 - PROD-413: multi-kind Notification visible projection의 `UNION ALL` 기본안과 `LEFT JOIN` 대안 중 최종 구현, PROD-277 Read/navigation 순서
 
 ## Superseded Decisions
