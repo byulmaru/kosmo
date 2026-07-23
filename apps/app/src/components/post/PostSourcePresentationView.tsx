@@ -123,7 +123,7 @@ export function PostSourcePresentationView({
           })}
         </View>
         <View style={styles.sourceHeader}>
-          {sourceAuthor}
+          <View style={styles.sourceAuthorSlot}>{sourceAuthor}</View>
           {sourceTimestamp}
         </View>
         {source.content ? (
@@ -150,7 +150,7 @@ export function PostSourcePresentationView({
       <PostContentRenderer bodyText={content.bodyText} document={content.document} size="md" />
       <View style={[styles.preview, { borderColor: theme.border }]} testID="source-post-preview">
         <View style={styles.sourceHeader}>
-          {sourceAuthor}
+          <View style={styles.sourceAuthorSlot}>{sourceAuthor}</View>
           {sourceTimestamp}
         </View>
         {source.content ? (
@@ -207,6 +207,7 @@ const styles = StyleSheet.create({
   displayName: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
   handle: { flexShrink: 1, fontFamily: 'SUIT', ...typography.xsm },
   sourceHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, minWidth: 0 },
+  sourceAuthorSlot: { flex: 1, minWidth: 0 },
   timestamp: { fontFamily: 'SUIT', minHeight: 44, minWidth: 44, paddingTop: 12, ...typography.xsm },
   sourceBody: { minWidth: 0 },
   preview: { borderRadius: radii.lg, borderWidth: 1, gap: spacing.sm, padding: spacing.md },
