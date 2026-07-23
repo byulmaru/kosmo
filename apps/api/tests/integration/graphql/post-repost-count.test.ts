@@ -5,6 +5,8 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 import {
   AccountProfileRole,
   AccountState,
+  InstanceKind,
+  InstanceState,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -17,7 +19,7 @@ import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { encodeGlobalId } from '../../../src/graphql/global-id';
 import type * as CoreDb from '@kosmo/core/db';
-import type { Env } from '../../../src/context';
+import type { deriveContext as DeriveContext, Env } from '../../../src/context';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -26,19 +28,41 @@ let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
+let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
 let Profiles: typeof CoreDb.Profiles;
 let Sessions: typeof CoreDb.Sessions;
 let app: Hono<Env>;
+let deriveContext: typeof DeriveContext;
 let localInstanceId: string;
 
 type ProfileRow = typeof CoreDb.Profiles.$inferSelect;
 type PostRow = typeof CoreDb.Posts.$inferSelect;
+type LoaderBatchRecord = Map<string, number[]>;
 type GraphQLResult<TData> = {
   data?: TData;
   errors?: Array<{ message: string }>;
+};
+
+let loaderBatches: LoaderBatchRecord;
+
+const trackLoaderBatches = <Context extends Awaited<ReturnType<typeof deriveContext>>>(
+  context: Context,
+) => {
+  const originalLoader = context.loader;
+  context.loader = ((params: { name: string; load: (keys: unknown[]) => Promise<unknown[]> }) =>
+    originalLoader({
+      ...params,
+      load: async (keys: unknown[]) => {
+        const keyCounts = loaderBatches.get(params.name) ?? [];
+        keyCounts.push(keys.length);
+        loaderBatches.set(params.name, keyCounts);
+        return params.load(keys);
+      },
+    } as never)) as typeof context.loader;
+  return context;
 };
 
 describe('Post Repost 상태 GraphQL 경계', () => {
@@ -47,25 +71,36 @@ describe('Post Repost 상태 GraphQL 경계', () => {
     process.env.NODE_ENV = 'production';
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
-    ({ AccountProfiles, Accounts, db, firstOrThrow, pg, PostContents, Posts, Profiles, Sessions } =
-      await import('@kosmo/core/db'));
+    ({
+      AccountProfiles,
+      Accounts,
+      db,
+      firstOrThrow,
+      Instances,
+      pg,
+      PostContents,
+      Posts,
+      Profiles,
+      Sessions,
+    } = await import('@kosmo/core/db'));
     const { seedDatabase } = await import('@kosmo/core/db/seed');
 
     await truncateDatabase();
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
 
-    const { deriveContext } = await import('../../../src/context');
+    ({ deriveContext } = await import('../../../src/context'));
     const { yoga } = await import('../../../src/graphql');
     app = new Hono<Env>();
     app.use('*', async (c, next) => {
-      c.set('context', await deriveContext(c));
+      c.set('context', trackLoaderBatches(await deriveContext(c)));
       return next();
     });
     app.route('/graphql', yoga);
   });
 
   beforeEach(async () => {
+    loaderBatches = new Map();
     await resetFixtures();
   });
 
@@ -103,11 +138,32 @@ describe('Post Repost 상태 GraphQL 경계', () => {
       (await createProfile('inactive-reposter', { state: ProfileState.DISABLED })).id,
       sourceA.id,
     );
+    const suspendedInstance = await createSuspendedInstance('suspended-reposter.example');
+    await createRepost(
+      (await createProfile('suspended-instance-reposter', { instanceId: suspendedInstance.id })).id,
+      sourceA.id,
+    );
     await createRepost((await createProfile('reply-reposter')).id, sourceA.id, {
       replyParentId: sourceA.id,
     });
     await createRepost((await createProfile('source-b-reposter')).id, sourceB.id);
     await createRepost((await createProfile('quote-reposter')).id, quote.id);
+
+    loaderBatches.clear();
+    const batchingResult = await requestRepostState([sourceA.id, sourceB.id], viewerA.token);
+    assertNoGraphQLErrors(batchingResult);
+    assert.deepEqual(loaderBatches.get('post.repostCount'), [2]);
+    assert.deepEqual(loaderBatches.get('post.viewerRepost'), [2]);
+    assert.deepEqual(batchingResult.data?.nodes, [
+      {
+        id: encodeGlobalId('Post', sourceA.id),
+        repostCount: 2,
+        viewerRepost: { id: encodeGlobalId('Post', repostA.id) },
+      },
+      { id: encodeGlobalId('Post', sourceB.id), repostCount: 1, viewerRepost: null },
+    ]);
+
+    loaderBatches.clear();
 
     const [
       anonymousResult,
@@ -165,7 +221,10 @@ describe('Post Repost 상태 GraphQL 경계', () => {
 
 const createProfile = (
   handle: string,
-  { state = ProfileState.ACTIVE }: { state?: ProfileState } = {},
+  {
+    instanceId = localInstanceId,
+    state = ProfileState.ACTIVE,
+  }: { instanceId?: string; state?: ProfileState } = {},
 ): Promise<ProfileRow> =>
   db
     .insert(Profiles)
@@ -173,10 +232,17 @@ const createProfile = (
       displayName: handle,
       followPolicy: ProfileFollowPolicy.OPEN,
       handle,
-      instanceId: localInstanceId,
+      instanceId,
       normalizedHandle: normalizeHandle(handle),
       state,
     })
+    .returning()
+    .then(firstOrThrow);
+
+const createSuspendedInstance = (domain: string) =>
+  db
+    .insert(Instances)
+    .values({ domain, kind: InstanceKind.ACTIVITYPUB, state: InstanceState.SUSPENDED })
     .returning()
     .then(firstOrThrow);
 
