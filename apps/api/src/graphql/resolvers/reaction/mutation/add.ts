@@ -1,6 +1,6 @@
 import { db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
 import { NotFoundError } from '@kosmo/core/error';
-import { addReaction } from '@kosmo/core/services';
+import { addReaction, createReactionNotification } from '@kosmo/core/services';
 import { reactionTypeSchema } from '@kosmo/core/validation';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
@@ -20,7 +20,7 @@ builder.mutationField('addReaction', (t) =>
       type: t.input.string({ validate: reactionTypeSchema }),
     },
     resolve: async (_, { input }, ctx) => {
-      return db.transaction(async (tx) => {
+      const result = await db.transaction(async (tx) => {
         const post = await tx
           .select({ id: Posts.id })
           .from(Posts)
@@ -33,7 +33,7 @@ builder.mutationField('addReaction', (t) =>
           throw new NotFoundError('Post not found');
         }
 
-        const reaction = await addReaction(
+        return addReaction(
           {
             actorProfileId: ctx.session.profileId,
             postId: post.id,
@@ -41,9 +41,13 @@ builder.mutationField('addReaction', (t) =>
           },
           tx,
         );
-
-        return { reaction };
       });
+
+      if (result.created) {
+        await createReactionNotification(result.reaction.id).catch(() => undefined);
+      }
+
+      return { reaction: result.reaction };
     },
   }),
 );

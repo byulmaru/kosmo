@@ -7,6 +7,7 @@ import {
   AccountState,
   InstanceKind,
   InstanceState,
+  NotificationKind,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -28,6 +29,7 @@ let Accounts: typeof CoreDb.Accounts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
+let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
 let Posts: typeof CoreDb.Posts;
 let Profiles: typeof CoreDb.Profiles;
@@ -48,6 +50,7 @@ describe('GraphQL Reaction', () => {
       db,
       firstOrThrow,
       Instances,
+      Notifications,
       pg,
       Posts,
       Profiles,
@@ -107,6 +110,63 @@ describe('GraphQL Reaction', () => {
         .then((rows) => rows.length),
       1,
     );
+  });
+
+  test('새 Reaction은 타인 소유 Local Post에 알림을 한 번만 생성한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile(`recipient-${crypto.randomUUID()}`);
+    const post = await createPost(recipient.id);
+
+    await requestAddReaction(post.id, '🎉', auth.token);
+    await requestAddReaction(post.id, '🎉', auth.token);
+
+    const [reaction] = await db.select().from(Reactions).where(eq(Reactions.postId, post.id));
+    assert.ok(reaction);
+    assert.deepEqual(
+      await db
+        .select({
+          kind: Notifications.kind,
+          recipientProfileId: Notifications.recipientProfileId,
+          sourceId: Notifications.sourceId,
+        })
+        .from(Notifications),
+      [
+        {
+          kind: NotificationKind.REACTION,
+          recipientProfileId: recipient.id,
+          sourceId: reaction.id,
+        },
+      ],
+    );
+  });
+
+  test('Notification 저장 실패는 Reaction 성공을 rollback하지 않는다', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile(`recipient-${crypto.randomUUID()}`);
+    const post = await createPost(recipient.id);
+
+    await pg.unsafe(`
+      CREATE FUNCTION fail_reaction_notification_insert() RETURNS trigger
+      LANGUAGE plpgsql AS $$ BEGIN
+        IF NEW.kind = 'REACTION' THEN RAISE EXCEPTION 'forced notification failure'; END IF;
+        RETURN NEW;
+      END $$;
+      CREATE TRIGGER fail_reaction_notification_insert
+      BEFORE INSERT ON notification
+      FOR EACH ROW EXECUTE FUNCTION fail_reaction_notification_insert();
+    `);
+
+    try {
+      const result = await requestAddReaction(post.id, '👀', auth.token);
+      assertNoGraphQLErrors(result);
+      assert.equal(await db.$count(Reactions), 1);
+      assert.equal(await db.$count(Notifications), 0);
+    } finally {
+      await pg.unsafe(`
+        DROP TRIGGER IF EXISTS fail_reaction_notification_insert ON notification;
+        DROP FUNCTION IF EXISTS fail_reaction_notification_insert();
+      `);
+    }
   });
 
   test('허용되지 않은 Type은 VALIDATION과 field type으로 거부한다', async () => {
@@ -681,6 +741,7 @@ const createAuthenticatedSession = async ({
 };
 
 const resetFixtures = async () => {
+  await db.delete(Notifications);
   await db.delete(Reactions);
   await db.delete(Posts);
   await db.delete(Sessions);

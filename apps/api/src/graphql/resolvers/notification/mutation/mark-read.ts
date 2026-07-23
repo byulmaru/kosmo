@@ -1,15 +1,10 @@
-import { db, firstOrThrowWith, Notifications, ProfileFollows } from '@kosmo/core/db';
+import { db, firstOrThrowWith, Notifications } from '@kosmo/core/db';
 import { NotFoundError } from '@kosmo/core/error';
 import { and, eq, getColumns, sql } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
-import {
-  NotificationRecipientProfiles,
-  NotificationRelatedInstances,
-  NotificationRelatedProfiles,
-  visibleFollowNotificationWhere,
-} from '../access/visibility';
-import { FollowNotification, Notification } from '../ref';
+import { visibleNotificationWhere } from '../access/visibility';
+import { Notification, notificationKindForNodeType } from '../ref';
 
 builder.mutationField('markNotificationRead', (t) =>
   t.withAuth({ login: true }).fieldWithInput({
@@ -20,36 +15,25 @@ builder.mutationField('markNotificationRead', (t) =>
       }),
     }),
     input: {
-      id: t.input.globalID({ for: FollowNotification }),
+      id: t.input.globalID(),
     },
     resolve: async (_, { input }, ctx) => {
+      const kind = notificationKindForNodeType(input.id.typename);
+      if (!kind) {
+        throw new NotFoundError('Notification not found');
+      }
+
       const notification = await db
         .update(Notifications)
         .set({ readAt: sql`coalesce(${Notifications.readAt}, now())` })
-        .from(ProfileFollows)
-        .innerJoin(
-          NotificationRecipientProfiles,
-          eq(NotificationRecipientProfiles.id, ProfileFollows.followeeProfileId),
-        )
-        .innerJoin(
-          NotificationRelatedProfiles,
-          eq(NotificationRelatedProfiles.id, ProfileFollows.followerProfileId),
-        )
-        .innerJoin(
-          NotificationRelatedInstances,
-          eq(NotificationRelatedInstances.id, NotificationRelatedProfiles.instanceId),
-        )
         .where(
           and(
             eq(Notifications.id, input.id.id),
-            eq(ProfileFollows.id, Notifications.sourceId),
-            visibleFollowNotificationWhere({ ctx }),
+            eq(Notifications.kind, kind),
+            visibleNotificationWhere({ ctx }),
           ),
         )
-        .returning({
-          ...getColumns(Notifications),
-          profileId: ProfileFollows.followerProfileId,
-        })
+        .returning(getColumns(Notifications))
         .then(firstOrThrowWith(() => new NotFoundError('Notification not found')));
 
       return {

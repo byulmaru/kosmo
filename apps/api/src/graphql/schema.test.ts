@@ -256,9 +256,10 @@ test('rejects empty and over-500-character Plain Text before creating a post', a
   }
 });
 
-test('exposes Notification interface and FollowNotification without raw storage fields', () => {
+test('exposes Notification interface and concrete source types without raw storage fields', () => {
   const notification = schema.getType('Notification');
   const followNotification = schema.getType('FollowNotification');
+  const reactionNotification = schema.getType('ReactionNotification');
   const profile = schema.getType('Profile');
 
   assert.ok(isObjectType(followNotification));
@@ -274,12 +275,25 @@ test('exposes Notification interface and FollowNotification without raw storage 
   assert.equal(followNotification.getFields().data, undefined);
   assert.equal(schema.getType('NotificationType'), undefined);
 
+  assert.ok(isObjectType(reactionNotification));
+  assert.deepEqual(
+    reactionNotification.getInterfaces().map(({ name }) => name),
+    ['Node', 'Notification'],
+  );
+  assert.equal(String(reactionNotification.getFields().profile.type), 'Profile!');
+  assert.equal(String(reactionNotification.getFields().post.type), 'Post!');
+  assert.equal(String(reactionNotification.getFields().type.type), 'String!');
+  assert.equal(reactionNotification.getFields().kind, undefined);
+  assert.equal(reactionNotification.getFields().sourceId, undefined);
+  assert.equal(reactionNotification.getFields().data, undefined);
+
   assert.ok(isInterfaceType(notification));
   assert.deepEqual(
     notification.getInterfaces().map(({ name }) => name),
     ['Node'],
   );
   assert.equal(notificationNodeType('FOLLOW'), 'FollowNotification');
+  assert.equal(notificationNodeType('REACTION'), 'ReactionNotification');
   assert.equal(notificationNodeType('UNSUPPORTED'), null);
   assert.equal(String(profile.getFields().notifications?.type), 'NotificationConnection!');
   assert.equal(String(profile.getFields().unreadNotificationCount?.type), 'Int!');
@@ -367,7 +381,7 @@ test('rejects a global ID with the wrong concrete mutation input type', async ()
   assert.match(result.errors?.[0]?.message ?? '', /is not of type: Profile/);
 });
 
-test('rejects a non-FollowNotification global ID for Notification Read', async () => {
+test('rejects a non-Notification global ID for Notification Read', async () => {
   const result = await graphql({
     schema,
     source: `mutation MarkNotificationRead($id: ID!) {
@@ -380,5 +394,5 @@ test('rejects a non-FollowNotification global ID for Notification Read', async (
   });
 
   assert.equal(result.data, null);
-  assert.match(result.errors?.[0]?.message ?? '', /is not of type: FollowNotification/);
+  assert.match(result.errors?.[0]?.message ?? '', /Notification not found/);
 });

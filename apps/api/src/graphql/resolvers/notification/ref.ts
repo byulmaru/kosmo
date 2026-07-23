@@ -1,4 +1,4 @@
-import { db, Notifications, ProfileFollows } from '@kosmo/core/db';
+import { db, Notifications, Posts, ProfileFollows, Reactions } from '@kosmo/core/db';
 import { NotificationKind } from '@kosmo/core/enums';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
@@ -7,14 +7,84 @@ import {
   NotificationRecipientProfiles,
   NotificationRelatedInstances,
   NotificationRelatedProfiles,
-  visibleFollowNotificationWhere,
+  visibleNotificationWhere,
 } from './access/visibility';
 
 export type NotificationRow = typeof Notifications.$inferSelect;
 export type FollowNotificationRow = NotificationRow & { profileId: string };
+export type ReactionNotificationRow = NotificationRow & {
+  post: typeof Posts.$inferSelect;
+  profileId: string;
+  type: string;
+};
+
+type NotificationSource = {
+  post?: typeof Posts.$inferSelect;
+  profileId: string;
+  type?: string;
+};
+
+const notificationSourceCache = new WeakMap<NotificationRow, Promise<NotificationSource>>();
+
+export const getNotificationSource = (
+  notification: NotificationRow,
+): Promise<NotificationSource> => {
+  const concreteNotification = notification as Partial<ReactionNotificationRow>;
+  if (concreteNotification.profileId) {
+    return Promise.resolve({
+      post: concreteNotification.post,
+      profileId: concreteNotification.profileId,
+      type: concreteNotification.type,
+    });
+  }
+
+  const cached = notificationSourceCache.get(notification);
+  if (cached) {
+    return cached;
+  }
+
+  const source: Promise<NotificationSource> = (
+    notification.kind === NotificationKind.FOLLOW
+      ? db
+          .select({ profileId: ProfileFollows.followerProfileId })
+          .from(ProfileFollows)
+          .where(eq(ProfileFollows.id, notification.sourceId))
+          .limit(1)
+      : db
+          .select({
+            post: getColumns(Posts),
+            profileId: Reactions.profileId,
+            type: Reactions.type,
+          })
+          .from(Reactions)
+          .innerJoin(Posts, eq(Posts.id, Reactions.postId))
+          .where(eq(Reactions.id, notification.sourceId))
+          .limit(1)
+  ).then(([row]) => {
+    if (!row) {
+      throw new Error('Notification source not found');
+    }
+
+    return row;
+  });
+
+  notificationSourceCache.set(notification, source);
+  return source;
+};
 
 export const notificationNodeType = (kind: string) =>
-  kind === NotificationKind.FOLLOW ? ('FollowNotification' as const) : null;
+  kind === NotificationKind.FOLLOW
+    ? ('FollowNotification' as const)
+    : kind === NotificationKind.REACTION
+      ? ('ReactionNotification' as const)
+      : null;
+
+export const notificationKindForNodeType = (typename: string) =>
+  typename === 'FollowNotification'
+    ? NotificationKind.FOLLOW
+    : typename === 'ReactionNotification'
+      ? NotificationKind.REACTION
+      : null;
 
 export const Notification = builder.interfaceRef<NotificationRow>('Notification');
 
@@ -60,7 +130,13 @@ export const FollowNotification = createObjectRef<FollowNotificationRow>(
         NotificationRelatedInstances,
         eq(NotificationRelatedInstances.id, NotificationRelatedProfiles.instanceId),
       )
-      .where(and(inArray(Notifications.id, ids), visibleFollowNotificationWhere({ ctx })));
+      .where(
+        and(
+          inArray(Notifications.id, ids),
+          eq(Notifications.kind, NotificationKind.FOLLOW),
+          visibleNotificationWhere({ ctx }),
+        ),
+      );
 
     return rows;
   },
@@ -71,5 +147,46 @@ FollowNotification.implement({
   fields: (t) => ({
     createdAt: t.expose('createdAt', { type: 'DateTime' }),
     readAt: t.expose('readAt', { type: 'DateTime', nullable: true }),
+  }),
+});
+
+export const ReactionNotification = createObjectRef<ReactionNotificationRow>(
+  'ReactionNotification',
+  async (ids, ctx) =>
+    db
+      .select({
+        ...getColumns(Notifications),
+        post: getColumns(Posts),
+        profileId: Reactions.profileId,
+        type: Reactions.type,
+      })
+      .from(Notifications)
+      .innerJoin(Reactions, eq(Reactions.id, Notifications.sourceId))
+      .innerJoin(Posts, eq(Posts.id, Reactions.postId))
+      .innerJoin(
+        NotificationRelatedProfiles,
+        eq(NotificationRelatedProfiles.id, Reactions.profileId),
+      )
+      .innerJoin(
+        NotificationRelatedInstances,
+        eq(NotificationRelatedInstances.id, NotificationRelatedProfiles.instanceId),
+      )
+      .where(
+        and(
+          inArray(Notifications.id, ids),
+          eq(Notifications.kind, NotificationKind.REACTION),
+          visibleNotificationWhere({ ctx }),
+        ),
+      ),
+);
+
+ReactionNotification.implement({
+  interfaces: [Notification],
+  fields: (t) => ({
+    createdAt: t.expose('createdAt', { type: 'DateTime' }),
+    readAt: t.expose('readAt', { type: 'DateTime', nullable: true }),
+    type: t.string({
+      resolve: async (notification) => (await getNotificationSource(notification)).type!,
+    }),
   }),
 });
