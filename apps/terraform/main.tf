@@ -10,8 +10,18 @@ locals {
   app_identifier     = "moe.kos"
   distribution_group = "native-testers"
   native_distribution_workflows = {
-    "ios-device-onboarding"    = ".github/workflows/ios-device-onboarding.yml"
-    "native-test-distribution" = ".github/workflows/ios-ad-hoc-distribution.yml"
+    android_test = {
+      environment = "native-test-distribution"
+      workflow    = ".github/workflows/android-test-distribution.yml"
+    }
+    ios_ad_hoc = {
+      environment = "native-test-distribution"
+      workflow    = ".github/workflows/ios-ad-hoc-distribution.yml"
+    }
+    ios_device_onboarding = {
+      environment = "ios-device-onboarding"
+      workflow    = ".github/workflows/ios-device-onboarding.yml"
+    }
   }
 
   terraform_apply_environment = "terraform-apply"
@@ -149,8 +159,8 @@ resource "google_iam_workload_identity_pool_provider" "kosmo" {
     "assertion.repository_owner_id == '${local.github_owner_id}'",
     "assertion.ref == 'refs/heads/main'",
     "(${join(" || ", [
-      for environment, workflow in local.native_distribution_workflows :
-      "(assertion.environment == '${environment}' && assertion.workflow_ref == '${local.github_owner}/${local.github_repository}/${workflow}@refs/heads/main')"
+      for authorization in values(local.native_distribution_workflows) :
+      "(assertion.environment == '${authorization.environment}' && assertion.workflow_ref == '${local.github_owner}/${local.github_repository}/${authorization.workflow}@refs/heads/main')"
     ])})",
   ])
 
