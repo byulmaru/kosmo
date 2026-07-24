@@ -245,9 +245,9 @@ Post fragment와 mutations를 colocate한 내부 `useRepostAction` adapter가 PR
 - raw Relay unit test로 생성 성공 cache, 정확한 Active Repost ID의 취소와 cache 비변경, 오류 뒤 pending 종료·error callback·다음 입력 재시도와 actor Store 격리를 검증한다.
 - Storybook 전용 단일-config `PostActionBar` wrapper의 `play` interaction으로 클릭, pending 중복 차단, 생성 성공, 취소 ID와 cache 비변경, 오류 재시도, selected Profile actor reset과 접근성 상태를 검증한다.
 
-- [ ] 8.1 `repostCount`와 `viewerRepost` fragment를 소비하는 내부 `useRepostAction` adapter와 `PostActionBar.repost` config를 구현한다.
-- [ ] 8.2 `repostPost`의 normalized actor Store 갱신과 Active Repost ID를 사용하는 `deletePost` 호출을 연결하고, 취소 성공 뒤 Source cache를 변경하지 않으며 실패를 error callback으로 전달한다.
-- [ ] 8.3 raw Relay unit과 Storybook `play` interaction으로 pending·생성·취소·오류 재시도·Profile actor reset을 검증하고 relay/app/Storybook scoped check를 통과시킨다.
+- [x] 8.1 `repostCount`와 `viewerRepost` fragment를 소비하는 내부 `useRepostAction` adapter와 `PostActionBar.repost` config를 구현한다.
+- [x] 8.2 `repostPost`의 normalized actor Store 갱신과 Active Repost ID를 사용하는 `deletePost` 호출을 연결하고, 취소 성공 뒤 Source cache를 변경하지 않으며 실패를 error callback으로 전달한다.
+- [x] 8.3 raw Relay unit과 Storybook `play` interaction으로 pending·생성·취소·오류 재시도·Profile actor reset을 검증하고 relay/app/Storybook scoped check를 통과시킨다.
 
 ## 9. PROD-415 Post List Repost 연결
 
