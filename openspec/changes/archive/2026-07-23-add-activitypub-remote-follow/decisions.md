@@ -4,6 +4,30 @@
 
 ## Decision Records
 
+### 저장 follow count는 visible relation membership의 exact source of truth가 아니다
+
+- Decision Date: 2026-07-23
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/follow-relationship.md`, [PROD-240](https://linear.app/byulmaru/issue/PROD-240)의 전체 established relation backfill, [PROD-281](https://linear.app/byulmaru/issue/PROD-281)의 이후 profile disable count 조정과 [PROD-361](https://linear.app/byulmaru/issue/PROD-361)의 최종 정합성 결정에서 파생한다.
+- Status: Active
+- Context / Problem: 초기 count migration은 기존 established relation 전체를 snapshot으로 집계하지만, 이후 profile disable lifecycle은 relation row를 보존하면서 남은 active 상대의 count를 조정한다. migration 전에 이미 disabled인 profile 관계까지 historical state로 재구성하려면 별도 reconciliation이 필요하지만, 저장 count는 visible connection membership을 판정하는 source of truth가 아니다.
+- Decision Outcome: local/remote profile의 저장 followers/following count는 화면 표시와 mutation cache 갱신을 위한 best-effort 값으로 취급한다. 초기 migration은 기존 established relation 전체를 집계하고 migration 이전 disabled relation을 별도로 reconciliation하지 않는다. 이후 follow/unfollow와 profile disable 전이는 현재 transaction 계약에 따라 count를 갱신하며, visible followers/following connection이 실제 membership의 권위다.
+- Alternatives Considered: backfill에서 disabled profile relation 제외, additive reconciliation migration 추가, 저장 count와 visible connection edge 수의 상시 일치 보장.
+- Consequences: historical disabled relation 때문에 저장 count와 visible connection edge 수가 다를 수 있다. 이 차이만을 복구하는 migration이나 별도 이슈는 만들지 않으며, SUSPENDED remote relation/count 보존 계약도 변경하지 않는다.
+- Confirmation / Follow-up: active/archived data-model이 one-time backfill을, profile spec이 이후 disable transition과 best-effort count 경계를 각각 명시하는지 확인한다.
+
+### Remote Follow은 Fedify 결과 계약만 소유하고 공통 discovery를 수정하지 않는다
+
+- Decision Date: 2026-07-23
+- Decision Class: Derived Contract
+- Authority / Provenance: [PROD-241](https://linear.app/byulmaru/issue/PROD-241)의 공통 actor-scoped/shared inbox와 activity-neutral delegation 계약, current active `activitypub-actor-discovery`, [PROD-361](https://linear.app/byulmaru/issue/PROD-361)의 최종 정합성 결정에서 파생한다.
+- Status: Active
+- Context / Problem: legacy Remote Follow delta가 actor document, key identifier, endpoint 404와 handler 목록을 다시 정의하고, protocol/data-model/profile requirement가 Fedify accessor·option·context 표현을 반복해 같은 신뢰 경계를 유지하는 라이브러리 변경까지 capability 위반으로 만들었다.
+- Decision Outcome: 이 change는 `activitypub-actor-discovery` delta를 소유하지 않는다. Remote Follow은 Fedify가 제공하는 inbox, signature, key와 delivery 경계를 재사용하고, normative contract에는 trusted typed Follow, verified local delivery target, actor/object/generation 검증과 projection 결과만 둔다. `getObject()`, `crossOrigin`, inbox context와 delivery option 같은 현재 API 선택은 design과 adapter test에서 검증한다. Profile은 GraphQL payload와 post-commit failure isolation을, data model은 저장 identity와 transport metadata 비저장만 소유한다.
+- Alternatives Considered: legacy actor-discovery delta 유지, key identifier만 최신 값으로 수정, 모든 Fedify 경계 문구 제거.
+- Consequences: current main runtime, migration, GraphQL과 Web 동작은 바뀌지 않는다. Fedify가 같은 보안·delivery 보장을 다른 API로 제공해도 normative spec을 다시 수정할 필요가 없고, 공통 discovery 계약은 다른 activity capability와 독립적으로 유지된다.
+- Confirmation / Follow-up: Remote Follow delta에 actor-discovery modification과 Fedify accessor/option 표현이 남지 않는지 확인하고 strict OpenSpec validation 및 기존 Fedify adapter/integration test를 통과시킨다.
+
 ### Web follow action은 mutation의 established/pending 결과를 구분한다
 
 - Decision Date: 2026-07-18
@@ -120,13 +144,16 @@
 
 ### Accept/Reject compatibility fallback도 outbound Follow generation을 검증한다
 
-- Decision Date: 2026-07-21
-- Status: Accepted
+- Decision Date: 2026-07-23
+- Decision Class: Derived Contract
+- Authority / Provenance: [PROD-244](https://linear.app/byulmaru/issue/PROD-244)의 최신 Inbound Accept/Reject 계약과 [PROD-361](https://linear.app/byulmaru/issue/PROD-361)의 timestamp 범위 정정에서 파생한다.
+- Status: Active
 - Context / Problem: actor/object만 일치하는 ID-less 또는 non-kosmo Follow fallback은 이전 request R1을 취소하고 같은 pair의 R2를 만든 뒤 도착한 늦은 R1 Accept/Reject를 현재 R2에 잘못 적용할 수 있다.
-- Decision Outcome: canonical kosmo Follow ID가 현재 projection ID와 정확히 일치하면 기존처럼 처리한다. ID-less 또는 non-kosmo Follow fallback은 embedded Follow의 `published`가 존재하고 현재 request/relation의 immutable `createdAt`과 정확히 일치할 때만 같은 outbound generation으로 인정한다. remote Accept/Reject activity의 `published`나 local 수신 시각은 이 fallback generation 판정에 사용하지 않는다.
-- Alternatives Considered: actor/object-only fallback 유지, compatibility fallback 전체 제거, terminal history나 correlation metadata 추가, remote Accept activity timestamp로 순서 추정.
+- Decision Outcome: canonical kosmo Follow ID가 현재 projection ID와 정확히 일치하면 기존처럼 처리한다. ID-less 또는 non-kosmo Follow fallback은 embedded Follow의 `published`가 존재하고 현재 request/relation의 immutable `createdAt`과 정확히 일치할 때만 같은 outbound generation으로 인정한다. remote Accept/Reject activity의 `published`와 local 수신 시각은 generation 또는 freshness 판정에 사용하지 않는다. Reject는 exact generation 검증 뒤 `expectedRowId`가 여전히 현재 row인 경우에만 제거한다.
+- Supersedes: 2026-07-22에 정한 local `receivedAt` freshness gate. application clock과 DB `createdAt` clock을 비교하면 clock skew로 현재 Reject를 무시할 수 있고, exact generation과 `expectedRowId` 재검증이 이미 replacement를 보호하므로 해당 gate는 불필요하다.
+- Alternatives Considered: actor/object-only fallback 유지, compatibility fallback 전체 제거, terminal history나 correlation metadata 추가, remote `Reject.published` 사용, application local 수신 시각 비교, DB clock을 별도 조회해 비교하는 방식.
 - Consequences: 원본 outbound Follow의 `published`를 보존하지 않는 구현의 ID-less/non-kosmo response는 side effect 없이 무시한다. 새 schema, history, lock 또는 reconciliation 흐름 없이 이전 generation response가 새 projection을 변경하지 못한다.
-- Confirmation / Follow-up: 같은-generation fallback Accept/Reject는 처리하고 missing/mismatched Follow `published`와 cancel-refollow 뒤 늦은 fallback Accept는 새 request/relation을 변경하지 않는지 PROD-244가 검증한다.
+- Confirmation / Follow-up: PROD-361은 같은-generation fallback Reject가 remote `Reject.published` 및 application/DB clock skew와 무관하게 처리되고, missing/mismatched embedded Follow `published`와 cancel-refollow 뒤 늦은 fallback response는 새 projection을 변경하지 않는지 검증한다.
 
 ### Remote Follow ID는 advisory이고 generation은 단조 증가한다
 
