@@ -332,10 +332,33 @@ describe('GraphQL Reaction', () => {
   test('현재 타인 소유 Reaction 삭제는 PERMISSION_DENIED로 거부한다', async () => {
     const owner = await createAuthenticatedSession();
     const attacker = await createAuthenticatedSession();
-    const post = await createPost(owner.profile.id);
+    const recipient = await createProfile(`recipient-${crypto.randomUUID()}`);
+    const post = await createPost(recipient.id);
     const added = await requestAddReaction(post.id, '🎉', owner.token);
     const reactionId = added.data?.addReaction.reaction.id;
     assert.ok(reactionId);
+    const reaction = await db
+      .select()
+      .from(Reactions)
+      .where(eq(Reactions.postId, post.id))
+      .then(firstOrThrow);
+    assert.deepEqual(
+      await db
+        .select({
+          kind: Notifications.kind,
+          recipientProfileId: Notifications.recipientProfileId,
+          sourceId: Notifications.sourceId,
+        })
+        .from(Notifications)
+        .where(eq(Notifications.sourceId, reaction.id)),
+      [
+        {
+          kind: NotificationKind.REACTION,
+          recipientProfileId: recipient.id,
+          sourceId: reaction.id,
+        },
+      ],
+    );
 
     const result = await requestDeleteReaction(reactionId, attacker.token);
 
@@ -347,6 +370,23 @@ describe('GraphQL Reaction', () => {
         .where(eq(Reactions.postId, post.id))
         .then((rows) => rows.length),
       1,
+    );
+    assert.deepEqual(
+      await db
+        .select({
+          kind: Notifications.kind,
+          recipientProfileId: Notifications.recipientProfileId,
+          sourceId: Notifications.sourceId,
+        })
+        .from(Notifications)
+        .where(eq(Notifications.sourceId, reaction.id)),
+      [
+        {
+          kind: NotificationKind.REACTION,
+          recipientProfileId: recipient.id,
+          sourceId: reaction.id,
+        },
+      ],
     );
   });
 
@@ -411,12 +451,117 @@ describe('GraphQL Reaction', () => {
     );
   });
 
+  test('Reaction 삭제는 Notification cleanup을 정상·반복 수행한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createAuthenticatedSession();
+    const post = await createPost(recipient.profile.id);
+    const added = await requestAddReaction(post.id, '🎉', auth.token);
+    const reactionId = added.data?.addReaction.reaction.id;
+    assert.ok(reactionId);
+    const reaction = await db
+      .select()
+      .from(Reactions)
+      .where(eq(Reactions.postId, post.id))
+      .then(firstOrThrow);
+
+    const deleted = await requestDeleteReaction(reactionId, auth.token);
+    assertNoGraphQLErrors(deleted);
+    assert.equal(await db.$count(Notifications), 0);
+
+    await db.insert(Notifications).values({
+      kind: NotificationKind.REACTION,
+      recipientProfileId: recipient.profile.id,
+      sourceId: reaction.id,
+    });
+    assert.equal(await db.$count(Notifications), 1);
+
+    const repeated = await requestDeleteReaction(reactionId, auth.token);
+
+    assertNoGraphQLErrors(repeated);
+    assert.equal(await db.$count(Reactions), 0);
+    assert.equal(await db.$count(Notifications), 0);
+  });
+
+  test('Notification cleanup 실패에도 Reaction 삭제 성공과 stale visibility를 유지하고 오류를 기록한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createAuthenticatedSession();
+    const post = await createPost(recipient.profile.id);
+    const added = await requestAddReaction(post.id, '👀', auth.token);
+    const reactionId = added.data?.addReaction.reaction.id;
+    assert.ok(reactionId);
+    const reaction = await db
+      .select()
+      .from(Reactions)
+      .where(eq(Reactions.postId, post.id))
+      .then(firstOrThrow);
+    const notification = await db
+      .select()
+      .from(Notifications)
+      .where(eq(Notifications.sourceId, reaction.id))
+      .then(firstOrThrow);
+
+    await pg.unsafe(`
+      CREATE FUNCTION fail_reaction_notification_delete() RETURNS trigger
+      LANGUAGE plpgsql AS $$ BEGIN
+        IF OLD.kind = 'REACTION' THEN RAISE EXCEPTION 'forced notification cleanup failure'; END IF;
+        RETURN OLD;
+      END $$;
+      CREATE TRIGGER fail_reaction_notification_delete
+      BEFORE DELETE ON notification
+      FOR EACH ROW EXECUTE FUNCTION fail_reaction_notification_delete();
+    `);
+
+    const originalConsoleError = console.error;
+    const errors: unknown[][] = [];
+    console.error = (...args) => {
+      errors.push(args);
+    };
+
+    let deleted: Awaited<ReturnType<typeof requestDeleteReaction>>;
+    try {
+      deleted = await requestDeleteReaction(reactionId, auth.token);
+    } finally {
+      console.error = originalConsoleError;
+      await pg.unsafe(`
+        DROP TRIGGER IF EXISTS fail_reaction_notification_delete ON notification;
+        DROP FUNCTION IF EXISTS fail_reaction_notification_delete();
+      `);
+    }
+
+    assertNoGraphQLErrors(deleted);
+    assert.equal(await db.$count(Reactions), 0);
+    assert.equal(await db.$count(Notifications), 1);
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0]?.[0], 'Failed to clean up Reaction Notification');
+    assert.equal((errors[0]?.[1] as { reactionId?: string } | undefined)?.reactionId, reaction.id);
+    assert.ok((errors[0]?.[1] as { error?: unknown } | undefined)?.error);
+
+    const surfaces = await requestNotificationSurfaces(recipient.profile.id, recipient.token);
+    assertNoGraphQLErrors(surfaces);
+    assert.deepEqual(surfaces.data?.node?.notifications.edges, []);
+    assert.equal(surfaces.data?.node?.unreadNotificationCount, 0);
+
+    const staleNode = await requestNode(
+      globalId('ReactionNotification', notification.id),
+      recipient.token,
+    );
+    assertNoGraphQLErrors(staleNode);
+    assert.equal(staleNode.data?.node, null);
+
+    const read = await requestMarkNotificationRead(
+      globalId('ReactionNotification', notification.id),
+      recipient.token,
+    );
+    assert.equal(read.errors?.[0]?.extensions?.code, 'NOT_FOUND');
+  });
+
   test('Reaction이 아닌 concrete global ID를 delete input에서 거부한다', async () => {
     const auth = await createAuthenticatedSession();
     const result = await requestDeleteReaction(globalId('Profile', auth.profile.id), auth.token);
 
     assert.ok(result.errors?.[0]);
   });
+
   test('Reaction Profile은 Type별로 최신 Reaction순 Profile connection을 반환한다', async () => {
     const auth = await createAuthenticatedSession();
     const post = await createPost(auth.profile.id);
@@ -688,6 +833,13 @@ type ReactionNode = {
   type: string;
 };
 
+type NotificationSurfacesNode = {
+  notifications: {
+    edges: Array<{ node: { __typename: string; id: string } }>;
+  };
+  unreadNotificationCount: number;
+};
+
 type ReactionProfilesNode = {
   reactionProfiles: {
     edges: Array<{ cursor: string; node: { __typename: 'Profile'; handle: string; id: string } }>;
@@ -732,12 +884,44 @@ const requestDeleteReaction = (reactionId: string, token?: string) =>
     token,
   );
 
-const requestNode = (id: string) =>
-  requestGraphQL<{ node: { type: string } | null }>(
+const requestNode = (id: string, token?: string) =>
+  requestGraphQL<{ node: { __typename: string; id: string; type?: string } | null }>(
     `query ReactionNode($id: ID!) {
-      node(id: $id) { ... on Reaction { type } }
+      node(id: $id) { __typename id ... on Reaction { type } }
     }`,
     { id },
+    token,
+  );
+
+const requestNotificationSurfaces = (profileId: string, token: string) =>
+  requestGraphQL<{ node: NotificationSurfacesNode | null }>(
+    `query NotificationSurfaces($profileId: ID!) {
+      node(id: $profileId) {
+        ... on Profile {
+          notifications(first: 10) { edges { node { __typename id } } }
+          unreadNotificationCount
+        }
+      }
+    }`,
+    { profileId: globalId('Profile', profileId) },
+    token,
+  );
+
+const requestMarkNotificationRead = (notificationId: string, token: string) =>
+  requestGraphQL<{
+    markNotificationRead: {
+      notification: { __typename: string; id: string };
+      recipientProfile: { id: string };
+    };
+  }>(
+    `mutation MarkNotificationRead($input: MarkNotificationReadInput!) {
+      markNotificationRead(input: $input) {
+        notification { __typename id }
+        recipientProfile { id }
+      }
+    }`,
+    { input: { id: notificationId } },
+    token,
   );
 
 const requestReactionProfiles = (
