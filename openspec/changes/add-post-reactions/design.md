@@ -2,7 +2,7 @@
 
 현재 `main`에는 PROD-395·404·405·407의 Reaction 저장·생성·삭제·Profile connection과 PROD-449의 fixture-first 요약·Profile 목록 presentation, PROD-277·324·372의 Notification 목록·badge·Read/navigation 기반이 있다. PostgreSQL/Drizzle은 UUIDv7 default, 명시적 foreign key와 SQL-like query builder를 사용하며, Post 조회 권한은 API의 기존 Post visibility predicate가 소유한다. Profile-scoped Notification 저장과 Follow source backend는 병합됐지만 list/count/read visibility SQL과 client item은 Follow kind에 고정돼 있다.
 
-이 change는 PROD-390이 소유한 공유 계약이며 구현은 PROD-395, PROD-404, PROD-405, PROD-406, PROD-407, PROD-413, PROD-417, PROD-418, PROD-419의 독립 PR로 나뉜다. PROD-395 저장 slice, PROD-404 멱등 생성 slice, PROD-405 Owner 멱등 삭제 slice, PROD-407 Type별 Profile connection slice와 PROD-449 fixture-first presentation slice는 `main`에 병합됐다. 이번 적용 대상은 PROD-413의 Reaction Notification 생성·inbox 통합 slice다. 나머지 slice는 자신의 blocker와 미결정을 해소한 뒤 같은 change를 이어서 사용한다.
+이 change는 PROD-390이 소유한 공유 계약이며 구현은 PROD-395, PROD-404, PROD-405, PROD-406, PROD-407, PROD-413, PROD-417, PROD-418, PROD-419의 독립 PR로 나뉜다. PROD-395 저장 slice, PROD-404 멱등 생성 slice, PROD-405 Owner 멱등 삭제 slice, PROD-407 Type별 Profile connection slice와 PROD-449 fixture-first presentation slice는 `main`에 병합됐다. 이번 적용 대상은 PROD-406의 viewer-independent Reaction Type count 조회 slice다. 나머지 slice는 자신의 blocker와 미결정을 해소한 뒤 같은 change를 이어서 사용한다.
 
 ## Goals / Non-Goals
 
@@ -28,6 +28,7 @@
 - DB schema는 `packages/core/db/tables.ts`와 공용 UUIDv7/created-at helper를 사용한다. 현재 허용 Type 검증은 PROD-404 application service가 소유하며 database enum, seed registry 또는 `CHECK` constraint로 목록을 고정하지 않는다.
 - Post visibility predicate와 Account/session membership 검증은 API 경계에 있다. `usingProfile` entry point는 Active Account의 Member인 selected Profile을 보장하고, mutation은 검증된 actor Profile과 Post context를 service에 전달한다. core service는 transport session이나 actor origin을 다시 검증하지 않고 Active/Normal Profile, non-Suspended Instance, Post, Type과 멱등 저장을 검증한다.
 - GraphQL의 create 계열 mutation은 `fieldWithInput`, concrete Node global ID와 simple payload object를 사용한다. `addReaction`은 이 관례를 따라 Post global ID와 Type 문자열을 받고 최소 Reaction Node를 반환한다.
+- Post Node loader는 기존 Post visibility predicate를 적용한다. `Post.reactionCounts`는 이 접근 경계를 통과한 Post object에서 resolve하며, `reactionProfiles`와 달리 viewer Profile visibility를 aggregate에 적용하지 않는다.
 - Notification create/delete는 기존 Follow와 같이 source transaction commit 뒤 같은 request에서 await/catch한다. Notification 실패를 source transaction에 포함하거나 fire-and-forget으로 처리하지 않는다.
 - 현재 Notification Node/list/count/read query는 Follow source inner join에 고정돼 있어 enum과 concrete type만 추가하면 Reaction item이 누락된다.
 - selected Profile이 바뀌면 앱의 Relay Environment가 교체된다. Reaction pending/error/cache 상태를 actor 사이에 공유하면 안 된다.
@@ -38,7 +39,7 @@
 1. PROD-395는 `reaction` 관계 테이블을 additive migration으로 추가하고 Type을 non-null text로 저장한다. built-in 여섯 Type은 database에 seed하거나 `CHECK`로 고정하지 않으며 기존 행은 backfill하거나 재작성하지 않는다.
 2. PROD-404의 GraphQL `usingProfile` entry point는 Account/session membership과 Post visibility를 검증하고, core service는 검증된 actor Profile identity를 받아 짧은 transaction에서 Active/Normal actor·non-Suspended Instance·Post·Type을 검증한 뒤 `(post, type, profile)` insert를 conflict-safe하게 수행한다. core `addReaction`은 `{ created, reaction }`을 반환하고, GraphQL resolver는 이를 `Reaction` Node만 포함하는 공개 payload로 변환한다. PROD-404는 Notification side effect와 신규 source 구분을 미리 구현하지 않으며, 실제 caller가 생기는 PROD-413이 `created` 결과를 사용해 신규 source에만 Best Effort Notification을 연결한다. 명시적 pessimistic lock은 사용하지 않는다.
 3. PROD-405는 concrete Reaction global ID를 입력으로 받고, GraphQL `usingProfile` entry point가 검증한 actor Profile identity를 core service에 전달한다. core는 actor가 Active/Normal Profile이고 Instance가 non-Suspended인지와 현재 Reaction Owner인지 확인하되 actor origin과 Instance Reachability를 권한 조건으로 사용하지 않는다. 현재 타인 소유 행은 거부한다. 현재 Owner 행은 ID와 actor를 조건으로 transaction에서 삭제하며, 이미 없는 ID는 입력 ID를 유지한 성공 no-op으로 처리한다. core는 입력받은 database Reaction ID를 결과로 반환하고, GraphQL `deleteReaction(id: ID!)` payload는 이를 concrete Reaction global ID인 `reactionId: ID!`로 encode한다. Post의 현재 visibility는 조회하거나 삭제 권한으로 사용하지 않으며, Notification cleanup 연결과 필요한 service 결과 확장은 PROD-419가 소유한다.
-4. PROD-406 count query는 Post visibility만 통과한 뒤 viewer Profile filtering 없이 현재 Reaction을 group/count한다. PROD-407 Profile connection은 기존 Profile node만 반환하고, Type을 격리하며 기존 Profile visibility를 SQL page limit 전에 적용한 뒤 `Reaction.createdAt DESC, Reaction.id DESC` keyset으로 최신 Reaction부터 반환한다. Reaction metadata는 공개 row field로 노출하지 않는다.
+4. PROD-406 count query는 `Post.reactionCounts: [ReactionCount!]!`로 현재 Reaction이 존재하는 Type의 `type: String!`과 `count: Int!`만 제공한다. Post visibility를 통과한 뒤 viewer Profile filtering 없이 현재 Reaction을 Post와 Type으로 batch group/count하고 count 내림차순으로 반환한다. Reaction이 없으면 빈 목록을 반환한다. PROD-407 Profile connection은 기존 Profile node만 반환하고, Type을 격리하며 기존 Profile visibility를 SQL page limit 전에 적용한 뒤 `Reaction.createdAt DESC, Reaction.id DESC` keyset으로 최신 Reaction부터 반환한다. Reaction metadata는 공개 row field로 노출하지 않는다.
 5. PROD-413은 Reaction source에서 Recipient, Related Profile, Target Post와 Type을 파생하고 자기 Post·Remote Recipient를 no-op 처리한다. multi-kind Notification 목록은 승인된 구현 선택에 따라 kind별 visible projection을 `UNION ALL`한 뒤 공통 `id DESC` pagination/count를 적용한다. item 활성화는 Target Post 이동을 즉시 시작하고 Read는 응답을 기다리지 않는 Best Effort 동기화로 유지한다.
 6. PROD-449는 먼저 props-only `ReactionSummary`와 `ReactionProfileList`의 fixture 상태 catalog를 전달한다. supplied count entry는 order·zero-count를 바꾸지 않고 렌더하며, Profile row는 기존 `ProfileListItem` Relay fragment ref를 재사용하고 Storybook은 Relay mock fragment ref로 상태를 구성한다. 이 구현 단계는 최종 `post-reaction-ui` spec을 변경하지 않는다.
 7. PROD-418은 이후 실제 Post count query와 `reactionProfiles` Relay connection을 같은 props seam에 연결하고, zero-count와 modal/route UX 및 cache 통합을 결정·검증한다. seam은 PROD-418 통합에서도 유지한다. PROD-417 selector는 Type별 pending/error를 격리하고 서버가 확인한 상태를 기준으로 복구한다. summary는 server count와 정렬을 그대로 사용하며 visible Profile 수로 count를 다시 계산하지 않는다.
@@ -59,6 +60,7 @@
 - 삭제 mutation에서 Reaction Node loader를 호출해 Post visibility를 삭제 권한으로 만들지 않는다.
 - Profile/Post/Type 조합을 삭제 input으로 사용해 이전 요청이 같은 조합으로 다시 생성된 새 Reaction을 제거하게 하지 않는다.
 - viewer가 볼 수 없는 Profile의 Reaction을 count에서 제외하지 않는다.
+- `reactionCounts`에 zero-count Type을 합성하거나 Profile connection 길이로 count를 다시 계산하지 않는다.
 - Profile visibility filtering을 page fetch 뒤 애플리케이션에서 수행하지 않는다.
 - Notification kind와 concrete object만 추가한 채 Follow 전용 list/count/read join을 유지하지 않는다.
 - Notification 저장·cleanup 실패로 Reaction mutation을 rollback하지 않는다.

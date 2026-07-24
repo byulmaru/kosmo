@@ -20,6 +20,20 @@ test('exposes viewer-independent Repost count and selected Profile Repost on Pos
   assert.equal(String(post.getFields().viewerRepost?.type), 'Post');
 });
 
+test('exposes viewer-independent Reaction counts on Post', () => {
+  const post = schema.getType('Post');
+  const reactionCount = schema.getType('ReactionCount');
+
+  assert.ok(isObjectType(post));
+  assert.equal(String(post.getFields().reactionCounts?.type), '[ReactionCount!]!');
+  assert.deepEqual(post.getFields().reactionCounts?.args, []);
+
+  assert.ok(isObjectType(reactionCount));
+  assert.equal(String(reactionCount.getFields().type?.type), 'String!');
+  assert.equal(String(reactionCount.getFields().count?.type), 'Int!');
+  assert.deepEqual(Object.keys(reactionCount.getFields()).sort(), ['count', 'type']);
+});
+
 test('exposes the versioned PostContent document and Plain Text composer contract', () => {
   const postContent = schema.getType('PostContent');
   const createPostInput = schema.getType('CreatePostInput');
