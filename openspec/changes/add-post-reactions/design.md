@@ -29,7 +29,7 @@
 - Post visibility predicate와 Account/session membership 검증은 API 경계에 있다. `usingProfile` entry point는 Active Account의 Member인 selected Profile을 보장하고, mutation은 검증된 actor Profile과 Post context를 service에 전달한다. core service는 transport session이나 actor origin을 다시 검증하지 않고 Active/Normal Profile, non-Suspended Instance, Post, Type과 멱등 저장을 검증한다.
 - GraphQL의 create 계열 mutation은 `fieldWithInput`, concrete Node global ID와 simple payload object를 사용한다. `addReaction`은 이 관례를 따라 Post global ID와 Type 문자열을 받고 최소 Reaction Node를 반환한다.
 - Notification create/delete는 기존 Follow와 같이 source transaction commit 뒤 같은 request에서 await/catch한다. Notification 실패를 source transaction에 포함하거나 fire-and-forget으로 처리하지 않는다.
-- `deleteReaction`은 transaction commit 뒤 `reactionId`만 반환하며 Notification cleanup을 호출하지 않는다. Notification service에는 kind와 source ID로 행을 지우는 idempotent delete 경계가 이미 있다.
+- `deleteReaction`은 transaction commit 뒤 `reactionId`를 반환하고 Notification service의 kind·source ID 기반 idempotent delete 경계를 같은 application action에서 호출한다. cleanup은 source transaction 밖에서 수행한다.
 - 별도 logger나 metric 경계는 없고 post-commit side effect 실패는 `console.error`와 source context를 사용하는 관례가 있다. Reaction Notification 생성의 무음 catch를 다른 범위까지 함께 정리하지 않는다.
 - selected Profile이 바뀌면 앱의 Relay Environment가 교체된다. Reaction pending/error/cache 상태를 actor 사이에 공유하면 안 된다.
 - `SelectMenu`는 단일 radio 선택 후 닫히는 UI라 복수 Reaction toggle에 그대로 사용할 수 없다. 공통 Post Action Bar와 surface 배치는 이번 change 밖이다.
