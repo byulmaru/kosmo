@@ -122,10 +122,22 @@
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-389`, `PROD-414`, `PROD-415`, `PROD-453`
 - Status: Active
 - Context / Problem: presentation은 API 없이 먼저 검증할 수 있지만 production 목록 연결과 mutation action은 각기 다른 선행 조건을 가진다.
-- Decision Outcome: PROD-453은 production fragment shape를 따르는 Relay fixture·Storybook·mock navigation으로 Repost/Quote presentation을 소유한다. PROD-415는 공용 Post list item fragment에 presentation을 연결하고, PROD-414는 별도 fragment-colocated Repost action과 mutation/cache 상태를 소유한다. 공통 Action Bar surface 조립은 포함하지 않는다.
+- Decision Outcome: PROD-453은 production fragment shape를 따르는 typed fixture·Storybook·mock navigation으로 Repost/Quote presentation을 소유한다. 실제 관계 field를 읽는 Relay operation·fragment와 generated type은 PROD-415에 남긴다. PROD-415는 공용 Post list item fragment에 presentation을 연결하고, PROD-414는 별도 fragment-colocated Repost action과 mutation/cache 상태를 소유한다. 공통 Action Bar surface 조립은 포함하지 않는다.
 - Alternatives Considered: 하나의 목록 컴포넌트에서 presentation·action·route를 모두 구현, raw scalar props, raw fragment key cast. 모두 이슈 의존성과 Relay colocation 경계를 흐린다.
 - Consequences: presentation 결과는 목록 연결 전에도 독립 검증되며, 실제 surface 조립 전 action component만 완료될 수 있다.
 - Confirmation / Follow-up: Storybook 상태/interaction, Relay compile, Home/Profile integration과 PROD-432 제외 범위를 확인한다.
+
+### Repost와 Quote는 Source의 시각 계층을 다르게 사용한다
+
+- Decision Date: 2026-07-24
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-389`, `PROD-415`, `PROD-453`
+- Status: Active
+- Context / Problem: presentation slice가 기존 Post의 Author·Content·생성 시각을 보존하면서 Repost Author와 direct Source, Quote Author와 Source preview를 구분해야 한다.
+- Decision Outcome: 순수 Repost(content 없음 + direct Source 있음 + Reply Parent 없음)는 Repost Author attribution 뒤에 direct Source를 primary presentation으로 표시한다. Quote와 Reply+Quote는 Quote Author·자체 Content·생성 시각 뒤에 direct Source를 compact bordered preview로 표시하고, 일반 Content Post도 기존 생성 시각 표시를 유지한다. Source preview의 Source Author와 Source Post affordance는 body link와 sibling으로 두고 자체 Action Bar를 두지 않는다. nullable Source Quote는 자체 Author·Content·생성 시각을 유지하고 preview/navigation만 생략한다. PROD-453은 story-only typed fixture adapter, internal presentation model과 mock link renderer를 소유하고 실제 Post/Source Relay field·generated type·navigation은 PROD-415에 남긴다.
+- Alternatives Considered: Source를 바깥 Post의 Content처럼 평탄화하는 방식, Source body 전체를 하나의 Link로 감싸는 방식, 일반 Post와 Quote의 outer 생성 시각을 parent integration까지 생략하는 방식. 각각 관계 역할을 흐리거나 body의 외부 Link와 중첩되고 기존 Post 표시 회귀를 만든다.
+- Consequences: presentation component는 production 연결 전에도 일반 Post 회귀와 Repost·Quote 시각 계층을 독립 검증하며, PROD-415는 기존 canonical Link를 공급하되 이 표시 계층을 재정의하지 않는다.
+- Confirmation / Follow-up: Storybook에서 일반 Post와 Quote의 outer 생성 시각, Repost·Source Author와 Source Post target, nullable Source와 긴 내용·화면 폭을 검증하고 PROD-415에서 실제 Home/Profile fragment·navigation을 통합 검증한다.
 
 ### 부모 change가 전체 계약과 archive를 소유한다
 
