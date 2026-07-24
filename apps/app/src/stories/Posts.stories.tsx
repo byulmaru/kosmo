@@ -99,10 +99,17 @@ const threadParentPost = post({ bodyText: '직접 Parent Reply입니다.', id: '
 const threadCurrentPost = post({ bodyText: '지금 보고 있는 Reply입니다.', id: 'thread-current' });
 const threadChildPost = post({ bodyText: '현재 Reply에 이어진 답글입니다.', id: 'thread-child' });
 const threadSiblingPost = post({ bodyText: '별도 분기의 답글입니다.', id: 'thread-sibling' });
-const threadReplyQuotePost = post({
-  bodyText: 'Reply이면서 Quote인 Post의 자체 Content입니다.',
-  id: 'thread-reply-quote',
+const threadQuoteSourcePost = post({
+  bodyText: '인용된 Source 본문입니다.',
+  id: 'thread-quote-source',
 });
+const threadReplyQuotePost = {
+  ...post({
+    bodyText: 'Reply이면서 Quote인 Post의 자체 Content입니다.',
+    id: 'thread-reply-quote',
+  }),
+  repostSource: threadQuoteSourcePost,
+};
 const threadItems = {
   ancestors: [
     { connectedToPrevious: false, id: threadRootPost.id },
@@ -122,6 +129,7 @@ const threadStoryPosts = [
   threadChildPost,
   threadSiblingPost,
   threadReplyQuotePost,
+  threadQuoteSourcePost,
 ];
 const storyPosts = [
   shortPost,
@@ -138,7 +146,10 @@ const storyPosts = [
   linkedPost,
   unsupportedDocumentPost,
   ...threadStoryPosts,
-];
+].map((storyPost) => ({
+  ...storyPost,
+  repostSource: 'repostSource' in storyPost ? storyPost.repostSource : null,
+}));
 const composerProfile = profile({ id: 'profile-composer' });
 const emptyPostsProfile = profileWithPosts([], { id: 'profile-posts-empty' });
 const contentPostsProfile = profileWithPosts([shortPost, longPost, emptyPost], {
@@ -152,6 +163,9 @@ const PostsStoriesQuery = graphql`
       __typename
       ... on Post {
         id
+        repostSource {
+          id
+        }
         ...PostBody_post @alias(as: "body")
         ...PostLayout_post @alias(as: "layout")
         ...PostListItem_post @alias(as: "listItem")
@@ -369,8 +383,8 @@ function ThreadCatalog() {
                   <PostListItem post={requireFragment(item.post.listItem, 'thread list item')} />
                 </View>
               )}
-              {item.id === threadReplyQuotePost.id ? (
-                <View testID="reply-quote-source-subtree-sentinel" />
+              {item.post.repostSource ? (
+                <View testID={`reply-quote-source-subtree-${item.post.repostSource.id}`} />
               ) : null}
             </View>
           )}
@@ -393,12 +407,11 @@ function ThreadNavigationCatalog() {
         ancestors={[]}
         current={items[0]}
         descendants={[items[1]]}
-        onPostPress={setSelectedPostId}
-        renderPost={({ item, onPress }) => (
+        renderPost={({ item }) => (
           <Pressable
             accessibilityLabel={`${item.post} 상세 선택`}
             accessibilityRole="link"
-            onPress={onPress}
+            onPress={() => setSelectedPostId(item.id)}
           >
             <Text>{item.post}</Text>
           </Pressable>
@@ -493,6 +506,16 @@ export const ReplyThreadPresentation: Story = {
     expect(canvas.getByTestId('post-thread-renderer-detail-thread-current')).toBeVisible();
     expect(canvas.getByTestId('post-thread-renderer-list-thread-child')).toBeVisible();
     expect(canvas.getByTestId('post-thread-renderer-list-thread-reply-quote')).toBeVisible();
+    const currentArticles = canvas.getAllByRole('article', { current: true });
+    expect(currentArticles).toHaveLength(1);
+    expect(currentArticles[0]).toBe(canvas.getByTestId('post-thread-current-thread-current'));
+    expect(within(currentArticles[0]).getByRole('link', { name: /코스모 작가/ })).toBeVisible();
+    expect(canvas.queryAllByRole('article', { current: true })).toHaveLength(1);
+    for (const article of canvas.getAllByRole('article')) {
+      if (article !== currentArticles[0]) {
+        expect(article).not.toHaveAttribute('aria-current', 'true');
+      }
+    }
     expect(
       canvasElement.querySelector(
         '[data-testid^="post-thread-connector-"][data-testid$="-thread-root-before"]',
@@ -536,7 +559,9 @@ export const ReplyThreadPresentation: Story = {
 
     const replyQuote = within(canvas.getByTestId('post-thread-item-thread-reply-quote'));
     expect(replyQuote.getByText('Reply이면서 Quote인 Post의 자체 Content입니다.')).toBeVisible();
-    expect(replyQuote.getByTestId('reply-quote-source-subtree-sentinel')).toBeEmptyDOMElement();
+    expect(
+      replyQuote.getByTestId('reply-quote-source-subtree-thread-quote-source'),
+    ).toBeEmptyDOMElement();
     expect(canvas.queryByText('인용된 Source 본문입니다.')).toBeNull();
   },
   render: () => <ThreadCatalog />,

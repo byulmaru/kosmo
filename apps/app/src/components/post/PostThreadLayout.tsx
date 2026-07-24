@@ -13,7 +13,6 @@ export type PostThreadItem<TPost> = Readonly<{
 
 export type PostThreadRenderArgs<TPost> = Readonly<{
   item: PostThreadItem<TPost>;
-  onPress?: () => void;
   role: PostThreadRole;
 }>;
 
@@ -21,7 +20,6 @@ export type PostThreadLayoutProps<TPost> = Readonly<{
   ancestors: ReadonlyArray<PostThreadItem<TPost>>;
   current: PostThreadItem<TPost>;
   descendants: ReadonlyArray<PostThreadItem<TPost>>;
-  onPostPress?: (postId: string) => void;
   renderPost: (args: PostThreadRenderArgs<TPost>) => React.ReactNode;
 }>;
 
@@ -29,7 +27,6 @@ export function PostThreadLayout<TPost>({
   ancestors,
   current,
   descendants,
-  onPostPress,
   renderPost,
 }: PostThreadLayoutProps<TPost>): React.ReactElement {
   const theme = useTheme();
@@ -50,6 +47,7 @@ export function PostThreadLayout<TPost>({
         return (
           <View
             key={item.id}
+            aria-current={role === 'current' ? true : undefined}
             role={role === 'current' ? 'article' : undefined}
             style={[
               styles.row,
@@ -80,11 +78,7 @@ export function PostThreadLayout<TPost>({
                 testID={`post-thread-connector-${item.id}-${next.item.id}-after`}
               />
             ) : null}
-            {renderPost({
-              item,
-              ...(onPostPress ? { onPress: () => onPostPress(item.id) } : {}),
-              role,
-            })}
+            {renderPost({ item, role })}
           </View>
         );
       })}
