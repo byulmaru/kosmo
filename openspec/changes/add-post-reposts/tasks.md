@@ -222,24 +222,32 @@ production fragment shape를 유지하는 fixture와 Storybook에서 Repost·Quo
 - `docs/domain/decisions/0010-post-interaction-contracts.md`
 - `PROD-389`
 - `PROD-414`
+- `PROD-432`
+- `PROD-433`
 
 **Deliverable**
 
-사용자가 selected Profile 기준 Repost 상태와 viewer-independent count를 확인하고 독립 component에서 생성·취소하며 pending·실패 뒤 일관된 상태를 유지한다.
+Post fragment와 mutations를 colocate한 내부 `useRepostAction` adapter가 PROD-433의 `PostActionBar.repost` config에 selected Profile별 상태, viewer-independent count와 생성·취소 interaction을 제공한다. 생성 성공은 normalized Source 상태를 반영하고, 취소 성공은 실제 Repost를 삭제하되 Source cache 동기화는 PROD-471에 남긴다.
 
 **Guardrails**
 
-- fragment와 mutations를 실제 component에 colocate하고 actor별 Relay Store를 격리한다.
-- mutation payload의 normalized Post identity·count·viewer relation을 사용하고 임시 목록 membership updater를 만들지 않는다.
-- 공통 Action Bar와 실제 surface 조립은 PROD-432에 남긴다.
+- 최신 main을 반영하고 검증한 `prod-433` head에서 `prod-414`를 생성하고 Draft PR base를 `prod-433`으로 유지하며, branch 코드를 복사하거나 `PostActionBar` 또는 독립 공개 action leaf를 중복 구현하지 않는다.
+- fragment와 mutations를 내부 adapter/hook에 colocate하고 actor별 Relay Store를 격리한다.
+- 생성 mutation payload의 normalized Post identity·count·viewer relation을 사용하고 임시 목록 membership updater를 만들지 않는다.
+- 취소 성공 뒤 client count 산술, 광범위한 cache invalidation, 임시 refetch 또는 Source cache 직접 변경을 추가하지 않는다.
+- 취소 성공 뒤 임시 local deselect나 같은 Tombstone ID의 후속 입력을 막는 client 상태를 추가하지 않는다.
+- mutation 실패는 pending을 종료하고 서버 확정 domain/cache 상태를 유지한 채 error callback을 호출한다. persistent 오류·재시도 UI와 한국어 또는 성공 toast는 추가하지 않는다.
+- Storybook 전용 wrapper는 `PostActionBar`에 Repost config 하나만 전달하고, production full-bar 조립과 접근 가능한 한국어 오류 toast는 PROD-432에 남긴다.
+- 공통 test harness를 신설하거나 기존 harness를 범용 확장하지 않는다.
 
 **Verification**
 
-- 선택·미선택, pending 중 중복 차단, 생성·취소 성공, 실패 복구, selected Profile 전환과 접근성 상태를 component/integration test로 검증한다.
+- raw Relay unit test로 생성 성공 cache, 정확한 Active Repost ID의 취소와 cache 비변경, 오류 뒤 pending 종료·error callback·다음 입력 재시도와 actor Store 격리를 검증한다.
+- Storybook 전용 단일-config `PostActionBar` wrapper의 `play` interaction으로 클릭, pending 중복 차단, 생성 성공, 취소 ID와 cache 비변경, 오류 재시도, selected Profile actor reset과 접근성 상태를 검증한다.
 
-- [ ] 8.1 `repostCount`와 `viewerRepost` fragment를 소비하는 독립 Repost action component와 접근성 상태를 구현한다.
-- [ ] 8.2 `repostPost`·`deletePost` mutation과 normalized actor Store 갱신을 연결한다.
-- [ ] 8.3 Relay mock/Storybook에서 pending·성공·오류·Profile 전환을 검증하고 relay/app check를 통과시킨다.
+- [ ] 8.1 `repostCount`와 `viewerRepost` fragment를 소비하는 내부 `useRepostAction` adapter와 `PostActionBar.repost` config를 구현한다.
+- [ ] 8.2 `repostPost`의 normalized actor Store 갱신과 Active Repost ID를 사용하는 `deletePost` 호출을 연결하고, 취소 성공 뒤 Source cache를 변경하지 않으며 실패를 error callback으로 전달한다.
+- [ ] 8.3 raw Relay unit과 Storybook `play` interaction으로 pending·생성·취소·오류 재시도·Profile actor reset을 검증하고 relay/app/Storybook scoped check를 통과시킨다.
 
 ## 9. PROD-415 Post List Repost 연결
 
@@ -329,7 +337,35 @@ Repost Tombstone 뒤 대응 Notification cleanup을 Best Effort로 시도하고,
 - [ ] 11.2 kind-aware visible predicate가 stale Repost Notification을 모든 API surface에서 숨기게 한다.
 - [ ] 11.3 cleanup 성공·반복·실패와 stale visibility 검증을 추가하고 core/API check를 통과시킨다.
 
-## 12. PROD-389 Repost 통합 검증·정합성 확인·archive
+## 12. PROD-471 Repost 취소 뒤 Source cache 동기화
+
+**Authority / Provenance**
+
+- `docs/domain/objects/post.md`
+- `docs/domain/decisions/0010-post-interaction-contracts.md`
+- `PROD-389`
+- `PROD-471`
+
+**Deliverable**
+
+Repost 취소 성공 뒤 서버가 확정한 Source Post의 `repostCount`와 selected Profile별 `viewerRepost`를 같은 Relay actor Store에 정규화해 모든 중복 surface가 일치한다.
+
+**Guardrails**
+
+- 일반 `deletePost`와 concrete Post identity, PROD-411의 Tombstone lifecycle을 보존한다.
+- client count 산술, 관련 없는 전체 refetch, 광범위한 cache invalidation과 임시 connection updater를 사용하지 않는다.
+- 다른 selected Profile의 actor Store로 취소 상태를 전파하지 않는다.
+- Repost action adapter와 공통 `PostActionBar` 조립을 다시 소유하지 않는다.
+
+**Verification**
+
+- 취소 결과의 Source 상태, 같은 actor Store의 중복 surface 일치, actor 간 격리와 API·Relay cache 동기화를 자동 테스트로 검증한다.
+
+- [ ] 12.1 취소 성공 결과가 Source Post ID, 최신 `repostCount`와 selected Profile별 `viewerRepost`를 제공하게 한다.
+- [ ] 12.2 취소 mutation 결과로 같은 actor Store의 normalized Source Post record를 갱신한다.
+- [ ] 12.3 API payload와 client cache 동기화·actor 격리 회귀 테스트를 추가하고 관련 check를 통과시킨다.
+
+## 13. PROD-389 Repost 통합 검증·정합성 확인·archive
 
 **Authority / Provenance**
 
@@ -355,7 +391,7 @@ Repost Tombstone 뒤 대응 Notification cleanup을 Best Effort로 시도하고,
 - direct Source 저장부터 Repost 생성·취소·재Repost, count/viewer 상태, Home/Profile 표시·Source 이동·action, 자기 알림 억제, inbox/read/badge와 Tombstone cleanup을 연결한 vertical flow를 검증한다.
 - canonical 문서·Linear·OpenSpec delta·구현 정합성, archive diff와 archive 후 strict validation을 확인한다.
 
-- [ ] 12.1 모든 자식 이슈·PR·담당 검증 완료와 Remaining Decisions 정리를 확인한다.
-- [ ] 12.2 전체 Repost 사용자·Notification lifecycle과 mixed Post/Notification 회귀 통합 검증을 실행한다.
-- [ ] 12.3 canonical 문서와 OpenSpec delta를 최종 구현에 맞춰 동기화하고 strict validation을 통과시킨다.
-- [ ] 12.4 Completion Gate 승인 뒤 change를 archive하고 archive 후 strict validation을 통과시킨다.
+- [ ] 13.1 모든 자식 이슈·PR·담당 검증 완료와 Remaining Decisions 정리를 확인한다.
+- [ ] 13.2 전체 Repost 사용자·Notification lifecycle과 mixed Post/Notification 회귀 통합 검증을 실행한다.
+- [ ] 13.3 canonical 문서와 OpenSpec delta를 최종 구현에 맞춰 동기화하고 strict validation을 통과시킨다.
+- [ ] 13.4 Completion Gate 승인 뒤 change를 archive하고 archive 후 strict validation을 통과시킨다.
