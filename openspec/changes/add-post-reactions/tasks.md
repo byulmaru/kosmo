@@ -209,8 +209,8 @@ Reaction 삭제 뒤 대응 Notification cleanup을 Best Effort로 시도하고, 
 
 - 정상·반복·누락 source cleanup, cleanup 실패 격리·오류 관측과 stale row의 Node/list/count/read 숨김을 database/API integration test로 검증한다.
 
-- [ ] 9.1 Reaction 삭제 결과에 연결되는 idempotent Notification cleanup을 구현한다.
-- [ ] 9.2 cleanup 성공·반복·실패 격리와 stale visibility 검증을 추가하고 core/API check를 통과시킨다.
+- [x] 9.1 Reaction 삭제 결과에 연결되는 idempotent Notification cleanup을 구현한다.
+- [x] 9.2 cleanup 성공·반복·실패 격리와 stale visibility 검증을 추가하고 core/API check를 통과시킨다.
 
 ## 10. PROD-390 Reaction 통합 검증·정합성 확인·archive
 

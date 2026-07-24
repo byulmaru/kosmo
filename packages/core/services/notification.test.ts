@@ -259,3 +259,22 @@ test('Reaction 알림은 자기 Post와 Remote Recipient에서 no-op이다', asy
 test('Reaction 알림은 존재하지 않는 source를 거부한다', async () => {
   await assert.rejects(createReactionNotification(crypto.randomUUID()), NotFoundError);
 });
+
+test('Reaction 알림 정리는 정상·반복·없는 source에 idempotent하다', async () => {
+  const author = await createProfile();
+  const recipient = await createProfile();
+  const reaction = await createReaction(author.id, recipient.id);
+
+  await createReactionNotification(reaction.id);
+  await deleteNotificationBySource(NotificationKind.REACTION, reaction.id);
+  await deleteNotificationBySource(NotificationKind.REACTION, reaction.id);
+  assert.deepEqual(await readNotifications(reaction.id), []);
+
+  const staleReaction = await createReaction(author.id, recipient.id);
+  await createReactionNotification(staleReaction.id);
+  await db.delete(Reactions).where(eq(Reactions.id, staleReaction.id));
+  await deleteNotificationBySource(NotificationKind.REACTION, staleReaction.id);
+  assert.deepEqual(await readNotifications(staleReaction.id), []);
+
+  await deleteNotificationBySource(NotificationKind.REACTION, crypto.randomUUID());
+});
