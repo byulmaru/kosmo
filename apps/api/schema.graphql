@@ -106,6 +106,14 @@ type DeleteBookmarkPayload {
   post: Post
 }
 
+input DeletePostInput {
+  id: ID!
+}
+
+type DeletePostPayload {
+  postId: ID!
+}
+
 input DeleteProfileInput {
   id: ID!
 }
@@ -171,6 +179,7 @@ type Mutation {
   createPost(input: CreatePostInput!): CreatePostPayload!
   createProfile(input: CreateProfileInput!): CreateProfilePayload!
   deleteBookmark(input: DeleteBookmarkInput!): DeleteBookmarkPayload!
+  deletePost(input: DeletePostInput!): DeletePostPayload!
   deleteProfile(input: DeleteProfileInput!): DeleteProfilePayload!
   deleteReaction(input: DeleteReactionInput!): DeleteReactionPayload!
   exchangeNativeOidcSession(input: ExchangeNativeOidcSessionInput!): ExchangeNativeOidcSessionPayload!

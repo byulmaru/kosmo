@@ -200,11 +200,14 @@ Remote follow 전체 흐름이 최종 계약과 일치하고 shared change가 ac
 - 모든 구현 자식이 main에 병합되기 전에는 시작하거나 archive하지 않는다.
 - 자식 이슈의 runtime 구현을 이 task에 흡수하지 않는다.
 - 부모 PROD-235는 자체 PR 없이 이 task의 완료 근거로 전체 계약의 완료만 판단한다.
+- current active actor-discovery의 generic handler delegation을 소비하고, Remote Follow delta에서 actor document, key identifier, endpoint 또는 activity allowlist를 다시 정의하지 않는다.
+- Fedify accessor, option과 inbox context 표현은 adapter 구현·테스트에 두고 normative delta는 trusted typed activity, local target binding과 projection 결과를 정의한다.
 
 **Verification**
 
 - 모든 child PR, requirement scenario, schema/type generation과 전체 strict validation을 확인한다.
 - archive 이후 active specs와 현재 main이 일치하는지 검증한다.
+- actor-discovery modification이 없고 profile/data-model delta가 Fedify transport API를 중복 소유하지 않는지 검증한다.
 
-- [ ] 10.1 PROD-361이 Follow/Undo/Accept/Reject, graph와 Web action 및 PROD-380 Notification integration evidence를 통합 검증한다.
-- [ ] 10.2 PROD-361이 전체 task 완료 후 delta specs를 동기화하고 change를 archive한 뒤 `openspec validate --all --strict`를 통과한다.
+- [x] 10.1 PROD-361이 Follow/Undo/Accept/Reject, graph와 Web action 및 PROD-380 Notification integration evidence를 통합 검증한다.
+- [x] 10.2 PROD-361이 전체 task 완료 후 delta specs를 동기화하고 change를 archive한 뒤 `openspec validate --all --strict`를 통과한다.

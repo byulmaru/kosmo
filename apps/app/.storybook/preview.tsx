@@ -90,6 +90,11 @@ const preview: Preview = {
           styles: { height: '844px', width: '390px' },
           type: 'mobile',
         },
+        kosmoPickerWide: {
+          name: 'KOSMO picker wide',
+          styles: { height: '900px', width: '600px' },
+          type: 'tablet',
+        },
       },
     },
   },

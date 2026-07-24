@@ -319,7 +319,7 @@ describe('inbound Accept and Reject', () => {
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
   });
 
-  test('handles a Reject and ignores a stale Reject', async () => {
+  test('ignores Reject.published when the embedded Follow generation matches', async () => {
     const fixture = await createFixture({ projection: 'ESTABLISHED' });
     const context = createContext(localProfileId);
 
@@ -329,16 +329,6 @@ describe('inbound Accept and Reject', () => {
         actor: remoteActorUri,
         object: createOutboundFollow(fixture.projection, { includeId: false }),
         published: fixture.projection.createdAt.subtract({ seconds: 1 }),
-      }),
-    );
-    assert.equal((await db.select().from(ProfileFollows)).length, 1);
-
-    await handleInboundReject(
-      context,
-      new Reject({
-        actor: remoteActorUri,
-        object: createOutboundFollow(fixture.projection, { includeId: false }),
-        published: fixture.projection.createdAt,
       }),
     );
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
