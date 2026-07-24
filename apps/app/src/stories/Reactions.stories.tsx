@@ -244,6 +244,39 @@ function QuickPickerStateCatalog() {
   );
 }
 
+function QuickPickerViewportCatalog({ title }: { title: string }) {
+  return (
+    <Catalog>
+      <Section title={title}>
+        <ReactionSelector
+          onToggle={() => {}}
+          options={quickReactionOptions}
+          selectedOptionIds={['❤️', '👀']}
+        />
+      </Section>
+    </Catalog>
+  );
+}
+
+async function assertQuickPickerViewport(canvasElement: HTMLElement, expectedWidth: number) {
+  const canvas = within(canvasElement);
+  const buttons = canvas.getAllByRole('button');
+  const picker = buttons[0]!.parentElement!;
+  const canvasRect = canvasElement.getBoundingClientRect();
+  const pickerRect = picker.getBoundingClientRect();
+
+  expect(canvasElement.ownerDocument.documentElement.clientWidth).toBe(expectedWidth);
+  expect(buttons).toHaveLength(6);
+  for (const button of buttons) {
+    expect(button.getBoundingClientRect().width).toBe(44);
+    expect(button.getBoundingClientRect().height).toBe(44);
+    expect(button.getBoundingClientRect().top).toBe(buttons[0]!.getBoundingClientRect().top);
+  }
+  expect(picker.scrollWidth).toBeLessThanOrEqual(picker.clientWidth);
+  expect(pickerRect.left).toBeGreaterThanOrEqual(canvasRect.left);
+  expect(pickerRect.right).toBeLessThanOrEqual(canvasRect.right);
+}
+
 const meta = {
   component: ReactionSummaryCatalog,
   parameters: {
@@ -406,4 +439,16 @@ export const QuickPickerStates: Story = {
     expect(canvas.getByText('차단된 동작: 0')).toBeVisible();
   },
   render: () => <QuickPickerStateCatalog />,
+};
+
+export const QuickPickerViewport390: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: ({ canvasElement }) => assertQuickPickerViewport(canvasElement, 390),
+  render: () => <QuickPickerViewportCatalog title="Quick Picker at 390px" />,
+};
+
+export const QuickPickerViewport600: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoPickerWide' } },
+  play: ({ canvasElement }) => assertQuickPickerViewport(canvasElement, 600),
+  render: () => <QuickPickerViewportCatalog title="Quick Picker at 600px" />,
 };
