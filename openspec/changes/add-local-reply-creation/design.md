@@ -28,6 +28,7 @@ PROD-424 backend, PROD-425 UI/thread, PROD-426 Notification/inbox는 하나의 L
 - Parent visibility 검증과 core write가 서로 다른 connection/transaction에서 수행되면 검증 후 상태 변경 또는 부분 저장 경계가 생길 수 있다.
 - `PostComposer` 성공 처리는 현재 본문 초기화에 초점이 있고, thread connection의 공개 shape은 선행 `add-post-replies` 구현이 제공해야 한다.
 - Notification kind, source predicate, concrete Node loader, connection/count/Read 쿼리와 client item이 Follow 구조에 결합되어 있어, Reply branch를 item 표시만으로 추가하면 hidden item이 page limit·count·Node·Read 간에 다르게 보일 수 있다.
+- PROD-273은 실제 Mute·Block 정책 capability가 연결되기 전 Notification 생성 정책을 기본 allow로 정의한다. PROD-426은 아직 구현되지 않은 Profile Mute·Block·Domain Block·Domain Block Instance, Notification scope Word·Hashtag Mute와 Root Post thread Notification Mute capability 및 Reply source 연동을 구현하지 않는다.
 - Relay generated artifact는 commit하지 않으며, selected Profile 전환은 Environment/Store 재생성을 통해 cache를 격리한다.
 
 ### Recommended Approach
