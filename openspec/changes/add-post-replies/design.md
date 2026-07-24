@@ -11,7 +11,7 @@
 - 기존 Repost Source 기반을 보존하면서 nullable Reply Parent를 additive하게 저장한다.
 - Content, Reply Parent와 Repost Source의 허용 조합을 공통 core 경계에서 판정하고 Reply Parent 대상 유효성을 검증한다.
 - 직접 Parent, 조상과 descendant를 조회할 때 서로 다른 visibility/eligibility 경계를 유지한다.
-- Home/Profile/Hashtag 후보 정책과 Post 상세 thread가 같은 직접 관계를 사용하게 한다.
+- Home/Profile 후보 정책과 Post 상세 thread가 같은 직접 관계를 사용하게 한다.
 - 각 Linear 구현 이슈가 자신의 구현과 검증을 소유하고 부모 PROD-388이 최종 통합·archive를 소유하게 한다.
 
 **Non-Goals:**
@@ -42,7 +42,7 @@
 - validator는 package 공개 barrel에 노출하지 않는다. PROD-393은 기존 Local/ActivityPub `createPost`에 `replyParentId`만 추가해 Post와 Reply를 저장한다. Source를 실제로 연결하는 Quote·Reply+Quote와 Repost 경로는 각 caller를 소유한 후속 이슈에서 추가한다.
 - PROD-398은 Post 관계 field resolver에서 저장 ID를 기존 loadable `Post` Node에 전달하고 Parent가 조회 불가능하면 `null`로 정규화한다.
 - PROD-399는 직접 Parent를 seed로 하는 recursive query에서 현재 Post와 방문한 조상 ID를 path로 추적한다. 각 단계에 기존 `Post` 조회 경계를 적용해 unavailable Parent에서 중단하고, 반환 순서는 직접 Parent부터 유지한다. PROD-400은 recursive traversal에서 visibility를 적용하지 않고 cycle 방문을 방어하며 전체 descendant ID를 찾은 뒤, 최종 Post 후보에 visibility/eligibility를 적용하고 `createdAt ASC, id ASC` cursor와 page limit을 적용한다. 대표 fan-out·depth 데이터의 실제 query plan으로 `reply_parent_id` index 필요성과 형태를 결정한다.
-- PROD-429는 Reply 후보 판정을 page limit 이전에 적용한다. PROD-422는 route가 thread query를 소유하고 각 Post 표시 컴포넌트가 colocated Relay fragment를 유지하게 연결한다.
+- PROD-429는 Home/Profile의 Reply 후보 판정을 page limit 이전에 적용한다. PROD-422는 route가 thread query를 소유하고 각 Post 표시 컴포넌트가 colocated Relay fragment를 유지하게 연결한다.
 - `add-post-replies`는 `add-post-reposts` artifact를 수정하지 않는다. 겹치는 active capability는 새 독립 requirement로 추가하고 두 change와 전체 OpenSpec을 함께 strict validation한다.
 
 ### Allowed Alternatives

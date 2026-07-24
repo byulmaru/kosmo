@@ -127,10 +127,28 @@ test('addReaction 결과는 새 source만 구분한다', async () => {
   assert.equal(repeated.reaction.id, first.reaction.id);
 });
 
-test('활성 Local actor가 아니면 Reaction을 만들지 않는다', async () => {
+test('ACTIVITYPUB Unresponsive actor도 공통 Reaction action으로 추가·삭제한다', async () => {
+  const fixture = await createFixture({
+    instanceKind: InstanceKind.ACTIVITYPUB,
+    instanceState: InstanceState.UNRESPONSIVE,
+  });
+
+  const { reaction } = await addReaction({ ...fixture.input, type: '👀' });
+  assert.equal(await countReactions(fixture.post.id), 1);
+
+  await deleteReaction({
+    actorProfileId: fixture.profile.id,
+    reactionId: reaction.id,
+  });
+  assert.equal(await countReactions(fixture.post.id), 0);
+});
+
+test('Profile이 비활성이거나 Instance가 Suspended이면 Reaction을 만들지 않는다', async () => {
   const fixtures = await Promise.all([
-    createFixture({ instanceKind: InstanceKind.ACTIVITYPUB }),
-    createFixture({ instanceState: InstanceState.SUSPENDED }),
+    createFixture({
+      instanceKind: InstanceKind.ACTIVITYPUB,
+      instanceState: InstanceState.SUSPENDED,
+    }),
     createFixture({ profileState: ProfileState.DISABLED }),
   ]);
 
@@ -234,12 +252,14 @@ test('이미 없는 ID와 이전 ID의 재시도는 현재 Reaction을 제거하
   ]);
 });
 
-test('타인 소유의 현재 Reaction과 유효하지 않은 actor 삭제를 거부한다', async () => {
+test('타인 소유의 현재 Reaction과 비활성 또는 Suspended actor의 삭제를 거부한다', async () => {
   const owner = await createFixture();
   const attacker = await createFixture();
   const invalidActors = await Promise.all([
-    createFixture({ instanceKind: InstanceKind.ACTIVITYPUB }),
-    createFixture({ instanceState: InstanceState.SUSPENDED }),
+    createFixture({
+      instanceKind: InstanceKind.ACTIVITYPUB,
+      instanceState: InstanceState.SUSPENDED,
+    }),
     createFixture({ profileState: ProfileState.DISABLED }),
   ]);
   const { reaction } = await addReaction({ ...owner.input, type: '🌈' });

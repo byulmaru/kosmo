@@ -14,11 +14,13 @@ import {
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
+import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { encodeGlobalId as globalId } from '../../../src/graphql/global-id';
 import type * as CoreDb from '@kosmo/core/db';
+import type * as CoreServices from '@kosmo/core/services';
 import type { Env } from '../../../src/context';
 
 const publicOrigin = 'http://127.0.0.1:4173';
@@ -31,10 +33,13 @@ let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
+let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
 let Profiles: typeof CoreDb.Profiles;
 let Reactions: typeof CoreDb.Reactions;
 let Sessions: typeof CoreDb.Sessions;
+let createCorePost: typeof CoreServices.createPost;
+let repostPost: typeof CoreServices.repostPost;
 let app: Hono<Env>;
 let localInstanceId: string;
 
@@ -44,6 +49,7 @@ describe('GraphQL Reaction', () => {
     process.env.NODE_ENV = 'production';
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
+    ({ createPost: createCorePost, repostPost } = await import('@kosmo/core/services'));
     ({
       AccountProfiles,
       Accounts,
@@ -52,6 +58,7 @@ describe('GraphQL Reaction', () => {
       Instances,
       Notifications,
       pg,
+      PostContents,
       Posts,
       Profiles,
       Reactions,
@@ -554,6 +561,124 @@ describe('GraphQL Reaction', () => {
     assert.equal(invalidType.errors?.[0]?.extensions?.code, 'VALIDATION');
     assert.equal(invalidType.errors?.[0]?.extensions?.field, 'type');
   });
+
+  test('Reaction count는 viewer와 Profile visibility에 무관하게 집계하고 삭제를 반영한다', async () => {
+    const viewer = await createAuthenticatedSession();
+    const post = await createPost(viewer.profile.id);
+    const suspendedInstance = await createRemoteInstance({ state: InstanceState.SUSPENDED });
+    const unavailableProfile = await createProfile('unavailable-count-profile', {
+      instanceId: suspendedInstance.id,
+    });
+    const otherProfile = await createProfile('other-count-profile');
+
+    await Promise.all([
+      insertReaction({
+        id: '00000000-0000-8000-8000-000000000031',
+        postId: post.id,
+        profileId: viewer.profile.id,
+        type: '❤️',
+        createdAt: '2026-07-21T00:00:01Z',
+      }),
+      insertReaction({
+        id: '00000000-0000-8000-8000-000000000032',
+        postId: post.id,
+        profileId: unavailableProfile.id,
+        type: '❤️',
+        createdAt: '2026-07-21T00:00:02Z',
+      }),
+      insertReaction({
+        id: '00000000-0000-8000-8000-000000000033',
+        postId: post.id,
+        profileId: otherProfile.id,
+        type: '🎉',
+        createdAt: '2026-07-21T00:00:03Z',
+      }),
+    ]);
+
+    const authenticated = await requestReactionCounts(post.id, viewer.token);
+    const anonymous = await requestReactionCounts(post.id);
+    assertNoGraphQLErrors(authenticated);
+    assertNoGraphQLErrors(anonymous);
+    assert.deepEqual(authenticated.data?.node?.reactionCounts, [
+      { type: '❤️', count: 2 },
+      { type: '🎉', count: 1 },
+    ]);
+    assert.deepEqual(
+      anonymous.data?.node?.reactionCounts,
+      authenticated.data?.node?.reactionCounts,
+    );
+
+    await db.delete(Reactions).where(eq(Reactions.id, '00000000-0000-8000-8000-000000000033'));
+    const afterDelete = await requestReactionCounts(post.id, viewer.token);
+    assertNoGraphQLErrors(afterDelete);
+    assert.deepEqual(afterDelete.data?.node?.reactionCounts, [{ type: '❤️', count: 2 }]);
+
+    const emptyPost = await createPost(viewer.profile.id);
+    const empty = await requestReactionCounts(emptyPost.id, viewer.token);
+    assertNoGraphQLErrors(empty);
+    assert.deepEqual(empty.data?.node?.reactionCounts, []);
+
+    const privateAuthor = await createProfile('private-count-author');
+    const privatePost = await createPost(privateAuthor.id, PostVisibility.DIRECT);
+    const hiddenPost = await requestReactionCounts(privatePost.id, viewer.token);
+    assertNoGraphQLErrors(hiddenPost);
+    assert.equal(hiddenPost.data?.node, null);
+  });
+
+  test('Reaction count는 숨겨진 Repost source의 raw Post 경로에서 노출되지 않는다', async () => {
+    const auth = await createAuthenticatedSession();
+    const sourceAuthor = await createProfile('hidden-repost-source-author');
+    const { post: source } = await createCorePost({
+      document: postContentDocumentFromText(crypto.randomUUID()),
+      origin: 'LOCAL',
+      profileId: sourceAuthor.id,
+      visibility: PostVisibility.PUBLIC,
+    });
+    const { repost } = await repostPost({
+      actorProfileId: auth.profile.id,
+      sourcePostId: source.id,
+    });
+    const reactionProfile = await createProfile('raw-post-reaction-profile');
+    const reaction = await db
+      .insert(Reactions)
+      .values({ postId: repost.id, profileId: reactionProfile.id, type: '🎉' })
+      .returning()
+      .then(firstOrThrow);
+    const notification = await db
+      .insert(Notifications)
+      .values({
+        kind: NotificationKind.REACTION,
+        recipientProfileId: auth.profile.id,
+        sourceId: reaction.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+
+    await db
+      .update(Posts)
+      .set({ visibility: PostVisibility.DIRECT })
+      .where(eq(Posts.id, source.id));
+
+    const result = await requestGraphQL<{
+      node: { post: { id: string; reactionCounts: Array<{ type: string; count: number }> } } | null;
+    }>(
+      `query ReactionNotificationRawPost($id: ID!) {
+        node(id: $id) {
+          ... on ReactionNotification {
+            post { id reactionCounts { type count } }
+          }
+        }
+      }`,
+      { id: globalId('ReactionNotification', notification.id) },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.node?.post, {
+      id: globalId('Post', repost.id),
+      reactionCounts: [],
+    });
+  });
 });
 
 type ReactionNode = {
@@ -573,6 +698,10 @@ type ReactionProfilesNode = {
       startCursor: string | null;
     };
   };
+};
+
+type ReactionCountsNode = {
+  reactionCounts: Array<{ type: string; count: number }>;
 };
 
 type GraphQLResult<TData> = {
@@ -635,6 +764,19 @@ const requestReactionProfiles = (
       }
     }`,
     { postId: globalId('Post', postId), type, ...pagination },
+  );
+
+const requestReactionCounts = (postId: string, token?: string) =>
+  requestGraphQL<{ node: ReactionCountsNode | null }>(
+    `query ReactionCounts($postId: ID!) {
+      node(id: $postId) {
+        ... on Post {
+          reactionCounts { type count }
+        }
+      }
+    }`,
+    { postId: globalId('Post', postId) },
+    token,
   );
 
 const requestGraphQL = async <TData>(
@@ -743,6 +885,8 @@ const createAuthenticatedSession = async ({
 const resetFixtures = async () => {
   await db.delete(Notifications);
   await db.delete(Reactions);
+  await db.update(Posts).set({ currentContentId: null });
+  await db.delete(PostContents);
   await db.delete(Posts);
   await db.delete(Sessions);
   await db.delete(AccountProfiles);

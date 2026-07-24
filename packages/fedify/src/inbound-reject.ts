@@ -12,7 +12,6 @@ export const handleInboundReject = async (
   context: InboxContext<void>,
   reject: Reject,
 ): Promise<void> => {
-  const receivedAt = Temporal.Now.instant();
   const actorUri = reject.actorId;
   if (!isHttpUri(actorUri)) {
     return;
@@ -41,8 +40,6 @@ export const handleInboundReject = async (
       follow: object,
       followeeActorUri: actorUri,
       followeeProfileId: remoteActor.profile.id,
-      publishedAt: reject.published,
-      receivedAt,
     });
   }
 };
