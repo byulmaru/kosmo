@@ -553,14 +553,27 @@ export const PureRepost: Story = {
     const root = within(canvasElement).getByTestId('post-source-presentation');
     const canvas = within(root);
     expect(canvas.getAllByRole('link')).toHaveLength(3);
+    const repostIcon = canvas.getByText('↻');
     const repostLabel = canvas.getByText('재게시한 코스모 사용자님이 재게시함');
-    const sourceAuthorLink = canvas.getByLabelText('아주 긴 Source 작성자 표시 이름 프로필 보기');
+    const sourceAuthorName = canvas.getByText('아주 긴 Source 작성자 표시 이름');
+    const sourceAvatar = canvas.getByLabelText('아주 긴 Source 작성자 표시 이름 프로필 이미지');
     expect(repostLabel.getBoundingClientRect().height).toBeLessThanOrEqual(
       typography.sm.lineHeight,
     );
+    expect(
+      Math.abs(
+        repostIcon.getBoundingClientRect().right - sourceAvatar.getBoundingClientRect().right,
+      ),
+    ).toBeLessThanOrEqual(1);
+    expect(
+      Math.abs(
+        repostLabel.getBoundingClientRect().left - sourceAuthorName.getBoundingClientRect().left,
+      ),
+    ).toBeLessThanOrEqual(1);
     const attributionGap =
-      sourceAuthorLink.getBoundingClientRect().top - repostLabel.getBoundingClientRect().bottom;
-    expect(attributionGap).toBeLessThanOrEqual(spacing.sm);
+      sourceAuthorName.getBoundingClientRect().top - repostLabel.getBoundingClientRect().bottom;
+    expect(attributionGap).toBeGreaterThanOrEqual(-spacing.xs);
+    expect(attributionGap).toBeLessThanOrEqual(spacing.xs);
     await userEvent.click(canvas.getByLabelText('재게시한 코스모 사용자 프로필 보기'));
     await expect(args.onPostAuthor).toHaveBeenCalledTimes(1);
     await expect(args.onSourceAuthor).toHaveBeenCalledTimes(0);

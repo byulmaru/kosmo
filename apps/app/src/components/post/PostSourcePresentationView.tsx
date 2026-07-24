@@ -119,7 +119,9 @@ export function PostSourcePresentationView({
     return (
       <View role="article" style={styles.root} testID="post-source-presentation">
         <View style={styles.repostAttribution}>
-          <Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>
+          <View style={styles.repostIconColumn}>
+            <Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>
+          </View>
           {renderLink({
             accessibilityLabel: `${post.profile.displayName} 프로필 보기`,
             children: (
@@ -195,7 +197,13 @@ function Author({ profile, showAvatar }: { profile: PresentationProfile; showAva
 
 const styles = StyleSheet.create({
   root: { gap: spacing.sm, minWidth: 0 },
-  repostAttribution: { alignItems: 'center', flexDirection: 'row', gap: spacing.xs },
+  repostAttribution: {
+    alignItems: 'flex-end',
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: -spacing.lg,
+  },
+  repostIconColumn: { alignItems: 'flex-end', width: 40 },
   repeat: { fontFamily: 'SUIT', ...typography.sm },
   repostLabel: {
     fontFamily: 'SUIT',
