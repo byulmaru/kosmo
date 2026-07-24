@@ -14,6 +14,7 @@ import {
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
+import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -31,6 +32,7 @@ let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
+let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
 let Profiles: typeof CoreDb.Profiles;
 let Reactions: typeof CoreDb.Reactions;
@@ -52,6 +54,7 @@ describe('GraphQL Reaction', () => {
       Instances,
       Notifications,
       pg,
+      PostContents,
       Posts,
       Profiles,
       Reactions,
@@ -617,6 +620,55 @@ describe('GraphQL Reaction', () => {
     assertNoGraphQLErrors(hiddenPost);
     assert.equal(hiddenPost.data?.node, null);
   });
+
+  test('Reaction count는 숨겨진 Repost source의 raw Post 경로에서 노출되지 않는다', async () => {
+    const auth = await createAuthenticatedSession();
+    const sourceAuthor = await createProfile('hidden-repost-source-author');
+    const source = await createContentfulPost(sourceAuthor.id);
+    const repost = await createPost(auth.profile.id, PostVisibility.PUBLIC, {
+      repostSourceId: source.id,
+    });
+    const reactionProfile = await createProfile('raw-post-reaction-profile');
+    const reaction = await db
+      .insert(Reactions)
+      .values({ postId: repost.id, profileId: reactionProfile.id, type: '🎉' })
+      .returning()
+      .then(firstOrThrow);
+    const notification = await db
+      .insert(Notifications)
+      .values({
+        kind: NotificationKind.REACTION,
+        recipientProfileId: auth.profile.id,
+        sourceId: reaction.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+
+    await db
+      .update(Posts)
+      .set({ visibility: PostVisibility.DIRECT })
+      .where(eq(Posts.id, source.id));
+
+    const result = await requestGraphQL<{
+      node: { post: { id: string; reactionCounts: Array<{ type: string; count: number }> } } | null;
+    }>(
+      `query ReactionNotificationRawPost($id: ID!) {
+        node(id: $id) {
+          ... on ReactionNotification {
+            post { id reactionCounts { type count } }
+          }
+        }
+      }`,
+      { id: globalId('ReactionNotification', notification.id) },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.node?.post, {
+      id: globalId('Post', repost.id),
+      reactionCounts: [],
+    });
+  });
 });
 
 type ReactionNode = {
@@ -770,6 +822,22 @@ const createPost = (
     .returning()
     .then(firstOrThrow);
 
+const createContentfulPost = async (profileId: string) => {
+  const post = await createPost(profileId);
+  const content = await db
+    .insert(PostContents)
+    .values({ document: postContentDocumentFromText(post.id), postId: post.id })
+    .returning()
+    .then(firstOrThrow);
+
+  return db
+    .update(Posts)
+    .set({ currentContentId: content.id })
+    .where(eq(Posts.id, post.id))
+    .returning()
+    .then(firstOrThrow);
+};
+
 const createRemoteInstance = ({ state }: { state: InstanceState }) => {
   const domain = `remote-${crypto.randomUUID()}.example`;
   return db
@@ -823,6 +891,8 @@ const createAuthenticatedSession = async ({
 const resetFixtures = async () => {
   await db.delete(Notifications);
   await db.delete(Reactions);
+  await db.update(Posts).set({ currentContentId: null });
+  await db.delete(PostContents);
   await db.delete(Posts);
   await db.delete(Sessions);
   await db.delete(AccountProfiles);
