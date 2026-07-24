@@ -1,6 +1,6 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { first, getDatabaseConnection, Instances, Posts, Profiles, Reactions } from '../db';
-import { InstanceKind, InstanceState, PostState, ProfileState } from '../enums';
+import { InstanceState, PostState, ProfileState } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import { reactionTypeSchema } from '../validation';
 import type { Transaction } from '../db';
@@ -14,8 +14,7 @@ const requireReactionActor = async (tx: Transaction, actorProfileId: string): Pr
       and(
         eq(Profiles.id, actorProfileId),
         eq(Profiles.state, ProfileState.ACTIVE),
-        eq(Instances.kind, InstanceKind.LOCAL),
-        eq(Instances.state, InstanceState.ACTIVE),
+        ne(Instances.state, InstanceState.SUSPENDED),
       ),
     )
     .limit(1)
@@ -25,18 +24,16 @@ const requireReactionActor = async (tx: Transaction, actorProfileId: string): Pr
   }
 };
 
+type AddReactionInput = {
+  readonly actorProfileId: string;
+  readonly postId: string;
+  readonly type: string;
+};
+
 export const addReaction = async (
-  {
-    actorProfileId,
-    postId,
-    type,
-  }: {
-    readonly actorProfileId: string;
-    readonly postId: string;
-    readonly type: string;
-  },
+  { actorProfileId, postId, type }: AddReactionInput,
   tx?: Transaction,
-): Promise<typeof Reactions.$inferSelect> => {
+): Promise<{ readonly created: boolean; readonly reaction: typeof Reactions.$inferSelect }> => {
   const parsedType = reactionTypeSchema.safeParse(type);
   if (!parsedType.success) {
     throw new ValidationError(parsedType.error.issues[0]?.message, { field: 'type' });
@@ -81,7 +78,7 @@ export const addReaction = async (
       throw new Error('Reaction not found after insert conflict');
     }
 
-    return reaction;
+    return { created: inserted !== undefined, reaction };
   });
 };
 

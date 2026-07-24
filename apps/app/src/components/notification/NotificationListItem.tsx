@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { UserPlus } from 'lucide-react-native';
+import { Smile, UserPlus } from 'lucide-react-native';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
@@ -10,9 +10,21 @@ import { radii, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { NotificationListItem_notification$key } from './__generated__/NotificationListItem_notification.graphql';
 import type { NotificationListItemMarkReadMutation } from './__generated__/NotificationListItemMarkReadMutation.graphql';
+import type { ReactionNotificationListItem_notification$key } from './__generated__/ReactionNotificationListItem_notification.graphql';
 
 type NotificationListItemProps = {
   notification: NotificationListItem_notification$key;
+};
+
+type NotificationRowProps = {
+  action: string;
+  destination: string;
+  href: Href;
+  id: string;
+  kind: 'follow' | 'reaction';
+  name: string;
+  readAt: string | null | undefined;
+  timestamp: string;
 };
 
 const notificationFragment = graphql`
@@ -44,22 +56,85 @@ const notificationListItemMarkReadMutation = graphql`
 `;
 
 export function NotificationListItem({ notification }: NotificationListItemProps) {
+  const data = useFragment(notificationFragment, notification);
+  const name = data.profile.displayName || data.profile.handle;
+
+  return (
+    <NotificationRow
+      action="팔로우했습니다"
+      destination="프로필"
+      href={`/${data.profile.relativeHandle}` as Href}
+      id={data.id}
+      kind="follow"
+      name={name}
+      readAt={data.readAt}
+      timestamp={formatTimelineTimestamp(data.createdAt)}
+    />
+  );
+}
+
+const reactionNotificationFragment = graphql`
+  fragment ReactionNotificationListItem_notification on ReactionNotification {
+    id
+    createdAt
+    readAt
+    type
+    profile {
+      displayName
+      handle
+    }
+    post {
+      id
+      profile {
+        relativeHandle
+      }
+    }
+  }
+`;
+
+export function ReactionNotificationListItem({
+  notification,
+}: {
+  notification: ReactionNotificationListItem_notification$key;
+}) {
+  const data = useFragment(reactionNotificationFragment, notification);
+  const name = data.profile.displayName || data.profile.handle;
+
+  return (
+    <NotificationRow
+      action={`${data.type} 반응을 남겼습니다`}
+      destination="게시글"
+      href={`/${data.post.profile.relativeHandle}/${data.post.id}` as Href}
+      id={data.id}
+      kind="reaction"
+      name={name}
+      readAt={data.readAt}
+      timestamp={formatTimelineTimestamp(data.createdAt)}
+    />
+  );
+}
+
+function NotificationRow({
+  action,
+  destination,
+  href,
+  id,
+  kind,
+  name,
+  readAt,
+  timestamp,
+}: NotificationRowProps) {
   const theme = useTheme();
   const [hovered, setHovered] = useState(false);
-  const data = useFragment(notificationFragment, notification);
   const [commitMarkRead] = useMutation<NotificationListItemMarkReadMutation>(
     notificationListItemMarkReadMutation,
   );
-  const name = data.profile.displayName || data.profile.handle;
-  const profileHref = `/${data.profile.relativeHandle}` as Href;
-  const timestamp = formatTimelineTimestamp(data.createdAt);
-  const unread = data.readAt === null;
+  const unread = readAt === null;
   const unreadDescription = unread ? ' 읽지 않은 알림.' : '';
-  const actionLabel = `${name}님이 팔로우했습니다. ${timestamp}.${unreadDescription} 프로필로 이동`;
   const markRead = () => {
     commitMarkRead({
       onError: () => undefined,
-      variables: { id: data.id },
+      variables: { id },
     });
   };
 
@@ -80,13 +155,17 @@ export function NotificationListItem({ notification }: NotificationListItemProps
         importantForAccessibility="no-hide-descendants"
         style={[styles.kind, { backgroundColor: theme.primary }]}
       >
-        <UserPlus color={theme.text} size={18} strokeWidth={2} />
+        {kind === 'follow' ? (
+          <UserPlus color={theme.text} size={18} strokeWidth={2} />
+        ) : (
+          <Smile color={theme.text} size={18} strokeWidth={2} />
+        )}
       </View>
       <View style={styles.content}>
         <View style={styles.avatarRow}>
-          <Link asChild href={profileHref}>
+          <Link asChild href={href}>
             <Pressable
-              accessibilityLabel={`${name} 프로필로 이동.${unreadDescription}`}
+              accessibilityLabel={`${name} ${destination}로 이동.${unreadDescription}`}
               accessibilityRole="link"
               onPress={markRead}
               style={styles.avatarLink}
@@ -96,15 +175,15 @@ export function NotificationListItem({ notification }: NotificationListItemProps
           </Link>
           <Text style={[styles.time, { color: theme.textSecondary }]}>{timestamp}</Text>
         </View>
-        <Link asChild href={profileHref}>
+        <Link asChild href={href}>
           <Pressable
-            accessibilityLabel={actionLabel}
+            accessibilityLabel={`${name}님이 ${action}. ${timestamp}.${unreadDescription} ${destination}로 이동`}
             accessibilityRole="link"
             onPress={markRead}
             style={styles.copyLink}
           >
             <Text style={[styles.copy, { color: theme.text }]}>
-              <Text style={styles.name}>{name}</Text>님이 팔로우했습니다
+              <Text style={styles.name}>{name}</Text>님이 {action}
             </Text>
           </Pressable>
         </Link>

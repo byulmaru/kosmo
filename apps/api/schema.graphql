@@ -77,6 +77,7 @@ type CreateBookmarkPayload {
 
 input CreatePostInput {
   bodyText: String!
+  replyParentId: ID
   visibility: PostVisibility!
 }
 
@@ -103,6 +104,14 @@ input DeleteBookmarkInput {
 type DeleteBookmarkPayload {
   bookmarkId: ID
   post: Post
+}
+
+input DeletePostInput {
+  id: ID!
+}
+
+type DeletePostPayload {
+  postId: ID!
 }
 
 input DeleteProfileInput {
@@ -170,12 +179,14 @@ type Mutation {
   createPost(input: CreatePostInput!): CreatePostPayload!
   createProfile(input: CreateProfileInput!): CreateProfilePayload!
   deleteBookmark(input: DeleteBookmarkInput!): DeleteBookmarkPayload!
+  deletePost(input: DeletePostInput!): DeletePostPayload!
   deleteProfile(input: DeleteProfileInput!): DeleteProfilePayload!
   deleteReaction(input: DeleteReactionInput!): DeleteReactionPayload!
   exchangeNativeOidcSession(input: ExchangeNativeOidcSessionInput!): ExchangeNativeOidcSessionPayload!
   followProfile(input: FollowProfileInput!): FollowProfilePayload!
   markNotificationRead(input: MarkNotificationReadInput!): MarkNotificationReadPayload!
   rejectProfileFollowRequest(input: RejectProfileFollowRequestInput!): RejectProfileFollowRequestPayload!
+  repostPost(input: RepostPostInput!): RepostPostPayload!
   selectProfile(input: SelectProfileInput!): SelectProfilePayload!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
   updateProfile(input: UpdateProfileInput!): UpdateProfilePayload!
@@ -213,9 +224,16 @@ type Post implements Node {
   createdAt: DateTime!
   id: ID!
   profile: Profile!
+  reactionCounts: [ReactionCount!]!
   reactionProfiles(after: String, before: String, first: Int, last: Int, type: String!): ProfileConnection!
+  replyAncestors: [Post!]!
+  replyDescendants(after: String, before: String, first: Int, last: Int): PostConnection!
+  replyParent: Post
+  repostCount: Int!
+  repostSource: Post
   state: PostState!
   viewerBookmark: Bookmark
+  viewerRepost: Post
   visibility: PostVisibility!
 }
 
@@ -376,6 +394,20 @@ type Reaction implements Node {
   type: String!
 }
 
+type ReactionCount {
+  count: Int!
+  type: String!
+}
+
+type ReactionNotification implements Node & Notification {
+  createdAt: DateTime!
+  id: ID!
+  post: Post!
+  profile: Profile!
+  readAt: DateTime
+  type: String!
+}
+
 input RejectProfileFollowRequestInput {
   id: ID!
 }
@@ -383,6 +415,14 @@ input RejectProfileFollowRequestInput {
 type RejectProfileFollowRequestPayload {
   followeeProfile: Profile!
   profileFollowRequestId: ID!
+}
+
+input RepostPostInput {
+  sourceId: ID!
+}
+
+type RepostPostPayload {
+  repost: Post!
 }
 
 input SelectProfileInput {

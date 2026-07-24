@@ -14,15 +14,11 @@ export const handleInboundRejectFollow = async ({
   follow,
   followeeActorUri,
   followeeProfileId,
-  publishedAt,
-  receivedAt,
 }: {
   context: InboxContext<void>;
   follow: Follow;
   followeeActorUri: URL;
   followeeProfileId: string;
-  publishedAt: Temporal.Instant | null;
-  receivedAt: Temporal.Instant;
 }): Promise<void> => {
   const followerActorUri = follow.actorId;
   const objectUri = follow.objectId;
@@ -73,10 +69,6 @@ export const handleInboundRejectFollow = async ({
       projection,
     )
   ) {
-    return;
-  }
-
-  if (Temporal.Instant.compare(publishedAt ?? receivedAt, projection.createdAt) < 0) {
     return;
   }
 

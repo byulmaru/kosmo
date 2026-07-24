@@ -1,17 +1,21 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import {
   ActivityPubPosts,
-  db,
+  first,
   firstOrThrow,
   firstOrThrowWith,
+  getDatabaseConnection,
+  Instances,
   isUniqueViolation,
   PostContents,
   Posts,
+  ProfileFollows,
+  Profiles,
 } from '../db';
-import { PostState } from '../enums';
-import { NotFoundError, ValidationError } from '../error';
+import { InstanceState, PostState, PostVisibility, ProfileState } from '../enums';
+import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import { validatePostStructure } from './post-structure';
-import type { PostVisibility } from '../enums';
+import type { Transaction } from '../db';
 import type { PostContentDocumentV1 } from '../post-content';
 
 type LocalPostInput = {
@@ -55,13 +59,177 @@ const isActivityPubPostUriConflict = (error: unknown): boolean => {
   );
 };
 
-export function createPost(input: LocalPostInput): Promise<CreatedPost>;
-export function createPost(input: ActivityPubPostInput): Promise<CreatedPost | DuplicatePost>;
+const findVisiblePost = async (
+  tx: Transaction,
+  { actorProfileId, postId }: { actorProfileId: string; postId: string },
+) =>
+  tx
+    .select({
+      currentContentId: Posts.currentContentId,
+      id: Posts.id,
+      profileId: Posts.profileId,
+      visibility: Posts.visibility,
+    })
+    .from(Posts)
+    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .leftJoin(
+      ProfileFollows,
+      and(
+        eq(ProfileFollows.followerProfileId, actorProfileId),
+        eq(ProfileFollows.followeeProfileId, Posts.profileId),
+      ),
+    )
+    .where(
+      and(
+        eq(Posts.id, postId),
+        eq(Posts.state, PostState.ACTIVE),
+        eq(Profiles.state, ProfileState.ACTIVE),
+        ne(Instances.state, InstanceState.SUSPENDED),
+        or(
+          inArray(Posts.visibility, [PostVisibility.PUBLIC, PostVisibility.UNLISTED]),
+          eq(Posts.profileId, actorProfileId),
+          and(eq(Posts.visibility, PostVisibility.FOLLOWERS), isNotNull(ProfileFollows.id)),
+        ),
+      ),
+    )
+    .limit(1)
+    .then(first);
+
+export const deletePost = async (
+  {
+    actorProfileId,
+    postId,
+  }: {
+    readonly actorProfileId: string;
+    readonly postId: string;
+  },
+  tx?: Transaction,
+): Promise<{ readonly postId: string }> =>
+  getDatabaseConnection(tx).transaction(async (tx) => {
+    const post = await tx
+      .select({ profileId: Posts.profileId })
+      .from(Posts)
+      .where(eq(Posts.id, postId))
+      .limit(1)
+      .then(first);
+    if (!post) {
+      throw new NotFoundError('Post not found');
+    }
+    if (post.profileId !== actorProfileId) {
+      throw new PermissionDeniedError('Post author permission is required');
+    }
+
+    await tx
+      .update(Posts)
+      .set({ deletedAt: sql`now()`, state: PostState.DELETED })
+      .where(
+        and(
+          eq(Posts.id, postId),
+          eq(Posts.profileId, actorProfileId),
+          eq(Posts.state, PostState.ACTIVE),
+        ),
+      );
+
+    return { postId };
+  });
+
+export const repostPost = async (
+  {
+    actorProfileId,
+    sourcePostId,
+  }: {
+    readonly actorProfileId: string;
+    readonly sourcePostId: string;
+  },
+  tx?: Transaction,
+): Promise<typeof Posts.$inferSelect> =>
+  getDatabaseConnection(tx).transaction(async (tx) => {
+    const actor = await tx
+      .select({ id: Profiles.id })
+      .from(Profiles)
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(
+        and(
+          eq(Profiles.id, actorProfileId),
+          eq(Profiles.state, ProfileState.ACTIVE),
+          ne(Instances.state, InstanceState.SUSPENDED),
+        ),
+      )
+      .limit(1)
+      .then(first);
+    if (!actor) {
+      throw new PermissionDeniedError();
+    }
+
+    const source = await findVisiblePost(tx, { actorProfileId, postId: sourcePostId });
+    if (!source) {
+      throw new NotFoundError('Post not found');
+    }
+    if (source.currentContentId === null) {
+      throw new ValidationError('Post cannot be reposted', { field: 'sourceId' });
+    }
+
+    let visibility: PostVisibility;
+    if (
+      source.visibility === PostVisibility.PUBLIC ||
+      source.visibility === PostVisibility.UNLISTED
+    ) {
+      visibility = PostVisibility.UNLISTED;
+    } else if (
+      source.visibility === PostVisibility.FOLLOWERS &&
+      source.profileId === actorProfileId
+    ) {
+      visibility = PostVisibility.FOLLOWERS;
+    } else {
+      throw new ValidationError('Post cannot be reposted', { field: 'sourceId' });
+    }
+
+    const inserted = await tx
+      .insert(Posts)
+      .values({
+        profileId: actorProfileId,
+        repostSourceId: source.id,
+        state: PostState.ACTIVE,
+        visibility,
+      })
+      .onConflictDoNothing()
+      .returning()
+      .then(first);
+    if (inserted) {
+      return inserted;
+    }
+
+    const existing = await tx
+      .select()
+      .from(Posts)
+      .where(
+        and(
+          eq(Posts.profileId, actorProfileId),
+          eq(Posts.repostSourceId, source.id),
+          eq(Posts.state, PostState.ACTIVE),
+          isNull(Posts.currentContentId),
+        ),
+      )
+      .limit(1)
+      .then(first);
+    if (!existing) {
+      throw new Error('Repost not found after insert conflict');
+    }
+
+    return existing;
+  });
+export function createPost(input: LocalPostInput, tx?: Transaction): Promise<CreatedPost>;
+export function createPost(
+  input: ActivityPubPostInput,
+  tx?: Transaction,
+): Promise<CreatedPost | DuplicatePost>;
 export async function createPost(
   input: LocalPostInput | ActivityPubPostInput,
+  tx?: Transaction,
 ): Promise<CreatedPost | DuplicatePost> {
   try {
-    return await db.transaction(async (tx) => {
+    return await getDatabaseConnection(tx).transaction(async (tx) => {
       const createdAt =
         input.origin === 'ACTIVITYPUB' &&
         input.publishedAt &&

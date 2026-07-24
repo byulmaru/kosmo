@@ -1,11 +1,14 @@
 import { db, Instances, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
-import { and, asc, desc, eq, exists, getColumns, gt, lt, or } from 'drizzle-orm';
+import { and, asc, desc, eq, exists, getColumns, gt, isNull, lt, or } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { builder } from '@/graphql/builder';
-import { postVisibilityAccessWhere } from '../access/visibility';
+import { postAccessWhere } from '../access';
 import { Post, PostConnection } from '../ref';
 
 type PostRow = typeof Posts.$inferSelect;
+
+const ReplyParents = alias(Posts, 'home_timeline_reply_parent');
 
 builder.queryField('homeTimeline', (t) =>
   t.withAuth({ usingProfile: true }).connection(
@@ -25,6 +28,35 @@ builder.queryField('homeTimeline', (t) =>
               ),
             ),
         );
+        const replyParentIsViewerPost = exists(
+          db
+            .select({ id: ReplyParents.id })
+            .from(ReplyParents)
+            .where(
+              and(
+                eq(ReplyParents.id, Posts.replyParentId),
+                eq(ReplyParents.profileId, ctx.session.profileId),
+              ),
+            ),
+        );
+        const replyParentAuthorIsFollowee = exists(
+          db
+            .select({ id: ReplyParents.id })
+            .from(ReplyParents)
+            .innerJoin(ProfileFollows, eq(ProfileFollows.followeeProfileId, ReplyParents.profileId))
+            .where(
+              and(
+                eq(ReplyParents.id, Posts.replyParentId),
+                eq(ProfileFollows.followerProfileId, ctx.session.profileId),
+              ),
+            ),
+        );
+        const homeCandidateWhere = or(
+          eq(Posts.profileId, ctx.session.profileId),
+          and(isNull(Posts.replyParentId), followeeWhere),
+          replyParentIsViewerPost,
+          and(followeeWhere, replyParentAuthorIsFollowee),
+        );
 
         return resolveCursorConnection<Promise<PostRow[]>>(
           {
@@ -39,8 +71,8 @@ builder.queryField('homeTimeline', (t) =>
               .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
               .where(
                 and(
-                  or(eq(Posts.profileId, ctx.session.profileId), followeeWhere),
-                  postVisibilityAccessWhere({ ctx }),
+                  homeCandidateWhere,
+                  postAccessWhere({ ctx }),
                   before ? gt(Posts.id, before) : undefined,
                   after ? lt(Posts.id, after) : undefined,
                 ),

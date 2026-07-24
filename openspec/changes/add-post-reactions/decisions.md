@@ -59,7 +59,9 @@
 ### count와 Profile 목록의 visibility 책임을 분리한다
 
 - Decision Date: 2026-07-20
-- Status: Accepted
+- Decision Class: Derived Contract
+- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0010](../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-406](https://linear.app/byulmaru/issue/PROD-406/reaction-type%EB%B3%84-%EA%B0%9C%EC%88%98%EB%A5%BC-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4), [PROD-407](https://linear.app/byulmaru/issue/PROD-407/reaction%EC%9D%84-%EB%82%A8%EA%B8%B4-profile%EC%9D%84-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4)
+- Status: Active
 - Context / Problem: viewer에 따라 count가 달라지면 Post 단위 cache가 불안정해지지만 unavailable Profile은 목록에 노출할 수 없다.
 - Decision Outcome: Post 조회 권한을 통과한 모든 viewer에게 현재 Reaction 전체의 Type별 count를 동일하게 제공한다. Type별 Profile connection에만 viewer의 기존 Profile visibility를 SQL page limit 전에 적용한다. count는 내림차순이며 동률 순서는 보장하지 않는다.
 - Alternatives Considered: count에도 viewer Profile visibility를 적용하는 방식은 viewer마다 count가 달라지고 canonical 계약과 충돌한다. client filtering은 pagination을 깨뜨린다.
@@ -108,6 +110,23 @@
 - Consequences: 실제 `Post` count query와 `reactionProfiles` connection, modal/route, selected Profile/viewer cache 통합은 PROD-418에 남는다. supplied order는 server가 제공한 count 내림차순과 동률 무보장 계약을 그대로 보존하며, component는 이를 재해석하지 않는다. 이 선택은 최종 `post-reaction-ui` spec을 축소하거나 대체하지 않으며, 나중에 되돌릴 중간 제품 계약이 아니다.
 - Confirmation / Follow-up: PROD-449는 fixture state, 복수 Type·동률, 기존 Profile row, callback interaction과 Relay mock fragment Storybook을 component 수준에서 검증한다. PROD-418은 같은 seam을 유지한 채 실제 query/connection, zero-count와 modal/route UX, cache 통합 및 최종 spec의 pagination 검증을 수행한다.
 
+### PROD-450은 supplied option 기반 Quick Picker 프레젠테이션을 먼저 전달한다
+
+- Decision Date: 2026-07-23
+- Decision Updated: 2026-07-24
+- Decision Class: Implementation Choice
+- Authority / Provenance:
+  - `docs/domain/objects/reaction.md`
+  - `docs/design/reactions.md`
+  - `PROD-450`
+  - `openspec/changes/add-post-reactions/specs/post-reaction-ui/spec.md`
+- Status: Active
+- Context / Problem: 최종 Reaction selector는 selected Profile의 실제 add/delete mutation과 Relay cache를 연결해야 하지만, PROD-450은 API 없이 독립 검증 가능한 프레젠테이션과 상태 경계만 소유한다. 현재는 canonical 여섯 Unicode를 GitHub Reaction 선택기처럼 빠르게 고르는 panel이 필요하고, 장기 custom emoji 탐색은 별도 제품·federation 계약이 필요하다.
+- Decision Outcome: PROD-450은 부모가 공급한 ordered option을 한 줄로 표시하는 props-only `ReactionSelector` Quick Picker panel을 제공한다. 외부 컨테이너는 16px radius와 border를 유지하고 각 44×44px option은 border 없는 12px 둥근 사각형으로 표시한다. selected는 이모지 아래의 분리된 `primary`/`primaryHover` 배경 layer를 70% opacity로 표시해 이모지 opacity를 유지하고, error에는 빨간 border를 추가하지 않는다. pending은 이모지를 유지한 채 `zIndex` 없는 full-size 투명 overlay를 표시하고, 가운데에서 `textSecondary` head가 투명한 tail로 흐려지는 24×24px·3px 두께의 연결된 180° 호를 약 820ms 주기로 시계 방향·linear 회전시킨다. spinner에는 배경 track, 점과 분리된 spoke를 사용하지 않는다. 전체 disabled이면 panel을 렌더링하지 않는다. option의 선택 identity는 표시 문자열과 분리된 opaque 값으로 취급하고 selected·pending·error를 option별 controlled 상태로 받으며, toggle intent만 callback으로 전달한다. 현재 fixture는 `🥹`, `❤️`, `🎉`, `👀`, `☘️`, `🌈`을 사용하고 서로 다른 Type의 선택 상태를 함께 유지한다. trigger, popover 위치·열림 상태, Post Action Bar 배치와 실제 mutation·Relay/cache·서버 실패 복구는 소유하지 않는다.
+- Alternatives Considered: full-opacity selected 배경은 현재 theme 색이 지나치게 강조돼 사용자가 30% 더 투명한 표현을 선택했다. 기존 `ActivityIndicator`, 점·spoke spinner와 균일한 ring은 회전 방향과 head-to-tail 진행감이 약해 제외했다. `react-awesome-spinners` package는 React DOM과 styled-components에 결합돼 universal React Native 경계에 맞지 않으므로 설치하지 않고 시각 원리만 참고한다. component 내부에 현재 여섯 Type을 고정하면 option 공급과 미래 확장을 가로막는다. Promise callback으로 비동기 상태를 내부 소유하면 PROD-417의 mutation·rollback 책임을 앞당긴다. 지금 custom emoji Full Picker까지 구현하면 identity, asset lifecycle, animation, sensitive/local-remote permission, 검색·category·최근 사용을 상위 계약 없이 선결정한다.
+- Consequences: selected 배경과 이모지를 별도 layer로 관리하고, existing `react-native-svg`와 React Native `Animated`로 서로 맞닿은 arc segment를 하나의 회전 layer 안에 그린다. 새 dependency는 추가하지 않으며 spinner는 Quick Picker의 private presentation detail로 유지한다. PROD-417은 같은 seam에 실제 option data, add/delete adapter와 selected Profile cache를 연결할 수 있다. 장기 Misskey형 palette·Full Picker와 custom emoji renderer는 별도 Domain Gate와 Issue Gate 뒤 option 공급자로 연결할 수 있지만, 이번 결정은 custom emoji identity나 wire format을 정하지 않는다. 이 presentation slice는 최종 `post-reaction-ui` spec을 축소하거나 대체하지 않는다.
+- Confirmation / Follow-up: PROD-450 Storybook/component interaction에서 supplied order, 현재 여섯 fixture, 선택·해제·복수 Type, option별 border·radius, 70% selected 배경과 100% 이모지, 44×44px pending overlay와 24×24px fading arc, error와 전체 disabled 미렌더링 및 callback을 검증한다. 390px·600px viewport에서 layout을 확인한다. PROD-417은 실제 Relay data shape, mutation 성공·실패 복구와 selected Profile 전환을 별도로 검증한다.
+
 ### Reaction Notification은 source 밖의 Best Effort projection으로 처리한다
 
 - Decision Date: 2026-07-20
@@ -121,12 +140,50 @@
 ### Reaction Notification은 기존 Notification baseline 뒤에 확장한다
 
 - Decision Date: 2026-07-20
-- Status: Accepted
+- Decision Class: Implementation Choice
+- Authority / Provenance: [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4)
+- Status: Superseded
 - Context / Problem: Notification backend는 병합됐지만 공통 목록 UI·badge·E2E와 active capability archive가 남아 있고 현재 SQL은 Follow source에 고정돼 있다.
 - Decision Outcome: PROD-395와 Reaction mutation/query slice는 Notification UI 완료를 기다리지 않는다. `REACTION` kind migration, multi-kind list/count/read와 client item은 `add-in-app-notifications` archive 뒤 PROD-413·419가 추가한다.
 - Alternatives Considered: active Notification change에 Reaction을 끼우면 PROD-273 범위와 archive 책임을 바꾸고 migration/snapshot 충돌을 만든다.
 - Consequences: 공유 Reaction change는 Notification baseline에 대한 명시적 의존성을 유지한다. 부모 PROD-390 archive는 Notification 자식 완료를 기다린다.
-- Confirmation / Follow-up: PROD-413 착수 전에 archived `notification`·`data-model` baseline과 PROD-277 Read/navigation 결정을 다시 읽는다.
+- Confirmation / Follow-up: 2026-07-23의 “Reaction Notification 구현 gate는 완료된 직접 선행 slice로 판단한다”가 최신 Linear dependency를 반영해 이 기록을 대체한다.
+
+### Reaction Notification 구현 gate는 완료된 직접 선행 slice로 판단한다
+
+- Decision Date: 2026-07-23
+- Decision Class: Derived Contract
+- Authority / Provenance: [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4), PROD-277, PROD-324, PROD-372
+- Status: Active
+- Context / Problem: 이전 기록은 `add-in-app-notifications` 전체 archive를 착수 조건으로 뒀지만 최신 PROD-413은 필요한 저장·API·UI 구현 이슈를 직접 blocker로 관리한다.
+- Decision Outcome: PROD-413은 직접 blocker인 Notification 목록·badge·Read/navigation slice가 완료되면 착수한다. 부모 Notification change의 남은 E2E·archive는 별도 통합 책임이며 PROD-413을 차단하지 않는다.
+- Alternatives Considered: 부모 change 전체 archive까지 기다리면 이미 승인·병합된 직접 기반을 사용하지 못하고 두 계약의 독립 구현 순서를 불필요하게 결합한다.
+- Consequences: PROD-413은 현재 병합된 baseline을 독립 확인해 확장하며 `add-in-app-notifications`의 남은 task나 archive를 대신 완료하지 않는다.
+- Confirmation / Follow-up: PROD-277·324·372의 Done 상태와 현재 `main`의 목록·badge·Read/cache 구현을 착수 전에 확인했다.
+
+### Multi-kind Notification은 kind별 visible projection을 합친다
+
+- Decision Date: 2026-07-23
+- Decision Class: Implementation Choice
+- Authority / Provenance: [Notification canonical 객체](../../../docs/domain/objects/notification.md), [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4)
+- Status: Active
+- Context / Problem: Follow와 Reaction은 서로 다른 source 관계와 visibility predicate를 가지지만 Node·list·count·Read는 같은 visible Notification 집합을 사용해야 한다.
+- Decision Outcome: 각 kind가 source correlation과 visibility를 검증한 동일 shape의 projection을 만들고 이를 `UNION ALL`로 합친 뒤 공통 ID cursor pagination, unread count와 Read 대상을 결정한다.
+- Alternatives Considered: kind-guarded `LEFT JOIN`과 `OR` predicate는 nullable source join과 kind 조건을 Node·list·count·Read마다 반복해 새 kind 추가 시 predicate drift 위험이 크다.
+- Consequences: kind별 predicate는 독립적으로 검증할 수 있고 공통 표면은 합쳐진 projection만 소비한다. projection column shape와 cursor ordering은 kind 사이에서 같아야 한다.
+- Confirmation / Follow-up: Follow와 Reaction 혼합 목록·count·Node·Read, unavailable source의 filter-before-limit을 API integration test로 검증한다.
+
+### Notification item 이동과 Read를 분리한다
+
+- Decision Date: 2026-07-23
+- Decision Class: Derived Contract
+- Authority / Provenance: [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4), [PROD-372](https://linear.app/byulmaru/issue/PROD-372/%EC%95%8C%EB%A6%BC-%ED%95%AD%EB%AA%A9-%EC%9D%BD%EC%9D%8C-%EC%83%81%ED%83%9C%EB%A5%BC-best-effort%EB%A1%9C-%EB%8F%99%EA%B8%B0%ED%99%94%ED%95%9C%EB%8B%A4)
+- Status: Active
+- Context / Problem: Reaction item은 Related Profile이 아니라 Target Post로 이동하지만 기존 Read/cache 동기화의 비차단 계약을 유지해야 한다.
+- Decision Outcome: item 활성화는 Target Post 이동을 즉시 시작하고 Read mutation은 응답을 기다리지 않는 Best Effort 요청으로 실행한다. Read pending·실패·재시도는 이동 결과를 바꾸지 않으며 성공 payload만 Recipient item/count cache를 갱신한다.
+- Alternatives Considered: Read 성공 뒤 이동하면 network 실패가 핵심 navigation을 차단한다. 이동 뒤 별도 화면에서 Read를 시작하면 item activation과 source ID 상관관계를 잃기 쉽다.
+- Consequences: Follow와 Reaction item은 목적지는 달라도 같은 Read/cache orchestration을 공유하며 selected Profile별 Relay Store 격리를 유지한다.
+- Confirmation / Follow-up: 즉시 navigation, Read 실패·반복·Profile 전환과 성공 payload cache 반영을 client integration test로 검증한다.
 
 ### Reaction Type과 add mutation은 canonical 문자열 계약을 그대로 노출한다
 
@@ -161,12 +218,26 @@
 ### Reaction add의 session 권한과 도메인 검증 책임을 분리한다
 
 - Decision Date: 2026-07-21
-- Status: Accepted
+- Decision Class: Implementation Choice
+- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [Core 서비스 경계](../../../docs/architecture/core-services.md), [PROD-404](https://linear.app/byulmaru/issue/PROD-404/reaction을-생성한다)
+- Status: Superseded
 - Context / Problem: GraphQL context는 Active Account, selected Profile membership과 Profile visibility를 검증하지만 core `addReaction`이 `accountId`를 받아 같은 membership을 다시 조회해 transport session 정책에 결합하고 있었다.
 - Decision Outcome: GraphQL `usingProfile` entry point가 Active Account와 Account–Profile membership을 검증하고, core service에는 검증된 actor Profile identity만 전달한다. core는 actor가 Active/Normal Local Profile인지와 Post, Type, 멱등 저장을 계속 검증한다.
 - Alternatives Considered: core가 `accountId`와 membership을 계속 재검증하면 session 정책을 중복 소유한다. actor 검증 전체를 API에 두면 core caller가 Local/Instance 상태를 우회할 수 있어 채택하지 않았다.
 - Consequences: Account 또는 membership 변경과 core transaction 사이에는 context snapshot 기준의 짧은 시간차가 있을 수 있다. commit 시점의 membership 재검증이 필요해지면 transport identity를 core에 다시 결합하지 않고 entry point의 transaction-aware 검증으로 별도 설계한다.
 - Confirmation / Follow-up: core test는 Local/Profile/Instance/Post/Type/멱등성에 집중하고, API integration test는 비활성 Account와 membership 부재가 `PERMISSION_DENIED`로 거부되는지 검증한다. PROD-405 등 후속 mutation도 같은 책임 경계를 따른다.
+
+### Reaction core actor 검증은 origin과 reachability에 중립적이다
+
+- Decision Date: 2026-07-23
+- Decision Class: Implementation Choice
+- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [Core 서비스 경계](../../../docs/architecture/core-services.md), [PROD-404](https://linear.app/byulmaru/issue/PROD-404/reaction을-생성한다), [PROD-405](https://linear.app/byulmaru/issue/PROD-405/reaction을-삭제한다)
+- Status: Active
+- Context / Problem: 이전 결정은 Local GraphQL caller의 Account·membership·selected Profile 조건과 여러 진입점이 공유할 수 있는 Reaction core actor 조건을 섞어 core에서 Local Instance와 Reachable 상태를 강제했다.
+- Decision Outcome: Local GraphQL `usingProfile` entry point는 Active Account와 Account–Profile membership을 검증하며, 정상 제품 경로의 selected Profile은 membership 모델상 Local이다. core add/delete는 검증된 actor identity를 받아 Active/Normal Profile과 non-Suspended Instance를 검증하되 Instance Type과 Unresponsive Reachability를 권한 조건으로 사용하지 않는다.
+- Alternatives Considered: Local Instance를 core에서 계속 강제하면 향후 protocol entry가 같은 domain action을 재사용하지 못한다. actor 상태를 전부 entry에 맡기면 공통 Profile/Instance 가용성 정책을 우회할 수 있어 채택하지 않았다.
+- Consequences: 현재 GraphQL 사용자가 선택할 수 있는 actor 범위와 ActivityPub federation 제외 범위는 바뀌지 않는다. 향후 ActivityPub entry는 signature, actor/object/recipient와 Post 접근 조건을 먼저 검증한 뒤 같은 core action을 사용할 수 있다.
+- Confirmation / Follow-up: core database-backed test는 Active/Normal ACTIVITYPUB Unresponsive actor의 add/delete 성공과 Suspended Instance·비활성 Profile 거부를 검증한다. API integration test는 Account와 membership 조건을 계속 검증한다.
 
 ### Reaction 삭제는 관계의 global ID로 식별한다
 
@@ -180,12 +251,21 @@
 - Consequences: 존재하지 않는 Reaction ID의 성공은 과거 소유권을 증명하지 않지만 어떤 현재 행도 변경하지 않는다. 삭제 뒤 같은 조합으로 다시 생성된 Reaction은 새 ID를 가지므로 이전 요청에서 보호된다. Notification cleanup 연결과 필요한 service 결과 확장은 실제 caller를 구현하는 PROD-419가 소유한다.
 - Confirmation / Follow-up: GraphQL schema/payload, Owner·non-owner·unavailable Post, 이미 없는 ID, 반복·동시 요청과 삭제 후 같은 조합 재생성을 core/API test로 검증한다.
 
+### Reaction count는 Post의 non-null simple list로 노출한다
+
+- Decision Date: 2026-07-24
+- Decision Class: Implementation Choice
+- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0010](../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-406](https://linear.app/byulmaru/issue/PROD-406/reaction-type%EB%B3%84-%EA%B0%9C%EC%88%98%EB%A5%BC-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4)
+- Status: Active
+- Context / Problem: canonical과 PROD-406은 viewer-independent Type별 count와 정렬을 고정하지만 GraphQL field와 항목 shape는 구현 전 공개 계약으로 확정되지 않았다.
+- Decision Outcome: GraphQL은 `Post.reactionCounts: [ReactionCount!]!`를 제공하고 `ReactionCount`는 `type: String!`과 `count: Int!`만 제공한다. 목록은 현재 Reaction이 하나 이상 존재하는 Type만 포함하며 Reaction이 없으면 빈 목록이다. Type별 Profile connection은 기존 `Post.reactionProfiles`로 분리한다.
+- Alternatives Considered: Relay connection은 현재 Type 수가 제한되고 pagination 계약이 없어 불필요한 cursor 표면을 만든다. map 또는 JSON scalar는 Type과 count의 정적 schema 계약을 잃는다. `ReactionSummary` 명칭은 client presentation component와 API aggregate를 혼동시킨다.
+- Consequences: API consumer는 서버가 제공한 count 내림차순을 그대로 사용하고 동률 순서에 의존하지 않는다. zero-count Type 공급은 PROD-417/418의 별도 결정이며 이 field가 합성하지 않는다.
+- Confirmation / Follow-up: schema test와 PROD-406 integration test에서 non-null list·항목 shape, 빈 목록, viewer-independent 집계, 정렬, 삭제와 Post visibility를 검증한다.
+
 ## Remaining Decisions
 
-- PROD-417/418: zero-count Type 공급 API
-- PROD-417: selector optimistic update 사용 여부
-- PROD-418: Profile 목록 modal/route UX
-- PROD-413: multi-kind Notification visible projection의 `UNION ALL` 기본안과 `LEFT JOIN` 대안 중 최종 구현, PROD-277 Read/navigation 순서
+- PROD-417/418: zero-count Type 공급 API, selector·Profile 목록 UX, optimistic update 사용 여부
 
 ## Superseded Decisions
 

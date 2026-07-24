@@ -27,6 +27,7 @@ const preview: Preview = {
               paginationError={relay.paginationError}
               paginationLoading={relay.paginationLoading}
               paginationResponse={relay.paginationResponse}
+              paginationResponses={relay.paginationResponses}
               operationResponses={relay.operationResponses}
               queryData={relay.data}
             >
@@ -88,6 +89,11 @@ const preview: Preview = {
           name: 'KOSMO mobile',
           styles: { height: '844px', width: '390px' },
           type: 'mobile',
+        },
+        kosmoPickerWide: {
+          name: 'KOSMO picker wide',
+          styles: { height: '900px', width: '600px' },
+          type: 'tablet',
         },
       },
     },

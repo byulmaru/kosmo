@@ -92,7 +92,9 @@ Mutation도 필드별로 나눈다.
 - 단순 scalar 검증은 `input` 필드에 `validate`를 직접 붙인다.
 - 여러 필드 조합을 검증해야 하는 경우에만 mutation 파일 안에 inline Zod object schema를 둔다.
 - `packages/core/validation`에는 `handle`, `displayName`, `bio` 같은 재사용 가능한 공통 primitive schema만 둔다. `createProfileInputSchema`처럼 특정 GraphQL mutation input 전체를 core에 공통화하지 않는다.
-- mutation resolver는 권한 확인, 입력 정규화, DB 변경을 수행한다.
+- mutation resolver는 권한 확인과 입력 정규화를 수행한다. 여러 진입점이 공유할 수 있는 state-changing
+  action은 core service를 호출하고, GraphQL 진입점에서만 의미가 있는 state change는 resolver의
+  query/persistence 계층에서 수행할 수 있다.
 - create mutation처럼 입력을 최소화할 수 있으면 필수 입력만 받고, 나머지 값은 resolver에서 명확한 기본값으로 채운다. 예를 들어 profile 생성은 `handle`만 받고 `displayName`은 `handle`, `followPolicy`는 `OPEN`으로 설정한다.
 - update mutation input은 omitted과 `null`의 의미를 명확히 분리한다. 생략은 보통 변경 없음이고, nullable 도메인 필드의 `null`은 명시적 clear가 될 수 있다. non-null 도메인 필드는 update input에서 optional로 받더라도 `null`을 새 값으로 보지 않는다.
 - mutation이 Node 타입을 반환할 때 이미 `returning()` 등으로 row를 가지고 있으면 row를 반환해도 된다. 추가 조회가 필요하다면 `id`만 반환한다.

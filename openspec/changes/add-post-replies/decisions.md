@@ -96,9 +96,66 @@
 - Decision Date: 2026-07-22
 - Decision Class: Upstream Change Required
 - Authority / Provenance: 없음.
-- Status: Blocked
+- Status: Superseded
 - Context / Problem: PROD-399·400은 관찰 가능한 관계·visibility 행동을 정의하지만 field 이름, list/connection, pagination과 정렬 방향은 정의하지 않고, PROD-422의 thread 배치·중첩 표현도 PROD-451과의 경계가 확정되지 않았다.
-- Decision Outcome: 현재 change에서 임의의 공개 GraphQL shape나 thread 표현을 규범 계약으로 만들지 않는다. 각 구현 전에 Linear에서 shape와 책임 경계를 확정하고 이 decision을 authority가 있는 Active decision으로 대체한다.
+- Decision Outcome: 현재 change에서 임의의 공개 GraphQL shape나 thread 표현을 규범 계약으로 만들지 않는다. 각 구현 전에 Linear에서 shape와 책임 경계를 확정한다. 이 혼합 기록은 PROD-399·400 계약 승인 뒤 각 Active decision과 thread Blocked 기록으로 분리해 대체한다.
 - Alternatives Considered: `replyAncestors`/`replyDescendants` 이름과 connection·정렬을 OpenSpec만으로 즉시 확정. 공개 API를 upstream 근거 없이 추가하므로 보류한다.
-- Consequences: PROD-393·398은 이 결정과 무관하게 진행할 수 있지만 PROD-399·400 및 이를 소비하는 PROD-422는 해당 책임의 decision이 Blocked인 동안 구현할 수 없다.
-- Confirmation / Follow-up: 해당 Linear 이슈 본문·댓글 갱신과 별도 Issue Gate 승인 뒤 specs·design·tasks를 갱신한다.
+- Consequences: PROD-393·398은 이 결정과 무관하게 진행할 수 있었고 PROD-399·400 및 이를 소비하는 PROD-422는 각자 해당 책임의 upstream decision을 기다렸다.
+- Confirmation / Follow-up: PROD-399·400은 2026-07-23 Linear에서 각각 확정되어 아래 Active decision으로 대체됐다. PROD-422의 thread 표현만 별도 Blocked decision으로 남는다.
+
+### Reply 조상 경로는 non-null list로 직접 Parent부터 반환한다
+
+- Decision Date: 2026-07-23
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/post.md`, `PROD-399`
+- Status: Active
+- Context / Problem: 조상 경로의 field 이름, collection shape, 빈 결과, 순서와 pagination을 공개 GraphQL 계약으로 확정해야 한다.
+- Decision Outcome: 기존 `Post` Node에 pagination 없는 `replyAncestors: [Post!]!` field를 추가한다. 직접 Reply Parent를 첫 요소로 두고 root 방향으로 진행하며, 조회 가능한 조상이 없으면 빈 배열을 반환한다. 조회 불가능한 Parent에서 중단하고 임의의 최대 깊이로 정상 경로를 절단하지 않는다.
+- Alternatives Considered: Relay connection, `ancestors` field, root 우선 순서, 고정 깊이 오류 또는 조용한 절단. 단일 경로에 cursor 복잡도를 만들거나 Reply 관계를 약하게 표현하고 저장 관계 순서·전체 조회 가능 경로 계약을 바꾸므로 사용하지 않는다.
+- Consequences: 클라이언트는 index 0을 `replyParent`와 같은 직접 Parent로 해석할 수 있고 root 우선 표시가 필요하면 제공된 list를 presentation 경계에서 변환한다.
+- Confirmation / Follow-up: schema contract와 Parent 없음·다단계·unavailable 중단·cycle API test로 확인한다.
+
+### Reply 조상 탐색은 단일 recursive query와 visited path를 사용한다
+
+- Decision Date: 2026-07-23
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-399`, `memory/graphql-style.md`
+- Status: Active
+- Context / Problem: 임의의 깊이 상한 없이 전체 조상 경로를 제공하면서 단계별 N+1 조회와 비정상 cycle을 방어해야 한다.
+- Decision Outcome: 현재 Post의 직접 Parent를 seed로 하는 단일 recursive query에서 현재 Post와 방문한 조상 ID를 path로 추적한다. 방문한 Post는 다시 확장하거나 반환하지 않고, 각 단계의 기존 `Post` 조회 경계가 실패하면 그 지점에서 탐색을 중단한다.
+- Alternatives Considered: Parent별 반복 Node load, 고정 최대 깊이 뒤 field error, 최대 깊이에서 일부 결과 반환. 반복 query는 깊이에 비례한 N+1을 만들고 고정 상한은 승인된 전체 경로 계약을 바꾸므로 사용하지 않는다.
+- Consequences: 정상 경로의 실제 깊이만큼 recursive work가 발생하지만 DB round trip은 한 번이며 cycle에서도 유한하게 종료한다. 운영 상한이 필요해지면 Linear 공개 error 계약을 먼저 갱신해야 한다.
+- Confirmation / Follow-up: query count, 직접 Parent 우선 순서, 긴 경로와 2-node cycle fixture로 확인한다.
+
+### Reply thread는 현재 Post를 상세 앵커로 두고 supplied 직접 관계만 연결한다
+
+- Decision Date: 2026-07-23
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-451`, `PROD-422`, `memory/frontend-react-native.md`
+- Status: Active
+- Context / Problem: 조상·현재·하위 Reply를 구분하면서도 기존 Post rendering을 유지하고, API가 제공하지 않은 관계나 visibility 경계를 client가 추론하지 않는 presentation 경계가 필요하다.
+- Decision Outcome: 조상과 하위 Reply는 기존 목록 Post와 같은 정보 밀도로 표시하고 현재 Post만 기존 상세 rendering을 사용해 앵커로 강조한다. `PostThreadLayout`은 item, role, supplied 순서와 direct connector metadata만 소유하며, 관계가 확인된 구간에만 connector를 그리고 supplied 경계에서 자연스럽게 종료한다. fixture caller는 `renderPost` 안에서 local state를 close over하여 mock 선택 action을 붙일 수 있고 기존 Link를 감싸거나 대체하지 않는다. PROD-422는 실제 Reply fragment·visibility 결과에서 relation metadata를 만들고 기존 route-aware Post renderer를 같은 layout에 공급하며, route-aware caller가 필요로 할 때만 나중에 production navigation adapter를 도입할 수 있다.
+- Alternatives Considered: 조상을 축소·희미하게 만드는 compact chain, 모든 Post를 같은 강조도로 잇는 linear feed, 모든 descendant를 depth tree나 하나의 연속선으로 추론하는 layout. compact chain은 일반 Post 밀도를 잃고, 동일 강조는 현재 상세 Post의 앵커를 약화하며, tree·연속선은 API가 공급하지 않은 직접 관계를 암시할 수 있어 사용하지 않는다.
+- Consequences: 현재 Post의 상세 맥락과 주변 Reply의 일반 읽기 밀도를 함께 유지하고 API visibility 경계를 누출하지 않는다. presentation seam은 새 Quote Source·Action Bar·Reaction/Repost UI를 소유하지 않으며 caller가 공급한 기존 Post rendering과 link semantics를 보존해야 한다. Reply+Quote fixture는 nullable `repostSource`를 Story query로 읽고, 반환된 subtree에서만 Source ID를 지닌 구조적 sentinel을 렌더해 한 item 안의 자체 Content와 Source 관계를 증명한다. 실제 Source preview 외관과 상호작용은 production Post renderer 소유 범위에서 별도로 검증한다.
+- Confirmation / Follow-up: PROD-451 Storybook/component interaction은 role별 기존 renderer 선택, supplied 직접 connector, 직접 연결된 마지막 visible Reply에서의 경계 종료와 반환된 `repostSource` subtree의 Source ID sentinel으로 Reply+Quote의 자체 Content·Source 관계 보존을 검증한다. 실제 spacing·typography 밀도는 현재 `ThemeProvider`가 지원하는 Light appearance의 390px/600px visual QA로 확인하고 Dark appearance는 완료한 것으로 기록하지 않는다. PROD-422는 ancestor reverse와 descendant `replyParent { id }` 기반 metadata, 실제 fragment·route integration을 별도로 검증한다.
+
+### descendant는 replyDescendants Relay connection으로 시간순 제공한다
+
+- Decision Date: 2026-07-23
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/post.md`, `PROD-400`
+- Status: Active
+- Context / Problem: 모든 조회 가능한 descendant를 hidden Parent와 독립적으로 제공하면서 client가 안정적으로 양방향 pagination할 공개 field와 순서를 확정해야 한다.
+- Decision Outcome: 기존 단일 GraphQL `Post` Node에 non-null `replyDescendants: PostConnection!` field를 추가한다. `first`/`after`와 `last`/`before`를 지원하고 `createdAt ASC, id ASC`로 정렬한다. 임의의 최대 깊이를 두지 않고 비정상 cycle에서 같은 Post를 반복하지 않으며, 구조 전체를 탐색한 뒤 각 descendant의 visibility/eligibility를 pagination 전에 적용한다.
+- Alternatives Considered: `replies` field, forward-only pagination, 최신순 정렬, depth 기반 Parent-before-child 정렬. 직접 Reply로 오해될 이름, 기존 connection과의 비대칭, thread 시간 흐름 역전 또는 hidden depth·cursor 복잡성을 만들므로 사용하지 않는다.
+- Consequences: 시간순과 deterministic tie-break를 보장하지만 비정상 timestamp에서도 Parent-before-child 위상 순서를 별도로 보장하지 않는다. 구현은 구조 traversal과 viewer filtering을 분리하고 실제 query plan으로 최소 index를 선택해야 한다.
+- Confirmation / Follow-up: PROD-400 API test에서 direct·indirect·Reply+Quote, 양방향 pageInfo, 동일 시각 tie-break, hidden Parent 아래 visible Reply, filter-before-limit와 cycle 종료를 검증한다.
+
+## Remaining Decisions
+
+- 없음.
+
+## Superseded Decisions
+
+- 2026-07-22 `조상·descendant 공개 GraphQL collection shape를 확정해야 한다` 기록은 2026-07-23 조상·descendant Active 기록과 thread Blocked 기록으로 분리해 대체했다.
+- 2026-07-23 `thread 표현을 확정해야 한다` Blocked 기록은 PROD-451의 presentation 책임과 PROD-422의 실제 integration 책임을 분리한 Active 구현 선택으로 대체했다.
