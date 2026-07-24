@@ -58,7 +58,7 @@
 
 ### Requirement: selected Profile별 Repost action
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-389`, `PROD-414` 유니버설 앱은 Post fragment에 colocate된 독립 Repost action component로 viewer-independent count와 selected Profile의 Active Repost 상태를 표시하고 생성·취소 mutation을 연결해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-389`, `PROD-414`, `PROD-432`, `PROD-433`, `PROD-471` 유니버설 앱은 Post fragment에 colocate된 Repost action adapter로 viewer-independent count와 selected Profile의 Active Repost 상태를 해석하고, 공용 `PostActionBar`의 Repost config에 생성·취소 mutation과 interaction 상태를 제공해야 한다(MUST).
 
 #### Scenario: Repost하지 않은 상태
 
@@ -78,27 +78,34 @@
 - **THEN** action은 pending·disabled 접근성 상태를 표시하고 반복 mutation 호출을 막는다
 - **AND** 낙관 상태가 다른 selected Profile의 Relay Store로 전파되지 않는다
 
-#### Scenario: mutation 성공과 cache 동기화
+#### Scenario: Repost 생성 성공과 cache 동기화
 
-- **WHEN** Repost 생성 또는 취소 mutation이 성공한다
+- **WHEN** Repost 생성 mutation이 성공한다
 - **THEN** 앱은 mutation payload의 Source Post ID, `repostCount`와 `viewerRepost` 결과로 normalized cache를 갱신한다
 - **AND** 같은 actor Store에서 그 Post를 표시하는 목록과 상세의 action 상태가 일치한다
+
+#### Scenario: Repost 취소 성공과 cache 동기화
+
+- **WHEN** Repost 취소 mutation이 성공한다
+- **THEN** 앱은 서버가 확정한 Source Post ID, `repostCount`와 `viewerRepost` 결과로 normalized cache를 갱신한다
+- **AND** client count 산술이나 관련 없는 전체 refetch 없이 같은 actor Store의 action 상태를 일치시킨다
 
 #### Scenario: mutation 실패
 
 - **WHEN** Repost 생성 또는 취소 mutation이 GraphQL 또는 network 오류로 실패한다
-- **THEN** 앱은 안전한 한국어 실패 상태를 표시하고 이전 count와 선택 상태로 복구한다
-- **AND** 사용자가 다시 시도할 수 있게 한다
+- **THEN** adapter는 pending을 종료하고 이전 서버 확정 count·선택 상태와 normalized cache를 유지한다
+- **AND** error callback을 호출하고 다음 입력에서 같은 action을 다시 시도할 수 있게 한다
+- **AND** persistent error 상태, 한국어 또는 성공 toast를 직접 소유하지 않는다
 
-#### Scenario: 독립 component 경계
+#### Scenario: adapter와 PostActionBar 경계
 
-- **WHEN** Repost action component를 구현하고 검증한다
-- **THEN** component는 실제 Post surface의 공통 Action Bar 조립을 소유하지 않는다
-- **AND** 공통 Action Bar rollout은 PROD-432에 남긴다
+- **WHEN** Repost action adapter를 구현하고 검증한다
+- **THEN** adapter는 PROD-433의 공용 `PostActionBar`에 Repost config를 제공하며 독립 공개 action leaf를 만들지 않는다
+- **AND** Storybook 전용 wrapper는 Repost config 하나만 조립하고 실제 production full-bar 연결과 접근 가능한 한국어 오류 toast는 PROD-432에 남긴다
 
 ### Requirement: Repost UI 상태 카탈로그와 검증
 
-**Authority / Provenance:** `PROD-389`, `PROD-414`, `PROD-415`, `PROD-453` 유니버설 앱은 production fragment 계약을 유지하는 Relay mock과 Storybook 상태로 Repost·Quote presentation 및 action을 검증해야 한다(MUST).
+**Authority / Provenance:** `PROD-389`, `PROD-414`, `PROD-415`, `PROD-433`, `PROD-453` 유니버설 앱은 production fragment 계약을 유지하는 Relay mock과 Storybook 상태로 Repost·Quote presentation 및 action adapter를 검증해야 한다(MUST).
 
 #### Scenario: presentation 상태 카탈로그
 
@@ -109,5 +116,5 @@
 #### Scenario: action 상태 카탈로그
 
 - **WHEN** Storybook에서 Repost action을 검증한다
-- **THEN** 선택·미선택, pending, 성공, 오류와 selected Profile 변경 상태를 포함한다
-- **AND** interaction test는 접근성 상태, 중복 호출 방지와 navigation target을 확인한다
+- **THEN** Storybook 전용 wrapper가 `PostActionBar`에 Repost config 하나를 전달하고 선택·미선택, pending, 성공, 오류와 selected Profile 변경 상태를 포함한다
+- **AND** `play` interaction은 클릭, pending 중복 호출 방지, 생성 성공, 정확한 취소 ID와 cache 비변경, 오류 뒤 재시도, actor reset과 접근성 상태를 확인한다

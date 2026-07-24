@@ -49,13 +49,37 @@
 
 - Decision Date: 2026-07-21
 - Decision Class: Implementation Choice
-- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `PROD-389`, `PROD-401`, `PROD-402`, `PROD-403`, `PROD-411`
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `PROD-389`, `PROD-401`, `PROD-402`, `PROD-403`, `PROD-411`, `PROD-414`, `PROD-471`
 - Status: Active
 - Context / Problem: Repost가 별도 durable object가 아니므로 GraphQL identity와 client normalized cache가 같은 Post Node를 사용해야 한다.
 - Decision Outcome: 기존 `Post`에 nullable `repostSource`, non-null `repostCount`, nullable `viewerRepost`를 추가한다. 생성 mutation은 `repostPost(input: { sourceId })`와 `RepostPostPayload.repost`, 삭제는 일반 `deletePost(input: { id })`와 Tombstone Node 대신 `DeletePostPayload.postId`를 사용한다. `viewerRepost`는 현재 selected Profile의 Active Repost Post identity를 반환한다.
 - Alternatives Considered: Repost concrete type, `viewerHasReposted` boolean, 확장 가능한 viewer state wrapper, `cancelRepost` 전용 mutation. concrete type은 canonical과 충돌하고 boolean은 취소할 identity를 잃는다. wrapper는 현재 단일 관계에 비해 과도하며 전용 cancel은 일반 Post 삭제 계약을 중복한다.
-- Consequences: API와 Relay fragments는 concrete Post global ID를 유지하고, mutation payload는 Source Post의 count/viewer 상태를 normalized cache가 갱신할 수 있게 함께 제공해야 한다.
-- Confirmation / Follow-up: GraphQL schema snapshot, Node/field/mutation integration과 client Relay compile·cache 테스트에서 확인한다.
+- Consequences: API와 Relay fragments는 concrete Post global ID를 유지한다. 생성 payload는 Repost의 Source Post 관계로 count/viewer 상태를 정규화할 수 있지만, 현재 삭제 payload의 `postId`만으로는 Source 상태를 정규화할 수 없다.
+- Confirmation / Follow-up: GraphQL schema snapshot, Node/field/mutation integration을 확인하고, PROD-414는 생성 cache와 취소 실행을, PROD-471은 서버 결과 기반 취소 cache 동기화를 검증한다.
+
+### Repost 취소 실행과 Source cache 동기화를 단계화한다
+
+- Decision Date: 2026-07-24
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-389`, `PROD-414`, `PROD-471`
+- Status: Active
+- Context / Problem: 현재 `DeletePostPayload`는 삭제된 Repost의 `postId`만 반환하므로 PROD-414가 Source Post의 최신 `repostCount`와 selected Profile별 `viewerRepost`를 서버 결과로 정규화할 수 없다.
+- Decision Outcome: PROD-414는 조회된 Active Repost ID로 `deletePost`를 호출해 취소를 실제 수행하되 취소 성공 뒤 Source cache를 직접 변경하지 않는다. PROD-471은 취소 결과에서 Source 상태를 전달하는 서버 계약과 같은 actor Store의 normalized cache 동기화를 후속 구현한다.
+- Alternatives Considered: PROD-414에서 count를 직접 감소, 광범위한 cache invalidation 또는 임시 refetch, PROD-414 안에서 API payload까지 확장. 직접 산술은 viewer-independent 서버 집계와 어긋날 수 있고, 광범위한 invalidation/refetch는 현재 client 경계를 넓히며, API 확장은 프론트엔드 이슈 범위를 넘으므로 사용하지 않는다.
+- Consequences: PROD-414 완료 직후에는 취소된 Repost의 현재 화면 상태가 다음 서버 기반 재조회 또는 actor 환경 재생성 전까지 오래될 수 있다. PROD-471이 완료되기 전에는 전체 Repost change를 archive하지 않는다.
+- Confirmation / Follow-up: PROD-414는 정확한 취소 identity와 cache 비변경을 검증하고, PROD-471은 서버 결과, 같은 actor Store 일치, actor 간 격리와 client Relay cache 테스트를 검증한다.
+
+### Repost mutation adapter와 PostActionBar 공개 UI를 분리한다
+
+- Decision Date: 2026-07-24
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-414`, `PROD-432`, `PROD-433`
+- Status: Active
+- Context / Problem: PROD-433은 공용 action UI의 공개 경계를 `PostActionBar` 하나로 제한하고 PROD-432는 production full-bar 조립과 action 실패 toast를 소유한다. PROD-414가 독립 공개 Repost component나 persistent 오류 UI를 추가하면 이 경계를 중복한다.
+- Decision Outcome: PROD-414는 Post fragment와 mutations를 colocate한 내부 `useRepostAction` adapter로 `PostActionBar.repost` config를 제공한다. `prod-433`에 최신 main을 반영하고 검증한 뒤 그 head에서 `prod-414`를 생성하며, Draft PR base는 `prod-433`으로 두어 `main → prod-433 → prod-414` stack을 유지한다. branch 코드를 복사하거나 Action Bar를 중복 구현하지 않고 부모 branch의 공개 UI를 직접 재사용한다. Storybook 전용 wrapper는 Repost config 하나만 조립한다. adapter는 mutation 실패 시 pending을 종료하고 서버 확정 domain/cache 상태를 유지한 채 error callback을 호출하며, production의 접근 가능한 한국어 오류 toast와 실제 full-bar 연결은 PROD-432에 남긴다. persistent error·retry UI와 success toast는 추가하지 않는다.
+- Alternatives Considered: PR #341 merge까지 구현 대기, 독립 공개 Repost action leaf, 부모 branch 코드 복사 또는 중복 구현, PROD-414의 persistent 오류·재시도·성공 UI. merge 대기는 해결된 review thread와 green CI 뒤에도 구현을 직렬화하고, 나머지는 공개 UI 또는 통합 책임을 중복하고 cache 상태를 흐리므로 사용하지 않는다.
+- Consequences: PROD-414는 PROD-433의 공개 API를 직접 의존하므로 `blockedBy: PROD-433` 관계를 유지한다. adapter는 실제 production surface와 독립적으로 Storybook·Relay test에서 검증할 수 있지만 사용자가 보는 오류 toast는 PROD-432 연결 뒤 제공된다. PR #341 merge 뒤 자식 branch의 rebase와 PR base 변경은 별도 stack 안전 확인과 승인을 거쳐 수행한다.
+- Confirmation / Follow-up: Storybook `play` interaction과 raw Relay unit test로 Repost config, pending 중복 차단, create cache, cancel identity/cache 비변경, error callback·다음 입력 재시도와 actor reset을 검증한다.
 
 ### Source 접근 실패는 Repost와 Quote에 다르게 적용한다
 
@@ -115,23 +139,23 @@
 - Consequences: 성공 응답 latency에 짧은 Notification 시도가 포함되지만 source 결과는 보존된다. cleanup 실패 잔존 행은 visible predicate가 숨긴다.
 - Confirmation / Follow-up: 저장·cleanup 실패 주입, 반복 처리와 프로세스 간격의 hidden-row API 테스트를 수행한다.
 
-### Presentation, 목록 연결과 action을 독립 client slice로 유지한다
+### Presentation, 목록 연결과 action adapter를 독립 client slice로 유지한다
 
 - Decision Date: 2026-07-21
 - Decision Class: Implementation Choice
-- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-389`, `PROD-414`, `PROD-415`, `PROD-453`
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-389`, `PROD-414`, `PROD-415`, `PROD-432`, `PROD-433`, `PROD-453`, `PROD-471`
 - Status: Active
 - Context / Problem: presentation은 API 없이 먼저 검증할 수 있지만 production 목록 연결과 mutation action은 각기 다른 선행 조건을 가진다.
-- Decision Outcome: PROD-453은 production fragment shape를 따르는 Relay fixture·Storybook·mock navigation으로 Repost/Quote presentation을 소유한다. PROD-415는 공용 Post list item fragment에 presentation을 연결하고, PROD-414는 별도 fragment-colocated Repost action과 mutation/cache 상태를 소유한다. 공통 Action Bar surface 조립은 포함하지 않는다.
+- Decision Outcome: PROD-453은 production fragment shape를 따르는 Relay fixture·Storybook·mock navigation으로 Repost/Quote presentation을 소유한다. PROD-415는 공용 Post list item fragment에 presentation을 연결하고, PROD-414는 fragment-colocated Repost action adapter, `PostActionBar.repost` config, 생성 cache 동기화와 취소 실행을 소유한다. PROD-471은 취소 성공 뒤 Source cache 동기화를 소유하고, 실제 production Action Bar surface 조립과 오류 toast는 PROD-432에 남긴다.
 - Alternatives Considered: 하나의 목록 컴포넌트에서 presentation·action·route를 모두 구현, raw scalar props, raw fragment key cast. 모두 이슈 의존성과 Relay colocation 경계를 흐린다.
-- Consequences: presentation 결과는 목록 연결 전에도 독립 검증되며, 실제 surface 조립 전 action component만 완료될 수 있다.
-- Confirmation / Follow-up: Storybook 상태/interaction, Relay compile, Home/Profile integration과 PROD-432 제외 범위를 확인한다.
+- Consequences: presentation 결과는 목록 연결 전에도 독립 검증되며, Storybook 전용 `PostActionBar` wrapper로 실제 production surface 조립 전에 action adapter를 완료할 수 있다.
+- Confirmation / Follow-up: Storybook 상태/`play` interaction, raw Relay unit, Relay compile, Home/Profile integration과 PROD-432 제외 범위를 확인한다.
 
 ### 부모 change가 전체 계약과 archive를 소유한다
 
 - Decision Date: 2026-07-21
 - Decision Class: Derived Contract
-- Authority / Provenance: `PROD-389`, `PROD-394`, `PROD-401`, `PROD-402`, `PROD-403`, `PROD-411`, `PROD-412`, `PROD-414`, `PROD-430`, `PROD-415`, `PROD-416`, `PROD-453`
+- Authority / Provenance: `PROD-389`, `PROD-394`, `PROD-401`, `PROD-402`, `PROD-403`, `PROD-411`, `PROD-412`, `PROD-414`, `PROD-430`, `PROD-415`, `PROD-416`, `PROD-453`, `PROD-471`
 - Status: Active
 - Context / Problem: 저장, API, UI와 Notification이 여러 PR로 분리되지만 하나의 Repost 제품 결과와 통합 검증을 공유한다.
 - Decision Outcome: 하나의 `add-post-reposts` change에서 각 구현 이슈별 task와 검증 책임을 유지한다. 자식 PR 완료만으로 change를 archive하지 않고 PROD-389가 모든 child 결과, vertical flow, canonical 정합성과 archive 후 strict validation을 소유한다.

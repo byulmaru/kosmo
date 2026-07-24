@@ -1,6 +1,6 @@
 ## Context
 
-PROD-389는 Repost 저장부터 생성·취소, GraphQL 조회·count, Home/Profile 목록, 유니버설 UI와 Notification lifecycle까지 하나의 계약으로 통합 검증한다. Domain Gate는 `docs/domain/objects/post.md`, `docs/domain/objects/notification.md`, `docs/domain/policies/post-list.md`와 ADR 0010·0014에서 확정됐고, 구현은 10개 직접 자식과 PROD-415의 하위 presentation slice인 PROD-453으로 나뉜다.
+PROD-389는 Repost 저장부터 생성·취소, GraphQL 조회·count, Home/Profile 목록, 유니버설 UI와 Notification lifecycle까지 하나의 계약으로 통합 검증한다. Domain Gate는 `docs/domain/objects/post.md`, `docs/domain/objects/notification.md`, `docs/domain/policies/post-list.md`와 ADR 0010·0014에서 확정됐고, 구현은 11개 직접 자식과 PROD-415의 하위 presentation slice인 PROD-453으로 나뉜다.
 
 PROD-394와 PROD-393이 main에 merge되어 현재 `post` table은 nullable `repost_source_id`와
 `reply_parent_id` self-reference, Active contentless Repost용 partial unique index를 가진다. core
@@ -44,6 +44,8 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 - Node/Home/Profile/Bookmark가 공유하는 현재 Post visibility predicate는 Post 자체를 판정한다. Source 조건을
   전역 predicate에 추가하면 Quote와 Quote Content까지 잘못 숨기므로 구조별 조건을 분리해야 한다.
 - Repost count는 viewer-independent지만 Post Node와 `viewerRepost`는 viewer-dependent다. viewer의 block/mute 결과를 count에 섞으면 동일 Post의 count가 viewer마다 달라진다.
+- 현재 `deletePost` payload는 삭제된 Repost의 `postId`만 반환해 Source Post의 최신 count/viewer relation을 정규화할 수 없다. PROD-414는 취소를 실행하되 Source cache를 바꾸지 않고, PROD-471이 서버 결과 기반 취소 cache 동기화를 후속 소유한다.
+- 공용 action UI는 PROD-433의 단일 공개 `PostActionBar` 경계를 재사용해야 한다. PROD-414는 최신 main을 반영한 `prod-433` 위에 stack되어 부모 branch의 공개 UI를 직접 사용하고, branch 코드를 복사하거나 독립 action leaf를 만들지 않으며 PROD-432의 production full-bar 조립과 접근 가능한 한국어 오류 toast를 소유하지 않는다.
 - Notification connection/count/read와 client row는 Follow source에 하드코딩되어 있다. Repost를 join 하나만 덧붙이면 kind discriminator와 limit-before-filter가 어긋날 수 있다.
 - Home/Profile은 공용 Post list item fragment를 쓰지만 Post detail은 별도 fragment다. PROD-415는 목록 연결을 소유하고 detail/action surface 조립은 관련 이슈 경계를 존중해야 한다.
 
@@ -57,7 +59,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
    `repostSource`는 direct Source를 독립 조회해 unavailable이면 `null`로 정규화한다. Source link는 생성 때
    정해진 direct relation을 그대로 유지하고 flatten하지 않는다.
 5. PROD-411은 Author와 Active 상태를 한 transaction에서 확인해 Post를 Tombstone으로 전이하고 최초 `deletedAt`과 `repostSourceId`를 보존한다. 일반 Post 삭제 경계를 재사용하되 이 slice는 Repost 취소·멱등성·유일성 해제를 검증한다.
-6. PROD-453은 production fragment 형태를 따르는 Relay fixture/Storybook으로 Repost·Quote presentation과 mock navigation을 먼저 검증한다. PROD-415는 공용 list item fragment에 결과를 연결하고, PROD-414는 별도 Repost action fragment/mutations와 normalized payload로 actor Store를 갱신한다.
+6. PROD-453은 production fragment 형태를 따르는 Relay fixture/Storybook으로 Repost·Quote presentation과 mock navigation을 먼저 검증한다. PROD-415는 공용 list item fragment에 결과를 연결한다. 최신 main을 반영하고 검증한 PROD-433의 `prod-433` head에서 `prod-414`를 생성하고 Draft PR base를 `prod-433`으로 둔다. PROD-414는 Post fragment/mutations를 colocate한 내부 `useRepostAction` adapter로 `PostActionBar.repost` config를 제공하고, 생성 payload의 actor Store 정규화와 정확한 Repost ID를 사용한 취소 실행을 소유한다. mutation 실패는 pending을 종료하고 domain/cache 상태를 유지한 채 error callback으로 전달하며, production full-bar 조립과 한국어 오류 toast는 PROD-432에 남긴다. 취소 성공 뒤 Source cache는 변경하지 않고 PROD-471이 서버 확정 Source 상태와 같은 actor Store 정규화를 후속 소유한다.
 7. PROD-412는 기존 Notification table에 `REPOST` kind를 추가하고 source-only create 경계에서 Recipient·Related Profile·Related Post를 파생한다. kind별 visible projection을 connection/count/Node/Read에서 공통 조립하고, client는 concrete inline fragment로 Source Post 이동과 Read/cache를 처리한다.
 8. PROD-416은 Repost Tombstone commit 뒤 같은 request에서 idempotent cleanup을 await하고 오류를 catch한다. 남은 row는 Active pure-Repost 구조와 Recipient 기준 관계 visibility를 검증하는 predicate로 모든 API surface에서 숨긴다.
 
@@ -85,6 +87,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 - Notification을 Repost transaction 안에 넣거나 fire-and-forget으로 실행해 rollback 결합 또는 관측 불가능한 실패를 만들지 않는다.
 - client가 raw object를 Relay fragment key로 cast하거나 route query에 presentation scalar를 중복 나열하지 않는다.
 - Source preview Link를 전체 Post Link 안에 중첩하지 않는다.
+- 독립 공개 Repost action leaf, `PostActionBar` 중복 구현, PROD-433 branch 코드 복사, persistent 오류·재시도 UI 또는 success toast를 PROD-414에 추가하지 않는다.
 
 ## Risks / Trade-offs
 
@@ -94,13 +97,15 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 - [동시 Source Tombstone과 Repost 생성] → 명시적 row lock을 추가하지 않고 transaction 시점의 Source 검증과 Post eligibility를 사용한다. 이후 Source가 Tombstone이면 생성된 Repost는 조회 후보에서 사라지며 관계는 보존된다.
 - [Notification 기반 change와 archive 순서] → `add-in-app-notifications`의 실제 schema/API 기반이 완료된 뒤 PROD-412/416을 구현하고, 그 change를 authority로 사용하지 않으며 canonical·Linear 계약을 독립 대조한다.
 - [여러 PR 사이 schema drift] → 각 child PR에서 공유 OpenSpec task와 선행 issue를 명시하고, 부모 PROD-389가 최종 schema/Relay/E2E 정합성을 검증한다.
-- [UI action의 실제 surface 부재] → PROD-414는 독립 component/integration을 완료로 삼고 실제 공통 Action Bar rollout은 PROD-432에 남긴다.
+- [UI action의 실제 surface 부재] → PROD-414는 `prod-433` 위 내부 adapter와 Storybook 전용 단일-config `PostActionBar` wrapper를 완료 경계로 삼고, 실제 production full-bar rollout과 오류 toast는 PROD-432에 남긴다.
+- [PROD-433 변경 전파] → PROD-414를 `blockedBy: PROD-433`으로 유지하고 부모 branch 변경을 자식에 반영해 검증한다. PR #341 merge 뒤 rebase·PR base 변경은 backup, range-diff와 명시적 lease를 사용하는 별도 승인 작업으로 수행한다.
+- [취소 성공 뒤 오래된 client 상태] → PROD-414는 client count 산술·광범위한 invalidation·임시 refetch를 추가하지 않고 알려진 제한을 검증한다. PROD-471이 서버 결과 기반 Source cache 동기화를 완료하기 전에는 부모 change를 archive하지 않는다.
 
 ## Migration Plan
 
 1. PROD-394에서 nullable `repost_source_id`와 partial unique index를 포함한 expand migration, Drizzle schema·snapshot과 DB migration tests를 배포한다. 기존 workload와 contentful `createPost` 계약은 새 column을 비워 둔 채 계속 동작한다.
 2. PROD-401·402·403에서 생성, direct Source, count와 viewer relation API를 추가하고 PROD-411에서 Tombstone 취소를 연결한다.
-3. PROD-430에서 Home/Profile candidate query를 전환하고 PROD-453·415·414에서 presentation, 목록 연결과 action을 단계적으로 제공한다.
+3. PROD-430에서 Home/Profile candidate query를 전환하고 PROD-453·415에서 presentation과 목록을 연결한다. 최신 main을 반영한 `prod-433` 위에 PROD-414 action adapter를 stack하고 PROD-432가 production full-bar에 연결한다. PROD-471에서 취소 성공 뒤 Source cache 동기화를 연결한다.
 4. Notification 기반 선행 이슈가 완료된 뒤 PROD-412에서 enum/API/inbox를 확장하고 PROD-416에서 Tombstone cleanup을 연결한다.
 5. PROD-389가 모든 child 결과를 연결한 vertical flow, canonical/OpenSpec 정합성과 strict validation을 확인한 뒤 archive한다.
 
