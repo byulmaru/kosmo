@@ -207,7 +207,6 @@ const styles = StyleSheet.create({
   repeat: { fontFamily: 'SUIT', ...typography.sm },
   repostLabel: {
     fontFamily: 'SUIT',
-    fontWeight: '700',
     ...typography.sm,
   },
   author: {

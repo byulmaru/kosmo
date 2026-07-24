@@ -560,6 +560,7 @@ export const PureRepost: Story = {
     expect(repostLabel.getBoundingClientRect().height).toBeLessThanOrEqual(
       typography.sm.lineHeight,
     );
+    expect(repostLabel).toHaveStyle({ fontWeight: '400' });
     expect(
       Math.abs(
         repostIcon.getBoundingClientRect().right - sourceAvatar.getBoundingClientRect().right,
