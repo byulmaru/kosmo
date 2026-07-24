@@ -3,6 +3,7 @@
 ## pnpm workspace scripts
 
 - `pnpm-workspace.yaml`은 package manager mismatch 처리를 `ignore`로 둬 pnpm이 sandbox 내부에서 `packageManager`에 명시된 pnpm 자체를 자동 fetch하지 않게 한다.
+- 루트 `pnpm test`의 Helm render 검증은 `mise.toml`에 고정된 Helm을 사용하므로 로컬과 CI 모두 `mise install` 뒤 실행한다.
 - sandbox 실패나 fallback 실행으로 workspace 안에 `.pnpm-store/`가 생길 수 있으므로 git, Prettier, ESLint ignore 대상으로 둔다.
 - `pnpm --recursive --parallel --if-present <script>`는 루트 패키지의 `<script>`를 재귀 실행하지 않고, workspace 패키지들의 해당 script를 실행한다.
 - 루트 `dev` 스크립트가 `node scripts/vault-run.mjs -- pnpm --recursive --parallel --if-present dev`처럼 workspace script 실행을 감싸는 구조여도, 이것만으로 루트 `dev`가 자기 자신을 무한 재귀 호출한다고 판단하면 안 된다.
