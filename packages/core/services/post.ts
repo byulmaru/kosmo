@@ -195,7 +195,7 @@ export const repostPost = async (
       })
       .onConflictDoNothing()
       .returning()
-    .then(first);
+      .then(first);
     if (inserted) {
       return inserted;
     }
