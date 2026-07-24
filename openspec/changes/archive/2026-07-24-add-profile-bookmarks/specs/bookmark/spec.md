@@ -44,7 +44,7 @@
 
 ### Requirement: Bookmark 생성 GraphQL 계약
 
-**Authority / Provenance:** `docs/domain/objects/bookmark.md`, `PROD-408` 본문과 2026-07-21 생성 API·책임 경계 확정 댓글 — 시스템은 현재 `usingProfile`을 Owner로 사용하는 `createBookmark(input: { postId })` GraphQL mutation을 제공해야 한다(MUST). 성공 payload는 `bookmark` 필드로 Owner Profile, 현재 조회 가능한 Target Post와 생성 시각을 식별할 수 있는 Bookmark Node를 반환해야 한다(MUST). 이후 Target Post가 조회 불가능해져도 Owner의 Bookmark Node는 유지되고 `post` 필드는 `null`이어야 한다(MUST). 같은 Profile/Post의 순차·동시 중복 요청은 기존 Bookmark를 반환하는 성공으로 정규화하고 기존 생성 시각을 변경하지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/bookmark.md`, `PROD-391`, `PROD-408` 본문과 2026-07-21 생성 API·책임 경계 확정 댓글 — 시스템은 현재 `usingProfile`을 Owner로 사용하는 `createBookmark(input: { postId })` GraphQL mutation을 제공해야 한다(MUST). 성공 payload는 `bookmark` 필드로 Owner Profile, 현재 조회 가능한 Target Post와 생성 시각을 식별할 수 있는 Bookmark Node를 반환해야 한다(MUST). 이후 Target Post가 조회 불가능해져도 Owner의 Bookmark Node는 유지되고 `post` 필드는 `null`이어야 한다(MUST). 같은 Profile/Post의 순차·동시 중복 요청은 기존 Bookmark를 반환하는 성공으로 정규화하고 기존 생성 시각을 변경하지 않아야 한다(MUST).
 
 #### Scenario: GraphQL로 Bookmark를 생성함
 
