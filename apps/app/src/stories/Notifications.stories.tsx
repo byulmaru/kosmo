@@ -16,6 +16,7 @@ import {
   post,
   profile,
   reactionNotification,
+  replyNotification,
 } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -43,6 +44,13 @@ const notificationRecipient = profile({
   id: 'notification-profile-content',
   relativeHandle: '@recipient',
 });
+const replyAuthor = profile({
+  displayName: '성운 답글 작성자',
+  handle: 'nebula-replier',
+  id: 'notification-reply-author',
+  instance: { kind: 'ACTIVITYPUB' },
+  relativeHandle: '@nebula-replier@remote.example',
+});
 
 const emptyProfile = notificationsProfile([], {}, { id: 'notification-profile-empty' });
 const contentProfile = notificationsProfile(
@@ -59,6 +67,11 @@ const contentProfile = notificationsProfile(
       post: post({ id: 'notification-related-post', profile: notificationRecipient }),
       profile: unreadFollower,
       type: '🎉',
+    }),
+    replyNotification({
+      id: 'notification-reply',
+      post: post({ id: 'notification-reply-post', profile: replyAuthor }),
+      profile: replyAuthor,
     }),
   ],
   {},
@@ -228,6 +241,11 @@ export const StatesAndFollowItems: Story = {
     expect(
       canvas.getByRole('link', { name: /별빛 여행자님이 🎉 반응을 남겼습니다/ }),
     ).toHaveAttribute('href', '/@recipient/notification-related-post');
+    expect(
+      canvas.getByRole('link', {
+        name: /성운 답글 작성자님이 답글을 남겼습니다.*게시글로 이동/,
+      }),
+    ).toHaveAttribute('href', '/@nebula-replier@remote.example/notification-reply-post');
   },
 };
 

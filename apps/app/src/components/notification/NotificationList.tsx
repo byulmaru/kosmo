@@ -14,7 +14,11 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
-import { NotificationListItem, ReactionNotificationListItem } from './NotificationListItem';
+import {
+  NotificationListItem,
+  ReactionNotificationListItem,
+  ReplyNotificationListItem,
+} from './NotificationListItem';
 import type { NotificationList_profile$key } from './__generated__/NotificationList_profile.graphql';
 import type { NotificationListNextPageQuery } from './__generated__/NotificationListNextPageQuery.graphql';
 
@@ -39,6 +43,9 @@ const notificationListFragment = graphql`
           ... on ReactionNotification {
             ...ReactionNotificationListItem_notification @alias(as: "reaction")
           }
+          ... on ReplyNotification {
+            ...ReplyNotificationListItem_notification @alias(as: "reply")
+          }
         }
       }
     }
@@ -59,6 +66,9 @@ export function NotificationList({ profile }: NotificationListProps) {
     }
     if (node.__typename === 'ReactionNotification' && node.reaction) {
       return <ReactionNotificationListItem key={node.id} notification={node.reaction} />;
+    }
+    if (node.__typename === 'ReplyNotification' && node.reply) {
+      return <ReplyNotificationListItem key={node.id} notification={node.reply} />;
     }
     return [];
   });
