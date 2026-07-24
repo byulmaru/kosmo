@@ -229,7 +229,7 @@ Owner Profile이 조회 가능한 Target의 Bookmark를 안정적인 최신순 c
 - 선택 Profile의 저장 → `Post.viewerBookmark`/목록 조회 → Target 숨김·관계 유지·재노출 → 해제 vertical flow를 검증한다.
 - 모든 requirement scenario, 자식 검증 증거, canonical 문서·active specs 정합성, archive 전후 strict validation을 확인한다.
 
-- [ ] 8.1 일곱 구현 이슈의 결과·테스트와 Remaining Decisions 해소 상태를 대조한다.
-- [ ] 8.2 Bookmark vertical flow와 Profile·가시성·pagination 경계의 최종 통합 검증을 실행한다.
-- [ ] 8.3 구현에서 확정된 계약을 canonical 문서·OpenSpec artifacts와 동기화하고 archive diff를 검토한다.
-- [ ] 8.4 Completion Gate 승인 후 change를 archive하고 archive 후 strict validation을 통과시킨다.
+- [x] 8.1 일곱 구현 이슈의 결과·테스트와 Remaining Decisions 해소 상태를 대조한다.
+- [x] 8.2 Bookmark vertical flow와 Profile·가시성·pagination 경계의 최종 통합 검증을 실행한다.
+- [x] 8.3 구현에서 확정된 계약을 canonical 문서·OpenSpec artifacts와 동기화하고 archive diff를 검토한다.
+- [x] 8.4 change를 archive하고 archive 후 strict validation을 통과시켜 Ready PR로 Completion Gate 승인을 요청한다.
