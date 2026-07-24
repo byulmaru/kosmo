@@ -1,4 +1,10 @@
-## ADDED Requirements
+# bookmark Specification
+
+## Purpose
+
+Profile이 조회 가능한 Post를 개인적으로 저장하고, Profile별로 격리된 Bookmark 관계를 생성·조회·삭제하며 유니버설 클라이언트에서 탐색하는 계약을 문서화한다.
+
+## Requirements
 
 ### Requirement: Profile별 개인 Bookmark
 
@@ -44,7 +50,7 @@
 
 ### Requirement: Bookmark 생성 GraphQL 계약
 
-**Authority / Provenance:** `docs/domain/objects/bookmark.md`, `PROD-408` 본문과 2026-07-21 생성 API·책임 경계 확정 댓글 — 시스템은 현재 `usingProfile`을 Owner로 사용하는 `createBookmark(input: { postId })` GraphQL mutation을 제공해야 한다(MUST). 성공 payload는 `bookmark` 필드로 Owner Profile, 현재 조회 가능한 Target Post와 생성 시각을 식별할 수 있는 Bookmark Node를 반환해야 한다(MUST). 이후 Target Post가 조회 불가능해져도 Owner의 Bookmark Node는 유지되고 `post` 필드는 `null`이어야 한다(MUST). 같은 Profile/Post의 순차·동시 중복 요청은 기존 Bookmark를 반환하는 성공으로 정규화하고 기존 생성 시각을 변경하지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/bookmark.md`, `PROD-391`, `PROD-408` 본문과 2026-07-21 생성 API·책임 경계 확정 댓글 — 시스템은 현재 `usingProfile`을 Owner로 사용하는 `createBookmark(input: { postId })` GraphQL mutation을 제공해야 한다(MUST). 성공 payload는 `bookmark` 필드로 Owner Profile, 현재 조회 가능한 Target Post와 생성 시각을 식별할 수 있는 Bookmark Node를 반환해야 한다(MUST). 이후 Target Post가 조회 불가능해져도 Owner의 Bookmark Node는 유지되고 `post` 필드는 `null`이어야 한다(MUST). 같은 Profile/Post의 순차·동시 중복 요청은 기존 Bookmark를 반환하는 성공으로 정규화하고 기존 생성 시각을 변경하지 않아야 한다(MUST).
 
 #### Scenario: GraphQL로 Bookmark를 생성함
 
@@ -78,7 +84,7 @@
 
 ### Requirement: Owner 전용 Bookmark 삭제
 
-**Authority / Provenance:** `docs/domain/objects/bookmark.md`, `PROD-391`, `PROD-409`와 2026-07-22 삭제 API 승인 — 시스템은 Bookmark의 Owner Profile만 해당 Bookmark를 삭제할 수 있게 해야 한다(MUST). Target Post가 현재 조회 불가능하더라도 Owner는 저장 관계를 삭제할 수 있어야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/bookmark.md`, `PROD-391`, `PROD-409` 본문과 2026-07-24 Bookmark 삭제 API 계약 댓글 — 시스템은 Bookmark의 Owner Profile만 해당 Bookmark를 삭제할 수 있게 해야 한다(MUST). Target Post가 현재 조회 불가능하더라도 Owner는 저장 관계를 삭제할 수 있어야 한다(MUST).
 
 GraphQL은 현재 `usingProfile`을 Owner로 사용하는 `deleteBookmark(input: { id })` mutation을 제공해야 한다(MUST). 성공 payload는 nullable `bookmarkId`와 nullable `post`를 반환해야 한다(MUST). Owner가 존재하는 Bookmark를 처음 삭제하면 `bookmarkId`로 삭제된 Bookmark 관계를 정확히 식별하고, `post`는 현재 조회 가능한 Target Post를 반환해야 한다(MUST). Target Post가 현재 조회 불가능하면 삭제는 그대로 성공하되 `post`는 `null`이어야 한다(MUST).
 
@@ -207,7 +213,7 @@ Owner가 개별 Bookmark Node를 조회할 때 `Bookmark.post`는 nullable이어
 
 **Authority / Provenance:** `docs/domain/objects/bookmark.md`, `PROD-391`, `PROD-421` — 클라이언트는 유효한 세션과 선택 Profile이 있는 사용자에게 개인 Bookmark 목록 화면을 제공해야 한다(MUST). 화면은 최신순 pagination과 Target Post 이동을 지원하고(MUST), loading·error·empty 상태를 구분해야 하며(MUST), 서버가 숨긴 Target Post를 별도 경로로 복원하거나 노출하지 않아야 한다(MUST NOT).
 
-**Authority / Provenance:** `PROD-421`, 2026-07-23 사용자 결정 — 다음 페이지 요청이 실패하면 클라이언트는 이미 표시한 Bookmark edge를 유지해야 하며(MUST), 목록 아래에 실패 alert와 같은 다음 cursor를 다시 요청하는 retry action을 제공해야 한다(MUST).
+**Authority / Provenance:** `PROD-421` 본문과 2026-07-24 Bookmark 목록 UX와 navigation 계약 댓글 — 다음 페이지 요청이 실패하면 클라이언트는 이미 표시한 Bookmark edge를 유지해야 하며(MUST), 목록 아래에 실패 alert와 같은 다음 cursor를 다시 요청하는 retry action을 제공해야 한다(MUST).
 
 #### Scenario: Bookmark 목록을 탐색함
 

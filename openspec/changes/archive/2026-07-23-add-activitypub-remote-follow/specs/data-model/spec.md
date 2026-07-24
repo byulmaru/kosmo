@@ -9,15 +9,14 @@
 - **WHEN** local profile 또는 ActivityPub remote profile이 생성된다
 - **THEN** 시스템은 `profile` row에 followers count와 following count를 저장한다
 - **AND** 저장 count는 음수가 될 수 없다
-- **AND** 새 local profile의 followers count와 following count는 0으로 초기화한다
-- **AND** 새 remote profile의 followers count와 following count는 actor materialization에서 확인한 remote followers/following collection count로 초기화한다
-- **AND** remote collection count를 확인할 수 없으면 GraphQL non-null count 계약을 유지할 수 있도록 0으로 초기화할 수 있다
+- **AND** 새 local profile과 ActivityPub remote profile의 followers count와 following count는 0으로 초기화한다
 
 #### Scenario: Backfill stored profile counts
 
 - **WHEN** followers/following 저장 count column을 기존 DB에 추가한다
 - **THEN** migration은 기존 established `ProfileFollow` row를 기준으로 각 profile의 followers count와 following count를 채운다
 - **AND** backfill은 기존 established relation 전체를 사용하며 profile/instance 가시성 상태를 이유로 relation을 삭제하거나 제외하지 않는다
+- **AND** 이 one-time snapshot은 migration 전에 이미 비활성화된 profile 관계를 별도로 reconciliation하지 않으며 visible connection edge 수와의 상시 일치를 보장하지 않는다
 
 #### Scenario: Update stored counts for established follow changes
 
@@ -42,15 +41,11 @@
 - **AND** suspension만으로 양쪽 profile의 저장 followers/following count를 변경하지 않는다
 - **AND** suspension 중 GraphQL follow/unfollow action은 해당 remote profile을 NotFound로 숨긴다
 
-#### Scenario: Refresh remote stored counts
+#### Scenario: Preserve stored counts during remote actor refresh
 
-- **WHEN** remote ActivityPub actor refresh가 followers/following collection count를 확인한다
-- **THEN** 시스템은 해당 remote `Profile`의 저장 followers count와 following count를 확인한 값으로 갱신한다
-- **AND** remote collection item 또는 page content는 이번 capability에서 mirror하지 않는다
-- **AND** 이번 capability는 remote baseline count와 local optimistic delta를 별도 column으로 분리하지 않는다
-- **AND** 저장 count는 best-effort 값이며, remote refresh와 이후 follow side effect가 마지막으로 반영한 값으로 간주한다
-- **AND** remote collection count가 kosmo가 저장한 known `ProfileFollow` edge를 이미 포함하더라도 이번 capability는 해당 edge를 deduplicate하는 별도 count reconciliation model을 두지 않는다
-- **AND** refresh에서 collection count를 확인할 수 없으면 기존 저장 count를 임의로 0으로 덮어쓰지 않는다
+- **WHEN** 저장된 ActivityPub remote actor를 refresh한다
+- **THEN** 시스템은 해당 remote `Profile`의 기존 followers count와 following count를 보존한다
+- **AND** remote followers/following collection이나 collection count를 fetch하지 않는다
 
 ### Requirement: Remote follow activity projection
 
@@ -61,18 +56,12 @@
 - **WHEN** local profile이 remote ActivityPub profile을 follow하고 outbound Follow activity를 보낸다
 - **THEN** 시스템은 outbound Follow activity identity를 configured canonical origin과 `ProfileFollow` 또는 `ProfileFollowRequest` id에서 파생해야 한다
 - **AND** actor/object URI는 저장된 follower/followee actor identity에서, generation timestamp는 해당 row의 immutable createdAt에서 파생해야 한다
-- **AND** remote Accept 또는 Reject에서 Fedify의 기본 cross-origin 검증을 통과한 typed Follow가 kosmo outbound Follow URI를 id로 포함하면 그 URI가 현재 저장된 outbound Follow identity와 일치해야 기존 follow 관계에 대응시킬 수 있어야 한다
-- **AND** 시스템은 cross-origin embedded Follow를 신뢰하도록 Fedify origin 검증을 우회하지 않아야 하며, authoritative origin에서 조회되지 않은 cross-origin object는 follow graph/request side effect 없이 무시할 수 있어야 한다
-- **AND** Fedify가 typed object로 제공한 Follow에 kosmo outbound Follow URI가 없으면 remote Follow id를 compatibility hint로만 취급하고 actor/object가 relation과 저장된 actor identity에서 파생한 actor/object와 일치하며 Follow의 `published`가 현재 request/relation의 immutable `createdAt`과 정확히 일치할 때만 기존 follow generation에 대응시킬 수 있어야 한다
-- **AND** Fedify가 Accept 또는 Reject object를 typed Follow로 제공하지 못하면 시스템은 IRI-only object를 relation/request로 역조회하지 않고 follow graph/request side effect 없이 무시할 수 있어야 한다
-- **AND** remote Reject의 activity timestamp가 현재 outbound Follow generation timestamp보다 오래된 것이 확인되면 actor/object가 일치해도 기존 follow 관계를 제거하지 않을 수 있어야 한다
 - **AND** outbound Follow activity identity는 생성된 request 또는 relation id에서 파생한 kosmo outbound Follow URI여야 한다
 - **AND** outbound Follow activity identity는 follower actor URI와 followee actor URI만으로 파생하지 않고 새 logical outbound Follow activity마다 고유해야 한다
 - **AND** outbound Follow activity identity는 kosmo가 발송하는 Follow/Undo transport identity로 안정적이어야 하지만, remote server가 후속 Accept/Reject object에서 이 identity를 보존한다는 것을 필수 전제로 삼지 않는다
-- **AND** Fedify `orderingKey`는 follower actor URI와 followee actor URI pair에서 안정적으로 파생되어 같은 pair의 모든 outbound Follow와 Undo(Follow)에 재사용되어야 한다
-- **AND** 후속 Fedify transport retry는 같은 request 또는 relation row에서 같은 Follow activity identity를 다시 파생할 수 있어야 한다
+- **AND** 후속 transport retry가 필요해도 같은 request 또는 relation row에서 같은 Follow activity identity를 다시 파생할 수 있어야 한다
 - **AND** PROD-244 outbound mutation은 APPROVAL_REQUIRED remote `ProfileFollowRequest`를 만들며, inbound remote request 생성은 PROD-243이, local request 생성과 local/remote 공통 처리 lifecycle은 PROD-272가 별도 경계에서 다룬다
-- **AND** Fedify delivery queue/retry 설정과 운영 검증은 후속 capability 범위이며, transport delivery retry와 queue 상태는 도메인 테이블에 중복 저장하지 않는다
+- **AND** delivery ordering, retry, queue와 history 같은 transport metadata는 도메인 테이블에 중복 저장하지 않는다
 
 #### Scenario: Project inbound remote Follow without correlation storage
 
@@ -85,12 +74,13 @@
 - **AND** inbound `Undo(Follow)`는 Follow id를 저장하거나 비교하지 않고 verified same actor/object이면 현재 관계 또는 request를 취소하는 의사로 처리할 수 있어야 한다
 - **AND** relation/request 삭제는 처리 중 확인한 exact row가 일치할 때만 적용되고, established relation을 실제 삭제한 transaction만 저장 count를 감소시켜야 한다
 - **AND** IRI-only `Undo.object`는 이번 capability에서 relation/request로 역조회하지 않고 follow graph/request side effect 없이 무시할 수 있어야 하며, 저장된 actor instance의 reachability 복구는 이 제한에 포함하지 않는다
-- **AND** Fedify inbox idempotency는 조기 중복 제거로만 사용하고, durable relation/request side effect는 PostgreSQL unique 제약과 exact-row 조건이 source of truth여야 한다
+- **AND** transport의 조기 중복 제거와 무관하게 durable relation/request side effect는 PostgreSQL unique 제약과 exact-row 조건이 source of truth여야 한다
 
 #### Scenario: Remove rejected remote follow projection
 
 - **WHEN** remote actor가 저장된 outbound Follow의 actor/object와 일치하는 Follow를 object로 하는 Reject를 보낸다
-- **THEN** 시스템은 해당 Reject의 activity timestamp가 현재 outbound Follow generation timestamp보다 오래되지 않았으면 그 Follow에 연결된 pending request 또는 optimistic established relation의 exact row를 제거해야 한다
+- **THEN** 시스템은 embedded Follow가 현재 outbound Follow generation과 일치하고 transaction에서 expected row가 여전히 현재 projection이면 pending request 또는 optimistic established relation의 exact row를 제거해야 한다
+- **AND** remote `Reject.published`와 local 수신 시각은 이 판정에 사용하지 않는다
 - **AND** 시스템은 거절 상태 값을 저장하지 않는다
 
 ## MODIFIED Requirements
@@ -112,6 +102,5 @@
 
 - **WHEN** 팔로우 관계가 ActivityPub remote profile을 포함한다
 - **THEN** inbound Follow는 별도 activity identity나 actor/object metadata 없이 actor pair의 `ProfileFollow` 관계 또는 inbound `ProfileFollowRequest` 요청으로 투영해야 한다
-- **AND** outbound Follow identity, actor/object URI, generation과 Fedify `orderingKey`는 established `ProfileFollow`와 저장된 actor identity에서 안정적으로 파생할 수 있어야 한다
-- **AND** Accept, Reject, Undo activity identity의 durable history 저장은 이번 domain table 요구사항이 아니며 Fedify idempotency 또는 후속 activity log capability의 책임이다
-- **AND** transport delivery retry와 queue metadata는 Fedify가 소유하며 local-only follow 관계의 필수 값이 아니다
+- **AND** outbound Follow identity, actor/object URI와 generation은 established `ProfileFollow`와 저장된 actor identity에서 안정적으로 파생할 수 있어야 한다
+- **AND** Accept, Reject, Undo activity identity의 durable history와 delivery ordering, retry, queue metadata는 이번 domain table 요구사항이 아니다

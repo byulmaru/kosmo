@@ -120,6 +120,20 @@ test('exposes the idempotent Repost creation contract', () => {
   assert.equal(payload.getFields().created, undefined);
 });
 
+test('exposes the ID-based idempotent Post delete contract', () => {
+  const mutation = schema.getMutationType();
+  const input = schema.getType('DeletePostInput');
+  const payload = schema.getType('DeletePostPayload');
+
+  assert.equal(String(mutation?.getFields().deletePost?.type), 'DeletePostPayload!');
+  assert.ok(isInputObjectType(input));
+  assert.equal(String(input.getFields().id.type), 'ID!');
+  assert.ok(isObjectType(payload));
+  assert.equal(String(payload.getFields().postId.type), 'ID!');
+  assert.equal(payload.getFields().post, undefined);
+  assert.equal(payload.getFields().deleted, undefined);
+});
+
 test('exposes the Bookmark mutation and relationship contract', () => {
   const mutation = schema.getMutationType();
   const createInput = schema.getType('CreateBookmarkInput');

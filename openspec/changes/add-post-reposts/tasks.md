@@ -182,9 +182,9 @@ Repost Author가 기존 Post 삭제 행동으로 Active Repost를 멱등 Tombsto
 
 - 정상·반복·동시 삭제, 권한 실패, `postId` payload, count 감소, partial unique 해제와 재Repost를 core/API integration test로 검증한다.
 
-- [ ] 6.1 Author·Active 상태를 확인하고 Post를 멱등 Tombstone 처리하는 공통 삭제 core action을 구현한다.
-- [ ] 6.2 `deletePost` mutation과 `DeletePostPayload.postId`를 concrete Post global ID 계약에 맞춰 제공한다.
-- [ ] 6.3 Tombstone·권한·동시성·count·재Repost와 GraphQL payload 검증을 추가하고 core/API check를 통과시킨다.
+- [x] 6.1 Author·Active 상태를 확인하고 Post를 멱등 Tombstone 처리하는 공통 삭제 core action을 구현한다.
+- [x] 6.2 `deletePost` mutation과 `DeletePostPayload.postId`를 concrete Post global ID 계약에 맞춰 제공한다.
+- [x] 6.3 Tombstone·권한·동시성·count·재Repost와 GraphQL payload 검증을 추가하고 core/API check를 통과시킨다.
 
 ## 7. PROD-453 Repost/Quote presentation UI
 

@@ -70,7 +70,7 @@
 
 - Decision Date: 2026-07-23
 - Decision Class: Derived Contract
-- Authority / Provenance: `PROD-391`, `PROD-421`
+- Authority / Provenance: `PROD-391`, `PROD-421` 본문과 2026-07-24 Bookmark 목록 UX와 navigation 계약 댓글
 - Status: Active
 - Context / Problem: Android·iOS·Web이 같은 개인 목록을 제공하면서 selected Profile 전환 때 pagination cache가 섞이지 않아야 한다.
 - Decision Outcome: `/bookmarks`를 `(tabs)` 아래의 보호된 universal Expo route로 사용한다. 목록 connection은 현재 Relay actor store 안에서 selected Profile별로 식별하며, Profile 전환은 새 Environment/Store와 connection/cursor를 사용한다.
@@ -82,7 +82,7 @@
 
 - Decision Date: 2026-07-23
 - Decision Class: Implementation Choice
-- Authority / Provenance: `PROD-421`, 2026-07-23 사용자 결정
+- Authority / Provenance: `PROD-421` 본문과 2026-07-24 Bookmark 목록 UX와 navigation 계약 댓글
 - Status: Active
 - Context / Problem: Web full·compact sidebar와 mobile drawer가 같은 `SidebarNavigation`을 사용하지만 Bookmark 항목은 현재 일반 `/menu` placeholder를 가리킨다. Mobile bottom tab은 홈·검색·글쓰기·알림·Profile의 다섯 항목을 고정으로 제공한다.
 - Decision Outcome: Web full·compact sidebar와 mobile drawer의 공용 Bookmark 메뉴 항목을 모두 canonical `/bookmarks` route로 연결한다. Mobile은 기존 메뉴 drawer를 Bookmark 진입점으로 사용하며 bottom tab이나 별도 header 버튼을 추가하지 않는다.
@@ -94,7 +94,7 @@
 
 - Decision Date: 2026-07-23
 - Decision Class: Implementation Choice
-- Authority / Provenance: `PROD-421`, 2026-07-23 사용자 결정
+- Authority / Provenance: `PROD-421` 본문과 2026-07-24 Bookmark 목록 UX와 navigation 계약 댓글
 - Status: Active
 - Context / Problem: 첫 목록 요청 실패와 기존 edge를 표시한 뒤의 다음 페이지 요청 실패는 보존할 수 있는 사용자 데이터가 다르다. 다음 페이지 실패를 전체 error 화면으로 바꾸면 이미 조회한 Bookmark를 불필요하게 숨긴다.
 - Decision Outcome: 첫 목록 요청이 실패하고 표시할 edge가 없으면 전체 목록 error·retry 상태를 표시한다. 기존 edge가 있는 상태에서 다음 페이지 요청이 실패하면 기존 Post 카드를 유지하고 목록 아래에 `북마크를 더 불러오지 못했어요` alert와 `다시 시도` action을 표시한다. 재시도는 같은 connection의 다음 cursor를 다시 요청하며 성공하면 pagination error를 지운다.
@@ -142,7 +142,7 @@
 
 - Decision Date: 2026-07-22
 - Decision Class: Implementation Choice
-- Authority / Provenance: `docs/domain/objects/bookmark.md`, `PROD-409` 본문과 2026-07-22 사용자 승인
+- Authority / Provenance: `docs/domain/objects/bookmark.md`, `PROD-409` 본문과 2026-07-24 Bookmark 삭제 API 계약 댓글
 - Status: Active
 - Context / Problem: Owner 전용 삭제와 반복·동시 삭제 검증은 확정됐지만, missing·non-owner·경쟁 loser의 외부 의미와 Relay가 정규화할 exact payload가 열려 있었다.
 - Decision Outcome: `deleteBookmark(input: { id })`는 현재 `usingProfile`, session Account와 Bookmark ID를 함께 조건으로 삭제한다. Resolver가 actor 권한을 먼저 검증해 사용할 수 없는 actor에는 `PERMISSION_DENIED`를 반환하고, core의 원자적 DELETE가 같은 Account/Profile membership과 Account·Profile·local Instance의 활성 상태를 다시 조건으로 결합해 검증 직후 권한이 사라지는 경합을 막는다. 첫 Owner 삭제는 nullable `DeleteBookmarkPayload.bookmarkId`로 삭제된 Bookmark 관계를 정확히 식별하고 nullable `post`로 현재 조회 가능한 Target Post를 반환한다. Target이 숨겨졌으면 관계는 삭제하되 `post`는 `null`이다. missing·non-owner·순차 반복·동시 loser와 검증 직후 actor 권한이 사라진 요청은 오류 없이 `bookmarkId: null`, `post: null`인 동일 성공으로 정규화한다.
