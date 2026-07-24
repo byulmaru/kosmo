@@ -15,6 +15,7 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
+import { createPost as createCorePost, repostPost } from '@kosmo/core/services';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -624,9 +625,15 @@ describe('GraphQL Reaction', () => {
   test('Reaction count는 숨겨진 Repost source의 raw Post 경로에서 노출되지 않는다', async () => {
     const auth = await createAuthenticatedSession();
     const sourceAuthor = await createProfile('hidden-repost-source-author');
-    const source = await createContentfulPost(sourceAuthor.id);
-    const repost = await createPost(auth.profile.id, PostVisibility.PUBLIC, {
-      repostSourceId: source.id,
+    const { post: source } = await createCorePost({
+      document: postContentDocumentFromText(crypto.randomUUID()),
+      origin: 'LOCAL',
+      profileId: sourceAuthor.id,
+      visibility: PostVisibility.PUBLIC,
+    });
+    const repost = await repostPost({
+      actorProfileId: auth.profile.id,
+      sourcePostId: source.id,
     });
     const reactionProfile = await createProfile('raw-post-reaction-profile');
     const reaction = await db
@@ -821,22 +828,6 @@ const createPost = (
     .values({ profileId, repostSourceId, state: PostState.ACTIVE, visibility })
     .returning()
     .then(firstOrThrow);
-
-const createContentfulPost = async (profileId: string) => {
-  const post = await createPost(profileId);
-  const content = await db
-    .insert(PostContents)
-    .values({ document: postContentDocumentFromText(post.id), postId: post.id })
-    .returning()
-    .then(firstOrThrow);
-
-  return db
-    .update(Posts)
-    .set({ currentContentId: content.id })
-    .where(eq(Posts.id, post.id))
-    .returning()
-    .then(firstOrThrow);
-};
 
 const createRemoteInstance = ({ state }: { state: InstanceState }) => {
   const domain = `remote-${crypto.randomUUID()}.example`;
