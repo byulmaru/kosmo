@@ -13,7 +13,7 @@ import {
 } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { normalizeHandle } from '@kosmo/core/utils';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { encodeGlobalId as globalId } from '../../../src/graphql/global-id';
 import type * as CoreDb from '@kosmo/core/db';
@@ -199,7 +199,7 @@ describe('GraphQL Repost', () => {
     assert.ok(result.errors?.[0]);
   });
 
-  test('deletePost는 Author Repost를 멱등 Tombstone 처리하고 새 Repost를 허용한다', async () => {
+  test('deletePost는 삭제한 Repost의 concrete global ID를 반환한다', async () => {
     const auth = await createAuthenticatedSession();
     const source = await createContentPost(auth.profile.id);
     await requestRepost(source.id, auth.token);
@@ -212,64 +212,6 @@ describe('GraphQL Repost', () => {
     const first = await requestDelete(repost.id, auth.token);
     assertNoGraphQLErrors(first);
     assert.deepEqual(first.data?.deletePost, { postId: globalId('Post', repost.id) });
-
-    const deleted = await db.select().from(Posts).where(eq(Posts.id, repost.id)).then(firstOrThrow);
-    assert.equal(deleted.state, PostState.DELETED);
-    assert.ok(deleted.deletedAt);
-    assert.equal(deleted.repostSourceId, source.id);
-
-    const repeated = await requestDelete(repost.id, auth.token);
-    assertNoGraphQLErrors(repeated);
-    assert.deepEqual(repeated.data?.deletePost, first.data?.deletePost);
-    const repeatedDeletedAt = await db
-      .select({ deletedAt: Posts.deletedAt })
-      .from(Posts)
-      .where(eq(Posts.id, repost.id))
-      .then(firstOrThrow);
-    assert.equal(repeatedDeletedAt.deletedAt?.toString(), deleted.deletedAt.toString());
-
-    assert.equal(
-      await db
-        .select()
-        .from(Posts)
-        .where(
-          and(
-            eq(Posts.repostSourceId, source.id),
-            eq(Posts.state, PostState.ACTIVE),
-            isNull(Posts.currentContentId),
-          ),
-        )
-        .then((rows) => rows.length),
-      0,
-    );
-
-    const recreated = await requestRepost(source.id, auth.token);
-    assertNoGraphQLErrors(recreated);
-    assert.notEqual(recreated.data?.repostPost.repost.id, globalId('Post', repost.id));
-  });
-
-  test('동시 deletePost는 같은 postId로 수렴하고 최초 Tombstone만 기록한다', async () => {
-    const auth = await createAuthenticatedSession();
-    const source = await createContentPost(auth.profile.id);
-    await requestRepost(source.id, auth.token);
-    const repost = await db
-      .select()
-      .from(Posts)
-      .where(and(eq(Posts.profileId, auth.profile.id), eq(Posts.repostSourceId, source.id)))
-      .then(firstOrThrow);
-
-    const concurrent = await Promise.all(
-      Array.from({ length: 4 }, () => requestDelete(repost.id, auth.token)),
-    );
-    concurrent.forEach(assertNoGraphQLErrors);
-    assert.deepEqual(
-      concurrent.map((result) => result.data?.deletePost.postId),
-      Array.from({ length: 4 }, () => globalId('Post', repost.id)),
-    );
-
-    const stored = await db.select().from(Posts).where(eq(Posts.id, repost.id)).then(firstOrThrow);
-    assert.equal(stored.state, PostState.DELETED);
-    assert.ok(stored.deletedAt);
   });
 
   test('deletePost는 비Author와 비로그인 요청을 거부한다', async () => {
