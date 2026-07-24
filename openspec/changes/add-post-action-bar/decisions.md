@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 PROD-432·PROD-433·PROD-434의 Linear 경계, `post-action-bar` spec, 현재 React Native 코드 구조와 2026-07-21·2026-07-23 KST 사용자 논의에서 확정한 선택을 반영한다. Figma Action node는 비규범적 시각 참고 자료다.
+이 기록은 PROD-432·PROD-433·PROD-434의 Linear 경계, `post-action-bar` spec, 현재 React Native 코드 구조와 2026-07-21·2026-07-23·2026-07-24 KST 사용자 논의에서 확정한 선택을 반영한다. Figma Action node는 비규범적 시각 참고 자료다.
 
 ## Decision Records
 
@@ -46,11 +46,35 @@
 - Decision Class: Derived Contract
 - Authority / Provenance: `memory/issue-openspec-workflow.md`, `PROD-432`
 - Status: Active
-- Context / Problem: 현재 Figma에는 pending·disabled·error와 최소 44×44 interactive target이 없고, 도구를 통한 수정 결과를 신뢰할 수 있는 동기화 기준으로 삼기 어렵다. 동시에 제품 정책과 작업 범위, 규범적 UI 계약의 소유권을 구분해야 한다.
+- Context / Problem: 현재 Figma에는 pending·disabled, 접근 가능한 실패 toast와 최소 44×44 interactive target이 없고, 도구를 통한 수정 결과를 신뢰할 수 있는 동기화 기준으로 삼기 어렵다. 동시에 제품 정책과 작업 범위, 규범적 UI 계약의 소유권을 구분해야 한다.
 - Decision Outcome: `docs/domain`·`docs/design`은 제품·디자인의 canonical source, Linear는 범위·소유권·의존성의 source, 이 OpenSpec은 상태·입력·접근성·통합 동작의 규범 계약으로 사용한다. Figma Action node는 배치·간격·icon·색상의 비규범적 시각 참고로만 사용하며 이 change에서 수정하지 않는다.
-- Alternatives Considered: 구현 전에 Figma variant와 touch target 설명을 추가하는 방식은 도구 반영 신뢰도가 낮고 사용자가 필요할 때 직접 정렬하기로 했으므로 채택하지 않았다. Figma에 없는 상태를 구현하지 않는 방식은 PROD-433의 승인된 완료 조건을 위반하므로 채택하지 않았다.
+- Alternatives Considered: 구현 전에 Figma variant와 touch target 설명을 추가하는 방식은 도구 반영 신뢰도가 낮고 사용자가 필요할 때 직접 정렬하기로 했으므로 채택하지 않았다. Figma에 없는 상태와 실패 피드백을 구현하지 않는 방식은 Linear와 OpenSpec의 승인된 완료 조건을 위반하므로 채택하지 않았다.
 - Consequences: 일정 기간 Figma와 구현 상태 카탈로그 사이의 차이를 허용한다. 향후 Figma를 정렬할 때 canonical 문서·Linear·OpenSpec·코드의 소유 경계를 기준으로 역동기화해야 한다.
 - Confirmation / Follow-up: OpenSpec strict validation과 구현 PR 검토에서 Linear·OpenSpec·코드 정합성을 확인한다. Figma 수정은 이 change의 task에 포함하지 않는다.
+
+### 액션별 광학 크기와 선 두께를 조정
+
+- Decision Date: 2026-07-23
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-433`, 2026-07-23 KST 사용자 결정
+- Status: Superseded
+- Context / Problem: 같은 16px과 Lucide 기본 `strokeWidth` 2를 사용하면 내부 여백이 큰 Repost는 다른 glyph보다 작고 가늘게 보이고, Reply는 count보다 크게 느껴지며 수직 중심이 어긋나 보인다. Reaction Heart도 상대적으로 작고 모든 action glyph의 선 가독성이 부족하다.
+- Decision Outcome: Reply는 16px slot 중앙의 14px glyph, Repost는 20px glyph, Reaction Heart는 18px glyph, Bookmark·More는 16px glyph를 사용한다. Reply·Reaction·Bookmark·More의 Lucide `strokeWidth`는 3.5, 추가 강조가 필요한 Repost는 4를 사용한다. active Heart·Bookmark의 fill은 유지한다. pending spinner는 14px을 각 액션의 default glyph slot 중앙에 배치하고, 모든 control은 최소 44×44 interactive target을 유지한다.
+- Alternatives Considered: 모든 glyph를 16px과 기본 선 두께로 유지하는 방식은 확인된 광학 불균형과 가독성 문제를 남겨 채택하지 않았다. 모든 glyph를 같은 크기로 일괄 확대·축소하는 방식은 이미 적절한 Bookmark·More까지 바꾸므로 채택하지 않았다. Reply나 Repost를 한 축으로만 늘리는 방식은 Lucide 비율을 왜곡하므로 채택하지 않았다.
+- Consequences: action별 visual glyph와 slot 폭이 달라지지만 공개 props, 순서, 최소 입력 영역과 접근성 계약은 바뀌지 않는다. Repost의 default↔pending 전환은 20px slot을 유지하고 다른 action도 자기 slot 중앙에서 spinner를 표시하므로 count와 행 배치가 흔들리지 않는다.
+- Confirmation / Follow-up: PROD-433 Storybook에서 다섯 glyph의 크기와 선 두께, Reply·Repost의 count 중앙선, pending slot과 390px·900px·1400px 한 행 배치를 검증한다.
+
+### Reply·Repost의 실제 획 높이를 count와 맞춘다
+
+- Decision Date: 2026-07-23
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-433`, 2026-07-23 KST 사용자 결정
+- Status: Active
+- Context / Problem: Reply·Repost의 SVG element box와 16px count line box 중심을 같게 배치해도 실제 icon path와 글자 획의 높이가 달라 수평선이 맞지 않아 보인다. 특히 Repeat2를 20×20px과 `strokeWidth` 4로 균등 확대하면 원래 y=6~18만 사용하는 가로형 path는 계속 눌려 보이면서 선만 과도하게 두꺼워진다. 비정사각 scaling 뒤에도 SUIT count의 font ink가 icon optical center보다 높게 느껴진다. 14×16 Reply와 16×24 Repost는 세로 대비 가로가 부족해 과도하게 길어 보인다.
+- Decision Outcome: Reply는 16×16px slot 중앙의 16×16px glyph, Repost는 18×24px slot의 18×24px glyph를 사용한다. Reply·Reaction·Bookmark·More의 `strokeWidth`는 3.5를 유지하고, 가로 path가 과도하게 무거워 보이지 않도록 Repost만 2.7을 사용한다. Reply는 가로폭을 16px로 넓혀 세로와 같은 비율로 맞춘다. Repost는 24×24 viewBox의 y=6~18 path가 실제 약 16px 높이로 보이도록 세로 24px을 유지하고, 가로폭은 18px로 넓혀 세로로 과도하게 늘어난 비율을 완화한다. React Native SVG의 기본 비율 보존이 비정사각 viewport 안에 정사각 content를 letterbox하지 않도록 Reply·Repost에만 `preserveAspectRatio="none"`을 전달한다. count는 모든 ActionControl에서 lineHeight와 layout 위치를 바꾸지 않고 내부 typography transform으로 시각적으로 2px 아래에 둔다. pending spinner는 14px 크기와 각 액션 slot layout을 유지한 채 시각만 1px 아래로 이동해 count 중심보다 1px 위에 둔다. Reaction Heart 18×18px, Bookmark·More 16×16px, active fill과 최소 44×44 interactive target은 유지한다.
+- Alternatives Considered: Repost 20×20px과 `strokeWidth` 4는 path 비율을 개선하지 못하고 선만 과도하게 두꺼워 채택하지 않았다. Repost 16×20px은 path가 사용하는 세로 영역이 실제 약 10px로 남아 16px count 획 높이와 계속 차이가 나므로 채택하지 않았다. 비정사각 width·height만 전달하고 기본 `preserveAspectRatio="xMidYMid meet"`를 유지하는 방식은 정사각 content를 letterbox해 실제 path 비율을 바꾸지 못하므로 채택하지 않았다. count lineHeight나 layout 위치를 바꾸는 방식은 Reply·Repost 이외의 typography와 플랫폼별 font metric까지 넓게 바꾸므로 채택하지 않았다. action별 icon `translateY`는 spinner slot과 default glyph 중심 계약을 바꾸므로 채택하지 않았다.
+- Consequences: 내부 icon renderer가 width와 height를 별도로 처리하지만 공개 `PostActionBarProps`, 액션 순서, count 계약, 입력·접근성 상태는 바뀌지 않는다. Reply·Repost의 default와 pending slot은 각각 16×16px·18×24px로 유지하므로 icon↔spinner 전환 때 행 배치가 흔들리지 않는다. Repost glyph와 slot 폭을 같게 해 Android View clipping을 피하고 플랫폼별로 같은 18px glyph를 보장한다. count는 렌더링만 2px 내려가며 lineHeight와 action target은 유지하고, pending spinner만 렌더링 1px 내려간다.
+- Confirmation / Follow-up: PROD-433 Storybook에서 Reply 16×16px, Repost 18×24px와 `strokeWidth` 2.7, 나머지 glyph의 `strokeWidth` 3.5, Reply·Repost count의 icon 중심보다 2px 낮은 렌더 위치와 pending spinner의 count 중심보다 1px 높은 렌더 위치, 실제 광학 정렬과 390px·900px·1400px 한 행 배치를 검증한다.
 
 ### 공유 change와 부모 소유의 최종 archive
 
@@ -81,12 +105,24 @@
 - Decision Date: 2026-07-23
 - Decision Class: Derived Contract
 - Authority / Provenance: `PROD-432`, `PROD-433`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425`
-- Status: Active
+- Status: Superseded
 - Context / Problem: 범용 `selected`는 Reply Composer의 열림, Repost 수행 여부, 하나 이상의 Reaction 존재와 Bookmark 여부처럼 서로 다른 제품 의미를 하나의 이름으로 축약해 상위 adapter와 컴포넌트 계약을 모호하게 만든다.
-- Decision Outcome: 공개 UI 상태는 Reply의 controlled `expanded`, Repost의 `hasReposted`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`로 표현하고 default·pending·disabled·error 처리 상태와 독립적으로 유지한다. Reply 활성화는 상위 Composer를 열거나 focus할 뿐 `expanded`를 자체 전환하지 않는다. Reaction은 현재 Profile이 하나 이상의 Reaction Type을 남겼는지만 `hasReacted`로 나타내고 count를 받지 않는다. More는 callback과 접근성 label만 받는다.
+- Decision Outcome: 공개 UI 상태는 Reply의 controlled `expanded`, Repost의 `hasReposted`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`로 표현하고 default·pending·disabled·error 처리 상태와 독립적으로 유지한다. Reply 활성화는 상위 Composer를 열거나 focus할 뿐 `expanded`를 자체 전환하지 않는다. Reaction은 현재 Profile이 하나 이상의 Reaction Type을 남겼는지만 `hasReacted`로 나타내며 Reaction과 Bookmark는 count를 받지 않는다. `hasReacted` 또는 `hasBookmarked`가 true이면 pending spinner를 제외한 Heart·Bookmark 내부를 현재 처리 상태 색상으로 채우고 default에서는 primary 색상을 사용한다. More는 callback과 접근성 label만 받는다.
 - Alternatives Considered: 범용 `selected`는 도메인 의미와 소유 계층을 숨기므로 채택하지 않았다. Reply가 내부 상태로 Composer 열림을 전환하는 방식은 controlled surface 계약과 충돌하므로 채택하지 않았다.
-- Consequences: surface adapter가 도메인별 값을 공급하고, 처리 상태의 시각 표현이 primary 표현보다 우선해도 도메인 의미와 접근성 상태는 보존한다. React Native 접근성 구현 내부에서는 플랫폼의 `selected`·`pressed`·`expanded` 용어를 사용할 수 있다.
-- Confirmation / Follow-up: Storybook과 component test에서 `expanded`·`hasReposted`·`hasReacted`·`hasBookmarked`와 pending·disabled·error의 조합, callback 허용 여부 및 접근성 상태를 검증한다.
+- Consequences: surface adapter가 도메인별 값을 공급하고, 처리 상태의 시각 표현이 primary 표현보다 우선해도 도메인 의미, Reaction·Bookmark의 채워진 형태와 접근성 상태는 보존한다. React Native 접근성 구현 내부에서는 플랫폼의 `selected`·`pressed`·`expanded` 용어를 사용할 수 있다.
+- Confirmation / Follow-up: Storybook과 component test에서 `expanded`·`hasReposted`·`hasReacted`·`hasBookmarked`와 pending·disabled·error의 조합, active Reaction·Bookmark의 채워진 형태, callback 허용 여부 및 접근성 상태를 검증한다.
+
+### 공개 도메인 상태와 일시적 실패 피드백을 분리
+
+- Decision Date: 2026-07-23
+- Decision Class: Derived Contract
+- Authority / Provenance: `PROD-432`, `PROD-433` Linear comment `2abceb83-7f74-4fb3-a436-145dde45195c`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425`
+- Status: Active
+- Context / Problem: `expanded`·`hasReposted`·`hasReacted`·`hasBookmarked`는 현재 확정된 제품 상태이지만, 마지막 요청 실패는 일시적 실행 결과다. 실패를 Action Bar의 지속 `error`·danger 상태로 남기면 현재 도메인 상태와 위험·파괴적 의미로 읽힐 수 있는 실패 표현이 하나의 control에 섞인다.
+- Decision Outcome: 공개 UI 상태는 Reply의 controlled `expanded`, Repost의 `hasReposted`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`로 표현하고 default·pending·disabled 처리 상태와 독립적으로 유지한다. Reaction과 Bookmark는 count를 받지 않고 active이면 pending spinner를 제외한 현재 처리 상태 색상으로 icon 내부를 채운다. 요청 실패 시 production surface는 pending을 종료하고 직전의 확정된 도메인 상태와 count를 유지한 채 default로 복귀한다. PROD-432의 action adapter 계층은 액션별 한국어 toast와 동일한 보조 기술 안내를 제공한다. 별도 retry 상태나 toast 버튼은 두지 않고 같은 액션의 다음 입력을 재시도로 처리한다. `PostActionBar`는 toast를 소유하지 않는다.
+- Alternatives Considered: danger `error` 상태만 유지하는 방식은 구현은 단순하지만 일시적 실패와 도메인 상태를 섞고 실패 문구를 제공하지 못해 채택하지 않았다. toast와 danger 상태를 함께 두는 방식은 중복 피드백과 상태 수명 복잡도를 만들어 채택하지 않았다. toast 내 retry 버튼은 같은 액션의 다음 입력이 자연스러운 재시도 경로이므로 추가하지 않았다.
+- Consequences: PROD-433은 공개 `error` 처리 상태, danger 표현, 재시도 label·hint와 관련 Storybook·component test를 제거한다. PROD-432는 실제 mutation 실패에서 이전 확정 상태 복원, 접근 가능한 toast, 다음 입력 재시도를 통합 검증한다. cross-platform toast primitive·package 선택은 PROD-432 구현 계획에서 별도로 결정한다.
+- Confirmation / Follow-up: PROD-433 Storybook과 component test는 `expanded`·`hasReposted`·`hasReacted`·`hasBookmarked`와 default·pending·disabled 조합을 검증한다. PROD-432는 Web·Android·iOS에서 액션별 toast, 보조 기술 즉시 안내, 이전 확정 상태 유지와 다음 입력 재시도를 검증한다.
 
 ### More callback 경계와 Post Share Reference 통합을 분리
 
@@ -107,7 +143,7 @@
 - Authority / Provenance: `PROD-432`, `PROD-433`
 - Status: Active
 - Context / Problem: Action Bar가 K/M 반올림·단위 승격·`999M` 상한을 수동 구현하면 JavaScript 표준의 locale-aware compact formatting을 중복하고 한국어의 천·만·억 같은 실행 환경 표기를 막는다.
-- Decision Outcome: Reaction과 More를 제외하고 선행 action 계약이 제공한 optional count는 실행 환경 locale의 표준 `Intl.NumberFormat` compact notation을 사용한다. Action Bar는 K/M 단위, 반올림 경계, 단위 승격과 표시 상한을 자체 구현하지 않고 locale별 정확한 문자열을 규범으로 고정하지 않는다. Reaction은 count를 받지 않으며 count 계약이 없는 액션에는 `0`이나 placeholder를 합성하지 않는다.
+- Decision Outcome: 선행 action 계약이 Reply와 Repost에 제공한 optional count는 실행 환경 locale의 표준 `Intl.NumberFormat` compact notation을 사용한다. Action Bar는 K/M 단위, 반올림 경계, 단위 승격과 표시 상한을 자체 구현하지 않고 locale별 정확한 문자열을 규범으로 고정하지 않는다. Reaction·Bookmark·More는 count를 받지 않으며 count 계약이 없는 Reply·Repost에는 `0`이나 placeholder를 합성하지 않는다.
 - Alternatives Considered: 수동 K/M formatter는 표준 기능을 중복하고 locale 출력을 제거하므로 채택하지 않았다. raw count는 좁은 폭에서 길이를 제한하지 못하므로 채택하지 않았다.
 - Consequences: locale과 플랫폼의 표준 데이터에 따라 단위와 반올림 결과가 달라질 수 있다. 레이아웃은 최대 네 글자 가정 대신 한국어·영어 대표 compact fixture에서 한 행과 비겹침을 검증한다.
 - Confirmation / Follow-up: PROD-433 구현에서 기존 `Intl.NumberFormat` 사용 관례를 재사용하고 Web Storybook과 Android·iOS runtime에서 대표 fixture를 검증한다.
@@ -124,6 +160,18 @@
 - Consequences: 실제 대상 적격성과 실행 권한은 canonical 문서와 선행 action 계약이 소유하고 Action Bar는 adapter가 전달한 disabled 상태만 표현한다. guest 인증 목적지·화면 전환·임시 화면은 이 change에서 구현하지 않는다.
 - Confirmation / Follow-up: PROD-432 통합 검증에서 Content 없는 Repost와 Visibility 등 대상 자체 제한, 인증된 실행 주체의 권한 제한, 대상이 적격한 guest의 인증 위임과 대상이 부적격한 guest의 disabled 유지를 각각 확인한다.
 
+### Action Bar 컨테이너는 고정된 한국어 접근성 이름을 사용
+
+- Decision Date: 2026-07-24
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-433`, 사용자 확인
+- Status: Active
+- Context / Problem: toolbar role만 제공하면 한 화면에 반복되는 Action Bar 컨테이너의 접근 가능한 이름이 비어 있고, 새 공개 prop으로 surface마다 이름을 조립하면 현재 컴포넌트 범위에 불필요한 API가 추가된다.
+- Decision Outcome: `PostActionBar` 컨테이너는 고정된 한국어 접근성 이름 `액션 바`와 toolbar role을 제공한다. 컨테이너를 단일 접근성 요소로 만들지 않고 내부 action button의 개별 label과 탐색을 유지한다.
+- Alternatives Considered: `accessibilityLabel` 공개 prop을 받는 방식은 surface별 별도 문구 요구가 없어 채택하지 않았다. 영어 이름 `Action bar`는 저장소의 기존 사용자 대상 접근성 문구가 한국어인 관례와 맞지 않아 채택하지 않았다. toolbar 이름을 생략하는 방식은 반복되는 toolbar를 구분할 이름이 없어 채택하지 않았다.
+- Consequences: 한 화면의 여러 Post Action Bar가 같은 이름을 사용하지만 모두 toolbar로 식별되며, 각 액션은 기존 label을 가진 button으로 계속 탐색된다. 공개 `PostActionBarProps`는 바뀌지 않는다.
+- Confirmation / Follow-up: Storybook에서 반복 렌더된 toolbar를 `액션 바` 이름으로 찾고 각 toolbar 내부 action button이 계속 노출되는지 검증한다.
+
 ## Remaining Decisions
 
 - 없음.
@@ -131,5 +179,7 @@
 ## Superseded Decisions
 
 - 2026-07-21 `선택 상태와 처리 상태의 분리`는 2026-07-23 `공개 도메인 상태와 처리 상태를 분리`로 대체했다.
+- 2026-07-23 `공개 도메인 상태와 처리 상태를 분리`는 2026-07-23 `공개 도메인 상태와 일시적 실패 피드백을 분리`로 대체했다.
 - 2026-07-21 `More 컴포넌트 경계와 링크 복사 통합을 분리`는 2026-07-23 `More callback 경계와 Post Share Reference 통합을 분리`로 대체했다.
 - 2026-07-21 `count는 K/M 단위 최대 네 글자로 표시`는 2026-07-23 `locale-aware 표준 compact number formatting을 사용`으로 대체했다.
+- 2026-07-23 `액션별 광학 크기와 선 두께를 조정`은 같은 날 `Reply·Repost의 실제 획 높이를 count와 맞춘다`로 대체했다.
