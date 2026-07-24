@@ -19,11 +19,13 @@ import {
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
+  ProfileState,
 } from '../enums';
 import { NotFoundError } from '../error';
 import {
   createFollowNotification,
   createReactionNotification,
+  createReplyNotification,
   deleteNotificationBySource,
 } from './notification';
 import { followProfile, unfollowProfile } from './profile-follow';
@@ -78,6 +80,33 @@ const createReaction = async (authorProfileId: string, recipientProfileId: strin
     .values({ postId: post.id, profileId: authorProfileId, type: '🎉' })
     .returning()
     .then(firstOrThrow);
+};
+
+const createReply = async (
+  authorProfileId: string,
+  recipientProfileId: string,
+  visibility: PostVisibility = PostVisibility.PUBLIC,
+) => {
+  const parent = await db
+    .insert(Posts)
+    .values({
+      profileId: recipientProfileId,
+      state: PostState.ACTIVE,
+      visibility: PostVisibility.PUBLIC,
+    })
+    .returning()
+    .then(firstOrThrow);
+  const reply = await db
+    .insert(Posts)
+    .values({
+      profileId: authorProfileId,
+      replyParentId: parent.id,
+      state: PostState.ACTIVE,
+      visibility,
+    })
+    .returning()
+    .then(firstOrThrow);
+  return { parent, reply };
 };
 
 const getEstablishedFollow = (result: Awaited<ReturnType<typeof followProfile>>) => {
@@ -258,4 +287,110 @@ test('Reaction 알림은 자기 Post와 Remote Recipient에서 no-op이다', asy
 
 test('Reaction 알림은 존재하지 않는 source를 거부한다', async () => {
   await assert.rejects(createReactionNotification(crypto.randomUUID()), NotFoundError);
+});
+
+test('Reply 알림은 source에서 Recipient와 Related 객체를 파생하고 idempotent하다', async () => {
+  const author = await createProfile();
+  const parentAuthor = await createProfile();
+  const { reply } = await createReply(author.id, parentAuthor.id);
+
+  await Promise.all([createReplyNotification(reply.id), createReplyNotification(reply.id)]);
+
+  const rows = await db.select().from(Notifications).where(eq(Notifications.sourceId, reply.id));
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.kind, NotificationKind.REPLY);
+  assert.equal(rows[0]?.recipientProfileId, parentAuthor.id);
+  assert.notEqual(author.id, parentAuthor.id);
+  assert.deepEqual(rows[0]?.data, {});
+});
+
+test('self-reply, Remote Recipient와 Recipient에게 보이지 않는 Reply는 no-op이다', async () => {
+  const self = await createProfile();
+  const selfReply = await createReply(self.id, self.id);
+  await createReplyNotification(selfReply.reply.id);
+  assert.deepEqual(await readNotifications(selfReply.reply.id), []);
+
+  const author = await createProfile();
+  const remoteRecipient = await createProfile(InstanceKind.ACTIVITYPUB);
+  const remoteReply = await createReply(author.id, remoteRecipient.id);
+  await createReplyNotification(remoteReply.reply.id);
+  assert.deepEqual(await readNotifications(remoteReply.reply.id), []);
+
+  const invisibleAuthor = await createProfile();
+  const localRecipient = await createProfile();
+  const invisibleReply = await createReply(
+    invisibleAuthor.id,
+    localRecipient.id,
+    PostVisibility.FOLLOWERS,
+  );
+  await createReplyNotification(invisibleReply.reply.id);
+  assert.deepEqual(await readNotifications(invisibleReply.reply.id), []);
+});
+
+test('unavailable source, Parent, Recipient와 Reply Author는 생성 시 no-op이다', async () => {
+  const assertUnavailableNoOp = async (
+    mutate: (fixture: {
+      author: typeof Profiles.$inferSelect;
+      parent: typeof Posts.$inferSelect;
+      recipient: typeof Profiles.$inferSelect;
+      reply: typeof Posts.$inferSelect;
+    }) => Promise<void>,
+  ) => {
+    const author = await createProfile();
+    const recipient = await createProfile();
+    const { parent, reply } = await createReply(author.id, recipient.id);
+    await mutate({ author, parent, recipient, reply });
+    await createReplyNotification(reply.id);
+    assert.deepEqual(await readNotifications(reply.id), []);
+  };
+
+  await assertUnavailableNoOp(async ({ reply }) => {
+    await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, reply.id));
+  });
+  await assertUnavailableNoOp(async ({ parent }) => {
+    await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, parent.id));
+  });
+  await assertUnavailableNoOp(async ({ recipient }) => {
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, recipient.id));
+  });
+  await assertUnavailableNoOp(async ({ recipient }) => {
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.SUSPENDED })
+      .where(eq(Instances.id, recipient.instanceId));
+  });
+  await assertUnavailableNoOp(async ({ author }) => {
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.SUSPENDED })
+      .where(eq(Profiles.id, author.id));
+  });
+  await assertUnavailableNoOp(async ({ author }) => {
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.SUSPENDED })
+      .where(eq(Instances.id, author.instanceId));
+  });
+});
+
+test('존재하지 않거나 Reply가 아닌 source는 거부한다', async () => {
+  const missingSourceId = crypto.randomUUID();
+  await assert.rejects(createReplyNotification(missingSourceId), NotFoundError);
+  assert.deepEqual(await readNotifications(missingSourceId), []);
+
+  const author = await createProfile();
+  const post = await db
+    .insert(Posts)
+    .values({
+      profileId: author.id,
+      state: PostState.ACTIVE,
+      visibility: PostVisibility.PUBLIC,
+    })
+    .returning()
+    .then(firstOrThrow);
+  await assert.rejects(createReplyNotification(post.id), NotFoundError);
+  assert.deepEqual(await readNotifications(post.id), []);
 });

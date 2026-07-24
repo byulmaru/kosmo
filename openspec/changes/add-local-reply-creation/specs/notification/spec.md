@@ -21,11 +21,6 @@
 - **WHEN** Parent Author Profile이 결과 Reply 또는 Reply Author Profile을 조회할 수 없다
 - **THEN** 시스템은 Reply Notification을 생성하지 않는다
 
-#### Scenario: Recipient Notification 억제 정책
-
-- **WHEN** Recipient의 Profile Mute·Profile Block·Profile Domain Block, Notification scope Word·Hashtag Mute, Root Post thread의 Post Notification Mute 또는 Domain Block Instance 정책이 결과 Reply에 적용된다
-- **THEN** 시스템은 Reply Notification을 생성하지 않는다
-
 #### Scenario: 동일 source 재처리
 
 - **WHEN** 같은 결과 Reply source의 Notification 저장 경계가 중복 또는 동시 호출된다
