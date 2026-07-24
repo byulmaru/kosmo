@@ -91,17 +91,6 @@
 - **WHEN** Target Profile이 Reply Parent가 있는 Post를 작성했다
 - **THEN** 시스템은 Reply이면서 Quote인 경우를 포함해 그 Post를 Profile Post List 후보에서 제외한다
 
-### Requirement: Hashtag Post List의 Reply 제외 정책
-
-**Authority / Provenance:** `docs/domain/policies/post-list.md`, `PROD-388` 시스템은 Public Visibility와 Content, Hashtag 조건을 충족하더라도 Reply Parent가 있는 Post를 Hashtag Post List 후보에 포함하지 않아야 한다(MUST).
-
-> 현재 Hashtag Post List query/resolver 표면은 없으므로 이 requirement의 구현·회귀 검증은 PROD-429의 현재 구현 slice가 아니라 Hashtag capability를 도입하는 후속 구현 slice와 부모 통합 검증에서 소유한다.
-
-#### Scenario: Hashtag에서 Reply 제외
-
-- **WHEN** Public Post가 Target Hashtag를 포함하지만 Reply Parent를 가진다
-- **THEN** 시스템은 그 Post를 Hashtag Post List 후보에서 제외한다
-
 ### Requirement: Reply 조상 경로 조회
 
 **Authority / Provenance:** `docs/domain/objects/post.md`, `PROD-388`, `PROD-399` 시스템은 Reply의 저장된 직접 Reply Parent 관계를 따라 viewer가 조회할 수 있는 조상 Post 경로를 제공해야 하며(MUST), 임의의 최대 깊이로 정상 경로를 절단해서는 안 된다(MUST NOT).
