@@ -1,6 +1,7 @@
 import { db, Notifications, Posts, ProfileFollows, Reactions } from '@kosmo/core/db';
 import { NotificationKind } from '@kosmo/core/enums';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
 import {
@@ -17,6 +18,12 @@ export type ReactionNotificationRow = NotificationRow & {
   profileId: string;
   type: string;
 };
+export type ReplyNotificationRow = NotificationRow & {
+  post: typeof Posts.$inferSelect;
+  profileId: string;
+};
+
+const ReplyNotificationParents = alias(Posts, 'reply_notification_parent');
 
 type NotificationSource = {
   post?: typeof Posts.$inferSelect;
@@ -29,7 +36,7 @@ const notificationSourceCache = new WeakMap<NotificationRow, Promise<Notificatio
 export const getNotificationSource = (
   notification: NotificationRow,
 ): Promise<NotificationSource> => {
-  const concreteNotification = notification as Partial<ReactionNotificationRow>;
+  const concreteNotification = notification as NotificationRow & Partial<NotificationSource>;
   if (concreteNotification.profileId) {
     return Promise.resolve({
       post: concreteNotification.post,
@@ -43,14 +50,21 @@ export const getNotificationSource = (
     return cached;
   }
 
-  const source: Promise<NotificationSource> = (
-    notification.kind === NotificationKind.FOLLOW
-      ? db
+  const source = (async (): Promise<NotificationSource> => {
+    switch (notification.kind) {
+      case NotificationKind.FOLLOW: {
+        const [row] = await db
           .select({ profileId: ProfileFollows.followerProfileId })
           .from(ProfileFollows)
           .where(eq(ProfileFollows.id, notification.sourceId))
-          .limit(1)
-      : db
+          .limit(1);
+        if (row) {
+          return row;
+        }
+        break;
+      }
+      case NotificationKind.REACTION: {
+        const [row] = await db
           .select({
             post: getColumns(Posts),
             profileId: Reactions.profileId,
@@ -59,14 +73,36 @@ export const getNotificationSource = (
           .from(Reactions)
           .innerJoin(Posts, eq(Posts.id, Reactions.postId))
           .where(eq(Reactions.id, notification.sourceId))
-          .limit(1)
-  ).then(([row]) => {
-    if (!row) {
-      throw new Error('Notification source not found');
+          .limit(1);
+        if (row) {
+          return row;
+        }
+        break;
+      }
+      case NotificationKind.REPLY: {
+        const [row] = await db
+          .select({
+            post: getColumns(Posts),
+            profileId: Posts.profileId,
+          })
+          .from(Posts)
+          .innerJoin(ReplyNotificationParents, eq(ReplyNotificationParents.id, Posts.replyParentId))
+          .where(
+            and(
+              eq(Posts.id, notification.sourceId),
+              eq(ReplyNotificationParents.profileId, notification.recipientProfileId),
+            ),
+          )
+          .limit(1);
+        if (row) {
+          return row;
+        }
+        break;
+      }
     }
 
-    return row;
-  });
+    throw new Error('Notification source not found');
+  })();
 
   notificationSourceCache.set(notification, source);
   return source;
@@ -77,14 +113,18 @@ export const notificationNodeType = (kind: string) =>
     ? ('FollowNotification' as const)
     : kind === NotificationKind.REACTION
       ? ('ReactionNotification' as const)
-      : null;
+      : kind === NotificationKind.REPLY
+        ? ('ReplyNotification' as const)
+        : null;
 
 export const notificationKindForNodeType = (typename: string) =>
   typename === 'FollowNotification'
     ? NotificationKind.FOLLOW
     : typename === 'ReactionNotification'
       ? NotificationKind.REACTION
-      : null;
+      : typename === 'ReplyNotification'
+        ? NotificationKind.REPLY
+        : null;
 
 export const Notification = builder.interfaceRef<NotificationRow>('Notification');
 
@@ -188,5 +228,40 @@ ReactionNotification.implement({
     type: t.string({
       resolve: async (notification) => (await getNotificationSource(notification)).type!,
     }),
+  }),
+});
+
+export const ReplyNotification = createObjectRef<ReplyNotificationRow>(
+  'ReplyNotification',
+  async (ids, ctx) =>
+    db
+      .select({
+        ...getColumns(Notifications),
+        post: getColumns(Posts),
+        profileId: Posts.profileId,
+      })
+      .from(Notifications)
+      .innerJoin(Posts, eq(Posts.id, Notifications.sourceId))
+      .innerJoin(ReplyNotificationParents, eq(ReplyNotificationParents.id, Posts.replyParentId))
+      .innerJoin(NotificationRelatedProfiles, eq(NotificationRelatedProfiles.id, Posts.profileId))
+      .innerJoin(
+        NotificationRelatedInstances,
+        eq(NotificationRelatedInstances.id, NotificationRelatedProfiles.instanceId),
+      )
+      .where(
+        and(
+          inArray(Notifications.id, ids),
+          eq(Notifications.kind, NotificationKind.REPLY),
+          eq(ReplyNotificationParents.profileId, Notifications.recipientProfileId),
+          visibleNotificationWhere({ ctx }),
+        ),
+      ),
+);
+
+ReplyNotification.implement({
+  interfaces: [Notification],
+  fields: (t) => ({
+    createdAt: t.expose('createdAt', { type: 'DateTime' }),
+    readAt: t.expose('readAt', { type: 'DateTime', nullable: true }),
   }),
 });

@@ -9,7 +9,7 @@ import {
 import { NotificationKind } from '@kosmo/core/enums';
 import { PermissionDeniedError } from '@kosmo/core/error';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
-import { and, asc, count, desc, eq, getColumns, gt, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, getColumns, gt, isNull, lt, or, sql } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
 import { visibleNotificationWhere } from '../access/visibility';
@@ -45,7 +45,7 @@ builder.objectField(Profile, 'notifications', (t) =>
               .select({
                 ...getColumns(Notifications),
                 post: getColumns(Posts),
-                profileId: sql<string>`coalesce(${ProfileFollows.followerProfileId}, ${Reactions.profileId})`,
+                profileId: sql<string>`coalesce(${ProfileFollows.followerProfileId}, ${Reactions.profileId}, ${Posts.profileId})`,
                 type: Reactions.type,
               })
               .from(Notifications)
@@ -63,7 +63,19 @@ builder.objectField(Profile, 'notifications', (t) =>
                   eq(Reactions.id, Notifications.sourceId),
                 ),
               )
-              .leftJoin(Posts, eq(Posts.id, Reactions.postId))
+              .leftJoin(
+                Posts,
+                or(
+                  and(
+                    eq(Notifications.kind, NotificationKind.REACTION),
+                    eq(Posts.id, Reactions.postId),
+                  ),
+                  and(
+                    eq(Notifications.kind, NotificationKind.REPLY),
+                    eq(Posts.id, Notifications.sourceId),
+                  ),
+                ),
+              )
               .where(
                 and(
                   eq(Notifications.recipientProfileId, profile.id),

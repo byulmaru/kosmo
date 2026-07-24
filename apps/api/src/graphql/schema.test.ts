@@ -297,6 +297,7 @@ test('exposes Notification interface and concrete source types without raw stora
   const notification = schema.getType('Notification');
   const followNotification = schema.getType('FollowNotification');
   const reactionNotification = schema.getType('ReactionNotification');
+  const replyNotification = schema.getType('ReplyNotification');
   const profile = schema.getType('Profile');
 
   assert.ok(isObjectType(followNotification));
@@ -324,6 +325,17 @@ test('exposes Notification interface and concrete source types without raw stora
   assert.equal(reactionNotification.getFields().sourceId, undefined);
   assert.equal(reactionNotification.getFields().data, undefined);
 
+  assert.ok(isObjectType(replyNotification));
+  assert.deepEqual(
+    replyNotification.getInterfaces().map(({ name }) => name),
+    ['Node', 'Notification'],
+  );
+  assert.equal(String(replyNotification.getFields().profile.type), 'Profile!');
+  assert.equal(String(replyNotification.getFields().post.type), 'Post!');
+  assert.equal(replyNotification.getFields().kind, undefined);
+  assert.equal(replyNotification.getFields().sourceId, undefined);
+  assert.equal(replyNotification.getFields().data, undefined);
+
   assert.ok(isInterfaceType(notification));
   assert.deepEqual(
     notification.getInterfaces().map(({ name }) => name),
@@ -331,6 +343,7 @@ test('exposes Notification interface and concrete source types without raw stora
   );
   assert.equal(notificationNodeType('FOLLOW'), 'FollowNotification');
   assert.equal(notificationNodeType('REACTION'), 'ReactionNotification');
+  assert.equal(notificationNodeType('REPLY'), 'ReplyNotification');
   assert.equal(notificationNodeType('UNSUPPORTED'), null);
   assert.equal(String(profile.getFields().notifications?.type), 'NotificationConnection!');
   assert.equal(String(profile.getFields().unreadNotificationCount?.type), 'Int!');
