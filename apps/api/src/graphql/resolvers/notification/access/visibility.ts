@@ -116,26 +116,6 @@ const visibleNotificationSourceWhere = () =>
       db
         .select({ id: NotificationSourceReposts.id })
         .from(NotificationSourceReposts)
-        .innerJoin(
-          NotificationRelatedProfiles,
-          eq(NotificationRelatedProfiles.id, NotificationSourceReposts.profileId),
-        )
-        .innerJoin(
-          NotificationRelatedInstances,
-          eq(NotificationRelatedInstances.id, NotificationRelatedProfiles.instanceId),
-        )
-        .innerJoin(
-          NotificationRepostRelatedPosts,
-          eq(NotificationRepostRelatedPosts.id, NotificationSourceReposts.repostSourceId),
-        )
-        .innerJoin(
-          NotificationRecipientProfiles,
-          eq(NotificationRecipientProfiles.id, NotificationRepostRelatedPosts.profileId),
-        )
-        .innerJoin(
-          NotificationRepostRecipientInstances,
-          eq(NotificationRepostRecipientInstances.id, NotificationRecipientProfiles.instanceId),
-        )
         .where(
           and(
             eq(Notifications.kind, NotificationKind.REPOST),
@@ -143,26 +123,61 @@ const visibleNotificationSourceWhere = () =>
             eq(NotificationSourceReposts.state, PostState.ACTIVE),
             isNull(NotificationSourceReposts.currentContentId),
             isNull(NotificationSourceReposts.replyParentId),
-            eq(NotificationRepostRelatedPosts.profileId, Notifications.recipientProfileId),
-            isNotNull(NotificationRepostRelatedPosts.currentContentId),
-            eq(NotificationRepostRecipientInstances.kind, InstanceKind.LOCAL),
-            eq(NotificationRepostRecipientInstances.state, InstanceState.ACTIVE),
-            visibleProfileWhere({
-              instance: NotificationRelatedInstances,
-              profile: NotificationRelatedProfiles,
-            }),
-            postVisibilityAccessCondition({
-              columns: {
-                postProfileId: NotificationRepostRelatedPosts.profileId,
-                postState: NotificationRepostRelatedPosts.state,
-                postVisibility: NotificationRepostRelatedPosts.visibility,
-                profileVisible: sql<boolean>`${visibleProfileWhere({
-                  instance: NotificationRepostRecipientInstances,
-                  profile: NotificationRecipientProfiles,
-                })}`,
-              },
-              viewerProfileId: Notifications.recipientProfileId,
-            }),
+            exists(
+              db
+                .select({ id: NotificationRelatedProfiles.id })
+                .from(NotificationRelatedProfiles)
+                .innerJoin(
+                  NotificationRelatedInstances,
+                  eq(NotificationRelatedInstances.id, NotificationRelatedProfiles.instanceId),
+                )
+                .where(
+                  and(
+                    eq(NotificationRelatedProfiles.id, NotificationSourceReposts.profileId),
+                    visibleProfileWhere({
+                      instance: NotificationRelatedInstances,
+                      profile: NotificationRelatedProfiles,
+                    }),
+                  ),
+                ),
+            ),
+            exists(
+              db
+                .select({ id: NotificationRepostRelatedPosts.id })
+                .from(NotificationRepostRelatedPosts)
+                .innerJoin(
+                  NotificationRecipientProfiles,
+                  eq(NotificationRecipientProfiles.id, NotificationRepostRelatedPosts.profileId),
+                )
+                .innerJoin(
+                  NotificationRepostRecipientInstances,
+                  eq(
+                    NotificationRepostRecipientInstances.id,
+                    NotificationRecipientProfiles.instanceId,
+                  ),
+                )
+                .where(
+                  and(
+                    eq(NotificationRepostRelatedPosts.id, NotificationSourceReposts.repostSourceId),
+                    eq(NotificationRepostRelatedPosts.profileId, Notifications.recipientProfileId),
+                    isNotNull(NotificationRepostRelatedPosts.currentContentId),
+                    eq(NotificationRepostRecipientInstances.kind, InstanceKind.LOCAL),
+                    eq(NotificationRepostRecipientInstances.state, InstanceState.ACTIVE),
+                    postVisibilityAccessCondition({
+                      columns: {
+                        postProfileId: NotificationRepostRelatedPosts.profileId,
+                        postState: NotificationRepostRelatedPosts.state,
+                        postVisibility: NotificationRepostRelatedPosts.visibility,
+                        profileVisible: sql<boolean>`${visibleProfileWhere({
+                          instance: NotificationRepostRecipientInstances,
+                          profile: NotificationRecipientProfiles,
+                        })}`,
+                      },
+                      viewerProfileId: Notifications.recipientProfileId,
+                    }),
+                  ),
+                ),
+            ),
           ),
         ),
     ),
