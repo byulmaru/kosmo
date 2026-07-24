@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     flexDirection: 'row',
     gap: spacing.sm,
-    marginBottom: -spacing.lg,
+    marginBottom: -spacing.md,
   },
   repostIconColumn: { alignItems: 'flex-end', width: 40 },
   repeat: { fontFamily: 'SUIT', ...typography.sm },

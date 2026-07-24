@@ -10,7 +10,7 @@ import { PostList } from '@/components/post/PostList';
 import { PostListItem } from '@/components/post/PostListItem';
 import { PostSourcePresentationView } from '@/components/post/PostSourcePresentationView';
 import { formatTimelineTimestamp } from '@/lib/date';
-import { spacing, typography } from '@/theme/tokens';
+import { typography } from '@/theme/tokens';
 import { longBody, post, profile, profileWithPosts, timeline } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -572,8 +572,7 @@ export const PureRepost: Story = {
     ).toBeLessThanOrEqual(1);
     const attributionGap =
       sourceAuthorName.getBoundingClientRect().top - repostLabel.getBoundingClientRect().bottom;
-    expect(attributionGap).toBeGreaterThanOrEqual(-spacing.xs);
-    expect(attributionGap).toBeLessThanOrEqual(spacing.xs);
+    expect(Math.abs(attributionGap)).toBeLessThanOrEqual(1);
     await userEvent.click(canvas.getByLabelText('재게시한 코스모 사용자 프로필 보기'));
     await expect(args.onPostAuthor).toHaveBeenCalledTimes(1);
     await expect(args.onSourceAuthor).toHaveBeenCalledTimes(0);
