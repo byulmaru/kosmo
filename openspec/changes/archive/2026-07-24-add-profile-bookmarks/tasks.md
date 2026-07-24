@@ -65,7 +65,7 @@ Active Local Profile이 조회 가능한 Post를 자신의 Bookmark로 저장하
 
 - `docs/domain/objects/bookmark.md`
 - `PROD-391`
-- `PROD-409`
+- `PROD-409` 본문과 2026-07-24 Bookmark 삭제 API 계약 댓글
 
 **Deliverable**
 
@@ -181,7 +181,7 @@ Owner Profile이 조회 가능한 Target의 Bookmark를 안정적인 최신순 c
 
 - `docs/domain/objects/bookmark.md`
 - `PROD-391`
-- `PROD-421`
+- `PROD-421` 본문과 2026-07-24 Bookmark 목록 UX와 navigation 계약 댓글
 
 **Deliverable**
 

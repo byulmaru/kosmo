@@ -28,7 +28,7 @@ Android, iOS, Web에서 하나의 Expo Router·React Native route tree와 React 
 
 #### Scenario: Navigate core routes
 
-- **WHEN** 사용자가 `/`, `/home`, `/compose`, `/search`, `/notifications`, `/bookmarks`, `/menu` 중 하나로 이동한다
+- **WHEN** 사용자가 `/`, `/home`, `/compose`, `/search`, `/notifications`, `/menu` 중 하나로 이동한다
 - **THEN** Expo Router는 해당 온보딩 또는 앱 화면을 표시한다
 
 #### Scenario: Navigate profile routes
@@ -152,7 +152,7 @@ Relay network layer는 웹에서는 same-origin BFF를, Android/iOS에서는 공
 
 ### Requirement: Universal Bookmark list behavior
 
-Android, iOS, Web 클라이언트는 `/bookmarks` route에 같은 공용 route·component·Relay 계약을 사용해야 한다(MUST). 플랫폼별 차이는 safe area와 native navigation 같은 표현 경계로 제한해야 하며(MUST), Profile별 pagination cache key는 선택 Profile을 포함해 격리해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/bookmark.md`, `PROD-391`, `PROD-421` 본문과 2026-07-24 Bookmark 목록 UX와 navigation 계약 댓글 — Android, iOS, Web 클라이언트는 `/bookmarks` route에 같은 공용 route·component·Relay 계약을 사용해야 한다(MUST). 플랫폼별 차이는 safe area와 native navigation 같은 표현 경계로 제한해야 하며(MUST), Profile별 pagination cache key는 선택 Profile을 포함해 격리해야 한다(MUST).
 
 #### Scenario: Render Bookmark list on every platform
 

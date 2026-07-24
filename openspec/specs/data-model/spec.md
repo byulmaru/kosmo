@@ -472,7 +472,7 @@ kosmo의 현재 PostgreSQL/Drizzle 기반 도메인 저장 모델, ID 생성 규
 
 ### Requirement: Bookmark 영속 모델
 
-시스템은 Bookmark를 UUIDv7 primary key, 필수 Owner Profile 관계, 필수 Target Post 관계와 불변 생성 시각을 가진 별도 PostgreSQL row로 저장해야 한다(MUST). Profile/Post 조합은 데이터베이스 제약으로 유일해야 하며(MUST), Profile별 UUIDv7 ID 내림차순 목록을 지원하는 index를 가져야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/bookmark.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-391`, `PROD-396` — 시스템은 Bookmark를 UUIDv7 primary key, 필수 Owner Profile 관계, 필수 Target Post 관계와 불변 생성 시각을 가진 별도 PostgreSQL row로 저장해야 한다(MUST). Profile/Post 조합은 데이터베이스 제약으로 유일해야 하며(MUST), Profile별 UUIDv7 ID 내림차순 목록을 지원하는 index를 가져야 한다(MUST).
 
 #### Scenario: Bookmark row를 저장함
 
