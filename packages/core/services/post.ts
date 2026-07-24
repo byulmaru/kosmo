@@ -143,7 +143,10 @@ export const repostPost = async (
     readonly sourcePostId: string;
   },
   tx?: Transaction,
-): Promise<typeof Posts.$inferSelect> =>
+): Promise<{
+  readonly created: boolean;
+  readonly repost: typeof Posts.$inferSelect;
+}> =>
   getDatabaseConnection(tx).transaction(async (tx) => {
     const actor = await tx
       .select({ id: Profiles.id })
@@ -197,7 +200,7 @@ export const repostPost = async (
       .returning()
       .then(first);
     if (inserted) {
-      return inserted;
+      return { created: true, repost: inserted };
     }
 
     const existing = await tx
@@ -217,7 +220,7 @@ export const repostPost = async (
       throw new Error('Repost not found after insert conflict');
     }
 
-    return existing;
+    return { created: false, repost: existing };
   });
 export function createPost(input: LocalPostInput, tx?: Transaction): Promise<CreatedPost>;
 export function createPost(

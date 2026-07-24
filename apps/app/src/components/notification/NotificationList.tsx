@@ -14,7 +14,11 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
-import { NotificationListItem, ReactionNotificationListItem } from './NotificationListItem';
+import {
+  NotificationListItem,
+  ReactionNotificationListItem,
+  RepostNotificationListItem,
+} from './NotificationListItem';
 import type { NotificationList_profile$key } from './__generated__/NotificationList_profile.graphql';
 import type { NotificationListNextPageQuery } from './__generated__/NotificationListNextPageQuery.graphql';
 
@@ -39,6 +43,9 @@ const notificationListFragment = graphql`
           ... on ReactionNotification {
             ...ReactionNotificationListItem_notification @alias(as: "reaction")
           }
+          ... on RepostNotification {
+            ...RepostNotificationListItem_notification @alias(as: "repost")
+          }
         }
       }
     }
@@ -59,6 +66,9 @@ export function NotificationList({ profile }: NotificationListProps) {
     }
     if (node.__typename === 'ReactionNotification' && node.reaction) {
       return <ReactionNotificationListItem key={node.id} notification={node.reaction} />;
+    }
+    if (node.__typename === 'RepostNotification' && node.repost) {
+      return <RepostNotificationListItem key={node.id} notification={node.repost} />;
     }
     return [];
   });
@@ -106,7 +116,7 @@ export function NotificationList({ profile }: NotificationListProps) {
         <View style={styles.state}>
           <Text style={[styles.stateTitle, { color: theme.text }]}>아직 알림이 없어요</Text>
           <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>
-            새로운 팔로우나 반응 알림이 생기면 여기에 표시돼요.
+            새로운 팔로우, 반응 또는 재게시 알림이 생기면 여기에 표시돼요.
           </Text>
         </View>
       )}

@@ -12,7 +12,11 @@ import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, count, desc, eq, getColumns, gt, isNull, lt, sql } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
-import { visibleNotificationWhere } from '../access/visibility';
+import {
+  NotificationRepostRelatedPosts,
+  NotificationSourceReposts,
+  visibleNotificationWhere,
+} from '../access/visibility';
 import { Notification, NotificationConnection } from '../ref';
 import type { NotificationRow } from '../ref';
 
@@ -44,8 +48,9 @@ builder.objectField(Profile, 'notifications', (t) =>
             db
               .select({
                 ...getColumns(Notifications),
-                post: getColumns(Posts),
-                profileId: sql<string>`coalesce(${ProfileFollows.followerProfileId}, ${Reactions.profileId})`,
+                profileId: sql<string>`coalesce(${ProfileFollows.followerProfileId}, ${Reactions.profileId}, ${NotificationSourceReposts.profileId})`,
+                reactionPost: getColumns(Posts),
+                repostPost: getColumns(NotificationRepostRelatedPosts),
                 type: Reactions.type,
               })
               .from(Notifications)
@@ -63,7 +68,18 @@ builder.objectField(Profile, 'notifications', (t) =>
                   eq(Reactions.id, Notifications.sourceId),
                 ),
               )
+              .leftJoin(
+                NotificationSourceReposts,
+                and(
+                  eq(Notifications.kind, NotificationKind.REPOST),
+                  eq(NotificationSourceReposts.id, Notifications.sourceId),
+                ),
+              )
               .leftJoin(Posts, eq(Posts.id, Reactions.postId))
+              .leftJoin(
+                NotificationRepostRelatedPosts,
+                eq(NotificationRepostRelatedPosts.id, NotificationSourceReposts.repostSourceId),
+              )
               .where(
                 and(
                   eq(Notifications.recipientProfileId, profile.id),

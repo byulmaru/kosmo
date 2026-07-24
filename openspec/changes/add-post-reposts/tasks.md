@@ -295,10 +295,10 @@ Home과 Profile Post List가 실제 GraphQL fragment와 generated type으로 Rep
 
 - source mapping, 자기/Remote 억제, duplicate·실패 격리, mixed-kind pagination, concrete Node, Recipient visibility, Read·Unread·badge/cache와 Source Post 이동을 core/API/app integration test로 검증한다.
 
-- [ ] 10.1 기존 Notification projection에 Repost kind와 source-only 멱등 create lifecycle을 추가한다.
-- [ ] 10.2 `RepostNotification` concrete Node와 kind-aware visible connection·count·Read를 구현한다.
-- [ ] 10.3 inbox row, Source Post navigation, Read와 actor별 badge/cache를 기존 Notification UI에 연결한다.
-- [ ] 10.4 source mapping·실패 격리·mixed-kind visibility와 core/API/app 검증을 추가해 관련 check를 통과시킨다.
+- [x] 10.1 기존 Notification projection에 Repost kind와 source-only 멱등 create lifecycle을 추가한다.
+- [x] 10.2 `RepostNotification` concrete Node와 kind-aware visible connection·count·Read를 구현한다.
+- [x] 10.3 inbox row, Source Post navigation, Read와 actor별 badge/cache를 기존 Notification UI에 연결한다.
+- [x] 10.4 source mapping·실패 격리·mixed-kind visibility와 core/API/app 검증을 추가해 관련 check를 통과시킨다.
 
 ## 11. PROD-416 Repost Notification 정리
 

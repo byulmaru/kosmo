@@ -15,8 +15,9 @@ import {
   PostState,
   ProfileState,
 } from '@kosmo/core/enums';
-import { and, eq, exists, sql } from 'drizzle-orm';
+import { and, eq, exists, isNotNull, isNull, sql } from 'drizzle-orm';
 import { alias, unionAll } from 'drizzle-orm/pg-core';
+import { postVisibilityAccessCondition } from '@/graphql/resolvers/post/access/visibility';
 import { visibleProfileWhere } from '@/profile/visibility';
 import type { UserContext } from '@/context';
 
@@ -26,6 +27,12 @@ export const NotificationRelatedInstances = alias(Instances, 'notification_relat
 export const NotificationReactionRecipientInstances = alias(
   Instances,
   'notification_reaction_recipient_instance',
+);
+export const NotificationSourceReposts = alias(Posts, 'notification_source_repost');
+export const NotificationRepostRelatedPosts = alias(Posts, 'notification_repost_related_post');
+export const NotificationRepostRecipientInstances = alias(
+  Instances,
+  'notification_repost_recipient_instance',
 );
 
 export const notificationMembershipWhere = (accountId: string) =>
@@ -104,6 +111,73 @@ const visibleNotificationSourceWhere = () =>
               instance: NotificationRelatedInstances,
               profile: NotificationRelatedProfiles,
             }),
+          ),
+        ),
+      db
+        .select({ id: NotificationSourceReposts.id })
+        .from(NotificationSourceReposts)
+        .where(
+          and(
+            eq(Notifications.kind, NotificationKind.REPOST),
+            eq(NotificationSourceReposts.id, Notifications.sourceId),
+            eq(NotificationSourceReposts.state, PostState.ACTIVE),
+            isNull(NotificationSourceReposts.currentContentId),
+            isNull(NotificationSourceReposts.replyParentId),
+            exists(
+              db
+                .select({ id: NotificationRelatedProfiles.id })
+                .from(NotificationRelatedProfiles)
+                .innerJoin(
+                  NotificationRelatedInstances,
+                  eq(NotificationRelatedInstances.id, NotificationRelatedProfiles.instanceId),
+                )
+                .where(
+                  and(
+                    eq(NotificationRelatedProfiles.id, NotificationSourceReposts.profileId),
+                    visibleProfileWhere({
+                      instance: NotificationRelatedInstances,
+                      profile: NotificationRelatedProfiles,
+                    }),
+                  ),
+                ),
+            ),
+            exists(
+              db
+                .select({ id: NotificationRepostRelatedPosts.id })
+                .from(NotificationRepostRelatedPosts)
+                .innerJoin(
+                  NotificationRecipientProfiles,
+                  eq(NotificationRecipientProfiles.id, NotificationRepostRelatedPosts.profileId),
+                )
+                .innerJoin(
+                  NotificationRepostRecipientInstances,
+                  eq(
+                    NotificationRepostRecipientInstances.id,
+                    NotificationRecipientProfiles.instanceId,
+                  ),
+                )
+                .where(
+                  and(
+                    eq(NotificationRepostRelatedPosts.id, NotificationSourceReposts.repostSourceId),
+                    eq(NotificationRepostRelatedPosts.profileId, Notifications.recipientProfileId),
+                    isNotNull(NotificationRepostRelatedPosts.currentContentId),
+                    eq(NotificationRepostRecipientInstances.kind, InstanceKind.LOCAL),
+                    eq(NotificationRepostRecipientInstances.state, InstanceState.ACTIVE),
+                    postVisibilityAccessCondition({
+                      columns: {
+                        postProfileId: NotificationRepostRelatedPosts.profileId,
+                        postState: NotificationRepostRelatedPosts.state,
+                        postVisibility: NotificationRepostRelatedPosts.visibility,
+                        profileVisible: sql<boolean>`${visibleProfileWhere({
+                          instance: NotificationRepostRecipientInstances,
+                          profile: NotificationRecipientProfiles,
+                        })}`,
+                      },
+                      viewerProfileId: Notifications.recipientProfileId,
+                    }),
+                  ),
+                ),
+            ),
           ),
         ),
     ),
