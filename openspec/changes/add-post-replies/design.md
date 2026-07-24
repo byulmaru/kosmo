@@ -45,9 +45,9 @@
 - PROD-398은 Post 관계 field resolver에서 저장 ID를 기존 loadable `Post` Node에 전달하고 Parent가 조회 불가능하면 `null`로 정규화한다.
 - PROD-399는 직접 Parent를 seed로 하는 recursive query에서 현재 Post와 방문한 조상 ID를 path로 추적한다. 각 단계에 기존 `Post` 조회 경계를 적용해 unavailable Parent에서 중단하고, 반환 순서는 직접 Parent부터 유지한다. PROD-400은 recursive traversal에서 visibility를 적용하지 않고 cycle 방문을 방어하며 전체 descendant ID를 찾은 뒤, 최종 Post 후보에 visibility/eligibility를 적용하고 `createdAt ASC, id ASC` cursor와 page limit을 적용한다. 대표 fan-out·depth 데이터의 실제 query plan으로 `reply_parent_id` index 필요성과 형태를 결정한다.
 - PROD-429는 Home/Profile의 Reply 후보 판정을 page limit 이전에 적용한다. PROD-451은 부모가 공급한 조상·현재·하위 Post 순서와 직접 관계 metadata를 그대로 표시하는 props-only thread layout을 먼저 제공한다. 조상과 하위 Reply는 기존 목록 Post와 같은 정보 밀도를 유지하고 현재 Post만 기존 상세 rendering으로 앵커를 만든다. 연결선은 공급된 인접 Post가 직접 관계일 때만 그리고, 공급된 배열이 끝나는 visibility 경계에는 숨겨진 Post를 암시하는 placeholder나 문구를 만들지 않는다.
-- presentation seam은 Post 내부 rendering과 link semantics를 소유하지 않고 role, supplied relation metadata와 fixture에서 사용할 수 있는 optional Post 선택 adapter만 소유한다. 기존 `PostListItem`·`PostLayout` renderer는 자신의 Profile/Post Link를 그대로 유지하며 presentation이 이를 다른 `Pressable`로 감싸지 않는다.
-- Reply+Quote fixture는 caller가 반환한 자체 Content·Source subtree가 하나의 thread item 안에 보존되는지만 구조적 sentinel로 검증한다. PROD-451은 실제 Source preview의 카드·링크·상호작용과 새 Quote Source·Action Bar·Reaction/Repost UI를 만들거나 Storybook에서 production UI처럼 합성하지 않는다.
-- PROD-422는 route가 thread query를 소유하고 `replyAncestors`를 root 우선 표시 순서로 변환한다. ancestor 인접 항목은 경로 계약에서 직접 관계이고, descendant는 각 Post의 `replyParent { id }`와 이전 표시 Post ID를 비교해 supplied 직접 관계 metadata를 만든다. 각 Post 표시 컴포넌트는 colocated Relay fragment와 기존 Link를 유지하며, route-aware renderer가 필요한 표면에서만 optional 선택 adapter를 사용할 수 있다.
+- `PostThreadLayout`은 item, role, supplied 순서와 direct connector metadata만 소유한다. fixture caller는 `renderPost` 안에서 local state를 close over하여 mock 선택 action을 붙일 수 있다. 기존 `PostListItem`·`PostLayout` renderer는 자신의 Profile/Post Link를 그대로 유지하며 presentation이 이를 다른 `Pressable`로 감싸지 않는다.
+- Reply+Quote fixture에는 nullable `repostSource` 관계가 있고 Story query가 이를 읽는다. 구조적 sentinel은 반환된 `repostSource` subtree에서만 렌더하며 Source ID를 가진다. 이 증거는 Reply 자신의 Content와 Source 관계가 하나의 thread item 안에 함께 남는지만 보이고, PROD-451은 production Source preview의 외관이나 상호작용을 합성하지 않는다.
+- PROD-422는 route가 thread query를 소유하고 `replyAncestors`를 root 우선 표시 순서로 변환한다. ancestor 인접 항목은 경로 계약에서 직접 관계이고, descendant는 각 Post의 `replyParent { id }`와 이전 표시 Post ID를 비교해 supplied 직접 관계 metadata를 만든다. 각 Post 표시 컴포넌트는 colocated Relay fragment와 기존 Link를 유지한다. PROD-422는 route-aware caller가 필요로 할 때만 나중에 production navigation adapter를 도입할 수 있다.
 - `add-post-replies`는 `add-post-reposts` artifact를 수정하지 않는다. 겹치는 active capability는 새 독립 requirement로 추가하고 두 change와 전체 OpenSpec을 함께 strict validation한다.
 
 ### Allowed Alternatives
@@ -70,7 +70,7 @@
 - descendant 전체를 시간순으로 이어진 하나의 선으로 그리면 인접 Post가 직접 Parent/Child가 아닌 경우에도 관계를 암시한다. connector는 caller가 공급한 직접 관계 metadata만 사용한다.
 - visibility 경계에 `숨겨진 답글` 같은 placeholder나 설명을 만들면 API가 구분하지 않은 root·unavailable 상태를 client가 추론하고 숨겨진 관계를 누출할 수 있다.
 - presentation component가 Quote Source, Action Bar 또는 Reaction/Repost 수치를 별도로 렌더하면 기존 Post rendering을 복제하고 PROD-451의 thread layout 범위를 넘는다.
-- 기존 link-rich Post renderer를 외부 `Pressable`로 감싸 mock navigation을 만들면 Profile·timestamp·본문 Link가 중첩된다. optional 선택 adapter는 caller가 link semantics를 직접 소유하는 fixture/renderer에서만 사용한다.
+- 기존 link-rich Post renderer를 외부 `Pressable`로 감싸 mock navigation을 만들면 Profile·timestamp·본문 Link가 중첩된다. mock 선택은 fixture caller가 `renderPost` 안에서 local state를 close over하는 범위에만 둔다.
 
 ## Risks / Trade-offs
 
