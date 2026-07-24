@@ -125,9 +125,11 @@ export function PostSourcePresentationView({
           {renderLink({
             accessibilityLabel: `${post.profile.displayName} 프로필 보기`,
             children: (
-              <Text style={[styles.repostLabel, { color: theme.textSecondary }]}>
-                {post.profile.displayName}님이 재게시함
-              </Text>
+              <View style={styles.repostLabelTarget}>
+                <Text style={[styles.repostLabel, { color: theme.textSecondary }]}>
+                  {post.profile.displayName}님이 재게시함
+                </Text>
+              </View>
             ),
             target: 'postAuthor',
           })}
@@ -201,10 +203,17 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     flexDirection: 'row',
     gap: spacing.sm,
-    marginBottom: -spacing.md,
+    marginBottom: -spacing.sm,
+    minHeight: 44,
   },
-  repostIconColumn: { alignItems: 'flex-end', width: 40 },
+  repostIconColumn: {
+    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
+    minHeight: 44,
+    width: 40,
+  },
   repeat: { fontFamily: 'SUIT', ...typography.sm },
+  repostLabelTarget: { justifyContent: 'flex-end', minHeight: 44 },
   repostLabel: {
     fontFamily: 'SUIT',
     ...typography.sm,

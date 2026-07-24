@@ -10,7 +10,7 @@ import { PostList } from '@/components/post/PostList';
 import { PostListItem } from '@/components/post/PostListItem';
 import { PostSourcePresentationView } from '@/components/post/PostSourcePresentationView';
 import { formatTimelineTimestamp } from '@/lib/date';
-import { typography } from '@/theme/tokens';
+import { spacing, typography } from '@/theme/tokens';
 import { longBody, post, profile, profileWithPosts, timeline } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -555,8 +555,16 @@ export const PureRepost: Story = {
     expect(canvas.getAllByRole('link')).toHaveLength(3);
     const repostIcon = canvas.getByText('↻');
     const repostLabel = canvas.getByText('재게시한 코스모 사용자님이 재게시함');
+    const repostAuthorLink = canvas.getByLabelText('재게시한 코스모 사용자 프로필 보기');
     const sourceAuthorName = canvas.getByText('아주 긴 Source 작성자 표시 이름');
+    const sourceAuthorLink = canvas.getByLabelText('아주 긴 Source 작성자 표시 이름 프로필 보기');
     const sourceAvatar = canvas.getByLabelText('아주 긴 Source 작성자 표시 이름 프로필 이미지');
+    expect(repostAuthorLink.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    const linkGap =
+      sourceAuthorLink.getBoundingClientRect().top -
+      repostAuthorLink.getBoundingClientRect().bottom;
+    expect(linkGap).toBeGreaterThanOrEqual(0);
+    expect(linkGap).toBeLessThanOrEqual(1);
     expect(repostLabel.getBoundingClientRect().height).toBeLessThanOrEqual(
       typography.sm.lineHeight,
     );
@@ -573,12 +581,13 @@ export const PureRepost: Story = {
     ).toBeLessThanOrEqual(1);
     const attributionGap =
       sourceAuthorName.getBoundingClientRect().top - repostLabel.getBoundingClientRect().bottom;
-    expect(Math.abs(attributionGap)).toBeLessThanOrEqual(1);
-    await userEvent.click(canvas.getByLabelText('재게시한 코스모 사용자 프로필 보기'));
+    expect(attributionGap).toBeGreaterThanOrEqual(0);
+    expect(attributionGap).toBeLessThanOrEqual(spacing.xs);
+    await userEvent.click(repostAuthorLink);
     await expect(args.onPostAuthor).toHaveBeenCalledTimes(1);
     await expect(args.onSourceAuthor).toHaveBeenCalledTimes(0);
     await expect(args.onSourcePost).toHaveBeenCalledTimes(0);
-    await userEvent.click(canvas.getByLabelText('아주 긴 Source 작성자 표시 이름 프로필 보기'));
+    await userEvent.click(sourceAuthorLink);
     await expect(args.onPostAuthor).toHaveBeenCalledTimes(1);
     await expect(args.onSourceAuthor).toHaveBeenCalledTimes(1);
     await expect(args.onSourcePost).toHaveBeenCalledTimes(0);
