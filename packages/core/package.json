@@ -44,7 +44,7 @@
     "test:services": "node --import tsx --test --test-concurrency=1 'services/*.test.ts'",
     "test:services:database": "cd ../.. && node scripts/test-db.mjs run -- pnpm --filter @kosmo/core test:services:isolated",
     "test:services:isolated": "cd ../.. && pnpm db:test:push && pnpm --filter @kosmo/core test:services",
-    "test:unit": "node --import tsx --test activitypub-note-content.test.ts 'post-content/**/*.test.ts'"
+    "test:unit": "node --import tsx --test activitypub-note-content.test.ts 'db/*.unit.test.ts' 'post-content/**/*.test.ts'"
   },
   "devDependencies": {
     "@types/jsdom": "^28.0.3",
