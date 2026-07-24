@@ -122,12 +122,7 @@
 
 ### Requirement: 반응형 배치
 
-**Authority / Provenance:** `docs/design/breakpoints.md`, `PROD-433`, `PROD-434` — Action Bar는 mobile·compact·full의 지원 폭에서 액션을 한 행에 배치해야 하고(MUST) 줄바꿈이나 순서 변경 없이 사용 가능한 가로 공간에 분배해야 한다(MUST). More가 제공되면 해당 interactive target은 행 오른쪽 끝에 배치하고 icon 오른쪽에 8px inset을 유지해야 한다(MUST). 이 change의 필수 폭 검증은 기존 Storybook viewport인 `kosmoMobile` 390px, `kosmoCompact` 900px, `kosmoFull` 1400px을 사용해야 하며(MUST), 각 viewport에서 실제 목록·상세 surface가 Action Bar에 제공하는 콘텐츠 폭을 fixture로 사용해야 한다(MUST). 한국어·영어 locale의 표준 compact count 또는 count가 없는 액션이 있어도 각 액션의 icon, count 및 interactive target이 겹치지 않아야 한다(MUST).
-
-#### Scenario: More만 제공된 선택적 구성
-
-- **WHEN** 독립 컴포넌트 사용에서 More 설정만 제공된다
-- **THEN** More interactive target은 Action Bar 오른쪽 끝에 배치되고 icon은 오른쪽 8px inset을 유지한다
+**Authority / Provenance:** `docs/design/breakpoints.md`, `PROD-433`, `PROD-434` — Action Bar는 mobile·compact·full의 지원 폭에서 액션을 한 행에 배치해야 하고(MUST) 줄바꿈이나 순서 변경 없이 사용 가능한 가로 공간에 분배해야 한다(MUST). 이 change의 필수 폭 검증은 기존 Storybook viewport인 `kosmoMobile` 390px, `kosmoCompact` 900px, `kosmoFull` 1400px을 사용해야 하며(MUST), 각 viewport에서 실제 목록·상세 surface가 Action Bar에 제공하는 콘텐츠 폭을 fixture로 사용해야 한다(MUST). 한국어·영어 locale의 표준 compact count 또는 count가 없는 액션이 있어도 각 액션의 icon, count 및 interactive target이 겹치지 않아야 한다(MUST).
 
 #### Scenario: compact 폭
 
