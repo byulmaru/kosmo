@@ -40,17 +40,29 @@
 - Consequences: 각 실행 환경은 인증서를 파일로 제공해야 하고, 세 값 중 일부만 있으면 시작 전에 실패한다.
 - Confirmation / Follow-up: 공통 helper unit test와 API/migration/Drizzle 구성의 재사용 여부를 검증한다.
 
-### Kubernetes에서는 workload별 client certificate를 발급하고 회전 시 재시작한다
+### Kubernetes에서는 runtime과 migration 로그인만 분리하고 leaf key는 workload별로 발급한다
 
 - Decision Date: 2026-07-24
 - Decision Class: Implementation Choice
 - Authority / Provenance: [PROD-470](https://linear.app/byulmaru/issue/PROD-470/vault-pki-인증서로-로컬kubernetes-postgresql-연결을-통합한다)
 - Status: Active
-- Context / Problem: PROD-369 이후 API, web/system과 migration은 서로 다른 DB 역할을 사용하며 Postgres.js는 시작 시 인증서를 Buffer로 읽는다.
-- Decision Outcome: Helm은 API, web, migration별 VaultPKISecret을 만들고 각 consumer에 해당 Secret만 mount한다. 외부 client CA private key를 CNPG에 주지 않으므로 `streaming_replica` 인증서도 Vault에서 발급해 `replicationTLSSecret`으로 지정한다. API와 web 인증서 회전은 VSO의 Argo Rollout restart target으로 새 pool을 만들고, migration hook Job은 생성 시 최신 Secret을 읽는다.
-- Alternatives Considered: 하나의 client certificate 공유는 역할 분리를 약화하고, file watch로 singleton pool을 교체하는 방식은 현재 전역 Drizzle client 수명 주기에 복잡성을 추가한다.
-- Consequences: Secret과 PKI role 수가 늘지만 workload 경계와 회전 책임이 명확해진다.
-- Confirmation / Follow-up: 활성 Helm render에서 다섯 PKI Secret, CNPG replication TLS, consumer별 volume과 두 Rollout restart target을 확인한다.
+- Context / Problem: API와 web/federation은 동일한 애플리케이션 runtime 권한 경계를 공유하고 federation은 web 프로세스의 공통 DB pool을 사용한다. 프로세스마다 PostgreSQL 로그인을 만들 필요는 없지만 leaf private key를 공유하면 한 workload의 Secret 노출 범위가 다른 workload로 커진다. Postgres.js는 시작 시 인증서를 Buffer로 읽는다.
+- Decision Outcome: Helm은 API와 web에 서로 다른 VaultPKISecret을 만들되 둘 다 같은 runtime Vault role과 `kosmo_runtime` common name을 사용한다. migration만 별도 로그인과 VaultPKISecret을 사용한다. 외부 client CA private key를 CNPG에 주지 않으므로 `streaming_replica` 인증서도 Vault에서 발급해 `replicationTLSSecret`으로 지정한다. API와 web 인증서 회전은 VSO의 Argo Rollout restart target으로 새 pool을 만들고, migration hook Job은 생성 시 최신 Secret을 읽는다.
+- Alternatives Considered: API와 web에 별도 DB 로그인을 만들면 실제 권한 경계보다 자격 증명과 `pg_hba`가 늘어난다. 하나의 runtime client Secret을 공유하면 계정 수는 줄지만 private key와 회전 실패 범위가 결합된다. file watch로 singleton pool을 교체하는 방식은 현재 전역 Drizzle client 수명 주기에 복잡성을 추가한다.
+- Consequences: 앱 PostgreSQL 로그인은 runtime과 migration 두 개만 유지하면서 API와 web의 private key·회전 경계는 분리된다. Vault client role도 runtime과 migration만 필요하다.
+- Confirmation / Follow-up: 활성 Helm render에서 다섯 PKI Secret, 두 앱 `pg_hba` 역할, API/web의 같은 common name과 DATABASE_URL, 다른 Secret, CNPG replication TLS와 두 Rollout restart target을 확인한다.
+
+### PKI resource 준비와 client 인증 활성화를 두 sync로 나눈다
+
+- Decision Date: 2026-07-24
+- Decision Class: Implementation Choice
+- Authority / Provenance: [PROD-470](https://linear.app/byulmaru/issue/PROD-470/vault-pki-인증서로-로컬kubernetes-postgresql-연결을-통합한다), [PR #353 review](https://github.com/byulmaru/kosmo/pull/353#discussion_r3643443210)
+- Status: Active
+- Context / Problem: dev migration은 Argo CD PreSync hook이므로 같은 sync의 일반 VSO와 CNPG resource보다 먼저 실행된다. 첫 PKI 활성화에서 migration이 아직 생성되지 않은 certificate Secret이나 아직 적용되지 않은 `cert` 인증을 사용하면 sync가 실패한다.
+- Decision Outcome: `postgresTls.enabled`는 VSO PKI Secret과 CNPG TLS·`pg_hba`를 준비하고, 별도 `clientAuthEnabled`가 API·web·migration의 certificate 연결을 활성화한다. 첫 sync는 client 인증을 끈 채 기존 password 연결로 migration을 실행하고, 준비 완료 뒤 두 번째 sync에서 client 인증을 켠다.
+- Alternatives Considered: migration을 Sync/PostSync로 옮기면 기존의 migration-before-rollout 계약이 바뀐다. PKI resource를 PreSync hook으로 만들면 CNPG와 VSO의 비동기 준비까지 안전하게 보장하기 어렵다. 첫 활성화 실패 가능성을 문서에만 남기는 방식은 배포 flag가 이를 강제하지 못한다.
+- Consequences: PKI 활성화에는 두 번의 sync가 필요하지만 준비 단계와 rollback이 명시적이며 기존 PreSync 순서를 보존한다.
+- Confirmation / Follow-up: 준비 render에서 PKI resource와 CNPG TLS는 존재하지만 세 consumer가 password를 유지하고, 활성 render에서 세 consumer가 certificate 파일을 사용하는지 확인한다.
 
 ### 로컬 client private key는 명령 수명의 임시 파일로만 유지한다
 
@@ -70,4 +82,4 @@
 
 ## Superseded Decisions
 
-- 없음.
+- 2026-07-24의 API, web, migration별 PostgreSQL 로그인 분리 결정은 같은 날 사용자가 프로세스 수가 아니라 실제 권한 경계만 로그인으로 나누기로 확정해 위 runtime/migration 결정으로 대체했다.

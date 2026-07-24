@@ -1,6 +1,7 @@
 env: dev
 postgresTls:
   enabled: true
+  clientAuthEnabled: true
   mount: pki
   ttl: 24h
   expiryOffset: 1h
@@ -9,14 +10,10 @@ postgresTls:
     commonName: kosmo-dev-postgres
     altNames:
       - postgres.dev.example.test
-  api:
-    vaultRole: postgres-api
+  runtime:
+    vaultRole: postgres-runtime
     database: kosmo
-    role: kosmo_api
-  web:
-    vaultRole: postgres-web
-    database: kosmo
-    role: kosmo_web
+    role: kosmo_runtime
   migration:
     vaultRole: postgres-migration
     database: kosmo

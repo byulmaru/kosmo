@@ -35,11 +35,37 @@ test('the PKI chart renders server and workload certificates', () => {
   assert.match(manifest, /clientCASecret: kosmo-postgres-server/);
   assert.match(manifest, /replicationTLSSecret: kosmo-replication-postgres-client/);
   assert.match(manifest, /serverTLSSecret: kosmo-postgres-server/);
-  assert.match(manifest, /hostssl kosmo kosmo_api all cert/);
-  assert.match(manifest, /hostssl kosmo kosmo_web all cert/);
+  assert.equal(occurrences(manifest, /hostssl kosmo kosmo_runtime all cert/g), 1);
   assert.match(manifest, /hostssl kosmo kosmo_migration all cert/);
+  assert.equal(occurrences(manifest, /commonName: "kosmo_runtime"/g), 2);
+  assert.equal(
+    occurrences(manifest, /postgres:\/\/kosmo_runtime@kosmo-postgres-rw:5432\/kosmo/g),
+    2,
+  );
   assert.match(manifest, /secretName: "kosmo-api-postgres-client"/);
   assert.match(manifest, /secretName: "kosmo-web-postgres-client"/);
   assert.match(manifest, /secretName: "kosmo-migration-postgres-client"/);
+  assert.doesNotMatch(manifest, /kosmo_(?:api|web)/);
   assert.match(manifest, /commonName: "streaming_replica"/);
+});
+
+test('the PKI preparation phase keeps workloads on password authentication', () => {
+  const manifest = render(
+    '-f',
+    'apps/helm/test-values/postgres-pki.yaml',
+    '--set',
+    'postgresTls.clientAuthEnabled=false',
+  );
+
+  assert.equal(occurrences(manifest, /kind: VaultPKISecret/g), 5);
+  assert.match(manifest, /clientCASecret: kosmo-postgres-server/);
+  assert.equal(occurrences(manifest, /name: DATABASE_PASSWORD/g), 3);
+  assert.equal(occurrences(manifest, /name: PGSSLCERT/g), 0);
+  assert.equal(
+    occurrences(
+      manifest,
+      /postgres:\/\/kosmo:\$\(DATABASE_PASSWORD\)@kosmo-postgres-rw:5432\/kosmo/g,
+    ),
+    3,
+  );
 });
