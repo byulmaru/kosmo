@@ -224,6 +224,7 @@ type Post implements Node {
   createdAt: DateTime!
   id: ID!
   profile: Profile!
+  reactionCounts: [ReactionCount!]!
   reactionProfiles(after: String, before: String, first: Int, last: Int, type: String!): ProfileConnection!
   replyAncestors: [Post!]!
   replyDescendants(after: String, before: String, first: Int, last: Int): PostConnection!
@@ -390,6 +391,11 @@ type Query {
 type Reaction implements Node {
   createdAt: DateTime!
   id: ID!
+  type: String!
+}
+
+type ReactionCount {
+  count: Int!
   type: String!
 }
 
