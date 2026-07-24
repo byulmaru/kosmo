@@ -1,6 +1,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'drizzle-kit';
+import { getPostgresSsl } from './db/ssl';
 
 const configDir = dirname(fileURLToPath(import.meta.url));
 
@@ -15,5 +16,6 @@ export default defineConfig({
   out: join(configDir, '../../drizzle'),
   dbCredentials: {
     url: process.env.DATABASE_URL!,
+    ssl: getPostgresSsl(),
   },
 });

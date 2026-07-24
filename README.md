@@ -20,6 +20,24 @@ such as `pnpm dev`. The default secret path is
 or `node scripts/vault-run.mjs --secret-path secret/kubernetes/kosmo/dev -- <command>`
 to point at another path.
 
+To use Vault PKI client authentication for PostgreSQL, store
+`DATABASE_PKI_ROLE` and `DATABASE_PKI_COMMON_NAME` together in that KV path.
+`DATABASE_PKI_MOUNT` defaults to `pki`, and `DATABASE_PKI_TTL` is optional. The
+wrapper issues a certificate for the command, exposes it through `PGSSLCERT`,
+`PGSSLKEY`, and `PGSSLROOTCERT`, and removes the owner-only temporary files when
+the command exits. Partial PKI settings fail instead of falling back to password
+authentication. The Vault PKI issuer, roles, ACLs, and a PostgreSQL server
+certificate covering both its cluster Service and Tailnet hostname must already
+be provisioned outside this repository. Kubernetes PKI values also require a
+Vault role for CNPG's `streaming_replica` certificate because the cluster does
+not receive the CA private key. Kubernetes issues separate leaf Secrets to API
+and web but gives both certificates the shared `kosmo_runtime` common name and
+PostgreSQL login; migration uses a separate `kosmo_migration` identity. Roll
+this out in two syncs: set `postgresTls.enabled=true` while leaving
+`postgresTls.clientAuthEnabled=false` to prepare VSO Secrets and CNPG TLS, then
+set `clientAuthEnabled=true` after those resources are ready. This keeps the
+existing PreSync migration Job on password authentication during preparation.
+
 Run `pnpm dev`, then open `http://localhost:5173`. Local development uses Expo/Metro
 on public port `5173`, the Hono web BFF on internal port `5174`, and the API on
 `3000`. Metro proxies the BFF routes so the browser keeps the production same-origin

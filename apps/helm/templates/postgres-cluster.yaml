@@ -16,5 +16,18 @@ spec:
     initdb:
       database: kosmo
       owner: kosmo
+{{- if .Values.postgresTls.enabled }}
+  certificates:
+    clientCASecret: {{ include "kosmo.postgresServerTlsName" . }}
+    replicationTLSSecret: {{ include "kosmo.postgresClientTlsName" (dict "root" . "workload" "replication") }}
+    serverCASecret: {{ include "kosmo.postgresServerTlsName" . }}
+    serverTLSSecret: {{ include "kosmo.postgresServerTlsName" . }}
+  postgresql:
+    pg_hba:
+{{- range $identity := list "runtime" "migration" }}
+{{- $connection := index $.Values.postgresTls $identity }}
+      - {{ printf "hostssl %s %s all cert" (required (printf "postgresTls.%s.database is required when postgresTls is enabled" $identity) $connection.database) (required (printf "postgresTls.%s.role is required when postgresTls is enabled" $identity) $connection.role) | quote }}
+{{- end }}
+{{- end }}
   storage:
     size: 10Gi
