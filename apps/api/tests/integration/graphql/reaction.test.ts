@@ -15,12 +15,12 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
-import { createPost as createCorePost, repostPost } from '@kosmo/core/services';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { encodeGlobalId as globalId } from '../../../src/graphql/global-id';
 import type * as CoreDb from '@kosmo/core/db';
+import type * as CoreServices from '@kosmo/core/services';
 import type { Env } from '../../../src/context';
 
 const publicOrigin = 'http://127.0.0.1:4173';
@@ -38,6 +38,8 @@ let Posts: typeof CoreDb.Posts;
 let Profiles: typeof CoreDb.Profiles;
 let Reactions: typeof CoreDb.Reactions;
 let Sessions: typeof CoreDb.Sessions;
+let createCorePost: typeof CoreServices.createPost;
+let repostPost: typeof CoreServices.repostPost;
 let app: Hono<Env>;
 let localInstanceId: string;
 
@@ -47,6 +49,7 @@ describe('GraphQL Reaction', () => {
     process.env.NODE_ENV = 'production';
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
+    ({ createPost: createCorePost, repostPost } = await import('@kosmo/core/services'));
     ({
       AccountProfiles,
       Accounts,
