@@ -19,6 +19,7 @@ import type {
   PostSourcePresentationData,
 } from '@/components/post/PostSourcePresentationView';
 import type { PostsStoriesQuery as PostsStoriesQueryType } from './__generated__/PostsStoriesQuery.graphql';
+import type { StoryPost } from './fixtures';
 
 const shortPost = post({ bodyText: '짧은 본문 한 줄.', id: 'short' });
 const longPost = post({ bodyText: longBody, id: 'long' });
@@ -206,32 +207,6 @@ const PostsStoriesQuery = graphql`
       __typename
       ... on Post {
         id
-        createdAt
-        profile {
-          displayName
-          handle
-          relativeHandle
-        }
-        content {
-          bodyText
-          document
-        }
-        replyParent {
-          id
-        }
-        repostSource {
-          id
-          createdAt
-          profile {
-            displayName
-            handle
-            relativeHandle
-          }
-          content {
-            bodyText
-            document
-          }
-        }
         ...PostBody_post @alias(as: "body")
         ...PostLayout_post @alias(as: "layout")
         ...PostListItem_post @alias(as: "listItem")
@@ -330,7 +305,7 @@ function requirePost(posts: ReadonlyArray<PostNode>, index: number): PostNode {
   return result;
 }
 
-function requirePostById(posts: ReadonlyArray<PostNode>, id: string): PostNode {
+function requireStoryPostById(posts: ReadonlyArray<StoryPost>, id: string): StoryPost {
   const result = posts.find((post) => post.id === id);
   if (!result) {
     throw new Error(`Missing post fixture with id ${id}.`);
@@ -338,7 +313,7 @@ function requirePostById(posts: ReadonlyArray<PostNode>, id: string): PostNode {
   return result;
 }
 
-function toPostSourcePresentationData(post: PostNode): PostSourcePresentationData {
+function toPostSourcePresentationData(post: StoryPost): PostSourcePresentationData {
   const repostSource = post.repostSource ?? null;
 
   return {
@@ -451,8 +426,7 @@ function PostListCatalog({ onRetry }: PostsStoryArgs) {
 }
 
 function RepostQuotePresentationStory({ callbacks, postId }: PresentationStoryProps) {
-  const { posts } = usePostsStoryData();
-  const post = requirePostById(posts, postId);
+  const post = requireStoryPostById(storyPosts, postId);
   const renderMockLink: PostPresentationLinkRenderer = ({
     accessibilityLabel,
     children,
