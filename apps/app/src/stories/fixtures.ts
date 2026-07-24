@@ -231,9 +231,34 @@ export function reactionNotification({
   };
 }
 
+export function replyNotification({
+  createdAt = Temporal.Now.instant().subtract({ minutes: 2 }).toString(),
+  id = 'notification-reply-1',
+  post: relatedPost = post(),
+  profile: relatedProfile = profile(),
+  readAt = null,
+}: {
+  createdAt?: string;
+  id?: string;
+  post?: StoryPost;
+  profile?: StoryProfile;
+  readAt?: string | null;
+} = {}) {
+  return {
+    __typename: 'ReplyNotification' as const,
+    createdAt,
+    id,
+    post: relatedPost,
+    profile: relatedProfile,
+    readAt,
+  };
+}
+
 export function notificationsProfile(
   notifications: Array<
-    ReturnType<typeof followNotification> | ReturnType<typeof reactionNotification>
+    | ReturnType<typeof followNotification>
+    | ReturnType<typeof reactionNotification>
+    | ReturnType<typeof replyNotification>
   >,
   metadata: PaginationMetadata = {},
   overrides: Partial<StoryProfile> = {},
