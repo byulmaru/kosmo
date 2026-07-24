@@ -81,7 +81,7 @@
 
 ### Requirement: Reaction 제거 뒤 Best Effort Notification 정리
 
-정상 Reaction 삭제 action은 source transaction commit 뒤 같은 request에서 대응 Notification cleanup을 Best Effort로 시도해야 한다(MUST).
+**Authority / Provenance:** [Notification canonical 객체](../../../../../docs/domain/objects/notification.md), [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0010](../../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-419](https://linear.app/byulmaru/issue/PROD-419/reaction-notification%EC%9D%84-%EC%A0%95%EB%A6%AC%ED%95%9C%EB%8B%A4) 정상 Reaction 삭제 action은 source transaction commit 뒤 대응 Notification cleanup을 Best Effort로 시도해야 한다(MUST). 정리 시점과 성공은 Reaction 삭제 결과의 조건이어서는 안 된다(MUST NOT).
 
 #### Scenario: Reaction 삭제 cleanup
 
@@ -98,5 +98,6 @@
 
 - **WHEN** Reaction 삭제 뒤 Notification cleanup이 실패하거나 process가 종료된다
 - **THEN** Reaction 삭제와 성공 응답은 유지된다
+- **AND** cleanup 실패는 source Reaction을 식별할 수 있는 context와 함께 관측 가능하게 기록된다
 - **AND** 남은 Notification row는 source가 없으므로 모든 API 표면에서 숨겨진다
 - **AND** retry, cron, queue, backfill 또는 bulk cleanup은 이번 capability에 포함하지 않는다
