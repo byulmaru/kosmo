@@ -1,8 +1,9 @@
 import { and, eq, ne } from 'drizzle-orm';
-import { first, getDatabaseConnection, Instances, Posts, Profiles, Reactions } from '../db';
-import { InstanceState, PostState, ProfileState } from '../enums';
+import { db, first, getDatabaseConnection, Instances, Posts, Profiles, Reactions } from '../db';
+import { InstanceState, NotificationKind, PostState, ProfileState } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import { reactionTypeSchema } from '../validation';
+import { deleteNotificationBySource } from './notification';
 import type { Transaction } from '../db';
 
 const requireReactionActor = async (tx: Transaction, actorProfileId: string): Promise<void> => {
@@ -82,35 +83,50 @@ export const addReaction = async (
   });
 };
 
-export const deleteReaction = async (
-  {
-    actorProfileId,
-    reactionId,
-  }: {
-    readonly actorProfileId: string;
-    readonly reactionId: string;
-  },
-  tx?: Transaction,
-): Promise<{ readonly reactionId: string }> =>
-  getDatabaseConnection(tx).transaction(async (tx) => {
-    await requireReactionActor(tx, actorProfileId);
+type DeleteReactionInput = {
+  readonly actorProfileId: string;
+  readonly reactionId: string;
+};
 
-    const reaction = await tx
-      .select({ profileId: Reactions.profileId })
-      .from(Reactions)
-      .where(eq(Reactions.id, reactionId))
-      .limit(1)
-      .then(first);
-    if (!reaction) {
-      return { reactionId };
-    }
-    if (reaction.profileId !== actorProfileId) {
-      throw new PermissionDeniedError('Reaction owner permission is required');
-    }
+const deleteReactionInTransaction = async (
+  { actorProfileId, reactionId }: DeleteReactionInput,
+  tx: Transaction,
+): Promise<{ readonly reactionId: string }> => {
+  await requireReactionActor(tx, actorProfileId);
 
-    await tx
-      .delete(Reactions)
-      .where(and(eq(Reactions.id, reactionId), eq(Reactions.profileId, actorProfileId)));
-
+  const reaction = await tx
+    .select({ profileId: Reactions.profileId })
+    .from(Reactions)
+    .where(eq(Reactions.id, reactionId))
+    .limit(1)
+    .then(first);
+  if (!reaction) {
     return { reactionId };
-  });
+  }
+  if (reaction.profileId !== actorProfileId) {
+    throw new PermissionDeniedError('Reaction owner permission is required');
+  }
+
+  await tx
+    .delete(Reactions)
+    .where(and(eq(Reactions.id, reactionId), eq(Reactions.profileId, actorProfileId)));
+
+  return { reactionId };
+};
+
+export const deleteReaction = async (
+  input: DeleteReactionInput,
+): Promise<{ readonly reactionId: string }> => {
+  const result = await db.transaction((tx) => deleteReactionInTransaction(input, tx));
+
+  try {
+    await deleteNotificationBySource(NotificationKind.REACTION, result.reactionId);
+  } catch (error) {
+    console.error('Failed to clean up Reaction Notification', {
+      error,
+      reactionId: result.reactionId,
+    });
+  }
+
+  return result;
+};

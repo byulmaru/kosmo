@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { and, eq } from 'drizzle-orm';
-import { db, firstOrThrow, Instances, pg, Posts, Profiles, Reactions } from '../db';
+import { db, firstOrThrow, Instances, Notifications, pg, Posts, Profiles, Reactions } from '../db';
 import {
   InstanceKind,
   InstanceState,
+  NotificationKind,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -12,6 +13,7 @@ import {
 } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import { reactionTypes } from '../validation';
+import { createReactionNotification } from './notification';
 import { addReaction, deleteReaction } from './reaction';
 
 after(async () => {
@@ -73,6 +75,15 @@ const countReactions = (postId: string) =>
     .select()
     .from(Reactions)
     .where(eq(Reactions.postId, postId))
+    .then((rows) => rows.length);
+
+const countReactionNotifications = (sourceId: string) =>
+  db
+    .select()
+    .from(Notifications)
+    .where(
+      and(eq(Notifications.kind, NotificationKind.REACTION), eq(Notifications.sourceId, sourceId)),
+    )
     .then((rows) => rows.length);
 
 test('여섯 built-in Type을 정확한 Unicode 문자열로 저장하고 서로 공존시킨다', async () => {
@@ -204,6 +215,80 @@ test('Owner는 Post가 unavailable해져도 Reaction을 삭제하고 입력 ID�
 
   assert.deepEqual(result, { reactionId: reaction.id });
   assert.equal(await countReactions(fixture.post.id), 0);
+});
+
+test('Reaction 삭제는 Notification cleanup을 정상·반복 수행한다', async () => {
+  const author = await createFixture();
+  const recipient = await createFixture();
+  const { reaction } = await addReaction({
+    actorProfileId: author.profile.id,
+    postId: recipient.post.id,
+    type: '🎉',
+  });
+  await createReactionNotification(reaction.id);
+
+  assert.equal(await countReactionNotifications(reaction.id), 1);
+  await deleteReaction({ actorProfileId: author.profile.id, reactionId: reaction.id });
+  assert.equal(await countReactionNotifications(reaction.id), 0);
+
+  await db.insert(Notifications).values({
+    kind: NotificationKind.REACTION,
+    recipientProfileId: recipient.profile.id,
+    sourceId: reaction.id,
+  });
+  assert.equal(await countReactionNotifications(reaction.id), 1);
+
+  await deleteReaction({ actorProfileId: author.profile.id, reactionId: reaction.id });
+  assert.equal(await countReactionNotifications(reaction.id), 0);
+});
+
+test('Notification cleanup 실패에도 Reaction 삭제 성공과 오류 관측을 유지한다', async () => {
+  const author = await createFixture();
+  const recipient = await createFixture();
+  const { reaction } = await addReaction({
+    actorProfileId: author.profile.id,
+    postId: recipient.post.id,
+    type: '👀',
+  });
+  await createReactionNotification(reaction.id);
+
+  await pg.unsafe(`
+    CREATE FUNCTION fail_reaction_notification_delete() RETURNS trigger
+    LANGUAGE plpgsql AS $$ BEGIN
+      IF OLD.kind = 'REACTION' THEN RAISE EXCEPTION 'forced notification cleanup failure'; END IF;
+      RETURN OLD;
+    END $$;
+    CREATE TRIGGER fail_reaction_notification_delete
+    BEFORE DELETE ON notification
+    FOR EACH ROW EXECUTE FUNCTION fail_reaction_notification_delete();
+  `);
+
+  const originalConsoleError = console.error;
+  const errors: unknown[][] = [];
+  console.error = (...args) => {
+    errors.push(args);
+  };
+
+  try {
+    const result = await deleteReaction({
+      actorProfileId: author.profile.id,
+      reactionId: reaction.id,
+    });
+
+    assert.deepEqual(result, { reactionId: reaction.id });
+    assert.equal(await countReactions(recipient.post.id), 0);
+    assert.equal(await countReactionNotifications(reaction.id), 1);
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0]?.[0], 'Failed to clean up Reaction Notification');
+    assert.equal((errors[0]?.[1] as { reactionId?: string } | undefined)?.reactionId, reaction.id);
+    assert.ok((errors[0]?.[1] as { error?: unknown } | undefined)?.error);
+  } finally {
+    console.error = originalConsoleError;
+    await pg.unsafe(`
+      DROP TRIGGER IF EXISTS fail_reaction_notification_delete ON notification;
+      DROP FUNCTION IF EXISTS fail_reaction_notification_delete();
+    `);
+  }
 });
 
 test('반복·동시 삭제는 모두 입력 ID를 반환하는 성공으로 끝난다', async () => {
