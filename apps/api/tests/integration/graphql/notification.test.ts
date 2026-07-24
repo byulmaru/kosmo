@@ -13,8 +13,9 @@ import {
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
+import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { normalizeHandle } from '@kosmo/core/utils';
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, inArray, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -32,6 +33,7 @@ let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
+let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
@@ -58,6 +60,7 @@ describe('Notification GraphQL Node boundary', () => {
       Instances,
       Notifications,
       pg,
+      PostContents,
       Posts,
       ProfileFollows,
       Profiles,
@@ -88,6 +91,88 @@ describe('Notification GraphQL Node boundary', () => {
 
   after(async () => {
     await pg.end();
+  });
+
+  test('Local Reply commit 뒤 Parent Author에게 Reply Notification을 생성한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const parentAuthor = await createProfile('reply-parent-author');
+    const parent = await createContentPost(parentAuthor.id);
+
+    const result = await requestCreateReply(parent.id, auth.token);
+    assertNoGraphQLErrors(result);
+    const [reply] = await db.select().from(Posts).where(eq(Posts.replyParentId, parent.id));
+    assert.ok(reply);
+    const [notification] = await db
+      .select()
+      .from(Notifications)
+      .where(
+        and(eq(Notifications.kind, NotificationKind.REPLY), eq(Notifications.sourceId, reply.id)),
+      );
+    assert.equal(notification?.recipientProfileId, parentAuthor.id);
+  });
+
+  test('self-reply와 invisible Reply는 mutation 성공을 유지하고 알림을 만들지 않는다', async () => {
+    const selfAuth = await createAuthenticatedSession();
+    const selfParent = await createContentPost(selfAuth.profile.id);
+    const selfResult = await requestCreateReply(selfParent.id, selfAuth.token);
+    assertNoGraphQLErrors(selfResult);
+
+    const invisibleAuth = await createAuthenticatedSession();
+    const parentAuthor = await createProfile('invisible-parent-author');
+    const invisibleParent = await createContentPost(parentAuthor.id);
+    const invisibleResult = await requestCreateReply(
+      invisibleParent.id,
+      invisibleAuth.token,
+      PostVisibility.FOLLOWERS,
+    );
+    assertNoGraphQLErrors(invisibleResult);
+
+    const replies = await db
+      .select()
+      .from(Posts)
+      .where(inArray(Posts.replyParentId, [selfParent.id, invisibleParent.id]));
+    assert.equal(replies.length, 2);
+    for (const reply of replies) {
+      assert.equal(
+        await db.$count(
+          Notifications,
+          and(eq(Notifications.kind, NotificationKind.REPLY), eq(Notifications.sourceId, reply.id)),
+        ),
+        0,
+      );
+    }
+  });
+
+  test('Notification 저장 실패는 Reply 성공을 rollback하지 않는다', async () => {
+    const auth = await createAuthenticatedSession();
+    const parentAuthor = await createProfile('failure-parent-author');
+    const parent = await createContentPost(parentAuthor.id);
+
+    await pg.unsafe(`
+      CREATE FUNCTION fail_reply_notification_insert() RETURNS trigger
+      LANGUAGE plpgsql AS $$ BEGIN
+        IF NEW.kind = 'REPLY' THEN RAISE EXCEPTION 'forced notification failure'; END IF;
+        RETURN NEW;
+      END $$;
+      CREATE TRIGGER fail_reply_notification_insert
+      BEFORE INSERT ON notification
+      FOR EACH ROW EXECUTE FUNCTION fail_reply_notification_insert();
+    `);
+
+    try {
+      const result = await requestCreateReply(parent.id, auth.token);
+      assertNoGraphQLErrors(result);
+      assert.equal(await db.$count(Posts, eq(Posts.replyParentId, parent.id)), 1);
+      assert.equal(
+        await db.$count(Notifications, eq(Notifications.kind, NotificationKind.REPLY)),
+        0,
+      );
+    } finally {
+      await pg.unsafe(`
+        DROP TRIGGER IF EXISTS fail_reply_notification_insert ON notification;
+        DROP FUNCTION IF EXISTS fail_reply_notification_insert();
+      `);
+    }
   });
 
   test('resolves FOLLOW rows through Node and preserves nodes input order', async () => {
@@ -834,6 +919,25 @@ const requestGraphQL = async <TData>(
   return (await response.json()) as GraphQLResult<TData>;
 };
 
+const requestCreateReply = (
+  replyParentId: string,
+  token: string,
+  visibility: PostVisibility = PostVisibility.PUBLIC,
+) =>
+  requestGraphQL<{ createPost: { post: { id: string } } }>(
+    `mutation CreateReply($input: CreatePostInput!) {
+      createPost(input: $input) { post { id } }
+    }`,
+    {
+      input: {
+        bodyText: 'reply',
+        replyParentId: encodeGlobalId('Post', replyParentId),
+        visibility,
+      },
+    },
+    token,
+  );
+
 const loadNodes = async (ids: string[], token: string) => {
   const result = await requestGraphQL<{ nodes: Array<{ id: string } | null> }>(
     `query NotificationVisibility($ids: [ID!]!) {
@@ -939,6 +1043,29 @@ const createProfile = (name: string) => {
     .then(firstOrThrow);
 };
 
+const createContentPost = async (profileId: string) => {
+  const post = await db
+    .insert(Posts)
+    .values({
+      profileId,
+      state: PostState.ACTIVE,
+      visibility: PostVisibility.PUBLIC,
+    })
+    .returning()
+    .then(firstOrThrow);
+  const content = await db
+    .insert(PostContents)
+    .values({ document: postContentDocumentFromText(post.id), postId: post.id })
+    .returning()
+    .then(firstOrThrow);
+  return db
+    .update(Posts)
+    .set({ currentContentId: content.id })
+    .where(eq(Posts.id, post.id))
+    .returning()
+    .then(firstOrThrow);
+};
+
 const addMembership = (accountId: string, profileId: string, role: AccountProfileRole) =>
   db.insert(AccountProfiles).values({ accountId, profileId, role });
 
@@ -1026,6 +1153,8 @@ const resetFixtures = async () => {
   await db.delete(Sessions);
   await db.delete(ProfileFollows);
   await db.delete(Reactions);
+  await db.update(Posts).set({ currentContentId: null, replyParentId: null });
+  await db.delete(PostContents);
   await db.delete(Posts);
   await db.delete(AccountProfiles);
   await db.delete(Accounts);
