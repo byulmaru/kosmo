@@ -88,36 +88,33 @@ type DeleteReactionInput = {
   readonly reactionId: string;
 };
 
-const deleteReactionInTransaction = async (
-  { actorProfileId, reactionId }: DeleteReactionInput,
-  tx: Transaction,
-): Promise<{ readonly reactionId: string }> => {
-  await requireReactionActor(tx, actorProfileId);
-
-  const reaction = await tx
-    .select({ profileId: Reactions.profileId })
-    .from(Reactions)
-    .where(eq(Reactions.id, reactionId))
-    .limit(1)
-    .then(first);
-  if (!reaction) {
-    return { reactionId };
-  }
-  if (reaction.profileId !== actorProfileId) {
-    throw new PermissionDeniedError('Reaction owner permission is required');
-  }
-
-  await tx
-    .delete(Reactions)
-    .where(and(eq(Reactions.id, reactionId), eq(Reactions.profileId, actorProfileId)));
-
-  return { reactionId };
-};
-
 export const deleteReaction = async (
   input: DeleteReactionInput,
 ): Promise<{ readonly reactionId: string }> => {
-  const result = await db.transaction((tx) => deleteReactionInTransaction(input, tx));
+  const result = await db.transaction(async (tx) => {
+    await requireReactionActor(tx, input.actorProfileId);
+
+    const reaction = await tx
+      .select({ profileId: Reactions.profileId })
+      .from(Reactions)
+      .where(eq(Reactions.id, input.reactionId))
+      .limit(1)
+      .then(first);
+    if (!reaction) {
+      return { reactionId: input.reactionId };
+    }
+    if (reaction.profileId !== input.actorProfileId) {
+      throw new PermissionDeniedError('Reaction owner permission is required');
+    }
+
+    await tx
+      .delete(Reactions)
+      .where(
+        and(eq(Reactions.id, input.reactionId), eq(Reactions.profileId, input.actorProfileId)),
+      );
+
+    return { reactionId: input.reactionId };
+  });
 
   try {
     await deleteNotificationBySource(NotificationKind.REACTION, result.reactionId);
