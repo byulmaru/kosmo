@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 PROD-432·PROD-433·PROD-434의 Linear 경계, `post-action-bar` spec, 현재 React Native 코드 구조와 2026-07-21·2026-07-23 KST 사용자 논의에서 확정한 선택을 반영한다. Figma Action node는 비규범적 시각 참고 자료다.
+이 기록은 PROD-432·PROD-433·PROD-434의 Linear 경계, `post-action-bar` spec, 현재 React Native 코드 구조와 2026-07-21·2026-07-23·2026-07-24 KST 사용자 논의에서 확정한 선택을 반영한다. Figma Action node는 비규범적 시각 참고 자료다.
 
 ## Decision Records
 
@@ -159,6 +159,18 @@
 - Alternatives Considered: 정책상 불가능한 액션을 숨기는 방식은 고정 구성을 깨므로 채택하지 않았다. guest 액션을 disabled로 두는 방식은 인증·가입 진입점을 제공하지 못하므로 채택하지 않았다.
 - Consequences: 실제 대상 적격성과 실행 권한은 canonical 문서와 선행 action 계약이 소유하고 Action Bar는 adapter가 전달한 disabled 상태만 표현한다. guest 인증 목적지·화면 전환·임시 화면은 이 change에서 구현하지 않는다.
 - Confirmation / Follow-up: PROD-432 통합 검증에서 Content 없는 Repost와 Visibility 등 대상 자체 제한, 인증된 실행 주체의 권한 제한, 대상이 적격한 guest의 인증 위임과 대상이 부적격한 guest의 disabled 유지를 각각 확인한다.
+
+### Action Bar 컨테이너는 고정된 한국어 접근성 이름을 사용
+
+- Decision Date: 2026-07-24
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-433`, 사용자 확인
+- Status: Active
+- Context / Problem: toolbar role만 제공하면 한 화면에 반복되는 Action Bar 컨테이너의 접근 가능한 이름이 비어 있고, 새 공개 prop으로 surface마다 이름을 조립하면 현재 컴포넌트 범위에 불필요한 API가 추가된다.
+- Decision Outcome: `PostActionBar` 컨테이너는 고정된 한국어 접근성 이름 `액션 바`와 toolbar role을 제공한다. 컨테이너를 단일 접근성 요소로 만들지 않고 내부 action button의 개별 label과 탐색을 유지한다.
+- Alternatives Considered: `accessibilityLabel` 공개 prop을 받는 방식은 surface별 별도 문구 요구가 없어 채택하지 않았다. 영어 이름 `Action bar`는 저장소의 기존 사용자 대상 접근성 문구가 한국어인 관례와 맞지 않아 채택하지 않았다. toolbar 이름을 생략하는 방식은 반복되는 toolbar를 구분할 이름이 없어 채택하지 않았다.
+- Consequences: 한 화면의 여러 Post Action Bar가 같은 이름을 사용하지만 모두 toolbar로 식별되며, 각 액션은 기존 label을 가진 button으로 계속 탐색된다. 공개 `PostActionBarProps`는 바뀌지 않는다.
+- Confirmation / Follow-up: Storybook에서 반복 렌더된 toolbar를 `액션 바` 이름으로 찾고 각 toolbar 내부 action button이 계속 노출되는지 검증한다.
 
 ## Remaining Decisions
 

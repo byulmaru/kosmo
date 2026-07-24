@@ -80,7 +80,7 @@ function CatalogStory() {
         />
       </Section>
       <Section title="Optional actions · More callback only">
-        <PostActionBar more={actionBarProps.more} reaction={actionBarProps.reaction} />
+        <PostActionBar more={actionBarProps.more} />
       </Section>
       <Section title="Standard compact formatting · runtime component / locale seam">
         <Text style={styles.localeCopy}>
@@ -362,6 +362,23 @@ export const AccessibilityAndMinimumTarget: Story = {
   render: () => <PostActionBar {...actionBarProps} />,
 };
 
+export const MoreOnlyAlignment: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: { layout: 'fullscreen' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const actionBar = canvas.getByRole('toolbar', { name: '액션 바' });
+    const moreButton = within(actionBar).getByRole('button', { name: '더보기' });
+    const actionBarBounds = actionBar.getBoundingClientRect();
+    const moreButtonBounds = moreButton.getBoundingClientRect();
+    const moreIconBounds = canvas.getByTestId('post-action-more-icon').getBoundingClientRect();
+
+    expect(moreButtonBounds.right).toBeCloseTo(actionBarBounds.right, 0);
+    expect(moreIconBounds.right).toBeCloseTo(actionBarBounds.right - spacing.sm, 0);
+  },
+  render: () => <PostActionBar more={actionBarProps.more} />,
+};
+
 export const Compact390: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   parameters: { layout: 'fullscreen' },
@@ -406,7 +423,7 @@ const styles = {
 function verifyFixtures(expectedDetailWidth: number, expectedListWidth: number) {
   return async ({ canvasElement }: { canvasElement: HTMLElement }) => {
     const canvas = within(canvasElement);
-    const toolbars = canvas.getAllByRole('toolbar');
+    const toolbars = canvas.getAllByRole('toolbar', { name: '액션 바' });
 
     expect(toolbars).toHaveLength(2);
     verifySingleRow(toolbars[0]!, expectedDetailWidth);

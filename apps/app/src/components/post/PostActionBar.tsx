@@ -59,8 +59,14 @@ type ActionControlProps = {
 };
 
 export function PostActionBar({ bookmark, more, reaction, reply, repost }: PostActionBarProps) {
+  const hasOnlyMore = Boolean(more && !bookmark && !reaction && !reply && !repost);
+
   return (
-    <View accessibilityRole="toolbar" style={styles.root}>
+    <View
+      accessibilityLabel="액션 바"
+      accessibilityRole="toolbar"
+      style={[styles.root, hasOnlyMore ? styles.moreOnlyRoot : undefined]}
+    >
       {reply ? (
         <ActionControl
           accessibilityLabel={reply.accessibilityLabel}
@@ -245,6 +251,7 @@ const styles = StyleSheet.create({
   icon: { alignItems: 'center', justifyContent: 'center' },
   pendingSpinner: { transform: [{ translateY: 1 }] },
   pressed: { opacity: 0.72 },
+  moreOnlyRoot: { justifyContent: 'flex-end' },
   root: {
     alignItems: 'center',
     flexDirection: 'row',
