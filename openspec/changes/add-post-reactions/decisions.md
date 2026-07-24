@@ -59,7 +59,9 @@
 ### count와 Profile 목록의 visibility 책임을 분리한다
 
 - Decision Date: 2026-07-20
-- Status: Accepted
+- Decision Class: Derived Contract
+- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0010](../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-406](https://linear.app/byulmaru/issue/PROD-406/reaction-type%EB%B3%84-%EA%B0%9C%EC%88%98%EB%A5%BC-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4), [PROD-407](https://linear.app/byulmaru/issue/PROD-407/reaction%EC%9D%84-%EB%82%A8%EA%B8%B4-profile%EC%9D%84-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4)
+- Status: Active
 - Context / Problem: viewer에 따라 count가 달라지면 Post 단위 cache가 불안정해지지만 unavailable Profile은 목록에 노출할 수 없다.
 - Decision Outcome: Post 조회 권한을 통과한 모든 viewer에게 현재 Reaction 전체의 Type별 count를 동일하게 제공한다. Type별 Profile connection에만 viewer의 기존 Profile visibility를 SQL page limit 전에 적용한다. count는 내림차순이며 동률 순서는 보장하지 않는다.
 - Alternatives Considered: count에도 viewer Profile visibility를 적용하는 방식은 viewer마다 count가 달라지고 canonical 계약과 충돌한다. client filtering은 pagination을 깨뜨린다.
@@ -107,6 +109,23 @@
 - Alternatives Considered: component 안에서 직접 Relay connection을 조회·페이지네이션하는 방식은 실제 connection과 cache/route 책임을 PROD-449에 앞당긴다. raw scalar로 새 Profile row를 만드는 방식은 기존 Avatar/name/handle/bio/Follow surface와 fragment contract를 중복한다.
 - Consequences: 실제 `Post` count query와 `reactionProfiles` connection, modal/route, selected Profile/viewer cache 통합은 PROD-418에 남는다. supplied order는 server가 제공한 count 내림차순과 동률 무보장 계약을 그대로 보존하며, component는 이를 재해석하지 않는다. 이 선택은 최종 `post-reaction-ui` spec을 축소하거나 대체하지 않으며, 나중에 되돌릴 중간 제품 계약이 아니다.
 - Confirmation / Follow-up: PROD-449는 fixture state, 복수 Type·동률, 기존 Profile row, callback interaction과 Relay mock fragment Storybook을 component 수준에서 검증한다. PROD-418은 같은 seam을 유지한 채 실제 query/connection, zero-count와 modal/route UX, cache 통합 및 최종 spec의 pagination 검증을 수행한다.
+
+### PROD-450은 supplied option 기반 Quick Picker 프레젠테이션을 먼저 전달한다
+
+- Decision Date: 2026-07-23
+- Decision Updated: 2026-07-24
+- Decision Class: Implementation Choice
+- Authority / Provenance:
+  - `docs/domain/objects/reaction.md`
+  - `docs/design/reactions.md`
+  - `PROD-450`
+  - `openspec/changes/add-post-reactions/specs/post-reaction-ui/spec.md`
+- Status: Active
+- Context / Problem: 최종 Reaction selector는 selected Profile의 실제 add/delete mutation과 Relay cache를 연결해야 하지만, PROD-450은 API 없이 독립 검증 가능한 프레젠테이션과 상태 경계만 소유한다. 현재는 canonical 여섯 Unicode를 GitHub Reaction 선택기처럼 빠르게 고르는 panel이 필요하고, 장기 custom emoji 탐색은 별도 제품·federation 계약이 필요하다.
+- Decision Outcome: PROD-450은 부모가 공급한 ordered option을 한 줄로 표시하는 props-only `ReactionSelector` Quick Picker panel을 제공한다. 외부 컨테이너는 16px radius와 border를 유지하고 각 44×44px option은 border 없는 12px 둥근 사각형으로 표시한다. selected는 이모지 아래의 분리된 `primary`/`primaryHover` 배경 layer를 70% opacity로 표시해 이모지 opacity를 유지하고, error에는 빨간 border를 추가하지 않는다. pending은 이모지를 유지한 채 `zIndex` 없는 full-size 투명 overlay를 표시하고, 가운데에서 `textSecondary` head가 투명한 tail로 흐려지는 24×24px·3px 두께의 연결된 180° 호를 약 820ms 주기로 시계 방향·linear 회전시킨다. spinner에는 배경 track, 점과 분리된 spoke를 사용하지 않는다. 전체 disabled이면 panel을 렌더링하지 않는다. option의 선택 identity는 표시 문자열과 분리된 opaque 값으로 취급하고 selected·pending·error를 option별 controlled 상태로 받으며, toggle intent만 callback으로 전달한다. 현재 fixture는 `🥹`, `❤️`, `🎉`, `👀`, `☘️`, `🌈`을 사용하고 서로 다른 Type의 선택 상태를 함께 유지한다. trigger, popover 위치·열림 상태, Post Action Bar 배치와 실제 mutation·Relay/cache·서버 실패 복구는 소유하지 않는다.
+- Alternatives Considered: full-opacity selected 배경은 현재 theme 색이 지나치게 강조돼 사용자가 30% 더 투명한 표현을 선택했다. 기존 `ActivityIndicator`, 점·spoke spinner와 균일한 ring은 회전 방향과 head-to-tail 진행감이 약해 제외했다. `react-awesome-spinners` package는 React DOM과 styled-components에 결합돼 universal React Native 경계에 맞지 않으므로 설치하지 않고 시각 원리만 참고한다. component 내부에 현재 여섯 Type을 고정하면 option 공급과 미래 확장을 가로막는다. Promise callback으로 비동기 상태를 내부 소유하면 PROD-417의 mutation·rollback 책임을 앞당긴다. 지금 custom emoji Full Picker까지 구현하면 identity, asset lifecycle, animation, sensitive/local-remote permission, 검색·category·최근 사용을 상위 계약 없이 선결정한다.
+- Consequences: selected 배경과 이모지를 별도 layer로 관리하고, existing `react-native-svg`와 React Native `Animated`로 서로 맞닿은 arc segment를 하나의 회전 layer 안에 그린다. 새 dependency는 추가하지 않으며 spinner는 Quick Picker의 private presentation detail로 유지한다. PROD-417은 같은 seam에 실제 option data, add/delete adapter와 selected Profile cache를 연결할 수 있다. 장기 Misskey형 palette·Full Picker와 custom emoji renderer는 별도 Domain Gate와 Issue Gate 뒤 option 공급자로 연결할 수 있지만, 이번 결정은 custom emoji identity나 wire format을 정하지 않는다. 이 presentation slice는 최종 `post-reaction-ui` spec을 축소하거나 대체하지 않는다.
+- Confirmation / Follow-up: PROD-450 Storybook/component interaction에서 supplied order, 현재 여섯 fixture, 선택·해제·복수 Type, option별 border·radius, 70% selected 배경과 100% 이모지, 44×44px pending overlay와 24×24px fading arc, error와 전체 disabled 미렌더링 및 callback을 검증한다. 390px·600px viewport에서 layout을 확인한다. PROD-417은 실제 Relay data shape, mutation 성공·실패 복구와 selected Profile 전환을 별도로 검증한다.
 
 ### Reaction Notification은 source 밖의 Best Effort projection으로 처리한다
 
@@ -231,6 +250,18 @@
 - Alternatives Considered: `(postId, type)` input은 actor의 현재 조합만 주소화하지만 타인 소유 행 거부를 표현하지 못하고 오래된 요청의 ABA 삭제를 허용한다. soft delete나 idempotency ledger는 과거 Owner를 증명할 수 있지만 Reaction의 존재 기반 lifecycle과 현재 저장 범위를 확장한다.
 - Consequences: 존재하지 않는 Reaction ID의 성공은 과거 소유권을 증명하지 않지만 어떤 현재 행도 변경하지 않는다. 삭제 뒤 같은 조합으로 다시 생성된 Reaction은 새 ID를 가지므로 이전 요청에서 보호된다. Notification cleanup 연결과 필요한 service 결과 확장은 실제 caller를 구현하는 PROD-419가 소유한다.
 - Confirmation / Follow-up: GraphQL schema/payload, Owner·non-owner·unavailable Post, 이미 없는 ID, 반복·동시 요청과 삭제 후 같은 조합 재생성을 core/API test로 검증한다.
+
+### Reaction count는 Post의 non-null simple list로 노출한다
+
+- Decision Date: 2026-07-24
+- Decision Class: Implementation Choice
+- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0010](../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-406](https://linear.app/byulmaru/issue/PROD-406/reaction-type%EB%B3%84-%EA%B0%9C%EC%88%98%EB%A5%BC-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4)
+- Status: Active
+- Context / Problem: canonical과 PROD-406은 viewer-independent Type별 count와 정렬을 고정하지만 GraphQL field와 항목 shape는 구현 전 공개 계약으로 확정되지 않았다.
+- Decision Outcome: GraphQL은 `Post.reactionCounts: [ReactionCount!]!`를 제공하고 `ReactionCount`는 `type: String!`과 `count: Int!`만 제공한다. 목록은 현재 Reaction이 하나 이상 존재하는 Type만 포함하며 Reaction이 없으면 빈 목록이다. Type별 Profile connection은 기존 `Post.reactionProfiles`로 분리한다.
+- Alternatives Considered: Relay connection은 현재 Type 수가 제한되고 pagination 계약이 없어 불필요한 cursor 표면을 만든다. map 또는 JSON scalar는 Type과 count의 정적 schema 계약을 잃는다. `ReactionSummary` 명칭은 client presentation component와 API aggregate를 혼동시킨다.
+- Consequences: API consumer는 서버가 제공한 count 내림차순을 그대로 사용하고 동률 순서에 의존하지 않는다. zero-count Type 공급은 PROD-417/418의 별도 결정이며 이 field가 합성하지 않는다.
+- Confirmation / Follow-up: schema test와 PROD-406 integration test에서 non-null list·항목 shape, 빈 목록, viewer-independent 집계, 정렬, 삭제와 Post visibility를 검증한다.
 
 ## Remaining Decisions
 

@@ -20,6 +20,20 @@ test('exposes viewer-independent Repost count and selected Profile Repost on Pos
   assert.equal(String(post.getFields().viewerRepost?.type), 'Post');
 });
 
+test('exposes viewer-independent Reaction counts on Post', () => {
+  const post = schema.getType('Post');
+  const reactionCount = schema.getType('ReactionCount');
+
+  assert.ok(isObjectType(post));
+  assert.equal(String(post.getFields().reactionCounts?.type), '[ReactionCount!]!');
+  assert.deepEqual(post.getFields().reactionCounts?.args, []);
+
+  assert.ok(isObjectType(reactionCount));
+  assert.equal(String(reactionCount.getFields().type?.type), 'String!');
+  assert.equal(String(reactionCount.getFields().count?.type), 'Int!');
+  assert.deepEqual(Object.keys(reactionCount.getFields()).sort(), ['count', 'type']);
+});
+
 test('exposes the versioned PostContent document and Plain Text composer contract', () => {
   const postContent = schema.getType('PostContent');
   const createPostInput = schema.getType('CreatePostInput');
@@ -34,6 +48,7 @@ test('exposes the versioned PostContent document and Plain Text composer contrac
   assert.ok(isInputObjectType(createPostInput));
   assert.equal(createPostInput.getFields().content, undefined);
   assert.equal(String(createPostInput.getFields().bodyText?.type), 'String!');
+  assert.equal(String(createPostInput.getFields().replyParentId?.type), 'ID');
   assert.equal(schema.getType('TipTapDocument'), undefined);
   assert.equal(schema.getType('PostContentBody'), undefined);
   assert.equal(String(schema.getType('PostContentDocument')), 'PostContentDocument');
@@ -117,6 +132,20 @@ test('exposes the idempotent Repost creation contract', () => {
   assert.ok(isObjectType(payload));
   assert.equal(String(payload.getFields().repost.type), 'Post!');
   assert.equal(payload.getFields().created, undefined);
+});
+
+test('exposes the ID-based idempotent Post delete contract', () => {
+  const mutation = schema.getMutationType();
+  const input = schema.getType('DeletePostInput');
+  const payload = schema.getType('DeletePostPayload');
+
+  assert.equal(String(mutation?.getFields().deletePost?.type), 'DeletePostPayload!');
+  assert.ok(isInputObjectType(input));
+  assert.equal(String(input.getFields().id.type), 'ID!');
+  assert.ok(isObjectType(payload));
+  assert.equal(String(payload.getFields().postId.type), 'ID!');
+  assert.equal(payload.getFields().post, undefined);
+  assert.equal(payload.getFields().deleted, undefined);
 });
 
 test('exposes the Bookmark mutation and relationship contract', () => {

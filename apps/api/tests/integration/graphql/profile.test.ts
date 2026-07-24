@@ -23,6 +23,7 @@ import { Hono } from 'hono';
 import { encodeGlobalId as globalId } from '../../../src/graphql/global-id';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type * as CoreServices from '@kosmo/core/services';
 import type { handleInboundCreate as HandleInboundCreate } from '../../../../../packages/fedify/src/inbound-create';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
 import type { yoga as YogaRouter } from '../../../src/graphql';
@@ -30,7 +31,7 @@ import type { yoga as YogaRouter } from '../../../src/graphql';
 const publicOrigin = 'http://127.0.0.1:4173';
 const localDomain = '127.0.0.1:4173';
 const remoteDomain = 'remote.example';
-const databaseUrl = 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
@@ -47,6 +48,7 @@ let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
 let Sessions: typeof CoreDb.Sessions;
 let seedDatabase: typeof CoreSeed.seedDatabase;
+let createPost: typeof CoreServices.createPost;
 let deriveContext: typeof DeriveContext;
 let yoga: typeof YogaRouter;
 let handleInboundCreate: typeof HandleInboundCreate;
@@ -76,6 +78,7 @@ describe('GraphQL remote profile boundary', () => {
       Sessions,
     } = await import('@kosmo/core/db'));
     ({ seedDatabase } = await import('@kosmo/core/db/seed'));
+    ({ createPost } = await import('@kosmo/core/services'));
     ({ handleInboundCreate } = await import('../../../../../packages/fedify/src/inbound-create'));
 
     await truncateDatabase();
@@ -1704,6 +1707,188 @@ describe('GraphQL remote profile boundary', () => {
     );
   });
 
+  test('applies Reply candidate policy before paginating Home and excludes Replies from Profile', async () => {
+    const auth = await createAuthenticatedSession();
+    const replyAuthor = await createStoredActivityPubAuthor({
+      domain: 'reply-author.example',
+      handle: 'reply-author',
+    });
+    const parentAuthor = await createStoredActivityPubAuthor({
+      domain: 'parent-author.example',
+      handle: 'parent-author',
+    });
+    const unrelatedAuthor = await createStoredActivityPubAuthor({
+      domain: 'unrelated-author.example',
+      handle: 'unrelated-author',
+    });
+    await db.insert(ProfileFollows).values([
+      {
+        followerProfileId: auth.profile.id,
+        followeeProfileId: replyAuthor.profile.id,
+      },
+      {
+        followerProfileId: auth.profile.id,
+        followeeProfileId: parentAuthor.profile.id,
+      },
+    ]);
+
+    const createContentPost = ({
+      profileId,
+      replyParentId,
+      visibility = PostVisibility.PUBLIC,
+    }: {
+      profileId: string;
+      replyParentId?: string;
+      visibility?: typeof PostVisibility.PUBLIC | typeof PostVisibility.FOLLOWERS;
+    }) =>
+      createPost({
+        document: postContentDocumentFromText('Reply policy fixture'),
+        origin: 'LOCAL',
+        profileId,
+        replyParentId,
+        visibility,
+      });
+
+    const viewerParent = await createContentPost({
+      profileId: auth.profile.id,
+    });
+    const followedParent = await createContentPost({
+      profileId: parentAuthor.profile.id,
+    });
+    const unrelatedParent = await createContentPost({
+      profileId: unrelatedAuthor.profile.id,
+    });
+    const replyAuthorTopLevel = await createContentPost({
+      profileId: replyAuthor.profile.id,
+    });
+    const topLevelQuote = await createContentPost({
+      profileId: replyAuthor.profile.id,
+    });
+    await db
+      .update(Posts)
+      .set({ repostSourceId: followedParent.post.id })
+      .where(eq(Posts.id, topLevelQuote.post.id));
+    const contentlessRepost = await db
+      .insert(Posts)
+      .values({
+        profileId: replyAuthor.profile.id,
+        repostSourceId: viewerParent.post.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.UNLISTED,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const viewerReply = await createContentPost({
+      profileId: auth.profile.id,
+      replyParentId: unrelatedParent.post.id,
+    });
+    const replyToViewer = await createContentPost({
+      profileId: unrelatedAuthor.profile.id,
+      replyParentId: viewerParent.post.id,
+    });
+    const followeeReply = await createContentPost({
+      profileId: replyAuthor.profile.id,
+      replyParentId: followedParent.post.id,
+    });
+    const replyQuote = await createContentPost({
+      profileId: replyAuthor.profile.id,
+      replyParentId: followedParent.post.id,
+    });
+    await db
+      .update(Posts)
+      .set({ repostSourceId: unrelatedParent.post.id })
+      .where(eq(Posts.id, replyQuote.post.id));
+    const pageBoundaryExcludedId = 'ffffffff-ffff-7fff-bfff-ffffffffffff';
+    await db.insert(Posts).values({
+      id: pageBoundaryExcludedId,
+      profileId: unrelatedAuthor.profile.id,
+      state: PostState.ACTIVE,
+      visibility: PostVisibility.PUBLIC,
+    });
+    const pageBoundaryExcludedContent = await db
+      .insert(PostContents)
+      .values({
+        document: postContentDocumentFromText('Reply policy fixture'),
+        postId: pageBoundaryExcludedId,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db
+      .update(Posts)
+      .set({
+        currentContentId: pageBoundaryExcludedContent.id,
+        replyParentId: unrelatedParent.post.id,
+      })
+      .where(eq(Posts.id, pageBoundaryExcludedId));
+    await createContentPost({
+      profileId: replyAuthor.profile.id,
+      replyParentId: unrelatedParent.post.id,
+    });
+    const tombstonedParent = await createContentPost({
+      profileId: parentAuthor.profile.id,
+    });
+    const replyToTombstonedParent = await createContentPost({
+      profileId: replyAuthor.profile.id,
+      replyParentId: tombstonedParent.post.id,
+    });
+    await db
+      .update(Posts)
+      .set({ state: PostState.DELETED })
+      .where(eq(Posts.id, tombstonedParent.post.id));
+    const tombstonedReply = await createContentPost({
+      profileId: replyAuthor.profile.id,
+      replyParentId: viewerParent.post.id,
+    });
+    await db
+      .update(Posts)
+      .set({ state: PostState.DELETED })
+      .where(eq(Posts.id, tombstonedReply.post.id));
+
+    const includedHomePostIds = [
+      viewerParent.post.id,
+      followedParent.post.id,
+      replyAuthorTopLevel.post.id,
+      topLevelQuote.post.id,
+      contentlessRepost.id,
+      viewerReply.post.id,
+      replyToViewer.post.id,
+      followeeReply.post.id,
+      replyQuote.post.id,
+      replyToTombstonedParent.post.id,
+    ];
+    assert.ok(includedHomePostIds.every((id) => pageBoundaryExcludedId > id));
+    const includedHomeIds = includedHomePostIds
+      .toSorted((left, right) => (left < right ? 1 : left > right ? -1 : 0))
+      .map((id) => globalId('Post', id));
+    const includedProfileIds = [
+      replyAuthorTopLevel.post.id,
+      topLevelQuote.post.id,
+      contentlessRepost.id,
+    ]
+      .toSorted((left, right) => (left < right ? 1 : left > right ? -1 : 0))
+      .map((id) => globalId('Post', id));
+    const firstPage = await requestRemotePostRead({
+      first: 2,
+      nodeIds: [],
+      profileId: globalId('Profile', replyAuthor.profile.id),
+      token: auth.token,
+    });
+
+    assertNoGraphQLErrors(firstPage);
+    assert.deepEqual(connectionIds(firstPage.data?.homeTimeline), includedHomeIds.slice(0, 2));
+    assert.equal(firstPage.data?.homeTimeline?.pageInfo.hasNextPage, true);
+
+    const allPosts = await requestRemotePostRead({
+      first: 100,
+      nodeIds: [],
+      profileId: globalId('Profile', replyAuthor.profile.id),
+      token: auth.token,
+    });
+    assertNoGraphQLErrors(allPosts);
+    assert.deepEqual(connectionIds(allPosts.data?.homeTimeline), includedHomeIds);
+    assert.deepEqual(connectionIds(allPosts.data?.profile?.posts), includedProfileIds);
+  });
+
   test('applies Repost candidate eligibility before Profile and Home pagination', async () => {
     const auth = await createAuthenticatedSession();
     const profileAuthor = await createStoredActivityPubAuthor({
@@ -1740,22 +1925,22 @@ describe('GraphQL remote profile boundary', () => {
       .set({ state: PostState.DELETED })
       .where(eq(Posts.id, unavailableSource.id));
 
-    const ordinaryRepost = await createPost({
+    const ordinaryRepost = await createRepost({
       id: '019f8ed0-0000-7000-8000-000000000110',
       profileId: profileAuthor.profile.id,
       repostSourceId: ordinarySource.id,
     });
-    const replyRepost = await createPost({
+    const replyRepost = await createRepost({
       id: '019f8ed0-0000-7000-8000-000000000111',
       profileId: profileAuthor.profile.id,
       repostSourceId: replySource.id,
     });
-    const quoteRepost = await createPost({
+    const quoteRepost = await createRepost({
       id: '019f8ed0-0000-7000-8000-000000000112',
       profileId: profileAuthor.profile.id,
       repostSourceId: quoteSource.id,
     });
-    const unavailableRepost = await createPost({
+    const unavailableRepost = await createRepost({
       id: '019f8ed0-0000-7000-8000-000000000130',
       profileId: profileAuthor.profile.id,
       repostSourceId: unavailableSource.id,
@@ -1777,12 +1962,12 @@ describe('GraphQL remote profile boundary', () => {
       profileId: homeAuthor.profile.id,
       repostSourceId: unavailableSource.id,
     });
-    const homeEligibleRepost = await createPost({
+    const homeEligibleRepost = await createRepost({
       id: '019f8ed0-0000-7000-8000-000000000220',
       profileId: homeAuthor.profile.id,
       repostSourceId: ordinarySource.id,
     });
-    const homeUnavailableRepost = await createPost({
+    const homeUnavailableRepost = await createRepost({
       id: '019f8ed0-0000-7000-8000-000000000215',
       profileId: homeAuthor.profile.id,
       repostSourceId: unavailableSource.id,
@@ -2204,7 +2389,7 @@ const materializeRemotePost = async ({
   return { content: materializedContent, mapping, post };
 };
 
-const createPost = async ({
+const createRepost = async ({
   id,
   profileId,
   repostSourceId,
@@ -2357,5 +2542,9 @@ const truncateDatabase = async () => {
 };
 
 const assertTestDatabaseUrl = () => {
-  assert.equal(new URL(process.env.DATABASE_URL ?? '').pathname, '/kosmo_test');
+  const testDatabaseUrl = new URL(process.env.DATABASE_URL ?? '');
+  const loopbackHosts = new Set(['127.0.0.1', '[::1]', 'localhost']);
+
+  assert.ok(loopbackHosts.has(testDatabaseUrl.hostname));
+  assert.match(testDatabaseUrl.pathname, /^\/kosmo_test(?:_[a-z0-9_]+)?$/);
 };

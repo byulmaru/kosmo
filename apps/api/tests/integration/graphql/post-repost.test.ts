@@ -13,7 +13,7 @@ import {
 } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { normalizeHandle } from '@kosmo/core/utils';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { encodeGlobalId as globalId } from '../../../src/graphql/global-id';
 import type * as CoreDb from '@kosmo/core/db';
@@ -198,6 +198,92 @@ describe('GraphQL Repost', () => {
 
     assert.ok(result.errors?.[0]);
   });
+
+  test('deletePost는 GraphQL 경로에서 Repost를 Tombstone 처리하고 상태를 갱신한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const source = await createContentPost(auth.profile.id);
+    await requestRepost(source.id, auth.token);
+    const repost = await db
+      .select()
+      .from(Posts)
+      .where(and(eq(Posts.profileId, auth.profile.id), eq(Posts.repostSourceId, source.id)))
+      .then(firstOrThrow);
+
+    const first = await requestDelete(repost.id, auth.token);
+    assertNoGraphQLErrors(first);
+    assert.deepEqual(first.data?.deletePost, { postId: globalId('Post', repost.id) });
+
+    const deleted = await db
+      .select({ deletedAt: Posts.deletedAt, state: Posts.state })
+      .from(Posts)
+      .where(eq(Posts.id, repost.id))
+      .then(firstOrThrow);
+    assert.equal(deleted.state, PostState.DELETED);
+    assert.ok(deleted.deletedAt);
+
+    const sourceState = await requestGraphQL<{
+      nodes: Array<{
+        id: string;
+        repostCount: number;
+        viewerRepost: { id: string } | null;
+      } | null>;
+    }>(
+      `query RepostState($ids: [ID!]!) {
+        nodes(ids: $ids) {
+          ... on Post {
+            id
+            repostCount
+            viewerRepost { id }
+          }
+        }
+      }`,
+      { ids: [globalId('Post', source.id)] },
+      auth.token,
+    );
+    assertNoGraphQLErrors(sourceState);
+    assert.deepEqual(sourceState.data?.nodes[0], {
+      id: globalId('Post', source.id),
+      repostCount: 0,
+      viewerRepost: null,
+    });
+  });
+
+  test('deletePost는 비Author와 비로그인 요청을 거부한다', async () => {
+    const author = await createAuthenticatedSession();
+    const other = await createAuthenticatedSession();
+    const source = await createContentPost(author.profile.id);
+    await requestRepost(source.id, author.token);
+    const repost = await db
+      .select()
+      .from(Posts)
+      .where(and(eq(Posts.profileId, author.profile.id), eq(Posts.repostSourceId, source.id)))
+      .then(firstOrThrow);
+
+    for (const token of [other.token, undefined]) {
+      const result = await requestDelete(repost.id, token);
+      assert.equal(result.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+    }
+
+    const stored = await db
+      .select({ state: Posts.state })
+      .from(Posts)
+      .where(eq(Posts.id, repost.id))
+      .then(firstOrThrow);
+    assert.equal(stored.state, PostState.ACTIVE);
+  });
+
+  test('deletePost는 Post가 아닌 concrete global ID를 거부한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const result = await requestGraphQL<{ deletePost: { postId: string } }>(
+      `mutation DeletePost($input: DeletePostInput!) {
+        deletePost(input: $input) { postId }
+      }`,
+      { input: { id: globalId('Profile', auth.profile.id) } },
+      auth.token,
+    );
+
+    assert.ok(result.errors?.[0]);
+  });
 });
 
 type PostNode = {
@@ -223,6 +309,15 @@ const requestRepost = (sourceId: string, token?: string) =>
       }
     }`,
     { input: { sourceId: globalId('Post', sourceId) } },
+    token,
+  );
+
+const requestDelete = (postId: string, token?: string) =>
+  requestGraphQL<{ deletePost: { postId: string } }>(
+    `mutation DeletePost($input: DeletePostInput!) {
+      deletePost(input: $input) { postId }
+    }`,
+    { input: { id: globalId('Post', postId) } },
     token,
   );
 

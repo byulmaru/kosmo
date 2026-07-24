@@ -1,5 +1,6 @@
 import { usePathname } from 'expo-router';
-import { Linking, Pressable, Text } from 'react-native';
+import { useState } from 'react';
+import { Linking, Pressable, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Temporal } from 'temporal-polyfill';
@@ -9,6 +10,7 @@ import { PostLayout } from '@/components/post/PostLayout';
 import { PostList } from '@/components/post/PostList';
 import { PostListItem } from '@/components/post/PostListItem';
 import { PostSourcePresentationView } from '@/components/post/PostSourcePresentationView';
+import { PostThreadLayout } from '@/components/post/PostThreadLayout';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { spacing, typography } from '@/theme/tokens';
 import { longBody, post, profile, profileWithPosts, timeline } from './fixtures';
@@ -170,6 +172,43 @@ const linkedSourceQuote = post({
   profile: repostAuthor,
   repostSource: linkedPost,
 });
+const threadRootPost = post({ bodyText: '대화의 시작입니다.', id: 'thread-root' });
+const threadParentPost = post({ bodyText: '직접 Parent Reply입니다.', id: 'thread-parent' });
+const threadCurrentPost = post({ bodyText: '지금 보고 있는 Reply입니다.', id: 'thread-current' });
+const threadChildPost = post({ bodyText: '현재 Reply에 이어진 답글입니다.', id: 'thread-child' });
+const threadSiblingPost = post({ bodyText: '별도 분기의 답글입니다.', id: 'thread-sibling' });
+const threadQuoteSourcePost = post({
+  bodyText: '인용된 Source 본문입니다.',
+  id: 'thread-quote-source',
+});
+const threadReplyQuotePost = {
+  ...post({
+    bodyText: 'Reply이면서 Quote인 Post의 자체 Content입니다.',
+    id: 'thread-reply-quote',
+  }),
+  repostSource: threadQuoteSourcePost,
+};
+const threadItems = {
+  ancestors: [
+    { connectedToPrevious: false, id: threadRootPost.id },
+    { connectedToPrevious: true, id: threadParentPost.id },
+  ],
+  current: { connectedToPrevious: true, id: threadCurrentPost.id },
+  descendants: [
+    { connectedToPrevious: true, id: threadChildPost.id },
+    { connectedToPrevious: false, id: threadSiblingPost.id },
+    { connectedToPrevious: true, id: threadReplyQuotePost.id },
+  ],
+} as const;
+const threadStoryPosts = [
+  threadRootPost,
+  threadParentPost,
+  threadCurrentPost,
+  threadChildPost,
+  threadSiblingPost,
+  threadReplyQuotePost,
+  threadQuoteSourcePost,
+];
 const storyPosts = [
   shortPost,
   longPost,
@@ -184,6 +223,7 @@ const storyPosts = [
   remoteAuthorPost,
   linkedPost,
   unsupportedDocumentPost,
+  ...threadStoryPosts,
   sourcePost,
   pureRepost,
   quotePost,
@@ -207,6 +247,9 @@ const PostsStoriesQuery = graphql`
       __typename
       ... on Post {
         id
+        repostSource {
+          id
+        }
         ...PostBody_post @alias(as: "body")
         ...PostLayout_post @alias(as: "layout")
         ...PostListItem_post @alias(as: "listItem")
@@ -309,6 +352,14 @@ function requireStoryPostById(posts: ReadonlyArray<StoryPost>, id: string): Stor
   const result = posts.find((post) => post.id === id);
   if (!result) {
     throw new Error(`Missing post fixture with id ${id}.`);
+  }
+  return result;
+}
+
+function requirePostById(posts: ReadonlyArray<PostNode>, id: string): PostNode {
+  const result = posts.find((postNode) => postNode.id === id);
+  if (!result) {
+    throw new Error(`Missing post fixture ${id}.`);
   }
   return result;
 }
@@ -465,6 +516,75 @@ function LinkedPostListItemStory() {
     <Catalog>
       <Text testID="current-story-pathname">{pathname}</Text>
       <PostListItem post={requireFragment(requirePost(posts, 14).listItem, 'linked post item')} />
+    </Catalog>
+  );
+}
+
+function ThreadCatalog() {
+  const { posts } = usePostsStoryData();
+
+  return (
+    <Catalog width={600}>
+      <Section title="Reply thread · current anchor">
+        <PostThreadLayout
+          ancestors={threadItems.ancestors.map((item) => ({
+            ...item,
+            post: requirePostById(posts, item.id),
+          }))}
+          current={{
+            ...threadItems.current,
+            post: requirePostById(posts, threadItems.current.id),
+          }}
+          descendants={threadItems.descendants.map((item) => ({
+            ...item,
+            post: requirePostById(posts, item.id),
+          }))}
+          renderPost={({ item, role }) => (
+            <View>
+              {role === 'current' ? (
+                <View testID={`post-thread-renderer-detail-${item.id}`}>
+                  <PostLayout post={requireFragment(item.post.layout, 'thread current layout')} />
+                </View>
+              ) : (
+                <View testID={`post-thread-renderer-list-${item.id}`}>
+                  <PostListItem post={requireFragment(item.post.listItem, 'thread list item')} />
+                </View>
+              )}
+              {item.post.repostSource ? (
+                <View testID={`reply-quote-source-subtree-${item.post.repostSource.id}`} />
+              ) : null}
+            </View>
+          )}
+        />
+      </Section>
+    </Catalog>
+  );
+}
+
+function ThreadNavigationCatalog() {
+  const [selectedPostId, setSelectedPostId] = useState('없음');
+  const items = [
+    { connectedToPrevious: false, id: 'thread-current', post: '현재 Post' },
+    { connectedToPrevious: true, id: 'thread-child', post: '하위 Reply' },
+  ] as const;
+
+  return (
+    <Catalog width={390}>
+      <PostThreadLayout
+        ancestors={[]}
+        current={items[0]}
+        descendants={[items[1]]}
+        renderPost={({ item }) => (
+          <Pressable
+            accessibilityLabel={`${item.post} 상세 선택`}
+            accessibilityRole="link"
+            onPress={() => setSelectedPostId(item.id)}
+          >
+            <Text>{item.post}</Text>
+          </Pressable>
+        )}
+      />
+      <Text testID="selected-thread-post">{selectedPostId}</Text>
     </Catalog>
   );
 }
@@ -722,6 +842,98 @@ export const LinkedBodyKeepsDetailNavigationIsolated: Story = {
     }
   },
   render: () => <LinkedPostListItemStory />,
+};
+
+export const ReplyThreadPresentation: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const thread = canvas.getByTestId('post-thread');
+
+    expect(Array.from(thread.children).map((row) => row.getAttribute('data-testid'))).toEqual([
+      'post-thread-item-thread-root',
+      'post-thread-item-thread-parent',
+      'post-thread-current-thread-current',
+      'post-thread-item-thread-child',
+      'post-thread-item-thread-sibling',
+      'post-thread-item-thread-reply-quote',
+    ]);
+    expect(thread.textContent).toContain('대화의 시작입니다.');
+    expect(thread.textContent).toContain('지금 보고 있는 Reply입니다.');
+    expect(thread.textContent).toContain('현재 Reply에 이어진 답글입니다.');
+    expect(canvas.getByTestId('post-thread-current-thread-current')).toBeVisible();
+    expect(canvas.getByTestId('post-thread-renderer-list-thread-root')).toBeVisible();
+    expect(canvas.getByTestId('post-thread-renderer-list-thread-parent')).toBeVisible();
+    expect(canvas.getByTestId('post-thread-renderer-detail-thread-current')).toBeVisible();
+    expect(canvas.getByTestId('post-thread-renderer-list-thread-child')).toBeVisible();
+    expect(canvas.getByTestId('post-thread-renderer-list-thread-reply-quote')).toBeVisible();
+    const currentArticles = canvas.getAllByRole('article', { current: true });
+    expect(currentArticles).toHaveLength(1);
+    expect(currentArticles[0]).toBe(canvas.getByTestId('post-thread-current-thread-current'));
+    expect(within(currentArticles[0]).getByRole('link', { name: /코스모 작가/ })).toBeVisible();
+    expect(canvas.queryAllByRole('article', { current: true })).toHaveLength(1);
+    for (const article of canvas.getAllByRole('article')) {
+      if (article !== currentArticles[0]) {
+        expect(article).not.toHaveAttribute('aria-current', 'true');
+      }
+    }
+    expect(
+      canvasElement.querySelector(
+        '[data-testid^="post-thread-connector-"][data-testid$="-thread-root-before"]',
+      ),
+    ).toBeNull();
+    expect(
+      canvas.getByTestId('post-thread-connector-thread-root-thread-parent-after'),
+    ).toBeVisible();
+    expect(
+      canvas.getByTestId('post-thread-connector-thread-root-thread-parent-before'),
+    ).toBeVisible();
+    expect(
+      canvas.getByTestId('post-thread-connector-thread-parent-thread-current-after'),
+    ).toBeVisible();
+    expect(
+      canvas.getByTestId('post-thread-connector-thread-parent-thread-current-before'),
+    ).toBeVisible();
+    expect(
+      canvas.getByTestId('post-thread-connector-thread-current-thread-child-after'),
+    ).toBeVisible();
+    expect(
+      canvas.getByTestId('post-thread-connector-thread-current-thread-child-before'),
+    ).toBeVisible();
+    expect(
+      canvas.queryByTestId('post-thread-connector-thread-child-thread-sibling-after'),
+    ).toBeNull();
+    expect(
+      canvas.queryByTestId('post-thread-connector-thread-child-thread-sibling-before'),
+    ).toBeNull();
+    expect(
+      canvas.getByTestId('post-thread-connector-thread-sibling-thread-reply-quote-after'),
+    ).toBeVisible();
+    expect(
+      canvas.getByTestId('post-thread-connector-thread-sibling-thread-reply-quote-before'),
+    ).toBeVisible();
+    expect(
+      canvasElement.querySelector(
+        '[data-testid^="post-thread-connector-thread-reply-quote-"][data-testid$="-after"]',
+      ),
+    ).toBeNull();
+
+    const replyQuote = within(canvas.getByTestId('post-thread-item-thread-reply-quote'));
+    expect(replyQuote.getByText('Reply이면서 Quote인 Post의 자체 Content입니다.')).toBeVisible();
+    expect(
+      replyQuote.getByTestId('reply-quote-source-subtree-thread-quote-source'),
+    ).toBeEmptyDOMElement();
+    expect(canvas.queryByText('인용된 Source 본문입니다.')).toBeNull();
+  },
+  render: () => <ThreadCatalog />,
+};
+
+export const ReplyThreadMockNavigation: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('link', { name: '하위 Reply 상세 선택' }));
+    expect(canvas.getByTestId('selected-thread-post')).toHaveTextContent('thread-child');
+  },
+  render: () => <ThreadNavigationCatalog />,
 };
 
 export const ComposerDefault: Story = {

@@ -145,7 +145,7 @@ core service는 검증된 actor가 Active/Normal Profile이고 Instance가 non-S
 
 ### Requirement: viewer와 무관한 Reaction Type count
 
-Post의 Reaction Type별 count는 대상 Post에 현재 존재하는 모든 Reaction을 포함해야 하며(MUST), Post를 조회할 수 있는 viewer 사이에서 같아야 한다(MUST). Type은 count 내림차순으로 제공해야 하며(MUST), 동률 순서는 보장하지 않아야 한다(MUST NOT).
+**Authority / Provenance:** [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0010](../../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-406](https://linear.app/byulmaru/issue/PROD-406/reaction-type%EB%B3%84-%EA%B0%9C%EC%88%98%EB%A5%BC-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4) Post의 Reaction Type별 count는 대상 Post에 현재 존재하는 모든 Reaction을 포함해야 하며(MUST), Post를 조회할 수 있는 viewer 사이에서 같아야 한다(MUST). Type은 count 내림차순으로 제공해야 하며(MUST), 동률 순서는 보장하지 않아야 한다(MUST NOT).
 
 #### Scenario: viewer 간 같은 count
 

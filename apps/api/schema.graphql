@@ -77,6 +77,7 @@ type CreateBookmarkPayload {
 
 input CreatePostInput {
   bodyText: String!
+  replyParentId: ID
   visibility: PostVisibility!
 }
 
@@ -103,6 +104,14 @@ input DeleteBookmarkInput {
 type DeleteBookmarkPayload {
   bookmarkId: ID
   post: Post
+}
+
+input DeletePostInput {
+  id: ID!
+}
+
+type DeletePostPayload {
+  postId: ID!
 }
 
 input DeleteProfileInput {
@@ -170,6 +179,7 @@ type Mutation {
   createPost(input: CreatePostInput!): CreatePostPayload!
   createProfile(input: CreateProfileInput!): CreateProfilePayload!
   deleteBookmark(input: DeleteBookmarkInput!): DeleteBookmarkPayload!
+  deletePost(input: DeletePostInput!): DeletePostPayload!
   deleteProfile(input: DeleteProfileInput!): DeleteProfilePayload!
   deleteReaction(input: DeleteReactionInput!): DeleteReactionPayload!
   exchangeNativeOidcSession(input: ExchangeNativeOidcSessionInput!): ExchangeNativeOidcSessionPayload!
@@ -214,6 +224,7 @@ type Post implements Node {
   createdAt: DateTime!
   id: ID!
   profile: Profile!
+  reactionCounts: [ReactionCount!]!
   reactionProfiles(after: String, before: String, first: Int, last: Int, type: String!): ProfileConnection!
   replyAncestors: [Post!]!
   replyDescendants(after: String, before: String, first: Int, last: Int): PostConnection!
@@ -380,6 +391,11 @@ type Query {
 type Reaction implements Node {
   createdAt: DateTime!
   id: ID!
+  type: String!
+}
+
+type ReactionCount {
+  count: Int!
   type: String!
 }
 

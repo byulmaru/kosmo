@@ -46,7 +46,10 @@ Approval Policy 변경만으로 기존 Pending Follow Request를 승인하거나
 
 ## 조회 정책
 
-- Follower/Followee 수는 Active/Normal Profile 사이의 현재 Follow Relationship만 계산한다.
+- Follower/Followee 목록은 Active/Normal Profile 사이의 현재 Follow Relationship을 기준으로 한다.
+- Profile에 저장된 Follower/Followee 수는 best-effort projection이며, visible 목록의 정확한 edge
+  수를 보장하는 membership source of truth가 아니다.
+- Profile 비활성화 전이는 관계를 보존하면서 남은 Active 상대 Profile의 저장 count를 조정한다.
 - Profile Block과 Domain Block은 Follow Relationship보다 우선한다.
 - 팔로워/팔로잉 목록 공개 정책의 구체 값이 확정되기 전에는 관계 당사자 외 공개 범위를 확장하지 않는다.
 

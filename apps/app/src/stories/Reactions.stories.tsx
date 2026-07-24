@@ -3,10 +3,12 @@ import { Text } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, userEvent, within } from 'storybook/test';
 import { ReactionProfileList } from '@/components/reaction/ReactionProfileList';
+import { ReactionSelector } from '@/components/reaction/ReactionSelector';
 import { ReactionSummary } from '@/components/reaction/ReactionSummary';
 import { profile } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { ReactionOption, ReactionToggleIntent } from '@/components/reaction/ReactionSelector';
 import type { ReactionsStoriesQuery as ReactionsStoriesQueryType } from './__generated__/ReactionsStoriesQuery.graphql';
 
 const tiedEntries = [
@@ -23,6 +25,15 @@ const profileCopy = {
   loadErrorTitle: '반응한 프로필을 더 불러오지 못했어요',
   loadingTitle: '반응한 프로필을 불러오는 중입니다.',
 } as const;
+
+const quickReactionOptions = [
+  { emoji: '🥹', id: '🥹', label: '🥹' },
+  { emoji: '❤️', id: '❤️', label: '❤️' },
+  { emoji: '🎉', id: '🎉', label: '🎉' },
+  { emoji: '👀', id: '👀', label: '👀' },
+  { emoji: '☘️', id: '☘️', label: '☘️' },
+  { emoji: '🌈', id: '🌈', label: '🌈' },
+] satisfies ReadonlyArray<ReactionOption>;
 
 const storyProfiles = [
   profile({
@@ -163,6 +174,109 @@ function ReactionProfileListCatalog() {
   );
 }
 
+function QuickPickerInteractionCatalog() {
+  const [selectedOptionIds, setSelectedOptionIds] = useState<ReadonlyArray<string>>(['❤️', '👀']);
+  const [lastIntent, setLastIntent] = useState('없음');
+
+  function handleToggle({ nextSelected, optionId }: ReactionToggleIntent) {
+    setSelectedOptionIds((current) =>
+      nextSelected ? [...current, optionId] : current.filter((id) => id !== optionId),
+    );
+    setLastIntent(`${optionId}:${nextSelected ? '선택' : '해제'}`);
+  }
+
+  const selectedInOptionOrder = quickReactionOptions
+    .filter((option) => selectedOptionIds.includes(option.id))
+    .map((option) => option.emoji)
+    .join(' ');
+
+  return (
+    <Catalog width={360}>
+      <Section title="Interactive Quick Picker">
+        <ReactionSelector
+          onToggle={handleToggle}
+          options={quickReactionOptions}
+          selectedOptionIds={selectedOptionIds}
+        />
+        <Text>{`선택: ${selectedInOptionOrder || '없음'}`}</Text>
+        <Text>{`마지막 동작: ${lastIntent}`}</Text>
+      </Section>
+    </Catalog>
+  );
+}
+
+function QuickPickerStateCatalog() {
+  const [blockedToggleCount, setBlockedToggleCount] = useState(0);
+  const [retryCount, setRetryCount] = useState(0);
+
+  return (
+    <Catalog width={360}>
+      <Section title="Pending">
+        <ReactionSelector
+          onToggle={() => setBlockedToggleCount((count) => count + 1)}
+          options={quickReactionOptions}
+          pendingOptionIds={['❤️']}
+          selectedOptionIds={['❤️', '👀']}
+        />
+      </Section>
+      <Section title="Error Retry">
+        <ReactionSelector
+          errorOptionIds={['🎉']}
+          onToggle={({ optionId }) => {
+            if (optionId === '🎉') {
+              setRetryCount((count) => count + 1);
+            }
+          }}
+          options={quickReactionOptions}
+          selectedOptionIds={['🎉']}
+        />
+        <Text>{`재시도: ${retryCount}`}</Text>
+      </Section>
+      <Section title="Disabled">
+        <ReactionSelector
+          disabled
+          onToggle={() => setBlockedToggleCount((count) => count + 1)}
+          options={quickReactionOptions}
+        />
+      </Section>
+      <Text>{`차단된 동작: ${blockedToggleCount}`}</Text>
+    </Catalog>
+  );
+}
+
+function QuickPickerViewportCatalog({ title }: { title: string }) {
+  return (
+    <Catalog>
+      <Section title={title}>
+        <ReactionSelector
+          onToggle={() => {}}
+          options={quickReactionOptions}
+          selectedOptionIds={['❤️', '👀']}
+        />
+      </Section>
+    </Catalog>
+  );
+}
+
+async function assertQuickPickerViewport(canvasElement: HTMLElement, expectedWidth: number) {
+  const canvas = within(canvasElement);
+  const buttons = canvas.getAllByRole('button');
+  const picker = buttons[0]!.parentElement!;
+  const canvasRect = canvasElement.getBoundingClientRect();
+  const pickerRect = picker.getBoundingClientRect();
+
+  expect(canvasElement.ownerDocument.documentElement.clientWidth).toBe(expectedWidth);
+  expect(buttons).toHaveLength(6);
+  for (const button of buttons) {
+    expect(button.getBoundingClientRect().width).toBe(44);
+    expect(button.getBoundingClientRect().height).toBe(44);
+    expect(button.getBoundingClientRect().top).toBe(buttons[0]!.getBoundingClientRect().top);
+  }
+  expect(picker.scrollWidth).toBeLessThanOrEqual(picker.clientWidth);
+  expect(pickerRect.left).toBeGreaterThanOrEqual(canvasRect.left);
+  expect(pickerRect.right).toBeLessThanOrEqual(canvasRect.right);
+}
+
 const meta = {
   component: ReactionSummaryCatalog,
   parameters: {
@@ -226,4 +340,115 @@ export const ProfileListStates: Story = {
     expect(loadingMoreButton).toHaveAttribute('aria-busy', 'true');
   },
   render: () => <ReactionProfileListCatalog />,
+};
+
+export const QuickPickerInteraction: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const buttons = canvas.getAllByRole('button');
+
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      '🥹',
+      '❤️',
+      '🎉',
+      '👀',
+      '☘️',
+      '🌈',
+    ]);
+
+    const firstOptionStyle = getComputedStyle(buttons[0]!);
+    const pickerStyle = getComputedStyle(buttons[0]!.parentElement!);
+
+    expect(firstOptionStyle.borderTopWidth).toBe('0px');
+    expect(firstOptionStyle.borderRadius).toBe('12px');
+    expect(pickerStyle.borderTopWidth).toBe('1px');
+    expect(pickerStyle.borderRadius).toBe('16px');
+
+    const heart = canvas.getByRole('button', { name: '❤️ 반응' });
+    const party = canvas.getByRole('button', { name: '🎉 반응' });
+    const eyes = canvas.getByRole('button', { name: '👀 반응' });
+    const heartBackground = heart.querySelector('[data-testid="reaction-selected-background"]');
+    const heartEmoji = heart.querySelector('[data-testid="reaction-emoji"]');
+
+    expect(heartBackground).not.toBeNull();
+    expect(getComputedStyle(heartBackground!).opacity).toBe('0.7');
+    expect(heartEmoji).not.toBeNull();
+    expect(getComputedStyle(heartEmoji!).opacity).toBe('1');
+    expect(party.querySelector('[data-testid="reaction-selected-background"]')).toBeNull();
+
+    expect(heart).toHaveAttribute('aria-pressed', 'true');
+    expect(eyes).toHaveAttribute('aria-pressed', 'true');
+    expect(party).toHaveAttribute('aria-pressed', 'false');
+
+    await userEvent.click(heart);
+    expect(heart).toHaveAttribute('aria-pressed', 'false');
+    expect(eyes).toHaveAttribute('aria-pressed', 'true');
+    expect(canvas.getByText('마지막 동작: ❤️:해제')).toBeVisible();
+
+    await userEvent.click(party);
+    expect(party).toHaveAttribute('aria-pressed', 'true');
+    expect(eyes).toHaveAttribute('aria-pressed', 'true');
+    expect(canvas.getByText('선택: 🎉 👀')).toBeVisible();
+    expect(canvas.getByText('마지막 동작: 🎉:선택')).toBeVisible();
+  },
+  render: () => <QuickPickerInteractionCatalog />,
+};
+
+export const QuickPickerStates: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const pendingSection = within(canvas.getByText('Pending').parentElement!);
+    const errorSection = within(canvas.getByText('Error Retry').parentElement!);
+    const disabledSection = within(canvas.getByText('Disabled').parentElement!);
+
+    const pendingHeart = pendingSection.getByRole('button', {
+      name: '❤️ 반응, 처리 중',
+    });
+    expect(pendingHeart).toBeDisabled();
+    expect(pendingHeart).toHaveAttribute('aria-busy', 'true');
+    expect(pendingHeart).toHaveAttribute('aria-pressed', 'true');
+    expect(pendingHeart).toHaveTextContent('❤️');
+    const pendingOverlay = pendingHeart.querySelector('[aria-hidden="true"]');
+    expect(pendingOverlay).not.toBeNull();
+    expect(pendingOverlay!.getBoundingClientRect().width).toBe(44);
+    expect(pendingOverlay!.getBoundingClientRect().height).toBe(44);
+    const spinner = pendingOverlay!.querySelector('[data-testid="reaction-pending-spinner"]');
+    expect(spinner).not.toBeNull();
+    expect(getComputedStyle(spinner!).width).toBe('24px');
+    expect(getComputedStyle(spinner!).height).toBe('24px');
+
+    const arcSegments = spinner!.querySelectorAll('path');
+    expect(arcSegments).toHaveLength(18);
+    expect(arcSegments[0]).toHaveAttribute('stroke-opacity', '0');
+    expect(arcSegments[17]).toHaveAttribute('stroke-opacity', '1');
+    expect(spinner!.querySelector('circle')).toBeNull();
+    expect(pendingSection.getByRole('button', { name: '👀 반응' })).toBeEnabled();
+    await userEvent.click(pendingHeart, { pointerEventsCheck: 0 });
+    expect(canvas.getByText('차단된 동작: 0')).toBeVisible();
+
+    const errorParty = errorSection.getByRole('button', {
+      name: '🎉 반응, 오류, 다시 시도',
+    });
+    expect(errorParty).toBeEnabled();
+    expect(errorParty).toHaveAttribute('aria-pressed', 'true');
+    expect(getComputedStyle(errorParty).borderTopWidth).toBe('0px');
+    await userEvent.click(errorParty);
+    expect(canvas.getByText('재시도: 1')).toBeVisible();
+
+    expect(disabledSection.queryAllByRole('button')).toHaveLength(0);
+    expect(canvas.getByText('차단된 동작: 0')).toBeVisible();
+  },
+  render: () => <QuickPickerStateCatalog />,
+};
+
+export const QuickPickerViewport390: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: ({ canvasElement }) => assertQuickPickerViewport(canvasElement, 390),
+  render: () => <QuickPickerViewportCatalog title="Quick Picker at 390px" />,
+};
+
+export const QuickPickerViewport600: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoPickerWide' } },
+  play: ({ canvasElement }) => assertQuickPickerViewport(canvasElement, 600),
+  render: () => <QuickPickerViewportCatalog title="Quick Picker at 600px" />,
 };
