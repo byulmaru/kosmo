@@ -49,7 +49,7 @@
 ### Allowed Alternatives
 
 - Notification visibility는 kind-guarded `LEFT JOIN`과 `OR` predicate로 구현해도 된다. specs의 filter-before-limit, Recipient/source correlation과 multi-kind pagination을 만족해야 하며 kind 증가에 따른 nullable join 복잡도를 감수해야 한다.
-- Cleanup orchestration은 GraphQL resolver 대신 core의 source transaction 밖 application 경계에 둘 수 있다. 어느 위치든 Reaction transaction commit 뒤 실행되고, 현재 공개 payload·멱등성·실패 격리와 오류 관측을 동일하게 유지해야 한다.
+- Cleanup orchestration은 core public application action 내부의 source transaction 밖 경계에서 수행해야 한다. 구현 방식은 해당 action 안에서 Reaction transaction commit 뒤 실행되고, 현재 공개 payload·멱등성·실패 격리와 오류 관측을 동일하게 유지해야 한다.
 - Reaction selector는 Relay가 rollback할 수 있는 좁은 optimistic updater를 사용할 수 있다. 기본 경로는 서버 확정 상태이며, optimistic 경로도 Type별 pending 격리와 실패 복구를 동일하게 만족해야 한다.
 - mutation payload가 같은 Post의 selector·summary fragment를 반환하지 못하면 최소 범위의 Relay updater를 사용할 수 있다. actor가 다른 Relay Environment나 관련 없는 Post connection을 수정해서는 안 된다.
 
