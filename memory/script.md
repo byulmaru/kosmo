@@ -7,6 +7,8 @@
 - `pnpm --recursive --parallel --if-present <script>`는 루트 패키지의 `<script>`를 재귀 실행하지 않고, workspace 패키지들의 해당 script를 실행한다.
 - 루트 `dev` 스크립트가 `node scripts/vault-run.mjs -- pnpm --recursive --parallel --if-present dev`처럼 workspace script 실행을 감싸는 구조여도, 이것만으로 루트 `dev`가 자기 자신을 무한 재귀 호출한다고 판단하면 안 된다.
 - `scripts/vault-run.mjs`는 Vault CLI의 현재 인증 상태를 사용해 기본 `secret/kubernetes/kosmo/local` 값을 env로 주입하고, 토큰 조회가 실패하면 `vault login -method=oidc`를 실행한다. 다른 path가 필요하면 wrapper CLI 옵션 `--env <name>` 또는 `--secret-path <path>`를 `-- <command>` 앞에 둔다.
+- 같은 KV path에 `DATABASE_PKI_ROLE`과 `DATABASE_PKI_COMMON_NAME`이 함께 있으면 wrapper는 선택적으로 Vault PKI client certificate를 발급하고 소유자 전용 임시 파일의 `PGSSLCERT`, `PGSSLKEY`, `PGSSLROOTCERT`로 자식 명령에 전달한 뒤 성공·실패와 무관하게 제거한다. `DATABASE_PKI_MOUNT` 기본값은 `pki`이고 `DATABASE_PKI_TTL`은 선택 사항이며, 두 필수 설정 중 하나만 있으면 password fallback 없이 실패한다.
+- Kubernetes의 PKI 모드는 Helm에서 opt-in이다. 같은 issuer의 server certificate와 API/web/migration 및 CNPG `streaming_replica` client certificate를 VSO로 동기화하고 CNPG `cert` 인증에 연결하되, Vault PKI issuer·role·ACL provisioning과 실제 rollout은 이 저장소 밖의 인프라 선행조건이다. 외부 client CA Secret에는 private key가 없으므로 `replicationTLSSecret`도 반드시 Vault에서 공급한다.
 - 관련 리뷰를 작성하거나 수정할 때는 실제 재현 로그 없이 재귀 실행을 단정하지 않는다.
 - 루트 script 래퍼 구조를 바꾸는 경우, 이 메모의 전제가 여전히 맞는지 확인하고 변경 사항을 업데이트한다.
 

@@ -1,0 +1,78 @@
+{{- if .Values.postgresTls.enabled }}
+{{- $serverRole := required "postgresTls.server.vaultRole is required when postgresTls is enabled" .Values.postgresTls.server.vaultRole }}
+{{- $serverCommonName := default (include "kosmo.postgresTailscaleHostname" .) .Values.postgresTls.server.commonName }}
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultPKISecret
+metadata:
+  name: {{ include "kosmo.postgresServerTlsName" . }}
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: postgres-server-tls
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  vaultAuthRef: "vso-kubernetes-sync"
+  mount: {{ required "postgresTls.mount is required when postgresTls is enabled" .Values.postgresTls.mount | quote }}
+  role: {{ $serverRole | quote }}
+  commonName: {{ $serverCommonName | quote }}
+  altNames:
+    - {{ printf "%s-rw" (include "kosmo.postgresName" .) | quote }}
+    - {{ printf "%s-rw.%s" (include "kosmo.postgresName" .) .Release.Namespace | quote }}
+    - {{ printf "%s-rw.%s.svc" (include "kosmo.postgresName" .) .Release.Namespace | quote }}
+    - {{ printf "%s-rw.%s.svc.cluster.local" (include "kosmo.postgresName" .) .Release.Namespace | quote }}
+    - {{ include "kosmo.postgresTailscaleHostname" . | quote }}
+{{- range .Values.postgresTls.server.altNames }}
+    - {{ . | quote }}
+{{- end }}
+  format: pem
+  ttl: {{ .Values.postgresTls.ttl | quote }}
+  expiryOffset: {{ .Values.postgresTls.expiryOffset | quote }}
+  destination:
+    create: true
+    overwrite: true
+    name: {{ include "kosmo.postgresServerTlsName" . }}
+    type: kubernetes.io/tls
+    labels:
+      cnpg.io/reload: "true"
+    transformation:
+      templates:
+        ca.crt:
+          text: {{ printf "{{- get .Secrets %q -}}" "issuing_ca" | quote }}
+---
+{{- range $workload := list "api" "web" "migration" "replication" }}
+{{- $connection := index $.Values.postgresTls $workload }}
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultPKISecret
+metadata:
+  name: {{ include "kosmo.postgresClientTlsName" (dict "root" $ "workload" $workload) }}
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" $ }}
+    app.kubernetes.io/name: {{ printf "%s-postgres-client-tls" $workload }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+spec:
+  vaultAuthRef: "vso-kubernetes-sync"
+  mount: {{ required "postgresTls.mount is required when postgresTls is enabled" $.Values.postgresTls.mount | quote }}
+  role: {{ required (printf "postgresTls.%s.vaultRole is required when postgresTls is enabled" $workload) $connection.vaultRole | quote }}
+  commonName: {{ required (printf "postgresTls.%s.role is required when postgresTls is enabled" $workload) $connection.role | quote }}
+  excludeCNFromSans: true
+  format: pem
+  ttl: {{ $.Values.postgresTls.ttl | quote }}
+  expiryOffset: {{ $.Values.postgresTls.expiryOffset | quote }}
+  destination:
+    create: true
+    overwrite: true
+    name: {{ include "kosmo.postgresClientTlsName" (dict "root" $ "workload" $workload) }}
+    type: kubernetes.io/tls
+    transformation:
+      templates:
+        ca.crt:
+          text: {{ printf "{{- get .Secrets %q -}}" "issuing_ca" | quote }}
+{{- if or (eq $workload "api") (eq $workload "web") }}
+  rolloutRestartTargets:
+    - kind: "argo.Rollout"
+      name: {{ printf "%s-%s" $.Release.Name $workload | trunc 63 | trimSuffix "-" | quote }}
+{{- end }}
+---
+{{- end }}
+{{- end }}
