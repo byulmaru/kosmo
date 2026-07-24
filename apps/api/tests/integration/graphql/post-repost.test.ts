@@ -199,7 +199,7 @@ describe('GraphQL Repost', () => {
     assert.ok(result.errors?.[0]);
   });
 
-  test('deletePost는 삭제한 Repost의 concrete global ID를 반환한다', async () => {
+  test('deletePost는 GraphQL 경로에서 Repost를 Tombstone 처리하고 상태를 갱신한다', async () => {
     const auth = await createAuthenticatedSession();
     const source = await createContentPost(auth.profile.id);
     await requestRepost(source.id, auth.token);
@@ -212,6 +212,40 @@ describe('GraphQL Repost', () => {
     const first = await requestDelete(repost.id, auth.token);
     assertNoGraphQLErrors(first);
     assert.deepEqual(first.data?.deletePost, { postId: globalId('Post', repost.id) });
+
+    const deleted = await db
+      .select({ deletedAt: Posts.deletedAt, state: Posts.state })
+      .from(Posts)
+      .where(eq(Posts.id, repost.id))
+      .then(firstOrThrow);
+    assert.equal(deleted.state, PostState.DELETED);
+    assert.ok(deleted.deletedAt);
+
+    const sourceState = await requestGraphQL<{
+      nodes: Array<{
+        id: string;
+        repostCount: number;
+        viewerRepost: { id: string } | null;
+      } | null>;
+    }>(
+      `query RepostState($ids: [ID!]!) {
+        nodes(ids: $ids) {
+          ... on Post {
+            id
+            repostCount
+            viewerRepost { id }
+          }
+        }
+      }`,
+      { ids: [globalId('Post', source.id)] },
+      auth.token,
+    );
+    assertNoGraphQLErrors(sourceState);
+    assert.deepEqual(sourceState.data?.nodes[0], {
+      id: globalId('Post', source.id),
+      repostCount: 0,
+      viewerRepost: null,
+    });
   });
 
   test('deletePost는 비Author와 비로그인 요청을 거부한다', async () => {
