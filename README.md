@@ -30,7 +30,13 @@ authentication. The Vault PKI issuer, roles, ACLs, and a PostgreSQL server
 certificate covering both its cluster Service and Tailnet hostname must already
 be provisioned outside this repository. Kubernetes PKI values also require a
 Vault role for CNPG's `streaming_replica` certificate because the cluster does
-not receive the CA private key.
+not receive the CA private key. Kubernetes issues separate leaf Secrets to API
+and web but gives both certificates the shared `kosmo_runtime` common name and
+PostgreSQL login; migration uses a separate `kosmo_migration` identity. Roll
+this out in two syncs: set `postgresTls.enabled=true` while leaving
+`postgresTls.clientAuthEnabled=false` to prepare VSO Secrets and CNPG TLS, then
+set `clientAuthEnabled=true` after those resources are ready. This keeps the
+existing PreSync migration Job on password authentication during preparation.
 
 Run `pnpm dev`, then open `http://localhost:5173`. Local development uses Expo/Metro
 on public port `5173`, the Hono web BFF on internal port `5174`, and the API on

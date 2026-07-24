@@ -24,9 +24,9 @@ spec:
     serverTLSSecret: {{ include "kosmo.postgresServerTlsName" . }}
   postgresql:
     pg_hba:
-{{- range $workload := list "api" "web" "migration" }}
-{{- $connection := index $.Values.postgresTls $workload }}
-      - {{ printf "hostssl %s %s all cert" (required (printf "postgresTls.%s.database is required when postgresTls is enabled" $workload) $connection.database) (required (printf "postgresTls.%s.role is required when postgresTls is enabled" $workload) $connection.role) | quote }}
+{{- range $identity := list "runtime" "migration" }}
+{{- $connection := index $.Values.postgresTls $identity }}
+      - {{ printf "hostssl %s %s all cert" (required (printf "postgresTls.%s.database is required when postgresTls is enabled" $identity) $connection.database) (required (printf "postgresTls.%s.role is required when postgresTls is enabled" $identity) $connection.role) | quote }}
 {{- end }}
 {{- end }}
   storage:

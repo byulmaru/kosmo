@@ -3,6 +3,7 @@ image: ghcr.io/byulmaru/kosmo
 version: main
 postgresTls:
   enabled: false
+  clientAuthEnabled: false
   mount: pki
   ttl: 24h
   expiryOffset: 1h
@@ -10,11 +11,7 @@ postgresTls:
     vaultRole:
     commonName:
     altNames: []
-  api:
-    vaultRole:
-    database: kosmo
-    role:
-  web:
+  runtime:
     vaultRole:
     database: kosmo
     role:

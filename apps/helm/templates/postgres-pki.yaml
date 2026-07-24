@@ -39,8 +39,10 @@ spec:
         ca.crt:
           text: {{ printf "{{- get .Secrets %q -}}" "issuing_ca" | quote }}
 ---
-{{- range $workload := list "api" "web" "migration" "replication" }}
-{{- $connection := index $.Values.postgresTls $workload }}
+{{- range $client := list (dict "workload" "api" "identity" "runtime") (dict "workload" "web" "identity" "runtime") (dict "workload" "migration" "identity" "migration") (dict "workload" "replication" "identity" "replication") }}
+{{- $workload := $client.workload }}
+{{- $identity := $client.identity }}
+{{- $connection := index $.Values.postgresTls $identity }}
 apiVersion: secrets.hashicorp.com/v1beta1
 kind: VaultPKISecret
 metadata:
@@ -53,8 +55,8 @@ metadata:
 spec:
   vaultAuthRef: "vso-kubernetes-sync"
   mount: {{ required "postgresTls.mount is required when postgresTls is enabled" $.Values.postgresTls.mount | quote }}
-  role: {{ required (printf "postgresTls.%s.vaultRole is required when postgresTls is enabled" $workload) $connection.vaultRole | quote }}
-  commonName: {{ required (printf "postgresTls.%s.role is required when postgresTls is enabled" $workload) $connection.role | quote }}
+  role: {{ required (printf "postgresTls.%s.vaultRole is required when postgresTls is enabled" $identity) $connection.vaultRole | quote }}
+  commonName: {{ required (printf "postgresTls.%s.role is required when postgresTls is enabled" $identity) $connection.role | quote }}
   excludeCNFromSans: true
   format: pem
   ttl: {{ $.Values.postgresTls.ttl | quote }}

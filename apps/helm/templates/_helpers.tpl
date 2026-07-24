@@ -16,9 +16,13 @@
 
 {{- define "kosmo.databaseUrl" -}}
 {{- $root := .root -}}
-{{- if $root.Values.postgresTls.enabled -}}
-{{- $connection := index $root.Values.postgresTls .workload -}}
-{{- printf "postgres://%s@%s-rw:5432/%s" (required (printf "postgresTls.%s.role is required when postgresTls is enabled" .workload) $connection.role) (include "kosmo.postgresName" $root) (required (printf "postgresTls.%s.database is required when postgresTls is enabled" .workload) $connection.database) -}}
+{{- if and $root.Values.postgresTls.enabled $root.Values.postgresTls.clientAuthEnabled -}}
+{{- $identity := .workload -}}
+{{- if or (eq .workload "api") (eq .workload "web") -}}
+{{- $identity = "runtime" -}}
+{{- end -}}
+{{- $connection := index $root.Values.postgresTls $identity -}}
+{{- printf "postgres://%s@%s-rw:5432/%s" (required (printf "postgresTls.%s.role is required when postgresTls is enabled" $identity) $connection.role) (include "kosmo.postgresName" $root) (required (printf "postgresTls.%s.database is required when postgresTls is enabled" $identity) $connection.database) -}}
 {{- else -}}
 {{- printf "postgres://kosmo:$(DATABASE_PASSWORD)@%s-rw:5432/kosmo" (include "kosmo.postgresName" $root) -}}
 {{- end -}}

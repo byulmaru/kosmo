@@ -39,7 +39,7 @@ spec:
           args:
             - migrate
           env:
-            {{- if not .Values.postgresTls.enabled }}
+            {{- if not (and .Values.postgresTls.enabled .Values.postgresTls.clientAuthEnabled) }}
             - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -48,7 +48,7 @@ spec:
             {{- end }}
             - name: DATABASE_URL
               value: {{ include "kosmo.databaseUrl" (dict "root" . "workload" "migration") | quote }}
-            {{- if .Values.postgresTls.enabled }}
+            {{- if and .Values.postgresTls.enabled .Values.postgresTls.clientAuthEnabled }}
             - name: PGSSLCERT
               value: /var/run/secrets/postgres/tls.crt
             - name: PGSSLKEY
@@ -56,7 +56,7 @@ spec:
             - name: PGSSLROOTCERT
               value: /var/run/secrets/postgres/ca.crt
             {{- end }}
-          {{- if .Values.postgresTls.enabled }}
+          {{- if and .Values.postgresTls.enabled .Values.postgresTls.clientAuthEnabled }}
           volumeMounts:
             - name: postgres-tls
               mountPath: /var/run/secrets/postgres
@@ -69,7 +69,7 @@ spec:
             limits:
               cpu: 500m
               memory: 256Mi
-      {{- if .Values.postgresTls.enabled }}
+      {{- if and .Values.postgresTls.enabled .Values.postgresTls.clientAuthEnabled }}
       volumes:
         - name: postgres-tls
           secret:

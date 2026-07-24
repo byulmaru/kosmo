@@ -45,7 +45,7 @@ spec:
           args:
             - web
           env:
-            {{- if not .Values.postgresTls.enabled }}
+            {{- if not (and .Values.postgresTls.enabled .Values.postgresTls.clientAuthEnabled) }}
             - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -54,7 +54,7 @@ spec:
             {{- end }}
             - name: DATABASE_URL
               value: {{ include "kosmo.databaseUrl" (dict "root" . "workload" "web") | quote }}
-            {{- if .Values.postgresTls.enabled }}
+            {{- if and .Values.postgresTls.enabled .Values.postgresTls.clientAuthEnabled }}
             - name: PGSSLCERT
               value: /var/run/secrets/postgres/tls.crt
             - name: PGSSLKEY
@@ -65,7 +65,7 @@ spec:
           envFrom:
             - secretRef:
                 name: env
-          {{- if .Values.postgresTls.enabled }}
+          {{- if and .Values.postgresTls.enabled .Values.postgresTls.clientAuthEnabled }}
           volumeMounts:
             - name: postgres-tls
               mountPath: /var/run/secrets/postgres
@@ -90,7 +90,7 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
-      {{- if .Values.postgresTls.enabled }}
+      {{- if and .Values.postgresTls.enabled .Values.postgresTls.clientAuthEnabled }}
       volumes:
         - name: postgres-tls
           secret:

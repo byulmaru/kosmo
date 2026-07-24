@@ -45,12 +45,27 @@
 
 ### Requirement: Kubernetes workload는 Vault PKI 인증서를 회전 가능하게 소비한다
 
-**Authority / Provenance:** [PROD-470](https://linear.app/byulmaru/issue/PROD-470/vault-pki-인증서로-로컬kubernetes-postgresql-연결을-통합한다) — Helm chart는 명시적으로 활성화된 환경에서 Vault Secrets Operator가 같은 issuer의 PostgreSQL client/server certificate를 발급·동기화하고, client certificate를 API와 web workload에 읽기 전용 파일로 마운트하며 server certificate를 CNPG에 제공하도록 구성해야 한다(MUST). server certificate는 CNPG 내부 read-write 서비스와 설정된 로컬 Tailnet 접속 hostname을 SAN에 포함해야 한다(MUST). client certificate가 회전되면 시작 시 TLS 파일을 읽는 workload가 새 인증서를 사용하도록 Rollout을 재시작해야 한다(MUST). 기능이 비활성화된 기본값에서는 기존 password Secret manifest를 유지해야 한다(MUST).
+**Authority / Provenance:** [PROD-470](https://linear.app/byulmaru/issue/PROD-470/vault-pki-인증서로-로컬kubernetes-postgresql-연결을-통합한다) — Helm chart는 명시적으로 활성화된 환경에서 Vault Secrets Operator가 같은 issuer의 PostgreSQL client/server certificate를 발급·동기화하고, client certificate를 API와 web workload에 읽기 전용 파일로 마운트하며 server certificate를 CNPG에 제공하도록 구성해야 한다(MUST). API와 web은 서로 다른 leaf Secret을 사용하되 같은 `kosmo_runtime` common name과 PostgreSQL 로그인을 사용해야 하며(MUST), migration은 별도 로그인과 leaf Secret을 사용해야 한다(MUST). server certificate는 CNPG 내부 read-write 서비스와 설정된 로컬 Tailnet 접속 hostname을 SAN에 포함해야 한다(MUST). client certificate가 회전되면 시작 시 TLS 파일을 읽는 workload가 새 인증서를 사용하도록 Rollout을 재시작해야 한다(MUST). VSO Secret과 CNPG TLS 준비와 workload client 인증 활성화는 별도 sync로 수행할 수 있어야 하며(MUST), 준비 단계의 PreSync migration과 workload는 기존 password 연결을 유지해야 한다(MUST). 기능이 비활성화된 기본값에서는 기존 password Secret manifest를 유지해야 한다(MUST).
 
 #### Scenario: Kubernetes PKI 활성화
 
-- **WHEN** Helm values가 Vault PKI mount, role, common name, TTL과 client CA Secret을 설정한다
+- **WHEN** Helm values가 Vault PKI mount, server/runtime/migration/replication role, PostgreSQL role과 TTL을 설정한다
 - **THEN** render 결과는 client/server/replication `VaultPKISecret`, CNPG server 및 replication TLS 참조, 대상 Secret, API/web TLS volume과 표준 TLS 파일 환경변수 및 두 Rollout의 restart target을 포함한다
+
+#### Scenario: runtime 로그인 공유와 leaf key 분리
+
+- **WHEN** API와 web workload의 client certificate가 발급된다
+- **THEN** 두 인증서는 별도 Secret과 private key를 사용하지만 common name과 DATABASE_URL username은 동일한 `kosmo_runtime` 역할을 사용한다
+
+#### Scenario: 첫 PKI 준비 sync
+
+- **WHEN** PKI resource provisioning은 활성화했지만 client 인증 활성화는 보류한다
+- **THEN** server와 client VaultPKISecret 및 CNPG TLS·`pg_hba`는 render되고 API·web·PreSync migration은 기존 password URL과 Secret을 계속 사용한다
+
+#### Scenario: 준비 이후 client 인증 활성화
+
+- **WHEN** 이전 sync에서 VSO destination Secret과 CNPG TLS가 준비된 뒤 client 인증을 활성화한다
+- **THEN** PreSync migration과 뒤따르는 API·web workload가 각 client certificate를 사용한다
 
 #### Scenario: 인증서 회전
 
@@ -64,7 +79,7 @@
 
 ### Requirement: CNPG는 Vault PKI로 client와 server TLS를 검증한다
 
-**Authority / Provenance:** [PROD-470](https://linear.app/byulmaru/issue/PROD-470/vault-pki-인증서로-로컬kubernetes-postgresql-연결을-통합한다) — PKI가 활성화된 Helm 구성은 CNPG가 Vault PKI CA의 공개 인증서를 신뢰하고 대상 database와 role에 한정된 `hostssl ... cert` 규칙을 사용하며, 같은 issuer가 서명하고 실제 접속 hostname을 SAN에 포함한 server certificate를 제공하도록 해야 한다(MUST). client certificate common name은 요청하는 PostgreSQL role과 일치해야 하며(MUST), CA private key를 CNPG 또는 repository에 복제해서는 안 된다(MUST NOT).
+**Authority / Provenance:** [PROD-470](https://linear.app/byulmaru/issue/PROD-470/vault-pki-인증서로-로컬kubernetes-postgresql-연결을-통합한다) — PKI가 활성화된 Helm 구성은 CNPG가 Vault PKI CA의 공개 인증서를 신뢰하고 runtime과 migration database role에 한정된 `hostssl ... cert` 규칙을 사용하며, 같은 issuer가 서명하고 실제 접속 hostname을 SAN에 포함한 server certificate를 제공하도록 해야 한다(MUST). client certificate common name은 요청하는 PostgreSQL role과 일치해야 하며(MUST), API와 web을 프로세스 단위의 별도 PostgreSQL 로그인으로 늘려서는 안 된다(MUST NOT). CA private key를 CNPG 또는 repository에 복제해서는 안 된다(MUST NOT).
 
 #### Scenario: 올바른 역할 인증서
 
@@ -75,6 +90,11 @@
 
 - **WHEN** 인증서 common name과 요청한 PostgreSQL role이 일치하지 않는다
 - **THEN** PostgreSQL은 해당 연결을 인증하지 않는다
+
+#### Scenario: 제한된 앱 로그인 집합
+
+- **WHEN** PKI 활성 CNPG `pg_hba`가 render된다
+- **THEN** 앱 규칙은 공유 runtime과 별도 migration 역할만 포함하고 API·web·federation별 역할을 추가하지 않는다
 
 #### Scenario: 로컬 Tailnet 서버 검증
 
