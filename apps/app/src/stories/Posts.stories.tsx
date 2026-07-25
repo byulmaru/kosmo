@@ -4,6 +4,7 @@ import { Linking, Pressable, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Temporal } from 'temporal-polyfill';
+import PostDetailScreen from '@/app/(tabs)/(post)/[profileHandle]/[postId]';
 import { PostBody } from '@/components/post/PostBody';
 import { PostComposer } from '@/components/post/PostComposer';
 import { PostLayout } from '@/components/post/PostLayout';
@@ -188,6 +189,53 @@ const threadReplyQuotePost = {
   }),
   repostSource: threadQuoteSourcePost,
 };
+const routeRootPost = post({ bodyText: 'Route Root 본문', id: 'route-root' });
+const routeParentPost = post({
+  bodyText: 'Route Parent 본문',
+  id: 'route-parent',
+  replyParent: { __typename: 'Post', id: routeRootPost.id },
+});
+const routeSourcePost = post({ bodyText: 'Source 본문', id: 'route-source' });
+const routeCurrentPost = post({
+  bodyText: '현재 Reply 본문',
+  id: 'route-current',
+  replyParent: { __typename: 'Post', id: routeParentPost.id },
+});
+const routeChildPost = post({
+  bodyText: 'Child 본문',
+  id: 'route-child',
+  replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+});
+const routeSiblingPost = post({
+  bodyText: 'Sibling 본문',
+  id: 'route-sibling',
+  replyParent: { __typename: 'Post', id: routeParentPost.id },
+});
+const routeReplyQuotePost = post({
+  bodyText: 'Reply+Quote 자체 Content',
+  id: 'route-reply-quote',
+  replyParent: { __typename: 'Post', id: routeSiblingPost.id },
+  repostSource: routeSourcePost,
+});
+const routeSourceNullPost = post({
+  bodyText: 'Source가 없어도 남는 Content',
+  id: 'route-source-null',
+  replyParent: { __typename: 'Post', id: routeSiblingPost.id },
+});
+const routeHiddenAncestorPost = post({
+  bodyText: '숨겨진 답글',
+  id: 'route-hidden-ancestor',
+});
+const routeVisibleParentPost = post({
+  bodyText: '조회 가능한 직접 Parent',
+  id: 'route-visible-parent',
+  replyParent: { __typename: 'Post', id: routeHiddenAncestorPost.id },
+});
+const routeBoundaryCurrentPost = post({
+  bodyText: '경계 Current 본문',
+  id: 'route-boundary-current',
+  replyParent: { __typename: 'Post', id: routeVisibleParentPost.id },
+});
 const threadItems = {
   ancestors: [
     { connectedToPrevious: false, id: threadRootPost.id },
@@ -233,6 +281,17 @@ const storyPosts = [
   longSourcePost,
   longQuotePost,
   linkedSourceQuote,
+  routeRootPost,
+  routeParentPost,
+  routeCurrentPost,
+  routeChildPost,
+  routeSiblingPost,
+  routeReplyQuotePost,
+  routeSourcePost,
+  routeSourceNullPost,
+  routeHiddenAncestorPost,
+  routeVisibleParentPost,
+  routeBoundaryCurrentPost,
 ];
 const composerProfile = profile({ id: 'profile-composer' });
 const emptyPostsProfile = profileWithPosts([], { id: 'profile-posts-empty' });
@@ -934,6 +993,110 @@ export const ReplyThreadMockNavigation: Story = {
     expect(canvas.getByTestId('selected-thread-post')).toHaveTextContent('thread-child');
   },
   render: () => <ThreadNavigationCatalog />,
+};
+
+export const PostDetailThreadRoute: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostDetailQuery: {
+          data: {
+            node: {
+              ...routeCurrentPost,
+              replyAncestors: [routeParentPost, routeRootPost],
+              replyDescendants: {
+                edges: [
+                  { cursor: 'route-child', node: routeChildPost },
+                  { cursor: 'route-sibling', node: routeSiblingPost },
+                  { cursor: 'route-reply-quote', node: routeReplyQuotePost },
+                  { cursor: 'route-source-null', node: routeSourceNullPost },
+                ],
+                pageInfo: { endCursor: null, hasNextPage: false },
+              },
+            },
+          },
+        },
+      },
+    },
+    router: {
+      params: {
+        postId: routeCurrentPost.id,
+        profileHandle: routeCurrentPost.profile.relativeHandle,
+      },
+      pathname: `/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.id}`,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const thread = await canvas.findByTestId('post-thread');
+    expect(Array.from(thread.children).map((row) => row.getAttribute('data-testid'))).toEqual([
+      'post-thread-item-route-root',
+      'post-thread-item-route-parent',
+      'post-thread-current-route-current',
+      'post-thread-item-route-child',
+      'post-thread-item-route-sibling',
+      'post-thread-item-route-reply-quote',
+      'post-thread-item-route-source-null',
+    ]);
+    expect(canvas.getByText('Reply+Quote 자체 Content')).toBeVisible();
+    const source = canvas.getByTestId('post-thread-source-route-source');
+    expect(within(source).getByText('Source 본문')).toBeVisible();
+    expect(getComputedStyle(source).borderTopWidth).toBe('1px');
+    expect(canvas.queryByTestId('post-thread-source-route-source-null')).not.toBeInTheDocument();
+    expect(canvas.getByText('Source가 없어도 남는 Content')).toBeVisible();
+    expect(
+      canvas.getByTestId('post-thread-connector-route-current-route-child-after'),
+    ).toBeVisible();
+    expect(
+      canvas.queryByTestId('post-thread-connector-route-child-route-sibling-after'),
+    ).toBeNull();
+    await userEvent.click(canvas.getByText('Child 본문'));
+    expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent('/@kosmo/route-child');
+    await userEvent.click(within(source).getByText('Source 본문'));
+    expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent('/@kosmo/route-source');
+  },
+  render: () => (
+    <>
+      <Text testID="current-story-pathname">{usePathname()}</Text>
+      <PostDetailScreen />
+    </>
+  ),
+};
+
+export const PostDetailThreadUnavailableAncestorBoundary: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostDetailQuery: {
+          data: {
+            node: {
+              ...routeBoundaryCurrentPost,
+              replyAncestors: [routeVisibleParentPost],
+              replyDescendants: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } },
+            },
+          },
+        },
+      },
+    },
+    router: {
+      params: {
+        postId: routeBoundaryCurrentPost.id,
+        profileHandle: routeBoundaryCurrentPost.profile.relativeHandle,
+      },
+      pathname: `/${routeBoundaryCurrentPost.profile.relativeHandle}/${routeBoundaryCurrentPost.id}`,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const thread = await canvas.findByTestId('post-thread');
+    expect(Array.from(thread.children).map((row) => row.getAttribute('data-testid'))).toEqual([
+      'post-thread-item-route-visible-parent',
+      'post-thread-current-route-boundary-current',
+    ]);
+    expect(canvas.queryByText('숨겨진 답글')).not.toBeInTheDocument();
+    expect(canvas.queryByText('조회할 수 없는 상위 Post')).not.toBeInTheDocument();
+  },
+  render: () => <PostDetailScreen />,
 };
 
 export const ComposerDefault: Story = {
