@@ -76,9 +76,9 @@
 - Authority / Provenance: `PROD-414`, `PROD-432`, `PROD-433`
 - Status: Active
 - Context / Problem: PROD-433은 공용 action UI의 공개 경계를 `PostActionBar` 하나로 제한하고 PROD-432는 production full-bar 조립과 action 실패 toast를 소유한다. PROD-414가 독립 공개 Repost component나 persistent 오류 UI를 추가하면 이 경계를 중복한다.
-- Decision Outcome: PROD-414는 Post fragment와 mutations를 colocate한 내부 `useRepostAction` adapter로 `PostActionBar.repost` config를 제공한다. `prod-433`에 최신 main을 반영하고 검증한 뒤 그 head에서 `prod-414`를 생성하며, Draft PR base는 `prod-433`으로 두어 `main → prod-433 → prod-414` stack을 유지한다. branch 코드를 복사하거나 Action Bar를 중복 구현하지 않고 부모 branch의 공개 UI를 직접 재사용한다. Storybook 전용 wrapper는 Repost config 하나만 조립한다. adapter는 mutation 실패 시 pending을 종료하고 서버 확정 domain/cache 상태를 유지한 채 error callback을 호출하며, production의 접근 가능한 한국어 오류 toast와 실제 full-bar 연결은 PROD-432에 남긴다. persistent error·retry UI와 success toast는 추가하지 않는다.
+- Decision Outcome: PROD-414는 Post fragment와 mutations를 colocate한 내부 `useRepostAction` adapter로 `PostActionBar.repost` config를 제공한다. #341로 main에 포함된 PROD-433의 공개 UI를 직접 재사용하고 Draft PR base를 `main`으로 유지하며, branch 코드를 복사하거나 Action Bar를 중복 구현하지 않는다. Storybook 전용 wrapper는 Repost config 하나만 조립한다. adapter는 mutation 실패 시 pending을 종료하고 서버 확정 domain/cache 상태를 유지한 채 error callback을 호출하며, production의 접근 가능한 한국어 오류 toast와 실제 full-bar 연결은 PROD-432에 남긴다. persistent error·retry UI와 success toast는 추가하지 않는다.
 - Alternatives Considered: PR #341 merge까지 구현 대기, 독립 공개 Repost action leaf, 부모 branch 코드 복사 또는 중복 구현, PROD-414의 persistent 오류·재시도·성공 UI. merge 대기는 해결된 review thread와 green CI 뒤에도 구현을 직렬화하고, 나머지는 공개 UI 또는 통합 책임을 중복하고 cache 상태를 흐리므로 사용하지 않는다.
-- Consequences: PROD-414는 PROD-433의 공개 API를 직접 의존하므로 `blockedBy: PROD-433` 관계를 유지한다. adapter는 실제 production surface와 독립적으로 Storybook·Relay test에서 검증할 수 있지만 사용자가 보는 오류 toast는 PROD-432 연결 뒤 제공된다. PR #341 merge 뒤 자식 branch의 rebase와 PR base 변경은 별도 stack 안전 확인과 승인을 거쳐 수행한다.
+- Consequences: PROD-414는 main에 포함된 PROD-433의 공개 API를 직접 의존한다. adapter는 실제 production surface와 독립적으로 Storybook·Relay test에서 검증할 수 있지만 사용자가 보는 오류 toast는 PROD-432 연결 뒤 제공된다. #341 squash merge 뒤 자식 branch는 기존 부모·자식 tip을 백업하고 range-diff와 명시적 lease로 main 위에 이동한다.
 - Confirmation / Follow-up: Storybook `play` interaction과 raw Relay unit test로 Repost config, pending 중복 차단, create cache, cancel identity/cache 비변경, error callback·다음 입력 재시도와 actor reset을 검증한다.
 
 ### Source 접근 실패는 Repost와 Quote에 다르게 적용한다

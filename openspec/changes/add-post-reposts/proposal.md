@@ -37,5 +37,5 @@ Kosmo는 Repost를 별도 Post Kind가 아니라 Content와 Reply Parent 없이 
 - Core/DB: Post self-reference, partial unique index, migration, 구조·Source 검증, Repost 생성·Tombstone lifecycle, Notification projection·정리
 - GraphQL/API: Repost 생성·취소 mutation, `Post.repostSource`, count와 selected Profile별 Active Repost, 후속 취소 Source 상태 응답, Repost Notification concrete Node와 visibility
 - Universal client: Repost·Quote presentation, Home/Profile/Bookmark 목록과 Post 상세 연결, Content 없는 Repost canonical route, `PostActionBar`용 Repost action adapter와 Relay cache, Notification inbox·badge·navigation
-- Dependency: `add-in-app-notifications`가 제공하는 active `notification`·`data-model`·`api-platform` 기반과 PROD-412의 선행 이슈 결과를 재사용한다. PROD-414는 최신 main을 반영한 PROD-433의 `prod-433` 위에 `prod-414`를 stack하고 Draft PR base를 `prod-433`으로 유지한다.
+- Dependency: `add-in-app-notifications`가 제공하는 active `notification`·`data-model`·`api-platform` 기반과 PROD-412의 선행 이슈 결과를 재사용한다. PROD-414는 #341로 main에 포함된 PROD-433의 공개 `PostActionBar` 경계를 재사용하고 Draft PR base를 `main`으로 유지한다.
 - Excluded systems: Quote 작성 action·전용 composer, ActivityPub federation delivery·Repost ingestion, Mentioned Profiles Repost, Post Media, 범용 Notification 재설계, retry/outbox/backfill, 공통 `PostActionBar` 구현, production full-bar 조립과 오류 toast

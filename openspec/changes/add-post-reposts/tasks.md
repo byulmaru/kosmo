@@ -231,8 +231,8 @@ Post fragment와 mutations를 colocate한 내부 `useRepostAction` adapter가 PR
 
 **Guardrails**
 
-- 최신 main을 반영하고 검증한 `prod-433` head에서 `prod-414`를 생성하고 Draft PR base를 `prod-433`으로 유지하며, branch 코드를 복사하거나 `PostActionBar` 또는 독립 공개 action leaf를 중복 구현하지 않는다.
-- PR #341 merge 뒤 stack을 정리할 때 최신 main의 PROD-453와 PROD-414가 함께 수정한 `add-post-reposts`의 `decisions.md`, `design.md`, `tasks.md`를 어느 한쪽으로 덮지 않고 presentation과 action 계약을 명시적으로 reconcile한 뒤 전체 검증을 다시 수행한다. rebase와 PR base 변경은 별도 승인을 받아 진행한다.
+- #341로 main에 포함된 PROD-433의 공개 `PostActionBar` 경계를 재사용하고 Draft PR base를 `main`으로 유지하며, branch 코드를 복사하거나 `PostActionBar` 또는 독립 공개 action leaf를 중복 구현하지 않는다.
+- #341 squash merge 뒤 기존 부모·자식 tip을 backup ref로 보존하고 자식 고유 커밋만 main 위에 옮긴다. 최신 main의 PROD-453와 PROD-414가 함께 수정한 `add-post-reposts`의 `decisions.md`, `design.md`, `tasks.md`를 어느 한쪽으로 덮지 않고 presentation과 action 계약을 명시적으로 reconcile한 뒤 range-diff와 전체 검증을 수행하고, 명시적 lease로 원격을 갱신한다.
 - fragment와 mutations를 내부 adapter/hook에 colocate하고 actor별 Relay Store를 격리한다.
 - 생성 mutation payload의 normalized Post identity·count·viewer relation을 사용하고 임시 목록 membership updater를 만들지 않는다.
 - 취소 성공 뒤 client count 산술, 광범위한 cache invalidation, 임시 refetch 또는 Source cache 직접 변경을 추가하지 않는다.
