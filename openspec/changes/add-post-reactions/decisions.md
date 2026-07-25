@@ -110,6 +110,21 @@
 - Consequences: 실제 `Post` count query와 `reactionProfiles` connection, modal/route, selected Profile/viewer cache 통합은 PROD-418에 남는다. supplied order는 server가 제공한 count 내림차순과 동률 무보장 계약을 그대로 보존하며, component는 이를 재해석하지 않는다. 이 선택은 최종 `post-reaction-ui` spec을 축소하거나 대체하지 않으며, 나중에 되돌릴 중간 제품 계약이 아니다.
 - Confirmation / Follow-up: PROD-449는 fixture state, 복수 Type·동률, 기존 Profile row, callback interaction과 Relay mock fragment Storybook을 component 수준에서 검증한다. PROD-418은 같은 seam을 유지한 채 실제 query/connection, zero-count와 modal/route UX, cache 통합 및 최종 spec의 pagination 검증을 수행한다.
 
+### PROD-418은 Reaction이 있는 Post에서 modal 기반 Profile 탐색을 제공한다
+
+- Decision Date: 2026-07-25
+- Decision Class: Implementation Choice
+- Authority / Provenance:
+  - `docs/domain/objects/reaction.md`
+  - `docs/design/reactions.md`
+  - `PROD-418`의 2026-07-25 설계 결정 댓글
+- Status: Active
+- Context / Problem: PROD-418은 이미 제공된 viewer-independent Type별 count와 viewer-filtered Profile connection을 현재 Post 맥락에서 연결해야 한다. Reaction이 없는 Post의 빈 요약, 별도 route, 조회 오류용 전역 알림과 매번 빈 loading부터 시작하는 modal은 이 결과에 불필요한 UI·cache 계약을 추가한다.
+- Decision Outcome: `reactionCounts`가 비어 있으면 `ReactionSummary`를 렌더링하지 않고, 양수 count가 있으면 server 순서를 그대로 표시한다. Type 선택은 현재 Post 위의 modal overlay를 열며 별도 route나 URL을 만들지 않는다. modal은 외부 영역 클릭·터치와 Android back으로 닫고 별도 닫기 버튼을 두지 않는다. 최초 Profile 조회 실패와 추가 page 실패는 각각 modal·목록 내부 오류와 다시 시도로 복구하며 추가 page 실패 전까지의 Profile을 유지한다. Profile 조회 오류에는 snackbar·toast·전역 outlet을 추가하지 않는다. 같은 Type의 modal 재진입은 cache된 목록을 먼저 표시하고 background에서 갱신하며 selected Profile 전환 뒤에는 이전 Relay Environment의 cache를 재사용하지 않는다.
+- Alternatives Considered: Reaction이 없는 Post에 빈 요약을 표시하는 방식은 요약 진입점 없이 중복 empty UI를 남긴다. Profile 목록을 별도 route로 여는 방식은 현재 Post 맥락과 불필요한 URL 계약을 추가한다. 조회 오류를 snackbar로만 알리는 방식은 지속적인 복구 동작을 화면 밖의 일시적 알림에 의존하게 한다. 매번 network-only loading부터 시작하는 방식은 이미 조회한 목록을 불필요하게 숨긴다.
+- Consequences: PROD-418은 기존 backend API와 props-only seam의 Relay·modal·cache 통합 및 기존 Post detail route의 요약 진입점만 추가한다. Reaction 추가·삭제 mutation 오류 UX, snackbar/toast infrastructure, 공통 Post Action Bar와 feed/list surface 조립은 이 결정에 포함하지 않는다.
+- Confirmation / Follow-up: PROD-418 component/integration test는 zero-count 미렌더링, server 순서, modal dismiss, 최초·추가 page 오류 복구, 기존 edge 보존, cache 우선 재진입과 selected Profile 격리를 검증한다.
+
 ### PROD-450은 supplied option 기반 Quick Picker 프레젠테이션을 먼저 전달한다
 
 - Decision Date: 2026-07-23
