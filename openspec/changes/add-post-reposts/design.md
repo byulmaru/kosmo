@@ -60,6 +60,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 6. PROD-453의 순수 Repost는 Repost Author attribution 뒤에 direct Source를 주 Post content로 표시한다. Quote와 Reply+Quote는 Quote Author와 자체 Content를 먼저 표시하고 direct Source를 compact bordered preview로 표시한다. Source preview는 자체 Action Bar를 갖지 않으며, nullable Source인 Quote는 preview와 Source 이동 affordance만 생략한다. Storybook은 production fragment shape를 따르는 typed fixture adapter로 internal presentation model을 구성하고 raw object를 fragment key로 cast하지 않는다. 실제 관계 field를 읽는 Relay operation·fragment와 generated type은 PROD-415에 남긴다. View의 link renderer는 Storybook mock target을 검증하고 PROD-415 production fragment wrapper가 canonical Expo Router Link를 공급할 수 있게 한다. Figma와 외부 SNS는 시각 참고이며 수치는 앱 theme token과 기존 Post component를 따른다. PROD-415는 공용 list item fragment에 결과를 연결하고, PROD-414는 별도 Repost action fragment/mutations와 normalized payload로 actor Store를 갱신한다.
 7. PROD-412는 기존 Notification table에 `REPOST` kind를 추가하고 source-only create 경계에서 Recipient·Related Profile·Related Post를 파생한다. kind별 visible projection을 connection/count/Node/Read에서 공통 조립하고, client는 concrete inline fragment로 Source Post 이동과 Read/cache를 처리한다.
 8. PROD-416은 Repost Tombstone commit 뒤 같은 request에서 idempotent cleanup을 await하고 오류를 catch한다. 남은 row는 Active pure-Repost 구조와 Recipient 기준 관계 visibility를 검증하는 predicate로 모든 API surface에서 숨긴다.
+9. PROD-415는 direct Source가 Quote인 경우에도 direct Source 한 단계만 full presentation한다. 다음 Source는 global ID와 Author `relativeHandle`만 읽어 canonical Post route로 이동하는 독립된 최소 44px `인용한 게시글 보기` placeholder로 표시한다. 두 번째 Source를 full presentation하거나 presentation component를 재귀 호출하지 않고, 두 번째 Source가 unavailable이면 placeholder를 생략한다.
 
 ### Allowed Alternatives
 
@@ -83,6 +84,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 - hidden Repost/Notification을 page limit 뒤 application filtering해 짧은 page와 cursor 누락을 만들지 않는다.
 - Tombstone에서 `repost_source_id`를 null로 만들거나 Source Tombstone에 cascade delete를 적용하지 않는다.
 - Notification을 Repost transaction 안에 넣거나 fire-and-forget으로 실행해 rollback 결합 또는 관측 불가능한 실패를 만들지 않는다.
+- 두 번째 Source의 Content·Profile presentation field를 fragment에 추가하거나 Source presentation을 재귀 호출하지 않는다. 두 번째 Source는 canonical route용 global ID와 Author `relativeHandle`만 읽는다.
 - client가 raw object를 Relay fragment key로 cast하거나 route query에 presentation scalar를 중복 나열하지 않는다.
 - Source preview Link를 전체 Post Link 안에 중첩하지 않는다.
 
