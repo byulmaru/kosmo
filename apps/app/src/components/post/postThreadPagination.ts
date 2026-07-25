@@ -9,7 +9,11 @@ export function isPostThreadNearEnd({
   offset,
   viewportLength,
 }: PostThreadScrollMetrics): boolean {
-  return viewportLength > 0 && contentLength - offset - viewportLength <= viewportLength;
+  return (
+    contentLength > 0 &&
+    viewportLength > 0 &&
+    contentLength - offset - viewportLength <= viewportLength
+  );
 }
 
 type PostThreadMetricsRef = { current: PostThreadScrollMetrics };

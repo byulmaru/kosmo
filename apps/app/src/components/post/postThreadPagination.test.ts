@@ -13,6 +13,7 @@ test('한 viewport 이내에서만 다음 Reply page를 요청한다', () => {
     false,
   );
   assert.equal(isPostThreadNearEnd({ contentLength: 0, offset: 0, viewportLength: 0 }), false);
+  assert.equal(isPostThreadNearEnd({ contentLength: 0, offset: 0, viewportLength: 800 }), false);
 });
 
 test('Native ScrollView event를 같은 metric 계약으로 합친다', () => {
@@ -25,6 +26,7 @@ test('Native ScrollView event를 같은 metric 계약으로 합친다', () => {
   });
 
   handlers.onLayout({ nativeEvent: { layout: { height: 800 } } });
+  assert.equal(isPostThreadNearEnd(observed.at(-1)!), false);
   handlers.onContentSizeChange(0, 1200);
   assert.equal(isPostThreadNearEnd(observed.at(-1)!), true);
 
