@@ -445,13 +445,12 @@ export const RepostQuoteUsesOneSourceDepth: Story = {
       'href',
       '/@bookmark-source/bookmark-source-quote',
     );
-    const nestedSourceLink = canvas.getByRole('link', { name: '인용한 게시글 보기' });
-    expect(nestedSourceLink).toHaveAttribute(
-      'href',
-      '/@deep-bookmark-source/bookmark-source-depth-2',
-    );
-    expect(nestedSourceLink.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    const sourceBody = canvas.getByTestId('source-post-body');
+    expect(sourceBody.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(sourceBody.closest('[role="link"]')).toBeNull();
+    expect(canvas.queryByRole('link', { name: '인용한 게시글 보기' })).not.toBeInTheDocument();
     expect(canvasElement.querySelector('a a')).toBeNull();
+    expect(canvasElement.querySelector('[role="link"] [role="link"]')).toBeNull();
   },
 };
 

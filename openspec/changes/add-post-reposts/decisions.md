@@ -146,10 +146,10 @@
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-389`, `PROD-415`
 - Status: Active
 - Context / Problem: direct Source 자체가 Quote이면 저장된 다음 Source 관계를 보존하면서도 목록에서 full Source preview가 무제한으로 재귀하는 것을 막아야 한다.
-- Decision Outcome: direct Source의 Author·Content·생성 시각은 첫 번째 full presentation으로 표시한다. direct Source의 non-null Source 관계는 두 번째 Source의 canonical Post route로 이동하는 독립된 최소 44px `인용한 게시글 보기` link placeholder로만 표시한다. 두 번째 Source의 Author·Content·생성 시각은 표시하지 않고 presentation component를 재귀 호출하지 않는다. 두 번째 Source가 unavailable이어서 API가 `null`을 반환하면 placeholder를 생략한다.
-- Alternatives Considered: 다음 Source 관계를 버리거나 최상위 Source로 평탄화하는 방식, 모든 Source를 full presentation으로 재귀 표시하는 방식. 전자는 저장된 direct relation을 잃고 후자는 목록 깊이와 fragment shape를 무제한으로 확장한다.
-- Consequences: production fragment는 direct Source presentation field와 두 번째 Source의 global ID·Author `relativeHandle`만 읽는 유한한 shape를 사용한다.
-- Confirmation / Follow-up: Home/Profile Relay 경로와 Storybook에서 Quote-of-Quote·Repost-of-Quote cutoff, 정확한 두 번째 Source href, 독립 44px target, 외부 body Link와의 비중첩을 검증한다. Post detail 연결은 포함하지 않는다.
+- Decision Outcome: direct Source의 Author·Content·생성 시각은 첫 번째 full presentation으로 표시한다. Source Author는 canonical Profile route로 이동하고 direct Source의 생성 시각과 본문 영역은 direct Source의 canonical Post route로 이동한다. 두 번째 Source의 Author·Content·생성 시각과 별도 placeholder·CTA는 표시하지 않고 presentation component를 재귀 호출하지 않는다.
+- Alternatives Considered: 두 번째 Source route를 별도 `인용한 게시글 보기` placeholder로 제공하는 방식, 다음 Source를 최상위 Source로 평탄화하는 방식, 모든 Source를 full presentation으로 재귀 표시하는 방식. 별도 placeholder는 이미 표시된 direct Source 이동과 중복되는 CTA를 만들고, 평탄화는 저장된 direct relation을 잃으며, 재귀 표시는 목록 깊이와 fragment shape를 무제한으로 확장한다.
+- Consequences: production fragment는 direct Source presentation field까지만 읽는 유한한 shape를 사용하며 두 번째 Source를 위한 client field나 이동 UI를 만들지 않는다.
+- Confirmation / Follow-up: Home/Profile/Bookmark Relay 경로와 Storybook에서 Quote-of-Quote·Repost-of-Quote cutoff, direct Source 생성 시각·본문의 정확한 canonical route 이동, 두 번째 Source Content와 CTA 미노출, 외부 body Link와의 비중첩을 검증한다. Post detail 연결은 포함하지 않는다.
 
 ### 부모 change가 전체 계약과 archive를 소유한다
 

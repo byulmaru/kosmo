@@ -253,7 +253,7 @@ production fragment shape를 유지하는 fixture와 Storybook에서 Repost·Quo
 
 **Deliverable**
 
-Home, Profile과 Bookmark 목록이 실제 GraphQL fragment와 generated type으로 Repost·Quote presentation을 표시하고 Source·Author route를 정확히 연결한다. direct Source가 Quote이면 direct Source 한 단계까지만 full presentation하고 다음 Source는 canonical `인용한 게시글 보기` placeholder로 표시한다.
+Home, Profile과 Bookmark 목록이 실제 GraphQL fragment와 generated type으로 Repost·Quote presentation을 표시하고 Source·Author route를 정확히 연결한다. direct Source가 Quote이면 direct Source 한 단계까지만 full presentation하고 두 번째 Source를 위한 별도 placeholder나 CTA를 표시하지 않는다.
 
 **Guardrails**
 
@@ -261,14 +261,14 @@ Home, Profile과 Bookmark 목록이 실제 GraphQL fragment와 generated type으
 - Bookmark도 Home/Profile과 같은 공용 Post list item fragment를 사용하고 별도 presentation scalar를 중복하지 않는다.
 - Source preview Link를 전체 Post Link 안에 중첩하지 않는다.
 - Source가 API에서 제외된 불완전한 row를 client에서 합성하지 않는다.
-- 두 번째 Source는 canonical route용 global ID와 Author `relativeHandle`만 읽고 full presentation field를 추가하거나 presentation component를 재귀 호출하지 않는다.
-- `인용한 게시글 보기`는 다른 Post·Profile·body Link와 중첩되지 않은 독립된 최소 44px target으로 제공한다.
+- 두 번째 Source의 ID·Content·Profile presentation field를 읽거나 presentation component를 재귀 호출하지 않는다.
+- Source Author는 canonical Profile route로 이동하고 direct Source의 생성 시각과 본문 영역은 direct Source의 canonical Post route로 이동한다.
 - 서버가 반환한 connection edge 순서와 결과만 렌더링하고 새 `loadNext` pagination UI를 추가하지 않는다.
 - Repost action과 Notification UI를 이 slice에 포함하지 않는다.
 
 **Verification**
 
-- Home/Profile/Bookmark fragment 연결, Repost/Quote Author 구분, Source·Profile navigation, 일반 Post 회귀와 Relay generated type을 app integration/E2E로 검증한다. Quote-of-Quote·Repost-of-Quote는 direct Source 한 단계에서 full presentation이 끝나고 placeholder가 두 번째 Source의 canonical route로 이동하는지 확인한다. Reply+Quote, nullable Source, 일반 Post와 외부 body Link의 중첩 anchor 회귀도 함께 검증한다.
+- Home/Profile/Bookmark fragment 연결, Repost/Quote Author 구분, Source·Profile navigation, 일반 Post 회귀와 Relay generated type을 app integration/E2E로 검증한다. Quote-of-Quote·Repost-of-Quote는 direct Source 한 단계에서 full presentation이 끝나고 direct Source 생성 시각·본문이 해당 Source의 canonical route로 이동하며 두 번째 Source Content와 CTA가 표시되지 않는지 확인한다. Reply+Quote, nullable Source, 일반 Post와 외부 body Link의 중첩 anchor 회귀도 함께 검증한다.
 
 - [x] 9.1 PROD-453 presentation fragment를 production Post list item과 실제 API shape에 연결한다.
 - [x] 9.2 Home/Profile/Bookmark 목록의 Source·Author navigation과 중첩 Link 회귀를 검증한다.

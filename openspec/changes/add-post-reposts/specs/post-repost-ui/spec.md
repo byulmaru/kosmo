@@ -33,7 +33,7 @@
 - **WHEN** direct `repostSource`가 non-null `repostSource`를 가진다
 - **THEN** 앱은 direct Source만 Author·Content·생성 시각을 포함한 full presentation으로 표시한다
 - **AND** 두 번째 Source의 Author·Content·생성 시각을 표시하거나 presentation component를 재귀 호출하지 않는다
-- **AND** 두 번째 Source가 available이면 `인용한 게시글 보기` placeholder를 표시하고 API가 `null`을 반환하면 placeholder를 생략한다
+- **AND** 두 번째 Source를 위한 별도 placeholder 또는 CTA를 표시하지 않는다
 
 ### Requirement: Source Post 이동과 목록 연결
 
@@ -41,16 +41,10 @@
 
 #### Scenario: Source Post 이동
 
-- **WHEN** 사용자가 Repost 또는 Quote의 Source preview를 활성화한다
+- **WHEN** 사용자가 Repost 또는 Quote의 direct Source 생성 시각이나 본문 영역을 활성화한다
 - **THEN** 앱은 Source Author의 `relativeHandle`과 Source Post global ID를 사용하는 canonical Post route로 이동한다
 - **AND** Repost 또는 Quote Author의 상세 route로 잘못 이동하지 않는다
-
-#### Scenario: 중첩 Source Post 이동
-
-- **WHEN** 사용자가 `인용한 게시글 보기` placeholder를 활성화한다
-- **THEN** 앱은 두 번째 Source Author의 `relativeHandle`과 두 번째 Source global ID를 사용하는 canonical Post route로 이동한다
-- **AND** 바깥 Post나 direct Source의 route로 잘못 이동하지 않는다
-- **AND** placeholder는 다른 Post·Profile·body Link와 중첩되지 않은 독립된 최소 44px target이다
+- **AND** Source Author affordance는 Source Author의 canonical Profile route로 이동한다
 
 #### Scenario: Author Profile 이동
 

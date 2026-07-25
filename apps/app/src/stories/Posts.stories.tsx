@@ -435,7 +435,6 @@ type PostNode = Extract<
 >;
 
 type PostsStoryArgs = {
-  onNestedSourcePost?: ReturnType<typeof fn>;
   onPostAuthor?: ReturnType<typeof fn>;
   onPostDetail?: ReturnType<typeof fn>;
   onRetry?: ReturnType<typeof fn>;
@@ -444,7 +443,6 @@ type PostsStoryArgs = {
 };
 
 type PresentationCallbacks = {
-  nestedSourcePost: ReturnType<typeof fn>;
   postAuthor: ReturnType<typeof fn>;
   postDetail: ReturnType<typeof fn>;
   sourceAuthor: ReturnType<typeof fn>;
@@ -530,31 +528,16 @@ function toPostSourcePresentationData(post: StoryPost): PostSourcePresentationDa
           createdAt: repostSource.createdAt,
           id: repostSource.id,
           profile: repostSource.profile,
-          repostSource: repostSource.repostSource
-            ? {
-                id: repostSource.repostSource.id,
-                profile: {
-                  relativeHandle: repostSource.repostSource.profile.relativeHandle,
-                },
-              }
-            : null,
         }
       : null,
   };
 }
 
 function requirePresentationCallbacks(args: PostsStoryArgs): PresentationCallbacks {
-  if (
-    !args.onNestedSourcePost ||
-    !args.onPostAuthor ||
-    !args.onPostDetail ||
-    !args.onSourceAuthor ||
-    !args.onSourcePost
-  ) {
+  if (!args.onPostAuthor || !args.onPostDetail || !args.onSourceAuthor || !args.onSourcePost) {
     throw new Error('Repost/Quote presentation stories require isolated link callbacks.');
   }
   return {
-    nestedSourcePost: args.onNestedSourcePost,
     postAuthor: args.onPostAuthor,
     postDetail: args.onPostDetail,
     sourceAuthor: args.onSourceAuthor,
@@ -678,6 +661,7 @@ function RepostQuotePresentationStory({ callbacks, postId }: PresentationStoryPr
 
   return (
     <PostSourcePresentationView
+      onSourcePostPress={callbacks.sourcePost}
       post={toPostSourcePresentationData(post)}
       renderLink={renderMockLink}
     />
@@ -896,18 +880,28 @@ export const ProductionRepostQuoteListIntegration: Story = {
     expect(quoteRow!.querySelector('a[href="/@source@remote.example"]')).toBeInTheDocument();
     expect(
       quoteOfQuoteRow!.querySelector('a[href="/@deep-source@remote.example/post-source-depth-2"]'),
-    ).toBeInTheDocument();
+    ).not.toBeInTheDocument();
     expect(
       repostOfQuoteRow!.querySelector('a[href="/@deep-source@remote.example/post-source-depth-2"]'),
-    ).toBeInTheDocument();
+    ).not.toBeInTheDocument();
+    expect(
+      quoteOfQuoteRow!.querySelectorAll('a[href="/@source@remote.example/post-source-quote"]'),
+    ).toHaveLength(1);
+    expect(
+      repostOfQuoteRow!.querySelectorAll('a[href="/@source@remote.example/post-source-quote"]'),
+    ).toHaveLength(1);
     expect(quoteOfQuoteRow!.querySelectorAll('[data-testid="source-post-preview"]')).toHaveLength(
       1,
     );
     expect(repostOfQuoteRow!.querySelectorAll('[data-testid="source-post-preview"]')).toHaveLength(
       0,
     );
-    expect(within(quoteOfQuoteRow!).getByTestId('nested-source-post-placeholder')).toBeVisible();
-    expect(within(repostOfQuoteRow!).getByTestId('nested-source-post-placeholder')).toBeVisible();
+    expect(
+      within(quoteOfQuoteRow!).queryByRole('link', { name: '인용한 게시글 보기' }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(repostOfQuoteRow!).queryByRole('link', { name: '인용한 게시글 보기' }),
+    ).not.toBeInTheDocument();
     expect(
       within(quoteOfQuoteRow!).getByText('첫 번째 direct Source Quote의 본문입니다.'),
     ).toBeVisible();
@@ -923,6 +917,7 @@ export const ProductionRepostQuoteListIntegration: Story = {
     expect(quoteOfQuoteRow!.querySelector('a a')).toBeNull();
     expect(repostOfQuoteRow!.querySelector('a a')).toBeNull();
     expect(linkedSourceRow!.querySelector('a a')).toBeNull();
+    expect(linkedSourceRow!.querySelector('[role="link"] [role="link"]')).toBeNull();
 
     const openURL = fn(async () => undefined);
     const originalOpenURL = Linking.openURL;
@@ -933,6 +928,10 @@ export const ProductionRepostQuoteListIntegration: Story = {
       );
       await expect(openURL).toHaveBeenCalledWith('https://example.com/path');
       expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent('/@kosmo/post-1');
+      await userEvent.click(within(quoteOfQuoteRow!).getByTestId('source-post-body'));
+      expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+        '/@source@remote.example/post-source-quote',
+      );
     } finally {
       Linking.openURL = originalOpenURL;
     }
@@ -942,7 +941,6 @@ export const ProductionRepostQuoteListIntegration: Story = {
 
 export const PureRepost: Story = {
   args: {
-    onNestedSourcePost: fn(),
     onPostAuthor: fn(),
     onPostDetail: fn(),
     onSourceAuthor: fn(),
@@ -990,7 +988,7 @@ export const PureRepost: Story = {
     await expect(args.onPostAuthor).toHaveBeenCalledTimes(1);
     await expect(args.onSourceAuthor).toHaveBeenCalledTimes(1);
     await expect(args.onSourcePost).toHaveBeenCalledTimes(0);
-    await userEvent.click(canvas.getByLabelText('원문 게시글 보기'));
+    await userEvent.click(canvas.getByTestId('source-post-body'));
     await expect(args.onPostAuthor).toHaveBeenCalledTimes(1);
     await expect(args.onSourceAuthor).toHaveBeenCalledTimes(1);
     await expect(args.onSourcePost).toHaveBeenCalledTimes(1);
@@ -1005,7 +1003,6 @@ export const PureRepost: Story = {
 
 export const PureRepostOfQuote: Story = {
   args: {
-    onNestedSourcePost: fn(),
     onPostAuthor: fn(),
     onPostDetail: fn(),
     onSourceAuthor: fn(),
@@ -1020,17 +1017,15 @@ export const PureRepostOfQuote: Story = {
     expect(root.textContent).not.toContain(
       '두 번째 Source의 본문은 목록에서 full preview하지 않습니다.',
     );
-    const placeholder = canvas.getByTestId('nested-source-post-placeholder');
-    const nestedLink = placeholder.closest('[role="link"]');
-    expect(nestedLink).not.toBeNull();
-    expect(nestedLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(canvas.getAllByLabelText('원문 게시글 보기')).toHaveLength(1);
+    expect(canvas.queryByLabelText('인용한 게시글 보기')).not.toBeInTheDocument();
     expect(root.querySelector('a a')).toBeNull();
-    await userEvent.click(canvas.getByLabelText('인용한 게시글 보기'));
-    await expect(args.onNestedSourcePost).toHaveBeenCalledTimes(1);
+    expect(root.querySelector('[role="link"] [role="link"]')).toBeNull();
+    await userEvent.click(canvas.getByTestId('source-post-body'));
     await expect(args.onPostAuthor).not.toHaveBeenCalled();
     await expect(args.onPostDetail).not.toHaveBeenCalled();
     await expect(args.onSourceAuthor).not.toHaveBeenCalled();
-    await expect(args.onSourcePost).not.toHaveBeenCalled();
+    await expect(args.onSourcePost).toHaveBeenCalledTimes(1);
   },
   render: (args) => (
     <RepostQuotePresentationStory
@@ -1042,7 +1037,6 @@ export const PureRepostOfQuote: Story = {
 
 export const Quote: Story = {
   args: {
-    onNestedSourcePost: fn(),
     onPostAuthor: fn(),
     onPostDetail: fn(),
     onSourceAuthor: fn(),
@@ -1077,7 +1071,6 @@ export const Quote: Story = {
 
 export const QuoteOfQuote: Story = {
   args: {
-    onNestedSourcePost: fn(),
     onPostAuthor: fn(),
     onPostDetail: fn(),
     onSourceAuthor: fn(),
@@ -1093,17 +1086,15 @@ export const QuoteOfQuote: Story = {
     expect(root.textContent).not.toContain(
       '두 번째 Source의 본문은 목록에서 full preview하지 않습니다.',
     );
-    const placeholder = canvas.getByTestId('nested-source-post-placeholder');
-    const nestedLink = placeholder.closest('[role="link"]');
-    expect(nestedLink).not.toBeNull();
-    expect(nestedLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(canvas.getAllByLabelText('원문 게시글 보기')).toHaveLength(1);
+    expect(canvas.queryByLabelText('인용한 게시글 보기')).not.toBeInTheDocument();
     expect(root.querySelector('a a')).toBeNull();
-    await userEvent.click(canvas.getByLabelText('인용한 게시글 보기'));
-    await expect(args.onNestedSourcePost).toHaveBeenCalledTimes(1);
+    expect(root.querySelector('[role="link"] [role="link"]')).toBeNull();
+    await userEvent.click(canvas.getByTestId('source-post-body'));
     await expect(args.onPostAuthor).not.toHaveBeenCalled();
     await expect(args.onPostDetail).not.toHaveBeenCalled();
     await expect(args.onSourceAuthor).not.toHaveBeenCalled();
-    await expect(args.onSourcePost).not.toHaveBeenCalled();
+    await expect(args.onSourcePost).toHaveBeenCalledTimes(1);
   },
   render: (args) => (
     <RepostQuotePresentationStory
@@ -1115,7 +1106,6 @@ export const QuoteOfQuote: Story = {
 
 export const ReplyQuote: Story = {
   args: {
-    onNestedSourcePost: fn(),
     onPostAuthor: fn(),
     onPostDetail: fn(),
     onSourceAuthor: fn(),
@@ -1137,7 +1127,6 @@ export const ReplyQuote: Story = {
 
 export const QuoteWithoutSource: Story = {
   args: {
-    onNestedSourcePost: fn(),
     onPostAuthor: fn(),
     onPostDetail: fn(),
     onSourceAuthor: fn(),
@@ -1160,7 +1149,6 @@ export const QuoteWithoutSource: Story = {
 
 export const OrdinaryPost: Story = {
   args: {
-    onNestedSourcePost: fn(),
     onPostAuthor: fn(),
     onPostDetail: fn(),
     onSourceAuthor: fn(),
@@ -1183,7 +1171,6 @@ export const OrdinaryPost: Story = {
 
 export const InvalidContentlessReplySource: Story = {
   args: {
-    onNestedSourcePost: fn(),
     onPostAuthor: fn(),
     onPostDetail: fn(),
     onSourceAuthor: fn(),
@@ -1202,7 +1189,6 @@ export const InvalidContentlessReplySource: Story = {
 
 export const LinkedSourceQuote: Story = {
   args: {
-    onNestedSourcePost: fn(),
     onPostAuthor: fn(),
     onPostDetail: fn(),
     onSourceAuthor: fn(),
@@ -1215,6 +1201,7 @@ export const LinkedSourceQuote: Story = {
     Linking.openURL = openURL;
 
     try {
+      expect(canvasElement.querySelector('[role="link"] [role="link"]')).toBeNull();
       await userEvent.click(canvas.getByLabelText('안전한 외부 링크, https://example.com/path'));
       await expect(openURL).toHaveBeenCalledWith('https://example.com/path');
       expect(args.onSourcePost).not.toHaveBeenCalled();
@@ -1232,7 +1219,6 @@ export const LinkedSourceQuote: Story = {
 
 export const RepostQuoteLongContentMobile: Story = {
   args: {
-    onNestedSourcePost: fn(),
     onPostAuthor: fn(),
     onPostDetail: fn(),
     onSourceAuthor: fn(),
