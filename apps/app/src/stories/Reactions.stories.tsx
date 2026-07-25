@@ -102,6 +102,14 @@ const reactionPostWithRefreshedProfiles = reactionPostWithProfile(
   'Refreshed Profile',
   'reaction-profile-refreshed',
 );
+const reactionPostWithHeartTypeProfiles = reactionPostWithProfile(
+  'Heart Type Profile',
+  'reaction-profile-heart-type',
+);
+const reactionPostWithPartyTypeProfiles = reactionPostWithProfile(
+  'Party Type Profile',
+  'reaction-profile-party-type',
+);
 
 const reactionProfilesNextPage = {
   node: {
@@ -611,6 +619,35 @@ export const ReopenShowsCacheBeforeBackgroundRefresh: Story = {
     expect(screen.getByText('Actor A Profile')).toBeInTheDocument();
     await expect(screen.findByText('Refreshed Profile')).resolves.toBeInTheDocument();
     await userEvent.click(screen.getByLabelText('❤️ 반응한 프로필 닫기'));
+  },
+};
+
+export const SwitchingReactionTypeDoesNotReuseProfileRows: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        ReactionsIntegrationStoriesQuery: { data: { node: reactionPostSummary } },
+        ReactionProfilesModalQuery: {
+          sequence: [
+            { data: { node: reactionPostWithHeartTypeProfiles } },
+            { data: { node: reactionPostWithPartyTypeProfiles }, delayMs: 150 },
+          ],
+        },
+      },
+    },
+  },
+  render: () => <PostReactionSummaryStory />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await userEvent.click(canvas.getByRole('button', { name: '❤️ 반응 12개 보기' }));
+    await expect(screen.findByText('Heart Type Profile')).resolves.toBeVisible();
+    await userEvent.click(screen.getByLabelText('❤️ 반응한 프로필 닫기'));
+    await userEvent.click(canvas.getByRole('button', { name: '🎉 반응 7개 보기' }));
+    expect(screen.queryByText('Heart Type Profile')).not.toBeInTheDocument();
+    await expect(screen.findByText('Party Type Profile')).resolves.toBeVisible();
+    expect(screen.queryByText('Heart Type Profile')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText('🎉 반응한 프로필 닫기'));
   },
 };
 
