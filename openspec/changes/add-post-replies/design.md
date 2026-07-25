@@ -35,6 +35,7 @@
 - 조상 경로는 임의의 최대 깊이로 절단하지 않으므로 단계별 Node load를 반복하지 않고 cycle을 식별하면서 한 번에 탐색해야 한다.
 - PROD-400은 `Post.replyDescendants: PostConnection!`, full Relay pagination과 `createdAt ASC, id ASC` 정렬을 공개 계약으로 확정했다. 기존 Post connection helper와 같은 양방향 page 계약을 유지하되 ID 단독 cursor로 축약하지 않는다.
 - 현재 앱의 목록 Post는 `PostListItem`, 상세 Post는 `PostLayout`이 각자 colocated Relay fragment와 기존 Post rendering을 소유한다. PROD-451은 실제 Reply field·route를 읽지 않는 fixture-first presentation slice이고 PROD-422가 실제 Relay data와 route를 연결한다.
+- 현재 Post 상세 route source는 sticky header를 가진 `ScrollView`를 렌더하지만 canonical `docs/design/breakpoints.md`는 Web `(tabs)` 셸의 scroll owner를 document/window로, Android/iOS 화면의 scroll owner를 `ScrollView`로 확정한다. 앱의 기존 connection 화면은 `usePaginationFragment`와 `loadNext`를 사용하지만 자동 무한 스크롤 선례는 없으므로 PROD-422가 두 platform scroll owner의 측정과 중복 요청 방어를 명시적으로 소유해야 한다.
 - 현재 `ThemeProvider`는 `colors.light`만 공급하므로 PROD-451의 390px/600px visual QA는 Light appearance만 완료 증거로 삼는다. Dark theme injection과 Dark appearance 검증은 이 presentation slice에서 추가하거나 완료한 것으로 기록하지 않는다.
 
 ### Recommended Approach
@@ -47,7 +48,9 @@
 - PROD-429는 Home/Profile의 Reply 후보 판정을 page limit 이전에 적용한다. PROD-451은 부모가 공급한 조상·현재·하위 Post 순서와 직접 관계 metadata를 그대로 표시하는 props-only thread layout을 먼저 제공한다. 조상과 하위 Reply는 기존 목록 Post와 같은 정보 밀도를 유지하고 현재 Post만 기존 상세 rendering으로 앵커를 만든다. 연결선은 공급된 인접 Post가 직접 관계일 때만 그리고, 공급된 배열이 끝나는 visibility 경계에는 숨겨진 Post를 암시하는 placeholder나 문구를 만들지 않는다.
 - `PostThreadLayout`은 item, role, supplied 순서와 direct connector metadata만 소유한다. fixture caller는 `renderPost` 안에서 local state를 close over하여 mock 선택 action을 붙일 수 있다. 기존 `PostListItem`·`PostLayout` renderer는 자신의 Profile/Post Link를 그대로 유지하며 presentation이 이를 다른 `Pressable`로 감싸지 않는다.
 - Reply+Quote fixture에는 nullable `repostSource` 관계가 있고 Story query가 이를 읽는다. 구조적 sentinel은 반환된 `repostSource` subtree에서만 렌더하며 Source ID를 가진다. 이 증거는 Reply 자신의 Content와 Source 관계가 하나의 thread item 안에 함께 남는지만 보이고, PROD-451은 production Source preview의 외관이나 상호작용을 합성하지 않는다.
-- PROD-422는 route가 thread query를 소유하고 `replyAncestors`를 root 우선 표시 순서로 변환한다. ancestor 인접 항목은 경로 계약에서 직접 관계이고, descendant는 각 Post의 `replyParent { id }`와 이전 표시 Post ID를 비교해 supplied 직접 관계 metadata를 만든다. 각 Post 표시 컴포넌트는 colocated Relay fragment와 기존 Link를 유지한다. PROD-422는 route-aware caller가 필요로 할 때만 나중에 production navigation adapter를 도입할 수 있다.
+- PROD-422는 route가 thread query를 소유하고 `replyAncestors`를 root 우선 표시 순서로 변환한다. ancestor 인접 항목은 경로 계약에서 직접 관계이고, descendant는 각 Post의 `replyParent { id }`와 이전 표시 Post ID를 비교해 supplied 직접 관계 metadata를 만든다. 각 Post 표시 컴포넌트는 colocated Relay fragment와 기존 Link를 유지하며, PROD-422의 production route integration은 별도 navigation adapter 없이 이 Link를 그대로 실제 상세 이동에 사용한다.
+- thread의 각 바깥 Post는 role에 따라 기존 `PostLayout` 또는 `PostListItem`으로 렌더한다. Reply+Quote의 nullable `repostSource`에는 기존 `PostListItem_post` fragment를 함께 선택하고, Source가 반환되면 바깥 Post 바로 아래에 테두리를 둔 sibling `PostListItem`으로 표시한다. Source가 `null`이면 preview만 생략하고 Reply+Quote 자체 Content와 thread item은 유지한다. 별도 Source preview abstraction을 추출하거나 전체 `PostSourcePresentationView`를 중첩하지 않으며, sibling 경계로 기존 Profile/Post Link의 중첩을 피한다.
+- descendant connection은 route-owned refetchable pagination fragment가 `first: 20`과 `after`를 소유하고 `usePaginationFragment`로 누적한다. Web은 document/window의 scroll·resize event와 `documentElement.scrollHeight`·`window.scrollY`·`window.innerHeight`를 사용하고, Android/iOS는 `ScrollView`의 scroll·layout·content size event를 사용한다. 두 경로는 `contentLength - offset - viewportLength <= viewportLength`인 공통 near-end 판정과 `hasNext && !isLoadingNext`·요청 중 ref·page error guard를 공유하며 통과한 경우에만 `loadNext(20)`을 호출한다. 초기 content가 viewport보다 짧으면 Web document 또는 Native content size 변화 뒤 같은 guard로 viewport를 채우거나 `hasNext`가 끝날 때까지 다음 page를 요청한다. footer는 loading 상태를 표시하고, page 요청 실패 시 자동 재요청을 멈추며 이미 표시한 Reply를 유지한 채 같은 cursor 경계에서 재시도할 수 있는 inline affordance를 제공한다. `PostThreadLayout`은 pagination·scroll·오류 상태를 알지 못하는 순수 presentation으로 유지한다.
 - `add-post-replies`는 `add-post-reposts` artifact를 수정하지 않는다. 겹치는 active capability는 새 독립 requirement로 추가하고 두 change와 전체 OpenSpec을 함께 strict validation한다.
 
 ### Allowed Alternatives
@@ -55,6 +58,7 @@
 - 공통 구조 validator는 `post` service 안에 둘 수도 있고 후속 Repost action이 실제로 재사용할 때 package 내부 모듈로 분리할 수도 있다. 어느 경우에도 package 공개 API와 관찰 가능한 error 계약은 같아야 한다.
 - PROD-399 조상 조회는 Linear에서 단일 recursive query와 visited path로 확정됐다. PROD-400 descendant 조회는 재귀 CTE나 visited-set을 사용하는 동등한 traversal을 사용할 수 있다. 임의의 최대 깊이로 결과를 자르지 않고 독립 필터·cycle 방어와 query plan 검증을 동일하게 만족하며, 공개 field·connection·pagination·정렬 계약을 유지해야 한다.
 - thread layout은 role별 Post fragment ref를 직접 받을 수도 있고 caller가 기존 Post component를 render callback으로 공급하게 할 수도 있다. 어느 방식이든 plain Post renderer를 복제하지 않고, PROD-451에서는 실제 Reply GraphQL field나 Expo route를 읽지 않으며, PROD-422가 layout 계약을 바꾸지 않고 실제 Post renderer와 관계 metadata를 공급할 수 있어야 한다.
+- descendant pagination은 명시적 더 보기 button, Web 중앙 컬럼의 internal scroller, `FlatList`/`VirtualizedList` 전환 또는 Web 전용 `IntersectionObserver`로도 만들 수 있다. 그러나 button은 승인된 자동 연속 읽기와 다르고, Web internal scroller는 canonical document scroll ownership을 위반하며, list 전환은 sticky header·connector row·Web parity까지 범위를 넓히고, observer는 현재 event 기반 shell 계약에 별도 browser-only 관찰 경계를 추가한다. 따라서 Web document/window와 Native `ScrollView`의 기존 event를 사용하되 같은 판정 함수와 request guard를 공유한다.
 
 ### Known Traps
 
@@ -71,6 +75,9 @@
 - visibility 경계에 `숨겨진 답글` 같은 placeholder나 설명을 만들면 API가 구분하지 않은 root·unavailable 상태를 client가 추론하고 숨겨진 관계를 누출할 수 있다.
 - presentation component가 Quote Source, Action Bar 또는 Reaction/Repost 수치를 별도로 렌더하면 기존 Post rendering을 복제하고 PROD-451의 thread layout 범위를 넘는다.
 - 기존 link-rich Post renderer를 외부 `Pressable`로 감싸 mock navigation을 만들면 Profile·timestamp·본문 Link가 중첩된다. mock 선택은 fixture caller가 `renderPost` 안에서 local state를 close over하는 범위에만 둔다.
+- Source `PostListItem`을 바깥 Post의 Link 안에 넣거나 `PostSourcePresentationView` 전체를 다시 렌더하면 Link가 중첩되거나 바깥 Post author·content가 중복된다. Source는 바깥 renderer 아래의 sibling으로만 둔다.
+- Web scroll·resize와 Native `onScroll`·`onLayout`·`onContentSizeChange`가 같은 page에 대해 각각 `loadNext`를 호출하면 중복 요청이 생길 수 있다. `hasNext`·Relay loading 상태뿐 아니라 요청 중 ref를 함께 확인하고, page error 뒤에는 자동 trigger를 멈추며 고정 pixel 대신 각 scroll owner의 viewport 높이를 기준으로 near-end를 판정한다.
+- Web route를 높이가 고정된 `ScrollView`나 overflow container로 바꾸면 sidebar·right rail·빈 shell 영역의 wheel 입력이 document scroll로 이어지는 canonical 동작과 browser history scroll restoration을 깨뜨릴 수 있다. Web은 document flow를 유지하고 sticky route header만 CSS sticky surface로 둔다.
 
 ## Risks / Trade-offs
 
@@ -81,6 +88,7 @@
 - [Risk] 손상 데이터가 매우 긴 ancestor chain을 만들면 depth 상한 없는 recursive query 비용이 커질 수 있다. → 정상 write는 immutable 직접 관계로 cycle을 만들 수 없게 유지하고, visited path로 cycle을 종료하며 실제 query와 깊은 fixture를 검증한다. 운영 상한이 필요해지면 부분 절단을 추가하지 않고 PROD-399의 공개 error 계약을 먼저 갱신한다.
 - [Risk] `reply_parent_id`와 정렬 column을 함께 둔 index가 전역 descendant 정렬까지 해결한다고 오판할 수 있다. → 실제 recursive query의 `EXPLAIN (ANALYZE, BUFFERS)`에서 traversal lookup과 최종 sort를 나눠 확인하고 측정으로 증명된 최소 index만 추가한다.
 - [Risk] color token에는 Dark 값이 있지만 현재 앱이 Dark theme을 주입하지 않아 thread의 실제 Dark appearance는 확인할 수 없다. → PROD-451은 Light QA만 보고하고, 향후 Dark theme을 실제로 공급하는 소유 변경에서 inherited connector·border·current surface를 검증한다.
+- [Trade-off] 기존 `ScrollView` 무한 스크롤은 지금까지 불러온 descendant를 모두 mount하므로 매우 긴 thread에서 virtualization보다 메모리를 더 쓴다. → PROD-422는 20개 page와 중복 요청 방어로 요청을 제한하고, 실제 성능 근거 없이 sticky header와 thread connector를 포함한 list migration까지 확장하지 않는다.
 - [Trade-off] Parent Tombstone 뒤 ID를 보존하면 저장 관계와 노출 관계가 달라진다. → resolver와 list policy에서 visibility/eligibility를 적용하고 DB 참조는 audit·thread 구조를 위해 유지한다.
 
 ## Migration Plan

@@ -149,7 +149,7 @@ Home은 viewer와 관련된 eligible Reply를 포함하고 Profile Post List는 
 
 **Deliverable**
 
-PROD-451은 item, role, supplied 순서와 direct connector metadata만 소유하는 재사용 presentation layout을 전달하고, fixture caller는 `renderPost` 안에서 local state를 close over하여 mock 선택 action을 붙일 수 있다. PROD-422는 API에서 제공한 조회 가능한 조상 경로·현재 Post·하위 Reply와 route-aware Post renderer를 같은 layout에 연결하고, route-aware caller가 필요로 할 때만 나중에 production navigation adapter를 도입할 수 있다.
+PROD-451은 item, role, supplied 순서와 direct connector metadata만 소유하는 재사용 presentation layout을 전달하고, fixture caller는 `renderPost` 안에서 local state를 close over하여 mock 선택 action을 붙일 수 있다. PROD-422는 API에서 제공한 조회 가능한 조상 경로·현재 Post·하위 Reply와 route-aware Post renderer를 같은 layout에 연결한다. descendant는 route-owned 무한 스크롤로 20개씩 이어 붙이고, Reply+Quote Source는 기존 `PostListItem`을 바깥 Post 아래의 테두리 있는 sibling으로 조합한다.
 
 **Guardrails**
 
@@ -157,6 +157,9 @@ PROD-451은 item, role, supplied 순서와 direct connector metadata만 소유�
 - PROD-451은 부모가 공급한 순서와 직접 관계 metadata를 그대로 사용한다. 조상·하위 Reply는 일반 Post 밀도를 유지하고 현재 Post만 상세 앵커로 강조하며, 직접 관계에만 connector를 표시하고 supplied visibility 경계에서 자연스럽게 종료한다.
 - PROD-451은 fixture·Storybook·presentation component interaction만 소유한다. 기존 Post Link를 감싸거나 대체하지 않으며 실제 Reply field·Relay query/cache·route·visibility integration, Quote Source·Action Bar·Reaction/Repost UI를 추가하지 않는다.
 - PROD-422는 `replyAncestors`를 root 우선 표시 순서로 바꾸고 descendant의 `replyParent { id }`를 이전 표시 Post ID와 비교해 direct connector metadata를 공급한다. unavailable Parent나 인접 직접 관계가 아닌 항목은 연결하지 않는다.
+- PROD-422는 role별 바깥 Post에 기존 `PostLayout`·`PostListItem`과 colocated fragment를 사용한다. nullable `repostSource`가 반환되면 기존 `PostListItem_post`로 테두리 있는 sibling을 표시하고, `null`이면 Source preview만 생략한다. 별도 preview abstraction이나 전체 `PostSourcePresentationView` 중첩, 기존 Link를 감싸는 외부 `Pressable`을 추가하지 않는다.
+- PROD-422 route는 `replyDescendants`를 `first: 20`으로 누적한다. Web은 canonical document/window scroll·resize와 document metrics를, Android/iOS는 `ScrollView` scroll·layout·content size event를 사용하되 같은 한-viewport near-end 판정과 Relay loading·요청 중 ref guard를 공유한다. 초기 content가 짧으면 각 platform viewport를 채우거나 `hasNext=false`가 될 때까지 이어서 요청한다. Web 중앙 컬럼을 internal scroller로 바꾸지 않고 `PostThreadLayout`에는 scroll·pagination·오류 책임을 추가하지 않는다.
+- 다음 page 실패는 이미 표시한 Reply를 제거하거나 route 전체 오류로 승격하지 않고, footer에서 같은 cursor 경계의 inline retry를 제공한다.
 - PROD-451은 현재 `ThemeProvider`를 바꾸거나 Dark theme injection을 추가하지 않는다. visual QA는 Light 390px/600px만 완료 증거로 삼고 Dark appearance를 검증 완료로 기록하지 않는다.
 - API가 중단한 권한 경계를 우회하거나 thread 관계를 평탄화하지 않는다.
 - Reply 작성·Media를 포함하지 않는다.
@@ -165,14 +168,14 @@ PROD-451은 item, role, supplied 순서와 direct connector metadata만 소유�
 **Verification**
 
 - PROD-451은 fixture 기반 일반 Reply, role별 list/detail renderer 선택, 직접 connector와 직접 연결된 마지막 visible Reply에서의 supplied boundary 종료를 Storybook/component interaction으로 검증한다. Reply+Quote proof는 fixture의 nullable `repostSource`를 Story query가 읽고, 반환된 `repostSource` subtree에서만 Source ID를 지닌 sentinel을 렌더해 Reply 자체 Content와 Source 관계가 한 item 안에 남음을 보이는 것으로 한정하며 production Source preview의 외관이나 상호작용을 합성하지 않는다. 실제 spacing·typography 밀도는 Light 390px/600px visual QA로 검증하고 Dark appearance는 미검증 위험으로 남긴다.
-- PROD-422는 조상·현재·하위 Reply 조합, Reply+Quote, unavailable 조상 경계, 각 Post 상세 이동과 fragment·route integration을 client test로 검증한다.
+- PROD-422는 조상·현재·하위 Reply 조합, Reply+Quote Source sibling과 Source 부재, unavailable 조상 경계, 각 Post 상세 이동과 fragment·route integration을 client test로 검증한다. descendant pagination은 20개 초기 page, Web document near-end append, 요청 중 중복 방지, 짧은 content auto-fill, page 종료와 부분 실패 후 기존 항목 유지·retry를 검증하고 Native `ScrollView` event가 같은 판정을 사용하는 최소 단위 test와 실제 iOS/Android 화면의 단일 `ScrollView`·sticky header 확인을 포함한다. 저장소가 보장하지 않는 20개 초과 Native seed는 새로 추가하지 않고 page append 자체는 자동 client test가 증명한다.
 
-- [x] 6.1 최종 `post-reply-ui` spec이 변경되지 않음을 확인하고 수정된 PROD-451 presentation seam과 PROD-422 integration 경계를 proposal·design·decisions·tasks에 동기화해 strict validation을 통과시킨다.
+- [x] 6.1 PROD-451 구현 당시 `post-reply-ui` spec을 확장하지 않고 presentation seam과 PROD-422 integration 경계를 proposal·design·decisions·tasks에 동기화해 strict validation을 통과시킨다.
 - [x] 6.2 PROD-451 props-only Reply thread layout을 구현한다. layout은 item, role, supplied 순서와 direct connector metadata만 소유하며 fixture caller는 `renderPost` 안에서 local state를 close over하여 mock 선택 action을 붙일 수 있다.
 - [x] 6.3 PROD-451 Storybook/component interaction에서 일반 Reply, role별 기존 renderer 선택, 직접 connector, 직접 연결된 마지막 visible Reply의 supplied boundary와 relation-backed Reply+Quote proof를 검증하고 Light 390px/600px visual QA 및 app check를 통과시킨다. relation-backed proof는 fixture의 nullable `repostSource`를 Story query가 읽고, 반환된 subtree에서만 Source ID sentinel을 렌더해 Reply 자체 Content와 Source 관계가 한 item 안에 남음을 보이며 production Source preview의 외관이나 상호작용을 합성하지 않는다. 현재 미지원 Dark appearance는 검증 완료로 기록하지 않는다.
-- [ ] 6.4 승인된 Parent·조상·descendant 결과를 Post 상세 query와 colocated fragment에 연결하고 ancestor reverse와 descendant `replyParent { id }` 비교로 direct connector metadata를 만든다.
-- [ ] 6.5 thread 맥락과 각 Post 상세 이동을 유니버설 route에 연결한다.
-- [ ] 6.6 Reply+Quote·권한 경계·fragment integration test와 관련 client check를 통과시킨다.
+- [ ] 6.4 승인된 Parent·조상·descendant 결과를 Post 상세 query와 route-owned pagination fragment에 연결하고 ancestor reverse와 descendant `replyParent { id }` 비교로 direct connector metadata를 만든다. role별 기존 Post fragment와 nullable Source의 `PostListItem_post` fragment를 함께 연결한다.
+- [ ] 6.5 thread 맥락과 각 Post 상세 이동을 유니버설 route에 연결하고, Web document/window와 Native sticky-header `ScrollView`에서 20개 page의 공통 near-end 무한 스크롤·초기 viewport auto-fill·loading·부분 오류 retry를 구현한다.
+- [ ] 6.6 Reply+Quote Source 존재·부재, 권한 경계, fragment integration, Web document 다음 page append·중복 방지·종료·auto-fill·부분 실패 retry와 Native `ScrollView` 공통 판정 test, 실제 iOS/Android 화면 확인 및 관련 client check를 통과시킨다.
 
 ## 7. PROD-388 Reply 계약 통합 검증과 archive
 

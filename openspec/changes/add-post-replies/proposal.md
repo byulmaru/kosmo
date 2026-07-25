@@ -8,7 +8,7 @@ Kosmo는 Reply를 별도 Post Kind가 아니라 Content와 직접 Reply Parent �
 - 일반 Post, Reply, Quote, Reply+Quote와 Content 없는 Repost의 허용 조합을 공통 구조 검증으로 판정한다.
 - 조회 가능한 직접 Reply Parent, pagination 없는 `replyAncestors` 조상 경로와 직접·간접 하위 Reply를 기존 단일 GraphQL `Post` 계약에 연결한다.
 - Home Post List에는 승인된 Reply 후보를 포함하고 Profile Post List에서는 Reply를 제외한다.
-- Post 상세에서 조회 가능한 조상·현재 Post·하위 Reply를 thread로 연결한다.
+- Post 상세에서 조회 가능한 조상·현재 Post·하위 Reply를 thread로 연결하고, 하위 Reply Relay page를 스크롤 경계에서 자동으로 이어 붙인다.
 - Reply 작성 action·composer, Quote 작성 action, ActivityPub `inReplyTo`, Post Media와 Notification은 후속 계약으로 유지한다.
 
 ## Authority / Provenance
