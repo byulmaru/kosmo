@@ -37,7 +37,7 @@
 
 ### Requirement: Source Post 이동과 목록 연결
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-389`, `PROD-402`, `PROD-430`, `PROD-415`, `PROD-453` 유니버설 앱은 Home과 Profile Post List에서 Repost·Quote Source를 표시하고 기존 canonical Post route로 이동할 수 있어야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-389`, `PROD-402`, `PROD-430`, `PROD-415`, `PROD-453` 유니버설 앱은 Home, Profile과 Bookmark 목록에서 Repost·Quote Source를 표시하고 기존 canonical Post route로 이동할 수 있어야 한다(MUST).
 
 #### Scenario: Source Post 이동
 
@@ -57,10 +57,10 @@
 - **WHEN** 사용자가 Repost Author 또는 Source Author의 Profile affordance를 각각 활성화한다
 - **THEN** 앱은 선택한 Author의 canonical Profile route로 이동한다
 
-#### Scenario: Home과 Profile 목록 연결
+#### Scenario: Home, Profile과 Bookmark 목록 연결
 
-- **WHEN** PROD-430의 connection이 Repost 후보를 반환한다
-- **THEN** Home과 Profile route는 공용 Post List item fragment를 통해 Repost·Quote presentation을 표시한다
+- **WHEN** PROD-430의 Home/Profile connection 또는 Bookmark connection이 조회 가능한 Repost·Quote를 반환한다
+- **THEN** Home, Profile과 Bookmark route는 공용 Post List item fragment를 통해 Repost·Quote presentation을 표시한다
 - **AND** route query가 presentation용 scalar field를 중복 소유하지 않는다
 
 #### Scenario: unavailable Source 결과
