@@ -62,7 +62,7 @@ describe('useRepostAction Relay cache contract', () => {
     assert.deepEqual(sourceRecord(environment).viewerRepost, { __ref: activeRepostId });
   });
 
-  it('uses the exact active Repost id for delete without changing the source cache', () => {
+  it('keeps the source cache unchanged after the delete payload', () => {
     const environment = createEnvironment();
     const before = sourceRecord(environment);
     const operation = createOperationDescriptor(getRequest(deletePostMutation), {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { graphql, RelayEnvironmentProvider, useLazyLoadQuery } from 'react-relay';
 import {
@@ -6,13 +6,14 @@ import {
   Environment,
   getRequest,
   Network,
+  Observable,
   RecordSource,
   Store,
 } from 'relay-runtime';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { PostActionBar } from '@/components/post/PostActionBar';
 import { useRepostAction } from '@/components/post/useRepostAction';
-import { useRelayActor } from '@/relay/RelayActorProvider';
+import { RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import RepostActionStoryQueryNode from './__generated__/RepostActionStoryQuery.graphql';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
@@ -31,11 +32,13 @@ const repostActionStoryQuery = graphql`
   }
 `;
 
-function RepostActionStory() {
+function RepostActionStory({ storeOnly = false }: { storeOnly?: boolean }) {
   const [errorCount, setErrorCount] = useState(0);
-  const data = useLazyLoadQuery<RepostActionStoryQuery>(repostActionStoryQuery, {
-    id: sourcePostId,
-  });
+  const data = useLazyLoadQuery<RepostActionStoryQuery>(
+    repostActionStoryQuery,
+    { id: sourcePostId },
+    storeOnly ? { fetchPolicy: 'store-only' } : undefined,
+  );
   const repost = useRepostAction(data.node!.post!, {
     onError: () => setErrorCount((count) => count + 1),
   });
@@ -49,16 +52,64 @@ function RepostActionStory() {
 }
 
 function ResetActor() {
-  const { resetActor } = useRelayActor();
+  const { resetActor, revision } = useRelayActor();
 
   return (
-    <Text
-      accessibilityLabel="두 번째 프로필로 전환"
-      accessibilityRole="button"
-      onPress={() => resetActor('profile-b')}
-    >
-      두 번째 프로필로 전환
-    </Text>
+    <View>
+      <Text
+        accessibilityLabel="두 번째 프로필로 전환"
+        accessibilityRole="button"
+        onPress={() => resetActor('profile-b')}
+      >
+        두 번째 프로필로 전환
+      </Text>
+      <Text testID="actor-revision">{revision}</Text>
+    </View>
+  );
+}
+
+function ActorResetIgnoresStaleCallbacksStory() {
+  const staleActorRequest = useRef<((error: Error) => void) | null>(null);
+  const mutationRequestCount = useRef(0);
+  const [mutationRequests, setMutationRequests] = useState(0);
+  const createEnvironment = useCallback(() => {
+    const environment = new Environment({
+      network: Network.create((request) => {
+        return Observable.create((sink) => {
+          if (request.operationKind !== 'mutation') {
+            sink.next({ data: { node: unselectedSource } } as GraphQLResponse);
+            sink.complete();
+            return;
+          }
+
+          setMutationRequests((count) => count + 1);
+          if (mutationRequestCount.current++ === 0) {
+            staleActorRequest.current = (error) => sink.error(error);
+          }
+        });
+      }),
+      store: new Store(new RecordSource()),
+    });
+    environment.commitPayload(
+      createOperationDescriptor(getRequest(RepostActionStoryQueryNode), { id: sourcePostId }),
+      { node: unselectedSource },
+    );
+    return environment;
+  }, []);
+
+  return (
+    <RelayActorProvider createEnvironment={createEnvironment}>
+      <RepostActionStory storeOnly />
+      <ResetActor />
+      <Text
+        accessibilityLabel="첫 번째 프로필 요청 실패"
+        accessibilityRole="button"
+        onPress={() => staleActorRequest.current?.(new Error('첫 번째 프로필 요청 실패'))}
+      >
+        첫 번째 프로필 요청 실패
+      </Text>
+      <Text testID="repost-mutation-request-count">{mutationRequests}</Text>
+    </RelayActorProvider>
   );
 }
 
@@ -261,6 +312,31 @@ export const ActorResetUsesNewStore: Story = {
       <ResetActor />
     </>
   ),
+};
+
+export const ActorResetIgnoresStaleCallbacks: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const repost = await canvas.findByRole('button', { name: '재게시' });
+    await userEvent.click(repost);
+    await waitFor(() =>
+      expect(canvas.getByTestId('repost-mutation-request-count')).toHaveTextContent('1'),
+    );
+
+    await userEvent.click(canvas.getByRole('button', { name: '두 번째 프로필로 전환' }));
+    await waitFor(() => expect(canvas.getByTestId('actor-revision')).toHaveTextContent('1'));
+    const secondActorRepost = canvas.getByRole('button', { name: '재게시' });
+    await userEvent.click(secondActorRepost);
+    await waitFor(() =>
+      expect(canvas.getByTestId('repost-mutation-request-count')).toHaveTextContent('2'),
+    );
+    await waitFor(() => expect(secondActorRepost).toHaveAttribute('aria-busy', 'true'));
+
+    await userEvent.click(canvas.getByRole('button', { name: '첫 번째 프로필 요청 실패' }));
+    expect(canvas.getByTestId('repost-error-count')).toHaveTextContent('0');
+    expect(secondActorRepost).toHaveAttribute('aria-busy', 'true');
+  },
+  render: () => <ActorResetIgnoresStaleCallbacksStory />,
 };
 
 export const HookRequestVariablesAndDuplicateGuard: Story = {

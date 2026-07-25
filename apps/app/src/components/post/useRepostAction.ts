@@ -57,7 +57,10 @@ export function useRepostAction(
   const [commitDelete, isDeleting] =
     useMutation<useRepostActionDeletePostMutation>(deletePostMutation);
   const inFlight = useRef(false);
+  const currentEnvironment = useRef(environment);
   const processing = isReposting || isDeleting;
+
+  currentEnvironment.current = environment;
 
   useEffect(() => {
     inFlight.current = false;
@@ -79,18 +82,27 @@ export function useRepostAction(
     }
 
     inFlight.current = true;
+    const requestEnvironment = environment;
     const callbacks = {
       onCompleted: (
         _response: unknown,
         errors: ReadonlyArray<{ message: string }> | null | undefined,
       ) => {
+        if (currentEnvironment.current !== requestEnvironment) {
+          return;
+        }
         if (errors?.[0]) {
           finishWithError(new Error(errors[0].message));
           return;
         }
         finish();
       },
-      onError: finishWithError,
+      onError: (error: Error) => {
+        if (currentEnvironment.current !== requestEnvironment) {
+          return;
+        }
+        finishWithError(error);
+      },
     };
 
     if (data.viewerRepost) {
@@ -99,7 +111,16 @@ export function useRepostAction(
     }
 
     commitRepost({ ...callbacks, variables: { sourceId: data.id } });
-  }, [commitDelete, commitRepost, data.id, data.viewerRepost, finish, finishWithError, processing]);
+  }, [
+    commitDelete,
+    commitRepost,
+    data.id,
+    data.viewerRepost,
+    environment,
+    finish,
+    finishWithError,
+    processing,
+  ]);
 
   return {
     accessibilityLabel: data.viewerRepost ? '재게시 취소' : '재게시',
