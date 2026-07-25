@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Text } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, userEvent, within } from 'storybook/test';
+import { ReactionProfileConnection } from '@/components/reaction/ReactionProfileConnection';
 import { ReactionProfileList } from '@/components/reaction/ReactionProfileList';
 import { ReactionSelector } from '@/components/reaction/ReactionSelector';
 import { ReactionSummary } from '@/components/reaction/ReactionSummary';
@@ -9,6 +10,7 @@ import { profile } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ReactionOption, ReactionToggleIntent } from '@/components/reaction/ReactionSelector';
+import type { ReactionProfileConnectionStoriesQuery } from './__generated__/ReactionProfileConnectionStoriesQuery.graphql';
 import type { ReactionsStoriesQuery as ReactionsStoriesQueryType } from './__generated__/ReactionsStoriesQuery.graphql';
 
 const tiedEntries = [
@@ -48,6 +50,37 @@ const storyProfiles = [
   }),
 ];
 
+const reactionPostWithProfiles = {
+  __typename: 'Post' as const,
+  id: 'reaction-post',
+  reactionProfiles: {
+    edges: storyProfiles.map((node, index) => ({
+      cursor: `reaction-profile-cursor-${index + 1}`,
+      node,
+    })),
+    pageInfo: { endCursor: 'reaction-profile-cursor-2', hasNextPage: true },
+  },
+};
+
+const reactionProfilesNextPage = {
+  node: {
+    ...reactionPostWithProfiles,
+    reactionProfiles: {
+      edges: [
+        {
+          cursor: 'reaction-profile-cursor-3',
+          node: profile({
+            displayName: '혜성 반응 프로필',
+            id: 'reaction-profile-comet',
+            relativeHandle: '@comet',
+          }),
+        },
+      ],
+      pageInfo: { endCursor: 'reaction-profile-cursor-3', hasNextPage: false },
+    },
+  },
+};
+
 const ReactionsStoriesQuery = graphql`
   query ReactionsStoriesQuery($ids: [ID!]!) {
     nodes(ids: $ids) {
@@ -55,6 +88,19 @@ const ReactionsStoriesQuery = graphql`
       ... on Profile {
         id
         ...ProfileListItem_profile @alias(as: "reactionListItem")
+      }
+    }
+  }
+`;
+
+const ReactionProfileConnectionStoriesQueryNode = graphql`
+  query ReactionProfileConnectionStoriesQuery($reactionType: String!) {
+    node(id: "reaction-post") {
+      __typename
+      ... on Post {
+        ...ReactionProfileConnection_post
+          @arguments(reactionType: $reactionType)
+          @alias(as: "reactionProfileConnection")
       }
     }
   }
@@ -83,6 +129,17 @@ function requireFragment<T>(fragment: T | null | undefined, label: string): T {
     throw new Error(`Missing ${label} fragment reference.`);
   }
   return fragment;
+}
+
+function ReactionProfileConnectionStory() {
+  const data = useLazyLoadQuery<ReactionProfileConnectionStoriesQuery>(
+    ReactionProfileConnectionStoriesQueryNode,
+    { reactionType: '❤️' },
+  );
+  if (data.node?.__typename !== 'Post' || !data.node.reactionProfileConnection) {
+    throw new Error('Missing Reaction Profile connection Post fixture.');
+  }
+  return <ReactionProfileConnection post={data.node.reactionProfileConnection} reactionType="❤️" />;
 }
 
 function ReactionSummaryCatalog() {
@@ -340,6 +397,31 @@ export const ProfileListStates: Story = {
     expect(loadingMoreButton).toHaveAttribute('aria-busy', 'true');
   },
   render: () => <ReactionProfileListCatalog />,
+};
+
+export const ProfilePaginationFailurePreservesRows: Story = {
+  parameters: {
+    relay: {
+      data: { node: reactionPostWithProfiles },
+      paginationResponses: [
+        { error: '다음 Reaction Profile page 조회 실패' },
+        { data: reactionProfilesNextPage },
+      ],
+    },
+  },
+  render: () => <ReactionProfileConnectionStory />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getAllByRole('link')).toHaveLength(2);
+    await userEvent.click(canvas.getByRole('button', { name: '더 불러오기' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '반응한 프로필을 더 불러오지 못했어요',
+    );
+    expect(canvas.getAllByRole('link')).toHaveLength(2);
+    await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
+    await expect(canvas.findAllByRole('link')).resolves.toHaveLength(3);
+    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+  },
 };
 
 export const QuickPickerInteraction: Story = {
