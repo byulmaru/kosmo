@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -7,7 +7,6 @@ import { PostContentRenderer } from './PostContentRenderer';
 import type { ReactNode } from 'react';
 
 export type PostPresentationLinkTarget =
-  | 'nestedSourcePost'
   | 'postAuthor'
   | 'postDetail'
   | 'sourceAuthor'
@@ -30,17 +29,11 @@ export type PresentationContent = {
   readonly document: unknown;
 };
 
-export type SourcePostReferencePresentationData = {
-  readonly id: string;
-  readonly profile: Pick<PresentationProfile, 'relativeHandle'>;
-};
-
 export type SourcePostPresentationData = {
   readonly content: PresentationContent | null;
   readonly createdAt: string;
   readonly id: string;
   readonly profile: PresentationProfile;
-  readonly repostSource: SourcePostReferencePresentationData | null;
 };
 
 export type PostSourcePresentationData = {
@@ -65,9 +58,11 @@ function presentationKind(post: PostSourcePresentationData): PresentationKind {
 }
 
 export function PostSourcePresentationView({
+  onSourcePostPress,
   post,
   renderLink,
 }: {
+  onSourcePostPress: () => void;
   post: PostSourcePresentationData;
   renderLink: PostPresentationLinkRenderer;
 }): ReactNode {
@@ -132,19 +127,22 @@ export function PostSourcePresentationView({
     ),
     target: 'sourcePost',
   });
-  const nestedSourcePlaceholder = source.repostSource
-    ? renderLink({
-        accessibilityLabel: '인용한 게시글 보기',
-        children: (
-          <View style={styles.nestedSourceTarget} testID="nested-source-post-placeholder">
-            <Text style={[styles.nestedSourceLabel, { color: theme.textSecondary }]}>
-              인용한 게시글 보기
-            </Text>
-          </View>
-        ),
-        target: 'nestedSourcePost',
-      })
-    : null;
+  const sourceBody = source.content ? (
+    <Pressable
+      accessible={false}
+      focusable={false}
+      onPress={onSourcePostPress}
+      style={styles.sourceBody}
+      tabIndex={-1}
+      testID="source-post-body"
+    >
+      <PostContentRenderer
+        bodyText={source.content.bodyText}
+        document={source.content.document}
+        size="md"
+      />
+    </Pressable>
+  ) : null;
 
   if (kind === 'repost') {
     return (
@@ -169,16 +167,7 @@ export function PostSourcePresentationView({
           <View style={styles.authorSlot}>{sourceAuthor}</View>
           {sourceTimestamp}
         </View>
-        {source.content ? (
-          <View style={styles.sourceBody}>
-            <PostContentRenderer
-              bodyText={source.content.bodyText}
-              document={source.content.document}
-              size="md"
-            />
-          </View>
-        ) : null}
-        {nestedSourcePlaceholder}
+        {sourceBody}
       </View>
     );
   }
@@ -197,16 +186,7 @@ export function PostSourcePresentationView({
           <View style={styles.authorSlot}>{sourceAuthor}</View>
           {sourceTimestamp}
         </View>
-        {source.content ? (
-          <View style={styles.sourceBody}>
-            <PostContentRenderer
-              bodyText={source.content.bodyText}
-              document={source.content.document}
-              size="md"
-            />
-          </View>
-        ) : null}
-        {nestedSourcePlaceholder}
+        {sourceBody}
       </View>
     </View>
   );
@@ -264,8 +244,6 @@ const styles = StyleSheet.create({
   authorHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, minWidth: 0 },
   authorSlot: { flex: 1, minWidth: 0 },
   timestamp: { fontFamily: 'SUIT', minHeight: 44, minWidth: 44, paddingTop: 12, ...typography.xsm },
-  sourceBody: { minWidth: 0 },
-  nestedSourceTarget: { justifyContent: 'center', minHeight: 44 },
-  nestedSourceLabel: { fontFamily: 'SUIT', ...typography.sm },
+  sourceBody: { justifyContent: 'center', minHeight: 44, minWidth: 0 },
   preview: { borderRadius: radii.lg, borderWidth: 1, gap: spacing.sm, padding: spacing.md },
 });

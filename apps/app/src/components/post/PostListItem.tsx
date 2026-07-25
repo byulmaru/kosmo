@@ -1,4 +1,4 @@
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -45,18 +45,13 @@ const PostListItemFragment = graphql`
         handle
         relativeHandle
       }
-      repostSource {
-        id
-        profile {
-          relativeHandle
-        }
-      }
     }
     ...PostBody_post
   }
 `;
 
 export function PostListItem({ post: postKey }: { post: PostListItem_post$key }) {
+  const router = useRouter();
   const theme = useTheme();
   const post = useFragment(PostListItemFragment, postKey);
   const profileHref = `/${post.profile.relativeHandle}` as const;
@@ -70,21 +65,14 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
     const source = post.repostSource;
     const sourceProfileHref = `/${source.profile.relativeHandle}` as const;
     const sourcePostHref = `/${source.profile.relativeHandle}/${source.id}` as const;
-    const nestedSourcePostHref = source.repostSource
-      ? (`/${source.repostSource.profile.relativeHandle}/${source.repostSource.id}` as const)
-      : null;
     const hrefs = {
-      nestedSourcePost: nestedSourcePostHref,
       postAuthor: profileHref,
       postDetail: detailHref,
       sourceAuthor: sourceProfileHref,
       sourcePost: sourcePostHref,
-    } satisfies Record<PostPresentationLinkTarget, string | null>;
+    } satisfies Record<PostPresentationLinkTarget, string>;
     const renderLink: PostPresentationLinkRenderer = ({ accessibilityLabel, children, target }) => {
       const href = hrefs[target];
-      if (!href) {
-        throw new Error('nestedSourcePost target requires a visible direct relation.');
-      }
 
       return (
         <Link asChild href={href}>
@@ -121,19 +109,17 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
           handle: source.profile.handle,
           relativeHandle: source.profile.relativeHandle,
         },
-        repostSource: source.repostSource
-          ? {
-              id: source.repostSource.id,
-              profile: { relativeHandle: source.repostSource.profile.relativeHandle },
-            }
-          : null,
       },
     };
 
     return (
       <View style={[styles.card, { borderColor: theme.border }]}>
         <View style={styles.sourcePresentation}>
-          <PostSourcePresentationView post={presentationPost} renderLink={renderLink} />
+          <PostSourcePresentationView
+            onSourcePostPress={() => router.push(sourcePostHref)}
+            post={presentationPost}
+            renderLink={renderLink}
+          />
         </View>
       </View>
     );
