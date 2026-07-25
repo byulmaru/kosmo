@@ -122,6 +122,23 @@ const sourcePost = post({
   id: 'post-source',
   profile: sourceAuthor,
 });
+const deepestSourceAuthor = profile({
+  displayName: '두 번째 Source 작성자',
+  handle: 'deep-source@remote.example',
+  id: 'profile-source-depth-2',
+  relativeHandle: '@deep-source@remote.example',
+});
+const deepestSourcePost = post({
+  bodyText: '두 번째 Source의 본문은 목록에서 full preview하지 않습니다.',
+  id: 'post-source-depth-2',
+  profile: deepestSourceAuthor,
+});
+const sourceQuotePost = post({
+  bodyText: '첫 번째 direct Source Quote의 본문입니다.',
+  id: 'post-source-quote',
+  profile: sourceAuthor,
+  repostSource: deepestSourcePost,
+});
 const pureRepost = post({
   bodyText: null,
   id: 'post-repost',
@@ -133,6 +150,18 @@ const quotePost = post({
   id: 'post-quote',
   profile: repostAuthor,
   repostSource: sourcePost,
+});
+const pureRepostOfQuote = post({
+  bodyText: null,
+  id: 'post-repost-of-quote',
+  profile: repostAuthor,
+  repostSource: sourceQuotePost,
+});
+const quoteOfQuotePost = post({
+  bodyText: 'Source Quote를 인용하는 outer Quote 본문입니다.',
+  id: 'post-quote-of-quote',
+  profile: repostAuthor,
+  repostSource: sourceQuotePost,
 });
 const replyQuotePost = post({
   bodyText: '답글 관계를 유지하는 인용입니다.',
@@ -327,6 +356,10 @@ const storyPosts = [
   routeHiddenAncestorPost,
   routeVisibleParentPost,
   routeBoundaryCurrentPost,
+  deepestSourcePost,
+  sourceQuotePost,
+  pureRepostOfQuote,
+  quoteOfQuotePost,
 ];
 const composerProfile = profile({ id: 'profile-composer' });
 const emptyPostsProfile = profileWithPosts([], { id: 'profile-posts-empty' });
@@ -394,14 +427,18 @@ type PostNode = Extract<
 >;
 
 type PostsStoryArgs = {
+  onNestedSourcePost?: ReturnType<typeof fn>;
   onPostAuthor?: ReturnType<typeof fn>;
+  onPostDetail?: ReturnType<typeof fn>;
   onRetry?: ReturnType<typeof fn>;
   onSourceAuthor?: ReturnType<typeof fn>;
   onSourcePost?: ReturnType<typeof fn>;
 };
 
 type PresentationCallbacks = {
+  nestedSourcePost: ReturnType<typeof fn>;
   postAuthor: ReturnType<typeof fn>;
+  postDetail: ReturnType<typeof fn>;
   sourceAuthor: ReturnType<typeof fn>;
   sourcePost: ReturnType<typeof fn>;
 };
@@ -485,17 +522,33 @@ function toPostSourcePresentationData(post: StoryPost): PostSourcePresentationDa
           createdAt: repostSource.createdAt,
           id: repostSource.id,
           profile: repostSource.profile,
+          repostSource: repostSource.repostSource
+            ? {
+                id: repostSource.repostSource.id,
+                profile: {
+                  relativeHandle: repostSource.repostSource.profile.relativeHandle,
+                },
+              }
+            : null,
         }
       : null,
   };
 }
 
 function requirePresentationCallbacks(args: PostsStoryArgs): PresentationCallbacks {
-  if (!args.onPostAuthor || !args.onSourceAuthor || !args.onSourcePost) {
+  if (
+    !args.onNestedSourcePost ||
+    !args.onPostAuthor ||
+    !args.onPostDetail ||
+    !args.onSourceAuthor ||
+    !args.onSourcePost
+  ) {
     throw new Error('Repost/Quote presentation stories require isolated link callbacks.');
   }
   return {
+    nestedSourcePost: args.onNestedSourcePost,
     postAuthor: args.onPostAuthor,
+    postDetail: args.onPostDetail,
     sourceAuthor: args.onSourceAuthor,
     sourcePost: args.onSourcePost,
   };
@@ -748,7 +801,13 @@ export const ListLoadingErrorEmptyAndContent: Story = {
 };
 
 export const PureRepost: Story = {
-  args: { onPostAuthor: fn(), onSourceAuthor: fn(), onSourcePost: fn() },
+  args: {
+    onNestedSourcePost: fn(),
+    onPostAuthor: fn(),
+    onPostDetail: fn(),
+    onSourceAuthor: fn(),
+    onSourcePost: fn(),
+  },
   play: async ({ args, canvasElement }) => {
     const root = within(canvasElement).getByTestId('post-source-presentation');
     const canvas = within(root);
@@ -804,9 +863,52 @@ export const PureRepost: Story = {
   ),
 };
 
+export const PureRepostOfQuote: Story = {
+  args: {
+    onNestedSourcePost: fn(),
+    onPostAuthor: fn(),
+    onPostDetail: fn(),
+    onSourceAuthor: fn(),
+    onSourcePost: fn(),
+  },
+  play: async ({ args, canvasElement }) => {
+    const root = within(canvasElement).getByTestId('post-source-presentation');
+    const canvas = within(root);
+    expect(canvas.queryAllByTestId('source-post-preview')).toHaveLength(0);
+    expect(canvas.getByText('아주 긴 Source 작성자 표시 이름')).toBeVisible();
+    expect(canvas.getByText('첫 번째 direct Source Quote의 본문입니다.')).toBeVisible();
+    expect(root.textContent).not.toContain(
+      '두 번째 Source의 본문은 목록에서 full preview하지 않습니다.',
+    );
+    const placeholder = canvas.getByTestId('nested-source-post-placeholder');
+    const nestedLink = placeholder.closest('[role="link"]');
+    expect(nestedLink).not.toBeNull();
+    expect(nestedLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(root.querySelector('a a')).toBeNull();
+    await userEvent.click(canvas.getByLabelText('인용한 게시글 보기'));
+    await expect(args.onNestedSourcePost).toHaveBeenCalledTimes(1);
+    await expect(args.onPostAuthor).not.toHaveBeenCalled();
+    await expect(args.onPostDetail).not.toHaveBeenCalled();
+    await expect(args.onSourceAuthor).not.toHaveBeenCalled();
+    await expect(args.onSourcePost).not.toHaveBeenCalled();
+  },
+  render: (args) => (
+    <RepostQuotePresentationStory
+      callbacks={requirePresentationCallbacks(args)}
+      postId="post-repost-of-quote"
+    />
+  ),
+};
+
 export const Quote: Story = {
-  args: { onPostAuthor: fn(), onSourceAuthor: fn(), onSourcePost: fn() },
-  play: async ({ canvasElement }) => {
+  args: {
+    onNestedSourcePost: fn(),
+    onPostAuthor: fn(),
+    onPostDetail: fn(),
+    onSourceAuthor: fn(),
+    onSourcePost: fn(),
+  },
+  play: async ({ args, canvasElement }) => {
     const root = within(canvasElement).getByTestId('post-source-presentation');
     const canvas = within(root);
     expect(canvas.getByText('이 원문에 덧붙이는 인용자의 본문입니다.')).toBeVisible();
@@ -815,9 +917,15 @@ export const Quote: Story = {
     );
     const preview = canvas.getByTestId('source-post-preview');
     expect(preview.textContent).toContain('원문 작성자의 긴 본문과 줄바꿈을 표시합니다.');
-    expect(canvas.getAllByRole('link')).toHaveLength(3);
+    expect(canvas.getAllByRole('link')).toHaveLength(4);
     expect(within(preview).getAllByRole('link')).toHaveLength(2);
     expect(within(preview).queryByRole('button')).not.toBeInTheDocument();
+    expect(canvas.queryByTestId('nested-source-post-placeholder')).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByLabelText('재게시한 코스모 사용자의 게시글 보기'));
+    await expect(args.onPostDetail).toHaveBeenCalledTimes(1);
+    await expect(args.onPostAuthor).not.toHaveBeenCalled();
+    await expect(args.onSourceAuthor).not.toHaveBeenCalled();
+    await expect(args.onSourcePost).not.toHaveBeenCalled();
   },
   render: (args) => (
     <RepostQuotePresentationStory
@@ -827,8 +935,52 @@ export const Quote: Story = {
   ),
 };
 
+export const QuoteOfQuote: Story = {
+  args: {
+    onNestedSourcePost: fn(),
+    onPostAuthor: fn(),
+    onPostDetail: fn(),
+    onSourceAuthor: fn(),
+    onSourcePost: fn(),
+  },
+  play: async ({ args, canvasElement }) => {
+    const root = within(canvasElement).getByTestId('post-source-presentation');
+    const canvas = within(root);
+    expect(canvas.getByText('Source Quote를 인용하는 outer Quote 본문입니다.')).toBeVisible();
+    expect(canvas.queryAllByTestId('source-post-preview')).toHaveLength(1);
+    expect(canvas.getByText('아주 긴 Source 작성자 표시 이름')).toBeVisible();
+    expect(canvas.getByText('첫 번째 direct Source Quote의 본문입니다.')).toBeVisible();
+    expect(root.textContent).not.toContain(
+      '두 번째 Source의 본문은 목록에서 full preview하지 않습니다.',
+    );
+    const placeholder = canvas.getByTestId('nested-source-post-placeholder');
+    const nestedLink = placeholder.closest('[role="link"]');
+    expect(nestedLink).not.toBeNull();
+    expect(nestedLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(root.querySelector('a a')).toBeNull();
+    await userEvent.click(canvas.getByLabelText('인용한 게시글 보기'));
+    await expect(args.onNestedSourcePost).toHaveBeenCalledTimes(1);
+    await expect(args.onPostAuthor).not.toHaveBeenCalled();
+    await expect(args.onPostDetail).not.toHaveBeenCalled();
+    await expect(args.onSourceAuthor).not.toHaveBeenCalled();
+    await expect(args.onSourcePost).not.toHaveBeenCalled();
+  },
+  render: (args) => (
+    <RepostQuotePresentationStory
+      callbacks={requirePresentationCallbacks(args)}
+      postId="post-quote-of-quote"
+    />
+  ),
+};
+
 export const ReplyQuote: Story = {
-  args: { onPostAuthor: fn(), onSourceAuthor: fn(), onSourcePost: fn() },
+  args: {
+    onNestedSourcePost: fn(),
+    onPostAuthor: fn(),
+    onPostDetail: fn(),
+    onSourceAuthor: fn(),
+    onSourcePost: fn(),
+  },
   play: async ({ canvasElement }) => {
     const root = within(canvasElement).getByTestId('post-source-presentation');
     const canvas = within(root);
@@ -844,13 +996,19 @@ export const ReplyQuote: Story = {
 };
 
 export const QuoteWithoutSource: Story = {
-  args: { onPostAuthor: fn(), onSourceAuthor: fn(), onSourcePost: fn() },
+  args: {
+    onNestedSourcePost: fn(),
+    onPostAuthor: fn(),
+    onPostDetail: fn(),
+    onSourceAuthor: fn(),
+    onSourcePost: fn(),
+  },
   play: async ({ canvasElement }) => {
     const root = within(canvasElement).getByTestId('post-source-presentation');
     const canvas = within(root);
     expect(canvas.getByText('원문을 더 이상 볼 수 없어도 남는 인용 본문입니다.')).toBeVisible();
     expect(canvas.queryByTestId('source-post-preview')).not.toBeInTheDocument();
-    expect(canvas.getAllByRole('link')).toHaveLength(1);
+    expect(canvas.getAllByRole('link')).toHaveLength(2);
   },
   render: (args) => (
     <RepostQuotePresentationStory
@@ -861,7 +1019,13 @@ export const QuoteWithoutSource: Story = {
 };
 
 export const OrdinaryPost: Story = {
-  args: { onPostAuthor: fn(), onSourceAuthor: fn(), onSourcePost: fn() },
+  args: {
+    onNestedSourcePost: fn(),
+    onPostAuthor: fn(),
+    onPostDetail: fn(),
+    onSourceAuthor: fn(),
+    onSourcePost: fn(),
+  },
   play: async ({ canvasElement }) => {
     const root = within(canvasElement).getByTestId('post-source-presentation');
     const canvas = within(root);
@@ -870,7 +1034,7 @@ export const OrdinaryPost: Story = {
       formatTimelineTimestamp(shortPost.createdAt),
     );
     expect(canvas.queryByTestId('source-post-preview')).not.toBeInTheDocument();
-    expect(canvas.getAllByRole('link')).toHaveLength(1);
+    expect(canvas.getAllByRole('link')).toHaveLength(2);
   },
   render: (args) => (
     <RepostQuotePresentationStory callbacks={requirePresentationCallbacks(args)} postId="short" />
@@ -878,7 +1042,13 @@ export const OrdinaryPost: Story = {
 };
 
 export const InvalidContentlessReplySource: Story = {
-  args: { onPostAuthor: fn(), onSourceAuthor: fn(), onSourcePost: fn() },
+  args: {
+    onNestedSourcePost: fn(),
+    onPostAuthor: fn(),
+    onPostDetail: fn(),
+    onSourceAuthor: fn(),
+    onSourcePost: fn(),
+  },
   play: async ({ canvasElement }) => {
     expect(within(canvasElement).queryByTestId('post-source-presentation')).not.toBeInTheDocument();
   },
@@ -891,7 +1061,13 @@ export const InvalidContentlessReplySource: Story = {
 };
 
 export const LinkedSourceQuote: Story = {
-  args: { onPostAuthor: fn(), onSourceAuthor: fn(), onSourcePost: fn() },
+  args: {
+    onNestedSourcePost: fn(),
+    onPostAuthor: fn(),
+    onPostDetail: fn(),
+    onSourceAuthor: fn(),
+    onSourcePost: fn(),
+  },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     const openURL = fn(async () => undefined);
@@ -915,7 +1091,13 @@ export const LinkedSourceQuote: Story = {
 };
 
 export const RepostQuoteLongContentMobile: Story = {
-  args: { onPostAuthor: fn(), onSourceAuthor: fn(), onSourcePost: fn() },
+  args: {
+    onNestedSourcePost: fn(),
+    onPostAuthor: fn(),
+    onPostDetail: fn(),
+    onSourceAuthor: fn(),
+    onSourcePost: fn(),
+  },
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: async ({ canvasElement }) => {
     const root = within(canvasElement).getByTestId('post-source-presentation');

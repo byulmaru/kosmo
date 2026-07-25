@@ -6,7 +6,12 @@ import { radii, spacing, typography } from '@/theme/tokens';
 import { PostContentRenderer } from './PostContentRenderer';
 import type { ReactNode } from 'react';
 
-export type PostPresentationLinkTarget = 'postAuthor' | 'sourceAuthor' | 'sourcePost';
+export type PostPresentationLinkTarget =
+  | 'nestedSourcePost'
+  | 'postAuthor'
+  | 'postDetail'
+  | 'sourceAuthor'
+  | 'sourcePost';
 
 export type PostPresentationLinkRenderer = (props: {
   accessibilityLabel: string;
@@ -25,11 +30,17 @@ export type PresentationContent = {
   readonly document: unknown;
 };
 
+export type SourcePostReferencePresentationData = {
+  readonly id: string;
+  readonly profile: Pick<PresentationProfile, 'relativeHandle'>;
+};
+
 export type SourcePostPresentationData = {
   readonly content: PresentationContent | null;
   readonly createdAt: string;
   readonly id: string;
   readonly profile: PresentationProfile;
+  readonly repostSource: SourcePostReferencePresentationData | null;
 };
 
 export type PostSourcePresentationData = {
@@ -72,12 +83,19 @@ export function PostSourcePresentationView({
     children: <Author profile={post.profile} showAvatar={kind !== 'repost'} />,
     target: 'postAuthor',
   });
-  const postHeader = (
-    <View style={styles.authorHeader}>
-      <View style={styles.authorSlot}>{postAuthor}</View>
+  const postTimestamp = renderLink({
+    accessibilityLabel: `${post.profile.displayName}의 게시글 보기`,
+    children: (
       <Text style={[styles.timestamp, { color: theme.textSecondary }]} testID="post-timestamp">
         {formatTimelineTimestamp(post.createdAt)}
       </Text>
+    ),
+    target: 'postDetail',
+  });
+  const postHeader = (
+    <View style={styles.authorHeader}>
+      <View style={styles.authorSlot}>{postAuthor}</View>
+      {postTimestamp}
     </View>
   );
 
@@ -114,6 +132,19 @@ export function PostSourcePresentationView({
     ),
     target: 'sourcePost',
   });
+  const nestedSourcePlaceholder = source.repostSource
+    ? renderLink({
+        accessibilityLabel: '인용한 게시글 보기',
+        children: (
+          <View style={styles.nestedSourceTarget} testID="nested-source-post-placeholder">
+            <Text style={[styles.nestedSourceLabel, { color: theme.textSecondary }]}>
+              인용한 게시글 보기
+            </Text>
+          </View>
+        ),
+        target: 'nestedSourcePost',
+      })
+    : null;
 
   if (kind === 'repost') {
     return (
@@ -147,6 +178,7 @@ export function PostSourcePresentationView({
             />
           </View>
         ) : null}
+        {nestedSourcePlaceholder}
       </View>
     );
   }
@@ -174,6 +206,7 @@ export function PostSourcePresentationView({
             />
           </View>
         ) : null}
+        {nestedSourcePlaceholder}
       </View>
     </View>
   );
@@ -232,5 +265,7 @@ const styles = StyleSheet.create({
   authorSlot: { flex: 1, minWidth: 0 },
   timestamp: { fontFamily: 'SUIT', minHeight: 44, minWidth: 44, paddingTop: 12, ...typography.xsm },
   sourceBody: { minWidth: 0 },
+  nestedSourceTarget: { justifyContent: 'center', minHeight: 44 },
+  nestedSourceLabel: { fontFamily: 'SUIT', ...typography.sm },
   preview: { borderRadius: radii.lg, borderWidth: 1, gap: spacing.sm, padding: spacing.md },
 });
