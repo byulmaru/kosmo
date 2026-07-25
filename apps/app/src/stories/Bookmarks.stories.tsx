@@ -89,6 +89,54 @@ const bookmarkOtherOwner = {
     pageInfo: { endCursor: 'bookmark-b-cursor-1', hasNextPage: true },
   },
 };
+const bookmarkDeepSource = post({
+  bodyText: '북마크에서 표시하지 않아야 하는 두 번째 Source 본문입니다.',
+  id: 'bookmark-source-depth-2',
+  profile: profile({
+    displayName: '깊은 원문 작성자',
+    handle: 'deep-bookmark-source',
+    id: 'bookmark-deep-source-author',
+    relativeHandle: '@deep-bookmark-source',
+  }),
+});
+const bookmarkDirectQuote = post({
+  bodyText: '북마크에서 한 단계만 표시하는 인용 Source입니다.',
+  id: 'bookmark-source-quote',
+  profile: profile({
+    displayName: '인용 Source 작성자',
+    handle: 'bookmark-source',
+    id: 'bookmark-source-author',
+    relativeHandle: '@bookmark-source',
+  }),
+  repostSource: bookmarkDeepSource,
+});
+const bookmarkedQuoteOfQuote = post({
+  bodyText: '북마크에 저장한 인용 게시글입니다.',
+  id: 'bookmark-quote-of-quote',
+  profile: profile({
+    displayName: '북마크 인용 작성자',
+    handle: 'bookmark-quote-author',
+    id: 'bookmark-quote-author',
+    relativeHandle: '@bookmark-quote-author',
+  }),
+  repostSource: bookmarkDirectQuote,
+});
+const bookmarkPresentationOwner = {
+  ...profile({ id: 'bookmark-owner' }),
+  bookmarks: {
+    edges: [
+      {
+        cursor: 'bookmark-presentation-cursor',
+        node: {
+          __typename: 'Bookmark',
+          id: 'bookmark-presentation',
+          post: bookmarkedQuoteOfQuote,
+        },
+      },
+    ],
+    pageInfo: { endCursor: 'bookmark-presentation-cursor', hasNextPage: false },
+  },
+};
 
 const BookmarksStoriesQuery = graphql`
   query BookmarksStoriesQuery($ids: [ID!]!) {
@@ -378,6 +426,32 @@ export const ConnectionProfileSwitchClearsPaginationError: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'B 프로필로 전환' }));
     expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
     expect(canvas.getByRole('button', { name: '더 불러오기' })).toBeVisible();
+  },
+};
+
+export const RepostQuoteUsesOneSourceDepth: Story = {
+  parameters: { relay: { data: { node: bookmarkPresentationOwner } } },
+  render: () => <BookmarkConnectionStory />,
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getAllByRole('article')).toHaveLength(1);
+    expect(canvas.getByText('북마크에 저장한 인용 게시글입니다.')).toBeVisible();
+    expect(canvas.getByText('북마크에서 한 단계만 표시하는 인용 Source입니다.')).toBeVisible();
+    expect(
+      canvas.queryByText('북마크에서 표시하지 않아야 하는 두 번째 Source 본문입니다.'),
+    ).not.toBeInTheDocument();
+
+    expect(canvas.getByRole('link', { name: '원문 게시글 보기' })).toHaveAttribute(
+      'href',
+      '/@bookmark-source/bookmark-source-quote',
+    );
+    const nestedSourceLink = canvas.getByRole('link', { name: '인용한 게시글 보기' });
+    expect(nestedSourceLink).toHaveAttribute(
+      'href',
+      '/@deep-bookmark-source/bookmark-source-depth-2',
+    );
+    expect(nestedSourceLink.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(canvasElement.querySelector('a a')).toBeNull();
   },
 };
 
