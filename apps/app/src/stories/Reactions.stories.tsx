@@ -1,16 +1,19 @@
 import { useState } from 'react';
-import { Text } from 'react-native';
+import { Button, Text } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, screen, userEvent, within } from 'storybook/test';
+import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { ReactionProfileConnection } from '@/components/reaction/ReactionProfileConnection';
 import { ReactionProfileList } from '@/components/reaction/ReactionProfileList';
 import { ReactionSelector } from '@/components/reaction/ReactionSelector';
 import { ReactionSummary } from '@/components/reaction/ReactionSummary';
+import { useRelayActor } from '@/relay/RelayActorProvider';
 import { profile } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ReactionOption, ReactionToggleIntent } from '@/components/reaction/ReactionSelector';
 import type { ReactionProfileConnectionStoriesQuery } from './__generated__/ReactionProfileConnectionStoriesQuery.graphql';
+import type { ReactionsIntegrationStoriesQuery } from './__generated__/ReactionsIntegrationStoriesQuery.graphql';
 import type { ReactionsStoriesQuery as ReactionsStoriesQueryType } from './__generated__/ReactionsStoriesQuery.graphql';
 
 const tiedEntries = [
@@ -62,6 +65,44 @@ const reactionPostWithProfiles = {
   },
 };
 
+const reactionPostSummary = {
+  __typename: 'Post' as const,
+  id: 'reaction-post',
+  reactionCounts: [
+    { count: 12, type: '❤️' },
+    { count: 7, type: '🎉' },
+  ],
+};
+
+function reactionPostWithProfile(displayName: string, id: string) {
+  return {
+    __typename: 'Post' as const,
+    id: 'reaction-post',
+    reactionProfiles: {
+      edges: [
+        {
+          cursor: `${id}-cursor`,
+          node: profile({ displayName, id, relativeHandle: `@${id}` }),
+        },
+      ],
+      pageInfo: { endCursor: `${id}-cursor`, hasNextPage: false },
+    },
+  };
+}
+
+const reactionPostWithActorAProfiles = reactionPostWithProfile(
+  'Actor A Profile',
+  'reaction-profile-actor-a',
+);
+const reactionPostWithActorBProfiles = reactionPostWithProfile(
+  'Actor B Profile',
+  'reaction-profile-actor-b',
+);
+const reactionPostWithRefreshedProfiles = reactionPostWithProfile(
+  'Refreshed Profile',
+  'reaction-profile-refreshed',
+);
+
 const reactionProfilesNextPage = {
   node: {
     ...reactionPostWithProfiles,
@@ -106,6 +147,17 @@ const ReactionProfileConnectionStoriesQueryNode = graphql`
   }
 `;
 
+const ReactionsIntegrationStoriesQueryNode = graphql`
+  query ReactionsIntegrationStoriesQuery($postId: ID!) {
+    node(id: $postId) {
+      __typename
+      ... on Post {
+        ...PostReactionSummary_post @alias(as: "reactionSummary")
+      }
+    }
+  }
+`;
+
 type ProfileNode = Extract<
   NonNullable<ReactionsStoriesQueryType['response']['nodes'][number]>,
   { readonly __typename: 'Profile' }
@@ -140,6 +192,29 @@ function ReactionProfileConnectionStory() {
     throw new Error('Missing Reaction Profile connection Post fixture.');
   }
   return <ReactionProfileConnection post={data.node.reactionProfileConnection} reactionType="❤️" />;
+}
+
+function PostReactionSummaryStory({ postId = 'reaction-post' }: { postId?: string }) {
+  const data = useLazyLoadQuery<ReactionsIntegrationStoriesQuery>(
+    ReactionsIntegrationStoriesQueryNode,
+    { postId },
+  );
+  if (data.node?.__typename !== 'Post' || !data.node.reactionSummary) {
+    throw new Error('Missing Reaction Summary Post fixture.');
+  }
+
+  return <PostReactionSummary post={data.node.reactionSummary} />;
+}
+
+function ActorSwitchPostReactionSummaryStory() {
+  const { resetActor } = useRelayActor();
+
+  return (
+    <>
+      <Button onPress={() => resetActor('reaction-actor-b')} title="프로필 전환" />
+      <PostReactionSummaryStory />
+    </>
+  );
 }
 
 function ReactionSummaryCatalog() {
@@ -421,6 +496,135 @@ export const ProfilePaginationFailurePreservesRows: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
     await expect(canvas.findAllByRole('link')).resolves.toHaveLength(3);
     expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+  },
+};
+
+export const ZeroCountSummaryIsNotRendered: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        ReactionsIntegrationStoriesQuery: {
+          data: { node: { __typename: 'Post', id: 'post-empty', reactionCounts: [] } },
+        },
+      },
+    },
+  },
+  render: () => <PostReactionSummaryStory postId="post-empty" />,
+  play: ({ canvasElement }) => {
+    expect(within(canvasElement).queryByRole('heading', { name: '반응' })).not.toBeInTheDocument();
+  },
+};
+
+export const SummaryOrderAndModalDismiss: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        ReactionsIntegrationStoriesQuery: { data: { node: reactionPostSummary } },
+        ReactionProfilesModalQuery: { data: { node: reactionPostWithProfiles } },
+      },
+    },
+  },
+  render: () => <PostReactionSummaryStory />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    expect(canvas.getAllByRole('button').map((button) => button.textContent)).toEqual([
+      '❤️ 12',
+      '🎉 7',
+    ]);
+
+    await userEvent.click(canvas.getByRole('button', { name: '❤️ 반응 12개 보기' }));
+    await expect(
+      screen.findByRole('dialog', { name: '❤️ 반응한 프로필' }),
+    ).resolves.toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText('❤️ 반응한 프로필 닫기'));
+    expect(screen.queryByRole('dialog', { name: '❤️ 반응한 프로필' })).not.toBeInTheDocument();
+  },
+};
+
+export const InitialProfileQueryFailureIsInline: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        ReactionsIntegrationStoriesQuery: { data: { node: reactionPostSummary } },
+        ReactionProfilesModalQuery: {
+          sequence: [
+            { error: 'Reaction Profile 최초 조회 실패' },
+            { data: { node: reactionPostWithProfiles } },
+          ],
+        },
+      },
+    },
+  },
+  render: () => <PostReactionSummaryStory />,
+  play: async ({ canvasElement }) => {
+    await userEvent.click(within(canvasElement).getByRole('button', { name: '❤️ 반응 12개 보기' }));
+    await expect(screen.findByRole('alert')).resolves.toHaveTextContent(
+      '반응한 프로필을 불러오지 못했어요',
+    );
+    await userEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    await expect(screen.findByText('별빛 반응 프로필')).resolves.toBeVisible();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText('❤️ 반응한 프로필 닫기'));
+  },
+};
+
+export const ReopenShowsCacheBeforeBackgroundRefresh: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        ReactionsIntegrationStoriesQuery: { data: { node: reactionPostSummary } },
+        ReactionProfilesModalQuery: {
+          sequence: [
+            { data: { node: reactionPostWithActorAProfiles } },
+            { data: { node: reactionPostWithRefreshedProfiles }, delayMs: 150 },
+          ],
+        },
+      },
+    },
+  },
+  render: () => <PostReactionSummaryStory />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const summaryButton = canvas.getByRole('button', { name: '❤️ 반응 12개 보기' });
+
+    await userEvent.click(summaryButton);
+    await expect(screen.findByText('Actor A Profile')).resolves.toBeVisible();
+    await userEvent.click(screen.getByLabelText('❤️ 반응한 프로필 닫기'));
+    await userEvent.click(summaryButton);
+    expect(screen.getByText('Actor A Profile')).toBeInTheDocument();
+    await expect(screen.findByText('Refreshed Profile')).resolves.toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText('❤️ 반응한 프로필 닫기'));
+  },
+};
+
+export const ActorSwitchDoesNotReuseProfileRows: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        ReactionsIntegrationStoriesQuery: [
+          { data: { node: reactionPostSummary } },
+          { data: { node: reactionPostSummary } },
+        ],
+        ReactionProfilesModalQuery: [
+          { data: { node: reactionPostWithActorAProfiles } },
+          { data: { node: reactionPostWithActorBProfiles } },
+        ],
+      },
+    },
+  },
+  render: () => <ActorSwitchPostReactionSummaryStory />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await userEvent.click(canvas.getByRole('button', { name: '❤️ 반응 12개 보기' }));
+    await expect(screen.findByText('Actor A Profile')).resolves.toBeVisible();
+    await userEvent.click(screen.getByLabelText('❤️ 반응한 프로필 닫기'));
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 전환' }));
+    await userEvent.click(await canvas.findByRole('button', { name: '❤️ 반응 12개 보기' }));
+    await expect(screen.findByText('Actor B Profile')).resolves.toBeVisible();
+    expect(screen.queryByText('Actor A Profile')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText('❤️ 반응한 프로필 닫기'));
   },
 };
 
