@@ -130,12 +130,14 @@
 ### Reaction Notification은 source 밖의 Best Effort projection으로 처리한다
 
 - Decision Date: 2026-07-20
-- Status: Accepted
+- Decision Class: Implementation Choice
+- Authority / Provenance: [Notification canonical 객체](../../../docs/domain/objects/notification.md), [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0010](../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4), [PROD-419](https://linear.app/byulmaru/issue/PROD-419/reaction-notification%EC%9D%84-%EC%A0%95%EB%A6%AC%ED%95%9C%EB%8B%A4)
+- Status: Active
 - Context / Problem: Notification 실패가 Reaction 결과를 깨뜨리지 않으면서 source·Recipient·Related Profile·Post·Type 상관관계를 유지해야 한다.
-- Decision Outcome: Reaction commit 뒤 새 source에 대해서만 같은 request에서 Notification create를 await/catch한다. 자기 Post와 Remote Recipient는 생성하지 않는다. Reaction delete commit 뒤 cleanup을 await/catch하며 실패해도 source 결과를 유지한다. stale row는 source/visibility predicate로 모든 API surface에서 숨긴다.
+- Decision Outcome: Reaction commit 뒤 새 source에 대해서만 같은 request에서 Notification create를 await/catch한다. 자기 Post와 Remote Recipient는 생성하지 않는다. Reaction delete commit 뒤 cleanup을 await/catch하며 실패해도 source 결과를 유지하고 source Reaction을 식별할 수 있게 오류를 기록한다. stale row는 source/visibility predicate로 모든 API surface에서 숨긴다.
 - Alternatives Considered: 같은 transaction은 Notification 장애를 source 장애로 확대한다. fire-and-forget은 process 종료와 관측 경계를 잃는다. retry/outbox/queue/backfill은 이번 범위가 아니다.
-- Consequences: 누락 또는 stale Notification이 물리적으로 남을 수 있다. Notification API는 kind별 source visibility를 filter-before-limit으로 적용해야 한다.
-- Confirmation / Follow-up: `add-in-app-notifications` archive 뒤 PROD-413·419에서 source 실패 격리, 숨김, inbox/read/count와 cleanup을 검증한다.
+- Consequences: 누락 또는 stale Notification이 물리적으로 남을 수 있다. Notification API는 kind별 source visibility를 filter-before-limit으로 적용해야 하며 cleanup 실패 로그가 남을 수 있다.
+- Confirmation / Follow-up: PROD-413은 source 실패 격리·숨김·inbox/read/count를 검증했다. PROD-419는 cleanup 성공·반복·실패 격리·오류 관측과 stale visibility를 검증한다.
 
 ### Reaction Notification은 기존 Notification baseline 뒤에 확장한다
 
