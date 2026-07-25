@@ -1,15 +1,20 @@
-import { Platform, ScrollView, StyleSheet, View } from 'react-native';
-import { graphql, useFragment } from 'react-relay';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { graphql, usePaginationFragment } from 'react-relay';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostListItem } from '@/components/post/PostListItem';
+import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/tokens';
 import { PostThreadLayout } from './PostThreadLayout';
+import { createPostThreadNativeScrollHandlers, isPostThreadNearEnd } from './postThreadPagination';
 import type { PropsWithChildren, ReactNode } from 'react';
 import type { ScrollViewProps } from 'react-native';
 import type { PostDetailThread_post$key } from './__generated__/PostDetailThread_post.graphql';
+import type { PostDetailThreadNextPageQuery } from './__generated__/PostDetailThreadNextPageQuery.graphql';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
+import type { PostThreadScrollMetrics } from './postThreadPagination';
 
 const PostDetailThreadFragment = graphql`
   fragment PostDetailThread_post on Post
@@ -90,7 +95,71 @@ export function PostDetailThread({
   post: PostDetailThread_post$key;
 }) {
   const theme = useTheme();
-  const data = useFragment(PostDetailThreadFragment, postKey);
+  const { data, hasNext, isLoadingNext, loadNext } = usePaginationFragment<
+    PostDetailThreadNextPageQuery,
+    PostDetailThread_post$key
+  >(PostDetailThreadFragment, postKey);
+  const [loadError, setLoadError] = useState(false);
+  const requestInFlightRef = useRef(false);
+  const pageErrorRef = useRef(false);
+  const loadNextPage = useCallback(() => {
+    if (!hasNext || isLoadingNext || requestInFlightRef.current) {
+      return;
+    }
+    requestInFlightRef.current = true;
+    pageErrorRef.current = false;
+    setLoadError(false);
+    loadNext(20, {
+      onComplete: (error) => {
+        pageErrorRef.current = Boolean(error);
+        setLoadError(Boolean(error));
+        if (error) {
+          requestInFlightRef.current = false;
+        } else {
+          setTimeout(() => {
+            requestInFlightRef.current = false;
+          }, 0);
+        }
+      },
+    });
+  }, [hasNext, isLoadingNext, loadNext]);
+  const maybeLoadNextPage = useCallback(
+    (metrics: PostThreadScrollMetrics) => {
+      if (!pageErrorRef.current && !loadError && isPostThreadNearEnd(metrics)) {
+        loadNextPage();
+      }
+    },
+    [loadError, loadNextPage],
+  );
+  const nativeMetricsRef = useRef<PostThreadScrollMetrics>({
+    contentLength: 0,
+    offset: 0,
+    viewportLength: 0,
+  });
+  const nativeScrollProps = useMemo(
+    () => createPostThreadNativeScrollHandlers(nativeMetricsRef, maybeLoadNextPage),
+    [maybeLoadNextPage],
+  );
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      return;
+    }
+    const check = () =>
+      maybeLoadNextPage({
+        contentLength: document.documentElement.scrollHeight,
+        offset: window.scrollY,
+        viewportLength: window.innerHeight,
+      });
+    const frame = window.requestAnimationFrame(check);
+    window.addEventListener('scroll', check, { passive: true });
+    window.addEventListener('resize', check);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', check);
+      window.removeEventListener('resize', check);
+    };
+  }, [data.replyDescendants.edges.length, maybeLoadNextPage]);
   const ancestors = [...data.replyAncestors].reverse().map((post, index) => ({
     connectedToPrevious: index > 0,
     id: post.id,
@@ -125,7 +194,7 @@ export function PostDetailThread({
   };
 
   return (
-    <PostDetailFrame header={header}>
+    <PostDetailFrame header={header} nativeScrollProps={nativeScrollProps}>
       <PostThreadLayout<ThreadRenderablePost>
         ancestors={ancestors}
         current={current}
@@ -154,6 +223,17 @@ export function PostDetailThread({
           );
         }}
       />
+      {isLoadingNext ? (
+        <Text accessibilityLiveRegion="polite">답글을 더 불러오는 중입니다.</Text>
+      ) : loadError ? (
+        <View accessibilityRole="alert">
+          <Text>답글을 더 불러오지 못했어요</Text>
+          <Text>이미 불러온 답글은 그대로 유지돼요.</Text>
+          <Button onPress={loadNextPage} tone="secondary">
+            답글 다시 불러오기
+          </Button>
+        </View>
+      ) : null}
     </PostDetailFrame>
   );
 }
