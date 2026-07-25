@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button, Text } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { expect, screen, userEvent, within } from 'storybook/test';
+import { expect, screen, spyOn, userEvent, within } from 'storybook/test';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { ReactionProfileConnection } from '@/components/reaction/ReactionProfileConnection';
 import { ReactionProfileList } from '@/components/reaction/ReactionProfileList';
@@ -543,6 +543,22 @@ export const SummaryOrderAndModalDismiss: Story = {
 };
 
 export const InitialProfileQueryFailureIsInline: Story = {
+  beforeEach: () => {
+    const originalError = console.error;
+    const errorSpy = spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      const isExpectedRouteError = args.some((argument) =>
+        argument instanceof Error
+          ? argument.message === 'Reaction Profile 최초 조회 실패'
+          : typeof argument === 'string' && argument.includes('Reaction Profile 최초 조회 실패'),
+      );
+
+      if (!isExpectedRouteError) {
+        originalError(...args);
+      }
+    });
+
+    return () => errorSpy.mockRestore();
+  },
   parameters: {
     relay: {
       operationResponses: {
