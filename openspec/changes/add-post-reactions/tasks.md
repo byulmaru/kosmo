@@ -209,9 +209,9 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 - [x] 8.2 PROD-449 props-only `ReactionSummary`와 `ReactionProfileList`를 구현한다.
 - [x] 8.3 PROD-449 Storybook과 component interaction에서 Relay mock fragment ref의 supplied-order·Type selection·상태·retry/pagination callback 조합을 검증한다.
 - [x] 8.4 PROD-418의 zero-count·modal·조회 오류·cache 결정을 specs·decisions·design·tasks에 동기화하고 strict validation을 통과시킨다.
-- [ ] 8.5 실제 Post count query와 Type별 `reactionProfiles` Relay connection을 기존 props seam에 연결하고, zero-count summary 미렌더링과 현재 Post 위 modal dismiss를 구현한다.
-- [ ] 8.6 최초·추가 page 조회 오류를 modal·목록 내부 retry로 연결하고 기존 edge 보존, cache 우선 background 갱신과 selected Profile 격리를 구현한다.
-- [ ] 8.7 실제 Relay data shape의 count·Type 격리·pagination·modal·오류 복구·cache 동작을 최소 component/integration test로 검증하고 app check를 통과시킨다.
+- [x] 8.5 실제 Post count query와 Type별 `reactionProfiles` Relay connection을 기존 props seam에 연결하고, zero-count summary 미렌더링과 현재 Post 위 modal dismiss를 구현한다.
+- [x] 8.6 최초·추가 page 조회 오류를 modal·목록 내부 retry로 연결하고 기존 edge 보존, cache 우선 background 갱신과 selected Profile 격리를 구현한다.
+- [x] 8.7 실제 Relay data shape의 count·Type 격리·pagination·modal·오류 복구·cache 동작을 최소 component/integration test로 검증하고 app check를 통과시킨다.
 
 ## 9. PROD-419 Reaction Notification Best Effort 정리
 

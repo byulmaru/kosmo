@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PostLayout } from '@/components/post/PostLayout';
+import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { StateView } from '@/components/ui/StateView';
 import { useRelayActor } from '@/relay/RelayActorProvider';
@@ -23,6 +24,7 @@ const PostQuery = graphql`
           relativeHandle
         }
         ...PostLayout_post @alias
+        ...PostReactionSummary_post @alias
       }
     }
   }
@@ -98,7 +100,7 @@ function PostDetailContent({
     />
   ) : post.state === 'DELETED' ? (
     <StateView description="작성자가 이 게시글을 삭제했어요." title="삭제된 게시글이에요" />
-  ) : !post.PostLayout_post ? (
+  ) : !post.PostLayout_post || !post.PostReactionSummary_post ? (
     <StateView
       description="게시글 데이터를 다시 불러와 주세요."
       title="게시글을 표시할 수 없어요"
@@ -106,6 +108,7 @@ function PostDetailContent({
   ) : (
     <View style={styles.post}>
       <PostLayout post={post.PostLayout_post} />
+      <PostReactionSummary post={post.PostReactionSummary_post} />
     </View>
   );
 }
@@ -128,5 +131,5 @@ const styles = StyleSheet.create({
     width: 44,
   },
   heading: { fontFamily: 'SUIT', fontSize: 18, fontWeight: '700', lineHeight: 28 },
-  post: { padding: spacing.lg },
+  post: { gap: spacing.lg, padding: spacing.lg },
 });
