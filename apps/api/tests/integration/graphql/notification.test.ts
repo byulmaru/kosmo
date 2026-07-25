@@ -318,7 +318,7 @@ describe('Notification GraphQL Node boundary', () => {
     assert.equal(await notificationReadAt(follow.id), null);
   });
 
-  test('integrates Reply rows into Node, mixed list, unread count and Read', async () => {
+  test('keeps Reply rows in Node, mixed list, unread count and Read after Parent Tombstone', async () => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile('reply-recipient');
     await addMembership(auth.account.id, recipient.id, AccountProfileRole.OWNER);
@@ -338,6 +338,7 @@ describe('Notification GraphQL Node boundary', () => {
         and(eq(Notifications.kind, NotificationKind.REPLY), eq(Notifications.sourceId, reply.id)),
       )
       .then(firstOrThrow);
+    await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, parent.id));
     const recipientId = encodeGlobalId('Profile', recipient.id);
     const replyId = encodeGlobalId('ReplyNotification', notification.id);
 

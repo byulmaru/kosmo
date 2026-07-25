@@ -346,7 +346,21 @@ test('self-reply, Remote Recipient와 Recipient에게 보이지 않는 Reply는 
   assert.deepEqual(await readNotifications(invisibleReply.reply.id), []);
 });
 
-test('unavailable source, Parent, Recipient와 Reply Author는 생성 시 no-op이다', async () => {
+test('Reply Parent가 Tombstone이어도 visible Reply 알림을 생성한다', async () => {
+  const author = await createProfile();
+  const recipient = await createProfile();
+  const { parent, reply } = await createReply(author.id, recipient.id);
+  await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, parent.id));
+
+  await createReplyNotification(reply.id);
+
+  const [notification] = await readNotifications(reply.id);
+  assert.ok(notification);
+  assert.equal(notification.kind, NotificationKind.REPLY);
+  assert.equal(notification.recipientProfileId, recipient.id);
+});
+
+test('unavailable source, Recipient와 Reply Author는 생성 시 no-op이다', async () => {
   const assertUnavailableNoOp = async (
     mutate: (fixture: {
       author: typeof Profiles.$inferSelect;
@@ -365,9 +379,6 @@ test('unavailable source, Parent, Recipient와 Reply Author는 생성 시 no-op�
 
   await assertUnavailableNoOp(async ({ reply }) => {
     await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, reply.id));
-  });
-  await assertUnavailableNoOp(async ({ parent }) => {
-    await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, parent.id));
   });
   await assertUnavailableNoOp(async ({ recipient }) => {
     await db

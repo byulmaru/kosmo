@@ -109,7 +109,6 @@ const selectReplyVisibleToProfile = async ({
       and(
         eq(Posts.id, sourceId),
         eq(Posts.state, PostState.ACTIVE),
-        eq(ReplyParents.state, PostState.ACTIVE),
         eq(ReplyParents.profileId, profileId),
         eq(Profiles.state, ProfileState.ACTIVE),
         eq(Instances.kind, InstanceKind.LOCAL),

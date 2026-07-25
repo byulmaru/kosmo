@@ -153,7 +153,6 @@ const visibleNotificationSourceWhere = () =>
             eq(NotificationReplyPosts.id, Notifications.sourceId),
             eq(NotificationReplyParentPosts.profileId, Notifications.recipientProfileId),
             eq(NotificationReplyPosts.state, PostState.ACTIVE),
-            eq(NotificationReplyParentPosts.state, PostState.ACTIVE),
             eq(NotificationReplyRecipientProfiles.state, ProfileState.ACTIVE),
             eq(NotificationReplyRecipientInstances.kind, InstanceKind.LOCAL),
             eq(NotificationReplyRecipientInstances.state, InstanceState.ACTIVE),
