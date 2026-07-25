@@ -232,6 +232,7 @@ Post fragment와 mutations를 colocate한 내부 `useRepostAction` adapter가 PR
 **Guardrails**
 
 - 최신 main을 반영하고 검증한 `prod-433` head에서 `prod-414`를 생성하고 Draft PR base를 `prod-433`으로 유지하며, branch 코드를 복사하거나 `PostActionBar` 또는 독립 공개 action leaf를 중복 구현하지 않는다.
+- PR #341 merge 뒤 stack을 정리할 때 최신 main의 PROD-453와 PROD-414가 함께 수정한 `add-post-reposts`의 `decisions.md`, `design.md`, `tasks.md`를 어느 한쪽으로 덮지 않고 presentation과 action 계약을 명시적으로 reconcile한 뒤 전체 검증을 다시 수행한다. rebase와 PR base 변경은 별도 승인을 받아 진행한다.
 - fragment와 mutations를 내부 adapter/hook에 colocate하고 actor별 Relay Store를 격리한다.
 - 생성 mutation payload의 normalized Post identity·count·viewer relation을 사용하고 임시 목록 membership updater를 만들지 않는다.
 - 취소 성공 뒤 client count 산술, 광범위한 cache invalidation, 임시 refetch 또는 Source cache 직접 변경을 추가하지 않는다.
@@ -242,8 +243,8 @@ Post fragment와 mutations를 colocate한 내부 `useRepostAction` adapter가 PR
 
 **Verification**
 
-- raw Relay unit test로 생성 성공 cache, 정확한 Active Repost ID의 취소와 cache 비변경, 오류 뒤 pending 종료·error callback·다음 입력 재시도와 actor Store 격리를 검증한다.
-- Storybook 전용 단일-config `PostActionBar` wrapper의 `play` interaction으로 클릭, pending 중복 차단, 생성 성공, 취소 ID와 cache 비변경, 오류 재시도, selected Profile actor reset과 접근성 상태를 검증한다.
+- raw Relay unit test로 생성 payload의 Source Post cache 정규화, 취소 payload 뒤 Source cache 비변경과 서로 다른 actor Store 격리를 검증한다.
+- Storybook 전용 단일-config `PostActionBar` wrapper의 `play` interaction으로 실제 adapter의 Source Post ID 생성 호출, 정확한 Active Repost ID 취소, 같은 tick pending 중복 차단, 생성 성공, 취소 뒤 cache 비변경, network·GraphQL 오류 callback·재시도, selected Profile actor reset과 접근성 상태를 검증한다.
 
 - [x] 8.1 `repostCount`와 `viewerRepost` fragment를 소비하는 내부 `useRepostAction` adapter와 `PostActionBar.repost` config를 구현한다.
 - [x] 8.2 `repostPost`의 normalized actor Store 갱신과 Active Repost ID를 사용하는 `deletePost` 호출을 연결하고, 취소 성공 뒤 Source cache를 변경하지 않으며 실패를 error callback으로 전달한다.

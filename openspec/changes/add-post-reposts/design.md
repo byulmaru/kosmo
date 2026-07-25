@@ -106,7 +106,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 - [여러 PR 사이 schema drift] → 각 child PR에서 공유 OpenSpec task와 선행 issue를 명시하고, 부모 PROD-389가 최종 schema/Relay/E2E 정합성을 검증한다.
 - [UI action의 실제 surface 부재] → PROD-414는 `prod-433` 위 내부 adapter와 Storybook 전용 단일-config `PostActionBar` wrapper를 완료 경계로 삼고, 실제 production full-bar rollout과 오류 toast는 PROD-432에 남긴다.
 - [Content 없는 Repost redirect와 handle 보정 경쟁] → 순수 Repost Source 이동을 우선하는 단일 canonical target을 계산하고 redirect 동안 detail thread를 렌더하지 않는다.
-- [PROD-433 변경 전파] → PROD-414를 `blockedBy: PROD-433`으로 유지하고 부모 branch 변경을 자식에 반영해 검증한다. PR #341 merge 뒤 rebase·PR base 변경은 backup, range-diff와 명시적 lease를 사용하는 별도 승인 작업으로 수행한다.
+- [PROD-433 변경 전파] → PROD-414를 `blockedBy: PROD-433`으로 유지하고 부모 branch 변경을 자식에 반영해 검증한다. PR #341 merge 뒤 rebase·PR base 변경은 backup, range-diff와 명시적 lease를 사용하는 별도 승인 작업으로 수행한다. 이때 최신 main의 PROD-453와 PROD-414가 함께 수정한 `add-post-reposts`의 `decisions.md`, `design.md`, `tasks.md`를 어느 한쪽으로 덮지 않고 presentation과 action 계약을 명시적으로 reconcile한 뒤 app·Storybook·OpenSpec 전체 검증을 다시 수행한다.
 - [취소 성공 뒤 오래된 client 상태] → PROD-414는 client count 산술·광범위한 invalidation·임시 refetch를 추가하지 않고 알려진 제한을 검증한다. PROD-471이 서버 결과 기반 Source cache 동기화를 완료하기 전에는 부모 change를 archive하지 않는다.
 
 ## Migration Plan
