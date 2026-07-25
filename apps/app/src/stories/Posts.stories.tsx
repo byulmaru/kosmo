@@ -363,10 +363,18 @@ const storyPosts = [
 ];
 const composerProfile = profile({ id: 'profile-composer' });
 const emptyPostsProfile = profileWithPosts([], { id: 'profile-posts-empty' });
-const contentPostsProfile = profileWithPosts([shortPost, longPost, emptyPost], {
-  id: 'profile-posts-content',
-});
-const homeTimeline = timeline(shortPost, multilinePost);
+const contentPostsProfile = profileWithPosts(
+  [shortPost, pureRepostOfQuote, quotePost, quoteWithoutSource],
+  { id: 'profile-posts-content' },
+);
+const homeTimeline = timeline(
+  shortPost,
+  pureRepost,
+  quotePost,
+  replyQuotePost,
+  quoteOfQuotePost,
+  linkedSourceQuote,
+);
 
 const PostsStoriesQuery = graphql`
   query PostsStoriesQuery($ids: [ID!]!) {
@@ -635,6 +643,23 @@ function PostListCatalog({ onRetry }: PostsStoryArgs) {
   );
 }
 
+function ProductionRepostQuoteLists() {
+  const data = usePostsStoryData();
+  const pathname = usePathname();
+
+  return (
+    <Catalog>
+      <Text testID="current-story-pathname">{pathname}</Text>
+      <View testID="production-home-reposts">
+        <PostList homeTimeline={data.homeTimeline} />
+      </View>
+      <View testID="production-profile-reposts">
+        <PostList profile={data.contentPostsProfile} />
+      </View>
+    </Catalog>
+  );
+}
+
 function RepostQuotePresentationStory({ callbacks, postId }: PresentationStoryProps) {
   const post = requireStoryPostById(storyPosts, postId);
   const renderMockLink: PostPresentationLinkRenderer = ({
@@ -798,6 +823,121 @@ export const ListLoadingErrorEmptyAndContent: Story = {
     await expect(args.onRetry).toHaveBeenCalledTimes(1);
   },
   render: (args) => <PostListCatalog onRetry={args.onRetry} />,
+};
+
+export const ProductionRepostQuoteListIntegration: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const homeRoot = canvas.getByTestId('production-home-reposts');
+    const profileRoot = canvas.getByTestId('production-profile-reposts');
+    const home = within(homeRoot);
+    const profile = within(profileRoot);
+    const pureRepostRow = home
+      .getByText('재게시한 코스모 사용자님이 재게시함')
+      .closest<HTMLElement>('[role="article"]');
+    const quoteRow = home
+      .getByText('이 원문에 덧붙이는 인용자의 본문입니다.')
+      .closest<HTMLElement>('[role="article"]');
+    const replyQuoteRow = home
+      .getByText('답글 관계를 유지하는 인용입니다.')
+      .closest<HTMLElement>('[role="article"]');
+    const linkedSourceRow = home
+      .getByText('외부 링크가 있는 원문을 인용합니다.')
+      .closest<HTMLElement>('[role="article"]');
+    const quoteOfQuoteRow = home
+      .getByText('Source Quote를 인용하는 outer Quote 본문입니다.')
+      .closest<HTMLElement>('[role="article"]');
+    const repostOfQuoteRow = profile
+      .getByText('재게시한 코스모 사용자님이 재게시함')
+      .closest<HTMLElement>('[role="article"]');
+    const sourceNullQuoteRow = profile
+      .getByText('원문을 더 이상 볼 수 없어도 남는 인용 본문입니다.')
+      .closest<HTMLElement>('[role="article"]');
+
+    expect(pureRepostRow).not.toBeNull();
+    expect(quoteRow).not.toBeNull();
+    expect(replyQuoteRow).not.toBeNull();
+    expect(linkedSourceRow).not.toBeNull();
+    expect(quoteOfQuoteRow).not.toBeNull();
+    expect(repostOfQuoteRow).not.toBeNull();
+    expect(sourceNullQuoteRow).not.toBeNull();
+    expect(home.getAllByRole('article').map((row) => row.textContent)).toEqual([
+      expect.stringContaining('짧은 본문 한 줄.'),
+      expect.stringContaining('재게시한 코스모 사용자님이 재게시함'),
+      expect.stringContaining('이 원문에 덧붙이는 인용자의 본문입니다.'),
+      expect.stringContaining('답글 관계를 유지하는 인용입니다.'),
+      expect.stringContaining('Source Quote를 인용하는 outer Quote 본문입니다.'),
+      expect.stringContaining('외부 링크가 있는 원문을 인용합니다.'),
+    ]);
+    expect(within(quoteRow!).getByTestId('source-post-preview')).toBeVisible();
+    expect(within(replyQuoteRow!).getByTestId('source-post-preview')).toBeVisible();
+    expect(
+      replyQuoteRow!.querySelector('a[href="/@source@remote.example/post-source"]'),
+    ).toBeInTheDocument();
+    expect(sourceNullQuoteRow!.querySelector('a[href="/@reposter"]')).toBeInTheDocument();
+    expect(
+      sourceNullQuoteRow!.querySelector('a[href="/@reposter/post-quote-source-null"]'),
+    ).toBeInTheDocument();
+    expect(
+      within(sourceNullQuoteRow!).queryByTestId('source-post-preview'),
+    ).not.toBeInTheDocument();
+    expect(
+      within(sourceNullQuoteRow!).queryByTestId('nested-source-post-placeholder'),
+    ).not.toBeInTheDocument();
+    expect(
+      sourceNullQuoteRow!.querySelector('a[href^="/@source@remote.example"]'),
+    ).not.toBeInTheDocument();
+
+    expect(pureRepostRow!.querySelector('a[href="/@reposter"]')).toBeInTheDocument();
+    expect(
+      pureRepostRow!.querySelector('a[href="/@source@remote.example/post-source"]'),
+    ).toBeInTheDocument();
+    expect(quoteRow!.querySelector('a[href="/@reposter/post-quote"]')).toBeInTheDocument();
+    expect(quoteRow!.querySelector('a[href="/@source@remote.example"]')).toBeInTheDocument();
+    expect(
+      quoteOfQuoteRow!.querySelector('a[href="/@deep-source@remote.example/post-source-depth-2"]'),
+    ).toBeInTheDocument();
+    expect(
+      repostOfQuoteRow!.querySelector('a[href="/@deep-source@remote.example/post-source-depth-2"]'),
+    ).toBeInTheDocument();
+    expect(quoteOfQuoteRow!.querySelectorAll('[data-testid="source-post-preview"]')).toHaveLength(
+      1,
+    );
+    expect(repostOfQuoteRow!.querySelectorAll('[data-testid="source-post-preview"]')).toHaveLength(
+      0,
+    );
+    expect(within(quoteOfQuoteRow!).getByTestId('nested-source-post-placeholder')).toBeVisible();
+    expect(within(repostOfQuoteRow!).getByTestId('nested-source-post-placeholder')).toBeVisible();
+    expect(
+      within(quoteOfQuoteRow!).getByText('첫 번째 direct Source Quote의 본문입니다.'),
+    ).toBeVisible();
+    expect(
+      within(repostOfQuoteRow!).getByText('첫 번째 direct Source Quote의 본문입니다.'),
+    ).toBeVisible();
+    expect(quoteOfQuoteRow!.textContent).not.toContain(
+      '두 번째 Source의 본문은 목록에서 full preview하지 않습니다.',
+    );
+    expect(repostOfQuoteRow!.textContent).not.toContain(
+      '두 번째 Source의 본문은 목록에서 full preview하지 않습니다.',
+    );
+    expect(quoteOfQuoteRow!.querySelector('a a')).toBeNull();
+    expect(repostOfQuoteRow!.querySelector('a a')).toBeNull();
+    expect(linkedSourceRow!.querySelector('a a')).toBeNull();
+
+    const openURL = fn(async () => undefined);
+    const originalOpenURL = Linking.openURL;
+    Linking.openURL = openURL;
+    try {
+      await userEvent.click(
+        within(linkedSourceRow!).getByLabelText('안전한 외부 링크, https://example.com/path'),
+      );
+      await expect(openURL).toHaveBeenCalledWith('https://example.com/path');
+      expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent('/@kosmo/post-1');
+    } finally {
+      Linking.openURL = originalOpenURL;
+    }
+  },
+  render: () => <ProductionRepostQuoteLists />,
 };
 
 export const PureRepost: Story = {
@@ -1210,7 +1350,8 @@ export const ReplyThreadPresentation: Story = {
     expect(
       replyQuote.getByTestId('reply-quote-source-subtree-thread-quote-source'),
     ).toBeEmptyDOMElement();
-    expect(canvas.queryByText('인용된 Source 본문입니다.')).toBeNull();
+    expect(replyQuote.getByTestId('source-post-preview')).toBeVisible();
+    expect(replyQuote.getByText('인용된 Source 본문입니다.')).toBeVisible();
   },
   render: () => <ThreadCatalog />,
 };

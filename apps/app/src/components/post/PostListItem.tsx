@@ -7,7 +7,13 @@ import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { PostBody } from './PostBody';
+import { PostSourcePresentationView } from './PostSourcePresentationView';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
+import type {
+  PostPresentationLinkRenderer,
+  PostPresentationLinkTarget,
+  PostSourcePresentationData,
+} from './PostSourcePresentationView';
 
 const PostListItemFragment = graphql`
   fragment PostListItem_post on Post {
@@ -15,6 +21,7 @@ const PostListItemFragment = graphql`
     createdAt
     content {
       bodyText
+      document
     }
     profile {
       id
@@ -22,6 +29,28 @@ const PostListItemFragment = graphql`
       relativeHandle
       displayName
       ...ProfileNameBlock_profile
+    }
+    replyParent {
+      id
+    }
+    repostSource {
+      id
+      createdAt
+      content {
+        bodyText
+        document
+      }
+      profile {
+        displayName
+        handle
+        relativeHandle
+      }
+      repostSource {
+        id
+        profile {
+          relativeHandle
+        }
+      }
     }
     ...PostBody_post
   }
@@ -32,6 +61,83 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
   const post = useFragment(PostListItemFragment, postKey);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const detailHref = `/${post.profile.relativeHandle}/${post.id}` as const;
+
+  if (post.repostSource) {
+    if (!post.content && post.replyParent) {
+      return null;
+    }
+
+    const source = post.repostSource;
+    const sourceProfileHref = `/${source.profile.relativeHandle}` as const;
+    const sourcePostHref = `/${source.profile.relativeHandle}/${source.id}` as const;
+    const nestedSourcePostHref = source.repostSource
+      ? (`/${source.repostSource.profile.relativeHandle}/${source.repostSource.id}` as const)
+      : null;
+    const hrefs = {
+      nestedSourcePost: nestedSourcePostHref,
+      postAuthor: profileHref,
+      postDetail: detailHref,
+      sourceAuthor: sourceProfileHref,
+      sourcePost: sourcePostHref,
+    } satisfies Record<PostPresentationLinkTarget, string | null>;
+    const renderLink: PostPresentationLinkRenderer = ({ accessibilityLabel, children, target }) => {
+      const href = hrefs[target];
+      if (!href) {
+        throw new Error('nestedSourcePost target requires a visible direct relation.');
+      }
+
+      return (
+        <Link asChild href={href}>
+          <Pressable
+            accessibilityLabel={accessibilityLabel}
+            accessibilityRole="link"
+            style={styles.presentationLink}
+          >
+            {children}
+          </Pressable>
+        </Link>
+      );
+    };
+    const presentationPost: PostSourcePresentationData = {
+      content: post.content
+        ? { bodyText: post.content.bodyText, document: post.content.document }
+        : null,
+      createdAt: post.createdAt,
+      id: post.id,
+      profile: {
+        displayName: post.profile.displayName,
+        handle: post.profile.handle,
+        relativeHandle: post.profile.relativeHandle,
+      },
+      replyParent: post.replyParent ? { id: post.replyParent.id } : null,
+      repostSource: {
+        content: source.content
+          ? { bodyText: source.content.bodyText, document: source.content.document }
+          : null,
+        createdAt: source.createdAt,
+        id: source.id,
+        profile: {
+          displayName: source.profile.displayName,
+          handle: source.profile.handle,
+          relativeHandle: source.profile.relativeHandle,
+        },
+        repostSource: source.repostSource
+          ? {
+              id: source.repostSource.id,
+              profile: { relativeHandle: source.repostSource.profile.relativeHandle },
+            }
+          : null,
+      },
+    };
+
+    return (
+      <View style={[styles.card, { borderColor: theme.border }]}>
+        <View style={styles.sourcePresentation}>
+          <PostSourcePresentationView post={presentationPost} renderLink={renderLink} />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View role="article" style={[styles.card, { borderColor: theme.border }]}>
@@ -92,4 +198,6 @@ const styles = StyleSheet.create({
   timeLink: { borderRadius: radii.sm, flexShrink: 0 },
   time: { fontFamily: 'SUIT', ...typography.sm },
   bodyLink: { borderRadius: radii.sm, minWidth: 0 },
+  presentationLink: { minWidth: 0 },
+  sourcePresentation: { flex: 1, minWidth: 0 },
 });
