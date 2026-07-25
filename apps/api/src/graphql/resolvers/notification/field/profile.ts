@@ -1,22 +1,10 @@
-import {
-  AccountProfiles,
-  db,
-  Notifications,
-  Posts,
-  ProfileFollows,
-  Reactions,
-} from '@kosmo/core/db';
-import { NotificationKind } from '@kosmo/core/enums';
+import { AccountProfiles, db, Notifications } from '@kosmo/core/db';
 import { PermissionDeniedError } from '@kosmo/core/error';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
-import { and, asc, count, desc, eq, getColumns, gt, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, getColumns, gt, isNull, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
-import {
-  NotificationRepostRelatedPosts,
-  NotificationSourceReposts,
-  visibleNotificationWhere,
-} from '../access/visibility';
+import { visibleNotificationWhere } from '../access/visibility';
 import { Notification, NotificationConnection } from '../ref';
 import type { NotificationRow } from '../ref';
 
@@ -46,40 +34,8 @@ builder.objectField(Profile, 'notifications', (t) =>
           },
           ({ before, after, limit, inverted }) =>
             db
-              .select({
-                ...getColumns(Notifications),
-                profileId: sql<string>`coalesce(${ProfileFollows.followerProfileId}, ${Reactions.profileId}, ${NotificationSourceReposts.profileId})`,
-                reactionPost: getColumns(Posts),
-                repostPost: getColumns(NotificationRepostRelatedPosts),
-                type: Reactions.type,
-              })
+              .select(getColumns(Notifications))
               .from(Notifications)
-              .leftJoin(
-                ProfileFollows,
-                and(
-                  eq(Notifications.kind, NotificationKind.FOLLOW),
-                  eq(ProfileFollows.id, Notifications.sourceId),
-                ),
-              )
-              .leftJoin(
-                Reactions,
-                and(
-                  eq(Notifications.kind, NotificationKind.REACTION),
-                  eq(Reactions.id, Notifications.sourceId),
-                ),
-              )
-              .leftJoin(
-                NotificationSourceReposts,
-                and(
-                  eq(Notifications.kind, NotificationKind.REPOST),
-                  eq(NotificationSourceReposts.id, Notifications.sourceId),
-                ),
-              )
-              .leftJoin(Posts, eq(Posts.id, Reactions.postId))
-              .leftJoin(
-                NotificationRepostRelatedPosts,
-                eq(NotificationRepostRelatedPosts.id, NotificationSourceReposts.repostSourceId),
-              )
               .where(
                 and(
                   eq(Notifications.recipientProfileId, profile.id),

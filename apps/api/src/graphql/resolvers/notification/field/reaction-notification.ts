@@ -6,10 +6,11 @@ import { getNotificationSource, ReactionNotification } from '../ref';
 builder.objectFields(ReactionNotification, (t) => ({
   post: t.field({
     type: Post,
-    resolve: async (notification) => (await getNotificationSource(notification)).post!,
+    resolve: async (notification, _, ctx) => (await getNotificationSource(notification, ctx)).post!,
   }),
   profile: t.field({
     type: Profile,
-    resolve: async (notification) => (await getNotificationSource(notification)).profileId,
+    resolve: async (notification, _, ctx) =>
+      (await getNotificationSource(notification, ctx)).profileId,
   }),
 }));
