@@ -273,8 +273,8 @@ Home, Profile과 Bookmark 목록이 실제 GraphQL fragment와 generated type으
 - Home/Profile/Bookmark fragment 연결, Repost/Quote Author 구분, Source·Profile navigation, 일반 Post 회귀와 Relay generated type을 app integration/E2E로 검증한다. Quote-of-Quote·Repost-of-Quote는 direct Source 한 단계에서 full presentation이 끝나고 direct Source 생성 시각·본문이 해당 Source의 canonical route로 이동하며 두 번째 Source Content와 CTA가 표시되지 않는지 확인한다. Quote와 Reply+Quote의 자체 본문은 바깥 Quote Post로 이동하고 Source Post로 잘못 이동하지 않아야 한다. Source/Quote 생성 시각의 실제 Link, pointer·touch body shortcut, 빈 border padding, Author Profile과 외부 body Link 목적지를 각각 검증하고 `a a` 및 `[role="link"] [role="link"]`가 없어야 한다.
 
 - [x] 9.1 PROD-453 presentation fragment를 production Post list item과 실제 API shape에 연결한다.
-- [ ] 9.2 Home/Profile/Bookmark 목록의 Source·Author navigation과 중첩 Link 회귀를 검증한다.
-- [ ] 9.3 Relay compile, app check·Storybook과 목록 integration 검증을 통과시킨다.
+- [x] 9.2 Home/Profile/Bookmark 목록의 Source·Author navigation과 중첩 Link 회귀를 검증한다.
+- [x] 9.3 Relay compile, app check·Storybook과 목록 integration 검증을 통과시킨다.
 
 ## 10. PROD-412 Repost Notification 생성과 inbox 표시
 
