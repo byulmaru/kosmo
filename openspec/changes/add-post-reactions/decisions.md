@@ -48,7 +48,7 @@
 
 - Decision Date: 2026-07-20
 - Decision Class: Implementation Choice
-- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0012](../../../docs/domain/decisions/0012-post-interaction-followup-clarifications.md), [PROD-404](https://linear.app/byulmaru/issue/PROD-404/reaction을-추가한다), [PROD-405](https://linear.app/byulmaru/issue/PROD-405/reaction을-삭제한다), [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4)
+- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0012](../../../docs/domain/decisions/0012-post-interaction-followup-clarifications.md), [ADR 0016](../../../docs/domain/decisions/0016-reaction-selector-current-state.md), [PROD-404](https://linear.app/byulmaru/issue/PROD-404/reaction을-추가한다), [PROD-405](https://linear.app/byulmaru/issue/PROD-405/reaction을-삭제한다), [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4)
 - Status: Active
 - Context / Problem: 반복·동시 요청이 중복 Reaction이나 불필요한 실패를 만들 수 있다.
 - Decision Outcome: add는 unique conflict를 원자적으로 처리하고 기존 Reaction을 성공 결과로 반환한다. delete는 selected Profile의 현재 Post/Type 관계를 원자적으로 제거하며 관계가 없으면 성공 no-op으로 처리한다. 명시적 pessimistic lock을 사용하지 않는다.
@@ -272,7 +272,7 @@
 
 - Decision Date: 2026-07-25
 - Decision Class: Implementation Choice
-- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4)
+- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0016](../../../docs/domain/decisions/0016-reaction-selector-current-state.md), [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4)
 - Status: Active
 - Context / Problem: `Post.reactionProfiles(type:)`는 Profile만 반환하고 ID 기반 `deleteReaction`은 selector가 이전 session·화면에서 생성된 관계를 복원하거나 해제할 수 없게 한다. selector의 의도는 과거 Reaction 객체를 보존하는 것이 아니라 selected Profile의 현재 Type 선택을 관리하는 것이다.
 - Decision Outcome: GraphQL은 `Post.viewerReactions: [Reaction!]!`로 현재 selected Profile이 Post에 남긴 Reaction 관계를 제공한다. guest와 selected Profile 부재에는 빈 목록을 반환한다. `deleteReaction(input: { postId: ID!, type: String! })`은 현재 selected Profile의 조합만 원자적으로 삭제한다. payload는 실제 삭제된 관계의 nullable `reactionId`와 현재 조회 가능한 nullable `post`를 반환한다. missing·반복·동시 loser는 `reactionId: null`인 성공이며 다른 Profile과 다른 Type을 변경하지 않는다. 삭제된 ID가 있을 때만 post-commit Notification cleanup을 시도한다.

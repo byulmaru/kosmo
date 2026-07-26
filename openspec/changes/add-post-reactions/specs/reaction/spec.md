@@ -96,7 +96,7 @@ GraphQL API는 `addReaction` mutation의 input으로 `postId: ID!`와 `type: Str
 
 ### Requirement: selected Profile의 현재 Reaction 조회
 
-**Authority / Provenance:** [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4) — Post를 조회하는 viewer는 현재 selected Profile이 남긴 Reaction 관계를 복원할 수 있어야 한다(MUST). GraphQL API는 `Post.viewerReactions: [Reaction!]!`를 제공해야 하며(MUST), guest 또는 selected Profile이 없는 viewer에게 빈 목록을 반환해야 한다(MUST).
+**Authority / Provenance:** [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0016](../../../../../docs/domain/decisions/0016-reaction-selector-current-state.md), [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4) — Post를 조회하는 viewer는 현재 selected Profile이 남긴 Reaction 관계를 복원할 수 있어야 한다(MUST). GraphQL API는 `Post.viewerReactions: [Reaction!]!`를 제공해야 하며(MUST), guest 또는 selected Profile이 없는 viewer에게 빈 목록을 반환해야 한다(MUST).
 
 #### Scenario: selected Profile의 현재 관계
 
@@ -119,7 +119,7 @@ GraphQL API는 `addReaction` mutation의 input으로 `postId: ID!`와 `type: Str
 
 ### Requirement: Post와 Type 기준의 멱등 Reaction 삭제
 
-**Authority / Provenance:** [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4) — selected Profile은 대상 Post의 현재 조회 가능성과 무관하게 Post와 Reaction Type으로 자신의 현재 Reaction을 삭제할 수 있어야 하며(MUST), 관계가 없는 반복·동시 삭제는 상태를 바꾸지 않는 성공 결과여야 한다(MUST).
+**Authority / Provenance:** [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0016](../../../../../docs/domain/decisions/0016-reaction-selector-current-state.md), [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4) — selected Profile은 대상 Post의 현재 조회 가능성과 무관하게 Post와 Reaction Type으로 자신의 현재 Reaction을 삭제할 수 있어야 하며(MUST), 관계가 없는 반복·동시 삭제는 상태를 바꾸지 않는 성공 결과여야 한다(MUST).
 
 GraphQL API는 `deleteReaction` mutation의 input으로 `postId: ID!`와 `type: String!`을 받아야 한다(MUST). 성공 payload는 실제 삭제된 concrete Reaction global ID인 nullable `reactionId`와 현재 조회 가능한 nullable `post`를 반환해야 한다(MUST). missing·반복·동시 loser는 `reactionId: null`인 성공이어야 하며(MUST), payload는 별도 `deleted` boolean을 노출해서는 안 된다(MUST NOT).
 

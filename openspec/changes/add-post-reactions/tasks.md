@@ -245,6 +245,7 @@ Reaction 삭제 뒤 대응 Notification cleanup을 Best Effort로 시도하고, 
 **Authority / Provenance**
 
 - [Reaction canonical 객체](../../../docs/domain/objects/reaction.md)
+- [ADR 0016](../../../docs/domain/decisions/0016-reaction-selector-current-state.md)
 - [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4)
 
 **Deliverable**
