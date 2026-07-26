@@ -89,6 +89,18 @@ export function PostDetailFrame({ children, header, nativeScrollProps }: PostDet
 
 export function PostDetailThread({
   header,
+  identity,
+  post: postKey,
+}: {
+  header: ReactNode;
+  identity: string;
+  post: PostDetailThread_post$key;
+}) {
+  return <PostDetailThreadContent header={header} key={identity} post={postKey} />;
+}
+
+function PostDetailThreadContent({
+  header,
   post: postKey,
 }: {
   header: ReactNode;
@@ -229,7 +241,7 @@ export function PostDetailThread({
         <View accessibilityRole="alert">
           <Text>답글을 더 불러오지 못했어요</Text>
           <Text>이미 불러온 답글은 그대로 유지돼요.</Text>
-          <Button onPress={loadNextPage} tone="secondary">
+          <Button onPress={loadNextPage} style={styles.retryButton} tone="secondary">
             답글 다시 불러오기
           </Button>
         </View>
@@ -248,6 +260,7 @@ function requireThreadFragment<T>(value: T | null | undefined, label: string): T
 const styles = StyleSheet.create({
   frame: { flexGrow: 1 },
   header: { zIndex: 10 },
+  retryButton: { minHeight: 44 },
   source: {
     borderRadius: radii.md,
     borderWidth: 1,

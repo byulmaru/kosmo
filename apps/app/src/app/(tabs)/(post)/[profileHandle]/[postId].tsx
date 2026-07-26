@@ -126,7 +126,7 @@ function PostDetailContent({
       />
     </PostDetailFrame>
   ) : (
-    <PostDetailThread header={<PostDetailHeader />} post={post.thread} />
+    <PostDetailThread header={<PostDetailHeader />} identity={fetchKey} post={post.thread} />
   );
 }
 

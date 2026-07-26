@@ -7,6 +7,7 @@ import { Temporal } from 'temporal-polyfill';
 import PostDetailScreen from '@/app/(tabs)/(post)/[profileHandle]/[postId]';
 import { PostBody } from '@/components/post/PostBody';
 import { PostComposer } from '@/components/post/PostComposer';
+import { PostDetailThread } from '@/components/post/PostDetailThread';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostList } from '@/components/post/PostList';
 import { PostListItem } from '@/components/post/PostListItem';
@@ -21,6 +22,7 @@ import type {
   PostPresentationLinkRenderer,
   PostSourcePresentationData,
 } from '@/components/post/PostSourcePresentationView';
+import type { PostDetailThreadIdentityStoryQuery } from './__generated__/PostDetailThreadIdentityStoryQuery.graphql';
 import type { PostsStoriesQuery as PostsStoriesQueryType } from './__generated__/PostsStoriesQuery.graphql';
 import type { StoryPost } from './fixtures';
 
@@ -364,6 +366,18 @@ const PostsStoriesQuery = graphql`
     }
     homeTimeline(first: 20) {
       ...PostList_homeTimeline
+    }
+  }
+`;
+
+const PostDetailThreadIdentityStoryQuery = graphql`
+  query PostDetailThreadIdentityStoryQuery($postId: ID!) {
+    node(id: $postId) {
+      __typename
+      ... on Post {
+        id
+        ...PostDetailThread_post @arguments(count: 20) @alias(as: "thread")
+      }
     }
   }
 `;
@@ -1342,11 +1356,80 @@ export const PostDetailThreadPageFailureRetries: Story = {
       '답글을 더 불러오지 못했어요',
     );
     expect(canvas.getByText(/기존 Reply 20/)).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '답글 다시 불러오기' }));
+    const retryButton = canvas.getByRole('button', { name: '답글 다시 불러오기' });
+    expect(retryButton.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    await userEvent.click(retryButton);
     await expect(canvas.findByText('재시도로 추가된 Reply')).resolves.toBeVisible();
     expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
   },
   render: () => <PostDetailScreen />,
+};
+
+function PostDetailThreadIdentityFailureStory() {
+  const [identity, setIdentity] = useState('actor-a:0');
+  const data = useLazyLoadQuery<PostDetailThreadIdentityStoryQuery>(
+    PostDetailThreadIdentityStoryQuery,
+    { postId: routeCurrentPost.id },
+  );
+  const post = data.node?.__typename === 'Post' ? data.node.thread : null;
+
+  if (!post) {
+    throw new Error('Missing Post detail thread identity story fixture.');
+  }
+
+  const threadProps = { header: <Text>게시글</Text>, identity, post };
+
+  return (
+    <>
+      <Pressable
+        accessibilityLabel="다른 actor query로 전환"
+        accessibilityRole="button"
+        onPress={() => setIdentity('actor-b:0')}
+      >
+        <Text>다른 actor query로 전환</Text>
+      </Pressable>
+      <PostDetailThread {...threadProps} />
+    </>
+  );
+}
+
+export const PostDetailThreadPageFailureIdentityReset: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostDetailThreadIdentityStoryQuery: {
+          data: {
+            node: {
+              ...routeCurrentPost,
+              replyAncestors: [],
+              replyDescendants: {
+                edges: paginationInitialReplies.map((node) => ({ cursor: node.id, node })),
+                pageInfo: {
+                  endCursor: paginationInitialReplies.at(-1)?.id ?? null,
+                  hasNextPage: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      paginationResponses: [{ error: '다음 Reply page를 불러오지 못했습니다.' }],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const storyWindow = canvasElement.ownerDocument.defaultView!;
+    storyWindow.scrollTo(0, storyWindow.document.documentElement.scrollHeight);
+    storyWindow.dispatchEvent(new Event('scroll'));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '답글을 더 불러오지 못했어요',
+    );
+    await userEvent.click(canvas.getByRole('button', { name: '다른 actor query로 전환' }));
+    await waitFor(() => {
+      expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+    });
+  },
+  render: () => <PostDetailThreadIdentityFailureStory />,
 };
 
 export const ComposerDefault: Story = {
