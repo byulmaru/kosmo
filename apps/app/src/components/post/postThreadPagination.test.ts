@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createPostThreadNativeScrollHandlers, isPostThreadNearEnd } from './postThreadPagination';
+import {
+  createPostThreadNativeScrollHandlers,
+  isPostThreadNearEnd,
+  resumePostThreadNativePagination,
+} from './postThreadPagination';
 import type { PostThreadScrollMetrics } from './postThreadPagination';
 
 test('한 viewport 이내에서만 다음 Reply page를 요청한다', () => {
@@ -44,4 +48,25 @@ test('Native ScrollView event를 같은 metric 계약으로 합친다', () => {
   });
   assert.equal(isPostThreadNearEnd(observed.at(-1)!), false);
   assert.equal(handlers.scrollEventThrottle, 16);
+});
+
+test('성공한 Native page 뒤 guard를 해제하고 저장된 metrics를 다시 검사한다', () => {
+  const requestInFlightRef = { current: true };
+  const metricsRef = {
+    current: { contentLength: 800, offset: 0, viewportLength: 800 },
+  };
+  let nextPageRequests = 0;
+
+  resumePostThreadNativePagination(
+    requestInFlightRef,
+    metricsRef,
+    (metrics: PostThreadScrollMetrics) => {
+      assert.equal(requestInFlightRef.current, false);
+      if (isPostThreadNearEnd(metrics)) {
+        nextPageRequests += 1;
+      }
+    },
+  );
+
+  assert.equal(nextPageRequests, 1);
 });

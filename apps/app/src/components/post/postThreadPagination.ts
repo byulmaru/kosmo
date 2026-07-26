@@ -17,6 +17,7 @@ export function isPostThreadNearEnd({
 }
 
 type PostThreadMetricsRef = { current: PostThreadScrollMetrics };
+type PostThreadRequestRef = { current: boolean };
 type PostThreadNativeLayoutEvent = { nativeEvent: { layout: { height: number } } };
 type PostThreadNativeScrollEvent = {
   nativeEvent: {
@@ -25,6 +26,15 @@ type PostThreadNativeScrollEvent = {
     layoutMeasurement: { height: number };
   };
 };
+
+export function resumePostThreadNativePagination(
+  requestInFlightRef: PostThreadRequestRef,
+  metricsRef: PostThreadMetricsRef,
+  onMetrics: (metrics: PostThreadScrollMetrics) => void,
+) {
+  requestInFlightRef.current = false;
+  onMetrics(metricsRef.current);
+}
 
 export function createPostThreadNativeScrollHandlers(
   metricsRef: PostThreadMetricsRef,

@@ -7,7 +7,11 @@ import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/tokens';
 import { PostThreadLayout } from './PostThreadLayout';
-import { createPostThreadNativeScrollHandlers, isPostThreadNearEnd } from './postThreadPagination';
+import {
+  createPostThreadNativeScrollHandlers,
+  isPostThreadNearEnd,
+  resumePostThreadNativePagination,
+} from './postThreadPagination';
 import type { PropsWithChildren, ReactNode } from 'react';
 import type { ScrollViewProps } from 'react-native';
 import type { PostDetailThread_post$key } from './__generated__/PostDetailThread_post.graphql';
@@ -112,6 +116,8 @@ function PostDetailThreadContent({
     PostDetailThread_post$key
   >(PostDetailThreadFragment, postKey);
   const [loadError, setLoadError] = useState(false);
+  const [nativePageRevision, setNativePageRevision] = useState(0);
+  const handledNativePageRevisionRef = useRef(0);
   const requestInFlightRef = useRef(false);
   const pageErrorRef = useRef(false);
   const loadNextPage = useCallback(() => {
@@ -129,7 +135,11 @@ function PostDetailThreadContent({
           requestInFlightRef.current = false;
         } else {
           setTimeout(() => {
-            requestInFlightRef.current = false;
+            if (Platform.OS === 'web') {
+              requestInFlightRef.current = false;
+            } else {
+              setNativePageRevision((revision) => revision + 1);
+            }
           }, 0);
         }
       },
@@ -152,6 +162,19 @@ function PostDetailThreadContent({
     () => createPostThreadNativeScrollHandlers(nativeMetricsRef, maybeLoadNextPage),
     [maybeLoadNextPage],
   );
+
+  useEffect(() => {
+    if (
+      Platform.OS === 'web' ||
+      nativePageRevision === 0 ||
+      isLoadingNext ||
+      handledNativePageRevisionRef.current === nativePageRevision
+    ) {
+      return;
+    }
+    handledNativePageRevisionRef.current = nativePageRevision;
+    resumePostThreadNativePagination(requestInFlightRef, nativeMetricsRef, maybeLoadNextPage);
+  }, [isLoadingNext, maybeLoadNextPage, nativePageRevision]);
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
