@@ -777,6 +777,33 @@ function PostActionBarSurfaceMatrix({ callbacks }: { callbacks: SurfaceActionCal
           post={requireFragment(quote.listItem, 'quote action bar list item')}
         />
       </View>
+      <View
+        style={postActionBarSurfaceStyles.profileList}
+        testID="post-action-profile-surface-ordinary"
+      >
+        <PostListItem
+          actionBar={<SurfaceActionBar onPress={callbacks.ordinary} />}
+          post={requireFragment(ordinary.listItem, 'profile ordinary action bar list item')}
+        />
+      </View>
+      <View
+        style={postActionBarSurfaceStyles.profileList}
+        testID="post-action-profile-surface-repost"
+      >
+        <PostListItem
+          actionBar={<SurfaceActionBar onPress={callbacks.repost} />}
+          post={requireFragment(repost.listItem, 'profile repost action bar list item')}
+        />
+      </View>
+      <View
+        style={postActionBarSurfaceStyles.profileList}
+        testID="post-action-profile-surface-quote"
+      >
+        <PostListItem
+          actionBar={<SurfaceActionBar onPress={callbacks.quote} />}
+          post={requireFragment(quote.listItem, 'profile quote action bar list item')}
+        />
+      </View>
       <View testID="post-action-surface-detail">
         <View style={postActionBarSurfaceStyles.detailRoutePadding}>
           <PostLayout
@@ -792,6 +819,7 @@ function PostActionBarSurfaceMatrix({ callbacks }: { callbacks: SurfaceActionCal
 const postActionBarSurfaceStyles = StyleSheet.create({
   detailRoutePadding: { padding: spacing.lg },
   listRoutePadding: { paddingHorizontal: spacing.xl },
+  profileList: { width: '100%' },
 });
 
 function overlapsWithPositiveArea(first: DOMRect, second: DOMRect) {
@@ -805,10 +833,12 @@ async function verifyPostActionBarSurfaceMatrix({
   callbacks,
   canvasElement,
   expectedContentWidths,
+  expectedProfileContentWidths,
 }: {
   callbacks: SurfaceActionCallbacks;
   canvasElement: HTMLElement;
   expectedContentWidths: SurfaceContentWidths;
+  expectedProfileContentWidths: Pick<SurfaceContentWidths, 'ordinary' | 'quote' | 'repost'>;
 }) {
   const canvas = within(canvasElement);
   const pathname = window.location.pathname;
@@ -867,6 +897,37 @@ async function verifyPostActionBarSurfaceMatrix({
         routerPathname ?? '',
       );
       expect(openURL).not.toHaveBeenCalled();
+    }
+
+    const profileSurfaces = ['ordinary', 'repost', 'quote'] as const;
+    for (const name of profileSurfaces) {
+      const surface = canvas.getByTestId(`post-action-profile-surface-${name}`);
+      const slot = within(surface).getByTestId('post-action-bar-slot');
+      const toolbar = within(slot).getByRole('toolbar', { name: '액션 바' });
+      const buttons = within(toolbar).getAllByRole('button');
+      const contentColumn = slot.parentElement;
+
+      expect(contentColumn?.lastElementChild).toBe(slot);
+      expect(slot.getBoundingClientRect().width).toBeCloseTo(expectedProfileContentWidths[name], 0);
+      expect(slot.closest('a')).toBeNull();
+      expect(slot.closest('[role="button"]')).toBeNull();
+
+      const protectedTargets = Array.from(
+        surface.querySelectorAll<HTMLElement>(
+          'a, [data-testid="post-body"], [data-testid="source-post-body"], [data-testid="post-layout-body-meta"]',
+        ),
+      ).filter((target) => !slot.contains(target));
+      expect(buttons).toHaveLength(5);
+      for (const actionTarget of [toolbar, ...buttons]) {
+        for (const protectedTarget of protectedTargets) {
+          expect(
+            overlapsWithPositiveArea(
+              actionTarget.getBoundingClientRect(),
+              protectedTarget.getBoundingClientRect(),
+            ),
+          ).toBe(false);
+        }
+      }
     }
   } finally {
     Linking.openURL = originalOpenURL;
@@ -993,6 +1054,7 @@ export const PostActionBarSurfacePlacement390: Story = {
       callbacks: requireSurfaceActionCallbacks(args),
       canvasElement,
       expectedContentWidths: { detail: 306, ordinary: 266, quote: 326, repost: 326 },
+      expectedProfileContentWidths: { ordinary: 314, quote: 374, repost: 374 },
     }),
   render: (args) => <PostActionBarSurfaceMatrix callbacks={requireSurfaceActionCallbacks(args)} />,
 };
@@ -1006,6 +1068,7 @@ export const PostActionBarSurfacePlacement900: Story = {
       callbacks: requireSurfaceActionCallbacks(args),
       canvasElement,
       expectedContentWidths: { detail: 516, ordinary: 476, quote: 536, repost: 536 },
+      expectedProfileContentWidths: { ordinary: 524, quote: 584, repost: 584 },
     }),
   render: (args) => <PostActionBarSurfaceMatrix callbacks={requireSurfaceActionCallbacks(args)} />,
 };
@@ -1019,6 +1082,7 @@ export const PostActionBarSurfacePlacement1400: Story = {
       callbacks: requireSurfaceActionCallbacks(args),
       canvasElement,
       expectedContentWidths: { detail: 516, ordinary: 476, quote: 536, repost: 536 },
+      expectedProfileContentWidths: { ordinary: 524, quote: 584, repost: 584 },
     }),
   render: (args) => <PostActionBarSurfaceMatrix callbacks={requireSurfaceActionCallbacks(args)} />,
 };
