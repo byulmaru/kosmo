@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { ReactionProfileList } from './ReactionProfileList';
 import type { ReactionProfileConnection_post$key } from './__generated__/ReactionProfileConnection_post.graphql';
@@ -37,13 +37,6 @@ export function ReactionProfileConnection({ post, reactionType }: ReactionProfil
     ReactionProfileConnection_post$key
   >(reactionProfileConnectionFragment, post);
   const [loadMoreError, setLoadMoreError] = useState(false);
-  const scope = `${pagination.data.id}:${reactionType}`;
-  const scopeRef = useRef(scope);
-  scopeRef.current = scope;
-
-  useEffect(() => {
-    setLoadMoreError(false);
-  }, [scope]);
 
   const loadMore = () => {
     if (pagination.isLoadingNext) {
@@ -52,11 +45,7 @@ export function ReactionProfileConnection({ post, reactionType }: ReactionProfil
 
     setLoadMoreError(false);
     pagination.loadNext(20, {
-      onComplete: (error) => {
-        if (scopeRef.current === scope) {
-          setLoadMoreError(Boolean(error));
-        }
-      },
+      onComplete: (error) => setLoadMoreError(Boolean(error)),
     });
   };
 
