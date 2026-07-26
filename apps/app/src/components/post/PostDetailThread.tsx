@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostListItem } from '@/components/post/PostListItem';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/tokens';
+import { getShellMobileHeaderStickyOffset } from '../shell/shellLayout';
 import { PostThreadLayout } from './PostThreadLayout';
 import {
   createPostThreadNativeScrollHandlers,
@@ -73,9 +74,18 @@ type ThreadRenderablePost = Readonly<{
 }>;
 
 export function PostDetailFrame({ children, header, nativeScrollProps }: PostDetailFrameProps) {
+  const { width } = useWindowDimensions();
+
   return Platform.OS === 'web' ? (
     <View style={styles.frame} testID="post-detail-scroll">
-      <View style={[styles.header, webStickyHeader]}>{header}</View>
+      <View
+        style={[
+          styles.header,
+          webStickyHeader(getShellMobileHeaderStickyOffset(Platform.OS === 'web', width)),
+        ]}
+      >
+        {header}
+      </View>
       {children}
     </View>
   ) : (
@@ -292,4 +302,6 @@ const styles = StyleSheet.create({
   },
 });
 
-const webStickyHeader = { position: 'sticky' as never, top: 0, zIndex: 10 };
+function webStickyHeader(top: number) {
+  return { position: 'sticky' as never, top, zIndex: 10 };
+}

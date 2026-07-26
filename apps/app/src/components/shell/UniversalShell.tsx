@@ -21,7 +21,7 @@ import { spacing } from '@/theme/tokens';
 import { BottomTabBar } from './BottomTabBar';
 import { RightRail } from './RightRail';
 import { ShellChromeProvider } from './ShellChromeContext';
-import { getShellLayout } from './shellLayout';
+import { getShellLayout, webMobileShellHeaderHeight } from './shellLayout';
 import { SidebarNavigation } from './SidebarNavigation';
 import { UnreadNotificationBadgeController } from './UnreadNotificationBadgeController';
 import type { ViewStyle } from 'react-native';
@@ -55,6 +55,7 @@ const webRightRailOverflow = {
 } as unknown as ViewStyle;
 
 const webStickyHeader = {
+  height: webMobileShellHeaderHeight,
   position: 'sticky',
   top: 0,
   zIndex: 20,
