@@ -277,12 +277,12 @@
 - Context / Problem: canonical과 PROD-406은 viewer-independent Type별 count와 정렬을 고정하지만 GraphQL field와 항목 shape는 구현 전 공개 계약으로 확정되지 않았다.
 - Decision Outcome: GraphQL은 `Post.reactionCounts: [ReactionCount!]!`를 제공하고 `ReactionCount`는 `type: String!`과 `count: Int!`만 제공한다. 목록은 현재 Reaction이 하나 이상 존재하는 Type만 포함하며 Reaction이 없으면 빈 목록이다. Type별 Profile connection은 기존 `Post.reactionProfiles`로 분리한다.
 - Alternatives Considered: Relay connection은 현재 Type 수가 제한되고 pagination 계약이 없어 불필요한 cursor 표면을 만든다. map 또는 JSON scalar는 Type과 count의 정적 schema 계약을 잃는다. `ReactionSummary` 명칭은 client presentation component와 API aggregate를 혼동시킨다.
-- Consequences: API consumer는 서버가 제공한 count 내림차순을 그대로 사용하고 동률 순서에 의존하지 않는다. zero-count Type 공급은 PROD-417/418의 별도 결정이며 이 field가 합성하지 않는다.
+- Consequences: API consumer는 서버가 제공한 count 내림차순을 그대로 사용하고 동률 순서에 의존하지 않는다. summary에는 zero-count Type을 합성하지 않으며 selector의 zero-count option 공급은 PROD-417의 별도 결정이다. 이 field는 어느 쪽도 합성하지 않는다.
 - Confirmation / Follow-up: schema test와 PROD-406 integration test에서 non-null list·항목 shape, 빈 목록, viewer-independent 집계, 정렬, 삭제와 Post visibility를 검증한다.
 
 ## Remaining Decisions
 
-- PROD-417/418: zero-count Type 공급 API, selector·Profile 목록 UX, optimistic update 사용 여부
+- PROD-417: zero-count option 공급, selector 통합 UX와 optimistic update 사용 여부
 
 ## Superseded Decisions
 
