@@ -15,6 +15,7 @@ Web full sidebar와 compact icon rail에서 각각 자연스러운 trigger와 su
 - 기존 `compact=768`, `full=1280`, 80px icon rail과 중앙 피드 layout 폭을 유지한다.
 - full Web은 inline picker, compact Web은 backdrop·focus trap 없는 비모달 overlay drawer를 사용한다.
 - 프로필 목록만 internal scroll owner로 두고 추가 액션·생성 폼은 고정 footer에 유지한다.
+- semantic `menu`는 profile option·separator·add action까지만 소유하고 create form·operation error alert은 같은 고정 footer 위치의 sibling으로 유지한다.
 - 기존 프로필 선택·생성·실패 상태와 GraphQL·Relay actor 전환 계약을 바꾸지 않는다.
 - Android/iOS와 mobile Web drawer의 picker를 재설계하지 않는다.
 - PROD-213/214/215와 디자인 시스템·Figma 라이브러리 전면 정리를 포함하지 않는다.

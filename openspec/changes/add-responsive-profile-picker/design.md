@@ -41,6 +41,8 @@ desktop compact에서는 새 portal이나 dependency를 추가하지 않고 `Pro
 
 compact drawer는 full sidebar 폭과 기존 spacing·radius·semantic color token을 기본값으로 검토하되, 정확한 width·viewport gap은 현재 token과 실제 Storybook viewport에서 조정할 수 있다. picker root가 viewport 높이를 넘지 않도록 제한하고, list container만 `ScrollView`와 축소 가능한 flex 영역으로 만든다. divider 아래의 add action 또는 create form은 scroll container 밖 footer에 둔다.
 
+Web의 시각적 picker wrapper가 viewport bounds, border와 overflow를 소유하고, 그 안의 semantic `menu` region은 profile list, separator와 기존 `menuitem` add action까지만 소유한다. create form과 operation error `alert`는 같은 고정 footer 위치를 유지하되 `menu`의 sibling으로 렌더한다. ARIA `menu` descendant에 `form`·`alert`를 넣어 `aria-required-children` 규칙을 위반하거나 a11y 예외를 추가하지 않는다.
+
 full·compact Web picker가 열리면 현재 선택 항목, 선택값이 없으면 첫 항목으로 focus를 이동한다. `ArrowUp`·`ArrowDown`은 항목을 순환하고 `Home`·`End`는 처음과 끝으로 이동하며, DOM focus 이동 뒤 `scrollIntoView({ block: 'nearest' })`로 list viewport 안에 유지한다. `Tab`은 가로채지 않아 비모달 surface의 일반 focus 순서를 보존한다. 이 동작은 프로필 `menuitemradio` 목록에만 적용하고 고정 footer의 새 프로필 추가 action은 기존 `menuitem` focus target으로 유지한다. mobile Web drawer와 native에는 이 keyboard lifecycle을 추가하지 않는다.
 
 full inline picker는 같은 프로필 이름 trigger 재실행으로 닫는다. compact Web open 상태에서는 아바타 trigger 재실행, trigger와 drawer 밖의 pointer interaction과 `Escape`를 동일한 close transition으로 모으고 listener를 정리한다. pointer listener는 trigger와 drawer containment를 먼저 확인해 trigger press와 close가 중복 실행되지 않게 한다. full·compact Web에서 `Escape`로 닫으면 trigger에 focus를 복원한다. 선택·생성 failure는 close transition을 실행하지 않으며, full·compact Web의 명시적 close transition은 create state, 입력 handle과 error를 모두 초기화한다. mobile Web drawer와 native의 기존 close state 동작은 유지한다.
@@ -58,6 +60,7 @@ Storybook fixture는 기존 shell query fixture builder 안에서 10개 이상�
 - `compact=false`만 보고 full inline picker를 렌더해 mobile Web drawer 또는 native surface까지 바꾸지 않는다.
 - rail width를 임시로 320px로 확장해 중앙 피드를 밀거나 breakpoint layout 계산을 바꾸지 않는다.
 - navigation `ScrollView`나 picker 전체를 scroll owner로 만들어 footer가 목록과 함께 사라지게 하지 않는다.
+- create form이나 operation error `alert`를 semantic `menu` descendant로 넣어 ARIA required-owned-element 규칙을 위반하지 않는다.
 - compact drawer에 backdrop, focus trap 또는 modal dialog semantics를 추가하지 않는다.
 - component-local breakpoint 숫자나 raw color를 새로 만들지 않는다.
 - layout 수정과 함께 GraphQL selection, mutation payload, Relay cache updater 또는 actor reset을 정리하지 않는다.

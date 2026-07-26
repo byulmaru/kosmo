@@ -16,6 +16,7 @@
 - compact drawer는 80px rail 오른쪽의 비모달 absolute layer이며 backdrop·focus trap·layout width 변경이 없다.
 - mobile Web drawer와 Android/iOS `Modal` picker 경로는 재설계하지 않는다.
 - 프로필 목록만 internal scroll owner다. add action·create form·오류 footer는 목록과 함께 스크롤하지 않는다.
+- 시각적 picker wrapper가 bounds·border·overflow를 소유한다. semantic `menu`는 profile option·separator·add action까지만 포함하고 create form·operation error alert은 같은 고정 footer 위치의 sibling으로 둔다.
 - full·compact Web picker open 시 현재 선택 항목 또는 첫 항목으로 focus를 옮기고 `ArrowUp`·`ArrowDown`·`Home`·`End`를 지원한다. `Escape`는 닫고 trigger focus를 복원하며 `Tab`은 가로채지 않는다.
 - full·compact Web의 선택·생성 실패는 picker와 오류를 유지하고 생성 실패는 입력값을 보존한다. 명시적 close는 create mode, handle 입력과 오류를 모두 초기화한다. mobile Web drawer와 native의 기존 close state 동작은 유지한다.
 - GraphQL fragment·mutation payload, Relay normalization, `resetActor`, route와 cache 정책을 바꾸지 않는다.
@@ -745,7 +746,7 @@ Expected: 현재 list에는 internal scroll이 없고 open 시 option focus가 �
 
 - [ ] **Step 3: list-only ScrollView와 fixed footer를 구현한다**
 
-`ProfileSwitcher.tsx`의 profile options만 `ScrollView`로 감싸고 divider/add/create/error는 scroll container 밖에 둔다. outer menu role은 기존 E2E의 `menuitem` selector를 유지한다.
+`ProfileSwitcher.tsx`의 profile options만 `ScrollView`로 감싸고 divider/add/create/error는 scroll container 밖에 둔다. 시각적 picker wrapper가 bounds·border·overflow를 소유하고, 내부 semantic `menu` region은 profile options·divider·add action만 포함한다. create form과 operation error alert은 같은 고정 footer 위치를 유지하는 `menu` sibling으로 분리해 ARIA `aria-required-children` 규칙을 지킨다. 기존 E2E의 `menu`와 add `menuitem` selector는 유지한다.
 
 ```tsx
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -832,17 +833,21 @@ const surfaceBounds =
       : webFullPickerBounds;
 
 <View
-  accessibilityLabel="프로필 전환"
-  accessibilityRole={Platform.OS === 'web' ? undefined : 'menu'}
-  ref={menuRef}
-  role={Platform.OS === 'web' ? 'menu' : undefined}
   style={[styles.menu, surfaceBounds, { backgroundColor: theme.card, borderColor: theme.border }]}
 >
-  <ScrollView
-    accessibilityLabel="전환할 프로필 목록"
-    contentContainerStyle={styles.profileListContent}
-    style={styles.profileList}
+  <View
+    accessibilityLabel="프로필 전환"
+    accessibilityRole={Platform.OS === 'web' ? undefined : 'menu'}
+    ref={menuRef}
+    role={Platform.OS === 'web' ? 'menu' : undefined}
+    style={styles.menuRegion}
   >
+    <ScrollView
+      accessibilityLabel="전환할 프로필 목록"
+      contentContainerStyle={styles.profileListContent}
+      role={Platform.OS === 'web' ? 'group' : undefined}
+      style={styles.profileList}
+    >
     {profiles.map((profile, index) => {
       const selected = active?.id === profile.id;
       return (
@@ -878,10 +883,12 @@ const surfaceBounds =
         </Pressable>
       );
     })}
-  </ScrollView>
-  <View role={Platform.OS === 'web' ? 'separator' : undefined} style={styles.divider} />
+    </ScrollView>
+    <View role={Platform.OS === 'web' ? 'separator' : undefined} style={styles.divider} />
+    {addProfileButton}
+  </View>
   <View style={styles.pickerFooter}>
-    {creating ? createForm : addProfileButton}
+    {createForm}
     {!creating && error ? (
       <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
         {error}
@@ -891,7 +898,7 @@ const surfaceBounds =
 </View>
 ```
 
-`webCompactPickerBounds`와 `webFullPickerBounds`는 각각 현재 surface 위치에서 viewport gap을 남기면서 12개 fixture가 list scroll을 만드는 CSS `maxHeight` Web style이다. `menu`에는 `overflow: 'hidden'`, `profileList`에는 `flexShrink: 1`, `minHeight: 0`을 적용한다. footer에는 scroll style을 적용하지 않고 새 breakpoint 상수는 만들지 않는다.
+`webCompactPickerBounds`와 `webFullPickerBounds`는 각각 현재 surface 위치에서 viewport gap을 남기면서 12개 fixture가 list scroll을 만드는 CSS `maxHeight` Web style이다. 시각적 `menu` wrapper에는 `overflow: 'hidden'`, semantic `menuRegion`과 `profileList`에는 축소 가능한 flex 경계, `profileList`에는 `minHeight: 0`을 적용한다. footer에는 scroll style이나 `menu` role을 적용하지 않고 새 breakpoint 상수는 만들지 않는다.
 
 - [ ] **Step 4: keyboard focus 이동과 reset을 구현한다**
 

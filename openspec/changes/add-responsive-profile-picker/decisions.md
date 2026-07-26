@@ -52,6 +52,18 @@
 - Consequences: full·compact Web open lifecycle에서 item collection과 trigger reference를 관리해야 하지만 mobile Web drawer와 native focus 동작은 바꾸지 않는다.
 - Confirmation / Follow-up: 10개 이상 typed fixture에서 선택 항목 초기 focus, `End` 이동 뒤 focus 가시성, `Escape` focus 복원을 검증한다.
 
+### 시각적 picker wrapper와 semantic menu 경계를 분리한다
+
+- Decision Date: 2026-07-27
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/breakpoints.md`, `PROD-238`
+- Status: Active
+- Context / Problem: bounded picker의 고정 footer 전체를 Web `menu` descendant로 두면 create `form`과 operation error `alert`가 ARIA menu의 required-owned-element 규칙을 위반해 Storybook axe `aria-required-children` 오류가 발생한다.
+- Decision Outcome: 시각적 picker wrapper가 bounds, border와 overflow를 소유한다. 그 안의 semantic `menu` region은 profile list의 `menuitemradio`, separator와 add `menuitem`까지 소유하고, create form과 operation error alert는 동일한 고정 footer 위치를 유지하는 `menu` sibling으로 렌더한다.
+- Alternatives Considered: footer 전체를 outer `menu` 안에 두는 방식과 중간 `group` wrapper는 form·alert descendant 오류를 해소하지 못한다. a11y rule 예외는 실제 접근성 트리 결함을 숨기므로 사용하지 않는다.
+- Consequences: 기존 `menu`·add `menuitem` selector와 profile option keyboard model은 유지하면서 form·alert을 유효한 semantic sibling으로 노출한다. visual layout과 scroll ownership은 바뀌지 않는다.
+- Confirmation / Follow-up: Shell Storybook a11y, create failure 유지·close reset interaction과 기존 profile-switcher E2E로 검증한다.
+
 ### Compact overlay는 현재 shell hierarchy의 absolute layer를 사용한다
 
 - Decision Date: 2026-07-26
