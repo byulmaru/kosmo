@@ -116,6 +116,7 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
       <View style={[styles.card, { borderColor: theme.border }]}>
         <View style={styles.sourcePresentation}>
           <PostSourcePresentationView
+            onPostPress={() => router.push(detailHref)}
             onSourcePostPress={() => router.push(sourcePostHref)}
             post={presentationPost}
             renderLink={renderLink}

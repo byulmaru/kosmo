@@ -198,12 +198,12 @@ const longQuotePost = post({
   profile: repostAuthor,
   repostSource: longSourcePost,
 });
-const linkedSourceQuote = post({
-  bodyText: '외부 링크가 있는 원문을 인용합니다.',
+const linkedSourceQuote = {
+  ...linkedPost,
   id: 'post-quote-linked-source',
   profile: repostAuthor,
   repostSource: linkedPost,
-});
+};
 const threadRootPost = post({ bodyText: '대화의 시작입니다.', id: 'thread-root' });
 const threadParentPost = post({ bodyText: '직접 Parent Reply입니다.', id: 'thread-parent' });
 const threadCurrentPost = post({ bodyText: '지금 보고 있는 Reply입니다.', id: 'thread-current' });
@@ -661,6 +661,7 @@ function RepostQuotePresentationStory({ callbacks, postId }: PresentationStoryPr
 
   return (
     <PostSourcePresentationView
+      onPostPress={callbacks.postDetail}
       onSourcePostPress={callbacks.sourcePost}
       post={toPostSourcePresentationData(post)}
       renderLink={renderMockLink}
@@ -826,7 +827,7 @@ export const ProductionRepostQuoteListIntegration: Story = {
       .getByText('답글 관계를 유지하는 인용입니다.')
       .closest<HTMLElement>('[role="article"]');
     const linkedSourceRow = home
-      .getByText('외부 링크가 있는 원문을 인용합니다.')
+      .getAllByText(/두 번째 문단입니다\./)[0]!
       .closest<HTMLElement>('[role="article"]');
     const quoteOfQuoteRow = home
       .getByText('Source Quote를 인용하는 outer Quote 본문입니다.')
@@ -851,7 +852,7 @@ export const ProductionRepostQuoteListIntegration: Story = {
       expect.stringContaining('이 원문에 덧붙이는 인용자의 본문입니다.'),
       expect.stringContaining('답글 관계를 유지하는 인용입니다.'),
       expect.stringContaining('Source Quote를 인용하는 outer Quote 본문입니다.'),
-      expect.stringContaining('외부 링크가 있는 원문을 인용합니다.'),
+      expect.stringContaining('두 번째 문단입니다.'),
     ]);
     expect(within(quoteRow!).getByTestId('source-post-preview')).toBeVisible();
     expect(within(replyQuoteRow!).getByTestId('source-post-preview')).toBeVisible();
@@ -923,11 +924,25 @@ export const ProductionRepostQuoteListIntegration: Story = {
     const originalOpenURL = Linking.openURL;
     Linking.openURL = openURL;
     try {
+      await userEvent.click(within(quoteRow!).getByTestId('post-body'));
+      expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+        '/@reposter/post-quote',
+      );
+
+      await userEvent.click(within(replyQuoteRow!).getByTestId('post-body'));
+      expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+        '/@reposter/post-reply-quote',
+      );
+
       await userEvent.click(
-        within(linkedSourceRow!).getByLabelText('안전한 외부 링크, https://example.com/path'),
+        within(linkedSourceRow!).getAllByLabelText(
+          '안전한 외부 링크, https://example.com/path',
+        )[0]!,
       );
       await expect(openURL).toHaveBeenCalledWith('https://example.com/path');
-      expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent('/@kosmo/post-1');
+      expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+        '/@reposter/post-reply-quote',
+      );
       await userEvent.click(within(quoteOfQuoteRow!).getByTestId('source-post-body'));
       expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
         '/@source@remote.example/post-source-quote',
@@ -1055,8 +1070,14 @@ export const Quote: Story = {
     expect(within(preview).getAllByRole('link')).toHaveLength(2);
     expect(within(preview).queryByRole('button')).not.toBeInTheDocument();
     expect(canvas.queryByTestId('nested-source-post-placeholder')).not.toBeInTheDocument();
-    await userEvent.click(canvas.getByLabelText('재게시한 코스모 사용자의 게시글 보기'));
+    const postBody = canvas.getByTestId('post-body');
+    expect(postBody.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(postBody.closest('[role="link"]')).toBeNull();
+
+    await userEvent.click(postBody);
     await expect(args.onPostDetail).toHaveBeenCalledTimes(1);
+    await userEvent.click(canvas.getByLabelText('재게시한 코스모 사용자의 게시글 보기'));
+    await expect(args.onPostDetail).toHaveBeenCalledTimes(2);
     await expect(args.onPostAuthor).not.toHaveBeenCalled();
     await expect(args.onSourceAuthor).not.toHaveBeenCalled();
     await expect(args.onSourcePost).not.toHaveBeenCalled();
@@ -1111,11 +1132,15 @@ export const ReplyQuote: Story = {
     onSourceAuthor: fn(),
     onSourcePost: fn(),
   },
-  play: async ({ canvasElement }) => {
+  play: async ({ args, canvasElement }) => {
     const root = within(canvasElement).getByTestId('post-source-presentation');
     const canvas = within(root);
     expect(canvas.getByText('답글 관계를 유지하는 인용입니다.')).toBeVisible();
     expect(canvas.getByTestId('source-post-preview')).toBeVisible();
+
+    await userEvent.click(canvas.getByTestId('post-body'));
+    await expect(args.onPostDetail).toHaveBeenCalledTimes(1);
+    await expect(args.onSourcePost).not.toHaveBeenCalled();
   },
   render: (args) => (
     <RepostQuotePresentationStory
@@ -1196,15 +1221,27 @@ export const LinkedSourceQuote: Story = {
   },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
+    const postBody = canvas.getByTestId('post-body');
+    const sourcePreview = canvas.getByTestId('source-post-preview');
     const openURL = fn(async () => undefined);
     const originalOpenURL = Linking.openURL;
     Linking.openURL = openURL;
 
     try {
       expect(canvasElement.querySelector('[role="link"] [role="link"]')).toBeNull();
-      await userEvent.click(canvas.getByLabelText('안전한 외부 링크, https://example.com/path'));
-      await expect(openURL).toHaveBeenCalledWith('https://example.com/path');
+      await userEvent.click(
+        within(postBody).getByLabelText('안전한 외부 링크, https://example.com/path'),
+      );
+      await userEvent.click(
+        within(sourcePreview).getByLabelText('안전한 외부 링크, https://example.com/path'),
+      );
+      await expect(openURL).toHaveBeenCalledTimes(2);
+      await expect(args.onPostDetail).not.toHaveBeenCalled();
       expect(args.onSourcePost).not.toHaveBeenCalled();
+
+      await userEvent.click(within(postBody).getByText(/두 번째 문단입니다\./));
+      await expect(args.onPostDetail).toHaveBeenCalledTimes(1);
+      await expect(args.onSourcePost).not.toHaveBeenCalled();
     } finally {
       Linking.openURL = originalOpenURL;
     }
