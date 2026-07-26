@@ -105,9 +105,9 @@
 - **AND** API가 Source 없는 Quote를 반환하면 Quote Author와 자체 Content를 표시하고 Source preview와 이동
   affordance만 생략한다
 
-### Requirement: selected Profile별 Repost action
+### Requirement: selected Profile별 Repost child action
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-389`, `PROD-414`, `PROD-432`, `PROD-433`, `PROD-471` 유니버설 앱은 Post fragment에 colocate된 Repost action adapter로 viewer-independent count와 selected Profile의 Active Repost 상태를 해석하고, 공용 `PostActionBar`의 Repost config에 생성·취소 mutation과 interaction 상태를 제공해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-389`, `PROD-414`, `PROD-432`, `PROD-433`, `PROD-471` 유니버설 앱은 공용 `PostActionBar`의 composite Post fragment가 private Repost action child fragment를 조립하게 해야 하며(MUST), child action은 viewer-independent count, selected Profile의 Active Repost 상태, 생성·취소 mutation과 interaction 상태를 같은 Relay 소유 경계에서 파생해야 한다(MUST).
 
 #### Scenario: Repost하지 않은 상태
 
@@ -142,19 +142,21 @@
 #### Scenario: mutation 실패
 
 - **WHEN** Repost 생성 또는 취소 mutation이 GraphQL 또는 network 오류로 실패한다
-- **THEN** adapter는 pending을 종료하고 이전 서버 확정 count·선택 상태와 normalized cache를 유지한다
+- **THEN** child action은 pending을 종료하고 이전 서버 확정 count·선택 상태와 normalized cache를 유지한다
 - **AND** error callback을 호출하고 다음 입력에서 같은 action을 다시 시도할 수 있게 한다
 - **AND** persistent error 상태, 한국어 또는 성공 toast를 직접 소유하지 않는다
 
-#### Scenario: adapter와 PostActionBar 경계
+#### Scenario: child action과 PostActionBar 경계
 
-- **WHEN** Repost action adapter를 구현하고 검증한다
-- **THEN** adapter는 PROD-433의 공용 `PostActionBar`에 Repost config를 제공하며 독립 공개 action leaf를 만들지 않는다
-- **AND** Storybook 전용 wrapper는 Repost config 하나만 조립하고 실제 production full-bar 연결과 접근 가능한 한국어 오류 toast는 PROD-432에 남긴다
+- **WHEN** Repost child action을 구현하고 검증한다
+- **THEN** `PostActionBar_post`는 `RepostAction_post`를 child fragment로 spread하고 실제 fragment ref를 private `RepostAction`까지 전달한다
+- **AND** private `RepostAction`은 `viewerRepost`에서 선택 상태, 접근성 label, 정확한 Active Repost delete identity와 create/delete mutation 종류를 함께 파생해 공통 private control을 렌더한다
+- **AND** surface는 Repost의 disabled 정책과 error callback만 공급하고 실제 production full-bar 연결과 접근 가능한 한국어 오류 toast는 PROD-432에 남긴다
+- **AND** 독립 공개 action leaf 또는 선택 상태·label·delete identity·mutation callback의 독립 scalar config를 만들지 않는다
 
 ### Requirement: Repost UI 상태 카탈로그와 검증
 
-**Authority / Provenance:** `PROD-389`, `PROD-414`, `PROD-415`, `PROD-433`, `PROD-453` 유니버설 앱은 production fragment 계약을 유지하는 Relay mock과 Storybook 상태로 Repost·Quote presentation 및 action adapter를 검증해야 한다(MUST).
+**Authority / Provenance:** `PROD-389`, `PROD-414`, `PROD-415`, `PROD-433`, `PROD-453` 유니버설 앱은 production fragment 계약을 유지하는 Relay mock과 Storybook 상태로 Repost·Quote presentation 및 Repost child action을 검증해야 한다(MUST).
 
 #### Scenario: presentation 상태 카탈로그
 
@@ -165,5 +167,5 @@
 #### Scenario: action 상태 카탈로그
 
 - **WHEN** Storybook에서 Repost action을 검증한다
-- **THEN** Storybook 전용 wrapper가 `PostActionBar`에 Repost config 하나를 전달하고 선택·미선택, pending, 성공, 오류와 selected Profile 변경 상태를 포함한다
+- **THEN** Storybook의 실제 Relay operation이 Post fragment ref를 `PostActionBar_post`에서 `RepostAction_post`까지 전달하고 선택·미선택, pending, 성공, 오류와 selected Profile 변경 상태를 포함한다
 - **AND** `play` interaction은 클릭, pending 중복 호출 방지, 생성 성공, 정확한 취소 ID와 cache 비변경, 오류 뒤 재시도, actor reset과 접근성 상태를 확인한다

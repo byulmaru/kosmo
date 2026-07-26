@@ -227,28 +227,29 @@ production fragment shape를 유지하는 fixture와 Storybook에서 Repost·Quo
 
 **Deliverable**
 
-Post fragment와 mutations를 colocate한 내부 `useRepostAction` adapter가 PROD-433의 `PostActionBar.repost` config에 selected Profile별 상태, viewer-independent count와 생성·취소 interaction을 제공한다. 생성 성공은 normalized Source 상태를 반영하고, 취소 성공은 실제 Repost를 삭제하되 Source cache 동기화는 PROD-471에 남긴다.
+`PostActionBar_post` composite fragment가 private `RepostAction_post` child fragment를 조립하고, private `RepostAction`이 selected Profile별 상태, viewer-independent count, 생성·취소 mutation과 pending을 한 Relay 소유 경계에서 파생해 공통 private control을 렌더한다. 생성 성공은 normalized Source 상태를 반영하고, 취소 성공은 실제 Repost를 삭제하되 Source cache 동기화는 PROD-471에 남긴다.
 
 **Guardrails**
 
 - #341로 main에 포함된 PROD-433의 공개 `PostActionBar` 경계를 재사용하고 Draft PR base를 `main`으로 유지하며, branch 코드를 복사하거나 `PostActionBar` 또는 독립 공개 action leaf를 중복 구현하지 않는다.
 - #341 squash merge 뒤 기존 부모·자식 tip을 backup ref로 보존하고 자식 고유 커밋만 main 위에 옮긴다. 최신 main의 PROD-453와 PROD-414가 함께 수정한 `add-post-reposts`의 `decisions.md`, `design.md`, `tasks.md`를 어느 한쪽으로 덮지 않고 presentation과 action 계약을 명시적으로 reconcile한 뒤 range-diff와 전체 검증을 수행하고, 명시적 lease로 원격을 갱신한다.
-- fragment와 mutations를 내부 adapter/hook에 colocate하고 actor별 Relay Store를 격리한다.
+- `PostActionBar`는 composite Post fragment를 받고 private Repost child fragment를 실제 fragment ref로 전달한다.
+- child action은 fragment, create/delete mutation, pending, actor 격리와 선택 상태·label·정확한 delete identity를 함께 소유한다. 이 값을 독립 scalar config로 분해하지 않는다.
 - 생성 mutation payload의 normalized Post identity·count·viewer relation을 사용하고 임시 목록 membership updater를 만들지 않는다.
 - 취소 성공 뒤 client count 산술, 광범위한 cache invalidation, 임시 refetch 또는 Source cache 직접 변경을 추가하지 않는다.
 - 취소 성공 뒤 임시 local deselect나 같은 Tombstone ID의 후속 입력을 막는 client 상태를 추가하지 않는다.
 - mutation 실패는 pending을 종료하고 서버 확정 domain/cache 상태를 유지한 채 error callback을 호출한다. persistent 오류·재시도 UI와 한국어 또는 성공 toast는 추가하지 않는다.
-- Storybook 전용 wrapper는 `PostActionBar`에 Repost config 하나만 전달하고, production full-bar 조립과 접근 가능한 한국어 오류 toast는 PROD-432에 남긴다.
+- Storybook 전용 wrapper는 실제 Relay operation의 Post fragment ref를 `PostActionBar_post`에서 `RepostAction_post`까지 전달하고, production full-bar 조립·대상 정책과 접근 가능한 한국어 오류 toast는 PROD-432에 남긴다.
 - 공통 test harness를 신설하거나 기존 harness를 범용 확장하지 않는다.
 
 **Verification**
 
 - raw Relay unit test로 생성 payload의 Source Post cache 정규화, 취소 payload 뒤 Source cache 비변경과 서로 다른 actor Store 격리를 검증한다.
-- Storybook 전용 단일-config `PostActionBar` wrapper의 `play` interaction으로 실제 adapter의 Source Post ID 생성 호출, 정확한 Active Repost ID 취소, 같은 tick pending 중복 차단, 생성 성공, 취소 뒤 cache 비변경, network·GraphQL 오류 callback·재시도, selected Profile actor reset과 접근성 상태를 검증한다.
+- actual Post fragment ref를 받는 Storybook `PostActionBar` wrapper의 `play` interaction으로 parent→child fragment 전달, Source Post ID 생성 호출, 정확한 Active Repost ID 취소, 같은 tick pending 중복 차단, 생성 성공, 취소 뒤 cache 비변경, network·GraphQL 오류 callback·재시도, selected Profile actor reset과 접근성 상태를 검증한다.
 
-- [x] 8.1 `repostCount`와 `viewerRepost` fragment를 소비하는 내부 `useRepostAction` adapter와 `PostActionBar.repost` config를 구현한다.
-- [x] 8.2 `repostPost`의 normalized actor Store 갱신과 Active Repost ID를 사용하는 `deletePost` 호출을 연결하고, 취소 성공 뒤 Source cache를 변경하지 않으며 실패를 error callback으로 전달한다.
-- [x] 8.3 raw Relay unit과 Storybook `play` interaction으로 pending·생성·취소·오류 재시도·Profile actor reset을 검증하고 relay/app/Storybook scoped check를 통과시킨다.
+- [ ] 8.1 `PostActionBar_post` composite fragment와 private `RepostAction_post` child fragment를 연결하고 Repost 선택 상태·label·delete identity·mutation 종류를 child action에서 함께 파생한다.
+- [ ] 8.2 private `RepostAction`에 `repostPost`·`deletePost`, pending·actor callback 격리를 두고 생성 normalized cache, 정확한 취소 identity, 취소 뒤 Source cache 비변경과 error callback 계약을 유지한다.
+- [ ] 8.3 raw Relay unit과 실제 parent→child fragment ref를 사용하는 Storybook `play` interaction으로 pending·생성·취소·오류 재시도·Profile actor reset을 검증하고 relay/app/Storybook scoped check를 통과시킨다.
 
 ## 9. PROD-415 Post renderer Repost 연결
 
@@ -374,7 +375,7 @@ Repost 취소 성공 뒤 서버가 확정한 Source Post의 `repostCount`와 sel
 - 일반 `deletePost`와 concrete Post identity, PROD-411의 Tombstone lifecycle을 보존한다.
 - client count 산술, 관련 없는 전체 refetch, 광범위한 cache invalidation과 임시 connection updater를 사용하지 않는다.
 - 다른 selected Profile의 actor Store로 취소 상태를 전파하지 않는다.
-- Repost action adapter와 공통 `PostActionBar` 조립을 다시 소유하지 않는다.
+- Repost child action과 공통 `PostActionBar` 조립을 다시 소유하지 않는다.
 
 **Verification**
 

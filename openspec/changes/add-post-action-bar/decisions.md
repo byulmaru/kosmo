@@ -6,15 +6,27 @@
 
 ### 고정된 단일 공개 컴포넌트 API
 
-- Decision Date: 2026-07-21
+- Decision Date: 2026-07-26
 - Decision Class: Derived Contract
-- Authority / Provenance: `PROD-432`, `PROD-433`
+- Authority / Provenance: `PROD-432`, `PROD-433`, `PROD-414`
 - Status: Active
 - Context / Problem: 제품 액션 구성과 순서가 고정되어 있는데도 임의 구성 API나 액션별 공개 컴포넌트를 만들면 필요하지 않은 조합, API 표면과 유지보수 책임이 생긴다.
-- Decision Outcome: 공개 UI API는 `PostActionBar` 하나로 제한한다. `reply`, `repost`, `reaction`, `bookmark`, `more`의 명시적 optional prop을 사용하고 이 순서를 고정한다. 반복되는 action control은 모듈 내부 구현으로만 둔다.
+- Decision Outcome: 공개 UI API는 `PostActionBar` 하나로 제한한다. actual Post fragment ref를 받는 `post`와 `reply`, `reaction`, `bookmark`, `more`의 명시적 optional config, Repost의 좁은 host policy/error input을 사용하고 action 순서를 고정한다. 구현된 Repost는 `post` composite fragment 아래 private child action으로 조립하며 반복되는 action control과 child action은 비공개 구현으로만 둔다.
 - Alternatives Considered: 임의 `actions[]` 배열은 고정 제품 계약에 불필요한 유연성을 추가하므로 채택하지 않았다. Reply·Repost 등 action별 공개 leaf 컴포넌트는 독립 재사용 요구가 없고 공개 API만 넓히므로 채택하지 않았다.
-- Consequences: 독립 컴포넌트 사용은 지원하지 않는 액션을 prop 생략으로 표현할 수 있다. production Post surface는 다섯 액션을 모두 제공하고 Content·Reply Parent·Repost Source 관계 조합, Post Visibility 또는 권한상 실행할 수 없는 액션을 disabled로 표현한다. 새로운 액션이나 순서 변경은 제품 계약과 OpenSpec 변경을 요구한다.
-- Confirmation / Follow-up: PROD-433의 공개 export와 Storybook에서 단일 공개 컴포넌트, 고정 순서 및 optional 표시를 검증한다.
+- Consequences: 독립 컴포넌트 사용은 지원하지 않는 config나 Post fragment ref를 생략해 액션을 숨길 수 있다. production Post surface는 actual Post fragment ref와 나머지 config로 다섯 액션을 모두 제공하고 Content·Reply Parent·Repost Source 관계 조합, Post Visibility 또는 권한상 실행할 수 없는 액션을 disabled로 표현한다. 새로운 액션이나 순서 변경은 제품 계약과 OpenSpec 변경을 요구한다.
+- Confirmation / Follow-up: PROD-433의 공개 export와 Storybook에서 단일 공개 컴포넌트, 고정 순서 및 optional 표시를 검증하고, PROD-414는 actual Post fragment ref가 private Repost child까지 전달되는지 검증한다.
+
+### 구현된 action은 composite parent fragment와 private child로 조립한다
+
+- Decision Date: 2026-07-26
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-414`, `PROD-432`, `PROD-433`
+- Status: Active
+- Context / Problem: Repost의 선택 상태, 접근성 label, 정확한 delete identity와 create/delete mutation 선택은 같은 `viewerRepost` 관계에서 파생된다. 이를 독립 scalar config로 전달하면 함께 바뀌어야 하는 값을 유효하지 않은 조합으로 만들 수 있다.
+- Decision Outcome: `PostActionBar` toolbar는 `PostActionBar_post` composite fragment와 고정 action 순서를 소유한다. private `RepostAction`은 `RepostAction_post` child fragment, create/delete mutation, pending, actor 격리와 파생 도메인 상태를 소유하고 공통 private control을 렌더한다. surface는 actual Post fragment ref, 대상 적격성·실행 권한에서 파생한 disabled와 error callback만 공급한다. Toolbar container는 child mutation payload나 cache update 정책을 재구현하지 않는다. 아직 구현되지 않은 Reply·Reaction·Bookmark child 전환은 각 선행 action과 PROD-432에 남긴다.
+- Alternatives Considered: `useRepostAction`이 `PostActionBar.repost` scalar config를 반환하는 방식은 Relay 관계에서 함께 변하는 상태와 mutation identity를 분해하므로 채택하지 않았다. 독립 공개 Repost leaf는 단일 공개 UI 경계를 넓히므로 채택하지 않았다. Toolbar container가 모든 action mutation과 정책을 직접 소유하는 방식은 surface·action 소유권을 결합하므로 채택하지 않았다.
+- Consequences: production query와 Storybook operation은 parent fragment spread를 통해 필요한 Repost fields를 transitively 포함한다. Repost child는 fragment와 mutation을 함께 검증할 수 있지만 production full-bar 조립, 대상 정책·guest 인증 위임과 오류 toast는 계속 PROD-432가 소유한다.
+- Confirmation / Follow-up: PROD-414에서 actual parent→child fragment ref, create/delete ID, pending·actor 격리, 생성 cache와 취소 cache 비변경을 검증하고, 이후 action child는 각 선행 계약이 준비됐을 때 같은 원칙을 적용한다.
 
 ### 선택 상태와 처리 상태의 분리
 
@@ -119,9 +131,9 @@
 - Authority / Provenance: `PROD-432`, `PROD-433` Linear comment `2abceb83-7f74-4fb3-a436-145dde45195c`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425`
 - Status: Active
 - Context / Problem: `expanded`·`hasReposted`·`hasReacted`·`hasBookmarked`는 현재 확정된 제품 상태이지만, 마지막 요청 실패는 일시적 실행 결과다. 실패를 Action Bar의 지속 `error`·danger 상태로 남기면 현재 도메인 상태와 위험·파괴적 의미로 읽힐 수 있는 실패 표현이 하나의 control에 섞인다.
-- Decision Outcome: 공개 UI 상태는 Reply의 controlled `expanded`, Repost의 `hasReposted`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`로 표현하고 default·pending·disabled 처리 상태와 독립적으로 유지한다. Reaction과 Bookmark는 count를 받지 않고 active이면 pending spinner를 제외한 현재 처리 상태 색상으로 icon 내부를 채운다. 요청 실패 시 production surface는 pending을 종료하고 직전의 확정된 도메인 상태와 count를 유지한 채 default로 복귀한다. PROD-432의 action adapter 계층은 액션별 한국어 toast와 동일한 보조 기술 안내를 제공한다. 별도 retry 상태나 toast 버튼은 두지 않고 같은 액션의 다음 입력을 재시도로 처리한다. `PostActionBar`는 toast를 소유하지 않는다.
+- Decision Outcome: 공개 UI 상태는 Reply의 controlled `expanded`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`로 표현하고 default·pending·disabled 처리 상태와 독립적으로 유지한다. Repost child는 fragment의 `viewerRepost`에서 `hasReposted`를 파생하고 자기 mutation pending과 독립적으로 유지한다. Reaction과 Bookmark는 count를 받지 않고 active이면 pending spinner를 제외한 현재 처리 상태 색상으로 icon 내부를 채운다. 요청 실패 시 child action 또는 production surface는 pending을 종료하고 직전의 확정된 도메인 상태와 count를 유지한 채 default로 복귀한다. child action은 error callback을 호출하고 PROD-432는 액션별 한국어 toast와 동일한 보조 기술 안내를 제공한다. 별도 retry 상태나 toast 버튼은 두지 않고 같은 액션의 다음 입력을 재시도로 처리한다. `PostActionBar`는 toast를 소유하지 않는다.
 - Alternatives Considered: danger `error` 상태만 유지하는 방식은 구현은 단순하지만 일시적 실패와 도메인 상태를 섞고 실패 문구를 제공하지 못해 채택하지 않았다. toast와 danger 상태를 함께 두는 방식은 중복 피드백과 상태 수명 복잡도를 만들어 채택하지 않았다. toast 내 retry 버튼은 같은 액션의 다음 입력이 자연스러운 재시도 경로이므로 추가하지 않았다.
-- Consequences: PROD-433은 공개 `error` 처리 상태, danger 표현, 재시도 label·hint와 관련 Storybook·component test를 제거한다. PROD-432는 실제 mutation 실패에서 이전 확정 상태 복원, 접근 가능한 toast, 다음 입력 재시도를 통합 검증한다. cross-platform toast primitive·package 선택은 PROD-432 구현 계획에서 별도로 결정한다.
+- Consequences: PROD-433은 공개 `error` 처리 상태, danger 표현, 재시도 label·hint와 관련 Storybook·component test를 제거한다. PROD-414 child action은 실제 Repost mutation 실패에서 이전 확정 상태와 cache를 유지하고 error callback·다음 입력 재시도를 검증한다. PROD-432는 접근 가능한 toast를 production surface에서 통합 검증한다. cross-platform toast primitive·package 선택은 PROD-432 구현 계획에서 별도로 결정한다.
 - Confirmation / Follow-up: PROD-433 Storybook과 component test는 `expanded`·`hasReposted`·`hasReacted`·`hasBookmarked`와 default·pending·disabled 조합을 검증한다. PROD-432는 Web·Android·iOS에서 액션별 toast, 보조 기술 즉시 안내, 이전 확정 상태 유지와 다음 입력 재시도를 검증한다.
 
 ### More callback 경계와 Post Share Reference 통합을 분리
@@ -143,7 +155,7 @@
 - Authority / Provenance: `PROD-432`, `PROD-433`
 - Status: Active
 - Context / Problem: Action Bar가 K/M 반올림·단위 승격·`999M` 상한을 수동 구현하면 JavaScript 표준의 locale-aware compact formatting을 중복하고 한국어의 천·만·억 같은 실행 환경 표기를 막는다.
-- Decision Outcome: 선행 action 계약이 Reply와 Repost에 제공한 optional count는 실행 환경 locale의 표준 `Intl.NumberFormat` compact notation을 사용한다. Action Bar는 K/M 단위, 반올림 경계, 단위 승격과 표시 상한을 자체 구현하지 않고 locale별 정확한 문자열을 규범으로 고정하지 않는다. Reaction·Bookmark·More는 count를 받지 않으며 count 계약이 없는 Reply·Repost에는 `0`이나 placeholder를 합성하지 않는다.
+- Decision Outcome: 선행 action 계약이 Reply config와 Repost child fragment에 제공한 optional count는 실행 환경 locale의 표준 `Intl.NumberFormat` compact notation을 사용한다. Action Bar는 K/M 단위, 반올림 경계, 단위 승격과 표시 상한을 자체 구현하지 않고 locale별 정확한 문자열을 규범으로 고정하지 않는다. Reaction·Bookmark·More는 count를 받지 않으며 count 계약이 없는 Reply·Repost에는 `0`이나 placeholder를 합성하지 않는다.
 - Alternatives Considered: 수동 K/M formatter는 표준 기능을 중복하고 locale 출력을 제거하므로 채택하지 않았다. raw count는 좁은 폭에서 길이를 제한하지 못하므로 채택하지 않았다.
 - Consequences: locale과 플랫폼의 표준 데이터에 따라 단위와 반올림 결과가 달라질 수 있다. 레이아웃은 최대 네 글자 가정 대신 한국어·영어 대표 compact fixture에서 한 행과 비겹침을 검증한다.
 - Confirmation / Follow-up: PROD-433 구현에서 기존 `Intl.NumberFormat` 사용 관례를 재사용하고 Web Storybook과 Android·iOS runtime에서 대표 fixture를 검증한다.

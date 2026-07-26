@@ -2,16 +2,16 @@
 
 ### Requirement: 고정된 액션 구성
 
-**Authority / Provenance:** `PROD-432`, `PROD-433` — Post Action Bar는 표시하도록 제공된 액션을 Reply → Repost → Reaction → Bookmark → More 순서의 단일 행으로 렌더해야 한다(MUST). 액션별 설정이 제공되지 않으면 해당 위치를 렌더하지 않아야 하며(MUST), 남은 액션의 상대 순서는 바꾸지 않아야 한다(MUST). 지원되는 production Post surface는 다섯 액션 설정을 모두 제공해야 하며(MUST), Content·Reply Parent·Repost Source 관계 조합, Post Visibility 또는 권한 때문에 실행할 수 없는 액션도 생략하지 않고 disabled 상태로 제공해야 한다(MUST). More는 icon-only 액션이어야 하며(MUST) count나 의미적 선택·처리 상태를 자체적으로 제공하지 않아야 한다(MUST).
+**Authority / Provenance:** `PROD-432`, `PROD-433`, `PROD-414` — Post Action Bar는 표시하도록 제공된 액션을 Reply → Repost → Reaction → Bookmark → More 순서의 단일 행으로 렌더해야 한다(MUST). 액션별 config 또는 구현된 child action fragment가 제공되지 않으면 해당 위치를 렌더하지 않아야 하며(MUST), 남은 액션의 상대 순서는 바꾸지 않아야 한다(MUST). 지원되는 production Post surface는 composite Post fragment와 나머지 action config로 다섯 액션을 모두 제공해야 하며(MUST), Content·Reply Parent·Repost Source 관계 조합, Post Visibility 또는 권한 때문에 실행할 수 없는 액션도 생략하지 않고 disabled 상태로 제공해야 한다(MUST). More는 icon-only 액션이어야 하며(MUST) count나 의미적 선택·처리 상태를 자체적으로 제공하지 않아야 한다(MUST).
 
 #### Scenario: 모든 액션 표시
 
-- **WHEN** 다섯 액션의 설정이 모두 제공된다
+- **WHEN** 다섯 액션의 config 또는 child fragment가 모두 제공된다
 - **THEN** Action Bar는 Reply, Repost, Reaction, Bookmark, More 순서로 렌더한다
 
 #### Scenario: 독립 컴포넌트의 선택적 액션 생략
 
-- **WHEN** production Post surface가 아닌 독립 컴포넌트 사용에서 일부 액션의 설정이 제공되지 않는다
+- **WHEN** production Post surface가 아닌 독립 컴포넌트 사용에서 일부 액션의 config 또는 child fragment가 제공되지 않는다
 - **THEN** Action Bar는 해당 액션을 숨기고 제공된 액션의 상대 순서를 유지한다
 
 #### Scenario: More 표시
@@ -21,7 +21,7 @@
 
 ### Requirement: 액션의 시각 상태
 
-**Authority / Provenance:** `PROD-433`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425` — Reply·Repost·Reaction·Bookmark는 default·pending·disabled 처리 상태를 받아야 하며(MUST), 공개 제품 상태는 Reply의 controlled `expanded`, Repost의 `hasReposted`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`로 처리 상태와 독립적으로 받아야 한다(MUST). 범용 `selected`를 공개 prop으로 제공하지 않아야 하며(MUST NOT), Reaction과 Bookmark는 count를 받지 않아야 한다(MUST NOT). default 상태는 보조 텍스트 색상의 outline icon과 Reply·Repost에 제공된 선택적 count를 표시해야 하고(MUST), 활성인 도메인 상태는 primary 색상의 icon으로 표현해야 한다(MUST). `hasReacted` 또는 `hasBookmarked`가 true이면 pending spinner를 표시하는 동안을 제외하고 Heart 또는 Bookmark icon 내부를 현재 처리 상태 색상으로 채워야 하며(MUST), default 처리 상태에서는 primary 색상으로 채워야 한다(MUST). 처리 상태의 시각 표현은 도메인 상태의 primary 표현보다 우선해야 한다(MUST). pending 상태는 icon 자리에 spinner를 표시하고(MUST), disabled 상태는 icon과 제공된 count를 비활성 표현으로 약화해야 한다(MUST). pending·disabled 중에도 `expanded`·`hasReposted`·`hasReacted`·`hasBookmarked`의 의미와 접근성 상태를 잃지 않아야 한다(MUST). More는 callback과 접근성 label만 받아야 하며(MUST) count·도메인 상태·pending·disabled 입력을 받지 않아야 한다(MUST).
+**Authority / Provenance:** `PROD-433`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425` — Reply·Reaction·Bookmark는 default·pending·disabled 처리 상태와 각각 controlled `expanded`, `hasReacted`, `hasBookmarked`를 받아야 하며(MUST), private Repost child action은 `viewerRepost`와 mutation 진행 상태에서 `hasReposted` 및 default·pending·disabled를 함께 파생해야 한다(MUST). 범용 `selected`를 공개 prop으로 제공하지 않아야 하며(MUST NOT), Reaction과 Bookmark는 count를 받지 않아야 한다(MUST NOT). default 상태는 보조 텍스트 색상의 outline icon과 Reply 또는 Repost child가 제공한 선택적 count를 표시해야 하고(MUST), 활성인 도메인 상태는 primary 색상의 icon으로 표현해야 한다(MUST). `hasReacted` 또는 `hasBookmarked`가 true이면 pending spinner를 표시하는 동안을 제외하고 Heart 또는 Bookmark icon 내부를 현재 처리 상태 색상으로 채워야 하며(MUST), default 처리 상태에서는 primary 색상으로 채워야 한다(MUST). 처리 상태의 시각 표현은 도메인 상태의 primary 표현보다 우선해야 한다(MUST). pending 상태는 icon 자리에 spinner를 표시하고(MUST), disabled 상태는 icon과 제공된 count를 비활성 표현으로 약화해야 한다(MUST). pending·disabled 중에도 `expanded`·`hasReposted`·`hasReacted`·`hasBookmarked`의 의미와 접근성 상태를 잃지 않아야 한다(MUST). More는 callback과 접근성 label만 받아야 하며(MUST) count·도메인 상태·pending·disabled 입력을 받지 않아야 한다(MUST).
 
 #### Scenario: 활성인 도메인 상태
 
@@ -50,22 +50,22 @@
 
 ### Requirement: 액션 입력 계약
 
-**Authority / Provenance:** `PROD-432`, `PROD-433` — Action Bar는 각 표시 액션의 callback을 외부에서 받아야 하며(MUST) 자체적으로 navigation, menu, mutation, Composer 상태, toast 또는 cache 갱신을 수행하지 않아야 한다(MUST). Reply·Repost·Reaction·Bookmark의 default 상태는 도메인 상태 값과 관계없이 사용자 입력 시 callback을 한 번 호출해야 한다(MUST). 이 액션들의 pending·disabled 상태는 touch, pointer 및 keyboard 입력을 차단하고 callback을 호출하지 않아야 한다(MUST). More는 사용자 입력 시 상태 전이 없이 callback을 한 번 호출해야 한다(MUST).
+**Authority / Provenance:** `PROD-432`, `PROD-433`, `PROD-414` — Post Action Bar toolbar는 composite Post fragment와 고정 action 순서를 소유해야 하며(MUST), 구현된 private child action은 자신의 child fragment, mutation, pending과 파생 도메인 상태를 소유하고 공통 private control을 렌더할 수 있어야 한다(MUST). Reply·Reaction·Bookmark·More의 callback, controlled Composer, navigation, menu와 toast는 외부 surface가 소유해야 하며(MUST), surface는 Repost child에 대상 적격성·실행 권한에서 파생한 disabled와 error callback을 제공해야 한다(MUST). Toolbar container는 child mutation payload 또는 cache update 정책을 재구현하지 않아야 한다(MUST NOT). Reply·Reaction·Bookmark의 default 상태와 Repost child의 default 상태는 사용자 입력 시 해당 action을 한 번 실행해야 하며(MUST), pending·disabled 상태는 touch, pointer 및 keyboard 입력을 차단해야 한다(MUST). More는 사용자 입력 시 상태 전이 없이 callback을 한 번 호출해야 한다(MUST).
 
 #### Scenario: 기본 액션 실행
 
 - **WHEN** 사용자가 default 상태이거나 도메인 상태가 활성인 액션을 활성화한다
-- **THEN** Action Bar는 해당 액션 callback을 한 번 호출한다
+- **THEN** config 기반 액션은 해당 callback을 한 번 호출하고 Repost child는 fragment 상태에서 선택한 mutation을 한 번 호출한다
 
 #### Scenario: 처리 중 중복 입력 차단
 
 - **WHEN** 사용자가 pending 상태의 액션을 다시 활성화한다
-- **THEN** Action Bar는 입력을 차단하고 callback을 호출하지 않는다
+- **THEN** Action Bar는 입력을 차단하고 callback 또는 child mutation을 호출하지 않는다
 
 #### Scenario: 비활성 입력 차단
 
 - **WHEN** 사용자가 disabled 상태의 액션을 활성화하려 한다
-- **THEN** Action Bar는 callback을 호출하지 않는다
+- **THEN** Action Bar는 callback 또는 child mutation을 호출하지 않는다
 
 #### Scenario: More callback 실행
 
@@ -74,7 +74,7 @@
 
 ### Requirement: 액션 접근성
 
-**Authority / Provenance:** `PROD-433` — Action Bar 컨테이너는 toolbar role과 고정된 한국어 접근성 이름 `액션 바`를 노출해야 하며(MUST), 내부 액션을 하나의 접근성 요소로 병합하지 않아야 한다(MUST NOT). 표시되는 각 액션은 button role과 액션별 label을 노출해야 하며(MUST) 시각 icon이나 count에만 의미를 의존하지 않아야 한다(MUST). 액션은 시각 크기와 별도로 최소 44×44 interactive target을 가져야 한다(MUST). Reply의 `expanded`, Repost의 `hasReposted`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`와 각 액션의 pending·disabled 상태는 플랫폼에서 지원하는 접근성 state로 노출해야 한다(MUST). 이 접근성 매핑 내부에서는 플랫폼의 `selected`·`pressed`·`expanded` 용어를 사용할 수 있지만 공개 제품 prop 이름을 바꾸지 않아야 한다(MUST). More는 button role과 label을 제공하되 도메인 상태 또는 처리 상태를 노출하지 않아야 한다(MUST).
+**Authority / Provenance:** `PROD-433`, `PROD-414` — Action Bar 컨테이너는 toolbar role과 고정된 한국어 접근성 이름 `액션 바`를 노출해야 하며(MUST), 내부 액션을 하나의 접근성 요소로 병합하지 않아야 한다(MUST NOT). 표시되는 각 액션은 button role과 액션별 label을 노출해야 하며(MUST) 시각 icon이나 count에만 의미를 의존하지 않아야 한다(MUST). 액션은 시각 크기와 별도로 최소 44×44 interactive target을 가져야 한다(MUST). Reply의 `expanded`, Repost child가 `viewerRepost`에서 파생한 `hasReposted`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`와 각 액션의 pending·disabled 상태는 플랫폼에서 지원하는 접근성 state로 노출해야 한다(MUST). 이 접근성 매핑 내부에서는 플랫폼의 `selected`·`pressed`·`expanded` 용어를 사용할 수 있지만 공개 제품 prop 이름을 바꾸지 않아야 한다(MUST). More는 button role과 label을 제공하되 도메인 상태 또는 처리 상태를 노출하지 않아야 한다(MUST).
 
 #### Scenario: 이름이 있는 툴바 탐색
 
@@ -103,7 +103,7 @@
 
 ### Requirement: Compact count 표시
 
-**Authority / Provenance:** `PROD-432`, `PROD-433` — Action Bar는 Reply와 Repost에 선행 계약이 제공한 0 이상의 정수 count만 표시해야 하며(MUST), 실행 환경 locale을 사용하는 표준 compact number formatting 결과를 사용해야 한다(MUST). Action Bar는 K/M 단위, 반올림 경계, 단위 승격 또는 표시 상한을 자체 알고리즘으로 재구현하지 않아야 하며(MUST NOT), locale에 따른 단위와 반올림 결과를 이 OpenSpec에서 별도로 고정하지 않아야 한다(MUST NOT). Reaction·Bookmark·More는 count 입력을 받거나 표시하지 않아야 하며(MUST NOT), count 계약이 없거나 값이 제공되지 않은 Reply·Repost에 `0` 또는 placeholder를 합성하지 않아야 한다(MUST NOT).
+**Authority / Provenance:** `PROD-432`, `PROD-433`, `PROD-414` — Action Bar는 Reply config와 Repost child fragment에 선행 계약이 제공한 0 이상의 정수 count만 표시해야 하며(MUST), 실행 환경 locale을 사용하는 표준 compact number formatting 결과를 사용해야 한다(MUST). Action Bar는 K/M 단위, 반올림 경계, 단위 승격 또는 표시 상한을 자체 알고리즘으로 재구현하지 않아야 하며(MUST NOT), locale에 따른 단위와 반올림 결과를 이 OpenSpec에서 별도로 고정하지 않아야 한다(MUST NOT). Reaction·Bookmark·More는 count 입력을 받거나 표시하지 않아야 하며(MUST NOT), count 계약이 없거나 값이 제공되지 않은 Reply·Repost에 `0` 또는 placeholder를 합성하지 않아야 한다(MUST NOT).
 
 #### Scenario: 실행 환경 locale의 compact 표시
 
@@ -141,7 +141,7 @@
 
 ### Requirement: Production Post surface 배치
 
-**Authority / Provenance:** `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `docs/domain/objects/profile.md`, `docs/domain/README.md`, `PROD-432`, `PROD-434`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425` — 지원되는 Home Post List, Profile Post List 및 Post 상세 surface의 게시글은 공통 Post Action Bar 계약을 사용해야 한다(MUST). surface adapter는 canonical Content·Reply Parent·Repost Source 관계 조합, Post Visibility·권한 계약과 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425의 action 계약에서 대상 Post 자체의 액션 적격성과 현재 실행 주체·세션의 실행 권한을 분리해 판단해야 하고(MUST), Action Bar가 정책을 자체 판단하게 하지 않아야 한다(MUST). 대상 Post가 적격하지 않거나 인증된 실행 주체가 실행 권한을 갖지 못한 액션은 설정을 생략하지 않고 disabled 상태로 제공해야 한다(MUST). 인증하지 않은 guest에게 `Account.Active`·`Profile.Member`·선택 Profile 같은 현재 세션 전제가 없다는 이유만으로 조회 가능하고 대상 자체가 적격한 액션을 disabled로 제공해서는 안 되며(MUST NOT), 활성화는 상위 인증 진입 callback에 위임해야 한다(MUST). surface 배치는 게시글의 기존 상세 navigation 및 다른 interactive control의 입력을 가로채지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `docs/domain/objects/profile.md`, `docs/domain/README.md`, `PROD-432`, `PROD-434`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425` — 지원되는 Home Post List, Profile Post List 및 Post 상세 surface의 게시글은 공통 Post Action Bar 계약을 사용해야 한다(MUST). surface는 actual Post fragment ref를 `PostActionBar` composite fragment에 공급해야 하며(MUST), canonical Content·Reply Parent·Repost Source 관계 조합, Post Visibility·권한 계약과 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425의 action 계약에서 대상 Post 자체의 액션 적격성과 현재 실행 주체·세션의 실행 권한을 분리해 판단해야 한다(MUST). Action Bar child는 전달받은 policy input을 표현하되 대상 정책 또는 guest 인증 진입을 자체 판단하지 않아야 한다(MUST NOT). 대상 Post가 적격하지 않거나 인증된 실행 주체가 실행 권한을 갖지 못한 액션은 config 또는 child action을 생략하지 않고 disabled 상태로 제공해야 한다(MUST). 인증하지 않은 guest에게 `Account.Active`·`Profile.Member`·선택 Profile 같은 현재 세션 전제가 없다는 이유만으로 조회 가능하고 대상 자체가 적격한 액션을 disabled로 제공해서는 안 되며(MUST NOT), 활성화는 상위 인증 진입 callback에 위임해야 한다(MUST). surface 배치는 게시글의 기존 상세 navigation 및 다른 interactive control의 입력을 가로채지 않아야 한다(MUST).
 
 #### Scenario: 목록과 상세의 공통 계약
 
@@ -180,7 +180,7 @@
 
 ### Requirement: 실제 액션 상태 연결
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `PROD-432`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425` — Production surface는 Reply·Repost·Reaction·Bookmark의 기존 구현 결과에서 callback과 처리 상태를 공급해야 하고(MUST), Reply에는 외부 Composer의 controlled `expanded`, Repost에는 현재 Profile의 `hasReposted`, Reaction에는 현재 Profile이 하나 이상의 Reaction Type을 남겼는지를 나타내는 `hasReacted`, Bookmark에는 현재 Profile의 `hasBookmarked`를 공급해야 한다(MUST). 범용 `selected`를 합성하거나 공개 입력으로 공급하지 않아야 한다(MUST NOT). Reaction과 Bookmark count는 공급하지 않아야 하며(MUST NOT), Reply와 Repost의 count는 선행 action 계약이 viewer-independent count를 제공하는 경우에만 optional로 공급해야 하고(MUST), count 계약이 없는 액션에 `0`이나 새로운 집계 값을 합성하지 않아야 한다(MUST NOT). 제공된 count와 선택된 Profile에 상대적인 도메인 상태는 기존 cache 경계를 유지해야 하며(MUST), Profile 전환 시 이전 Profile의 `hasReposted`·`hasReacted`·`hasBookmarked`를 재사용하지 않아야 한다(MUST). 각 액션의 pending 상태는 해당 요청의 중복 입력만 차단해야 하며(MUST) 다른 액션을 불필요하게 차단하지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `PROD-432`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425` — Production surface는 actual Post fragment ref와 Reply·Reaction·Bookmark의 기존 구현 결과에서 callback과 처리 상태를 공급해야 하며(MUST), Reply에는 외부 Composer의 controlled `expanded`, Reaction에는 현재 Profile이 하나 이상의 Reaction Type을 남겼는지를 나타내는 `hasReacted`, Bookmark에는 현재 Profile의 `hasBookmarked`를 공급해야 한다(MUST). Repost child action은 child fragment의 `viewerRepost`에서 `hasReposted`, delete identity와 create/delete mutation 선택을 함께 파생해야 하고(MUST), surface는 Repost의 disabled 정책과 error callback만 공급해야 한다(MUST). 범용 `selected`를 합성하거나 공개 입력으로 공급하지 않아야 한다(MUST NOT). Reaction과 Bookmark count는 공급하지 않아야 하며(MUST NOT), Reply count는 선행 action 계약이 제공하는 경우에만 optional로 공급하고 Repost count는 child fragment에서 읽어야 하며(MUST), count 계약이 없는 액션에 `0`이나 새로운 집계 값을 합성하지 않아야 한다(MUST NOT). 제공된 count와 선택된 Profile에 상대적인 도메인 상태는 기존 cache 경계를 유지해야 하며(MUST), Profile 전환 시 이전 Profile의 `hasReposted`·`hasReacted`·`hasBookmarked`를 재사용하지 않아야 한다(MUST). 각 액션의 pending 상태는 해당 요청의 중복 입력만 차단해야 하며(MUST) 다른 액션을 불필요하게 차단하지 않아야 한다(MUST).
 
 Reaction Type 선택·해제와 Type별 count·Profile 목록은 PROD-417·PROD-418의 공개 계약을 그대로 소비해야 하며(MUST) 이 Action Bar 계약에서 별도 집계 방식이나 Reaction count를 정의하지 않아야 한다(MUST). `hasReacted`는 현재 Profile이 하나 이상의 Reaction Type을 남겼는지만 나타내야 한다(MUST).
 
@@ -202,7 +202,7 @@ Reaction Type 선택·해제와 Type별 count·Profile 목록은 PROD-417·PROD-
 #### Scenario: 성공한 요청 반영
 
 - **WHEN** 연결된 action 요청이 성공한다
-- **THEN** Production surface는 기존 action 계약이 제공하는 Reply·Repost count와 `hasReposted`·`hasReacted`·`hasBookmarked`만 Action Bar에 반영한다
+- **THEN** Production surface는 기존 action 계약이 제공하는 Reply count와 `hasReacted`·`hasBookmarked`를 공급하고 Repost child는 fragment가 제공하는 Repost count와 `hasReposted`를 반영한다
 
 #### Scenario: 실패한 요청 복구
 
@@ -243,7 +243,7 @@ Reaction Type 선택·해제와 Type별 count·Profile 목록은 PROD-417·PROD-
 
 ### Requirement: 상태 카탈로그와 통합 검증
 
-**Authority / Provenance:** `PROD-432`, `PROD-433`, `PROD-434` — 공통 UI 구현은 Reply `expanded`, Repost `hasReposted`, Reaction `hasReacted`, Bookmark `hasBookmarked`와 각 액션의 default·pending·disabled 조합, active Reaction·Bookmark의 채워진 icon, More callback-only, 선택적 액션, Reaction·Bookmark count 제외, Reply·Repost count 유무, 한국어·영어 locale의 compact count 및 지원 폭을 독립적으로 검토할 수 있는 Storybook 상태 카탈로그를 제공해야 한다(MUST). 구현 자식의 component test는 표시 우선순위·입력 차단·접근성 metadata를 검증해야 하며(MUST), 계약 부모의 통합 검증은 실제 Post surface에서 controlled Reply Composer, Profile 전환, action별 pending, 성공, 실패 시 이전 확정 상태 복원·접근 가능한 액션별 한국어 toast·다음 입력 재시도, disabled action 유지, guest 인증 위임 및 More 링크 복사를 검증해야 한다(MUST).
+**Authority / Provenance:** `PROD-432`, `PROD-433`, `PROD-434`, `PROD-414` — 공통 UI 구현은 Reply `expanded`, Repost child가 fragment에서 파생한 `hasReposted`, Reaction `hasReacted`, Bookmark `hasBookmarked`와 각 액션의 default·pending·disabled 조합, active Reaction·Bookmark의 채워진 icon, More callback-only, 선택적 액션, Reaction·Bookmark count 제외, Reply·Repost count 유무, 한국어·영어 locale의 compact count 및 지원 폭을 독립적으로 검토할 수 있는 Storybook 상태 카탈로그를 제공해야 한다(MUST). Repost Storybook은 actual Relay operation의 fragment ref를 `PostActionBar` parent fragment에서 private Repost child fragment까지 전달해야 한다(MUST). 구현 자식의 component test는 표시 우선순위·입력 차단·접근성 metadata를 검증해야 하며(MUST), 계약 부모의 통합 검증은 실제 Post surface에서 controlled Reply Composer, Profile 전환, action별 pending, 성공, 실패 시 이전 확정 상태 복원·접근 가능한 액션별 한국어 toast·다음 입력 재시도, disabled action 유지, guest 인증 위임 및 More 링크 복사를 검증해야 한다(MUST).
 
 #### Scenario: UI 상태 독립 검토
 

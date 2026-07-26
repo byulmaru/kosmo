@@ -69,17 +69,17 @@
 - Consequences: PROD-414 완료 직후에는 취소된 Repost의 현재 화면 상태가 다음 서버 기반 재조회 또는 actor 환경 재생성 전까지 오래될 수 있다. PROD-471이 완료되기 전에는 전체 Repost change를 archive하지 않는다.
 - Confirmation / Follow-up: PROD-414는 정확한 취소 identity와 cache 비변경을 검증하고, PROD-471은 서버 결과, 같은 actor Store 일치, actor 간 격리와 client Relay cache 테스트를 검증한다.
 
-### Repost mutation adapter와 PostActionBar 공개 UI를 분리한다
+### Repost child action과 PostActionBar 공개 UI를 조립한다
 
-- Decision Date: 2026-07-24
+- Decision Date: 2026-07-26
 - Decision Class: Implementation Choice
 - Authority / Provenance: `PROD-414`, `PROD-432`, `PROD-433`
 - Status: Active
-- Context / Problem: PROD-433은 공용 action UI의 공개 경계를 `PostActionBar` 하나로 제한하고 PROD-432는 production full-bar 조립과 action 실패 toast를 소유한다. PROD-414가 독립 공개 Repost component나 persistent 오류 UI를 추가하면 이 경계를 중복한다.
-- Decision Outcome: PROD-414는 Post fragment와 mutations를 colocate한 내부 `useRepostAction` adapter로 `PostActionBar.repost` config를 제공한다. #341로 main에 포함된 PROD-433의 공개 UI를 직접 재사용하고 Draft PR base를 `main`으로 유지하며, branch 코드를 복사하거나 Action Bar를 중복 구현하지 않는다. Storybook 전용 wrapper는 Repost config 하나만 조립한다. adapter는 mutation 실패 시 pending을 종료하고 서버 확정 domain/cache 상태를 유지한 채 error callback을 호출하며, production의 접근 가능한 한국어 오류 toast와 실제 full-bar 연결은 PROD-432에 남긴다. persistent error·retry UI와 success toast는 추가하지 않는다.
-- Alternatives Considered: PR #341 merge까지 구현 대기, 독립 공개 Repost action leaf, 부모 branch 코드 복사 또는 중복 구현, PROD-414의 persistent 오류·재시도·성공 UI. merge 대기는 해결된 review thread와 green CI 뒤에도 구현을 직렬화하고, 나머지는 공개 UI 또는 통합 책임을 중복하고 cache 상태를 흐리므로 사용하지 않는다.
-- Consequences: PROD-414는 main에 포함된 PROD-433의 공개 API를 직접 의존한다. adapter는 실제 production surface와 독립적으로 Storybook·Relay test에서 검증할 수 있지만 사용자가 보는 오류 toast는 PROD-432 연결 뒤 제공된다. #341 squash merge 뒤 자식 branch는 기존 부모·자식 tip을 백업하고 range-diff와 명시적 lease로 main 위에 이동한다.
-- Confirmation / Follow-up: Storybook `play` interaction과 raw Relay unit test로 Repost config, pending 중복 차단, create cache, cancel identity/cache 비변경, error callback·다음 입력 재시도와 actor reset을 검증한다.
+- Context / Problem: PROD-433은 공용 action UI의 공개 경계를 `PostActionBar` 하나로 제한하고 PROD-432는 production full-bar 조립·대상 정책과 action 실패 toast를 소유한다. Repost 상태·label·delete identity와 mutation callback을 독립 scalar config로 분해하면 Relay 관계에서 반드시 함께 바뀌어야 하는 값을 유효하지 않은 조합으로 전달할 수 있다.
+- Decision Outcome: PROD-414는 `PostActionBar_post` composite fragment가 private `RepostAction_post` child fragment를 spread하게 한다. private `RepostAction`은 child fragment, create/delete mutation, pending, actor 격리와 `viewerRepost` 기반 선택 상태·접근성 label·정확한 delete identity·mutation 종류를 함께 소유하고 공통 private control을 렌더한다. surface에는 actual Post fragment ref, disabled 정책과 error callback만 남긴다. #341로 main에 포함된 PROD-433의 공개 UI를 직접 재사용하고 Draft PR base를 `main`으로 유지하며, branch 코드를 복사하거나 Action Bar를 중복 구현하지 않는다. mutation 실패 시 서버 확정 domain/cache 상태를 유지하고, production의 접근 가능한 한국어 오류 toast와 실제 full-bar 연결은 PROD-432에 남긴다. persistent error·retry UI와 success toast는 추가하지 않는다.
+- Alternatives Considered: `useRepostAction`이 `PostActionBar.repost` scalar config를 반환하는 방식, 독립 공개 Repost action leaf, 부모 branch 코드 복사 또는 중복 구현, PROD-414의 persistent 오류·재시도·성공 UI. scalar config는 함께 변해야 하는 Relay 상태와 mutation identity를 분해하고, 나머지는 공개 UI 또는 통합 책임을 중복하고 cache 상태를 흐리므로 사용하지 않는다.
+- Consequences: PROD-414는 main에 포함된 PROD-433의 공개 UI와 private common control을 직접 의존한다. composite parent fragment는 실제 production query가 action child fragment를 transitively 포함하게 하고, Storybook도 parent→child fragment ref를 사용한다. 사용자가 보는 오류 toast와 대상 적격성·세션 권한은 PROD-432 연결 뒤 제공된다.
+- Confirmation / Follow-up: Storybook `play` interaction과 raw Relay unit test로 actual parent→child fragment 전달, pending 중복 차단, create cache, cancel identity/cache 비변경, error callback·다음 입력 재시도와 actor reset을 검증한다.
 
 ### Source 접근 실패는 Repost와 Quote에 다르게 적용한다
 
@@ -139,16 +139,16 @@
 - Consequences: 성공 응답 latency에 짧은 Notification 시도가 포함되지만 source 결과는 보존된다. cleanup 실패 잔존 행은 visible predicate가 숨긴다.
 - Confirmation / Follow-up: 저장·cleanup 실패 주입, 반복 처리와 프로세스 간격의 hidden-row API 테스트를 수행한다.
 
-### Presentation, renderer 연결과 action adapter를 독립 client slice로 유지한다
+### Presentation, renderer 연결과 action child를 독립 client slice로 유지한다
 
 - Decision Date: 2026-07-21
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-389`, `PROD-414`, `PROD-415`, `PROD-432`, `PROD-433`, `PROD-453`, `PROD-471`
 - Status: Active
 - Context / Problem: presentation은 API 없이 먼저 검증할 수 있지만 production 목록 연결과 mutation action은 각기 다른 선행 조건을 가진다.
-- Decision Outcome: PROD-453은 production fragment shape를 따르는 typed fixture·Storybook·mock navigation으로 Repost/Quote presentation을 소유한다. 실제 관계 field를 읽는 Relay operation·fragment와 generated type은 PROD-415에 남긴다. PROD-415는 공용 `PostListItem`과 현재 상세의 `PostLayout`에 presentation을 연결하고 Content 없는 Repost 상세를 direct Source canonical route로 대체한다. PROD-414는 fragment-colocated Repost action adapter, `PostActionBar.repost` config, 생성 cache 동기화와 취소 실행을 소유한다. PROD-471은 취소 성공 뒤 Source cache 동기화를 소유하고, 실제 production Action Bar surface 조립과 오류 toast는 PROD-432에 남긴다.
+- Decision Outcome: PROD-453은 production fragment shape를 따르는 typed fixture·Storybook·mock navigation으로 Repost/Quote presentation을 소유한다. 실제 관계 field를 읽는 Relay operation·fragment와 generated type은 PROD-415에 남긴다. PROD-415는 공용 `PostListItem`과 현재 상세의 `PostLayout`에 presentation을 연결하고 Content 없는 Repost 상세를 direct Source canonical route로 대체한다. PROD-414는 `PostActionBar` composite fragment, private Repost child fragment·mutation·pending, 생성 cache 동기화와 취소 실행을 소유한다. PROD-471은 취소 성공 뒤 Source cache 동기화를 소유하고, 실제 production Action Bar surface 조립·대상 정책과 오류 toast는 PROD-432에 남긴다.
 - Alternatives Considered: 하나의 목록 컴포넌트에서 presentation·action·route를 모두 구현, raw scalar props, raw fragment key cast. 모두 이슈 의존성과 Relay colocation 경계를 흐린다.
-- Consequences: presentation 결과는 목록 연결 전에도 독립 검증되며, Storybook 전용 `PostActionBar` wrapper로 실제 production surface 조립 전에 action adapter를 완료할 수 있다.
+- Consequences: presentation 결과는 목록 연결 전에도 독립 검증되며, actual Post fragment ref를 받는 Storybook 전용 `PostActionBar` wrapper로 실제 production surface 조립 전에 Repost child action을 완료할 수 있다.
 - Confirmation / Follow-up: Storybook 상태/`play` interaction, raw Relay unit, Relay compile, Home/Profile/Bookmark와 Post 상세 integration, Content 없는 Repost canonical replace와 PROD-432 제외 범위를 확인한다.
 
 ### Repost와 Quote는 Source의 시각 계층을 다르게 사용한다
