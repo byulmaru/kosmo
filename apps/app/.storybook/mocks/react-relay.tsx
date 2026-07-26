@@ -13,13 +13,21 @@ type RelayMockValue = {
   paginationLoading?: boolean;
   paginationResponse?: unknown;
   paginationResponses?: StoryOperationResponse[];
-  operationResponses?: Record<string, StoryOperationResponse | StoryOperationResponse[]>;
+  operationResponses?: Record<
+    string,
+    StoryOperationResponse | StoryOperationResponse[] | StoryOperationResponseSequence
+  >;
   queryData?: unknown;
 };
 
 type StoryOperationResponse = {
   data?: unknown;
+  delayMs?: number;
   error?: string;
+};
+
+type StoryOperationResponseSequence = {
+  sequence: [StoryOperationResponse, ...StoryOperationResponse[]];
 };
 
 export function RelayStoryProvider({
@@ -76,19 +84,33 @@ export function RelayStoryProvider({
 
 function createStoryEnvironment(mock: RelayMockValue, environmentIndex: number): Environment {
   let paginationResponseIndex = 0;
+  const operationResponseIndices = new Map<string, number>();
+  const nextOperationResponseIndex = (operationName: string) => {
+    const index = operationResponseIndices.get(operationName) ?? 0;
+    operationResponseIndices.set(operationName, index + 1);
+    return index;
+  };
+
   return new Environment({
     network: Network.create((request) =>
-      executeStoryOperation(request, mock, environmentIndex, () => paginationResponseIndex++),
+      executeStoryOperation(
+        request,
+        mock,
+        environmentIndex,
+        () => paginationResponseIndex++,
+        nextOperationResponseIndex,
+      ),
     ),
     store: new Store(new RecordSource()),
   });
 }
 
-function executeStoryOperation(
+async function executeStoryOperation(
   request: RequestParameters,
   mock: RelayMockValue,
   environmentIndex: number,
   nextPaginationResponseIndex: () => number,
+  nextOperationResponseIndex: (operationName: string) => number,
 ): Promise<GraphQLResponse> {
   if (request.operationKind === 'mutation') {
     if (mock.mutationError) {
@@ -134,7 +156,15 @@ function executeStoryOperation(
   const configuredResponse = mock.operationResponses?.[request.name];
   const operationResponse = Array.isArray(configuredResponse)
     ? configuredResponse[Math.min(environmentIndex, configuredResponse.length - 1)]
-    : configuredResponse;
+    : configuredResponse && 'sequence' in configuredResponse
+      ? configuredResponse.sequence[
+          Math.min(nextOperationResponseIndex(request.name), configuredResponse.sequence.length - 1)
+        ]
+      : configuredResponse;
+
+  if (operationResponse?.delayMs) {
+    await new Promise((resolve) => setTimeout(resolve, operationResponse.delayMs));
+  }
 
   if (operationResponse?.error) {
     return Promise.reject(new Error(operationResponse.error));
