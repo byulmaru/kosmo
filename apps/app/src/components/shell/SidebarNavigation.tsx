@@ -22,6 +22,7 @@ import { useUnreadNotificationCount } from './UnreadNotificationBadgeController'
 import { getUnreadNotificationAccessibilityLabel } from './unreadNotificationBadgeState';
 import type { Href } from 'expo-router';
 import type { LucideIcon } from 'lucide-react-native';
+import type { ReactNode } from 'react';
 import type { ViewStyle } from 'react-native';
 import type { SidebarNavigation_query$key } from './__generated__/SidebarNavigation_query.graphql';
 
@@ -112,14 +113,102 @@ export function SidebarNavigation({
     return { active: Boolean(href && pathname === href), href };
   };
 
-  const profileSwitcher = (
+  const profileCountLinks = profile ? (
+    <>
+      <Link asChild href={`/${profile.relativeHandle}/following`}>
+        <Pressable accessibilityRole="link" style={styles.countLink}>
+          <Text style={[styles.count, { color: theme.text }]}>
+            {countFormatter.format(profile.followingCount).toLowerCase()}
+          </Text>
+          <Text style={[styles.countLabel, { color: theme.text }]}>팔로잉</Text>
+        </Pressable>
+      </Link>
+      <Link asChild href={`/${profile.relativeHandle}/followers`}>
+        <Pressable accessibilityRole="link" style={styles.countLink}>
+          <Text style={[styles.count, { color: theme.text }]}>
+            {countFormatter.format(profile.followersCount).toLowerCase()}
+          </Text>
+          <Text style={[styles.countLabel, { color: theme.text }]}>팔로워</Text>
+        </Pressable>
+      </Link>
+    </>
+  ) : null;
+  const profileDetails = profile ? (
+    <>
+      <Text
+        accessibilityLabel="활성 프로필 핸들"
+        numberOfLines={1}
+        style={[styles.profileHandle, { color: theme.textSecondary }]}
+      >
+        {profile.relativeHandle}
+      </Text>
+      <View style={styles.counts}>{profileCountLinks}</View>
+    </>
+  ) : (
+    <Text style={[styles.emptyProfile, { color: theme.textSecondary }]}>
+      {hasProfiles ? '사용할 프로필을 선택해주세요.' : '새 프로필을 만들어 시작하세요.'}
+    </Text>
+  );
+  const renderProfileSummary = (trigger: ReactNode) => (
+    <View accessibilityLabel="활성 프로필" style={styles.profileHeader}>
+      <View
+        style={[
+          styles.cover,
+          { backgroundColor: theme.surface },
+          Platform.OS === 'web' && webCover,
+        ]}
+      />
+      <View style={styles.largeAvatar}>
+        <Avatar
+          label={profile?.displayName || profile?.handle || '?'}
+          size={96}
+          style={avatarShadow}
+        />
+      </View>
+      {profile ? (
+        <Pressable
+          accessibilityLabel="프로필 편집"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: true }}
+          disabled
+          style={[styles.editButton, { backgroundColor: theme.primary }]}
+        >
+          <Text style={styles.editLabel}>편집</Text>
+        </Pressable>
+      ) : null}
+      <View style={styles.profileCopy}>
+        {trigger}
+        {profileDetails}
+      </View>
+    </View>
+  );
+  const profileSwitcher = compact ? (
     <ProfileSwitcher
-      compact={compact}
       onOpenChange={onSwitcherOpenChange}
       open={switcherOpen}
       query={data}
-      showAvatar={compact}
+      showAvatar={true}
+      surface="compact"
     />
+  ) : surface === 'desktop' ? (
+    <ProfileSwitcher
+      onOpenChange={onSwitcherOpenChange}
+      open={switcherOpen}
+      query={data}
+      renderSummary={renderProfileSummary}
+      showAvatar={false}
+      surface="full"
+    />
+  ) : (
+    renderProfileSummary(
+      <ProfileSwitcher
+        onOpenChange={onSwitcherOpenChange}
+        open={switcherOpen}
+        query={data}
+        showAvatar={false}
+        surface="drawer"
+      />,
+    )
   );
 
   return (
@@ -130,73 +219,7 @@ export function SidebarNavigation({
         { backgroundColor: theme.card },
       ]}
     >
-      {compact ? (
-        profileSwitcher
-      ) : (
-        <View accessibilityLabel="활성 프로필" style={styles.profileHeader}>
-          <View
-            style={[
-              styles.cover,
-              { backgroundColor: theme.surface },
-              Platform.OS === 'web' && webCover,
-            ]}
-          />
-          <View style={styles.largeAvatar}>
-            <Avatar
-              label={profile?.displayName || profile?.handle || '?'}
-              size={96}
-              style={avatarShadow}
-            />
-          </View>
-          {profile ? (
-            <Pressable
-              accessibilityLabel="프로필 편집"
-              accessibilityRole="button"
-              accessibilityState={{ disabled: true }}
-              disabled
-              style={[styles.editButton, { backgroundColor: theme.primary }]}
-            >
-              <Text style={styles.editLabel}>편집</Text>
-            </Pressable>
-          ) : null}
-          <View style={styles.profileCopy}>
-            {profileSwitcher}
-            {profile ? (
-              <>
-                <Text
-                  accessibilityLabel="활성 프로필 핸들"
-                  numberOfLines={1}
-                  style={[styles.profileHandle, { color: theme.textSecondary }]}
-                >
-                  {profile.relativeHandle}
-                </Text>
-                <View style={styles.counts}>
-                  <Link asChild href={`/${profile.relativeHandle}/following`}>
-                    <Pressable accessibilityRole="link" style={styles.countLink}>
-                      <Text style={[styles.count, { color: theme.text }]}>
-                        {countFormatter.format(profile.followingCount).toLowerCase()}
-                      </Text>
-                      <Text style={[styles.countLabel, { color: theme.text }]}>팔로잉</Text>
-                    </Pressable>
-                  </Link>
-                  <Link asChild href={`/${profile.relativeHandle}/followers`}>
-                    <Pressable accessibilityRole="link" style={styles.countLink}>
-                      <Text style={[styles.count, { color: theme.text }]}>
-                        {countFormatter.format(profile.followersCount).toLowerCase()}
-                      </Text>
-                      <Text style={[styles.countLabel, { color: theme.text }]}>팔로워</Text>
-                    </Pressable>
-                  </Link>
-                </View>
-              </>
-            ) : (
-              <Text style={[styles.emptyProfile, { color: theme.textSecondary }]}>
-                {hasProfiles ? '사용할 프로필을 선택해주세요.' : '새 프로필을 만들어 시작하세요.'}
-              </Text>
-            )}
-          </View>
-        </View>
-      )}
+      {profileSwitcher}
 
       <ScrollView
         contentContainerStyle={[

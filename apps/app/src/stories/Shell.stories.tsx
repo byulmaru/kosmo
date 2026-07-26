@@ -114,7 +114,12 @@ function CompactSidebarStory() {
 function ProfileSwitcherStory() {
   return (
     <View style={{ maxWidth: 360 }}>
-      <ProfileSwitcher query={useShellStoryData().query} showAvatar={false} />
+      <ProfileSwitcher
+        query={useShellStoryData().query}
+        renderSummary={(trigger) => trigger}
+        showAvatar={false}
+        surface="full"
+      />
     </View>
   );
 }
@@ -171,6 +176,34 @@ export const CompactSidebar: Story = {
     expect(canvas.getByRole('link', { name: '북마크' })).toHaveAttribute('href', '/bookmarks');
   },
   render: () => <CompactSidebarStory />,
+};
+
+export const ResponsiveProfilePickerFull: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: '프로필 목록' });
+    const summary = canvas.getByLabelText('활성 프로필');
+    const navigation = canvas.getByRole('navigation', { name: '주요 메뉴' });
+    const summaryBottom = summary.getBoundingClientRect().bottom;
+    const closedNavigationTop = navigation.getBoundingClientRect().top;
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    const menu = await canvas.findByRole('menu', { name: '프로필 전환' });
+    expect(menu).toBeVisible();
+    expect(menu.getBoundingClientRect().top).toBeGreaterThanOrEqual(summaryBottom);
+    expect(navigation.getBoundingClientRect().top).toBeGreaterThan(closedNavigationTop);
+
+    await userEvent.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(canvas.queryByRole('menu', { name: '프로필 전환' })).toBeNull();
+  },
+  render: () => (
+    <View style={{ height: 900, width: 320 }}>
+      <SidebarNavigation query={useShellStoryData().query} />
+    </View>
+  ),
 };
 
 export const FollowUpdatesBothProfileCounts: Story = {

@@ -1,5 +1,5 @@
 import { profileHandleSchema } from '@kosmo/core/validation/profile';
-import { CheckIcon, ChevronDownIcon, PlusIcon } from 'lucide-react-native';
+import { CheckIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
+import type { ReactNode } from 'react';
 import type { ProfileSwitcher_query$key } from './__generated__/ProfileSwitcher_query.graphql';
 import type { ProfileSwitcherCreateProfileMutation } from './__generated__/ProfileSwitcherCreateProfileMutation.graphql';
 import type { ProfileSwitcherSelectProfileMutation } from './__generated__/ProfileSwitcherSelectProfileMutation.graphql';
@@ -75,20 +76,26 @@ const CreateProfileMutation = graphql`
   }
 `;
 
-type Props = {
-  compact?: boolean;
+export type ProfileSwitcherSurface = 'compact' | 'drawer' | 'full';
+
+type CommonProps = {
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
   query: ProfileSwitcher_query$key;
   showAvatar?: boolean;
 };
 
+type Props =
+  | (CommonProps & { renderSummary: (trigger: ReactNode) => ReactNode; surface: 'full' })
+  | (CommonProps & { renderSummary?: never; surface: 'compact' | 'drawer' });
+
 export function ProfileSwitcher({
-  compact = false,
   onOpenChange,
   open: controlledOpen,
   query,
+  renderSummary,
   showAvatar = true,
+  surface,
 }: Props) {
   const theme = useTheme();
   const data = useFragment(ProfileSwitcherFragment, query);
@@ -104,6 +111,8 @@ export function ProfileSwitcher({
   const active = data.currentSession?.selectedProfile ?? null;
   const profiles = data.me?.profiles ?? [];
   const busy = selecting || creatingProfile;
+  const compact = surface === 'compact';
+  const fullWeb = Platform.OS === 'web' && surface === 'full';
   const open = controlledOpen ?? internalOpen;
   const setOpen = (nextOpen: boolean) => {
     if (controlledOpen === undefined) {
@@ -288,6 +297,36 @@ export function ProfileSwitcher({
     </View>
   );
 
+  const trigger = (
+    <Pressable
+      aria-expanded={open}
+      accessibilityLabel="프로필 목록"
+      accessibilityRole="button"
+      accessibilityState={{ expanded: open }}
+      onPress={() => setOpen(!open)}
+      style={({ pressed }) => [
+        styles.trigger,
+        compact ? styles.compactTrigger : styles.fullTrigger,
+        { opacity: pressed ? 0.65 : 1 },
+      ]}
+    >
+      {showAvatar ? <Avatar label={active?.displayName ?? '?'} size={compact ? 40 : 48} /> : null}
+      {!compact ? (
+        <Text numberOfLines={1} style={[styles.triggerName, { color: theme.text }]}>
+          {active?.displayName ?? (profiles.length ? '프로필 선택' : '프로필')}
+        </Text>
+      ) : null}
+      {!compact ? (
+        fullWeb && open ? (
+          <ChevronUpIcon color={theme.textSecondary} size={16} />
+        ) : (
+          <ChevronDownIcon color={theme.textSecondary} size={16} />
+        )
+      ) : null}
+    </Pressable>
+  );
+  const triggerSurface = surface === 'full' ? renderSummary(trigger) : trigger;
+
   return (
     <View
       style={[
@@ -296,33 +335,22 @@ export function ProfileSwitcher({
         { zIndex: open ? 30 : 0 },
       ]}
     >
-      <Pressable
-        aria-expanded={open}
-        accessibilityLabel="프로필 목록"
-        accessibilityRole="button"
-        onPress={() => setOpen(!open)}
-        style={({ pressed }) => [
-          styles.trigger,
-          compact ? styles.compactTrigger : styles.fullTrigger,
-          { opacity: pressed ? 0.65 : 1 },
-        ]}
-      >
-        {showAvatar ? <Avatar label={active?.displayName ?? '?'} size={compact ? 40 : 48} /> : null}
-        {!compact ? (
-          <Text numberOfLines={1} style={[styles.triggerName, { color: theme.text }]}>
-            {active?.displayName ?? (profiles.length ? '프로필 선택' : '프로필')}
-          </Text>
-        ) : null}
-        {!compact ? <ChevronDownIcon color={theme.textSecondary} size={16} /> : null}
-      </Pressable>
+      {triggerSurface}
 
       {Platform.OS === 'web' ? (
         open ? (
-          <View
-            style={[styles.webMenu, compact ? styles.compactMenuPosition : styles.fullMenuPosition]}
-          >
-            {menu}
-          </View>
+          fullWeb ? (
+            <View style={styles.fullInlineMenu}>{menu}</View>
+          ) : (
+            <View
+              style={[
+                styles.webMenu,
+                surface === 'compact' ? styles.compactMenuPosition : styles.fullMenuPosition,
+              ]}
+            >
+              {menu}
+            </View>
+          )
         ) : null
       ) : (
         <Modal
@@ -365,6 +393,7 @@ const styles = StyleSheet.create({
   webMenu: { position: 'absolute', width: 280, zIndex: 30 },
   compactMenuPosition: { left: 52, top: 0 },
   fullMenuPosition: { left: 0, top: 50 },
+  fullInlineMenu: { width: 280 },
   menu: {
     borderRadius: 14,
     borderWidth: 1,
