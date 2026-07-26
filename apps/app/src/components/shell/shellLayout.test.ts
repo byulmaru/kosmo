@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { getShellLayout } from './shellLayout';
+import { getShellLayout, getWebMobileShellHeaderStickyOffset } from './shellLayout';
 
 describe('getShellLayout', () => {
   it('keeps native tablets on the mobile shell', () => {
@@ -11,5 +11,11 @@ describe('getShellLayout', () => {
     assert.equal(getShellLayout(true, 767), 'mobile');
     assert.equal(getShellLayout(true, 768), 'compact');
     assert.equal(getShellLayout(true, 1_280), 'full');
+  });
+
+  it('offsets a Web mobile detail header below the shell header only', () => {
+    assert.equal(getWebMobileShellHeaderStickyOffset(767), 65);
+    assert.equal(getWebMobileShellHeaderStickyOffset(768), 0);
+    assert.equal(getWebMobileShellHeaderStickyOffset(1_280), 0);
   });
 });

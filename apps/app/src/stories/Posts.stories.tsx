@@ -4,8 +4,10 @@ import { Linking, Pressable, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Temporal } from 'temporal-polyfill';
+import PostDetailScreen from '@/app/(tabs)/(post)/[profileHandle]/[postId]';
 import { PostBody } from '@/components/post/PostBody';
 import { PostComposer } from '@/components/post/PostComposer';
+import { PostDetailThread } from '@/components/post/PostDetailThread';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostList } from '@/components/post/PostList';
 import { PostListItem } from '@/components/post/PostListItem';
@@ -20,6 +22,7 @@ import type {
   PostPresentationLinkRenderer,
   PostSourcePresentationData,
 } from '@/components/post/PostSourcePresentationView';
+import type { PostDetailThreadIdentityStoryQuery } from './__generated__/PostDetailThreadIdentityStoryQuery.graphql';
 import type { PostsStoriesQuery as PostsStoriesQueryType } from './__generated__/PostsStoriesQuery.graphql';
 import type { StoryPost } from './fixtures';
 
@@ -188,6 +191,86 @@ const threadReplyQuotePost = {
   }),
   repostSource: threadQuoteSourcePost,
 };
+const routeRootPost = post({ bodyText: 'Route Root 본문', id: 'route-root' });
+const routeParentPost = post({
+  bodyText: 'Route Parent 본문',
+  id: 'route-parent',
+  replyParent: { __typename: 'Post', id: routeRootPost.id },
+});
+const routeSourcePost = post({ bodyText: 'Source 본문', id: 'route-source' });
+const routeCurrentPost = post({
+  bodyText: '현재 Reply 본문',
+  id: 'route-current',
+  replyParent: { __typename: 'Post', id: routeParentPost.id },
+});
+const routeCurrentPostReactionCounts = [{ count: 2, type: '❤️' }];
+const routeCurrentPostWithoutReactions = { ...routeCurrentPost, reactionCounts: [] };
+const routeChildPost = post({
+  bodyText: 'Child 본문',
+  id: 'route-child',
+  replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+});
+const routeSiblingPost = post({
+  bodyText: 'Sibling 본문',
+  id: 'route-sibling',
+  replyParent: { __typename: 'Post', id: routeParentPost.id },
+});
+const routeReplyQuotePost = post({
+  bodyText: 'Reply+Quote 자체 Content',
+  id: 'route-reply-quote',
+  replyParent: { __typename: 'Post', id: routeSiblingPost.id },
+  repostSource: routeSourcePost,
+});
+const routeSourceNullPost = post({
+  bodyText: 'Source가 없어도 남는 Content',
+  id: 'route-source-null',
+  replyParent: { __typename: 'Post', id: routeSiblingPost.id },
+});
+const routeHiddenAncestorPost = post({
+  bodyText: '숨겨진 답글',
+  id: 'route-hidden-ancestor',
+});
+const routeVisibleParentPost = post({
+  bodyText: '조회 가능한 직접 Parent',
+  id: 'route-visible-parent',
+  replyParent: { __typename: 'Post', id: routeHiddenAncestorPost.id },
+});
+const routeBoundaryCurrentPost = post({
+  bodyText: '경계 Current 본문',
+  id: 'route-boundary-current',
+  replyParent: { __typename: 'Post', id: routeVisibleParentPost.id },
+});
+const routeBoundaryCurrentPostWithoutReactions = {
+  ...routeBoundaryCurrentPost,
+  reactionCounts: [],
+};
+const paginationInitialReplies = Array.from({ length: 20 }, (_, index) =>
+  post({
+    bodyText: `기존 Reply ${index + 1}\n${Array.from({ length: 8 }, () => '긴 document scroll 검증 본문').join('\n')}`,
+    id: `pagination-initial-${index + 1}`,
+    replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+  }),
+);
+const paginationInitialReply = post({
+  bodyText: '짧은 화면의 초기 Reply',
+  id: 'pagination-short-initial',
+  replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+});
+const paginationFirstNextReply = post({
+  bodyText: '첫 다음 page Reply',
+  id: 'pagination-next-first',
+  replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+});
+const paginationDuplicateNextReply = post({
+  bodyText: '중복 요청이면 나타나는 Reply',
+  id: 'pagination-next-duplicate',
+  replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+});
+const paginationRetryReply = post({
+  bodyText: '재시도로 추가된 Reply',
+  id: 'pagination-next-retry',
+  replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+});
 const threadItems = {
   ancestors: [
     { connectedToPrevious: false, id: threadRootPost.id },
@@ -233,6 +316,17 @@ const storyPosts = [
   longSourcePost,
   longQuotePost,
   linkedSourceQuote,
+  routeRootPost,
+  routeParentPost,
+  routeCurrentPost,
+  routeChildPost,
+  routeSiblingPost,
+  routeReplyQuotePost,
+  routeSourcePost,
+  routeSourceNullPost,
+  routeHiddenAncestorPost,
+  routeVisibleParentPost,
+  routeBoundaryCurrentPost,
 ];
 const composerProfile = profile({ id: 'profile-composer' });
 const emptyPostsProfile = profileWithPosts([], { id: 'profile-posts-empty' });
@@ -278,6 +372,18 @@ const PostsStoriesQuery = graphql`
     }
     homeTimeline(first: 20) {
       ...PostList_homeTimeline
+    }
+  }
+`;
+
+const PostDetailThreadIdentityStoryQuery = graphql`
+  query PostDetailThreadIdentityStoryQuery($postId: ID!) {
+    node(id: $postId) {
+      __typename
+      ... on Post {
+        id
+        ...PostDetailThread_post @arguments(count: 20) @alias(as: "thread")
+      }
     }
   }
 `;
@@ -934,6 +1040,404 @@ export const ReplyThreadMockNavigation: Story = {
     expect(canvas.getByTestId('selected-thread-post')).toHaveTextContent('thread-child');
   },
   render: () => <ThreadNavigationCatalog />,
+};
+
+export const PostDetailThreadRoute: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostDetailQuery: {
+          data: {
+            node: {
+              ...routeCurrentPost,
+              reactionCounts: routeCurrentPostReactionCounts,
+              replyAncestors: [routeParentPost, routeRootPost],
+              replyDescendants: {
+                edges: [
+                  { cursor: 'route-child', node: routeChildPost },
+                  { cursor: 'route-sibling', node: routeSiblingPost },
+                  { cursor: 'route-reply-quote', node: routeReplyQuotePost },
+                  { cursor: 'route-source-null', node: routeSourceNullPost },
+                ],
+                pageInfo: { endCursor: null, hasNextPage: false },
+              },
+            },
+          },
+        },
+      },
+    },
+    router: {
+      params: {
+        postId: routeCurrentPost.id,
+        profileHandle: routeCurrentPost.profile.relativeHandle,
+      },
+      pathname: `/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.id}`,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const thread = await canvas.findByTestId('post-thread');
+    expect(Array.from(thread.children).map((row) => row.getAttribute('data-testid'))).toEqual([
+      'post-thread-item-route-root',
+      'post-thread-item-route-parent',
+      'post-thread-current-route-current',
+      'post-thread-item-route-child',
+      'post-thread-item-route-sibling',
+      'post-thread-item-route-reply-quote',
+      'post-thread-item-route-source-null',
+    ]);
+    expect(canvas.getByText('Reply+Quote 자체 Content')).toBeVisible();
+    expect(canvas.getByRole('button', { name: '❤️ 반응 2개 보기' })).toBeVisible();
+    const source = canvas.getByTestId('post-thread-source-route-source');
+    expect(within(source).getByText('Source 본문')).toBeVisible();
+    expect(getComputedStyle(source).borderTopWidth).toBe('1px');
+    expect(canvas.queryByTestId('post-thread-source-route-source-null')).not.toBeInTheDocument();
+    expect(canvas.getByText('Source가 없어도 남는 Content')).toBeVisible();
+    expect(
+      canvas.getByTestId('post-thread-connector-route-current-route-child-after'),
+    ).toBeVisible();
+    expect(
+      canvas.queryByTestId('post-thread-connector-route-child-route-sibling-after'),
+    ).toBeNull();
+    await userEvent.click(canvas.getByText('Child 본문'));
+    expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent('/@kosmo/route-child');
+    await userEvent.click(within(source).getByText('Source 본문'));
+    expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent('/@kosmo/route-source');
+  },
+  render: () => (
+    <>
+      <Text testID="current-story-pathname">{usePathname()}</Text>
+      <PostDetailScreen />
+    </>
+  ),
+};
+
+export const PostDetailThreadUnavailableAncestorBoundary: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostDetailQuery: {
+          data: {
+            node: {
+              ...routeBoundaryCurrentPostWithoutReactions,
+              replyAncestors: [routeVisibleParentPost],
+              replyDescendants: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } },
+            },
+          },
+        },
+      },
+    },
+    router: {
+      params: {
+        postId: routeBoundaryCurrentPost.id,
+        profileHandle: routeBoundaryCurrentPost.profile.relativeHandle,
+      },
+      pathname: `/${routeBoundaryCurrentPost.profile.relativeHandle}/${routeBoundaryCurrentPost.id}`,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const thread = await canvas.findByTestId('post-thread');
+    expect(Array.from(thread.children).map((row) => row.getAttribute('data-testid'))).toEqual([
+      'post-thread-item-route-visible-parent',
+      'post-thread-current-route-boundary-current',
+    ]);
+    expect(canvas.queryByText('숨겨진 답글')).not.toBeInTheDocument();
+    expect(canvas.queryByText('조회할 수 없는 상위 Post')).not.toBeInTheDocument();
+  },
+  render: () => <PostDetailScreen />,
+};
+
+export const PostDetailThreadShortContentAutoFills: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostDetailQuery: {
+          data: {
+            node: {
+              ...routeCurrentPostWithoutReactions,
+              replyAncestors: [],
+              replyDescendants: {
+                edges: [{ cursor: paginationInitialReply.id, node: paginationInitialReply }],
+                pageInfo: { endCursor: paginationInitialReply.id, hasNextPage: true },
+              },
+            },
+          },
+        },
+      },
+      paginationResponses: [
+        {
+          data: {
+            node: {
+              ...routeCurrentPostWithoutReactions,
+              replyAncestors: [],
+              replyDescendants: {
+                edges: [{ cursor: paginationFirstNextReply.id, node: paginationFirstNextReply }],
+                pageInfo: { endCursor: null, hasNextPage: false },
+              },
+            },
+          },
+        },
+      ],
+    },
+    router: {
+      params: {
+        postId: routeCurrentPost.id,
+        profileHandle: routeCurrentPost.profile.relativeHandle,
+      },
+      pathname: `/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.id}`,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.findByText('첫 다음 page Reply')).resolves.toBeVisible();
+  },
+  render: () => <PostDetailScreen />,
+};
+
+export const PostDetailThreadDocumentScrollLoadsOnce: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostDetailQuery: {
+          data: {
+            node: {
+              ...routeCurrentPostWithoutReactions,
+              replyAncestors: [],
+              replyDescendants: {
+                edges: paginationInitialReplies.map((node) => ({ cursor: node.id, node })),
+                pageInfo: {
+                  endCursor: paginationInitialReplies.at(-1)?.id ?? null,
+                  hasNextPage: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      paginationResponses: [
+        {
+          data: {
+            node: {
+              ...routeCurrentPostWithoutReactions,
+              replyAncestors: [],
+              replyDescendants: {
+                edges: [{ cursor: paginationFirstNextReply.id, node: paginationFirstNextReply }],
+                pageInfo: { endCursor: null, hasNextPage: false },
+              },
+            },
+          },
+        },
+        {
+          data: {
+            node: {
+              ...routeCurrentPostWithoutReactions,
+              replyAncestors: [],
+              replyDescendants: {
+                edges: [
+                  { cursor: paginationDuplicateNextReply.id, node: paginationDuplicateNextReply },
+                ],
+                pageInfo: { endCursor: null, hasNextPage: false },
+              },
+            },
+          },
+        },
+      ],
+    },
+    router: {
+      params: {
+        postId: routeCurrentPost.id,
+        profileHandle: routeCurrentPost.profile.relativeHandle,
+      },
+      pathname: `/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.id}`,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const storyWindow = canvasElement.ownerDocument.defaultView!;
+    storyWindow.scrollTo(0, storyWindow.document.documentElement.scrollHeight);
+    storyWindow.dispatchEvent(new Event('scroll'));
+    storyWindow.dispatchEvent(new Event('scroll'));
+    await expect(canvas.findByText('첫 다음 page Reply')).resolves.toBeVisible();
+    expect(canvas.queryByText('중복 요청이면 나타나는 Reply')).not.toBeInTheDocument();
+    storyWindow.dispatchEvent(new Event('scroll'));
+    storyWindow.dispatchEvent(new Event('resize'));
+    await waitFor(() => {
+      expect(canvas.queryByText('중복 요청이면 나타나는 Reply')).not.toBeInTheDocument();
+    });
+  },
+  render: () => <PostDetailScreen />,
+};
+
+export const PostDetailThreadPageLoading: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostDetailQuery: {
+          data: {
+            node: {
+              ...routeCurrentPostWithoutReactions,
+              replyAncestors: [],
+              replyDescendants: {
+                edges: paginationInitialReplies.map((node) => ({ cursor: node.id, node })),
+                pageInfo: {
+                  endCursor: paginationInitialReplies.at(-1)?.id ?? null,
+                  hasNextPage: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      paginationLoading: true,
+    },
+    router: {
+      params: {
+        postId: routeCurrentPost.id,
+        profileHandle: routeCurrentPost.profile.relativeHandle,
+      },
+      pathname: `/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.id}`,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const storyWindow = canvasElement.ownerDocument.defaultView!;
+    storyWindow.scrollTo(0, storyWindow.document.documentElement.scrollHeight);
+    storyWindow.dispatchEvent(new Event('scroll'));
+    const loadingText = await canvas.findByText('답글을 더 불러오는 중입니다.');
+    expect(loadingText).toHaveAttribute('aria-live', 'polite');
+    expect(canvas.getByText(/기존 Reply 20/)).toBeVisible();
+  },
+  render: () => <PostDetailScreen />,
+};
+
+export const PostDetailThreadPageFailureRetries: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostDetailQuery: {
+          data: {
+            node: {
+              ...routeCurrentPostWithoutReactions,
+              replyAncestors: [],
+              replyDescendants: {
+                edges: paginationInitialReplies.map((node) => ({ cursor: node.id, node })),
+                pageInfo: {
+                  endCursor: paginationInitialReplies.at(-1)?.id ?? null,
+                  hasNextPage: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      paginationResponses: [
+        { error: '다음 Reply page를 불러오지 못했습니다.' },
+        {
+          data: {
+            node: {
+              ...routeCurrentPostWithoutReactions,
+              replyAncestors: [],
+              replyDescendants: {
+                edges: [{ cursor: paginationRetryReply.id, node: paginationRetryReply }],
+                pageInfo: { endCursor: null, hasNextPage: false },
+              },
+            },
+          },
+        },
+      ],
+    },
+    router: {
+      params: {
+        postId: routeCurrentPost.id,
+        profileHandle: routeCurrentPost.profile.relativeHandle,
+      },
+      pathname: `/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.id}`,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const storyWindow = canvasElement.ownerDocument.defaultView!;
+    storyWindow.scrollTo(0, storyWindow.document.documentElement.scrollHeight);
+    storyWindow.dispatchEvent(new Event('scroll'));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '답글을 더 불러오지 못했어요',
+    );
+    expect(canvas.getByText(/기존 Reply 20/)).toBeVisible();
+    const retryButton = canvas.getByRole('button', { name: '답글 다시 불러오기' });
+    expect(retryButton.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    await userEvent.click(retryButton);
+    await expect(canvas.findByText('재시도로 추가된 Reply')).resolves.toBeVisible();
+    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+  },
+  render: () => <PostDetailScreen />,
+};
+
+function PostDetailThreadIdentityFailureStory() {
+  const [identity, setIdentity] = useState('actor-a:0');
+  const data = useLazyLoadQuery<PostDetailThreadIdentityStoryQuery>(
+    PostDetailThreadIdentityStoryQuery,
+    { postId: routeCurrentPost.id },
+  );
+  const post = data.node?.__typename === 'Post' ? data.node.thread : null;
+
+  if (!post) {
+    throw new Error('Missing Post detail thread identity story fixture.');
+  }
+
+  const threadProps = { header: <Text>게시글</Text>, identity, post };
+
+  return (
+    <>
+      <Pressable
+        accessibilityLabel="다른 actor query로 전환"
+        accessibilityRole="button"
+        onPress={() => setIdentity('actor-b:0')}
+      >
+        <Text>다른 actor query로 전환</Text>
+      </Pressable>
+      <PostDetailThread {...threadProps} />
+    </>
+  );
+}
+
+export const PostDetailThreadPageFailureIdentityReset: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostDetailThreadIdentityStoryQuery: {
+          data: {
+            node: {
+              ...routeCurrentPostWithoutReactions,
+              replyAncestors: [],
+              replyDescendants: {
+                edges: paginationInitialReplies.map((node) => ({ cursor: node.id, node })),
+                pageInfo: {
+                  endCursor: paginationInitialReplies.at(-1)?.id ?? null,
+                  hasNextPage: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      paginationResponses: [{ error: '다음 Reply page를 불러오지 못했습니다.' }],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const storyWindow = canvasElement.ownerDocument.defaultView!;
+    storyWindow.scrollTo(0, storyWindow.document.documentElement.scrollHeight);
+    storyWindow.dispatchEvent(new Event('scroll'));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '답글을 더 불러오지 못했어요',
+    );
+    await userEvent.click(canvas.getByRole('button', { name: '다른 actor query로 전환' }));
+    await waitFor(() => {
+      expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+    });
+  },
+  render: () => <PostDetailThreadIdentityFailureStory />,
 };
 
 export const ComposerDefault: Story = {
