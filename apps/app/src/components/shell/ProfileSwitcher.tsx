@@ -505,7 +505,7 @@ const styles = StyleSheet.create({
   webMenu: { position: 'absolute', width: 280, zIndex: 30 },
   compactMenuPosition: { left: 62, top: 0 },
   fullMenuPosition: { left: 0, top: 50 },
-  fullOverlayPosition: { left: 0, top: 260 },
+  fullOverlayPosition: { left: 0, top: 190 },
   menu: {
     borderRadius: 14,
     borderWidth: 1,

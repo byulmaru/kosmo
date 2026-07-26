@@ -32,10 +32,11 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
   비모달 overlay drawer로 열리며, 레일과 중앙 피드의 실제 layout 폭을 바꾸지 않는다.
 - compact drawer는 본문보다 위에 표시하지만 backdrop과 focus trap을 사용하지 않는다. 아바타 재클릭,
   바깥 클릭, `Escape`, 프로필 선택 성공으로 닫힌다.
-- `≥ full`에서는 프로필 이름과 chevron을 하나의 trigger로 사용하고, 닫힌 260px 프로필 요약 영역 바로
-  아래에 anchored absolute overlay picker를 표시한다. picker는 navigation 위에 표시하되 navigation의 layout
-  위치와 sidebar·중앙 피드의 실제 폭을 바꾸지 않는다. backdrop과 focus trap을 사용하지 않으며, 같은 trigger
-  재실행, 바깥 클릭, `Escape`, 프로필 선택 성공으로 닫는다.
+- `≥ full`에서는 프로필 이름과 chevron을 하나의 trigger로 사용하고, picker의 시각적 wrapper를 그 trigger
+  바로 아래에 anchored absolute overlay로 표시한다. 닫힌 260px 프로필 요약 영역은 유지하며, picker는 trigger
+  아래의 프로필 상세와 navigation 위에 표시하되 navigation의 layout 위치와 sidebar·중앙 피드의 실제 폭을
+  바꾸지 않는다. backdrop과 focus trap을 사용하지 않으며, 같은 trigger 재실행, 바깥 클릭, `Escape`, 프로필
+  선택 성공으로 닫는다.
   닫힌 상태는 아래 방향, 열린 상태는 위 방향 chevron으로 표시하되 chevron 자체는 별도 focus target이
   아니다.
 - trigger는 열린 상태를 accessibility `expanded` 상태로 노출한다.

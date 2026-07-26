@@ -4,7 +4,7 @@
 
 **Goal:** Web full sidebar와 compact icon rail에 각각 자연스러운 profile picker를 제공하고, 긴 프로필 목록에서도 선택과 생성을 계속 사용할 수 있게 한다.
 
-**Architecture:** `ProfileSwitcher`가 기존 Relay 선택·생성 흐름, trigger, picker content와 transient state를 계속 소유하되 `full | compact | drawer` surface를 명시적으로 받는다. `SidebarNavigation`은 닫힌 full profile summary를 260px로 유지하고 full picker를 summary 바로 아래의 anchored absolute overlay로 표시해 navigation 위치를 보존한다. `UniversalShell`은 full·compact picker가 열릴 때 sidebar stacking만 높여 overlay가 navigation과 중앙 본문 위에 보이게 한다.
+**Architecture:** `ProfileSwitcher`가 기존 Relay 선택·생성 흐름, trigger, picker content와 transient state를 계속 소유하되 `full | compact | drawer` surface를 명시적으로 받는다. `SidebarNavigation`은 닫힌 full profile summary를 260px로 유지하고 full picker를 프로필 이름 trigger 바로 아래의 anchored absolute overlay로 표시해 navigation 위치를 보존한다. `UniversalShell`은 full·compact picker가 열릴 때 sidebar stacking만 높여 overlay가 프로필 상세, navigation과 중앙 본문 위에 보이게 한다.
 
 **Tech Stack:** React Native 0.85, React Native Web 0.21, Expo Router, React Relay, Storybook Vitest, Playwright, OpenSpec
 
@@ -12,8 +12,8 @@
 
 - Authority는 `docs/design/breakpoints.md`, `docs/design/figma.md`, 최신 Linear `PROD-238`, `openspec/changes/add-responsive-profile-picker/`다.
 - Web breakpoint는 `compact=768`, `full=1280`을 그대로 사용하고 새 breakpoint나 dependency를 추가하지 않는다.
-- 닫힌 full profile summary는 기존 260px를 유지한다. picker는 summary 바로 아래의 absolute overlay로 열리고
-  navigation의 layout 위치를 바꾸지 않는다.
+- 닫힌 full profile summary는 기존 260px를 유지한다. picker는 프로필 이름 trigger 바로 아래의 absolute
+  overlay로 열려 trigger 아래의 프로필 상세와 navigation 위에 paint되며 navigation의 layout 위치를 바꾸지 않는다.
 - compact drawer는 80px rail 오른쪽의 비모달 absolute layer이며 backdrop·focus trap·layout width 변경이 없다.
 - mobile Web drawer와 Android/iOS `Modal` picker 경로는 재설계하지 않는다.
 - 프로필 목록만 internal scroll owner다. add action·create form·오류 footer는 목록과 함께 스크롤하지 않는다.
@@ -35,7 +35,7 @@
 - Modify `apps/app/src/components/shell/ProfileSwitcher.tsx`
   - `ProfileSwitcherSurface` 계약, trigger와 chevron, Web keyboard/outside-click lifecycle, bounded list와 fixed footer, transient reset을 소유한다.
 - Modify `apps/app/src/components/shell/SidebarNavigation.tsx`
-  - `full | compact | drawer` surface 전달, 260px full summary와 anchored absolute overlay를 소유한다.
+  - `full | compact | drawer` surface 전달, 260px full summary와 이름 trigger 기준 anchored absolute overlay를 소유한다.
 - Modify `apps/app/src/components/shell/UniversalShell.tsx`
   - compact picker open 중 desktop sidebar sibling의 stacking만 소유한다. picker content나 breakpoint 숫자는 소유하지 않는다.
 - Modify `apps/app/src/stories/Shell.stories.tsx`
@@ -74,9 +74,9 @@ type Props = CommonProps &
   );
 ```
 
-- `renderSummary(trigger)`는 `SidebarNavigation`이 full cover·avatar·profile detail과 trigger를 정확히 260px summary에 함께 넣는 render seam이다. `ProfileSwitcher`는 반환된 summary 바로 아래에 absolute overlay를 anchor한다.
+- `renderSummary(trigger)`는 `SidebarNavigation`이 full cover·avatar·profile detail과 trigger를 정확히 260px summary에 함께 넣는 render seam이다. `ProfileSwitcher`는 같은 root에서 이름 trigger bottom에 맞춘 absolute overlay를 anchor한다.
 - `surface='compact'`만 avatar trigger와 Web absolute drawer를 사용한다.
-- `surface='full'`은 `renderSummary`를 필수로 받고 Web picker를 summary 아래의 absolute layer로 렌더한다.
+- `surface='full'`은 `renderSummary`를 필수로 받고 Web picker를 이름 trigger 바로 아래의 absolute layer로 렌더한다.
 - `surface='drawer'`인 mobile Web은 기존 absolute menu를, native platform은 기존 `Modal` 경로를 유지한다. 새 keyboard/reset lifecycle은 두 경로에 적용하지 않는다.
 
 ## State Contract
@@ -103,7 +103,7 @@ type Props = CommonProps &
 
 | OpenSpec contract | Implementation task | Proof |
 | --- | --- | --- |
-| full 260px summary, anchored overlay, navigation 위치 불변 | Task 5 | `ResponsiveProfilePickerFull` interaction과 1280/1440px 시각 검증 |
+| full 260px summary, 이름 trigger 바로 아래 anchored overlay, navigation 위치 불변 | Task 6 | `ResponsiveProfilePickerFull` interaction과 1280/1440px 시각 검증 |
 | compact avatar overlay와 네 dismissal 경로 | Task 2-3 | `ResponsiveProfilePickerCompact` interaction과 768/1024/1279px 시각 검증 |
 | list-only scroll, fixed footer, create form shrink | Task 3 | 12개 typed fixture의 list/footer geometry assertion |
 | selected-first focus, arrow/Home/End, visible focus, Escape restore | Task 3 | long-list keyboard interaction |
@@ -1034,7 +1034,7 @@ Review links:
 | 768px | compact | avatar drawer가 80px rail 오른쪽, route 위, center width 불변 |
 | 1024px | compact | 긴 목록만 scroll, footer 고정, outside wheel은 document scroll |
 | 1279px | compact | full 전환 직전까지 drawer와 rail 폭 유지 |
-| 1280px | full | 260px summary 아래 overlay, navigation 위치와 center/right rail 폭 불변 |
+| 1280px | full | 프로필 이름 trigger 바로 아래 overlay, navigation 위치와 center/right rail 폭 불변 |
 | 1440px | full | overlay paint order, outside dismissal, 긴 목록 focus·footer, 닫힌 sidebar 회귀 없음 |
 
 Expected: 각 width의 open/closed screenshot 또는 동일 수준의 관찰 기록과 결과를 Draft PR `어떻게 확인할 수 있는지`에 남긴다.
@@ -1077,6 +1077,9 @@ PR scoped implementation과 필수 검증이 완료되면 Ready 대상·검증·
 ---
 
 ### Task 5: Full picker를 navigation 위치를 보존하는 overlay로 교정
+
+> Task 5의 `top: 260` 세로 앵커는 navigation 밀림을 해결한 당시 checkpoint다. 최신 사용자·canonical·Linear
+> 계약에 따른 이름 trigger 하단 배치는 Task 6이 supersede한다.
 
 **Files:**
 
@@ -1225,3 +1228,90 @@ git push origin PROD-238
 
 Expected: 승인된 full surface 교정과 직접 회귀 테스트만 포함된다. Terra 독립 리뷰에서 full stacking/listener,
 compact/native leakage와 계약 정합성을 확인한 뒤 검증된 1.1·1.5·1.6 checkbox만 다시 완료한다.
+
+---
+
+### Task 6: Full picker를 프로필 이름 trigger 바로 아래로 옮긴다
+
+**Files:**
+
+- Modify: `docs/design/breakpoints.md`
+- Modify: `openspec/changes/add-responsive-profile-picker/{proposal.md,design.md,decisions.md,tasks.md,specs/web-app-shell/spec.md}`
+- Modify: `apps/app/src/components/shell/ProfileSwitcher.tsx:505-509`
+- Test: `apps/app/src/stories/Shell.stories.tsx:194-216`
+- Modify: `docs/superpowers/plans/2026-07-26-responsive-profile-picker.md`
+
+**Interfaces:**
+
+- Consumes: 고정 full summary geometry(`profileCopy.top=140`, `spacing.sm=8`, `fullTrigger.height=42`)
+- Produces: picker visual wrapper top `190px`, semantic menu region top과 trigger bottom 사이 `0–12px`, navigation 위치 불변
+
+**테스트 코드 범위:** 기존 `ResponsiveProfilePickerFull` interaction의 세로 geometry assertion만 교체한다.
+
+**테스트 필요성:** summary bottom assertion은 picker가 이름 trigger에서 70px 떨어져 navigation 시작점에 보이는 회귀를
+통과시킨다. trigger bottom과 semantic menu top의 인접성을 직접 검증해야 같은 위치 오류를 잡을 수 있다.
+
+**테스트 제외 범위:** 새 story/helper/harness, compact·drawer 중복 geometry, runtime measurement/ResizeObserver,
+GraphQL·Relay·native 테스트 확대.
+
+- [x] **Step 1: trigger 하단 인접성 RED를 작성한다**
+
+`ResponsiveProfilePickerFull`에서 `summary.bottom` 기준 assertion을 다음 observable geometry로 교체한다.
+
+```tsx
+const triggerRect = trigger.getBoundingClientRect();
+
+await userEvent.click(trigger);
+const menu = await canvas.findByRole('menu', { name: '프로필 전환' });
+const menuRect = menu.getBoundingClientRect();
+
+expect(menuRect.top).toBeGreaterThanOrEqual(triggerRect.bottom);
+expect(menuRect.top - triggerRect.bottom).toBeLessThanOrEqual(12);
+expect(openNavigationTop).toBe(closedNavigationTop);
+```
+
+Run:
+
+```bash
+pnpm --filter @kosmo/app test:storybook -- Shell
+```
+
+Expected: 현재 `top: 260`에서는 semantic menu top과 trigger bottom 사이가 약 77px이므로 두 번째 assertion이 FAIL한다.
+
+- [x] **Step 2: fixed full geometry에 맞춰 GREEN을 만든다**
+
+현재 full summary는 `profileCopy.top=140`, `paddingTop=spacing.sm(8)`, `fullTrigger.height=42`로 고정돼 있으므로
+`fullOverlayPosition.top`을 합계 `190`으로 바꾼다. runtime measurement, 새 prop·상수·listener는 추가하지 않는다.
+
+```tsx
+fullOverlayPosition: { left: 0, top: 190 },
+```
+
+Run:
+
+```bash
+pnpm --filter @kosmo/app test:storybook -- Shell
+```
+
+Expected: 새 인접성 assertion, navigation 불변, outside dismissal을 포함한 기존 Shell interaction이 모두 통과한다.
+
+- [x] **Step 3: 1280·1440px 시각 stop gate를 확인한다**
+
+`ResponsiveProfilePickerFull`과 `UniversalFull`에서 picker wrapper가 이름 trigger 바로 아래에서 시작하고, 그 아래의
+프로필 상세와 navigation 위에 paint되며, open 전후 navigation·sidebar·center·right rail layout이 움직이지 않는지
+확인한다. clipping 또는 center sibling 뒤 paint가 확인되면 범위를 확대하지 않고 중단한다.
+
+- [x] **Step 4: 자동 검증과 독립 리뷰를 수행한다**
+
+Run:
+
+```bash
+pnpm --filter @kosmo/app check
+pnpm exec openspec validate add-responsive-profile-picker --strict
+pnpm exec openspec validate --all --strict
+pnpm exec prettier --check docs/design/breakpoints.md docs/superpowers/plans/2026-07-26-responsive-profile-picker.md openspec/changes/add-responsive-profile-picker apps/app/src/components/shell/ProfileSwitcher.tsx apps/app/src/stories/Shell.stories.tsx
+git diff --check
+```
+
+Expected: 모든 명령이 exit code 0이고 독립 reviewer가 P0–P2 없이 trigger anchor, navigation 불변, compact/native 비회귀와
+계약 정합성을 확인한다. 그 뒤 OpenSpec 1.7을 완료 처리하고 checkpoint commit·push한다.

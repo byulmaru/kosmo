@@ -7,9 +7,9 @@
 #### Scenario: Open the full sidebar picker as an overlay
 
 - **WHEN** 사용자가 `full` 이상 Web에서 프로필 이름 trigger를 실행한다
-- **THEN** 시스템은 닫힌 260px 프로필 요약 영역 바로 아래에 profile picker를 anchored absolute overlay로 표시한다
+- **THEN** 시스템은 profile picker의 시각적 wrapper를 프로필 이름 trigger 바로 아래에 anchored absolute overlay로 표시한다
 - **AND** 닫힌 상태의 기존 260px 상단 프로필 요약 영역은 유지한다
-- **AND** picker는 sidebar navigation 위에 표시하되 navigation의 layout 위치를 바꾸지 않는다
+- **AND** picker는 trigger 아래의 프로필 상세와 sidebar navigation 위에 표시하되 navigation의 layout 위치를 바꾸지 않는다
 - **AND** backdrop과 focus trap을 사용하지 않는다
 - **AND** sidebar의 실제 layout 폭은 유지한다
 - **AND** 중앙 피드의 layout 폭은 유지한다

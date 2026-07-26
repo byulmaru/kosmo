@@ -28,8 +28,9 @@
 - Web full sidebar와 mobile Web drawer는 현재 모두 `compact=false` 경로를 사용한다. `compact` boolean만으로 full
   overlay surface를 선택하면 제외 범위인 mobile drawer 동작까지 바뀔 수 있다.
 - `SidebarNavigation`의 navigation `ScrollView`는 picker를 감싸지 않으므로 긴 picker 목록의 scroll owner로 재사용할 수 없다.
-- full profile header는 고정 높이와 absolute child 배치에 의존한다. picker overlay는 260px summary 바로 아래에
-  anchor하되 flow 높이에 참여하지 않아 navigation의 닫힌 위치를 유지해야 한다.
+- full profile header는 고정 높이와 absolute child 배치에 의존한다. picker overlay는 프로필 이름 trigger 바로
+  아래에 anchor해 그 아래의 profile detail과 navigation 위에 paint하되, flow 높이에 참여하지 않아 navigation의
+  닫힌 위치를 유지해야 한다.
 - compact drawer는 80px rail 밖으로 확장되므로 sidebar/center sibling의 stacking과 ancestor overflow를 함께 고려해야 한다.
 - full·compact Web 바깥 pointer close와 `Escape` 처리는 open 상태 동안만 활성화하고 unmount·close 시 정리해야 한다. 바깥 pointer listener는 이벤트 기본 동작을 막지 않아 pointer 대상의 기본 focus를 유지하며, native 전역 listener나 modal semantics로 확장하지 않는다.
 - 현재 `PostComposer`의 Web menu는 open 상태에 한정한 `pointerdown`·`keydown` listener, 선택 항목 초기 focus와 `Escape` focus 복원 패턴을 이미 제공하므로 같은 lifecycle 경계를 재사용할 수 있다.
@@ -41,11 +42,12 @@ picker의 Relay data/action state와 반복 content를 유지하되, `full`·`co
 별개로 명시적으로 전달한다. `ProfileSwitcher`는 trigger, Relay action state, list/footer content를 소유하고 full
 surface에서 `SidebarNavigation`이 제공하는 `renderSummary(trigger)` seam을 호출한다. `SidebarNavigation`은 기존
 cover·avatar·profile detail과 전달받은 trigger를 정확히 260px 높이의 summary View 안에 렌더한다.
-`ProfileSwitcher`는 summary 다음의 absolute layer에 picker를 anchor해 navigation flow 높이에 참여하지 않게 한다.
+`ProfileSwitcher`는 summary와 같은 root의 absolute layer를 프로필 이름 trigger 바로 아래에 anchor해 navigation
+flow 높이에 참여하지 않게 한다.
 따라서 닫힌 summary와 navigation 위치, mobile Web drawer·Android/iOS의 기존 header 경로를 모두 유지한다.
 
 desktop full·compact에서는 새 portal이나 dependency를 추가하지 않고 `ProfileSwitcher`의 Web absolute layer를
-사용한다. full은 260px summary 바로 아래, compact는 80px rail 오른쪽에 배치한다. `UniversalShell`은 picker가
+사용한다. full은 프로필 이름 trigger 바로 아래, compact는 80px rail 오른쪽에 배치한다. `UniversalShell`은 picker가
 열린 sidebar sibling의 stacking을 본문보다 높이되 column width는 full 320px, compact 80px로 유지한다. 현재
 shell ancestor에는 overflow clipping이 없다는 전제에서 시작하되 768·1024·1279·1280·1440px paint 검증에서
 clipping 또는 sibling stacking 실패가 확인되면 이 checkpoint에서 중단하고 portal/layer host 대안을 별도

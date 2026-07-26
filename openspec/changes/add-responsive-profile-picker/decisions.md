@@ -24,19 +24,21 @@
 - Status: Active
 - Context / Problem: full inline picker는 긴 프로필 목록 높이만큼 sidebar navigation을 아래로 밀어 주요 메뉴를
   viewport 밖으로 보낼 수 있고, 프로필 전환을 일시적인 picker가 아니라 sidebar 구조 확장처럼 보이게 한다.
-- Decision Outcome: `full` 이상 Web에서는 프로필 이름 trigger와 닫힌 260px summary를 유지하고, summary 바로
-  아래에 anchored absolute overlay picker를 표시한다. picker는 navigation 위에 paint되지만 navigation의 layout
-  위치와 sidebar·중앙 피드 폭을 바꾸지 않는다. backdrop과 focus trap을 사용하지 않으며 같은 trigger 재실행,
+- Decision Outcome: `full` 이상 Web에서는 프로필 이름 trigger와 닫힌 260px summary를 유지하고, picker의 시각적
+  wrapper를 프로필 이름 trigger 바로 아래에 anchored absolute overlay로 표시한다. picker는 trigger 아래의
+  프로필 상세와 navigation 위에 paint되지만 navigation의 layout 위치와 sidebar·중앙 피드 폭을 바꾸지 않는다.
+  backdrop과 focus trap을 사용하지 않으며 같은 trigger 재실행,
   바깥 pointer close, `Escape`, 프로필 선택 성공으로 닫는다. 바깥 pointer close는 이벤트 기본 동작을 막지 않아
   pointer 대상의 기본 focus를 따르며, 명시적 close로 `open=false`, `creating=false`, 빈 handle과 오류 없음으로
   초기화한다. `compact` drawer와 mobile Web/native surface는 유지한다.
 - Alternatives Considered: 기존 inline flow는 navigation 접근성과 정보 구조를 흔든다. full sidebar 전체 폭을
   확장하거나 modal을 사용하면 layout 또는 background interaction을 불필요하게 바꾼다.
-- Consequences: full Web render는 flow 높이에 참여하지 않는 absolute layer를 사용하고 outside interaction
-  containment와 transient reset을 compact와 함께 지원해야 한다. full sidebar parent의 stacking과 1280·1440px
-  paint order를 직접 확인해야 한다.
-- Confirmation / Follow-up: Storybook에서 open 전후 navigation top이 같고 overlay가 navigation 위에 표시되는지,
-  same trigger·outside·`Escape`·선택 성공 dismissal과 장목록 고정 footer를 확인한다.
+- Consequences: full Web render는 flow 높이에 참여하지 않는 absolute layer를 사용하고, 이름 trigger의 고정
+  geometry와 함께 움직이는 anchor 및 outside interaction containment와 transient reset을 compact와 함께 지원해야
+  한다. full sidebar parent의 stacking과 1280·1440px paint order를 직접 확인해야 한다.
+- Confirmation / Follow-up: Storybook에서 picker top이 이름 trigger bottom에 인접하고 open 전후 navigation top이
+  같으며 overlay가 navigation 위에 표시되는지, same trigger·outside·`Escape`·선택 성공 dismissal과 장목록 고정
+  footer를 확인한다.
 
 ### Compact drawer는 layout을 바꾸지 않는 비모달 surface다
 

@@ -198,8 +198,8 @@ export const ResponsiveProfilePickerFull: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('button', { name: '프로필 목록' });
-    const summary = canvas.getByLabelText('활성 프로필');
     const navigation = canvas.getByRole('navigation', { name: '주요 메뉴' });
+    const triggerRect = trigger.getBoundingClientRect();
     const closedNavigationTop = navigation.getBoundingClientRect().top;
 
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
@@ -210,7 +210,8 @@ export const ResponsiveProfilePickerFull: Story = {
     const openNavigationTop = navigation.getBoundingClientRect().top;
 
     expect(menu).toBeVisible();
-    expect(menuRect.top).toBeGreaterThanOrEqual(summary.getBoundingClientRect().bottom);
+    expect(menuRect.top).toBeGreaterThanOrEqual(triggerRect.bottom);
+    expect(menuRect.top - triggerRect.bottom).toBeLessThanOrEqual(12);
     expect(openNavigationTop).toBe(closedNavigationTop);
     expect(menuRect.bottom).toBeGreaterThan(openNavigationTop);
     expect(canvas.queryByRole('dialog')).toBeNull();
