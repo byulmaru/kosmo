@@ -58,10 +58,12 @@ function presentationKind(post: PostSourcePresentationData): PresentationKind {
 }
 
 export function PostSourcePresentationView({
+  onPostPress,
   onSourcePostPress,
   post,
   renderLink,
 }: {
+  onPostPress: () => void;
   onSourcePostPress: () => void;
   post: PostSourcePresentationData;
   renderLink: PostPresentationLinkRenderer;
@@ -95,15 +97,14 @@ export function PostSourcePresentationView({
   );
 
   if (kind === 'ordinary') {
-    const content = post.content;
-    if (!content) {
+    if (!post.content) {
       return null;
     }
 
     return (
       <View role="article" style={styles.root} testID="post-source-presentation">
         {postHeader}
-        <PostContentRenderer bodyText={content.bodyText} document={content.document} size="md" />
+        <PostBodyPressTarget content={post.content} onPress={onPostPress} testID="post-body" />
       </View>
     );
   }
@@ -127,21 +128,15 @@ export function PostSourcePresentationView({
     ),
     target: 'sourcePost',
   });
+  const postBody = post.content ? (
+    <PostBodyPressTarget content={post.content} onPress={onPostPress} testID="post-body" />
+  ) : null;
   const sourceBody = source.content ? (
-    <Pressable
-      accessible={false}
-      focusable={false}
+    <PostBodyPressTarget
+      content={source.content}
       onPress={onSourcePostPress}
-      style={styles.sourceBody}
-      tabIndex={-1}
       testID="source-post-body"
-    >
-      <PostContentRenderer
-        bodyText={source.content.bodyText}
-        document={source.content.document}
-        size="md"
-      />
-    </Pressable>
+    />
   ) : null;
 
   if (kind === 'repost') {
@@ -172,15 +167,14 @@ export function PostSourcePresentationView({
     );
   }
 
-  const content = post.content;
-  if (!content) {
+  if (!post.content) {
     return null;
   }
 
   return (
     <View role="article" style={styles.root} testID="post-source-presentation">
       {postHeader}
-      <PostContentRenderer bodyText={content.bodyText} document={content.document} size="md" />
+      {postBody}
       <View style={[styles.preview, { borderColor: theme.border }]} testID="source-post-preview">
         <View style={styles.authorHeader}>
           <View style={styles.authorSlot}>{sourceAuthor}</View>
@@ -189,6 +183,29 @@ export function PostSourcePresentationView({
         {sourceBody}
       </View>
     </View>
+  );
+}
+
+function PostBodyPressTarget({
+  content,
+  onPress,
+  testID,
+}: {
+  content: PresentationContent;
+  onPress: () => void;
+  testID: string;
+}) {
+  return (
+    <Pressable
+      accessible={false}
+      focusable={false}
+      onPress={onPress}
+      style={styles.postBody}
+      tabIndex={-1}
+      testID={testID}
+    >
+      <PostContentRenderer bodyText={content.bodyText} document={content.document} size="md" />
+    </Pressable>
   );
 }
 
@@ -244,6 +261,6 @@ const styles = StyleSheet.create({
   authorHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, minWidth: 0 },
   authorSlot: { flex: 1, minWidth: 0 },
   timestamp: { fontFamily: 'SUIT', minHeight: 44, minWidth: 44, paddingTop: 12, ...typography.xsm },
-  sourceBody: { justifyContent: 'center', minHeight: 44, minWidth: 0 },
+  postBody: { justifyContent: 'center', minHeight: 44, minWidth: 0 },
   preview: { borderRadius: radii.lg, borderWidth: 1, gap: spacing.sm, padding: spacing.md },
 });
