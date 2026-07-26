@@ -8,8 +8,8 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
-import deletePostMutation from './__generated__/useRepostActionDeletePostMutation.graphql';
-import repostPostMutation from './__generated__/useRepostActionRepostPostMutation.graphql';
+import deletePostMutation from './__generated__/RepostActionDeletePostMutation.graphql';
+import repostPostMutation from './__generated__/RepostActionRepostPostMutation.graphql';
 
 const sourcePostId = 'post-source';
 const activeRepostId = 'post-repost-active';
@@ -36,7 +36,7 @@ function sourceRecord(environment: Environment) {
   return record;
 }
 
-describe('useRepostAction Relay cache contract', () => {
+describe('RepostAction Relay cache contract', () => {
   it('normalizes repost creation onto the source Post record', () => {
     const environment = createEnvironment();
     const operation = createOperationDescriptor(getRequest(repostPostMutation), {

@@ -1,16 +1,28 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
+import { graphql, RelayEnvironmentProvider, useLazyLoadQuery } from 'react-relay';
+import {
+  createOperationDescriptor,
+  Environment,
+  getRequest,
+  Network,
+  Observable,
+  RecordSource,
+  Store,
+} from 'relay-runtime';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { PostActionBar } from '@/components/post/PostActionBar';
 import { formatPostActionCount } from '@/components/post/postActionCount';
 import { spacing, typography } from '@/theme/tokens';
+import PostActionBarStoryQueryNode from './__generated__/PostActionBarStoryQuery.graphql';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ViewStyle } from 'react-native';
+import type { GraphQLResponse } from 'relay-runtime';
 import type { PostActionBarProps } from '@/components/post/PostActionBar';
+import type { PostActionBarStoryQuery } from './__generated__/PostActionBarStoryQuery.graphql';
 
 const reply = fn();
-const repost = fn();
 const reaction = fn();
 const bookmark = fn();
 const more = fn();
@@ -36,14 +48,93 @@ const actionBarProps = {
     onPress: reply,
     processing: 'default' as const,
   },
-  repost: {
-    accessibilityLabel: '재게시',
-    count: 12_345,
-    hasReposted: false,
-    onPress: repost,
-    processing: 'default' as const,
-  },
 };
+
+const sourcePostId = 'post-source';
+const activeRepostId = 'post-repost-active';
+type RepostFixtureState = 'hidden' | 'unselected' | 'selected' | 'pending' | 'disabled';
+type FixtureProps = Omit<PostActionBarProps, 'post' | 'repostDisabled'> & {
+  repostState?: RepostFixtureState;
+};
+
+const postActionBarStoryQuery = graphql`
+  query PostActionBarStoryQuery($id: ID!) {
+    node(id: $id) {
+      ... on Post {
+        ...PostActionBar_post @alias(as: "actionBar")
+      }
+    }
+  }
+`;
+
+const unselectedSource = {
+  __typename: 'Post',
+  id: sourcePostId,
+  repostCount: 12_345,
+  viewerRepost: null,
+};
+const selectedSource = {
+  ...unselectedSource,
+  repostCount: 12_346,
+  viewerRepost: { __typename: 'Post', id: activeRepostId },
+};
+
+function PostActionBarFixture({ repostState = 'unselected', ...props }: FixtureProps) {
+  const environment = useMemo(() => {
+    const source =
+      repostState === 'selected' || repostState === 'pending' ? selectedSource : unselectedSource;
+    const result = new Environment({
+      network: Network.create((request) =>
+        request.operationKind !== 'mutation'
+          ? Promise.resolve({ data: { node: source } } as GraphQLResponse)
+          : repostState === 'pending'
+            ? Observable.create(() => undefined)
+            : Promise.resolve({
+                data:
+                  request.name === 'RepostActionDeletePostMutation'
+                    ? { deletePost: { postId: activeRepostId } }
+                    : {
+                        repostPost: {
+                          repost: {
+                            __typename: 'Post',
+                            id: activeRepostId,
+                            repostSource: selectedSource,
+                          },
+                        },
+                      },
+              }),
+      ),
+      store: new Store(new RecordSource()),
+    });
+    result.commitPayload(
+      createOperationDescriptor(getRequest(PostActionBarStoryQueryNode), { id: sourcePostId }),
+      { node: source },
+    );
+    return result;
+  }, [repostState]);
+
+  if (repostState === 'hidden') {
+    return <PostActionBar {...props} />;
+  }
+
+  return (
+    <RelayEnvironmentProvider environment={environment}>
+      <PostActionBarFixtureContents {...props} repostDisabled={repostState === 'disabled'} />
+    </RelayEnvironmentProvider>
+  );
+}
+
+function PostActionBarFixtureContents(
+  props: Omit<PostActionBarProps, 'post'> & { repostDisabled: boolean },
+) {
+  const data = useLazyLoadQuery<PostActionBarStoryQuery>(
+    postActionBarStoryQuery,
+    { id: sourcePostId },
+    { fetchPolicy: 'store-only' },
+  );
+
+  return <PostActionBar {...props} post={data.node!.actionBar!} />;
+}
 
 type BookmarkProcessingState = NonNullable<PostActionBarProps['bookmark']>['processing'];
 
@@ -55,39 +146,43 @@ function CatalogStory() {
   return (
     <Catalog>
       <Section title="Default · Reply/Repost count / no count / Reaction/Bookmark count omitted">
-        <PostActionBar {...actionBarProps} />
-        <PostActionBar
+        <PostActionBarFixture {...actionBarProps} />
+        <PostActionBarFixture
           bookmark={actionBarProps.bookmark}
           reaction={actionBarProps.reaction}
           reply={{ ...actionBarProps.reply, count: undefined }}
-          repost={{ ...actionBarProps.repost, count: undefined }}
+          repostState="unselected"
         />
       </Section>
       <Section title="Domain active · Reply / Repost / Reaction / Bookmark">
-        <PostActionBar
+        <PostActionBarFixture
           bookmark={{ ...actionBarProps.bookmark, hasBookmarked: true }}
           reaction={{ ...actionBarProps.reaction, hasReacted: true }}
           reply={{ ...actionBarProps.reply, expanded: true }}
-          repost={{ ...actionBarProps.repost, hasReposted: true }}
+          repostState="selected"
         />
       </Section>
       <Section title="Processing · pending / disabled">
-        <PostActionBar
+        <PostActionBarFixture
           bookmark={{ ...actionBarProps.bookmark, hasBookmarked: true, processing: 'disabled' }}
           reaction={{ ...actionBarProps.reaction, hasReacted: true, processing: 'disabled' }}
           reply={{ ...actionBarProps.reply, expanded: true, processing: 'pending' }}
-          repost={{ ...actionBarProps.repost, hasReposted: true, processing: 'pending' }}
+          repostState="pending"
         />
       </Section>
       <Section title="Optional actions · More callback only">
-        <PostActionBar more={actionBarProps.more} reaction={actionBarProps.reaction} />
+        <PostActionBarFixture
+          more={actionBarProps.more}
+          reaction={actionBarProps.reaction}
+          repostState="hidden"
+        />
       </Section>
       <Section title="Standard compact formatting · runtime component / locale seam">
         <Text style={styles.localeCopy}>
           ko-KR: {formatPostActionCount(12_345, 'ko-KR')} · en-US:{' '}
           {formatPostActionCount(12_345, 'en-US')}
         </Text>
-        <PostActionBar {...actionBarProps} />
+        <PostActionBarFixture {...actionBarProps} />
       </Section>
     </Catalog>
   );
@@ -98,7 +193,7 @@ function ControlledReplyStory() {
 
   return (
     <View style={styles.controlled}>
-      <PostActionBar
+      <PostActionBarFixture
         reply={{
           ...actionBarProps.reply,
           expanded,
@@ -114,16 +209,15 @@ function InteractionStory() {
   return (
     <Catalog>
       <Section title="Default invokes callbacks">
-        <PostActionBar
+        <PostActionBarFixture
           bookmark={actionBarProps.bookmark}
           more={actionBarProps.more}
           reaction={actionBarProps.reaction}
           reply={actionBarProps.reply}
-          repost={actionBarProps.repost}
         />
       </Section>
       <Section title="Pending and disabled block callbacks">
-        <PostActionBar
+        <PostActionBarFixture
           bookmark={{ ...actionBarProps.bookmark, processing: 'disabled' }}
           reaction={{ ...actionBarProps.reaction, processing: 'pending' }}
         />
@@ -136,12 +230,12 @@ function ActionBarFixtures() {
   return (
     <View style={styles.fixture}>
       <View style={styles.detailSurface}>
-        <PostActionBar {...actionBarProps} />
+        <PostActionBarFixture {...actionBarProps} />
       </View>
       <View style={styles.listCard}>
         <View style={styles.avatarFixture} />
         <View style={styles.listContent}>
-          <PostActionBar {...actionBarProps} />
+          <PostActionBarFixture {...actionBarProps} />
         </View>
       </View>
     </View>
@@ -230,19 +324,27 @@ export const InteractionContract: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     reply.mockClear();
-    repost.mockClear();
     reaction.mockClear();
     bookmark.mockClear();
     more.mockClear();
 
     const labels = canvas.getAllByRole('button').map((button) => button.getAttribute('aria-label'));
-    expect(labels).toEqual(['답글', '재게시', '반응', '북마크', '더보기', '반응', '북마크']);
+    expect(labels).toEqual([
+      '답글',
+      '재게시',
+      '반응',
+      '북마크',
+      '더보기',
+      '재게시',
+      '반응',
+      '북마크',
+    ]);
 
     const replyButton = canvas.getByRole('button', { name: '답글' });
     replyButton.focus();
     await userEvent.keyboard('{Enter}');
     await userEvent.keyboard(' ');
-    await userEvent.click(canvas.getByRole('button', { name: '재게시' }));
+    await userEvent.click(canvas.getAllByRole('button', { name: '재게시' })[0]!);
     await userEvent.click(canvas.getAllByRole('button', { name: '반응' })[0]!);
     await userEvent.click(canvas.getAllByRole('button', { name: '북마크' })[0]!);
     await userEvent.click(canvas.getByRole('button', { name: '더보기' }));
@@ -260,7 +362,6 @@ export const InteractionContract: Story = {
     disabledBookmark.click();
 
     expect(reply).toHaveBeenCalledTimes(2);
-    expect(repost).toHaveBeenCalledTimes(1);
     expect(bookmark).toHaveBeenCalledTimes(1);
     expect(more).toHaveBeenCalledTimes(1);
     expect(reaction).toHaveBeenCalledTimes(1);
@@ -272,7 +373,12 @@ export const ProcessingAccessibility: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const replyButton = canvas.getByRole('button', { name: '답글' });
-    const repostButton = canvas.getByRole('button', { name: '재게시' });
+    const repostButton = canvas.getByRole('button', { name: '재게시 취소' });
+    await userEvent.click(repostButton);
+    await expect(canvas.findByRole('button', { name: '재게시 취소' })).resolves.toHaveAttribute(
+      'aria-busy',
+      'true',
+    );
     const reactionButton = canvas.getByRole('button', { name: '반응' });
     const bookmarkButton = canvas.getByRole('button', { name: '북마크' });
     const moreButton = canvas.getByRole('button', { name: '더보기' });
@@ -319,12 +425,12 @@ export const ProcessingAccessibility: Story = {
     ).not.toHaveAttribute('fill', 'none');
   },
   render: () => (
-    <PostActionBar
+    <PostActionBarFixture
       bookmark={{ ...actionBarProps.bookmark, hasBookmarked: true }}
       more={actionBarProps.more}
       reaction={{ ...actionBarProps.reaction, hasReacted: true, processing: 'disabled' }}
       reply={{ ...actionBarProps.reply, expanded: true, processing: 'pending' }}
-      repost={{ ...actionBarProps.repost, hasReposted: true, processing: 'pending' }}
+      repostState="pending"
     />
   ),
 };
@@ -359,7 +465,7 @@ export const AccessibilityAndMinimumTarget: Story = {
     expect(moreButtonBounds.right).toBeCloseTo(actionBarBounds.right, 0);
     expect(moreIconBounds.right).toBeCloseTo(actionBarBounds.right - spacing.sm, 0);
   },
-  render: () => <PostActionBar {...actionBarProps} />,
+  render: () => <PostActionBarFixture {...actionBarProps} />,
 };
 
 export const Compact390: Story = {

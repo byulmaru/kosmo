@@ -247,9 +247,9 @@ production fragment shape를 유지하는 fixture와 Storybook에서 Repost·Quo
 - raw Relay unit test로 생성 payload의 Source Post cache 정규화, 취소 payload 뒤 Source cache 비변경과 서로 다른 actor Store 격리를 검증한다.
 - actual Post fragment ref를 받는 Storybook `PostActionBar` wrapper의 `play` interaction으로 parent→child fragment 전달, Source Post ID 생성 호출, 정확한 Active Repost ID 취소, 같은 tick pending 중복 차단, 생성 성공, 취소 뒤 cache 비변경, network·GraphQL 오류 callback·재시도, selected Profile actor reset과 접근성 상태를 검증한다.
 
-- [ ] 8.1 `PostActionBar_post` composite fragment와 private `RepostAction_post` child fragment를 연결하고 Repost 선택 상태·label·delete identity·mutation 종류를 child action에서 함께 파생한다.
-- [ ] 8.2 private `RepostAction`에 `repostPost`·`deletePost`, pending·actor callback 격리를 두고 생성 normalized cache, 정확한 취소 identity, 취소 뒤 Source cache 비변경과 error callback 계약을 유지한다.
-- [ ] 8.3 raw Relay unit과 실제 parent→child fragment ref를 사용하는 Storybook `play` interaction으로 pending·생성·취소·오류 재시도·Profile actor reset을 검증하고 relay/app/Storybook scoped check를 통과시킨다.
+- [x] 8.1 `PostActionBar_post` composite fragment와 private `RepostAction_post` child fragment를 연결하고 Repost 선택 상태·label·delete identity·mutation 종류를 child action에서 함께 파생한다.
+- [x] 8.2 private `RepostAction`에 `repostPost`·`deletePost`, pending·actor callback 격리를 두고 생성 normalized cache, 정확한 취소 identity, 취소 뒤 Source cache 비변경과 error callback 계약을 유지한다.
+- [x] 8.3 raw Relay unit과 실제 parent→child fragment ref를 사용하는 Storybook `play` interaction으로 pending·생성·취소·오류 재시도·Profile actor reset을 검증하고 relay/app/Storybook scoped check를 통과시킨다.
 
 ## 9. PROD-415 Post renderer Repost 연결
 

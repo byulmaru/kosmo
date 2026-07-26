@@ -12,7 +12,6 @@ import {
 } from 'relay-runtime';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { PostActionBar } from '@/components/post/PostActionBar';
-import { useRepostAction } from '@/components/post/useRepostAction';
 import { RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import RepostActionStoryQueryNode from './__generated__/RepostActionStoryQuery.graphql';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -26,7 +25,7 @@ const repostActionStoryQuery = graphql`
   query RepostActionStoryQuery($id: ID!) {
     node(id: $id) {
       ... on Post {
-        ...useRepostAction_post @alias(as: "post")
+        ...PostActionBar_post @alias(as: "actionBar")
       }
     }
   }
@@ -39,13 +38,12 @@ function RepostActionStory({ storeOnly = false }: { storeOnly?: boolean }) {
     { id: sourcePostId },
     storeOnly ? { fetchPolicy: 'store-only' } : undefined,
   );
-  const repost = useRepostAction(data.node!.post!, {
-    onError: () => setErrorCount((count) => count + 1),
-  });
-
   return (
     <View>
-      <PostActionBar repost={repost} />
+      <PostActionBar
+        onRepostError={() => setErrorCount((count) => count + 1)}
+        post={data.node!.actionBar!}
+      />
       <Text testID="repost-error-count">{errorCount}</Text>
     </View>
   );
@@ -134,7 +132,7 @@ function CapturedRepostActionStory({ failure }: { failure?: MutationFailure }) {
             errors: [{ message: 'graphql failed' }],
           });
         }
-        if (request.name === 'useRepostActionRepostPostMutation') {
+        if (request.name === 'RepostActionRepostPostMutation') {
           return Promise.resolve({
             data: {
               repostPost: {
@@ -170,25 +168,26 @@ function CapturedRepostActionControls() {
     { id: sourcePostId },
     { fetchPolicy: 'store-only' },
   );
-  const repost = useRepostAction(data.node!.post!, {
-    onError: () => setErrorCount((count) => count + 1),
-  });
-
   return (
     <View>
-      <PostActionBar repost={repost} />
+      <PostActionBar
+        onRepostError={() => setErrorCount((count) => count + 1)}
+        post={data.node!.actionBar!}
+      />
       <Text
         accessibilityLabel="두 번 재게시 실행"
         accessibilityRole="button"
         onPress={() => {
-          repost.onPress();
-          repost.onPress();
+          const repostButton = document.querySelector<HTMLElement>(
+            '[data-testid="post-action-repost"]',
+          );
+          repostButton?.click();
+          repostButton?.click();
         }}
       >
         두 번 재게시 실행
       </Text>
       <Text testID="repost-error-count">{errorCount}</Text>
-      <Text testID="repost-state">{`${repost.accessibilityLabel}:${repost.count}`}</Text>
     </View>
   );
 }
@@ -339,7 +338,7 @@ export const ActorResetIgnoresStaleCallbacks: Story = {
   render: () => <ActorResetIgnoresStaleCallbacksStory />,
 };
 
-export const HookRequestVariablesAndDuplicateGuard: Story = {
+export const RequestVariablesAndDuplicateGuard: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.findByRole('button', { name: '재게시' })).resolves.toBeVisible();
@@ -348,47 +347,47 @@ export const HookRequestVariablesAndDuplicateGuard: Story = {
       '"sourceId":"post-source"',
     );
     expect(canvas.getByTestId('repost-request-log')).toHaveTextContent(
-      'useRepostActionRepostPostMutation',
+      'RepostActionRepostPostMutation',
     );
     expect(
       canvas
         .getByTestId('repost-request-log')
-        .textContent?.match(/useRepostActionRepostPostMutation/g),
+        .textContent?.match(/RepostActionRepostPostMutation/g),
     ).toHaveLength(1);
     await expect(canvas.findByRole('button', { name: '재게시 취소' })).resolves.toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: '재게시 취소' }));
     await expect(canvas.findByTestId('repost-request-log')).resolves.toHaveTextContent(
       '"id":"post-repost-active"',
     );
-    expect(canvas.getByTestId('repost-state')).toHaveTextContent('재게시 취소:4');
+    expect(canvas.getByRole('button', { name: '재게시 취소' })).toHaveTextContent('4');
   },
   render: () => <CapturedRepostActionStory />,
 };
 
-export const HookNetworkErrorKeepsSourceAndRetries: Story = {
+export const NetworkErrorKeepsSourceAndRetries: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const action = await canvas.findByRole('button', { name: '두 번 재게시 실행' });
     await userEvent.click(action);
     await expect(canvas.findByTestId('repost-error-count')).resolves.toHaveTextContent('1');
-    expect(canvas.getByTestId('repost-state')).toHaveTextContent('재게시:3');
+    expect(canvas.getByRole('button', { name: '재게시' })).toHaveTextContent('3');
     await userEvent.click(action);
     await expect(canvas.findByTestId('repost-error-count')).resolves.toHaveTextContent('2');
-    expect(canvas.getByTestId('repost-state')).toHaveTextContent('재게시:3');
+    expect(canvas.getByRole('button', { name: '재게시' })).toHaveTextContent('3');
   },
   render: () => <CapturedRepostActionStory failure="network" />,
 };
 
-export const HookGraphQLErrorKeepsSourceAndRetries: Story = {
+export const GraphQLErrorKeepsSourceAndRetries: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const action = await canvas.findByRole('button', { name: '두 번 재게시 실행' });
     await userEvent.click(action);
     await expect(canvas.findByTestId('repost-error-count')).resolves.toHaveTextContent('1');
-    expect(canvas.getByTestId('repost-state')).toHaveTextContent('재게시:3');
+    expect(canvas.getByRole('button', { name: '재게시' })).toHaveTextContent('3');
     await userEvent.click(action);
     await expect(canvas.findByTestId('repost-error-count')).resolves.toHaveTextContent('2');
-    expect(canvas.getByTestId('repost-state')).toHaveTextContent('재게시:3');
+    expect(canvas.getByRole('button', { name: '재게시' })).toHaveTextContent('3');
   },
   render: () => <CapturedRepostActionStory failure="graphql" />,
 };

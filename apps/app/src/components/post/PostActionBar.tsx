@@ -1,10 +1,16 @@
 import { Bookmark, Heart, MessageCircle, MoreHorizontal, Repeat2 } from 'lucide-react-native';
+import { useCallback, useEffect, useRef } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
 import { formatPostActionCount } from './postActionCount';
 import type { ComponentType } from 'react';
 import type { AccessibilityState, StyleProp, ViewStyle } from 'react-native';
+import type { PostActionBar_post$key } from './__generated__/PostActionBar_post.graphql';
+import type { RepostAction_post$key } from './__generated__/RepostAction_post.graphql';
+import type { RepostActionDeletePostMutation } from './__generated__/RepostActionDeletePostMutation.graphql';
+import type { RepostActionRepostPostMutation } from './__generated__/RepostActionRepostPostMutation.graphql';
 
 type ProcessingState = 'default' | 'pending' | 'disabled';
 
@@ -16,7 +22,6 @@ type SocialActionConfig = {
 };
 
 type ReplyActionConfig = SocialActionConfig & { expanded: boolean };
-type RepostActionConfig = SocialActionConfig & { hasReposted: boolean };
 type ReactionActionConfig = Omit<SocialActionConfig, 'count'> & { hasReacted: boolean };
 type BookmarkActionConfig = Omit<SocialActionConfig, 'count'> & { hasBookmarked: boolean };
 type MoreActionConfig = { accessibilityLabel: string; onPress: () => void };
@@ -24,10 +29,53 @@ type MoreActionConfig = { accessibilityLabel: string; onPress: () => void };
 export type PostActionBarProps = {
   bookmark?: BookmarkActionConfig;
   more?: MoreActionConfig;
+  onRepostError?: (error: Error) => void;
+  post?: PostActionBar_post$key | null;
   reaction?: ReactionActionConfig;
   reply?: ReplyActionConfig;
-  repost?: RepostActionConfig;
+  repostDisabled?: boolean;
 };
+
+const postActionBarPostFragment = graphql`
+  fragment PostActionBar_post on Post {
+    ...RepostAction_post @alias(as: "repost")
+  }
+`;
+
+const repostActionPostFragment = graphql`
+  fragment RepostAction_post on Post {
+    id
+    repostCount
+    viewerRepost {
+      id
+    }
+  }
+`;
+
+const repostPostMutation = graphql`
+  mutation RepostActionRepostPostMutation($sourceId: ID!) {
+    repostPost(input: { sourceId: $sourceId }) {
+      repost {
+        id
+        repostSource {
+          id
+          repostCount
+          viewerRepost {
+            id
+          }
+        }
+      }
+    }
+  }
+`;
+
+const deletePostMutation = graphql`
+  mutation RepostActionDeletePostMutation($id: ID!) {
+    deletePost(input: { id: $id }) {
+      postId
+    }
+  }
+`;
 
 type Icon = ComponentType<{
   color: string;
@@ -58,11 +106,21 @@ type ActionControlProps = {
   testID: string;
 };
 
-export function PostActionBar({ bookmark, more, reaction, reply, repost }: PostActionBarProps) {
+export function PostActionBar({
+  bookmark,
+  more,
+  onRepostError,
+  post,
+  reaction,
+  reply,
+  repostDisabled = false,
+}: PostActionBarProps) {
+  const data = useFragment(postActionBarPostFragment, post ?? null);
+
   return (
     <View accessibilityLabel="액션 바" accessibilityRole="toolbar" style={styles.root}>
       {reply ? (
-        <ActionControl
+        <PostActionControl
           accessibilityLabel={reply.accessibilityLabel}
           count={reply.count}
           expanded={reply.expanded}
@@ -75,24 +133,11 @@ export function PostActionBar({ bookmark, more, reaction, reply, repost }: PostA
           testID="reply"
         />
       ) : null}
-      {repost ? (
-        <ActionControl
-          accessibilityLabel={repost.accessibilityLabel}
-          active={repost.hasReposted}
-          count={repost.count}
-          icon={Repeat2}
-          iconHeight={24}
-          iconSize={16}
-          iconStrokeWidth={2.7}
-          iconWidth={18}
-          onPress={repost.onPress}
-          preserveAspectRatio="none"
-          processing={repost.processing}
-          testID="repost"
-        />
+      {data?.repost ? (
+        <RepostAction disabled={repostDisabled} onError={onRepostError} post={data.repost} />
       ) : null}
       {reaction ? (
-        <ActionControl
+        <PostActionControl
           accessibilityLabel={reaction.accessibilityLabel}
           active={reaction.hasReacted}
           fillActive
@@ -104,7 +149,7 @@ export function PostActionBar({ bookmark, more, reaction, reply, repost }: PostA
         />
       ) : null}
       {bookmark ? (
-        <ActionControl
+        <PostActionControl
           accessibilityLabel={bookmark.accessibilityLabel}
           active={bookmark.hasBookmarked}
           fillActive
@@ -115,7 +160,7 @@ export function PostActionBar({ bookmark, more, reaction, reply, repost }: PostA
         />
       ) : null}
       {more ? (
-        <ActionControl
+        <PostActionControl
           accessibilityLabel={more.accessibilityLabel}
           alignToEnd
           icon={MoreHorizontal}
@@ -128,7 +173,98 @@ export function PostActionBar({ bookmark, more, reaction, reply, repost }: PostA
   );
 }
 
-function ActionControl({
+type RepostActionProps = {
+  disabled: boolean;
+  onError?: (error: Error) => void;
+  post: RepostAction_post$key;
+};
+
+function RepostAction({ disabled, onError, post }: RepostActionProps) {
+  const data = useFragment(repostActionPostFragment, post);
+  const environment = useRelayEnvironment();
+  const [commitRepost, isReposting] =
+    useMutation<RepostActionRepostPostMutation>(repostPostMutation);
+  const [commitDelete, isDeleting] =
+    useMutation<RepostActionDeletePostMutation>(deletePostMutation);
+  const inFlight = useRef(false);
+  const currentEnvironment = useRef(environment);
+  const processing = isReposting || isDeleting;
+
+  currentEnvironment.current = environment;
+
+  useEffect(() => {
+    inFlight.current = false;
+  }, [environment]);
+
+  const onPress = useCallback(() => {
+    if (disabled || inFlight.current || processing) {
+      return;
+    }
+
+    inFlight.current = true;
+    const requestEnvironment = environment;
+    const finish = () => {
+      if (currentEnvironment.current === requestEnvironment) {
+        inFlight.current = false;
+      }
+    };
+    const finishWithError = (error: Error) => {
+      if (currentEnvironment.current !== requestEnvironment) {
+        return;
+      }
+      inFlight.current = false;
+      onError?.(error);
+    };
+    const callbacks = {
+      onCompleted: (
+        _response: unknown,
+        errors: ReadonlyArray<{ message: string }> | null | undefined,
+      ) => {
+        if (errors?.[0]) {
+          finishWithError(new Error(errors[0].message));
+          return;
+        }
+        finish();
+      },
+      onError: finishWithError,
+    };
+
+    if (data.viewerRepost?.id) {
+      commitDelete({ ...callbacks, variables: { id: data.viewerRepost.id } });
+      return;
+    }
+
+    commitRepost({ ...callbacks, variables: { sourceId: data.id } });
+  }, [
+    commitDelete,
+    commitRepost,
+    data.id,
+    data.viewerRepost?.id,
+    disabled,
+    environment,
+    onError,
+    processing,
+  ]);
+
+  return (
+    <PostActionControl
+      accessibilityLabel={data.viewerRepost ? '재게시 취소' : '재게시'}
+      active={Boolean(data.viewerRepost)}
+      count={data.repostCount}
+      icon={Repeat2}
+      iconHeight={24}
+      iconSize={16}
+      iconStrokeWidth={2.7}
+      iconWidth={18}
+      onPress={onPress}
+      preserveAspectRatio="none"
+      processing={disabled ? 'disabled' : processing ? 'pending' : 'default'}
+      testID="repost"
+    />
+  );
+}
+
+function PostActionControl({
   accessibilityLabel,
   active = false,
   alignToEnd = false,
