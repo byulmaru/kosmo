@@ -1071,7 +1071,7 @@ export const Quote: Story = {
     expect(within(preview).queryByRole('button')).not.toBeInTheDocument();
     expect(canvas.queryByTestId('nested-source-post-placeholder')).not.toBeInTheDocument();
     const postBody = canvas.getByTestId('post-body');
-    expect(postBody.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(postBody.getBoundingClientRect().height).toBeLessThan(44);
     expect(postBody.closest('[role="link"]')).toBeNull();
 
     await userEvent.click(postBody);

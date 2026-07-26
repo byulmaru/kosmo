@@ -5,6 +5,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { PostContentRenderer } from './PostContentRenderer';
 import type { ReactNode } from 'react';
+import type { StyleProp, ViewStyle } from 'react-native';
 
 export type PostPresentationLinkTarget =
   | 'postAuthor'
@@ -135,6 +136,7 @@ export function PostSourcePresentationView({
     <PostBodyPressTarget
       content={source.content}
       onPress={onSourcePostPress}
+      style={styles.sourceBody}
       testID="source-post-body"
     />
   ) : null;
@@ -189,10 +191,12 @@ export function PostSourcePresentationView({
 function PostBodyPressTarget({
   content,
   onPress,
+  style,
   testID,
 }: {
   content: PresentationContent;
   onPress: () => void;
+  style?: StyleProp<ViewStyle>;
   testID: string;
 }) {
   return (
@@ -200,7 +204,7 @@ function PostBodyPressTarget({
       accessible={false}
       focusable={false}
       onPress={onPress}
-      style={styles.postBody}
+      style={style}
       tabIndex={-1}
       testID={testID}
     >
@@ -261,6 +265,6 @@ const styles = StyleSheet.create({
   authorHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, minWidth: 0 },
   authorSlot: { flex: 1, minWidth: 0 },
   timestamp: { fontFamily: 'SUIT', minHeight: 44, minWidth: 44, paddingTop: 12, ...typography.xsm },
-  postBody: { justifyContent: 'center', minHeight: 44, minWidth: 0 },
+  sourceBody: { justifyContent: 'center', minHeight: 44, minWidth: 0 },
   preview: { borderRadius: radii.lg, borderWidth: 1, gap: spacing.sm, padding: spacing.md },
 });
