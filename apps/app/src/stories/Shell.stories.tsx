@@ -192,6 +192,9 @@ export const CompactSidebar: Story = {
 };
 
 export const ResponsiveProfilePickerFull: Story = {
+  parameters: {
+    relay: { data: longProfileQuery },
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('button', { name: '프로필 목록' });
