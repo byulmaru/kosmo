@@ -104,6 +104,7 @@ Membership/Owner 같은 관계 사실과 Account 활성 상태를 하나의 권�
 - [ADR 0013: Media Storage Service Boundary](./decisions/0013-media-storage-service-boundary.md)
 - [ADR 0014: Post Structure Relations](./decisions/0014-post-structure-relations.md)
 - [ADR 0015: Post Share Reference](./decisions/0015-post-share-reference.md)
+- [ADR 0016: Reaction Selector Current State](./decisions/0016-reaction-selector-current-state.md)
 - [2026-06-28 DDD 명세 점검 기록](./records/2026-06-28-ddd-spec-audit.md)
 - [2026-06-29 결정 반영 기록](./records/2026-06-29-decision-round.md)
 - [2026-06-29 PR 리뷰 반영 기록](./records/2026-06-29-pr-review-followup.md)

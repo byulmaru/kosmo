@@ -1,8 +1,8 @@
 ## Context
 
-현재 `main`에는 PROD-395·404·405·406·407의 Reaction 저장·생성·삭제·Type별 count·Profile connection, PROD-449의 fixture-first 요약·Profile 목록 presentation, PROD-450의 fixture-first Reaction Quick Picker presentation, PROD-277·324·372의 Notification 목록·badge·Read/navigation 기반과 PROD-413의 Reaction Notification 생성·inbox 통합이 있다. 아직 `main`에 없는 범위는 selector·요약 presentation을 실제 data와 연결하는 UI integration과 Reaction Notification 정리 lifecycle이다. PostgreSQL/Drizzle은 UUIDv7 default, 명시적 foreign key와 SQL-like query builder를 사용하며, Post 조회 권한은 API의 기존 Post visibility predicate가 소유한다. Notification Node/list/count/read는 Follow와 Reaction의 kind별 visible projection을 함께 사용하고 source가 없는 Reaction Notification을 숨긴다.
+현재 `main`에는 PROD-395·404·405·406·407의 Reaction 저장·생성·ID 기준 삭제·Type별 count·Profile connection, PROD-449의 fixture-first 요약·Profile 목록 presentation, PROD-450의 fixture-first Reaction Quick Picker presentation, PROD-418의 Reaction 요약·Profile modal data 통합, PROD-277·324·372의 Notification 목록·badge·Read/navigation 기반, PROD-413의 Reaction Notification 생성·inbox 통합과 PROD-419의 삭제 뒤 Notification 정리가 있다. PROD-472는 selector에 필요한 selected Profile별 현재 Reaction 조회와 Post/Type 기준 삭제 계약을 보완한다. 이후 PROD-417의 selector add/delete mutation·Relay cache 통합이 남는다. PostgreSQL/Drizzle은 UUIDv7 default, 명시적 foreign key와 SQL-like query builder를 사용하며, Post 조회 권한은 API의 기존 Post visibility predicate가 소유한다. Notification Node/list/count/read는 Follow와 Reaction의 kind별 visible projection을 함께 사용하고 source가 없는 Reaction Notification을 숨긴다.
 
-이 change는 PROD-390이 소유한 공유 계약이며 구현은 PROD-395, PROD-404, PROD-405, PROD-406, PROD-407, PROD-413, PROD-450, PROD-417, PROD-418, PROD-419의 독립 PR로 나뉜다. PROD-395 저장 slice, PROD-404 멱등 생성 slice, PROD-405 멱등 삭제 slice, PROD-406 viewer-independent Reaction Type count 조회 slice, PROD-407 Type별 Profile connection slice, PROD-413 Reaction Notification slice, PROD-449 fixture-first 요약·Profile 목록 presentation slice와 PROD-450 fixture-first Reaction Quick Picker presentation slice는 `main`에 병합됐다. 현재 적용 대상은 PROD-418의 Reaction 요약·Profile modal 통합과 PROD-419의 Reaction 삭제 뒤 Best Effort Notification 정리 slice이며, 나머지 slice는 자신의 blocker와 미결정을 해소한 뒤 같은 change를 이어서 사용한다.
+이 change는 PROD-390이 소유한 공유 계약이며 구현은 PROD-395, PROD-404, PROD-405, PROD-406, PROD-407, PROD-413, PROD-450, PROD-472, PROD-417, PROD-418, PROD-419의 독립 PR로 나뉜다. PROD-395 저장 slice, PROD-404 멱등 생성 slice, PROD-405 ID 기준 멱등 삭제 slice, PROD-406 viewer-independent Reaction Type count 조회 slice, PROD-407 Type별 Profile connection slice, PROD-413 Reaction Notification slice, PROD-419 Reaction Notification 정리 slice, PROD-449 fixture-first 요약·Profile 목록 presentation slice, PROD-450 fixture-first Reaction Quick Picker presentation slice와 PROD-418 Reaction 요약·Profile modal 통합 slice는 `main`에 병합됐다. 현재 적용 대상은 PROD-472의 selector backend 계약 보완 slice이며, 나머지 slice는 자신의 blocker와 미결정을 해소한 뒤 같은 change를 이어서 사용한다.
 
 ## Goals / Non-Goals
 
@@ -34,6 +34,8 @@
 - 별도 logger나 metric 경계는 없고 post-commit side effect 실패는 `console.error`와 source context를 사용하는 관례가 있다. Reaction Notification 생성의 무음 catch를 다른 범위까지 함께 정리하지 않는다.
 - Notification Node/list/count/read query와 client item은 kind별 visible projection으로 Follow와 Reaction source를 함께 처리한다. Reaction 제거 뒤 Notification 정리와 stale source 숨김 lifecycle은 PROD-419에 남아 있다.
 - selected Profile이 바뀌면 앱의 Relay Environment가 교체된다. Reaction pending/error/cache 상태를 actor 사이에 공유하면 안 된다.
+- `Post.viewerReactions: [Reaction!]!`는 현재 selected Profile과 Post 사이의 Reaction 관계를 batch 조회한다. guest 또는 selected Profile 부재에는 빈 목록을 반환하고 다른 selected Profile의 결과를 공유하지 않는다.
+- `deleteReaction(input: { postId, type })`은 현재 selected Profile의 조합만 삭제한다. 첫 삭제는 nullable `reactionId`와 현재 조회 가능한 nullable `post`를 반환하고, missing·반복·동시 loser는 `reactionId: null`인 성공으로 정규화한다.
 - `SelectMenu`는 단일 radio 선택 후 닫히는 UI라 복수 Reaction toggle에 그대로 사용할 수 없다. 공통 Post Action Bar와 surface 배치는 이번 change 밖이다.
 - PROD-450은 부모가 공급한 ordered option과 controlled selected/pending/error 상태를 표시하는 펼쳐진 Quick Picker panel만 소유한다. panel은 16px 둥근 외부 컨테이너 안에 border 없는 44×44px·12px radius option을 표시한다. selected는 이모지와 분리된 `primary`/`primaryHover` 배경 layer를 70% opacity로 표시하고 error는 빨간 border를 추가하지 않는다. pending은 이모지를 유지한 채 `zIndex` 없는 full-size 투명 overlay에 track 없는 24×24px·3px 두께의 180° fading arc를 표시하며, 전체 disabled이면 panel을 렌더링하지 않는다. 현재 fixture는 canonical 여섯 Unicode를 사용하지만 component가 허용 목록, trigger·popover, mutation·Relay/cache, custom emoji Full Picker와 palette·검색·category·최근 사용 정책을 소유하지 않는다.
 
@@ -49,8 +51,9 @@
 8. PROD-417은 같은 presentation seam에 zero-count option 공급, add/delete mutation과 selected Profile Relay cache를 연결하고, Type별 pending/error를 격리해 서버가 확인한 상태를 기준으로 복구한다. optimistic update 여부는 이 통합 slice에서 결정한다.
 9. PROD-418은 실제 Post count query와 `reactionProfiles` Relay connection을 기존 summary/list props seam에 연결한다. `reactionCounts`가 비어 있으면 summary를 렌더링하지 않고, 양수 count가 있으면 server 순서를 그대로 표시한다. Type 선택은 현재 Post 위의 modal overlay를 열며 별도 route나 URL을 만들지 않는다. modal은 backdrop click·touch와 Android back으로 닫고 별도 닫기 버튼을 두지 않는다. 최초·추가 page 조회 오류는 modal·목록 내부 오류와 retry로 복구하고 추가 page 실패 전의 edge를 유지하며 snackbar·toast·전역 outlet을 추가하지 않는다. 재진입은 cache된 목록을 먼저 표시하고 background에서 갱신하되 selected Profile 전환 뒤에는 이전 Relay Environment의 cache를 재사용하지 않는다.
 10. PROD-277·324·372가 전달한 공통 목록 UI·badge·read/navigation 계약 위에 Reaction Notification item을 확장한다. `add-in-app-notifications`의 남은 E2E·archive는 그 부모 범위로 유지하며 PROD-413의 직접 구현 gate로 사용하지 않는다.
-11. PROD-419는 Owner 삭제 transaction이 성공한 뒤 반환된 Reaction ID로 기존 Notification delete 경계를 호출한다. 같은 request에서 cleanup을 await하되 실패는 Reaction 성공 payload와 분리하고, 기존 post-commit 오류 관례에 따라 error와 source Reaction ID를 기록한다. 반복 삭제와 이미 없는 source에도 같은 idempotent cleanup을 시도한다.
-12. PROD-390은 모든 자식 뒤 사용자 흐름과 canonical/OpenSpec 정합성을 검증하고 통합·archive를 소유한다.
+11. PROD-419는 Owner 삭제 transaction이 성공한 뒤 반환된 Reaction ID로 기존 Notification delete 경계를 호출한다. 같은 request에서 cleanup을 await하되 실패는 Reaction 성공 payload와 분리하고, 기존 post-commit 오류 관례에 따라 error와 source Reaction ID를 기록한다.
+12. PROD-472는 `Post.viewerReactions: [Reaction!]!`를 selected Profile별 batch loader로 제공하고, GraphQL 삭제 input을 `{ postId: ID!, type: String! }`로 교체한다. core는 actor/Post/Type 조합을 원자적으로 삭제해 실제 삭제된 Reaction ID만 post-commit Notification cleanup에 전달한다. GraphQL payload는 nullable `reactionId`와 nullable `post`를 반환한다.
+13. PROD-390은 모든 자식 뒤 사용자 흐름과 canonical/OpenSpec 정합성을 검증하고 통합·archive를 소유한다.
 
 ### Allowed Alternatives
 
@@ -72,7 +75,7 @@
 - 허용 목록 검증을 database 제약에만 의존하지 않는다.
 - 같은 Reaction의 멱등성을 명시적 DB lock이나 check-then-insert만으로 구현하지 않는다.
 - 삭제 mutation에서 Reaction Node loader를 호출해 Post visibility를 삭제 권한으로 만들지 않는다.
-- Profile/Post/Type 조합을 삭제 input으로 사용해 이전 요청이 같은 조합으로 다시 생성된 새 Reaction을 제거하게 하지 않는다.
+- Post/Type 삭제는 오래 지연된 요청이 같은 조합으로 다시 생성된 현재 Reaction을 제거할 수 있음을 숨기지 않는다. 별도 Reaction ID 조회·보존이나 ABA ledger를 추가하지 않는다.
 - viewer가 볼 수 없는 Profile의 Reaction을 count에서 제외하지 않는다.
 - `reactionCounts`에 zero-count Type을 합성하거나 Profile connection 길이로 count를 다시 계산하지 않는다.
 - Reaction이 없는 Post에 빈 summary를 렌더링하거나 Profile 목록을 별도 route·URL로 확장하지 않는다.
@@ -93,8 +96,8 @@
 - [최신순 Profile pagination이 기존 unique index만으로 정렬되지 않음] → PROD-407에서 `(post_id, type, created_at DESC, id DESC)` ordering index를 forward migration으로 추가하고 동일 생성 시각의 ID tie-break와 visibility-before-limit을 함께 검증한다.
 - [Notification active change와 migration/snapshot 충돌 가능] → Notification kind migration과 UI 확장은 `add-in-app-notifications` archive 뒤 별도 slice에서 적용하고 PROD-395 migration에는 포함하지 않는다.
 - [Best Effort 실패로 stale Notification row가 남을 수 있음] → source 존재와 관계 visibility를 모든 API surface에서 filter하고 retry/physical cleanup은 후속 capability가 소유한다.
-- [공유 OpenSpec의 후속 API/UI 선택이 아직 미정] → 각 후속 구현 slice 전 decisions와 관련 specs를 갱신해 승인받고, 현재 PROD-395 저장 slice의 accepted decision과 분리한다.
-- [이미 없는 Reaction ID는 과거 Owner를 증명할 수 없음] → 존재하는 타인 소유 행만 `PERMISSION_DENIED`로 거부하고, 존재하지 않는 concrete Reaction ID는 어떤 행도 바꾸지 않는 성공 no-op으로 처리한다. 과거 소유권 ledger나 soft delete는 이번 존재 기반 관계 범위에 추가하지 않는다.
+- [공유 OpenSpec의 후속 UI/cache 선택이 아직 미정] → 각 후속 구현 slice 전 decisions와 관련 specs를 갱신해 승인받고, 현재 PROD-395 저장 slice의 accepted decision과 분리한다.
+- [오래 지연된 Post/Type 삭제가 재생성된 현재 관계를 제거할 수 있음] → 사용자가 즉시 다시 선택할 수 있는 낮은 위험의 소셜 상호작용으로 ABA 가능성을 수용한다. 과거 관계 ledger나 soft delete는 이번 존재 기반 관계 범위에 추가하지 않는다.
 
 ## Migration Plan
 

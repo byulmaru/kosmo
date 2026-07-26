@@ -16,8 +16,8 @@ Accepted
   사이에서 달라지지 않는다. Reaction을 남긴 Profile 목록만 viewer가 조회할 수 있는 Profile로 제한한다.
 - 같은 Profile/Post/Reaction Type 조합의 Reaction 추가를 반복하면 기존 Reaction을 유지한 채 멱등
   성공한다.
-- 행동 주체가 이미 제거한 동일 Reaction의 삭제를 재시도하면 상태를 바꾸지 않은 채 멱등 성공한다. 이
-  멱등성은 다른 Profile이 소유한 기존 Reaction을 삭제할 권한을 부여하지 않는다.
+- Reaction 삭제 재시도에 관해 당시에는 행동 주체가 이미 제거한 동일 Reaction의 재시도가 상태를 바꾸지
+  않는다고 결정했다. 이 결정은 [ADR 0016](./0016-reaction-selector-current-state.md)으로 대체됐다.
 
 ## 이유
 

@@ -6,7 +6,8 @@ Kosmo는 Profile이 Post에 여러 종류의 Reaction을 남기고, 이를 일�
 
 - Profile, Post와 Unicode 문자열 Reaction Type을 저장하는 Reaction 계약을 추가한다.
 - 초기 built-in Reaction Type을 `🥹`, `❤️`, `🎉`, `👀`, `☘️`, `🌈`로 제한하고, 같은 Profile/Post/Type 조합의 유일성과 다른 Type의 공존을 보장한다.
-- 허용된 Reaction의 멱등 생성과 Owner의 멱등 삭제를 제공한다.
+- 허용된 Reaction의 멱등 생성과 selected Profile의 Post/Type 기준 멱등 삭제를 제공한다.
+- Post에서 selected Profile이 남긴 현재 Reaction 관계 목록을 제공한다.
 - Post별 Type count는 viewer와 무관하게 제공하고, Type별 Profile 목록에만 viewer의 Profile 조회 경계를 적용한다.
 - Reaction 선택 UI와 count/Profile 요약 UI를 독립 component/integration 경계로 제공한다.
 - 자기 Post 알림을 억제하면서 Reaction Notification을 기존 inbox에 통합하고, Reaction 제거 뒤 Notification을 Best Effort로 정리한다.
@@ -27,9 +28,9 @@ Kosmo는 Profile이 Post에 여러 종류의 Reaction을 남기고, 이를 일�
 
 ## Impact
 
-- Linear: PROD-395, PROD-404, PROD-405, PROD-406, PROD-407, PROD-413, PROD-450, PROD-417, PROD-418, PROD-419와 부모 PROD-390
+- Linear: PROD-395, PROD-404, PROD-405, PROD-406, PROD-407, PROD-413, PROD-450, PROD-472, PROD-417, PROD-418, PROD-419와 부모 PROD-390
 - Core/DB: Reaction schema, migration, 무결성·index 검증
-- GraphQL/Core service: 생성·삭제 mutation, count와 Profile connection, Reaction Notification concrete type와 loader
+- GraphQL/Core service: 생성·Post/Type 삭제 mutation, selected Profile의 Reaction 목록, count와 Profile connection, Reaction Notification concrete type와 loader
 - Universal client: fixture-first Reaction Quick Picker·summary presentation, 후속 Relay mutation/cache·pagination 통합과 component/integration 검증
 - Notification: 기존 Profile-scoped projection과 inbox/read/count UI 확장
 - Dependency: PROD-413은 완료된 PROD-277·324·372 Notification 기반 위에 Reaction Notification delta를 적용한다. `add-in-app-notifications`의 남은 E2E·archive는 그 부모 범위로 유지한다.

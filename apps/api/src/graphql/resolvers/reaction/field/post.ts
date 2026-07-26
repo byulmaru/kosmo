@@ -8,6 +8,8 @@ import { builder } from '@/graphql/builder';
 import { Post } from '@/graphql/resolvers/post';
 import { Profile, ProfileConnection } from '@/graphql/resolvers/profile';
 import { visibleProfileWhere } from '@/profile/visibility';
+import { viewerReactionLoader } from '../loader/viewer-reaction';
+import { Reaction } from '../ref';
 
 type ReactionProfileRow = typeof Profiles.$inferSelect & {
   readonly reactionCreatedAt: Temporal.Instant;
@@ -73,6 +75,11 @@ const reactionProfileCursorWhere = (cursor: string | undefined, direction: 'afte
 };
 
 builder.objectFields(Post, (t) => ({
+  viewerReactions: t.withAuth({ usingProfile: true }).field({
+    type: [Reaction],
+    unauthorizedResolver: () => [],
+    resolve: (post, _, ctx) => viewerReactionLoader(ctx).load(post.id),
+  }),
   reactionProfiles: t.connection(
     {
       type: Profile,

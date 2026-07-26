@@ -1,26 +1,42 @@
 import { deleteReaction } from '@kosmo/core/services';
+import { reactionTypeSchema } from '@kosmo/core/validation';
 import { builder } from '@/graphql/builder';
+import { Post } from '@/graphql/resolvers/post';
 import { Reaction } from '../ref';
+
+type DeleteReactionPayload = {
+  readonly post: string;
+  readonly reactionId: string | null;
+};
 
 builder.mutationField('deleteReaction', (t) =>
   t.withAuth({ usingProfile: true }).fieldWithInput({
     type: builder.simpleObject('DeleteReactionPayload', {
       fields: (field) => ({
         reactionId: field.globalID({
-          resolve: (payload) => ({
-            id: (payload as { reactionId: string }).reactionId,
-            type: Reaction,
-          }),
+          nullable: true,
+          resolve: (payload) => {
+            const { reactionId } = payload as DeleteReactionPayload;
+            return reactionId ? { id: reactionId, type: Reaction } : null;
+          },
+        }),
+        post: field.field({
+          nullable: true,
+          type: Post,
         }),
       }),
     }),
     input: {
-      id: t.input.globalID({ for: Reaction }),
+      postId: t.input.globalID({ for: Post }),
+      type: t.input.string({ validate: reactionTypeSchema }),
     },
-    resolve: (_, { input }, ctx) =>
-      deleteReaction({
+    resolve: async (_, { input }, ctx): Promise<DeleteReactionPayload> => {
+      const result = await deleteReaction({
         actorProfileId: ctx.session.profileId,
-        reactionId: input.id.id,
-      }),
+        postId: input.postId.id,
+        type: input.type,
+      });
+      return { post: result.postId, reactionId: result.reactionId };
+    },
   }),
 );

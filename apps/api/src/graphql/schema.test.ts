@@ -176,18 +176,23 @@ test('exposes the Bookmark mutation and relationship contract', () => {
   assert.equal(String(post.getFields().viewerBookmark.type), 'Bookmark');
 });
 
-test('exposes the ID-based idempotent Reaction delete contract', () => {
+test('exposes selected Profile Reactions and the Post/Type delete contract', () => {
   const mutation = schema.getMutationType();
   const input = schema.getType('DeleteReactionInput');
   const payload = schema.getType('DeleteReactionPayload');
+  const post = schema.getType('Post');
 
   assert.equal(String(mutation?.getFields().deleteReaction?.type), 'DeleteReactionPayload!');
   assert.ok(isInputObjectType(input));
-  assert.equal(String(input.getFields().id.type), 'ID!');
+  assert.equal(String(input.getFields().postId.type), 'ID!');
+  assert.equal(String(input.getFields().type.type), 'String!');
   assert.ok(isObjectType(payload));
-  assert.equal(String(payload.getFields().reactionId.type), 'ID!');
+  assert.equal(String(payload.getFields().reactionId.type), 'ID');
+  assert.equal(String(payload.getFields().post.type), 'Post');
   assert.equal(payload.getFields().reaction, undefined);
   assert.equal(payload.getFields().deleted, undefined);
+  assert.ok(isObjectType(post));
+  assert.equal(String(post.getFields().viewerReactions.type), '[Reaction!]!');
 });
 
 test('exposes Reaction Profiles as the shared Profile connection without Reaction metadata', () => {

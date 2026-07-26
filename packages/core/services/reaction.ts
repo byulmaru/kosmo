@@ -85,44 +85,45 @@ export const addReaction = async (
 
 type DeleteReactionInput = {
   readonly actorProfileId: string;
-  readonly reactionId: string;
+  readonly postId: string;
+  readonly type: string;
 };
 
 export const deleteReaction = async (
   input: DeleteReactionInput,
-): Promise<{ readonly reactionId: string }> => {
+): Promise<{ readonly postId: string; readonly reactionId: string | null }> => {
+  const parsedType = reactionTypeSchema.safeParse(input.type);
+  if (!parsedType.success) {
+    throw new ValidationError(parsedType.error.issues[0]?.message, { field: 'type' });
+  }
+
   const result = await db.transaction(async (tx) => {
     await requireReactionActor(tx, input.actorProfileId);
 
-    const reaction = await tx
-      .select({ profileId: Reactions.profileId })
-      .from(Reactions)
-      .where(eq(Reactions.id, input.reactionId))
-      .limit(1)
-      .then(first);
-    if (!reaction) {
-      return { reactionId: input.reactionId };
-    }
-    if (reaction.profileId !== input.actorProfileId) {
-      throw new PermissionDeniedError('Reaction owner permission is required');
-    }
-
-    await tx
+    const deleted = await tx
       .delete(Reactions)
       .where(
-        and(eq(Reactions.id, input.reactionId), eq(Reactions.profileId, input.actorProfileId)),
-      );
+        and(
+          eq(Reactions.profileId, input.actorProfileId),
+          eq(Reactions.postId, input.postId),
+          eq(Reactions.type, parsedType.data),
+        ),
+      )
+      .returning({ id: Reactions.id })
+      .then(first);
 
-    return { reactionId: input.reactionId };
+    return { postId: input.postId, reactionId: deleted?.id ?? null };
   });
 
-  try {
-    await deleteNotificationBySource(NotificationKind.REACTION, result.reactionId);
-  } catch (error) {
-    console.error('Failed to clean up Reaction Notification', {
-      error,
-      reactionId: result.reactionId,
-    });
+  if (result.reactionId) {
+    try {
+      await deleteNotificationBySource(NotificationKind.REACTION, result.reactionId);
+    } catch (error) {
+      console.error('Failed to clean up Reaction Notification', {
+        error,
+        reactionId: result.reactionId,
+      });
+    }
   }
 
   return result;

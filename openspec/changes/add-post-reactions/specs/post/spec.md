@@ -2,7 +2,7 @@
 
 ### Requirement: Post Reaction 조회
 
-**Authority / Provenance:** [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0010](../../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-406](https://linear.app/byulmaru/issue/PROD-406/reaction-type%EB%B3%84-%EA%B0%9C%EC%88%98%EB%A5%BC-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4), [PROD-407](https://linear.app/byulmaru/issue/PROD-407/reaction%EC%9D%84-%EB%82%A8%EA%B8%B4-profile%EC%9D%84-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4) API는 조회 가능한 Post에 현재 Reaction Type별 count와 Type별 Reaction Profile connection을 제공해야 한다(MUST). GraphQL API는 `Post.reactionCounts: [ReactionCount!]!`와 `Post.reactionProfiles(type: String!): ProfileConnection!`을 제공해야 한다(MUST). `ReactionCount`는 `type: String!`과 `count: Int!`만 제공해야 한다(MUST).
+**Authority / Provenance:** [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0010](../../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [ADR 0016](../../../../../docs/domain/decisions/0016-reaction-selector-current-state.md), [PROD-406](https://linear.app/byulmaru/issue/PROD-406/reaction-type%EB%B3%84-%EA%B0%9C%EC%88%98%EB%A5%BC-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4), [PROD-407](https://linear.app/byulmaru/issue/PROD-407/reaction%EC%9D%84-%EB%82%A8%EA%B8%B4-profile%EC%9D%84-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4), [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4) API는 조회 가능한 Post에 현재 Reaction Type별 count, Type별 Reaction Profile connection과 selected Profile의 현재 Reaction 관계를 제공해야 한다(MUST). GraphQL API는 `Post.reactionCounts: [ReactionCount!]!`, `Post.reactionProfiles(type: String!): ProfileConnection!`과 `Post.viewerReactions: [Reaction!]!`를 제공해야 한다(MUST). `ReactionCount`는 `type: String!`과 `count: Int!`만 제공해야 한다(MUST).
 
 #### Scenario: Post Reaction summary 조회
 
@@ -24,7 +24,14 @@
 - **AND** GraphQL field는 `reactionProfiles(type: String!): ProfileConnection!` 계약을 사용한다
 - **AND** connection은 cursor pagination을 지원한다
 
+#### Scenario: selected Profile의 Post Reaction 조회
+
+- **WHEN** viewer가 조회 가능한 Post의 `viewerReactions`를 요청한다
+- **THEN** Post object는 현재 selected Profile이 남긴 Reaction Node만 반환한다
+- **AND** guest 또는 selected Profile이 없는 viewer에게 빈 목록을 반환한다
+- **AND** 여러 Post를 함께 조회할 때 Post별 추가 query를 발생시키지 않는다
+
 #### Scenario: Post 조회 정책 재사용
 
 - **WHEN** viewer가 대상 Post를 GraphQL Post object로 조회할 수 없다
-- **THEN** API는 그 Post의 Reaction summary와 Profile connection도 노출하지 않는다
+- **THEN** API는 그 Post의 Reaction summary, Profile connection과 selected Profile Reaction 목록도 노출하지 않는다

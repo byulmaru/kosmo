@@ -81,11 +81,11 @@
 
 ### Requirement: Reaction 제거 뒤 Best Effort Notification 정리
 
-**Authority / Provenance:** [Notification canonical 객체](../../../../../docs/domain/objects/notification.md), [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0010](../../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-419](https://linear.app/byulmaru/issue/PROD-419/reaction-notification%EC%9D%84-%EC%A0%95%EB%A6%AC%ED%95%9C%EB%8B%A4) 정상 Reaction 삭제 action은 source transaction commit 뒤 대응 Notification cleanup을 Best Effort로 시도해야 한다(MUST). 정리 시점과 성공은 Reaction 삭제 결과의 조건이어서는 안 된다(MUST NOT).
+**Authority / Provenance:** [Notification canonical 객체](../../../../../docs/domain/objects/notification.md), [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0010](../../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-419](https://linear.app/byulmaru/issue/PROD-419/reaction-notification%EC%9D%84-%EC%A0%95%EB%A6%AC%ED%95%9C%EB%8B%A4), [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4) 실제 Reaction 제거가 source transaction에서 commit되면 대응 Notification cleanup을 Best Effort로 시도해야 한다(MUST). 삭제 no-op은 cleanup을 시도해서는 안 되며(MUST NOT), 정리 시점과 성공은 Reaction 삭제 결과의 조건이어서는 안 된다(MUST NOT).
 
 #### Scenario: Reaction 삭제 cleanup
 
-- **WHEN** Reaction 삭제가 commit된다
+- **WHEN** 실제 Reaction 제거가 commit된다
 - **THEN** source action은 `(REACTION, source_id)` Notification delete 경계를 await한다
 - **AND** cleanup 성공 뒤 item은 connection, Unread count, Node와 Read에서 사라진다
 

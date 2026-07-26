@@ -240,7 +240,38 @@ Reaction 삭제 뒤 대응 Notification cleanup을 Best Effort로 시도하고, 
 - [x] 9.1 Reaction 삭제 결과에 연결되는 idempotent Notification cleanup을 구현한다.
 - [x] 9.2 cleanup 성공·반복·실패 격리와 stale visibility 검증을 추가하고 core/API check를 통과시킨다.
 
-## 10. PROD-390 Reaction 통합 검증·정합성 확인·archive
+## 10. PROD-472 Selector 현재 상태 조회와 Post/Type 삭제
+
+**Authority / Provenance**
+
+- [Reaction canonical 객체](../../../docs/domain/objects/reaction.md)
+- [ADR 0016](../../../docs/domain/decisions/0016-reaction-selector-current-state.md)
+- [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4)
+
+**Deliverable**
+
+Reaction selector가 selected Profile이 Post에 남긴 현재 Reaction 관계를 복원하고 Post와 Type으로 자신의 현재 관계를 멱등하게 삭제한다.
+
+**Guardrails**
+
+- 조회는 `Post.viewerReactions: [Reaction!]!`로 현재 selected Profile의 관계 Node만 제공하고 guest·selected Profile 부재에는 빈 목록을 반환한다.
+- 여러 Post의 viewer-relative 관계는 batch 조회하며 selected Profile 사이에서 loader·cache 결과를 공유하지 않는다.
+- 삭제는 `{ postId, type }`으로 현재 selected Profile의 조합만 원자적으로 제거하고 다른 Profile과 다른 Type을 변경하지 않는다.
+- 실제 삭제된 Reaction ID가 있을 때만 post-commit Notification cleanup을 시도한다. cleanup 실패는 삭제 성공과 분리한다.
+- 오래 지연된 요청이 같은 조합으로 재생성된 현재 Reaction을 제거할 수 있는 ABA 가능성을 수용하며 별도 history·ledger·lock을 추가하지 않는다.
+- PROD-417의 zero-count option 공급, optimistic update, pending/error UX와 Relay adapter 구현을 포함하지 않는다.
+
+**Verification**
+
+- schema와 API integration test로 guest·selected Profile 부재, Profile별 목록, Profile 전환, multi-Post batching, 삭제 payload와 다른 Profile/Type 보존을 검증한다.
+- core database test로 missing·반복·동시 삭제, 허용된 ABA, actor/Type 검증과 실제 삭제 ID 기반 Notification cleanup·실패 격리를 검증한다.
+
+- [x] 10.1 canonical·Linear 계약을 specs·design·decisions·tasks에 동기화하고 strict validation을 통과시킨다.
+- [x] 10.2 `Post.viewerReactions` batch loader와 GraphQL field를 구현한다.
+- [x] 10.3 core와 GraphQL `deleteReaction`을 Post/Type 입력, nullable 삭제 결과와 post-commit cleanup 계약으로 전환한다.
+- [x] 10.4 core·schema·API integration 검증과 typecheck·format check를 통과시킨다.
+
+## 11. PROD-390 Reaction 통합 검증·정합성 확인·archive
 
 **Deliverable**
 
