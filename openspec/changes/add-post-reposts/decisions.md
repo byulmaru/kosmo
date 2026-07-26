@@ -151,6 +151,18 @@
 - Consequences: production fragment는 direct Source presentation field까지만 읽는 유한한 shape를 사용하며 두 번째 Source를 위한 client field나 이동 UI를 만들지 않는다.
 - Confirmation / Follow-up: Home/Profile/Bookmark Relay 경로와 Storybook에서 Quote-of-Quote·Repost-of-Quote cutoff, direct Source 생성 시각·본문의 정확한 canonical route 이동, 두 번째 Source Content와 CTA 미노출, 외부 body Link와의 비중첩을 검증한다. Post detail 연결은 포함하지 않는다.
 
+### Post와 Source preview의 이동 영역을 목적지별로 분리한다
+
+- Decision Date: 2026-07-26
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-415`, 2026-07-26 사용자 확인
+- Status: Active
+- Context / Problem: Quote 자체 Post, bordered direct Source preview와 body의 외부 Link는 서로 다른 목적지를 가진다. preview 전체나 body 전체를 하나의 Link로 만들면 Source Author의 Profile Link 또는 body의 외부 Link가 중첩되며, pointer 전용 body 이동을 실제 Link처럼 접근성 tree에 노출하면 같은 중첩 interactive 구조를 다시 만든다.
+- Decision Outcome: bordered Source preview는 시각적 그룹 경계이며 하나의 Link가 아니다. Source Avatar·Author는 canonical Profile Link, Source 생성 시각은 keyboard·screen reader·pointer가 사용하는 최소 44px canonical Post Link다. Source 본문 행은 pointer·touch에서 같은 Source Post로 이동하는 넓은 shortcut이지만 별도 accessibility element나 keyboard focus target으로 만들지 않는다. 본문 안 외부 Link는 event propagation을 차단하고 자신의 외부 URL로 이동하며, border의 빈 padding에는 이동 동작을 두지 않는다. Quote 자체 생성 시각은 Quote Post의 canonical Link를 유지하고 Quote 자체 본문 행도 같은 원칙의 pointer·touch shortcut으로 Quote Post로 이동한다. 이 구분은 style이나 layout을 바꾸지 않는다.
+- Alternatives Considered: bordered preview 전체를 Source Post Link로 만드는 방식은 Source Author Profile과 외부 body Link를 중첩시킨다. body 전체를 독립된 접근 가능한 Link로 만드는 방식도 외부 body Link와 nested interactive semantics를 만들며, link가 없는 text run만 각각 Link로 분할하는 방식은 하나의 본문에 중복 focus target을 늘린다. Source Author와 외부 Link를 제거하고 preview 전체를 단일 Link로 만드는 방식은 승인된 목적지를 잃는다.
+- Consequences: keyboard·screen reader 사용자는 Source 생성 시각의 `원문 게시글 보기` Link로 Source Post에 접근하고, pointer·touch 사용자는 생성 시각 또는 본문 행을 사용할 수 있다. Source Author Profile과 body 외부 Link는 독립 목적지를 유지한다. P1 회귀 검증은 Quote 자체 본문 shortcut이 바깥 Quote Post로 이동하고 Source Post로 잘못 이동하지 않는지 확인해야 한다.
+- Confirmation / Follow-up: Storybook에서 Quote 자체 본문, Source 생성 시각, Source 본문, Source Author와 외부 body Link의 목적지를 각각 검증하고 `a a` 및 `[role="link"] [role="link"]`가 없음을 확인한다. 시각 변화가 없으므로 별도 visual re-review는 요구하지 않는다.
+
 ### 부모 change가 전체 계약과 archive를 소유한다
 
 - Decision Date: 2026-07-21

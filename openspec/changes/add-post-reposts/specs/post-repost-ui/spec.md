@@ -41,10 +41,26 @@
 
 #### Scenario: Source Post 이동
 
-- **WHEN** 사용자가 Repost 또는 Quote의 direct Source 생성 시각이나 본문 영역을 활성화한다
+- **WHEN** 사용자가 Repost 또는 Quote의 direct Source 생성 시각을 keyboard, screen reader, pointer 또는 touch로 활성화하거나 Source 본문 행을 pointer 또는 touch로 활성화한다
 - **THEN** 앱은 Source Author의 `relativeHandle`과 Source Post global ID를 사용하는 canonical Post route로 이동한다
 - **AND** Repost 또는 Quote Author의 상세 route로 잘못 이동하지 않는다
 - **AND** Source Author affordance는 Source Author의 canonical Profile route로 이동한다
+
+#### Scenario: Source preview의 목적지별 이동 경계
+
+- **WHEN** direct Source preview가 Author, 생성 시각, Content와 border padding을 표시한다
+- **THEN** Source Author는 canonical Profile Link이고 Source 생성 시각은 최소 44px canonical Post Link다
+- **AND** Source 본문 행은 별도 accessibility element 또는 keyboard focus target이 아닌 pointer·touch shortcut으로 Source Post에 이동한다
+- **AND** body의 외부 Link는 Source 이동을 함께 실행하지 않고 자신의 URL로 이동한다
+- **AND** bordered preview 전체와 빈 padding은 단일 Source Post Link 또는 이동 affordance가 아니다
+- **AND** 앱은 Source Post, Profile 또는 외부 body Link를 서로 중첩하지 않는다
+
+#### Scenario: Quote 자체 Post 이동 보존
+
+- **WHEN** 사용자가 Quote 또는 Reply+Quote의 자체 생성 시각을 활성화하거나 자체 본문 행을 pointer 또는 touch로 활성화한다
+- **THEN** 앱은 Quote Author의 `relativeHandle`과 Quote Post global ID를 사용하는 canonical Post route로 이동한다
+- **AND** direct Source Post route로 잘못 이동하지 않는다
+- **AND** Quote 자체 body의 외부 Link는 Quote Post 이동을 함께 실행하지 않고 자신의 URL로 이동한다
 
 #### Scenario: Author Profile 이동
 

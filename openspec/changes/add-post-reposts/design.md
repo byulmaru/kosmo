@@ -60,7 +60,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 6. PROD-453의 순수 Repost는 Repost Author attribution 뒤에 direct Source를 주 Post content로 표시한다. Quote와 Reply+Quote는 Quote Author와 자체 Content를 먼저 표시하고 direct Source를 compact bordered preview로 표시한다. Source preview는 자체 Action Bar를 갖지 않으며, nullable Source인 Quote는 preview와 Source 이동 affordance만 생략한다. Storybook은 production fragment shape를 따르는 typed fixture adapter로 internal presentation model을 구성하고 raw object를 fragment key로 cast하지 않는다. 실제 관계 field를 읽는 Relay operation·fragment와 generated type은 PROD-415에 남긴다. View의 link renderer는 Storybook mock target을 검증하고 PROD-415 production fragment wrapper가 canonical Expo Router Link를 공급할 수 있게 한다. Figma와 외부 SNS는 시각 참고이며 수치는 앱 theme token과 기존 Post component를 따른다. PROD-415는 공용 list item fragment에 결과를 연결하고, PROD-414는 별도 Repost action fragment/mutations와 normalized payload로 actor Store를 갱신한다.
 7. PROD-412는 기존 Notification table에 `REPOST` kind를 추가하고 source-only create 경계에서 Recipient·Related Profile·Related Post를 파생한다. kind별 visible projection을 connection/count/Node/Read에서 공통 조립하고, client는 concrete inline fragment로 Source Post 이동과 Read/cache를 처리한다.
 8. PROD-416은 Repost Tombstone commit 뒤 같은 request에서 idempotent cleanup을 await하고 오류를 catch한다. 남은 row는 Active pure-Repost 구조와 Recipient 기준 관계 visibility를 검증하는 predicate로 모든 API surface에서 숨긴다.
-9. PROD-415는 direct Source가 Quote인 경우에도 direct Source 한 단계만 full presentation한다. Source Author는 canonical Profile route로 이동하고 direct Source의 생성 시각과 본문 영역은 direct Source의 canonical Post route로 이동한다. 두 번째 Source를 위한 presentation field, placeholder 또는 CTA를 추가하지 않고 presentation component를 재귀 호출하지 않는다.
+9. PROD-415는 direct Source가 Quote인 경우에도 direct Source 한 단계만 full presentation한다. bordered Source preview는 하나의 Link가 아닌 시각적 그룹 경계다. Source Author는 canonical Profile Link, Source 생성 시각은 keyboard·screen reader·pointer가 사용하는 최소 44px canonical Post Link, Source 본문 행은 pointer·touch에서 같은 Post로 이동하는 shortcut으로 분리한다. border의 빈 padding에는 동작을 두지 않고 body 외부 Link는 자신의 URL로 이동한다. Quote 자체 생성 시각과 본문 행도 각각 실제 canonical Link와 pointer·touch shortcut으로 바깥 Quote Post에 연결한다. 두 번째 Source를 위한 presentation field, placeholder 또는 CTA를 추가하지 않고 presentation component를 재귀 호출하지 않는다.
 
 ### Allowed Alternatives
 
@@ -87,6 +87,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 - 두 번째 Source의 ID·Content·Profile presentation field를 fragment에 추가하거나 Source presentation을 재귀 호출하지 않는다.
 - client가 raw object를 Relay fragment key로 cast하거나 route query에 presentation scalar를 중복 나열하지 않는다.
 - Source preview Link를 전체 Post Link 안에 중첩하지 않는다.
+- bordered Source preview 전체 또는 body 외부 Link를 포함한 body 전체를 하나의 접근 가능한 Link로 만들지 않는다.
 
 ## Risks / Trade-offs
 
