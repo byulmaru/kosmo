@@ -1,7 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
-import { after, before, beforeEach, describe, test } from 'node:test';
+import { after, before, beforeEach, describe, mock, test } from 'node:test';
 import {
   AccountProfileRole,
   AccountState,
@@ -312,17 +312,25 @@ describe('GraphQL Repost', () => {
 
   test('deletePost는 GraphQL 경로에서 Repost를 Tombstone 처리하고 상태를 갱신한다', async () => {
     const auth = await createAuthenticatedSession();
-    const source = await createContentPost(auth.profile.id);
+    const recipient = await createProfile('delete-notification-recipient');
+    const source = await createContentPost(recipient.id);
     await requestRepost(source.id, auth.token);
     const repost = await db
       .select()
       .from(Posts)
       .where(and(eq(Posts.profileId, auth.profile.id), eq(Posts.repostSourceId, source.id)))
       .then(firstOrThrow);
+    assert.equal(await db.$count(Notifications), 1);
 
     const first = await requestDelete(repost.id, auth.token);
     assertNoGraphQLErrors(first);
     assert.deepEqual(first.data?.deletePost, { postId: globalId('Post', repost.id) });
+    assert.equal(await db.$count(Notifications), 0);
+
+    const repeated = await requestDelete(repost.id, auth.token);
+    assertNoGraphQLErrors(repeated);
+    assert.deepEqual(repeated.data?.deletePost, { postId: globalId('Post', repost.id) });
+    assert.equal(await db.$count(Notifications), 0);
 
     const deleted = await db
       .select({ deletedAt: Posts.deletedAt, state: Posts.state })
@@ -357,6 +365,56 @@ describe('GraphQL Repost', () => {
       repostCount: 0,
       viewerRepost: null,
     });
+  });
+
+  test('Notification 정리 실패는 Tombstone 결과를 유지하고 오류를 기록한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('failed-delete-notification-recipient');
+    const source = await createContentPost(recipient.id);
+    await requestRepost(source.id, auth.token);
+    const repost = await db
+      .select()
+      .from(Posts)
+      .where(and(eq(Posts.profileId, auth.profile.id), eq(Posts.repostSourceId, source.id)))
+      .then(firstOrThrow);
+    const errorLog = mock.method(console, 'error', () => undefined);
+
+    await pg.unsafe(`
+      CREATE FUNCTION fail_repost_notification_delete() RETURNS trigger
+      LANGUAGE plpgsql AS $$ BEGIN
+        IF OLD.kind = 'REPOST' THEN RAISE EXCEPTION 'forced notification cleanup failure'; END IF;
+        RETURN OLD;
+      END $$;
+      CREATE TRIGGER fail_repost_notification_delete
+      BEFORE DELETE ON notification
+      FOR EACH ROW EXECUTE FUNCTION fail_repost_notification_delete();
+    `);
+
+    try {
+      const result = await requestDelete(repost.id, auth.token);
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(result.data?.deletePost, { postId: globalId('Post', repost.id) });
+
+      const deleted = await db
+        .select({ state: Posts.state })
+        .from(Posts)
+        .where(eq(Posts.id, repost.id))
+        .then(firstOrThrow);
+      assert.equal(deleted.state, PostState.DELETED);
+      assert.equal(await db.$count(Notifications), 1);
+      assert.equal(errorLog.mock.callCount(), 1);
+      assert.equal(
+        errorLog.mock.calls[0]?.arguments[0],
+        'Post-commit Repost notification cleanup failed',
+      );
+      assert.equal((errorLog.mock.calls[0]?.arguments[1] as { postId: string }).postId, repost.id);
+    } finally {
+      await pg.unsafe(`
+        DROP TRIGGER IF EXISTS fail_repost_notification_delete ON notification;
+        DROP FUNCTION IF EXISTS fail_repost_notification_delete();
+      `);
+      errorLog.mock.restore();
+    }
   });
 
   test('deletePost는 비Author와 비로그인 요청을 거부한다', async () => {

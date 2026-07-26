@@ -338,6 +338,23 @@ test('Repost 알림은 존재하지 않거나 pure Repost가 아닌 source를 �
   await assert.rejects(createRepostNotification(contentPost.id), NotFoundError);
 });
 
+test('Repost 알림 정리는 정상·반복·없는 source에 idempotent하다', async () => {
+  const author = await createProfile();
+  const recipient = await createProfile();
+  const source = await createContentPost(recipient.id);
+  const { repost } = await repostPost({
+    actorProfileId: author.id,
+    sourcePostId: source.id,
+  });
+
+  await createRepostNotification(repost.id);
+  await deleteNotificationBySource(NotificationKind.REPOST, repost.id);
+  await deleteNotificationBySource(NotificationKind.REPOST, repost.id);
+  assert.deepEqual(await readNotifications(repost.id), []);
+
+  await deleteNotificationBySource(NotificationKind.REPOST, crypto.randomUUID());
+});
+
 test('Reaction 알림 정리는 정상·반복·없는 source에 idempotent하다', async () => {
   const author = await createProfile();
   const recipient = await createProfile();
