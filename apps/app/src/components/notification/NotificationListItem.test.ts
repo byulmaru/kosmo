@@ -16,12 +16,13 @@ const notificationId = 'notification-unread';
 const recipientId = 'notification-profile-content';
 const otherRecipientId = 'notification-profile-other';
 const readAt = '2026-07-21T12:00:00Z';
+type NotificationTypename = 'FollowNotification' | 'RepostNotification';
 
-function createEnvironment() {
+function createEnvironment(typename: NotificationTypename = 'FollowNotification') {
   const source = new RecordSource();
   source.set(notificationId, {
     __id: notificationId,
-    __typename: 'FollowNotification',
+    __typename: typename,
     id: notificationId,
     readAt: null,
   });
@@ -44,13 +45,16 @@ function createEnvironment() {
   });
 }
 
-function commitReadPayload(environment: Environment) {
+function commitReadPayload(
+  environment: Environment,
+  typename: NotificationTypename = 'FollowNotification',
+) {
   const operation = createOperationDescriptor(getRequest(MarkReadMutation), {
     id: notificationId,
   });
   environment.commitPayload(operation, {
     markNotificationRead: {
-      notification: { __typename: 'FollowNotification', id: notificationId, readAt },
+      notification: { __typename: typename, id: notificationId, readAt },
       recipientProfile: {
         __typename: 'Profile',
         id: recipientId,
@@ -77,13 +81,25 @@ describe('NotificationListItem Read cache', () => {
     assert.equal(requireRecord(environment, otherRecipientId).unreadNotificationCount, 7);
   });
 
+  it('normalizes a Repost Notification and Recipient Profile in the same actor Store', () => {
+    const environment = createEnvironment('RepostNotification');
+
+    commitReadPayload(environment, 'RepostNotification');
+
+    assert.equal(requireRecord(environment, notificationId).__typename, 'RepostNotification');
+    assert.equal(requireRecord(environment, notificationId).readAt, readAt);
+    assert.equal(requireRecord(environment, recipientId).unreadNotificationCount, 1);
+    assert.equal(requireRecord(environment, otherRecipientId).unreadNotificationCount, 7);
+  });
+
   it('keeps repeated final payloads and another actor Store isolated', () => {
-    const actorA = createEnvironment();
-    const actorB = createEnvironment();
+    const actorA = createEnvironment('RepostNotification');
+    const actorB = createEnvironment('RepostNotification');
 
-    commitReadPayload(actorA);
-    commitReadPayload(actorA);
+    commitReadPayload(actorA, 'RepostNotification');
+    commitReadPayload(actorA, 'RepostNotification');
 
+    assert.equal(requireRecord(actorA, notificationId).__typename, 'RepostNotification');
     assert.equal(requireRecord(actorA, notificationId).readAt, readAt);
     assert.equal(requireRecord(actorA, recipientId).unreadNotificationCount, 1);
     assert.equal(requireRecord(actorB, notificationId).readAt, null);

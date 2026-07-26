@@ -14,16 +14,15 @@ export type PostVisibilityAccessColumns = {
 
 export const postVisibilityAccessCondition = ({
   columns,
-  ctx,
+  viewerProfileId,
 }: {
   columns: PostVisibilityAccessColumns;
-  ctx: UserContext;
+  viewerProfileId?: SQLWrapper | string | null;
 }): SQL<boolean> => {
   const publicWhere = inArray(columns.postVisibility, [
     PostVisibility.PUBLIC,
     PostVisibility.UNLISTED,
   ]);
-  const viewerProfileId = ctx.session?.profileId;
   const followerWhere = viewerProfileId
     ? and(
         eq(columns.postVisibility, PostVisibility.FOLLOWERS),
@@ -63,5 +62,5 @@ export const postVisibilityAccessWhere = ({ ctx }: { ctx: UserContext }) =>
         instance: Instances,
       })}`,
     },
-    ctx,
+    viewerProfileId: ctx.session?.profileId,
   });
