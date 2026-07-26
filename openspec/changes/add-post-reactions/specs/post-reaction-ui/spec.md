@@ -44,17 +44,49 @@
 - **THEN** component는 Type과 count를 count 내림차순으로 표시한다
 - **AND** count 동률 Type의 순서에 의존하지 않는다
 
+#### Scenario: Reaction이 없는 Post
+
+- **WHEN** Post의 `reactionCounts`가 빈 목록이다
+- **THEN** 클라이언트는 Reaction 요약 영역을 렌더링하지 않는다
+- **AND** zero-count Type이나 별도 빈 요약 상태를 합성하지 않는다
+
 #### Scenario: Type별 Profile 목록 진입
 
 - **WHEN** 사용자가 한 Reaction Type 요약을 연다
-- **THEN** component는 그 Type의 Profile connection만 표시한다
+- **THEN** 클라이언트는 현재 Post 위의 modal overlay에서 그 Type의 Profile connection만 표시한다
+- **AND** 별도 route나 공개 URL을 만들지 않는다
 - **AND** server가 viewer 기준으로 숨긴 Profile을 client에서 복구하거나 count에서 빼지 않는다
+
+#### Scenario: Profile 목록 modal 닫기
+
+- **WHEN** 사용자가 modal 외부 영역을 클릭·터치하거나 Android back을 실행한다
+- **THEN** 클라이언트는 Profile 목록 modal을 닫는다
+- **AND** modal 내부에는 별도 닫기 버튼을 표시하지 않는다
+
+#### Scenario: Profile 목록 최초 조회 실패
+
+- **WHEN** 선택한 Type의 Profile 목록 최초 조회가 실패한다
+- **THEN** modal 내부에 오류와 다시 시도 동작을 표시한다
+- **AND** snackbar·toast·전역 outlet을 조회 오류 복구에 요구하지 않는다
 
 #### Scenario: Profile 목록 추가 page
 
 - **WHEN** Type별 Profile 목록에 다음 page가 있다
 - **THEN** component는 Relay cursor로 다음 page를 불러온다
 - **AND** 이미 표시한 Profile을 중복 추가하지 않는다
+
+#### Scenario: Profile 목록 추가 page 실패
+
+- **WHEN** 다음 Profile page 조회가 실패한다
+- **THEN** component는 이미 표시한 Profile을 유지한다
+- **AND** 목록 내부에 오류와 다시 시도 동작을 표시한다
+- **AND** snackbar·toast·전역 outlet을 조회 오류 복구에 요구하지 않는다
+
+#### Scenario: Profile 목록 재진입과 actor 격리
+
+- **WHEN** 같은 selected Profile이 이전에 조회한 Type의 modal을 다시 연다
+- **THEN** 클라이언트는 cache된 Profile을 먼저 표시하고 background에서 최신 목록을 조회한다
+- **AND** selected Profile 전환 뒤에는 이전 Relay Environment의 Profile 목록 cache를 표시하지 않는다
 
 ### Requirement: 독립 Reaction UI 검증 경계
 

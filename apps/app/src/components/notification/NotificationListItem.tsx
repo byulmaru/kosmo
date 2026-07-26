@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { Smile, UserPlus } from 'lucide-react-native';
+import { Repeat2, Smile, UserPlus } from 'lucide-react-native';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
@@ -11,6 +11,7 @@ import type { Href } from 'expo-router';
 import type { NotificationListItem_notification$key } from './__generated__/NotificationListItem_notification.graphql';
 import type { NotificationListItemMarkReadMutation } from './__generated__/NotificationListItemMarkReadMutation.graphql';
 import type { ReactionNotificationListItem_notification$key } from './__generated__/ReactionNotificationListItem_notification.graphql';
+import type { RepostNotificationListItem_notification$key } from './__generated__/RepostNotificationListItem_notification.graphql';
 
 type NotificationListItemProps = {
   notification: NotificationListItem_notification$key;
@@ -21,7 +22,7 @@ type NotificationRowProps = {
   destination: string;
   href: Href;
   id: string;
-  kind: 'follow' | 'reaction';
+  kind: 'follow' | 'reaction' | 'repost';
   name: string;
   readAt: string | null | undefined;
   timestamp: string;
@@ -114,6 +115,46 @@ export function ReactionNotificationListItem({
   );
 }
 
+const repostNotificationFragment = graphql`
+  fragment RepostNotificationListItem_notification on RepostNotification {
+    id
+    createdAt
+    readAt
+    profile {
+      displayName
+      handle
+    }
+    post {
+      id
+      profile {
+        relativeHandle
+      }
+    }
+  }
+`;
+
+export function RepostNotificationListItem({
+  notification,
+}: {
+  notification: RepostNotificationListItem_notification$key;
+}) {
+  const data = useFragment(repostNotificationFragment, notification);
+  const name = data.profile.displayName || data.profile.handle;
+
+  return (
+    <NotificationRow
+      action="게시물을 재게시했습니다"
+      destination="게시글"
+      href={`/${data.post.profile.relativeHandle}/${data.post.id}` as Href}
+      id={data.id}
+      kind="repost"
+      name={name}
+      readAt={data.readAt}
+      timestamp={formatTimelineTimestamp(data.createdAt)}
+    />
+  );
+}
+
 function NotificationRow({
   action,
   destination,
@@ -157,8 +198,10 @@ function NotificationRow({
       >
         {kind === 'follow' ? (
           <UserPlus color={theme.text} size={18} strokeWidth={2} />
-        ) : (
+        ) : kind === 'reaction' ? (
           <Smile color={theme.text} size={18} strokeWidth={2} />
+        ) : (
+          <Repeat2 color={theme.text} size={18} strokeWidth={2} />
         )}
       </View>
       <View style={styles.content}>

@@ -203,6 +203,8 @@ const routeCurrentPost = post({
   id: 'route-current',
   replyParent: { __typename: 'Post', id: routeParentPost.id },
 });
+const routeCurrentPostReactionCounts = [{ count: 2, type: '❤️' }];
+const routeCurrentPostWithoutReactions = { ...routeCurrentPost, reactionCounts: [] };
 const routeChildPost = post({
   bodyText: 'Child 본문',
   id: 'route-child',
@@ -238,6 +240,10 @@ const routeBoundaryCurrentPost = post({
   id: 'route-boundary-current',
   replyParent: { __typename: 'Post', id: routeVisibleParentPost.id },
 });
+const routeBoundaryCurrentPostWithoutReactions = {
+  ...routeBoundaryCurrentPost,
+  reactionCounts: [],
+};
 const paginationInitialReplies = Array.from({ length: 20 }, (_, index) =>
   post({
     bodyText: `기존 Reply ${index + 1}\n${Array.from({ length: 8 }, () => '긴 document scroll 검증 본문').join('\n')}`,
@@ -1044,6 +1050,7 @@ export const PostDetailThreadRoute: Story = {
           data: {
             node: {
               ...routeCurrentPost,
+              reactionCounts: routeCurrentPostReactionCounts,
               replyAncestors: [routeParentPost, routeRootPost],
               replyDescendants: {
                 edges: [
@@ -1080,6 +1087,7 @@ export const PostDetailThreadRoute: Story = {
       'post-thread-item-route-source-null',
     ]);
     expect(canvas.getByText('Reply+Quote 자체 Content')).toBeVisible();
+    expect(canvas.getByRole('button', { name: '❤️ 반응 2개 보기' })).toBeVisible();
     const source = canvas.getByTestId('post-thread-source-route-source');
     expect(within(source).getByText('Source 본문')).toBeVisible();
     expect(getComputedStyle(source).borderTopWidth).toBe('1px');
@@ -1111,7 +1119,7 @@ export const PostDetailThreadUnavailableAncestorBoundary: Story = {
         PostDetailQuery: {
           data: {
             node: {
-              ...routeBoundaryCurrentPost,
+              ...routeBoundaryCurrentPostWithoutReactions,
               replyAncestors: [routeVisibleParentPost],
               replyDescendants: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } },
             },
@@ -1147,7 +1155,7 @@ export const PostDetailThreadShortContentAutoFills: Story = {
         PostDetailQuery: {
           data: {
             node: {
-              ...routeCurrentPost,
+              ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
                 edges: [{ cursor: paginationInitialReply.id, node: paginationInitialReply }],
@@ -1161,7 +1169,7 @@ export const PostDetailThreadShortContentAutoFills: Story = {
         {
           data: {
             node: {
-              ...routeCurrentPost,
+              ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
                 edges: [{ cursor: paginationFirstNextReply.id, node: paginationFirstNextReply }],
@@ -1194,7 +1202,7 @@ export const PostDetailThreadDocumentScrollLoadsOnce: Story = {
         PostDetailQuery: {
           data: {
             node: {
-              ...routeCurrentPost,
+              ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
                 edges: paginationInitialReplies.map((node) => ({ cursor: node.id, node })),
@@ -1211,7 +1219,7 @@ export const PostDetailThreadDocumentScrollLoadsOnce: Story = {
         {
           data: {
             node: {
-              ...routeCurrentPost,
+              ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
                 edges: [{ cursor: paginationFirstNextReply.id, node: paginationFirstNextReply }],
@@ -1223,7 +1231,7 @@ export const PostDetailThreadDocumentScrollLoadsOnce: Story = {
         {
           data: {
             node: {
-              ...routeCurrentPost,
+              ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
                 edges: [
@@ -1268,7 +1276,7 @@ export const PostDetailThreadPageLoading: Story = {
         PostDetailQuery: {
           data: {
             node: {
-              ...routeCurrentPost,
+              ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
                 edges: paginationInitialReplies.map((node) => ({ cursor: node.id, node })),
@@ -1310,7 +1318,7 @@ export const PostDetailThreadPageFailureRetries: Story = {
         PostDetailQuery: {
           data: {
             node: {
-              ...routeCurrentPost,
+              ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
                 edges: paginationInitialReplies.map((node) => ({ cursor: node.id, node })),
@@ -1328,7 +1336,7 @@ export const PostDetailThreadPageFailureRetries: Story = {
         {
           data: {
             node: {
-              ...routeCurrentPost,
+              ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
                 edges: [{ cursor: paginationRetryReply.id, node: paginationRetryReply }],
@@ -1400,7 +1408,7 @@ export const PostDetailThreadPageFailureIdentityReset: Story = {
         PostDetailThreadIdentityStoryQuery: {
           data: {
             node: {
-              ...routeCurrentPost,
+              ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
                 edges: paginationInitialReplies.map((node) => ({ cursor: node.id, node })),

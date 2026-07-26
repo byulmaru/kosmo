@@ -1,4 +1,6 @@
-# Reaction Quick Picker
+# Reaction UI
+
+## Reaction Quick Picker
 
 Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하는 펼쳐진 패널이다. option 목록과 상태는 부모가 공급하며, Picker는 시각 표현과 toggle intent만 소유한다.
 
@@ -32,3 +34,14 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 
 - Storybook interaction에서 border 없는 option, 70% opacity의 selected 배경과 100% opacity의 이모지, 44×44px pending overlay와 24×24px fading arc, 오류 재시도와 disabled 시 미렌더링을 검증한다.
 - 390px와 600px Web viewport에서 여섯 option이 한 줄을 유지하고 각 target이 44×44px인지 확인한다.
+
+## Reaction 요약과 Profile 목록
+
+- Post에 하나 이상의 Reaction이 있을 때만 Type별 count 요약을 표시한다. Reaction이 없으면 별도 빈 요약 영역이나 zero-count Type을 표시하지 않는다.
+- 요약은 server가 제공한 양수 count Type과 순서를 그대로 사용하며, viewer가 볼 수 있는 Profile 수로 count를 다시 계산하지 않는다.
+- 사용자가 한 Type을 선택하면 현재 Post 위에 modal overlay를 열어 그 Type의 Profile 목록을 표시한다. 별도 route나 공개 URL은 만들지 않는다.
+- modal은 외부 영역 클릭·터치와 Android back으로 닫으며 별도 닫기 버튼을 표시하지 않는다.
+- Profile 목록의 최초 조회가 실패하면 modal 내부에 오류와 다시 시도 동작을 표시한다.
+- 추가 page 조회가 실패하면 이미 표시한 Profile을 유지하고 목록 내부에 오류와 다시 시도 동작을 표시한다. 이 조회 오류에 snackbar나 toast를 사용하지 않는다.
+- 같은 Type의 modal을 다시 열 때 cache된 Profile을 먼저 표시하고 background에서 최신 목록을 조회한다. Profile 전환 뒤에는 이전 actor의 cache를 재사용하지 않는다.
+- Reaction 추가·삭제 mutation의 오류 알림 방식은 Reaction 요약·Profile 조회 UI의 계약에 포함하지 않는다.

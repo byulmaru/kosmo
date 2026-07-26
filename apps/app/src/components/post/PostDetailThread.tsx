@@ -3,6 +3,7 @@ import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } fro
 import { graphql, usePaginationFragment } from 'react-relay';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostListItem } from '@/components/post/PostListItem';
+import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/tokens';
@@ -15,6 +16,7 @@ import {
 } from './postThreadPagination';
 import type { PropsWithChildren, ReactNode } from 'react';
 import type { ScrollViewProps } from 'react-native';
+import type { PostReactionSummary_post$key } from '@/components/reaction/__generated__/PostReactionSummary_post.graphql';
 import type { PostDetailThread_post$key } from './__generated__/PostDetailThread_post.graphql';
 import type { PostDetailThreadNextPageQuery } from './__generated__/PostDetailThreadNextPageQuery.graphql';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
@@ -27,6 +29,7 @@ const PostDetailThreadFragment = graphql`
   @refetchable(queryName: "PostDetailThreadNextPageQuery") {
     id
     ...PostLayout_post @alias(as: "detail")
+    ...PostReactionSummary_post @alias(as: "reactionSummary")
     repostSource {
       id
       ...PostListItem_post @alias(as: "listItem")
@@ -70,6 +73,7 @@ type ThreadRenderablePost = Readonly<{
   detail: PostLayout_post$key | null;
   id: string;
   listItem: PostListItem_post$key | null;
+  reactionSummary: PostReactionSummary_post$key | null;
   repostSource: Readonly<{ id: string; listItem: PostListItem_post$key | null }> | null | undefined;
 }>;
 
@@ -212,6 +216,7 @@ function PostDetailThreadContent({
       detail: null,
       id: post.id,
       listItem: post.listItem,
+      reactionSummary: null,
       repostSource: post.repostSource,
     } satisfies ThreadRenderablePost,
   }));
@@ -224,6 +229,7 @@ function PostDetailThreadContent({
       detail: null,
       id: node.id,
       listItem: node.listItem,
+      reactionSummary: null,
       repostSource: node.repostSource,
     } satisfies ThreadRenderablePost,
   }));
@@ -234,6 +240,7 @@ function PostDetailThreadContent({
       detail: data.detail,
       id: data.id,
       listItem: null,
+      reactionSummary: data.reactionSummary,
       repostSource: data.repostSource,
     } satisfies ThreadRenderablePost,
   };
@@ -250,7 +257,15 @@ function PostDetailThreadContent({
           return (
             <View>
               {role === 'current' ? (
-                <PostLayout post={requireThreadFragment(item.post.detail, 'current detail')} />
+                <View style={styles.currentContent}>
+                  <PostLayout post={requireThreadFragment(item.post.detail, 'current detail')} />
+                  <PostReactionSummary
+                    post={requireThreadFragment(
+                      item.post.reactionSummary,
+                      'current reaction summary',
+                    )}
+                  />
+                </View>
               ) : (
                 <PostListItem
                   post={requireThreadFragment(item.post.listItem, `${role} list item`)}
@@ -291,6 +306,7 @@ function requireThreadFragment<T>(value: T | null | undefined, label: string): T
 }
 
 const styles = StyleSheet.create({
+  currentContent: { gap: spacing.lg },
   frame: { flexGrow: 1 },
   header: { zIndex: 10 },
   retryButton: { minHeight: 44 },

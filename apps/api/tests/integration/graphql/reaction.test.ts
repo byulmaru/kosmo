@@ -779,7 +779,7 @@ describe('GraphQL Reaction', () => {
       profileId: sourceAuthor.id,
       visibility: PostVisibility.PUBLIC,
     });
-    const repost = await repostPost({
+    const { repost } = await repostPost({
       actorProfileId: auth.profile.id,
       sourcePostId: source.id,
     });
