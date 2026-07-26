@@ -33,7 +33,6 @@ export type PostActionBarProps = {
   post?: PostActionBar_post$key | null;
   reaction?: ReactionActionConfig;
   reply?: ReplyActionConfig;
-  repostDisabled?: boolean;
 };
 
 const postActionBarPostFragment = graphql`
@@ -113,7 +112,6 @@ export function PostActionBar({
   post,
   reaction,
   reply,
-  repostDisabled = false,
 }: PostActionBarProps) {
   const data = useFragment(postActionBarPostFragment, post ?? null);
 
@@ -133,9 +131,7 @@ export function PostActionBar({
           testID="reply"
         />
       ) : null}
-      {data?.repost ? (
-        <RepostAction disabled={repostDisabled} onError={onRepostError} post={data.repost} />
-      ) : null}
+      {data?.repost ? <RepostAction onError={onRepostError} post={data.repost} /> : null}
       {reaction ? (
         <PostActionControl
           accessibilityLabel={reaction.accessibilityLabel}
@@ -174,12 +170,11 @@ export function PostActionBar({
 }
 
 type RepostActionProps = {
-  disabled: boolean;
   onError?: (error: Error) => void;
   post: RepostAction_post$key;
 };
 
-function RepostAction({ disabled, onError, post }: RepostActionProps) {
+function RepostAction({ onError, post }: RepostActionProps) {
   const data = useFragment(repostActionPostFragment, post);
   const environment = useRelayEnvironment();
   const [commitRepost, isReposting] =
@@ -197,7 +192,7 @@ function RepostAction({ disabled, onError, post }: RepostActionProps) {
   }, [environment]);
 
   const onPress = useCallback(() => {
-    if (disabled || inFlight.current || processing) {
+    if (inFlight.current || processing) {
       return;
     }
 
@@ -240,7 +235,6 @@ function RepostAction({ disabled, onError, post }: RepostActionProps) {
     commitRepost,
     data.id,
     data.viewerRepost?.id,
-    disabled,
     environment,
     onError,
     processing,
@@ -258,7 +252,7 @@ function RepostAction({ disabled, onError, post }: RepostActionProps) {
       iconWidth={18}
       onPress={onPress}
       preserveAspectRatio="none"
-      processing={disabled ? 'disabled' : processing ? 'pending' : 'default'}
+      processing={processing ? 'pending' : 'default'}
       testID="repost"
     />
   );

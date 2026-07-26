@@ -52,8 +52,8 @@ const actionBarProps = {
 
 const sourcePostId = 'post-source';
 const activeRepostId = 'post-repost-active';
-type RepostFixtureState = 'hidden' | 'unselected' | 'selected' | 'pending' | 'disabled';
-type FixtureProps = Omit<PostActionBarProps, 'post' | 'repostDisabled'> & {
+type RepostFixtureState = 'hidden' | 'unselected' | 'selected' | 'pending';
+type FixtureProps = Omit<PostActionBarProps, 'post'> & {
   repostState?: RepostFixtureState;
 };
 
@@ -119,14 +119,12 @@ function PostActionBarFixture({ repostState = 'unselected', ...props }: FixtureP
 
   return (
     <RelayEnvironmentProvider environment={environment}>
-      <PostActionBarFixtureContents {...props} repostDisabled={repostState === 'disabled'} />
+      <PostActionBarFixtureContents {...props} />
     </RelayEnvironmentProvider>
   );
 }
 
-function PostActionBarFixtureContents(
-  props: Omit<PostActionBarProps, 'post'> & { repostDisabled: boolean },
-) {
+function PostActionBarFixtureContents(props: Omit<PostActionBarProps, 'post'>) {
   const data = useLazyLoadQuery<PostActionBarStoryQuery>(
     postActionBarStoryQuery,
     { id: sourcePostId },
