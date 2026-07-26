@@ -123,11 +123,13 @@ type DeleteProfilePayload {
 }
 
 input DeleteReactionInput {
-  id: ID!
+  postId: ID!
+  type: String!
 }
 
 type DeleteReactionPayload {
-  reactionId: ID!
+  post: Post
+  reactionId: ID
 }
 
 input ExchangeNativeOidcSessionInput {
@@ -233,6 +235,7 @@ type Post implements Node {
   repostSource: Post
   state: PostState!
   viewerBookmark: Bookmark
+  viewerReactions: [Reaction!]!
   viewerRepost: Post
   visibility: PostVisibility!
 }

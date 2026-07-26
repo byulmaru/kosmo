@@ -21,7 +21,7 @@ import { Hono } from 'hono';
 import { encodeGlobalId as globalId } from '../../../src/graphql/global-id';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreServices from '@kosmo/core/services';
-import type { Env } from '../../../src/context';
+import type { deriveContext as deriveContextFunction, Env } from '../../../src/context';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -41,7 +41,26 @@ let Sessions: typeof CoreDb.Sessions;
 let createCorePost: typeof CoreServices.createPost;
 let repostPost: typeof CoreServices.repostPost;
 let app: Hono<Env>;
+let deriveContext: typeof deriveContextFunction;
 let localInstanceId: string;
+let loaderBatches = new Map<string, number[]>();
+
+const trackLoaderBatches = <Context extends Awaited<ReturnType<typeof deriveContext>>>(
+  context: Context,
+) => {
+  const originalLoader = context.loader;
+  context.loader = ((params: { name: string; load: (keys: unknown[]) => Promise<unknown[]> }) =>
+    originalLoader({
+      ...params,
+      load: async (keys: unknown[]) => {
+        const keyCounts = loaderBatches.get(params.name) ?? [];
+        keyCounts.push(keys.length);
+        loaderBatches.set(params.name, keyCounts);
+        return params.load(keys);
+      },
+    } as never)) as typeof context.loader;
+  return context;
+};
 
 describe('GraphQL Reaction', () => {
   before(async () => {
@@ -70,17 +89,18 @@ describe('GraphQL Reaction', () => {
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
 
-    const { deriveContext } = await import('../../../src/context');
+    ({ deriveContext } = await import('../../../src/context'));
     const { yoga } = await import('../../../src/graphql');
     app = new Hono<Env>();
     app.use('*', async (c, next) => {
-      c.set('context', await deriveContext(c));
+      c.set('context', trackLoaderBatches(await deriveContext(c)));
       return next();
     });
     app.route('/graphql', yoga);
   });
 
   beforeEach(async () => {
+    loaderBatches = new Map();
     await resetFixtures();
   });
 
@@ -303,7 +323,87 @@ describe('GraphQL Reaction', () => {
     assert.equal(hiddenNode.data?.node, null);
   });
 
-  test('Owner는 Post를 조회할 수 없게 된 뒤에도 Reaction을 삭제하고 같은 ID로 재시도한다', async () => {
+  test('Post viewerReactions는 selected Profile별 현재 관계를 batch 조회하고 전환을 격리한다', async () => {
+    const viewerA = await createAuthenticatedSession();
+    const viewerB = await createAuthenticatedSession();
+    const noSelectedProfile = await createAuthenticatedSession({ activeProfile: false });
+    const author = await createProfile('viewer-reaction-author');
+    const postA = await createPost(author.id);
+    const postB = await createPost(author.id);
+
+    const reactionA = await requestAddReaction(postA.id, '❤️', viewerA.token);
+    const reactionB = await requestAddReaction(postB.id, '👀', viewerA.token);
+    const reactionOtherProfile = await requestAddReaction(postA.id, '🎉', viewerB.token);
+    assertNoGraphQLErrors(reactionA);
+    assertNoGraphQLErrors(reactionB);
+    assertNoGraphQLErrors(reactionOtherProfile);
+
+    loaderBatches.clear();
+    const batched = await requestViewerReactions([postA.id, postB.id], viewerA.token);
+    assertNoGraphQLErrors(batched);
+    assert.deepEqual(loaderBatches.get('reaction.viewerReactions'), [2]);
+    assert.deepEqual(batched.data?.nodes, [
+      {
+        id: globalId('Post', postA.id),
+        viewerReactions: [
+          {
+            id: reactionA.data?.addReaction.reaction.id,
+            type: '❤️',
+          },
+        ],
+      },
+      {
+        id: globalId('Post', postB.id),
+        viewerReactions: [
+          {
+            id: reactionB.data?.addReaction.reaction.id,
+            type: '👀',
+          },
+        ],
+      },
+    ]);
+
+    const [otherProfile, noProfile, anonymous] = await Promise.all([
+      requestViewerReactions([postA.id], viewerB.token),
+      requestViewerReactions([postA.id], noSelectedProfile.token),
+      requestViewerReactions([postA.id]),
+    ]);
+    assertNoGraphQLErrors(otherProfile);
+    assertNoGraphQLErrors(noProfile);
+    assertNoGraphQLErrors(anonymous);
+    assert.deepEqual(otherProfile.data?.nodes[0]?.viewerReactions, [
+      {
+        id: reactionOtherProfile.data?.addReaction.reaction.id,
+        type: '🎉',
+      },
+    ]);
+    assert.deepEqual(noProfile.data?.nodes[0]?.viewerReactions, []);
+    assert.deepEqual(anonymous.data?.nodes[0]?.viewerReactions, []);
+
+    const switchedProfile = await createProfile('viewer-reaction-switched');
+    await db.insert(AccountProfiles).values({
+      accountId: viewerA.account.id,
+      profileId: switchedProfile.id,
+      role: AccountProfileRole.OWNER,
+    });
+    const [switchedReaction] = await db
+      .insert(Reactions)
+      .values({ postId: postA.id, profileId: switchedProfile.id, type: '🌈' })
+      .returning();
+    assert.ok(switchedReaction);
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: switchedProfile.id })
+      .where(eq(Sessions.id, viewerA.session.id));
+
+    const afterTransition = await requestViewerReactions([postA.id], viewerA.token);
+    assertNoGraphQLErrors(afterTransition);
+    assert.deepEqual(afterTransition.data?.nodes[0]?.viewerReactions, [
+      { id: globalId('Reaction', switchedReaction.id), type: '🌈' },
+    ]);
+  });
+
+  test('Owner는 Post를 조회할 수 없게 된 뒤에도 Post와 Type으로 Reaction을 삭제한다', async () => {
     const auth = await createAuthenticatedSession();
     const author = await createProfile('hidden-post-author');
     const post = await createPost(author.id);
@@ -312,13 +412,15 @@ describe('GraphQL Reaction', () => {
     assert.ok(reactionId);
     await db.update(Posts).set({ visibility: PostVisibility.DIRECT }).where(eq(Posts.id, post.id));
 
-    const deleted = await requestDeleteReaction(reactionId, auth.token);
-    const repeated = await requestDeleteReaction(reactionId, auth.token);
+    const deleted = await requestDeleteReaction(post.id, '❤️', auth.token);
+    const repeated = await requestDeleteReaction(post.id, '❤️', auth.token);
 
     assertNoGraphQLErrors(deleted);
     assertNoGraphQLErrors(repeated);
     assert.equal(deleted.data?.deleteReaction.reactionId, reactionId);
-    assert.equal(repeated.data?.deleteReaction.reactionId, reactionId);
+    assert.equal(deleted.data?.deleteReaction.post, null);
+    assert.equal(repeated.data?.deleteReaction.reactionId, null);
+    assert.equal(repeated.data?.deleteReaction.post, null);
     assert.equal(
       await db
         .select()
@@ -329,7 +431,7 @@ describe('GraphQL Reaction', () => {
     );
   });
 
-  test('현재 타인 소유 Reaction 삭제는 PERMISSION_DENIED로 거부한다', async () => {
+  test('Post와 Type 삭제는 다른 Profile의 Reaction과 Notification을 유지한다', async () => {
     const owner = await createAuthenticatedSession();
     const attacker = await createAuthenticatedSession();
     const recipient = await createProfile(`recipient-${crypto.randomUUID()}`);
@@ -360,9 +462,11 @@ describe('GraphQL Reaction', () => {
       ],
     );
 
-    const result = await requestDeleteReaction(reactionId, attacker.token);
+    const result = await requestDeleteReaction(post.id, '🎉', attacker.token);
 
-    assert.equal(result.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.deleteReaction.reactionId, null);
+    assert.deepEqual(result.data?.deleteReaction.post?.viewerReactions, []);
     assert.equal(
       await db
         .select()
@@ -401,7 +505,7 @@ describe('GraphQL Reaction', () => {
       .update(Accounts)
       .set({ state: AccountState.DISABLED })
       .where(eq(Accounts.id, auth.account.id));
-    const disabledAccount = await requestDeleteReaction(reactionId, auth.token);
+    const disabledAccount = await requestDeleteReaction(post.id, '☘️', auth.token);
     assert.equal(disabledAccount.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
 
     await db
@@ -409,7 +513,7 @@ describe('GraphQL Reaction', () => {
       .set({ state: AccountState.ACTIVE })
       .where(eq(Accounts.id, auth.account.id));
     await db.delete(AccountProfiles).where(eq(AccountProfiles.accountId, auth.account.id));
-    const missingMembership = await requestDeleteReaction(reactionId, auth.token);
+    const missingMembership = await requestDeleteReaction(post.id, '☘️', auth.token);
     assert.equal(missingMembership.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
     assert.equal(
       await db
@@ -421,37 +525,37 @@ describe('GraphQL Reaction', () => {
     );
   });
 
-  test('이미 없는 ID와 stale ID는 성공하고 다시 생성된 Reaction은 유지한다', async () => {
+  test('없는 조합은 no-op이고 오래된 Post/Type 재시도는 재생성된 Reaction을 제거한다', async () => {
     const auth = await createAuthenticatedSession();
     const post = await createPost(auth.profile.id);
-    const missingId = globalId('Reaction', crypto.randomUUID());
-    const missing = await requestDeleteReaction(missingId, auth.token);
+    const missing = await requestDeleteReaction(post.id, '👀', auth.token);
     assertNoGraphQLErrors(missing);
-    assert.equal(missing.data?.deleteReaction.reactionId, missingId);
+    assert.equal(missing.data?.deleteReaction.reactionId, null);
+    assert.deepEqual(missing.data?.deleteReaction.post?.viewerReactions, []);
 
     const first = await requestAddReaction(post.id, '👀', auth.token);
     const firstId = first.data?.addReaction.reaction.id;
     assert.ok(firstId);
-    assertNoGraphQLErrors(await requestDeleteReaction(firstId, auth.token));
+    assertNoGraphQLErrors(await requestDeleteReaction(post.id, '👀', auth.token));
     const recreated = await requestAddReaction(post.id, '👀', auth.token);
     const recreatedId = recreated.data?.addReaction.reaction.id;
     assert.ok(recreatedId);
     assert.notEqual(recreatedId, firstId);
 
-    const stale = await requestDeleteReaction(firstId, auth.token);
+    const stale = await requestDeleteReaction(post.id, '👀', auth.token);
     assertNoGraphQLErrors(stale);
-    assert.equal(stale.data?.deleteReaction.reactionId, firstId);
+    assert.equal(stale.data?.deleteReaction.reactionId, recreatedId);
     assert.equal(
       await db
         .select()
         .from(Reactions)
         .where(eq(Reactions.postId, post.id))
         .then((rows) => rows.length),
-      1,
+      0,
     );
   });
 
-  test('Reaction 삭제는 Notification cleanup을 정상·반복 수행한다', async () => {
+  test('Reaction 삭제는 실제 삭제된 ID의 Notification만 정리한다', async () => {
     const auth = await createAuthenticatedSession();
     const recipient = await createAuthenticatedSession();
     const post = await createPost(recipient.profile.id);
@@ -464,7 +568,7 @@ describe('GraphQL Reaction', () => {
       .where(eq(Reactions.postId, post.id))
       .then(firstOrThrow);
 
-    const deleted = await requestDeleteReaction(reactionId, auth.token);
+    const deleted = await requestDeleteReaction(post.id, '🎉', auth.token);
     assertNoGraphQLErrors(deleted);
     assert.equal(await db.$count(Notifications), 0);
 
@@ -475,11 +579,12 @@ describe('GraphQL Reaction', () => {
     });
     assert.equal(await db.$count(Notifications), 1);
 
-    const repeated = await requestDeleteReaction(reactionId, auth.token);
+    const repeated = await requestDeleteReaction(post.id, '🎉', auth.token);
 
     assertNoGraphQLErrors(repeated);
+    assert.equal(repeated.data?.deleteReaction.reactionId, null);
     assert.equal(await db.$count(Reactions), 0);
-    assert.equal(await db.$count(Notifications), 0);
+    assert.equal(await db.$count(Notifications), 1);
   });
 
   test('Notification cleanup 실패에도 Reaction 삭제 성공과 stale visibility를 유지하고 오류를 기록한다', async () => {
@@ -519,7 +624,7 @@ describe('GraphQL Reaction', () => {
 
     let deleted: Awaited<ReturnType<typeof requestDeleteReaction>>;
     try {
-      deleted = await requestDeleteReaction(reactionId, auth.token);
+      deleted = await requestDeleteReaction(post.id, '👀', auth.token);
     } finally {
       console.error = originalConsoleError;
       await pg.unsafe(`
@@ -555,11 +660,20 @@ describe('GraphQL Reaction', () => {
     assert.equal(read.errors?.[0]?.extensions?.code, 'NOT_FOUND');
   });
 
-  test('Reaction이 아닌 concrete global ID를 delete input에서 거부한다', async () => {
+  test('Post가 아닌 concrete global ID와 잘못된 Type을 delete input에서 거부한다', async () => {
     const auth = await createAuthenticatedSession();
-    const result = await requestDeleteReaction(globalId('Profile', auth.profile.id), auth.token);
+    const wrongId = await requestDeleteReactionWithInput(
+      { postId: globalId('Profile', auth.profile.id), type: '👀' },
+      auth.token,
+    );
+    const wrongType = await requestDeleteReactionWithInput(
+      { postId: globalId('Post', crypto.randomUUID()), type: 'invalid' },
+      auth.token,
+    );
 
-    assert.ok(result.errors?.[0]);
+    assert.ok(wrongId.errors?.[0]);
+    assert.equal(wrongType.errors?.[0]?.extensions?.code, 'VALIDATION');
+    assert.equal(wrongType.errors?.[0]?.extensions?.field, 'type');
   });
 
   test('Reaction Profile은 Type별로 최신 Reaction순 Profile connection을 반환한다', async () => {
@@ -875,12 +989,45 @@ const requestAddReaction = (postId: string, type: string, token?: string) =>
     token,
   );
 
-const requestDeleteReaction = (reactionId: string, token?: string) =>
-  requestGraphQL<{ deleteReaction: { reactionId: string } }>(
+const requestDeleteReaction = (postId: string, type: string, token?: string) =>
+  requestDeleteReactionWithInput({ postId: globalId('Post', postId), type }, token);
+
+const requestDeleteReactionWithInput = (input: { postId: string; type: string }, token?: string) =>
+  requestGraphQL<{
+    deleteReaction: {
+      post: { id: string; viewerReactions: Array<{ id: string; type: string }> } | null;
+      reactionId: string | null;
+    };
+  }>(
     `mutation DeleteReaction($input: DeleteReactionInput!) {
-      deleteReaction(input: $input) { reactionId }
+      deleteReaction(input: $input) {
+        reactionId
+        post {
+          id
+          viewerReactions { id type }
+        }
+      }
     }`,
-    { input: { id: reactionId } },
+    { input },
+    token,
+  );
+
+const requestViewerReactions = (postIds: string[], token?: string) =>
+  requestGraphQL<{
+    nodes: Array<{
+      id: string;
+      viewerReactions: Array<{ id: string; type: string }>;
+    } | null>;
+  }>(
+    `query ViewerReactions($ids: [ID!]!) {
+      nodes(ids: $ids) {
+        ... on Post {
+          id
+          viewerReactions { id type }
+        }
+      }
+    }`,
+    { ids: postIds.map((postId) => globalId('Post', postId)) },
     token,
   );
 
@@ -1057,13 +1204,17 @@ const createAuthenticatedSession = async ({
     role: AccountProfileRole.OWNER,
   });
   const token = `token-${suffix}`;
-  await db.insert(Sessions).values({
-    accountId: account.id,
-    activeProfileId: activeProfile ? profile.id : null,
-    state: SessionState.ACTIVE,
-    token,
-  });
-  return { account, profile, token };
+  const session = await db
+    .insert(Sessions)
+    .values({
+      accountId: account.id,
+      activeProfileId: activeProfile ? profile.id : null,
+      state: SessionState.ACTIVE,
+      token,
+    })
+    .returning()
+    .then(firstOrThrow);
+  return { account, profile, session, token };
 };
 
 const resetFixtures = async () => {

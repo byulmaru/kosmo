@@ -94,54 +94,67 @@ GraphQL API는 `addReaction` mutation의 input으로 `postId: ID!`와 `type: Str
 - **AND** 오류의 field는 `type`이다
 - **AND** Reaction을 저장하지 않는다
 
-### Requirement: Owner의 멱등 Reaction 삭제
+### Requirement: selected Profile의 현재 Reaction 조회
 
-**Authority / Provenance:** [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0012](../../../../../docs/domain/decisions/0012-post-interaction-followup-clarifications.md), [PROD-405](https://linear.app/byulmaru/issue/PROD-405/reaction을-삭제한다) — Reaction Owner는 대상 Post의 현재 조회 가능성과 무관하게 자신의 Reaction을 삭제할 수 있어야 하며(MUST), 자신이 이미 제거한 동일 Reaction의 반복·동시 삭제는 상태를 바꾸지 않는 성공 결과여야 한다(MUST).
+**Authority / Provenance:** [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4) — Post를 조회하는 viewer는 현재 selected Profile이 남긴 Reaction 관계를 복원할 수 있어야 한다(MUST). GraphQL API는 `Post.viewerReactions: [Reaction!]!`를 제공해야 하며(MUST), guest 또는 selected Profile이 없는 viewer에게 빈 목록을 반환해야 한다(MUST).
 
-GraphQL API는 `deleteReaction` mutation의 input으로 `id: ID!`를 받아야 하며(MUST), 성공 payload는 `reactionId: ID!`를 반환해야 한다(MUST). input과 payload의 ID는 concrete `Reaction` global ID여야 하며(MUST), payload는 실제 삭제 여부를 노출해서는 안 된다(MUST NOT).
+#### Scenario: selected Profile의 현재 관계
 
-core service는 검증된 actor가 Active/Normal Profile이고 Instance가 non-Suspended인지 확인해야 하며(MUST), actor의 Instance Type이나 Unresponsive Reachability를 삭제 권한 조건으로 사용해서는 안 된다(MUST NOT).
+- **WHEN** selected Profile이 조회 가능한 Post에 여러 Reaction Type을 남겼다
+- **THEN** `Post.viewerReactions`는 해당 Profile의 현재 Reaction Node를 모두 반환한다
+- **AND** 각 Node의 ID와 Type을 제공한다
+- **AND** 다른 Profile의 Reaction은 포함하지 않는다
 
-#### Scenario: GraphQL Reaction 삭제 계약
+#### Scenario: guest와 selected Profile 부재
 
-- **WHEN** Profile이 `deleteReaction`에 Reaction global ID를 전달한다
-- **THEN** 성공 payload는 `DeleteReactionPayload.reactionId`로 입력과 같은 Reaction global ID를 반환한다
-- **AND** 이미 제거된 ID의 성공한 no-op도 같은 ID를 반환한다
-- **AND** payload는 `deleted` 또는 동등한 실제 삭제 여부를 노출하지 않는다
+- **WHEN** guest 또는 selected Profile이 없는 Account가 조회 가능한 Post를 요청한다
+- **THEN** `Post.viewerReactions`는 빈 목록이다
 
-#### Scenario: Owner Reaction 삭제
+#### Scenario: Profile 전환과 여러 Post 조회
 
-- **WHEN** Reaction Owner가 현재 존재하는 자신의 Reaction을 삭제한다
-- **THEN** 시스템은 Reaction을 제거하고 성공 결과를 반환한다
+- **WHEN** selected Profile을 전환하거나 한 요청에서 여러 Post의 `viewerReactions`를 조회한다
+- **THEN** 각 결과는 현재 selected Profile과 Post 조합에 상대적이다
+- **AND** 이전 Profile의 결과를 재사용하지 않는다
+- **AND** Post별 추가 query를 발생시키지 않는다
 
-#### Scenario: Post가 더 이상 조회되지 않는 Owner 삭제
+### Requirement: Post와 Type 기준의 멱등 Reaction 삭제
 
-- **WHEN** Reaction Owner가 더 이상 조회할 수 없는 Post에 남긴 자신의 Reaction을 삭제한다
-- **THEN** 시스템은 기존 소유권을 확인해 Reaction을 제거한다
+**Authority / Provenance:** [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4) — selected Profile은 대상 Post의 현재 조회 가능성과 무관하게 Post와 Reaction Type으로 자신의 현재 Reaction을 삭제할 수 있어야 하며(MUST), 관계가 없는 반복·동시 삭제는 상태를 바꾸지 않는 성공 결과여야 한다(MUST).
 
-#### Scenario: 이미 제거한 Reaction 재삭제
+GraphQL API는 `deleteReaction` mutation의 input으로 `postId: ID!`와 `type: String!`을 받아야 한다(MUST). 성공 payload는 실제 삭제된 concrete Reaction global ID인 nullable `reactionId`와 현재 조회 가능한 nullable `post`를 반환해야 한다(MUST). missing·반복·동시 loser는 `reactionId: null`인 성공이어야 하며(MUST), payload는 별도 `deleted` boolean을 노출해서는 안 된다(MUST NOT).
 
-- **WHEN** 이미 제거된 Reaction ID의 삭제를 재시도한다
-- **THEN** 시스템은 성공한 멱등 no-op을 반환한다
-- **AND** 입력과 같은 Reaction global ID를 반환한다
+core service는 검증된 actor가 Active/Normal Profile이고 Instance가 non-Suspended인지 확인해야 하며(MUST), actor의 Instance Type이나 Unresponsive Reachability를 삭제 권한 조건으로 사용해서는 안 된다(MUST NOT). 실제 삭제된 Reaction ID가 있을 때만 source transaction commit 뒤 Notification cleanup을 Best Effort로 시도해야 한다(MUST).
 
-#### Scenario: 제거 뒤 같은 조합을 다시 생성함
+#### Scenario: 현재 Reaction 삭제
 
-- **WHEN** Reaction을 제거한 뒤 같은 Profile/Post/Type 조합에 새 Reaction을 생성하고 이전 Reaction ID의 삭제를 재시도한다
-- **THEN** 이전 ID의 삭제는 성공한 no-op을 반환한다
-- **AND** 새 Reaction은 제거하지 않는다
+- **WHEN** selected Profile이 자신의 현재 Reaction과 같은 Post와 Type을 전달한다
+- **THEN** 시스템은 해당 Reaction만 제거한다
+- **AND** payload의 `reactionId`는 삭제된 Reaction global ID이다
+- **AND** Target Post가 현재 조회 가능하면 payload의 `post`에서 갱신된 `viewerReactions`를 조회할 수 있다
 
-#### Scenario: 같은 Reaction 동시 삭제
+#### Scenario: 관계가 없는 반복 삭제
 
-- **WHEN** 같은 Owner가 같은 Reaction ID의 삭제를 동시에 요청한다
+- **WHEN** selected Profile이 현재 관계가 없는 Post와 Type의 삭제를 요청한다
+- **THEN** mutation은 `reactionId: null`인 성공을 반환한다
+- **AND** 다른 Profile과 다른 Type의 Reaction을 변경하지 않는다
+
+#### Scenario: Post가 더 이상 조회되지 않는 삭제
+
+- **WHEN** selected Profile이 더 이상 조회할 수 없는 Post에 남긴 자신의 Reaction을 삭제한다
+- **THEN** 시스템은 현재 Profile/Post/Type 관계를 제거한다
+- **AND** payload의 `post`는 `null`이다
+
+#### Scenario: 같은 조합의 동시 삭제
+
+- **WHEN** 같은 selected Profile이 같은 Post와 Type의 삭제를 동시에 요청한다
 - **THEN** 최종 상태에는 해당 Reaction이 존재하지 않는다
-- **AND** 각 요청은 같은 Reaction global ID를 반환하는 성공 결과로 끝난다
+- **AND** 하나의 성공 결과만 삭제된 `reactionId`를 반환하고 나머지는 `reactionId: null`을 반환한다
 
-#### Scenario: 다른 Profile의 Reaction 삭제
+#### Scenario: 삭제 뒤 같은 조합을 다시 생성함
 
-- **WHEN** Profile이 다른 Profile 소유의 현재 Reaction을 삭제하려 한다
-- **THEN** GraphQL API는 `PERMISSION_DENIED` 오류로 요청을 거부한다
-- **AND** 다른 Profile의 Reaction을 유지한다
+- **WHEN** Reaction을 제거한 뒤 같은 Profile/Post/Type 조합을 다시 생성하고 오래된 Post/Type 삭제 요청이 도착한다
+- **THEN** 현재 재생성된 Reaction이 제거될 수 있다
+- **AND** 시스템은 이 경우를 막기 위한 Reaction history나 idempotency ledger를 요구하지 않는다
 
 ### Requirement: viewer와 무관한 Reaction Type count
 
