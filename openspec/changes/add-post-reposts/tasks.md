@@ -259,20 +259,22 @@ Home, Profile과 Bookmark 목록이 실제 GraphQL fragment와 generated type으
 
 - route query에 leaf presentation scalar를 중복하지 않고 공용 Post list item fragment를 확장한다.
 - Bookmark도 Home/Profile과 같은 공용 Post list item fragment를 사용하고 별도 presentation scalar를 중복하지 않는다.
-- Source preview Link를 전체 Post Link 안에 중첩하지 않는다.
+- bordered Source preview는 시각적 그룹 경계로 유지하고 전체를 Source Post Link로 만들지 않는다.
 - Source가 API에서 제외된 불완전한 row를 client에서 합성하지 않는다.
 - 두 번째 Source의 ID·Content·Profile presentation field를 읽거나 presentation component를 재귀 호출하지 않는다.
-- Source Author는 canonical Profile route로 이동하고 direct Source의 생성 시각과 본문 영역은 direct Source의 canonical Post route로 이동한다.
+- Source Author는 canonical Profile Link, direct Source 생성 시각은 최소 44px canonical Post Link, direct Source 본문 행은 pointer·touch shortcut으로 분리하고 border의 빈 padding에는 동작을 두지 않는다.
+- Quote 자체 생성 시각은 바깥 Quote Post의 canonical Link를 유지하고 자체 본문 행의 pointer·touch shortcut도 바깥 Quote Post로 이동한다.
+- Quote와 Source body의 외부 Link는 각각의 Post 이동과 함께 실행되지 않는 독립 목적지를 유지하고 nested interactive semantics를 만들지 않는다.
 - 서버가 반환한 connection edge 순서와 결과만 렌더링하고 새 `loadNext` pagination UI를 추가하지 않는다.
 - Repost action과 Notification UI를 이 slice에 포함하지 않는다.
 
 **Verification**
 
-- Home/Profile/Bookmark fragment 연결, Repost/Quote Author 구분, Source·Profile navigation, 일반 Post 회귀와 Relay generated type을 app integration/E2E로 검증한다. Quote-of-Quote·Repost-of-Quote는 direct Source 한 단계에서 full presentation이 끝나고 direct Source 생성 시각·본문이 해당 Source의 canonical route로 이동하며 두 번째 Source Content와 CTA가 표시되지 않는지 확인한다. Reply+Quote, nullable Source, 일반 Post와 외부 body Link의 중첩 anchor 회귀도 함께 검증한다.
+- Home/Profile/Bookmark fragment 연결, Repost/Quote Author 구분, Source·Profile navigation, 일반 Post 회귀와 Relay generated type을 app integration/E2E로 검증한다. Quote-of-Quote·Repost-of-Quote는 direct Source 한 단계에서 full presentation이 끝나고 direct Source 생성 시각·본문이 해당 Source의 canonical route로 이동하며 두 번째 Source Content와 CTA가 표시되지 않는지 확인한다. Quote와 Reply+Quote의 자체 본문은 바깥 Quote Post로 이동하고 Source Post로 잘못 이동하지 않아야 한다. Source/Quote 생성 시각의 실제 Link, pointer·touch body shortcut, 빈 border padding, Author Profile과 외부 body Link 목적지를 각각 검증하고 `a a` 및 `[role="link"] [role="link"]`가 없어야 한다.
 
 - [x] 9.1 PROD-453 presentation fragment를 production Post list item과 실제 API shape에 연결한다.
-- [x] 9.2 Home/Profile/Bookmark 목록의 Source·Author navigation과 중첩 Link 회귀를 검증한다.
-- [x] 9.3 Relay compile, app check·Storybook과 목록 integration 검증을 통과시킨다.
+- [ ] 9.2 Home/Profile/Bookmark 목록의 Source·Author navigation과 중첩 Link 회귀를 검증한다.
+- [ ] 9.3 Relay compile, app check·Storybook과 목록 integration 검증을 통과시킨다.
 
 ## 10. PROD-412 Repost Notification 생성과 inbox 표시
 
