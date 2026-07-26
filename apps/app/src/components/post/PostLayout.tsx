@@ -7,6 +7,7 @@ import { formatPostDate } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { PostBody } from './PostBody';
+import type { ReactNode } from 'react';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
 
 const PostLayoutFragment = graphql`
@@ -32,7 +33,13 @@ const visibilityLabels: Record<string, string> = {
   DIRECT: '다이렉트',
 };
 
-export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
+export function PostLayout({
+  actionBar,
+  post: postKey,
+}: {
+  actionBar?: ReactNode;
+  post: PostLayout_post$key;
+}) {
   const theme = useTheme();
   const post = useFragment(PostLayoutFragment, postKey);
   const profileHref = `/${post.profile.relativeHandle}` as const;
@@ -54,13 +61,14 @@ export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
       </Link>
       <View style={styles.content}>
         <ProfileNameBlock href={profileHref} profile={post.profile} />
-        <View style={styles.body}>
+        <View style={styles.body} testID="post-layout-body-meta">
           <PostBody post={post} size="lg" />
           <Text style={[styles.meta, { color: theme.textSecondary }]}>
             {formatPostDate(post.createdAt)} ·{' '}
             {visibilityLabels[post.visibility] ?? post.visibility}
           </Text>
         </View>
+        {actionBar != null ? <View testID="post-action-bar-slot">{actionBar}</View> : null}
       </View>
     </View>
   );

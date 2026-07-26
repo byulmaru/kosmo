@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 PROD-432·PROD-433·PROD-434의 Linear 경계, `post-action-bar` spec, 현재 React Native 코드 구조와 2026-07-21·2026-07-23·2026-07-24 KST 사용자 논의에서 확정한 선택을 반영한다. Figma Action node는 비규범적 시각 참고 자료다.
+이 기록은 PROD-432·PROD-433·PROD-434의 Linear 경계, `post-action-bar` spec, 현재 React Native 코드 구조와 2026-07-21·2026-07-23·2026-07-24·2026-07-26 KST 사용자 논의에서 확정한 선택을 반영한다. Figma Action node는 비규범적 시각 참고 자료다.
 
 ## Decision Records
 
@@ -171,6 +171,30 @@
 - Alternatives Considered: `accessibilityLabel` 공개 prop을 받는 방식은 surface별 별도 문구 요구가 없어 채택하지 않았다. 영어 이름 `Action bar`는 저장소의 기존 사용자 대상 접근성 문구가 한국어인 관례와 맞지 않아 채택하지 않았다. toolbar 이름을 생략하는 방식은 반복되는 toolbar를 구분할 이름이 없어 채택하지 않았다.
 - Consequences: 한 화면의 여러 Post Action Bar가 같은 이름을 사용하지만 모두 toolbar로 식별되며, 각 액션은 기존 label을 가진 button으로 계속 탐색된다. 공개 `PostActionBarProps`는 바뀌지 않는다.
 - Confirmation / Follow-up: Storybook에서 반복 렌더된 toolbar를 `액션 바` 이름으로 찾고 각 toolbar 내부 action button이 계속 노출되는지 검증한다.
+
+### Action Bar는 게시글 content grid의 마지막 sibling으로 배치
+
+- Decision Date: 2026-07-26
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-434`, 2026-07-26 KST 사용자 결정
+- Status: Active
+- Context / Problem: 목록의 `PostBody`는 Post 상세 Link 안에 있고 상세의 body·metadata도 자체 wrapper를 사용한다. PROD-415의 Repost·Quote 목록 경로는 일반 Post와 별도 return에서 전체 `PostSourcePresentationView`를 렌더한다. Action Bar의 정확한 위치를 정하지 않으면 본문 Link나 body wrapper 안에 중첩되거나 Source presentation 앞에 놓여 Post navigation과 action 입력이 함께 활성화되고 게시글별 정보 계층이 달라질 수 있다.
+- Decision Outcome: `PostListItem`과 `PostLayout`은 상위가 mock 또는 후속 adapter 결과를 주입할 수 있는 단일 presentation-only seam `actionBar?: ReactNode`를 제공한다. 이 seam은 `PostActionBarProps`, action callback, Relay data 또는 adapter 상태를 받거나 구성하지 않는다. 일반 목록은 header와 `PostBody` Link가 놓인 content column에서 본문 Link 뒤, Repost와 Quote 목록은 각각 전체 `PostSourcePresentationView`와 같은 content column에서 Source presentation 뒤, 상세는 `ProfileNameBlock`과 body·metadata가 놓인 content column에서 body·metadata wrapper 뒤에 Action Bar를 마지막 child로 배치한다. Action Bar는 항상 본문·Source Link/Pressable과 body·metadata wrapper 밖의 sibling이며, `actionBar`가 `null` 또는 `undefined`이면 Action Bar wrapper 자체를 렌더하지 않는다.
+- Alternatives Considered: 본문 또는 Source Link/Pressable 안에 넣는 방식은 navigation과 action 입력을 중첩하므로 채택하지 않았다. card나 상세 root 바깥에 두는 방식은 Action Bar를 게시글 콘텐츠 폭과 분리하므로 채택하지 않았다. Repost·Quote에서 Source presentation 앞에 두는 방식은 게시글 presentation이 끝나기 전에 액션을 삽입하므로 채택하지 않았다. `PostActionBarProps`나 action model을 받는 seam은 PROD-434가 실제 상태·callback·adapter 책임을 소유하게 하므로 채택하지 않았다.
+- Consequences: PROD-434는 목록·상세의 단일 ReactNode 배치 seam과 data 없는 fallback만 소유하고 `PostList`의 production forwarding, 실제 Action Bar 상태와 callback을 만드는 production adapter 및 Relay fragment는 PROD-432에 남는다. 일반 목록, Repost 목록, Quote 목록과 상세는 같은 마지막-sibling 규칙을 사용하며 기존 Profile·timestamp·본문·Source navigation을 유지한다.
+- Confirmation / Follow-up: `kosmoMobile`·`kosmoCompact`·`kosmoFull` Storybook에서 일반 목록, Repost 목록, Quote 목록과 상세의 Action Bar가 각 content column의 마지막 child이고 Link/Pressable에 포함되지 않는지, `actionBar`가 없을 때 wrapper와 toolbar가 모두 없는지 검증한다. 각 case에서 Action Bar container와 button의 bounding box가 인접 Profile·timestamp·본문·Source Link/Pressable과 양의 면적으로 교차하지 않고, Action Bar button 활성화가 해당 mock action callback만 호출하며 pathname·Linking·router navigation을 바꾸지 않는지 확인한다.
+
+### PROD-415 latest head 위에서 구현하고 PROD-422 reconciliation을 별도 승인한다
+
+- Decision Date: 2026-07-26
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-434`, 2026-07-26 KST 사용자 결정
+- Status: Active
+- Context / Problem: PR #357의 head는 계획 승인 중에도 전진할 수 있고 PR #358은 독립 base에서 같은 `Posts.stories.tsx`와 상세 surface를 수정한다. stale #357 head에서 구현하거나 #358을 함께 합치면 PROD-434 diff가 PROD-415의 최신 Source 경계를 놓치거나 제외된 thread 구현과 PR 구조까지 소유할 수 있다.
+- Decision Outcome: 구현 편집 전 local `HEAD`가 live PR #357 head와 같은지 확인한다. 다르면 기존 작업을 보존하고 incoming diff의 파일 겹침과 ancestry를 확인한 뒤 fast-forward 가능한 경우에만 #357 latest head로 정렬한다. 겹침, rebase, conflict resolution, PR reparent 또는 force-push가 필요하면 자동 진행하지 않고 중단한다. PR #358의 변경은 PROD-434에 합치지 않으며, reconciliation 전 live head·base·diff·conflict와 실행할 명령·영향 파일·재검증 범위를 사용자에게 제시하고 별도 승인을 받는다.
+- Alternatives Considered: stale #357 head에서 구현하는 방식은 최신 Source 경계를 누락하므로 채택하지 않았다. #358을 지금 병합하는 방식은 thread 제외 범위와 독립 PR 구조를 바꾸므로 채택하지 않았다. 충돌을 구현 중 임의로 해소하는 방식은 사용자가 승인하지 않은 diff와 history rewrite를 만들 수 있어 채택하지 않았다.
+- Consequences: PROD-434의 현재 구현은 #357 stack만 기준으로 완료할 수 있고 #358과의 최종 조정은 별도 작업으로 남는다. 승인된 reconciliation 뒤에는 `merge-tree`, 적용 가능한 `range-diff`, 상세 wrapper 폭과 전체 app 검증을 다시 실행해 Storybook·placement assertion 유실 여부를 확인한다.
+- Confirmation / Follow-up: 코드 편집 직전 `HEAD == live PR #357 head`를 기록한다. #358 reconciliation을 수행하지 않은 상태에서는 그 사실과 미검증 위험을 PR에 남기고, reconciliation 승인 전에는 rebase·reparent·force-push를 실행하지 않는다.
 
 ## Remaining Decisions
 

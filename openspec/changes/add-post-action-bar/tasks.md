@@ -51,22 +51,26 @@ Home·Profile Post List와 Post 상세가 같은 Post Action Bar를 본문 inter
 **Guardrails**
 
 - 목록과 상세는 PROD-433의 공통 컴포넌트를 재구현하지 않는다.
-- Action Bar는 본문 상세 링크와 중첩되지 않는 sibling interactive surface로 배치한다.
+- Action Bar는 일반 목록의 `PostBody` Link 뒤, Repost·Quote 목록의 전체 Source presentation 뒤, 상세의 body·metadata wrapper 뒤에서 각 게시글 content column의 마지막 child로 배치한다.
+- `PostListItem`과 `PostLayout`은 단일 presentation-only seam `actionBar?: ReactNode`만 추가한다. Action Bar wrapper는 본문·Source Link/Pressable과 body·metadata wrapper 밖의 sibling이며 `actionBar`가 `null` 또는 `undefined`이면 wrapper 자체를 렌더하지 않는다.
+- PROD-434는 `PostActionBarProps`, action callback, Relay data 또는 adapter 상태를 seam에 추가하지 않고 `PostList` production forwarding도 수정하지 않는다.
 - 이 이슈에서 실제 action field, mutation, Relay cache, 권한 또는 Content·Reply Parent·Repost Source 관계 조합 정책을 새로 구현하지 않는다.
-- PROD-415·PROD-422처럼 같은 Post surface를 수정하는 최신 변경과 충돌 여부를 구현 시점에 대조한다.
+- 구현 편집 전 local `HEAD`와 live PR #357 head가 같은지 확인한다. 다르면 기존 변경을 보존하고 incoming diff의 파일 겹침과 ancestry를 확인한 뒤 fast-forward 가능한 경우에만 정렬하며, rebase·conflict resolution·PR reparent·force-push가 필요하면 중단한다.
+- PROD-422/PR #358을 이 이슈에 합치거나 thread 구현을 수정하지 않는다. #358 reconciliation 전 live head·base·diff·conflict와 실행 명령·영향 파일·재검증 범위를 사용자에게 제시하고 별도 승인을 받으며, 승인된 조정 뒤 `merge-tree`, 적용 가능한 `range-diff`, 상세 wrapper 폭과 전체 app 검증을 다시 실행한다.
 
 **Verification**
 
-- Home·Profile 목록의 공통 `PostListItem` 경계와 Post 상세에서 동일 Action Bar 배치를 확인한다.
-- mock 액션 상태에서 spacing·divider·compact/web layout과 interactive element 경계를 검증한다.
-- action data가 아직 연결되지 않은 production 경로에서는 불완전한 Action Bar 전체가 표시되지 않음을 검증한다. 실제 연결 뒤 정책상 실행할 수 없는 개별 액션을 숨기는 fallback으로 사용하지 않는다.
-- 프로필·timestamp·본문 상세 navigation과 Action Bar 입력이 함께 활성화되지 않음을 검증한다.
-- 관련 Storybook/component test와 React Native Web 검증을 통과시킨다.
+- Home·Profile 목록의 공통 `PostListItem`에서 일반 Post, Repost Source presentation과 Quote Source presentation을 각각 렌더하고, Post 상세에서 `PostLayout`을 사용해 네 presentation case의 동일한 마지막-sibling Action Bar 배치를 확인한다.
+- mock 액션 상태에서 `kosmoMobile` 390px의 실제 route padding과 `kosmoCompact` 900px·`kosmoFull` 1400px의 최대 600px 중앙 column을 재현해 spacing·기존 divider·한 행 layout과 interactive element 경계를 검증한다.
+- action data가 아직 연결되지 않은 production 경로에서는 Action Bar wrapper와 불완전한 Action Bar 전체가 표시되지 않음을 검증한다. 실제 연결 뒤 정책상 실행할 수 없는 개별 액션을 숨기는 fallback으로 사용하지 않는다.
+- 기존 `Posts.stories.tsx` browser harness에서 새 test harness 없이 일반·Repost·Quote·상세 × 390px·900px·1400px 조합을 검증한다. 각 조합에서 Action Bar container와 각 button의 bounding box가 인접 Profile·timestamp·본문·Source Link/Pressable의 bounding box와 양의 면적으로 교차하지 않고 Action Bar가 그 descendant가 아님을 assertion으로 확인한다.
+- 각 presentation case에서 Action Bar button 활성화가 해당 mock action callback만 한 번 호출하고 `window.location.pathname`, `Linking.openURL` 및 router navigation 관찰값을 바꾸지 않아 기존 Post navigation과 함께 활성화되지 않음을 검증한다.
+- app type/Relay check, unit test, 정적 Storybook build, Storybook browser test와 React Native Web 검증을 통과시킨다.
 
-- [ ] 2.1 최신 Post surface 변경과 겹침을 대조하고 목록·상세의 공통 배치 경계를 확정한다.
-- [ ] 2.2 지원되는 목록과 상세에 공통 Post Action Bar를 sibling interactive surface로 배치하고 data 없는 안전한 fallback을 적용한다.
-- [ ] 2.3 mock 액션으로 목록·상세 배치와 spacing·responsive layout을 검토할 Storybook 또는 component integration 사례를 추가한다.
-- [ ] 2.4 기존 navigation·접근성 회귀와 입력 전파 경계를 검증하고 관련 검증 명령을 통과시킨다.
+- [x] 2.1 live PR #357 head와 local `HEAD`를 일치시킨 뒤 PROD-415의 일반·Repost·Quote 목록 분기와 PROD-422의 상세 surface 변경을 대조하고 네 presentation case의 content-column 마지막-sibling 배치 경계를 확정한다.
+- [x] 2.2 일반 목록, Repost 목록, Quote 목록과 상세에 `actionBar?: ReactNode` presentation seam을 배치하고 `actionBar`가 없을 때 wrapper까지 렌더하지 않는 안전한 fallback을 적용한다.
+- [x] 2.3 기존 `Posts.stories.tsx` browser harness에 mock 액션을 사용해 일반 목록·Repost 목록·Quote 목록·상세 × 390px·900px·1400px의 배치, 실제 surface 폭, spacing·responsive layout과 Action Bar·인접 interactive element bounding-box 비중첩을 검토하는 integration 사례를 추가한다.
+- [x] 2.4 기존 Profile·timestamp·본문·Source navigation, 접근성, 마지막-sibling 위치, Action Bar callback-only 활성화와 pathname·Linking·router navigation 불변을 검증하고 전체 app 검증 명령을 통과시킨다.
 
 ## 3. PROD-432 실제 액션 연결·통합 검증·archive
 

@@ -8,6 +8,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { PostBody } from './PostBody';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
+import type { ReactNode } from 'react';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
 import type {
   PostPresentationLinkRenderer,
@@ -50,7 +51,13 @@ const PostListItemFragment = graphql`
   }
 `;
 
-export function PostListItem({ post: postKey }: { post: PostListItem_post$key }) {
+export function PostListItem({
+  actionBar,
+  post: postKey,
+}: {
+  actionBar?: ReactNode;
+  post: PostListItem_post$key;
+}) {
   const router = useRouter();
   const theme = useTheme();
   const post = useFragment(PostListItemFragment, postKey);
@@ -121,6 +128,7 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
             post={presentationPost}
             renderLink={renderLink}
           />
+          {actionBar != null ? <View testID="post-action-bar-slot">{actionBar}</View> : null}
         </View>
       </View>
     );
@@ -159,6 +167,7 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
             </Pressable>
           </Link>
         ) : null}
+        {actionBar != null ? <View testID="post-action-bar-slot">{actionBar}</View> : null}
       </View>
     </View>
   );

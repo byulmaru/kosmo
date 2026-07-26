@@ -1,10 +1,11 @@
 import { usePathname } from 'expo-router';
 import { useState } from 'react';
-import { Linking, Pressable, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Temporal } from 'temporal-polyfill';
 import PostDetailScreen from '@/app/(tabs)/(post)/[profileHandle]/[postId]';
+import { PostActionBar } from '@/components/post/PostActionBar';
 import { PostBody } from '@/components/post/PostBody';
 import { PostComposer } from '@/components/post/PostComposer';
 import { PostDetailThread } from '@/components/post/PostDetailThread';
@@ -454,6 +455,15 @@ type PresentationStoryProps = {
   postId: string;
 };
 
+type SurfaceActionCallbacks = {
+  detail: ReturnType<typeof fn>;
+  ordinary: ReturnType<typeof fn>;
+  quote: ReturnType<typeof fn>;
+  repost: ReturnType<typeof fn>;
+};
+
+type SurfaceContentWidths = Record<keyof SurfaceActionCallbacks, number>;
+
 function usePostsStoryData() {
   const data = useLazyLoadQuery<PostsStoriesQueryType>(PostsStoriesQuery, {
     ids: storyPosts.map(({ id }) => id),
@@ -542,6 +552,18 @@ function requirePresentationCallbacks(args: PostsStoryArgs): PresentationCallbac
     postDetail: args.onPostDetail,
     sourceAuthor: args.onSourceAuthor,
     sourcePost: args.onSourcePost,
+  };
+}
+
+function requireSurfaceActionCallbacks(args: PostsStoryArgs): SurfaceActionCallbacks {
+  if (!args.onPostAuthor || !args.onPostDetail || !args.onSourceAuthor || !args.onSourcePost) {
+    throw new Error('Action Bar surface stories require isolated action callbacks.');
+  }
+  return {
+    detail: args.onPostDetail,
+    ordinary: args.onPostAuthor,
+    quote: args.onSourceAuthor,
+    repost: args.onSourcePost,
   };
 }
 
@@ -689,6 +711,168 @@ function LinkedPostListItemStory() {
   );
 }
 
+function SurfaceActionBar({ onPress }: { onPress: () => void }) {
+  return (
+    <PostActionBar
+      bookmark={{
+        accessibilityLabel: '북마크',
+        hasBookmarked: false,
+        onPress,
+        processing: 'default',
+      }}
+      more={{ accessibilityLabel: '더보기', onPress }}
+      reaction={{
+        accessibilityLabel: '반응',
+        hasReacted: false,
+        onPress,
+        processing: 'default',
+      }}
+      reply={{
+        accessibilityLabel: '답글',
+        count: 3,
+        expanded: false,
+        onPress,
+        processing: 'default',
+      }}
+      repost={{
+        accessibilityLabel: '재게시',
+        count: 2,
+        hasReposted: false,
+        onPress,
+        processing: 'default',
+      }}
+    />
+  );
+}
+
+function PostActionBarSurfaceMatrix({ callbacks }: { callbacks: SurfaceActionCallbacks }) {
+  const { posts } = usePostsStoryData();
+  const pathname = usePathname();
+  const ordinary = requirePostById(posts, 'short');
+  const repost = requirePostById(posts, 'post-repost');
+  const quote = requirePostById(posts, 'post-quote');
+  const detail = requirePostById(posts, 'detail-public');
+
+  return (
+    <Catalog width={600}>
+      <Text testID="post-action-surface-pathname">{pathname}</Text>
+      <View
+        style={postActionBarSurfaceStyles.listRoutePadding}
+        testID="post-action-surface-ordinary"
+      >
+        <PostListItem
+          actionBar={<SurfaceActionBar onPress={callbacks.ordinary} />}
+          post={requireFragment(ordinary.listItem, 'ordinary action bar list item')}
+        />
+      </View>
+      <View style={postActionBarSurfaceStyles.listRoutePadding} testID="post-action-surface-repost">
+        <PostListItem
+          actionBar={<SurfaceActionBar onPress={callbacks.repost} />}
+          post={requireFragment(repost.listItem, 'repost action bar list item')}
+        />
+      </View>
+      <View style={postActionBarSurfaceStyles.listRoutePadding} testID="post-action-surface-quote">
+        <PostListItem
+          actionBar={<SurfaceActionBar onPress={callbacks.quote} />}
+          post={requireFragment(quote.listItem, 'quote action bar list item')}
+        />
+      </View>
+      <View testID="post-action-surface-detail">
+        <View style={postActionBarSurfaceStyles.detailRoutePadding}>
+          <PostLayout
+            actionBar={<SurfaceActionBar onPress={callbacks.detail} />}
+            post={requireFragment(detail.layout, 'detail action bar layout')}
+          />
+        </View>
+      </View>
+    </Catalog>
+  );
+}
+
+const postActionBarSurfaceStyles = StyleSheet.create({
+  detailRoutePadding: { padding: spacing.lg },
+  listRoutePadding: { paddingHorizontal: spacing.xl },
+});
+
+function overlapsWithPositiveArea(first: DOMRect, second: DOMRect) {
+  return (
+    Math.min(first.right, second.right) > Math.max(first.left, second.left) &&
+    Math.min(first.bottom, second.bottom) > Math.max(first.top, second.top)
+  );
+}
+
+async function verifyPostActionBarSurfaceMatrix({
+  callbacks,
+  canvasElement,
+  expectedContentWidths,
+}: {
+  callbacks: SurfaceActionCallbacks;
+  canvasElement: HTMLElement;
+  expectedContentWidths: SurfaceContentWidths;
+}) {
+  const canvas = within(canvasElement);
+  const pathname = window.location.pathname;
+  const routerPathname = canvas.getByTestId('post-action-surface-pathname').textContent;
+  const openURL = fn(async () => undefined);
+  const originalOpenURL = Linking.openURL;
+  Linking.openURL = openURL;
+
+  try {
+    const surfaces = [
+      ['ordinary', callbacks.ordinary],
+      ['repost', callbacks.repost],
+      ['quote', callbacks.quote],
+      ['detail', callbacks.detail],
+    ] as const;
+    for (const [surfaceIndex, [name, callback]] of surfaces.entries()) {
+      const surface = canvas.getByTestId(`post-action-surface-${name}`);
+      const slot = within(surface).getByTestId('post-action-bar-slot');
+      const toolbar = within(slot).getByRole('toolbar', { name: '액션 바' });
+      const reply = within(toolbar).getByRole('button', { name: '답글' });
+      const buttons = within(toolbar).getAllByRole('button');
+      const presentation = surface.querySelector('[role="article"]');
+      const contentColumn = slot.parentElement;
+
+      expect(contentColumn?.lastElementChild).toBe(slot);
+      expect(slot.getBoundingClientRect().width).toBeCloseTo(expectedContentWidths[name], 0);
+      expect(slot.closest('a')).toBeNull();
+      expect(slot.closest('[role="button"]')).toBeNull();
+      expect(toolbar.contains(slot)).toBe(false);
+      expect(presentation?.contains(slot) ?? false).toBe(name === 'ordinary');
+
+      const protectedTargets = Array.from(
+        surface.querySelectorAll<HTMLElement>(
+          'a, [data-testid="post-body"], [data-testid="source-post-body"], [data-testid="post-layout-body-meta"]',
+        ),
+      ).filter((target) => !slot.contains(target));
+      expect(buttons).toHaveLength(5);
+      for (const actionTarget of [toolbar, ...buttons]) {
+        for (const protectedTarget of protectedTargets) {
+          expect(
+            overlapsWithPositiveArea(
+              actionTarget.getBoundingClientRect(),
+              protectedTarget.getBoundingClientRect(),
+            ),
+          ).toBe(false);
+        }
+      }
+
+      await userEvent.click(reply);
+      await expect(callback).toHaveBeenCalledTimes(1);
+      for (const [otherIndex, [, otherCallback]] of surfaces.entries()) {
+        await expect(otherCallback).toHaveBeenCalledTimes(otherIndex <= surfaceIndex ? 1 : 0);
+      }
+      expect(window.location.pathname).toBe(pathname);
+      expect(canvas.getByTestId('post-action-surface-pathname')).toHaveTextContent(
+        routerPathname ?? '',
+      );
+      expect(openURL).not.toHaveBeenCalled();
+    }
+  } finally {
+    Linking.openURL = originalOpenURL;
+  }
+}
+
 function ThreadCatalog() {
   const { posts } = usePostsStoryData();
 
@@ -795,7 +979,48 @@ export const BodyTimeAndLayoutStates: Story = {
     );
     expect(canvas.getByText('미지원 문서는 안전한 Plain Text로 표시합니다.')).toBeVisible();
     expect(canvas.queryByText('실행하면 안 되는 구조')).not.toBeInTheDocument();
+    expect(canvas.queryByRole('toolbar', { name: '액션 바' })).not.toBeInTheDocument();
+    expect(canvas.queryByTestId('post-action-bar-slot')).not.toBeInTheDocument();
   },
+};
+
+export const PostActionBarSurfacePlacement390: Story = {
+  args: { onPostAuthor: fn(), onPostDetail: fn(), onSourceAuthor: fn(), onSourcePost: fn() },
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: { layout: 'fullscreen' },
+  play: async ({ args, canvasElement }) =>
+    verifyPostActionBarSurfaceMatrix({
+      callbacks: requireSurfaceActionCallbacks(args),
+      canvasElement,
+      expectedContentWidths: { detail: 306, ordinary: 266, quote: 326, repost: 326 },
+    }),
+  render: (args) => <PostActionBarSurfaceMatrix callbacks={requireSurfaceActionCallbacks(args)} />,
+};
+
+export const PostActionBarSurfacePlacement900: Story = {
+  args: { onPostAuthor: fn(), onPostDetail: fn(), onSourceAuthor: fn(), onSourcePost: fn() },
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: { layout: 'fullscreen' },
+  play: async ({ args, canvasElement }) =>
+    verifyPostActionBarSurfaceMatrix({
+      callbacks: requireSurfaceActionCallbacks(args),
+      canvasElement,
+      expectedContentWidths: { detail: 516, ordinary: 476, quote: 536, repost: 536 },
+    }),
+  render: (args) => <PostActionBarSurfaceMatrix callbacks={requireSurfaceActionCallbacks(args)} />,
+};
+
+export const PostActionBarSurfacePlacement1400: Story = {
+  args: { onPostAuthor: fn(), onPostDetail: fn(), onSourceAuthor: fn(), onSourcePost: fn() },
+  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
+  parameters: { layout: 'fullscreen' },
+  play: async ({ args, canvasElement }) =>
+    verifyPostActionBarSurfaceMatrix({
+      callbacks: requireSurfaceActionCallbacks(args),
+      canvasElement,
+      expectedContentWidths: { detail: 516, ordinary: 476, quote: 536, repost: 536 },
+    }),
+  render: (args) => <PostActionBarSurfaceMatrix callbacks={requireSurfaceActionCallbacks(args)} />,
 };
 
 export const ListLoadingErrorEmptyAndContent: Story = {
