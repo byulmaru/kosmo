@@ -16,7 +16,7 @@ Android·iOS·Web에서 공유하며 고정 순서, optional 액션, compact cou
 
 **Guardrails**
 
-- 공개 UI API는 `PostActionBar` 하나와 actual Post fragment ref, `reply`·`reaction`·`bookmark`·`more`의 명시적 optional config, Repost의 좁은 host policy/error input으로 제한한다. 구현된 Repost는 composite parent fragment 아래 private child action으로 조립한다.
+- 공개 UI API는 `PostActionBar` 하나와 actual Post fragment ref, `reply`·`reaction`·`bookmark`·`more`의 명시적 optional config, Repost error callback으로 제한한다. 구현된 Repost는 composite parent fragment 아래 private child action으로 조립한다. Repost의 concrete disabled host input 또는 fragment shape는 actual caller와 함께 PROD-432가 설계한다.
 - Reply의 controlled `expanded`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`를 처리 상태와 분리하고, Repost child는 `viewerRepost`에서 `hasReposted`를 파생한다. 범용 공개 `selected`를 만들지 않는다. 공개 처리 상태는 default·pending·disabled만 제공하고 pending·disabled만 입력을 차단한다. 일시적 요청 실패를 `error`·danger 상태로 표현하지 않는다.
 - 각 control은 최소 44×44 interactive target과 접근성 label을 제공하고, Reply·Repost·Reaction·Bookmark는 공개 도메인 상태와 처리 상태에 대응하는 접근성 state도 제공한다.
 - Reaction과 Bookmark는 count를 받지 않는다. Reply config와 Repost child fragment는 선행 계약이 제공한 count만 실행 환경 기본 locale의 표준 compact formatting으로 표시하고 K/M 반올림·단위 승격·상한을 수동 구현하거나 count가 없을 때 `0`을 합성하지 않는다.
@@ -26,14 +26,14 @@ Android·iOS·Web에서 공유하며 고정 순서, optional 액션, compact cou
 **Verification**
 
 - 고정 순서, optional 표시, Reaction·Bookmark count 제외, Reply·Repost count 유무와 한국어·영어 locale의 표준 compact 결과를 렌더링 검증한다.
-- Reply `expanded`, actual Relay fragment에서 파생한 Repost `hasReposted`, Reaction `hasReacted`, Bookmark `hasBookmarked`와 각 액션의 default·pending·disabled 조합에 대한 시각 표현, active Reaction·Bookmark의 채워진 icon, default callback 또는 child mutation 호출과 pending·disabled 차단을 검증한다.
+- Reply `expanded`, actual Relay fragment에서 파생한 Repost `hasReposted`, Reaction `hasReacted`, Bookmark `hasBookmarked`, config 기반 Reply·Reaction·Bookmark의 default·pending·disabled와 Repost child의 default·mutation pending에 대한 시각 표현, active Reaction·Bookmark의 채워진 icon, default callback 또는 child mutation 호출과 각 소유 경계의 입력 차단을 검증한다. Repost policy-disabled는 PROD-432 actual surface 통합에서 검증한다.
 - 390px mobile·900px compact·1400px full Storybook에서 실제 surface 콘텐츠 폭 기준 한 행, 44×44 target과 layout을 검토한다.
 - keyboard/touch activation과 role·label·expanded·pressed·selected·busy·disabled metadata를 공개 도메인 상태에 맞게 검증한다.
 - React Native type/Relay check, Storybook build와 관련 component test를 통과시킨다.
 
 - [x] 1.1 고정 공개 API와 optional 액션으로 Post Action Bar의 표시·입력 계약을 구현하고 공개 처리 상태를 default·pending·disabled로 제한한다.
 - [x] 1.2 theme token과 기존 icon dependency를 사용해 active Reaction·Bookmark의 채워진 icon, default·pending·disabled 처리 상태 표현, locale-aware compact count, 한 행 반응형 배치, 최소 interactive target 및 접근성 metadata를 구현한다.
-- [x] 1.3 Reply `expanded`와 Repost·Reaction·Bookmark의 `has*` 상태, default·pending·disabled 조합, Reaction·Bookmark count 제외·한국어와 영어 compact count·count 없음·optional 액션·More callback-only 및 390px·900px·1400px 폭의 Storybook 상태 카탈로그를 추가한다.
+- [x] 1.3 Reply `expanded`, Reaction `hasReacted`, Bookmark `hasBookmarked`와 config 기반 default·pending·disabled, actual Relay fragment에서 파생한 Repost `hasReposted`·default·mutation pending, Reaction·Bookmark count 제외·한국어와 영어 compact count·count 없음·optional 액션·More callback-only 및 390px·900px·1400px 폭의 Storybook 상태 카탈로그를 추가한다. Repost policy-disabled fixture와 실제 surface 검증은 PROD-432에 남긴다.
 - [x] 1.4 default callback 호출, pending·disabled 입력 차단, active Reaction·Bookmark의 채워진 icon·도메인 상태 유지·locale compact count·More 상태 제외·접근성 계약의 component test를 추가하고 관련 검증 명령을 통과시킨다.
 
 ## 2. PROD-434 Post surface 배치
@@ -111,7 +111,7 @@ Home·Profile Post List와 Post 상세가 같은 Post Action Bar를 본문 inter
 - archive 전후 strict validation을 통과시킨다.
 
 - [ ] 3.1 구현 자식과 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425의 완료·공개 계약을 확인하고, actual Post fragment ref를 `PostActionBar` composite fragment에 공급하며 아직 config 기반인 action 상태를 연결할 경계를 정리한다. Reaction은 하나 이상의 Reaction Type 존재를 `hasReacted`로 연결하되 count는 연결하지 않는다.
-- [ ] 3.2 목록·상세에서 Repost child fragment·mutation과 기존 Reply·Reaction·Bookmark의 callback 및 액션별 default·pending·disabled 처리 상태를 공통 Action Bar에 연결한다. Reply에는 상위 Composer의 `expanded`와 optional count, Reaction·Bookmark에는 각각 `hasReacted`·`hasBookmarked`를 공급하고, Repost child에는 actual Post fragment ref·disabled·error callback만 공급한다.
+- [ ] 3.2 목록·상세에서 Repost child fragment·mutation과 기존 Reply·Reaction·Bookmark의 callback 및 액션별 default·pending·disabled 처리 상태를 공통 Action Bar에 연결한다. Reply에는 상위 Composer의 `expanded`와 optional count, Reaction·Bookmark에는 각각 `hasReacted`·`hasBookmarked`를 공급하고, Repost child에는 actual Post fragment ref와 error callback을 공급한다. Repost의 최종 disabled 행동을 child에 연결할 concrete host input 또는 fragment shape는 actual caller와 함께 3.3에서 설계한다.
 - [ ] 3.3 선택 Profile cache 경계를 유지하면서 대상 적격성과 현재 실행 주체·세션의 실행 권한을 분리하고, Content·Reply Parent·Repost Source 관계 조합, Post Visibility·권한별 disabled, 대상이 적격한 guest의 인증 위임, 대상이 부적격한 guest의 disabled 유지와 action별 pending, 실패 시 이전 확정 상태 유지·접근 가능한 액션별 한국어 toast·다음 입력 재시도 동작을 적용한다.
 - [ ] 3.4 More callback에 접근 가능한 최소 팝업과 guest도 사용할 수 있는 ADR 0015 Post Share Reference `링크 복사`를 연결한다. Web·Android·iOS 모두 configured Local Instance의 `canonical_origin`을 client에 투영한 `EXPO_PUBLIC_WEB_ORIGIN`을 사용한다. Content가 있는 Post는 그 Post의 `/{relativeHandle}/{postId}`를 결합한 query·hash 없는 절대 URL을 사용하고, Content와 Reply Parent 없이 Repost Source만 있는 Repost는 자기 상세 참조를 노출하지 않고 조회 가능한 직접 Source의 공유 참조를 사용한다. `EXPO_PUBLIC_WEB_ORIGIN`이나 Web의 현재 browser origin을 독립 authority로 사용하지 않는다. 공유 clipboard 추상화가 없으면 Expo 호환 clipboard package를 추가해 native·Web 동작을 검증한다.
 - [ ] 3.5 Home·Profile 목록·Post 상세의 실제 성공·중복 차단·실패 시 이전 확정 상태 유지·접근 가능한 액션별 한국어 toast·다음 입력 재시도·controlled Reply Composer·Profile별 도메인 상태, 대상 적격성·현재 세션 실행 권한의 분리, guest 위임·대상 제한, Content 없는 Repost에서 직접 Source 공유 참조 선택, configured Local Instance의 `canonical_origin`과 Web current Host가 다른 경우를 포함한 ADR 0015 More 링크 복사 통합 테스트를 추가하고 전체 관련 검증을 통과시킨다.

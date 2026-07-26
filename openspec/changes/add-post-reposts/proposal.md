@@ -8,7 +8,7 @@ Kosmo는 Repost를 별도 Post Kind가 아니라 Content와 Reply Parent 없이 
 - 허용된 Post를 Repost하는 멱등 core action과 GraphQL mutation, 기존 Post 삭제를 통한 멱등 취소를 제공한다.
 - 기존 단일 GraphQL `Post` Node에 nullable `repostSource`, viewer-independent `repostCount`, 현재 selected Profile의 Active Repost identity를 제공한다.
 - Home과 Profile Post List가 Repost와 Source 양쪽의 조회 정책을 적용해 후보를 선정하고, Hashtag Post List에서는 Content 없는 Repost를 제외한다.
-- Repost·Quote 프레젠테이션, 목록·상세 renderer별 direct Source 표시와 Content 없는 Repost 상세의 canonical Source 이동을 제공한다. 공용 `PostActionBar`의 composite Post fragment가 private Repost action child fragment를 조립하며, child action은 selected Profile별 상태·pending·mutation을 소유하고 surface에는 disabled 정책과 오류 callback만 남긴다. 생성 cache 동기화와 취소 실행 뒤 후속 취소 cache 동기화는 분리한다.
+- Repost·Quote 프레젠테이션, 목록·상세 renderer별 direct Source 표시와 Content 없는 Repost 상세의 canonical Source 이동을 제공한다. 공용 `PostActionBar`의 composite Post fragment가 private Repost action child fragment를 조립한다. child action은 selected Profile별 상태·pending·mutation을 소유하고 PROD-414의 현재 공개 경계에는 actual Post fragment ref와 오류 callback만 남긴다. 최종 disabled 행동은 유지하되 concrete host input 또는 fragment shape는 actual production caller와 함께 PROD-432가 설계한다. 생성 cache 동기화와 취소 실행 뒤 후속 취소 cache 동기화는 분리한다.
 - 자기 Post 알림을 억제하면서 Repost Notification을 기존 inbox·Unread count·Read·Node 계약에 통합하고, Repost가 Tombstone이 된 뒤 Notification을 Best Effort로 정리한다.
 - 공용 `PostActionBar` UI는 PROD-433을 재사용하고, 여러 action을 실제 production surface에 조립하며 접근 가능한 한국어 오류 toast를 제공하는 rollout은 PROD-432의 별도 계약으로 유지한다.
 

@@ -151,7 +151,7 @@
 - **WHEN** Repost child action을 구현하고 검증한다
 - **THEN** `PostActionBar_post`는 `RepostAction_post`를 child fragment로 spread하고 실제 fragment ref를 private `RepostAction`까지 전달한다
 - **AND** private `RepostAction`은 `viewerRepost`에서 선택 상태, 접근성 label, 정확한 Active Repost delete identity와 create/delete mutation 종류를 함께 파생해 공통 private control을 렌더한다
-- **AND** surface는 Repost의 disabled 정책과 error callback만 공급하고 실제 production full-bar 연결과 접근 가능한 한국어 오류 toast는 PROD-432에 남긴다
+- **AND** PROD-414의 현재 surface는 actual Post fragment ref와 Repost error callback을 공급하고 최종 disabled 행동을 child에 연결할 concrete host input 또는 fragment shape, 실제 production full-bar 연결과 접근 가능한 한국어 오류 toast는 actual caller와 함께 PROD-432가 설계하고 통합 검증한다
 - **AND** 독립 공개 action leaf 또는 선택 상태·label·delete identity·mutation callback의 독립 scalar config를 만들지 않는다
 
 ### Requirement: Repost UI 상태 카탈로그와 검증
