@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { Repeat2, Smile, UserPlus } from 'lucide-react-native';
+import { MessageCircle, Repeat2, Smile, UserPlus } from 'lucide-react-native';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
@@ -11,6 +11,7 @@ import type { Href } from 'expo-router';
 import type { NotificationListItem_notification$key } from './__generated__/NotificationListItem_notification.graphql';
 import type { NotificationListItemMarkReadMutation } from './__generated__/NotificationListItemMarkReadMutation.graphql';
 import type { ReactionNotificationListItem_notification$key } from './__generated__/ReactionNotificationListItem_notification.graphql';
+import type { ReplyNotificationListItem_notification$key } from './__generated__/ReplyNotificationListItem_notification.graphql';
 import type { RepostNotificationListItem_notification$key } from './__generated__/RepostNotificationListItem_notification.graphql';
 
 type NotificationListItemProps = {
@@ -22,7 +23,7 @@ type NotificationRowProps = {
   destination: string;
   href: Href;
   id: string;
-  kind: 'follow' | 'reaction' | 'repost';
+  kind: 'follow' | 'reaction' | 'reply' | 'repost';
   name: string;
   readAt: string | null | undefined;
   timestamp: string;
@@ -115,6 +116,45 @@ export function ReactionNotificationListItem({
   );
 }
 
+const replyNotificationFragment = graphql`
+  fragment ReplyNotificationListItem_notification on ReplyNotification {
+    id
+    createdAt
+    readAt
+    profile {
+      displayName
+      handle
+    }
+    post {
+      id
+      profile {
+        relativeHandle
+      }
+    }
+  }
+`;
+
+export function ReplyNotificationListItem({
+  notification,
+}: {
+  notification: ReplyNotificationListItem_notification$key;
+}) {
+  const data = useFragment(replyNotificationFragment, notification);
+  const name = data.profile.displayName || data.profile.handle;
+  return (
+    <NotificationRow
+      action="답글을 남겼습니다"
+      destination="게시글"
+      href={`/${data.post.profile.relativeHandle}/${data.post.id}` as Href}
+      id={data.id}
+      kind="reply"
+      name={name}
+      readAt={data.readAt}
+      timestamp={formatTimelineTimestamp(data.createdAt)}
+    />
+  );
+}
+
 const repostNotificationFragment = graphql`
   fragment RepostNotificationListItem_notification on RepostNotification {
     id
@@ -200,6 +240,8 @@ function NotificationRow({
           <UserPlus color={theme.text} size={18} strokeWidth={2} />
         ) : kind === 'reaction' ? (
           <Smile color={theme.text} size={18} strokeWidth={2} />
+        ) : kind === 'reply' ? (
+          <MessageCircle color={theme.text} size={18} strokeWidth={2} />
         ) : (
           <Repeat2 color={theme.text} size={18} strokeWidth={2} />
         )}

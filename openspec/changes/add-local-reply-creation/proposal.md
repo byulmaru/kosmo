@@ -33,4 +33,4 @@ Kosmo의 Reply Parent 저장·조회와 thread 표시 기반은 있지만, 사�
 - Core/API: 기존 Reply Parent 저장 경계, Post visibility predicate, `CreatePostInput`, Reply Notification source·concrete Node·visible predicate
 - Universal client: Post 상세 action, 기존 composer mutation, thread Relay cache, Notification inbox item·Read·badge cache
 - Verification: backend service/schema/resolver, client component/route/cache, Notification connection·count·Read·Node와 통합 flow
-- Dependencies: `add-post-replies`의 Reply Parent·thread 기반과 `add-in-app-notifications`의 공통 Notification 기반을 재사용한다.
+- Dependencies: `add-post-replies`의 Reply Parent·thread 기반과 `add-in-app-notifications`의 공통 Notification 기반을 재사용한다. `add-post-reposts`의 merged Repost Notification loader·bounded source visibility 구조와 같은 request-scoped loader contract를 공유한다.

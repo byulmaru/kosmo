@@ -411,6 +411,14 @@ type ReactionNotification implements Node & Notification {
   type: String!
 }
 
+type ReplyNotification implements Node & Notification {
+  createdAt: DateTime!
+  id: ID!
+  post: Post!
+  profile: Profile!
+  readAt: DateTime
+}
+
 input RejectProfileFollowRequestInput {
   id: ID!
 }

@@ -20,12 +20,14 @@ import {
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
+  ProfileState,
 } from '../enums';
 import { NotFoundError } from '../error';
 import { postContentDocumentFromText } from '../post-content/server';
 import {
   createFollowNotification,
   createReactionNotification,
+  createReplyNotification,
   createRepostNotification,
   deleteNotificationBySource,
 } from './notification';
@@ -91,6 +93,22 @@ const createContentPost = (profileId: string) =>
     profileId,
     visibility: PostVisibility.PUBLIC,
   }).then(({ post }) => post);
+
+const createReply = async (
+  authorProfileId: string,
+  recipientProfileId: string,
+  visibility: PostVisibility = PostVisibility.PUBLIC,
+) => {
+  const parent = await createContentPost(recipientProfileId);
+  const reply = await createPost({
+    document: postContentDocumentFromText(crypto.randomUUID()),
+    origin: 'LOCAL',
+    profileId: authorProfileId,
+    replyParentId: parent.id,
+    visibility,
+  }).then(({ post }) => post);
+  return { parent, reply };
+};
 
 const getEstablishedFollow = (result: Awaited<ReturnType<typeof followProfile>>) => {
   if (result.result.kind !== 'ESTABLISHED') {
@@ -355,4 +373,64 @@ test('Reaction 알림 정리는 정상·반복·없는 source에 idempotent하�
   assert.deepEqual(await readNotifications(staleReaction.id), []);
 
   await deleteNotificationBySource(NotificationKind.REACTION, crypto.randomUUID());
+});
+
+test('Reply 알림은 source에서 Recipient와 Related 객체를 파생하고 idempotent하다', async () => {
+  const author = await createProfile();
+  const recipient = await createProfile();
+  const { reply } = await createReply(author.id, recipient.id);
+  await Promise.all([createReplyNotification(reply.id), createReplyNotification(reply.id)]);
+  const rows = await readNotifications(reply.id);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.kind, NotificationKind.REPLY);
+  assert.equal(rows[0]?.recipientProfileId, recipient.id);
+});
+
+test('self-reply, Remote Recipient와 Recipient에게 보이지 않는 Reply는 no-op이다', async () => {
+  const self = await createProfile();
+  const selfReply = await createReply(self.id, self.id);
+  await createReplyNotification(selfReply.reply.id);
+  assert.deepEqual(await readNotifications(selfReply.reply.id), []);
+  const author = await createProfile();
+  const remote = await createProfile(InstanceKind.ACTIVITYPUB);
+  const remoteReply = await createReply(author.id, remote.id);
+  await createReplyNotification(remoteReply.reply.id);
+  assert.deepEqual(await readNotifications(remoteReply.reply.id), []);
+  const invisible = await createReply(author.id, self.id, PostVisibility.FOLLOWERS);
+  await createReplyNotification(invisible.reply.id);
+  assert.deepEqual(await readNotifications(invisible.reply.id), []);
+});
+
+test('Reply Parent가 Tombstone이어도 visible Reply 알림을 생성한다', async () => {
+  const author = await createProfile();
+  const recipient = await createProfile();
+  const { parent, reply } = await createReply(author.id, recipient.id);
+  await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, parent.id));
+  await createReplyNotification(reply.id);
+  assert.equal((await readNotifications(reply.id))[0]?.recipientProfileId, recipient.id);
+});
+
+test('unavailable Reply source, Recipient와 Reply Author는 생성 시 no-op이다', async () => {
+  const author = await createProfile();
+  const recipient = await createProfile();
+  const { reply } = await createReply(author.id, recipient.id);
+  await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, reply.id));
+  await createReplyNotification(reply.id);
+  assert.deepEqual(await readNotifications(reply.id), []);
+  const hiddenAuthor = await createProfile();
+  const visibleRecipient = await createProfile();
+  const hiddenReply = await createReply(hiddenAuthor.id, visibleRecipient.id);
+  await db
+    .update(Profiles)
+    .set({ state: ProfileState.SUSPENDED })
+    .where(eq(Profiles.id, hiddenAuthor.id));
+  await createReplyNotification(hiddenReply.reply.id);
+  assert.deepEqual(await readNotifications(hiddenReply.reply.id), []);
+});
+
+test('존재하지 않거나 Reply가 아닌 source는 거부한다', async () => {
+  await assert.rejects(createReplyNotification(crypto.randomUUID()), NotFoundError);
+  const author = await createProfile();
+  const post = await createContentPost(author.id);
+  await assert.rejects(createReplyNotification(post.id), NotFoundError);
 });
