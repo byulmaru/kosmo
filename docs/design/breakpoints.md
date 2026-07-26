@@ -46,8 +46,10 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
   안에 유지한다. `Escape`는 picker를 닫고 trigger로 focus를 복원하며, `Tab`은 focus trap 없이 브라우저의
   일반 순서를 따른다.
 - full·compact Web에서 프로필 선택·생성 실패는 picker와 오류를 유지하고 생성 실패는 입력값도 유지한다.
-  trigger 재실행, compact 바깥 클릭 또는 `Escape`처럼 사용자가 명시적으로 닫으면 생성 폼·입력값·이전
-  오류를 초기화한다. mobile Web drawer와 Android/iOS의 기존 close 상태 동작은 이 계약으로 바꾸지 않는다.
+  trigger 재실행, full·compact 바깥 pointer close 또는 `Escape`처럼 사용자가 명시적으로 닫으면 `open=false`,
+  `creating=false`, 빈 handle과 오류 없음으로 초기화한다. 바깥 pointer close는 이벤트 기본 동작을 막지 않아
+  pointer 대상의 브라우저 기본 focus를 따른다. `Escape`는 trigger focus를 복원한다. mobile Web drawer와
+  Android/iOS의 기존 close 상태 동작은 이 계약으로 바꾸지 않는다.
 
 ## 알림 Unread badge
 

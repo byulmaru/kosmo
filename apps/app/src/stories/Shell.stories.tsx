@@ -221,8 +221,26 @@ export const ResponsiveProfilePickerFull: Story = {
 
     await userEvent.click(trigger);
     await canvas.findByRole('menu', { name: '프로필 전환' });
-    await userEvent.click(canvas.getByRole('link', { name: '홈' }));
-    expect(canvas.queryByRole('menu', { name: '프로필 전환' })).toBeNull();
+    await userEvent.click(canvas.getByRole('menuitem', { name: '새 프로필 추가' }));
+    const handle = canvas.getByRole('textbox', { name: '프로필 핸들' });
+    await userEvent.type(handle, 'outside_reset');
+    expect(handle).toHaveValue('outside_reset');
+
+    const support = canvas.getByRole('button', { name: '설정 & 지원' });
+    await userEvent.click(support);
+    await waitFor(() => expect(canvas.queryByRole('menu', { name: '프로필 전환' })).toBeNull());
+    expect(support).toHaveFocus();
+
+    await userEvent.click(trigger);
+    await waitFor(() => {
+      expect(canvas.queryByRole('form', { name: '새 프로필 만들기' })).toBeNull();
+      expect(canvas.queryByRole('alert')).toBeNull();
+    });
+    await userEvent.click(canvas.getByRole('menuitem', { name: '새 프로필 추가' }));
+    expect(canvas.getByRole('textbox', { name: '프로필 핸들' })).toHaveValue('');
+
+    await userEvent.click(trigger);
+    await waitFor(() => expect(canvas.queryByRole('menu', { name: '프로필 전환' })).toBeNull());
   },
   render: () => (
     <View style={{ height: 900, width: 320 }}>

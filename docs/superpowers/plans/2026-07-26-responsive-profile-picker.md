@@ -19,7 +19,10 @@
 - 프로필 목록만 internal scroll owner다. add action·create form·오류 footer는 목록과 함께 스크롤하지 않는다.
 - 시각적 picker wrapper가 bounds·border·overflow를 소유한다. semantic `menu`는 profile option·separator·add action까지만 포함하고 create form·operation error alert은 같은 고정 footer 위치의 sibling으로 둔다.
 - full·compact Web picker open 시 현재 선택 항목 또는 첫 항목으로 focus를 옮기고 `ArrowUp`·`ArrowDown`·`Home`·`End`를 지원한다. `Escape`는 닫고 trigger focus를 복원하며 `Tab`은 가로채지 않는다.
-- full·compact Web의 선택·생성 실패는 picker와 오류를 유지하고 생성 실패는 입력값을 보존한다. 명시적 close는 create mode, handle 입력과 오류를 모두 초기화한다. mobile Web drawer와 native의 기존 close state 동작은 유지한다.
+- full·compact Web의 선택·생성 실패는 picker와 오류를 유지하고 생성 실패는 입력값을 보존한다. trigger 재실행,
+  full·compact 바깥 pointer close 또는 `Escape`의 명시적 close는 `open=false`, `creating=false`, 빈 handle과
+  오류 없음으로 초기화한다. 바깥 pointer close는 pointer 대상의 기본 focus를 따르고, `Escape`는 trigger focus를
+  복원한다. mobile Web drawer와 native의 기존 close state 동작은 유지한다.
 - GraphQL fragment·mutation payload, Relay normalization, `resetActor`, route와 cache 정책을 바꾸지 않는다.
 - active `add-shell-responsive-breakpoints`의 이전 compact popover delta는 이 변경에 흡수하거나 수정하지 않는다. 최종 active spec sync·archive 전에 최신 drawer 계약이 남는지 별도 확인한다.
 - compact paint 검증에서 clipping 또는 sibling stacking 실패가 발견되면 portal을 추가하지 않고 작업을 중단해 범위 승인을 다시 받는다.
@@ -86,6 +89,7 @@ type Props = CommonProps &
 | 선택 성공 | false | false | 빈 값 | 없음 | actor reset 이후 새 shell |
 | full trigger close | false | false | 빈 값 | 없음 | trigger |
 | compact trigger close | false | false | 빈 값 | 없음 | trigger |
+| full outside pointer close | false | false | 빈 값 | 없음 | pointer 대상의 기본 focus |
 | compact outside pointer close | false | false | 빈 값 | 없음 | pointer 대상의 기본 focus |
 | Web `Escape` close | false | false | 빈 값 | 없음 | trigger |
 

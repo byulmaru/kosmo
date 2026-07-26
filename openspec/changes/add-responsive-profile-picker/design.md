@@ -31,7 +31,7 @@
 - full profile header는 고정 높이와 absolute child 배치에 의존한다. picker overlay는 260px summary 바로 아래에
   anchor하되 flow 높이에 참여하지 않아 navigation의 닫힌 위치를 유지해야 한다.
 - compact drawer는 80px rail 밖으로 확장되므로 sidebar/center sibling의 stacking과 ancestor overflow를 함께 고려해야 한다.
-- Web 바깥 클릭과 `Escape` 처리는 open 상태 동안만 활성화하고 unmount·close 시 정리해야 한다. native 전역 listener나 modal semantics로 확장하지 않는다.
+- full·compact Web 바깥 pointer close와 `Escape` 처리는 open 상태 동안만 활성화하고 unmount·close 시 정리해야 한다. 바깥 pointer listener는 이벤트 기본 동작을 막지 않아 pointer 대상의 기본 focus를 유지하며, native 전역 listener나 modal semantics로 확장하지 않는다.
 - 현재 `PostComposer`의 Web menu는 open 상태에 한정한 `pointerdown`·`keydown` listener, 선택 항목 초기 focus와 `Escape` focus 복원 패턴을 이미 제공하므로 같은 lifecycle 경계를 재사용할 수 있다.
 - 기존 선택 성공은 picker를 닫고 Relay actor를 재생성하며, 생성 성공은 생성된 프로필을 선택한다. 이 데이터 흐름은 layout 변경과 분리해 보존해야 한다.
 
@@ -59,9 +59,10 @@ full·compact Web picker가 열리면 현재 선택 항목, 선택값이 없으�
 
 full·compact Web open 상태에서는 trigger 재실행, trigger와 picker 밖의 pointer interaction, `Escape`, 프로필
 선택 성공을 동일한 close transition으로 모으고 listener를 정리한다. pointer listener는 trigger와 picker
-containment를 먼저 확인해 trigger press와 close가 중복 실행되지 않게 한다. `Escape`로 닫으면 trigger에 focus를
-복원한다. 선택·생성 failure는 close transition을 실행하지 않으며, full·compact Web의 명시적 close transition은
-create state, 입력 handle과 error를 모두 초기화한다. mobile Web drawer와 native의 기존 close state 동작은 유지한다.
+containment를 먼저 확인해 trigger press와 close가 중복 실행되지 않게 하며, pointer event의 기본 동작을 막지
+않아 대상의 기본 focus를 따른다. `Escape`로 닫으면 trigger에 focus를 복원한다. 선택·생성 failure는 close
+transition을 실행하지 않으며, full·compact Web의 명시적 close transition은 `open=false`, `creating=false`,
+빈 handle과 오류 없음으로 초기화한다. mobile Web drawer와 native의 기존 close state 동작은 유지한다.
 
 Storybook fixture는 기존 shell query fixture builder 안에서 10개 이상의 typed profile fixture를 제공한다. full과
 compact surface의 trigger·expanded 상태·overlay 위치·navigation 위치 불변·outside dismissal, keyboard focus

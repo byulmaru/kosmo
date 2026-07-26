@@ -26,6 +26,8 @@
 - **WHEN** full sidebar profile picker가 열린 상태에서 사용자가 같은 프로필 이름 trigger를 다시 실행하거나 바깥을 클릭하거나 `Escape`를 누르거나 프로필 선택을 성공한다
 - **THEN** 시스템은 overlay picker를 닫는다
 - **AND** trigger는 닫힌 accessibility `expanded` 상태와 아래 방향 chevron을 표시한다
+- **AND** 바깥 pointer close이면 시스템은 pointer event의 기본 동작을 막지 않아 pointer 대상의 기본 focus를 따른다
+- **AND** trigger 재실행, 바깥 pointer close 또는 `Escape`의 명시적 close이면 `open=false`, `creating=false`, 빈 handle과 오류 없음으로 초기화한다
 
 #### Scenario: Open the compact picker beside the icon rail
 
@@ -39,6 +41,8 @@
 
 - **WHEN** compact drawer가 열린 상태에서 사용자가 아바타 trigger를 다시 실행하거나 바깥을 클릭하거나 `Escape`를 누르거나 프로필 선택을 성공한다
 - **THEN** 시스템은 compact drawer를 닫는다
+- **AND** 바깥 pointer close이면 시스템은 pointer event의 기본 동작을 막지 않아 pointer 대상의 기본 focus를 따른다
+- **AND** trigger 재실행, 바깥 pointer close 또는 `Escape`의 명시적 close이면 `open=false`, `creating=false`, 빈 handle과 오류 없음으로 초기화한다
 
 ### Requirement: Bounded profile picker content
 
@@ -74,5 +78,7 @@
 
 #### Scenario: Reset transient state after explicit dismissal
 
-- **WHEN** 사용자가 full 또는 compact Web picker를 직접 닫은 뒤 다시 연다
-- **THEN** 시스템은 생성 폼, 프로필 핸들 입력값과 이전 오류 상태를 초기화한다
+- **WHEN** 사용자가 full 또는 compact Web picker를 trigger 재실행, 바깥 pointer close 또는 `Escape`로 직접 닫는다
+- **THEN** 시스템은 `open=false`, `creating=false`, 빈 handle과 오류 없음으로 초기화한다
+- **AND** 바깥 pointer close는 pointer 대상의 기본 focus를 따르고, `Escape`는 해당 trigger로 focus를 복원한다
+- **AND** 사용자가 picker를 다시 열면 생성 폼과 이전 오류는 표시하지 않는다

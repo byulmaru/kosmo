@@ -27,12 +27,14 @@
 - Decision Outcome: `full` 이상 Web에서는 프로필 이름 trigger와 닫힌 260px summary를 유지하고, summary 바로
   아래에 anchored absolute overlay picker를 표시한다. picker는 navigation 위에 paint되지만 navigation의 layout
   위치와 sidebar·중앙 피드 폭을 바꾸지 않는다. backdrop과 focus trap을 사용하지 않으며 같은 trigger 재실행,
-  바깥 클릭, `Escape`, 프로필 선택 성공으로 닫는다. `compact` drawer와 mobile Web/native surface는 유지한다.
+  바깥 pointer close, `Escape`, 프로필 선택 성공으로 닫는다. 바깥 pointer close는 이벤트 기본 동작을 막지 않아
+  pointer 대상의 기본 focus를 따르며, 명시적 close로 `open=false`, `creating=false`, 빈 handle과 오류 없음으로
+  초기화한다. `compact` drawer와 mobile Web/native surface는 유지한다.
 - Alternatives Considered: 기존 inline flow는 navigation 접근성과 정보 구조를 흔든다. full sidebar 전체 폭을
   확장하거나 modal을 사용하면 layout 또는 background interaction을 불필요하게 바꾼다.
 - Consequences: full Web render는 flow 높이에 참여하지 않는 absolute layer를 사용하고 outside interaction
-  containment를 compact와 함께 지원해야 한다. full sidebar parent의 stacking과 1280·1440px paint order를 직접
-  확인해야 한다.
+  containment와 transient reset을 compact와 함께 지원해야 한다. full sidebar parent의 stacking과 1280·1440px
+  paint order를 직접 확인해야 한다.
 - Confirmation / Follow-up: Storybook에서 open 전후 navigation top이 같고 overlay가 navigation 위에 표시되는지,
   same trigger·outside·`Escape`·선택 성공 dismissal과 장목록 고정 footer를 확인한다.
 
@@ -103,7 +105,7 @@
 - Authority / Provenance: `docs/design/breakpoints.md`, `PROD-238`
 - Status: Active
 - Context / Problem: 기존 close effect는 create mode와 error만 지우고 입력 handle을 보존해, 닫았다 다시 열 때 이전 생성 폼 상태가 일부 남는다.
-- Decision Outcome: full·compact Web에서 trigger 재실행, compact 바깥 클릭 또는 `Escape`처럼 사용자가 picker를 명시적으로 닫으면 create mode, handle 입력값과 error를 초기화한다. 선택·생성 실패는 picker와 실패 시점의 입력·오류를 유지한다. mobile Web drawer와 native의 기존 close state 동작은 유지한다.
+- Decision Outcome: full·compact Web에서 trigger 재실행, full·compact 바깥 pointer close 또는 `Escape`처럼 사용자가 picker를 명시적으로 닫으면 `open=false`, `creating=false`, 빈 handle과 오류 없음으로 초기화한다. 바깥 pointer close는 이벤트 기본 동작을 막지 않아 pointer 대상의 기본 focus를 따르고, `Escape`는 trigger focus를 복원한다. 선택·생성 실패는 picker와 실패 시점의 입력·오류를 유지한다. mobile Web drawer와 native의 기존 close state 동작은 유지한다.
 - Alternatives Considered: handle을 보존하면 명시적 close 뒤 새 session처럼 다시 연다는 계약과 맞지 않는다.
 - Consequences: 성공·실패·close reason별 `open`·`creating`·`handle`·`error`·focus 기대값을 가장 가까운 Storybook interaction에서 확인해야 한다.
 - Confirmation / Follow-up: 생성 실패 input 보존과 명시적 close 후 빈 input·오류 제거를 함께 검증한다.
