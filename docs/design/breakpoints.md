@@ -32,9 +32,10 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
   비모달 overlay drawer로 열리며, 레일과 중앙 피드의 실제 layout 폭을 바꾸지 않는다.
 - compact drawer는 본문보다 위에 표시하지만 backdrop과 focus trap을 사용하지 않는다. 아바타 재클릭,
   바깥 클릭, `Escape`, 프로필 선택 성공으로 닫힌다.
-- `≥ full`에서는 프로필 이름과 chevron을 하나의 trigger로 사용하고 이름 아래에 inline picker를 펼친다.
-  닫힌 프로필 요약 영역은 기존 260px 높이를 유지하고, 열린 picker는 그 요약과 navigation 사이의 flow
-  sibling으로 높이에 참여해 navigation을 아래로 배치한다. 같은 trigger를 다시 실행하면 picker를 닫는다.
+- `≥ full`에서는 프로필 이름과 chevron을 하나의 trigger로 사용하고, 닫힌 260px 프로필 요약 영역 바로
+  아래에 anchored absolute overlay picker를 표시한다. picker는 navigation 위에 표시하되 navigation의 layout
+  위치와 sidebar·중앙 피드의 실제 폭을 바꾸지 않는다. backdrop과 focus trap을 사용하지 않으며, 같은 trigger
+  재실행, 바깥 클릭, `Escape`, 프로필 선택 성공으로 닫는다.
   닫힌 상태는 아래 방향, 열린 상태는 위 방향 chevron으로 표시하되 chevron 자체는 별도 focus target이
   아니다.
 - trigger는 열린 상태를 accessibility `expanded` 상태로 노출한다.
@@ -66,6 +67,8 @@ React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owne
 - `compact`~`full` profile picker가 열렸을 때는 overlay drawer 안의 프로필 목록만 internal scroll owner가 된다.
   drawer 밖의 wheel 입력은 기존 document scroll 흐름을 유지한다.
 - `≥ full`에서는 풀 사이드바와 우측 레일이 각각 layout flow 안의 sticky column으로 배치된다. 두 rail은 중앙 컬럼과 겹치지 않도록 width 계산에 참여한다.
+- `≥ full` profile picker가 열렸을 때는 overlay 안의 프로필 목록만 internal scroll owner가 된다. overlay 밖의
+  wheel 입력은 기존 document scroll 흐름을 유지하고 navigation의 layout 위치는 닫힌 상태와 같게 유지한다.
 - 우측 레일 콘텐츠가 viewport보다 긴 경우 rail 내부 overflow를 허용할 수 있지만, 중앙 피드를 별도 internal scroller로 만들지는 않는다.
 - 일반 route 이동과 back/forward는 Expo Router와 browser history의 document scroll policy에 맞춘다. 검색 화면의 query-only `router.push`/`setParams` 이동은 현재 document scroll과 입력 focus를 보존하도록 명시적으로 검증한다.
 - shell chrome에서 중앙 피드로 wheel 이벤트를 인위적으로 전달하지 않는다.

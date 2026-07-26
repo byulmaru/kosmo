@@ -4,13 +4,14 @@
 
 **Authority / Provenance:** `docs/design/breakpoints.md`, `docs/design/figma.md`, `PROD-238` — Web 앱 셸은 full sidebar와 compact icon rail에 각각 맞는 profile picker surface를 제공해야 하며(MUST), picker를 열어도 중앙 피드의 layout 폭을 바꾸지 않아야 한다(MUST).
 
-#### Scenario: Expand the full sidebar picker inline
+#### Scenario: Open the full sidebar picker as an overlay
 
 - **WHEN** 사용자가 `full` 이상 Web에서 프로필 이름 trigger를 실행한다
-- **THEN** 시스템은 프로필 이름 아래에 profile picker를 inline으로 펼친다
+- **THEN** 시스템은 닫힌 260px 프로필 요약 영역 바로 아래에 profile picker를 anchored absolute overlay로 표시한다
 - **AND** 닫힌 상태의 기존 260px 상단 프로필 요약 영역은 유지한다
-- **AND** 열린 picker는 260px 프로필 요약 영역과 sidebar navigation 사이의 flow sibling으로 높이에 참여한다
-- **AND** picker가 차지하는 높이에 맞춰 sidebar navigation을 아래로 배치한다
+- **AND** picker는 sidebar navigation 위에 표시하되 navigation의 layout 위치를 바꾸지 않는다
+- **AND** backdrop과 focus trap을 사용하지 않는다
+- **AND** sidebar의 실제 layout 폭은 유지한다
 - **AND** 중앙 피드의 layout 폭은 유지한다
 
 #### Scenario: Expose the full picker state from one trigger
@@ -20,10 +21,10 @@
 - **AND** 닫힌 상태는 아래 방향 chevron, 열린 상태는 위 방향 chevron으로 표시한다
 - **AND** chevron은 별도 focus target이 아니다
 
-#### Scenario: Close the full picker from the same trigger
+#### Scenario: Dismiss the full picker
 
-- **WHEN** full sidebar profile picker가 열린 상태에서 사용자가 같은 프로필 이름 trigger를 다시 실행한다
-- **THEN** 시스템은 inline picker를 닫는다
+- **WHEN** full sidebar profile picker가 열린 상태에서 사용자가 같은 프로필 이름 trigger를 다시 실행하거나 바깥을 클릭하거나 `Escape`를 누르거나 프로필 선택을 성공한다
+- **THEN** 시스템은 overlay picker를 닫는다
 - **AND** trigger는 닫힌 accessibility `expanded` 상태와 아래 방향 chevron을 표시한다
 
 #### Scenario: Open the compact picker beside the icon rail

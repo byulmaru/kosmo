@@ -9,12 +9,32 @@
 - Decision Date: 2026-07-26
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/design/breakpoints.md`, `docs/design/figma.md`, `PROD-238`
-- Status: Active
+- Status: Superseded
 - Context / Problem: full sidebar와 compact icon rail은 trigger와 가용 폭이 다르며 하나의 absolute dropdown 표현이 두 구조를 모두 안전하게 만족하지 못한다.
 - Decision Outcome: `full` 이상 Web에서는 프로필 이름 trigger 아래 inline picker를 사용하고, `compact` 이상 `full` 미만 Web에서는 아바타 trigger 오른쪽 비모달 overlay drawer를 사용한다. Android/iOS와 mobile Web drawer는 이 재설계에서 제외한다.
 - Alternatives Considered: 모든 Web 구간에서 같은 overlay를 사용하는 방식은 full sidebar의 정보 구조를 활용하지 못한다. compact rail 자체를 확장하는 방식은 중앙 피드 폭과 breakpoint layout을 흔든다.
 - Consequences: shell surface 정보를 `compact` boolean과 별개로 구분해야 한다. `SidebarNavigation`이 full summary render seam을 소유하고 `ProfileSwitcher`가 그 260px summary와 picker를 별도 flow siblings로 배치해야 한다.
 - Confirmation / Follow-up: full·compact Storybook surface와 768·1024·1279·1280·1440px 시각 검증으로 확인한다.
+
+### Full picker도 navigation을 밀지 않는 비모달 overlay로 표시한다
+
+- Decision Date: 2026-07-27
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/breakpoints.md`, `docs/design/figma.md`, `PROD-238`
+- Status: Active
+- Context / Problem: full inline picker는 긴 프로필 목록 높이만큼 sidebar navigation을 아래로 밀어 주요 메뉴를
+  viewport 밖으로 보낼 수 있고, 프로필 전환을 일시적인 picker가 아니라 sidebar 구조 확장처럼 보이게 한다.
+- Decision Outcome: `full` 이상 Web에서는 프로필 이름 trigger와 닫힌 260px summary를 유지하고, summary 바로
+  아래에 anchored absolute overlay picker를 표시한다. picker는 navigation 위에 paint되지만 navigation의 layout
+  위치와 sidebar·중앙 피드 폭을 바꾸지 않는다. backdrop과 focus trap을 사용하지 않으며 같은 trigger 재실행,
+  바깥 클릭, `Escape`, 프로필 선택 성공으로 닫는다. `compact` drawer와 mobile Web/native surface는 유지한다.
+- Alternatives Considered: 기존 inline flow는 navigation 접근성과 정보 구조를 흔든다. full sidebar 전체 폭을
+  확장하거나 modal을 사용하면 layout 또는 background interaction을 불필요하게 바꾼다.
+- Consequences: full Web render는 flow 높이에 참여하지 않는 absolute layer를 사용하고 outside interaction
+  containment를 compact와 함께 지원해야 한다. full sidebar parent의 stacking과 1280·1440px paint order를 직접
+  확인해야 한다.
+- Confirmation / Follow-up: Storybook에서 open 전후 navigation top이 같고 overlay가 navigation 위에 표시되는지,
+  same trigger·outside·`Escape`·선택 성공 dismissal과 장목록 고정 footer를 확인한다.
 
 ### Compact drawer는 layout을 바꾸지 않는 비모달 surface다
 
