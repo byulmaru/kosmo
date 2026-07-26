@@ -148,7 +148,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
             style={[
               styles.sidebar,
               web && webStickyRail,
-              compact && switcherOpen && styles.sidebarWithOverlay,
+              switcherOpen && styles.sidebarWithOverlay,
               { borderColor: theme.border, width: full ? 320 : 80 },
             ]}
           >

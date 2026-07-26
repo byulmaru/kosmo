@@ -166,7 +166,7 @@ export function ProfileSwitcher({
     initialItem?.focus();
     initialItem?.scrollIntoView({ block: 'nearest' });
     const onPointerDown = (event: PointerEvent) => {
-      if (surface === 'compact' && !control?.contains(event.target as Node)) {
+      if (!control?.contains(event.target as Node)) {
         setOpen(false);
       }
     };
@@ -452,7 +452,7 @@ export function ProfileSwitcher({
       {Platform.OS === 'web' ? (
         open ? (
           fullWeb ? (
-            <View style={styles.fullInlineMenu}>{menu}</View>
+            <View style={[styles.webMenu, styles.fullOverlayPosition]}>{menu}</View>
           ) : (
             <View
               style={[
@@ -505,7 +505,7 @@ const styles = StyleSheet.create({
   webMenu: { position: 'absolute', width: 280, zIndex: 30 },
   compactMenuPosition: { left: 62, top: 0 },
   fullMenuPosition: { left: 0, top: 50 },
-  fullInlineMenu: { width: 280 },
+  fullOverlayPosition: { left: 0, top: 260 },
   menu: {
     borderRadius: 14,
     borderWidth: 1,

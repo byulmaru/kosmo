@@ -200,19 +200,28 @@ export const ResponsiveProfilePickerFull: Story = {
     const trigger = canvas.getByRole('button', { name: '프로필 목록' });
     const summary = canvas.getByLabelText('활성 프로필');
     const navigation = canvas.getByRole('navigation', { name: '주요 메뉴' });
-    const summaryBottom = summary.getBoundingClientRect().bottom;
     const closedNavigationTop = navigation.getBoundingClientRect().top;
 
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(trigger);
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
     const menu = await canvas.findByRole('menu', { name: '프로필 전환' });
+    const menuRect = menu.getBoundingClientRect();
+    const openNavigationTop = navigation.getBoundingClientRect().top;
+
     expect(menu).toBeVisible();
-    expect(menu.getBoundingClientRect().top).toBeGreaterThanOrEqual(summaryBottom);
-    expect(navigation.getBoundingClientRect().top).toBeGreaterThan(closedNavigationTop);
+    expect(menuRect.top).toBeGreaterThanOrEqual(summary.getBoundingClientRect().bottom);
+    expect(openNavigationTop).toBe(closedNavigationTop);
+    expect(menuRect.bottom).toBeGreaterThan(openNavigationTop);
+    expect(canvas.queryByRole('dialog')).toBeNull();
 
     await userEvent.click(trigger);
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(canvas.queryByRole('menu', { name: '프로필 전환' })).toBeNull();
+
+    await userEvent.click(trigger);
+    await canvas.findByRole('menu', { name: '프로필 전환' });
+    await userEvent.click(canvas.getByRole('link', { name: '홈' }));
     expect(canvas.queryByRole('menu', { name: '프로필 전환' })).toBeNull();
   },
   render: () => (

@@ -54,13 +54,13 @@ Web full sidebar와 compact icon rail에서 각각 자연스러운 trigger와 su
 - full·compact exact-width paint 검증에서 ancestor clipping 또는 sibling stacking 실패가 확인되면
   portal/layer host로 조용히 확대하지 않고 구현을 중단해 별도 승인을 받는다.
 
-- [ ] 1.1 닫힌 260px full profile summary를 유지하면서 picker를 summary 바로 아래의 anchored absolute overlay로
+- [x] 1.1 닫힌 260px full profile summary를 유지하면서 picker를 summary 바로 아래의 anchored absolute overlay로
       표시하고 navigation 위치와 sidebar·중앙 피드 폭을 유지하며, 같은 이름 trigger의 expanded 상태·위아래
       chevron과 같은 trigger·바깥 클릭·`Escape`·선택 성공 dismissal을 검증한다.
 - [x] 1.2 mobile/native surface를 보존하면서 compact avatar trigger 오른쪽에 layout 폭을 바꾸지 않는 absolute overlay drawer를 표시하고, trigger 재실행·바깥 클릭·`Escape`·선택 성공 dismissal을 제공한다.
 - [x] 1.3 프로필 목록만 제한된 높이에서 스크롤하고 add/create footer를 밖에 고정하며, 선택 항목 초기 focus·방향키 이동·focus 가시성·`Escape` focus 복원을 제공한다.
 - [x] 1.4 선택·생성 failure는 picker·오류와 생성 입력을 유지하고, 명시적 close는 생성 폼·handle·오류를 초기화한다.
-- [ ] 1.5 기존 Shell Storybook 영역의 10개 이상 typed profile fixture에서 full overlay의 navigation 위치 불변과
+- [x] 1.5 기존 Shell Storybook 영역의 10개 이상 typed profile fixture에서 full overlay의 navigation 위치 불변과
       outside dismissal을 추가 검증하고 compact surface·기존 선택·생성 interaction과 actor-flow E2E를 유지한다.
-- [ ] 1.6 관련 typecheck·Storybook test/build·기존 profile-switcher E2E를 다시 통과시키고 1280·1440px full
+- [x] 1.6 관련 typecheck·Storybook test/build·기존 profile-switcher E2E를 다시 통과시키고 1280·1440px full
       overlay 시각 검증, OpenSpec scoped/all strict validation과 diff 검증 결과를 기록한다.
