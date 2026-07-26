@@ -1,7 +1,16 @@
 import { profileHandleSchema } from '@kosmo/core/validation/profile';
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -9,6 +18,7 @@ import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import type { ReactNode } from 'react';
+import type { ViewStyle } from 'react-native';
 import type { ProfileSwitcher_query$key } from './__generated__/ProfileSwitcher_query.graphql';
 import type { ProfileSwitcherCreateProfileMutation } from './__generated__/ProfileSwitcherCreateProfileMutation.graphql';
 import type { ProfileSwitcherSelectProfileMutation } from './__generated__/ProfileSwitcherSelectProfileMutation.graphql';
@@ -78,6 +88,13 @@ const CreateProfileMutation = graphql`
 
 export type ProfileSwitcherSurface = 'compact' | 'drawer' | 'full';
 
+const webCompactPickerBounds = {
+  maxHeight: 'min(560px, calc(100vh - 32px))',
+} as unknown as ViewStyle;
+const webFullPickerBounds = {
+  maxHeight: 'min(560px, calc(100vh - 276px))',
+} as unknown as ViewStyle;
+
 type CommonProps = {
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
@@ -105,6 +122,7 @@ export function ProfileSwitcher({
   const [handle, setHandle] = useState('');
   const [error, setError] = useState<string | null>(null);
   const controlRef = useRef<View>(null);
+  const menuRef = useRef<View>(null);
   const triggerRef = useRef<View>(null);
   const [commitSelect, selecting] =
     useMutation<ProfileSwitcherSelectProfileMutation>(SelectProfileMutation);
@@ -115,6 +133,7 @@ export function ProfileSwitcher({
   const busy = selecting || creatingProfile;
   const compact = surface === 'compact';
   const fullWeb = Platform.OS === 'web' && surface === 'full';
+  const redesignedWeb = Platform.OS === 'web' && surface !== 'drawer';
   const open = controlledOpen ?? internalOpen;
   const setOpen = (nextOpen: boolean) => {
     if (controlledOpen === undefined) {
@@ -127,8 +146,11 @@ export function ProfileSwitcher({
     if (!open) {
       setCreating(false);
       setError(null);
+      if (redesignedWeb) {
+        setHandle('');
+      }
     }
-  }, [open]);
+  }, [open, redesignedWeb]);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !open || surface === 'drawer') {
@@ -136,20 +158,43 @@ export function ProfileSwitcher({
     }
 
     const control = controlRef.current as unknown as HTMLElement | null;
+    const menu = menuRef.current as unknown as HTMLElement | null;
     const trigger = triggerRef.current as unknown as HTMLElement | null;
+    const items = Array.from(menu?.querySelectorAll<HTMLElement>('[role="menuitemradio"]') ?? []);
+    const initialItem =
+      items.find((item) => item.getAttribute('aria-checked') === 'true') ?? items[0];
+    initialItem?.focus();
+    initialItem?.scrollIntoView({ block: 'nearest' });
     const onPointerDown = (event: PointerEvent) => {
       if (surface === 'compact' && !control?.contains(event.target as Node)) {
         setOpen(false);
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setOpen(false);
+        trigger?.focus();
+        return;
+      }
+
+      const current = document.activeElement as HTMLElement | null;
+      const index = current ? items.indexOf(current) : -1;
+      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || index < 0) {
         return;
       }
 
       event.preventDefault();
-      setOpen(false);
-      trigger?.focus();
+      const nextIndex =
+        event.key === 'Home'
+          ? 0
+          : event.key === 'End'
+            ? items.length - 1
+            : event.key === 'ArrowDown'
+              ? (index + 1) % items.length
+              : (index - 1 + items.length) % items.length;
+      items[nextIndex]?.focus();
+      items[nextIndex]?.scrollIntoView({ block: 'nearest' });
     };
 
     document.addEventListener('pointerdown', onPointerDown);
@@ -208,41 +253,66 @@ export function ProfileSwitcher({
     });
   };
 
+  const surfaceBounds = !redesignedWeb
+    ? undefined
+    : surface === 'compact'
+      ? webCompactPickerBounds
+      : webFullPickerBounds;
   const menu = (
-    <View style={[styles.menu, { backgroundColor: theme.card, borderColor: theme.border }]}>
-      <View accessibilityLabel="프로필 전환" accessibilityRole="menu" style={styles.menuItems}>
-        {profiles.map((profile) => {
-          const selected = active?.id === profile.id;
-          return (
-            <Pressable
-              aria-checked={selected}
-              accessibilityRole={Platform.OS === 'web' ? undefined : 'radio'}
-              accessibilityState={{ checked: selected, disabled: busy }}
-              disabled={busy}
-              key={profile.id}
-              onPress={() => selectProfile(profile.id)}
-              role={Platform.OS === 'web' ? ('menuitemradio' as 'radio') : undefined}
-              style={({ pressed }) => [
-                styles.profile,
-                {
-                  backgroundColor: selected || pressed ? theme.surface : 'transparent',
-                  opacity: busy ? 0.5 : 1,
-                },
-              ]}
-            >
-              <Avatar label={profile.displayName} size={selected ? 48 : 32} />
-              <View style={styles.profileLabel}>
-                <Text numberOfLines={1} style={[styles.profileName, { color: theme.text }]}>
-                  {profile.displayName}
-                </Text>
-                <Text numberOfLines={1} style={[styles.handle, { color: theme.textSecondary }]}>
-                  {profile.relativeHandle}
-                </Text>
-              </View>
-              {selected ? <CheckIcon color={theme.text} size={16} /> : null}
-            </Pressable>
-          );
-        })}
+    <View
+      style={[
+        styles.menu,
+        surfaceBounds,
+        { backgroundColor: theme.card, borderColor: theme.border },
+      ]}
+    >
+      <View
+        accessibilityLabel="프로필 전환"
+        accessibilityRole={Platform.OS === 'web' ? undefined : 'menu'}
+        ref={menuRef}
+        role={Platform.OS === 'web' ? 'menu' : undefined}
+        style={styles.menuRegion}
+      >
+        <ScrollView
+          accessibilityLabel="전환할 프로필 목록"
+          contentContainerStyle={styles.profileListContent}
+          role={Platform.OS === 'web' ? 'group' : undefined}
+          style={styles.profileList}
+        >
+          {profiles.map((profile, index) => {
+            const selected = active?.id === profile.id;
+            return (
+              <Pressable
+                aria-checked={selected}
+                accessibilityRole={Platform.OS === 'web' ? undefined : 'radio'}
+                accessibilityState={{ checked: selected, disabled: busy }}
+                disabled={busy}
+                key={profile.id}
+                onPress={() => selectProfile(profile.id)}
+                role={Platform.OS === 'web' ? ('menuitemradio' as 'radio') : undefined}
+                tabIndex={Platform.OS === 'web' && (selected || (!active && index === 0)) ? 0 : -1}
+                style={({ pressed }) => [
+                  styles.profile,
+                  {
+                    backgroundColor: selected || pressed ? theme.surface : 'transparent',
+                    opacity: busy ? 0.5 : 1,
+                  },
+                ]}
+              >
+                <Avatar label={profile.displayName} size={selected ? 48 : 32} />
+                <View style={styles.profileLabel}>
+                  <Text numberOfLines={1} style={[styles.profileName, { color: theme.text }]}>
+                    {profile.displayName}
+                  </Text>
+                  <Text numberOfLines={1} style={[styles.handle, { color: theme.textSecondary }]}>
+                    {profile.relativeHandle}
+                  </Text>
+                </View>
+                {selected ? <CheckIcon color={theme.text} size={16} /> : null}
+              </Pressable>
+            );
+          })}
+        </ScrollView>
 
         <View
           accessibilityRole={Platform.OS === 'web' ? undefined : 'none'}
@@ -275,57 +345,59 @@ export function ProfileSwitcher({
         ) : null}
       </View>
 
-      {creating ? (
-        <View
-          accessibilityLabel="새 프로필 만들기"
-          role={Platform.OS === 'web' ? 'form' : undefined}
-          style={styles.createForm}
-        >
-          <View style={styles.createRow}>
-            <TextInput
-              aria-invalid={Boolean(error)}
-              accessibilityLabel="프로필 핸들"
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!busy}
-              onChangeText={setHandle}
-              onSubmitEditing={createProfile}
-              placeholder="새 프로필 핸들"
-              placeholderTextColor={theme.textSecondary}
-              style={[
-                styles.input,
-                {
-                  backgroundColor: theme.card,
-                  borderColor: error ? theme.danger : theme.border,
-                  color: theme.text,
-                },
-              ]}
-              value={handle}
-            />
-            <Button
-              disabled={busy}
-              loading={busy}
-              onPress={createProfile}
-              style={styles.createButton}
-            >
-              만들기
-            </Button>
-          </View>
-          <Text style={[styles.help, { color: theme.textSecondary }]}>
-            영문, 숫자, 밑줄(_)만 사용할 수 있어요.
-          </Text>
-          {error ? (
-            <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
-              {error}
+      <View style={styles.pickerFooter}>
+        {creating ? (
+          <View
+            accessibilityLabel="새 프로필 만들기"
+            role={Platform.OS === 'web' ? 'form' : undefined}
+            style={styles.createForm}
+          >
+            <View style={styles.createRow}>
+              <TextInput
+                aria-invalid={Boolean(error)}
+                accessibilityLabel="프로필 핸들"
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!busy}
+                onChangeText={setHandle}
+                onSubmitEditing={createProfile}
+                placeholder="새 프로필 핸들"
+                placeholderTextColor={theme.textSecondary}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.card,
+                    borderColor: error ? theme.danger : theme.border,
+                    color: theme.text,
+                  },
+                ]}
+                value={handle}
+              />
+              <Button
+                disabled={busy}
+                loading={busy}
+                onPress={createProfile}
+                style={styles.createButton}
+              >
+                만들기
+              </Button>
+            </View>
+            <Text style={[styles.help, { color: theme.textSecondary }]}>
+              영문, 숫자, 밑줄(_)만 사용할 수 있어요.
             </Text>
-          ) : null}
-        </View>
-      ) : null}
-      {!creating && error ? (
-        <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
-          {error}
-        </Text>
-      ) : null}
+            {error ? (
+              <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
+                {error}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+        {!creating && error ? (
+          <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
+            {error}
+          </Text>
+        ) : null}
+      </View>
     </View>
   );
 
@@ -432,10 +504,14 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     boxShadow: '0 6px 20px rgba(0, 0, 0, 0.16)',
+    overflow: 'hidden',
     padding: 6,
     width: 280,
   },
-  menuItems: { gap: 2 },
+  menuRegion: { flexShrink: 1, minHeight: 0 },
+  profileList: { flexShrink: 1, minHeight: 0 },
+  profileListContent: { gap: 2 },
+  pickerFooter: { flexShrink: 0 },
   profileName: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
   handle: { fontFamily: 'SUIT', ...typography.xsm },
   backdrop: {

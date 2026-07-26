@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { commitLocalUpdate } from 'relay-runtime';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { BottomTabBar } from '@/components/shell/BottomTabBar';
@@ -49,6 +49,19 @@ const followedProfile = profile({
 const query = {
   ...shellQuery({ profiles: [selectedProfile, secondProfile], selectedProfile }),
   node: followedProfile,
+};
+const additionalProfiles = Array.from({ length: 11 }, (_, index) =>
+  profile({
+    displayName: `테스트 프로필 ${index + 1}`,
+    handle: `picker_${index + 1}`,
+    id: `profile-picker-${index + 1}`,
+    relativeHandle: `@picker_${index + 1}`,
+    viewerState: { follow: null, followRequest: null, isSelf: true },
+  }),
+);
+const longProfileQuery = {
+  ...query,
+  ...shellQuery({ profiles: [selectedProfile, ...additionalProfiles], selectedProfile }),
 };
 
 const ShellStoriesQuery = graphql`
@@ -545,6 +558,11 @@ export const ProfileSwitcherCreateGraphQLError: Story = {
       '프로필을 생성하지 못했습니다.',
     );
     expect(input).toHaveValue('kept_handle');
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    expect(canvas.queryByRole('alert')).toBeNull();
+    await userEvent.click(canvas.getByRole('menuitem', { name: '새 프로필 추가' }));
+    expect(canvas.getByRole('textbox', { name: '프로필 핸들' })).toHaveValue('');
   },
   render: () => <ProfileSwitcherStory />,
 };
@@ -901,7 +919,21 @@ export const UniversalCompact: Story = {
 
 export const ResponsiveProfilePickerCompact: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
-  parameters: universalParameters,
+  parameters: {
+    ...universalParameters,
+    relay: {
+      data: longProfileQuery,
+      mutationResponse: {
+        selectProfile: {
+          profile: additionalProfiles[0]!,
+          session: {
+            id: 'session-story',
+            selectedProfile: { id: additionalProfiles[0]!.id },
+          },
+        },
+      },
+    },
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('button', { name: '프로필 목록' });
@@ -909,10 +941,38 @@ export const ResponsiveProfilePickerCompact: Story = {
 
     await userEvent.click(trigger);
     const menu = await canvas.findByRole('menu', { name: '프로필 전환' });
+    const list = canvas.getByLabelText('전환할 프로필 목록');
+    const options = within(menu).getAllByRole('menuitemradio');
+    const footerAction = canvas.getByRole('menuitem', { name: '새 프로필 추가' });
     expect(menu).toBeVisible();
     expect(menu.getBoundingClientRect().left).toBeGreaterThanOrEqual(80);
     expect(canvas.queryByRole('dialog')).toBeNull();
+    expect(options).toHaveLength(12);
+    expect(options[0]).toHaveFocus();
+    expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
+    expect(footerAction).toBeVisible();
 
+    await userEvent.keyboard('{ArrowDown}');
+    expect(options[1]).toHaveFocus();
+    await userEvent.keyboard('{ArrowUp}');
+    expect(options[0]).toHaveFocus();
+    await userEvent.keyboard('{End}');
+    expect(options[11]).toHaveFocus();
+    const menuRect = list.getBoundingClientRect();
+    const focusedRect = options[11]!.getBoundingClientRect();
+    expect(focusedRect.top).toBeGreaterThanOrEqual(menuRect.top);
+    expect(focusedRect.bottom).toBeLessThanOrEqual(menuRect.bottom);
+
+    await userEvent.keyboard('{Home}');
+    expect(options[0]).toHaveFocus();
+    const firstRect = options[0]!.getBoundingClientRect();
+    expect(firstRect.top).toBeGreaterThanOrEqual(menuRect.top);
+    expect(firstRect.bottom).toBeLessThanOrEqual(menuRect.bottom);
+
+    await userEvent.click(options[1]!);
+    await waitFor(() => expect(canvas.queryByRole('menu', { name: '프로필 전환' })).toBeNull());
+
+    await userEvent.click(trigger);
     await userEvent.click(route);
     expect(canvas.queryByRole('menu', { name: '프로필 전환' })).toBeNull();
 
