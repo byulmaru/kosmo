@@ -258,10 +258,44 @@ export function ProfileSwitcher({
     : surface === 'compact'
       ? webCompactPickerBounds
       : webFullPickerBounds;
+  const profileOptions = profiles.map((profile, index) => {
+    const selected = active?.id === profile.id;
+    return (
+      <Pressable
+        aria-checked={selected}
+        accessibilityRole={Platform.OS === 'web' ? undefined : 'radio'}
+        accessibilityState={{ checked: selected, disabled: busy }}
+        disabled={busy}
+        key={profile.id}
+        onPress={() => selectProfile(profile.id)}
+        role={Platform.OS === 'web' ? ('menuitemradio' as 'radio') : undefined}
+        tabIndex={redesignedWeb ? (selected || (!active && index === 0) ? 0 : -1) : undefined}
+        style={({ pressed }) => [
+          styles.profile,
+          {
+            backgroundColor: selected || pressed ? theme.surface : 'transparent',
+            opacity: busy ? 0.5 : 1,
+          },
+        ]}
+      >
+        <Avatar label={profile.displayName} size={selected ? 48 : 32} />
+        <View style={styles.profileLabel}>
+          <Text numberOfLines={1} style={[styles.profileName, { color: theme.text }]}>
+            {profile.displayName}
+          </Text>
+          <Text numberOfLines={1} style={[styles.handle, { color: theme.textSecondary }]}>
+            {profile.relativeHandle}
+          </Text>
+        </View>
+        {selected ? <CheckIcon color={theme.text} size={16} /> : null}
+      </Pressable>
+    );
+  });
   const menu = (
     <View
       style={[
         styles.menu,
+        redesignedWeb ? styles.redesignedMenu : undefined,
         surfaceBounds,
         { backgroundColor: theme.card, borderColor: theme.border },
       ]}
@@ -271,48 +305,20 @@ export function ProfileSwitcher({
         accessibilityRole={Platform.OS === 'web' ? undefined : 'menu'}
         ref={menuRef}
         role={Platform.OS === 'web' ? 'menu' : undefined}
-        style={styles.menuRegion}
+        style={redesignedWeb ? styles.redesignedMenuRegion : styles.menuItems}
       >
-        <ScrollView
-          accessibilityLabel="전환할 프로필 목록"
-          contentContainerStyle={styles.profileListContent}
-          role={Platform.OS === 'web' ? 'group' : undefined}
-          style={styles.profileList}
-        >
-          {profiles.map((profile, index) => {
-            const selected = active?.id === profile.id;
-            return (
-              <Pressable
-                aria-checked={selected}
-                accessibilityRole={Platform.OS === 'web' ? undefined : 'radio'}
-                accessibilityState={{ checked: selected, disabled: busy }}
-                disabled={busy}
-                key={profile.id}
-                onPress={() => selectProfile(profile.id)}
-                role={Platform.OS === 'web' ? ('menuitemradio' as 'radio') : undefined}
-                tabIndex={Platform.OS === 'web' && (selected || (!active && index === 0)) ? 0 : -1}
-                style={({ pressed }) => [
-                  styles.profile,
-                  {
-                    backgroundColor: selected || pressed ? theme.surface : 'transparent',
-                    opacity: busy ? 0.5 : 1,
-                  },
-                ]}
-              >
-                <Avatar label={profile.displayName} size={selected ? 48 : 32} />
-                <View style={styles.profileLabel}>
-                  <Text numberOfLines={1} style={[styles.profileName, { color: theme.text }]}>
-                    {profile.displayName}
-                  </Text>
-                  <Text numberOfLines={1} style={[styles.handle, { color: theme.textSecondary }]}>
-                    {profile.relativeHandle}
-                  </Text>
-                </View>
-                {selected ? <CheckIcon color={theme.text} size={16} /> : null}
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+        {redesignedWeb ? (
+          <ScrollView
+            accessibilityLabel="전환할 프로필 목록"
+            contentContainerStyle={styles.profileListContent}
+            role="group"
+            style={styles.profileList}
+          >
+            {profileOptions}
+          </ScrollView>
+        ) : (
+          profileOptions
+        )}
 
         <View
           accessibilityRole={Platform.OS === 'web' ? undefined : 'none'}
@@ -504,11 +510,12 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     boxShadow: '0 6px 20px rgba(0, 0, 0, 0.16)',
-    overflow: 'hidden',
     padding: 6,
     width: 280,
   },
-  menuRegion: { flexShrink: 1, minHeight: 0 },
+  redesignedMenu: { overflow: 'hidden' },
+  menuItems: { gap: 2 },
+  redesignedMenuRegion: { flexShrink: 1, minHeight: 0 },
   profileList: { flexShrink: 1, minHeight: 0 },
   profileListContent: { gap: 2 },
   pickerFooter: { flexShrink: 0 },
