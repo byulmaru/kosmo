@@ -899,6 +899,39 @@ export const UniversalCompact: Story = {
   ),
 };
 
+export const ResponsiveProfilePickerCompact: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: universalParameters,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: '프로필 목록' });
+    const route = canvas.getByText('홈 타임라인');
+
+    await userEvent.click(trigger);
+    const menu = await canvas.findByRole('menu', { name: '프로필 전환' });
+    expect(menu).toBeVisible();
+    expect(menu.getBoundingClientRect().left).toBeGreaterThanOrEqual(80);
+    expect(canvas.queryByRole('dialog')).toBeNull();
+
+    await userEvent.click(route);
+    expect(canvas.queryByRole('menu', { name: '프로필 전환' })).toBeNull();
+
+    await userEvent.click(trigger);
+    await userEvent.click(trigger);
+    expect(canvas.queryByRole('menu', { name: '프로필 전환' })).toBeNull();
+
+    await userEvent.click(trigger);
+    await userEvent.keyboard('{Escape}');
+    expect(canvas.queryByRole('menu', { name: '프로필 전환' })).toBeNull();
+    expect(trigger).toHaveFocus();
+  },
+  render: () => (
+    <View style={{ height: 900 }}>
+      <UniversalShellStory />
+    </View>
+  ),
+};
+
 export const UniversalFull: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
   parameters: universalParameters,

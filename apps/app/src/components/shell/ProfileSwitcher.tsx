@@ -1,6 +1,6 @@
 import { profileHandleSchema } from '@kosmo/core/validation/profile';
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { Avatar } from '@/components/ui/Avatar';
@@ -104,6 +104,8 @@ export function ProfileSwitcher({
   const [creating, setCreating] = useState(false);
   const [handle, setHandle] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const controlRef = useRef<View>(null);
+  const triggerRef = useRef<View>(null);
   const [commitSelect, selecting] =
     useMutation<ProfileSwitcherSelectProfileMutation>(SelectProfileMutation);
   const [commitCreate, creatingProfile] =
@@ -127,6 +129,36 @@ export function ProfileSwitcher({
       setError(null);
     }
   }, [open]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !open || surface === 'drawer') {
+      return;
+    }
+
+    const control = controlRef.current as unknown as HTMLElement | null;
+    const trigger = triggerRef.current as unknown as HTMLElement | null;
+    const onPointerDown = (event: PointerEvent) => {
+      if (surface === 'compact' && !control?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+
+      event.preventDefault();
+      setOpen(false);
+      trigger?.focus();
+    };
+
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open, surface]);
 
   const selectProfile = (id: string) => {
     setError(null);
@@ -299,6 +331,7 @@ export function ProfileSwitcher({
 
   const trigger = (
     <Pressable
+      ref={triggerRef}
       aria-expanded={open}
       accessibilityLabel="프로필 목록"
       accessibilityRole="button"
@@ -329,6 +362,7 @@ export function ProfileSwitcher({
 
   return (
     <View
+      ref={controlRef}
       style={[
         styles.root,
         compact ? styles.compactRoot : styles.fullRoot,
@@ -391,7 +425,7 @@ const styles = StyleSheet.create({
     ...typography.xl,
   },
   webMenu: { position: 'absolute', width: 280, zIndex: 30 },
-  compactMenuPosition: { left: 52, top: 0 },
+  compactMenuPosition: { left: 62, top: 0 },
   fullMenuPosition: { left: 0, top: 50 },
   fullInlineMenu: { width: 280 },
   menu: {
