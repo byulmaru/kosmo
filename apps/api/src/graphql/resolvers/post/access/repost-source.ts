@@ -21,7 +21,7 @@ export const postRepostSourceAccessWhere = ({ ctx }: { ctx: UserContext }): SQL<
         instance: DirectRepostSourceInstances,
       })}`,
     },
-    ctx,
+    viewerProfileId: ctx.session?.profileId,
   });
 
   return sql<boolean>`${or(

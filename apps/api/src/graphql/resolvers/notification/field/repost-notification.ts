@@ -1,9 +1,9 @@
 import { builder } from '@/graphql/builder';
 import { Post } from '@/graphql/resolvers/post';
 import { Profile } from '@/graphql/resolvers/profile';
-import { getNotificationSource, ReplyNotification } from '../ref';
+import { getNotificationSource, RepostNotification } from '../ref';
 
-builder.objectFields(ReplyNotification, (t) => ({
+builder.objectFields(RepostNotification, (t) => ({
   post: t.field({
     type: Post,
     resolve: async (notification, _, ctx) => (await getNotificationSource(notification, ctx)).post!,

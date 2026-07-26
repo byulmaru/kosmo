@@ -85,7 +85,7 @@ Post 상세의 contentful Parent에서 기존 composer로 Reply를 작성하고 
 **Verification**
 
 - 타인 Post Reply, self-reply, invisible 결과, duplicate/concurrent source와 Notification 저장 실패 격리를 검증한다.
-- source·Related Post·Related Profile·Recipient mapping, concrete `ReplyNotification` Node와 unavailable predicate를 검증한다.
+- source·Related Post·Related Profile·Recipient mapping, concrete `ReplyNotification` Node와 unavailable predicate를 검증한다. Parent Tombstone은 Reply 자체의 visibility/eligibility를 제거하지 않으며, interface-only list는 source loader를 호출하지 않고 concrete Reply source fields는 request당 한 batch로 mapping됨을 검증한다.
 - mixed connection·Unread count·Read, inbox 표시·Reply 이동·Best Effort Read와 selected Profile cache 격리를 검증한다.
 
 - [x] 3.1 기존 Notification 기반의 projection·API·client contract가 merge되었고 Reply kind 확장이 공통 계약을 재사용할 수 있음을 확인한다.

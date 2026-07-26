@@ -62,6 +62,7 @@ export const NotificationKind = {
   FOLLOW: 'FOLLOW',
   REACTION: 'REACTION',
   REPLY: 'REPLY',
+  REPOST: 'REPOST',
 } as const;
 export type NotificationKind = keyof typeof NotificationKind;
 

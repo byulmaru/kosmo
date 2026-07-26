@@ -5,6 +5,7 @@ import { FollowNotification, getNotificationSource } from '../ref';
 builder.objectField(FollowNotification, 'profile', (t) =>
   t.field({
     type: Profile,
-    resolve: async (notification) => (await getNotificationSource(notification)).profileId,
+    resolve: async (notification, _, ctx) =>
+      (await getNotificationSource(notification, ctx)).profileId,
   }),
 );

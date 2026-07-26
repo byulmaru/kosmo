@@ -5,6 +5,8 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 import {
   AccountProfileRole,
   AccountState,
+  InstanceKind,
+  NotificationKind,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -26,6 +28,8 @@ let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
+let Instances: typeof CoreDb.Instances;
+let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
@@ -40,8 +44,19 @@ describe('GraphQL Repost', () => {
     process.env.NODE_ENV = 'production';
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
-    ({ AccountProfiles, Accounts, db, firstOrThrow, pg, PostContents, Posts, Profiles, Sessions } =
-      await import('@kosmo/core/db'));
+    ({
+      AccountProfiles,
+      Accounts,
+      db,
+      firstOrThrow,
+      Instances,
+      Notifications,
+      pg,
+      PostContents,
+      Posts,
+      Profiles,
+      Sessions,
+    } = await import('@kosmo/core/db'));
     const { seedDatabase } = await import('@kosmo/core/db/seed');
 
     await truncateDatabase();
@@ -96,6 +111,102 @@ describe('GraphQL Repost', () => {
       state: 'ACTIVE',
       visibility: 'UNLISTED',
     });
+    assert.equal(await db.$count(Notifications), 0);
+  });
+
+  test('새 Repost는 Source Post Author에게 source-only Notification을 한 번 생성한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('notification-recipient');
+    const source = await createContentPost(recipient.id);
+
+    const first = await requestRepost(source.id, auth.token);
+    const repeated = await requestRepost(source.id, auth.token);
+    const concurrent = await Promise.all(
+      Array.from({ length: 3 }, () => requestRepost(source.id, auth.token)),
+    );
+
+    assertNoGraphQLErrors(first);
+    assertNoGraphQLErrors(repeated);
+    concurrent.forEach(assertNoGraphQLErrors);
+    const repostId = first.data?.repostPost.repost.id;
+    assert.equal(repeated.data?.repostPost.repost.id, repostId);
+    assert.ok(repostId);
+
+    const [repost] = await db.select().from(Posts).where(eq(Posts.repostSourceId, source.id));
+    assert.ok(repost);
+    const notifications = await db.select().from(Notifications);
+    assert.equal(notifications.length, 1);
+    assert.deepEqual(
+      {
+        data: notifications[0]?.data,
+        kind: notifications[0]?.kind,
+        recipientProfileId: notifications[0]?.recipientProfileId,
+        sourceId: notifications[0]?.sourceId,
+      },
+      {
+        data: {},
+        kind: NotificationKind.REPOST,
+        recipientProfileId: recipient.id,
+        sourceId: repost.id,
+      },
+    );
+  });
+
+  test('Remote Source Author에게는 Local inbox Notification을 만들지 않는다', async () => {
+    const auth = await createAuthenticatedSession();
+    const remoteInstance = await db
+      .insert(Instances)
+      .values({
+        domain: `${crypto.randomUUID()}.remote.example`,
+        kind: InstanceKind.ACTIVITYPUB,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const remoteRecipient = await createProfile('remote-notification-recipient', {
+      instanceId: remoteInstance.id,
+    });
+    const source = await createContentPost(remoteRecipient.id);
+
+    const result = await requestRepost(source.id, auth.token);
+
+    assertNoGraphQLErrors(result);
+    assert.equal(await db.$count(Notifications), 0);
+  });
+
+  test('Notification 저장 실패는 Repost 성공을 rollback하지 않는다', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('failed-notification-recipient');
+    const source = await createContentPost(recipient.id);
+
+    await pg.unsafe(`
+      CREATE FUNCTION fail_repost_notification_insert() RETURNS trigger
+      LANGUAGE plpgsql AS $$ BEGIN
+        IF NEW.kind = 'REPOST' THEN RAISE EXCEPTION 'forced notification failure'; END IF;
+        RETURN NEW;
+      END $$;
+      CREATE TRIGGER fail_repost_notification_insert
+      BEFORE INSERT ON notification
+      FOR EACH ROW EXECUTE FUNCTION fail_repost_notification_insert();
+    `);
+
+    try {
+      const result = await requestRepost(source.id, auth.token);
+      assertNoGraphQLErrors(result);
+      assert.equal(
+        await db
+          .select()
+          .from(Posts)
+          .where(eq(Posts.repostSourceId, source.id))
+          .then((rows) => rows.length),
+        1,
+      );
+      assert.equal(await db.$count(Notifications), 0);
+    } finally {
+      await pg.unsafe(`
+        DROP TRIGGER IF EXISTS fail_repost_notification_insert ON notification;
+        DROP FUNCTION IF EXISTS fail_repost_notification_insert();
+      `);
+    }
   });
 
   test('Owner·Admin·Member가 선택한 Local Active Profile로 Repost할 수 있다', async () => {
@@ -427,6 +538,7 @@ const createAuthenticatedSession = async ({
 };
 
 const resetFixtures = async () => {
+  await db.delete(Notifications);
   await db.update(Posts).set({ currentContentId: null });
   await db.delete(PostContents);
   await db.delete(Posts);

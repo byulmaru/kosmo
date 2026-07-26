@@ -4,6 +4,7 @@ export {
   createReactionNotification,
   createReplyNotification,
   createReplyNotificationBestEffort,
+  createRepostNotification,
   deleteNotificationBySource,
 } from './notification';
 export { createPost, deletePost, repostPost } from './post';

@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, ne, or } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   db,
@@ -20,6 +20,14 @@ import {
 } from '../enums';
 import { NotFoundError } from '../error';
 
+const NotificationRepostAuthors = alias(Profiles, 'notification_repost_author');
+const NotificationRepostAuthorInstances = alias(Instances, 'notification_repost_author_instance');
+const NotificationRepostRelatedPosts = alias(Posts, 'notification_repost_related_post');
+const NotificationRepostRecipients = alias(Profiles, 'notification_repost_recipient');
+const NotificationRepostRecipientInstances = alias(
+  Instances,
+  'notification_repost_recipient_instance',
+);
 const ReplyParents = alias(Posts, 'reply_notification_parent');
 const ReplyAuthors = alias(Profiles, 'reply_notification_author');
 const ReplyAuthorInstances = alias(Instances, 'reply_notification_author_instance');
@@ -143,12 +151,7 @@ export const createReplyNotification = async (sourceId: string): Promise<void> =
 
   if (
     source.actorProfileId === source.recipientProfileId ||
-    source.recipientInstanceKind !== InstanceKind.LOCAL
-  ) {
-    return;
-  }
-
-  if (
+    source.recipientInstanceKind !== InstanceKind.LOCAL ||
     !(await selectReplyVisibleToProfile({
       profileId: source.recipientProfileId,
       sourceId: source.id,
@@ -176,6 +179,70 @@ export const createReplyNotificationBestEffort = async (sourceId: string): Promi
   } catch {
     // Notification은 Reply source 성공을 바꾸지 않는다.
   }
+};
+
+export const createRepostNotification = async (sourceId: string): Promise<void> => {
+  const source = await db
+    .select({
+      actorProfileId: Posts.profileId,
+      id: Posts.id,
+      recipientInstanceKind: NotificationRepostRecipientInstances.kind,
+      recipientProfileId: NotificationRepostRelatedPosts.profileId,
+    })
+    .from(Posts)
+    .innerJoin(NotificationRepostAuthors, eq(NotificationRepostAuthors.id, Posts.profileId))
+    .innerJoin(
+      NotificationRepostAuthorInstances,
+      eq(NotificationRepostAuthorInstances.id, NotificationRepostAuthors.instanceId),
+    )
+    .innerJoin(
+      NotificationRepostRelatedPosts,
+      eq(NotificationRepostRelatedPosts.id, Posts.repostSourceId),
+    )
+    .innerJoin(
+      NotificationRepostRecipients,
+      eq(NotificationRepostRecipients.id, NotificationRepostRelatedPosts.profileId),
+    )
+    .innerJoin(
+      NotificationRepostRecipientInstances,
+      eq(NotificationRepostRecipientInstances.id, NotificationRepostRecipients.instanceId),
+    )
+    .where(
+      and(
+        eq(Posts.id, sourceId),
+        eq(Posts.state, PostState.ACTIVE),
+        isNull(Posts.currentContentId),
+        isNull(Posts.replyParentId),
+        isNotNull(Posts.repostSourceId),
+        eq(NotificationRepostAuthors.state, ProfileState.ACTIVE),
+        ne(NotificationRepostAuthorInstances.state, InstanceState.SUSPENDED),
+        eq(NotificationRepostRelatedPosts.state, PostState.ACTIVE),
+        isNotNull(NotificationRepostRelatedPosts.currentContentId),
+        eq(NotificationRepostRecipients.state, ProfileState.ACTIVE),
+        ne(NotificationRepostRecipientInstances.state, InstanceState.SUSPENDED),
+      ),
+    )
+    .limit(1)
+    .then(firstOrThrowWith(() => new NotFoundError('Repost not found')));
+
+  if (
+    source.actorProfileId === source.recipientProfileId ||
+    source.recipientInstanceKind !== InstanceKind.LOCAL
+  ) {
+    return;
+  }
+
+  await db
+    .insert(Notifications)
+    .values({
+      data: {},
+      kind: NotificationKind.REPOST,
+      recipientProfileId: source.recipientProfileId,
+      sourceId: source.id,
+    })
+    .onConflictDoNothing({
+      target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
+    });
 };
 
 export const deleteNotificationBySource = async (

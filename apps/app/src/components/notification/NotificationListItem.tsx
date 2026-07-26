@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { MessageCircle, Smile, UserPlus } from 'lucide-react-native';
+import { MessageCircle, Repeat2, Smile, UserPlus } from 'lucide-react-native';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
@@ -12,6 +12,7 @@ import type { NotificationListItem_notification$key } from './__generated__/Noti
 import type { NotificationListItemMarkReadMutation } from './__generated__/NotificationListItemMarkReadMutation.graphql';
 import type { ReactionNotificationListItem_notification$key } from './__generated__/ReactionNotificationListItem_notification.graphql';
 import type { ReplyNotificationListItem_notification$key } from './__generated__/ReplyNotificationListItem_notification.graphql';
+import type { RepostNotificationListItem_notification$key } from './__generated__/RepostNotificationListItem_notification.graphql';
 
 type NotificationListItemProps = {
   notification: NotificationListItem_notification$key;
@@ -22,7 +23,7 @@ type NotificationRowProps = {
   destination: string;
   href: Href;
   id: string;
-  kind: 'follow' | 'reaction' | 'reply';
+  kind: 'follow' | 'reaction' | 'reply' | 'repost';
   name: string;
   readAt: string | null | undefined;
   timestamp: string;
@@ -140,7 +141,6 @@ export function ReplyNotificationListItem({
 }) {
   const data = useFragment(replyNotificationFragment, notification);
   const name = data.profile.displayName || data.profile.handle;
-
   return (
     <NotificationRow
       action="답글을 남겼습니다"
@@ -148,6 +148,46 @@ export function ReplyNotificationListItem({
       href={`/${data.post.profile.relativeHandle}/${data.post.id}` as Href}
       id={data.id}
       kind="reply"
+      name={name}
+      readAt={data.readAt}
+      timestamp={formatTimelineTimestamp(data.createdAt)}
+    />
+  );
+}
+
+const repostNotificationFragment = graphql`
+  fragment RepostNotificationListItem_notification on RepostNotification {
+    id
+    createdAt
+    readAt
+    profile {
+      displayName
+      handle
+    }
+    post {
+      id
+      profile {
+        relativeHandle
+      }
+    }
+  }
+`;
+
+export function RepostNotificationListItem({
+  notification,
+}: {
+  notification: RepostNotificationListItem_notification$key;
+}) {
+  const data = useFragment(repostNotificationFragment, notification);
+  const name = data.profile.displayName || data.profile.handle;
+
+  return (
+    <NotificationRow
+      action="게시물을 재게시했습니다"
+      destination="게시글"
+      href={`/${data.post.profile.relativeHandle}/${data.post.id}` as Href}
+      id={data.id}
+      kind="repost"
       name={name}
       readAt={data.readAt}
       timestamp={formatTimelineTimestamp(data.createdAt)}
@@ -196,9 +236,15 @@ function NotificationRow({
         importantForAccessibility="no-hide-descendants"
         style={[styles.kind, { backgroundColor: theme.primary }]}
       >
-        {kind === 'follow' ? <UserPlus color={theme.text} size={18} strokeWidth={2} /> : null}
-        {kind === 'reaction' ? <Smile color={theme.text} size={18} strokeWidth={2} /> : null}
-        {kind === 'reply' ? <MessageCircle color={theme.text} size={18} strokeWidth={2} /> : null}
+        {kind === 'follow' ? (
+          <UserPlus color={theme.text} size={18} strokeWidth={2} />
+        ) : kind === 'reaction' ? (
+          <Smile color={theme.text} size={18} strokeWidth={2} />
+        ) : kind === 'reply' ? (
+          <MessageCircle color={theme.text} size={18} strokeWidth={2} />
+        ) : (
+          <Repeat2 color={theme.text} size={18} strokeWidth={2} />
+        )}
       </View>
       <View style={styles.content}>
         <View style={styles.avatarRow}>
