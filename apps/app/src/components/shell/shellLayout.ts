@@ -10,6 +10,6 @@ export function getShellLayout(web: boolean, width: number) {
   return width < breakpoints.full ? 'compact' : 'full';
 }
 
-export function getShellMobileHeaderStickyOffset(web: boolean, width: number) {
-  return web && getShellLayout(web, width) === 'mobile' ? webMobileShellHeaderHeight : 0;
+export function getWebMobileShellHeaderStickyOffset(width: number) {
+  return width < breakpoints.compact ? webMobileShellHeaderHeight : 0;
 }
