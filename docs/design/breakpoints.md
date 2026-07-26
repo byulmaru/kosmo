@@ -23,6 +23,31 @@ KOSMO 웹의 메인 3분할 레이아웃은 트위터/X처럼 화면 폭에 따�
 - `compact`~`full`: 우측 레일이 없으므로 아이콘 레일의 글쓰기 버튼.
 - `≥ full`: 우측 레일 컴포저가 담당하며, 사이드바 글쓰기 버튼은 표시하지 않는다(드로어 surface에서만 유지).
 
+## 프로필 피커
+
+Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사용한다. Android/iOS profile picker는
+이 Web 계약의 적용 대상이 아니다.
+
+- `compact`~`full`에서는 아이콘 레일의 프로필 아바타가 trigger다. picker는 80px 레일 오른쪽에
+  비모달 overlay drawer로 열리며, 레일과 중앙 피드의 실제 layout 폭을 바꾸지 않는다.
+- compact drawer는 본문보다 위에 표시하지만 backdrop과 focus trap을 사용하지 않는다. 아바타 재클릭,
+  바깥 클릭, `Escape`, 프로필 선택 성공으로 닫힌다.
+- `≥ full`에서는 프로필 이름과 chevron을 하나의 trigger로 사용하고 이름 아래에 inline picker를 펼친다.
+  닫힌 프로필 요약 영역은 기존 260px 높이를 유지하고, 열린 picker는 그 요약과 navigation 사이의 flow
+  sibling으로 높이에 참여해 navigation을 아래로 배치한다. 같은 trigger를 다시 실행하면 picker를 닫는다.
+  닫힌 상태는 아래 방향, 열린 상태는 위 방향 chevron으로 표시하되 chevron 자체는 별도 focus target이
+  아니다.
+- trigger는 열린 상태를 accessibility `expanded` 상태로 노출한다.
+- 프로필이 많을 때는 프로필 목록 영역만 제한된 높이 안에서 스크롤한다. 새 프로필 추가 액션과 생성 폼은
+  목록 아래의 고정 영역에 두며, 생성 폼이 열리면 목록이 남은 높이에 맞게 줄어든다.
+- full·compact Web picker를 열면 현재 선택된 프로필, 선택값이 없으면 첫 프로필 항목으로 focus를 이동한다.
+  프로필 항목에서는 `ArrowUp`·`ArrowDown`·`Home`·`End`로 이동하며 focus된 항목은 목록의 보이는 영역
+  안에 유지한다. `Escape`는 picker를 닫고 trigger로 focus를 복원하며, `Tab`은 focus trap 없이 브라우저의
+  일반 순서를 따른다.
+- full·compact Web에서 프로필 선택·생성 실패는 picker와 오류를 유지하고 생성 실패는 입력값도 유지한다.
+  trigger 재실행, compact 바깥 클릭 또는 `Escape`처럼 사용자가 명시적으로 닫으면 생성 폼·입력값·이전
+  오류를 초기화한다. mobile Web drawer와 Android/iOS의 기존 close 상태 동작은 이 계약으로 바꾸지 않는다.
+
 ## 알림 Unread badge
 
 모든 셸 단계는 selected Profile의 Unread 상태를 기존 알림 아이콘 우상단 badge로 표시한다. badge는 아이콘 wrapper 안에서 overlay되어 row, touch target과 label layout을 밀지 않는다.
@@ -38,6 +63,8 @@ React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owne
 
 - `< compact`에서는 모바일 header가 document scroll 위의 sticky chrome으로 동작하고, 하단 탭 바는 safe-area를 포함한 fixed bottom chrome으로 유지된다. 콘텐츠는 하단 탭 높이와 safe-area를 고려한 bottom padding 또는 scroll padding으로 겹침을 피한다.
 - `compact`~`full`에서는 아이콘 레일이 layout flow 안에서 sticky viewport column으로 고정된다. 레일 자체가 스크롤 가능한 콘텐츠를 갖지 않는 한 wheel 입력은 document scroll로 이어진다.
+- `compact`~`full` profile picker가 열렸을 때는 overlay drawer 안의 프로필 목록만 internal scroll owner가 된다.
+  drawer 밖의 wheel 입력은 기존 document scroll 흐름을 유지한다.
 - `≥ full`에서는 풀 사이드바와 우측 레일이 각각 layout flow 안의 sticky column으로 배치된다. 두 rail은 중앙 컬럼과 겹치지 않도록 width 계산에 참여한다.
 - 우측 레일 콘텐츠가 viewport보다 긴 경우 rail 내부 overflow를 허용할 수 있지만, 중앙 피드를 별도 internal scroller로 만들지는 않는다.
 - 일반 route 이동과 back/forward는 Expo Router와 browser history의 document scroll policy에 맞춘다. 검색 화면의 query-only `router.push`/`setParams` 이동은 현재 document scroll과 입력 focus를 보존하도록 명시적으로 검증한다.
