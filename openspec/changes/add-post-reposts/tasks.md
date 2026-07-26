@@ -210,9 +210,9 @@ production fragment shape를 유지하는 fixture와 Storybook에서 Repost·Quo
 
 - 일반 Post, Repost, Quote, Reply+Quote, 긴 Author·Content, nullable Source와 Repost/Source Author navigation을 Storybook state·interaction·a11y test로 검증한다.
 
-- [ ] 7.1 production Post fragment shape의 Repost·Quote fixture와 presentation component 상태를 구현한다.
-- [ ] 7.2 Repost/Source Author와 Source Post mock navigation, 긴 내용·접근성 상태를 Storybook interaction으로 검증한다.
-- [ ] 7.3 app unit·Storybook check를 통과시키고 PROD-415가 연결할 fragment 경계를 문서화한다.
+- [x] 7.1 production Post fragment shape의 Repost·Quote fixture와 presentation component 상태를 구현한다.
+- [x] 7.2 Repost/Source Author와 Source Post mock navigation, 긴 내용·접근성 상태를 Storybook interaction으로 검증한다.
+- [x] 7.3 app unit·Storybook check를 통과시키고 PROD-415가 연결할 fragment 경계를 문서화한다.
 
 ## 8. PROD-414 Repost action
 

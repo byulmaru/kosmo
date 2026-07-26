@@ -139,31 +139,40 @@ Home은 viewer와 관련된 eligible Reply를 포함하고 Profile Post List는 
 - [x] 5.2 Profile의 Reply 제외 정책을 구현한다.
 - [x] 5.3 권한·pagination limit·기존 목록 회귀 test와 관련 check를 통과시킨다.
 
-## 6. PROD-422 Post 상세 Reply thread 통합
+## 6. PROD-451 Reply thread 프레젠테이션과 PROD-422 Post 상세 통합
 
 **Authority / Provenance**
 
 - `docs/domain/objects/post.md`
+- `PROD-451`
 - `PROD-422`
 
 **Deliverable**
 
-Post 상세가 API에서 제공한 조회 가능한 조상 경로, 현재 Post와 하위 Reply를 하나의 thread 맥락으로 연결한다.
+PROD-451은 item, role, supplied 순서와 direct connector metadata만 소유하는 재사용 presentation layout을 전달하고, fixture caller는 `renderPost` 안에서 local state를 close over하여 mock 선택 action을 붙일 수 있다. PROD-422는 API에서 제공한 조회 가능한 조상 경로·현재 Post·하위 Reply와 route-aware Post renderer를 같은 layout에 연결하고, route-aware caller가 필요로 할 때만 나중에 production navigation adapter를 도입할 수 있다.
 
 **Guardrails**
 
 - 각 Post는 기존 단일 Post fragment·rendering을 사용하고 Reply+Quote의 Content·Source 맥락을 유지한다.
+- PROD-451은 부모가 공급한 순서와 직접 관계 metadata를 그대로 사용한다. 조상·하위 Reply는 일반 Post 밀도를 유지하고 현재 Post만 상세 앵커로 강조하며, 직접 관계에만 connector를 표시하고 supplied visibility 경계에서 자연스럽게 종료한다.
+- PROD-451은 fixture·Storybook·presentation component interaction만 소유한다. 기존 Post Link를 감싸거나 대체하지 않으며 실제 Reply field·Relay query/cache·route·visibility integration, Quote Source·Action Bar·Reaction/Repost UI를 추가하지 않는다.
+- PROD-422는 `replyAncestors`를 root 우선 표시 순서로 바꾸고 descendant의 `replyParent { id }`를 이전 표시 Post ID와 비교해 direct connector metadata를 공급한다. unavailable Parent나 인접 직접 관계가 아닌 항목은 연결하지 않는다.
+- PROD-451은 현재 `ThemeProvider`를 바꾸거나 Dark theme injection을 추가하지 않는다. visual QA는 Light 390px/600px만 완료 증거로 삼고 Dark appearance를 검증 완료로 기록하지 않는다.
 - API가 중단한 권한 경계를 우회하거나 thread 관계를 평탄화하지 않는다.
-- Reply 작성·Media·presentation fixture/Storybook 범위를 포함하지 않는다.
-- PROD-398·399·400의 승인된 API 계약과 구현이 완료되기 전 시작하지 않는다.
+- Reply 작성·Media를 포함하지 않는다.
+- PROD-451 fixture presentation은 실제 API 구현과 독립적으로 진행한다. PROD-422의 실제 Relay·route integration만 PROD-398·399·400의 승인된 API 계약과 구현이 완료된 뒤 시작한다.
 
 **Verification**
 
-- 조상·현재·하위 Reply 조합, Reply+Quote, unavailable 조상 경계, 각 Post 상세 이동과 fragment·route integration을 client test로 검증한다.
+- PROD-451은 fixture 기반 일반 Reply, role별 list/detail renderer 선택, 직접 connector와 직접 연결된 마지막 visible Reply에서의 supplied boundary 종료를 Storybook/component interaction으로 검증한다. Reply+Quote proof는 fixture의 nullable `repostSource`를 Story query가 읽고, 반환된 `repostSource` subtree에서만 Source ID를 지닌 sentinel을 렌더해 Reply 자체 Content와 Source 관계가 한 item 안에 남음을 보이는 것으로 한정하며 production Source preview의 외관이나 상호작용을 합성하지 않는다. 실제 spacing·typography 밀도는 Light 390px/600px visual QA로 검증하고 Dark appearance는 미검증 위험으로 남긴다.
+- PROD-422는 조상·현재·하위 Reply 조합, Reply+Quote, unavailable 조상 경계, 각 Post 상세 이동과 fragment·route integration을 client test로 검증한다.
 
-- [ ] 6.1 승인된 Parent·조상·descendant 결과를 Post 상세 query와 colocated fragment에 연결한다.
-- [ ] 6.2 thread 맥락과 각 Post 상세 이동을 유니버설 route에 연결한다.
-- [ ] 6.3 Reply+Quote·권한 경계·fragment integration test와 관련 client check를 통과시킨다.
+- [x] 6.1 최종 `post-reply-ui` spec이 변경되지 않음을 확인하고 수정된 PROD-451 presentation seam과 PROD-422 integration 경계를 proposal·design·decisions·tasks에 동기화해 strict validation을 통과시킨다.
+- [x] 6.2 PROD-451 props-only Reply thread layout을 구현한다. layout은 item, role, supplied 순서와 direct connector metadata만 소유하며 fixture caller는 `renderPost` 안에서 local state를 close over하여 mock 선택 action을 붙일 수 있다.
+- [x] 6.3 PROD-451 Storybook/component interaction에서 일반 Reply, role별 기존 renderer 선택, 직접 connector, 직접 연결된 마지막 visible Reply의 supplied boundary와 relation-backed Reply+Quote proof를 검증하고 Light 390px/600px visual QA 및 app check를 통과시킨다. relation-backed proof는 fixture의 nullable `repostSource`를 Story query가 읽고, 반환된 subtree에서만 Source ID sentinel을 렌더해 Reply 자체 Content와 Source 관계가 한 item 안에 남음을 보이며 production Source preview의 외관이나 상호작용을 합성하지 않는다. 현재 미지원 Dark appearance는 검증 완료로 기록하지 않는다.
+- [ ] 6.4 승인된 Parent·조상·descendant 결과를 Post 상세 query와 colocated fragment에 연결하고 ancestor reverse와 descendant `replyParent { id }` 비교로 direct connector metadata를 만든다.
+- [ ] 6.5 thread 맥락과 각 Post 상세 이동을 유니버설 route에 연결한다.
+- [ ] 6.6 Reply+Quote·권한 경계·fragment integration test와 관련 client check를 통과시킨다.
 
 ## 7. PROD-388 Reply 계약 통합 검증과 archive
 

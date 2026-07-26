@@ -204,6 +204,13 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 
 ## 9. PROD-419 Reaction Notification Best Effort 정리
 
+**Authority / Provenance**
+
+- [Notification canonical 객체](../../../docs/domain/objects/notification.md)
+- [Reaction canonical 객체](../../../docs/domain/objects/reaction.md)
+- [ADR 0010](../../../docs/domain/decisions/0010-post-interaction-contracts.md)
+- [PROD-419](https://linear.app/byulmaru/issue/PROD-419/reaction-notification%EC%9D%84-%EC%A0%95%EB%A6%AC%ED%95%9C%EB%8B%A4)
+
 **Deliverable**
 
 Reaction 삭제 뒤 대응 Notification cleanup을 Best Effort로 시도하고, 실패하거나 반복해도 Reaction 삭제 결과와 API 가시성이 일관된다.
@@ -211,15 +218,16 @@ Reaction 삭제 뒤 대응 Notification cleanup을 Best Effort로 시도하고, 
 **Guardrails**
 
 - cleanup은 source transaction 밖에서 같은 request로 await/catch한다.
+- cleanup 실패를 무음으로 삼키지 않고 source Reaction을 식별할 수 있게 기록한다.
 - retry, queue, cron, backfill과 bulk physical cleanup을 포함하지 않는다.
 - source가 없는 stale row를 모든 Notification API surface에서 숨긴다.
 
 **Verification**
 
-- 정상·반복·누락 source cleanup, cleanup 실패 격리와 stale row의 Node/list/count/read 숨김을 database/API integration test로 검증한다.
+- 정상·반복·누락 source cleanup, cleanup 실패 격리·오류 관측과 stale row의 Node/list/count/read 숨김을 database/API integration test로 검증한다.
 
-- [ ] 9.1 Reaction 삭제 결과에 연결되는 idempotent Notification cleanup을 구현한다.
-- [ ] 9.2 cleanup 성공·반복·실패 격리와 stale visibility 검증을 추가하고 core/API check를 통과시킨다.
+- [x] 9.1 Reaction 삭제 결과에 연결되는 idempotent Notification cleanup을 구현한다.
+- [x] 9.2 cleanup 성공·반복·실패 격리와 stale visibility 검증을 추가하고 core/API check를 통과시킨다.
 
 ## 10. PROD-390 Reaction 통합 검증·정합성 확인·archive
 

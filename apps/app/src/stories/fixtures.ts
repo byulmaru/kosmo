@@ -70,7 +70,31 @@ export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
   };
 }
 
-export type StoryPost = ReturnType<typeof post>;
+export type StoryPostReference = {
+  __typename: 'Post';
+  id: string;
+};
+
+export type StoryPost = {
+  __typename: 'Post';
+  content: {
+    __typename: 'PostContent';
+    bodyText: string;
+    document: {
+      body: PostContentBodyDocumentV1;
+      summary: null;
+      version: 1;
+    };
+    id: string;
+  } | null;
+  createdAt: string;
+  id: string;
+  profile: StoryProfile;
+  replyParent: StoryPostReference | null;
+  repostSource: StoryPost | null;
+  state: 'ACTIVE';
+  visibility: 'DIRECT' | 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
+};
 
 export function post({
   bodyDocument,
@@ -78,6 +102,8 @@ export function post({
   createdAt = Temporal.Now.instant().subtract({ minutes: 5 }).toString(),
   id = 'post-1',
   profile: author = profile(),
+  replyParent = null,
+  repostSource = null,
   visibility = 'UNLISTED',
 }: {
   bodyDocument?: PostContentBodyDocumentV1;
@@ -85,8 +111,10 @@ export function post({
   createdAt?: string;
   id?: string;
   profile?: StoryProfile;
-  visibility?: 'DIRECT' | 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
-} = {}) {
+  replyParent?: StoryPostReference | null;
+  repostSource?: StoryPost | null;
+  visibility?: StoryPost['visibility'];
+} = {}): StoryPost {
   return {
     __typename: 'Post' as const,
     content:
@@ -105,6 +133,8 @@ export function post({
     createdAt,
     id,
     profile: author,
+    replyParent,
+    repostSource,
     state: 'ACTIVE',
     visibility,
   };
