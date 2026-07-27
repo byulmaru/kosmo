@@ -96,16 +96,47 @@ test('Local Follow 알림은 Recipient Profile별로 격리되고 Read와 Unfoll
     await firstReadResponse;
     await page.unroute('**/graphql');
 
-    await page.goto('/notifications');
     await expect(page.getByRole('link', { name: '알림', exact: true })).toBeVisible();
+
+    let releaseNotificationRefresh!: () => void;
+    const notificationRefreshGate = new Promise<void>((resolve) => {
+      releaseNotificationRefresh = resolve;
+    });
+    await page.route('**/graphql', async (route) => {
+      if (
+        readGraphQLOperation(route.request().postData())?.operationName !== 'NotificationsPageQuery'
+      ) {
+        await route.fallback();
+        return;
+      }
+
+      const response = await route.fetch();
+      await notificationRefreshGate;
+      await route.fulfill({ response });
+    });
+
+    const notificationRefreshResponse = waitForGraphQLOperation(page, 'NotificationsPageQuery');
+    await page.getByRole('link', { name: '알림', exact: true }).click();
+    await expect(page).toHaveURL('/notifications');
     const readNotificationLink = page.getByRole('link', {
       name: /E2E Notification Follower님이 팔로우했습니다.*프로필로 이동/,
     });
     await expect(readNotificationLink).toBeVisible();
     await expect(readNotificationLink).not.toHaveAccessibleName(/읽지 않은 알림/);
+    releaseNotificationRefresh();
+    await notificationRefreshResponse;
+    await page.unroute('**/graphql');
 
     const firstReadAt = await notificationReadAt(notification!.id);
     expect(firstReadAt).not.toBeNull();
+
+    await selectProfile(page, recipientProfileB.handle);
+    await expect(page.getByText('아직 알림이 없어요')).toBeVisible();
+    await expect(page.getByRole('link', { name: '알림', exact: true })).toBeVisible();
+    await expect(page.getByText('E2E Notification Follower님이 팔로우했습니다')).toHaveCount(0);
+
+    await selectProfile(page, recipient.profile!.handle);
+    await expect(readNotificationLink).toBeVisible();
 
     const repeatedReadResponse = waitForGraphQLOperation(
       page,
@@ -124,7 +155,8 @@ test('Local Follow 알림은 Recipient Profile별로 격리되고 Read와 Unfoll
     await unfollowResponse;
     await expect(followerPage.getByRole('button', { name: '팔로우' })).toBeVisible();
 
-    await page.goto('/notifications');
+    await page.getByRole('link', { name: '알림', exact: true }).click();
+    await expect(page).toHaveURL('/notifications');
     await expect(page.getByText('아직 알림이 없어요')).toBeVisible();
     await expect(page.getByRole('link', { name: '알림', exact: true })).toBeVisible();
     expect(
