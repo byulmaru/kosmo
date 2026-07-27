@@ -153,19 +153,28 @@ Drizzle query policy:
 - `profile_follow`: established follower/followee direction only; row existence means the follow relationship is active.
 - `profile_follow_request`: pending follower/followee request direction before a follow relationship is established. The row itself means the request is pending; accepted or rejected requests are removed instead of stored with a state.
 
-## Media And Files
+## Media And External Storage
 
 Current media direction:
 
-- `file`: physical Object Storage/R2 file owned by the application, with `storage_key`, `mime_type`, optional `byte_size`, optional `sha256`, optional `width`, optional `height`, and later deletion metadata when cleanup policy is added. Do not store public/CDN URL when it is derivable from `storage_key` and environment configuration; derive it at API/service boundaries when needed. Upload API can fill byte size from the incoming `File.size`; SHA-256 and dimensions are deferred to processing/measurement.
-- `media`: logical media used by the product. It can represent local uploads or remote ActivityPub media via `source = LOCAL | REMOTE`, and every media row belongs to a `profile`.
-- Local upload `media` rows initially reference `original_file_id`, which points to the uploaded R2 object. Image transformation and thumbnail generation are separated into a later worker/pipeline; that later work can fill `thumbnail_file_id`, thumbhash, dimensions, and hash metadata.
-- Remote ActivityPub `media` rows may initially have no file references. Store remote URL and remote fetched timestamp on `media`; the remote actor/profile identity belongs to `profile`, then lazily materialize cached R2 `file` rows through an image proxy/processing pipeline later.
-- Keep thumbhash on `media`; it is nullable because both local uploads and remote media can exist before worker/proxy processing.
+- `media` is the only Kosmo persistence for a logical image. Kosmo does not mirror Media Storage Service originals,
+  derived representations, storage keys, MIME metadata or dimensions in a separate `file` table.
+- A Local Media row is created when an authenticated Account/Profile starts an upload. It keeps its Kosmo identity,
+  upload Account, actor Profile, `UPLOADING` state, opaque external storage reference and upload expiry.
+- After Kosmo confirms storage through Media Storage Service, the same row transitions atomically to `READY`; only
+  `READY` Media can be attached to a Post or used as a Profile representation.
+- The external storage reference is unique persistence data but is never the GraphQL/Media identity and is not exposed
+  to clients. API consumers use the Media global ID.
+- The unused legacy `/upload` route, direct R2 configuration and `file` persistence are removed rather than supported as
+  a compatibility path. No database-emptiness precondition is required for that replacement.
+- Remote Media remains a canonical product concept, but its Media Storage Service projection and persistence shape are
+  deferred until a real Remote Media implementation requires them. Do not add future File or remote-storage columns to
+  the Local upload slice.
 - `post_media`: usage context for a post, with `position`, `alt_text`, `sensitivity`, `focus_x`, and `focus_y`.
 - `profile_media`: add later when avatar/banner usage needs its own context.
 
-Do not expose the original URL just because the original file is stored. Timelines can use thumbnail/compressed variants, detail views can use high-resolution variants, and original access should be a product/cost policy decision.
+Do not expose an original URL just because a stored representation exists. Timelines can use thumbnail/compressed
+variants, detail views can use high-resolution variants, and original access remains a product/cost policy decision.
 
 Deduplication questions:
 
@@ -174,7 +183,7 @@ Deduplication questions:
 - Is the value worth slower uploads?
 - Should files with different quality, size, or metadata count as the same image?
 
-Image processing worker responsibilities:
+Media Storage Service responsibilities:
 
 - Finalize original uploads.
 - Generate thumbnails, compressed images, resolution-specific variants, WebP/AVIF optimized variants, and blurhash/placeholders.
@@ -191,7 +200,7 @@ Thumbnail policy:
 
 - Prefer soft delete for user-visible domain objects.
 - For `post`, consider `state` and `deleted_at` if federation tombstones, moderation, or user restore policy matter.
-- Mark `media` and `file` with `deleted_at` once deletion policy is introduced, then physically delete R2 objects after a grace period.
+- Mark `media` with `deleted_at` once deletion policy is introduced, then request external object deletion after a grace period.
 - Manage `session` and `application_secret` with revoke/expire timestamps.
 - `post_media` can cascade if audit/restore is not required, but review that with post/media deletion policy.
 - Treat `ON DELETE CASCADE` as policy, not convenience. Check whether rows are needed for audit, moderation, federation, or cost accounting.

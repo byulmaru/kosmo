@@ -7,7 +7,6 @@
     "./datetime": "./datetime.ts",
     "./db": "./db/index.ts",
     "./db/seed": "./db/seed/index.ts",
-    "./env": "./env.ts",
     "./error": "./error/index.ts",
     "./enums": "./enums.ts",
     "./local-instance": "./local-instance.ts",

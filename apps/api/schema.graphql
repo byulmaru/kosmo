@@ -164,6 +164,12 @@ enum InstanceKind {
   LOCAL
 }
 
+type IssueMediaUploadUrlPayload {
+  expiresAt: DateTime!
+  media: Media!
+  uploadUrl: String!
+}
+
 input MarkNotificationReadInput {
   id: ID!
 }
@@ -171,6 +177,16 @@ input MarkNotificationReadInput {
 type MarkNotificationReadPayload {
   notification: Notification!
   recipientProfile: Profile!
+}
+
+type Media implements Node {
+  id: ID!
+  state: MediaState!
+}
+
+enum MediaState {
+  READY
+  UPLOADING
 }
 
 type Mutation {
@@ -186,6 +202,7 @@ type Mutation {
   deleteReaction(input: DeleteReactionInput!): DeleteReactionPayload!
   exchangeNativeOidcSession(input: ExchangeNativeOidcSessionInput!): ExchangeNativeOidcSessionPayload!
   followProfile(input: FollowProfileInput!): FollowProfilePayload!
+  issueMediaUploadUrl: IssueMediaUploadUrlPayload!
   markNotificationRead(input: MarkNotificationReadInput!): MarkNotificationReadPayload!
   rejectProfileFollowRequest(input: RejectProfileFollowRequestInput!): RejectProfileFollowRequestPayload!
   repostPost(input: RepostPostInput!): RepostPostPayload!
