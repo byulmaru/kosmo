@@ -121,8 +121,8 @@ export function ProfileSwitcher({
   const [creating, setCreating] = useState(false);
   const [handle, setHandle] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const controlRef = useRef<View>(null);
   const menuRef = useRef<View>(null);
+  const pickerRef = useRef<View>(null);
   const triggerRef = useRef<View>(null);
   const [commitSelect, selecting] =
     useMutation<ProfileSwitcherSelectProfileMutation>(SelectProfileMutation);
@@ -159,8 +159,8 @@ export function ProfileSwitcher({
       return;
     }
 
-    const control = controlRef.current as unknown as HTMLElement | null;
     const menu = menuRef.current as unknown as HTMLElement | null;
+    const picker = pickerRef.current as unknown as HTMLElement | null;
     const trigger = triggerRef.current as unknown as HTMLElement | null;
     const items = Array.from(menu?.querySelectorAll<HTMLElement>('[role="menuitemradio"]') ?? []);
     const initialItem =
@@ -168,7 +168,7 @@ export function ProfileSwitcher({
     initialItem?.focus();
     initialItem?.scrollIntoView({ block: 'nearest' });
     const onPointerDown = (event: PointerEvent) => {
-      if (!control?.contains(event.target as Node)) {
+      if (!picker?.contains(event.target as Node) && !trigger?.contains(event.target as Node)) {
         setOpen(false);
       }
     };
@@ -295,6 +295,7 @@ export function ProfileSwitcher({
   });
   const menu = (
     <View
+      ref={pickerRef}
       style={[
         styles.menu,
         redesignedWeb ? styles.redesignedMenu : undefined,
@@ -447,7 +448,6 @@ export function ProfileSwitcher({
 
   return (
     <View
-      ref={controlRef}
       style={[
         styles.root,
         compact ? styles.compactRoot : styles.fullRoot,

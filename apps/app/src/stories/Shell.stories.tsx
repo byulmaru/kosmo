@@ -259,7 +259,7 @@ export const ResponsiveProfilePickerFull: Story = {
     await userEvent.click(canvas.getByRole('menuitem', { name: '새 프로필 추가' }));
     expect(canvas.getByRole('textbox', { name: '프로필 핸들' })).toHaveValue('');
 
-    await userEvent.click(trigger);
+    await userEvent.click(canvas.getByRole('link', { name: /팔로잉/ }));
     await waitFor(() => expect(canvas.queryByRole('menu', { name: '프로필 전환' })).toBeNull());
   },
   render: () => (
