@@ -47,7 +47,8 @@ Reaction은 Profile이 Post에 남기는 유니코드 이모지 반응이다.
 
 Reaction 삭제는 입력한 Post와 Reaction Type에서 행동 주체 Profile의 현재 관계만 식별한다. 다른 Profile이
 소유한 Reaction은 변경하지 않는다. 오래 지연된 삭제 요청이 그 사이 같은 조합으로 다시 생성된 현재 Reaction을
-제거할 수 있으며, 사용자가 즉시 다시 선택할 수 있는 낮은 위험의 소셜 상호작용으로 이 가능성을 수용한다.
+제거할 수 있으며, selected Profile이 즉시 같은 Reaction을 다시 생성할 수 있는 낮은 위험의 소셜 상호작용으로
+이 가능성을 수용한다.
 
 ## 권한
 

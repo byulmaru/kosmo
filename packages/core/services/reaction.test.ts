@@ -143,25 +143,12 @@ test('addReaction 결과는 새 source만 구분한다', async () => {
   assert.equal(repeated.reaction.id, first.reaction.id);
 });
 
-test('ACTIVITYPUB Unresponsive actor도 공통 Reaction action으로 추가·삭제한다', async () => {
-  const fixture = await createFixture({
-    instanceKind: InstanceKind.ACTIVITYPUB,
-    instanceState: InstanceState.UNRESPONSIVE,
-  });
-
-  const { reaction } = await addReaction({ ...fixture.input, type: '👀' });
-  assert.equal(await countReactions(fixture.post.id), 1);
-
-  await deleteReaction({
-    actorProfileId: fixture.profile.id,
-    postId: fixture.post.id,
-    type: reaction.type,
-  });
-  assert.equal(await countReactions(fixture.post.id), 0);
-});
-
 test('core는 entry에서 검증된 actor의 Profile/Instance 상태를 다시 조회하지 않는다', async () => {
   const fixtures = await Promise.all([
+    createFixture({
+      instanceKind: InstanceKind.ACTIVITYPUB,
+      instanceState: InstanceState.UNRESPONSIVE,
+    }),
     createFixture({
       instanceKind: InstanceKind.ACTIVITYPUB,
       instanceState: InstanceState.SUSPENDED,

@@ -137,7 +137,7 @@ Profile과 달라도 같은 Upload Account를 가지면 연결할 수 있다. St
   Author Profile의 handle이나 GraphQL global ID를 사용하지 않는다.
 - 같은 Local Post는 프로세스 재시작, 역참조 요청 경로와 후속 Activity 종류에 관계없이 같은 Note URI를
   가진다. Local Post를 위해 remote ActivityPub Post mapping을 만들지 않는다.
-- ActivityPub `Note`는 위 URI를 `id`, Author Profile의 canonical ActivityPub actor URI를 `attributedTo`, Post
+- ActivityPub `Note`는 위 URI를 `id`, Author Profile의 canonical ActivityPub URI를 `attributedTo`, Post
   생성 시각을 `published`, Post 공유 참조를 `url`로 제공한다.
 - canonical PostContent 계약이 정의한 document 의미와 안전한 link 제약을 ActivityPub HTML `content`에
   투영한다. Content Warning은 있으면 안전한 `summary`로 투영한다. 이 Local Note 계약은 PostContent node,
@@ -160,8 +160,9 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 | Followers Only     | Author followers collection | 없음                        | Author 또는 established Follower의 signed fetch만 허용 |
 | Mentioned Profiles | 지원하지 않음               | 지원하지 않음               | 제공하지 않음                                          |
 
-- Followers Only signed fetch는 검증된 ActivityPub actor가 Author이거나 저장된 established Follow 관계의
-  Follower일 때만 허용한다. anonymous, unknown actor와 non-follower에게는 Post가 없는 것처럼 응답한다.
+- Followers Only signed fetch는 서명으로 검증된 요청 Profile이 Author이거나 저장된 established Follow 관계의
+  Follower일 때만 허용한다. 인증되지 않았거나 식별되지 않은 요청 주체와 Follower가 아닌 Profile에게는 Post가
+  없는 것처럼 응답한다.
 - Post가 Tombstone이거나 Content가 없거나, Author Profile 또는 configured Local Instance가 unavailable이거나,
   지원하지 않는 Visibility이면 Note를 제공하지 않는다. 이 unavailable 응답은 Post의 존재를 노출하지 않는다.
 - Local Note의 ActivityPub Tombstone, `Delete`, `Create`, `Announce`, `Like`, `EmojiReact`, `Undo` delivery는 각

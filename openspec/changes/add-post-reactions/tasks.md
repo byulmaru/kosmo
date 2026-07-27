@@ -56,7 +56,9 @@ Reaction이 Unicode 문자열 Type, Author Profile과 Target Post를 보존하�
 
 - [Reaction canonical 객체](../../../docs/domain/objects/reaction.md)
 - [ADR 0012](../../../docs/domain/decisions/0012-post-interaction-followup-clarifications.md)
+- [ADR 0019](../../../docs/domain/decisions/0019-selected-profile-authorization-boundary.md)
 - [PROD-405](https://linear.app/byulmaru/issue/PROD-405/reaction을-삭제한다)
+- [PROD-439](https://linear.app/byulmaru/issue/PROD-439/kosmo에서-uploading-local-media를-생성한다)
 
 **Deliverable**
 
@@ -65,14 +67,15 @@ Reaction Owner가 대상 Post의 현재 조회 가능성과 무관하게 자신�
 **Guardrails**
 
 - 다른 Profile 소유의 현재 Reaction을 삭제하지 않는다.
-- core service는 Active/Normal Profile과 non-Suspended Instance를 검증하되 actor origin과 Instance Reachability를 권한 조건으로 사용하지 않는다.
+- GraphQL `usingProfile` entry point는 Active Account, Account–Profile membership과 selected Profile의 Active/Normal 및 non-Suspended Instance 상태를 검증한다.
+- core service는 검증된 행동 주체 Profile identity를 받아 Profile/Instance 상태를 다시 조회하지 않고 현재 Owner 관계와 persistence만 검증한다.
 - Post visibility를 Owner 소유권 대신 사용하지 않는다.
 - Notification cleanup 연결과 필요한 service 결과 확장은 실제 caller를 구현하는 PROD-419가 소유한다.
 
 **Verification**
 
-- Owner/non-owner, Remote Unresponsive actor, Post가 unavailable한 경우, 반복·동시 삭제와 이미 없는 관계를 database-backed test로 검증한다.
-- GraphQL payload/error와 입력 ID를 유지하는 성공 no-op을 integration test로 검증한다.
+- Owner/non-owner, 행동 주체 Profile/Instance 상태 비재조회, Post가 unavailable한 경우, 반복·동시 삭제와 이미 없는 관계를 database-backed test로 검증한다.
+- GraphQL payload/error, 사용할 수 없는 selected Profile 거부와 입력 ID를 유지하는 성공 no-op을 integration test로 검증한다.
 
 - [x] 3.1 PROD-405가 소유한 delete input/payload와 이미 제거한 관계의 stable 식별 결정을 확정해 specs·decisions를 갱신하고 strict validation을 통과시킨다.
 - [x] 3.2 Owner의 현재 관계를 원자적으로 멱등 삭제하는 core service와 GraphQL mutation을 구현한다.
