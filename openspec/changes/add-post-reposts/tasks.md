@@ -325,9 +325,9 @@ Repost Tombstone 뒤 대응 Notification cleanup을 Best Effort로 시도하고,
 
 - 정상·반복·누락 cleanup, 실패 격리와 stale row의 list/count/Node/Read 숨김을 core/API integration test로 검증한다.
 
-- [ ] 11.1 Repost Tombstone 결과에 연결되는 idempotent Notification cleanup을 구현한다.
-- [ ] 11.2 kind-aware visible predicate가 stale Repost Notification을 모든 API surface에서 숨기게 한다.
-- [ ] 11.3 cleanup 성공·반복·실패와 stale visibility 검증을 추가하고 core/API check를 통과시킨다.
+- [x] 11.1 Repost Tombstone 결과에 연결되는 idempotent Notification cleanup을 구현한다.
+- [x] 11.2 kind-aware visible predicate가 stale Repost Notification을 모든 API surface에서 숨기게 한다.
+- [x] 11.3 cleanup 성공·반복·실패와 stale visibility 검증을 추가하고 core/API check를 통과시킨다.
 
 ## 12. PROD-389 Repost 통합 검증·정합성 확인·archive
 
