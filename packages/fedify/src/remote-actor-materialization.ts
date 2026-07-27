@@ -305,14 +305,6 @@ export const findUsableStoredRemoteProfileActorByUri = async (actorUri: URL | st
   return stored ? requireUsableStoredRemoteActor(stored) : undefined;
 };
 
-const resolveActorHandleByUri = async (actorUri: URL): Promise<string> => {
-  try {
-    return await getActorHandle(actorUri, { trimLeadingAt: true });
-  } catch {
-    throw new RemoteActorMaterializationError('WebFinger actor identity does not match.');
-  }
-};
-
 export const findOrMaterializeRemoteProfileActorByUri = async ({
   actorUri,
   context,
@@ -328,7 +320,12 @@ export const findOrMaterializeRemoteProfileActorByUri = async ({
     return stored;
   }
 
-  const handle = await resolveActorHandleByUri(actorUri);
+  let handle: string;
+  try {
+    handle = await getActorHandle(actorUri, { trimLeadingAt: true });
+  } catch {
+    throw new RemoteActorMaterializationError('WebFinger actor identity does not match.');
+  }
   await materializeRemoteProfileActor({ context, handle, now, reactivateUnresponsive: true });
 
   const materialized = await findStoredRemoteProfileActorByUri(actorUri);
