@@ -30,6 +30,24 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 - option은 button role, pressed·busy 상태와 상태별 접근성 label을 제공한다.
 - trigger, popover 위치, Post Action Bar 배치, mutation·Relay/cache와 custom emoji Full Picker는 이 컴포넌트의 범위가 아니다.
 
+## Post Action Bar 통합
+
+- 실제 Post Action Bar의 Reaction action은 현재 여섯 Type을 zero-count 여부와 무관하게 client catalog에서 공급하고, selected Profile의 `viewerReactions`를 선택 상태로 사용한다.
+- Reaction trigger는 Web·iOS·Android 모두에서 trigger에 붙은 작은 floating popover를 열며 같은 trigger를 다시 누르면 닫힌다. 화면 공간에 따라 위·아래로 전환하고 viewport와 safe area 안으로 수평 위치를 제한한다.
+- popover는 외부 클릭·터치, Web `Escape`, Android back, 대상 Post unmount 또는 selected Profile 전환으로 닫힌다. Web에서는 열릴 때 첫 option으로 focus를 옮기고 닫힐 때 trigger로 focus를 복원한다.
+- 한 Type을 선택하거나 해제한 뒤에도 popover를 유지해 여러 Type을 연속으로 조작할 수 있다.
+- 일반 Post와 Quote Post의 action은 해당 Post를 대상으로 하고, 순수 Repost가 source Post의 Action Bar를 표시하는 경우에는 source Post를 대상으로 한다.
+- 이 통합은 기존 Post Action Bar의 Reaction 자리만 소유한다. 전체 action 조립, Reply composer 연결, More 메뉴와 범용 anchored overlay 추출은 각각의 후속 범위로 유지한다.
+
+## Mutation과 상태
+
+- 선택 상태는 optimistic하게 바꾸지 않고 server가 확인한 mutation payload가 도착한 뒤 갱신한다.
+- 요청한 Type만 pending으로 막고 다른 Type은 계속 조작할 수 있다. 같은 Type의 연속 입력은 하나의 operation만 만들지만 서로 다른 Type은 동시에 진행할 수 있다.
+- mutation 실패는 해당 Type에 기존 inline `오류, 다시 시도` 상태를 표시하며 전역 toast를 추가하지 않는다. 재시도는 해당 Type의 오류만 지운다.
+- 필요한 mutation payload가 있으면 GraphQL `errors`가 함께 있어도 해당 Reaction 결과는 성공으로 처리한다. payload가 없거나 network가 실패하면 기존 선택 상태를 유지한다.
+- mutation과 Relay cache 갱신은 요청을 시작한 selected Profile의 Relay Environment 안에서 끝낸다. 이전 actor의 늦은 성공·실패 callback은 새 actor의 popover, pending, error 또는 선택 UI를 변경하지 않는다.
+- 같은 actor의 여러 화면에서 동시에 보낸 요청을 client 전역에서 직렬화하지 않는다. 서로 다른 Type의 응답 순서는 보존되지만 같은 Type의 cross-surface 응답 순서는 server 결과에 따른다.
+
 ## 검증
 
 - Storybook interaction에서 border 없는 option, 70% opacity의 selected 배경과 100% opacity의 이모지, 44×44px pending overlay와 24×24px fading arc, 오류 재시도와 disabled 시 미렌더링을 검증한다.

@@ -162,9 +162,18 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 
 ## 7. PROD-450 Reaction selector 프레젠테이션과 PROD-417 통합
 
+**Authority / Provenance**
+
+- `docs/domain/objects/reaction.md`
+- `docs/design/reactions.md`
+- `PROD-450`
+- `PROD-472`
+- `PROD-414`
+- `PROD-417`
+
 **Deliverable**
 
-사용자가 현재 여섯 built-in Type을 Quick Picker에서 독립적으로 선택하고, 후속 통합에서 selected Profile 기준으로 실제 추가·삭제하며 pending·실패 뒤 일관된 선택 상태를 확인한다. PROD-450은 이를 위한 재사용 presentation seam을 전달하고, PROD-417은 실제 mutation·Relay cache 통합을 전달한다.
+사용자가 기존 Post Action Bar의 anchored Quick Picker에서 현재 여섯 built-in Type을 selected Profile 기준으로 실제 추가·삭제하고, Type별 pending·실패와 actor 전환 뒤 server가 확인한 일관된 선택 상태를 확인한다. PROD-450은 재사용 presentation seam을 전달하고, PROD-417은 실제 trigger·popover·mutation·Relay cache와 Post surface 통합을 전달한다.
 
 **Guardrails**
 
@@ -172,20 +181,30 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 - PROD-450은 표시 문자열과 분리된 opaque option identity별 selected/pending/error controlled 상태와 toggle callback만 소유하며 서로 다른 Type의 기존 선택을 유지한다.
 - PROD-450 Quick Picker는 16px 둥근 외부 컨테이너 안에 border 없는 44×44px·12px radius option을 표시한다. selected는 이모지와 분리된 `primary`/`primaryHover` 배경 layer를 70% opacity로 표시하고 error는 빨간 border를 추가하지 않는다. pending은 이모지 위 full-size 투명 overlay에 `textSecondary` head가 투명한 tail로 흐려지는 24×24px·3px 두께의 연결된 180° 호를 표시하고, 전체 disabled이면 panel을 렌더링하지 않는다.
 - PROD-450은 mutation, Relay fragment/cache, 실제 서버 실패 복구, trigger·popover, Post Action Bar/surface 배치와 custom emoji Full Picker·palette·검색을 포함하지 않는다.
-- PROD-417은 Type별 pending/error를 격리하고 selected Profile의 Relay Environment 사이에서 상태를 공유하지 않는다.
+- PROD-417은 `ReactionSelector`를 변경하지 않고 private `ReactionAction`·`ReactionPopover`를 기존 `PostActionBar`에 연결한다. `ActionMenu` 일반화, 범용 anchored overlay, Reply composer·More와 전체 action 조립은 포함하지 않는다.
+- fixed 여섯 Type은 zero-count와 무관하게 client catalog가 공급하며 `viewerReactions`는 selected state만 제공한다. optimistic update를 사용하지 않는다.
+- add는 payload Reaction이 있을 때만 기존 Post의 non-connection `viewerReactions`에서 같은 Type·data ID를 중복 없이 upsert한다. delete는 non-null payload Post의 반환 list를 nullable `reactionId`와 무관하게 authoritative하게 사용하고, `post: null`이면 기존 field에서 요청 Type만 제거한다. cache에 Post/field가 없으면 합성하지 않는다.
+- 필요한 payload와 GraphQL `errors`가 함께 있으면 payload 결과를 성공으로 처리하고, payload 부재·network failure만 실패로 처리한다.
+- PROD-417은 같은 Type의 surface-local 중복 입력을 막고 서로 다른 Type의 동시 mutation과 reverse completion을 허용한다. Type별 pending/error를 격리하고 selected Profile의 Relay Environment 사이에서 UI 상태를 공유하지 않는다.
+- 같은 actor의 여러 surface를 client 전역에서 직렬화하지 않는다.
 - 사용자 정의 Reaction identity·asset·federation 계약을 포함하지 않는다.
 
 **Verification**
 
 - PROD-450은 supplied order와 현재 여섯 fixture, 선택·해제·복수 Type, option별 border·radius, 70% selected 배경과 100% 이모지, 44×44px pending overlay와 24×24px fading arc, error·중복 입력 방지, 전체 disabled 미렌더링과 callback을 Storybook/component interaction으로 검증한다.
-- PROD-417은 실제 mutation 성공·실패 복구, selected Profile cache와 actor 전환을 component/integration test로 검증한다.
+- PROD-417 unit test는 production updater seam을 직접 호출해 add same-Type/different-ID 교체, same-ID 반복 중복 방지, 다른 Type 보존, payload/Post/field 부재, delete authoritative list·`post: null` fallback·nullable `reactionId`, add 성공 뒤 delete와 actor 격리를 검증한다.
+- PROD-417 Web integration은 trigger 재입력, outside pointer, `Escape`, 첫 option·trigger focus, `aria-haspopup`/`aria-expanded`, 열린 상태 유지, flip/clamp, Type별 동시 pending·reverse completion·실패/retry·actor 전환·unmount를 검증한다.
+- production Post fixture는 ordinary·Quote가 자신의 Post ID를, 순수 Repost가 source Post ID를 mutation 대상으로 사용하는지 검증한다.
+- iOS·Android는 safe area, 외부 touch, Android back과 VoiceOver/TalkBack focus를 수동 확인한다. 기존 `Reactions`·`ActionMenu` presentation catalog와 API/DB test를 중복 확장하지 않는다.
 
-- [x] 7.1 최종 `post-reaction-ui` spec이 변경되지 않음을 확인하고, PROD-450 supplied-option Quick Picker 프레젠테이션과 PROD-417 통합 경계를 proposal·design·decisions·tasks에 동기화해 strict validation을 통과시킨다.
+- [x] 7.1 PROD-450 supplied-option Quick Picker 프레젠테이션과 후속 PROD-417 통합 경계를 proposal·design·decisions·tasks에 기록하고 strict validation을 통과시킨다.
 - [x] 7.2 PROD-450 props-only `ReactionSelector` Quick Picker panel을 canonical 시각 계약에 맞게 구현한다.
 - [x] 7.3 PROD-450 Storybook/component interaction에서 supplied option 동작과 border·radius·selected layer·fading arc pending overlay·error·disabled 미렌더링을 검증하고 app check를 통과시킨다.
-- [ ] 7.4 PROD-417이 소유한 zero-count option 공급, selector 통합 UX와 optimistic update 결정을 확정해 specs·decisions를 갱신하고 strict validation을 통과시킨다.
-- [ ] 7.5 add/delete mutation과 selected Profile cache를 PROD-450 presentation seam에 연결한다.
-- [ ] 7.6 실제 Relay data shape의 mutation 성공·실패 복구와 selected Profile 전환을 component/integration test로 검증하고 app check를 통과시킨다.
+- [ ] 7.4 PROD-417이 소유한 fixed option, anchored popover, server-confirmed mutation/cache, partial payload, actor 격리와 실제 Action Bar surface 결정을 canonical design·specs·decisions·tasks에 동기화하고 strict validation을 통과시킨다.
+- [ ] 7.5 private Reaction action/popover와 add/delete mutation을 기존 Post Action Bar·PROD-450 presentation seam에 연결하고, 승인된 non-connection `viewerReactions` updater와 stale UI callback guard를 구현한다.
+- [ ] 7.6 production updater seam을 직접 검증하는 최소 unit test로 add/delete cache matrix, Type별 concurrency와 actor 전환을 검증한다.
+- [ ] 7.7 Post Action Bar Storybook integration에서 Web popover dismiss/focus/placement, 동시 mutation·실패/retry·unmount를 검증하고 production Post fixture에서 ordinary·Quote·순수 Repost mutation target을 검증한다.
+- [ ] 7.8 app test·lint·format·diff check와 OpenSpec strict validation을 통과시키고 Web 자동 검증과 iOS·Android 수동 관찰 결과를 분리해 기록한다.
 
 ## 8. PROD-449 Reaction 요약 프레젠테이션과 PROD-418 통합
 

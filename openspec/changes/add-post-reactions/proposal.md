@@ -9,9 +9,9 @@ Kosmo는 Profile이 Post에 여러 종류의 Reaction을 남기고, 이를 일�
 - 허용된 Reaction의 멱등 생성과 selected Profile의 Post/Type 기준 멱등 삭제를 제공한다.
 - Post에서 selected Profile이 남긴 현재 Reaction 관계 목록을 제공한다.
 - Post별 Type count는 viewer와 무관하게 제공하고, Type별 Profile 목록에만 viewer의 Profile 조회 경계를 적용한다.
-- Reaction 선택 UI와 count/Profile 요약 UI를 독립 component/integration 경계로 제공한다.
+- Reaction 선택 UI를 기존 Post Action Bar의 실제 Reaction action에 연결하고, count/Profile 요약 UI는 독립 component/integration 경계로 제공한다.
 - 자기 Post 알림을 억제하면서 Reaction Notification을 기존 inbox에 통합하고, Reaction 제거 뒤 Notification을 Best Effort로 정리한다.
-- 여러 Post action을 공통 Action Bar와 실제 surface에 조립하는 작업은 PROD-432의 별도 계약으로 유지한다.
+- 기존 Post Action Bar의 Reaction action 통합은 PROD-417이 소유하고, Reply composer·More를 포함한 전체 action 조립은 PROD-432의 별도 계약으로 유지한다.
 
 ## Capabilities
 
@@ -31,7 +31,7 @@ Kosmo는 Profile이 Post에 여러 종류의 Reaction을 남기고, 이를 일�
 - Linear: PROD-395, PROD-404, PROD-405, PROD-406, PROD-407, PROD-413, PROD-450, PROD-472, PROD-417, PROD-418, PROD-419와 부모 PROD-390
 - Core/DB: Reaction schema, migration, 무결성·index 검증
 - GraphQL/Core service: 생성·Post/Type 삭제 mutation, selected Profile의 Reaction 목록, count와 Profile connection, Reaction Notification concrete type와 loader
-- Universal client: fixture-first Reaction Quick Picker·summary presentation, 후속 Relay mutation/cache·pagination 통합과 component/integration 검증
+- Universal client: fixture-first Reaction Quick Picker·summary presentation, 기존 Post Action Bar의 Reaction popover, Relay mutation/cache·pagination 통합과 component/integration 검증
 - Notification: 기존 Profile-scoped projection과 inbox/read/count UI 확장
 - Dependency: PROD-413은 완료된 PROD-277·324·372 Notification 기반 위에 Reaction Notification delta를 적용한다. `add-in-app-notifications`의 남은 E2E·archive는 그 부모 범위로 유지한다.
-- Excluded systems: ActivityPub Reaction ingress/delivery, 임의 Unicode와 사용자 정의 Reaction, custom emoji Full Picker·palette·검색, Reaction trigger·popover와 공통 Post Action Bar rollout, 범용 Notification 재설계
+- Excluded systems: ActivityPub Reaction ingress/delivery, 임의 Unicode와 사용자 정의 Reaction, custom emoji Full Picker·palette·검색, Reply composer·More를 포함한 전체 Action Bar 조립, 범용 anchored overlay·Notification 재설계
