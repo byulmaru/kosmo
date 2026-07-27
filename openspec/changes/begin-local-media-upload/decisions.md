@@ -14,7 +14,7 @@
 - Decision Outcome: 업로드 시작 시 Kosmo Media를 `Uploading`으로 만들고 후속 완료 시 같은 Media를 `Ready`로 전환한다. 별도 claim이나 File 객체는 만들지 않는다.
 - Alternatives Considered: 별도 upload claim 뒤 Ready Media 생성, File을 상태 객체로 사용, 기존 File/Media 동시 생성. 모두 identity 또는 외부 저장 책임을 중복하므로 선택하지 않았다.
 - Consequences: `PROD-439`는 Uploading 생성만, `PROD-441`은 같은 row의 Ready 전환만 소유한다.
-- Confirmation / Follow-up: mutation 구현과 schema/migration diff에서 Uploading Media만 생성하고 File persistence가 제거되는지 확인한다. DB 실행 검증은 하지 않는다.
+- Confirmation / Follow-up: mutation integration test에서 Uploading Media만 생성하는지 확인하고 schema/migration diff에서 File persistence 제거를 확인한다. 생성 migration history의 실행 검증은 하지 않는다.
 
 ### 외부 저장 참조를 비공개 persistence로 유지한다
 
@@ -38,7 +38,7 @@
 - Decision Outcome: 인증과 행동 주체를 검증한 뒤 외부 업로드 권한을 발급받고, 응답 검증 후 Media를 insert하며, insert 성공 뒤에만 upload URL을 반환한다.
 - Alternatives Considered: Media를 먼저 insert한 뒤 외부 호출, DB transaction 안에서 외부 호출, consumer에게 URL을 먼저 반환. 실패한 미결속 Media, 긴 transaction 또는 관찰 가능한 불완전 성공을 만들므로 선택하지 않았다.
 - Consequences: DB insert 실패 시 consumer에게 노출되지 않은 외부 upload slot이 만료 전까지 남을 수 있다.
-- Confirmation / Follow-up: 외부 실패는 production client wiring 단위 테스트로, DB 실패 시 URL을 반환할 수 없는 호출 순서는 resolver 정적 review로 확인한다. DB 실행 검증과 orphan 정리는 현재 범위 밖이다.
+- Confirmation / Follow-up: 외부 실패는 production client wiring 및 GraphQL integration test로, DB insert 실패 시 URL을 반환하지 않는 동작은 격리된 test DB의 storage reference 충돌로 확인한다. 생성 migration history 실행과 orphan 정리는 현재 범위 밖이다.
 
 ### 기존 Media/File schema를 데이터 precondition 없이 교체한다
 

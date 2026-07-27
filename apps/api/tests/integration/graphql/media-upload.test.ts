@@ -1,0 +1,351 @@
+import '@kosmo/core/polyfill';
+
+import assert from 'node:assert/strict';
+import { after, before, beforeEach, describe, test } from 'node:test';
+import {
+  AccountProfileRole,
+  AccountState,
+  InstanceKind,
+  InstanceState,
+  MediaSource,
+  MediaState,
+  ProfileFollowPolicy,
+  ProfileState,
+  SessionState,
+} from '@kosmo/core/enums';
+import { normalizeHandle } from '@kosmo/core/utils';
+import { ne } from 'drizzle-orm';
+import { Hono } from 'hono';
+import type { TestContext } from 'node:test';
+import type * as CoreDb from '@kosmo/core/db';
+import type { deriveContext as DeriveContext, Env } from '../../../src/context';
+import type { yoga as YogaRouter } from '../../../src/graphql';
+import type { encodeGlobalId as EncodeGlobalId } from '../../../src/graphql/global-id';
+
+const publicOrigin = 'http://127.0.0.1:4173';
+const uploadExpiresAt = '2026-07-27T15:00:00Z';
+const serializedUploadExpiresAt = '2026-07-27T15:00:00.000Z';
+process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+process.env.MEDIA_STORAGE_SERVICE_ORIGIN = 'https://media.example';
+process.env.MEDIA_STORAGE_SERVICE_API_KEY = 'secret';
+
+let AccountProfiles: typeof CoreDb.AccountProfiles;
+let Accounts: typeof CoreDb.Accounts;
+let db: typeof CoreDb.db;
+let firstOrThrow: typeof CoreDb.firstOrThrow;
+let Instances: typeof CoreDb.Instances;
+let Media: typeof CoreDb.Media;
+let pg: typeof CoreDb.pg;
+let Profiles: typeof CoreDb.Profiles;
+let Sessions: typeof CoreDb.Sessions;
+let deriveContext: typeof DeriveContext;
+let yoga: typeof YogaRouter;
+let encodeGlobalId: typeof EncodeGlobalId;
+let app: Hono<Env>;
+let localInstanceId: string;
+
+describe('Local Media upload 시작 GraphQL 경계', () => {
+  before(async () => {
+    process.env.NODE_ENV = 'production';
+    process.env.PUBLIC_ORIGIN = publicOrigin;
+
+    ({ AccountProfiles, Accounts, db, firstOrThrow, Instances, Media, pg, Profiles, Sessions } =
+      await import('@kosmo/core/db'));
+    const { seedDatabase } = await import('@kosmo/core/db/seed');
+
+    await truncateDatabase();
+    const { localInstance } = await seedDatabase({ publicOrigin });
+    localInstanceId = localInstance.id;
+
+    ({ deriveContext } = await import('../../../src/context'));
+    ({ yoga } = await import('../../../src/graphql'));
+    ({ encodeGlobalId } = await import('../../../src/graphql/global-id'));
+
+    app = new Hono<Env>();
+    app.use('*', async (c, next) => {
+      c.set('context', await deriveContext(c));
+      return next();
+    });
+    app.route('/graphql', yoga);
+  });
+
+  beforeEach(async () => {
+    await resetFixtures();
+  });
+
+  after(async () => {
+    await pg.end();
+  });
+
+  test('Account와 선택 Profile을 Uploading Media에 결속하고 Account별 조회를 격리한다', async (t) => {
+    const issued = mockUploadIssuance(t);
+    const first = await createAuthenticatedSession();
+    const secondProfile = await createProfile(`second-${crypto.randomUUID()}`);
+    await db.insert(AccountProfiles).values({
+      accountId: first.account.id,
+      profileId: secondProfile.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    const secondProfileToken = await createSession(first.account.id, secondProfile.id);
+    const other = await createAuthenticatedSession();
+
+    const firstResult = await requestIssueMediaUploadUrl(first.token);
+    const secondResult = await requestIssueMediaUploadUrl(secondProfileToken);
+    const otherResult = await requestIssueMediaUploadUrl(other.token);
+
+    for (const result of [firstResult, secondResult, otherResult]) {
+      assertNoGraphQLErrors(result);
+      assert.equal(result.data?.issueMediaUploadUrl.media.state, 'UPLOADING');
+      assert.equal(result.data?.issueMediaUploadUrl.expiresAt, serializedUploadExpiresAt);
+    }
+
+    const stored = await db.select().from(Media);
+    assert.equal(stored.length, 3);
+    const byStorageReference = new Map(stored.map((media) => [media.storageReference, media]));
+    assertStoredMedia(byStorageReference.get(issued[0]!.id), first.account.id, first.profile.id);
+    assertStoredMedia(byStorageReference.get(issued[1]!.id), first.account.id, secondProfile.id);
+    assertStoredMedia(byStorageReference.get(issued[2]!.id), other.account.id, other.profile.id);
+
+    const firstMediaId = firstResult.data!.issueMediaUploadUrl.media.id;
+    assert.equal(firstMediaId, encodeGlobalId('Media', byStorageReference.get(issued[0]!.id)!.id));
+    assert.deepEqual(await requestMediaNode(firstMediaId, first.token), {
+      id: firstMediaId,
+      state: 'UPLOADING',
+    });
+    assert.equal(await requestMediaNode(firstMediaId, other.token), null);
+  });
+
+  test('유효하지 않은 Account와 선택 Profile은 외부 발급 전에 거부한다', async (t) => {
+    let fetchCalls = 0;
+    t.mock.method(globalThis, 'fetch', async () => {
+      fetchCalls += 1;
+      return uploadResponse();
+    });
+    const remoteInstance = await createInstance(InstanceKind.ACTIVITYPUB, InstanceState.ACTIVE);
+    const unresponsiveInstance = await createInstance(
+      InstanceKind.LOCAL,
+      InstanceState.UNRESPONSIVE,
+    );
+    const actors = await Promise.all([
+      createAuthenticatedSession({ activeProfile: false }),
+      createAuthenticatedSession({ accountState: AccountState.DISABLED }),
+      createAuthenticatedSession({ member: false }),
+      createAuthenticatedSession({ profileState: ProfileState.DISABLED }),
+      createAuthenticatedSession({ instanceId: remoteInstance.id }),
+      createAuthenticatedSession({ instanceId: unresponsiveInstance.id }),
+    ]);
+
+    for (const token of [undefined, ...actors.map(({ token }) => token)]) {
+      const result = await requestIssueMediaUploadUrl(token);
+      assert.equal(result.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+    }
+    assert.equal(fetchCalls, 0);
+    assert.equal(await db.$count(Media), 0);
+  });
+
+  test('외부 업로드 권한 발급 실패는 Media를 생성하지 않는다', async (t) => {
+    t.mock.method(globalThis, 'fetch', async () => new Response(null, { status: 503 }));
+    const auth = await createAuthenticatedSession();
+
+    const result = await requestIssueMediaUploadUrl(auth.token);
+
+    assert.ok(result.errors?.[0]);
+    assert.equal(result.data, null);
+    assert.equal(await db.$count(Media), 0);
+  });
+
+  test('Media persistence 실패는 upload URL을 응답하지 않는다', async (t) => {
+    const storageReference = `u_${crypto.randomUUID()}`;
+    mockUploadIssuance(t, storageReference);
+    const auth = await createAuthenticatedSession();
+
+    const first = await requestIssueMediaUploadUrl(auth.token);
+    const failed = await requestIssueMediaUploadUrl(auth.token);
+
+    assertNoGraphQLErrors(first);
+    assert.ok(failed.errors?.[0]);
+    assert.equal(failed.data, null);
+    assert.doesNotMatch(JSON.stringify(failed), /signed-token/);
+    assert.equal(await db.$count(Media), 1);
+  });
+});
+
+type GraphQLResult<TData> = {
+  data?: TData | null;
+  errors?: Array<{ extensions?: { code?: string }; message: string }>;
+};
+
+type IssueMediaUploadUrlData = {
+  issueMediaUploadUrl: {
+    expiresAt: string;
+    media: { id: string; state: string };
+    uploadUrl: string;
+  };
+};
+
+const requestIssueMediaUploadUrl = (token?: string) =>
+  requestGraphQL<IssueMediaUploadUrlData>(
+    `mutation IssueMediaUploadUrl {
+      issueMediaUploadUrl { media { id state } uploadUrl expiresAt }
+    }`,
+    {},
+    token,
+  );
+
+const requestMediaNode = async (id: string, token: string) => {
+  const result = await requestGraphQL<{
+    node: { id: string; state: string } | null;
+  }>(
+    `query MediaNode($id: ID!) {
+      node(id: $id) { ... on Media { id state } }
+    }`,
+    { id },
+    token,
+  );
+  assertNoGraphQLErrors(result);
+  return result.data!.node;
+};
+
+const requestGraphQL = async <TData>(
+  query: string,
+  variables: Record<string, unknown>,
+  token?: string,
+): Promise<GraphQLResult<TData>> => {
+  const headers = new Headers({ 'content-type': 'application/json' });
+  if (token) {
+    headers.set('authorization', `Bearer ${token}`);
+  }
+  const response = await app.request('/graphql', {
+    body: JSON.stringify({ query, variables }),
+    headers,
+    method: 'POST',
+  });
+  assert.equal(response.status, 200);
+  return (await response.json()) as GraphQLResult<TData>;
+};
+
+const assertNoGraphQLErrors = (result: GraphQLResult<unknown>) => {
+  assert.equal(result.errors, undefined, JSON.stringify(result.errors));
+};
+
+const mockUploadIssuance = (t: TestContext, fixedId?: string) => {
+  const issued: Array<{ id: string; uploadUrl: string }> = [];
+  t.mock.method(globalThis, 'fetch', async () => {
+    const id = fixedId ?? `u_${crypto.randomUUID()}`;
+    const uploadUrl = `https://media.example/v1/uploads/signed-token-${issued.length + 1}`;
+    issued.push({ id, uploadUrl });
+    return uploadResponse(id, uploadUrl);
+  });
+  return issued;
+};
+
+const uploadResponse = (
+  id = `u_${crypto.randomUUID()}`,
+  uploadUrl = 'https://media.example/v1/uploads/signed-token',
+) => Response.json({ expiresAt: uploadExpiresAt, id, uploadUrl }, { status: 201 });
+
+const assertStoredMedia = (
+  media: typeof Media.$inferSelect | undefined,
+  accountId: string,
+  profileId: string,
+) => {
+  assert.ok(media);
+  assert.equal(media.accountId, accountId);
+  assert.equal(media.profileId, profileId);
+  assert.equal(media.source, MediaSource.LOCAL);
+  assert.equal(media.state, MediaState.UPLOADING);
+  assert.equal(media.uploadExpiresAt.toString(), uploadExpiresAt);
+};
+
+const createInstance = (kind: InstanceKind, state: InstanceState) =>
+  db
+    .insert(Instances)
+    .values({ domain: `${crypto.randomUUID()}.example`, kind, state })
+    .returning()
+    .then(firstOrThrow);
+
+const createProfile = (
+  handle: string,
+  {
+    instanceId = localInstanceId,
+    state = ProfileState.ACTIVE,
+  }: { instanceId?: string; state?: ProfileState } = {},
+) =>
+  db
+    .insert(Profiles)
+    .values({
+      displayName: handle,
+      followPolicy: ProfileFollowPolicy.OPEN,
+      handle,
+      instanceId,
+      normalizedHandle: normalizeHandle(handle),
+      state,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+const createAuthenticatedSession = async ({
+  accountState = AccountState.ACTIVE,
+  activeProfile = true,
+  instanceId = localInstanceId,
+  member = true,
+  profileState = ProfileState.ACTIVE,
+}: {
+  accountState?: AccountState;
+  activeProfile?: boolean;
+  instanceId?: string;
+  member?: boolean;
+  profileState?: ProfileState;
+} = {}) => {
+  const suffix = crypto.randomUUID();
+  const account = await db
+    .insert(Accounts)
+    .values({ displayName: suffix, oidcSubject: suffix, state: accountState })
+    .returning()
+    .then(firstOrThrow);
+  const profile = await createProfile(`viewer-${suffix}`, { instanceId, state: profileState });
+  if (member) {
+    await db.insert(AccountProfiles).values({
+      accountId: account.id,
+      profileId: profile.id,
+      role: AccountProfileRole.OWNER,
+    });
+  }
+  const token = await createSession(account.id, activeProfile ? profile.id : null);
+  return { account, profile, token };
+};
+
+const createSession = async (accountId: string, profileId: string | null) => {
+  const token = `token-${crypto.randomUUID()}`;
+  await db.insert(Sessions).values({
+    accountId,
+    activeProfileId: profileId,
+    state: SessionState.ACTIVE,
+    token,
+  });
+  return token;
+};
+
+const resetFixtures = async () => {
+  await db.delete(Media);
+  await db.delete(Sessions);
+  await db.delete(AccountProfiles);
+  await db.delete(Accounts);
+  await db.delete(Profiles);
+  await db.delete(Instances).where(ne(Instances.id, localInstanceId));
+};
+
+const truncateDatabase = async () => {
+  const databaseUrl = new URL(process.env.DATABASE_URL ?? '');
+  assert.ok(new Set(['127.0.0.1', '[::1]', 'localhost']).has(databaseUrl.hostname));
+  assert.match(databaseUrl.pathname, /^\/kosmo_test(?:_[a-z0-9_]+)?$/);
+  await pg.unsafe(`
+    DO $$
+    DECLARE truncate_statement text;
+    BEGIN
+      SELECT 'TRUNCATE TABLE ' || string_agg(format('%I.%I', schemaname, tablename), ', ') || ' CASCADE'
+      INTO truncate_statement FROM pg_tables WHERE schemaname = 'public';
+      IF truncate_statement IS NOT NULL THEN EXECUTE truncate_statement; END IF;
+    END $$;
+  `);
+};

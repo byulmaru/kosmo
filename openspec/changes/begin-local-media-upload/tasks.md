@@ -51,13 +51,13 @@ Kosmo가 Local Media의 Upload Account, 행동 주체 Profile, Uploading state, 
 
 - GraphQL schema와 인증된 선택 Profile 요구를 단위 테스트로 검증한다.
 - production 환경 설정과 전역 fetch를 사용하는 Storage client의 성공·외부 오류·잘못된 응답을 단위 테스트로 검증한다.
-- Account/Profile/Instance 권한 조건, Account/Profile insert 결속과 persistence 실패 시 URL 비노출 순서는 resolver 정적 review로 확인한다. DB 실행 검증은 수행하지 않는다.
+- 격리된 test DB에서 Account/Profile/Instance 권한 조건, Account/Profile insert 결속, Account 간 조회 격리, 외부 실패 시 미생성과 persistence 실패 시 URL 비노출을 실제 GraphQL 경로로 검증한다.
 - GraphQL schema가 Media identity, state, upload URL과 만료 시각만 공개하는지 확인한다.
 
 - [x] 2.1 Media Storage Service 업로드 시작 응답을 검증하고 호출할 수 있게 한다.
 - [x] 2.2 인증·Profile 권한과 외부 업로드 권한에 결속된 Uploading Media 생성 동작을 구현한다.
 - [x] 2.3 `issueMediaUploadUrl` GraphQL mutation과 최소 Media 조회 계약을 제공한다.
-- [x] 2.4 GraphQL 인증/schema와 production Storage client 테스트를 추가하고 DB 결속·실패 순서를 정적 review한다.
+- [x] 2.4 GraphQL 인증/schema와 production Storage client 테스트를 추가하고 실제 GraphQL/DB 경로에서 권한·결속·격리·실패 순서를 검증한다.
 
 ## 3. PROD-439 사용되지 않는 내부 업로드 경계 제거
 
@@ -102,11 +102,11 @@ PROD-439 범위가 canonical 계약과 OpenSpec을 만족하고 후속 완료/Re
 **Guardrails**
 
 - `PROD-440`의 저장 완료 endpoint와 `PROD-441`의 Ready 전환을 변경하지 않는다.
-- DB 실행 검증은 요구하지 않는다.
+- API persistence는 격리된 test DB로 검증하되 생성 migration history 실행과 기존 DB 데이터 검증은 요구하지 않는다.
 
 **Verification**
 
-- 관련 단위·GraphQL schema 테스트, lint/type check와 OpenSpec strict validation을 통과시킨다.
+- 관련 단위·GraphQL schema·DB integration 테스트, lint/type check와 OpenSpec strict validation을 통과시킨다.
 - diff에서 브라우저 byte 전송, 완료 확인, Ready 전환과 Post/Profile 연결이 없는지 확인한다.
 
 - [x] 4.1 관련 테스트와 정적 검사를 실행하고 실패를 수정한다.
