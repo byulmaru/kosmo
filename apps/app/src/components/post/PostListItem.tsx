@@ -1,4 +1,4 @@
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -159,6 +159,7 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
 }
 
 function PostListRow({ post: postKey }: { post: PostListRow_post$key }) {
+  const router = useRouter();
   const theme = useTheme();
   const post = useFragment(PostListRowFragment, postKey);
   const profileHref = `/${post.profile.relativeHandle}` as const;
@@ -191,11 +192,16 @@ function PostListRow({ post: postKey }: { post: PostListRow_post$key }) {
           </Link>
         </View>
         {post.content?.bodyText ? (
-          <Link asChild href={detailHref}>
-            <Pressable accessibilityRole="link" style={styles.bodyLink}>
-              <PostBody post={post} />
-            </Pressable>
-          </Link>
+          <Pressable
+            accessible={false}
+            focusable={false}
+            onPress={() => router.push(detailHref)}
+            style={styles.bodyLink}
+            tabIndex={-1}
+            testID="post-list-row-body"
+          >
+            <PostBody post={post} />
+          </Pressable>
         ) : null}
       </View>
     </View>

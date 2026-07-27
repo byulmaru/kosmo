@@ -924,7 +924,7 @@ export const ProductionRepostQuoteListIntegration: Story = {
     ).toHaveLength(1);
     expect(
       repostOfQuoteRow!.querySelectorAll('a[href="/@source@remote.example/post-source-quote"]'),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
     expect(quoteOfQuoteRow!.querySelectorAll('[data-testid="source-post-preview"]')).toHaveLength(
       1,
     );
@@ -1241,10 +1241,17 @@ export const LinkedBodyKeepsDetailNavigationIsolated: Story = {
     Linking.openURL = openURL;
 
     try {
+      expect(canvasElement.querySelector('a a')).toBeNull();
+      expect(canvasElement.querySelector('[role="link"] [role="link"]')).toBeNull();
       await userEvent.click(canvas.getByLabelText('안전한 외부 링크, https://example.com/path'));
       await expect(openURL).toHaveBeenCalledWith('https://example.com/path');
       await expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
         '/@kosmo/post-1',
+      );
+
+      await userEvent.click(canvas.getByTestId('post-list-row-body'));
+      await expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+        '/@kosmo/linked',
       );
     } finally {
       Linking.openURL = originalOpenURL;
