@@ -139,6 +139,18 @@
 - Consequences: 현재 Post의 상세 맥락과 주변 Reply의 일반 읽기 밀도를 함께 유지하고 API visibility 경계를 누출하지 않는다. PROD-451 presentation seam은 새 Quote Source·Action Bar·Reaction/Repost UI를 소유하지 않으며 fixture가 공급한 기존 Post rendering과 link semantics를 보존한다. PROD-422는 새 preview component 없이 production fragment와 renderer를 조합하므로 outer Post와 Source의 Profile/Post Link가 sibling으로 독립되고, Source가 unavailable이어도 Reply+Quote 자체 Content가 남는다.
 - Confirmation / Follow-up: PROD-451 Storybook/component interaction은 role별 기존 renderer 선택, supplied 직접 connector, 직접 연결된 마지막 visible Reply에서의 경계 종료와 반환된 `repostSource` subtree의 Source ID sentinel으로 Reply+Quote의 자체 Content·Source 관계 보존을 검증한다. 실제 spacing·typography 밀도는 현재 `ThemeProvider`가 지원하는 Light appearance의 390px/600px visual QA로 확인하고 Dark appearance는 완료한 것으로 기록하지 않는다. PROD-422는 ancestor reverse와 descendant `replyParent { id }` 기반 metadata, Source 존재·부재에 따른 sibling 표시, 기존 Link와 실제 fragment·route integration을 별도로 검증한다.
 
+### direct Source의 공용 renderer 소유권 정렬은 PROD-415가 후속 수행한다
+
+- Decision Date: 2026-07-27
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-422`, `PROD-415`
+- Status: Active
+- Context / Problem: PR #358은 Reply thread 통합을 완료하면서 `PostDetailThread`가 현재 Post와 조상·하위 Reply의 direct Source fragment와 sibling 조합을 직접 소유했다. 이후 Home·Profile·Bookmark·상세에 같은 direct Source 표시를 적용하려면 thread가 아니라 공용 Post renderer가 이 책임을 가져야 함이 확인됐다.
+- Decision Outcome: PROD-388은 PR #358이 전달한 Reply+Quote의 자체 Content 유지, nullable direct Source sibling과 thread 관계·배치를 완료 결과로 검증한다. direct Source의 fragment·조합·표시 책임을 현재 상세 Post의 `PostLayout`과 목록형 Post의 `PostListItem`으로 옮기고 Content 없는 Repost 상세을 canonical Source route로 replace하는 후속 구현·전체 surface 검증은 PROD-415가 소유한다. 이 책임 정렬은 PROD-422의 완료 범위와 Reply 계약 archive를 막지 않는다.
+- Alternatives Considered: PROD-388에서 PROD-415 구현까지 함께 수행하거나, PR #358의 thread-local Source 조합을 영구 공용 책임으로 확정하는 방식. 전자는 독립 Repost 표시 이슈를 Reply archive에 끌어오고 후자는 최신 Linear 소유권 정정과 충돌하므로 사용하지 않는다.
+- Consequences: archive된 Reply spec은 관찰 가능한 Reply+Quote thread 행동을 유지하고, 공용 renderer 내부 책임과 Content 없는 Repost route 정리는 active `add-post-reposts` change와 PROD-415에서 이어간다.
+- Confirmation / Follow-up: PROD-415가 Home·Profile·Bookmark·Post 상세의 direct Source와 Content 없는 Repost 상세 redirect를 통합 검증한다.
+
 ### PROD-422 descendant page는 route-owned 무한 스크롤로 이어 붙인다
 
 - Decision Date: 2026-07-25

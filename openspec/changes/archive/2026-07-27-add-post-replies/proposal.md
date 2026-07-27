@@ -16,6 +16,7 @@ Kosmo는 Reply를 별도 Post Kind가 아니라 Content와 직접 Reply Parent �
 - Canonical: `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`
 - Linear Contract: [PROD-388](https://linear.app/byulmaru/issue/PROD-388)
 - Linear Implementations: [PROD-393](https://linear.app/byulmaru/issue/PROD-393), [PROD-398](https://linear.app/byulmaru/issue/PROD-398), [PROD-399](https://linear.app/byulmaru/issue/PROD-399), [PROD-400](https://linear.app/byulmaru/issue/PROD-400), [PROD-429](https://linear.app/byulmaru/issue/PROD-429), [PROD-451](https://linear.app/byulmaru/issue/PROD-451), [PROD-422](https://linear.app/byulmaru/issue/PROD-422)
+- Follow-up ownership correction: [PROD-415](https://linear.app/byulmaru/issue/PROD-415) owns moving direct Repost Source composition into the shared Post renderers without changing this change's Reply thread behavior.
 
 ## Capabilities
 
@@ -36,4 +37,5 @@ Kosmo는 Reply를 별도 Post Kind가 아니라 Content와 직접 Reply Parent �
 - GraphQL/API: `Post.replyParent`, `Post.replyAncestors` non-null list와 `Post.replyDescendants` full Relay connection
 - Universal client: Post 상세 thread fragment·route integration과 Home/Profile 후보 정책 회귀 검증
 - Dependency: 완료된 PROD-394와 `add-post-reposts`가 제공하는 nullable Repost Source 저장 기반을 재사용한다.
+- Follow-up boundary: PROD-422의 완료 뒤 확인된 direct Source 공용 renderer 소유권 정렬은 PROD-415가 구현·검증하며, 이 change의 archive를 막거나 Reply thread 결과를 재정의하지 않는다.
 - Excluded systems: Reply 작성 mutation·composer, Quote/Reply+Quote 작성 action, ActivityPub `inReplyTo`, Post Media, Notification, 별도 Post Kind와 concrete GraphQL type
