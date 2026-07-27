@@ -23,7 +23,7 @@
 - **WHEN** `/login/callback` GET 요청에 `code`와 쿠키 state와 일치하는 `state`가 포함된다
 - **THEN** 시스템은 OIDC token endpoint에 authorization code, PKCE code verifier, client id, client secret, grant type, 현재 origin의 `/login/callback` redirect URI를 제출한다
 - **AND** token 응답에는 access token과 id token이 포함되어야 한다
-- **AND** 시스템은 ID token signature, issuer, audience와 시간 claims가 유효하고 연결된 Account가 `ACTIVE`일 때만 Kosmo session을 생성한다
+- **AND** 시스템은 ID token signature, issuer, audience와 시간 claims가 유효하고 연결된 Account가 없거나 `ACTIVE`일 때만 Kosmo session을 생성한다
 
 #### Scenario: 검증되지 않은 ID token 거부
 
