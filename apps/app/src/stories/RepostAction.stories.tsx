@@ -33,6 +33,7 @@ const repostActionStoryQuery = graphql`
 
 function RepostActionStory({ storeOnly = false }: { storeOnly?: boolean }) {
   const [errorCount, setErrorCount] = useState(0);
+  const [failureActions, setFailureActions] = useState<string[]>([]);
   const data = useLazyLoadQuery<RepostActionStoryQuery>(
     repostActionStoryQuery,
     { id: sourcePostId },
@@ -41,10 +42,14 @@ function RepostActionStory({ storeOnly = false }: { storeOnly?: boolean }) {
   return (
     <View>
       <PostActionBar
-        onRepostError={() => setErrorCount((count) => count + 1)}
+        onRepostError={(failure) => {
+          setErrorCount((count) => count + 1);
+          setFailureActions((actions) => [...actions, failure.action]);
+        }}
         post={data.node!.actionBar!}
       />
       <Text testID="repost-error-count">{errorCount}</Text>
+      <Text testID="repost-failure-actions">{JSON.stringify(failureActions)}</Text>
     </View>
   );
 }
@@ -113,7 +118,13 @@ function ActorResetIgnoresStaleCallbacksStory() {
 
 type MutationFailure = 'graphql' | 'network' | undefined;
 
-function CapturedRepostActionStory({ failure }: { failure?: MutationFailure }) {
+function CapturedRepostActionStory({
+  failure,
+  initialSource = unselectedSource,
+}: {
+  failure?: MutationFailure;
+  initialSource?: typeof unselectedSource | typeof selectedSource;
+}) {
   const [requests, setRequests] = useState<Array<{ name: string; variables: Variables }>>([]);
   const environment = useMemo(() => {
     const result = new Environment({
@@ -148,7 +159,7 @@ function CapturedRepostActionStory({ failure }: { failure?: MutationFailure }) {
     });
     result.commitPayload(
       createOperationDescriptor(getRequest(RepostActionStoryQueryNode), { id: sourcePostId }),
-      { node: unselectedSource },
+      { node: initialSource },
     );
     return result;
   }, [failure]);
@@ -163,6 +174,7 @@ function CapturedRepostActionStory({ failure }: { failure?: MutationFailure }) {
 
 function CapturedRepostActionControls() {
   const [errorCount, setErrorCount] = useState(0);
+  const [failureActions, setFailureActions] = useState<string[]>([]);
   const data = useLazyLoadQuery<RepostActionStoryQuery>(
     repostActionStoryQuery,
     { id: sourcePostId },
@@ -171,23 +183,14 @@ function CapturedRepostActionControls() {
   return (
     <View>
       <PostActionBar
-        onRepostError={() => setErrorCount((count) => count + 1)}
+        onRepostError={(failure) => {
+          setErrorCount((count) => count + 1);
+          setFailureActions((actions) => [...actions, failure.action]);
+        }}
         post={data.node!.actionBar!}
       />
-      <Text
-        accessibilityLabel="두 번 재게시 실행"
-        accessibilityRole="button"
-        onPress={() => {
-          const repostButton = document.querySelector<HTMLElement>(
-            '[data-testid="post-action-repost"]',
-          );
-          repostButton?.click();
-          repostButton?.click();
-        }}
-      >
-        두 번 재게시 실행
-      </Text>
       <Text testID="repost-error-count">{errorCount}</Text>
+      <Text testID="repost-failure-actions">{JSON.stringify(failureActions)}</Text>
     </View>
   );
 }
@@ -229,13 +232,18 @@ export const CreatesRepost: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const button = await canvas.findByRole('button', { name: '재게시' });
-    button.click();
+    const trigger = await canvas.findByRole('button', { name: '재게시' });
+    await userEvent.click(trigger);
+    const menu = await canvas.findByRole('menu', { name: '재게시 메뉴' });
+    expect(within(menu).getByRole('menuitem', { name: '재게시하기' })).toBeVisible();
+    expect(canvas.getByTestId('repost-request-log')).toHaveTextContent('[]');
+    await userEvent.click(within(menu).getByRole('menuitem', { name: '재게시하기' }));
     await expect(canvas.findByRole('button', { name: '재게시 취소' })).resolves.toHaveAttribute(
       'aria-pressed',
       'true',
     );
   },
+  render: () => <CapturedRepostActionStory />,
 };
 
 export const CancelsWithActiveRepost: Story = {
@@ -247,13 +255,17 @@ export const CancelsWithActiveRepost: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const button = await canvas.findByRole('button', { name: '재게시 취소' });
-    await userEvent.click(button);
+    const trigger = await canvas.findByRole('button', { name: '재게시 취소' });
+    await userEvent.click(trigger);
+    const menu = await canvas.findByRole('menu', { name: '재게시 메뉴' });
+    await userEvent.click(within(menu).getByRole('menuitem', { name: '재게시 취소' }));
     await expect(canvas.findByRole('button', { name: '재게시 취소' })).resolves.toHaveAttribute(
       'aria-pressed',
       'true',
     );
+    expect(canvas.getByTestId('repost-request-log')).toHaveTextContent('"id":"post-repost-active"');
   },
+  render: () => <CapturedRepostActionStory initialSource={selectedSource} />,
 };
 
 export const FailureAllowsRetry: Story = {
@@ -262,9 +274,20 @@ export const FailureAllowsRetry: Story = {
     const canvas = within(canvasElement);
     const button = await canvas.findByRole('button', { name: '재게시' });
     await userEvent.click(button);
+    await userEvent.click(
+      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '재게시하기',
+      }),
+    );
     await expect(canvas.findByTestId('repost-error-count')).resolves.toHaveTextContent('1');
+    expect(canvas.getByTestId('repost-failure-actions')).toHaveTextContent('["create"]');
     expect(button).not.toBeDisabled();
     await userEvent.click(button);
+    await userEvent.click(
+      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '재게시하기',
+      }),
+    );
     await expect(canvas.findByTestId('repost-error-count')).resolves.toHaveTextContent('2');
   },
 };
@@ -275,6 +298,11 @@ export const PendingIsDisabled: Story = {
     const canvas = within(canvasElement);
     const button = await canvas.findByRole('button', { name: '재게시' });
     await userEvent.click(button);
+    await userEvent.click(
+      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '재게시하기',
+      }),
+    );
     await expect(canvas.findByRole('button', { name: '재게시' })).resolves.toHaveAttribute(
       'aria-busy',
       'true',
@@ -318,6 +346,11 @@ export const ActorResetIgnoresStaleCallbacks: Story = {
     const canvas = within(canvasElement);
     const repost = await canvas.findByRole('button', { name: '재게시' });
     await userEvent.click(repost);
+    await userEvent.click(
+      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '재게시하기',
+      }),
+    );
     await waitFor(() =>
       expect(canvas.getByTestId('repost-mutation-request-count')).toHaveTextContent('1'),
     );
@@ -326,6 +359,11 @@ export const ActorResetIgnoresStaleCallbacks: Story = {
     await waitFor(() => expect(canvas.getByTestId('actor-revision')).toHaveTextContent('1'));
     const secondActorRepost = canvas.getByRole('button', { name: '재게시' });
     await userEvent.click(secondActorRepost);
+    await userEvent.click(
+      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '재게시하기',
+      }),
+    );
     await waitFor(() =>
       expect(canvas.getByTestId('repost-mutation-request-count')).toHaveTextContent('2'),
     );
@@ -341,8 +379,13 @@ export const ActorResetIgnoresStaleCallbacks: Story = {
 export const RequestVariablesAndDuplicateGuard: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.findByRole('button', { name: '재게시' })).resolves.toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '두 번 재게시 실행' }));
+    const createTrigger = await canvas.findByRole('button', { name: '재게시' });
+    await userEvent.click(createTrigger);
+    const createMenu = await canvas.findByRole('menu', { name: '재게시 메뉴' });
+    expect(within(createMenu).queryByRole('menuitem', { name: '인용하기' })).toBeNull();
+    const createItem = within(createMenu).getByRole('menuitem', { name: '재게시하기' });
+    createItem.click();
+    createItem.click();
     await expect(canvas.findByTestId('repost-request-log')).resolves.toHaveTextContent(
       '"sourceId":"post-source"',
     );
@@ -356,6 +399,11 @@ export const RequestVariablesAndDuplicateGuard: Story = {
     ).toHaveLength(1);
     await expect(canvas.findByRole('button', { name: '재게시 취소' })).resolves.toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: '재게시 취소' }));
+    await userEvent.click(
+      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '재게시 취소',
+      }),
+    );
     await expect(canvas.findByTestId('repost-request-log')).resolves.toHaveTextContent(
       '"id":"post-repost-active"',
     );
@@ -367,11 +415,22 @@ export const RequestVariablesAndDuplicateGuard: Story = {
 export const NetworkErrorKeepsSourceAndRetries: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const action = await canvas.findByRole('button', { name: '두 번 재게시 실행' });
+    const action = await canvas.findByRole('button', { name: '재게시' });
     await userEvent.click(action);
+    await userEvent.click(
+      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '재게시하기',
+      }),
+    );
     await expect(canvas.findByTestId('repost-error-count')).resolves.toHaveTextContent('1');
+    expect(canvas.getByTestId('repost-failure-actions')).toHaveTextContent('["create"]');
     expect(canvas.getByRole('button', { name: '재게시' })).toHaveTextContent('3');
     await userEvent.click(action);
+    await userEvent.click(
+      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '재게시하기',
+      }),
+    );
     await expect(canvas.findByTestId('repost-error-count')).resolves.toHaveTextContent('2');
     expect(canvas.getByRole('button', { name: '재게시' })).toHaveTextContent('3');
   },
@@ -381,13 +440,48 @@ export const NetworkErrorKeepsSourceAndRetries: Story = {
 export const GraphQLErrorKeepsSourceAndRetries: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const action = await canvas.findByRole('button', { name: '두 번 재게시 실행' });
+    const action = await canvas.findByRole('button', { name: '재게시' });
     await userEvent.click(action);
+    await userEvent.click(
+      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '재게시하기',
+      }),
+    );
     await expect(canvas.findByTestId('repost-error-count')).resolves.toHaveTextContent('1');
+    expect(canvas.getByTestId('repost-failure-actions')).toHaveTextContent('["create"]');
     expect(canvas.getByRole('button', { name: '재게시' })).toHaveTextContent('3');
     await userEvent.click(action);
+    await userEvent.click(
+      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '재게시하기',
+      }),
+    );
     await expect(canvas.findByTestId('repost-error-count')).resolves.toHaveTextContent('2');
     expect(canvas.getByRole('button', { name: '재게시' })).toHaveTextContent('3');
   },
   render: () => <CapturedRepostActionStory failure="graphql" />,
+};
+
+export const CancelNetworkErrorKeepsSourceAndRetries: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const action = await canvas.findByRole('button', { name: '재게시 취소' });
+    await userEvent.click(action);
+    await userEvent.click(
+      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '재게시 취소',
+      }),
+    );
+    await expect(canvas.findByTestId('repost-error-count')).resolves.toHaveTextContent('1');
+    expect(canvas.getByTestId('repost-failure-actions')).toHaveTextContent('["cancel"]');
+    expect(canvas.getByRole('button', { name: '재게시 취소' })).toHaveTextContent('4');
+    await userEvent.click(action);
+    await userEvent.click(
+      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '재게시 취소',
+      }),
+    );
+    await expect(canvas.findByTestId('repost-error-count')).resolves.toHaveTextContent('2');
+  },
+  render: () => <CapturedRepostActionStory failure="network" initialSource={selectedSource} />,
 };

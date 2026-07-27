@@ -373,6 +373,11 @@ export const ProcessingAccessibility: Story = {
     const replyButton = canvas.getByRole('button', { name: '답글' });
     const repostButton = canvas.getByRole('button', { name: '재게시 취소' });
     await userEvent.click(repostButton);
+    await userEvent.click(
+      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '재게시 취소',
+      }),
+    );
     await expect(canvas.findByRole('button', { name: '재게시 취소' })).resolves.toHaveAttribute(
       'aria-busy',
       'true',
@@ -449,6 +454,8 @@ export const AccessibilityAndMinimumTarget: Story = {
     ]);
     expect(buttons[0]).toHaveAttribute('aria-expanded', 'false');
     expect(buttons[1]).toHaveAttribute('aria-pressed', 'false');
+    expect(buttons[1]).toHaveAttribute('aria-haspopup', 'menu');
+    expect(buttons[1]).toHaveAttribute('aria-expanded', 'false');
     expect(buttons[2]).toHaveAttribute('aria-pressed', 'false');
     expect(buttons[3]).toHaveAttribute('aria-pressed', 'false');
     expect(buttons[4]).not.toHaveAttribute('aria-pressed');
