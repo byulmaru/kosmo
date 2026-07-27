@@ -66,7 +66,7 @@ export interface LocalProfileActorResult {
 // ActivityPubActorKeyKind is ordered RSA then Ed25519; Fedify uses the first key pair as #main-key.
 const keyKinds = Object.values(ActivityPubActorKeyKind);
 
-const profileIdSchema = z.uuid();
+const profileIdSchema = z.uuid().refine((value) => value === value.toLowerCase());
 
 const isCanonicalUuid = (value: string): boolean => profileIdSchema.safeParse(value).success;
 

@@ -2,7 +2,7 @@ import { ActivityPubPosts, db, first, Posts, Profiles } from '@kosmo/core/db';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
-const postIdSchema = z.uuid();
+const postIdSchema = z.uuid().refine((value) => value === value.toLowerCase());
 
 export const isCanonicalPostId = (value: string): boolean => postIdSchema.safeParse(value).success;
 

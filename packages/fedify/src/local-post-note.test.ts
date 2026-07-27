@@ -38,6 +38,7 @@ let db: typeof CoreDb.db;
 let dispatchLocalPostNote: typeof LocalPostNoteModule.dispatchLocalPostNote;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let getLocalPostUri: typeof PostUriModule.getLocalPostUri;
+let isCanonicalPostId: typeof PostUriModule.isCanonicalPostId;
 let Instances: typeof CoreDb.Instances;
 let localInstanceId: string;
 let pg: typeof CoreDb.pg;
@@ -68,7 +69,8 @@ describe('ActivityPub Local Post Note', () => {
       Profiles,
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
-    ({ getLocalPostUri, resolveActivityPubPostUri } = await import('./activitypub-post-uri'));
+    ({ getLocalPostUri, isCanonicalPostId, resolveActivityPubPostUri } =
+      await import('./activitypub-post-uri'));
     ({ authorizeLocalPostNote, dispatchLocalPostNote } = await import('./local-post-note'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
@@ -238,6 +240,7 @@ describe('ActivityPub Local Post Note', () => {
       null,
     );
     assert.equal(await dispatchLocalPostNote(context, { id: 'not-a-uuid' }), null);
+    assert.equal(isCanonicalPostId('019F6F67-ABCD-7777-8888-ABCDEFABCDEF'), false);
 
     const inactiveInstancePost = await createPost(localAuthor.id);
     await db
