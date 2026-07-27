@@ -209,7 +209,8 @@ Reply 저장부터 조회·목록·상세 thread까지 승인된 구현 결과�
 - canonical `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `docs/design/breakpoints.md`와 최신 PROD-388·구현 이슈 본문·댓글을 대조했다. Blocked decision과 미해결 `Upstream Change Required` decision은 없고, PROD-422의 direct Source renderer 후속 정정은 PROD-415 소유로 동기화했다.
 - archive 전 `openspec validate --all --strict --no-interactive`는 33/33을 통과했다.
 - delta spec 9개 requirement를 active `data-model`, `post`, 신규 `post-reply-ui`, `reply` capability에 동기화해 archive했고, archive 후 strict validation은 34/34를 통과했다.
+- PR #367은 Ready 상태이며 아직 merge되지 않았다. archive와 후검증은 Completion Gate 승인 요청 준비까지 완료했다는 증거이고, PR merge 승인이나 PROD-388 완료를 의미하지 않는다.
 
 - [x] 7.1 모든 구현 자식의 결과와 requirement scenario를 연결하는 최종 통합 검증을 수행한다.
 - [x] 7.2 최신 canonical·Linear, 구현과 OpenSpec의 정합성 및 남은 decision을 확인한다.
-- [x] 7.3 Completion Gate 승인 뒤 change를 archive하고 archive 후 strict validation을 통과시킨다.
+- [x] 7.3 Completion Gate 승인 요청을 위해 change를 active specs에 archive하고 archive 후 strict validation을 통과시킨다. Ready PR merge 전에는 승인 완료나 PROD-388 완료로 기록하지 않는다.
