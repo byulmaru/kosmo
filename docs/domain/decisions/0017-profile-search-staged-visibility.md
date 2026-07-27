@@ -25,7 +25,7 @@ Instance의 Remote Profile은 검색 결과에서 제외되어야 한다.
 - 이 ADR은 PROD-504의 선행 조건이 아니다. PROD-504의 exact/partial 검색 구현은 아래 staged visibility 조건을
   따르는 범위에서 진행할 수 있다.
 - 저장 모델과 공통 predicate가 없는 현재 단계에서만, PROD-504의 persisted Profile exact `profileByHandle`과
-  partial `profilesByHandle`은 기존 exact lookup의 현재 visibility를 그대로 재사용한다. configured local Instance에서는
+  partial `searchProfiles`는 기존 exact lookup의 현재 visibility를 그대로 재사용한다. configured local Instance에서는
   `ProfileState.ACTIVE` Profile만 포함하고, remote Instance에서는 `ProfileState.ACTIVE` Profile과
   `InstanceState.SUSPENDED`가 아닌 Instance만 포함한다. 따라서 `ProfileState.SUSPENDED` Profile과 suspended
   Instance의 Remote Profile은 현재 단계에서도 제외된다.
@@ -35,7 +35,7 @@ Instance의 Remote Profile은 검색 결과에서 제외되어야 한다.
 - 이 staged 예외는 현재 저장된 Profile의 exact/partial handle lookup에만 적용한다. ADR이 최종 moderation 정책의
   예외를 직접 승인하거나 Domain Limit/Profile Domain Block을 생략해도 된다는 일반 권한을 부여하는 것은 아니다.
 - Domain Limit과 viewer Profile Domain Block의 저장 모델 및 공통 predicate가 도입되면, exact `profileByHandle`과
-  partial `profilesByHandle`을 같은 rollout에서 공통 predicate로 함께 전환한다. 두 lookup이 서로 다른 visibility
+  partial `searchProfiles`를 같은 rollout에서 공통 predicate로 함께 전환한다. 두 lookup이 서로 다른 visibility
   정책을 적용하는 중간 상태를 허용하지 않는다.
 
 ## 이유

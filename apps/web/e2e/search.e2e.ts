@@ -136,7 +136,7 @@ test('handle 제출은 operationName을 포함한 Relay request와 사람 결과
   await signInSearchUser(context, { displayName, handle });
   await page.route('**/graphql', async (route) => {
     const operation = readGraphQLOperation(route.request().postData());
-    if (operation?.variables?.handle === handle) {
+    if (operation?.variables?.query === handle) {
       operationName = operation.operationName;
     }
     await route.continue();
@@ -156,10 +156,7 @@ test('handle 제출은 operationName을 포함한 Relay request와 사람 결과
   expect(operationName).toBe('SearchPeopleByHandlePageQuery');
 });
 
-test('부분 handle 검색은 저장된 모든 일치 Profile을 목록으로 표시한다', async ({
-  context,
-  page,
-}) => {
+test('부분 handle 검색은 저장된 일치 Profile을 목록으로 표시한다', async ({ context, page }) => {
   const firstHandle = 'e2e-partial-alpha';
   const secondHandle = 'e2e-partial-beta';
   await signInSearchUser(context, { displayName: 'E2E 부분 검색 첫 결과', handle: firstHandle });
@@ -175,6 +172,32 @@ test('부분 handle 검색은 저장된 모든 일치 Profile을 목록으로 �
     'href',
     `/@${secondHandle}`,
   );
+});
+
+test('부분 handle 검색은 다음 페이지를 중복 없이 누적한다', async ({ context, page }) => {
+  const handles = Array.from(
+    { length: 21 },
+    (_, index) => `e2e-page-${String(index).padStart(2, '0')}`,
+  );
+  await signInSearchUser(context, {
+    displayName: 'E2E 페이지 결과 00',
+    handle: handles[0],
+  });
+  for (const [index, handle] of handles.slice(1).entries()) {
+    await createE2EProfile({
+      displayName: `E2E 페이지 결과 ${String(index + 1).padStart(2, '0')}`,
+      handle,
+    });
+  }
+
+  await page.goto('/search?q=e2e-page-&tab=people');
+
+  await expect(page.getByRole('link', { name: /E2E 페이지 결과/ })).toHaveCount(20);
+  await expect(page.getByText('E2E 페이지 결과 20')).toHaveCount(0);
+  await page.getByRole('button', { name: '검색 결과 더 보기' }).click();
+  await expect(page.getByRole('link', { name: /E2E 페이지 결과/ })).toHaveCount(21);
+  await expect(page.getByText('E2E 페이지 결과 20')).toBeVisible();
+  await expect(page.getByRole('button', { name: '검색 결과 더 보기' })).toHaveCount(0);
 });
 
 test('사람 검색의 LIKE wildcard 문자는 일반 handle 문자로 처리한다', async ({ context, page }) => {

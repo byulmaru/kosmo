@@ -7,14 +7,21 @@
 
 ### Requirement: People tab partial handle search results
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/decisions/0003-policy-ownership-clarifications.md`, `docs/domain/decisions/0004-review-consistency-clarifications.md`, `docs/domain/decisions/0017-profile-search-staged-visibility.md` (ADR 0017), `PROD-504` — 검색 후 사람 탭은 제출된 검색어(`q`)를 기존 정책으로 정규화한 handle 부분 검색어로 해석하고, DB에 저장된 Local/Remote Profile의 부분 일치 결과 전체를 목록으로 표시해야 한다(MUST). 사람 탭이 아니거나 제출된 검색어가 비어 있으면 handle 검색을 실행하지 않아야 한다(MUST NOT). 각 검색 결과는 실데이터와 팔로우 액션이 연결된 `ProfileListItem`으로 표시해야 한다(MUST). 검색 결과 항목은 해당 프로필의 `relativeHandle`을 path로 사용한 프로필 페이지(`/${relativeHandle}`)로 이동할 수 있어야 한다(MUST). display name, 게시글·미디어 또는 원격 fediverse 조회 검색은 이 범위에서 제공하지 않는다(MUST NOT). 현재 staged visibility는 configured local Instance의 `ProfileState.ACTIVE` Profile과 remote domain의 `ProfileState.ACTIVE` Profile 중 `InstanceState.SUSPENDED`가 아닌 Instance에 이미 저장된 Profile만 포함한다. WebFinger, actor document fetch·refresh 또는 새 Remote Profile materialization은 수행하지 않으며, Domain Limit·viewer Profile Domain Block 공통 predicate는 ADR 0017에 따른 미래 동시 moderation rollout이지 현재 검색의 선행 조건이 아니다.
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/decisions/0003-policy-ownership-clarifications.md`, `docs/domain/decisions/0004-review-consistency-clarifications.md`, `docs/domain/decisions/0017-profile-search-staged-visibility.md` (ADR 0017), `PROD-504` — 검색 후 사람 탭은 제출된 검색어(`q`)를 기존 정책으로 정규화한 handle 부분 검색어로 해석하고, DB에 저장된 Local/Remote Profile의 부분 일치 connection을 목록으로 표시해야 한다(MUST). 다음 페이지가 있으면 Relay pagination으로 결과를 누적하고 loading/error/retry와 종료 상태를 제공해야 한다(MUST). 사람 탭이 아니거나 제출된 검색어가 비어 있으면 handle 검색을 실행하지 않아야 한다(MUST NOT). 각 검색 결과는 실데이터와 팔로우 액션이 연결된 `ProfileListItem`으로 표시해야 한다(MUST). 검색 결과 항목은 해당 프로필의 `relativeHandle`을 path로 사용한 프로필 페이지(`/${relativeHandle}`)로 이동할 수 있어야 한다(MUST). display name, 게시글·미디어 또는 원격 fediverse 조회 검색은 이 범위에서 제공하지 않는다(MUST NOT). 현재 staged visibility는 configured local Instance의 `ProfileState.ACTIVE` Profile과 remote domain의 `ProfileState.ACTIVE` Profile 중 `InstanceState.SUSPENDED`가 아닌 Instance에 이미 저장된 Profile만 포함한다. WebFinger, actor document fetch·refresh 또는 새 Remote Profile materialization은 수행하지 않으며, Domain Limit·viewer Profile Domain Block 공통 predicate는 ADR 0017에 따른 미래 동시 moderation rollout이지 현재 검색의 선행 조건이 아니다.
 
 #### Scenario: Multiple partial handle results
 
 - **WHEN** 사용자가 여러 저장된 Profile의 handle에 포함된 문자열을 사람 탭에서 검색한다
-- **THEN** 시스템은 부분 일치하는 결과 전체를 pagination 없이 각각 `ProfileListItem`으로 표시한다
+- **THEN** 시스템은 첫 connection page의 부분 일치 결과를 각각 `ProfileListItem`으로 표시한다
 - **AND** 각 결과 항목의 프로필 정보 영역은 `/${relativeHandle}` 프로필 페이지로 이동한다
 - **AND** 각 결과 항목의 팔로우 액션은 local Profile 또는 ActivityPub remote Profile 여부와 관계없이 기존 `ProfileListItem`/`FollowButton` 정책에 따라 표시되거나 숨겨진다
+
+#### Scenario: Load the next page of partial handle results
+
+- **WHEN** 현재 connection에 다음 페이지가 있고 사용자가 더 불러오기를 실행한다
+- **THEN** 시스템은 `after` cursor로 다음 페이지를 요청해 기존 결과 뒤에 누적한다
+- **AND** 로딩 중에는 중복 요청을 막고 다음 페이지 실패 시 기존 결과를 유지하며 같은 위치에서 재시도할 수 있다
+- **AND** 페이지 사이에 Profile이 중복되거나 누락되지 않으며 마지막 페이지에서는 더 불러오기 동작을 숨긴다
 
 #### Scenario: Local-domain partial handle results
 

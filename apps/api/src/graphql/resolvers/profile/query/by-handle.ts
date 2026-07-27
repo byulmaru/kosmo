@@ -2,10 +2,13 @@ import { db, first, Instances, Profiles } from '@kosmo/core/db';
 import { InstanceKind, ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { parseProfileHandle } from '@kosmo/core/profile';
-import { and, eq, getColumns, sql } from 'drizzle-orm';
+import { resolveCursorConnection } from '@pothos/plugin-relay';
+import { and, asc, desc, eq, getColumns, gt, lt, sql } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { visibleProfileWhere } from '@/profile/visibility';
-import { Profile } from '../ref';
+import { Profile, ProfileConnection } from '../ref';
+
+type ProfileRow = typeof Profiles.$inferSelect;
 
 const escapeLikePattern = (value: string) =>
   value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
@@ -60,52 +63,76 @@ builder.queryField('profileByHandle', (t) =>
   }),
 );
 
-builder.queryField('profilesByHandle', (t) =>
-  t.field({
-    type: [Profile],
-    args: {
-      handle: t.arg.string({ required: true }),
-    },
-    resolve: async (_, args) => {
-      const localInstance = await resolveConfiguredLocalInstance();
-      const parsed = parseProfileHandle(args.handle, {
-        configuredLocalDomain: localInstance.domain,
-      });
+builder.queryField('searchProfiles', (t) =>
+  t.connection(
+    {
+      type: Profile,
+      args: {
+        query: t.arg.string({ required: true }),
+      },
+      resolve: async (_, args) => {
+        const localInstance = await resolveConfiguredLocalInstance();
+        const parsed = parseProfileHandle(args.query, {
+          configuredLocalDomain: localInstance.domain,
+        });
 
-      if (!parsed) {
-        return [];
-      }
+        if (!parsed) {
+          return resolveCursorConnection<Promise<ProfileRow[]>>(
+            { args, toCursor: (profile) => profile.normalizedHandle },
+            () => Promise.resolve([]),
+          );
+        }
 
-      const handlePattern = `%${escapeLikePattern(parsed.normalizedHandle)}%`;
-      const normalizedHandleLike = sql`
+        const handlePattern = `%${escapeLikePattern(parsed.normalizedHandle)}%`;
+        const normalizedHandleLike = sql`
         ${Profiles.normalizedHandle} LIKE ${handlePattern} ESCAPE '\\'
       `;
 
-      if (parsed.kind === 'remote') {
-        return db
-          .select(getColumns(Profiles))
-          .from(Profiles)
-          .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-          .where(
-            and(
-              eq(Instances.domain, parsed.domain),
-              eq(Instances.kind, InstanceKind.ACTIVITYPUB),
-              normalizedHandleLike,
-              visibleProfileWhere({ profile: Profiles, instance: Instances }),
-            ),
-          );
-      }
+        return resolveCursorConnection<Promise<ProfileRow[]>>(
+          { args, toCursor: (profile) => profile.normalizedHandle },
+          ({ after, before, inverted, limit }) => {
+            const cursorWhere = and(
+              after ? gt(Profiles.normalizedHandle, after) : undefined,
+              before ? lt(Profiles.normalizedHandle, before) : undefined,
+            );
 
-      return db
-        .select(getColumns(Profiles))
-        .from(Profiles)
-        .where(
-          and(
-            eq(Profiles.state, ProfileState.ACTIVE),
-            eq(Profiles.instanceId, localInstance.id),
-            normalizedHandleLike,
-          ),
+            if (parsed.kind === 'remote') {
+              return db
+                .select(getColumns(Profiles))
+                .from(Profiles)
+                .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+                .where(
+                  and(
+                    eq(Instances.domain, parsed.domain),
+                    eq(Instances.kind, InstanceKind.ACTIVITYPUB),
+                    normalizedHandleLike,
+                    cursorWhere,
+                    visibleProfileWhere({ profile: Profiles, instance: Instances }),
+                  ),
+                )
+                .orderBy(
+                  inverted ? desc(Profiles.normalizedHandle) : asc(Profiles.normalizedHandle),
+                )
+                .limit(limit);
+            }
+
+            return db
+              .select(getColumns(Profiles))
+              .from(Profiles)
+              .where(
+                and(
+                  eq(Profiles.state, ProfileState.ACTIVE),
+                  eq(Profiles.instanceId, localInstance.id),
+                  normalizedHandleLike,
+                  cursorWhere,
+                ),
+              )
+              .orderBy(inverted ? desc(Profiles.normalizedHandle) : asc(Profiles.normalizedHandle))
+              .limit(limit);
+          },
         );
+      },
     },
-  }),
+    ProfileConnection,
+  ),
 );

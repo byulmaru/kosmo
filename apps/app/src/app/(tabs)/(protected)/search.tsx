@@ -3,9 +3,10 @@ import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, History, Search as SearchIcon, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { graphql, useLazyLoadQuery } from 'react-relay';
+import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { RouteBoundary } from '@/components/RouteBoundary';
+import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { addRecentSearch, readRecentSearches, writeRecentSearches } from '@/lib/recentSearches';
 import { useRelayActor } from '@/relay/RelayActorProvider';
@@ -13,6 +14,8 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { SearchPeopleByHandlePageQuery } from './__generated__/SearchPeopleByHandlePageQuery.graphql';
+import type { SearchPeopleResults_query$key } from './__generated__/SearchPeopleResults_query.graphql';
+import type { SearchPeopleResultsNextPageQuery } from './__generated__/SearchPeopleResultsNextPageQuery.graphql';
 
 const tabs = [
   { label: '인기', value: SearchTab.POPULAR },
@@ -22,10 +25,27 @@ const tabs = [
 ] as const;
 
 const SearchPeopleQuery = graphql`
-  query SearchPeopleByHandlePageQuery($handle: String!) {
-    profilesByHandle(handle: $handle) {
-      id
-      ...ProfileListItem_profile
+  query SearchPeopleByHandlePageQuery($query: String!) {
+    ...SearchPeopleResults_query @arguments(query: $query)
+  }
+`;
+
+const SearchPeopleResultsFragment = graphql`
+  fragment SearchPeopleResults_query on Query
+  @argumentDefinitions(
+    count: { type: "Int", defaultValue: 20 }
+    cursor: { type: "String" }
+    query: { type: "String!" }
+  )
+  @refetchable(queryName: "SearchPeopleResultsNextPageQuery") {
+    searchProfiles(query: $query, first: $count, after: $cursor)
+      @connection(key: "SearchPeopleResults_searchProfiles", filters: ["query"]) {
+      edges {
+        cursor
+        node {
+          ...ProfileListItem_profile
+        }
+      }
     }
   }
 `;
@@ -49,18 +69,69 @@ function PeopleResults({ handle }: { handle: string }) {
 function PeopleResultsContent({ fetchKey, handle }: { fetchKey: string; handle: string }) {
   const data = useLazyLoadQuery<SearchPeopleByHandlePageQuery>(
     SearchPeopleQuery,
-    { handle: handle.replace(/^@/, '') },
+    { query: handle.replace(/^@/, '') },
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
-  return data.profilesByHandle.length ? (
-    data.profilesByHandle.map((profile) => (
-      <ProfileListItem key={profile.id} linked profile={profile} />
-    ))
-  ) : (
-    <StateView
-      description={`'${handle}'에 해당하는 프로필을 찾지 못했어요.`}
-      title="검색 결과가 없어요"
-    />
+
+  return <SearchPeopleResults handle={handle} query={data} />;
+}
+
+function SearchPeopleResults({
+  handle,
+  query,
+}: {
+  handle: string;
+  query: SearchPeopleResults_query$key;
+}) {
+  const theme = useTheme();
+  const pagination = usePaginationFragment<
+    SearchPeopleResultsNextPageQuery,
+    SearchPeopleResults_query$key
+  >(SearchPeopleResultsFragment, query);
+  const [loadError, setLoadError] = useState(false);
+  const edges = pagination.data.searchProfiles.edges;
+
+  if (!edges.length) {
+    return (
+      <StateView
+        description={`'${handle}'에 해당하는 프로필을 찾지 못했어요.`}
+        title="검색 결과가 없어요"
+      />
+    );
+  }
+
+  const loadNext = () => {
+    if (pagination.isLoadingNext) {
+      return;
+    }
+
+    setLoadError(false);
+    pagination.loadNext(20, { onComplete: (error) => setLoadError(Boolean(error)) });
+  };
+
+  return (
+    <View>
+      {edges.map(({ cursor, node }) => (
+        <ProfileListItem key={cursor} linked profile={node} />
+      ))}
+      {pagination.hasNext || loadError ? (
+        <View style={styles.pagination}>
+          {loadError ? (
+            <Text accessibilityRole="alert" style={[styles.paginationError, { color: theme.text }]}>
+              다음 검색 결과를 불러오지 못했어요. 다시 시도해 주세요.
+            </Text>
+          ) : null}
+          <Button
+            accessibilityLabel={loadError ? '다음 검색 결과 다시 불러오기' : '검색 결과 더 보기'}
+            loading={pagination.isLoadingNext}
+            onPress={loadNext}
+            tone="secondary"
+          >
+            {loadError ? '다시 시도' : '더 보기'}
+          </Button>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -351,6 +422,17 @@ const styles = StyleSheet.create({
     ...typography.sm,
   },
   tabs: { borderBottomWidth: 1, flexDirection: 'row', height: 44 },
+  pagination: {
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xl,
+  },
+  paginationError: {
+    fontFamily: 'SUIT',
+    textAlign: 'center',
+    ...typography.xsm,
+  },
   tab: {
     alignItems: 'center',
     flex: 1,

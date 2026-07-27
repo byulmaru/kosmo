@@ -54,10 +54,10 @@ test('exposes partial Profile handle search without changing exact lookup', () =
 
   assert.ok(query);
   assert.equal(String(query.getFields().profileByHandle?.type), 'Profile');
-  assert.equal(String(query.getFields().profilesByHandle?.type), '[Profile!]!');
+  assert.equal(String(query.getFields().searchProfiles?.type), 'ProfileConnection!');
   assert.deepEqual(
-    query.getFields().profilesByHandle?.args.map(({ name }) => name),
-    ['handle'],
+    query.getFields().searchProfiles?.args.map(({ name }) => name),
+    ['after', 'before', 'first', 'last', 'query'],
   );
 });
 
