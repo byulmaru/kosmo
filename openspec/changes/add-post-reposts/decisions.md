@@ -158,10 +158,10 @@
 - Authority / Provenance: `docs/domain/objects/post.md`, `PROD-415`, `PROD-422`
 - Status: Active
 - Context / Problem: `PostDetailThread`가 바깥 Post renderer 뒤에 Source `PostListItem`을 추가하면 Source를 이미 소유한 목록 renderer와 중복되고, 현재 상세 Post만 별도 Source 구성이 필요해 renderer별 동작이 갈라진다. Content 없는 Repost는 표시할 자체 Content가 없어 독립 상세 surface와 공유 참조가 Source 이동을 중복한다.
-- Decision Outcome: Home·Profile·Bookmark 및 상세 thread의 조상·하위 Reply는 `PostListItem`이, 현재 상세 Post는 `PostLayout`이 자신의 nullable direct Source fragment와 공용 direct Source preview leaf를 소유한다. preview는 `PostBody` 아래 테두리 있는 sibling으로 정확히 한 번 표시하고 direct Source 한 단계에서 멈춘다. `PostDetailThread`는 Source를 선택·운반·추가 렌더링하지 않는다. Content 없는 Repost 상세 진입은 조회 가능한 direct Source의 canonical Post route로 `replace`하며 Repost 자체 surface·history entry·공유 참조를 남기지 않는다.
+- Decision Outcome: Home·Profile·Bookmark 및 상세 thread의 조상·하위 Reply는 `PostListItem`이, 현재 상세 Post는 `PostLayout`이 자신의 nullable direct Source fragment와 공용 direct Source preview leaf를 소유한다. preview는 `PostBody` 아래 테두리 있는 sibling으로 정확히 한 번 표시하고 direct Source 한 단계에서 멈춘다. `PostDetailThread`는 Source를 선택·운반·추가 렌더링하지 않는다. thread connector segment는 목록형 48px avatar와 현재 상세 40px avatar의 위·아래에서 각각 4px 떨어지고 둥근 끝을 사용하며, 기존 row border는 유지한다. Content 없는 Repost 상세 진입은 조회 가능한 direct Source의 canonical Post route로 `replace`하며 Repost 자체 surface·history entry·공유 참조를 남기지 않는다.
 - Alternatives Considered: Thread가 Source `PostListItem` sibling을 조립하는 방식, `PostSourcePresentationView` 전체를 중첩하는 방식, contentless Repost 자체 상세을 유지하는 방식, Source route로 `push`하는 방식. Thread 조립은 renderer-owned Source와 중복되고 전체 중첩은 바깥 Author·Content와 Link를 복제하며, 별도 상세과 `push`는 자체 Content가 없는 중간 URL과 history entry를 만든다.
 - Consequences: 목록과 상세의 Source 외관·navigation·한 단계 cutoff가 하나의 leaf를 공유한다. Post 상세 query는 renderer fragment만 spread하고 Source carrier를 제거하며, 순수 Repost redirect 동안 thread를 렌더하지 않는다. Source가 unavailable하면 기존 API eligibility로 Repost 자체가 조회되지 않으므로 숨겨진 경로를 추론하지 않는다.
-- Confirmation / Follow-up: 현재·조상·하위 Reply Quote의 Source가 정확히 한 번만 표시되고 다음 Source depth와 CTA가 없는지, Source null Quote가 자체 Content를 유지하는지, Content 없는 Repost 경로가 Source canonical route로 replace되는지, 기존 thread 순서·connector·pagination·오류 복구가 유지되는지 검증한다.
+- Confirmation / Follow-up: 현재·조상·하위 Reply Quote의 Source가 정확히 한 번만 표시되고 다음 Source depth와 CTA가 없는지, Source null Quote가 자체 Content를 유지하는지, Content 없는 Repost 경로가 Source canonical route로 replace되는지, 기존 thread 순서·pagination·오류 복구가 유지되는지 검증한다. production Storybook은 48px 목록형 avatar와 40px 현재 avatar 모두 connector 위·아래 간격이 4px이며 끝이 둥글고 기존 row border가 유지되는지도 검증한다.
 
 ### Post와 Source preview의 이동 영역을 목적지별로 분리한다
 
