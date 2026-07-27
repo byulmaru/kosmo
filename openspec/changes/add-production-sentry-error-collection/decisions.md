@@ -4,17 +4,17 @@
 
 ## Decision Records
 
-### Android·iOS는 platform no-op 경계로 유지한다
+### Android·iOS는 Web 관측 조합에서 제외한다
 
 - Decision Date: 2026-07-27
 - Decision Class: Derived Contract
 - Authority / Provenance: PROD-477, PROD-483, PROD-493
 - Status: Active
 - Context / Problem: 공용 Expo source에 Web 수집을 추가하면 native runtime에도 같은 import와 초기화가 도달할 수 있다.
-- Decision Outcome: 이번 변경은 Web platform에서만 Sentry browser client를 초기화하고 Android·iOS platform 구현은 no-op으로 유지한다.
+- Decision Outcome: Web platform의 오류 경계 조합만 Sentry browser client를 import·초기화하며 Android·iOS에는 Sentry 관측 구현을 추가하지 않는다.
 - Alternatives Considered: 공용 `@sentry/react-native` 초기화는 Backlog인 PROD-483의 SDK·native crash·debug symbol 범위를 선행하므로 선택하지 않는다.
-- Consequences: 공용 React boundary는 platform-neutral capture API를 호출하지만 native에서는 event를 전송하지 않는다.
-- Confirmation / Follow-up: Web bundle에 SDK가 포함되고 native TypeScript/runtime 경로가 no-op인지 검증한다.
+- Consequences: 공용 오류 경계의 UI·retry 구현은 공유하지만 Sentry capture callback은 Web 전용 조합만 소유한다.
+- Confirmation / Follow-up: Web bundle에는 SDK가 포함되고 native bundle에는 Sentry 관측 module import가 없는지 검증한다.
 
 ### Event는 stack과 배포 식별자 중심의 최소 정보만 유지한다
 
@@ -23,9 +23,9 @@
 - Authority / Provenance: PROD-477, PROD-484, PROD-493
 - Status: Active
 - Context / Problem: Sentry 기본 integration은 request, console, navigation, UI interaction 등의 context와 breadcrumb를 자동 수집할 수 있다.
-- Decision Outcome: request, user, body, header, query string, extra, context와 모든 breadcrumb를 제거하고 exception message를 type 기반 일반값으로 정제한다. stack frame, environment, release와 runtime tag만 조사 정보로 유지한다.
+- Decision Outcome: request, user, body, header, query string, extra, context와 모든 breadcrumb를 제거한다. 원인 구분과 검색에 필요한 원래 exception message, 정제된 stack frame, environment, release와 runtime tag는 조사 정보로 유지한다.
 - Alternatives Considered: 필드별 denylist는 새 SDK field와 예상하지 못한 GraphQL·사용자 값이 빠질 수 있어 선택하지 않는다.
-- Consequences: 초기 조사 정보는 적지만 개인정보·사용자 콘텐츠 유출 범위가 좁고 세 runtime에서 같은 정책을 검증할 수 있다.
+- Consequences: 구조화된 request·사용자 context의 유출 범위는 좁지만 애플리케이션이 exception message에 민감 값이나 사용자 콘텐츠를 포함하지 않을 책임이 남는다.
 - Confirmation / Follow-up: server/browser event processor 단위 테스트에서 금지된 field와 breadcrumb가 제거되는지 확인한다.
 
 ### 명시적 배포 enable과 완전한 metadata가 있어야 전송한다

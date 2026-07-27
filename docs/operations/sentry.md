@@ -29,7 +29,7 @@ Vault의 `secret/kubernetes/kosmo/<environment>`에는 다음 runtime secret을 
 
 수집 event는 다음 정보만 유지한다.
 
-- 오류 type과 stack frame
+- 오류 type, 원래 오류 message와 stack frame
 - source map debug ID
 - environment와 `kosmo@<commit-sha>` release
 - `api`, `web-bff`, `web` runtime tag
@@ -39,10 +39,10 @@ Vault의 `secret/kubernetes/kosmo/<environment>`에는 다음 runtime secret을 
 - Authorization header, cookie, session과 bearer token
 - request body와 query string
 - GraphQL document, operation variables와 response data
-- 사용자 작성 콘텐츠와 원래 exception message
+- 구조화된 사용자 작성 콘텐츠와 request payload
 - user, extra, context와 모든 자동 console·network·navigation·UI breadcrumb
 
-Sentry의 기본 개인정보 전송도 활성화하지 않는다. 새 tag, context 또는 breadcrumb가 필요하면 허용할 값과 사용자 콘텐츠 포함 가능성을 먼저 검토하고 이 문서와 redaction test를 함께 갱신한다.
+Sentry의 기본 개인정보 전송도 활성화하지 않는다. 원래 exception message는 원인 구분과 검색을 위해 유지하므로 애플리케이션 오류 message에 인증 정보, request payload 또는 사용자 작성 콘텐츠를 포함하지 않아야 한다. 새 tag, context 또는 breadcrumb가 필요하면 허용할 값과 사용자 콘텐츠 포함 가능성을 먼저 검토하고 이 문서와 redaction test를 함께 갱신한다.
 
 ## Build와 source map
 
@@ -69,7 +69,7 @@ rg 'sourceMappingURL=|SENTRY_AUTH_TOKEN' apps/api/dist apps/web/dist apps/app/di
 3. Web React boundary 아래에서 render 오류를 발생시키고 기존 오류 화면·재시도와 `web` event를 확인한다.
 4. 세 event의 environment, runtime tag와 `kosmo@<같은 commit-sha>` release가 일치하는지 확인한다.
 5. 각 stack이 원본 TypeScript·React 파일과 행으로 symbolicate되는지 확인한다.
-6. event JSON에서 request, user, extra, context, breadcrumb, 원래 exception message와 검증 요청의 인증·GraphQL·사용자 값이 없는지 확인한다.
+6. event JSON에서 원래 exception message는 유지되고 request, user, extra, context, breadcrumb와 검증 요청의 인증·GraphQL·사용자 값은 없는지 확인한다.
 7. Sentry project의 새 issue 알림이 운영 채널로 전달되는지 확인한다.
 
 실제 event와 알림 증거가 없으면 PROD-477의 통합 검증과 OpenSpec archive를 완료하지 않는다.

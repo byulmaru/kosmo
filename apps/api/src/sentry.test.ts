@@ -36,7 +36,7 @@ describe('API Sentry configuration', () => {
             mechanism: { data: { request: 'secret' }, handled: false, type: 'generic' },
             stacktrace,
             type: 'User supplied value',
-            value: 'post body secret',
+            value: 'database connection failed',
           },
         ],
       },
@@ -53,7 +53,7 @@ describe('API Sentry configuration', () => {
         mechanism: { handled: false, type: 'generic' },
         stacktrace,
         type: 'Error',
-        value: 'Unhandled error',
+        value: 'database connection failed',
       },
     ]);
     assert.deepEqual(event.tags, { runtime: 'api' });

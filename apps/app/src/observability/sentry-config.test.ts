@@ -16,13 +16,23 @@ describe('Web app Sentry configuration', () => {
     );
   });
 
-  it('retains React stacks but drops browser and user context', () => {
-    const stacktrace = { frames: [{ filename: 'src/App.tsx', lineno: 12 }] };
+  it('retains linked React component stacks but drops browser and user context', () => {
+    const errorStack = { frames: [{ filename: 'src/relay/network.ts', lineno: 12 }] };
+    const componentStack = {
+      frames: [{ filename: 'src/app/profile.tsx', function: 'ProfileRoute', lineno: 24 }],
+    };
     const event = redactSentryEvent({
       breadcrumbs: [{ category: 'ui.click', message: 'secret' }],
       contexts: { react: { componentStack: 'secret' } },
       exception: {
-        values: [{ stacktrace, type: 'React ErrorBoundary TypeError', value: 'secret' }],
+        values: [
+          {
+            stacktrace: componentStack,
+            type: 'React ErrorBoundary TypeError',
+            value: 'profile route render failed',
+          },
+          { stacktrace: errorStack, type: 'TypeError', value: 'profile data was invalid' },
+        ],
       },
       extra: { variables: { content: 'secret' } },
       request: { cookies: { session: 'secret' }, data: 'secret' },
@@ -32,7 +42,12 @@ describe('Web app Sentry configuration', () => {
     });
 
     assert.deepEqual(event.exception?.values, [
-      { stacktrace, type: 'React ErrorBoundary TypeError', value: 'Unhandled error' },
+      {
+        stacktrace: componentStack,
+        type: 'React ErrorBoundary TypeError',
+        value: 'profile route render failed',
+      },
+      { stacktrace: errorStack, type: 'TypeError', value: 'profile data was invalid' },
     ]);
     assert.deepEqual(event.tags, { runtime: 'web' });
     assert.equal(event.request, undefined);

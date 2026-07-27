@@ -14,10 +14,10 @@ describe('Web BFF Sentry configuration', () => {
     ).toBe(true);
   });
 
-  it('drops request and user supplied values', () => {
+  it('keeps the diagnostic message while dropping request and user context', () => {
     const event = redactSentryEvent({
       breadcrumbs: [{ message: 'secret' }],
-      exception: { values: [{ type: 'TypeError', value: 'secret' }] },
+      exception: { values: [{ type: 'TypeError', value: 'upstream response was invalid' }] },
       extra: { body: 'secret' },
       request: { data: 'secret' },
       tags: { runtime: 'web-bff', token: 'secret' },
@@ -25,7 +25,9 @@ describe('Web BFF Sentry configuration', () => {
       user: { ip_address: '127.0.0.1' },
     });
 
-    expect(event.exception?.values).toEqual([{ type: 'TypeError', value: 'Unhandled error' }]);
+    expect(event.exception?.values).toEqual([
+      { type: 'TypeError', value: 'upstream response was invalid' },
+    ]);
     expect(event.tags).toEqual({ runtime: 'web-bff' });
     expect(event.request).toBeUndefined();
     expect(event.breadcrumbs).toBeUndefined();

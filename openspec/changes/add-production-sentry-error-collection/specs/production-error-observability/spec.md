@@ -40,12 +40,12 @@
 
 ### Requirement: 민감 데이터 최소화
 
-**Authority / Provenance:** PROD-477, PROD-484, PROD-493. 모든 Sentry event와 breadcrumb는 인증 header, cookie, token, request body, GraphQL document·variables와 사용자 작성 콘텐츠를 포함하지 않아야 한다(MUST NOT). SDK는 기본 개인정보 전송을 활성화하지 않아야 하고(MUST NOT), 자동 request·navigation·console·UI breadcrumb 중 민감 값을 포함할 수 있는 항목을 전송 전에 제거해야 한다(MUST).
+**Authority / Provenance:** PROD-477, PROD-484, PROD-493. 모든 Sentry event와 breadcrumb는 구조화된 인증 header, cookie, token, request body, GraphQL document·variables와 사용자 context를 포함하지 않아야 한다(MUST NOT). 원인 추적을 위해 원래 exception message는 유지해야 하며(MUST), SDK는 기본 개인정보 전송을 활성화하지 않아야 하고(MUST NOT), 자동 request·navigation·console·UI breadcrumb 중 민감 값을 포함할 수 있는 항목을 전송 전에 제거해야 한다(MUST).
 
 #### Scenario: Server request fails
 
 - **WHEN** 인증 header, cookie, GraphQL body 또는 사용자 콘텐츠가 있는 요청에서 서버 예외가 발생한다
-- **THEN** 수집된 event에는 method와 허용된 route 식별자 외의 request header, cookie, body, query string과 사용자 값이 없다
+- **THEN** 수집된 event에는 원래 exception message가 있고 method와 허용된 route 식별자 외의 request header, cookie, body, query string과 구조화된 사용자 context가 없다
 
 #### Scenario: Browser interaction precedes failure
 

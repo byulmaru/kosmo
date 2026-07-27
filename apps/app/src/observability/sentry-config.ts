@@ -43,7 +43,7 @@ export const redactSentryEvent = (event: ErrorEvent): ErrorEvent => ({
               }
             : undefined,
           type: normalizeErrorType(exception.type),
-          value: 'Unhandled error',
+          value: exception.value,
         })),
       }
     : undefined,
