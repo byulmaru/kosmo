@@ -33,7 +33,7 @@
 
 ### Recommended Approach
 
-`issueMediaUploadUrl` resolver에서 먼저 인증·행동 주체 조건을 확인하고 Media Storage Service의 `POST /v1/uploads`를 직접 호출한다. 외부 호출은 client request 취소와 10초 deadline을 함께 적용한다. 응답의 opaque 저장 참조와 upload URL 구조를 runtime schema로 검증하고, 만료 시각은 persistence와 GraphQL `DateTime`에 필요한 `Temporal.Instant`로 변환한 뒤 단일 insert로 Local/Uploading Media를 만든다. insert가 성공한 뒤에만 Media ref, upload URL과 만료 시각을 payload로 반환한다. 현재 caller가 이 resolver 하나뿐이므로 별도 Storage client abstraction은 두지 않는다.
+`issueMediaUploadUrl` resolver에서 먼저 인증·행동 주체 조건을 확인하고 Media Storage Service의 `POST /v1/uploads`를 직접 호출한다. 외부 호출은 client request 취소와 10초 deadline을 함께 적용한다. 응답에서는 비어 있지 않은 opaque 저장 참조, upload URL과 만료 시각만 추출하고 provider가 추가한 필드는 허용한다. upload URL은 URL 구조를 검증하고, 만료 시각은 persistence와 GraphQL `DateTime`에 필요한 `Temporal.Instant`로 변환한 뒤 단일 insert로 Local/Uploading Media를 만든다. insert가 성공한 뒤에만 Media ref, upload URL과 만료 시각을 payload로 반환한다. 현재 caller가 이 resolver 하나뿐이므로 별도 Storage client abstraction은 두지 않는다.
 
 `media` persistence는 이번 slice가 실제로 쓰는 Account, Profile, source, state, opaque storage reference와 upload expiry만 보존한다. 기존 File 참조와 미구현 Remote projection은 제거한다. enum에는 canonical state인 `UPLOADING`, `READY`를 정의하되 이번 mutation은 `UPLOADING`만 쓰고 Ready 전환 전용 속성은 `PROD-441`에서 추가한다.
 

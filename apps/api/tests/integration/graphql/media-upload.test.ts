@@ -151,7 +151,7 @@ describe('Local Media upload 시작 GraphQL 경계', () => {
       Response.json(
         {
           expiresAt: uploadExpiresAt,
-          id: 'not-an-upload-id',
+          id: '',
           uploadUrl: 'https://media.example/v1/uploads/signed-token',
         },
         { status: 201 },
@@ -183,7 +183,7 @@ describe('Local Media upload 시작 GraphQL 경계', () => {
   });
 
   test('Media persistence 실패는 upload URL을 응답하지 않는다', async (t) => {
-    const storageReference = `u_${crypto.randomUUID()}`;
+    const storageReference = 'provider-opaque-reference';
     mockUploadIssuance(t, storageReference);
     const auth = await createAuthenticatedSession();
 
@@ -270,7 +270,11 @@ const mockUploadIssuance = (t: TestContext, fixedId?: string) => {
 const uploadResponse = (
   id = `u_${crypto.randomUUID()}`,
   uploadUrl = 'https://media.example/v1/uploads/signed-token',
-) => Response.json({ expiresAt: uploadExpiresAt, id, uploadUrl }, { status: 201 });
+) =>
+  Response.json(
+    { expiresAt: uploadExpiresAt, id, providerMetadata: { version: 1 }, uploadUrl },
+    { status: 201 },
+  );
 
 const assertStoredMedia = (
   media: typeof Media.$inferSelect | undefined,

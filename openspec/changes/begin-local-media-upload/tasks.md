@@ -54,7 +54,7 @@ Kosmo가 Local Media의 Upload Account, 행동 주체 Profile, Uploading state, 
 - 격리된 test DB에서 Account/Profile/Instance 권한 조건, Account/Profile insert 결속, Account 간 조회 격리, 외부 실패 시 미생성과 persistence 실패 시 URL 비노출을 실제 GraphQL 경로로 검증한다.
 - GraphQL schema가 Media identity, state, upload URL과 만료 시각만 공개하는지 확인한다.
 
-- [x] 2.1 Media Storage Service 업로드 시작 응답을 검증하고 client 취소와 deadline을 적용해 호출할 수 있게 한다.
+- [x] 2.1 Media Storage Service 업로드 시작 응답에서 필요한 필드만 추출하고 client 취소와 deadline을 적용해 호출할 수 있게 한다.
 - [x] 2.2 인증·Profile 권한과 외부 업로드 권한에 결속된 Uploading Media 생성 동작을 구현한다.
 - [x] 2.3 `issueMediaUploadUrl` GraphQL mutation과 최소 Media 조회 계약을 제공한다.
 - [x] 2.4 GraphQL 인증/schema를 확인하고 production resolver의 실제 GraphQL/DB 경로에서 HTTP 요청·권한·결속·격리·실패 순서를 검증한다.

@@ -22,8 +22,8 @@ import { z } from 'zod';
 import { builder } from '@/graphql/builder';
 import { MediaObject } from '../ref';
 
-const uploadResponseSchema = z.strictObject({
-  id: z.string().regex(/^u_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
+const uploadResponseSchema = z.object({
+  id: z.string().min(1),
   uploadUrl: z.url(),
   expiresAt: z.string(),
 });
