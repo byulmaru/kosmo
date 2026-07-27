@@ -291,6 +291,18 @@ describe('ActivityPub Local Post Note', () => {
     assert.equal(allowed.headers.get('Cache-Control'), 'private, no-store');
     assert.equal((await allowed.json()).content, '<p>body</p>');
 
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.UNRESPONSIVE })
+      .where(eq(Instances.id, remoteFollower.instanceId));
+    assert.equal((await signedFixture.fetch(followersPost.id)).status, 200);
+
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.SUSPENDED })
+      .where(eq(Instances.id, remoteFollower.instanceId));
+    assert.equal((await signedFixture.fetch(followersPost.id)).status, 404);
+
     await db.delete(ProfileFollows);
     const anonymous = await signedFixture.federation.fetch(
       new Request(`${publicOrigin}/ap/note/${followersPost.id}`, {

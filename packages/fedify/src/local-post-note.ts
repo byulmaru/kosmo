@@ -12,9 +12,12 @@ import {
   Profiles,
 } from '@kosmo/core/db';
 import { InstanceState, PostState, PostVisibility, ProfileState } from '@kosmo/core/enums';
-import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
+import {
+  LocalInstanceConfigurationError,
+  resolveConfiguredLocalInstance,
+} from '@kosmo/core/local-instance';
 import { postContentDocumentToHtml } from '@kosmo/core/post-content/server';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { escapeText } from 'entities/escape';
 import {
   getLocalPostUri,
@@ -47,8 +50,11 @@ const loadLocalPostNote = async (postId: string): Promise<LocalPostNote | null> 
   let localInstance;
   try {
     localInstance = await resolveConfiguredLocalInstance();
-  } catch {
-    return null;
+  } catch (error) {
+    if (error instanceof LocalInstanceConfigurationError) {
+      return null;
+    }
+    throw error;
   }
 
   const row = await db
@@ -105,7 +111,7 @@ const isEstablishedFollower = async (actorUri: URL, authorProfileId: string): Pr
       and(
         eq(ActivityPubActors.uri, actorUri.href),
         eq(Profiles.state, ProfileState.ACTIVE),
-        eq(Instances.state, InstanceState.ACTIVE),
+        ne(Instances.state, InstanceState.SUSPENDED),
         eq(ProfileFollows.followeeProfileId, authorProfileId),
       ),
     )
