@@ -23,6 +23,16 @@ import type { deriveContext as DeriveContext, Env } from '../../../src/context';
 import type { yoga as YogaRouter } from '../../../src/graphql';
 
 const publicOrigin = 'http://127.0.0.1:4173';
+const browserUploadOrigin = 'http://localhost:5173';
+const crossServiceOrigin = process.env.MEDIA_UPLOAD_CROSS_SERVICE_ORIGIN;
+const crossServiceApiKey = process.env.MEDIA_UPLOAD_CROSS_SERVICE_API_KEY;
+const crossServiceRequested = crossServiceOrigin !== undefined || crossServiceApiKey !== undefined;
+// Keep the production smoke-test upload minimal. This is the same non-animated 1×1 PNG fixture
+// used by the Media Storage Service integration suite.
+const onePixelPng = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64',
+);
 const uploadExpiresAt = '2026-07-27T15:00:00Z';
 const serializedUploadExpiresAt = '2026-07-27T15:00:00.000Z';
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -117,6 +127,67 @@ describe('Local Media upload GraphQL 경계', () => {
     });
     assert.equal(await requestMediaNode(firstMediaId, other.token), null);
   });
+
+  test(
+    '실제 Media Storage Service를 거쳐 같은 Local Media를 Ready로 전환한다',
+    { skip: !crossServiceRequested },
+    async (t) => {
+      assert.ok(crossServiceOrigin);
+      assert.ok(crossServiceApiKey);
+      const previousOrigin = process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
+      const previousApiKey = process.env.MEDIA_STORAGE_SERVICE_API_KEY;
+      process.env.MEDIA_STORAGE_SERVICE_ORIGIN = crossServiceOrigin;
+      process.env.MEDIA_STORAGE_SERVICE_API_KEY = crossServiceApiKey;
+      t.after(() => {
+        process.env.MEDIA_STORAGE_SERVICE_ORIGIN = previousOrigin;
+        process.env.MEDIA_STORAGE_SERVICE_API_KEY = previousApiKey;
+      });
+      const auth = await createAuthenticatedSession();
+
+      const issued = await requestIssueMediaUploadUrl(auth.token);
+      assertNoGraphQLErrors(issued);
+      assert.equal(issued.data?.issueMediaUploadUrl.media.state, MediaState.UPLOADING);
+      const uploadUrl = issued.data!.issueMediaUploadUrl.uploadUrl;
+
+      const preflight = await fetch(uploadUrl, {
+        headers: {
+          Origin: browserUploadOrigin,
+          'Access-Control-Request-Headers': 'content-type',
+          'Access-Control-Request-Method': 'PUT',
+        },
+        method: 'OPTIONS',
+      });
+      assert.equal(preflight.status, 204);
+      assert.equal(preflight.headers.get('access-control-allow-origin'), browserUploadOrigin);
+      assert.equal(preflight.headers.get('access-control-allow-methods'), 'PUT, OPTIONS');
+      assert.equal(preflight.headers.get('access-control-allow-headers'), 'Content-Type');
+
+      const upload = await fetch(uploadUrl, {
+        body: onePixelPng,
+        headers: { 'Content-Type': 'image/png', Origin: browserUploadOrigin },
+        method: 'PUT',
+      });
+      const uploadBody = await upload.text();
+      assert.equal(upload.status, 201, uploadBody);
+      assert.equal(upload.headers.get('access-control-allow-origin'), browserUploadOrigin);
+      const storedOriginal = JSON.parse(uploadBody) as { id: string; url: string };
+      const original = await fetch(storedOriginal.url, { method: 'HEAD' });
+      assert.equal(original.status, 200);
+      assert.equal(original.headers.get('content-type'), 'image/webp');
+
+      const completed = await requestCompleteMediaUpload(
+        issued.data!.issueMediaUploadUrl.media.id,
+        auth.token,
+      );
+      assertNoGraphQLErrors(completed);
+      assert.equal(
+        completed.data?.completeMediaUpload.media.id,
+        issued.data!.issueMediaUploadUrl.media.id,
+      );
+      assert.equal(completed.data?.completeMediaUpload.media.state, MediaState.READY);
+      assert.ok(completed.data?.completeMediaUpload.media.readyAt);
+    },
+  );
 
   test('유효하지 않은 Account와 선택 Profile은 외부 발급 전에 거부한다', async (t) => {
     let fetchCalls = 0;

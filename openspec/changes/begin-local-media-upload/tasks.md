@@ -171,3 +171,39 @@ PROD-441 구현이 canonical·Linear·OpenSpec 계약을 만족하고 부모 PRO
 
 - [x] 6.1 관련 테스트와 정적 검사를 실행하고 실패를 수정한다.
 - [x] 6.2 OpenSpec strict validation, correctness review와 Ponytail review를 통과시킨다.
+
+## 7. PROD-435 cross-service 통합, 배포와 archive
+
+**Authority / Provenance**
+
+- `docs/domain/objects/media.md`
+- `docs/domain/decisions/0013-media-storage-service-boundary.md`
+- `docs/domain/decisions/0018-media-upload-lifecycle-without-file.md`
+- `PROD-435`
+- `PROD-436`
+- `PROD-439`
+- `PROD-440`
+- `PROD-441`
+
+**Deliverable**
+
+배포된 Kosmo와 Media Storage Service의 실제 경계에서 Uploading Local Media 생성, 브라우저 직접 전송과 같은 Media의 Ready 전환을 검증하고 canonical·Linear·OpenSpec 정합성을 확인한 뒤 change를 archive한다.
+
+**Guardrails**
+
+- Media Storage Service runtime 값은 Vault의 `secret/kubernetes/kosmo/dev`가 소유하고 Helm은 Vault Secrets Operator가 동기화한 `env` Secret을 기존 `envFrom`으로 소비한다.
+- cross-service 검증 자격증명을 저장소나 기본 CI에 저장하지 않으며 명시적으로 실행할 때만 production service를 호출한다.
+- Post 연결, composer/viewer UI, thumbnail, Remote Media, 취소·삭제와 orphan 정리를 추가하지 않는다.
+- dev 배포 상태와 실제 runtime 환경변수를 확인하기 전에는 OpenSpec을 archive하지 않는다.
+
+**Verification**
+
+- Vault와 Vault Secrets Operator가 Media Storage Service origin 및 API key를 `env` Secret에 동기화하고 API Rollout이 기존 `envFrom`으로 소비하는지 확인한다.
+- 실제 GraphQL 발급, CORS preflight, 브라우저 PUT, 공개 WebP HEAD, 완료 확인과 Ready 전환을 하나의 격리 DB integration test로 검증한다.
+- dev API container에 두 runtime 환경변수가 주입됐는지 값 비노출 방식으로 확인한다.
+- delta spec을 main spec에 동기화하고 관련 검증을 통과한 뒤 OpenSpec을 archive한다.
+
+- [x] 7.1 Vault dev secret에 Media Storage Service API key와 production origin을 저장하고 기존 Vault Secrets Operator 및 `envFrom` 경로로 주입한다.
+- [x] 7.2 실제 Media Storage Service를 사용하는 선택적 cross-service API integration test를 추가하고 통과시킨다.
+- [x] 7.3 Vault 설정을 dev에 배포하고 Rollout 상태, runtime 환경변수와 실제 업로드 lifecycle을 확인한다.
+- [ ] 7.4 delta spec을 동기화하고 canonical·Linear·OpenSpec 정합성 및 strict validation을 확인한 뒤 change를 archive한다.
