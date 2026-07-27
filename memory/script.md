@@ -23,10 +23,6 @@
 - test database의 schema 불일치를 구현 결함으로 판단하기 전에 위 초기화 또는 격리 절차로 재현 여부를 확인한다.
 - workspace package의 기본 `test`는 CI에서 해당 package의 전체 테스트를 실행한다. API integration처럼 DB가 필요한 suite는 package 단위 aggregate script 하나가 격리 DB를 준비해 전체 suite를 실행하며, 개별 테스트 파일 선택용 root script를 추가하지 않는다.
 - 특정 API integration 파일만 디버깅할 때는 package manifest에 파일별 alias를 늘리지 말고 준비된 test DB에서 Node test runner에 파일 경로를 직접 전달한다.
-- PostgreSQL 대체 test backend를 검토할 때는 CRUD와 schema push 성공만으로 채택하지 않는다. 최소한
-  constraint/error propagation, 실제 migration 실행, 독립 connection/session, transaction과 advisory lock
-  semantics를 현재 test suite와 같은 driver 경로에서 검증한다. 하나라도 호환되지 않으면 기존 PostgreSQL
-  test 경로를 제거하지 않는다.
 
 ## Script And Tooling Review
 
@@ -37,9 +33,6 @@
 - CI runner를 바꾸는 PR은 실제 target runner에서 workflow가 실행되는지 확인한다.
 - security scanner나 CI step에 `continue-on-error`를 쓰는 경우, 후속 step에서 실패 여부를 명시적으로 판정해 workflow가 조용히 성공하지 않게 한다.
 - dependency, tooling, CI 명령이 바뀌면 변경 이유와 platform 제약을 리뷰에서 확인한다.
-- Docker layer/cache 동작을 바꾸는 PR은 GitHub check만으로 결론내리지 않는다. 실제 target Docker/BuildKit
-  환경에서 동일 build를 최소 두 번 실행해 최초 build와 cache reuse를 모두 확인한다. `main`이 진전했다면
-  `/private/tmp`의 임시 worktree에서 현재 PR head와 최신 `origin/main`의 merge 결과도 같은 방식으로 검증한다.
 
 ## Expo, Relay, Web BFF
 
