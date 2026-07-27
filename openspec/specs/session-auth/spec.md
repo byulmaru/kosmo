@@ -23,7 +23,7 @@
 - **WHEN** `/login/callback` GET 요청에 `code`와 쿠키 state와 일치하는 `state`가 포함된다
 - **THEN** 시스템은 OIDC token endpoint에 authorization code, PKCE code verifier, client id, client secret, grant type, 현재 origin의 `/login/callback` redirect URI를 제출한다
 - **AND** token 응답에는 access token과 id token이 포함되어야 한다
-- **AND** 시스템은 ID token signature, issuer, audience와 시간 claims가 유효할 때만 Kosmo session을 생성한다
+- **AND** 시스템은 ID token signature, issuer, audience와 시간 claims가 유효하고 연결된 Account가 없거나 `ACTIVE`일 때만 Kosmo session을 생성한다
 
 #### Scenario: 검증되지 않은 ID token 거부
 
@@ -49,17 +49,23 @@
 
 ### Requirement: OIDC 계정 upsert와 세션 쿠키
 
-웹 애플리케이션은 OIDC id token의 subject를 기준으로 계정을 upsert하고 kosmo 세션 쿠키를 발급해야 한다(MUST).
+웹 애플리케이션은 OIDC id token의 subject를 기준으로 계정을 upsert하고 신규 또는 기존 `ACTIVE` Account에만 kosmo 세션 쿠키를 발급해야 한다(MUST).
 
 #### Scenario: 로그인 성공
 
-- **WHEN** OIDC token 응답의 id token payload가 문자열 `sub`와 `name`을 포함한다
+- **WHEN** OIDC token 응답의 id token payload가 문자열 `sub`와 `name`을 포함하고 연결된 Account가 없거나 `ACTIVE`이다
 - **THEN** 시스템은 `sub`를 `account.oidc_subject`로 사용하여 계정을 생성하거나 기존 계정의 표시 이름을 갱신한다
 - **AND** 계정 상태는 신규 생성 시 `ACTIVE`이다
 - **AND** 시스템은 무작위 session token을 가진 `ACTIVE` 세션을 생성한다
 - **AND** 시스템은 `kosmo_oidc_state`와 `kosmo_oidc_code_verifier` 쿠키를 삭제한다
 - **AND** 시스템은 1년 동안 유효한 HTTP-only `kosmo_session` 쿠키를 `/` 경로에 설정한다
 - **AND** 시스템은 `/`로 리다이렉트한다
+
+#### Scenario: 비활성 Account의 browser 로그인 거부
+
+- **WHEN** 유효한 OIDC token의 `sub`가 기존 `SUSPENDED` 또는 Deleted Account와 연결된다
+- **THEN** 시스템은 Account 상태나 upstream OIDC 세부 정보를 노출하지 않는 일반 서버 오류를 반환한다
+- **AND** Account를 갱신하거나 Kosmo session과 `kosmo_session` 쿠키를 생성하지 않는다
 
 #### Scenario: id token payload invalid
 
@@ -94,13 +100,20 @@ Kosmo API는 네이티브 공개 OIDC client가 client secret을 보유하지 �
 
 #### Scenario: Exchange a valid native code
 
-- **WHEN** 공개 API origin의 `/graphql`이 code, PKCE verifier, `kosmo://login/callback` redirect URI를 포함한 `exchangeNativeOidcSession` mutation을 받는다
+- **WHEN** 공개 API origin의 `/graphql`이 code, PKCE verifier, `kosmo://login/callback` redirect URI를 포함한 `exchangeNativeOidcSession` mutation을 받고 연결된 Account가 없거나 `ACTIVE`이다
 - **THEN** API는 구성된 공개 native client ID와 client secret 없이 OIDC token endpoint에 authorization code, PKCE verifier, exact redirect URI를 제출한다
 - **AND** API는 discovery metadata와 JWKS를 사용해 ID token signature, issuer, native client audience, expiration, issued-at claims를 검증한다
 - **AND** Kosmo는 단일 configured issuer의 `sub`를 account identity로 사용하고, 해당 issuer가 보장하는 문자열 `name` claim을 display name으로 사용한다
 - **AND** API는 OIDC 계정을 upsert하고 upstream OIDC token을 저장하지 않은 ACTIVE Kosmo session을 생성한다
 - **AND** mutation payload로 Kosmo session token을 반환하고 session cookie를 설정하지 않는다
 - **AND** 응답에 `Cache-Control: no-store`를 설정한다
+
+#### Scenario: Reject a native exchange for an inactive Account
+
+- **WHEN** 검증된 native ID token의 `sub`가 기존 `SUSPENDED` 또는 Deleted Account와 연결된다
+- **THEN** API는 Account 상태나 upstream OIDC 세부 정보를 노출하지 않는 generic GraphQL permission error를 반환한다
+- **AND** Account를 갱신하거나 Kosmo session을 생성하지 않는다
+- **AND** mutation payload와 cookie로 Kosmo session token을 반환하지 않는다
 
 #### Scenario: Reject an invalid native redirect URI
 
