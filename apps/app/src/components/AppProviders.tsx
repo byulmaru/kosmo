@@ -8,6 +8,7 @@ import {
 import { ThemeProvider } from '@/theme/ThemeProvider';
 import { GraphQLErrorBoundary } from './GraphQLErrorBoundary';
 import { Splash } from './Splash';
+import { ToastProvider } from './ui/ToastProvider';
 import type { PropsWithChildren } from 'react';
 
 function RelaySessionBoundary({ children }: PropsWithChildren) {
@@ -30,9 +31,11 @@ function RelaySessionBoundary({ children }: PropsWithChildren) {
 export function AppProviders({ children }: PropsWithChildren) {
   return (
     <ThemeProvider>
-      <RelayActorProvider>
-        <RelaySessionBoundary>{children}</RelaySessionBoundary>
-      </RelayActorProvider>
+      <ToastProvider>
+        <RelayActorProvider>
+          <RelaySessionBoundary>{children}</RelaySessionBoundary>
+        </RelayActorProvider>
+      </ToastProvider>
     </ThemeProvider>
   );
 }
