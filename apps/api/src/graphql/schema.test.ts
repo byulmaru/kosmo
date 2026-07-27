@@ -5,6 +5,43 @@ import { encodeGlobalId } from './global-id';
 import { notificationNodeType } from './resolvers/notification/ref';
 import { schema } from './schema';
 
+test('exposes upload URL issuance with a minimal Media state contract', () => {
+  const mutation = schema.getMutationType();
+  const payload = schema.getType('IssueMediaUploadUrlPayload');
+  const media = schema.getType('Media');
+
+  const field = mutation?.getFields().issueMediaUploadUrl;
+  assert.equal(String(field?.type), 'IssueMediaUploadUrlPayload!');
+  assert.deepEqual(field?.args, []);
+
+  assert.ok(isObjectType(payload));
+  assert.deepEqual(Object.keys(payload.getFields()).sort(), ['expiresAt', 'media', 'uploadUrl']);
+  assert.equal(String(payload.getFields().media.type), 'Media!');
+  assert.equal(String(payload.getFields().uploadUrl.type), 'String!');
+  assert.equal(String(payload.getFields().expiresAt.type), 'DateTime!');
+
+  assert.ok(isObjectType(media));
+  assert.deepEqual(Object.keys(media.getFields()).sort(), ['id', 'state']);
+  assert.equal(String(media.getFields().state.type), 'MediaState!');
+  assert.equal(media.getFields().storageReference, undefined);
+});
+
+test('requires an authenticated selected Profile to issue a Media upload URL', async () => {
+  for (const contextValue of [
+    {},
+    { session: { id: 'session', accountId: 'account', profileId: null } },
+  ]) {
+    const result = await graphql({
+      schema,
+      source: `mutation { issueMediaUploadUrl { uploadUrl } }`,
+      contextValue,
+    });
+
+    assert.equal(result.data, null);
+    assert.match(result.errors?.[0]?.message ?? '', /Not authorized/);
+  }
+});
+
 test('Post는 nullable Repost Source를 제공한다', () => {
   const post = schema.getType('Post');
 

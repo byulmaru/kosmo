@@ -166,17 +166,6 @@ export const Bookmarks = pgTable(
   ],
 );
 
-export const Files = pgTable('file', {
-  id: id(),
-  storageKey: text('storage_key').unique().notNull(),
-  sha256: text('sha256'),
-  mimeType: text('mime_type').notNull(),
-  byteSize: integer('byte_size'),
-  width: integer('width'),
-  height: integer('height'),
-  createdAt: createdAt(),
-});
-
 export const Instances = pgTable(
   'instance',
   {
@@ -196,22 +185,18 @@ export const Media = pgTable(
   {
     id: id(),
     source: Enum.mediaSource('source').notNull(),
-    accountId: uuid('account_id').references(() => Accounts.id),
+    state: Enum.mediaState('state').notNull(),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => Accounts.id),
     profileId: uuid('profile_id')
       .notNull()
       .references(() => Profiles.id),
-    originalFileId: uuid('original_file_id').references(() => Files.id),
-    thumbnailFileId: uuid('thumbnail_file_id').references(() => Files.id),
-    remoteUrl: text('remote_url'),
-    remoteFetchedAt: datetime('remote_fetched_at'),
-    thumbhash: text('thumbhash'),
+    storageReference: text('storage_reference').unique().notNull(),
+    uploadExpiresAt: datetime('upload_expires_at').notNull(),
     createdAt: createdAt(),
   },
-  (table) => [
-    index().on(table.accountId),
-    index().on(table.profileId),
-    index().on(table.remoteUrl),
-  ],
+  (table) => [index().on(table.accountId), index().on(table.profileId)],
 );
 
 export const Notifications = pgTable(

@@ -73,10 +73,10 @@ Author Profile/Repost Source 조합에는 Lifecycle State가 Active이고 Conten
 | Repost 작성 | Profile           | Post      | Source Post                                                                                          | `Account.Active`, `Profile.Member` | 행동 주체는 Active/Normal Local Profile이고 Content가 있는 입력 Source를 볼 수 있다. Source Visibility는 Public, Unlisted, Followers Only 중 하나이며 같은 Author Profile/Source 조합의 Active Repost가 없다. Followers Only Source는 Source Author만 Repost할 수 있다 | Lifecycle=Active이고 Content와 Reply Parent 없이 입력 Repost Source를 직접 참조하는 Post와 Author 관계가 생성된다. Visibility는 Public/Unlisted Source이면 Unlisted, Followers Only Source이면 Followers Only가 된다 |
 | Post 삭제   | Author Profile    | Post      | 없음                                                                                                 | `Account.Active`, `Post.Author`    | Lifecycle State가 Active다                                                                                                                                                                                                                                             | Lifecycle State가 Tombstone이 되고 삭제 시각이 기록된다                                                                                                                                                              |
 
-Post/Reply/Quote 작성에서 Attached Media는 입력 순서를 유지한다. 모든 Attached Media는 Source=Local이고
-Media의 Upload Account가 행동을 요청한 Account와 같아야 한다. Media의 Profile은 Author Profile과 달라도 같은
-Upload Account를 가지면 연결할 수 있다. 저장 참조만 발급되고 이미지 저장 성공이 확인되지 않은 입력은 Local
-Media 또는 Attached Media로 취급하지 않는다. Tombstone Post에는 다른 상태 전이를 적용하지 않는다.
+Post/Reply/Quote 작성에서 Attached Media는 입력 순서를 유지한다. 모든 Attached Media는 Source=Local,
+State=Ready이고 Media의 Upload Account가 행동을 요청한 Account와 같아야 한다. Media의 Profile은 Author
+Profile과 달라도 같은 Upload Account를 가지면 연결할 수 있다. State=Uploading인 Media는 Attached Media로
+사용할 수 없다. Tombstone Post에는 다른 상태 전이를 적용하지 않는다.
 
 ## 권한
 
