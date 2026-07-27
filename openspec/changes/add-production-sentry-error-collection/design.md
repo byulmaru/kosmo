@@ -36,7 +36,7 @@ API와 Web BFF는 Hono/Node ESM 애플리케이션이며 TypeScript source를 `t
 - API와 BFF는 작은 공용 server 관측 모듈을 공유하지 말고 각 앱이 같은 최소 설정을 소유하되, 개인정보 정제 로직만 실제로 재사용되는 workspace 경계에 둔다. Sentry SDK는 명시적 배포 enable flag, DSN, environment와 release가 모두 있을 때만 활성화한다.
 - API GraphQL plugin은 Kosmo/validation 오류를 변환만 하고 unexpected 원인만 capture한다. GraphQL 밖 API 오류와 Web BFF unexpected 오류는 각 Hono `onError`가 capture한다.
 - Web 전용 오류 경계 조합이 browser SDK를 초기화하고 공용 React boundary의 `componentDidCatch` callback으로 capture한다. Android·iOS 조합은 Sentry 관측 module을 import하지 않는다.
-- event processor는 Sentry exception을 그대로 전달하고 top-level request/user/extra/context/breadcrumb만 제거한다. environment/release/runtime metadata는 유지하고 자동 breadcrumb는 전부 비활성화한다.
+- event processor는 Sentry exception을 그대로 전달하고 top-level request/user/extra/context/breadcrumb만 제거한다. environment/release/runtime metadata는 유지하고 자동 breadcrumb와 Web session tracking은 전부 비활성화한다.
 - Docker build는 server entry를 production JavaScript와 external source map으로 만들고 Expo Web export에 external source map을 요청한다. Sentry CLI의 debug ID inject와 upload를 업로드 token BuildKit secret으로 수행한 뒤 map과 sourceMappingURL을 제거하고 runtime image에는 실행 JavaScript만 복사한다.
 - GitHub Actions는 공개 Web DSN, 조직·프로젝트 slug와 커밋 release를 build arg로, 업로드 token을 BuildKit secret으로 전달한다. 서버 DSN은 기존 VaultStaticSecret 경로에서 runtime에만 주입한다.
 

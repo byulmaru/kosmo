@@ -1,6 +1,6 @@
 # Sentry 오류 수집 운영
 
-Kosmo는 API, Web BFF와 Web browser의 처리되지 않은 오류만 Sentry에 수집한다. Android·iOS 수집과 native debug symbol은 PROD-483 범위이며 현재 연결하지 않는다. Prometheus SLI/SLO, tracing, Session Replay와 사용자 행동 분석도 이 설정의 범위가 아니다.
+Kosmo는 API, Web BFF와 Web browser의 처리되지 않은 오류만 Sentry에 수집한다. Web 자동 session tracking도 비활성화한다. Android·iOS 수집과 native debug symbol은 PROD-483 범위이며 현재 연결하지 않는다. Prometheus SLI/SLO, tracing, Session Replay와 사용자 행동 분석도 이 설정의 범위가 아니다.
 
 ## Project와 자격 증명
 

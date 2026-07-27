@@ -30,6 +30,8 @@ export const createSentryOptions = (environment: SentryEnvironment): BrowserOpti
       Boolean(dsn && deploymentEnvironment && release),
     environment: deploymentEnvironment,
     initialScope: { tags: { runtime: 'web' } },
+    integrations: (integrations) =>
+      integrations.filter((integration) => integration.name !== 'BrowserSession'),
     release,
     sendDefaultPii: false,
   };

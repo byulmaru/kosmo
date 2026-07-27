@@ -40,7 +40,7 @@
 
 ### Requirement: 민감 데이터 최소화
 
-**Authority / Provenance:** PROD-477, PROD-484, PROD-493. Sentry SDK가 만든 exception은 values와 모든 내부 진단 정보를 포함해 그대로 유지해야 한다(MUST). Event의 top-level request, user, extra, contexts와 breadcrumb는 제거해야 하며(MUST), SDK는 기본 개인정보 전송을 활성화하지 않아야 한다(MUST NOT).
+**Authority / Provenance:** PROD-477, PROD-484, PROD-493. Sentry SDK가 만든 exception은 values와 모든 내부 진단 정보를 포함해 그대로 유지해야 한다(MUST). Event의 top-level request, user, extra, contexts와 breadcrumb는 제거해야 하며(MUST), SDK는 기본 개인정보 전송과 Web 자동 session tracking을 활성화하지 않아야 한다(MUST NOT).
 
 #### Scenario: Server request fails
 
