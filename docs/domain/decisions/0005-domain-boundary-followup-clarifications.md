@@ -21,7 +21,7 @@ File 표현과 Media 생성 시점에 관한 결정은 [ADR 0017](./0017-media-u
   관계에 자동으로 적용하지 않는다.
 - 모든 Profile은 Profile Origin과 같은 Instance Type을 가진 Instance 관계를 필수로 가진다. Post와 Media의
   Instance는 각각 Author Profile과 Media Profile에서 파생한다.
-- File은 Original/Derived 표현만 도메인에서 다루며 저장 위치와 URL은 구현 세부다. 이 항목은 ADR 0014로
+- File은 Original/Derived 표현만 도메인에서 다루며 저장 위치와 URL은 구현 세부다. 이 항목은 ADR 0017로
   대체됐다.
 - avatar/header의 현재 Media 참조는 Profile이 소유한다.
 - Follow Request는 Follow Relationship과 별도 객체다.

@@ -33,6 +33,8 @@ const mediaStorageConfigSchema = z.object({
   MEDIA_STORAGE_SERVICE_API_KEY: z.string().min(1),
 });
 
+const MEDIA_STORAGE_REQUEST_TIMEOUT_MS = 10_000;
+
 builder.mutationField('issueMediaUploadUrl', (t) =>
   t.withAuth({ usingProfile: true }).field({
     type: builder.simpleObject('IssueMediaUploadUrlPayload', {
@@ -84,6 +86,10 @@ builder.mutationField('issueMediaUploadUrl', (t) =>
             'Content-Type': 'application/json',
           },
           body: '{}',
+          signal: AbortSignal.any([
+            ctx.c.req.raw.signal,
+            AbortSignal.timeout(MEDIA_STORAGE_REQUEST_TIMEOUT_MS),
+          ]),
         },
       );
       if (response.status !== 201) {

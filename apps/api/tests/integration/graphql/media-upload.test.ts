@@ -168,6 +168,7 @@ describe('Local Media upload 시작 GraphQL 경계', () => {
             'Content-Type': 'application/json',
           });
           assert.equal(init?.body, '{}');
+          assert.ok(init?.signal instanceof AbortSignal);
           return response;
         },
       );
