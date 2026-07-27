@@ -1,6 +1,7 @@
 import { Note } from '@fedify/vocab';
 import { ActivityPubPosts, db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
 import { InstanceKind } from '@kosmo/core/enums';
+import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Context } from '@fedify/fedify';
@@ -8,6 +9,49 @@ import type { Context } from '@fedify/fedify';
 const postIdSchema = z.uuid().refine((value) => value === value.toLowerCase());
 
 export const isCanonicalPostId = (value: string): boolean => postIdSchema.safeParse(value).success;
+
+export const resolveActivityPubPostId = async (uri: URL): Promise<string | undefined> => {
+  const localInstance = await resolveConfiguredLocalInstance();
+  const localPrefix = '/ap/note/';
+
+  if (uri.origin === localInstance.canonicalOrigin) {
+    const postId = uri.pathname.startsWith(localPrefix)
+      ? uri.pathname.slice(localPrefix.length)
+      : undefined;
+
+    const isCanonicalLocalUri =
+      postId &&
+      isCanonicalPostId(postId) &&
+      new URL(`${localPrefix}${postId}`, localInstance.canonicalOrigin).href === uri.href;
+    if (!isCanonicalLocalUri) {
+      return undefined;
+    }
+
+    return db
+      .select({ postId: Posts.id })
+      .from(Posts)
+      .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(
+        and(
+          eq(Posts.id, postId),
+          eq(Instances.id, localInstance.id),
+          eq(Instances.kind, InstanceKind.LOCAL),
+        ),
+      )
+      .limit(1)
+      .then(first)
+      .then((row) => row?.postId);
+  }
+
+  return db
+    .select({ postId: ActivityPubPosts.postId })
+    .from(ActivityPubPosts)
+    .where(eq(ActivityPubPosts.uri, uri.href))
+    .limit(1)
+    .then(first)
+    .then((row) => row?.postId);
+};
 
 export const resolveActivityPubPostUri = async (postId: string): Promise<URL | undefined> => {
   if (!isCanonicalPostId(postId)) {

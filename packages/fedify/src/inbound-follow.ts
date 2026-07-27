@@ -1,9 +1,24 @@
 import '@kosmo/core/polyfill';
 
 import { EmojiReact, Follow, Like } from '@fedify/vocab';
-import { InstanceState } from '@kosmo/core/enums';
+import {
+  ActivityPubActors,
+  ActivityPubPosts,
+  db,
+  first,
+  Instances,
+  Posts,
+  Profiles,
+} from '@kosmo/core/db';
+import { InstanceKind, InstanceState, PostState, ProfileState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
-import { followProfile, undoInboundReaction, unfollowProfile } from '@kosmo/core/services';
+import {
+  deletePost,
+  followProfile,
+  undoInboundReaction,
+  unfollowProfile,
+} from '@kosmo/core/services';
+import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { sendAcceptFollowActivity } from './follow-delivery';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
@@ -14,7 +29,6 @@ import {
 } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Recipient, Undo } from '@fedify/vocab';
-import type { ActivityPubActors } from '@kosmo/core/db';
 
 const getNow = () => Temporal.Now.instant();
 
@@ -95,10 +109,67 @@ const noNetworkDocumentLoader = async (url: string) => {
   throw new Error(`Network lookup is disabled for inbound Undo: ${url}`);
 };
 
+const handleInboundUndoAnnounce = async (undo: Undo, actorUri: URL): Promise<boolean> => {
+  const activityUri = undo.objectId;
+  if (!isHttpUri(activityUri)) {
+    return false;
+  }
+
+  return db.transaction(async (tx) => {
+    const row = await tx
+      .select({
+        actorUri: ActivityPubActors.uri,
+        instanceKind: Instances.kind,
+        instanceState: Instances.state,
+        postId: Posts.id,
+        postState: Posts.state,
+        profileId: Profiles.id,
+        profileState: Profiles.state,
+      })
+      .from(ActivityPubPosts)
+      .innerJoin(Posts, eq(Posts.id, ActivityPubPosts.postId))
+      .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
+      .where(
+        and(
+          eq(ActivityPubPosts.uri, activityUri.href),
+          isNull(Posts.currentContentId),
+          isNotNull(Posts.repostSourceId),
+        ),
+      )
+      .limit(1)
+      .for('update', { of: ActivityPubPosts })
+      .then(first);
+
+    if (!row) {
+      return false;
+    }
+    if (
+      activityUri.origin !== actorUri.origin ||
+      row.actorUri !== actorUri.href ||
+      row.instanceKind !== InstanceKind.ACTIVITYPUB ||
+      (row.instanceState !== InstanceState.ACTIVE &&
+        row.instanceState !== InstanceState.UNRESPONSIVE) ||
+      row.profileState !== ProfileState.ACTIVE ||
+      row.postState !== PostState.ACTIVE
+    ) {
+      return true;
+    }
+
+    await deletePost({ actorProfileId: row.profileId, postId: row.postId }, tx);
+    return true;
+  });
+};
+
 export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo): Promise<void> => {
   const actorHref = uniqueHref(undo.actorIds);
   const actorUri = actorHref ? new URL(actorHref) : null;
   if (!isHttpUri(actorUri)) {
+    return;
+  }
+
+  if (await handleInboundUndoAnnounce(undo, actorUri)) {
     return;
   }
 
