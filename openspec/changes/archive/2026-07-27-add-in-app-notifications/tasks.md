@@ -108,8 +108,8 @@ Android/iOS와 Web의 모든 지원 셸 알림 진입점이 selected Profile의 
 
 ## 12. PROD-271 Local Follow Web E2E와 OpenSpec archive를 완료한다
 
-- [ ] 12.1 모든 선행 slice가 merge되고 scoped validation을 통과했는지 확인한 뒤 Local Account/Profile A/B와 실제 Follow/Unfollow action을 사용하는 Web E2E fixture를 준비한다.
-- [ ] 12.2 Follow 뒤 Recipient selected Profile 목록에 visible unread item이 나타나고 badge가 증가하며 다른 selected Profile UI/cache에는 섞이지 않는지 검증한다.
-- [ ] 12.3 item의 Read·Related Profile 이동·반복 Read와 정상 Unfollow 뒤 목록/count/Node/Read cleanup을 end-to-end로 검증한다.
-- [ ] 12.4 `PROD-380` production ActivityPub integration evidence, workspace required checks, canonical Notification 문서와 delta spec sync, 전체 task 완료 및 `openspec validate add-in-app-notifications --strict`를 확인한다.
-- [ ] 12.5 proposal 전체 scope가 완료된 뒤 change를 archive하고 archive 후 strict validation을 통과시키되 `PROD-327`, `PROD-328`, delivery queue/retry, Push/realtime, ActivityPub transport 재구현과 remote network E2E를 archive gate로 끌어오지 않는다.
+- [x] 12.1 모든 선행 slice가 merge되고 scoped validation을 통과했는지 확인한 뒤 Local Account/Profile A/B와 실제 Follow/Unfollow action을 사용하는 Web E2E fixture를 준비한다.
+- [x] 12.2 Follow 뒤 Recipient selected Profile 목록에 visible unread item이 나타나고 badge가 증가하며 다른 selected Profile UI/cache에는 섞이지 않는지 검증한다.
+- [x] 12.3 item의 Read·Related Profile 이동·반복 Read와 정상 Unfollow 뒤 목록/count/Node/Read cleanup을 end-to-end로 검증한다.
+- [x] 12.4 `PROD-380` production ActivityPub integration evidence, workspace required checks, canonical Notification 문서와 delta spec sync, 전체 task 완료 및 `openspec validate add-in-app-notifications --strict`를 확인한다.
+- [x] 12.5 proposal 전체 scope가 완료된 뒤 change를 archive하고 archive 후 strict validation을 통과시키되 `PROD-327`, `PROD-328`, delivery queue/retry, Push/realtime, ActivityPub transport 재구현과 remote network E2E를 archive gate로 끌어오지 않는다.
