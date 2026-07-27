@@ -917,9 +917,6 @@ export const ProductionRepostQuoteListIntegration: Story = {
       quoteOfQuoteRow!.querySelector('a[href="/@deep-source@remote.example/post-source-depth-2"]'),
     ).not.toBeInTheDocument();
     expect(
-      repostOfQuoteRow!.querySelector('a[href="/@deep-source@remote.example/post-source-depth-2"]'),
-    ).not.toBeInTheDocument();
-    expect(
       quoteOfQuoteRow!.querySelectorAll('a[href="/@source@remote.example/post-source-quote"]'),
     ).toHaveLength(1);
     expect(
@@ -927,9 +924,6 @@ export const ProductionRepostQuoteListIntegration: Story = {
     ).toHaveLength(1);
     expect(quoteOfQuoteRow!.querySelectorAll('[data-testid="source-post-preview"]')).toHaveLength(
       1,
-    );
-    expect(repostOfQuoteRow!.querySelectorAll('[data-testid="source-post-preview"]')).toHaveLength(
-      0,
     );
     expect(
       within(quoteOfQuoteRow!).queryByRole('link', { name: '인용한 게시글 보기' }),
@@ -944,9 +938,6 @@ export const ProductionRepostQuoteListIntegration: Story = {
       within(repostOfQuoteRow!).getByText('첫 번째 direct Source Quote의 본문입니다.'),
     ).toBeVisible();
     expect(quoteOfQuoteRow!.textContent).not.toContain(
-      '두 번째 Source의 본문은 목록에서 full preview하지 않습니다.',
-    );
-    expect(repostOfQuoteRow!.textContent).not.toContain(
       '두 번째 Source의 본문은 목록에서 full preview하지 않습니다.',
     );
     expect(quoteOfQuoteRow!.querySelector('a a')).toBeNull();
@@ -1155,10 +1146,17 @@ export const OrdinaryPost: Story = {
     const canvas = within(canvasElement);
     const article = canvas.getByRole('article');
     const standardRow = within(article).getByTestId('post-list-standard-row');
+    const bodyShortcut = within(standardRow).getByTestId('post-list-row-body');
     expect(canvas.getByText('짧은 본문 한 줄.')).toBeVisible();
     expect(canvas.queryByTestId('source-post-preview')).not.toBeInTheDocument();
     expect(article.querySelectorAll('[data-testid="post-list-standard-row"]')).toHaveLength(1);
-    await userEvent.click(within(standardRow).getByText('짧은 본문 한 줄.'));
+    expect(bodyShortcut).not.toHaveAttribute('role', 'link');
+    expect(bodyShortcut.closest('[role="link"]')).toBeNull();
+    const timestampLink = standardRow.querySelector<HTMLAnchorElement>('a[href="/@kosmo/short"]');
+    expect(timestampLink).not.toBeNull();
+    expect(timestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(timestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
+    await userEvent.click(bodyShortcut);
     expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent('/@kosmo/short');
   },
   render: () => <ProductionPostListItemStory postId="short" />,

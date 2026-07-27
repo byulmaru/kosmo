@@ -65,6 +65,14 @@
 - **AND** Quote 자체 body의 외부 Link는 Quote Post 이동을 함께 실행하지 않고 자신의 URL로 이동한다
 - **AND** 이미 자기 canonical route를 렌더링하는 현재 상세 `PostLayout`은 self Link나 동일 URL history entry를 추가하지 않고 direct Source 이동만 제공한다
 
+#### Scenario: 목록 표준 행의 Post 이동 경계
+
+- **WHEN** Home, Profile, Bookmark 또는 상세 thread의 조상·하위 Reply `PostListItem`이 일반 Post나 순수 Repost의 direct Source를 표준 목록 행으로 표시한다
+- **THEN** 생성 시각은 keyboard, screen reader, pointer가 사용하는 최소 44px canonical Post Link다
+- **AND** 본문 행은 별도 accessibility element 또는 keyboard focus target이 아닌 pointer·touch shortcut으로 같은 Post에 이동한다
+- **AND** 본문 내부 외부 Link는 Post 이동을 함께 실행하지 않고 자신의 URL로 이동한다
+- **AND** 앱은 canonical Post Link와 본문 내부 외부 Link를 서로 중첩하지 않는다
+
 #### Scenario: Author Profile 이동
 
 - **WHEN** 사용자가 Repost Author 또는 Source Author의 Profile affordance를 각각 활성화한다
