@@ -52,6 +52,13 @@ spec:
                   key: password
             - name: DATABASE_URL
               value: {{ include "kosmo.databaseUrl" . | quote }}
+            - name: MEDIA_STORAGE_SERVICE_ORIGIN
+              value: {{ required "mediaStorageService.origin is required" .Values.mediaStorageService.origin | quote }}
+            - name: MEDIA_STORAGE_SERVICE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: env
+                  key: MEDIA_API_KEY
           envFrom:
             - secretRef:
                 name: env

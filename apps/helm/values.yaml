@@ -1,3 +1,5 @@
 env:
 image: ghcr.io/byulmaru/kosmo
+mediaStorageService:
+  origin: https://media-api.byulmaru.co
 version: main
