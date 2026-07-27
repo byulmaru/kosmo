@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD - created by archiving change add-post-replies. Update Purpose after archive.
+Post 상세에서 조회 가능한 Reply 조상 경로, 현재 Post와 하위 Reply를 기존 Post rendering과 API visibility 경계를 유지하는 하나의 thread로 표시하고, Web과 Native scroll owner에서 하위 Reply pagination을 이어가는 클라이언트 계약을 문서화한다.
 
 ## Requirements
 

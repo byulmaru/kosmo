@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD - created by archiving change add-post-replies. Update Purpose after archive.
+Content, Reply Parent와 Repost Source의 관계 조합으로 Reply 구조를 판정하고, Reply Parent 생성·저장과 조상·하위 Reply 조회 및 Home/Profile Post List 후보 정책을 기존 단일 Post 모델 위에서 적용하는 계약을 문서화한다.
 
 ## Requirements
 
