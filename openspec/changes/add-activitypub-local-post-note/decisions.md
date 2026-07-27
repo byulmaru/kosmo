@@ -51,11 +51,13 @@ Linear 계약을 독립적으로 다시 확인해야 한다.
 - Context / Problem: Local/Remote Post URI 해석은 outbound Note와 후속 federation activity가 공유하지만 GraphQL과
   일반 core Post action에는 필요하지 않은 ActivityPub protocol projection이다.
 - Decision Outcome: 공통 Post URI resolver와 Local Note URI projection은 `packages/fedify`가 소유한다.
-  `packages/core`는 Post, Instance와 mapping 저장 조회 계약만 제공한다.
+  resolver는 Post ID만 받고 Local Post의 origin은 Author Profile이 속한 `Instances.canonicalOrigin`에서 읽으며,
+  Remote Post는 저장 mapping URI를 사용한다. `packages/core`는 Post, Instance와 mapping 저장 조회 계약만 제공한다.
 - Alternatives Considered: `packages/core` 공개 service, `apps/web` route helper, activity별 URI 조립. core domain에
   protocol URL을 노출하거나 BFF와 후속 activity에서 규칙을 중복하므로 사용하지 않는다.
-- Consequences: Fedify dispatcher와 후속 activity delivery는 같은 package 경계를 재사용하고 GraphQL/API는 이
-  resolver에 의존하지 않는다. 내부 helper와 query 분리는 구현 중 달라질 수 있다.
+- Consequences: caller가 configured origin이나 Local Instance ID를 다시 전달하지 않으므로 DB에 저장된 Post
+  소유 Instance가 URI source가 된다. Fedify dispatcher와 후속 activity delivery는 같은 package 경계를
+  재사용하고 GraphQL/API는 이 resolver에 의존하지 않는다.
 - Confirmation / Follow-up: package dependency와 후속 재사용 가능한 export, Local/Remote URI test로 확인한다.
 
 ### Note serialization은 기존 PostContent 계약을 재정의하지 않는다
@@ -124,7 +126,7 @@ Linear 계약을 독립적으로 다시 확인해야 한다.
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/domain/objects/post.md`,
   `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-494
-- Status: Active
+- Status: Superseded
 - Context / Problem: Note body 자체가 requester별로 달라지지 않아도 Followers Only의 200 여부는 signed actor와
   stored Follow 관계에 의존한다. Fedify 기본 success response만 사용하면 shared cache 격리를 명시적으로 보장할
   수 없다.
@@ -137,6 +139,27 @@ Linear 계약을 독립적으로 다시 확인해야 한다.
   cache 설정과 독립적으로 보존한다. Public/Unlisted는 이 decision으로 `no-store`를 강제하지 않는다.
 - Confirmation / Follow-up: authorized success의 exact Cache-Control과 같은 URI의 anonymous/non-follower 요청이
   representation을 받지 않는 web integration test로 확인한다.
+
+### Followers Only 역참조는 Fedify authorize 경계만 사용한다
+
+- Decision Date: 2026-07-27
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/post.md`,
+  `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-494
+- Status: Active
+- Context / Problem: canonical 계약과 PROD-494는 verified signed fetch의 접근 판정을 요구하지만 성공 응답의
+  cache header는 정하지 않는다. Fedify 2.3 object dispatcher와 Hackers' Pub 구현도 `.authorize()` 결과로
+  접근을 제한하고 요청 표시나 object response별 cache header를 추가하지 않는다.
+- Decision Outcome: Followers Only 접근은 Fedify object dispatcher의 `.authorize()`에서 Author 또는 established
+  Follower인지 판정한다. Web은 `federation.fetch()` 응답을 그대로 반환하며 request marker, `WeakSet`,
+  `Cache-Control` override를 추가하지 않는다.
+- Alternatives Considered: Followers Only 성공 응답에 `private, no-store` 적용, 모든 Local Note에 `no-store`
+  적용, signature별 application cache key. 상위 계약에 없는 응답 정책을 위해 Fedify의 request/response 경계를
+  우회하거나 공개 응답까지 제한하므로 사용하지 않는다.
+- Consequences: authorization 구현은 Fedify의 공식 확장 지점에 머물고 Web routing은 object 종류를 알 필요가
+  없다. 배포 계층의 shared cache 정책은 이 capability가 보장하지 않으며 필요하면 별도 운영 계약으로 결정한다.
+- Confirmation / Follow-up: Author/established Follower의 signed fetch 성공과 anonymous, unknown actor,
+  non-follower의 unavailable 응답을 federation integration test로 확인한다.
 
 ### inReplyTo는 requester와 무관한 저장 Parent identity다
 
@@ -199,4 +222,5 @@ Linear 계약을 독립적으로 다시 확인해야 한다.
 
 ## Superseded Decisions
 
-- 없음.
+- `Followers Only signed fetch 성공 응답은 shared cache에 저장하지 않는다`는 Fedify authorize 경계만 사용하는
+  구현 선택으로 대체됐다.

@@ -385,6 +385,23 @@ describe('runtime routing', () => {
     expect(await response.text()).toBe('404 Not Found');
   });
 
+  test('does not turn an unauthorized federation representation into the SPA', async () => {
+    federationFetch.mockImplementation(async (request, options) => {
+      if (!options.onUnauthorized) {
+        throw new Error('Missing federation authorization fallback');
+      }
+
+      return options.onUnauthorized(request);
+    });
+
+    const response = await app.request('/ap/note/00000000-0000-8000-8000-000000000001', {
+      headers: { accept: 'application/activity+json' },
+    });
+
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe('404 Not Found');
+  });
+
   test.each([undefined, '*/*'])(
     'preserves a missing WebFinger response with Accept %s',
     async (accept) => {

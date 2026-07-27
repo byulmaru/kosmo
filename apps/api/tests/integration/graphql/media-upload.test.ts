@@ -18,9 +18,9 @@ import { ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { TestContext } from 'node:test';
 import type * as CoreDb from '@kosmo/core/db';
+import type { encodeGlobalId as EncodeGlobalId } from '@kosmo/core/global-id';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
 import type { yoga as YogaRouter } from '../../../src/graphql';
-import type { encodeGlobalId as EncodeGlobalId } from '../../../src/graphql/global-id';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const uploadExpiresAt = '2026-07-27T15:00:00Z';
@@ -59,7 +59,7 @@ describe('Local Media upload GraphQL 경계', () => {
 
     ({ deriveContext } = await import('../../../src/context'));
     ({ yoga } = await import('../../../src/graphql'));
-    ({ encodeGlobalId } = await import('../../../src/graphql/global-id'));
+    ({ encodeGlobalId } = await import('@kosmo/core/global-id'));
 
     app = new Hono<Env>();
     app.use('*', async (c, next) => {

@@ -288,7 +288,9 @@ export const Posts = pgTable(
     visibility: Enum.postVisibility('visibility').notNull(),
     state: Enum.postState('state').notNull(),
     currentContentId: uuid('current_content_id').references((): AnyPgColumn => PostContents.id),
-    replyParentId: uuid('reply_parent_id').references((): AnyPgColumn => Posts.id),
+    replyParentId: uuid('reply_parent_id').references((): AnyPgColumn => Posts.id, {
+      onDelete: 'set null',
+    }),
     repostSourceId: uuid('repost_source_id').references((): AnyPgColumn => Posts.id),
     createdAt: createdAt(),
     deletedAt: datetime('deleted_at'),

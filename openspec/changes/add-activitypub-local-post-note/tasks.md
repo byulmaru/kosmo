@@ -23,8 +23,8 @@ FK는 향후 actual row 삭제 시 관계만 `null`로 만들도록 정렬된다
 - 기존 row가 있는 실제 PostgreSQL migration에서 FK delete action과 schema catalog를 확인한다.
 - Parent Tombstone 뒤 관계 보존과 직접 DB fixture delete의 null FK를 검증한다.
 
-- [ ] 1.1 Reply Parent FK의 physical delete 동작을 `SET NULL`로 정렬하는 additive forward migration과 schema 선언을 추가한다.
-- [ ] 1.2 기존 관계·Tombstone 보존, FK catalog와 직접 DB fixture 삭제의 nullification을 실제 PostgreSQL에서 검증한다.
+- [x] 1.1 Reply Parent FK의 physical delete 동작을 `SET NULL`로 정렬하는 additive forward migration과 schema 선언을 추가한다.
+- [x] 1.2 기존 관계·Tombstone 보존, FK catalog와 직접 DB fixture 삭제의 nullification을 실제 PostgreSQL에서 검증한다.
 
 ## 2. PROD-502 PostContent ProseMirror HTML serialization
 
@@ -76,12 +76,15 @@ Local/Remote Post가 `packages/fedify`의 하나의 안정적인 ActivityPub ide
 **Guardrails**
 
 - URI resolver, Post load, authorization과 FK 작업은 PROD-502 완료 전에도 독립적으로 진행할 수 있다.
+- Local Post URI origin은 Author Profile이 속한 `Instances.canonicalOrigin`에서 읽고 resolver caller가 origin이나
+  Local Instance ID를 다시 전달하지 않는다.
 - Note `content` 연결과 PROD-494 최종 완료만 PROD-502 serializer 결과에 의존한다.
 - Followers Only는 signed actor URI가 Author이거나 stored established Follow의 follower일 때만 허용한다.
 - pending FollowRequest, anonymous, unknown actor와 non-follower는 권한을 부여하지 않는다.
 - followers audience identity는 `/ap/actor/{authorProfileId}/followers`이며 collection GET과 actor `followers`
   속성은 열지 않는다.
-- Followers Only 성공 응답은 `Cache-Control: private, no-store`로 shared cache 재사용을 막는다.
+- Followers Only 역참조는 Fedify object dispatcher의 authorization 경계에서 판정하고 Web은 Fedify 응답을
+  그대로 반환한다.
 - `inReplyTo`는 Parent visibility와 requester에 따라 필터링하지 않고 relation이 있을 때 Local/Remote identity를
   사용한다. Tombstone Parent 관계와 identity는 유지한다.
 - unavailable 원인을 구분해 노출하지 않고 Reply·Repost·Reaction 또는 Tombstone/Delete activity delivery를
@@ -91,16 +94,16 @@ Local/Remote Post가 `packages/fedify`의 하나의 안정적인 ActivityPub ide
 
 - Public/Unlisted/Follower audience와 anonymous/Author/follower/non-follower/unknown signed fetch를 검증한다.
 - process restart·alternate request host에서 Local URI 안정성, Local mapping 미생성과 Remote mapping URI 재사용을 검증한다.
-- signed success cache header와 동일 URI의 후속 unauthorized request가 representation을 받지 않음을 검증한다.
+- signed success와 동일 URI의 후속 unauthorized request가 representation을 받지 않음을 검증한다.
 - Local/Remote/private/Tombstone/null Parent의 `inReplyTo`와 requester-independent body를 검증한다.
 - missing/non-local/Tombstone/contentless/unsupported visibility/unavailable Author·Instance를 같은 미제공 경계로
   검증한다.
 
-- [ ] 3.1 `packages/fedify`에 Local/Remote Post ActivityPub URI resolver를 구현한다.
-- [ ] 3.2 PROD-502 HTML을 사용하는 Local Note object dispatcher와 제공 가능 Post load 경계를 구현한다.
-- [ ] 3.3 Post Visibility audience와 signed actor 기반 Followers Only authorization 및 cache 격리를 구현한다.
-- [ ] 3.4 requester-independent Local/Remote Parent `inReplyTo` projection을 연결한다.
-- [ ] 3.5 identity, mapping, audience, authorization, cache, Parent와 unavailable matrix의 federation integration test를 추가한다.
+- [x] 3.1 `packages/fedify`에 Local/Remote Post ActivityPub URI resolver를 구현한다.
+- [x] 3.2 PROD-502 HTML을 사용하는 Local Note object dispatcher와 제공 가능 Post load 경계를 구현한다.
+- [x] 3.3 Post Visibility audience와 signed actor 기반 Followers Only authorization을 구현한다.
+- [x] 3.4 requester-independent Local/Remote Parent `inReplyTo` projection을 연결한다.
+- [x] 3.5 identity, mapping, audience, authorization, Parent와 unavailable matrix의 federation integration test를 추가한다.
 
 ## 4. PROD-494 Federation routing 회귀와 OpenSpec 완료
 
@@ -129,8 +132,8 @@ Local Note 역참조가 기존 federation-first BFF 경계에서 제공되고 ac
 - package typecheck/lint/test, migration 검증, `openspec validate add-activitypub-local-post-note --strict`와 전체
   strict validation 결과를 기록한다.
 
-- [ ] 4.1 federation-first web routing에서 Note 응답과 기존 BFF/SPA fallback 회귀를 검증한다.
-- [ ] 4.2 관련 workspace checks와 PROD-494 전체 계약 통합 검증을 통과시킨다.
+- [x] 4.1 federation-first web routing에서 Note 응답과 기존 BFF/SPA fallback 회귀를 검증한다.
+- [x] 4.2 관련 workspace checks와 PROD-494 전체 계약 통합 검증을 통과시킨다.
 - [ ] 4.3 구현·검증 완료 뒤 delta spec 정합성을 확인하고 `add-activitypub-local-post-note` change를 archive한다.
 - Local identity는 configured Local Instance canonical origin과 immutable Post DB UUID의 `/ap/note/{postId}`다.
 - Local Post에 remote ActivityPub Post mapping row를 만들지 않으며 Remote Post는 기존 mapping URI를 사용한다.

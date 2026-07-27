@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { encodeGlobalId } from '@kosmo/core/global-id';
 import { graphql, isInputObjectType, isInterfaceType, isObjectType, isUnionType } from 'graphql';
-import { encodeGlobalId } from './global-id';
 import { notificationNodeType } from './resolvers/notification/ref';
 import { schema } from './schema';
 
