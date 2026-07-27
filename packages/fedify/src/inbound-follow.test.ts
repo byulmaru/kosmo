@@ -419,31 +419,38 @@ describe('inbound Follow and Undo', () => {
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
   });
 
-  test('ignores expected actor validation failures but propagates lookup outages', async () => {
+  test('uses Fedify actor discovery failures and propagates object lookup outages', async () => {
     await createFixture();
     const unknownActorUri = new URL('https://unknown.example/users/mallory');
     const follow = new Follow({ actor: unknownActorUri, object: localActorUri });
-
-    await handleInboundFollow(
-      createContext({
-        lookupWebFinger: mock.fn(async () => null),
-        recipient: localProfileId,
-      }),
-      follow,
+    const fetch = mock.method(globalThis, 'fetch', async () =>
+      Response.json({}, { status: 404, headers: { 'Content-Type': 'application/jrd+json' } }),
     );
 
-    await assert.rejects(
-      handleInboundFollow(
-        createContext({
-          lookupWebFinger: mock.fn(async () => {
-            throw new Error('WebFinger unavailable');
+    try {
+      await handleInboundFollow(createContext({ recipient: localProfileId }), follow);
+
+      fetch.mock.mockImplementation(async () =>
+        Response.json(
+          { subject: 'acct:mallory@unknown.example' },
+          { headers: { 'Content-Type': 'application/jrd+json' } },
+        ),
+      );
+      await assert.rejects(
+        handleInboundFollow(
+          createContext({
+            lookupObject: mock.fn(async () => {
+              throw new Error('Actor lookup unavailable');
+            }),
+            recipient: localProfileId,
           }),
-          recipient: localProfileId,
-        }),
-        follow,
-      ),
-      /WebFinger unavailable/,
-    );
+          follow,
+        ),
+        /Actor lookup unavailable/,
+      );
+    } finally {
+      fetch.mock.restore();
+    }
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
   });
 

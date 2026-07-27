@@ -52,6 +52,42 @@
 - Consequences: 기존 Media row는 삭제되고 File 데이터도 table과 함께 제거된다. migration 자체의 정적 형식과 schema 일관성은 검증한다.
 - Confirmation / Follow-up: DB 실행 검증은 하지 않고 생성된 migration과 schema diff를 review한다.
 
+### Ready 전환은 외부 확인 뒤 conditional update로 수행한다
+
+- Decision Date: 2026-07-27
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/media.md`, `docs/domain/decisions/0018-media-upload-lifecycle-without-file.md`, `docs/domain/decisions/0013-media-storage-service-boundary.md`, `PROD-435`, `PROD-440`, `PROD-441`
+- Status: Active
+- Context / Problem: 외부 저장 완료 확인과 PostgreSQL state 전환은 하나의 transaction으로 묶을 수 없고, 반복·동시 완료 요청은 첫 성공 결과를 바꾸면 안 된다.
+- Decision Outcome: 요청 Account가 소유한 Local Media를 먼저 조회한다. Ready이면 그대로 반환하고, Uploading이면 외부 `HEAD` 확인의 `204` 뒤 `id + accountId + LOCAL + UPLOADING` 조건 update 하나로 `READY`와 `readyAt`을 기록한다. concurrent loser는 같은 Account의 Ready row를 다시 읽어 반환한다.
+- Alternatives Considered: 외부 호출을 transaction 안에 넣기, row lock으로 직렬화하기, 매 요청마다 Ready와 `readyAt` 덮어쓰기. 긴 transaction/lock 또는 멱등 결과 변경을 만들므로 선택하지 않았다.
+- Consequences: 외부 저장 완료 뒤 update가 실패하면 Media는 Uploading으로 남고 caller가 같은 mutation을 재시도해야 한다. 이미 Ready인 반복 요청은 외부 서비스를 다시 호출하지 않는다.
+- Confirmation / Follow-up: GraphQL/DB integration test에서 첫 전환, 반복 요청, concurrent conditional update 결과, 외부 실패와 persistence 실패를 확인한다.
+
+### 완료 권한은 Upload Account 소유권으로 판정한다
+
+- Decision Date: 2026-07-27
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/media.md`, `docs/domain/decisions/0018-media-upload-lifecycle-without-file.md`, `PROD-435`, `PROD-441`
+- Status: Active
+- Context / Problem: Local Media의 Profile은 업로드 행동 주체를 보존하지만 완료 권한은 `Media.UploadAccount`이며, 같은 Account가 다른 Member Profile context에서 요청할 수 있다.
+- Decision Outcome: 완료 mutation은 `usingProfile` 인증 context를 사용하고 Media의 `accountId`가 요청 Account와 같은지 검증한다. Media Profile과 현재 선택 Profile의 일치를 요구하거나 Account/Profile actor query를 반복하지 않는다.
+- Alternatives Considered: Media Profile만 완료 허용, 선택 Profile의 InstanceKind.LOCAL 재검증, resolver에서 membership 재조회. canonical 권한보다 범위를 좁히거나 인증 context 검증을 중복하므로 선택하지 않았다.
+- Consequences: 같은 Account의 다른 유효한 선택 Profile에서도 Media identity/Profile 관계를 바꾸지 않고 완료할 수 있다.
+- Confirmation / Follow-up: 다른 Account 거부와 같은 Account의 다른 Profile 성공을 integration test로 확인한다.
+
+### opaque 저장 참조는 해석 없이 완료 endpoint에 전달한다
+
+- Decision Date: 2026-07-27
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/media.md`, `docs/domain/decisions/0013-media-storage-service-boundary.md`, `PROD-440`, `PROD-441`
+- Status: Active
+- Context / Problem: 저장 참조 형식은 Media Storage Service 내부 계약이며 Kosmo Media identity나 공개 API가 아니다.
+- Decision Outcome: persistence에서 읽은 저장 참조를 형식 검증하거나 분해하지 않고 URL path segment로만 안전하게 인코딩해 완료 endpoint에 전달한다. GraphQL schema와 payload에는 노출하지 않는다.
+- Alternatives Considered: `u_<UUIDv4>`를 Kosmo에서 재검증하거나 Media global ID로 사용. provider 내부 형식과 Kosmo 권한을 결합하므로 선택하지 않았다.
+- Consequences: malformed persistence가 있다면 Media Storage Service 응답을 외부 확인 실패로 처리하며 Kosmo가 별도 형식 정책을 소유하지 않는다.
+- Confirmation / Follow-up: opaque 값의 encoded endpoint 호출과 GraphQL 비노출을 테스트한다.
+
 ## Remaining Decisions
 
 - 없음.

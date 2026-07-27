@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { decodeGlobalId, encodeGlobalId } from './global-id';
+import { decodeGlobalId, encodeGlobalId } from '@kosmo/core/global-id';
 
 const id = '019f6678-86fa-709b-984e-1520766b8447';
 

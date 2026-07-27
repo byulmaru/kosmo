@@ -111,3 +111,99 @@ PROD-439 범위가 canonical 계약과 OpenSpec을 만족하고 후속 완료/Re
 
 - [x] 4.1 관련 테스트와 정적 검사를 실행하고 실패를 수정한다.
 - [x] 4.2 OpenSpec strict validation과 최종 scope diff review를 통과시킨다.
+
+## 5. PROD-441 Local Media Ready 전환
+
+**Authority / Provenance**
+
+- `docs/domain/objects/media.md`
+- `docs/domain/decisions/0018-media-upload-lifecycle-without-file.md`
+- `docs/domain/decisions/0013-media-storage-service-boundary.md`
+- `PROD-435`
+- `PROD-440`
+- `PROD-441`
+
+**Deliverable**
+
+인증된 요청 Account가 소유한 Local/Uploading Media의 저장 완료를 확인하고 identity, Profile과 Upload Account 관계를 유지한 같은 Media를 Ready로 전환한다.
+
+**Guardrails**
+
+- `usingProfile`이 보장하는 Account/Profile context를 resolver actor query로 반복 검증하지 않는다.
+- Media Profile과 현재 선택 Profile의 일치 또는 InstanceKind.LOCAL을 요구하지 않는다.
+- 저장 참조는 persistence-only opaque 값으로 사용하고 형식을 해석·재검증하거나 GraphQL에 노출하지 않는다.
+- 외부 확인 성공 전에 state를 바꾸지 않으며 state와 `readyAt`은 단일 conditional update로 함께 기록한다.
+- Ready 반복 요청은 같은 identity와 최초 `readyAt`을 유지한다.
+
+**Verification**
+
+- GraphQL schema가 Media global ID 입력과 Ready Media 결과를 제공하고 저장 참조를 노출하지 않는지 확인한다.
+- production resolver의 실제 HTTP/DB 경로에서 Account 소유권, 같은 Account의 다른 Profile, 외부 완료·미완료·실패와 멱등 전환을 확인한다.
+- persistence 실패와 conditional update 경쟁에서 부분 state 전이 또는 `readyAt` 덮어쓰기가 없는지 격리된 test DB로 확인한다.
+
+- [x] 5.1 nullable `readyAt` persistence와 additive migration을 추가한다.
+- [x] 5.2 `completeMediaUpload` GraphQL mutation과 Media `readyAt` field를 구현한다.
+- [x] 5.3 저장 완료 `HEAD` 확인과 conditional Ready 전환을 production resolver 경로에 연결한다.
+- [x] 5.4 Account/Profile 관계 보존, 다른 Account 거부, 반복·동시 요청과 실패 원자성을 검증한다.
+
+## 6. PROD-441 변경 검증
+
+**Authority / Provenance**
+
+- `docs/domain/objects/media.md`
+- `PROD-435`
+- `PROD-441`
+
+**Deliverable**
+
+PROD-441 구현이 canonical·Linear·OpenSpec 계약을 만족하고 부모 PROD-435의 cross-service 통합·archive 범위를 침범하지 않은 상태로 검증된다.
+
+**Guardrails**
+
+- 브라우저 byte 전송, Media Storage Service endpoint 변경, Post/Profile Representation 연결, UI, thumbnail/content delivery, 취소·삭제·orphan 정리와 Remote Media를 포함하지 않는다.
+- 부모 PROD-435가 전체 lifecycle의 cross-service 배포 통합 검증과 OpenSpec archive를 계속 소유한다.
+
+**Verification**
+
+- 관련 단위·GraphQL schema·DB integration 테스트와 lint/type check를 통과시킨다.
+- OpenSpec strict validation과 최종 scope diff review를 통과시킨다.
+- correctness와 Ponytail review findings를 반영하거나 기각 근거를 기록한다.
+
+- [x] 6.1 관련 테스트와 정적 검사를 실행하고 실패를 수정한다.
+- [x] 6.2 OpenSpec strict validation, correctness review와 Ponytail review를 통과시킨다.
+
+## 7. PROD-435 cross-service 통합, 배포와 archive
+
+**Authority / Provenance**
+
+- `docs/domain/objects/media.md`
+- `docs/domain/decisions/0013-media-storage-service-boundary.md`
+- `docs/domain/decisions/0018-media-upload-lifecycle-without-file.md`
+- `PROD-435`
+- `PROD-436`
+- `PROD-439`
+- `PROD-440`
+- `PROD-441`
+
+**Deliverable**
+
+배포된 Kosmo와 Media Storage Service의 실제 경계에서 Uploading Local Media 생성, 브라우저 직접 전송과 같은 Media의 Ready 전환을 검증하고 canonical·Linear·OpenSpec 정합성을 확인한 뒤 change를 archive한다.
+
+**Guardrails**
+
+- Media Storage Service runtime 값은 Vault의 `secret/kubernetes/kosmo/dev`가 소유하고 Helm은 Vault Secrets Operator가 동기화한 `env` Secret을 기존 `envFrom`으로 소비한다.
+- cross-service 검증 자격증명을 저장소나 기본 CI에 저장하지 않으며 명시적으로 실행할 때만 production service를 호출한다.
+- Post 연결, composer/viewer UI, thumbnail, Remote Media, 취소·삭제와 orphan 정리를 추가하지 않는다.
+- dev 배포 상태와 실제 runtime 환경변수를 확인하기 전에는 OpenSpec을 archive하지 않는다.
+
+**Verification**
+
+- Vault와 Vault Secrets Operator가 Media Storage Service origin 및 API key를 `env` Secret에 동기화하고 API Rollout이 기존 `envFrom`으로 소비하는지 확인한다.
+- 실제 GraphQL 발급, CORS preflight, 브라우저 PUT, 공개 WebP HEAD, 완료 확인과 Ready 전환을 하나의 격리 DB integration test로 검증한다.
+- dev API container에 두 runtime 환경변수가 주입됐는지 값 비노출 방식으로 확인한다.
+- delta spec을 main spec에 동기화하고 관련 검증을 통과한 뒤 OpenSpec을 archive한다.
+
+- [x] 7.1 Vault dev secret에 Media Storage Service API key와 production origin을 저장하고 기존 Vault Secrets Operator 및 `envFrom` 경로로 주입한다.
+- [x] 7.2 실제 Media Storage Service를 사용하는 선택적 cross-service API integration test를 추가하고 통과시킨다.
+- [x] 7.3 Vault 설정을 dev에 배포하고 Rollout 상태, runtime 환경변수와 실제 업로드 lifecycle을 확인한다.
+- [ ] 7.4 delta spec을 동기화하고 canonical·Linear·OpenSpec 정합성 및 strict validation을 확인한 뒤 change를 archive한다.

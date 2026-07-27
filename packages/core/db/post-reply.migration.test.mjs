@@ -25,6 +25,10 @@ const descendantMigration = new URL(
   '../../../drizzle/20260723021105_amused_brood/migration.sql',
   import.meta.url,
 );
+const setNullMigration = new URL(
+  '../../../drizzle/20260727063711_prod_494_reply_parent_set_null/migration.sql',
+  import.meta.url,
+);
 
 const ids = {
   instance: '00000000-0000-8000-8000-000000000001',
@@ -281,6 +285,79 @@ test('adds the measured Reply descendant traversal index without changing Post r
     assert.equal(
       planNodes.find((node) => node['Node Type'] === 'Recursive Union')?.['Actual Rows'],
       46,
+    );
+  } finally {
+    await sql.end();
+  }
+});
+
+test('sets only Reply Parent to null when a Parent row is physically deleted', async () => {
+  assert.ok(process.env.DATABASE_URL);
+  const sql = postgres(process.env.DATABASE_URL, { max: 1 });
+
+  try {
+    await sql.unsafe('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
+    for (const migration of previousMigrations) {
+      await sql.unsafe(await readFile(migration, 'utf8'));
+    }
+    await seedRows(sql);
+    await sql.unsafe(await readFile(replyMigration, 'utf8'));
+    await sql.unsafe(await readFile(descendantMigration, 'utf8'));
+    await insertContentfulPost(sql, {
+      contentId: ids.replyContent,
+      id: ids.reply,
+      replyParentId: ids.parent,
+    });
+
+    await sql`
+      UPDATE post
+      SET state = 'DELETED', deleted_at = now()
+      WHERE id = ${ids.parent}
+    `;
+    const rowsBefore = await getPostRows(sql);
+
+    await sql.unsafe(await readFile(setNullMigration, 'utf8'));
+
+    assert.deepEqual(await getPostRows(sql), rowsBefore);
+    assert.deepEqual(
+      [
+        ...(await sql`
+          SELECT confdeltype AS "deleteType"
+          FROM pg_constraint
+          WHERE conrelid = 'post'::regclass
+            AND conname = 'post_reply_parent_id_post_id_fkey'
+        `),
+      ],
+      [{ deleteType: 'n' }],
+    );
+
+    // Production keeps deleted Posts as Tombstones. This fixture-only physical deletion
+    // exercises the future FK behavior after removing the Parent's own content cycle.
+    await sql`UPDATE post SET current_content_id = NULL WHERE id = ${ids.parent}`;
+    await sql`DELETE FROM post_content WHERE post_id = ${ids.parent}`;
+    await sql`DELETE FROM post WHERE id = ${ids.parent}`;
+
+    assert.deepEqual(
+      [
+        ...(await sql`
+          SELECT
+            post.id::text,
+            post.reply_parent_id::text AS "replyParentId",
+            post.current_content_id::text AS "currentContentId",
+            post_content.post_id::text AS "contentPostId"
+          FROM post
+          INNER JOIN post_content ON post_content.id = post.current_content_id
+          WHERE post.id = ${ids.reply}
+        `),
+      ],
+      [
+        {
+          contentPostId: ids.reply,
+          currentContentId: ids.replyContent,
+          id: ids.reply,
+          replyParentId: null,
+        },
+      ],
     );
   } finally {
     await sql.end();

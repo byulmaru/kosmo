@@ -19,9 +19,9 @@ import { and, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type { encodeGlobalId as EncodeGlobalId } from '@kosmo/core/global-id';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
 import type { yoga as YogaRouter } from '../../../src/graphql';
-import type { encodeGlobalId as EncodeGlobalId } from '../../../src/graphql/global-id';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -76,7 +76,7 @@ describe('Notification GraphQL Node boundary', () => {
 
     ({ deriveContext } = await import('../../../src/context'));
     ({ yoga } = await import('../../../src/graphql'));
-    ({ encodeGlobalId } = await import('../../../src/graphql/global-id'));
+    ({ encodeGlobalId } = await import('@kosmo/core/global-id'));
 
     app = new Hono<Env>();
     app.use('*', async (c, next) => {

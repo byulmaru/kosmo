@@ -6,6 +6,7 @@ import {
   AccountProfileRole,
   AccountState,
   InstanceKind,
+  InstanceState,
   NotificationKind,
   PostState,
   PostVisibility,
@@ -13,11 +14,11 @@ import {
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
+import { encodeGlobalId as globalId } from '@kosmo/core/global-id';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { encodeGlobalId as globalId } from '../../../src/graphql/global-id';
 import type * as CoreDb from '@kosmo/core/db';
 import type { Env } from '../../../src/context';
 
@@ -226,6 +227,20 @@ describe('GraphQL Repost', () => {
     }
   });
 
+  test('Remote Unresponsive selected Profile도 Repost할 수 있다', async () => {
+    const sourceAuthor = await createProfile('remote-selected-source-author');
+    const source = await createContentPost(sourceAuthor.id);
+    const auth = await createAuthenticatedSession({
+      instanceKind: InstanceKind.ACTIVITYPUB,
+      instanceState: InstanceState.UNRESPONSIVE,
+    });
+
+    const result = await requestRepost(source.id, auth.token);
+
+    assertNoGraphQLErrors(result);
+    assert.ok(result.data?.repostPost.repost.id);
+  });
+
   test('조회 가능한 허용 불가 Source는 VALIDATION sourceId로 거부한다', async () => {
     const auth = await createAuthenticatedSession();
     const contentSource = await createContentPost(auth.profile.id);
@@ -279,19 +294,23 @@ describe('GraphQL Repost', () => {
     }
   });
 
-  test('membership 부재·비활성 Profile을 거부한다', async () => {
+  test('membership 부재·비활성 Profile·Suspended Instance를 거부한다', async () => {
     const sourceAuthor = await createProfile('membership-source-author');
     const source = await createContentPost(sourceAuthor.id);
     const missingMembership = await createAuthenticatedSession();
     const disabledProfile = await createAuthenticatedSession({
       profileState: ProfileState.DISABLED,
     });
+    const suspendedInstance = await createAuthenticatedSession({
+      instanceKind: InstanceKind.ACTIVITYPUB,
+      instanceState: InstanceState.SUSPENDED,
+    });
 
     await db
       .delete(AccountProfiles)
       .where(eq(AccountProfiles.accountId, missingMembership.account.id));
 
-    for (const token of [missingMembership.token, disabledProfile.token]) {
+    for (const token of [missingMembership.token, disabledProfile.token, suspendedInstance.token]) {
       const result = await requestRepost(source.id, token);
       assert.equal(result.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
     }
@@ -561,11 +580,15 @@ const createContentPost = async (
 const createAuthenticatedSession = async ({
   activeProfile = true,
   accountState = AccountState.ACTIVE,
+  instanceKind,
+  instanceState,
   profileState = ProfileState.ACTIVE,
   role = AccountProfileRole.OWNER,
 }: {
   activeProfile?: boolean;
   accountState?: AccountState;
+  instanceKind?: InstanceKind;
+  instanceState?: InstanceState;
   profileState?: ProfileState;
   role?: AccountProfileRole;
 } = {}) => {
@@ -575,8 +598,21 @@ const createAuthenticatedSession = async ({
     .values({ displayName: suffix, oidcSubject: suffix, state: accountState })
     .returning()
     .then(firstOrThrow);
+  const instanceId =
+    instanceKind === undefined && instanceState === undefined
+      ? localInstanceId
+      : await db
+          .insert(Instances)
+          .values({
+            domain: `${suffix}.selected.example`,
+            kind: instanceKind ?? InstanceKind.ACTIVITYPUB,
+            state: instanceState ?? InstanceState.ACTIVE,
+          })
+          .returning({ id: Instances.id })
+          .then(firstOrThrow)
+          .then((instance) => instance.id);
   const profile = await createProfile(`viewer-${suffix}`, {
-    instanceId: localInstanceId,
+    instanceId,
     state: profileState,
   });
   await db.insert(AccountProfiles).values({

@@ -147,7 +147,7 @@ test('repostPost는 누락·Tombstone·조회 불가 Source를 같은 NOT_FOUND�
   }
 });
 
-test('repostPost는 Active Local과 Remote actor가 공통 action을 사용할 수 있다', async () => {
+test('repostPost core는 entry에서 검증된 행동 주체의 Profile/Instance 상태를 다시 조회하지 않는다', async () => {
   const sourceAuthor = await createProfile();
   const source = await createContentPost(sourceAuthor.profile.id);
 
@@ -157,33 +157,17 @@ test('repostPost는 Active Local과 Remote actor가 공통 action을 사용할 �
       instanceKind: InstanceKind.ACTIVITYPUB,
       instanceState: InstanceState.UNRESPONSIVE,
     }),
-  ]) {
-    const { repost } = await repostPost({
-      actorProfileId: actor.profile.id,
-      sourcePostId: source.id,
-    });
-    assert.equal(repost.profileId, actor.profile.id);
-  }
-});
-
-test('repostPost는 비활성 Profile 또는 Suspended Instance actor를 거부한다', async () => {
-  const sourceAuthor = await createProfile();
-  const source = await createContentPost(sourceAuthor.profile.id);
-
-  for (const actor of [
     await createProfile({ profileState: ProfileState.DISABLED }),
     await createProfile({
       instanceKind: InstanceKind.ACTIVITYPUB,
       instanceState: InstanceState.SUSPENDED,
     }),
   ]) {
-    await assert.rejects(
-      repostPost({
-        actorProfileId: actor.profile.id,
-        sourcePostId: source.id,
-      }),
-      (error) => error instanceof PermissionDeniedError && error.code === 'PERMISSION_DENIED',
-    );
+    const { repost } = await repostPost({
+      actorProfileId: actor.profile.id,
+      sourcePostId: source.id,
+    });
+    assert.equal(repost.profileId, actor.profile.id);
   }
 });
 

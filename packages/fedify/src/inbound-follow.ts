@@ -1,10 +1,10 @@
 import '@kosmo/core/polyfill';
 
-import { Follow } from '@fedify/vocab';
+import { EmojiReact, Follow, Like } from '@fedify/vocab';
 import { InstanceState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
-import { followProfile, unfollowProfile } from '@kosmo/core/services';
-import { isHttpUri } from './activitypub-uri';
+import { followProfile, undoInboundReaction, unfollowProfile } from '@kosmo/core/services';
+import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { sendAcceptFollowActivity } from './follow-delivery';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
 import {
@@ -96,7 +96,8 @@ const noNetworkDocumentLoader = async (url: string) => {
 };
 
 export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo): Promise<void> => {
-  const actorUri = undo.actorId;
+  const actorHref = uniqueHref(undo.actorIds);
+  const actorUri = actorHref ? new URL(actorHref) : null;
   if (!isHttpUri(actorUri)) {
     return;
   }
@@ -122,22 +123,36 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
     documentLoader: noNetworkDocumentLoader,
     suppressError: true,
   });
-  if (!(embedded instanceof Follow)) {
+  if (embedded instanceof Follow) {
+    const objectUri = embedded.objectId;
+    if (!isHttpUri(objectUri) || uniqueHref(embedded.actorIds) !== actorUri.href) {
+      return;
+    }
+
+    const localRecipient = await resolveInboundLocalRecipient(context, objectUri);
+    if (!localRecipient) {
+      return;
+    }
+
+    await unfollowProfile({
+      followeeProfileId: localRecipient.id,
+      followerProfileId: remoteActor.profile.id,
+    });
     return;
   }
 
-  const objectUri = embedded.objectId;
-  if (!isHttpUri(objectUri) || embedded.actorId?.href !== actorUri.href) {
+  if (embedded !== null && !(embedded instanceof Like) && !(embedded instanceof EmojiReact)) {
     return;
   }
 
-  const localRecipient = await resolveInboundLocalRecipient(context, objectUri);
-  if (!localRecipient) {
+  const activityUri = embedded?.id ?? undo.objectId;
+  if (
+    !isHttpUri(activityUri) ||
+    ((embedded instanceof Like || embedded instanceof EmojiReact) &&
+      uniqueHref(embedded.actorIds) !== actorUri.href)
+  ) {
     return;
   }
 
-  await unfollowProfile({
-    followeeProfileId: localRecipient.id,
-    followerProfileId: remoteActor.profile.id,
-  });
+  await undoInboundReaction({ activityUri: activityUri.href, actorUri: actorUri.href });
 };

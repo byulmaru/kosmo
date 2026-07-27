@@ -11,10 +11,10 @@ import {
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
+import { encodeGlobalId as globalId } from '@kosmo/core/global-id';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, asc, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { encodeGlobalId as globalId } from '../../../src/graphql/global-id';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';

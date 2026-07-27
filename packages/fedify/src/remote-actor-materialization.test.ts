@@ -1,7 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
-import { after, before, beforeEach, describe, mock, test } from 'node:test';
+import { after, afterEach, before, beforeEach, describe, mock, test } from 'node:test';
 import { Endpoints, LanguageString, Note, Person } from '@fedify/vocab';
 import {
   ActivityPubActorType,
@@ -62,6 +62,8 @@ describe('remote actor materialization', () => {
     await db.delete(Instances).where(ne(Instances.id, localInstanceId));
   });
 
+  afterEach(() => mock.restoreAll());
+
   after(async () => {
     await pg.end();
   });
@@ -109,44 +111,33 @@ describe('remote actor materialization', () => {
     assert.equal(stored.actor.lastFetchedAt?.toString(), now.toString());
   });
 
-  for (const mediaType of [
-    'application/activity+json',
-    'application/ld+json; profile="https://www.w3.org/ns/activitystreams"',
-  ]) {
-    test(`materializes an inbound actor URI from WebFinger self type ${mediaType}`, async () => {
-      const actor = createActor();
-      const lookupObject = mock.fn(async () => actor);
-      const lookupWebFinger = mock.fn(async () => ({
-        links: [{ href: actor.id?.href, rel: 'self', type: mediaType }],
-        subject: `acct:alice@${remoteDomain}`,
-      }));
+  test('materializes an inbound actor URI through Fedify actor handle discovery', async () => {
+    const actor = createActor();
+    const lookupObject = mock.fn(async () => actor);
+    const fetch = mockWebFinger({ subject: `acct:alice@${remoteDomain}` });
 
-      const result = await findOrMaterializeRemoteProfileActorByUri({
-        actorUri: actor.id!,
-        context: { lookupObject, lookupWebFinger } as unknown as Context<void>,
-      });
-
-      assert.equal(result.actor.uri, actor.id?.href);
-      assert.equal(lookupWebFinger.mock.calls.length, 1);
-      assert.equal(
-        (lookupObject.mock.calls as unknown as Array<{ arguments: unknown[] }>)[0]?.arguments[0],
-        `acct:alice@${remoteDomain}`,
-      );
+    const result = await findOrMaterializeRemoteProfileActorByUri({
+      actorUri: actor.id!,
+      context: { lookupObject },
     });
-  }
+
+    assert.equal(result.actor.uri, actor.id?.href);
+    assert.equal(fetch.mock.calls.length, 1);
+    assert.equal(
+      (lookupObject.mock.calls as unknown as Array<{ arguments: unknown[] }>)[0]?.arguments[0],
+      `acct:alice@${remoteDomain}`,
+    );
+  });
 
   test('reactivates an unknown actor instance only after materialization succeeds', async () => {
     const instance = await createRemoteInstance({ state: InstanceState.UNRESPONSIVE });
     const actor = createActor();
     const lookupObject = mock.fn(async () => actor);
-    const lookupWebFinger = mock.fn(async () => ({
-      links: [{ href: actor.id?.href, rel: 'self', type: 'application/activity+json' }],
-      subject: `acct:alice@${remoteDomain}`,
-    }));
+    mockWebFinger({ subject: `acct:alice@${remoteDomain}` });
 
     await findOrMaterializeRemoteProfileActorByUri({
       actorUri: actor.id!,
-      context: { lookupObject, lookupWebFinger } as unknown as Context<void>,
+      context: { lookupObject },
     });
 
     const reactivated = await db
@@ -162,15 +153,12 @@ describe('remote actor materialization', () => {
     const instance = await createRemoteInstance({ state: InstanceState.UNRESPONSIVE });
     const actor = createActor();
     const lookupObject = mock.fn(async () => null);
-    const lookupWebFinger = mock.fn(async () => ({
-      links: [{ href: actor.id?.href, rel: 'self', type: 'application/activity+json' }],
-      subject: `acct:alice@${remoteDomain}`,
-    }));
+    mockWebFinger({ subject: `acct:alice@${remoteDomain}` });
 
     await assert.rejects(
       findOrMaterializeRemoteProfileActorByUri({
         actorUri: actor.id!,
-        context: { lookupObject, lookupWebFinger } as unknown as Context<void>,
+        context: { lookupObject },
       }),
       RemoteActorMaterializationError,
     );
@@ -187,33 +175,29 @@ describe('remote actor materialization', () => {
   test('reuses a stored inbound actor and reactivates UNRESPONSIVE with compare-and-set', async () => {
     const stored = await createStoredRemoteActor({ instanceState: InstanceState.UNRESPONSIVE });
     const lookupObject = mock.fn(async () => createActor());
-    const lookupWebFinger = mock.fn(async () => null);
 
     const result = await findOrMaterializeRemoteProfileActorByUri({
       actorUri: new URL(stored.actor.uri),
-      context: { lookupObject, lookupWebFinger } as unknown as Context<void>,
+      context: { lookupObject },
     });
 
     assert.equal(result.profile.id, stored.profile.id);
     assert.equal(result.instance.state, InstanceState.ACTIVE);
     assert.equal(lookupObject.mock.calls.length, 0);
-    assert.equal(lookupWebFinger.mock.calls.length, 0);
   });
 
   test('ignores a stored SUSPENDED inbound actor without network access', async () => {
     const stored = await createStoredRemoteActor({ instanceState: InstanceState.SUSPENDED });
     const lookupObject = mock.fn(async () => createActor());
-    const lookupWebFinger = mock.fn(async () => null);
 
     await assert.rejects(
       findOrMaterializeRemoteProfileActorByUri({
         actorUri: new URL(stored.actor.uri),
-        context: { lookupObject, lookupWebFinger } as unknown as Context<void>,
+        context: { lookupObject },
       }),
       /Profile not found/,
     );
     assert.equal(lookupObject.mock.calls.length, 0);
-    assert.equal(lookupWebFinger.mock.calls.length, 0);
   });
 
   test('preserves the original handle casing during lookup', async () => {
@@ -867,6 +851,19 @@ const createActor = (overrides: Partial<PersonOptions> = {}) =>
     published: Temporal.Instant.from('2024-01-02T03:04:05Z'),
     summary: 'Remote bio',
     ...overrides,
+  });
+
+const mockWebFinger = (descriptor: { subject: string }) =>
+  mock.method(globalThis, 'fetch', async (input: string | URL | Request) => {
+    const url = new URL(input instanceof Request ? input.url : input);
+
+    assert.equal(url.origin, `https://${remoteDomain}`);
+    assert.equal(url.pathname, '/.well-known/webfinger');
+    assert.equal(url.searchParams.get('resource'), `https://${remoteDomain}/users/alice`);
+
+    return Response.json(descriptor, {
+      headers: { 'Content-Type': 'application/jrd+json' },
+    });
   });
 
 const createLookupContext = (

@@ -17,9 +17,9 @@ import { normalizeHandle } from '@kosmo/core/utils';
 import { eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
+import type { encodeGlobalId as EncodeGlobalId } from '@kosmo/core/global-id';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
 import type { yoga as YogaRouter } from '../../../src/graphql';
-import type { encodeGlobalId as EncodeGlobalId } from '../../../src/graphql/global-id';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -69,7 +69,7 @@ describe('Bookmark GraphQL 경계', () => {
 
     ({ deriveContext } = await import('../../../src/context'));
     ({ yoga } = await import('../../../src/graphql'));
-    ({ encodeGlobalId } = await import('../../../src/graphql/global-id'));
+    ({ encodeGlobalId } = await import('@kosmo/core/global-id'));
 
     app = new Hono<Env>();
     app.use('*', async (c, next) => {
@@ -213,7 +213,7 @@ describe('Bookmark GraphQL 경계', () => {
     assert.equal(await countBookmarks(), 0);
   });
 
-  test('비로그인·비활성 Account·사용 불가 Profile은 PERMISSION_DENIED로 거부한다', async () => {
+  test('usingProfile context는 사용할 수 없는 actor를 거부하고 Instance 종류를 제한하지 않는다', async () => {
     const author = await createProfile('actor-check-author');
     const post = await createPost(author.id);
     const suffix = crypto.randomUUID();
@@ -228,18 +228,31 @@ describe('Bookmark GraphQL 경계', () => {
         state: InstanceState.UNRESPONSIVE,
       },
     ]);
-    const actors = await Promise.all([
+    const unavailableActors = await Promise.all([
       createAuthenticatedSession({ activeProfile: false }),
       createAuthenticatedSession({ accountState: AccountState.DISABLED }),
       createAuthenticatedSession({ member: false }),
       createAuthenticatedSession({ profileState: ProfileState.DISABLED }),
+    ]);
+    const availableActors = await Promise.all([
       createAuthenticatedSession({ instanceId: remoteInstanceId }),
       createAuthenticatedSession({ instanceId: unresponsiveInstanceId }),
     ]);
 
-    for (const token of [undefined, ...actors.map(({ token }) => token)]) {
+    for (const token of [undefined, ...unavailableActors.map(({ token }) => token)]) {
       const result = await requestCreateBookmark(post.id, token);
       assert.equal(result.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+    }
+
+    for (const { token } of availableActors) {
+      const created = await requestCreateBookmark(post.id, token);
+      assertNoGraphQLErrors(created);
+      const bookmarkId = created.data?.createBookmark.bookmark.id;
+      assert.ok(bookmarkId);
+
+      const deleted = await requestDeleteBookmark(bookmarkId, token);
+      assertNoGraphQLErrors(deleted);
+      assert.equal(deleted.data?.deleteBookmark.bookmarkId, bookmarkId);
     }
     assert.equal(await countBookmarks(), 0);
   });

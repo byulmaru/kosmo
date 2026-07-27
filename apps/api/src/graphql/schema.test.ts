@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { encodeGlobalId } from '@kosmo/core/global-id';
 import { graphql, isInputObjectType, isInterfaceType, isObjectType, isUnionType } from 'graphql';
-import { encodeGlobalId } from './global-id';
 import { notificationNodeType } from './resolvers/notification/ref';
 import { schema } from './schema';
 
@@ -21,24 +21,47 @@ test('exposes upload URL issuance with a minimal Media state contract', () => {
   assert.equal(String(payload.getFields().expiresAt.type), 'DateTime!');
 
   assert.ok(isObjectType(media));
-  assert.deepEqual(Object.keys(media.getFields()).sort(), ['id', 'state']);
+  assert.deepEqual(Object.keys(media.getFields()).sort(), ['id', 'readyAt', 'state']);
+  assert.equal(String(media.getFields().readyAt.type), 'DateTime');
   assert.equal(String(media.getFields().state.type), 'MediaState!');
   assert.equal(media.getFields().storageReference, undefined);
 });
 
-test('requires an authenticated selected Profile to issue a Media upload URL', async () => {
-  for (const contextValue of [
-    {},
-    { session: { id: 'session', accountId: 'account', profileId: null } },
-  ]) {
-    const result = await graphql({
-      schema,
-      source: `mutation { issueMediaUploadUrl { uploadUrl } }`,
-      contextValue,
-    });
+test('exposes idempotent Local Media upload completion without a storage reference', () => {
+  const mutation = schema.getMutationType();
+  const field = mutation?.getFields().completeMediaUpload;
+  const input = schema.getType('CompleteMediaUploadInput');
+  const payload = schema.getType('CompleteMediaUploadPayload');
 
-    assert.equal(result.data, null);
-    assert.match(result.errors?.[0]?.message ?? '', /Not authorized/);
+  assert.equal(String(field?.type), 'CompleteMediaUploadPayload!');
+  assert.equal(field?.args[0]?.name, 'input');
+  assert.equal(String(field?.args[0]?.type), 'CompleteMediaUploadInput!');
+
+  assert.ok(isInputObjectType(input));
+  assert.deepEqual(Object.keys(input.getFields()), ['id']);
+  assert.equal(String(input.getFields().id.type), 'ID!');
+
+  assert.ok(isObjectType(payload));
+  assert.deepEqual(Object.keys(payload.getFields()), ['media']);
+  assert.equal(String(payload.getFields().media.type), 'Media!');
+  assert.equal(payload.getFields().storageReference, undefined);
+});
+
+test('requires an authenticated selected Profile for Media upload mutations', async () => {
+  const mediaId = encodeGlobalId('Media', '00000000-0000-8000-8000-000000000001');
+  for (const source of [
+    `mutation { issueMediaUploadUrl { uploadUrl } }`,
+    `mutation { completeMediaUpload(input: { id: "${mediaId}" }) { media { id } } }`,
+  ]) {
+    for (const contextValue of [
+      {},
+      { session: { id: 'session', accountId: 'account', profileId: null } },
+    ]) {
+      const result = await graphql({ schema, source, contextValue });
+
+      assert.equal(result.data, null);
+      assert.match(result.errors?.[0]?.message ?? '', /Not authorized/);
+    }
   }
 });
 

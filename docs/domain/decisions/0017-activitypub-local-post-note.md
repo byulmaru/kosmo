@@ -14,11 +14,11 @@ Accepted
   `/ap/note/{postId}`를 결합한 URI다. `postId`는 immutable DB UUID다.
 - Author handle이나 GraphQL global ID는 ActivityPub identity에 포함하지 않는다. Post의 canonical Web 공유
   참조는 ActivityPub identity와 구분해 Note의 `url`로 제공한다.
-- PROD-255와 archived remote-post ingestion 계약에 따라 ActivityPub Post mapping은 remote object URI와
+- PROD-255와 archived 원격 Post 수신 계약에 따라 ActivityPub Post mapping은 remote object URI와
   materialized Post의 관계만 소유한다. Local Post identity는 이 기존 경계를 유지하며 DB row를 추가하지 않고
   Post ID에서 파생한다.
 - Note content는 기존 canonical PostContent Document 계약을 재정의하지 않고 그 의미를 안전한 HTML로 투영하며
-  Content Warning은 `summary`로 제공한다. Author actor, immutable 생성 시각과 canonical Web 공유 참조를 함께
+  Content Warning은 `summary`로 제공한다. Author Profile, immutable 생성 시각과 canonical Web 공유 참조를 함께
   제공한다.
 - Public은 ActivityStreams Public을 `to`, followers collection을 `cc`로 사용한다. Unlisted는 followers
   collection을 `to`, ActivityStreams Public을 `cc`로 사용한다. Followers Only는 followers collection만
@@ -65,7 +65,7 @@ Note 역참조 권한이 독립적으로 제한하므로, Reply를 조회한 req
 
 - `packages/fedify`의 Local Note dispatcher와 후속 activity delivery는 하나의 Post URI resolver와 Note
   projection을 공유한다.
-- Followers Only 역참조는 verified signed actor와 stored Follow 관계를 연결해야 한다.
+- Followers Only 역참조는 서명으로 검증된 요청 Profile과 stored Follow 관계를 연결해야 한다.
 - remote Parent와 대상 Post는 기존 ActivityPub Post mapping URI를 사용하고 local Parent와 대상 Post는 파생 URI를
   사용한다.
 - Parent의 실제 표현이 requester에게 unavailable이어도 Reply Parent 관계가 유지되는 동안 `inReplyTo` identity는

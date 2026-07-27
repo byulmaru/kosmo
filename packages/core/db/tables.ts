@@ -107,6 +107,13 @@ export const ActivityPubPosts = pgTable('activitypub_post', {
   publishedAt: datetime('published_at'),
 });
 
+export const ActivityPubReactions = pgTable('activitypub_reaction', {
+  uri: text('uri').unique().notNull(),
+  reactionId: uuid('reaction_id')
+    .primaryKey()
+    .references(() => Reactions.id, { onDelete: 'cascade' }),
+});
+
 export const Applications = pgTable(
   'application',
   {
@@ -194,6 +201,7 @@ export const Media = pgTable(
       .references(() => Profiles.id),
     storageReference: text('storage_reference').unique().notNull(),
     uploadExpiresAt: datetime('upload_expires_at').notNull(),
+    readyAt: datetime('ready_at'),
     createdAt: createdAt(),
   },
   (table) => [index().on(table.accountId), index().on(table.profileId)],
@@ -287,7 +295,9 @@ export const Posts = pgTable(
     visibility: Enum.postVisibility('visibility').notNull(),
     state: Enum.postState('state').notNull(),
     currentContentId: uuid('current_content_id').references((): AnyPgColumn => PostContents.id),
-    replyParentId: uuid('reply_parent_id').references((): AnyPgColumn => Posts.id),
+    replyParentId: uuid('reply_parent_id').references((): AnyPgColumn => Posts.id, {
+      onDelete: 'set null',
+    }),
     repostSourceId: uuid('repost_source_id').references((): AnyPgColumn => Posts.id),
     createdAt: createdAt(),
     deletedAt: datetime('deleted_at'),

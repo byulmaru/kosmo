@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { db, Sessions } from '@kosmo/core/db';
+import { Accounts, db, Sessions } from '@kosmo/core/db';
 import { AccountState, SessionState } from '@kosmo/core/enums';
 import { eq } from 'drizzle-orm';
 import { createE2ESession, resetE2EDatabase, setE2ESessionCookie } from './db-fixtures';
@@ -158,6 +158,25 @@ test('mock OIDC로 로그인하면 보호 홈으로 이동하고 세션이 유�
   await expect(page).toHaveURL(/\/home$/);
 });
 
+test('Deleted Account의 Web OIDC callback은 Session 없이 일반 오류로 거부된다', async ({
+  context,
+  page,
+}) => {
+  await db.insert(Accounts).values({
+    displayName: 'Deleted E2E User',
+    oidcSubject: 'oidc-mock-e2e-user',
+    state: AccountState.DISABLED,
+  });
+
+  const response = await page.goto('/login');
+
+  expect(response?.status()).toBe(500);
+  expect(await response?.text()).toBe('Internal Server Error');
+  expect(await db.select().from(Sessions)).toEqual([]);
+  expect((await context.cookies()).some(({ name }) => name === 'kosmo_session')).toBe(false);
+  expect(await page.textContent('body')).not.toContain('oidc-mock-e2e-user');
+});
+
 test('API는 public native PKCE code를 cookie 없이 Kosmo 세션으로 교환한다', async ({ request }) => {
   const codeVerifier = 'v'.repeat(43);
   const callbackUrl = await authorizeNativeCode(request, codeVerifier);
@@ -189,6 +208,33 @@ test('API는 public native PKCE code를 cookie 없이 Kosmo 세션으로 교환�
   expect(session?.oidcSessionKey).toBeNull();
   expect(response.headers()['cache-control']).toContain('no-store');
   expect(response.headers().pragma).toBe('no-cache');
+  expect(response.headers()['set-cookie']).toBeUndefined();
+});
+
+test('Suspended Account의 Native exchange는 Session 없이 일반 권한 오류로 거부된다', async ({
+  request,
+}) => {
+  await db.insert(Accounts).values({
+    displayName: 'Suspended E2E User',
+    oidcSubject: 'oidc-mock-e2e-user',
+    state: AccountState.SUSPENDED,
+  });
+  const codeVerifier = 'v'.repeat(43);
+  const callbackUrl = await authorizeNativeCode(request, codeVerifier);
+  const response = await exchangeNativeOidcSession(request, {
+    code: callbackUrl.searchParams.get('code'),
+    codeVerifier,
+    redirectUri: 'kosmo://login/callback',
+  });
+  const body = (await response.json()) as NativeSessionGraphQLResponse;
+
+  expect(response.status()).toBe(200);
+  expect(body.data).toBeNull();
+  expect(body.errors?.[0]?.extensions?.code).toBe('PERMISSION_DENIED');
+  expect(body.errors?.[0]?.message).toBe('Permission denied');
+  expect(JSON.stringify(body)).not.toContain('oidc-mock-e2e-user');
+  expect(JSON.stringify(body)).not.toContain(codeVerifier);
+  expect(await db.select().from(Sessions)).toEqual([]);
   expect(response.headers()['set-cookie']).toBeUndefined();
 });
 

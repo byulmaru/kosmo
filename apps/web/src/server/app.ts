@@ -30,10 +30,11 @@ app.use('*', async (c, next) => {
     contextData: undefined,
     onNotAcceptable: fallThroughNotAcceptable,
     onNotFound: fallThrough,
+    onUnauthorized: fallThrough,
   });
 
   c.res = response;
-  return response;
+  return c.res;
 });
 
 app.onError((cause, c) => {

@@ -1,11 +1,13 @@
 import { createFederation, MemoryKvStore } from '@fedify/fedify';
-import { Accept, Create, Follow, Reject, Undo } from '@fedify/vocab';
+import { Accept, Create, EmojiReact, Follow, Like, Note, Reject, Undo } from '@fedify/vocab';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { handleInboundAccept } from './inbound-accept';
 import { handleInboundCreate } from './inbound-create';
 import { handleInboundFollow, handleInboundUndo } from './inbound-follow';
+import { handleInboundReaction } from './inbound-reaction';
 import { handleInboundReject } from './inbound-reject';
 import { ensureDrizzleLocalProfileActor } from './local-actor-store';
+import { authorizeLocalPostNote, dispatchLocalPostNote } from './local-post-note';
 import { createLocalProfilePerson } from './local-profile-person';
 import { resolveLocalActorIdentifierByHandle } from './webfinger';
 import type { Federation } from '@fedify/fedify';
@@ -61,9 +63,15 @@ federation
   });
 
 federation
+  .setObjectDispatcher(Note, '/ap/note/{id}', dispatchLocalPostNote)
+  .authorize(authorizeLocalPostNote);
+
+federation
   .setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox')
   .on(Accept, handleInboundAccept)
   .on(Create, handleInboundCreate)
+  .on(EmojiReact, handleInboundReaction)
   .on(Follow, handleInboundFollow)
+  .on(Like, handleInboundReaction)
   .on(Reject, handleInboundReject)
   .on(Undo, handleInboundUndo);

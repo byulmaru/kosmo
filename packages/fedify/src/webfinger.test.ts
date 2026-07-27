@@ -258,6 +258,23 @@ describe('WebFinger local profile handle mapping', () => {
 
     assert.equal(response.status, 404);
   });
+
+  test('rejects a non-canonical uppercase local actor identifier', async () => {
+    const profile = await createProfile({
+      handle: 'alice',
+      id: '019f6f67-abcd-7777-8888-abcdefabcdef',
+      instanceId: localInstanceId,
+    });
+    const response = await federation.fetch(
+      new Request(`${publicOrigin}/ap/actor/${profile.id.toUpperCase()}`, {
+        headers: { accept: 'application/activity+json' },
+      }),
+      { contextData: undefined },
+    );
+
+    assert.equal(response.status, 404);
+    assert.equal((await db.select().from(ActivityPubActors)).length, 0);
+  });
 });
 
 const truncateDatabase = async () => {
@@ -303,10 +320,12 @@ const createRemoteInstance = async () =>
 
 const createProfile = async ({
   handle,
+  id,
   instanceId,
   state = ProfileState.ACTIVE,
 }: {
   handle: string;
+  id?: string;
   instanceId: string;
   state?: ProfileState;
 }) =>
@@ -316,6 +335,7 @@ const createProfile = async ({
       displayName: handle,
       followPolicy: ProfileFollowPolicy.OPEN,
       handle,
+      ...(id ? { id } : {}),
       instanceId,
       normalizedHandle: normalizeHandle(handle),
       state,

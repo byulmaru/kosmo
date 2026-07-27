@@ -18,11 +18,21 @@ import { ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { TestContext } from 'node:test';
 import type * as CoreDb from '@kosmo/core/db';
+import type { encodeGlobalId as EncodeGlobalId } from '@kosmo/core/global-id';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
 import type { yoga as YogaRouter } from '../../../src/graphql';
-import type { encodeGlobalId as EncodeGlobalId } from '../../../src/graphql/global-id';
 
 const publicOrigin = 'http://127.0.0.1:4173';
+const browserUploadOrigin = 'http://localhost:5173';
+const crossServiceOrigin = process.env.MEDIA_UPLOAD_CROSS_SERVICE_ORIGIN;
+const crossServiceApiKey = process.env.MEDIA_UPLOAD_CROSS_SERVICE_API_KEY;
+const crossServiceRequested = crossServiceOrigin !== undefined || crossServiceApiKey !== undefined;
+// Keep the production smoke-test upload minimal. This is the same non-animated 1×1 PNG fixture
+// used by the Media Storage Service integration suite.
+const onePixelPng = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64',
+);
 const uploadExpiresAt = '2026-07-27T15:00:00Z';
 const serializedUploadExpiresAt = '2026-07-27T15:00:00.000Z';
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -44,7 +54,7 @@ let encodeGlobalId: typeof EncodeGlobalId;
 let app: Hono<Env>;
 let localInstanceId: string;
 
-describe('Local Media upload 시작 GraphQL 경계', () => {
+describe('Local Media upload GraphQL 경계', () => {
   before(async () => {
     process.env.NODE_ENV = 'production';
     process.env.PUBLIC_ORIGIN = publicOrigin;
@@ -59,7 +69,7 @@ describe('Local Media upload 시작 GraphQL 경계', () => {
 
     ({ deriveContext } = await import('../../../src/context'));
     ({ yoga } = await import('../../../src/graphql'));
-    ({ encodeGlobalId } = await import('../../../src/graphql/global-id'));
+    ({ encodeGlobalId } = await import('@kosmo/core/global-id'));
 
     app = new Hono<Env>();
     app.use('*', async (c, next) => {
@@ -117,6 +127,67 @@ describe('Local Media upload 시작 GraphQL 경계', () => {
     });
     assert.equal(await requestMediaNode(firstMediaId, other.token), null);
   });
+
+  test(
+    '실제 Media Storage Service를 거쳐 같은 Local Media를 Ready로 전환한다',
+    { skip: !crossServiceRequested },
+    async (t) => {
+      assert.ok(crossServiceOrigin);
+      assert.ok(crossServiceApiKey);
+      const previousOrigin = process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
+      const previousApiKey = process.env.MEDIA_STORAGE_SERVICE_API_KEY;
+      process.env.MEDIA_STORAGE_SERVICE_ORIGIN = crossServiceOrigin;
+      process.env.MEDIA_STORAGE_SERVICE_API_KEY = crossServiceApiKey;
+      t.after(() => {
+        process.env.MEDIA_STORAGE_SERVICE_ORIGIN = previousOrigin;
+        process.env.MEDIA_STORAGE_SERVICE_API_KEY = previousApiKey;
+      });
+      const auth = await createAuthenticatedSession();
+
+      const issued = await requestIssueMediaUploadUrl(auth.token);
+      assertNoGraphQLErrors(issued);
+      assert.equal(issued.data?.issueMediaUploadUrl.media.state, MediaState.UPLOADING);
+      const uploadUrl = issued.data!.issueMediaUploadUrl.uploadUrl;
+
+      const preflight = await fetch(uploadUrl, {
+        headers: {
+          Origin: browserUploadOrigin,
+          'Access-Control-Request-Headers': 'content-type',
+          'Access-Control-Request-Method': 'PUT',
+        },
+        method: 'OPTIONS',
+      });
+      assert.equal(preflight.status, 204);
+      assert.equal(preflight.headers.get('access-control-allow-origin'), browserUploadOrigin);
+      assert.equal(preflight.headers.get('access-control-allow-methods'), 'PUT, OPTIONS');
+      assert.equal(preflight.headers.get('access-control-allow-headers'), 'Content-Type');
+
+      const upload = await fetch(uploadUrl, {
+        body: onePixelPng,
+        headers: { 'Content-Type': 'image/png', Origin: browserUploadOrigin },
+        method: 'PUT',
+      });
+      const uploadBody = await upload.text();
+      assert.equal(upload.status, 201, uploadBody);
+      assert.equal(upload.headers.get('access-control-allow-origin'), browserUploadOrigin);
+      const storedOriginal = JSON.parse(uploadBody) as { id: string; url: string };
+      const original = await fetch(storedOriginal.url, { method: 'HEAD' });
+      assert.equal(original.status, 200);
+      assert.equal(original.headers.get('content-type'), 'image/webp');
+
+      const completed = await requestCompleteMediaUpload(
+        issued.data!.issueMediaUploadUrl.media.id,
+        auth.token,
+      );
+      assertNoGraphQLErrors(completed);
+      assert.equal(
+        completed.data?.completeMediaUpload.media.id,
+        issued.data!.issueMediaUploadUrl.media.id,
+      );
+      assert.equal(completed.data?.completeMediaUpload.media.state, MediaState.READY);
+      assert.ok(completed.data?.completeMediaUpload.media.readyAt);
+    },
+  );
 
   test('유효하지 않은 Account와 선택 Profile은 외부 발급 전에 거부한다', async (t) => {
     let fetchCalls = 0;
@@ -202,6 +273,200 @@ describe('Local Media upload 시작 GraphQL 경계', () => {
     assert.doesNotMatch(JSON.stringify(failed), /signed-token/);
     assert.equal(await db.$count(Media), 1);
   });
+
+  test('같은 Account의 다른 선택 Profile이 저장 완료된 같은 Media를 Ready로 전환한다', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const remoteInstance = await createInstance(InstanceKind.ACTIVITYPUB, InstanceState.ACTIVE);
+    const selectedProfile = await createProfile(`selected-${crypto.randomUUID()}`, {
+      instanceId: remoteInstance.id,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: selectedProfile.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    const selectedProfileToken = await createSession(auth.account.id, selectedProfile.id);
+    const stored = await createUploadingMedia(
+      auth.account.id,
+      auth.profile.id,
+      'opaque/reference?provider-owned',
+    );
+
+    t.mock.method(
+      globalThis,
+      'fetch',
+      async (input: string | URL | Request, init?: RequestInit) => {
+        assert.equal(
+          String(input),
+          'https://media.example/v1/uploads/opaque%2Freference%3Fprovider-owned',
+        );
+        assert.equal(init?.method, 'HEAD');
+        assert.deepEqual(init?.headers, { Authorization: 'Bearer secret' });
+        assert.equal(init?.body, undefined);
+        assert.ok(init?.signal instanceof AbortSignal);
+        return new Response(null, { status: 204 });
+      },
+    );
+
+    const result = await requestCompleteMediaUpload(stored.id, selectedProfileToken);
+
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.completeMediaUpload.media.id, stored.id);
+    assert.equal(result.data?.completeMediaUpload.media.state, MediaState.READY);
+    assert.ok(result.data?.completeMediaUpload.media.readyAt);
+
+    const completed = await db.select().from(Media).then(firstOrThrow);
+    assert.equal(completed.id, stored.databaseId);
+    assert.equal(completed.accountId, auth.account.id);
+    assert.equal(completed.profileId, auth.profile.id);
+    assert.equal(completed.storageReference, stored.storageReference);
+    assert.equal(completed.uploadExpiresAt.toString(), uploadExpiresAt);
+    assert.equal(completed.state, MediaState.READY);
+    assert.ok(completed.readyAt);
+  });
+
+  test('다른 Account의 완료 요청은 외부 확인 전에 거부한다', async (t) => {
+    let fetchCalls = 0;
+    t.mock.method(globalThis, 'fetch', async () => {
+      fetchCalls += 1;
+      return new Response(null, { status: 204 });
+    });
+    const owner = await createAuthenticatedSession();
+    const other = await createAuthenticatedSession();
+    const media = await createUploadingMedia(owner.account.id, owner.profile.id);
+
+    const result = await requestCompleteMediaUpload(media.id, other.token);
+
+    assert.equal(result.errors?.[0]?.extensions?.code, 'NOT_FOUND');
+    assert.equal(result.data, null);
+    assert.equal(fetchCalls, 0);
+    const unchanged = await db.select().from(Media).then(firstOrThrow);
+    assert.equal(unchanged.state, MediaState.UPLOADING);
+    assert.equal(unchanged.readyAt, null);
+  });
+
+  test('저장 미완료와 외부 확인 실패는 Uploading state를 유지한다', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const media = await createUploadingMedia(auth.account.id, auth.profile.id);
+    const attempts: Array<() => Promise<Response>> = [
+      async () => new Response(null, { status: 404 }),
+      async () => new Response(null, { status: 503 }),
+      async () => {
+        throw new Error('network failure');
+      },
+    ];
+
+    for (const attempt of attempts) {
+      t.mock.method(globalThis, 'fetch', attempt);
+      const result = await requestCompleteMediaUpload(media.id, auth.token);
+      assert.ok(result.errors?.[0]);
+      assert.equal(result.data, null);
+      t.mock.restoreAll();
+
+      const unchanged = await db.select().from(Media).then(firstOrThrow);
+      assert.equal(unchanged.state, MediaState.UPLOADING);
+      assert.equal(unchanged.readyAt, null);
+    }
+  });
+
+  test('dot-segment opaque reference는 완료 endpoint 밖으로 정규화하지 않는다', async (t) => {
+    let fetchCalls = 0;
+    t.mock.method(globalThis, 'fetch', async () => {
+      fetchCalls += 1;
+      return new Response(null, { status: 204 });
+    });
+    const auth = await createAuthenticatedSession();
+
+    for (const storageReference of ['.', '..']) {
+      const { id } = await createUploadingMedia(auth.account.id, auth.profile.id, storageReference);
+      const result = await requestCompleteMediaUpload(id, auth.token);
+      assert.ok(result.errors?.[0]);
+      assert.equal(result.data, null);
+    }
+
+    assert.equal(fetchCalls, 0);
+    for (const unchanged of await db.select().from(Media)) {
+      assert.equal(unchanged.state, MediaState.UPLOADING);
+      assert.equal(unchanged.readyAt, null);
+    }
+  });
+
+  test('반복 완료 요청은 같은 Ready Media와 최초 readyAt을 유지한다', async (t) => {
+    let fetchCalls = 0;
+    t.mock.method(globalThis, 'fetch', async () => {
+      fetchCalls += 1;
+      return new Response(null, { status: 204 });
+    });
+    const auth = await createAuthenticatedSession();
+    const media = await createUploadingMedia(auth.account.id, auth.profile.id);
+
+    const first = await requestCompleteMediaUpload(media.id, auth.token);
+    const repeated = await requestCompleteMediaUpload(media.id, auth.token);
+
+    assertNoGraphQLErrors(first);
+    assertNoGraphQLErrors(repeated);
+    assert.deepEqual(repeated.data, first.data);
+    assert.equal(fetchCalls, 1);
+  });
+
+  test('동시 완료 요청은 하나의 Ready 결과를 공유한다', async (t) => {
+    let fetchCalls = 0;
+    const bothChecksStarted = Promise.withResolvers<void>();
+    t.mock.method(globalThis, 'fetch', async () => {
+      fetchCalls += 1;
+      if (fetchCalls === 2) {
+        bothChecksStarted.resolve();
+      }
+      await bothChecksStarted.promise;
+      return new Response(null, { status: 204 });
+    });
+    const auth = await createAuthenticatedSession();
+    const media = await createUploadingMedia(auth.account.id, auth.profile.id);
+
+    const results = await Promise.all([
+      requestCompleteMediaUpload(media.id, auth.token),
+      requestCompleteMediaUpload(media.id, auth.token),
+    ]);
+
+    for (const result of results) {
+      assertNoGraphQLErrors(result);
+    }
+    assert.deepEqual(results[1]!.data, results[0]!.data);
+    assert.equal(fetchCalls, 2);
+    const completed = await db.select().from(Media).then(firstOrThrow);
+    assert.equal(completed.state, MediaState.READY);
+    assert.ok(completed.readyAt);
+  });
+
+  test('Ready persistence 실패는 부분 state 전이를 남기지 않는다', async (t) => {
+    t.mock.method(globalThis, 'fetch', async () => new Response(null, { status: 204 }));
+    const auth = await createAuthenticatedSession();
+    const media = await createUploadingMedia(auth.account.id, auth.profile.id);
+    await pg.unsafe(`
+      CREATE FUNCTION fail_media_ready_update() RETURNS trigger
+      LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW.state = 'READY' THEN RAISE EXCEPTION 'forced ready persistence failure'; END IF;
+        RETURN NEW;
+      END $$;
+      CREATE TRIGGER fail_media_ready_update
+      BEFORE UPDATE ON media FOR EACH ROW EXECUTE FUNCTION fail_media_ready_update();
+    `);
+    t.after(async () => {
+      await pg.unsafe(`
+        DROP TRIGGER IF EXISTS fail_media_ready_update ON media;
+        DROP FUNCTION IF EXISTS fail_media_ready_update();
+      `);
+    });
+
+    const result = await requestCompleteMediaUpload(media.id, auth.token);
+
+    assert.ok(result.errors?.[0]);
+    assert.equal(result.data, null);
+    const unchanged = await db.select().from(Media).then(firstOrThrow);
+    assert.equal(unchanged.state, MediaState.UPLOADING);
+    assert.equal(unchanged.readyAt, null);
+  });
 });
 
 type GraphQLResult<TData> = {
@@ -217,12 +482,27 @@ type IssueMediaUploadUrlData = {
   };
 };
 
+type CompleteMediaUploadData = {
+  completeMediaUpload: {
+    media: { id: string; readyAt: string; state: string };
+  };
+};
+
 const requestIssueMediaUploadUrl = (token?: string) =>
   requestGraphQL<IssueMediaUploadUrlData>(
     `mutation IssueMediaUploadUrl {
       issueMediaUploadUrl { media { id state } uploadUrl expiresAt }
     }`,
     {},
+    token,
+  );
+
+const requestCompleteMediaUpload = (id: string, token?: string) =>
+  requestGraphQL<CompleteMediaUploadData>(
+    `mutation CompleteMediaUpload($input: CompleteMediaUploadInput!) {
+      completeMediaUpload(input: $input) { media { id readyAt state } }
+    }`,
+    { input: { id } },
     token,
   );
 
@@ -293,6 +573,30 @@ const assertStoredMedia = (
   assert.equal(media.source, MediaSource.LOCAL);
   assert.equal(media.state, MediaState.UPLOADING);
   assert.equal(media.uploadExpiresAt.toString(), uploadExpiresAt);
+};
+
+const createUploadingMedia = async (
+  accountId: string,
+  profileId: string,
+  storageReference = `opaque-${crypto.randomUUID()}`,
+) => {
+  const media = await db
+    .insert(Media)
+    .values({
+      accountId,
+      profileId,
+      source: MediaSource.LOCAL,
+      state: MediaState.UPLOADING,
+      storageReference,
+      uploadExpiresAt: Temporal.Instant.from(uploadExpiresAt),
+    })
+    .returning()
+    .then(firstOrThrow);
+  return {
+    databaseId: media.id,
+    id: encodeGlobalId('Media', media.id),
+    storageReference,
+  };
 };
 
 const createInstance = (kind: InstanceKind, state: InstanceState) =>

@@ -9,6 +9,7 @@
     "./db/seed": "./db/seed/index.ts",
     "./error": "./error/index.ts",
     "./enums": "./enums.ts",
+    "./global-id": "./global-id.ts",
     "./local-instance": "./local-instance.ts",
     "./post-content": "./post-content/index.ts",
     "./post-content/server": "./post-content/server.ts",
@@ -30,6 +31,7 @@
     "prosemirror-model": "^1.25.10",
     "temporal-polyfill": "^0.3.2",
     "tsx": "^4.22.4",
+    "uuid": "^14.0.1",
     "zod": "^4.4.3"
   },
   "scripts": {

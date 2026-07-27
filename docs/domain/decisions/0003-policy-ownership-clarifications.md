@@ -38,8 +38,9 @@ File 표현과 Media 생성 시점에 관한 결정은 [ADR 0018](./0018-media-u
   Reaction을 제거한다. 제거된 Follow 객체를 직접 원인으로 가진 Notification도 제거하며 Repost Post,
   Bookmark, 다른 기존 Notification은 유지한다.
 - Account 삭제는 Membership을 모두 정리하고 Local Profile의 마지막 Owner를 제거하지 않을 때만 가능하다.
-- Local Profile 또는 Account가 주체인 행동은 관계 권한과 별도로 `Account.Active`를 요구한다. Account 삭제와
-  Account 대상 Operational Notification 읽음은 명시적 예외다.
+- Account 요청에서 Profile 또는 Account가 주체인 행동은 관계 권한과 별도로 `Account.Active`를 요구한다.
+  Account 삭제와 Account 대상 Operational Notification 읽음은 명시적 예외다. Profile Origin은 Account 요청
+  여부를 대신 결정하지 않는다.
 
 ## 문서 반영
 
