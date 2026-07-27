@@ -191,19 +191,19 @@ PROD-441 구현이 canonical·Linear·OpenSpec 계약을 만족하고 부모 PRO
 
 **Guardrails**
 
-- Helm은 Vault Secrets Operator가 동기화한 기존 secret key를 runtime 환경변수에 매핑하고 secret 값을 chart나 저장소에 복사하지 않는다.
+- Media Storage Service runtime 값은 Vault의 `secret/kubernetes/kosmo/dev`가 소유하고 Helm은 Vault Secrets Operator가 동기화한 `env` Secret을 기존 `envFrom`으로 소비한다.
 - cross-service 검증 자격증명을 저장소나 기본 CI에 저장하지 않으며 명시적으로 실행할 때만 production service를 호출한다.
 - Post 연결, composer/viewer UI, thumbnail, Remote Media, 취소·삭제와 orphan 정리를 추가하지 않는다.
 - dev 배포 상태와 실제 runtime 환경변수를 확인하기 전에는 OpenSpec을 archive하지 않는다.
 
 **Verification**
 
-- Helm lint와 rendered API Rollout에서 Media Storage Service origin 및 secret key mapping을 확인한다.
+- Vault와 Vault Secrets Operator가 Media Storage Service origin 및 API key를 `env` Secret에 동기화하고 API Rollout이 기존 `envFrom`으로 소비하는지 확인한다.
 - 실제 GraphQL 발급, CORS preflight, 브라우저 PUT, 공개 WebP HEAD, 완료 확인과 Ready 전환을 하나의 격리 DB integration test로 검증한다.
-- 병합 뒤 dev Argo Rollout이 새 chart를 적용했고 API container에 두 runtime 환경변수가 주입됐는지 값 비노출 방식으로 확인한다.
+- dev API container에 두 runtime 환경변수가 주입됐는지 값 비노출 방식으로 확인한다.
 - delta spec을 main spec에 동기화하고 관련 검증을 통과한 뒤 OpenSpec을 archive한다.
 
-- [x] 7.1 Helm chart에서 기존 Media API secret과 production origin을 Kosmo API runtime 계약에 연결한다.
+- [x] 7.1 Vault dev secret에 Media Storage Service API key와 production origin을 저장하고 기존 Vault Secrets Operator 및 `envFrom` 경로로 주입한다.
 - [x] 7.2 실제 Media Storage Service를 사용하는 선택적 cross-service API integration test를 추가하고 통과시킨다.
-- [ ] 7.3 변경을 dev에 배포하고 Rollout 상태, runtime 환경변수와 실제 업로드 lifecycle을 확인한다.
+- [x] 7.3 Vault 설정을 dev에 배포하고 Rollout 상태, runtime 환경변수와 실제 업로드 lifecycle을 확인한다.
 - [ ] 7.4 delta spec을 동기화하고 canonical·Linear·OpenSpec 정합성 및 strict validation을 확인한 뒤 change를 archive한다.
