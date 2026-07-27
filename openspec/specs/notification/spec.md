@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD - created by archiving change add-in-app-notifications. Update Purpose after archive.
+Profile-scoped in-app Notification의 생성과 정리, GraphQL 조회와 Read, visible pagination과 Unread count, selected Profile 목록 UI 계약을 문서화한다.
 
 ## Requirements
 
