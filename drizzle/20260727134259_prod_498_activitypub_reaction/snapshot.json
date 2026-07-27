@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "3fde4569-dc1e-4372-a248-f91260d2c8bc",
+  "id": "4640ded0-668b-4bfc-8e7d-58c0178478b6",
   "prevIds": ["6afb6ff1-25a0-4239-9f65-bb5f0b8eb042", "d20783dc-f1f5-4b7e-b476-632bc31499af"],
   "ddl": [
     {
@@ -660,19 +660,6 @@
       "entityType": "columns",
       "schema": "public",
       "table": "activitypub_post"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "uuidv7()",
-      "generated": null,
-      "identity": null,
-      "name": "id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "activitypub_reaction"
     },
     {
       "type": "text",
@@ -3321,7 +3308,7 @@
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": ["reaction_id"],
       "nameExplicit": false,
       "name": "activitypub_reaction_pkey",
       "schema": "public",
@@ -3615,15 +3602,6 @@
       "columns": ["uri"],
       "nullsNotDistinct": false,
       "name": "activitypub_reaction_uri_key",
-      "schema": "public",
-      "table": "activitypub_reaction",
-      "entityType": "uniques"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["reaction_id"],
-      "nullsNotDistinct": false,
-      "name": "activitypub_reaction_reaction_id_key",
       "schema": "public",
       "table": "activitypub_reaction",
       "entityType": "uniques"

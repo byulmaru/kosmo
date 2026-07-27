@@ -9,6 +9,8 @@ source Reaction 없이 존재할 수 없어야 한다(MUST NOT).
 
 - **WHEN** inbound Reaction mapping을 저장한다
 - **THEN** mapping은 고유한 HTTP(S) activity URI와 하나의 non-null Reaction FK를 가진다
+- **AND** `reaction_id`는 mapping의 primary key이자 `reaction(id) ON DELETE CASCADE` foreign key다
+- **AND** mapping은 별도 surrogate identity를 갖지 않는다
 - **AND** 하나의 Reaction에는 최대 하나의 ActivityPub mapping만 연결된다
 
 #### Scenario: Reaction lifecycle cascade

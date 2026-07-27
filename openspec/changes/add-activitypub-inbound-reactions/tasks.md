@@ -12,16 +12,18 @@ Reaction lifecycle과 함께 정리된다.
 
 **Guardrails**
 
-- activity URI와 Reaction FK는 각각 unique이고 Reaction 없는 mapping은 존재하지 않는다.
+- activity URI는 unique이고 `reaction_id`는 PK이자 cascade FK이며, 별도 surrogate ID 없이 Reaction 없는 mapping은
+  존재하지 않는다.
 - 기존 row backfill이나 rewrite를 수행하지 않는다.
 
 **Verification**
 
-- migration SQL·snapshot, Drizzle schema와 catalog/direct DB fixture에서 unique, FK cascade와 기존 data 보존을
-  검증한다.
+- migration SQL·snapshot, Drizzle schema와 catalog/direct DB fixture에서 `reaction_id` PK/FK, URI unique, FK cascade,
+  surrogate ID 부재와 기존 data 보존을 검증한다.
 
 - [x] 1.1 ActivityPub Reaction mapping의 additive schema와 forward migration을 추가한다.
 - [x] 1.2 mapping 1:1 uniqueness, FK cascade와 migration 적용을 DB test로 검증한다.
+- [x] 1.3 mapping surrogate ID를 제거하고 `reaction_id` PK/FK extension shape로 정렬한다.
 
 ## 2. PROD-498 Core inbound Reaction lifecycle
 

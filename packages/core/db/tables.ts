@@ -108,11 +108,9 @@ export const ActivityPubPosts = pgTable('activitypub_post', {
 });
 
 export const ActivityPubReactions = pgTable('activitypub_reaction', {
-  id: id(),
   uri: text('uri').unique().notNull(),
   reactionId: uuid('reaction_id')
-    .unique()
-    .notNull()
+    .primaryKey()
     .references(() => Reactions.id, { onDelete: 'cascade' }),
 });
 

@@ -95,12 +95,17 @@ outbound, collection과 신규 remote ingestion은 포함하지 않는다.
 - Status: Active
 - Context / Problem: activity URI를 기존 Reaction row에 nullable column으로 섞으면 local Reaction과 protocol
   projection의 ownership이 결합되고 future federation projection을 구분하기 어렵다.
-- Decision Outcome: 별도 ActivityPub Reaction mapping table에 unique activity URI와 unique non-null Reaction FK를
-  두고 Reaction 삭제 시 cascade한다. migration은 backfill 없는 additive change다.
-- Alternatives Considered: Reaction nullable `activity_uri` column은 local row 대부분에 의미 없는 protocol field를
-  추가한다. 범용 activity table은 현재 Reply/Repost/outbound까지 선결정하는 과도한 추상화다.
-- Consequences: 구버전은 table을 무시할 수 있고 rollback 시 table을 남길 수 있다. mapping row는 Reaction보다
-  오래 존재하지 않는다.
+- Decision Outcome: 별도 ActivityPub Reaction mapping table을 유지하되 `reaction_id`를 primary key이자
+  `reaction(id) ON DELETE CASCADE` foreign key로 사용하고 activity `uri`는 non-null unique로 둔다. 별도 surrogate
+  `id`는 만들지 않는다. migration은 backfill 없는 additive change다.
+- Alternatives Considered: Hackers’ Pub처럼 protocol IRI를 core Reaction primary key로 쓰는 방식은 Kosmo의
+  protocol-neutral core Reaction identity에 ActivityPub ownership을 결합한다. Reaction nullable `activity_uri` column도
+  local row 대부분에 의미 없는 protocol field를 추가한다. 별도 surrogate `id`와 `reaction_id` unique를 함께 두는
+  방식은 1:1 extension row에 불필요한 primary key와 index를 추가한다. 범용 activity table은 현재
+  Reply/Repost/outbound까지 선결정하는 과도한 추상화다.
+- Consequences: 구버전은 table을 무시할 수 있고 rollback 시 table을 남길 수 있다. mapping row는 Reaction과 같은
+  identity/lifecycle을 사용해 Reaction보다 오래 존재하지 않으며, activity URI lookup을 위한 unique index만 별도로
+  유지한다.
 - Confirmation / Follow-up: Drizzle schema, migration SQL, catalog와 direct DB lifecycle fixture를 검증한다.
 
 ### Notification은 실제 source 변화에만 Best Effort로 연결한다

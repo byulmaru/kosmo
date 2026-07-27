@@ -235,7 +235,7 @@ export const materializeInboundReaction = async (
         .insert(ActivityPubReactions)
         .values({ reactionId: reactionResult.reaction.id, uri: input.activityUri })
         .onConflictDoNothing()
-        .returning({ id: ActivityPubReactions.id })
+        .returning({ reactionId: ActivityPubReactions.reactionId })
         .then(first);
       if (insertedMapping) {
         return {

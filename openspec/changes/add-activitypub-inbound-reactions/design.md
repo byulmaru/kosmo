@@ -45,8 +45,9 @@ actor와 viewer 접근을 한 transaction 안에서 확인해야 한다.
 
 ### Recommended Approach
 
-1. additive mapping table에 unique activity URI, unique non-null Reaction FK와 cascade lifecycle을 선언하고
-   migration catalog test를 추가한다.
+1. additive 1:1 extension table에 unique activity URI를 두고, `reaction_id`를 primary key이자
+   `reaction(id) ON DELETE CASCADE` foreign key로 선언한다. 별도 surrogate identity와 중복 unique index는 만들지
+   않고 migration catalog test로 물리 shape를 검증한다.
 2. core에 inbound 전용 transaction service를 두어 저장된 remote actor, local·remote object URI, Post Author actor,
    Post visibility와 mapping을 함께 조회한다. Type은 기존 canonical validator를 사용한다.
 3. mapping이 없으면 기존 `addReaction(..., tx)`로 core 관계를 얻고 mapping insert를 시도한다. unique race에서는

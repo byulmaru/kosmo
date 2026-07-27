@@ -27,7 +27,7 @@ const previousMigrations = [
   '20260727082945_prod_441_ready_media',
 ].map((name) => new URL(`../../../drizzle/${name}/migration.sql`, import.meta.url));
 const mappingMigration = new URL(
-  '../../../drizzle/20260727125924_prod_498_activitypub_reaction/migration.sql',
+  '../../../drizzle/20260727134259_prod_498_activitypub_reaction/migration.sql',
   import.meta.url,
 );
 
@@ -72,10 +72,15 @@ test('adds the ActivityPub Reaction mapping without rewriting existing rows', as
       VALUES (${reactorProfileId}, ${postId}, '❤️')
       RETURNING id
     `;
+    const [otherReaction] = await sql`
+      INSERT INTO reaction (profile_id, post_id, type)
+      VALUES (${reactorProfileId}, ${postId}, '👀')
+      RETURNING id
+    `;
 
     await sql.unsafe(await readFile(mappingMigration, 'utf8'));
 
-    assert.equal((await sql`SELECT count(*)::int AS count FROM reaction`)[0]?.count, 1);
+    assert.equal((await sql`SELECT count(*)::int AS count FROM reaction`)[0]?.count, 2);
     assert.deepEqual(
       [
         ...(await sql`
@@ -86,11 +91,35 @@ test('adds the ActivityPub Reaction mapping without rewriting existing rows', as
         `),
       ],
       [
-        { name: 'id', isNullable: 'NO' },
         { name: 'uri', isNullable: 'NO' },
         { name: 'reaction_id', isNullable: 'NO' },
       ],
     );
+
+    const primaryKeyColumns = await sql`
+      SELECT attribute.attname AS column
+      FROM pg_constraint AS primary_key
+      INNER JOIN unnest(primary_key.conkey) WITH ORDINALITY AS key(attnum, ordinal) ON true
+      INNER JOIN pg_attribute AS attribute
+        ON attribute.attrelid = primary_key.conrelid
+        AND attribute.attnum = key.attnum
+      WHERE primary_key.conrelid = 'activitypub_reaction'::regclass
+        AND primary_key.contype = 'p'
+      ORDER BY key.ordinal
+    `;
+    assert.deepEqual([...primaryKeyColumns], [{ column: 'reaction_id' }]);
+
+    const uniqueColumns = await sql`
+      SELECT attribute.attname AS column
+      FROM pg_constraint AS unique_constraint
+      INNER JOIN unnest(unique_constraint.conkey) AS key(attnum) ON true
+      INNER JOIN pg_attribute AS attribute
+        ON attribute.attrelid = unique_constraint.conrelid
+        AND attribute.attnum = key.attnum
+      WHERE unique_constraint.conrelid = 'activitypub_reaction'::regclass
+        AND unique_constraint.contype = 'u'
+    `;
+    assert.deepEqual([...uniqueColumns], [{ column: 'uri' }]);
 
     const foreignKeys = await sql`
       SELECT attribute.attname AS column, foreign_key.confdeltype AS "deleteType"
@@ -104,17 +133,15 @@ test('adds the ActivityPub Reaction mapping without rewriting existing rows', as
     `;
     assert.deepEqual([...foreignKeys], [{ column: 'reaction_id', deleteType: 'c' }]);
 
-    const [mapping] = await sql`
+    await sql`
       INSERT INTO activitypub_reaction (uri, reaction_id)
       VALUES ('https://remote.test/activities/like-one', ${reaction.id})
-      RETURNING uuid_extract_version(id)::int AS "idVersion"
     `;
-    assert.equal(mapping?.idVersion, 7);
 
     await assert.rejects(
       sql`
         INSERT INTO activitypub_reaction (uri, reaction_id)
-        VALUES ('https://remote.test/activities/like-one', ${reaction.id})
+        VALUES ('https://remote.test/activities/like-one', ${otherReaction.id})
       `,
       { code: '23505' },
     );
