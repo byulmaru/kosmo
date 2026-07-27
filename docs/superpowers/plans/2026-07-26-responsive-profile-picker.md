@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Web full sidebar와 compact icon rail에 각각 자연스러운 profile picker를 제공하고, 긴 프로필 목록에서도 선택과 생성을 계속 사용할 수 있게 한다.
+**Goal:** Web full sidebar와 compact icon rail에 각각 자연스러운 profile picker를 제공하고, 긴 프로필 목록과 mobile Web drawer trigger도 일관되게 사용할 수 있게 한다.
 
-**Architecture:** `ProfileSwitcher`가 기존 Relay 선택·생성 흐름, trigger, picker content와 transient state를 계속 소유하되 `full | compact | drawer` surface를 명시적으로 받는다. `SidebarNavigation`은 닫힌 full profile summary를 260px로 유지하고 full picker를 프로필 이름 trigger 바로 아래의 anchored absolute overlay로 표시해 navigation 위치를 보존한다. `UniversalShell`은 full·compact picker가 열릴 때 sidebar stacking만 높여 overlay가 프로필 상세, navigation과 중앙 본문 위에 보이게 한다.
+**Architecture:** `ProfileSwitcher`가 기존 Relay 선택·생성 흐름, trigger, picker content와 transient state를 계속 소유하되 `full | compact | drawer` surface를 명시적으로 받는다. `SidebarNavigation`은 닫힌 full profile summary를 260px로 유지하고 full picker를 프로필 이름 trigger 바로 아래의 anchored absolute overlay로 표시해 navigation 위치를 보존한다. `UniversalShell`은 full·compact picker가 열릴 때 sidebar stacking만 높인다. 후속 polish는 `ProfileSwitcher` 안에서 full·compact bounds를 430px로 줄이고 mobile Web drawer의 trigger 내부 content만 2px 이동한다.
 
 **Tech Stack:** React Native 0.85, React Native Web 0.21, Expo Router, React Relay, Storybook Vitest, Playwright, OpenSpec
 
@@ -15,8 +15,10 @@
 - 닫힌 full profile summary는 기존 260px를 유지한다. picker는 프로필 이름 trigger 바로 아래의 absolute
   overlay로 열려 trigger 아래의 프로필 상세와 navigation 위에 paint되며 navigation의 layout 위치를 바꾸지 않는다.
 - compact drawer는 80px rail 오른쪽의 비모달 absolute layer이며 backdrop·focus trap·layout width 변경이 없다.
-- mobile Web drawer와 Android/iOS `Modal` picker 경로는 재설계하지 않는다.
+- mobile Web drawer는 이름·chevron 내부 content의 2px 하향 광학 보정과 Web 전용 open chevron만 변경한다.
+  trigger hitbox·picker anchor·navigation geometry, drawer content·close lifecycle과 Android/iOS `Modal` picker는 재설계하지 않는다.
 - 프로필 목록만 internal scroll owner다. add action·create form·오류 footer는 목록과 함께 스크롤하지 않는다.
+- full·compact Web picker는 기존 surface별 viewport 여백 계산을 유지하면서 최대 높이를 430px로 제한한다.
 - 시각적 picker wrapper가 bounds·border·overflow를 소유한다. semantic `menu`는 profile option·separator·add action까지만 포함하고 create form·operation error alert은 같은 고정 footer 위치의 sibling으로 둔다.
 - full·compact Web picker open 시 현재 선택 항목 또는 첫 항목으로 focus를 옮기고 `ArrowUp`·`ArrowDown`·`Home`·`End`를 지원한다. `Escape`는 닫고 trigger focus를 복원하며 `Tab`은 가로채지 않는다.
 - full·compact Web의 선택·생성 실패는 picker와 오류를 유지하고 생성 실패는 입력값을 보존한다. trigger 재실행,
@@ -77,7 +79,9 @@ type Props = CommonProps &
 - `renderSummary(trigger)`는 `SidebarNavigation`이 full cover·avatar·profile detail과 trigger를 정확히 260px summary에 함께 넣는 render seam이다. `ProfileSwitcher`는 같은 root에서 이름 trigger bottom에 맞춘 absolute overlay를 anchor한다.
 - `surface='compact'`만 avatar trigger와 Web absolute drawer를 사용한다.
 - `surface='full'`은 `renderSummary`를 필수로 받고 Web picker를 이름 trigger 바로 아래의 absolute layer로 렌더한다.
-- `surface='drawer'`인 mobile Web은 기존 absolute menu를, native platform은 기존 `Modal` 경로를 유지한다. 새 keyboard/reset lifecycle은 두 경로에 적용하지 않는다.
+- `surface='drawer'`인 mobile Web은 기존 absolute menu와 close lifecycle을 유지하되 trigger 내부 이름·chevron만
+  2px 아래로 보정하고 open 상태에 위 chevron을 표시한다. native platform은 기존 `Modal`과 아래 chevron을 유지한다.
+  새 keyboard/reset lifecycle은 두 경로에 적용하지 않는다.
 
 ## State Contract
 
@@ -96,7 +100,7 @@ type Props = CommonProps &
 ## Test Code Scope
 
 - **테스트 코드 범위:** `apps/app/src/stories/Shell.stories.tsx`의 기존 Shell Relay fixture와 interaction 영역만 수정한다.
-- **테스트 필요성:** full flow/expanded toggle, compact overlay dismissal·stacking seam, 12개 목록의 internal scroll·keyboard focus, 실패 유지와 명시적 close reset을 관찰 가능한 결과로 직접 증명한다.
+- **테스트 필요성:** full flow/expanded toggle, compact overlay dismissal·stacking seam, 12개 목록의 430px wrapper·internal scroll·keyboard focus, mobile Web drawer의 down/up chevron·2px content geometry, 실패 유지와 명시적 close reset을 관찰 가능한 결과로 직접 증명한다.
 - **테스트 제외 범위:** 새 test harness/helper 파일, Storybook viewport preset, 광범위 snapshot, GraphQL/Relay cache 테스트 확대, `apps/web/e2e/profile-switcher.e2e.ts` 수정, Android/iOS picker 테스트, PROD-213/214/215 상태 조합.
 
 ## Spec Coverage
@@ -110,6 +114,8 @@ type Props = CommonProps &
 | failure 유지와 explicit close reset | Task 3 | 기존 select/create error stories의 유지·reset assertion |
 | Relay actor 선택·생성 흐름 비변경 | Task 4 | 기존 `profile-switcher.e2e.ts` 전체 실행 |
 | mobile/native 비재설계 | Task 1-3 | 명시적 `surface='drawer'`/platform guard와 독립 implementation review; 새 native test는 제외 |
+| full·compact 430px cap과 고정 footer | Task 7 | Full·Compact long-profile wrapper 높이와 기존 list/footer assertion |
+| mobile Web chevron·2px optical shift | Task 7 | `UniversalMobile` trigger state·text/icon geometry와 직접 시각 검증 |
 | old popover delta와 최종 active spec 정렬 | Task 4 | archive 전 `rg` 및 active spec sync stop gate |
 
 ---
@@ -1315,3 +1321,182 @@ git diff --check
 
 Expected: 모든 명령이 exit code 0이고 독립 reviewer가 P0–P2 없이 trigger anchor, navigation 불변, compact/native 비회귀와
 계약 정합성을 확인한다. 그 뒤 OpenSpec 1.7을 완료 처리하고 checkpoint commit·push한다.
+
+---
+
+### Task 7: Picker 높이와 Mobile Web trigger를 최종 보정한다
+
+**Files:**
+
+- Modify: `docs/design/breakpoints.md`
+- Modify: `openspec/changes/add-responsive-profile-picker/{proposal.md,design.md,decisions.md,tasks.md,specs/web-app-shell/spec.md}`
+- Modify: `apps/app/src/components/shell/ProfileSwitcher.tsx:91-96,134-136,410-437,498-509`
+- Test: `apps/app/src/stories/Shell.stories.tsx:194-251,678-697,951-1024`
+- Modify: `docs/superpowers/plans/2026-07-26-responsive-profile-picker.md`
+
+**Interfaces:**
+
+- Consumes: `surface='full' | 'compact' | 'drawer'`, controlled `open`, 기존 42px noncompact trigger와 surface별 viewport bounds
+- Produces: full·compact wrapper `maxHeight: min(430px, viewport bound)`, mobile Web drawer down/up chevron, trigger 내부 content `translateY(2px)`
+
+**테스트 코드 범위:** 기존 `ResponsiveProfilePickerFull`, `ResponsiveProfilePickerCompact`, `UniversalMobile` play만 수정한다.
+
+**테스트 필요성:** 560px cap 회귀, mobile Web drawer가 열린 상태에도 down chevron을 유지하는 회귀, optical transform이
+trigger root나 navigation을 이동시키는 회귀를 가장 가까운 실제 Storybook surface에서 잡는다.
+
+**테스트 제외 범위:** 새 story/helper/harness·viewport preset, snapshot, Android/iOS picker test, drawer content·dismissal
+lifecycle 확대, GraphQL·Relay·E2E 수정, SidebarNavigation·UniversalShell 제품 코드 변경.
+
+- [x] **Step 1: Full·Compact 430px bounds RED를 작성한다**
+
+두 long-profile story에서 semantic menu의 visual wrapper를 확인한다.
+
+```tsx
+const picker = menu.parentElement;
+const list = canvas.getByLabelText('전환할 프로필 목록');
+const footerAction = canvas.getByRole('menuitem', { name: '새 프로필 추가' });
+expect(picker).not.toBeNull();
+expect(picker!.getBoundingClientRect().height).toBeLessThanOrEqual(430);
+expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
+expect(footerAction).toBeVisible();
+```
+
+Run:
+
+```bash
+pnpm --filter @kosmo/app test:storybook -- Shell
+```
+
+Expected: 현재 full·compact wrapper는 560px cap까지 커져 `height <= 430` assertion이 FAIL한다.
+
+- [x] **Step 2: Mobile Web chevron·2px geometry RED를 작성한다**
+
+`UniversalMobile`에서 drawer를 연 뒤 profile trigger의 실제 SVG path와 text/icon center를 검증한다.
+
+```tsx
+const profileTrigger = page.getByRole('button', { name: '프로필 목록' });
+const triggerName = within(profileTrigger).getByText('코스모 작가');
+const triggerIcon = profileTrigger.querySelector('svg')!;
+const triggerRect = profileTrigger.getBoundingClientRect();
+const navigationRect = drawer.getBoundingClientRect();
+const nameRect = triggerName.getBoundingClientRect();
+const iconRect = triggerIcon.getBoundingClientRect();
+
+expect(triggerIcon.querySelector('path')).toHaveAttribute('d', 'm6 9 6 6 6-6');
+expect(nameRect.top + nameRect.height / 2 - (triggerRect.top + triggerRect.height / 2)).toBeCloseTo(2, 0);
+expect(iconRect.top + iconRect.height / 2 - (triggerRect.top + triggerRect.height / 2)).toBeCloseTo(2, 0);
+
+await userEvent.click(profileTrigger);
+expect(profileTrigger).toHaveAttribute('aria-expanded', 'true');
+expect(profileTrigger.querySelector('path')).toHaveAttribute('d', 'm18 15-6-6-6 6');
+const menu = await page.findByRole('menu', { name: '프로필 전환' });
+const picker = menu.parentElement;
+const openTriggerRect = profileTrigger.getBoundingClientRect();
+const openNavigationRect = drawer.getBoundingClientRect();
+expect(picker).not.toBeNull();
+const pickerRect = picker!.getBoundingClientRect();
+expect(openTriggerRect).toEqual(triggerRect);
+expect(openNavigationRect).toEqual(navigationRect);
+expect(pickerRect.top).toBeGreaterThanOrEqual(triggerRect.bottom);
+expect(pickerRect.top - triggerRect.bottom).toBeLessThanOrEqual(12);
+```
+
+Run:
+
+```bash
+pnpm --filter @kosmo/app test:storybook -- Shell
+```
+
+Expected: 현재 text/icon center offset은 0px이고 open 뒤에도 down path를 유지해 FAIL한다. 초기 down assertion은 통과한다.
+
+- [x] **Step 3: 430px bounds와 mobile Web 전용 trigger content를 최소 구현한다**
+
+두 Web bounds의 560px cap만 430px로 바꾸고 viewport 계산은 유지한다.
+
+```tsx
+const webCompactPickerBounds = {
+  maxHeight: 'min(430px, calc(100vh - 32px))',
+} as unknown as ViewStyle;
+const webFullPickerBounds = {
+  maxHeight: 'min(430px, calc(100vh - 276px))',
+} as unknown as ViewStyle;
+```
+
+`ProfileSwitcher`에서 mobile Web drawer 경계를 명시하고 noncompact trigger copy를 만든다.
+
+```tsx
+const mobileWebDrawer = Platform.OS === 'web' && surface === 'drawer';
+const webExpandedChevron = Platform.OS === 'web' && open;
+
+const triggerCopy = !compact ? (
+  <>
+    <Text numberOfLines={1} style={[styles.triggerName, { color: theme.text }]}>
+      {active?.displayName ?? (profiles.length ? '프로필 선택' : '프로필')}
+    </Text>
+    {webExpandedChevron ? (
+      <ChevronUpIcon color={theme.textSecondary} size={16} />
+    ) : (
+      <ChevronDownIcon color={theme.textSecondary} size={16} />
+    )}
+  </>
+) : null;
+```
+
+기존 trigger root는 이동하지 않고 mobile Web drawer에서만 내부 wrapper를 사용한다.
+
+```tsx
+{mobileWebDrawer ? (
+  <View style={styles.mobileWebTriggerContent}>{triggerCopy}</View>
+) : (
+  triggerCopy
+)}
+```
+
+```tsx
+mobileWebTriggerContent: {
+  alignItems: 'center',
+  flexDirection: 'row',
+  flexShrink: 1,
+  gap: spacing.sm,
+  maxWidth: '100%',
+  transform: [{ translateY: 2 }],
+},
+```
+
+`webExpandedChevron`은 Web noncompact trigger에서만 소비되므로 full Web과 mobile Web drawer가 열릴 때 Up이 되고,
+compact에는 icon이 없으며 Android/iOS drawer는 계속 Down이다. `SidebarNavigation`·`UniversalShell`은 수정하지 않는다.
+
+- [x] **Step 4: focused GREEN과 정적 검증을 실행한다**
+
+Run:
+
+```bash
+pnpm --filter @kosmo/app test:storybook -- Shell
+pnpm --filter @kosmo/app check
+pnpm exec openspec validate add-responsive-profile-picker --strict
+pnpm exec openspec validate --all --strict
+pnpm exec prettier --check docs/design/breakpoints.md docs/superpowers/plans/2026-07-26-responsive-profile-picker.md openspec/changes/add-responsive-profile-picker apps/app/src/components/shell/ProfileSwitcher.tsx apps/app/src/stories/Shell.stories.tsx
+git diff --check
+```
+
+Expected: 모든 명령이 exit code 0이며 Full·Compact의 list overflow·footer 접근성, Mobile Web navigation top과
+Android/iOS 제외 계약을 유지한다.
+
+- [x] **Step 5: Storybook 시각 stop gate를 확인한다**
+
+다음 기존 story를 직접 연다.
+
+- `http://localhost:6006/?path=/story/kosmo-shell-navigation--responsive-profile-picker-full`
+- `http://localhost:6006/?path=/story/kosmo-shell-navigation--responsive-profile-picker-compact`
+- `http://localhost:6006/?path=/story/kosmo-shell-navigation--universal-mobile`
+
+Full·Compact는 약 7개 행의 높이와 list-only scroll·고정 footer를, Mobile은 drawer open 전후 닉네임·chevron이
+상자 안에서 자연스럽게 2px 아래에 보이고 navigation·picker anchor가 움직이지 않는지 확인한다. 2px가 여전히 높거나
+아래로 처져 보이면 수치를 조용히 바꾸지 않고 사용자에게 다시 확인한다.
+
+- [x] **Step 6: 독립 리뷰 뒤 OpenSpec checkpoint를 완료한다**
+
+Terra `implementation_reviewer`는 430px bounds, mobile Web platform/surface guard, trigger root 불변, Android/iOS
+비누출, 세 Storybook assertion과 문서 정합성을 `REVIEW_PACKET_V1`으로 검토한다. P0–P2 finding을 수정하고 focused
+검증을 다시 통과한 뒤 OpenSpec 1.8만 완료 처리한다. 사용자 시각 확인 전에는 PR Ready 전환이나 OpenSpec archive를
+수행하지 않는다.

@@ -89,10 +89,10 @@ const CreateProfileMutation = graphql`
 export type ProfileSwitcherSurface = 'compact' | 'drawer' | 'full';
 
 const webCompactPickerBounds = {
-  maxHeight: 'min(560px, calc(100vh - 32px))',
+  maxHeight: 'min(430px, calc(100vh - 32px))',
 } as unknown as ViewStyle;
 const webFullPickerBounds = {
-  maxHeight: 'min(560px, calc(100vh - 276px))',
+  maxHeight: 'min(430px, calc(100vh - 276px))',
 } as unknown as ViewStyle;
 
 type CommonProps = {
@@ -133,8 +133,10 @@ export function ProfileSwitcher({
   const busy = selecting || creatingProfile;
   const compact = surface === 'compact';
   const fullWeb = Platform.OS === 'web' && surface === 'full';
+  const mobileWebDrawer = Platform.OS === 'web' && surface === 'drawer';
   const redesignedWeb = Platform.OS === 'web' && surface !== 'drawer';
   const open = controlledOpen ?? internalOpen;
+  const webExpandedChevron = Platform.OS === 'web' && open;
   const setOpen = (nextOpen: boolean) => {
     if (controlledOpen === undefined) {
       setInternalOpen(nextOpen);
@@ -407,6 +409,18 @@ export function ProfileSwitcher({
     </View>
   );
 
+  const triggerCopy = !compact ? (
+    <>
+      <Text numberOfLines={1} style={[styles.triggerName, { color: theme.text }]}>
+        {active?.displayName ?? (profiles.length ? '프로필 선택' : '프로필')}
+      </Text>
+      {webExpandedChevron ? (
+        <ChevronUpIcon color={theme.textSecondary} size={16} />
+      ) : (
+        <ChevronDownIcon color={theme.textSecondary} size={16} />
+      )}
+    </>
+  ) : null;
   const trigger = (
     <Pressable
       ref={triggerRef}
@@ -422,18 +436,11 @@ export function ProfileSwitcher({
       ]}
     >
       {showAvatar ? <Avatar label={active?.displayName ?? '?'} size={compact ? 40 : 48} /> : null}
-      {!compact ? (
-        <Text numberOfLines={1} style={[styles.triggerName, { color: theme.text }]}>
-          {active?.displayName ?? (profiles.length ? '프로필 선택' : '프로필')}
-        </Text>
-      ) : null}
-      {!compact ? (
-        fullWeb && open ? (
-          <ChevronUpIcon color={theme.textSecondary} size={16} />
-        ) : (
-          <ChevronDownIcon color={theme.textSecondary} size={16} />
-        )
-      ) : null}
+      {mobileWebDrawer ? (
+        <View style={styles.mobileWebTriggerContent}>{triggerCopy}</View>
+      ) : (
+        triggerCopy
+      )}
     </Pressable>
   );
   const triggerSurface = surface === 'full' ? renderSummary(trigger) : trigger;
@@ -496,6 +503,14 @@ const styles = StyleSheet.create({
   trigger: { alignItems: 'center', flexDirection: 'row' },
   compactTrigger: { height: 44, justifyContent: 'center', width: 44 },
   fullTrigger: { alignSelf: 'flex-start', gap: spacing.sm, height: 42, maxWidth: '100%' },
+  mobileWebTriggerContent: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexShrink: 1,
+    gap: spacing.sm,
+    maxWidth: '100%',
+    transform: [{ translateY: 2 }],
+  },
   triggerName: {
     flexShrink: 1,
     fontFamily: 'SUIT',

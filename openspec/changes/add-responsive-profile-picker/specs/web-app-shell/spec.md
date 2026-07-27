@@ -44,9 +44,25 @@
 - **AND** 바깥 pointer close이면 시스템은 pointer event의 기본 동작을 막지 않아 pointer 대상의 기본 focus를 따른다
 - **AND** trigger 재실행, 바깥 pointer close 또는 `Escape`의 명시적 close이면 `open=false`, `creating=false`, 빈 handle과 오류 없음으로 초기화한다
 
+#### Scenario: Expose the mobile Web drawer trigger state
+
+- **WHEN** 사용자가 `compact` 미만 Web의 mobile drawer에서 profile picker를 열거나 닫는다
+- **THEN** 같은 프로필 이름 trigger가 accessibility `expanded` 상태로 열림 여부를 노출한다
+- **AND** 닫힌 상태는 아래 방향 chevron, 열린 상태는 위 방향 chevron으로 표시한다
+- **AND** 이름·chevron 콘텐츠만 trigger 상자 안에서 아래로 `2px` 광학 보정한다
+- **AND** trigger hitbox, picker anchor와 navigation geometry를 바꾸지 않는다
+- **AND** Android/iOS trigger에는 이 시각 보정을 적용하지 않는다
+
 ### Requirement: Bounded profile picker content
 
 **Authority / Provenance:** `docs/design/breakpoints.md`, `PROD-238` — Web profile picker는 viewport 안에서 프로필 목록과 생성 진입을 계속 사용할 수 있어야 하며(MUST), 프로필 목록만 제한된 높이의 internal scroll owner로 사용해야 한다(MUST).
+
+#### Scenario: Bound the full and compact picker surface
+
+- **WHEN** 사용자가 full 또는 compact Web profile picker를 연다
+- **THEN** 시스템은 기존 surface별 viewport 여백 계산을 유지하면서 picker wrapper의 최대 높이를 `430px`로 제한한다
+- **AND** 기본 상태에서 약 7개 프로필 행을 표시한다
+- **AND** 실제 가시 행 수보다 고정 footer 접근성과 목록 내부 스크롤을 우선한다
 
 #### Scenario: Scroll a long profile list inside the picker
 

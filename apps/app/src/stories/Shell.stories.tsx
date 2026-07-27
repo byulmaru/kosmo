@@ -206,10 +206,17 @@ export const ResponsiveProfilePickerFull: Story = {
     await userEvent.click(trigger);
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
     const menu = await canvas.findByRole('menu', { name: '프로필 전환' });
+    const picker = menu.parentElement;
+    const list = canvas.getByLabelText('전환할 프로필 목록');
+    const footerAction = canvas.getByRole('menuitem', { name: '새 프로필 추가' });
     const menuRect = menu.getBoundingClientRect();
     const openNavigationTop = navigation.getBoundingClientRect().top;
 
     expect(menu).toBeVisible();
+    expect(picker).not.toBeNull();
+    expect(picker!.getBoundingClientRect().height).toBeLessThanOrEqual(430);
+    expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
+    expect(footerAction).toBeVisible();
     expect(menuRect.top).toBeGreaterThanOrEqual(triggerRect.bottom);
     expect(menuRect.top - triggerRect.bottom).toBeLessThanOrEqual(12);
     expect(openNavigationTop).toBe(closedNavigationTop);
@@ -684,10 +691,40 @@ export const UniversalMobile: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
     const page = within(canvasElement.ownerDocument.body);
     const drawer = await page.findByRole('navigation', { name: '주요 메뉴' });
+    const profileTrigger = page.getByRole('button', { name: '프로필 목록' });
+    const triggerName = within(profileTrigger).getByText('코스모 작가');
+    const triggerIcon = profileTrigger.querySelector('svg')!;
+    const triggerRect = profileTrigger.getBoundingClientRect();
+    const navigationRect = drawer.getBoundingClientRect();
+    const nameRect = triggerName.getBoundingClientRect();
+    const iconRect = triggerIcon.getBoundingClientRect();
+
     expect(within(drawer).getByRole('link', { name: '북마크' })).toHaveAttribute(
       'href',
       '/bookmarks',
     );
+    expect(triggerIcon.querySelector('path')).toHaveAttribute('d', 'm6 9 6 6 6-6');
+    expect(
+      nameRect.top + nameRect.height / 2 - (triggerRect.top + triggerRect.height / 2),
+    ).toBeCloseTo(2, 0);
+    expect(
+      iconRect.top + iconRect.height / 2 - (triggerRect.top + triggerRect.height / 2),
+    ).toBeCloseTo(2, 0);
+
+    await userEvent.click(profileTrigger);
+    expect(profileTrigger).toHaveAttribute('aria-expanded', 'true');
+    expect(profileTrigger.querySelector('path')).toHaveAttribute('d', 'm18 15-6-6-6 6');
+    const menu = await page.findByRole('menu', { name: '프로필 전환' });
+    const picker = menu.parentElement;
+    const openTriggerRect = profileTrigger.getBoundingClientRect();
+    const openNavigationRect = drawer.getBoundingClientRect();
+    expect(picker).not.toBeNull();
+    const pickerRect = picker!.getBoundingClientRect();
+
+    expect(openTriggerRect).toEqual(triggerRect);
+    expect(openNavigationRect).toEqual(navigationRect);
+    expect(pickerRect.top).toBeGreaterThanOrEqual(triggerRect.bottom);
+    expect(pickerRect.top - triggerRect.bottom).toBeLessThanOrEqual(12);
   },
   render: () => (
     <View style={{ height: 844 }}>
@@ -972,10 +1009,13 @@ export const ResponsiveProfilePickerCompact: Story = {
 
     await userEvent.click(trigger);
     const menu = await canvas.findByRole('menu', { name: '프로필 전환' });
+    const picker = menu.parentElement;
     const list = canvas.getByLabelText('전환할 프로필 목록');
     const options = within(menu).getAllByRole('menuitemradio');
     const footerAction = canvas.getByRole('menuitem', { name: '새 프로필 추가' });
     expect(menu).toBeVisible();
+    expect(picker).not.toBeNull();
+    expect(picker!.getBoundingClientRect().height).toBeLessThanOrEqual(430);
     expect(menu.getBoundingClientRect().left).toBeGreaterThanOrEqual(80);
     expect(canvas.queryByRole('dialog')).toBeNull();
     expect(options).toHaveLength(12);

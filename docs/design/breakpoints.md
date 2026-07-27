@@ -32,6 +32,10 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
   비모달 overlay drawer로 열리며, 레일과 중앙 피드의 실제 layout 폭을 바꾸지 않는다.
 - compact drawer는 본문보다 위에 표시하지만 backdrop과 focus trap을 사용하지 않는다. 아바타 재클릭,
   바깥 클릭, `Escape`, 프로필 선택 성공으로 닫힌다.
+- `< compact` mobile Web drawer에서는 프로필 이름과 chevron을 하나의 trigger로 유지한다. 닫힌 상태는 아래
+  방향, 열린 상태는 위 방향 chevron으로 표시하고 이름·chevron 콘텐츠만 trigger 상자 안에서 아래로 `2px`
+  광학 보정한다. trigger hitbox, picker anchor와 navigation geometry는 바꾸지 않으며 Android/iOS에는 이 보정을
+  적용하지 않는다.
 - `≥ full`에서는 프로필 이름과 chevron을 하나의 trigger로 사용하고, picker의 시각적 wrapper를 그 trigger
   바로 아래에 anchored absolute overlay로 표시한다. 닫힌 260px 프로필 요약 영역은 유지하며, picker는 trigger
   아래의 프로필 상세와 navigation 위에 표시하되 navigation의 layout 위치와 sidebar·중앙 피드의 실제 폭을
@@ -41,7 +45,9 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
   아니다.
 - trigger는 열린 상태를 accessibility `expanded` 상태로 노출한다.
 - 프로필이 많을 때는 프로필 목록 영역만 제한된 높이 안에서 스크롤한다. 새 프로필 추가 액션과 생성 폼은
-  목록 아래의 고정 영역에 두며, 생성 폼이 열리면 목록이 남은 높이에 맞게 줄어든다.
+  목록 아래의 고정 영역에 두며, 생성 폼이 열리면 목록이 남은 높이에 맞게 줄어든다. full·compact Web picker의
+  시각적 wrapper는 기존 viewport 여백 계산을 유지하면서 `430px`를 최대 높이로 사용해 기본 상태에서 약 7개
+  프로필 행이 보이게 한다. 실제 가시 행 수보다 고정 footer 접근성과 목록 내부 스크롤을 우선한다.
 - full·compact Web picker를 열면 현재 선택된 프로필, 선택값이 없으면 첫 프로필 항목으로 focus를 이동한다.
   프로필 항목에서는 `ArrowUp`·`ArrowDown`·`Home`·`End`로 이동하며 focus된 항목은 목록의 보이는 영역
   안에 유지한다. `Escape`는 picker를 닫고 trigger로 focus를 복원하며, `Tab`은 focus trap 없이 브라우저의
@@ -49,8 +55,8 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
 - full·compact Web에서 프로필 선택·생성 실패는 picker와 오류를 유지하고 생성 실패는 입력값도 유지한다.
   trigger 재실행, full·compact 바깥 pointer close 또는 `Escape`처럼 사용자가 명시적으로 닫으면 `open=false`,
   `creating=false`, 빈 handle과 오류 없음으로 초기화한다. 바깥 pointer close는 이벤트 기본 동작을 막지 않아
-  pointer 대상의 브라우저 기본 focus를 따른다. `Escape`는 trigger focus를 복원한다. mobile Web drawer와
-  Android/iOS의 기존 close 상태 동작은 이 계약으로 바꾸지 않는다.
+  pointer 대상의 브라우저 기본 focus를 따른다. `Escape`는 trigger focus를 복원한다. mobile Web drawer의
+  chevron·광학 보정 외 close transition과 Android/iOS의 기존 상태 동작은 이 계약으로 바꾸지 않는다.
 
 ## 알림 Unread badge
 

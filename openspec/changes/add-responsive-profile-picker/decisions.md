@@ -112,6 +112,41 @@
 - Consequences: 성공·실패·close reason별 `open`·`creating`·`handle`·`error`·focus 기대값을 가장 가까운 Storybook interaction에서 확인해야 한다.
 - Confirmation / Follow-up: 생성 실패 input 보존과 명시적 close 후 빈 input·오류 제거를 함께 검증한다.
 
+### Full·Compact picker의 최대 높이를 430px로 제한한다
+
+- Decision Date: 2026-07-27
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/breakpoints.md`, `PROD-238`
+- Status: Active
+- Context / Problem: 560px 높이는 기본 상태에서 프로필 행을 필요 이상으로 많이 노출해 picker가 sidebar와
+  viewport에서 차지하는 시각적 비중이 크다.
+- Decision Outcome: full·compact Web picker는 기존 surface별 viewport 여백 계산을 유지하면서 wrapper의 최대
+  높이를 430px로 제한한다. 기본 상태에서 약 7개 프로필 행을 표시하되 정확한 행 수보다 목록 내부 스크롤과
+  고정 add/create footer 접근성을 우선한다.
+- Alternatives Considered: 560px를 유지하면 모바일에 가까운 viewport에서 picker의 시각적 비중이 크고, 정확히
+  7개 행 높이를 동적으로 계산하면 runtime measurement와 별도 layout 상태가 필요하다.
+- Consequences: compact와 full bounds 상수를 함께 변경하고 12개 fixture에서 wrapper 높이, list overflow와 footer
+  접근성을 검증해야 한다.
+- Confirmation / Follow-up: Full·Compact Storybook interaction과 직접 시각 확인에서 430px cap과 고정 footer를 확인한다.
+
+### Mobile Web drawer trigger만 2px 광학 보정한다
+
+- Decision Date: 2026-07-27
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/breakpoints.md`, `PROD-238`
+- Status: Active
+- Context / Problem: mobile Web drawer의 42px trigger 안에서 text·icon box는 수학적으로 중앙이지만 SUIT glyph와
+  16px chevron의 시각적 무게가 위로 치우쳐 보이고, 열린 상태에도 chevron이 아래 방향으로 남는다.
+- Decision Outcome: `Platform.OS === 'web' && surface === 'drawer'`인 경우 이름·chevron 내부 content만 아래로
+  2px 광학 보정하고 닫힘은 아래, 열림은 위 chevron을 사용한다. trigger root, picker anchor와 navigation geometry는
+  이동하지 않으며 Android/iOS에는 적용하지 않는다.
+- Alternatives Considered: `alignItems: center` 재적용은 이미 일치하는 box center를 바꾸지 않는다. 3–4px 이동은
+  실제 기하학적 중심보다 아래로 처져 보일 수 있고, line-height 변경은 full/native text layout까지 넓게 영향을 준다.
+- Consequences: mobile drawer trigger 내부 content 경계가 필요하고 mobile Storybook에서 chevron 상태와 2px visual
+  center를 검증해야 한다. 기존 drawer picker content와 close lifecycle은 유지한다.
+- Confirmation / Follow-up: Universal Mobile story와 직접 시각 확인에서 닫힘/열림 chevron, 2px 위치와 navigation
+  불변을 확인한다.
+
 ## Remaining Decisions
 
 - 없음.

@@ -17,9 +17,11 @@ Web full sidebar와 compact icon rail에서 각각 자연스러운 trigger와 su
   compact Web은 backdrop·focus trap 없는 비모달 overlay drawer를 사용하며 두 surface 모두 기존 layout 폭을
   바꾸지 않는다.
 - 프로필 목록만 internal scroll owner로 두고 추가 액션·생성 폼은 고정 footer에 유지한다.
+- full·compact Web picker는 기존 viewport 여백 계산을 유지하면서 최대 높이를 430px로 제한한다.
 - semantic `menu`는 profile option·separator·add action까지만 소유하고 create form·operation error alert은 같은 고정 footer 위치의 sibling으로 유지한다.
 - 기존 프로필 선택·생성·실패 상태와 GraphQL·Relay actor 전환 계약을 바꾸지 않는다.
-- Android/iOS와 mobile Web drawer의 picker를 재설계하지 않는다.
+- mobile Web drawer는 이름·chevron 내부 content의 2px 광학 보정과 Web 전용 open chevron만 변경한다. trigger
+  hitbox·picker anchor·navigation geometry, drawer content·close lifecycle과 Android/iOS picker는 재설계하지 않는다.
 - PROD-213/214/215와 디자인 시스템·Figma 라이브러리 전면 정리를 포함하지 않는다.
 
 **Verification**
@@ -30,6 +32,7 @@ Web full sidebar와 compact icon rail에서 각각 자연스러운 trigger와 su
 - 10개 이상 프로필에서 목록 내부 스크롤, 선택 항목 초기 focus, 방향키 이동·focus 가시성·`Escape` focus 복원과 고정 add/create footer를 검증한다.
 - 선택·생성 성공과 실패 상태의 기존 interaction을 검증한다.
 - Storybook browser를 768·1024·1279·1280·1440px로 직접 조절해 surface, stacking과 scroll을 시각 확인한다.
+- mobile Storybook에서 drawer trigger의 닫힘/열림 chevron, 2px 광학 보정과 navigation 위치 불변을 확인한다.
 - `pnpm --filter @kosmo/app test:storybook -- Shell`, app check·Storybook build, 기존 profile-switcher E2E, scoped/all OpenSpec strict validation과 `git diff --check`를 실행한다.
 
 **테스트 코드 범위**
@@ -72,3 +75,7 @@ Web full sidebar와 compact icon rail에서 각각 자연스러운 trigger와 su
 - [x] 1.7 full Web picker의 시각적 wrapper를 프로필 이름 trigger 바로 아래로 옮기고, trigger와 picker의 인접성,
       navigation 위치 불변, 프로필 상세·navigation 위 paint order를 Storybook interaction과 1280·1440px에서
       다시 검증한다.
+- [x] 1.8 full·compact Web picker의 최대 높이를 430px로 제한하고, mobile Web drawer trigger의 닫힘/열림
+      chevron과 이름·icon 내부 content의 2px 하향 광학 보정을 추가한다. Full·Compact wrapper 높이·list overflow·고정
+      footer와 Mobile Web trigger geometry·navigation 불변을 기존 Shell Storybook에서 검증하고 Android/iOS 경로가
+      바뀌지 않았는지 독립 리뷰한다.
