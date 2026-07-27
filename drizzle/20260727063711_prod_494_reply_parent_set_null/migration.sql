@@ -1,0 +1,1 @@
+ALTER TABLE "post" DROP CONSTRAINT "post_reply_parent_id_post_id_fkey", ADD CONSTRAINT "post_reply_parent_id_post_id_fkey" FOREIGN KEY ("reply_parent_id") REFERENCES "post"("id") ON DELETE SET NULL;

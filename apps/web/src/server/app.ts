@@ -1,4 +1,4 @@
-import { federation } from '@kosmo/fedify';
+import { applyLocalNoteCachePolicy, federation } from '@kosmo/fedify';
 import { Hono } from 'hono';
 import { routePath } from 'hono/route';
 import { OidcAuthError } from './auth';
@@ -30,10 +30,11 @@ app.use('*', async (c, next) => {
     contextData: undefined,
     onNotAcceptable: fallThroughNotAcceptable,
     onNotFound: fallThrough,
+    onUnauthorized: fallThrough,
   });
 
-  c.res = response;
-  return response;
+  c.res = applyLocalNoteCachePolicy(c.req.raw, response);
+  return c.res;
 });
 
 app.onError((cause, c) => {
