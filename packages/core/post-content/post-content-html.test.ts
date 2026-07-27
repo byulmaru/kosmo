@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { postContentDocumentToHtml } from './server';
+import type { PostContentDocumentV1 } from './index';
 
 const canonicalFixture = {
   version: 1,
@@ -94,7 +95,7 @@ for (const [name, document] of [
   ],
 ] as const) {
   test(`rejects ${name} before producing HTML`, () => {
-    assert.throws(() => postContentDocumentToHtml(document));
+    assert.throws(() => postContentDocumentToHtml(document as unknown as PostContentDocumentV1));
   });
 }
 

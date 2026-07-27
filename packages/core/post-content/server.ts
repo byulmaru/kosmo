@@ -97,14 +97,16 @@ export function postContentDocumentToText(value: unknown): string {
   return postContentBodyToText(canonicalizePostContentDocument(value).body);
 }
 
-export function postContentDocumentToHtml(value: unknown): string {
-  const { body } = canonicalizePostContentDocument(value);
+export function postContentDocumentToHtml(document: PostContentDocumentV1): string {
+  const { body } = canonicalizePostContentDocument(document);
   const node = postContentSchema.nodeFromJSON(body);
 
-  const document = new JSDOM().window.document;
-  const container = document.createElement('div');
+  const domDocument = new JSDOM().window.document;
+  const container = domDocument.createElement('div');
   container.append(
-    DOMSerializer.fromSchema(postContentSchema).serializeFragment(node.content, { document }),
+    DOMSerializer.fromSchema(postContentSchema).serializeFragment(node.content, {
+      document: domDocument,
+    }),
   );
   return container.innerHTML;
 }
