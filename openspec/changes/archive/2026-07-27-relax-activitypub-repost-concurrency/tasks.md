@@ -28,4 +28,4 @@
 
 - [x] 1.1 Announce mapping 교체와 Undo 조회의 명시적 row lock을 제거하고 기존 transaction·uniqueness 경계를 유지한다.
 - [x] 1.2 concurrent Announce/Undo 강보장 테스트를 제거하고 duplicate 및 순차 generation/Undo 검증을 유지한다.
-- [ ] 1.3 active spec, PR과 Linear 검증 기록을 최종 구현과 정렬하고 관련 검증을 통과시킨다.
+- [x] 1.3 active spec, PR과 Linear 검증 기록을 최종 구현과 정렬하고 관련 검증을 통과시킨다.
