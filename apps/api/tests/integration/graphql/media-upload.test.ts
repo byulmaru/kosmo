@@ -80,7 +80,10 @@ describe('Local Media upload 시작 GraphQL 경계', () => {
   test('Account와 선택 Profile을 Uploading Media에 결속하고 Account별 조회를 격리한다', async (t) => {
     const issued = mockUploadIssuance(t);
     const first = await createAuthenticatedSession();
-    const secondProfile = await createProfile(`second-${crypto.randomUUID()}`);
+    const remoteInstance = await createInstance(InstanceKind.ACTIVITYPUB, InstanceState.ACTIVE);
+    const secondProfile = await createProfile(`second-${crypto.randomUUID()}`, {
+      instanceId: remoteInstance.id,
+    });
     await db.insert(AccountProfiles).values({
       accountId: first.account.id,
       profileId: secondProfile.id,
@@ -121,18 +124,13 @@ describe('Local Media upload 시작 GraphQL 경계', () => {
       fetchCalls += 1;
       return uploadResponse();
     });
-    const remoteInstance = await createInstance(InstanceKind.ACTIVITYPUB, InstanceState.ACTIVE);
-    const unresponsiveInstance = await createInstance(
-      InstanceKind.LOCAL,
-      InstanceState.UNRESPONSIVE,
-    );
+    const suspendedInstance = await createInstance(InstanceKind.LOCAL, InstanceState.SUSPENDED);
     const actors = await Promise.all([
       createAuthenticatedSession({ activeProfile: false }),
       createAuthenticatedSession({ accountState: AccountState.DISABLED }),
       createAuthenticatedSession({ member: false }),
       createAuthenticatedSession({ profileState: ProfileState.DISABLED }),
-      createAuthenticatedSession({ instanceId: remoteInstance.id }),
-      createAuthenticatedSession({ instanceId: unresponsiveInstance.id }),
+      createAuthenticatedSession({ instanceId: suspendedInstance.id }),
     ]);
 
     for (const token of [undefined, ...actors.map(({ token }) => token)]) {

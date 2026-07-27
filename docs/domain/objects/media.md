@@ -46,7 +46,7 @@ Media Storage Service의 opaque 저장 참조는 Local Media를 외부 저장 �
 | Attached Post          | [Post](./post.md)       | Media <- Post    | 1 -> 0..N   | State가 Ready이고 첨부됨 | Post 조회 정책 통과    | 없음                  |
 | Profile Representation | [Profile](./profile.md) | Media <- Profile | 1 -> 0..N   | State가 Ready이고 연결됨 | Profile 조회 정책 통과 | 없음                  |
 
-Local Media의 Profile은 upload를 시작한 Local Profile이다. Remote Media의 Profile은 원본 Remote Profile이며,
+Local Media의 Profile은 upload를 시작할 때 선택된 Profile이다. Remote Media의 Profile은 원본 Remote Profile이며,
 Instance는 이 Profile에서 파생한다.
 
 Post에 Attached Media 관계를 만드는 요청은 Source=Local, State=Ready이고 행동을 요청한 Account와 Upload
@@ -55,13 +55,13 @@ Profile이 달라도 연결할 수 있다.
 
 ## 행동
 
-| 행동              | 행동 주체 | 대상 객체 | 입력값                               | 권한                                    | 조건                                                                                              | 결과                                                                                   |
-| ----------------- | --------- | --------- | ------------------------------------ | --------------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Local 업로드 시작 | Profile   | Media     | 없음                                 | `Account.Active`, `Profile.Member`      | 행동 주체는 Active/Normal Local Profile이고 Media Storage Service가 제한된 업로드 권한을 발급한다 | Source=Local, State=Uploading인 Media와 행동 주체 Profile/요청 Account 관계가 생성된다 |
-| Local 업로드 완료 | Profile   | Media     | Uploading Media                      | `Account.Active`, `Media.UploadAccount` | Source가 Local이고 State가 Uploading이며 Media Storage Service에서 이미지 저장 성공이 확인된다    | 같은 Media의 State가 Ready가 되고 Ready At이 기록된다                                  |
-| Remote Media 등록 | 시스템    | Media     | Remote Profile, Remote URL, Alt Text | `System.RemoteMediaSource`              | Remote Profile의 Instance가 새 원격 요청 허용 상태이고 같은 Remote URL의 Media가 없다             | Source=Remote, State=Ready인 Media와 Remote Profile 관계가 생성된다                    |
-| Remote Media 갱신 | 시스템    | Media     | Alt Text, Fetch 결과                 | `System.RemoteMediaSource`              | Source가 Remote이고 Profile의 Instance가 새 원격 요청 허용 상태다                                 | 원격 속성과 Remote Fetched At이 갱신된다                                               |
-| Alt Text 변경     | Profile   | Media     | Alt Text                             | `Account.Active`, `Media.Profile`       | Source가 Local이고 State가 Ready다                                                                | Alt Text가 바뀐다                                                                      |
+| 행동              | 행동 주체 | 대상 객체 | 입력값                               | 권한                                    | 조건                                                                                               | 결과                                                                                   |
+| ----------------- | --------- | --------- | ------------------------------------ | --------------------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Local 업로드 시작 | Profile   | Media     | 없음                                 | `Account.Active`, `Profile.Member`      | 행동 주체는 선택된 Active/Normal Profile이고 Media Storage Service가 제한된 업로드 권한을 발급한다 | Source=Local, State=Uploading인 Media와 행동 주체 Profile/요청 Account 관계가 생성된다 |
+| Local 업로드 완료 | Profile   | Media     | Uploading Media                      | `Account.Active`, `Media.UploadAccount` | Source가 Local이고 State가 Uploading이며 Media Storage Service에서 이미지 저장 성공이 확인된다     | 같은 Media의 State가 Ready가 되고 Ready At이 기록된다                                  |
+| Remote Media 등록 | 시스템    | Media     | Remote Profile, Remote URL, Alt Text | `System.RemoteMediaSource`              | Remote Profile의 Instance가 새 원격 요청 허용 상태이고 같은 Remote URL의 Media가 없다              | Source=Remote, State=Ready인 Media와 Remote Profile 관계가 생성된다                    |
+| Remote Media 갱신 | 시스템    | Media     | Alt Text, Fetch 결과                 | `System.RemoteMediaSource`              | Source가 Remote이고 Profile의 Instance가 새 원격 요청 허용 상태다                                  | 원격 속성과 Remote Fetched At이 갱신된다                                               |
+| Alt Text 변경     | Profile   | Media     | Alt Text                             | `Account.Active`, `Media.Profile`       | Source가 Local이고 State가 Ready다                                                                 | Alt Text가 바뀐다                                                                      |
 
 Local 업로드 완료는 Media identity, Profile과 Upload Account를 바꾸지 않는다. 저장 참조를 알고 있다는 사실만으로
 Media 완료, 조회 또는 Post 연결 권한을 부여하지 않는다.

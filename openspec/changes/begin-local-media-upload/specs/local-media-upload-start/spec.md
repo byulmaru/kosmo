@@ -2,11 +2,11 @@
 
 ### Requirement: 인증된 Local Media 업로드 시작
 
-**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/domain/decisions/0017-media-upload-lifecycle-without-file.md`, `PROD-435`, `PROD-439` Kosmo는 인증된 Active Account의 선택된 Active/Normal Local Profile이 `issueMediaUploadUrl` GraphQL mutation으로 Local Media upload URL을 발급받을 수 있게 해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/domain/decisions/0018-media-upload-lifecycle-without-file.md`, `PROD-435`, `PROD-439` Kosmo는 인증된 Active Account의 선택된 Active/Normal Profile이 `issueMediaUploadUrl` GraphQL mutation으로 Local Media upload URL을 발급받을 수 있게 해야 한다(MUST).
 
 #### Scenario: 유효한 업로드 시작
 
-- **WHEN** 인증된 Active Account가 선택된 Active/Normal Local Profile로 `issueMediaUploadUrl`을 요청한다
+- **WHEN** 인증된 Active Account가 선택된 Active/Normal Profile로 `issueMediaUploadUrl`을 요청한다
 - **THEN** 시스템은 Media Storage Service에서 제한된 업로드 권한을 발급받는다
 - **AND** `Source=Local`, `State=Uploading`인 Media를 생성한다
 - **AND** Media를 요청 Account와 선택된 Profile에 결속한다
@@ -18,12 +18,12 @@
 
 #### Scenario: 유효한 행동 주체가 없는 요청
 
-- **WHEN** 인증된 Account에 선택된 Profile이 없거나 선택된 Profile이 Active/Normal Local Profile이 아니다
+- **WHEN** 인증된 Account에 선택된 Profile이 없거나 선택된 Profile이 Active/Normal 상태가 아니다
 - **THEN** 시스템은 업로드 권한이나 Media를 생성하지 않고 권한 오류를 반환한다
 
 ### Requirement: Uploading Media와 외부 업로드 권한의 결속
 
-**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/domain/decisions/0017-media-upload-lifecycle-without-file.md`, `docs/domain/decisions/0013-media-storage-service-boundary.md`, `PROD-435`, `PROD-439` Kosmo는 Media Storage Service가 발급한 opaque 저장 참조와 만료 시각을 새 Uploading Media에 영속화해야 하며(MUST), raw 저장 참조를 GraphQL consumer에게 노출하면 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/domain/decisions/0018-media-upload-lifecycle-without-file.md`, `docs/domain/decisions/0013-media-storage-service-boundary.md`, `PROD-435`, `PROD-439` Kosmo는 Media Storage Service가 발급한 opaque 저장 참조와 만료 시각을 새 Uploading Media에 영속화해야 하며(MUST), raw 저장 참조를 GraphQL consumer에게 노출하면 안 된다(MUST NOT).
 
 #### Scenario: 외부 업로드 권한 발급 성공
 
@@ -44,7 +44,7 @@
 
 ### Requirement: 업로드 시작 응답
 
-**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/domain/decisions/0017-media-upload-lifecycle-without-file.md`, `PROD-435`, `PROD-439` 성공한 `issueMediaUploadUrl` mutation은 생성된 Kosmo Media identity, 제한된 upload URL, 만료 시각을 반환해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/domain/decisions/0018-media-upload-lifecycle-without-file.md`, `PROD-435`, `PROD-439` 성공한 `issueMediaUploadUrl` mutation은 생성된 Kosmo Media identity, 제한된 upload URL, 만료 시각을 반환해야 한다(MUST).
 
 #### Scenario: 성공 payload
 
@@ -55,7 +55,7 @@
 
 ### Requirement: Account와 Profile 경계 보존
 
-**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/domain/decisions/0017-media-upload-lifecycle-without-file.md`, `PROD-435`, `PROD-439` 각 Local Media는 업로드를 요청한 Account와 요청 시 선택된 Profile을 별도로 보존해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/domain/decisions/0018-media-upload-lifecycle-without-file.md`, `PROD-435`, `PROD-439` 각 Local Media는 업로드를 요청한 Account와 요청 시 선택된 Profile을 별도로 보존해야 한다(MUST).
 
 #### Scenario: 같은 Account의 다른 Profile
 
@@ -70,7 +70,7 @@
 
 ### Requirement: 업로드 시작 범위 제한
 
-**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0017-media-upload-lifecycle-without-file.md`, `PROD-435`, `PROD-439`, `PROD-441` 업로드 시작은 새 Media를 `Uploading`으로만 생성해야 하며(MUST), 저장 완료 확인이나 `Ready` 전환 또는 제품 관계 연결을 수행하면 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0018-media-upload-lifecycle-without-file.md`, `PROD-435`, `PROD-439`, `PROD-441` 업로드 시작은 새 Media를 `Uploading`으로만 생성해야 하며(MUST), 저장 완료 확인이나 `Ready` 전환 또는 제품 관계 연결을 수행하면 안 된다(MUST NOT).
 
 #### Scenario: 시작 직후 state
 

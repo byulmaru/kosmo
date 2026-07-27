@@ -4,7 +4,7 @@ Kosmo 내부가 이미지 byte와 File 표현을 직접 저장하는 기존 `/up
 
 ## What Changes
 
-- 인증된 Account의 선택된 Local Profile을 행동 주체로 `Source=Local`, `State=Uploading` Media를 생성하는 `issueMediaUploadUrl` GraphQL mutation을 추가한다.
+- 인증된 Account의 선택된 Profile을 행동 주체로 `Source=Local`, `State=Uploading` Media를 생성하는 `issueMediaUploadUrl` GraphQL mutation을 추가한다.
 - Media Storage Service에 업로드를 시작해 받은 opaque 저장 참조, 제한된 upload URL, 만료 시각을 Media 생성과 결속한다.
 - mutation 응답에는 Kosmo의 Media identity, upload URL, 만료 시각을 반환하고 raw 저장 참조는 공개하지 않는다.
 - **BREAKING** 실제 consumer가 없는 기존 `POST /upload` multipart API와 Kosmo의 직접 R2 저장 계약을 제거한다.
@@ -13,7 +13,7 @@ Kosmo 내부가 이미지 byte와 File 표현을 직접 저장하는 기존 `/up
 
 ## Authority / Provenance
 
-- Canonical: `docs/domain/objects/media.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0017-media-upload-lifecycle-without-file.md`, `docs/domain/decisions/0013-media-storage-service-boundary.md`
+- Canonical: `docs/domain/objects/media.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0018-media-upload-lifecycle-without-file.md`, `docs/domain/decisions/0013-media-storage-service-boundary.md`
 - Linear Contract: `PROD-435`
 - Linear Implementations: `PROD-439` (현재 변경), `PROD-440` (외부 저장 완료 확인 endpoint, 후속 통합 의존성), `PROD-441` (Ready 전환, 후속)
 
@@ -21,7 +21,7 @@ Kosmo 내부가 이미지 byte와 File 표현을 직접 저장하는 기존 `/up
 
 ### New Capabilities
 
-- `local-media-upload-start`: 인증된 Account가 선택된 Local Profile로 외부 업로드 권한과 결속된 Uploading Media를 생성하는 계약
+- `local-media-upload-start`: 인증된 Account가 선택된 Profile로 외부 업로드 권한과 결속된 Uploading Media를 생성하는 계약
 
 ### Modified Capabilities
 

@@ -8,7 +8,7 @@
 
 **Goals:**
 
-- 인증된 Account와 선택된 Local Profile에 결속된 Uploading Media를 만든다.
+- 인증된 Account와 선택된 Profile에 결속된 Uploading Media를 만든다.
 - 외부 저장 참조는 persistence에 숨기고 GraphQL에는 Media identity와 제한된 upload URL만 제공한다.
 - 사용되지 않는 `/upload`, File table과 Kosmo 직접 R2 경계를 제거한다.
 - `PROD-441`이 같은 Media를 Ready로 전환할 수 있는 최소 state persistence를 마련한다.
@@ -26,7 +26,7 @@
 
 ### Current Constraints
 
-- 인증 context는 Active Account를 확인하지만 선택된 Profile의 membership, state와 Local Instance 조건은 mutation 경계에서 다시 확인해야 한다.
+- 인증 context는 Active Account, 선택된 Profile의 membership과 조회 가능 상태를 확인한다. mutation resolver는 이 조건을 별도 actor query로 반복 검증하지 않는다.
 - 기존 `Media` schema는 state와 외부 저장 참조가 없고 File 및 미구현 Remote 필드를 포함한다.
 - Media Storage Service 호출 성공 뒤 DB insert가 실패하면 consumer에게 노출되지 않은 외부 upload slot이 남을 수 있다. 현재 계약에는 취소 endpoint나 정리 정책이 없다.
 - GraphQL Media object가 아직 없으므로 Node identity와 필요한 최소 field를 새로 연결해야 한다.

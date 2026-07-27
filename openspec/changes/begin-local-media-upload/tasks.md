@@ -3,7 +3,7 @@
 **Authority / Provenance**
 
 - `docs/domain/objects/media.md`
-- `docs/domain/decisions/0017-media-upload-lifecycle-without-file.md`
+- `docs/domain/decisions/0018-media-upload-lifecycle-without-file.md`
 - `PROD-435`
 - `PROD-439`
 
@@ -31,14 +31,14 @@ Kosmo가 Local Media의 Upload Account, 행동 주체 Profile, Uploading state, 
 **Authority / Provenance**
 
 - `docs/domain/objects/media.md`
-- `docs/domain/decisions/0017-media-upload-lifecycle-without-file.md`
+- `docs/domain/decisions/0018-media-upload-lifecycle-without-file.md`
 - `docs/domain/decisions/0013-media-storage-service-boundary.md`
 - `PROD-435`
 - `PROD-439`
 
 **Deliverable**
 
-인증된 Active Account가 선택된 Active/Normal Local Profile로 외부 업로드 권한과 결속된 Uploading Media를 생성하고 Media identity, upload URL과 만료 시각을 받을 수 있다.
+인증된 Active Account가 선택된 Active/Normal Profile로 외부 업로드 권한과 결속된 Uploading Media를 생성하고 Media identity, upload URL과 만료 시각을 받을 수 있다.
 
 **Guardrails**
 
@@ -51,7 +51,7 @@ Kosmo가 Local Media의 Upload Account, 행동 주체 Profile, Uploading state, 
 
 - GraphQL schema와 인증된 선택 Profile 요구를 단위 테스트로 검증한다.
 - production 환경 설정과 전역 fetch를 사용하는 resolver의 HTTP 요청·외부 오류를 실제 GraphQL 경로로 검증한다.
-- 격리된 test DB에서 Account/Profile/Instance 권한 조건, Account/Profile insert 결속, Account 간 조회 격리, 외부 실패 시 미생성과 persistence 실패 시 URL 비노출을 실제 GraphQL 경로로 검증한다.
+- 격리된 test DB에서 Account/Profile context 조건, 선택된 Local/Remote Profile의 insert 결속, Account 간 조회 격리, 외부 실패 시 미생성과 persistence 실패 시 URL 비노출을 실제 GraphQL 경로로 검증한다.
 - GraphQL schema가 Media identity, state, upload URL과 만료 시각만 공개하는지 확인한다.
 
 - [x] 2.1 Media Storage Service 업로드 시작 응답에서 필요한 필드만 추출하고 client 취소와 deadline을 적용해 호출할 수 있게 한다.
@@ -63,7 +63,7 @@ Kosmo가 Local Media의 Upload Account, 행동 주체 Profile, Uploading state, 
 
 **Authority / Provenance**
 
-- `docs/domain/decisions/0017-media-upload-lifecycle-without-file.md`
+- `docs/domain/decisions/0018-media-upload-lifecycle-without-file.md`
 - `docs/domain/decisions/0013-media-storage-service-boundary.md`
 - `PROD-435`
 - `PROD-439`
@@ -91,7 +91,7 @@ Kosmo가 더 이상 이미지 byte, R2 storage와 File 표현을 직접 소유�
 **Authority / Provenance**
 
 - `docs/domain/objects/media.md`
-- `docs/domain/decisions/0017-media-upload-lifecycle-without-file.md`
+- `docs/domain/decisions/0018-media-upload-lifecycle-without-file.md`
 - `PROD-435`
 - `PROD-439`
 

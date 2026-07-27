@@ -10,7 +10,7 @@ Accepted
 
 ## 후속 결정
 
-File 표현과 Media 생성 시점에 관한 결정은 [ADR 0017](./0017-media-upload-lifecycle-without-file.md)가 대체한다.
+File 표현과 Media 생성 시점에 관한 결정은 [ADR 0018](./0018-media-upload-lifecycle-without-file.md)가 대체한다.
 
 ## 결정
 
@@ -31,7 +31,7 @@ File 표현과 Media 생성 시점에 관한 결정은 [ADR 0017](./0017-media-u
   각각 소유한다.
 - Instance 전역 safety, reachability, service 상태는 [Instance](../objects/instance.md)가 소유한다.
 - Media는 Profile, Local Upload Account, Alt Text를 소유한다. Media의 Instance는 Media Profile에서 파생한다.
-- File은 Original/Derived 표현을 소유하고 저장소 위치와 공개 URL은 소유하지 않는다. 이 항목은 ADR 0017로
+- File은 Original/Derived 표현을 소유하고 저장소 위치와 공개 URL은 소유하지 않는다. 이 항목은 ADR 0018로
   대체됐다.
 - Post/Reply/Quote 작성은 Attached Media 관계를 원자적으로 생성하며 게시 뒤 연결을 바꾸지 않는다.
 - Profile Block 생성은 두 Profile 사이의 Follow Request와 Follow Relationship, Target이 Owner의 Post에 남긴

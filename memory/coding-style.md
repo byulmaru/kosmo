@@ -47,9 +47,9 @@
   대한 공통 domain policy, transaction, persistence와 멱등성을 처리한다. 상세 책임은
   `docs/architecture/core-services.md`를 따른다.
 - Local GraphQL의 Account/session/selected Profile membership, ActivityPub의
-  signature/actor/object/recipient 검증처럼 caller마다 다른 권한 증거는 진입점이 소유한다. 정상 제품
-  경로의 selected Profile은 membership 모델상 Local이며, core service에는 검증된 actor identity와
-  business input만 전달한다.
+  signature/actor/object/recipient 검증처럼 caller마다 다른 권한 증거는 진입점이 소유한다. GraphQL의
+  selected Profile은 membership과 조회 가능 상태가 검증되지만 Instance 종류는 제한하지 않는다. core
+  service에는 검증된 actor identity와 business input만 전달한다.
 - 기본 소셜 행동 주체는 Profile이다. Account 자체가 domain participant이거나 commit 시점의 Account 권한
   재검증이 명시된 불변식인 경우가 아니라면, GraphQL context 검증을 반복하기 위해 core public action에
   `accountId`를 추가하지 않는다. 현재 caller가 Local이라는 이유만으로 공통 action에
