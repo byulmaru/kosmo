@@ -509,41 +509,42 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
       {profiles.length ? '사용할 프로필을 선택해주세요.' : '새 프로필을 만들어 시작하세요.'}
     </Text>
   );
-  const triggerSurface = compact ? (
-    trigger
-  ) : (
-    <View accessibilityLabel="활성 프로필" style={styles.profileHeader}>
-      <View
-        style={[
-          styles.cover,
-          { backgroundColor: theme.surface },
-          Platform.OS === 'web' && webCover,
-        ]}
-      />
-      <View style={styles.largeAvatar}>
-        <Avatar
-          label={active?.displayName || active?.handle || '?'}
-          size={96}
-          style={avatarShadow}
+  const triggerSurface =
+    surface === 'full' ? (
+      <View accessibilityLabel="활성 프로필" style={styles.profileHeader}>
+        <View
+          style={[
+            styles.cover,
+            { backgroundColor: theme.surface },
+            Platform.OS === 'web' && webCover,
+          ]}
         />
+        <View style={styles.largeAvatar}>
+          <Avatar
+            label={active?.displayName || active?.handle || '?'}
+            size={96}
+            style={avatarShadow}
+          />
+        </View>
+        {active ? (
+          <Pressable
+            accessibilityLabel="프로필 편집"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: true }}
+            disabled
+            style={[styles.editButton, { backgroundColor: theme.primary }]}
+          >
+            <Text style={styles.editLabel}>편집</Text>
+          </Pressable>
+        ) : null}
+        <View style={styles.profileCopy}>
+          {trigger}
+          {profileDetails}
+        </View>
       </View>
-      {active ? (
-        <Pressable
-          accessibilityLabel="프로필 편집"
-          accessibilityRole="button"
-          accessibilityState={{ disabled: true }}
-          disabled
-          style={[styles.editButton, { backgroundColor: theme.primary }]}
-        >
-          <Text style={styles.editLabel}>편집</Text>
-        </Pressable>
-      ) : null}
-      <View style={styles.profileCopy}>
-        {trigger}
-        {profileDetails}
-      </View>
-    </View>
-  );
+    ) : (
+      trigger
+    );
 
   return (
     <View
@@ -563,7 +564,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
             <View
               style={[
                 styles.webMenu,
-                surface === 'compact' ? styles.compactMenuPosition : styles.fullOverlayPosition,
+                surface === 'compact' ? styles.compactMenuPosition : styles.drawerMenuPosition,
               ]}
             >
               {menu}
@@ -618,6 +619,7 @@ const styles = StyleSheet.create({
   },
   webMenu: { position: 'absolute', width: 280, zIndex: 30 },
   compactMenuPosition: { left: 62, top: 0 },
+  drawerMenuPosition: { left: 0, top: 50 },
   fullOverlayPosition: { left: 0, top: 190 },
   profileHeader: { height: 260, position: 'relative', width: 320, zIndex: 20 },
   cover: { height: 104, left: 0, position: 'absolute', right: 0, top: 0 },
