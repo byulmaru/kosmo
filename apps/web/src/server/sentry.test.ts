@@ -6,7 +6,7 @@ describe('Web BFF Sentry configuration', () => {
     expect(createSentryOptions({}).enabled).toBe(false);
     expect(
       createSentryOptions({
-        SENTRY_DSN: 'https://public@example.invalid/1',
+        SENTRY_WEB_BFF_DSN: 'https://public@example.invalid/1',
         SENTRY_ENABLED: '1',
         SENTRY_ENVIRONMENT: 'production',
         SENTRY_RELEASE: 'kosmo@abc123',

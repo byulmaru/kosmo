@@ -15,13 +15,10 @@ permissions:
 env:
   AWS_REGION: ap-northeast-2
   AWS_ECR_REPOSITORY_URL: 822638974464.dkr.ecr.ap-northeast-2.amazonaws.com/kosmo
-  EXPO_PUBLIC_SENTRY_DSN: ${{ vars.EXPO_PUBLIC_SENTRY_DSN }}
-  SENTRY_API_PROJECT: ${{ vars.SENTRY_API_PROJECT }}
   SENTRY_ENVIRONMENT: ${{ startsWith(github.ref, 'refs/tags/') && 'prod' || 'dev' }}
-  SENTRY_ORG: ${{ vars.SENTRY_ORG }}
   SENTRY_RELEASE: kosmo@${{ github.sha }}
-  SENTRY_WEB_BFF_PROJECT: ${{ vars.SENTRY_WEB_BFF_PROJECT }}
-  SENTRY_WEB_PROJECT: ${{ vars.SENTRY_WEB_PROJECT }}
+  VAULT_ADDR: https://vault.tail1fdd55.ts.net
+  VAULT_GITHUB_ACTIONS_AUDIENCE: https://vault.tail1fdd55.ts.net
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -56,6 +53,68 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::822638974464:role/github-actions-kosmo-ecr-push
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Load Sentry build configuration from Vault
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          case "${GITHUB_REF}" in
+            refs/heads/main)
+              vault_role="kosmo-build-dev"
+              ;;
+            refs/tags/*)
+              vault_role="kosmo-build-prod"
+              ;;
+            *)
+              echo "Sentry-enabled builds are allowed only from main or a release tag." >&2
+              exit 1
+              ;;
+          esac
+
+          encoded_audience="$(python3 -c 'import os, urllib.parse; print(urllib.parse.quote(os.environ["VAULT_GITHUB_ACTIONS_AUDIENCE"], safe=""))')"
+          request_url="${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${encoded_audience}"
+          jwt_json="$(curl -fsSL -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${request_url}")"
+          jwt="$(printf '%s' "${jwt_json}" | python3 -c 'import json, sys; print(json.load(sys.stdin)["value"])')"
+          echo "::add-mask::${jwt}"
+
+          login_payload="$(GITHUB_ACTIONS_JWT="${jwt}" VAULT_ROLE="${vault_role}" python3 -c 'import json, os; print(json.dumps({"role": os.environ["VAULT_ROLE"], "jwt": os.environ["GITHUB_ACTIONS_JWT"]}))')"
+          token_json="$(printf '%s' "${login_payload}" | curl -fsSL \
+            -H "Content-Type: application/json" \
+            --request POST \
+            --data @- \
+            "${VAULT_ADDR}/v1/auth/github-actions/login")"
+          vault_token="$(printf '%s' "${token_json}" | python3 -c 'import json, sys; print(json.load(sys.stdin)["auth"]["client_token"])')"
+          echo "::add-mask::${vault_token}"
+
+          sentry_json="$(curl -fsSL \
+            -H "X-Vault-Token: ${vault_token}" \
+            "${VAULT_ADDR}/v1/secret/data/kubernetes/kosmo/shared")"
+          SENTRY_JSON="${sentry_json}" python3 - <<'PY'
+          import json
+          import os
+
+          keys = (
+              "EXPO_PUBLIC_SENTRY_DSN",
+              "SENTRY_API_PROJECT",
+              "SENTRY_AUTH_TOKEN",
+              "SENTRY_ORG",
+              "SENTRY_WEB_BFF_PROJECT",
+              "SENTRY_WEB_PROJECT",
+          )
+          values = json.loads(os.environ["SENTRY_JSON"])["data"]["data"]
+          missing = [key for key in keys if not values.get(key)]
+          if missing:
+              raise SystemExit(f"Vault Sentry build configuration is missing: {', '.join(missing)}")
+
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as environment:
+              for key in keys:
+                  value = values[key]
+                  if not isinstance(value, str) or "\n" in value or "\r" in value:
+                      raise SystemExit(f"Vault value {key} must be a single-line string")
+                  print(f"::add-mask::{value}")
+                  environment.write(f"{key}={value}\n")
+          PY
 
       - name: Log in to ECR
         uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64 # v2.1.6
@@ -95,7 +154,7 @@ jobs:
             SENTRY_WEB_BFF_PROJECT=${{ env.SENTRY_WEB_BFF_PROJECT }}
             SENTRY_WEB_PROJECT=${{ env.SENTRY_WEB_PROJECT }}
           secrets: |
-            sentry_auth_token=${{ secrets.SENTRY_AUTH_TOKEN }}
+            sentry_auth_token=${{ env.SENTRY_AUTH_TOKEN }}
 
       - name: Save Docker image reference
         shell: bash

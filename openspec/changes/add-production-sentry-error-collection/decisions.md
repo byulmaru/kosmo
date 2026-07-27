@@ -76,6 +76,18 @@
 - Consequences: 코드와 build는 topology에 독립적이며 운영자가 배포 환경에서 실제 값을 관리한다.
 - Confirmation / Follow-up: 운영 문서에 필요한 변수와 project별 DSN 매핑을 기록한다.
 
+### Sentry build 설정은 Vault shared 경로에서 읽는다
+
+- Decision Date: 2026-07-27
+- Decision Class: User Choice
+- Authority / Provenance: 사용자 결정, PROD-477
+- Status: Active
+- Context / Problem: GitHub repository variable과 secret에 build 설정을 나누면 기존 Kosmo Vault가 source of truth가 되지 않고, 업로드 token을 환경별 runtime 경로에 두면 Vault Secrets Operator가 불필요하게 Pod로 동기화한다.
+- Decision Outcome: 환경과 무관한 공개 Web DSN, Sentry 조직·project slug와 source map 업로드 token은 `secret/kubernetes/kosmo/shared`에 둔다. GitHub Actions의 main·release tag OIDC role은 이 단일 경로만 읽고, 환경별 경로에는 API·Web BFF runtime DSN만 둔다.
+- Alternatives Considered: GitHub repository variable/secret은 설정 출처를 분산하고, `secret/kubernetes/kosmo/dev`에 모든 값을 두는 방식은 build token을 runtime에 노출하므로 선택하지 않는다.
+- Consequences: Actions build 설정은 Vault에서 함께 회전하며 업로드 token은 Kubernetes Secret에 포함되지 않는다. dev와 prod build는 같은 shared 값을 사용하고 environment/release는 Git ref와 commit에서 파생한다.
+- Confirmation / Follow-up: Terraform plan에서 role과 최소 read policy를 확인하고 main build가 shared 값을 읽어 source map을 업로드하는지 확인한다.
+
 ## Remaining Decisions
 
 - 없음.

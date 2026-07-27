@@ -38,7 +38,7 @@ API와 Web BFF는 Hono/Node ESM 애플리케이션이며 TypeScript source를 `t
 - Web 전용 오류 경계 조합이 browser SDK를 초기화하고 공용 React boundary에 오류 reporter context를 제공한다. 외부 GraphQL 경계와 오류를 소비하는 내부 route·session 경계의 `componentDidCatch`가 이 reporter로 capture한다. Android·iOS 조합은 Sentry 관측 module을 import하지 않는다.
 - event processor는 Sentry exception을 그대로 전달하고 top-level request/user/extra/context/breadcrumb만 제거한다. environment/release/runtime metadata는 유지하고 자동 breadcrumb와 Web session tracking은 전부 비활성화한다.
 - Docker build는 server entry를 production JavaScript와 external source map으로 만들고 Expo Web export에 external source map을 요청한다. Sentry CLI의 debug ID inject와 upload를 업로드 token BuildKit secret으로 수행한 뒤 map과 sourceMappingURL을 제거하고 runtime image에는 실행 JavaScript만 복사한다.
-- GitHub Actions는 공개 Web DSN, 조직·프로젝트 slug와 커밋 release를 build arg로, 업로드 token을 BuildKit secret으로 전달한다. 서버 DSN은 기존 VaultStaticSecret 경로에서 runtime에만 주입한다.
+- GitHub Actions는 OIDC로 Vault의 `secret/kubernetes/kosmo/shared`만 읽어 공개 Web DSN과 조직·프로젝트 slug를 build arg로, 업로드 token을 BuildKit secret으로 전달한다. 서버 DSN은 `secret/kubernetes/kosmo/<environment>`의 기존 VaultStaticSecret 경로에서 runtime에만 주입한다. `shared`는 Kubernetes runtime에 동기화하지 않는다.
 
 ### Allowed Alternatives
 
@@ -65,7 +65,7 @@ API와 Web BFF는 Hono/Node ESM 애플리케이션이며 TypeScript source를 `t
 
 1. SDK와 비활성 기본 설정, unit test를 먼저 추가한다.
 2. server/Web source map 생성과 secret 없는 로컬 build 검증을 연결한다.
-3. GitHub environment variable과 BuildKit upload secret, Vault runtime DSN을 설정한다.
+3. Vault shared build 설정과 GitHub OIDC read role, BuildKit upload secret, Vault runtime DSN을 설정한다.
 4. 새 image를 배포하고 API, Web BFF, Web 검증 event를 순서대로 발생시켜 release·원본 위치·redaction을 확인한다.
 5. 문제가 있으면 enable flag 또는 DSN을 제거해 수집만 즉시 중단한다. 기존 응답·UI와 애플리케이션 실행은 유지된다.
 

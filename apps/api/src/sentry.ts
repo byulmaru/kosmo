@@ -18,7 +18,7 @@ export const redactSentryEvent = (event: ErrorEvent): ErrorEvent => ({
 });
 
 export const createSentryOptions = (environment: SentryEnvironment): NodeOptions => {
-  const dsn = environment.SENTRY_API_DSN ?? environment.SENTRY_DSN;
+  const dsn = environment.SENTRY_API_DSN;
   const deploymentEnvironment = environment.SENTRY_ENVIRONMENT;
   const release = environment.SENTRY_RELEASE;
 

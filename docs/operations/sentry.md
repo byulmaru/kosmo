@@ -4,7 +4,7 @@ Kosmo는 API, Web BFF와 Web browser의 처리되지 않은 오류만 Sentry에 
 
 ## Project와 자격 증명
 
-GitHub Actions repository variable에는 다음 공개·비밀이 아닌 값을 둔다.
+Vault의 `secret/kubernetes/kosmo/shared`에는 환경과 무관한 build 설정을 둔다. `byulmaru/kosmo`의 main과 release tag GitHub OIDC subject만 이 경로를 읽을 수 있으며 Kubernetes runtime에는 동기화하지 않는다.
 
 | 이름                     | 용도                                       |
 | ------------------------ | ------------------------------------------ |
@@ -13,17 +13,18 @@ GitHub Actions repository variable에는 다음 공개·비밀이 아닌 값을 
 | `SENTRY_WEB_BFF_PROJECT` | Web BFF source map을 받을 project slug     |
 | `SENTRY_WEB_PROJECT`     | Web browser source map을 받을 project slug |
 | `EXPO_PUBLIC_SENTRY_DSN` | Web bundle에 포함되는 공개 ingest DSN      |
+| `SENTRY_AUTH_TOKEN`      | source map 업로드용 organization token     |
 
 세 project를 하나로 운영하면 세 project variable에 같은 slug를 사용한다. Runtime별로 분리하면 각각 대응하는 slug와 DSN을 사용한다.
 
-GitHub Actions secret `SENTRY_AUTH_TOKEN`에는 source map 업로드와 release artifact 생성 권한만 가진 organization token을 둔다. 이 token은 Docker BuildKit secret mount로만 전달되며 Docker ARG, image layer와 Web bundle에 포함하지 않는다.
+`SENTRY_AUTH_TOKEN`에는 source map 업로드와 release artifact 생성 권한만 가진 organization token을 둔다. GitHub Actions는 OIDC로 `shared` 경로를 읽고 이 token을 Docker BuildKit secret mount로만 전달한다. token은 Docker ARG, image layer, Web bundle과 runtime Kubernetes Secret에 포함하지 않는다.
 
 Vault의 `secret/kubernetes/kosmo/<environment>`에는 다음 runtime secret을 둔다.
 
 - `SENTRY_API_DSN`: API project ingest DSN
 - `SENTRY_WEB_BFF_DSN`: Web BFF project ingest DSN
 
-두 서버가 같은 project를 사용하면 기존 호환 key인 `SENTRY_DSN` 하나를 대신 사용할 수 있다. DSN은 인증 token이 아니지만 server 설정은 runtime secret으로 관리한다. `SENTRY_ENABLED=1`, `SENTRY_ENVIRONMENT`와 commit 기반 `SENTRY_RELEASE`는 Helm과 image가 주입한다. 네 값 중 하나라도 없으면 해당 runtime은 event를 전송하지 않는다.
+두 서버가 같은 Sentry project를 사용해도 runtime별 key를 명시적으로 유지한다. DSN은 인증 token이 아니지만 server 설정은 runtime secret으로 관리한다. `SENTRY_ENABLED=1`, `SENTRY_ENVIRONMENT`와 commit 기반 `SENTRY_RELEASE`는 Helm과 image가 주입한다. 네 값 중 하나라도 없으면 해당 runtime은 event를 전송하지 않는다.
 
 ## 개인정보 제거 정책
 
@@ -48,7 +49,7 @@ Sentry의 기본 개인정보 전송도 활성화하지 않는다. Exception은 
 
 `pnpm build:sentry-artifacts`는 API와 Web BFF JavaScript, Expo Web bundle과 external source map을 생성한다. 이어서 debug ID를 주입하고 source map의 `sourcesContent`를 정적으로 검증한다. 업로드 설정이 없는 로컬 실행은 외부 전송을 건너뛰지만 검증 뒤 map과 공개 JavaScript의 `sourceMappingURL`을 제거한다.
 
-`Docker Build` workflow는 commit release와 project slug를 build arg로 전달하고 업로드 token만 BuildKit secret으로 전달한다. CI에서는 `SENTRY_UPLOAD_REQUIRED=1`이므로 token, organization, release 또는 project가 누락되면 image build가 실패한다. 업로드가 성공한 뒤 runtime image와 Web static root에는 `.map` 파일이 남지 않는다.
+`Docker Build` workflow는 main에는 `kosmo-build-dev`, release tag에는 `kosmo-build-prod` Vault OIDC role을 사용해 `shared` build 설정을 읽는다. 다른 ref의 수동 실행은 실패한다. Workflow는 commit release와 project slug를 build arg로 전달하고 업로드 token만 BuildKit secret으로 전달한다. CI에서는 `SENTRY_UPLOAD_REQUIRED=1`이므로 token, organization, release 또는 project가 누락되면 image build가 실패한다. 업로드가 성공한 뒤 runtime image와 Web static root에는 `.map` 파일이 남지 않는다.
 
 로컬에서 artifact 보안 경계를 확인한다.
 
@@ -82,4 +83,4 @@ rg 'sourceMappingURL=|SENTRY_AUTH_TOKEN' apps/api/dist apps/web/dist apps/app/di
 
 ## 중단과 rollback
 
-수집 문제나 개인정보 위험이 있으면 Vault의 해당 DSN을 제거하거나 Helm의 `SENTRY_ENABLED`를 비활성화해 event 전송부터 중단한다. Sentry 초기화가 비활성화돼도 기존 API/BFF 응답과 Web 오류 UI는 유지된다. source map 업로드 token은 GitHub secret에서 회전하거나 제거한다.
+수집 문제나 개인정보 위험이 있으면 Vault의 해당 환경 DSN을 제거하거나 Helm의 `SENTRY_ENABLED`를 비활성화해 event 전송부터 중단한다. Sentry 초기화가 비활성화돼도 기존 API/BFF 응답과 Web 오류 UI는 유지된다. source map 업로드 token은 Vault의 `secret/kubernetes/kosmo/shared`에서 회전하거나 제거한다.

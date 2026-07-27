@@ -7,7 +7,7 @@ describe('API Sentry configuration', () => {
     assert.equal(createSentryOptions({}).enabled, false);
     assert.equal(
       createSentryOptions({
-        SENTRY_DSN: 'https://public@example.invalid/1',
+        SENTRY_API_DSN: 'https://public@example.invalid/1',
         SENTRY_ENABLED: '1',
         SENTRY_ENVIRONMENT: 'production',
       }).enabled,
@@ -15,7 +15,7 @@ describe('API Sentry configuration', () => {
     );
     assert.equal(
       createSentryOptions({
-        SENTRY_DSN: 'https://public@example.invalid/1',
+        SENTRY_API_DSN: 'https://public@example.invalid/1',
         SENTRY_ENABLED: '1',
         SENTRY_ENVIRONMENT: 'production',
         SENTRY_RELEASE: 'kosmo@abc123',
