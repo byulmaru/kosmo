@@ -152,6 +152,17 @@ describe('inbound Announce materialization', () => {
       await handleInboundAnnounce(context(), activity, receivedAt);
     }
 
+    const nonHttpObjectUri = new URL('ftp://source.example/notes/1');
+    await db
+      .update(ActivityPubPosts)
+      .set({ uri: nonHttpObjectUri.href })
+      .where(eq(ActivityPubPosts.postId, source.id));
+    await handleInboundAnnounce(
+      context(),
+      announce('non-http-object', nonHttpObjectUri),
+      receivedAt,
+    );
+
     assert.equal(await findRepostsByActor(actorUri).then((rows) => rows.length), 0);
   });
 

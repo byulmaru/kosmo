@@ -109,7 +109,7 @@ export const handleInboundAnnounce = async (
 
   const actorUri = new URL(actorHref);
   const objectUri = new URL(objectHref);
-  if (activityUri.origin !== actorUri.origin) {
+  if (!isHttpUri(actorUri) || !isHttpUri(objectUri) || activityUri.origin !== actorUri.origin) {
     return;
   }
 
