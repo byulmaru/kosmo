@@ -10,7 +10,7 @@ API와 Web BFF는 Hono/Node ESM 애플리케이션이며 TypeScript source를 `t
 
 - API, Web BFF와 Web browser의 unexpected 오류를 기존 응답·UI를 유지하며 한 번씩 수집한다.
 - 세 runtime에 같은 커밋 release와 일관된 environment/runtime metadata를 붙인다.
-- strict allowlist 성격의 event 정제로 request·GraphQL·구조화된 사용자 context와 자동 breadcrumb를 제거하고 원래 exception message는 보존한다.
+- Sentry exception은 그대로 전달하고 top-level request·GraphQL·사용자 context와 자동 breadcrumb만 제거한다.
 - build에서 server/Web source map을 생성·검증·업로드하고 제공 artifact에서는 제거한다.
 - 자격 증명 주입, 배포 검증과 triage 경로를 저장소 문서로 재현 가능하게 만든다.
 
@@ -36,7 +36,7 @@ API와 Web BFF는 Hono/Node ESM 애플리케이션이며 TypeScript source를 `t
 - API와 BFF는 작은 공용 server 관측 모듈을 공유하지 말고 각 앱이 같은 최소 설정을 소유하되, 개인정보 정제 로직만 실제로 재사용되는 workspace 경계에 둔다. Sentry SDK는 명시적 배포 enable flag, DSN, environment와 release가 모두 있을 때만 활성화한다.
 - API GraphQL plugin은 Kosmo/validation 오류를 변환만 하고 unexpected 원인만 capture한다. GraphQL 밖 API 오류와 Web BFF unexpected 오류는 각 Hono `onError`가 capture한다.
 - Web 전용 오류 경계 조합이 browser SDK를 초기화하고 공용 React boundary의 `componentDidCatch` callback으로 capture한다. Android·iOS 조합은 Sentry 관측 module을 import하지 않는다.
-- event processor는 request/user/extra/context/breadcrumb를 제거하고 원래 exception value, environment/release/runtime과 정제된 stack frame만 남긴다. 자동 breadcrumb는 전부 비활성화한다.
+- event processor는 Sentry exception을 그대로 전달하고 top-level request/user/extra/context/breadcrumb만 제거한다. environment/release/runtime metadata는 유지하고 자동 breadcrumb는 전부 비활성화한다.
 - Docker build는 server entry를 production JavaScript와 external source map으로 만들고 Expo Web export에 external source map을 요청한다. Sentry CLI의 debug ID inject와 upload를 업로드 token BuildKit secret으로 수행한 뒤 map과 sourceMappingURL을 제거하고 runtime image에는 실행 JavaScript만 복사한다.
 - GitHub Actions는 공개 Web DSN, 조직·프로젝트 slug와 커밋 release를 build arg로, 업로드 token을 BuildKit secret으로 전달한다. 서버 DSN은 기존 VaultStaticSecret 경로에서 runtime에만 주입한다.
 
@@ -49,7 +49,7 @@ API와 Web BFF는 Hono/Node ESM 애플리케이션이며 TypeScript source를 `t
 
 - DSN은 Web bundle에 공개될 수 있지만 source map 업로드 token은 공개 설정이나 Docker layer/ARG에 넣지 않는다.
 - capture 전 request object를 그대로 scope/context에 추가하지 않는다. SDK 기본 PII 비활성만으로 GraphQL body와 breadcrumb 제거가 증명되지는 않는다.
-- 원래 exception message는 조사 정보로 유지되므로 애플리케이션 오류 message에 인증 정보, request payload 또는 사용자 작성 콘텐츠를 넣지 않는다.
+- exception message, mechanism data, source context와 frame local variable는 조사 정보로 그대로 유지되므로 애플리케이션 오류와 local variable에 인증 정보, request payload 또는 사용자 작성 콘텐츠를 넣지 않는다.
 - React boundary capture와 browser 자동 capture를 별도 error wrapper로 중첩하지 않는다.
 - map을 정적 root에 남기거나 공개 JavaScript에 `sourceMappingURL`을 남기지 않는다.
 - 업로드 자격 증명 없는 로컬 build와 test를 실패시키지 않되, 인증된 배포 검증에서는 업로드 누락을 성공으로 간주하지 않는다.

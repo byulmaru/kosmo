@@ -16,17 +16,17 @@
 - Consequences: 공용 오류 경계의 UI·retry 구현은 공유하지만 Sentry capture callback은 Web 전용 조합만 소유한다.
 - Confirmation / Follow-up: Web bundle에는 SDK가 포함되고 native bundle에는 Sentry 관측 module import가 없는지 검증한다.
 
-### Event는 stack과 배포 식별자 중심의 최소 정보만 유지한다
+### Exception은 그대로 유지하고 top-level context만 제거한다
 
 - Decision Date: 2026-07-27
 - Decision Class: Derived Contract
 - Authority / Provenance: PROD-477, PROD-484, PROD-493
 - Status: Active
 - Context / Problem: Sentry 기본 integration은 request, console, navigation, UI interaction 등의 context와 breadcrumb를 자동 수집할 수 있다.
-- Decision Outcome: request, user, body, header, query string, extra, context와 모든 breadcrumb를 제거한다. 원인 구분과 검색에 필요한 원래 exception message, 정제된 stack frame, environment, release와 runtime tag는 조사 정보로 유지한다.
-- Alternatives Considered: 필드별 denylist는 새 SDK field와 예상하지 못한 GraphQL·사용자 값이 빠질 수 있어 선택하지 않는다.
-- Consequences: 구조화된 request·사용자 context의 유출 범위는 좁지만 애플리케이션이 exception message에 민감 값이나 사용자 콘텐츠를 포함하지 않을 책임이 남는다.
-- Confirmation / Follow-up: server/browser event processor 단위 테스트에서 금지된 field와 breadcrumb가 제거되는지 확인한다.
+- Decision Outcome: Sentry SDK가 만든 `event.exception`은 values, message, mechanism과 stack frame metadata를 포함해 그대로 전달한다. top-level request, user, extra, contexts와 모든 breadcrumb만 제거한다.
+- Alternatives Considered: exception 내부 필드를 allowlist로 재구성하면 SDK가 제공하는 진단 정보가 사라지므로 선택하지 않는다. 전체 event를 그대로 전달하면 자동 request·사용자 context까지 포함되므로 선택하지 않는다.
+- Consequences: Sentry 진단 정보는 온전히 유지되지만 exception message, mechanism data, source context와 frame local variable에 민감 값이나 사용자 콘텐츠가 포함될 수 있다.
+- Confirmation / Follow-up: server/browser event processor 단위 테스트에서 exception 객체 identity가 유지되고 top-level 금지 field와 breadcrumb만 제거되는지 확인한다.
 
 ### 명시적 배포 enable과 완전한 metadata가 있어야 전송한다
 

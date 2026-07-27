@@ -7,12 +7,12 @@
 
 **Deliverable**
 
-프로덕션 API와 Web BFF의 처리되지 않은 오류가 기존 응답을 유지하며 runtime·환경·커밋 release와 함께 한 번 수집되고, 예상 오류와 민감 데이터는 전송되지 않는다.
+프로덕션 API와 Web BFF의 처리되지 않은 오류가 기존 응답을 유지하며 runtime·환경·커밋 release와 SDK가 만든 exception 전체를 포함해 한 번 수집된다.
 
 **Guardrails**
 
 - 예상 Kosmo 도메인 오류와 OIDC 인증 오류는 수집하지 않는다.
-- 원래 exception message는 보존하되 request header·cookie·body·query, GraphQL document·variables, 구조화된 사용자 context와 breadcrumb를 전송하지 않는다.
+- Sentry exception은 그대로 전달하고 top-level request, user, extra, contexts와 breadcrumb만 제거한다.
 - 명시적 배포 enable, DSN, environment와 release가 모두 없으면 외부 전송하지 않는다.
 - API GraphQL 변환과 HTTP 전역 경계가 같은 오류를 중복 수집하지 않는다.
 
@@ -40,7 +40,7 @@
 **Guardrails**
 
 - Android·iOS platform에서는 Sentry SDK를 초기화하거나 native 범위를 선행하지 않는다.
-- 원래 exception message는 보존하되 request·GraphQL payload·구조화된 사용자 context, console·UI·network breadcrumb를 전송하지 않는다.
+- Sentry exception은 그대로 전달하고 top-level browser context와 console·UI·network breadcrumb만 제거한다.
 - 업로드 token은 client bundle에 포함하지 않고 local/test는 기본 비전송한다.
 - 기존 `GraphQLErrorBoundary`의 오류 화면·문구·재시도 행동을 변경하지 않는다.
 
