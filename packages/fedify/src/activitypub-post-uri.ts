@@ -41,7 +41,7 @@ export const resolveActivityPubPostUri = async (postId: string): Promise<URL | u
 };
 
 export const findPostByActivityPubUri = async (
-  context: Pick<Context<unknown>, 'parseUri'>,
+  context: Pick<Context<unknown>, 'canonicalOrigin' | 'parseUri'>,
   uri: URL,
 ): Promise<string | undefined> => {
   if (uri.protocol !== 'http:' && uri.protocol !== 'https:') {
@@ -64,7 +64,13 @@ export const findPostByActivityPubUri = async (
       .from(Posts)
       .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
       .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .where(and(eq(Posts.id, postId), eq(Instances.kind, InstanceKind.LOCAL)))
+      .where(
+        and(
+          eq(Posts.id, postId),
+          eq(Instances.kind, InstanceKind.LOCAL),
+          eq(Instances.canonicalOrigin, context.canonicalOrigin),
+        ),
+      )
       .limit(1)
       .then(first)
       .then((post) => post?.id);

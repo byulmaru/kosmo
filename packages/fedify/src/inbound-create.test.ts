@@ -355,6 +355,58 @@ describe('inbound Create dispatch', () => {
     assert.equal((await getMaterializedPost(remoteReplyUri)).post.profileId, remoteProfile.id);
   });
 
+  test('does not resolve a current canonical URI to a Post from a previous Local Instance', async () => {
+    const previousInstance = await db
+      .insert(Instances)
+      .values({
+        canonicalOrigin: 'https://previous.example',
+        domain: 'previous.example',
+        kind: InstanceKind.LOCAL,
+        state: InstanceState.ACTIVE,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const previousProfile = await db
+      .insert(Profiles)
+      .values({
+        displayName: 'previous',
+        followPolicy: ProfileFollowPolicy.OPEN,
+        handle: 'previous',
+        instanceId: previousInstance.id,
+        normalizedHandle: 'previous',
+        state: ProfileState.ACTIVE,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const previousPost = await createPost({
+      document: postContentDocumentFromText('Previous local Post'),
+      origin: 'LOCAL',
+      profileId: previousProfile.id,
+      visibility: PostVisibility.PUBLIC,
+    });
+
+    assert.equal(
+      await findPostByActivityPubUri(
+        createContext(),
+        new URL(`/ap/note/${previousPost.post.id}`, publicOrigin),
+      ),
+      undefined,
+    );
+    assert.equal(
+      await findPostByActivityPubUri(
+        {
+          canonicalOrigin: previousInstance.canonicalOrigin!,
+          parseUri: (uri: URL | null) =>
+            uriFederation
+              .createContext(new URL(previousInstance.canonicalOrigin!), undefined)
+              .parseUri(uri),
+        },
+        new URL(`/ap/note/${previousPost.post.id}`, previousInstance.canonicalOrigin!),
+      ),
+      previousPost.post.id,
+    );
+  });
+
   test('stores ambiguous, unsupported, unknown, forged Local, and contentless Parent inputs as top-level Posts', async () => {
     const profile = await createStoredRemoteActor();
     const sourceUri = new URL('https://remote.example/notes/repost-source');
@@ -821,6 +873,7 @@ const createContext = (
   },
 ) =>
   ({
+    canonicalOrigin: publicOrigin,
     documentLoader,
     parseUri: (uri: URL | null) => uriContext.parseUri(uri),
   }) as unknown as InboxContext<void>;
