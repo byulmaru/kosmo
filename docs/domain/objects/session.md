@@ -37,19 +37,20 @@ Session credential의 원문은 Session의 조회 가능한 속성이 아니다.
 
 ## 행동
 
-| 행동              | 행동 주체 | 대상 객체 | 입력값             | 권한                             | 조건                                                                                                                  | 결과                                                                                                                                                                  |
-| ----------------- | --------- | --------- | ------------------ | -------------------------------- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Session 생성      | Account   | Session   | 검증된 로그인 결과 | `Account.Active`                 | 검증된 로그인 결과가 Account와 연결된다                                                                               | Account에 속한 새 Active Session이 생성된다                                                                                                                           |
-| 현재 Session 폐기 | Account   | Session   | 없음               | `Account.Active`, `Session.Self` | 요청 credential을 검증한 서버 인증 경계가 대상 Session을 식별하며, 클라이언트가 다른 Session 식별자를 지정하지 않는다 | Active Session은 Revoked가 된다. 인증 뒤 경쟁 요청으로 이미 Revoked 또는 Expired가 된 Session은 terminal 상태를 유지한다. 같은 Account의 다른 Session은 바뀌지 않는다 |
-| Session 만료      | 시스템    | Session   | 없음               | 없음                             | Active Session이 적용되는 유효 기간 정책을 더 이상 만족하지 않는다                                                    | Session State가 Expired가 된다                                                                                                                                        |
+| 행동              | 행동 주체 | 대상 객체 | 입력값             | 권한             | 조건                                                                                                                                                                      | 결과                                                                                                                                                                  |
+| ----------------- | --------- | --------- | ------------------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Session 생성      | Account   | Session   | 검증된 로그인 결과 | `Account.Active` | 검증된 로그인 결과가 Account와 연결된다                                                                                                                                   | Account에 속한 새 Active Session이 생성된다                                                                                                                           |
+| 현재 Session 폐기 | Account   | Session   | 없음               | `Session.Self`   | 요청 credential을 검증한 서버 인증 경계가 Active Session을 식별하고, 연결된 Account State가 Active 또는 Suspended이며, 클라이언트가 다른 Session 식별자를 지정하지 않는다 | Active Session은 Revoked가 된다. 인증 뒤 경쟁 요청으로 이미 Revoked 또는 Expired가 된 Session은 terminal 상태를 유지한다. 같은 Account의 다른 Session은 바뀌지 않는다 |
+| Session 만료      | 시스템    | Session   | 없음               | 없음             | Active Session이 적용되는 유효 기간 정책을 더 이상 만족하지 않는다                                                                                                        | Session State가 Expired가 된다                                                                                                                                        |
 
 현재 Session 폐기는 상태 수준에서 멱등이다. 폐기 완료 뒤 같은 credential로 시작한 새 요청은 인증 경계에서 거부되며,
 폐기 전에 인증을 마친 경쟁 요청은 Session을 다른 terminal 상태로 덮어쓰지 않는다.
 
-`Account.Active`와 `Session.Self`는 현재 Session 폐기 행동의 진입 권한이며 클라이언트 로그아웃의 완료 조건이
-아니다. credential이 Suspended/Deleted Account 또는 Revoked/Expired Session을 가리키면 인증 경계는 이 권한을
-성립시키지 않고 폐기 행동에 진입하지 않지만, 서버는 해당 credential이 이미 인증에 사용될 수 없음을 확정할 수
-있다.
+`Session.Self`는 현재 Session 폐기 행동의 진입 권한이며 클라이언트 로그아웃의 완료 조건이 아니다. 현재
+Session 폐기는 Suspended Account도 요청할 수 있는 `Account.Active`의 명시적 예외다. 따라서 credential이
+Suspended Account의 Active Session을 가리키면 Session을 Revoked로 전이한 뒤 로그아웃을 완료한다. credential이
+Deleted Account 또는 Revoked/Expired Session을 가리키면 폐기 행동에 진입하지 않지만, 서버는 해당 credential이
+이미 인증에 사용될 수 없음을 확정할 수 있다.
 
 클라이언트는 서버가 현재 Session의 폐기를 확정하거나 credential이 이미 인증 불가능한 상태임을 확정한 뒤에만
 caller-owned credential과 해당 Session에 종속된 상태를 제거하고 로그아웃 성공으로 전환한다. DB timeout,
