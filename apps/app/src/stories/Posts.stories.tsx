@@ -597,6 +597,14 @@ function PostCatalog(_args: PostsStoryArgs) {
         <PostLayout
           post={requireFragment(requirePost(posts, 13).layout, 'remote author post layout')}
         />
+        <View testID="detail-quote-layout">
+          <PostLayout
+            post={requireFragment(
+              requirePostById(posts, quotePost.id).layout,
+              'quote post detail layout',
+            )}
+          />
+        </View>
       </Section>
     </Catalog>
   );
@@ -795,6 +803,11 @@ export const BodyTimeAndLayoutStates: Story = {
     );
     expect(canvas.getByText('미지원 문서는 안전한 Plain Text로 표시합니다.')).toBeVisible();
     expect(canvas.queryByText('실행하면 안 되는 구조')).not.toBeInTheDocument();
+    const quoteLayout = within(canvas.getByTestId('detail-quote-layout'));
+    expect(quoteLayout.getAllByTestId('source-post-preview')).toHaveLength(1);
+    expect(quoteLayout.getByTestId('source-post-body')).toHaveTextContent(
+      '원문 작성자의 긴 본문과 줄바꿈을 표시합니다.',
+    );
   },
 };
 
@@ -1397,7 +1410,10 @@ export const PostDetailThreadRoute: Story = {
             node: {
               ...routeCurrentPost,
               reactionCounts: routeCurrentPostReactionCounts,
-              replyAncestors: [routeParentPost, routeRootPost],
+              replyAncestors: [
+                { ...routeParentPost, repostSource: routeSourcePost },
+                routeRootPost,
+              ],
               replyDescendants: {
                 edges: [
                   { cursor: 'route-child', node: routeChildPost },
@@ -1434,9 +1450,13 @@ export const PostDetailThreadRoute: Story = {
     ]);
     expect(canvas.getByText('Reply+Quote 자체 Content')).toBeVisible();
     expect(canvas.getByRole('button', { name: '❤️ 반응 2개 보기' })).toBeVisible();
-    const source = canvas.getByTestId('post-thread-source-route-source');
-    expect(within(source).getByText('Source 본문')).toBeVisible();
-    expect(getComputedStyle(source).borderTopWidth).toBe('1px');
+    const ancestorQuote = within(canvas.getByTestId('post-thread-item-route-parent'));
+    expect(ancestorQuote.getAllByText('Source 본문')).toHaveLength(1);
+    expect(ancestorQuote.getAllByTestId('source-post-preview')).toHaveLength(1);
+    const descendantQuote = within(canvas.getByTestId('post-thread-item-route-reply-quote'));
+    expect(descendantQuote.getAllByText('Source 본문')).toHaveLength(1);
+    expect(descendantQuote.getAllByTestId('source-post-preview')).toHaveLength(1);
+    expect(canvas.queryByTestId('post-thread-source-route-source')).not.toBeInTheDocument();
     expect(canvas.queryByTestId('post-thread-source-route-source-null')).not.toBeInTheDocument();
     expect(canvas.getByText('Source가 없어도 남는 Content')).toBeVisible();
     expect(
@@ -1447,8 +1467,52 @@ export const PostDetailThreadRoute: Story = {
     ).toBeNull();
     await userEvent.click(canvas.getByText('Child 본문'));
     expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent('/@kosmo/route-child');
-    await userEvent.click(within(source).getByText('Source 본문'));
+    await userEvent.click(descendantQuote.getByTestId('source-post-body'));
     expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent('/@kosmo/route-source');
+  },
+  render: () => (
+    <>
+      <Text testID="current-story-pathname">{usePathname()}</Text>
+      <PostDetailScreen />
+    </>
+  ),
+};
+
+export const PureRepostDetailCanonicalizesToSource: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostDetailQuery: {
+          data: {
+            node: {
+              ...pureRepost,
+              reactionCounts: [],
+              replyAncestors: [],
+              replyDescendants: {
+                edges: [],
+                pageInfo: { endCursor: null, hasNextPage: false },
+              },
+            },
+          },
+        },
+      },
+    },
+    router: {
+      params: {
+        postId: pureRepost.id,
+        profileHandle: pureRepost.profile.relativeHandle,
+      },
+      pathname: `/${pureRepost.profile.relativeHandle}/${pureRepost.id}`,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() => {
+      expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+        '/@source@remote.example/post-source',
+      );
+    });
+    expect(canvas.queryByTestId('post-thread')).not.toBeInTheDocument();
   },
   render: () => (
     <>

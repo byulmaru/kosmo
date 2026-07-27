@@ -115,17 +115,17 @@
 - Consequences: 성공 응답 latency에 짧은 Notification 시도가 포함되지만 source 결과는 보존된다. cleanup 실패 잔존 행은 visible predicate가 숨긴다.
 - Confirmation / Follow-up: 저장·cleanup 실패 주입, 반복 처리와 프로세스 간격의 hidden-row API 테스트를 수행한다.
 
-### Presentation, 목록 연결과 action을 독립 client slice로 유지한다
+### Presentation, renderer 연결과 action을 독립 client slice로 유지한다
 
 - Decision Date: 2026-07-21
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-389`, `PROD-414`, `PROD-415`, `PROD-453`
 - Status: Active
 - Context / Problem: presentation은 API 없이 먼저 검증할 수 있지만 production 목록 연결과 mutation action은 각기 다른 선행 조건을 가진다.
-- Decision Outcome: PROD-453은 production fragment shape를 따르는 typed fixture·Storybook·mock navigation으로 Repost/Quote presentation을 소유한다. 실제 관계 field를 읽는 Relay operation·fragment와 generated type은 PROD-415에 남긴다. PROD-415는 공용 Post list item fragment에 presentation을 연결하고, PROD-414는 별도 fragment-colocated Repost action과 mutation/cache 상태를 소유한다. 공통 Action Bar surface 조립은 포함하지 않는다.
+- Decision Outcome: PROD-453은 production fragment shape를 따르는 typed fixture·Storybook·mock navigation으로 Repost/Quote presentation을 소유한다. 실제 관계 field를 읽는 Relay operation·fragment와 generated type은 PROD-415에 남긴다. PROD-415는 공용 `PostListItem`과 현재 상세의 `PostLayout`에 presentation을 연결하고 Content 없는 Repost 상세를 direct Source canonical route로 대체하며, PROD-414는 별도 fragment-colocated Repost action과 mutation/cache 상태를 소유한다. 공통 Action Bar surface 조립은 포함하지 않는다.
 - Alternatives Considered: 하나의 목록 컴포넌트에서 presentation·action·route를 모두 구현, raw scalar props, raw fragment key cast. 모두 이슈 의존성과 Relay colocation 경계를 흐린다.
 - Consequences: presentation 결과는 목록 연결 전에도 독립 검증되며, 실제 surface 조립 전 action component만 완료될 수 있다.
-- Confirmation / Follow-up: Storybook 상태/interaction, Relay compile, Home/Profile integration과 PROD-432 제외 범위를 확인한다.
+- Confirmation / Follow-up: Storybook 상태/interaction, Relay compile, Home/Profile/Bookmark와 Post 상세 integration, Content 없는 Repost canonical replace와 PROD-432 제외 범위를 확인한다.
 
 ### Repost와 Quote는 Source의 시각 계층을 다르게 사용한다
 
@@ -149,7 +149,19 @@
 - Decision Outcome: direct Source의 Author·Content·생성 시각은 첫 번째 full presentation으로 표시한다. Source Author는 canonical Profile route로 이동하고 direct Source의 생성 시각과 본문 영역은 direct Source의 canonical Post route로 이동한다. 두 번째 Source의 Author·Content·생성 시각과 별도 placeholder·CTA는 표시하지 않고 presentation component를 재귀 호출하지 않는다.
 - Alternatives Considered: 두 번째 Source route를 별도 `인용한 게시글 보기` placeholder로 제공하는 방식, 다음 Source를 최상위 Source로 평탄화하는 방식, 모든 Source를 full presentation으로 재귀 표시하는 방식. 별도 placeholder는 이미 표시된 direct Source 이동과 중복되는 CTA를 만들고, 평탄화는 저장된 direct relation을 잃으며, 재귀 표시는 목록 깊이와 fragment shape를 무제한으로 확장한다.
 - Consequences: production fragment는 direct Source presentation field까지만 읽는 유한한 shape를 사용하며 두 번째 Source를 위한 client field나 이동 UI를 만들지 않는다.
-- Confirmation / Follow-up: Home/Profile/Bookmark Relay 경로와 Storybook에서 Quote-of-Quote·Repost-of-Quote cutoff, direct Source 생성 시각·본문의 정확한 canonical route 이동, 두 번째 Source Content와 CTA 미노출, 외부 body Link와의 비중첩을 검증한다. Post detail 연결은 포함하지 않는다.
+- Confirmation / Follow-up: Home/Profile/Bookmark와 Post 상세 Relay 경로, Storybook에서 Quote-of-Quote·Repost-of-Quote cutoff, direct Source 생성 시각·본문의 정확한 canonical route 이동, 두 번째 Source Content와 CTA 미노출, 외부 body Link와의 비중첩을 검증한다.
+
+### 각 Post renderer가 direct Source를 소유하고 순수 Repost 상세은 Source로 대체한다
+
+- Decision Date: 2026-07-27
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/post.md`, `PROD-415`, `PROD-422`
+- Status: Active
+- Context / Problem: `PostDetailThread`가 바깥 Post renderer 뒤에 Source `PostListItem`을 추가하면 Source를 이미 소유한 목록 renderer와 중복되고, 현재 상세 Post만 별도 Source 구성이 필요해 renderer별 동작이 갈라진다. Content 없는 Repost는 표시할 자체 Content가 없어 독립 상세 surface와 공유 참조가 Source 이동을 중복한다.
+- Decision Outcome: Home·Profile·Bookmark 및 상세 thread의 조상·하위 Reply는 `PostListItem`이, 현재 상세 Post는 `PostLayout`이 자신의 nullable direct Source fragment와 공용 direct Source preview leaf를 소유한다. preview는 `PostBody` 아래 테두리 있는 sibling으로 정확히 한 번 표시하고 direct Source 한 단계에서 멈춘다. `PostDetailThread`는 Source를 선택·운반·추가 렌더링하지 않는다. Content 없는 Repost 상세 진입은 조회 가능한 direct Source의 canonical Post route로 `replace`하며 Repost 자체 surface·history entry·공유 참조를 남기지 않는다.
+- Alternatives Considered: Thread가 Source `PostListItem` sibling을 조립하는 방식, `PostSourcePresentationView` 전체를 중첩하는 방식, contentless Repost 자체 상세을 유지하는 방식, Source route로 `push`하는 방식. Thread 조립은 renderer-owned Source와 중복되고 전체 중첩은 바깥 Author·Content와 Link를 복제하며, 별도 상세과 `push`는 자체 Content가 없는 중간 URL과 history entry를 만든다.
+- Consequences: 목록과 상세의 Source 외관·navigation·한 단계 cutoff가 하나의 leaf를 공유한다. Post 상세 query는 renderer fragment만 spread하고 Source carrier를 제거하며, 순수 Repost redirect 동안 thread를 렌더하지 않는다. Source가 unavailable하면 기존 API eligibility로 Repost 자체가 조회되지 않으므로 숨겨진 경로를 추론하지 않는다.
+- Confirmation / Follow-up: 현재·조상·하위 Reply Quote의 Source가 정확히 한 번만 표시되고 다음 Source depth와 CTA가 없는지, Source null Quote가 자체 Content를 유지하는지, Content 없는 Repost 경로가 Source canonical route로 replace되는지, 기존 thread 순서·connector·pagination·오류 복구가 유지되는지 검증한다.
 
 ### Post와 Source preview의 이동 영역을 목적지별로 분리한다
 

@@ -114,31 +114,8 @@ export function PostSourcePresentationView({
   if (!source) {
     return null;
   }
-
-  const sourceAuthor = renderLink({
-    accessibilityLabel: `${source.profile.displayName} 프로필 보기`,
-    children: <Author profile={source.profile} showAvatar />,
-    target: 'sourceAuthor',
-  });
-  const sourceTimestamp = renderLink({
-    accessibilityLabel: '원문 게시글 보기',
-    children: (
-      <Text style={[styles.timestamp, { color: theme.textSecondary }]}>
-        {formatTimelineTimestamp(source.createdAt)}
-      </Text>
-    ),
-    target: 'sourcePost',
-  });
   const postBody = post.content ? (
     <PostBodyPressTarget content={post.content} onPress={onPostPress} testID="post-body" />
-  ) : null;
-  const sourceBody = source.content ? (
-    <PostBodyPressTarget
-      content={source.content}
-      onPress={onSourcePostPress}
-      style={styles.sourceBody}
-      testID="source-post-body"
-    />
   ) : null;
 
   if (kind === 'repost') {
@@ -160,11 +137,12 @@ export function PostSourcePresentationView({
             target: 'postAuthor',
           })}
         </View>
-        <View style={styles.authorHeader}>
-          <View style={styles.authorSlot}>{sourceAuthor}</View>
-          {sourceTimestamp}
-        </View>
-        {sourceBody}
+        <PostSourcePreview
+          bordered={false}
+          onSourcePostPress={onSourcePostPress}
+          renderLink={renderLink}
+          source={source}
+        />
       </View>
     );
   }
@@ -177,14 +155,69 @@ export function PostSourcePresentationView({
     <View role="article" style={styles.root} testID="post-source-presentation">
       {postHeader}
       {postBody}
-      <View style={[styles.preview, { borderColor: theme.border }]} testID="source-post-preview">
-        <View style={styles.authorHeader}>
-          <View style={styles.authorSlot}>{sourceAuthor}</View>
-          {sourceTimestamp}
-        </View>
-        {sourceBody}
-      </View>
+      <PostSourcePreview
+        onSourcePostPress={onSourcePostPress}
+        renderLink={renderLink}
+        source={source}
+      />
     </View>
+  );
+}
+
+export function PostSourcePreview({
+  bordered = true,
+  onSourcePostPress,
+  renderLink,
+  source,
+  style,
+}: {
+  bordered?: boolean;
+  onSourcePostPress: () => void;
+  renderLink: PostPresentationLinkRenderer;
+  source: SourcePostPresentationData;
+  style?: StyleProp<ViewStyle>;
+}): ReactNode {
+  const theme = useTheme();
+  const sourceAuthor = renderLink({
+    accessibilityLabel: `${source.profile.displayName} 프로필 보기`,
+    children: <Author profile={source.profile} showAvatar />,
+    target: 'sourceAuthor',
+  });
+  const sourceTimestamp = renderLink({
+    accessibilityLabel: '원문 게시글 보기',
+    children: (
+      <Text style={[styles.timestamp, { color: theme.textSecondary }]}>
+        {formatTimelineTimestamp(source.createdAt)}
+      </Text>
+    ),
+    target: 'sourcePost',
+  });
+  const content = (
+    <>
+      <View style={styles.authorHeader}>
+        <View style={styles.authorSlot}>{sourceAuthor}</View>
+        {sourceTimestamp}
+      </View>
+      {source.content ? (
+        <PostBodyPressTarget
+          content={source.content}
+          onPress={onSourcePostPress}
+          style={styles.sourceBody}
+          testID="source-post-body"
+        />
+      ) : null}
+    </>
+  );
+
+  return bordered ? (
+    <View
+      style={[styles.preview, style, { borderColor: theme.border }]}
+      testID="source-post-preview"
+    >
+      {content}
+    </View>
+  ) : (
+    content
   );
 }
 

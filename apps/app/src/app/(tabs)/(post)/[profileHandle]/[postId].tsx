@@ -22,6 +22,18 @@ const PostQuery = graphql`
           id
           relativeHandle
         }
+        content {
+          id
+        }
+        replyParent {
+          id
+        }
+        repostSource {
+          id
+          profile {
+            relativeHandle
+          }
+        }
         ...PostDetailThread_post @arguments(count: 20) @alias(as: "thread")
       }
     }
@@ -100,14 +112,20 @@ function PostDetailContent({
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
   const post = data.node?.__typename === 'Post' ? data.node : null;
+  const pureRepostSource = post && !post.content && !post.replyParent ? post.repostSource : null;
+  const pureRepostSourceHref = pureRepostSource
+    ? `/${pureRepostSource.profile.relativeHandle}/${pureRepostSource.id}`
+    : null;
 
   useEffect(() => {
-    if (post && post.profile.relativeHandle !== routeRelativeHandle) {
+    if (pureRepostSourceHref) {
+      router.replace(pureRepostSourceHref);
+    } else if (post && post.profile.relativeHandle !== routeRelativeHandle) {
       router.replace(`/${post.profile.relativeHandle}/${postId}`);
     }
-  }, [post, postId, routeRelativeHandle, router]);
+  }, [post, postId, pureRepostSourceHref, routeRelativeHandle, router]);
 
-  return !post ? (
+  return pureRepostSourceHref ? null : !post ? (
     <PostDetailFrame header={<PostDetailHeader />}>
       <StateView
         description="이미 삭제되었거나 존재하지 않는 게시글이에요."

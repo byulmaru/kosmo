@@ -5,8 +5,7 @@ import { PostLayout } from '@/components/post/PostLayout';
 import { PostListItem } from '@/components/post/PostListItem';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { Button } from '@/components/ui/Button';
-import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
 import { getWebMobileShellHeaderStickyOffset } from '../shell/shellLayout';
 import { PostThreadLayout } from './PostThreadLayout';
 import {
@@ -29,17 +28,9 @@ const PostDetailThreadFragment = graphql`
     id
     ...PostLayout_post @alias(as: "detail")
     ...PostReactionSummary_post @alias(as: "reactionSummary")
-    repostSource {
-      id
-      ...PostListItem_post @alias(as: "listItem")
-    }
     replyAncestors {
       id
       ...PostListItem_post @alias(as: "listItem")
-      repostSource {
-        id
-        ...PostListItem_post @alias(as: "listItem")
-      }
     }
     replyDescendants(first: $count, after: $cursor)
       @connection(key: "PostDetailThread_replyDescendants") {
@@ -50,10 +41,6 @@ const PostDetailThreadFragment = graphql`
             id
           }
           ...PostListItem_post @alias(as: "listItem")
-          repostSource {
-            id
-            ...PostListItem_post @alias(as: "listItem")
-          }
         }
       }
     }
@@ -72,7 +59,6 @@ type ThreadRenderablePost = Readonly<{
   detail: PostLayout_post$key | null;
   id: string;
   listItem: PostListItem_post$key | null;
-  repostSource: Readonly<{ id: string; listItem: PostListItem_post$key | null }> | null | undefined;
 }>;
 
 export function PostDetailFrame({ children, header, nativeScrollProps }: PostDetailFrameProps) {
@@ -117,7 +103,6 @@ function PostDetailThreadContent({
   header: ReactNode;
   post: PostDetailThread_post$key;
 }) {
-  const theme = useTheme();
   const { data, hasNext, isLoadingNext, loadNext } = usePaginationFragment<
     PostDetailThreadNextPageQuery,
     PostDetailThread_post$key
@@ -209,7 +194,6 @@ function PostDetailThreadContent({
       detail: null,
       id: post.id,
       listItem: post.listItem,
-      repostSource: post.repostSource,
     } satisfies ThreadRenderablePost,
   }));
   const descendantEdges = data.replyDescendants.edges;
@@ -221,7 +205,6 @@ function PostDetailThreadContent({
       detail: null,
       id: node.id,
       listItem: node.listItem,
-      repostSource: node.repostSource,
     } satisfies ThreadRenderablePost,
   }));
   const current = {
@@ -231,7 +214,6 @@ function PostDetailThreadContent({
       detail: data.detail,
       id: data.id,
       listItem: null,
-      repostSource: data.repostSource,
     } satisfies ThreadRenderablePost,
   };
 
@@ -242,8 +224,6 @@ function PostDetailThreadContent({
         current={current}
         descendants={descendants}
         renderPost={({ item, role }) => {
-          const source = item.post.repostSource;
-
           return (
             <View>
               {role === 'current' ? (
@@ -258,14 +238,6 @@ function PostDetailThreadContent({
                   post={requireThreadFragment(item.post.listItem, `${role} list item`)}
                 />
               )}
-              {source ? (
-                <View
-                  style={[styles.source, { borderColor: theme.border }]}
-                  testID={`post-thread-source-${source.id}`}
-                >
-                  <PostListItem post={requireThreadFragment(source.listItem, 'source list item')} />
-                </View>
-              ) : null}
             </View>
           );
         }}
@@ -297,12 +269,6 @@ const styles = StyleSheet.create({
   frame: { flexGrow: 1 },
   header: { zIndex: 10 },
   retryButton: { minHeight: 44 },
-  source: {
-    borderRadius: radii.md,
-    borderWidth: 1,
-    marginHorizontal: spacing.sm,
-    overflow: 'hidden',
-  },
 });
 
 function webStickyHeader(top: number) {

@@ -117,13 +117,21 @@ Profile과 달라도 같은 Upload Account를 가지면 연결할 수 있다. St
 - 조상 경로는 조회할 수 없는 Parent에서 중단하고, 하위 Reply는 각 Reply의 Post Visibility와 Post
   Eligibility를 독립적으로 적용한다.
 - Reply는 입력 Parent를, Repost와 Quote는 입력 Repost Source를 직접 참조하며 다른 Post로 평탄화하지 않는다.
+- Content 없는 Repost는 독립적인 상세 surface를 갖지 않는다. 그 Repost 식별자로 상세 경로에 진입해도
+  조회 가능한 직접 Repost Source의 canonical 상세 경로로 대체하고 Repost 자신의 경로를 navigation
+  history에 남기지 않는다.
 - Post의 Repost 수는 해당 Post를 Repost Source로 직접 참조하면서 Content와 Reply Parent가 없는 eligible
   Active Repost만 포함하고 Quote는 포함하지 않는다.
 
 ### Post 공유 참조
 
-- Post의 공유 참조는 현재 deployment가 사용하는 configured Local Instance의 canonical origin과
+- Content가 있는 Post의 공유 참조는 현재 deployment가 사용하는 configured Local Instance의 canonical origin과
   `/{relativeHandle}/{postId}` 경로를 결합한 절대 URL이다.
+- Content 없는 Repost의 공유 참조는 Repost 자신의 식별자가 아니라 조회 가능한 직접 Repost Source의 공유
+  참조다. 클라이언트는 Repost 자신의 상세 참조를 노출하지 않고, 그 식별자로 직접 진입해도 Source 공유
+  참조로 canonicalize한다.
+- Repost Source가 조회 정책을 통과하지 못하면 Content 없는 Repost 자체도 후보가 아니므로 공유 참조를
+  제공하지 않는다.
 - 공유 참조에는 현재 화면의 query와 hash를 포함하지 않고 API origin이나 플랫폼 전용 native deep link를
   사용하지 않는다.
 - Web, Android와 iOS는 같은 Post에 대해 같은 공유 참조를 제공한다.
