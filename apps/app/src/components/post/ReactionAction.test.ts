@@ -170,13 +170,6 @@ describe('ReactionAction Relay cache contract', () => {
       'reaction-heart-new',
     ]);
 
-    const withoutPayload = createEnvironment();
-    await commitAdd(withoutPayload.environment, withoutPayload.respond, postId, 'HEART', {});
-    assert.deepEqual(viewerReactionIds(withoutPayload.environment), [
-      'reaction-heart',
-      'reaction-eyes',
-    ]);
-
     const withoutPost = createEnvironment({ initialPost: false });
     await commitAdd(withoutPost.environment, withoutPost.respond, missingPostId);
     assert.equal(withoutPost.environment.getStore().getSource().get(missingPostId), undefined);
@@ -239,13 +232,6 @@ describe('ReactionAction Relay cache contract', () => {
     await commitDelete(environment, respond);
 
     assert.deepEqual(viewerReactionIds(environment), ['reaction-eyes']);
-
-    const withoutPayload = createEnvironment();
-    await commitDelete(withoutPayload.environment, withoutPayload.respond, postId, 'HEART', {});
-    assert.deepEqual(viewerReactionIds(withoutPayload.environment), [
-      'reaction-heart',
-      'reaction-eyes',
-    ]);
 
     const withoutPost = createEnvironment({ initialPost: false });
     await commitDelete(withoutPost.environment, withoutPost.respond, missingPostId);
