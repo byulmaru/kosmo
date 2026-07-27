@@ -3,7 +3,7 @@
 **Authority / Provenance**
 
 - `docs/domain/objects/media.md`
-- `docs/domain/decisions/0014-media-upload-lifecycle-without-file.md`
+- `docs/domain/decisions/0017-media-upload-lifecycle-without-file.md`
 - `PROD-435`
 - `PROD-439`
 
@@ -31,7 +31,7 @@ Kosmo가 Local Media의 Upload Account, 행동 주체 Profile, Uploading state, 
 **Authority / Provenance**
 
 - `docs/domain/objects/media.md`
-- `docs/domain/decisions/0014-media-upload-lifecycle-without-file.md`
+- `docs/domain/decisions/0017-media-upload-lifecycle-without-file.md`
 - `docs/domain/decisions/0013-media-storage-service-boundary.md`
 - `PROD-435`
 - `PROD-439`
@@ -63,7 +63,7 @@ Kosmo가 Local Media의 Upload Account, 행동 주체 Profile, Uploading state, 
 
 **Authority / Provenance**
 
-- `docs/domain/decisions/0014-media-upload-lifecycle-without-file.md`
+- `docs/domain/decisions/0017-media-upload-lifecycle-without-file.md`
 - `docs/domain/decisions/0013-media-storage-service-boundary.md`
 - `PROD-435`
 - `PROD-439`
@@ -91,7 +91,7 @@ Kosmo가 더 이상 이미지 byte, R2 storage와 File 표현을 직접 소유�
 **Authority / Provenance**
 
 - `docs/domain/objects/media.md`
-- `docs/domain/decisions/0014-media-upload-lifecycle-without-file.md`
+- `docs/domain/decisions/0017-media-upload-lifecycle-without-file.md`
 - `PROD-435`
 - `PROD-439`
 

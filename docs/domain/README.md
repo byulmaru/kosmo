@@ -101,7 +101,7 @@ Membership/Owner 같은 관계 사실과 Account 활성 상태를 하나의 권�
 - [ADR 0011: Post Kind Terminology (Superseded)](./decisions/0011-post-kind-terminology.md)
 - [ADR 0012: Post Interaction Follow-up Clarifications](./decisions/0012-post-interaction-followup-clarifications.md)
 - [ADR 0013: Media Storage Service Boundary](./decisions/0013-media-storage-service-boundary.md)
-- [ADR 0014: Media Upload State Without File](./decisions/0014-media-upload-lifecycle-without-file.md)
+- [ADR 0017: Media Upload State Without File](./decisions/0017-media-upload-lifecycle-without-file.md)
 - [ADR 0014: Post Structure Relations](./decisions/0014-post-structure-relations.md)
 - [ADR 0015: Post Share Reference](./decisions/0015-post-share-reference.md)
 - [ADR 0016: Reaction Selector Current State](./decisions/0016-reaction-selector-current-state.md)

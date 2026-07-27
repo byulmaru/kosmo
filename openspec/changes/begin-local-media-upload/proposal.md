@@ -13,7 +13,7 @@ Kosmo 내부가 이미지 byte와 File 표현을 직접 저장하는 기존 `/up
 
 ## Authority / Provenance
 
-- Canonical: `docs/domain/objects/media.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0014-media-upload-lifecycle-without-file.md`, `docs/domain/decisions/0013-media-storage-service-boundary.md`
+- Canonical: `docs/domain/objects/media.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0017-media-upload-lifecycle-without-file.md`, `docs/domain/decisions/0013-media-storage-service-boundary.md`
 - Linear Contract: `PROD-435`
 - Linear Implementations: `PROD-439` (현재 변경), `PROD-440` (외부 저장 완료 확인 endpoint, 후속 통합 의존성), `PROD-441` (Ready 전환, 후속)
 

@@ -11,7 +11,7 @@ Accepted
 ## 후속 결정
 
 File 표현, Local Media 생성 시점과 업로드 중 상태에 관한 결정은
-[ADR 0014](./0014-media-upload-lifecycle-without-file.md)가 대체한다. Media Storage Service와 Kosmo의 소유권·저장
+[ADR 0017](./0017-media-upload-lifecycle-without-file.md)가 대체한다. Media Storage Service와 Kosmo의 소유권·저장
 책임 분리는 계속 적용된다.
 
 ## 결정

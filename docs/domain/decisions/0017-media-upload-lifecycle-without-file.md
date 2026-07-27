@@ -1,4 +1,4 @@
-# ADR 0014: Media Upload State Without File
+# ADR 0017: Media Upload State Without File
 
 ## 상태
 

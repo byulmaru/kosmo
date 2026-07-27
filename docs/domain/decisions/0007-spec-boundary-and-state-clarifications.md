@@ -10,7 +10,7 @@ Accepted
 
 ## 후속 결정
 
-File 표현과 Media 생성 시점에 관한 결정은 [ADR 0014](./0014-media-upload-lifecycle-without-file.md)가 대체한다.
+File 표현과 Media 생성 시점에 관한 결정은 [ADR 0017](./0017-media-upload-lifecycle-without-file.md)가 대체한다.
 
 Follow Request 상태와 Notification 처리 표시에 관한 결정은
 [ADR 0009](./0009-pending-only-follow-request-lifecycle.md)로 대체되었다. 나머지 결정은 유지한다.
