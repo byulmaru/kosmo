@@ -201,12 +201,12 @@ API는 로그인 Account가 Account-Profile membership을 가진 Profile의 Noti
 
 ### Requirement: Visible ID-ordered Notification pagination
 
-API는 source가 저장 Recipient와 일치하고 Related Profile을 조회할 수 있는 Notification만 DB UUID ID 순서의 stable Relay connection에 포함해야 한다(MUST). 기존 UUIDv8과 신규 UUIDv7은 함께 조회되며 같은 millisecond에 생성된 item 사이의 생성 순서와 concurrent insert snapshot은 보장하지 않는다.
+API는 kind별 source가 존재하고 source에서 파생한 Recipient가 저장 Recipient와 일치하며, 해당 kind에 필요한 Related Profile과 Related Post를 Recipient Profile 기준으로 조회할 수 있는 Notification만 DB UUID ID 순서의 stable Relay connection에 포함해야 한다(MUST). 기존 UUIDv8과 신규 UUIDv7은 함께 조회되며 같은 millisecond에 생성된 item 사이의 생성 순서와 concurrent insert snapshot은 보장하지 않는다.
 
 #### Scenario: 첫 페이지 정렬과 filtering
 
 - **WHEN** 클라이언트가 권한이 있는 Profile의 Notification 첫 페이지를 요청한다
-- **THEN** API는 Recipient Profile 자체의 API visibility, source 존재, source Followee와 저장 Recipient의 일치, Recipient Profile 기준 Related Profile visibility를 SQL에서 적용한 뒤 page limit을 적용한다
+- **THEN** API는 Recipient Profile 자체의 API visibility, kind별 source 존재와 source-Recipient 관계의 일치, 해당 kind에 필요한 Related Profile과 Related Post의 Recipient 기준 visibility를 SQL에서 적용한 뒤 page limit을 적용한다
 - **AND** visible item을 `Notification.id DESC` 순서로 반환한다
 - **AND** opaque cursor는 마지막 visible item ID를 기준으로 다음 경계를 표현한다
 
@@ -270,12 +270,12 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 #### Scenario: visible count 계산
 
 - **WHEN** API가 `unreadNotificationCount`를 계산한다
-- **THEN** Recipient Profile 자체가 API에 visible하고 source가 존재하며 source Followee가 저장 Recipient와 일치하고 Related Profile visible predicate와 `read_at IS NULL`을 만족하는 Recipient item만 센다
+- **THEN** Recipient Profile 자체가 API에 visible하고 kind별 source가 존재하며 source에서 파생한 Recipient가 저장 Recipient와 일치하고, 해당 kind에 필요한 Related Profile과 Related Post의 Recipient 기준 visible predicate와 `read_at IS NULL`을 만족하는 item만 센다
 - **AND** connection에서 숨긴 item을 count에 포함하지 않는다
 
 ### Requirement: Unavailable Notification 숨김
 
-시스템은 Recipient Profile 자체가 API에 노출되지 않거나 source가 없거나 source Recipient가 저장 Recipient와 일치하지 않거나 Recipient Profile 기준으로 Related Profile을 조회할 수 없는 Notification을 모든 API 표면에서 존재하지 않는 것으로 취급해야 한다(MUST).
+시스템은 Recipient Profile 자체가 API에 노출되지 않거나 kind별 source가 없거나 source에서 파생한 Recipient가 저장 Recipient와 일치하지 않거나, 해당 kind에 필요한 Related Profile 또는 Related Post를 Recipient Profile 기준으로 조회할 수 없는 Notification을 모든 API 표면에서 존재하지 않는 것으로 취급해야 한다(MUST).
 
 #### Scenario: unavailable item connection과 count
 
