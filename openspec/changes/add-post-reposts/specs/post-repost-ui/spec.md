@@ -7,8 +7,10 @@
 #### Scenario: Repost 표시
 
 - **WHEN** `content = null`이고 `repostSource`가 non-null인 Post를 표시한다
-- **THEN** 앱은 Repost Author와 Source Post를 시각적으로 구분해 표시한다
+- **THEN** 앱은 Repost Author의 `{displayName}님이 재게시함` attribution을 canonical Profile Link로 정확히 한 번 표시한다
+- **AND** 바로 아래의 direct Source는 일반 목록 Post와 동일한 표준 avatar·Author·Content·spacing·navigation 행으로 표시한다
 - **AND** Source의 Author와 Content를 Repost 자신의 Content처럼 복제하지 않는다
+- **AND** Source용 별도 full presentation·중첩 preview·중첩 article·이중 row border 또는 별도 Source renderer를 만들지 않는다
 
 #### Scenario: Quote 표시
 

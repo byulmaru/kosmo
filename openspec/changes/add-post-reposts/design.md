@@ -46,6 +46,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 - Repost count는 viewer-independent지만 Post Node와 `viewerRepost`는 viewer-dependent다. viewer의 block/mute 결과를 count에 섞으면 동일 Post의 count가 viewer마다 달라진다.
 - Notification connection/count/read와 client row는 Follow source에 하드코딩되어 있다. Repost를 join 하나만 덧붙이면 kind discriminator와 limit-before-filter가 어긋날 수 있다.
 - Home/Profile/Bookmark와 상세 thread의 조상·하위 Reply는 공용 Post list item fragment를 쓰고 현재 상세 Post는 별도 Post layout fragment를 쓴다. 각 renderer가 자신의 direct Source를 소유해야 하며 thread 조립 경계가 Source를 다시 붙이면 중복된다.
+- Content 없는 Repost 목록은 attribution 뒤 direct Source를 일반 Post와 같은 비재귀 표준 목록 행으로 표시해야 한다. 바깥 list item만 article·row border·padding을 한 번 소유하고 Source용 full presentation·preview·article·border·renderer를 별도로 만들지 않는다.
 
 ### Recommended Approach
 
@@ -57,10 +58,10 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
    `repostSource`는 direct Source를 독립 조회해 unavailable이면 `null`로 정규화한다. Source link는 생성 때
    정해진 direct relation을 그대로 유지하고 flatten하지 않는다.
 5. PROD-411은 Author와 Active 상태를 한 transaction에서 확인해 Post를 Tombstone으로 전이하고 최초 `deletedAt`과 `repostSourceId`를 보존한다. 일반 Post 삭제 경계를 재사용하되 이 slice는 Repost 취소·멱등성·유일성 해제를 검증한다.
-6. PROD-453의 순수 Repost는 Repost Author attribution 뒤에 direct Source를 주 Post content로 표시한다. Quote와 Reply+Quote는 Quote Author와 자체 Content를 먼저 표시하고 direct Source를 compact bordered preview로 표시한다. Source preview는 자체 Action Bar를 갖지 않으며, nullable Source인 Quote는 preview와 Source 이동 affordance만 생략한다. Storybook은 production fragment shape를 따르는 typed fixture adapter로 internal presentation model을 구성하고 raw object를 fragment key로 cast하지 않는다. 실제 관계 field를 읽는 Relay operation·fragment와 generated type은 PROD-415에 남긴다. View의 link renderer는 Storybook mock target을 검증하고 PROD-415 production fragment wrapper가 canonical Expo Router Link를 공급할 수 있게 한다. Figma와 외부 SNS는 시각 참고이며 수치는 앱 theme token과 기존 Post component를 따른다. PROD-415는 공용 list item fragment에 결과를 연결하고, PROD-414는 별도 Repost action fragment/mutations와 normalized payload로 actor Store를 갱신한다.
+6. PROD-453의 fixture-only 단계는 production fragment shape를 따르는 typed fixture adapter와 mock navigation으로 Repost·Quote 상태를 검증했다. PROD-415 production integration에서 Content 없는 Repost는 `PostListItem`이 Repost Author attribution을 정확히 한 번 표시한 뒤 direct Source를 일반 Post와 같은 비재귀 표준 목록 행 leaf로 렌더링한다. Quote와 Reply+Quote는 Quote Author와 자체 Content를 먼저 표시하고 direct Source를 compact bordered preview로 표시한다. Quote Source preview는 자체 Action Bar를 갖지 않으며 nullable Source인 Quote는 preview와 Source 이동 affordance만 생략한다. `PostSourcePresentationView`와 `PostSourcePreview`는 presentation data에서 canonical Expo Router Link와 body shortcut을 직접 만들고 caller-injected renderer·navigation callback을 받지 않는다. Storybook은 production과 같은 Router decorator에서 실제 pathname을 검증하고 raw object를 fragment key로 cast하지 않는다. 실제 관계 field를 읽는 Relay operation·fragment와 generated type은 PROD-415가 소유하고, PROD-414는 별도 Repost action fragment/mutations와 normalized payload로 actor Store를 갱신한다.
 7. PROD-412는 기존 Notification table에 `REPOST` kind를 추가하고 source-only create 경계에서 Recipient·Related Profile·Related Post를 파생한다. kind별 visible projection을 connection/count/Node/Read에서 공통 조립하고, client는 concrete inline fragment로 Source Post 이동과 Read/cache를 처리한다.
 8. PROD-416은 Repost Tombstone commit 뒤 같은 request에서 idempotent cleanup을 await하고 오류를 catch한다. 남은 row는 Active pure-Repost 구조와 Recipient 기준 관계 visibility를 검증하는 predicate로 모든 API surface에서 숨긴다.
-9. PROD-415는 direct Source가 Quote인 경우에도 direct Source 한 단계만 full presentation한다. bordered Source preview는 하나의 Link가 아닌 시각적 그룹 경계다. Source Author는 canonical Profile Link, Source 생성 시각은 keyboard·screen reader·pointer가 사용하는 최소 44px canonical Post Link, Source 본문 행은 pointer·touch에서 같은 Post로 이동하는 shortcut으로 분리한다. border의 빈 padding에는 동작을 두지 않고 body 외부 Link는 자신의 URL로 이동한다. 목록과 상세 thread의 조상·하위 Reply를 렌더링하는 `PostListItem`에서는 Quote 자체 생성 시각과 본문 행도 각각 실제 canonical Link와 pointer·touch shortcut으로 바깥 Quote Post에 연결한다. 이미 자기 canonical route인 현재 상세 Post의 `PostLayout`은 self Link나 동일 URL history entry를 추가하지 않고 direct Source 이동만 제공한다. 현재 상세 Post의 `PostLayout`과 목록·조상·하위 Reply의 `PostListItem`이 공용 direct Source preview leaf를 `PostBody` sibling으로 사용하고 `PostDetailThread`는 Source를 별도 선택·운반·렌더하지 않는다. Content 없는 Repost 상세 진입은 조회 가능한 direct Source의 canonical route로 `replace`한다. 두 번째 Source를 위한 presentation field, placeholder 또는 CTA를 추가하지 않고 presentation component를 재귀 호출하지 않는다.
+9. PROD-415는 direct Source가 Quote인 경우에도 direct Source 한 단계만 full presentation한다. Quote와 Reply+Quote의 bordered Source preview는 하나의 Link가 아닌 시각적 그룹 경계다. Source Author는 canonical Profile Link, Source 생성 시각은 keyboard·screen reader·pointer가 사용하는 최소 44px canonical Post Link, Source 본문 행은 pointer·touch에서 같은 Post로 이동하는 shortcut으로 분리한다. border의 빈 padding에는 동작을 두지 않고 body 외부 Link는 자신의 URL로 이동한다. Content 없는 Repost는 bordered preview를 사용하지 않고 Repost Author Profile Link attribution 뒤에 direct Source를 일반 Post와 같은 표준 목록 행 leaf로 표시한다. `PostListItem`의 outer Post와 direct Source는 `repostSource`를 포함하지 않는 같은 leaf fragment를 각각 한 번만 사용한다. 목록과 상세 thread의 조상·하위 Reply를 렌더링하는 `PostListItem`에서는 Quote 자체 생성 시각과 본문 행도 각각 실제 canonical Link와 pointer·touch shortcut으로 바깥 Quote Post에 연결한다. 이미 자기 canonical route인 현재 상세 Post의 `PostLayout`은 self Link나 동일 URL history entry를 추가하지 않고 direct Source 이동만 제공한다. 현재 상세 Post의 `PostLayout`과 목록·조상·하위 Reply의 `PostListItem`은 Quote direct Source preview를 `PostBody` sibling으로 사용하고 `PostDetailThread`는 Source를 별도 선택·운반·렌더하지 않는다. Content 없는 Repost 상세 진입은 조회 가능한 direct Source의 canonical route로 `replace`한다. 두 번째 Source를 위한 presentation field, placeholder 또는 CTA를 추가하지 않고 presentation component를 재귀 호출하지 않는다.
 
 ### Allowed Alternatives
 
@@ -68,7 +69,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
   동등한 set-based query로 캡슐화할 수 있다.
 - PROD-401의 duplicate 정규화는 `ON CONFLICT DO NOTHING` 뒤 기존 identity를 조회하거나, partial unique index 위반만 식별해 savepoint 밖에서 기존 identity를 다시 조회하는 방식 중 transaction을 실패 상태로 남기지 않는 쪽을 사용할 수 있다.
 - Notification mixed-kind projection은 kind별 `UNION ALL` 또는 nullable join과 discriminator별 predicate로 구성할 수 있다. 어느 방식이든 filter-before-limit, concrete typename route와 Recipient 기준 visibility를 만족해야 한다.
-- Repost·Quote Source preview는 공용 leaf fragment component로 분리하거나 list item 안에 유지할 수 있다. 실제 재사용 경계와 중첩 Link 회피가 확인되는 쪽을 선택한다.
+- Quote·Reply+Quote Source preview는 공용 leaf component로 분리하거나 renderer 안에 유지할 수 있다. Content 없는 Repost의 direct Source는 일반 Post와 같은 비재귀 표준 목록 행 leaf를 반드시 재사용한다.
 - PROD-401의 Repost 정책 검증은 전용 action의 transaction 경계에 둔다. caller 없는 저수준 Repost insert helper나 기존 `createPost`의 nullable overload를 미리 추가하지 않는다.
 
 ### Known Traps
@@ -90,6 +91,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 - bordered Source preview 전체 또는 body 외부 Link를 포함한 body 전체를 하나의 접근 가능한 Link로 만들지 않는다.
 - `PostDetailThread`가 renderer 밖에서 Source를 다시 조립해 같은 Source를 중복 표시하거나 다음 Source depth를 노출하지 않는다.
 - Content 없는 Repost route를 먼저 렌더하거나 Source route로 `push`해 Repost 상세 history entry를 남기지 않는다.
+- Content 없는 Repost의 direct Source를 별도 full presentation·unbordered preview·중첩 article·별도 Source renderer로 다시 조립하거나 row border를 이중으로 만들지 않는다.
 
 ## Risks / Trade-offs
 
