@@ -9,6 +9,7 @@ import {
   Sessions,
 } from '../db';
 import { AccountState, ProfileState, SessionState } from '../enums';
+import { PermissionDeniedError } from '../error';
 import type { Transaction } from '../db';
 
 type VerifiedOidcIdentity = {
@@ -36,8 +37,12 @@ export const createOidcSession = async (
         target: [Accounts.oidcSubject],
         set: { displayName },
       })
-      .returning({ id: Accounts.id })
+      .returning({ id: Accounts.id, state: Accounts.state })
       .then(firstOrThrow);
+
+    if (account.state !== AccountState.ACTIVE) {
+      throw new PermissionDeniedError();
+    }
 
     const activeProfile = await tx
       .select({ id: Profiles.id })
