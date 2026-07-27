@@ -516,8 +516,8 @@ kosmo의 현재 PostgreSQL/Drizzle 기반 도메인 저장 모델, ID 생성 규
 #### Scenario: Notification kind enum
 
 - **WHEN** migration이 Notification schema를 생성한다
-- **THEN** 시스템은 `notification_kind` enum과 현재 지원 값 `FOLLOW`를 추가한다
-- **AND** API는 `notification.kind = FOLLOW`인 row를 `FollowNotification` concrete object로 해석한다
+- **THEN** 시스템은 `notification_kind` enum에 현재 지원 값 `FOLLOW`, `REACTION`, `REPLY`, `REPOST`를 유지한다
+- **AND** API는 각 kind row를 `FollowNotification`, `ReactionNotification`, `ReplyNotification`, `RepostNotification` concrete object로 해석한다
 - **AND** 아직 구현하지 않는 Notification kind 값을 선제 추가하지 않는다
 
 #### Scenario: 의도적인 loose source reference

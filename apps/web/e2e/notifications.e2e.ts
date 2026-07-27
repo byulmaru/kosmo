@@ -66,6 +66,15 @@ test('Local Follow 알림은 Recipient Profile별로 격리되고 Read와 Unfoll
     await expect(unreadNotificationLink).toBeVisible();
     await expect(page.getByRole('link', { name: '알림, 읽지 않은 알림 1개' })).toBeVisible();
 
+    await selectProfile(page, recipientProfileB.handle);
+    await expect(page.getByText('아직 알림이 없어요')).toBeVisible();
+    await expect(page.getByRole('link', { name: '알림', exact: true })).toBeVisible();
+    await expect(page.getByText('E2E Notification Follower님이 팔로우했습니다')).toHaveCount(0);
+
+    await selectProfile(page, recipient.profile!.handle);
+    await expect(unreadNotificationLink).toBeVisible();
+    await expect(page.getByRole('link', { name: '알림, 읽지 않은 알림 1개' })).toBeVisible();
+
     let releaseFirstRead!: () => void;
     const firstReadGate = new Promise<void>((resolve) => {
       releaseFirstRead = resolve;
@@ -124,14 +133,6 @@ test('Local Follow 알림은 Recipient Profile별로 격리되고 Read와 Unfoll
 
     const firstReadAt = await notificationReadAt(notification!.id);
     expect(firstReadAt).not.toBeNull();
-
-    await selectProfile(page, recipientProfileB.handle);
-    await expect(page.getByText('아직 알림이 없어요')).toBeVisible();
-    await expect(page.getByRole('link', { name: '알림', exact: true })).toBeVisible();
-    await expect(page.getByText('E2E Notification Follower님이 팔로우했습니다')).toHaveCount(0);
-
-    await selectProfile(page, recipient.profile!.handle);
-    await expect(readNotificationLink).toBeVisible();
 
     const repeatedReadResponse = waitForGraphQLOperation(
       page,
