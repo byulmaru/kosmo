@@ -59,6 +59,9 @@ Remote actor 검증 뒤 같은 action을 재사용할 수 있지만, ingress와 
   계층을 맞추기 위한 pass-through core service를 만들지 않는다.
 - 여러 DB 변경이 원자적이어야 하면 core action이 transaction 경계를 소유한다. 실제 caller
   transaction과 합류해야 할 때만 optional transaction을 받는다.
+- 외부 delivery나 notification처럼 DB transaction에 포함되지 않는 side effect는 domain write가 commit된
+  뒤 실행한다. side effect 실패가 이미 commit된 domain 결과를 되돌려서는 안 되는 계약이면 실패를 호출
+  경계에서 격리하고 commit된 상태를 유지한다.
 - core는 공통 domain error를 반환하고 각 진입점이 외부 오류 표현으로 mapping한다.
 - 실제 caller 없이 evaluator, callback, generic port나 대체 implementation을 미리 추가하지 않는다.
 
