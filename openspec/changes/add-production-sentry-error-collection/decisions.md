@@ -16,17 +16,17 @@
 - Consequences: 공용 오류 경계의 UI·retry 구현은 공유하지만 Sentry capture callback은 Web 전용 조합만 소유한다.
 - Confirmation / Follow-up: Web bundle에는 SDK가 포함되고 native bundle에는 Sentry 관측 module import가 없는지 검증한다.
 
-### Exception은 그대로 유지하고 top-level context만 제거한다
+### SDK event를 beforeSend 정제 없이 전달한다
 
 - Decision Date: 2026-07-27
-- Decision Class: Derived Contract
-- Authority / Provenance: PROD-477, PROD-484, PROD-493
+- Decision Class: User Choice
+- Authority / Provenance: 사용자 결정, PROD-477, PROD-484, PROD-493
 - Status: Active
-- Context / Problem: Sentry 기본 integration은 request, console, navigation, UI interaction 등의 context와 breadcrumb를 자동 수집할 수 있다.
-- Decision Outcome: Sentry SDK가 만든 `event.exception`은 values, message, mechanism과 stack frame metadata를 포함해 그대로 전달한다. top-level request, user, extra, contexts와 모든 breadcrumb만 제거한다.
-- Alternatives Considered: exception 내부 필드를 allowlist로 재구성하면 SDK가 제공하는 진단 정보가 사라지므로 선택하지 않는다. 전체 event를 그대로 전달하면 자동 request·사용자 context까지 포함되므로 선택하지 않는다.
-- Consequences: Sentry 진단 정보는 온전히 유지되지만 exception message, mechanism data, source context와 frame local variable에 민감 값이나 사용자 콘텐츠가 포함될 수 있다.
-- Confirmation / Follow-up: server/browser event processor 단위 테스트에서 exception 객체 identity가 유지되고 top-level 금지 field와 breadcrumb만 제거되는지 확인한다.
+- Context / Problem: event allowlist와 redaction은 오류 message와 SDK 진단 정보를 손실시켜 실제 오류 추적을 어렵게 한다.
+- Decision Outcome: API, Web BFF와 Web browser 모두 `beforeSend`를 두지 않고 Sentry SDK가 만든 event 전체를 그대로 전송한다. 자동 breadcrumb, Web session tracking과 기본 PII 전송은 계속 비활성화한다.
+- Alternatives Considered: exception만 보존하고 top-level request, user, extra와 contexts를 제거하는 방식은 진단 정보를 임의로 누락하므로 선택하지 않는다.
+- Consequences: 오류 message와 SDK 진단 정보는 온전히 유지되지만 request metadata, context 또는 사용자 콘텐츠가 event에 포함될 수 있다.
+- Confirmation / Follow-up: server/browser 설정 테스트에서 `beforeSend`가 없고 배포 후 실제 event의 진단 정보가 누락되지 않는지 확인한다.
 
 ### 명시적 배포 enable과 완전한 metadata가 있어야 전송한다
 
@@ -85,7 +85,7 @@
 - Context / Problem: GitHub repository variable과 secret, 환경별 Vault 경로에 Sentry 설정을 나누면 기존 Kosmo Vault가 하나의 source of truth가 되지 않는다. 현재 세 runtime은 환경마다 다른 Sentry project를 쓰지 않으므로 DSN도 환경 독립 값이다. 반면 `shared` 전체를 Pod로 동기화하면 업로드 token까지 불필요하게 노출한다.
 - Decision Outcome: 공개 Web DSN, API·Web BFF DSN, Sentry 조직·project slug와 source map 업로드 token을 모두 `secret/kubernetes/kosmo/shared`에 둔다. GitHub Actions는 build에 필요한 값을 읽고, VaultStaticSecret transformation은 API·Web BFF DSN 두 개만 runtime Secret으로 추출한다.
 - Alternatives Considered: GitHub repository variable/secret과 환경별 Vault 경로로 나누는 방식은 환경 독립 값의 출처를 분산하고, `shared` 전체를 Kubernetes Secret으로 복사하는 방식은 build token을 runtime에 노출하므로 선택하지 않는다.
-- Consequences: 모든 환경 독립 Sentry 설정은 Vault에서 함께 회전하고 dev와 prod event 구분은 `SENTRY_ENVIRONMENT`가 담당한다. 업로드 token과 build metadata는 Kubernetes Secret에 포함되지 않는다.
+- Consequences: 모든 환경 독립 Sentry 설정은 Vault에서 함께 회전하고 dev와 prod event 구분은 공용 `ENVIRONMENT`와 Web build의 `EXPO_PUBLIC_ENVIRONMENT`가 담당한다. 업로드 token과 build metadata는 Kubernetes Secret에 포함되지 않는다.
 - Confirmation / Follow-up: Terraform plan에서 role과 최소 read policy를 확인하고 Helm render에서 runtime Secret이 DSN 두 개만 포함하는지, main build가 shared 값을 읽어 source map을 업로드하는지 확인한다.
 
 ## Remaining Decisions

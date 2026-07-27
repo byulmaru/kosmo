@@ -15,7 +15,7 @@ permissions:
 env:
   AWS_REGION: ap-northeast-2
   AWS_ECR_REPOSITORY_URL: 822638974464.dkr.ecr.ap-northeast-2.amazonaws.com/kosmo
-  SENTRY_ENVIRONMENT: ${{ startsWith(github.ref, 'refs/tags/') && 'prod' || 'dev' }}
+  ENVIRONMENT: ${{ startsWith(github.ref, 'refs/tags/') && 'prod' || 'dev' }}
   SENTRY_RELEASE: kosmo@${{ github.sha }}
   VAULT_ADDR: https://vault.tail1fdd55.ts.net
   VAULT_GITHUB_ACTIONS_AUDIENCE: https://vault.tail1fdd55.ts.net
@@ -149,7 +149,7 @@ jobs:
           build-args: |
             EXPO_PUBLIC_SENTRY_DSN=${{ env.EXPO_PUBLIC_SENTRY_DSN }}
             EXPO_PUBLIC_SENTRY_ENABLED=1
-            EXPO_PUBLIC_SENTRY_ENVIRONMENT=${{ env.SENTRY_ENVIRONMENT }}
+            EXPO_PUBLIC_ENVIRONMENT=${{ env.ENVIRONMENT }}
             SENTRY_API_PROJECT=${{ env.SENTRY_API_PROJECT }}
             SENTRY_ORG=${{ env.SENTRY_ORG }}
             SENTRY_RELEASE=${{ env.SENTRY_RELEASE }}

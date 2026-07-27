@@ -47,7 +47,7 @@ spec:
           env:
             - name: SENTRY_ENABLED
               value: "1"
-            - name: SENTRY_ENVIRONMENT
+            - name: ENVIRONMENT
               value: {{ .Values.env | quote }}
             - name: DATABASE_PASSWORD
               valueFrom:

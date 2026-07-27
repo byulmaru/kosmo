@@ -43,14 +43,14 @@
 - **WHEN** 같은 공용 앱 source가 Android 또는 iOS에서 실행된다
 - **THEN** 이 변경은 native Sentry SDK를 초기화하거나 native 오류·debug symbol을 업로드하지 않는다
 
-### Requirement: 민감 데이터 최소화
+### Requirement: SDK event 보존과 기본 telemetry 최소화
 
-**Authority / Provenance:** PROD-477, PROD-484, PROD-493. Sentry SDK가 만든 exception은 values와 모든 내부 진단 정보를 포함해 그대로 유지해야 한다(MUST). Event의 top-level request, user, extra, contexts와 breadcrumb는 제거해야 하며(MUST), SDK는 기본 개인정보 전송과 Web 자동 session tracking을 활성화하지 않아야 한다(MUST NOT).
+**Authority / Provenance:** 사용자 결정, PROD-477, PROD-484, PROD-493. Sentry SDK가 만든 event와 exception은 `beforeSend`에서 정제하거나 재구성하지 않고 그대로 전송해야 한다(MUST). SDK는 자동 breadcrumb, 기본 개인정보 전송과 Web 자동 session tracking을 활성화하지 않아야 한다(MUST NOT).
 
 #### Scenario: Server request fails
 
 - **WHEN** 인증 header, cookie, GraphQL body 또는 사용자 콘텐츠가 있는 요청에서 서버 예외가 발생한다
-- **THEN** 수집된 event의 exception은 SDK가 만든 값과 동일하고 top-level request, user, extra, contexts와 breadcrumb는 없다
+- **THEN** 수집된 event는 SDK가 만든 exception, request와 context를 유지하고 breadcrumb는 없다
 
 #### Scenario: BFF authentication path has a server failure
 
@@ -61,7 +61,7 @@
 #### Scenario: Browser interaction precedes failure
 
 - **WHEN** 입력, 클릭, GraphQL 요청 또는 console 출력 뒤 Web 오류가 발생한다
-- **THEN** 수집된 event에는 SDK가 만든 exception이 있고 top-level browser context와 breadcrumb는 없다
+- **THEN** 수집된 event에는 SDK가 만든 exception과 browser context가 유지되고 breadcrumb는 없다
 
 ### Requirement: 환경 runtime release 식별
 
@@ -93,12 +93,12 @@
 
 ### Requirement: 운영 검증과 triage
 
-**Authority / Provenance:** PROD-477, PROD-484, PROD-493. 저장소 문서는 설정 방법, 개인정보 제거 정책, 검증용 오류 절차, release·source map 확인과 새 오류를 담당 작업으로 넘기는 최소 triage 경로를 설명해야 한다(MUST). 배포 완료 판단은 API, Web BFF와 Web 각각의 검증 event에서 release와 원본 TypeScript·React 위치를 확인해야 한다(MUST).
+**Authority / Provenance:** PROD-477, PROD-484, PROD-493. 저장소 문서는 설정 방법, event 전달 정책, 검증용 오류 절차, release·source map 확인과 새 오류를 담당 작업으로 넘기는 최소 triage 경로를 설명해야 한다(MUST). 배포 완료 판단은 API, Web BFF와 Web 각각의 검증 event에서 release와 원본 TypeScript·React 위치를 확인해야 한다(MUST).
 
 #### Scenario: Deployment verification
 
 - **WHEN** 운영자가 새 release를 배포한다
-- **THEN** 문서화된 절차로 세 runtime의 검증 event, 개인정보 제거, release 연결, 원본 위치와 알림 전달을 확인할 수 있다
+- **THEN** 문서화된 절차로 세 runtime의 검증 event, event 전달 결과, release 연결, 원본 위치와 알림 전달을 확인할 수 있다
 
 #### Scenario: New issue triage
 

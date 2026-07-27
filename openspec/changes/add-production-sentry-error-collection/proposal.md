@@ -7,7 +7,7 @@ Kosmo의 API, Web BFF, Web 앱은 프로덕션 처리되지 않은 예외를 중
 - API와 Web BFF의 처리되지 않은 서버 예외를 전역 경계에서 한 번만 Sentry에 수집한다.
 - Web 앱의 처리되지 않은 React·브라우저 오류를 공용 경계와 브라우저 런타임에서 수집한다.
 - 세 runtime에 공통 환경·runtime·release 식별자를 붙이고 배포 전에 source map을 업로드한다.
-- Sentry exception은 모든 내부 진단 정보와 함께 그대로 보존하고 top-level 요청·사용자 context와 breadcrumb만 event에서 제거한다.
+- Sentry SDK가 만든 event와 exception은 `beforeSend`로 정제하지 않고 그대로 전송하며 자동 breadcrumb만 비활성화한다.
 - 로컬 개발과 테스트에서는 DSN이 명시적으로 주어져도 기본적으로 외부 전송하지 않는다.
 - DSN과 source map 업로드 자격 증명을 Vault·GitHub 배포 설정으로 분리하고 운영 검증·triage 절차를 문서화한다.
 - Android·iOS native runtime과 debug symbol 업로드는 Backlog인 PROD-483에 남긴다.
@@ -22,7 +22,7 @@ Kosmo의 API, Web BFF, Web 앱은 프로덕션 처리되지 않은 예외를 중
 
 ### New Capabilities
 
-- `production-error-observability`: API, Web BFF와 Web browser의 처리되지 않은 오류 수집, 개인정보 제거, release·source map 연결과 운영 검증 계약
+- `production-error-observability`: API, Web BFF와 Web browser의 처리되지 않은 오류 수집, event 전달 정책, release·source map 연결과 운영 검증 계약
 
 ### Modified Capabilities
 
@@ -33,4 +33,4 @@ Kosmo의 API, Web BFF, Web 앱은 프로덕션 처리되지 않은 예외를 중
 - `apps/api`, `apps/web`, `apps/app`의 오류 경계와 런타임 초기화
 - Docker/Expo Web 빌드, GitHub Actions, Helm/Vault 배포 환경 변수와 source map 업로드
 - Sentry JavaScript SDK 및 업로드 도구 의존성
-- 오류 수집 설정, 개인정보 제거 정책, 배포 후 검증과 triage 운영 문서
+- 오류 수집 설정, event 전달 정책, 배포 후 검증과 triage 운영 문서

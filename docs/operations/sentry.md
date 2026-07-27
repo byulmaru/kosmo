@@ -21,26 +21,23 @@ Vault의 `secret/kubernetes/kosmo/shared`에는 환경과 무관한 Sentry 설�
 
 `SENTRY_AUTH_TOKEN`에는 source map 업로드와 release artifact 생성 권한만 가진 organization token을 둔다. GitHub Actions는 OIDC로 `shared` 경로를 읽고 이 token을 Docker BuildKit secret mount로만 전달한다. Vault Secrets Operator의 `sentry-runtime` transformation은 `SENTRY_API_DSN`과 `SENTRY_WEB_BFF_DSN`만 Kubernetes Secret으로 복사하므로 token, organization·project slug와 Web DSN은 Pod에 포함하지 않는다.
 
-세 DSN은 현재 환경마다 다른 Sentry project를 사용하지 않으므로 `shared`에서 관리하고 event의 dev/prod 구분은 `SENTRY_ENVIRONMENT`가 담당한다. 두 서버가 같은 Sentry project를 사용해도 runtime별 key를 명시적으로 유지한다. `SENTRY_ENABLED=1`, `SENTRY_ENVIRONMENT`와 commit 기반 `SENTRY_RELEASE`는 Helm과 image가 주입한다. DSN, enable flag, environment와 release 중 하나라도 없으면 해당 runtime은 event를 전송하지 않는다.
+세 DSN은 현재 환경마다 다른 Sentry project를 사용하지 않으므로 `shared`에서 관리하고 event의 dev/prod 구분은 공용 `ENVIRONMENT`가 담당한다. Web build에는 같은 값을 `EXPO_PUBLIC_ENVIRONMENT`로 전달한다. 두 서버가 같은 Sentry project를 사용해도 runtime별 key를 명시적으로 유지한다. `SENTRY_ENABLED=1`, environment와 commit 기반 `SENTRY_RELEASE`는 Helm과 image가 주입한다. DSN, enable flag, environment와 release 중 하나라도 없으면 해당 runtime은 event를 전송하지 않는다.
 
-## 개인정보 제거 정책
+## Event 전달 정책
 
-수집 event는 다음 정보를 유지한다.
+Sentry SDK가 만든 event는 `beforeSend`에서 재구성하거나 제거하지 않고 그대로 전송한다. 따라서 다음 진단 정보를 유지한다.
 
 - Sentry SDK가 만든 exception 전체(values, type, message, mechanism, stack frame과 frame metadata)
 - source map debug ID
 - environment와 `kosmo@<commit-sha>` release
 - `api`, `web-bff`, `web` runtime tag
+- SDK가 수집한 request, user, extra와 context
 
-다음 top-level 정보는 `beforeSend`와 `beforeBreadcrumb`에서 제거한다.
+자동 breadcrumb는 `beforeBreadcrumb`에서 모두 제거한다.
 
-- Authorization header, cookie, session과 bearer token
-- request body와 query string
-- GraphQL document, operation variables와 response data
-- 구조화된 사용자 작성 콘텐츠와 request payload
-- user, extra, context와 모든 자동 console·network·navigation·UI breadcrumb
+- console, network, navigation과 UI breadcrumb
 
-Sentry의 기본 개인정보 전송도 활성화하지 않는다. Exception은 SDK가 구성한 값을 그대로 유지하므로 message, mechanism data, source context와 frame local variable에 인증 정보, request payload 또는 사용자 작성 콘텐츠가 포함될 수 있다. 이는 오류 추적 정보를 보존하기 위해 수용한 범위이며, 애플리케이션 오류와 local variable에 민감 값을 넣지 않아야 한다. 새 top-level tag, context 또는 breadcrumb가 필요하면 허용할 값과 사용자 콘텐츠 포함 가능성을 먼저 검토하고 이 문서와 redaction test를 함께 갱신한다.
+Sentry의 기본 개인정보 전송은 활성화하지 않지만, SDK event에는 오류 진단을 위해 request metadata, exception message, mechanism data, source context, frame local variable와 애플리케이션이 추가한 context가 포함될 수 있다. 애플리케이션 오류나 명시적 Sentry context에 인증 정보 또는 불필요한 사용자 콘텐츠를 넣지 않아야 한다.
 
 ## Build와 source map
 
@@ -67,7 +64,7 @@ rg 'sourceMappingURL=|SENTRY_AUTH_TOKEN' apps/api/dist apps/web/dist apps/app/di
 3. Web React boundary 아래에서 render 오류를 발생시키고 기존 오류 화면·재시도와 `web` event를 확인한다.
 4. 세 event의 environment, runtime tag와 `kosmo@<같은 commit-sha>` release가 일치하는지 확인한다.
 5. 각 stack이 원본 TypeScript·React 파일과 행으로 symbolicate되는지 확인한다.
-6. event JSON에서 Sentry exception payload는 그대로 유지되고 top-level request, user, extra, context와 breadcrumb는 없는지 확인한다.
+6. event JSON에서 SDK가 만든 exception, request와 context가 누락 없이 유지되고 breadcrumb는 없는지 확인한다.
 7. Sentry project의 새 issue 알림이 운영 채널로 전달되는지 확인한다.
 
 실제 event와 알림 증거가 없으면 PROD-477의 통합 검증과 OpenSpec archive를 완료하지 않는다.

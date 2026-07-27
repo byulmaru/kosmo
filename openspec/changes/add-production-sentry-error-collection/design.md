@@ -10,7 +10,7 @@ API와 Web BFF는 Hono/Node ESM 애플리케이션이며 TypeScript source를 `t
 
 - API, Web BFF와 Web browser의 unexpected 오류를 기존 응답·UI를 유지하며 한 번씩 수집한다.
 - 세 runtime에 같은 커밋 release와 일관된 environment/runtime metadata를 붙인다.
-- Sentry exception은 그대로 전달하고 top-level request·GraphQL·사용자 context와 자동 breadcrumb만 제거한다.
+- Sentry SDK가 만든 event와 exception은 `beforeSend`로 정제하지 않고 그대로 전달하며 자동 breadcrumb만 제거한다.
 - build에서 server/Web source map을 생성·검증·업로드하고 제공 artifact에서는 제거한다.
 - 자격 증명 주입, 배포 검증과 triage 경로를 저장소 문서로 재현 가능하게 만든다.
 
@@ -33,10 +33,10 @@ API와 Web BFF는 Hono/Node ESM 애플리케이션이며 TypeScript source를 `t
 
 ### Recommended Approach
 
-- API와 BFF는 작은 공용 server 관측 모듈을 공유하지 말고 각 앱이 같은 최소 설정을 소유하되, 개인정보 정제 로직만 실제로 재사용되는 workspace 경계에 둔다. Sentry SDK는 명시적 배포 enable flag, DSN, environment와 release가 모두 있을 때만 활성화한다.
+- API와 BFF는 작은 공용 server 관측 모듈을 공유하지 말고 각 앱이 같은 최소 설정을 소유한다. Sentry SDK는 명시적 배포 enable flag, DSN, environment와 release가 모두 있을 때만 활성화한다.
 - API GraphQL plugin은 Kosmo/validation 오류를 변환만 하고 unexpected 원인만 capture한다. GraphQL 밖 API 오류와 Web BFF unexpected 오류는 각 Hono `onError`가 capture한다.
 - Web platform entry가 router와 애플리케이션 module보다 먼저 browser SDK를 초기화하고 Web 전용 오류 경계 조합이 공용 React boundary에 오류 reporter context를 제공한다. 외부 GraphQL 경계와 오류를 소비하는 내부 route·session 경계의 `componentDidCatch`가 이 reporter로 capture한다. Android·iOS entry와 조합은 Sentry 관측 module을 import하지 않는다.
-- event processor는 Sentry exception을 그대로 전달하고 top-level request/user/extra/context/breadcrumb만 제거한다. environment/release/runtime metadata는 유지하고 자동 breadcrumb와 Web session tracking은 전부 비활성화한다.
+- `beforeSend` event processor를 두지 않고 SDK event 전체를 전달한다. environment/release/runtime metadata는 유지하고 자동 breadcrumb와 Web session tracking은 전부 비활성화한다.
 - Docker build는 Sentry를 애플리케이션 module보다 먼저 초기화하는 server entry를 production JavaScript와 external source map으로 만들고 Expo Web export에 external source map을 요청한다. Sentry CLI의 debug ID inject와 upload를 업로드 token BuildKit secret으로 수행한 뒤 map과 sourceMappingURL을 제거하고 runtime image에는 실행 JavaScript만 복사한다.
 - GitHub Actions는 OIDC로 Vault의 `secret/kubernetes/kosmo/shared`만 읽어 공개 Web DSN과 조직·프로젝트 slug를 build arg로, 업로드 token을 BuildKit secret으로 전달한다. 환경에 독립적인 서버 DSN도 `shared`에 두되 별도 VaultStaticSecret transformation이 API·Web BFF DSN 두 개만 runtime Kubernetes Secret으로 추출한다.
 
@@ -48,25 +48,25 @@ API와 Web BFF는 Hono/Node ESM 애플리케이션이며 TypeScript source를 `t
 ### Known Traps
 
 - DSN은 Web bundle에 공개될 수 있지만 source map 업로드 token은 공개 설정이나 Docker layer/ARG에 넣지 않는다.
-- capture 전 request object를 그대로 scope/context에 추가하지 않는다. SDK 기본 PII 비활성만으로 GraphQL body와 breadcrumb 제거가 증명되지는 않는다.
-- exception message, mechanism data, source context와 frame local variable는 조사 정보로 그대로 유지되므로 애플리케이션 오류와 local variable에 인증 정보, request payload 또는 사용자 작성 콘텐츠를 넣지 않는다.
+- capture 전 request object나 인증 정보를 별도 scope/context에 중복 추가하지 않는다.
+- request metadata, exception message, mechanism data, source context와 frame local variable는 조사 정보로 유지될 수 있으므로 애플리케이션 오류와 명시적 context에 인증 정보 또는 불필요한 사용자 콘텐츠를 넣지 않는다.
 - React boundary capture와 browser 자동 capture를 별도 error wrapper로 중첩하지 않는다.
 - map을 정적 root에 남기거나 공개 JavaScript에 `sourceMappingURL`을 남기지 않는다.
 - 업로드 자격 증명 없는 로컬 build와 test를 실패시키지 않되, 인증된 배포 검증에서는 업로드 누락을 성공으로 간주하지 않는다.
 
 ## Risks / Trade-offs
 
-- [엄격한 정제로 request·browser context가 줄어 조사 단서가 제한된다] → 초기 계약에서는 stack, release, runtime과 허용 route만 남기고 필요한 추가 metadata는 별도 개인정보 검토 뒤 확장한다.
+- [SDK event에 request·browser context나 사용자 콘텐츠가 포함될 수 있다] → 기본 PII 전송과 breadcrumb·Web session tracking은 비활성화하고, 애플리케이션이 오류·context에 민감 정보를 넣지 않도록 운영 검증에서 실제 event를 확인한다.
 - [서버 bundle 전환이 ESM package 동작이나 dynamic loading을 바꿀 수 있다] → production entry smoke와 API/Web 전체 test를 실행하고 문제가 있으면 emit 전략을 바꾸되 source map 계약은 유지한다.
 - [하나의 image가 여러 환경에 재사용되면 Web environment가 build 시점 값과 달라질 수 있다] → 현재 main/dev와 tag/production build가 명시적 environment build arg를 전달하고, image promotion이 도입되면 runtime config 주입을 별도 계약으로 전환한다.
-- [실제 Sentry project와 알림 rule은 저장소 밖 상태다] → 코드·build 검증과 별도로 배포 후 event, symbolication, redaction, 알림 전달 체크리스트를 완료 조건으로 남긴다.
+- [실제 Sentry project와 알림 rule은 저장소 밖 상태다] → 코드·build 검증과 별도로 배포 후 event, symbolication, event 전달 결과와 알림 전달 체크리스트를 완료 조건으로 남긴다.
 
 ## Migration Plan
 
 1. SDK와 비활성 기본 설정, unit test를 먼저 추가한다.
 2. server/Web source map 생성과 secret 없는 로컬 build 검증을 연결한다.
 3. Vault shared Sentry 설정과 GitHub OIDC read role, BuildKit upload secret, runtime DSN transformation을 설정한다.
-4. 새 image를 배포하고 API, Web BFF, Web 검증 event를 순서대로 발생시켜 release·원본 위치·redaction을 확인한다.
+4. 새 image를 배포하고 API, Web BFF, Web 검증 event를 순서대로 발생시켜 release·원본 위치·event 전달 결과를 확인한다.
 5. 문제가 있으면 enable flag 또는 DSN을 제거해 수집만 즉시 중단한다. 기존 응답·UI와 애플리케이션 실행은 유지된다.
 
 ## Open Questions
