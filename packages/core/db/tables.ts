@@ -107,6 +107,13 @@ export const ActivityPubPosts = pgTable('activitypub_post', {
   publishedAt: datetime('published_at'),
 });
 
+export const ActivityPubReactions = pgTable('activitypub_reaction', {
+  uri: text('uri').unique().notNull(),
+  reactionId: uuid('reaction_id')
+    .primaryKey()
+    .references(() => Reactions.id, { onDelete: 'cascade' }),
+});
+
 export const Applications = pgTable(
   'application',
   {

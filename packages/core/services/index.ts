@@ -1,3 +1,4 @@
+export { materializeInboundReaction, undoInboundReaction } from './activitypub-reaction';
 export { createBookmark, deleteBookmark } from './bookmark';
 export {
   createFollowNotification,
