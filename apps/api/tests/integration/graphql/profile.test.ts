@@ -162,6 +162,122 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(await countRows(Profiles), profileCountBefore);
   });
 
+  test('searches stored profiles by partial handle with literal LIKE metacharacters', async () => {
+    await createProfile({ handle: 'alice', instanceId: localInstanceId });
+    await createProfile({ handle: 'malice', instanceId: localInstanceId });
+    await createProfile({
+      handle: 'literal_handle',
+      instanceId: localInstanceId,
+    });
+    await createProfile({
+      handle: 'literalXhandle',
+      instanceId: localInstanceId,
+    });
+    await createProfile({
+      handle: 'literal-disabled',
+      instanceId: localInstanceId,
+      state: ProfileState.DISABLED,
+    });
+    await createProfile({
+      handle: 'literal-suspended',
+      instanceId: localInstanceId,
+      state: ProfileState.SUSPENDED,
+    });
+    const remoteInstance = await createRemoteInstance();
+    await createProfile({
+      handle: 'alice-remote',
+      instanceId: remoteInstance.id,
+    });
+    const unresponsiveRemoteInstance = await createRemoteInstance({
+      domain: 'unresponsive.remote.example',
+      state: InstanceState.UNRESPONSIVE,
+    });
+    await createProfile({
+      handle: 'alice-unresponsive',
+      instanceId: unresponsiveRemoteInstance.id,
+    });
+    const suspendedRemoteInstance = await createRemoteInstance({
+      domain: 'suspended.remote.example',
+      state: InstanceState.SUSPENDED,
+    });
+    await createProfile({
+      handle: 'alice-hidden',
+      instanceId: suspendedRemoteInstance.id,
+    });
+
+    const search = (handle: string) =>
+      requestGraphQL<{
+        profilesByHandle: Array<{ relativeHandle: string }>;
+      }>(
+        `query ProfilesByHandle($handle: String!) {
+          profilesByHandle(handle: $handle) {
+            relativeHandle
+          }
+        }`,
+        { handle },
+      );
+    const relativeHandles = (
+      result: GraphQLResult<{ profilesByHandle: Array<{ relativeHandle: string }> }>,
+    ) => {
+      assert.ok(result.data);
+      return result.data.profilesByHandle.map(({ relativeHandle }) => relativeHandle).sort();
+    };
+    const searchExactAndPartial = (exactHandle: string, partialHandle: string) =>
+      requestGraphQL<{
+        exact: { id: string } | null;
+        partial: Array<{ relativeHandle: string }>;
+      }>(
+        `query ProfileVisibility($exactHandle: String!, $partialHandle: String!) {
+          exact: profileByHandle(handle: $exactHandle) { id }
+          partial: profilesByHandle(handle: $partialHandle) { relativeHandle }
+        }`,
+        { exactHandle, partialHandle },
+      );
+
+    for (const [handle, expectedHandles] of [
+      ['alice', ['@alice', '@malice']],
+      [`alice@${localDomain}`, ['@alice', '@malice']],
+      ['@alice@remote.example', ['@alice-remote@remote.example']],
+      ['does-not-exist', []],
+      ['literal%', []],
+      ['literal_', ['@literal_handle']],
+      ['literal\\', []],
+      ['alice@unresponsive.remote.example', ['@alice-unresponsive@unresponsive.remote.example']],
+    ] as const) {
+      const matches = await search(handle);
+      assertNoGraphQLErrors(matches);
+      assert.deepEqual(relativeHandles(matches), [...expectedHandles], handle);
+    }
+
+    const suspendedLocalMatches = await searchExactAndPartial('literal-suspended', 'literal-');
+    assertNoGraphQLErrors(suspendedLocalMatches);
+    assert.equal(suspendedLocalMatches.data?.exact, null);
+    assert.deepEqual(suspendedLocalMatches.data?.partial, []);
+
+    const suspendedRemoteMatches = await searchExactAndPartial(
+      'alice-hidden@suspended.remote.example',
+      'alice@suspended.remote.example',
+    );
+    assertNoGraphQLErrors(suspendedRemoteMatches);
+    assert.equal(suspendedRemoteMatches.data?.exact, null);
+    assert.deepEqual(suspendedRemoteMatches.data?.partial, []);
+
+    const profileCountBefore = await countRows(Profiles);
+    const fetchMock = mock.method(globalThis, 'fetch', async () => {
+      throw new Error('Stored profile search must not use the network');
+    });
+
+    try {
+      const missingRemote = await search('missing@missing.remote.example');
+      assertNoGraphQLErrors(missingRemote);
+      assert.deepEqual(missingRemote.data?.profilesByHandle, []);
+      assert.equal(fetchMock.mock.calls.length, 0);
+      assert.equal(await countRows(Profiles), profileCountBefore);
+    } finally {
+      fetchMock.mock.restore();
+    }
+  });
+
   test('loads an active remote profile through the Node interface', async () => {
     const remoteInstance = await createRemoteInstance();
     const remote = await createProfile({

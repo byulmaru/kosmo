@@ -406,6 +406,7 @@ type Query {
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
   profileByHandle(handle: String!): Profile
+  profilesByHandle(handle: String!): [Profile!]!
 }
 
 type Reaction implements Node {

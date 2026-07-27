@@ -12,6 +12,12 @@ const result = profile({
   id: 'profile-byulmaru',
   relativeHandle: '@byulmaru',
 });
+const secondResult = profile({
+  displayName: '별마루 개발',
+  handle: 'byulmaru-dev',
+  id: 'profile-byulmaru-dev',
+  relativeHandle: '@byulmaru-dev',
+});
 
 const meta = {
   component: SearchScreen,
@@ -27,21 +33,25 @@ export const Idle: Story = {
 
 export const Result: Story = {
   parameters: {
-    relay: { data: { profileByHandle: result } },
+    relay: { data: { profilesByHandle: [result, secondResult] } },
     router: { params: { q: 'byulmaru', tab: 'people' }, pathname: '/search' },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole('link', { name: /별마루/ })).toHaveAttribute(
+    await expect(canvas.getByRole('link', { name: /@byulmaru / })).toHaveAttribute(
       'href',
       '/@byulmaru',
+    );
+    await expect(canvas.getByRole('link', { name: /@byulmaru-dev / })).toHaveAttribute(
+      'href',
+      '/@byulmaru-dev',
     );
   },
 };
 
 export const EmptyResult: Story = {
   parameters: {
-    relay: { data: { profileByHandle: null } },
+    relay: { data: { profilesByHandle: [] } },
     router: { params: { q: '없는핸들', tab: 'people' }, pathname: '/search' },
   },
 };

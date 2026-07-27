@@ -92,6 +92,16 @@ Request의 상태나 존재를 바꾸지 않는다.
 - Remote Profile은 Instance의 Safety State가 Domain Block이 아니어야 한다.
 - viewer Profile의 Profile Domain Block 대상 Instance에 속한 Remote Profile은 viewer에게 없는 것처럼 취급한다.
 - 공개 검색 후보는 위 조회 조건을 통과해야 하며 Domain Limit Instance의 Remote Profile은 제외한다.
+
+위 Domain Limit 및 viewer Profile Domain Block 규칙은 공개 Profile 조회·검색의 최종 canonical moderation
+정책이다. 다만 해당 정책을 exact/partial Profile lookup에 함께 적용할 저장 모델과 공통 predicate가 아직 없는
+현재 단계에서는 [ADR 0017](../decisions/0017-profile-search-staged-visibility.md)의 제한된 staged exception을
+적용할 수 있다. 현재 저장된 Profile의 exact `profileByHandle`과 partial `profilesByHandle`은 같은 visibility를
+사용해 configured local Instance의 `Active` Profile과, 입력 domain의 ActivityPub Instance에 저장된 `Active`
+Remote Profile(단, `InstanceState.SUSPENDED` Instance 제외)만 반환한다. 이 예외는 최종 moderation 정책이
+Domain Limit/Profile Domain Block을 허용하거나 생략하도록 바꾸지 않으며, 공통 predicate가 준비되면 exact와
+partial lookup을 함께 전환해야 한다.
+
 - Remote Profile lookup은 Instance의 Safety State가 Domain Block이 아니고 Reachability State가
   Reachable이며 Service State가 Active일 때만 새 원격 요청을 보낼 수 있다.
 

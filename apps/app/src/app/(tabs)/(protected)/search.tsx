@@ -23,7 +23,8 @@ const tabs = [
 
 const SearchPeopleQuery = graphql`
   query SearchPeopleByHandlePageQuery($handle: String!) {
-    profileByHandle(handle: $handle) {
+    profilesByHandle(handle: $handle) {
+      id
       ...ProfileListItem_profile
     }
   }
@@ -51,8 +52,10 @@ function PeopleResultsContent({ fetchKey, handle }: { fetchKey: string; handle: 
     { handle: handle.replace(/^@/, '') },
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
-  return data.profileByHandle ? (
-    <ProfileListItem linked profile={data.profileByHandle} />
+  return data.profilesByHandle.length ? (
+    data.profilesByHandle.map((profile) => (
+      <ProfileListItem key={profile.id} linked profile={profile} />
+    ))
   ) : (
     <StateView
       description={`'${handle}'에 해당하는 프로필을 찾지 못했어요.`}

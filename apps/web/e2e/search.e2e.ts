@@ -1,4 +1,9 @@
-import { createE2ESession, resetE2EDatabase, setE2ESessionCookie } from './db-fixtures';
+import {
+  createE2EProfile,
+  createE2ESession,
+  resetE2EDatabase,
+  setE2ESessionCookie,
+} from './db-fixtures';
 import { expect, test } from './fixtures';
 import { isGraphQLOperation, readGraphQLOperation } from './graphql';
 import type { BrowserContext, Page } from '@playwright/test';
@@ -149,6 +154,40 @@ test('handle 제출은 operationName을 포함한 Relay request와 사람 결과
     `/@${handle}`,
   );
   expect(operationName).toBe('SearchPeopleByHandlePageQuery');
+});
+
+test('부분 handle 검색은 저장된 모든 일치 Profile을 목록으로 표시한다', async ({
+  context,
+  page,
+}) => {
+  const firstHandle = 'e2e-partial-alpha';
+  const secondHandle = 'e2e-partial-beta';
+  await signInSearchUser(context, { displayName: 'E2E 부분 검색 첫 결과', handle: firstHandle });
+  await createE2EProfile({ displayName: 'E2E 부분 검색 두 번째 결과', handle: secondHandle });
+
+  await page.goto('/search?q=e2e-partial&tab=people');
+
+  await expect(page.getByRole('link', { name: /E2E 부분 검색 첫 결과/ })).toHaveAttribute(
+    'href',
+    `/@${firstHandle}`,
+  );
+  await expect(page.getByRole('link', { name: /E2E 부분 검색 두 번째 결과/ })).toHaveAttribute(
+    'href',
+    `/@${secondHandle}`,
+  );
+});
+
+test('사람 검색의 LIKE wildcard 문자는 일반 handle 문자로 처리한다', async ({ context, page }) => {
+  const wildcardLookalike = 'e2e-percent-target';
+  await signInSearchUser(context, {
+    displayName: 'E2E 퍼센트 유사 결과',
+    handle: wildcardLookalike,
+  });
+
+  await page.goto(`/search?q=${encodeURIComponent('e2e-percent%')}&tab=people`);
+
+  await expect(page.getByRole('link', { name: /E2E 퍼센트 유사 결과/ })).toHaveCount(0);
+  await expect(page.getByText('검색 결과가 없어요')).toBeVisible();
 });
 
 test('알 수 없는 tab은 사람 탭으로 정규화한다', async ({ context, page }) => {
