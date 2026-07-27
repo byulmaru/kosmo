@@ -27,6 +27,12 @@ const browserUploadOrigin = 'http://localhost:5173';
 const crossServiceOrigin = process.env.MEDIA_UPLOAD_CROSS_SERVICE_ORIGIN;
 const crossServiceApiKey = process.env.MEDIA_UPLOAD_CROSS_SERVICE_API_KEY;
 const crossServiceRequested = crossServiceOrigin !== undefined || crossServiceApiKey !== undefined;
+// Keep the production smoke-test upload minimal. This is the same non-animated 1×1 PNG fixture
+// used by the Media Storage Service integration suite.
+const onePixelPng = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64',
+);
 const uploadExpiresAt = '2026-07-27T15:00:00Z';
 const serializedUploadExpiresAt = '2026-07-27T15:00:00.000Z';
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -153,12 +159,11 @@ describe('Local Media upload GraphQL 경계', () => {
       });
       assert.equal(preflight.status, 204);
       assert.equal(preflight.headers.get('access-control-allow-origin'), browserUploadOrigin);
+      assert.equal(preflight.headers.get('access-control-allow-methods'), 'PUT, OPTIONS');
+      assert.equal(preflight.headers.get('access-control-allow-headers'), 'Content-Type');
 
       const upload = await fetch(uploadUrl, {
-        body: Buffer.from(
-          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-          'base64',
-        ),
+        body: onePixelPng,
         headers: { 'Content-Type': 'image/png', Origin: browserUploadOrigin },
         method: 'PUT',
       });
