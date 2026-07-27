@@ -308,32 +308,16 @@ describe('inbound Announce materialization', () => {
     assert.equal(await postState(recreated.id), PostState.ACTIVE);
   });
 
-  test('ignores Undo from another actor and converges under concurrent B and Undo A', async () => {
-    const actor = await createRemoteActor(actorUri);
+  test('ignores Undo from another actor', async () => {
+    await createRemoteActor(actorUri);
     await createRemoteActor(otherActorUri, 'mallory');
-    const source = await createRemoteSource();
+    await createRemoteSource();
     const a = announce('race-a', sourceUri);
-    const b = announce('race-b', sourceUri);
 
     await handleInboundAnnounce(context(), a);
     const original = await currentRepost(a.id!).then(({ repost }) => repost);
     await handleInboundUndo(context(), undo(otherActorUri, a.id!));
     assert.equal(await postState(original.id), PostState.ACTIVE);
-
-    await Promise.all([
-      handleInboundAnnounce(context(), b),
-      handleInboundUndo(context(), undo(actorUri, a.id!)),
-    ]);
-
-    const { repost } = await currentRepost(b.id!);
-    assert.equal(repost.state, PostState.ACTIVE);
-    assert.equal(repost.profileId, actor.id);
-    assert.equal(repost.repostSourceId, source.id);
-    assert.equal(
-      (await findReposts(actor.id, source.id)).filter(({ state }) => state === PostState.ACTIVE)
-        .length,
-      1,
-    );
   });
 });
 

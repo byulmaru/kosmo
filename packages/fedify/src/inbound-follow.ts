@@ -139,7 +139,6 @@ const handleInboundUndoAnnounce = async (undo: Undo, actorUri: URL): Promise<boo
         ),
       )
       .limit(1)
-      .for('update', { of: ActivityPubPosts })
       .then(first);
 
     if (!row) {

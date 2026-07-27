@@ -48,9 +48,7 @@ const saveCurrentAnnounce = async (
     })
     .from(ActivityPubPosts)
     .innerJoin(Posts, eq(Posts.id, ActivityPubPosts.postId))
-    .where(or(eq(ActivityPubPosts.postId, postId), eq(ActivityPubPosts.uri, activityUri)))
-    .orderBy(ActivityPubPosts.id)
-    .for('update', { of: ActivityPubPosts });
+    .where(or(eq(ActivityPubPosts.postId, postId), eq(ActivityPubPosts.uri, activityUri)));
 
   const current = existing.find((row) => row.postId === postId);
   const collision = existing.find((row) => row.uri === activityUri && row.postId !== postId);
