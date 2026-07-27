@@ -50,7 +50,6 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
         <View
           accessibilityLiveRegion="assertive"
           accessibilityRole="alert"
-          pointerEvents="none"
           style={[Platform.OS === 'web' ? webHost : styles.nativeHost, { paddingBottom: bottom }]}
         >
           <View style={[styles.toast, { backgroundColor: theme.accent }]}>

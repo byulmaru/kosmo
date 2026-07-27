@@ -607,6 +607,19 @@ function PostCatalog(_args: PostsStoryArgs) {
             )}
           />
         </View>
+        <View testID="detail-default-action-layout">
+          <PostLayout
+            post={requireFragment(requirePost(posts, 2).layout, 'default action detail layout')}
+          />
+        </View>
+        <View testID="detail-pure-repost-action-layout">
+          <PostLayout
+            post={requireFragment(
+              requirePostById(posts, pureRepost.id).layout,
+              'pure Repost action detail layout',
+            )}
+          />
+        </View>
       </Section>
     </Catalog>
   );
@@ -849,6 +862,25 @@ export const BodyTimeAndLayoutStates: Story = {
     expect(detailActionBar.parentElement?.closest('a, [role="link"], [role="button"]')).toBeNull();
     expect(detailActionBar.parentElement?.lastElementChild).toBe(detailActionBar);
     expect(within(detailActionBar).getByRole('button', { name: '재게시' })).toHaveTextContent('3');
+    const defaultActionBar = within(canvas.getByTestId('detail-default-action-layout')).getByRole(
+      'toolbar',
+      { name: '액션 바' },
+    );
+    expect(within(defaultActionBar).getByRole('button', { name: '재게시' })).toHaveTextContent('0');
+
+    const pureRepostActionBar = within(
+      canvas.getByTestId('detail-pure-repost-action-layout'),
+    ).getByRole('toolbar', { name: '액션 바' });
+    expect(
+      within(pureRepostActionBar).getByRole('button', { name: '재게시 취소' }),
+    ).toHaveTextContent('7');
+    await userEvent.click(within(pureRepostActionBar).getByRole('button', { name: '재게시 취소' }));
+    expect(await canvas.findByRole('menu', { name: '재게시 메뉴' })).toBeVisible();
+    expect(
+      within(canvas.getByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '재게시 취소',
+      }),
+    ).toBeVisible();
   },
 };
 
