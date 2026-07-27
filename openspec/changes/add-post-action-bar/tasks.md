@@ -90,9 +90,9 @@ PROD-434의 독립 `actionBar?: ReactNode`·mock surface slice를 실행하지 �
 - Web outside/Escape/focus return·keyboard navigation과 Native backdrop/back/dismiss/safe area·modal semantics를 검증한다.
 - menu label·item 선택 뒤 create/delete identity·pending, exact toast·latest-replace·자동 dismiss·alert semantics, 실패 뒤 상태 유지·menu 재시도를 검증한다.
 
-- [ ] 3.1 `PostListItem`·`PostLayout`에 actual Action Bar를 final sibling으로 배치하고 순수 Repost Source target과 navigation 비중첩을 연결한다.
-- [ ] 3.2 Web anchored menu와 Android·iOS bottom action sheet를 구현하고 선택·미선택 label, dismiss·focus/back·접근성, `인용하기` 미노출과 항목 선택 뒤 mutation을 검증한다.
-- [ ] 3.3 앱 provider의 단일 transient toast host와 Repost action별 surface callback을 연결하고 exact copy·latest-replace·자동 dismiss·safe area·alert semantics·실패 상태 유지를 검증한다.
+- [x] 3.1 `PostListItem`·`PostLayout`에 actual Action Bar를 final sibling으로 배치하고 순수 Repost Source target과 navigation 비중첩을 연결한다.
+- [x] 3.2 Web anchored menu와 Android·iOS bottom action sheet를 구현하고 선택·미선택 label, dismiss·focus/back·접근성, `인용하기` 미노출과 항목 선택 뒤 mutation을 검증한다.
+- [x] 3.3 앱 provider의 단일 transient toast host와 Repost action별 surface callback을 연결하고 exact copy·latest-replace·자동 dismiss·safe area·alert semantics·실패 상태 유지를 검증한다.
 - [ ] 3.4 app·Relay·unit·Storybook·static build·Web/Android/iOS runtime과 두 OpenSpec의 scoped·전체 strict validation을 통과시킨다.
 
 ## 4. PROD-432 실제 액션 연결·통합 검증·archive
