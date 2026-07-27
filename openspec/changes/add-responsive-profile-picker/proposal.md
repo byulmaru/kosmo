@@ -10,7 +10,7 @@
 - `compact` 이상 `full` 미만 Web에서는 아이콘 레일의 프로필 아바타가 레일 오른쪽 비모달 overlay drawer를 연다.
 - compact drawer는 레이아웃 폭을 바꾸거나 backdrop·focus trap을 사용하지 않으며 trigger 재실행, 바깥 클릭, `Escape`, 프로필 선택으로 닫힌다.
 - `< compact` mobile Web drawer의 이름·chevron trigger는 닫힘에 아래 방향, 열림에 위 방향을 표시하고
-  trigger 내부 콘텐츠만 아래로 4px 광학 보정한다.
+  trigger 내부 콘텐츠만 아래로 6px 광학 보정한다.
 - full·compact Web picker는 기존 viewport 여백 계산 안에서 최대 430px로 제한하고, 프로필 목록만 스크롤하며
   새 프로필 추가 액션·생성 폼은 고정 footer에 유지한다.
 - 기존 프로필 선택·생성·실패 상태와 Relay actor 전환 계약을 유지한다.

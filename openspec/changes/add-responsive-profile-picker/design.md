@@ -12,12 +12,12 @@
 - picker open state, 선택·생성·오류 처리와 Relay actor 전환을 한 흐름으로 유지한다.
 - 목록만 scroll owner로 두고 생성 진입과 폼을 고정 footer에 유지한다.
 - compact drawer를 본문보다 위에 표시하면서 기존 Web 셸 column 폭과 document scroll을 보존한다.
-- mobile Web drawer의 trigger에서 open chevron과 4px 광학 보정을 제공하되 hitbox·anchor·navigation geometry를 보존한다.
+- mobile Web drawer의 trigger에서 open chevron과 6px 광학 보정을 제공하되 hitbox·anchor·navigation geometry를 보존한다.
 - 가장 가까운 Storybook surface에서 responsive trigger와 긴 목록 회귀를 검증한다.
 
 **Non-Goals:**
 
-- Android/iOS profile picker를 재설계하지 않는다. mobile Web drawer는 trigger의 chevron·4px 광학 보정 외
+- Android/iOS profile picker를 재설계하지 않는다. mobile Web drawer는 trigger의 chevron·6px 광학 보정 외
   content, dismissal과 transient-state lifecycle을 재설계하지 않는다.
 - GraphQL schema, mutation payload, Relay normalization·actor reset·cache 정책을 바꾸지 않는다.
 - PROD-213 공용 Dropdown 전환이나 PROD-214/215의 별도 오류·Storybook 범위를 흡수하지 않는다.
@@ -58,7 +58,7 @@ clipping 또는 sibling stacking 실패가 확인되면 이 checkpoint에서 중
 compact drawer는 full sidebar 폭과 기존 spacing·radius·semantic color token을 기본값으로 검토하되, 정확한 width·viewport gap은 현재 token과 실제 Storybook viewport에서 조정할 수 있다. full·compact picker root는 기존 surface별 viewport 여백 계산을 유지하면서 최대 430px로 제한하고, list container만 `ScrollView`와 축소 가능한 flex 영역으로 만든다. divider 아래의 add action 또는 create form은 scroll container 밖 footer에 둔다. 기본 상태의 약 7개 가시 행은 목표치이며 실제 행 수보다 footer 접근성과 내부 스크롤을 우선한다.
 
 mobile Web drawer는 `Platform.OS === 'web' && surface === 'drawer'`인 trigger visual만 별도로 분기한다. 이름과
-chevron을 함께 감싼 내부 content를 아래로 4px 이동하고 open 상태에는 위 방향 chevron을 사용한다. trigger root와
+chevron을 함께 감싼 내부 content를 아래로 6px 이동하고 open 상태에는 위 방향 chevron을 사용한다. trigger root와
 picker surface는 이동하지 않아 hitbox, absolute anchor와 navigation geometry를 유지하고 Android/iOS에는 적용하지 않는다.
 
 Web의 시각적 picker wrapper가 viewport bounds, border와 overflow를 소유하고, 그 안의 semantic `menu` region은 profile list, separator와 기존 `menuitem` add action까지만 소유한다. create form과 operation error `alert`는 같은 고정 footer 위치를 유지하되 `menu`의 sibling으로 렌더한다. ARIA `menu` descendant에 `form`·`alert`를 넣어 `aria-required-children` 규칙을 위반하거나 a11y 예외를 추가하지 않는다.
@@ -76,7 +76,7 @@ Storybook fixture는 기존 shell query fixture builder 안에서 10개 이상�
 compact surface의 trigger·expanded 상태·overlay 위치·navigation 위치 불변·outside dismissal, keyboard focus
 가시성, 목록과 footer 접근성을 가장 가까운 story에서 검증하고, 기존 선택·생성 interaction과 Web E2E는 회귀
 검증으로 실행한다. 기존 mobile story에서는 drawer trigger의 down/up chevron과 이름·icon center가 trigger center보다
-4px 아래에 보이는 geometry를 검증한다. Storybook viewport preset이나 새 test harness는 추가하지 않고
+6px 아래에 보이는 geometry를 검증한다. Storybook viewport preset이나 새 test harness는 추가하지 않고
 768·1024·1279·1280·1440px는 browser resize로 직접 확인해 story URL과 관찰 결과를 기록한다.
 
 ### Allowed Alternatives
@@ -91,7 +91,7 @@ compact surface의 trigger·expanded 상태·overlay 위치·navigation 위치 �
 
 - `compact=false`만 보고 full overlay를 렌더해 mobile Web drawer 또는 native surface까지 바꾸지 않는다.
 - `open`만 보고 모든 drawer chevron을 바꿔 Android/iOS trigger에 mobile Web 보정을 누출하지 않는다.
-- 4px 보정을 trigger root나 picker wrapper에 적용해 hitbox·anchor 또는 navigation geometry를 이동시키지 않는다.
+- 6px 보정을 trigger root나 picker wrapper에 적용해 hitbox·anchor 또는 navigation geometry를 이동시키지 않는다.
 - rail width를 임시로 320px로 확장해 중앙 피드를 밀거나 breakpoint layout 계산을 바꾸지 않는다.
 - navigation `ScrollView`나 picker 전체를 scroll owner로 만들어 footer가 목록과 함께 사라지게 하지 않는다.
 - create form이나 operation error `alert`를 semantic `menu` descendant로 넣어 ARIA required-owned-element 규칙을 위반하지 않는다.
@@ -119,7 +119,7 @@ compact surface의 trigger·expanded 상태·overlay 위치·navigation 위치 �
 
 1. canonical 디자인 문서와 OpenSpec delta를 먼저 반영하고 strict validation한다.
 2. Web full/compact surface와 list/footer layout을 구현하고 최대 높이를 430px로 제한한다.
-3. mobile Web drawer trigger의 chevron·4px 내부 광학 보정을 추가한다.
+3. mobile Web drawer trigger의 chevron·6px 내부 광학 보정을 추가한다.
 4. 10개 이상 fixture와 최소 interaction 검증을 추가하고 기존 선택·생성 E2E를 실행한다.
 5. Storybook browser를 mobile·768·1024·1279·1280·1440px로 직접 조절해 responsive surface와 stacking을 시각 검증한다.
 6. `add-shell-responsive-breakpoints`의 이전 compact popover 문구가 최종 active spec에 남지 않도록 change 적용 순서와 archive sync 결과를 확인한다.

@@ -706,10 +706,10 @@ export const UniversalMobile: Story = {
     expect(triggerIcon.querySelector('path')).toHaveAttribute('d', 'm6 9 6 6 6-6');
     expect(
       nameRect.top + nameRect.height / 2 - (triggerRect.top + triggerRect.height / 2),
-    ).toBeCloseTo(4, 0);
+    ).toBeCloseTo(6, 0);
     expect(
       iconRect.top + iconRect.height / 2 - (triggerRect.top + triggerRect.height / 2),
-    ).toBeCloseTo(4, 0);
+    ).toBeCloseTo(6, 0);
 
     await userEvent.click(profileTrigger);
     expect(profileTrigger).toHaveAttribute('aria-expanded', 'true');

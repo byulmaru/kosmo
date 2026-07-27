@@ -33,7 +33,7 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
 - compact drawer는 본문보다 위에 표시하지만 backdrop과 focus trap을 사용하지 않는다. 아바타 재클릭,
   바깥 클릭, `Escape`, 프로필 선택 성공으로 닫힌다.
 - `< compact` mobile Web drawer에서는 프로필 이름과 chevron을 하나의 trigger로 유지한다. 닫힌 상태는 아래
-  방향, 열린 상태는 위 방향 chevron으로 표시하고 이름·chevron 콘텐츠만 trigger 상자 안에서 아래로 `4px`
+  방향, 열린 상태는 위 방향 chevron으로 표시하고 이름·chevron 콘텐츠만 trigger 상자 안에서 아래로 `6px`
   광학 보정한다. trigger hitbox, picker anchor와 navigation geometry는 바꾸지 않으며 Android/iOS에는 이 보정을
   적용하지 않는다.
 - `≥ full`에서는 프로필 이름과 chevron을 하나의 trigger로 사용하고, picker의 시각적 wrapper를 그 trigger

@@ -4,7 +4,7 @@
 
 **Goal:** Web full sidebar와 compact icon rail에 각각 자연스러운 profile picker를 제공하고, 긴 프로필 목록과 mobile Web drawer trigger도 일관되게 사용할 수 있게 한다.
 
-**Architecture:** `ProfileSwitcher`가 기존 Relay 선택·생성 흐름, trigger, picker content와 transient state를 계속 소유하되 `full | compact | drawer` surface를 명시적으로 받는다. `SidebarNavigation`은 닫힌 full profile summary를 260px로 유지하고 full picker를 프로필 이름 trigger 바로 아래의 anchored absolute overlay로 표시해 navigation 위치를 보존한다. `UniversalShell`은 full·compact picker가 열릴 때 sidebar stacking만 높인다. 후속 polish는 `ProfileSwitcher` 안에서 full·compact bounds를 430px로 줄이고 mobile Web drawer의 trigger 내부 content만 4px 이동한다.
+**Architecture:** `ProfileSwitcher`가 기존 Relay 선택·생성 흐름, trigger, picker content와 transient state를 계속 소유하되 `full | compact | drawer` surface를 명시적으로 받는다. `SidebarNavigation`은 닫힌 full profile summary를 260px로 유지하고 full picker를 프로필 이름 trigger 바로 아래의 anchored absolute overlay로 표시해 navigation 위치를 보존한다. `UniversalShell`은 full·compact picker가 열릴 때 sidebar stacking만 높인다. 후속 polish는 `ProfileSwitcher` 안에서 full·compact bounds를 430px로 줄이고 mobile Web drawer의 trigger 내부 content만 6px 이동한다.
 
 **Tech Stack:** React Native 0.85, React Native Web 0.21, Expo Router, React Relay, Storybook Vitest, Playwright, OpenSpec
 
@@ -15,7 +15,7 @@
 - 닫힌 full profile summary는 기존 260px를 유지한다. picker는 프로필 이름 trigger 바로 아래의 absolute
   overlay로 열려 trigger 아래의 프로필 상세와 navigation 위에 paint되며 navigation의 layout 위치를 바꾸지 않는다.
 - compact drawer는 80px rail 오른쪽의 비모달 absolute layer이며 backdrop·focus trap·layout width 변경이 없다.
-- mobile Web drawer는 이름·chevron 내부 content의 4px 하향 광학 보정과 Web 전용 open chevron만 변경한다.
+- mobile Web drawer는 이름·chevron 내부 content의 6px 하향 광학 보정과 Web 전용 open chevron만 변경한다.
   trigger hitbox·picker anchor·navigation geometry, drawer content·close lifecycle과 Android/iOS `Modal` picker는 재설계하지 않는다.
 - 프로필 목록만 internal scroll owner다. add action·create form·오류 footer는 목록과 함께 스크롤하지 않는다.
 - full·compact Web picker는 기존 surface별 viewport 여백 계산을 유지하면서 최대 높이를 430px로 제한한다.
@@ -80,7 +80,7 @@ type Props = CommonProps &
 - `surface='compact'`만 avatar trigger와 Web absolute drawer를 사용한다.
 - `surface='full'`은 `renderSummary`를 필수로 받고 Web picker를 이름 trigger 바로 아래의 absolute layer로 렌더한다.
 - `surface='drawer'`인 mobile Web은 기존 absolute menu와 close lifecycle을 유지하되 trigger 내부 이름·chevron만
-  4px 아래로 보정하고 open 상태에 위 chevron을 표시한다. native platform은 기존 `Modal`과 아래 chevron을 유지한다.
+  6px 아래로 보정하고 open 상태에 위 chevron을 표시한다. native platform은 기존 `Modal`과 아래 chevron을 유지한다.
   새 keyboard/reset lifecycle은 두 경로에 적용하지 않는다.
 
 ## State Contract
@@ -100,7 +100,7 @@ type Props = CommonProps &
 ## Test Code Scope
 
 - **테스트 코드 범위:** `apps/app/src/stories/Shell.stories.tsx`의 기존 Shell Relay fixture와 interaction 영역만 수정한다.
-- **테스트 필요성:** full flow/expanded toggle, compact overlay dismissal·stacking seam, 12개 목록의 430px wrapper·internal scroll·keyboard focus, mobile Web drawer의 down/up chevron·4px content geometry, 실패 유지와 명시적 close reset을 관찰 가능한 결과로 직접 증명한다.
+- **테스트 필요성:** full flow/expanded toggle, compact overlay dismissal·stacking seam, 12개 목록의 430px wrapper·internal scroll·keyboard focus, mobile Web drawer의 down/up chevron·6px content geometry, 실패 유지와 명시적 close reset을 관찰 가능한 결과로 직접 증명한다.
 - **테스트 제외 범위:** 새 test harness/helper 파일, Storybook viewport preset, 광범위 snapshot, GraphQL/Relay cache 테스트 확대, `apps/web/e2e/profile-switcher.e2e.ts` 수정, Android/iOS picker 테스트, PROD-213/214/215 상태 조합.
 
 ## Spec Coverage
@@ -115,7 +115,7 @@ type Props = CommonProps &
 | Relay actor 선택·생성 흐름 비변경 | Task 4 | 기존 `profile-switcher.e2e.ts` 전체 실행 |
 | mobile/native 비재설계 | Task 1-3 | 명시적 `surface='drawer'`/platform guard와 독립 implementation review; 새 native test는 제외 |
 | full·compact 430px cap과 고정 footer | Task 7 | Full·Compact long-profile wrapper 높이와 기존 list/footer assertion |
-| mobile Web chevron·4px optical shift | Task 8 | `UniversalMobile` trigger state·text/icon geometry와 직접 시각 검증 |
+| mobile Web chevron·6px optical shift | Task 9 | `UniversalMobile` trigger state·text/icon geometry와 직접 시각 검증 |
 | old popover delta와 최종 active spec 정렬 | Task 4 | archive 전 `rg` 및 active spec sync stop gate |
 
 ---
@@ -1561,3 +1561,64 @@ picker anchor와 Down/Up chevron이 유지되는지 확인한다. 4px가 아래�
 
 최종 diff가 Mobile Web 내부 transform과 기존 geometry assertion, 승인 계약 문서에만 한정되는지 확인한 뒤 OpenSpec
 1.9와 위 체크리스트를 완료 처리한다. PR #362는 Draft로 유지하고 Ready 전환과 OpenSpec archive를 수행하지 않는다.
+
+---
+
+### Task 9: Mobile Web trigger 광학 보정을 6px로 조정한다
+
+**Files:**
+
+- Modify: `docs/design/breakpoints.md`
+- Modify: `openspec/changes/add-responsive-profile-picker/{proposal.md,design.md,decisions.md,tasks.md,specs/web-app-shell/spec.md}`
+- Test: `apps/app/src/stories/Shell.stories.tsx:709-712`
+- Modify: `apps/app/src/components/shell/ProfileSwitcher.tsx:512`
+- Modify: `docs/superpowers/plans/2026-07-26-responsive-profile-picker.md`
+
+**Interfaces:**
+
+- Consumes: `Platform.OS === 'web' && surface === 'drawer'`, 기존 내부 trigger content wrapper
+- Produces: text·chevron center가 42px trigger center보다 6px 아래인 Mobile Web 전용 optical position
+
+**테스트 코드 범위:** 기존 `UniversalMobile` play의 text·icon center assertion 두 곳만 6px로 수정한다.
+
+**테스트 필요성:** 4px 구현이 남아 있으면 실제 Mobile Web DOM geometry가 실패하고 승인된 6px 위치만 통과하는지
+가장 가까운 실제 shell surface에서 증명한다.
+
+**테스트 제외 범위:** 새 story·fixture·helper·harness, snapshot, Android/iOS picker test, drawer·navigation 제품
+코드, Full·Compact interaction, GraphQL·Relay·E2E 변경.
+
+- [x] **Step 1: canonical → Linear → OpenSpec 계약을 6px로 정렬한다**
+
+`docs/design/breakpoints.md`와 `PROD-238`의 Mobile Web 광학 보정을 6px로 갱신한 뒤 OpenSpec current contract에
+반영하고, 기존 4px 결정과 완료 기록은 historical record로 보존한다. 후속 task 1.10은 구현 전 미완료로 둔다.
+
+- [x] **Step 2: 기존 Mobile geometry assertion을 6px로 바꾸고 RED를 확인한다**
+
+`UniversalMobile`의 text·icon center expected literal만 `6`으로 바꾼다. 4px 제품 코드에서 focused Storybook test를
+실행해 expected 6, received 4의 동작 실패를 확인한다.
+
+- [x] **Step 3: Mobile Web trigger 내부 transform만 6px로 변경한다**
+
+`styles.mobileWebTriggerContent.transform`의 `translateY`만 4에서 6으로 바꾼다. trigger root, platform/surface guard,
+chevron branch, picker anchor와 navigation 코드는 수정하지 않는다.
+
+- [x] **Step 4: focused GREEN과 정적 검증을 실행한다**
+
+```bash
+pnpm --filter @kosmo/app test:storybook -- Shell
+pnpm --filter @kosmo/app check
+pnpm exec openspec validate add-responsive-profile-picker --strict
+pnpm exec openspec validate --all --strict
+pnpm exec prettier --check docs/design/breakpoints.md docs/superpowers/plans/2026-07-26-responsive-profile-picker.md openspec/changes/add-responsive-profile-picker apps/app/src/components/shell/ProfileSwitcher.tsx apps/app/src/stories/Shell.stories.tsx
+git diff --check
+```
+
+- [x] **Step 5: Storybook 시각 stop gate와 geometry를 확인한다**
+
+`UniversalMobile`에서 trigger center 대비 text·icon center가 실제 6px 아래이고, open 전후 trigger·navigation rect,
+picker anchor와 Down/Up chevron이 유지되는지 확인한다. 6px가 아래로 처져 보이면 사용자 확인 없이 추가 보정하지 않는다.
+
+- [x] **Step 6: OpenSpec 1.10을 완료하고 checkpoint commit·push한다**
+
+최종 diff가 Mobile Web 내부 transform과 기존 geometry assertion, 승인 계약 문서에만 한정되는지 확인한 뒤 OpenSpec
+1.10과 위 체크리스트를 완료 처리한다. PR #362는 Draft로 유지하고 Ready 전환과 OpenSpec archive를 수행하지 않는다.
