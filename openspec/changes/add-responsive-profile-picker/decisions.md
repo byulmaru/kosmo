@@ -134,7 +134,7 @@
 - Decision Date: 2026-07-27
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/design/breakpoints.md`, `PROD-238`
-- Status: Active
+- Status: Superseded
 - Context / Problem: mobile Web drawer의 42px trigger 안에서 text·icon box는 수학적으로 중앙이지만 SUIT glyph와
   16px chevron의 시각적 무게가 위로 치우쳐 보이고, 열린 상태에도 chevron이 아래 방향으로 남는다.
 - Decision Outcome: `Platform.OS === 'web' && surface === 'drawer'`인 경우 이름·chevron 내부 content만 아래로
@@ -145,6 +145,23 @@
 - Consequences: mobile drawer trigger 내부 content 경계가 필요하고 mobile Storybook에서 chevron 상태와 2px visual
   center를 검증해야 한다. 기존 drawer picker content와 close lifecycle은 유지한다.
 - Confirmation / Follow-up: Universal Mobile story와 직접 시각 확인에서 닫힘/열림 chevron, 2px 위치와 navigation
+  불변을 확인한다.
+
+### Mobile Web drawer trigger 내부 콘텐츠를 4px 광학 보정한다
+
+- Decision Date: 2026-07-27
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/breakpoints.md`, `PROD-238`
+- Status: Active
+- Context / Problem: 2px transform은 DOM geometry에서 적용됐지만 32px line-height 안에서 육안 차이가 거의 느껴지지
+  않아 mobile Web drawer의 닉네임과 chevron이 여전히 위로 치우쳐 보인다.
+- Decision Outcome: `Platform.OS === 'web' && surface === 'drawer'`인 이름·chevron 내부 content만 아래로 4px
+  광학 보정한다. trigger root, picker anchor와 navigation geometry는 이동하지 않고 Android/iOS에는 적용하지 않는다.
+- Alternatives Considered: 2px를 유지하면 측정상 이동은 있으나 시각 보정 목적을 충족하지 못한다. line-height나
+  trigger root를 바꾸면 full/native text layout 또는 hitbox·anchor에 불필요한 영향을 준다.
+- Consequences: 기존 Mobile Storybook geometry assertion을 4px로 갱신하고 open 전후 trigger·navigation 위치 불변을
+  유지해야 한다.
+- Confirmation / Follow-up: Universal Mobile story와 직접 시각 확인에서 닉네임·chevron의 4px 위치와 navigation
   불변을 확인한다.
 
 ## Remaining Decisions

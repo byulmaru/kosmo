@@ -509,7 +509,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     gap: spacing.sm,
     maxWidth: '100%',
-    transform: [{ translateY: 2 }],
+    transform: [{ translateY: 4 }],
   },
   triggerName: {
     flexShrink: 1,
