@@ -16,6 +16,7 @@
 - **WHEN** 사용자가 기존 Post Action Bar의 Reaction trigger를 누른다
 - **THEN** Web·iOS·Android에서 trigger에 붙은 작은 floating popover를 연다
 - **AND** 공간에 따라 trigger 위·아래로 전환하고 viewport와 safe area 안으로 수평 위치를 제한한다
+- **AND** 여섯 option의 고유 너비가 가용 너비보다 크면 target 크기를 줄이지 않고 popover shell 안에서 수평 scroll을 허용한다
 - **AND** 같은 trigger 재입력, 외부 클릭·터치, Web `Escape` 또는 Android back으로 닫는다
 - **AND** Web에서는 열릴 때 첫 option에 focus하고 닫힐 때 trigger에 focus를 복원한다
 
@@ -65,10 +66,11 @@
 - **THEN** component는 서버가 확인한 이전 선택 상태를 유지한다
 - **AND** 해당 Type에 inline `오류, 다시 시도` 상태를 제공하고 전역 toast를 요구하지 않는다
 
-#### Scenario: 없는 cache record를 합성하지 않음
+#### Scenario: 수동 updater가 없는 cache record를 합성하지 않음
 
-- **WHEN** mutation payload가 있어도 대상 Post record 또는 기존 `viewerReactions` field가 cache에 없다
-- **THEN** 클라이언트는 Post나 field를 합성하지 않는다
+- **WHEN** add payload 또는 delete의 `post: null` fallback을 처리할 때 대상 Post record나 기존 `viewerReactions` field가 cache에 없다
+- **THEN** 클라이언트의 수동 updater는 Post나 field를 합성하지 않는다
+- **AND** delete payload의 `post`가 non-null이면 Relay는 server가 반환한 Post와 `viewerReactions`를 정상 정규화한다
 
 #### Scenario: selected Profile 전환과 늦은 응답
 

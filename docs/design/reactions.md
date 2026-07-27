@@ -33,7 +33,7 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 ## Post Action Bar 통합
 
 - 실제 Post Action Bar의 Reaction action은 현재 여섯 Type을 zero-count 여부와 무관하게 client catalog에서 공급하고, selected Profile의 `viewerReactions`를 선택 상태로 사용한다.
-- Reaction trigger는 Web·iOS·Android 모두에서 trigger에 붙은 작은 floating popover를 열며 같은 trigger를 다시 누르면 닫힌다. 화면 공간에 따라 위·아래로 전환하고 viewport와 safe area 안으로 수평 위치를 제한한다.
+- Reaction trigger는 Web·iOS·Android 모두에서 trigger에 붙은 작은 floating popover를 열며 같은 trigger를 다시 누르면 닫힌다. 화면 공간에 따라 위·아래로 전환하고 viewport와 safe area 안으로 수평 위치를 제한한다. 여섯 option의 고유 너비가 가용 너비보다 크면 target 크기를 줄이지 않고 popover shell 안에서 수평 scroll을 허용한다.
 - popover는 외부 클릭·터치, Web `Escape`, Android back, 대상 Post unmount 또는 selected Profile 전환으로 닫힌다. Web에서는 열릴 때 첫 option으로 focus를 옮기고 닫힐 때 trigger로 focus를 복원한다.
 - 한 Type을 선택하거나 해제한 뒤에도 popover를 유지해 여러 Type을 연속으로 조작할 수 있다.
 - 일반 Post와 Quote Post의 action은 해당 Post를 대상으로 하고, 순수 Repost가 source Post의 Action Bar를 표시하는 경우에는 source Post를 대상으로 한다.
@@ -54,6 +54,7 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 
 - Storybook interaction에서 border 없는 option, 70% opacity의 selected 배경과 100% opacity의 이모지, 44×44px pending overlay와 24×24px fading arc, 오류 재시도와 disabled 시 미렌더링을 검증한다.
 - 390px와 600px Web viewport에서 여섯 option이 한 줄을 유지하고 각 target이 44×44px인지 확인한다.
+- PROD-417 popover integration은 320px Web viewport에서 shell이 viewport 안에 머물고 44×44px target을 유지한 option row를 수평 scroll할 수 있는지 확인한다.
 
 ## Reaction 요약과 Profile 목록
 
