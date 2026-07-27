@@ -19,6 +19,11 @@ function ActionMenuFixture({ disabled = false }: { disabled?: boolean }) {
             label: '재게시',
             onSelect: () => setSelectionCount((count) => count + 1),
           },
+          {
+            key: 'quote',
+            label: '인용 재게시',
+            onSelect: () => setSelectionCount((count) => count + 1),
+          },
         ]}
         renderTrigger={({ expanded, onPress, ref }) => (
           <Pressable
@@ -81,7 +86,9 @@ export const InteractionContract: Story = {
     expect(defaultFixture.queryByRole('menu', { name: '재게시 메뉴' })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
     await userEvent.click(trigger);
-    await userEvent.click(within(await defaultFixture.findByRole('menu')).getByRole('menuitem'));
+    await userEvent.click(
+      within(await defaultFixture.findByRole('menu')).getByRole('menuitem', { name: '재게시' }),
+    );
     expect(defaultFixture.getByTestId('selection-count')).toHaveTextContent('1');
     expect(trigger).toHaveFocus();
 
@@ -95,14 +102,24 @@ export const InteractionContract: Story = {
     await userEvent.click(outsideTrigger);
     await outsideFixture.findByRole('menu', { name: '재게시 메뉴' });
     await userEvent.tab();
+    await userEvent.tab();
     expect(outsideFixture.getByRole('button', { name: '바깥 버튼' })).toHaveFocus();
     expect(outsideFixture.queryByRole('menu', { name: '재게시 메뉴' })).not.toBeInTheDocument();
 
     await userEvent.click(outsideTrigger);
     const keyboardMenu = await outsideFixture.findByRole('menu', { name: '재게시 메뉴' });
-    const item = within(keyboardMenu).getByRole('menuitem');
-    await userEvent.keyboard('{ArrowDown}{ArrowUp}{Home}{End}');
-    expect(item).toHaveFocus();
+    const [repostItem, quoteItem] = within(keyboardMenu).getAllByRole('menuitem');
+    expect(repostItem).toHaveFocus();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(quoteItem).toHaveFocus();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(repostItem).toHaveFocus();
+    await userEvent.keyboard('{ArrowUp}');
+    expect(quoteItem).toHaveFocus();
+    await userEvent.keyboard('{Home}');
+    expect(repostItem).toHaveFocus();
+    await userEvent.keyboard('{End}');
+    expect(quoteItem).toHaveFocus();
     await userEvent.keyboard('{Escape}');
 
     const disabledFixture = within(canvas.getByLabelText('비활성 메뉴 fixture'));
