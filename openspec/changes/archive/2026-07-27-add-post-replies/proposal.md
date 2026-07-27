@@ -36,6 +36,7 @@ Kosmo는 Reply를 별도 Post Kind가 아니라 Content와 직접 Reply Parent �
 - Core/DB: Post Reply Parent self-reference, additive migration, Post 관계 조합·대상 검증과 직접·재귀 조회
 - GraphQL/API: `Post.replyParent`, `Post.replyAncestors` non-null list와 `Post.replyDescendants` full Relay connection
 - Universal client: Post 상세 thread fragment·route integration과 Home/Profile 후보 정책 회귀 검증
+- Rollout: 현재 출시는 Web만 대상으로 하며, iOS/Android 앱 출시와 실기기 QA는 후속 앱 출시 작업에서 수행한다. 유니버설 구현과 Native `ScrollView` 공통 판정 단위 테스트는 유지한다.
 - Dependency: 완료된 PROD-394와 `add-post-reposts`가 제공하는 nullable Repost Source 저장 기반을 재사용한다.
 - Follow-up boundary: PROD-422의 완료 뒤 확인된 direct Source 공용 renderer 소유권 정렬은 PROD-415가 구현·검증하며, 이 change의 archive를 막거나 Reply thread 결과를 재정의하지 않는다.
 - Excluded systems: Reply 작성 mutation·composer, Quote/Reply+Quote 작성 action, ActivityPub `inReplyTo`, Post Media, Notification, 별도 Post Kind와 concrete GraphQL type

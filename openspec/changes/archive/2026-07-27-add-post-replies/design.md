@@ -36,6 +36,7 @@
 - PROD-400은 `Post.replyDescendants: PostConnection!`, full Relay pagination과 `createdAt ASC, id ASC` 정렬을 공개 계약으로 확정했다. 기존 Post connection helper와 같은 양방향 page 계약을 유지하되 ID 단독 cursor로 축약하지 않는다.
 - 현재 앱의 목록 Post는 `PostListItem`, 상세 Post는 `PostLayout`이 각자 colocated Relay fragment와 기존 Post rendering을 소유한다. PROD-451은 실제 Reply field·route를 읽지 않는 fixture-first presentation slice이고 PROD-422가 실제 Relay data와 route를 연결한다.
 - 현재 Post 상세 route source는 sticky header를 가진 `ScrollView`를 렌더하지만 canonical `docs/design/breakpoints.md`는 Web `(tabs)` 셸의 scroll owner를 document/window로, Android/iOS 화면의 scroll owner를 `ScrollView`로 확정한다. 앱의 기존 connection 화면은 `usePaginationFragment`와 `loadNext`를 사용하지만 자동 무한 스크롤 선례는 없으므로 PROD-422가 두 platform scroll owner의 측정과 중복 요청 방어를 명시적으로 소유해야 한다.
+- 현재 제품 출시 범위는 Web이다. 유니버설 route와 Native `ScrollView` 구현은 유지하되, 이 change의 완료 gate는 Web 동작과 Native 공통 판정 단위 테스트로 한정한다. 실제 iOS/Android 화면 QA는 앱 출시를 재개하는 후속 출시 작업에서 수행한다.
 - 현재 `ThemeProvider`는 `colors.light`만 공급하므로 PROD-451의 390px/600px visual QA는 Light appearance만 완료 증거로 삼는다. Dark theme injection과 Dark appearance 검증은 이 presentation slice에서 추가하거나 완료한 것으로 기록하지 않는다.
 
 ### Recommended Approach
