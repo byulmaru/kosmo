@@ -213,4 +213,3 @@ Reply 저장부터 조회·목록·상세 thread까지 승인된 구현 결과�
 
 - [x] 7.1 모든 구현 자식의 결과와 requirement scenario를 연결하는 최종 통합 검증을 수행한다.
 - [x] 7.2 최신 canonical·Linear, 구현과 OpenSpec의 정합성 및 남은 decision을 확인한다.
-- [x] 7.3 Completion Gate 승인 요청을 위해 change를 active specs에 archive하고 archive 후 strict validation을 통과시킨다. Ready PR merge 전에는 승인 완료나 PROD-388 완료로 기록하지 않는다.
