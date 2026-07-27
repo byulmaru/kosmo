@@ -21,6 +21,8 @@
 - 공용 `kosmo_test` schema가 현재 코드보다 뒤처져 DB-backed 테스트가 실패하면 `pnpm db:test:reset && pnpm db:test:push`로 초기화한 뒤 다시 검증한다.
 - 병렬 작업이나 테스트 간 격리가 필요하면 `node scripts/test-db.mjs run -- <command>`로 고유 test database를 할당한다.
 - test database의 schema 불일치를 구현 결함으로 판단하기 전에 위 초기화 또는 격리 절차로 재현 여부를 확인한다.
+- workspace package의 기본 `test`는 CI에서 해당 package의 전체 테스트를 실행한다. API integration처럼 DB가 필요한 suite는 package 단위 aggregate script 하나가 격리 DB를 준비해 전체 suite를 실행하며, 개별 테스트 파일 선택용 root script를 추가하지 않는다.
+- 특정 API integration 파일만 디버깅할 때는 package manifest에 파일별 alias를 늘리지 말고 준비된 test DB에서 Node test runner에 파일 경로를 직접 전달한다.
 
 ## Script And Tooling Review
 
