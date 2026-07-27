@@ -127,17 +127,22 @@ export function PostSourcePresentationView({
           <View style={styles.repostIconColumn}>
             <Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>
           </View>
-          {renderLink({
-            accessibilityLabel: `${post.profile.displayName} 프로필 보기`,
-            children: (
-              <View style={styles.repostLabelTarget}>
-                <Text style={[styles.repostLabel, { color: theme.textSecondary }]}>
-                  {post.profile.displayName}님이 재게시함
-                </Text>
-              </View>
-            ),
-            target: 'postAuthor',
-          })}
+          <View style={styles.repostAuthorSlot}>
+            {renderLink({
+              accessibilityLabel: `${post.profile.displayName} 프로필 보기`,
+              children: (
+                <View style={styles.repostLabelTarget}>
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.repostLabel, { color: theme.textSecondary }]}
+                  >
+                    {post.profile.displayName}님이 재게시함
+                  </Text>
+                </View>
+              ),
+              target: 'postAuthor',
+            })}
+          </View>
         </View>
         <PostSourcePreview
           bordered={false}
@@ -282,7 +287,8 @@ const styles = StyleSheet.create({
     width: 40,
   },
   repeat: { fontFamily: 'SUIT', ...typography.sm },
-  repostLabelTarget: { justifyContent: 'flex-end', minHeight: 44 },
+  repostAuthorSlot: { flex: 1, minWidth: 0 },
+  repostLabelTarget: { justifyContent: 'flex-end', minHeight: 44, minWidth: 0 },
   repostLabel: {
     fontFamily: 'SUIT',
     ...typography.sm,

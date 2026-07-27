@@ -2,13 +2,13 @@ import { Link, useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
+import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatPostDate } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { PostBody } from './PostBody';
 import { PostSourcePreview } from './PostSourcePresentationView';
-import type { ReactNode } from 'react';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
 import type {
   PostPresentationLinkRenderer,
@@ -42,6 +42,7 @@ const PostLayoutFragment = graphql`
       }
     }
     ...PostBody_post
+    ...PostReactionSummary_post
   }
 `;
 
@@ -52,13 +53,7 @@ const visibilityLabels: Record<string, string> = {
   DIRECT: '다이렉트',
 };
 
-export function PostLayout({
-  post: postKey,
-  reactionSummary,
-}: {
-  post: PostLayout_post$key;
-  reactionSummary?: ReactNode;
-}) {
+export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
   const router = useRouter();
   const theme = useTheme();
   const post = useFragment(PostLayoutFragment, postKey);
@@ -142,7 +137,7 @@ export function PostLayout({
             {formatPostDate(post.createdAt)} ·{' '}
             {visibilityLabels[post.visibility] ?? post.visibility}
           </Text>
-          {reactionSummary}
+          <PostReactionSummary post={post} style={styles.reactionSummary} />
         </View>
       </View>
     </View>
@@ -156,5 +151,6 @@ const styles = StyleSheet.create({
   body: { minWidth: 0 },
   meta: { fontFamily: 'SUIT', marginTop: 6, textAlign: 'right', ...typography.xsm },
   presentationLink: { minWidth: 0 },
+  reactionSummary: { marginTop: spacing.lg },
   source: { marginTop: spacing.sm },
 });

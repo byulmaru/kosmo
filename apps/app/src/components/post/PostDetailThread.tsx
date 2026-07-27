@@ -3,10 +3,8 @@ import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } fro
 import { graphql, usePaginationFragment } from 'react-relay';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostListItem } from '@/components/post/PostListItem';
-import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
-import { spacing } from '@/theme/tokens';
 import { getWebMobileShellHeaderStickyOffset } from '../shell/shellLayout';
 import { PostThreadLayout } from './PostThreadLayout';
 import {
@@ -28,7 +26,6 @@ const PostDetailThreadFragment = graphql`
   @refetchable(queryName: "PostDetailThreadNextPageQuery") {
     id
     ...PostLayout_post @alias(as: "detail")
-    ...PostReactionSummary_post @alias(as: "reactionSummary")
     replyAncestors {
       id
       ...PostListItem_post @alias(as: "listItem")
@@ -234,15 +231,7 @@ function PostDetailThreadContent({
           return (
             <View>
               {role === 'current' ? (
-                <PostLayout
-                  post={requireThreadFragment(item.post.detail, 'current detail')}
-                  reactionSummary={
-                    <PostReactionSummary
-                      post={requireThreadFragment(data.reactionSummary, 'current reaction summary')}
-                      style={styles.reactionSummary}
-                    />
-                  }
-                />
+                <PostLayout post={requireThreadFragment(item.post.detail, 'current detail')} />
               ) : (
                 <PostListItem
                   post={requireThreadFragment(item.post.listItem, `${role} list item`)}
@@ -277,7 +266,6 @@ function requireThreadFragment<T>(value: T | null | undefined, label: string): T
 const styles = StyleSheet.create({
   frame: { flexGrow: 1 },
   header: { zIndex: 10 },
-  reactionSummary: { marginTop: spacing.lg },
   retryButton: { minHeight: 44 },
 });
 

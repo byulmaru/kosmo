@@ -145,6 +145,17 @@ const pureRepost = post({
   profile: repostAuthor,
   repostSource: sourcePost,
 });
+const longPureRepost = post({
+  bodyText: null,
+  id: 'post-repost-long-author',
+  profile: profile({
+    displayName: '모바일 너비에서도 한 줄로 줄어들어야 하는 아주 길고 긴 재게시 작성자 표시 이름',
+    handle: 'extremely-long-repost-author-handle-for-mobile-overflow',
+    id: 'profile-repost-author-long',
+    relativeHandle: '@extremely-long-repost-author-handle-for-mobile-overflow',
+  }),
+  repostSource: sourcePost,
+});
 const quotePost = post({
   bodyText: '이 원문에 덧붙이는 인용자의 본문입니다.',
   id: 'post-quote',
@@ -233,6 +244,11 @@ const routeCurrentPost = post({
   replyParent: { __typename: 'Post', id: routeParentPost.id },
 });
 const routeCurrentPostReactionCounts = [{ count: 2, type: '❤️' }];
+const postLayoutReactionPost = post({
+  bodyText: 'PostLayout이 반응 요약을 직접 소유하는 게시글입니다.',
+  id: 'post-layout-reaction',
+  reactionCounts: routeCurrentPostReactionCounts,
+});
 const routeCurrentPostWithoutReactions = { ...routeCurrentPost, reactionCounts: [] };
 const routeChildPost = post({
   bodyText: 'Child 본문',
@@ -338,6 +354,7 @@ const storyPosts = [
   ...threadStoryPosts,
   sourcePost,
   pureRepost,
+  longPureRepost,
   quotePost,
   replyQuotePost,
   quoteWithoutSource,
@@ -356,6 +373,7 @@ const storyPosts = [
   routeHiddenAncestorPost,
   routeVisibleParentPost,
   routeBoundaryCurrentPost,
+  postLayoutReactionPost,
   deepestSourcePost,
   sourceQuotePost,
   pureRepostOfQuote,
@@ -694,6 +712,32 @@ function LinkedPostListItemStory() {
       <Text testID="current-story-pathname">{pathname}</Text>
       <PostListItem post={requireFragment(requirePost(posts, 14).listItem, 'linked post item')} />
     </Catalog>
+  );
+}
+
+function LongPureRepostListItemStory() {
+  const { posts } = usePostsStoryData();
+
+  return (
+    <PostListItem
+      post={requireFragment(
+        requirePostById(posts, longPureRepost.id).listItem,
+        'long pure repost list item',
+      )}
+    />
+  );
+}
+
+function PostLayoutReactionSummaryStory() {
+  const { posts } = usePostsStoryData();
+
+  return (
+    <PostLayout
+      post={requireFragment(
+        requirePostById(posts, postLayoutReactionPost.id).layout,
+        'post layout reaction summary',
+      )}
+    />
   );
 }
 
@@ -1286,6 +1330,24 @@ export const RepostQuoteLongContentMobile: Story = {
       postId="post-quote-long"
     />
   ),
+};
+
+export const ProductionPureRepostLongAuthorMobile: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: async ({ canvasElement }) => {
+    const article = within(canvasElement).getByRole('article');
+    expect(article).toBeVisible();
+    expect(article.scrollWidth).toBeLessThanOrEqual(article.clientWidth);
+    expect(canvasElement.scrollWidth).toBeLessThanOrEqual(canvasElement.clientWidth);
+  },
+  render: () => <LongPureRepostListItemStory />,
+};
+
+export const PostLayoutOwnsReactionSummary: Story = {
+  play: async ({ canvasElement }) => {
+    expect(within(canvasElement).getByRole('button', { name: '❤️ 반응 2개 보기' })).toBeVisible();
+  },
+  render: () => <PostLayoutReactionSummaryStory />,
 };
 
 export const LinkedBodyKeepsDetailNavigationIsolated: Story = {
