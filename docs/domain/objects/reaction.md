@@ -40,14 +40,15 @@ Reaction은 Profile이 Post에 남기는 유니코드 이모지 반응이다.
 
 ## 행동
 
-| 행동          | 행동 주체 Profile | 대상 객체 | 입력값              | 권한                                          | 조건                                                                                          | 결과                                                                                              |
-| ------------- | ----------------- | --------- | ------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Reaction 추가 | Profile           | Reaction  | Post, Reaction Type | Local일 때 `Account.Active`, `Profile.Member` | 행동 주체가 Active/Normal Profile이고 Instance Service가 Active이며 Post 조회 정책을 통과한다 | 같은 조합의 Reaction이 없으면 생성하고, 이미 있으면 기존 Reaction을 유지한 채 멱등 성공한다       |
-| Reaction 삭제 | Profile           | Reaction  | Post, Reaction Type | Local일 때 `Account.Active`, `Profile.Member` | 행동 주체가 Active/Normal Profile이고 Instance Service가 Active이다                           | 같은 Profile/Post/Type의 Reaction이 존재하면 제거하고, 없으면 상태를 바꾸지 않은 채 멱등 성공한다 |
+| 행동          | 행동 주체 Profile | 대상 객체 | 입력값              | 권한                                                 | 조건                                                                                          | 결과                                                                                              |
+| ------------- | ----------------- | --------- | ------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Reaction 추가 | Profile           | Reaction  | Post, Reaction Type | Account 요청일 때 `Account.Active`, `Profile.Member` | 행동 주체가 Active/Normal Profile이고 Instance Service가 Active이며 Post 조회 정책을 통과한다 | 같은 조합의 Reaction이 없으면 생성하고, 이미 있으면 기존 Reaction을 유지한 채 멱등 성공한다       |
+| Reaction 삭제 | Profile           | Reaction  | Post, Reaction Type | Account 요청일 때 `Account.Active`, `Profile.Member` | 행동 주체가 Active/Normal Profile이고 Instance Service가 Active이다                           | 같은 Profile/Post/Type의 Reaction이 존재하면 제거하고, 없으면 상태를 바꾸지 않은 채 멱등 성공한다 |
 
 Reaction 삭제는 입력한 Post와 Reaction Type에서 행동 주체 Profile의 현재 관계만 식별한다. 다른 Profile이
 소유한 Reaction은 변경하지 않는다. 오래 지연된 삭제 요청이 그 사이 같은 조합으로 다시 생성된 현재 Reaction을
-제거할 수 있으며, 사용자가 즉시 다시 선택할 수 있는 낮은 위험의 소셜 상호작용으로 이 가능성을 수용한다.
+제거할 수 있으며, selected Profile이 즉시 같은 Reaction을 다시 생성할 수 있는 낮은 위험의 소셜 상호작용으로
+이 가능성을 수용한다.
 
 ## 권한
 

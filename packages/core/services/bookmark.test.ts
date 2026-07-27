@@ -126,12 +126,11 @@ test('호출 transaction이 rollback되면 생성한 Bookmark도 남지 않는�
 });
 
 test('Owner는 Target Post 상태와 관계없이 Bookmark를 삭제한다', async () => {
-  const { account, post, profile } = await createFixture();
+  const { post, profile } = await createFixture();
   const bookmark = await createBookmark({ postId: post.id, profileId: profile.id });
   await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, post.id));
 
   const deleted = await deleteBookmark({
-    accountId: account.id,
     bookmarkId: bookmark.id,
     profileId: profile.id,
   });
@@ -141,18 +140,16 @@ test('Owner는 Target Post 상태와 관계없이 Bookmark를 삭제한다', asy
 });
 
 test('missing과 non-owner 삭제는 같은 null 결과이며 기존 관계를 노출하거나 제거하지 않는다', async () => {
-  const { account, instance, post, profile } = await createFixture();
+  const { instance, post, profile } = await createFixture();
   const otherProfile = await createProfile(instance.id);
   const bookmark = await createBookmark({ postId: post.id, profileId: profile.id });
 
   const [missing, nonOwner] = await Promise.all([
     deleteBookmark({
-      accountId: account.id,
       bookmarkId: crypto.randomUUID(),
       profileId: profile.id,
     }),
     deleteBookmark({
-      accountId: account.id,
       bookmarkId: bookmark.id,
       profileId: otherProfile.id,
     }),
@@ -164,9 +161,9 @@ test('missing과 non-owner 삭제는 같은 null 결과이며 기존 관계를 �
 });
 
 test('순차·동시 삭제에서 한 요청만 삭제된 Bookmark를 반환한다', async () => {
-  const { account, post, profile } = await createFixture();
+  const { post, profile } = await createFixture();
   const bookmark = await createBookmark({ postId: post.id, profileId: profile.id });
-  const input = { accountId: account.id, bookmarkId: bookmark.id, profileId: profile.id };
+  const input = { bookmarkId: bookmark.id, profileId: profile.id };
 
   const concurrent = await Promise.all(Array.from({ length: 4 }, () => deleteBookmark(input)));
   const repeated = await deleteBookmark(input);
@@ -180,15 +177,12 @@ test('순차·동시 삭제에서 한 요청만 삭제된 Bookmark를 반환한�
 });
 
 test('호출 transaction이 rollback되면 삭제한 Bookmark가 복구된다', async () => {
-  const { account, post, profile } = await createFixture();
+  const { post, profile } = await createFixture();
   const bookmark = await createBookmark({ postId: post.id, profileId: profile.id });
 
   await assert.rejects(
     db.transaction(async (tx) => {
-      const deleted = await deleteBookmark(
-        { accountId: account.id, bookmarkId: bookmark.id, profileId: profile.id },
-        tx,
-      );
+      const deleted = await deleteBookmark({ bookmarkId: bookmark.id, profileId: profile.id }, tx);
       assert.equal(deleted?.id, bookmark.id);
       throw new Error('rollback');
     }),
@@ -198,8 +192,8 @@ test('호출 transaction이 rollback되면 삭제한 Bookmark가 복구된다', 
   assert.deepEqual(await loadPostBookmarks(post.id), [bookmark]);
 });
 
-test('권한 검증 이후 Profile이 비활성화되면 Bookmark를 삭제하지 않는다', async () => {
-  const { account, post, profile } = await createFixture();
+test('검증된 Owner identity는 Profile 상태가 바뀌어도 Bookmark를 삭제한다', async () => {
+  const { post, profile } = await createFixture();
   const bookmark = await createBookmark({ postId: post.id, profileId: profile.id });
 
   const deleted = await db.transaction(async (tx) => {
@@ -213,17 +207,14 @@ test('권한 검증 이후 Profile이 비활성화되면 Bookmark를 삭제하�
       .set({ state: ProfileState.DISABLED })
       .where(eq(Profiles.id, profile.id));
 
-    return deleteBookmark(
-      { accountId: account.id, bookmarkId: bookmark.id, profileId: profile.id },
-      tx,
-    );
+    return deleteBookmark({ bookmarkId: bookmark.id, profileId: profile.id }, tx);
   });
 
-  assert.equal(deleted, null);
-  assert.deepEqual(await loadPostBookmarks(post.id), [bookmark]);
+  assert.equal(deleted?.id, bookmark.id);
+  assert.deepEqual(await loadPostBookmarks(post.id), []);
 });
 
-test('권한 검증 이후 Account membership이 제거되면 Bookmark를 삭제하지 않는다', async () => {
+test('검증된 Owner identity는 Account membership이 바뀌어도 Bookmark를 삭제한다', async () => {
   const { account, post, profile } = await createFixture();
   const bookmark = await createBookmark({ postId: post.id, profileId: profile.id });
 
@@ -241,12 +232,9 @@ test('권한 검증 이후 Account membership이 제거되면 Bookmark를 삭제
         and(eq(AccountProfiles.accountId, account.id), eq(AccountProfiles.profileId, profile.id)),
       );
 
-    return deleteBookmark(
-      { accountId: account.id, bookmarkId: bookmark.id, profileId: profile.id },
-      tx,
-    );
+    return deleteBookmark({ bookmarkId: bookmark.id, profileId: profile.id }, tx);
   });
 
-  assert.equal(deleted, null);
-  assert.deepEqual(await loadPostBookmarks(post.id), [bookmark]);
+  assert.equal(deleted?.id, bookmark.id);
+  assert.deepEqual(await loadPostBookmarks(post.id), []);
 });

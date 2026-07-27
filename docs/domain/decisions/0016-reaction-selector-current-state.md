@@ -22,8 +22,8 @@ Accepted
 
 - selector는 화면 재진입이나 selected Profile 전환 뒤에도 현재 선택을 복원하고 해제할 수 있어야 하며, 과거
   Reaction ID 보존을 모든 consumer의 전제로 만들지 않는다.
-- Reaction은 사용자가 즉시 다시 선택할 수 있는 낮은 위험의 소셜 상호작용이므로 ABA를 막기 위한 별도 상태와
-  저장 범위를 추가하지 않는다.
+- Reaction은 selected Profile이 즉시 같은 Reaction을 다시 생성할 수 있는 낮은 위험의 소셜 상호작용이므로
+  ABA를 막기 위한 별도 상태와 저장 범위를 추가하지 않는다.
 - Profile/Post/Type 조건으로 현재 관계만 삭제하면 관계가 없는 반복·동시 요청을 성공 no-op으로 정규화하면서
   다른 Profile과 Type을 보존할 수 있다.
 
@@ -36,4 +36,4 @@ visibility 및 Reply Notification 결정은 유지한다.
 ## 문서 반영
 
 - [Reaction](../objects/reaction.md)은 selected Profile의 현재 관계 조회와 Post/Type 기준 삭제를 정의한다.
-- `add-post-reactions` OpenSpec은 구체 GraphQL 조회·mutation·payload와 Notification cleanup 경계를 선택한다.
+- Reaction OpenSpec은 구체 GraphQL 조회·mutation·payload와 Notification cleanup 경계를 선택한다.

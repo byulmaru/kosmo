@@ -148,23 +148,6 @@ export const repostPost = async (
   readonly repost: typeof Posts.$inferSelect;
 }> =>
   getDatabaseConnection(tx).transaction(async (tx) => {
-    const actor = await tx
-      .select({ id: Profiles.id })
-      .from(Profiles)
-      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .where(
-        and(
-          eq(Profiles.id, actorProfileId),
-          eq(Profiles.state, ProfileState.ACTIVE),
-          ne(Instances.state, InstanceState.SUSPENDED),
-        ),
-      )
-      .limit(1)
-      .then(first);
-    if (!actor) {
-      throw new PermissionDeniedError();
-    }
-
     const source = await findVisiblePost(tx, { actorProfileId, postId: sourcePostId });
     if (!source) {
       throw new NotFoundError('Post not found');
