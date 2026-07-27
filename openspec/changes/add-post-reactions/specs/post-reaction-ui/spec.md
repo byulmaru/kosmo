@@ -25,6 +25,13 @@
 - **THEN** popover는 열린 상태를 유지한다
 - **AND** 사용자는 다른 Type을 이어서 조작할 수 있다
 
+#### Scenario: selected Profile 부재
+
+- **WHEN** guest이거나 현재 Account에 selected Profile이 없다
+- **THEN** 기존 Post Action Bar의 Reaction trigger를 disabled 상태로 표시한다
+- **AND** popover를 열거나 Reaction mutation을 시작하지 않는다
+- **AND** 로그인·가입 또는 Profile 선택 onboarding 연결을 이 capability에 요구하지 않는다
+
 #### Scenario: 선택하지 않은 Type 추가
 
 - **WHEN** 사용자가 선택하지 않은 Reaction Type을 누른다

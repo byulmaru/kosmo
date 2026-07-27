@@ -187,6 +187,7 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 - 필요한 payload와 GraphQL `errors`가 함께 있으면 payload 결과를 성공으로 처리하고, payload 부재·network failure만 실패로 처리한다.
 - PROD-417은 같은 Type의 surface-local 중복 입력을 막고 서로 다른 Type의 동시 mutation과 reverse completion을 허용한다. Type별 pending/error를 격리하고 selected Profile의 Relay Environment 사이에서 UI 상태를 공유하지 않는다.
 - 같은 actor의 여러 surface를 client 전역에서 직렬화하지 않는다.
+- guest이거나 selected Profile이 없으면 Reaction trigger를 disabled로 표시하고 popover·mutation을 시작하지 않는다. 로그인·가입·Profile 선택 onboarding은 포함하지 않는다.
 - 사용자 정의 Reaction identity·asset·federation 계약을 포함하지 않는다.
 
 **Verification**
@@ -194,6 +195,7 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 - PROD-450은 supplied order와 현재 여섯 fixture, 선택·해제·복수 Type, option별 border·radius, 70% selected 배경과 100% 이모지, 44×44px pending overlay와 24×24px fading arc, error·중복 입력 방지, 전체 disabled 미렌더링과 callback을 Storybook/component interaction으로 검증한다.
 - PROD-417 unit test는 production updater seam을 직접 호출해 add same-Type/different-ID 교체, same-ID 반복 중복 방지, 다른 Type 보존, payload/Post/field 부재, delete authoritative list·`post: null` fallback·nullable `reactionId`, add 성공 뒤 delete와 actor 격리를 검증한다.
 - PROD-417 Web integration은 trigger 재입력, outside pointer, `Escape`, 첫 option·trigger focus, `aria-haspopup`/`aria-expanded`, 열린 상태 유지, flip/clamp, Type별 동시 pending·reverse completion·실패/retry·actor 전환·unmount를 검증한다.
+- selected Profile 부재 fixture는 disabled trigger가 popover와 mutation request를 만들지 않는지 검증한다.
 - production Post fixture는 ordinary·Quote가 자신의 Post ID를, 순수 Repost가 source Post ID를 mutation 대상으로 사용하는지 검증한다.
 - iOS·Android는 safe area, 외부 touch, Android back과 VoiceOver/TalkBack focus를 수동 확인한다. 기존 `Reactions`·`ActionMenu` presentation catalog와 API/DB test를 중복 확장하지 않는다.
 

@@ -41,6 +41,7 @@
 - PROD-417은 `ReactionSelector`를 수정하지 않고 private feature-local `ReactionAction`과 `ReactionPopover`로 trigger, overlay, mutation과 cache 책임을 분리한다. `PostActionBar`는 공개 composite fragment, toolbar semantics와 action 순서를 유지한다.
 - Reaction popover는 Web·iOS·Android에서 trigger에 anchored된 floating surface를 사용한다. trigger 재입력, 외부 입력, Web `Escape`, Android back, Post unmount와 actor 전환으로 닫고, 공간에 따라 위·아래 전환과 viewport/safe-area 수평 clamp를 적용한다. Web에서는 첫 option focus와 trigger focus 복원을 보장한다.
 - fixed 여섯 Type catalog는 zero-count와 무관하게 integration layer가 공급한다. selector는 성공 뒤에도 열린 상태를 유지하고 요청한 Type만 pending/error로 격리한다.
+- guest이거나 selected Profile이 없으면 Reaction trigger를 disabled로 유지하고 popover·mutation을 시작하지 않는다. 로그인·가입 또는 Profile 선택 onboarding 연결은 후속 제품 계약으로 남긴다.
 - selection은 server-confirmed 상태만 표시한다. 필요한 mutation payload가 있으면 GraphQL `errors`가 함께 있어도 성공으로 처리하고, payload 부재나 network failure만 실패로 처리한다.
 - `Post.viewerReactions`는 connection이 아닌 plural linked field다. updater는 요청을 시작한 Relay Environment의 기존 Post와 field가 모두 있을 때만 `getLinkedRecords`/`setLinkedRecords`로 갱신하며 record나 field를 합성하지 않는다.
 
@@ -94,6 +95,7 @@
 - PROD-417의 기존 Action Bar Reaction slot 통합을 PROD-432로 미루거나, 반대로 Reply composer·More·범용 overlay까지 PROD-417에 포함하지 않는다.
 - add updater에서 같은 Type·같은 data ID를 단순 append해 중복시키거나 delete의 nullable `reactionId`를 실패로 취급하지 않는다.
 - actor 전환 뒤 이전 mutation callback으로 새 actor의 popover·pending·error 상태를 다시 열거나 변경하지 않는다.
+- guest·selected Profile 부재에서 trigger를 숨기거나 로그인·가입·Profile 선택 흐름을 PROD-417 안에서 새로 만들지 않는다.
 
 ## Risks / Trade-offs
 
@@ -117,4 +119,4 @@
 
 ## Open Questions
 
-- 없음. PROD-417의 option 공급, popover, server-confirmed mutation/cache, partial payload와 actor 격리 정책은 2026-07-28 결정으로 확정했다.
+- 없음. PROD-417의 option 공급, popover, server-confirmed mutation/cache, partial payload, actor 격리와 selected Profile 부재 시 disabled trigger 정책은 2026-07-28 결정으로 확정했다. 로그인·가입·Profile 선택 onboarding 연결은 후속 제품 계약이다.

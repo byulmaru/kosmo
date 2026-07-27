@@ -37,7 +37,9 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 - popover는 외부 클릭·터치, Web `Escape`, Android back, 대상 Post unmount 또는 selected Profile 전환으로 닫힌다. Web에서는 열릴 때 첫 option으로 focus를 옮기고 닫힐 때 trigger로 focus를 복원한다.
 - 한 Type을 선택하거나 해제한 뒤에도 popover를 유지해 여러 Type을 연속으로 조작할 수 있다.
 - 일반 Post와 Quote Post의 action은 해당 Post를 대상으로 하고, 순수 Repost가 source Post의 Action Bar를 표시하는 경우에는 source Post를 대상으로 한다.
+- guest이거나 selected Profile이 없으면 Reaction trigger는 Action Bar 자리를 유지한 채 disabled로 표시하고 popover나 mutation을 시작하지 않는다.
 - 이 통합은 기존 Post Action Bar의 Reaction 자리만 소유한다. 전체 action 조립, Reply composer 연결, More 메뉴와 범용 anchored overlay 추출은 각각의 후속 범위로 유지한다.
+- disabled trigger에서 로그인·가입 또는 Profile 선택 onboarding으로 연결하는 흐름은 후속 제품 계약으로 남긴다.
 
 ## Mutation과 상태
 

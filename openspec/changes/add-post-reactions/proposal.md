@@ -34,4 +34,4 @@ Kosmo는 Profile이 Post에 여러 종류의 Reaction을 남기고, 이를 일�
 - Universal client: fixture-first Reaction Quick Picker·summary presentation, 기존 Post Action Bar의 Reaction popover, Relay mutation/cache·pagination 통합과 component/integration 검증
 - Notification: 기존 Profile-scoped projection과 inbox/read/count UI 확장
 - Dependency: PROD-413은 완료된 PROD-277·324·372 Notification 기반 위에 Reaction Notification delta를 적용한다. `add-in-app-notifications`의 남은 E2E·archive는 그 부모 범위로 유지한다.
-- Excluded systems: ActivityPub Reaction ingress/delivery, 임의 Unicode와 사용자 정의 Reaction, custom emoji Full Picker·palette·검색, Reply composer·More를 포함한 전체 Action Bar 조립, 범용 anchored overlay·Notification 재설계
+- Excluded systems: ActivityPub Reaction ingress/delivery, 임의 Unicode와 사용자 정의 Reaction, custom emoji Full Picker·palette·검색, guest·selected Profile 부재에서 로그인·가입·Profile 선택 onboarding 연결, Reply composer·More를 포함한 전체 Action Bar 조립, 범용 anchored overlay·Notification 재설계
