@@ -1,13 +1,8 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
-import { after, before, beforeEach, describe, test } from 'node:test';
-import {
-  createFederation,
-  generateCryptoKeyPair,
-  MemoryKvStore,
-  signRequest,
-} from '@fedify/fedify';
+import { after, before, beforeEach, describe, mock, test } from 'node:test';
+import { generateCryptoKeyPair, signRequest } from '@fedify/fedify';
 import { Announce, CryptographicKey, Person, Undo } from '@fedify/vocab';
 import { getDocumentLoader } from '@fedify/vocab-runtime';
 import {
@@ -22,9 +17,10 @@ import {
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { createPost } from '@kosmo/core/services';
 import { and, eq, ne } from 'drizzle-orm';
-import type { DocumentLoader, InboxContext } from '@fedify/fedify';
+import type { InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type * as FederationModule from './federation';
 import type { handleInboundAnnounce as HandleInboundAnnounce } from './inbound-announce';
 import type { handleInboundUndo as HandleInboundUndo } from './inbound-follow';
 
@@ -45,6 +41,7 @@ let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
 let Profiles: typeof CoreDb.Profiles;
+let federation: typeof FederationModule.federation;
 let handleInboundAnnounce: typeof HandleInboundAnnounce;
 let handleInboundUndo: typeof HandleInboundUndo;
 let localInstanceId: string;
@@ -67,6 +64,7 @@ describe('inbound Announce materialization', () => {
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ handleInboundAnnounce } = await import('./inbound-announce'));
     ({ handleInboundUndo } = await import('./inbound-follow'));
+    ({ federation } = await import('./federation'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
   });
@@ -215,28 +213,62 @@ describe('inbound Announce materialization', () => {
     assert.equal((await findReposts(actor.id, source.id)).length, 0);
   });
 
-  test('materializes one Repost from signed personal and shared inbox deliveries', async () => {
+  test('routes signed personal and shared deliveries through the production listener to one Repost', async () => {
     const actor = await createRemoteActor(actorUri);
     const source = await createRemoteSource();
-    const fixture = await createInboxFixture();
-    const activity = announce('signed-both', sourceUri);
-
-    const [personal, shared] = await Promise.all([
-      fixture.federation.fetch(
-        await fixture.createSignedRequest(`/ap/actor/${localProfileId}/inbox`, activity),
-        { contextData: undefined },
-      ),
-      fixture.federation.fetch(await fixture.createSignedRequest('/inbox', activity), {
-        contextData: undefined,
-      }),
+    await createProfile({ id: localProfileId, instanceId: localInstanceId, handle: 'local-inbox' });
+    const remoteKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
+    const remoteKeyUri = new URL('#main-key', actorUri);
+    const remoteKey = new CryptographicKey({
+      id: remoteKeyUri,
+      owner: actorUri,
+      publicKey: remoteKeyPair.publicKey,
+    });
+    const remoteActor = new Person({ id: actorUri, publicKey: remoteKey });
+    const documents = new Map<string, unknown>([
+      [actorUri.href, await remoteActor.toJsonLd({ format: 'expand' })],
+      [remoteKeyUri.href, await remoteKey.toJsonLd({ format: 'expand' })],
     ]);
+    const fetchMock = mock.method(globalThis, 'fetch', async (input: string | URL | Request) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      const document = documents.get(url);
+      if (!document) {
+        throw new Error(`Unexpected fetch URL: ${url}`);
+      }
+      return new Response(JSON.stringify(document), {
+        headers: { 'content-type': 'application/activity+json' },
+      });
+    });
+    const contextLoader = getDocumentLoader();
+    const activity = announce('signed-both', sourceUri);
+    const createSignedRequest = async (path: string) =>
+      signRequest(
+        new Request(new URL(path, publicOrigin), {
+          body: JSON.stringify(await activity.toJsonLd({ contextLoader })),
+          headers: { 'content-type': 'application/activity+json' },
+          method: 'POST',
+        }),
+        remoteKeyPair.privateKey,
+        remoteKeyUri,
+      );
 
-    assert.equal(personal.status, 202, await personal.text());
-    assert.equal(shared.status, 202, await shared.text());
-    assert.equal((await findReposts(actor.id, source.id)).length, 1);
+    try {
+      const [personal, shared] = await Promise.all([
+        federation.fetch(await createSignedRequest(`/ap/actor/${localProfileId}/inbox`), {
+          contextData: undefined,
+        }),
+        federation.fetch(await createSignedRequest('/inbox'), { contextData: undefined }),
+      ]);
+
+      assert.equal(personal.status, 202, await personal.text());
+      assert.equal(shared.status, 202, await shared.text());
+      assert.equal((await findReposts(actor.id, source.id)).length, 1);
+    } finally {
+      fetchMock.mock.restore();
+    }
   });
 
-  test('moves the current identity from A to B and only current Undo B deletes the Repost', async () => {
+  test('moves current identities across generations and ignores a repeated Undo after B is superseded', async () => {
     const actor = await createRemoteActor(actorUri);
     await createRemoteSource();
     const a = announce('a', sourceUri);
@@ -257,7 +289,11 @@ describe('inbound Announce materialization', () => {
     assert.notEqual(recreated.id, original.id);
     assert.equal(recreated.profileId, actor.id);
 
-    await handleInboundUndo(context(), undo(actorUri, a.id!));
+    const c = announce('c', sourceUri);
+    await handleInboundAnnounce(context(), c);
+    assert.equal(await currentRepost(c.id!).then(({ repost }) => repost.id), recreated.id);
+
+    await handleInboundUndo(context(), undo(actorUri, b.id!));
     assert.equal(await postState(recreated.id), PostState.ACTIVE);
   });
 
@@ -332,13 +368,22 @@ const createRemoteActor = async (uri: URL, handle = 'alice') => {
   return profile;
 };
 
-const createProfile = async ({ instanceId, handle }: { instanceId: string; handle: string }) =>
+const createProfile = async ({
+  id,
+  instanceId,
+  handle,
+}: {
+  id?: string;
+  instanceId: string;
+  handle: string;
+}) =>
   db
     .insert(Profiles)
     .values({
       displayName: handle,
       followPolicy: ProfileFollowPolicy.OPEN,
       handle,
+      id,
       instanceId,
       normalizedHandle: handle,
       state: ProfileState.ACTIVE,
@@ -415,54 +460,3 @@ const postState = (postId: string) =>
     .where(eq(Posts.id, postId))
     .then(firstOrThrow)
     .then(({ state }) => state);
-
-const createInboxFixture = async () => {
-  const remoteKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
-  const remoteKeyUri = new URL('#main-key', actorUri);
-  const remoteKey = new CryptographicKey({
-    id: remoteKeyUri,
-    owner: actorUri,
-    publicKey: remoteKeyPair.publicKey,
-  });
-  const remoteActor = new Person({ id: actorUri, publicKey: remoteKey });
-  const documents = new Map<string, unknown>([
-    [actorUri.href, await remoteActor.toJsonLd({ format: 'expand' })],
-    [remoteKeyUri.href, await remoteKey.toJsonLd({ format: 'expand' })],
-  ]);
-  const documentLoader: DocumentLoader = async (url) => {
-    const document = documents.get(url);
-    if (!document) {
-      throw new Error(`Unexpected document URL: ${url}`);
-    }
-    return { contextUrl: null, document, documentUrl: url };
-  };
-  const contextLoader = getDocumentLoader();
-  const federation = createFederation<void>({
-    authenticatedDocumentLoaderFactory: () => documentLoader,
-    contextLoaderFactory: () => contextLoader,
-    documentLoaderFactory: () => documentLoader,
-    kv: new MemoryKvStore(),
-  });
-  const localKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
-  federation
-    .setActorDispatcher('/ap/actor/{identifier}', (inboxContext, identifier) =>
-      identifier === localProfileId
-        ? new Person({ id: inboxContext.getActorUri(identifier) })
-        : null,
-    )
-    .setKeyPairsDispatcher(() => [localKeyPair]);
-  federation
-    .setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox')
-    .on(Announce, handleInboundAnnounce);
-
-  const createSignedRequest = async (path: string, activity: Announce) => {
-    const request = new Request(new URL(path, 'https://kos.moe'), {
-      body: JSON.stringify(await activity.toJsonLd({ contextLoader })),
-      headers: { 'content-type': 'application/activity+json' },
-      method: 'POST',
-    });
-    return signRequest(request, remoteKeyPair.privateKey, remoteKeyUri);
-  };
-
-  return { createSignedRequest, federation };
-};
