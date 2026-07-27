@@ -30,10 +30,10 @@
 - **THEN** 앱은 두 Author의 역할과 이동 대상을 혼동하지 않게 표시한다
 - **AND** 지원하는 화면 폭과 줄바꿈에서도 Post content와 action을 사용할 수 있다
 
-#### Scenario: 중첩 Source의 1단계 표시
+#### Scenario: Quote의 중첩 Source 1단계 표시
 
-- **WHEN** direct `repostSource`가 non-null `repostSource`를 가진다
-- **THEN** 앱은 direct Source만 Author·Content·생성 시각을 포함한 full presentation으로 표시한다
+- **WHEN** Quote 또는 Reply+Quote의 direct `repostSource`가 non-null `repostSource`를 가진다
+- **THEN** 앱은 direct Source만 Author·Content·생성 시각을 포함한 preview로 표시한다
 - **AND** 두 번째 Source의 Author·Content·생성 시각을 표시하거나 presentation component를 재귀 호출하지 않는다
 - **AND** 두 번째 Source를 위한 별도 placeholder 또는 CTA를 표시하지 않는다
 

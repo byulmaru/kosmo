@@ -235,7 +235,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   timeLink: { borderRadius: radii.sm, flexShrink: 0 },
-  time: { fontFamily: 'SUIT', ...typography.sm },
+  time: {
+    fontFamily: 'SUIT',
+    minHeight: 44,
+    minWidth: 44,
+    paddingTop: 12,
+    ...typography.sm,
+  },
   bodyLink: { borderRadius: radii.sm, minWidth: 0 },
   sourcePresentation: { flex: 1, minWidth: 0 },
   repostAttribution: {

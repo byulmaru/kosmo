@@ -1026,6 +1026,8 @@ export const PureRepost: Story = {
       'a[href="/@source@remote.example/post-source"]',
     );
     expect(sourceTimestampLink).not.toBeNull();
+    expect(sourceTimestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(sourceTimestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
     await userEvent.click(sourceTimestampLink!);
     expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
       '/@source@remote.example/post-source',
@@ -1047,17 +1049,12 @@ export const PureRepostOfQuote: Story = {
     const article = canvas.getByRole('article');
     const standardRow = within(article).getByTestId('post-list-standard-row');
 
-    expect(canvas.queryAllByTestId('source-post-preview')).toHaveLength(0);
-    expect(canvas.queryAllByTestId('post-source-presentation')).toHaveLength(0);
+    expect(canvas.getAllByRole('article')).toHaveLength(1);
+    expect(article.querySelector('[role="article"]')).toBeNull();
     expect(within(standardRow).getByText('아주 긴 Source 작성자 표시 이름')).toBeVisible();
     expect(
       within(standardRow).getByText('첫 번째 direct Source Quote의 본문입니다.'),
     ).toBeVisible();
-    expect(article.textContent).not.toContain(
-      '두 번째 Source의 본문은 목록에서 full preview하지 않습니다.',
-    );
-    expect(canvas.queryByLabelText('인용한 게시글 보기')).not.toBeInTheDocument();
-    expect(article.querySelector('a[href="/@deep-source@remote.example"]')).toBeNull();
     expect(article.querySelector('a a')).toBeNull();
     expect(article.querySelector('[role="link"] [role="link"]')).toBeNull();
 

@@ -24,10 +24,12 @@ function formatDateLabel(iso: string) {
 }
 
 async function expectPostOrder(page: Page, bodies: string[]) {
-  const bodyLinks = page.getByRole('link').filter({ hasText: /^E2E timeline/ });
+  const bodyShortcuts = page.getByTestId('post-list-row-body').filter({
+    hasText: /^E2E timeline/,
+  });
 
-  await expect(bodyLinks).toHaveCount(bodies.length);
-  await expect(bodyLinks).toHaveText(bodies);
+  await expect(bodyShortcuts).toHaveCount(bodies.length);
+  await expect(bodyShortcuts).toHaveText(bodies);
 }
 
 test.beforeEach(async () => {

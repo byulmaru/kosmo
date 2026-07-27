@@ -37,7 +37,7 @@ test('게시글 목록에서 상세로 이동하고 뒤로 가며 deep-link hand
   await page.goto('/home');
 
   const detailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
-  await page.getByRole('link', { name: body }).click();
+  await page.getByTestId('post-list-row-body').filter({ hasText: body }).click();
   const response = await detailResponse;
   const operation = readGraphQLOperation(response.request().postData());
 

@@ -127,11 +127,21 @@ const bookmarkRepostAuthor = profile({
   id: 'bookmark-repost-author',
   relativeHandle: '@bookmark-reposter',
 });
+const bookmarkPureRepostSource = post({
+  bodyText: '북마크 순수 재게시의 일반 Source입니다.',
+  id: 'bookmark-pure-repost-source',
+  profile: profile({
+    displayName: '순수 재게시 Source 작성자',
+    handle: 'bookmark-pure-source',
+    id: 'bookmark-pure-source-author',
+    relativeHandle: '@bookmark-pure-source',
+  }),
+});
 const bookmarkedPureRepost = post({
   bodyText: null,
   id: 'bookmark-pure-repost',
   profile: bookmarkRepostAuthor,
-  repostSource: bookmarkDirectQuote,
+  repostSource: bookmarkPureRepostSource,
 });
 const bookmarkPresentationOwner = {
   ...profile({ id: 'bookmark-owner' }),
@@ -476,7 +486,7 @@ export const RepostQuoteUsesOneSourceDepth: Story = {
     ).toBeVisible();
     const pureRepostRow = within(pureRepostArticle!).getByTestId('post-list-standard-row');
     expect(
-      within(pureRepostRow).getByText('북마크에서 한 단계만 표시하는 인용 Source입니다.'),
+      within(pureRepostRow).getByText('북마크 순수 재게시의 일반 Source입니다.'),
     ).toBeVisible();
     expect(within(pureRepostArticle!).queryByTestId('source-post-preview')).toBeNull();
     expect(pureRepostArticle!.querySelector('[role="article"]')).toBeNull();
@@ -506,16 +516,26 @@ export const RepostQuoteUsesOneSourceDepth: Story = {
       '/@bookmark-source/bookmark-source-quote',
     );
 
+    await userEvent.click(
+      quoteCanvas.getByRole('link', { name: '인용 Source 작성자 프로필 보기' }),
+    );
+    expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent('/@bookmark-source');
+
     await userEvent.click(sourceBody);
     expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent(
       '/@bookmark-source/bookmark-source-quote',
     );
 
     await userEvent.click(
-      within(pureRepostRow).getByText('북마크에서 한 단계만 표시하는 인용 Source입니다.'),
+      within(pureRepostArticle!).getByRole('link', {
+        name: '북마크 재게시 작성자 프로필 보기',
+      }),
     );
+    expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent('/@bookmark-reposter');
+
+    await userEvent.click(within(pureRepostRow).getByTestId('post-list-row-body'));
     expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent(
-      '/@bookmark-source/bookmark-source-quote',
+      '/@bookmark-pure-source/bookmark-pure-repost-source',
     );
   },
 };
