@@ -45,6 +45,10 @@ Source 관계, Content Warning, Sensitive Media, Tombstone, Post Eligibility 정
 | Reaction          | [Reaction](./reaction.md) | Post <- Reaction | 1 -> 0..N   | Reaction이 존재할 때                                  | Post 조회 정책 통과                                   | 없음             |
 | Bookmark          | [Bookmark](./bookmark.md) | Post <- Bookmark | 1 -> 0..N   | Bookmark가 존재할 때                                  | 저장한 Profile의 개인 조회                            | `Bookmark.Owner` |
 
+Reply Parent가 Tombstone으로 전이되어도 저장된 직접 관계를 유지한다. 현재 Parent Post row를 물리적으로
+제거하는 행동은 제공하지 않지만, Reply Parent FK는 향후 실제 row 제거 시 Reply Post를 cascade 삭제하지 않고
+관계만 `null`로 만드는 참조 동작을 가진다.
+
 Post의 게시 구조는 다음 관계 조합으로 정의한다.
 
 | Content | Reply Parent | Repost Source | 구조              |
@@ -126,6 +130,43 @@ Media 또는 Attached Media로 취급하지 않는다. Tombstone Post에는 다�
 - 인증하지 않은 guest도 조회할 수 있는 Post의 공유 참조를 복사할 수 있다.
 - 공유 참조는 Post Visibility와 Post Eligibility가 허용하지 않은 viewer에게 조회 범위를 넓히지 않는다.
 
+### ActivityPub Local Note 표현
+
+- Content가 있는 Local Post의 ActivityPub identity는 현재 deployment가 사용하는 configured Local Instance의
+  canonical origin과 `/ap/note/{postId}` 경로를 결합한 절대 URI다. `postId`는 Post의 immutable DB UUID이며
+  Author Profile의 handle이나 GraphQL global ID를 사용하지 않는다.
+- 같은 Local Post는 프로세스 재시작, 역참조 요청 경로와 후속 Activity 종류에 관계없이 같은 Note URI를
+  가진다. Local Post를 위해 remote ActivityPub Post mapping을 만들지 않는다.
+- ActivityPub `Note`는 위 URI를 `id`, Author Profile의 canonical ActivityPub actor URI를 `attributedTo`, Post
+  생성 시각을 `published`, Post 공유 참조를 `url`로 제공한다.
+- canonical PostContent 계약이 정의한 document 의미와 안전한 link 제약을 ActivityPub HTML `content`에
+  투영한다. Content Warning은 있으면 안전한 `summary`로 투영한다. 이 Local Note 계약은 PostContent node,
+  mark, canonicalization 또는 validation을 다시 정의하지 않는다. Media, Mention, custom emoji와 Quote 전용
+  federation 속성은 이 표현에 포함하지 않는다.
+- Reply Parent 관계가 있으면 Parent의 ActivityPub Post identity를 `inReplyTo`로 제공한다. Local Parent는
+  같은 local Note URI 규칙을 사용하고 remote Parent는 저장된 ActivityPub Post URI를 사용한다. `inReplyTo`는
+  requester별 Parent 조회 가능성에 따라 달라지지 않으며, Parent의 실제 표현은 Parent 자체의 역참조 권한으로
+  보호한다. Tombstone Parent도 저장 관계가 유지되는 동안 같은 identity를 제공하며, Parent row의 물리적
+  제거로 Reply Parent 관계가 `null`이 된 뒤에는 `inReplyTo`를 제공하지 않는다.
+- Content와 Reply Parent 없이 Repost Source만 있는 Repost는 Note로 표현하지 않는다. 후속 Announce와
+  Reaction Activity는 대상 Post의 같은 ActivityPub Post identity를 `object`로 재사용한다.
+
+ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
+
+| Post Visibility    | `to`                        | `cc`                        | Note 역참조 조건                                       |
+| ------------------ | --------------------------- | --------------------------- | ------------------------------------------------------ |
+| Public             | ActivityStreams Public      | Author followers collection | 인증 없이 허용                                         |
+| Unlisted           | Author followers collection | ActivityStreams Public      | 인증 없이 허용                                         |
+| Followers Only     | Author followers collection | 없음                        | Author 또는 established Follower의 signed fetch만 허용 |
+| Mentioned Profiles | 지원하지 않음               | 지원하지 않음               | 제공하지 않음                                          |
+
+- Followers Only signed fetch는 검증된 ActivityPub actor가 Author이거나 저장된 established Follow 관계의
+  Follower일 때만 허용한다. anonymous, unknown actor와 non-follower에게는 Post가 없는 것처럼 응답한다.
+- Post가 Tombstone이거나 Content가 없거나, Author Profile 또는 configured Local Instance가 unavailable이거나,
+  지원하지 않는 Visibility이면 Note를 제공하지 않는다. 이 unavailable 응답은 Post의 존재를 노출하지 않는다.
+- Local Note의 ActivityPub Tombstone, `Delete`, `Create`, `Announce`, `Like`, `EmojiReact`, `Undo` delivery는 각
+  lifecycle과 delivery 계약이 소유한다.
+
 ### 검색
 
 - 검색 후보는 Post Visibility가 Public이고 Post Eligibility를 통과한 Post다.
@@ -149,6 +190,8 @@ Media 또는 Attached Media로 취급하지 않는다. Tombstone Post에는 다�
 - 민감한 미디어: Sensitive Media
 - Tombstone: Tombstone
 - 게시 공유 참조: Post Share Reference
+- ActivityPub 게시 정체성: ActivityPub Post Identity
+- 로컬 Note 표현: Local Note Representation
 
 ## 제외/보류
 
@@ -157,3 +200,4 @@ Media 또는 Attached Media로 취급하지 않는다. Tombstone Post에는 다�
 - 게시 후 Media 연결/해제와 Post Visibility 변경은 지원하지 않는다.
 - 본문의 canonical 표현은 schema version이 식별된 document다. Plain Text는 작성 입력과 읽기·검색·접근성 projection이며 별도 canonical 저장값이 아니다.
 - 현재 document V1은 paragraph, text, hard break와 안전한 HTTP(S) link만 지원한다. `pre`와 rich-text editor는 지원하지 않는다.
+- Mentioned Profiles audience, ActivityPub Media·Mention·custom emoji·Quote 전용 속성은 후속 계약에서 정의한다.

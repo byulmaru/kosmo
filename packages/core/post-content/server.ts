@@ -1,4 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
+import { JSDOM } from 'jsdom';
+import { DOMSerializer } from 'prosemirror-model';
 import { postBodyMaxLength } from '../validation/post-policy';
 import { normalizePostContentPlainText, postContentSchemaVersion } from './index';
 import { postContentSchema } from './schema';
@@ -93,6 +95,19 @@ export function postContentDocumentFromText(
 
 export function postContentDocumentToText(value: unknown): string {
   return postContentBodyToText(canonicalizePostContentDocument(value).body);
+}
+
+export function postContentDocumentToHtml(value: unknown): string {
+  const { body } = canonicalizePostContentDocument(value);
+  const node = postContentSchema.nodeFromJSON(body);
+  node.check();
+
+  const document = new JSDOM().window.document;
+  const container = document.createElement('div');
+  container.append(
+    DOMSerializer.fromSchema(postContentSchema).serializeFragment(node.content, { document }),
+  );
+  return container.innerHTML;
 }
 
 export function validateLocalPostContentDocument(value: unknown): PostContentDocumentV1 {
