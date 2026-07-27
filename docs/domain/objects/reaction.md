@@ -50,6 +50,25 @@ Reaction 삭제는 입력한 Post와 Reaction Type에서 행동 주체 Profile�
 제거할 수 있으며, selected Profile이 즉시 같은 Reaction을 다시 생성할 수 있는 낮은 위험의 소셜 상호작용으로
 이 가능성을 수용한다.
 
+## ActivityPub 수신 투영
+
+- Remote `Like`와 `EmojiReact`는 저장된 Remote Profile을 행동 주체로 하는 같은 Reaction 추가 행동으로
+  materialize한다. 대상은 파생 Local Note URI 또는 저장된 Remote Post URI로 식별되는 기존 Post다.
+- Activity의 `actor`는 저장된 Remote Profile actor URI와 일치해야 하고, `object`는 대상 Post의 ActivityPub
+  identity와 일치해야 한다. Activity 수신자에는 대상 Post Author의 actor URI가 포함되어야 한다.
+- `content`가 허용 Reaction Type과 정확히 일치하면 해당 Type을 사용한다. `content`가 없거나 지원하지 않는
+  Unicode, custom emoji shortcode 또는 tag를 사용하면 `❤️`로 투영하며 custom emoji 객체를 만들지 않는다.
+- `Like(content)`와 `EmojiReact(content)`는 같은 규칙을 사용한다. Legacy `EmojiReaction`과 Misskey
+  `_misskey_reaction`은 수신 계약에 포함하지 않는다.
+- Remote activity URI와 materialize된 Reaction은 ActivityPub 전용 1:1 관계로 같은 transaction에 저장한다.
+  같은 URI와 같은 actor, object, Type의 재전달은 기존 관계를 유지한 채 멱등 성공한다. 같은 URI를 다른
+  actor, object 또는 Type으로 재사용한 전달은 기존 관계를 바꾸지 않는다.
+- `Undo`는 저장된 activity URI를 직접 가리키거나 같은 URI의 `Like` 또는 `EmojiReact`를 내장할 수 있다.
+  `Undo` actor가 원래 Reaction actor와 일치할 때만 저장된 mapping으로 정확한 Reaction과 mapping을 같은
+  transaction에서 제거한다. `Undo` 대상은 네트워크에서 역참조하지 않는다.
+- 새 Reaction이 실제 생성되거나 `Undo`로 실제 제거된 경우 기존 Reaction Notification 생성·정리 lifecycle을
+  적용한다. Notification 실패는 Reaction과 ActivityPub mapping 결과를 바꾸지 않는다.
+
 ## 권한
 
 | 권한             | 종류      | 성립 조건                                  |
@@ -75,3 +94,5 @@ Reaction 삭제는 입력한 Post와 Reaction Type에서 행동 주체 Profile�
 ## 제외/보류
 
 - 좋아요, 부스트 같은 별도 canonical term은 사용하지 않는다.
+- 임의 Unicode와 custom emoji Reaction 저장, legacy `EmojiReaction`, Misskey `_misskey_reaction` 확장은
+  지원하지 않는다.
