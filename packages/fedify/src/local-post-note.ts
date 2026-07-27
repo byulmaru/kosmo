@@ -41,8 +41,6 @@ type LocalPostNote = {
   readonly visibility: (typeof PostVisibility)[keyof typeof PostVisibility];
 };
 
-const privateLocalNoteRequests = new WeakSet<Request>();
-
 const loadLocalPostNote = async (postId: string): Promise<LocalPostNote | null> => {
   if (!isCanonicalPostId(postId)) {
     return null;
@@ -137,13 +135,10 @@ export const authorizeLocalPostNote = async (
     return false;
   }
 
-  const authorized =
+  return (
     signedActor.id.href === context.getActorUri(note.authorProfileId).href ||
-    (await isEstablishedFollower(signedActor.id, note.authorProfileId));
-  if (authorized) {
-    privateLocalNoteRequests.add(context.request);
-  }
-  return authorized;
+    (await isEstablishedFollower(signedActor.id, note.authorProfileId))
+  );
 };
 
 export const dispatchLocalPostNote = async (
@@ -187,11 +182,4 @@ export const dispatchLocalPostNote = async (
       note.canonicalOrigin,
     ),
   });
-};
-
-export const applyLocalNoteCachePolicy = (request: Request, response: Response): Response => {
-  if (response.ok && privateLocalNoteRequests.has(request)) {
-    response.headers.set('Cache-Control', 'private, no-store');
-  }
-  return response;
 };

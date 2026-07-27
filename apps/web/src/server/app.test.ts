@@ -6,21 +6,14 @@ import { gunzipSync, gzipSync } from 'node:zlib';
 import { parse } from 'hono/utils/cookie';
 import { Configuration, enableNonRepudiationChecks } from 'openid-client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
-import type { applyLocalNoteCachePolicy as applyCachePolicy, federation } from '@kosmo/fedify';
+import type { federation } from '@kosmo/fedify';
 import type { Hono } from 'hono';
 import type {
   authorizationCodeGrant as oidcAuthorizationCodeGrant,
   discovery as oidcDiscovery,
 } from 'openid-client';
 
-const {
-  applyLocalNoteCachePolicy,
-  authorizationCodeGrant,
-  createSession,
-  discovery,
-  federationFetch,
-} = vi.hoisted(() => ({
-  applyLocalNoteCachePolicy: vi.fn<typeof applyCachePolicy>(),
+const { authorizationCodeGrant, createSession, discovery, federationFetch } = vi.hoisted(() => ({
   authorizationCodeGrant: vi.fn<typeof oidcAuthorizationCodeGrant>(),
   createSession:
     vi.fn<(identity: { displayName: string; oidcSubject: string }) => Promise<string>>(),
@@ -39,7 +32,6 @@ vi.mock('@kosmo/core/services', () => ({
 }));
 
 vi.mock('@kosmo/fedify', () => ({
-  applyLocalNoteCachePolicy,
   federation: { fetch: federationFetch },
 }));
 
@@ -91,7 +83,6 @@ beforeEach(() => {
       }) as unknown as Awaited<ReturnType<typeof oidcAuthorizationCodeGrant>>,
   );
   createSession.mockResolvedValue('kosmo-session-token');
-  applyLocalNoteCachePolicy.mockImplementation((_request, response) => response);
   federationFetch.mockImplementation(async (request, options) => {
     if (!options.onNotFound) {
       throw new Error('Missing federation fallback');
@@ -409,21 +400,6 @@ describe('runtime routing', () => {
 
     expect(response.status).toBe(404);
     expect(await response.text()).toBe('404 Not Found');
-  });
-
-  test('applies requester-relative cache policy to federation responses', async () => {
-    applyLocalNoteCachePolicy.mockImplementation((_request, response) => {
-      response.headers.set('Cache-Control', 'private, no-store');
-      return response;
-    });
-    federationFetch.mockResolvedValue(new Response('{}', { status: 200 }));
-
-    const response = await app.request('/ap/note/00000000-0000-8000-8000-000000000001', {
-      headers: { accept: 'application/activity+json' },
-    });
-
-    expect(applyLocalNoteCachePolicy).toHaveBeenCalledOnce();
-    expect(response.headers.get('cache-control')).toBe('private, no-store');
   });
 
   test.each([undefined, '*/*'])(

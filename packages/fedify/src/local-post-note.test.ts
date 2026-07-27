@@ -33,7 +33,6 @@ const remoteKeyUri = new URL('#main-key', remoteActorUri);
 
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
-let applyLocalNoteCachePolicy: typeof LocalPostNoteModule.applyLocalNoteCachePolicy;
 let authorizeLocalPostNote: typeof LocalPostNoteModule.authorizeLocalPostNote;
 let db: typeof CoreDb.db;
 let dispatchLocalPostNote: typeof LocalPostNoteModule.dispatchLocalPostNote;
@@ -70,8 +69,7 @@ describe('ActivityPub Local Post Note', () => {
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ getLocalPostUri, resolveActivityPubPostUri } = await import('./activitypub-post-uri'));
-    ({ applyLocalNoteCachePolicy, authorizeLocalPostNote, dispatchLocalPostNote } =
-      await import('./local-post-note'));
+    ({ authorizeLocalPostNote, dispatchLocalPostNote } = await import('./local-post-note'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
   });
@@ -259,7 +257,7 @@ describe('ActivityPub Local Post Note', () => {
     }
   });
 
-  test('allows only Author or established Follower signed fetch and prevents shared caching', async () => {
+  test('allows only Author or established Follower signed fetch', async () => {
     const author = await createProfile({ kind: InstanceKind.LOCAL });
     const followersPost = await createPost(author.id, { visibility: PostVisibility.FOLLOWERS });
     const remoteFollower = await createProfile({ domain: 'remote.example' });
@@ -290,15 +288,11 @@ describe('ActivityPub Local Post Note', () => {
       followerProfileId: remoteFollower.id,
     });
     const allowedRequest = await signedFixture.createRequest(followersPost.id);
-    const allowed = applyLocalNoteCachePolicy(
-      allowedRequest,
-      await signedFixture.federation.fetch(allowedRequest, {
-        contextData: undefined,
-        onUnauthorized: () => new Response('Not found', { status: 404 }),
-      }),
-    );
+    const allowed = await signedFixture.federation.fetch(allowedRequest, {
+      contextData: undefined,
+      onUnauthorized: () => new Response('Not found', { status: 404 }),
+    });
     assert.equal(allowed.status, 200);
-    assert.equal(allowed.headers.get('Cache-Control'), 'private, no-store');
     assert.equal((await allowed.json()).content, '<p>body</p>');
 
     await db

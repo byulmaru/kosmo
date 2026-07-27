@@ -57,7 +57,7 @@
 
 ### Requirement: Local Note audience and dereference authorization
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-494. 시스템은 Post Visibility를 ActivityPub audience와 Note 역참조 권한으로 일관되게 투영해야 하며(MUST), 권한 있는 Followers Only 응답이 다른 requester에게 재사용되어 Post 존재나 내용을 노출하지 않게 해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-494. 시스템은 Post Visibility를 ActivityPub audience와 Note 역참조 권한으로 일관되게 투영해야 한다(MUST).
 
 #### Scenario: Public Note audience
 
@@ -83,7 +83,7 @@
 
 - **WHEN** anonymous, unknown actor 또는 Author의 established Follower가 아닌 actor가 Followers Only Local Post를 역참조한다
 - **THEN** 시스템은 Post가 없는 것처럼 응답한다
-- **AND** 응답 또는 shared cache를 통해 Post 존재, audience와 Content를 다른 requester에게 노출하지 않는다
+- **AND** 직접 federation 응답으로 Post 존재, audience와 Content를 노출하지 않는다
 
 #### Scenario: Mentioned Profiles Note 제외
 

@@ -73,9 +73,8 @@ export는 아직 완성되지 않았다. 현재 `post.reply_parent_id` self-FK�
    text로 export하고 빈 Content Warning을 만들지 않는다.
 6. `inReplyTo`는 load된 direct relation의 identity만 사용한다. Parent visibility와 lifecycle로 다시 필터링하지
    않으며 Parent Content를 함께 load하거나 embed하지 않는다. relation이 `null`일 때만 생략한다.
-7. Followers Only 성공 응답은 requester authorization 결과가 shared cache에서 재사용되지 않도록 명시적으로
-   보호한다. 기본 권고는 `Cache-Control: private, no-store`이며, 동등한 격리를 증명하는 federation/web 경계도
-   허용한다. Public/Unlisted 응답에는 requester별 body 변형을 만들지 않는다.
+7. Followers Only 역참조 권한은 Fedify object dispatcher의 `.authorize()`에서 판정하고 Web은 Fedify가 만든
+   응답을 그대로 반환한다. requester 표시나 별도 응답 cache policy를 애플리케이션에 추가하지 않는다.
 8. Reply Parent self-FK를 drop/recreate하는 forward migration으로 delete action을 `SET NULL`로 바꾸되 기존 row를
    update하지 않는다. physical delete application 경로는 추가하지 않고 catalog와 직접 DB fixture로 constraint만
    검증한다.
@@ -86,8 +85,8 @@ export는 아직 완성되지 않았다. 현재 `post.reply_parent_id` self-FK�
   있다.
 - ProseMirror DOMSerializer를 감싸는 adapter와 DOM document 제공 방식은 달라질 수 있지만 별도 수동 node
   renderer로 schema 의미를 복제하지 않는다.
-- Followers Only cache 격리는 `private, no-store` 외에도 서명 identity별 격리가 실제 web/federation 응답에서
-  검증되는 방식이면 허용된다. 단순 `Vary: Accept`는 허용되지 않는다.
+- Fedify가 생성한 object response에 애플리케이션별 header를 추가하지 않는다. 배포 계층의 cache 정책은 이
+  capability의 구현 범위가 아니다.
 
 ### Known Traps
 
@@ -96,7 +95,7 @@ export는 아직 완성되지 않았다. 현재 `post.reply_parent_id` self-FK�
   Local URI로 노출할 수 있다.
 - Followers Only authorization에서 actor URI 문자열만 비교하거나 pending FollowRequest를 허용하면 저장된
   established relationship 계약을 우회한다.
-- Parent visibility를 확인해 `inReplyTo`를 생략하면 requester별 표현과 cache key 문제가 생긴다.
+- Parent visibility를 확인해 `inReplyTo`를 생략하면 requester별 표현이 달라진다.
 - inbound HTML parser, 앱 React Native renderer 또는 수동 JSON 순회를 outbound serializer로 사용하면
   ProseMirror schema 의미와 책임을 중복한다.
 - Tombstone update에서 `reply_parent_id`를 직접 nullify하거나 Parent row에 cascade delete를 사용하면 승인된
@@ -110,8 +109,9 @@ export는 아직 완성되지 않았다. 현재 `post.reply_parent_id` self-FK�
   canonical 계약으로 유지하고 Parent Content를 Reply에 embed하지 않는다.
 - [Risk] Followers collection URI는 audience에 사용되지만 collection endpoint는 404다. → 이번 scope에서는
   address identity로만 사용하고 endpoint 공개는 별도 계약 전까지 열지 않는다.
-- [Risk] Fedify 기본 success 응답의 cache header가 signed-fetch 격리를 보장하지 않을 수 있다. → Followers Only
-  응답에 명시적 cache 격리를 적용하고 web-level response test로 확인한다.
+- [Risk] Fedify의 success response는 signed requester별 cache 격리를 위한 별도 header를 제공하지 않는다. →
+  Fedify와 Hackers' Pub의 object dispatcher 경계와 같이 `.authorize()`에서 직접 접근을 제한하며, 배포 계층의
+  cache 정책은 별도 운영 계약에서 다룬다.
 - [Risk] FK를 `SET NULL`로 바꾼 뒤 실제 physical delete가 발생하면 Parent identity는 복구할 수 없다. → 현재
   사용자 삭제는 Tombstone이라 영향을 받지 않으며 migration과 rollback 문서에서 비가역 가능성을 명시한다.
 - [Risk] `toDOM` metadata가 existing parse/canonical schema와 어긋날 수 있다. → 같은 ProseMirror schema의

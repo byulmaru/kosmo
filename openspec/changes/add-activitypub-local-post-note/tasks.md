@@ -81,7 +81,8 @@ Local/Remote Post가 `packages/fedify`의 하나의 안정적인 ActivityPub ide
 - pending FollowRequest, anonymous, unknown actor와 non-follower는 권한을 부여하지 않는다.
 - followers audience identity는 `/ap/actor/{authorProfileId}/followers`이며 collection GET과 actor `followers`
   속성은 열지 않는다.
-- Followers Only 성공 응답은 `Cache-Control: private, no-store`로 shared cache 재사용을 막는다.
+- Followers Only 역참조는 Fedify object dispatcher의 authorization 경계에서 판정하고 Web은 Fedify 응답을
+  그대로 반환한다.
 - `inReplyTo`는 Parent visibility와 requester에 따라 필터링하지 않고 relation이 있을 때 Local/Remote identity를
   사용한다. Tombstone Parent 관계와 identity는 유지한다.
 - unavailable 원인을 구분해 노출하지 않고 Reply·Repost·Reaction 또는 Tombstone/Delete activity delivery를
@@ -91,16 +92,16 @@ Local/Remote Post가 `packages/fedify`의 하나의 안정적인 ActivityPub ide
 
 - Public/Unlisted/Follower audience와 anonymous/Author/follower/non-follower/unknown signed fetch를 검증한다.
 - process restart·alternate request host에서 Local URI 안정성, Local mapping 미생성과 Remote mapping URI 재사용을 검증한다.
-- signed success cache header와 동일 URI의 후속 unauthorized request가 representation을 받지 않음을 검증한다.
+- signed success와 동일 URI의 후속 unauthorized request가 representation을 받지 않음을 검증한다.
 - Local/Remote/private/Tombstone/null Parent의 `inReplyTo`와 requester-independent body를 검증한다.
 - missing/non-local/Tombstone/contentless/unsupported visibility/unavailable Author·Instance를 같은 미제공 경계로
   검증한다.
 
 - [x] 3.1 `packages/fedify`에 Local/Remote Post ActivityPub URI resolver를 구현한다.
 - [x] 3.2 PROD-502 HTML을 사용하는 Local Note object dispatcher와 제공 가능 Post load 경계를 구현한다.
-- [x] 3.3 Post Visibility audience와 signed actor 기반 Followers Only authorization 및 cache 격리를 구현한다.
+- [x] 3.3 Post Visibility audience와 signed actor 기반 Followers Only authorization을 구현한다.
 - [x] 3.4 requester-independent Local/Remote Parent `inReplyTo` projection을 연결한다.
-- [x] 3.5 identity, mapping, audience, authorization, cache, Parent와 unavailable matrix의 federation integration test를 추가한다.
+- [x] 3.5 identity, mapping, audience, authorization, Parent와 unavailable matrix의 federation integration test를 추가한다.
 
 ## 4. PROD-494 Federation routing 회귀와 OpenSpec 완료
 

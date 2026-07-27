@@ -124,7 +124,7 @@ Linear 계약을 독립적으로 다시 확인해야 한다.
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/domain/objects/post.md`,
   `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-494
-- Status: Active
+- Status: Superseded
 - Context / Problem: Note body 자체가 requester별로 달라지지 않아도 Followers Only의 200 여부는 signed actor와
   stored Follow 관계에 의존한다. Fedify 기본 success response만 사용하면 shared cache 격리를 명시적으로 보장할
   수 없다.
@@ -137,6 +137,27 @@ Linear 계약을 독립적으로 다시 확인해야 한다.
   cache 설정과 독립적으로 보존한다. Public/Unlisted는 이 decision으로 `no-store`를 강제하지 않는다.
 - Confirmation / Follow-up: authorized success의 exact Cache-Control과 같은 URI의 anonymous/non-follower 요청이
   representation을 받지 않는 web integration test로 확인한다.
+
+### Followers Only 역참조는 Fedify authorize 경계만 사용한다
+
+- Decision Date: 2026-07-27
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/post.md`,
+  `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-494
+- Status: Active
+- Context / Problem: canonical 계약과 PROD-494는 verified signed fetch의 접근 판정을 요구하지만 성공 응답의
+  cache header는 정하지 않는다. Fedify 2.3 object dispatcher와 Hackers' Pub 구현도 `.authorize()` 결과로
+  접근을 제한하고 요청 표시나 object response별 cache header를 추가하지 않는다.
+- Decision Outcome: Followers Only 접근은 Fedify object dispatcher의 `.authorize()`에서 Author 또는 established
+  Follower인지 판정한다. Web은 `federation.fetch()` 응답을 그대로 반환하며 request marker, `WeakSet`,
+  `Cache-Control` override를 추가하지 않는다.
+- Alternatives Considered: Followers Only 성공 응답에 `private, no-store` 적용, 모든 Local Note에 `no-store`
+  적용, signature별 application cache key. 상위 계약에 없는 응답 정책을 위해 Fedify의 request/response 경계를
+  우회하거나 공개 응답까지 제한하므로 사용하지 않는다.
+- Consequences: authorization 구현은 Fedify의 공식 확장 지점에 머물고 Web routing은 object 종류를 알 필요가
+  없다. 배포 계층의 shared cache 정책은 이 capability가 보장하지 않으며 필요하면 별도 운영 계약으로 결정한다.
+- Confirmation / Follow-up: Author/established Follower의 signed fetch 성공과 anonymous, unknown actor,
+  non-follower의 unavailable 응답을 federation integration test로 확인한다.
 
 ### inReplyTo는 requester와 무관한 저장 Parent identity다
 
@@ -199,4 +220,5 @@ Linear 계약을 독립적으로 다시 확인해야 한다.
 
 ## Superseded Decisions
 
-- 없음.
+- `Followers Only signed fetch 성공 응답은 shared cache에 저장하지 않는다`는 Fedify authorize 경계만 사용하는
+  구현 선택으로 대체됐다.
