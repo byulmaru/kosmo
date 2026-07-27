@@ -38,7 +38,7 @@ API와 Web BFF는 Hono/Node ESM 애플리케이션이며 TypeScript source를 `t
 - Web platform entry가 router와 애플리케이션 module보다 먼저 browser SDK를 초기화하고 Web 전용 오류 경계 조합이 공용 React boundary에 오류 reporter context를 제공한다. 외부 GraphQL 경계와 오류를 소비하는 내부 route·session 경계의 `componentDidCatch`가 이 reporter로 capture한다. Android·iOS entry와 조합은 Sentry 관측 module을 import하지 않는다.
 - `beforeSend` event processor를 두지 않고 SDK event 전체를 전달한다. environment/release/runtime metadata는 유지하고 자동 breadcrumb와 Web session tracking은 전부 비활성화한다.
 - Docker build는 Sentry를 애플리케이션 module보다 먼저 초기화하는 server entry를 production JavaScript와 external source map으로 만들고 Expo Web export에 external source map을 요청한다. Sentry CLI의 debug ID inject와 upload를 업로드 token BuildKit secret으로 수행한 뒤 map과 sourceMappingURL을 제거하고 runtime image에는 실행 JavaScript만 복사한다.
-- GitHub Actions는 OIDC로 Vault의 `secret/kubernetes/kosmo/shared`만 읽어 공개 Web DSN과 조직·프로젝트 slug를 build arg로, 업로드 token을 BuildKit secret으로 전달한다. 환경에 독립적인 서버 DSN도 `shared`에 두되 별도 VaultStaticSecret transformation이 API·Web BFF DSN 두 개만 runtime Kubernetes Secret으로 추출한다.
+- GitHub Actions는 branch build에 dev role, 정식 SemVer tag build에 prod role을 사용해 OIDC로 Vault의 `secret/kubernetes/kosmo/shared`만 읽는다. 공개 Web DSN과 조직·프로젝트 slug는 build arg로, 업로드 token은 BuildKit secret으로 전달한다. 환경에 독립적인 서버 DSN도 `shared`에 두되 별도 VaultStaticSecret transformation이 API·Web BFF DSN 두 개만 runtime Kubernetes Secret으로 추출한다.
 
 ### Allowed Alternatives
 
@@ -58,7 +58,7 @@ API와 Web BFF는 Hono/Node ESM 애플리케이션이며 TypeScript source를 `t
 
 - [SDK event에 request·browser context나 사용자 콘텐츠가 포함될 수 있다] → 기본 PII 전송과 breadcrumb·Web session tracking은 비활성화하고, 애플리케이션이 오류·context에 민감 정보를 넣지 않도록 운영 검증에서 실제 event를 확인한다.
 - [서버 bundle 전환이 ESM package 동작이나 dynamic loading을 바꿀 수 있다] → production entry smoke와 API/Web 전체 test를 실행하고 문제가 있으면 emit 전략을 바꾸되 source map 계약은 유지한다.
-- [하나의 image가 여러 환경에 재사용되면 Web environment가 build 시점 값과 달라질 수 있다] → 현재 main/dev와 tag/production build가 명시적 environment build arg를 전달하고, image promotion이 도입되면 runtime config 주입을 별도 계약으로 전환한다.
+- [하나의 image가 여러 환경에 재사용되면 Web environment가 build 시점 값과 달라질 수 있다] → 현재 branch/dev와 tag/production build가 명시적 environment build arg를 전달하고, image promotion이 도입되면 runtime config 주입을 별도 계약으로 전환한다.
 - [실제 Sentry project와 알림 rule은 저장소 밖 상태다] → 코드·build 검증과 별도로 배포 후 event, symbolication, event 전달 결과와 알림 전달 체크리스트를 완료 조건으로 남긴다.
 
 ## Migration Plan

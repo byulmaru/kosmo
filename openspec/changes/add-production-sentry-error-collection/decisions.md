@@ -86,7 +86,19 @@
 - Decision Outcome: 공개 Web DSN, API·Web BFF DSN, Sentry 조직·project slug와 source map 업로드 token을 모두 `secret/kubernetes/kosmo/shared`에 둔다. GitHub Actions는 build에 필요한 값을 읽고, VaultStaticSecret transformation은 API·Web BFF DSN 두 개만 runtime Secret으로 추출한다.
 - Alternatives Considered: GitHub repository variable/secret과 환경별 Vault 경로로 나누는 방식은 환경 독립 값의 출처를 분산하고, `shared` 전체를 Kubernetes Secret으로 복사하는 방식은 build token을 runtime에 노출하므로 선택하지 않는다.
 - Consequences: 모든 환경 독립 Sentry 설정은 Vault에서 함께 회전하고 dev와 prod event 구분은 공용 `ENVIRONMENT`와 Web build의 `EXPO_PUBLIC_ENVIRONMENT`가 담당한다. 업로드 token과 build metadata는 Kubernetes Secret에 포함되지 않는다.
-- Confirmation / Follow-up: Terraform plan에서 role과 최소 read policy를 확인하고 Helm render에서 runtime Secret이 DSN 두 개만 포함하는지, main build가 shared 값을 읽어 source map을 업로드하는지 확인한다.
+- Confirmation / Follow-up: Terraform plan에서 role과 최소 read policy를 확인하고 Helm render에서 runtime Secret이 DSN 두 개만 포함하는지, branch와 release tag build가 shared 값을 읽어 source map을 업로드하는지 확인한다.
+
+### 기능 branch Docker build도 Vault shared를 읽는다
+
+- Decision Date: 2026-07-27
+- Decision Class: User Choice
+- Authority / Provenance: 사용자 결정, PROD-477
+- Status: Active
+- Context / Problem: 수동 feature branch Docker build는 `branch-*`와 `sha-*` image를 발행하도록 지원하지만, main에만 묶인 Vault dev role 때문에 Sentry build 설정을 읽는 단계에서 실패한다.
+- Decision Outcome: `byulmaru/kosmo`의 모든 branch GitHub OIDC subject가 `kosmo-build-dev` role을 사용해 `secret/kubernetes/kosmo/shared`를 읽도록 허용한다. 정식 SemVer tag는 기존처럼 `kosmo-build-prod` role을 사용한다.
+- Alternatives Considered: feature branch에서 Sentry 업로드를 비활성화하거나 main만 shared를 읽게 유지하는 방식은 수동 branch image가 production build와 같은 artifact 검증을 수행하지 못하므로 선택하지 않는다.
+- Consequences: feature branch도 dev environment source map을 업로드할 수 있다. Vault policy는 정확한 shared 경로의 read-only 권한과 짧은 token TTL을 유지하지만, repository에서 branch workflow를 실행할 수 있는 주체는 shared의 source map 업로드 token을 build 중 사용할 수 있다.
+- Confirmation / Follow-up: Terraform plan에서 branch subject glob과 exact-path read policy를 확인하고 workflow ref matrix에서 branch는 dev, 정식 SemVer tag는 prod, 그 밖의 tag는 거부되는지 검증한다.
 
 ## Remaining Decisions
 

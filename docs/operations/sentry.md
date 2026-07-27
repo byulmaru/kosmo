@@ -4,7 +4,7 @@ Kosmo는 API, Web BFF와 Web browser의 처리되지 않은 오류만 Sentry에 
 
 ## Project와 자격 증명
 
-Vault의 `secret/kubernetes/kosmo/shared`에는 환경과 무관한 Sentry 설정을 둔다. `byulmaru/kosmo`의 main과 release tag GitHub OIDC subject는 build에 필요한 값을 읽고, Vault Secrets Operator는 server runtime에 필요한 DSN 두 개만 별도 Kubernetes Secret으로 추출한다.
+Vault의 `secret/kubernetes/kosmo/shared`에는 환경과 무관한 Sentry 설정을 둔다. `byulmaru/kosmo`의 branch와 release tag GitHub OIDC subject는 build에 필요한 값을 읽고, Vault Secrets Operator는 server runtime에 필요한 DSN 두 개만 별도 Kubernetes Secret으로 추출한다.
 
 | 이름                     | 용도                                       |
 | ------------------------ | ------------------------------------------ |
@@ -43,7 +43,7 @@ Sentry의 기본 개인정보 전송은 활성화하지 않지만, SDK event에�
 
 `pnpm build:sentry-artifacts`는 API와 Web BFF JavaScript, Expo Web bundle과 external source map을 생성한다. 이어서 debug ID를 주입하고 source map의 `sourcesContent`를 정적으로 검증한다. 업로드 설정이 없는 로컬 실행은 외부 전송을 건너뛰지만 검증 뒤 map과 공개 JavaScript의 `sourceMappingURL`을 제거한다.
 
-`Docker Build` workflow는 main에는 `kosmo-build-dev`, release tag에는 `kosmo-build-prod` Vault OIDC role을 사용해 `shared` build 설정을 읽는다. 다른 ref의 수동 실행은 실패한다. Workflow는 commit release와 project slug를 build arg로 전달하고 업로드 token만 BuildKit secret으로 전달한다. CI에서는 `SENTRY_UPLOAD_REQUIRED=1`이므로 token, organization, release 또는 project가 누락되면 image build가 실패한다. 업로드가 성공한 뒤 runtime image와 Web static root에는 `.map` 파일이 남지 않는다.
+`Docker Build` workflow는 모든 branch에는 `kosmo-build-dev`, 정식 SemVer release tag에는 `kosmo-build-prod` Vault OIDC role을 사용해 `shared` build 설정을 읽는다. 다른 tag ref의 수동 실행은 실패한다. 따라서 기능 branch의 수동 build도 dev environment로 source map을 업로드할 수 있다. 두 role은 동일한 정확한 `shared` 경로만 read할 수 있고 token 수명도 짧지만, repository에서 branch workflow를 실행할 수 있는 주체는 source map 업로드 token을 build 중 사용할 수 있다. Workflow는 commit release와 project slug를 build arg로 전달하고 업로드 token만 BuildKit secret으로 전달한다. CI에서는 `SENTRY_UPLOAD_REQUIRED=1`이므로 token, organization, release 또는 project가 누락되면 image build가 실패한다. 업로드가 성공한 뒤 runtime image와 Web static root에는 `.map` 파일이 남지 않는다.
 
 로컬에서 artifact 보안 경계를 확인한다.
 
