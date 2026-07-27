@@ -800,7 +800,16 @@ export const UniversalMobile: Story = {
       'href',
       '/bookmarks',
     );
-    expect(page.queryByLabelText('활성 프로필')).not.toBeInTheDocument();
+    const profileSummary = page.getByLabelText('활성 프로필');
+    expect(profileSummary).toBeInTheDocument();
+    expect(within(profileSummary).getByRole('link', { name: /팔로잉/ })).toHaveAttribute(
+      'href',
+      '/@selected/following',
+    );
+    expect(within(profileSummary).getByRole('link', { name: /팔로워/ })).toHaveAttribute(
+      'href',
+      '/@selected/followers',
+    );
     expect(triggerIcon.querySelector('path')).toHaveAttribute('d', 'm6 9 6 6 6-6');
     expect(
       nameRect.top + nameRect.height / 2 - (triggerRect.top + triggerRect.height / 2),
