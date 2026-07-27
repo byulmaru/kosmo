@@ -12,6 +12,7 @@ import {
   Profiles,
 } from '@kosmo/core/db';
 import { InstanceState, PostState, PostVisibility, ProfileState } from '@kosmo/core/enums';
+import { encodeGlobalId } from '@kosmo/core/global-id';
 import {
   LocalInstanceConfigurationError,
   resolveConfiguredLocalInstance,
@@ -100,12 +101,6 @@ const getFollowersUri = (context: RequestContext<void>, profileId: string): URL 
   return new URL(`${actorUri.pathname.replace(/\/$/, '')}/followers`, actorUri);
 };
 
-const getPostGlobalId = (postId: string): string =>
-  Buffer.concat([
-    Buffer.from(postId.replaceAll('-', ''), 'hex'),
-    Buffer.from('Post', 'ascii'),
-  ]).toString('base64url');
-
 const isEstablishedFollower = async (actorUri: URL, authorProfileId: string): Promise<boolean> =>
   db
     .select({ id: ProfileFollows.id })
@@ -188,7 +183,7 @@ export const dispatchLocalPostNote = async (
     ...(note.summary ? { summary: escapeText(note.summary) } : {}),
     to,
     url: new URL(
-      `/@${encodeURIComponent(note.authorHandle)}/${getPostGlobalId(note.id)}`,
+      `/@${encodeURIComponent(note.authorHandle)}/${encodeGlobalId('Post', note.id)}`,
       note.canonicalOrigin,
     ),
   });
