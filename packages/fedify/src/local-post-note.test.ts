@@ -175,7 +175,17 @@ describe('ActivityPub Local Post Note', () => {
     assert.equal(publicNote.toId?.href, PUBLIC_COLLECTION.href);
     assert.equal(publicNote.ccId?.href, followersUri);
     assert.equal(publicNote.summary?.toString(), '&lt;script&gt;alert(1)&lt;/script&gt;');
-    assert.equal(publicNote.url?.toString(), `${publicOrigin}/@author/${publicReply.id}`);
+    const webPostId = publicNote.url
+      ? new URL(publicNote.url.toString()).pathname.split('/').at(-1)
+      : undefined;
+    assert.ok(webPostId);
+    const webPostIdPayload = Buffer.from(webPostId, 'base64url');
+    assert.equal(
+      webPostIdPayload.subarray(0, 16).toString('hex'),
+      publicReply.id.replaceAll('-', ''),
+    );
+    assert.equal(webPostIdPayload.subarray(16).toString('ascii'), 'Post');
+    assert.equal(publicNote.url?.toString(), `${publicOrigin}/@author/${webPostId}`);
 
     assert.ok(unlistedNote);
     assert.equal(unlistedNote.replyTargetId?.href, remoteParentUri.href);
