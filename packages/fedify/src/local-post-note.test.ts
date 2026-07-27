@@ -249,7 +249,7 @@ describe('ActivityPub Local Post Note', () => {
     }
   });
 
-  test('allows only Author or established Follower signed fetch and isolates successful cache', async () => {
+  test('allows only Author or established Follower signed fetch and prevents shared caching', async () => {
     const author = await createProfile({ kind: InstanceKind.LOCAL });
     const followersPost = await createPost(author.id, { visibility: PostVisibility.FOLLOWERS });
     const remoteFollower = await createProfile({ domain: 'remote.example' });

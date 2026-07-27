@@ -15,6 +15,7 @@ import { InstanceState, PostState, PostVisibility, ProfileState } from '@kosmo/c
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { postContentDocumentToHtml } from '@kosmo/core/post-content/server';
 import { and, eq } from 'drizzle-orm';
+import { escapeText } from 'entities/escape';
 import {
   getLocalPostUri,
   isCanonicalPostId,
@@ -36,32 +37,10 @@ type LocalPostNote = {
   readonly visibility: (typeof PostVisibility)[keyof typeof PostVisibility];
 };
 
-const localPostNotes = new WeakMap<RequestContext<void>, Map<string, LocalPostNote | null>>();
 const privateLocalNoteRequests = new WeakSet<Request>();
 
-const escapeHtmlText = (value: string): string =>
-  value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-
-const loadLocalPostNote = async (
-  context: RequestContext<void>,
-  postId: string,
-): Promise<LocalPostNote | null> => {
-  let requestNotes = localPostNotes.get(context);
-  if (!requestNotes) {
-    requestNotes = new Map();
-    localPostNotes.set(context, requestNotes);
-  }
-  if (requestNotes.has(postId)) {
-    return requestNotes.get(postId) ?? null;
-  }
-
+const loadLocalPostNote = async (postId: string): Promise<LocalPostNote | null> => {
   if (!isCanonicalPostId(postId)) {
-    requestNotes.set(postId, null);
     return null;
   }
 
@@ -69,7 +48,6 @@ const loadLocalPostNote = async (
   try {
     localInstance = await resolveConfiguredLocalInstance();
   } catch {
-    requestNotes.set(postId, null);
     return null;
   }
 
@@ -95,23 +73,20 @@ const loadLocalPostNote = async (
     .limit(1)
     .then(first);
 
-  const note =
-    row && row.post.visibility !== PostVisibility.DIRECT
-      ? {
-          authorHandle: row.profile.handle,
-          authorProfileId: row.profile.id,
-          canonicalOrigin: localInstance.canonicalOrigin,
-          contentDocument: row.contentDocument,
-          createdAt: row.post.createdAt,
-          id: row.post.id,
-          localInstanceId: localInstance.id,
-          replyParentId: row.post.replyParentId,
-          summary: row.contentDocument.summary,
-          visibility: row.post.visibility,
-        }
-      : null;
-  requestNotes.set(postId, note);
-  return note;
+  return row && row.post.visibility !== PostVisibility.DIRECT
+    ? {
+        authorHandle: row.profile.handle,
+        authorProfileId: row.profile.id,
+        canonicalOrigin: localInstance.canonicalOrigin,
+        contentDocument: row.contentDocument,
+        createdAt: row.post.createdAt,
+        id: row.post.id,
+        localInstanceId: localInstance.id,
+        replyParentId: row.post.replyParentId,
+        summary: row.contentDocument.summary,
+        visibility: row.post.visibility,
+      }
+    : null;
 };
 
 const getFollowersUri = (context: RequestContext<void>, profileId: string): URL => {
@@ -142,7 +117,7 @@ export const authorizeLocalPostNote = async (
   context: RequestContext<void>,
   { id }: { id: string },
 ): Promise<boolean> => {
-  const note = await loadLocalPostNote(context, id);
+  const note = await loadLocalPostNote(id);
   if (!note) {
     return false;
   }
@@ -168,7 +143,7 @@ export const dispatchLocalPostNote = async (
   context: RequestContext<void>,
   { id }: { id: string },
 ): Promise<Note | null> => {
-  const note = await loadLocalPostNote(context, id);
+  const note = await loadLocalPostNote(id);
   if (!note) {
     return null;
   }
@@ -198,7 +173,7 @@ export const dispatchLocalPostNote = async (
     mediaType: 'text/html',
     published: note.createdAt,
     ...(replyTarget ? { replyTarget } : {}),
-    ...(note.summary ? { summary: escapeHtmlText(note.summary) } : {}),
+    ...(note.summary ? { summary: escapeText(note.summary) } : {}),
     to,
     url: new URL(`/@${encodeURIComponent(note.authorHandle)}/${note.id}`, note.canonicalOrigin),
   });

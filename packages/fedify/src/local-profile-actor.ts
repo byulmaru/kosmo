@@ -1,5 +1,6 @@
 import { exportJwk, generateCryptoKeyPair, importJwk } from '@fedify/fedify';
 import { ActivityPubActorKeyKind } from '@kosmo/core/enums';
+import { z } from 'zod';
 import type { ActivityPubActorKeyKind as ActivityPubActorKeyKindValue } from '@kosmo/core/enums';
 
 export type JsonWebKeyRecord = Record<string, unknown>;
@@ -65,9 +66,9 @@ export interface LocalProfileActorResult {
 // ActivityPubActorKeyKind is ordered RSA then Ed25519; Fedify uses the first key pair as #main-key.
 const keyKinds = Object.values(ActivityPubActorKeyKind);
 
-const canonicalUuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const profileIdSchema = z.uuid();
 
-const isCanonicalUuid = (value: string): boolean => canonicalUuidPattern.test(value);
+const isCanonicalUuid = (value: string): boolean => profileIdSchema.safeParse(value).success;
 
 type GenerateCryptoKeyPairAlgorithm = 'RSASSA-PKCS1-v1_5' | 'Ed25519';
 

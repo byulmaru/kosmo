@@ -1,9 +1,10 @@
 import { ActivityPubPosts, db, first, Posts, Profiles } from '@kosmo/core/db';
 import { eq } from 'drizzle-orm';
+import { z } from 'zod';
 
-const canonicalUuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const postIdSchema = z.uuid();
 
-export const isCanonicalPostId = (value: string): boolean => canonicalUuidPattern.test(value);
+export const isCanonicalPostId = (value: string): boolean => postIdSchema.safeParse(value).success;
 
 export const getLocalPostUri = (canonicalOrigin: string | URL, postId: string): URL =>
   new URL(`/ap/note/${postId}`, canonicalOrigin);
