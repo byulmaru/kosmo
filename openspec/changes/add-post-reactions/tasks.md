@@ -26,9 +26,15 @@ Reaction이 Unicode 문자열 Type, Author Profile과 Target Post를 보존하�
 
 권한 있는 Profile이 Instance Type과 무관하게 조회 가능한 Post에 허용 Type의 Reaction을 추가하며 반복·동시 요청에도 하나의 관계를 성공 결과로 유지한다.
 
+**Authority / Provenance**
+
+- `docs/domain/objects/reaction.md`
+- `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`
+- `PROD-404`, `PROD-439`
+
 **Guardrails**
 
-- GraphQL `usingProfile` entry point는 Active Account와 Account–Profile membership을 검증하고, core service는 검증된 actor Profile identity의 Active/Normal 상태와 non-Suspended Instance를 검증하되 actor origin과 Instance Reachability를 권한 조건으로 사용하지 않는다.
+- GraphQL `usingProfile` entry point는 Active Account, Account–Profile membership과 selected Profile 조회 가능 상태를 검증하고 resolver/core는 이를 중복 검증하지 않는다. core service는 검증된 actor Profile identity의 Active/Normal 상태와 non-Suspended Instance를 검증하되 actor origin과 Instance Reachability를 권한 조건으로 사용하지 않는다.
 - 기존 Post 조회 정책을 우회하지 않는다.
 - 임의 Unicode와 사용자 정의 Reaction은 거부한다.
 - 명시적 pessimistic lock을 추가하지 않는다.

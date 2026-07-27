@@ -2,7 +2,7 @@
 
 ### Requirement: Local Reply 생성 권한과 Parent 검증
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `PROD-424` 시스템은 Active Account의 Member이며 Active/Normal Local Profile인 행동 주체에게만, 행동 주체가 조회할 수 있는 contentful Post를 직접 Parent로 참조하는 Local Reply 생성을 허용해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `PROD-424`, `PROD-439` 시스템은 Active Account의 Member이며 Active/Normal Profile인 행동 주체에게, 행동 주체가 조회할 수 있는 contentful Post를 직접 Parent로 참조하는 Local Reply 생성을 허용해야 한다(MUST). Local Reply라는 결과 구분은 selected Profile의 Instance Type 조건이어서는 안 된다(MUST NOT).
 
 #### Scenario: 조회 가능한 contentful Parent에 Reply 생성
 

@@ -15,8 +15,8 @@ File 표현과 Media 생성 시점에 관한 결정은 [ADR 0018](./0018-media-u
 ## 결정
 
 - Post는 작성 시 Attached Media 관계와 순서를 원자적으로 만들며 게시 뒤 연결/해제를 지원하지 않는다.
-- Media는 Profile 관계를 필수로 가진다. Local Media는 upload를 수행한 Local Profile과 Upload Account를,
-  Remote Media는 원본 Remote Profile을 가진다.
+- Media는 Profile 관계를 필수로 가진다. Local Media는 upload를 시작할 때 선택된 Profile과 Upload Account를,
+  Remote Media는 원본 Remote Profile을 가진다. Media Source는 행동 주체 Profile의 Origin을 결정하지 않는다.
 - 다른 Profile의 Media 재사용은 Media 관계를 만드는 각 행동의 조건을 따르며, 한 행동의 허용 조건을 다른
   관계에 자동으로 적용하지 않는다.
 - 모든 Profile은 Profile Origin과 같은 Instance Type을 가진 Instance 관계를 필수로 가진다. Post와 Media의

@@ -29,11 +29,11 @@ Profile이 조회 가능한 Post를 개인적으로 저장하고, Profile별로 
 
 ### Requirement: Bookmark 생성 권한과 대상 조건
 
-**Authority / Provenance:** `docs/domain/objects/bookmark.md`, `PROD-391`, `PROD-408` — 시스템은 유효한 세션의 Account가 멤버인 Active/Normal Local Profile을 행동 주체로 선택했고 그 Profile이 Target Post 조회 정책을 통과할 때만 Bookmark 생성을 허용해야 한다(MUST). 생성은 Post Author에게 Notification을 만들지 않아야 한다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/bookmark.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `PROD-391`, `PROD-408`, `PROD-439` — 시스템은 유효한 세션의 Account가 멤버인 Active/Normal Profile을 행동 주체로 선택했고 그 Profile이 Target Post 조회 정책을 통과할 때만 Bookmark 생성을 허용해야 한다(MUST). 선택 Profile의 Instance Type은 Bookmark 생성 권한 조건이어서는 안 되며(MUST NOT), 생성은 Post Author에게 Notification을 만들지 않아야 한다(MUST NOT).
 
 #### Scenario: 조회 가능한 Post를 저장함
 
-- **WHEN** 활성 Account의 멤버인 Active/Normal Local Profile이 조회 가능한 Post를 저장하고 같은 조합의 Bookmark가 없다
+- **WHEN** 활성 Account의 멤버인 Active/Normal Profile이 조회 가능한 Post를 저장하고 같은 조합의 Bookmark가 없다
 - **THEN** 시스템은 그 Profile을 Owner로 하는 Bookmark를 생성한다
 - **AND** Post Author에게 Notification을 생성하지 않는다
 
@@ -45,16 +45,16 @@ Profile이 조회 가능한 Post를 개인적으로 저장하고, Profile별로 
 
 #### Scenario: 사용할 수 없는 Profile로 저장을 시도함
 
-- **WHEN** 행동 주체가 Local Profile이 아니거나 Active/Normal 상태가 아니거나 현재 Account의 멤버가 아니다
+- **WHEN** 행동 주체가 Active/Normal 상태가 아니거나 현재 Account의 멤버가 아니다
 - **THEN** 시스템은 Bookmark를 생성하지 않는다
 
 ### Requirement: Bookmark 생성 GraphQL 계약
 
-**Authority / Provenance:** `docs/domain/objects/bookmark.md`, `PROD-391`, `PROD-408` 본문과 2026-07-21 생성 API·책임 경계 확정 댓글 — 시스템은 현재 `usingProfile`을 Owner로 사용하는 `createBookmark(input: { postId })` GraphQL mutation을 제공해야 한다(MUST). 성공 payload는 `bookmark` 필드로 Owner Profile, 현재 조회 가능한 Target Post와 생성 시각을 식별할 수 있는 Bookmark Node를 반환해야 한다(MUST). 이후 Target Post가 조회 불가능해져도 Owner의 Bookmark Node는 유지되고 `post` 필드는 `null`이어야 한다(MUST). 같은 Profile/Post의 순차·동시 중복 요청은 기존 Bookmark를 반환하는 성공으로 정규화하고 기존 생성 시각을 변경하지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/bookmark.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `PROD-391`, `PROD-408` 본문과 2026-07-21 생성 API·책임 경계 확정 댓글, `PROD-439` — 시스템은 현재 `usingProfile`을 Owner로 사용하는 `createBookmark(input: { postId })` GraphQL mutation을 제공해야 한다(MUST). `usingProfile` entry point는 Active Account, Account–Profile membership과 selected Profile 조회 가능 상태를 보장해야 하며(MUST), resolver와 core action은 이 사실을 중복 조회·검증해서는 안 된다(MUST NOT). 성공 payload는 `bookmark` 필드로 Owner Profile, 현재 조회 가능한 Target Post와 생성 시각을 식별할 수 있는 Bookmark Node를 반환해야 한다(MUST). 이후 Target Post가 조회 불가능해져도 Owner의 Bookmark Node는 유지되고 `post` 필드는 `null`이어야 한다(MUST). 같은 Profile/Post의 순차·동시 중복 요청은 기존 Bookmark를 반환하는 성공으로 정규화하고 기존 생성 시각을 변경하지 않아야 한다(MUST).
 
 #### Scenario: GraphQL로 Bookmark를 생성함
 
-- **WHEN** 유효한 Account의 Active/Normal Local `usingProfile`이 조회 가능한 Post ID로 `createBookmark`를 요청한다
+- **WHEN** 유효한 Account의 Active/Normal `usingProfile`이 조회 가능한 Post ID로 `createBookmark`를 요청한다
 - **THEN** 시스템은 현재 `usingProfile`을 Owner로 하는 Bookmark를 생성한다
 - **AND** `CreateBookmarkPayload.bookmark`로 Bookmark ID, Owner Profile, Target Post와 생성 시각을 반환한다
 
@@ -72,7 +72,7 @@ Profile이 조회 가능한 Post를 개인적으로 저장하고, Profile별로 
 
 #### Scenario: 사용할 수 없는 actor로 GraphQL 생성을 요청함
 
-- **WHEN** 현재 Account가 활성 상태가 아니거나 `usingProfile`이 현재 Account의 Active/Normal Local Member가 아니다
+- **WHEN** 현재 Account가 활성 상태가 아니거나 `usingProfile`이 현재 Account의 Active/Normal Member가 아니다
 - **THEN** 시스템은 `PERMISSION_DENIED` 오류로 요청을 거부한다
 - **AND** Bookmark를 생성하지 않는다
 

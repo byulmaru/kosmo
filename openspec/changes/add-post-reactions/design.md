@@ -26,7 +26,7 @@
 ### Current Constraints
 
 - DB schema는 `packages/core/db/tables.ts`와 공용 UUIDv7/created-at helper를 사용한다. 현재 허용 Type 검증은 PROD-404 application service가 소유하며 database enum, seed registry 또는 `CHECK` constraint로 목록을 고정하지 않는다.
-- Post visibility predicate와 Account/session membership 검증은 API 경계에 있다. `usingProfile` entry point는 Active Account의 Member인 selected Profile을 보장하고, mutation은 검증된 actor Profile과 Post context를 service에 전달한다. core service는 transport session이나 actor origin을 다시 검증하지 않고 Active/Normal Profile, non-Suspended Instance, Post, Type과 멱등 저장을 검증한다.
+- Post visibility predicate와 Account/session membership 검증은 API 경계에 있다. `usingProfile` entry point는 Active Account의 Member이며 조회 가능한 selected Profile을 Instance Type과 무관하게 보장하고, mutation은 검증된 actor Profile과 Post context를 service에 전달한다. resolver와 core service는 Account, membership, selected Profile visibility를 다시 조회하지 않는다. core service는 transport session이나 actor origin을 다시 검증하지 않고 Active/Normal Profile, non-Suspended Instance, Post, Type과 멱등 저장을 검증한다.
 - GraphQL의 create 계열 mutation은 `fieldWithInput`, concrete Node global ID와 simple payload object를 사용한다. `addReaction`은 이 관례를 따라 Post global ID와 Type 문자열을 받고 최소 Reaction Node를 반환한다.
 - Post Node loader는 기존 Post visibility predicate를 적용한다. `Post.reactionCounts`는 이 접근 경계를 통과한 Post object에서 resolve하며, `reactionProfiles`와 달리 viewer Profile visibility를 aggregate에 적용하지 않는다.
 - Notification create/delete는 기존 Follow와 같이 source transaction commit 뒤 같은 request에서 await/catch한다. Notification 실패를 source transaction에 포함하거나 fire-and-forget으로 처리하지 않는다.

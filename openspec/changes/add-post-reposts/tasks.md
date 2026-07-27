@@ -43,12 +43,12 @@ Repost와 Quote가 같은 nullable direct Repost Source를 저장할 수 있게 
 
 **Deliverable**
 
-권한이 있는 Local Profile이 조회 가능한 Content Post를 visibility 정책에 맞게 멱등 Repost하고 기존 `Post` Node 결과를 받는다.
+권한이 있는 selected Profile이 Instance Type과 무관하게 조회 가능한 Content Post를 visibility 정책에 맞게 멱등 Repost하고 기존 `Post` Node 결과를 받는다.
 
 **Guardrails**
 
 - Public/Unlisted Source의 Repost는 Unlisted, Followers Only Source는 Source Author만 Followers Only로 생성한다.
-- Local GraphQL entry는 공통 `usingProfile` 인증이 검증한 Account.Active와 선택된 Local Profile membership·visibility를 사용하며 역할별 제한을 다시 적용하지 않는다.
+- GraphQL entry는 공통 `usingProfile` 인증이 검증한 Account.Active와 선택 Profile membership·visibility를 사용하며 역할별 제한이나 Instance Type 제한을 다시 적용하지 않는다.
 - 공통 core action은 검증된 actor Profile ID와 Source Post ID만 받고 Active Profile과 Suspended가 아닌 Instance라는 공통 actor 가용성, Source visibility/eligibility와 저장 정책을 검증한다.
 - Mentioned Profiles, Tombstone, unavailable, Content 없는 Repost Source를 거부한다.
 - 누락·Tombstone·조회 불가 Source는 `NOT_FOUND`, 조회 가능한 허용 불가 Source는 `VALIDATION(sourceId)`, actor 권한 실패는 `PERMISSION_DENIED`로 처리한다.

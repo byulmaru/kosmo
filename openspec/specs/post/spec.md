@@ -145,7 +145,7 @@ API는 게시글의 현재 콘텐츠를 GraphQL `PostContent` Node로 노출하�
 
 ### Requirement: Plain Text post creation
 
-로그인했고 active profile이 있는 사용자는 Plain Text UX의 `bodyText` 입력으로 versioned canonical document 게시글을 작성할 수 있어야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `PROD-384`, `PROD-439` — 로그인했고 active profile이 있는 사용자는 Plain Text UX의 `bodyText` 입력으로 versioned canonical document 게시글을 작성할 수 있어야 한다(MUST). selected Profile은 Local 또는 Remote일 수 있으며(MUST), Kosmo에 저장되는 Post라는 결과를 selected Profile의 Instance Type 조건으로 확장해서는 안 된다(MUST NOT). GraphQL `usingProfile` entry point가 Active Account, Account–Profile membership과 selected Profile 조회 가능 상태를 보장한 뒤 resolver는 같은 사실을 중복 조회·검증해서는 안 된다(MUST NOT).
 
 #### Scenario: Plain Text 게시글 작성 성공
 
@@ -157,6 +157,12 @@ API는 게시글의 현재 콘텐츠를 GraphQL `PostContent` Node로 노출하�
 - **AND** 시스템은 새 `post_content` 행을 생성한다
 - **AND** `post.current_content_id`는 생성된 콘텐츠를 참조한다
 - **AND** mutation은 `CreatePostPayload.post`로 생성된 `Post`를 반환한다
+
+#### Scenario: Remote selected Profile로 게시글 작성
+
+- **WHEN** Active Account의 Member인 Active/Normal Remote Profile이 selected Profile인 상태에서 유효한 입력으로 `createPost` mutation을 호출한다
+- **THEN** 시스템은 selected Profile을 Author로 하는 Post를 생성한다
+- **AND** selected Profile의 Instance Type만으로 요청을 거부하지 않는다
 
 #### Scenario: 본문 저장 형식
 

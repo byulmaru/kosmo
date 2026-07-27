@@ -37,10 +37,15 @@ Post.Author, Source visibility와 lifecycle처럼 검증된 actor와 domain obje
 
 ## Actor와 caller별 조건
 
-기본 소셜 actor는 `Profile`이다. `Account`는 Local GraphQL caller의 인증 identity이고, 정상 제품 경로의
-selected Profile은 membership 모델상 Local이다. `Account`와 `InstanceKind.LOCAL`은 모든 소셜 action의
-공통 조건이 아니며, Account 자체가 domain participant이거나 Locality가 action의 의미일 때만 core
-contract에 포함한다.
+기본 소셜 actor는 `Profile`이다. `Account`는 GraphQL caller의 인증 identity이며 selected Profile은
+Account–Profile membership으로 정한다. selected Profile은 Local 또는 Remote일 수 있다. `Account`와
+`InstanceKind.LOCAL`은 모든 소셜 action의 공통 조건이 아니며, Account 자체가 domain participant이거나
+Locality가 action의 의미일 때만 core contract에 포함한다. 결과 객체의 Local/Remote 구분이나 저장 위치를
+actor Profile의 Instance Type 조건으로 확장하지 않는다.
+
+GraphQL `usingProfile` entry point가 Active Account, selected Profile membership과 Profile 조회 가능 상태를
+보장하면 resolver와 core action은 같은 Account·membership·Profile visibility를 다시 조회하지 않는다.
+core는 검증된 Profile identity를 받아 action에 고유한 상태, 관계, 대상과 persistence 조건만 검증한다.
 
 현재 Repost caller인 Local mutation은 session과 selected Profile membership을 검증한 뒤 core action에
 `actorProfileId`와 `sourcePostId`를 전달한다. 향후 ActivityPub Repost ingress가 생기면 signature와

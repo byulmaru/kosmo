@@ -48,9 +48,9 @@ API는 Reaction을 opaque global ID, 현재 Type 문자열과 생성 시각을 �
 
 ### Requirement: 멱등 Reaction 추가
 
-Active Account의 Member인 Active/Normal Profile은 조회할 수 있는 Post에 허용 Reaction Type을 추가할 수 있어야 하며(MUST), 같은 조합의 반복·동시 추가는 기존 Reaction을 유지한 성공 결과여야 한다(MUST). 선택 Profile의 Instance Type은 Reaction 추가 권한 조건이어서는 안 된다(MUST NOT).
+**Authority / Provenance:** [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0019](../../../../../docs/domain/decisions/0019-selected-profile-authorization-boundary.md), [PROD-404](https://linear.app/byulmaru/issue/PROD-404/reaction을-생성한다), [PROD-439](https://linear.app/byulmaru/issue/PROD-439/kosmo에서-uploading-local-media를-생성한다) — Active Account의 Member인 Active/Normal Profile은 조회할 수 있는 Post에 허용 Reaction Type을 추가할 수 있어야 하며(MUST), 같은 조합의 반복·동시 추가는 기존 Reaction을 유지한 성공 결과여야 한다(MUST). 선택 Profile의 Instance Type은 Reaction 추가 권한 조건이어서는 안 된다(MUST NOT).
 
-GraphQL `usingProfile` entry point는 Active Account와 Account–Profile membership을 검증해야 하며(MUST), core service는 검증된 actor Profile identity를 받아 Active/Normal Profile, non-Suspended Instance, Post, Type과 멱등 저장을 검증해야 한다(MUST). core service는 actor의 Instance Type이나 Unresponsive Reachability를 권한 조건으로 사용해서는 안 된다(MUST NOT).
+GraphQL `usingProfile` entry point는 Active Account, Account–Profile membership과 selected Profile 조회 가능 상태를 검증해야 하며(MUST), resolver와 core service는 이 사실을 중복 조회·검증해서는 안 된다(MUST NOT). core service는 검증된 actor Profile identity를 받아 Active/Normal Profile, non-Suspended Instance, Post, Type과 멱등 저장을 검증해야 한다(MUST). core service는 actor의 Instance Type이나 Unresponsive Reachability를 권한 조건으로 사용해서는 안 된다(MUST NOT).
 
 GraphQL API는 `addReaction` mutation의 input으로 `postId: ID!`와 `type: String!`을 받아야 하며(MUST), 성공 payload는 `reaction: Reaction!`을 반환해야 한다(MUST). 공개 payload는 신규 생성 여부를 노출해서는 안 된다(MUST NOT).
 

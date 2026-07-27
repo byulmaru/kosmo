@@ -38,7 +38,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
   검증상 Reply Parent를 가질 수 없으므로 PROD-401의 Repost insert와 core/API 테스트는
   `reply_parent_id = null`을 명시적으로 유지·확인해야 한다.
 - 기존 `createPost` caller는 Local GraphQL content creation과 ActivityPub Note ingestion뿐이며 `content` non-null 반환을 기대한다. 단순히 모든 반환을 nullable로 넓히면 기존 caller contract가 불필요하게 약해진다.
-- 현재 `postVisibilityAccessWhere`는 API context와 전역 DB connection에 결합되어 core service가 직접 재사용할 수 없다. Local GraphQL entry의 공통 `usingProfile` 인증은 Account.Active와 선택된 Local Profile membership·visibility를 검증하고, 공통 Repost action은 전달받은 actor Profile의 가용성과 이번 action에 필요한 Source visibility 조건을 자체 transaction에서 검증하되 API helper를 core로 역참조하지 않아야 한다.
+- 현재 `postVisibilityAccessWhere`는 API context와 전역 DB connection에 결합되어 core service가 직접 재사용할 수 없다. GraphQL entry의 공통 `usingProfile` 인증은 Account.Active와 선택 Profile membership·visibility를 Instance Type과 무관하게 검증하고, 공통 Repost action은 전달받은 actor Profile의 가용성과 이번 action에 필요한 Source visibility 조건을 자체 transaction에서 검증하되 API helper를 core로 역참조하지 않아야 한다.
 - Source 접근 실패는 nullable 관계 field의 결과이며 Content 있는 Quote 자체의 eligibility를 바꾸지 않는다.
   Content 없는 Repost만 직접 Source가 viewer 기준으로 조회 가능해야 한다.
 - Node/Home/Profile/Bookmark가 공유하는 현재 Post visibility predicate는 Post 자체를 판정한다. Source 조건을

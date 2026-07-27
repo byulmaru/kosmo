@@ -50,15 +50,15 @@ Local Profile과 Remote Profile은 Profile Origin 상태 차원으로 구분한�
 
 ## 관계
 
-| 관계                | 대상                                                          | 방향                           | cardinality | 존재 조건        | 조회 조건               | 조회 권한                                 |
-| ------------------- | ------------------------------------------------------------- | ------------------------------ | ----------- | ---------------- | ----------------------- | ----------------------------------------- |
-| Account membership  | [Account-Profile Membership](./account-profile-membership.md) | Profile <- Membership          | 1 -> 0..N   | Origin이 Local   | Local Profile 운영 관계 | `Profile.Owner` 또는 `Membership.Account` |
-| Instance            | [Instance](./instance.md)                                     | Profile -> Instance            | 1 -> 1      | 항상             | Profile 조회 정책 통과  | 없음                                      |
-| avatar Media        | [Media](./media.md)                                           | Profile -> Media               | 1 -> 0..1   | 설정된 경우      | Profile 조회 정책 통과  | 없음                                      |
-| header Media        | [Media](./media.md)                                           | Profile -> Media               | 1 -> 0..1   | 설정된 경우      | Profile 조회 정책 통과  | 없음                                      |
-| 작성 Post           | [Post](./post.md)                                             | Profile <- Post                | 1 -> 0..N   | Post가 존재할 때 | 각 Post 조회 정책 통과  | 없음                                      |
-| Follow Relationship | [Follow Relationship](./follow-relationship.md)               | Profile <- Follow Relationship | 1 -> 0..N   | 관계가 존재할 때 | 관계 당사자             | `Follow.Participant`                      |
-| Follow Request      | [Follow Request](./follow-request.md)                         | Profile <- Follow Request      | 1 -> 0..N   | 요청이 존재할 때 | 요청 당사자             | `FollowRequest.Participant`               |
+| 관계                | 대상                                                          | 방향                           | cardinality | 존재 조건        | 조회 조건              | 조회 권한                                 |
+| ------------------- | ------------------------------------------------------------- | ------------------------------ | ----------- | ---------------- | ---------------------- | ----------------------------------------- |
+| Account membership  | [Account-Profile Membership](./account-profile-membership.md) | Profile <- Membership          | 1 -> 0..N   | 관계가 존재할 때 | Membership 당사자 관계 | `Profile.Owner` 또는 `Membership.Account` |
+| Instance            | [Instance](./instance.md)                                     | Profile -> Instance            | 1 -> 1      | 항상             | Profile 조회 정책 통과 | 없음                                      |
+| avatar Media        | [Media](./media.md)                                           | Profile -> Media               | 1 -> 0..1   | 설정된 경우      | Profile 조회 정책 통과 | 없음                                      |
+| header Media        | [Media](./media.md)                                           | Profile -> Media               | 1 -> 0..1   | 설정된 경우      | Profile 조회 정책 통과 | 없음                                      |
+| 작성 Post           | [Post](./post.md)                                             | Profile <- Post                | 1 -> 0..N   | Post가 존재할 때 | 각 Post 조회 정책 통과 | 없음                                      |
+| Follow Relationship | [Follow Relationship](./follow-relationship.md)               | Profile <- Follow Relationship | 1 -> 0..N   | 관계가 존재할 때 | 관계 당사자            | `Follow.Participant`                      |
+| Follow Request      | [Follow Request](./follow-request.md)                         | Profile <- Follow Request      | 1 -> 0..N   | 요청이 존재할 때 | 요청 당사자            | `FollowRequest.Participant`               |
 
 ## 행동
 
@@ -79,11 +79,11 @@ Request의 상태나 존재를 바꾸지 않는다.
 
 ## 권한
 
-| 권한                         | 종류      | 성립 조건                                                              |
-| ---------------------------- | --------- | ---------------------------------------------------------------------- |
-| `Profile.Member`             | 객체 종속 | Account가 Local Profile의 Owner, Admin 또는 Member Membership을 가진다 |
-| `Profile.Owner`              | 객체 종속 | Account가 Local Profile의 Owner Membership을 가진다                    |
-| `System.RemoteProfileSource` | 독립      | 시스템이 Remote Profile 원본 정보를 반영하는 주체다                    |
+| 권한                         | 종류      | 성립 조건                                                        |
+| ---------------------------- | --------- | ---------------------------------------------------------------- |
+| `Profile.Member`             | 객체 종속 | Account가 Profile의 Owner, Admin 또는 Member Membership을 가진다 |
+| `Profile.Owner`              | 객체 종속 | Account가 Local Profile의 Owner Membership을 가진다              |
+| `System.RemoteProfileSource` | 독립      | 시스템이 Remote Profile 원본 정보를 반영하는 주체다              |
 
 ## 조회 정책
 
