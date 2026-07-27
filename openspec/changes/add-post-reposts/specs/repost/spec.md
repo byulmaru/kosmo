@@ -29,12 +29,12 @@
 
 ### Requirement: Repost 생성
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `PROD-389`, `PROD-401`, `PROD-439` 시스템은 `Account.Active`와 `Profile.Member` 권한을 가진 선택된 Active/Normal Profile이 조회 가능한 Content Post를 Repost하는 멱등 action과 GraphQL mutation을 제공해야 한다(MUST). `Profile.Member`는 Owner, Admin, Member 역할을 모두 포함하며 GraphQL entry는 공통 `usingProfile` 인증을 통과한 선택 Profile에 역할별 제한이나 Instance Type 제한을 다시 적용하지 않는다.
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `PROD-389`, `PROD-401`, `PROD-439` 시스템은 `Account.Active`와 `Profile.Member` 권한을 가진 selected Active/Normal Profile이 조회 가능한 Content Post를 Repost하는 멱등 action과 GraphQL mutation을 제공해야 한다(MUST). `Profile.Member`는 Owner, Admin, Member 역할을 모두 포함하며 GraphQL entry는 공통 `usingProfile` 인증을 통과한 selected Profile에 역할별 제한이나 Instance Type 제한을 다시 적용하지 않는다.
 
 #### Scenario: Public 또는 Unlisted Source Repost
 
 - **WHEN** Active/Normal Profile이 조회 가능한 Active Public 또는 Unlisted Content Post를 Repost한다
-- **THEN** 시스템은 행동 Profile을 Author로 하고 Content와 Reply Parent 없이 입력 Source를 직접 참조하는 Active Post를 생성한다
+- **THEN** 시스템은 행동 주체 Profile을 Author로 하고 Content와 Reply Parent 없이 입력 Source를 직접 참조하는 Active Post를 생성한다
 - **AND** 생성된 Repost Visibility는 Unlisted다
 
 #### Scenario: Followers Only Source Repost
@@ -44,13 +44,13 @@
 
 #### Scenario: 허용되지 않는 Source Repost
 
-- **WHEN** 행동 Profile이 다른 Profile의 Followers Only Post, Mentioned Profiles Post, Tombstone Post, 조회할 수 없는 Post 또는 Content 없는 Repost를 Source로 입력한다
+- **WHEN** 행동 주체 Profile이 다른 Profile의 Followers Only Post, Mentioned Profiles Post, Tombstone Post, 조회할 수 없는 Post 또는 Content 없는 Repost를 Source로 입력한다
 - **THEN** 시스템은 Repost를 생성하지 않는다
 - **AND** Source의 존재나 비공개 상태를 권한 없는 요청에 노출하지 않는다
 
 #### Scenario: Repost 행동 권한 거부
 
-- **WHEN** Account가 Active가 아니거나 선택된 Profile과의 Membership이 없거나 행동 Profile이 Active/Normal Profile이 아니다
+- **WHEN** Account가 Active가 아니거나 selected Profile과의 Membership이 없거나 행동 주체 Profile이 Active/Normal Profile이 아니다
 - **THEN** 시스템은 Repost를 생성하지 않고 권한 오류로 요청을 거부한다
 
 #### Scenario: Repost 생성 transaction rollback
