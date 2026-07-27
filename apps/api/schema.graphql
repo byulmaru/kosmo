@@ -67,6 +67,14 @@ type CancelProfileFollowRequestPayload {
   profileFollowRequestId: ID!
 }
 
+input CompleteMediaUploadInput {
+  id: ID!
+}
+
+type CompleteMediaUploadPayload {
+  media: Media!
+}
+
 input CreateBookmarkInput {
   postId: ID!
 }
@@ -181,6 +189,7 @@ type MarkNotificationReadPayload {
 
 type Media implements Node {
   id: ID!
+  readyAt: DateTime
   state: MediaState!
 }
 
@@ -193,6 +202,7 @@ type Mutation {
   addReaction(input: AddReactionInput!): AddReactionPayload!
   approveProfileFollowRequest(input: ApproveProfileFollowRequestInput!): ApproveProfileFollowRequestPayload!
   cancelProfileFollowRequest(input: CancelProfileFollowRequestInput!): CancelProfileFollowRequestPayload!
+  completeMediaUpload(input: CompleteMediaUploadInput!): CompleteMediaUploadPayload!
   createBookmark(input: CreateBookmarkInput!): CreateBookmarkPayload!
   createPost(input: CreatePostInput!): CreatePostPayload!
   createProfile(input: CreateProfileInput!): CreateProfilePayload!
@@ -428,14 +438,6 @@ type ReactionNotification implements Node & Notification {
   type: String!
 }
 
-type ReplyNotification implements Node & Notification {
-  createdAt: DateTime!
-  id: ID!
-  post: Post!
-  profile: Profile!
-  readAt: DateTime
-}
-
 input RejectProfileFollowRequestInput {
   id: ID!
 }
@@ -443,6 +445,14 @@ input RejectProfileFollowRequestInput {
 type RejectProfileFollowRequestPayload {
   followeeProfile: Profile!
   profileFollowRequestId: ID!
+}
+
+type ReplyNotification implements Node & Notification {
+  createdAt: DateTime!
+  id: ID!
+  post: Post!
+  profile: Profile!
+  readAt: DateTime
 }
 
 type RepostNotification implements Node & Notification {
