@@ -194,6 +194,7 @@ export const Media = pgTable(
       .references(() => Profiles.id),
     storageReference: text('storage_reference').unique().notNull(),
     uploadExpiresAt: datetime('upload_expires_at').notNull(),
+    readyAt: datetime('ready_at'),
     createdAt: createdAt(),
   },
   (table) => [index().on(table.accountId), index().on(table.profileId)],

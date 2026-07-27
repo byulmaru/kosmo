@@ -16,6 +16,7 @@ export const MediaObject = createObjectRef('Media', (ids, ctx) => {
 
 MediaObject.implement({
   fields: (t) => ({
+    readyAt: t.expose('readyAt', { type: 'DateTime', nullable: true }),
     state: t.expose('state', { type: MediaState }),
   }),
 });

@@ -67,6 +67,14 @@ type CancelProfileFollowRequestPayload {
   profileFollowRequestId: ID!
 }
 
+input CompleteMediaUploadInput {
+  id: ID!
+}
+
+type CompleteMediaUploadPayload {
+  media: Media!
+}
+
 input CreateBookmarkInput {
   postId: ID!
 }
@@ -181,6 +189,7 @@ type MarkNotificationReadPayload {
 
 type Media implements Node {
   id: ID!
+  readyAt: DateTime
   state: MediaState!
 }
 
@@ -193,6 +202,7 @@ type Mutation {
   addReaction(input: AddReactionInput!): AddReactionPayload!
   approveProfileFollowRequest(input: ApproveProfileFollowRequestInput!): ApproveProfileFollowRequestPayload!
   cancelProfileFollowRequest(input: CancelProfileFollowRequestInput!): CancelProfileFollowRequestPayload!
+  completeMediaUpload(input: CompleteMediaUploadInput!): CompleteMediaUploadPayload!
   createBookmark(input: CreateBookmarkInput!): CreateBookmarkPayload!
   createPost(input: CreatePostInput!): CreatePostPayload!
   createProfile(input: CreateProfileInput!): CreateProfilePayload!
