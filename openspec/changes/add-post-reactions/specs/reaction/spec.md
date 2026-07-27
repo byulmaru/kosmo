@@ -48,7 +48,7 @@ API는 Reaction을 opaque global ID, 현재 Type 문자열과 생성 시각을 �
 
 ### Requirement: 멱등 Reaction 추가
 
-Active Account의 Member인 Active/Normal Local Profile은 조회할 수 있는 Post에 허용 Reaction Type을 추가할 수 있어야 하며(MUST), 같은 조합의 반복·동시 추가는 기존 Reaction을 유지한 성공 결과여야 한다(MUST).
+Active Account의 Member인 Active/Normal Profile은 조회할 수 있는 Post에 허용 Reaction Type을 추가할 수 있어야 하며(MUST), 같은 조합의 반복·동시 추가는 기존 Reaction을 유지한 성공 결과여야 한다(MUST). 선택 Profile의 Instance Type은 Reaction 추가 권한 조건이어서는 안 된다(MUST NOT).
 
 GraphQL `usingProfile` entry point는 Active Account와 Account–Profile membership을 검증해야 하며(MUST), core service는 검증된 actor Profile identity를 받아 Active/Normal Profile, non-Suspended Instance, Post, Type과 멱등 저장을 검증해야 한다(MUST). core service는 actor의 Instance Type이나 Unresponsive Reachability를 권한 조건으로 사용해서는 안 된다(MUST NOT).
 
@@ -63,7 +63,7 @@ GraphQL API는 `addReaction` mutation의 input으로 `postId: ID!`와 `type: Str
 
 #### Scenario: 새 Reaction 추가
 
-- **WHEN** 권한 있는 Local Profile이 조회 가능한 Post에 아직 없는 허용 Reaction Type을 추가한다
+- **WHEN** 권한 있는 Profile이 조회 가능한 Post에 아직 없는 허용 Reaction Type을 추가한다
 - **THEN** 시스템은 Profile, Post와 Reaction Type을 참조하는 Reaction 하나를 생성한다
 - **AND** 생성된 Reaction 결과를 반환한다
 

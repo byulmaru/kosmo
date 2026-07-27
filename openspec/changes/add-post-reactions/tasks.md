@@ -24,7 +24,7 @@ Reaction이 Unicode 문자열 Type, Author Profile과 Target Post를 보존하�
 
 **Deliverable**
 
-권한 있는 Local Profile이 조회 가능한 Post에 허용 Type의 Reaction을 추가하며 반복·동시 요청에도 하나의 관계를 성공 결과로 유지한다.
+권한 있는 Profile이 Instance Type과 무관하게 조회 가능한 Post에 허용 Type의 Reaction을 추가하며 반복·동시 요청에도 하나의 관계를 성공 결과로 유지한다.
 
 **Guardrails**
 

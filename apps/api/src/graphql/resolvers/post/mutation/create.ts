@@ -1,6 +1,6 @@
 import { db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
-import { InstanceKind, InstanceState, PostVisibility } from '@kosmo/core/enums';
-import { NotFoundError, PermissionDeniedError } from '@kosmo/core/error';
+import { PostVisibility } from '@kosmo/core/enums';
+import { NotFoundError } from '@kosmo/core/error';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { createPost, createReplyNotificationBestEffort } from '@kosmo/core/services';
 import { postBodyTextSchema } from '@kosmo/core/validation';
@@ -23,23 +23,6 @@ builder.mutationField('createPost', (t) =>
     },
     resolve: async (_, { input }, ctx) => {
       const result = await db.transaction(async (tx) => {
-        const instance = await tx
-          .select({ id: Instances.id })
-          .from(Profiles)
-          .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-          .where(
-            and(
-              eq(Profiles.id, ctx.session.profileId),
-              eq(Instances.kind, InstanceKind.LOCAL),
-              eq(Instances.state, InstanceState.ACTIVE),
-            ),
-          )
-          .limit(1)
-          .then(first);
-        if (!instance) {
-          throw new PermissionDeniedError();
-        }
-
         const replyParentId = input.replyParentId?.id;
         if (replyParentId) {
           const parent = await tx
