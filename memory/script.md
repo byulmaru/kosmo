@@ -36,6 +36,9 @@
 
 ## Expo, Relay, Web BFF
 
+- `apps/api`의 `lint:schema`는 runtime GraphQL schema를 사전식으로 정렬한 결과와 committed
+  `schema.graphql`이 완전히 같은지 검사한다. root CI의 workspace `lint:*` 실행에 포함되므로 schema를
+  변경하면 generated SDL도 같은 변경에서 정렬한다.
 - `apps/app`의 `prepare`, `dev`, `check`, `build`는 필요한 Relay generated artifact보다 먼저 `relay-compiler`를 실행한다. `__generated__`는 commit하지 않으므로 clean checkout과 CI에서도 compiler 선행을 생략하지 않는다.
 - universal client 검증은 `pnpm --filter @kosmo/app relay`, `check`, `export:web`을 분리해 실패 경계를 확인한다. `export:web`은 이전 환경의 `EXPO_PUBLIC_*` inline 값을 Metro cache에서 재사용하지 않도록 `expo export --clear`를 사용한다. Expo web export 산출물은 `apps/app/dist`이며 UI source를 소유하지 않는 `apps/web` Hono BFF가 이를 제공한다.
 - BFF 검증은 federation-first 전역 전달과 공식 미처리 callback, federation 표현의 404 보존, `/health`, browser 로그인/callback, cookie/Bearer GraphQL proxy, WebFinger/ActivityPub 응답, SPA deep-link fallback을 포함한다. Native session exchange는 API GraphQL mutation의 별도 API E2E로 검증한다. Expo export 성공만으로 server origin 계약이 검증됐다고 보지 않는다.

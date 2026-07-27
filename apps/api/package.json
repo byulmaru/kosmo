@@ -4,6 +4,7 @@
   "scripts": {
     "db:bootstrap-local-instance": "tsx scripts/bootstrap-local-instance.ts",
     "dev": "tsx watch src/index.ts",
+    "lint:schema": "NODE_ENV=production node --import tsx scripts/check-schema.ts",
     "lint:tsc": "tsc --noEmit",
     "start": "node --import tsx src/index.ts",
     "test": "pnpm lint:tsc && pnpm test:unit && pnpm test:integration",
