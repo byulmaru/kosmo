@@ -6,6 +6,7 @@ import graphqlRoutes from './routes/graphql';
 import loginRoutes from './routes/login';
 import logoutRoutes from './routes/logout';
 import staticRoutes from './routes/static';
+import { captureUnexpectedError } from './sentry';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 const app = new Hono();
@@ -43,6 +44,7 @@ app.onError((cause, c) => {
     return c.text(cause.message, cause.status as ContentfulStatusCode);
   }
 
+  captureUnexpectedError(cause);
   console.error('Unhandled BFF error', {
     method: c.req.method,
     route: routePath(c),

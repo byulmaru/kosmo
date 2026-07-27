@@ -15,6 +15,13 @@ permissions:
 env:
   AWS_REGION: ap-northeast-2
   AWS_ECR_REPOSITORY_URL: 822638974464.dkr.ecr.ap-northeast-2.amazonaws.com/kosmo
+  EXPO_PUBLIC_SENTRY_DSN: ${{ vars.EXPO_PUBLIC_SENTRY_DSN }}
+  SENTRY_API_PROJECT: ${{ vars.SENTRY_API_PROJECT }}
+  SENTRY_ENVIRONMENT: ${{ startsWith(github.ref, 'refs/tags/') && 'prod' || 'dev' }}
+  SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+  SENTRY_RELEASE: kosmo@${{ github.sha }}
+  SENTRY_WEB_BFF_PROJECT: ${{ vars.SENTRY_WEB_BFF_PROJECT }}
+  SENTRY_WEB_PROJECT: ${{ vars.SENTRY_WEB_PROJECT }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -77,6 +84,18 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           no-cache-filters: runtime
+          build-args: |
+            EXPO_PUBLIC_SENTRY_DSN=${{ env.EXPO_PUBLIC_SENTRY_DSN }}
+            EXPO_PUBLIC_SENTRY_ENABLED=1
+            EXPO_PUBLIC_SENTRY_ENVIRONMENT=${{ env.SENTRY_ENVIRONMENT }}
+            SENTRY_API_PROJECT=${{ env.SENTRY_API_PROJECT }}
+            SENTRY_ORG=${{ env.SENTRY_ORG }}
+            SENTRY_RELEASE=${{ env.SENTRY_RELEASE }}
+            SENTRY_UPLOAD_REQUIRED=1
+            SENTRY_WEB_BFF_PROJECT=${{ env.SENTRY_WEB_BFF_PROJECT }}
+            SENTRY_WEB_PROJECT=${{ env.SENTRY_WEB_PROJECT }}
+          secrets: |
+            sentry_auth_token=${{ secrets.SENTRY_AUTH_TOKEN }}
 
       - name: Save Docker image reference
         shell: bash

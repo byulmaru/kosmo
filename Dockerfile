@@ -2,6 +2,7 @@
 
 ARG NODE_VERSION=26.3.0
 ARG PNPM_VERSION=11.10.0
+ARG SENTRY_RELEASE=local
 
 FROM ghcr.io/pnpm/pnpm:${PNPM_VERSION} AS base
 
@@ -35,11 +36,34 @@ RUN test -e apps/app/node_modules/.bin/relay-compiler \
 
 FROM deps AS app-build
 
+ARG EXPO_PUBLIC_SENTRY_DSN
+ARG EXPO_PUBLIC_SENTRY_ENABLED=0
+ARG EXPO_PUBLIC_SENTRY_ENVIRONMENT
+ARG SENTRY_API_PROJECT
+ARG SENTRY_ORG
+ARG SENTRY_RELEASE
+ARG SENTRY_UPLOAD_REQUIRED=0
+ARG SENTRY_WEB_BFF_PROJECT
+ARG SENTRY_WEB_PROJECT
+
+ENV EXPO_PUBLIC_SENTRY_DSN=$EXPO_PUBLIC_SENTRY_DSN
+ENV EXPO_PUBLIC_SENTRY_ENABLED=$EXPO_PUBLIC_SENTRY_ENABLED
+ENV EXPO_PUBLIC_SENTRY_ENVIRONMENT=$EXPO_PUBLIC_SENTRY_ENVIRONMENT
+ENV EXPO_PUBLIC_SENTRY_RELEASE=$SENTRY_RELEASE
+ENV SENTRY_API_PROJECT=$SENTRY_API_PROJECT
+ENV SENTRY_ORG=$SENTRY_ORG
+ENV SENTRY_RELEASE=$SENTRY_RELEASE
+ENV SENTRY_UPLOAD_REQUIRED=$SENTRY_UPLOAD_REQUIRED
+ENV SENTRY_WEB_BFF_PROJECT=$SENTRY_WEB_BFF_PROJECT
+ENV SENTRY_WEB_PROJECT=$SENTRY_WEB_PROJECT
+
 COPY tsconfig.json ./
 COPY apps ./apps
 COPY packages ./packages
+COPY scripts ./scripts
 
-RUN pnpm --filter @kosmo/app build
+RUN --mount=type=secret,id=sentry_auth_token,target=/run/secrets/sentry_auth_token,required=false \
+  SENTRY_AUTH_TOKEN_FILE=/run/secrets/sentry_auth_token pnpm build:sentry-artifacts
 RUN find apps/app/dist -type f \( \
       -name '*.css' -o -name '*.html' -o -name '*.js' -o -name '*.json' \
       -o -name '*.mjs' -o -name '*.svg' -o -name '*.ttf' -o -name '*.wasm' \
@@ -47,10 +71,13 @@ RUN find apps/app/dist -type f \( \
 
 FROM workspace AS runtime-files
 
+ARG SENTRY_RELEASE
+
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=8080
 ENV EXPO_WEB_ROOT=/app/apps/app/dist
+ENV SENTRY_RELEASE=$SENTRY_RELEASE
 
 RUN groupadd --system --gid 10001 app \
   && useradd --system --uid 10001 --gid app --home-dir /app --shell /usr/sbin/nologin app \
@@ -59,12 +86,16 @@ RUN groupadd --system --gid 10001 app \
 RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store \
   pnpm install --filter @kosmo/api... --filter @kosmo/web... --frozen-lockfile --prod --ignore-scripts --store-dir=/var/cache/pnpm/store
 
+RUN find node_modules -type f -name '*.map' -delete
+
 COPY --chown=app:app tsconfig.json ./
 COPY --chown=app:app apps/api ./apps/api
 COPY --chown=app:app drizzle ./drizzle
 COPY --chown=app:app packages/core ./packages/core
 COPY --chown=app:app packages/fedify ./packages/fedify
 COPY --chown=app:app apps/web/src/server ./apps/web/src/server
+COPY --chown=app:app --from=app-build /app/apps/api/dist/server ./apps/api/dist/server
+COPY --chown=app:app --from=app-build /app/apps/web/dist/server ./apps/web/dist/server
 COPY --chown=app:app --from=app-build /app/apps/app/dist ./apps/app/dist
 COPY --chown=app:app docker-entrypoint.sh ./docker-entrypoint.sh
 

@@ -2,6 +2,7 @@ import { dev } from '@kosmo/core';
 import { FieldError, KosmoError } from '@kosmo/core/error';
 import { GraphQLError } from 'graphql';
 import { isAsyncIterable } from 'graphql-yoga';
+import { captureUnexpectedError } from '@/sentry';
 import type { ExecutionResult, GraphQLErrorExtensions } from 'graphql';
 import type { Plugin } from 'graphql-yoga';
 import type { UserContext } from '@/context';
@@ -26,6 +27,8 @@ const getKosmoErrorExtensions = (error: KosmoError): GraphQLErrorExtensions => (
 const createUnexpectedGraphQLError = (error: unknown, graphQLError?: GraphQLError) => {
   const originalError =
     graphQLError?.originalError ?? (error instanceof Error ? error : new Error(String(error)));
+
+  captureUnexpectedError(originalError);
 
   return new GraphQLError(dev ? originalError.message : 'Unexpected error', {
     nodes: graphQLError?.nodes,

@@ -45,6 +45,10 @@ spec:
           args:
             - api
           env:
+            - name: SENTRY_ENABLED
+              value: "1"
+            - name: SENTRY_ENVIRONMENT
+              value: {{ .Values.env | quote }}
             - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:

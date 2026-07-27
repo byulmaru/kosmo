@@ -1,0 +1,1 @@
+export { captureReactError } from './sentry';

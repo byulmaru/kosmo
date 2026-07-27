@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@kosmo/core": "workspace:*",
+    "@sentry/react": "^10.66.0",
     "@sun-typeface/suit": "^2.0.5",
     "expo": "~56.0.14",
     "expo-auth-session": "~56.0.15",
