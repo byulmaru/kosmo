@@ -143,13 +143,13 @@
 
 - Decision Date: 2026-07-25
 - Decision Class: Implementation Choice
-- Authority / Provenance: `PROD-422`, `memory/frontend-react-native.md`
+- Authority / Provenance: `PROD-388`, `PROD-422`, `memory/frontend-react-native.md`
 - Status: Active
 - Context / Problem: 시간순 descendant connection 전체를 유니버설 Post 상세에서 연속해서 읽게 하면서 Web document scroll, Native `ScrollView`, sticky header, thread connector와 기존 route 오류 경계를 유지하고 중복 page 요청과 부분 실패를 처리해야 한다.
 - Decision Outcome: route-owned refetchable fragment가 `replyDescendants(first: 20, after: $cursor)`를 `usePaginationFragment`로 누적한다. Web은 document/window scroll·resize와 document metrics를, Android/iOS는 `ScrollView` scroll·layout·content size event를 사용한다. 두 platform 경로는 끝에서 한 viewport 이내인지 판정하는 같은 계산과 `hasNext && !isLoadingNext`·요청 중 ref·page error guard를 공유해 `loadNext(20)`을 호출한다. 초기 짧은 thread는 각 scroll owner의 viewport를 채우거나 `hasNext`가 끝날 때까지 이어서 불러온다. footer는 loading을 표시하고, 다음 page가 실패하면 자동 재요청을 멈추고 이미 불러온 Reply를 보존한 채 같은 경계에서 재시도한다. `PostThreadLayout`은 scroll·pagination·오류 상태를 소유하지 않는다.
 - Alternatives Considered: 명시적 더 보기 button, Web 중앙 컬럼의 internal scroller, `FlatList`/`VirtualizedList` 전환, Web 전용 `IntersectionObserver`. button은 승인된 연속 읽기를 끊고, internal scroller는 canonical document scroll을 위반하며, list 전환은 sticky header·connector row와 Web parity까지 구현 범위를 넓히고, observer는 현재 event 기반 shell 계약 밖의 browser-only 관찰 경계를 추가하므로 사용하지 않는다.
 - Consequences: Web은 sidebar·right rail·빈 shell 영역의 wheel 입력과 browser history가 사용하는 document scroll을 보존하고, Native는 기존 screen `ScrollView`를 유지한다. 두 경로가 같은 임계값과 request guard를 공유해 부분 실패 후에도 읽던 thread를 잃지 않는다. 지금까지 불러온 descendant는 모두 mount되므로 매우 긴 thread에서 virtualization보다 메모리 비용이 크지만, 실제 성능 근거 없이 list architecture를 바꾸지는 않는다.
-- Confirmation / Follow-up: client test에서 20개 초기 page, Web document near-end 다음 page append, 요청 중 중복 방지, 짧은 초기 content auto-fill, `hasNext=false` 종료, 다음 page 실패 시 기존 항목 유지와 retry를 검증한다. Native에서는 `ScrollView` event가 같은 판정 함수를 통과하는지 최소 단위 test와 실제 Android/iOS 화면에서 확인하고, Web에서는 sticky header와 document scroll ownership을 함께 확인한다.
+- Confirmation / Follow-up: client test에서 초기 20개, Web document near-end 다음 page append, 요청 중 중복 방지, 짧은 초기 content auto-fill, `hasNext=false` 종료, 다음 page 실패 시 기존 항목 유지와 retry를 검증한다. Native는 `ScrollView` event가 같은 판정 함수를 통과하는지 최소 단위 test로 검증한다. 현재 출시는 Web만 대상으로 하므로 Web의 sticky header와 document scroll ownership을 이 change의 출시·완료 gate로 확인하고, 실제 iOS/Android 화면 QA는 앱 출시를 재개하는 후속 출시 작업에서 수행한다.
 
 ### descendant는 replyDescendants Relay connection으로 시간순 제공한다
 
