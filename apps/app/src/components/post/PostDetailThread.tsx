@@ -4,6 +4,7 @@ import { graphql, usePaginationFragment } from 'react-relay';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostListItem } from '@/components/post/PostListItem';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
+import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
 import { spacing } from '@/theme/tokens';
 import { getWebMobileShellHeaderStickyOffset } from '../shell/shellLayout';
@@ -63,10 +64,16 @@ type ThreadRenderablePost = Readonly<{
 
 export function PostDetailFrame({ children, header, nativeScrollProps }: PostDetailFrameProps) {
   const { width } = useWindowDimensions();
+  const shellChrome = useShellChrome();
 
   return Platform.OS === 'web' ? (
     <View style={styles.frame} testID="post-detail-scroll">
-      <View style={[styles.header, webStickyHeader(getWebMobileShellHeaderStickyOffset(width))]}>
+      <View
+        style={[
+          styles.header,
+          webStickyHeader(shellChrome ? getWebMobileShellHeaderStickyOffset(width) : 0),
+        ]}
+      >
         {header}
       </View>
       {children}

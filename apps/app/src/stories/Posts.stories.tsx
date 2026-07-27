@@ -1590,6 +1590,7 @@ export const PureRepostDetailCanonicalizesToSource: Story = {
 };
 
 export const PostDetailThreadUnavailableAncestorBoundary: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   parameters: {
     relay: {
       operationResponses: {
@@ -1619,6 +1620,11 @@ export const PostDetailThreadUnavailableAncestorBoundary: Story = {
       'post-thread-item-route-visible-parent',
       'post-thread-current-route-boundary-current',
     ]);
+    const header = canvas.getByTestId('post-detail-scroll').children[0] as HTMLElement;
+    const firstPost = thread.children[0] as HTMLElement;
+    expect(header.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      firstPost.getBoundingClientRect().top,
+    );
     expect(canvas.queryByText('숨겨진 답글')).not.toBeInTheDocument();
     expect(canvas.queryByText('조회할 수 없는 상위 Post')).not.toBeInTheDocument();
   },
