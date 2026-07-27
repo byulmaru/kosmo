@@ -50,7 +50,7 @@ API는 Reaction을 opaque global ID, 현재 Type 문자열과 생성 시각을 �
 
 **Authority / Provenance:** [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0019](../../../../../docs/domain/decisions/0019-selected-profile-authorization-boundary.md), [PROD-404](https://linear.app/byulmaru/issue/PROD-404/reaction을-생성한다), [PROD-439](https://linear.app/byulmaru/issue/PROD-439/kosmo에서-uploading-local-media를-생성한다) — Active Account의 Member인 Active/Normal Profile은 조회할 수 있는 Post에 허용 Reaction Type을 추가할 수 있어야 하며(MUST), 같은 조합의 반복·동시 추가는 기존 Reaction을 유지한 성공 결과여야 한다(MUST). 선택 Profile의 Instance Type은 Reaction 추가 권한 조건이어서는 안 된다(MUST NOT).
 
-GraphQL `usingProfile` entry point는 Active Account, Account–Profile membership과 selected Profile 조회 가능 상태를 검증해야 하며(MUST), resolver와 core service는 이 사실을 중복 조회·검증해서는 안 된다(MUST NOT). core service는 검증된 actor Profile identity를 받아 Active/Normal Profile, non-Suspended Instance, Post, Type과 멱등 저장을 검증해야 한다(MUST). core service는 actor의 Instance Type이나 Unresponsive Reachability를 권한 조건으로 사용해서는 안 된다(MUST NOT).
+GraphQL `usingProfile` entry point는 Active Account, Account–Profile membership과 selected Profile의 Active/Normal 및 non-Suspended Instance 조회 가능 상태를 검증해야 하며(MUST), resolver와 core service는 Account, membership, Profile/Instance 상태와 Instance Type을 중복 조회·검증해서는 안 된다(MUST NOT). core service는 검증된 actor Profile identity를 받아 Post, Type과 멱등 저장만 검증해야 한다(MUST).
 
 GraphQL API는 `addReaction` mutation의 input으로 `postId: ID!`와 `type: String!`을 받아야 하며(MUST), 성공 payload는 `reaction: Reaction!`을 반환해야 한다(MUST). 공개 payload는 신규 생성 여부를 노출해서는 안 된다(MUST NOT).
 
@@ -123,7 +123,7 @@ GraphQL API는 `addReaction` mutation의 input으로 `postId: ID!`와 `type: Str
 
 GraphQL API는 `deleteReaction` mutation의 input으로 `postId: ID!`와 `type: String!`을 받아야 한다(MUST). 성공 payload는 실제 삭제된 concrete Reaction global ID인 nullable `reactionId`와 현재 조회 가능한 nullable `post`를 반환해야 한다(MUST). missing·반복·동시 loser는 `reactionId: null`인 성공이어야 하며(MUST), payload는 별도 `deleted` boolean을 노출해서는 안 된다(MUST NOT).
 
-core service는 검증된 actor가 Active/Normal Profile이고 Instance가 non-Suspended인지 확인해야 하며(MUST), actor의 Instance Type이나 Unresponsive Reachability를 삭제 권한 조건으로 사용해서는 안 된다(MUST NOT). 실제 삭제된 Reaction ID가 있을 때만 source transaction commit 뒤 Notification cleanup을 Best Effort로 시도해야 한다(MUST).
+GraphQL `usingProfile` entry point는 actor의 Active/Normal Profile과 non-Suspended Instance 상태를 검증해야 하며(MUST), core service는 검증된 actor identity의 Profile/Instance 상태, Instance Type이나 Unresponsive Reachability를 다시 조회·검증해서는 안 된다(MUST NOT). 실제 삭제된 Reaction ID가 있을 때만 source transaction commit 뒤 Notification cleanup을 Best Effort로 시도해야 한다(MUST).
 
 #### Scenario: 현재 Reaction 삭제
 

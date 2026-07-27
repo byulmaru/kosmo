@@ -251,10 +251,10 @@
 - Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0019](../../../docs/domain/decisions/0019-selected-profile-authorization-boundary.md), [Core 서비스 경계](../../../docs/architecture/core-services.md), [PROD-404](https://linear.app/byulmaru/issue/PROD-404/reaction을-생성한다), [PROD-405](https://linear.app/byulmaru/issue/PROD-405/reaction을-삭제한다), [PROD-439](https://linear.app/byulmaru/issue/PROD-439/kosmo에서-uploading-local-media를-생성한다)
 - Status: Active
 - Context / Problem: 이전 결정은 Local GraphQL caller의 Account·membership·selected Profile 조건과 여러 진입점이 공유할 수 있는 Reaction core actor 조건을 섞어 core에서 Local Instance와 Reachable 상태를 강제했다.
-- Decision Outcome: GraphQL `usingProfile` entry point는 Active Account와 Account–Profile membership, selected Profile의 조회 가능 상태를 한 번 검증하며 Instance Type을 제한하지 않는다. resolver와 core add/delete는 같은 Account·membership·Profile visibility를 다시 검증하지 않는다. core add/delete는 검증된 actor identity를 받아 Active/Normal Profile과 non-Suspended Instance를 검증하되 Instance Type과 Unresponsive Reachability를 권한 조건으로 사용하지 않는다.
-- Alternatives Considered: Local Instance를 core에서 계속 강제하면 향후 protocol entry가 같은 domain action을 재사용하지 못한다. actor 상태를 전부 entry에 맡기면 공통 Profile/Instance 가용성 정책을 우회할 수 있어 채택하지 않았다.
+- Decision Outcome: GraphQL `usingProfile` entry point는 Active Account와 Account–Profile membership, selected Profile의 Active/Normal 및 non-Suspended Instance 조회 가능 상태를 한 번 검증하며 Instance Type을 제한하지 않는다. resolver와 core add/delete는 같은 Account·membership·Profile/Instance 상태를 다시 검증하지 않는다. core add/delete는 검증된 actor identity를 받아 Post, Type, 소유 관계와 persistence만 검증한다.
+- Alternatives Considered: core가 Profile/Instance 상태를 다시 검증하면 `usingProfile` snapshot과 같은 사실을 중복 소유하고 현재 유일한 production caller의 인증 정책에 결합한다. 향후 protocol entry가 생기면 signature와 actor 가용성을 해당 entry가 검증한 뒤 같은 core action을 호출한다.
 - Consequences: GraphQL에서는 Membership이 있는 Local/Remote selected Profile을 같은 경계로 처리한다. ActivityPub federation 제외 범위는 바뀌지 않는다. 향후 ActivityPub entry는 signature, actor/object/recipient와 Post 접근 조건을 먼저 검증한 뒤 같은 core action을 사용할 수 있다.
-- Confirmation / Follow-up: core database-backed test는 Active/Normal ACTIVITYPUB Unresponsive actor의 add/delete 성공과 Suspended Instance·비활성 Profile 거부를 검증한다. API integration test는 Account와 membership 조건을 계속 검증한다.
+- Confirmation / Follow-up: core database-backed test는 actor Profile/Instance 상태를 재조회하지 않는 add/delete와 Post·Type·소유 관계를 검증한다. API integration test는 비활성 Account, membership 부재와 selected Profile 조회 불가 상태를 계속 거부한다.
 
 ### Reaction 삭제는 관계의 global ID로 식별한다
 

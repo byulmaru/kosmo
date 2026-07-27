@@ -34,7 +34,7 @@ Reaction이 Unicode 문자열 Type, Author Profile과 Target Post를 보존하�
 
 **Guardrails**
 
-- GraphQL `usingProfile` entry point는 Active Account, Account–Profile membership과 selected Profile 조회 가능 상태를 검증하고 resolver/core는 이를 중복 검증하지 않는다. core service는 검증된 actor Profile identity의 Active/Normal 상태와 non-Suspended Instance를 검증하되 actor origin과 Instance Reachability를 권한 조건으로 사용하지 않는다.
+- GraphQL `usingProfile` entry point는 Active Account, Account–Profile membership과 selected Profile의 Active/Normal 및 non-Suspended Instance 상태를 검증하고 resolver/core는 이를 중복 검증하지 않는다. core service는 검증된 actor Profile identity를 받아 Post, Type과 멱등 저장만 검증한다.
 - 기존 Post 조회 정책을 우회하지 않는다.
 - 임의 Unicode와 사용자 정의 Reaction은 거부한다.
 - 명시적 pessimistic lock을 추가하지 않는다.
@@ -43,8 +43,8 @@ Reaction이 Unicode 문자열 Type, Author Profile과 Target Post를 보존하�
 
 **Verification**
 
-- 성공, 허용되지 않은 Type, Profile/Instance/Post 상태 실패, Remote Unresponsive actor, 반복·동시 요청과 rollback을 core database-backed test로 검증한다.
-- GraphQL payload·Node, Active Account/membership scope와 validation/`NOT_FOUND` error 계약을 API integration test로 검증한다.
+- 성공, 허용되지 않은 Type, Post 상태 실패, actor Profile/Instance 상태 비재조회, 반복·동시 요청과 rollback을 core database-backed test로 검증한다.
+- GraphQL payload·Node, Active Account/membership/selected Profile visibility scope와 validation/`NOT_FOUND` error 계약을 API integration test로 검증한다.
 
 - [x] 2.1 PROD-404가 소유한 Type 공개 표현, add input/payload, Reaction Node와 Post 권한 오류 결정을 확정해 specs·decisions를 갱신하고 strict validation을 통과시킨다.
 - [x] 2.2 허용 Type을 원자적으로 멱등 추가하는 core service와 GraphQL mutation을 구현한다.

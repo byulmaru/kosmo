@@ -1,29 +1,10 @@
-import { and, eq, ne } from 'drizzle-orm';
-import { db, first, getDatabaseConnection, Instances, Posts, Profiles, Reactions } from '../db';
-import { InstanceState, NotificationKind, PostState, ProfileState } from '../enums';
-import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
+import { and, eq } from 'drizzle-orm';
+import { db, first, getDatabaseConnection, Posts, Reactions } from '../db';
+import { NotificationKind, PostState } from '../enums';
+import { NotFoundError, ValidationError } from '../error';
 import { reactionTypeSchema } from '../validation';
 import { deleteNotificationBySource } from './notification';
 import type { Transaction } from '../db';
-
-const requireReactionActor = async (tx: Transaction, actorProfileId: string): Promise<void> => {
-  const actor = await tx
-    .select({ id: Profiles.id })
-    .from(Profiles)
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(
-      and(
-        eq(Profiles.id, actorProfileId),
-        eq(Profiles.state, ProfileState.ACTIVE),
-        ne(Instances.state, InstanceState.SUSPENDED),
-      ),
-    )
-    .limit(1)
-    .then(first);
-  if (!actor) {
-    throw new PermissionDeniedError();
-  }
-};
 
 type AddReactionInput = {
   readonly actorProfileId: string;
@@ -41,8 +22,6 @@ export const addReaction = async (
   }
 
   return getDatabaseConnection(tx).transaction(async (tx) => {
-    await requireReactionActor(tx, actorProfileId);
-
     const post = await tx
       .select({ id: Posts.id })
       .from(Posts)
@@ -98,8 +77,6 @@ export const deleteReaction = async (
   }
 
   const result = await db.transaction(async (tx) => {
-    await requireReactionActor(tx, input.actorProfileId);
-
     const deleted = await tx
       .delete(Reactions)
       .where(
