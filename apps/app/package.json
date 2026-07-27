@@ -2,7 +2,7 @@
   "name": "@kosmo/app",
   "private": true,
   "version": "0.0.1",
-  "main": "expo-router/entry",
+  "main": "index",
   "scripts": {
     "android": "expo run:android",
     "build": "pnpm export:web",

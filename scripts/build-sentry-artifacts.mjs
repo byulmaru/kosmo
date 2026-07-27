@@ -23,14 +23,16 @@ const run = (command, args, options = {}) => {
 };
 
 const serverArtifacts = [
-  { entry: 'apps/api/src/index.ts', outdir: 'apps/api/dist/server' },
-  { entry: 'apps/web/src/server/index.ts', outdir: 'apps/web/dist/server' },
+  { entry: 'apps/api/src/entry.ts', outdir: 'apps/api/dist/server' },
+  { entry: 'apps/web/src/server/entry.ts', outdir: 'apps/web/dist/server' },
 ];
 
 for (const artifact of serverArtifacts) {
   await rm(path.join(workspaceRoot, artifact.outdir), { force: true, recursive: true });
   await build({
     bundle: true,
+    chunkNames: 'chunks/[hash]',
+    entryNames: 'index',
     entryPoints: [path.join(workspaceRoot, artifact.entry)],
     format: 'esm',
     legalComments: 'none',
@@ -39,6 +41,7 @@ for (const artifact of serverArtifacts) {
     outExtension: { '.js': '.mjs' },
     packages: 'external',
     platform: 'node',
+    splitting: true,
     sourcemap: 'external',
     sourcesContent: true,
     target: 'node26',
