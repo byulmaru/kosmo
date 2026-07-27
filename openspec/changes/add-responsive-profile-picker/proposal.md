@@ -38,7 +38,6 @@
 
 - Web 앱 셸 profile picker와 surface 배치: `apps/app/src/components/shell/ProfileSwitcher.tsx`, `apps/app/src/components/shell/SidebarNavigation.tsx`, 필요 시 `apps/app/src/components/shell/UniversalShell.tsx`
 - 가장 가까운 fixture·회귀 검증: `apps/app/src/stories/Shell.stories.tsx`, 기존 `apps/web/e2e/profile-switcher.e2e.ts`
-- 승인용 최종 구현 계획: `docs/superpowers/plans/2026-07-26-responsive-profile-picker.md`
 - 호환성 stop gate: active `add-shell-responsive-breakpoints`의 이전 compact popover delta를 이 change에 흡수하지 않고, 최종 active spec sync·archive 전에 최신 drawer 계약으로 정렬됐는지 확인
 - Canonical 디자인 계약: `docs/design/breakpoints.md`
 - GraphQL schema, mutation payload, Relay normalization·actor reset·cache 정책과 패키지 의존성에는 영향이 없다.

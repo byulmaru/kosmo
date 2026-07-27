@@ -49,10 +49,6 @@ Web full sidebar와 compact icon rail에서 각각 자연스러운 trigger와 su
 
 - 관련 없는 Storybook 상태·fixture 조합, 광범위한 snapshot, 새 test harness·인프라, GraphQL·Relay cache 테스트 확대, Android/iOS picker 테스트.
 
-**Implementation Plan**
-
-- `docs/superpowers/plans/2026-07-26-responsive-profile-picker.md`
-
 **Stop Gates**
 
 - 사용자에게 OpenSpec Gate와 별도의 최종 구현 계획 승인을 받기 전에는 제품 코드를 수정하지 않는다.
@@ -90,3 +86,7 @@ Web full sidebar와 compact icon rail에서 각각 자연스러운 trigger와 su
 - [x] 1.11 사용자의 Full Web Storybook 시각 확인을 반영해 이름·chevron 내부 content도 Mobile Web과 같은 6px
       아래로 조정한다. 기존 Responsive Profile Picker Full Storybook에서 text·icon center의 6px offset과 open
       전후 trigger·picker anchor·navigation geometry 불변을 검증하고 compact avatar·Android/iOS 경로를 유지한다.
+- [x] 1.12 코드 리뷰에 따라 public `renderSummary(trigger)` seam을 제거하고 full·drawer의 고정 summary composition을
+      `ProfileSwitcher` 안으로 옮긴다. 명시적 close 뒤 도착한 mutation 오류를 폐기하고, 열린 동안 변경된 현재 profile
+      option 집합으로 keyboard 이동하며, full summary의 팔로잉·팔로워 링크를 keyboard로 실행해도 picker를 닫는다.
+      관련 Storybook 회귀와 OpenSpec 문서 정합성을 검증하고 저장소 ignore 정책 대상 plan 파일은 Git 추적에서 제외한다.

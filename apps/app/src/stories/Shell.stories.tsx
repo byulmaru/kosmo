@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { commitLocalUpdate } from 'relay-runtime';
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, userEvent, waitFor, within } from 'storybook/test';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { BottomTabBar } from '@/components/shell/BottomTabBar';
@@ -127,13 +127,41 @@ function CompactSidebarStory() {
 function ProfileSwitcherStory() {
   return (
     <View style={{ maxWidth: 360 }}>
-      <ProfileSwitcher
-        query={useShellStoryData().query}
-        renderSummary={(trigger) => trigger}
-        showAvatar={false}
-        surface="full"
-      />
+      <ProfileSwitcher query={useShellStoryData().query} surface="full" />
     </View>
+  );
+}
+
+function DynamicProfileSwitcherStory() {
+  const environment = useRelayEnvironment();
+  const data = useShellStoryData();
+  const addProfile = () =>
+    commitLocalUpdate(environment, (store) => {
+      const account = store.getRoot().getLinkedRecord('me');
+      if (!account) {
+        throw new Error('DynamicProfileSwitcherStory requires an account fixture.');
+      }
+
+      const dynamicProfile = store.create('profile-dynamic', 'Profile');
+      dynamicProfile.setValue('profile-dynamic', 'id');
+      dynamicProfile.setValue('dynamic', 'handle');
+      dynamicProfile.setValue('@dynamic', 'relativeHandle');
+      dynamicProfile.setValue('동적 프로필', 'displayName');
+      dynamicProfile.setValue(0, 'followingCount');
+      dynamicProfile.setValue(0, 'followersCount');
+      account.setLinkedRecords(
+        [...(account.getLinkedRecords('profiles') ?? []), dynamicProfile],
+        'profiles',
+      );
+    });
+
+  return (
+    <>
+      <View style={{ maxWidth: 360 }}>
+        <ProfileSwitcher query={data.query} surface="full" />
+      </View>
+      <StoryButton label="동적 프로필 추가" onPress={addProfile} />
+    </>
   );
 }
 
@@ -259,7 +287,20 @@ export const ResponsiveProfilePickerFull: Story = {
     await userEvent.click(canvas.getByRole('menuitem', { name: '새 프로필 추가' }));
     expect(canvas.getByRole('textbox', { name: '프로필 핸들' })).toHaveValue('');
 
-    await userEvent.click(canvas.getByRole('link', { name: /팔로잉/ }));
+    const followingLink = canvas.getByRole('link', { name: /팔로잉/ });
+    followingLink.addEventListener('click', (event) => event.preventDefault(), { once: true });
+    await userEvent.click(followingLink);
+    await waitFor(() => expect(canvas.queryByRole('menu', { name: '프로필 전환' })).toBeNull());
+
+    await userEvent.click(trigger);
+    await canvas.findByRole('menu', { name: '프로필 전환' });
+    const followersLink = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@selected/followers"]',
+    );
+    expect(followersLink).not.toBeNull();
+    followersLink!.addEventListener('click', (event) => event.preventDefault(), { once: true });
+    followersLink!.focus();
+    await userEvent.keyboard('{Enter}');
     await waitFor(() => expect(canvas.queryByRole('menu', { name: '프로필 전환' })).toBeNull());
   },
   render: () => (
@@ -558,6 +599,50 @@ export const ProfileSwitcherInteraction: Story = {
     const reopenedMenu = await canvas.findByRole('menu', { name: '프로필 전환' });
     expect(within(reopenedMenu).queryByRole('form', { name: '새 프로필 만들기' })).toBeNull();
     expect(within(reopenedMenu).getByRole('menuitem', { name: '새 프로필 추가' })).toBeVisible();
+  },
+  render: () => <ProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherKeyboardUsesCurrentProfiles: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    const menu = await canvas.findByRole('menu', { name: '프로필 전환' });
+    await fireEvent.click(canvas.getByRole('button', { name: '동적 프로필 추가' }));
+    const dynamicProfile = await within(menu).findByRole('menuitemradio', {
+      name: /동적 프로필/,
+    });
+
+    await userEvent.keyboard('{End}');
+    expect(dynamicProfile).toHaveFocus();
+  },
+  render: () => <DynamicProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherLateErrorAfterDismissal: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        ProfileSwitcherSelectProfileMutation: {
+          delayMs: 100,
+          error: '지연된 프로필 전환 실패',
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: '프로필 목록' });
+    await userEvent.click(trigger);
+    const menu = await canvas.findByRole('menu', { name: '프로필 전환' });
+    await userEvent.click(within(menu).getAllByRole('menuitemradio')[1]!);
+    await userEvent.click(trigger);
+    const responseDeadline = Date.now() + 120;
+    await waitFor(() => expect(Date.now()).toBeGreaterThanOrEqual(responseDeadline));
+
+    await userEvent.click(trigger);
+    await canvas.findByRole('menu', { name: '프로필 전환' });
+    expect(canvas.queryByRole('alert')).toBeNull();
   },
   render: () => <ProfileSwitcherStory />,
 };

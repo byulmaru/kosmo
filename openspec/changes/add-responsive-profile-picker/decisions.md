@@ -13,7 +13,7 @@
 - Context / Problem: full sidebar와 compact icon rail은 trigger와 가용 폭이 다르며 하나의 absolute dropdown 표현이 두 구조를 모두 안전하게 만족하지 못한다.
 - Decision Outcome: `full` 이상 Web에서는 프로필 이름 trigger 아래 inline picker를 사용하고, `compact` 이상 `full` 미만 Web에서는 아바타 trigger 오른쪽 비모달 overlay drawer를 사용한다. Android/iOS와 mobile Web drawer는 이 재설계에서 제외한다.
 - Alternatives Considered: 모든 Web 구간에서 같은 overlay를 사용하는 방식은 full sidebar의 정보 구조를 활용하지 못한다. compact rail 자체를 확장하는 방식은 중앙 피드 폭과 breakpoint layout을 흔든다.
-- Consequences: shell surface 정보를 `compact` boolean과 별개로 구분해야 한다. `SidebarNavigation`이 full summary render seam을 소유하고 `ProfileSwitcher`가 그 260px summary와 picker를 별도 flow siblings로 배치해야 한다.
+- Consequences: shell surface 정보를 `compact` boolean과 별개로 구분해야 한다. `ProfileSwitcher`가 고정 260px summary composition과 picker를 같은 root의 별도 flow siblings로 배치하고, `SidebarNavigation`에는 summary renderer seam을 노출하지 않는다.
 - Confirmation / Follow-up: full·compact Storybook surface와 768·1024·1279·1280·1440px 시각 검증으로 확인한다.
 
 ### Full picker도 navigation을 밀지 않는 비모달 overlay로 표시한다

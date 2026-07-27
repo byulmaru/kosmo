@@ -41,11 +41,10 @@
 ### Recommended Approach
 
 picker의 Relay data/action state와 반복 content를 유지하되, `full`·`compact`·`drawer` surface를 `compact` boolean과
-별개로 명시적으로 전달한다. `ProfileSwitcher`는 trigger, Relay action state, list/footer content를 소유하고 full
-surface에서 `SidebarNavigation`이 제공하는 `renderSummary(trigger)` seam을 호출한다. `SidebarNavigation`은 기존
-cover·avatar·profile detail과 전달받은 trigger를 정확히 260px 높이의 summary View 안에 렌더한다.
-`ProfileSwitcher`는 summary와 같은 root의 absolute layer를 프로필 이름 trigger 바로 아래에 anchor해 navigation
-flow 높이에 참여하지 않게 한다.
+별개로 명시적으로 전달한다. `ProfileSwitcher`는 trigger, Relay action state, list/footer content와 full·drawer의
+고정 260px summary composition을 소유한다. `SidebarNavigation`은 surface와 제어 상태만 전달하고 summary renderer나
+trigger ReactNode를 공개 계약으로 노출하지 않는다. `ProfileSwitcher`는 summary와 같은 root의 absolute layer를
+프로필 이름 trigger 바로 아래에 anchor해 navigation flow 높이에 참여하지 않게 한다.
 따라서 닫힌 summary와 navigation 위치, mobile Web drawer·Android/iOS의 기존 header 경로를 모두 유지한다.
 
 desktop full·compact에서는 새 portal이나 dependency를 추가하지 않고 `ProfileSwitcher`의 Web absolute layer를

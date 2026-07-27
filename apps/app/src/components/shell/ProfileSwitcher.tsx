@@ -1,4 +1,5 @@
 import { profileHandleSchema } from '@kosmo/core/validation/profile';
+import { Link } from 'expo-router';
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -17,7 +18,6 @@ import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
-import type { ReactNode } from 'react';
 import type { ViewStyle } from 'react-native';
 import type { ProfileSwitcher_query$key } from './__generated__/ProfileSwitcher_query.graphql';
 import type { ProfileSwitcherCreateProfileMutation } from './__generated__/ProfileSwitcherCreateProfileMutation.graphql';
@@ -31,6 +31,8 @@ const ProfileSwitcherFragment = graphql`
         handle
         relativeHandle
         displayName
+        followingCount
+        followersCount
       }
     }
     me {
@@ -94,26 +96,27 @@ const webCompactPickerBounds = {
 const webFullPickerBounds = {
   maxHeight: 'min(430px, calc(100vh - 276px))',
 } as unknown as ViewStyle;
+const countFormatter = new Intl.NumberFormat('en', {
+  maximumFractionDigits: 1,
+  notation: 'compact',
+});
+const webCover = {
+  backgroundImage:
+    'radial-gradient(circle at 30% 20%, rgba(255,255,255,0.9), transparent 35%), linear-gradient(135deg, rgba(17,17,17,0.14), transparent), linear-gradient(135deg, #e4e4e7, #f4f4f5, #d4d4d8)',
+  filter: 'blur(1px)',
+} as unknown as ViewStyle;
+const avatarShadow = {
+  boxShadow: '1px 1px 2px rgba(0, 0, 0, 0.25)',
+} as ViewStyle;
 
-type CommonProps = {
+type Props = {
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
   query: ProfileSwitcher_query$key;
-  showAvatar?: boolean;
+  surface: ProfileSwitcherSurface;
 };
 
-type Props =
-  | (CommonProps & { renderSummary: (trigger: ReactNode) => ReactNode; surface: 'full' })
-  | (CommonProps & { renderSummary?: never; surface: 'compact' | 'drawer' });
-
-export function ProfileSwitcher({
-  onOpenChange,
-  open: controlledOpen,
-  query,
-  renderSummary,
-  showAvatar = true,
-  surface,
-}: Props) {
+export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, surface }: Props) {
   const theme = useTheme();
   const data = useFragment(ProfileSwitcherFragment, query);
   const { resetActor } = useRelayActor();
@@ -124,6 +127,7 @@ export function ProfileSwitcher({
   const menuRef = useRef<View>(null);
   const pickerRef = useRef<View>(null);
   const triggerRef = useRef<View>(null);
+  const dismissalVersionRef = useRef(0);
   const [commitSelect, selecting] =
     useMutation<ProfileSwitcherSelectProfileMutation>(SelectProfileMutation);
   const [commitCreate, creatingProfile] =
@@ -142,6 +146,20 @@ export function ProfileSwitcher({
       setInternalOpen(nextOpen);
     }
     onOpenChange?.(nextOpen);
+  };
+  const dismissPicker = () => {
+    if (redesignedWeb) {
+      dismissalVersionRef.current += 1;
+      setCreating(false);
+      setHandle('');
+      setError(null);
+    }
+    setOpen(false);
+  };
+  const setOperationError = (version: number, message: string) => {
+    if (!redesignedWeb || version === dismissalVersionRef.current) {
+      setError(message);
+    }
   };
 
   useEffect(() => {
@@ -162,24 +180,27 @@ export function ProfileSwitcher({
     const menu = menuRef.current as unknown as HTMLElement | null;
     const picker = pickerRef.current as unknown as HTMLElement | null;
     const trigger = triggerRef.current as unknown as HTMLElement | null;
-    const items = Array.from(menu?.querySelectorAll<HTMLElement>('[role="menuitemradio"]') ?? []);
+    const getItems = () =>
+      Array.from(menu?.querySelectorAll<HTMLElement>('[role="menuitemradio"]') ?? []);
+    const initialItems = getItems();
     const initialItem =
-      items.find((item) => item.getAttribute('aria-checked') === 'true') ?? items[0];
+      initialItems.find((item) => item.getAttribute('aria-checked') === 'true') ?? initialItems[0];
     initialItem?.focus();
     initialItem?.scrollIntoView({ block: 'nearest' });
     const onPointerDown = (event: PointerEvent) => {
       if (!picker?.contains(event.target as Node) && !trigger?.contains(event.target as Node)) {
-        setOpen(false);
+        dismissPicker();
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        setOpen(false);
+        dismissPicker();
         trigger?.focus();
         return;
       }
 
+      const items = getItems();
       const current = document.activeElement as HTMLElement | null;
       const index = current ? items.indexOf(current) : -1;
       if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || index < 0) {
@@ -207,24 +228,26 @@ export function ProfileSwitcher({
     };
   }, [open, surface]);
 
-  const selectProfile = (id: string) => {
+  const selectProfile = (id: string, operationVersion = dismissalVersionRef.current) => {
     setError(null);
     commitSelect({
       variables: { id },
       onCompleted: (response, errors) => {
         if (errors?.length) {
-          setError('프로필을 전환하지 못했습니다.');
+          setOperationError(operationVersion, '프로필을 전환하지 못했습니다.');
           return;
         }
 
         setOpen(false);
         resetActor(response.selectProfile.session.selectedProfile?.id ?? id);
       },
-      onError: (cause) => setError(cause.message || '프로필을 전환하지 못했습니다.'),
+      onError: (cause) =>
+        setOperationError(operationVersion, cause.message || '프로필을 전환하지 못했습니다.'),
     });
   };
 
   const createProfile = () => {
+    const operationVersion = dismissalVersionRef.current;
     const normalized = handle.trim();
     if (!normalized) {
       setError('프로필 핸들을 입력해주세요.');
@@ -243,15 +266,16 @@ export function ProfileSwitcher({
       variables: { handle: normalized },
       onCompleted: (response, errors) => {
         if (errors?.length) {
-          setError('프로필을 생성하지 못했습니다.');
+          setOperationError(operationVersion, '프로필을 생성하지 못했습니다.');
           return;
         }
 
         setHandle('');
         setCreating(false);
-        selectProfile(response.createProfile.profile.id);
+        selectProfile(response.createProfile.profile.id, operationVersion);
       },
-      onError: (cause) => setError(cause.message || '프로필을 생성하지 못했습니다.'),
+      onError: (cause) =>
+        setOperationError(operationVersion, cause.message || '프로필을 생성하지 못했습니다.'),
     });
   };
 
@@ -429,14 +453,14 @@ export function ProfileSwitcher({
       accessibilityLabel="프로필 목록"
       accessibilityRole="button"
       accessibilityState={{ expanded: open }}
-      onPress={() => setOpen(!open)}
+      onPress={() => (open ? dismissPicker() : setOpen(true))}
       style={({ pressed }) => [
         styles.trigger,
         compact ? styles.compactTrigger : styles.fullTrigger,
         { opacity: pressed ? 0.65 : 1 },
       ]}
     >
-      {showAvatar ? <Avatar label={active?.displayName ?? '?'} size={compact ? 40 : 48} /> : null}
+      {compact ? <Avatar label={active?.displayName ?? '?'} size={40} /> : null}
       {fullWeb || mobileWebDrawer ? (
         <View style={styles.webTriggerContent}>{triggerCopy}</View>
       ) : (
@@ -444,7 +468,82 @@ export function ProfileSwitcher({
       )}
     </Pressable>
   );
-  const triggerSurface = surface === 'full' ? renderSummary(trigger) : trigger;
+  const profileDetails = active ? (
+    <>
+      <Text
+        accessibilityLabel="활성 프로필 핸들"
+        numberOfLines={1}
+        style={[styles.profileHandle, { color: theme.textSecondary }]}
+      >
+        {active.relativeHandle}
+      </Text>
+      <View style={styles.counts}>
+        <Link asChild href={`/${active.relativeHandle}/following`}>
+          <Pressable
+            accessibilityRole="link"
+            onPress={fullWeb && open ? dismissPicker : undefined}
+            style={styles.countLink}
+          >
+            <Text style={[styles.count, { color: theme.text }]}>
+              {countFormatter.format(active.followingCount).toLowerCase()}
+            </Text>
+            <Text style={[styles.countLabel, { color: theme.text }]}>팔로잉</Text>
+          </Pressable>
+        </Link>
+        <Link asChild href={`/${active.relativeHandle}/followers`}>
+          <Pressable
+            accessibilityRole="link"
+            onPress={fullWeb && open ? dismissPicker : undefined}
+            style={styles.countLink}
+          >
+            <Text style={[styles.count, { color: theme.text }]}>
+              {countFormatter.format(active.followersCount).toLowerCase()}
+            </Text>
+            <Text style={[styles.countLabel, { color: theme.text }]}>팔로워</Text>
+          </Pressable>
+        </Link>
+      </View>
+    </>
+  ) : (
+    <Text style={[styles.emptyProfile, { color: theme.textSecondary }]}>
+      {profiles.length ? '사용할 프로필을 선택해주세요.' : '새 프로필을 만들어 시작하세요.'}
+    </Text>
+  );
+  const triggerSurface = compact ? (
+    trigger
+  ) : (
+    <View accessibilityLabel="활성 프로필" style={styles.profileHeader}>
+      <View
+        style={[
+          styles.cover,
+          { backgroundColor: theme.surface },
+          Platform.OS === 'web' && webCover,
+        ]}
+      />
+      <View style={styles.largeAvatar}>
+        <Avatar
+          label={active?.displayName || active?.handle || '?'}
+          size={96}
+          style={avatarShadow}
+        />
+      </View>
+      {active ? (
+        <Pressable
+          accessibilityLabel="프로필 편집"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: true }}
+          disabled
+          style={[styles.editButton, { backgroundColor: theme.primary }]}
+        >
+          <Text style={styles.editLabel}>편집</Text>
+        </Pressable>
+      ) : null}
+      <View style={styles.profileCopy}>
+        {trigger}
+        {profileDetails}
+      </View>
+    </View>
+  );
 
   return (
     <View
@@ -464,7 +563,7 @@ export function ProfileSwitcher({
             <View
               style={[
                 styles.webMenu,
-                surface === 'compact' ? styles.compactMenuPosition : styles.fullMenuPosition,
+                surface === 'compact' ? styles.compactMenuPosition : styles.fullOverlayPosition,
               ]}
             >
               {menu}
@@ -519,8 +618,36 @@ const styles = StyleSheet.create({
   },
   webMenu: { position: 'absolute', width: 280, zIndex: 30 },
   compactMenuPosition: { left: 62, top: 0 },
-  fullMenuPosition: { left: 0, top: 50 },
   fullOverlayPosition: { left: 0, top: 190 },
+  profileHeader: { height: 260, position: 'relative', width: 320, zIndex: 20 },
+  cover: { height: 104, left: 0, position: 'absolute', right: 0, top: 0 },
+  largeAvatar: { left: 20, position: 'absolute', top: 54 },
+  editButton: {
+    alignItems: 'center',
+    borderRadius: radii.sm,
+    height: 32,
+    justifyContent: 'center',
+    opacity: 0.6,
+    paddingHorizontal: spacing.md,
+    position: 'absolute',
+    right: 20,
+    top: 134,
+  },
+  editLabel: { color: '#111111', fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
+  profileCopy: {
+    left: 10,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    position: 'absolute',
+    top: 140,
+    width: 300,
+  },
+  profileHandle: { fontFamily: 'SUIT', ...typography.sm },
+  emptyProfile: { fontFamily: 'SUIT', marginTop: spacing.sm, ...typography.sm },
+  counts: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm },
+  countLink: { flexDirection: 'row', gap: spacing.sm },
+  count: { fontFamily: 'SUIT', ...typography.sm },
+  countLabel: { fontFamily: 'SUIT', ...typography.sm },
   menu: {
     borderRadius: 14,
     borderWidth: 1,
