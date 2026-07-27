@@ -33,11 +33,11 @@
 
 ### Recommended Approach
 
-`issueMediaUploadUrl` resolver에서 먼저 인증·행동 주체 조건을 확인하고 Media Storage Service의 `POST /v1/uploads`를 호출한다. 응답의 opaque 저장 참조, upload URL과 만료 시각을 runtime schema로 검증한 뒤 단일 insert로 Local/Uploading Media를 만든다. insert가 성공한 뒤에만 Media ref, upload URL과 만료 시각을 payload로 반환한다.
+`issueMediaUploadUrl` resolver에서 먼저 인증·행동 주체 조건을 확인하고 Media Storage Service의 `POST /v1/uploads`를 직접 호출한다. 응답의 opaque 저장 참조와 upload URL 구조를 runtime schema로 검증하고, 만료 시각은 persistence와 GraphQL `DateTime`에 필요한 `Temporal.Instant`로 변환한 뒤 단일 insert로 Local/Uploading Media를 만든다. insert가 성공한 뒤에만 Media ref, upload URL과 만료 시각을 payload로 반환한다. 현재 caller가 이 resolver 하나뿐이므로 별도 Storage client abstraction은 두지 않는다.
 
 `media` persistence는 이번 slice가 실제로 쓰는 Account, Profile, source, state, opaque storage reference와 upload expiry만 보존한다. 기존 File 참조와 미구현 Remote projection은 제거한다. enum에는 canonical state인 `UPLOADING`, `READY`를 정의하되 이번 mutation은 `UPLOADING`만 쓰고 Ready 전환 전용 속성은 `PROD-441`에서 추가한다.
 
-기존 REST route 등록, R2 helper/config/env와 File schema를 함께 제거하고 migration은 기존 Media row를 별도 검사 없이 삭제한다. 테스트는 production 환경 설정을 통한 외부 Media service client와 GraphQL 인증/schema를 확인하고, 격리된 test DB에서 실제 resolver의 권한·결속·Account 격리·외부 및 persistence 실패 순서를 실행한다.
+기존 REST route 등록, R2 helper/config/env와 File schema를 함께 제거하고 migration은 기존 Media row를 별도 검사 없이 삭제한다. 테스트는 격리된 test DB에서 production 환경 설정과 전역 fetch를 사용하는 실제 resolver의 HTTP 요청, 권한·결속·Account 격리·외부 및 persistence 실패 순서를 실행하고 GraphQL 인증/schema를 함께 확인한다.
 
 ### Allowed Alternatives
 
@@ -61,7 +61,7 @@
 ## Migration Plan
 
 1. Media state enum과 새 Local Uploading persistence를 추가하고 기존 Media/File projection을 제거하는 migration을 만든다.
-2. Media Storage Service client와 GraphQL mutation/Media schema를 추가한다.
+2. Media Storage Service 호출 경계와 GraphQL mutation/Media schema를 추가한다.
 3. 기존 `/upload` route, R2 helper와 전용 환경 변수를 제거한다.
 4. schema, resolver/service, migration 정적 검증과 OpenSpec strict validation을 실행하고, 격리된 test DB에서 GraphQL persistence 경로를 검증한다. 생성 migration history의 실행 검증과 DB emptiness precondition은 수행하지 않는다.
 5. rollback은 애플리케이션과 schema migration을 함께 이전 revision으로 되돌리는 방식으로 수행한다. 이 변경 이후 생성된 Uploading Media의 역변환은 보장하지 않는다.

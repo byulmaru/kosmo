@@ -143,14 +143,41 @@ describe('Local Media upload 시작 GraphQL 경계', () => {
     assert.equal(await db.$count(Media), 0);
   });
 
-  test('외부 업로드 권한 발급 실패는 Media를 생성하지 않는다', async (t) => {
-    t.mock.method(globalThis, 'fetch', async () => new Response(null, { status: 503 }));
+  test('외부 업로드 권한 발급 실패와 잘못된 응답은 Media를 생성하지 않는다', async (t) => {
     const auth = await createAuthenticatedSession();
 
-    const result = await requestIssueMediaUploadUrl(auth.token);
+    for (const response of [
+      new Response(null, { status: 503 }),
+      Response.json(
+        {
+          expiresAt: uploadExpiresAt,
+          id: 'not-an-upload-id',
+          uploadUrl: 'https://media.example/v1/uploads/signed-token',
+        },
+        { status: 201 },
+      ),
+    ]) {
+      t.mock.method(
+        globalThis,
+        'fetch',
+        async (input: string | URL | Request, init?: RequestInit) => {
+          assert.equal(String(input), 'https://media.example/v1/uploads');
+          assert.equal(init?.method, 'POST');
+          assert.deepEqual(init?.headers, {
+            Authorization: 'Bearer secret',
+            'Content-Type': 'application/json',
+          });
+          assert.equal(init?.body, '{}');
+          return response;
+        },
+      );
 
-    assert.ok(result.errors?.[0]);
-    assert.equal(result.data, null);
+      const result = await requestIssueMediaUploadUrl(auth.token);
+
+      assert.ok(result.errors?.[0]);
+      assert.equal(result.data, null);
+      t.mock.restoreAll();
+    }
     assert.equal(await db.$count(Media), 0);
   });
 

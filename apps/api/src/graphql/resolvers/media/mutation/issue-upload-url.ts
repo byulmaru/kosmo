@@ -18,9 +18,20 @@ import {
 } from '@kosmo/core/enums';
 import { PermissionDeniedError } from '@kosmo/core/error';
 import { and, eq } from 'drizzle-orm';
+import { z } from 'zod';
 import { builder } from '@/graphql/builder';
-import { issueMediaStorageUpload } from '@/media/storage';
 import { MediaObject } from '../ref';
+
+const uploadResponseSchema = z.strictObject({
+  id: z.string().regex(/^u_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
+  uploadUrl: z.url(),
+  expiresAt: z.string(),
+});
+
+const mediaStorageConfigSchema = z.object({
+  MEDIA_STORAGE_SERVICE_ORIGIN: z.url(),
+  MEDIA_STORAGE_SERVICE_API_KEY: z.string().min(1),
+});
 
 builder.mutationField('issueMediaUploadUrl', (t) =>
   t.withAuth({ usingProfile: true }).field({
@@ -59,7 +70,32 @@ builder.mutationField('issueMediaUploadUrl', (t) =>
         throw new PermissionDeniedError();
       }
 
-      const upload = await issueMediaStorageUpload();
+      const config = mediaStorageConfigSchema.safeParse(process.env);
+      if (!config.success) {
+        throw new Error('Media Storage Service is not configured');
+      }
+
+      const response = await globalThis.fetch(
+        new URL('/v1/uploads', config.data.MEDIA_STORAGE_SERVICE_ORIGIN),
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${config.data.MEDIA_STORAGE_SERVICE_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: '{}',
+        },
+      );
+      if (response.status !== 201) {
+        throw new Error(`Media Storage Service rejected upload issuance (${response.status})`);
+      }
+
+      const upload = uploadResponseSchema.safeParse(await response.json());
+      if (!upload.success) {
+        throw new Error('Media Storage Service returned an invalid upload response');
+      }
+      const expiresAt = Temporal.Instant.from(upload.data.expiresAt);
+
       const media = await db
         .insert(Media)
         .values({
@@ -67,16 +103,16 @@ builder.mutationField('issueMediaUploadUrl', (t) =>
           state: MediaState.UPLOADING,
           accountId: ctx.session.accountId,
           profileId: actor.id,
-          storageReference: upload.storageReference,
-          uploadExpiresAt: upload.expiresAt,
+          storageReference: upload.data.id,
+          uploadExpiresAt: expiresAt,
         })
         .returning()
         .then(firstOrThrowWith(() => new Error('Failed to create Uploading Media')));
 
       return {
         media,
-        uploadUrl: upload.uploadUrl,
-        expiresAt: upload.expiresAt,
+        uploadUrl: upload.data.uploadUrl,
+        expiresAt,
       };
     },
   }),

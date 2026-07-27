@@ -31,6 +31,6 @@ Kosmo 내부가 이미지 byte와 File 표현을 직접 저장하는 기존 `/up
 
 - GraphQL schema와 resolver, 인증 session의 Account/Profile 경계
 - PostgreSQL `media` persistence와 사용되지 않는 `files` persistence
-- Media Storage Service의 upload 시작 API client
+- Media Storage Service의 upload 시작 API를 호출하는 GraphQL resolver 경계
 - 기존 REST `/upload`, R2 client/configuration과 관련 테스트
 - 후속 `PROD-441`이 사용할 동일 Media identity와 state persistence

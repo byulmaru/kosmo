@@ -38,7 +38,7 @@
 - Decision Outcome: 인증과 행동 주체를 검증한 뒤 외부 업로드 권한을 발급받고, 응답 검증 후 Media를 insert하며, insert 성공 뒤에만 upload URL을 반환한다.
 - Alternatives Considered: Media를 먼저 insert한 뒤 외부 호출, DB transaction 안에서 외부 호출, consumer에게 URL을 먼저 반환. 실패한 미결속 Media, 긴 transaction 또는 관찰 가능한 불완전 성공을 만들므로 선택하지 않았다.
 - Consequences: DB insert 실패 시 consumer에게 노출되지 않은 외부 upload slot이 만료 전까지 남을 수 있다.
-- Confirmation / Follow-up: 외부 실패는 production client wiring 및 GraphQL integration test로, DB insert 실패 시 URL을 반환하지 않는 동작은 격리된 test DB의 storage reference 충돌로 확인한다. 생성 migration history 실행과 orphan 정리는 현재 범위 밖이다.
+- Confirmation / Follow-up: 외부 실패와 HTTP 요청은 production resolver wiring을 사용하는 GraphQL integration test로, DB insert 실패 시 URL을 반환하지 않는 동작은 격리된 test DB의 storage reference 충돌로 확인한다. 생성 migration history 실행과 orphan 정리는 현재 범위 밖이다.
 
 ### 기존 Media/File schema를 데이터 precondition 없이 교체한다
 
