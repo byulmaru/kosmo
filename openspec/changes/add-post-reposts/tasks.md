@@ -283,9 +283,9 @@ Home, Profile, Bookmark와 Post 상세이 실제 GraphQL fragment와 generated t
 - [x] 9.4 `PostLayout`과 `PostListItem`이 공용 direct Source preview leaf로 자신의 Source를 정확히 한 번 표시하게 하고 `PostDetailThread`의 별도 Source carrier를 제거한다.
 - [x] 9.5 Content 없는 Repost 상세 진입을 direct Source canonical route로 `replace`하고 자체 surface·history entry·공유 참조를 남기지 않는다.
 - [x] 9.6 current·ancestor·descendant Quote의 한 단계 Source 표시, Source null, 순수 Repost canonical replace와 기존 목록·thread 회귀를 검증하고 Relay compile·app check·Storybook·OpenSpec strict validation을 통과시킨다.
-- [ ] 9.7 Source presentation과 표준 목록 행이 고정 canonical Link·body shortcut을 직접 소유하게 하고 caller-injected renderer·target·navigation callback API를 제거한다.
-- [ ] 9.8 Content 없는 Repost가 Repost Author Profile Link attribution을 한 번 표시한 뒤 direct Source를 일반 Post와 같은 비재귀 표준 목록 행 leaf로 렌더링하게 하고 별도 Source renderer·중첩 article·이중 border를 제거한다.
-- [ ] 9.9 production Storybook pathname·외부 Link 격리·표준 행 구조·one-depth cutoff와 전체 app/OpenSpec 회귀 검증을 통과시킨다.
+- [x] 9.7 Source presentation과 표준 목록 행이 고정 canonical Link·body shortcut을 직접 소유하게 하고 caller-injected renderer·target·navigation callback API를 제거한다.
+- [x] 9.8 Content 없는 Repost가 Repost Author Profile Link attribution을 한 번 표시한 뒤 direct Source를 일반 Post와 같은 비재귀 표준 목록 행 leaf로 렌더링하게 하고 별도 Source renderer·중첩 article·이중 border를 제거한다.
+- [x] 9.9 production Storybook pathname·외부 Link 격리·표준 행 구조·one-depth cutoff와 전체 app/OpenSpec 회귀 검증을 통과시킨다.
 
 ## 10. PROD-412 Repost Notification 생성과 inbox 표시
 
