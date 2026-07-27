@@ -169,6 +169,7 @@ describe('Local Media upload GraphQL 경계', () => {
       });
       const uploadBody = await upload.text();
       assert.equal(upload.status, 201, uploadBody);
+      assert.equal(upload.headers.get('access-control-allow-origin'), browserUploadOrigin);
       const storedOriginal = JSON.parse(uploadBody) as { id: string; url: string };
       const original = await fetch(storedOriginal.url, { method: 'HEAD' });
       assert.equal(original.status, 200);
