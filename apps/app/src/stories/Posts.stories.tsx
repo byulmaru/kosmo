@@ -22,7 +22,11 @@ import type { PostDetailThreadIdentityStoryQuery } from './__generated__/PostDet
 import type { PostsStoriesQuery as PostsStoriesQueryType } from './__generated__/PostsStoriesQuery.graphql';
 import type { StoryPost } from './fixtures';
 
-const shortPost = post({ bodyText: '짧은 본문 한 줄.', id: 'short' });
+const shortPost = {
+  ...post({ bodyText: '짧은 본문 한 줄.', id: 'short' }),
+  repostCount: 2,
+  viewerRepost: { __typename: 'Post' as const, id: 'short-viewer-repost' },
+};
 const longPost = post({ bodyText: longBody, id: 'long' });
 const multilinePost = post({
   bodyText: '첫 번째 문단입니다.\n두 번째 줄입니다.\n\n빈 줄 뒤의 마지막 문단입니다.',
@@ -113,11 +117,15 @@ const repostAuthor = profile({
   id: 'profile-repost-author',
   relativeHandle: '@reposter',
 });
-const sourcePost = post({
-  bodyText: '원문 작성자의 긴 본문과 줄바꿈을 표시합니다.\n두 번째 줄입니다.',
-  id: 'post-source',
-  profile: sourceAuthor,
-});
+const sourcePost = {
+  ...post({
+    bodyText: '원문 작성자의 긴 본문과 줄바꿈을 표시합니다.\n두 번째 줄입니다.',
+    id: 'post-source',
+    profile: sourceAuthor,
+  }),
+  repostCount: 7,
+  viewerRepost: { __typename: 'Post' as const, id: 'source-viewer-repost' },
+};
 const deepestSourceAuthor = profile({
   displayName: '두 번째 Source 작성자',
   handle: 'deep-source@remote.example',
@@ -135,12 +143,16 @@ const sourceQuotePost = post({
   profile: sourceAuthor,
   repostSource: deepestSourcePost,
 });
-const pureRepost = post({
-  bodyText: null,
-  id: 'post-repost',
-  profile: repostAuthor,
-  repostSource: sourcePost,
-});
+const pureRepost = {
+  ...post({
+    bodyText: null,
+    id: 'post-repost',
+    profile: repostAuthor,
+    repostSource: sourcePost,
+  }),
+  repostCount: 1,
+  viewerRepost: null,
+};
 const longPureRepost = post({
   bodyText: null,
   id: 'post-repost-long-author',
@@ -152,12 +164,16 @@ const longPureRepost = post({
   }),
   repostSource: sourcePost,
 });
-const quotePost = post({
-  bodyText: '이 원문에 덧붙이는 인용자의 본문입니다.',
-  id: 'post-quote',
-  profile: repostAuthor,
-  repostSource: sourcePost,
-});
+const quotePost = {
+  ...post({
+    bodyText: '이 원문에 덧붙이는 인용자의 본문입니다.',
+    id: 'post-quote',
+    profile: repostAuthor,
+    repostSource: sourcePost,
+  }),
+  repostCount: 3,
+  viewerRepost: null,
+};
 const pureRepostOfQuote = post({
   bodyText: null,
   id: 'post-repost-of-quote',
@@ -829,6 +845,10 @@ export const BodyTimeAndLayoutStates: Story = {
     expect(quoteLayout.getByTestId('source-post-body')).toHaveTextContent(
       '원문 작성자의 긴 본문과 줄바꿈을 표시합니다.',
     );
+    const detailActionBar = quoteLayout.getByRole('toolbar', { name: '액션 바' });
+    expect(detailActionBar.parentElement?.closest('a, [role="link"], [role="button"]')).toBeNull();
+    expect(detailActionBar.parentElement?.lastElementChild).toBe(detailActionBar);
+    expect(within(detailActionBar).getByRole('button', { name: '재게시' })).toHaveTextContent('3');
   },
 };
 
@@ -880,6 +900,26 @@ export const ProductionRepostQuoteListIntegration: Story = {
     expect(quoteOfQuoteRow).not.toBeNull();
     expect(repostOfQuoteRow).not.toBeNull();
     expect(sourceNullQuoteRow).not.toBeNull();
+    const pureRepostActionBar = within(pureRepostRow!).getByRole('toolbar', {
+      name: '액션 바',
+    });
+    const quoteActionBar = within(quoteRow!.parentElement!).getByRole('toolbar', {
+      name: '액션 바',
+    });
+    const ordinaryActionBar = within(home.getAllByRole('article')[0]!).getByRole('toolbar', {
+      name: '액션 바',
+    });
+    for (const actionBar of [ordinaryActionBar, quoteActionBar, pureRepostActionBar]) {
+      expect(actionBar.parentElement?.closest('a, [role="link"], [role="button"]')).toBeNull();
+      expect(actionBar.parentElement?.lastElementChild).toBe(actionBar);
+    }
+    expect(
+      within(ordinaryActionBar).getByRole('button', { name: '재게시 취소' }),
+    ).toHaveTextContent('2');
+    expect(within(quoteActionBar).getByRole('button', { name: '재게시' })).toHaveTextContent('3');
+    expect(
+      within(pureRepostActionBar).getByRole('button', { name: '재게시 취소' }),
+    ).toHaveTextContent('7');
     expect(home.getAllByRole('article').map((row) => row.textContent)).toEqual([
       expect.stringContaining('짧은 본문 한 줄.'),
       expect.stringContaining('재게시한 코스모 사용자님이 재게시함'),
@@ -975,6 +1015,61 @@ export const ProductionRepostQuoteListIntegration: Story = {
     } finally {
       Linking.openURL = originalOpenURL;
     }
+  },
+  render: () => <ProductionRepostQuoteLists />,
+};
+
+export const ProductionRepostFailureToast: Story = {
+  parameters: {
+    relay: {
+      data: {
+        composerProfile,
+        contentPostsProfile,
+        emptyPostsProfile,
+        homeTimeline,
+        nodes: storyPosts,
+      },
+      mutationError: 'repost mutation failed',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const home = within(canvas.getByTestId('production-home-reposts'));
+    const quoteActionBar = within(
+      home
+        .getByText('이 원문에 덧붙이는 인용자의 본문입니다.')
+        .closest<HTMLElement>('[role="article"]')!.parentElement!,
+    ).getByRole('toolbar', { name: '액션 바' });
+    const pureRepostActionBar = within(
+      home
+        .getByText('재게시한 코스모 사용자님이 재게시함')
+        .closest<HTMLElement>('[role="article"]')!,
+    ).getByRole('toolbar', { name: '액션 바' });
+
+    await userEvent.click(within(quoteActionBar).getByRole('button', { name: '재게시' }));
+    await userEvent.click(
+      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '재게시하기',
+      }),
+    );
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '재게시하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    );
+    expect(within(quoteActionBar).getByRole('button', { name: '재게시' })).toHaveTextContent('3');
+
+    await userEvent.click(within(pureRepostActionBar).getByRole('button', { name: '재게시 취소' }));
+    await userEvent.click(
+      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '재게시 취소',
+      }),
+    );
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '재게시를 취소하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    );
+    expect(canvas.getAllByRole('alert')).toHaveLength(1);
+    expect(
+      within(pureRepostActionBar).getByRole('button', { name: '재게시 취소' }),
+    ).toHaveTextContent('7');
   },
   render: () => <ProductionRepostQuoteLists />,
 };

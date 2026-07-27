@@ -6,10 +6,13 @@ import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
+import { PostActionBar } from './PostActionBar';
 import { PostBody } from './PostBody';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
+import { useRepostFailureToast } from './useRepostFailureToast';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
 import type { PostListRow_post$key } from './__generated__/PostListRow_post.graphql';
+import type { PostActionBarProps } from './PostActionBar';
 import type { PostSourcePresentationData } from './PostSourcePresentationView';
 
 const PostListRowFragment = graphql`
@@ -25,6 +28,7 @@ const PostListRowFragment = graphql`
       displayName
       ...ProfileNameBlock_profile
     }
+    ...PostActionBar_post @alias(as: "actionBar")
     ...PostBody_post
   }
 `;
@@ -46,6 +50,7 @@ const PostListItemFragment = graphql`
     replyParent {
       id
     }
+    ...PostActionBar_post @alias(as: "actionBar")
     repostSource {
       id
       createdAt
@@ -66,13 +71,14 @@ const PostListItemFragment = graphql`
 
 export function PostListItem({ post: postKey }: { post: PostListItem_post$key }) {
   const theme = useTheme();
+  const onRepostError = useRepostFailureToast();
   const post = useFragment(PostListItemFragment, postKey);
   const profileHref = `/${post.profile.relativeHandle}` as const;
 
   if (!post.repostSource) {
     return (
       <View role="article" style={[styles.card, { borderColor: theme.border }]}>
-        <PostListRow post={post} />
+        <PostListRow onRepostError={onRepostError} post={post} />
       </View>
     );
   }
@@ -107,7 +113,7 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
             </Link>
           </View>
         </View>
-        <PostListRow post={source} />
+        <PostListRow onRepostError={onRepostError} post={source} />
       </View>
     );
   }
@@ -153,12 +159,19 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
       </Link>
       <View style={styles.sourcePresentation}>
         <PostSourcePresentationView post={presentationPost} showPostAvatar={false} />
+        <PostActionBar onRepostError={onRepostError} post={post.actionBar} />
       </View>
     </View>
   );
 }
 
-function PostListRow({ post: postKey }: { post: PostListRow_post$key }) {
+function PostListRow({
+  onRepostError,
+  post: postKey,
+}: {
+  onRepostError: NonNullable<PostActionBarProps['onRepostError']>;
+  post: PostListRow_post$key;
+}) {
   const router = useRouter();
   const theme = useTheme();
   const post = useFragment(PostListRowFragment, postKey);
@@ -203,6 +216,7 @@ function PostListRow({ post: postKey }: { post: PostListRow_post$key }) {
             <PostBody post={post} />
           </Pressable>
         ) : null}
+        <PostActionBar onRepostError={onRepostError} post={post.actionBar} />
       </View>
     </View>
   );
