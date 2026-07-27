@@ -26,6 +26,7 @@ Account가 아니라 Profile이다.
 | 관계               | 대상                                                          | 방향                  | cardinality | 존재 조건 | 조회 조건                | 조회 권한                              |
 | ------------------ | ------------------------------------------------------------- | --------------------- | ----------- | --------- | ------------------------ | -------------------------------------- |
 | Profile membership | [Account-Profile Membership](./account-profile-membership.md) | Account -> Membership | 1 -> 0..N   | 항상      | 대상 Account의 운영 관계 | `Account.Self` 또는 `Account.Operator` |
+| Session            | [Session](./session.md)                                       | Account <- Session    | 1 <- 0..N   | 항상      | 현재 Session 내부 조회   | `Session.Self`                         |
 
 ## 행동
 

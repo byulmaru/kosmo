@@ -65,6 +65,7 @@ Membership/Owner 같은 관계 사실과 Account 활성 상태를 하나의 권�
 | 객체                                                                  | 책임                                       | 주요 관계                                                                                                |
 | --------------------------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
 | [Account](./objects/account.md)                                       | 로그인과 운영자 행동의 기준                | [Profile](./objects/profile.md), [Account-Profile Membership](./objects/account-profile-membership.md)   |
+| [Session](./objects/session.md)                                       | Account credential의 서버 인증 생명주기    | [Account](./objects/account.md)                                                                          |
 | [Profile](./objects/profile.md)                                       | 공개 소셜 정체성과 기본 행동 주체          | [Account-Profile Membership](./objects/account-profile-membership.md), [Instance](./objects/instance.md) |
 | [Account-Profile Membership](./objects/account-profile-membership.md) | Account와 Local Profile의 역할 관계        | [Account](./objects/account.md), [Profile](./objects/profile.md)                                         |
 | [Post](./objects/post.md)                                             | Content, 관계 구조, 공개 범위, 후보성 정책 | [Profile](./objects/profile.md), [Media](./objects/media.md)                                             |
