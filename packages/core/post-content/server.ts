@@ -100,7 +100,6 @@ export function postContentDocumentToText(value: unknown): string {
 export function postContentDocumentToHtml(value: unknown): string {
   const { body } = canonicalizePostContentDocument(value);
   const node = postContentSchema.nodeFromJSON(body);
-  node.check();
 
   const document = new JSDOM().window.document;
   const container = document.createElement('div');
