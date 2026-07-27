@@ -41,17 +41,20 @@ builder.mutationField('completeMediaUpload', (t) =>
         throw new Error('Media Storage Service is not configured');
       }
 
-      const response = await globalThis.fetch(
-        new URL(`/v1/uploads/${encodeURIComponent(media.storageReference)}`, mediaStorageOrigin),
-        {
-          method: 'HEAD',
-          headers: { Authorization: `Bearer ${mediaStorageApiKey}` },
-          signal: AbortSignal.any([
-            ctx.c.req.raw.signal,
-            AbortSignal.timeout(MEDIA_STORAGE_REQUEST_TIMEOUT_MS),
-          ]),
-        },
-      );
+      const completionPath = `/v1/uploads/${encodeURIComponent(media.storageReference)}`;
+      const completionUrl = new URL(completionPath, mediaStorageOrigin);
+      if (completionUrl.pathname !== completionPath) {
+        throw new Error('Media Storage Service returned an unsafe upload reference');
+      }
+
+      const response = await globalThis.fetch(completionUrl, {
+        method: 'HEAD',
+        headers: { Authorization: `Bearer ${mediaStorageApiKey}` },
+        signal: AbortSignal.any([
+          ctx.c.req.raw.signal,
+          AbortSignal.timeout(MEDIA_STORAGE_REQUEST_TIMEOUT_MS),
+        ]),
+      });
       if (response.status === 404) {
         throw new Error('Media upload is not complete');
       }

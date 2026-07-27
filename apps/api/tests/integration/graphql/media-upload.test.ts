@@ -298,6 +298,28 @@ describe('Local Media upload GraphQL 경계', () => {
     }
   });
 
+  test('dot-segment opaque reference는 완료 endpoint 밖으로 정규화하지 않는다', async (t) => {
+    let fetchCalls = 0;
+    t.mock.method(globalThis, 'fetch', async () => {
+      fetchCalls += 1;
+      return new Response(null, { status: 204 });
+    });
+    const auth = await createAuthenticatedSession();
+
+    for (const storageReference of ['.', '..']) {
+      const { id } = await createUploadingMedia(auth.account.id, auth.profile.id, storageReference);
+      const result = await requestCompleteMediaUpload(id, auth.token);
+      assert.ok(result.errors?.[0]);
+      assert.equal(result.data, null);
+    }
+
+    assert.equal(fetchCalls, 0);
+    for (const unchanged of await db.select().from(Media)) {
+      assert.equal(unchanged.state, MediaState.UPLOADING);
+      assert.equal(unchanged.readyAt, null);
+    }
+  });
+
   test('반복 완료 요청은 같은 Ready Media와 최초 readyAt을 유지한다', async (t) => {
     let fetchCalls = 0;
     t.mock.method(globalThis, 'fetch', async () => {
