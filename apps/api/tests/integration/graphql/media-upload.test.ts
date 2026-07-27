@@ -154,6 +154,14 @@ describe('Local Media upload 시작 GraphQL 경계', () => {
         },
         { status: 201 },
       ),
+      Response.json(
+        {
+          expiresAt: uploadExpiresAt,
+          id: 'provider-opaque-reference',
+          uploadUrl: 'data:text/plain,not-an-upload-url',
+        },
+        { status: 201 },
+      ),
     ]) {
       t.mock.method(
         globalThis,

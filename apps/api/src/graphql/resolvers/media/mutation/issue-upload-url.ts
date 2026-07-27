@@ -6,7 +6,7 @@ import { MediaObject } from '../ref';
 
 const uploadResponseSchema = z.object({
   id: z.string().min(1),
-  uploadUrl: z.url(),
+  uploadUrl: z.httpUrl(),
   expiresAt: z.string(),
 });
 
