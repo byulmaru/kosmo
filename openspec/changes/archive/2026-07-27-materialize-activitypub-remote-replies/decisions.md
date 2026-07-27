@@ -69,9 +69,9 @@
 - Decision Date: 2026-07-27
 - Decision Class: Upstream Change Required
 - Authority / Provenance: 없음.
-- Status: Blocked
+- Status: Superseded
 - Context / Problem: 장기적으로 미해석 Parent를 가져오고 먼저 top-level로 저장된 Post에 관계를 연결할 필요가 있을 수 있지만 fetch 시점, 재귀 깊이, SSRF/권한, parsing limit, 기존 Post update/backfill, retry와 비용 한계가 아직 canonical 또는 Linear 계약으로 승인되지 않았다.
-- Decision Outcome: PROD-358은 해당 fetch·update lifecycle을 구현하거나 영구 미지원으로 확정하지 않는다. 향후 필요하면 canonical 문서와 별도 Linear 계약에서 먼저 범위와 안전 한계를 승인한다.
+- Decision Outcome: PROD-358은 해당 fetch·update lifecycle을 구현하거나 영구 미지원으로 확정하지 않는다. 이 항목은 현재 change의 구현 decision이 아니므로 archive 시점에 decision record에서는 supersede하고, 향후 필요하면 canonical 문서와 별도 Linear 계약에서 새로 범위와 안전 한계를 승인한다.
 - Alternatives Considered: 현재 OpenSpec에서 fetch 방향만 미리 고정, 단순 one-hop fetch를 암묵 구현. upstream authority 없이 후속 제품·운영 계약을 선점하므로 채택하지 않는다.
 - Consequences: 현재 top-level fallback을 Parent 관계의 영구 폐기 정책으로 인용할 수 없다.
 - Confirmation / Follow-up: 후속 계약이 생기기 전에는 구현 task에 포함하지 않는다.
@@ -83,3 +83,4 @@
 ## Superseded Decisions
 
 - `현재 slice는 미해석 Parent를 fetch하지 않고 materialization을 보류한다`는 2026-07-27 top-level fallback 결정으로 대체됐다.
+- `장기 Parent fetch와 관계 update lifecycle은 별도 upstream 계약이 필요하다`는 현재 change의 결정이 아니라 후속 upstream 미결정이므로 `Remaining Decisions`에만 유지한다.
