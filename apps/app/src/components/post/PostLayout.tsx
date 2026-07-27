@@ -1,4 +1,4 @@
-import { Link, useRouter } from 'expo-router';
+import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -10,11 +10,7 @@ import { radii, spacing, typography } from '@/theme/tokens';
 import { PostBody } from './PostBody';
 import { PostSourcePreview } from './PostSourcePresentationView';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
-import type {
-  PostPresentationLinkRenderer,
-  PostPresentationLinkTarget,
-  SourcePostPresentationData,
-} from './PostSourcePresentationView';
+import type { SourcePostPresentationData } from './PostSourcePresentationView';
 
 const PostLayoutFragment = graphql`
   fragment PostLayout_post on Post {
@@ -54,43 +50,10 @@ const visibilityLabels: Record<string, string> = {
 };
 
 export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
-  const router = useRouter();
   const theme = useTheme();
   const post = useFragment(PostLayoutFragment, postKey);
   const profileHref = `/${post.profile.relativeHandle}` as const;
-  const detailHref = `/${post.profile.relativeHandle}/${post.id}` as const;
   const source = post.repostSource;
-  const sourceProfileHref = source ? (`/${source.profile.relativeHandle}` as const) : null;
-  const sourcePostHref = source
-    ? (`/${source.profile.relativeHandle}/${source.id}` as const)
-    : null;
-  const hrefs =
-    sourceProfileHref && sourcePostHref
-      ? ({
-          postAuthor: profileHref,
-          postDetail: detailHref,
-          sourceAuthor: sourceProfileHref,
-          sourcePost: sourcePostHref,
-        } satisfies Record<PostPresentationLinkTarget, string>)
-      : null;
-  const renderLink: PostPresentationLinkRenderer = ({ accessibilityLabel, children, target }) => {
-    const href = hrefs?.[target];
-    if (!href) {
-      throw new Error('Post detail Source link requires a visible direct Source.');
-    }
-
-    return (
-      <Link asChild href={href}>
-        <Pressable
-          accessibilityLabel={accessibilityLabel}
-          accessibilityRole="link"
-          style={styles.presentationLink}
-        >
-          {children}
-        </Pressable>
-      </Link>
-    );
-  };
   const presentationSource: SourcePostPresentationData | null = source
     ? {
         content: source.content
@@ -125,13 +88,8 @@ export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
         <ProfileNameBlock href={profileHref} profile={post.profile} />
         <View style={styles.body}>
           <PostBody post={post} size="lg" />
-          {presentationSource && sourcePostHref ? (
-            <PostSourcePreview
-              onSourcePostPress={() => router.push(sourcePostHref)}
-              renderLink={renderLink}
-              source={presentationSource}
-              style={styles.source}
-            />
+          {presentationSource ? (
+            <PostSourcePreview source={presentationSource} style={styles.source} />
           ) : null}
           <Text style={[styles.meta, { color: theme.textSecondary }]}>
             {formatPostDate(post.createdAt)} ·{' '}
@@ -150,7 +108,6 @@ const styles = StyleSheet.create({
   content: { flex: 1, gap: spacing.xs, minWidth: 0 },
   body: { minWidth: 0 },
   meta: { fontFamily: 'SUIT', marginTop: 6, textAlign: 'right', ...typography.xsm },
-  presentationLink: { minWidth: 0 },
   reactionSummary: { marginTop: spacing.lg },
   source: { marginTop: spacing.sm },
 });

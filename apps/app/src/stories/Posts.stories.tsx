@@ -14,14 +14,10 @@ import { PostListItem } from '@/components/post/PostListItem';
 import { PostSourcePresentationView } from '@/components/post/PostSourcePresentationView';
 import { PostThreadLayout } from '@/components/post/PostThreadLayout';
 import { formatTimelineTimestamp } from '@/lib/date';
-import { spacing, typography } from '@/theme/tokens';
 import { longBody, post, profile, profileWithPosts, timeline } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type {
-  PostPresentationLinkRenderer,
-  PostSourcePresentationData,
-} from '@/components/post/PostSourcePresentationView';
+import type { PostSourcePresentationData } from '@/components/post/PostSourcePresentationView';
 import type { PostDetailThreadIdentityStoryQuery } from './__generated__/PostDetailThreadIdentityStoryQuery.graphql';
 import type { PostsStoriesQuery as PostsStoriesQueryType } from './__generated__/PostsStoriesQuery.graphql';
 import type { StoryPost } from './fixtures';
@@ -453,23 +449,7 @@ type PostNode = Extract<
 >;
 
 type PostsStoryArgs = {
-  onPostAuthor?: ReturnType<typeof fn>;
-  onPostDetail?: ReturnType<typeof fn>;
   onRetry?: ReturnType<typeof fn>;
-  onSourceAuthor?: ReturnType<typeof fn>;
-  onSourcePost?: ReturnType<typeof fn>;
-};
-
-type PresentationCallbacks = {
-  postAuthor: ReturnType<typeof fn>;
-  postDetail: ReturnType<typeof fn>;
-  sourceAuthor: ReturnType<typeof fn>;
-  sourcePost: ReturnType<typeof fn>;
-};
-
-type PresentationStoryProps = {
-  callbacks: PresentationCallbacks;
-  postId: string;
 };
 
 function usePostsStoryData() {
@@ -548,18 +528,6 @@ function toPostSourcePresentationData(post: StoryPost): PostSourcePresentationDa
           profile: repostSource.profile,
         }
       : null,
-  };
-}
-
-function requirePresentationCallbacks(args: PostsStoryArgs): PresentationCallbacks {
-  if (!args.onPostAuthor || !args.onPostDetail || !args.onSourceAuthor || !args.onSourcePost) {
-    throw new Error('Repost/Quote presentation stories require isolated link callbacks.');
-  }
-  return {
-    postAuthor: args.onPostAuthor,
-    postDetail: args.onPostDetail,
-    sourceAuthor: args.onSourceAuthor,
-    sourcePost: args.onSourcePost,
   };
 }
 
@@ -654,11 +622,10 @@ function PostListCatalog({ onRetry }: PostsStoryArgs) {
 
 function ProductionRepostQuoteLists() {
   const data = usePostsStoryData();
-  const pathname = usePathname();
 
   return (
     <Catalog>
-      <Text testID="current-story-pathname">{pathname}</Text>
+      <StoryPathname testID="current-story-pathname" />
       <View testID="production-home-reposts">
         <PostList homeTimeline={data.homeTimeline} />
       </View>
@@ -669,29 +636,14 @@ function ProductionRepostQuoteLists() {
   );
 }
 
-function RepostQuotePresentationStory({ callbacks, postId }: PresentationStoryProps) {
+function RepostQuotePresentationStory({ postId }: { postId: string }) {
   const post = requireStoryPostById(storyPosts, postId);
-  const renderMockLink: PostPresentationLinkRenderer = ({
-    accessibilityLabel,
-    children,
-    target,
-  }) => (
-    <Pressable
-      accessibilityLabel={accessibilityLabel}
-      accessibilityRole="link"
-      onPress={callbacks[target]}
-    >
-      {children}
-    </Pressable>
-  );
 
   return (
-    <PostSourcePresentationView
-      onPostPress={callbacks.postDetail}
-      onSourcePostPress={callbacks.sourcePost}
-      post={toPostSourcePresentationData(post)}
-      renderLink={renderMockLink}
-    />
+    <Catalog>
+      <StoryPathname testID="presentation-story-pathname" />
+      <PostSourcePresentationView post={toPostSourcePresentationData(post)} />
+    </Catalog>
   );
 }
 
@@ -705,11 +657,10 @@ function ComposerStory() {
 
 function LinkedPostListItemStory() {
   const { posts } = usePostsStoryData();
-  const pathname = usePathname();
 
   return (
     <Catalog>
-      <Text testID="current-story-pathname">{pathname}</Text>
+      <StoryPathname testID="current-story-pathname" />
       <PostListItem post={requireFragment(requirePost(posts, 14).listItem, 'linked post item')} />
     </Catalog>
   );
@@ -719,12 +670,38 @@ function LongPureRepostListItemStory() {
   const { posts } = usePostsStoryData();
 
   return (
-    <PostListItem
-      post={requireFragment(
-        requirePostById(posts, longPureRepost.id).listItem,
-        'long pure repost list item',
-      )}
-    />
+    <Catalog>
+      <PostListItem
+        post={requireFragment(
+          requirePostById(posts, longPureRepost.id).listItem,
+          'long pure repost list item',
+        )}
+      />
+    </Catalog>
+  );
+}
+
+function ProductionPostListItemStory({ postId }: { postId: string }) {
+  const { posts } = usePostsStoryData();
+
+  return (
+    <Catalog>
+      <StoryPathname testID="presentation-story-pathname" />
+      <PostListItem
+        post={requireFragment(
+          requirePostById(posts, postId).listItem,
+          `production post list item ${postId}`,
+        )}
+      />
+    </Catalog>
+  );
+}
+
+function StoryPathname({ testID }: { testID: string }) {
+  return (
+    <Text style={{ display: 'none' }} testID={testID}>
+      {usePathname()}
+    </Text>
   );
 }
 
@@ -947,7 +924,7 @@ export const ProductionRepostQuoteListIntegration: Story = {
     ).toHaveLength(1);
     expect(
       repostOfQuoteRow!.querySelectorAll('a[href="/@source@remote.example/post-source-quote"]'),
-    ).toHaveLength(1);
+    ).toHaveLength(2);
     expect(quoteOfQuoteRow!.querySelectorAll('[data-testid="source-post-preview"]')).toHaveLength(
       1,
     );
@@ -1012,109 +989,90 @@ export const ProductionRepostQuoteListIntegration: Story = {
 };
 
 export const PureRepost: Story = {
-  args: {
-    onPostAuthor: fn(),
-    onPostDetail: fn(),
-    onSourceAuthor: fn(),
-    onSourcePost: fn(),
-  },
-  play: async ({ args, canvasElement }) => {
-    const root = within(canvasElement).getByTestId('post-source-presentation');
-    const canvas = within(root);
-    expect(canvas.getAllByRole('link')).toHaveLength(3);
-    const repostIcon = canvas.getByText('↻');
-    const repostLabel = canvas.getByText('재게시한 코스모 사용자님이 재게시함');
-    const repostAuthorLink = canvas.getByLabelText('재게시한 코스모 사용자 프로필 보기');
-    const sourceAuthorName = canvas.getByText('아주 긴 Source 작성자 표시 이름');
-    const sourceAuthorLink = canvas.getByLabelText('아주 긴 Source 작성자 표시 이름 프로필 보기');
-    const sourceAvatar = canvas.getByLabelText('아주 긴 Source 작성자 표시 이름 프로필 이미지');
-    expect(repostAuthorLink.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
-    const linkGap =
-      sourceAuthorLink.getBoundingClientRect().top -
-      repostAuthorLink.getBoundingClientRect().bottom;
-    expect(linkGap).toBeGreaterThanOrEqual(0);
-    expect(linkGap).toBeLessThanOrEqual(1);
-    expect(repostLabel.getBoundingClientRect().height).toBeLessThanOrEqual(
-      typography.sm.lineHeight,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const article = canvas.getByRole('article');
+    const standardRow = within(article).getByTestId('post-list-standard-row');
+    const sourceAvatar = within(standardRow).getByLabelText(
+      '아주 긴 Source 작성자 표시 이름 프로필 이미지',
     );
-    expect(repostLabel).toHaveStyle({ fontWeight: '400' });
-    expect(
-      Math.abs(
-        repostIcon.getBoundingClientRect().right - sourceAvatar.getBoundingClientRect().right,
-      ),
-    ).toBeLessThanOrEqual(1);
-    expect(
-      Math.abs(
-        repostLabel.getBoundingClientRect().left - sourceAuthorName.getBoundingClientRect().left,
-      ),
-    ).toBeLessThanOrEqual(1);
-    const attributionGap =
-      sourceAuthorName.getBoundingClientRect().top - repostLabel.getBoundingClientRect().bottom;
-    expect(attributionGap).toBeGreaterThanOrEqual(0);
-    expect(attributionGap).toBeLessThanOrEqual(spacing.xs);
+
+    expect(canvas.getAllByText('재게시한 코스모 사용자님이 재게시함')).toHaveLength(1);
+    expect(canvas.getAllByRole('article')).toHaveLength(1);
+    expect(article.querySelector('[role="article"]')).toBeNull();
+    expect(article.querySelectorAll('[data-testid="post-list-standard-row"]')).toHaveLength(1);
+    expect(article.querySelector('[data-testid="post-source-presentation"]')).toBeNull();
+    expect(article.querySelector('[data-testid="source-post-preview"]')).toBeNull();
+    expect(getComputedStyle(article).borderBottomWidth).toBe('1px');
+    expect(sourceAvatar.getBoundingClientRect().width).toBe(48);
+    expect(sourceAvatar.getBoundingClientRect().height).toBe(48);
+    expect(article.querySelector('a a')).toBeNull();
+    expect(article.querySelector('[role="link"] [role="link"]')).toBeNull();
+
+    const repostAuthorLink = canvas.getByLabelText('재게시한 코스모 사용자 프로필 보기');
     await userEvent.click(repostAuthorLink);
-    await expect(args.onPostAuthor).toHaveBeenCalledTimes(1);
-    await expect(args.onSourceAuthor).toHaveBeenCalledTimes(0);
-    await expect(args.onSourcePost).toHaveBeenCalledTimes(0);
-    await userEvent.click(sourceAuthorLink);
-    await expect(args.onPostAuthor).toHaveBeenCalledTimes(1);
-    await expect(args.onSourceAuthor).toHaveBeenCalledTimes(1);
-    await expect(args.onSourcePost).toHaveBeenCalledTimes(0);
-    await userEvent.click(canvas.getByTestId('source-post-body'));
-    await expect(args.onPostAuthor).toHaveBeenCalledTimes(1);
-    await expect(args.onSourceAuthor).toHaveBeenCalledTimes(1);
-    await expect(args.onSourcePost).toHaveBeenCalledTimes(1);
+    expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent('/@reposter');
+
+    const sourceAuthorLink = standardRow.querySelector<HTMLAnchorElement>(
+      'a[href="/@source@remote.example"]',
+    );
+    expect(sourceAuthorLink).not.toBeNull();
+    await userEvent.click(sourceAuthorLink!);
+    expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
+      '/@source@remote.example',
+    );
+
+    const sourceTimestampLink = standardRow.querySelector<HTMLAnchorElement>(
+      'a[href="/@source@remote.example/post-source"]',
+    );
+    expect(sourceTimestampLink).not.toBeNull();
+    await userEvent.click(sourceTimestampLink!);
+    expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
+      '/@source@remote.example/post-source',
+    );
+
+    await userEvent.click(
+      within(standardRow).getByText(/원문 작성자의 긴 본문과 줄바꿈을 표시합니다/),
+    );
+    expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
+      '/@source@remote.example/post-source',
+    );
   },
-  render: (args) => (
-    <RepostQuotePresentationStory
-      callbacks={requirePresentationCallbacks(args)}
-      postId="post-repost"
-    />
-  ),
+  render: () => <ProductionPostListItemStory postId="post-repost" />,
 };
 
 export const PureRepostOfQuote: Story = {
-  args: {
-    onPostAuthor: fn(),
-    onPostDetail: fn(),
-    onSourceAuthor: fn(),
-    onSourcePost: fn(),
-  },
-  play: async ({ args, canvasElement }) => {
-    const root = within(canvasElement).getByTestId('post-source-presentation');
-    const canvas = within(root);
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const article = canvas.getByRole('article');
+    const standardRow = within(article).getByTestId('post-list-standard-row');
+
     expect(canvas.queryAllByTestId('source-post-preview')).toHaveLength(0);
-    expect(canvas.getByText('아주 긴 Source 작성자 표시 이름')).toBeVisible();
-    expect(canvas.getByText('첫 번째 direct Source Quote의 본문입니다.')).toBeVisible();
-    expect(root.textContent).not.toContain(
+    expect(canvas.queryAllByTestId('post-source-presentation')).toHaveLength(0);
+    expect(within(standardRow).getByText('아주 긴 Source 작성자 표시 이름')).toBeVisible();
+    expect(
+      within(standardRow).getByText('첫 번째 direct Source Quote의 본문입니다.'),
+    ).toBeVisible();
+    expect(article.textContent).not.toContain(
       '두 번째 Source의 본문은 목록에서 full preview하지 않습니다.',
     );
-    expect(canvas.getAllByLabelText('원문 게시글 보기')).toHaveLength(1);
     expect(canvas.queryByLabelText('인용한 게시글 보기')).not.toBeInTheDocument();
-    expect(root.querySelector('a a')).toBeNull();
-    expect(root.querySelector('[role="link"] [role="link"]')).toBeNull();
-    await userEvent.click(canvas.getByTestId('source-post-body'));
-    await expect(args.onPostAuthor).not.toHaveBeenCalled();
-    await expect(args.onPostDetail).not.toHaveBeenCalled();
-    await expect(args.onSourceAuthor).not.toHaveBeenCalled();
-    await expect(args.onSourcePost).toHaveBeenCalledTimes(1);
+    expect(article.querySelector('a[href="/@deep-source@remote.example"]')).toBeNull();
+    expect(article.querySelector('a a')).toBeNull();
+    expect(article.querySelector('[role="link"] [role="link"]')).toBeNull();
+
+    await userEvent.click(
+      within(standardRow).getByText('첫 번째 direct Source Quote의 본문입니다.'),
+    );
+    expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
+      '/@source@remote.example/post-source-quote',
+    );
   },
-  render: (args) => (
-    <RepostQuotePresentationStory
-      callbacks={requirePresentationCallbacks(args)}
-      postId="post-repost-of-quote"
-    />
-  ),
+  render: () => <ProductionPostListItemStory postId="post-repost-of-quote" />,
 };
 
 export const Quote: Story = {
-  args: {
-    onPostAuthor: fn(),
-    onPostDetail: fn(),
-    onSourceAuthor: fn(),
-    onSourcePost: fn(),
-  },
-  play: async ({ args, canvasElement }) => {
+  play: async ({ canvasElement }) => {
     const root = within(canvasElement).getByTestId('post-source-presentation');
     const canvas = within(root);
     expect(canvas.getByText('이 원문에 덧붙이는 인용자의 본문입니다.')).toBeVisible();
@@ -1132,29 +1090,22 @@ export const Quote: Story = {
     expect(postBody.closest('[role="link"]')).toBeNull();
 
     await userEvent.click(postBody);
-    await expect(args.onPostDetail).toHaveBeenCalledTimes(1);
-    await userEvent.click(canvas.getByLabelText('재게시한 코스모 사용자의 게시글 보기'));
-    await expect(args.onPostDetail).toHaveBeenCalledTimes(2);
-    await expect(args.onPostAuthor).not.toHaveBeenCalled();
-    await expect(args.onSourceAuthor).not.toHaveBeenCalled();
-    await expect(args.onSourcePost).not.toHaveBeenCalled();
+    expect(within(canvasElement).getByTestId('presentation-story-pathname')).toHaveTextContent(
+      '/@reposter/post-quote',
+    );
+    const pathnameBeforePadding = within(canvasElement).getByTestId(
+      'presentation-story-pathname',
+    ).textContent;
+    await userEvent.click(preview);
+    expect(within(canvasElement).getByTestId('presentation-story-pathname')).toHaveTextContent(
+      pathnameBeforePadding ?? '',
+    );
   },
-  render: (args) => (
-    <RepostQuotePresentationStory
-      callbacks={requirePresentationCallbacks(args)}
-      postId="post-quote"
-    />
-  ),
+  render: () => <RepostQuotePresentationStory postId="post-quote" />,
 };
 
 export const QuoteOfQuote: Story = {
-  args: {
-    onPostAuthor: fn(),
-    onPostDetail: fn(),
-    onSourceAuthor: fn(),
-    onSourcePost: fn(),
-  },
-  play: async ({ args, canvasElement }) => {
+  play: async ({ canvasElement }) => {
     const root = within(canvasElement).getByTestId('post-source-presentation');
     const canvas = within(root);
     expect(canvas.getByText('Source Quote를 인용하는 outer Quote 본문입니다.')).toBeVisible();
@@ -1169,51 +1120,29 @@ export const QuoteOfQuote: Story = {
     expect(root.querySelector('a a')).toBeNull();
     expect(root.querySelector('[role="link"] [role="link"]')).toBeNull();
     await userEvent.click(canvas.getByTestId('source-post-body'));
-    await expect(args.onPostAuthor).not.toHaveBeenCalled();
-    await expect(args.onPostDetail).not.toHaveBeenCalled();
-    await expect(args.onSourceAuthor).not.toHaveBeenCalled();
-    await expect(args.onSourcePost).toHaveBeenCalledTimes(1);
+    expect(within(canvasElement).getByTestId('presentation-story-pathname')).toHaveTextContent(
+      '/@source@remote.example/post-source-quote',
+    );
   },
-  render: (args) => (
-    <RepostQuotePresentationStory
-      callbacks={requirePresentationCallbacks(args)}
-      postId="post-quote-of-quote"
-    />
-  ),
+  render: () => <RepostQuotePresentationStory postId="post-quote-of-quote" />,
 };
 
 export const ReplyQuote: Story = {
-  args: {
-    onPostAuthor: fn(),
-    onPostDetail: fn(),
-    onSourceAuthor: fn(),
-    onSourcePost: fn(),
-  },
-  play: async ({ args, canvasElement }) => {
+  play: async ({ canvasElement }) => {
     const root = within(canvasElement).getByTestId('post-source-presentation');
     const canvas = within(root);
     expect(canvas.getByText('답글 관계를 유지하는 인용입니다.')).toBeVisible();
     expect(canvas.getByTestId('source-post-preview')).toBeVisible();
 
     await userEvent.click(canvas.getByTestId('post-body'));
-    await expect(args.onPostDetail).toHaveBeenCalledTimes(1);
-    await expect(args.onSourcePost).not.toHaveBeenCalled();
+    expect(within(canvasElement).getByTestId('presentation-story-pathname')).toHaveTextContent(
+      '/@reposter/post-reply-quote',
+    );
   },
-  render: (args) => (
-    <RepostQuotePresentationStory
-      callbacks={requirePresentationCallbacks(args)}
-      postId="post-reply-quote"
-    />
-  ),
+  render: () => <RepostQuotePresentationStory postId="post-reply-quote" />,
 };
 
 export const QuoteWithoutSource: Story = {
-  args: {
-    onPostAuthor: fn(),
-    onPostDetail: fn(),
-    onSourceAuthor: fn(),
-    onSourcePost: fn(),
-  },
   play: async ({ canvasElement }) => {
     const root = within(canvasElement).getByTestId('post-source-presentation');
     const canvas = within(root);
@@ -1221,62 +1150,32 @@ export const QuoteWithoutSource: Story = {
     expect(canvas.queryByTestId('source-post-preview')).not.toBeInTheDocument();
     expect(canvas.getAllByRole('link')).toHaveLength(2);
   },
-  render: (args) => (
-    <RepostQuotePresentationStory
-      callbacks={requirePresentationCallbacks(args)}
-      postId="post-quote-source-null"
-    />
-  ),
+  render: () => <RepostQuotePresentationStory postId="post-quote-source-null" />,
 };
 
 export const OrdinaryPost: Story = {
-  args: {
-    onPostAuthor: fn(),
-    onPostDetail: fn(),
-    onSourceAuthor: fn(),
-    onSourcePost: fn(),
-  },
   play: async ({ canvasElement }) => {
-    const root = within(canvasElement).getByTestId('post-source-presentation');
-    const canvas = within(root);
+    const canvas = within(canvasElement);
+    const article = canvas.getByRole('article');
+    const standardRow = within(article).getByTestId('post-list-standard-row');
     expect(canvas.getByText('짧은 본문 한 줄.')).toBeVisible();
-    expect(canvas.getByTestId('post-timestamp')).toHaveTextContent(
-      formatTimelineTimestamp(shortPost.createdAt),
-    );
     expect(canvas.queryByTestId('source-post-preview')).not.toBeInTheDocument();
-    expect(canvas.getAllByRole('link')).toHaveLength(2);
+    expect(article.querySelectorAll('[data-testid="post-list-standard-row"]')).toHaveLength(1);
+    await userEvent.click(within(standardRow).getByText('짧은 본문 한 줄.'));
+    expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent('/@kosmo/short');
   },
-  render: (args) => (
-    <RepostQuotePresentationStory callbacks={requirePresentationCallbacks(args)} postId="short" />
-  ),
+  render: () => <ProductionPostListItemStory postId="short" />,
 };
 
 export const InvalidContentlessReplySource: Story = {
-  args: {
-    onPostAuthor: fn(),
-    onPostDetail: fn(),
-    onSourceAuthor: fn(),
-    onSourcePost: fn(),
-  },
   play: async ({ canvasElement }) => {
     expect(within(canvasElement).queryByTestId('post-source-presentation')).not.toBeInTheDocument();
   },
-  render: (args) => (
-    <RepostQuotePresentationStory
-      callbacks={requirePresentationCallbacks(args)}
-      postId="post-invalid-contentless-reply-source"
-    />
-  ),
+  render: () => <RepostQuotePresentationStory postId="post-invalid-contentless-reply-source" />,
 };
 
 export const LinkedSourceQuote: Story = {
-  args: {
-    onPostAuthor: fn(),
-    onPostDetail: fn(),
-    onSourceAuthor: fn(),
-    onSourcePost: fn(),
-  },
-  play: async ({ args, canvasElement }) => {
+  play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const postBody = canvas.getByTestId('post-body');
     const sourcePreview = canvas.getByTestId('source-post-preview');
@@ -1293,43 +1192,27 @@ export const LinkedSourceQuote: Story = {
         within(sourcePreview).getByLabelText('안전한 외부 링크, https://example.com/path'),
       );
       await expect(openURL).toHaveBeenCalledTimes(2);
-      await expect(args.onPostDetail).not.toHaveBeenCalled();
-      expect(args.onSourcePost).not.toHaveBeenCalled();
+      expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent('/@kosmo/post-1');
 
       await userEvent.click(within(postBody).getByText(/두 번째 문단입니다\./));
-      await expect(args.onPostDetail).toHaveBeenCalledTimes(1);
-      await expect(args.onSourcePost).not.toHaveBeenCalled();
+      expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
+        '/@reposter/post-quote-linked-source',
+      );
     } finally {
       Linking.openURL = originalOpenURL;
     }
   },
-  render: (args) => (
-    <RepostQuotePresentationStory
-      callbacks={requirePresentationCallbacks(args)}
-      postId="post-quote-linked-source"
-    />
-  ),
+  render: () => <RepostQuotePresentationStory postId="post-quote-linked-source" />,
 };
 
 export const RepostQuoteLongContentMobile: Story = {
-  args: {
-    onPostAuthor: fn(),
-    onPostDetail: fn(),
-    onSourceAuthor: fn(),
-    onSourcePost: fn(),
-  },
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: async ({ canvasElement }) => {
     const root = within(canvasElement).getByTestId('post-source-presentation');
     expect(root).toBeVisible();
     expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth);
   },
-  render: (args) => (
-    <RepostQuotePresentationStory
-      callbacks={requirePresentationCallbacks(args)}
-      postId="post-quote-long"
-    />
-  ),
+  render: () => <RepostQuotePresentationStory postId="post-quote-long" />,
 };
 
 export const ProductionPureRepostLongAuthorMobile: Story = {
