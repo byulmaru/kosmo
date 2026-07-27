@@ -1478,6 +1478,73 @@ export const PostDetailThreadRoute: Story = {
   ),
 };
 
+export const PostDetailCurrentQuoteSourceNavigation: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostDetailQuery: {
+          data: {
+            node: {
+              ...quotePost,
+              reactionCounts: [],
+              replyAncestors: [],
+              replyDescendants: {
+                edges: [],
+                pageInfo: { endCursor: null, hasNextPage: false },
+              },
+            },
+          },
+        },
+      },
+    },
+    router: {
+      params: {
+        postId: quotePost.id,
+        profileHandle: quotePost.profile.relativeHandle,
+      },
+      pathname: `/${quotePost.profile.relativeHandle}/${quotePost.id}`,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const currentQuote = within(await canvas.findByTestId('post-thread-current-post-quote'));
+
+    expect(currentQuote.getAllByTestId('source-post-preview')).toHaveLength(1);
+    expect(
+      currentQuote.queryByRole('link', { name: `${repostAuthor.displayName}의 게시글 보기` }),
+    ).not.toBeInTheDocument();
+    expect(currentQuote.queryByTestId('post-timestamp')).not.toBeInTheDocument();
+    expect(
+      currentQuote
+        .queryByText('이 원문에 덧붙이는 인용자의 본문입니다.')
+        ?.closest(`a[href="/${quotePost.profile.relativeHandle}/${quotePost.id}"]`),
+    ).toBeNull();
+
+    await userEvent.click(
+      currentQuote.getByRole('link', { name: `${sourceAuthor.displayName} 프로필 보기` }),
+    );
+    expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+      `/${sourceAuthor.relativeHandle}`,
+    );
+
+    await userEvent.click(currentQuote.getByRole('link', { name: '원문 게시글 보기' }));
+    expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+      `/${sourceAuthor.relativeHandle}/${sourcePost.id}`,
+    );
+
+    await userEvent.click(currentQuote.getByTestId('source-post-body'));
+    expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+      `/${sourceAuthor.relativeHandle}/${sourcePost.id}`,
+    );
+  },
+  render: () => (
+    <>
+      <Text testID="current-story-pathname">{usePathname()}</Text>
+      <PostDetailScreen />
+    </>
+  ),
+};
+
 export const PureRepostDetailCanonicalizesToSource: Story = {
   parameters: {
     relay: {

@@ -57,10 +57,11 @@
 
 #### Scenario: Quote 자체 Post 이동 보존
 
-- **WHEN** 사용자가 Quote 또는 Reply+Quote의 자체 생성 시각을 활성화하거나 자체 본문 행을 pointer 또는 touch로 활성화한다
+- **WHEN** Home, Profile, Bookmark 또는 상세 thread의 조상·하위 Reply `PostListItem`에서 사용자가 Quote 또는 Reply+Quote의 자체 생성 시각을 활성화하거나 자체 본문 행을 pointer 또는 touch로 활성화한다
 - **THEN** 앱은 Quote Author의 `relativeHandle`과 Quote Post global ID를 사용하는 canonical Post route로 이동한다
 - **AND** direct Source Post route로 잘못 이동하지 않는다
 - **AND** Quote 자체 body의 외부 Link는 Quote Post 이동을 함께 실행하지 않고 자신의 URL로 이동한다
+- **AND** 이미 자기 canonical route를 렌더링하는 현재 상세 `PostLayout`은 self Link나 동일 URL history entry를 추가하지 않고 direct Source 이동만 제공한다
 
 #### Scenario: Author Profile 이동
 
