@@ -4,19 +4,42 @@ import { PUBLIC_COLLECTION } from '@fedify/vocab';
 import { projectRemoteNoteContent } from '@kosmo/core/activitypub-note-content/server';
 import { PostVisibility } from '@kosmo/core/enums';
 import { createPost } from '@kosmo/core/services';
-import { uniqueHref } from './activitypub-uri';
+import { findContentPostByActivityPubUri } from './activitypub-post-uri';
+import { isHttpUri, uniqueHref } from './activitypub-uri';
+import type { DocumentLoader } from '@fedify/fedify';
 import type { Note } from '@fedify/vocab';
 
-const hasReplyTarget = async (note: Note): Promise<boolean> => {
-  if (note.replyTargetIds.length > 0) {
-    return true;
+type ReplyParent =
+  | { readonly kind: 'invalid' | 'none' }
+  | { readonly id: string; readonly kind: 'resolved' };
+
+const denyReplyTargetFetch: DocumentLoader = async (url) => {
+  throw new Error(`Reply Parent fetch is not available for ${url}`);
+};
+
+const resolveReplyParent = async (note: Note): Promise<ReplyParent> => {
+  if (note.replyTargetIds.length === 0) {
+    try {
+      return (await note.getReplyTarget({ documentLoader: denyReplyTargetFetch })) === null
+        ? { kind: 'none' }
+        : { kind: 'invalid' };
+    } catch {
+      return { kind: 'invalid' };
+    }
   }
 
-  try {
-    return (await note.getReplyTarget()) !== null;
-  } catch {
-    return true;
+  const replyTargetHref = uniqueHref(note.replyTargetIds);
+  if (!replyTargetHref) {
+    return { kind: 'invalid' };
   }
+
+  const replyTarget = new URL(replyTargetHref);
+  if (!isHttpUri(replyTarget)) {
+    return { kind: 'invalid' };
+  }
+
+  const id = await findContentPostByActivityPubUri(replyTarget);
+  return id ? { id, kind: 'resolved' } : { kind: 'invalid' };
 };
 
 export const handleInboundCreateNote = async ({
@@ -37,7 +60,12 @@ export const handleInboundCreateNote = async ({
   }
 
   const attributionUri = uniqueHref(note.attributionIds);
-  if (attributionUri !== actorUri || (await hasReplyTarget(note))) {
+  if (attributionUri !== actorUri) {
+    return;
+  }
+
+  const replyParent = await resolveReplyParent(note);
+  if (replyParent.kind === 'invalid') {
     return;
   }
 
@@ -71,6 +99,7 @@ export const handleInboundCreateNote = async ({
     profileId,
     publishedAt: note.published,
     receivedAt,
+    ...(replyParent.kind === 'resolved' ? { replyParentId: replyParent.id } : {}),
     visibility,
   });
 };

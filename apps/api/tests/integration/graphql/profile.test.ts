@@ -1543,6 +1543,58 @@ describe('GraphQL remote profile boundary', () => {
     }
   });
 
+  test('reads an inbound materialized remote Reply through the existing Post relation', async () => {
+    const auth = await createAuthenticatedSession();
+    const author = await createStoredActivityPubAuthor({
+      domain: 'reply-materialized.example',
+      handle: 'reply-author',
+    });
+    const parentUri = 'https://reply-materialized.example/notes/parent';
+    const replyUri = 'https://reply-materialized.example/notes/reply';
+    const parent = await materializeRemotePost({
+      actorUri: author.actorUri,
+      objectUri: parentUri,
+      visibility: PostVisibility.PUBLIC,
+    });
+    const reply = await materializeRemotePost({
+      actorUri: author.actorUri,
+      content: '<p>Remote reply</p>',
+      objectUri: replyUri,
+      replyTarget: parentUri,
+      visibility: PostVisibility.PUBLIC,
+    });
+
+    const result = await requestGraphQL<{
+      node: {
+        __typename: 'Post';
+        content: { bodyText: string };
+        id: string;
+        replyParent: { id: string } | null;
+      } | null;
+    }>(
+      `query RemoteReply($id: ID!) {
+        node(id: $id) {
+          __typename
+          ... on Post {
+            id
+            content { bodyText }
+            replyParent { id }
+          }
+        }
+      }`,
+      { id: globalId('Post', reply.post.id) },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.node, {
+      __typename: 'Post',
+      content: { bodyText: 'Remote reply' },
+      id: globalId('Post', reply.post.id),
+      replyParent: { id: globalId('Post', parent.post.id) },
+    });
+  });
+
   test('applies the existing parent authorization matrix to materialized remote Posts', async () => {
     const auth = await createAuthenticatedSession();
     const author = await createStoredActivityPubAuthor({
@@ -2340,6 +2392,7 @@ const materializeRemotePost = async ({
   objectUri,
   publishedAt = null,
   receivedAt = Temporal.Instant.from('2026-07-16T00:00:00Z'),
+  replyTarget,
   summary = null,
   visibility,
 }: {
@@ -2348,6 +2401,7 @@ const materializeRemotePost = async ({
   objectUri: string;
   publishedAt?: Temporal.Instant | null;
   receivedAt?: Temporal.Instant;
+  replyTarget?: string;
   summary?: string | null;
   visibility: typeof PostVisibility.PUBLIC | typeof PostVisibility.UNLISTED;
 }) => {
@@ -2360,6 +2414,7 @@ const materializeRemotePost = async ({
     id: new URL(objectUri),
     mediaType: 'text/html',
     published: publishedAt,
+    ...(replyTarget ? { replyTarget: new URL(replyTarget) } : {}),
     summary,
   });
   const documentLoader = mock.fn(async () => {
