@@ -63,21 +63,17 @@ const artifactGroups = [
   { path: 'apps/api/dist/server', project: process.env.SENTRY_API_PROJECT },
   { path: 'apps/web/dist/server', project: process.env.SENTRY_WEB_BFF_PROJECT },
   { path: 'apps/app/dist', project: process.env.SENTRY_WEB_PROJECT },
-].map((group) => ({ ...group, project: group.project ?? process.env.SENTRY_PROJECT }));
+];
 
 for (const group of artifactGroups) {
   run(sentryCli, ['sourcemaps', 'inject', group.path, '--quiet']);
 }
 
 const walkFiles = async (directory) => {
-  const entries = await readdir(directory, { withFileTypes: true });
-  const nested = await Promise.all(
-    entries.map((entry) => {
-      const entryPath = path.join(directory, entry.name);
-      return entry.isDirectory() ? walkFiles(entryPath) : [entryPath];
-    }),
-  );
-  return nested.flat();
+  const entries = await readdir(directory, { recursive: true, withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile())
+    .map((entry) => path.join(entry.parentPath, entry.name));
 };
 
 for (const group of artifactGroups) {
