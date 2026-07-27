@@ -4,15 +4,21 @@ import { before, describe, it } from 'node:test';
 import { commitMutation } from 'react-relay';
 import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
 import AddReactionMutation from './__generated__/ReactionActionAddReactionMutation.graphql';
-import type { ReactionActionAddReactionMutation } from './__generated__/ReactionActionAddReactionMutation.graphql';
 import DeleteReactionMutation from './__generated__/ReactionActionDeleteReactionMutation.graphql';
+import type { SelectorStoreUpdater } from 'relay-runtime';
+import type { ReactionActionAddReactionMutation } from './__generated__/ReactionActionAddReactionMutation.graphql';
 import type { ReactionActionDeleteReactionMutation } from './__generated__/ReactionActionDeleteReactionMutation.graphql';
 
 const postId = 'post-content';
 const missingPostId = 'post-missing';
 const require = createRequire(import.meta.url);
-let createAddReactionUpdater: typeof import('./ReactionAction').createAddReactionUpdater;
-let createDeleteReactionUpdater: typeof import('./ReactionAction').createDeleteReactionUpdater;
+let createAddReactionUpdater: (
+  postId: string,
+) => SelectorStoreUpdater<ReactionActionAddReactionMutation['response']>;
+let createDeleteReactionUpdater: (
+  postId: string,
+  type: string,
+) => SelectorStoreUpdater<ReactionActionDeleteReactionMutation['response']>;
 
 before(async () => {
   Object.defineProperty(require('react-relay'), 'graphql', {
@@ -59,11 +65,10 @@ function createEnvironment({
 
   let sink: NetworkSink | undefined;
   const environment = new Environment({
-    network: Network.create(
-      () =>
-        Observable.create((nextSink) => {
-          sink = nextSink;
-        }),
+    network: Network.create(() =>
+      Observable.create((nextSink) => {
+        sink = nextSink;
+      }),
     ),
     store: new Store(source),
   });
@@ -160,10 +165,17 @@ describe('ReactionAction Relay cache contract', () => {
       },
       [{ message: 'partial GraphQL error' }],
     );
-    assert.deepEqual(
-      viewerReactionIds(withDataAndErrors.environment),
-      ['reaction-eyes', 'reaction-heart-new'],
-    );
+    assert.deepEqual(viewerReactionIds(withDataAndErrors.environment), [
+      'reaction-eyes',
+      'reaction-heart-new',
+    ]);
+
+    const withoutPayload = createEnvironment();
+    await commitAdd(withoutPayload.environment, withoutPayload.respond, postId, 'HEART', {});
+    assert.deepEqual(viewerReactionIds(withoutPayload.environment), [
+      'reaction-heart',
+      'reaction-eyes',
+    ]);
 
     const withoutPost = createEnvironment({ initialPost: false });
     await commitAdd(withoutPost.environment, withoutPost.respond, missingPostId);
@@ -188,6 +200,25 @@ describe('ReactionAction Relay cache contract', () => {
     });
     assert.deepEqual(viewerReactionIds(existingPost.environment), ['reaction-eyes']);
 
+    const withoutInitialField = createEnvironment({ initialViewerReactions: false });
+    await commitDelete(
+      withoutInitialField.environment,
+      withoutInitialField.respond,
+      postId,
+      'HEART',
+      {
+        deleteReaction: {
+          reactionId: null,
+          post: {
+            __typename: 'Post',
+            id: postId,
+            viewerReactions: [{ __typename: 'Reaction', id: 'reaction-eyes', type: 'EYES' }],
+          },
+        },
+      },
+    );
+    assert.deepEqual(viewerReactionIds(withoutInitialField.environment), ['reaction-eyes']);
+
     const withoutPost = createEnvironment({ initialPost: false });
     await commitDelete(withoutPost.environment, withoutPost.respond, missingPostId, 'HEART', {
       deleteReaction: {
@@ -208,6 +239,13 @@ describe('ReactionAction Relay cache contract', () => {
     await commitDelete(environment, respond);
 
     assert.deepEqual(viewerReactionIds(environment), ['reaction-eyes']);
+
+    const withoutPayload = createEnvironment();
+    await commitDelete(withoutPayload.environment, withoutPayload.respond, postId, 'HEART', {});
+    assert.deepEqual(viewerReactionIds(withoutPayload.environment), [
+      'reaction-heart',
+      'reaction-eyes',
+    ]);
 
     const withoutPost = createEnvironment({ initialPost: false });
     await commitDelete(withoutPost.environment, withoutPost.respond, missingPostId);
