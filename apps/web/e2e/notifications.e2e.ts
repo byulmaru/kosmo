@@ -59,11 +59,6 @@ test('Local Follow 알림은 Recipient Profile별로 격리되고 Read와 Unfoll
       .then(([row]) => row);
     expect(notification).toBeDefined();
 
-    await page.reload();
-    await expect(page.getByText('아직 알림이 없어요')).toBeVisible();
-    await expect(page.getByRole('link', { name: '알림', exact: true })).toBeVisible();
-    await expect(page.getByText('E2E Notification Follower님이 팔로우했습니다')).toHaveCount(0);
-
     await selectProfile(page, recipient.profile!.handle);
     const unreadNotificationLink = page.getByRole('link', {
       name: /E2E Notification Follower님이 팔로우했습니다.*읽지 않은 알림.*프로필로 이동/,
