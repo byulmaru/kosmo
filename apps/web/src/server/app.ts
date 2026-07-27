@@ -41,6 +41,9 @@ app.use('*', async (c, next) => {
 
 app.onError((cause, c) => {
   if (cause instanceof OidcAuthError) {
+    if (cause.status >= 500) {
+      captureUnexpectedError(cause);
+    }
     return c.text(cause.message, cause.status as ContentfulStatusCode);
   }
 

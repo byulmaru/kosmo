@@ -28,6 +28,11 @@
 - **WHEN** Web 앱의 공용 React 경계 아래에서 render 오류가 발생한다
 - **THEN** 시스템은 Web runtime tag와 component stack을 가진 event를 한 번 수집하고 기존 오류 화면을 표시한다
 
+#### Scenario: Nested boundary consumes a render error
+
+- **WHEN** route 또는 session 오류 경계가 외부 공용 경계보다 먼저 Web render 오류를 처리한다
+- **THEN** 내부 경계는 같은 Web reporter로 오류와 component stack을 수집하고 기존 fallback을 표시한다
+
 #### Scenario: Browser runtime error
 
 - **WHEN** 공용 React 경계 밖의 처리되지 않은 오류 또는 처리되지 않은 Promise rejection이 발생한다
@@ -46,6 +51,12 @@
 
 - **WHEN** 인증 header, cookie, GraphQL body 또는 사용자 콘텐츠가 있는 요청에서 서버 예외가 발생한다
 - **THEN** 수집된 event의 exception은 SDK가 만든 값과 동일하고 top-level request, user, extra, contexts와 breadcrumb는 없다
+
+#### Scenario: BFF authentication path has a server failure
+
+- **WHEN** OIDC 또는 GraphQL proxy 설정·upstream 오류가 5xx `OidcAuthError`를 만든다
+- **THEN** 기존 HTTP 오류 응답을 유지하면서 exception을 수집해야 한다
+- **AND** 예상된 4xx 인증 거절은 수집하지 않아야 한다
 
 #### Scenario: Browser interaction precedes failure
 

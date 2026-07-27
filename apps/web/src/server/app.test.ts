@@ -13,18 +13,25 @@ import type {
   discovery as oidcDiscovery,
 } from 'openid-client';
 
-const { authorizationCodeGrant, createSession, discovery, federationFetch, revokeSession } =
-  vi.hoisted(() => ({
-    authorizationCodeGrant: vi.fn<typeof oidcAuthorizationCodeGrant>(),
-    createSession:
-      vi.fn<(identity: { displayName: string; oidcSubject: string }) => Promise<string>>(),
-    discovery: vi.fn<typeof oidcDiscovery>(),
-    federationFetch: vi.fn<typeof federation.fetch>(),
-    revokeSession:
-      vi.fn<
-        (input: { token?: string }) => Promise<{ status: 'REVOKED' | 'ALREADY_UNAUTHENTICATED' }>
-      >(),
-  }));
+const {
+  authorizationCodeGrant,
+  captureUnexpectedError,
+  createSession,
+  discovery,
+  federationFetch,
+  revokeSession,
+} = vi.hoisted(() => ({
+  authorizationCodeGrant: vi.fn<typeof oidcAuthorizationCodeGrant>(),
+  captureUnexpectedError: vi.fn<(cause: unknown) => void>(),
+  createSession:
+    vi.fn<(identity: { displayName: string; oidcSubject: string }) => Promise<string>>(),
+  discovery: vi.fn<typeof oidcDiscovery>(),
+  federationFetch: vi.fn<typeof federation.fetch>(),
+  revokeSession:
+    vi.fn<
+      (input: { token?: string }) => Promise<{ status: 'REVOKED' | 'ALREADY_UNAUTHENTICATED' }>
+    >(),
+}));
 
 vi.mock('openid-client', async (importOriginal) => ({
   ...((await importOriginal()) as object),
@@ -40,6 +47,8 @@ vi.mock('@kosmo/core/services', () => ({
 vi.mock('@kosmo/fedify', () => ({
   federation: { fetch: federationFetch },
 }));
+
+vi.mock('./sentry', () => ({ captureUnexpectedError }));
 
 let staticRoot: string;
 let app: Hono;
@@ -311,6 +320,24 @@ describe('Web logout BFF', () => {
 });
 
 describe('GraphQL proxy', () => {
+  test('captures missing server configuration while preserving its 500 response', async () => {
+    vi.stubEnv('PUBLIC_API_ORIGIN', undefined);
+
+    const response = await app.request('/graphql', {
+      body: '{}',
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(500);
+    expect(await response.text()).toBe('PUBLIC_API_ORIGIN is required');
+    expect(captureUnexpectedError).toHaveBeenCalledOnce();
+    expect(captureUnexpectedError.mock.calls[0]?.[0]).toMatchObject({
+      message: 'PUBLIC_API_ORIGIN is required',
+      status: 500,
+    });
+  });
+
   test.each([
     {
       expectedAuthorization: 'Bearer cookie-token',
