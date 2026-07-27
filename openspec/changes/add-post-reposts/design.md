@@ -1,6 +1,6 @@
 ## Context
 
-PROD-389는 Repost 저장부터 생성·취소, GraphQL 조회·count, Home/Profile 목록, 유니버설 UI와 Notification lifecycle까지 하나의 계약으로 통합 검증한다. Domain Gate는 `docs/domain/objects/post.md`, `docs/domain/objects/notification.md`, `docs/domain/policies/post-list.md`와 ADR 0010·0014에서 확정됐고, 구현은 11개 직접 자식과 PROD-415의 하위 presentation slice인 PROD-453으로 나뉜다.
+PROD-389는 Repost 저장부터 생성·취소, GraphQL 조회·count, Home/Profile 목록, 유니버설 UI와 Notification lifecycle까지 하나의 계약으로 통합 검증한다. Domain Gate는 `docs/domain/objects/post.md`, `docs/domain/objects/notification.md`, `docs/domain/policies/post-list.md`, `docs/design/post-action-bar.md`와 ADR 0010·0014에서 확정됐고, 구현은 11개 직접 자식과 PROD-415의 하위 presentation slice인 PROD-453으로 나뉜다.
 
 PROD-394와 PROD-393이 main에 merge되어 현재 `post` table은 nullable `repost_source_id`와
 `reply_parent_id` self-reference, Active contentless Repost용 partial unique index를 가진다. core
@@ -18,6 +18,9 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 - 권한·visibility·멱등성을 지키는 Repost 생성과 Post Tombstone 취소를 제공한다.
 - Content 없는 Repost는 Source 접근 가능성을 자신의 eligibility에 포함하고, Content 있는 Quote는 Source와
   독립적으로 자신의 Node·Content·목록 후보를 유지한다.
+- 순수 Repost의 presentation·직접 상세 URL과 Action Bar target은 direct Source를 사용하고, Quote는 자체
+  canonical detail과 Source preview navigation을 분리한다.
+- 실제 Post surface의 마지막 sibling에 Action Bar를 배치하고 Repost menu·생성·취소·실패 toast를 제공한다.
 - 기존 Notification projection·Node·inbox·Read·badge 경계에 Repost kind를 추가하고 실패를 source action과 격리한다.
 - 각 Linear 구현 이슈가 자기 구현과 테스트를 소유하고 부모가 최종 vertical flow와 archive를 검증하게 한다.
 
@@ -25,7 +28,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 
 - Quote 작성 action·composer, Mentioned Profiles Repost, Post Media와 ActivityPub Repost/Quote ingress·delivery
 - 별도 Post Kind, Repost table, Quote Source, GraphQL concrete Post subtype
-- Notification retry/outbox/backfill·범용 cleanup worker, 공통 Post Action Bar surface rollout
+- Notification retry/outbox/backfill·범용 cleanup worker, Repost 외 action의 production 조립과 최종 공통 정책
 - 기존 Notification 기반이나 Post list/pagination 체계의 범용 재설계
 
 ## Implementation Guidance
@@ -45,10 +48,11 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
   전역 predicate에 추가하면 Quote와 Quote Content까지 잘못 숨기므로 구조별 조건을 분리해야 한다.
 - Repost count는 viewer-independent지만 Post Node와 `viewerRepost`는 viewer-dependent다. viewer의 block/mute 결과를 count에 섞으면 동일 Post의 count가 viewer마다 달라진다.
 - 현재 `deletePost` payload는 삭제된 Repost의 `postId`만 반환해 Source Post의 최신 count/viewer relation을 정규화할 수 없다. PROD-414는 취소를 실행하되 Source cache를 바꾸지 않고, PROD-471이 서버 결과 기반 취소 cache 동기화를 후속 소유한다.
-- 공용 action UI는 #341로 main에 포함된 PROD-433의 단일 공개 `PostActionBar` 경계를 재사용해야 한다. `PostActionBar`의 composite Post fragment는 private Repost child fragment를 조립하고, child action은 fragment·mutation·pending·파생 상태를 소유한다. PROD-414는 main의 공개 UI를 직접 사용하고 branch 코드를 복사하거나 독립 공개 action leaf를 만들지 않으며, PROD-432의 production full-bar 조립·대상 정책과 접근 가능한 한국어 오류 toast를 소유하지 않는다.
+- 공용 action UI는 #341로 main에 포함된 PROD-433의 단일 공개 `PostActionBar` 경계를 재사용해야 한다. `PostActionBar`의 composite Post fragment는 private Repost child fragment를 조립하고, child action은 fragment·mutation·pending·파생 상태를 소유한다. PROD-414는 main의 공개 UI를 직접 사용해 `PostListItem`·`PostLayout`에 최초 production Action Bar를 배치하고 Repost menu·실패 toast를 연결한다. branch 코드를 복사하거나 독립 공개 action leaf를 만들지 않으며, 나머지 action 조립·최종 disabled 정책과 공통 통합 검증은 PROD-432에 남긴다.
 - Notification connection/count/read와 client row는 Follow source에 하드코딩되어 있다. Repost를 join 하나만 덧붙이면 kind discriminator와 limit-before-filter가 어긋날 수 있다.
 - Home/Profile/Bookmark와 상세 thread의 조상·하위 Reply는 공용 Post list item fragment를 쓰고 현재 상세 Post는 별도 Post layout fragment를 쓴다. 각 renderer가 자신의 direct Source를 소유해야 하며 thread 조립 경계가 Source를 다시 붙이면 중복된다.
 - Content 없는 Repost 목록은 attribution 뒤 direct Source를 일반 Post와 같은 비재귀 표준 목록 행의 실제 표시 대상으로 사용해야 한다. 바깥 list item만 article·row border·padding을 한 번 소유하고 Source용 full presentation·article·border·renderer를 별도로 만들지 않는다. direct Source 자체가 Quote인 조합의 preview 정책은 이번 slice의 완료 조건에서 제외한다.
+- Home/Profile은 공용 Post list item fragment를 쓰지만 Post detail은 별도 fragment다. PROD-415는 목록 연결과 순수 Repost ID 직접 접근의 Source replace redirect를 소유한다. 순수 Repost의 body·timestamp와 Action Bar는 direct Source를 target으로 사용하고 Quote는 자체 detail을 유지한다.
 
 ### Recommended Approach
 
@@ -60,7 +64,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
    `repostSource`는 direct Source를 독립 조회해 unavailable이면 `null`로 정규화한다. Source link는 생성 때
    정해진 direct relation을 그대로 유지하고 flatten하지 않는다.
 5. PROD-411은 Author와 Active 상태를 한 transaction에서 확인해 Post를 Tombstone으로 전이하고 최초 `deletedAt`과 `repostSourceId`를 보존한다. 일반 Post 삭제 경계를 재사용하되 이 slice는 Repost 취소·멱등성·유일성 해제를 검증한다.
-6. PROD-453의 fixture-only 단계는 production fragment shape를 따르는 typed fixture adapter와 mock navigation으로 Repost·Quote 상태를 검증했다. PROD-415 production integration에서 Content 없는 Repost는 `PostListItem`이 Repost Author attribution을 정확히 한 번 표시한 뒤 direct Source를 일반 Post와 같은 비재귀 표준 목록 행 leaf의 실제 표시 대상으로 사용한다. Quote와 Reply+Quote는 Quote Author와 자체 Content를 먼저 표시하고 direct Source를 compact bordered preview로 표시한다. Quote Source preview는 자체 Action Bar를 갖지 않으며 nullable Source인 Quote는 preview와 Source 이동 affordance만 생략한다. 순수 Repost의 direct Source 자체가 Quote인 조합의 preview 정책은 2026-07-27 PROD-415 creator reply에 따라 후속으로 미룬다. `PostSourcePresentationView`와 `PostSourcePreview`는 presentation data에서 canonical Expo Router Link와 body shortcut을 직접 만들고 caller-injected renderer·navigation callback을 받지 않는다. Storybook은 production과 같은 Router decorator에서 실제 pathname을 검증하고 raw object를 fragment key로 cast하지 않는다. 실제 관계 field를 읽는 Relay operation·fragment와 generated type은 PROD-415가 소유한다. PROD-414는 #341로 main에 들어온 단일 공개 `PostActionBar` 경계에서 `PostActionBar_post`가 `RepostAction_post` child fragment를 spread하게 한다. private `RepostAction`은 fragment read, create/delete mutation, pending, actor 격리와 선택 상태·label·정확한 delete identity 파생을 함께 소유하고 공통 private control을 렌더한다. 현재 surface는 actual Post fragment ref와 error callback을 공급한다. 최종 disabled 행동은 유지하되 이를 child에 연결할 concrete host input 또는 fragment shape는 actual production caller와 함께 PROD-432가 설계하고 통합 검증한다. mutation 실패는 pending을 종료하고 domain/cache 상태를 유지한 채 error callback으로 전달하며, production full-bar 조립·대상 정책과 한국어 오류 toast는 PROD-432에 남긴다. 취소 성공 뒤 Source cache는 변경하지 않고 PROD-471이 서버 확정 Source 상태와 같은 actor Store 정규화를 후속 소유한다.
+6. PROD-453의 fixture-only 단계는 production fragment shape를 따르는 typed fixture adapter와 mock navigation으로 Repost·Quote 상태를 검증했다. PROD-415 production integration에서 Content 없는 Repost는 `PostListItem`이 Repost Author attribution을 정확히 한 번 표시한 뒤 direct Source를 일반 Post와 같은 비재귀 표준 목록 행 leaf의 실제 표시 대상으로 사용한다. Quote와 Reply+Quote는 Quote Author와 자체 Content를 먼저 표시하고 direct Source를 compact bordered preview로 표시한다. Quote Source preview는 자체 Action Bar를 갖지 않으며 nullable Source인 Quote는 preview와 Source 이동 affordance만 생략한다. 순수 Repost의 direct Source 자체가 Quote인 조합의 preview 정책은 2026-07-27 PROD-415 creator reply에 따라 후속으로 미룬다. `PostSourcePresentationView`와 `PostSourcePreview`는 presentation data에서 canonical Expo Router Link와 body shortcut을 직접 만들고 caller-injected renderer·navigation callback을 받지 않는다. Storybook은 production과 같은 Router decorator에서 실제 pathname을 검증하고 raw object를 fragment key로 cast하지 않는다. 실제 관계 field를 읽는 Relay operation·fragment와 generated type은 PROD-415가 소유한다. PROD-414는 #341로 main에 들어온 단일 공개 `PostActionBar` 경계에서 `PostActionBar_post`가 `RepostAction_post` child fragment를 spread하게 한다. private `RepostAction`은 fragment read, create/delete mutation, pending, actor 격리와 선택 상태·label·정확한 delete identity 파생을 함께 소유하고 공통 private control을 렌더한다. `PostListItem`·`PostLayout`은 Action Bar를 content grid의 마지막 sibling이자 모든 navigation link 밖에 렌더링하고, 순수 Repost에서는 direct Source fragment를 Action Bar target으로 공급한다. Repost trigger는 항상 menu를 열며 Web은 anchored popup, Android·iOS는 bottom action sheet를 사용한다. 현재 상태에 따라 `재게시하기` 또는 `재게시 취소`만 표시하고 `인용하기`는 PROD-431 전까지 노출하지 않는다. 실제 surface는 action별 error callback을 하나의 공용 transient toast host에 연결하고 정확한 한국어 실패 문구·약 3초 자동 dismiss·latest replace·alert semantics를 제공한다. 새 외부 dependency는 추가하지 않는다. 최종 disabled 정책과 나머지 action의 production 조립은 PROD-432가 설계하고 통합 검증한다. 취소 성공 뒤 Source cache는 변경하지 않고 PROD-471이 서버 확정 Source 상태와 같은 actor Store 정규화를 후속 소유한다.
 7. PROD-412는 기존 Notification table에 `REPOST` kind를 추가하고 source-only create 경계에서 Recipient·Related Profile·Related Post를 파생한다. kind별 visible projection을 connection/count/Node/Read에서 공통 조립하고, client는 concrete inline fragment로 Source Post 이동과 Read/cache를 처리한다.
 8. PROD-416은 Repost Tombstone commit 뒤 같은 request에서 idempotent cleanup을 await하고 오류를 catch한다. 남은 row는 Active pure-Repost 구조와 Recipient 기준 관계 visibility를 검증하는 predicate로 모든 API surface에서 숨긴다.
 9. PROD-415는 Quote와 Reply+Quote에서 direct Source preview 한 단계만 소유한다. bordered Source preview는 하나의 Link가 아닌 시각적 그룹 경계다. Source Author는 canonical Profile Link, Source 생성 시각은 keyboard·screen reader·pointer가 사용하는 최소 44px canonical Post Link, Source 본문 행은 pointer·touch에서 같은 Post로 이동하는 shortcut으로 분리한다. border의 빈 padding에는 동작을 두지 않고 body 외부 Link는 자신의 URL로 이동한다. Content 없는 Repost는 Repost Author Profile Link attribution 뒤에 direct Source를 일반 Post와 같은 비재귀 표준 목록 행 leaf의 실제 표시 대상으로 선택한다. 표준 행은 ordinary Post와 pure Repost Source 모두 생성 시각을 최소 44px canonical Post Link로 유지하고, 본문 행은 내부 외부 Link와 중첩되지 않는 pointer·touch shortcut으로 사용한다. `PostListItem`의 outer fragment와 nested Source fragment는 공용 표준 행 leaf를 공유하되 leaf가 자기 자신을 재귀 spread하지 않는 유한한 GraphQL shape를 사용한다. 순수 Repost의 direct Source 자체가 Quote인 조합의 preview 유지 여부는 이번 slice에서 고정하지 않는다. 목록과 상세 thread의 조상·하위 Reply를 렌더링하는 `PostListItem`에서는 Quote 자체 생성 시각과 본문 행도 각각 실제 canonical Link와 pointer·touch shortcut으로 바깥 Quote Post에 연결한다. 이미 자기 canonical route인 현재 상세 Post의 `PostLayout`은 self Link나 동일 URL history entry를 추가하지 않고 direct Source 이동만 제공한다. 현재 상세 Post의 `PostLayout`과 목록·조상·하위 Reply의 `PostListItem`은 Quote direct Source preview를 `PostBody` sibling으로 사용하고 `PostDetailThread`는 Source를 별도 선택·운반·렌더하지 않는다. Content 없는 Repost 상세 진입은 조회 가능한 direct Source의 canonical route로 `replace`한다. Quote preview의 두 번째 Source를 위한 presentation field, placeholder 또는 CTA를 추가하지 않고 presentation component를 재귀 호출하지 않는다.
@@ -73,6 +77,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 - Notification mixed-kind projection은 kind별 `UNION ALL` 또는 nullable join과 discriminator별 predicate로 구성할 수 있다. 어느 방식이든 filter-before-limit, concrete typename route와 Recipient 기준 visibility를 만족해야 한다.
 - Quote·Reply+Quote Source preview는 공용 leaf component로 분리하거나 renderer 안에 유지할 수 있다. Content 없는 Repost의 direct Source는 일반 Post와 같은 비재귀 표준 목록 행 leaf를 반드시 재사용한다. Source Quote의 preview 유지 여부는 후속 결정으로 남긴다.
 - PROD-401의 Repost 정책 검증은 전용 action의 transaction 경계에 둔다. caller 없는 저수준 Repost insert helper나 기존 `createPost`의 nullable overload를 미리 추가하지 않는다.
+- Web anchored menu와 Android·iOS bottom action sheet는 platform file로 나눌 수 있다. 공용 경계는 항목·open·dismiss·선택 결과와 접근성 의미만 공유하고 platform-specific positioning을 억지로 하나의 구현에 합치지 않는다.
 
 ### Known Traps
 
@@ -89,11 +94,12 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 - Notification을 Repost transaction 안에 넣거나 fire-and-forget으로 실행해 rollback 결합 또는 관측 불가능한 실패를 만들지 않는다.
 - Quote preview의 두 번째 Source ID·Content·Profile presentation field를 fragment에 추가하거나 Source presentation을 재귀 호출하지 않는다.
 - client가 raw object를 Relay fragment key로 cast하거나 route query에 presentation scalar를 중복 나열하지 않는다.
-- Source preview Link를 전체 Post Link 안에 중첩하지 않는다.
+- Source preview나 Action Bar를 전체 Post Link 안에 중첩하지 않는다.
 - bordered Source preview 전체 또는 body 외부 Link를 포함한 body 전체를 하나의 접근 가능한 Link로 만들지 않는다.
 - `PostDetailThread`가 renderer 밖에서 Source를 다시 조립해 같은 Source를 중복 표시하거나 다음 Source depth를 노출하지 않는다.
 - Content 없는 Repost route를 먼저 렌더하거나 Source route로 `push`해 Repost 상세 history entry를 남기지 않는다.
 - Content 없는 Repost의 direct Source를 별도 full presentation·unbordered preview·중첩 article·별도 Source renderer로 다시 조립하거나 row border를 이중으로 만들지 않는다.
+- Repost trigger에서 mutation을 즉시 실행하거나 선택 상태에 따라 menu와 즉시 실행을 섞지 않는다.
 - Repost의 선택 상태·label·delete identity·mutation callback을 독립 scalar config로 분해하거나, 독립 공개 Repost action leaf, `PostActionBar` 중복 구현, PROD-433 branch 코드 복사, persistent 오류·재시도 UI 또는 success toast를 PROD-414에 추가하지 않는다.
 
 ## Risks / Trade-offs
@@ -104,7 +110,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 - [동시 Source Tombstone과 Repost 생성] → 명시적 row lock을 추가하지 않고 transaction 시점의 Source 검증과 Post eligibility를 사용한다. 이후 Source가 Tombstone이면 생성된 Repost는 조회 후보에서 사라지며 관계는 보존된다.
 - [Notification 기반 change와 archive 순서] → `add-in-app-notifications`의 실제 schema/API 기반이 완료된 뒤 PROD-412/416을 구현하고, 그 change를 authority로 사용하지 않으며 canonical·Linear 계약을 독립 대조한다.
 - [여러 PR 사이 schema drift] → 각 child PR에서 공유 OpenSpec task와 선행 issue를 명시하고, 부모 PROD-389가 최종 schema/Relay/E2E 정합성을 검증한다.
-- [UI action의 실제 surface 부재] → PROD-414는 main의 공개 `PostActionBar` 경계에서 composite parent fragment와 private Repost child action, 실제 parent→child fragment ref를 사용하는 Storybook wrapper를 완료 경계로 삼고, 실제 production full-bar rollout·대상 정책과 오류 toast는 PROD-432에 남긴다.
+- [UI action의 실제 surface 부재] → PROD-414가 main의 공개 `PostActionBar` 경계를 `PostListItem`·`PostLayout`에 처음 배치하고 Repost menu·toast까지 연결한다. PROD-432는 나머지 action 조립·최종 disabled 정책과 전체 통합 검증을 소유한다.
 - [Content 없는 Repost redirect와 handle 보정 경쟁] → 순수 Repost Source 이동을 우선하는 단일 canonical target을 계산하고 redirect 동안 detail thread를 렌더하지 않는다.
 - [PROD-433 squash merge 반영] → PR #341 merge 뒤 기존 부모·자식 tip을 backup ref로 보존하고, 자식 고유 커밋만 main 위에 옮긴 뒤 range-diff와 명시적 lease를 사용한다. 최신 main의 PROD-453와 PROD-414가 함께 수정한 `add-post-reposts`의 `decisions.md`, `design.md`, `tasks.md`는 어느 한쪽으로 덮지 않고 presentation과 action 계약을 명시적으로 reconcile한 뒤 app·Storybook·OpenSpec 전체 검증을 다시 수행한다.
 - [취소 성공 뒤 오래된 client 상태] → PROD-414는 client count 산술·광범위한 invalidation·임시 refetch를 추가하지 않고 알려진 제한을 검증한다. PROD-471이 서버 결과 기반 Source cache 동기화를 완료하기 전에는 부모 change를 archive하지 않는다.
@@ -113,7 +119,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 
 1. PROD-394에서 nullable `repost_source_id`와 partial unique index를 포함한 expand migration, Drizzle schema·snapshot과 DB migration tests를 배포한다. 기존 workload와 contentful `createPost` 계약은 새 column을 비워 둔 채 계속 동작한다.
 2. PROD-401·402·403에서 생성, direct Source, count와 viewer relation API를 추가하고 PROD-411에서 Tombstone 취소를 연결한다.
-3. PROD-430에서 Home/Profile candidate query를 전환하고 PROD-453·415에서 presentation과 목록을 연결한다. #341로 main에 포함된 `PostActionBar`에 PROD-414 composite parent fragment와 private Repost child action을 연결하고 PROD-432가 production full-bar와 대상 정책에 연결한다. PROD-471에서 취소 성공 뒤 Source cache 동기화를 연결한다.
+3. PROD-430에서 Home/Profile candidate query를 전환하고 PROD-453·415에서 presentation, canonical Source navigation과 direct Repost URL redirect를 연결한다. #341로 main에 포함된 `PostActionBar`에 PROD-414 composite parent fragment와 private Repost child action을 연결하고, 목록·상세의 최초 production 배치, Repost menu·toast까지 제공한다. PROD-432가 나머지 action과 최종 대상 정책을 연결하고 PROD-471이 취소 성공 뒤 Source cache를 동기화한다.
 4. Notification 기반 선행 이슈가 완료된 뒤 PROD-412에서 enum/API/inbox를 확장하고 PROD-416에서 Tombstone cleanup을 연결한다.
 5. PROD-389가 모든 child 결과를 연결한 vertical flow, canonical/OpenSpec 정합성과 strict validation을 확인한 뒤 archive한다.
 

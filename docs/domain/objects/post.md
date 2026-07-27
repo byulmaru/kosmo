@@ -117,9 +117,11 @@ Profile과 달라도 같은 Upload Account를 가지면 연결할 수 있다. St
 - 조상 경로는 조회할 수 없는 Parent에서 중단하고, 하위 Reply는 각 Reply의 Post Visibility와 Post
   Eligibility를 독립적으로 적용한다.
 - Reply는 입력 Parent를, Repost와 Quote는 입력 Repost Source를 직접 참조하며 다른 Post로 평탄화하지 않는다.
-- Content 없는 Repost는 독립적인 상세 surface를 갖지 않는다. 그 Repost 식별자로 상세 경로에 진입해도
-  조회 가능한 직접 Repost Source의 canonical 상세 경로로 대체하고 Repost 자신의 경로를 navigation
-  history에 남기지 않는다.
+- Content와 Reply Parent가 없고 Repost Source가 있는 순수 Repost의 상세 affordance와 순수 Repost ID의 직접
+  상세 URL은 Repost Source Author의 `relativeHandle`과 Source Post ID를 사용하는 canonical Post route로
+  이동하거나 replace redirect한다. Repost 자체의 별도 상세 화면은 표시하지 않는다.
+- Content와 Repost Source가 있는 Quote는 Quote 자체의 canonical Post 상세를 유지하고, Quote 안의 Source
+  preview를 활성화했을 때만 Source의 canonical Post route로 이동한다.
 - Post의 Repost 수는 해당 Post를 Repost Source로 직접 참조하면서 Content와 Reply Parent가 없는 eligible
   Active Repost만 포함하고 Quote는 포함하지 않는다.
 

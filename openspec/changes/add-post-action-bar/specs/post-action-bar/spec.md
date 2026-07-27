@@ -50,12 +50,13 @@
 
 ### Requirement: 액션 입력 계약
 
-**Authority / Provenance:** `PROD-432`, `PROD-433`, `PROD-414` — Post Action Bar toolbar는 composite Post fragment와 고정 action 순서를 소유해야 하며(MUST), 구현된 private child action은 자신의 child fragment, mutation, pending과 파생 도메인 상태를 소유하고 공통 private control을 렌더할 수 있어야 한다(MUST). Reply·Reaction·Bookmark·More의 callback, controlled Composer, navigation, menu와 toast는 외부 surface가 소유해야 하며(MUST), 현재 surface는 Repost child에 actual Post fragment ref와 error callback을 제공해야 한다(MUST). 대상 적격성·현재 실행 주체 권한·guest 인증 위임에서 파생할 최종 disabled 행동은 유지해야 하지만(MUST), 이를 child에 연결할 concrete host input 또는 fragment shape는 actual production caller와 함께 PROD-432가 설계해야 한다(MUST). Toolbar container는 child mutation payload 또는 cache update 정책을 재구현하지 않아야 한다(MUST NOT). Reply·Reaction·Bookmark의 default 상태와 Repost child의 default 상태는 사용자 입력 시 해당 action을 한 번 실행해야 하며(MUST), pending·disabled 상태는 touch, pointer 및 keyboard 입력을 차단해야 한다(MUST). More는 사용자 입력 시 상태 전이 없이 callback을 한 번 호출해야 한다(MUST).
+**Authority / Provenance:** `docs/design/post-action-bar.md`, `PROD-432`, `PROD-433`, `PROD-414` — Post Action Bar toolbar는 composite Post fragment와 고정 action 순서를 소유해야 하며(MUST), 구현된 private child action은 자신의 child fragment, mutation, pending과 파생 도메인 상태를 소유하고 공통 private control을 렌더할 수 있어야 한다(MUST). Reply·Reaction·Bookmark·More의 callback, controlled Composer, navigation과 More menu는 외부 surface가 소유해야 하며(MUST), PROD-414 surface는 Repost child에 actual target Post fragment ref와 action별 error callback을 제공해야 한다(MUST). Repost child는 자기 action menu의 open·dismiss·선택 결과를 조립할 수 있어야 하지만(MUST), toolbar container는 child mutation payload 또는 cache update 정책을 재구현하지 않아야 한다(MUST NOT). Repost trigger는 사용자 입력 시 mutation을 즉시 실행하지 않고(MUST NOT) action menu를 열어야 하며(MUST), menu 항목 선택 뒤 fragment 상태에서 파생한 mutation을 한 번 실행해야 한다(MUST). Reply·Reaction·Bookmark의 default 상태는 사용자 입력 시 해당 callback을 한 번 실행해야 하며(MUST), pending·disabled 상태는 touch, pointer 및 keyboard 입력을 차단해야 한다(MUST). 대상 적격성·현재 실행 주체 권한·guest 인증 위임에서 파생할 최종 disabled 행동은 actual production caller와 함께 PROD-432가 설계해야 한다(MUST). More는 사용자 입력 시 상태 전이 없이 callback을 한 번 호출해야 한다(MUST).
 
 #### Scenario: 기본 액션 실행
 
 - **WHEN** 사용자가 default 상태이거나 도메인 상태가 활성인 액션을 활성화한다
-- **THEN** config 기반 액션은 해당 callback을 한 번 호출하고 Repost child는 fragment 상태에서 선택한 mutation을 한 번 호출한다
+- **THEN** config 기반 액션은 해당 callback을 한 번 호출한다
+- **AND** Repost child는 action menu를 열고 아직 mutation을 호출하지 않는다
 
 #### Scenario: 처리 중 중복 입력 차단
 
@@ -71,6 +72,40 @@
 
 - **WHEN** 사용자가 More를 활성화한다
 - **THEN** Action Bar는 More callback을 한 번 호출하고 메뉴나 clipboard 동작을 자체 수행하지 않는다
+
+### Requirement: Repost action menu
+
+**Authority / Provenance:** `docs/design/post-action-bar.md`, `PROD-414`, `PROD-431` — Repost action은 선택 여부와 관계없이 동일 trigger에서 action menu를 열어야 하고(MUST), 현재 selected Profile의 `viewerRepost` 상태에 따라 정확히 `재게시하기` 또는 `재게시 취소` 항목을 제공해야 한다(MUST). Web은 trigger 근처 anchored menu를 사용해야 하고(MUST), Android·iOS는 safe area를 고려한 bottom action sheet를 사용해야 한다(MUST). menu는 platform별 dismiss·focus·back·keyboard·modal 접근성 계약을 만족해야 하며(MUST), 항목 선택으로 menu를 닫은 뒤 해당 mutation을 시작해야 한다(MUST). PROD-431이 완료되기 전에는 `인용하기`를 disabled나 placeholder 항목으로도 표시하지 않아야 한다(MUST NOT).
+
+#### Scenario: 미선택 Repost menu
+
+- **WHEN** `viewerRepost`가 `null`인 Repost trigger를 활성화한다
+- **THEN** menu는 `재게시하기` 항목 하나를 표시한다
+- **AND** 항목을 선택하면 Source Post를 대상으로 `repostPost`를 한 번 호출한다
+
+#### Scenario: 선택된 Repost menu
+
+- **WHEN** `viewerRepost`가 Active Repost identity인 Repost trigger를 활성화한다
+- **THEN** menu는 `재게시 취소` 항목 하나를 표시한다
+- **AND** 항목을 선택하면 해당 Active Repost ID를 대상으로 `deletePost`를 한 번 호출한다
+
+#### Scenario: Web anchored menu
+
+- **WHEN** Web에서 Repost menu가 열린다
+- **THEN** menu는 trigger 근처에 배치되고 trigger는 popup·expanded 상태를 노출한다
+- **AND** 바깥 pointer·focus 또는 Escape로 닫히며 Escape 뒤 trigger로 focus가 돌아간다
+- **AND** 방향키, Home과 End로 item focus를 이동할 수 있다
+
+#### Scenario: Native bottom action sheet
+
+- **WHEN** Android 또는 iOS에서 Repost menu가 열린다
+- **THEN** sheet는 safe area를 고려해 화면 아래에 표시되고 backdrop·platform back action·dismiss gesture로 닫을 수 있다
+- **AND** modal·menu 의미와 최소 44×44 item target을 제공한다
+
+#### Scenario: 미래 Quote action 미노출
+
+- **WHEN** PROD-431의 Quote 작성 계약이 아직 완료되지 않았다
+- **THEN** Repost menu는 `인용하기`를 표시하지 않는다
 
 ### Requirement: 액션 접근성
 
@@ -141,17 +176,24 @@
 
 ### Requirement: Production Post surface 배치
 
-**Authority / Provenance:** `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `docs/domain/objects/profile.md`, `docs/domain/README.md`, `PROD-432`, `PROD-434`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425` — 지원되는 Home Post List, Profile Post List 및 Post 상세 surface의 게시글은 공통 Post Action Bar 계약을 사용해야 한다(MUST). surface는 actual Post fragment ref를 `PostActionBar` composite fragment에 공급해야 하며(MUST), canonical Content·Reply Parent·Repost Source 관계 조합, Post Visibility·권한 계약과 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425의 action 계약에서 대상 Post 자체의 액션 적격성과 현재 실행 주체·세션의 실행 권한을 분리해 판단해야 한다(MUST). Action Bar child는 전달받은 policy input을 표현하되 대상 정책 또는 guest 인증 진입을 자체 판단하지 않아야 한다(MUST NOT). 대상 Post가 적격하지 않거나 인증된 실행 주체가 실행 권한을 갖지 못한 액션은 config 또는 child action을 생략하지 않고 disabled 상태로 제공해야 한다(MUST). 인증하지 않은 guest에게 `Account.Active`·`Profile.Member`·선택 Profile 같은 현재 세션 전제가 없다는 이유만으로 조회 가능하고 대상 자체가 적격한 액션을 disabled로 제공해서는 안 되며(MUST NOT), 활성화는 상위 인증 진입 callback에 위임해야 한다(MUST). surface 배치는 게시글의 기존 상세 navigation 및 다른 interactive control의 입력을 가로채지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `docs/domain/objects/profile.md`, `docs/domain/README.md`, `docs/design/post-action-bar.md`, `PROD-432`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425` — 지원되는 Home Post List, Profile Post List 및 Post 상세 surface의 게시글은 공통 Post Action Bar 계약을 사용해야 한다(MUST). `PostListItem`과 `PostLayout`은 Action Bar를 Post content grid의 마지막 sibling으로 직접 렌더링해야 하고(MUST), 본문·작성자·생성 시각·Source navigation `Link`/`Pressable` 안에 중첩하지 않아야 한다(MUST NOT). 일반 Post와 Quote는 바깥 Post를, 순수 Repost는 화면에 표시한 direct Source Post를 Action Bar target으로 공급해야 한다(MUST). surface는 display Post와 action target을 구분하면서 canonical 관계 조합, Post Visibility·권한 계약과 각 action 계약에서 target 자체의 적격성과 현재 실행 주체·세션의 실행 권한을 분리해 판단해야 한다(MUST). Action Bar child는 전달받은 policy input을 표현하되 대상 정책 또는 guest 인증 진입을 자체 판단하지 않아야 한다(MUST NOT). target Post가 적격하지 않거나 인증된 실행 주체가 실행 권한을 갖지 못한 액션은 config 또는 child action을 생략하지 않고 disabled 상태로 제공해야 한다(MUST). 인증하지 않은 guest에게 현재 세션 전제가 없다는 이유만으로 조회 가능하고 target 자체가 적격한 액션을 disabled로 제공해서는 안 되며(MUST NOT), 활성화는 상위 인증 진입 callback에 위임해야 한다(MUST). `PostList`, route와 외부 caller는 Action Bar subtree나 `actionBar?: ReactNode`를 주입하지 않아야 하며(MUST NOT), surface 배치는 기존 상세 navigation 및 다른 interactive control의 입력을 가로채지 않아야 한다(MUST).
 
 #### Scenario: 목록과 상세의 공통 계약
 
 - **WHEN** 같은 Post가 지원되는 목록과 상세 surface에 표시된다
 - **THEN** 두 surface는 같은 액션 순서, 상태 의미 및 접근성 계약의 Post Action Bar를 렌더한다
 
-#### Scenario: Content 없는 Repost의 액션 제한
+#### Scenario: content grid 마지막 sibling
+
+- **WHEN** `PostListItem` 또는 `PostLayout`이 일반 Post, 순수 Repost 또는 Quote를 렌더한다
+- **THEN** Action Bar는 각 구조의 마지막 presentation 뒤 content grid의 마지막 sibling으로 렌더된다
+- **AND** 본문·작성자·생성 시각·Source navigation link의 descendant가 아니다
+
+#### Scenario: 순수 Repost의 Source action target
 
 - **WHEN** Post에 Content와 Reply Parent가 없고 Repost Source만 있다
-- **THEN** surface는 Reply와 Repost를 렌더하되 disabled로 제공하고 Reaction·Bookmark·More는 다른 정책이 허용하는 상태를 유지한다
+- **THEN** surface는 바깥 Repost가 아니라 direct Source Post fragment를 Action Bar target으로 공급한다
+- **AND** Repost child는 Source의 `repostCount`와 selected Profile의 `viewerRepost`에서 menu 상태와 mutation identity를 파생한다
 
 #### Scenario: 대상 자체가 액션에 부적격
 
@@ -180,7 +222,7 @@
 
 ### Requirement: 실제 액션 상태 연결
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `PROD-432`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425` — Production surface는 actual Post fragment ref와 Reply·Reaction·Bookmark의 기존 구현 결과에서 callback과 처리 상태를 공급해야 하며(MUST), Reply에는 외부 Composer의 controlled `expanded`, Reaction에는 현재 Profile이 하나 이상의 Reaction Type을 남겼는지를 나타내는 `hasReacted`, Bookmark에는 현재 Profile의 `hasBookmarked`를 공급해야 한다(MUST). Repost child action은 child fragment의 `viewerRepost`에서 `hasReposted`, delete identity와 create/delete mutation 선택을 함께 파생해야 하고(MUST), 현재 surface는 actual Post fragment ref와 error callback을 공급해야 한다(MUST). Repost의 최종 disabled 행동을 연결할 concrete host input 또는 fragment shape는 actual production caller와 함께 PROD-432가 설계하고 통합 검증해야 한다(MUST). 범용 `selected`를 합성하거나 공개 입력으로 공급하지 않아야 한다(MUST NOT). Reaction과 Bookmark count는 공급하지 않아야 하며(MUST NOT), Reply count는 선행 action 계약이 제공하는 경우에만 optional로 공급하고 Repost count는 child fragment에서 읽어야 하며(MUST), count 계약이 없는 액션에 `0`이나 새로운 집계 값을 합성하지 않아야 한다(MUST NOT). 제공된 count와 선택된 Profile에 상대적인 도메인 상태는 기존 cache 경계를 유지해야 하며(MUST), Profile 전환 시 이전 Profile의 `hasReposted`·`hasReacted`·`hasBookmarked`를 재사용하지 않아야 한다(MUST). 각 액션의 pending 상태는 해당 요청의 중복 입력만 차단해야 하며(MUST) 다른 액션을 불필요하게 차단하지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `docs/design/post-action-bar.md`, `PROD-432`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425` — Production surface는 actual action target Post fragment ref와 Reply·Reaction·Bookmark의 기존 구현 결과에서 callback과 처리 상태를 공급해야 하며(MUST), Reply에는 외부 Composer의 controlled `expanded`, Reaction에는 현재 Profile이 하나 이상의 Reaction Type을 남겼는지를 나타내는 `hasReacted`, Bookmark에는 현재 Profile의 `hasBookmarked`를 공급해야 한다(MUST). Repost child action은 target fragment의 `viewerRepost`에서 `hasReposted`, delete identity와 create/delete mutation 선택을 함께 파생해야 하고(MUST), PROD-414 surface는 target fragment ref와 action별 error callback을 공급해야 한다(MUST). Repost의 최종 disabled 행동을 연결할 concrete host input 또는 fragment shape는 actual production caller와 함께 PROD-432가 설계하고 통합 검증해야 한다(MUST). 범용 `selected`를 합성하거나 공개 입력으로 공급하지 않아야 한다(MUST NOT). Reaction과 Bookmark count는 공급하지 않아야 하며(MUST NOT), Reply count는 선행 action 계약이 제공하는 경우에만 optional로 공급하고 Repost count는 target child fragment에서 읽어야 하며(MUST), count 계약이 없는 액션에 `0`이나 새로운 집계 값을 합성하지 않아야 한다(MUST NOT). 제공된 count와 선택된 Profile에 상대적인 도메인 상태는 기존 cache 경계를 유지해야 하며(MUST), Profile 전환 시 이전 Profile의 상태를 재사용하지 않아야 한다(MUST). 각 액션의 pending 상태는 해당 요청의 중복 입력만 차단해야 하며(MUST) 다른 액션을 불필요하게 차단하지 않아야 한다(MUST).
 
 Reaction Type 선택·해제와 Type별 count·Profile 목록은 PROD-417·PROD-418의 공개 계약을 그대로 소비해야 하며(MUST) 이 Action Bar 계약에서 별도 집계 방식이나 Reaction count를 정의하지 않아야 한다(MUST). `hasReacted`는 현재 Profile이 하나 이상의 Reaction Type을 남겼는지만 나타내야 한다(MUST).
 
@@ -208,8 +250,9 @@ Reaction Type 선택·해제와 Type별 count·Profile 목록은 PROD-417·PROD-
 
 - **WHEN** 연결된 action 요청이 실패한다
 - **THEN** production surface는 해당 액션의 pending을 종료하고 요청 직전의 확정된 `expanded`·`hasReposted`·`hasReacted`·`hasBookmarked`와 제공된 Reply·Repost count를 유지한다
-- **AND** 액션별 한국어 toast로 실패를 안내하고 같은 내용을 보조 기술이 즉시 인식할 수 있게 한다
-- **AND** Action Bar에 지속 error 상태나 별도 retry 제어를 공급하지 않고, 사용자가 같은 default 상태의 액션을 다시 활성화하면 상위 계층이 재시도할 수 있게 한다
+- **AND** Repost 생성 실패는 `재게시하지 못했습니다. 잠시 후 다시 시도해 주세요.`, 취소 실패는 `재게시를 취소하지 못했습니다. 잠시 후 다시 시도해 주세요.`라는 toast로 안내하고 같은 내용을 보조 기술이 즉시 인식할 수 있게 한다
+- **AND** Repost toast는 safe area와 고정 탭 바 위의 화면 하단에서 약 3초 뒤 사라지고 새 toast가 기존 toast를 교체한다
+- **AND** Action Bar에 지속 error 상태나 toast close·retry control을 공급하지 않고, 사용자가 Repost menu를 다시 열어 같은 항목을 선택하면 재시도할 수 있게 한다
 
 ### Requirement: More 링크 복사 통합
 
@@ -243,7 +286,7 @@ Reaction Type 선택·해제와 Type별 count·Profile 목록은 PROD-417·PROD-
 
 ### Requirement: 상태 카탈로그와 통합 검증
 
-**Authority / Provenance:** `PROD-432`, `PROD-433`, `PROD-434`, `PROD-414` — 공통 UI 구현은 Reply `expanded`, Repost child가 fragment에서 파생한 `hasReposted`, Reaction `hasReacted`, Bookmark `hasBookmarked`, config 기반 Reply·Reaction·Bookmark의 default·pending·disabled와 Repost child의 default·pending, active Reaction·Bookmark의 채워진 icon, More callback-only, 선택적 액션, Reaction·Bookmark count 제외, Reply·Repost count 유무, 한국어·영어 locale의 compact count 및 지원 폭을 독립적으로 검토할 수 있는 Storybook 상태 카탈로그를 제공해야 한다(MUST). Repost Storybook은 actual Relay operation의 fragment ref를 `PostActionBar` parent fragment에서 private Repost child fragment까지 전달해야 한다(MUST). 구현 자식의 component test는 현재 소유한 표시 우선순위·입력 차단·접근성 metadata를 검증해야 하며(MUST), Repost policy-disabled 시각·입력 차단·접근성 상태와 계약 부모의 통합 검증은 실제 Post surface에서 controlled Reply Composer, Profile 전환, action별 pending, 성공, 실패 시 이전 확정 상태 복원·접근 가능한 액션별 한국어 toast·다음 입력 재시도, disabled action 유지, guest 인증 위임 및 More 링크 복사를 검증해야 한다(MUST).
+**Authority / Provenance:** `docs/design/post-action-bar.md`, `PROD-432`, `PROD-433`, `PROD-414` — 공통 UI 구현은 Reply `expanded`, Repost child가 fragment에서 파생한 `hasReposted`, Reaction `hasReacted`, Bookmark `hasBookmarked`, config 기반 Reply·Reaction·Bookmark의 default·pending·disabled와 Repost child의 default·pending, active Reaction·Bookmark의 채워진 icon, More callback-only, 선택적 액션, count 및 지원 폭을 독립적으로 검토할 수 있는 Storybook 상태 카탈로그를 제공해야 한다(MUST). Repost Storybook은 actual Relay operation의 target fragment ref를 `PostActionBar` parent fragment에서 private Repost child fragment까지 전달하고(MUST), menu open·dismiss·항목 선택·pending·mutation·오류 callback을 검증해야 한다(MUST). PROD-414 integration은 일반 Post·순수 Repost·Quote 목록과 상세의 final sibling·link 비중첩, 순수 Repost Source target, Web anchored menu·Native bottom sheet, exact failure toast와 이전 상태 유지·재시도를 검증해야 한다(MUST). PROD-432의 계약 부모 통합 검증은 준비된 나머지 action, 최종 disabled·guest 정책, More 링크 복사와 전체 action 조합을 검증해야 한다(MUST).
 
 #### Scenario: UI 상태 독립 검토
 

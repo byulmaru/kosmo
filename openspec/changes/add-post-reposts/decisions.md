@@ -86,12 +86,36 @@
 - Decision Date: 2026-07-26
 - Decision Class: Implementation Choice
 - Authority / Provenance: `PROD-414`, `PROD-432`, `PROD-433`
-- Status: Active
+- Status: Superseded
 - Context / Problem: PROD-433은 공용 action UI의 공개 경계를 `PostActionBar` 하나로 제한하고 PROD-432는 production full-bar 조립·대상 정책과 action 실패 toast를 소유한다. Repost 상태·label·delete identity와 mutation callback을 독립 scalar config로 분해하면 Relay 관계에서 반드시 함께 바뀌어야 하는 값을 유효하지 않은 조합으로 전달할 수 있다.
 - Decision Outcome: PROD-414는 `PostActionBar_post` composite fragment가 private `RepostAction_post` child fragment를 spread하게 한다. private `RepostAction`은 child fragment, create/delete mutation, pending, actor 격리와 `viewerRepost` 기반 선택 상태·접근성 label·정확한 delete identity·mutation 종류를 함께 소유하고 공통 private control을 렌더한다. 현재 공개 경계에는 actual Post fragment ref와 error callback만 남긴다. 대상 적격성·현재 실행 주체 권한·guest 인증 위임에서 파생할 최종 disabled 행동은 유지하되, 이를 child에 연결할 concrete host input 또는 fragment shape는 actual production caller와 함께 PROD-432가 설계하고 통합 검증한다. #341로 main에 포함된 PROD-433의 공개 UI를 직접 재사용하고 Draft PR base를 `main`으로 유지하며, branch 코드를 복사하거나 Action Bar를 중복 구현하지 않는다. mutation 실패 시 서버 확정 domain/cache 상태를 유지하고, production의 접근 가능한 한국어 오류 toast와 실제 full-bar 연결은 PROD-432에 남긴다. persistent error·retry UI와 success toast는 추가하지 않는다.
 - Alternatives Considered: `useRepostAction`이 `PostActionBar.repost` scalar config를 반환하는 방식, 독립 공개 Repost action leaf, 부모 branch 코드 복사 또는 중복 구현, PROD-414의 persistent 오류·재시도·성공 UI. scalar config는 함께 변해야 하는 Relay 상태와 mutation identity를 분해하고, 나머지는 공개 UI 또는 통합 책임을 중복하고 cache 상태를 흐리므로 사용하지 않는다.
 - Consequences: PROD-414는 main에 포함된 PROD-433의 공개 UI와 private common control을 직접 의존한다. composite parent fragment는 실제 production query가 action child fragment를 transitively 포함하게 하고, Storybook도 parent→child fragment ref를 사용한다. 사용자가 보는 오류 toast와 대상 적격성·세션 권한은 PROD-432 연결 뒤 제공된다.
 - Confirmation / Follow-up: Storybook `play` interaction과 raw Relay unit test로 actual parent→child fragment 전달, pending 중복 차단, create cache, cancel identity/cache 비변경, error callback·다음 입력 재시도와 actor reset을 검증한다.
+
+### Repost 메뉴와 최초 production surface를 PROD-414에서 완성한다
+
+- Decision Date: 2026-07-27
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/design/post-action-bar.md`, `PROD-414`, `PROD-415`, `PROD-431`, `PROD-432`, `PROD-471`
+- Status: Active
+- Context / Problem: private Repost child만 독립 Storybook에서 검증하면 실제 사용자는 목록·상세에서 action을 사용할 수 없고, 즉시 mutation trigger는 향후 Quote action을 같은 진입점에 추가할 수 없다. 순수 Repost surface가 바깥 Repost identity를 action target으로 사용하면 Content 없는 Repost를 다시 Repost하는 잘못된 요청도 만든다.
+- Decision Outcome: PROD-414는 `PostListItem`과 `PostLayout`이 `PostActionBar`를 Post content grid의 마지막 sibling이자 본문·작성자·생성 시각·Source navigation link 밖에 렌더링하게 한다. 일반 Post와 Quote는 자신을, 순수 Repost는 화면에 표시한 direct Source Post를 Action Bar target으로 사용한다. Repost trigger는 선택 여부와 관계없이 menu를 열고, 미선택이면 `재게시하기`, 선택됐으면 `재게시 취소` 항목 하나를 표시한 뒤 항목 선택으로 mutation을 시작한다. Web은 trigger 근처 anchored menu, Android·iOS는 bottom action sheet를 사용한다. `인용하기`는 PROD-431 전까지 disabled나 placeholder로도 노출하지 않는다. PROD-414 surface는 생성·취소 실패를 정확한 action별 한국어 transient toast와 alert semantics로 알리고 이전 서버 확정 상태·cache를 유지한다. PROD-432는 나머지 action 조립, 최종 disabled 정책과 전체 통합 검증을 계속 소유한다.
+- Alternatives Considered: 즉시 mutation 유지, 선택 상태에서만 즉시 취소, 순수 Repost 바깥 identity를 action target으로 사용, 최초 production 조립과 Repost toast를 PROD-432까지 연기. 각각 미래 Quote 진입점을 막거나 비대칭 interaction을 만들고, 잘못된 Source를 대상으로 하거나 PROD-414를 실제 사용자에게 전달할 수 없는 slice로 남기므로 채택하지 않았다.
+- Consequences: PROD-414의 기존 fragment·mutation slice 뒤에 production surface, cross-platform menu와 Repost toast 작업이 추가된다. PROD-415는 canonical Source navigation과 direct Repost URL redirect를, PROD-431은 미래 `인용하기`, PROD-471은 취소 cache 동기화를 독립 소유한다.
+- Confirmation / Follow-up: 목록·상세의 final sibling·link 비중첩, 순수 Repost Source target, menu label·dismiss·keyboard/back·접근성, 항목 선택 뒤 mutation, action별 toast와 실패 뒤 상태 유지·재시도를 검증한다.
+
+### Repost menu와 toast는 최소 공용 platform 경계로 제공한다
+
+- Decision Date: 2026-07-27
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/post-action-bar.md`, `PROD-414`
+- Status: Active
+- Context / Problem: 목록 row마다 toast host를 두거나 Web·Native의 서로 다른 menu 위치 동작을 `RepostAction`에 직접 결합하면 transient UI 수명과 mutation 상태 소유권이 뒤섞인다. 현재 앱에는 요구 계약을 만족하는 공용 toast 또는 bottom action sheet가 없다.
+- Decision Outcome: 새 외부 dependency 없이 앱 provider에 하나의 transient toast host를 두고, Repost surface는 action별 error callback을 host에 연결한다. toast는 safe area와 고정 탭 바 위의 화면 하단에 표시하고 약 3초 뒤 사라지며 latest-replace, no close/retry control, no success toast와 alert semantics를 사용한다. action menu는 공용 항목·open·dismiss·선택 결과 경계를 공유하되 Web anchored popup과 Android·iOS bottom action sheet를 platform 구현으로 분리할 수 있다. private `RepostAction`은 fragment·mutation·pending·actor 격리를 계속 소유한다.
+- Alternatives Considered: 각 Post row의 toast, `PostActionBar` 내부 global toast, 모든 플랫폼의 중앙 `ModalSheet`, 새 menu/toast package. 각각 중복 host, UI와 action 상태 결합, 승인된 platform 동작 불일치 또는 불필요한 dependency를 만들므로 채택하지 않았다.
+- Consequences: toast provider는 다른 action이 재사용할 수 있는 최소 API만 제공하지만 PROD-414는 Repost 문구와 surface 연결만 구현한다. menu primitive는 미래 항목을 받을 수 있으나 PROD-431 전에는 Quote action을 노출하지 않는다.
+- Confirmation / Follow-up: toast latest-replace·자동 dismiss·alert semantics·safe area와 Web/native menu interaction을 unit·component·runtime 검증으로 확인한다.
 
 ### Source 접근 실패는 Repost와 Quote에 다르게 적용한다
 
@@ -156,7 +180,7 @@
 - Decision Date: 2026-07-21
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-389`, `PROD-414`, `PROD-415`, `PROD-432`, `PROD-433`, `PROD-453`, `PROD-471`
-- Status: Active
+- Status: Superseded
 - Context / Problem: presentation은 API 없이 먼저 검증할 수 있지만 production 목록 연결과 mutation action은 각기 다른 선행 조건을 가진다.
 - Decision Outcome: PROD-453은 production fragment shape를 따르는 typed fixture·Storybook·mock navigation으로 Repost/Quote presentation을 소유한다. 실제 관계 field를 읽는 Relay operation·fragment와 generated type은 PROD-415에 남긴다. PROD-415는 공용 `PostListItem`과 현재 상세의 `PostLayout`에 presentation을 연결하고 Content 없는 Repost 상세를 direct Source canonical route로 대체한다. PROD-414는 `PostActionBar` composite fragment, private Repost child fragment·mutation·pending, 생성 cache 동기화와 취소 실행을 소유한다. PROD-471은 취소 성공 뒤 Source cache 동기화를 소유하고, 실제 production Action Bar surface 조립·대상 정책과 오류 toast는 PROD-432에 남긴다.
 - Alternatives Considered: 하나의 목록 컴포넌트에서 presentation·action·route를 모두 구현, raw scalar props, raw fragment key cast. 모두 이슈 의존성과 Relay colocation 경계를 흐린다.
@@ -168,7 +192,7 @@
 - Decision Date: 2026-07-24
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-389`, `PROD-415`, `PROD-453`
-- Status: Active
+- Status: Superseded
 - Context / Problem: presentation slice가 기존 Post의 Author·Content·생성 시각을 보존하면서 Repost Author와 direct Source, Quote Author와 Source preview를 구분해야 한다.
 - Decision Outcome: 순수 Repost(content 없음 + direct Source 있음 + Reply Parent 없음)는 Repost Author의 canonical Profile Link attribution을 정확히 한 번 표시한 뒤 direct Source를 일반 Post와 같은 표준 목록 행 leaf로 표시한다. 이 경로에는 Source용 별도 full presentation·article·row border·renderer를 두지 않는다. 순수 Repost의 direct Source 자체가 Quote인 조합의 preview 정책은 2026-07-27 PROD-415 creator reply에 따라 이번 slice의 완료 조건에서 제외한다. Quote와 Reply+Quote는 Quote Author·자체 Content·생성 시각 뒤에 direct Source를 compact bordered preview로 표시하고, 일반 Content Post도 기존 생성 시각 표시를 유지한다. Quote Source preview의 Source Author와 Source Post affordance는 body link와 sibling으로 두고 자체 Action Bar를 두지 않는다. nullable Source Quote는 자체 Author·Content·생성 시각을 유지하고 preview/navigation만 생략한다. PROD-453은 story-only typed fixture adapter와 internal presentation model을 소유했고 fixture-only 단계에서 mock navigation을 검증했다. 실제 Post/Source Relay field·generated type·production navigation은 PROD-415가 통합한다.
 - Alternatives Considered: Source를 바깥 Post의 Content처럼 평탄화하는 방식, Source body 전체를 하나의 Link로 감싸는 방식, 일반 Post와 Quote의 outer 생성 시각을 parent integration까지 생략하는 방식. 각각 관계 역할을 흐리거나 body의 외부 Link와 중첩되고 기존 Post 표시 회귀를 만든다.
@@ -223,6 +247,30 @@
 - Consequences: keyboard·screen reader 사용자는 Source 생성 시각의 `원문 게시글 보기` Link로 Source Post에 접근하고, pointer·touch 사용자는 생성 시각 또는 본문 행을 사용할 수 있다. Source Author Profile과 body 외부 Link는 독립 목적지를 유지한다. `PostListItem` 회귀 검증은 Quote 자체 본문 shortcut이 바깥 Quote Post로 이동하고 Source Post로 잘못 이동하지 않는지 확인해야 한다. 현재 상세은 self navigation을 만들지 않는다.
 - Confirmation / Follow-up: Storybook에서 `PostListItem`의 Quote 자체 본문, 공용 preview의 Source 생성 시각·본문·Author와 외부 body Link의 목적지를 각각 검증하고 `a a` 및 `[role="link"] [role="link"]`가 없음을 확인한다. 현재 상세 `PostLayout`은 direct Source navigation만 검증한다. 시각 변화가 없으므로 별도 visual re-review는 요구하지 않는다.
 
+### Repost와 Quote의 canonical navigation target을 분리한다
+
+- Decision Date: 2026-07-27
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/design/post-action-bar.md`, `PROD-389`, `PROD-414`, `PROD-415`, `PROD-453`
+- Status: Active
+- Context / Problem: 순수 Repost에 자체 detail을 만들거나 바깥 Repost route로 이동하면 화면에 표시한 Source와 canonical navigation target이 달라진다. 반면 Content가 있는 Quote는 독립 Post이므로 자체 detail을 잃어서는 안 된다.
+- Decision Outcome: 순수 Repost의 body·생성 시각 affordance는 Source Author의 `relativeHandle`과 Source Post ID를 사용하는 canonical route로 이동하고, 순수 Repost ID의 상세 URL을 직접 열어도 Source canonical route로 replace redirect한다. 순수 Repost 아래 Action Bar도 direct Source를 대상으로 한다. Quote는 자체 canonical detail을 유지하고 Source preview만 Source detail로 이동한다. unavailable Source는 기존 unavailable/not-found 결과를 사용하며 불완전한 placeholder나 redirect loop를 만들지 않는다.
+- Alternatives Considered: Repost 자체 detail, 모든 Repost·Quote를 Source detail로 이동, unavailable Source placeholder. 각각 presentation과 target을 분리하거나 Quote identity를 잃고, 조회 정책을 client가 우회하므로 채택하지 않았다.
+- Consequences: PROD-415의 production wrapper와 detail route query는 Source canonical target과 replace redirect를 연결해야 한다. PROD-414는 순수 Repost surface에서 Source fragment를 Action Bar에 공급하고 PROD-453 presentation은 route를 직접 소유하지 않는다.
+- Confirmation / Follow-up: Home/Profile navigation, direct Repost URL replace, Quote 자체 detail과 Source preview 분리, unavailable 결과와 redirect loop 부재를 검증한다.
+
+### Presentation, navigation과 Repost action을 전달 가능한 client slice로 유지한다
+
+- Decision Date: 2026-07-27
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/design/post-action-bar.md`, `PROD-389`, `PROD-414`, `PROD-415`, `PROD-432`, `PROD-433`, `PROD-453`, `PROD-471`
+- Status: Active
+- Context / Problem: presentation, production navigation, Repost action과 전체 Action Bar 통합은 서로 다른 선행 조건을 가지지만 실제 사용 가능한 Repost action을 최종 통합 이슈까지 미루면 PROD-414의 전달 결과가 독립적으로 완성되지 않는다.
+- Decision Outcome: PROD-453은 typed fixture·Storybook·mock navigation presentation을 소유하고 PROD-415는 실제 Relay field, Home/Profile 연결과 canonical Source navigation을 소유한다. PROD-414는 private Repost child의 fragment·mutation·pending·cache 경계와 함께 최초 production Action Bar 배치, Repost menu와 실패 toast를 소유한다. PROD-471은 취소 성공 뒤 Source cache 동기화를 소유한다. PROD-432는 나머지 action 조립, 최종 대상·세션 policy, More와 공유 Action Bar의 전체 통합 검증·archive를 소유한다.
+- Alternatives Considered: presentation·navigation·action·최종 통합을 하나의 이슈에 모으거나, 모든 production surface 연결을 PROD-432까지 연기. 전자는 독립 선행 조건과 리뷰 경계를 잃고 후자는 PROD-414의 실제 사용자 결과를 미완성으로 남기므로 채택하지 않았다.
+- Consequences: 같은 `PostListItem`·`PostLayout`을 수정하는 이슈는 최신 head와 fragment ownership을 대조해야 한다. PROD-414 production surface를 시작할 때 PR #357이 열려 있으면 검증한 exact `prod-415` head 위에 PROD-414 고유 변경만 stack하고 PR base를 `prod-415`로 두며, 이미 merge됐으면 해당 merge가 포함된 최신 `main` 위에서 이어간다. 완료 여부는 각 issue task와 두 공유 OpenSpec의 정합성을 함께 확인한다.
+- Confirmation / Follow-up: PROD-414·415 scoped test와 PROD-432 최종 integration에서 각 slice의 포함·제외 범위를 교차 확인한다.
+
 ### 부모 change가 전체 계약과 archive를 소유한다
 
 - Decision Date: 2026-07-21
@@ -255,3 +303,6 @@
 
 - 2026-07-24 `Repost와 Quote는 Source의 시각 계층을 다르게 사용한다` 결정 중 Storybook mock link renderer를 production integration에도 유지하고 caller wrapper가 canonical Link를 공급한다는 구현 경계는 2026-07-27 `Post Source presentation이 canonical navigation을 직접 소유한다` 결정으로 대체한다. typed fixture와 Repost·Quote 시각 계층 소유권은 유지한다.
 - 2026-07-24 `Repost mutation adapter와 PostActionBar 공개 UI를 분리한다`는 2026-07-26 `Repost child action과 PostActionBar 공개 UI를 조립한다`로 대체했다.
+- 2026-07-26 `Repost child action과 PostActionBar 공개 UI를 조립한다`는 2026-07-27 `Repost 메뉴와 최초 production surface를 PROD-414에서 완성한다`로 대체했다.
+- 2026-07-21 `Presentation, 목록 연결과 action child를 독립 client slice로 유지한다`는 2026-07-27 `Presentation, navigation과 Repost action을 전달 가능한 client slice로 유지한다`로 대체했다.
+- 2026-07-24 `Repost와 Quote는 Source의 시각 계층을 다르게 사용한다`는 2026-07-27 `Repost와 Quote의 canonical navigation target을 분리한다`로 대체했다.
