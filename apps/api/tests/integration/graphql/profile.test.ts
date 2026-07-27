@@ -2422,7 +2422,9 @@ const materializeRemotePost = async ({
   });
 
   await handleInboundCreate(
-    { documentLoader } as unknown as Parameters<typeof handleInboundCreate>[0],
+    { documentLoader, parseUri: () => null } as unknown as Parameters<
+      typeof handleInboundCreate
+    >[0],
     new Create({ actor: new URL(actorUri), object: note }),
     receivedAt,
   );

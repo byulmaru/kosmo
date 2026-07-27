@@ -12,11 +12,11 @@
 #### Scenario: 모호하거나 지원하지 않는 Parent identity
 
 - **WHEN** 공개 원격 Note의 `inReplyTo`가 없지 않으면서 여러 URI로 해석되거나 HTTP(S)가 아닌 URI다
-- **THEN** 시스템은 그 Note를 Reply로 materialize하지 않는다
+- **THEN** 시스템은 그 Note를 Reply Parent 관계 없는 top-level Post로 materialize한다
 
 ### Requirement: 저장된 ActivityPub Post를 Reply Parent로 해석
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-358, PROD-494. 시스템은 `inReplyTo`가 가리키는 저장된 Local 또는 Remote ActivityPub Post identity를 기존 Post로 해석해야 하며(MUST), Content가 있는 Post만 Reply Parent로 허용해야 한다(MUST). `inReplyTo`는 Repost Source로 해석하거나 별도 raw Parent source of truth로 저장해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-358, PROD-494. 시스템은 `inReplyTo`가 가리키는 저장된 Local 또는 Remote ActivityPub Post identity를 기존 Post로 해석해야 하며(MUST), URI에서 Post를 찾는 identity lookup은 Post의 현재 Content 보유 여부와 독립적이어야 한다(MUST). Content가 있는 Post만 Reply Parent로 허용하는 검증은 기존 Post 생성 계약을 따라야 한다(MUST). `inReplyTo`는 Repost Source로 해석하거나 별도 raw Parent source of truth로 저장해서는 안 된다(MUST NOT).
 
 #### Scenario: 저장된 Local Parent
 
@@ -31,22 +31,25 @@
 #### Scenario: Content 없는 Repost Parent
 
 - **WHEN** 해석된 Post가 자체 Content 없는 Repost다
-- **THEN** 시스템은 그 Post를 Reply Parent로 연결하지 않고 원격 Reply를 materialize하지 않는다
+- **THEN** 시스템은 그 Post를 Reply Parent로 연결하지 않는다
+- **AND** 원격 Note 자체는 Reply Parent 관계 없는 top-level Post로 materialize한다
 
-### Requirement: 현재 저장 상태에서 해석할 수 없는 Parent 처리
+### Requirement: 현재 저장 상태에서 해석할 수 없는 Parent의 top-level fallback
 
-**Authority / Provenance:** PROD-358 및 2026-07-27 구현 결정 댓글. 이 변경 범위에서 시스템은 `inReplyTo` Parent를 현재 저장된 ActivityPub Post identity로 해석할 수 없으면 원격 Reply를 materialize해서는 안 되며(MUST NOT), 수신 처리 중 Parent를 원격 fetch하거나 재귀 materialize해서는 안 된다(MUST NOT). 이 요구사항은 Parent fetch의 장기 정책, 실행 시점 또는 한계를 확정하지 않는다.
+**Authority / Provenance:** PROD-358 및 2026-07-27 구현 결정 댓글. 이 변경 범위에서 시스템은 `inReplyTo` Parent를 현재 저장된 ActivityPub Post identity로 해석할 수 없거나 Reply Parent로 사용할 수 없으면 원격 Note를 Reply Parent 관계 없는 top-level Post로 materialize해야 한다(MUST). 수신 처리 중 Parent를 원격 fetch하거나 재귀 materialize해서는 안 된다(MUST NOT). 이 요구사항은 향후 Parent fetch, 기존 top-level Post의 Parent update/backfill, 실행 시점 또는 한계를 확정하지 않는다.
 
 #### Scenario: 아직 저장되지 않은 Parent
 
 - **WHEN** 유효한 `inReplyTo` URI에 대응하는 저장된 Post가 없다
-- **THEN** 시스템은 현재 delivery에서 Reply Post, Content 또는 ActivityPub mapping을 생성하지 않는다
+- **THEN** 시스템은 현재 delivery에서 Content와 ActivityPub mapping을 가진 top-level Post를 생성한다
+- **AND** `replyParentId`를 설정하지 않는다
 - **AND** Parent에 대한 network fetch를 수행하지 않는다
 
-#### Scenario: Parent 저장 뒤 재전달
+#### Scenario: Parent 저장 뒤 duplicate 재전달
 
-- **WHEN** 앞선 delivery에서는 Parent가 없어 보류됐지만 Parent가 저장된 뒤 같은 Create가 다시 전달된다
-- **THEN** 시스템은 현재 저장 상태를 다시 평가해 원격 Reply를 정상 materialize할 수 있다
+- **WHEN** 앞선 delivery에서 Parent가 없어 top-level Post로 저장됐고 Parent 저장 뒤 같은 Create가 다시 전달된다
+- **THEN** 시스템은 first-write-wins에 따라 기존 top-level Post를 유지한다
+- **AND** duplicate delivery만으로 `replyParentId`를 추가하지 않는다
 
 ### Requirement: 원격 Reply의 원자적 저장과 중복 보존
 
@@ -63,6 +66,12 @@
 - **WHEN** 이미 materialize된 원격 Reply와 같은 object URI의 Create가 다시 전달된다
 - **THEN** 시스템은 추가 Post나 Content를 만들지 않는다
 - **AND** 기존 `replyParentId`를 유지한다
+
+#### Scenario: top-level fallback의 duplicate Create
+
+- **WHEN** Parent를 해석하지 못해 top-level로 materialize된 원격 Note와 같은 object URI의 Create가 다시 전달된다
+- **THEN** 시스템은 추가 Post나 Content를 만들지 않는다
+- **AND** 기존의 nullable `replyParentId`를 변경하지 않는다
 
 #### Scenario: 저장 실패 rollback
 

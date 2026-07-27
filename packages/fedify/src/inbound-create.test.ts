@@ -36,6 +36,7 @@ import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as CoreServices from '@kosmo/core/services';
+import type { findPostByActivityPubUri as findPostByActivityPubUriType } from './activitypub-post-uri';
 import type { handleInboundCreate as handleInboundCreateType } from './inbound-create';
 
 const publicOrigin = 'http://127.0.0.1:4173';
@@ -45,6 +46,9 @@ const remoteActorUri = new URL('https://remote.example/users/alice');
 const remoteKeyUri = new URL('#main-key', remoteActorUri);
 const remoteObjectUri = new URL('https://remote.example/notes/1');
 const receivedAt = Temporal.Instant.from('2026-07-16T00:00:00Z');
+const uriFederation = createFederation<void>({ kv: new MemoryKvStore() });
+uriFederation.setObjectDispatcher(Note, '/ap/note/{id}', () => null);
+const uriContext = uriFederation.createContext(new URL(publicOrigin), undefined);
 
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
@@ -56,6 +60,7 @@ let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
 let Profiles: typeof CoreDb.Profiles;
 let createPost: typeof CoreServices.createPost;
+let findPostByActivityPubUri: typeof findPostByActivityPubUriType;
 let handleInboundCreate: typeof handleInboundCreateType;
 let localInstanceId: string;
 
@@ -76,6 +81,7 @@ describe('inbound Create dispatch', () => {
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ createPost } = await import('@kosmo/core/services'));
+    ({ findPostByActivityPubUri } = await import('./activitypub-post-uri'));
     ({ handleInboundCreate } = await import('./inbound-create'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
@@ -230,7 +236,7 @@ describe('inbound Create dispatch', () => {
     assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
   });
 
-  test('rejects mismatched identity, attribution, replies, and non-public Notes', async () => {
+  test('rejects mismatched identity, attribution, and non-public Notes while falling back unresolved replies', async () => {
     await createStoredRemoteActor();
     const notes = [
       new Note({ id: remoteObjectUri, to: PUBLIC_COLLECTION }),
@@ -287,9 +293,10 @@ describe('inbound Create dispatch', () => {
       receivedAt,
     );
 
-    assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
-    assert.equal((await db.select().from(Posts)).length, 0);
-    assert.equal((await db.select().from(PostContents)).length, 0);
+    assert.equal((await db.select().from(ActivityPubPosts)).length, 1);
+    assert.equal((await db.select().from(Posts)).length, 1);
+    assert.equal((await db.select().from(PostContents)).length, 1);
+    assert.equal((await getMaterializedPost(remoteObjectUri)).post.replyParentId, null);
   });
 
   test('materializes replies to stored Remote and canonical Local Parent identities', async () => {
@@ -348,7 +355,7 @@ describe('inbound Create dispatch', () => {
     assert.equal((await getMaterializedPost(remoteReplyUri)).post.profileId, remoteProfile.id);
   });
 
-  test('rejects ambiguous, unsupported, unknown, forged Local, and contentless Parent identities', async () => {
+  test('stores ambiguous, unsupported, unknown, forged Local, and contentless Parent inputs as top-level Posts', async () => {
     const profile = await createStoredRemoteActor();
     const sourceUri = new URL('https://remote.example/notes/repost-source');
     await handleInboundCreate(
@@ -373,6 +380,10 @@ describe('inbound Create dispatch', () => {
       receivedAt,
       uri: contentlessParentUri.href,
     });
+    assert.equal(
+      await findPostByActivityPubUri(createContext(), contentlessParentUri),
+      contentlessParent.id,
+    );
     const existingPostCount = await db.$count(Posts);
     const existingContentCount = await db.$count(PostContents);
     const existingMappingCount = await db.$count(ActivityPubPosts);
@@ -382,6 +393,7 @@ describe('inbound Create dispatch', () => {
     const invalidNotes = [
       new Note({
         attribution: remoteActorUri,
+        content: 'Multiple Parent fallback',
         id: new URL('https://remote.example/notes/multiple-parent'),
         replyTargets: [
           new URL('https://remote.example/notes/parent-1'),
@@ -391,18 +403,21 @@ describe('inbound Create dispatch', () => {
       }),
       new Note({
         attribution: remoteActorUri,
+        content: 'Unsupported Parent fallback',
         id: new URL('https://remote.example/notes/non-http-parent'),
         replyTarget: new URL('urn:uuid:019f6f67-1111-7777-8888-123456789abc'),
         to: PUBLIC_COLLECTION,
       }),
       new Note({
         attribution: remoteActorUri,
+        content: 'Unknown Parent fallback',
         id: new URL('https://remote.example/notes/unknown-parent'),
         replyTarget: new URL('https://remote.example/notes/unknown'),
         to: PUBLIC_COLLECTION,
       }),
       new Note({
         attribution: remoteActorUri,
+        content: 'Forged Local Parent fallback',
         id: new URL('https://remote.example/notes/forged-local-parent'),
         replyTarget: new URL(
           'https://attacker.example/ap/note/019f6f67-1111-7777-8888-123456789abc',
@@ -411,12 +426,14 @@ describe('inbound Create dispatch', () => {
       }),
       new Note({
         attribution: remoteActorUri,
+        content: 'Contentless Parent fallback',
         id: new URL('https://remote.example/notes/contentless-reply'),
         replyTarget: contentlessParentUri,
         to: PUBLIC_COLLECTION,
       }),
       new Note({
         attribution: remoteActorUri,
+        content: 'Embedded Parent fallback',
         id: new URL('https://remote.example/notes/embedded-parent-without-id'),
         replyTarget: new Note({ content: 'Parent without an ID' }),
         to: PUBLIC_COLLECTION,
@@ -432,12 +449,15 @@ describe('inbound Create dispatch', () => {
     }
 
     assert.equal(parentLoader.mock.calls.length, 0);
-    assert.equal(await db.$count(Posts), existingPostCount);
-    assert.equal(await db.$count(PostContents), existingContentCount);
-    assert.equal(await db.$count(ActivityPubPosts), existingMappingCount);
+    assert.equal(await db.$count(Posts), existingPostCount + invalidNotes.length);
+    assert.equal(await db.$count(PostContents), existingContentCount + invalidNotes.length);
+    assert.equal(await db.$count(ActivityPubPosts), existingMappingCount + invalidNotes.length);
+    for (const note of invalidNotes) {
+      assert.equal((await getMaterializedPost(note.id!)).post.replyParentId, null);
+    }
   });
 
-  test('materializes a deferred Reply after Parent arrival and preserves the first Parent on duplicate Create', async () => {
+  test('preserves first-write Parent state for top-level fallback and resolved Reply duplicates', async () => {
     await createStoredRemoteActor();
     const firstParentUri = new URL('https://remote.example/notes/late-parent');
     const secondParentUri = new URL('https://remote.example/notes/second-parent');
@@ -446,7 +466,7 @@ describe('inbound Create dispatch', () => {
       createRemoteCreate({ objectUri: replyUri, replyTarget: firstParentUri });
 
     await handleInboundCreate(createContext(), deferredReply(), receivedAt);
-    assert.equal(await db.$count(ActivityPubPosts), 0);
+    assert.equal((await getMaterializedPost(replyUri)).post.replyParentId, null);
 
     await handleInboundCreate(
       createContext(),
@@ -455,8 +475,17 @@ describe('inbound Create dispatch', () => {
     );
     await handleInboundCreate(createContext(), deferredReply(), receivedAt);
     const firstParent = await getMaterializedPost(firstParentUri);
-    const reply = await getMaterializedPost(replyUri);
-    assert.equal(reply.post.replyParentId, firstParent.post.id);
+    const fallback = await getMaterializedPost(replyUri);
+    assert.equal(fallback.post.replyParentId, null);
+
+    const resolvedReplyUri = new URL('https://remote.example/notes/resolved-reply');
+    await handleInboundCreate(
+      createContext(),
+      createRemoteCreate({ objectUri: resolvedReplyUri, replyTarget: firstParentUri }),
+      receivedAt,
+    );
+    const resolvedReply = await getMaterializedPost(resolvedReplyUri);
+    assert.equal(resolvedReply.post.replyParentId, firstParent.post.id);
 
     await handleInboundCreate(
       createContext(),
@@ -465,13 +494,18 @@ describe('inbound Create dispatch', () => {
     );
     await handleInboundCreate(
       createContext(),
-      createRemoteCreate({ objectUri: replyUri, replyTarget: secondParentUri }),
+      createRemoteCreate({ objectUri: resolvedReplyUri, replyTarget: secondParentUri }),
       receivedAt.add({ hours: 1 }),
     );
 
-    assert.equal((await getMaterializedPost(replyUri)).post.replyParentId, firstParent.post.id);
+    assert.equal((await getMaterializedPost(replyUri)).post.replyParentId, null);
     assert.equal(
-      (await db.select().from(PostContents).where(eq(PostContents.postId, reply.post.id))).length,
+      (await getMaterializedPost(resolvedReplyUri)).post.replyParentId,
+      firstParent.post.id,
+    );
+    assert.equal(
+      (await db.select().from(PostContents).where(eq(PostContents.postId, resolvedReply.post.id)))
+        .length,
       1,
     );
   });
@@ -785,7 +819,11 @@ const createContext = (
   documentLoader: DocumentLoader = async (url) => {
     throw new Error(`Unexpected document URL: ${url}`);
   },
-) => ({ documentLoader }) as unknown as InboxContext<void>;
+) =>
+  ({
+    documentLoader,
+    parseUri: (uri: URL | null) => uriContext.parseUri(uri),
+  }) as unknown as InboxContext<void>;
 
 const createRemoteCreate = ({ objectUri, replyTarget }: { objectUri: URL; replyTarget?: URL }) =>
   new Create({

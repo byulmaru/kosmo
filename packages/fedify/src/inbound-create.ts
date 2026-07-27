@@ -39,6 +39,7 @@ export const handleInboundCreate = async (
   if (object instanceof Note) {
     await handleInboundCreateNote({
       actorUri,
+      context,
       note: object,
       objectUri,
       profileId: storedActor.profile.id,

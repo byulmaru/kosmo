@@ -1,7 +1,9 @@
+import { Note } from '@fedify/vocab';
 import { ActivityPubPosts, db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
 import { InstanceKind } from '@kosmo/core/enums';
-import { and, eq, isNotNull } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
+import type { Context } from '@fedify/fedify';
 
 const postIdSchema = z.uuid().refine((value) => value === value.toLowerCase());
 
@@ -38,45 +40,43 @@ export const resolveActivityPubPostUri = async (postId: string): Promise<URL | u
   return row.remoteUri ? new URL(row.remoteUri) : undefined;
 };
 
-export const findContentPostByActivityPubUri = async (uri: URL): Promise<string | undefined> => {
+export const findPostByActivityPubUri = async (
+  context: Pick<Context<unknown>, 'parseUri'>,
+  uri: URL,
+): Promise<string | undefined> => {
   if (uri.protocol !== 'http:' && uri.protocol !== 'https:') {
     return undefined;
+  }
+
+  const localObject = context.parseUri(uri);
+  if (localObject) {
+    if (localObject.type !== 'object' || localObject.class !== Note) {
+      return undefined;
+    }
+
+    const postId = localObject.values.id;
+    if (!isCanonicalPostId(postId)) {
+      return undefined;
+    }
+
+    return db
+      .select({ id: Posts.id })
+      .from(Posts)
+      .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(and(eq(Posts.id, postId), eq(Instances.kind, InstanceKind.LOCAL)))
+      .limit(1)
+      .then(first)
+      .then((post) => post?.id);
   }
 
   const remotePost = await db
     .select({ id: Posts.id })
     .from(ActivityPubPosts)
     .innerJoin(Posts, eq(Posts.id, ActivityPubPosts.postId))
-    .where(and(eq(ActivityPubPosts.uri, uri.href), isNotNull(Posts.currentContentId)))
-    .limit(1)
-    .then(first);
-  if (remotePost) {
-    return remotePost.id;
-  }
-
-  const match = /^\/ap\/note\/([^/]+)$/.exec(uri.pathname);
-  const postId = match?.[1];
-  if (!postId || !isCanonicalPostId(postId)) {
-    return undefined;
-  }
-
-  const localPost = await db
-    .select({ canonicalOrigin: Instances.canonicalOrigin, id: Posts.id })
-    .from(Posts)
-    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(
-      and(
-        eq(Posts.id, postId),
-        isNotNull(Posts.currentContentId),
-        eq(Instances.kind, InstanceKind.LOCAL),
-      ),
-    )
+    .where(eq(ActivityPubPosts.uri, uri.href))
     .limit(1)
     .then(first);
 
-  return localPost?.canonicalOrigin &&
-    new URL(`/ap/note/${localPost.id}`, localPost.canonicalOrigin).href === uri.href
-    ? localPost.id
-    : undefined;
+  return remotePost?.id;
 };
