@@ -71,3 +71,10 @@
 - 열린 PR의 제목, 본문, base, Draft/Ready 상태 변경은 `gh` 명령을 사용한다.
 - PR 본문 형식은 `memory/pr-writing.md`를 따른다.
 - Ready for review로 전환하기 전에는 현재 HEAD가 정상 동작하고 PR 범위가 리뷰 가능한 단위인지 다시 확인한다.
+
+## Merge And Closeout
+
+- merge 직전에 PR head SHA, base, checks, merge state와 unresolved review thread를 새로 조회한다.
+- merge queue 또는 auto-merge 등록은 merge 완료가 아니다. squash merge를 요청할 때는 가능하면 확인한 head
+  SHA를 `--match-head-commit <sha>`로 고정하고, 등록 뒤 `state: MERGED`, `mergedAt`, `mergeCommit.oid`를
+  다시 확인한다.
