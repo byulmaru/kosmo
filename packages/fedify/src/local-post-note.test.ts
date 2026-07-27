@@ -37,7 +37,6 @@ let authorizeLocalPostNote: typeof LocalPostNoteModule.authorizeLocalPostNote;
 let db: typeof CoreDb.db;
 let dispatchLocalPostNote: typeof LocalPostNoteModule.dispatchLocalPostNote;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
-let getLocalPostUri: typeof PostUriModule.getLocalPostUri;
 let isCanonicalPostId: typeof PostUriModule.isCanonicalPostId;
 let Instances: typeof CoreDb.Instances;
 let localInstanceId: string;
@@ -69,8 +68,7 @@ describe('ActivityPub Local Post Note', () => {
       Profiles,
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
-    ({ getLocalPostUri, isCanonicalPostId, resolveActivityPubPostUri } =
-      await import('./activitypub-post-uri'));
+    ({ isCanonicalPostId, resolveActivityPubPostUri } = await import('./activitypub-post-uri'));
     ({ authorizeLocalPostNote, dispatchLocalPostNote } = await import('./local-post-note'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
@@ -98,38 +96,24 @@ describe('ActivityPub Local Post Note', () => {
       uri: remoteUri.href,
     });
 
-    assert.equal(
-      getLocalPostUri(publicOrigin, localPost.id).href,
-      `${publicOrigin}/ap/note/${localPost.id}`,
-    );
-    assert.equal(
-      (
-        await resolveActivityPubPostUri({
-          canonicalOrigin: publicOrigin,
-          localInstanceId,
-          postId: localPost.id,
-        })
-      )?.href,
-      `${publicOrigin}/ap/note/${localPost.id}`,
-    );
-    assert.equal(
-      (
-        await resolveActivityPubPostUri({
-          canonicalOrigin: publicOrigin,
-          localInstanceId,
-          postId: remotePost.id,
-        })
-      )?.href,
-      remoteUri.href,
-    );
-    assert.equal(
-      await resolveActivityPubPostUri({
-        canonicalOrigin: publicOrigin,
-        localInstanceId,
-        postId: unmappedRemotePost.id,
-      }),
-      undefined,
-    );
+    const storedCanonicalOrigin = 'https://stored-origin.example';
+    await db
+      .update(Instances)
+      .set({ canonicalOrigin: storedCanonicalOrigin })
+      .where(eq(Instances.id, localInstanceId));
+    try {
+      assert.equal(
+        (await resolveActivityPubPostUri(localPost.id))?.href,
+        `${storedCanonicalOrigin}/ap/note/${localPost.id}`,
+      );
+    } finally {
+      await db
+        .update(Instances)
+        .set({ canonicalOrigin: publicOrigin })
+        .where(eq(Instances.id, localInstanceId));
+    }
+    assert.equal((await resolveActivityPubPostUri(remotePost.id))?.href, remoteUri.href);
+    assert.equal(await resolveActivityPubPostUri(unmappedRemotePost.id), undefined);
     assert.equal((await db.select().from(ActivityPubPosts)).length, 1);
   });
 

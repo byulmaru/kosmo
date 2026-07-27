@@ -51,11 +51,13 @@ Linear 계약을 독립적으로 다시 확인해야 한다.
 - Context / Problem: Local/Remote Post URI 해석은 outbound Note와 후속 federation activity가 공유하지만 GraphQL과
   일반 core Post action에는 필요하지 않은 ActivityPub protocol projection이다.
 - Decision Outcome: 공통 Post URI resolver와 Local Note URI projection은 `packages/fedify`가 소유한다.
-  `packages/core`는 Post, Instance와 mapping 저장 조회 계약만 제공한다.
+  resolver는 Post ID만 받고 Local Post의 origin은 Author Profile이 속한 `Instances.canonicalOrigin`에서 읽으며,
+  Remote Post는 저장 mapping URI를 사용한다. `packages/core`는 Post, Instance와 mapping 저장 조회 계약만 제공한다.
 - Alternatives Considered: `packages/core` 공개 service, `apps/web` route helper, activity별 URI 조립. core domain에
   protocol URL을 노출하거나 BFF와 후속 activity에서 규칙을 중복하므로 사용하지 않는다.
-- Consequences: Fedify dispatcher와 후속 activity delivery는 같은 package 경계를 재사용하고 GraphQL/API는 이
-  resolver에 의존하지 않는다. 내부 helper와 query 분리는 구현 중 달라질 수 있다.
+- Consequences: caller가 configured origin이나 Local Instance ID를 다시 전달하지 않으므로 DB에 저장된 Post
+  소유 Instance가 URI source가 된다. Fedify dispatcher와 후속 activity delivery는 같은 package 경계를
+  재사용하고 GraphQL/API는 이 resolver에 의존하지 않는다.
 - Confirmation / Follow-up: package dependency와 후속 재사용 가능한 export, Local/Remote URI test로 확인한다.
 
 ### Note serialization은 기존 PostContent 계약을 재정의하지 않는다

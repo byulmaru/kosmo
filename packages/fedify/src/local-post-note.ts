@@ -11,20 +11,18 @@ import {
   ProfileFollows,
   Profiles,
 } from '@kosmo/core/db';
-import { InstanceState, PostState, PostVisibility, ProfileState } from '@kosmo/core/enums';
-import { encodeGlobalId } from '@kosmo/core/global-id';
 import {
-  LocalInstanceConfigurationError,
-  resolveConfiguredLocalInstance,
-} from '@kosmo/core/local-instance';
+  InstanceKind,
+  InstanceState,
+  PostState,
+  PostVisibility,
+  ProfileState,
+} from '@kosmo/core/enums';
+import { encodeGlobalId } from '@kosmo/core/global-id';
 import { postContentDocumentToHtml } from '@kosmo/core/post-content/server';
 import { and, eq, ne } from 'drizzle-orm';
 import { escapeText } from 'entities/escape';
-import {
-  getLocalPostUri,
-  isCanonicalPostId,
-  resolveActivityPubPostUri,
-} from './activitypub-post-uri';
+import { isCanonicalPostId, resolveActivityPubPostUri } from './activitypub-post-uri';
 import type { RequestContext } from '@fedify/fedify';
 import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
 
@@ -35,30 +33,23 @@ type LocalPostNote = {
   readonly contentDocument: PostContentDocumentV1;
   readonly createdAt: Temporal.Instant;
   readonly id: string;
-  readonly localInstanceId: string;
   readonly replyParentId: string | null;
   readonly summary: string | null;
   readonly visibility: (typeof PostVisibility)[keyof typeof PostVisibility];
 };
 
-const loadLocalPostNote = async (postId: string): Promise<LocalPostNote | null> => {
+const loadLocalPostNote = async (
+  context: RequestContext<void>,
+  postId: string,
+): Promise<LocalPostNote | null> => {
   if (!isCanonicalPostId(postId)) {
     return null;
-  }
-
-  let localInstance;
-  try {
-    localInstance = await resolveConfiguredLocalInstance();
-  } catch (error) {
-    if (error instanceof LocalInstanceConfigurationError) {
-      return null;
-    }
-    throw error;
   }
 
   const row = await db
     .select({
       contentDocument: PostContents.document,
+      instanceCanonicalOrigin: Instances.canonicalOrigin,
       post: Posts,
       profile: Profiles,
     })
@@ -70,7 +61,8 @@ const loadLocalPostNote = async (postId: string): Promise<LocalPostNote | null> 
       and(
         eq(Posts.id, postId),
         eq(Posts.state, PostState.ACTIVE),
-        eq(Profiles.instanceId, localInstance.id),
+        eq(Instances.kind, InstanceKind.LOCAL),
+        eq(Instances.canonicalOrigin, context.canonicalOrigin),
         eq(Profiles.state, ProfileState.ACTIVE),
         eq(Instances.state, InstanceState.ACTIVE),
       ),
@@ -78,15 +70,14 @@ const loadLocalPostNote = async (postId: string): Promise<LocalPostNote | null> 
     .limit(1)
     .then(first);
 
-  return row && row.post.visibility !== PostVisibility.DIRECT
+  return row && row.instanceCanonicalOrigin && row.post.visibility !== PostVisibility.DIRECT
     ? {
         authorHandle: row.profile.handle,
         authorProfileId: row.profile.id,
-        canonicalOrigin: localInstance.canonicalOrigin,
+        canonicalOrigin: row.instanceCanonicalOrigin,
         contentDocument: row.contentDocument,
         createdAt: row.post.createdAt,
         id: row.post.id,
-        localInstanceId: localInstance.id,
         replyParentId: row.post.replyParentId,
         summary: row.contentDocument.summary,
         visibility: row.post.visibility,
@@ -122,7 +113,7 @@ export const authorizeLocalPostNote = async (
   context: RequestContext<void>,
   { id }: { id: string },
 ): Promise<boolean> => {
-  const note = await loadLocalPostNote(id);
+  const note = await loadLocalPostNote(context, id);
   if (!note) {
     return false;
   }
@@ -145,7 +136,7 @@ export const dispatchLocalPostNote = async (
   context: RequestContext<void>,
   { id }: { id: string },
 ): Promise<Note | null> => {
-  const note = await loadLocalPostNote(id);
+  const note = await loadLocalPostNote(context, id);
   if (!note) {
     return null;
   }
@@ -153,11 +144,7 @@ export const dispatchLocalPostNote = async (
   const authorUri = context.getActorUri(note.authorProfileId);
   const followersUri = getFollowersUri(context, note.authorProfileId);
   const replyTarget = note.replyParentId
-    ? await resolveActivityPubPostUri({
-        canonicalOrigin: note.canonicalOrigin,
-        localInstanceId: note.localInstanceId,
-        postId: note.replyParentId,
-      })
+    ? await resolveActivityPubPostUri(note.replyParentId)
     : undefined;
   const to = note.visibility === PostVisibility.PUBLIC ? PUBLIC_COLLECTION : followersUri;
   const cc =
@@ -171,7 +158,7 @@ export const dispatchLocalPostNote = async (
     attribution: authorUri,
     ...(cc ? { cc } : {}),
     content: postContentDocumentToHtml(note.contentDocument),
-    id: getLocalPostUri(note.canonicalOrigin, note.id),
+    id: new URL(`/ap/note/${note.id}`, note.canonicalOrigin),
     mediaType: 'text/html',
     published: note.createdAt,
     ...(replyTarget ? { replyTarget } : {}),

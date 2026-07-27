@@ -55,9 +55,9 @@ export는 아직 완성되지 않았다. 현재 `post.reply_parent_id` self-FK�
 
 ### Recommended Approach
 
-1. `packages/fedify`에 configured Local Instance와 Post DB UUID를 받는 Local Note URI projection과, Post ID에서
-   Local identity 또는 existing remote mapping URI를 반환하는 공통 Post identity 경계를 둔다. 후속 federation
-   activity는 이 경계를 재사용한다.
+1. `packages/fedify`에 Post DB UUID를 받는 공통 Post identity 경계를 둔다. Local Post는 Author Profile이 속한
+   `Instances.canonicalOrigin`에서 Note URI를 파생하고 Remote Post는 existing mapping URI를 반환한다. 후속
+   federation activity는 이 경계를 재사용한다.
 2. Fedify에 `Note` object dispatcher `/ap/note/{id}`를 등록한다. dispatcher load는 Post, current Content, Author
    Profile/Instance와 direct Parent identity에 필요한 최소 열을 한 경계에서 읽고 Local/Active/contentful 조건을
    먼저 확인한다.

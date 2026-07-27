@@ -1,4 +1,4 @@
-export { getLocalPostUri, resolveActivityPubPostUri } from './src/activitypub-post-uri';
+export { resolveActivityPubPostUri } from './src/activitypub-post-uri';
 export { federation } from './src/federation';
 export { sendAcceptFollowActivity } from './src/follow-delivery';
 export { sendProfileFollow, sendProfileUnfollow } from './src/profile-follow-delivery';

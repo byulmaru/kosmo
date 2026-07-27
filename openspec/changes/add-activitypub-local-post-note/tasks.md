@@ -76,6 +76,8 @@ Local/Remote Post가 `packages/fedify`의 하나의 안정적인 ActivityPub ide
 **Guardrails**
 
 - URI resolver, Post load, authorization과 FK 작업은 PROD-502 완료 전에도 독립적으로 진행할 수 있다.
+- Local Post URI origin은 Author Profile이 속한 `Instances.canonicalOrigin`에서 읽고 resolver caller가 origin이나
+  Local Instance ID를 다시 전달하지 않는다.
 - Note `content` 연결과 PROD-494 최종 완료만 PROD-502 serializer 결과에 의존한다.
 - Followers Only는 signed actor URI가 Author이거나 stored established Follow의 follower일 때만 허용한다.
 - pending FollowRequest, anonymous, unknown actor와 non-follower는 권한을 부여하지 않는다.

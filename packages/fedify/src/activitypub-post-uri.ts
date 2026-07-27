@@ -1,4 +1,5 @@
-import { ActivityPubPosts, db, first, Posts, Profiles } from '@kosmo/core/db';
+import { ActivityPubPosts, db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
+import { InstanceKind } from '@kosmo/core/enums';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -6,26 +7,20 @@ const postIdSchema = z.uuid().refine((value) => value === value.toLowerCase());
 
 export const isCanonicalPostId = (value: string): boolean => postIdSchema.safeParse(value).success;
 
-export const getLocalPostUri = (canonicalOrigin: string | URL, postId: string): URL =>
-  new URL(`/ap/note/${postId}`, canonicalOrigin);
-
-export const resolveActivityPubPostUri = async ({
-  canonicalOrigin,
-  localInstanceId,
-  postId,
-}: {
-  canonicalOrigin: string | URL;
-  localInstanceId: string;
-  postId: string;
-}): Promise<URL | undefined> => {
+export const resolveActivityPubPostUri = async (postId: string): Promise<URL | undefined> => {
   if (!isCanonicalPostId(postId)) {
     return undefined;
   }
 
   const row = await db
-    .select({ instanceId: Profiles.instanceId, remoteUri: ActivityPubPosts.uri })
+    .select({
+      instanceCanonicalOrigin: Instances.canonicalOrigin,
+      instanceKind: Instances.kind,
+      remoteUri: ActivityPubPosts.uri,
+    })
     .from(Posts)
     .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
     .leftJoin(ActivityPubPosts, eq(ActivityPubPosts.postId, Posts.id))
     .where(eq(Posts.id, postId))
     .limit(1)
@@ -34,8 +29,10 @@ export const resolveActivityPubPostUri = async ({
   if (!row) {
     return undefined;
   }
-  if (row.instanceId === localInstanceId) {
-    return getLocalPostUri(canonicalOrigin, postId);
+  if (row.instanceKind === InstanceKind.LOCAL) {
+    return row.instanceCanonicalOrigin
+      ? new URL(`/ap/note/${postId}`, row.instanceCanonicalOrigin)
+      : undefined;
   }
 
   return row.remoteUri ? new URL(row.remoteUri) : undefined;

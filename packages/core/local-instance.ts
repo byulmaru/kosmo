@@ -3,13 +3,10 @@ import { db } from './db';
 import { Instances } from './db/tables';
 import { first } from './db/utils';
 import {
-  LocalInstanceConfigurationError,
   parseLocalInstanceConfig,
   validateConfiguredLocalInstance,
 } from './local-instance-internal';
 import type { ConfiguredLocalInstance, LocalInstanceOptions } from './local-instance-internal';
-
-export { LocalInstanceConfigurationError };
 
 let configuredLocalInstancePromise: Promise<ConfiguredLocalInstance> | undefined;
 
