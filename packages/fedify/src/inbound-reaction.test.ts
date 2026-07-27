@@ -229,6 +229,29 @@ test('Undo URI와 embedded activity는 mapping만 사용하고 actor mismatch를
   await handleInboundUndo(
     createContext(null),
     new Undo({
+      actors: [new URL(actor.actorUri), new URL(attacker.actorUri)],
+      id: new URL(`/activities/${crypto.randomUUID()}`, actor.actorUri),
+      object: first.id!,
+    }),
+  );
+  assert.ok(await readReaction(actor.profile.id, firstTarget.post.id));
+
+  await handleInboundUndo(
+    createContext(null),
+    new Undo({
+      actor: new URL(actor.actorUri),
+      id: new URL(`/activities/${crypto.randomUUID()}`, actor.actorUri),
+      object: new EmojiReact({
+        actors: [new URL(actor.actorUri), new URL(attacker.actorUri)],
+        id: second.id,
+      }),
+    }),
+  );
+  assert.ok(await readReaction(actor.profile.id, secondTarget.post.id));
+
+  await handleInboundUndo(
+    createContext(null),
+    new Undo({
       actor: new URL(attacker.actorUri),
       id: new URL(`/activities/${crypto.randomUUID()}`, attacker.actorUri),
       object: first.id!,

@@ -4,7 +4,7 @@ import { EmojiReact, Follow, Like } from '@fedify/vocab';
 import { InstanceState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { followProfile, undoInboundReaction, unfollowProfile } from '@kosmo/core/services';
-import { isHttpUri } from './activitypub-uri';
+import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { sendAcceptFollowActivity } from './follow-delivery';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
 import {
@@ -96,7 +96,8 @@ const noNetworkDocumentLoader = async (url: string) => {
 };
 
 export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo): Promise<void> => {
-  const actorUri = undo.actorId;
+  const actorHref = uniqueHref(undo.actorIds);
+  const actorUri = actorHref ? new URL(actorHref) : null;
   if (!isHttpUri(actorUri)) {
     return;
   }
@@ -124,7 +125,7 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
   });
   if (embedded instanceof Follow) {
     const objectUri = embedded.objectId;
-    if (!isHttpUri(objectUri) || embedded.actorId?.href !== actorUri.href) {
+    if (!isHttpUri(objectUri) || uniqueHref(embedded.actorIds) !== actorUri.href) {
       return;
     }
 
@@ -148,7 +149,7 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
   if (
     !isHttpUri(activityUri) ||
     ((embedded instanceof Like || embedded instanceof EmojiReact) &&
-      embedded.actorId?.href !== actorUri.href)
+      uniqueHref(embedded.actorIds) !== actorUri.href)
   ) {
     return;
   }

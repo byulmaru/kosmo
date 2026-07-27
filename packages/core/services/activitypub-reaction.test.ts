@@ -265,6 +265,73 @@ test('exact duplicate와 기존 core Reaction mapping은 멱등이고 URI confli
   assert.equal(mapped.reaction.id, existing.reaction.id);
 });
 
+test('같은 activity URI의 동시 conflict는 한 identity만 보존하고 loser Reaction을 rollback한다', async () => {
+  const actor = await createProfile(InstanceKind.ACTIVITYPUB);
+  const author = await createProfile(InstanceKind.LOCAL);
+  const post = await createLocalPost(author.profile.id);
+  const objectUri = new URL(`/ap/note/${post.id}`, author.canonicalOrigin!).href;
+  const activityUri = `https://${actor.instance.domain}/activities/${crypto.randomUUID()}`;
+
+  const results = await Promise.all(
+    ['👀', '☘️'].map((type) =>
+      materializeInboundReaction({
+        activityUri,
+        actorUri: actor.actorUri,
+        objectUri,
+        recipientUris: [author.actorUri],
+        type,
+      }),
+    ),
+  );
+
+  assert.deepEqual(results.map(({ kind }) => kind).sort(), ['CREATED', 'REJECTED']);
+  const reactions = await db
+    .select()
+    .from(Reactions)
+    .where(and(eq(Reactions.profileId, actor.profile.id), eq(Reactions.postId, post.id)));
+  assert.equal(reactions.length, 1);
+  assert.equal((await readMappings(activityUri))[0]?.reactionId, reactions[0]?.id);
+});
+
+test('Notification 생성 실패에도 새 Reaction과 mapping을 유지한다', async () => {
+  const actor = await createProfile(InstanceKind.ACTIVITYPUB);
+  const author = await createProfile(InstanceKind.LOCAL);
+  const post = await createLocalPost(author.profile.id);
+  const activityUri = `https://${actor.instance.domain}/activities/${crypto.randomUUID()}`;
+
+  await pg.unsafe(`
+    CREATE FUNCTION fail_inbound_reaction_notification_insert() RETURNS trigger
+    LANGUAGE plpgsql AS $$ BEGIN
+      IF NEW.kind = 'REACTION' THEN RAISE EXCEPTION 'forced create failure'; END IF;
+      RETURN NEW;
+    END $$;
+    CREATE TRIGGER fail_inbound_reaction_notification_insert
+    BEFORE INSERT ON notification
+    FOR EACH ROW EXECUTE FUNCTION fail_inbound_reaction_notification_insert();
+  `);
+
+  try {
+    const result = await materializeInboundReaction({
+      activityUri,
+      actorUri: actor.actorUri,
+      objectUri: new URL(`/ap/note/${post.id}`, author.canonicalOrigin!).href,
+      recipientUris: [author.actorUri],
+      type: '🌈',
+    });
+    assert.equal(result.kind, 'CREATED');
+    if (result.kind !== 'CREATED') {
+      assert.fail('Expected a created Reaction');
+    }
+    assert.equal((await readMappings(activityUri))[0]?.reactionId, result.reaction.id);
+    assert.equal((await readReactionNotifications(result.reaction.id)).length, 0);
+  } finally {
+    await pg.unsafe(`
+      DROP TRIGGER IF EXISTS fail_inbound_reaction_notification_insert ON notification;
+      DROP FUNCTION IF EXISTS fail_inbound_reaction_notification_insert();
+    `);
+  }
+});
+
 test('mapping owner의 Undo만 exact Reaction과 Notification을 제거하고 반복은 no-op이다', async () => {
   const actor = await createProfile(InstanceKind.ACTIVITYPUB);
   const attacker = await createProfile(InstanceKind.ACTIVITYPUB);
