@@ -1,6 +1,6 @@
 import '@kosmo/core/polyfill';
 
-import { getActorTypeName, isActor } from '@fedify/vocab';
+import { getActorHandle, getActorTypeName, isActor } from '@fedify/vocab';
 import {
   ActivityPubActors,
   db,
@@ -40,7 +40,6 @@ export class RemoteActorMaterializationError extends Error {
 }
 
 type RemoteActorLookupContext = Pick<Context<void>, 'lookupObject'>;
-type RemoteActorUriLookupContext = Pick<Context<void>, 'lookupObject' | 'lookupWebFinger'>;
 
 type RemoteActorMaterializationOptions = {
   context: RemoteActorLookupContext;
@@ -306,35 +305,13 @@ export const findUsableStoredRemoteProfileActorByUri = async (actorUri: URL | st
   return stored ? requireUsableStoredRemoteActor(stored) : undefined;
 };
 
-const resolveActorHandleByUri = async (
-  context: RemoteActorUriLookupContext,
-  actorUri: URL,
-): Promise<string> => {
-  const descriptor = await context.lookupWebFinger(actorUri);
-  const subject = descriptor?.subject;
-  const self = descriptor?.links?.find(
-    ({ href, rel, type }) =>
-      rel === 'self' &&
-      href === actorUri.href &&
-      ['application/activity+json', 'application/ld+json'].includes(
-        type?.split(';', 1)[0]?.trim().toLowerCase() ?? '',
-      ),
-  );
-
-  if (!subject?.startsWith('acct:') || !self) {
-    throw new RemoteActorMaterializationError('WebFinger actor identity does not match.');
-  }
-
-  return subject.slice('acct:'.length);
-};
-
 export const findOrMaterializeRemoteProfileActorByUri = async ({
   actorUri,
   context,
   now = getNow(),
 }: {
   actorUri: URL;
-  context: RemoteActorUriLookupContext;
+  context: RemoteActorLookupContext;
   now?: Temporal.Instant;
 }) => {
   const stored = await findUsableStoredRemoteProfileActorByUri(actorUri);
@@ -343,7 +320,12 @@ export const findOrMaterializeRemoteProfileActorByUri = async ({
     return stored;
   }
 
-  const handle = await resolveActorHandleByUri(context, actorUri);
+  let handle: string;
+  try {
+    handle = await getActorHandle(actorUri, { trimLeadingAt: true });
+  } catch {
+    throw new RemoteActorMaterializationError('WebFinger actor identity does not match.');
+  }
   await materializeRemoteProfileActor({ context, handle, now, reactivateUnresponsive: true });
 
   const materialized = await findStoredRemoteProfileActorByUri(actorUri);
