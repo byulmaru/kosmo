@@ -71,26 +71,6 @@
 - **THEN** 정상 core 생성 경로는 다단계 cycle을 만들지 않는다
 - **AND** 시스템은 정상 생성에 재귀 cycle 탐색이나 constraint trigger를 요구하지 않는다
 
-### Requirement: Reply의 Home/Profile Post List 후보 정책
-
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-388`, `PROD-429` 시스템은 각 Post의 Visibility와 Eligibility를 먼저 적용한 뒤 Home Post List에 승인된 Reply 후보를 포함하고 Profile Post List에서는 Reply Parent가 있는 Post를 제외해야 한다(MUST).
-
-#### Scenario: Home에서 viewer 관련 Reply 포함
-
-- **WHEN** Reply가 viewer Profile의 Post에 달렸거나 viewer가 작성했거나, viewer가 팔로우한 Profile의 Post에 viewer가 팔로우한 Profile이 작성했다
-- **THEN** 시스템은 Reply 자체가 Visibility와 Eligibility를 통과하면 Home 후보에 포함한다
-- **AND** Reply이면서 Quote인 Post에도 같은 규칙을 적용한다
-
-#### Scenario: Home에서 관련 없는 Reply 제외
-
-- **WHEN** Reply가 Home의 viewer 관련 Reply 조건을 충족하지 않는다
-- **THEN** 시스템은 그 Reply를 page limit 적용 전에 Home 후보에서 제외한다
-
-#### Scenario: Profile에서 Reply 제외
-
-- **WHEN** Target Profile이 Reply Parent가 있는 Post를 작성했다
-- **THEN** 시스템은 Reply이면서 Quote인 경우를 포함해 그 Post를 Profile Post List 후보에서 제외한다
-
 ### Requirement: Reply 조상 경로 조회
 
 **Authority / Provenance:** `docs/domain/objects/post.md`, `PROD-388`, `PROD-399` 시스템은 Reply의 저장된 직접 Reply Parent 관계를 따라 viewer가 조회할 수 있는 조상 Post 경로를 제공해야 하며(MUST), 임의의 최대 깊이로 정상 경로를 절단해서는 안 된다(MUST NOT).
@@ -114,9 +94,9 @@
 - **AND** 같은 Post를 반복 노출하지 않는다
 - **AND** 조회를 시작한 현재 Post를 조상으로 노출하지 않는다
 
-### Requirement: 하위 Reply 조회
+### Requirement: 하위 Reply 관계 조회 정책
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `PROD-388`, `PROD-400` 시스템은 기존 단일 GraphQL `Post` Node의 non-null `replyDescendants` field에 현재 Post를 직접 또는 간접 Reply Parent로 참조하는 모든 조회 가능한 descendant Post를 `PostConnection`으로 제공해야 하며(MUST), 각 descendant의 Visibility와 Eligibility를 독립적으로 적용해야 한다(MUST). 이 connection은 `first`/`after`와 `last`/`before`를 지원하고(MUST), descendant를 `createdAt ASC, id ASC`로 정렬해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `PROD-388`, `PROD-400` 시스템은 현재 Post를 직접 또는 간접 Reply Parent로 참조하는 모든 descendant Post를 임의의 최대 깊이 없이 탐색해야 하며(MUST), 각 descendant의 Visibility와 Eligibility를 독립적으로 판정해야 한다(MUST).
 
 #### Scenario: 직접·간접 하위 Reply 제공
 
@@ -135,19 +115,6 @@
 - **WHEN** Reply이면서 Quote인 descendant 자체는 조회 가능하지만 Repost Source는 조회할 수 없다
 - **THEN** 시스템은 그 descendant와 자체 Content를 하위 Reply 결과에 유지한다
 - **AND** nullable Repost Source 관계만 독립적으로 숨긴다
-
-#### Scenario: 양방향 Relay pagination과 시간순 정렬
-
-- **WHEN** viewer가 여러 생성 시각과 같은 생성 시각을 가진 descendant를 `replyDescendants`에서 앞이나 뒤 방향으로 조회한다
-- **THEN** 시스템은 `createdAt ASC, id ASC`의 동일한 전체 순서에서 `first`/`after`와 `last`/`before` page를 제공한다
-- **AND** 같은 생성 시각에는 `id`를 deterministic tie-breaker로 사용한다
-- **AND** 이 시간순 정렬만으로 Parent-before-child 위상 순서를 별도로 보장하지 않는다
-
-#### Scenario: 조회 정책을 pagination 전에 적용
-
-- **WHEN** descendant 구조에 조회 불가능한 Post와 조회 가능한 Post가 page 경계 앞뒤로 함께 존재한다
-- **THEN** 시스템은 각 descendant의 Visibility와 Eligibility를 page limit 전에 적용한다
-- **AND** 조회 불가능한 후보 때문에 조회 가능한 page가 비거나 누락되지 않는다
 
 #### Scenario: 비정상 cycle 방어
 

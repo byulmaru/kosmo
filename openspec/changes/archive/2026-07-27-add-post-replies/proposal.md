@@ -16,13 +16,12 @@ Kosmo는 Reply를 별도 Post Kind가 아니라 Content와 직접 Reply Parent �
 - Canonical: `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`
 - Linear Contract: [PROD-388](https://linear.app/byulmaru/issue/PROD-388)
 - Linear Implementations: [PROD-393](https://linear.app/byulmaru/issue/PROD-393), [PROD-398](https://linear.app/byulmaru/issue/PROD-398), [PROD-399](https://linear.app/byulmaru/issue/PROD-399), [PROD-400](https://linear.app/byulmaru/issue/PROD-400), [PROD-429](https://linear.app/byulmaru/issue/PROD-429), [PROD-451](https://linear.app/byulmaru/issue/PROD-451), [PROD-422](https://linear.app/byulmaru/issue/PROD-422)
-- Follow-up ownership correction: [PROD-415](https://linear.app/byulmaru/issue/PROD-415) owns moving direct Repost Source composition into the shared Post renderers without changing this change's Reply thread behavior.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `reply`: Reply Parent 관계, Post 구조 판별, 직접 Parent·조상·하위 Reply 조회와 목록 후보 계약
+- `reply`: Post 구조 판별, Reply Parent 관계 생성과 조상·하위 Reply 관계 조회 정책
 - `post-reply-ui`: Post 상세에서 조상·현재 Post·하위 Reply를 연결하는 thread 통합 계약
 
 ### Modified Capabilities

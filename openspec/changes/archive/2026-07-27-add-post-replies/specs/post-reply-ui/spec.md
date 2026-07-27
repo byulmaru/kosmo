@@ -21,7 +21,7 @@
 #### Scenario: 하위 Reply 다음 page 자동 연결
 
 - **WHEN** 조회 가능한 하위 Reply가 다음 page에 남아 있고 사용자가 thread 끝에서 한 viewport 이내로 스크롤한다
-- **THEN** 클라이언트는 다음 20개 Relay page를 자동으로 요청하고 기존 항목 뒤에 API 정렬 순서대로 이어 붙인다
+- **THEN** 클라이언트는 다음 page에서 최대 20개 Reply를 자동으로 요청하고 기존 항목 뒤에 API 정렬 순서대로 이어 붙인다
 - **AND** Web은 document/window를 scroll owner로 유지하고 internal scroller를 만들지 않으며, Native는 sticky-header `ScrollView`를 유지한다
 - **AND** 두 경로는 `contentLength - offset - viewportLength <= viewportLength`인 같은 한-viewport near-end 판정과 요청 중 중복 요청을 막는 guard를 공유한다
 - **AND** 같은 page 요청이 진행 중이면 추가 scroll·layout event로 중복 요청하지 않는다

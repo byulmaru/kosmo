@@ -139,18 +139,6 @@
 - Consequences: 현재 Post의 상세 맥락과 주변 Reply의 일반 읽기 밀도를 함께 유지하고 API visibility 경계를 누출하지 않는다. PROD-451 presentation seam은 새 Quote Source·Action Bar·Reaction/Repost UI를 소유하지 않으며 fixture가 공급한 기존 Post rendering과 link semantics를 보존한다. PROD-422는 새 preview component 없이 production fragment와 renderer를 조합하므로 outer Post와 Source의 Profile/Post Link가 sibling으로 독립되고, Source가 unavailable이어도 Reply+Quote 자체 Content가 남는다.
 - Confirmation / Follow-up: PROD-451 Storybook/component interaction은 role별 기존 renderer 선택, supplied 직접 connector, 직접 연결된 마지막 visible Reply에서의 경계 종료와 반환된 `repostSource` subtree의 Source ID sentinel으로 Reply+Quote의 자체 Content·Source 관계 보존을 검증한다. 실제 spacing·typography 밀도는 현재 `ThemeProvider`가 지원하는 Light appearance의 390px/600px visual QA로 확인하고 Dark appearance는 완료한 것으로 기록하지 않는다. PROD-422는 ancestor reverse와 descendant `replyParent { id }` 기반 metadata, Source 존재·부재에 따른 sibling 표시, 기존 Link와 실제 fragment·route integration을 별도로 검증한다.
 
-### direct Source의 공용 renderer 소유권 정렬은 PROD-415가 후속 수행한다
-
-- Decision Date: 2026-07-27
-- Decision Class: Implementation Choice
-- Authority / Provenance: `PROD-422`, `PROD-415`
-- Status: Active
-- Context / Problem: PR #358은 Reply thread 통합을 완료하면서 `PostDetailThread`가 현재 Post와 조상·하위 Reply의 direct Source fragment와 sibling 조합을 직접 소유했다. 이후 Home·Profile·Bookmark·상세에 같은 direct Source 표시를 적용하려면 thread가 아니라 공용 Post renderer가 이 책임을 가져야 함이 확인됐다.
-- Decision Outcome: PROD-388은 PR #358이 전달한 Reply+Quote의 자체 Content 유지, nullable direct Source sibling과 thread 관계·배치를 완료 결과로 검증한다. direct Source의 fragment·조합·표시 책임을 현재 상세 Post의 `PostLayout`과 목록형 Post의 `PostListItem`으로 옮기고 Content 없는 Repost 상세를 canonical Source route로 replace하는 후속 구현·전체 surface 검증은 PROD-415가 소유한다. 이 책임 정렬은 PROD-422의 완료 범위와 Reply 계약 archive를 막지 않는다.
-- Alternatives Considered: PROD-388에서 PROD-415 구현까지 함께 수행하거나, PR #358의 thread-local Source 조합을 영구 공용 책임으로 확정하는 방식. 전자는 독립 Repost 표시 이슈를 Reply archive에 끌어오고 후자는 최신 Linear 소유권 정정과 충돌하므로 사용하지 않는다.
-- Consequences: archive된 Reply spec은 관찰 가능한 Reply+Quote thread 행동을 유지하고, 공용 renderer 내부 책임과 Content 없는 Repost route 정리는 active `add-post-reposts` change와 PROD-415에서 이어간다.
-- Confirmation / Follow-up: PROD-415가 Home·Profile·Bookmark·Post 상세의 direct Source와 Content 없는 Repost 상세 redirect를 통합 검증한다.
-
 ### PROD-422 descendant page는 route-owned 무한 스크롤로 이어 붙인다
 
 - Decision Date: 2026-07-25
@@ -161,7 +149,7 @@
 - Decision Outcome: route-owned refetchable fragment가 `replyDescendants(first: 20, after: $cursor)`를 `usePaginationFragment`로 누적한다. Web은 document/window scroll·resize와 document metrics를, Android/iOS는 `ScrollView` scroll·layout·content size event를 사용한다. 두 platform 경로는 끝에서 한 viewport 이내인지 판정하는 같은 계산과 `hasNext && !isLoadingNext`·요청 중 ref·page error guard를 공유해 `loadNext(20)`을 호출한다. 초기 짧은 thread는 각 scroll owner의 viewport를 채우거나 `hasNext`가 끝날 때까지 이어서 불러온다. footer는 loading을 표시하고, 다음 page가 실패하면 자동 재요청을 멈추고 이미 불러온 Reply를 보존한 채 같은 경계에서 재시도한다. `PostThreadLayout`은 scroll·pagination·오류 상태를 소유하지 않는다.
 - Alternatives Considered: 명시적 더 보기 button, Web 중앙 컬럼의 internal scroller, `FlatList`/`VirtualizedList` 전환, Web 전용 `IntersectionObserver`. button은 승인된 연속 읽기를 끊고, internal scroller는 canonical document scroll을 위반하며, list 전환은 sticky header·connector row와 Web parity까지 구현 범위를 넓히고, observer는 현재 event 기반 shell 계약 밖의 browser-only 관찰 경계를 추가하므로 사용하지 않는다.
 - Consequences: Web은 sidebar·right rail·빈 shell 영역의 wheel 입력과 browser history가 사용하는 document scroll을 보존하고, Native는 기존 screen `ScrollView`를 유지한다. 두 경로가 같은 임계값과 request guard를 공유해 부분 실패 후에도 읽던 thread를 잃지 않는다. 지금까지 불러온 descendant는 모두 mount되므로 매우 긴 thread에서 virtualization보다 메모리 비용이 크지만, 실제 성능 근거 없이 list architecture를 바꾸지는 않는다.
-- Confirmation / Follow-up: client test에서 20개 초기 page, Web document near-end 다음 page append, 요청 중 중복 방지, 짧은 초기 content auto-fill, `hasNext=false` 종료, 다음 page 실패 시 기존 항목 유지와 retry를 검증한다. Native는 `ScrollView` event가 같은 판정 함수를 통과하는지 최소 단위 test로 검증한다. 현재 출시는 Web만 대상으로 하므로 Web의 sticky header와 document scroll ownership을 이 change의 출시·완료 gate로 확인하고, 실제 iOS/Android 화면 QA는 앱 출시를 재개하는 후속 출시 작업에서 수행한다.
+- Confirmation / Follow-up: client test에서 초기 20개, Web document near-end 다음 page append, 요청 중 중복 방지, 짧은 초기 content auto-fill, `hasNext=false` 종료, 다음 page 실패 시 기존 항목 유지와 retry를 검증한다. Native는 `ScrollView` event가 같은 판정 함수를 통과하는지 최소 단위 test로 검증한다. 현재 출시는 Web만 대상으로 하므로 Web의 sticky header와 document scroll ownership을 이 change의 출시·완료 gate로 확인하고, 실제 iOS/Android 화면 QA는 앱 출시를 재개하는 후속 출시 작업에서 수행한다.
 
 ### descendant는 replyDescendants Relay connection으로 시간순 제공한다
 

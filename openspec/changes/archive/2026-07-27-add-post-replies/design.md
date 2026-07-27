@@ -50,9 +50,9 @@
 - `PostThreadLayout`은 item, role, supplied 순서와 direct connector metadata만 소유한다. fixture caller는 `renderPost` 안에서 local state를 close over하여 mock 선택 action을 붙일 수 있다. 기존 `PostListItem`·`PostLayout` renderer는 자신의 Profile/Post Link를 그대로 유지하며 presentation이 이를 다른 `Pressable`로 감싸지 않는다.
 - Reply+Quote fixture에는 nullable `repostSource` 관계가 있고 Story query가 이를 읽는다. 구조적 sentinel은 반환된 `repostSource` subtree에서만 렌더하며 Source ID를 가진다. 이 증거는 Reply 자신의 Content와 Source 관계가 하나의 thread item 안에 함께 남는지만 보이고, PROD-451은 production Source preview의 외관이나 상호작용을 합성하지 않는다.
 - PROD-422는 route가 thread query를 소유하고 `replyAncestors`를 root 우선 표시 순서로 변환한다. ancestor 인접 항목은 경로 계약에서 직접 관계이고, descendant는 각 Post의 `replyParent { id }`와 이전 표시 Post ID를 비교해 supplied 직접 관계 metadata를 만든다. 각 Post 표시 컴포넌트는 colocated Relay fragment와 기존 Link를 유지하며, PROD-422의 production route integration은 별도 navigation adapter 없이 이 Link를 그대로 실제 상세 이동에 사용한다.
-- PR #358의 완료 시점에는 thread의 각 바깥 Post를 role에 따라 기존 `PostLayout` 또는 `PostListItem`으로 렌더하고, Reply+Quote의 nullable `repostSource`가 반환되면 바깥 renderer 아래에 테두리 있는 sibling `PostListItem`을 조합했다. Source가 `null`이면 preview만 생략하고 Reply+Quote 자체 Content와 thread item은 유지한다. 2026-07-27 PROD-422 책임 경계 정정에 따라 direct Source의 fragment·조합·표시 책임을 공용 `PostLayout`·`PostListItem`으로 옮기는 후속 구현과 전체 surface 회귀 검증은 PROD-415가 소유한다. PROD-388은 이미 전달된 Reply thread 행동을 검증하고 archive하며 이 공용 renderer 리팩터링을 선행조건으로 확대하지 않는다.
+- PR #358의 완료 시점에는 thread의 각 바깥 Post를 role에 따라 기존 `PostLayout` 또는 `PostListItem`으로 렌더하고, Reply+Quote의 nullable `repostSource`가 반환되면 바깥 renderer 아래에 테두리 있는 sibling `PostListItem`을 조합했다. Source가 `null`이면 preview만 생략하고 Reply+Quote 자체 Content와 thread item은 유지한다.
 - descendant connection은 route-owned refetchable pagination fragment가 `first: 20`과 `after`를 소유하고 `usePaginationFragment`로 누적한다. Web은 document/window의 scroll·resize event와 `documentElement.scrollHeight`·`window.scrollY`·`window.innerHeight`를 사용하고, Android/iOS는 `ScrollView`의 scroll·layout·content size event를 사용한다. 두 경로는 `contentLength - offset - viewportLength <= viewportLength`인 공통 near-end 판정과 `hasNext && !isLoadingNext`·요청 중 ref·page error guard를 공유하며 통과한 경우에만 `loadNext(20)`을 호출한다. 초기 content가 viewport보다 짧으면 Web document 또는 Native content size 변화 뒤 같은 guard로 viewport를 채우거나 `hasNext`가 끝날 때까지 다음 page를 요청한다. footer는 loading 상태를 표시하고, page 요청 실패 시 자동 재요청을 멈추며 이미 표시한 Reply를 유지한 채 같은 cursor 경계에서 재시도할 수 있는 inline affordance를 제공한다. `PostThreadLayout`은 pagination·scroll·오류 상태를 알지 못하는 순수 presentation으로 유지한다.
-- `add-post-replies`는 `add-post-reposts` artifact를 수정하지 않는다. 겹치는 active capability는 새 독립 requirement로 추가하고 두 change와 전체 OpenSpec을 함께 strict validation한다.
+- Home/Profile의 기존 `post` requirement는 Reply 후보 정책으로 수정한다. 이후 같은 requirement를 전체 교체하는 `add-post-reposts` delta도 Reply provenance와 pagination 전 후보 판정을 보존하고, active change와 전체 OpenSpec을 함께 strict validation한다.
 
 ### Allowed Alternatives
 
@@ -76,7 +76,7 @@
 - visibility 경계에 `숨겨진 답글` 같은 placeholder나 설명을 만들면 API가 구분하지 않은 root·unavailable 상태를 client가 추론하고 숨겨진 관계를 누출할 수 있다.
 - presentation component가 Quote Source, Action Bar 또는 Reaction/Repost 수치를 별도로 렌더하면 기존 Post rendering을 복제하고 PROD-451의 thread layout 범위를 넘는다.
 - 기존 link-rich Post renderer를 외부 `Pressable`로 감싸 mock navigation을 만들면 Profile·timestamp·본문 Link가 중첩된다. mock 선택은 fixture caller가 `renderPost` 안에서 local state를 close over하는 범위에만 둔다.
-- Source `PostListItem`을 바깥 Post의 Link 안에 넣거나 `PostSourcePresentationView` 전체를 다시 렌더하면 Link가 중첩되거나 바깥 Post author·content가 중복된다. PR #358의 thread-local 조합은 바깥 renderer 아래 sibling 경계를 사용했고, 후속 PROD-415는 같은 direct Source 행동을 공용 renderer 책임으로 옮긴다.
+- Source `PostListItem`을 바깥 Post의 Link 안에 넣거나 `PostSourcePresentationView` 전체를 다시 렌더하면 Link가 중첩되거나 바깥 Post author·content가 중복된다. PR #358의 thread-local 조합은 바깥 renderer 아래 sibling 경계를 사용한다.
 - Web scroll·resize와 Native `onScroll`·`onLayout`·`onContentSizeChange`가 같은 page에 대해 각각 `loadNext`를 호출하면 중복 요청이 생길 수 있다. `hasNext`·Relay loading 상태뿐 아니라 요청 중 ref를 함께 확인하고, page error 뒤에는 자동 trigger를 멈추며 고정 pixel 대신 각 scroll owner의 viewport 높이를 기준으로 near-end를 판정한다.
 - Web route를 높이가 고정된 `ScrollView`나 overflow container로 바꾸면 sidebar·right rail·빈 shell 영역의 wheel 입력이 document scroll로 이어지는 canonical 동작과 browser history scroll restoration을 깨뜨릴 수 있다. Web은 document flow를 유지하고 sticky route header만 CSS sticky surface로 둔다.
 
@@ -84,12 +84,12 @@
 
 - [Risk] nullable column, FK와 CHECK 추가 시 기존 `post` table 검증 lock이 발생할 수 있다. → 생성 SQL을 검토하고 table rewrite 여부와 현재 lock timeout 안의 migration test를 확인한다. 예상 밖 운영 위험이면 migration 방식을 임의 변경하지 않고 upstream에서 재결정한다.
 - [Risk] DB CHECK는 직접 self-reference만 막고 raw SQL 관계 변경으로 만든 장주기 cycle은 막지 않는다. → 생성 전용 immutable core 경계로 정상 write를 제한하고 재귀 조회는 cycle 방어를 둔다.
-- [Risk] `add-post-reposts`와 `add-post-replies`가 active `data-model`·`post` capability를 함께 확장한다. → 기존 change를 수정하지 않고 독립 ADDED requirement를 사용하며 두 change와 전체 OpenSpec을 strict validation한다.
+- [Risk] `add-post-reposts`와 `add-post-replies`가 active `data-model`·`post` capability를 함께 확장한다. → 공개 GraphQL 관계는 독립 ADDED requirement로 분리하고, 겹치는 Home/Profile MODIFIED replacement는 Reply provenance와 pagination 전 후보 판정을 보존하며 두 change와 전체 OpenSpec을 strict validation한다.
 - [Risk] descendant 전체 탐색은 데이터 증가에 따라 비싸질 수 있다. → PROD-400이 실제 query와 실행 계획을 소유하고 그때 `reply_parent_id` index와 pagination을 결정한다.
 - [Risk] 손상 데이터가 매우 긴 ancestor chain을 만들면 depth 상한 없는 recursive query 비용이 커질 수 있다. → 정상 write는 immutable 직접 관계로 cycle을 만들 수 없게 유지하고, visited path로 cycle을 종료하며 실제 query와 깊은 fixture를 검증한다. 운영 상한이 필요해지면 부분 절단을 추가하지 않고 PROD-399의 공개 error 계약을 먼저 갱신한다.
 - [Risk] `reply_parent_id`와 정렬 column을 함께 둔 index가 전역 descendant 정렬까지 해결한다고 오판할 수 있다. → 실제 recursive query의 `EXPLAIN (ANALYZE, BUFFERS)`에서 traversal lookup과 최종 sort를 나눠 확인하고 측정으로 증명된 최소 index만 추가한다.
 - [Risk] color token에는 Dark 값이 있지만 현재 앱이 Dark theme을 주입하지 않아 thread의 실제 Dark appearance는 확인할 수 없다. → PROD-451은 Light QA만 보고하고, 향후 Dark theme을 실제로 공급하는 소유 변경에서 inherited connector·border·current surface를 검증한다.
-- [Trade-off] 기존 `ScrollView` 무한 스크롤은 지금까지 불러온 descendant를 모두 mount하므로 매우 긴 thread에서 virtualization보다 메모리를 더 쓴다. → PROD-422는 20개 page와 중복 요청 방어로 요청을 제한하고, 실제 성능 근거 없이 sticky header와 thread connector를 포함한 list migration까지 확장하지 않는다.
+- [Trade-off] 기존 `ScrollView` 무한 스크롤은 지금까지 불러온 descendant를 모두 mount하므로 매우 긴 thread에서 virtualization보다 메모리를 더 쓴다. → PROD-422는 최대 20개 단위 요청과 중복 요청 방어로 요청을 제한하고, 실제 성능 근거 없이 sticky header와 thread connector를 포함한 list migration까지 확장하지 않는다.
 - [Trade-off] Parent Tombstone 뒤 ID를 보존하면 저장 관계와 노출 관계가 달라진다. → resolver와 list policy에서 visibility/eligibility를 적용하고 DB 참조는 audit·thread 구조를 위해 유지한다.
 
 ## Migration Plan
