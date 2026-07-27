@@ -428,14 +428,6 @@ type ReactionNotification implements Node & Notification {
   type: String!
 }
 
-type ReplyNotification implements Node & Notification {
-  createdAt: DateTime!
-  id: ID!
-  post: Post!
-  profile: Profile!
-  readAt: DateTime
-}
-
 input RejectProfileFollowRequestInput {
   id: ID!
 }
@@ -443,6 +435,14 @@ input RejectProfileFollowRequestInput {
 type RejectProfileFollowRequestPayload {
   followeeProfile: Profile!
   profileFollowRequestId: ID!
+}
+
+type ReplyNotification implements Node & Notification {
+  createdAt: DateTime!
+  id: ID!
+  post: Post!
+  profile: Profile!
+  readAt: DateTime
 }
 
 type RepostNotification implements Node & Notification {
