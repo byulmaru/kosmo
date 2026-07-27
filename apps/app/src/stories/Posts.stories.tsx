@@ -1467,6 +1467,45 @@ export const PostDetailThreadRoute: Story = {
         .getByTestId('post-thread-connector-route-root-route-parent-before')
         .getBoundingClientRect().right,
     );
+    const connectorClearance = (
+      rowId: string,
+      beforeConnectorId: string,
+      afterConnectorId: string,
+    ) => {
+      const row = canvas.getByTestId(rowId);
+      const avatar = row.querySelector<HTMLElement>('[aria-label$="프로필 이미지"]');
+      const before = canvas.getByTestId(beforeConnectorId);
+      const after = canvas.getByTestId(afterConnectorId);
+
+      expect(avatar).not.toBeNull();
+
+      return {
+        after: Math.round(
+          after.getBoundingClientRect().top - avatar!.getBoundingClientRect().bottom,
+        ),
+        before: Math.round(
+          avatar!.getBoundingClientRect().top - before.getBoundingClientRect().bottom,
+        ),
+        rounded: [before, after].every(
+          (connector) => Number.parseFloat(window.getComputedStyle(connector).borderRadius) > 0,
+        ),
+      };
+    };
+    expect({
+      current: connectorClearance(
+        'post-thread-current-route-current',
+        'post-thread-connector-route-parent-route-current-before',
+        'post-thread-connector-route-current-route-child-after',
+      ),
+      parent: connectorClearance(
+        'post-thread-item-route-parent',
+        'post-thread-connector-route-root-route-parent-before',
+        'post-thread-connector-route-parent-route-current-after',
+      ),
+    }).toEqual({
+      current: { after: 4, before: 4, rounded: true },
+      parent: { after: 4, before: 4, rounded: true },
+    });
     const descendantQuote = within(canvas.getByTestId('post-thread-item-route-reply-quote'));
     expect(descendantQuote.getAllByText('Source 본문')).toHaveLength(1);
     expect(descendantQuote.getAllByTestId('source-post-preview')).toHaveLength(1);

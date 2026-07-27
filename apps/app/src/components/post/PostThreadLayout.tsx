@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing } from '@/theme/tokens';
+import { radii, spacing } from '@/theme/tokens';
 import type React from 'react';
 
 export type PostThreadRole = 'ancestor' | 'current' | 'descendant';
@@ -95,12 +95,19 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
   },
   connector: {
+    borderRadius: radii.full,
     left: spacing.xxl,
     position: 'absolute',
     width: 2,
   },
-  listConnectorBefore: { height: spacing.xxl, top: 0 },
-  listConnectorAfter: { bottom: 0, top: spacing.xxl },
-  currentConnectorBefore: { height: spacing.xxl + spacing.xs, top: 0 },
-  currentConnectorAfter: { bottom: 0, top: spacing.xxl + spacing.xs },
+  listConnectorBefore: { height: spacing.sm - spacing.xs, top: 0 },
+  listConnectorAfter: {
+    bottom: 0,
+    top: spacing.sm + spacing.xxxl + spacing.xs,
+  },
+  currentConnectorBefore: { height: spacing.lg - spacing.xs, top: 0 },
+  currentConnectorAfter: {
+    bottom: 0,
+    top: spacing.lg + spacing.xxl + spacing.sm + spacing.xs,
+  },
 });
