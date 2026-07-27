@@ -19,6 +19,8 @@
 - **WHEN** full sidebar profile picker가 닫히거나 열린다
 - **THEN** 같은 프로필 이름 trigger가 accessibility `expanded` 상태로 열림 여부를 노출한다
 - **AND** 닫힌 상태는 아래 방향 chevron, 열린 상태는 위 방향 chevron으로 표시한다
+- **AND** 이름·chevron 콘텐츠만 trigger 상자 안에서 아래로 `6px` 광학 보정한다
+- **AND** trigger hitbox, picker anchor와 navigation geometry를 바꾸지 않는다
 - **AND** chevron은 별도 focus target이 아니다
 
 #### Scenario: Dismiss the full picker

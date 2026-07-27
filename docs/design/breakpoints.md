@@ -41,8 +41,9 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
   아래의 프로필 상세와 navigation 위에 표시하되 navigation의 layout 위치와 sidebar·중앙 피드의 실제 폭을
   바꾸지 않는다. backdrop과 focus trap을 사용하지 않으며, 같은 trigger 재실행, 바깥 클릭, `Escape`, 프로필
   선택 성공으로 닫는다.
-  닫힌 상태는 아래 방향, 열린 상태는 위 방향 chevron으로 표시하되 chevron 자체는 별도 focus target이
-  아니다.
+  닫힌 상태는 아래 방향, 열린 상태는 위 방향 chevron으로 표시한다. 이름·chevron 콘텐츠만 trigger 상자 안에서
+  아래로 `6px` 광학 보정하되 trigger hitbox, picker anchor와 navigation geometry는 바꾸지 않으며, chevron 자체는
+  별도 focus target이 아니다.
 - trigger는 열린 상태를 accessibility `expanded` 상태로 노출한다.
 - 프로필이 많을 때는 프로필 목록 영역만 제한된 높이 안에서 스크롤한다. 새 프로필 추가 액션과 생성 폼은
   목록 아래의 고정 영역에 두며, 생성 폼이 열리면 목록이 남은 높이에 맞게 줄어든다. full·compact Web picker의

@@ -181,6 +181,25 @@
 - Confirmation / Follow-up: Universal Mobile story와 직접 시각 확인에서 닉네임·chevron의 6px 위치와 navigation
   불변을 확인한다.
 
+### Full Web trigger도 내부 콘텐츠를 6px 광학 보정한다
+
+- Decision Date: 2026-07-27
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/breakpoints.md`, `PROD-238`
+- Status: Active
+- Context / Problem: full Web의 42px trigger에서 32px 이름 line box와 16px chevron box는 수학적으로 중앙이지만,
+  SUIT glyph와 chevron의 시각적 무게가 위로 치우쳐 보인다. 사용자가 full Storybook을 확인한 뒤 mobile Web과 같은
+  내부 영역을 같은 6px만큼 보정하기로 확정했다.
+- Decision Outcome: `Platform.OS === 'web' && surface === 'full'`인 이름·chevron 내부 content도 mobile Web drawer와
+  동일하게 아래로 6px 광학 보정한다. trigger root, picker anchor와 navigation geometry는 이동하지 않으며 compact
+  avatar trigger와 Android/iOS에는 적용하지 않는다.
+- Alternatives Considered: full trigger root를 이동하면 hitbox와 picker anchor가 함께 움직이고, line-height 변경은
+  typography와 다른 platform까지 영향을 넓힌다. 별도 full 수치를 두면 사용자가 확정한 동일한 높이 계약과 어긋난다.
+- Consequences: 기존 Full Storybook geometry assertion에서 이름·chevron center의 6px offset과 open 전후 trigger·
+  navigation geometry 불변을 검증해야 한다.
+- Confirmation / Follow-up: Responsive Profile Picker Full과 Profile Switcher Interaction story의 직접 시각 확인에서
+  이름·chevron의 6px 위치와 picker anchor·navigation 불변을 확인한다.
+
 ## Remaining Decisions
 
 - 없음.

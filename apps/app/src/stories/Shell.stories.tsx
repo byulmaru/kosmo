@@ -199,10 +199,20 @@ export const ResponsiveProfilePickerFull: Story = {
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('button', { name: '프로필 목록' });
     const navigation = canvas.getByRole('navigation', { name: '주요 메뉴' });
+    const triggerName = within(trigger).getByText('코스모 작가');
+    const triggerIcon = trigger.querySelector('svg')!;
     const triggerRect = trigger.getBoundingClientRect();
     const closedNavigationTop = navigation.getBoundingClientRect().top;
+    const nameRect = triggerName.getBoundingClientRect();
+    const iconRect = triggerIcon.getBoundingClientRect();
 
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(
+      nameRect.top + nameRect.height / 2 - (triggerRect.top + triggerRect.height / 2),
+    ).toBeCloseTo(6, 0);
+    expect(
+      iconRect.top + iconRect.height / 2 - (triggerRect.top + triggerRect.height / 2),
+    ).toBeCloseTo(6, 0);
     await userEvent.click(trigger);
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
     const menu = await canvas.findByRole('menu', { name: '프로필 전환' });
@@ -210,6 +220,7 @@ export const ResponsiveProfilePickerFull: Story = {
     const list = canvas.getByLabelText('전환할 프로필 목록');
     const footerAction = canvas.getByRole('menuitem', { name: '새 프로필 추가' });
     const menuRect = menu.getBoundingClientRect();
+    const openTriggerRect = trigger.getBoundingClientRect();
     const openNavigationTop = navigation.getBoundingClientRect().top;
 
     expect(menu).toBeVisible();
@@ -219,6 +230,7 @@ export const ResponsiveProfilePickerFull: Story = {
     expect(footerAction).toBeVisible();
     expect(menuRect.top).toBeGreaterThanOrEqual(triggerRect.bottom);
     expect(menuRect.top - triggerRect.bottom).toBeLessThanOrEqual(12);
+    expect(openTriggerRect).toEqual(triggerRect);
     expect(openNavigationTop).toBe(closedNavigationTop);
     expect(menuRect.bottom).toBeGreaterThan(openNavigationTop);
     expect(canvas.queryByRole('dialog')).toBeNull();

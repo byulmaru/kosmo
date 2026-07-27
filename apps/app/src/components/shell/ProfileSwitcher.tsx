@@ -436,8 +436,8 @@ export function ProfileSwitcher({
       ]}
     >
       {showAvatar ? <Avatar label={active?.displayName ?? '?'} size={compact ? 40 : 48} /> : null}
-      {mobileWebDrawer ? (
-        <View style={styles.mobileWebTriggerContent}>{triggerCopy}</View>
+      {fullWeb || mobileWebDrawer ? (
+        <View style={styles.webTriggerContent}>{triggerCopy}</View>
       ) : (
         triggerCopy
       )}
@@ -503,7 +503,7 @@ const styles = StyleSheet.create({
   trigger: { alignItems: 'center', flexDirection: 'row' },
   compactTrigger: { height: 44, justifyContent: 'center', width: 44 },
   fullTrigger: { alignSelf: 'flex-start', gap: spacing.sm, height: 42, maxWidth: '100%' },
-  mobileWebTriggerContent: {
+  webTriggerContent: {
     alignItems: 'center',
     flexDirection: 'row',
     flexShrink: 1,

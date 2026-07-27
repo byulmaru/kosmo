@@ -6,7 +6,8 @@
 
 - `full` 이상 Web에서는 닫힌 260px profile summary를 유지하고 프로필 이름 trigger 바로 아래에 연결된 비모달
   overlay picker를 표시한다. picker는 trigger 아래의 프로필 상세와 navigation 위에 paint되며, navigation 위치와
-  sidebar·중앙 피드 폭을 유지하면서 chevron과 accessibility expanded 상태로 열림 여부를 표시한다.
+  sidebar·중앙 피드 폭을 유지하면서 chevron과 accessibility expanded 상태로 열림 여부를 표시한다. 이름·chevron
+  내부 콘텐츠는 trigger 상자 안에서 아래로 6px 광학 보정한다.
 - `compact` 이상 `full` 미만 Web에서는 아이콘 레일의 프로필 아바타가 레일 오른쪽 비모달 overlay drawer를 연다.
 - compact drawer는 레이아웃 폭을 바꾸거나 backdrop·focus trap을 사용하지 않으며 trigger 재실행, 바깥 클릭, `Escape`, 프로필 선택으로 닫힌다.
 - `< compact` mobile Web drawer의 이름·chevron trigger는 닫힘에 아래 방향, 열림에 위 방향을 표시하고
@@ -14,7 +15,7 @@
 - full·compact Web picker는 기존 viewport 여백 계산 안에서 최대 430px로 제한하고, 프로필 목록만 스크롤하며
   새 프로필 추가 액션·생성 폼은 고정 footer에 유지한다.
 - 기존 프로필 선택·생성·실패 상태와 Relay actor 전환 계약을 유지한다.
-- mobile Web trigger hitbox·picker anchor·navigation geometry, Android/iOS picker, GraphQL·Relay cache 계약,
+- full·mobile Web trigger hitbox·picker anchor·navigation geometry, Android/iOS picker, GraphQL·Relay cache 계약,
   공용 Dropdown 전환과 별도 오류·Storybook 확장은 변경하지 않는다.
 
 ## Authority / Provenance
