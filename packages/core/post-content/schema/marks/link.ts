@@ -16,6 +16,7 @@ export const linkMarkSpec = {
       },
     },
   ],
+  toDOM: (mark) => ['a', { href: normalizeLinkHref(mark.attrs.href) }, 0],
 } satisfies MarkSpec;
 
 export function normalizeLinkHref(value: unknown): string {
