@@ -8,6 +8,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { PostBody } from './PostBody';
 import { PostSourcePreview } from './PostSourcePresentationView';
+import type { ReactNode } from 'react';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
 import type {
   PostPresentationLinkRenderer,
@@ -51,7 +52,13 @@ const visibilityLabels: Record<string, string> = {
   DIRECT: '다이렉트',
 };
 
-export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
+export function PostLayout({
+  post: postKey,
+  reactionSummary,
+}: {
+  post: PostLayout_post$key;
+  reactionSummary?: ReactNode;
+}) {
   const router = useRouter();
   const theme = useTheme();
   const post = useFragment(PostLayoutFragment, postKey);
@@ -135,6 +142,7 @@ export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
             {formatPostDate(post.createdAt)} ·{' '}
             {visibilityLabels[post.visibility] ?? post.visibility}
           </Text>
+          {reactionSummary}
         </View>
       </View>
     </View>

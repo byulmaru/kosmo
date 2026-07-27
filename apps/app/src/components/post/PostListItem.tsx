@@ -114,12 +114,28 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
 
     return (
       <View style={[styles.card, { borderColor: theme.border }]}>
+        {post.content ? (
+          <Link asChild href={profileHref}>
+            <Pressable
+              aria-hidden
+              accessibilityElementsHidden
+              accessible={false}
+              focusable={false}
+              importantForAccessibility="no-hide-descendants"
+              style={styles.avatar}
+              tabIndex={-1}
+            >
+              <Avatar label={post.profile.displayName || post.profile.handle} size={48} />
+            </Pressable>
+          </Link>
+        ) : null}
         <View style={styles.sourcePresentation}>
           <PostSourcePresentationView
             onPostPress={() => router.push(detailHref)}
             onSourcePostPress={() => router.push(sourcePostHref)}
             post={presentationPost}
             renderLink={renderLink}
+            showPostAvatar={!post.content}
           />
         </View>
       </View>

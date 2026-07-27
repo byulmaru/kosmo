@@ -63,11 +63,13 @@ export function PostSourcePresentationView({
   onSourcePostPress,
   post,
   renderLink,
+  showPostAvatar = true,
 }: {
   onPostPress: () => void;
   onSourcePostPress: () => void;
   post: PostSourcePresentationData;
   renderLink: PostPresentationLinkRenderer;
+  showPostAvatar?: boolean;
 }): ReactNode {
   const theme = useTheme();
   const kind = presentationKind(post);
@@ -78,7 +80,7 @@ export function PostSourcePresentationView({
 
   const postAuthor = renderLink({
     accessibilityLabel: `${post.profile.displayName} 프로필 보기`,
-    children: <Author profile={post.profile} showAvatar={kind !== 'repost'} />,
+    children: <Author profile={post.profile} showAvatar={kind !== 'repost' && showPostAvatar} />,
     target: 'postAuthor',
   });
   const postTimestamp = renderLink({

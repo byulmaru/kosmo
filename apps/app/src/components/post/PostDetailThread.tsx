@@ -234,12 +234,15 @@ function PostDetailThreadContent({
           return (
             <View>
               {role === 'current' ? (
-                <View style={styles.currentContent}>
-                  <PostLayout post={requireThreadFragment(item.post.detail, 'current detail')} />
-                  <PostReactionSummary
-                    post={requireThreadFragment(data.reactionSummary, 'current reaction summary')}
-                  />
-                </View>
+                <PostLayout
+                  post={requireThreadFragment(item.post.detail, 'current detail')}
+                  reactionSummary={
+                    <PostReactionSummary
+                      post={requireThreadFragment(data.reactionSummary, 'current reaction summary')}
+                      style={styles.reactionSummary}
+                    />
+                  }
+                />
               ) : (
                 <PostListItem
                   post={requireThreadFragment(item.post.listItem, `${role} list item`)}
@@ -272,9 +275,9 @@ function requireThreadFragment<T>(value: T | null | undefined, label: string): T
 }
 
 const styles = StyleSheet.create({
-  currentContent: { gap: spacing.lg },
   frame: { flexGrow: 1 },
   header: { zIndex: 10 },
+  reactionSummary: { marginTop: spacing.lg },
   retryButton: { minHeight: 44 },
 });
 

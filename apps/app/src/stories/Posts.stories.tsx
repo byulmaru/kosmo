@@ -1449,10 +1449,24 @@ export const PostDetailThreadRoute: Story = {
       'post-thread-item-route-source-null',
     ]);
     expect(canvas.getByText('Reply+Quote 자체 Content')).toBeVisible();
-    expect(canvas.getByRole('button', { name: '❤️ 반응 2개 보기' })).toBeVisible();
+    const reactionButton = canvas.getByRole('button', { name: '❤️ 반응 2개 보기' });
+    expect(reactionButton).toBeVisible();
     const ancestorQuote = within(canvas.getByTestId('post-thread-item-route-parent'));
     expect(ancestorQuote.getAllByText('Source 본문')).toHaveLength(1);
     expect(ancestorQuote.getAllByTestId('source-post-preview')).toHaveLength(1);
+    expect(
+      Math.abs(
+        reactionButton.getBoundingClientRect().left -
+          canvas.getByText('현재 Reply 본문').getBoundingClientRect().left,
+      ),
+    ).toBeLessThanOrEqual(1);
+    expect(
+      ancestorQuote.getByTestId('source-post-preview').getBoundingClientRect().left,
+    ).toBeGreaterThanOrEqual(
+      canvas
+        .getByTestId('post-thread-connector-route-root-route-parent-before')
+        .getBoundingClientRect().right,
+    );
     const descendantQuote = within(canvas.getByTestId('post-thread-item-route-reply-quote'));
     expect(descendantQuote.getAllByText('Source 본문')).toHaveLength(1);
     expect(descendantQuote.getAllByTestId('source-post-preview')).toHaveLength(1);
