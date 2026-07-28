@@ -8,10 +8,10 @@ import {
   Posts,
   Profiles,
 } from '@kosmo/core/db';
-import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
+import { InstanceKind, InstanceState, PostState, ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { reactionTypeSchema } from '@kosmo/core/validation';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { federation } from './federation';
 import type { Context } from '@fedify/fedify';
@@ -72,7 +72,7 @@ const loadReactionProjection = async (
     .innerJoin(SenderInstances, eq(SenderInstances.id, SenderProfiles.instanceId))
     .leftJoin(ActivityPubPosts, eq(ActivityPubPosts.postId, Posts.id))
     .leftJoin(TargetActors, eq(TargetActors.profileId, Profiles.id))
-    .where(eq(Posts.id, reaction.postId))
+    .where(and(eq(Posts.id, reaction.postId), eq(Posts.state, PostState.ACTIVE)))
     .limit(1)
     .then(first);
 

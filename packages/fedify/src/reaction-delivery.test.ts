@@ -191,6 +191,12 @@ describe('Reaction delivery', () => {
     const missingInboxReaction = await createReaction(missingInbox, '❤️');
     await sendReaction(missingInboxReaction);
 
+    const tombstone = await createDeliveryFixture();
+    const tombstoneReaction = await createReaction(tombstone, '🎉');
+    await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, tombstone.postId));
+    await sendReaction(tombstoneReaction);
+    await sendReactionUndo(tombstoneReaction);
+
     const malformedObject = await createDeliveryFixture({ objectUri: 'not a URI' });
     const malformedObjectReaction = await createReaction(malformedObject, '❤️');
     await assert.rejects(sendReaction(malformedObjectReaction), /Invalid URL|must be an HTTP/);
