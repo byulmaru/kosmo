@@ -67,7 +67,7 @@ full/compact/drawer의 공용 로그아웃 control이 Web에서는 logout BFF를
 - [x] 2.1 Web BFF와 Native GraphQL을 선택하는 공용 runtime logout action을 구현한다.
 - [x] 2.2 확정된 성공 뒤 credential과 Relay Environment/Store를 정리하고 `/`로 replace 이동하는 흐름을 구현한다.
 - [x] 2.3 full/compact/drawer logout control에 공용 action, 중복 방지와 접근 가능한 진행·실패·재시도 상태를 연결한다.
-- [ ] 2.4 Web·Native 성공/이미 비인증/결과 불명/중복 실행/cache 격리 검증과 Relay compile·client check를 통과시킨다.
+- [x] 2.4 Web·Native 성공/이미 비인증/결과 불명/중복 실행/cache 격리 검증과 Relay compile·client check를 통과시킨다.
 - [ ] 2.5 2026-07-29 Web production 배포 뒤 logout smoke 결과를 PROD-473에 전달한다.
 
 ## 3. PROD-473 종단 간 통합 검증과 archive 준비
