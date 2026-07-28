@@ -17,7 +17,7 @@ Workflow는 Vault의 Sentry 설정 객체 전체를 임시 env 파일 하나로 
 
 `SENTRY_AUTH_TOKEN`에는 source map 업로드와 release artifact 생성 권한만 가진 organization token을 둔다. Vault JSON 전체는 Docker BuildKit secret mount에서만 보이며 layer에 복사하지 않는다. Token과 organization·project slug는 runtime image에 포함하지 않는다.
 
-공용 DSN은 환경마다 다른 Sentry project를 사용하지 않으므로 `shared`에서 관리하고 event의 dev/prod 구분은 공용 `ENVIRONMENT`가 담당한다. Web build에는 같은 값을 `EXPO_PUBLIC_ENVIRONMENT`로 전달한다. API와 Web BFF에는 Vault Secrets Operator가 `shared`의 `SENTRY_DSN` 하나만 `sentry-runtime` Secret으로 변환해 배포 시 주입한다. `SENTRY_RELEASE`는 Vault 값이 아니라 workflow가 `kosmo@<Git commit SHA>`로 만드는 배포 식별자이며 event와 source map을 연결한다. `SENTRY_ENABLED=1`, environment와 release는 Helm과 image가 주입한다. DSN, enable flag, environment와 release 중 하나라도 없으면 해당 runtime은 event를 전송하지 않는다.
+공용 DSN은 환경마다 다른 Sentry project를 사용하지 않으므로 `shared`에서 관리하고 event의 dev/prod 구분은 공용 `ENVIRONMENT`가 담당한다. Web build에는 같은 값을 `EXPO_PUBLIC_ENVIRONMENT`로 전달한다. API와 Web BFF에는 Vault Secrets Operator가 `shared`의 `SENTRY_DSN` 하나만 `sentry-runtime` Secret으로 변환해 배포 시 주입한다. `SENTRY_RELEASE`는 Vault 값이 아니라 workflow가 `kosmo@<Git commit SHA>`로 만드는 배포 식별자이며 event와 source map을 연결한다. DSN, environment와 release가 모두 있으면 해당 runtime은 Sentry를 활성화한다. 로컬·테스트에는 이 배포 metadata를 기본 주입하지 않는다.
 
 ## Event 전달 정책
 
@@ -71,6 +71,6 @@ rg 'sourceMappingURL=|SENTRY_AUTH_TOKEN' apps/api/dist apps/web/dist apps/app/di
 
 이미 담당 issue가 있으면 새 issue를 만들지 않고 Sentry link와 최신 release 증거를 기존 issue에 추가한다. 오류가 예상 도메인 실패이거나 중복 경계 보고라면 SDK 필터·경계 회귀로 분류한다.
 
-## 중단과 rollback
+## 설정 회전
 
-수집 문제나 개인정보 위험이 있으면 Helm의 `SENTRY_ENABLED`를 비활성화해 event 전송부터 중단한다. Vault `shared`의 `SENTRY_DSN` 변경은 API와 Web BFF에는 Vault Secrets Operator의 Secret 갱신과 rollout restart로, Web에는 새 image build·배포로 반영된다. Sentry 초기화가 비활성화돼도 기존 API/BFF 응답과 Web 오류 UI는 유지된다. source map 업로드 token도 Vault의 `secret/kubernetes/kosmo/shared`에서 회전하거나 제거한다.
+Vault `shared`의 `SENTRY_DSN` 변경은 API와 Web BFF에는 Vault Secrets Operator의 Secret 갱신과 rollout restart로, Web에는 새 image build·배포로 반영된다. Source map 업로드 token은 Vault의 `secret/kubernetes/kosmo/shared`에서 회전한다.

@@ -11,7 +11,7 @@ export const createSentryOptions = (environment: Environment): NodeOptions => {
   return {
     beforeBreadcrumb: () => null,
     dsn,
-    enabled: environment.SENTRY_ENABLED === '1' && Boolean(dsn && deploymentEnvironment && release),
+    enabled: Boolean(dsn && deploymentEnvironment && release),
     environment: deploymentEnvironment,
     initialScope: { tags: { runtime: 'web-bff' } },
     release,

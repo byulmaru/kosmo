@@ -13,7 +13,7 @@
 
 - 예상 Kosmo 도메인 오류와 OIDC 인증 오류는 수집하지 않는다.
 - Sentry SDK event는 `beforeSend` 정제 없이 그대로 전달하고 자동 breadcrumb만 제거한다.
-- 명시적 배포 enable, DSN, environment와 release가 모두 없으면 외부 전송하지 않는다.
+- DSN, environment와 release가 모두 없으면 외부 전송하지 않는다.
 - API GraphQL 변환과 HTTP 전역 경계가 같은 오류를 중복 수집하지 않는다.
 
 **Verification**
@@ -49,7 +49,7 @@
 - Web 전용 초기화와 native 관측 제외, event 전달 설정, React boundary capture와 기존 fallback/retry를 단위·Storybook 또는 관련 UI test로 검증한다.
 - Relay, TypeScript, Expo Web export와 Web source map 정적 검증을 통과시킨다.
 
-- [x] 2.1 Web-only Sentry 초기화·event 전달과 native 관측 제외 경계를 구현하고 활성화 설정 테스트를 추가한다.
+- [x] 2.1 Web-only Sentry 초기화·event 전달과 native 관측 제외 경계를 구현하고 배포 metadata 설정 테스트를 추가한다.
 - [x] 2.2 공용 React 오류 경계의 Web capture를 기존 fallback·retry 동작에 연결하고 중복 없는 capture를 검증한다.
 - [x] 2.3 Expo Web build가 외부 source map을 생성하고 업로드 뒤 제공 asset에서 map과 참조를 제거하도록 정렬한다.
 

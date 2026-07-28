@@ -45,8 +45,6 @@ spec:
           args:
             - web
           env:
-            - name: SENTRY_ENABLED
-              value: "1"
             - name: ENVIRONMENT
               value: {{ .Values.env | quote }}
             - name: DATABASE_PASSWORD

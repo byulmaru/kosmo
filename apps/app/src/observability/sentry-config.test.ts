@@ -8,7 +8,6 @@ describe('Web app Sentry configuration', () => {
     const options = createSentryOptions({
       EXPO_PUBLIC_ENVIRONMENT: 'production',
       EXPO_PUBLIC_SENTRY_DSN: 'https://public@example.invalid/1',
-      EXPO_PUBLIC_SENTRY_ENABLED: '1',
       EXPO_PUBLIC_SENTRY_RELEASE: 'kosmo@abc123',
     });
 

@@ -3,19 +3,17 @@ import { describe, it } from 'node:test';
 import { createSentryOptions } from './sentry';
 
 describe('API Sentry configuration', () => {
-  it('requires an explicit enable flag and complete deployment metadata', () => {
+  it('requires complete deployment metadata', () => {
     assert.equal(createSentryOptions({}).enabled, false);
     assert.equal(
       createSentryOptions({
         SENTRY_DSN: 'https://public@example.invalid/1',
-        SENTRY_ENABLED: '1',
         ENVIRONMENT: 'production',
       }).enabled,
       false,
     );
     const options = createSentryOptions({
       SENTRY_DSN: 'https://public@example.invalid/1',
-      SENTRY_ENABLED: '1',
       ENVIRONMENT: 'production',
       SENTRY_RELEASE: 'kosmo@abc123',
     });

@@ -10,9 +10,7 @@ export const createSentryOptions = (environment: Environment): BrowserOptions =>
   return {
     beforeBreadcrumb: () => null,
     dsn,
-    enabled:
-      environment.EXPO_PUBLIC_SENTRY_ENABLED === '1' &&
-      Boolean(dsn && deploymentEnvironment && release),
+    enabled: Boolean(dsn && deploymentEnvironment && release),
     environment: deploymentEnvironment,
     initialScope: { tags: { runtime: 'web' } },
     integrations: (integrations) =>

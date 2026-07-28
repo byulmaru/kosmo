@@ -33,12 +33,24 @@
 - Decision Date: 2026-07-27
 - Decision Class: Implementation Choice
 - Authority / Provenance: PROD-477, PROD-484, PROD-493
-- Status: Active
+- Status: Superseded
 - Context / Problem: API unit test도 `NODE_ENV=production`을 사용하고 개발 환경에 DSN이 남아 있을 수 있어 `NODE_ENV`나 DSN만으로 활성화하면 외부 event가 발생할 수 있다.
 - Decision Outcome: runtime별 공개·비공개 enable flag, DSN, environment와 commit release가 모두 있는 배포 build/runtime에서만 SDK를 활성화한다.
 - Alternatives Considered: `NODE_ENV=production` 단독 gate와 DSN 존재 단독 gate는 local/test 기본 비전송을 보장하지 못해 선택하지 않는다.
 - Consequences: 배포 설정이 불완전하면 애플리케이션은 정상 실행하지만 Sentry 전송은 비활성화된다. 운영 검증 체크리스트가 누락을 검출해야 한다.
 - Confirmation / Follow-up: 설정 조합별 초기화 단위 테스트와 배포 후 검증 event를 확인한다.
+
+### 완전한 배포 metadata가 있으면 Sentry를 활성화한다
+
+- Decision Date: 2026-07-28
+- Decision Class: User Choice
+- Authority / Provenance: 사용자 결정, PROD-477
+- Status: Active
+- Context / Problem: 별도 enable flag는 Linear 요구사항이나 사용자 결정에 없었는데 로컬·테스트 기본 비전송을 구현하는 과정에서 kill switch와 rollback 계약으로 잘못 확장됐다.
+- Decision Outcome: API, Web BFF와 Web browser는 별도 enable flag를 사용하지 않는다. DSN, environment와 commit release가 모두 있으면 Sentry를 활성화하며 로컬·테스트에는 이 배포 metadata를 기본 주입하지 않는다.
+- Alternatives Considered: runtime별 enable flag와 운영 kill switch는 Sentry를 임의로 끌 필요가 없고 요구사항에도 없으므로 선택하지 않는다.
+- Consequences: 배포 metadata가 완전한 runtime은 항상 오류를 전송한다. 로컬·테스트 기본 비전송은 별도 flag가 아니라 배포 metadata 부재로 보장한다.
+- Confirmation / Follow-up: 설정 조합별 단위 테스트에서 metadata가 완전하면 활성화되고 하나라도 없으면 비활성화되는지 확인한다.
 
 ### 커밋 기반 release를 모든 runtime과 artifact에 공유한다
 
@@ -106,4 +118,4 @@
 
 ## Superseded Decisions
 
-- 없음.
+- `명시적 배포 enable과 완전한 metadata가 있어야 전송한다`: 별도 enable·kill switch는 상위 요구사항에 없던 구현 가정이므로 2026-07-28 사용자 결정으로 폐기했다.
