@@ -4,14 +4,14 @@ Kosmo는 API, Web BFF와 Web browser의 처리되지 않은 오류만 Sentry에 
 
 ## Project와 자격 증명
 
-Vault의 `secret/kubernetes/kosmo/shared`에는 환경과 무관한 Sentry 설정을 둔다. API, Web BFF와 Web browser는 Sentry의 `kosmo` project 하나를 공유하고 `runtime` tag로 구분한다. `byulmaru/kosmo`의 branch와 release tag GitHub OIDC subject는 image build에 필요한 값을 읽는다.
+Vault의 `secret/kubernetes/kosmo/shared`에는 환경과 무관한 Sentry runtime·식별 설정을 둔다. API, Web BFF와 Web browser는 Sentry의 `kosmo` project 하나를 공유하고 `runtime` tag로 구분한다. `byulmaru/kosmo`의 branch와 release tag GitHub OIDC subject는 image build에 필요한 Vault 값을 읽고, source map 업로드 token은 GitHub repository secret에서 주입한다.
 
-| 이름                | 용도                                         |
-| ------------------- | -------------------------------------------- |
-| `SENTRY_ORG`        | Sentry organization slug                     |
-| `SENTRY_PROJECT`    | 세 runtime source map을 받을 project slug    |
-| `SENTRY_DSN`        | 세 runtime이 공유하는 공개 ingest DSN        |
-| `SENTRY_AUTH_TOKEN` | source map 업로드용 GitHub repository secret |
+| 이름                | 저장 위치                | 용도                                      |
+| ------------------- | ------------------------ | ----------------------------------------- |
+| `SENTRY_ORG`        | Vault `shared`           | Sentry organization slug                  |
+| `SENTRY_PROJECT`    | Vault `shared`           | 세 runtime source map을 받을 project slug |
+| `SENTRY_DSN`        | Vault `shared`           | 세 runtime이 공유하는 공개 ingest DSN     |
+| `SENTRY_AUTH_TOKEN` | GitHub repository secret | source map 업로드용 organization token    |
 
 Workflow는 Vault의 Sentry 설정 객체를 임시 env 파일로 만들고 GitHub repository secret의 `SENTRY_AUTH_TOKEN`을 같은 파일에 추가해 `sentry_config` BuildKit secret으로 Docker build에 한 번 전달한다. Docker build의 artifact 생성 단계가 이 파일을 환경 변수로 읽는다. DSN은 `EXPO_PUBLIC_SENTRY_DSN`으로 Web bundle에만 넣고, organization·project slug와 token은 source map upload 단계에서만 사용한다. DSN은 공개 ingest endpoint이므로 browser bundle에 포함될 수 있다.
 
