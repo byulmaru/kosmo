@@ -7,17 +7,17 @@ import {
   PostVisibility,
   ProfileState,
 } from '@kosmo/core/enums';
-import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
-import { federation } from './federation';
 import { projectLocalPostNote } from './local-post-note';
-import type { Context } from '@fedify/fedify';
+import { localReplyFederation } from './local-reply-federation';
 import type { Recipient } from '@fedify/vocab';
 
 type DeliverySource = {
   readonly authorProfileId: string;
+  readonly canonicalOrigin: string;
   readonly deletedAt: Temporal.Instant | null;
+  readonly localInstanceId: string;
   readonly replyParentId: string;
   readonly visibility: (typeof PostVisibility)[keyof typeof PostVisibility];
 };
@@ -28,19 +28,46 @@ type StoredRecipient = {
   readonly uri: string;
 };
 
-const createFederationContext = async (): Promise<Context<void>> => {
-  const localInstance = await resolveConfiguredLocalInstance();
-  return federation.createContext(new URL(localInstance.canonicalOrigin), undefined);
+const createFederationContext = (
+  source: Pick<DeliverySource, 'canonicalOrigin' | 'localInstanceId'>,
+) =>
+  localReplyFederation.createContext(new URL(source.canonicalOrigin), {
+    localInstanceId: source.localInstanceId,
+  });
+
+const loadLocalPostSource = async (
+  postId: string,
+): Promise<Pick<DeliverySource, 'canonicalOrigin' | 'localInstanceId'> | null> => {
+  const row = await db
+    .select({ canonicalOrigin: Instances.canonicalOrigin, localInstanceId: Instances.id })
+    .from(Posts)
+    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .where(
+      and(
+        eq(Posts.id, postId),
+        eq(Posts.state, PostState.ACTIVE),
+        eq(Instances.kind, InstanceKind.LOCAL),
+        eq(Instances.state, InstanceState.ACTIVE),
+        isNotNull(Instances.canonicalOrigin),
+        eq(Profiles.state, ProfileState.ACTIVE),
+      ),
+    )
+    .limit(1)
+    .then(first);
+
+  return row?.canonicalOrigin
+    ? { canonicalOrigin: row.canonicalOrigin, localInstanceId: row.localInstanceId }
+    : null;
 };
 
-const loadDeletedReplySource = async (
-  context: Context<void>,
-  postId: string,
-): Promise<DeliverySource | null> => {
+const loadDeletedReplySource = async (postId: string): Promise<DeliverySource | null> => {
   const row = await db
     .select({
       authorProfileId: Profiles.id,
+      canonicalOrigin: Instances.canonicalOrigin,
       deletedAt: Posts.deletedAt,
+      localInstanceId: Instances.id,
       replyParentId: Posts.replyParentId,
       visibility: Posts.visibility,
     })
@@ -53,18 +80,20 @@ const loadDeletedReplySource = async (
         eq(Posts.state, PostState.DELETED),
         isNotNull(Posts.replyParentId),
         eq(Instances.kind, InstanceKind.LOCAL),
-        eq(Instances.canonicalOrigin, context.canonicalOrigin),
         eq(Instances.state, InstanceState.ACTIVE),
+        isNotNull(Instances.canonicalOrigin),
         eq(Profiles.state, ProfileState.ACTIVE),
       ),
     )
     .limit(1)
     .then(first);
 
-  return row?.replyParentId
+  return row?.replyParentId && row.canonicalOrigin
     ? {
         authorProfileId: row.authorProfileId,
+        canonicalOrigin: row.canonicalOrigin,
         deletedAt: row.deletedAt,
+        localInstanceId: row.localInstanceId,
         replyParentId: row.replyParentId,
         visibility: row.visibility,
       }
@@ -145,7 +174,12 @@ const noteUri = (canonicalOrigin: string | URL, postId: string): URL =>
   new URL(`/ap/note/${postId}`, canonicalOrigin);
 
 export const sendLocalReplyCreate = async (postId: string): Promise<void> => {
-  const context = await createFederationContext();
+  const source = await loadLocalPostSource(postId);
+  if (!source) {
+    return;
+  }
+
+  const context = createFederationContext(source);
   const projection = await projectLocalPostNote(context, postId);
   if (!projection?.replyParentId) {
     return;
@@ -172,21 +206,21 @@ export const sendLocalReplyCreate = async (postId: string): Promise<void> => {
 };
 
 export const sendLocalReplyDelete = async (postId: string): Promise<void> => {
-  const context = await createFederationContext();
-  const source = await loadDeletedReplySource(context, postId);
+  const source = await loadDeletedReplySource(postId);
   if (!source) {
     return;
   }
 
+  const context = createFederationContext(source);
   const recipient = await selectRecipient(source);
   if (!recipient) {
     return;
   }
 
-  const objectUri = noteUri(context.canonicalOrigin, postId);
+  const objectUri = noteUri(source.canonicalOrigin, postId);
   const followersUri = new URL(
     `${context.getActorUri(source.authorProfileId).pathname.replace(/\/$/, '')}/followers`,
-    context.canonicalOrigin,
+    source.canonicalOrigin,
   );
   const activity = new Delete({
     actor: context.getActorUri(source.authorProfileId),

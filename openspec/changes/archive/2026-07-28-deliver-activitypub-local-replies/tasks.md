@@ -18,12 +18,14 @@ Local Reply가 기존 canonical Note 표현과 identity를 사용하는 안정�
 - Delete는 생성 때 사용한 canonical Note URI를 가리키며 별도 Tombstone endpoint나 mapping row를 만들지 않는다.
 - Public/Unlisted는 remote Parent Author만 direct recipient로 허용하고 Followers Only·Direct는 전달하지 않는다.
 - ACTIVE ActivityPub Instance의 usable HTTP(S) actor endpoint만 사용하고 UNRESPONSIVE/SUSPENDED는 제외한다.
+- Fedify Context, actor URI와 Note identity는 Reply Author Profile의 Local Instance `canonicalOrigin`에서 파생한다.
 - Create는 `{noteUri}#create`, Delete는 `{noteUri}#delete`, ordering domain은 canonical Note URI를 사용한다.
 - follower 직접 조회·fanout, followers/outbox collection, queue, retry/history와 새 DB schema를 추가하지 않는다.
 
 **Verification**
 
 - Local/Remote Parent의 Create Note projection과 Delete object identity를 검증한다.
+- configured origin과 다른 Local Instance Author의 Create/Delete identity와 Context origin을 검증한다.
 - visibility, Parent Author, endpoint와 Instance state recipient matrix를 검증한다.
 - 반복 delivery ID, Create/Delete ordering key, shared inbox와 no-recipient no-op을 검증한다.
 
