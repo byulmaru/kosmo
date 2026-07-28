@@ -12,6 +12,29 @@ const result = profile({
   id: 'profile-byulmaru',
   relativeHandle: '@byulmaru',
 });
+const secondResult = profile({
+  displayName: '별마루 개발',
+  handle: 'byulmaru-dev',
+  id: 'profile-byulmaru-dev',
+  relativeHandle: '@byulmaru-dev',
+});
+const thirdResult = profile({
+  displayName: '별마루 운영',
+  handle: 'byulmaru-ops',
+  id: 'profile-byulmaru-ops',
+  relativeHandle: '@byulmaru-ops',
+});
+
+const searchConnection = (
+  profiles: ReadonlyArray<ReturnType<typeof profile>>,
+  hasNextPage = false,
+) => ({
+  edges: profiles.map((node) => ({ cursor: node.handle, node })),
+  pageInfo: {
+    endCursor: profiles.at(-1)?.handle ?? null,
+    hasNextPage,
+  },
+});
 
 const meta = {
   component: SearchScreen,
@@ -27,22 +50,66 @@ export const Idle: Story = {
 
 export const Result: Story = {
   parameters: {
-    relay: { data: { profileByHandle: result } },
+    relay: { data: { searchProfiles: searchConnection([result, secondResult]) } },
     router: { params: { q: 'byulmaru', tab: 'people' }, pathname: '/search' },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole('link', { name: /별마루/ })).toHaveAttribute(
+    await expect(canvas.getByRole('link', { name: /@byulmaru / })).toHaveAttribute(
       'href',
       '/@byulmaru',
+    );
+    await expect(canvas.getByRole('link', { name: /@byulmaru-dev / })).toHaveAttribute(
+      'href',
+      '/@byulmaru-dev',
     );
   },
 };
 
 export const EmptyResult: Story = {
   parameters: {
-    relay: { data: { profileByHandle: null } },
+    relay: { data: { searchProfiles: searchConnection([]) } },
     router: { params: { q: '없는핸들', tab: 'people' }, pathname: '/search' },
+  },
+};
+
+export const NextPageFailureRetrySucceeds: Story = {
+  parameters: {
+    relay: {
+      data: { searchProfiles: searchConnection([result, secondResult], true) },
+      paginationResponses: [
+        { error: '다음 검색 결과를 불러오지 못했습니다.' },
+        { data: { searchProfiles: searchConnection([thirdResult]) } },
+      ],
+    },
+    router: { params: { q: 'byulmaru', tab: 'people' }, pathname: '/search' },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '검색 결과 더 보기' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '다음 검색 결과를 불러오지 못했어요',
+    );
+    expect(canvas.queryByText('별마루 운영')).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: '다음 검색 결과 다시 불러오기' }));
+    await expect(canvas.findByText('별마루 운영')).resolves.toBeVisible();
+    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+  },
+};
+
+export const NextPageLoading: Story = {
+  parameters: {
+    relay: {
+      data: { searchProfiles: searchConnection([result, secondResult], true) },
+      paginationLoading: true,
+    },
+    router: { params: { q: 'byulmaru', tab: 'people' }, pathname: '/search' },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const button = canvas.getByRole('button', { name: '검색 결과 더 보기' });
+    await userEvent.click(button);
+    await expect(button).toBeDisabled();
   },
 };
 

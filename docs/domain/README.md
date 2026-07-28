@@ -105,6 +105,7 @@ Account 요청에서 Profile이 주체인 행동의 `Account.Active`는 해당 P
 - [ADR 0014: Post Structure Relations](./decisions/0014-post-structure-relations.md)
 - [ADR 0015: Post Share Reference](./decisions/0015-post-share-reference.md)
 - [ADR 0016: Reaction Selector Current State](./decisions/0016-reaction-selector-current-state.md)
+- [ADR 0017: Profile Search Staged Visibility](./decisions/0017-profile-search-staged-visibility.md)
 - [ADR 0018: Media Upload State Without File](./decisions/0018-media-upload-lifecycle-without-file.md)
 - [ADR 0019: Selected Profile Authorization Boundary](./decisions/0019-selected-profile-authorization-boundary.md)
 - [2026-06-28 DDD 명세 점검 기록](./records/2026-06-28-ddd-spec-audit.md)

@@ -72,6 +72,18 @@ test('Post는 nullable Repost Source를 제공한다', () => {
   assert.equal(String(post.getFields().repostSource?.type), 'Post');
 });
 
+test('exposes partial Profile handle search without changing exact lookup', () => {
+  const query = schema.getQueryType();
+
+  assert.ok(query);
+  assert.equal(String(query.getFields().profileByHandle?.type), 'Profile');
+  assert.equal(String(query.getFields().searchProfiles?.type), 'ProfileConnection!');
+  assert.deepEqual(
+    query.getFields().searchProfiles?.args.map(({ name }) => name),
+    ['after', 'before', 'first', 'last', 'query'],
+  );
+});
+
 test('exposes viewer-independent Repost count and selected Profile Repost on Post', () => {
   const post = schema.getType('Post');
 
