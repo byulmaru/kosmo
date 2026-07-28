@@ -91,7 +91,7 @@ export function ReactionPopover({
         !trigger?.contains(event.target as Node) &&
         !contentElement?.contains(event.target as Node)
       ) {
-        dismiss(false);
+        dismiss();
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
@@ -126,6 +126,7 @@ export function ReactionPopover({
       ? anchor.y + anchor.height + spacing.xs
       : anchor.y - (content?.height ?? 0) - spacing.xs
     : insets.top + spacing.sm;
+  const webPlacementProps: Record<string, unknown> = web ? { dataSet: { placement } } : {};
 
   return (
     <>
@@ -149,15 +150,17 @@ export function ReactionPopover({
               testID="reaction-popover-backdrop"
             />
             <View
+              {...webPlacementProps}
               accessibilityViewIsModal
-              data-placement={placement}
               onAccessibilityEscape={() => dismiss()}
               style={[styles.position, { left, pointerEvents: 'box-none', top, width: shellWidth }]}
+              testID="reaction-popover-position"
             >
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={[styles.shell, { backgroundColor: theme.card, borderColor: theme.border }]}
+                testID="reaction-popover-scroll"
               >
                 <View onLayout={onContentLayout} ref={contentRef} style={styles.content}>
                   {children}

@@ -10,7 +10,7 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
-import { expect, fn, screen, userEvent, within } from 'storybook/test';
+import { expect, fn, screen, userEvent, waitFor, within } from 'storybook/test';
 import { PostActionBar } from '@/components/post/PostActionBar';
 import { formatPostActionCount } from '@/components/post/postActionCount';
 import { RelayActorProvider } from '@/relay/RelayActorProvider';
@@ -27,6 +27,7 @@ import type { PostActionBarStoryQuery } from './__generated__/PostActionBarStory
 const reply = fn();
 const bookmark = fn();
 const more = fn();
+const reactionMutationRequest = fn();
 
 const actionBarProps = {
   bookmark: {
@@ -49,7 +50,9 @@ const sourcePostId = 'post-source';
 const activeRepostId = 'post-repost-active';
 type RepostFixtureState = 'hidden' | 'unselected' | 'selected' | 'pending';
 type FixtureProps = Omit<PostActionBarProps, 'post'> & {
+  onMutationRequest?: (requestName: string) => void;
   repostState?: RepostFixtureState;
+  selectedProfileId?: string | null;
 };
 
 const postActionBarStoryQuery = graphql`
@@ -76,13 +79,21 @@ const selectedSource = {
   viewerReactions: [{ __typename: 'Reaction', id: 'reaction-story', type: '🥹' }],
 };
 
-function PostActionBarFixture({ repostState = 'unselected', ...props }: FixtureProps) {
+function PostActionBarFixture({
+  onMutationRequest,
+  repostState = 'unselected',
+  selectedProfileId = 'profile-story',
+  ...props
+}: FixtureProps) {
   const environment = useMemo(() => {
     const source =
       repostState === 'selected' || repostState === 'pending' ? selectedSource : unselectedSource;
     const result = new Environment({
-      network: Network.create((request) =>
-        request.operationKind !== 'mutation'
+      network: Network.create((request) => {
+        if (request.operationKind === 'mutation') {
+          onMutationRequest?.(request.name);
+        }
+        return request.operationKind !== 'mutation'
           ? Promise.resolve({
               data:
                 request.name === 'SessionProviderQuery'
@@ -90,7 +101,13 @@ function PostActionBarFixture({ repostState = 'unselected', ...props }: FixtureP
                       currentSession: {
                         __typename: 'Session',
                         id: 'session-story',
-                        selectedProfile: { __typename: 'Profile', id: 'profile-story' },
+                        selectedProfile:
+                          selectedProfileId === null
+                            ? null
+                            : {
+                                __typename: 'Profile',
+                                id: selectedProfileId,
+                              },
                       },
                       me: { __typename: 'Account', id: 'account-story', name: 'Story' },
                     }
@@ -111,8 +128,8 @@ function PostActionBarFixture({ repostState = 'unselected', ...props }: FixtureP
                           },
                         },
                       },
-              }),
-      ),
+              });
+      }),
       store: new Store(new RecordSource()),
     });
     result.commitPayload(
@@ -120,7 +137,7 @@ function PostActionBarFixture({ repostState = 'unselected', ...props }: FixtureP
       { node: source },
     );
     return result;
-  }, [repostState]);
+  }, [onMutationRequest, repostState, selectedProfileId]);
   const createEnvironment = useCallback(() => environment, [environment]);
 
   if (repostState === 'hidden') {
@@ -319,16 +336,90 @@ export const ControlledReply: Story = {
 };
 
 export const ReactionPopoverDismissFocusAndPlacement: Story = {
+  globals: { viewport: { isRotated: false, value: 'reactionNarrow' } },
+  parameters: {
+    layout: 'fullscreen',
+    viewport: {
+      options: {
+        reactionNarrow: {
+          name: 'Reaction narrow',
+          styles: { height: '640px', width: '320px' },
+          type: 'mobile',
+        },
+      },
+    },
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const [topLeftTrigger, bottomRightTrigger] = canvas.getAllByRole('button', { name: '반응' });
+
+    expect(topLeftTrigger).toHaveAttribute('aria-haspopup', 'dialog');
+    expect(topLeftTrigger).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(topLeftTrigger!);
+    await screen.findByRole('dialog', { name: '반응 선택' });
+    let position = screen.getByTestId('reaction-popover-position');
+    await waitFor(() => expect(position).toHaveAttribute('data-placement', 'bottom'));
+    expect(canvasElement.ownerDocument.activeElement).toHaveAttribute('aria-label', '🥹 반응');
+    expect(position.getBoundingClientRect().left).toBeGreaterThanOrEqual(0);
+
+    const shell = screen.getByTestId('reaction-popover-scroll');
+    expect(shell.getBoundingClientRect().left).toBeGreaterThanOrEqual(spacing.sm);
+    expect(shell.getBoundingClientRect().right).toBeLessThanOrEqual(
+      canvasElement.ownerDocument.documentElement.clientWidth - spacing.sm,
+    );
+    expect(getComputedStyle(shell).overflowX).toBe('auto');
+    for (const option of screen.getAllByRole('button', { name: /반응/ })) {
+      const bounds = option.getBoundingClientRect();
+      expect(bounds.width).toBeGreaterThanOrEqual(44);
+      expect(bounds.height).toBeGreaterThanOrEqual(44);
+    }
+
+    await userEvent.click(topLeftTrigger!);
+    expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
+    await userEvent.click(topLeftTrigger!);
+    await userEvent.click(screen.getByTestId('reaction-popover-backdrop'));
+    expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
+    expect(canvasElement.ownerDocument.activeElement).toBe(topLeftTrigger);
+
+    await userEvent.click(topLeftTrigger!);
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
+    expect(canvasElement.ownerDocument.activeElement).toBe(topLeftTrigger);
+
+    await userEvent.click(bottomRightTrigger!);
+    await screen.findByRole('dialog', { name: '반응 선택' });
+    position = screen.getByTestId('reaction-popover-position');
+    await waitFor(() => expect(position).toHaveAttribute('data-placement', 'top'));
+    expect(position.getBoundingClientRect().right).toBeLessThanOrEqual(
+      canvasElement.ownerDocument.documentElement.clientWidth - spacing.sm,
+    );
+  },
+  render: () => (
+    <View style={styles.placementFixture}>
+      <View style={styles.topLeftAction}>
+        <PostActionBarFixture />
+      </View>
+      <View style={styles.bottomRightAction}>
+        <PostActionBarFixture />
+      </View>
+    </View>
+  ),
+};
+
+export const NoSelectedProfileDisablesReaction: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    reactionMutationRequest.mockClear();
     const trigger = canvas.getByRole('button', { name: '반응' });
 
-    expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
-    expect(trigger).toHaveAttribute('aria-expanded', 'false');
-    await userEvent.click(trigger);
-    expect(await screen.findByRole('dialog', { name: '반응 선택' })).toBeVisible();
+    expect(trigger).toBeDisabled();
+    trigger.click();
+    expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
+    expect(reactionMutationRequest).not.toHaveBeenCalled();
   },
-  render: () => <PostActionBarFixture {...actionBarProps} />,
+  render: () => (
+    <PostActionBarFixture onMutationRequest={reactionMutationRequest} selectedProfileId={null} />
+  ),
 };
 
 export const InteractionContract: Story = {
@@ -503,6 +594,12 @@ export const Full1400: Story = {
 };
 
 const styles = {
+  bottomRightAction: {
+    bottom: 0,
+    position: 'absolute',
+    right: 0,
+    width: 88,
+  } satisfies ViewStyle,
   controlled: { gap: spacing.sm },
   avatarFixture: { height: 48, width: 48 },
   detailSurface: { paddingHorizontal: spacing.lg },
@@ -520,6 +617,17 @@ const styles = {
   } satisfies ViewStyle,
   listContent: { flex: 1, minWidth: 0 } satisfies ViewStyle,
   localeCopy: { fontFamily: 'SUIT', ...typography.sm },
+  placementFixture: {
+    height: 640,
+    position: 'relative',
+    width: '100%',
+  } satisfies ViewStyle,
+  topLeftAction: {
+    left: -44,
+    position: 'absolute',
+    top: 0,
+    width: 88,
+  } satisfies ViewStyle,
 };
 
 function verifyFixtures(expectedDetailWidth: number, expectedListWidth: number) {
