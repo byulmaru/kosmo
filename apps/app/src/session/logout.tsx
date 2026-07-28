@@ -4,7 +4,6 @@ import { Platform } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
 import { LOGOUT_FAILURE_MESSAGE, requestWebLogout } from '@/auth/logout';
 import { useRelayActor } from '@/relay/RelayActorProvider';
-import { executeLogoutFlow } from './logout-flow';
 import type { LogoutRevokeCurrentSessionMutation as LogoutRevokeCurrentSessionMutationType } from './__generated__/LogoutRevokeCurrentSessionMutation.graphql';
 
 const RevokeCurrentSessionMutation = graphql`
@@ -61,14 +60,15 @@ export function useLogout(): LogoutState {
 
     void (async () => {
       try {
-        await executeLogoutFlow({
-          clearNativeSession,
-          replaceWithRoot: () => router.replace('/'),
-          requestNativeLogout: revokeNativeSession,
-          requestWebLogout,
-          resetWebActor: () => resetActor(null),
-          runtime: Platform.OS === 'web' ? 'web' : 'native',
-        });
+        if (Platform.OS === 'web') {
+          await requestWebLogout();
+          resetActor(null);
+        } else {
+          await revokeNativeSession();
+          await clearNativeSession();
+        }
+
+        router.replace('/');
         setPending(false);
       } catch {
         setPending(false);

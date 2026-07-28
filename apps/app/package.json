@@ -20,7 +20,7 @@
     "storybook:dev": "storybook dev -p 6006 --disable-telemetry",
     "test": "pnpm check && pnpm test:unit && pnpm build-storybook && pnpm test:storybook",
     "test:storybook": "vitest run --project=storybook",
-    "test:unit": "node --import tsx --test 'src/**/*.test.ts'",
+    "test:unit": "node --experimental-test-module-mocks --import tsx --test 'src/**/*.test.ts'",
     "web": "expo start --web --port 5173"
   },
   "dependencies": {

@@ -82,7 +82,7 @@ const avatarShadow = {
 
 type Props = {
   compact?: boolean;
-  logout?: LogoutControlProps;
+  logout: LogoutControlProps;
   onNavigate?: () => void;
   onSwitcherOpenChange?: (open: boolean) => void;
   query: SidebarNavigation_query$key;
@@ -92,7 +92,7 @@ type Props = {
 
 export function SidebarNavigation({
   compact = false,
-  logout = { error: null, logout: () => undefined, pending: false },
+  logout,
   onNavigate,
   onSwitcherOpenChange,
   query,
