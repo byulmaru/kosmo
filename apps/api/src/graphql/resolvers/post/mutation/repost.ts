@@ -1,4 +1,4 @@
-import { createRepostNotification, repostPost } from '@kosmo/core/services';
+import { repostPost } from '@kosmo/core/services';
 import { builder } from '@/graphql/builder';
 import { Post } from '../ref';
 
@@ -17,10 +17,6 @@ builder.mutationField('repostPost', (t) =>
         actorProfileId: ctx.session.profileId,
         sourcePostId: input.sourceId.id,
       });
-
-      if (result.created) {
-        await createRepostNotification(result.repost.id).catch(() => undefined);
-      }
 
       return { repost: result.repost };
     },
