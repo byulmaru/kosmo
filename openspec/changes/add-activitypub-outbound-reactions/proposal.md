@@ -42,10 +42,10 @@ Kosmo는 Local Profile의 Reaction을 domain transaction에 저장하지만 Remo
 
 ## Impact
 
-- `packages/core`: local application action의 실제 create/delete 결과에서 post-commit delivery command를 구성하고
-  inbound가 공유하는 Reaction primitive에는 outbound side effect를 추가하지 않는다.
-- `packages/fedify`: stable Reaction activity identity, `Like`·`EmojiReact`·`Undo` vocabulary 직렬화와 기존
-  inbox/shared inbox 직접 delivery 경계
+- `packages/core`: local application Reaction action의 transaction과 post-commit Notification/Fedify 호출을
+  소유하고, inbound가 공유하는 persistence primitive에는 outbound side effect를 추가하지 않는다.
+- `packages/fedify`: 저장된 Reaction·Post·actor projection 조회, stable activity identity,
+  `Like`·`EmojiReact`·`Undo` 직렬화와 inbox/shared inbox 직접 delivery 경계
 - API/Fedify/core 테스트: 여섯 Type 매핑, local/remote·actor/instance eligibility, duplicate add/repeated delete,
   exact Undo, recipient·ordering과 post-commit failure isolation 검증
 - PostgreSQL/Drizzle schema, MessageQueue/NATS/transactional outbox 변경 없음

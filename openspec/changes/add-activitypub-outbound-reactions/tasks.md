@@ -47,8 +47,8 @@ Local application Reaction의 실제 create/delete만 transaction commit 후 Fed
 **Guardrails**
 
 - shared Reaction persistence primitive는 inbound materialization에 outbound side effect를 일으키지 않는다.
-- transaction 안에서 actual 변화와 sender/target eligibility 및 delivery projection을 확정하고 commit 전에는 remote
-  I/O를 하지 않는다.
+- core local application action이 actual 변화를 commit하고 immutable Reaction row를 Fedify에 넘긴다. Fedify가 저장된 target
+  projection을 조회해 eligibility를 판단한다. commit 전에는 Fedify 호출이나 remote I/O를 하지 않는다.
 - Local Post, non-local sender, Active가 아닌 Remote Instance와 unsupported Type에는 delivery를 시도하지 않는다.
 - duplicate add, repeated delete는 새 delivery를 만들지 않고 삭제한 exact Type만 Undo한다.
 - Notification과 ActivityPub delivery 실패는 서로 및 committed application 결과에서 독립적으로 격리한다.
@@ -57,10 +57,10 @@ Local application Reaction의 실제 create/delete만 transaction commit 후 Fed
 
 - API/core DB-backed test로 eligible create/delete, duplicate add, repeated delete, multi-Type exactness, Local Post,
   non-local sender, Unresponsive/Suspended target과 inbound no-echo를 검증한다.
-- delivery spy에서 호출이 transaction commit 이후 발생하고 rollback 시 발생하지 않음을 검증한다.
+- delivery 경계에서 commit된 Reaction row가 delete와 경쟁해도 원본 activity를 유지하고 rollback 시 호출되지 않음을 검증한다.
 
-- [x] 2.1 Local Reaction create transaction이 실제 생성과 eligibility에 따라 post-commit delivery를 시작하도록 연결한다.
-- [x] 2.2 Local Reaction delete transaction이 실제 삭제한 Reaction projection으로 exact post-commit Undo를 시작하도록 연결한다.
+- [x] 2.1 core local Reaction create action이 실제 생성 후 post-commit Fedify delivery를 시작하도록 연결한다.
+- [x] 2.2 core Reaction delete action이 실제 삭제 row로 exact post-commit Undo를 시작하도록 연결한다.
 - [x] 2.3 멱등 lifecycle, eligibility no-delivery와 inbound no-echo 회귀를 DB-backed test로 검증한다.
 
 ## 3. PROD-499 Failure isolation과 범위 회귀 검증

@@ -36,7 +36,7 @@
 - Alternatives Considered: Hackers’ Pub처럼 author와 followers에 모두 전달하는 방식은 federation 도달 범위를
   넓히고 PROD-499의 author-delivery 범위를 벗어난다. Local Post delivery는 remote recipient가 없다.
 - Consequences: Local Post, non-local sender, Unresponsive target과 기존 조회 정책상 unavailable target은
-  committed Reaction만 유지하고 delivery command를 만들지 않는다.
+  committed Reaction만 유지하고 Fedify delivery를 만들지 않는다.
 - Confirmation / Follow-up: author inbox/shared inbox recipient, followers 부재와 각 eligibility no-delivery를
   integration test로 검증한다.
 
@@ -68,8 +68,9 @@
 - Status: Active
 - Context / Problem: Remote HTTP 실패와 process crash 가능성을 domain transaction 및 application 성공 의미와
   분리해야 한다.
-- Decision Outcome: transaction에서 delivery command를 확정하되 기존 Fedify direct delivery는 commit 이후
-  실행한다. 실패는 catch/log하고 committed create/delete 및 application 결과를 유지한다.
+- Decision Outcome: core local application action이 create/delete transaction을 commit한 뒤 기존 Fedify direct
+  delivery를 호출한다. Fedify는 commit된 Reaction 결과와 저장된 Post·actor projection으로 eligibility와 activity를
+  구성한다. 실패는 core 호출 경계에서 catch/log하고 committed create/delete 및 application 결과를 유지한다.
 - Alternatives Considered: transaction 안 delivery는 remote I/O 실패와 지연을 domain commit에 결합한다.
   transactional outbox, MessageQueue와 durable retry는 PROD-499의 선행이 아니며 PROD-448 후속 migration이다.
 - Consequences: commit 뒤 delivery 전 process 종료 시 activity 유실 가능성을 현재 계약으로 수용한다. 사용자용
@@ -86,13 +87,15 @@
 - Context / Problem: 현재 Reaction create primitive는 GraphQL local mutation과 PROD-498 inbound materialization이
   공유하므로 그 자체에 outbound delivery를 붙이면 remote activity가 다시 발신된다.
 - Decision Outcome: transport-neutral shared persistence primitive에는 outbound side effect를 추가하지 않는다.
-  Local application 경계가 transaction 안에서 actual create/delete와 eligibility를 평가해 private command를 만들고,
-  commit 뒤 Fedify 경계를 호출한다.
+  core의 local Reaction application action과 delete action이 실제 create/delete를 commit한 뒤 Fedify 경계를 호출한다.
+  Fedify가 protocol-specific Post·actor·inbox projection과 recipient eligibility를 소유한다. GraphQL API는 인증·입력·응답
+  mapping과 Post 조회 가능 여부만 소유한다.
 - Alternatives Considered: shared primitive의 caller flag는 protocol별 분기를 public contract에 누출하고 누락 시
   echo 위험이 있다. Fedify handler에서 global hook으로 Reaction row를 관찰하는 방식은 application intent 및 멱등
   결과와 분리된다.
-- Consequences: inbound 경로는 기존 shared primitive만 사용하고 outbound 경로는 Local application action에서만
-  시작한다. 구체적인 helper·파일 이름은 구현자가 현재 구조에 맞게 선택할 수 있다.
+- Consequences: inbound 경로는 기존 shared primitive만 사용하고 outbound 경로는 local application action에서만
+  시작한다. API에는 Fedify command 타입이나 projection query가 노출되지 않는다. commit 뒤 저장 projection을
+  조회하므로 transaction 시점 이후 target 상태가 바뀌면 최신 eligibility에 따라 delivery를 생략할 수 있다.
 - Confirmation / Follow-up: inbound Reaction이 outbound helper를 호출하지 않는 회귀 test와 local duplicate
   add/repeated delete no-delivery를 검증한다.
 

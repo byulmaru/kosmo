@@ -1,13 +1,12 @@
 import { db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
 import { NotFoundError } from '@kosmo/core/error';
-import { addReaction, createReactionNotification } from '@kosmo/core/services';
+import { reactToPost } from '@kosmo/core/services';
 import { reactionTypeSchema } from '@kosmo/core/validation';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Post } from '../../post';
 import { postAccessWhere } from '../../post/access';
 import { Reaction } from '../ref';
-import { deliverReactionCreation, resolveReactionDeliveryCommand } from './activitypub-delivery';
 
 builder.mutationField('addReaction', (t) =>
   t.withAuth({ usingProfile: true }).fieldWithInput({
@@ -21,38 +20,23 @@ builder.mutationField('addReaction', (t) =>
       type: t.input.string({ validate: reactionTypeSchema }),
     },
     resolve: async (_, { input }, ctx) => {
-      const { command, result } = await db.transaction(async (tx) => {
-        const post = await tx
-          .select({ id: Posts.id })
-          .from(Posts)
-          .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
-          .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-          .where(and(eq(Posts.id, input.postId.id), postAccessWhere({ ctx })))
-          .limit(1)
-          .then(first);
-        if (!post) {
-          throw new NotFoundError('Post not found');
-        }
-
-        const result = await addReaction(
-          {
-            actorProfileId: ctx.session.profileId,
-            postId: post.id,
-            type: input.type,
-          },
-          tx,
-        );
-        const command = result.created
-          ? await resolveReactionDeliveryCommand(tx, result.reaction)
-          : undefined;
-
-        return { command, result };
-      });
-
-      if (result.created) {
-        await createReactionNotification(result.reaction.id).catch(() => undefined);
+      const post = await db
+        .select({ id: Posts.id })
+        .from(Posts)
+        .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
+        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+        .where(and(eq(Posts.id, input.postId.id), postAccessWhere({ ctx })))
+        .limit(1)
+        .then(first);
+      if (!post) {
+        throw new NotFoundError('Post not found');
       }
-      await deliverReactionCreation(command);
+
+      const result = await reactToPost({
+        actorProfileId: ctx.session.profileId,
+        postId: post.id,
+        type: input.type,
+      });
 
       return { reaction: result.reaction };
     },

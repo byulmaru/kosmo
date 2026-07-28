@@ -3,6 +3,15 @@ import '@kosmo/core/polyfill';
 import assert from 'node:assert/strict';
 import { after, afterEach, before, describe, mock, test } from 'node:test';
 import { EmojiReact, Like, Undo } from '@fedify/vocab';
+import {
+  InstanceKind,
+  InstanceState,
+  PostState,
+  PostVisibility,
+  ProfileFollowPolicy,
+  ProfileState,
+} from '@kosmo/core/enums';
+import { eq } from 'drizzle-orm';
 import type { Context } from '@fedify/fedify';
 import type { Activity, Recipient } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
@@ -12,31 +21,43 @@ import type * as ReactionDelivery from './reaction-delivery';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
-const senderProfileId = '019f6f67-1111-7777-8888-123456789abc';
-const remotePostUri = new URL('https://remote.example/posts/1');
-const remoteActorUri = new URL('https://remote.example/users/alice');
-const actor = {
-  inboxUri: 'https://remote.example/users/alice/inbox',
-  sharedInboxUri: 'https://remote.example/inbox',
-  uri: remoteActorUri.href,
-};
 
+let ActivityPubActors: typeof CoreDb.ActivityPubActors;
+let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
+let db: typeof CoreDb.db;
 let federation: typeof Federation;
+let firstOrThrow: typeof CoreDb.firstOrThrow;
+let Instances: typeof CoreDb.Instances;
+let localInstanceId: string;
 let pg: typeof CoreDb.pg;
-let sendProfileReaction: typeof ReactionDelivery.sendProfileReaction;
-let sendProfileReactionUndo: typeof ReactionDelivery.sendProfileReactionUndo;
+let Posts: typeof CoreDb.Posts;
+let Profiles: typeof CoreDb.Profiles;
+let Reactions: typeof CoreDb.Reactions;
+let sendReaction: typeof ReactionDelivery.sendReaction;
+let sendReactionUndo: typeof ReactionDelivery.sendReactionUndo;
 
 describe('Reaction delivery', () => {
   before(async () => {
     process.env.DATABASE_URL = databaseUrl;
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
-    ({ pg } = await import('@kosmo/core/db'));
+    ({
+      ActivityPubActors,
+      ActivityPubPosts,
+      db,
+      firstOrThrow,
+      Instances,
+      pg,
+      Posts,
+      Profiles,
+      Reactions,
+    } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ federation } = await import('./federation'));
-    ({ sendProfileReaction, sendProfileReactionUndo } = await import('./reaction-delivery'));
+    ({ sendReaction, sendReactionUndo } = await import('./reaction-delivery'));
 
-    await seedDatabase({ publicOrigin });
+    const { localInstance } = await seedDatabase({ publicOrigin });
+    localInstanceId = localInstance.id;
   });
 
   afterEach(() => {
@@ -47,9 +68,10 @@ describe('Reaction delivery', () => {
     await pg.end();
   });
 
-  test('여섯 Type을 stable identity의 Like 또는 EmojiReact로 직렬화한다', async () => {
-    const fixture = createContextFixture();
-    mock.method(federation, 'createContext', () => fixture.context);
+  test('여섯 Type을 저장 projection에서 stable identity의 Like 또는 EmojiReact로 직렬화한다', async () => {
+    const target = await createDeliveryFixture();
+    const context = createContextFixture();
+    mock.method(federation, 'createContext', () => context.context);
     const cases = [
       { activityClass: Like, id: '019f6f67-2222-7777-8888-123456789a01', type: '❤️' },
       { activityClass: EmojiReact, id: '019f6f67-2222-7777-8888-123456789a02', type: '🥹' },
@@ -60,40 +82,45 @@ describe('Reaction delivery', () => {
     ] as const;
 
     for (const reaction of cases) {
-      await sendProfileReaction({
-        actor,
-        objectUri: remotePostUri.href,
-        outboundReaction: {
+      const stored = await db
+        .insert(Reactions)
+        .values({
           createdAt: Temporal.Instant.from('2026-07-28T00:00:00Z'),
           id: reaction.id,
+          postId: target.postId,
+          profileId: target.senderProfileId,
           type: reaction.type,
-        },
-        senderProfileId,
-      });
+        })
+        .returning()
+        .then(firstOrThrow);
+      await sendReaction(stored);
     }
 
-    assert.equal(fixture.calls.length, cases.length);
+    assert.equal(context.calls.length, cases.length);
     for (const [index, reaction] of cases.entries()) {
-      const call = fixture.calls[index];
+      const call = context.calls[index];
       assert.ok(call);
       assert.ok(call.activity instanceof reaction.activityClass);
       assert.equal(call.activity.id?.href, `${publicOrigin}/ap/reaction/${reaction.id}`);
-      assert.equal(call.activity.actorId?.href, `${publicOrigin}/ap/actor/${senderProfileId}`);
-      assert.equal(call.activity.objectId?.href, remotePostUri.href);
+      assert.equal(
+        call.activity.actorId?.href,
+        `${publicOrigin}/ap/actor/${target.senderProfileId}`,
+      );
+      assert.equal(call.activity.objectId?.href, target.objectUri);
       assert.equal(call.activity.content?.toString(), reaction.type);
       assert.equal(call.activity.published?.toString(), '2026-07-28T00:00:00Z');
       assert.deepEqual(
         call.activity.toIds.map((uri) => uri.href),
-        [remoteActorUri.href],
+        [target.actorUri],
       );
       assert.deepEqual(
         call.activity.ccIds.map((uri) => uri.href),
         [],
       );
-      assert.equal(call.recipient.id?.href, remoteActorUri.href);
-      assert.equal(call.recipient.inboxId?.href, actor.inboxUri);
-      assert.equal(call.recipient.endpoints?.sharedInbox?.href, actor.sharedInboxUri);
-      assert.deepEqual(call.sender, { identifier: senderProfileId });
+      assert.equal(call.recipient.id?.href, target.actorUri);
+      assert.equal(call.recipient.inboxId?.href, target.inboxUri);
+      assert.equal(call.recipient.endpoints?.sharedInbox?.href, target.sharedInboxUri);
+      assert.deepEqual(call.sender, { identifier: target.senderProfileId });
       assert.deepEqual(call.options, {
         orderingKey: `${publicOrigin}/ap/reaction/${reaction.id}`,
       });
@@ -104,84 +131,173 @@ describe('Reaction delivery', () => {
     }
   });
 
-  test('Undo는 #undo identity와 exact 원본 activity 및 같은 ordering key를 사용한다', async () => {
-    const fixture = createContextFixture();
-    mock.method(federation, 'createContext', () => fixture.context);
-    const reactionId = '019f6f67-2222-7777-8888-123456789abc';
-
-    await sendProfileReactionUndo({
-      actor,
-      objectUri: remotePostUri.href,
-      outboundReaction: {
+  test('삭제된 row에서도 create와 exact Undo를 같은 ordering key로 직렬화한다', async () => {
+    const target = await createDeliveryFixture();
+    const context = createContextFixture();
+    mock.method(federation, 'createContext', () => context.context);
+    const reaction = await db
+      .insert(Reactions)
+      .values({
         createdAt: Temporal.Instant.from('2026-07-28T00:00:00Z'),
-        id: reactionId,
+        postId: target.postId,
+        profileId: target.senderProfileId,
         type: '🎉',
-      },
-      senderProfileId,
-    });
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db.delete(Reactions).where(eq(Reactions.id, reaction.id));
 
-    const call = fixture.calls[0];
+    await sendReaction(reaction);
+    await sendReactionUndo(reaction);
+
+    assert.ok(context.calls[0]?.activity instanceof EmojiReact);
+    const call = context.calls[1];
     assert.ok(call?.activity instanceof Undo);
     const original = await call.activity.getObject();
     assert.ok(original instanceof EmojiReact);
-    assert.equal(call.activity.id?.href, `${publicOrigin}/ap/reaction/${reactionId}#undo`);
-    assert.equal(call.activity.actorId?.href, `${publicOrigin}/ap/actor/${senderProfileId}`);
+    assert.equal(call.activity.id?.href, `${publicOrigin}/ap/reaction/${reaction.id}#undo`);
+    assert.equal(call.activity.actorId?.href, `${publicOrigin}/ap/actor/${target.senderProfileId}`);
     assert.deepEqual(
       call.activity.toIds.map((uri) => uri.href),
-      [remoteActorUri.href],
+      [target.actorUri],
     );
-    assert.equal(original.id?.href, `${publicOrigin}/ap/reaction/${reactionId}`);
-    assert.equal(original.actorId?.href, `${publicOrigin}/ap/actor/${senderProfileId}`);
-    assert.equal(original.objectId?.href, remotePostUri.href);
+    assert.equal(original.id?.href, `${publicOrigin}/ap/reaction/${reaction.id}`);
+    assert.equal(original.objectId?.href, target.objectUri);
     assert.equal(original.content?.toString(), '🎉');
     assert.equal(original.published?.toString(), '2026-07-28T00:00:00Z');
     assert.deepEqual(call.options, {
-      orderingKey: `${publicOrigin}/ap/reaction/${reactionId}`,
+      orderingKey: `${publicOrigin}/ap/reaction/${reaction.id}`,
     });
+    assert.equal(context.calls[0]?.options?.orderingKey, call.options?.orderingKey);
   });
 
-  test('unsupported Type과 없거나 malformed인 저장 endpoint를 전송 전에 거부한다', async () => {
-    const fixture = createContextFixture();
-    mock.method(federation, 'createContext', () => fixture.context);
-    const base = {
-      actor,
-      objectUri: remotePostUri.href,
-      outboundReaction: {
-        createdAt: Temporal.Instant.from('2026-07-28T00:00:00Z'),
-        id: '019f6f67-2222-7777-8888-123456789abc',
-        type: '👍',
-      },
-      senderProfileId,
-    };
+  test('unsupported Type과 없거나 malformed인 저장 projection은 전송하지 않는다', async () => {
+    const context = createContextFixture();
+    mock.method(federation, 'createContext', () => context.context);
 
-    await assert.rejects(sendProfileReaction(base), /Unsupported outbound/);
+    const unsupported = await createDeliveryFixture();
     await assert.rejects(
-      sendProfileReaction({
-        ...base,
-        actor: { ...actor, inboxUri: null },
-        outboundReaction: { ...base.outboundReaction, type: '❤️' },
+      sendReactionUndo({
+        createdAt: Temporal.Instant.from('2026-07-28T00:00:00Z'),
+        id: crypto.randomUUID(),
+        postId: unsupported.postId,
+        profileId: unsupported.senderProfileId,
+        type: '👍',
       }),
-      /must have an inbox/,
+      /Unsupported outbound/,
     );
-    await assert.rejects(
-      sendProfileReaction({
-        ...base,
-        objectUri: 'not a URI',
-        outboundReaction: { ...base.outboundReaction, type: '❤️' },
-      }),
-      /Invalid URL|must be an HTTP/,
-    );
-    await assert.rejects(
-      sendProfileReaction({
-        ...base,
-        actor: { ...actor, inboxUri: 'ftp://remote.example/inbox' },
-        outboundReaction: { ...base.outboundReaction, type: '❤️' },
-      }),
-      /must be an HTTP/,
-    );
-    assert.equal(fixture.calls.length, 0);
+
+    const missingInbox = await createDeliveryFixture({ inboxUri: null });
+    const missingInboxReaction = await createReaction(missingInbox, '❤️');
+    await sendReaction(missingInboxReaction);
+
+    const malformedObject = await createDeliveryFixture({ objectUri: 'not a URI' });
+    const malformedObjectReaction = await createReaction(malformedObject, '❤️');
+    await assert.rejects(sendReaction(malformedObjectReaction), /Invalid URL|must be an HTTP/);
+
+    const malformedInbox = await createDeliveryFixture({
+      inboxUri: 'ftp://remote.example/inbox',
+    });
+    const malformedInboxReaction = await createReaction(malformedInbox, '❤️');
+    await assert.rejects(sendReaction(malformedInboxReaction), /must be an HTTP/);
+    assert.equal(context.calls.length, 0);
   });
 });
+
+type DeliveryFixture = {
+  readonly actorUri: string;
+  readonly inboxUri: string | null;
+  readonly objectUri: string;
+  readonly postId: string;
+  readonly senderProfileId: string;
+  readonly sharedInboxUri: string;
+};
+
+const createDeliveryFixture = async ({
+  inboxUri,
+  objectUri,
+}: {
+  inboxUri?: string | null;
+  objectUri?: string;
+} = {}): Promise<DeliveryFixture> => {
+  const suffix = crypto.randomUUID();
+  const sender = await db
+    .insert(Profiles)
+    .values({
+      displayName: `sender-${suffix}`,
+      followPolicy: ProfileFollowPolicy.OPEN,
+      handle: `sender-${suffix}`,
+      instanceId: localInstanceId,
+      normalizedHandle: `sender-${suffix}`,
+      state: ProfileState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  const remoteInstance = await db
+    .insert(Instances)
+    .values({
+      canonicalOrigin: `https://remote-${suffix}.example`,
+      domain: `remote-${suffix}.example`,
+      kind: InstanceKind.ACTIVITYPUB,
+      state: InstanceState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  const author = await db
+    .insert(Profiles)
+    .values({
+      displayName: `author-${suffix}`,
+      followPolicy: ProfileFollowPolicy.OPEN,
+      handle: `author-${suffix}`,
+      instanceId: remoteInstance.id,
+      normalizedHandle: `author-${suffix}`,
+      state: ProfileState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  const actorUri = `https://${remoteInstance.domain}/users/${author.id}`;
+  const resolvedInboxUri =
+    inboxUri === undefined ? `https://${remoteInstance.domain}/users/${author.id}/inbox` : inboxUri;
+  const sharedInboxUri = `https://${remoteInstance.domain}/inbox`;
+  await db.insert(ActivityPubActors).values({
+    inboxUri: resolvedInboxUri,
+    profileId: author.id,
+    sharedInboxUri,
+    type: 'PERSON',
+    uri: actorUri,
+  });
+  const post = await db
+    .insert(Posts)
+    .values({
+      profileId: author.id,
+      state: PostState.ACTIVE,
+      visibility: PostVisibility.PUBLIC,
+    })
+    .returning()
+    .then(firstOrThrow);
+  const resolvedObjectUri = objectUri ?? `https://${remoteInstance.domain}/posts/${post.id}`;
+  await db.insert(ActivityPubPosts).values({
+    postId: post.id,
+    receivedAt: Temporal.Now.instant(),
+    uri: resolvedObjectUri,
+  });
+
+  return {
+    actorUri,
+    inboxUri: resolvedInboxUri,
+    objectUri: resolvedObjectUri,
+    postId: post.id,
+    senderProfileId: sender.id,
+    sharedInboxUri,
+  };
+};
+
+const createReaction = (fixture: DeliveryFixture, type: string) =>
+  db
+    .insert(Reactions)
+    .values({ postId: fixture.postId, profileId: fixture.senderProfileId, type })
+    .returning()
+    .then(firstOrThrow);
 
 interface SendActivityCall {
   readonly activity: Activity;

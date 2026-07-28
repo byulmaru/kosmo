@@ -91,7 +91,7 @@ Reaction 삭제는 입력한 Post와 Reaction Type에서 행동 주체 Profile�
   원본 activity URI에 `#undo`를 결합하고, 원본 activity URI를 생성과 취소 delivery의 같은 ordering key로
   사용한다.
 - domain transaction이 commit된 뒤 기존 Fedify delivery 경계로 직접 전달한다. delivery 실패는 관측·로그하되
-  이미 commit된 Reaction 추가·삭제와 application 결과를 실패로 바꾸지 않는다. API process가 commit 뒤
+  이미 commit된 Reaction 추가·삭제와 application 결과를 실패로 바꾸지 않는다. application process가 commit 뒤
   delivery 전에 종료되는 유실 가능성, durable retry, delivery history와 queue handoff는 후속 migration
   범위다.
 

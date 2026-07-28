@@ -2,7 +2,6 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, mock, test } from 'node:test';
-import { Like, Undo } from '@fedify/vocab';
 import {
   AccountProfileRole,
   AccountState,
@@ -20,10 +19,8 @@ import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
-import type { Activity, Recipient } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreServices from '@kosmo/core/services';
-import type * as FedifyDelivery from '@kosmo/fedify';
 import type { deriveContext as deriveContextFunction, Env } from '../../../src/context';
 
 const publicOrigin = 'http://127.0.0.1:4173';
@@ -45,7 +42,6 @@ let Reactions: typeof CoreDb.Reactions;
 let Sessions: typeof CoreDb.Sessions;
 let createCorePost: typeof CoreServices.createPost;
 let repostPost: typeof CoreServices.repostPost;
-let federation: typeof FedifyDelivery.federation;
 let app: Hono<Env>;
 let deriveContext: typeof deriveContextFunction;
 let localInstanceId: string;
@@ -75,7 +71,6 @@ describe('GraphQL Reaction', () => {
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
     ({ createPost: createCorePost, repostPost } = await import('@kosmo/core/services'));
-    ({ federation } = await import('@kosmo/fedify'));
     ({
       AccountProfiles,
       Accounts,
@@ -239,64 +234,6 @@ describe('GraphQL Reaction', () => {
       assert.equal(await db.$count(Notifications), 0);
     } finally {
       errorLog.mock.restore();
-    }
-  });
-
-  test('성공 delivery는 commit된 Reaction과 저장된 remote projection을 사용한다', async () => {
-    const auth = await createAuthenticatedSession();
-    const target = await createRemoteReactionTarget({
-      inboxUri: 'https://remote.example/users/author/inbox',
-    });
-    const calls: Array<{
-      activity: Activity;
-      options: { orderingKey?: string } | undefined;
-      reactionCount: number;
-      recipient: Recipient;
-    }> = [];
-    const createContext = mock.method(
-      federation,
-      'createContext',
-      () =>
-        ({
-          canonicalOrigin: publicOrigin,
-          getActorUri: (identifier: string) => new URL(`/ap/actor/${identifier}`, publicOrigin),
-          sendActivity: async (
-            _sender: { identifier: string },
-            recipient: Recipient,
-            activity: Activity,
-            options?: { orderingKey?: string },
-          ) => {
-            calls.push({
-              activity,
-              options,
-              reactionCount: await db.$count(Reactions),
-              recipient,
-            });
-          },
-        }) as never,
-    );
-
-    try {
-      const added = await requestAddReaction(target.post.id, '❤️', auth.token);
-      assertNoGraphQLErrors(added);
-      const reaction = await db.select().from(Reactions).then(firstOrThrow);
-
-      const deleted = await requestDeleteReaction(target.post.id, '❤️', auth.token);
-      assertNoGraphQLErrors(deleted);
-
-      assert.equal(calls.length, 2);
-      const [creation, undo] = calls;
-      assert.ok(creation?.activity instanceof Like);
-      assert.equal(creation.reactionCount, 1);
-      assert.equal(creation.activity.objectId?.href, target.activityPubPostUri);
-      assert.equal(creation.recipient.id?.href, target.actorUri);
-      assert.equal(creation.recipient.inboxId?.href, target.inboxUri);
-      assert.equal(creation.options?.orderingKey, `${publicOrigin}/ap/reaction/${reaction.id}`);
-      assert.ok(undo?.activity instanceof Undo);
-      assert.equal(undo.reactionCount, 0);
-      assert.equal(undo.options?.orderingKey, creation.options?.orderingKey);
-    } finally {
-      createContext.mock.restore();
     }
   });
 
@@ -1443,23 +1380,21 @@ const createRemoteReactionTarget = async ({
   const profile = await createProfile(`remote-target-${crypto.randomUUID()}`, {
     instanceId: instance.id,
   });
-  const actorUri = `https://${instance.domain}/users/${profile.id}`;
   await db.insert(ActivityPubActors).values({
     inboxUri,
     profileId: profile.id,
     sharedInboxUri: `https://${instance.domain}/inbox`,
     type: 'PERSON',
-    uri: actorUri,
+    uri: `https://${instance.domain}/users/${profile.id}`,
   });
   const post = await createPost(profile.id);
-  const activityPubPostUri = `https://${instance.domain}/posts/${post.id}`;
   await db.insert(ActivityPubPosts).values({
     postId: post.id,
     receivedAt: Temporal.Now.instant(),
-    uri: activityPubPostUri,
+    uri: `https://${instance.domain}/posts/${post.id}`,
   });
 
-  return { actorUri, activityPubPostUri, inboxUri, instance, post, profile };
+  return { instance, post, profile };
 };
 
 const insertReaction = ({

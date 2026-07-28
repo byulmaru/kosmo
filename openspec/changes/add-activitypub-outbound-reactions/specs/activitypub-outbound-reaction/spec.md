@@ -9,12 +9,12 @@
 #### Scenario: 기본 Reaction을 Like로 만든다
 
 - **WHEN** Local Profile이 Remote Post에 `❤️` Reaction을 실제 생성한다
-- **THEN** 시스템은 actor, object와 `content: "❤️"`를 가진 `Like` delivery command를 만든다
+- **THEN** 시스템은 actor, object와 `content: "❤️"`를 가진 `Like` activity를 전달한다
 
 #### Scenario: 나머지 built-in Reaction을 EmojiReact로 만든다
 
 - **WHEN** Local Profile이 Remote Post에 `🥹`, `🎉`, `👀`, `☘️`, `🌈` 중 하나를 실제 생성한다
-- **THEN** 시스템은 선택한 Type과 정확히 같은 content를 가진 `EmojiReact` delivery command를 만든다
+- **THEN** 시스템은 선택한 Type과 정확히 같은 content를 가진 `EmojiReact` activity를 전달한다
 
 #### Scenario: 지원하지 않는 Type은 발신하지 않는다
 
@@ -122,7 +122,7 @@ delivery 실패는 관측 가능하게 기록해야 하지만(MUST), 이미 comm
 MessageQueue, durable retry, delivery history 또는 사용자용 delivery status를 선행 조건으로 추가하지 않아야 한다
 (MUST NOT).
 
-#### Scenario: API process가 commit 뒤 delivery 전에 종료된다
+#### Scenario: application process가 commit 뒤 delivery 전에 종료된다
 
 - **WHEN** domain transaction commit 후 direct delivery 시도 전에 process가 종료된다
 - **THEN** 시스템은 이 변경에서 durable 복구를 보장하지 않으며 committed Reaction 결과는 그대로 유지된다

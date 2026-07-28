@@ -3,7 +3,7 @@ import { first, getDatabaseConnection, Posts, Reactions } from '../db';
 import { NotificationKind, PostState } from '../enums';
 import { NotFoundError, ValidationError } from '../error';
 import { reactionTypeSchema } from '../validation';
-import { deleteNotificationBySource } from './notification';
+import { createReactionNotification, deleteNotificationBySource } from './notification';
 import type { Transaction } from '../db';
 
 type AddReactionInput = {
@@ -62,57 +62,78 @@ export const addReaction = async (
   });
 };
 
+export const reactToPost = async (
+  input: AddReactionInput,
+): Promise<{ readonly reaction: typeof Reactions.$inferSelect }> => {
+  const result = await addReaction(input);
+  if (!result.created) {
+    return { reaction: result.reaction };
+  }
+
+  await createReactionNotification(result.reaction.id).catch(() => undefined);
+
+  try {
+    const { sendReaction } = await import('@kosmo/fedify');
+    await sendReaction(result.reaction);
+  } catch (error) {
+    console.error('Post-commit ActivityPub Reaction delivery failed', {
+      error,
+      reactionId: result.reaction.id,
+    });
+  }
+
+  return { reaction: result.reaction };
+};
+
 type DeleteReactionInput = {
   readonly actorProfileId: string;
   readonly postId: string;
   readonly type: string;
 };
 
-export const removeReaction = async (
+export const deleteReaction = async (
   input: DeleteReactionInput,
-  tx?: Transaction,
-): Promise<{
-  readonly postId: string;
-  readonly reaction: typeof Reactions.$inferSelect | null;
-}> => {
+): Promise<{ readonly postId: string; readonly reactionId: string | null }> => {
   const parsedType = reactionTypeSchema.safeParse(input.type);
   if (!parsedType.success) {
     throw new ValidationError(parsedType.error.issues[0]?.message, { field: 'type' });
   }
 
-  return getDatabaseConnection(tx).transaction(async (tx) => {
-    const deleted = await tx
-      .delete(Reactions)
-      .where(
-        and(
-          eq(Reactions.profileId, input.actorProfileId),
-          eq(Reactions.postId, input.postId),
-          eq(Reactions.type, parsedType.data),
-        ),
-      )
-      .returning()
-      .then(first);
-
-    return { postId: input.postId, reaction: deleted ?? null };
-  });
-};
-
-export const deleteReaction = async (
-  input: DeleteReactionInput,
-): Promise<{ readonly postId: string; readonly reactionId: string | null }> => {
-  const removed = await removeReaction(input);
-  const result = { postId: removed.postId, reactionId: removed.reaction?.id ?? null };
-
-  if (result.reactionId) {
+  const reaction = await getDatabaseConnection()
+    .transaction((tx) =>
+      tx
+        .delete(Reactions)
+        .where(
+          and(
+            eq(Reactions.profileId, input.actorProfileId),
+            eq(Reactions.postId, input.postId),
+            eq(Reactions.type, parsedType.data),
+          ),
+        )
+        .returning()
+        .then(first),
+    )
+    .then((deleted) => deleted ?? null);
+  if (reaction) {
     try {
-      await deleteNotificationBySource(NotificationKind.REACTION, result.reactionId);
+      await deleteNotificationBySource(NotificationKind.REACTION, reaction.id);
     } catch (error) {
       console.error('Failed to clean up Reaction Notification', {
         error,
-        reactionId: result.reactionId,
+        reactionId: reaction.id,
+      });
+    }
+
+    try {
+      const { sendReactionUndo } = await import('@kosmo/fedify');
+      await sendReactionUndo(reaction);
+    } catch (error) {
+      console.error('Post-commit ActivityPub Reaction Undo delivery failed', {
+        error,
+        reactionId: reaction.id,
       });
     }
   }
 
-  return result;
+  return { postId: input.postId, reactionId: reaction?.id ?? null };
 };
