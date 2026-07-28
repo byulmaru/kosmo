@@ -11,7 +11,7 @@
 
 **Guardrails**
 
-- 예상 Kosmo 도메인 오류와 OIDC 인증 오류는 수집하지 않는다.
+- 예상 Kosmo 도메인 오류, 명시적으로 던진 `GraphQLError`와 OIDC 인증 오류는 수집하지 않는다.
 - Sentry SDK event는 `beforeSend` 정제 없이 그대로 전달하고 자동 breadcrumb만 제거한다.
 - DSN, environment와 release가 모두 없으면 외부 전송하지 않는다.
 - API GraphQL 변환과 HTTP 전역 경계가 같은 오류를 중복 수집하지 않는다.

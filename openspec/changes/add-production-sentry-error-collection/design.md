@@ -34,10 +34,10 @@ API와 Web BFF는 Hono/Node ESM 애플리케이션이며 TypeScript source를 `t
 ### Recommended Approach
 
 - API와 BFF는 작은 공용 server 관측 모듈을 공유하지 말고 각 앱이 같은 최소 설정을 소유한다. Sentry SDK는 DSN, environment와 release가 모두 있으면 활성화한다.
-- API GraphQL plugin은 Kosmo/validation 오류를 변환만 하고 unexpected 원인만 capture한다. GraphQL 밖 API 오류와 Web BFF unexpected 오류는 각 Hono `onError`가 capture한다.
+- API GraphQL plugin은 Kosmo/validation 오류와 명시적으로 던진 `GraphQLError`를 capture하지 않고, plain `Error`와 non-null field 위반 같은 unexpected execution 원인만 capture한다. GraphQL 밖 API 오류와 Web BFF unexpected 오류는 각 Hono `onError`가 capture한다.
 - Web platform entry가 router와 애플리케이션 module보다 먼저 browser SDK를 초기화하고 Web 전용 오류 경계 조합이 공용 React boundary에 오류 reporter context를 제공한다. 외부 GraphQL 경계와 오류를 소비하는 내부 route·session 경계의 `componentDidCatch`가 이 reporter로 capture한다. Android·iOS entry와 조합은 Sentry 관측 module을 import하지 않는다.
 - `beforeSend` event processor를 두지 않고 SDK event 전체를 전달한다. environment/release/runtime metadata는 유지하고 자동 breadcrumb와 Web session tracking은 전부 비활성화한다.
-- Docker build는 Sentry를 애플리케이션 module보다 먼저 초기화하는 server entry를 production JavaScript와 external source map으로 만들고 Expo Web export에 external source map을 요청한다. Sentry CLI의 debug ID inject와 upload를 업로드 token BuildKit secret으로 수행한 뒤 map과 sourceMappingURL을 제거하고 runtime image에는 실행 JavaScript만 복사한다.
+- Docker build는 기존 API·Web BFF index를 production JavaScript와 external source map으로 만들고 Expo Web export에 external source map을 요청한다. Sentry CLI의 debug ID inject와 upload를 업로드 token BuildKit secret으로 수행한 뒤 map과 sourceMappingURL을 제거하고 runtime image에는 실행 JavaScript만 복사한다.
 - API, Web BFF와 Web browser는 Sentry project 하나를 공유하고 `runtime` tag로 구분한다. GitHub Actions는 공식 Vault Action과 branch/dev·SemVer tag/prod role을 사용해 각각 Vault의 `secret/kubernetes/kosmo/dev|prod`에서 `EXPO_PUBLIC_SENTRY_DSN`을 읽는다. 공개 DSN과 GitHub repository variables의 조직·project slug는 build arg, repository secret의 upload token만 BuildKit secret으로 전달한다. API와 Web BFF는 Vault Secrets Operator가 환경별 객체를 변환한 기존 `env` Kubernetes Secret에서 같은 `EXPO_PUBLIC_SENTRY_DSN`을 읽는다.
 
 ### Allowed Alternatives

@@ -136,6 +136,30 @@
 - Consequences: Vault 인증과 masking 동작은 공식 action에 의존한다. Workflow와 Dockerfile은 임시 JSON/Python/env 파일 없이 공개 build 설정과 token secret 경계를 직접 표현한다.
 - Confirmation / Follow-up: actionlint와 branch Docker build에서 Vault OIDC 조회, source map upload와 final image의 token 부재를 확인한다.
 
+### Server artifact는 기존 application index를 직접 사용한다
+
+- Decision Date: 2026-07-28
+- Decision Class: User Choice
+- Authority / Provenance: 사용자 결정, PROD-477
+- Status: Active
+- Context / Problem: Sentry를 모든 application dependency보다 먼저 평가하기 위한 별도 bootstrap entry와 dynamic import가 추가됐지만, module 평가 중 startup 오류까지 수집하는 것은 현재 server 오류 수집 계약의 필수 범위가 아니다.
+- Decision Outcome: API와 Web BFF production artifact는 기존 `index.ts`를 직접 entry로 사용하고 별도 Sentry bootstrap entry를 두지 않는다.
+- Alternatives Considered: Sentry 전용 entry가 application index를 dynamic import하면 module 평가 오류까지 수집할 가능성을 높이지만 production과 개발 entry가 달라지고 별도 bootstrap을 유지해야 한다.
+- Consequences: Hono·GraphQL·Fedify dependency 평가 중 Sentry 초기화 전 발생한 startup 오류는 수집되지 않을 수 있다. 실행이 시작된 뒤 기존 GraphQL·HTTP 전역 경계의 unexpected 오류 수집은 유지된다.
+- Confirmation / Follow-up: 기존 index 기반 production artifact build와 server smoke를 확인한다.
+
+### 명시적으로 던진 GraphQLError는 수집하지 않는다
+
+- Decision Date: 2026-07-28
+- Decision Class: User Choice
+- Authority / Provenance: 사용자 결정, PROD-477 댓글 `GraphQL intentional error 수집 제외`
+- Status: Active
+- Context / Problem: GraphQL response의 모든 error를 수집하면 resolver나 context가 의도적으로 표현한 사용자·도메인 오류까지 Sentry issue를 만든다.
+- Decision Outcome: 명시적으로 던진 `GraphQLError`, `KosmoError`, parse·validation 오류는 capture하지 않는다. Plain `Error`와 non-null field 계약 위반처럼 executor가 만든 unexpected execution error만 원인 예외를 capture하고 `INTERNAL_SERVER_ERROR`로 변환한다.
+- Alternatives Considered: 모든 execution result error를 capture하는 방식은 의도된 오류와 코드 결함을 구분하지 못하므로 선택하지 않는다.
+- Consequences: 개발자가 실제 결함을 `GraphQLError`로 감싸면 Sentry에 수집되지 않으므로 `GraphQLError`는 의도된 GraphQL 응답에만 사용해야 한다.
+- Confirmation / Follow-up: 명시적 `GraphQLError` 보존과 plain `Error`·non-null 위반 변환 회귀 테스트를 유지한다.
+
 ## Remaining Decisions
 
 - 없음.

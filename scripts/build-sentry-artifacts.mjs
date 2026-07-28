@@ -23,8 +23,8 @@ const run = (command, args, options = {}) => {
 };
 
 const serverArtifacts = [
-  { entry: 'apps/api/src/entry.ts', outdir: 'apps/api/dist/server' },
-  { entry: 'apps/web/src/server/entry.ts', outdir: 'apps/web/dist/server' },
+  { entry: 'apps/api/src/index.ts', outdir: 'apps/api/dist/server' },
+  { entry: 'apps/web/src/server/index.ts', outdir: 'apps/web/dist/server' },
 ];
 
 for (const artifact of serverArtifacts) {

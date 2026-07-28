@@ -2,7 +2,7 @@
 
 ### Requirement: 서버 처리되지 않은 오류 수집
 
-**Authority / Provenance:** PROD-477, PROD-484. 프로덕션 API와 Web BFF는 처리되지 않은 서버 예외를 각각의 전역 오류 경계에서 Sentry로 수집해야 한다(MUST). API의 예상된 Kosmo 도메인 오류와 BFF의 예상된 인증 오류는 event로 수집하지 않아야 하며(MUST NOT), GraphQL 변환 경계와 HTTP 전역 경계가 같은 예외를 중복 수집하지 않아야 한다(MUST).
+**Authority / Provenance:** PROD-477, PROD-484. 프로덕션 API와 Web BFF는 처리되지 않은 서버 예외를 각각의 전역 오류 경계에서 Sentry로 수집해야 한다(MUST). API의 예상된 Kosmo 도메인 오류, 명시적으로 던진 `GraphQLError`와 BFF의 예상된 인증 오류는 event로 수집하지 않아야 하며(MUST NOT), GraphQL 변환 경계와 HTTP 전역 경계가 같은 예외를 중복 수집하지 않아야 한다(MUST).
 
 #### Scenario: API unexpected GraphQL error
 
@@ -18,6 +18,12 @@
 
 - **WHEN** Kosmo 도메인 오류 또는 예상된 OIDC 인증 오류가 기존 오류 처리 경계에 도달한다
 - **THEN** 시스템은 오류를 기존 계약대로 응답하고 Sentry event를 생성하지 않는다
+
+#### Scenario: Intentional GraphQL error
+
+- **WHEN** resolver 또는 context가 `GraphQLError`를 명시적으로 던진다
+- **THEN** 시스템은 기존 GraphQL message와 extensions를 유지하고 Sentry event를 생성하지 않는다
+- **AND** plain `Error` 또는 non-null field 위반 같은 unexpected execution error만 `INTERNAL_SERVER_ERROR`로 변환해 수집한다
 
 ### Requirement: Web browser 처리되지 않은 오류 수집
 

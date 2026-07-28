@@ -57,7 +57,12 @@ const transformError = (error: unknown): GraphQLError => {
     });
   }
 
-  if (graphQLError && !graphQLError.originalError) {
+  if (
+    graphQLError &&
+    (graphQLError.path === undefined ||
+      !graphQLError.originalError ||
+      graphQLError.originalError instanceof GraphQLError)
+  ) {
     return graphQLError;
   }
 
