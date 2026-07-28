@@ -10,11 +10,7 @@ export type GraphQLErrorBoundaryProps = PropsWithChildren<{
   onRetry: () => void;
 }>;
 
-export function GraphQLErrorBoundary({
-  children,
-  onError,
-  onRetry,
-}: GraphQLErrorBoundaryProps) {
+export function GraphQLErrorBoundary({ children, onError, onRetry }: GraphQLErrorBoundaryProps) {
   return (
     <UnexpectedErrorContext.Provider value={onError}>
       <ErrorBoundary
