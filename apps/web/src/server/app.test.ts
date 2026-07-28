@@ -13,13 +13,18 @@ import type {
   discovery as oidcDiscovery,
 } from 'openid-client';
 
-const { authorizationCodeGrant, createSession, discovery, federationFetch } = vi.hoisted(() => ({
-  authorizationCodeGrant: vi.fn<typeof oidcAuthorizationCodeGrant>(),
-  createSession:
-    vi.fn<(identity: { displayName: string; oidcSubject: string }) => Promise<string>>(),
-  discovery: vi.fn<typeof oidcDiscovery>(),
-  federationFetch: vi.fn<typeof federation.fetch>(),
-}));
+const { authorizationCodeGrant, createSession, discovery, federationFetch, revokeSession } =
+  vi.hoisted(() => ({
+    authorizationCodeGrant: vi.fn<typeof oidcAuthorizationCodeGrant>(),
+    createSession:
+      vi.fn<(identity: { displayName: string; oidcSubject: string }) => Promise<string>>(),
+    discovery: vi.fn<typeof oidcDiscovery>(),
+    federationFetch: vi.fn<typeof federation.fetch>(),
+    revokeSession:
+      vi.fn<
+        (input: { token?: string }) => Promise<{ status: 'REVOKED' | 'ALREADY_UNAUTHENTICATED' }>
+      >(),
+  }));
 
 vi.mock('openid-client', async (importOriginal) => ({
   ...((await importOriginal()) as object),
@@ -29,6 +34,7 @@ vi.mock('openid-client', async (importOriginal) => ({
 
 vi.mock('@kosmo/core/services', () => ({
   createOidcSession: createSession,
+  revokeCurrentSession: revokeSession,
 }));
 
 vi.mock('@kosmo/fedify', () => ({
@@ -83,6 +89,7 @@ beforeEach(() => {
       }) as unknown as Awaited<ReturnType<typeof oidcAuthorizationCodeGrant>>,
   );
   createSession.mockResolvedValue('kosmo-session-token');
+  revokeSession.mockResolvedValue({ status: 'REVOKED' });
   federationFetch.mockImplementation(async (request, options) => {
     if (!options.onNotFound) {
       throw new Error('Missing federation fallback');
@@ -220,6 +227,86 @@ describe('browser login', () => {
     expect(await response.text()).toBe('OIDC callback redirect_uri is invalid');
     expect(authorizationCodeGrant).not.toHaveBeenCalled();
     expect(createSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('Web logout BFF', () => {
+  test('revoke가 확정되면 same-origin response에서 session cookie를 제거한다', async () => {
+    const response = await app.request('https://kos.moe/logout', {
+      headers: {
+        cookie: 'kosmo_session=cookie-token',
+        origin: 'https://kos.moe',
+      },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('pragma')).toBe('no-cache');
+    expect(response.headers.get('set-cookie')).toContain('kosmo_session=');
+    expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
+    expect(response.headers.get('set-cookie')).toContain('Path=/');
+    expect(response.headers.get('set-cookie')).toContain('HttpOnly');
+    expect(response.headers.get('set-cookie')).toContain('SameSite=Lax');
+    expect(response.headers.get('set-cookie')).toContain('Secure');
+    expect(revokeSession).toHaveBeenCalledWith({ token: 'cookie-token' });
+  });
+
+  test('cookie가 없어도 이미 인증 불가한 성공으로 처리한다', async () => {
+    const response = await app.request('https://kos.moe/logout', {
+      headers: { origin: 'https://kos.moe' },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(204);
+    expect(revokeSession).toHaveBeenCalledWith({ token: undefined });
+    expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
+  });
+
+  test.each([
+    {
+      name: 'Origin 누락',
+      headers: { cookie: 'kosmo_session=cookie-token' } as Record<string, string>,
+    },
+    {
+      name: '다른 Origin',
+      headers: { cookie: 'kosmo_session=cookie-token', origin: 'https://evil.example' },
+    },
+  ])('$name 요청은 revoke와 cookie 제거를 실행하지 않는다', async ({ headers }) => {
+    const response = await app.request('https://kos.moe/logout', {
+      headers,
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(revokeSession).not.toHaveBeenCalled();
+  });
+
+  test('POST 이외 method는 허용하지 않는다', async () => {
+    const response = await app.request('https://kos.moe/logout', {
+      headers: { origin: 'https://kos.moe' },
+      method: 'GET',
+    });
+
+    expect(response.status).toBe(405);
+    expect(response.headers.get('allow')).toBe('POST');
+    expect(revokeSession).not.toHaveBeenCalled();
+  });
+
+  test('revoke 결과가 불명확하면 cookie를 제거하지 않고 500을 반환한다', async () => {
+    revokeSession.mockRejectedValueOnce(new Error('database unavailable'));
+
+    const response = await app.request('https://kos.moe/logout', {
+      headers: {
+        cookie: 'kosmo_session=cookie-token',
+        origin: 'https://kos.moe',
+      },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get('set-cookie')).toBeNull();
   });
 });
 

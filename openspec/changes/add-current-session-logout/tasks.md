@@ -28,11 +28,11 @@ Native bearer client의 GraphQL mutation과 Web HttpOnly cookie client의 same-o
 - BFF에서 Origin, POST/405, 204/no-store, cookie scope·제거, cookie 없음/terminal 상태와 failure cookie 보존을 검증한다.
 - API schema 생성, 관련 typecheck·lint와 database 격리 test를 통과시킨다.
 
-- [ ] 1.1 current-session credential 결과와 Active→Revoked core 계약을 구현한다.
-- [ ] 1.2 중복·경쟁·terminal 상태·다른 Session 격리와 폐기 뒤 인증 거부를 core 검증으로 증명한다.
-- [ ] 1.3 input 없는 `revokeCurrentSession` GraphQL mutation과 완료/error 계약을 구현하고 API schema·integration 검증을 통과시킨다.
-- [ ] 1.4 same-origin `POST /logout` BFF와 확정 결과의 HttpOnly cookie 제거 계약을 구현하고 BFF 검증을 통과시킨다.
-- [ ] 1.5 PROD-474 범위의 typecheck·lint·관련 test 결과와 공개 계약 변경 사항을 PROD-473에 전달한다.
+- [x] 1.1 current-session credential 결과와 Active→Revoked core 계약을 구현한다.
+- [x] 1.2 중복·경쟁·terminal 상태·다른 Session 격리와 폐기 뒤 인증 거부를 core 검증으로 증명한다.
+- [x] 1.3 input 없는 `revokeCurrentSession` GraphQL mutation과 완료/error 계약을 구현하고 API schema·integration 검증을 통과시킨다.
+- [x] 1.4 same-origin `POST /logout` BFF와 확정 결과의 HttpOnly cookie 제거 계약을 구현하고 BFF 검증을 통과시킨다.
+- [x] 1.5 PROD-474 범위의 typecheck·lint·관련 test 결과와 공개 계약 변경 사항을 PROD-473에 전달한다.
 
 ## 2. PROD-475 공용 Expo logout 연결
 

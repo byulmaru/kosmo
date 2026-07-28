@@ -1,10 +1,12 @@
+import '@kosmo/core/polyfill';
+
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { eq } from 'drizzle-orm';
-import { Accounts, db, firstOrThrow, pg, Sessions } from '../db';
+import { eq, inArray } from 'drizzle-orm';
+import { AccountProfiles, Accounts, db, firstOrThrow, pg, Sessions } from '../db';
 import { AccountState, SessionState } from '../enums';
 import { PermissionDeniedError } from '../error';
-import { createOidcSession } from './session';
+import { createOidcSession, revokeCurrentSession } from './session';
 
 after(async () => {
   await pg.end();
@@ -81,3 +83,154 @@ for (const state of [AccountState.SUSPENDED, AccountState.DISABLED]) {
     assert.deepEqual(await loadSessions(account.id), []);
   });
 }
+
+const createFixture = async ({
+  accountState = AccountState.ACTIVE,
+  sessionState = SessionState.ACTIVE,
+}: {
+  accountState?: AccountState;
+  sessionState?: SessionState;
+} = {}) => {
+  const suffix = crypto.randomUUID();
+  const account = await db
+    .insert(Accounts)
+    .values({ displayName: suffix, oidcSubject: suffix, state: accountState })
+    .returning()
+    .then(firstOrThrow);
+  const session = await db
+    .insert(Sessions)
+    .values({ accountId: account.id, state: sessionState, token: `token-${suffix}` })
+    .returning()
+    .then(firstOrThrow);
+
+  return { account, session };
+};
+
+const cleanup = async (accountIds: string[]) => {
+  await db.delete(Sessions).where(inArray(Sessions.accountId, accountIds));
+  await db.delete(AccountProfiles).where(inArray(AccountProfiles.accountId, accountIds));
+  await db.delete(Accounts).where(inArray(Accounts.id, accountIds));
+};
+
+test('현재 Active Session만 폐기하고 같은 Account의 다른 Session을 보존한다', async () => {
+  const { account, session } = await createFixture();
+  const other = await db
+    .insert(Sessions)
+    .values({
+      accountId: account.id,
+      state: SessionState.ACTIVE,
+      token: `other-${crypto.randomUUID()}`,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+  try {
+    assert.deepEqual(await revokeCurrentSession({ token: session.token }), { status: 'REVOKED' });
+    assert.equal(
+      (
+        await db.select({ state: Sessions.state }).from(Sessions).where(eq(Sessions.id, session.id))
+      )[0]?.state,
+      SessionState.REVOKED,
+    );
+    assert.equal(
+      (
+        await db.select({ state: Sessions.state }).from(Sessions).where(eq(Sessions.id, other.id))
+      )[0]?.state,
+      SessionState.ACTIVE,
+    );
+  } finally {
+    await cleanup([account.id]);
+  }
+});
+
+test('Suspended Account의 현재 Session은 폐기하고 Disabled Account는 이미 인증 불가로 처리한다', async () => {
+  const suspended = await createFixture({ accountState: AccountState.SUSPENDED });
+  const disabled = await createFixture({ accountState: AccountState.DISABLED });
+
+  try {
+    assert.deepEqual(await revokeCurrentSession({ token: suspended.session.token }), {
+      status: 'REVOKED',
+    });
+    assert.deepEqual(await revokeCurrentSession({ token: disabled.session.token }), {
+      status: 'ALREADY_UNAUTHENTICATED',
+    });
+    assert.equal(
+      (
+        await db
+          .select({ state: Sessions.state })
+          .from(Sessions)
+          .where(eq(Sessions.id, disabled.session.id))
+      )[0]?.state,
+      SessionState.ACTIVE,
+    );
+  } finally {
+    await cleanup([suspended.account.id, disabled.account.id]);
+  }
+});
+
+test('Revoked·Expired·missing credential은 terminal 결과를 유지한다', async () => {
+  const revoked = await createFixture({ sessionState: SessionState.REVOKED });
+  const expired = await createFixture({ sessionState: SessionState.EXPIRED });
+
+  try {
+    const results = await Promise.all([
+      revokeCurrentSession({ token: revoked.session.token }),
+      revokeCurrentSession({ token: expired.session.token }),
+      revokeCurrentSession({ token: 'missing-token' }),
+      revokeCurrentSession({}),
+    ]);
+    assert.deepEqual(results, [
+      { status: 'ALREADY_UNAUTHENTICATED' },
+      { status: 'ALREADY_UNAUTHENTICATED' },
+      { status: 'ALREADY_UNAUTHENTICATED' },
+      { status: 'ALREADY_UNAUTHENTICATED' },
+    ]);
+  } finally {
+    await cleanup([revoked.account.id, expired.account.id]);
+  }
+});
+
+test('동시 폐기 요청은 하나의 Revoked terminal 결과로 수렴한다', async () => {
+  const { account, session } = await createFixture();
+
+  try {
+    const results = await Promise.all(
+      Array.from({ length: 6 }, () => revokeCurrentSession({ token: session.token })),
+    );
+    assert.ok(
+      results.every(({ status }) => status === 'REVOKED' || status === 'ALREADY_UNAUTHENTICATED'),
+    );
+    assert.equal(
+      (
+        await db.select({ state: Sessions.state }).from(Sessions).where(eq(Sessions.id, session.id))
+      )[0]?.state,
+      SessionState.REVOKED,
+    );
+  } finally {
+    await cleanup([account.id]);
+  }
+});
+
+test('호출 transaction이 rollback되면 Session 폐기도 rollback된다', async () => {
+  const { account, session } = await createFixture();
+
+  try {
+    await assert.rejects(
+      db.transaction(async (tx) => {
+        assert.deepEqual(await revokeCurrentSession({ token: session.token }, tx), {
+          status: 'REVOKED',
+        });
+        throw new Error('rollback');
+      }),
+      /rollback/,
+    );
+    assert.equal(
+      (
+        await db.select({ state: Sessions.state }).from(Sessions).where(eq(Sessions.id, session.id))
+      )[0]?.state,
+      SessionState.ACTIVE,
+    );
+  } finally {
+    await cleanup([account.id]);
+  }
+});

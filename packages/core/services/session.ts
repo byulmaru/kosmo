@@ -17,6 +17,79 @@ type VerifiedOidcIdentity = {
   oidcSubject: string;
 };
 
+export type RevokeCurrentSessionResult =
+  | { readonly status: 'REVOKED' }
+  | { readonly status: 'ALREADY_UNAUTHENTICATED' };
+
+type CurrentSessionState = {
+  readonly accountState: AccountState;
+  readonly id: string;
+  readonly state: SessionState;
+};
+
+const loadCurrentSession = async (token: string, tx: Transaction) =>
+  tx
+    .select({
+      accountState: Accounts.state,
+      id: Sessions.id,
+      state: Sessions.state,
+    })
+    .from(Sessions)
+    .innerJoin(Accounts, eq(Accounts.id, Sessions.accountId))
+    .where(eq(Sessions.token, token))
+    .limit(1)
+    .then((rows) => rows[0] as CurrentSessionState | undefined);
+
+/**
+ * Revokes the Session identified by a caller-owned credential.
+ *
+ * Missing, disabled-account, revoked, and expired credentials are already
+ * unauthenticated outcomes. Active Sessions on active or suspended Accounts
+ * are revoked with a conditional update so a terminal concurrent winner is
+ * never changed back to Active.
+ */
+export const revokeCurrentSession = async (
+  { token }: { readonly token?: string },
+  tx?: Transaction,
+): Promise<RevokeCurrentSessionResult> => {
+  if (!token) {
+    return { status: 'ALREADY_UNAUTHENTICATED' };
+  }
+
+  return getDatabaseConnection(tx).transaction(async (transaction) => {
+    const current = await loadCurrentSession(token, transaction);
+    if (
+      !current ||
+      current.accountState === AccountState.DISABLED ||
+      current.state !== SessionState.ACTIVE
+    ) {
+      return { status: 'ALREADY_UNAUTHENTICATED' } as const;
+    }
+
+    const revoked = await transaction
+      .update(Sessions)
+      .set({ state: SessionState.REVOKED })
+      .where(and(eq(Sessions.id, current.id), eq(Sessions.state, SessionState.ACTIVE)))
+      .returning({ id: Sessions.id })
+      .then((rows) => rows[0]);
+
+    if (revoked) {
+      return { status: 'REVOKED' } as const;
+    }
+
+    const settled = await loadCurrentSession(token, transaction);
+    if (
+      !settled ||
+      settled.accountState === AccountState.DISABLED ||
+      settled.state !== SessionState.ACTIVE
+    ) {
+      return { status: 'ALREADY_UNAUTHENTICATED' } as const;
+    }
+
+    throw new Error('Current Session revoke did not settle');
+  });
+};
+
 /**
  * Creates a Kosmo session for an OIDC identity that has already been verified
  * by the caller. Upstream OIDC tokens must not be persisted with the session.
