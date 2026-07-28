@@ -1827,8 +1827,7 @@ export const PostDetailCurrentQuoteSourceNavigation: Story = {
         PostDetailQuery: {
           data: {
             node: {
-              viewerReactions: [],
-              ...quotePost,
+              ...withReactionViewerState(quotePost),
               reactionCounts: [],
               replyAncestors: [],
               replyDescendants: {
@@ -1895,8 +1894,7 @@ export const PureRepostDetailCanonicalizesToSource: Story = {
         PostDetailQuery: {
           data: {
             node: {
-              viewerReactions: [],
-              ...pureRepost,
+              ...withReactionViewerState(pureRepost),
               reactionCounts: [],
               replyAncestors: [],
               replyDescendants: {
