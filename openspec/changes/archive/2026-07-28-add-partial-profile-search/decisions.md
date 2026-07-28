@@ -23,10 +23,10 @@
 - Authority / Provenance: `PROD-504`, PR #376 review by `robin-maki`
 - Status: Active
 - Context / Problem: `[Profile!]!`을 먼저 공개한 뒤 pagination을 추가하면 반환형을 바꾸는 breaking change가 생기고, 무상한 `%query%` 조회는 Profile 증가에 따라 DB·payload·render 비용이 함께 커진다.
-- Decision Outcome: `searchProfiles(query: String!, first: Int, after: String): ProfileConnection!`으로 시작한다. 현재 검색 대상은 handle 부분 일치로 유지하며, 단일 Instance 범위에서 유일한 `normalizedHandle ASC`를 cursor 순서로 사용한다. API와 Relay client는 페이지 사이 중복·누락 없이 결과를 누적한다.
+- Decision Outcome: `searchProfiles(query: String!, first: Int, after: String): ProfileConnection!`으로 시작한다. 현재 검색 대상은 handle 부분 일치로 유지하며, 단일 Instance 범위에서 변경되지 않는 유일한 `Profile.id ASC`를 cursor 순서로 사용한다. API와 Relay client는 페이지 사이 중복·누락 없이 결과를 누적하고, 페이지 사이 normalized handle 변경에도 동일한 ID 경계를 유지한다.
 - Alternatives Considered: `[Profile!]!` 전체 반환은 후속 pagination의 breaking change와 무상한 비용을 만든다. 별도 paginated field를 나중에 추가하면 같은 검색 의미의 공개 API가 중복된다.
 - Consequences: API·schema·Relay fragment·Story/E2E 범위가 커지지만 첫 공개 계약이 장기 확장성과 비용 경계를 가진다. 검색 index와 관련도 정렬은 여전히 별도 근거가 필요한 후속 범위다.
-- Confirmation / Follow-up: API 통합 테스트로 `first`/`after`, `normalizedHandle ASC`, 페이지 중복·누락 및 종료를 검증하고, client Story/E2E로 다음 페이지 loading/error/retry와 기존 edge 유지를 검증한다.
+- Confirmation / Follow-up: API 통합 테스트로 `first`/`after`, `Profile.id ASC`, 페이지 사이 normalized handle 변경에도 유지되는 cursor 경계, 페이지 중복·누락 및 종료를 검증하고, client Story/E2E로 다음 페이지 loading/error/retry와 기존 edge 유지를 검증한다.
 
 ### exact lookup과 별도의 다건 GraphQL field를 사용한다 (Superseded)
 

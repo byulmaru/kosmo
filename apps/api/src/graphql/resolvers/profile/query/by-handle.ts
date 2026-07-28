@@ -78,7 +78,7 @@ builder.queryField('searchProfiles', (t) =>
 
         if (!parsed) {
           return resolveCursorConnection<Promise<ProfileRow[]>>(
-            { args, toCursor: (profile) => profile.normalizedHandle },
+            { args, toCursor: (profile) => profile.id },
             () => Promise.resolve([]),
           );
         }
@@ -89,11 +89,11 @@ builder.queryField('searchProfiles', (t) =>
       `;
 
         return resolveCursorConnection<Promise<ProfileRow[]>>(
-          { args, toCursor: (profile) => profile.normalizedHandle },
+          { args, toCursor: (profile) => profile.id },
           ({ after, before, inverted, limit }) => {
             const cursorWhere = and(
-              after ? gt(Profiles.normalizedHandle, after) : undefined,
-              before ? lt(Profiles.normalizedHandle, before) : undefined,
+              after ? gt(Profiles.id, after) : undefined,
+              before ? lt(Profiles.id, before) : undefined,
             );
 
             if (parsed.kind === 'remote') {
@@ -110,9 +110,7 @@ builder.queryField('searchProfiles', (t) =>
                     visibleProfileWhere({ profile: Profiles, instance: Instances }),
                   ),
                 )
-                .orderBy(
-                  inverted ? desc(Profiles.normalizedHandle) : asc(Profiles.normalizedHandle),
-                )
+                .orderBy(inverted ? desc(Profiles.id) : asc(Profiles.id))
                 .limit(limit);
             }
 
@@ -127,7 +125,7 @@ builder.queryField('searchProfiles', (t) =>
                   cursorWhere,
                 ),
               )
-              .orderBy(inverted ? desc(Profiles.normalizedHandle) : asc(Profiles.normalizedHandle))
+              .orderBy(inverted ? desc(Profiles.id) : asc(Profiles.id))
               .limit(limit);
           },
         );

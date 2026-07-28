@@ -36,7 +36,7 @@ PROD-504는 첫 공개부터 cursor pagination 가능한 검색 계약을 선택
 - exact field는 유지하고 `searchProfiles(query: String!, first: Int, after: String): ProfileConnection!` 형태의 별도 connection query를 추가한다. 반환 Profile row는 기존 loadable Node/fragment 경계를 그대로 사용한다.
 - leading `@`, 대소문자, optional domain은 기존 handle 정책과 같은 방식으로 정규화하되, handle 일부 자체를 full handle 유효성으로 오인해 불필요하게 거부하지 않는다. bare/local-domain 검색은 configured local instance, remote-domain 검색은 해당 ActivityPub instance로 제한한다.
 - 정규화된 사용자 검색어에서 escape 문자, `%`, `_` 순으로 `LIKE` 메타문자를 escape한 뒤에만 양쪽에 `%`를 붙인다. 완성된 pattern은 Drizzle parameter로 전달하고 SQL에는 명시적인 escape 의미가 유지되게 한다. 빈 정규화 검색어는 전체 테이블 검색으로 바꾸지 않는다.
-- Pothos `resolveCursorConnection`을 사용하고 `normalizedHandle`을 cursor로 encode한다. `after`는 `normalizedHandle > cursor`, 역방향 요청은 반대 predicate/order를 사용하며 최종 결과 의미는 항상 ascending이다.
+- Pothos `resolveCursorConnection`을 사용하고 immutable한 `Profile.id`를 cursor로 encode한다. `after`는 `Profile.id > cursor`, 역방향 요청은 반대 predicate/order를 사용하며 최종 결과 의미는 항상 ID ascending이다. 페이지 사이 normalized handle이 바뀌어도 ID 경계는 변하지 않는다.
 - 사람 탭의 colocated Relay query는 refetchable connection fragment를 spread하고 `usePaginationFragment`로 읽는다. route state에서 edge를 직접 합치지 않고 Relay가 누적을 소유한다. 빈 connection은 기존 empty 상태, 초기 request 실패는 기존 RouteBoundary, 다음 페이지 실패는 기존 edge를 유지한 inline retry 상태로 표시한다.
 - API 통합 테스트는 local/remote 부분일치, cursor pagination 중복·누락 방지, 복수/empty, 정규화, `%`·`_`·escape 문자, 노출 정책, no-materialization을 검증한다. 검색 Story/E2E는 다건 렌더링·다음 페이지 loading/error/retry·empty·wildcard 입력과 기존 링크/follow 표시 계약을 검증한다.
 
@@ -50,7 +50,7 @@ PROD-504는 첫 공개부터 cursor pagination 가능한 검색 계약을 선택
 - [일치 결과가 많으면 응답 크기와 UI 렌더 비용이 증가한다] → 첫 공개부터 `first`/`after` connection으로 페이지 비용을 제한한다.
 - [선행 wildcard 조회가 커지면 DB full scan 비용이 증가한다] → 이번 변경은 migration을 만들지 않고 현재 데이터 규모에서 검증하며, 검색 index는 query plan 근거가 생긴 후 별도 변경으로 다룬다.
 - [부분 검색용 visibility 조건이 exact resolver와 달라질 수 있다] → [ADR 0017](../../../docs/domain/decisions/0017-profile-search-staged-visibility.md)의 staged 조건을 exact·partial 양쪽에 동일하게 적용하고, Domain Limit·viewer Profile Domain Block의 공통 predicate 전환은 후속 rollout에서 함께 수행한다. 이 변경은 그 모델을 전제로 하지 않는다.
-- [cursor 순서가 안정적이지 않으면 페이지가 중복·누락될 수 있다] → 단일 Instance 범위의 unique key인 `normalizedHandle ASC`를 cursor와 order에 함께 사용하고 통합 테스트로 페이지 경계를 검증한다.
+- [cursor 순서가 안정적이지 않으면 페이지가 중복·누락될 수 있다] → 단일 Instance 범위의 immutable unique key인 `Profile.id ASC`를 cursor와 order에 함께 사용하고, 페이지 사이 normalized handle 변경을 포함한 통합 테스트로 경계를 검증한다.
 
 ## Migration Plan
 

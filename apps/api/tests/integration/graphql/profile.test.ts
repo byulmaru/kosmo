@@ -165,9 +165,21 @@ describe('GraphQL remote profile boundary', () => {
   test('searches stored profiles by partial handle with literal LIKE metacharacters', async () => {
     await createProfile({ handle: 'alice', instanceId: localInstanceId });
     await createProfile({ handle: 'malice', instanceId: localInstanceId });
-    await createProfile({ handle: 'page-alpha', instanceId: localInstanceId });
-    await createProfile({ handle: 'page-beta', instanceId: localInstanceId });
-    await createProfile({ handle: 'page-gamma', instanceId: localInstanceId });
+    const pageFirst = await createProfile({
+      handle: 'page-zulu',
+      id: '00000000-0000-8006-8000-000000000001',
+      instanceId: localInstanceId,
+    });
+    const pageSecond = await createProfile({
+      handle: 'page-alpha',
+      id: '00000000-0000-8006-8000-000000000002',
+      instanceId: localInstanceId,
+    });
+    const pageThird = await createProfile({
+      handle: 'page-gamma',
+      id: '00000000-0000-8006-8000-000000000003',
+      instanceId: localInstanceId,
+    });
     await createProfile({
       handle: 'literal_handle',
       instanceId: localInstanceId,
@@ -271,13 +283,13 @@ describe('GraphQL remote profile boundary', () => {
 
     const firstPage = await requestGraphQL<{
       searchProfiles: {
-        edges: Array<{ cursor: string; node: { relativeHandle: string } }>;
+        edges: Array<{ cursor: string; node: { id: string; relativeHandle: string } }>;
         pageInfo: { endCursor: string | null; hasNextPage: boolean };
       };
     }>(
       `query SearchProfilePage($after: String) {
         searchProfiles(query: "page-", first: 2, after: $after) {
-          edges { cursor node { relativeHandle } }
+          edges { cursor node { id relativeHandle } }
           pageInfo { endCursor hasNextPage }
         }
       }`,
@@ -286,14 +298,26 @@ describe('GraphQL remote profile boundary', () => {
     assertNoGraphQLErrors(firstPage);
     assert.deepEqual(
       firstPage.data?.searchProfiles.edges.map(({ node }) => node.relativeHandle),
-      ['@page-alpha', '@page-beta'],
+      ['@page-zulu', '@page-alpha'],
+    );
+    assert.deepEqual(
+      firstPage.data?.searchProfiles.edges.map(({ node }) => node.id),
+      [globalId('Profile', pageFirst.id), globalId('Profile', pageSecond.id)],
     );
     assert.equal(firstPage.data?.searchProfiles.pageInfo.hasNextPage, true);
+
+    await db
+      .update(Profiles)
+      .set({
+        handle: 'page-aaron',
+        normalizedHandle: normalizeHandle('page-aaron'),
+      })
+      .where(eq(Profiles.id, pageThird.id));
 
     const secondPage = await requestGraphQL<typeof firstPage.data>(
       `query SearchProfilePage($after: String) {
         searchProfiles(query: "page-", first: 2, after: $after) {
-          edges { cursor node { relativeHandle } }
+          edges { cursor node { id relativeHandle } }
           pageInfo { endCursor hasNextPage }
         }
       }`,
@@ -302,7 +326,11 @@ describe('GraphQL remote profile boundary', () => {
     assertNoGraphQLErrors(secondPage);
     assert.deepEqual(
       secondPage.data?.searchProfiles.edges.map(({ node }) => node.relativeHandle),
-      ['@page-gamma'],
+      ['@page-aaron'],
+    );
+    assert.deepEqual(
+      secondPage.data?.searchProfiles.edges.map(({ node }) => node.id),
+      [globalId('Profile', pageThird.id)],
     );
     assert.equal(secondPage.data?.searchProfiles.pageInfo.hasNextPage, false);
     assert.deepEqual(
@@ -310,7 +338,7 @@ describe('GraphQL remote profile boundary', () => {
         ...(firstPage.data?.searchProfiles.edges ?? []),
         ...(secondPage.data?.searchProfiles.edges ?? []),
       ].map(({ node }) => node.relativeHandle),
-      ['@page-alpha', '@page-beta', '@page-gamma'],
+      ['@page-zulu', '@page-alpha', '@page-aaron'],
     );
 
     const profileCountBefore = await countRows(Profiles);

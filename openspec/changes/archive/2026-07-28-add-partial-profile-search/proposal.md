@@ -8,7 +8,7 @@
 - bare/local-domain 입력은 configured local Instance, remote-domain 입력은 해당 ActivityPub Instance에 이미 저장된 Profile을 대상으로 기존 handle 정규화 경계를 유지한다.
 - ADR 0017의 현재 staged visibility에 따라 exact·partial lookup 모두 configured local Instance의 `ProfileState.ACTIVE` Profile과, remote branch의 `ProfileState.ACTIVE` Profile 중 `InstanceState.SUSPENDED`가 아닌 Instance에 속한 Profile만 포함한다. Domain Limit Instance와 viewer Profile Domain Block은 최종 canonical moderation 정책이며, 저장 모델과 공통 predicate를 도입한 후 exact·partial을 함께 전환하는 후속 범위이지 PROD-504의 선행 조건이 아니다.
 - 정규화된 handle 검색어의 SQL `LIKE` 메타문자(`%`, `_`, escape 문자)는 리터럴로 처리하고, 부분 일치용 `%`는 escape 뒤 양쪽에 별도로 추가하며 parameter binding을 유지한다.
-- 단일 Instance 범위에서 유일한 `normalizedHandle ASC`를 cursor 순서로 사용하고 `first`/`after` 페이지 사이 중복·누락 없이 결과 비용을 제한한다.
+- 단일 Instance 범위에서 immutable하고 유일한 `Profile.id ASC`를 cursor 순서로 사용하고 `first`/`after` 페이지 사이 중복·누락 없이 결과 비용을 제한한다. 페이지 사이 normalized handle이 변경되어도 ID cursor 경계는 유지된다.
 - 사람 검색 UI는 Relay connection과 `usePaginationFragment`로 페이지를 누적해 기존 `ProfileListItem`과 팔로우 액션 정책으로 표시하며 초기·다음 페이지 로딩/오류/재시도와 빈 결과 상태를 제공한다.
 - 검색 중 WebFinger, actor fetch, remote profile refresh 또는 신규 Profile materialization을 수행하지 않는다.
 
