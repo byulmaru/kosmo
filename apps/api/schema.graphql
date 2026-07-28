@@ -10,7 +10,6 @@ type AccountProfile implements Node {
 }
 
 enum AccountProfileRole {
-  ADMIN
   MEMBER
   OWNER
 }

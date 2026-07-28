@@ -654,6 +654,54 @@ describe('GraphQL remote profile boundary', () => {
     ]);
   });
 
+  test('allows an Owner to update a Profile', async () => {
+    const auth = await createAuthenticatedSession();
+
+    const result = await requestGraphQL<{
+      updateProfile: { profile: { displayName: string; id: string } };
+    }>(
+      `mutation UpdateOwnedProfile($id: ID!, $displayName: String!) {
+        updateProfile(input: { id: $id, displayName: $displayName }) {
+          profile { displayName id }
+        }
+      }`,
+      { displayName: 'Updated Owner', id: globalId('Profile', auth.profile.id) },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.updateProfile.profile, {
+      displayName: 'Updated Owner',
+      id: globalId('Profile', auth.profile.id),
+    });
+  });
+
+  test('rejects a Member updating a Profile', async () => {
+    const auth = await createAuthenticatedSession();
+    await db
+      .update(AccountProfiles)
+      .set({ role: AccountProfileRole.MEMBER })
+      .where(
+        and(
+          eq(AccountProfiles.accountId, auth.account.id),
+          eq(AccountProfiles.profileId, auth.profile.id),
+        ),
+      );
+
+    const result = await requestGraphQL(
+      `mutation UpdateMemberProfile($id: ID!) {
+        updateProfile(input: { id: $id, displayName: "Member Update" }) {
+          profile { id }
+        }
+      }`,
+      { id: globalId('Profile', auth.profile.id) },
+      auth.token,
+    );
+
+    assertGraphQLErrorCode(result, 'PERMISSION_DENIED');
+    assert.equal(result.errors?.[0]?.message, 'Profile owner permission is required');
+  });
+
   test('restores an active profile from another local instance in the session context', async () => {
     const auth = await createAuthenticatedSession();
     const otherLocalInstance = await createLocalInstance({ domain: 'other-local.example' });

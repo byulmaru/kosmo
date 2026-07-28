@@ -53,6 +53,10 @@ Post에 Attached Media 관계를 만드는 요청은 Source=Local, State=Ready�
 Account가 같은 Media만 사용할 수 있다. 같은 Upload Account를 가진 Local Media는 Media Profile과 Post Author
 Profile이 달라도 연결할 수 있다.
 
+Profile avatar/header 관계에는 Source=Local, State=Ready이고 Media Profile이 편집 대상 Profile과 같은 Media만
+연결할 수 있다. 같은 Upload Account가 올렸더라도 다른 Profile의 Media는 재사용하지 않는다. avatar/header를
+교체하거나 제거하면 Profile Representation 관계만 바뀌며 기존 Media는 삭제하지 않는다.
+
 ## 행동
 
 | 행동              | 행동 주체 | 대상 객체 | 입력값                               | 권한                                    | 조건                                                                                               | 결과                                                                                   |
