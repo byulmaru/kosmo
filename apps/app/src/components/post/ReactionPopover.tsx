@@ -87,10 +87,12 @@ export function ReactionPopover({
     const onPointerDown = (event: PointerEvent) => {
       const trigger = triggerRef.current as unknown as HTMLElement | null;
       const contentElement = contentRef.current as unknown as HTMLElement | null;
-      if (
-        !trigger?.contains(event.target as Node) &&
-        !contentElement?.contains(event.target as Node)
-      ) {
+      const target = event.target as Node;
+      if (trigger?.contains(target)) {
+        dismiss();
+        return;
+      }
+      if (!contentElement?.contains(target)) {
         dismiss();
       }
     };
@@ -149,6 +151,24 @@ export function ReactionPopover({
               style={StyleSheet.absoluteFill}
               testID="reaction-popover-backdrop"
             />
+            {anchor ? (
+              <Pressable
+                accessible={false}
+                aria-hidden
+                importantForAccessibility="no"
+                onPress={() => dismiss()}
+                style={[
+                  styles.triggerDismiss,
+                  {
+                    height: anchor.height,
+                    left: anchor.x,
+                    top: anchor.y,
+                    width: anchor.width,
+                  },
+                ]}
+                testID="reaction-popover-trigger-dismiss"
+              />
+            ) : null}
             <View
               {...webPlacementProps}
               accessibilityViewIsModal
@@ -179,4 +199,5 @@ const styles = StyleSheet.create({
   content: { alignSelf: 'flex-start' },
   position: { position: 'absolute' },
   shell: { borderRadius: radii.lg, borderWidth: 1, ...shadow },
+  triggerDismiss: { position: 'absolute' },
 });

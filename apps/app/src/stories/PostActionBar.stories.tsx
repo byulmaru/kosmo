@@ -614,8 +614,9 @@ export const ReactionPopoverDismissFocusAndPlacement: Story = {
       expect(bounds.height).toBeGreaterThanOrEqual(44);
     }
 
-    await userEvent.click(topLeftTrigger!);
+    await userEvent.click(screen.getByTestId('reaction-popover-trigger-dismiss'));
     expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
+    expect(canvasElement.ownerDocument.activeElement).toBe(topLeftTrigger);
     await userEvent.click(topLeftTrigger!);
     await userEvent.click(screen.getByTestId('reaction-popover-backdrop'));
     expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
