@@ -19,9 +19,9 @@ import { and, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type { encodeGlobalId as EncodeGlobalId } from '@kosmo/core/global-id';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
 import type { yoga as YogaRouter } from '../../../src/graphql';
-import type { encodeGlobalId as EncodeGlobalId } from '../../../src/graphql/global-id';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -45,6 +45,7 @@ let yoga: typeof YogaRouter;
 let encodeGlobalId: typeof EncodeGlobalId;
 let app: Hono<Env>;
 let localInstanceId: string;
+let replySourceBatchCount: number | undefined;
 
 describe('Notification GraphQL Node boundary', () => {
   before(async () => {
@@ -75,11 +76,27 @@ describe('Notification GraphQL Node boundary', () => {
 
     ({ deriveContext } = await import('../../../src/context'));
     ({ yoga } = await import('../../../src/graphql'));
-    ({ encodeGlobalId } = await import('../../../src/graphql/global-id'));
+    ({ encodeGlobalId } = await import('@kosmo/core/global-id'));
 
     app = new Hono<Env>();
     app.use('*', async (c, next) => {
-      c.set('context', await deriveContext(c));
+      const context = await deriveContext(c);
+      if (replySourceBatchCount !== undefined) {
+        const loader = context.loader;
+        context.loader = ((params: Parameters<typeof loader>[0]) =>
+          loader(
+            params.name === 'notification.replySource'
+              ? {
+                  ...params,
+                  load: async (ids) => {
+                    replySourceBatchCount! += 1;
+                    return params.load(ids);
+                  },
+                }
+              : params,
+          )) as typeof context.loader;
+      }
+      c.set('context', context);
       return next();
     });
     app.route('/graphql', yoga);
@@ -97,7 +114,7 @@ describe('Notification GraphQL Node boundary', () => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile('recipient');
     const relatedProfiles = await Promise.all([createProfile('first'), createProfile('second')]);
-    await addMembership(auth.account.id, recipient.id, AccountProfileRole.ADMIN);
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.MEMBER);
     const notifications = await Promise.all(
       relatedProfiles.map((related, index) =>
         createFollowNotification(
@@ -147,6 +164,218 @@ describe('Notification GraphQL Node boundary', () => {
     );
     assert.equal((result.data?.nodes[0] as NotificationNode).profile.id, relatedProfileIds[1]);
     assert.equal((result.data?.nodes[2] as NotificationNode).profile.id, relatedProfileIds[0]);
+  });
+
+  test('loads Reply sources only for concrete source fields and batches them per request', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('reply-batch-recipient');
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.OWNER);
+    const parent = await createContentPost(recipient.id);
+    const replies = await Promise.all(
+      ['first', 'second', 'third'].map(async (name) => {
+        const author = await createProfile(`reply-batch-${name}`);
+        const reply = await db
+          .insert(Posts)
+          .values({
+            profileId: author.id,
+            replyParentId: parent.id,
+            state: PostState.ACTIVE,
+            visibility: PostVisibility.PUBLIC,
+          })
+          .returning()
+          .then(firstOrThrow);
+        await db.insert(Notifications).values({
+          kind: NotificationKind.REPLY,
+          recipientProfileId: recipient.id,
+          sourceId: reply.id,
+        });
+        return { author, reply };
+      }),
+    );
+    const recipientId = encodeGlobalId('Profile', recipient.id);
+
+    replySourceBatchCount = 0;
+    try {
+      const interfaceOnly = await requestGraphQL<{
+        node: { notifications: NotificationConnection } | null;
+      }>(
+        `query ReplyNotificationInterfaceOnly($id: ID!) {
+          node(id: $id) {
+            ... on Profile { notifications(first: 10) { edges { node { __typename id } } } }
+          }
+        }`,
+        { id: recipientId },
+        auth.token,
+      );
+      assertNoGraphQLErrors(interfaceOnly);
+      assert.equal(replySourceBatchCount, 0);
+
+      const concrete = await requestGraphQL<{
+        node: { notifications: NotificationConnection } | null;
+      }>(
+        `query ReplyNotificationConcreteSources($id: ID!) {
+          node(id: $id) {
+            ... on Profile {
+              notifications(first: 10) {
+                edges { node { __typename id ... on ReplyNotification { profile { id } post { id } } } }
+              }
+            }
+          }
+        }`,
+        { id: recipientId },
+        auth.token,
+      );
+      assertNoGraphQLErrors(concrete);
+      assert.equal(replySourceBatchCount, 1);
+      assert.deepEqual(
+        concrete.data?.node?.notifications.edges.map(({ node }) => node.post?.id).sort(),
+        replies.map(({ reply }) => encodeGlobalId('Post', reply.id)).sort(),
+      );
+      assert.deepEqual(
+        concrete.data?.node?.notifications.edges.map(({ node }) => node.profile.id).sort(),
+        replies.map(({ author }) => encodeGlobalId('Profile', author.id)).sort(),
+      );
+    } finally {
+      replySourceBatchCount = undefined;
+    }
+  });
+
+  test('creates Reply Notifications after commit, suppresses self/invisible sources, and isolates insert failure', async () => {
+    const author = await createAuthenticatedSession();
+    const recipient = await createProfile('reply-create-recipient');
+    const parent = await createContentPost(recipient.id);
+    const created = await requestCreateReply(parent.id, author.token);
+    assertNoGraphQLErrors(created);
+    const reply = await db
+      .select()
+      .from(Posts)
+      .where(eq(Posts.replyParentId, parent.id))
+      .then(firstOrThrow);
+    assert.equal(
+      await db.$count(
+        Notifications,
+        and(eq(Notifications.kind, NotificationKind.REPLY), eq(Notifications.sourceId, reply.id)),
+      ),
+      1,
+    );
+    const selfParent = await createContentPost(author.profile.id);
+    assertNoGraphQLErrors(await requestCreateReply(selfParent.id, author.token));
+    const invisibleParent = await createContentPost(recipient.id);
+    assertNoGraphQLErrors(
+      await requestCreateReply(invisibleParent.id, author.token, PostVisibility.FOLLOWERS),
+    );
+    assert.equal(await db.$count(Notifications, eq(Notifications.kind, NotificationKind.REPLY)), 1);
+    await pg.unsafe(
+      `CREATE FUNCTION fail_reply_notification_insert() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.kind = 'REPLY' THEN RAISE EXCEPTION 'forced'; END IF; RETURN NEW; END $$; CREATE TRIGGER fail_reply_notification_insert BEFORE INSERT ON notification FOR EACH ROW EXECUTE FUNCTION fail_reply_notification_insert();`,
+    );
+    try {
+      const failureParent = await createContentPost(recipient.id);
+      assertNoGraphQLErrors(await requestCreateReply(failureParent.id, author.token));
+      assert.equal(await db.$count(Posts, eq(Posts.replyParentId, failureParent.id)), 1);
+    } finally {
+      await pg.unsafe(
+        `DROP TRIGGER IF EXISTS fail_reply_notification_insert ON notification; DROP FUNCTION IF EXISTS fail_reply_notification_insert();`,
+      );
+    }
+  });
+
+  test('filters unavailable Reply Notifications before pagination and from Read', async () => {
+    const viewer = await createAuthenticatedSession();
+    const recipient = await createProfile('reply-hidden-recipient');
+    await addMembership(viewer.account.id, recipient.id, AccountProfileRole.OWNER);
+    const parent = await createContentPost(recipient.id);
+    const visibleAuthor = await createAuthenticatedSession();
+    assertNoGraphQLErrors(await requestCreateReply(parent.id, visibleAuthor.token));
+    const visible = await db
+      .select()
+      .from(Posts)
+      .where(eq(Posts.replyParentId, parent.id))
+      .then(firstOrThrow);
+    const hiddenAuthor = await createAuthenticatedSession();
+    assertNoGraphQLErrors(await requestCreateReply(parent.id, hiddenAuthor.token));
+    const hidden = await db
+      .select()
+      .from(Posts)
+      .where(and(eq(Posts.replyParentId, parent.id), ne(Posts.id, visible.id)))
+      .then(firstOrThrow);
+    const visibleNotification = await db
+      .select()
+      .from(Notifications)
+      .where(
+        and(eq(Notifications.kind, NotificationKind.REPLY), eq(Notifications.sourceId, visible.id)),
+      )
+      .then(firstOrThrow);
+    const hiddenNotification = await db
+      .select()
+      .from(Notifications)
+      .where(
+        and(eq(Notifications.kind, NotificationKind.REPLY), eq(Notifications.sourceId, hidden.id)),
+      )
+      .then(firstOrThrow);
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.SUSPENDED })
+      .where(eq(Profiles.id, hiddenAuthor.profile.id));
+    const recipientId = encodeGlobalId('Profile', recipient.id);
+    const connection = await loadNotificationConnection(recipientId, viewer.token, { first: 1 });
+    assertNoGraphQLErrors(connection);
+    assert.deepEqual(
+      connection.data?.node?.notifications.edges.map(({ node }) => node.id),
+      [encodeGlobalId('ReplyNotification', visibleNotification.id)],
+    );
+    const hiddenId = encodeGlobalId('ReplyNotification', hiddenNotification.id);
+    assert.deepEqual(await loadNodes([hiddenId], viewer.token), [null]);
+    const read = await markNotificationRead(hiddenId, viewer.token);
+    assert.equal(read.errors?.[0]?.extensions?.code, 'NOT_FOUND');
+    assert.equal(await notificationReadAt(hiddenNotification.id), null);
+  });
+
+  test('keeps a created Reply in Node, connection, unread count and Read after Parent Tombstone', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('reply-tombstone-recipient');
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.OWNER);
+    const parent = await createContentPost(recipient.id);
+    const created = await requestCreateReply(parent.id, auth.token);
+    assertNoGraphQLErrors(created);
+    const reply = await db
+      .select()
+      .from(Posts)
+      .where(eq(Posts.replyParentId, parent.id))
+      .then(firstOrThrow);
+    const notification = await db
+      .select()
+      .from(Notifications)
+      .where(
+        and(eq(Notifications.kind, NotificationKind.REPLY), eq(Notifications.sourceId, reply.id)),
+      )
+      .then(firstOrThrow);
+    await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, parent.id));
+
+    const result = await requestGraphQL<{ node: NotificationNode | null }>(
+      `query TombstoneParentReplyNotification($id: ID!) {
+        node(id: $id) { __typename ... on ReplyNotification { profile { id } post { id } } }
+      }`,
+      { id: encodeGlobalId('ReplyNotification', notification.id) },
+      auth.token,
+    );
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.node?.__typename, 'ReplyNotification');
+    assert.equal(result.data?.node?.post?.id, encodeGlobalId('Post', reply.id));
+    const recipientId = encodeGlobalId('Profile', recipient.id);
+    const connection = await loadNotificationConnection(recipientId, auth.token, { first: 10 });
+    assertNoGraphQLErrors(connection);
+    assert.deepEqual(
+      connection.data?.node?.notifications.edges.map(({ node }) => node.id),
+      [encodeGlobalId('ReplyNotification', notification.id)],
+    );
+    const count = await loadUnreadNotificationCounts([recipientId], auth.token);
+    assert.equal(count.data?.nodes[0]?.unreadNotificationCount, 1);
+    const read = await markNotificationRead(
+      encodeGlobalId('ReplyNotification', notification.id),
+      auth.token,
+    );
+    assertNoGraphQLErrors(read);
+    assert.equal(read.data?.markNotificationRead.recipientProfile.unreadNotificationCount, 0);
   });
 
   test('uses every membership role without depending on the selected Profile', async () => {
@@ -864,7 +1093,7 @@ describe('Notification GraphQL Node boundary', () => {
     const recipient = await createProfile('read-recipient');
     const related = await createProfile('read-related');
     const otherRelated = await createProfile('other-unread-related');
-    await addMembership(auth.account.id, recipient.id, AccountProfileRole.ADMIN);
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.MEMBER);
     const notification = await createFollowNotification(recipient.id, related.id);
     const otherNotification = await createFollowNotification(recipient.id, otherRelated.id);
     await db
@@ -1050,6 +1279,25 @@ const requestGraphQL = async <TData>(
   assert.equal(response.status, 200);
   return (await response.json()) as GraphQLResult<TData>;
 };
+
+const requestCreateReply = (
+  replyParentId: string,
+  token: string,
+  visibility: PostVisibility = PostVisibility.PUBLIC,
+) =>
+  requestGraphQL<{ createPost: { post: { id: string } } }>(
+    `mutation CreateReply($input: CreatePostInput!) {
+      createPost(input: $input) { post { id } }
+    }`,
+    {
+      input: {
+        bodyText: 'reply',
+        replyParentId: encodeGlobalId('Post', replyParentId),
+        visibility,
+      },
+    },
+    token,
+  );
 
 const loadNodes = async (ids: string[], token: string) => {
   const result = await requestGraphQL<{ nodes: Array<{ id: string } | null> }>(

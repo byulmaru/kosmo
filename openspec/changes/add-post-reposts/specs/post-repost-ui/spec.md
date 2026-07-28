@@ -7,8 +7,10 @@
 #### Scenario: Repost 표시
 
 - **WHEN** `content = null`이고 `repostSource`가 non-null인 Post를 표시한다
-- **THEN** 앱은 Repost Author와 Source Post를 시각적으로 구분해 표시한다
+- **THEN** 앱은 Repost Author의 `{displayName}님이 재게시함` attribution을 canonical Profile Link로 정확히 한 번 표시한다
+- **AND** 바로 아래의 direct Source는 일반 목록 Post와 동일한 표준 avatar·Author·Content·spacing·navigation 행으로 표시한다
 - **AND** Source의 Author와 Content를 Repost 자신의 Content처럼 복제하지 않는다
+- **AND** Source용 별도 full presentation·중첩 preview·중첩 article·이중 row border 또는 별도 Source renderer를 만들지 않는다
 
 #### Scenario: Quote 표시
 
@@ -28,26 +30,73 @@
 - **THEN** 앱은 두 Author의 역할과 이동 대상을 혼동하지 않게 표시한다
 - **AND** 지원하는 화면 폭과 줄바꿈에서도 Post content와 action을 사용할 수 있다
 
-### Requirement: Source Post 이동과 목록 연결
+#### Scenario: Quote의 중첩 Source 1단계 표시
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-389`, `PROD-402`, `PROD-430`, `PROD-415`, `PROD-453` 유니버설 앱은 Home과 Profile Post List에서 Repost·Quote Source를 표시하고 기존 canonical Post route로 이동할 수 있어야 한다(MUST).
+- **WHEN** Quote 또는 Reply+Quote의 direct `repostSource`가 non-null `repostSource`를 가진다
+- **THEN** 앱은 direct Source만 Author·Content·생성 시각을 포함한 preview로 표시한다
+- **AND** 두 번째 Source의 Author·Content·생성 시각을 표시하거나 presentation component를 재귀 호출하지 않는다
+- **AND** 두 번째 Source를 위한 별도 placeholder 또는 CTA를 표시하지 않는다
+
+### Requirement: Source Post 이동과 목록·상세 연결
+
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-389`, `PROD-402`, `PROD-415`, `PROD-422`, `PROD-430`, `PROD-453` 유니버설 앱은 Home, Profile, Bookmark와 Post 상세에서 Repost·Quote Source를 표시하고 기존 canonical Post route로 이동할 수 있어야 한다(MUST).
 
 #### Scenario: Source Post 이동
 
-- **WHEN** 사용자가 Repost 또는 Quote의 Source preview를 활성화한다
+- **WHEN** 사용자가 Repost 또는 Quote의 direct Source 생성 시각을 keyboard, screen reader, pointer 또는 touch로 활성화하거나 Source 본문 행을 pointer 또는 touch로 활성화한다
 - **THEN** 앱은 Source Author의 `relativeHandle`과 Source Post global ID를 사용하는 canonical Post route로 이동한다
 - **AND** Repost 또는 Quote Author의 상세 route로 잘못 이동하지 않는다
+- **AND** Source Author affordance는 Source Author의 canonical Profile route로 이동한다
+
+#### Scenario: Source preview의 목적지별 이동 경계
+
+- **WHEN** direct Source preview가 Author, 생성 시각, Content와 border padding을 표시한다
+- **THEN** Source Author는 canonical Profile Link이고 Source 생성 시각은 최소 44px canonical Post Link다
+- **AND** Source 본문 행은 별도 accessibility element 또는 keyboard focus target이 아닌 pointer·touch shortcut으로 Source Post에 이동한다
+- **AND** body의 외부 Link는 Source 이동을 함께 실행하지 않고 자신의 URL로 이동한다
+- **AND** bordered preview 전체와 빈 padding은 단일 Source Post Link 또는 이동 affordance가 아니다
+- **AND** 앱은 Source Post, Profile 또는 외부 body Link를 서로 중첩하지 않는다
+
+#### Scenario: Quote 자체 Post 이동 보존
+
+- **WHEN** Home, Profile, Bookmark 또는 상세 thread의 조상·하위 Reply `PostListItem`에서 사용자가 Quote 또는 Reply+Quote의 자체 생성 시각을 활성화하거나 자체 본문 행을 pointer 또는 touch로 활성화한다
+- **THEN** 앱은 Quote Author의 `relativeHandle`과 Quote Post global ID를 사용하는 canonical Post route로 이동한다
+- **AND** direct Source Post route로 잘못 이동하지 않는다
+- **AND** Quote 자체 body의 외부 Link는 Quote Post 이동을 함께 실행하지 않고 자신의 URL로 이동한다
+- **AND** 이미 자기 canonical route를 렌더링하는 현재 상세 `PostLayout`은 self Link나 동일 URL history entry를 추가하지 않고 direct Source 이동만 제공한다
+
+#### Scenario: 목록 표준 행의 Post 이동 경계
+
+- **WHEN** Home, Profile, Bookmark 또는 상세 thread의 조상·하위 Reply `PostListItem`이 일반 Post나 순수 Repost의 direct Source를 표준 목록 행으로 표시한다
+- **THEN** 생성 시각은 keyboard, screen reader, pointer가 사용하는 최소 44px canonical Post Link다
+- **AND** 본문 행은 별도 accessibility element 또는 keyboard focus target이 아닌 pointer·touch shortcut으로 같은 Post에 이동한다
+- **AND** 본문 내부 외부 Link는 Post 이동을 함께 실행하지 않고 자신의 URL로 이동한다
+- **AND** 앱은 canonical Post Link와 본문 내부 외부 Link를 서로 중첩하지 않는다
 
 #### Scenario: Author Profile 이동
 
 - **WHEN** 사용자가 Repost Author 또는 Source Author의 Profile affordance를 각각 활성화한다
 - **THEN** 앱은 선택한 Author의 canonical Profile route로 이동한다
 
-#### Scenario: Home과 Profile 목록 연결
+#### Scenario: Home, Profile과 Bookmark 목록 연결
 
-- **WHEN** PROD-430의 connection이 Repost 후보를 반환한다
-- **THEN** Home과 Profile route는 공용 Post List item fragment를 통해 Repost·Quote presentation을 표시한다
+- **WHEN** PROD-430의 Home/Profile connection 또는 Bookmark connection이 조회 가능한 Repost·Quote를 반환한다
+- **THEN** Home, Profile과 Bookmark route는 공용 Post List item fragment를 통해 Repost·Quote presentation을 표시한다
 - **AND** route query가 presentation용 scalar field를 중복 소유하지 않는다
+
+#### Scenario: Post 상세 renderer별 Source 소유
+
+- **WHEN** Post 상세 thread가 현재 Quote·Reply+Quote와 조상·하위 Reply를 표시한다
+- **THEN** 현재 Post의 상세 renderer와 조상·하위 Reply의 목록 renderer는 각각 자신의 direct Source preview를 `PostBody` 아래 테두리 있는 sibling으로 정확히 한 번 표시한다
+- **AND** thread 조립 경계는 Source를 별도 조회·운반·추가 렌더링하지 않는다
+- **AND** 각 preview는 direct Source 한 단계에서 멈추고 두 번째 Source나 별도 CTA를 표시하지 않는다
+
+#### Scenario: Content 없는 Repost 상세 canonical 이동
+
+- **WHEN** 사용자가 Content와 Reply Parent 없이 Repost Source만 가진 Post의 상세 경로에 진입한다
+- **THEN** 앱은 조회 가능한 direct Source의 canonical Post route로 현재 경로를 대체한다
+- **AND** Content 없는 Repost 자체의 상세 surface, navigation history entry와 공유 참조를 남기지 않는다
+- **AND** Source가 unavailable해 Content 없는 Repost 자체가 조회되지 않으면 숨겨진 Source 경로를 추론하지 않고 기존 not-found 경계를 유지한다
 
 #### Scenario: unavailable Source 결과
 

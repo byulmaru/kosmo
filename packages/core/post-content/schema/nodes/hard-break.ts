@@ -6,4 +6,5 @@ export const hardBreakNodeSpec = {
   marks: '',
   parseDOM: [{ tag: 'br' }],
   selectable: false,
+  toDOM: () => ['br'],
 } satisfies NodeSpec;

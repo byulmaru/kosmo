@@ -4,6 +4,7 @@ import { routePath } from 'hono/route';
 import { OidcAuthError } from './auth';
 import graphqlRoutes from './routes/graphql';
 import loginRoutes from './routes/login';
+import logoutRoutes from './routes/logout';
 import staticRoutes from './routes/static';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
@@ -30,10 +31,11 @@ app.use('*', async (c, next) => {
     contextData: undefined,
     onNotAcceptable: fallThroughNotAcceptable,
     onNotFound: fallThrough,
+    onUnauthorized: fallThrough,
   });
 
   c.res = response;
-  return response;
+  return c.res;
 });
 
 app.onError((cause, c) => {
@@ -52,6 +54,7 @@ app.get('/health', (c) => c.text('ok'));
 app.all('/health', (c) => c.text('Method Not Allowed', 405, { Allow: 'GET' }));
 
 app.route('/', loginRoutes);
+app.route('/', logoutRoutes);
 app.route('/', graphqlRoutes);
 app.route('/', staticRoutes);
 

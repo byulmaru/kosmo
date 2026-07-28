@@ -1,4 +1,5 @@
-import { Component, createContext, useContext, useEffect } from 'react';
+import { createContext, useContext, useEffect } from 'react';
+import { ErrorBoundary } from 'react-error-boundary';
 import { Platform } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { useRelayActor } from '@/relay/RelayActorProvider';
@@ -77,27 +78,14 @@ export function SessionErrorProvider({ children }: PropsWithChildren) {
   );
 }
 
-export class SessionFailOpenBoundary extends Component<
-  PropsWithChildren<{ fallback: ReactNode; resetKey: number }>,
-  { failed: boolean }
-> {
-  state = { failed: false };
-
-  static getDerivedStateFromError(): { failed: boolean } {
-    return { failed: true };
-  }
-
-  componentDidUpdate(previous: Readonly<{ resetKey: number }>): void {
-    if (this.state.failed && previous.resetKey !== this.props.resetKey) {
-      this.setState({ failed: false });
-    }
-  }
-
-  render(): ReactNode {
-    if (this.state.failed) {
-      return this.props.fallback;
-    }
-
-    return this.props.children;
-  }
+export function SessionFailOpenBoundary({
+  children,
+  fallback,
+  resetKey,
+}: PropsWithChildren<{ fallback: ReactNode; resetKey: number }>) {
+  return (
+    <ErrorBoundary fallback={fallback} resetKeys={[resetKey]}>
+      {children}
+    </ErrorBoundary>
+  );
 }

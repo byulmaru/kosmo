@@ -12,8 +12,9 @@ import {
   ProfileFollows,
   Profiles,
 } from '../db';
-import { InstanceState, PostState, PostVisibility, ProfileState } from '../enums';
+import { InstanceState, NotificationKind, PostState, PostVisibility, ProfileState } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
+import { createRepostNotification, deleteNotificationBySource } from './notification';
 import { validatePostStructure } from './post-structure';
 import type { Transaction } from '../db';
 import type { PostContentDocumentV1 } from '../post-content';
@@ -105,8 +106,8 @@ export const deletePost = async (
     readonly postId: string;
   },
   tx?: Transaction,
-): Promise<{ readonly postId: string }> =>
-  getDatabaseConnection(tx).transaction(async (tx) => {
+): Promise<{ readonly postId: string }> => {
+  const { repostId, result } = await getDatabaseConnection(tx).transaction(async (tx) => {
     const post = await tx
       .select({ profileId: Posts.profileId })
       .from(Posts)
@@ -120,7 +121,7 @@ export const deletePost = async (
       throw new PermissionDeniedError('Post author permission is required');
     }
 
-    await tx
+    const deleted = await tx
       .update(Posts)
       .set({ deletedAt: sql`now()`, state: PostState.DELETED })
       .where(
@@ -129,10 +130,52 @@ export const deletePost = async (
           eq(Posts.profileId, actorProfileId),
           eq(Posts.state, PostState.ACTIVE),
         ),
-      );
+      )
+      .returning({
+        currentContentId: Posts.currentContentId,
+        id: Posts.id,
+        replyParentId: Posts.replyParentId,
+        repostSourceId: Posts.repostSourceId,
+      })
+      .then(first);
 
-    return { postId };
+    return {
+      repostId:
+        deleted &&
+        deleted.currentContentId === null &&
+        deleted.replyParentId === null &&
+        deleted.repostSourceId !== null
+          ? deleted.id
+          : undefined,
+      result: { postId },
+    };
   });
+
+  // A caller-owned transaction has no after-commit hook. Its caller owns any
+  // post-commit side effect so delivery cannot run before the outer commit.
+  if (!tx) {
+    await deleteNotificationBySource(NotificationKind.REPOST, result.postId).catch((error) => {
+      console.error('Post-commit Repost notification cleanup failed', {
+        error,
+        postId: result.postId,
+      });
+    });
+  }
+
+  if (!tx && repostId) {
+    try {
+      const { sendRepostUndo } = await import('@kosmo/fedify');
+      await sendRepostUndo(repostId);
+    } catch (error) {
+      console.error('Post-commit ActivityPub Repost Undo delivery failed', {
+        error,
+        repostId,
+      });
+    }
+  }
+
+  return result;
+};
 
 export const repostPost = async (
   {
@@ -146,25 +189,8 @@ export const repostPost = async (
 ): Promise<{
   readonly created: boolean;
   readonly repost: typeof Posts.$inferSelect;
-}> =>
-  getDatabaseConnection(tx).transaction(async (tx) => {
-    const actor = await tx
-      .select({ id: Profiles.id })
-      .from(Profiles)
-      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .where(
-        and(
-          eq(Profiles.id, actorProfileId),
-          eq(Profiles.state, ProfileState.ACTIVE),
-          ne(Instances.state, InstanceState.SUSPENDED),
-        ),
-      )
-      .limit(1)
-      .then(first);
-    if (!actor) {
-      throw new PermissionDeniedError();
-    }
-
+}> => {
+  const result = await getDatabaseConnection(tx).transaction(async (tx) => {
     const source = await findVisiblePost(tx, { actorProfileId, postId: sourcePostId });
     if (!source) {
       throw new NotFoundError('Post not found');
@@ -222,6 +248,25 @@ export const repostPost = async (
 
     return { created: false, repost: existing };
   });
+
+  // See deletePost: caller-owned transactions cannot safely emit before their
+  // outer commit, so only this top-level transaction owns post-commit effects.
+  if (!tx && result.created) {
+    await createRepostNotification(result.repost.id).catch(() => undefined);
+
+    try {
+      const { sendRepostAnnounce } = await import('@kosmo/fedify');
+      await sendRepostAnnounce(result.repost.id);
+    } catch (error) {
+      console.error('Post-commit ActivityPub Repost Announce delivery failed', {
+        error,
+        repostId: result.repost.id,
+      });
+    }
+  }
+
+  return result;
+};
 export function createPost(input: LocalPostInput, tx?: Transaction): Promise<CreatedPost>;
 export function createPost(
   input: ActivityPubPostInput,

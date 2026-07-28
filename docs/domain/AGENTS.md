@@ -55,8 +55,9 @@ OpenSpec은 이 문서를 참조하는 downstream 구현 스펙이다. OpenSpec�
 - Follow Request와 Follow Relationship은 별도 객체다.
 - Account가 주체인 행동은 인증, Profile Owner/Member 권한, 운영자 권한에 한정한다. 기본 소셜 행동 주체는
   Profile이다.
-- Local Profile 또는 Account가 주체인 Mutation은 `Account.Active`를 별도 사실로 요구한다. Account 삭제와
-  Account 대상 Operational Notification 읽음처럼 Suspended 상태에서도 허용하기로 명시한 행동만 예외다.
+- Account 요청에서 Profile 또는 Account가 주체인 Mutation은 `Account.Active`를 별도 사실로 요구한다.
+  Account 삭제와 Account 대상 Operational Notification 읽음처럼 Suspended 상태에서도 허용하기로 명시한
+  행동만 예외다. Profile Origin만으로 Account 요청 여부를 추론하지 않는다.
 - Messaging, Collection, 신고 처리 객체는 현재 도메인 범위에서 제외한다.
 
 ## 검증 명령

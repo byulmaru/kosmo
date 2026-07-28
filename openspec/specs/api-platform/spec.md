@@ -81,6 +81,13 @@ API는 concrete GraphQL typename과 DB UUID를 포함하는 opaque global ID를 
 - **THEN** 시스템은 다른 table이나 type을 추론해 재시도하지 않는다
 - **AND** 해당 ID는 object 없음으로 처리한다
 
+#### Scenario: Notification concrete Node resolve
+
+- **WHEN** 클라이언트가 concrete FollowNotification global ID를 제공한다
+- **THEN** 시스템은 FollowNotification loader로 notification row를 batch load한다
+- **AND** row의 kind가 FOLLOW이고 visibility 조건을 만족할 때 FollowNotification concrete object를 반환한다
+- **AND** interface typename, 지원하지 않는 kind 또는 hidden row는 다른 concrete type으로 오라우팅하지 않고 object 없음으로 처리한다
+
 #### Scenario: Batch load nodes
 
 - **WHEN** API가 같은 concrete Node type의 여러 global ID를 resolve한다

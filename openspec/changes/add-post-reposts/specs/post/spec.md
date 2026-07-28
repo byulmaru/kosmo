@@ -60,7 +60,7 @@
 
 ### Requirement: 프로필 게시글 목록 connection
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-389`, `PROD-430` API는 Target Profile이 작성한 eligible Active Post 중 Reply Parent가 없는 Content Post와 Content 없는 Repost를 최신순 Relay connection `Profile.posts`로 노출해야 한다(MUST). `Profile.posts`는 게시글 node 목록 공용 wrapper인 `PostConnection`을 반환해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-388`, `PROD-429`, `PROD-389`, `PROD-430` API는 Target Profile이 작성한 eligible Active Post 중 Reply Parent가 없는 Content Post와 Content 없는 Repost를 최신순 Relay connection `Profile.posts`로 노출해야 한다(MUST). `Profile.posts`는 게시글 node 목록 공용 wrapper인 `PostConnection`을 반환해야 한다(MUST). Reply 여부와 Visibility·Eligibility는 page limit 전에 적용해야 한다(MUST).
 
 #### Scenario: 공개 프로필 게시글 목록 조회
 
@@ -101,7 +101,7 @@
 
 ### Requirement: Home timeline connection
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-389`, `PROD-430` API는 현재 active profile 기준 Home Post List 후보를 최신순 Relay connection `Query.homeTimeline`으로 노출해야 한다(MUST). `Query.homeTimeline`은 게시글 node 목록 공용 wrapper인 `PostConnection`을 반환해야 하며(MUST), active profile이 없거나 인증되지 않은 조회에는 요청을 거부하지 않고 `null`을 반환해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-388`, `PROD-429`, `PROD-389`, `PROD-430` API는 현재 active profile 기준 Home Post List 후보를 최신순 Relay connection `Query.homeTimeline`으로 노출해야 한다(MUST). `Query.homeTimeline`은 게시글 node 목록 공용 wrapper인 `PostConnection`을 반환해야 한다(MUST). 각 후보의 Visibility·Eligibility와 Reply·Repost 후보 정책은 page limit 전에 적용해야 한다(MUST). active profile이 없거나 인증되지 않은 조회에는 요청을 거부하지 않고 `null`을 반환해야 한다(MUST).
 
 #### Scenario: 내 Content Post와 Repost 포함
 

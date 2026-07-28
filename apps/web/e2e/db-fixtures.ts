@@ -52,6 +52,10 @@ type CreateE2EProfileOptions = {
   state?: ProfileState;
 };
 
+type CreateE2EAccountProfileOptions = CreateE2EProfileOptions & {
+  accountId: string;
+};
+
 type CreateE2ERemoteProfileOptions = CreateE2EProfileOptions & {
   domain?: string;
   instanceState?: InstanceState;
@@ -203,6 +207,18 @@ export async function createE2EProfile(options: CreateE2EProfileOptions = {}) {
     })
     .returning()
     .then(firstOrThrow);
+}
+
+export async function createE2EAccountProfile(options: CreateE2EAccountProfileOptions) {
+  const profile = await createE2EProfile(options);
+
+  await db.insert(AccountProfiles).values({
+    accountId: options.accountId,
+    profileId: profile.id,
+    role: AccountProfileRole.OWNER,
+  });
+
+  return profile;
 }
 
 export async function createE2ERemoteProfile(options: CreateE2ERemoteProfileOptions = {}) {

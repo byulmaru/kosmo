@@ -35,12 +35,23 @@ Account session이나 ActivityPub signature처럼 actor identity를 신뢰하기
 Post.Author, Source visibility와 lifecycle처럼 검증된 actor와 domain object 사이의 공통 권한은 core가
 검증한다.
 
+current-session logout은 이 규칙의 의도적인 예외다. missing 또는 terminal Session credential은 검증된
+Session identity를 만들 수 없지만, 로그아웃은 이 상태를 DB·네트워크 오류처럼 결과를 확정하지 못한 실패와
+구분해야 한다. GraphQL과 Web BFF가 같은 판정을 공유하도록 transport-neutral logout action이 raw Kosmo
+Session credential 확인과 조건부 revoke를 함께 소유한다. 이 예외는 다른 인증 action의 caller·actor 검증
+책임을 core로 옮기는 근거가 아니다.
+
 ## Actor와 caller별 조건
 
-기본 소셜 actor는 `Profile`이다. `Account`는 Local GraphQL caller의 인증 identity이고, 정상 제품 경로의
-selected Profile은 membership 모델상 Local이다. `Account`와 `InstanceKind.LOCAL`은 모든 소셜 action의
-공통 조건이 아니며, Account 자체가 domain participant이거나 Locality가 action의 의미일 때만 core
-contract에 포함한다.
+기본 소셜 actor는 `Profile`이다. `Account`는 GraphQL caller의 인증 identity이며 selected Profile은
+Account–Profile membership으로 정한다. selected Profile은 Local 또는 Remote일 수 있다. `Account`와
+`InstanceKind.LOCAL`은 모든 소셜 action의 공통 조건이 아니며, Account 자체가 domain participant이거나
+Locality가 action의 의미일 때만 core contract에 포함한다. 결과 객체의 Local/Remote 구분이나 저장 위치를
+actor Profile의 Instance Type 조건으로 확장하지 않는다.
+
+GraphQL `usingProfile` entry point가 Active Account, selected Profile membership과 Profile 조회 가능 상태를
+보장하면 resolver와 core action은 같은 Account·membership·Profile visibility를 다시 조회하지 않는다.
+core는 검증된 Profile identity를 받아 action에 고유한 상태, 관계, 대상과 persistence 조건만 검증한다.
 
 현재 Repost caller인 Local mutation은 session과 selected Profile membership을 검증한 뒤 core action에
 `actorProfileId`와 `sourcePostId`를 전달한다. 향후 ActivityPub Repost ingress가 생기면 signature와
@@ -59,6 +70,9 @@ Remote actor 검증 뒤 같은 action을 재사용할 수 있지만, ingress와 
   계층을 맞추기 위한 pass-through core service를 만들지 않는다.
 - 여러 DB 변경이 원자적이어야 하면 core action이 transaction 경계를 소유한다. 실제 caller
   transaction과 합류해야 할 때만 optional transaction을 받는다.
+- 외부 delivery나 notification처럼 DB transaction에 포함되지 않는 side effect는 domain write가 commit된
+  뒤 실행한다. side effect 실패가 이미 commit된 domain 결과를 되돌려서는 안 되는 계약이면 실패를 호출
+  경계에서 격리하고 commit된 상태를 유지한다.
 - core는 공통 domain error를 반환하고 각 진입점이 외부 오류 표현으로 mapping한다.
 - 실제 caller 없이 evaluator, callback, generic port나 대체 implementation을 미리 추가하지 않는다.
 

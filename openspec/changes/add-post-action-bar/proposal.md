@@ -9,7 +9,7 @@ Reply·Repost·Reaction·Bookmark를 실제 게시글 화면에 일관되게 연
 - action 요청 실패는 Action Bar의 지속 `error` 상태로 표시하지 않는다. production surface는 요청 직전의 확정된 도메인 상태와 count를 유지하고, PROD-432의 action adapter 계층에서 액션별 한국어 toast와 보조 기술이 즉시 인식할 수 있는 안내를 제공한다. 별도의 retry 상태나 toast 버튼 없이 같은 액션을 다시 활성화하면 재시도한다.
 - Reaction과 Bookmark에는 count를 표시하지 않는다. Reply와 Repost는 선행 계약이 제공한 count만 실행 환경 locale의 표준 compact notation으로 표시하고, 수동 K/M 반올림·단위 승격·상한 알고리즘을 만들지 않는다.
 - production Post surface는 다섯 액션을 유지하고 대상 Post 자체의 액션 적격성과 현재 실행 주체·세션의 실행 권한을 분리한다. Content와 Reply Parent가 없고 Repost Source만 있는 Repost의 Reply·Repost처럼 대상 자체가 부적격하거나 인증된 실행 주체가 권한을 갖지 못한 액션은 disabled로 표시한다. guest에게 인증 전제가 없다는 이유만으로 대상 자체가 적격한 소셜 액션을 disabled로 만들지 않고 향후 인증 진입 계약으로 위임한다.
-- More의 공통 UI 경계는 callback-only로 유지하고, PROD-432의 production 통합에서 최소 팝업과 ADR 0015의 Post Share Reference를 복사하는 `링크 복사` 항목을 제공한다.
+- More의 공통 UI 경계는 callback-only로 유지하고, PROD-432의 production 통합에서 최소 팝업과 ADR 0015의 Post Share Reference를 복사하는 `링크 복사` 항목을 제공한다. Content 없는 Repost에서는 독립 상세 참조를 노출하지 않고 조회 가능한 직접 Repost Source의 공유 참조를 복사한다.
 - 공통 컴포넌트, production Post surface 배치, 실제 action 데이터 연결과 최종 통합 검증을 각각 PROD-433, PROD-434, PROD-432가 소유하도록 공유 구현 순서를 정의한다.
 - `docs/domain`·`docs/design`은 제품·디자인의 canonical source, Linear는 범위·소유권·의존성의 source, 이 OpenSpec은 상태·입력·접근성·통합 동작의 규범 계약으로 사용한다. Figma Action 노드는 시각 참고 자료로만 사용하고 수정하지 않는다.
 

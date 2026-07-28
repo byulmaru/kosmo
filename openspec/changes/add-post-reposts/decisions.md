@@ -115,17 +115,17 @@
 - Consequences: 성공 응답 latency에 짧은 Notification 시도가 포함되지만 source 결과는 보존된다. cleanup 실패 잔존 행은 visible predicate가 숨긴다.
 - Confirmation / Follow-up: 저장·cleanup 실패 주입, 반복 처리와 프로세스 간격의 hidden-row API 테스트를 수행한다.
 
-### Presentation, 목록 연결과 action을 독립 client slice로 유지한다
+### Presentation, renderer 연결과 action을 독립 client slice로 유지한다
 
 - Decision Date: 2026-07-21
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-389`, `PROD-414`, `PROD-415`, `PROD-453`
 - Status: Active
 - Context / Problem: presentation은 API 없이 먼저 검증할 수 있지만 production 목록 연결과 mutation action은 각기 다른 선행 조건을 가진다.
-- Decision Outcome: PROD-453은 production fragment shape를 따르는 typed fixture·Storybook·mock navigation으로 Repost/Quote presentation을 소유한다. 실제 관계 field를 읽는 Relay operation·fragment와 generated type은 PROD-415에 남긴다. PROD-415는 공용 Post list item fragment에 presentation을 연결하고, PROD-414는 별도 fragment-colocated Repost action과 mutation/cache 상태를 소유한다. 공통 Action Bar surface 조립은 포함하지 않는다.
+- Decision Outcome: PROD-453은 production fragment shape를 따르는 typed fixture·Storybook·mock navigation으로 Repost/Quote presentation을 소유한다. 실제 관계 field를 읽는 Relay operation·fragment와 generated type은 PROD-415에 남긴다. PROD-415는 공용 `PostListItem`과 현재 상세의 `PostLayout`에 presentation을 연결하고 Content 없는 Repost 상세를 direct Source canonical route로 대체하며, PROD-414는 별도 fragment-colocated Repost action과 mutation/cache 상태를 소유한다. 공통 Action Bar surface 조립은 포함하지 않는다.
 - Alternatives Considered: 하나의 목록 컴포넌트에서 presentation·action·route를 모두 구현, raw scalar props, raw fragment key cast. 모두 이슈 의존성과 Relay colocation 경계를 흐린다.
 - Consequences: presentation 결과는 목록 연결 전에도 독립 검증되며, 실제 surface 조립 전 action component만 완료될 수 있다.
-- Confirmation / Follow-up: Storybook 상태/interaction, Relay compile, Home/Profile integration과 PROD-432 제외 범위를 확인한다.
+- Confirmation / Follow-up: Storybook 상태/interaction, Relay compile, Home/Profile/Bookmark와 Post 상세 integration, Content 없는 Repost canonical replace와 PROD-432 제외 범위를 확인한다.
 
 ### Repost와 Quote는 Source의 시각 계층을 다르게 사용한다
 
@@ -134,10 +134,58 @@
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-389`, `PROD-415`, `PROD-453`
 - Status: Active
 - Context / Problem: presentation slice가 기존 Post의 Author·Content·생성 시각을 보존하면서 Repost Author와 direct Source, Quote Author와 Source preview를 구분해야 한다.
-- Decision Outcome: 순수 Repost(content 없음 + direct Source 있음 + Reply Parent 없음)는 Repost Author attribution 뒤에 direct Source를 primary presentation으로 표시한다. Quote와 Reply+Quote는 Quote Author·자체 Content·생성 시각 뒤에 direct Source를 compact bordered preview로 표시하고, 일반 Content Post도 기존 생성 시각 표시를 유지한다. Source preview의 Source Author와 Source Post affordance는 body link와 sibling으로 두고 자체 Action Bar를 두지 않는다. nullable Source Quote는 자체 Author·Content·생성 시각을 유지하고 preview/navigation만 생략한다. PROD-453은 story-only typed fixture adapter, internal presentation model과 mock link renderer를 소유하고 실제 Post/Source Relay field·generated type·navigation은 PROD-415에 남긴다.
+- Decision Outcome: 순수 Repost(content 없음 + direct Source 있음 + Reply Parent 없음)는 Repost Author의 canonical Profile Link attribution을 정확히 한 번 표시한 뒤 direct Source를 일반 Post와 같은 표준 목록 행 leaf로 표시한다. 이 경로에는 Source용 별도 full presentation·article·row border·renderer를 두지 않는다. 순수 Repost의 direct Source 자체가 Quote인 조합의 preview 정책은 2026-07-27 PROD-415 creator reply에 따라 이번 slice의 완료 조건에서 제외한다. Quote와 Reply+Quote는 Quote Author·자체 Content·생성 시각 뒤에 direct Source를 compact bordered preview로 표시하고, 일반 Content Post도 기존 생성 시각 표시를 유지한다. Quote Source preview의 Source Author와 Source Post affordance는 body link와 sibling으로 두고 자체 Action Bar를 두지 않는다. nullable Source Quote는 자체 Author·Content·생성 시각을 유지하고 preview/navigation만 생략한다. PROD-453은 story-only typed fixture adapter와 internal presentation model을 소유했고 fixture-only 단계에서 mock navigation을 검증했다. 실제 Post/Source Relay field·generated type·production navigation은 PROD-415가 통합한다.
 - Alternatives Considered: Source를 바깥 Post의 Content처럼 평탄화하는 방식, Source body 전체를 하나의 Link로 감싸는 방식, 일반 Post와 Quote의 outer 생성 시각을 parent integration까지 생략하는 방식. 각각 관계 역할을 흐리거나 body의 외부 Link와 중첩되고 기존 Post 표시 회귀를 만든다.
-- Consequences: presentation component는 production 연결 전에도 일반 Post 회귀와 Repost·Quote 시각 계층을 독립 검증하며, PROD-415는 기존 canonical Link를 공급하되 이 표시 계층을 재정의하지 않는다.
-- Confirmation / Follow-up: Storybook에서 일반 Post와 Quote의 outer 생성 시각, Repost·Source Author와 Source Post target, nullable Source와 긴 내용·화면 폭을 검증하고 PROD-415에서 실제 Home/Profile fragment·navigation을 통합 검증한다.
+- Consequences: `PostListItem`은 ordinary Post와 pure Repost Source에 같은 비재귀 표준 행 leaf를 사용하고 article·row border를 한 번만 소유한다. Quote presentation은 compact bordered preview 경계를 유지한다. Repost-of-Quote의 preview 유지 여부는 이 결정에서 고정하지 않는다.
+- Confirmation / Follow-up: Storybook에서 pure Repost attribution 1회, Repost/Source Author 구분, ordinary와 Source의 동일 표준 행, 단일 article·border, Quote의 outer 생성 시각, Source Post target, nullable Source와 긴 내용·화면 폭을 production Relay wiring으로 검증한다.
+
+### 중첩 Source는 direct Source 한 단계까지만 full presentation한다
+
+- Decision Date: 2026-07-25
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-389`, `PROD-415`
+- Status: Active
+- Context / Problem: direct Source 자체가 Quote이면 저장된 다음 Source 관계를 보존하면서도 목록에서 full Source preview가 무제한으로 재귀하는 것을 막아야 한다.
+- Decision Outcome: direct Source의 Author·Content·생성 시각은 첫 번째 full presentation으로 표시한다. Source Author는 canonical Profile route로 이동하고 direct Source의 생성 시각과 본문 영역은 direct Source의 canonical Post route로 이동한다. 두 번째 Source의 Author·Content·생성 시각과 별도 placeholder·CTA는 표시하지 않고 presentation component를 재귀 호출하지 않는다.
+- Alternatives Considered: 두 번째 Source route를 별도 `인용한 게시글 보기` placeholder로 제공하는 방식, 다음 Source를 최상위 Source로 평탄화하는 방식, 모든 Source를 full presentation으로 재귀 표시하는 방식. 별도 placeholder는 이미 표시된 direct Source 이동과 중복되는 CTA를 만들고, 평탄화는 저장된 direct relation을 잃으며, 재귀 표시는 목록 깊이와 fragment shape를 무제한으로 확장한다.
+- Consequences: production fragment는 direct Source presentation field까지만 읽는 유한한 shape를 사용하며 두 번째 Source를 위한 client field나 이동 UI를 만들지 않는다.
+- Confirmation / Follow-up: Home/Profile/Bookmark와 Post 상세 Relay 경로, Storybook에서 Quote-of-Quote cutoff, direct Source 생성 시각·본문의 정확한 canonical route 이동, 두 번째 Source Content와 CTA 미노출, 외부 body Link와의 비중첩을 검증한다. 순수 Repost의 direct Source가 Quote인 조합은 후속에서 별도 결정한다.
+
+### 각 Post renderer가 direct Source를 소유하고 순수 Repost 상세은 Source로 대체한다
+
+- Decision Date: 2026-07-27
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/post.md`, `PROD-415`, `PROD-422`
+- Status: Active
+- Context / Problem: `PostDetailThread`가 바깥 Post renderer 뒤에 Source `PostListItem`을 추가하면 Source를 이미 소유한 목록 renderer와 중복되고, 현재 상세 Post만 별도 Source 구성이 필요해 renderer별 동작이 갈라진다. Content 없는 Repost는 표시할 자체 Content가 없어 독립 상세 surface와 공유 참조가 Source 이동을 중복한다.
+- Decision Outcome: Home·Profile·Bookmark 및 상세 thread의 조상·하위 Reply는 `PostListItem`이, 현재 상세 Post는 `PostLayout`이 자신의 nullable direct Source를 소유한다. Quote·Reply+Quote의 preview는 `PostBody` 아래 테두리 있는 sibling으로 정확히 한 번 표시하고 direct Source 한 단계에서 멈춘다. Content 없는 Repost의 `PostListItem`은 Repost Author Profile Link attribution 뒤 direct Source를 ordinary Post와 같은 비재귀 표준 목록 행 leaf로 표시하며 outer article·row border를 한 번만 소유한다. 순수 Repost의 direct Source 자체가 Quote인 조합은 이번 slice에서 별도 preview 계약을 추가하지 않는다. `PostDetailThread`는 Source를 선택·운반·추가 렌더링하지 않는다. thread connector segment는 목록형 48px avatar와 현재 상세 40px avatar의 위·아래에서 각각 4px 떨어지고 둥근 끝을 사용하며, 기존 row border는 유지한다. Content 없는 Repost 상세 진입은 조회 가능한 direct Source의 canonical Post route로 `replace`하며 Repost 자체 surface·history entry·공유 참조를 남기지 않는다.
+- Alternatives Considered: Thread가 Source `PostListItem` sibling을 조립하는 방식, `PostSourcePresentationView` 전체를 중첩하는 방식, contentless Repost 자체 상세을 유지하는 방식, Source route로 `push`하는 방식. Thread 조립은 renderer-owned Source와 중복되고 전체 중첩은 바깥 Author·Content와 Link를 복제하며, 별도 상세과 `push`는 자체 Content가 없는 중간 URL과 history entry를 만든다.
+- Consequences: Quote 목록·상세은 같은 direct Source preview 동작을 유지하고 pure Repost 목록은 ordinary 표준 행을 재사용한다. Post 상세 query는 renderer fragment만 spread하고 Source carrier를 제거하며, 순수 Repost redirect 동안 thread를 렌더하지 않는다. Source가 unavailable하면 기존 API eligibility로 Repost 자체가 조회되지 않으므로 숨겨진 경로를 추론하지 않는다.
+- Confirmation / Follow-up: 현재·조상·하위 Reply Quote의 Source가 정확히 한 번만 표시되고 다음 Source depth와 CTA가 없는지, pure Repost가 attribution 뒤 동일 표준 행·단일 article·단일 border를 갖는지, Source null Quote가 자체 Content를 유지하는지, Content 없는 Repost 경로가 Source canonical route로 replace되는지, 기존 thread 순서·pagination·오류 복구가 유지되는지 검증한다. production Storybook은 48px 목록형 avatar와 40px 현재 avatar 모두 connector 위·아래 간격이 4px이며 끝이 둥글고 기존 row border가 유지되는지도 검증한다.
+
+### Post Source presentation이 canonical navigation을 직접 소유한다
+
+- Decision Date: 2026-07-27
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-415`, `PROD-453`, PR #357 review thread, 2026-07-27 사용자 확인
+- Status: Active
+- Context / Problem: PROD-453의 fixture-only 단계에서는 Storybook mock target을 검증하기 위해 replaceable link renderer와 navigation callback을 사용했지만 production integration 뒤에는 `PostListItem`과 `PostLayout`이 같은 canonical 목적지 mapping을 중복 조립한다. production의 두 번째 navigation 구현은 없으며 caller가 renderer나 callback을 대체하면 필수 navigation을 제거할 수 있다.
+- Decision Outcome: `PostSourcePresentationView`와 `PostSourcePreview`는 presentation data의 `relativeHandle`과 Post ID로 Author Profile·Post detail·Source Profile·Source Post href를 직접 만들고 고정 Expo Router Link를 렌더링한다. Post·Source body shortcut은 같은 파일의 non-accessible Pressable이 내부 `router.push()`로 이동한다. `PostPresentationLinkRenderer`, target enum, `renderLink`, `onPostPress`, `onSourcePostPress` public API는 제거한다. `PostListItem`의 비재귀 표준 목록 행 leaf도 own Post fragment에서 canonical navigation을 직접 만들며 ordinary Post와 pure Repost Source에 같은 wiring을 사용한다. 표준 행의 생성 시각은 keyboard·screen reader·pointer가 사용하는 최소 44px canonical Post Link이고, 본문 행은 내부 외부 Link와 중첩되지 않는 pointer·touch shortcut이다. Storybook은 공용 Router decorator에서 실제 pathname 변화를 검증한다.
+- Alternatives Considered: generic renderer seam을 유지하고 production wrapper만 공용화하는 방식은 두 번째 runtime 구현 없이 Storybook을 위해 replaceable seam과 wrapper를 함께 유지한다. caller별 renderer를 유지하는 방식은 mapping 중복과 필수 navigation 우회 가능성을 남긴다. body 전체를 접근 가능한 Link로 만드는 방식은 body 내부 외부 Link와 nested interactive semantics를 만든다.
+- Consequences: presentation과 표준 행 leaf는 Expo Router에 직접 의존하지만 production과 Storybook이 같은 navigation wiring을 실행한다. caller는 Relay data와 layout만 소유하며 navigation을 생략하거나 다른 target으로 바꿀 수 없다. 목적지별 sibling 구조, bordered padding 비활성, current-detail self-navigation 부재는 유지한다.
+- Confirmation / Follow-up: Storybook에서 Repost/Quote/Source Author와 Post의 실제 pathname, ordinary·pure Repost Source 표준 행의 44px timestamp Link와 pointer·touch body shortcut, Quote·Source body의 분리, 외부 Link 뒤 pathname 불변, 빈 preview padding 비활성, nested interactive 부재와 현재 상세 Source navigation을 검증한다.
+
+### Post와 Source preview의 이동 영역을 목적지별로 분리한다
+
+- Decision Date: 2026-07-26
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-415`, 2026-07-26 사용자 확인
+- Status: Active
+- Context / Problem: Quote 자체 Post, bordered direct Source preview와 body의 외부 Link는 서로 다른 목적지를 가진다. preview 전체나 body 전체를 하나의 Link로 만들면 Source Author의 Profile Link 또는 body의 외부 Link가 중첩되며, pointer 전용 body 이동을 실제 Link처럼 접근성 tree에 노출하면 같은 중첩 interactive 구조를 다시 만든다.
+- Decision Outcome: bordered Source preview는 시각적 그룹 경계이며 하나의 Link가 아니다. Source Avatar·Author는 canonical Profile Link, Source 생성 시각은 keyboard·screen reader·pointer가 사용하는 최소 44px canonical Post Link다. Source 본문 행은 pointer·touch에서 같은 Source Post로 이동하는 넓은 shortcut이지만 별도 accessibility element나 keyboard focus target으로 만들지 않는다. 본문 안 외부 Link는 event propagation을 차단하고 자신의 외부 URL로 이동하며, border의 빈 padding에는 이동 동작을 두지 않는다. Home·Profile·Bookmark와 상세 thread의 조상·하위 Reply를 렌더링하는 `PostListItem`에서는 Quote 자체 생성 시각이 Quote Post의 canonical Link를 유지하고 Quote 자체 본문 행도 같은 원칙의 pointer·touch shortcut으로 Quote Post로 이동한다. 이미 자기 canonical route인 현재 상세 `PostLayout`에는 self Link나 동일 URL history entry를 추가하지 않고 direct Source 이동만 제공한다. 이 구분은 style이나 layout을 바꾸지 않는다.
+- Alternatives Considered: bordered preview 전체를 Source Post Link로 만드는 방식은 Source Author Profile과 외부 body Link를 중첩시킨다. body 전체를 독립된 접근 가능한 Link로 만드는 방식도 외부 body Link와 nested interactive semantics를 만들며, link가 없는 text run만 각각 Link로 분할하는 방식은 하나의 본문에 중복 focus target을 늘린다. Source Author와 외부 Link를 제거하고 preview 전체를 단일 Link로 만드는 방식은 승인된 목적지를 잃는다.
+- Consequences: keyboard·screen reader 사용자는 Source 생성 시각의 `원문 게시글 보기` Link로 Source Post에 접근하고, pointer·touch 사용자는 생성 시각 또는 본문 행을 사용할 수 있다. Source Author Profile과 body 외부 Link는 독립 목적지를 유지한다. `PostListItem` 회귀 검증은 Quote 자체 본문 shortcut이 바깥 Quote Post로 이동하고 Source Post로 잘못 이동하지 않는지 확인해야 한다. 현재 상세은 self navigation을 만들지 않는다.
+- Confirmation / Follow-up: Storybook에서 `PostListItem`의 Quote 자체 본문, 공용 preview의 Source 생성 시각·본문·Author와 외부 body Link의 목적지를 각각 검증하고 `a a` 및 `[role="link"] [role="link"]`가 없음을 확인한다. 현재 상세 `PostLayout`은 direct Source navigation만 검증한다. 시각 변화가 없으므로 별도 visual re-review는 요구하지 않는다.
 
 ### 부모 change가 전체 계약과 archive를 소유한다
 
@@ -158,10 +206,10 @@
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-401`
 - Status: Active
 - Context / Problem: Source가 없거나 조회 불가능한 경우에는 존재와 비공개 상태를 숨겨야 하지만, 호출자가 이미 조회할 수 있는 Content 없는 Repost, Mentioned Profiles와 타인 Followers Only Source는 존재를 숨겨도 입력을 수정할 근거가 부족하다.
-- Decision Outcome: 누락·Tombstone·viewer 기준 조회 불가 Source는 `NOT_FOUND`로 처리한다. 호출자가 조회할 수 있지만 구조 또는 Repost visibility 정책상 허용되지 않는 Source는 `VALIDATION`과 `sourceId` field로 처리한다. Account/Profile membership 또는 actor 상태 실패는 `PERMISSION_DENIED`로 처리한다.
+- Decision Outcome: 누락·Tombstone·viewer 기준 조회 불가 Source는 `NOT_FOUND`로 처리한다. 호출자가 조회할 수 있지만 구조 또는 Repost visibility 정책상 허용되지 않는 Source는 `VALIDATION`과 `sourceId` field로 처리한다. `usingProfile`의 Account/Profile membership 또는 selected Profile 가용성 검증 실패는 `PERMISSION_DENIED`로 처리한다.
 - Alternatives Considered: 모든 허용되지 않는 Source를 `NOT_FOUND`로 통일하는 방식은 비공개 정보 보호는 단순하지만 이미 조회 권한이 있는 입력에도 수정 가능한 field 오류를 제공하지 못한다. 세부 원인별 error type을 늘리는 방식은 현재 GraphQL error 계약에 비해 과도하다.
 - Consequences: core action은 viewer 기준 Source 조회 가능성을 먼저 확인한 뒤 Repost 전용 구조·visibility 정책을 검증해야 하며, GraphQL은 기존 domain error mapping을 그대로 사용한다.
-- Confirmation / Follow-up: 누락·Tombstone·비공개 Source의 `NOT_FOUND`, 조회 가능한 허용 불가 Source의 `VALIDATION(sourceId)`, actor 실패의 `PERMISSION_DENIED`를 core/API integration test로 검증한다.
+- Confirmation / Follow-up: 누락·Tombstone·비공개 Source의 `NOT_FOUND`, 조회 가능한 허용 불가 Source의 `VALIDATION(sourceId)`, 진입점 권한 실패의 `PERMISSION_DENIED`를 core/API integration test로 검증한다.
 
 ## Remaining Decisions
 
@@ -169,4 +217,4 @@
 
 ## Superseded Decisions
 
-- 없음.
+- 2026-07-24 `Repost와 Quote는 Source의 시각 계층을 다르게 사용한다` 결정 중 Storybook mock link renderer를 production integration에도 유지하고 caller wrapper가 canonical Link를 공급한다는 구현 경계는 2026-07-27 `Post Source presentation이 canonical navigation을 직접 소유한다` 결정으로 대체한다. typed fixture와 Repost·Quote 시각 계층 소유권은 유지한다.

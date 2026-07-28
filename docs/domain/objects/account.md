@@ -26,6 +26,7 @@ Account가 아니라 Profile이다.
 | 관계               | 대상                                                          | 방향                  | cardinality | 존재 조건 | 조회 조건                | 조회 권한                              |
 | ------------------ | ------------------------------------------------------------- | --------------------- | ----------- | --------- | ------------------------ | -------------------------------------- |
 | Profile membership | [Account-Profile Membership](./account-profile-membership.md) | Account -> Membership | 1 -> 0..N   | 항상      | 대상 Account의 운영 관계 | `Account.Self` 또는 `Account.Operator` |
+| Session            | [Session](./session.md)                                       | Account <- Session    | 1 <- 0..N   | 항상      | 현재 Session 내부 조회   | `Session.Self`                         |
 
 ## 행동
 
@@ -36,8 +37,8 @@ Account가 아니라 Profile이다.
 | Account 정지 해제 | 운영자 Account | Account   | 사유   | `Account.Active`, `Account.Operator` | 대상 Account State가 Suspended다                                                       | Account State가 Active가 된다                             |
 
 Deleted Account에는 다른 상태 전이를 적용하지 않는다.
-Suspended Account는 `Account.Active`가 필요한 행동을 수행할 수 없지만 Account 삭제와 Account 대상 Operational
-Notification 읽음 처리는 요청할 수 있다.
+Suspended Account는 `Account.Active`가 필요한 행동을 수행할 수 없지만 Account 삭제, 현재 Session 폐기와
+Account 대상 Operational Notification 읽음 처리는 요청할 수 있다.
 
 ## 권한
 

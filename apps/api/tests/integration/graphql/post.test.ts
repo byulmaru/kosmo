@@ -18,9 +18,9 @@ import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
+import type { encodeGlobalId as EncodeGlobalId } from '@kosmo/core/global-id';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
 import type { yoga as YogaRouter } from '../../../src/graphql';
-import type { encodeGlobalId as EncodeGlobalId } from '../../../src/graphql/global-id';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -68,7 +68,7 @@ describe('Post Reply GraphQL 경계', () => {
 
     ({ deriveContext } = await import('../../../src/context'));
     ({ yoga } = await import('../../../src/graphql'));
-    ({ encodeGlobalId } = await import('../../../src/graphql/global-id'));
+    ({ encodeGlobalId } = await import('@kosmo/core/global-id'));
 
     app = new Hono<Env>();
     app.use('*', async (c, next) => {
@@ -226,7 +226,7 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(await db.$count(Posts), 0);
   });
 
-  test('비로그인·비활성 Account·사용 불가 Local actor는 PERMISSION_DENIED로 거부한다', async () => {
+  test('usingProfile context는 사용할 수 없는 actor를 거부하고 Instance 종류를 제한하지 않는다', async () => {
     const parentAuthor = await createProfile('actor-check-parent');
     const parent = await createContentPost(parentAuthor.id);
     const remoteInstance = await createInstance(InstanceKind.ACTIVITYPUB, InstanceState.ACTIVE);
@@ -234,17 +234,19 @@ describe('Post Reply GraphQL 경계', () => {
       InstanceKind.LOCAL,
       InstanceState.UNRESPONSIVE,
     );
-    const actors = await Promise.all([
+    const unavailableActors = await Promise.all([
       createAuthenticatedSession({ activeProfile: false }),
       createAuthenticatedSession({ accountState: AccountState.DISABLED }),
       createAuthenticatedSession({ member: false }),
       createAuthenticatedSession({ profileState: ProfileState.DISABLED }),
+    ]);
+    const availableActors = await Promise.all([
       createAuthenticatedSession({ instanceId: remoteInstance.id }),
       createAuthenticatedSession({ instanceId: unresponsiveLocalInstance.id }),
     ]);
     const before = await db.$count(Posts);
 
-    for (const token of [undefined, ...actors.map(({ token }) => token)]) {
+    for (const token of [undefined, ...unavailableActors.map(({ token }) => token)]) {
       const result = await requestCreatePost(
         {
           bodyText: 'unauthorized reply',
@@ -256,7 +258,19 @@ describe('Post Reply GraphQL 경계', () => {
       assert.equal(result.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
     }
 
-    assert.equal(await db.$count(Posts), before);
+    for (const { token } of availableActors) {
+      const result = await requestCreatePost(
+        {
+          bodyText: 'context-validated reply',
+          replyParentId: encodeGlobalId('Post', parent.id),
+          visibility: PostVisibility.PUBLIC,
+        },
+        token,
+      );
+      assertNoGraphQLErrors(result);
+    }
+
+    assert.equal(await db.$count(Posts), before + availableActors.length);
   });
   test('일반 Reply와 Reply+Quote는 저장된 직접 Parent를 기존 Post Node로 반환한다', async () => {
     const author = await createProfile('reply-author');

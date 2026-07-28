@@ -1,15 +1,87 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { encodeGlobalId } from '@kosmo/core/global-id';
 import { graphql, isInputObjectType, isInterfaceType, isObjectType, isUnionType } from 'graphql';
-import { encodeGlobalId } from './global-id';
 import { notificationNodeType } from './resolvers/notification/ref';
 import { schema } from './schema';
+
+test('exposes upload URL issuance with a minimal Media state contract', () => {
+  const mutation = schema.getMutationType();
+  const payload = schema.getType('IssueMediaUploadUrlPayload');
+  const media = schema.getType('Media');
+
+  const field = mutation?.getFields().issueMediaUploadUrl;
+  assert.equal(String(field?.type), 'IssueMediaUploadUrlPayload!');
+  assert.deepEqual(field?.args, []);
+
+  assert.ok(isObjectType(payload));
+  assert.deepEqual(Object.keys(payload.getFields()).sort(), ['expiresAt', 'media', 'uploadUrl']);
+  assert.equal(String(payload.getFields().media.type), 'Media!');
+  assert.equal(String(payload.getFields().uploadUrl.type), 'String!');
+  assert.equal(String(payload.getFields().expiresAt.type), 'DateTime!');
+
+  assert.ok(isObjectType(media));
+  assert.deepEqual(Object.keys(media.getFields()).sort(), ['id', 'readyAt', 'state']);
+  assert.equal(String(media.getFields().readyAt.type), 'DateTime');
+  assert.equal(String(media.getFields().state.type), 'MediaState!');
+  assert.equal(media.getFields().storageReference, undefined);
+});
+
+test('exposes idempotent Local Media upload completion without a storage reference', () => {
+  const mutation = schema.getMutationType();
+  const field = mutation?.getFields().completeMediaUpload;
+  const input = schema.getType('CompleteMediaUploadInput');
+  const payload = schema.getType('CompleteMediaUploadPayload');
+
+  assert.equal(String(field?.type), 'CompleteMediaUploadPayload!');
+  assert.equal(field?.args[0]?.name, 'input');
+  assert.equal(String(field?.args[0]?.type), 'CompleteMediaUploadInput!');
+
+  assert.ok(isInputObjectType(input));
+  assert.deepEqual(Object.keys(input.getFields()), ['id']);
+  assert.equal(String(input.getFields().id.type), 'ID!');
+
+  assert.ok(isObjectType(payload));
+  assert.deepEqual(Object.keys(payload.getFields()), ['media']);
+  assert.equal(String(payload.getFields().media.type), 'Media!');
+  assert.equal(payload.getFields().storageReference, undefined);
+});
+
+test('requires an authenticated selected Profile for Media upload mutations', async () => {
+  const mediaId = encodeGlobalId('Media', '00000000-0000-8000-8000-000000000001');
+  for (const source of [
+    `mutation { issueMediaUploadUrl { uploadUrl } }`,
+    `mutation { completeMediaUpload(input: { id: "${mediaId}" }) { media { id } } }`,
+  ]) {
+    for (const contextValue of [
+      {},
+      { session: { id: 'session', accountId: 'account', profileId: null } },
+    ]) {
+      const result = await graphql({ schema, source, contextValue });
+
+      assert.equal(result.data, null);
+      assert.match(result.errors?.[0]?.message ?? '', /Not authorized/);
+    }
+  }
+});
 
 test('Post는 nullable Repost Source를 제공한다', () => {
   const post = schema.getType('Post');
 
   assert.ok(isObjectType(post));
   assert.equal(String(post.getFields().repostSource?.type), 'Post');
+});
+
+test('exposes partial Profile handle search without changing exact lookup', () => {
+  const query = schema.getQueryType();
+
+  assert.ok(query);
+  assert.equal(String(query.getFields().profileByHandle?.type), 'Profile');
+  assert.equal(String(query.getFields().searchProfiles?.type), 'ProfileConnection!');
+  assert.deepEqual(
+    query.getFields().searchProfiles?.args.map(({ name }) => name),
+    ['after', 'before', 'first', 'last', 'query'],
+  );
 });
 
 test('exposes viewer-independent Repost count and selected Profile Repost on Post', () => {
@@ -302,6 +374,7 @@ test('exposes Notification interface and concrete source types without raw stora
   const notification = schema.getType('Notification');
   const followNotification = schema.getType('FollowNotification');
   const reactionNotification = schema.getType('ReactionNotification');
+  const replyNotification = schema.getType('ReplyNotification');
   const repostNotification = schema.getType('RepostNotification');
   const profile = schema.getType('Profile');
 
@@ -330,6 +403,17 @@ test('exposes Notification interface and concrete source types without raw stora
   assert.equal(reactionNotification.getFields().sourceId, undefined);
   assert.equal(reactionNotification.getFields().data, undefined);
 
+  assert.ok(isObjectType(replyNotification));
+  assert.deepEqual(
+    replyNotification.getInterfaces().map(({ name }) => name),
+    ['Node', 'Notification'],
+  );
+  assert.equal(String(replyNotification.getFields().profile.type), 'Profile!');
+  assert.equal(String(replyNotification.getFields().post.type), 'Post!');
+  assert.equal(replyNotification.getFields().kind, undefined);
+  assert.equal(replyNotification.getFields().sourceId, undefined);
+  assert.equal(replyNotification.getFields().data, undefined);
+
   assert.ok(isObjectType(repostNotification));
   assert.deepEqual(
     repostNotification.getInterfaces().map(({ name }) => name),
@@ -348,6 +432,7 @@ test('exposes Notification interface and concrete source types without raw stora
   );
   assert.equal(notificationNodeType('FOLLOW'), 'FollowNotification');
   assert.equal(notificationNodeType('REACTION'), 'ReactionNotification');
+  assert.equal(notificationNodeType('REPLY'), 'ReplyNotification');
   assert.equal(notificationNodeType('REPOST'), 'RepostNotification');
   assert.equal(notificationNodeType('UNSUPPORTED'), null);
   assert.equal(String(profile.getFields().notifications?.type), 'NotificationConnection!');
@@ -376,6 +461,18 @@ test('exposes the typed Notification Read mutation payload', () => {
   assert.ok(isObjectType(payload));
   assert.equal(String(payload.getFields().notification.type), 'Notification!');
   assert.equal(String(payload.getFields().recipientProfile.type), 'Profile!');
+});
+
+test('exposes current-session revoke without a target input', () => {
+  const mutation = schema.getMutationType();
+  const payload = schema.getType('RevokeCurrentSessionPayload');
+  const field = mutation?.getFields().revokeCurrentSession;
+
+  assert.equal(String(field?.type), 'RevokeCurrentSessionPayload!');
+  assert.deepEqual(field?.args, []);
+  assert.ok(isObjectType(payload));
+  assert.deepEqual(Object.keys(payload.getFields()), ['completed']);
+  assert.equal(String(payload.getFields().completed.type), 'Boolean!');
 });
 
 test('exposes the private Bookmark Node and Profile connection contract', () => {

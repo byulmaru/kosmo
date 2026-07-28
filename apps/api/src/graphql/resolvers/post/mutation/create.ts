@@ -1,8 +1,8 @@
 import { db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
-import { InstanceKind, InstanceState, PostVisibility } from '@kosmo/core/enums';
-import { NotFoundError, PermissionDeniedError } from '@kosmo/core/error';
+import { PostVisibility } from '@kosmo/core/enums';
+import { NotFoundError } from '@kosmo/core/error';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
-import { createPost } from '@kosmo/core/services';
+import { createPost, createReplyNotificationBestEffort } from '@kosmo/core/services';
 import { postBodyTextSchema } from '@kosmo/core/validation';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
@@ -21,25 +21,8 @@ builder.mutationField('createPost', (t) =>
       replyParentId: t.input.globalID({ for: Post, required: false }),
       visibility: t.input.field({ type: PostVisibility }),
     },
-    resolve: async (_, { input }, ctx) =>
-      db.transaction(async (tx) => {
-        const instance = await tx
-          .select({ id: Instances.id })
-          .from(Profiles)
-          .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-          .where(
-            and(
-              eq(Profiles.id, ctx.session.profileId),
-              eq(Instances.kind, InstanceKind.LOCAL),
-              eq(Instances.state, InstanceState.ACTIVE),
-            ),
-          )
-          .limit(1)
-          .then(first);
-        if (!instance) {
-          throw new PermissionDeniedError();
-        }
-
+    resolve: async (_, { input }, ctx) => {
+      const result = await db.transaction(async (tx) => {
         const replyParentId = input.replyParentId?.id;
         if (replyParentId) {
           const parent = await tx
@@ -67,6 +50,12 @@ builder.mutationField('createPost', (t) =>
         );
 
         return { post };
-      }),
+      });
+
+      if (input.replyParentId) {
+        await createReplyNotificationBestEffort(result.post.id);
+      }
+      return result;
+    },
   }),
 );

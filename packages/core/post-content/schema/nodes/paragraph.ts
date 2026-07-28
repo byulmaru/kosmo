@@ -5,4 +5,5 @@ export const paragraphNodeSpec = {
   group: 'block',
   marks: 'link',
   parseDOM: [{ tag: 'p' }],
+  toDOM: () => ['p', 0],
 } satisfies NodeSpec;

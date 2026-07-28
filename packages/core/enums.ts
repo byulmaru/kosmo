@@ -1,6 +1,5 @@
 export const AccountProfileRole = {
   OWNER: 'OWNER',
-  ADMIN: 'ADMIN',
   MEMBER: 'MEMBER',
 } as const;
 export type AccountProfileRole = keyof typeof AccountProfileRole;
@@ -58,9 +57,16 @@ export const MediaSource = {
 } as const;
 export type MediaSource = keyof typeof MediaSource;
 
+export const MediaState = {
+  UPLOADING: 'UPLOADING',
+  READY: 'READY',
+} as const;
+export type MediaState = keyof typeof MediaState;
+
 export const NotificationKind = {
   FOLLOW: 'FOLLOW',
   REACTION: 'REACTION',
+  REPLY: 'REPLY',
   REPOST: 'REPOST',
 } as const;
 export type NotificationKind = keyof typeof NotificationKind;

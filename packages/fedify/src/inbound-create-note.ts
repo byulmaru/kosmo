@@ -3,30 +3,40 @@ import '@kosmo/core/polyfill';
 import { PUBLIC_COLLECTION } from '@fedify/vocab';
 import { projectRemoteNoteContent } from '@kosmo/core/activitypub-note-content/server';
 import { PostVisibility } from '@kosmo/core/enums';
+import { NotFoundError, ValidationError } from '@kosmo/core/error';
 import { createPost } from '@kosmo/core/services';
-import { uniqueHref } from './activitypub-uri';
+import { findPostByActivityPubUri } from './activitypub-post-uri';
+import { isHttpUri, uniqueHref } from './activitypub-uri';
+import type { InboxContext } from '@fedify/fedify';
 import type { Note } from '@fedify/vocab';
 
-const hasReplyTarget = async (note: Note): Promise<boolean> => {
-  if (note.replyTargetIds.length > 0) {
-    return true;
+const resolveReplyParentId = async (
+  context: InboxContext<void>,
+  note: Note,
+): Promise<string | undefined> => {
+  const replyTargetHref = uniqueHref(note.replyTargetIds);
+  if (!replyTargetHref) {
+    return undefined;
   }
 
-  try {
-    return (await note.getReplyTarget()) !== null;
-  } catch {
-    return true;
+  const replyTarget = new URL(replyTargetHref);
+  if (!isHttpUri(replyTarget)) {
+    return undefined;
   }
+
+  return findPostByActivityPubUri(context, replyTarget);
 };
 
 export const handleInboundCreateNote = async ({
   actorUri,
+  context,
   note,
   objectUri,
   profileId,
   receivedAt,
 }: {
   actorUri: string;
+  context: InboxContext<void>;
   note: Note;
   objectUri: string;
   profileId: string;
@@ -37,9 +47,11 @@ export const handleInboundCreateNote = async ({
   }
 
   const attributionUri = uniqueHref(note.attributionIds);
-  if (attributionUri !== actorUri || (await hasReplyTarget(note))) {
+  if (attributionUri !== actorUri) {
     return;
   }
+
+  const replyParentId = await resolveReplyParentId(context, note);
 
   const visibility = note.toIds.some((uri) => uri.href === PUBLIC_COLLECTION.href)
     ? PostVisibility.PUBLIC
@@ -64,7 +76,7 @@ export const handleInboundCreateNote = async ({
     throw error;
   }
 
-  await createPost({
+  const input = {
     document,
     objectUri,
     origin: 'ACTIVITYPUB',
@@ -72,5 +84,21 @@ export const handleInboundCreateNote = async ({
     publishedAt: note.published,
     receivedAt,
     visibility,
-  });
+  } satisfies Parameters<typeof createPost>[0];
+
+  try {
+    await createPost(replyParentId ? { ...input, replyParentId } : input);
+  } catch (error) {
+    if (
+      !replyParentId ||
+      !(
+        error instanceof NotFoundError ||
+        (error instanceof ValidationError && error.field === 'replyParentId')
+      )
+    ) {
+      throw error;
+    }
+
+    await createPost(input);
+  }
 };

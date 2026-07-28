@@ -108,6 +108,13 @@ Mutation도 필드별로 나눈다.
 - domain error는 result union으로 반환하지 않고 GraphQL `errors[]` 경로로 전달한다.
 - Zod/Pothos validation 실패는 builder의 `validation.validationError`가 `ValidationError`로 변환한다.
 - 인증 scope 부족은 resolver에서 직접 던지지 않고 `t.withAuth({ login: true })` 같은 auth 설정으로 처리한다.
+- `login`과 `usingProfile` resolver는 production context가 이미 검증한 Active Account, selected Profile
+  membership과 조회 가능 상태를 별도 actor query로 반복 검증하지 않는다. canonical action이 추가 조건을
+  명시할 때만 그 조건을 조회한다. `Media.Source=Local`처럼 생성 결과의 source가 Local이라는 사실만으로
+  selected Profile의 Instance 종류를 Local로 제한하지 않는다.
+- resolver에서 환경 변수 묶음을 별도 Zod object로 다시 파싱하지 않는다. 중앙 env 모듈이 없는 현재
+  runtime에서는 필요한 값을 직접 읽고 필수값 부재만 진입점에서 실패시키며, URL처럼 실제 사용 시 생성자가
+  검증하는 값은 중복 schema를 두지 않는다.
 - scope-auth 기본 unauthorized error는 사용하지 않고 builder의 `scopeAuth.unauthorizedError`에서 `PermissionDeniedError`로 변환한다.
 - resolver 안에서는 대상 리소스에 대한 권한 부족만 `PermissionDeniedError`로 던진다.
 - 의도적으로 후속 정책으로 미룬 state나 분기는 `TODO:` 주석으로 남겨 검색 가능하게 한다.
@@ -192,6 +199,9 @@ GraphQL enum은 `apps/api/src/graphql/enums.ts`에서 전역 등록한다.
 
 ## Client And Spec Sync
 
+- Pothos resolver/object/input/payload 변경으로 런타임 GraphQL schema가 바뀌면 같은 변경에서
+  `apps/api/schema.graphql`도 갱신한다. `apps/app/relay.config.json`은 이 파일을 Relay schema source로
+  사용하므로 런타임 등록만으로 client contract가 동기화됐다고 보지 않는다.
 - GraphQL operation은 실제 사용하는 React Native `.tsx` 파일에 Relay `graphql` tag로 colocate한다. 프론트 fragment, connection, actor environment 세부 규칙은 `memory/frontend-react-native.md`를 따른다.
 - GraphQL mutation error UI 분기가 여러 컴포넌트에서 반복되면 공통 helper나 error handling boundary로 모을 후보로 본다.
 - API 구현과 OpenSpec은 root field, object field, payload, error type, connection 단위가 서로 맞아야 한다.

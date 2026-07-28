@@ -16,6 +16,7 @@ import {
   post,
   profile,
   reactionNotification,
+  replyNotification,
   repostNotification,
 } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
@@ -60,6 +61,11 @@ const contentProfile = notificationsProfile(
       post: post({ id: 'notification-related-post', profile: notificationRecipient }),
       profile: unreadFollower,
       type: '🎉',
+    }),
+    replyNotification({
+      id: 'notification-reply',
+      post: post({ id: 'notification-reply-post', profile: notificationRecipient }),
+      profile: unreadFollower,
     }),
     repostNotification({
       id: 'notification-repost',
@@ -249,6 +255,10 @@ export const StatesAndFollowItems: Story = {
     expect(
       canvas.getByRole('link', { name: /별빛 여행자님이 🎉 반응을 남겼습니다/ }),
     ).toHaveAttribute('href', '/@recipient/notification-related-post');
+    expect(canvas.getByRole('link', { name: /별빛 여행자님이 답글을 남겼습니다/ })).toHaveAttribute(
+      'href',
+      '/@recipient/notification-reply-post',
+    );
     expect(
       canvas.getByRole('link', { name: /은하 기록자님이 게시물을 재게시했습니다/ }),
     ).toHaveAttribute('href', '/@recipient/notification-repost-related-post');

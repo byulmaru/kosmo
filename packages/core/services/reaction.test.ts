@@ -11,7 +11,7 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '../enums';
-import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
+import { NotFoundError, ValidationError } from '../error';
 import { reactionTypes } from '../validation';
 import { createReactionNotification } from './notification';
 import { addReaction, deleteReaction } from './reaction';
@@ -143,25 +143,12 @@ test('addReaction 결과는 새 source만 구분한다', async () => {
   assert.equal(repeated.reaction.id, first.reaction.id);
 });
 
-test('ACTIVITYPUB Unresponsive actor도 공통 Reaction action으로 추가·삭제한다', async () => {
-  const fixture = await createFixture({
-    instanceKind: InstanceKind.ACTIVITYPUB,
-    instanceState: InstanceState.UNRESPONSIVE,
-  });
-
-  const { reaction } = await addReaction({ ...fixture.input, type: '👀' });
-  assert.equal(await countReactions(fixture.post.id), 1);
-
-  await deleteReaction({
-    actorProfileId: fixture.profile.id,
-    postId: fixture.post.id,
-    type: reaction.type,
-  });
-  assert.equal(await countReactions(fixture.post.id), 0);
-});
-
-test('Profile이 비활성이거나 Instance가 Suspended이면 Reaction을 만들지 않는다', async () => {
+test('core는 entry에서 검증된 actor의 Profile/Instance 상태를 다시 조회하지 않는다', async () => {
   const fixtures = await Promise.all([
+    createFixture({
+      instanceKind: InstanceKind.ACTIVITYPUB,
+      instanceState: InstanceState.UNRESPONSIVE,
+    }),
     createFixture({
       instanceKind: InstanceKind.ACTIVITYPUB,
       instanceState: InstanceState.SUSPENDED,
@@ -169,13 +156,19 @@ test('Profile이 비활성이거나 Instance가 Suspended이면 Reaction을 만�
     createFixture({ profileState: ProfileState.DISABLED }),
   ]);
 
-  for (const { input } of fixtures) {
-    await assert.rejects(addReaction({ ...input, type: '👀' }), PermissionDeniedError);
-    assert.equal(await countReactions(input.postId), 0);
+  for (const fixture of fixtures) {
+    const { reaction } = await addReaction({ ...fixture.input, type: '👀' });
+    assert.equal(await countReactions(fixture.input.postId), 1);
+    await deleteReaction({
+      actorProfileId: fixture.profile.id,
+      postId: fixture.post.id,
+      type: reaction.type,
+    });
+    assert.equal(await countReactions(fixture.input.postId), 0);
   }
 });
 
-test('활성 Post가 아니거나 actor 검증이 실패하면 Reaction을 만들지 않는다', async () => {
+test('활성 Post가 아니면 Reaction을 만들지 않는다', async () => {
   const deletedPost = await createFixture({ postState: PostState.DELETED });
   await assert.rejects(addReaction({ ...deletedPost.input, type: '☘️' }), NotFoundError);
   assert.equal(await countReactions(deletedPost.post.id), 0);
@@ -354,16 +347,9 @@ test('없는 조합은 no-op이고 오래된 Post/Type 재시도는 재생성된
   assert.deepEqual(await db.select().from(Reactions).where(eq(Reactions.id, recreated.id)), []);
 });
 
-test('다른 Profile의 Reaction은 유지하고 비활성 또는 Suspended actor의 삭제를 거부한다', async () => {
+test('다른 Profile의 Reaction은 삭제하지 않는다', async () => {
   const owner = await createFixture();
   const attacker = await createFixture();
-  const invalidActors = await Promise.all([
-    createFixture({
-      instanceKind: InstanceKind.ACTIVITYPUB,
-      instanceState: InstanceState.SUSPENDED,
-    }),
-    createFixture({ profileState: ProfileState.DISABLED }),
-  ]);
   const { reaction } = await addReaction({ ...owner.input, type: '🌈' });
 
   assert.deepEqual(
@@ -374,16 +360,6 @@ test('다른 Profile의 Reaction은 유지하고 비활성 또는 Suspended acto
     }),
     { postId: owner.post.id, reactionId: null },
   );
-  for (const invalidActor of invalidActors) {
-    await assert.rejects(
-      deleteReaction({
-        actorProfileId: invalidActor.profile.id,
-        postId: owner.post.id,
-        type: reaction.type,
-      }),
-      PermissionDeniedError,
-    );
-  }
   assert.deepEqual(await db.select().from(Reactions).where(eq(Reactions.id, reaction.id)), [
     reaction,
   ]);

@@ -15,7 +15,7 @@ Repost와 Quote가 같은 nullable direct Repost Source를 저장할 수 있게 
 **Guardrails**
 
 - 별도 Post Kind, Repost table 또는 Quote Source를 추가하지 않는다.
-- actor 권한, Source visibility/eligibility, 결과 visibility와 멱등 application action은 PROD-401에서 실제 caller와 함께 구현한다.
+- 행동 주체 권한, Source visibility/eligibility, 결과 visibility와 멱등 application action은 PROD-401에서 실제 caller와 함께 구현한다.
 - Quote Source 연결은 실제 Quote 작성 action을 소유하는 후속 작업에서 구현한다.
 - Tombstone에서 Repost Source를 제거하지 않고 Source Tombstone도 참조를 cascade/nullify하지 않는다.
 - DB constraint trigger와 명시적 비관적 row lock을 추가하지 않는다.
@@ -43,26 +43,26 @@ Repost와 Quote가 같은 nullable direct Repost Source를 저장할 수 있게 
 
 **Deliverable**
 
-권한이 있는 Local Profile이 조회 가능한 Content Post를 visibility 정책에 맞게 멱등 Repost하고 기존 `Post` Node 결과를 받는다.
+권한이 있는 selected Profile이 Instance Type과 무관하게 조회 가능한 Content Post를 visibility 정책에 맞게 멱등 Repost하고 기존 `Post` Node 결과를 받는다.
 
 **Guardrails**
 
 - Public/Unlisted Source의 Repost는 Unlisted, Followers Only Source는 Source Author만 Followers Only로 생성한다.
-- Local GraphQL entry는 공통 `usingProfile` 인증이 검증한 Account.Active와 선택된 Local Profile membership·visibility를 사용하며 역할별 제한을 다시 적용하지 않는다.
-- 공통 core action은 검증된 actor Profile ID와 Source Post ID만 받고 Active Profile과 Suspended가 아닌 Instance라는 공통 actor 가용성, Source visibility/eligibility와 저장 정책을 검증한다.
+- GraphQL entry는 공통 `usingProfile` 인증이 검증한 Account.Active와 selected Profile membership·visibility를 사용하며 역할별 제한이나 Instance Type 제한을 다시 적용하지 않는다.
+- 공통 core action은 검증된 행동 주체 Profile ID와 Source Post ID만 받고 Profile/Instance 상태를 다시 조회하지 않으며 Source visibility/eligibility와 저장 정책을 검증한다.
 - Mentioned Profiles, Tombstone, unavailable, Content 없는 Repost Source를 거부한다.
-- 누락·Tombstone·조회 불가 Source는 `NOT_FOUND`, 조회 가능한 허용 불가 Source는 `VALIDATION(sourceId)`, actor 권한 실패는 `PERMISSION_DENIED`로 처리한다.
+- 누락·Tombstone·조회 불가 Source는 `NOT_FOUND`, 조회 가능한 허용 불가 Source는 `VALIDATION(sourceId)`, 진입점 권한 실패는 `PERMISSION_DENIED`로 처리한다.
 - duplicate/concurrent 생성은 같은 Active Repost identity로 수렴한다.
 - Quote 작성과 ActivityPub Repost ingress·delivery를 포함하지 않는다.
 
 **Verification**
 
-- core DB test는 검증된 Local/Remote actor의 공통 action 사용, 비활성 Profile·Suspended Instance 거부, visibility·Source 정책, direct Source, 순차·동시 duplicate와 실패 transaction rollback을 검증한다.
-- GraphQL integration test는 Owner/Admin/Member 성공과 membership 부재·비활성 Account/Profile 거부, 기존 error code/field와 payload를 검증한다.
+- core DB test는 진입점에서 검증된 행동 주체의 Profile/Instance 상태 비재조회, visibility·Source 정책, direct Source, 순차·동시 duplicate와 실패 transaction rollback을 검증한다.
+- GraphQL integration test는 Owner/Member 성공과 membership 부재·비활성 Account/Profile·Suspended Instance 거부, 기존 error code/field와 payload를 검증한다.
 
-- [x] 2.1 검증된 actor의 공통 가용성, Source visibility와 derived visibility를 적용하는 멱등 Repost core action을 구현한다.
+- [x] 2.1 검증된 행동 주체 identity, Source visibility와 derived visibility를 적용하는 멱등 Repost core action을 구현한다.
 - [x] 2.2 `repostPost` mutation과 `RepostPostPayload.repost`를 기존 Post global ID 계약에 맞춰 제공한다.
-- [x] 2.3 GraphQL Local 인증과 core 공통 actor/Source 정책의 성공·거부, 순차/동시 멱등성 및 schema/payload 검증을 추가하고 core/API check를 통과시킨다.
+- [x] 2.3 GraphQL `usingProfile` 인증과 core Source 정책의 성공·거부, 순차/동시 멱등성 및 schema/payload 검증을 추가하고 core/API check를 통과시킨다.
 
 ## 3. PROD-402 Repost와 Quote의 Source 조회
 
@@ -241,7 +241,7 @@ production fragment shape를 유지하는 fixture와 Storybook에서 Repost·Quo
 - [ ] 8.2 `repostPost`·`deletePost` mutation과 normalized actor Store 갱신을 연결한다.
 - [ ] 8.3 Relay mock/Storybook에서 pending·성공·오류·Profile 전환을 검증하고 relay/app check를 통과시킨다.
 
-## 9. PROD-415 Post List Repost 연결
+## 9. PROD-415 Post renderer Repost 연결
 
 **Authority / Provenance**
 
@@ -253,22 +253,40 @@ production fragment shape를 유지하는 fixture와 Storybook에서 Repost·Quo
 
 **Deliverable**
 
-Home과 Profile Post List가 실제 GraphQL fragment와 generated type으로 Repost·Quote presentation을 표시하고 Source·Author route를 정확히 연결한다.
+Home, Profile, Bookmark와 Post 상세이 실제 GraphQL fragment와 generated type으로 Repost·Quote presentation을 표시하고 Source·Author route를 정확히 연결한다. Content 없는 Repost 목록은 Repost Author attribution 뒤 direct Source를 일반 Post와 같은 표준 목록 행으로 표시한다. Quote와 Reply+Quote는 direct Source 한 단계까지만 preview하고 두 번째 Source를 위한 별도 placeholder나 CTA를 표시하지 않는다. Content 없는 Repost 상세 진입은 direct Source canonical route로 대체한다. 순수 Repost의 direct Source 자체가 Quote인 조합의 preview 정책은 이번 slice의 완료 조건에서 제외한다.
 
 **Guardrails**
 
 - route query에 leaf presentation scalar를 중복하지 않고 공용 Post list item fragment를 확장한다.
-- Source preview Link를 전체 Post Link 안에 중첩하지 않는다.
+- Bookmark도 Home/Profile과 같은 공용 Post list item fragment를 사용하고 별도 presentation scalar를 중복하지 않는다.
+- 현재 상세 Post는 `PostLayout`, 목록과 상세 thread의 조상·하위 Reply는 `PostListItem`이 자신의 direct Source를 소유하고 공용 preview leaf를 `PostBody` 아래 sibling으로 정확히 한 번 표시한다.
+- `PostDetailThread`는 Source를 별도 선택·운반·추가 렌더링하지 않는다.
+- thread connector segment는 목록형 48px avatar와 현재 상세 40px avatar의 위·아래에서 각각 4px 떨어지고 둥근 끝을 사용하며, 기존 row border는 유지한다.
+- bordered Source preview는 시각적 그룹 경계로 유지하고 전체를 Source Post Link로 만들지 않는다.
 - Source가 API에서 제외된 불완전한 row를 client에서 합성하지 않는다.
+- Quote preview의 두 번째 Source ID·Content·Profile presentation field를 읽거나 presentation component를 재귀 호출하지 않는다.
+- Source Author는 canonical Profile Link, direct Source 생성 시각은 최소 44px canonical Post Link, direct Source 본문 행은 pointer·touch shortcut으로 분리하고 border의 빈 padding에는 동작을 두지 않는다.
+- ordinary Post와 pure Repost Source의 공용 표준 목록 행은 생성 시각을 최소 44px canonical Post Link로 유지하고, 본문 행은 내부 외부 Link와 중첩되지 않는 pointer·touch shortcut으로 사용한다.
+- Home/Profile/Bookmark와 상세 thread의 조상·하위 Reply `PostListItem`에서 Quote 자체 생성 시각은 바깥 Quote Post의 canonical Link를 유지하고 자체 본문 행의 pointer·touch shortcut도 바깥 Quote Post로 이동한다. 이미 자기 canonical route인 현재 상세 `PostLayout`에는 self navigation을 추가하지 않는다.
+- Quote와 Source body의 외부 Link는 각각의 Post 이동과 함께 실행되지 않는 독립 목적지를 유지하고 nested interactive semantics를 만들지 않는다.
+- 서버가 반환한 connection edge 순서와 결과만 렌더링하고 새 `loadNext` pagination UI를 추가하지 않는다.
 - Repost action과 Notification UI를 이 slice에 포함하지 않는다.
+- Content 없는 Repost 상세 route는 direct Source 경로로 `replace`하고 Repost 자체 surface·history entry·공유 참조를 노출하지 않는다. Source가 unavailable해 Repost 자체가 조회되지 않으면 기존 not-found 경계를 유지한다.
+- Content 없는 Repost 목록은 Repost Author canonical Profile Link attribution을 한 번만 표시하고, ordinary Post와 direct Source에 `repostSource`를 선택하지 않는 같은 표준 행 fragment leaf를 사용한다. outer list item만 article·row border·padding을 소유하며 별도 Source full presentation·article·border·renderer를 만들지 않는다.
 
 **Verification**
 
-- Home/Profile fragment 연결, Repost/Quote Author 구분, Source·Profile navigation, 일반 Post 회귀와 Relay generated type을 app integration/E2E로 검증한다.
+- Home/Profile/Bookmark와 Post 상세 fragment 연결, Repost/Quote Author 구분, Source·Profile navigation, 일반 Post 회귀와 Relay generated type을 app integration/E2E로 검증한다. Pure Repost는 attribution이 한 번만 있고 Repost Author Profile과 Source Author/Profile·Post pathname이 구분되며, direct Source가 ordinary Post와 같은 48px avatar·Author·Content·spacing·navigation 표준 행을 사용하고 중첩 article·이중 border가 없어야 한다. ordinary와 pure Repost Source 표준 행은 최소 44px timestamp Link, pointer·touch body shortcut, 외부 Link 격리와 nested interactive 부재를 검증한다. current·ancestor·descendant Quote의 Source는 정확히 한 번만 표시되어야 한다. Quote-of-Quote는 direct Source 한 단계에서 preview가 끝나고 direct Source 생성 시각·본문이 해당 Source의 canonical route로 이동하며 두 번째 Source Content와 CTA가 표시되지 않는지 확인한다. 목록과 상세 thread 조상·하위 Reply의 `PostListItem`에서 Quote와 Reply+Quote의 자체 본문은 바깥 Quote Post로 이동하고 Source Post로 잘못 이동하지 않아야 하며, 현재 상세 `PostLayout`은 direct Source 이동만 제공해야 한다. Source/Quote 생성 시각의 실제 Link, pointer·touch body shortcut, 빈 border padding, Author Profile과 외부 body Link 목적지를 각각 검증하고 `a a` 및 `[role="link"] [role="link"]`가 없어야 한다. Content 없는 Repost 상세 진입은 Source canonical URL로 replace되고 기존 thread 순서·pagination·오류 복구가 유지되어야 한다. production Storybook은 48px 목록형 avatar와 40px 현재 avatar 모두 connector 위·아래 간격이 4px이며 끝이 둥글고 기존 row border가 유지되는지 검증한다.
 
-- [ ] 9.1 PROD-453 presentation fragment를 production Post list item과 실제 API shape에 연결한다.
-- [ ] 9.2 Home/Profile 목록의 Source·Author navigation과 중첩 Link 회귀를 검증한다.
-- [ ] 9.3 Relay compile, app check·Storybook과 목록 integration 검증을 통과시킨다.
+- [x] 9.1 PROD-453 presentation fragment를 production Post list item과 실제 API shape에 연결한다.
+- [x] 9.2 Home/Profile/Bookmark 목록의 Source·Author navigation과 중첩 Link 회귀를 검증한다.
+- [x] 9.3 Relay compile, app check·Storybook과 목록 integration 검증을 통과시킨다.
+- [x] 9.4 `PostLayout`과 `PostListItem`이 공용 direct Source preview leaf로 자신의 Source를 정확히 한 번 표시하게 하고 `PostDetailThread`의 별도 Source carrier를 제거한다.
+- [x] 9.5 Content 없는 Repost 상세 진입을 direct Source canonical route로 `replace`하고 자체 surface·history entry·공유 참조를 남기지 않는다.
+- [x] 9.6 current·ancestor·descendant Quote의 한 단계 Source 표시, Source null, 순수 Repost canonical replace와 기존 목록·thread 회귀를 검증하고 Relay compile·app check·Storybook·OpenSpec strict validation을 통과시킨다.
+- [x] 9.7 Source presentation과 표준 목록 행이 고정 canonical Link·body shortcut을 직접 소유하게 하고 caller-injected renderer·target·navigation callback API를 제거한다.
+- [x] 9.8 Content 없는 Repost가 Repost Author Profile Link attribution을 한 번 표시한 뒤 direct Source를 일반 Post와 같은 비재귀 표준 목록 행 leaf로 렌더링하게 하고 별도 Source renderer·중첩 article·이중 border를 제거한다.
+- [x] 9.9 production Storybook pathname·외부 Link 격리·표준 행 구조·Quote one-depth cutoff와 전체 app/OpenSpec 회귀 검증을 통과시킨다.
 
 ## 10. PROD-412 Repost Notification 생성과 inbox 표시
 
@@ -325,9 +343,9 @@ Repost Tombstone 뒤 대응 Notification cleanup을 Best Effort로 시도하고,
 
 - 정상·반복·누락 cleanup, 실패 격리와 stale row의 list/count/Node/Read 숨김을 core/API integration test로 검증한다.
 
-- [ ] 11.1 Repost Tombstone 결과에 연결되는 idempotent Notification cleanup을 구현한다.
-- [ ] 11.2 kind-aware visible predicate가 stale Repost Notification을 모든 API surface에서 숨기게 한다.
-- [ ] 11.3 cleanup 성공·반복·실패와 stale visibility 검증을 추가하고 core/API check를 통과시킨다.
+- [x] 11.1 Repost Tombstone 결과에 연결되는 idempotent Notification cleanup을 구현한다.
+- [x] 11.2 kind-aware visible predicate가 stale Repost Notification을 모든 API surface에서 숨기게 한다.
+- [x] 11.3 cleanup 성공·반복·실패와 stale visibility 검증을 추가하고 core/API check를 통과시킨다.
 
 ## 12. PROD-389 Repost 통합 검증·정합성 확인·archive
 

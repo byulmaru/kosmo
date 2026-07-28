@@ -56,20 +56,20 @@
 별도 `불변 조건` 섹션은 두지 않는다. 행동 전제와 결과 보장은 행동에, 값 제약은 속성에, uniqueness와
 cardinality는 관계에, 조회 제한은 조회 정책과 조회 조건에 둔다.
 
-Local Profile이 주체인 행동에서 `Account.Active`는 해당 Profile을 선택한 요청 Account의 상태 사실이다.
-Membership/Owner 같은 관계 사실과 Account 활성 상태를 하나의 권한으로 합치지 않고 행동 권한 열에서 각각
-참조한다.
+Account 요청에서 Profile이 주체인 행동의 `Account.Active`는 해당 Profile을 선택한 요청 Account의 상태
+사실이다. Membership/Owner 같은 관계 사실과 Account 활성 상태를 하나의 권한으로 합치지 않고 행동 권한
+열에서 각각 참조한다. 선택 Profile의 Origin은 이 Account 요청 여부나 공통 권한을 대신 결정하지 않는다.
 
 ## 객체 인덱스
 
 | 객체                                                                  | 책임                                       | 주요 관계                                                                                                |
 | --------------------------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
 | [Account](./objects/account.md)                                       | 로그인과 운영자 행동의 기준                | [Profile](./objects/profile.md), [Account-Profile Membership](./objects/account-profile-membership.md)   |
+| [Session](./objects/session.md)                                       | Account credential의 서버 인증 생명주기    | [Account](./objects/account.md)                                                                          |
 | [Profile](./objects/profile.md)                                       | 공개 소셜 정체성과 기본 행동 주체          | [Account-Profile Membership](./objects/account-profile-membership.md), [Instance](./objects/instance.md) |
-| [Account-Profile Membership](./objects/account-profile-membership.md) | Account와 Local Profile의 역할 관계        | [Account](./objects/account.md), [Profile](./objects/profile.md)                                         |
+| [Account-Profile Membership](./objects/account-profile-membership.md) | Account와 Profile의 역할 관계              | [Account](./objects/account.md), [Profile](./objects/profile.md)                                         |
 | [Post](./objects/post.md)                                             | Content, 관계 구조, 공개 범위, 후보성 정책 | [Profile](./objects/profile.md), [Media](./objects/media.md)                                             |
-| [Media](./objects/media.md)                                           | 논리적 미디어와 대체 텍스트                | [File](./objects/file.md), [Profile](./objects/profile.md), [Post](./objects/post.md)                    |
-| [File](./objects/file.md)                                             | 원본과 파생 파일 표현                      | [Media](./objects/media.md), [File](./objects/file.md)                                                   |
+| [Media](./objects/media.md)                                           | 논리적 미디어, 업로드 상태와 대체 텍스트   | [Profile](./objects/profile.md), [Post](./objects/post.md)                                               |
 | [Follow Relationship](./objects/follow-relationship.md)               | Profile 간 성립된 팔로우 관계              | [Profile](./objects/profile.md)                                                                          |
 | [Follow Request](./objects/follow-request.md)                         | 승인제 Profile 대상 팔로우 요청            | [Profile](./objects/profile.md), [Follow Relationship](./objects/follow-relationship.md)                 |
 | [Reaction](./objects/reaction.md)                                     | Profile의 Post 이모지 반응                 | [Profile](./objects/profile.md), [Post](./objects/post.md)                                               |
@@ -105,6 +105,9 @@ Membership/Owner 같은 관계 사실과 Account 활성 상태를 하나의 권�
 - [ADR 0014: Post Structure Relations](./decisions/0014-post-structure-relations.md)
 - [ADR 0015: Post Share Reference](./decisions/0015-post-share-reference.md)
 - [ADR 0016: Reaction Selector Current State](./decisions/0016-reaction-selector-current-state.md)
+- [ADR 0017: Profile Search Staged Visibility](./decisions/0017-profile-search-staged-visibility.md)
+- [ADR 0018: Media Upload State Without File](./decisions/0018-media-upload-lifecycle-without-file.md)
+- [ADR 0019: Selected Profile Authorization Boundary](./decisions/0019-selected-profile-authorization-boundary.md)
 - [2026-06-28 DDD 명세 점검 기록](./records/2026-06-28-ddd-spec-audit.md)
 - [2026-06-29 결정 반영 기록](./records/2026-06-29-decision-round.md)
 - [2026-06-29 PR 리뷰 반영 기록](./records/2026-06-29-pr-review-followup.md)

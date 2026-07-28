@@ -3,9 +3,10 @@ import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, History, Search as SearchIcon, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { graphql, useLazyLoadQuery } from 'react-relay';
+import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { RouteBoundary } from '@/components/RouteBoundary';
+import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { addRecentSearch, readRecentSearches, writeRecentSearches } from '@/lib/recentSearches';
 import { useRelayActor } from '@/relay/RelayActorProvider';
@@ -13,6 +14,8 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { SearchPeopleByHandlePageQuery } from './__generated__/SearchPeopleByHandlePageQuery.graphql';
+import type { SearchPeopleResults_query$key } from './__generated__/SearchPeopleResults_query.graphql';
+import type { SearchPeopleResultsNextPageQuery } from './__generated__/SearchPeopleResultsNextPageQuery.graphql';
 
 const tabs = [
   { label: '인기', value: SearchTab.POPULAR },
@@ -22,9 +25,27 @@ const tabs = [
 ] as const;
 
 const SearchPeopleQuery = graphql`
-  query SearchPeopleByHandlePageQuery($handle: String!) {
-    profileByHandle(handle: $handle) {
-      ...ProfileListItem_profile
+  query SearchPeopleByHandlePageQuery($query: String!) {
+    ...SearchPeopleResults_query @arguments(query: $query)
+  }
+`;
+
+const SearchPeopleResultsFragment = graphql`
+  fragment SearchPeopleResults_query on Query
+  @argumentDefinitions(
+    count: { type: "Int", defaultValue: 20 }
+    cursor: { type: "String" }
+    query: { type: "String!" }
+  )
+  @refetchable(queryName: "SearchPeopleResultsNextPageQuery") {
+    searchProfiles(query: $query, first: $count, after: $cursor)
+      @connection(key: "SearchPeopleResults_searchProfiles", filters: ["query"]) {
+      edges {
+        cursor
+        node {
+          ...ProfileListItem_profile
+        }
+      }
     }
   }
 `;
@@ -48,16 +69,69 @@ function PeopleResults({ handle }: { handle: string }) {
 function PeopleResultsContent({ fetchKey, handle }: { fetchKey: string; handle: string }) {
   const data = useLazyLoadQuery<SearchPeopleByHandlePageQuery>(
     SearchPeopleQuery,
-    { handle: handle.replace(/^@/, '') },
+    { query: handle.replace(/^@/, '') },
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
-  return data.profileByHandle ? (
-    <ProfileListItem linked profile={data.profileByHandle} />
-  ) : (
-    <StateView
-      description={`'${handle}'에 해당하는 프로필을 찾지 못했어요.`}
-      title="검색 결과가 없어요"
-    />
+
+  return <SearchPeopleResults handle={handle} query={data} />;
+}
+
+function SearchPeopleResults({
+  handle,
+  query,
+}: {
+  handle: string;
+  query: SearchPeopleResults_query$key;
+}) {
+  const theme = useTheme();
+  const pagination = usePaginationFragment<
+    SearchPeopleResultsNextPageQuery,
+    SearchPeopleResults_query$key
+  >(SearchPeopleResultsFragment, query);
+  const [loadError, setLoadError] = useState(false);
+  const edges = pagination.data.searchProfiles.edges;
+
+  if (!edges.length) {
+    return (
+      <StateView
+        description={`'${handle}'에 해당하는 프로필을 찾지 못했어요.`}
+        title="검색 결과가 없어요"
+      />
+    );
+  }
+
+  const loadNext = () => {
+    if (pagination.isLoadingNext) {
+      return;
+    }
+
+    setLoadError(false);
+    pagination.loadNext(20, { onComplete: (error) => setLoadError(Boolean(error)) });
+  };
+
+  return (
+    <View>
+      {edges.map(({ cursor, node }) => (
+        <ProfileListItem key={cursor} linked profile={node} />
+      ))}
+      {pagination.hasNext || loadError ? (
+        <View style={styles.pagination}>
+          {loadError ? (
+            <Text accessibilityRole="alert" style={[styles.paginationError, { color: theme.text }]}>
+              다음 검색 결과를 불러오지 못했어요. 다시 시도해 주세요.
+            </Text>
+          ) : null}
+          <Button
+            accessibilityLabel={loadError ? '다음 검색 결과 다시 불러오기' : '검색 결과 더 보기'}
+            loading={pagination.isLoadingNext}
+            onPress={loadNext}
+            tone="secondary"
+          >
+            {loadError ? '다시 시도' : '더 보기'}
+          </Button>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -83,6 +157,7 @@ export default function SearchScreen() {
   const [input, setInput] = useState(query);
   const [recent, setRecent] = useState<string[]>([]);
   const [focused, setFocused] = useState(false);
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -103,6 +178,14 @@ export default function SearchScreen() {
       current = false;
     };
   }, [query]);
+  useEffect(
+    () => () => {
+      if (blurTimerRef.current) {
+        clearTimeout(blurTimerRef.current);
+      }
+    },
+    [],
+  );
   useEffect(() => {
     if (!focused) {
       setInput(query);
@@ -114,6 +197,22 @@ export default function SearchScreen() {
       void writeRecentSearches(next);
       return next;
     });
+  };
+  const keepSearchFocused = () => {
+    if (blurTimerRef.current) {
+      clearTimeout(blurTimerRef.current);
+      blurTimerRef.current = null;
+    }
+    setFocused(true);
+  };
+  const leaveSearchFocus = () => {
+    if (blurTimerRef.current) {
+      clearTimeout(blurTimerRef.current);
+    }
+    blurTimerRef.current = setTimeout(() => {
+      blurTimerRef.current = null;
+      setFocused(false);
+    }, 0);
   };
 
   const navigate = (nextQuery: string, tab: SearchTab = activeTab) => {
@@ -127,7 +226,7 @@ export default function SearchScreen() {
 
   const clearSearch = () => {
     setInput('');
-    setFocused(true);
+    keepSearchFocused();
     if (query) {
       router.setParams({ q: undefined });
     }
@@ -138,103 +237,104 @@ export default function SearchScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.root} keyboardShouldPersistTaps="handled">
-      <View
-        accessibilityLabel="검색"
-        style={[styles.searchBar, { backgroundColor: theme.card, borderColor: theme.border }]}
-      >
-        {phase !== 'before' ? (
-          <Link asChild href={searchHref('', activeTab)}>
-            <Pressable
-              accessibilityLabel="뒤로"
-              accessibilityRole="link"
-              onPress={() => {
-                setInput('');
-                setFocused(false);
-              }}
-              style={styles.iconButton}
-            >
-              <ArrowLeft color={theme.textSecondary} size={20} strokeWidth={2} />
-            </Pressable>
-          </Link>
-        ) : null}
-        <View style={[styles.inputShell, { backgroundColor: theme.surface }]}>
-          <SearchIcon color={theme.textSecondary} size={20} strokeWidth={2} />
-          <TextInput
-            ref={inputRef}
-            accessibilityLabel="검색어"
-            autoCapitalize="none"
-            autoCorrect={false}
-            onBlur={() =>
-              setTimeout(() => {
-                if (!inputRef.current?.isFocused()) {
+      <View onBlur={leaveSearchFocus} onFocus={keepSearchFocused}>
+        <View
+          accessibilityLabel="검색"
+          style={[styles.searchBar, { backgroundColor: theme.card, borderColor: theme.border }]}
+        >
+          {phase !== 'before' ? (
+            <Link asChild href={searchHref('', activeTab)}>
+              <Pressable
+                accessibilityLabel="뒤로"
+                accessibilityRole="link"
+                onPress={() => {
+                  setInput('');
                   setFocused(false);
-                }
-              }, 0)
-            }
-            onChangeText={setInput}
-            onFocus={() => setFocused(true)}
-            onSubmitEditing={() => navigate(input)}
-            placeholder="검색어를 입력하세요"
-            placeholderTextColor={theme.textSecondary}
-            returnKeyType="search"
-            style={[styles.input, { color: theme.text }]}
-            value={input}
-          />
-          {input ? (
-            <Pressable
-              accessibilityLabel="검색 지우기"
-              accessibilityRole="button"
-              onPress={clearSearch}
-              style={styles.clearButton}
-            >
-              <X color={theme.textSecondary} size={18} strokeWidth={2} />
-            </Pressable>
+                }}
+                onPressIn={keepSearchFocused}
+                style={styles.iconButton}
+              >
+                <ArrowLeft color={theme.textSecondary} size={20} strokeWidth={2} />
+              </Pressable>
+            </Link>
           ) : null}
+          <View style={[styles.inputShell, { backgroundColor: theme.surface }]}>
+            <SearchIcon color={theme.textSecondary} size={20} strokeWidth={2} />
+            <TextInput
+              ref={inputRef}
+              accessibilityLabel="검색어"
+              autoCapitalize="none"
+              autoCorrect={false}
+              onChangeText={setInput}
+              onSubmitEditing={() => navigate(input)}
+              placeholder="검색어를 입력하세요"
+              placeholderTextColor={theme.textSecondary}
+              returnKeyType="search"
+              style={[styles.input, { color: theme.text }]}
+              value={input}
+            />
+            {input ? (
+              <Pressable
+                accessibilityLabel="검색 지우기"
+                accessibilityRole="button"
+                onPress={clearSearch}
+                onPressIn={keepSearchFocused}
+                style={styles.clearButton}
+              >
+                <X color={theme.textSecondary} size={18} strokeWidth={2} />
+              </Pressable>
+            ) : null}
+          </View>
         </View>
+
+        {phase === 'input' ? (
+          <View style={styles.recent}>
+            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>최근 검색</Text>
+            {recent.length ? (
+              recent.map((term) => (
+                <View key={term} style={[styles.recentItem, { borderColor: theme.border }]}>
+                  <Link asChild href={searchHref(term, activeTab)}>
+                    <Pressable
+                      accessibilityRole="link"
+                      onPress={() => {
+                        setFocused(false);
+                        remember(term);
+                      }}
+                      onPressIn={keepSearchFocused}
+                      style={styles.recentTerm}
+                    >
+                      <History color={theme.textSecondary} size={16} strokeWidth={2} />
+                      <Text numberOfLines={1} style={[styles.recentText, { color: theme.text }]}>
+                        {term}
+                      </Text>
+                    </Pressable>
+                  </Link>
+                  <Pressable
+                    accessibilityLabel={`최근 검색 '${term}' 삭제`}
+                    accessibilityRole="button"
+                    onPress={() => {
+                      const next = recent.filter((item) => item !== term);
+                      setRecent(next);
+                      void writeRecentSearches(next);
+                      inputRef.current?.focus();
+                    }}
+                    onPressIn={keepSearchFocused}
+                    style={styles.deleteButton}
+                  >
+                    <X color={theme.textSecondary} size={16} strokeWidth={2} />
+                  </Pressable>
+                </View>
+              ))
+            ) : (
+              <Text style={[styles.help, { color: theme.textSecondary }]}>
+                아직 최근 검색이 없어요.
+              </Text>
+            )}
+          </View>
+        ) : null}
       </View>
 
-      {phase === 'input' ? (
-        <View style={styles.recent}>
-          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>최근 검색</Text>
-          {recent.length ? (
-            recent.map((term) => (
-              <View key={term} style={[styles.recentItem, { borderColor: theme.border }]}>
-                <Link asChild href={searchHref(term, activeTab)}>
-                  <Pressable
-                    accessibilityRole="link"
-                    onPress={() => {
-                      setFocused(false);
-                      remember(term);
-                    }}
-                    style={styles.recentTerm}
-                  >
-                    <History color={theme.textSecondary} size={16} strokeWidth={2} />
-                    <Text numberOfLines={1} style={[styles.recentText, { color: theme.text }]}>
-                      {term}
-                    </Text>
-                  </Pressable>
-                </Link>
-                <Pressable
-                  accessibilityLabel={`최근 검색 '${term}' 삭제`}
-                  accessibilityRole="button"
-                  onPress={() => {
-                    const next = recent.filter((item) => item !== term);
-                    setRecent(next);
-                    void writeRecentSearches(next);
-                  }}
-                  style={styles.deleteButton}
-                >
-                  <X color={theme.textSecondary} size={16} strokeWidth={2} />
-                </Pressable>
-              </View>
-            ))
-          ) : (
-            <Text style={[styles.help, { color: theme.textSecondary }]}>
-              아직 최근 검색이 없어요.
-            </Text>
-          )}
-        </View>
-      ) : phase === 'results' ? (
+      {phase === 'results' ? (
         <>
           <View
             accessibilityLabel="검색 결과 유형"
@@ -273,12 +373,12 @@ export default function SearchScreen() {
             />
           )}
         </>
-      ) : (
+      ) : phase === 'before' ? (
         <StateView
           description="handle을 입력하면 일치하는 프로필을 찾아드려요."
           title="프로필을 검색해보세요"
         />
-      )}
+      ) : null}
     </ScrollView>
   );
 }
@@ -348,6 +448,17 @@ const styles = StyleSheet.create({
     ...typography.sm,
   },
   tabs: { borderBottomWidth: 1, flexDirection: 'row', height: 44 },
+  pagination: {
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xl,
+  },
+  paginationError: {
+    fontFamily: 'SUIT',
+    textAlign: 'center',
+    ...typography.xsm,
+  },
   tab: {
     alignItems: 'center',
     flex: 1,

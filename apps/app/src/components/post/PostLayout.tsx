@@ -2,12 +2,15 @@ import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
+import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatPostDate } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { PostBody } from './PostBody';
+import { PostSourcePreview } from './PostSourcePresentationView';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
+import type { SourcePostPresentationData } from './PostSourcePresentationView';
 
 const PostLayoutFragment = graphql`
   fragment PostLayout_post on Post {
@@ -21,7 +24,21 @@ const PostLayoutFragment = graphql`
       displayName
       ...ProfileNameBlock_profile
     }
+    repostSource {
+      id
+      createdAt
+      content {
+        bodyText
+        document
+      }
+      profile {
+        displayName
+        handle
+        relativeHandle
+      }
+    }
     ...PostBody_post
+    ...PostReactionSummary_post
   }
 `;
 
@@ -36,6 +53,21 @@ export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
   const theme = useTheme();
   const post = useFragment(PostLayoutFragment, postKey);
   const profileHref = `/${post.profile.relativeHandle}` as const;
+  const source = post.repostSource;
+  const presentationSource: SourcePostPresentationData | null = source
+    ? {
+        content: source.content
+          ? { bodyText: source.content.bodyText, document: source.content.document }
+          : null,
+        createdAt: source.createdAt,
+        id: source.id,
+        profile: {
+          displayName: source.profile.displayName,
+          handle: source.profile.handle,
+          relativeHandle: source.profile.relativeHandle,
+        },
+      }
+    : null;
 
   return (
     <View style={styles.root}>
@@ -56,10 +88,14 @@ export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
         <ProfileNameBlock href={profileHref} profile={post.profile} />
         <View style={styles.body}>
           <PostBody post={post} size="lg" />
+          {presentationSource ? (
+            <PostSourcePreview source={presentationSource} style={styles.source} />
+          ) : null}
           <Text style={[styles.meta, { color: theme.textSecondary }]}>
             {formatPostDate(post.createdAt)} ·{' '}
             {visibilityLabels[post.visibility] ?? post.visibility}
           </Text>
+          <PostReactionSummary post={post} style={styles.reactionSummary} />
         </View>
       </View>
     </View>
@@ -72,4 +108,6 @@ const styles = StyleSheet.create({
   content: { flex: 1, gap: spacing.xs, minWidth: 0 },
   body: { minWidth: 0 },
   meta: { fontFamily: 'SUIT', marginTop: 6, textAlign: 'right', ...typography.xsm },
+  reactionSummary: { marginTop: spacing.lg },
+  source: { marginTop: spacing.sm },
 });

@@ -8,7 +8,7 @@ Kosmo는 Repost를 별도 Post Kind가 아니라 Content와 Reply Parent 없이 
 - 허용된 Post를 Repost하는 멱등 core action과 GraphQL mutation, 기존 Post 삭제를 통한 멱등 취소를 제공한다.
 - 기존 단일 GraphQL `Post` Node에 nullable `repostSource`, viewer-independent `repostCount`, 현재 selected Profile의 Active Repost identity를 제공한다.
 - Home과 Profile Post List가 Repost와 Source 양쪽의 조회 정책을 적용해 후보를 선정하고, Hashtag Post List에서는 Content 없는 Repost를 제외한다.
-- Repost·Quote 프레젠테이션, Source 이동, selected Profile별 Repost action 상태와 pending·오류·Relay cache 동기화를 component/integration 경계로 제공한다.
+- Repost·Quote 프레젠테이션, 목록·상세 renderer별 direct Source 표시, Source 이동, Content 없는 Repost 상세의 canonical Source 이동, selected Profile별 Repost action 상태와 pending·오류·Relay cache 동기화를 component/integration 경계로 제공한다.
 - 자기 Post 알림을 억제하면서 Repost Notification을 기존 inbox·Unread count·Read·Node 계약에 통합하고, Repost가 Tombstone이 된 뒤 Notification을 Best Effort로 정리한다.
 - 여러 Post action을 공통 Action Bar와 실제 surface에 조립하는 rollout은 PROD-432의 별도 계약으로 유지한다.
 
@@ -36,6 +36,6 @@ Kosmo는 Repost를 별도 Post Kind가 아니라 Content와 Reply Parent 없이 
 - Linear: PROD-394, PROD-401, PROD-402, PROD-403, PROD-411, PROD-412, PROD-414, PROD-430, PROD-415, PROD-416, PROD-453과 부모 PROD-389
 - Core/DB: Post self-reference, partial unique index, migration, 구조·Source 검증, Repost 생성·Tombstone lifecycle, Notification projection·정리
 - GraphQL/API: Repost 생성·취소 mutation, `Post.repostSource`, count와 selected Profile별 Active Repost, Repost Notification concrete Node와 visibility
-- Universal client: Repost·Quote presentation, Home/Profile 목록 연결, Repost action과 Relay cache, Notification inbox·badge·navigation
+- Universal client: Repost·Quote presentation, Home/Profile/Bookmark 목록과 Post 상세 연결, Content 없는 Repost canonical route, Repost action과 Relay cache, Notification inbox·badge·navigation
 - Dependency: `add-in-app-notifications`가 제공하는 active `notification`·`data-model`·`api-platform` 기반과 PROD-412의 선행 이슈 결과를 재사용한다.
 - Excluded systems: Quote 작성 action·전용 composer, ActivityPub federation delivery·Repost ingestion, Mentioned Profiles Repost, Post Media, 범용 Notification 재설계, retry/outbox/backfill, 공통 Post Action Bar rollout

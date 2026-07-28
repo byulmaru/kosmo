@@ -1,4 +1,5 @@
 import js from '@eslint/js';
+import eslintReact from '@eslint-react/eslint-plugin';
 import prettier from 'eslint-config-prettier';
 import importPlugin from 'eslint-plugin-import';
 import simpleImportSortPlugin from 'eslint-plugin-simple-import-sort';
@@ -19,9 +20,11 @@ const config = ts.config(
       },
     },
     plugins: {
+      '@eslint-react': eslintReact,
       'simple-import-sort': simpleImportSortPlugin,
     },
     rules: {
+      '@eslint-react/no-class-component': 'error',
       curly: ['error', 'all'],
       '@typescript-eslint/consistent-type-imports': 'error',
       'import/consistent-type-specifier-style': ['error', 'prefer-top-level'],

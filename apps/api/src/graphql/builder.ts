@@ -1,4 +1,5 @@
 import { PermissionDeniedError, ValidationError } from '@kosmo/core/error';
+import { decodeGlobalId, encodeGlobalId } from '@kosmo/core/global-id';
 import SchemaBuilder from '@pothos/core';
 import DataloaderPlugin from '@pothos/plugin-dataloader';
 import RelayPlugin from '@pothos/plugin-relay';
@@ -7,7 +8,6 @@ import SimpleObjectsPlugin from '@pothos/plugin-simple-objects';
 import ValidationPlugin from '@pothos/plugin-validation';
 import WithInputPlugin from '@pothos/plugin-with-input';
 import * as R from 'remeda';
-import { decodeGlobalId, encodeGlobalId } from './global-id';
 import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
 import type { SessionContext, SessionWithProfileContext, UserContext } from '@/context';
 

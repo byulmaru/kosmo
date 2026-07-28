@@ -449,39 +449,54 @@ Android, iOS, Web에서 공유하는 kosmo 앱 shell과 canonical route 계약�
 - **WHEN** 사용자가 인기·최신·미디어 탭을 활성으로 본다
 - **THEN** 시스템은 해당 탭 콘텐츠 대신 준비 중 안내를 표시한다
 
-### Requirement: People tab exact handle search results
+### Requirement: People tab partial handle search results
 
-검색 후 사람 탭은 제출된 검색어(`q`)를 정확 handle로 해석해 기존 `profileByHandle` 조회 결과를 표시해야 한다(MUST). 사람 탭이 아니거나 제출된 검색어가 비어 있으면 handle 조회를 실행하지 않아야 한다(MUST NOT). 검색 결과는 실데이터와 팔로우 액션이 연결된 `ProfileListItem`으로 표시해야 한다(MUST). 검색 결과 항목은 해당 프로필의 `relativeHandle`을 path로 사용한 프로필 페이지(`/${relativeHandle}`)로 이동할 수 있어야 한다(MUST). prefix, display name, fediverse 검색은 이 범위에서 제공하지 않는다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/decisions/0003-policy-ownership-clarifications.md`, `docs/domain/decisions/0004-review-consistency-clarifications.md`, `docs/domain/decisions/0017-profile-search-staged-visibility.md` (ADR 0017), `PROD-504` — 검색 후 사람 탭은 제출된 검색어(`q`)를 기존 정책으로 정규화한 handle 부분 검색어로 해석하고, DB에 저장된 Local/Remote Profile의 부분 일치 connection을 목록으로 표시해야 한다(MUST). 다음 페이지가 있으면 Relay pagination으로 결과를 누적하고 loading/error/retry와 종료 상태를 제공해야 한다(MUST). 사람 탭이 아니거나 제출된 검색어가 비어 있으면 handle 검색을 실행하지 않아야 한다(MUST NOT). 각 검색 결과는 실데이터와 팔로우 액션이 연결된 `ProfileListItem`으로 표시해야 한다(MUST). 검색 결과 항목은 해당 프로필의 `relativeHandle`을 path로 사용한 프로필 페이지(`/${relativeHandle}`)로 이동할 수 있어야 한다(MUST). display name, 게시글·미디어 또는 원격 fediverse 조회 검색은 이 범위에서 제공하지 않는다(MUST NOT). 현재 staged visibility는 configured local Instance의 `ProfileState.ACTIVE` Profile과 remote domain의 `ProfileState.ACTIVE` Profile 중 `InstanceState.SUSPENDED`가 아닌 Instance에 이미 저장된 Profile만 포함한다. WebFinger, actor document fetch·refresh 또는 새 Remote Profile materialization은 수행하지 않으며, Domain Limit·viewer Profile Domain Block 공통 predicate는 ADR 0017에 따른 미래 동시 moderation rollout이지 현재 검색의 선행 조건이 아니다.
 
-#### Scenario: Existing handle result
+#### Scenario: Multiple partial handle results
 
-- **WHEN** 사용자가 존재하는 handle을 사람 탭에서 검색한다
-- **THEN** 시스템은 `profileByHandle` 결과를 `ProfileListItem`으로 표시한다
-- **AND** 결과 항목의 프로필 정보 영역은 `/${relativeHandle}` 프로필 페이지로 이동한다
-- **AND** stored ActivityPub remote profile의 `relativeHandle`은 bare `@handle`이 아니라 `@handle@domain`이다
-- **AND** 결과 항목의 팔로우 액션은 local profile 또는 ActivityPub remote profile 여부와 관계없이 기존 `ProfileListItem`/`FollowButton` 정책에 따라 표시되거나 숨겨진다
+- **WHEN** 사용자가 여러 저장된 Profile의 handle에 포함된 문자열을 사람 탭에서 검색한다
+- **THEN** 시스템은 첫 connection page의 부분 일치 결과를 각각 `ProfileListItem`으로 표시한다
+- **AND** 각 결과 항목의 프로필 정보 영역은 `/${relativeHandle}` 프로필 페이지로 이동한다
+- **AND** 각 결과 항목의 팔로우 액션은 local Profile 또는 ActivityPub remote Profile 여부와 관계없이 기존 `ProfileListItem`/`FollowButton` 정책에 따라 표시되거나 숨겨진다
 
-#### Scenario: Local-domain handle result
+#### Scenario: Load the next page of partial handle results
 
-- **WHEN** 사용자가 configured local domain의 `handle@domain` 또는 `@handle@domain` 형식 handle을 사람 탭에서 검색한다
-- **THEN** 시스템은 이를 remote profile 검색으로 취급하지 않고 local profile lookup으로 정규화한다
-- **AND** 결과 profile의 `relativeHandle`은 `@handle` 형식으로 유지된다
+- **WHEN** 현재 connection에 다음 페이지가 있고 사용자가 더 불러오기를 실행한다
+- **THEN** 시스템은 `after` cursor로 다음 페이지를 요청해 기존 결과 뒤에 누적한다
+- **AND** 로딩 중에는 중복 요청을 막고 다음 페이지 실패 시 기존 결과를 유지하며 같은 위치에서 재시도할 수 있다
+- **AND** 페이지 사이에 Profile이 중복되거나 누락되지 않으며 마지막 페이지에서는 더 불러오기 동작을 숨긴다
 
-#### Scenario: Stored remote handle result
+#### Scenario: Local-domain partial handle results
 
-- **WHEN** 사용자가 remote domain의 `handle@domain` 또는 `@handle@domain` 형식 handle을 사람 탭에서 검색한다
-- **THEN** 시스템은 이미 materialized되어 DB에 저장된 ActivityPub remote profile만 반환한다
-- **AND** 검색 중 WebFinger lookup, actor document fetch, 또는 remote profile 저장을 수행하지 않는다
+- **WHEN** 사용자가 configured local domain의 `handle-part@domain` 또는 `@handle-part@domain` 형식으로 사람 탭에서 검색한다
+- **THEN** 시스템은 이를 remote Profile 검색으로 취급하지 않고 configured local instance의 handle 부분 일치 검색으로 정규화한다
+- **AND** 각 결과 Profile의 `relativeHandle`은 `@handle` 형식으로 유지된다
+- **AND** 결과는 configured local Instance에 이미 저장된 `ProfileState.ACTIVE` Profile로 한정된다
 
-#### Scenario: Missing handle result
+#### Scenario: Stored remote partial handle results
 
-- **WHEN** 사용자가 존재하지 않는 handle을 사람 탭에서 검색한다
+- **WHEN** 사용자가 remote domain의 `handle-part@domain` 또는 `@handle-part@domain` 형식으로 사람 탭에서 검색한다
+- **THEN** 시스템은 해당 domain에 이미 materialized되어 DB에 저장된 ActivityPub remote Profile의 부분 일치 결과만 표시한다
+- **AND** 각 결과 Profile의 `relativeHandle`은 `@handle@domain` 형식이다
+- **AND** 결과는 `ProfileState.ACTIVE`이고 `InstanceState.SUSPENDED`가 아닌 remote Instance에 이미 저장된 Profile로 한정된다
+- **AND** 검색 중 WebFinger lookup, actor document fetch, actor refresh 또는 remote Profile 저장을 수행하지 않는다
+
+#### Scenario: Literal LIKE metacharacter search
+
+- **WHEN** 사용자가 `%`, `_` 또는 SQL `LIKE` escape 문자가 포함된 검색어를 제출한다
+- **THEN** 시스템은 해당 문자를 wildcard가 아닌 일반 검색 문자로 취급한 결과만 표시한다
+- **AND** 의도하지 않은 전체 또는 wildcard 패턴 결과를 표시하지 않는다
+
+#### Scenario: Missing partial handle results
+
+- **WHEN** 사용자가 저장된 Profile의 handle과 부분 일치하지 않는 검색어를 사람 탭에서 검색한다
 - **THEN** 시스템은 결과 없음 안내를 표시한다
 
 #### Scenario: Skip search without people query
 
 - **WHEN** 사람 탭이 아니거나 제출된 검색어가 비어 있다
-- **THEN** 시스템은 `profileByHandle` 조회를 실행하지 않는다
+- **THEN** 시스템은 부분 일치 handle 조회를 실행하지 않는다
 
 ### Requirement: People tab search states
 
@@ -890,3 +905,94 @@ GraphQL entity data를 표시하는 shell과 화면 component는 Relay fragment 
 
 - **WHEN** 유효한 세션은 있지만 선택 Profile이 없는 사용자가 `/bookmarks`로 이동한다
 - **THEN** 시스템은 Bookmark 목록을 요청하지 않고 Profile 선택 안내를 표시한다
+
+### Requirement: Profile-scoped unread notification badge
+
+유니버설 앱 셸은 selected Profile의 서버 제공 `Profile.unreadNotificationCount`가 양수인지 모든 알림 내비게이션 진입점에 표시해야 한다(MUST). 지원 진입점은 Android/iOS와 `compact` 미만 Web의 하단 탭 바, 모바일 drawer 사이드바, `compact` 이상 `full` 미만 Web의 아이콘 레일, `full` 이상 Web의 풀 사이드바다(MUST). 모든 표면은 양수 count를 숫자 없는 8px dot으로 기존 알림 아이콘의 같은 위치에 겹쳐 표시해야 한다(MUST). badge는 셸의 라벨, 행 배치, 클릭 영역과 내비게이션 구조를 바꾸지 않아야 한다(MUST).
+
+#### Scenario: Hide a zero count
+
+- **GIVEN** selected Profile의 `unreadNotificationCount`가 `0`이다
+- **WHEN** 시스템이 지원하는 알림 셸 진입점을 렌더링한다
+- **THEN** 시스템은 시각적 badge를 표시하지 않는다
+- **AND** 진입점의 accessible name은 `알림`이다
+
+#### Scenario: Show unread presence for a positive count
+
+- **GIVEN** selected Profile의 `unreadNotificationCount`가 양수 `N`이다
+- **WHEN** 시스템이 지원하는 알림 셸 진입점을 렌더링한다
+- **THEN** 시스템은 알림 아이콘 우상단에 숫자 없는 8px dot을 표시한다
+- **AND** 기존 라벨과 내비게이션 layout은 그대로 유지된다
+- **AND** 진입점의 accessible name은 실제 서버 count를 사용한 `알림, 읽지 않은 알림 N개`다
+
+#### Scenario: Keep a large count numberless
+
+- **GIVEN** selected Profile의 `unreadNotificationCount`가 `127`이다
+- **WHEN** 시스템이 지원하는 알림 셸 진입점을 렌더링한다
+- **THEN** 시스템은 다른 양수 count와 같은 숫자 없는 8px dot을 표시한다
+- **AND** 진입점의 accessible name은 실제 서버 count를 사용한 `알림, 읽지 않은 알림 127개`다
+- **AND** 시각적 badge는 별도 focus 대상이나 중복 accessibility element로 노출되지 않는다
+
+#### Scenario: Render every supported shell surface
+
+- **GIVEN** selected Profile의 `unreadNotificationCount`가 양수다
+- **WHEN** 시스템이 하단 탭 바, 모바일 drawer, Web 아이콘 레일 또는 Web 풀 사이드바를 렌더링한다
+- **THEN** 모든 표면은 같은 8px 숫자 없는 dot badge를 같은 위치와 스타일로 표시한다
+- **AND** compact surface는 기존 icon-only 구조를, label이 있는 surface는 기존 label을 유지한다
+
+#### Scenario: Expose one accessible navigation entry
+
+- **GIVEN** selected Profile의 `unreadNotificationCount`가 양수 `N`이다
+- **WHEN** screen reader가 알림 내비게이션 진입점을 탐색한다
+- **THEN** 진입점은 실제 서버 count를 사용한 `알림, 읽지 않은 알림 N개`라는 하나의 accessible name으로 노출된다
+- **AND** 시각적 badge는 별도 focus 대상이나 중복 accessibility element로 노출되지 않는다
+
+### Requirement: Unread badge profile isolation and freshness
+
+유니버설 앱 셸은 다른 Profile의 마지막 count를 selected Profile의 badge로 재사용하지 않아야 한다(MUST). selected Profile별 최초 성공 전에는 badge를 숨기고, 같은 Profile의 재조회가 실패하면 마지막 성공 count와 셸 진입점을 유지해야 한다(MUST). count 조회 오류는 전체 셸 query의 loading/error boundary로 전파되지 않는 non-suspending badge 상태 경계가 처리해야 하며(MUST), 그 상태 경계는 actor environment가 교체되어도 같은 selected Profile ID의 마지막 성공값을 보존해야 한다(MUST). 클라이언트는 목록 길이, hidden item 또는 임의의 로컬 증감으로 count를 다시 계산하지 않고 Relay의 normalized `Profile.unreadNotificationCount`와 이후 서버 재조회 결과에 수렴해야 한다(MUST).
+
+#### Scenario: Hide the badge before the first successful count
+
+- **GIVEN** selected Profile의 count 조회가 아직 성공하지 않았다
+- **WHEN** 셸이 loading 상태 또는 최초 조회 오류 상태를 표시한다
+- **THEN** 알림 진입점은 badge를 표시하지 않는다
+- **AND** 진입점 자체는 `알림`이라는 accessible name을 유지한다
+
+#### Scenario: Wait for the next existing refresh after an initial count-only failure
+
+- **GIVEN** selected Profile의 최초 count 조회만 실패했고 셸의 다른 데이터와 진입점은 정상 렌더링됐다
+- **WHEN** 시스템이 count 오류를 non-suspending badge 상태 경계에서 처리한다
+- **THEN** 알림 진입점은 badge를 숨긴 채 유지된다
+- **AND** badge 전용 오류 메시지나 retry control을 추가하지 않는다
+- **AND** 다음 Profile 전환, 셸 재진입 또는 기존 셸 오류의 명시적 retry가 발생할 때 count를 다시 조회한다
+
+#### Scenario: Do not leak the previous Profile count
+
+- **GIVEN** Profile A의 마지막 성공 count가 `12`다
+- **WHEN** 사용자가 Profile B로 전환한다
+- **THEN** 시스템은 Profile B의 첫 성공 count가 도착할 때까지 badge를 숨긴다
+- **AND** Profile A의 `12`를 Profile B의 진입점에 표시하지 않는다
+
+#### Scenario: Keep the same Profile's last successful count after failure
+
+- **GIVEN** 현재 selected Profile의 마지막 성공 count가 `7`이다
+- **WHEN** 같은 Profile을 위한 후속 재조회가 실패한다
+- **THEN** 시스템은 마지막 성공 count `7`을 계속 표시한다
+- **AND** 실패를 `0`으로 해석하거나 badge를 제거하지 않는다
+- **AND** count 오류 때문에 셸 진입점을 전체 오류 화면으로 교체하지 않는다
+
+#### Scenario: Converge through the existing actor refresh lifecycle
+
+- **GIVEN** selected Profile의 서버 count가 마지막 성공 count와 달라졌다
+- **WHEN** Profile 전환, 셸 초기 로드·재진입 또는 기존 셸 오류 UI의 명시적 retry가 actor revision과 `store-and-network` 재조회를 실행한다
+- **THEN** 성공한 서버 응답이 해당 Profile의 badge count를 갱신한다
+- **AND** badge 상태 경계는 같은 Profile의 environment 교체 중 마지막 성공값을 지우지 않고 count 조회 오류를 전체 셸 오류로 전파하지 않는다
+- **AND** count-only 오류를 위한 별도 retry control은 제공하지 않는다
+- **AND** foreground 또는 network reconnect만을 위한 별도 자동 재조회 계약은 요구하지 않는다
+
+#### Scenario: Reflect a normalized Profile cache update
+
+- **GIVEN** 현재 selected Profile의 `unreadNotificationCount` Relay record가 새 값으로 갱신된다
+- **WHEN** 같은 Profile을 표시하는 셸 진입점이 렌더링되어 있다
+- **THEN** 모든 진입점은 같은 새 count를 표시한다
+- **AND** badge consumer는 Notification 목록 길이 또는 hidden item 보정으로 별도 값을 만들지 않는다

@@ -20,6 +20,11 @@ such as `pnpm dev`. The default secret path is
 or `node scripts/vault-run.mjs --secret-path secret/kubernetes/kosmo/dev -- <command>`
 to point at another path.
 
+The API uses `MEDIA_STORAGE_SERVICE_ORIGIN` and `MEDIA_STORAGE_SERVICE_API_KEY`
+to issue browser upload URLs from Media Storage Service. These are server-only
+values loaded through the same Vault environment and must not be exposed to the
+browser bundle.
+
 Run `pnpm dev`, then open `http://localhost:5173`. Local development uses Expo/Metro
 on public port `5173`, the Hono web BFF on internal port `5174`, and the API on
 `3000`. Metro proxies the BFF routes so the browser keeps the production same-origin

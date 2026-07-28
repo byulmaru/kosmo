@@ -107,6 +107,13 @@ export const ActivityPubPosts = pgTable('activitypub_post', {
   publishedAt: datetime('published_at'),
 });
 
+export const ActivityPubReactions = pgTable('activitypub_reaction', {
+  uri: text('uri').unique().notNull(),
+  reactionId: uuid('reaction_id')
+    .primaryKey()
+    .references(() => Reactions.id, { onDelete: 'cascade' }),
+});
+
 export const Applications = pgTable(
   'application',
   {
@@ -166,17 +173,6 @@ export const Bookmarks = pgTable(
   ],
 );
 
-export const Files = pgTable('file', {
-  id: id(),
-  storageKey: text('storage_key').unique().notNull(),
-  sha256: text('sha256'),
-  mimeType: text('mime_type').notNull(),
-  byteSize: integer('byte_size'),
-  width: integer('width'),
-  height: integer('height'),
-  createdAt: createdAt(),
-});
-
 export const Instances = pgTable(
   'instance',
   {
@@ -196,22 +192,19 @@ export const Media = pgTable(
   {
     id: id(),
     source: Enum.mediaSource('source').notNull(),
-    accountId: uuid('account_id').references(() => Accounts.id),
+    state: Enum.mediaState('state').notNull(),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => Accounts.id),
     profileId: uuid('profile_id')
       .notNull()
       .references(() => Profiles.id),
-    originalFileId: uuid('original_file_id').references(() => Files.id),
-    thumbnailFileId: uuid('thumbnail_file_id').references(() => Files.id),
-    remoteUrl: text('remote_url'),
-    remoteFetchedAt: datetime('remote_fetched_at'),
-    thumbhash: text('thumbhash'),
+    storageReference: text('storage_reference').unique().notNull(),
+    uploadExpiresAt: datetime('upload_expires_at').notNull(),
+    readyAt: datetime('ready_at'),
     createdAt: createdAt(),
   },
-  (table) => [
-    index().on(table.accountId),
-    index().on(table.profileId),
-    index().on(table.remoteUrl),
-  ],
+  (table) => [index().on(table.accountId), index().on(table.profileId)],
 );
 
 export const Notifications = pgTable(
@@ -302,7 +295,9 @@ export const Posts = pgTable(
     visibility: Enum.postVisibility('visibility').notNull(),
     state: Enum.postState('state').notNull(),
     currentContentId: uuid('current_content_id').references((): AnyPgColumn => PostContents.id),
-    replyParentId: uuid('reply_parent_id').references((): AnyPgColumn => Posts.id),
+    replyParentId: uuid('reply_parent_id').references((): AnyPgColumn => Posts.id, {
+      onDelete: 'set null',
+    }),
     repostSourceId: uuid('repost_source_id').references((): AnyPgColumn => Posts.id),
     createdAt: createdAt(),
     deletedAt: datetime('deleted_at'),

@@ -1,0 +1,7 @@
+import { Component } from 'react';
+
+export class LegacyBoundary extends Component {
+  render() {
+    return null;
+  }
+}

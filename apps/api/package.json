@@ -4,16 +4,16 @@
   "scripts": {
     "db:bootstrap-local-instance": "tsx scripts/bootstrap-local-instance.ts",
     "dev": "tsx watch src/index.ts",
+    "lint:schema": "NODE_ENV=production node --import tsx scripts/check-schema.ts",
     "lint:tsc": "tsc --noEmit",
     "start": "node --import tsx src/index.ts",
-    "test": "pnpm lint:tsc && pnpm test:unit",
-    "test:integration": "tsx --test --test-concurrency=1 tests/integration/**/*.test.ts",
+    "test": "pnpm lint:tsc && pnpm test:unit && pnpm test:integration",
+    "test:integration": "cd ../.. && node scripts/test-db.mjs run -- pnpm --filter @kosmo/api test:integration:database",
+    "test:integration:database": "cd ../.. && pnpm db:test:push && pnpm --filter @kosmo/api exec node --import tsx --test --test-concurrency=1 'tests/integration/**/*.test.ts'",
     "test:unit": "NODE_ENV=production node --import tsx --test 'src/**/*.test.ts'"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1053.0",
     "@hono/node-server": "^2.0.10",
-    "@hono/standard-validator": "^0.2.2",
     "@kosmo/core": "workspace:*",
     "@pothos/core": "^4.12.0",
     "@pothos/plugin-dataloader": "^4.4.3",

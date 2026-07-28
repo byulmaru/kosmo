@@ -8,16 +8,21 @@ Accepted
 
 2026-06-29
 
+## 후속 결정
+
+File 표현과 Media 생성 시점에 관한 결정은 [ADR 0018](./0018-media-upload-lifecycle-without-file.md)가 대체한다.
+
 ## 결정
 
 - Post는 작성 시 Attached Media 관계와 순서를 원자적으로 만들며 게시 뒤 연결/해제를 지원하지 않는다.
-- Media는 Profile 관계를 필수로 가진다. Local Media는 upload를 수행한 Local Profile과 Upload Account를,
-  Remote Media는 원본 Remote Profile을 가진다.
+- Media는 Profile 관계를 필수로 가진다. Local Media는 upload를 시작할 때 선택된 Profile과 Upload Account를,
+  Remote Media는 원본 Remote Profile을 가진다. Media Source는 행동 주체 Profile의 Origin을 결정하지 않는다.
 - 다른 Profile의 Media 재사용은 Media 관계를 만드는 각 행동의 조건을 따르며, 한 행동의 허용 조건을 다른
   관계에 자동으로 적용하지 않는다.
 - 모든 Profile은 Profile Origin과 같은 Instance Type을 가진 Instance 관계를 필수로 가진다. Post와 Media의
   Instance는 각각 Author Profile과 Media Profile에서 파생한다.
-- File은 Original/Derived 표현만 도메인에서 다루며 저장 위치와 URL은 구현 세부다.
+- File은 Original/Derived 표현만 도메인에서 다루며 저장 위치와 URL은 구현 세부다. 이 항목은 ADR 0018로
+  대체됐다.
 - avatar/header의 현재 Media 참조는 Profile이 소유한다.
 - Follow Request는 Follow Relationship과 별도 객체다.
 - Profile Mute, Profile Block, Word Mute Rule, Hashtag Mute Rule, Profile Domain Block은 별도 객체다.
@@ -38,7 +43,7 @@ Accepted
 ## 문서 반영
 
 - [Post](../objects/post.md)는 Post 생성 시 Media 관계와 Reply 조건을 정의한다.
-- [Media](../objects/media.md)와 [File](../objects/file.md)은 논리 Media와 파일 표현 경계를 정의한다.
+- [Media](../objects/media.md)는 논리 Media와 외부 저장 경계를 정의한다.
 - [Profile](../objects/profile.md)은 Instance와 avatar/header 관계를 정의한다.
 - [Follow Relationship](../objects/follow-relationship.md)과 [Follow Request](../objects/follow-request.md)는
   성립된 관계와 승인 요청을 분리한다.

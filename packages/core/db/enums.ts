@@ -19,6 +19,7 @@ export const applicationType = createPgEnum('application_type', Enum.Application
 export const instanceKind = createPgEnum('instance_kind', Enum.InstanceKind);
 export const instanceState = createPgEnum('instance_state', Enum.InstanceState);
 export const mediaSource = createPgEnum('media_source', Enum.MediaSource);
+export const mediaState = createPgEnum('media_state', Enum.MediaState);
 export const notificationKind = createPgEnum('notification_kind', Enum.NotificationKind);
 export const oauthTokenState = createPgEnum('oauth_token_state', Enum.OAuthTokenState);
 export const postState = createPgEnum('post_state', Enum.PostState);

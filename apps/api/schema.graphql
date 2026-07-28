@@ -10,7 +10,6 @@ type AccountProfile implements Node {
 }
 
 enum AccountProfileRole {
-  ADMIN
   MEMBER
   OWNER
 }
@@ -65,6 +64,14 @@ input CancelProfileFollowRequestInput {
 type CancelProfileFollowRequestPayload {
   followerProfile: Profile!
   profileFollowRequestId: ID!
+}
+
+input CompleteMediaUploadInput {
+  id: ID!
+}
+
+type CompleteMediaUploadPayload {
+  media: Media!
 }
 
 input CreateBookmarkInput {
@@ -164,6 +171,12 @@ enum InstanceKind {
   LOCAL
 }
 
+type IssueMediaUploadUrlPayload {
+  expiresAt: DateTime!
+  media: Media!
+  uploadUrl: String!
+}
+
 input MarkNotificationReadInput {
   id: ID!
 }
@@ -173,10 +186,22 @@ type MarkNotificationReadPayload {
   recipientProfile: Profile!
 }
 
+type Media implements Node {
+  id: ID!
+  readyAt: DateTime
+  state: MediaState!
+}
+
+enum MediaState {
+  READY
+  UPLOADING
+}
+
 type Mutation {
   addReaction(input: AddReactionInput!): AddReactionPayload!
   approveProfileFollowRequest(input: ApproveProfileFollowRequestInput!): ApproveProfileFollowRequestPayload!
   cancelProfileFollowRequest(input: CancelProfileFollowRequestInput!): CancelProfileFollowRequestPayload!
+  completeMediaUpload(input: CompleteMediaUploadInput!): CompleteMediaUploadPayload!
   createBookmark(input: CreateBookmarkInput!): CreateBookmarkPayload!
   createPost(input: CreatePostInput!): CreatePostPayload!
   createProfile(input: CreateProfileInput!): CreateProfilePayload!
@@ -186,9 +211,11 @@ type Mutation {
   deleteReaction(input: DeleteReactionInput!): DeleteReactionPayload!
   exchangeNativeOidcSession(input: ExchangeNativeOidcSessionInput!): ExchangeNativeOidcSessionPayload!
   followProfile(input: FollowProfileInput!): FollowProfilePayload!
+  issueMediaUploadUrl: IssueMediaUploadUrlPayload!
   markNotificationRead(input: MarkNotificationReadInput!): MarkNotificationReadPayload!
   rejectProfileFollowRequest(input: RejectProfileFollowRequestInput!): RejectProfileFollowRequestPayload!
   repostPost(input: RepostPostInput!): RepostPostPayload!
+  revokeCurrentSession: RevokeCurrentSessionPayload!
   selectProfile(input: SelectProfileInput!): SelectProfilePayload!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
   updateProfile(input: UpdateProfileInput!): UpdateProfilePayload!
@@ -389,6 +416,7 @@ type Query {
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
   profileByHandle(handle: String!): Profile
+  searchProfiles(after: String, before: String, first: Int, last: Int, query: String!): ProfileConnection!
 }
 
 type Reaction implements Node {
@@ -420,6 +448,14 @@ type RejectProfileFollowRequestPayload {
   profileFollowRequestId: ID!
 }
 
+type ReplyNotification implements Node & Notification {
+  createdAt: DateTime!
+  id: ID!
+  post: Post!
+  profile: Profile!
+  readAt: DateTime
+}
+
 type RepostNotification implements Node & Notification {
   createdAt: DateTime!
   id: ID!
@@ -434,6 +470,10 @@ input RepostPostInput {
 
 type RepostPostPayload {
   repost: Post!
+}
+
+type RevokeCurrentSessionPayload {
+  completed: Boolean!
 }
 
 input SelectProfileInput {

@@ -8,7 +8,9 @@
 ## Review Thread Policy
 
 - merge 전에는 unresolved review thread가 남아 있지 않아야 한다.
-- 리뷰 코멘트는 코드를 수정했을 때뿐 아니라 확인만으로 충분한 경우에도 resolve한다.
+- 리뷰 코멘트는 요청한 변경이 반영됐거나, 코드 변경 없이도 충족됨을 확인했거나, 사용자가 명시적으로
+  수용·보류했을 때 resolve한다. 아직 유효한 actionable finding은 단순 응답이나 merge 일정만으로 resolve하지
+  않는다.
 - 같은 문제가 다른 PR에서 이미 논의됐으면 해당 PR/comment를 링크해 같은 기준을 반복 적용한다.
 - 자동화나 AI가 남긴 리뷰라도 의미 있는 지적이면 실제 코드 기준으로 판단하고, 틀린 지적은 왜 틀렸는지 남긴 뒤 무시한다.
 

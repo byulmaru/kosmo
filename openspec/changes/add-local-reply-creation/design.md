@@ -28,6 +28,7 @@ PROD-424 backend, PROD-425 UI/thread, PROD-426 Notification/inbox는 하나의 L
 - Parent visibility 검증과 core write가 서로 다른 connection/transaction에서 수행되면 검증 후 상태 변경 또는 부분 저장 경계가 생길 수 있다.
 - `PostComposer` 성공 처리는 현재 본문 초기화에 초점이 있고, thread connection의 공개 shape은 선행 `add-post-replies` 구현이 제공해야 한다.
 - Notification kind, source predicate, concrete Node loader, connection/count/Read 쿼리와 client item이 Follow 구조에 결합되어 있어, Reply branch를 item 표시만으로 추가하면 hidden item이 page limit·count·Node·Read 간에 다르게 보일 수 있다.
+- PROD-273은 실제 Mute·Block 정책 capability가 연결되기 전 Notification 생성 정책을 기본 allow로 정의한다. PROD-426은 아직 구현되지 않은 Profile Mute·Block·Domain Block·Domain Block Instance, Notification scope Word·Hashtag Mute와 Root Post thread Notification Mute capability 및 Reply source 연동을 구현하지 않는다.
 - Relay generated artifact는 commit하지 않으며, selected Profile 전환은 Environment/Store 재생성을 통해 cache를 격리한다.
 
 ### Recommended Approach
@@ -35,7 +36,7 @@ PROD-424 backend, PROD-425 UI/thread, PROD-426 Notification/inbox는 하나의 L
 1. PROD-424에서 `CreatePostInput`에 nullable `replyParentId: ID`를 추가하고 concrete `Post` global ID를 decode한다. 요청 Profile 기준 Parent visibility/eligibility·Content를 검증한 같은 transaction 내에서 기존 core Reply 저장 경계를 호출하고 기존 `CreatePostPayload.post`를 반환한다.
 2. PROD-425에서 선행 thread API/UI가 merge된 뒤 route가 thread query와 mutation connection context를 소유하게 한다. `PostComposer`에 optional Parent context를 주입하고, 성공 payload를 현재 descendant connection에 정규화·반영하되 전역 Post 목록 membership을 추측하지 않는다.
 3. PROD-426에서 Reply source에서 Recipient·Related Post·Related Profile을 파생하는 멱등 Notification 저장 경계를 추가한다. Reply commit 후 같은 request에서 이 경계를 await/catch하여 source transaction과 격리한다.
-4. Notification visibility predicate를 kind별 source relation에 따라 SQL에서 구성하고 page limit 전에 적용한다. concrete `ReplyNotification` Node, mixed connection/count/Read가 동일 predicate를 사용하게 한 뒤 client의 discriminated item branch를 결과 Reply 이동과 기존 Best Effort Read/cache 경계에 연결한다.
+4. Notification visibility predicate를 kind별 source relation에 따라 SQL에서 구성하고 page limit 전에 적용한다. Reply branch는 source PK에서 시작하는 nested `EXISTS`로 Parent Author/Recipient mapping과 Reply Author visibility를 확인하며 Parent lifecycle predicate는 두지 않는다. concrete `ReplyNotification` Node의 `post`/`profile` source hydration은 request-scoped `ctx.loader`로 batch하고, mixed connection/count/Read가 동일 predicate를 사용하게 한 뒤 client의 discriminated item branch를 결과 Reply 이동과 기존 Best Effort Read/cache 경계에 연결한다.
 5. PROD-423에서 Post 상세 Reply 작성 → thread 반영 → Parent Author inbox/count → item 읽음/결과 Reply 이동을 통합 검증한다. 세 자식 계약과 선행 change의 task·delta spec이 모두 맞을 때만 archive한다.
 
 ### Allowed Alternatives

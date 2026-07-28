@@ -15,12 +15,12 @@ import {
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
+import { encodeGlobalId as globalId } from '@kosmo/core/global-id';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { isConfiguredLocalProfile } from '@kosmo/core/profile';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, count, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { encodeGlobalId as globalId } from '../../../src/graphql/global-id';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as CoreServices from '@kosmo/core/services';
@@ -160,6 +160,201 @@ describe('GraphQL remote profile boundary', () => {
     assertNoGraphQLErrors(missing);
     assert.equal(missing.data?.profileByHandle, null);
     assert.equal(await countRows(Profiles), profileCountBefore);
+  });
+
+  test('searches stored profiles by partial handle with literal LIKE metacharacters', async () => {
+    await createProfile({ handle: 'alice', instanceId: localInstanceId });
+    await createProfile({ handle: 'malice', instanceId: localInstanceId });
+    const pageFirst = await createProfile({
+      handle: 'page-zulu',
+      id: '00000000-0000-8006-8000-000000000001',
+      instanceId: localInstanceId,
+    });
+    const pageSecond = await createProfile({
+      handle: 'page-alpha',
+      id: '00000000-0000-8006-8000-000000000002',
+      instanceId: localInstanceId,
+    });
+    const pageThird = await createProfile({
+      handle: 'page-gamma',
+      id: '00000000-0000-8006-8000-000000000003',
+      instanceId: localInstanceId,
+    });
+    await createProfile({
+      handle: 'literal_handle',
+      instanceId: localInstanceId,
+    });
+    await createProfile({
+      handle: 'literalXhandle',
+      instanceId: localInstanceId,
+    });
+    await createProfile({
+      handle: 'literal-disabled',
+      instanceId: localInstanceId,
+      state: ProfileState.DISABLED,
+    });
+    await createProfile({
+      handle: 'literal-suspended',
+      instanceId: localInstanceId,
+      state: ProfileState.SUSPENDED,
+    });
+    const remoteInstance = await createRemoteInstance();
+    await createProfile({
+      handle: 'alice-remote',
+      instanceId: remoteInstance.id,
+    });
+    const unresponsiveRemoteInstance = await createRemoteInstance({
+      domain: 'unresponsive.remote.example',
+      state: InstanceState.UNRESPONSIVE,
+    });
+    await createProfile({
+      handle: 'alice-unresponsive',
+      instanceId: unresponsiveRemoteInstance.id,
+    });
+    const suspendedRemoteInstance = await createRemoteInstance({
+      domain: 'suspended.remote.example',
+      state: InstanceState.SUSPENDED,
+    });
+    await createProfile({
+      handle: 'alice-hidden',
+      instanceId: suspendedRemoteInstance.id,
+    });
+
+    const search = (handle: string) =>
+      requestGraphQL<{
+        searchProfiles: { edges: Array<{ node: { relativeHandle: string } }> };
+      }>(
+        `query SearchProfiles($handle: String!) {
+          searchProfiles(query: $handle, first: 20) {
+            edges { node { relativeHandle } }
+          }
+        }`,
+        { handle },
+      );
+    const relativeHandles = (
+      result: GraphQLResult<{
+        searchProfiles: { edges: Array<{ node: { relativeHandle: string } }> };
+      }>,
+    ) => {
+      assert.ok(result.data);
+      return result.data.searchProfiles.edges.map(({ node }) => node.relativeHandle).sort();
+    };
+    const searchExactAndPartial = (exactHandle: string, partialHandle: string) =>
+      requestGraphQL<{
+        exact: { id: string } | null;
+        partial: { edges: Array<{ node: { relativeHandle: string } }> };
+      }>(
+        `query ProfileVisibility($exactHandle: String!, $partialHandle: String!) {
+          exact: profileByHandle(handle: $exactHandle) { id }
+          partial: searchProfiles(query: $partialHandle, first: 20) {
+            edges { node { relativeHandle } }
+          }
+        }`,
+        { exactHandle, partialHandle },
+      );
+
+    for (const [handle, expectedHandles] of [
+      ['alice', ['@alice', '@malice']],
+      [`alice@${localDomain}`, ['@alice', '@malice']],
+      ['@alice@remote.example', ['@alice-remote@remote.example']],
+      ['does-not-exist', []],
+      ['literal%', []],
+      ['literal_', ['@literal_handle']],
+      ['literal\\', []],
+      ['alice@unresponsive.remote.example', ['@alice-unresponsive@unresponsive.remote.example']],
+    ] as const) {
+      const matches = await search(handle);
+      assertNoGraphQLErrors(matches);
+      assert.deepEqual(relativeHandles(matches), [...expectedHandles], handle);
+    }
+
+    const suspendedLocalMatches = await searchExactAndPartial('literal-suspended', 'literal-');
+    assertNoGraphQLErrors(suspendedLocalMatches);
+    assert.equal(suspendedLocalMatches.data?.exact, null);
+    assert.deepEqual(suspendedLocalMatches.data?.partial.edges, []);
+
+    const suspendedRemoteMatches = await searchExactAndPartial(
+      'alice-hidden@suspended.remote.example',
+      'alice@suspended.remote.example',
+    );
+    assertNoGraphQLErrors(suspendedRemoteMatches);
+    assert.equal(suspendedRemoteMatches.data?.exact, null);
+    assert.deepEqual(suspendedRemoteMatches.data?.partial.edges, []);
+
+    const firstPage = await requestGraphQL<{
+      searchProfiles: {
+        edges: Array<{ cursor: string; node: { id: string; relativeHandle: string } }>;
+        pageInfo: { endCursor: string | null; hasNextPage: boolean };
+      };
+    }>(
+      `query SearchProfilePage($after: String) {
+        searchProfiles(query: "page-", first: 2, after: $after) {
+          edges { cursor node { id relativeHandle } }
+          pageInfo { endCursor hasNextPage }
+        }
+      }`,
+      { after: null },
+    );
+    assertNoGraphQLErrors(firstPage);
+    assert.deepEqual(
+      firstPage.data?.searchProfiles.edges.map(({ node }) => node.relativeHandle),
+      ['@page-zulu', '@page-alpha'],
+    );
+    assert.deepEqual(
+      firstPage.data?.searchProfiles.edges.map(({ node }) => node.id),
+      [globalId('Profile', pageFirst.id), globalId('Profile', pageSecond.id)],
+    );
+    assert.equal(firstPage.data?.searchProfiles.pageInfo.hasNextPage, true);
+
+    await db
+      .update(Profiles)
+      .set({
+        handle: 'page-aaron',
+        normalizedHandle: normalizeHandle('page-aaron'),
+      })
+      .where(eq(Profiles.id, pageThird.id));
+
+    const secondPage = await requestGraphQL<typeof firstPage.data>(
+      `query SearchProfilePage($after: String) {
+        searchProfiles(query: "page-", first: 2, after: $after) {
+          edges { cursor node { id relativeHandle } }
+          pageInfo { endCursor hasNextPage }
+        }
+      }`,
+      { after: firstPage.data?.searchProfiles.pageInfo.endCursor },
+    );
+    assertNoGraphQLErrors(secondPage);
+    assert.deepEqual(
+      secondPage.data?.searchProfiles.edges.map(({ node }) => node.relativeHandle),
+      ['@page-aaron'],
+    );
+    assert.deepEqual(
+      secondPage.data?.searchProfiles.edges.map(({ node }) => node.id),
+      [globalId('Profile', pageThird.id)],
+    );
+    assert.equal(secondPage.data?.searchProfiles.pageInfo.hasNextPage, false);
+    assert.deepEqual(
+      [
+        ...(firstPage.data?.searchProfiles.edges ?? []),
+        ...(secondPage.data?.searchProfiles.edges ?? []),
+      ].map(({ node }) => node.relativeHandle),
+      ['@page-zulu', '@page-alpha', '@page-aaron'],
+    );
+
+    const profileCountBefore = await countRows(Profiles);
+    const fetchMock = mock.method(globalThis, 'fetch', async () => {
+      throw new Error('Stored profile search must not use the network');
+    });
+
+    try {
+      const missingRemote = await search('missing@missing.remote.example');
+      assertNoGraphQLErrors(missingRemote);
+      assert.deepEqual(missingRemote.data?.searchProfiles.edges, []);
+      assert.equal(fetchMock.mock.calls.length, 0);
+      assert.equal(await countRows(Profiles), profileCountBefore);
+    } finally {
+      fetchMock.mock.restore();
+    }
   });
 
   test('loads an active remote profile through the Node interface', async () => {
@@ -457,6 +652,54 @@ describe('GraphQL remote profile boundary', () => {
       { id: globalId('Profile', auth.profile.id) },
       { id: globalId('Profile', otherLocal.id) },
     ]);
+  });
+
+  test('allows an Owner to update a Profile', async () => {
+    const auth = await createAuthenticatedSession();
+
+    const result = await requestGraphQL<{
+      updateProfile: { profile: { displayName: string; id: string } };
+    }>(
+      `mutation UpdateOwnedProfile($id: ID!, $displayName: String!) {
+        updateProfile(input: { id: $id, displayName: $displayName }) {
+          profile { displayName id }
+        }
+      }`,
+      { displayName: 'Updated Owner', id: globalId('Profile', auth.profile.id) },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.updateProfile.profile, {
+      displayName: 'Updated Owner',
+      id: globalId('Profile', auth.profile.id),
+    });
+  });
+
+  test('rejects a Member updating a Profile', async () => {
+    const auth = await createAuthenticatedSession();
+    await db
+      .update(AccountProfiles)
+      .set({ role: AccountProfileRole.MEMBER })
+      .where(
+        and(
+          eq(AccountProfiles.accountId, auth.account.id),
+          eq(AccountProfiles.profileId, auth.profile.id),
+        ),
+      );
+
+    const result = await requestGraphQL(
+      `mutation UpdateMemberProfile($id: ID!) {
+        updateProfile(input: { id: $id, displayName: "Member Update" }) {
+          profile { id }
+        }
+      }`,
+      { id: globalId('Profile', auth.profile.id) },
+      auth.token,
+    );
+
+    assertGraphQLErrorCode(result, 'PERMISSION_DENIED');
+    assert.equal(result.errors?.[0]?.message, 'Profile owner permission is required');
   });
 
   test('restores an active profile from another local instance in the session context', async () => {
@@ -1543,6 +1786,58 @@ describe('GraphQL remote profile boundary', () => {
     }
   });
 
+  test('reads an inbound materialized remote Reply through the existing Post relation', async () => {
+    const auth = await createAuthenticatedSession();
+    const author = await createStoredActivityPubAuthor({
+      domain: 'reply-materialized.example',
+      handle: 'reply-author',
+    });
+    const parentUri = 'https://reply-materialized.example/notes/parent';
+    const replyUri = 'https://reply-materialized.example/notes/reply';
+    const parent = await materializeRemotePost({
+      actorUri: author.actorUri,
+      objectUri: parentUri,
+      visibility: PostVisibility.PUBLIC,
+    });
+    const reply = await materializeRemotePost({
+      actorUri: author.actorUri,
+      content: '<p>Remote reply</p>',
+      objectUri: replyUri,
+      replyTarget: parentUri,
+      visibility: PostVisibility.PUBLIC,
+    });
+
+    const result = await requestGraphQL<{
+      node: {
+        __typename: 'Post';
+        content: { bodyText: string };
+        id: string;
+        replyParent: { id: string } | null;
+      } | null;
+    }>(
+      `query RemoteReply($id: ID!) {
+        node(id: $id) {
+          __typename
+          ... on Post {
+            id
+            content { bodyText }
+            replyParent { id }
+          }
+        }
+      }`,
+      { id: globalId('Post', reply.post.id) },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.node, {
+      __typename: 'Post',
+      content: { bodyText: 'Remote reply' },
+      id: globalId('Post', reply.post.id),
+      replyParent: { id: globalId('Post', parent.post.id) },
+    });
+  });
+
   test('applies the existing parent authorization matrix to materialized remote Posts', async () => {
     const auth = await createAuthenticatedSession();
     const author = await createStoredActivityPubAuthor({
@@ -2340,6 +2635,7 @@ const materializeRemotePost = async ({
   objectUri,
   publishedAt = null,
   receivedAt = Temporal.Instant.from('2026-07-16T00:00:00Z'),
+  replyTarget,
   summary = null,
   visibility,
 }: {
@@ -2348,6 +2644,7 @@ const materializeRemotePost = async ({
   objectUri: string;
   publishedAt?: Temporal.Instant | null;
   receivedAt?: Temporal.Instant;
+  replyTarget?: string;
   summary?: string | null;
   visibility: typeof PostVisibility.PUBLIC | typeof PostVisibility.UNLISTED;
 }) => {
@@ -2360,6 +2657,7 @@ const materializeRemotePost = async ({
     id: new URL(objectUri),
     mediaType: 'text/html',
     published: publishedAt,
+    ...(replyTarget ? { replyTarget: new URL(replyTarget) } : {}),
     summary,
   });
   const documentLoader = mock.fn(async () => {
@@ -2367,7 +2665,9 @@ const materializeRemotePost = async ({
   });
 
   await handleInboundCreate(
-    { documentLoader } as unknown as Parameters<typeof handleInboundCreate>[0],
+    { documentLoader, parseUri: () => null } as unknown as Parameters<
+      typeof handleInboundCreate
+    >[0],
     new Create({ actor: new URL(actorUri), object: note }),
     receivedAt,
   );

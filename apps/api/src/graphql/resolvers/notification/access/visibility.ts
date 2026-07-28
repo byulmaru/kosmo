@@ -34,6 +34,15 @@ export const NotificationRepostRecipientInstances = alias(
   Instances,
   'notification_repost_recipient_instance',
 );
+const NotificationReplyPosts = alias(Posts, 'notification_reply_post');
+const NotificationReplyParents = alias(Posts, 'notification_reply_parent');
+const NotificationReplyRecipientProfiles = alias(Profiles, 'notification_reply_recipient_profile');
+const NotificationReplyRecipientInstances = alias(
+  Instances,
+  'notification_reply_recipient_instance',
+);
+const NotificationReplyAuthors = alias(Profiles, 'notification_reply_author');
+const NotificationReplyAuthorInstances = alias(Instances, 'notification_reply_author_instance');
 
 export const notificationMembershipWhere = (accountId: string) =>
   exists(
@@ -171,6 +180,66 @@ const visibleNotificationSourceWhere = () =>
                         profileVisible: sql<boolean>`${visibleProfileWhere({
                           instance: NotificationRepostRecipientInstances,
                           profile: NotificationRecipientProfiles,
+                        })}`,
+                      },
+                      viewerProfileId: Notifications.recipientProfileId,
+                    }),
+                  ),
+                ),
+            ),
+          ),
+        ),
+      db
+        .select({ id: NotificationReplyPosts.id })
+        .from(NotificationReplyPosts)
+        .where(
+          and(
+            eq(Notifications.kind, NotificationKind.REPLY),
+            eq(NotificationReplyPosts.id, Notifications.sourceId),
+            exists(
+              db
+                .select({ id: NotificationReplyParents.id })
+                .from(NotificationReplyParents)
+                .innerJoin(
+                  NotificationReplyRecipientProfiles,
+                  eq(NotificationReplyRecipientProfiles.id, NotificationReplyParents.profileId),
+                )
+                .innerJoin(
+                  NotificationReplyRecipientInstances,
+                  eq(
+                    NotificationReplyRecipientInstances.id,
+                    NotificationReplyRecipientProfiles.instanceId,
+                  ),
+                )
+                .where(
+                  and(
+                    eq(NotificationReplyParents.id, NotificationReplyPosts.replyParentId),
+                    eq(NotificationReplyParents.profileId, Notifications.recipientProfileId),
+                    eq(NotificationReplyRecipientProfiles.state, ProfileState.ACTIVE),
+                    eq(NotificationReplyRecipientInstances.kind, InstanceKind.LOCAL),
+                    eq(NotificationReplyRecipientInstances.state, InstanceState.ACTIVE),
+                  ),
+                ),
+            ),
+            exists(
+              db
+                .select({ id: NotificationReplyAuthors.id })
+                .from(NotificationReplyAuthors)
+                .innerJoin(
+                  NotificationReplyAuthorInstances,
+                  eq(NotificationReplyAuthorInstances.id, NotificationReplyAuthors.instanceId),
+                )
+                .where(
+                  and(
+                    eq(NotificationReplyAuthors.id, NotificationReplyPosts.profileId),
+                    postVisibilityAccessCondition({
+                      columns: {
+                        postProfileId: NotificationReplyPosts.profileId,
+                        postState: NotificationReplyPosts.state,
+                        postVisibility: NotificationReplyPosts.visibility,
+                        profileVisible: sql<boolean>`${visibleProfileWhere({
+                          instance: NotificationReplyAuthorInstances,
+                          profile: NotificationReplyAuthors,
                         })}`,
                       },
                       viewerProfileId: Notifications.recipientProfileId,

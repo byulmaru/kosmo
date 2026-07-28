@@ -50,15 +50,15 @@ Local Profile과 Remote Profile은 Profile Origin 상태 차원으로 구분한�
 
 ## 관계
 
-| 관계                | 대상                                                          | 방향                           | cardinality | 존재 조건        | 조회 조건               | 조회 권한                                 |
-| ------------------- | ------------------------------------------------------------- | ------------------------------ | ----------- | ---------------- | ----------------------- | ----------------------------------------- |
-| Account membership  | [Account-Profile Membership](./account-profile-membership.md) | Profile <- Membership          | 1 -> 0..N   | Origin이 Local   | Local Profile 운영 관계 | `Profile.Owner` 또는 `Membership.Account` |
-| Instance            | [Instance](./instance.md)                                     | Profile -> Instance            | 1 -> 1      | 항상             | Profile 조회 정책 통과  | 없음                                      |
-| avatar Media        | [Media](./media.md)                                           | Profile -> Media               | 1 -> 0..1   | 설정된 경우      | Profile 조회 정책 통과  | 없음                                      |
-| header Media        | [Media](./media.md)                                           | Profile -> Media               | 1 -> 0..1   | 설정된 경우      | Profile 조회 정책 통과  | 없음                                      |
-| 작성 Post           | [Post](./post.md)                                             | Profile <- Post                | 1 -> 0..N   | Post가 존재할 때 | 각 Post 조회 정책 통과  | 없음                                      |
-| Follow Relationship | [Follow Relationship](./follow-relationship.md)               | Profile <- Follow Relationship | 1 -> 0..N   | 관계가 존재할 때 | 관계 당사자             | `Follow.Participant`                      |
-| Follow Request      | [Follow Request](./follow-request.md)                         | Profile <- Follow Request      | 1 -> 0..N   | 요청이 존재할 때 | 요청 당사자             | `FollowRequest.Participant`               |
+| 관계                | 대상                                                          | 방향                           | cardinality | 존재 조건        | 조회 조건              | 조회 권한                                 |
+| ------------------- | ------------------------------------------------------------- | ------------------------------ | ----------- | ---------------- | ---------------------- | ----------------------------------------- |
+| Account membership  | [Account-Profile Membership](./account-profile-membership.md) | Profile <- Membership          | 1 -> 0..N   | 관계가 존재할 때 | Membership 당사자 관계 | `Profile.Owner` 또는 `Membership.Account` |
+| Instance            | [Instance](./instance.md)                                     | Profile -> Instance            | 1 -> 1      | 항상             | Profile 조회 정책 통과 | 없음                                      |
+| avatar Media        | [Media](./media.md)                                           | Profile -> Media               | 1 -> 0..1   | 설정된 경우      | Profile 조회 정책 통과 | 없음                                      |
+| header Media        | [Media](./media.md)                                           | Profile -> Media               | 1 -> 0..1   | 설정된 경우      | Profile 조회 정책 통과 | 없음                                      |
+| 작성 Post           | [Post](./post.md)                                             | Profile <- Post                | 1 -> 0..N   | Post가 존재할 때 | 각 Post 조회 정책 통과 | 없음                                      |
+| Follow Relationship | [Follow Relationship](./follow-relationship.md)               | Profile <- Follow Relationship | 1 -> 0..N   | 관계가 존재할 때 | 관계 당사자            | `Follow.Participant`                      |
+| Follow Request      | [Follow Request](./follow-request.md)                         | Profile <- Follow Request      | 1 -> 0..N   | 요청이 존재할 때 | 요청 당사자            | `FollowRequest.Participant`               |
 
 ## 행동
 
@@ -79,11 +79,11 @@ Request의 상태나 존재를 바꾸지 않는다.
 
 ## 권한
 
-| 권한                         | 종류      | 성립 조건                                                              |
-| ---------------------------- | --------- | ---------------------------------------------------------------------- |
-| `Profile.Member`             | 객체 종속 | Account가 Local Profile의 Owner, Admin 또는 Member Membership을 가진다 |
-| `Profile.Owner`              | 객체 종속 | Account가 Local Profile의 Owner Membership을 가진다                    |
-| `System.RemoteProfileSource` | 독립      | 시스템이 Remote Profile 원본 정보를 반영하는 주체다                    |
+| 권한                         | 종류      | 성립 조건                                                 |
+| ---------------------------- | --------- | --------------------------------------------------------- |
+| `Profile.Member`             | 객체 종속 | Account가 Profile의 Owner 또는 Member Membership을 가진다 |
+| `Profile.Owner`              | 객체 종속 | Account가 Local Profile의 Owner Membership을 가진다       |
+| `System.RemoteProfileSource` | 독립      | 시스템이 Remote Profile 원본 정보를 반영하는 주체다       |
 
 ## 조회 정책
 
@@ -92,6 +92,16 @@ Request의 상태나 존재를 바꾸지 않는다.
 - Remote Profile은 Instance의 Safety State가 Domain Block이 아니어야 한다.
 - viewer Profile의 Profile Domain Block 대상 Instance에 속한 Remote Profile은 viewer에게 없는 것처럼 취급한다.
 - 공개 검색 후보는 위 조회 조건을 통과해야 하며 Domain Limit Instance의 Remote Profile은 제외한다.
+
+위 Domain Limit 및 viewer Profile Domain Block 규칙은 공개 Profile 조회·검색의 최종 canonical moderation
+정책이다. 다만 해당 정책을 exact/partial Profile lookup에 함께 적용할 저장 모델과 공통 predicate가 아직 없는
+현재 단계에서는 [ADR 0017](../decisions/0017-profile-search-staged-visibility.md)의 제한된 staged exception을
+적용할 수 있다. 현재 저장된 Profile의 exact `profileByHandle`과 partial `searchProfiles`는 같은 visibility를
+사용해 configured local Instance의 `Active` Profile과, 입력 domain의 ActivityPub Instance에 저장된 `Active`
+Remote Profile(단, `InstanceState.SUSPENDED` Instance 제외)만 반환한다. 이 예외는 최종 moderation 정책이
+Domain Limit/Profile Domain Block을 허용하거나 생략하도록 바꾸지 않으며, 공통 predicate가 준비되면 exact와
+partial lookup을 함께 전환해야 한다.
+
 - Remote Profile lookup은 Instance의 Safety State가 Domain Block이 아니고 Reachability State가
   Reachable이며 Service State가 Active일 때만 새 원격 요청을 보낼 수 있다.
 

@@ -1,7 +1,10 @@
+export { materializeInboundReaction, undoInboundReaction } from './activitypub-reaction';
 export { createBookmark, deleteBookmark } from './bookmark';
 export {
   createFollowNotification,
   createReactionNotification,
+  createReplyNotification,
+  createReplyNotificationBestEffort,
   createRepostNotification,
   deleteNotificationBySource,
 } from './notification';
@@ -15,4 +18,5 @@ export {
   rejectProfileFollowRequest,
 } from './profile-follow-request';
 export { addReaction, deleteReaction } from './reaction';
-export { createOidcSession } from './session';
+export type { RevokeCurrentSessionResult } from './session';
+export { createOidcSession, revokeCurrentSession } from './session';

@@ -1,10 +1,25 @@
 import '@kosmo/core/polyfill';
 
-import { Follow } from '@fedify/vocab';
-import { InstanceState } from '@kosmo/core/enums';
+import { EmojiReact, Follow, Like } from '@fedify/vocab';
+import {
+  ActivityPubActors,
+  ActivityPubPosts,
+  db,
+  first,
+  Instances,
+  Posts,
+  Profiles,
+} from '@kosmo/core/db';
+import { InstanceKind, InstanceState, PostState, ProfileState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
-import { followProfile, unfollowProfile } from '@kosmo/core/services';
-import { isHttpUri } from './activitypub-uri';
+import {
+  deletePost,
+  followProfile,
+  undoInboundReaction,
+  unfollowProfile,
+} from '@kosmo/core/services';
+import { and, eq, isNotNull, isNull } from 'drizzle-orm';
+import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { sendAcceptFollowActivity } from './follow-delivery';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
 import {
@@ -14,7 +29,6 @@ import {
 } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Recipient, Undo } from '@fedify/vocab';
-import type { ActivityPubActors } from '@kosmo/core/db';
 
 const getNow = () => Temporal.Now.instant();
 
@@ -95,9 +109,70 @@ const noNetworkDocumentLoader = async (url: string) => {
   throw new Error(`Network lookup is disabled for inbound Undo: ${url}`);
 };
 
+const handleInboundUndoAnnounce = async (activityUri: URL, actorUri: URL): Promise<boolean> => {
+  return db.transaction(async (tx) => {
+    const row = await tx
+      .select({
+        actorUri: ActivityPubActors.uri,
+        instanceKind: Instances.kind,
+        instanceState: Instances.state,
+        postId: Posts.id,
+        postState: Posts.state,
+        profileId: Profiles.id,
+        profileState: Profiles.state,
+      })
+      .from(ActivityPubPosts)
+      .innerJoin(Posts, eq(Posts.id, ActivityPubPosts.postId))
+      .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
+      .where(
+        and(
+          eq(ActivityPubPosts.uri, activityUri.href),
+          isNull(Posts.currentContentId),
+          isNotNull(Posts.repostSourceId),
+        ),
+      )
+      .limit(1)
+      .then(first);
+
+    if (!row) {
+      return false;
+    }
+    if (
+      activityUri.origin !== actorUri.origin ||
+      row.actorUri !== actorUri.href ||
+      row.instanceKind !== InstanceKind.ACTIVITYPUB ||
+      (row.instanceState !== InstanceState.ACTIVE &&
+        row.instanceState !== InstanceState.UNRESPONSIVE) ||
+      row.profileState !== ProfileState.ACTIVE ||
+      row.postState !== PostState.ACTIVE
+    ) {
+      return true;
+    }
+
+    await deletePost({ actorProfileId: row.profileId, postId: row.postId }, tx);
+    return true;
+  });
+};
+
 export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo): Promise<void> => {
-  const actorUri = undo.actorId;
+  const actorHref = uniqueHref(undo.actorIds);
+  const actorUri = actorHref ? new URL(actorHref) : null;
   if (!isHttpUri(actorUri)) {
+    return;
+  }
+
+  const objectHref = uniqueHref(undo.objectIds);
+  if (undo.objectIds.length > 0 && !objectHref) {
+    return;
+  }
+  const objectUri = objectHref ? new URL(objectHref) : null;
+  if (objectUri && !isHttpUri(objectUri)) {
+    return;
+  }
+
+  if (objectUri && (await handleInboundUndoAnnounce(objectUri, actorUri))) {
     return;
   }
 
@@ -122,22 +197,36 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
     documentLoader: noNetworkDocumentLoader,
     suppressError: true,
   });
-  if (!(embedded instanceof Follow)) {
+  if (embedded instanceof Follow) {
+    const objectUri = embedded.objectId;
+    if (!isHttpUri(objectUri) || uniqueHref(embedded.actorIds) !== actorUri.href) {
+      return;
+    }
+
+    const localRecipient = await resolveInboundLocalRecipient(context, objectUri);
+    if (!localRecipient) {
+      return;
+    }
+
+    await unfollowProfile({
+      followeeProfileId: localRecipient.id,
+      followerProfileId: remoteActor.profile.id,
+    });
     return;
   }
 
-  const objectUri = embedded.objectId;
-  if (!isHttpUri(objectUri) || embedded.actorId?.href !== actorUri.href) {
+  if (embedded !== null && !(embedded instanceof Like) && !(embedded instanceof EmojiReact)) {
     return;
   }
 
-  const localRecipient = await resolveInboundLocalRecipient(context, objectUri);
-  if (!localRecipient) {
+  const activityUri = embedded?.id ?? undo.objectId;
+  if (
+    !isHttpUri(activityUri) ||
+    ((embedded instanceof Like || embedded instanceof EmojiReact) &&
+      uniqueHref(embedded.actorIds) !== actorUri.href)
+  ) {
     return;
   }
 
-  await unfollowProfile({
-    followeeProfileId: localRecipient.id,
-    followerProfileId: remoteActor.profile.id,
-  });
+  await undoInboundReaction({ activityUri: activityUri.href, actorUri: actorUri.href });
 };

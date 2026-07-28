@@ -90,6 +90,7 @@ export type StoryPost = {
   createdAt: string;
   id: string;
   profile: StoryProfile;
+  reactionCounts: Array<{ count: number; type: string }>;
   replyParent: StoryPostReference | null;
   repostSource: StoryPost | null;
   state: 'ACTIVE';
@@ -102,6 +103,7 @@ export function post({
   createdAt = Temporal.Now.instant().subtract({ minutes: 5 }).toString(),
   id = 'post-1',
   profile: author = profile(),
+  reactionCounts = [],
   replyParent = null,
   repostSource = null,
   visibility = 'UNLISTED',
@@ -111,6 +113,7 @@ export function post({
   createdAt?: string;
   id?: string;
   profile?: StoryProfile;
+  reactionCounts?: StoryPost['reactionCounts'];
   replyParent?: StoryPostReference | null;
   repostSource?: StoryPost | null;
   visibility?: StoryPost['visibility'];
@@ -133,6 +136,7 @@ export function post({
     createdAt,
     id,
     profile: author,
+    reactionCounts,
     replyParent,
     repostSource,
     state: 'ACTIVE',
@@ -261,6 +265,29 @@ export function reactionNotification({
   };
 }
 
+export function replyNotification({
+  createdAt = Temporal.Now.instant().subtract({ minutes: 2 }).toString(),
+  id = 'notification-reply-1',
+  post: relatedPost = post(),
+  profile: relatedProfile = profile(),
+  readAt = null,
+}: {
+  createdAt?: string;
+  id?: string;
+  post?: StoryPost;
+  profile?: StoryProfile;
+  readAt?: string | null;
+} = {}) {
+  return {
+    __typename: 'ReplyNotification' as const,
+    createdAt,
+    id,
+    post: relatedPost,
+    profile: relatedProfile,
+    readAt,
+  };
+}
+
 export function repostNotification({
   createdAt = Temporal.Now.instant().subtract({ minutes: 2 }).toString(),
   id = 'notification-repost-1',
@@ -288,6 +315,7 @@ export function notificationsProfile(
   notifications: Array<
     | ReturnType<typeof followNotification>
     | ReturnType<typeof reactionNotification>
+    | ReturnType<typeof replyNotification>
     | ReturnType<typeof repostNotification>
   >,
   metadata: PaginationMetadata = {},
