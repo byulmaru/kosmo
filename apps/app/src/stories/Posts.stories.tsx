@@ -1,7 +1,8 @@
 import { usePathname } from 'expo-router';
-import { useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
-import { graphql, useLazyLoadQuery } from 'react-relay';
+import { graphql, RelayEnvironmentProvider, useLazyLoadQuery } from 'react-relay';
+import { Environment, Network, RecordSource, Store } from 'relay-runtime';
 import { expect, fn, screen, userEvent, waitFor, within } from 'storybook/test';
 import { Temporal } from 'temporal-polyfill';
 import PostDetailScreen from '@/app/(tabs)/(post)/[profileHandle]/[postId]';
@@ -14,9 +15,11 @@ import { PostListItem } from '@/components/post/PostListItem';
 import { PostSourcePresentationView } from '@/components/post/PostSourcePresentationView';
 import { PostThreadLayout } from '@/components/post/PostThreadLayout';
 import { formatTimelineTimestamp } from '@/lib/date';
+import { SessionProvider } from '@/session/SessionProvider';
 import { longBody, post, profile, profileWithPosts, timeline } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
 import type { PostSourcePresentationData } from '@/components/post/PostSourcePresentationView';
 import type { PostDetailThreadIdentityStoryQuery } from './__generated__/PostDetailThreadIdentityStoryQuery.graphql';
 import type { PostsStoriesQuery as PostsStoriesQueryType } from './__generated__/PostsStoriesQuery.graphql';
@@ -714,6 +717,106 @@ function ProductionRepostQuoteLists() {
   );
 }
 
+type ProductionReactionRequest = Readonly<{ postId: string; type: string }>;
+
+function withProductionReactionViewerState(storyPost: StoryPost): StoryPost & {
+  viewerReactions: [];
+} {
+  return {
+    ...storyPost,
+    repostSource: storyPost.repostSource
+      ? withProductionReactionViewerState(storyPost.repostSource)
+      : null,
+    viewerReactions: [],
+  };
+}
+
+function ProductionReactionMutationTargetsStory() {
+  const [requests, setRequests] = useState<ProductionReactionRequest[]>([]);
+  const environment = useMemo(
+    () =>
+      new Environment({
+        network: Network.create((request: RequestParameters, variables: Variables) => {
+          if (request.name === 'SessionProviderQuery') {
+            return Promise.resolve({
+              data: {
+                currentSession: {
+                  __typename: 'Session',
+                  id: 'session-production-reaction-targets',
+                  selectedProfile: {
+                    __typename: 'Profile',
+                    id: 'profile-production-reaction-targets',
+                  },
+                },
+                me: {
+                  __typename: 'Account',
+                  id: 'account-production-reaction-targets',
+                  name: 'Reaction Target Story',
+                },
+              },
+            } as GraphQLResponse);
+          }
+          if (request.name === 'PostsStoriesQuery') {
+            return Promise.resolve({
+              data: {
+                composerProfile,
+                contentPostsProfile: {
+                  ...contentPostsProfile,
+                  posts: {
+                    ...contentPostsProfile.posts,
+                    edges: contentPostsProfile.posts.edges.map((edge) => ({
+                      ...edge,
+                      node: withProductionReactionViewerState(edge.node),
+                    })),
+                  },
+                },
+                emptyPostsProfile,
+                homeTimeline: {
+                  ...homeTimeline,
+                  edges: homeTimeline.edges.map((edge) => ({
+                    ...edge,
+                    node: withProductionReactionViewerState(edge.node),
+                  })),
+                },
+                nodes: storyPosts.map(withProductionReactionViewerState),
+              },
+            } as GraphQLResponse);
+          }
+          if (request.name === 'ReactionActionAddReactionMutation') {
+            const postId = String(variables.postId);
+            const type = String(variables.type);
+            setRequests((current) => [...current, { postId, type }]);
+            return Promise.resolve({
+              data: {
+                addReaction: {
+                  reaction: {
+                    __typename: 'Reaction',
+                    id: `reaction-${postId}-${type}`,
+                    type,
+                  },
+                },
+              },
+            } as GraphQLResponse);
+          }
+          return Promise.resolve({ data: {} } as GraphQLResponse);
+        }),
+        store: new Store(new RecordSource()),
+      }),
+    [],
+  );
+
+  return (
+    <RelayEnvironmentProvider environment={environment}>
+      <Suspense fallback={<Text>Reaction target fixture를 불러오는 중입니다.</Text>}>
+        <SessionProvider>
+          <ProductionRepostQuoteLists />
+        </SessionProvider>
+      </Suspense>
+      <Text testID="production-reaction-request-log">{JSON.stringify(requests)}</Text>
+    </RelayEnvironmentProvider>
+  );
+}
+
 function RepostQuotePresentationStory({ postId }: { postId: string }) {
   const post = requireStoryPostById(storyPosts, postId);
 
@@ -1136,6 +1239,51 @@ export const ProductionRepostQuoteListIntegration: Story = {
     }
   },
   render: () => <ProductionRepostQuoteLists />,
+};
+
+export const ProductionReactionMutationTargets: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const home = within(await canvas.findByTestId('production-home-reposts'));
+    const ordinaryActionBar = within(home.getAllByRole('article')[0]!).getByRole('toolbar', {
+      name: '액션 바',
+    });
+    const quoteActionBar = within(
+      home
+        .getByText('이 원문에 덧붙이는 인용자의 본문입니다.')
+        .closest<HTMLElement>('[role="article"]')!.parentElement!,
+    ).getByRole('toolbar', { name: '액션 바' });
+    const pureRepostActionBar = within(
+      home
+        .getByText('재게시한 코스모 사용자님이 재게시함')
+        .closest<HTMLElement>('[role="article"]')!,
+    ).getByRole('toolbar', { name: '액션 바' });
+    const actionBars = [ordinaryActionBar, quoteActionBar, pureRepostActionBar];
+
+    for (const [index, actionBar] of actionBars.entries()) {
+      const trigger = within(actionBar).getByRole('button', { name: '반응' });
+      await userEvent.click(trigger);
+      await userEvent.click(await screen.findByRole('button', { name: '🥹 반응' }));
+      await waitFor(() => {
+        const requests = JSON.parse(
+          canvas.getByTestId('production-reaction-request-log').textContent ?? '[]',
+        ) as ProductionReactionRequest[];
+        expect(requests).toHaveLength(index + 1);
+      });
+      await userEvent.click(trigger);
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull());
+    }
+
+    const requests = JSON.parse(
+      canvas.getByTestId('production-reaction-request-log').textContent ?? '[]',
+    ) as ProductionReactionRequest[];
+    expect(requests.map(({ postId }) => postId)).toEqual([
+      shortPost.id,
+      quotePost.id,
+      pureRepost.repostSource!.id,
+    ]);
+  },
+  render: () => <ProductionReactionMutationTargetsStory />,
 };
 
 export const ProductionRepostFailureToast: Story = {
