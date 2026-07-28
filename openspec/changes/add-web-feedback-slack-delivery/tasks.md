@@ -118,4 +118,4 @@ API·Web contract와 secret 경계가 repository checks를 통과하고, product
 - [x] 4.1 Relay/schema generation, API·app·Web E2E와 workspace lint/format 검증을 실행하고 실패를 수정한다.
 - [x] 4.2 API-only Vault secret 설정과 production smoke 절차를 민감값 없이 문서화하고 client export의 secret 비노출을 검증한다.
 - [ ] 4.3 Production Web에서 인증 smoke를 실행해 Slack message 한 건, safe payload와 UI 성공 상태를 확인한다.
-- [ ] 4.4 `PROD-487` 검증 증거를 정리하고 `PROD-488` unblock 및 부모 `PROD-479`의 후속 integration/archive 책임을 handoff한다.
+- [x] 4.4 `PROD-487` 검증 증거를 정리하고 `PROD-488` unblock 및 부모 `PROD-479`의 후속 integration/archive 책임을 handoff한다.
