@@ -136,6 +136,17 @@
 - Consequences: 이전 action별 비정사각 glyph와 optical transform을 제거하고 fixed geometry로 단순화한다. Native 28pt·28dp는 Apple·Android baseline을 충족하지 않는 출시 전 임시 예외이므로 Native 접근성 완료를 주장하지 않는다.
 - Confirmation / Follow-up: Storybook에서 exact geometry와 Web target non-overlap을 검증한다. iOS 출시 전 최소 44×44pt, Android 출시 전 최소 48×48dp를 복구하고 touch·VoiceOver·TalkBack runtime을 별도 검증한다.
 
+### 목록 Post 카드의 Action Bar 주변 spacing을 Figma에 맞춘다
+
+- Decision Date: 2026-07-29
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/accessibility.md`, `docs/design/post-action-bar.md`, `PROD-414`, 2026-07-29 KST 사용자 결정
+- Status: Active
+- Context / Problem: `PostListItem`의 하단 16px padding과 순수 Repost attribution의 44px target·4px gap이 Figma에 없는 여백을 추가한다.
+- Decision Outcome: 일반 Post·Quote·순수 Repost 목록에서 Action Bar 아래 외부 padding은 0이다. 순수 Repost attribution은 20px line box와 Source 표준행까지 gap 0을 사용한다. Web Profile text link는 inline target 예외를 적용하고 Native target 복구와 인접 target runtime 검증은 출시 gate로 남긴다.
+- Consequences: `PostListItem` spacing과 기존 Storybook geometry assertion만 변경하며 `PostLayout`, Action Bar 28px geometry와 action 동작은 유지한다.
+- Confirmation / Follow-up: 390px Web Storybook에서 세 목록 variant의 하단 gap과 순수 Repost attribution 높이·Source gap을 exact 값으로 검증한다.
+
 ### 공유 change와 부모 소유의 최종 archive
 
 - Decision Date: 2026-07-21

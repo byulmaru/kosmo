@@ -196,6 +196,12 @@
 - **THEN** Action Bar는 각 구조의 마지막 presentation 뒤 content grid의 마지막 sibling으로 렌더된다
 - **AND** 본문·작성자·생성 시각·Source navigation link의 descendant가 아니다
 
+#### Scenario: 목록 Post 카드의 compact spacing
+
+- **WHEN** `PostListItem`이 일반 Post, 순수 Repost 또는 Quote를 렌더한다
+- **THEN** Action Bar 아래 외부 padding 없이 카드 구분선이 바로 이어진다
+- **AND** 순수 Repost attribution은 20px line box를 사용하고 아래 Source 표준행과의 추가 gap을 두지 않는다
+
 #### Scenario: 순수 Repost의 Source action target
 
 - **WHEN** Post에 Content와 Reply Parent가 없고 Repost Source만 있다

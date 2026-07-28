@@ -81,6 +81,10 @@ PR과 이슈에는 실행한 자동화, 실제 관찰한 platform·viewport·입
 - Reaction Quick Picker는 [reactions.md](./reactions.md)의 44×44 option과 pending overlay를 유지한다. `apps/app/src/stories/Reactions.stories.tsx`의 exact 44×44 assertion도 그대로 유지한다.
 - Post Action Bar는 `post-action-bar.md`의 component-specific 28px geometry를 사용한다. 기존 PROD-433의 최소 44×44 assertion은 이 결정에 맞춰 PROD-414에서 교체하되, 이 변경을 전역 Web 또는 Native target 완화로 해석하지 않는다.
 - Post Action Bar의 Native 28pt·28dp 값은 출시 전 임시 예외다. iOS 44×44pt와 Android 48×48dp 복구 및 runtime 관찰은 Native 출시 gate이며 현재 Web 우선 slice의 완료 증거와 분리한다.
+- 순수 Repost의 `{displayName}님이 재게시함` Profile link는 독립 icon button이 아니라 attribution 문장 전체에
+  적용된 text link다. Web에서는 SC 2.5.8의 inline target 예외를 사용해 14/20 line box를 유지하며 role,
+  accessible name, keyboard focus와 navigation을 보존한다. Native 출시 전에는 이 링크의 44pt·48dp target,
+  focus boundary와 바로 아래 Source Author link 비중첩을 runtime에서 다시 검증한다.
 - 새 컴포넌트는 이 문서의 플랫폼 baseline을 사용한다. 더 큰 target이나 엄격한 검증이 필요하면 컴포넌트 디자인 문서·Linear·OpenSpec에 이유와 exact contract를 기록한다.
 
 ## 이 문서가 변경하지 않는 것

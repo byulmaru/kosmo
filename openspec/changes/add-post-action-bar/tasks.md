@@ -87,6 +87,7 @@ PROD-434의 독립 `actionBar?: ReactNode`·mock surface slice를 실행하지 �
 **Verification**
 
 - 일반 Post·순수 Repost·Quote의 final sibling·link 비중첩과 순수 Repost Source target을 목록·상세에서 검증한다.
+- 목록의 세 Post variant에서 Action Bar 아래 외부 padding 0, 순수 Repost attribution line box 20과 Source 표준행까지 gap 0을 검증한다.
 - Web outside/Escape/focus return·keyboard navigation과 Native backdrop/back/dismiss/safe area·modal semantics를 검증한다.
 - menu label·item 선택 뒤 create/delete identity·pending, exact toast·latest-replace·자동 dismiss·alert semantics, 실패 뒤 상태 유지·menu 재시도를 검증한다.
 
@@ -95,6 +96,8 @@ PROD-434의 독립 `actionBar?: ReactNode`·mock surface slice를 실행하지 �
 - [x] 3.3 앱 provider의 단일 transient toast host와 Repost action별 surface callback을 연결하고 exact copy·latest-replace·자동 dismiss·safe area·alert semantics·실패 상태 유지를 검증한다.
 - [x] 3.4 Figma 기반 28px geometry를 Action Bar에 적용하고 exact height·padding·action width·glyph·gap, Web 최소 target과 non-overlap을 Storybook에서 검증한다.
 - [x] 3.5 app·Relay·unit·Storybook·static build·Web runtime과 두 OpenSpec의 scoped·전체 strict validation을 통과시킨다. Native는 공통 구현의 정적·Storybook 검증만 수행하고 44pt·48dp 복구와 runtime 관찰을 출시 gate에 남긴다.
+- [x] 3.6 목록 일반 Post·Quote·순수 Repost의 Action Bar 하단 외부 padding을 0으로 맞추고, 순수 Repost attribution을 20px line box·Source gap 0으로 줄여 기존 Storybook interaction으로 exact geometry를 검증한다.
+- [x] 3.7 compact spacing 변경 뒤 app·Storybook·lint와 전체 OpenSpec strict validation을 다시 통과시키고 390px Web runtime을 관찰한다.
 
 ## 4. PROD-432 실제 액션 연결·통합 검증·archive
 

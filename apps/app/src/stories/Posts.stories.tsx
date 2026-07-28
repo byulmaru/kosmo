@@ -941,6 +941,27 @@ export const ProductionRepostQuoteListIntegration: Story = {
     const ordinaryActionBar = within(home.getAllByRole('article')[0]!).getByRole('toolbar', {
       name: '액션 바',
     });
+    const ordinaryCard = ordinaryActionBar.closest<HTMLElement>('[role="article"]')!;
+    const quoteCard = quoteActionBar.parentElement!.parentElement!;
+    const pureRepostAttributionLink = home
+      .getByText('재게시한 코스모 사용자님이 재게시함')
+      .closest<HTMLAnchorElement>('a')!;
+    const pureRepostSourceRow = within(pureRepostRow!).getByTestId('post-list-standard-row');
+    expect(pureRepostAttributionLink.getBoundingClientRect().height).toBe(20);
+    expect(
+      pureRepostSourceRow.getBoundingClientRect().top -
+        pureRepostAttributionLink.getBoundingClientRect().bottom,
+    ).toBeCloseTo(0, 0);
+    for (const [card, actionBar] of [
+      [ordinaryCard, ordinaryActionBar],
+      [quoteCard, quoteActionBar],
+      [pureRepostRow!, pureRepostActionBar],
+    ] as const) {
+      const cardBounds = card.getBoundingClientRect();
+      const actionBarBounds = actionBar.getBoundingClientRect();
+      const borderBottomWidth = Number.parseFloat(getComputedStyle(card).borderBottomWidth);
+      expect(cardBounds.bottom - borderBottomWidth - actionBarBounds.bottom).toBeCloseTo(0, 0);
+    }
     for (const actionBar of [ordinaryActionBar, quoteActionBar, pureRepostActionBar]) {
       expect(actionBar.parentElement?.closest('a, [role="link"], [role="button"]')).toBeNull();
       expect(actionBar.parentElement?.lastElementChild).toBe(actionBar);

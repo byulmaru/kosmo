@@ -14,6 +14,8 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 모든 glyph의 visual box는 16×16px, glyph와 count 사이는 4px다. count는 16px 한 줄이며 icon과 시각 중심을 맞춘다.
 - 순서는 `Reply → Repost → Reaction → Bookmark → More`로 고정한다. Reply와 Repost만 count를 표시하고 Reaction·Bookmark·More에는 count slot을 만들지 않는다.
 - pending spinner, selected·pressed·disabled 표현은 같은 28px slot 안에서 layout을 바꾸지 않는다. focus indicator와 accessible name·state는 compact geometry에서도 유지한다.
+- Figma Action은 내부 상하 padding 4px을 포함하지만 바깥 하단 padding은 포함하지 않는다. 목록 카드에서 마지막
+  자식인 Action Bar 아래 외부 padding은 0이며 카드 구분선이 바로 이어진다.
 
 ## 플랫폼 rollout과 release gate
 
@@ -33,6 +35,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 순수 Repost 아래의 Action Bar는 바깥 Repost Post가 아니라 화면에 표시한 direct Source Post를 대상으로
   동작한다. 따라서 Repost menu의 선택 상태, count와 생성·취소 identity도 Source fragment에서 파생한다.
 - Quote의 자체 본문 affordance는 Quote detail로 이동하고 Source preview만 Source detail로 이동한다.
+- 순수 Repost의 `{displayName}님이 재게시함` attribution은 `typography.sm`의 14/20 line box에 맞추고 바로
+  아래 Source 표준행과의 추가 간격을 두지 않는다. Web의 Profile text link는 inline target 예외를 사용하며,
+  Native target과 인접 Source link 비중첩은 출시 전 runtime gate에서 다시 검증한다.
 
 ## Repost action menu
 
@@ -74,6 +79,8 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 
 - 일반 Post, 순수 Repost, Quote와 상세에서 Action Bar가 content grid의 마지막 sibling이고 navigation
   Link/Pressable의 descendant가 아닌지 검증한다.
+- 목록의 일반 Post·순수 Repost·Quote에서 Action Bar 아래 외부 padding이 0인지 검증한다. 순수 Repost는
+  attribution line box가 20이고 Source 표준행과의 추가 gap이 0인지 함께 검증한다.
 - 모든 플랫폼 구현에서 Bar와 control 높이 28, 좌우 padding 8, social action 너비 50, More target 너비 최소
   28, glyph 16, icon-count gap 4와 고정 순서를 검증한다. Web runtime에서는 각 target이 24×24 CSS px 자체를
   포함하고 서로 겹치지 않는지도 확인한다.

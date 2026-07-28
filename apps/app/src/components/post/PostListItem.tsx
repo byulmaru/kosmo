@@ -225,7 +225,6 @@ function PostListRow({
 const styles = StyleSheet.create({
   card: {
     borderBottomWidth: 1,
-    paddingBottom: spacing.lg,
     paddingHorizontal: spacing.sm,
     paddingTop: spacing.sm,
   },
@@ -262,12 +261,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.md,
-    marginBottom: spacing.xs,
     minWidth: 0,
   },
   repostIconColumn: { alignItems: 'flex-end', width: 48 },
   repeat: { fontFamily: 'SUIT', ...typography.sm },
   repostAuthorSlot: { flex: 1, minWidth: 0 },
-  repostLabelTarget: { justifyContent: 'center', minHeight: 44, minWidth: 0 },
+  repostLabelTarget: { minWidth: 0 },
   repostLabel: { fontFamily: 'SUIT', ...typography.sm },
 });
