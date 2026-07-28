@@ -463,6 +463,18 @@ test('exposes the typed Notification Read mutation payload', () => {
   assert.equal(String(payload.getFields().recipientProfile.type), 'Profile!');
 });
 
+test('exposes current-session revoke without a target input', () => {
+  const mutation = schema.getMutationType();
+  const payload = schema.getType('RevokeCurrentSessionPayload');
+  const field = mutation?.getFields().revokeCurrentSession;
+
+  assert.equal(String(field?.type), 'RevokeCurrentSessionPayload!');
+  assert.deepEqual(field?.args, []);
+  assert.ok(isObjectType(payload));
+  assert.deepEqual(Object.keys(payload.getFields()), ['completed']);
+  assert.equal(String(payload.getFields().completed.type), 'Boolean!');
+});
+
 test('exposes the private Bookmark Node and Profile connection contract', () => {
   const bookmark = schema.getType('Bookmark');
   const profile = schema.getType('Profile');

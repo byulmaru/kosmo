@@ -216,6 +216,7 @@ type Mutation {
   markNotificationRead(input: MarkNotificationReadInput!): MarkNotificationReadPayload!
   rejectProfileFollowRequest(input: RejectProfileFollowRequestInput!): RejectProfileFollowRequestPayload!
   repostPost(input: RepostPostInput!): RepostPostPayload!
+  revokeCurrentSession: RevokeCurrentSessionPayload!
   selectProfile(input: SelectProfileInput!): SelectProfilePayload!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
   updateProfile(input: UpdateProfileInput!): UpdateProfilePayload!
@@ -470,6 +471,10 @@ input RepostPostInput {
 
 type RepostPostPayload {
   repost: Post!
+}
+
+type RevokeCurrentSessionPayload {
+  completed: Boolean!
 }
 
 input SelectProfileInput {

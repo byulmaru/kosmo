@@ -35,6 +35,12 @@ Account session이나 ActivityPub signature처럼 actor identity를 신뢰하기
 Post.Author, Source visibility와 lifecycle처럼 검증된 actor와 domain object 사이의 공통 권한은 core가
 검증한다.
 
+current-session logout은 이 규칙의 의도적인 예외다. missing 또는 terminal Session credential은 검증된
+Session identity를 만들 수 없지만, 로그아웃은 이 상태를 DB·네트워크 오류처럼 결과를 확정하지 못한 실패와
+구분해야 한다. GraphQL과 Web BFF가 같은 판정을 공유하도록 transport-neutral logout action이 raw Kosmo
+Session credential 확인과 조건부 revoke를 함께 소유한다. 이 예외는 다른 인증 action의 caller·actor 검증
+책임을 core로 옮기는 근거가 아니다.
+
 ## Actor와 caller별 조건
 
 기본 소셜 actor는 `Profile`이다. `Account`는 GraphQL caller의 인증 identity이며 selected Profile은
