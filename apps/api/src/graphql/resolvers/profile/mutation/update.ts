@@ -46,11 +46,8 @@ builder.mutationField('updateProfile', (t) =>
         .limit(1)
         .then(firstOrThrowWith(() => new NotFoundError('Profile not found')));
 
-      if (
-        profile.actorRole !== AccountProfileRole.OWNER &&
-        profile.actorRole !== AccountProfileRole.ADMIN
-      ) {
-        throw new PermissionDeniedError('Profile admin permission is required');
+      if (profile.actorRole !== AccountProfileRole.OWNER) {
+        throw new PermissionDeniedError('Profile owner permission is required');
       }
 
       const updatedProfile = await db

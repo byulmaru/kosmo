@@ -1,6 +1,5 @@
 export const AccountProfileRole = {
   OWNER: 'OWNER',
-  ADMIN: 'ADMIN',
   MEMBER: 'MEMBER',
 } as const;
 export type AccountProfileRole = keyof typeof AccountProfileRole;

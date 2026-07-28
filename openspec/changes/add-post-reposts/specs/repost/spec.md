@@ -29,7 +29,7 @@
 
 ### Requirement: Repost 생성
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `PROD-389`, `PROD-401`, `PROD-439` 시스템은 `Account.Active`와 `Profile.Member` 권한을 가진 selected Active/Normal Profile이 조회 가능한 Content Post를 Repost하는 멱등 action과 GraphQL mutation을 제공해야 한다(MUST). `Profile.Member`는 Owner, Admin, Member 역할을 모두 포함하며 GraphQL entry는 공통 `usingProfile` 인증을 통과한 selected Profile에 역할별 제한이나 Instance Type 제한을 다시 적용하지 않는다.
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `PROD-389`, `PROD-401`, `PROD-439` 시스템은 `Account.Active`와 `Profile.Member` 권한을 가진 selected Active/Normal Profile이 조회 가능한 Content Post를 Repost하는 멱등 action과 GraphQL mutation을 제공해야 한다(MUST). `Profile.Member`는 Owner, Member 역할을 모두 포함하며 GraphQL entry는 공통 `usingProfile` 인증을 통과한 selected Profile에 역할별 제한이나 Instance Type 제한을 다시 적용하지 않는다.
 
 #### Scenario: Public 또는 Unlisted Source Repost
 

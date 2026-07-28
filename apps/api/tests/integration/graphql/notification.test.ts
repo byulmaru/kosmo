@@ -114,7 +114,7 @@ describe('Notification GraphQL Node boundary', () => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile('recipient');
     const relatedProfiles = await Promise.all([createProfile('first'), createProfile('second')]);
-    await addMembership(auth.account.id, recipient.id, AccountProfileRole.ADMIN);
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.MEMBER);
     const notifications = await Promise.all(
       relatedProfiles.map((related, index) =>
         createFollowNotification(
@@ -1093,7 +1093,7 @@ describe('Notification GraphQL Node boundary', () => {
     const recipient = await createProfile('read-recipient');
     const related = await createProfile('read-related');
     const otherRelated = await createProfile('other-unread-related');
-    await addMembership(auth.account.id, recipient.id, AccountProfileRole.ADMIN);
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.MEMBER);
     const notification = await createFollowNotification(recipient.id, related.id);
     const otherNotification = await createFollowNotification(recipient.id, otherRelated.id);
     await db

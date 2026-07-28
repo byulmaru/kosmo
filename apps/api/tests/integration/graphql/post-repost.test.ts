@@ -210,15 +210,11 @@ describe('GraphQL Repost', () => {
     }
   });
 
-  test('Owner·Admin·Member가 선택한 Local Active Profile로 Repost할 수 있다', async () => {
+  test('Owner·Member가 선택한 Local Active Profile로 Repost할 수 있다', async () => {
     const sourceAuthor = await createProfile('member-source-author');
     const source = await createContentPost(sourceAuthor.id);
 
-    for (const role of [
-      AccountProfileRole.OWNER,
-      AccountProfileRole.ADMIN,
-      AccountProfileRole.MEMBER,
-    ]) {
+    for (const role of [AccountProfileRole.OWNER, AccountProfileRole.MEMBER]) {
       const auth = await createAuthenticatedSession({ role });
       const result = await requestRepost(source.id, auth.token);
 
