@@ -87,11 +87,8 @@ const deletePostMutation = graphql`
 type Icon = ComponentType<{
   color: string;
   fill?: string;
-  height?: number;
-  preserveAspectRatio?: 'none';
   size: number;
   strokeWidth?: number;
-  width?: number;
 }>;
 
 type ActionControlProps = {
@@ -104,13 +101,9 @@ type ActionControlProps = {
   fillActive?: boolean;
   hasMenuPopup?: boolean;
   icon: Icon;
-  iconHeight?: number;
-  iconSize?: number;
   iconStrokeWidth?: number;
-  iconWidth?: number;
   menuExpanded?: boolean;
   onPress: () => void;
-  preserveAspectRatio?: 'none';
   processing?: ProcessingState;
   stateful?: boolean;
   testID: string;
@@ -134,10 +127,7 @@ export function PostActionBar({
           count={reply.count}
           expanded={reply.expanded}
           icon={MessageCircle}
-          iconHeight={16}
-          iconSize={16}
           onPress={reply.onPress}
-          preserveAspectRatio="none"
           processing={reply.processing}
           testID="reply"
         />
@@ -149,7 +139,6 @@ export function PostActionBar({
           active={reaction.hasReacted}
           fillActive
           icon={Heart}
-          iconSize={18}
           onPress={reaction.onPress}
           processing={reaction.processing}
           testID="reaction"
@@ -270,13 +259,9 @@ function RepostAction({ onError, post }: RepostActionProps) {
           count={data.repostCount}
           hasMenuPopup
           icon={Repeat2}
-          iconHeight={24}
-          iconSize={16}
           iconStrokeWidth={2.7}
-          iconWidth={18}
           menuExpanded={menuExpanded}
           onPress={onPress}
-          preserveAspectRatio="none"
           processing={processing ? 'pending' : 'default'}
           testID="repost"
         />
@@ -295,13 +280,9 @@ function PostActionControl({
   fillActive = false,
   hasMenuPopup = false,
   icon: Icon,
-  iconHeight,
-  iconSize = 16,
   iconStrokeWidth = 3.5,
-  iconWidth,
   menuExpanded,
   onPress,
-  preserveAspectRatio,
   processing = 'default',
   stateful = true,
   testID,
@@ -325,12 +306,6 @@ function PostActionControl({
         : { expanded }),
   };
   const formattedCount = formatPostActionCount(count);
-  const resolvedIconHeight = iconHeight ?? iconSize;
-  const resolvedIconWidth = iconWidth ?? iconSize;
-  const iconSlotStyle = {
-    height: Math.max(16, resolvedIconHeight),
-    width: Math.max(16, resolvedIconWidth),
-  };
 
   return (
     <Pressable
@@ -357,24 +332,21 @@ function PostActionControl({
           aria-hidden
           color={color}
           size={14}
-          style={[styles.icon, iconSlotStyle, styles.pendingSpinner]}
+          style={styles.icon}
           testID={`post-action-${testID}-spinner`}
         />
       ) : (
         <View
           accessible={false}
           aria-hidden
-          style={[styles.icon, iconSlotStyle]}
+          style={styles.icon}
           testID={`post-action-${testID}-icon`}
         >
           <Icon
             color={color}
             fill={fillActive && active ? color : 'none'}
-            height={resolvedIconHeight}
-            preserveAspectRatio={preserveAspectRatio}
-            size={iconSize}
+            size={16}
             strokeWidth={iconStrokeWidth}
-            width={resolvedIconWidth}
           />
         </View>
       )}
@@ -392,30 +364,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.xs,
+    height: 28,
     justifyContent: 'center',
-    minHeight: 44,
-    minWidth: 44,
+    width: 50,
   },
   alignToEnd: {
-    justifyContent: 'flex-end',
-    paddingRight: spacing.sm,
+    width: 28,
   },
   blocked: { opacity: 0.45 },
   count: {
-    flexShrink: 1,
+    flexShrink: 0,
     fontFamily: 'SUIT',
     fontSize: typography.md.fontSize,
     lineHeight: typography.md.fontSize,
-    transform: [{ translateY: 2 }],
   },
-  icon: { alignItems: 'center', justifyContent: 'center' },
-  pendingSpinner: { transform: [{ translateY: 1 }] },
+  icon: { alignItems: 'center', height: 16, justifyContent: 'center', width: 16 },
   pressed: { opacity: 0.72 },
   root: {
     alignItems: 'center',
     flexDirection: 'row',
     flexWrap: 'nowrap',
+    height: 28,
     justifyContent: 'space-between',
+    paddingHorizontal: spacing.sm,
     width: '100%',
   } satisfies StyleProp<ViewStyle>,
 });

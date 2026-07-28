@@ -18,7 +18,7 @@ Android·iOS·Web에서 공유하며 고정 순서, optional 액션, compact cou
 
 - 공개 UI API는 `PostActionBar` 하나와 actual Post fragment ref, `reply`·`reaction`·`bookmark`·`more`의 명시적 optional config, Repost error callback으로 제한한다. 구현된 Repost는 composite parent fragment 아래 private child action으로 조립한다. Repost의 concrete disabled host input 또는 fragment shape는 actual caller와 함께 PROD-432가 설계한다.
 - Reply의 controlled `expanded`, Reaction의 `hasReacted`, Bookmark의 `hasBookmarked`를 처리 상태와 분리하고, Repost child는 `viewerRepost`에서 `hasReposted`를 파생한다. 범용 공개 `selected`를 만들지 않는다. 공개 처리 상태는 default·pending·disabled만 제공하고 pending·disabled만 입력을 차단한다. 일시적 요청 실패를 `error`·danger 상태로 표현하지 않는다.
-- 각 control은 최소 44×44 interactive target과 접근성 label을 제공하고, Reply·Repost·Reaction·Bookmark는 공개 도메인 상태와 처리 상태에 대응하는 접근성 state도 제공한다.
+- Bar와 각 control은 모든 플랫폼에서 높이 28을 사용하고, 좌우 padding 8, social action 너비 50, More target 너비 최소 28, glyph 16×16, icon-count 간격 4를 제공한다. Web target은 24×24 CSS px 사각형을 포함하고 서로 겹치지 않아야 한다. Native 28pt·28dp는 출시 전 임시 예외이며 Native 접근성 완료 증거로 사용하지 않는다.
 - Reaction과 Bookmark는 count를 받지 않는다. Reply config와 Repost child fragment는 선행 계약이 제공한 count만 실행 환경 기본 locale의 표준 compact formatting으로 표시하고 K/M 반올림·단위 승격·상한을 수동 구현하거나 count가 없을 때 `0`을 합성하지 않는다.
 - More는 callback과 접근성 label만 제공하고 count·도메인 상태·처리 상태, 팝업이나 링크 복사를 구현하지 않는다.
 - production surface, navigation, Content·Reply Parent·Repost Source 관계 조합 정책과 Figma 파일을 수정하지 않는다. 구현된 child action의 Relay fragment·mutation은 PROD-414가 소유하고 toolbar container가 mutation payload나 cache update 정책을 재구현하지 않는다.
@@ -27,7 +27,7 @@ Android·iOS·Web에서 공유하며 고정 순서, optional 액션, compact cou
 
 - 고정 순서, optional 표시, Reaction·Bookmark count 제외, Reply·Repost count 유무와 한국어·영어 locale의 표준 compact 결과를 렌더링 검증한다.
 - Reply `expanded`, actual Relay fragment에서 파생한 Repost `hasReposted`, Reaction `hasReacted`, Bookmark `hasBookmarked`, config 기반 Reply·Reaction·Bookmark의 default·pending·disabled와 Repost child의 default·mutation pending에 대한 시각 표현, active Reaction·Bookmark의 채워진 icon, default callback 또는 child mutation 호출과 각 소유 경계의 입력 차단을 검증한다. Repost policy-disabled는 PROD-432 actual surface 통합에서 검증한다.
-- 390px mobile·900px compact·1400px full Storybook에서 실제 surface 콘텐츠 폭 기준 한 행, 44×44 target과 layout을 검토한다.
+- 390px mobile·900px compact·1400px full Storybook에서 실제 surface 콘텐츠 폭 기준 한 행과 exact 28px geometry를 검토한다.
 - keyboard/touch activation과 role·label·expanded·pressed·selected·busy·disabled metadata를 공개 도메인 상태에 맞게 검증한다.
 - React Native type/Relay check, Storybook build와 관련 component test를 통과시킨다.
 
@@ -93,7 +93,8 @@ PROD-434의 독립 `actionBar?: ReactNode`·mock surface slice를 실행하지 �
 - [x] 3.1 `PostListItem`·`PostLayout`에 actual Action Bar를 final sibling으로 배치하고 순수 Repost Source target과 navigation 비중첩을 연결한다.
 - [x] 3.2 Web anchored menu와 Android·iOS bottom action sheet를 구현하고 선택·미선택 label, dismiss·focus/back·접근성, `인용하기` 미노출과 항목 선택 뒤 mutation을 검증한다.
 - [x] 3.3 앱 provider의 단일 transient toast host와 Repost action별 surface callback을 연결하고 exact copy·latest-replace·자동 dismiss·safe area·alert semantics·실패 상태 유지를 검증한다.
-- [ ] 3.4 app·Relay·unit·Storybook·static build·Web/Android/iOS runtime과 두 OpenSpec의 scoped·전체 strict validation을 통과시킨다.
+- [x] 3.4 Figma 기반 28px geometry를 Action Bar에 적용하고 exact height·padding·action width·glyph·gap, Web 최소 target과 non-overlap을 Storybook에서 검증한다.
+- [x] 3.5 app·Relay·unit·Storybook·static build·Web runtime과 두 OpenSpec의 scoped·전체 strict validation을 통과시킨다. Native는 공통 구현의 정적·Storybook 검증만 수행하고 44pt·48dp 복구와 runtime 관찰을 출시 gate에 남긴다.
 
 ## 4. PROD-432 실제 액션 연결·통합 검증·archive
 

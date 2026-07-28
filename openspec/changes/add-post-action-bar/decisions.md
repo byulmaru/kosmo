@@ -94,7 +94,7 @@
 - Decision Class: Derived Contract
 - Authority / Provenance: `memory/issue-openspec-workflow.md`, `PROD-432`
 - Status: Active
-- Context / Problem: 현재 Figma에는 pending·disabled, 접근 가능한 실패 toast와 최소 44×44 interactive target이 없고, 도구를 통한 수정 결과를 신뢰할 수 있는 동기화 기준으로 삼기 어렵다. 동시에 제품 정책과 작업 범위, 규범적 UI 계약의 소유권을 구분해야 한다.
+- Context / Problem: 현재 Figma에는 pending·disabled와 접근 가능한 실패 toast가 없고, 도구를 통한 수정 결과를 신뢰할 수 있는 동기화 기준으로 삼기 어렵다. 동시에 Figma의 27px 측정값을 production 정수 geometry로 정규화하고 제품 정책과 작업 범위, 규범적 UI 계약의 소유권을 구분해야 한다.
 - Decision Outcome: `docs/domain`·`docs/design`은 제품·디자인의 canonical source, Linear는 범위·소유권·의존성의 source, 이 OpenSpec은 상태·입력·접근성·통합 동작의 규범 계약으로 사용한다. Figma Action node는 배치·간격·icon·색상의 비규범적 시각 참고로만 사용하며 이 change에서 수정하지 않는다.
 - Alternatives Considered: 구현 전에 Figma variant와 touch target 설명을 추가하는 방식은 도구 반영 신뢰도가 낮고 사용자가 필요할 때 직접 정렬하기로 했으므로 채택하지 않았다. Figma에 없는 상태와 실패 피드백을 구현하지 않는 방식은 Linear와 OpenSpec의 승인된 완료 조건을 위반하므로 채택하지 않았다.
 - Consequences: 일정 기간 Figma와 구현 상태 카탈로그 사이의 차이를 허용한다. 향후 Figma를 정렬할 때 canonical 문서·Linear·OpenSpec·코드의 소유 경계를 기준으로 역동기화해야 한다.
@@ -117,12 +117,24 @@
 - Decision Date: 2026-07-23
 - Decision Class: Implementation Choice
 - Authority / Provenance: `PROD-433`, 2026-07-23 KST 사용자 결정
-- Status: Active
+- Status: Superseded
 - Context / Problem: Reply·Repost의 SVG element box와 16px count line box 중심을 같게 배치해도 실제 icon path와 글자 획의 높이가 달라 수평선이 맞지 않아 보인다. 특히 Repeat2를 20×20px과 `strokeWidth` 4로 균등 확대하면 원래 y=6~18만 사용하는 가로형 path는 계속 눌려 보이면서 선만 과도하게 두꺼워진다. 비정사각 scaling 뒤에도 SUIT count의 font ink가 icon optical center보다 높게 느껴진다. 14×16 Reply와 16×24 Repost는 세로 대비 가로가 부족해 과도하게 길어 보인다.
 - Decision Outcome: Reply는 16×16px slot 중앙의 16×16px glyph, Repost는 18×24px slot의 18×24px glyph를 사용한다. Reply·Reaction·Bookmark·More의 `strokeWidth`는 3.5를 유지하고, 가로 path가 과도하게 무거워 보이지 않도록 Repost만 2.7을 사용한다. Reply는 가로폭을 16px로 넓혀 세로와 같은 비율로 맞춘다. Repost는 24×24 viewBox의 y=6~18 path가 실제 약 16px 높이로 보이도록 세로 24px을 유지하고, 가로폭은 18px로 넓혀 세로로 과도하게 늘어난 비율을 완화한다. React Native SVG의 기본 비율 보존이 비정사각 viewport 안에 정사각 content를 letterbox하지 않도록 Reply·Repost에만 `preserveAspectRatio="none"`을 전달한다. count는 모든 ActionControl에서 lineHeight와 layout 위치를 바꾸지 않고 내부 typography transform으로 시각적으로 2px 아래에 둔다. pending spinner는 14px 크기와 각 액션 slot layout을 유지한 채 시각만 1px 아래로 이동해 count 중심보다 1px 위에 둔다. Reaction Heart 18×18px, Bookmark·More 16×16px, active fill과 최소 44×44 interactive target은 유지한다.
 - Alternatives Considered: Repost 20×20px과 `strokeWidth` 4는 path 비율을 개선하지 못하고 선만 과도하게 두꺼워 채택하지 않았다. Repost 16×20px은 path가 사용하는 세로 영역이 실제 약 10px로 남아 16px count 획 높이와 계속 차이가 나므로 채택하지 않았다. 비정사각 width·height만 전달하고 기본 `preserveAspectRatio="xMidYMid meet"`를 유지하는 방식은 정사각 content를 letterbox해 실제 path 비율을 바꾸지 못하므로 채택하지 않았다. count lineHeight나 layout 위치를 바꾸는 방식은 Reply·Repost 이외의 typography와 플랫폼별 font metric까지 넓게 바꾸므로 채택하지 않았다. action별 icon `translateY`는 spinner slot과 default glyph 중심 계약을 바꾸므로 채택하지 않았다.
 - Consequences: 내부 icon renderer가 width와 height를 별도로 처리하지만 공개 `PostActionBarProps`, 액션 순서, count 계약, 입력·접근성 상태는 바뀌지 않는다. Reply·Repost의 default와 pending slot은 각각 16×16px·18×24px로 유지하므로 icon↔spinner 전환 때 행 배치가 흔들리지 않는다. Repost glyph와 slot 폭을 같게 해 Android View clipping을 피하고 플랫폼별로 같은 18px glyph를 보장한다. count는 렌더링만 2px 내려가며 lineHeight와 action target은 유지하고, pending spinner만 렌더링 1px 내려간다.
 - Confirmation / Follow-up: PROD-433 Storybook에서 Reply 16×16px, Repost 18×24px와 `strokeWidth` 2.7, 나머지 glyph의 `strokeWidth` 3.5, Reply·Repost count의 icon 중심보다 2px 낮은 렌더 위치와 pending spinner의 count 중심보다 1px 높은 렌더 위치, 실제 광학 정렬과 390px·900px·1400px 한 행 배치를 검증한다.
+
+### Figma 기반 28px geometry로 Action Bar를 정규화한다
+
+- Decision Date: 2026-07-29
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/accessibility.md`, `docs/design/post-action-bar.md`, `PROD-414`, 2026-07-29 KST 사용자 결정
+- Status: Active
+- Context / Problem: 기존 44px control과 action별 16~24px glyph 보정은 Figma의 약 27px row보다 지나치게 높고 아이콘 비율도 제각각이라 production Post에서 시각 밀도가 무너진다. Web이 현재 출시 범위이고 Native binary는 아직 출시 범위가 아니므로 먼저 공유 구현을 Figma geometry에 맞출 필요가 있다.
+- Decision Outcome: Figma의 약 27px 측정값을 production 정수값 28px로 정규화한다. Bar와 모든 control은 Android·iOS·Web에서 높이 28을 사용하고 Bar는 좌우 8 padding 안에서 action을 `space-between`으로 분배한다. Reply·Repost·Reaction·Bookmark target은 각각 너비 50, More target은 최소 너비 28이며 모든 glyph visual box는 16×16, icon-count 간격은 4, count line box는 16이다. pending spinner, selected·pressed·disabled 표현도 같은 28px slot을 유지한다. Web target은 24×24 CSS px 사각형을 포함하고 인접 target과 겹치지 않는다.
+- Alternatives Considered: 기존 44px control 유지는 Figma와 production 밀도 차이를 남겨 채택하지 않았다. Web만 28px로 바꾸고 Native를 즉시 44pt·48dp로 분기하면 아직 출시하지 않는 platform에서 공유 구현 drift가 생겨 채택하지 않았다. visual row만 28px로 줄이고 겹치는 hit slop으로 Native target을 확장하면 인접 action target과 focus boundary가 겹칠 수 있어 채택하지 않았다.
+- Consequences: 이전 action별 비정사각 glyph와 optical transform을 제거하고 fixed geometry로 단순화한다. Native 28pt·28dp는 Apple·Android baseline을 충족하지 않는 출시 전 임시 예외이므로 Native 접근성 완료를 주장하지 않는다.
+- Confirmation / Follow-up: Storybook에서 exact geometry와 Web target non-overlap을 검증한다. iOS 출시 전 최소 44×44pt, Android 출시 전 최소 48×48dp를 복구하고 touch·VoiceOver·TalkBack runtime을 별도 검증한다.
 
 ### 공유 change와 부모 소유의 최종 archive
 
@@ -258,4 +270,5 @@
 - 2026-07-21 `More 컴포넌트 경계와 링크 복사 통합을 분리`는 2026-07-23 `More callback 경계와 Post Share Reference 통합을 분리`로 대체했다.
 - 2026-07-21 `count는 K/M 단위 최대 네 글자로 표시`는 2026-07-23 `locale-aware 표준 compact number formatting을 사용`으로 대체했다.
 - 2026-07-23 `액션별 광학 크기와 선 두께를 조정`은 같은 날 `Reply·Repost의 실제 획 높이를 count와 맞춘다`로 대체했다.
+- 2026-07-23 `Reply·Repost의 실제 획 높이를 count와 맞춘다`는 2026-07-29 `Figma 기반 28px geometry로 Action Bar를 정규화한다`로 대체했다.
 - 2026-07-21 `실행할 수 없는 액션은 숨기지 않고 disabled로 유지`는 2026-07-27 `production surface는 표시 Post와 action target을 구분한다`로 대체했다.

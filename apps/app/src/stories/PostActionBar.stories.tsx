@@ -262,8 +262,8 @@ export const ActionBarCatalog: Story = {
     const defaultToolbarCanvas = within(defaultToolbar);
     const iconMetrics = [
       ['답글', 16, 16, '3.5'],
-      ['재게시', 18, 24, '2.7'],
-      ['반응', 18, 18, '3.5'],
+      ['재게시', 16, 16, '2.7'],
+      ['반응', 16, 16, '3.5'],
       ['북마크', 16, 16, '3.5'],
       ['더보기', 16, 16, '3.5'],
     ] as const;
@@ -275,23 +275,20 @@ export const ActionBarCatalog: Story = {
       expect(icon).toHaveAttribute('stroke-width', strokeWidth);
     }
     expect(
-      defaultToolbarCanvas.getByRole('button', { name: '답글' }).querySelector('svg'),
-    ).toHaveAttribute('preserveAspectRatio', 'none');
-    expect(
-      defaultToolbarCanvas.getByRole('button', { name: '재게시' }).querySelector('svg'),
-    ).toHaveAttribute('preserveAspectRatio', 'none');
-    expect(
       defaultToolbarCanvas.getByTestId('post-action-repost-icon').getBoundingClientRect().width,
-    ).toBe(18);
+    ).toBe(16);
 
     for (const label of ['답글', '재게시'] as const) {
       const button = defaultToolbarCanvas.getByRole('button', { name: label });
       const iconBounds = button.querySelector('svg')!.getBoundingClientRect();
-      const countBounds = button.querySelector('[dir="auto"]')!.getBoundingClientRect();
+      const count = button.querySelector('[dir="auto"]') as HTMLElement;
+      const countBounds = count.getBoundingClientRect();
+      expect(count.scrollWidth).toBeLessThanOrEqual(count.clientWidth);
       expect(countBounds.top + countBounds.height / 2).toBeCloseTo(
-        iconBounds.top + iconBounds.height / 2 + 2,
+        iconBounds.top + iconBounds.height / 2,
         0,
       );
+      expect(countBounds.left - iconBounds.right).toBeCloseTo(spacing.xs, 0);
     }
 
     for (const button of bookmarkButtons) {
@@ -416,11 +413,11 @@ export const ProcessingAccessibility: Story = {
     expect(replySpinnerVisual.clientWidth).toBe(14);
     expect(replySpinnerVisual.clientHeight).toBe(14);
     expect(replySpinnerBounds.top + replySpinnerBounds.height / 2).toBeCloseTo(
-      replyCountBounds.top + replyCountBounds.height / 2 - 1,
+      replyCountBounds.top + replyCountBounds.height / 2,
       0,
     );
     expect(repostSpinnerBounds.top + repostSpinnerBounds.height / 2).toBeCloseTo(
-      repostCountBounds.top + repostCountBounds.height / 2 - 1,
+      repostCountBounds.top + repostCountBounds.height / 2,
       0,
     );
     expect(
@@ -438,7 +435,7 @@ export const ProcessingAccessibility: Story = {
   ),
 };
 
-export const AccessibilityAndMinimumTarget: Story = {
+export const AccessibilityAndCompactGeometry: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -459,16 +456,19 @@ export const AccessibilityAndMinimumTarget: Story = {
     expect(buttons[2]).toHaveAttribute('aria-pressed', 'false');
     expect(buttons[3]).toHaveAttribute('aria-pressed', 'false');
     expect(buttons[4]).not.toHaveAttribute('aria-pressed');
-    for (const button of buttons) {
+    expect(actionBar.getBoundingClientRect().height).toBe(28);
+    for (const [index, button] of buttons.entries()) {
       const bounds = button.getBoundingClientRect();
-      expect(bounds.width).toBeGreaterThanOrEqual(44);
-      expect(bounds.height).toBeGreaterThanOrEqual(44);
+      expect(bounds.width).toBe(index === 4 ? 28 : 50);
+      expect(bounds.height).toBe(28);
+      expect(bounds.width).toBeGreaterThanOrEqual(24);
+      expect(bounds.height).toBeGreaterThanOrEqual(24);
     }
     const actionBarBounds = actionBar.getBoundingClientRect();
+    const firstButtonBounds = buttons[0]!.getBoundingClientRect();
     const moreButtonBounds = buttons[4]!.getBoundingClientRect();
-    const moreIconBounds = canvas.getByTestId('post-action-more-icon').getBoundingClientRect();
-    expect(moreButtonBounds.right).toBeCloseTo(actionBarBounds.right, 0);
-    expect(moreIconBounds.right).toBeCloseTo(actionBarBounds.right - spacing.sm, 0);
+    expect(firstButtonBounds.left).toBeCloseTo(actionBarBounds.left + spacing.sm, 0);
+    expect(moreButtonBounds.right).toBeCloseTo(actionBarBounds.right - spacing.sm, 0);
   },
   render: () => <PostActionBarFixture {...actionBarProps} />,
 };
@@ -532,10 +532,13 @@ function verifySingleRow(toolbar: HTMLElement, expectedContentWidth: number) {
   let previousRight = toolbarBounds.left;
 
   expect(toolbarBounds.width).toBeCloseTo(expectedContentWidth, 0);
-  for (const button of buttons) {
+  expect(toolbarBounds.height).toBe(28);
+  for (const [index, button] of buttons.entries()) {
     const bounds = button.getBoundingClientRect();
-    expect(bounds.width).toBeGreaterThanOrEqual(44);
-    expect(bounds.height).toBeGreaterThanOrEqual(44);
+    expect(bounds.width).toBe(index === 4 ? 28 : 50);
+    expect(bounds.height).toBe(28);
+    expect(bounds.width).toBeGreaterThanOrEqual(24);
+    expect(bounds.height).toBeGreaterThanOrEqual(24);
     expect(bounds.top).toBe(firstBounds.top);
     expect(bounds.bottom).toBe(firstBounds.bottom);
     expect(bounds.top).toBeGreaterThanOrEqual(toolbarBounds.top);
@@ -544,4 +547,9 @@ function verifySingleRow(toolbar: HTMLElement, expectedContentWidth: number) {
     expect(bounds.right).toBeLessThanOrEqual(toolbarBounds.right);
     previousRight = bounds.right;
   }
+  expect(buttons[0]!.getBoundingClientRect().left).toBeCloseTo(toolbarBounds.left + spacing.sm, 0);
+  expect(buttons[4]!.getBoundingClientRect().right).toBeCloseTo(
+    toolbarBounds.right - spacing.sm,
+    0,
+  );
 }
