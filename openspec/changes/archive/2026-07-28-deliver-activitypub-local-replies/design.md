@@ -5,7 +5,7 @@ signed fetch authorization과 Local/Remote Post URI resolver를 제공한다. Lo
 `inReplyTo`를 포함한 Note로 역참조할 수 있지만, 현재 Local Post 생성·삭제 application flow는 activity를 remote
 inbox로 전달하지 않는다.
 
-Local Reply 생성은 core application action이 Parent 접근 검증과 가장 바깥 transaction을 함께 소유한다.
+Local Reply 생성은 통합 core `createPost` action이 Parent 접근 검증과 가장 바깥 transaction을 함께 소유한다.
 `deletePost()`도 core action이 transaction을 직접 연다. 기존 Remote Follow은 domain
 transaction이 끝난 뒤 Fedify delivery를 `await`하고, 실패를 catch/log해 committed result와 분리한다. 현재
 federation에는 MessageQueue가 없으므로 `sendActivity()`는 remote HTTP 요청을 직접 수행한다.
@@ -33,8 +33,8 @@ federation에는 MessageQueue가 없으므로 `sendActivity()`는 remote HTTP �
 ### Current Constraints
 
 - low-level `createPost()`는 optional caller transaction에 합류하므로 그 안에서 delivery를 호출하면 가장 바깥
-  transaction이 아직 rollback될 수 있다. Local production entry는 outer transaction을 소유하는 별도 core
-  application action을 사용해야 한다.
+  transaction이 아직 rollback될 수 있다. Local production entry는 caller transaction 없이 통합 `createPost`를
+  호출해 action이 outer transaction과 post-commit lifecycle을 함께 소유하게 해야 한다.
 - 현재 Local Note loader는 Active Post만 제공한다. Reply가 Tombstone이 된 뒤에는 dispatcher를 그대로 호출해
   Delete projection을 만들 수 없다.
 - Create의 embedded Note를 별도로 다시 직렬화하면 object dispatcher의 content, summary, audience와 `inReplyTo`
@@ -46,7 +46,7 @@ federation에는 MessageQueue가 없으므로 `sendActivity()`는 remote HTTP �
 
 ### Recommended Approach
 
-core `createLocalPost` application action이 Parent 접근 정책과 가장 바깥 transaction을 소유하고, commit된 Reply
+통합 core `createPost` action이 origin별 Parent 정책과 가장 바깥 transaction을 소유하고, Local Reply의 commit된
 ID를 받은 뒤 Notification과 Fedify package의 좁은 Reply Create delivery API를 호출한다. `deletePost()`는 commit
 결과에서 Reply를 판별해 Reply Delete delivery를 호출한다. 두 delivery는 각각 `await`하되 오류를 구조화해 기록하고
 committed domain 결과를 반환한다. GraphQL resolver는 인증된 Profile과 business input만 전달하고 payload를 구성한다.
@@ -72,9 +72,8 @@ fragment 없는 Note URI를 사용한다. 이 방법은 별도 activity row나 �
 
 ### Allowed Alternatives
 
-- 별도 API-local orchestration module이 outer transaction과 post-commit lifecycle을 소유할 수 있다. 다만 이
-  lifecycle은 GraphQL에 고유하지 않고 현재 Repost와 같은 core ownership을 공유하므로 core application action을
-  사용한다.
+- 별도 Local Post action이나 API-local orchestration module이 outer transaction과 post-commit lifecycle을 소유할
+  수 있다. 하지만 진입점 통일을 깨뜨리므로 통합 `createPost` action의 origin별 정책으로 유지한다.
 
 ### Known Traps
 

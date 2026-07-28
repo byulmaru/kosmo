@@ -1,6 +1,6 @@
 import { PostVisibility } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
-import { createLocalPost } from '@kosmo/core/services';
+import { createPost } from '@kosmo/core/services';
 import { postBodyTextSchema } from '@kosmo/core/validation';
 import { builder } from '@/graphql/builder';
 import { Post } from '../ref';
@@ -18,8 +18,9 @@ builder.mutationField('createPost', (t) =>
       visibility: t.input.field({ type: PostVisibility }),
     },
     resolve: async (_, { input }, ctx) => {
-      const { post } = await createLocalPost({
+      const { post } = await createPost({
         document: postContentDocumentFromText(input.bodyText),
+        origin: 'LOCAL',
         profileId: ctx.session.profileId,
         replyParentId: input.replyParentId?.id,
         visibility: input.visibility,

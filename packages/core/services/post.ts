@@ -304,8 +304,24 @@ export async function createPost(
   input: LocalPostInput | ActivityPubPostInput,
   tx?: Transaction,
 ): Promise<CreatedPost | DuplicatePost> {
+  let result: CreatedPost;
   try {
-    return await getDatabaseConnection(tx).transaction(async (tx) => {
+    result = await getDatabaseConnection(tx).transaction(async (tx) => {
+      if (input.origin === 'LOCAL' && input.replyParentId !== undefined) {
+        const parent = await findVisiblePost(tx, {
+          actorProfileId: input.profileId,
+          postId: input.replyParentId,
+        });
+        if (!parent) {
+          throw new NotFoundError('Post not found');
+        }
+        if (parent.currentContentId === null) {
+          throw new ValidationError('Reply Parent must have content', {
+            field: 'replyParentId',
+          });
+        }
+      }
+
       const createdAt =
         input.origin === 'ACTIVITYPUB' &&
         input.publishedAt &&
@@ -351,7 +367,7 @@ export async function createPost(
         repostSourceId: post.repostSourceId,
       });
 
-      if (input.replyParentId !== undefined) {
+      if (input.origin === 'ACTIVITYPUB' && input.replyParentId !== undefined) {
         const replyParent = await tx
           .select({ currentContentId: Posts.currentContentId })
           .from(Posts)
@@ -380,31 +396,8 @@ export async function createPost(
 
     return { created: false };
   }
-}
 
-export const createLocalPost = async (
-  input: Omit<LocalPostInput, 'origin'>,
-): Promise<CreatedPost> => {
-  const result = await getDatabaseConnection().transaction(async (tx) => {
-    if (input.replyParentId !== undefined) {
-      const parent = await findVisiblePost(tx, {
-        actorProfileId: input.profileId,
-        postId: input.replyParentId,
-      });
-      if (!parent) {
-        throw new NotFoundError('Post not found');
-      }
-      if (parent.currentContentId === null) {
-        throw new ValidationError('Reply Parent must have content', {
-          field: 'replyParentId',
-        });
-      }
-    }
-
-    return createPost({ ...input, origin: 'LOCAL' }, tx);
-  });
-
-  if (input.replyParentId !== undefined) {
+  if (!tx && input.origin === 'LOCAL' && input.replyParentId !== undefined) {
     await createReplyNotificationBestEffort(result.post.id);
 
     try {
@@ -419,4 +412,4 @@ export const createLocalPost = async (
   }
 
   return result;
-};
+}

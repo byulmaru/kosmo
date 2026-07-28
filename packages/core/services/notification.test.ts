@@ -87,12 +87,17 @@ const createReaction = async (authorProfileId: string, recipientProfileId: strin
 };
 
 const createContentPost = (profileId: string) =>
-  createPost({
-    document: postContentDocumentFromText(crypto.randomUUID()),
-    origin: 'LOCAL',
-    profileId,
-    visibility: PostVisibility.PUBLIC,
-  }).then(({ post }) => post);
+  db.transaction((tx) =>
+    createPost(
+      {
+        document: postContentDocumentFromText(crypto.randomUUID()),
+        origin: 'LOCAL',
+        profileId,
+        visibility: PostVisibility.PUBLIC,
+      },
+      tx,
+    ).then(({ post }) => post),
+  );
 
 const createReply = async (
   authorProfileId: string,
@@ -100,13 +105,18 @@ const createReply = async (
   visibility: PostVisibility = PostVisibility.PUBLIC,
 ) => {
   const parent = await createContentPost(recipientProfileId);
-  const reply = await createPost({
-    document: postContentDocumentFromText(crypto.randomUUID()),
-    origin: 'LOCAL',
-    profileId: authorProfileId,
-    replyParentId: parent.id,
-    visibility,
-  }).then(({ post }) => post);
+  const reply = await db.transaction((tx) =>
+    createPost(
+      {
+        document: postContentDocumentFromText(crypto.randomUUID()),
+        origin: 'LOCAL',
+        profileId: authorProfileId,
+        replyParentId: parent.id,
+        visibility,
+      },
+      tx,
+    ).then(({ post }) => post),
+  );
   return { parent, reply };
 };
 

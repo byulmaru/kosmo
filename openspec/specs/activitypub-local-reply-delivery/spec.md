@@ -99,8 +99,9 @@ Remote Parent의 ActivityPub Post identity를 `inReplyTo`로 제공해야 한다
 Delivery 실패는 관측 가능하게 기록하되 이미 commit된 Reply 생성·삭제 또는 application 성공 결과를 실패로
 바꾸거나 rollback해서는 안 된다(MUST NOT).
 
-Local Reply 생성·삭제의 core application action은 outer transaction과 post-commit Reply lifecycle을 소유해야
-하며(MUST), GraphQL resolver가 Reply Notification이나 Fedify delivery를 직접 조립해서는 안 된다(MUST NOT).
+통합 core `createPost`·`deletePost` action은 outer transaction과 origin별 post-commit Reply lifecycle을 소유해야
+하며(MUST), 별도 Local Post action이나 GraphQL resolver가 Reply Notification 또는 Fedify delivery를 직접
+조립해서는 안 된다(MUST NOT).
 
 #### Scenario: Create delivery 실패
 
@@ -124,8 +125,8 @@ Local Reply 생성·삭제의 core application action은 outer transaction과 po
 #### Scenario: GraphQL entry의 책임
 
 - **WHEN** GraphQL mutation이 Local Reply를 생성하거나 삭제한다
-- **THEN** resolver는 인증된 Profile과 business input을 core application action에 전달한다
-- **AND** core production 기본 경로가 commit 뒤 Reply Notification과 Create 또는 Delete delivery를 실행한다
+- **THEN** resolver는 인증된 Profile과 business input을 통합 `createPost` 또는 `deletePost`에 전달한다
+- **AND** 통합 core production 기본 경로가 commit 뒤 Reply Notification과 Create 또는 Delete delivery를 실행한다
 - **AND** resolver는 Notification 또는 Fedify lifecycle 함수를 직접 호출하지 않는다
 
 ### Requirement: 현재 직접 delivery 제한

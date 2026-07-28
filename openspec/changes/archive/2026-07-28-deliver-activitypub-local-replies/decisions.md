@@ -125,7 +125,7 @@
 - Decision Date: 2026-07-28
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/architecture/core-services.md`, PROD-447, PROD-497
-- Status: Active
+- Status: Superseded by "통합 createPost action이 origin별 lifecycle을 소유한다"
 - Context / Problem: commit 이후 실행해야 한다는 시점 제약을 이유로 GraphQL resolver가 Reply Notification과
   Fedify delivery를 직접 조립하면 Local Reply lifecycle이 transport entry에 누출되고 다른 production entry가
   같은 side effect를 빠뜨릴 수 있다.
@@ -141,6 +141,25 @@
   PROD-448 범위로 남는다.
 - Confirmation / Follow-up: GraphQL resolver에 Notification/Fedify 호출이 없고 core production 기본 경로가
   commit 뒤 Create/Delete와 실패 격리를 실행하는지 검증한다.
+
+### 통합 createPost action이 origin별 lifecycle을 소유한다
+
+- Decision Date: 2026-07-28
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/architecture/core-services.md`, PROD-447, PROD-497
+- Status: Active
+- Context / Problem: 별도 `createLocalPost` action은 Local GraphQL 전용 진입점을 추가해 GraphQL과 ActivityPub이
+  같은 Post application action을 사용하도록 통일하는 core service 목적을 깨뜨린다.
+- Decision Outcome: 단일 `createPost`가 Local/ActivityPub origin별 입력 정책과 transaction을 소유한다. caller
+  transaction이 없는 Local Reply production 호출은 실제 commit 뒤 Reply Notification과 Create delivery를 best
+  effort로 실행한다. ActivityPub origin에는 outbound Local Reply delivery를 실행하지 않는다. `deletePost`는 기존
+  통합 action에서 Reply Delete lifecycle을 소유한다.
+- Alternatives Considered: 별도 `createLocalPost`, GraphQL resolver orchestration, callback 또는 delivery port.
+- Consequences: 모든 Post 생성 진입점이 `createPost`로 통일되고 public action 수가 늘지 않는다. optional caller
+  transaction을 사용하는 내부 호출은 outer commit을 알 수 없으므로 post-commit side effect를 실행하지 않는다.
+  Remote Reply Notification과 durable delivery는 현재 범위에 추가하지 않는다.
+- Confirmation / Follow-up: production GraphQL과 ActivityPub ingress가 모두 `createPost`를 사용하고, Local 기본
+  호출만 commit 뒤 Notification/Create를 실행하며 resolver에는 lifecycle 호출이 없는지 검증한다.
 
 ### PROD-497은 원격 직접 Parent 작성자만 전달한다
 
@@ -170,6 +189,7 @@
 - "Recipient는 action 시점의 현재 저장 관계에서 계산한다"
 - "저장된 Recipient 배열을 Fedify에 직접 전달한다"
 - "실제 outer commit 뒤 application entry에서 delivery를 orchestration한다"
+- "core Local Post application action이 post-commit lifecycle을 소유한다"
 
 ## Additional Active Decisions
 

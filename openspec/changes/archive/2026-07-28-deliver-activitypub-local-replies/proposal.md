@@ -43,7 +43,7 @@ post-commit failure isolation이 준비되었으므로, 이제 Reply 생성·삭
 - `packages/fedify`: 기존 Local Note projection을 재사용하는 Reply Create/Delete activity 구성, Parent recipient 조회와
   직접 delivery
 - `apps/api`: 인증된 Profile과 입력을 core application action에 전달하고 기존 GraphQL payload를 유지
-- `packages/core`: Local Reply 생성·삭제 outer transaction과 post-commit Notification/Fedify lifecycle을 소유하며
-  새 schema나 migration은 추가하지 않음
+- `packages/core`: 통합 `createPost`·`deletePost`가 Local Reply 생성·삭제 outer transaction과 post-commit
+  Notification/Fedify lifecycle을 소유하며 새 schema나 migration은 추가하지 않음
 - 운영 제약: API process가 remote HTTP delivery를 직접 기다리고 commit과 delivery 사이 process 종료 시 activity가
   유실될 수 있는 현재 제한을 유지함
