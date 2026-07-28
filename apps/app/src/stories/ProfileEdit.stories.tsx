@@ -33,16 +33,25 @@ const initialDraft: ProfileEditDraft = {
 function ProfileEditScreenHarness({
   connected = true,
   initialValue = initialDraft,
+  startingValue = initialValue,
+  disabled = false,
+  withImageActions = false,
 }: {
   connected?: boolean;
+  disabled?: boolean;
   initialValue?: ProfileEditDraft;
+  startingValue?: ProfileEditDraft;
+  withImageActions?: boolean;
 }) {
-  const [value, setValue] = useState(initialValue);
+  const [value, setValue] = useState(startingValue);
 
   return (
     <ProfileEditScreen
+      disabled={disabled}
       initialValue={initialValue}
+      onAvatarEdit={withImageActions ? () => undefined : undefined}
       onChange={setValue}
+      onHeaderEdit={withImageActions ? () => undefined : undefined}
       onSubmit={connected ? () => undefined : undefined}
       value={value}
     />
@@ -113,6 +122,30 @@ function ProfileTagEditorHarness({ initialTags = [] }: { initialTags?: ReadonlyA
   const [tags, setTags] = useState(initialTags);
 
   return <ProfileTagEditor onChange={setTags} tags={tags} />;
+}
+
+function expectMinimumTarget(element: HTMLElement) {
+  const rect = element.getBoundingClientRect();
+
+  expect(Math.round(rect.width)).toBeGreaterThanOrEqual(44);
+  expect(Math.round(rect.height)).toBeGreaterThanOrEqual(44);
+}
+
+function expectResponsiveSurface(
+  canvasElement: HTMLElement,
+  expectedWidth: number,
+  expectedHeaderHeight: number,
+) {
+  const canvas = within(canvasElement);
+  const surface = canvas.getByTestId('profile-edit-screen').getBoundingClientRect();
+  const header = canvas.getByTestId('profile-edit-header-preview').getBoundingClientRect();
+
+  expect(Math.round(surface.width)).toBe(expectedWidth);
+  expect(Math.round(header.width)).toBe(expectedWidth);
+  expect(Math.round(header.height)).toBe(expectedHeaderHeight);
+  expect(Math.round(header.width / header.height)).toBe(3);
+  expect(canvas.queryByText('팔로우 승인 정책')).not.toBeInTheDocument();
+  expect(canvas.queryByText(/현재.*유지/)).not.toBeInTheDocument();
 }
 
 const meta = {
@@ -310,7 +343,15 @@ export const TagReorderMode: Story = {
     expect(canvas.getByRole('button', { name: '#공예 아래로 이동' })).toBeEnabled();
     expect(canvas.getByRole('button', { name: '#사진 아래로 이동' })).toBeDisabled();
 
-    await userEvent.click(canvas.getByRole('button', { name: '#공예 아래로 이동' }));
+    expect(canvas.getByRole('button', { name: '순서 변경 완료' })).toHaveFocus();
+    await userEvent.tab();
+    const moveDown = canvas.getByRole('button', { name: '#공예 아래로 이동' });
+    expect(moveDown).toHaveFocus();
+    await userEvent.tab({ shift: true });
+    expect(canvas.getByRole('button', { name: '순서 변경 완료' })).toHaveFocus();
+    await userEvent.tab();
+    expect(moveDown).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
     expect(canvas.getAllByTestId('profile-tag-order-item').map((item) => item.textContent)).toEqual(
       ['#개발', '#공예', '#사진'],
     );
@@ -321,6 +362,21 @@ export const TagReorderMode: Story = {
       '#공예',
       '#사진',
     ]);
+  },
+};
+
+export const TagReorderWithSpace: Story = {
+  render: () => <ProfileTagEditorHarness initialTags={['공예', '개발']} />,
+  play: async ({ canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+
+    await userEvent.click(canvas.getByRole('button', { name: '순서 변경' }));
+    await userEvent.tab();
+    expect(canvas.getByRole('button', { name: '#공예 아래로 이동' })).toHaveFocus();
+    await userEvent.keyboard(' ');
+    expect(canvas.getAllByTestId('profile-tag-order-item').map((item) => item.textContent)).toEqual(
+      ['#개발', '#공예'],
+    );
   },
 };
 
@@ -358,5 +414,168 @@ export const TagChangeUsesOptionalSubmitSeam: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '태그 추가' }));
     await userEvent.click(canvas.getByRole('button', { name: '저장' }));
     expect(canvas.getByLabelText('마지막 제출 태그')).toHaveTextContent('공예,개발,사진');
+  },
+};
+
+export const ImageReplacementUploading: Story = {
+  args: {
+    header: {
+      kind: 'replacement',
+      previewUri: null,
+      uploadState: 'uploading',
+    },
+  },
+  play: ({ canvasElement }) => {
+    expect(within(canvasElement).getByText('헤더 이미지 업로드를 기다리고 있어요.')).toBeVisible();
+  },
+};
+
+export const ImageReplacementReadyAndAvatarRemoved: Story = {
+  args: {
+    avatar: {
+      kind: 'removed',
+      previewUri: null,
+    },
+    header: {
+      kind: 'replacement',
+      previewUri: null,
+      uploadState: 'ready',
+    },
+  },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    expect(canvas.getByText('새 헤더 이미지가 선택됐어요.')).toBeVisible();
+    expect(canvas.getByText('아바타 이미지가 제거됩니다.')).toBeVisible();
+  },
+};
+
+export const UploadingImageBlocksSubmit: Story = {
+  render: () => (
+    <ProfileEditScreenHarness
+      startingValue={{
+        ...initialDraft,
+        header: {
+          kind: 'replacement',
+          previewUri: null,
+          uploadState: 'uploading',
+        },
+      }}
+      withImageActions
+    />
+  ),
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    expect(canvas.getByText('헤더 이미지 업로드를 기다리고 있어요.')).toBeVisible();
+    expect(canvas.getByRole('button', { name: '저장' })).toBeDisabled();
+  },
+};
+
+export const SuccessIsAnnounced: Story = {
+  render: () => (
+    <ProfileEditSubmitStateHarness
+      submitState={{ kind: 'success', message: '프로필을 저장했어요.' }}
+    />
+  ),
+  play: ({ canvasElement }) => {
+    const status = within(canvasElement).getByText('프로필을 저장했어요.');
+
+    expect(status).toHaveAttribute('aria-live', 'polite');
+  },
+};
+
+export const DisabledFormBlocksEveryAction: Story = {
+  render: () => <ProfileEditScreenHarness disabled withImageActions />,
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    expect(canvas.getByRole('button', { name: '헤더 이미지 변경' })).toBeDisabled();
+    expect(canvas.getByRole('button', { name: '아바타 이미지 편집' })).toBeDisabled();
+    expect(canvas.getByRole('button', { name: '#공예 제거' })).toBeDisabled();
+    expect(canvas.getByRole('button', { name: '순서 변경' })).toBeDisabled();
+    expect(canvas.getByRole('button', { name: '태그 추가' })).toBeDisabled();
+    expect(canvas.getByRole('button', { name: '저장' })).toBeDisabled();
+    for (const input of canvas.getAllByRole('textbox')) {
+      expect(input).toHaveAttribute('readonly');
+    }
+  },
+};
+
+export const ActionTargetsAreAtLeast44: Story = {
+  render: () => <ProfileEditScreenHarness withImageActions />,
+  play: async ({ canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+
+    expectMinimumTarget(canvas.getByRole('button', { name: '헤더 이미지 변경' }));
+    expectMinimumTarget(canvas.getByRole('button', { name: '아바타 이미지 편집' }));
+    expectMinimumTarget(canvas.getByRole('button', { name: '#공예 제거' }));
+    expectMinimumTarget(canvas.getByRole('button', { name: '저장' }));
+
+    await userEvent.click(canvas.getByRole('button', { name: '순서 변경' }));
+    expectMinimumTarget(canvas.getByRole('button', { name: '#공예 위로 이동' }));
+    expectMinimumTarget(canvas.getByRole('button', { name: '#공예 아래로 이동' }));
+  },
+};
+
+export const Responsive390: Story = {
+  render: () => <ProfileEditScreenHarness />,
+  play: ({ canvasElement }) => {
+    expectResponsiveSurface(canvasElement, 390, 130);
+  },
+};
+
+export const Responsive480: Story = {
+  parameters: {
+    viewport: { defaultViewport: 'kosmoProfileIntermediate' },
+  },
+  render: () => <ProfileEditScreenHarness />,
+  play: ({ canvasElement }) => {
+    expectResponsiveSurface(canvasElement, 480, 160);
+  },
+};
+
+export const Responsive1024: Story = {
+  parameters: {
+    viewport: { defaultViewport: 'kosmoProfileCompact' },
+  },
+  render: () => <ProfileEditScreenHarness />,
+  play: ({ canvasElement }) => {
+    expectResponsiveSurface(canvasElement, 600, 200);
+  },
+};
+
+export const Responsive1440: Story = {
+  parameters: {
+    viewport: { defaultViewport: 'kosmoProfileFull' },
+  },
+  render: () => <ProfileEditScreenHarness />,
+  play: ({ canvasElement }) => {
+    expectResponsiveSurface(canvasElement, 600, 200);
+  },
+};
+
+export const LongTextAndFiveLongTags: Story = {
+  render: () => (
+    <ProfileEditScreenHarness
+      initialValue={{
+        ...initialDraft,
+        bio: '소개'.repeat(250),
+        displayName: `${'긴이름'.repeat(13)}긴`,
+        tags: ['가'.repeat(20), '나'.repeat(20), '다'.repeat(20), '라'.repeat(20), '마'.repeat(20)],
+      }}
+    />
+  ),
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const chips = canvas.getAllByTestId('profile-tag-chip');
+
+    expect(canvas.getByText('40/40')).toBeVisible();
+    expect(canvas.getByText('500/500')).toBeVisible();
+    expect(chips).toHaveLength(5);
+    expect(
+      new Set(chips.map((chip) => Math.round(chip.getBoundingClientRect().top))).size,
+    ).toBeGreaterThan(1);
+    expect(canvas.getByText('최대 5개까지 추가할 수 있어요.')).toBeVisible();
   },
 };

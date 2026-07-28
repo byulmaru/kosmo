@@ -87,15 +87,16 @@ export function ProfileEditScreen({
 
   return (
     <View
+      testID="profile-edit-screen"
       style={[
         styles.root,
         {
           backgroundColor: theme.background,
-          borderColor: theme.border,
         },
       ]}
     >
       <View
+        testID="profile-edit-screen-header"
         style={[
           styles.header,
           Platform.OS === 'web' && webStickyHeader,
@@ -153,8 +154,6 @@ export function ProfileEditScreen({
 const styles = StyleSheet.create({
   root: {
     alignSelf: 'center',
-    borderLeftWidth: Platform.OS === 'web' ? 1 : 0,
-    borderRightWidth: Platform.OS === 'web' ? 1 : 0,
     maxWidth: 600,
     minHeight: '100%',
     width: '100%',

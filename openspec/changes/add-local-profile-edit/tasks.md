@@ -39,7 +39,7 @@ Profile edit component와 Web·Android·iOS 상태 카탈로그를 전달한다.
 - [x] 1.2 현재 값을 초기 draft로 사용하는 avatar/header별 controlled 편집 state, `3:1` header preview와 callback
       seam을 구현한다.
 - [x] 1.3 Profile Tag inline chip editor, 로컬 validation과 명시적 순서 변경 mode를 구현한다.
-- [ ] 1.4 unchanged/callback 없음의 disabled submit과 dirty·upload·saving·success·failure·retry 상태 카탈로그,
+- [x] 1.4 unchanged/callback 없음의 disabled submit과 dirty·upload·saving·success·failure·retry 상태 카탈로그,
       접근성 metadata를 추가한다.
 - [ ] 1.5 최소 component test, Storybook a11y/static build와 app 필수 check를 통과하고 PROD-491 PR에 증거를 기록한다.
 
