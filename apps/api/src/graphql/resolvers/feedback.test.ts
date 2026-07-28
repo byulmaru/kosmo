@@ -63,14 +63,17 @@ test('선택 Profile이 없는 login session도 feedback을 제출할 수 있다
     });
 
     assert.equal(result.errors, undefined);
-    assert.equal(result.data?.submitFeedback?.completed, true);
+    assert.equal(
+      (result.data as { submitFeedback?: { completed?: boolean } }).submitFeedback?.completed,
+      true,
+    );
   } finally {
     globalThis.fetch = previousFetch;
   }
 });
 
 test('BUG_REPORT의 Sentry event ID는 소문자로 정규화되어 Slack payload에 전달된다', async () => {
-  let payload: { blocks?: { fields?: { text: string }[] }[] } | null = null;
+  let payload: { blocks?: { fields?: { text: string }[] }[] } = {};
   const previousFetch = globalThis.fetch;
   globalThis.fetch = async (_input, init) => {
     payload = JSON.parse(String(init?.body)) as typeof payload;
@@ -92,7 +95,7 @@ test('BUG_REPORT의 Sentry event ID는 소문자로 정규화되어 Slack payloa
     });
 
     assert.equal(result.errors, undefined);
-    assert.equal(payload?.blocks?.[3]?.fields?.[0]?.text, `Sentry event ID: ${'a'.repeat(32)}`);
+    assert.equal(payload.blocks?.[3]?.fields?.[0]?.text, `Sentry event ID: ${'a'.repeat(32)}`);
   } finally {
     globalThis.fetch = previousFetch;
   }
