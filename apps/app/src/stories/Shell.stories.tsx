@@ -114,7 +114,7 @@ function CompactSidebarStory() {
 function FeedbackNavigationFullStory() {
   return (
     <View style={{ height: 560, width: 320 }}>
-      <SidebarNavigation query={useShellStoryData().query} />
+      <SidebarNavigation logout={storyLogout} query={useShellStoryData().query} />
     </View>
   );
 }
@@ -122,7 +122,7 @@ function FeedbackNavigationFullStory() {
 function FeedbackNavigationCompactStory() {
   return (
     <View style={{ height: 560, width: 80 }}>
-      <SidebarNavigation compact query={useShellStoryData().query} />
+      <SidebarNavigation compact logout={storyLogout} query={useShellStoryData().query} />
     </View>
   );
 }
@@ -130,7 +130,7 @@ function FeedbackNavigationCompactStory() {
 function FeedbackNavigationDrawerStory() {
   return (
     <View style={{ height: 560, width: 320 }}>
-      <SidebarNavigation query={useShellStoryData().query} surface="drawer" />
+      <SidebarNavigation logout={storyLogout} query={useShellStoryData().query} surface="drawer" />
     </View>
   );
 }

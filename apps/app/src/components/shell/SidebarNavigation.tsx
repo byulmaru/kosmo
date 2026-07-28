@@ -329,11 +329,11 @@ export function SidebarNavigation({
                 accessibilityLabel="피드백 보내기"
                 accessibilityRole="link"
                 onPress={onNavigate}
-                style={[
+                style={StyleSheet.flatten([
                   styles.footerItem,
                   compact && styles.compactItem,
                   { backgroundColor: feedbackActive ? theme.surface : 'transparent' },
-                ]}
+                ])}
               >
                 <Settings
                   color={feedbackActive ? theme.text : theme.textSecondary}
