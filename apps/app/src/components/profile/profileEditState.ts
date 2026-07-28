@@ -19,7 +19,6 @@ export type ProfileEditDraft = {
 export type ProfileEditSubmitState =
   | { kind: 'idle' }
   | { kind: 'saving' }
-  | { kind: 'success'; message: string }
   | { kind: 'error'; message: string };
 
 export type ProfileEditFieldErrors = {
@@ -166,19 +165,29 @@ export function moveProfileTag(
   index: number,
   direction: ProfileTagMoveDirection,
 ): string[] {
+  return moveProfileTagToIndex(tags, index, index + direction);
+}
+
+export function moveProfileTagToIndex(
+  tags: ReadonlyArray<string>,
+  fromIndex: number,
+  toIndex: number,
+): string[] {
   const next = [...tags];
-  const targetIndex = index + direction;
 
   if (
-    !Number.isInteger(index) ||
-    index < 0 ||
-    index >= next.length ||
-    targetIndex < 0 ||
-    targetIndex >= next.length
+    !Number.isInteger(fromIndex) ||
+    !Number.isInteger(toIndex) ||
+    fromIndex < 0 ||
+    fromIndex >= next.length ||
+    toIndex < 0 ||
+    toIndex >= next.length ||
+    fromIndex === toIndex
   ) {
     return next;
   }
 
-  [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+  const [tag] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, tag);
   return next;
 }

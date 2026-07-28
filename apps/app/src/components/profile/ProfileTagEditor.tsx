@@ -1,10 +1,16 @@
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { GripVertical } from 'lucide-react-native';
+import { useMemo, useRef, useState } from 'react';
+import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { Button } from '../ui/Button';
 import { TextField } from '../ui/TextField';
-import { moveProfileTag, validateProfileTagDraftInput } from './profileEditState';
+import {
+  moveProfileTag,
+  moveProfileTagToIndex,
+  validateProfileTagDraftInput,
+} from './profileEditState';
+import type { ReactNode } from 'react';
 
 export type ProfileTagEditorProps = {
   disabled?: boolean;
@@ -13,6 +19,7 @@ export type ProfileTagEditorProps = {
 };
 
 const MAX_PROFILE_TAGS = 5;
+const REORDER_ROW_HEIGHT = 40;
 
 export function ProfileTagEditor({ disabled = false, onChange, tags }: ProfileTagEditorProps) {
   const theme = useTheme();
@@ -57,13 +64,16 @@ export function ProfileTagEditor({ disabled = false, onChange, tags }: ProfileTa
             const last = index === tags.length - 1;
 
             return (
-              <View key={tag} style={[styles.reorderRow, { borderColor: theme.border }]}>
-                <Text
-                  style={[styles.tagText, { color: theme.text }]}
-                  testID="profile-tag-order-item"
-                >
-                  #{tag}
-                </Text>
+              <ProfileTagReorderRow
+                disabled={disabled}
+                index={index}
+                key={tag}
+                onMove={(fromIndex, toIndex) =>
+                  onChange(moveProfileTagToIndex(tags, fromIndex, toIndex))
+                }
+                tag={tag}
+                total={tags.length}
+              >
                 <View style={styles.reorderActions}>
                   <TagAction
                     accessibilityLabel={`#${tag} 위로 이동`}
@@ -80,7 +90,7 @@ export function ProfileTagEditor({ disabled = false, onChange, tags }: ProfileTa
                     아래로
                   </TagAction>
                 </View>
-              </View>
+              </ProfileTagReorderRow>
             );
           })}
         </View>
@@ -169,6 +179,71 @@ export function ProfileTagEditor({ disabled = false, onChange, tags }: ProfileTa
   );
 }
 
+function ProfileTagReorderRow({
+  children,
+  disabled,
+  index,
+  onMove,
+  tag,
+  total,
+}: {
+  children: ReactNode;
+  disabled: boolean;
+  index: number;
+  onMove: (fromIndex: number, toIndex: number) => void;
+  tag: string;
+  total: number;
+}) {
+  const theme = useTheme();
+  const translateY = useRef(new Animated.Value(0)).current;
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_event, gesture) => !disabled && Math.abs(gesture.dy) > 4,
+        onPanResponderMove: (_event, gesture) => translateY.setValue(gesture.dy),
+        onPanResponderRelease: (_event, gesture) => {
+          translateY.setValue(0);
+          const offset = Math.round(gesture.dy / REORDER_ROW_HEIGHT);
+          const toIndex = Math.max(0, Math.min(total - 1, index + offset));
+
+          if (toIndex !== index) {
+            onMove(index, toIndex);
+          }
+        },
+        onPanResponderTerminate: () => translateY.setValue(0),
+        onStartShouldSetPanResponder: () => !disabled,
+      }),
+    [disabled, index, onMove, total, translateY],
+  );
+
+  return (
+    <Animated.View
+      style={[styles.reorderRow, { borderColor: theme.border, transform: [{ translateY }] }]}
+    >
+      <View style={styles.reorderIdentity}>
+        <View
+          {...panResponder.panHandlers}
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+          style={[styles.dragHandle, { opacity: disabled ? 0.45 : 1 }]}
+          testID="profile-tag-drag-handle"
+        >
+          <GripVertical color={theme.textSecondary} size={18} strokeWidth={2} />
+        </View>
+        <Text
+          ellipsizeMode="tail"
+          numberOfLines={1}
+          style={[styles.tagText, styles.reorderTagText, { color: theme.text }]}
+          testID="profile-tag-order-item"
+        >
+          #{tag}
+        </Text>
+      </View>
+      {children}
+    </Animated.View>
+  );
+}
+
 function TagAction({
   accessibilityLabel,
   children,
@@ -217,8 +292,8 @@ const styles = StyleSheet.create({
     ...typography.sm,
   },
   modeButton: {
-    minHeight: 44,
-    minWidth: 44,
+    minHeight: 36,
+    minWidth: 0,
   },
   chips: {
     flexDirection: 'row',
@@ -230,7 +305,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.full,
     borderWidth: 1,
     flexDirection: 'row',
-    minHeight: 44,
+    minHeight: 32,
     paddingLeft: spacing.md,
   },
   tagText: {
@@ -240,8 +315,8 @@ const styles = StyleSheet.create({
   removeButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 44,
-    minWidth: 44,
+    minHeight: 32,
+    minWidth: 32,
   },
   removeLabel: {
     fontFamily: 'SUIT',
@@ -256,35 +331,51 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   addButton: {
-    minHeight: 44,
-    minWidth: 92,
+    minHeight: 36,
+    minWidth: 88,
   },
   helper: {
     fontFamily: 'SUIT',
     ...typography.xsm,
   },
   reorderList: {
-    gap: spacing.sm,
+    gap: 0,
   },
   reorderRow: {
     alignItems: 'center',
     borderBottomWidth: 1,
     flexDirection: 'row',
+    height: REORDER_ROW_HEIGHT,
     justifyContent: 'space-between',
-    minHeight: 52,
-    paddingVertical: spacing.xs,
+  },
+  reorderIdentity: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    minWidth: 0,
+  },
+  reorderTagText: {
+    flex: 1,
+  },
+  dragHandle: {
+    alignItems: 'center',
+    height: 32,
+    justifyContent: 'center',
+    width: 32,
   },
   reorderActions: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    flexShrink: 0,
+    gap: spacing.xs,
   },
   reorderButton: {
     alignItems: 'center',
     borderRadius: radii.sm,
     borderWidth: 1,
     justifyContent: 'center',
-    minHeight: 44,
-    minWidth: 44,
+    minHeight: 36,
+    minWidth: 48,
     paddingHorizontal: spacing.sm,
   },
   reorderLabel: {

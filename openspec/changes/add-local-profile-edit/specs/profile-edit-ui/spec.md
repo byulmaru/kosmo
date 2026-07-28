@@ -13,7 +13,7 @@
 
 #### Scenario: Render controlled save and image states
 
-- **WHEN** 상태 카탈로그가 dirty, validation, upload-wait, saving, success, failure 또는 retry state를 제공한다
+- **WHEN** 상태 카탈로그가 dirty, validation, upload-wait, saving, failure 또는 retry state를 제공한다
 - **THEN** form은 해당 상태를 색 외의 text와 accessibility state로 구분한다
 - **AND** failure와 retry state에서 현재 text, Tag 순서와 image draft를 유지한다
 
@@ -61,7 +61,7 @@
 
 ### Requirement: Responsive accessible Profile edit layout
 
-**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/breakpoints.md`, `PROD-491` — Profile edit presentation은 Web shell 중앙 최대 600px surface와 mobile/native 정보 구조를 공유해야 한다(MUST). 편집 action은 최소 44×44 touch target과 대상·상태를 설명하는 accessibility label/state를 제공해야 한다(MUST).
+**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/breakpoints.md`, `PROD-491` — Profile edit presentation은 Web shell 중앙 최대 600px surface와 mobile/native 정보 구조를 공유해야 한다(MUST). 현재 Web-first presentation은 icon action `32×32`, text action 최소 높이 `36`, Tag reorder row 최소 높이 `40`의 compact rhythm과 대상·상태를 설명하는 accessibility label/state를 제공해야 한다(MUST).
 
 #### Scenario: Render desktop shell layouts
 
@@ -69,11 +69,11 @@
 - **THEN** form은 각각 full sidebar/right rail 또는 icon rail 다음의 최대 600px 중앙 surface에 렌더된다
 - **AND** 중앙 content를 별도 internal scroller로 바꾸지 않고 shell document scroll을 유지한다
 
-#### Scenario: Operate controls without pointer drag
+#### Scenario: Operate drag and fallback controls
 
-- **WHEN** 사용자가 키보드 또는 스크린리더로 Tag 이동·제거와 image action을 탐색한다
-- **THEN** 각 action은 최소 44×44 target과 대상이 포함된 accessibility label/state를 제공한다
-- **AND** drag gesture 없이 같은 Tag 순서 변경을 수행할 수 있다
+- **WHEN** 사용자가 pointer로 Tag 행 왼쪽의 drag handle을 이동한다
+- **THEN** form은 요청한 위치로 Tag를 이동하고 보이는 순서를 즉시 갱신한다
+- **AND** 키보드 또는 스크린리더 사용자는 대상이 포함된 위·아래 이동 action으로 같은 순서 변경을 수행할 수 있다
 
 ### Requirement: Protected selected Owner Profile edit route
 

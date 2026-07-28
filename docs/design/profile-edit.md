@@ -41,7 +41,7 @@
   persistence를 만들지 않는다.
 - UI 선제작 단계에서는 표시 이름·bio와 Profile Tag의 로컬 입력, 추가·제거·순서 변경, client validation을
   동작하게 한다.
-- dirty, validation, 이미지 업로드 대기·오류, saving, success, failure와 retry는 production 연결 전에는
+- dirty, validation, 이미지 업로드 대기·오류, saving, failure와 retry는 production 연결 전에는
   Storybook의 controlled state로 검증한다.
 
 ### Production route와 저장
@@ -60,8 +60,8 @@
 
 - 기본 상태에서는 현재 TagChip과 추가 입력을 같은 섹션에 둔다.
 - 태그를 추가하면 목록 끝에 놓고, 제거하면 남은 태그의 상대 순서를 유지한다.
-- 순서 변경은 같은 섹션 안의 명시적 `순서 변경` mode로 진입해 수행한다. drag gesture를 필수로 요구하지
-  않으며 위·아래 이동과 동등한 키보드·스크린리더 action을 제공한다.
+- 순서 변경은 같은 섹션 안의 명시적 `순서 변경` mode로 진입해 수행한다. 각 행 왼쪽의 drag handle로
+  pointer 재정렬을 제공하고, 위·아래 이동 action을 키보드·스크린리더 대체 수단으로 유지한다.
 - 추천, 자동완성, trend, 검색 link를 표시하지 않는다.
 - 저장과 서버 validation, Relay 동기화는 Profile Tag 연결 이슈가 같은 presentation component를 재사용해
   제공한다. 별도의 태그 편집기를 다시 만들지 않는다.
@@ -84,10 +84,15 @@
 
 ## 접근성과 상태 표현
 
-- 모든 편집 action은 최소 44×44 touch target을 가진다.
+- 현재 Web-first presentation은 공용 compact rhythm을 사용한다. icon action은 `32×32`, text action은
+  최소 높이 `36`, Tag reorder row는 최소 높이 `40`을 기준으로 하며 `44×44`를 강제하지 않는다.
+- 이 compact target은 현재 Web 검증을 우선한 선택이다. Native 전달을 본격화할 때 touch target과 간격을
+  플랫폼 입력 방식에 맞게 다시 검토한다.
 - 저장, 제거, 순서 이동과 header·avatar 각각의 편집 action은 대상과 상태를 포함한 accessibility label/state를
   제공한다.
-- validation, disabled, saving, success와 failure를 색만으로 구분하지 않는다.
+- validation, disabled, saving과 failure를 색만으로 구분하지 않는다.
+- presentation은 저장 성공 문구를 남기지 않는다. production route가 성공 payload로 갱신된 Profile을 확보한 뒤
+  해당 Profile로 복귀한다.
 - 실패 뒤 표시 이름·bio·Profile Tag 순서와 이미지 선택 상태를 보존해 같은 draft로 재시도할 수 있게 한다.
 - 긴 표시 이름·bio, 빈 값, 최대 5개·긴 태그, 이미지 없음과 오류, compact/desktop 폭을 상태 카탈로그에서
   확인한다.

@@ -11,7 +11,8 @@ Local Profile의 displayName, bio와 avatar/header를 수정할 production 화�
   Profile Tag editor presentation을 Web·Android·iOS 공용으로 제공한다. 현재 avatar/header는 초기 draft이며 별도
   `유지` action 없이 각 이미지의 편집 control만 해당 field draft를 변경한다.
 - 제출 callback이 없거나 바뀐 draft가 없으면 저장을 disabled로 표현하고
-  dirty·validation·upload-wait·saving·success·failure·retry를 Storybook controlled state로 검증한다.
+  dirty·validation·upload-wait·saving·failure·retry를 Storybook controlled state로 검증한다. 저장 성공 뒤에는
+  presentation 문구를 남기지 않고 실제 route가 갱신된 Profile로 복귀한다.
 - 실제 `/profile-edit` route는 usingProfile 경계의 selected Active/Normal Local Profile과 Owner Membership을
   확인하고 초기값, 저장, Media picker/upload 결과, Relay와 navigation을 연결한다.
 - Web은 기존 shell의 최대 600px 중앙 route를 사용하고 1440/1024 단계와 mobile/native 정보 구조를 공유한다.

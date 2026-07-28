@@ -52,7 +52,8 @@ Profile Tag는 `add-profile-tags`가 별도 저장·공개 계약을 소유한�
    preview의 편집 control이 자기 field만 갱신하게 한다. optional submit callback이 없거나 draft가 초기값과 같으면
    저장을 disabled로 둔다.
 2. 표시 이름·bio와 Profile Tag의 로컬 입력·validation·order state만 presentation 경계에 둔다. Profile Tag
-   server error와 Relay 연결은 `PROD-527`이 주입할 수 있게 field-level error와 submit seam을 노출한다.
+   순서 변경 mode는 왼쪽 drag handle과 위·아래 접근성 대체 action을 함께 제공한다. server error와 Relay 연결은
+   `PROD-527`이 주입할 수 있게 field-level error와 submit seam을 노출한다.
 3. desktop은 shell 중앙 최대 600px surface와 sticky top action을 사용하고 mobile/native는 기존 header·safe area를
    따른다. header 이미지 preview는 hero wrapper와 분리해 `aspectRatio: 3`과 cover crop을 적용한다. 별도 modal
    route나 component-local breakpoint를 만들지 않는다.
@@ -62,6 +63,8 @@ Profile Tag는 `add-profile-tags`가 별도 저장·공개 계약을 소유한�
    transaction에서 변경한다. Media가 같은 Profile의 Ready Local Media인지 검증하고 관계 제거 때 Media는 남긴다.
 6. route가 초기값, submit, picker/upload 결과, Relay payload와 성공 navigation을 연결한다. Tag API가 없는 동안
    production Tag editor는 숨기거나 disabled로 두고 저장 가능하다고 오인시키지 않는다.
+7. Web-first presentation은 icon action `32×32`, text action 최소 높이 `36`, Tag reorder row 최소 높이 `40`의
+   compact rhythm을 Web·Native 공용으로 사용한다. Native 전달 시 touch target은 별도 검증으로 다시 정렬한다.
 
 ### Allowed Alternatives
 
@@ -84,6 +87,7 @@ Profile Tag는 `add-profile-tags`가 별도 저장·공개 계약을 소유한�
 - mobile·desktop별 고정 height로 header 이미지 preview를 만들거나 avatar overlap 공간까지 `3:1` 비율에
   포함하지 않는다.
 - web 중앙 column을 internal scroller로 바꿔 기존 document scroll 계약을 깨지 않는다.
+- presentation에 저장 성공 문구를 남겨 route가 갱신된 Profile로 복귀하는 production 동작과 경쟁시키지 않는다.
 
 ## Risks / Trade-offs
 

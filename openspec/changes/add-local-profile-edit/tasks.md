@@ -21,17 +21,18 @@ Profile edit component와 Web·Android·iOS 상태 카탈로그를 전달한다.
   해당 field만 변경하며 초기값과 같은 draft에서는 저장을 disabled로 표현한다.
 - inline TagChip 추가·제거와 같은 영역의 명시적 순서 변경 mode를 제공하되 Tag 저장·Relay는 연결하지 않는다.
 - Follow Approval Policy, Profile Link와 기존 Figma 시안의 범위 밖 field를 포함하지 않는다.
-- 기존 theme token·breakpoint와 React Native primitive를 사용하고 44×44 target과 accessibility state를 유지한다.
+- 기존 theme token·breakpoint와 React Native primitive를 사용하고 icon action `32×32`, text action 최소 높이
+  `36`, Tag reorder row 최소 높이 `40`의 compact rhythm과 accessibility state를 유지한다.
 - header 이미지 preview는 hero wrapper와 분리하고 모든 지원 폭에서 `3:1`과 중앙 기준 cover crop을 유지한다.
 
 **Verification**
 
 - 기본·dirty·displayName/bio 경계·Tag 추가/제거/순서/최대/invalid/duplicate를 component test와 Storybook에서 확인한다.
-- avatar/header 각각의 교체·제거·upload-wait·error, saving·success·failure·retry controlled state를 검증한다.
+- avatar/header 각각의 교체·제거·upload-wait·error, saving·failure·retry controlled state를 검증한다.
 - 한 이미지 field만 편집할 때 다른 이미지의 현재 draft가 유지되고 공통 `유지` action row가 없는지 확인한다.
 - `390×130`, `600×200`과 중간 폭에서 header preview가 `3:1`이며 wrapper·avatar·action이 비율을
   왜곡하지 않는지 검증한다.
-- mobile·1024·1440 wrapping, keyboard·screen-reader 이동과 action target을 확인한다.
+- mobile·1024·1440 wrapping, pointer drag와 keyboard·screen-reader 대체 이동, compact action target을 확인한다.
 - 테스트 코드 범위는 Profile edit form/editor의 승인 동작을 직접 검증하는 최소 component test로 제한하고 중복
   snapshot·새 harness·관련 없는 fixture 확대는 제외한다.
 
@@ -39,9 +40,9 @@ Profile edit component와 Web·Android·iOS 상태 카탈로그를 전달한다.
 - [x] 1.2 현재 값을 초기 draft로 사용하는 avatar/header별 controlled 편집 state, `3:1` header preview와 callback
       seam을 구현한다.
 - [x] 1.3 Profile Tag inline chip editor, 로컬 validation과 명시적 순서 변경 mode를 구현한다.
-- [x] 1.4 unchanged/callback 없음의 disabled submit과 dirty·upload·saving·success·failure·retry 상태 카탈로그,
+- [x] 1.4 unchanged/callback 없음의 disabled submit과 dirty·upload·saving·failure·retry 상태 카탈로그,
       접근성 metadata를 추가한다.
-- [ ] 1.5 최소 component test, Storybook a11y/static build와 app 필수 check를 통과하고 PROD-491 PR에 증거를 기록한다.
+- [x] 1.5 최소 component test, Storybook a11y/static build와 app 필수 check를 통과하고 PROD-491 PR에 증거를 기록한다.
 
 ## 2. PROD-492 selected Owner route·API·Media 연결
 

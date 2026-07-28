@@ -47,7 +47,7 @@ Profile 화면이 같은 태그를 Web·Android·iOS에서 일관되게 표시�
 
 ## 전달 경계
 
-- `PROD-491`은 Profile 편집 presentation 안의 controlled Profile Tag editor, 로컬 추가·제거·순서 변경,
+- `PROD-491`은 Profile 편집 presentation 안의 controlled Profile Tag editor, 로컬 추가·제거,
   client validation과 Storybook 상태를 제공한다.
 - `PROD-527`은 위 editor를 다시 만들지 않고 Profile Tag mutation·server validation·Relay 상태에 연결하며 공개
   Profile 표시를 제공한다.

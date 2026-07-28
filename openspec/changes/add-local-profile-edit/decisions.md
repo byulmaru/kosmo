@@ -111,6 +111,25 @@
   OpenSpec Gate를 거친다.
 - Confirmation / Follow-up: Profile edit UI·mutation selection에 followPolicy가 포함되지 않는지 확인한다.
 
+### Profile edit action은 Web-first compact rhythm을 사용한다
+
+- Decision Date: 2026-07-29
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/profile-edit.md`, `docs/design/profile-tags.md`, `PROD-491`
+- Status: Active
+- Context / Problem: UI 선제작 단계에서 모든 action에 `44×44`를 강제하면 Web form의 행과 Tag chip이 실제 정보
+  밀도보다 높아지고, 현재 우선 검증 대상인 Web에서 과한 수직 공간을 만든다.
+- Decision Outcome: Profile edit presentation은 icon action `32×32`, text action 최소 높이 `36`, Tag reorder row
+  최소 높이 `40`의 compact rhythm을 Web·Native 공용으로 사용한다. Tag는 왼쪽 drag handle을 제공하고 위·아래
+  action을 키보드·스크린리더 대체 수단으로 유지한다.
+- Alternatives Considered: Web만 compact하게 하고 Native는 `44×44`를 유지하는 방식은 현재 공용 component에
+  platform branch를 추가하므로 제외했다. 전 action을 `44×44`로 유지하고 padding만 줄이는 방식은 사용자가
+  지적한 Web 높이를 충분히 줄이지 못해 제외했다.
+- Consequences: Native touch target 최적화는 후순위로 남고 Native 전달 시 다시 검토해야 한다. 접근성 label/state와
+  drag 없는 이동 action은 현재에도 유지한다.
+- Confirmation / Follow-up: Storybook Web 상태에서 compact rhythm과 pointer drag·keyboard fallback을 확인하고,
+  Native 구현 이슈에서 target 크기를 재검토한다.
+
 ## Remaining Decisions
 
 - 없음.

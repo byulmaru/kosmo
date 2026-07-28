@@ -36,7 +36,7 @@ function getImageFieldStatus(
   if (draft.uploadState === 'error') {
     return {
       kind: 'error',
-      message: draft.error ?? `${label} 이미지를 준비하지 못했어요.`,
+      message: draft.error ?? `${label} 이미지 업로드에 실패했어요. 다시 시도해 주세요.`,
     };
   }
 
@@ -174,10 +174,10 @@ const styles = StyleSheet.create({
   },
   imageAction: {
     alignItems: 'center',
-    height: 44,
+    height: 32,
     justifyContent: 'center',
     position: 'absolute',
-    width: 44,
+    width: 32,
   },
   headerAction: {
     borderRadius: radii.full,

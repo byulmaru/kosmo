@@ -42,19 +42,12 @@ function mergeFieldErrors(
 function SubmitStatus({ state }: { state: ProfileEditSubmitState }) {
   const theme = useTheme();
 
-  if (state.kind === 'idle' || state.kind === 'saving') {
+  if (state.kind !== 'error') {
     return null;
   }
 
   return (
-    <Text
-      accessibilityLiveRegion={state.kind === 'success' ? 'polite' : undefined}
-      accessibilityRole={state.kind === 'error' ? 'alert' : undefined}
-      style={[
-        styles.submitStatus,
-        { color: state.kind === 'error' ? theme.danger : theme.textSecondary },
-      ]}
-    >
+    <Text accessibilityRole="alert" style={[styles.submitStatus, { color: theme.danger }]}>
       {state.message}
     </Text>
   );
@@ -162,14 +155,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 1,
     flexDirection: 'row',
-    minHeight: 60,
+    minHeight: 52,
     paddingHorizontal: spacing.sm,
   },
   backAction: {
     alignItems: 'center',
-    height: 44,
+    height: 32,
     justifyContent: 'center',
-    width: 44,
+    width: 32,
   },
   title: {
     flex: 1,
@@ -179,8 +172,8 @@ const styles = StyleSheet.create({
     ...typography.lg,
   },
   saveAction: {
-    minHeight: 44,
-    minWidth: 72,
+    minHeight: 36,
+    minWidth: 64,
   },
   submitStatus: {
     fontFamily: 'SUIT',
