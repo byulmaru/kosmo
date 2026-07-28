@@ -132,10 +132,15 @@ export const RecentSearchInteraction: Story = {
   parameters: { router: { params: {}, pathname: '/search' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('textbox', { name: '검색어' }));
+    const input = canvas.getByRole('textbox', { name: '검색어' });
+    await userEvent.click(input);
     await expect(canvas.findByText('별마루')).resolves.toBeVisible();
+    await userEvent.tab();
+    await expect(canvas.getByRole('link', { name: '별마루' })).toHaveFocus();
     await userEvent.click(canvas.getByRole('button', { name: "최근 검색 '별마루' 삭제" }));
     await expect(canvas.queryByText('별마루')).not.toBeInTheDocument();
+    await expect(canvas.findByText('@remote@space.example')).resolves.toBeVisible();
+    await expect(input).toHaveFocus();
   },
 };
 

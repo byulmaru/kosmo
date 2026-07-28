@@ -104,6 +104,9 @@ test('저장된 최근 검색을 표시하고 개별 항목을 삭제한다', as
   await page.getByRole('button', { name: "최근 검색 'recent-alpha' 삭제" }).click();
 
   await expect(page.getByText('recent-alpha', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('최근 검색', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'recent-beta' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: '검색어' })).toBeFocused();
   expect(
     await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? '[]'), recentSearchesKey),
   ).toEqual(['recent-beta']);
