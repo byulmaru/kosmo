@@ -1,4 +1,5 @@
 import { deletePost } from '@kosmo/core/services';
+import { sendLocalReplyDelete } from '@kosmo/fedify';
 import { builder } from '@/graphql/builder';
 import { Post } from '../ref';
 
@@ -23,6 +24,12 @@ builder.mutationField('deletePost', (t) =>
         postId: input.id.id,
       });
 
+      await sendLocalReplyDelete(result.postId).catch((error) => {
+        console.error('Post-commit ActivityPub Reply Delete delivery failed', {
+          error,
+          postId: result.postId,
+        });
+      });
       return result;
     },
   }),

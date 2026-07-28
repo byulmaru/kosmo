@@ -4,6 +4,7 @@ import { NotFoundError } from '@kosmo/core/error';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { createPost, createReplyNotificationBestEffort } from '@kosmo/core/services';
 import { postBodyTextSchema } from '@kosmo/core/validation';
+import { sendLocalReplyCreate } from '@kosmo/fedify';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { postVisibilityAccessWhere } from '../access/visibility';
@@ -54,6 +55,12 @@ builder.mutationField('createPost', (t) =>
 
       if (input.replyParentId) {
         await createReplyNotificationBestEffort(result.post.id);
+        await sendLocalReplyCreate(result.post.id).catch((error) => {
+          console.error('Post-commit ActivityPub Reply Create delivery failed', {
+            error,
+            postId: result.post.id,
+          });
+        });
       }
       return result;
     },
