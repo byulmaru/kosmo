@@ -34,8 +34,8 @@ Web은 Hono BFF가 발급한 HttpOnly `kosmo_session` cookie를 `/graphql`에서
 
 ### Recommended Approach
 
-1. **폐기 인증과 core action을 분리한다.** GraphQL resolver와 BFF route는 각 transport에서 받은 bearer/cookie credential을 server-side로 조회해 `revokeable current Session`, `already unauthenticated`, `unknown failure`를 구분한다. 일반 `ctx.session`의 Active Account 정책은 유지한다.
-2. **core는 검증된 current Session identity로 원자적 상태 전이를 수행한다.** Active Session만 조건부로 Revoked로 갱신하고, 갱신 실패 시 현재 Session/Account 상태를 다시 확인해 terminal winner 또는 삭제된 Account를 이미 인증 불가능한 결과로 분류한다. 명시적 비관적 lock 없이 PostgreSQL의 조건부 update와 짧은 transaction을 사용한다.
+1. **transport-neutral logout action이 폐기 인증과 조건부 revoke를 함께 소유한다.** GraphQL resolver와 BFF route는 bearer/cookie에서 얻은 raw Session credential을 같은 application action에 전달한다. 이 action이 `revokeable current Session`, `already unauthenticated`, `unknown failure`를 일관되게 구분하고, 일반 `ctx.session`의 Active Account 정책은 유지한다.
+2. **공유 action은 식별한 current Session을 원자적으로 전이한다.** Active Session만 조건부로 Revoked로 갱신하고, 갱신 실패 시 현재 Session/Account 상태를 다시 확인해 terminal winner 또는 삭제된 Account를 이미 인증 불가능한 결과로 분류한다. terminal/missing credential은 조건부 revoke 단계에 진입하지 않는다. 명시적 비관적 lock 없이 PostgreSQL의 조건부 update와 짧은 transaction을 사용한다.
 3. **GraphQL은 전용 mutation을 둔다.** `revokeCurrentSession`은 Session ID input 없이 special credential boundary를 사용하고, 확정 결과를 `RevokeCurrentSessionPayload { completed: Boolean! }`로 mapping한다. 예상 밖 DB/server 실패는 기존 `INTERNAL_SERVER_ERROR` 경로를 사용한다.
 4. **Web은 전용 `POST /logout` route를 둔다.** 구성된 public origin과 Origin header를 정확히 비교한 뒤 cookie credential을 처리한다. 확정 결과는 cache 불가 `204 No Content`와 동일 scope의 expired `kosmo_session` cookie로 응답하고, 불명 실패는 cookie를 유지한 채 non-2xx를 반환한다. `/graphql` proxy는 변경하지 않는다.
 5. **client logout action이 cleanup 순서를 소유한다.** Web은 credential 포함 `POST /logout`, Native는 Relay mutation을 호출한다. 성공 뒤 Native SecureStore token 삭제를 완료하고, 모든 runtime에서 actor revision을 바꿔 새 guest Environment/Store를 만든 다음 router replace로 `/`에 이동한다.
@@ -43,7 +43,7 @@ Web은 Hono BFF가 발급한 HttpOnly `kosmo_session` cookie를 `/graphql`에서
 
 ### Allowed Alternatives
 
-- GraphQL/BFF가 credential lookup 코드를 각각 소유해도 되고, transport 타입에 의존하지 않는 실제 공통 경계가 확인되면 server-side helper로 공유해도 된다. 어느 방식이든 일반 API `ctx.session` 정책을 넓히거나 core에 GraphQL/HTTP 타입을 전달해서는 안 된다.
+- GraphQL/BFF는 각 transport에서 raw Session credential을 추출하는 방식만 각각 소유할 수 있다. credential 조회·결과 분류·조건부 revoke는 transport-neutral logout action 안에서 직접 수행하거나 그 action만 사용하는 server-side helper로 분리할 수 있다. 어느 방식이든 일반 API `ctx.session` 정책을 넓히거나 공유 action에 GraphQL/HTTP 타입을 전달해서는 안 된다.
 - core의 조건부 전이는 단일 update 후 outcome 조회 또는 짧은 transaction 안의 동등한 방식으로 구현할 수 있다. specs의 terminal winner, 다른 Session 격리와 결과 분류를 만족해야 한다.
 - shell 실패 표현은 inline status 또는 기존 접근 가능한 공통 오류 surface를 사용할 수 있다. raw backend message나 credential material을 노출하지 않고 재시도를 제공해야 한다.
 
