@@ -243,91 +243,140 @@ const threadReplyQuotePost = {
   }),
   repostSource: threadQuoteSourcePost,
 };
-const routeRootPost = post({ bodyText: 'Route Root 본문', id: 'route-root' });
-const routeParentPost = post({
-  bodyText: 'Route Parent 본문',
-  id: 'route-parent',
-  replyParent: { __typename: 'Post', id: routeRootPost.id },
-});
-const routeSourcePost = post({ bodyText: 'Source 본문', id: 'route-source' });
-const routeCurrentPost = post({
-  bodyText: '현재 Reply 본문',
-  id: 'route-current',
-  replyParent: { __typename: 'Post', id: routeParentPost.id },
-});
+const routeRootPost = {
+  ...post({ bodyText: 'Route Root 본문', id: 'route-root' }),
+  viewerReactions: [],
+};
+const routeParentPost = {
+  ...post({
+    bodyText: 'Route Parent 본문',
+    id: 'route-parent',
+    replyParent: { __typename: 'Post', id: routeRootPost.id },
+  }),
+  viewerReactions: [],
+};
+const routeSourcePost = {
+  ...post({ bodyText: 'Source 본문', id: 'route-source' }),
+  viewerReactions: [],
+};
+const routeCurrentPost = {
+  ...post({
+    bodyText: '현재 Reply 본문',
+    id: 'route-current',
+    replyParent: { __typename: 'Post', id: routeParentPost.id },
+  }),
+  viewerReactions: [],
+};
 const routeCurrentPostReactionCounts = [{ count: 2, type: '❤️' }];
-const postLayoutReactionPost = post({
-  bodyText: 'PostLayout이 반응 요약을 직접 소유하는 게시글입니다.',
-  id: 'post-layout-reaction',
-  reactionCounts: routeCurrentPostReactionCounts,
-});
+const postLayoutReactionPost = {
+  ...post({
+    bodyText: 'PostLayout이 반응 요약을 직접 소유하는 게시글입니다.',
+    id: 'post-layout-reaction',
+    reactionCounts: routeCurrentPostReactionCounts,
+  }),
+  viewerReactions: [],
+};
 const routeCurrentPostWithoutReactions = { ...routeCurrentPost, reactionCounts: [] };
-const routeChildPost = post({
-  bodyText: 'Child 본문',
-  id: 'route-child',
-  replyParent: { __typename: 'Post', id: routeCurrentPost.id },
-});
-const routeSiblingPost = post({
-  bodyText: 'Sibling 본문',
-  id: 'route-sibling',
-  replyParent: { __typename: 'Post', id: routeParentPost.id },
-});
-const routeReplyQuotePost = post({
-  bodyText: 'Reply+Quote 자체 Content',
-  id: 'route-reply-quote',
-  replyParent: { __typename: 'Post', id: routeSiblingPost.id },
-  repostSource: routeSourcePost,
-});
-const routeSourceNullPost = post({
-  bodyText: 'Source가 없어도 남는 Content',
-  id: 'route-source-null',
-  replyParent: { __typename: 'Post', id: routeSiblingPost.id },
-});
-const routeHiddenAncestorPost = post({
-  bodyText: '숨겨진 답글',
-  id: 'route-hidden-ancestor',
-});
-const routeVisibleParentPost = post({
-  bodyText: '조회 가능한 직접 Parent',
-  id: 'route-visible-parent',
-  replyParent: { __typename: 'Post', id: routeHiddenAncestorPost.id },
-});
-const routeBoundaryCurrentPost = post({
-  bodyText: '경계 Current 본문',
-  id: 'route-boundary-current',
-  replyParent: { __typename: 'Post', id: routeVisibleParentPost.id },
-});
+const routeChildPost = {
+  ...post({
+    bodyText: 'Child 본문',
+    id: 'route-child',
+    replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+  }),
+  viewerReactions: [],
+};
+const routeSiblingPost = {
+  ...post({
+    bodyText: 'Sibling 본문',
+    id: 'route-sibling',
+    replyParent: { __typename: 'Post', id: routeParentPost.id },
+  }),
+  viewerReactions: [],
+};
+const routeReplyQuotePost = {
+  ...post({
+    bodyText: 'Reply+Quote 자체 Content',
+    id: 'route-reply-quote',
+    replyParent: { __typename: 'Post', id: routeSiblingPost.id },
+    repostSource: routeSourcePost,
+  }),
+  viewerReactions: [],
+};
+const routeSourceNullPost = {
+  ...post({
+    bodyText: 'Source가 없어도 남는 Content',
+    id: 'route-source-null',
+    replyParent: { __typename: 'Post', id: routeSiblingPost.id },
+  }),
+  viewerReactions: [],
+};
+const routeHiddenAncestorPost = {
+  ...post({
+    bodyText: '숨겨진 답글',
+    id: 'route-hidden-ancestor',
+  }),
+  viewerReactions: [],
+};
+const routeVisibleParentPost = {
+  ...post({
+    bodyText: '조회 가능한 직접 Parent',
+    id: 'route-visible-parent',
+    replyParent: { __typename: 'Post', id: routeHiddenAncestorPost.id },
+  }),
+  viewerReactions: [],
+};
+const routeBoundaryCurrentPost = {
+  ...post({
+    bodyText: '경계 Current 본문',
+    id: 'route-boundary-current',
+    replyParent: { __typename: 'Post', id: routeVisibleParentPost.id },
+  }),
+  viewerReactions: [],
+};
 const routeBoundaryCurrentPostWithoutReactions = {
   ...routeBoundaryCurrentPost,
   reactionCounts: [],
 };
-const paginationInitialReplies = Array.from({ length: 20 }, (_, index) =>
-  post({
+const paginationInitialReplies = Array.from({ length: 20 }, (_, index) => ({
+  ...post({
     bodyText: `기존 Reply ${index + 1}\n${Array.from({ length: 8 }, () => '긴 document scroll 검증 본문').join('\n')}`,
     id: `pagination-initial-${index + 1}`,
     replyParent: { __typename: 'Post', id: routeCurrentPost.id },
   }),
-);
-const paginationInitialReply = post({
-  bodyText: '짧은 화면의 초기 Reply',
-  id: 'pagination-short-initial',
-  replyParent: { __typename: 'Post', id: routeCurrentPost.id },
-});
-const paginationFirstNextReply = post({
-  bodyText: '첫 다음 page Reply',
-  id: 'pagination-next-first',
-  replyParent: { __typename: 'Post', id: routeCurrentPost.id },
-});
-const paginationDuplicateNextReply = post({
-  bodyText: '중복 요청이면 나타나는 Reply',
-  id: 'pagination-next-duplicate',
-  replyParent: { __typename: 'Post', id: routeCurrentPost.id },
-});
-const paginationRetryReply = post({
-  bodyText: '재시도로 추가된 Reply',
-  id: 'pagination-next-retry',
-  replyParent: { __typename: 'Post', id: routeCurrentPost.id },
-});
+  viewerReactions: [],
+}));
+const paginationInitialReply = {
+  ...post({
+    bodyText: '짧은 화면의 초기 Reply',
+    id: 'pagination-short-initial',
+    replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+  }),
+  viewerReactions: [],
+};
+const paginationFirstNextReply = {
+  ...post({
+    bodyText: '첫 다음 page Reply',
+    id: 'pagination-next-first',
+    replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+  }),
+  viewerReactions: [],
+};
+const paginationDuplicateNextReply = {
+  ...post({
+    bodyText: '중복 요청이면 나타나는 Reply',
+    id: 'pagination-next-duplicate',
+    replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+  }),
+  viewerReactions: [],
+};
+const paginationRetryReply = {
+  ...post({
+    bodyText: '재시도로 추가된 Reply',
+    id: 'pagination-next-retry',
+    replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+  }),
+  viewerReactions: [],
+};
 const threadItems = {
   ancestors: [
     { connectedToPrevious: false, id: threadRootPost.id },
@@ -825,7 +874,7 @@ const meta = {
         contentPostsProfile,
         emptyPostsProfile,
         homeTimeline,
-        nodes: storyPosts,
+        nodes: storyPosts.map((storyPost) => ({ ...storyPost, viewerReactions: [] })),
       },
       mutationResponse: { createPost: { post: { id: 'post-created-in-story' } } },
     },
@@ -1097,7 +1146,7 @@ export const ProductionRepostFailureToast: Story = {
         contentPostsProfile,
         emptyPostsProfile,
         homeTimeline,
-        nodes: storyPosts,
+        nodes: storyPosts.map((storyPost) => ({ ...storyPost, viewerReactions: [] })),
       },
       mutationError: 'repost mutation failed',
     },
@@ -1520,6 +1569,7 @@ export const PostDetailThreadRoute: Story = {
         PostDetailQuery: {
           data: {
             node: {
+              viewerReactions: [],
               ...routeCurrentPost,
               reactionCounts: routeCurrentPostReactionCounts,
               replyAncestors: [
@@ -1650,6 +1700,7 @@ export const PostDetailCurrentQuoteSourceNavigation: Story = {
         PostDetailQuery: {
           data: {
             node: {
+              viewerReactions: [],
               ...quotePost,
               reactionCounts: [],
               replyAncestors: [],
@@ -1717,6 +1768,7 @@ export const PureRepostDetailCanonicalizesToSource: Story = {
         PostDetailQuery: {
           data: {
             node: {
+              viewerReactions: [],
               ...pureRepost,
               reactionCounts: [],
               replyAncestors: [],
@@ -1762,6 +1814,7 @@ export const PostDetailThreadUnavailableAncestorBoundary: Story = {
         PostDetailQuery: {
           data: {
             node: {
+              viewerReactions: [],
               ...routeBoundaryCurrentPostWithoutReactions,
               replyAncestors: [routeVisibleParentPost],
               replyDescendants: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } },
@@ -1803,6 +1856,7 @@ export const PostDetailThreadShortContentAutoFills: Story = {
         PostDetailQuery: {
           data: {
             node: {
+              viewerReactions: [],
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
@@ -1817,6 +1871,7 @@ export const PostDetailThreadShortContentAutoFills: Story = {
         {
           data: {
             node: {
+              viewerReactions: [],
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
@@ -1850,6 +1905,7 @@ export const PostDetailThreadDocumentScrollLoadsOnce: Story = {
         PostDetailQuery: {
           data: {
             node: {
+              viewerReactions: [],
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
@@ -1867,6 +1923,7 @@ export const PostDetailThreadDocumentScrollLoadsOnce: Story = {
         {
           data: {
             node: {
+              viewerReactions: [],
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
@@ -1879,6 +1936,7 @@ export const PostDetailThreadDocumentScrollLoadsOnce: Story = {
         {
           data: {
             node: {
+              viewerReactions: [],
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
@@ -1924,6 +1982,7 @@ export const PostDetailThreadPageLoading: Story = {
         PostDetailQuery: {
           data: {
             node: {
+              viewerReactions: [],
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
@@ -1966,6 +2025,7 @@ export const PostDetailThreadPageFailureRetries: Story = {
         PostDetailQuery: {
           data: {
             node: {
+              viewerReactions: [],
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
@@ -1984,6 +2044,7 @@ export const PostDetailThreadPageFailureRetries: Story = {
         {
           data: {
             node: {
+              viewerReactions: [],
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
