@@ -43,6 +43,12 @@ const loadCurrentSession = async (token: string, tx: Transaction) =>
 /**
  * Revokes the Session identified by a caller-owned credential.
  *
+ * Unlike ordinary authenticated actions, logout must classify missing and
+ * terminal credentials as settled outcomes without first producing a verified
+ * Session identity. Keeping that lookup in this shared action also prevents
+ * GraphQL and Web transports from implementing different terminal-state rules,
+ * so this action intentionally accepts a raw Kosmo Session credential.
+ *
  * Missing, disabled-account, revoked, and expired credentials are already
  * unauthenticated outcomes. Active Sessions on active or suspended Accounts
  * are revoked with a conditional update so a terminal concurrent winner is

@@ -2,7 +2,7 @@
 
 ### Requirement: 현재 Session 폐기 인증 경계
 
-**Authority / Provenance:** `docs/domain/objects/session.md`, `docs/domain/objects/account.md`; Linear: `PROD-473`, `PROD-474` 시스템은 current-session revoke 요청의 credential을 일반 인증 행동과 분리된 폐기 인증 경계에서 확인해야 한다(MUST). 이 경계는 credential이 가리키는 현재 Active Session과 연결 Account State를 확인하고, 클라이언트가 Session ID를 입력하지 않은 상태에서만 `Session.Self` 대상 identity를 도출해야 한다(MUST). 정상 폐기 가능 상태, 이미 인증 불가능한 확정 상태와 결과 불명 실패를 구분해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/session.md`, `docs/domain/objects/account.md`; Linear: `PROD-473`, `PROD-474` 시스템은 current-session revoke 요청의 credential을 일반 인증 행동과 분리된 폐기 인증 경계에서 확인해야 한다(MUST). GraphQL과 Web transport가 같은 terminal-state 판정을 공유하도록 transport-neutral current-session logout action이 이 경계와 조건부 revoke를 함께 소유해야 한다(MUST). 이 경계는 credential이 가리키는 현재 Active Session과 연결 Account State를 확인하고, 클라이언트가 Session ID를 입력하지 않은 상태에서만 `Session.Self` 대상 identity를 도출해야 한다(MUST). 정상 폐기 가능 상태, 이미 인증 불가능한 확정 상태와 결과 불명 실패를 구분해야 한다(MUST).
 
 #### Scenario: Active Account의 현재 Active Session 식별
 
@@ -19,7 +19,7 @@
 #### Scenario: 이미 인증 불가능한 credential 확정
 
 - **WHEN** credential이 Deleted Account 또는 Revoked/Expired Session을 가리킨다
-- **THEN** 시스템은 revoke core에 진입하지 않는다
+- **THEN** 시스템은 조건부 Session revoke 단계에 진입하지 않는다
 - **AND** transport가 로그아웃 완료로 처리할 수 있는 이미 인증 불가능한 확정 결과를 반환한다
 
 #### Scenario: credential 확인 결과가 불명확함
@@ -30,11 +30,11 @@
 
 ### Requirement: 현재 Session의 멱등 폐기
 
-**Authority / Provenance:** `docs/domain/objects/session.md`, `docs/domain/objects/account.md`; Linear: `PROD-473`, `PROD-474` transport-neutral revoke core는 폐기 인증 경계가 식별한 현재 Session만 Active에서 Revoked로 전이해야 한다(MUST). Revoked와 Expired는 terminal 상태로 유지해야 하고(MUST), 같은 Account의 다른 Session을 변경해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/session.md`, `docs/domain/objects/account.md`; Linear: `PROD-473`, `PROD-474` transport-neutral current-session logout action은 폐기 인증 경계가 식별한 현재 Session만 Active에서 Revoked로 전이해야 한다(MUST). Revoked와 Expired는 terminal 상태로 유지해야 하고(MUST), 같은 Account의 다른 Session을 변경해서는 안 된다(MUST NOT).
 
 #### Scenario: 현재 Active Session 폐기
 
-- **WHEN** revoke core가 검증된 현재 Active Session identity를 받는다
+- **WHEN** current-session logout action이 credential에서 현재 Active Session을 식별한다
 - **THEN** 시스템은 그 Session을 Revoked로 전이한다
 - **AND** 같은 Account의 다른 Session은 기존 상태를 유지한다
 
@@ -63,13 +63,13 @@
 #### Scenario: Native bearer Session 폐기 성공
 
 - **WHEN** Native client가 Active 또는 Suspended Account의 현재 Active Session bearer credential로 `revokeCurrentSession`을 호출한다
-- **THEN** API는 같은 transport-neutral revoke core를 사용해 현재 Session 폐기를 확정한다
+- **THEN** API는 같은 transport-neutral current-session logout action을 사용해 현재 Session 폐기를 확정한다
 - **AND** `completed: true`인 payload를 반환한다
 
 #### Scenario: 이미 인증 불가능한 bearer credential
 
 - **WHEN** mutation의 bearer credential이 Deleted Account 또는 Revoked/Expired Session을 가리킨다
-- **THEN** API는 revoke core에 진입하지 않는다
+- **THEN** 공유 action의 조건부 Session revoke 단계에 진입하지 않는다
 - **AND** 이미 인증 불가능함이 확정됐으므로 `completed: true`인 payload를 반환한다
 
 #### Scenario: 결과 불명 실패
