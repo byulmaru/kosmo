@@ -49,7 +49,9 @@ GraphQL application 결과와 committed Reply state가 성공으로 유지된다
 
 **Guardrails**
 
-- transaction callback 또는 optional caller transaction 내부에서 delivery하지 않는다.
+- transaction 인자의 존재 여부로 origin이나 lifecycle 실행 여부를 분기하지 않는다.
+- caller transaction 합류가 필요해지면 delivery를 생략하거나 commit 전에 실행하지 않고 명시적인 post-commit
+  coordination 경계를 먼저 설계한다.
 - core Post public contract에 GraphQL·Fedify 타입, callback이나 speculative delivery port를 추가하지 않는다.
 - GraphQL resolver가 Reply Notification이나 Fedify delivery를 직접 조립하지 않는다.
 - 통합 `createPost`와 `deletePost`가 outer commit과 origin별 post-commit lifecycle을 소유한다.

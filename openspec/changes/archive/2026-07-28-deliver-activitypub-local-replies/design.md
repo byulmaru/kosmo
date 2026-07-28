@@ -32,9 +32,9 @@ federation에는 MessageQueue가 없으므로 `sendActivity()`는 remote HTTP �
 
 ### Current Constraints
 
-- low-level `createPost()`는 optional caller transaction에 합류하므로 그 안에서 delivery를 호출하면 가장 바깥
-  transaction이 아직 rollback될 수 있다. Local production entry는 caller transaction 없이 통합 `createPost`를
-  호출해 action이 outer transaction과 post-commit lifecycle을 함께 소유하게 해야 한다.
+- `createPost()`는 현재 자신의 transaction과 post-commit lifecycle을 함께 소유한다. transaction 인자의 존재
+  여부로 lifecycle을 켜거나 끄지 않는다. 향후 caller transaction 합류가 실제로 필요해지면 commit 이후 전달을
+  보장하는 명시적인 post-commit coordination 경계를 먼저 설계해야 한다.
 - 현재 Local Note loader는 Active Post만 제공한다. Reply가 Tombstone이 된 뒤에는 dispatcher를 그대로 호출해
   Delete projection을 만들 수 없다.
 - Create의 embedded Note를 별도로 다시 직렬화하면 object dispatcher의 content, summary, audience와 `inReplyTo`

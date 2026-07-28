@@ -129,6 +129,12 @@ Delivery 실패는 관측 가능하게 기록하되 이미 commit된 Reply 생�
 - **AND** 통합 core production 기본 경로가 commit 뒤 Reply Notification과 Create 또는 Delete delivery를 실행한다
 - **AND** resolver는 Notification 또는 Fedify lifecycle 함수를 직접 호출하지 않는다
 
+#### Scenario: Transaction 구성은 lifecycle 의미를 바꾸지 않는다
+
+- **WHEN** Post 생성 action의 transaction 구성 방식이 달라진다
+- **THEN** transaction 인자의 존재 여부로 Reply lifecycle 실행 여부를 결정하지 않는다
+- **AND** caller transaction 합류가 필요하면 commit 이후 전달을 보장하는 명시적 coordination 경계를 먼저 정의한다
+
 ### Requirement: 현재 직접 delivery 제한
 
 **Authority / Provenance:** PROD-448, PROD-497, PROD-512. 시스템은 이번 capability에서 followers fanout, transactional outbox, broker handoff, Fedify MessageQueue, durable retry 또는 사용자용 delivery status를 추가해서는 안 된다(MUST NOT). Commit과 직접 delivery 사이 process 종료로 activity가 유실될
