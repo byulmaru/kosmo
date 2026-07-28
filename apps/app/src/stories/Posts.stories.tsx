@@ -1250,7 +1250,7 @@ export const ProductionReactionMutationTargets: Story = {
         ) as ProductionReactionRequest[];
         expect(requests).toHaveLength(index + 1);
       });
-      await userEvent.click(trigger);
+      await userEvent.click(screen.getByTestId('reaction-popover-trigger-dismiss'));
       await waitFor(() => expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull());
     }
 
