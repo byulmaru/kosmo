@@ -596,7 +596,7 @@ export const ReactionPopoverDismissFocusAndPlacement: Story = {
     expect(topLeftTrigger).toHaveAttribute('aria-haspopup', 'dialog');
     expect(topLeftTrigger).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(topLeftTrigger!);
-    await screen.findByRole('dialog', { name: '반응 선택' });
+    const dialog = await screen.findByRole('dialog', { name: '반응 선택' });
     let position = screen.getByTestId('reaction-popover-position');
     await waitFor(() => expect(position).toHaveAttribute('data-placement', 'bottom'));
     expect(canvasElement.ownerDocument.activeElement).toHaveAttribute('aria-label', '🥹 반응');
@@ -608,7 +608,7 @@ export const ReactionPopoverDismissFocusAndPlacement: Story = {
       canvasElement.ownerDocument.documentElement.clientWidth - spacing.sm,
     );
     expect(getComputedStyle(shell).overflowX).toBe('auto');
-    for (const option of screen.getAllByRole('button', { name: /반응/ })) {
+    for (const option of within(dialog).getAllByRole('button', { name: /반응/ })) {
       const bounds = option.getBoundingClientRect();
       expect(bounds.width).toBeGreaterThanOrEqual(44);
       expect(bounds.height).toBeGreaterThanOrEqual(44);
