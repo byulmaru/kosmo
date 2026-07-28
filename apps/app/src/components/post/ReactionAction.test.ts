@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
+import { createRequire, registerHooks } from 'node:module';
 import { before, describe, it } from 'node:test';
+import { pathToFileURL } from 'node:url';
 import { commitMutation } from 'react-relay';
 import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
 import AddReactionMutation from './__generated__/ReactionActionAddReactionMutation.graphql';
@@ -21,10 +22,36 @@ let createDeleteReactionUpdater: (
 ) => SelectorStoreUpdater<ReactionActionDeleteReactionMutation['response']>;
 
 before(async () => {
+  const secureStoreMock = new URL('../../../.storybook/mocks/expo-secure-store.ts', import.meta.url)
+    .href;
+  const safeAreaMock = new URL('../../../.storybook/mocks/safe-area-context.tsx', import.meta.url)
+    .href;
+  const svgWeb = pathToFileURL(require.resolve('react-native-svg/lib/module/elements.web.js')).href;
+  const hooks = registerHooks({
+    resolve(specifier, context, nextResolve) {
+      if (specifier === 'expo-secure-store') {
+        return nextResolve(secureStoreMock, context);
+      }
+      if (specifier === 'react-native') {
+        return nextResolve('react-native-web', context);
+      }
+      if (specifier === 'react-native-safe-area-context') {
+        return nextResolve(safeAreaMock, context);
+      }
+      if (specifier === 'react-native-svg') {
+        return nextResolve(svgWeb, context);
+      }
+      return nextResolve(specifier, context);
+    },
+  });
   Object.defineProperty(require('react-relay'), 'graphql', {
     value: () => null,
   });
-  ({ createAddReactionUpdater, createDeleteReactionUpdater } = await import('./ReactionAction'));
+  try {
+    ({ createAddReactionUpdater, createDeleteReactionUpdater } = await import('./ReactionAction'));
+  } finally {
+    hooks.deregister();
+  }
 });
 
 type NetworkSink = {
