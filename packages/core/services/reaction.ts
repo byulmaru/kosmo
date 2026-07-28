@@ -6,28 +6,38 @@ import { reactionTypeSchema } from '../validation';
 import { createReactionNotification, deleteNotificationBySource } from './notification';
 import type { Transaction } from '../db';
 
-type AddReactionInput = {
+type ReactionInput = {
   readonly actorProfileId: string;
   readonly postId: string;
   readonly type: string;
 };
 
-type AddReactionExecution =
-  | { readonly mode: 'APPLICATION' }
-  | { readonly mode: 'MATERIALIZATION'; readonly tx: Transaction };
+type LocalReactionInput = ReactionInput & { readonly origin: 'LOCAL' };
+type ActivityPubReactionInput = ReactionInput & { readonly origin: 'ACTIVITYPUB' };
+type AddReactionResult = {
+  readonly created: boolean;
+  readonly reaction: typeof Reactions.$inferSelect;
+};
 
-export const addReaction = async (
-  { actorProfileId, postId, type }: AddReactionInput,
-  execution: AddReactionExecution,
-): Promise<{ readonly created: boolean; readonly reaction: typeof Reactions.$inferSelect }> => {
+export function addReaction(input: LocalReactionInput): Promise<AddReactionResult>;
+export function addReaction(
+  input: ActivityPubReactionInput,
+  tx: Transaction,
+): Promise<AddReactionResult>;
+export async function addReaction(
+  { actorProfileId, origin, postId, type }: LocalReactionInput | ActivityPubReactionInput,
+  tx?: Transaction,
+): Promise<AddReactionResult> {
+  if ((origin === 'LOCAL' && tx) || (origin === 'ACTIVITYPUB' && !tx)) {
+    throw new TypeError('Reaction origin and transaction ownership do not match.');
+  }
+
   const parsedType = reactionTypeSchema.safeParse(type);
   if (!parsedType.success) {
     throw new ValidationError(parsedType.error.issues[0]?.message, { field: 'type' });
   }
 
-  const result = await getDatabaseConnection(
-    execution.mode === 'MATERIALIZATION' ? execution.tx : undefined,
-  ).transaction(async (tx) => {
+  const result = await getDatabaseConnection(tx).transaction(async (tx) => {
     const post = await tx
       .select({ id: Posts.id })
       .from(Posts)
@@ -67,7 +77,7 @@ export const addReaction = async (
     return { created: inserted !== undefined, reaction };
   });
 
-  if (execution.mode === 'MATERIALIZATION' || !result.created) {
+  if (origin === 'ACTIVITYPUB' || !result.created) {
     return result;
   }
 
@@ -84,7 +94,7 @@ export const addReaction = async (
   }
 
   return result;
-};
+}
 
 type DeleteReactionInput = {
   readonly actorProfileId: string;

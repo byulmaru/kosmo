@@ -3,7 +3,7 @@
 PROD-499는 Local Profile의 Reaction application action이 commit한 결과를 Remote Post Author에게 전달하는 outbound
 slice다. `packages/core/services/reaction.ts`의 transport-neutral `addReaction`은 local application action과
 PROD-498 inbound materialization이 공유한다. 두 경로는 같은 저장 정책을 사용하지만 transaction과 post-commit
-side effect의 소유자가 다르므로 실행 mode를 명시적으로 구분해야 한다.
+side effect의 소유자가 다르므로 Reaction action의 origin을 domain input에서 명시적으로 구분해야 한다.
 
 GraphQL resolver는 caller 인증과 Post 조회 가능 여부, GraphQL 입력·응답 mapping을 소유한다. domain transaction,
 persistence, 멱등 결과와 post-commit side effect는 core application action의 책임이다. ActivityPub Post·actor·inbox
@@ -32,8 +32,8 @@ projection과 recipient eligibility, vocabulary 직렬화는 Fedify delivery 경
 
 ### Current Constraints
 
-- shared `addReaction`은 application과 materialization 실행 mode를 명시적으로 받아야 하며 transaction 인자 유무로
-  caller 의미를 추론하지 않아야 한다.
+- shared `addReaction`은 `createPost`와 같은 `LOCAL`·`ACTIVITYPUB` origin을 domain input으로 받아야 하며 transaction
+  인자 유무나 generic execution mode로 caller 의미를 표현하지 않아야 한다.
 - GraphQL API는 protocol-specific command 타입이나 actor/inbox projection을 알지 않아야 한다.
 - delete 이후 exact Undo를 만들려면 삭제된 Reaction의 ID, Type, 생성 시각과 actor/post identity를 보존해야 한다.
 - Fedify는 저장된 actor와 Post projection만 사용하고 delivery 중 remote fetch/materialization을 하지 않아야 한다.
@@ -41,11 +41,12 @@ projection과 recipient eligibility, vocabulary 직렬화는 Fedify delivery 경
 
 ### Recommended Approach
 
-GraphQL add resolver는 인증된 Profile과 Post 조회 가능 여부를 확인한 뒤 `addReaction`을 `APPLICATION` mode로
-호출한다. `addReaction`은 이 mode에서 actual create와 멱등 결과를 자체 transaction으로 commit하고 실제 생성된
-경우에만 Notification과 Fedify create delivery를 호출한다. PROD-498 inbound handler는 같은 `addReaction`을
-`MATERIALIZATION` mode와 caller transaction으로 호출한다. 이 mode는 저장 결과만 반환하고 inbound handler가 mapping을
-같은 transaction에 기록한 뒤 Notification을 post-commit으로 처리하므로 outbound echo가 발생하지 않는다.
+GraphQL add resolver는 인증된 Profile과 Post 조회 가능 여부를 확인한 뒤 `origin: 'LOCAL'`인 `addReaction`을 호출한다.
+`addReaction`은 Local origin에서 actual create와 멱등 결과를 자체 transaction으로 commit하고 실제 생성된 경우에만
+Notification과 Fedify create delivery를 호출한다. PROD-498 inbound handler는 같은 `addReaction`을
+`origin: 'ACTIVITYPUB'`과 필수 caller transaction으로 호출한다. ActivityPub origin은 저장 결과만 반환하고 inbound
+handler가 mapping을 같은 transaction에 기록한 뒤 Notification을 post-commit으로 처리하므로 outbound echo가 발생하지
+않는다.
 
 core `deleteReaction`은 exact Type의 삭제 row를 transaction에서 반환받는다. 실제 삭제된 경우 Notification cleanup과
 Fedify Undo를 각각 독립된 failure-isolation 경계에서 실행한다. 반복 delete는 삭제 row가 없으므로 side effect를 만들지
@@ -61,15 +62,16 @@ local canonical origin과 Reaction ID로 만들고, Undo는 같은 데이터로 
 
 ### Allowed Alternatives
 
-- 실행 mode 이름은 달라질 수 있지만 application lifecycle과 caller-owned materialization transaction의 차이가 public
-  contract에서 명시적이어야 한다.
+- origin field 이름은 `createPost`의 기존 domain provenance 표현과 일치해야 하며 Local origin과 ActivityPub origin의
+  transaction 계약은 overload와 runtime validation으로 함께 고정할 수 있다.
 - Fedify projection은 하나의 join 또는 분리된 조회로 구성할 수 있다. 어느 쪽이든 API로 projection 책임을 올리거나
   remote network fetch를 추가하지 않는다.
 
 ### Known Traps
 
-- transaction 인자 유무만으로 application/materialization을 암시적으로 분기한다.
-- materialization mode에서 Notification이나 ActivityPub delivery를 실행해 outer transaction commit 전에 side effect를
+- transaction 인자 유무만으로 Local/ActivityPub origin을 암시적으로 분기한다.
+- `APPLICATION`·`MATERIALIZATION`처럼 domain provenance가 아닌 generic execution mode를 public input에 추가한다.
+- ActivityPub origin에서 Notification이나 ActivityPub delivery를 실행해 outer transaction commit 전에 side effect를
   시작한다.
 - GraphQL resolver가 Fedify command 타입, actor/inbox projection 또는 post-commit delivery를 직접 소유한다.
 - transaction commit 전에 Fedify helper나 remote I/O를 호출한다.

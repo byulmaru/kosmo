@@ -250,10 +250,11 @@ test('exact duplicate와 기존 core Reaction mapping은 멱등이고 URI confli
     addReaction(
       {
         actorProfileId: secondActor.profile.id,
+        origin: 'ACTIVITYPUB',
         postId: post.id,
         type: '☘️',
       },
-      { mode: 'MATERIALIZATION', tx },
+      tx,
     ),
   );
   const mapped = await materializeInboundReaction({

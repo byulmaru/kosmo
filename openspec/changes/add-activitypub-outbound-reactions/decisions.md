@@ -105,7 +105,7 @@
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/architecture/core-services.md`, `docs/domain/objects/reaction.md`, PROD-499,
   implementation review decision on 2026-07-28
-- Status: Active
+- Status: Superseded
 - Context / Problem: 별도 `reactToPost` wrapper는 같은 Reaction 추가 행동을 두 public action으로 나누고,
   transaction 인자 유무만으로 분기하면 caller intent와 post-commit 책임이 암시적으로 숨는다.
 - Decision Outcome: 단일 `addReaction`이 `APPLICATION`과 `MATERIALIZATION` 실행 mode를 명시적으로 받는다.
@@ -119,6 +119,28 @@
   outbound eligibility와 ActivityPub 표현은 계속 Fedify가 소유하고 API에는 protocol detail이 노출되지 않는다.
 - Confirmation / Follow-up: GraphQL production caller와 inbound materialization caller의 mode를 코드에서 확인하고,
   rollback·no-echo·post-commit failure isolation 회귀를 검증한다.
+
+### 단일 addReaction에서 domain origin을 명시적으로 분기한다
+
+- Decision Date: 2026-07-28
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/architecture/core-services.md`, `docs/domain/objects/reaction.md`, PROD-499,
+  implementation review decision on 2026-07-28
+- Status: Active
+- Context / Problem: transaction 인자 유무에 따른 분기는 caller 의미를 숨기지만, `APPLICATION`·`MATERIALIZATION`은
+  다른 core action이 사용하지 않는 기술적 실행 mode를 public contract에 추가한다. 기존 `createPost`는 같은 local/remote
+  provenance를 `origin: 'LOCAL' | 'ACTIVITYPUB'`로 표현한다.
+- Decision Outcome: 단일 `addReaction`이 domain input에서 `origin: 'LOCAL' | 'ACTIVITYPUB'`를 명시적으로 받는다.
+  Local origin은 자체 transaction commit 뒤 실제 create에만 Notification과 Fedify delivery를 실행한다. ActivityPub
+  origin은 필수 caller transaction에 참여해 저장 결과만 반환하고 inbound caller가 mapping과 commit 후 Notification을
+  소유한다.
+- Alternatives Considered: 별도 `reactToPost` wrapper는 동일 행동의 public entry를 중복한다. optional transaction
+  유무만으로 분기하면 origin이 call site에 드러나지 않고, generic execution mode는 domain language와 기존 core input
+  convention을 따르지 않는다.
+- Consequences: Local origin은 caller transaction을 받을 수 없고 ActivityPub origin은 transaction 없이 호출할 수 없다.
+  overload와 runtime validation이 이 조합을 고정한다. outbound eligibility와 ActivityPub 표현은 계속 Fedify가 소유한다.
+- Confirmation / Follow-up: GraphQL과 inbound production caller의 origin, invalid origin/transaction 조합, rollback,
+  no-echo와 post-commit failure isolation을 검증한다.
 
 ## Remaining Decisions
 

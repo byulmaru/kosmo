@@ -42,8 +42,8 @@ Kosmo는 Local Profile의 Reaction을 domain transaction에 저장하지만 Remo
 
 ## Impact
 
-- `packages/core`: 단일 `addReaction` action이 명시적인 application/materialization 실행 mode에 따라 transaction과
-  post-commit Notification/Fedify lifecycle 또는 caller-owned transaction 참여를 수행한다.
+- `packages/core`: 단일 `addReaction` action이 domain input의 `LOCAL`·`ACTIVITYPUB` origin에 따라 자체 transaction과
+  post-commit Notification/Fedify lifecycle 또는 caller-owned materialization transaction 참여를 수행한다.
 - `packages/fedify`: 저장된 Reaction·Post·actor projection 조회, stable activity identity,
   `Like`·`EmojiReact`·`Undo` 직렬화와 inbox/shared inbox 직접 delivery 경계
 - API/Fedify/core 테스트: 여섯 Type 매핑, local/remote·actor/instance eligibility, duplicate add/repeated delete,

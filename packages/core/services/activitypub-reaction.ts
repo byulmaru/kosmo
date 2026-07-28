@@ -219,6 +219,7 @@ export const materializeInboundReaction = async (
 
       const identity = {
         actorProfileId: actor.profileId,
+        origin: 'ACTIVITYPUB' as const,
         postId: target.postId,
         type: parsedType.data,
       };
@@ -230,7 +231,7 @@ export const materializeInboundReaction = async (
         return { kind: 'DUPLICATE' as const, reaction: existingMapping };
       }
 
-      const reactionResult = await addReaction(identity, { mode: 'MATERIALIZATION', tx });
+      const reactionResult = await addReaction(identity, tx);
       const insertedMapping = await tx
         .insert(ActivityPubReactions)
         .values({ reactionId: reactionResult.reaction.id, uri: input.activityUri })
