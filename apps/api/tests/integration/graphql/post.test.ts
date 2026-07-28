@@ -22,7 +22,7 @@ import { Hono } from 'hono';
 import type { Activity, Recipient } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
 import type { encodeGlobalId as EncodeGlobalId } from '@kosmo/core/global-id';
-import type { federation as Federation } from '@kosmo/fedify';
+import type { localReplyFederation as LocalReplyFederation } from '../../../../../packages/fedify/src/local-reply-federation';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
 import type { yoga as YogaRouter } from '../../../src/graphql';
 
@@ -44,11 +44,11 @@ let Sessions: typeof CoreDb.Sessions;
 let deriveContext: typeof DeriveContext;
 let yoga: typeof YogaRouter;
 let encodeGlobalId: typeof EncodeGlobalId;
-let federation: typeof Federation;
+let localReplyFederation: typeof LocalReplyFederation;
 let app: Hono<Env>;
 let localInstanceId: string;
 
-type FederationContext = ReturnType<(typeof Federation)['createContext']>;
+type FederationContext = ReturnType<(typeof LocalReplyFederation)['createContext']>;
 
 describe('Post Reply GraphQL 경계', () => {
   before(async () => {
@@ -78,7 +78,8 @@ describe('Post Reply GraphQL 경계', () => {
     ({ deriveContext } = await import('../../../src/context'));
     ({ yoga } = await import('../../../src/graphql'));
     ({ encodeGlobalId } = await import('@kosmo/core/global-id'));
-    ({ federation } = await import('@kosmo/fedify'));
+    ({ localReplyFederation } =
+      await import('../../../../../packages/fedify/src/local-reply-federation'));
 
     app = new Hono<Env>();
     app.use('*', async (c, next) => {
@@ -172,7 +173,7 @@ describe('Post Reply GraphQL 경계', () => {
     const hidden = await createContentPost(author.id, { visibility: PostVisibility.DIRECT });
     const deleted = await createContentPost(author.id, { state: PostState.DELETED });
     const before = await db.$count(Posts);
-    const createContext = t.mock.method(federation, 'createContext');
+    const createContext = t.mock.method(localReplyFederation, 'createContext');
 
     for (const parentId of [hidden.id, deleted.id, crypto.randomUUID()]) {
       const result = await requestCreatePost(
@@ -195,7 +196,7 @@ describe('Post Reply GraphQL 경계', () => {
     const parentAuthor = await createRemoteActorProfile('delivery-create-parent');
     const parent = await createContentPost(parentAuthor.id);
     const deliveredPostIds: string[] = [];
-    t.mock.method(federation, 'createContext', () =>
+    t.mock.method(localReplyFederation, 'createContext', () =>
       createFailingDeliveryContext(async (activity) => {
         assert.ok(activity instanceof Create);
         const postId = activity.objectId?.pathname.split('/').at(-1);
@@ -235,7 +236,7 @@ describe('Post Reply GraphQL 경계', () => {
     const parentAuthor = await createRemoteActorProfile('delivery-delete-parent');
     const parent = await createContentPost(parentAuthor.id);
     const reply = await createContentPost(auth.profile.id, { replyParentId: parent.id });
-    t.mock.method(federation, 'createContext', () =>
+    t.mock.method(localReplyFederation, 'createContext', () =>
       createFailingDeliveryContext(async (activity) => {
         assert.ok(activity instanceof Delete);
         const committed = await db
@@ -265,7 +266,7 @@ describe('Post Reply GraphQL 경계', () => {
     const otherAuthor = await createProfile('delete-rollback-author');
     const parent = await createContentPost(otherAuthor.id);
     const reply = await createContentPost(otherAuthor.id, { replyParentId: parent.id });
-    const createContext = t.mock.method(federation, 'createContext');
+    const createContext = t.mock.method(localReplyFederation, 'createContext');
 
     const forbidden = await requestDeletePost(reply.id, auth.token);
     const missing = await requestDeletePost(crypto.randomUUID(), auth.token);
@@ -289,7 +290,7 @@ describe('Post Reply GraphQL 경계', () => {
     const reply = await createContentPost(auth.profile.id, { replyParentId: parent.id });
     const rootPost = await createContentPost(auth.profile.id);
     const activityIds: string[] = [];
-    t.mock.method(federation, 'createContext', () =>
+    t.mock.method(localReplyFederation, 'createContext', () =>
       createDeliveryContext(async (activity) => {
         assert.ok(activity instanceof Delete);
         assert.ok(activity.id);
