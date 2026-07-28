@@ -4,7 +4,6 @@ import {
   Bookmark,
   ChevronDown,
   House,
-  LogOut,
   PenLine,
   Search,
   Settings,
@@ -16,6 +15,7 @@ import { graphql, useFragment } from 'react-relay';
 import { Avatar } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
+import { LogoutControl } from './LogoutControl';
 import { ProfileSwitcher } from './ProfileSwitcher';
 import { UnreadNotificationBadge } from './UnreadNotificationBadge';
 import { useUnreadNotificationCount } from './UnreadNotificationBadgeController';
@@ -24,6 +24,7 @@ import type { Href } from 'expo-router';
 import type { LucideIcon } from 'lucide-react-native';
 import type { ViewStyle } from 'react-native';
 import type { SidebarNavigation_query$key } from './__generated__/SidebarNavigation_query.graphql';
+import type { LogoutControlProps } from './LogoutControl';
 
 const SidebarNavigationFragment = graphql`
   fragment SidebarNavigation_query on Query {
@@ -81,6 +82,7 @@ const avatarShadow = {
 
 type Props = {
   compact?: boolean;
+  logout?: LogoutControlProps;
   onNavigate?: () => void;
   onSwitcherOpenChange?: (open: boolean) => void;
   query: SidebarNavigation_query$key;
@@ -90,6 +92,7 @@ type Props = {
 
 export function SidebarNavigation({
   compact = false,
+  logout = { error: null, logout: () => undefined, pending: false },
   onNavigate,
   onSwitcherOpenChange,
   query,
@@ -301,25 +304,14 @@ export function SidebarNavigation({
               </Pressable>
             </Link>
           ) : null}
-          {!compact ? (
-            <Pressable accessibilityLabel="로그아웃" accessibilityRole="button" style={styles.item}>
-              <LogOut color="#404040" size={20} strokeWidth={1.5} />
-              <Text style={[styles.itemLabel, { color: theme.text }]}>로그아웃</Text>
-            </Pressable>
-          ) : null}
+          {!compact ? <LogoutControl {...logout} /> : null}
         </View>
 
         <View
           style={[styles.footer, compact && styles.compactFooter, { borderColor: theme.border }]}
         >
           {compact ? (
-            <Pressable
-              accessibilityLabel="로그아웃"
-              accessibilityRole="button"
-              style={[styles.footerItem, styles.compactItem]}
-            >
-              <LogOut color={theme.textSecondary} size={20} strokeWidth={1.5} />
-            </Pressable>
+            <LogoutControl {...logout} compact style={[styles.footerItem, styles.compactItem]} />
           ) : null}
           <Pressable
             accessibilityLabel="설정 & 지원"
