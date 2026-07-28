@@ -11,9 +11,9 @@
 - Authority / Provenance: PROD-477, PROD-483, PROD-493
 - Status: Active
 - Context / Problem: 공용 Expo source에 Web 수집을 추가하면 native runtime에도 같은 import와 초기화가 도달할 수 있다.
-- Decision Outcome: Web platform의 오류 경계 조합만 Sentry browser client를 import·초기화하며 Android·iOS에는 Sentry 관측 구현을 추가하지 않는다.
+- Decision Outcome: Web platform entry만 Sentry browser client를 import·초기화하고 generic 오류 reporter context를 제공하며 Android·iOS에는 Sentry 관측 구현을 추가하지 않는다.
 - Alternatives Considered: 공용 `@sentry/react-native` 초기화는 Backlog인 PROD-483의 SDK·native crash·debug symbol 범위를 선행하므로 선택하지 않는다.
-- Consequences: 공용 오류 경계의 UI·retry 구현은 공유하지만 Sentry capture callback은 Web 전용 조합만 소유한다.
+- Consequences: 공용 오류 경계의 UI·retry 구현은 공유하지만 Sentry capture callback은 Web entry만 소유한다.
 - Confirmation / Follow-up: Web bundle에는 SDK가 포함되고 native bundle에는 Sentry 관측 module import가 없는지 검증한다.
 
 ### SDK event를 beforeSend 정제 없이 전달한다
