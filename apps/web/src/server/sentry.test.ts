@@ -5,7 +5,7 @@ describe('Web BFF Sentry configuration', () => {
   it('is disabled unless deployment metadata is complete', () => {
     expect(createSentryOptions({}).enabled).toBe(false);
     const options = createSentryOptions({
-      SENTRY_DSN: 'https://public@example.invalid/1',
+      EXPO_PUBLIC_SENTRY_DSN: 'https://public@example.invalid/1',
       ENVIRONMENT: 'production',
       SENTRY_RELEASE: 'kosmo@abc123',
     });

@@ -4,7 +4,7 @@ import type { NodeOptions } from '@sentry/node';
 export type Environment = Readonly<Record<string, string | undefined>>;
 
 export const createSentryOptions = (environment: Environment): NodeOptions => {
-  const dsn = environment.SENTRY_DSN;
+  const dsn = environment.EXPO_PUBLIC_SENTRY_DSN;
   const deploymentEnvironment = environment.ENVIRONMENT;
   const release = environment.SENTRY_RELEASE;
 

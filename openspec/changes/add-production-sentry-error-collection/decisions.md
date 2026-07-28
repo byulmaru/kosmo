@@ -86,7 +86,7 @@
 - Decision Outcome: 세 runtime은 배포 설정으로 주입한 Sentry project 하나와 DSN 하나를 공유하고 `api`, `web-bff`, `web` runtime tag로 구분한다.
 - Alternatives Considered: runtime별 project와 DSN은 alert, rate limit, filter와 접근 권한을 독립적으로 운영할 수 있지만 현재 필요한 격리 근거가 없어 선택하지 않는다.
 - Consequences: project-level 설정과 alert는 세 runtime에 공통 적용된다. Runtime별 소유권, 알림, rate limit 또는 접근 권한 분리가 필요해지면 project topology와 배포 변수 계약을 다시 변경해야 한다.
-- Confirmation / Follow-up: build가 공용 `SENTRY_PROJECT`와 `SENTRY_DSN`을 사용하고 server runtime이 공용 `SENTRY_DSN`을 주입받으며, 세 검증 event가 같은 project에서 runtime tag로 구분되는지 확인한다.
+- Confirmation / Follow-up: build가 공용 `SENTRY_PROJECT`와 환경별 `EXPO_PUBLIC_SENTRY_DSN`을 사용하고 server runtime도 같은 DSN 변수를 주입받으며, 세 검증 event가 같은 project에서 runtime tag로 구분되는지 확인한다.
 
 ### 환경에 독립적인 Sentry 설정은 Vault에서 읽어 image build에 주입한다
 
@@ -100,28 +100,28 @@
 - Consequences: 새 Vault build 키가 추가돼도 workflow의 build arg 목록은 늘어나지 않는다. BuildKit secret 내용은 cache key가 아니므로 설정 회전을 반영하기 위해 Sentry artifact build stage는 cache를 사용하지 않는다. Web DSN 변경은 새 image build·배포가 필요하지만 server DSN은 Vault Secrets Operator가 갱신한다. Upload token과 조직·project slug는 runtime image와 pod에 포함되지 않는다.
 - Confirmation / Follow-up: Docker build가 secret env 파일 하나만 받고 final image에는 Vault 값이 남지 않는지, Helm render의 `sentry-runtime` Secret에는 `SENTRY_DSN`만 있는지, branch와 release tag build가 shared 값을 읽어 source map을 업로드하는지 확인한다.
 
-### Build 전용 Sentry 설정은 GitHub repository 설정에서 주입한다
+### Runtime과 Web build는 환경별 EXPO_PUBLIC_SENTRY_DSN을 공유한다
 
 - Decision Date: 2026-07-28
 - Decision Class: User Choice
 - Authority / Provenance: 사용자 결정, PROD-477
 - Status: Active
-- Context / Problem: 애플리케이션 runtime이 Vault에서 필요로 하는 Sentry secret은 DSN뿐이다. `SENTRY_ORG`, `SENTRY_PROJECT`와 `SENTRY_AUTH_TOKEN`은 GitHub Actions의 source map upload에서만 사용하는 build 설정이다.
-- Decision Outcome: Vault shared에는 `SENTRY_DSN`만 둔다. Sentry 조직·project slug는 `byulmaru/kosmo` GitHub repository variables, upload token은 repository secret에 둔다. Workflow는 세 저장 위치의 값을 임시 env 파일 하나로 합쳐 BuildKit secret으로 전달하며 조직·project slug와 token은 source map upload 단계에서만 소비한다.
-- Alternatives Considered: build 전용 설정까지 Vault shared에 두면 한 저장소에서 관리할 수 있지만 runtime 설정과 build 설정의 소유 경계를 섞는다. DSN까지 GitHub repository 설정으로 옮기면 API와 Web BFF의 Vault runtime DSN 주입 경계가 중복된다.
-- Consequences: DSN 회전은 Vault에서, 조직·project slug와 source map token 회전은 GitHub repository 설정에서 수행한다. Repository에서 branch workflow를 실행할 수 있는 주체는 build 중 token을 사용할 수 있지만, build 전용 설정은 Docker ARG·ENV·image·runtime pod에 포함되지 않는다.
-- Confirmation / Follow-up: Vault에 DSN만 있어도 branch Docker build가 repository variables/secret으로 source map을 업로드하고 final image와 로그에 build 전용 설정이 남지 않는지 확인한다.
+- Context / Problem: API/BFF runtime과 Web build가 같은 공개 DSN을 사용하지만 server용 `SENTRY_DSN`과 Web용 `EXPO_PUBLIC_SENTRY_DSN`을 따로 관리하면 값과 주입 경로가 중복된다.
+- Decision Outcome: Vault의 `kubernetes/kosmo/dev|prod` 환경 객체에 `EXPO_PUBLIC_SENTRY_DSN` 하나를 두고 API, Web BFF와 Web build가 모두 이 변수명을 사용한다. Sentry 조직·project slug는 `byulmaru/kosmo` GitHub repository variables, upload token은 repository secret에 둔다. 별도 shared 경로와 `sentry-runtime` Kubernetes Secret은 제거한다.
+- Alternatives Considered: shared Vault 경로의 server용 DSN을 별도 runtime Secret으로 변환하는 방식은 환경별 env 주입과 중복된다. 환경별 Sentry 전용 Vault 경로는 build role의 접근 범위를 좁힐 수 있지만 기존 dev/prod 객체와 별도 source를 만든다.
+- Consequences: Vault ACL이 경로 단위이므로 branch build role은 dev 객체 전체, release tag role은 prod 객체 전체를 읽을 수 있다. 사용자는 이 권한 확대를 명시적으로 수용했다. Workflow는 응답에서 DSN만 추출하며 build 전용 설정은 Docker ARG·ENV·image·runtime pod에 포함되지 않는다.
+- Confirmation / Follow-up: dev/prod Vault 객체에 DSN이 있고 API/BFF Helm render가 기존 `env` Secret만 사용하며 branch/tag build가 대응 환경 DSN으로 source map을 업로드하는지 확인한다.
 
-### 기능 branch Docker build도 Vault shared를 읽는다
+### 기능 branch와 release tag build는 대응 환경 Vault 객체를 읽는다
 
 - Decision Date: 2026-07-27
 - Decision Class: User Choice
 - Authority / Provenance: 사용자 결정, PROD-477
 - Status: Active
-- Context / Problem: 수동 feature branch Docker build는 `branch-*`와 `sha-*` image를 발행하도록 지원하지만, main에만 묶인 Vault dev role 때문에 Sentry build 설정을 읽는 단계에서 실패한다.
-- Decision Outcome: `byulmaru/kosmo`의 모든 branch GitHub OIDC subject가 `kosmo-build-dev` role을 사용해 `secret/kubernetes/kosmo/shared`를 읽도록 허용한다. 정식 SemVer tag는 기존처럼 `kosmo-build-prod` role을 사용한다.
+- Context / Problem: 수동 feature branch Docker build와 release tag build가 Web bundle에 대응 환경 DSN을 넣으려면 각각 dev/prod Vault 객체를 읽어야 한다.
+- Decision Outcome: `byulmaru/kosmo`의 모든 branch GitHub OIDC subject는 `kosmo-build-dev` role로 `secret/kubernetes/kosmo/dev`, 정식 SemVer tag는 `kosmo-build-prod` role로 `secret/kubernetes/kosmo/prod`를 읽는다.
 - Alternatives Considered: feature branch에서 Sentry 업로드를 비활성화하거나 main만 shared를 읽게 유지하는 방식은 수동 branch image가 production build와 같은 artifact 검증을 수행하지 못하므로 선택하지 않는다.
-- Consequences: feature branch도 dev environment source map을 업로드할 수 있다. Vault policy는 정확한 shared 경로의 read-only 권한과 짧은 token TTL을 유지하며, repository에서 branch workflow를 실행할 수 있는 주체는 repository secret의 source map 업로드 token을 build 중 사용할 수 있다.
+- Consequences: feature branch도 dev environment source map을 업로드할 수 있다. Vault policy는 각 환경 경로의 read-only 권한과 짧은 token TTL을 유지하지만 field-level 제한은 없으므로 대응 환경 객체 전체에 접근한다. Repository에서 branch workflow를 실행할 수 있는 주체는 repository secret의 source map upload token도 build 중 사용할 수 있다.
 - Confirmation / Follow-up: Terraform plan에서 branch subject glob과 exact-path read policy를 확인하고 workflow ref matrix에서 branch는 dev, 정식 SemVer tag는 prod, 그 밖의 tag는 거부되는지 검증한다.
 
 ## Remaining Decisions
@@ -132,3 +132,4 @@
 
 - `명시적 배포 enable과 완전한 metadata가 있어야 전송한다`: 별도 enable·kill switch는 상위 요구사항에 없던 구현 가정이므로 2026-07-28 사용자 결정으로 폐기했다.
 - `환경에 독립적인 Sentry 설정은 Vault에서 읽어 image build에 주입한다`: build 전용 설정까지 Vault shared에서 관리하던 선택은 2026-07-28 사용자 결정으로 폐기하고 Vault에는 runtime DSN만 남겼다.
+- `Vault shared에는 runtime DSN만 둔다`: server와 Web의 변수·주입 경로가 중복되므로 2026-07-28 사용자 결정으로 폐기하고 환경별 기존 Vault 객체의 `EXPO_PUBLIC_SENTRY_DSN` 하나로 통합했다.

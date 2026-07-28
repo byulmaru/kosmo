@@ -7,13 +7,13 @@ describe('API Sentry configuration', () => {
     assert.equal(createSentryOptions({}).enabled, false);
     assert.equal(
       createSentryOptions({
-        SENTRY_DSN: 'https://public@example.invalid/1',
+        EXPO_PUBLIC_SENTRY_DSN: 'https://public@example.invalid/1',
         ENVIRONMENT: 'production',
       }).enabled,
       false,
     );
     const options = createSentryOptions({
-      SENTRY_DSN: 'https://public@example.invalid/1',
+      EXPO_PUBLIC_SENTRY_DSN: 'https://public@example.invalid/1',
       ENVIRONMENT: 'production',
       SENTRY_RELEASE: 'kosmo@abc123',
     });

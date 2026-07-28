@@ -56,7 +56,7 @@ RUN --mount=type=secret,id=sentry_config,target=/run/secrets/sentry.env,required
     . /run/secrets/sentry.env; \
     set +a; \
   fi \
-  && EXPO_PUBLIC_SENTRY_DSN="${SENTRY_DSN:-}" pnpm build:sentry-artifacts
+  && pnpm build:sentry-artifacts
 RUN find apps/app/dist -type f \( \
       -name '*.css' -o -name '*.html' -o -name '*.js' -o -name '*.json' \
       -o -name '*.mjs' -o -name '*.svg' -o -name '*.ttf' -o -name '*.wasm' \
