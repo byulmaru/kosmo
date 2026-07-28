@@ -87,6 +87,24 @@ export const TrimmedBodyBoundary: Story = {
   },
 };
 
+export const BodyTooLong: Story = {
+  render: () => (
+    <Catalog width={760}>
+      <Section title="피드백 · 본문 길이 검증">
+        <FeedbackForm />
+      </Section>
+    </Catalog>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '피드백 내용' });
+    await userEvent.type(body, '가'.repeat(2001));
+    await expect(canvas.getByText('피드백은 2,000자 이내로 입력해주세요.')).toBeVisible();
+    expect(body).toHaveAttribute('aria-invalid', 'true');
+    expect(canvas.getByRole('button', { name: '피드백 보내기' })).toBeDisabled();
+  },
+};
+
 export const Pending: Story = {
   parameters: { relay: { mutationLoading: true } },
   render: () => (

@@ -31,6 +31,7 @@ export function FeedbackForm() {
   const theme = useTheme();
   const [kind, setKind] = useState<FeedbackKind>('POSITIVE');
   const [body, setBody] = useState('');
+  const [bodyTouched, setBodyTouched] = useState(false);
   const [sentryEventId, setSentryEventId] = useState('');
   const [status, setStatus] = useState<FeedbackStatus>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +51,7 @@ export function FeedbackForm() {
     !sentryEventIdPattern.test(trimmedSentryEventId)
       ? 'Sentry 이벤트 ID는 32자리 16진수여야 합니다.'
       : null;
+  const showBodyError = bodyTouched || status === 'error';
   const canSubmit = !submitting && !bodyError && !sentryEventIdError;
   const actionLabel = status === 'error' ? '다시 시도' : '보내기';
 
@@ -80,6 +82,7 @@ export function FeedbackForm() {
         }
 
         setBody('');
+        setBodyTouched(false);
         setSentryEventId('');
         setError(null);
         setStatus('success');
@@ -154,12 +157,13 @@ export function FeedbackForm() {
 
       <TextArea
         accessibilityLabel="피드백 내용"
-        aria-invalid={Boolean(bodyError && status === 'error')}
+        aria-invalid={Boolean(bodyError && showBodyError)}
         editable={!submitting}
-        error={status === 'error' ? (bodyError ?? undefined) : undefined}
+        error={showBodyError ? (bodyError ?? undefined) : undefined}
         label="피드백 내용"
         onChangeText={(value) => {
           setBody(value);
+          setBodyTouched(true);
           setStatus('idle');
           setError(null);
         }}
