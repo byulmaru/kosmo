@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ReactionProfilesModal } from './ReactionProfilesModal';
 import { ReactionSummary } from './ReactionSummary';
+import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostReactionSummary_post$key } from './__generated__/PostReactionSummary_post.graphql';
 
 const postReactionSummaryFragment = graphql`
@@ -14,7 +16,13 @@ const postReactionSummaryFragment = graphql`
   }
 `;
 
-export function PostReactionSummary({ post: postKey }: { post: PostReactionSummary_post$key }) {
+export function PostReactionSummary({
+  post: postKey,
+  style,
+}: {
+  post: PostReactionSummary_post$key;
+  style?: StyleProp<ViewStyle>;
+}) {
   const post = useFragment(postReactionSummaryFragment, postKey);
   const [selectedType, setSelectedType] = useState<string>();
 
@@ -23,7 +31,7 @@ export function PostReactionSummary({ post: postKey }: { post: PostReactionSumma
   }
 
   return (
-    <>
+    <View style={style}>
       <ReactionSummary entries={post.reactionCounts} onSelectType={setSelectedType} />
       {selectedType ? (
         <ReactionProfilesModal
@@ -33,6 +41,6 @@ export function PostReactionSummary({ post: postKey }: { post: PostReactionSumma
           reactionType={selectedType}
         />
       ) : null}
-    </>
+    </View>
   );
 }

@@ -89,6 +89,84 @@ const bookmarkOtherOwner = {
     pageInfo: { endCursor: 'bookmark-b-cursor-1', hasNextPage: true },
   },
 };
+const bookmarkDeepSource = post({
+  bodyText: '북마크에서 표시하지 않아야 하는 두 번째 Source 본문입니다.',
+  id: 'bookmark-source-depth-2',
+  profile: profile({
+    displayName: '깊은 원문 작성자',
+    handle: 'deep-bookmark-source',
+    id: 'bookmark-deep-source-author',
+    relativeHandle: '@deep-bookmark-source',
+  }),
+});
+const bookmarkDirectQuote = post({
+  bodyText: '북마크에서 한 단계만 표시하는 인용 Source입니다.',
+  id: 'bookmark-source-quote',
+  profile: profile({
+    displayName: '인용 Source 작성자',
+    handle: 'bookmark-source',
+    id: 'bookmark-source-author',
+    relativeHandle: '@bookmark-source',
+  }),
+  repostSource: bookmarkDeepSource,
+});
+const bookmarkedQuoteOfQuote = post({
+  bodyText: '북마크에 저장한 인용 게시글입니다.',
+  id: 'bookmark-quote-of-quote',
+  profile: profile({
+    displayName: '북마크 인용 작성자',
+    handle: 'bookmark-quote-author',
+    id: 'bookmark-quote-author',
+    relativeHandle: '@bookmark-quote-author',
+  }),
+  repostSource: bookmarkDirectQuote,
+});
+const bookmarkRepostAuthor = profile({
+  displayName: '북마크 재게시 작성자',
+  handle: 'bookmark-reposter',
+  id: 'bookmark-repost-author',
+  relativeHandle: '@bookmark-reposter',
+});
+const bookmarkPureRepostSource = post({
+  bodyText: '북마크 순수 재게시의 일반 Source입니다.',
+  id: 'bookmark-pure-repost-source',
+  profile: profile({
+    displayName: '순수 재게시 Source 작성자',
+    handle: 'bookmark-pure-source',
+    id: 'bookmark-pure-source-author',
+    relativeHandle: '@bookmark-pure-source',
+  }),
+});
+const bookmarkedPureRepost = post({
+  bodyText: null,
+  id: 'bookmark-pure-repost',
+  profile: bookmarkRepostAuthor,
+  repostSource: bookmarkPureRepostSource,
+});
+const bookmarkPresentationOwner = {
+  ...profile({ id: 'bookmark-owner' }),
+  bookmarks: {
+    edges: [
+      {
+        cursor: 'bookmark-presentation-cursor',
+        node: {
+          __typename: 'Bookmark',
+          id: 'bookmark-presentation',
+          post: bookmarkedQuoteOfQuote,
+        },
+      },
+      {
+        cursor: 'bookmark-pure-repost-cursor',
+        node: {
+          __typename: 'Bookmark',
+          id: 'bookmark-pure-repost-entry',
+          post: bookmarkedPureRepost,
+        },
+      },
+    ],
+    pageInfo: { endCursor: 'bookmark-pure-repost-cursor', hasNextPage: false },
+  },
+};
 
 const BookmarksStoriesQuery = graphql`
   query BookmarksStoriesQuery($ids: [ID!]!) {
@@ -138,7 +216,14 @@ function BookmarkConnectionStory() {
   if (data.node?.__typename !== 'Profile' || !data.node.bookmarkConnection) {
     throw new Error('Missing Bookmark connection Profile fixture.');
   }
-  return <BookmarkConnectionList profile={data.node.bookmarkConnection} />;
+  return (
+    <>
+      <Text style={{ display: 'none' }} testID="bookmark-story-pathname">
+        {usePathname()}
+      </Text>
+      <BookmarkConnectionList profile={data.node.bookmarkConnection} />
+    </>
+  );
 }
 
 function BookmarkConnectionProfileSwitchStory() {
@@ -378,6 +463,80 @@ export const ConnectionProfileSwitchClearsPaginationError: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'B 프로필로 전환' }));
     expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
     expect(canvas.getByRole('button', { name: '더 불러오기' })).toBeVisible();
+  },
+};
+
+export const RepostQuoteUsesOneSourceDepth: Story = {
+  parameters: { relay: { data: { node: bookmarkPresentationOwner } } },
+  render: () => <BookmarkConnectionStory />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const quoteArticle = canvas
+      .getByText('북마크에 저장한 인용 게시글입니다.')
+      .closest<HTMLElement>('[role="article"]');
+    const pureRepostArticle = canvas
+      .getByText('북마크 재게시 작성자님이 재게시함')
+      .closest<HTMLElement>('[role="article"]');
+
+    expect(canvas.getAllByRole('article')).toHaveLength(2);
+    expect(quoteArticle).not.toBeNull();
+    expect(pureRepostArticle).not.toBeNull();
+    expect(
+      within(quoteArticle!).getByText('북마크에서 한 단계만 표시하는 인용 Source입니다.'),
+    ).toBeVisible();
+    const pureRepostRow = within(pureRepostArticle!).getByTestId('post-list-standard-row');
+    expect(
+      within(pureRepostRow).getByText('북마크 순수 재게시의 일반 Source입니다.'),
+    ).toBeVisible();
+    expect(within(pureRepostArticle!).queryByTestId('source-post-preview')).toBeNull();
+    expect(pureRepostArticle!.querySelector('[role="article"]')).toBeNull();
+    expect(
+      canvas.queryByText('북마크에서 표시하지 않아야 하는 두 번째 Source 본문입니다.'),
+    ).not.toBeInTheDocument();
+
+    const quoteCanvas = within(quoteArticle!);
+    expect(quoteCanvas.getByRole('link', { name: '원문 게시글 보기' })).toHaveAttribute(
+      'href',
+      '/@bookmark-source/bookmark-source-quote',
+    );
+    const sourceBody = quoteCanvas.getByTestId('source-post-body');
+    expect(sourceBody.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(sourceBody.closest('[role="link"]')).toBeNull();
+    expect(canvas.queryByRole('link', { name: '인용한 게시글 보기' })).not.toBeInTheDocument();
+    expect(canvasElement.querySelector('a a')).toBeNull();
+    expect(canvasElement.querySelector('[role="link"] [role="link"]')).toBeNull();
+
+    await userEvent.click(
+      quoteCanvas.getByRole('link', { name: '인용 Source 작성자 프로필 보기' }),
+    );
+    expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent('/@bookmark-source');
+
+    await userEvent.click(quoteCanvas.getByRole('link', { name: '원문 게시글 보기' }));
+    expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent(
+      '/@bookmark-source/bookmark-source-quote',
+    );
+
+    await userEvent.click(
+      quoteCanvas.getByRole('link', { name: '인용 Source 작성자 프로필 보기' }),
+    );
+    expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent('/@bookmark-source');
+
+    await userEvent.click(sourceBody);
+    expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent(
+      '/@bookmark-source/bookmark-source-quote',
+    );
+
+    await userEvent.click(
+      within(pureRepostArticle!).getByRole('link', {
+        name: '북마크 재게시 작성자 프로필 보기',
+      }),
+    );
+    expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent('/@bookmark-reposter');
+
+    await userEvent.click(within(pureRepostRow).getByTestId('post-list-row-body'));
+    expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent(
+      '/@bookmark-pure-source/bookmark-pure-repost-source',
+    );
   },
 };
 

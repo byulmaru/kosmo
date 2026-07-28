@@ -90,6 +90,7 @@ export type StoryPost = {
   createdAt: string;
   id: string;
   profile: StoryProfile;
+  reactionCounts: Array<{ count: number; type: string }>;
   replyParent: StoryPostReference | null;
   repostSource: StoryPost | null;
   state: 'ACTIVE';
@@ -102,6 +103,7 @@ export function post({
   createdAt = Temporal.Now.instant().subtract({ minutes: 5 }).toString(),
   id = 'post-1',
   profile: author = profile(),
+  reactionCounts = [],
   replyParent = null,
   repostSource = null,
   visibility = 'UNLISTED',
@@ -111,6 +113,7 @@ export function post({
   createdAt?: string;
   id?: string;
   profile?: StoryProfile;
+  reactionCounts?: StoryPost['reactionCounts'];
   replyParent?: StoryPostReference | null;
   repostSource?: StoryPost | null;
   visibility?: StoryPost['visibility'];
@@ -133,6 +136,7 @@ export function post({
     createdAt,
     id,
     profile: author,
+    reactionCounts,
     replyParent,
     repostSource,
     state: 'ACTIVE',

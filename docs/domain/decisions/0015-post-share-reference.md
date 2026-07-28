@@ -10,8 +10,12 @@ Accepted
 
 ## 결정
 
-- Post의 공유 참조는 같은 Post를 식별하는 canonical public Web URL이다.
-- 공유 참조는 canonical Web origin과 `/{relativeHandle}/{postId}` 경로를 결합한 절대 URL이다.
+- Content가 있는 Post의 공유 참조는 같은 Post를 식별하는 canonical public Web URL이다.
+- Content가 있는 Post의 공유 참조는 canonical Web origin과 `/{relativeHandle}/{postId}` 경로를 결합한
+  절대 URL이다.
+- Content와 Reply Parent 없이 Repost Source만 있는 Repost는 독립적인 상세 surface나 공유 참조를 노출하지
+  않는다. 이 Repost를 공유할 때는 조회 가능한 직접 Repost Source의 공유 참조를 사용하고, Repost 자신의
+  식별자로 상세 경로에 직접 진입해도 Source의 canonical 상세 경로로 대체한다.
 - canonical Web origin은 현재 deployment가 사용하는 configured Local Instance의 canonical origin이다.
 - 공유 참조에는 현재 화면의 query와 hash를 포함하지 않는다.
 - API origin과 플랫폼 전용 native deep link는 Post의 공유 참조로 사용하지 않는다.
@@ -22,10 +26,12 @@ Accepted
 
 ## 이유
 
-Post 링크는 현재 화면의 검색·필터·탭 상태나 실행 플랫폼이 아니라 공유 대상 Post 자체를 안정적으로 가리켜야
-한다. API endpoint와 native deep link는 특정 클라이언트나 배포 환경에 종속되므로, 여러 플랫폼과 외부
-수신자가 함께 사용할 제품 공유 참조로 적합하지 않다. configured Local Instance의 canonical origin을
-공통 기준으로 사용하면 현재 browser Host나 클라이언트별 설정을 별도 링크 authority로 만들지 않는다.
+Post 링크는 현재 화면의 검색·필터·탭 상태나 실행 플랫폼이 아니라 공유 대상 Content를 가진 Post 자체를
+안정적으로 가리켜야 한다. Content 없는 Repost는 직접 Source를 배포하는 관계이며 독립 상세를 제공하지
+않으므로, Repost 식별자를 별도 공개 참조로 만들지 않고 Source의 공유 참조를 재사용한다. API endpoint와
+native deep link는 특정 클라이언트나 배포 환경에 종속되므로, 여러 플랫폼과 외부 수신자가 함께 사용할 제품
+공유 참조로 적합하지 않다. configured Local Instance의 canonical origin을 공통 기준으로 사용하면 현재
+browser Host나 클라이언트별 설정을 별도 링크 authority로 만들지 않는다.
 
 ## 대안
 
@@ -40,8 +46,9 @@ Post 링크는 현재 화면의 검색·필터·탭 상태나 실행 플랫폼�
 - 공유 UI는 현재 플랫폼과 무관하게 canonical public Web URL을 복사한다.
 - 클라이언트 설정은 configured Local Instance의 canonical origin을 전달할 뿐 별도의 공유 링크 authority가
   되지 않는다.
-- 현재 화면 URL을 그대로 재사용하지 않고 Post의 Author Profile `relativeHandle`과 Post ID로 공유 경로를
-  구성한다.
+- 현재 화면 URL을 그대로 재사용하지 않는다. Content가 있는 Post는 그 Post의 Author Profile
+  `relativeHandle`과 Post ID로 공유 경로를 구성하고, Content 없는 Repost는 조회 가능한 직접 Source의 공유
+  경로를 사용한다.
 - URL 생성과 clipboard 동작은 구현 계층의 책임이며, 이 결정은 공유 결과의 제품 계약만 정의한다.
 
 ## 문서 반영

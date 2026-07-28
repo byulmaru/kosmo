@@ -14,14 +14,10 @@ import { PostListItem } from '@/components/post/PostListItem';
 import { PostSourcePresentationView } from '@/components/post/PostSourcePresentationView';
 import { PostThreadLayout } from '@/components/post/PostThreadLayout';
 import { formatTimelineTimestamp } from '@/lib/date';
-import { spacing, typography } from '@/theme/tokens';
 import { longBody, post, profile, profileWithPosts, timeline } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type {
-  PostPresentationLinkRenderer,
-  PostSourcePresentationData,
-} from '@/components/post/PostSourcePresentationView';
+import type { PostSourcePresentationData } from '@/components/post/PostSourcePresentationView';
 import type { PostDetailThreadIdentityStoryQuery } from './__generated__/PostDetailThreadIdentityStoryQuery.graphql';
 import type { PostsStoriesQuery as PostsStoriesQueryType } from './__generated__/PostsStoriesQuery.graphql';
 import type { StoryPost } from './fixtures';
@@ -122,10 +118,38 @@ const sourcePost = post({
   id: 'post-source',
   profile: sourceAuthor,
 });
+const deepestSourceAuthor = profile({
+  displayName: '두 번째 Source 작성자',
+  handle: 'deep-source@remote.example',
+  id: 'profile-source-depth-2',
+  relativeHandle: '@deep-source@remote.example',
+});
+const deepestSourcePost = post({
+  bodyText: '두 번째 Source의 본문은 목록에서 full preview하지 않습니다.',
+  id: 'post-source-depth-2',
+  profile: deepestSourceAuthor,
+});
+const sourceQuotePost = post({
+  bodyText: '첫 번째 direct Source Quote의 본문입니다.',
+  id: 'post-source-quote',
+  profile: sourceAuthor,
+  repostSource: deepestSourcePost,
+});
 const pureRepost = post({
   bodyText: null,
   id: 'post-repost',
   profile: repostAuthor,
+  repostSource: sourcePost,
+});
+const longPureRepost = post({
+  bodyText: null,
+  id: 'post-repost-long-author',
+  profile: profile({
+    displayName: '모바일 너비에서도 한 줄로 줄어들어야 하는 아주 길고 긴 재게시 작성자 표시 이름',
+    handle: 'extremely-long-repost-author-handle-for-mobile-overflow',
+    id: 'profile-repost-author-long',
+    relativeHandle: '@extremely-long-repost-author-handle-for-mobile-overflow',
+  }),
   repostSource: sourcePost,
 });
 const quotePost = post({
@@ -133,6 +157,18 @@ const quotePost = post({
   id: 'post-quote',
   profile: repostAuthor,
   repostSource: sourcePost,
+});
+const pureRepostOfQuote = post({
+  bodyText: null,
+  id: 'post-repost-of-quote',
+  profile: repostAuthor,
+  repostSource: sourceQuotePost,
+});
+const quoteOfQuotePost = post({
+  bodyText: 'Source Quote를 인용하는 outer Quote 본문입니다.',
+  id: 'post-quote-of-quote',
+  profile: repostAuthor,
+  repostSource: sourceQuotePost,
 });
 const replyQuotePost = post({
   bodyText: '답글 관계를 유지하는 인용입니다.',
@@ -169,12 +205,12 @@ const longQuotePost = post({
   profile: repostAuthor,
   repostSource: longSourcePost,
 });
-const linkedSourceQuote = post({
-  bodyText: '외부 링크가 있는 원문을 인용합니다.',
+const linkedSourceQuote = {
+  ...linkedPost,
   id: 'post-quote-linked-source',
   profile: repostAuthor,
   repostSource: linkedPost,
-});
+};
 const threadRootPost = post({ bodyText: '대화의 시작입니다.', id: 'thread-root' });
 const threadParentPost = post({ bodyText: '직접 Parent Reply입니다.', id: 'thread-parent' });
 const threadCurrentPost = post({ bodyText: '지금 보고 있는 Reply입니다.', id: 'thread-current' });
@@ -204,6 +240,11 @@ const routeCurrentPost = post({
   replyParent: { __typename: 'Post', id: routeParentPost.id },
 });
 const routeCurrentPostReactionCounts = [{ count: 2, type: '❤️' }];
+const postLayoutReactionPost = post({
+  bodyText: 'PostLayout이 반응 요약을 직접 소유하는 게시글입니다.',
+  id: 'post-layout-reaction',
+  reactionCounts: routeCurrentPostReactionCounts,
+});
 const routeCurrentPostWithoutReactions = { ...routeCurrentPost, reactionCounts: [] };
 const routeChildPost = post({
   bodyText: 'Child 본문',
@@ -309,6 +350,7 @@ const storyPosts = [
   ...threadStoryPosts,
   sourcePost,
   pureRepost,
+  longPureRepost,
   quotePost,
   replyQuotePost,
   quoteWithoutSource,
@@ -327,13 +369,26 @@ const storyPosts = [
   routeHiddenAncestorPost,
   routeVisibleParentPost,
   routeBoundaryCurrentPost,
+  postLayoutReactionPost,
+  deepestSourcePost,
+  sourceQuotePost,
+  pureRepostOfQuote,
+  quoteOfQuotePost,
 ];
 const composerProfile = profile({ id: 'profile-composer' });
 const emptyPostsProfile = profileWithPosts([], { id: 'profile-posts-empty' });
-const contentPostsProfile = profileWithPosts([shortPost, longPost, emptyPost], {
-  id: 'profile-posts-content',
-});
-const homeTimeline = timeline(shortPost, multilinePost);
+const contentPostsProfile = profileWithPosts(
+  [shortPost, pureRepostOfQuote, quotePost, quoteWithoutSource],
+  { id: 'profile-posts-content' },
+);
+const homeTimeline = timeline(
+  shortPost,
+  pureRepost,
+  quotePost,
+  replyQuotePost,
+  quoteOfQuotePost,
+  linkedSourceQuote,
+);
 
 const PostsStoriesQuery = graphql`
   query PostsStoriesQuery($ids: [ID!]!) {
@@ -394,21 +449,7 @@ type PostNode = Extract<
 >;
 
 type PostsStoryArgs = {
-  onPostAuthor?: ReturnType<typeof fn>;
   onRetry?: ReturnType<typeof fn>;
-  onSourceAuthor?: ReturnType<typeof fn>;
-  onSourcePost?: ReturnType<typeof fn>;
-};
-
-type PresentationCallbacks = {
-  postAuthor: ReturnType<typeof fn>;
-  sourceAuthor: ReturnType<typeof fn>;
-  sourcePost: ReturnType<typeof fn>;
-};
-
-type PresentationStoryProps = {
-  callbacks: PresentationCallbacks;
-  postId: string;
 };
 
 function usePostsStoryData() {
@@ -490,17 +531,6 @@ function toPostSourcePresentationData(post: StoryPost): PostSourcePresentationDa
   };
 }
 
-function requirePresentationCallbacks(args: PostsStoryArgs): PresentationCallbacks {
-  if (!args.onPostAuthor || !args.onSourceAuthor || !args.onSourcePost) {
-    throw new Error('Repost/Quote presentation stories require isolated link callbacks.');
-  }
-  return {
-    postAuthor: args.onPostAuthor,
-    sourceAuthor: args.onSourceAuthor,
-    sourcePost: args.onSourcePost,
-  };
-}
-
 function PostCatalog(_args: PostsStoryArgs) {
   void _args;
   const { posts } = usePostsStoryData();
@@ -553,6 +583,14 @@ function PostCatalog(_args: PostsStoryArgs) {
         <PostLayout
           post={requireFragment(requirePost(posts, 13).layout, 'remote author post layout')}
         />
+        <View testID="detail-quote-layout">
+          <PostLayout
+            post={requireFragment(
+              requirePostById(posts, quotePost.id).layout,
+              'quote post detail layout',
+            )}
+          />
+        </View>
       </Section>
     </Catalog>
   );
@@ -582,27 +620,30 @@ function PostListCatalog({ onRetry }: PostsStoryArgs) {
   );
 }
 
-function RepostQuotePresentationStory({ callbacks, postId }: PresentationStoryProps) {
-  const post = requireStoryPostById(storyPosts, postId);
-  const renderMockLink: PostPresentationLinkRenderer = ({
-    accessibilityLabel,
-    children,
-    target,
-  }) => (
-    <Pressable
-      accessibilityLabel={accessibilityLabel}
-      accessibilityRole="link"
-      onPress={callbacks[target]}
-    >
-      {children}
-    </Pressable>
-  );
+function ProductionRepostQuoteLists() {
+  const data = usePostsStoryData();
 
   return (
-    <PostSourcePresentationView
-      post={toPostSourcePresentationData(post)}
-      renderLink={renderMockLink}
-    />
+    <Catalog>
+      <StoryPathname testID="current-story-pathname" />
+      <View testID="production-home-reposts">
+        <PostList homeTimeline={data.homeTimeline} />
+      </View>
+      <View testID="production-profile-reposts">
+        <PostList profile={data.contentPostsProfile} />
+      </View>
+    </Catalog>
+  );
+}
+
+function RepostQuotePresentationStory({ postId }: { postId: string }) {
+  const post = requireStoryPostById(storyPosts, postId);
+
+  return (
+    <Catalog>
+      <StoryPathname testID="presentation-story-pathname" />
+      <PostSourcePresentationView post={toPostSourcePresentationData(post)} />
+    </Catalog>
   );
 }
 
@@ -616,13 +657,64 @@ function ComposerStory() {
 
 function LinkedPostListItemStory() {
   const { posts } = usePostsStoryData();
-  const pathname = usePathname();
 
   return (
     <Catalog>
-      <Text testID="current-story-pathname">{pathname}</Text>
+      <StoryPathname testID="current-story-pathname" />
       <PostListItem post={requireFragment(requirePost(posts, 14).listItem, 'linked post item')} />
     </Catalog>
+  );
+}
+
+function LongPureRepostListItemStory() {
+  const { posts } = usePostsStoryData();
+
+  return (
+    <Catalog>
+      <PostListItem
+        post={requireFragment(
+          requirePostById(posts, longPureRepost.id).listItem,
+          'long pure repost list item',
+        )}
+      />
+    </Catalog>
+  );
+}
+
+function ProductionPostListItemStory({ postId }: { postId: string }) {
+  const { posts } = usePostsStoryData();
+
+  return (
+    <Catalog>
+      <StoryPathname testID="presentation-story-pathname" />
+      <PostListItem
+        post={requireFragment(
+          requirePostById(posts, postId).listItem,
+          `production post list item ${postId}`,
+        )}
+      />
+    </Catalog>
+  );
+}
+
+function StoryPathname({ testID }: { testID: string }) {
+  return (
+    <Text style={{ display: 'none' }} testID={testID}>
+      {usePathname()}
+    </Text>
+  );
+}
+
+function PostLayoutReactionSummaryStory() {
+  const { posts } = usePostsStoryData();
+
+  return (
+    <PostLayout
+      post={requireFragment(
+        requirePostById(posts, postLayoutReactionPost.id).layout,
+        'post layout reaction summary',
+      )}
+    />
   );
 }
 
@@ -732,6 +824,11 @@ export const BodyTimeAndLayoutStates: Story = {
     );
     expect(canvas.getByText('미지원 문서는 안전한 Plain Text로 표시합니다.')).toBeVisible();
     expect(canvas.queryByText('실행하면 안 되는 구조')).not.toBeInTheDocument();
+    const quoteLayout = within(canvas.getByTestId('detail-quote-layout'));
+    expect(quoteLayout.getAllByTestId('source-post-preview')).toHaveLength(1);
+    expect(quoteLayout.getByTestId('source-post-body')).toHaveTextContent(
+      '원문 작성자의 긴 본문과 줄바꿈을 표시합니다.',
+    );
   },
 };
 
@@ -747,65 +844,222 @@ export const ListLoadingErrorEmptyAndContent: Story = {
   render: (args) => <PostListCatalog onRetry={args.onRetry} />,
 };
 
-export const PureRepost: Story = {
-  args: { onPostAuthor: fn(), onSourceAuthor: fn(), onSourcePost: fn() },
-  play: async ({ args, canvasElement }) => {
-    const root = within(canvasElement).getByTestId('post-source-presentation');
-    const canvas = within(root);
-    expect(canvas.getAllByRole('link')).toHaveLength(3);
-    const repostIcon = canvas.getByText('↻');
-    const repostLabel = canvas.getByText('재게시한 코스모 사용자님이 재게시함');
-    const repostAuthorLink = canvas.getByLabelText('재게시한 코스모 사용자 프로필 보기');
-    const sourceAuthorName = canvas.getByText('아주 긴 Source 작성자 표시 이름');
-    const sourceAuthorLink = canvas.getByLabelText('아주 긴 Source 작성자 표시 이름 프로필 보기');
-    const sourceAvatar = canvas.getByLabelText('아주 긴 Source 작성자 표시 이름 프로필 이미지');
-    expect(repostAuthorLink.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
-    const linkGap =
-      sourceAuthorLink.getBoundingClientRect().top -
-      repostAuthorLink.getBoundingClientRect().bottom;
-    expect(linkGap).toBeGreaterThanOrEqual(0);
-    expect(linkGap).toBeLessThanOrEqual(1);
-    expect(repostLabel.getBoundingClientRect().height).toBeLessThanOrEqual(
-      typography.sm.lineHeight,
+export const ProductionRepostQuoteListIntegration: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const homeRoot = canvas.getByTestId('production-home-reposts');
+    const profileRoot = canvas.getByTestId('production-profile-reposts');
+    const home = within(homeRoot);
+    const profile = within(profileRoot);
+    const pureRepostRow = home
+      .getByText('재게시한 코스모 사용자님이 재게시함')
+      .closest<HTMLElement>('[role="article"]');
+    const quoteRow = home
+      .getByText('이 원문에 덧붙이는 인용자의 본문입니다.')
+      .closest<HTMLElement>('[role="article"]');
+    const replyQuoteRow = home
+      .getByText('답글 관계를 유지하는 인용입니다.')
+      .closest<HTMLElement>('[role="article"]');
+    const linkedSourceRow = home
+      .getAllByText(/두 번째 문단입니다\./)[0]!
+      .closest<HTMLElement>('[role="article"]');
+    const quoteOfQuoteRow = home
+      .getByText('Source Quote를 인용하는 outer Quote 본문입니다.')
+      .closest<HTMLElement>('[role="article"]');
+    const repostOfQuoteRow = profile
+      .getByText('재게시한 코스모 사용자님이 재게시함')
+      .closest<HTMLElement>('[role="article"]');
+    const sourceNullQuoteRow = profile
+      .getByText('원문을 더 이상 볼 수 없어도 남는 인용 본문입니다.')
+      .closest<HTMLElement>('[role="article"]');
+
+    expect(pureRepostRow).not.toBeNull();
+    expect(quoteRow).not.toBeNull();
+    expect(replyQuoteRow).not.toBeNull();
+    expect(linkedSourceRow).not.toBeNull();
+    expect(quoteOfQuoteRow).not.toBeNull();
+    expect(repostOfQuoteRow).not.toBeNull();
+    expect(sourceNullQuoteRow).not.toBeNull();
+    expect(home.getAllByRole('article').map((row) => row.textContent)).toEqual([
+      expect.stringContaining('짧은 본문 한 줄.'),
+      expect.stringContaining('재게시한 코스모 사용자님이 재게시함'),
+      expect.stringContaining('이 원문에 덧붙이는 인용자의 본문입니다.'),
+      expect.stringContaining('답글 관계를 유지하는 인용입니다.'),
+      expect.stringContaining('Source Quote를 인용하는 outer Quote 본문입니다.'),
+      expect.stringContaining('두 번째 문단입니다.'),
+    ]);
+    expect(within(quoteRow!).getByTestId('source-post-preview')).toBeVisible();
+    expect(within(replyQuoteRow!).getByTestId('source-post-preview')).toBeVisible();
+    expect(
+      replyQuoteRow!.querySelector('a[href="/@source@remote.example/post-source"]'),
+    ).toBeInTheDocument();
+    expect(sourceNullQuoteRow!.querySelector('a[href="/@reposter"]')).toBeInTheDocument();
+    expect(
+      sourceNullQuoteRow!.querySelector('a[href="/@reposter/post-quote-source-null"]'),
+    ).toBeInTheDocument();
+    expect(
+      within(sourceNullQuoteRow!).queryByTestId('source-post-preview'),
+    ).not.toBeInTheDocument();
+    expect(
+      within(sourceNullQuoteRow!).queryByTestId('nested-source-post-placeholder'),
+    ).not.toBeInTheDocument();
+    expect(
+      sourceNullQuoteRow!.querySelector('a[href^="/@source@remote.example"]'),
+    ).not.toBeInTheDocument();
+
+    expect(pureRepostRow!.querySelector('a[href="/@reposter"]')).toBeInTheDocument();
+    expect(
+      pureRepostRow!.querySelector('a[href="/@source@remote.example/post-source"]'),
+    ).toBeInTheDocument();
+    expect(quoteRow!.querySelector('a[href="/@reposter/post-quote"]')).toBeInTheDocument();
+    expect(quoteRow!.querySelector('a[href="/@source@remote.example"]')).toBeInTheDocument();
+    expect(
+      quoteOfQuoteRow!.querySelector('a[href="/@deep-source@remote.example/post-source-depth-2"]'),
+    ).not.toBeInTheDocument();
+    expect(
+      quoteOfQuoteRow!.querySelectorAll('a[href="/@source@remote.example/post-source-quote"]'),
+    ).toHaveLength(1);
+    expect(
+      repostOfQuoteRow!.querySelectorAll('a[href="/@source@remote.example/post-source-quote"]'),
+    ).toHaveLength(1);
+    expect(quoteOfQuoteRow!.querySelectorAll('[data-testid="source-post-preview"]')).toHaveLength(
+      1,
     );
-    expect(repostLabel).toHaveStyle({ fontWeight: '400' });
     expect(
-      Math.abs(
-        repostIcon.getBoundingClientRect().right - sourceAvatar.getBoundingClientRect().right,
-      ),
-    ).toBeLessThanOrEqual(1);
+      within(quoteOfQuoteRow!).queryByRole('link', { name: '인용한 게시글 보기' }),
+    ).not.toBeInTheDocument();
     expect(
-      Math.abs(
-        repostLabel.getBoundingClientRect().left - sourceAuthorName.getBoundingClientRect().left,
-      ),
-    ).toBeLessThanOrEqual(1);
-    const attributionGap =
-      sourceAuthorName.getBoundingClientRect().top - repostLabel.getBoundingClientRect().bottom;
-    expect(attributionGap).toBeGreaterThanOrEqual(0);
-    expect(attributionGap).toBeLessThanOrEqual(spacing.xs);
-    await userEvent.click(repostAuthorLink);
-    await expect(args.onPostAuthor).toHaveBeenCalledTimes(1);
-    await expect(args.onSourceAuthor).toHaveBeenCalledTimes(0);
-    await expect(args.onSourcePost).toHaveBeenCalledTimes(0);
-    await userEvent.click(sourceAuthorLink);
-    await expect(args.onPostAuthor).toHaveBeenCalledTimes(1);
-    await expect(args.onSourceAuthor).toHaveBeenCalledTimes(1);
-    await expect(args.onSourcePost).toHaveBeenCalledTimes(0);
-    await userEvent.click(canvas.getByLabelText('원문 게시글 보기'));
-    await expect(args.onPostAuthor).toHaveBeenCalledTimes(1);
-    await expect(args.onSourceAuthor).toHaveBeenCalledTimes(1);
-    await expect(args.onSourcePost).toHaveBeenCalledTimes(1);
+      within(repostOfQuoteRow!).queryByRole('link', { name: '인용한 게시글 보기' }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(quoteOfQuoteRow!).getByText('첫 번째 direct Source Quote의 본문입니다.'),
+    ).toBeVisible();
+    expect(
+      within(repostOfQuoteRow!).getByText('첫 번째 direct Source Quote의 본문입니다.'),
+    ).toBeVisible();
+    expect(quoteOfQuoteRow!.textContent).not.toContain(
+      '두 번째 Source의 본문은 목록에서 full preview하지 않습니다.',
+    );
+    expect(quoteOfQuoteRow!.querySelector('a a')).toBeNull();
+    expect(repostOfQuoteRow!.querySelector('a a')).toBeNull();
+    expect(linkedSourceRow!.querySelector('a a')).toBeNull();
+    expect(linkedSourceRow!.querySelector('[role="link"] [role="link"]')).toBeNull();
+
+    const openURL = fn(async () => undefined);
+    const originalOpenURL = Linking.openURL;
+    Linking.openURL = openURL;
+    try {
+      await userEvent.click(within(quoteRow!).getByTestId('post-body'));
+      expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+        '/@reposter/post-quote',
+      );
+
+      await userEvent.click(within(replyQuoteRow!).getByTestId('post-body'));
+      expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+        '/@reposter/post-reply-quote',
+      );
+
+      await userEvent.click(
+        within(linkedSourceRow!).getAllByLabelText(
+          '안전한 외부 링크, https://example.com/path',
+        )[0]!,
+      );
+      await expect(openURL).toHaveBeenCalledWith('https://example.com/path');
+      expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+        '/@reposter/post-reply-quote',
+      );
+      await userEvent.click(within(quoteOfQuoteRow!).getByTestId('source-post-body'));
+      expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+        '/@source@remote.example/post-source-quote',
+      );
+    } finally {
+      Linking.openURL = originalOpenURL;
+    }
   },
-  render: (args) => (
-    <RepostQuotePresentationStory
-      callbacks={requirePresentationCallbacks(args)}
-      postId="post-repost"
-    />
-  ),
+  render: () => <ProductionRepostQuoteLists />,
+};
+
+export const PureRepost: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const article = canvas.getByRole('article');
+    const standardRow = within(article).getByTestId('post-list-standard-row');
+    const sourceAvatar = within(standardRow).getByLabelText(
+      '아주 긴 Source 작성자 표시 이름 프로필 이미지',
+    );
+
+    expect(canvas.getAllByText('재게시한 코스모 사용자님이 재게시함')).toHaveLength(1);
+    expect(canvas.getAllByRole('article')).toHaveLength(1);
+    expect(article.querySelector('[role="article"]')).toBeNull();
+    expect(article.querySelectorAll('[data-testid="post-list-standard-row"]')).toHaveLength(1);
+    expect(article.querySelector('[data-testid="post-source-presentation"]')).toBeNull();
+    expect(article.querySelector('[data-testid="source-post-preview"]')).toBeNull();
+    expect(getComputedStyle(article).borderBottomWidth).toBe('1px');
+    expect(sourceAvatar.getBoundingClientRect().width).toBe(48);
+    expect(sourceAvatar.getBoundingClientRect().height).toBe(48);
+    expect(article.querySelector('a a')).toBeNull();
+    expect(article.querySelector('[role="link"] [role="link"]')).toBeNull();
+
+    const repostAuthorLink = canvas.getByLabelText('재게시한 코스모 사용자 프로필 보기');
+    await userEvent.click(repostAuthorLink);
+    expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent('/@reposter');
+
+    const sourceAuthorLink = standardRow.querySelector<HTMLAnchorElement>(
+      'a[href="/@source@remote.example"]',
+    );
+    expect(sourceAuthorLink).not.toBeNull();
+    await userEvent.click(sourceAuthorLink!);
+    expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
+      '/@source@remote.example',
+    );
+
+    const sourceTimestampLink = standardRow.querySelector<HTMLAnchorElement>(
+      'a[href="/@source@remote.example/post-source"]',
+    );
+    expect(sourceTimestampLink).not.toBeNull();
+    expect(sourceTimestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(sourceTimestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
+    await userEvent.click(sourceTimestampLink!);
+    expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
+      '/@source@remote.example/post-source',
+    );
+
+    await userEvent.click(
+      within(standardRow).getByText(/원문 작성자의 긴 본문과 줄바꿈을 표시합니다/),
+    );
+    expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
+      '/@source@remote.example/post-source',
+    );
+  },
+  render: () => <ProductionPostListItemStory postId="post-repost" />,
+};
+
+export const PureRepostOfQuote: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const article = canvas.getByRole('article');
+    const standardRow = within(article).getByTestId('post-list-standard-row');
+
+    expect(canvas.getAllByRole('article')).toHaveLength(1);
+    expect(article.querySelector('[role="article"]')).toBeNull();
+    expect(within(standardRow).getByText('아주 긴 Source 작성자 표시 이름')).toBeVisible();
+    expect(
+      within(standardRow).getByText('첫 번째 direct Source Quote의 본문입니다.'),
+    ).toBeVisible();
+    expect(article.querySelector('a a')).toBeNull();
+    expect(article.querySelector('[role="link"] [role="link"]')).toBeNull();
+
+    await userEvent.click(
+      within(standardRow).getByText('첫 번째 direct Source Quote의 본문입니다.'),
+    );
+    expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
+      '/@source@remote.example/post-source-quote',
+    );
+  },
+  render: () => <ProductionPostListItemStory postId="post-repost-of-quote" />,
 };
 
 export const Quote: Story = {
-  args: { onPostAuthor: fn(), onSourceAuthor: fn(), onSourcePost: fn() },
   play: async ({ canvasElement }) => {
     const root = within(canvasElement).getByTestId('post-source-presentation');
     const canvas = within(root);
@@ -815,119 +1069,163 @@ export const Quote: Story = {
     );
     const preview = canvas.getByTestId('source-post-preview');
     expect(preview.textContent).toContain('원문 작성자의 긴 본문과 줄바꿈을 표시합니다.');
-    expect(canvas.getAllByRole('link')).toHaveLength(3);
+    expect(canvas.getAllByRole('link')).toHaveLength(4);
     expect(within(preview).getAllByRole('link')).toHaveLength(2);
     expect(within(preview).queryByRole('button')).not.toBeInTheDocument();
+    expect(canvas.queryByTestId('nested-source-post-placeholder')).not.toBeInTheDocument();
+    const postBody = canvas.getByTestId('post-body');
+    expect(postBody.getBoundingClientRect().height).toBeLessThan(44);
+    expect(postBody.closest('[role="link"]')).toBeNull();
+
+    await userEvent.click(postBody);
+    expect(within(canvasElement).getByTestId('presentation-story-pathname')).toHaveTextContent(
+      '/@reposter/post-quote',
+    );
+    const pathnameBeforePadding = within(canvasElement).getByTestId(
+      'presentation-story-pathname',
+    ).textContent;
+    await userEvent.click(preview);
+    expect(within(canvasElement).getByTestId('presentation-story-pathname')).toHaveTextContent(
+      pathnameBeforePadding ?? '',
+    );
   },
-  render: (args) => (
-    <RepostQuotePresentationStory
-      callbacks={requirePresentationCallbacks(args)}
-      postId="post-quote"
-    />
-  ),
+  render: () => <RepostQuotePresentationStory postId="post-quote" />,
+};
+
+export const QuoteOfQuote: Story = {
+  play: async ({ canvasElement }) => {
+    const root = within(canvasElement).getByTestId('post-source-presentation');
+    const canvas = within(root);
+    expect(canvas.getByText('Source Quote를 인용하는 outer Quote 본문입니다.')).toBeVisible();
+    expect(canvas.queryAllByTestId('source-post-preview')).toHaveLength(1);
+    expect(canvas.getByText('아주 긴 Source 작성자 표시 이름')).toBeVisible();
+    expect(canvas.getByText('첫 번째 direct Source Quote의 본문입니다.')).toBeVisible();
+    expect(root.textContent).not.toContain(
+      '두 번째 Source의 본문은 목록에서 full preview하지 않습니다.',
+    );
+    expect(canvas.getAllByLabelText('원문 게시글 보기')).toHaveLength(1);
+    expect(canvas.queryByLabelText('인용한 게시글 보기')).not.toBeInTheDocument();
+    expect(root.querySelector('a a')).toBeNull();
+    expect(root.querySelector('[role="link"] [role="link"]')).toBeNull();
+    await userEvent.click(canvas.getByTestId('source-post-body'));
+    expect(within(canvasElement).getByTestId('presentation-story-pathname')).toHaveTextContent(
+      '/@source@remote.example/post-source-quote',
+    );
+  },
+  render: () => <RepostQuotePresentationStory postId="post-quote-of-quote" />,
 };
 
 export const ReplyQuote: Story = {
-  args: { onPostAuthor: fn(), onSourceAuthor: fn(), onSourcePost: fn() },
   play: async ({ canvasElement }) => {
     const root = within(canvasElement).getByTestId('post-source-presentation');
     const canvas = within(root);
     expect(canvas.getByText('답글 관계를 유지하는 인용입니다.')).toBeVisible();
     expect(canvas.getByTestId('source-post-preview')).toBeVisible();
+
+    await userEvent.click(canvas.getByTestId('post-body'));
+    expect(within(canvasElement).getByTestId('presentation-story-pathname')).toHaveTextContent(
+      '/@reposter/post-reply-quote',
+    );
   },
-  render: (args) => (
-    <RepostQuotePresentationStory
-      callbacks={requirePresentationCallbacks(args)}
-      postId="post-reply-quote"
-    />
-  ),
+  render: () => <RepostQuotePresentationStory postId="post-reply-quote" />,
 };
 
 export const QuoteWithoutSource: Story = {
-  args: { onPostAuthor: fn(), onSourceAuthor: fn(), onSourcePost: fn() },
   play: async ({ canvasElement }) => {
     const root = within(canvasElement).getByTestId('post-source-presentation');
     const canvas = within(root);
     expect(canvas.getByText('원문을 더 이상 볼 수 없어도 남는 인용 본문입니다.')).toBeVisible();
     expect(canvas.queryByTestId('source-post-preview')).not.toBeInTheDocument();
-    expect(canvas.getAllByRole('link')).toHaveLength(1);
+    expect(canvas.getAllByRole('link')).toHaveLength(2);
   },
-  render: (args) => (
-    <RepostQuotePresentationStory
-      callbacks={requirePresentationCallbacks(args)}
-      postId="post-quote-source-null"
-    />
-  ),
+  render: () => <RepostQuotePresentationStory postId="post-quote-source-null" />,
 };
 
 export const OrdinaryPost: Story = {
-  args: { onPostAuthor: fn(), onSourceAuthor: fn(), onSourcePost: fn() },
   play: async ({ canvasElement }) => {
-    const root = within(canvasElement).getByTestId('post-source-presentation');
-    const canvas = within(root);
+    const canvas = within(canvasElement);
+    const article = canvas.getByRole('article');
+    const standardRow = within(article).getByTestId('post-list-standard-row');
+    const bodyShortcut = within(standardRow).getByTestId('post-list-row-body');
     expect(canvas.getByText('짧은 본문 한 줄.')).toBeVisible();
-    expect(canvas.getByTestId('post-timestamp')).toHaveTextContent(
-      formatTimelineTimestamp(shortPost.createdAt),
-    );
     expect(canvas.queryByTestId('source-post-preview')).not.toBeInTheDocument();
-    expect(canvas.getAllByRole('link')).toHaveLength(1);
+    expect(article.querySelectorAll('[data-testid="post-list-standard-row"]')).toHaveLength(1);
+    expect(bodyShortcut).not.toHaveAttribute('role', 'link');
+    expect(bodyShortcut.closest('[role="link"]')).toBeNull();
+    const timestampLink = standardRow.querySelector<HTMLAnchorElement>('a[href="/@kosmo/short"]');
+    expect(timestampLink).not.toBeNull();
+    expect(timestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(timestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
+    await userEvent.click(bodyShortcut);
+    expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent('/@kosmo/short');
   },
-  render: (args) => (
-    <RepostQuotePresentationStory callbacks={requirePresentationCallbacks(args)} postId="short" />
-  ),
+  render: () => <ProductionPostListItemStory postId="short" />,
 };
 
 export const InvalidContentlessReplySource: Story = {
-  args: { onPostAuthor: fn(), onSourceAuthor: fn(), onSourcePost: fn() },
   play: async ({ canvasElement }) => {
     expect(within(canvasElement).queryByTestId('post-source-presentation')).not.toBeInTheDocument();
   },
-  render: (args) => (
-    <RepostQuotePresentationStory
-      callbacks={requirePresentationCallbacks(args)}
-      postId="post-invalid-contentless-reply-source"
-    />
-  ),
+  render: () => <RepostQuotePresentationStory postId="post-invalid-contentless-reply-source" />,
 };
 
 export const LinkedSourceQuote: Story = {
-  args: { onPostAuthor: fn(), onSourceAuthor: fn(), onSourcePost: fn() },
-  play: async ({ args, canvasElement }) => {
+  play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const postBody = canvas.getByTestId('post-body');
+    const sourcePreview = canvas.getByTestId('source-post-preview');
     const openURL = fn(async () => undefined);
     const originalOpenURL = Linking.openURL;
     Linking.openURL = openURL;
 
     try {
-      await userEvent.click(canvas.getByLabelText('안전한 외부 링크, https://example.com/path'));
-      await expect(openURL).toHaveBeenCalledWith('https://example.com/path');
-      expect(args.onSourcePost).not.toHaveBeenCalled();
+      expect(canvasElement.querySelector('[role="link"] [role="link"]')).toBeNull();
+      await userEvent.click(
+        within(postBody).getByLabelText('안전한 외부 링크, https://example.com/path'),
+      );
+      await userEvent.click(
+        within(sourcePreview).getByLabelText('안전한 외부 링크, https://example.com/path'),
+      );
+      await expect(openURL).toHaveBeenCalledTimes(2);
+      expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent('/@kosmo/post-1');
+
+      await userEvent.click(within(postBody).getByText(/두 번째 문단입니다\./));
+      expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
+        '/@reposter/post-quote-linked-source',
+      );
     } finally {
       Linking.openURL = originalOpenURL;
     }
   },
-  render: (args) => (
-    <RepostQuotePresentationStory
-      callbacks={requirePresentationCallbacks(args)}
-      postId="post-quote-linked-source"
-    />
-  ),
+  render: () => <RepostQuotePresentationStory postId="post-quote-linked-source" />,
 };
 
 export const RepostQuoteLongContentMobile: Story = {
-  args: { onPostAuthor: fn(), onSourceAuthor: fn(), onSourcePost: fn() },
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: async ({ canvasElement }) => {
     const root = within(canvasElement).getByTestId('post-source-presentation');
     expect(root).toBeVisible();
     expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth);
   },
-  render: (args) => (
-    <RepostQuotePresentationStory
-      callbacks={requirePresentationCallbacks(args)}
-      postId="post-quote-long"
-    />
-  ),
+  render: () => <RepostQuotePresentationStory postId="post-quote-long" />,
+};
+
+export const ProductionPureRepostLongAuthorMobile: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: async ({ canvasElement }) => {
+    const article = within(canvasElement).getByRole('article');
+    expect(article).toBeVisible();
+    expect(article.scrollWidth).toBeLessThanOrEqual(article.clientWidth);
+    expect(canvasElement.scrollWidth).toBeLessThanOrEqual(canvasElement.clientWidth);
+  },
+  render: () => <LongPureRepostListItemStory />,
+};
+
+export const PostLayoutOwnsReactionSummary: Story = {
+  play: async ({ canvasElement }) => {
+    expect(within(canvasElement).getByRole('button', { name: '❤️ 반응 2개 보기' })).toBeVisible();
+  },
+  render: () => <PostLayoutReactionSummaryStory />,
 };
 
 export const LinkedBodyKeepsDetailNavigationIsolated: Story = {
@@ -938,10 +1236,17 @@ export const LinkedBodyKeepsDetailNavigationIsolated: Story = {
     Linking.openURL = openURL;
 
     try {
+      expect(canvasElement.querySelector('a a')).toBeNull();
+      expect(canvasElement.querySelector('[role="link"] [role="link"]')).toBeNull();
       await userEvent.click(canvas.getByLabelText('안전한 외부 링크, https://example.com/path'));
       await expect(openURL).toHaveBeenCalledWith('https://example.com/path');
       await expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
         '/@kosmo/post-1',
+      );
+
+      await userEvent.click(canvas.getByTestId('post-list-row-body'));
+      await expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+        '/@kosmo/linked',
       );
     } finally {
       Linking.openURL = originalOpenURL;
@@ -1028,7 +1333,8 @@ export const ReplyThreadPresentation: Story = {
     expect(
       replyQuote.getByTestId('reply-quote-source-subtree-thread-quote-source'),
     ).toBeEmptyDOMElement();
-    expect(canvas.queryByText('인용된 Source 본문입니다.')).toBeNull();
+    expect(replyQuote.getByTestId('source-post-preview')).toBeVisible();
+    expect(replyQuote.getByText('인용된 Source 본문입니다.')).toBeVisible();
   },
   render: () => <ThreadCatalog />,
 };
@@ -1051,7 +1357,10 @@ export const PostDetailThreadRoute: Story = {
             node: {
               ...routeCurrentPost,
               reactionCounts: routeCurrentPostReactionCounts,
-              replyAncestors: [routeParentPost, routeRootPost],
+              replyAncestors: [
+                { ...routeParentPost, repostSource: routeSourcePost },
+                routeRootPost,
+              ],
               replyDescendants: {
                 edges: [
                   { cursor: 'route-child', node: routeChildPost },
@@ -1087,10 +1396,67 @@ export const PostDetailThreadRoute: Story = {
       'post-thread-item-route-source-null',
     ]);
     expect(canvas.getByText('Reply+Quote 자체 Content')).toBeVisible();
-    expect(canvas.getByRole('button', { name: '❤️ 반응 2개 보기' })).toBeVisible();
-    const source = canvas.getByTestId('post-thread-source-route-source');
-    expect(within(source).getByText('Source 본문')).toBeVisible();
-    expect(getComputedStyle(source).borderTopWidth).toBe('1px');
+    const reactionButton = canvas.getByRole('button', { name: '❤️ 반응 2개 보기' });
+    expect(reactionButton).toBeVisible();
+    const ancestorQuote = within(canvas.getByTestId('post-thread-item-route-parent'));
+    expect(ancestorQuote.getAllByText('Source 본문')).toHaveLength(1);
+    expect(ancestorQuote.getAllByTestId('source-post-preview')).toHaveLength(1);
+    expect(
+      Math.abs(
+        reactionButton.getBoundingClientRect().left -
+          canvas.getByText('현재 Reply 본문').getBoundingClientRect().left,
+      ),
+    ).toBeLessThanOrEqual(1);
+    expect(
+      ancestorQuote.getByTestId('source-post-preview').getBoundingClientRect().left,
+    ).toBeGreaterThanOrEqual(
+      canvas
+        .getByTestId('post-thread-connector-route-root-route-parent-before')
+        .getBoundingClientRect().right,
+    );
+    const connectorClearance = (
+      rowId: string,
+      beforeConnectorId: string,
+      afterConnectorId: string,
+    ) => {
+      const row = canvas.getByTestId(rowId);
+      const avatar = row.querySelector<HTMLElement>('[aria-label$="프로필 이미지"]');
+      const before = canvas.getByTestId(beforeConnectorId);
+      const after = canvas.getByTestId(afterConnectorId);
+
+      expect(avatar).not.toBeNull();
+
+      return {
+        after: Math.round(
+          after.getBoundingClientRect().top - avatar!.getBoundingClientRect().bottom,
+        ),
+        before: Math.round(
+          avatar!.getBoundingClientRect().top - before.getBoundingClientRect().bottom,
+        ),
+        rounded: [before, after].every(
+          (connector) => Number.parseFloat(window.getComputedStyle(connector).borderRadius) > 0,
+        ),
+      };
+    };
+    expect({
+      current: connectorClearance(
+        'post-thread-current-route-current',
+        'post-thread-connector-route-parent-route-current-before',
+        'post-thread-connector-route-current-route-child-after',
+      ),
+      parent: connectorClearance(
+        'post-thread-item-route-parent',
+        'post-thread-connector-route-root-route-parent-before',
+        'post-thread-connector-route-parent-route-current-after',
+      ),
+    }).toEqual({
+      current: { after: 4, before: 4, rounded: true },
+      parent: { after: 4, before: 4, rounded: true },
+    });
+    const descendantQuote = within(canvas.getByTestId('post-thread-item-route-reply-quote'));
+    expect(descendantQuote.getAllByText('Source 본문')).toHaveLength(1);
+    expect(descendantQuote.getAllByTestId('source-post-preview')).toHaveLength(1);
+    expect(canvas.queryByTestId('post-thread-source-route-source')).not.toBeInTheDocument();
     expect(canvas.queryByTestId('post-thread-source-route-source-null')).not.toBeInTheDocument();
     expect(canvas.getByText('Source가 없어도 남는 Content')).toBeVisible();
     expect(
@@ -1101,7 +1467,7 @@ export const PostDetailThreadRoute: Story = {
     ).toBeNull();
     await userEvent.click(canvas.getByText('Child 본문'));
     expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent('/@kosmo/route-child');
-    await userEvent.click(within(source).getByText('Source 본문'));
+    await userEvent.click(descendantQuote.getByTestId('source-post-body'));
     expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent('/@kosmo/route-source');
   },
   render: () => (
@@ -1112,7 +1478,119 @@ export const PostDetailThreadRoute: Story = {
   ),
 };
 
+export const PostDetailCurrentQuoteSourceNavigation: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostDetailQuery: {
+          data: {
+            node: {
+              ...quotePost,
+              reactionCounts: [],
+              replyAncestors: [],
+              replyDescendants: {
+                edges: [],
+                pageInfo: { endCursor: null, hasNextPage: false },
+              },
+            },
+          },
+        },
+      },
+    },
+    router: {
+      params: {
+        postId: quotePost.id,
+        profileHandle: quotePost.profile.relativeHandle,
+      },
+      pathname: `/${quotePost.profile.relativeHandle}/${quotePost.id}`,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const currentQuote = within(await canvas.findByTestId('post-thread-current-post-quote'));
+
+    expect(currentQuote.getAllByTestId('source-post-preview')).toHaveLength(1);
+    expect(
+      currentQuote.queryByRole('link', { name: `${repostAuthor.displayName}의 게시글 보기` }),
+    ).not.toBeInTheDocument();
+    expect(currentQuote.queryByTestId('post-timestamp')).not.toBeInTheDocument();
+    expect(
+      currentQuote
+        .queryByText('이 원문에 덧붙이는 인용자의 본문입니다.')
+        ?.closest(`a[href="/${quotePost.profile.relativeHandle}/${quotePost.id}"]`),
+    ).toBeNull();
+
+    await userEvent.click(
+      currentQuote.getByRole('link', { name: `${sourceAuthor.displayName} 프로필 보기` }),
+    );
+    expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+      `/${sourceAuthor.relativeHandle}`,
+    );
+
+    await userEvent.click(currentQuote.getByRole('link', { name: '원문 게시글 보기' }));
+    expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+      `/${sourceAuthor.relativeHandle}/${sourcePost.id}`,
+    );
+
+    await userEvent.click(currentQuote.getByTestId('source-post-body'));
+    expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+      `/${sourceAuthor.relativeHandle}/${sourcePost.id}`,
+    );
+  },
+  render: () => (
+    <>
+      <Text testID="current-story-pathname">{usePathname()}</Text>
+      <PostDetailScreen />
+    </>
+  ),
+};
+
+export const PureRepostDetailCanonicalizesToSource: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostDetailQuery: {
+          data: {
+            node: {
+              ...pureRepost,
+              reactionCounts: [],
+              replyAncestors: [],
+              replyDescendants: {
+                edges: [],
+                pageInfo: { endCursor: null, hasNextPage: false },
+              },
+            },
+          },
+        },
+      },
+    },
+    router: {
+      params: {
+        postId: pureRepost.id,
+        profileHandle: pureRepost.profile.relativeHandle,
+      },
+      pathname: `/${pureRepost.profile.relativeHandle}/${pureRepost.id}`,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() => {
+      expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+        '/@source@remote.example/post-source',
+      );
+    });
+    expect(canvas.queryByTestId('post-thread')).not.toBeInTheDocument();
+  },
+  render: () => (
+    <>
+      <Text testID="current-story-pathname">{usePathname()}</Text>
+      <PostDetailScreen />
+    </>
+  ),
+};
+
 export const PostDetailThreadUnavailableAncestorBoundary: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   parameters: {
     relay: {
       operationResponses: {
@@ -1142,6 +1620,11 @@ export const PostDetailThreadUnavailableAncestorBoundary: Story = {
       'post-thread-item-route-visible-parent',
       'post-thread-current-route-boundary-current',
     ]);
+    const header = canvas.getByTestId('post-detail-scroll').children[0] as HTMLElement;
+    const firstPost = thread.children[0] as HTMLElement;
+    expect(header.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      firstPost.getBoundingClientRect().top,
+    );
     expect(canvas.queryByText('숨겨진 답글')).not.toBeInTheDocument();
     expect(canvas.queryByText('조회할 수 없는 상위 Post')).not.toBeInTheDocument();
   },
