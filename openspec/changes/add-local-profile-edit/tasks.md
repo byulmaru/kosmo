@@ -36,7 +36,7 @@ Profile edit component와 Web·Android·iOS 상태 카탈로그를 전달한다.
   snapshot·새 harness·관련 없는 fixture 확대는 제외한다.
 
 - [ ] 1.1 route-independent Profile edit screen/form과 displayName·bio controlled 입력·validation을 구현한다.
-- [ ] 1.2 현재 값을 초기 draft로 사용하는 avatar/header별 controlled 편집 state, `3:1` header preview와 callback
+- [x] 1.2 현재 값을 초기 draft로 사용하는 avatar/header별 controlled 편집 state, `3:1` header preview와 callback
       seam을 구현한다.
 - [ ] 1.3 Profile Tag inline chip editor, 로컬 validation과 명시적 순서 변경 mode를 구현한다.
 - [ ] 1.4 unchanged/callback 없음의 disabled submit과 dirty·upload·saving·success·failure·retry 상태 카탈로그,
