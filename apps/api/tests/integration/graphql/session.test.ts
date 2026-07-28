@@ -3,7 +3,7 @@ import '@kosmo/core/polyfill';
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { AccountState, SessionState } from '@kosmo/core/enums';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
@@ -66,14 +66,8 @@ const createSession = async ({
 };
 
 const cleanup = async (accountIds: string[]) => {
-  await db.delete(Sessions).where(eq(Sessions.accountId, accountIds[0]!));
-  for (const accountId of accountIds.slice(1)) {
-    await db.delete(Sessions).where(eq(Sessions.accountId, accountId));
-  }
-  await db.delete(Accounts).where(eq(Accounts.id, accountIds[0]!));
-  for (const accountId of accountIds.slice(1)) {
-    await db.delete(Accounts).where(eq(Accounts.id, accountId));
-  }
+  await db.delete(Sessions).where(inArray(Sessions.accountId, accountIds));
+  await db.delete(Accounts).where(inArray(Accounts.id, accountIds));
 };
 
 const request = async <T>(query: string, token?: string): Promise<GraphQLResult<T>> => {
@@ -163,6 +157,17 @@ test('GraphQL mutation에는 Session ID 입력이 없고 malformed Authorization
   assert.equal(result.data, null);
   assert.equal(result.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
   assert.match(result.errors?.[0]?.message ?? '', /Bearer/);
+});
+
+test('database 결과를 확정할 수 없으면 완료 payload 대신 internal error를 반환한다', async (t) => {
+  t.mock.method(db, 'transaction', async () => {
+    throw new Error('database unavailable');
+  });
+
+  const result = await revoke('unreachable-token');
+
+  assert.equal(result.data, null);
+  assert.equal(result.errors?.[0]?.extensions?.code, 'INTERNAL_SERVER_ERROR');
 });
 
 test('동시 GraphQL 폐기는 한 Session만 Revoked로 수렴한다', async () => {

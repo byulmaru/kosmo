@@ -2,7 +2,7 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { AccountProfiles, Accounts, db, firstOrThrow, pg, Sessions } from '../db';
 import { AccountState, SessionState } from '../enums';
 import { PermissionDeniedError } from '../error';
@@ -206,6 +206,36 @@ test('동시 폐기 요청은 하나의 Revoked terminal 결과로 수렴한다'
       )[0]?.state,
       SessionState.REVOKED,
     );
+  } finally {
+    await cleanup([account.id]);
+  }
+});
+
+test('만료와 폐기가 경쟁하면 먼저 확정된 terminal 상태를 보존한다', async () => {
+  const { account, session } = await createFixture();
+
+  try {
+    const [revokeResult, expired] = await Promise.all([
+      revokeCurrentSession({ token: session.token }),
+      db
+        .update(Sessions)
+        .set({ state: SessionState.EXPIRED })
+        .where(and(eq(Sessions.id, session.id), eq(Sessions.state, SessionState.ACTIVE)))
+        .returning({ id: Sessions.id }),
+    ]);
+    const finalState = await db
+      .select({ state: Sessions.state })
+      .from(Sessions)
+      .where(eq(Sessions.id, session.id))
+      .then((rows) => rows[0]?.state);
+
+    if (expired.length === 1) {
+      assert.deepEqual(revokeResult, { status: 'ALREADY_UNAUTHENTICATED' });
+      assert.equal(finalState, SessionState.EXPIRED);
+    } else {
+      assert.deepEqual(revokeResult, { status: 'REVOKED' });
+      assert.equal(finalState, SessionState.REVOKED);
+    }
   } finally {
     await cleanup([account.id]);
   }
