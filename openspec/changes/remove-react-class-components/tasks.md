@@ -22,11 +22,11 @@ Android·iOS·Web 공용 앱의 production 오류 경계가 class component 없�
 - production 오류 경계의 정상, 오류 fallback, 사용자 retry, session reset key와 reporter 인자를 browser integration test로 검증한다.
 - 실제 루트 ESLint config로 class component fixture 실패와 domain error fixture 통과를 검증한다.
 - 앱 TypeScript, Storybook, ESLint, Prettier, strict OpenSpec validation과 `git diff --check`를 통과시킨다.
-- Git ancestry와 GitHub base ref가 `main → PROD-513 → PROD-477`인지 확인한다.
+- PROD-513 PR이 main을 base로 삼는지 확인하고, 후속 PROD-477/#375에 stack 방향을 명시한다.
 
 - [x] 1.1 필요한 runtime·lint 의존성을 pnpm CLI로 추가한다.
 - [x] 1.2 GraphQL, route와 session fail-open 경계를 함수형 조합으로 전환하고 선택적 reporter 계약을 제공한다.
 - [x] 1.3 production wiring의 fallback, retry/reset, reset key와 reporter 동작을 검증하는 integration test를 추가한다.
 - [x] 1.4 루트 ESLint config에서 React class component 금지 규칙을 error로 적용한다.
 - [x] 1.5 class component와 non-React domain class fixture를 사용하는 ESLint 회귀 검증을 추가한다.
-- [ ] 1.6 전체 검증을 통과시키고 main 기반 PR을 만든 뒤 PROD-477/#375를 그 위로 재배치한다.
+- [x] 1.6 전체 검증을 통과시키고 main 기반 PR을 만든 뒤, PROD-477/#375가 이 PR 위로 재배치될 후속 관계를 기록한다.
