@@ -246,11 +246,16 @@ test('exact duplicate와 기존 core Reaction mapping은 멱등이고 URI confli
   );
 
   const secondActor = await createProfile(InstanceKind.ACTIVITYPUB);
-  const existing = await addReaction({
-    actorProfileId: secondActor.profile.id,
-    postId: post.id,
-    type: '☘️',
-  });
+  const existing = await db.transaction((tx) =>
+    addReaction(
+      {
+        actorProfileId: secondActor.profile.id,
+        postId: post.id,
+        type: '☘️',
+      },
+      { mode: 'MATERIALIZATION', tx },
+    ),
+  );
   const mapped = await materializeInboundReaction({
     activityUri: `https://${secondActor.instance.domain}/activities/existing`,
     actorUri: secondActor.actorUri,

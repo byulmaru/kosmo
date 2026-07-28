@@ -12,16 +12,22 @@ type AddReactionInput = {
   readonly type: string;
 };
 
+type AddReactionExecution =
+  | { readonly mode: 'APPLICATION' }
+  | { readonly mode: 'MATERIALIZATION'; readonly tx: Transaction };
+
 export const addReaction = async (
   { actorProfileId, postId, type }: AddReactionInput,
-  tx?: Transaction,
+  execution: AddReactionExecution,
 ): Promise<{ readonly created: boolean; readonly reaction: typeof Reactions.$inferSelect }> => {
   const parsedType = reactionTypeSchema.safeParse(type);
   if (!parsedType.success) {
     throw new ValidationError(parsedType.error.issues[0]?.message, { field: 'type' });
   }
 
-  return getDatabaseConnection(tx).transaction(async (tx) => {
+  const result = await getDatabaseConnection(
+    execution.mode === 'MATERIALIZATION' ? execution.tx : undefined,
+  ).transaction(async (tx) => {
     const post = await tx
       .select({ id: Posts.id })
       .from(Posts)
@@ -60,14 +66,9 @@ export const addReaction = async (
 
     return { created: inserted !== undefined, reaction };
   });
-};
 
-export const reactToPost = async (
-  input: AddReactionInput,
-): Promise<{ readonly reaction: typeof Reactions.$inferSelect }> => {
-  const result = await addReaction(input);
-  if (!result.created) {
-    return { reaction: result.reaction };
+  if (execution.mode === 'MATERIALIZATION' || !result.created) {
+    return result;
   }
 
   await createReactionNotification(result.reaction.id).catch(() => undefined);
@@ -82,7 +83,7 @@ export const reactToPost = async (
     });
   }
 
-  return { reaction: result.reaction };
+  return result;
 };
 
 type DeleteReactionInput = {

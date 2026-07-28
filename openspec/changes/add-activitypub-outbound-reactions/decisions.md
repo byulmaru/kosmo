@@ -83,7 +83,7 @@
 - Decision Date: 2026-07-28
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/architecture/core-services.md`, `docs/domain/objects/reaction.md`, PROD-499
-- Status: Active
+- Status: Superseded
 - Context / Problem: 현재 Reaction create primitive는 GraphQL local mutation과 PROD-498 inbound materialization이
   공유하므로 그 자체에 outbound delivery를 붙이면 remote activity가 다시 발신된다.
 - Decision Outcome: transport-neutral shared persistence primitive에는 outbound side effect를 추가하지 않는다.
@@ -98,6 +98,27 @@
   조회하므로 transaction 시점 이후 target 상태가 바뀌면 최신 eligibility에 따라 delivery를 생략할 수 있다.
 - Confirmation / Follow-up: inbound Reaction이 outbound helper를 호출하지 않는 회귀 test와 local duplicate
   add/repeated delete no-delivery를 검증한다.
+
+### 단일 addReaction에서 실행 mode를 명시적으로 분기한다
+
+- Decision Date: 2026-07-28
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/architecture/core-services.md`, `docs/domain/objects/reaction.md`, PROD-499,
+  implementation review decision on 2026-07-28
+- Status: Active
+- Context / Problem: 별도 `reactToPost` wrapper는 같은 Reaction 추가 행동을 두 public action으로 나누고,
+  transaction 인자 유무만으로 분기하면 caller intent와 post-commit 책임이 암시적으로 숨는다.
+- Decision Outcome: 단일 `addReaction`이 `APPLICATION`과 `MATERIALIZATION` 실행 mode를 명시적으로 받는다.
+  `APPLICATION`은 자체 transaction commit 뒤 실제 create에만 Notification과 Fedify delivery를 실행한다.
+  `MATERIALIZATION`은 필수 caller transaction에 참여해 저장 결과만 반환하고, inbound caller가 mapping과 commit 후
+  Notification을 소유한다.
+- Alternatives Considered: 별도 `reactToPost` wrapper는 동일 행동의 public entry를 중복하고, optional transaction
+  유무에 따른 분기는 호출 의미를 타입과 call site에서 드러내지 못한다. actor origin만 조회해 분기하면 outer
+  transaction의 commit 소유권을 표현하지 못한다.
+- Consequences: 모든 production caller가 mode를 선택해야 하며 materialization mode는 transaction 없이 호출할 수 없다.
+  outbound eligibility와 ActivityPub 표현은 계속 Fedify가 소유하고 API에는 protocol detail이 노출되지 않는다.
+- Confirmation / Follow-up: GraphQL production caller와 inbound materialization caller의 mode를 코드에서 확인하고,
+  rollback·no-echo·post-commit failure isolation 회귀를 검증한다.
 
 ## Remaining Decisions
 
