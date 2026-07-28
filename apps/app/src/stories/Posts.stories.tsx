@@ -1569,7 +1569,6 @@ export const PostDetailThreadRoute: Story = {
         PostDetailQuery: {
           data: {
             node: {
-              viewerReactions: [],
               ...routeCurrentPost,
               reactionCounts: routeCurrentPostReactionCounts,
               replyAncestors: [
@@ -1814,7 +1813,6 @@ export const PostDetailThreadUnavailableAncestorBoundary: Story = {
         PostDetailQuery: {
           data: {
             node: {
-              viewerReactions: [],
               ...routeBoundaryCurrentPostWithoutReactions,
               replyAncestors: [routeVisibleParentPost],
               replyDescendants: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } },
@@ -1856,7 +1854,6 @@ export const PostDetailThreadShortContentAutoFills: Story = {
         PostDetailQuery: {
           data: {
             node: {
-              viewerReactions: [],
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
@@ -1871,7 +1868,6 @@ export const PostDetailThreadShortContentAutoFills: Story = {
         {
           data: {
             node: {
-              viewerReactions: [],
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
@@ -1905,7 +1901,6 @@ export const PostDetailThreadDocumentScrollLoadsOnce: Story = {
         PostDetailQuery: {
           data: {
             node: {
-              viewerReactions: [],
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
@@ -1923,7 +1918,6 @@ export const PostDetailThreadDocumentScrollLoadsOnce: Story = {
         {
           data: {
             node: {
-              viewerReactions: [],
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
@@ -1936,7 +1930,6 @@ export const PostDetailThreadDocumentScrollLoadsOnce: Story = {
         {
           data: {
             node: {
-              viewerReactions: [],
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
@@ -1982,7 +1975,6 @@ export const PostDetailThreadPageLoading: Story = {
         PostDetailQuery: {
           data: {
             node: {
-              viewerReactions: [],
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
@@ -2025,7 +2017,6 @@ export const PostDetailThreadPageFailureRetries: Story = {
         PostDetailQuery: {
           data: {
             node: {
-              viewerReactions: [],
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
@@ -2044,7 +2035,6 @@ export const PostDetailThreadPageFailureRetries: Story = {
         {
           data: {
             node: {
-              viewerReactions: [],
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {

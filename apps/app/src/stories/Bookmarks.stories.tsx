@@ -24,18 +24,22 @@ const author = profile({
   relativeHandle: '@space-writer',
 });
 const targetPosts = [
-  post({
-    bodyText: '첫 번째로 저장한 게시글입니다.',
-    id: 'bookmark-target-1',
-    profile: author,
+  {
+    ...post({
+      bodyText: '첫 번째로 저장한 게시글입니다.',
+      id: 'bookmark-target-1',
+      profile: author,
+    }),
     viewerReactions: [],
-  }),
-  post({
-    bodyText: '두 번째로 저장한 게시글입니다.',
-    id: 'bookmark-target-2',
-    profile: author,
+  },
+  {
+    ...post({
+      bodyText: '두 번째로 저장한 게시글입니다.',
+      id: 'bookmark-target-2',
+      profile: author,
+    }),
     viewerReactions: [],
-  }),
+  },
 ];
 const bookmarkOwner = {
   ...profile({ id: 'bookmark-owner' }),
@@ -67,12 +71,14 @@ const bookmarkNextPage = {
           node: {
             __typename: 'Bookmark',
             id: 'bookmark-0',
-            post: post({
-              bodyText: '더 이전에 저장한 게시글입니다.',
-              id: 'bookmark-target-3',
-              profile: author,
+            post: {
+              ...post({
+                bodyText: '더 이전에 저장한 게시글입니다.',
+                id: 'bookmark-target-3',
+                profile: author,
+              }),
               viewerReactions: [],
-            }),
+            },
           },
         },
       ],
@@ -89,53 +95,61 @@ const bookmarkOtherOwner = {
         node: {
           __typename: 'Bookmark',
           id: 'bookmark-b-1',
-          post: post({
-            bodyText: 'B 프로필로 저장한 게시글입니다.',
-            id: 'bookmark-target-b',
-            profile: author,
+          post: {
+            ...post({
+              bodyText: 'B 프로필로 저장한 게시글입니다.',
+              id: 'bookmark-target-b',
+              profile: author,
+            }),
             viewerReactions: [],
-          }),
+          },
         },
       },
     ],
     pageInfo: { endCursor: 'bookmark-b-cursor-1', hasNextPage: true },
   },
 };
-const bookmarkDeepSource = post({
-  bodyText: '북마크에서 표시하지 않아야 하는 두 번째 Source 본문입니다.',
-  id: 'bookmark-source-depth-2',
-  profile: profile({
-    displayName: '깊은 원문 작성자',
-    handle: 'deep-bookmark-source',
-    id: 'bookmark-deep-source-author',
-    relativeHandle: '@deep-bookmark-source',
+const bookmarkDeepSource = {
+  ...post({
+    bodyText: '북마크에서 표시하지 않아야 하는 두 번째 Source 본문입니다.',
+    id: 'bookmark-source-depth-2',
+    profile: profile({
+      displayName: '깊은 원문 작성자',
+      handle: 'deep-bookmark-source',
+      id: 'bookmark-deep-source-author',
+      relativeHandle: '@deep-bookmark-source',
+    }),
   }),
   viewerReactions: [],
-});
-const bookmarkDirectQuote = post({
-  bodyText: '북마크에서 한 단계만 표시하는 인용 Source입니다.',
-  id: 'bookmark-source-quote',
-  profile: profile({
-    displayName: '인용 Source 작성자',
-    handle: 'bookmark-source',
-    id: 'bookmark-source-author',
-    relativeHandle: '@bookmark-source',
+};
+const bookmarkDirectQuote = {
+  ...post({
+    bodyText: '북마크에서 한 단계만 표시하는 인용 Source입니다.',
+    id: 'bookmark-source-quote',
+    profile: profile({
+      displayName: '인용 Source 작성자',
+      handle: 'bookmark-source',
+      id: 'bookmark-source-author',
+      relativeHandle: '@bookmark-source',
+    }),
+    repostSource: bookmarkDeepSource,
   }),
-  repostSource: bookmarkDeepSource,
   viewerReactions: [],
-});
-const bookmarkedQuoteOfQuote = post({
-  bodyText: '북마크에 저장한 인용 게시글입니다.',
-  id: 'bookmark-quote-of-quote',
-  profile: profile({
-    displayName: '북마크 인용 작성자',
-    handle: 'bookmark-quote-author',
-    id: 'bookmark-quote-author',
-    relativeHandle: '@bookmark-quote-author',
+};
+const bookmarkedQuoteOfQuote = {
+  ...post({
+    bodyText: '북마크에 저장한 인용 게시글입니다.',
+    id: 'bookmark-quote-of-quote',
+    profile: profile({
+      displayName: '북마크 인용 작성자',
+      handle: 'bookmark-quote-author',
+      id: 'bookmark-quote-author',
+      relativeHandle: '@bookmark-quote-author',
+    }),
+    repostSource: bookmarkDirectQuote,
   }),
-  repostSource: bookmarkDirectQuote,
   viewerReactions: [],
-});
+};
 const bookmarkRepostAuthor = profile({
   displayName: '북마크 재게시 작성자',
   handle: 'bookmark-reposter',
