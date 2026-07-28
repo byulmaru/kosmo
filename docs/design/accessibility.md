@@ -27,7 +27,7 @@ CSS px, pt, dp는 서로 다른 플랫폼 단위다. 저장소의 공통 목표�
 - KOSMO가 직접 만든 독립 control은 가능한 한 24×24 CSS px 자체를 확보한다. 24px보다 작은 target을 spacing 예외로 처리해야 한다면 인접 target과의 24 CSS px 평가 원이 겹치지 않는지 검증하고 예외 근거를 남긴다.
 - 조밀한 Action Bar·toolbar의 icon action은 32×32 또는 36×36 CSS px처럼 44px보다 작은 target을 선택할 수 있다. exact size와 간격은 해당 컴포넌트 계약이 소유하며, 전역 convention만을 이유로 보이지 않는 상하 padding을 44px까지 추가하지 않는다.
 - [SC 2.5.5 Target Size (Enhanced)](https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html)의 44×44 CSS px는 Level AAA 강화 기준이다. 중요한 control, 오류 비용이 큰 control, touch 중심 Web surface에서는 선택적으로 적용할 수 있지만 모든 Web control의 전역 최소값은 아니다.
-- target이 둥글거나 clipping된 경우 bounding box 숫자만으로 통과를 판단하지 않는다. target 내부에 24×24 CSS px 사각형을 포함할 수 있는지 또는 공식 spacing 예외를 만족하는지 확인한다.
+- target이 둥글거나 clipping된 경우 bounding box 숫자만으로 크기 요구사항 통과를 판단하지 않는다. 크기 요구사항은 target 내부에 축 정렬된 24×24 CSS px 사각형을 포함할 수 있는지 확인한다. 이를 충족하지 못한 target의 spacing 예외를 평가할 때만 bounding box 중심에 24 CSS px 지름의 원을 배치한다.
 
 ## Visual geometry와 interactive target
 
@@ -44,7 +44,8 @@ CSS px, pt, dp는 서로 다른 플랫폼 단위다. 저장소의 공통 목표�
 - Web의 모든 기능은 keyboard로 도달하고 실행할 수 있어야 한다. focus-visible을 숨기지 않고 modal·menu·popover는 open, 이동, dismiss, focus restore를 검증한다.
 - 상태 변화와 오류는 필요한 경우 `aria-live` 또는 플랫폼 equivalent로 보조 기술에 전달한다. 같은 내용을 중복 announcement하지 않는다.
 - pointer, touch, keyboard와 screen reader 경로가 서로 다른 제품 결과를 만들지 않게 한다. 복잡한 gesture가 필요하면 같은 결과를 제공하는 단순 control을 둔다.
-- text scaling, zoom, reflow와 reduced-motion처럼 target 크기만으로 확인할 수 없는 A·AA 기준도 해당 surface 범위에서 함께 검토한다.
+- text scaling, zoom, reflow처럼 target 크기만으로 확인할 수 없는 A·AA 기준도 해당 surface 범위에서 함께 검토한다.
+- 사용자 상호작용으로 시작된 비필수 motion animation을 끌 수 있게 하는 [SC 2.3.3 Animation from Interactions](https://www.w3.org/WAI/WCAG22/Understanding/animation-from-interactions.html)은 Level AAA다. `prefers-reduced-motion` 대응은 저장소 전체의 A·AA 완료 조건이 아니며, 사용자 위험이나 컴포넌트 맥락상 필요할 때 별도 강화 계약으로 적용한다. 자동으로 시작되어 5초를 넘는 moving·blinking·scrolling content의 일시정지·중지는 Level A인 SC 2.2.2로 별도 평가한다.
 
 ## 가독성과 색상
 
@@ -71,7 +72,7 @@ PR과 이슈에는 실행한 자동화, 실제 관찰한 platform·viewport·입
 
 - Reaction Quick Picker는 [reactions.md](./reactions.md)의 44×44 option과 pending overlay를 유지한다. `apps/app/src/stories/Reactions.stories.tsx`의 exact 44×44 assertion도 그대로 유지한다.
 - Post Action Bar는 현재 `openspec/changes/add-post-action-bar`와 `apps/app/src/stories/PostActionBar.stories.tsx`에서 최소 44×44와 single-row geometry를 요구한다. 이 PR에서는 변경하지 않는다.
-- Post Action Bar의 조밀한 Web target 결정은 PROD-414가 소유한다. PROD-414의 Linear 계약과 적용되는 canonical 디자인 결정을 exact target·간격으로 먼저 정렬하고, 그 결정에 맞춰 OpenSpec과 Storybook assertion을 수정한 뒤 구현한다. 전역 Web AA 최소값만으로 기존 component-specific 44×44 계약을 우회하지 않는다.
+- Post Action Bar의 현재 44×44 interactive target 계약은 PROD-433이 소유한다. 이 PR은 더 작은 exact Web target이나 그 변경의 구현 이슈를 확정하지 않는다. 후속 변경은 해당 Linear 이슈의 범위와 canonical 디자인 결정을 exact target·간격으로 먼저 정렬하고, 그 결정에 맞춰 OpenSpec과 Storybook assertion을 수정한 뒤 구현한다. 전역 Web AA 최소값만으로 기존 component-specific 44×44 계약을 우회하지 않는다.
 - 새 컴포넌트는 이 문서의 플랫폼 baseline을 사용한다. 더 큰 target이나 엄격한 검증이 필요하면 컴포넌트 디자인 문서·Linear·OpenSpec에 이유와 exact contract를 기록한다.
 
 ## 이 문서가 변경하지 않는 것
