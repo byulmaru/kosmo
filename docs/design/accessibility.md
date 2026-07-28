@@ -4,7 +4,9 @@
 
 KOSMO의 Web 디자인과 구현은 적용 가능한 [WCAG 2.2](https://www.w3.org/TR/WCAG22/) Level A·AA 성공 기준을 기본 목표로 한다. Level AAA는 저장소 전체의 완료 조건이 아니며, 사용자 위험이나 컴포넌트 맥락상 필요한 기준만 별도 계약으로 강화한다.
 
-이 목표는 현재 제품 전체가 이미 WCAG 2.2 AA를 준수한다는 선언이나 접근성 인증·법률 자문을 뜻하지 않는다. 기능이나 PR에서 AA 준수를 표현하려면 평가 범위, 적용한 성공 기준, 자동화와 수동 관찰 결과, 확인하지 못한 항목을 함께 기록한다.
+이 목표는 현재 제품 전체가 이미 WCAG 2.2 AA를 준수한다는 선언이나 접근성 인증·법률 자문을 뜻하지 않는다. 기능이나 PR의 접근성 결과는 "적용 가능한 A·AA 성공 기준에 대응했다" 또는 "부분 평가 증거를 확보했다"고 표현하고, 평가 범위, 적용한 성공 기준, 자동화와 수동 관찰 결과, 확인하지 못한 항목을 함께 기록한다.
+
+[WCAG 2.2의 정식 Level AA 적합성](https://www.w3.org/TR/WCAG22/#conformance-reqs) 주장은 기능이나 PR 일부가 아니라 완전한 Web page와 전체 process를 대상으로 한다. 이 표현을 사용하려면 적용 가능한 Level A·AA 성공 기준 전체뿐 아니라 accessibility-supported 방식, non-interference 등 모든 적합성 요구사항을 충족해야 한다. 선택적으로 적합성 주장을 공개할 때는 날짜, WCAG 제목·버전·URI, 충족 수준, 대상 page 설명, 의존한 Web 기술 목록 등 [필수 claim 항목](https://www.w3.org/TR/WCAG22/#conformance-claims)을 함께 기록한다.
 
 Android·iOS 같은 Native App에는 WCAG를 Web과 같은 방식으로 직접 적용했다고 표현하지 않는다. [WCAG2ICT](https://www.w3.org/WAI/standards-guidelines/wcag/non-web-ict/)의 A·AA 매핑을 해석 지침으로 사용하고 각 플랫폼의 접근성 지침과 runtime 관찰을 함께 적용한다. WCAG2ICT는 비규범적 W3C Group Note이므로 Native App의 접근성을 전부 보장하거나 별도의 플랫폼 요구사항을 대체하지 않는다.
 
