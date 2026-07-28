@@ -75,26 +75,46 @@ export function ReactionAction({ post, renderTrigger }: ReactionActionProps): Re
   const [open, setOpen] = useState(false);
   const [pendingTypes, setPendingTypes] = useState<Set<string>>(() => new Set());
   const [errorTypes, setErrorTypes] = useState<Set<string>>(() => new Set());
+  const inFlightTypes = useRef(new Set<string>());
+  const mounted = useRef(false);
   const currentEnvironment = useRef(environment);
   const postId = data.id;
+  const currentPostId = useRef(postId);
   const disabled = selectedProfileId === null;
   const selectedTypes = (data.viewerReactions ?? []).map(({ type }) => type);
 
   currentEnvironment.current = environment;
+  currentPostId.current = postId;
 
   useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      inFlightTypes.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    inFlightTypes.current.clear();
     setPendingTypes(new Set());
     setErrorTypes(new Set());
     setOpen(false);
   }, [environment, postId]);
 
+  useEffect(() => {
+    if (disabled) {
+      setOpen(false);
+    }
+  }, [disabled]);
+
   const toggleReaction = useCallback(
     ({ nextSelected, optionId }: { nextSelected: boolean; optionId: string }) => {
-      if (disabled || pendingTypes.has(optionId)) {
+      if (disabled || inFlightTypes.current.has(optionId)) {
         return;
       }
       const requestEnvironment = environment;
       const requestPostId = postId;
+      inFlightTypes.current.add(optionId);
       setPendingTypes((value) => new Set(value).add(optionId));
       setErrorTypes((value) => {
         const next = new Set(value);
@@ -102,9 +122,14 @@ export function ReactionAction({ post, renderTrigger }: ReactionActionProps): Re
         return next;
       });
       const finish = (succeeded: boolean) => {
-        if (currentEnvironment.current !== requestEnvironment || postId !== requestPostId) {
+        if (
+          !mounted.current ||
+          currentEnvironment.current !== requestEnvironment ||
+          currentPostId.current !== requestPostId
+        ) {
           return;
         }
+        inFlightTypes.current.delete(optionId);
         setPendingTypes((value) => {
           const next = new Set(value);
           next.delete(optionId);
@@ -116,8 +141,8 @@ export function ReactionAction({ post, renderTrigger }: ReactionActionProps): Re
       };
       const onCompleted = (response: unknown) => {
         const payload = nextSelected
-          ? (response as ReactionActionAddReactionMutation['response']).addReaction
-          : (response as ReactionActionDeleteReactionMutation['response']).deleteReaction;
+          ? (response as ReactionActionAddReactionMutation['response'] | null)?.addReaction
+          : (response as ReactionActionDeleteReactionMutation['response'] | null)?.deleteReaction;
         finish(Boolean(payload));
       };
       if (nextSelected) {
@@ -136,7 +161,7 @@ export function ReactionAction({ post, renderTrigger }: ReactionActionProps): Re
         });
       }
     },
-    [commitAdd, commitDelete, disabled, environment, pendingTypes, postId],
+    [commitAdd, commitDelete, disabled, environment, postId],
   );
 
   return (

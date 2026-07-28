@@ -1,4 +1,7 @@
-import { Suspense, useCallback, useMemo, useState } from 'react';
+// eslint-disable-next-line import/newline-after-import -- TypeScript's suppression comment must stay immediately above the untyped Storybook-only import.
+import { Suspense, useCallback, useMemo, useRef, useState } from 'react';
+// @ts-expect-error The workspace does not install react-dom declarations for this Storybook-only batching helper.
+import { unstable_batchedUpdates } from 'react-dom';
 import { Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import {
@@ -10,17 +13,17 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
-import { expect, fn, screen, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fn, screen, spyOn, userEvent, waitFor, within } from 'storybook/test';
 import { PostActionBar } from '@/components/post/PostActionBar';
 import { formatPostActionCount } from '@/components/post/postActionCount';
-import { RelayActorProvider } from '@/relay/RelayActorProvider';
+import { RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
 import { spacing, typography } from '@/theme/tokens';
 import PostActionBarStoryQueryNode from './__generated__/PostActionBarStoryQuery.graphql';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ViewStyle } from 'react-native';
-import type { GraphQLResponse } from 'relay-runtime';
+import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
 import type { PostActionBarProps } from '@/components/post/PostActionBar';
 import type { PostActionBarStoryQuery } from './__generated__/PostActionBarStoryQuery.graphql';
 
@@ -28,6 +31,7 @@ const reply = fn();
 const bookmark = fn();
 const more = fn();
 const reactionMutationRequest = fn();
+const reactionLifecycleConsoleErrors: unknown[][] = [];
 
 const actionBarProps = {
   bookmark: {
@@ -163,6 +167,242 @@ function PostActionBarFixtureContents(props: Omit<PostActionBarProps, 'post'>) {
   );
 
   return <PostActionBar {...props} post={data.node!.actionBar!} />;
+}
+
+type ReactionRequestOutcome = 'data-errors-success' | 'network-error' | 'payload-error' | 'success';
+
+type ReactionMutationSink = Readonly<{
+  complete: () => void;
+  error: (error: Error) => void;
+  next: (response: GraphQLResponse) => void;
+}>;
+
+type CapturedReactionRequest = {
+  actorId: number;
+  id: number;
+  name: string;
+  settled: boolean;
+  sink: ReactionMutationSink;
+  type: string;
+};
+
+type ReactionRequestSummary = Readonly<{
+  actorId: number;
+  id: number;
+  name: string;
+  settled: boolean;
+  type: string;
+}>;
+
+function ReactionContractHarness() {
+  const requestsRef = useRef<CapturedReactionRequest[]>([]);
+  const selectedTypesByActor = useRef(new Map<number, Set<string>>());
+  const nextActorId = useRef(0);
+  const nextRequestId = useRef(0);
+  const [mounted, setMounted] = useState(true);
+  const [requests, setRequests] = useState<ReactionRequestSummary[]>([]);
+
+  const createEnvironment = useCallback(() => {
+    const actorId = ++nextActorId.current;
+    selectedTypesByActor.current.set(actorId, new Set());
+    const environment = new Environment({
+      network: Network.create((request: RequestParameters, variables: Variables) => {
+        if (request.operationKind !== 'mutation') {
+          return Promise.resolve({
+            data:
+              request.name === 'SessionProviderQuery'
+                ? {
+                    currentSession: {
+                      __typename: 'Session',
+                      id: `session-${actorId}`,
+                      selectedProfile: {
+                        __typename: 'Profile',
+                        id: `profile-${actorId}`,
+                      },
+                    },
+                    me: {
+                      __typename: 'Account',
+                      id: `account-${actorId}`,
+                      name: `Actor ${actorId}`,
+                    },
+                  }
+                : { node: unselectedSource },
+          } as GraphQLResponse);
+        }
+
+        return Observable.create<GraphQLResponse>((sink) => {
+          const captured: CapturedReactionRequest = {
+            actorId,
+            id: ++nextRequestId.current,
+            name: request.name,
+            settled: false,
+            sink,
+            type: String(variables.type),
+          };
+          requestsRef.current.push(captured);
+          setRequests((current) => [
+            ...current,
+            {
+              actorId: captured.actorId,
+              id: captured.id,
+              name: captured.name,
+              settled: false,
+              type: captured.type,
+            },
+          ]);
+        });
+      }),
+      store: new Store(new RecordSource()),
+    });
+    environment.commitPayload(
+      createOperationDescriptor(getRequest(PostActionBarStoryQueryNode), { id: sourcePostId }),
+      { node: unselectedSource },
+    );
+    return environment;
+  }, []);
+
+  const settleRequest = useCallback((id: number, outcome: ReactionRequestOutcome) => {
+    const request = requestsRef.current.find((candidate) => candidate.id === id);
+    if (!request || request.settled) {
+      return;
+    }
+    request.settled = true;
+    setRequests((current) =>
+      current.map((candidate) =>
+        candidate.id === id ? { ...candidate, settled: true } : candidate,
+      ),
+    );
+
+    if (outcome === 'network-error') {
+      request.sink.error(new Error(`request ${id} failed`));
+      return;
+    }
+    if (outcome === 'payload-error') {
+      request.sink.next({
+        data:
+          request.name === 'ReactionActionAddReactionMutation'
+            ? { addReaction: null }
+            : { deleteReaction: null },
+        errors: [{ message: `request ${id} payload missing` }],
+      });
+      request.sink.complete();
+      return;
+    }
+
+    const selectedTypes = selectedTypesByActor.current.get(request.actorId)!;
+    const add = request.name === 'ReactionActionAddReactionMutation';
+    if (add) {
+      selectedTypes.add(request.type);
+    } else {
+      selectedTypes.delete(request.type);
+    }
+    const data = add
+      ? {
+          addReaction: {
+            reaction: {
+              __typename: 'Reaction',
+              id: `reaction-${request.actorId}-${request.id}`,
+              type: request.type,
+            },
+          },
+        }
+      : {
+          deleteReaction: {
+            post: {
+              __typename: 'Post',
+              id: sourcePostId,
+              viewerReactions: [...selectedTypes].map((type, index) => ({
+                __typename: 'Reaction',
+                id: `reaction-${request.actorId}-${index}-${type}`,
+                type,
+              })),
+            },
+            reactionId: null,
+          },
+        };
+    request.sink.next({
+      data,
+      ...(outcome === 'data-errors-success'
+        ? { errors: [{ message: `request ${id} partial error` }] }
+        : {}),
+    });
+    request.sink.complete();
+  }, []);
+
+  return (
+    <RelayActorProvider createEnvironment={createEnvironment}>
+      <ReactionContractControls
+        mounted={mounted}
+        onMountedChange={setMounted}
+        onSettleRequest={settleRequest}
+        requests={requests}
+      />
+    </RelayActorProvider>
+  );
+}
+
+function ReactionContractControls({
+  mounted,
+  onMountedChange,
+  onSettleRequest,
+  requests,
+}: {
+  mounted: boolean;
+  onMountedChange: (mounted: boolean) => void;
+  onSettleRequest: (id: number, outcome: ReactionRequestOutcome) => void;
+  requests: ReadonlyArray<ReactionRequestSummary>;
+}) {
+  const { resetActor, revision } = useRelayActor();
+
+  return (
+    <View>
+      <Text
+        accessibilityLabel="Reaction actor 전환"
+        accessibilityRole="button"
+        onPress={() => resetActor(`profile-${revision + 2}`)}
+      >
+        Reaction actor 전환
+      </Text>
+      <Text
+        accessibilityLabel={mounted ? 'Reaction surface unmount' : 'Reaction surface remount'}
+        accessibilityRole="button"
+        onPress={() => onMountedChange(!mounted)}
+      >
+        {mounted ? 'Reaction surface unmount' : 'Reaction surface remount'}
+      </Text>
+      <Text testID="reaction-actor-revision">{revision}</Text>
+      <Text testID="reaction-request-log">{JSON.stringify(requests)}</Text>
+      {requests.map((request) => (
+        <View key={request.id}>
+          {(['success', 'payload-error', 'data-errors-success', 'network-error'] as const).map(
+            (outcome) => (
+              <Text
+                accessibilityLabel={`요청 ${request.id} ${outcome}`}
+                accessibilityRole="button"
+                key={outcome}
+                onPress={() => onSettleRequest(request.id, outcome)}
+              >
+                요청 {request.id} {outcome}
+              </Text>
+            ),
+          )}
+        </View>
+      ))}
+      {mounted ? (
+        <Suspense fallback={<View />}>
+          <SessionProvider>
+            <PostActionBarFixtureContents />
+          </SessionProvider>
+        </Suspense>
+      ) : null}
+    </View>
+  );
+}
+
+function readReactionRequests(canvas: ReturnType<typeof within>): ReactionRequestSummary[] {
+  return JSON.parse(
+    canvas.getByTestId('reaction-request-log').textContent ?? '[]',
+  ) as ReactionRequestSummary[];
 }
 
 type BookmarkProcessingState = NonNullable<PostActionBarProps['bookmark']>['processing'];
@@ -420,6 +660,160 @@ export const NoSelectedProfileDisablesReaction: Story = {
   render: () => (
     <PostActionBarFixture onMutationRequest={reactionMutationRequest} selectedProfileId={null} />
   ),
+};
+
+export const ReactionConcurrentMutationContract: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: '반응' }));
+    const heart = await screen.findByRole('button', { name: '❤️ 반응' });
+    const party = screen.getByRole('button', { name: '🎉 반응' });
+
+    unstable_batchedUpdates(() => {
+      heart.click();
+      heart.click();
+      party.click();
+    });
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(2));
+    let requests = readReactionRequests(canvas);
+    expect(requests.filter((request) => request.type === '❤️')).toHaveLength(1);
+    expect(requests.filter((request) => request.type === '🎉')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: '❤️ 반응, 처리 중' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '🎉 반응, 처리 중' })).toBeDisabled();
+
+    const partyRequest = requests.find((request) => request.type === '🎉')!;
+    canvas.getByRole('button', { name: `요청 ${partyRequest.id} success` }).click();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '🎉 반응' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+    expect(screen.getByRole('button', { name: '❤️ 반응, 처리 중' })).toBeDisabled();
+
+    const heartRequest = requests.find((request) => request.type === '❤️')!;
+    canvas.getByRole('button', { name: `요청 ${heartRequest.id} success` }).click();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '❤️ 반응' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+    expect(screen.getByRole('dialog', { name: '반응 선택' })).toBeVisible();
+
+    await userEvent.click(screen.getByRole('button', { name: '❤️ 반응' }));
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(3));
+    requests = readReactionRequests(canvas);
+    const deleteHeart = requests.find(
+      (request) => request.name === 'ReactionActionDeleteReactionMutation',
+    )!;
+    canvas.getByRole('button', { name: `요청 ${deleteHeart.id} success` }).click();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '❤️ 반응' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      ),
+    );
+    expect(screen.getByRole('button', { name: '🎉 반응' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('dialog', { name: '반응 선택' })).toBeVisible();
+  },
+  render: () => <ReactionContractHarness />,
+};
+
+export const ReactionFailureRetryActorSwitchAndUnmount: Story = {
+  beforeEach: () => {
+    reactionLifecycleConsoleErrors.length = 0;
+    const originalError = console.error;
+    const errorSpy = spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      reactionLifecycleConsoleErrors.push(args);
+      const expectedGraphQLError = args.some(
+        (argument) =>
+          typeof argument === 'string' &&
+          (argument.includes('payload missing') || argument.includes('partial error')),
+      );
+      if (!expectedGraphQLError) {
+        originalError(...args);
+      }
+    });
+    return () => errorSpy.mockRestore();
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: '반응' }));
+    await userEvent.click(await screen.findByRole('button', { name: '❤️ 반응' }));
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(1));
+    canvas.getByRole('button', { name: '요청 1 payload-error' }).click();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '❤️ 반응, 오류, 다시 시도' })).toBeVisible(),
+    );
+    expect(screen.getByRole('button', { name: '🎉 반응' })).not.toBeDisabled();
+
+    await userEvent.click(screen.getByRole('button', { name: '❤️ 반응, 오류, 다시 시도' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '❤️ 반응, 처리 중' })).toBeDisabled(),
+    );
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(2));
+    canvas.getByRole('button', { name: '요청 2 data-errors-success' }).click();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '❤️ 반응' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+    expect(screen.queryByRole('button', { name: /오류, 다시 시도/ })).toBeNull();
+
+    unstable_batchedUpdates(() => {
+      screen.getByRole('button', { name: '🎉 반응' }).click();
+      screen.getByRole('button', { name: '☘️ 반응' }).click();
+    });
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(4));
+    const oldActorRequests = readReactionRequests(canvas).slice(2, 4);
+    canvas.getByRole('button', { name: 'Reaction actor 전환' }).click();
+    await waitFor(() =>
+      expect(canvas.getByTestId('reaction-actor-revision')).toHaveTextContent('1'),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull());
+
+    await userEvent.click(await canvas.findByRole('button', { name: '반응' }));
+    await userEvent.click(await screen.findByRole('button', { name: '👀 반응' }));
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(5));
+    const currentActorRequest = readReactionRequests(canvas)[4]!;
+    canvas.getByRole('button', { name: `요청 ${oldActorRequests[0]!.id} success` }).click();
+    canvas.getByRole('button', { name: `요청 ${oldActorRequests[1]!.id} network-error` }).click();
+    expect(screen.getByRole('button', { name: '👀 반응, 처리 중' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /오류, 다시 시도/ })).toBeNull();
+
+    canvas.getByRole('button', { name: `요청 ${currentActorRequest.id} success` }).click();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '👀 반응' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+    unstable_batchedUpdates(() => {
+      screen.getByRole('button', { name: '🌈 반응' }).click();
+      screen.getByRole('button', { name: '🥹 반응' }).click();
+    });
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(7));
+    const unmountedRequests = readReactionRequests(canvas).slice(5, 7);
+    canvas.getByRole('button', { name: 'Reaction surface unmount' }).click();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull());
+    canvas.getByRole('button', { name: `요청 ${unmountedRequests[0]!.id} success` }).click();
+    canvas.getByRole('button', { name: `요청 ${unmountedRequests[1]!.id} network-error` }).click();
+    expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
+
+    canvas.getByRole('button', { name: 'Reaction surface remount' }).click();
+    await userEvent.click(await canvas.findByRole('button', { name: '반응' }));
+    await screen.findByRole('dialog', { name: '반응 선택' });
+    expect(screen.queryByRole('button', { name: /처리 중|오류, 다시 시도/ })).toBeNull();
+    expect(
+      reactionLifecycleConsoleErrors
+        .flat()
+        .map((value) => String(value))
+        .join(' '),
+    ).not.toMatch(/state update|unmount/i);
+  },
+  render: () => <ReactionContractHarness />,
 };
 
 export const InteractionContract: Story = {
