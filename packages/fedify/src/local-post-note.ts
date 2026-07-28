@@ -19,6 +19,7 @@ import {
   ProfileState,
 } from '@kosmo/core/enums';
 import { encodeGlobalId } from '@kosmo/core/global-id';
+import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { postContentDocumentToHtml } from '@kosmo/core/post-content/server';
 import { and, eq, ne } from 'drizzle-orm';
 import { escapeText } from 'entities/escape';
@@ -166,6 +167,7 @@ export const projectLocalPostNote = async (
       : note.visibility === PostVisibility.UNLISTED
         ? PUBLIC_COLLECTION
         : undefined;
+  const configuredLocalInstance = await resolveConfiguredLocalInstance();
 
   const object = new Note({
     attribution: authorUri,
@@ -179,7 +181,7 @@ export const projectLocalPostNote = async (
     to,
     url: new URL(
       `/@${encodeURIComponent(note.authorHandle)}/${encodeGlobalId('Post', note.id)}`,
-      note.canonicalOrigin,
+      configuredLocalInstance.canonicalOrigin,
     ),
   });
 

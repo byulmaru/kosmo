@@ -117,6 +117,7 @@ describe('ActivityPub Local Reply delivery', () => {
       const object = await call.activity.getObject();
       assert.ok(object instanceof Note);
       assert.equal(object.id?.href, `${authorOrigin}/ap/note/${reply.id}`);
+      assert.equal(object.url && new URL(object.url.toString()).origin, publicOrigin);
       assert.equal(object.replyTargetId?.href, parentUri.href);
       assert.deepEqual(call.sender, { identifier: author.id });
       assert.deepEqual(call.options, {
