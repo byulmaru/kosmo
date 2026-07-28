@@ -51,6 +51,13 @@ overrides:
   '@opentelemetry/sdk-metrics@<2.8.0': ^2.8.0
   # Expo Router exposes broad native peers; align every peer snapshot with SDK 56 / RN 0.85.
   '@react-native/metro-config': 0.85.3
+  # eslint-react 5.11.3 accepts 8.62.1; avoid newer incomplete registry dependency graphs.
+  '@typescript-eslint/scope-manager': 8.62.1
+  '@typescript-eslint/type-utils': 8.62.1
+  '@typescript-eslint/types': 8.62.1
+  '@typescript-eslint/typescript-estree': 8.62.1
+  '@typescript-eslint/utils': 8.62.1
+  '@typescript-eslint/visitor-keys': 8.62.1
   cookie@<0.7.0: ^0.7.0
   esbuild@<0.28.1: ^0.28.1
   # Keep fbjs's declared parser without crossing into the later provenance-downgrade releases.

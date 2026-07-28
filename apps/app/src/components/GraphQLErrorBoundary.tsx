@@ -1,40 +1,30 @@
-import { Component } from 'react';
+import { ErrorBoundary } from 'react-error-boundary';
 import { StateView } from '@/components/ui/StateView';
 import { formatGraphQLError } from '@/relay/network';
-import type { ErrorInfo, PropsWithChildren, ReactNode } from 'react';
+import type { PropsWithChildren } from 'react';
 
-type Props = PropsWithChildren<{ onRetry: () => void }>;
-type State = { error: unknown };
+export type GraphQLErrorBoundaryProps = PropsWithChildren<{
+  onRetry: () => void;
+}>;
 
-export class GraphQLErrorBoundary extends Component<Props, State> {
-  state: State = { error: null };
-
-  static getDerivedStateFromError(error: unknown): State {
-    return { error };
-  }
-
-  componentDidCatch(error: unknown, info: ErrorInfo): void {
-    console.error('Relay render error', error, info.componentStack);
-  }
-
-  private retry = () => {
-    this.setState({ error: null });
-    this.props.onRetry();
-  };
-
-  render(): ReactNode {
-    if (this.state.error) {
-      return (
+export function GraphQLErrorBoundary({ children, onRetry }: GraphQLErrorBoundaryProps) {
+  return (
+    <ErrorBoundary
+      fallbackRender={({ error, resetErrorBoundary }) => (
         <StateView
           actionLabel="다시 시도"
           alert
-          description={formatGraphQLError(this.state.error)}
-          onAction={this.retry}
+          description={formatGraphQLError(error)}
+          onAction={resetErrorBoundary}
           title="화면을 불러오지 못했어요"
         />
-      );
-    }
-
-    return this.props.children;
-  }
+      )}
+      onError={(error, info) => {
+        console.error('Relay render error', error, info.componentStack);
+      }}
+      onReset={onRetry}
+    >
+      {children}
+    </ErrorBoundary>
+  );
 }
