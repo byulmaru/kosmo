@@ -87,17 +87,12 @@ const createReaction = async (authorProfileId: string, recipientProfileId: strin
 };
 
 const createContentPost = (profileId: string) =>
-  db.transaction((tx) =>
-    createPost(
-      {
-        document: postContentDocumentFromText(crypto.randomUUID()),
-        origin: 'LOCAL',
-        profileId,
-        visibility: PostVisibility.PUBLIC,
-      },
-      tx,
-    ).then(({ post }) => post),
-  );
+  createPost({
+    document: postContentDocumentFromText(crypto.randomUUID()),
+    origin: 'LOCAL',
+    profileId,
+    visibility: PostVisibility.PUBLIC,
+  }).then(({ post }) => post);
 
 const createReply = async (
   authorProfileId: string,
@@ -105,18 +100,14 @@ const createReply = async (
   visibility: PostVisibility = PostVisibility.PUBLIC,
 ) => {
   const parent = await createContentPost(recipientProfileId);
-  const reply = await db.transaction((tx) =>
-    createPost(
-      {
-        document: postContentDocumentFromText(crypto.randomUUID()),
-        origin: 'LOCAL',
-        profileId: authorProfileId,
-        replyParentId: parent.id,
-        visibility,
-      },
-      tx,
-    ).then(({ post }) => post),
-  );
+  const reply = await createPost({
+    document: postContentDocumentFromText(crypto.randomUUID()),
+    origin: 'LOCAL',
+    profileId: authorProfileId,
+    replyParentId: parent.id,
+    visibility,
+  }).then(({ post }) => post);
+  await db.delete(Notifications).where(eq(Notifications.sourceId, reply.id));
   return { parent, reply };
 };
 

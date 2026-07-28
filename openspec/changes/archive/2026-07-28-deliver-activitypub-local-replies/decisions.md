@@ -150,16 +150,19 @@
 - Status: Active
 - Context / Problem: 별도 `createLocalPost` action은 Local GraphQL 전용 진입점을 추가해 GraphQL과 ActivityPub이
   같은 Post application action을 사용하도록 통일하는 core service 목적을 깨뜨린다.
-- Decision Outcome: 단일 `createPost`가 Local/ActivityPub origin별 입력 정책과 transaction을 소유한다. caller
-  transaction이 없는 Local Reply production 호출은 실제 commit 뒤 Reply Notification과 Create delivery를 best
-  effort로 실행한다. ActivityPub origin에는 outbound Local Reply delivery를 실행하지 않는다. `deletePost`는 기존
-  통합 action에서 Reply Delete lifecycle을 소유한다.
+- Decision Outcome: 단일 `createPost`가 Local/ActivityPub origin별 입력 정책과 transaction을 소유한다. Local
+  Reply production 호출은 실제 commit 뒤 Reply Notification과 Create delivery를 best effort로 실행한다.
+  ActivityPub origin에는 outbound Local Reply delivery를 실행하지 않는다. `deletePost`는 기존 통합 action에서
+  Reply Delete lifecycle을 소유한다. transaction 인자의 존재 여부는 origin이나 lifecycle 실행 여부를 결정하는
+  신호로 사용하지 않는다.
 - Alternatives Considered: 별도 `createLocalPost`, GraphQL resolver orchestration, callback 또는 delivery port.
-- Consequences: 모든 Post 생성 진입점이 `createPost`로 통일되고 public action 수가 늘지 않는다. optional caller
-  transaction을 사용하는 내부 호출은 outer commit을 알 수 없으므로 post-commit side effect를 실행하지 않는다.
-  Remote Reply Notification과 durable delivery는 현재 범위에 추가하지 않는다.
-- Confirmation / Follow-up: production GraphQL과 ActivityPub ingress가 모두 `createPost`를 사용하고, Local 기본
-  호출만 commit 뒤 Notification/Create를 실행하며 resolver에는 lifecycle 호출이 없는지 검증한다.
+- Consequences: 모든 Post 생성 진입점이 `createPost`로 통일되고 public action 수가 늘지 않는다. 현재
+  `createPost`는 자신의 transaction을 소유한다. 향후 caller transaction 합류가 실제로 필요해지면 `tx` 유무로
+  lifecycle을 생략하지 않고 명시적인 post-commit coordination 경계를 먼저 설계한다. Remote Reply Notification과
+  durable delivery는 현재 범위에 추가하지 않는다.
+- Confirmation / Follow-up: production GraphQL과 ActivityPub ingress가 모두 `createPost`를 사용하고, Local
+  origin만 commit 뒤 Notification/Create를 실행하며 resolver에는 lifecycle 호출과 transaction 유무에 따른
+  lifecycle 분기가 없는지 검증한다.
 
 ### PROD-497은 원격 직접 Parent 작성자만 전달한다
 
