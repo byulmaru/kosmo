@@ -306,7 +306,7 @@ test('API는 raw upstream token field를 세션 교환 입력으로 허용하지
   });
   const body = (await response.json()) as NativeSessionGraphQLResponse;
 
-  expect(response.status()).toBe(200);
+  expect(response.status()).toBe(400);
   expectNativeSessionGraphQLError(body);
   expect(await getOIDCTokenRequestCount(request)).toBe(tokenRequestCount);
 });
