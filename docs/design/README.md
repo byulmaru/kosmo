@@ -11,6 +11,7 @@ KOSMO의 UI/프로덕트 디자인 결정을 기록하고 공유하는 문서 �
 - [breakpoints.md](./breakpoints.md) — 레이아웃 브레이크포인트 단계와 컨벤션
 - [post-action-bar.md](./post-action-bar.md) — Post Action Bar의 28px geometry, 배치, Repost 메뉴와 오류 toast 계약
 - [reactions.md](./reactions.md) — Reaction Quick Picker, 요약 token toggle과 Profile 목록의 형태·상태·대상 Post 계약
+- [profile-edit.md](./profile-edit.md) — Local Profile 편집 화면의 필드, 상태와 route 연결 경계
 - [profile-tags.md](./profile-tags.md) — Profile Tag 편집·공개 표시의 플랫폼 공통 계약
 - [hashtag-related-profiles.md](./hashtag-related-profiles.md) — Hashtag 관련 Profile 목록 탐색의 결과·상태 계약
 
