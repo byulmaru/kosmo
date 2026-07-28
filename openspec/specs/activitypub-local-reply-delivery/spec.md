@@ -31,7 +31,7 @@ Remote Parent의 ActivityPub Post identity를 `inReplyTo`로 제공해야 한다
 
 ### Requirement: Reply delivery recipient와 audience
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/instance.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-497. 시스템은 Local Reply의 기존 Post Visibility audience를 유지하고, Public 또는 Unlisted Reply의 원격 직접 Parent 작성자를 direct recipient로 선택해야 한다(MUST). `inReplyTo` object IRI를 delivery endpoint로 취급해서는 안 된다(MUST NOT). 새 원격 요청이 허용되는 `ACTIVE` 또는 `UNRESPONSIVE` ActivityPub Instance의 저장된 HTTP(S) actor와 personal inbox만 전달에 사용해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/instance.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-497. 시스템은 Local Reply의 기존 Post Visibility audience를 유지하고, Public 또는 Unlisted Reply의 원격 직접 Parent 작성자를 direct recipient로 선택해야 한다(MUST). `inReplyTo` object IRI를 delivery endpoint로 취급해서는 안 된다(MUST NOT). 새 원격 요청이 허용되는 `ACTIVE` ActivityPub Instance의 저장된 HTTP(S) actor와 personal inbox만 전달에 사용해야 한다(MUST).
 
 #### Scenario: Public 또는 Unlisted Reply recipient
 
@@ -52,7 +52,7 @@ Remote Parent의 ActivityPub Post identity를 `inReplyTo`로 제공해야 한다
 
 #### Scenario: unavailable remote instance
 
-- **WHEN** 후보 recipient의 ActivityPub Instance가 `SUSPENDED`이다
+- **WHEN** 후보 recipient의 ActivityPub Instance가 `UNRESPONSIVE` 또는 `SUSPENDED`이다
 - **THEN** 시스템은 해당 recipient에게 activity를 전달하지 않는다
 - **AND** 이번 capability를 위한 pending delivery, durable retry 또는 delivery history를 만들지 않는다
 

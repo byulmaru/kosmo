@@ -179,7 +179,7 @@ describe('ActivityPub Local Reply delivery', () => {
     assert.equal(fixture.calls.length, 1);
   });
 
-  test('UNRESPONSIVE Parent는 전달하고 SUSPENDED Parent는 제외한다', async () => {
+  test('UNRESPONSIVE와 SUSPENDED Parent는 모두 제외한다', async () => {
     const author = await createProfile({ kind: InstanceKind.LOCAL });
     const unresponsive = await createRemoteActor({
       handle: 'unresponsive-parent',
@@ -201,8 +201,7 @@ describe('ActivityPub Local Reply delivery', () => {
     await sendLocalReplyCreate(unresponsiveReply.id);
     await sendLocalReplyCreate(suspendedReply.id);
 
-    assert.equal(fixture.calls.length, 1);
-    assert.equal(fixture.calls[0]?.recipients[0]?.id?.href, unresponsive.actorUri);
+    assert.equal(fixture.calls.length, 0);
   });
 
   test('Delete가 tombstone 뒤 같은 Note·activity identity와 Create ordering domain을 반복 사용한다', async () => {

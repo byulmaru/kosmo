@@ -54,7 +54,7 @@ Visibility와 Reply Parent 관계에서 actor, canonical Note URI, audience와 r
 Note representation이나 새 Tombstone endpoint가 필요하지 않다.
 
 Recipient는 delivery 시점의 저장 상태에서 직접 Parent Author만 조회한다. Public/Unlisted Reply이며 Parent가
-Active remote Profile, ACTIVE 또는 UNRESPONSIVE ActivityPub Instance, 유효한 HTTP(S) actor URI와 personal inbox를
+Active remote Profile, ACTIVE ActivityPub Instance, 유효한 HTTP(S) actor URI와 personal inbox를
 가질 때만 `Recipient`로 만든다. 유효한 shared inbox는 Fedify의 선호 옵션에 맡기고 사용할 수 없으면 personal
 inbox로 fallback한다. Followers Only·Direct, Local Parent 또는 usable Parent recipient가 없으면 `sendActivity()`를
 호출하지 않는다. follower expansion은 PROD-512가 별도 공통 dispatcher에서 소유한다.
@@ -78,7 +78,7 @@ fragment 없는 Note URI를 사용한다. 이 방법은 별도 activity row나 �
 - Create 전용 Note serialization을 새로 만들거나 Delete를 위해 Active-only dispatcher 조건을 완화하지 않는다.
 - follower 집합을 `ProfileFollows`에서 직접 조회하거나 special `"followers"` recipient를 이 capability에 추가하지 않는다.
 - Followers Only Reply를 remote Parent Author에게 direct delivery하지 않는다.
-- `UNRESPONSIVE` recipient를 durable pending delivery로 저장하거나 별도 자동 재전송하지 않는다.
+- `UNRESPONSIVE` recipient에게 direct delivery하거나 durable pending delivery를 저장하지 않는다.
 - usable Parent actor/inbox가 없으면 invalid URL을 Fedify에 전달하지 않고 no-op한다.
 - PROD-448의 outbox·queue 구조를 현재 작업의 abstraction이나 test seam으로 미리 추가하지 않는다.
 
