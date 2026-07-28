@@ -21,9 +21,9 @@
 - Valid session, selected Profile 없음, anonymous, category/body boundary, event-ID 조합과 normalization을 API test로 검증한다.
 - Generated GraphQL schema가 enum, input, payload와 mutation contract를 정확히 포함하는지 확인한다.
 
-- [ ] 1.1 Login-scoped feedback GraphQL public contract와 성공 payload를 구현한다.
-- [ ] 1.2 Feedback input validation과 선택 Profile이 없는 session의 제출 동작을 구현한다.
-- [ ] 1.3 인증·input boundary test를 추가하고 GraphQL schema를 현재 contract에 맞게 생성한다.
+- [x] 1.1 Login-scoped feedback GraphQL public contract와 성공 payload를 구현한다.
+- [x] 1.2 Feedback input validation과 선택 Profile이 없는 session의 제출 동작을 구현한다.
+- [x] 1.3 인증·input boundary test를 추가하고 GraphQL schema를 현재 contract에 맞게 생성한다.
 
 ## 2. PROD-487 Safe Slack delivery and abuse controls
 
@@ -49,9 +49,9 @@
 - Plain-text payload, unfurl 비활성화, optional event ID, secret/redaction과 DB 미사용을 검증한다.
 - Five-attempt boundary, sixth rejection와 same-account concurrent rejection을 fake time/concurrency test로 검증한다.
 
-- [ ] 2.1 API-owned Incoming Webhook configuration, safe payload와 single-attempt delivery 동작을 구현한다.
-- [ ] 2.2 Account별 비영속 rate window, in-flight guard와 종료 시 상태 해제를 구현한다.
-- [ ] 2.3 Delivery outcome, no-auto-retry, payload/redaction, rate와 concurrent behavior test를 추가한다.
+- [x] 2.1 API-owned Incoming Webhook configuration, safe payload와 single-attempt delivery 동작을 구현한다.
+- [x] 2.2 Account별 비영속 rate window, in-flight guard와 종료 시 상태 해제를 구현한다.
+- [x] 2.3 Delivery outcome, no-auto-retry, payload/redaction, rate와 concurrent behavior test를 추가한다.
 
 ## 3. PROD-487 Web feedback experience
 
@@ -82,8 +82,8 @@
 - Idle, validation, BUG_REPORT event ID, pending, success, failure와 retry state를 Storybook interaction과 unit test로 검증한다.
 - Web E2E에서 인증 사용자 menu 진입과 Relay success/failure 흐름을 검증한다.
 
-- [ ] 3.1 Web shell의 feedback navigation과 `/menu` current-state behavior를 구현하고 native surface를 유지한다.
-- [ ] 3.2 Web feedback form, colocated Relay mutation과 validation·pending·success·failure·retry state를 구현한다.
+- [x] 3.1 Web shell의 feedback navigation과 `/menu` current-state behavior를 구현하고 native surface를 유지한다.
+- [x] 3.2 Web feedback form, colocated Relay mutation과 validation·pending·success·failure·retry state를 구현한다.
 - [ ] 3.3 Feedback form과 shell surface의 Storybook 상태·접근성·interaction test를 추가한다.
 - [ ] 3.4 인증된 Web menu navigation과 제출 성공·실패 흐름의 E2E 증거를 추가한다.
 
@@ -116,6 +116,6 @@ API·Web contract와 secret 경계가 repository checks를 통과하고, product
 - Production smoke의 시간, environment, UI result와 Slack single-message/redaction result를 민감값 없이 기록한다.
 
 - [ ] 4.1 Relay/schema generation, API·app·Web E2E와 workspace lint/format 검증을 실행하고 실패를 수정한다.
-- [ ] 4.2 API-only Vault secret 설정과 production smoke 절차를 민감값 없이 문서화하고 client export의 secret 비노출을 검증한다.
+- [x] 4.2 API-only Vault secret 설정과 production smoke 절차를 민감값 없이 문서화하고 client export의 secret 비노출을 검증한다.
 - [ ] 4.3 Production Web에서 인증 smoke를 실행해 Slack message 한 건, safe payload와 UI 성공 상태를 확인한다.
 - [ ] 4.4 `PROD-487` 검증 증거를 정리하고 `PROD-488` unblock 및 부모 `PROD-479`의 후속 integration/archive 책임을 handoff한다.

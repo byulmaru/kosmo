@@ -1,6 +1,7 @@
 import { Link } from 'expo-router';
 import { Platform, Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import { startWebLoginFromPress } from '@/auth/login';
+import { FeedbackForm } from '@/components/feedback/FeedbackForm';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
@@ -17,11 +18,14 @@ export default function MenuScreen() {
         프로필과 설정 등 주요 메뉴를 확인합니다.
       </Text>
       {Platform.OS === 'web' ? (
-        <Link asChild href={'/login' as Href}>
-          <Pressable accessibilityRole="link" onPress={startWebLoginFromPress}>
-            <Text style={[styles.login, { color: theme.primary }]}>로그인 테스트</Text>
-          </Pressable>
-        </Link>
+        <>
+          <Link asChild href={'/login' as Href}>
+            <Pressable accessibilityRole="link" onPress={startWebLoginFromPress}>
+              <Text style={[styles.login, { color: theme.primary }]}>로그인 테스트</Text>
+            </Pressable>
+          </Link>
+          <FeedbackForm />
+        </>
       ) : null}
     </ScrollView>
   );

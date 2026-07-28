@@ -102,6 +102,7 @@ export function SidebarNavigation({
   const unreadNotificationCount = useUnreadNotificationCount();
   const profile = data.currentSession?.selectedProfile ?? null;
   const hasProfiles = (data.me?.profiles?.length ?? 0) > 0;
+  const feedbackActive = Platform.OS === 'web' && pathname === '/menu';
 
   const resolveItem = (item: NavigationItem) => {
     if (!item.profile) {
@@ -321,21 +322,40 @@ export function SidebarNavigation({
               <LogOut color={theme.textSecondary} size={20} strokeWidth={1.5} />
             </Pressable>
           ) : null}
-          <Pressable
-            accessibilityLabel="설정 & 지원"
-            accessibilityRole="button"
-            style={[styles.footerItem, compact && styles.compactItem]}
-          >
-            <Settings color={theme.textSecondary} size={20} strokeWidth={1.5} />
-            {!compact ? (
-              <>
-                <Text style={[styles.footerLabel, styles.footerLabelGrow, { color: theme.text }]}>
-                  설정 &amp; 지원
-                </Text>
-                <ChevronDown color={theme.textSecondary} size={20} />
-              </>
-            ) : null}
-          </Pressable>
+          {Platform.OS === 'web' ? (
+            <Link asChild href="/menu">
+              <Pressable
+                aria-current={feedbackActive ? 'page' : undefined}
+                accessibilityLabel="피드백 보내기"
+                accessibilityRole="link"
+                onPress={onNavigate}
+                style={[styles.footerItem, compact && styles.compactItem]}
+              >
+                <Settings color={theme.textSecondary} size={20} strokeWidth={1.5} />
+                {!compact ? (
+                  <Text style={[styles.footerLabel, styles.footerLabelGrow, { color: theme.text }]}>
+                    피드백 보내기
+                  </Text>
+                ) : null}
+              </Pressable>
+            </Link>
+          ) : (
+            <Pressable
+              accessibilityLabel="설정 & 지원"
+              accessibilityRole="button"
+              style={[styles.footerItem, compact && styles.compactItem]}
+            >
+              <Settings color={theme.textSecondary} size={20} strokeWidth={1.5} />
+              {!compact ? (
+                <>
+                  <Text style={[styles.footerLabel, styles.footerLabelGrow, { color: theme.text }]}>
+                    설정 &amp; 지원
+                  </Text>
+                  <ChevronDown color={theme.textSecondary} size={20} />
+                </>
+              ) : null}
+            </Pressable>
+          )}
         </View>
       </ScrollView>
     </View>
