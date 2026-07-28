@@ -200,11 +200,13 @@ const unselectedSource = {
   id: sourcePostId,
   repostCount: 3,
   viewerRepost: null,
+  viewerReactions: [],
 };
 const selectedSource = {
   ...unselectedSource,
   repostCount: 4,
   viewerRepost: { __typename: 'Post', id: activeRepostId },
+  viewerReactions: [],
 };
 
 const meta = {

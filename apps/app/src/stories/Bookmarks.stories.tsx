@@ -24,8 +24,18 @@ const author = profile({
   relativeHandle: '@space-writer',
 });
 const targetPosts = [
-  post({ bodyText: '첫 번째로 저장한 게시글입니다.', id: 'bookmark-target-1', profile: author }),
-  post({ bodyText: '두 번째로 저장한 게시글입니다.', id: 'bookmark-target-2', profile: author }),
+  post({
+    bodyText: '첫 번째로 저장한 게시글입니다.',
+    id: 'bookmark-target-1',
+    profile: author,
+    viewerReactions: [],
+  }),
+  post({
+    bodyText: '두 번째로 저장한 게시글입니다.',
+    id: 'bookmark-target-2',
+    profile: author,
+    viewerReactions: [],
+  }),
 ];
 const bookmarkOwner = {
   ...profile({ id: 'bookmark-owner' }),
@@ -61,6 +71,7 @@ const bookmarkNextPage = {
               bodyText: '더 이전에 저장한 게시글입니다.',
               id: 'bookmark-target-3',
               profile: author,
+              viewerReactions: [],
             }),
           },
         },
@@ -82,6 +93,7 @@ const bookmarkOtherOwner = {
             bodyText: 'B 프로필로 저장한 게시글입니다.',
             id: 'bookmark-target-b',
             profile: author,
+            viewerReactions: [],
           }),
         },
       },
@@ -98,6 +110,7 @@ const bookmarkDeepSource = post({
     id: 'bookmark-deep-source-author',
     relativeHandle: '@deep-bookmark-source',
   }),
+  viewerReactions: [],
 });
 const bookmarkDirectQuote = post({
   bodyText: '북마크에서 한 단계만 표시하는 인용 Source입니다.',
@@ -109,6 +122,7 @@ const bookmarkDirectQuote = post({
     relativeHandle: '@bookmark-source',
   }),
   repostSource: bookmarkDeepSource,
+  viewerReactions: [],
 });
 const bookmarkedQuoteOfQuote = post({
   bodyText: '북마크에 저장한 인용 게시글입니다.',
@@ -120,6 +134,7 @@ const bookmarkedQuoteOfQuote = post({
     relativeHandle: '@bookmark-quote-author',
   }),
   repostSource: bookmarkDirectQuote,
+  viewerReactions: [],
 });
 const bookmarkRepostAuthor = profile({
   displayName: '북마크 재게시 작성자',
