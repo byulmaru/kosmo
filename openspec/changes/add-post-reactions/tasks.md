@@ -198,7 +198,7 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 - PROD-417 Web integration은 trigger 재입력, outside pointer, `Escape`, 첫 option·trigger focus, `aria-haspopup`/`aria-expanded`, 열린 상태 유지, top/left·bottom/right flip/clamp와 좁은 너비 scroll, Type별 동시 pending·reverse completion·실패/retry·actor 전환·unmount 뒤 늦은 callback을 검증한다.
 - selected Profile 부재 fixture는 disabled trigger가 popover와 mutation request를 만들지 않는지 검증한다.
 - production Post fixture는 ordinary·Quote가 자신의 Post ID를, 순수 Repost가 source Post ID를 mutation 대상으로 사용하는지 검증한다.
-- iOS·Android는 safe area, 외부 touch, Android back과 VoiceOver/TalkBack focus를 수동 확인한다. 기존 `Reactions`·`ActionMenu` presentation catalog와 API/DB test를 중복 확장하지 않는다.
+- iOS·Android 동작 계약은 유지하되, 2026-07-28 사용자 결정에 따라 native app runtime 관찰은 현재 제품 범위와 PROD-417 PR Ready gate에서 제외하고 native app 작업 재개 시 후속 확인한다. 기존 `Reactions`·`ActionMenu` presentation catalog와 API/DB test를 중복 확장하지 않는다.
 
 - [x] 7.1 PROD-450 supplied-option Quick Picker 프레젠테이션과 후속 PROD-417 통합 경계를 proposal·design·decisions·tasks에 기록하고 strict validation을 통과시킨다.
 - [x] 7.2 PROD-450 props-only `ReactionSelector` Quick Picker panel을 canonical 시각 계약에 맞게 구현한다.
@@ -207,7 +207,7 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 - [x] 7.5 private Reaction action/popover와 add/delete mutation을 기존 Post Action Bar·PROD-450 presentation seam에 연결하고, 승인된 non-connection `viewerReactions` updater와 stale UI callback guard를 구현한다.
 - [x] 7.6 production updater seam을 직접 검증하는 최소 unit test로 add/delete cache matrix, Type별 concurrency와 actor 전환을 검증한다.
 - [x] 7.7 Post Action Bar Storybook integration에서 Web popover dismiss/focus/placement, 동시 mutation·실패/retry·unmount를 검증하고 production Post fixture에서 ordinary·Quote·순수 Repost mutation target을 검증한다.
-- [ ] 7.8 app test·lint·format·diff check와 OpenSpec strict validation을 통과시키고 Web 자동 검증과 iOS·Android 수동 관찰 결과를 분리해 기록한다.
+- [x] 7.8 app test·lint·format·diff check와 OpenSpec strict validation을 통과시키고 Web 자동 검증·runtime 관찰을 분리해 기록하며, 현재 제품 범위에서 제외한 iOS·Android runtime 관찰은 후속 확인으로 남긴다.
 
 ## 8. PROD-449 Reaction 요약 프레젠테이션과 PROD-418 통합
 
