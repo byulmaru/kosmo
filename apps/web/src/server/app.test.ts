@@ -221,6 +221,20 @@ describe('browser login', () => {
     expect(setCookie).toContain('Secure');
   });
 
+  test('does not capture an expected OIDC client error', async () => {
+    authorizationCodeGrant.mockResolvedValueOnce({ claims: () => undefined } as never);
+    const login = await app.request('https://kos.moe/login');
+    const cookies = responseCookies(login.headers);
+    const response = await app.request(
+      `https://kos.moe/login/callback?code=oidc-code&state=${cookies.kosmo_oidc_state}`,
+      { headers: { cookie: cookieHeader(cookies) } },
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.text()).toBe('Invalid id_token claims');
+    expect(captureUnexpectedError).not.toHaveBeenCalled();
+  });
+
   test('rejects a non-browser redirect before token exchange', async () => {
     const login = await app.request('https://kos.moe/login');
     const cookies = responseCookies(login.headers);
