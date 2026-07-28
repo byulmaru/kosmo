@@ -82,7 +82,7 @@
 - Decision Date: 2026-07-28
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/architecture/core-services.md`, PROD-447, PROD-497
-- Status: Active
+- Status: Superseded by "core Local Post application action이 post-commit lifecycle을 소유한다"
 - Context / Problem: `createPost()`는 caller transaction에 합류할 수 있어 그 함수 반환만으로 실제 domain
   transaction commit을 알 수 없다. 그 안에서 delivery하면 rollback될 Reply를 remote inbox로 먼저 보낼 수 있다.
 - Decision Outcome: 현재 production Local Reply entry인 GraphQL resolver가 가장 바깥 생성 transaction 또는
@@ -120,6 +120,28 @@
 
 ## Decision Amendments
 
+### core Local Post application action이 post-commit lifecycle을 소유한다
+
+- Decision Date: 2026-07-28
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/architecture/core-services.md`, PROD-447, PROD-497
+- Status: Active
+- Context / Problem: commit 이후 실행해야 한다는 시점 제약을 이유로 GraphQL resolver가 Reply Notification과
+  Fedify delivery를 직접 조립하면 Local Reply lifecycle이 transport entry에 누출되고 다른 production entry가
+  같은 side effect를 빠뜨릴 수 있다.
+- Decision Outcome: core `createLocalPost` application action이 Parent 정책과 outer transaction을 소유하고,
+  commit 뒤 Reply Notification과 Create delivery를 best effort로 실행한다. `deletePost`는 삭제 commit 결과에서
+  Reply를 판별해 Delete delivery를 best effort로 실행한다. GraphQL resolver는 인증된 Profile과 입력을 전달하고
+  payload만 구성한다. ActivityPub ingress가 사용하는 low-level `createPost`에는 Local Reply lifecycle을 추가하지
+  않는다.
+- Alternatives Considered: GraphQL resolver의 개별 side effect 호출 유지, transaction callback 또는 delivery
+  port 주입, low-level `createPost`의 모든 Local/Remote caller에 lifecycle 적용.
+- Consequences: 실제 outer commit 뒤 실패 격리는 유지하면서 Notification과 protocol delivery의 필수 lifecycle을
+  production core action이 소유한다. Remote Reply Notification은 이번 정정으로 추가되지 않으며 outbox·queue는
+  PROD-448 범위로 남는다.
+- Confirmation / Follow-up: GraphQL resolver에 Notification/Fedify 호출이 없고 core production 기본 경로가
+  commit 뒤 Create/Delete와 실패 격리를 실행하는지 검증한다.
+
 ### PROD-497은 원격 직접 Parent 작성자만 전달한다
 
 - Decision Date: 2026-07-28
@@ -147,6 +169,7 @@
 
 - "Recipient는 action 시점의 현재 저장 관계에서 계산한다"
 - "저장된 Recipient 배열을 Fedify에 직접 전달한다"
+- "실제 outer commit 뒤 application entry에서 delivery를 orchestration한다"
 
 ## Additional Active Decisions
 
