@@ -54,11 +54,13 @@ jobs:
           role-to-assume: arn:aws:iam::822638974464:role/github-actions-kosmo-ecr-push
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Load Sentry build configuration from Vault
+      - name: Prepare Sentry build configuration
         id: sentry
         shell: bash
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
         run: |
           set -euo pipefail
 
@@ -97,7 +99,6 @@ jobs:
           SENTRY_RESPONSE_FILE="${sentry_response_file}" SENTRY_CONFIG_FILE="${sentry_config_file}" python3 - <<'PY'
           import json
           import os
-          import re
           import shlex
 
           with open(os.environ["SENTRY_RESPONSE_FILE"], encoding="utf-8") as response:
@@ -105,23 +106,22 @@ jobs:
           if not isinstance(values, dict):
               raise SystemExit("Vault Sentry build configuration must be a JSON object")
 
-          auth_token = os.environ.get("SENTRY_AUTH_TOKEN")
-          if not auth_token:
-              raise SystemExit("SENTRY_AUTH_TOKEN repository secret must be set")
-          values.pop("SENTRY_AUTH_TOKEN", None)
+          build_configuration = {
+              "SENTRY_AUTH_TOKEN": os.environ.get("SENTRY_AUTH_TOKEN"),
+              "SENTRY_DSN": values.get("SENTRY_DSN"),
+              "SENTRY_ORG": os.environ.get("SENTRY_ORG"),
+              "SENTRY_PROJECT": os.environ.get("SENTRY_PROJECT"),
+          }
 
-          for key, value in values.items():
-              if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
-                  raise SystemExit(f"Vault key {key} is not a valid environment variable name")
-              if not isinstance(value, str):
-                  raise SystemExit(f"Vault value {key} must be a string")
+          for key, value in build_configuration.items():
+              if not isinstance(value, str) or not value:
+                  raise SystemExit(f"{key} build configuration must be set")
               escaped = value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
               print(f"::add-mask::{escaped}")
 
           with open(os.environ["SENTRY_CONFIG_FILE"], "w", encoding="utf-8") as config:
-              for key, value in values.items():
+              for key, value in build_configuration.items():
                   config.write(f"{key}={shlex.quote(value)}\n")
-              config.write(f"SENTRY_AUTH_TOKEN={shlex.quote(auth_token)}\n")
           os.chmod(os.environ["SENTRY_CONFIG_FILE"], 0o600)
           os.remove(os.environ["SENTRY_RESPONSE_FILE"])
 

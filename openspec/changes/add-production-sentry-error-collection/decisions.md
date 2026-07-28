@@ -100,17 +100,17 @@
 - Consequences: 새 Vault build 키가 추가돼도 workflow의 build arg 목록은 늘어나지 않는다. BuildKit secret 내용은 cache key가 아니므로 설정 회전을 반영하기 위해 Sentry artifact build stage는 cache를 사용하지 않는다. Web DSN 변경은 새 image build·배포가 필요하지만 server DSN은 Vault Secrets Operator가 갱신한다. Upload token과 조직·project slug는 runtime image와 pod에 포함되지 않는다.
 - Confirmation / Follow-up: Docker build가 secret env 파일 하나만 받고 final image에는 Vault 값이 남지 않는지, Helm render의 `sentry-runtime` Secret에는 `SENTRY_DSN`만 있는지, branch와 release tag build가 shared 값을 읽어 source map을 업로드하는지 확인한다.
 
-### Source map 업로드 token은 GitHub repository secret에서 주입한다
+### Build 전용 Sentry 설정은 GitHub repository 설정에서 주입한다
 
 - Decision Date: 2026-07-28
 - Decision Class: User Choice
 - Authority / Provenance: 사용자 결정, PROD-477
 - Status: Active
-- Context / Problem: `SENTRY_AUTH_TOKEN`은 애플리케이션 runtime 설정이 아니라 GitHub Actions의 source map 업로드에서만 사용하는 자격 증명이다. 이를 runtime DSN과 함께 Vault shared에서 관리할 필요가 없다.
-- Decision Outcome: `SENTRY_AUTH_TOKEN`은 `byulmaru/kosmo` GitHub repository secret에 둔다. Vault shared에는 공용 `SENTRY_DSN`, `SENTRY_PROJECT`와 Sentry 조직 slug를 유지한다. Workflow는 Vault 설정과 repository secret의 token을 임시 env 파일 하나로 합쳐 BuildKit secret으로 전달하며 token은 source map upload 단계에서만 소비한다.
-- Alternatives Considered: token까지 Vault shared에 두면 build 설정을 한 저장소에서 관리할 수 있지만, build 전용 GitHub 자격 증명의 소유 경계를 runtime 설정과 섞는다. 모든 Sentry 설정을 GitHub repository 설정으로 옮기면 API와 Web BFF의 Vault runtime DSN 주입 경계가 중복된다.
-- Consequences: source map token 회전은 GitHub repository secret에서 수행하고 DSN·조직·project 설정은 Vault에서 관리한다. Repository에서 branch workflow를 실행할 수 있는 주체는 build 중 token을 사용할 수 있지만, token은 Docker ARG·ENV·image·runtime pod에 포함되지 않는다.
-- Confirmation / Follow-up: Vault에 token이 없어도 branch Docker build가 repository secret으로 source map을 업로드하고 final image와 로그에 token이 남지 않는지 확인한다.
+- Context / Problem: 애플리케이션 runtime이 Vault에서 필요로 하는 Sentry secret은 DSN뿐이다. `SENTRY_ORG`, `SENTRY_PROJECT`와 `SENTRY_AUTH_TOKEN`은 GitHub Actions의 source map upload에서만 사용하는 build 설정이다.
+- Decision Outcome: Vault shared에는 `SENTRY_DSN`만 둔다. Sentry 조직·project slug는 `byulmaru/kosmo` GitHub repository variables, upload token은 repository secret에 둔다. Workflow는 세 저장 위치의 값을 임시 env 파일 하나로 합쳐 BuildKit secret으로 전달하며 조직·project slug와 token은 source map upload 단계에서만 소비한다.
+- Alternatives Considered: build 전용 설정까지 Vault shared에 두면 한 저장소에서 관리할 수 있지만 runtime 설정과 build 설정의 소유 경계를 섞는다. DSN까지 GitHub repository 설정으로 옮기면 API와 Web BFF의 Vault runtime DSN 주입 경계가 중복된다.
+- Consequences: DSN 회전은 Vault에서, 조직·project slug와 source map token 회전은 GitHub repository 설정에서 수행한다. Repository에서 branch workflow를 실행할 수 있는 주체는 build 중 token을 사용할 수 있지만, build 전용 설정은 Docker ARG·ENV·image·runtime pod에 포함되지 않는다.
+- Confirmation / Follow-up: Vault에 DSN만 있어도 branch Docker build가 repository variables/secret으로 source map을 업로드하고 final image와 로그에 build 전용 설정이 남지 않는지 확인한다.
 
 ### 기능 branch Docker build도 Vault shared를 읽는다
 
@@ -131,4 +131,4 @@
 ## Superseded Decisions
 
 - `명시적 배포 enable과 완전한 metadata가 있어야 전송한다`: 별도 enable·kill switch는 상위 요구사항에 없던 구현 가정이므로 2026-07-28 사용자 결정으로 폐기했다.
-- `환경에 독립적인 Sentry 설정은 Vault에서 읽어 image build에 주입한다`: upload token까지 Vault shared에서 관리하던 선택은 2026-07-28 사용자 결정으로 폐기하고 build 전용 token을 GitHub repository secret으로 옮겼다.
+- `환경에 독립적인 Sentry 설정은 Vault에서 읽어 image build에 주입한다`: build 전용 설정까지 Vault shared에서 관리하던 선택은 2026-07-28 사용자 결정으로 폐기하고 Vault에는 runtime DSN만 남겼다.

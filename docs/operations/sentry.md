@@ -4,16 +4,16 @@ Kosmo는 API, Web BFF와 Web browser의 처리되지 않은 오류만 Sentry에 
 
 ## Project와 자격 증명
 
-Vault의 `secret/kubernetes/kosmo/shared`에는 환경과 무관한 Sentry runtime·식별 설정을 둔다. API, Web BFF와 Web browser는 Sentry의 `kosmo` project 하나를 공유하고 `runtime` tag로 구분한다. `byulmaru/kosmo`의 branch와 release tag GitHub OIDC subject는 image build에 필요한 Vault 값을 읽고, source map 업로드 token은 GitHub repository secret에서 주입한다.
+Vault의 `secret/kubernetes/kosmo/shared`에는 환경과 무관한 Sentry runtime DSN을 둔다. API, Web BFF와 Web browser는 Sentry의 `kosmo` project 하나를 공유하고 `runtime` tag로 구분한다. `byulmaru/kosmo`의 branch와 release tag GitHub OIDC subject는 image build에 필요한 DSN을 읽고, source map upload metadata와 token은 GitHub repository 설정에서 주입한다.
 
-| 이름                | 저장 위치                | 용도                                      |
-| ------------------- | ------------------------ | ----------------------------------------- |
-| `SENTRY_ORG`        | Vault `shared`           | Sentry organization slug                  |
-| `SENTRY_PROJECT`    | Vault `shared`           | 세 runtime source map을 받을 project slug |
-| `SENTRY_DSN`        | Vault `shared`           | 세 runtime이 공유하는 공개 ingest DSN     |
-| `SENTRY_AUTH_TOKEN` | GitHub repository secret | source map 업로드용 organization token    |
+| 이름                | 저장 위치                  | 용도                                      |
+| ------------------- | -------------------------- | ----------------------------------------- |
+| `SENTRY_ORG`        | GitHub repository variable | Sentry organization slug                  |
+| `SENTRY_PROJECT`    | GitHub repository variable | 세 runtime source map을 받을 project slug |
+| `SENTRY_DSN`        | Vault `shared`             | 세 runtime이 공유하는 공개 ingest DSN     |
+| `SENTRY_AUTH_TOKEN` | GitHub repository secret   | source map 업로드용 organization token    |
 
-Workflow는 Vault의 Sentry 설정 객체를 임시 env 파일로 만들고 GitHub repository secret의 `SENTRY_AUTH_TOKEN`을 같은 파일에 추가해 `sentry_config` BuildKit secret으로 Docker build에 한 번 전달한다. Docker build의 artifact 생성 단계가 이 파일을 환경 변수로 읽는다. DSN은 `EXPO_PUBLIC_SENTRY_DSN`으로 Web bundle에만 넣고, organization·project slug와 token은 source map upload 단계에서만 사용한다. DSN은 공개 ingest endpoint이므로 browser bundle에 포함될 수 있다.
+Workflow는 Vault의 `SENTRY_DSN`, GitHub repository variables의 `SENTRY_ORG`·`SENTRY_PROJECT`와 repository secret의 `SENTRY_AUTH_TOKEN`을 임시 env 파일 하나로 만들어 `sentry_config` BuildKit secret으로 Docker build에 전달한다. Docker build의 artifact 생성 단계가 이 파일을 환경 변수로 읽는다. DSN은 `EXPO_PUBLIC_SENTRY_DSN`으로 Web bundle에만 넣고, organization·project slug와 token은 source map upload 단계에서만 사용한다. DSN은 공개 ingest endpoint이므로 browser bundle에 포함될 수 있다.
 
 GitHub repository secret `SENTRY_AUTH_TOKEN`에는 source map 업로드와 release artifact 생성 권한만 가진 organization token을 둔다. Vault 설정과 repository secret은 Docker BuildKit secret mount에서만 보이며 layer에 복사하지 않는다. Token과 organization·project slug는 runtime image에 포함하지 않는다.
 
@@ -39,7 +39,7 @@ Sentry의 기본 개인정보 전송은 활성화하지 않지만, SDK event에�
 
 `pnpm build:sentry-artifacts`는 API와 Web BFF JavaScript, Expo Web bundle과 external source map을 생성한다. 이어서 debug ID를 주입하고 source map의 `sourcesContent`를 정적으로 검증한다. 업로드 설정이 없는 로컬 실행은 외부 전송을 건너뛰지만 검증 뒤 map과 공개 JavaScript의 `sourceMappingURL`을 제거한다.
 
-`Docker Build` workflow는 모든 branch에는 `kosmo-build-dev`, 정식 SemVer release tag에는 `kosmo-build-prod` Vault OIDC role을 사용해 `shared` build 설정을 읽는다. 다른 tag ref의 수동 실행은 실패한다. 따라서 기능 branch의 수동 build도 dev environment로 source map을 업로드할 수 있다. 두 role은 동일한 정확한 `shared` 경로만 read할 수 있고 token 수명도 짧다. Repository에서 branch workflow를 실행할 수 있는 주체는 repository secret의 source map 업로드 token을 build 중 사용할 수 있다. Workflow는 commit release와 공개 environment만 build arg로 전달하고 Vault 설정과 GitHub token을 합친 env 파일 하나를 BuildKit secret으로 전달한다. BuildKit secret 내용은 cache key가 아니므로 `app-build` stage는 cache를 사용하지 않고 매 build마다 현재 설정을 읽는다. CI에서는 `SENTRY_UPLOAD_REQUIRED=1`이므로 token, DSN, organization, release 또는 project가 누락되면 image build가 실패한다. 최종 image에는 Vault 설정, upload token이나 server DSN을 남기지 않으며, 업로드가 성공한 뒤 runtime image와 Web static root에는 `.map` 파일이 남지 않는다.
+`Docker Build` workflow는 모든 branch에는 `kosmo-build-dev`, 정식 SemVer release tag에는 `kosmo-build-prod` Vault OIDC role을 사용해 `shared`의 DSN을 읽는다. 다른 tag ref의 수동 실행은 실패한다. 따라서 기능 branch의 수동 build도 dev environment로 source map을 업로드할 수 있다. 두 role은 동일한 정확한 `shared` 경로만 read할 수 있고 token 수명도 짧다. Repository에서 branch workflow를 실행할 수 있는 주체는 repository secret의 source map 업로드 token을 build 중 사용할 수 있다. Workflow는 commit release와 공개 environment만 build arg로 전달하고 Vault DSN과 GitHub build 설정을 합친 env 파일 하나를 BuildKit secret으로 전달한다. BuildKit secret 내용은 cache key가 아니므로 `app-build` stage는 cache를 사용하지 않고 매 build마다 현재 설정을 읽는다. CI에서는 `SENTRY_UPLOAD_REQUIRED=1`이므로 token, DSN, organization, release 또는 project가 누락되면 image build가 실패한다. 최종 image에는 upload token, organization/project 설정이나 server DSN을 남기지 않으며, 업로드가 성공한 뒤 runtime image와 Web static root에는 `.map` 파일이 남지 않는다.
 
 로컬에서 artifact 보안 경계를 확인한다.
 
