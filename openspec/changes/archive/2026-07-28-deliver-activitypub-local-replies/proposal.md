@@ -8,6 +8,7 @@ post-commit failure isolation이 준비되었으므로, 이제 Reply 생성·삭
 
 - 처음 생성된 Local Reply를 기존 Local Note 표현을 포함한 `Create(Note)`로 전달한다.
 - Reply 삭제를 같은 canonical Note identity를 가리키는 `Delete`로 전달한다.
+- Fedify Context와 local actor/Note identity를 Reply Author Profile의 Local Instance `canonicalOrigin`에서 파생한다.
 - Public/Unlisted Reply의 원격 직접 Parent 작성자를 현재 저장 상태에서 direct recipient로 선택한다.
 - outbound followers fanout은 공통 Fedify dispatcher를 소유하는 PROD-512로 분리한다.
 - domain transaction commit 뒤 Fedify로 직접 전달하고, delivery 실패를 관측하되 committed application 결과는

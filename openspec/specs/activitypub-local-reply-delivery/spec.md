@@ -61,6 +61,16 @@ Remote Parent의 ActivityPub Post identity를 `inReplyTo`로 제공해야 한다
 - **WHEN** visibility와 instance 정책을 통과한 remote recipient가 없다
 - **THEN** 시스템은 remote delivery 없이 committed application 결과를 성공으로 유지한다
 
+### Requirement: Reply Author Local Instance origin
+
+**Authority / Provenance:** `docs/domain/objects/instance.md`, `docs/domain/objects/profile.md`, `docs/domain/objects/post.md`, PROD-497. 시스템은 Reply Create/Delete의 Fedify Context, actor URI, Note URI와 activity identity를 Reply Author Profile이 연결된 Local Instance의 `canonicalOrigin`에서 파생해야 한다(MUST). 별도의 deployment configured origin으로 Author Instance identity를 대체해서는 안 된다(MUST NOT).
+
+#### Scenario: 여러 Local Instance가 저장된 상태의 Reply delivery
+
+- **WHEN** configured Local Instance와 다른 Local Instance에 속한 Profile의 Reply Create 또는 Delete를 전달한다
+- **THEN** Fedify Context와 actor URI는 Reply Author의 Local Instance `canonicalOrigin`을 사용한다
+- **AND** Create/Delete는 그 origin에서 파생한 동일한 canonical Note URI와 ordering domain을 사용한다
+
 ### Requirement: Local Reply Delete delivery
 
 **Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-497. 시스템은 Local Reply가 Tombstone으로 commit된 뒤 생성 때 사용한 canonical Note identity를 object로 가리키는 ActivityPub `Delete`를 전달해야 한다(MUST). 같은 Reply의 Create와 Delete는 recipient별 순서를 보존할 수 있는

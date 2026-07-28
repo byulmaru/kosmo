@@ -17,8 +17,8 @@ import type { Context } from '@fedify/fedify';
 import type { Activity, Recipient } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
-import type { federation as Federation } from './federation';
 import type * as LocalReplyDelivery from './local-reply-delivery';
+import type { localReplyFederation as LocalReplyFederation } from './local-reply-federation';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -26,10 +26,10 @@ const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhos
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let db: typeof CoreDb.db;
-let federation: typeof Federation;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let localInstanceId: string;
+let localReplyFederation: typeof LocalReplyFederation;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
@@ -55,7 +55,7 @@ describe('ActivityPub Local Reply delivery', () => {
       Profiles,
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
-    ({ federation } = await import('./federation'));
+    ({ localReplyFederation } = await import('./local-reply-federation'));
     ({ sendLocalReplyCreate, sendLocalReplyDelete } = await import('./local-reply-delivery'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
@@ -75,7 +75,8 @@ describe('ActivityPub Local Reply delivery', () => {
   });
 
   test('Create(Note)가 기존 projection과 stable identity를 쓰고 remote Parent Author에게 전달된다', async () => {
-    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const { canonicalOrigin: authorOrigin, id: authorInstanceId } = await createLocalInstance();
+    const author = await createProfile({ instanceId: authorInstanceId });
     const parentAuthor = await createRemoteActor({ handle: 'parent', sharedInbox: true });
     const parent = await createPost(parentAuthor.profile.id);
     const parentUri = new URL('https://remote.example/notes/parent');
@@ -85,24 +86,41 @@ describe('ActivityPub Local Reply delivery', () => {
       uri: parentUri.href,
     });
     const reply = await createPost(author.id, { replyParentId: parent.id });
-    const fixture = createContextFixture();
-    mock.method(federation, 'createContext', () => fixture.context);
+    const actualContext = localReplyFederation.createContext(new URL(authorOrigin), {
+      localInstanceId: authorInstanceId,
+    });
+    assert.equal(actualContext.canonicalOrigin, authorOrigin);
+    assert.equal(actualContext.getActorUri(author.id).origin, authorOrigin);
+    const keyPairs = await actualContext.getActorKeyPairs(author.id);
+    assert.equal(keyPairs.length, 2);
+    assert.ok(keyPairs.every((keyPair) => keyPair.keyId.origin === authorOrigin));
+    const fixture = createContextFixture(authorOrigin);
+    const createContext = mock.method(
+      localReplyFederation,
+      'createContext',
+      (origin: URL, data: { readonly localInstanceId: string }) => {
+        assert.equal(origin.href, `${authorOrigin}/`);
+        assert.equal(data.localInstanceId, authorInstanceId);
+        return fixture.context;
+      },
+    );
 
     await sendLocalReplyCreate(reply.id);
     await sendLocalReplyCreate(reply.id);
 
+    assert.equal(createContext.mock.callCount(), 2);
     assert.equal(fixture.calls.length, 2);
     for (const call of fixture.calls) {
       assert.ok(call.activity instanceof Create);
-      assert.equal(call.activity.id?.href, `${publicOrigin}/ap/note/${reply.id}#create`);
-      assert.equal(call.activity.actorId?.href, `${publicOrigin}/ap/actor/${author.id}`);
+      assert.equal(call.activity.id?.href, `${authorOrigin}/ap/note/${reply.id}#create`);
+      assert.equal(call.activity.actorId?.href, `${authorOrigin}/ap/actor/${author.id}`);
       const object = await call.activity.getObject();
       assert.ok(object instanceof Note);
-      assert.equal(object.id?.href, `${publicOrigin}/ap/note/${reply.id}`);
+      assert.equal(object.id?.href, `${authorOrigin}/ap/note/${reply.id}`);
       assert.equal(object.replyTargetId?.href, parentUri.href);
       assert.deepEqual(call.sender, { identifier: author.id });
       assert.deepEqual(call.options, {
-        orderingKey: `${publicOrigin}/ap/note/${reply.id}`,
+        orderingKey: `${authorOrigin}/ap/note/${reply.id}`,
         preferSharedInbox: true,
       });
       assert.deepEqual(
@@ -132,7 +150,7 @@ describe('ActivityPub Local Reply delivery', () => {
     });
     const rootPost = await createPost(author.id);
     const fixture = createContextFixture();
-    mock.method(federation, 'createContext', () => fixture.context);
+    mock.method(localReplyFederation, 'createContext', () => fixture.context);
 
     await sendLocalReplyCreate(publicReply.id);
     await sendLocalReplyCreate(unlistedReply.id);
@@ -156,7 +174,7 @@ describe('ActivityPub Local Reply delivery', () => {
     const parent = await createPost(parentAuthor.profile.id);
     const reply = await createPost(author.id, { replyParentId: parent.id });
     const fixture = createContextFixture();
-    mock.method(federation, 'createContext', () => fixture.context);
+    mock.method(localReplyFederation, 'createContext', () => fixture.context);
 
     await sendLocalReplyCreate(reply.id);
 
@@ -196,7 +214,7 @@ describe('ActivityPub Local Reply delivery', () => {
       replyParentId: (await createPost(suspended.profile.id)).id,
     });
     const fixture = createContextFixture();
-    mock.method(federation, 'createContext', () => fixture.context);
+    mock.method(localReplyFederation, 'createContext', () => fixture.context);
 
     await sendLocalReplyCreate(unresponsiveReply.id);
     await sendLocalReplyCreate(suspendedReply.id);
@@ -205,7 +223,8 @@ describe('ActivityPub Local Reply delivery', () => {
   });
 
   test('Delete가 tombstone 뒤 같은 Note·activity identity와 Create ordering domain을 반복 사용한다', async () => {
-    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const { canonicalOrigin: authorOrigin, id: authorInstanceId } = await createLocalInstance();
+    const author = await createProfile({ instanceId: authorInstanceId });
     const parentAuthor = await createRemoteActor({ handle: 'parent' });
     const parent = await createPost(parentAuthor.profile.id);
     const reply = await createPost(author.id, { replyParentId: parent.id });
@@ -214,19 +233,33 @@ describe('ActivityPub Local Reply delivery', () => {
       .update(Posts)
       .set({ deletedAt, state: PostState.DELETED })
       .where(eq(Posts.id, reply.id));
-    const fixture = createContextFixture();
-    mock.method(federation, 'createContext', () => fixture.context);
+    const actualContext = localReplyFederation.createContext(new URL(authorOrigin), {
+      localInstanceId: authorInstanceId,
+    });
+    assert.equal(actualContext.canonicalOrigin, authorOrigin);
+    assert.equal(actualContext.getActorUri(author.id).origin, authorOrigin);
+    const fixture = createContextFixture(authorOrigin);
+    const createContext = mock.method(
+      localReplyFederation,
+      'createContext',
+      (origin: URL, data: { readonly localInstanceId: string }) => {
+        assert.equal(origin.href, `${authorOrigin}/`);
+        assert.equal(data.localInstanceId, authorInstanceId);
+        return fixture.context;
+      },
+    );
 
     await sendLocalReplyDelete(reply.id);
     await sendLocalReplyDelete(reply.id);
 
+    assert.equal(createContext.mock.callCount(), 2);
     assert.equal(fixture.calls.length, 2);
     for (const call of fixture.calls) {
       assert.ok(call.activity instanceof Delete);
-      assert.equal(call.activity.id?.href, `${publicOrigin}/ap/note/${reply.id}#delete`);
-      assert.equal(call.activity.objectId?.href, `${publicOrigin}/ap/note/${reply.id}`);
+      assert.equal(call.activity.id?.href, `${authorOrigin}/ap/note/${reply.id}#delete`);
+      assert.equal(call.activity.objectId?.href, `${authorOrigin}/ap/note/${reply.id}`);
       assert.equal(call.activity.published?.toString(), deletedAt.toString());
-      assert.equal(call.options.orderingKey, `${publicOrigin}/ap/note/${reply.id}`);
+      assert.equal(call.options.orderingKey, `${authorOrigin}/ap/note/${reply.id}`);
       assert.deepEqual(
         call.recipients.map((recipient) => recipient.id?.href),
         [parentAuthor.actorUri],
@@ -242,11 +275,11 @@ interface SendActivityCall {
   readonly sender: { readonly identifier: string };
 }
 
-const createContextFixture = () => {
+const createContextFixture = (canonicalOrigin = publicOrigin) => {
   const calls: SendActivityCall[] = [];
   const context = {
-    canonicalOrigin: publicOrigin,
-    getActorUri: (identifier: string) => new URL(`/ap/actor/${identifier}`, publicOrigin),
+    canonicalOrigin,
+    getActorUri: (identifier: string) => new URL(`/ap/actor/${identifier}`, canonicalOrigin),
     sendActivity: async (
       sender: { identifier: string },
       recipients: Recipient | Recipient[],
@@ -262,6 +295,18 @@ const createContextFixture = () => {
     },
   } as Context<void>;
   return { calls, context };
+};
+
+const createLocalInstance = async () => {
+  const domain = `${crypto.randomUUID()}.local.example`;
+  const canonicalOrigin = `https://${domain}`;
+  const instance = await db
+    .insert(Instances)
+    .values({ canonicalOrigin, domain, kind: InstanceKind.LOCAL, state: InstanceState.ACTIVE })
+    .returning()
+    .then(firstOrThrow);
+  testInstanceIds.push(instance.id);
+  return { canonicalOrigin, id: instance.id };
 };
 
 const createProfile = async ({

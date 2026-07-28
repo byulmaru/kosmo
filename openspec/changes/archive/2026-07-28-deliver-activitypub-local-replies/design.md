@@ -40,6 +40,8 @@ federation에는 MessageQueue가 없으므로 `sendActivity()`는 remote HTTP �
   계약이 쉽게 달라진다.
 - Fedify의 special `"followers"` recipient는 followers collection dispatcher가 필요하지만 현재 actor 계약은
   collection GET을 열지 않는다.
+- deployment configured Local Instance를 항상 사용하면 다른 Local Instance에 속한 Author의 actor와 Note가 잘못된
+  origin으로 전달된다.
 
 ### Recommended Approach
 
@@ -52,6 +54,10 @@ Fedify package에서는 기존 Local Note 조회와 projection을 내부적으�
 commit된 Active Reply에서 object dispatcher와 동일한 Note를 만들고, Delete는 Tombstone row에 남아 있는 Author,
 Visibility와 Reply Parent 관계에서 actor, canonical Note URI, audience와 recipient를 복원한다. Delete에는 Active
 Note representation이나 새 Tombstone endpoint가 필요하지 않다.
+
+Create는 Reply Post에서 Author Profile의 Local Instance `canonicalOrigin`을 먼저 조회하고 그 origin으로 Fedify
+Context를 만든 뒤 Local Note를 projection한다. Delete는 Tombstone source 조회 결과에 같은 origin을 포함하고 그
+origin으로 Context, actor URI와 Note identity를 재구성한다. configured deployment origin은 사용하지 않는다.
 
 Recipient는 delivery 시점의 저장 상태에서 직접 Parent Author만 조회한다. Public/Unlisted Reply이며 Parent가
 Active remote Profile, ACTIVE ActivityPub Instance, 유효한 HTTP(S) actor URI와 personal inbox를

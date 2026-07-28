@@ -147,3 +147,24 @@
 
 - "Recipient는 action 시점의 현재 저장 관계에서 계산한다"
 - "저장된 Recipient 배열을 Fedify에 직접 전달한다"
+
+## Additional Active Decisions
+
+### Fedify Context는 Reply Author의 Local Instance origin을 사용한다
+
+- Decision Date: 2026-07-28
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/instance.md`, `docs/domain/objects/profile.md`,
+  `docs/domain/objects/post.md`, PROD-497
+- Status: Active
+- Context / Problem: configured Local Instance origin으로 Context를 고정하면 다른 Local Instance에 연결된 Profile의
+  Reply actor와 Note identity가 잘못된 origin으로 전달된다.
+- Decision Outcome: Create는 Active Reply의 Author Profile에서 Local Instance `canonicalOrigin`을 조회해 Context를
+  만들고, Delete는 Tombstone source와 함께 같은 origin을 복원한다. actor URI, Note URI, Create/Delete activity와
+  ordering domain은 모두 이 Context와 origin에서 파생한다.
+- Alternatives Considered: deployment configured origin 고정, caller가 origin을 인자로 전달, Post UUID만으로 origin을
+  추론.
+- Consequences: Create/Delete가 각각 Author Instance origin을 조회하지만 caller가 identity를 지정하거나 configured
+  deployment가 다른 Local Profile의 identity를 덮을 수 없다.
+- Confirmation / Follow-up: configured origin과 다른 Local Instance의 Author로 Create/Delete를 실행해 Context,
+  actor, Note, activity와 ordering key origin을 검증한다.
