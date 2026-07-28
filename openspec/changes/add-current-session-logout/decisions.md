@@ -11,7 +11,7 @@
 - Authority / Provenance: `docs/domain/objects/session.md`, `docs/domain/objects/account.md`; Linear: `PROD-344`, `PROD-473`, `PROD-474`
 - Status: Active
 - Context / Problem: 로그아웃 요청이 임의 Session을 대상으로 확장되거나 경쟁 요청이 terminal 상태를 되돌리면 current-session 계약과 다른 기기 격리가 깨진다.
-- Decision Outcome: 인증 경계가 `Session.Self`로 식별한 현재 Active Session만 Revoked로 전이한다. 클라이언트 Session ID 입력은 허용하지 않고, Revoked/Expired terminal winner와 같은 Account의 다른 Session을 보존한다.
+- Decision Outcome: Active 또는 Suspended Account에서 인증 경계가 `Session.Self`로 식별한 현재 Active Session만 Revoked로 전이한다. 클라이언트 Session ID 입력은 허용하지 않고, Revoked/Expired terminal winner와 같은 Account의 다른 Session을 보존한다. Suspended Account의 다른 보호 행동은 계속 거부한다.
 - Alternatives Considered: Session ID를 받아 원격 Session까지 폐기하는 방식은 Session 목록·원격 로그아웃이라는 제외 범위를 추가하므로 채택하지 않았다. 모든 Account Session을 폐기하는 방식은 다른 Session 격리 계약을 위반한다.
 - Consequences: core와 transport test는 대상 Session, terminal 경쟁, 동일 Account의 다른 Session과 폐기 뒤 credential 거부를 함께 검증해야 한다.
 - Confirmation / Follow-up: PROD-474의 core/API/BFF 검증에서 조건부 전이와 Session 격리를 증명한다.
@@ -19,8 +19,8 @@
 ### current-session logout action이 폐기 인증 경계와 조건부 revoke를 함께 소유한다
 
 - Decision Date: 2026-07-27
-- Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/objects/session.md`, `docs/domain/objects/account.md`; Linear: `PROD-344`, `PROD-473`, `PROD-474`
+- Decision Class: Implementation Choice
+- Authority / Provenance: 이 OpenSpec의 implementation design; informed by `docs/domain/objects/session.md`, `docs/domain/objects/account.md`; Linear: `PROD-344`, `PROD-473`, `PROD-474`
 - Status: Active
 - Context / Problem: 일반 API context는 Active Account만 인정하지만 Suspended Account는 재활성화될 수 있어 Active Session을 남기면 사용자가 로그아웃한 credential이 나중에 재사용될 수 있다. 반대로 일반 인증 경계를 먼저 적용하면 terminal/missing credential에서는 검증된 Session identity를 만들 수 없어, 이미 인증 불가능한 확정 결과를 DB·네트워크 오류 같은 결과 불명 실패와 구분할 수 없다. 이 판정을 GraphQL과 BFF에 복제하면 두 transport의 logout 결과가 달라질 수 있다.
 - Decision Outcome: transport-neutral current-session logout action이 raw Session credential 조회, 결과 분류와 조건부 revoke를 함께 소유한다. 이 action에서만 Suspended Account의 Active Session을 식별해 Revoked로 전이하고, 일반 `Account.Active` 보호 행동은 계속 거부한다. Deleted Account 또는 Revoked/Expired Session은 공유 action에서 이미 인증 불가능한 확정 결과로 분류하되 조건부 Session revoke 단계에는 진입하지 않는다.
@@ -82,4 +82,4 @@
 
 ## Superseded Decisions
 
-- 없음.
+- 이 change의 초기 design에서 GraphQL과 BFF가 각각 raw credential을 조회·분류한 뒤 검증된 Session identity만 core에 전달하도록 한 transport/core 분리 결정은 위의 transport-neutral current-session logout action 소유 결정으로 대체했다. terminal/missing credential에서는 identity를 만들 수 없고, 결과 분류가 transport마다 중복되어 동작이 달라질 수 있기 때문이다.
