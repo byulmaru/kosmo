@@ -119,7 +119,7 @@ test('최근 검색 항목을 선택하면 사람 검색 결과를 요청한다'
   await setRecentSearchesBeforeNavigation(page, [handle]);
   await page.goto('/search');
   await page.getByRole('textbox', { name: '검색어' }).focus();
-  await page.getByRole('link', { name: handle }).click();
+  await page.getByRole('link', { name: handle }).click({ delay: 50 });
 
   await expectSearchParams(page, { q: handle, tab: 'people' });
   await expectTabSelected(page, '사람');
