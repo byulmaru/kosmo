@@ -38,7 +38,7 @@ API와 Web BFF는 Hono/Node ESM 애플리케이션이며 TypeScript source를 `t
 - Web platform entry가 router와 애플리케이션 module보다 먼저 browser SDK를 초기화하고 Web 전용 오류 경계 조합이 공용 React boundary에 오류 reporter context를 제공한다. 외부 GraphQL 경계와 오류를 소비하는 내부 route·session 경계의 `componentDidCatch`가 이 reporter로 capture한다. Android·iOS entry와 조합은 Sentry 관측 module을 import하지 않는다.
 - `beforeSend` event processor를 두지 않고 SDK event 전체를 전달한다. environment/release/runtime metadata는 유지하고 자동 breadcrumb와 Web session tracking은 전부 비활성화한다.
 - Docker build는 Sentry를 애플리케이션 module보다 먼저 초기화하는 server entry를 production JavaScript와 external source map으로 만들고 Expo Web export에 external source map을 요청한다. Sentry CLI의 debug ID inject와 upload를 업로드 token BuildKit secret으로 수행한 뒤 map과 sourceMappingURL을 제거하고 runtime image에는 실행 JavaScript만 복사한다.
-- API, Web BFF와 Web browser는 Sentry project 하나와 DSN 하나를 공유하고 `runtime` tag로 구분한다. GitHub Actions는 branch build에 dev role, 정식 SemVer tag build에 prod role을 사용해 OIDC로 Vault의 `secret/kubernetes/kosmo/shared`만 읽는다. 공용 DSN과 조직·프로젝트 slug는 build arg로 전달하고, Docker build는 DSN을 server runtime image와 Web bundle에 넣는다. 업로드 token은 BuildKit secret에서만 소비한다.
+- API, Web BFF와 Web browser는 Sentry project 하나와 DSN 하나를 공유하고 `runtime` tag로 구분한다. GitHub Actions는 branch build에 dev role, 정식 SemVer tag build에 prod role을 사용해 OIDC로 Vault의 `secret/kubernetes/kosmo/shared`만 읽는다. Vault Sentry 객체 전체는 BuildKit secret JSON 파일 하나로 전달한다. Docker build는 DSN만 server runtime용 파일과 Web bundle에 남기고 조직·project slug와 upload token은 source map upload 단계에서만 소비한다.
 
 ### Allowed Alternatives
 

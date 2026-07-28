@@ -1,6 +1,11 @@
 #!/bin/sh
 set -eu
 
+if [ -s /app/.sentry-dsn ]; then
+  SENTRY_DSN="$(cat /app/.sentry-dsn)"
+  export SENTRY_DSN
+fi
+
 case "${1:-web}" in
   web)
     cd /app/apps/web

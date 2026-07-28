@@ -83,10 +83,10 @@
 - Authority / Provenance: 사용자 결정, PROD-477
 - Status: Active
 - Context / Problem: GitHub repository variable과 secret, 환경별 Vault 경로에 Sentry 설정을 나누면 기존 Kosmo Vault가 하나의 source of truth가 되지 않는다. 공용 공개 DSN은 Web bundle에 이미 build 시 포함되므로 server만 VaultStaticSecret으로 runtime 주입하면 같은 값에 두 경로를 운영하게 된다.
-- Decision Outcome: 공용 `SENTRY_DSN`, `SENTRY_PROJECT`, Sentry 조직 slug와 source map 업로드 token을 `secret/kubernetes/kosmo/shared`에 둔다. GitHub Actions는 image build 때 값을 읽고 DSN은 Docker build arg로 전달해 server runtime image와 Web bundle에 넣는다. 조직·project slug는 build 단계에서만 사용하고 upload token은 BuildKit secret에서만 소비한다.
-- Alternatives Considered: server DSN만 VaultStaticSecret으로 runtime 주입하는 방식은 Web과 server의 동일한 공개 DSN에 중복 경로를 만들고, `shared` 전체를 Kubernetes Secret으로 복사하는 방식은 build token을 runtime에 노출하므로 선택하지 않는다.
-- Consequences: Vault가 환경 독립 설정의 source of truth인 점은 유지되지만 DSN 변경은 새 image build·배포 후 적용된다. 즉시 중단은 runtime `SENTRY_ENABLED` 비활성화로 수행한다. Upload token과 조직·project slug는 runtime image에 포함되지 않는다.
-- Confirmation / Follow-up: Docker image 설정에 DSN과 release만 있고 upload token·조직·project slug는 없는지, Helm render에 `sentry-runtime` Secret이 없는지, branch와 release tag build가 shared 값을 읽어 source map을 업로드하는지 확인한다.
+- Decision Outcome: 공용 `SENTRY_DSN`, `SENTRY_PROJECT`, Sentry 조직 slug와 source map 업로드 token을 `secret/kubernetes/kosmo/shared`에 둔다. GitHub Actions는 image build 때 Vault Sentry 객체 전체를 임시 JSON 파일 하나로 만들고 `sentry_config` BuildKit secret으로 전달한다. Docker build는 DSN만 server runtime용 파일과 Web bundle에 남기고 조직·project slug와 upload token은 source map upload 단계에서만 소비한다.
+- Alternatives Considered: Vault 키를 GitHub environment와 Docker build arg에 하나씩 전달하는 방식은 키 목록과 전달 경로를 반복한다. Vault JSON 전체를 runtime image나 Kubernetes Secret에 복사하는 방식은 upload token까지 배포 artifact에 남기므로 선택하지 않는다.
+- Consequences: 새 Vault 키가 추가돼도 workflow의 build arg 목록은 늘어나지 않는다. BuildKit secret 내용은 cache key가 아니므로 설정 회전을 반영하기 위해 Sentry artifact build stage는 cache를 사용하지 않는다. Vault가 환경 독립 설정의 source of truth인 점은 유지되지만 DSN 변경은 새 image build·배포 후 적용된다. 즉시 중단은 runtime `SENTRY_ENABLED` 비활성화로 수행한다. Upload token과 조직·project slug는 runtime image에 포함되지 않는다.
+- Confirmation / Follow-up: Docker build가 secret JSON 하나만 받고 final image에는 DSN 파일과 release만 남기는지, Helm render에 `sentry-runtime` Secret이 없는지, branch와 release tag build가 shared 값을 읽어 source map을 업로드하는지 확인한다.
 
 ### 기능 branch Docker build도 Vault shared를 읽는다
 

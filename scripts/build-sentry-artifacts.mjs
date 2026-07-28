@@ -7,6 +7,46 @@ import { build } from 'esbuild';
 const workspaceRoot = process.cwd();
 const sentryCli = path.join(workspaceRoot, 'node_modules/.bin/sentry-cli');
 
+const loadSentryConfig = async () => {
+  if (!process.env.SENTRY_CONFIG_FILE) {
+    return {};
+  }
+
+  try {
+    const config = JSON.parse(await readFile(process.env.SENTRY_CONFIG_FILE, 'utf8'));
+    if (!config || typeof config !== 'object' || Array.isArray(config)) {
+      throw new TypeError('Sentry configuration must be a JSON object');
+    }
+    return config;
+  } catch (cause) {
+    if (cause instanceof Error && 'code' in cause && cause.code === 'ENOENT') {
+      return {};
+    }
+    throw cause;
+  }
+};
+
+const sentryConfig = await loadSentryConfig();
+const configValue = (key) => {
+  const value = sentryConfig[key] ?? process.env[key];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== 'string' || value.includes('\n') || value.includes('\r')) {
+    throw new TypeError(`Sentry configuration ${key} must be a single-line string`);
+  }
+  return value;
+};
+
+const authToken = configValue('SENTRY_AUTH_TOKEN');
+const dsn = configValue('SENTRY_DSN');
+const organization = configValue('SENTRY_ORG');
+const project = configValue('SENTRY_PROJECT');
+
+if (process.env.SENTRY_RUNTIME_DSN_FILE) {
+  await writeFile(process.env.SENTRY_RUNTIME_DSN_FILE, dsn ?? '', { mode: 0o600 });
+}
+
 const run = (command, args, options = {}) => {
   const result = spawnSync(command, args, {
     cwd: workspaceRoot,
@@ -49,18 +89,22 @@ for (const artifact of serverArtifacts) {
 }
 
 run('pnpm', ['--filter', '@kosmo/app', 'relay']);
-run('pnpm', [
-  '--filter',
-  '@kosmo/app',
-  'exec',
-  'expo',
-  'export',
-  '--clear',
-  '--platform',
-  'web',
-  '--source-maps',
-  'external',
-]);
+run(
+  'pnpm',
+  [
+    '--filter',
+    '@kosmo/app',
+    'exec',
+    'expo',
+    'export',
+    '--clear',
+    '--platform',
+    'web',
+    '--source-maps',
+    'external',
+  ],
+  { env: { ...process.env, ...(dsn ? { EXPO_PUBLIC_SENTRY_DSN: dsn } : {}) } },
+);
 
 const artifactGroups = [
   { path: 'apps/api/dist/server' },
@@ -93,20 +137,7 @@ for (const group of artifactGroups) {
   }
 }
 
-let authToken = process.env.SENTRY_AUTH_TOKEN;
-if (!authToken && process.env.SENTRY_AUTH_TOKEN_FILE) {
-  try {
-    authToken = (await readFile(process.env.SENTRY_AUTH_TOKEN_FILE, 'utf8')).trim();
-  } catch (cause) {
-    if (!(cause instanceof Error && 'code' in cause && cause.code === 'ENOENT')) {
-      throw cause;
-    }
-  }
-}
-
 const release = process.env.SENTRY_RELEASE;
-const organization = process.env.SENTRY_ORG;
-const project = process.env.SENTRY_PROJECT;
 const uploadRequired = process.env.SENTRY_UPLOAD_REQUIRED === '1';
 const missingUploadConfiguration = [
   !authToken && 'SENTRY_AUTH_TOKEN',

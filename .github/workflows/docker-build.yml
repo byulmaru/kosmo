@@ -84,37 +84,34 @@ jobs:
           vault_token="$(printf '%s' "${token_json}" | python3 -c 'import json, sys; print(json.load(sys.stdin)["auth"]["client_token"])')"
           echo "::add-mask::${vault_token}"
 
-          sentry_json="$(curl -fsSL \
+          sentry_response_file="${RUNNER_TEMP}/sentry-response.json"
+          sentry_config_file="${RUNNER_TEMP}/sentry-config.json"
+          curl -fsSL \
             -H "X-Vault-Token: ${vault_token}" \
-            "${VAULT_ADDR}/v1/secret/data/kubernetes/kosmo/shared")"
-          SENTRY_JSON="${sentry_json}" python3 - <<'PY'
+            --output "${sentry_response_file}" \
+            "${VAULT_ADDR}/v1/secret/data/kubernetes/kosmo/shared"
+          SENTRY_RESPONSE_FILE="${sentry_response_file}" SENTRY_CONFIG_FILE="${sentry_config_file}" python3 - <<'PY'
           import json
           import os
 
-          keys = (
-              "SENTRY_AUTH_TOKEN",
-              "SENTRY_DSN",
-              "SENTRY_ORG",
-              "SENTRY_PROJECT",
-          )
-          values = json.loads(os.environ["SENTRY_JSON"])["data"]["data"]
-          missing = [key for key in keys if not values.get(key)]
-          if missing:
-              raise SystemExit(f"Vault Sentry build configuration is missing: {', '.join(missing)}")
+          with open(os.environ["SENTRY_RESPONSE_FILE"], encoding="utf-8") as response:
+              values = json.load(response)["data"]["data"]
+          if not isinstance(values, dict):
+              raise SystemExit("Vault Sentry build configuration must be a JSON object")
 
-          with (
-              open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as environment,
-              open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output,
-          ):
-              for key in keys:
-                  value = values[key]
-                  if not isinstance(value, str) or "\n" in value or "\r" in value:
-                      raise SystemExit(f"Vault value {key} must be a single-line string")
-                  print(f"::add-mask::{value}")
-                  if key == "SENTRY_AUTH_TOKEN":
-                      output.write(f"sentry_auth_token={value}\n")
-                  else:
-                      environment.write(f"{key}={value}\n")
+          for key, value in values.items():
+              if not isinstance(value, str):
+                  raise SystemExit(f"Vault value {key} must be a string")
+              escaped = value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+              print(f"::add-mask::{escaped}")
+
+          with open(os.environ["SENTRY_CONFIG_FILE"], "w", encoding="utf-8") as config:
+              json.dump(values, config)
+          os.chmod(os.environ["SENTRY_CONFIG_FILE"], 0o600)
+          os.remove(os.environ["SENTRY_RESPONSE_FILE"])
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"sentry_config={os.environ['SENTRY_CONFIG_FILE']}\n")
           PY
 
       - name: Log in to ECR
@@ -143,17 +140,16 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          no-cache-filters: runtime
+          no-cache-filters: |
+            app-build
+            runtime
           build-args: |
             EXPO_PUBLIC_SENTRY_ENABLED=1
             EXPO_PUBLIC_ENVIRONMENT=${{ env.ENVIRONMENT }}
-            SENTRY_DSN=${{ env.SENTRY_DSN }}
-            SENTRY_ORG=${{ env.SENTRY_ORG }}
-            SENTRY_PROJECT=${{ env.SENTRY_PROJECT }}
             SENTRY_RELEASE=${{ env.SENTRY_RELEASE }}
             SENTRY_UPLOAD_REQUIRED=1
-          secrets: |
-            sentry_auth_token=${{ steps.sentry.outputs.sentry_auth_token }}
+          secret-files: |
+            sentry_config=${{ steps.sentry.outputs.sentry_config }}
 
       - name: Save Docker image reference
         shell: bash

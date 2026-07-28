@@ -68,7 +68,7 @@ API, Web BFF와 Web browser가 동일 커밋 release와 일관된 환경/runtime
 **Guardrails**
 
 - source map 업로드 token은 BuildKit secret으로만 소비하고 저장소·로그·image·Web asset에 남기지 않는다.
-- 환경에 독립적인 공용 DSN, project slug와 build token은 Vault shared secret에서 관리한다. DSN은 image build에 주입하고 upload token은 BuildKit secret에서만 소비한다.
+- 환경에 독립적인 공용 DSN, project slug와 build token은 Vault shared secret에서 관리하고 JSON BuildKit secret 하나로 image build에 전달한다. DSN만 final image와 Web bundle에 남기고 upload token은 build에서만 소비한다.
 - Android·iOS PROD-483 범위는 통합 완료 조건에 포함하지 않는다.
 - 실제 event, release, symbolication, event 전달 결과와 알림 전달을 확인하기 전에는 부모 통합 검증과 OpenSpec archive를 완료하지 않는다.
 

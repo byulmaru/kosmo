@@ -38,18 +38,12 @@ FROM deps AS app-build
 
 ARG EXPO_PUBLIC_SENTRY_ENABLED=0
 ARG EXPO_PUBLIC_ENVIRONMENT
-ARG SENTRY_DSN
-ARG SENTRY_ORG
-ARG SENTRY_PROJECT
 ARG SENTRY_RELEASE
 ARG SENTRY_UPLOAD_REQUIRED=0
 
-ENV EXPO_PUBLIC_SENTRY_DSN=$SENTRY_DSN
 ENV EXPO_PUBLIC_SENTRY_ENABLED=$EXPO_PUBLIC_SENTRY_ENABLED
 ENV EXPO_PUBLIC_ENVIRONMENT=$EXPO_PUBLIC_ENVIRONMENT
 ENV EXPO_PUBLIC_SENTRY_RELEASE=$SENTRY_RELEASE
-ENV SENTRY_ORG=$SENTRY_ORG
-ENV SENTRY_PROJECT=$SENTRY_PROJECT
 ENV SENTRY_RELEASE=$SENTRY_RELEASE
 ENV SENTRY_UPLOAD_REQUIRED=$SENTRY_UPLOAD_REQUIRED
 
@@ -58,8 +52,10 @@ COPY apps ./apps
 COPY packages ./packages
 COPY scripts ./scripts
 
-RUN --mount=type=secret,id=sentry_auth_token,target=/run/secrets/sentry_auth_token,required=false \
-  SENTRY_AUTH_TOKEN_FILE=/run/secrets/sentry_auth_token pnpm build:sentry-artifacts
+RUN --mount=type=secret,id=sentry_config,target=/run/secrets/sentry-config.json,required=false \
+  SENTRY_CONFIG_FILE=/run/secrets/sentry-config.json \
+  SENTRY_RUNTIME_DSN_FILE=/app/.sentry-dsn \
+  pnpm build:sentry-artifacts
 RUN find apps/app/dist -type f \( \
       -name '*.css' -o -name '*.html' -o -name '*.js' -o -name '*.json' \
       -o -name '*.mjs' -o -name '*.svg' -o -name '*.ttf' -o -name '*.wasm' \
@@ -67,14 +63,12 @@ RUN find apps/app/dist -type f \( \
 
 FROM workspace AS runtime-files
 
-ARG SENTRY_DSN
 ARG SENTRY_RELEASE
 
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=8080
 ENV EXPO_WEB_ROOT=/app/apps/app/dist
-ENV SENTRY_DSN=$SENTRY_DSN
 ENV SENTRY_RELEASE=$SENTRY_RELEASE
 
 RUN groupadd --system --gid 10001 app \
@@ -95,6 +89,7 @@ COPY --chown=app:app apps/web/src/server ./apps/web/src/server
 COPY --chown=app:app --from=app-build /app/apps/api/dist/server ./apps/api/dist/server
 COPY --chown=app:app --from=app-build /app/apps/web/dist/server ./apps/web/dist/server
 COPY --chown=app:app --from=app-build /app/apps/app/dist ./apps/app/dist
+COPY --chown=app:app --from=app-build /app/.sentry-dsn ./.sentry-dsn
 COPY --chown=app:app docker-entrypoint.sh ./docker-entrypoint.sh
 
 RUN chmod +x ./docker-entrypoint.sh
