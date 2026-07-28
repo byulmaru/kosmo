@@ -59,6 +59,8 @@ spec:
           envFrom:
             - secretRef:
                 name: env
+            - secretRef:
+                name: sentry-runtime
           livenessProbe:
             httpGet:
               path: /health

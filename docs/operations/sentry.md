@@ -13,11 +13,11 @@ Vault의 `secret/kubernetes/kosmo/shared`에는 환경과 무관한 Sentry 설�
 | `SENTRY_DSN`        | 세 runtime이 공유하는 공개 ingest DSN     |
 | `SENTRY_AUTH_TOKEN` | source map 업로드용 organization token    |
 
-Workflow는 Vault의 Sentry 설정 객체 전체를 임시 JSON 파일 하나로 만들고 `sentry_config` BuildKit secret으로 Docker build에 한 번 전달한다. Docker build는 같은 파일에서 DSN, organization·project slug와 upload token을 읽는다. DSN은 Web bundle과 server runtime용 파일에 넣고, organization·project slug와 token은 source map upload 단계에서만 사용한다. DSN은 공개 ingest endpoint이므로 browser bundle과 image 파일에 포함될 수 있다.
+Workflow는 Vault의 Sentry 설정 객체 전체를 임시 env 파일 하나로 만들고 `sentry_config` BuildKit secret으로 Docker build에 한 번 전달한다. Docker build의 artifact 생성 단계가 이 파일을 환경 변수로 읽는다. DSN은 `EXPO_PUBLIC_SENTRY_DSN`으로 Web bundle에만 넣고, organization·project slug와 token은 source map upload 단계에서만 사용한다. DSN은 공개 ingest endpoint이므로 browser bundle에 포함될 수 있다.
 
 `SENTRY_AUTH_TOKEN`에는 source map 업로드와 release artifact 생성 권한만 가진 organization token을 둔다. Vault JSON 전체는 Docker BuildKit secret mount에서만 보이며 layer에 복사하지 않는다. Token과 organization·project slug는 runtime image에 포함하지 않는다.
 
-공용 DSN은 환경마다 다른 Sentry project를 사용하지 않으므로 `shared`에서 관리하고 event의 dev/prod 구분은 공용 `ENVIRONMENT`가 담당한다. Web build에는 같은 값을 `EXPO_PUBLIC_ENVIRONMENT`로 전달한다. `SENTRY_ENABLED=1`, environment와 commit 기반 `SENTRY_RELEASE`는 Helm과 image가 주입한다. DSN, enable flag, environment와 release 중 하나라도 없으면 해당 runtime은 event를 전송하지 않는다.
+공용 DSN은 환경마다 다른 Sentry project를 사용하지 않으므로 `shared`에서 관리하고 event의 dev/prod 구분은 공용 `ENVIRONMENT`가 담당한다. Web build에는 같은 값을 `EXPO_PUBLIC_ENVIRONMENT`로 전달한다. API와 Web BFF에는 Vault Secrets Operator가 `shared`의 `SENTRY_DSN` 하나만 `sentry-runtime` Secret으로 변환해 배포 시 주입한다. `SENTRY_RELEASE`는 Vault 값이 아니라 workflow가 `kosmo@<Git commit SHA>`로 만드는 배포 식별자이며 event와 source map을 연결한다. `SENTRY_ENABLED=1`, environment와 release는 Helm과 image가 주입한다. DSN, enable flag, environment와 release 중 하나라도 없으면 해당 runtime은 event를 전송하지 않는다.
 
 ## Event 전달 정책
 
@@ -39,7 +39,7 @@ Sentry의 기본 개인정보 전송은 활성화하지 않지만, SDK event에�
 
 `pnpm build:sentry-artifacts`는 API와 Web BFF JavaScript, Expo Web bundle과 external source map을 생성한다. 이어서 debug ID를 주입하고 source map의 `sourcesContent`를 정적으로 검증한다. 업로드 설정이 없는 로컬 실행은 외부 전송을 건너뛰지만 검증 뒤 map과 공개 JavaScript의 `sourceMappingURL`을 제거한다.
 
-`Docker Build` workflow는 모든 branch에는 `kosmo-build-dev`, 정식 SemVer release tag에는 `kosmo-build-prod` Vault OIDC role을 사용해 `shared` build 설정을 읽는다. 다른 tag ref의 수동 실행은 실패한다. 따라서 기능 branch의 수동 build도 dev environment로 source map을 업로드할 수 있다. 두 role은 동일한 정확한 `shared` 경로만 read할 수 있고 token 수명도 짧지만, repository에서 branch workflow를 실행할 수 있는 주체는 source map 업로드 token을 build 중 사용할 수 있다. Workflow는 commit release와 공개 environment만 build arg로 전달하고 Vault Sentry JSON 전체는 BuildKit secret file 하나로 전달한다. BuildKit secret 내용은 cache key가 아니므로 `app-build` stage는 cache를 사용하지 않고 매 build마다 현재 Vault 값을 읽는다. CI에서는 `SENTRY_UPLOAD_REQUIRED=1`이므로 token, DSN, organization, release 또는 project가 누락되면 image build가 실패한다. 업로드가 성공한 뒤 runtime image와 Web static root에는 `.map` 파일이 남지 않는다.
+`Docker Build` workflow는 모든 branch에는 `kosmo-build-dev`, 정식 SemVer release tag에는 `kosmo-build-prod` Vault OIDC role을 사용해 `shared` build 설정을 읽는다. 다른 tag ref의 수동 실행은 실패한다. 따라서 기능 branch의 수동 build도 dev environment로 source map을 업로드할 수 있다. 두 role은 동일한 정확한 `shared` 경로만 read할 수 있고 token 수명도 짧지만, repository에서 branch workflow를 실행할 수 있는 주체는 source map 업로드 token을 build 중 사용할 수 있다. Workflow는 commit release와 공개 environment만 build arg로 전달하고 Vault Sentry env 파일 전체는 BuildKit secret file 하나로 전달한다. BuildKit secret 내용은 cache key가 아니므로 `app-build` stage는 cache를 사용하지 않고 매 build마다 현재 Vault 값을 읽는다. CI에서는 `SENTRY_UPLOAD_REQUIRED=1`이므로 token, DSN, organization, release 또는 project가 누락되면 image build가 실패한다. 최종 image에는 Vault 설정이나 server DSN을 남기지 않으며, 업로드가 성공한 뒤 runtime image와 Web static root에는 `.map` 파일이 남지 않는다.
 
 로컬에서 artifact 보안 경계를 확인한다.
 
@@ -73,4 +73,4 @@ rg 'sourceMappingURL=|SENTRY_AUTH_TOKEN' apps/api/dist apps/web/dist apps/app/di
 
 ## 중단과 rollback
 
-수집 문제나 개인정보 위험이 있으면 Helm의 `SENTRY_ENABLED`를 비활성화해 event 전송부터 중단한다. Vault `shared`의 `SENTRY_DSN` 변경은 새 image를 build·배포할 때 반영된다. Sentry 초기화가 비활성화돼도 기존 API/BFF 응답과 Web 오류 UI는 유지된다. source map 업로드 token도 Vault의 `secret/kubernetes/kosmo/shared`에서 회전하거나 제거한다.
+수집 문제나 개인정보 위험이 있으면 Helm의 `SENTRY_ENABLED`를 비활성화해 event 전송부터 중단한다. Vault `shared`의 `SENTRY_DSN` 변경은 API와 Web BFF에는 Vault Secrets Operator의 Secret 갱신과 rollout restart로, Web에는 새 image build·배포로 반영된다. Sentry 초기화가 비활성화돼도 기존 API/BFF 응답과 Web 오류 UI는 유지된다. source map 업로드 token도 Vault의 `secret/kubernetes/kosmo/shared`에서 회전하거나 제거한다.

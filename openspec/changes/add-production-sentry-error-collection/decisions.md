@@ -74,7 +74,7 @@
 - Decision Outcome: 세 runtime은 배포 설정으로 주입한 Sentry project 하나와 DSN 하나를 공유하고 `api`, `web-bff`, `web` runtime tag로 구분한다.
 - Alternatives Considered: runtime별 project와 DSN은 alert, rate limit, filter와 접근 권한을 독립적으로 운영할 수 있지만 현재 필요한 격리 근거가 없어 선택하지 않는다.
 - Consequences: project-level 설정과 alert는 세 runtime에 공통 적용된다. Runtime별 소유권, 알림, rate limit 또는 접근 권한 분리가 필요해지면 project topology와 배포 변수 계약을 다시 변경해야 한다.
-- Confirmation / Follow-up: build와 runtime이 공용 `SENTRY_PROJECT`, `SENTRY_DSN`만 요구하고 세 검증 event가 같은 project에서 runtime tag로 구분되는지 확인한다.
+- Confirmation / Follow-up: build가 공용 `SENTRY_PROJECT`와 `SENTRY_DSN`을 사용하고 server runtime이 공용 `SENTRY_DSN`을 주입받으며, 세 검증 event가 같은 project에서 runtime tag로 구분되는지 확인한다.
 
 ### 환경에 독립적인 Sentry 설정은 Vault에서 읽어 image build에 주입한다
 
@@ -82,11 +82,11 @@
 - Decision Class: User Choice
 - Authority / Provenance: 사용자 결정, PROD-477
 - Status: Active
-- Context / Problem: GitHub repository variable과 secret, 환경별 Vault 경로에 Sentry 설정을 나누면 기존 Kosmo Vault가 하나의 source of truth가 되지 않는다. 공용 공개 DSN은 Web bundle에 이미 build 시 포함되므로 server만 VaultStaticSecret으로 runtime 주입하면 같은 값에 두 경로를 운영하게 된다.
-- Decision Outcome: 공용 `SENTRY_DSN`, `SENTRY_PROJECT`, Sentry 조직 slug와 source map 업로드 token을 `secret/kubernetes/kosmo/shared`에 둔다. GitHub Actions는 image build 때 Vault Sentry 객체 전체를 임시 JSON 파일 하나로 만들고 `sentry_config` BuildKit secret으로 전달한다. Docker build는 DSN만 server runtime용 파일과 Web bundle에 남기고 조직·project slug와 upload token은 source map upload 단계에서만 소비한다.
-- Alternatives Considered: Vault 키를 GitHub environment와 Docker build arg에 하나씩 전달하는 방식은 키 목록과 전달 경로를 반복한다. Vault JSON 전체를 runtime image나 Kubernetes Secret에 복사하는 방식은 upload token까지 배포 artifact에 남기므로 선택하지 않는다.
-- Consequences: 새 Vault 키가 추가돼도 workflow의 build arg 목록은 늘어나지 않는다. BuildKit secret 내용은 cache key가 아니므로 설정 회전을 반영하기 위해 Sentry artifact build stage는 cache를 사용하지 않는다. Vault가 환경 독립 설정의 source of truth인 점은 유지되지만 DSN 변경은 새 image build·배포 후 적용된다. 즉시 중단은 runtime `SENTRY_ENABLED` 비활성화로 수행한다. Upload token과 조직·project slug는 runtime image에 포함되지 않는다.
-- Confirmation / Follow-up: Docker build가 secret JSON 하나만 받고 final image에는 DSN 파일과 release만 남기는지, Helm render에 `sentry-runtime` Secret이 없는지, branch와 release tag build가 shared 값을 읽어 source map을 업로드하는지 확인한다.
+- Context / Problem: GitHub repository variable과 secret, 환경별 Vault 경로에 Sentry 설정을 나누면 기존 Kosmo Vault가 하나의 source of truth가 되지 않는다. 다만 Expo 공개 변수, source map 업로드 자격 증명과 서버 runtime DSN은 수명과 노출 경계가 다르다.
+- Decision Outcome: 공용 `SENTRY_DSN`, `SENTRY_PROJECT`, Sentry 조직 slug와 source map 업로드 token을 `secret/kubernetes/kosmo/shared`에 둔다. GitHub Actions는 image build 때 Vault Sentry 객체 전체를 임시 env 파일 하나로 만들고 `sentry_config` BuildKit secret으로 전달한다. Artifact build 단계는 DSN을 `EXPO_PUBLIC_SENTRY_DSN`으로 Web bundle에만 남기고 조직·project slug와 upload token은 source map upload에만 소비한다. API와 Web BFF는 Vault Secrets Operator가 shared의 `SENTRY_DSN`만 변환한 `sentry-runtime` Kubernetes Secret을 배포 시 주입한다.
+- Alternatives Considered: Vault 키를 GitHub environment와 Docker build arg에 하나씩 전달하는 방식은 키 목록과 전달 경로를 반복한다. DSN을 server image 파일로 복사하는 방식은 build/runtime 경계를 섞고 DSN 회전마다 image 재빌드를 요구한다. Vault 객체 전체를 runtime Kubernetes Secret에 복사하는 방식은 upload token까지 pod에 배포하므로 선택하지 않는다.
+- Consequences: 새 Vault build 키가 추가돼도 workflow의 build arg 목록은 늘어나지 않는다. BuildKit secret 내용은 cache key가 아니므로 설정 회전을 반영하기 위해 Sentry artifact build stage는 cache를 사용하지 않는다. Web DSN 변경은 새 image build·배포가 필요하지만 server DSN은 Vault Secrets Operator가 갱신한다. Upload token과 조직·project slug는 runtime image와 pod에 포함되지 않는다.
+- Confirmation / Follow-up: Docker build가 secret env 파일 하나만 받고 final image에는 Vault 값이 남지 않는지, Helm render의 `sentry-runtime` Secret에는 `SENTRY_DSN`만 있는지, branch와 release tag build가 shared 값을 읽어 source map을 업로드하는지 확인한다.
 
 ### 기능 branch Docker build도 Vault shared를 읽는다
 

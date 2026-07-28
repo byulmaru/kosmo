@@ -85,7 +85,9 @@ jobs:
           echo "::add-mask::${vault_token}"
 
           sentry_response_file="${RUNNER_TEMP}/sentry-response.json"
-          sentry_config_file="${RUNNER_TEMP}/sentry-config.json"
+          sentry_config_file="${RUNNER_TEMP}/sentry.env"
+          umask 077
+          trap 'rm -f "${sentry_response_file}"' EXIT
           curl -fsSL \
             -H "X-Vault-Token: ${vault_token}" \
             --output "${sentry_response_file}" \
@@ -93,6 +95,8 @@ jobs:
           SENTRY_RESPONSE_FILE="${sentry_response_file}" SENTRY_CONFIG_FILE="${sentry_config_file}" python3 - <<'PY'
           import json
           import os
+          import re
+          import shlex
 
           with open(os.environ["SENTRY_RESPONSE_FILE"], encoding="utf-8") as response:
               values = json.load(response)["data"]["data"]
@@ -100,13 +104,16 @@ jobs:
               raise SystemExit("Vault Sentry build configuration must be a JSON object")
 
           for key, value in values.items():
+              if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
+                  raise SystemExit(f"Vault key {key} is not a valid environment variable name")
               if not isinstance(value, str):
                   raise SystemExit(f"Vault value {key} must be a string")
               escaped = value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
               print(f"::add-mask::{escaped}")
 
           with open(os.environ["SENTRY_CONFIG_FILE"], "w", encoding="utf-8") as config:
-              json.dump(values, config)
+              for key, value in values.items():
+                  config.write(f"{key}={shlex.quote(value)}\n")
           os.chmod(os.environ["SENTRY_CONFIG_FILE"], 0o600)
           os.remove(os.environ["SENTRY_RESPONSE_FILE"])
 

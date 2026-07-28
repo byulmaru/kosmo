@@ -52,10 +52,13 @@ COPY apps ./apps
 COPY packages ./packages
 COPY scripts ./scripts
 
-RUN --mount=type=secret,id=sentry_config,target=/run/secrets/sentry-config.json,required=false \
-  SENTRY_CONFIG_FILE=/run/secrets/sentry-config.json \
-  SENTRY_RUNTIME_DSN_FILE=/app/.sentry-dsn \
-  pnpm build:sentry-artifacts
+RUN --mount=type=secret,id=sentry_config,target=/run/secrets/sentry.env,required=false \
+  if [ -f /run/secrets/sentry.env ]; then \
+    set -a; \
+    . /run/secrets/sentry.env; \
+    set +a; \
+  fi \
+  && EXPO_PUBLIC_SENTRY_DSN="${SENTRY_DSN:-}" pnpm build:sentry-artifacts
 RUN find apps/app/dist -type f \( \
       -name '*.css' -o -name '*.html' -o -name '*.js' -o -name '*.json' \
       -o -name '*.mjs' -o -name '*.svg' -o -name '*.ttf' -o -name '*.wasm' \
@@ -89,7 +92,6 @@ COPY --chown=app:app apps/web/src/server ./apps/web/src/server
 COPY --chown=app:app --from=app-build /app/apps/api/dist/server ./apps/api/dist/server
 COPY --chown=app:app --from=app-build /app/apps/web/dist/server ./apps/web/dist/server
 COPY --chown=app:app --from=app-build /app/apps/app/dist ./apps/app/dist
-COPY --chown=app:app --from=app-build /app/.sentry-dsn ./.sentry-dsn
 COPY --chown=app:app docker-entrypoint.sh ./docker-entrypoint.sh
 
 RUN chmod +x ./docker-entrypoint.sh
