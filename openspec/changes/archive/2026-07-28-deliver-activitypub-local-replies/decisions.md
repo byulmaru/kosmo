@@ -47,7 +47,7 @@
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/instance.md`,
   `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-497
-- Status: Active
+- Status: Superseded by "PROD-497은 원격 직접 Parent 작성자만 전달한다"
 - Context / Problem: remote follower와 Parent Author가 겹칠 수 있고 Followers Only Reply가 follower가 아닌 Parent
   Author에게 전달되면 visibility를 우회한다. 반대로 과거 recipient를 보존하려면 명시적으로 제외된 delivery
   history가 필요하다.
@@ -66,7 +66,7 @@
 - Decision Date: 2026-07-28
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/instance.md`, PROD-497
-- Status: Active
+- Status: Superseded by "PROD-497은 원격 직접 Parent 작성자만 전달한다"
 - Context / Problem: Fedify의 special `"followers"` recipient는 followers collection dispatcher가 필요하지만
   현재 actor contract는 collection GET을 제공하지 않으며 remote Parent Author도 별도로 합쳐야 한다.
 - Decision Outcome: 현재 DB 관계에서 usable remote actor를 조회해 Fedify `Recipient[]`로 전달하고 shared inbox를
@@ -105,8 +105,8 @@
 - Context / Problem: 현재 Fedify federation에는 queue가 없어 remote HTTP 실패가 `sendActivity()`에서 throw된다.
   이 오류를 application 밖으로 전파하면 DB state는 commit됐지만 GraphQL은 실패하는 모순이 생긴다.
 - Decision Outcome: Create/Delete delivery를 commit 뒤 직접 await하고 실패를 Reply identity와 함께 기록하되,
-  create/delete application action은 committed payload를 성공으로 반환한다. `UNRESPONSIVE`에서는 delivery와
-  pending retry를 만들지 않는다.
+  create/delete application action은 committed payload를 성공으로 반환한다. `UNRESPONSIVE`에도 direct delivery를
+  시도하되 pending retry는 만들지 않는다.
 - Alternatives Considered: delivery 실패 시 domain rollback, GraphQL 실패 유지와 client refetch, fire-and-forget,
   이번 change에서 outbox·queue를 선행 구현.
 - Consequences: remote HTTP 지연은 API 응답 경로에 남고 commit과 delivery 사이 process 종료 시 유실될 수 있다.
@@ -118,6 +118,32 @@
 
 - 없음.
 
+## Decision Amendments
+
+### PROD-497은 원격 직접 Parent 작성자만 전달한다
+
+- Decision Date: 2026-07-28
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/instance.md`, PROD-497,
+  PROD-512
+- Status: Active
+- Context / Problem: 기존 결정은 각 interaction delivery가 `ProfileFollows`를 직접 조회해 follower fanout을
+  구현하도록 해 공통 recipient expansion의 소유권을 중복했다. 또한 Reply의 `inReplyTo` object IRI는 thread
+  relation일 뿐 delivery endpoint가 아니다.
+- Decision Outcome: PROD-497은 Public/Unlisted Reply의 원격 직접 Parent 작성자만 direct recipient로 선택한다.
+  Parent는 Active remote Profile, ACTIVE 또는 UNRESPONSIVE ActivityPub Instance와 유효한 HTTP(S) actor/personal
+  inbox를 가져야 한다. 유효한 shared inbox는 보존하고 사용할 수 없으면 personal inbox로 fallback한다. Followers
+  Only·Direct는 이 capability에서 전달하지 않으며 `ProfileFollows`를 조회하지 않는다. 공통 followers fanout과
+  Repost migration은 PROD-512가 소유한다.
+- Alternatives Considered: interaction마다 follower query 유지, `inReplyTo` IRI로 delivery, PROD-497에서 Fedify
+  followers dispatcher까지 구현, 모든 visibility의 Parent Author에게 무조건 direct delivery.
+- Consequences: PROD-512 전에는 Followers Only Reply와 일반 follower 배포가 없지만 Parent Author 직접 전달과
+  activity identity·post-commit failure isolation은 독립적으로 완료된다. Queue/outbox는 계속 PROD-314·448의
+  후속 범위다.
+- Confirmation / Follow-up: Parent endpoint·visibility·Instance state matrix와 follower query 부재를 PROD-497에서
+  검증하고, `.authorize(() => false)`로 공개 collection을 막는 공통 dispatcher는 PROD-512에서 검증한다.
+
 ## Superseded Decisions
 
-- 없음.
+- "Recipient는 action 시점의 현재 저장 관계에서 계산한다"
+- "저장된 Recipient 배열을 Fedify에 직접 전달한다"

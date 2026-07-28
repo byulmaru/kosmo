@@ -1,13 +1,5 @@
 import { Create, Delete, PUBLIC_COLLECTION } from '@fedify/vocab';
-import {
-  ActivityPubActors,
-  db,
-  first,
-  Instances,
-  Posts,
-  ProfileFollows,
-  Profiles,
-} from '@kosmo/core/db';
+import { ActivityPubActors, db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
 import {
   InstanceKind,
   InstanceState,
@@ -16,17 +8,12 @@ import {
   ProfileState,
 } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { and, eq, isNotNull } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/pg-core';
+import { and, eq, inArray, isNotNull } from 'drizzle-orm';
+import { isHttpUri } from './activitypub-uri';
 import { federation } from './federation';
 import { projectLocalPostNote } from './local-post-note';
 import type { Context } from '@fedify/fedify';
 import type { Recipient } from '@fedify/vocab';
-
-const ParentPosts = alias(Posts, 'local_reply_delivery_parent_post');
-const ParentProfiles = alias(Profiles, 'local_reply_delivery_parent_profile');
-const ParentInstances = alias(Instances, 'local_reply_delivery_parent_instance');
-const ParentActors = alias(ActivityPubActors, 'local_reply_delivery_parent_actor');
 
 type DeliverySource = {
   readonly authorProfileId: string;
@@ -84,54 +71,26 @@ const loadDeletedReplySource = async (
     : null;
 };
 
-const loadFollowerRecipients = async (authorProfileId: string): Promise<StoredRecipient[]> =>
-  db
-    .select({
-      inboxUri: ActivityPubActors.inboxUri,
-      sharedInboxUri: ActivityPubActors.sharedInboxUri,
-      uri: ActivityPubActors.uri,
-    })
-    .from(ProfileFollows)
-    .innerJoin(Profiles, eq(Profiles.id, ProfileFollows.followerProfileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
-    .where(
-      and(
-        eq(ProfileFollows.followeeProfileId, authorProfileId),
-        eq(Profiles.state, ProfileState.ACTIVE),
-        eq(Instances.kind, InstanceKind.ACTIVITYPUB),
-        eq(Instances.state, InstanceState.ACTIVE),
-        isNotNull(ActivityPubActors.inboxUri),
-      ),
-    )
-    .then((rows) =>
-      rows.flatMap((row) =>
-        row.inboxUri
-          ? [{ inboxUri: row.inboxUri, sharedInboxUri: row.sharedInboxUri, uri: row.uri }]
-          : [],
-      ),
-    );
-
 const loadRemoteParentRecipient = async (
   replyParentId: string,
 ): Promise<StoredRecipient | null> => {
   const row = await db
     .select({
-      inboxUri: ParentActors.inboxUri,
-      sharedInboxUri: ParentActors.sharedInboxUri,
-      uri: ParentActors.uri,
+      inboxUri: ActivityPubActors.inboxUri,
+      sharedInboxUri: ActivityPubActors.sharedInboxUri,
+      uri: ActivityPubActors.uri,
     })
-    .from(ParentPosts)
-    .innerJoin(ParentProfiles, eq(ParentProfiles.id, ParentPosts.profileId))
-    .innerJoin(ParentInstances, eq(ParentInstances.id, ParentProfiles.instanceId))
-    .innerJoin(ParentActors, eq(ParentActors.profileId, ParentProfiles.id))
+    .from(Posts)
+    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
     .where(
       and(
-        eq(ParentPosts.id, replyParentId),
-        eq(ParentProfiles.state, ProfileState.ACTIVE),
-        eq(ParentInstances.kind, InstanceKind.ACTIVITYPUB),
-        eq(ParentInstances.state, InstanceState.ACTIVE),
-        isNotNull(ParentActors.inboxUri),
+        eq(Posts.id, replyParentId),
+        eq(Profiles.state, ProfileState.ACTIVE),
+        eq(Instances.kind, InstanceKind.ACTIVITYPUB),
+        inArray(Instances.state, [InstanceState.ACTIVE, InstanceState.UNRESPONSIVE]),
+        isNotNull(ActivityPubActors.inboxUri),
       ),
     )
     .limit(1)
@@ -142,50 +101,44 @@ const loadRemoteParentRecipient = async (
     : null;
 };
 
-const toRecipient = (actor: StoredRecipient): Recipient | null => {
+const parseHttpUri = (value: string): URL | null => {
   try {
-    let sharedInbox: URL | undefined;
-    if (actor.sharedInboxUri) {
-      try {
-        sharedInbox = new URL(actor.sharedInboxUri);
-      } catch {
-        // 잘못 저장된 optional shared inbox는 usable personal inbox를 막지 않는다.
-      }
-    }
-    return {
-      endpoints: sharedInbox ? { sharedInbox } : null,
-      id: new URL(actor.uri),
-      inboxId: new URL(actor.inboxUri),
-    };
+    const uri = new URL(value);
+    return isHttpUri(uri) ? uri : null;
   } catch {
     return null;
   }
 };
 
-const selectRecipients = async (
-  source: Pick<DeliverySource, 'authorProfileId' | 'visibility'> & {
+const toRecipient = (actor: StoredRecipient): Recipient | null => {
+  const id = parseHttpUri(actor.uri);
+  const inboxId = parseHttpUri(actor.inboxUri);
+  if (!id || !inboxId) {
+    return null;
+  }
+
+  const sharedInbox = actor.sharedInboxUri ? parseHttpUri(actor.sharedInboxUri) : null;
+  return {
+    endpoints: sharedInbox ? { sharedInbox } : null,
+    id,
+    inboxId,
+  };
+};
+
+const selectRecipient = async (
+  source: Pick<DeliverySource, 'visibility'> & {
     readonly replyParentId: string | null;
   },
-): Promise<Recipient[]> => {
-  if (!source.replyParentId || source.visibility === PostVisibility.DIRECT) {
-    return [];
-  }
-
-  const actors = await loadFollowerRecipients(source.authorProfileId);
+): Promise<Recipient | null> => {
   if (
-    source.visibility === PostVisibility.PUBLIC ||
-    source.visibility === PostVisibility.UNLISTED
+    !source.replyParentId ||
+    (source.visibility !== PostVisibility.PUBLIC && source.visibility !== PostVisibility.UNLISTED)
   ) {
-    const parentActor = await loadRemoteParentRecipient(source.replyParentId);
-    if (parentActor) {
-      actors.push(parentActor);
-    }
+    return null;
   }
 
-  return [...new Map(actors.map((actor) => [actor.uri, actor])).values()].flatMap((actor) => {
-    const recipient = toRecipient(actor);
-    return recipient ? [recipient] : [];
-  });
+  const parentActor = await loadRemoteParentRecipient(source.replyParentId);
+  return parentActor ? toRecipient(parentActor) : null;
 };
 
 const noteUri = (canonicalOrigin: string | URL, postId: string): URL =>
@@ -198,8 +151,8 @@ export const sendLocalReplyCreate = async (postId: string): Promise<void> => {
     return;
   }
 
-  const recipients = await selectRecipients(projection);
-  if (recipients.length === 0) {
+  const recipient = await selectRecipient(projection);
+  if (!recipient) {
     return;
   }
 
@@ -212,7 +165,7 @@ export const sendLocalReplyCreate = async (postId: string): Promise<void> => {
     published: projection.createdAt,
     tos: projection.object.toIds,
   });
-  await context.sendActivity({ identifier: projection.authorProfileId }, recipients, activity, {
+  await context.sendActivity({ identifier: projection.authorProfileId }, recipient, activity, {
     orderingKey: objectUri.href,
     preferSharedInbox: true,
   });
@@ -225,8 +178,8 @@ export const sendLocalReplyDelete = async (postId: string): Promise<void> => {
     return;
   }
 
-  const recipients = await selectRecipients(source);
-  if (recipients.length === 0) {
+  const recipient = await selectRecipient(source);
+  if (!recipient) {
     return;
   }
 
@@ -248,7 +201,7 @@ export const sendLocalReplyDelete = async (postId: string): Promise<void> => {
     published: source.deletedAt,
     tos: source.visibility === PostVisibility.PUBLIC ? [PUBLIC_COLLECTION] : [followersUri],
   });
-  await context.sendActivity({ identifier: source.authorProfileId }, recipients, activity, {
+  await context.sendActivity({ identifier: source.authorProfileId }, recipient, activity, {
     orderingKey: objectUri.href,
     preferSharedInbox: true,
   });

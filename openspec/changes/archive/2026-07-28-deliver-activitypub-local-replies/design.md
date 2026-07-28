@@ -16,16 +16,16 @@ federation에는 MessageQueue가 없으므로 `sendActivity()`는 remote HTTP �
 
 - Local Reply 생성과 삭제를 기존 Fedify delivery 경계에 연결한다.
 - Local Note projection과 Post identity를 복제하지 않고 Create와 Delete에서 재사용한다.
-- visibility, established Follow, remote Parent Author와 Instance 상태에서 recipient를 결정한다.
+- visibility, remote Parent Author와 Instance 상태에서 direct recipient를 결정한다.
 - 실제 outer transaction commit 뒤 delivery하고 실패와 committed application 결과를 격리한다.
 - 반복 호출에 안정적인 activity identity와 Create/Delete ordering domain을 제공한다.
 
 **Non-Goals:**
 
 - transactional outbox, NATS, Fedify MessageQueue, worker, retry/history와 delivery status
-- 과거 Create recipient snapshot 또는 이미 unfollow한 recipient에 대한 Delete 보정
+- 과거 Create Parent endpoint snapshot에 대한 Delete 보정
 - inbound Reply, Repost, Reaction, Mention, Media, Direct와 Tombstone object endpoint
-- followers collection dispatcher 또는 ActivityPub outbox collection
+- followers fanout/collection dispatcher(PROD-512) 또는 ActivityPub outbox collection
 - Post·Profile·Follow·ActivityPub Actor schema와 GraphQL payload 변경
 
 ## Implementation Guidance
@@ -40,8 +40,6 @@ federation에는 MessageQueue가 없으므로 `sendActivity()`는 remote HTTP �
   계약이 쉽게 달라진다.
 - Fedify의 special `"followers"` recipient는 followers collection dispatcher가 필요하지만 현재 actor 계약은
   collection GET을 열지 않는다.
-- Remote actor row에는 inbox가 nullable이고 같은 shared inbox를 여러 Profile이 공유할 수 있다. 전달 후보와
-  실제 `Recipient` 구성, actor 중복과 shared inbox 묶음을 구분해야 한다.
 
 ### Recommended Approach
 
@@ -55,10 +53,11 @@ commit된 Active Reply에서 object dispatcher와 동일한 Note를 만들고, D
 Visibility와 Reply Parent 관계에서 actor, canonical Note URI, audience와 recipient를 복원한다. Delete에는 Active
 Note representation이나 새 Tombstone endpoint가 필요하지 않다.
 
-Recipient는 delivery 시점의 저장 상태에서 한 번 조회한다. Author의 established remote follower와 필요하면 remote
-Parent Author를 모으고, Active ActivityPub Instance, Active Profile, actor URI와 inbox가 있는 후보만 `Recipient`
-배열로 만든다. actor URI로 중복을 제거하고 Fedify의 shared inbox 선호 옵션을 사용한다. 후보가 없으면
-`sendActivity()`를 호출하지 않는다.
+Recipient는 delivery 시점의 저장 상태에서 직접 Parent Author만 조회한다. Public/Unlisted Reply이며 Parent가
+Active remote Profile, ACTIVE 또는 UNRESPONSIVE ActivityPub Instance, 유효한 HTTP(S) actor URI와 personal inbox를
+가질 때만 `Recipient`로 만든다. 유효한 shared inbox는 Fedify의 선호 옵션에 맡기고 사용할 수 없으면 personal
+inbox로 fallback한다. Followers Only·Direct, Local Parent 또는 usable Parent recipient가 없으면 `sendActivity()`를
+호출하지 않는다. follower expansion은 PROD-512가 별도 공통 dispatcher에서 소유한다.
 
 Activity ID는 canonical Note URI에서 Create와 Delete를 구분하는 안정적인 fragment로 파생하고 ordering key는
 fragment 없는 Note URI를 사용한다. 이 방법은 별도 activity row나 공개 activity dispatcher 없이 같은 Post의
@@ -69,8 +68,6 @@ fragment 없는 Note URI를 사용한다. 이 방법은 별도 activity row나 �
 - core application action이 실제 outer transaction 전체를 직접 소유하도록 구조를 정리한 뒤 그 action의
   post-commit 구간에서 delivery를 orchestration할 수 있다. 다만 현재 Parent 접근 검증을 callback이나 protocol
   타입으로 core public contract에 주입해서는 안 되며, optional caller transaction 안에서 delivery해서도 안 된다.
-- recipient를 한 번에 전달하거나 server별로 나누어 전달할 수 있다. 어느 방식이든 actor 중복 제거, shared inbox
-  사용, 안정적인 activity identity, recipient별 Create/Delete ordering과 전체 failure isolation을 보존해야 한다.
 
 ### Known Traps
 
@@ -79,10 +76,10 @@ fragment 없는 Note URI를 사용한다. 이 방법은 별도 activity row나 �
   불명확해진다.
 - Fedify의 자동 생성 activity ID를 사용하지 않는다. 같은 Reply 재호출이 다른 activity가 된다.
 - Create 전용 Note serialization을 새로 만들거나 Delete를 위해 Active-only dispatcher 조건을 완화하지 않는다.
-- followers collection dispatcher 없이 special `"followers"` recipient를 사용하지 않는다.
-- Followers Only Reply를 follower가 아닌 remote Parent Author에게 전달하지 않는다.
-- `UNRESPONSIVE` recipient를 durable pending delivery로 저장하거나 회복 뒤 자동 재전송하지 않는다.
-- 한 remote actor의 inbox 누락 때문에 유효한 다른 recipient 전체를 projection 단계에서 실패시키지 않는다.
+- follower 집합을 `ProfileFollows`에서 직접 조회하거나 special `"followers"` recipient를 이 capability에 추가하지 않는다.
+- Followers Only Reply를 remote Parent Author에게 direct delivery하지 않는다.
+- `UNRESPONSIVE` recipient를 durable pending delivery로 저장하거나 별도 자동 재전송하지 않는다.
+- usable Parent actor/inbox가 없으면 invalid URL을 Fedify에 전달하지 않고 no-op한다.
 - PROD-448의 outbox·queue 구조를 현재 작업의 abstraction이나 test seam으로 미리 추가하지 않는다.
 
 ## Risks / Trade-offs
@@ -91,10 +88,10 @@ fragment 없는 Note URI를 사용한다. 이 방법은 별도 activity row나 �
   commit된 상태로 유지한다. 응답 경로 분리는 PROD-448이 소유한다.
 - [Commit 뒤 process 종료 시 activity 유실] → 현재 제한을 문서와 테스트 경계에 남기고 outbox를 부분 구현하지
   않는다.
-- [다중 recipient delivery가 일부 성공한 뒤 실패할 수 있음] → activity identity와 ordering key를 안정적으로
-  유지해 재호출이 새 logical activity가 되지 않게 하고 committed 결과에는 영향을 주지 않는다.
-- [삭제 시점 recipient가 생성 시점과 달라 과거 recipient에 Delete가 도달하지 않을 수 있음] → history가 없는
-  현재 범위에서는 action 시점의 recipient만 사용하며 delivery history migration과 분리한다.
+- [Parent delivery가 실패한 뒤 재호출될 수 있음] → activity identity와 ordering key를 안정적으로 유지해 재호출이
+  새 logical activity가 되지 않게 하고 committed 결과에는 영향을 주지 않는다.
+- [Parent actor endpoint가 Create 뒤 바뀌면 Delete가 과거 inbox에 도달하지 않을 수 있음] → history가 없는
+  현재 범위에서는 action 시점의 Parent recipient만 사용하며 delivery history migration과 분리한다.
 - [Tombstone Post에서 Note projection을 잘못 재사용할 수 있음] → Create의 full Note projection과 Delete의 identity·
   audience projection을 구분하고 각각 lifecycle matrix를 검증한다.
 
