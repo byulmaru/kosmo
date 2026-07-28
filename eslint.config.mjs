@@ -26,6 +26,31 @@ const config = ts.config(
     rules: {
       '@eslint-react/no-class-component': 'error',
       curly: ['error', 'all'],
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              importNames: ['Component', 'PureComponent'],
+              message: 'React class components are not allowed. Use a function component.',
+              name: 'react',
+            },
+          ],
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          message: 'React class components are not allowed. Use a function component.',
+          selector:
+            "ClassDeclaration[superClass.type='MemberExpression'][superClass.object.name='React'][superClass.property.name=/^(Component|PureComponent)$/]",
+        },
+        {
+          message: 'React class components are not allowed. Use a function component.',
+          selector:
+            "ClassExpression[superClass.type='MemberExpression'][superClass.object.name='React'][superClass.property.name=/^(Component|PureComponent)$/]",
+        },
+      ],
       '@typescript-eslint/consistent-type-imports': 'error',
       'import/consistent-type-specifier-style': ['error', 'prefer-top-level'],
       'import/first': 'error',

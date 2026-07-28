@@ -1,0 +1,11 @@
+import * as React from 'react';
+
+export class LegacyErrorBoundary extends React.Component {
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    return null;
+  }
+}
