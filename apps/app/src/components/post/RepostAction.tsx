@@ -137,11 +137,11 @@ export function RepostAction({ onError, post }: Props) {
           active={Boolean(data.viewerRepost)}
           controlRef={ref}
           count={data.repostCount}
-          hasMenuPopup
           icon={Repeat2}
           iconStrokeWidth={2.7}
           menuExpanded={menuExpanded}
           onPress={onPress}
+          popupRole="menu"
           processing={processing ? 'pending' : 'default'}
           testID="repost"
         />
