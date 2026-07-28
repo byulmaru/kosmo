@@ -10,27 +10,26 @@
 **Deliverable**
 
 Local Reply가 기존 canonical Note 표현과 identity를 사용하는 안정적인 `Create(Note)`·`Delete` activity로 현재
-허용된 remote follower와 Parent Author에게 전달된다.
+허용된 remote Parent Author에게 전달된다.
 
 **Guardrails**
 
 - Create는 PROD-494의 Local Note content, summary, audience와 Local/Remote Parent `inReplyTo`를 재사용한다.
 - Delete는 생성 때 사용한 canonical Note URI를 가리키며 별도 Tombstone endpoint나 mapping row를 만들지 않는다.
-- Public/Unlisted는 established remote follower와 remote Parent Author를, Followers Only는 established remote
-  follower만 허용한다.
-- Active ActivityPub Instance의 usable actor endpoint만 사용하고 actor identity 중복을 제거한다.
+- Public/Unlisted는 remote Parent Author만 direct recipient로 허용하고 Followers Only·Direct는 전달하지 않는다.
+- ACTIVE 또는 UNRESPONSIVE ActivityPub Instance의 usable HTTP(S) actor endpoint만 사용한다.
 - Create는 `{noteUri}#create`, Delete는 `{noteUri}#delete`, ordering domain은 canonical Note URI를 사용한다.
-- followers collection, outbox collection, queue, retry/history와 새 DB schema를 추가하지 않는다.
+- follower 직접 조회·fanout, followers/outbox collection, queue, retry/history와 새 DB schema를 추가하지 않는다.
 
 **Verification**
 
 - Local/Remote Parent의 Create Note projection과 Delete object identity를 검증한다.
-- visibility, follower, Parent Author, actor 중복, endpoint와 Instance state recipient matrix를 검증한다.
+- visibility, Parent Author, endpoint와 Instance state recipient matrix를 검증한다.
 - 반복 delivery ID, Create/Delete ordering key, shared inbox와 no-recipient no-op을 검증한다.
 
 - [x] 1.1 기존 Local Note projection을 Create delivery에서도 동일하게 사용할 수 있도록 Fedify 내부 경계를 정렬한다.
 - [x] 1.2 stable activity identity와 ordering domain을 사용하는 Reply Create/Delete delivery를 구현한다.
-- [x] 1.3 현재 visibility·Follow·Parent Author·Instance·actor endpoint 계약에 맞는 recipient selection과 중복 제거를 구현한다.
+- [x] 1.3 현재 visibility·Parent Author·Instance·actor endpoint 계약에 맞는 direct recipient selection을 구현한다.
 - [x] 1.4 Create/Delete projection, recipient matrix, 반복 호출과 delivery option의 Fedify 검증을 추가한다.
 
 ## 2. PROD-497 Post-commit application integration
@@ -81,7 +80,7 @@ PROD-497의 Reply Create/Delete delivery 범위가 기존 Local Note, Reply 작�
 
 **Guardrails**
 
-- PROD-448의 transactional outbox, NATS, Fedify MessageQueue와 worker를 선행 구현하지 않는다.
+- PROD-512의 followers fanout이나 PROD-448의 transactional outbox, NATS, Fedify MessageQueue와 worker를 선행 구현하지 않는다.
 - inbound Reply, Repost, Reaction, Mention, Media, Direct와 사용자용 delivery status를 포함하지 않는다.
 - PROD-494의 미완료 archive task를 이 change가 흡수하거나 대신 완료하지 않는다.
 - 이 change의 모든 requirement와 task가 완료되기 전에는 archive하지 않는다.

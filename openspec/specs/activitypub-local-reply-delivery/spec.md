@@ -3,7 +3,7 @@
 ## Purpose
 
 Local Reply의 생성과 삭제를 기존 canonical Note identity, visibility와 post-commit failure isolation 계약에 맞는
-ActivityPub `Create(Note)`와 `Delete`로 remote recipient에게 전달하는 행동을 정의한다.
+ActivityPub `Create(Note)`와 `Delete`로 원격 직접 Parent 작성자에게 전달하는 행동을 정의한다.
 
 ## Requirements
 
@@ -15,8 +15,8 @@ Remote Parent의 ActivityPub Post identity를 `inReplyTo`로 제공해야 한다
 #### Scenario: Local Parent에 대한 Reply 생성
 
 - **WHEN** Local Profile이 Content가 있는 Local Post를 직접 Parent로 참조하는 Reply를 생성하고 transaction이 commit된다
-- **THEN** 시스템은 Reply의 canonical Local Note를 포함한 `Create(Note)`를 전달한다
-- **AND** Note의 `inReplyTo`는 Parent의 `/ap/note/{postId}` identity를 가리킨다
+- **THEN** Reply의 canonical Local Note에서 `inReplyTo`는 Parent의 `/ap/note/{postId}` identity를 가리킨다
+- **AND** 이번 capability는 remote direct recipient가 없으므로 activity를 전달하지 않는다
 
 #### Scenario: Remote Parent에 대한 Reply 생성
 
@@ -31,21 +31,19 @@ Remote Parent의 ActivityPub Post identity를 `inReplyTo`로 제공해야 한다
 
 ### Requirement: Reply delivery recipient와 audience
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/instance.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-497. 시스템은 Local Reply의 기존 Post Visibility audience를 유지하고, 현재 저장된 established remote follower와 원격 직접 Parent 작성자 중 해당 visibility가 허용하는 Profile을 recipient로 선택해야 한다(MUST). 새 원격 요청이
-허용되는 `ACTIVE` ActivityPub Instance의 저장된 actor endpoint에만 전달해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/instance.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-497. 시스템은 Local Reply의 기존 Post Visibility audience를 유지하고, Public 또는 Unlisted Reply의 원격 직접 Parent 작성자를 direct recipient로 선택해야 한다(MUST). `inReplyTo` object IRI를 delivery endpoint로 취급해서는 안 된다(MUST NOT). 새 원격 요청이 허용되는 `ACTIVE` 또는 `UNRESPONSIVE` ActivityPub Instance의 저장된 HTTP(S) actor와 personal inbox만 전달에 사용해야 한다(MUST).
 
 #### Scenario: Public 또는 Unlisted Reply recipient
 
 - **WHEN** Public 또는 Unlisted Local Reply의 Create나 Delete를 전달한다
-- **THEN** 시스템은 Author의 현재 established remote follower를 recipient로 선택한다
-- **AND** 직접 Parent의 Author가 remote Profile이면 follower 관계와 무관하게 recipient에 포함한다
-- **AND** 같은 remote actor가 follower이면서 Parent Author이면 한 recipient로 취급한다
+- **THEN** 직접 Parent의 Author가 remote Profile이면 follower 관계와 무관하게 direct recipient로 선택한다
+- **AND** 저장된 유효한 HTTP(S) shared inbox가 있으면 Fedify가 우선할 수 있게 보존하고, 사용할 수 없으면 personal inbox를 사용한다
 
 #### Scenario: Followers Only Reply recipient
 
 - **WHEN** Followers Only Local Reply의 Create나 Delete를 전달한다
-- **THEN** 시스템은 Author의 현재 established remote follower만 recipient로 선택한다
-- **AND** remote Parent Author도 Author를 follow하는 established remote follower일 때만 포함한다
+- **THEN** 시스템은 이번 capability에서 remote recipient를 선택하지 않는다
+- **AND** follower 집합을 직접 조회하거나 fanout하지 않는다
 
 #### Scenario: 지원하지 않는 Direct Reply
 
@@ -54,7 +52,7 @@ Remote Parent의 ActivityPub Post identity를 `inReplyTo`로 제공해야 한다
 
 #### Scenario: unavailable remote instance
 
-- **WHEN** 후보 recipient의 ActivityPub Instance가 `UNRESPONSIVE` 또는 `SUSPENDED`이다
+- **WHEN** 후보 recipient의 ActivityPub Instance가 `SUSPENDED`이다
 - **THEN** 시스템은 해당 recipient에게 activity를 전달하지 않는다
 - **AND** 이번 capability를 위한 pending delivery, durable retry 또는 delivery history를 만들지 않는다
 
@@ -112,7 +110,7 @@ Delivery 실패는 관측 가능하게 기록하되 이미 commit된 Reply 생�
 
 ### Requirement: 현재 직접 delivery 제한
 
-**Authority / Provenance:** PROD-448, PROD-497. 시스템은 이번 capability에서 transactional outbox, broker handoff, Fedify MessageQueue, durable retry 또는 사용자용 delivery status를 추가해서는 안 된다(MUST NOT). Commit과 직접 delivery 사이 process 종료로 activity가 유실될
+**Authority / Provenance:** PROD-448, PROD-497, PROD-512. 시스템은 이번 capability에서 followers fanout, transactional outbox, broker handoff, Fedify MessageQueue, durable retry 또는 사용자용 delivery status를 추가해서는 안 된다(MUST NOT). Commit과 직접 delivery 사이 process 종료로 activity가 유실될
 수 있는 현재 제한은 PROD-448 migration 전까지 수용해야 한다(MUST).
 
 #### Scenario: commit 직후 process 종료

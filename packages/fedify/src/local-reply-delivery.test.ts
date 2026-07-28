@@ -33,7 +33,6 @@ let localInstanceId: string;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
-let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
 let sendLocalReplyCreate: typeof LocalReplyDelivery.sendLocalReplyCreate;
 let sendLocalReplyDelete: typeof LocalReplyDelivery.sendLocalReplyDelete;
@@ -53,7 +52,6 @@ describe('ActivityPub Local Reply delivery', () => {
       pg,
       PostContents,
       Posts,
-      ProfileFollows,
       Profiles,
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
@@ -76,23 +74,9 @@ describe('ActivityPub Local Reply delivery', () => {
     await pg.end();
   });
 
-  test('Create(Note)가 기존 projection과 stable identity를 쓰고 recipient를 actor URI로 중복 제거한다', async () => {
+  test('Create(Note)가 기존 projection과 stable identity를 쓰고 remote Parent Author에게 전달된다', async () => {
     const author = await createProfile({ kind: InstanceKind.LOCAL });
-    const parentAuthor = await createRemoteActor({ handle: 'parent' });
-    const follower = await createRemoteActor({ handle: 'follower', sharedInbox: true });
-    const unavailable = await createRemoteActor({
-      handle: 'unavailable',
-      instanceState: InstanceState.UNRESPONSIVE,
-    });
-    await follow(parentAuthor.profile.id, author.id);
-    await follow(follower.profile.id, author.id);
-    await follow(unavailable.profile.id, author.id);
-    const malformed = await createRemoteActor({ handle: 'malformed' });
-    await follow(malformed.profile.id, author.id);
-    await db
-      .update(ActivityPubActors)
-      .set({ inboxUri: 'not-an-inbox-uri' })
-      .where(eq(ActivityPubActors.profileId, malformed.profile.id));
+    const parentAuthor = await createRemoteActor({ handle: 'parent', sharedInbox: true });
     const parent = await createPost(parentAuthor.profile.id);
     const parentUri = new URL('https://remote.example/notes/parent');
     await db.insert(ActivityPubPosts).values({
@@ -122,23 +106,22 @@ describe('ActivityPub Local Reply delivery', () => {
         preferSharedInbox: true,
       });
       assert.deepEqual(
-        call.recipients.map((recipient) => recipient.id?.href).sort(),
-        [follower.actorUri, parentAuthor.actorUri].sort(),
+        call.recipients.map((recipient) => recipient.id?.href),
+        [parentAuthor.actorUri],
       );
-      assert.equal(
-        call.recipients.find((recipient) => recipient.id?.href === follower.actorUri)?.endpoints
-          ?.sharedInbox?.href,
-        follower.sharedInboxUri,
-      );
+      assert.equal(call.recipients[0]?.endpoints?.sharedInbox?.href, parentAuthor.sharedInboxUri);
     }
   });
 
-  test('Followers Reply는 established follower만 보내고 Direct·일반 Post는 no-op이다', async () => {
+  test('Public/Unlisted만 Parent Author에게 보내고 Followers·Direct·일반 Post는 no-op이다', async () => {
     const author = await createProfile({ kind: InstanceKind.LOCAL });
     const parentAuthor = await createRemoteActor({ handle: 'parent' });
-    const follower = await createRemoteActor({ handle: 'follower' });
-    await follow(follower.profile.id, author.id);
     const parent = await createPost(parentAuthor.profile.id);
+    const publicReply = await createPost(author.id, { replyParentId: parent.id });
+    const unlistedReply = await createPost(author.id, {
+      replyParentId: parent.id,
+      visibility: PostVisibility.UNLISTED,
+    });
     const followersReply = await createPost(author.id, {
       replyParentId: parent.id,
       visibility: PostVisibility.FOLLOWERS,
@@ -151,15 +134,75 @@ describe('ActivityPub Local Reply delivery', () => {
     const fixture = createContextFixture();
     mock.method(federation, 'createContext', () => fixture.context);
 
+    await sendLocalReplyCreate(publicReply.id);
+    await sendLocalReplyCreate(unlistedReply.id);
     await sendLocalReplyCreate(followersReply.id);
     await sendLocalReplyCreate(directReply.id);
     await sendLocalReplyCreate(rootPost.id);
 
-    assert.equal(fixture.calls.length, 1);
-    assert.deepEqual(
-      fixture.calls[0]?.recipients.map((recipient) => recipient.id?.href),
-      [follower.actorUri],
+    assert.equal(fixture.calls.length, 2);
+    assert.ok(
+      fixture.calls.every((call) => call.recipients[0]?.id?.href === parentAuthor.actorUri),
     );
+  });
+
+  test('Parent endpoint는 HTTP(S)만 허용하고 invalid shared inbox는 personal inbox로 fallback한다', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const parentAuthor = await createRemoteActor({ handle: 'parent', sharedInbox: true });
+    await db
+      .update(ActivityPubActors)
+      .set({ sharedInboxUri: 'ftp://remote.example/inbox' })
+      .where(eq(ActivityPubActors.profileId, parentAuthor.profile.id));
+    const parent = await createPost(parentAuthor.profile.id);
+    const reply = await createPost(author.id, { replyParentId: parent.id });
+    const fixture = createContextFixture();
+    mock.method(federation, 'createContext', () => fixture.context);
+
+    await sendLocalReplyCreate(reply.id);
+
+    assert.equal(fixture.calls.length, 1);
+    assert.equal(fixture.calls[0]?.recipients[0]?.inboxId?.href, `${parentAuthor.actorUri}/inbox`);
+    assert.equal(fixture.calls[0]?.recipients[0]?.endpoints, null);
+
+    await db
+      .update(ActivityPubActors)
+      .set({ inboxUri: 'ftp://remote.example/inbox' })
+      .where(eq(ActivityPubActors.profileId, parentAuthor.profile.id));
+    await sendLocalReplyCreate(reply.id);
+    assert.equal(fixture.calls.length, 1);
+
+    await db
+      .update(ActivityPubActors)
+      .set({ inboxUri: `${parentAuthor.actorUri}/inbox`, uri: 'ftp://remote.example/actor' })
+      .where(eq(ActivityPubActors.profileId, parentAuthor.profile.id));
+    await sendLocalReplyCreate(reply.id);
+    assert.equal(fixture.calls.length, 1);
+  });
+
+  test('UNRESPONSIVE Parent는 전달하고 SUSPENDED Parent는 제외한다', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const unresponsive = await createRemoteActor({
+      handle: 'unresponsive-parent',
+      instanceState: InstanceState.UNRESPONSIVE,
+    });
+    const suspended = await createRemoteActor({
+      handle: 'suspended-parent',
+      instanceState: InstanceState.SUSPENDED,
+    });
+    const unresponsiveReply = await createPost(author.id, {
+      replyParentId: (await createPost(unresponsive.profile.id)).id,
+    });
+    const suspendedReply = await createPost(author.id, {
+      replyParentId: (await createPost(suspended.profile.id)).id,
+    });
+    const fixture = createContextFixture();
+    mock.method(federation, 'createContext', () => fixture.context);
+
+    await sendLocalReplyCreate(unresponsiveReply.id);
+    await sendLocalReplyCreate(suspendedReply.id);
+
+    assert.equal(fixture.calls.length, 1);
+    assert.equal(fixture.calls[0]?.recipients[0]?.id?.href, unresponsive.actorUri);
   });
 
   test('Delete가 tombstone 뒤 같은 Note·activity identity와 Create ordering domain을 반복 사용한다', async () => {
@@ -207,11 +250,16 @@ const createContextFixture = () => {
     getActorUri: (identifier: string) => new URL(`/ap/actor/${identifier}`, publicOrigin),
     sendActivity: async (
       sender: { identifier: string },
-      recipients: Recipient[],
+      recipients: Recipient | Recipient[],
       activity: Activity,
       options: { orderingKey: string; preferSharedInbox: boolean },
     ) => {
-      calls.push({ activity, options, recipients, sender });
+      calls.push({
+        activity,
+        options,
+        recipients: Array.isArray(recipients) ? recipients : [recipients],
+        sender,
+      });
     },
   } as Context<void>;
   return { calls, context };
@@ -291,9 +339,6 @@ const createRemoteActor = async ({
   });
   return { actorUri, profile, sharedInboxUri };
 };
-
-const follow = (followerProfileId: string, followeeProfileId: string) =>
-  db.insert(ProfileFollows).values({ followeeProfileId, followerProfileId });
 
 const createPost = async (
   profileId: string,
