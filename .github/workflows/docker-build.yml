@@ -54,82 +54,28 @@ jobs:
           role-to-assume: arn:aws:iam::822638974464:role/github-actions-kosmo-ecr-push
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Prepare Sentry build configuration
-        id: sentry
+      - name: Validate build ref
         shell: bash
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
         run: |
           set -euo pipefail
 
-          if [[ "${GITHUB_REF}" =~ ^refs/heads/.+$ ]]; then
-            vault_role="kosmo-build-dev"
-            vault_environment="dev"
-          elif [[ "${GITHUB_REF}" =~ ^refs/tags/[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            vault_role="kosmo-build-prod"
-            vault_environment="prod"
-          else
+          if [[ ! "${GITHUB_REF}" =~ ^refs/heads/.+$ && ! "${GITHUB_REF}" =~ ^refs/tags/[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Sentry-enabled builds are allowed only from a branch or a semantic version tag." >&2
             exit 1
           fi
 
-          encoded_audience="$(python3 -c 'import os, urllib.parse; print(urllib.parse.quote(os.environ["VAULT_GITHUB_ACTIONS_AUDIENCE"], safe=""))')"
-          request_url="${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${encoded_audience}"
-          jwt_json="$(curl -fsSL -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${request_url}")"
-          jwt="$(printf '%s' "${jwt_json}" | python3 -c 'import json, sys; print(json.load(sys.stdin)["value"])')"
-          echo "::add-mask::${jwt}"
-
-          login_payload="$(GITHUB_ACTIONS_JWT="${jwt}" VAULT_ROLE="${vault_role}" python3 -c 'import json, os; print(json.dumps({"role": os.environ["VAULT_ROLE"], "jwt": os.environ["GITHUB_ACTIONS_JWT"]}))')"
-          token_json="$(printf '%s' "${login_payload}" | curl -fsSL \
-            -H "Content-Type: application/json" \
-            --request POST \
-            --data @- \
-            "${VAULT_ADDR}/v1/auth/github-actions/login")"
-          vault_token="$(printf '%s' "${token_json}" | python3 -c 'import json, sys; print(json.load(sys.stdin)["auth"]["client_token"])')"
-          echo "::add-mask::${vault_token}"
-
-          sentry_response_file="${RUNNER_TEMP}/sentry-response.json"
-          sentry_config_file="${RUNNER_TEMP}/sentry.env"
-          umask 077
-          trap 'rm -f "${sentry_response_file}"' EXIT
-          curl -fsSL \
-            -H "X-Vault-Token: ${vault_token}" \
-            --output "${sentry_response_file}" \
-            "${VAULT_ADDR}/v1/secret/data/kubernetes/kosmo/${vault_environment}"
-          SENTRY_RESPONSE_FILE="${sentry_response_file}" SENTRY_CONFIG_FILE="${sentry_config_file}" python3 - <<'PY'
-          import json
-          import os
-          import shlex
-
-          with open(os.environ["SENTRY_RESPONSE_FILE"], encoding="utf-8") as response:
-              values = json.load(response)["data"]["data"]
-          if not isinstance(values, dict):
-              raise SystemExit("Vault Sentry build configuration must be a JSON object")
-
-          build_configuration = {
-              "SENTRY_AUTH_TOKEN": os.environ.get("SENTRY_AUTH_TOKEN"),
-              "EXPO_PUBLIC_SENTRY_DSN": values.get("EXPO_PUBLIC_SENTRY_DSN"),
-              "SENTRY_ORG": os.environ.get("SENTRY_ORG"),
-              "SENTRY_PROJECT": os.environ.get("SENTRY_PROJECT"),
-          }
-
-          for key, value in build_configuration.items():
-              if not isinstance(value, str) or not value:
-                  raise SystemExit(f"{key} build configuration must be set")
-              escaped = value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-              print(f"::add-mask::{escaped}")
-
-          with open(os.environ["SENTRY_CONFIG_FILE"], "w", encoding="utf-8") as config:
-              for key, value in build_configuration.items():
-                  config.write(f"{key}={shlex.quote(value)}\n")
-          os.chmod(os.environ["SENTRY_CONFIG_FILE"], 0o600)
-          os.remove(os.environ["SENTRY_RESPONSE_FILE"])
-
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"sentry_config={os.environ['SENTRY_CONFIG_FILE']}\n")
-          PY
+      - name: Load Sentry DSN from Vault
+        id: sentry
+        uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4.0.0
+        with:
+          url: ${{ env.VAULT_ADDR }}
+          path: github-actions
+          method: jwt
+          role: ${{ startsWith(github.ref, 'refs/tags/') && 'kosmo-build-prod' || 'kosmo-build-dev' }}
+          jwtGithubAudience: ${{ env.VAULT_GITHUB_ACTIONS_AUDIENCE }}
+          exportEnv: false
+          secrets: |
+            secret/data/kubernetes/kosmo/${{ env.ENVIRONMENT }} EXPO_PUBLIC_SENTRY_DSN | EXPO_PUBLIC_SENTRY_DSN
 
       - name: Log in to ECR
         uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64 # v2.1.6
@@ -151,6 +97,8 @@ jobs:
       - name: Build and push Docker image
         id: build
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         with:
           context: .
           file: ./Dockerfile
@@ -162,10 +110,13 @@ jobs:
             runtime
           build-args: |
             EXPO_PUBLIC_ENVIRONMENT=${{ env.ENVIRONMENT }}
+            EXPO_PUBLIC_SENTRY_DSN=${{ steps.sentry.outputs.EXPO_PUBLIC_SENTRY_DSN }}
+            SENTRY_ORG=${{ vars.SENTRY_ORG }}
+            SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}
             SENTRY_RELEASE=${{ env.SENTRY_RELEASE }}
             SENTRY_UPLOAD_REQUIRED=1
-          secret-files: |
-            sentry_config=${{ steps.sentry.outputs.sentry_config }}
+          secret-envs: |
+            sentry_auth_token=SENTRY_AUTH_TOKEN
 
       - name: Save Docker image reference
         shell: bash

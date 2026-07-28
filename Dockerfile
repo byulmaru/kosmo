@@ -37,6 +37,9 @@ RUN test -e apps/app/node_modules/.bin/relay-compiler \
 FROM deps AS app-build
 
 ARG EXPO_PUBLIC_ENVIRONMENT
+ARG EXPO_PUBLIC_SENTRY_DSN
+ARG SENTRY_ORG
+ARG SENTRY_PROJECT
 ARG SENTRY_RELEASE
 ARG SENTRY_UPLOAD_REQUIRED=0
 
@@ -50,13 +53,8 @@ COPY apps ./apps
 COPY packages ./packages
 COPY scripts ./scripts
 
-RUN --mount=type=secret,id=sentry_config,target=/run/secrets/sentry.env,required=false \
-  if [ -f /run/secrets/sentry.env ]; then \
-    set -a; \
-    . /run/secrets/sentry.env; \
-    set +a; \
-  fi \
-  && pnpm build:sentry-artifacts
+RUN --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN,required=false \
+  pnpm build:sentry-artifacts
 RUN find apps/app/dist -type f \( \
       -name '*.css' -o -name '*.html' -o -name '*.js' -o -name '*.json' \
       -o -name '*.mjs' -o -name '*.svg' -o -name '*.ttf' -o -name '*.wasm' \

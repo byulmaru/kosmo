@@ -109,7 +109,7 @@
 - Context / Problem: API/BFF runtime과 Web build가 같은 공개 DSN을 사용하지만 server용 `SENTRY_DSN`과 Web용 `EXPO_PUBLIC_SENTRY_DSN`을 따로 관리하면 값과 주입 경로가 중복된다.
 - Decision Outcome: Vault의 `kubernetes/kosmo/dev|prod` 환경 객체에 `EXPO_PUBLIC_SENTRY_DSN` 하나를 두고 API, Web BFF와 Web build가 모두 이 변수명을 사용한다. Sentry 조직·project slug는 `byulmaru/kosmo` GitHub repository variables, upload token은 repository secret에 둔다. 별도 shared 경로와 `sentry-runtime` Kubernetes Secret은 제거한다.
 - Alternatives Considered: shared Vault 경로의 server용 DSN을 별도 runtime Secret으로 변환하는 방식은 환경별 env 주입과 중복된다. 환경별 Sentry 전용 Vault 경로는 build role의 접근 범위를 좁힐 수 있지만 기존 dev/prod 객체와 별도 source를 만든다.
-- Consequences: Vault ACL이 경로 단위이므로 branch build role은 dev 객체 전체, release tag role은 prod 객체 전체를 읽을 수 있다. 사용자는 이 권한 확대를 명시적으로 수용했다. Workflow는 응답에서 DSN만 추출하며 build 전용 설정은 Docker ARG·ENV·image·runtime pod에 포함되지 않는다.
+- Consequences: Vault ACL이 경로 단위이므로 branch build role은 dev 객체 전체, release tag role은 prod 객체 전체를 읽을 수 있다. 사용자는 이 권한 확대를 명시적으로 수용했다. Workflow는 응답에서 DSN만 추출하며 공개 DSN·조직·project는 build arg로 전달되고 upload token은 Docker ARG·ENV·image·runtime pod에 포함되지 않는다.
 - Confirmation / Follow-up: dev/prod Vault 객체에 DSN이 있고 API/BFF Helm render가 기존 `env` Secret만 사용하며 branch/tag build가 대응 환경 DSN으로 source map을 업로드하는지 확인한다.
 
 ### 기능 branch와 release tag build는 대응 환경 Vault 객체를 읽는다
@@ -123,6 +123,18 @@
 - Alternatives Considered: feature branch에서 Sentry 업로드를 비활성화하거나 main만 shared를 읽게 유지하는 방식은 수동 branch image가 production build와 같은 artifact 검증을 수행하지 못하므로 선택하지 않는다.
 - Consequences: feature branch도 dev environment source map을 업로드할 수 있다. Vault policy는 각 환경 경로의 read-only 권한과 짧은 token TTL을 유지하지만 field-level 제한은 없으므로 대응 환경 객체 전체에 접근한다. Repository에서 branch workflow를 실행할 수 있는 주체는 repository secret의 source map upload token도 build 중 사용할 수 있다.
 - Confirmation / Follow-up: Terraform plan에서 branch subject glob과 exact-path read policy를 확인하고 workflow ref matrix에서 branch는 dev, 정식 SemVer tag는 prod, 그 밖의 tag는 거부되는지 검증한다.
+
+### Vault OIDC 인증과 secret 조회는 공식 Vault Action을 사용한다
+
+- Decision Date: 2026-07-28
+- Decision Class: User Choice
+- Authority / Provenance: 사용자 결정, PROD-477
+- Status: Active
+- Context / Problem: Workflow가 GitHub OIDC JWT 발급, Vault login HTTP 요청, JSON parsing, masking과 임시 env 파일 생성을 직접 구현해 Vault 조회 의도가 드러나지 않고 유지보수 코드가 길다.
+- Decision Outcome: immutable commit으로 pin한 공식 `hashicorp/vault-action`이 GitHub OIDC JWT 인증과 환경별 `EXPO_PUBLIC_SENTRY_DSN` 조회를 수행한다. 공개 DSN·organization·project는 Docker build arg로 전달하고 `SENTRY_AUTH_TOKEN`만 `docker/build-push-action`의 `secret-envs`로 BuildKit secret에 연결한다.
+- Alternatives Considered: 기존 curl/Python 구현은 외부 action 의존성이 없지만 인증·masking·임시 파일을 직접 유지해야 한다. 네 값을 BuildKit env 파일 하나로 전달하는 방식은 공개 build 설정과 실제 secret의 경계를 숨긴다.
+- Consequences: Vault 인증과 masking 동작은 공식 action에 의존한다. Workflow와 Dockerfile은 임시 JSON/Python/env 파일 없이 공개 build 설정과 token secret 경계를 직접 표현한다.
+- Confirmation / Follow-up: actionlint와 branch Docker build에서 Vault OIDC 조회, source map upload와 final image의 token 부재를 확인한다.
 
 ## Remaining Decisions
 
