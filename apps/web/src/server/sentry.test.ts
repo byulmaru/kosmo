@@ -1,16 +1,43 @@
-import { describe, expect, it } from 'vitest';
-import { createSentryOptions } from './sentry';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const sentry = vi.hoisted(() => ({ captureException: vi.fn(), init: vi.fn() }));
+
+vi.mock('@sentry/node', () => sentry);
+
+beforeEach(() => {
+  vi.resetModules();
+  sentry.init.mockReset();
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe('Web BFF Sentry configuration', () => {
-  it('is disabled unless deployment metadata is complete', () => {
-    expect(createSentryOptions({}).enabled).toBe(false);
-    const options = createSentryOptions({
-      EXPO_PUBLIC_SENTRY_DSN: 'https://public@example.invalid/1',
-      ENVIRONMENT: 'production',
-      SENTRY_RELEASE: 'kosmo@abc123',
-    });
+  it('does not initialize without deployment metadata', async () => {
+    vi.stubEnv('EXPO_PUBLIC_SENTRY_DSN', undefined);
+    vi.stubEnv('ENVIRONMENT', undefined);
+    vi.stubEnv('SENTRY_RELEASE', undefined);
 
-    expect(options.enabled).toBe(true);
-    expect(options.beforeSend).toBeUndefined();
+    await import('./sentry');
+
+    expect(sentry.init).not.toHaveBeenCalled();
+  });
+
+  it('initializes with complete deployment metadata', async () => {
+    vi.stubEnv('EXPO_PUBLIC_SENTRY_DSN', 'https://public@example.invalid/1');
+    vi.stubEnv('ENVIRONMENT', 'production');
+    vi.stubEnv('SENTRY_RELEASE', 'kosmo@abc123');
+
+    await import('./sentry');
+
+    expect(sentry.init).toHaveBeenCalledWith(
+      expect.objectContaining({
+        environment: 'production',
+        initialScope: { tags: { runtime: 'web-bff' } },
+        release: 'kosmo@abc123',
+      }),
+    );
+    expect(sentry.init.mock.calls[0]?.[0].beforeSend).toBeUndefined();
   });
 });

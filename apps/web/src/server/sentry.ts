@@ -1,32 +1,23 @@
 import * as Sentry from '@sentry/node';
-import type { NodeOptions } from '@sentry/node';
 
-type Environment = Readonly<Record<string, string | undefined>>;
+const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+const environment = process.env.ENVIRONMENT;
+const release = process.env.SENTRY_RELEASE;
+const enabled = Boolean(dsn && environment && release);
 
-export const createSentryOptions = (environment: Environment): NodeOptions => {
-  const dsn = environment.EXPO_PUBLIC_SENTRY_DSN;
-  const deploymentEnvironment = environment.ENVIRONMENT;
-  const release = environment.SENTRY_RELEASE;
-
-  return {
+if (enabled) {
+  Sentry.init({
     beforeBreadcrumb: () => null,
     dsn,
-    enabled: Boolean(dsn && deploymentEnvironment && release),
-    environment: deploymentEnvironment,
+    environment,
     initialScope: { tags: { runtime: 'web-bff' } },
     release,
     sendDefaultPii: false,
-  };
-};
-
-const options = createSentryOptions(process.env);
-
-if (options.enabled) {
-  Sentry.init(options);
+  });
 }
 
 export const captureUnexpectedError = (cause: unknown): void => {
-  if (options.enabled) {
+  if (enabled) {
     Sentry.captureException(cause);
   }
 };
