@@ -2,7 +2,6 @@ import { spawnSync } from 'node:child_process';
 import { readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
-import { build } from 'esbuild';
 
 const workspaceRoot = process.cwd();
 const sentryCli = path.join(workspaceRoot, 'node_modules/.bin/sentry-cli');
@@ -22,32 +21,6 @@ const run = (command, args, options = {}) => {
   }
 };
 
-const serverArtifacts = [
-  { entry: 'apps/api/src/index.ts', outdir: 'apps/api/dist/server' },
-  { entry: 'apps/web/src/server/index.ts', outdir: 'apps/web/dist/server' },
-];
-
-for (const artifact of serverArtifacts) {
-  await rm(path.join(workspaceRoot, artifact.outdir), { force: true, recursive: true });
-  await build({
-    bundle: true,
-    chunkNames: 'chunks/[hash]',
-    entryNames: 'index',
-    entryPoints: [path.join(workspaceRoot, artifact.entry)],
-    format: 'esm',
-    legalComments: 'none',
-    logLevel: 'info',
-    outdir: path.join(workspaceRoot, artifact.outdir),
-    outExtension: { '.js': '.mjs' },
-    packages: 'external',
-    platform: 'node',
-    splitting: true,
-    sourcemap: 'external',
-    sourcesContent: true,
-    target: 'node26',
-  });
-}
-
 run('pnpm', ['--filter', '@kosmo/app', 'relay']);
 run('pnpm', [
   '--filter',
@@ -62,15 +35,9 @@ run('pnpm', [
   'external',
 ]);
 
-const artifactGroups = [
-  { path: 'apps/api/dist/server' },
-  { path: 'apps/web/dist/server' },
-  { path: 'apps/app/dist' },
-];
+const artifactPath = 'apps/app/dist';
 
-for (const group of artifactGroups) {
-  run(sentryCli, ['sourcemaps', 'inject', group.path, '--quiet']);
-}
+run(sentryCli, ['sourcemaps', 'inject', artifactPath, '--quiet']);
 
 const walkFiles = async (directory) => {
   const entries = await readdir(directory, { recursive: true, withFileTypes: true });
@@ -79,17 +46,15 @@ const walkFiles = async (directory) => {
     .map((entry) => path.join(entry.parentPath, entry.name));
 };
 
-for (const group of artifactGroups) {
-  const mapFiles = (await walkFiles(group.path)).filter((file) => file.endsWith('.map'));
-  if (mapFiles.length === 0) {
-    throw new Error(`No source maps were generated under ${group.path}`);
-  }
+const mapFiles = (await walkFiles(artifactPath)).filter((file) => file.endsWith('.map'));
+if (mapFiles.length === 0) {
+  throw new Error(`No source maps were generated under ${artifactPath}`);
+}
 
-  for (const mapFile of mapFiles) {
-    const sourceMap = JSON.parse(await readFile(mapFile, 'utf8'));
-    if (!Array.isArray(sourceMap.sourcesContent) || sourceMap.sourcesContent.length === 0) {
-      throw new Error(`Source map is missing sourcesContent: ${mapFile}`);
-    }
+for (const mapFile of mapFiles) {
+  const sourceMap = JSON.parse(await readFile(mapFile, 'utf8'));
+  if (!Array.isArray(sourceMap.sourcesContent) || sourceMap.sourcesContent.length === 0) {
+    throw new Error(`Source map is missing sourcesContent: ${mapFile}`);
   }
 }
 
@@ -115,41 +80,37 @@ if (missingUploadConfiguration.length > 0 && uploadRequired) {
 
 if (missingUploadConfiguration.length === 0) {
   const uploadEnvironment = { ...process.env, SENTRY_AUTH_TOKEN: authToken };
-  for (const group of artifactGroups) {
-    run(
-      sentryCli,
-      [
-        'sourcemaps',
-        'upload',
-        group.path,
-        '--org',
-        organization,
-        '--project',
-        project,
-        '--release',
-        release,
-        '--strict',
-        '--validate',
-        '--wait',
-        '--quiet',
-      ],
-      { env: uploadEnvironment },
-    );
-  }
+  run(
+    sentryCli,
+    [
+      'sourcemaps',
+      'upload',
+      artifactPath,
+      '--org',
+      organization,
+      '--project',
+      project,
+      '--release',
+      release,
+      '--strict',
+      '--validate',
+      '--wait',
+      '--quiet',
+    ],
+    { env: uploadEnvironment },
+  );
 } else {
   console.log('Sentry upload skipped; generated source maps were validated locally.');
 }
 
-for (const group of artifactGroups) {
-  const files = await walkFiles(group.path);
-  await Promise.all(files.filter((file) => file.endsWith('.map')).map((file) => rm(file)));
-  await Promise.all(
-    files
-      .filter((file) => /\.(?:c|m)?js$/.test(file))
-      .map(async (file) => {
-        const source = await readFile(file, 'utf8');
-        const withoutMapReference = source.replace(/^\/\/# sourceMappingURL=.*$/gm, '');
-        await writeFile(file, withoutMapReference);
-      }),
-  );
-}
+const files = await walkFiles(artifactPath);
+await Promise.all(files.filter((file) => file.endsWith('.map')).map((file) => rm(file)));
+await Promise.all(
+  files
+    .filter((file) => /\.(?:c|m)?js$/.test(file))
+    .map(async (file) => {
+      const source = await readFile(file, 'utf8');
+      const withoutMapReference = source.replace(/^\/\/# sourceMappingURL=.*$/gm, '');
+      await writeFile(file, withoutMapReference);
+    }),
+);

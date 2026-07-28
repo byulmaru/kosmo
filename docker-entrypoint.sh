@@ -4,11 +4,11 @@ set -eu
 case "${1:-web}" in
   web)
     cd /app/apps/web
-    exec node --import tsx dist/server/index.mjs
+    exec node --import tsx src/server/index.ts
     ;;
   api)
     cd /app/apps/api
-    exec node --import tsx dist/server/index.mjs
+    exec node --import tsx src/index.ts
     ;;
   migrate)
     cd /app/packages/core

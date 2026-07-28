@@ -85,12 +85,13 @@
 
 ### Requirement: Source map 보안 업로드
 
-**Authority / Provenance:** PROD-477, PROD-484, PROD-493. 배포 빌드는 API, Web BFF와 Web browser artifact의 source map을 생성하고 배포 전에 해당 Sentry release에 업로드해야 한다(MUST). 업로드 token은 build secret으로만 주입되어야 하며(MUST), 저장소·빌드 로그·client bundle·배포 image와 제공되는 Web asset에 포함되지 않아야 한다(MUST NOT). 제공되는 Web asset에서는 source map 파일과 참조를 제거해야 한다(MUST).
+**Authority / Provenance:** PROD-477, PROD-493. 배포 빌드는 Web browser artifact의 source map을 생성하고 배포 전에 해당 Sentry release에 업로드해야 한다(MUST). 업로드 token은 build secret으로만 주입되어야 하며(MUST), 저장소·빌드 로그·client bundle·배포 image와 제공되는 Web asset에 포함되지 않아야 한다(MUST NOT). 제공되는 Web asset에서는 source map 파일과 참조를 제거해야 한다(MUST). API·Web BFF source map과 서버 artifact 생성은 PROD-516의 후속 범위이며 이 변경은 기존 `tsx` runtime entry를 유지해야 한다(MUST).
 
 #### Scenario: Release artifact upload
 
 - **WHEN** 인증된 프로덕션 배포 image를 빌드한다
-- **THEN** 서버와 Web artifact가 동일 release에 업로드되고 업로드 완료 뒤 source map은 runtime image와 Web 정적 asset에서 제거된다
+- **THEN** Web artifact가 해당 release에 업로드되고 업로드 완료 뒤 source map은 Web 정적 asset에서 제거된다
+- **AND** API와 Web BFF는 사전 컴파일된 JavaScript artifact 없이 기존 TypeScript entry를 `tsx`로 실행한다
 
 #### Scenario: Build without upload credentials
 
@@ -99,7 +100,7 @@
 
 ### Requirement: 운영 검증과 triage
 
-**Authority / Provenance:** PROD-477, PROD-484, PROD-493. 저장소 문서는 설정 방법, event 전달 정책, 검증용 오류 절차, release·source map 확인과 새 오류를 담당 작업으로 넘기는 최소 triage 경로를 설명해야 한다(MUST). 배포 완료 판단은 API, Web BFF와 Web 각각의 검증 event에서 release와 원본 TypeScript·React 위치를 확인해야 한다(MUST).
+**Authority / Provenance:** PROD-477, PROD-484, PROD-493. 저장소 문서는 설정 방법, event 전달 정책, 검증용 오류 절차, release·Web source map 확인과 새 오류를 담당 작업으로 넘기는 최소 triage 경로를 설명해야 한다(MUST). 배포 완료 판단은 API, Web BFF와 Web 각각의 검증 event와 release를 확인하고 Web event의 원본 TypeScript·React 위치를 확인해야 한다(MUST). 서버 원본 TypeScript symbolication은 PROD-516의 완료 판단이 소유한다.
 
 #### Scenario: Deployment verification
 

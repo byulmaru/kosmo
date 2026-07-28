@@ -77,16 +77,12 @@ RUN groupadd --system --gid 10001 app \
 RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store \
   pnpm install --filter @kosmo/api... --filter @kosmo/web... --frozen-lockfile --prod --ignore-scripts --store-dir=/var/cache/pnpm/store
 
-RUN find node_modules -type f -name '*.map' -delete
-
 COPY --chown=app:app tsconfig.json ./
 COPY --chown=app:app apps/api ./apps/api
 COPY --chown=app:app drizzle ./drizzle
 COPY --chown=app:app packages/core ./packages/core
 COPY --chown=app:app packages/fedify ./packages/fedify
 COPY --chown=app:app apps/web/src/server ./apps/web/src/server
-COPY --chown=app:app --from=app-build /app/apps/api/dist/server ./apps/api/dist/server
-COPY --chown=app:app --from=app-build /app/apps/web/dist/server ./apps/web/dist/server
 COPY --chown=app:app --from=app-build /app/apps/app/dist ./apps/app/dist
 COPY --chown=app:app docker-entrypoint.sh ./docker-entrypoint.sh
 

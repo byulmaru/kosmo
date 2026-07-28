@@ -19,12 +19,12 @@
 **Verification**
 
 - server event 전달 설정과 활성화 조건, API unexpected/expected GraphQL 오류, API HTTP 경계와 BFF expected/unexpected 오류를 단위·통합 테스트로 검증한다.
-- API와 Web package check/test, production server artifact 실행 smoke를 통과시킨다.
+- API와 Web package check/test, 기존 `tsx` production entry 실행 smoke를 통과시킨다.
 
 - [x] 1.1 Server Sentry SDK의 event 전달·runtime metadata 정책을 구현하고 설정 조합별 테스트를 추가한다.
 - [x] 1.2 API GraphQL unexpected 오류와 GraphQL 밖 HTTP unexpected 오류를 한 번 수집하도록 연결하고 예상 오류·응답 회귀를 검증한다.
 - [x] 1.3 Web BFF 전역 경계에서 unexpected 오류만 수집하고 OIDC 예상 오류·500 응답 회귀를 검증한다.
-- [x] 1.4 API·Web BFF production JavaScript/source map artifact를 생성하고 실행 entrypoint와 smoke 검증을 정렬한다.
+- [x] 1.4 API·Web BFF는 기존 `tsx` production entry를 유지하고 서버 artifact/source map은 PROD-516으로 분리하며 smoke 검증을 통과시킨다.
 
 ## 2. PROD-493 Web 앱 오류 수집
 
@@ -63,21 +63,21 @@
 
 **Deliverable**
 
-API, Web BFF와 Web browser가 동일 커밋 release와 일관된 환경/runtime 식별자를 사용하고, 자격 증명·source map 보안 경계와 배포 후 검증·triage 절차가 재현 가능하게 운영된다.
+API, Web BFF와 Web browser가 동일 커밋 release와 일관된 환경/runtime 식별자를 사용하고, Web source map 자격 증명·보안 경계와 배포 후 검증·triage 절차가 재현 가능하게 운영된다.
 
 **Guardrails**
 
 - source map 업로드 token은 BuildKit secret으로만 소비하고 저장소·로그·image·Web asset에 남기지 않는다.
 - 환경별 Vault dev/prod 객체의 `EXPO_PUBLIC_SENTRY_DSN`을 API, Web BFF와 Web build가 공유한다. 공식 Vault Action이 DSN을 조회하고 build 전용 organization/project slug와 upload token은 각각 GitHub repository variables/secret에서 관리한다. 공개 설정은 build arg, token만 BuildKit secret으로 전달하고 API와 Web BFF는 기존 환경 `env` Secret에서 같은 DSN 변수를 읽는다. Build role이 대응 환경 Vault 객체 전체를 읽는 권한 확대는 사용자 결정으로 수용한다.
 - Android·iOS PROD-483 범위는 통합 완료 조건에 포함하지 않는다.
-- 실제 event, release, symbolication, event 전달 결과와 알림 전달을 확인하기 전에는 부모 통합 검증과 OpenSpec archive를 완료하지 않는다.
+- 실제 event, release, Web symbolication, event 전달 결과와 알림 전달을 확인하기 전에는 부모 통합 검증과 OpenSpec archive를 완료하지 않는다.
 
 **Verification**
 
 - strict OpenSpec, lint, format, package test/build, Docker source map 정적 검사와 secret 없는 build 경로를 통과시킨다.
-- 배포 후 API·Web BFF·Web 검증 event에서 동일 release, runtime/environment, 원본 위치, event 전달 결과와 알림 전달을 체크리스트로 확인한다.
+- 배포 후 API·Web BFF·Web 검증 event에서 동일 release, runtime/environment와 event 전달 결과를 확인하고 Web event의 원본 위치와 알림 전달을 체크리스트로 확인한다.
 
 - [x] 3.1 GitHub Actions·Docker·Helm/Vault에 release, environment/runtime, 공개/비공개 DSN과 BuildKit 업로드 secret 경계를 연결한다.
 - [x] 3.2 설정, event 전달 정책, build·배포 검증과 Sentry 새 오류를 Linear 담당 작업으로 넘기는 triage 문서를 작성한다.
 - [x] 3.3 관련 package와 production artifact 검증, lint/format, strict OpenSpec과 secret·source map 정적 검사를 통과시킨다.
-- [ ] 3.4 배포 후 세 runtime의 실제 event, release·source map, event 전달 결과와 알림 전달을 확인한다.
+- [ ] 3.4 배포 후 세 runtime의 실제 event·release·event 전달 결과와 Web source map, 알림 전달을 확인한다.

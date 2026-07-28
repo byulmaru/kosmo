@@ -11,7 +11,7 @@ API와 Web BFF는 Hono/Node ESM 애플리케이션이며 TypeScript source를 `t
 - API, Web BFF와 Web browser의 unexpected 오류를 기존 응답·UI를 유지하며 한 번씩 수집한다.
 - 세 runtime에 같은 커밋 release와 일관된 environment/runtime metadata를 붙인다.
 - Sentry SDK가 만든 event와 exception은 `beforeSend`로 정제하지 않고 그대로 전달하며 자동 breadcrumb만 제거한다.
-- build에서 server/Web source map을 생성·검증·업로드하고 제공 artifact에서는 제거한다.
+- build에서 Web source map을 생성·검증·업로드하고 제공 artifact에서는 제거한다.
 - 자격 증명 주입, 배포 검증과 triage 경로를 저장소 문서로 재현 가능하게 만든다.
 
 **Non-Goals:**
@@ -29,7 +29,7 @@ API와 Web BFF는 Hono/Node ESM 애플리케이션이며 TypeScript source를 `t
 - `NODE_ENV=production`은 API unit test에서도 사용하므로 활성화 조건으로 사용할 수 없다. 로컬·테스트에는 배포 DSN·환경·release를 기본 주입하지 않아야 한다.
 - `apps/app`의 공용 source에 Web SDK를 직접 import하면 PROD-483보다 먼저 native bundle과 runtime을 바꾼다. platform module 경계가 필요하다.
 - Expo Web source map을 그대로 정적 root에 복사하면 원본 source가 공개된다. 업로드는 gzip과 runtime image 복사보다 먼저 끝나야 한다.
-- 서버는 현재 emit된 JavaScript artifact가 없어 업로드 가능한 source map도 없다. 배포 entry artifact를 생성하는 build 단계와 runtime entrypoint 정렬이 필요하다.
+- 서버는 TypeScript source를 `tsx`로 직접 실행한다. 서버 JavaScript artifact와 source map을 만들기 위한 build/runtime 전환은 오류 event 수집에 필수적이지 않으므로 PROD-516으로 연기한다.
 
 ### Recommended Approach
 
@@ -37,7 +37,7 @@ API와 Web BFF는 Hono/Node ESM 애플리케이션이며 TypeScript source를 `t
 - API GraphQL plugin은 Kosmo/validation 오류와 명시적으로 던진 `GraphQLError`를 capture하지 않고, plain `Error`와 non-null field 위반 같은 unexpected execution 원인만 capture한다. GraphQL 밖 API 오류와 Web BFF unexpected 오류는 각 Hono `onError`가 capture한다.
 - Web platform entry가 router와 애플리케이션 module보다 먼저 browser SDK를 초기화하고 generic 오류 reporter context를 제공한다. `react-error-boundary`로 구성한 단일 GraphQL 경계가 이 reporter를 상속하며 내부 route·session 경계의 `onError`도 같은 reporter로 capture한다. Android·iOS entry는 Sentry 관측 module을 import하지 않는다.
 - `beforeSend` event processor를 두지 않고 SDK event 전체를 전달한다. environment/release/runtime metadata는 유지하고 자동 breadcrumb와 Web session tracking은 전부 비활성화한다.
-- Docker build는 기존 API·Web BFF index를 production JavaScript와 external source map으로 만들고 Expo Web export에 external source map을 요청한다. Sentry CLI의 debug ID inject와 upload를 업로드 token BuildKit secret으로 수행한 뒤 map과 sourceMappingURL을 제거하고 runtime image에는 실행 JavaScript만 복사한다.
+- Docker build는 Expo Web export에 external source map을 요청한다. Sentry CLI의 debug ID inject와 upload를 업로드 token BuildKit secret으로 수행한 뒤 Web map과 sourceMappingURL을 제거한다. API와 Web BFF는 기존 TypeScript source와 `tsx` runtime entry를 유지한다.
 - API, Web BFF와 Web browser는 Sentry project 하나를 공유하고 `runtime` tag로 구분한다. GitHub Actions는 공식 Vault Action과 branch/dev·SemVer tag/prod role을 사용해 각각 Vault의 `secret/kubernetes/kosmo/dev|prod`에서 `EXPO_PUBLIC_SENTRY_DSN`을 읽는다. 공개 DSN과 GitHub repository variables의 조직·project slug는 build arg, repository secret의 upload token만 BuildKit secret으로 전달한다. API와 Web BFF는 Vault Secrets Operator가 환경별 객체를 변환한 기존 `env` Kubernetes Secret에서 같은 `EXPO_PUBLIC_SENTRY_DSN`을 읽는다.
 
 ### Allowed Alternatives
@@ -57,17 +57,17 @@ API와 Web BFF는 Hono/Node ESM 애플리케이션이며 TypeScript source를 `t
 ## Risks / Trade-offs
 
 - [SDK event에 request·browser context나 사용자 콘텐츠가 포함될 수 있다] → 기본 PII 전송과 breadcrumb·Web session tracking은 비활성화하고, 애플리케이션이 오류·context에 민감 정보를 넣지 않도록 운영 검증에서 실제 event를 확인한다.
-- [서버 bundle 전환이 ESM package 동작이나 dynamic loading을 바꿀 수 있다] → production entry smoke와 API/Web 전체 test를 실행하고 문제가 있으면 emit 전략을 바꾸되 source map 계약은 유지한다.
+- [서버 source map이 없어 event의 원본 TypeScript symbolication이 제한된다] → 오류 event 수집과 release/runtime 식별은 현재 범위에서 제공하고 artifact 생성 전략과 실제 symbolication은 PROD-516에서 독립적으로 검증한다.
 - [하나의 image가 여러 환경에 재사용되면 Web environment가 build 시점 값과 달라질 수 있다] → 현재 branch/dev와 tag/production build가 명시적 environment build arg를 전달하고, image promotion이 도입되면 runtime config 주입을 별도 계약으로 전환한다.
 - [Vault의 DSN을 바꾸면 Web bundle에는 기존 값이 남는다] → Web은 해당 환경의 새 image를 build·배포해 변경을 반영하고, API와 Web BFF는 Vault Secrets Operator의 기존 `env` Secret 갱신과 rollout restart로 반영한다.
-- [실제 Sentry project와 알림 rule은 저장소 밖 상태다] → 코드·build 검증과 별도로 배포 후 event, symbolication, event 전달 결과와 알림 전달 체크리스트를 완료 조건으로 남긴다.
+- [실제 Sentry project와 알림 rule은 저장소 밖 상태다] → 코드·build 검증과 별도로 배포 후 event, Web symbolication, event 전달 결과와 알림 전달 체크리스트를 완료 조건으로 남긴다.
 
 ## Migration Plan
 
 1. SDK와 배포 metadata 기반 설정, unit test를 먼저 추가한다.
-2. server/Web source map 생성과 secret 없는 로컬 build 검증을 연결한다.
+2. Web source map 생성과 secret 없는 로컬 build 검증을 연결한다.
 3. 환경별 Vault 객체의 `EXPO_PUBLIC_SENTRY_DSN`, GitHub repository variables의 조직·project slug와 repository secret의 upload token을 BuildKit secret으로 전달하고 서버도 기존 환경 Secret에서 같은 DSN 변수를 소비한다.
-4. 새 image를 배포하고 API, Web BFF, Web 검증 event를 순서대로 발생시켜 release·원본 위치·event 전달 결과를 확인한다.
+4. 새 image를 배포하고 API, Web BFF, Web 검증 event를 순서대로 발생시켜 release·event 전달 결과와 Web 원본 위치를 확인한다.
 
 ## Open Questions
 

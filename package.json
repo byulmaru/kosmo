@@ -31,7 +31,6 @@
     "@optique/run": "^1.1.1",
     "@sentry/cli": "^3.6.0",
     "@types/node": "^25.6.2",
-    "esbuild": "^0.28.1",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-import": "^2.32.0",

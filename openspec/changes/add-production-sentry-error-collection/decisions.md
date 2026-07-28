@@ -52,29 +52,29 @@
 - Consequences: 배포 metadata가 완전한 runtime은 항상 오류를 전송한다. 로컬·테스트 기본 비전송은 별도 flag가 아니라 배포 metadata 부재로 보장한다.
 - Confirmation / Follow-up: 설정 조합별 단위 테스트에서 metadata가 완전하면 활성화되고 하나라도 없으면 비활성화되는지 확인한다.
 
-### 커밋 기반 release를 모든 runtime과 artifact에 공유한다
+### 커밋 기반 release를 모든 runtime과 Web artifact에 공유한다
 
 - Decision Date: 2026-07-27
 - Decision Class: Derived Contract
 - Authority / Provenance: PROD-477, PROD-484, PROD-493
 - Status: Active
 - Context / Problem: server image와 Expo Web bundle이 다른 release 문자열을 사용하면 하나의 배포 회귀와 source map을 함께 추적할 수 없다.
-- Decision Outcome: Git commit SHA에서 만든 하나의 release 문자열을 API, Web BFF, Web browser event와 해당 source map artifact에 사용하고 runtime은 tag로 구분한다.
+- Decision Outcome: Git commit SHA에서 만든 하나의 release 문자열을 API, Web BFF, Web browser event와 Web source map artifact에 사용하고 runtime은 tag로 구분한다.
 - Alternatives Considered: package version은 현재 모두 `0.0.x`이고 배포 commit을 유일하게 식별하지 못한다. runtime별 release는 통합 추적을 분리하므로 선택하지 않는다.
-- Consequences: 같은 commit의 세 runtime 오류와 artifact가 하나의 release로 묶인다.
+- Consequences: 같은 commit의 세 runtime 오류와 Web artifact가 하나의 release로 묶인다. 서버 source map 연결은 PROD-516에서 같은 release 규칙을 재사용한다.
 - Confirmation / Follow-up: image build artifact와 세 검증 event의 release 일치를 확인한다.
 
 ### Source map 업로드 token은 BuildKit secret에서만 소비한다
 
 - Decision Date: 2026-07-27
 - Decision Class: Implementation Choice
-- Authority / Provenance: PROD-477, PROD-484, PROD-493
+- Authority / Provenance: PROD-477, PROD-493
 - Status: Active
 - Context / Problem: Docker ARG·ENV와 일반 build log를 통한 token 전달은 image history나 로그에 자격 증명을 남길 수 있다.
-- Decision Outcome: 업로드 token은 GitHub Actions가 BuildKit secret mount로만 전달하고 업로드 과정이 끝난 뒤 source map과 공개 bundle의 map 참조를 runtime image에서 제거한다.
+- Decision Outcome: 업로드 token은 GitHub Actions가 BuildKit secret mount로만 전달하고 업로드 과정이 끝난 뒤 Web source map과 공개 bundle의 map 참조를 runtime image에서 제거한다.
 - Alternatives Considered: Docker build arg, image runtime secret과 repository 설정 파일은 token 노출 또는 배포 후 불필요한 보유를 만들므로 선택하지 않는다.
 - Consequences: 인증된 CI build만 artifact를 업로드하며 로컬 build는 secret 없이 외부 업로드를 건너뛴다.
-- Confirmation / Follow-up: Docker history, runtime image, Web 정적 asset과 build log에서 token·map 부재를 확인한다.
+- Confirmation / Follow-up: Docker history, Web 정적 asset과 build log에서 token·Web map 부재를 확인한다.
 
 ### 세 runtime은 Sentry project 하나를 공유한다
 
@@ -110,7 +110,7 @@
 - Decision Outcome: Vault의 `kubernetes/kosmo/dev|prod` 환경 객체에 `EXPO_PUBLIC_SENTRY_DSN` 하나를 두고 API, Web BFF와 Web build가 모두 이 변수명을 사용한다. Sentry 조직·project slug는 `byulmaru/kosmo` GitHub repository variables, upload token은 repository secret에 둔다. 별도 shared 경로와 `sentry-runtime` Kubernetes Secret은 제거한다.
 - Alternatives Considered: shared Vault 경로의 server용 DSN을 별도 runtime Secret으로 변환하는 방식은 환경별 env 주입과 중복된다. 환경별 Sentry 전용 Vault 경로는 build role의 접근 범위를 좁힐 수 있지만 기존 dev/prod 객체와 별도 source를 만든다.
 - Consequences: Vault ACL이 경로 단위이므로 branch build role은 dev 객체 전체, release tag role은 prod 객체 전체를 읽을 수 있다. 사용자는 이 권한 확대를 명시적으로 수용했다. Workflow는 응답에서 DSN만 추출하며 공개 DSN·조직·project는 build arg로 전달되고 upload token은 Docker ARG·ENV·image·runtime pod에 포함되지 않는다.
-- Confirmation / Follow-up: dev/prod Vault 객체에 DSN이 있고 API/BFF Helm render가 기존 `env` Secret만 사용하며 branch/tag build가 대응 환경 DSN으로 source map을 업로드하는지 확인한다.
+- Confirmation / Follow-up: dev/prod Vault 객체에 DSN이 있고 API/BFF Helm render가 기존 `env` Secret만 사용하며 branch/tag build가 대응 환경 DSN으로 Web source map을 업로드하는지 확인한다.
 
 ### 기능 branch와 release tag build는 대응 환경 Vault 객체를 읽는다
 
@@ -121,7 +121,7 @@
 - Context / Problem: 수동 feature branch Docker build와 release tag build가 Web bundle에 대응 환경 DSN을 넣으려면 각각 dev/prod Vault 객체를 읽어야 한다.
 - Decision Outcome: `byulmaru/kosmo`의 모든 branch GitHub OIDC subject는 `kosmo-build-dev` role로 `secret/kubernetes/kosmo/dev`, 정식 SemVer tag는 `kosmo-build-prod` role로 `secret/kubernetes/kosmo/prod`를 읽는다.
 - Alternatives Considered: feature branch에서 Sentry 업로드를 비활성화하거나 main만 shared를 읽게 유지하는 방식은 수동 branch image가 production build와 같은 artifact 검증을 수행하지 못하므로 선택하지 않는다.
-- Consequences: feature branch도 dev environment source map을 업로드할 수 있다. Vault policy는 각 환경 경로의 read-only 권한과 짧은 token TTL을 유지하지만 field-level 제한은 없으므로 대응 환경 객체 전체에 접근한다. Repository에서 branch workflow를 실행할 수 있는 주체는 repository secret의 source map upload token도 build 중 사용할 수 있다.
+- Consequences: feature branch도 dev environment Web source map을 업로드할 수 있다. Vault policy는 각 환경 경로의 read-only 권한과 짧은 token TTL을 유지하지만 field-level 제한은 없으므로 대응 환경 객체 전체에 접근한다. Repository에서 branch workflow를 실행할 수 있는 주체는 repository secret의 source map upload token도 build 중 사용할 수 있다.
 - Confirmation / Follow-up: Terraform plan에서 branch subject glob과 exact-path read policy를 확인하고 workflow ref matrix에서 branch는 dev, 정식 SemVer tag는 prod, 그 밖의 tag는 거부되는지 검증한다.
 
 ### Vault OIDC 인증과 secret 조회는 공식 Vault Action을 사용한다
@@ -134,19 +134,19 @@
 - Decision Outcome: immutable commit으로 pin한 공식 `hashicorp/vault-action`이 GitHub OIDC JWT 인증과 환경별 `EXPO_PUBLIC_SENTRY_DSN` 조회를 수행한다. 공개 DSN·organization·project는 Docker build arg로 전달하고 `SENTRY_AUTH_TOKEN`만 `docker/build-push-action`의 `secret-envs`로 BuildKit secret에 연결한다.
 - Alternatives Considered: 기존 curl/Python 구현은 외부 action 의존성이 없지만 인증·masking·임시 파일을 직접 유지해야 한다. 네 값을 BuildKit env 파일 하나로 전달하는 방식은 공개 build 설정과 실제 secret의 경계를 숨긴다.
 - Consequences: Vault 인증과 masking 동작은 공식 action에 의존한다. Workflow와 Dockerfile은 임시 JSON/Python/env 파일 없이 공개 build 설정과 token secret 경계를 직접 표현한다.
-- Confirmation / Follow-up: actionlint와 branch Docker build에서 Vault OIDC 조회, source map upload와 final image의 token 부재를 확인한다.
+- Confirmation / Follow-up: actionlint와 branch Docker build에서 Vault OIDC 조회, Web source map upload와 final image의 token 부재를 확인한다.
 
-### Server artifact는 기존 application index를 직접 사용한다
+### 서버는 기존 TypeScript entry와 tsx runtime을 유지한다
 
 - Decision Date: 2026-07-28
 - Decision Class: User Choice
 - Authority / Provenance: 사용자 결정, PROD-477
 - Status: Active
-- Context / Problem: Sentry를 모든 application dependency보다 먼저 평가하기 위한 별도 bootstrap entry와 dynamic import가 추가됐지만, module 평가 중 startup 오류까지 수집하는 것은 현재 server 오류 수집 계약의 필수 범위가 아니다.
-- Decision Outcome: API와 Web BFF production artifact는 기존 `index.ts`를 직접 entry로 사용하고 별도 Sentry bootstrap entry를 두지 않는다.
-- Alternatives Considered: Sentry 전용 entry가 application index를 dynamic import하면 module 평가 오류까지 수집할 가능성을 높이지만 production과 개발 entry가 달라지고 별도 bootstrap을 유지해야 한다.
-- Consequences: Hono·GraphQL·Fedify dependency 평가 중 Sentry 초기화 전 발생한 startup 오류는 수집되지 않을 수 있다. 실행이 시작된 뒤 기존 GraphQL·HTTP 전역 경계의 unexpected 오류 수집은 유지된다.
-- Confirmation / Follow-up: 기존 index 기반 production artifact build와 server smoke를 확인한다.
+- Context / Problem: 서버 source map 업로드를 위해 API·Web BFF를 `esbuild` JavaScript artifact로 전환했지만, 이 build/runtime 변경은 현재 오류 event 수집에 필수적이지 않다. Sentry를 모든 application dependency보다 먼저 평가하기 위한 별도 bootstrap도 같은 이유로 불필요하다.
+- Decision Outcome: API와 Web BFF는 기존 `index.ts`를 `tsx`로 직접 실행하고 별도 JavaScript artifact, source map과 Sentry bootstrap entry를 두지 않는다.
+- Alternatives Considered: 사전 컴파일 artifact는 안정적인 server source map 업로드를 가능하게 하지만 ESM package 동작과 배포 entry를 함께 바꾼다. 해당 작업은 PROD-516이 독립적으로 검토한다.
+- Consequences: 실행이 시작된 뒤 GraphQL·HTTP 전역 경계의 unexpected 오류 수집과 release/runtime 식별은 유지된다. Hono·GraphQL·Fedify dependency 평가 중 초기화 전 오류와 원본 TypeScript symbolication은 현재 범위에서 보장하지 않는다.
+- Confirmation / Follow-up: 기존 `tsx` entry의 server smoke를 확인하고 source map·symbolication은 PROD-516에서 검증한다.
 
 ### 명시적으로 던진 GraphQLError는 수집하지 않는다
 
