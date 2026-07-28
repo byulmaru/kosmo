@@ -23,7 +23,7 @@ type DeliverySource = {
 };
 
 type StoredRecipient = {
-  readonly inboxUri: string;
+  readonly inboxUri: string | null;
   readonly sharedInboxUri: string | null;
   readonly uri: string;
 };
@@ -35,101 +35,6 @@ const createFederationContext = (
     localInstanceId: source.localInstanceId,
   });
 
-const loadLocalPostSource = async (
-  postId: string,
-): Promise<Pick<DeliverySource, 'canonicalOrigin' | 'localInstanceId'> | null> => {
-  const row = await db
-    .select({ canonicalOrigin: Instances.canonicalOrigin, localInstanceId: Instances.id })
-    .from(Posts)
-    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(
-      and(
-        eq(Posts.id, postId),
-        eq(Posts.state, PostState.ACTIVE),
-        eq(Instances.kind, InstanceKind.LOCAL),
-        eq(Instances.state, InstanceState.ACTIVE),
-        isNotNull(Instances.canonicalOrigin),
-        eq(Profiles.state, ProfileState.ACTIVE),
-      ),
-    )
-    .limit(1)
-    .then(first);
-
-  return row?.canonicalOrigin
-    ? { canonicalOrigin: row.canonicalOrigin, localInstanceId: row.localInstanceId }
-    : null;
-};
-
-const loadDeletedReplySource = async (postId: string): Promise<DeliverySource | null> => {
-  const row = await db
-    .select({
-      authorProfileId: Profiles.id,
-      canonicalOrigin: Instances.canonicalOrigin,
-      deletedAt: Posts.deletedAt,
-      localInstanceId: Instances.id,
-      replyParentId: Posts.replyParentId,
-      visibility: Posts.visibility,
-    })
-    .from(Posts)
-    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(
-      and(
-        eq(Posts.id, postId),
-        eq(Posts.state, PostState.DELETED),
-        isNotNull(Posts.replyParentId),
-        eq(Instances.kind, InstanceKind.LOCAL),
-        eq(Instances.state, InstanceState.ACTIVE),
-        isNotNull(Instances.canonicalOrigin),
-        eq(Profiles.state, ProfileState.ACTIVE),
-      ),
-    )
-    .limit(1)
-    .then(first);
-
-  return row?.replyParentId && row.canonicalOrigin
-    ? {
-        authorProfileId: row.authorProfileId,
-        canonicalOrigin: row.canonicalOrigin,
-        deletedAt: row.deletedAt,
-        localInstanceId: row.localInstanceId,
-        replyParentId: row.replyParentId,
-        visibility: row.visibility,
-      }
-    : null;
-};
-
-const loadRemoteParentRecipient = async (
-  replyParentId: string,
-): Promise<StoredRecipient | null> => {
-  const row = await db
-    .select({
-      inboxUri: ActivityPubActors.inboxUri,
-      sharedInboxUri: ActivityPubActors.sharedInboxUri,
-      uri: ActivityPubActors.uri,
-    })
-    .from(Posts)
-    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
-    .where(
-      and(
-        eq(Posts.id, replyParentId),
-        eq(Profiles.state, ProfileState.ACTIVE),
-        eq(Instances.kind, InstanceKind.ACTIVITYPUB),
-        eq(Instances.state, InstanceState.ACTIVE),
-        isNotNull(ActivityPubActors.inboxUri),
-      ),
-    )
-    .limit(1)
-    .then(first);
-
-  return row?.inboxUri
-    ? { inboxUri: row.inboxUri, sharedInboxUri: row.sharedInboxUri, uri: row.uri }
-    : null;
-};
-
 const parseHttpUri = (value: string): URL | null => {
   try {
     const uri = new URL(value);
@@ -140,6 +45,10 @@ const parseHttpUri = (value: string): URL | null => {
 };
 
 const toRecipient = (actor: StoredRecipient): Recipient | null => {
+  if (!actor.inboxUri) {
+    return null;
+  }
+
   const id = parseHttpUri(actor.uri);
   const inboxId = parseHttpUri(actor.inboxUri);
   if (!id || !inboxId) {
@@ -166,7 +75,28 @@ const selectRecipient = async (
     return null;
   }
 
-  const parentActor = await loadRemoteParentRecipient(source.replyParentId);
+  const parentActor = await db
+    .select({
+      inboxUri: ActivityPubActors.inboxUri,
+      sharedInboxUri: ActivityPubActors.sharedInboxUri,
+      uri: ActivityPubActors.uri,
+    })
+    .from(Posts)
+    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
+    .where(
+      and(
+        eq(Posts.id, source.replyParentId),
+        eq(Profiles.state, ProfileState.ACTIVE),
+        eq(Instances.kind, InstanceKind.ACTIVITYPUB),
+        eq(Instances.state, InstanceState.ACTIVE),
+        isNotNull(ActivityPubActors.inboxUri),
+      ),
+    )
+    .limit(1)
+    .then(first);
+
   return parentActor ? toRecipient(parentActor) : null;
 };
 
@@ -174,12 +104,31 @@ const noteUri = (canonicalOrigin: string | URL, postId: string): URL =>
   new URL(`/ap/note/${postId}`, canonicalOrigin);
 
 export const sendLocalReplyCreate = async (postId: string): Promise<void> => {
-  const source = await loadLocalPostSource(postId);
-  if (!source) {
+  const source = await db
+    .select({ canonicalOrigin: Instances.canonicalOrigin, localInstanceId: Instances.id })
+    .from(Posts)
+    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .where(
+      and(
+        eq(Posts.id, postId),
+        eq(Posts.state, PostState.ACTIVE),
+        eq(Instances.kind, InstanceKind.LOCAL),
+        eq(Instances.state, InstanceState.ACTIVE),
+        isNotNull(Instances.canonicalOrigin),
+        eq(Profiles.state, ProfileState.ACTIVE),
+      ),
+    )
+    .limit(1)
+    .then(first);
+  if (!source?.canonicalOrigin) {
     return;
   }
 
-  const context = createFederationContext(source);
+  const context = createFederationContext({
+    canonicalOrigin: source.canonicalOrigin,
+    localInstanceId: source.localInstanceId,
+  });
   const projection = await projectLocalPostNote(context, postId);
   if (!projection?.replyParentId) {
     return;
@@ -206,12 +155,39 @@ export const sendLocalReplyCreate = async (postId: string): Promise<void> => {
 };
 
 export const sendLocalReplyDelete = async (postId: string): Promise<void> => {
-  const source = await loadDeletedReplySource(postId);
-  if (!source) {
+  const source = await db
+    .select({
+      authorProfileId: Profiles.id,
+      canonicalOrigin: Instances.canonicalOrigin,
+      deletedAt: Posts.deletedAt,
+      localInstanceId: Instances.id,
+      replyParentId: Posts.replyParentId,
+      visibility: Posts.visibility,
+    })
+    .from(Posts)
+    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .where(
+      and(
+        eq(Posts.id, postId),
+        eq(Posts.state, PostState.DELETED),
+        isNotNull(Posts.replyParentId),
+        eq(Instances.kind, InstanceKind.LOCAL),
+        eq(Instances.state, InstanceState.ACTIVE),
+        isNotNull(Instances.canonicalOrigin),
+        eq(Profiles.state, ProfileState.ACTIVE),
+      ),
+    )
+    .limit(1)
+    .then(first);
+  if (!source?.replyParentId || !source.canonicalOrigin) {
     return;
   }
 
-  const context = createFederationContext(source);
+  const context = createFederationContext({
+    canonicalOrigin: source.canonicalOrigin,
+    localInstanceId: source.localInstanceId,
+  });
   const recipient = await selectRecipient(source);
   if (!recipient) {
     return;
