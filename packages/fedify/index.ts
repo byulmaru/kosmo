@@ -7,3 +7,4 @@ export {
   materializeRemoteProfileActor,
   RemoteActorMaterializationError,
 } from './src/remote-actor-materialization';
+export { sendRepostAnnounce, sendRepostUndo } from './src/repost-delivery';

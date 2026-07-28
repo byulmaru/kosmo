@@ -1,10 +1,21 @@
 import assert from 'node:assert/strict';
-import { after, test } from 'node:test';
+import { after, afterEach, before, mock, test } from 'node:test';
 import { and, eq, isNull } from 'drizzle-orm';
-import { db, firstOrThrow, Instances, pg, Posts, ProfileFollows, Profiles } from '../db';
+import {
+  ActivityPubActors,
+  db,
+  firstOrThrow,
+  Instances,
+  Notifications,
+  pg,
+  Posts,
+  ProfileFollows,
+  Profiles,
+} from '../db';
 import {
   InstanceKind,
   InstanceState,
+  NotificationKind,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -13,6 +24,19 @@ import {
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import { postContentDocumentFromText } from '../post-content/server';
 import { createPost, deletePost, repostPost } from './post';
+
+const publicOrigin = 'http://127.0.0.1:4173';
+process.env.PUBLIC_ORIGIN = publicOrigin;
+let configuredLocalInstanceId: string;
+
+before(async () => {
+  const { seedDatabase } = await import('../db/seed');
+  configuredLocalInstanceId = (await seedDatabase({ publicOrigin })).localInstance.id;
+});
+
+afterEach(() => {
+  mock.restoreAll();
+});
 
 after(async () => pg.end());
 
@@ -61,6 +85,37 @@ const createContentPost = async (
     profileId,
     visibility,
   }).then(({ post }) => post);
+
+const createConfiguredLocalProfile = async () => {
+  const suffix = crypto.randomUUID();
+  return db
+    .insert(Profiles)
+    .values({
+      displayName: suffix,
+      followPolicy: ProfileFollowPolicy.OPEN,
+      handle: suffix,
+      instanceId: configuredLocalInstanceId,
+      normalizedHandle: suffix,
+      state: ProfileState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+};
+
+const createRemoteFollower = async (followeeProfileId: string) => {
+  const remote = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+  const actorUri = `https://${remote.instance.domain}/users/${remote.profile.id}`;
+  await db.insert(ActivityPubActors).values({
+    inboxUri: `${actorUri}/inbox`,
+    profileId: remote.profile.id,
+    type: 'PERSON',
+    uri: actorUri,
+  });
+  await db.insert(ProfileFollows).values({
+    followeeProfileId,
+    followerProfileId: remote.profile.id,
+  });
+};
 
 test('repostPost는 Public과 Unlisted Source를 direct Unlisted Repost로 생성한다', async () => {
   const actor = await createProfile();
@@ -234,6 +289,120 @@ test('repostPost의 순차·동시 요청은 같은 Active Repost identity로 �
   );
 });
 
+test('최초 top-level Repost 생성과 취소만 commit 뒤 Announce와 Undo를 전달한다', async () => {
+  const actor = await createConfiguredLocalProfile();
+  const recipient = await createConfiguredLocalProfile();
+  const source = await createContentPost(recipient.id);
+  await createRemoteFollower(actor.id);
+  const { federation } = await import('@kosmo/fedify');
+  const fixture = createDeliveryContextFixture();
+  mock.method(federation, 'createContext', () => fixture.context);
+  const input = { actorProfileId: actor.id, sourcePostId: source.id };
+
+  const concurrent = await Promise.all(Array.from({ length: 4 }, () => repostPost(input)));
+  const repost = concurrent.find(({ created }) => created)?.repost;
+  assert.ok(repost);
+  assert.equal(fixture.calls.length, 1);
+  assert.equal(fixture.calls[0]?.constructor.name, 'Announce');
+  assert.equal(
+    await db
+      .select({ id: Notifications.id })
+      .from(Notifications)
+      .where(
+        and(eq(Notifications.kind, NotificationKind.REPOST), eq(Notifications.sourceId, repost.id)),
+      )
+      .then((rows) => rows.length),
+    1,
+  );
+
+  await repostPost(input);
+  assert.equal(fixture.calls.length, 1);
+  assert.equal(
+    await db
+      .select({ id: Notifications.id })
+      .from(Notifications)
+      .where(
+        and(eq(Notifications.kind, NotificationKind.REPOST), eq(Notifications.sourceId, repost.id)),
+      )
+      .then((rows) => rows.length),
+    1,
+  );
+
+  const deleteInput = { actorProfileId: actor.id, postId: repost.id };
+  await Promise.all(Array.from({ length: 4 }, () => deletePost(deleteInput)));
+  assert.equal(fixture.calls.length, 2);
+  assert.equal(fixture.calls[1]?.constructor.name, 'Undo');
+
+  await deletePost(deleteInput);
+  assert.equal(fixture.calls.length, 2);
+
+  const rollbackSource = await createContentPost(actor.id);
+  await assert.rejects(
+    db.transaction(async (tx) => {
+      await repostPost({ actorProfileId: actor.id, sourcePostId: rollbackSource.id }, tx);
+      throw new Error('rollback');
+    }),
+    /rollback/,
+  );
+  assert.equal(fixture.calls.length, 2);
+
+  const remoteActor = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+  await repostPost({ actorProfileId: remoteActor.profile.id, sourcePostId: source.id });
+  assert.equal(fixture.calls.length, 2);
+
+  const ordinaryPost = await createContentPost(actor.id);
+  await deletePost({ actorProfileId: actor.id, postId: ordinaryPost.id });
+  assert.equal(fixture.calls.length, 2);
+});
+
+test('post-commit Repost delivery 실패는 committed 생성과 취소 결과를 바꾸지 않는다', async () => {
+  const actor = await createConfiguredLocalProfile();
+  const source = await createContentPost(actor.id);
+  await createRemoteFollower(actor.id);
+  const { federation } = await import('@kosmo/fedify');
+  const context = {
+    canonicalOrigin: publicOrigin,
+    getActorUri: (identifier: string) => new URL(`/ap/actor/${identifier}`, publicOrigin),
+    sendActivity: async () => {
+      throw new Error('delivery failed');
+    },
+  } as never;
+  mock.method(federation, 'createContext', () => context);
+  const errorLog = mock.method(console, 'error', () => undefined);
+
+  const result = await repostPost({ actorProfileId: actor.id, sourcePostId: source.id });
+  assert.equal(result.created, true);
+  assert.equal(
+    await db
+      .select({ state: Posts.state })
+      .from(Posts)
+      .where(eq(Posts.id, result.repost.id))
+      .then(firstOrThrow)
+      .then(({ state }) => state),
+    PostState.ACTIVE,
+  );
+
+  assert.deepEqual(await deletePost({ actorProfileId: actor.id, postId: result.repost.id }), {
+    postId: result.repost.id,
+  });
+  assert.equal(
+    await db
+      .select({ state: Posts.state })
+      .from(Posts)
+      .where(eq(Posts.id, result.repost.id))
+      .then(firstOrThrow)
+      .then(({ state }) => state),
+    PostState.DELETED,
+  );
+  assert.deepEqual(
+    errorLog.mock.calls.map(({ arguments: [message] }) => message),
+    [
+      'Post-commit ActivityPub Repost Announce delivery failed',
+      'Post-commit ActivityPub Repost Undo delivery failed',
+    ],
+  );
+});
+
 test('repostPost는 caller transaction rollback에 합류한다', async () => {
   const actor = await createProfile();
   const source = await createContentPost(actor.profile.id);
@@ -397,3 +566,19 @@ test('deletePost는 caller transaction rollback에 합류한다', async () => {
   assert.equal(stored.state, PostState.ACTIVE);
   assert.equal(stored.deletedAt, null);
 });
+
+const createDeliveryContextFixture = () => {
+  const calls: { readonly constructor: { readonly name: string } }[] = [];
+  const context = {
+    canonicalOrigin: publicOrigin,
+    getActorUri: (identifier: string) => new URL(`/ap/actor/${identifier}`, publicOrigin),
+    sendActivity: async (
+      _sender: { identifier: string },
+      _recipients: unknown,
+      activity: { readonly constructor: { readonly name: string } },
+    ) => {
+      calls.push(activity);
+    },
+  } as never;
+  return { calls, context };
+};
