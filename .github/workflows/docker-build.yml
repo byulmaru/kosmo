@@ -145,9 +145,9 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           no-cache-filters: runtime
           build-args: |
-            EXPO_PUBLIC_SENTRY_DSN=${{ env.SENTRY_DSN }}
             EXPO_PUBLIC_SENTRY_ENABLED=1
             EXPO_PUBLIC_ENVIRONMENT=${{ env.ENVIRONMENT }}
+            SENTRY_DSN=${{ env.SENTRY_DSN }}
             SENTRY_ORG=${{ env.SENTRY_ORG }}
             SENTRY_PROJECT=${{ env.SENTRY_PROJECT }}
             SENTRY_RELEASE=${{ env.SENTRY_RELEASE }}
