@@ -4,6 +4,7 @@ import { spacing, typography } from '@/theme/tokens';
 import { TextArea, TextField } from '../ui/TextField';
 import { ProfileEditImageFields } from './ProfileEditImageFields';
 import { validateProfileEditDraft } from './profileEditState';
+import { ProfileTagEditor } from './ProfileTagEditor';
 import type { ProfileEditDraft, ProfileEditFieldErrors } from './profileEditState';
 
 export type ProfileEditFormProps = {
@@ -23,7 +24,7 @@ function resolveFieldError(local?: string, server?: string): string | undefined 
   return server ?? local;
 }
 
-function ImageFieldError({ message }: { message?: string }) {
+function FieldError({ message }: { message?: string }) {
   const theme = useTheme();
 
   if (!message) {
@@ -61,8 +62,8 @@ export function ProfileEditForm({
       />
 
       <View style={styles.imageErrors}>
-        <ImageFieldError message={serverErrors?.header} />
-        <ImageFieldError message={serverErrors?.avatar} />
+        <FieldError message={serverErrors?.header} />
+        <FieldError message={serverErrors?.avatar} />
       </View>
 
       <View style={styles.fields}>
@@ -92,6 +93,15 @@ export function ProfileEditForm({
           <Text style={[styles.counter, { color: theme.textSecondary }]}>
             {countCodePoints(value.bio)}/500
           </Text>
+        </View>
+
+        <View style={styles.field}>
+          <ProfileTagEditor
+            disabled={disabled}
+            onChange={(tags) => onChange({ ...value, tags })}
+            tags={value.tags}
+          />
+          <FieldError message={serverErrors?.tags} />
         </View>
       </View>
     </View>

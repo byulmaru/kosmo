@@ -3,6 +3,7 @@ import { Text } from 'react-native';
 import { expect, within } from 'storybook/test';
 import { ProfileEditImageFields } from '@/components/profile/ProfileEditImageFields';
 import { ProfileEditScreen } from '@/components/profile/ProfileEditScreen';
+import { ProfileTagEditor } from '@/components/profile/ProfileTagEditor';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type {
   ProfileEditDraft,
@@ -87,6 +88,31 @@ function ProfileEditServerErrorHarness() {
       value={value}
     />
   );
+}
+
+function ProfileEditTagSubmitHarness() {
+  const [value, setValue] = useState(initialDraft);
+  const [submittedTags, setSubmittedTags] = useState<ReadonlyArray<string>>();
+
+  return (
+    <>
+      <ProfileEditScreen
+        initialValue={initialDraft}
+        onChange={setValue}
+        onSubmit={(draft) => setSubmittedTags(draft.tags)}
+        value={value}
+      />
+      {submittedTags ? (
+        <Text accessibilityLabel="마지막 제출 태그">{submittedTags.join(',')}</Text>
+      ) : null}
+    </>
+  );
+}
+
+function ProfileTagEditorHarness({ initialTags = [] }: { initialTags?: ReadonlyArray<string> }) {
+  const [tags, setTags] = useState(initialTags);
+
+  return <ProfileTagEditor onChange={setTags} tags={tags} />;
 }
 
 const meta = {
@@ -251,5 +277,86 @@ export const ServerFieldErrorClearsAfterEditing: Story = {
     await userEvent.type(displayName, '새 이름');
     expect(canvas.queryByText('이미 사용 중인 이름입니다.')).not.toBeInTheDocument();
     expect(save).toBeEnabled();
+  },
+};
+
+export const TagAddDuplicateAndRemove: Story = {
+  render: () => <ProfileTagEditorHarness />,
+  play: async ({ canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+    const input = canvas.getByRole('textbox', { name: '프로필 태그' });
+    const add = canvas.getByRole('button', { name: '태그 추가' });
+
+    await userEvent.type(input, ' #공예 ');
+    await userEvent.click(add);
+    expect(canvas.getByText('#공예')).toBeVisible();
+
+    await userEvent.type(input, '#공예');
+    await userEvent.click(add);
+    expect(canvas.getByText('이미 추가한 태그예요.')).toBeVisible();
+
+    await userEvent.click(canvas.getByRole('button', { name: '#공예 제거' }));
+    expect(canvas.queryByText('#공예')).not.toBeInTheDocument();
+  },
+};
+
+export const TagReorderMode: Story = {
+  render: () => <ProfileTagEditorHarness initialTags={['공예', '개발', '사진']} />,
+  play: async ({ canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+
+    await userEvent.click(canvas.getByRole('button', { name: '순서 변경' }));
+    expect(canvas.getByRole('button', { name: '#공예 위로 이동' })).toBeDisabled();
+    expect(canvas.getByRole('button', { name: '#공예 아래로 이동' })).toBeEnabled();
+    expect(canvas.getByRole('button', { name: '#사진 아래로 이동' })).toBeDisabled();
+
+    await userEvent.click(canvas.getByRole('button', { name: '#공예 아래로 이동' }));
+    expect(canvas.getAllByTestId('profile-tag-order-item').map((item) => item.textContent)).toEqual(
+      ['#개발', '#공예', '#사진'],
+    );
+
+    await userEvent.click(canvas.getByRole('button', { name: '순서 변경 완료' }));
+    expect(canvas.getAllByTestId('profile-tag-chip').map((item) => item.textContent)).toEqual([
+      '#개발',
+      '#공예',
+      '#사진',
+    ]);
+  },
+};
+
+export const TagInvalidInput: Story = {
+  render: () => <ProfileTagEditorHarness />,
+  play: async ({ canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+
+    await userEvent.type(canvas.getByRole('textbox', { name: '프로필 태그' }), '공예!');
+    await userEvent.click(canvas.getByRole('button', { name: '태그 추가' }));
+    expect(canvas.getByText('태그는 문자, 숫자, 밑줄만 사용할 수 있어요.')).toBeVisible();
+    expect(canvas.queryAllByTestId('profile-tag-chip')).toHaveLength(0);
+  },
+};
+
+export const TagMaximumState: Story = {
+  render: () => <ProfileTagEditorHarness initialTags={['공예', '개발', '사진', '독서', '음악']} />,
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const input = canvas.getByRole('textbox', { name: '프로필 태그' });
+
+    expect(input).toHaveAttribute('readonly');
+    expect(input).toHaveAttribute('aria-disabled', 'true');
+    expect(canvas.getByRole('button', { name: '태그 추가' })).toBeDisabled();
+    expect(canvas.getByText('최대 5개까지 추가할 수 있어요.')).toBeVisible();
+  },
+};
+
+export const TagChangeUsesOptionalSubmitSeam: Story = {
+  render: () => <ProfileEditTagSubmitHarness />,
+  play: async ({ canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+
+    await userEvent.type(canvas.getByRole('textbox', { name: '프로필 태그' }), '#사진');
+    await userEvent.click(canvas.getByRole('button', { name: '태그 추가' }));
+    await userEvent.click(canvas.getByRole('button', { name: '저장' }));
+    expect(canvas.getByLabelText('마지막 제출 태그')).toHaveTextContent('공예,개발,사진');
   },
 };
