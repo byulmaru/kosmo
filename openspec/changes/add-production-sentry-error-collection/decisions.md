@@ -64,17 +64,17 @@
 - Consequences: 인증된 CI build만 artifact를 업로드하며 로컬 build는 secret 없이 외부 업로드를 건너뛴다.
 - Confirmation / Follow-up: Docker history, runtime image, Web 정적 asset과 build log에서 token·map 부재를 확인한다.
 
-### Sentry 조직과 project topology는 배포 설정으로 둔다
+### 세 runtime은 Sentry project 하나를 공유한다
 
-- Decision Date: 2026-07-27
-- Decision Class: Implementation Choice
-- Authority / Provenance: PROD-477
+- Decision Date: 2026-07-28
+- Decision Class: User Choice
+- Authority / Provenance: 사용자 결정, PROD-477
 - Status: Active
-- Context / Problem: 부모 이슈는 project 분리 방식을 OpenSpec에서 정밀화하되 저장소가 특정 Sentry 계정 slug에 결합될 필요는 없다.
-- Decision Outcome: 조직·project slug와 runtime DSN은 배포 설정으로 주입한다. 하나의 project 또는 runtime별 project 모두 동일 release·environment/runtime 계약을 지키면 사용할 수 있다.
-- Alternatives Considered: 저장소에 하나의 실제 slug를 고정하면 환경 이전과 project 분리를 코드 변경으로 만들고, project provisioning 자동화는 현재 운영 범위를 넓힌다.
-- Consequences: 코드와 build는 topology에 독립적이며 운영자가 배포 환경에서 실제 값을 관리한다.
-- Confirmation / Follow-up: 운영 문서에 필요한 변수와 project별 DSN 매핑을 기록한다.
+- Context / Problem: API, Web BFF와 Web browser는 같은 repository, image, 담당 팀과 commit release를 사용하며 현재 오류량과 runtime별 운영 정책이 확인되지 않았다. Runtime별 project를 미리 분리하면 DSN, alert, filter와 source map 설정만 중복된다.
+- Decision Outcome: 세 runtime은 배포 설정으로 주입한 Sentry project 하나와 DSN 하나를 공유하고 `api`, `web-bff`, `web` runtime tag로 구분한다.
+- Alternatives Considered: runtime별 project와 DSN은 alert, rate limit, filter와 접근 권한을 독립적으로 운영할 수 있지만 현재 필요한 격리 근거가 없어 선택하지 않는다.
+- Consequences: project-level 설정과 alert는 세 runtime에 공통 적용된다. Runtime별 소유권, 알림, rate limit 또는 접근 권한 분리가 필요해지면 project topology와 배포 변수 계약을 다시 변경해야 한다.
+- Confirmation / Follow-up: build와 runtime이 공용 `SENTRY_PROJECT`, `SENTRY_DSN`만 요구하고 세 검증 event가 같은 project에서 runtime tag로 구분되는지 확인한다.
 
 ### 환경에 독립적인 Sentry 설정은 Vault shared 경로에 둔다
 
@@ -82,11 +82,11 @@
 - Decision Class: User Choice
 - Authority / Provenance: 사용자 결정, PROD-477
 - Status: Active
-- Context / Problem: GitHub repository variable과 secret, 환경별 Vault 경로에 Sentry 설정을 나누면 기존 Kosmo Vault가 하나의 source of truth가 되지 않는다. 현재 세 runtime은 환경마다 다른 Sentry project를 쓰지 않으므로 DSN도 환경 독립 값이다. 반면 `shared` 전체를 Pod로 동기화하면 업로드 token까지 불필요하게 노출한다.
-- Decision Outcome: 공개 Web DSN, API·Web BFF DSN, Sentry 조직·project slug와 source map 업로드 token을 모두 `secret/kubernetes/kosmo/shared`에 둔다. GitHub Actions는 build에 필요한 값을 읽고, VaultStaticSecret transformation은 API·Web BFF DSN 두 개만 runtime Secret으로 추출한다.
+- Context / Problem: GitHub repository variable과 secret, 환경별 Vault 경로에 Sentry 설정을 나누면 기존 Kosmo Vault가 하나의 source of truth가 되지 않는다. 공용 project의 DSN도 환경 독립 값이다. 반면 `shared` 전체를 Pod로 동기화하면 업로드 token까지 불필요하게 노출한다.
+- Decision Outcome: 공용 `SENTRY_DSN`, `SENTRY_PROJECT`, Sentry 조직 slug와 source map 업로드 token을 `secret/kubernetes/kosmo/shared`에 둔다. GitHub Actions는 build에 필요한 값을 읽고 Web build에 같은 DSN을 공개 build arg로 전달하며, VaultStaticSecret transformation은 공용 DSN 하나만 runtime Secret으로 추출한다.
 - Alternatives Considered: GitHub repository variable/secret과 환경별 Vault 경로로 나누는 방식은 환경 독립 값의 출처를 분산하고, `shared` 전체를 Kubernetes Secret으로 복사하는 방식은 build token을 runtime에 노출하므로 선택하지 않는다.
 - Consequences: 모든 환경 독립 Sentry 설정은 Vault에서 함께 회전하고 dev와 prod event 구분은 공용 `ENVIRONMENT`와 Web build의 `EXPO_PUBLIC_ENVIRONMENT`가 담당한다. 업로드 token과 build metadata는 Kubernetes Secret에 포함되지 않는다.
-- Confirmation / Follow-up: Terraform plan에서 role과 최소 read policy를 확인하고 Helm render에서 runtime Secret이 DSN 두 개만 포함하는지, branch와 release tag build가 shared 값을 읽어 source map을 업로드하는지 확인한다.
+- Confirmation / Follow-up: Terraform plan에서 role과 최소 read policy를 확인하고 Helm render에서 runtime Secret이 공용 DSN 하나만 포함하는지, branch와 release tag build가 shared 값을 읽어 source map을 업로드하는지 확인한다.
 
 ### 기능 branch Docker build도 Vault shared를 읽는다
 

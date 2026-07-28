@@ -63,9 +63,9 @@ run('pnpm', [
 ]);
 
 const artifactGroups = [
-  { path: 'apps/api/dist/server', project: process.env.SENTRY_API_PROJECT },
-  { path: 'apps/web/dist/server', project: process.env.SENTRY_WEB_BFF_PROJECT },
-  { path: 'apps/app/dist', project: process.env.SENTRY_WEB_PROJECT },
+  { path: 'apps/api/dist/server' },
+  { path: 'apps/web/dist/server' },
+  { path: 'apps/app/dist' },
 ];
 
 for (const group of artifactGroups) {
@@ -106,12 +106,13 @@ if (!authToken && process.env.SENTRY_AUTH_TOKEN_FILE) {
 
 const release = process.env.SENTRY_RELEASE;
 const organization = process.env.SENTRY_ORG;
+const project = process.env.SENTRY_PROJECT;
 const uploadRequired = process.env.SENTRY_UPLOAD_REQUIRED === '1';
 const missingUploadConfiguration = [
   !authToken && 'SENTRY_AUTH_TOKEN',
   !organization && 'SENTRY_ORG',
+  !project && 'SENTRY_PROJECT',
   !release && 'SENTRY_RELEASE',
-  ...artifactGroups.map((group) => !group.project && `project for ${group.path}`),
 ].filter(Boolean);
 
 if (missingUploadConfiguration.length > 0 && uploadRequired) {
@@ -132,7 +133,7 @@ if (missingUploadConfiguration.length === 0) {
         '--org',
         organization,
         '--project',
-        group.project,
+        project,
         '--release',
         release,
         '--strict',

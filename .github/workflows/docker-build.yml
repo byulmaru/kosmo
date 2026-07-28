@@ -92,12 +92,10 @@ jobs:
           import os
 
           keys = (
-              "EXPO_PUBLIC_SENTRY_DSN",
-              "SENTRY_API_PROJECT",
               "SENTRY_AUTH_TOKEN",
+              "SENTRY_DSN",
               "SENTRY_ORG",
-              "SENTRY_WEB_BFF_PROJECT",
-              "SENTRY_WEB_PROJECT",
+              "SENTRY_PROJECT",
           )
           values = json.loads(os.environ["SENTRY_JSON"])["data"]["data"]
           missing = [key for key in keys if not values.get(key)]
@@ -147,15 +145,13 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           no-cache-filters: runtime
           build-args: |
-            EXPO_PUBLIC_SENTRY_DSN=${{ env.EXPO_PUBLIC_SENTRY_DSN }}
+            EXPO_PUBLIC_SENTRY_DSN=${{ env.SENTRY_DSN }}
             EXPO_PUBLIC_SENTRY_ENABLED=1
             EXPO_PUBLIC_ENVIRONMENT=${{ env.ENVIRONMENT }}
-            SENTRY_API_PROJECT=${{ env.SENTRY_API_PROJECT }}
             SENTRY_ORG=${{ env.SENTRY_ORG }}
+            SENTRY_PROJECT=${{ env.SENTRY_PROJECT }}
             SENTRY_RELEASE=${{ env.SENTRY_RELEASE }}
             SENTRY_UPLOAD_REQUIRED=1
-            SENTRY_WEB_BFF_PROJECT=${{ env.SENTRY_WEB_BFF_PROJECT }}
-            SENTRY_WEB_PROJECT=${{ env.SENTRY_WEB_PROJECT }}
           secrets: |
             sentry_auth_token=${{ steps.sentry.outputs.sentry_auth_token }}
 
