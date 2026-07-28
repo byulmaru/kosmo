@@ -203,10 +203,10 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 - [x] 7.1 PROD-450 supplied-option Quick Picker 프레젠테이션과 후속 PROD-417 통합 경계를 proposal·design·decisions·tasks에 기록하고 strict validation을 통과시킨다.
 - [x] 7.2 PROD-450 props-only `ReactionSelector` Quick Picker panel을 canonical 시각 계약에 맞게 구현한다.
 - [x] 7.3 PROD-450 Storybook/component interaction에서 supplied option 동작과 border·radius·selected layer·fading arc pending overlay·error·disabled 미렌더링을 검증하고 app check를 통과시킨다.
-- [ ] 7.4 PROD-417이 소유한 fixed option, anchored popover, server-confirmed mutation/cache, partial payload, actor 격리와 실제 Action Bar surface 결정을 canonical design·specs·decisions·tasks에 동기화하고 strict validation을 통과시킨다.
-- [ ] 7.5 private Reaction action/popover와 add/delete mutation을 기존 Post Action Bar·PROD-450 presentation seam에 연결하고, 승인된 non-connection `viewerReactions` updater와 stale UI callback guard를 구현한다.
-- [ ] 7.6 production updater seam을 직접 검증하는 최소 unit test로 add/delete cache matrix, Type별 concurrency와 actor 전환을 검증한다.
-- [ ] 7.7 Post Action Bar Storybook integration에서 Web popover dismiss/focus/placement, 동시 mutation·실패/retry·unmount를 검증하고 production Post fixture에서 ordinary·Quote·순수 Repost mutation target을 검증한다.
+- [x] 7.4 PROD-417이 소유한 fixed option, anchored popover, server-confirmed mutation/cache, partial payload, actor 격리와 실제 Action Bar surface 결정을 canonical design·specs·decisions·tasks에 동기화하고 strict validation을 통과시킨다.
+- [x] 7.5 private Reaction action/popover와 add/delete mutation을 기존 Post Action Bar·PROD-450 presentation seam에 연결하고, 승인된 non-connection `viewerReactions` updater와 stale UI callback guard를 구현한다.
+- [x] 7.6 production updater seam을 직접 검증하는 최소 unit test로 add/delete cache matrix, Type별 concurrency와 actor 전환을 검증한다.
+- [x] 7.7 Post Action Bar Storybook integration에서 Web popover dismiss/focus/placement, 동시 mutation·실패/retry·unmount를 검증하고 production Post fixture에서 ordinary·Quote·순수 Repost mutation target을 검증한다.
 - [ ] 7.8 app test·lint·format·diff check와 OpenSpec strict validation을 통과시키고 Web 자동 검증과 iOS·Android 수동 관찰 결과를 분리해 기록한다.
 
 ## 8. PROD-449 Reaction 요약 프레젠테이션과 PROD-418 통합
