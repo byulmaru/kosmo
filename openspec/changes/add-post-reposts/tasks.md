@@ -58,7 +58,7 @@ Repost와 Quote가 같은 nullable direct Repost Source를 저장할 수 있게 
 **Verification**
 
 - core DB test는 진입점에서 검증된 행동 주체의 Profile/Instance 상태 비재조회, visibility·Source 정책, direct Source, 순차·동시 duplicate와 실패 transaction rollback을 검증한다.
-- GraphQL integration test는 Owner/Admin/Member 성공과 membership 부재·비활성 Account/Profile·Suspended Instance 거부, 기존 error code/field와 payload를 검증한다.
+- GraphQL integration test는 Owner/Member 성공과 membership 부재·비활성 Account/Profile·Suspended Instance 거부, 기존 error code/field와 payload를 검증한다.
 
 - [x] 2.1 검증된 행동 주체 identity, Source visibility와 derived visibility를 적용하는 멱등 Repost core action을 구현한다.
 - [x] 2.2 `repostPost` mutation과 `RepostPostPayload.repost`를 기존 Post global ID 계약에 맞춰 제공한다.
