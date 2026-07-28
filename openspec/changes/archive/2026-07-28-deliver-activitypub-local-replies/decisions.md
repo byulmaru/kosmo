@@ -156,10 +156,10 @@
   Reply Delete lifecycle을 소유한다. transaction 인자의 존재 여부는 origin이나 lifecycle 실행 여부를 결정하는
   신호로 사용하지 않는다.
 - Alternatives Considered: 별도 `createLocalPost`, GraphQL resolver orchestration, callback 또는 delivery port.
-- Consequences: 모든 Post 생성 진입점이 `createPost`로 통일되고 public action 수가 늘지 않는다. 현재
-  `createPost`는 자신의 transaction을 소유한다. 향후 caller transaction 합류가 실제로 필요해지면 `tx` 유무로
-  lifecycle을 생략하지 않고 명시적인 post-commit coordination 경계를 먼저 설계한다. Remote Reply Notification과
-  durable delivery는 현재 범위에 추가하지 않는다.
+- Consequences: 모든 Post 생성 진입점이 `createPost`로 통일되고 public action 수가 늘지 않는다. 기존 optional
+  caller transaction 계약을 보존하되 `tx` 유무로 lifecycle을 생략하지 않는다. caller transaction에서 실제
+  outer commit 이후 전달까지 보장해야 하는 production 요구가 생기면 명시적인 post-commit coordination 경계를
+  먼저 설계한다. Remote Reply Notification과 durable delivery는 현재 범위에 추가하지 않는다.
 - Confirmation / Follow-up: production GraphQL과 ActivityPub ingress가 모두 `createPost`를 사용하고, Local
   origin만 commit 뒤 Notification/Create를 실행하며 resolver에는 lifecycle 호출과 transaction 유무에 따른
   lifecycle 분기가 없는지 검증한다.

@@ -1,7 +1,6 @@
 import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import {
   ActivityPubPosts,
-  db,
   first,
   firstOrThrow,
   firstOrThrowWith,
@@ -296,14 +295,18 @@ export const repostPost = async (
 
   return result;
 };
-export function createPost(input: LocalPostInput): Promise<CreatedPost>;
-export function createPost(input: ActivityPubPostInput): Promise<CreatedPost | DuplicatePost>;
+export function createPost(input: LocalPostInput, tx?: Transaction): Promise<CreatedPost>;
+export function createPost(
+  input: ActivityPubPostInput,
+  tx?: Transaction,
+): Promise<CreatedPost | DuplicatePost>;
 export async function createPost(
   input: LocalPostInput | ActivityPubPostInput,
+  tx?: Transaction,
 ): Promise<CreatedPost | DuplicatePost> {
   let result: CreatedPost;
   try {
-    result = await db.transaction(async (tx) => {
+    result = await getDatabaseConnection(tx).transaction(async (tx) => {
       if (input.origin === 'LOCAL' && input.replyParentId !== undefined) {
         const parent = await findVisiblePost(tx, {
           actorProfileId: input.profileId,
