@@ -124,7 +124,6 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
   const [creating, setCreating] = useState(false);
   const [handle, setHandle] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const menuRef = useRef<View>(null);
   const pickerRef = useRef<View>(null);
   const triggerRef = useRef<View>(null);
   const dismissalVersionRef = useRef(0);
@@ -177,16 +176,8 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
       return;
     }
 
-    const menu = menuRef.current as unknown as HTMLElement | null;
     const picker = pickerRef.current as unknown as HTMLElement | null;
     const trigger = triggerRef.current as unknown as HTMLElement | null;
-    const getItems = () =>
-      Array.from(menu?.querySelectorAll<HTMLElement>('[role="menuitemradio"]') ?? []);
-    const initialItems = getItems();
-    const initialItem =
-      initialItems.find((item) => item.getAttribute('aria-checked') === 'true') ?? initialItems[0];
-    initialItem?.focus();
-    initialItem?.scrollIntoView({ block: 'nearest' });
     const onPointerDown = (event: PointerEvent) => {
       if (!picker?.contains(event.target as Node) && !trigger?.contains(event.target as Node)) {
         dismissPicker();
@@ -197,27 +188,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
         event.preventDefault();
         dismissPicker();
         trigger?.focus();
-        return;
       }
-
-      const items = getItems();
-      const current = document.activeElement as HTMLElement | null;
-      const index = current ? items.indexOf(current) : -1;
-      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || index < 0) {
-        return;
-      }
-
-      event.preventDefault();
-      const nextIndex =
-        event.key === 'Home'
-          ? 0
-          : event.key === 'End'
-            ? items.length - 1
-            : event.key === 'ArrowDown'
-              ? (index + 1) % items.length
-              : (index - 1 + items.length) % items.length;
-      items[nextIndex]?.focus();
-      items[nextIndex]?.scrollIntoView({ block: 'nearest' });
     };
 
     document.addEventListener('pointerdown', onPointerDown);
@@ -284,18 +255,20 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
     : surface === 'compact'
       ? webCompactPickerBounds
       : webFullPickerBounds;
-  const profileOptions = profiles.map((profile, index) => {
+  const profileOptions = profiles.map((profile) => {
     const selected = active?.id === profile.id;
     return (
       <Pressable
-        aria-checked={selected}
-        accessibilityRole={Platform.OS === 'web' ? undefined : 'radio'}
-        accessibilityState={{ checked: selected, disabled: busy }}
+        aria-checked={Platform.OS === 'web' && !redesignedWeb ? selected : undefined}
+        aria-pressed={redesignedWeb ? selected : undefined}
+        accessibilityRole={redesignedWeb ? 'button' : Platform.OS === 'web' ? undefined : 'radio'}
+        accessibilityState={
+          redesignedWeb ? { disabled: busy } : { checked: selected, disabled: busy }
+        }
         disabled={busy}
         key={profile.id}
         onPress={() => selectProfile(profile.id)}
-        role={Platform.OS === 'web' ? ('menuitemradio' as 'radio') : undefined}
-        tabIndex={redesignedWeb ? (selected || (!active && index === 0) ? 0 : -1) : undefined}
+        role={Platform.OS === 'web' && !redesignedWeb ? ('menuitemradio' as 'radio') : undefined}
         style={({ pressed }) => [
           styles.profile,
           {
@@ -317,7 +290,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
       </Pressable>
     );
   });
-  const menu = (
+  const pickerContent = (
     <View
       ref={pickerRef}
       style={[
@@ -330,8 +303,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
       <View
         accessibilityLabel="프로필 전환"
         accessibilityRole={Platform.OS === 'web' ? undefined : 'menu'}
-        ref={menuRef}
-        role={Platform.OS === 'web' ? 'menu' : undefined}
+        role={Platform.OS === 'web' && !redesignedWeb ? 'menu' : undefined}
         style={redesignedWeb ? styles.redesignedMenuRegion : styles.menuItems}
       >
         {redesignedWeb ? (
@@ -356,12 +328,13 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
         {!creating ? (
           <Pressable
             accessibilityLabel="새 프로필 추가"
+            accessibilityRole={redesignedWeb || Platform.OS !== 'web' ? 'button' : undefined}
             disabled={busy}
             onPress={() => {
               setCreating(true);
               setError(null);
             }}
-            role={Platform.OS === 'web' ? 'menuitem' : 'button'}
+            role={Platform.OS === 'web' && !redesignedWeb ? 'menuitem' : undefined}
             style={({ pressed }) => [
               styles.addProfile,
               {
@@ -509,6 +482,10 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
       {profiles.length ? '사용할 프로필을 선택해주세요.' : '새 프로필을 만들어 시작하세요.'}
     </Text>
   );
+  const fullWebPicker =
+    fullWeb && open ? (
+      <View style={[styles.webMenu, styles.fullOverlayPosition]}>{pickerContent}</View>
+    ) : null;
   const triggerSurface = !compact ? (
     <View accessibilityLabel="활성 프로필" style={styles.profileHeader}>
       <View
@@ -538,6 +515,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
       ) : null}
       <View style={styles.profileCopy}>
         {trigger}
+        {fullWebPicker}
         {profileDetails}
       </View>
     </View>
@@ -556,19 +534,15 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
       {triggerSurface}
 
       {Platform.OS === 'web' ? (
-        open ? (
-          fullWeb ? (
-            <View style={[styles.webMenu, styles.fullOverlayPosition]}>{menu}</View>
-          ) : (
-            <View
-              style={[
-                styles.webMenu,
-                surface === 'compact' ? styles.compactMenuPosition : styles.drawerMenuPosition,
-              ]}
-            >
-              {menu}
-            </View>
-          )
+        open && !fullWeb ? (
+          <View
+            style={[
+              styles.webMenu,
+              surface === 'compact' ? styles.compactMenuPosition : styles.drawerMenuPosition,
+            ]}
+          >
+            {pickerContent}
+          </View>
         ) : null
       ) : (
         <Modal
@@ -586,7 +560,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
               onPress={(event) => event.stopPropagation()}
               style={styles.nativeMenu}
             >
-              {menu}
+              {pickerContent}
             </Pressable>
           </Pressable>
         </Modal>
@@ -619,7 +593,7 @@ const styles = StyleSheet.create({
   webMenu: { position: 'absolute', width: 280, zIndex: 30 },
   compactMenuPosition: { left: 62, top: 0 },
   drawerMenuPosition: { left: 0, top: 190 },
-  fullOverlayPosition: { left: 0, top: 190 },
+  fullOverlayPosition: { left: -10, top: 50 },
   profileHeader: { height: 260, position: 'relative', width: 320, zIndex: 20 },
   cover: { height: 104, left: 0, position: 'absolute', right: 0, top: 0 },
   largeAvatar: { left: 20, position: 'absolute', top: 54 },

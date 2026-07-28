@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { commitLocalUpdate } from 'relay-runtime';
-import { expect, fireEvent, userEvent, waitFor, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { BottomTabBar } from '@/components/shell/BottomTabBar';
@@ -132,39 +132,6 @@ function ProfileSwitcherStory() {
   );
 }
 
-function DynamicProfileSwitcherStory() {
-  const environment = useRelayEnvironment();
-  const data = useShellStoryData();
-  const addProfile = () =>
-    commitLocalUpdate(environment, (store) => {
-      const account = store.getRoot().getLinkedRecord('me');
-      if (!account) {
-        throw new Error('DynamicProfileSwitcherStory requires an account fixture.');
-      }
-
-      const dynamicProfile = store.create('profile-dynamic', 'Profile');
-      dynamicProfile.setValue('profile-dynamic', 'id');
-      dynamicProfile.setValue('dynamic', 'handle');
-      dynamicProfile.setValue('@dynamic', 'relativeHandle');
-      dynamicProfile.setValue('동적 프로필', 'displayName');
-      dynamicProfile.setValue(0, 'followingCount');
-      dynamicProfile.setValue(0, 'followersCount');
-      account.setLinkedRecords(
-        [...(account.getLinkedRecords('profiles') ?? []), dynamicProfile],
-        'profiles',
-      );
-    });
-
-  return (
-    <>
-      <View style={{ maxWidth: 360 }}>
-        <ProfileSwitcher query={data.query} surface="full" />
-      </View>
-      <StoryButton label="동적 프로필 추가" onPress={addProfile} />
-    </>
-  );
-}
-
 function FollowCacheStory() {
   const data = useLazyLoadQuery<ShellStoriesQueryType>(ShellStoriesQuery, {});
   if (data.node?.__typename !== 'Profile' || !data.node.followButton || !data.node.hero) {
@@ -243,40 +210,57 @@ export const ResponsiveProfilePickerFull: Story = {
     ).toBeCloseTo(6, 0);
     await userEvent.click(trigger);
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
-    const menu = await canvas.findByRole('menu', { name: '프로필 전환' });
-    const picker = menu.parentElement;
+    const pickerRegion = await canvas.findByLabelText('프로필 전환');
+    const picker = pickerRegion.parentElement;
     const list = canvas.getByLabelText('전환할 프로필 목록');
-    const footerAction = canvas.getByRole('menuitem', { name: '새 프로필 추가' });
-    const menuRect = menu.getBoundingClientRect();
+    const options = within(list).getAllByRole('button');
+    const footerAction = canvas.getByRole('button', { name: '새 프로필 추가' });
+    const pickerRect = pickerRegion.getBoundingClientRect();
     const openTriggerRect = trigger.getBoundingClientRect();
     const openNavigationTop = navigation.getBoundingClientRect().top;
+    const followingLink = canvas.getByRole('link', { name: /팔로잉/ });
 
-    expect(menu).toBeVisible();
+    expect(pickerRegion).toBeVisible();
     expect(picker).not.toBeNull();
     expect(picker!.getBoundingClientRect().height).toBeLessThanOrEqual(430);
     expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
     expect(footerAction).toBeVisible();
-    expect(menuRect.top).toBeGreaterThanOrEqual(triggerRect.bottom);
-    expect(menuRect.top - triggerRect.bottom).toBeLessThanOrEqual(12);
+    expect(pickerRect.top).toBeGreaterThanOrEqual(triggerRect.bottom);
+    expect(pickerRect.top - triggerRect.bottom).toBeLessThanOrEqual(12);
     expect(openTriggerRect).toEqual(triggerRect);
     expect(openNavigationTop).toBe(closedNavigationTop);
-    expect(menuRect.bottom).toBeGreaterThan(openNavigationTop);
+    expect(pickerRect.bottom).toBeGreaterThan(openNavigationTop);
     expect(canvas.queryByRole('dialog')).toBeNull();
+    expect(options).toHaveLength(12);
+    expect(trigger).toHaveFocus();
+
+    for (const option of options) {
+      await userEvent.tab();
+      expect(option).toHaveFocus();
+    }
+    const listRect = list.getBoundingClientRect();
+    const focusedRect = options.at(-1)!.getBoundingClientRect();
+    expect(focusedRect.top).toBeGreaterThanOrEqual(listRect.top);
+    expect(focusedRect.bottom).toBeLessThanOrEqual(listRect.bottom);
+    await userEvent.tab();
+    expect(footerAction).toHaveFocus();
+    await userEvent.tab();
+    expect(followingLink).toHaveFocus();
 
     await userEvent.click(trigger);
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
-    expect(canvas.queryByRole('menu', { name: '프로필 전환' })).toBeNull();
+    expect(canvas.queryByLabelText('프로필 전환')).toBeNull();
 
     await userEvent.click(trigger);
-    await canvas.findByRole('menu', { name: '프로필 전환' });
-    await userEvent.click(canvas.getByRole('menuitem', { name: '새 프로필 추가' }));
+    await canvas.findByLabelText('프로필 전환');
+    await userEvent.click(canvas.getByRole('button', { name: '새 프로필 추가' }));
     const handle = canvas.getByRole('textbox', { name: '프로필 핸들' });
     await userEvent.type(handle, 'outside_reset');
     expect(handle).toHaveValue('outside_reset');
 
     const support = canvas.getByRole('button', { name: '설정 & 지원' });
     await userEvent.click(support);
-    await waitFor(() => expect(canvas.queryByRole('menu', { name: '프로필 전환' })).toBeNull());
+    await waitFor(() => expect(canvas.queryByLabelText('프로필 전환')).toBeNull());
     expect(support).toHaveFocus();
 
     await userEvent.click(trigger);
@@ -284,16 +268,15 @@ export const ResponsiveProfilePickerFull: Story = {
       expect(canvas.queryByRole('form', { name: '새 프로필 만들기' })).toBeNull();
       expect(canvas.queryByRole('alert')).toBeNull();
     });
-    await userEvent.click(canvas.getByRole('menuitem', { name: '새 프로필 추가' }));
+    await userEvent.click(canvas.getByRole('button', { name: '새 프로필 추가' }));
     expect(canvas.getByRole('textbox', { name: '프로필 핸들' })).toHaveValue('');
 
-    const followingLink = canvas.getByRole('link', { name: /팔로잉/ });
     followingLink.addEventListener('click', (event) => event.preventDefault(), { once: true });
     await userEvent.click(followingLink);
-    await waitFor(() => expect(canvas.queryByRole('menu', { name: '프로필 전환' })).toBeNull());
+    await waitFor(() => expect(canvas.queryByLabelText('프로필 전환')).toBeNull());
 
     await userEvent.click(trigger);
-    await canvas.findByRole('menu', { name: '프로필 전환' });
+    await canvas.findByLabelText('프로필 전환');
     const followersLink = canvasElement.querySelector<HTMLAnchorElement>(
       'a[href="/@selected/followers"]',
     );
@@ -301,7 +284,7 @@ export const ResponsiveProfilePickerFull: Story = {
     followersLink!.addEventListener('click', (event) => event.preventDefault(), { once: true });
     followersLink!.focus();
     await userEvent.keyboard('{Enter}');
-    await waitFor(() => expect(canvas.queryByRole('menu', { name: '프로필 전환' })).toBeNull());
+    await waitFor(() => expect(canvas.queryByLabelText('프로필 전환')).toBeNull());
   },
   render: () => (
     <View style={{ height: 900, width: 320 }}>
@@ -586,37 +569,22 @@ export const ProfileSwitcherInteraction: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
-    const menu = await canvas.findByRole('menu', { name: '프로필 전환' });
+    const pickerRegion = await canvas.findByLabelText('프로필 전환');
+    const list = canvas.getByLabelText('전환할 프로필 목록');
 
-    expect(menu).toBeVisible();
-    expect(within(menu).getAllByRole('menuitemradio')).toHaveLength(2);
+    expect(pickerRegion).toBeVisible();
+    expect(within(list).getAllByRole('button')).toHaveLength(2);
     expect(canvas.queryByText('프로필 전환')).not.toBeInTheDocument();
     expect(canvas.queryByRole('dialog', { name: '프로필 전환' })).not.toBeInTheDocument();
-    await userEvent.click(within(menu).getByRole('menuitem', { name: '새 프로필 추가' }));
+    await userEvent.click(canvas.getByRole('button', { name: '새 프로필 추가' }));
     expect(canvas.getByRole('form', { name: '새 프로필 만들기' })).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
-    const reopenedMenu = await canvas.findByRole('menu', { name: '프로필 전환' });
-    expect(within(reopenedMenu).queryByRole('form', { name: '새 프로필 만들기' })).toBeNull();
-    expect(within(reopenedMenu).getByRole('menuitem', { name: '새 프로필 추가' })).toBeVisible();
+    const reopenedPicker = await canvas.findByLabelText('프로필 전환');
+    expect(within(reopenedPicker).queryByRole('form', { name: '새 프로필 만들기' })).toBeNull();
+    expect(canvas.getByRole('button', { name: '새 프로필 추가' })).toBeVisible();
   },
   render: () => <ProfileSwitcherStory />,
-};
-
-export const ProfileSwitcherKeyboardUsesCurrentProfiles: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
-    const menu = await canvas.findByRole('menu', { name: '프로필 전환' });
-    await fireEvent.click(canvas.getByRole('button', { name: '동적 프로필 추가' }));
-    const dynamicProfile = await within(menu).findByRole('menuitemradio', {
-      name: /동적 프로필/,
-    });
-
-    await userEvent.keyboard('{End}');
-    expect(dynamicProfile).toHaveFocus();
-  },
-  render: () => <DynamicProfileSwitcherStory />,
 };
 
 export const ProfileSwitcherLateErrorAfterDismissal: Story = {
@@ -634,14 +602,15 @@ export const ProfileSwitcherLateErrorAfterDismissal: Story = {
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('button', { name: '프로필 목록' });
     await userEvent.click(trigger);
-    const menu = await canvas.findByRole('menu', { name: '프로필 전환' });
-    await userEvent.click(within(menu).getAllByRole('menuitemradio')[1]!);
+    await canvas.findByLabelText('프로필 전환');
+    const list = canvas.getByLabelText('전환할 프로필 목록');
+    await userEvent.click(within(list).getAllByRole('button')[1]!);
     await userEvent.click(trigger);
     const responseDeadline = Date.now() + 120;
     await waitFor(() => expect(Date.now()).toBeGreaterThanOrEqual(responseDeadline));
 
     await userEvent.click(trigger);
-    await canvas.findByRole('menu', { name: '프로필 전환' });
+    await canvas.findByLabelText('프로필 전환');
     expect(canvas.queryByRole('alert')).toBeNull();
   },
   render: () => <ProfileSwitcherStory />,
@@ -662,12 +631,13 @@ export const ProfileSwitcherSelectGraphQLError: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
-    const menu = await canvas.findByRole('menu', { name: '프로필 전환' });
-    await userEvent.click(within(menu).getAllByRole('menuitemradio')[1]!);
+    const pickerRegion = await canvas.findByLabelText('프로필 전환');
+    const list = canvas.getByLabelText('전환할 프로필 목록');
+    await userEvent.click(within(list).getAllByRole('button')[1]!);
     await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
       '프로필을 전환하지 못했습니다.',
     );
-    expect(menu).toBeVisible();
+    expect(pickerRegion).toBeVisible();
   },
   render: () => <ProfileSwitcherStory />,
 };
@@ -684,8 +654,8 @@ export const ProfileSwitcherCreateGraphQLError: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
-    const menu = await canvas.findByRole('menu', { name: '프로필 전환' });
-    await userEvent.click(within(menu).getByRole('menuitem', { name: '새 프로필 추가' }));
+    await canvas.findByLabelText('프로필 전환');
+    await userEvent.click(canvas.getByRole('button', { name: '새 프로필 추가' }));
     const input = canvas.getByRole('textbox', { name: '프로필 핸들' });
     await userEvent.type(input, 'kept_handle');
     await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
@@ -696,7 +666,7 @@ export const ProfileSwitcherCreateGraphQLError: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
     expect(canvas.queryByRole('alert')).toBeNull();
-    await userEvent.click(canvas.getByRole('menuitem', { name: '새 프로필 추가' }));
+    await userEvent.click(canvas.getByRole('button', { name: '새 프로필 추가' }));
     expect(canvas.getByRole('textbox', { name: '프로필 핸들' })).toHaveValue('');
   },
   render: () => <ProfileSwitcherStory />,
@@ -1115,52 +1085,46 @@ export const ResponsiveProfilePickerCompact: Story = {
     const route = canvas.getByText('홈 타임라인');
 
     await userEvent.click(trigger);
-    const menu = await canvas.findByRole('menu', { name: '프로필 전환' });
-    const picker = menu.parentElement;
+    const pickerRegion = await canvas.findByLabelText('프로필 전환');
+    const picker = pickerRegion.parentElement;
     const list = canvas.getByLabelText('전환할 프로필 목록');
-    const options = within(menu).getAllByRole('menuitemradio');
-    const footerAction = canvas.getByRole('menuitem', { name: '새 프로필 추가' });
-    expect(menu).toBeVisible();
+    const options = within(list).getAllByRole('button');
+    const footerAction = canvas.getByRole('button', { name: '새 프로필 추가' });
+    expect(pickerRegion).toBeVisible();
     expect(picker).not.toBeNull();
     expect(picker!.getBoundingClientRect().height).toBeLessThanOrEqual(430);
-    expect(menu.getBoundingClientRect().left).toBeGreaterThanOrEqual(80);
+    expect(pickerRegion.getBoundingClientRect().left).toBeGreaterThanOrEqual(80);
     expect(canvas.queryByRole('dialog')).toBeNull();
     expect(options).toHaveLength(12);
-    expect(options[0]).toHaveFocus();
+    expect(trigger).toHaveFocus();
     expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
     expect(footerAction).toBeVisible();
 
-    await userEvent.keyboard('{ArrowDown}');
-    expect(options[1]).toHaveFocus();
-    await userEvent.keyboard('{ArrowUp}');
-    expect(options[0]).toHaveFocus();
-    await userEvent.keyboard('{End}');
-    expect(options[11]).toHaveFocus();
-    const menuRect = list.getBoundingClientRect();
+    for (const option of options) {
+      await userEvent.tab();
+      expect(option).toHaveFocus();
+    }
+    const listRect = list.getBoundingClientRect();
     const focusedRect = options[11]!.getBoundingClientRect();
-    expect(focusedRect.top).toBeGreaterThanOrEqual(menuRect.top);
-    expect(focusedRect.bottom).toBeLessThanOrEqual(menuRect.bottom);
-
-    await userEvent.keyboard('{Home}');
-    expect(options[0]).toHaveFocus();
-    const firstRect = options[0]!.getBoundingClientRect();
-    expect(firstRect.top).toBeGreaterThanOrEqual(menuRect.top);
-    expect(firstRect.bottom).toBeLessThanOrEqual(menuRect.bottom);
+    expect(focusedRect.top).toBeGreaterThanOrEqual(listRect.top);
+    expect(focusedRect.bottom).toBeLessThanOrEqual(listRect.bottom);
+    await userEvent.tab();
+    expect(footerAction).toHaveFocus();
 
     await userEvent.click(options[1]!);
-    await waitFor(() => expect(canvas.queryByRole('menu', { name: '프로필 전환' })).toBeNull());
+    await waitFor(() => expect(canvas.queryByLabelText('프로필 전환')).toBeNull());
 
     await userEvent.click(trigger);
     await userEvent.click(route);
-    expect(canvas.queryByRole('menu', { name: '프로필 전환' })).toBeNull();
+    expect(canvas.queryByLabelText('프로필 전환')).toBeNull();
 
     await userEvent.click(trigger);
     await userEvent.click(trigger);
-    expect(canvas.queryByRole('menu', { name: '프로필 전환' })).toBeNull();
+    expect(canvas.queryByLabelText('프로필 전환')).toBeNull();
 
     await userEvent.click(trigger);
     await userEvent.keyboard('{Escape}');
-    expect(canvas.queryByRole('menu', { name: '프로필 전환' })).toBeNull();
+    expect(canvas.queryByLabelText('프로필 전환')).toBeNull();
     expect(trigger).toHaveFocus();
   },
   render: () => (

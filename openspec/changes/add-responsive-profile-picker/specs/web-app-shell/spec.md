@@ -73,14 +73,14 @@
 - **AND** 새 프로필 추가 액션은 목록 아래의 고정 영역에 계속 표시된다
 - **AND** picker 밖의 Web document scroll 흐름은 유지된다
 
-#### Scenario: Keep keyboard focus visible in the profile list
+#### Scenario: Follow the browser's default keyboard order
 
 - **WHEN** 사용자가 full 또는 compact Web profile picker를 연다
-- **THEN** 시스템은 현재 선택된 프로필, 선택값이 없으면 첫 프로필 항목으로 focus를 이동한다
-- **AND** `ArrowUp`·`ArrowDown`·`Home`·`End`로 프로필 항목 사이를 이동할 수 있게 한다
+- **THEN** 시스템은 picker 안으로 focus를 강제로 이동하지 않는다
+- **AND** `Tab`은 trigger, 프로필 버튼, 새 프로필 추가·생성 control, full summary link 순으로 이동한다
+- **AND** `Enter`·`Space`는 focus된 프로필 또는 추가 버튼을 실행한다
 - **AND** focus된 프로필 항목을 목록의 보이는 영역 안에 유지한다
 - **AND** `Escape`는 picker를 닫고 해당 trigger로 focus를 복원한다
-- **AND** `Tab`은 focus trap 없이 브라우저의 일반 focus 순서를 따른다
 
 #### Scenario: Keep the create form available below the list
 

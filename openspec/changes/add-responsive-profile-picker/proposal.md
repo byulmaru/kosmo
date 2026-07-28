@@ -14,6 +14,8 @@
   trigger 내부 콘텐츠만 아래로 6px 광학 보정한다.
 - full·compact Web picker는 기존 viewport 여백 계산 안에서 최대 430px로 제한하고, 프로필 목록만 스크롤하며
   새 프로필 추가 액션·생성 폼은 고정 footer에 유지한다.
+- full·compact Web picker는 별도 menu keyboard model이나 초기 focus 이동 없이 일반 버튼과 브라우저 기본
+  `Tab`·`Enter`·`Space` 동작을 사용하고, `Escape` close와 trigger focus 복원을 유지한다.
 - 기존 프로필 선택·생성·실패 상태와 Relay actor 전환 계약을 유지한다.
 - full·mobile Web trigger hitbox·picker anchor·navigation geometry, Android/iOS picker, GraphQL·Relay cache 계약,
   공용 Dropdown 전환과 별도 오류·Storybook 확장은 변경하지 않는다.

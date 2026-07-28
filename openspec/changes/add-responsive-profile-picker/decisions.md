@@ -69,7 +69,7 @@
 - Decision Date: 2026-07-26
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/design/breakpoints.md`, `PROD-238`
-- Status: Active
+- Status: Superseded
 - Context / Problem: 현재 Web profile item은 `menuitemradio` semantics를 사용하지만 명시적인 focus 이동이 없어 긴 목록의 keyboard 탐색과 focus 가시성을 보장하지 못한다.
 - Decision Outcome: full·compact Web picker open 시 선택 항목 또는 첫 항목으로 focus를 이동한다. `ArrowUp`·`ArrowDown`·`Home`·`End`로 프로필 항목을 이동하고 focus 항목을 list viewport 안에 유지한다. `Escape`는 picker를 닫고 trigger로 focus를 복원하며 `Tab`은 가로채지 않는다.
 - Alternatives Considered: Tab 순회만 유지하면 현재 menu semantics와 긴 목록 탐색 계약을 충분히 설명하지 못한다. focus trap은 compact 비모달 계약과 충돌한다.
@@ -81,12 +81,33 @@
 - Decision Date: 2026-07-27
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/design/breakpoints.md`, `PROD-238`
-- Status: Active
+- Status: Superseded
 - Context / Problem: bounded picker의 고정 footer 전체를 Web `menu` descendant로 두면 create `form`과 operation error `alert`가 ARIA menu의 required-owned-element 규칙을 위반해 Storybook axe `aria-required-children` 오류가 발생한다.
 - Decision Outcome: 시각적 picker wrapper가 bounds, border와 overflow를 소유한다. 그 안의 semantic `menu` region은 profile list의 `menuitemradio`, separator와 add `menuitem`까지 소유하고, create form과 operation error alert는 동일한 고정 footer 위치를 유지하는 `menu` sibling으로 렌더한다.
 - Alternatives Considered: footer 전체를 outer `menu` 안에 두는 방식과 중간 `group` wrapper는 form·alert descendant 오류를 해소하지 못한다. a11y rule 예외는 실제 접근성 트리 결함을 숨기므로 사용하지 않는다.
 - Consequences: 기존 `menu`·add `menuitem` selector와 profile option keyboard model은 유지하면서 form·alert을 유효한 semantic sibling으로 노출한다. visual layout과 scroll ownership은 바뀌지 않는다.
 - Confirmation / Follow-up: Shell Storybook a11y, create failure 유지·close reset interaction과 기존 profile-switcher E2E로 검증한다.
+
+### Web profile picker는 일반 버튼과 브라우저 기본 Tab 순서를 따른다
+
+- Decision Date: 2026-07-28
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/breakpoints.md`, `PROD-238`
+- Status: Active
+- Context / Problem: profile picker가 직접 `menuitemradio`·roving `tabIndex`·방향키 이동을 구현하면
+  `PROD-238`의 반응형 surface 범위를 넘어 공용 Dropdown 동작을 소유하고, full summary link가 picker보다 먼저
+  오는 DOM 순서 때문에 비모달 picker의 자연스러운 keyboard 흐름도 깨진다.
+- Decision Outcome: full·compact Web profile option과 add action은 일반 `Pressable` 버튼을 사용한다. open 시
+  focus를 강제로 옮기지 않고 DOM을 trigger, profile button, add/create control, full summary link 순서로 구성해
+  브라우저 기본 `Tab`·`Enter`·`Space` 동작을 사용한다. `Escape` close와 trigger focus 복원, 바깥 pointer close는
+  유지하며 완전한 menu keyboard model은 `PROD-213`에 남긴다.
+- Alternatives Considered: 기존 custom menu model을 유지하면 이 component가 공용 Dropdown keyboard behavior를
+  중복 소유한다. focus trap은 compact 비모달 계약과 충돌한다.
+- Consequences: `menuRef`, item DOM query, 초기 focus, 방향키 handler, roving `tabIndex`와 관련 test를 제거한다.
+  full picker는 시각적 absolute anchor를 유지하면서 DOM상 trigger와 summary link 사이에 둔다. mobile Web drawer와
+  native 동작은 바꾸지 않는다.
+- Confirmation / Follow-up: 10개 이상 typed fixture에서 trigger부터 profile button·add action·full summary link까지
+  기본 `Tab` 순서, 긴 목록 focus 가시성, `Escape` focus 복원을 검증한다.
 
 ### Compact overlay는 현재 shell hierarchy의 absolute layer를 사용한다
 

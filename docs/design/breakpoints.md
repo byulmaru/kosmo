@@ -49,10 +49,10 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
   목록 아래의 고정 영역에 두며, 생성 폼이 열리면 목록이 남은 높이에 맞게 줄어든다. full·compact Web picker의
   시각적 wrapper는 기존 viewport 여백 계산을 유지하면서 `430px`를 최대 높이로 사용해 기본 상태에서 약 7개
   프로필 행이 보이게 한다. 실제 가시 행 수보다 고정 footer 접근성과 목록 내부 스크롤을 우선한다.
-- full·compact Web picker를 열면 현재 선택된 프로필, 선택값이 없으면 첫 프로필 항목으로 focus를 이동한다.
-  프로필 항목에서는 `ArrowUp`·`ArrowDown`·`Home`·`End`로 이동하며 focus된 항목은 목록의 보이는 영역
-  안에 유지한다. `Escape`는 picker를 닫고 trigger로 focus를 복원하며, `Tab`은 focus trap 없이 브라우저의
-  일반 순서를 따른다.
+- full·compact Web picker를 열어도 focus를 강제로 이동하지 않는다. 브라우저의 기본 `Tab` 순서는 trigger,
+  프로필 버튼, 새 프로필 추가·생성 control, full summary link 순으로 이어지고 `Enter`·`Space`는 focus된 버튼을
+  실행한다. 긴 목록에서 focus된 프로필 버튼은 목록의 보이는 영역 안에 유지한다. `Escape`는 picker를 닫고
+  trigger로 focus를 복원한다.
 - full·compact Web에서 프로필 선택·생성 실패는 picker와 오류를 유지하고 생성 실패는 입력값도 유지한다.
   trigger 재실행, full·compact 바깥 pointer close 또는 `Escape`처럼 사용자가 명시적으로 닫으면 `open=false`,
   `creating=false`, 빈 handle과 오류 없음으로 초기화한다. 바깥 pointer close는 이벤트 기본 동작을 막지 않아

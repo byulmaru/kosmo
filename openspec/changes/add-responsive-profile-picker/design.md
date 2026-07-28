@@ -35,7 +35,8 @@
   닫힌 위치를 유지해야 한다.
 - compact drawer는 80px rail 밖으로 확장되므로 sidebar/center sibling의 stacking과 ancestor overflow를 함께 고려해야 한다.
 - full·compact Web 바깥 pointer close와 `Escape` 처리는 open 상태 동안만 활성화하고 unmount·close 시 정리해야 한다. 바깥 pointer listener는 이벤트 기본 동작을 막지 않아 pointer 대상의 기본 focus를 유지하며, native 전역 listener나 modal semantics로 확장하지 않는다.
-- 현재 `PostComposer`의 Web menu는 open 상태에 한정한 `pointerdown`·`keydown` listener, 선택 항목 초기 focus와 `Escape` focus 복원 패턴을 이미 제공하므로 같은 lifecycle 경계를 재사용할 수 있다.
+- 현재 `PostComposer`의 Web menu가 사용하는 open 상태 한정 `pointerdown`·`keydown` listener와 `Escape` focus
+  복원 lifecycle 경계만 재사용할 수 있다. profile picker는 공용 menu keyboard model을 소유하지 않는다.
 - 기존 선택 성공은 picker를 닫고 Relay actor를 재생성하며, 생성 성공은 생성된 프로필을 선택한다. 이 데이터 흐름은 layout 변경과 분리해 보존해야 한다.
 
 ### Recommended Approach
@@ -61,9 +62,16 @@ trigger visual을 같은 내부 content 경계로 감싸 아래로 6px 이동한
 trigger root와 picker surface는 이동하지 않아 hitbox, absolute anchor와 navigation geometry를 유지한다. compact
 avatar trigger와 Android/iOS에는 적용하지 않는다.
 
-Web의 시각적 picker wrapper가 viewport bounds, border와 overflow를 소유하고, 그 안의 semantic `menu` region은 profile list, separator와 기존 `menuitem` add action까지만 소유한다. create form과 operation error `alert`는 같은 고정 footer 위치를 유지하되 `menu`의 sibling으로 렌더한다. ARIA `menu` descendant에 `form`·`alert`를 넣어 `aria-required-children` 규칙을 위반하거나 a11y 예외를 추가하지 않는다.
+Web의 시각적 picker wrapper가 viewport bounds, border와 overflow를 소유한다. 그 안의 profile option과 add action은
+일반 `Pressable` 버튼으로 노출하고 create form과 operation error `alert`는 같은 고정 footer 위치를 유지한다.
+완전한 ARIA menu와 방향키 이동은 이 change에서 새로 구현하지 않고 공용 Dropdown 전환을 소유한 `PROD-213`에
+남긴다.
 
-full·compact Web picker가 열리면 현재 선택 항목, 선택값이 없으면 첫 항목으로 focus를 이동한다. `ArrowUp`·`ArrowDown`은 항목을 순환하고 `Home`·`End`는 처음과 끝으로 이동하며, DOM focus 이동 뒤 `scrollIntoView({ block: 'nearest' })`로 list viewport 안에 유지한다. `Tab`은 가로채지 않아 비모달 surface의 일반 focus 순서를 보존한다. 이 동작은 프로필 `menuitemradio` 목록에만 적용하고 고정 footer의 새 프로필 추가 action은 기존 `menuitem` focus target으로 유지한다. mobile Web drawer와 native에는 이 keyboard lifecycle을 추가하지 않는다.
+full·compact Web picker가 열려도 focus를 강제로 이동하지 않는다. DOM과 브라우저 기본 `Tab` 순서는 trigger,
+profile button, add/create control, full summary link 순으로 구성하고 `Enter`·`Space`는 일반 버튼 동작을 따른다.
+긴 목록에서 Tab으로 focus된 profile button은 scroll container의 브라우저 기본 focus scroll로 보이는 영역 안에
+유지한다. `Escape`는 picker를 닫고 trigger로 focus를 복원하며, mobile Web drawer와 native에는 이 Web lifecycle을
+추가하지 않는다.
 
 full·compact Web open 상태에서는 trigger 재실행, trigger와 picker 밖의 pointer interaction, `Escape`, 프로필
 선택 성공을 동일한 close transition으로 모으고 listener를 정리한다. pointer listener는 trigger와 picker
@@ -73,8 +81,8 @@ transition을 실행하지 않으며, full·compact Web의 명시적 close trans
 빈 handle과 오류 없음으로 초기화한다. mobile Web drawer와 native의 기존 close state 동작은 유지한다.
 
 Storybook fixture는 기존 shell query fixture builder 안에서 10개 이상의 typed profile fixture를 제공한다. full과
-compact surface의 trigger·expanded 상태·overlay 위치·navigation 위치 불변·outside dismissal, keyboard focus
-가시성, 목록과 footer 접근성을 가장 가까운 story에서 검증하고, 기존 선택·생성 interaction과 Web E2E는 회귀
+compact surface의 trigger·expanded 상태·overlay 위치·navigation 위치 불변·outside dismissal, 기본 `Tab` 순서와
+focus 가시성, 목록과 footer 접근성을 가장 가까운 story에서 검증하고, 기존 선택·생성 interaction과 Web E2E는 회귀
 검증으로 실행한다. 기존 full·mobile story에서는 trigger의 down/up chevron과 이름·icon center가 trigger center보다
 6px 아래에 보이는 geometry를 검증한다. Storybook viewport preset이나 새 test harness는 추가하지 않고
 768·1024·1279·1280·1440px는 browser resize로 직접 확인해 story URL과 관찰 결과를 기록한다.

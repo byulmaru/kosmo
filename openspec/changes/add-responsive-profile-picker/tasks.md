@@ -18,7 +18,8 @@ Web full sidebar와 compact icon rail에서 각각 자연스러운 trigger와 su
   바꾸지 않는다.
 - 프로필 목록만 internal scroll owner로 두고 추가 액션·생성 폼은 고정 footer에 유지한다.
 - full·compact Web picker는 기존 viewport 여백 계산을 유지하면서 최대 높이를 430px로 제한한다.
-- semantic `menu`는 profile option·separator·add action까지만 소유하고 create form·operation error alert은 같은 고정 footer 위치의 sibling으로 유지한다.
+- profile option과 add action은 일반 Web 버튼으로 노출하고 create form·operation error alert은 같은 고정 footer
+  위치에 유지한다. 완전한 menu keyboard model은 `PROD-213`에 남긴다.
 - 기존 프로필 선택·생성·실패 상태와 GraphQL·Relay actor 전환 계약을 바꾸지 않는다.
 - Web full과 mobile Web drawer는 이름·chevron 내부 content의 6px 광학 보정과 Web 전용 open chevron만 변경한다.
   trigger hitbox·picker anchor·navigation geometry, drawer content·close lifecycle, compact avatar trigger와
@@ -30,7 +31,8 @@ Web full sidebar와 compact icon rail에서 각각 자연스러운 trigger와 su
 - full trigger의 chevron·expanded 상태, overlay picker, navigation 위치 불변과 같은 trigger 재실행·바깥
   클릭·`Escape`·선택 성공 dismissal을 검증한다.
 - compact avatar trigger, 본문 위 drawer, layout 폭 보존과 trigger 재실행·바깥 클릭·`Escape`·선택 성공 dismissal을 검증한다.
-- 10개 이상 프로필에서 목록 내부 스크롤, 선택 항목 초기 focus, 방향키 이동·focus 가시성·`Escape` focus 복원과 고정 add/create footer를 검증한다.
+- 10개 이상 프로필에서 목록 내부 스크롤, trigger부터 profile button·add action·full summary link까지 기본 `Tab`
+  순서, focus 가시성·`Escape` focus 복원과 고정 add/create footer를 검증한다.
 - 선택·생성 성공과 실패 상태의 기존 interaction을 검증한다.
 - Storybook browser를 768·1024·1279·1280·1440px로 직접 조절해 surface, stacking과 scroll을 시각 확인한다.
 - full Storybook에서 이름·chevron의 6px 광학 보정과 open 전후 trigger·navigation 위치 불변을 확인한다.
@@ -62,7 +64,8 @@ Web full sidebar와 compact icon rail에서 각각 자연스러운 trigger와 su
       chevron과 같은 trigger·바깥 pointer close·`Escape`·선택 성공 dismissal, 바깥 pointer 대상의 기본 focus와
       transient reset을 검증한다. 세로 앵커는 1.7에서 최신 trigger 하단 계약으로 보정한다.
 - [x] 1.2 mobile/native surface를 보존하면서 compact avatar trigger 오른쪽에 layout 폭을 바꾸지 않는 absolute overlay drawer를 표시하고, trigger 재실행·바깥 클릭·`Escape`·선택 성공 dismissal을 제공한다.
-- [x] 1.3 프로필 목록만 제한된 높이에서 스크롤하고 add/create footer를 밖에 고정하며, 선택 항목 초기 focus·방향키 이동·focus 가시성·`Escape` focus 복원을 제공한다.
+- [x] 1.3 프로필 목록만 제한된 높이에서 스크롤하고 add/create footer를 밖에 고정하며, 당시 선택 항목 초기
+      focus·방향키 이동·focus 가시성·`Escape` focus 복원을 제공했다. keyboard model은 1.13에서 대체한다.
 - [x] 1.4 선택·생성 failure는 picker·오류와 생성 입력을 유지하고, full·compact Web의 trigger 재실행·바깥 pointer
       close·`Escape` 명시적 close는 `open=false`, `creating=false`, 빈 handle과 오류 없음으로 초기화한다.
 - [x] 1.5 기존 Shell Storybook 영역의 10개 이상 typed profile fixture에서 full overlay의 navigation 위치 불변과
@@ -88,6 +91,12 @@ Web full sidebar와 compact icon rail에서 각각 자연스러운 trigger와 su
       전후 trigger·picker anchor·navigation geometry 불변을 검증하고 compact avatar·Android/iOS 경로를 유지한다.
 - [x] 1.12 코드 리뷰에 따라 public `renderSummary(trigger)` seam을 제거하고 full·drawer의 고정 260px summary composition을
       `ProfileSwitcher` 안으로 옮기되 mobile Web drawer와 native의 기존 trigger·header·picker anchor를 유지한다.
-      명시적 close 뒤 도착한 mutation 오류를 폐기하고, 열린 동안 변경된 현재 profile option 집합으로 keyboard 이동하며,
+      명시적 close 뒤 도착한 mutation 오류를 폐기하고, 당시 열린 동안 변경된 profile option 집합으로 keyboard 이동하며,
       full summary의 팔로잉·팔로워 링크를 keyboard로 실행해도 picker를 닫는다. 관련 Storybook 회귀와 OpenSpec 문서
-      정합성을 검증하고 저장소 ignore 정책 대상 plan 파일은 Git 추적에서 제외한다.
+      정합성을 검증하고 저장소 ignore 정책 대상 plan 파일은 Git 추적에서 제외했다. custom keyboard 이동은 1.13에서
+      제거한다.
+- [x] 1.13 코드 리뷰에 따라 full·compact Web의 `menu`·`menuitemradio`·roving `tabIndex`·강제 초기 focus·방향키
+      handler를 제거하고 일반 `Pressable` 버튼과 browser 기본 `Tab`·`Enter`·`Space` 동작으로 대체한다. full picker를
+      DOM상 trigger와 summary link 사이에 두되 기존 absolute anchor·layout을 유지하고, `Escape` close·trigger focus
+      복원·outside dismissal과 mobile Web drawer·native 동작을 보존한다. 관련 Shell Storybook·Web E2E·canonical
+      design/OpenSpec 정합성을 검증한다.
