@@ -2,7 +2,8 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { and, eq, inArray } from 'drizzle-orm';
+import { setTimeout as delay } from 'node:timers/promises';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { AccountProfiles, Accounts, db, firstOrThrow, pg, Sessions } from '../db';
 import { AccountState, SessionState } from '../enums';
 import { PermissionDeniedError } from '../error';
@@ -112,6 +113,26 @@ const cleanup = async (accountIds: string[]) => {
   await db.delete(Accounts).where(inArray(Accounts.id, accountIds));
 };
 
+const waitUntilBlockedBy = async (blockingPid: number) => {
+  for (let attempt = 0; attempt < 250; attempt += 1) {
+    const [activity] = await db.execute<{ blocked: boolean }>(sql`
+      SELECT EXISTS (
+        SELECT 1
+        FROM pg_stat_activity
+        WHERE ${blockingPid} = ANY(pg_blocking_pids(pid))
+      ) AS blocked
+    `);
+
+    if (activity?.blocked) {
+      return;
+    }
+
+    await delay(20);
+  }
+
+  assert.fail('Session revoke did not wait for the expiration transaction');
+};
+
 test('현재 Active Session만 폐기하고 같은 Account의 다른 Session을 보존한다', async () => {
   const { account, session } = await createFixture();
   const other = await db
@@ -211,32 +232,53 @@ test('동시 폐기 요청은 하나의 Revoked terminal 결과로 수렴한다'
   }
 });
 
-test('만료와 폐기가 경쟁하면 먼저 확정된 terminal 상태를 보존한다', async () => {
+test('폐기가 Active를 조회한 뒤 만료가 확정돼도 Expired terminal 상태를 보존한다', async () => {
   const { account, session } = await createFixture();
+  const expirationLocked = Promise.withResolvers<number>();
+  const allowExpiration = Promise.withResolvers<void>();
+  const expirationTransaction = db.transaction(async (tx) => {
+    const [connection] = await tx.execute<{ pid: number }>(
+      sql`SELECT pg_backend_pid()::int AS pid`,
+    );
+    assert.ok(connection);
+    await tx
+      .select({ id: Sessions.id })
+      .from(Sessions)
+      .where(eq(Sessions.id, session.id))
+      .for('update');
+    expirationLocked.resolve(connection.pid);
+    await allowExpiration.promise;
+
+    return tx
+      .update(Sessions)
+      .set({ state: SessionState.EXPIRED })
+      .where(and(eq(Sessions.id, session.id), eq(Sessions.state, SessionState.ACTIVE)))
+      .returning({ id: Sessions.id });
+  });
+  let revokeResult: ReturnType<typeof revokeCurrentSession> | undefined;
 
   try {
-    const [revokeResult, expired] = await Promise.all([
-      revokeCurrentSession({ token: session.token }),
-      db
-        .update(Sessions)
-        .set({ state: SessionState.EXPIRED })
-        .where(and(eq(Sessions.id, session.id), eq(Sessions.state, SessionState.ACTIVE)))
-        .returning({ id: Sessions.id }),
+    const blockingPid = await Promise.race([
+      expirationLocked.promise,
+      expirationTransaction.then(() => assert.fail('Expiration transaction ended before locking')),
     ]);
+    revokeResult = revokeCurrentSession({ token: session.token });
+    await waitUntilBlockedBy(blockingPid);
+    allowExpiration.resolve();
+
+    const [revoked, expired] = await Promise.all([revokeResult, expirationTransaction]);
     const finalState = await db
       .select({ state: Sessions.state })
       .from(Sessions)
       .where(eq(Sessions.id, session.id))
       .then((rows) => rows[0]?.state);
 
-    if (expired.length === 1) {
-      assert.deepEqual(revokeResult, { status: 'ALREADY_UNAUTHENTICATED' });
-      assert.equal(finalState, SessionState.EXPIRED);
-    } else {
-      assert.deepEqual(revokeResult, { status: 'REVOKED' });
-      assert.equal(finalState, SessionState.REVOKED);
-    }
+    assert.equal(expired.length, 1);
+    assert.deepEqual(revoked, { status: 'ALREADY_UNAUTHENTICATED' });
+    assert.equal(finalState, SessionState.EXPIRED);
   } finally {
+    allowExpiration.resolve();
+    await Promise.allSettled([expirationTransaction, ...(revokeResult ? [revokeResult] : [])]);
     await cleanup([account.id]);
   }
 });
