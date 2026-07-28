@@ -35,7 +35,7 @@ Profile edit component와 Web·Android·iOS 상태 카탈로그를 전달한다.
 - 테스트 코드 범위는 Profile edit form/editor의 승인 동작을 직접 검증하는 최소 component test로 제한하고 중복
   snapshot·새 harness·관련 없는 fixture 확대는 제외한다.
 
-- [ ] 1.1 route-independent Profile edit screen/form과 displayName·bio controlled 입력·validation을 구현한다.
+- [x] 1.1 route-independent Profile edit screen/form과 displayName·bio controlled 입력·validation을 구현한다.
 - [x] 1.2 현재 값을 초기 draft로 사용하는 avatar/header별 controlled 편집 state, `3:1` header preview와 callback
       seam을 구현한다.
 - [ ] 1.3 Profile Tag inline chip editor, 로컬 validation과 명시적 순서 변경 mode를 구현한다.
