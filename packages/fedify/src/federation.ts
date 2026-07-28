@@ -1,7 +1,18 @@
 import { createFederation, MemoryKvStore } from '@fedify/fedify';
-import { Accept, Create, EmojiReact, Follow, Like, Note, Reject, Undo } from '@fedify/vocab';
+import {
+  Accept,
+  Announce,
+  Create,
+  EmojiReact,
+  Follow,
+  Like,
+  Note,
+  Reject,
+  Undo,
+} from '@fedify/vocab';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { handleInboundAccept } from './inbound-accept';
+import { handleInboundAnnounce } from './inbound-announce';
 import { handleInboundCreate } from './inbound-create';
 import { handleInboundFollow, handleInboundUndo } from './inbound-follow';
 import { handleInboundReaction } from './inbound-reaction';
@@ -69,6 +80,7 @@ federation
 federation
   .setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox')
   .on(Accept, handleInboundAccept)
+  .on(Announce, handleInboundAnnounce)
   .on(Create, handleInboundCreate)
   .on(EmojiReact, handleInboundReaction)
   .on(Follow, handleInboundFollow)
