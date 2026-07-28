@@ -126,7 +126,7 @@
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/architecture/core-services.md`, `docs/domain/objects/reaction.md`, PROD-499,
   implementation review decision on 2026-07-28
-- Status: Active
+- Status: Superseded
 - Context / Problem: transaction 인자 유무에 따른 분기는 caller 의미를 숨기지만, `APPLICATION`·`MATERIALIZATION`은
   다른 core action이 사용하지 않는 기술적 실행 mode를 public contract에 추가한다. 기존 `createPost`는 같은 local/remote
   provenance를 `origin: 'LOCAL' | 'ACTIVITYPUB'`로 표현한다.
@@ -141,6 +141,51 @@
   overload와 runtime validation이 이 조합을 고정한다. outbound eligibility와 ActivityPub 표현은 계속 Fedify가 소유한다.
 - Confirmation / Follow-up: GraphQL과 inbound production caller의 origin, invalid origin/transaction 조합, rollback,
   no-echo와 post-commit failure isolation을 검증한다.
+
+### 공개 addReaction과 internal transaction helper를 분리한다
+
+- Decision Date: 2026-07-28
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/architecture/core-services.md`, PROD-499,
+  implementation review decision on 2026-07-28
+- Status: Superseded
+- Context / Problem: `origin` overload도 공개 action type으로 transaction 소유권과 post-commit 실행 여부를 선택하므로
+  기술적 execution mode를 domain-like 이름으로 바꾼 것에 불과하다. Local application과 inbound materialization은 같은
+  저장 정책을 사용하지만 하나의 공개 action contract가 아니다.
+- Decision Outcome: 공개 `addReaction(input)`은 origin, mode나 transaction을 받지 않고 자체 transaction과 실제 create의
+  post-commit Notification/Fedify delivery를 소유한다. inbound handler만 같은 module의
+  `addReactionInTransaction(input, tx)`을 호출해 validation·persistence·idempotency를 outer mapping transaction 안에서
+  재사용한다. helper는 core package barrel에서 export하지 않는다.
+- Alternatives Considered: `reactToPost` wrapper는 같은 local 행동의 공개 entry를 중복한다. optional transaction은
+  호출 의미를 암시적으로 만들고, generic mode와 domain origin overload는 모두 내부 composition 선택을 공개 input으로
+  누출한다.
+- Consequences: GraphQL caller는 평범한 `addReaction`만 알고 transaction이나 federation provenance를 알지 않는다.
+  inbound handler는 명시적인 internal helper 호출로 atomic mapping 책임을 드러내고 post-commit Notification을 계속
+  소유하므로 outbound echo가 없다.
+- Confirmation / Follow-up: package services index가 helper를 export하지 않는지, GraphQL caller input에 분기 값이 없는지,
+  inbound rollback·no-echo와 local post-commit failure isolation 회귀를 검증한다.
+
+### origin과 transaction 참여를 독립적으로 다룬다
+
+- Decision Date: 2026-07-28
+- Decision Class: Implementation Choice
+- Authority / Provenance: `packages/core/services/post.ts`, `docs/architecture/core-services.md`, PROD-499,
+  implementation review decision on 2026-07-28
+- Status: Active
+- Context / Problem: origin별 overload로 transaction 조합을 제한하면 `LOCAL + tx`를 금지해 GraphQL이나 다른 local caller가
+  더 큰 domain transaction에 참여할 수 없다. 반대로 transaction 유무로 origin을 추론하면 provenance가 암시적이 된다.
+- Decision Outcome: 단일 `addReaction(input, tx?)`이 `input.origin: 'LOCAL' | 'ACTIVITYPUB'`으로 Fedify outbound
+  provenance를 분기하고 optional transaction에는 origin과 독립적으로 참여한다. caller transaction이 없는 top-level
+  actual create는 origin과 무관하게 Notification을 commit 후 만들고 Local origin에서만 Fedify delivery를 실행한다.
+  caller transaction이 있으면 `created`와 Reaction을 반환하고 post-commit side effect는 outer caller가 소유한다.
+- Alternatives Considered: origin별 transaction overload는 두 입력을 불필요하게 결속한다. transaction 유무에 따른
+  암시적 분기와 generic execution mode는 provenance를 표현하지 못한다. 별도 transaction helper는 사용자가 요구한 단일
+  action을 다시 분리한다.
+- Consequences: `LOCAL + tx`, `ACTIVITYPUB + tx`, 두 origin의 top-level 호출이 모두 유효하다. inbound는 ActivityPub
+  origin과 mapping transaction을 함께 전달해 no-echo와 원자성을 유지한다. Local outer caller는 commit 뒤 side effect를
+  직접 이어야 하며, 이는 `deletePost`·`repostPost`의 caller-owned transaction 계약과 같다.
+- Confirmation / Follow-up: 두 origin의 caller transaction rollback, GraphQL Local top-level lifecycle, inbound mapping
+  atomicity·no-echo와 post-commit failure isolation을 검증한다.
 
 ## Remaining Decisions
 

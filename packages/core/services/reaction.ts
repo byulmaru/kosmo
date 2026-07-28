@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import { first, getDatabaseConnection, Posts, Reactions } from '../db';
+import { db, first, getDatabaseConnection, Posts, Reactions } from '../db';
 import { NotificationKind, PostState } from '../enums';
 import { NotFoundError, ValidationError } from '../error';
 import { reactionTypeSchema } from '../validation';
@@ -12,26 +12,19 @@ type ReactionInput = {
   readonly type: string;
 };
 
-type LocalReactionInput = ReactionInput & { readonly origin: 'LOCAL' };
-type ActivityPubReactionInput = ReactionInput & { readonly origin: 'ACTIVITYPUB' };
+type AddReactionInput = ReactionInput & {
+  readonly origin: 'LOCAL' | 'ACTIVITYPUB';
+};
+
 type AddReactionResult = {
   readonly created: boolean;
   readonly reaction: typeof Reactions.$inferSelect;
 };
 
-export function addReaction(input: LocalReactionInput): Promise<AddReactionResult>;
-export function addReaction(
-  input: ActivityPubReactionInput,
-  tx: Transaction,
-): Promise<AddReactionResult>;
-export async function addReaction(
-  { actorProfileId, origin, postId, type }: LocalReactionInput | ActivityPubReactionInput,
+export const addReaction = async (
+  { actorProfileId, origin, postId, type }: AddReactionInput,
   tx?: Transaction,
-): Promise<AddReactionResult> {
-  if ((origin === 'LOCAL' && tx) || (origin === 'ACTIVITYPUB' && !tx)) {
-    throw new TypeError('Reaction origin and transaction ownership do not match.');
-  }
-
+): Promise<AddReactionResult> => {
   const parsedType = reactionTypeSchema.safeParse(type);
   if (!parsedType.success) {
     throw new ValidationError(parsedType.error.issues[0]?.message, { field: 'type' });
@@ -77,40 +70,36 @@ export async function addReaction(
     return { created: inserted !== undefined, reaction };
   });
 
-  if (origin === 'ACTIVITYPUB' || !result.created) {
-    return result;
-  }
+  // A caller-owned transaction has no after-commit hook. Its caller owns any
+  // post-commit side effect so delivery cannot run before the outer commit.
+  if (!tx && result.created) {
+    await createReactionNotification(result.reaction.id).catch(() => undefined);
 
-  await createReactionNotification(result.reaction.id).catch(() => undefined);
-
-  try {
-    const { sendReaction } = await import('@kosmo/fedify');
-    await sendReaction(result.reaction);
-  } catch (error) {
-    console.error('Post-commit ActivityPub Reaction delivery failed', {
-      error,
-      reactionId: result.reaction.id,
-    });
+    if (origin === 'LOCAL') {
+      try {
+        const { sendReaction } = await import('@kosmo/fedify');
+        await sendReaction(result.reaction);
+      } catch (error) {
+        console.error('Post-commit ActivityPub Reaction delivery failed', {
+          error,
+          reactionId: result.reaction.id,
+        });
+      }
+    }
   }
 
   return result;
-}
-
-type DeleteReactionInput = {
-  readonly actorProfileId: string;
-  readonly postId: string;
-  readonly type: string;
 };
 
 export const deleteReaction = async (
-  input: DeleteReactionInput,
+  input: ReactionInput,
 ): Promise<{ readonly postId: string; readonly reactionId: string | null }> => {
   const parsedType = reactionTypeSchema.safeParse(input.type);
   if (!parsedType.success) {
     throw new ValidationError(parsedType.error.issues[0]?.message, { field: 'type' });
   }
 
-  const reaction = await getDatabaseConnection()
+  const reaction = await db
     .transaction((tx) =>
       tx
         .delete(Reactions)
