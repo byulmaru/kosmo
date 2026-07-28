@@ -1,4 +1,4 @@
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, fireEvent, userEvent, within } from 'storybook/test';
 import { FeedbackForm } from '@/components/feedback/FeedbackForm';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -80,7 +80,7 @@ export const TrimmedBodyBoundary: Story = {
     const canvas = within(canvasElement);
     const body = canvas.getByRole('textbox', { name: '피드백 내용' });
     const boundaryBody = ` ${'가'.repeat(2000)} `;
-    await userEvent.type(body, boundaryBody);
+    fireEvent.change(body, { target: { value: boundaryBody } });
     expect(body).toHaveValue(boundaryBody);
     await userEvent.click(canvas.getByRole('button', { name: '피드백 보내기' }));
     await expect(canvas.getByText('피드백을 전달했습니다. 감사합니다!')).toBeVisible();
@@ -98,7 +98,7 @@ export const BodyTooLong: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = canvas.getByRole('textbox', { name: '피드백 내용' });
-    await userEvent.type(body, '가'.repeat(2001));
+    fireEvent.change(body, { target: { value: '가'.repeat(2001) } });
     await expect(canvas.getByText('피드백은 2,000자 이내로 입력해주세요.')).toBeVisible();
     expect(body).toHaveAttribute('aria-invalid', 'true');
     expect(canvas.getByRole('button', { name: '피드백 보내기' })).toBeDisabled();
