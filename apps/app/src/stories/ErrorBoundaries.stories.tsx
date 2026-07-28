@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { GraphQLErrorBoundaryBase } from '@/components/GraphQLErrorBoundaryBase';
+import { GraphQLErrorBoundary } from '@/components/GraphQLErrorBoundary';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { SessionFailOpenBoundary } from '@/session/SessionProvider';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -27,7 +27,7 @@ function GraphQLBoundaryHarness({
   const [failed, setFailed] = useState(true);
 
   return (
-    <GraphQLErrorBoundaryBase
+    <GraphQLErrorBoundary
       onError={onError}
       onRetry={() => {
         setFailed(false);
@@ -35,7 +35,7 @@ function GraphQLBoundaryHarness({
       }}
     >
       <ThrowOnRender active={failed} />
-    </GraphQLErrorBoundaryBase>
+    </GraphQLErrorBoundary>
   );
 }
 
@@ -49,7 +49,7 @@ function RouteBoundaryHarness({
   const [failed, setFailed] = useState(true);
 
   return (
-    <GraphQLErrorBoundaryBase onError={onError} onRetry={() => undefined}>
+    <GraphQLErrorBoundary onError={onError} onRetry={() => undefined}>
       <RouteBoundary
         loading={<Text>route loading</Text>}
         onRetry={() => {
@@ -60,7 +60,7 @@ function RouteBoundaryHarness({
       >
         <ThrowOnRender active={failed} />
       </RouteBoundary>
-    </GraphQLErrorBoundaryBase>
+    </GraphQLErrorBoundary>
   );
 }
 
@@ -73,7 +73,7 @@ function SessionBoundaryHarness({
   const [resetKey, setResetKey] = useState(0);
 
   return (
-    <GraphQLErrorBoundaryBase onError={onError} onRetry={() => undefined}>
+    <GraphQLErrorBoundary onError={onError} onRetry={() => undefined}>
       <View>
         <Pressable
           accessibilityLabel="세션 갱신"
@@ -89,7 +89,7 @@ function SessionBoundaryHarness({
           <ThrowOnRender active={failed} />
         </SessionFailOpenBoundary>
       </View>
-    </GraphQLErrorBoundaryBase>
+    </GraphQLErrorBoundary>
   );
 }
 
