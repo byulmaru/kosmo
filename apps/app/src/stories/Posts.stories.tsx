@@ -446,16 +446,13 @@ const storyPosts = [
 const composerProfile = profile({ id: 'profile-composer' });
 const emptyPostsProfile = profileWithPosts([], { id: 'profile-posts-empty' });
 const contentPostsProfile = profileWithPosts(
-  [shortPost, pureRepostOfQuote, quotePost, quoteWithoutSource],
+  [shortPost, pureRepostOfQuote, quotePost, quoteWithoutSource].map(withReactionViewerState),
   { id: 'profile-posts-content' },
 );
 const homeTimeline = timeline(
-  shortPost,
-  pureRepost,
-  quotePost,
-  replyQuotePost,
-  quoteOfQuotePost,
-  linkedSourceQuote,
+  ...[shortPost, pureRepost, quotePost, replyQuotePost, quoteOfQuotePost, linkedSourceQuote].map(
+    withReactionViewerState,
+  ),
 );
 
 const PostsStoriesQuery = graphql`
@@ -719,14 +716,12 @@ function ProductionRepostQuoteLists() {
 
 type ProductionReactionRequest = Readonly<{ postId: string; type: string }>;
 
-function withProductionReactionViewerState(storyPost: StoryPost): StoryPost & {
+function withReactionViewerState(storyPost: StoryPost): StoryPost & {
   viewerReactions: [];
 } {
   return {
     ...storyPost,
-    repostSource: storyPost.repostSource
-      ? withProductionReactionViewerState(storyPost.repostSource)
-      : null,
+    repostSource: storyPost.repostSource ? withReactionViewerState(storyPost.repostSource) : null,
     viewerReactions: [],
   };
 }
@@ -760,25 +755,10 @@ function ProductionReactionMutationTargetsStory() {
             return Promise.resolve({
               data: {
                 composerProfile,
-                contentPostsProfile: {
-                  ...contentPostsProfile,
-                  posts: {
-                    ...contentPostsProfile.posts,
-                    edges: contentPostsProfile.posts.edges.map((edge) => ({
-                      ...edge,
-                      node: withProductionReactionViewerState(edge.node),
-                    })),
-                  },
-                },
+                contentPostsProfile,
                 emptyPostsProfile,
-                homeTimeline: {
-                  ...homeTimeline,
-                  edges: homeTimeline.edges.map((edge) => ({
-                    ...edge,
-                    node: withProductionReactionViewerState(edge.node),
-                  })),
-                },
-                nodes: storyPosts.map(withProductionReactionViewerState),
+                homeTimeline,
+                nodes: storyPosts.map(withReactionViewerState),
               },
             } as GraphQLResponse);
           }
@@ -977,7 +957,7 @@ const meta = {
         contentPostsProfile,
         emptyPostsProfile,
         homeTimeline,
-        nodes: storyPosts.map((storyPost) => ({ ...storyPost, viewerReactions: [] })),
+        nodes: storyPosts.map(withReactionViewerState),
       },
       mutationResponse: { createPost: { post: { id: 'post-created-in-story' } } },
     },
@@ -1294,7 +1274,7 @@ export const ProductionRepostFailureToast: Story = {
         contentPostsProfile,
         emptyPostsProfile,
         homeTimeline,
-        nodes: storyPosts.map((storyPost) => ({ ...storyPost, viewerReactions: [] })),
+        nodes: storyPosts.map(withReactionViewerState),
       },
       mutationError: 'repost mutation failed',
     },
