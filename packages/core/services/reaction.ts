@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import { db, first, getDatabaseConnection, Posts, Reactions } from '../db';
+import { first, getDatabaseConnection, Posts, Reactions } from '../db';
 import { NotificationKind, PostState } from '../enums';
 import { NotFoundError, ValidationError } from '../error';
 import { reactionTypeSchema } from '../validation';
@@ -68,15 +68,19 @@ type DeleteReactionInput = {
   readonly type: string;
 };
 
-export const deleteReaction = async (
+export const removeReaction = async (
   input: DeleteReactionInput,
-): Promise<{ readonly postId: string; readonly reactionId: string | null }> => {
+  tx?: Transaction,
+): Promise<{
+  readonly postId: string;
+  readonly reaction: typeof Reactions.$inferSelect | null;
+}> => {
   const parsedType = reactionTypeSchema.safeParse(input.type);
   if (!parsedType.success) {
     throw new ValidationError(parsedType.error.issues[0]?.message, { field: 'type' });
   }
 
-  const result = await db.transaction(async (tx) => {
+  return getDatabaseConnection(tx).transaction(async (tx) => {
     const deleted = await tx
       .delete(Reactions)
       .where(
@@ -86,11 +90,18 @@ export const deleteReaction = async (
           eq(Reactions.type, parsedType.data),
         ),
       )
-      .returning({ id: Reactions.id })
+      .returning()
       .then(first);
 
-    return { postId: input.postId, reactionId: deleted?.id ?? null };
+    return { postId: input.postId, reaction: deleted ?? null };
   });
+};
+
+export const deleteReaction = async (
+  input: DeleteReactionInput,
+): Promise<{ readonly postId: string; readonly reactionId: string | null }> => {
+  const removed = await removeReaction(input);
+  const result = { postId: removed.postId, reactionId: removed.reaction?.id ?? null };
 
   if (result.reactionId) {
     try {

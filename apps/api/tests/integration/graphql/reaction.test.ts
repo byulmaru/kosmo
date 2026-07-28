@@ -1,7 +1,8 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
-import { after, before, beforeEach, describe, test } from 'node:test';
+import { after, before, beforeEach, describe, mock, test } from 'node:test';
+import { Like, Undo } from '@fedify/vocab';
 import {
   AccountProfileRole,
   AccountState,
@@ -19,8 +20,10 @@ import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
+import type { Activity, Recipient } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreServices from '@kosmo/core/services';
+import type * as FedifyDelivery from '@kosmo/fedify';
 import type { deriveContext as deriveContextFunction, Env } from '../../../src/context';
 
 const publicOrigin = 'http://127.0.0.1:4173';
@@ -28,6 +31,8 @@ const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhos
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
+let ActivityPubActors: typeof CoreDb.ActivityPubActors;
+let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
@@ -40,6 +45,7 @@ let Reactions: typeof CoreDb.Reactions;
 let Sessions: typeof CoreDb.Sessions;
 let createCorePost: typeof CoreServices.createPost;
 let repostPost: typeof CoreServices.repostPost;
+let federation: typeof FedifyDelivery.federation;
 let app: Hono<Env>;
 let deriveContext: typeof deriveContextFunction;
 let localInstanceId: string;
@@ -69,9 +75,12 @@ describe('GraphQL Reaction', () => {
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
     ({ createPost: createCorePost, repostPost } = await import('@kosmo/core/services'));
+    ({ federation } = await import('@kosmo/fedify'));
     ({
       AccountProfiles,
       Accounts,
+      ActivityPubActors,
+      ActivityPubPosts,
       db,
       firstOrThrow,
       Instances,
@@ -193,6 +202,196 @@ describe('GraphQL Reaction', () => {
         DROP TRIGGER IF EXISTS fail_reaction_notification_insert ON notification;
         DROP FUNCTION IF EXISTS fail_reaction_notification_insert();
       `);
+    }
+  });
+
+  test('Active Remote Post의 실제 create/delete만 post-commit delivery를 시도한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const target = await createRemoteReactionTarget({ inboxUri: 'not a valid inbox URI' });
+    const errorLog = mock.method(console, 'error', () => undefined);
+
+    try {
+      const added = await requestAddReaction(target.post.id, '❤️', auth.token);
+      const duplicate = await requestAddReaction(target.post.id, '❤️', auth.token);
+      assertNoGraphQLErrors(added);
+      assertNoGraphQLErrors(duplicate);
+      assert.equal(duplicate.data?.addReaction.reaction.id, added.data?.addReaction.reaction.id);
+      assert.equal(errorLog.mock.callCount(), 1);
+      assert.equal(
+        errorLog.mock.calls[0]?.arguments[0],
+        'Post-commit ActivityPub Reaction delivery failed',
+      );
+      assert.equal(await db.$count(Reactions), 1);
+      assert.equal(await db.$count(Notifications), 0);
+
+      const deleted = await requestDeleteReaction(target.post.id, '❤️', auth.token);
+      const repeated = await requestDeleteReaction(target.post.id, '❤️', auth.token);
+      assertNoGraphQLErrors(deleted);
+      assertNoGraphQLErrors(repeated);
+      assert.equal(deleted.data?.deleteReaction.reactionId, added.data?.addReaction.reaction.id);
+      assert.equal(repeated.data?.deleteReaction.reactionId, null);
+      assert.equal(errorLog.mock.callCount(), 2);
+      assert.equal(
+        errorLog.mock.calls[1]?.arguments[0],
+        'Post-commit ActivityPub Reaction Undo delivery failed',
+      );
+      assert.equal(await db.$count(Reactions), 0);
+      assert.equal(await db.$count(Notifications), 0);
+    } finally {
+      errorLog.mock.restore();
+    }
+  });
+
+  test('성공 delivery는 commit된 Reaction과 저장된 remote projection을 사용한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const target = await createRemoteReactionTarget({
+      inboxUri: 'https://remote.example/users/author/inbox',
+    });
+    const calls: Array<{
+      activity: Activity;
+      options: { orderingKey?: string } | undefined;
+      reactionCount: number;
+      recipient: Recipient;
+    }> = [];
+    const createContext = mock.method(
+      federation,
+      'createContext',
+      () =>
+        ({
+          canonicalOrigin: publicOrigin,
+          getActorUri: (identifier: string) => new URL(`/ap/actor/${identifier}`, publicOrigin),
+          sendActivity: async (
+            _sender: { identifier: string },
+            recipient: Recipient,
+            activity: Activity,
+            options?: { orderingKey?: string },
+          ) => {
+            calls.push({
+              activity,
+              options,
+              reactionCount: await db.$count(Reactions),
+              recipient,
+            });
+          },
+        }) as never,
+    );
+
+    try {
+      const added = await requestAddReaction(target.post.id, '❤️', auth.token);
+      assertNoGraphQLErrors(added);
+      const reaction = await db.select().from(Reactions).then(firstOrThrow);
+
+      const deleted = await requestDeleteReaction(target.post.id, '❤️', auth.token);
+      assertNoGraphQLErrors(deleted);
+
+      assert.equal(calls.length, 2);
+      const [creation, undo] = calls;
+      assert.ok(creation?.activity instanceof Like);
+      assert.equal(creation.reactionCount, 1);
+      assert.equal(creation.activity.objectId?.href, target.activityPubPostUri);
+      assert.equal(creation.recipient.id?.href, target.actorUri);
+      assert.equal(creation.recipient.inboxId?.href, target.inboxUri);
+      assert.equal(creation.options?.orderingKey, `${publicOrigin}/ap/reaction/${reaction.id}`);
+      assert.ok(undo?.activity instanceof Undo);
+      assert.equal(undo.reactionCount, 0);
+      assert.equal(undo.options?.orderingKey, creation.options?.orderingKey);
+    } finally {
+      createContext.mock.restore();
+    }
+  });
+
+  test('Reaction transaction이 rollback되면 delivery를 시도하지 않는다', async () => {
+    const auth = await createAuthenticatedSession();
+    const target = await createRemoteReactionTarget({ inboxUri: 'not a valid inbox URI' });
+    await pg.unsafe(`
+      CREATE FUNCTION fail_reaction_insert() RETURNS trigger
+      LANGUAGE plpgsql AS $$ BEGIN
+        RAISE EXCEPTION 'forced reaction rollback';
+      END $$;
+      CREATE TRIGGER fail_reaction_insert
+      BEFORE INSERT ON reaction
+      FOR EACH ROW EXECUTE FUNCTION fail_reaction_insert();
+    `);
+    const errorLog = mock.method(console, 'error', () => undefined);
+
+    let result: Awaited<ReturnType<typeof requestAddReaction>>;
+    try {
+      result = await requestAddReaction(target.post.id, '🥹', auth.token);
+    } finally {
+      errorLog.mock.restore();
+      await pg.unsafe(`
+        DROP TRIGGER IF EXISTS fail_reaction_insert ON reaction;
+        DROP FUNCTION IF EXISTS fail_reaction_insert();
+      `);
+    }
+
+    assert.ok(result.errors?.[0]);
+    assert.equal(await db.$count(Reactions), 0);
+    assert.equal(
+      errorLog.mock.calls.filter(
+        ({ arguments: [message] }) =>
+          message === 'Post-commit ActivityPub Reaction delivery failed',
+      ).length,
+      0,
+    );
+  });
+
+  test('Local Post, non-local sender와 UNRESPONSIVE target에는 delivery를 시도하지 않는다', async () => {
+    const localAuth = await createAuthenticatedSession();
+    const localPost = await createPost(localAuth.profile.id);
+    const unresponsiveTarget = await createRemoteReactionTarget({
+      inboxUri: 'not a valid inbox URI',
+      state: InstanceState.UNRESPONSIVE,
+    });
+    const remoteSenderInstance = await createRemoteInstance({ state: InstanceState.ACTIVE });
+    const remoteAuth = await createAuthenticatedSession({ instanceId: remoteSenderInstance.id });
+    const activeTarget = await createRemoteReactionTarget({ inboxUri: 'not a valid inbox URI' });
+    const errorLog = mock.method(console, 'error', () => undefined);
+
+    try {
+      for (const [auth, post] of [
+        [localAuth, localPost],
+        [localAuth, unresponsiveTarget.post],
+        [remoteAuth, activeTarget.post],
+      ] as const) {
+        const added = await requestAddReaction(post.id, '🎉', auth.token);
+        const deleted = await requestDeleteReaction(post.id, '🎉', auth.token);
+        assertNoGraphQLErrors(added);
+        assertNoGraphQLErrors(deleted);
+      }
+
+      assert.equal(errorLog.mock.callCount(), 0);
+      assert.equal(await db.$count(Reactions), 0);
+    } finally {
+      errorLog.mock.restore();
+    }
+  });
+
+  test('SUSPENDED target add는 숨기고 기존 Reaction delete는 Undo 없이 commit한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const target = await createRemoteReactionTarget({
+      inboxUri: 'not a valid inbox URI',
+      state: InstanceState.UNRESPONSIVE,
+    });
+    const added = await requestAddReaction(target.post.id, '👀', auth.token);
+    assertNoGraphQLErrors(added);
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.SUSPENDED })
+      .where(eq(Instances.id, target.instance.id));
+    const errorLog = mock.method(console, 'error', () => undefined);
+
+    try {
+      const hiddenAdd = await requestAddReaction(target.post.id, '🌈', auth.token);
+      const deleted = await requestDeleteReaction(target.post.id, '👀', auth.token);
+
+      assert.equal(hiddenAdd.errors?.[0]?.extensions?.code, 'NOT_FOUND');
+      assertNoGraphQLErrors(deleted);
+      assert.equal(deleted.data?.deleteReaction.reactionId, added.data?.addReaction.reaction.id);
+      assert.equal(errorLog.mock.callCount(), 0);
+      assert.equal(await db.$count(Reactions), 0);
+    } finally {
+      errorLog.mock.restore();
     }
   });
 
@@ -658,6 +857,62 @@ describe('GraphQL Reaction', () => {
       recipient.token,
     );
     assert.equal(read.errors?.[0]?.extensions?.code, 'NOT_FOUND');
+  });
+
+  test('stale Notification cleanup과 Undo delivery 실패를 독립 격리한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const target = await createRemoteReactionTarget({
+      inboxUri: 'not a valid inbox URI',
+      state: InstanceState.UNRESPONSIVE,
+    });
+    const added = await requestAddReaction(target.post.id, '☘️', auth.token);
+    assertNoGraphQLErrors(added);
+    const reaction = await db.select().from(Reactions).then(firstOrThrow);
+    await db.insert(Notifications).values({
+      kind: NotificationKind.REACTION,
+      recipientProfileId: target.profile.id,
+      sourceId: reaction.id,
+    });
+    assert.equal(await db.$count(Notifications), 1);
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.ACTIVE })
+      .where(eq(Instances.id, target.instance.id));
+
+    await pg.unsafe(`
+      CREATE FUNCTION fail_reaction_notification_delete() RETURNS trigger
+      LANGUAGE plpgsql AS $$ BEGIN
+        IF OLD.kind = 'REACTION' THEN RAISE EXCEPTION 'forced notification cleanup failure'; END IF;
+        RETURN OLD;
+      END $$;
+      CREATE TRIGGER fail_reaction_notification_delete
+      BEFORE DELETE ON notification
+      FOR EACH ROW EXECUTE FUNCTION fail_reaction_notification_delete();
+    `);
+    const errorLog = mock.method(console, 'error', () => undefined);
+
+    let deleted: Awaited<ReturnType<typeof requestDeleteReaction>>;
+    try {
+      deleted = await requestDeleteReaction(target.post.id, '☘️', auth.token);
+    } finally {
+      errorLog.mock.restore();
+      await pg.unsafe(`
+        DROP TRIGGER IF EXISTS fail_reaction_notification_delete ON notification;
+        DROP FUNCTION IF EXISTS fail_reaction_notification_delete();
+      `);
+    }
+
+    assertNoGraphQLErrors(deleted);
+    assert.equal(deleted.data?.deleteReaction.reactionId, added.data?.addReaction.reaction.id);
+    assert.equal(await db.$count(Reactions), 0);
+    assert.equal(await db.$count(Notifications), 1);
+    assert.deepEqual(
+      errorLog.mock.calls.map(({ arguments: [message] }) => message),
+      [
+        'Failed to clean up Reaction Notification',
+        'Post-commit ActivityPub Reaction Undo delivery failed',
+      ],
+    );
   });
 
   test('Post가 아닌 concrete global ID와 잘못된 Type을 delete input에서 거부한다', async () => {
@@ -1177,6 +1432,36 @@ const createRemoteInstance = ({ state }: { state: InstanceState }) => {
     .then(firstOrThrow);
 };
 
+const createRemoteReactionTarget = async ({
+  inboxUri,
+  state = InstanceState.ACTIVE,
+}: {
+  inboxUri: string;
+  state?: InstanceState;
+}) => {
+  const instance = await createRemoteInstance({ state });
+  const profile = await createProfile(`remote-target-${crypto.randomUUID()}`, {
+    instanceId: instance.id,
+  });
+  const actorUri = `https://${instance.domain}/users/${profile.id}`;
+  await db.insert(ActivityPubActors).values({
+    inboxUri,
+    profileId: profile.id,
+    sharedInboxUri: `https://${instance.domain}/inbox`,
+    type: 'PERSON',
+    uri: actorUri,
+  });
+  const post = await createPost(profile.id);
+  const activityPubPostUri = `https://${instance.domain}/posts/${post.id}`;
+  await db.insert(ActivityPubPosts).values({
+    postId: post.id,
+    receivedAt: Temporal.Now.instant(),
+    uri: activityPubPostUri,
+  });
+
+  return { actorUri, activityPubPostUri, inboxUri, instance, post, profile };
+};
+
 const insertReaction = ({
   createdAt,
   ...values
@@ -1190,14 +1475,15 @@ const insertReaction = ({
 
 const createAuthenticatedSession = async ({
   activeProfile = true,
-}: { activeProfile?: boolean } = {}) => {
+  instanceId = localInstanceId,
+}: { activeProfile?: boolean; instanceId?: string } = {}) => {
   const suffix = crypto.randomUUID();
   const account = await db
     .insert(Accounts)
     .values({ displayName: suffix, oidcSubject: suffix, state: AccountState.ACTIVE })
     .returning()
     .then(firstOrThrow);
-  const profile = await createProfile(`viewer-${suffix}`);
+  const profile = await createProfile(`viewer-${suffix}`, { instanceId });
   await db.insert(AccountProfiles).values({
     accountId: account.id,
     profileId: profile.id,

@@ -2,6 +2,7 @@ export { resolveActivityPubPostUri } from './src/activitypub-post-uri';
 export { federation } from './src/federation';
 export { sendAcceptFollowActivity } from './src/follow-delivery';
 export { sendProfileFollow, sendProfileUnfollow } from './src/profile-follow-delivery';
+export { sendProfileReaction, sendProfileReactionUndo } from './src/reaction-delivery';
 export {
   findOrMaterializeRemoteProfileActor,
   materializeRemoteProfileActor,

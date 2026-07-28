@@ -7,6 +7,7 @@ import { builder } from '@/graphql/builder';
 import { Post } from '../../post';
 import { postAccessWhere } from '../../post/access';
 import { Reaction } from '../ref';
+import { deliverReactionCreation, resolveReactionDeliveryCommand } from './activitypub-delivery';
 
 builder.mutationField('addReaction', (t) =>
   t.withAuth({ usingProfile: true }).fieldWithInput({
@@ -20,7 +21,7 @@ builder.mutationField('addReaction', (t) =>
       type: t.input.string({ validate: reactionTypeSchema }),
     },
     resolve: async (_, { input }, ctx) => {
-      const result = await db.transaction(async (tx) => {
+      const { command, result } = await db.transaction(async (tx) => {
         const post = await tx
           .select({ id: Posts.id })
           .from(Posts)
@@ -33,7 +34,7 @@ builder.mutationField('addReaction', (t) =>
           throw new NotFoundError('Post not found');
         }
 
-        return addReaction(
+        const result = await addReaction(
           {
             actorProfileId: ctx.session.profileId,
             postId: post.id,
@@ -41,11 +42,17 @@ builder.mutationField('addReaction', (t) =>
           },
           tx,
         );
+        const command = result.created
+          ? await resolveReactionDeliveryCommand(tx, result.reaction)
+          : undefined;
+
+        return { command, result };
       });
 
       if (result.created) {
         await createReactionNotification(result.reaction.id).catch(() => undefined);
       }
+      await deliverReactionCreation(command);
 
       return { reaction: result.reaction };
     },

@@ -1,0 +1,105 @@
+## Context
+
+이 기록은 PROD-499를 위해 canonical Reaction 발신 계약, Local Post identity, core post-commit side-effect 경계와
+현재 shared Reaction application 구조를 대조해 확정한 durable 선택을 담는다. 제품 행동은 canonical 문서와 Linear
+계약에서만 파생하고, federation echo를 피하는 application orchestration만 구현 선택으로 구분한다.
+
+## Decision Records
+
+### 기본 하트만 Like 호환 표현으로 사용한다
+
+- Decision Date: 2026-07-28
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/reaction.md`, PROD-499
+- Status: Active
+- Context / Problem: Kosmo의 여섯 Reaction Type을 FEP-c0e0 의미 보존과 Like-only 구현체 호환성 사이에서 어떻게
+  나눌지 확정해야 한다.
+- Decision Outcome: `❤️`만 exact `content`를 가진 `Like`로, 나머지 다섯 Type은 exact `content`를 가진
+  `EmojiReact`로 발신한다. Like는 별도 domain 객체가 아니라 기본 Reaction의 호환 표현이다.
+- Alternatives Considered: 모든 Type을 `Like`로 보내면 복수 Reaction 의미가 사라지고, `❤️`까지
+  `EmojiReact`만 사용하면 Like-only 구현체 호환 목표를 놓친다.
+- Consequences: 직렬화와 Undo는 삭제된 Type에 따라 원본 activity class를 정확히 재구성해야 한다. legacy와 custom
+  emoji는 발신하지 않는다.
+- Confirmation / Follow-up: 여섯 Type별 vocabulary serialization fixture와 unsupported Type no-delivery를 검증한다.
+
+### Remote Post Author에게만 직접 전달한다
+
+- Decision Date: 2026-07-28
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/reaction.md`, `docs/domain/objects/post.md`, PROD-499
+- Status: Active
+- Context / Problem: Reaction의 대상 author와 행동 주체 followers 중 누가 이번 delivery recipient인지 경계를
+  고정해야 한다.
+- Decision Outcome: 조회 가능한 Remote Post의 저장 author actor를 `to`로 하여 inbox/shared inbox에 직접 전달하고
+  행동 주체 followers에는 fan-out하지 않는다. sender는 Local actor identity를 가져야 하고 target Remote Instance는
+  Active여야 한다.
+- Alternatives Considered: Hackers’ Pub처럼 author와 followers에 모두 전달하는 방식은 federation 도달 범위를
+  넓히고 PROD-499의 author-delivery 범위를 벗어난다. Local Post delivery는 remote recipient가 없다.
+- Consequences: Local Post, non-local sender, Unresponsive target과 기존 조회 정책상 unavailable target은
+  committed Reaction만 유지하고 delivery command를 만들지 않는다.
+- Confirmation / Follow-up: author inbox/shared inbox recipient, followers 부재와 각 eligibility no-delivery를
+  integration test로 검증한다.
+
+### Reaction ID를 원본과 Undo의 안정 identity로 사용한다
+
+- Decision Date: 2026-07-28
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/reaction.md`, `docs/domain/objects/post.md`,
+  `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-499
+- Status: Active
+- Context / Problem: 같은 Profile/Post의 여러 Type과 add/delete lifecycle을 서로 혼동하지 않는 activity 및 ordering
+  identity가 필요하다.
+- Decision Outcome: 원본 URI는 immutable Reaction ID에서 `/ap/reaction/{reactionId}`로 파생하고, Undo URI는
+  `{originalActivityUri}#undo`로 만든다. 원본과 Undo 모두 originalActivityUri를 ordering key로 쓰며 Undo는 같은
+  데이터로 재구성한 exact 원본 activity를 내장한다.
+- Alternatives Considered: Profile/Post 조합 identity는 여러 Type을 충돌시키고, 별도 outbound mapping identity는
+  canonical Reaction ID 파생 계약과 불필요한 schema를 추가한다. Undo ID를 ordering key로 쓰면 같은 lifecycle의
+  순서가 분리된다.
+- Consequences: 같은 Reaction의 반복 직렬화는 안정적이고 서로 다른 Reaction row는 독립 activity가 된다. 별도 DB
+  mapping이나 delivery record는 필요하지 않다.
+- Confirmation / Follow-up: 반복 직렬화, 서로 다른 Type, exact embedded Undo, `#undo` ID와 동일 ordering key를
+  검증한다.
+
+### Commit 후 direct delivery 실패를 격리한다
+
+- Decision Date: 2026-07-28
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/reaction.md`, `docs/architecture/core-services.md`, PROD-499
+- Status: Active
+- Context / Problem: Remote HTTP 실패와 process crash 가능성을 domain transaction 및 application 성공 의미와
+  분리해야 한다.
+- Decision Outcome: transaction에서 delivery command를 확정하되 기존 Fedify direct delivery는 commit 이후
+  실행한다. 실패는 catch/log하고 committed create/delete 및 application 결과를 유지한다.
+- Alternatives Considered: transaction 안 delivery는 remote I/O 실패와 지연을 domain commit에 결합한다.
+  transactional outbox, MessageQueue와 durable retry는 PROD-499의 선행이 아니며 PROD-448 후속 migration이다.
+- Consequences: commit 뒤 delivery 전 process 종료 시 activity 유실 가능성을 현재 계약으로 수용한다. 사용자용
+  delivery status나 재시도 보장은 없다.
+- Confirmation / Follow-up: commit/rollback 순서, 원본·Undo delivery failure와 committed 응답 보존을 검증하고
+  후속 durable migration은 PROD-448에서 다룬다.
+
+### Shared Reaction primitive와 local outbound orchestration을 분리한다
+
+- Decision Date: 2026-07-28
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/architecture/core-services.md`, `docs/domain/objects/reaction.md`, PROD-499
+- Status: Active
+- Context / Problem: 현재 Reaction create primitive는 GraphQL local mutation과 PROD-498 inbound materialization이
+  공유하므로 그 자체에 outbound delivery를 붙이면 remote activity가 다시 발신된다.
+- Decision Outcome: transport-neutral shared persistence primitive에는 outbound side effect를 추가하지 않는다.
+  Local application 경계가 transaction 안에서 actual create/delete와 eligibility를 평가해 private command를 만들고,
+  commit 뒤 Fedify 경계를 호출한다.
+- Alternatives Considered: shared primitive의 caller flag는 protocol별 분기를 public contract에 누출하고 누락 시
+  echo 위험이 있다. Fedify handler에서 global hook으로 Reaction row를 관찰하는 방식은 application intent 및 멱등
+  결과와 분리된다.
+- Consequences: inbound 경로는 기존 shared primitive만 사용하고 outbound 경로는 Local application action에서만
+  시작한다. 구체적인 helper·파일 이름은 구현자가 현재 구조에 맞게 선택할 수 있다.
+- Confirmation / Follow-up: inbound Reaction이 outbound helper를 호출하지 않는 회귀 test와 local duplicate
+  add/repeated delete no-delivery를 검증한다.
+
+## Remaining Decisions
+
+- 없음.
+
+## Superseded Decisions
+
+- 없음.
