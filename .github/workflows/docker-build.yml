@@ -57,6 +57,8 @@ jobs:
       - name: Load Sentry build configuration from Vault
         id: sentry
         shell: bash
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -103,6 +105,11 @@ jobs:
           if not isinstance(values, dict):
               raise SystemExit("Vault Sentry build configuration must be a JSON object")
 
+          auth_token = os.environ.get("SENTRY_AUTH_TOKEN")
+          if not auth_token:
+              raise SystemExit("SENTRY_AUTH_TOKEN repository secret must be set")
+          values.pop("SENTRY_AUTH_TOKEN", None)
+
           for key, value in values.items():
               if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
                   raise SystemExit(f"Vault key {key} is not a valid environment variable name")
@@ -114,6 +121,7 @@ jobs:
           with open(os.environ["SENTRY_CONFIG_FILE"], "w", encoding="utf-8") as config:
               for key, value in values.items():
                   config.write(f"{key}={shlex.quote(value)}\n")
+              config.write(f"SENTRY_AUTH_TOKEN={shlex.quote(auth_token)}\n")
           os.chmod(os.environ["SENTRY_CONFIG_FILE"], 0o600)
           os.remove(os.environ["SENTRY_RESPONSE_FILE"])
 

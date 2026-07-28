@@ -93,12 +93,24 @@
 - Decision Date: 2026-07-28
 - Decision Class: User Choice
 - Authority / Provenance: 사용자 결정, PROD-477
-- Status: Active
+- Status: Superseded
 - Context / Problem: GitHub repository variable과 secret, 환경별 Vault 경로에 Sentry 설정을 나누면 기존 Kosmo Vault가 하나의 source of truth가 되지 않는다. 다만 Expo 공개 변수, source map 업로드 자격 증명과 서버 runtime DSN은 수명과 노출 경계가 다르다.
 - Decision Outcome: 공용 `SENTRY_DSN`, `SENTRY_PROJECT`, Sentry 조직 slug와 source map 업로드 token을 `secret/kubernetes/kosmo/shared`에 둔다. GitHub Actions는 image build 때 Vault Sentry 객체 전체를 임시 env 파일 하나로 만들고 `sentry_config` BuildKit secret으로 전달한다. Artifact build 단계는 DSN을 `EXPO_PUBLIC_SENTRY_DSN`으로 Web bundle에만 남기고 조직·project slug와 upload token은 source map upload에만 소비한다. API와 Web BFF는 Vault Secrets Operator가 shared의 `SENTRY_DSN`만 변환한 `sentry-runtime` Kubernetes Secret을 배포 시 주입한다.
 - Alternatives Considered: Vault 키를 GitHub environment와 Docker build arg에 하나씩 전달하는 방식은 키 목록과 전달 경로를 반복한다. DSN을 server image 파일로 복사하는 방식은 build/runtime 경계를 섞고 DSN 회전마다 image 재빌드를 요구한다. Vault 객체 전체를 runtime Kubernetes Secret에 복사하는 방식은 upload token까지 pod에 배포하므로 선택하지 않는다.
 - Consequences: 새 Vault build 키가 추가돼도 workflow의 build arg 목록은 늘어나지 않는다. BuildKit secret 내용은 cache key가 아니므로 설정 회전을 반영하기 위해 Sentry artifact build stage는 cache를 사용하지 않는다. Web DSN 변경은 새 image build·배포가 필요하지만 server DSN은 Vault Secrets Operator가 갱신한다. Upload token과 조직·project slug는 runtime image와 pod에 포함되지 않는다.
 - Confirmation / Follow-up: Docker build가 secret env 파일 하나만 받고 final image에는 Vault 값이 남지 않는지, Helm render의 `sentry-runtime` Secret에는 `SENTRY_DSN`만 있는지, branch와 release tag build가 shared 값을 읽어 source map을 업로드하는지 확인한다.
+
+### Source map 업로드 token은 GitHub repository secret에서 주입한다
+
+- Decision Date: 2026-07-28
+- Decision Class: User Choice
+- Authority / Provenance: 사용자 결정, PROD-477
+- Status: Active
+- Context / Problem: `SENTRY_AUTH_TOKEN`은 애플리케이션 runtime 설정이 아니라 GitHub Actions의 source map 업로드에서만 사용하는 자격 증명이다. 이를 runtime DSN과 함께 Vault shared에서 관리할 필요가 없다.
+- Decision Outcome: `SENTRY_AUTH_TOKEN`은 `byulmaru/kosmo` GitHub repository secret에 둔다. Vault shared에는 공용 `SENTRY_DSN`, `SENTRY_PROJECT`와 Sentry 조직 slug를 유지한다. Workflow는 Vault 설정과 repository secret의 token을 임시 env 파일 하나로 합쳐 BuildKit secret으로 전달하며 token은 source map upload 단계에서만 소비한다.
+- Alternatives Considered: token까지 Vault shared에 두면 build 설정을 한 저장소에서 관리할 수 있지만, build 전용 GitHub 자격 증명의 소유 경계를 runtime 설정과 섞는다. 모든 Sentry 설정을 GitHub repository 설정으로 옮기면 API와 Web BFF의 Vault runtime DSN 주입 경계가 중복된다.
+- Consequences: source map token 회전은 GitHub repository secret에서 수행하고 DSN·조직·project 설정은 Vault에서 관리한다. Repository에서 branch workflow를 실행할 수 있는 주체는 build 중 token을 사용할 수 있지만, token은 Docker ARG·ENV·image·runtime pod에 포함되지 않는다.
+- Confirmation / Follow-up: Vault에 token이 없어도 branch Docker build가 repository secret으로 source map을 업로드하고 final image와 로그에 token이 남지 않는지 확인한다.
 
 ### 기능 branch Docker build도 Vault shared를 읽는다
 
@@ -109,7 +121,7 @@
 - Context / Problem: 수동 feature branch Docker build는 `branch-*`와 `sha-*` image를 발행하도록 지원하지만, main에만 묶인 Vault dev role 때문에 Sentry build 설정을 읽는 단계에서 실패한다.
 - Decision Outcome: `byulmaru/kosmo`의 모든 branch GitHub OIDC subject가 `kosmo-build-dev` role을 사용해 `secret/kubernetes/kosmo/shared`를 읽도록 허용한다. 정식 SemVer tag는 기존처럼 `kosmo-build-prod` role을 사용한다.
 - Alternatives Considered: feature branch에서 Sentry 업로드를 비활성화하거나 main만 shared를 읽게 유지하는 방식은 수동 branch image가 production build와 같은 artifact 검증을 수행하지 못하므로 선택하지 않는다.
-- Consequences: feature branch도 dev environment source map을 업로드할 수 있다. Vault policy는 정확한 shared 경로의 read-only 권한과 짧은 token TTL을 유지하지만, repository에서 branch workflow를 실행할 수 있는 주체는 shared의 source map 업로드 token을 build 중 사용할 수 있다.
+- Consequences: feature branch도 dev environment source map을 업로드할 수 있다. Vault policy는 정확한 shared 경로의 read-only 권한과 짧은 token TTL을 유지하며, repository에서 branch workflow를 실행할 수 있는 주체는 repository secret의 source map 업로드 token을 build 중 사용할 수 있다.
 - Confirmation / Follow-up: Terraform plan에서 branch subject glob과 exact-path read policy를 확인하고 workflow ref matrix에서 branch는 dev, 정식 SemVer tag는 prod, 그 밖의 tag는 거부되는지 검증한다.
 
 ## Remaining Decisions
@@ -119,3 +131,4 @@
 ## Superseded Decisions
 
 - `명시적 배포 enable과 완전한 metadata가 있어야 전송한다`: 별도 enable·kill switch는 상위 요구사항에 없던 구현 가정이므로 2026-07-28 사용자 결정으로 폐기했다.
+- `환경에 독립적인 Sentry 설정은 Vault에서 읽어 image build에 주입한다`: upload token까지 Vault shared에서 관리하던 선택은 2026-07-28 사용자 결정으로 폐기하고 build 전용 token을 GitHub repository secret으로 옮겼다.
