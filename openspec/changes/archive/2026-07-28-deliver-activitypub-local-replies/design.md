@@ -5,8 +5,8 @@ signed fetch authorization과 Local/Remote Post URI resolver를 제공한다. Lo
 `inReplyTo`를 포함한 Note로 역참조할 수 있지만, 현재 Local Post 생성·삭제 application flow는 activity를 remote
 inbox로 전달하지 않는다.
 
-Local Reply 생성의 가장 바깥 transaction은 GraphQL resolver가 Parent 접근을 검증하고 `createPost(..., tx)`를
-호출하는 경계에 있다. 반면 `deletePost()`는 core action이 transaction을 직접 연다. 기존 Remote Follow은 domain
+Local Reply 생성은 core application action이 Parent 접근 검증과 가장 바깥 transaction을 함께 소유한다.
+`deletePost()`도 core action이 transaction을 직접 연다. 기존 Remote Follow은 domain
 transaction이 끝난 뒤 Fedify delivery를 `await`하고, 실패를 catch/log해 committed result와 분리한다. 현재
 federation에는 MessageQueue가 없으므로 `sendActivity()`는 remote HTTP 요청을 직접 수행한다.
 
@@ -32,8 +32,9 @@ federation에는 MessageQueue가 없으므로 `sendActivity()`는 remote HTTP �
 
 ### Current Constraints
 
-- `createPost()`는 optional caller transaction에 합류한다. 이 함수 안에서 delivery를 호출하면 가장 바깥
-  transaction이 아직 rollback될 수 있으므로 post-commit 계약을 보장하지 못한다.
+- low-level `createPost()`는 optional caller transaction에 합류하므로 그 안에서 delivery를 호출하면 가장 바깥
+  transaction이 아직 rollback될 수 있다. Local production entry는 outer transaction을 소유하는 별도 core
+  application action을 사용해야 한다.
 - 현재 Local Note loader는 Active Post만 제공한다. Reply가 Tombstone이 된 뒤에는 dispatcher를 그대로 호출해
   Delete projection을 만들 수 없다.
 - Create의 embedded Note를 별도로 다시 직렬화하면 object dispatcher의 content, summary, audience와 `inReplyTo`
@@ -45,10 +46,10 @@ federation에는 MessageQueue가 없으므로 `sendActivity()`는 remote HTTP �
 
 ### Recommended Approach
 
-가장 바깥 application transaction을 소유하는 GraphQL resolver가 commit된 Post ID를 받은 뒤 Fedify package의
-좁은 Reply delivery API를 호출하는 방식을 기본으로 한다. Create resolver는 기존 outer transaction이 끝난 뒤,
-Delete resolver는 `deletePost()`가 반환된 뒤 호출한다. 두 호출은 각각 `await`하되 오류를 구조화해 기록하고 기존
-payload를 반환한다.
+core `createLocalPost` application action이 Parent 접근 정책과 가장 바깥 transaction을 소유하고, commit된 Reply
+ID를 받은 뒤 Notification과 Fedify package의 좁은 Reply Create delivery API를 호출한다. `deletePost()`는 commit
+결과에서 Reply를 판별해 Reply Delete delivery를 호출한다. 두 delivery는 각각 `await`하되 오류를 구조화해 기록하고
+committed domain 결과를 반환한다. GraphQL resolver는 인증된 Profile과 business input만 전달하고 payload를 구성한다.
 
 Fedify package에서는 기존 Local Note 조회와 projection을 내부적으로 재사용 가능한 경계로 정리한다. Create는
 commit된 Active Reply에서 object dispatcher와 동일한 Note를 만들고, Delete는 Tombstone row에 남아 있는 Author,
@@ -71,9 +72,9 @@ fragment 없는 Note URI를 사용한다. 이 방법은 별도 activity row나 �
 
 ### Allowed Alternatives
 
-- core application action이 실제 outer transaction 전체를 직접 소유하도록 구조를 정리한 뒤 그 action의
-  post-commit 구간에서 delivery를 orchestration할 수 있다. 다만 현재 Parent 접근 검증을 callback이나 protocol
-  타입으로 core public contract에 주입해서는 안 되며, optional caller transaction 안에서 delivery해서도 안 된다.
+- 별도 API-local orchestration module이 outer transaction과 post-commit lifecycle을 소유할 수 있다. 다만 이
+  lifecycle은 GraphQL에 고유하지 않고 현재 Repost와 같은 core ownership을 공유하므로 core application action을
+  사용한다.
 
 ### Known Traps
 
@@ -103,9 +104,10 @@ fragment 없는 Note URI를 사용한다. 이 방법은 별도 activity row나 �
 
 ## Migration Plan
 
-DB schema와 저장 데이터 migration은 없다. OpenSpec Gate 승인 뒤 Fedify projection/delivery와 API post-commit
-wiring을 추가하고 package·API integration test를 먼저 통과시킨다. Rollback은 새 resolver wiring과 Fedify Reply
-delivery 경계를 제거하면 기존 Local Reply 저장·조회·삭제 동작으로 돌아가며 저장 데이터 변환은 필요 없다.
+DB schema와 저장 데이터 migration은 없다. OpenSpec Gate 승인 뒤 Fedify projection/delivery와 core post-commit
+wiring을 추가하고 package·core·API integration test를 먼저 통과시킨다. Rollback은 새 core lifecycle wiring과
+Fedify Reply delivery 경계를 제거하면 기존 Local Reply 저장·조회·삭제 동작으로 돌아가며 저장 데이터 변환은
+필요 없다.
 
 ## Open Questions
 

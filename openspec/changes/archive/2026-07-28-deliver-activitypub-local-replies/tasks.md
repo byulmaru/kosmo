@@ -51,6 +51,8 @@ GraphQL application 결과와 committed Reply state가 성공으로 유지된다
 
 - transaction callback 또는 optional caller transaction 내부에서 delivery하지 않는다.
 - core Post public contract에 GraphQL·Fedify 타입, callback이나 speculative delivery port를 추가하지 않는다.
+- GraphQL resolver가 Reply Notification이나 Fedify delivery를 직접 조립하지 않는다.
+- core Local Post application action과 `deletePost`가 outer commit과 post-commit lifecycle을 소유한다.
 - delivery Promise를 fire-and-forget하지 않고 await한 뒤 실패를 Reply identity와 함께 관측한다.
 - 기존 Reply Notification과 Post 삭제 Notification cleanup의 best-effort lifecycle을 재정의하지 않는다.
 - Reply가 아닌 Post의 생성·삭제에는 이 capability의 activity를 전달하지 않는다.
@@ -61,8 +63,8 @@ GraphQL application 결과와 committed Reply state가 성공으로 유지된다
 - Create/Delete remote failure에서 GraphQL 성공 payload와 committed DB state가 일치하는지 검증한다.
 - 일반 Post, Repost와 remote-origin Post lifecycle이 Reply delivery를 만들지 않는지 회귀 검증한다.
 
-- [x] 2.1 Local Reply 생성의 outer transaction commit 뒤 Create delivery를 연결하고 실패를 application 결과와 격리한다.
-- [x] 2.2 Local Reply Tombstone commit 뒤 Delete delivery를 연결하고 실패를 application 결과와 격리한다.
+- [x] 2.1 core Local Post application action의 outer transaction commit 뒤 Notification과 Create delivery를 연결하고 실패를 application 결과와 격리한다.
+- [x] 2.2 `deletePost`의 Local Reply Tombstone commit 뒤 Delete delivery를 연결하고 실패를 application 결과와 격리한다.
 - [x] 2.3 create/delete rollback, delivery rejection, 반복 삭제와 non-Reply 경계의 API integration 검증을 추가한다.
 
 ## 3. PROD-497 통합 검증과 OpenSpec 완료

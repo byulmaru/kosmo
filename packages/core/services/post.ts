@@ -14,7 +14,11 @@ import {
 } from '../db';
 import { InstanceState, NotificationKind, PostState, PostVisibility, ProfileState } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
-import { createRepostNotification, deleteNotificationBySource } from './notification';
+import {
+  createReplyNotificationBestEffort,
+  createRepostNotification,
+  deleteNotificationBySource,
+} from './notification';
 import { validatePostStructure } from './post-structure';
 import type { Transaction } from '../db';
 import type { PostContentDocumentV1 } from '../post-content';
@@ -107,9 +111,14 @@ export const deletePost = async (
   },
   tx?: Transaction,
 ): Promise<{ readonly postId: string }> => {
-  const { repostId, result } = await getDatabaseConnection(tx).transaction(async (tx) => {
+  const { replyId, repostId, result } = await getDatabaseConnection(tx).transaction(async (tx) => {
     const post = await tx
-      .select({ profileId: Posts.profileId })
+      .select({
+        currentContentId: Posts.currentContentId,
+        profileId: Posts.profileId,
+        replyParentId: Posts.replyParentId,
+        state: Posts.state,
+      })
       .from(Posts)
       .where(eq(Posts.id, postId))
       .limit(1)
@@ -139,7 +148,14 @@ export const deletePost = async (
       })
       .then(first);
 
+    const replySource = deleted ?? post;
+    const isDeletedReply =
+      replySource.currentContentId !== null &&
+      replySource.replyParentId !== null &&
+      (deleted !== undefined || post.state === PostState.DELETED);
+
     return {
+      replyId: isDeletedReply ? postId : undefined,
       repostId:
         deleted &&
         deleted.currentContentId === null &&
@@ -170,6 +186,18 @@ export const deletePost = async (
       console.error('Post-commit ActivityPub Repost Undo delivery failed', {
         error,
         repostId,
+      });
+    }
+  }
+
+  if (!tx && replyId) {
+    try {
+      const { sendLocalReplyDelete } = await import('@kosmo/fedify');
+      await sendLocalReplyDelete(replyId);
+    } catch (error) {
+      console.error('Post-commit ActivityPub Reply Delete delivery failed', {
+        error,
+        postId: replyId,
       });
     }
   }
@@ -353,3 +381,42 @@ export async function createPost(
     return { created: false };
   }
 }
+
+export const createLocalPost = async (
+  input: Omit<LocalPostInput, 'origin'>,
+): Promise<CreatedPost> => {
+  const result = await getDatabaseConnection().transaction(async (tx) => {
+    if (input.replyParentId !== undefined) {
+      const parent = await findVisiblePost(tx, {
+        actorProfileId: input.profileId,
+        postId: input.replyParentId,
+      });
+      if (!parent) {
+        throw new NotFoundError('Post not found');
+      }
+      if (parent.currentContentId === null) {
+        throw new ValidationError('Reply Parent must have content', {
+          field: 'replyParentId',
+        });
+      }
+    }
+
+    return createPost({ ...input, origin: 'LOCAL' }, tx);
+  });
+
+  if (input.replyParentId !== undefined) {
+    await createReplyNotificationBestEffort(result.post.id);
+
+    try {
+      const { sendLocalReplyCreate } = await import('@kosmo/fedify');
+      await sendLocalReplyCreate(result.post.id);
+    } catch (error) {
+      console.error('Post-commit ActivityPub Reply Create delivery failed', {
+        error,
+        postId: result.post.id,
+      });
+    }
+  }
+
+  return result;
+};
