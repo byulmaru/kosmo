@@ -8,7 +8,7 @@ import {
   ProfileState,
 } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { and, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, eq, isNotNull } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
 import { federation } from './federation';
 import { projectLocalPostNote } from './local-post-note';
@@ -89,7 +89,7 @@ const loadRemoteParentRecipient = async (
         eq(Posts.id, replyParentId),
         eq(Profiles.state, ProfileState.ACTIVE),
         eq(Instances.kind, InstanceKind.ACTIVITYPUB),
-        inArray(Instances.state, [InstanceState.ACTIVE, InstanceState.UNRESPONSIVE]),
+        eq(Instances.state, InstanceState.ACTIVE),
         isNotNull(ActivityPubActors.inboxUri),
       ),
     )

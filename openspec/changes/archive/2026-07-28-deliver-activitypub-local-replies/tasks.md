@@ -17,7 +17,7 @@ Local Reply가 기존 canonical Note 표현과 identity를 사용하는 안정�
 - Create는 PROD-494의 Local Note content, summary, audience와 Local/Remote Parent `inReplyTo`를 재사용한다.
 - Delete는 생성 때 사용한 canonical Note URI를 가리키며 별도 Tombstone endpoint나 mapping row를 만들지 않는다.
 - Public/Unlisted는 remote Parent Author만 direct recipient로 허용하고 Followers Only·Direct는 전달하지 않는다.
-- ACTIVE 또는 UNRESPONSIVE ActivityPub Instance의 usable HTTP(S) actor endpoint만 사용한다.
+- ACTIVE ActivityPub Instance의 usable HTTP(S) actor endpoint만 사용하고 UNRESPONSIVE/SUSPENDED는 제외한다.
 - Create는 `{noteUri}#create`, Delete는 `{noteUri}#delete`, ordering domain은 canonical Note URI를 사용한다.
 - follower 직접 조회·fanout, followers/outbox collection, queue, retry/history와 새 DB schema를 추가하지 않는다.
 
