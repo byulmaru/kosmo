@@ -23,7 +23,7 @@ import { postContentDocumentToHtml } from '@kosmo/core/post-content/server';
 import { and, eq, ne } from 'drizzle-orm';
 import { escapeText } from 'entities/escape';
 import { isCanonicalPostId, resolveActivityPubPostUri } from './activitypub-post-uri';
-import type { RequestContext } from '@fedify/fedify';
+import type { Context, RequestContext } from '@fedify/fedify';
 import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
 
 type LocalPostNote = {
@@ -38,8 +38,14 @@ type LocalPostNote = {
   readonly visibility: (typeof PostVisibility)[keyof typeof PostVisibility];
 };
 
+type LocalPostNoteProjection = LocalPostNote & {
+  readonly object: Note;
+};
+
+type LocalPostNoteContext = Pick<Context<void>, 'canonicalOrigin' | 'getActorUri'>;
+
 const loadLocalPostNote = async (
-  context: RequestContext<void>,
+  context: LocalPostNoteContext,
   postId: string,
 ): Promise<LocalPostNote | null> => {
   if (!isCanonicalPostId(postId)) {
@@ -85,7 +91,7 @@ const loadLocalPostNote = async (
     : null;
 };
 
-const getFollowersUri = (context: RequestContext<void>, profileId: string): URL => {
+const getFollowersUri = (context: LocalPostNoteContext, profileId: string): URL => {
   const actorUri = context.getActorUri(profileId);
   return new URL(`${actorUri.pathname.replace(/\/$/, '')}/followers`, actorUri);
 };
@@ -136,7 +142,14 @@ export const dispatchLocalPostNote = async (
   context: RequestContext<void>,
   { id }: { id: string },
 ): Promise<Note | null> => {
-  const note = await loadLocalPostNote(context, id);
+  return (await projectLocalPostNote(context, id))?.object ?? null;
+};
+
+export const projectLocalPostNote = async (
+  context: LocalPostNoteContext,
+  postId: string,
+): Promise<LocalPostNoteProjection | null> => {
+  const note = await loadLocalPostNote(context, postId);
   if (!note) {
     return null;
   }
@@ -154,7 +167,7 @@ export const dispatchLocalPostNote = async (
         ? PUBLIC_COLLECTION
         : undefined;
 
-  return new Note({
+  const object = new Note({
     attribution: authorUri,
     ...(cc ? { cc } : {}),
     content: postContentDocumentToHtml(note.contentDocument),
@@ -169,4 +182,6 @@ export const dispatchLocalPostNote = async (
       note.canonicalOrigin,
     ),
   });
+
+  return { ...note, object };
 };

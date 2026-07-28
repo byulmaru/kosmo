@@ -1,0 +1,123 @@
+## Context
+
+이 기록은 canonical Post·Instance·core service 계약, 완료된 Local Note identity 기반, 최신 PROD-497·447·448과
+현재 Local Reply 생성·삭제 및 Fedify delivery 경계를 독립 확인한 결과를 반영한다. 구현자는 OpenSpec 자체를
+상위 권위로 사용하지 않고 구현 전에 최신 canonical 문서와 Linear 계약을 다시 대조해야 한다.
+
+## Decision Records
+
+### Reply Create와 Delete는 기존 Local Note identity를 공유한다
+
+- Decision Date: 2026-07-28
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/post.md`,
+  `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-494, PROD-497
+- Status: Active
+- Context / Problem: Reply delivery가 별도 object identity나 Tombstone 표현을 만들면 object dispatcher의
+  `/ap/note/{postId}`와 remote server가 받은 Create/Delete 대상이 달라질 수 있다.
+- Decision Outcome: Create는 PROD-494의 full Local Note projection을 object로 사용하고 Delete는 같은 canonical
+  Note URI를 object IRI로 가리킨다. Delete를 위해 새 Tombstone object endpoint나 local Post mapping row를 만들지
+  않는다.
+- Alternatives Considered: delivery 전용 Note URI, Local Post mapping row, embedded Tombstone, Delete 이후
+  Active-only Note dispatcher 허용.
+- Consequences: Create의 content·summary·audience·`inReplyTo`는 object dispatcher와 같고, Tombstone Reply는
+  직접 역참조할 수 없어도 Delete object identity가 유지된다.
+- Confirmation / Follow-up: Local/Remote Parent Create와 Tombstone Delete가 같은 Note identity를 사용하는지
+  Fedify integration test로 확인한다.
+
+### Activity identity는 Note URI fragment에서 파생한다
+
+- Decision Date: 2026-07-28
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-497
+- Status: Active
+- Context / Problem: Fedify의 자동 activity ID를 사용하면 같은 committed Reply의 delivery 재호출마다 새 logical
+  activity가 생기고, 별도 activity row를 추가하면 현재 범위를 넘어선다.
+- Decision Outcome: Create activity ID는 `{noteUri}#create`, Delete activity ID는 `{noteUri}#delete`로 파생하고
+  fragment 없는 canonical Note URI를 두 activity의 ordering key로 사용한다.
+- Alternatives Considered: 자동 생성 URN UUID, 별도 `/ap/activity/{id}` row·route, Post UUID와 activity kind를
+  포함한 별도 path.
+- Consequences: DB schema나 activity dispatcher 없이 반복 호출 identity와 Create/Delete ordering domain이
+  안정된다. 같은 Post에는 lifecycle별 logical Create와 Delete 하나만 표현한다.
+- Confirmation / Follow-up: 반복 Create·Delete 호출의 ID와 ordering key를 검증한다.
+
+### Recipient는 action 시점의 현재 저장 관계에서 계산한다
+
+- Decision Date: 2026-07-28
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/instance.md`,
+  `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-497
+- Status: Active
+- Context / Problem: remote follower와 Parent Author가 겹칠 수 있고 Followers Only Reply가 follower가 아닌 Parent
+  Author에게 전달되면 visibility를 우회한다. 반대로 과거 recipient를 보존하려면 명시적으로 제외된 delivery
+  history가 필요하다.
+- Decision Outcome: Public/Unlisted는 현재 established remote follower와 remote Parent Author를, Followers
+  Only는 현재 established remote follower만 선택한다. Parent Author도 Followers Only에서는 established
+  follower여야 한다. Active ActivityPub Instance와 usable actor endpoint만 허용하고 actor identity로 중복을
+  제거한다. Create 당시 recipient snapshot은 저장하지 않는다.
+- Alternatives Considered: visibility와 무관하게 Parent Author에게 항상 전달, Parent Author 제외, Create recipient
+  snapshot 저장, Instance 상태와 무관한 delivery.
+- Consequences: 삭제 시점 전에 unfollow한 과거 recipient는 Delete를 받지 못할 수 있다. 이 한계는 history가 없는
+  현재 직접 delivery 범위에 남고, visibility와 Instance 정책은 현재 저장 상태에 일치한다.
+- Confirmation / Follow-up: visibility·follower·Parent Author·Instance state·중복 actor matrix를 검증한다.
+
+### 저장된 Recipient 배열을 Fedify에 직접 전달한다
+
+- Decision Date: 2026-07-28
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/instance.md`, PROD-497
+- Status: Active
+- Context / Problem: Fedify의 special `"followers"` recipient는 followers collection dispatcher가 필요하지만
+  현재 actor contract는 collection GET을 제공하지 않으며 remote Parent Author도 별도로 합쳐야 한다.
+- Decision Outcome: 현재 DB 관계에서 usable remote actor를 조회해 Fedify `Recipient[]`로 전달하고 shared inbox를
+  선호한다. 이번 change에서 followers collection dispatcher나 collection endpoint를 열지 않는다.
+- Alternatives Considered: `"followers"` special recipient와 새 collection dispatcher, recipient별 개별
+  `sendActivity()`, ActivityPub followers collection mirror.
+- Consequences: 기존 저장 ProfileFollow와 ActivityPub Actor가 recipient source of truth로 유지된다. 동일 server
+  delivery는 Fedify shared inbox 경계에서 묶을 수 있고 새 공개 collection API가 생기지 않는다.
+- Confirmation / Follow-up: recipient 배열, actor 중복 제거, shared inbox option과 no-recipient no-op을 검증한다.
+
+### 실제 outer commit 뒤 application entry에서 delivery를 orchestration한다
+
+- Decision Date: 2026-07-28
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/architecture/core-services.md`, PROD-447, PROD-497
+- Status: Active
+- Context / Problem: `createPost()`는 caller transaction에 합류할 수 있어 그 함수 반환만으로 실제 domain
+  transaction commit을 알 수 없다. 그 안에서 delivery하면 rollback될 Reply를 remote inbox로 먼저 보낼 수 있다.
+- Decision Outcome: 현재 production Local Reply entry인 GraphQL resolver가 가장 바깥 생성 transaction 또는
+  `deletePost()` transaction의 성공 반환 뒤 Fedify delivery를 `await`하고 catch/log한다. Core Post public contract에
+  protocol object, callback이나 delivery port를 추가하지 않는다.
+- Alternatives Considered: `createPost(..., tx)` 내부 delivery, transaction callback 주입, fire-and-forget Promise,
+  Parent access를 포함한 새 core orchestration action.
+- Consequences: 현재 transaction ownership과 transport-neutral core contract를 유지하면서 실제 commit 이후에만
+  전달한다. 향후 다른 Local Reply production entry가 생기면 같은 post-commit orchestration을 연결하거나 core가
+  outer transaction 전체를 소유하도록 별도 정렬해야 한다.
+- Confirmation / Follow-up: rollback에서 delivery zero-call, commit 뒤 delivery와 failure isolation을 API integration
+  test로 확인한다.
+
+### Direct delivery 실패는 committed Reply 결과와 분리한다
+
+- Decision Date: 2026-07-28
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/architecture/core-services.md`, PROD-447, PROD-497, PROD-448
+- Status: Active
+- Context / Problem: 현재 Fedify federation에는 queue가 없어 remote HTTP 실패가 `sendActivity()`에서 throw된다.
+  이 오류를 application 밖으로 전파하면 DB state는 commit됐지만 GraphQL은 실패하는 모순이 생긴다.
+- Decision Outcome: Create/Delete delivery를 commit 뒤 직접 await하고 실패를 Reply identity와 함께 기록하되,
+  create/delete application action은 committed payload를 성공으로 반환한다. `UNRESPONSIVE`에서는 delivery와
+  pending retry를 만들지 않는다.
+- Alternatives Considered: delivery 실패 시 domain rollback, GraphQL 실패 유지와 client refetch, fire-and-forget,
+  이번 change에서 outbox·queue를 선행 구현.
+- Consequences: remote HTTP 지연은 API 응답 경로에 남고 commit과 delivery 사이 process 종료 시 유실될 수 있다.
+  Durable intent와 queue handoff로 이 임시 경계를 대체하는 migration은 PROD-448이 별도로 소유한다.
+- Confirmation / Follow-up: Create/Delete delivery rejection에서 로그, GraphQL 성공 payload와 committed DB state를
+  함께 검증한다.
+
+## Remaining Decisions
+
+- 없음.
+
+## Superseded Decisions
+
+- 없음.
