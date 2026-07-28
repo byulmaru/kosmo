@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { deliverFeedback, FEEDBACK_RATE_LIMIT, resetFeedbackDeliveryState } from './delivery';
+import {
+  deliverFeedback,
+  FEEDBACK_RATE_LIMIT,
+  FEEDBACK_RATE_WINDOW_MS,
+  resetFeedbackDeliveryState,
+} from './delivery';
 
 const webhookUrl = 'https://hooks.slack.com/services/T000/B000/secret';
 const validFeedback = {
@@ -94,6 +99,32 @@ test('전송 실패는 자동 재시도하지 않고 명시적 재시도만 새 
   assert.equal(calls, 2);
 });
 
+test('전송 timeout은 abort 후 안전한 오류를 반환하고 in-flight를 해제한다', async () => {
+  let calls = 0;
+  const fetch = async (_input: RequestInfo | URL, init?: RequestInit) => {
+    calls += 1;
+    if (calls > 1) {
+      return new Response(null, { status: 200 });
+    }
+
+    return await new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+    });
+  };
+
+  await assert.rejects(
+    deliverFeedback('account-1', validFeedback, { fetch, timeoutMs: 1, webhookUrl }),
+    /피드백을 전달하지 못했어요/u,
+  );
+  assert.equal(calls, 1);
+
+  await deliverFeedback('account-1', validFeedback, {
+    fetch,
+    webhookUrl,
+  });
+  assert.equal(calls, 2);
+});
+
 test('계정별 10분 fixed window에서 다섯 번만 시도할 수 있다', async () => {
   let calls = 0;
   const fetch = async () => {
@@ -110,6 +141,39 @@ test('계정별 10분 fixed window에서 다섯 번만 시도할 수 있다', as
     /너무 많이 보냈어요/u,
   );
   assert.equal(calls, FEEDBACK_RATE_LIMIT);
+});
+
+test('10분 window가 지나면 만료 상태를 청소하고 새 시도를 허용한다', async () => {
+  let now = 0;
+  let calls = 0;
+  const fetch = async () => {
+    calls += 1;
+    return new Response(null, { status: 200 });
+  };
+  const options = { fetch, now: () => now, webhookUrl };
+
+  for (let attempt = 0; attempt < FEEDBACK_RATE_LIMIT; attempt += 1) {
+    await deliverFeedback('account-1', validFeedback, options);
+  }
+  now = FEEDBACK_RATE_WINDOW_MS + 1;
+  await deliverFeedback('account-1', validFeedback, options);
+
+  assert.equal(calls, FEEDBACK_RATE_LIMIT + 1);
+});
+
+test('rate limit과 window 상태는 계정별로 격리된다', async () => {
+  let calls = 0;
+  const fetch = async () => {
+    calls += 1;
+    return new Response(null, { status: 200 });
+  };
+
+  for (let attempt = 0; attempt < FEEDBACK_RATE_LIMIT; attempt += 1) {
+    await deliverFeedback('account-1', validFeedback, { fetch, webhookUrl });
+  }
+  await deliverFeedback('account-2', validFeedback, { fetch, webhookUrl });
+
+  assert.equal(calls, FEEDBACK_RATE_LIMIT + 1);
 });
 
 test('같은 계정의 in-flight 전송은 두 번째 POST를 시작하지 않는다', async () => {
@@ -130,6 +194,29 @@ test('같은 계정의 in-flight 전송은 두 번째 POST를 시작하지 않�
     deliverFeedback('account-1', validFeedback, { fetch, webhookUrl }),
     /처리 중이에요/u,
   );
+  release();
+  await first;
+  assert.equal(calls, 1);
+});
+
+test('window rollover 중에도 같은 계정의 in-flight 전송을 중복 시작하지 않는다', async () => {
+  let now = 0;
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let calls = 0;
+  const fetch = async () => {
+    calls += 1;
+    await pending;
+    return new Response(null, { status: 200 });
+  };
+  const options = { fetch, now: () => now, webhookUrl };
+
+  const first = deliverFeedback('account-1', validFeedback, options);
+  await new Promise((resolve) => setImmediate(resolve));
+  now = FEEDBACK_RATE_WINDOW_MS + 1;
+  await assert.rejects(deliverFeedback('account-1', validFeedback, options), /처리 중이에요/u);
   release();
   await first;
   assert.equal(calls, 1);

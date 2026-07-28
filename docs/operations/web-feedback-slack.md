@@ -23,8 +23,13 @@ Webhook 값은 HTTPS `hooks.slack.com/services/...` 형식이어야 한다. URL�
 
 - `api-env` VaultStaticSecret이 API Rollout만 재시작하도록 렌더링되는지 확인한다.
 - `web` Rollout에 `api-env` 또는 `SLACK_FEEDBACK_WEBHOOK_URL`이 주입되지 않는지 확인한다.
-- API 이미지와 Web 번들에서 `SLACK_FEEDBACK_WEBHOOK_URL`, `hooks.slack.com/services`가
-  검색되지 않는지 확인한다.
+- Web bundle에서 `SLACK_FEEDBACK_WEBHOOK_URL`, `hooks.slack.com/services` 문자열이 검색되지
+  않는지 확인한다. API source/image에는 runtime 환경 키와 Slack hostname이 정상적으로
+  존재할 수 있으므로 이 문자열의 부재를 검사하지 않는다.
+- API source/image와 배포 산출물에는 실제 Vault secret의 exact-match와 credential-shaped
+  webhook 값(예: `https://hooks.slack.com/services/<token>` 형태)이 남아 있지 않은지
+  검사한다. 검사는 secret 값을 로그나 문서에 기록하지 않고 배포 단계에서 주입된 값을
+  안전한 검증 도구로 비교하는 방식으로 수행한다.
 - 인증된 Web 사용자가 `/menu`에서 피드백을 제출하고, 성공 시 Slack에 정확히 한 메시지가
   도착하는지 운영 smoke에서 확인한다.
 

@@ -97,7 +97,9 @@ export function FeedbackForm() {
       style={[styles.root, { backgroundColor: theme.card, borderColor: theme.border }]}
     >
       <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.text }]}>피드백 보내기</Text>
+        <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
+          피드백 보내기
+        </Text>
         <Text style={[styles.description, { color: theme.textSecondary }]}>
           KOSMO를 더 좋게 만들 수 있도록 의견을 들려주세요.
         </Text>
@@ -156,7 +158,6 @@ export function FeedbackForm() {
         editable={!submitting}
         error={status === 'error' ? (bodyError ?? undefined) : undefined}
         label="피드백 내용"
-        maxLength={2000}
         onChangeText={(value) => {
           setBody(value);
           setStatus('idle');
@@ -202,9 +203,11 @@ export function FeedbackForm() {
         <Button
           accessibilityLabel={status === 'error' ? '피드백 다시 시도' : '피드백 보내기'}
           accessibilityState={{ busy: submitting, disabled: !canSubmit }}
+          aria-busy={submitting}
           disabled={!canSubmit}
           loading={submitting}
           onPress={submit}
+          style={styles.submitButton}
         >
           {actionLabel}
         </Button>
@@ -249,5 +252,6 @@ const styles = StyleSheet.create({
   optionLabel: { fontFamily: 'SUIT', ...typography.md },
   success: { fontFamily: 'SUIT', ...typography.sm },
   error: { fontFamily: 'SUIT', ...typography.sm },
+  submitButton: { minHeight: 44 },
   actions: { alignItems: 'flex-start' },
 });

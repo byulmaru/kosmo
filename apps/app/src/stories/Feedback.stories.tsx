@@ -65,6 +65,28 @@ export const Validation: Story = {
   },
 };
 
+export const TrimmedBodyBoundary: Story = {
+  parameters: {
+    relay: { mutationResponse: { submitFeedback: { completed: true } } },
+  },
+  render: () => (
+    <Catalog width={760}>
+      <Section title="피드백 · trim 경계">
+        <FeedbackForm />
+      </Section>
+    </Catalog>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '피드백 내용' });
+    const boundaryBody = ` ${'가'.repeat(2000)} `;
+    await userEvent.type(body, boundaryBody);
+    expect(body).toHaveValue(boundaryBody);
+    await userEvent.click(canvas.getByRole('button', { name: '피드백 보내기' }));
+    await expect(canvas.getByText('피드백을 전달했습니다. 감사합니다!')).toBeVisible();
+  },
+};
+
 export const Pending: Story = {
   parameters: { relay: { mutationLoading: true } },
   render: () => (
@@ -74,6 +96,17 @@ export const Pending: Story = {
       </Section>
     </Catalog>
   ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(
+      canvas.getByRole('textbox', { name: '피드백 내용' }),
+      '전달 중인 피드백입니다.',
+    );
+    const submit = canvas.getByRole('button', { name: '피드백 보내기' });
+    await userEvent.click(submit);
+    await expect(submit).toBeDisabled();
+    expect(submit).toHaveAttribute('aria-busy', 'true');
+  },
 };
 
 export const Success: Story = {

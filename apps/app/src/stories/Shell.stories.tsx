@@ -111,6 +111,30 @@ function CompactSidebarStory() {
   );
 }
 
+function FeedbackNavigationFullStory() {
+  return (
+    <View style={{ height: 560, width: 320 }}>
+      <SidebarNavigation query={useShellStoryData().query} />
+    </View>
+  );
+}
+
+function FeedbackNavigationCompactStory() {
+  return (
+    <View style={{ height: 560, width: 80 }}>
+      <SidebarNavigation compact query={useShellStoryData().query} />
+    </View>
+  );
+}
+
+function FeedbackNavigationDrawerStory() {
+  return (
+    <View style={{ height: 560, width: 320 }}>
+      <SidebarNavigation query={useShellStoryData().query} surface="drawer" />
+    </View>
+  );
+}
+
 function ProfileSwitcherStory() {
   return (
     <View style={{ maxWidth: 360 }}>
@@ -171,6 +195,39 @@ export const CompactSidebar: Story = {
     expect(canvas.getByRole('link', { name: '북마크' })).toHaveAttribute('href', '/bookmarks');
   },
   render: () => <CompactSidebarStory />,
+};
+
+export const FeedbackNavigationCurrentState: Story = {
+  parameters: { router: { pathname: '/menu' } },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const link = canvas.getByRole('link', { name: '피드백 보내기' });
+    expect(link).toHaveAttribute('aria-current', 'page');
+    expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
+  },
+  render: () => <FeedbackNavigationFullStory />,
+};
+
+export const FeedbackNavigationCompactCurrentState: Story = {
+  parameters: { router: { pathname: '/menu' } },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const link = canvas.getByRole('link', { name: '피드백 보내기' });
+    expect(link).toHaveAttribute('aria-current', 'page');
+    expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
+  },
+  render: () => <FeedbackNavigationCompactStory />,
+};
+
+export const FeedbackNavigationDrawerCurrentState: Story = {
+  parameters: { router: { pathname: '/menu' } },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const link = canvas.getByRole('link', { name: '피드백 보내기' });
+    expect(link).toHaveAttribute('aria-current', 'page');
+    expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
+  },
+  render: () => <FeedbackNavigationDrawerStory />,
 };
 
 export const FollowUpdatesBothProfileCounts: Story = {

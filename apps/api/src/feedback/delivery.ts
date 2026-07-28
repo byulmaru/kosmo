@@ -89,16 +89,27 @@ const createPayload = ({ body, kind, sentryEventId }: FeedbackInput) => ({
   unfurl_media: false,
 });
 
+const cleanupExpiredFeedbackStates = (now: number) => {
+  for (const [accountId, state] of feedbackStates) {
+    if (!state.inFlight && now - state.windowStartedAt >= FEEDBACK_RATE_WINDOW_MS) {
+      feedbackStates.delete(accountId);
+    }
+  }
+};
+
 const claimAttempt = (accountId: string, now: number) => {
+  cleanupExpiredFeedbackStates(now);
+
   const previous = feedbackStates.get(accountId);
+
+  if (previous?.inFlight) {
+    throw new ConflictError({ message: '피드백을 처리 중이에요. 잠시 후 다시 시도해주세요.' });
+  }
+
   const state =
     previous && now - previous.windowStartedAt < FEEDBACK_RATE_WINDOW_MS
       ? previous
       : { attempts: 0, inFlight: false, windowStartedAt: now };
-
-  if (state.inFlight) {
-    throw new ConflictError({ message: '피드백을 처리 중이에요. 잠시 후 다시 시도해주세요.' });
-  }
 
   if (state.attempts >= FEEDBACK_RATE_LIMIT) {
     throw new ConflictError({ message: '피드백을 너무 많이 보냈어요. 잠시 후 다시 시도해주세요.' });

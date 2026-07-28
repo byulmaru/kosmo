@@ -329,11 +329,26 @@ export function SidebarNavigation({
                 accessibilityLabel="피드백 보내기"
                 accessibilityRole="link"
                 onPress={onNavigate}
-                style={[styles.footerItem, compact && styles.compactItem]}
+                style={[
+                  styles.footerItem,
+                  compact && styles.compactItem,
+                  { backgroundColor: feedbackActive ? theme.surface : 'transparent' },
+                ]}
               >
-                <Settings color={theme.textSecondary} size={20} strokeWidth={1.5} />
+                <Settings
+                  color={feedbackActive ? theme.text : theme.textSecondary}
+                  size={20}
+                  strokeWidth={1.5}
+                />
                 {!compact ? (
-                  <Text style={[styles.footerLabel, styles.footerLabelGrow, { color: theme.text }]}>
+                  <Text
+                    style={[
+                      styles.footerLabel,
+                      styles.footerLabelGrow,
+                      feedbackActive && styles.activeItemLabel,
+                      { color: theme.text },
+                    ]}
+                  >
                     피드백 보내기
                   </Text>
                 ) : null}
