@@ -10,8 +10,7 @@ Accepted
 
 ## 후속 결정
 
-Account Profile Role의 Admin 값은 [ADR 0020](./0020-profile-edit-authorization-and-role-alignment.md)이
-레거시 역할로 판정하고 제거하기로 결정했다. 나머지 결정은 유지한다.
+Account Profile Role의 Admin 값은 레거시 역할로 판정되어 제거한다. 나머지 결정은 유지한다.
 
 ## 결정
 

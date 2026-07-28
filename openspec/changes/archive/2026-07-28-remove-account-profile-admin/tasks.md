@@ -4,7 +4,7 @@
 
 - `docs/domain/objects/account-profile-membership.md`
 - `docs/domain/objects/profile.md`
-- `docs/domain/decisions/0020-profile-edit-authorization-and-role-alignment.md`
+- `docs/domain/decisions/0008-relationship-report-state-exclusions.md`
 - `PROD-489`
 
 **Deliverable**
@@ -32,7 +32,7 @@ application과 GraphQL은 Account Profile Role로 Owner와 Member만 노출하�
 **Authority / Provenance**
 
 - `docs/domain/objects/account-profile-membership.md`
-- `docs/domain/decisions/0020-profile-edit-authorization-and-role-alignment.md`
+- `docs/domain/decisions/0008-relationship-report-state-exclusions.md`
 - `PROD-489`
 
 **Deliverable**
@@ -61,7 +61,6 @@ dev PostgreSQL의 `account_profile_role`은 기존 Owner/Member row를 유지하
 - `docs/domain/objects/account-profile-membership.md`
 - `docs/domain/objects/profile.md`
 - `docs/domain/decisions/0008-relationship-report-state-exclusions.md`
-- `docs/domain/decisions/0020-profile-edit-authorization-and-role-alignment.md`
 - `PROD-489`
 
 **Deliverable**

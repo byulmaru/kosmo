@@ -131,7 +131,7 @@ API는 활성 local profile과 저장된 활성 ActivityPub remote profile을 Gr
 
 ### Requirement: Account-profile membership
 
-**Authority / Provenance:** `docs/domain/objects/account-profile-membership.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0020-profile-edit-authorization-and-role-alignment.md`, `PROD-489` 시스템은 계정과 프로필의 관계를 Owner 또는 Member 역할이 있는 membership으로 관리해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/account-profile-membership.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0008-relationship-report-state-exclusions.md`, `PROD-489` 시스템은 계정과 프로필의 관계를 Owner 또는 Member 역할이 있는 membership으로 관리해야 한다(MUST).
 
 #### Scenario: Represent supported membership roles
 
@@ -176,7 +176,7 @@ API는 활성 local profile과 저장된 활성 ActivityPub remote profile을 Gr
 
 ### Requirement: Profile updates
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/decisions/0020-profile-edit-authorization-and-role-alignment.md`, `PROD-489` 프로필의 Owner는 활성 프로필의 표시 이름, bio, 팔로우 정책을 수정할 수 있어야 한다(MUST). Member는 Profile
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/decisions/0008-relationship-report-state-exclusions.md`, `PROD-489` 프로필의 Owner는 활성 프로필의 표시 이름, bio, 팔로우 정책을 수정할 수 있어야 한다(MUST). Member는 Profile
 운영 권한을 갖지 않으며 Profile을 수정할 수 없어야 한다(MUST NOT).
 
 #### Scenario: Update profile as owner

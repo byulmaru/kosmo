@@ -8,7 +8,6 @@ KOSMO의 UI/프로덕트 디자인 결정을 기록하고 공유하는 문서 �
 - [colors.md](./colors.md) — 컬러 토큰 정책
 - [typography.md](./typography.md) — 폰트 사용 규칙
 - [breakpoints.md](./breakpoints.md) — 레이아웃 브레이크포인트 단계와 컨벤션
-- [profile-edit.md](./profile-edit.md) — 프로필 수정 화면의 필드, 노출과 저장 상태 계약
 - [reactions.md](./reactions.md) — Reaction Quick Picker의 형태와 상태 표현
 
 ## 갱신 규칙

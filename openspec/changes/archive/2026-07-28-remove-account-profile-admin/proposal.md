@@ -14,7 +14,7 @@ canonical Account Profile Role은 Owner와 Member만 정의하지만 runtime app
 
 ## Authority / Provenance
 
-- Canonical: `docs/domain/objects/account-profile-membership.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0008-relationship-report-state-exclusions.md`, `docs/domain/decisions/0020-profile-edit-authorization-and-role-alignment.md`
+- Canonical: `docs/domain/objects/account-profile-membership.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0008-relationship-report-state-exclusions.md`
 - Linear Contract: `PROD-489`
 - Linear Implementations: 없음.
 

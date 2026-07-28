@@ -10,7 +10,7 @@
 
 - Decision Date: 2026-07-28
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/objects/account-profile-membership.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0008-relationship-report-state-exclusions.md`, `docs/domain/decisions/0020-profile-edit-authorization-and-role-alignment.md`, `PROD-489`
+- Authority / Provenance: `docs/domain/objects/account-profile-membership.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0008-relationship-report-state-exclusions.md`, `PROD-489`
 - Status: Active
 - Context / Problem: canonical 역할 집합에서 제거된 Admin이 application, GraphQL과 PostgreSQL에 남아 역할과 권한 계약이 일치하지 않는다.
 - Decision Outcome: Account Profile Role은 `OWNER`와 `MEMBER`만 지원하고 `ADMIN`은 모든 현재 runtime 계약에서 제거한다.
@@ -22,7 +22,7 @@
 
 - Decision Date: 2026-07-28
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/decisions/0020-profile-edit-authorization-and-role-alignment.md`, `PROD-489`
+- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/decisions/0008-relationship-report-state-exclusions.md`, `PROD-489`
 - Status: Active
 - Context / Problem: 현재 `updateProfile`은 Owner와 Admin을 허용하지만 canonical Profile 운영 권한은 Owner에게만 있다.
 - Decision Outcome: 현재 mutation shape와 나머지 동작은 유지하면서 Admin 허용 분기와 Admin 기준 오류 표현을 제거한다.
