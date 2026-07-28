@@ -104,6 +104,9 @@ test('저장된 최근 검색을 표시하고 개별 항목을 삭제한다', as
   await page.getByRole('button', { name: "최근 검색 'recent-alpha' 삭제" }).click();
 
   await expect(page.getByText('recent-alpha', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('최근 검색', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'recent-beta' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: '검색어' })).toBeFocused();
   expect(
     await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? '[]'), recentSearchesKey),
   ).toEqual(['recent-beta']);
@@ -116,7 +119,7 @@ test('최근 검색 항목을 선택하면 사람 검색 결과를 요청한다'
   await setRecentSearchesBeforeNavigation(page, [handle]);
   await page.goto('/search');
   await page.getByRole('textbox', { name: '검색어' }).focus();
-  await page.getByRole('link', { name: handle }).click();
+  await page.getByRole('link', { name: handle }).click({ delay: 50 });
 
   await expectSearchParams(page, { q: handle, tab: 'people' });
   await expectTabSelected(page, '사람');
