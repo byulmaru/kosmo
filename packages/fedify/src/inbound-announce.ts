@@ -5,7 +5,7 @@ import { InstanceState, PostState } from '@kosmo/core/enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '@kosmo/core/error';
 import { repostPost } from '@kosmo/core/services';
 import { eq, or } from 'drizzle-orm';
-import { resolveActivityPubPostId } from './activitypub-post-uri';
+import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
@@ -93,7 +93,7 @@ const saveCurrentAnnounce = async (
 };
 
 export const handleInboundAnnounce = async (
-  _context: InboxContext<void>,
+  context: InboxContext<void>,
   announce: Announce,
   receivedAt: Temporal.Instant = Temporal.Now.instant(),
 ): Promise<void> => {
@@ -120,7 +120,7 @@ export const handleInboundAnnounce = async (
     return;
   }
 
-  const sourcePostId = await resolveActivityPubPostId(objectUri);
+  const sourcePostId = await findPostByActivityPubUri(context, objectUri);
   if (!sourcePostId) {
     return;
   }

@@ -323,9 +323,12 @@ describe('inbound Announce materialization', () => {
 
 const context = () =>
   ({
+    canonicalOrigin: publicOrigin,
     documentLoader: async (url: string) => {
       throw new Error(`Unexpected document URL: ${url}`);
     },
+    parseUri: (uri: URL | null) =>
+      federation.createContext(new URL(publicOrigin), undefined).parseUri(uri),
   }) as unknown as InboxContext<void>;
 
 const announce = (id: string, object: URL) =>
