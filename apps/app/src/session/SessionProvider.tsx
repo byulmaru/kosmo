@@ -1,6 +1,8 @@
-import { Component, createContext, useContext, useEffect } from 'react';
+import { createContext, useContext, useEffect } from 'react';
+import { ErrorBoundary } from 'react-error-boundary';
 import { Platform } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
+import { useUnexpectedErrorReporter } from '@/observability/UnexpectedErrorContext';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import type { PropsWithChildren, ReactNode } from 'react';
 import type { SessionProviderQuery as SessionProviderQueryType } from './__generated__/SessionProviderQuery.graphql';
@@ -77,27 +79,16 @@ export function SessionErrorProvider({ children }: PropsWithChildren) {
   );
 }
 
-export class SessionFailOpenBoundary extends Component<
-  PropsWithChildren<{ fallback: ReactNode; resetKey: number }>,
-  { failed: boolean }
-> {
-  state = { failed: false };
+export function SessionFailOpenBoundary({
+  children,
+  fallback,
+  resetKey,
+}: PropsWithChildren<{ fallback: ReactNode; resetKey: number }>) {
+  const reportUnexpectedError = useUnexpectedErrorReporter();
 
-  static getDerivedStateFromError(): { failed: boolean } {
-    return { failed: true };
-  }
-
-  componentDidUpdate(previous: Readonly<{ resetKey: number }>): void {
-    if (this.state.failed && previous.resetKey !== this.props.resetKey) {
-      this.setState({ failed: false });
-    }
-  }
-
-  render(): ReactNode {
-    if (this.state.failed) {
-      return this.props.fallback;
-    }
-
-    return this.props.children;
-  }
+  return (
+    <ErrorBoundary fallback={fallback} onError={reportUnexpectedError} resetKeys={[resetKey]}>
+      {children}
+    </ErrorBoundary>
+  );
 }
