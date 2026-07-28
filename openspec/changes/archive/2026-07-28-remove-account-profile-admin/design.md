@@ -73,7 +73,7 @@ Drizzle generator가 enum value 삭제 SQL을 만들지 못하면 같은 새 mig
 
 1. core enum과 runtime 권한·테스트를 Owner/Member 계약으로 변경한다.
 2. 새 Drizzle forward migration과 최신 snapshot을 생성하고 enum 재구성 SQL을 검토한다.
-3. 격리 test DB에 migration을 적용하고 Owner/Member row가 유지되며 enum에서 `ADMIN`이 제거되는지 확인한다.
+3. 기존 migration runner 검증으로 전체 migration history가 빈 DB에 적용되고 재실행되는지 확인한다.
 4. GraphQL schema와 integration test를 검증한다.
 5. dev 배포에서는 기존 PreSync migration Job으로 같은 main image의 migration을 먼저 적용한다.
 

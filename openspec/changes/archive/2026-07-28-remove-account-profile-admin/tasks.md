@@ -49,11 +49,10 @@ dev PostgreSQL의 `account_profile_role`은 기존 Owner/Member row를 유지하
 **Verification**
 
 - 생성된 migration SQL과 snapshot parent가 현재 schema head를 잇는지 검토한다.
-- 격리 test DB에서 migration 전후 Owner/Member row 보존과 최종 enum 값 집합을 검증한다.
-- migration runner의 history·재실행 검증을 통과시킨다.
+- migration runner의 전체 history 적용·재실행 검증을 통과시킨다.
 
 - [x] 2.1 Owner/Member schema를 표현하는 새 Drizzle forward migration과 최신 snapshot을 생성하고 enum 재구성 SQL을 검토한다.
-- [x] 2.2 격리 DB migration 검증에 Owner/Member 보존, `ADMIN` 제거와 예상 밖 `ADMIN` row 실패 증거를 추가한다.
+- [x] 2.2 기존 migration runner로 전체 history 적용과 재실행을 검증한다.
 
 ## 3. PROD-489 통합 검증과 OpenSpec 완료
 

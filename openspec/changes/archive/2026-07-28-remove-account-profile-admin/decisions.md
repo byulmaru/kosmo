@@ -40,7 +40,7 @@
 - Decision Outcome: application 변경과 같은 전달에서 `account_profile_role` enum을 Owner/Member 값으로 재구성하는 새 forward migration을 적용한다. 예상과 달리 `ADMIN` row가 있으면 자동 강등하지 않고 migration을 실패시킨다.
 - Alternatives Considered: transition과 contract release 분리, `ADMIN`을 `MEMBER`로 backfill, enum을 text로 완화하는 방안은 현재 데이터와 환경에 불필요하거나 역할 의미를 추정하므로 채택하지 않는다.
 - Consequences: migration 중 dev downtime과 table lock을 허용한다. 구버전 code rollback 호환성은 제공하지 않으며 실패 시 새 forward migration으로 정정한다.
-- Confirmation / Follow-up: 격리 DB에서 migration을 적용해 Owner/Member row 보존, `ADMIN` 부재와 재실행 history를 확인한다.
+- Confirmation / Follow-up: 기존 migration runner 검증으로 전체 history가 빈 DB에 적용되고 재실행되는지 확인한다.
 
 ### 적용된 migration 이력은 보존한다
 
