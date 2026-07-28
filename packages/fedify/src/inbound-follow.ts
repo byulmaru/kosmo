@@ -109,12 +109,7 @@ const noNetworkDocumentLoader = async (url: string) => {
   throw new Error(`Network lookup is disabled for inbound Undo: ${url}`);
 };
 
-const handleInboundUndoAnnounce = async (undo: Undo, actorUri: URL): Promise<boolean> => {
-  const activityUri = undo.objectId;
-  if (!isHttpUri(activityUri)) {
-    return false;
-  }
-
+const handleInboundUndoAnnounce = async (activityUri: URL, actorUri: URL): Promise<boolean> => {
   return db.transaction(async (tx) => {
     const row = await tx
       .select({
@@ -168,7 +163,16 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
     return;
   }
 
-  if (await handleInboundUndoAnnounce(undo, actorUri)) {
+  const objectHref = uniqueHref(undo.objectIds);
+  if (undo.objectIds.length > 0 && !objectHref) {
+    return;
+  }
+  const objectUri = objectHref ? new URL(objectHref) : null;
+  if (objectUri && !isHttpUri(objectUri)) {
+    return;
+  }
+
+  if (objectUri && (await handleInboundUndoAnnounce(objectUri, actorUri))) {
     return;
   }
 

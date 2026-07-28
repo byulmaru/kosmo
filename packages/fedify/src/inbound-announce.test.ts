@@ -319,6 +319,26 @@ describe('inbound Announce materialization', () => {
     await handleInboundUndo(context(), undo(otherActorUri, a.id!));
     assert.equal(await postState(original.id), PostState.ACTIVE);
   });
+
+  test('ignores Undo with multiple object identities', async () => {
+    await createRemoteActor(actorUri);
+    await createRemoteSource();
+    const activity = announce('ambiguous-undo', sourceUri);
+
+    await handleInboundAnnounce(context(), activity);
+    const original = await currentRepost(activity.id!).then(({ repost }) => repost);
+    const ambiguousUndo = await Undo.fromJsonLd({
+      '@type': ['https://www.w3.org/ns/activitystreams#Undo'],
+      'https://www.w3.org/ns/activitystreams#actor': [{ '@id': actorUri.href }],
+      'https://www.w3.org/ns/activitystreams#object': [
+        { '@id': activity.id!.href },
+        { '@id': new URL('/activities/another', actorUri).href },
+      ],
+    });
+    await handleInboundUndo(context(), ambiguousUndo);
+
+    assert.equal(await postState(original.id), PostState.ACTIVE);
+  });
 });
 
 const context = () =>
