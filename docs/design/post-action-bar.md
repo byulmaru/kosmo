@@ -4,6 +4,23 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 각 action의 fragment, mutation과 상태 소유권은 해당 private child가 가지며, Bar는 고정 순서와 공통 control
 표현을 조립한다.
 
+## Figma geometry
+
+기준 source는 Figma `KOSMO` 파일의 [`Action` node 88:1005](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=88-1005)다. source metadata에서 27px로 측정되는 한 줄 높이는 구현과 검증에서 exact 28px 정수 계약으로 정규화한다.
+
+- Bar와 각 interactive control의 높이는 Web·Android·iOS 모두 28px·28dp·28pt다. Native 값은 출시 전 임시 예외이며 아래 release gate를 통과하기 전에는 Native 접근성 완료를 주장하지 않는다.
+- Bar는 가용 너비를 채우고 좌우 8px padding 안에서 action을 `space-between`으로 분배한다. Figma의 302px frame은 기준 viewport의 측정값이며 production 고정 너비가 아니다.
+- Reply, Repost, Reaction, Bookmark의 action slot 너비는 각각 50px다. More는 16px glyph를 사용하되 실제 interactive target 너비를 최소 28px로 확보하고 오른쪽 8px inset에 맞춘다.
+- 모든 glyph의 visual box는 16×16px, glyph와 count 사이는 4px다. count는 16px 한 줄이며 icon과 시각 중심을 맞춘다.
+- 순서는 `Reply → Repost → Reaction → Bookmark → More`로 고정한다. Reply와 Repost만 count를 표시하고 Reaction·Bookmark·More에는 count slot을 만들지 않는다.
+- pending spinner, selected·pressed·disabled 표현은 같은 28px slot 안에서 layout을 바꾸지 않는다. focus indicator와 accessible name·state는 compact geometry에서도 유지한다.
+
+## 플랫폼 rollout과 release gate
+
+- 현재 출시 범위는 Web이며, 구현 drift를 막기 위해 Native platform file도 우선 같은 28px geometry를 사용한다.
+- iOS 출시 전에는 실제 hit target을 최소 44×44pt, Android 출시 전에는 최소 48×48dp로 복구한다. visual 28px row 유지 여부와 hit target 확장 방식은 target overlap 없이 별도 결정한다.
+- Native target 복구, VoiceOver·TalkBack focus boundary, touch 입력과 bottom sheet runtime 관찰은 Native release gate다. 현재 PROD-414 완료나 Web 검증으로 대체하지 않는다.
+
 ## Surface 배치
 
 - `PostListItem`과 `PostLayout`은 `PostActionBar`를 Post content grid 안의 마지막 자식으로 렌더링한다.
@@ -28,7 +45,8 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   제공하고, 바깥 pointer·focus, Escape로 닫으며 Escape 뒤 trigger로 focus를 돌려보낸다. menu는 방향키,
   Home과 End로 항목 focus를 이동한다.
 - Android와 iOS는 safe area를 고려한 bottom action sheet를 사용한다. backdrop, platform back action과
-  dismiss gesture로 닫을 수 있고 modal·menu 의미와 44×44 이상의 target을 제공한다.
+  dismiss gesture로 닫을 수 있고 modal·menu 의미를 제공한다. sheet 내부 menu item의 target은 Action Bar의
+  28px trigger geometry와 별도이며 최소 44×44를 유지한다.
 - mutation pending 중에는 trigger와 menu action의 반복 입력을 막고 기존 selected·count 표현을 유지한다.
 
 ## Repost 실패 toast
@@ -56,7 +74,12 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 
 - 일반 Post, 순수 Repost, Quote와 상세에서 Action Bar가 content grid의 마지막 sibling이고 navigation
   Link/Pressable의 descendant가 아닌지 검증한다.
+- 모든 플랫폼 구현에서 Bar와 control 높이 28, 좌우 padding 8, social action 너비 50, More target 너비 최소
+  28, glyph 16, icon-count gap 4와 고정 순서를 검증한다. Web runtime에서는 각 target이 24×24 CSS px 자체를
+  포함하고 서로 겹치지 않는지도 확인한다.
 - Web menu의 open/close, focus 복귀, 키보드 이동과 항목 선택을 검증한다.
-- Native bottom action sheet의 backdrop·back dismiss, safe area, modal 접근성과 touch target을 검증한다.
+- Native bottom action sheet의 backdrop·back dismiss, safe area, modal 접근성과 menu item target을 검증한다.
+- Native 44pt·48dp Action Bar target과 VoiceOver·TalkBack runtime은 출시 전 후속 gate로 남기고, 현재 28px
+  공통 구현의 완료 증거로 보고하지 않는다.
 - 선택·미선택 상태의 메뉴 label, pending 중복 차단, 생성·취소 mutation identity와 actor 격리를 검증한다.
 - 실패 문구, latest-replace, 자동 dismiss, alert semantics와 실패 뒤 상태 유지·다음 입력 재시도를 검증한다.
