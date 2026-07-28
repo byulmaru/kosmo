@@ -1,7 +1,6 @@
 import { Suspense } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { StateView } from '@/components/ui/StateView';
-import { useUnexpectedErrorReporter } from '@/observability/UnexpectedErrorContext';
 import type { ReactNode } from 'react';
 
 type RouteBoundaryProps = {
@@ -21,8 +20,6 @@ export function RouteBoundary({
   onRetry,
   title,
 }: RouteBoundaryProps) {
-  const reportUnexpectedError = useUnexpectedErrorReporter();
-
   return (
     <ErrorBoundary
       fallbackRender={({ resetErrorBoundary }) =>
@@ -39,7 +36,6 @@ export function RouteBoundary({
         )
       }
       onError={(error, info) => {
-        reportUnexpectedError?.(error, info);
         console.error('Route error', error, info.componentStack);
       }}
       onReset={onRetry}

@@ -6,7 +6,6 @@
 
 - 앱의 GraphQL, route, session fail-open 오류 경계를 `react-error-boundary` 기반 함수형 조합으로 전환한다.
 - 기존 사용자-visible fallback, retry/reset, reset key와 Suspense 동작을 보존한다.
-- 오류와 React component stack을 선택적 reporter로 전달하는 공용 조합 지점을 제공해 Web Sentry와 Native 분리 계약을 유지할 수 있게 한다.
 - `@eslint-react/no-class-component`를 error로 적용하고 의도적인 class component fixture가 lint에서 실패하는지 검증한다.
 
 ## Authority / Provenance
@@ -19,7 +18,7 @@
 
 ### New Capabilities
 
-- `react-error-boundary-composition`: universal 앱의 함수형 오류 경계 동작, reporter 계약과 class component 금지를 정의한다.
+- `react-error-boundary-composition`: universal 앱의 함수형 오류 경계 동작과 class component 금지를 정의한다.
 
 ### Modified Capabilities
 

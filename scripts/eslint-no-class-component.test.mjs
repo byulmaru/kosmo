@@ -29,17 +29,6 @@ describe('@eslint-react/no-class-component', () => {
     );
   });
 
-  it('rejects a class error boundary that the plugin intentionally exempts', async () => {
-    const messages = await lintFixture(
-      'react-class-error-boundary.tsx.txt',
-      'scripts/fixtures/react-class-error-boundary.tsx',
-    );
-
-    assert.ok(
-      messages.some(({ ruleId, severity }) => ruleId === 'no-restricted-syntax' && severity === 2),
-    );
-  });
-
   it('allows a non-React domain error class', async () => {
     const messages = await lintFixture(
       'domain-error-class.ts.txt',

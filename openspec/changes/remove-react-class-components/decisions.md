@@ -13,20 +13,20 @@
 - Context / Problem: React에는 함수형 오류 경계 API가 없지만 앱 소스에서 class component를 제거해야 한다.
 - Decision Outcome: 저장소 내부 class wrapper를 새로 만들지 않고 검증된 `react-error-boundary` API를 함수형 컴포넌트에서 조합한다.
 - Alternatives Considered: 기존 class 유지, 공용 wrapper 아래 private class를 숨기는 방식, 오류 경계 기능 제거. 모두 class 제거 또는 기존 오류 복구 계약을 만족하지 못한다.
-- Consequences: 오류 포착 lifecycle은 외부 라이브러리에 의존하며 fallback/reset/reporter 계약을 integration test로 고정해야 한다.
+- Consequences: 오류 포착 lifecycle은 외부 라이브러리에 의존하며 fallback/reset 계약을 integration test로 고정해야 한다.
 - Confirmation / Follow-up: production 오류 경계 test와 전체 앱 TypeScript/Storybook 검증을 통과시킨다.
 
-### 선택적 reporter는 error와 React component stack을 받는다
+### Reporter 계약은 실제 production 조합과 함께 도입한다
 
 - Decision Date: 2026-07-28
-- Decision Class: Derived Contract
-- Authority / Provenance: `memory/frontend-react-native.md`, `PROD-513`
+- Decision Class: User-confirmed Choice
+- Authority / Provenance: 사용자 결정, `PROD-513`, `PROD-477`
 - Status: Active
-- Context / Problem: 공용 경계는 Native SDK를 선행하지 않으면서 후속 Web Sentry wiring이 React 렌더링 위치를 수집할 조합 지점을 제공해야 한다.
-- Decision Outcome: 오류 경계가 선택적 reporter에 포착한 error와 React error info/component stack을 전달하고 reporter 부재를 정상 동작으로 지원한다.
-- Alternatives Considered: Web Sentry를 공용 경계에 직접 import, error만 전달, 전역 mutable reporter. 각각 platform 분리, 진단 정보 또는 조합 소유권을 훼손한다.
-- Consequences: PR #375는 이 reporter를 Web platform 조합에서만 연결해야 하며 Native는 SDK 없이 동일 경계를 사용한다.
-- Confirmation / Follow-up: reporter 인자와 reporter 없는 fallback/reset 동작을 production wiring test로 검증한다.
+- Context / Problem: PROD-513에서 reporter prop/context를 먼저 제공하면 production caller가 없고 Storybook 주입 경로만 계약을 사용한다.
+- Decision Outcome: PROD-513은 함수형 경계와 복구 동작만 제공한다. reporter/context, error와 component stack 전달 계약은 실제 Web Sentry production caller가 생기는 PROD-477/#375에서 함께 도입한다.
+- Alternatives Considered: 선택적 reporter를 선행 base에 미리 제공. 사용되지 않는 공개 계약과 test-only wiring을 만든다.
+- Consequences: PROD-513에는 Sentry 관측 추상화가 없으며 PR #375가 Web/Native 분리와 production reporter wiring을 온전히 소유한다.
+- Confirmation / Follow-up: PROD-513에서는 fallback/reset을 검증하고, reporter 인자와 Web production 조합은 PR #375에서 검증한다.
 
 ### ESLint가 React class component를 error로 차단한다
 
@@ -49,7 +49,7 @@
 - Context / Problem: PR #375가 미병합 상태에서 같은 오류 경계에 Sentry wiring을 추가하고 있다.
 - Decision Outcome: PROD-513은 최신 main에서 독립 구현하고, PROD-477/#375를 PROD-513 위로 rebase해 `main → PROD-513 → PROD-477` 순서로 리뷰한다.
 - Alternatives Considered: PROD-513을 #375 위에 stack, 두 변경을 #375에 합치기. 전자는 독립적인 기반 변경의 병합을 Sentry rollout에 묶고, 후자는 이슈·OpenSpec·rollback 경계를 혼합한다.
-- Consequences: #375의 class/context 변경은 함수형 reporter 조합으로 다시 적용해야 하며 PROD-513 merge 뒤 base를 main으로 전환한다.
+- Consequences: #375는 함수형 경계 위에 reporter/context와 Web Sentry 조합을 추가해야 하며 PROD-513 merge 뒤 base를 main으로 전환한다.
 - Confirmation / Follow-up: 양쪽 Git ancestry와 GitHub base ref를 갱신하고 PR 본문에 stack을 기록한다.
 
 ## Remaining Decisions

@@ -28,20 +28,6 @@
 - **WHEN** session 자식의 오류로 fail-open fallback이 표시된 뒤 reset key가 변경된다
 - **THEN** 경계는 오류 상태를 reset하고 session 자식 렌더링을 다시 시도한다
 
-### Requirement: 플랫폼 중립적인 오류 보고 조합 지점
-
-**Authority / Provenance:** `memory/frontend-react-native.md`, `PROD-513`. 공용 오류 경계는 선택적인 reporter에 포착한 error와 React component stack 정보를 전달해야 한다(MUST). reporter가 없을 때도 Android·iOS·Web 공용 fallback과 reset 동작이 동일하게 유지되어야 하며(MUST), 공용 또는 Native 코드가 Web Sentry 구현을 import해서는 안 된다(MUST NOT).
-
-#### Scenario: Reporter가 제공된 Web 조합
-
-- **WHEN** reporter가 설정된 오류 경계가 렌더링 오류를 포착한다
-- **THEN** reporter는 포착한 error와 비어 있지 않은 React component stack 정보를 받는다
-
-#### Scenario: Reporter가 없는 Native 조합
-
-- **WHEN** reporter 없이 동일한 공용 오류 경계를 렌더링한다
-- **THEN** 외부 관측 SDK 없이 기존 fallback과 reset 동작이 수행된다
-
 ### Requirement: 새 React class component 차단
 
 **Authority / Provenance:** `PROD-513`. 저장소 ESLint 구성은 `@eslint-react/no-class-component`를 error로 적용해 새 React class component가 CI lint를 통과하지 못하게 해야 한다(MUST). non-React domain error class는 이 규칙의 대상이 아니어야 한다(MUST NOT).
