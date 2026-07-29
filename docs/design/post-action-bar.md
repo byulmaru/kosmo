@@ -31,8 +31,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   Source preview의 `Link`나 `Pressable` 안에 중첩하지 않는다.
 - 일반 Post는 본문 뒤, 순수 Repost는 Source presentation 뒤, Quote는 자체 본문과 Source preview 뒤에 Action
   Bar를 둔다. 상세의 metadata가 있으면 metadata 뒤에 둔다.
-- Quote 목록은 공용 Action Bar slot의 상단 padding 0을 유지하면서 Source preview border 아래에만 4px
-  간격을 둔다. 일반 Post와 순수 Repost의 상단 간격은 늘리지 않는다.
+- Quote 목록은 Source preview의 내부 하단 padding을 4px로 줄이고, 공용 Action Bar slot의 상단 padding 0을
+  유지하면서 Source preview border 밖에서 Action Bar까지 8px 간격을 둔다. 일반 Post와 순수 Repost의 상단
+  간격은 늘리지 않는다.
 - 순수 Repost의 본문·생성 시각 affordance는 Repost 자체가 아니라 Source detail로 이동한다. Repost Author와
   Source Author affordance는 각각 해당 Profile로 이동한다.
 - 순수 Repost 아래의 Action Bar는 바깥 Repost Post가 아니라 화면에 표시한 direct Source Post를 대상으로
@@ -92,7 +93,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   sibling이고 navigation Link/Pressable의 descendant가 아닌지 검증한다.
 - 목록의 일반 Post·순수 Repost·Quote에서 Action Bar slot의 상단 padding이 0, 하단 padding이 4이고 1px 구분선이 semantic
   `divider` color를 사용하는지 검증한다. 순수 Repost는 attribution line box가 20이고 Source 표준행과의
-  추가 gap이 0인지, Quote는 Source preview border 아래부터 Action Bar까지 4px인지 함께 검증한다.
+  추가 gap이 0인지, Quote는 Source preview 내부 하단 padding이 4px이고 border 밖에서 Action Bar까지 8px인지 함께 검증한다.
 - 모든 플랫폼 구현에서 Bar와 control 높이 28, 좌우 padding 8, social action 너비 50, More target 너비 최소
   28, glyph 16, icon-count gap 4와 고정 순서를 검증한다. Web runtime에서는 각 target이 24×24 CSS px 자체를
   포함하고 서로 겹치지 않는지도 확인한다.

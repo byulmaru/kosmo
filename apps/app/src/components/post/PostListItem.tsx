@@ -158,7 +158,11 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
         </Pressable>
       </Link>
       <View style={styles.sourcePresentation}>
-        <PostSourcePresentationView post={presentationPost} showPostAvatar={false} />
+        <PostSourcePresentationView
+          post={presentationPost}
+          showPostAvatar={false}
+          sourcePreviewStyle={styles.quoteSourcePreview}
+        />
         <View style={[styles.actionBarSlot, styles.quoteActionBarSlot]}>
           <PostActionBar onRepostError={onRepostError} post={post.actionBar} />
         </View>
@@ -245,7 +249,8 @@ const styles = StyleSheet.create({
   },
   avatar: { borderRadius: radii.full },
   actionBarSlot: { paddingBottom: spacing.xs },
-  quoteActionBarSlot: { marginTop: spacing.xs },
+  quoteSourcePreview: { paddingBottom: spacing.xs },
+  quoteActionBarSlot: { marginTop: spacing.sm },
   content: { flex: 1, gap: spacing.xs, minWidth: 0 },
   header: {
     alignItems: 'flex-start',

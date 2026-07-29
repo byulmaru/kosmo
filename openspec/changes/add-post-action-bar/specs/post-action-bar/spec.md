@@ -206,7 +206,7 @@
 - **THEN** 목록 전용 Action Bar slot은 상단 0px·하단 4px padding을 제공하고 content grid의 마지막 sibling으로 렌더된다
 - **AND** 1px 카드 구분선은 입력·메뉴 외곽선용 `border`가 아니라 저강도 semantic `divider` color를 사용한다
 - **AND** 순수 Repost attribution은 20px line box를 사용하고 아래 Source 표준행과의 추가 gap을 두지 않는다
-- **AND** Quote는 공용 slot 상단 padding을 늘리지 않고 Source preview border 아래부터 Action Bar까지 4px 간격을 제공한다
+- **AND** Quote는 Source preview 내부 하단 padding을 4px로 줄이고, 공용 slot 상단 padding을 늘리지 않은 채 Source preview border 밖에서 Action Bar까지 8px 간격을 제공한다
 
 #### Scenario: 순수 Repost의 Source action target
 

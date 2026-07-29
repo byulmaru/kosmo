@@ -948,6 +948,7 @@ export const ProductionRepostQuoteListIntegration: Story = {
       .closest<HTMLAnchorElement>('a')!;
     const pureRepostSourceRow = within(pureRepostRow!).getByTestId('post-list-standard-row');
     const quoteSourcePreview = within(quoteRow!).getByTestId('source-post-preview');
+    const quoteSourceBody = within(quoteSourcePreview).getByTestId('source-post-body');
     expect(pureRepostAttributionLink.getBoundingClientRect().height).toBe(20);
     expect(
       pureRepostSourceRow.getBoundingClientRect().top -
@@ -956,6 +957,11 @@ export const ProductionRepostQuoteListIntegration: Story = {
     expect(
       quoteActionBar.getBoundingClientRect().top -
         quoteSourcePreview.getBoundingClientRect().bottom,
+    ).toBeCloseTo(8, 0);
+    expect(
+      quoteSourcePreview.getBoundingClientRect().bottom -
+        Number.parseFloat(getComputedStyle(quoteSourcePreview).borderBottomWidth) -
+        quoteSourceBody.getBoundingClientRect().bottom,
     ).toBeCloseTo(4, 0);
     for (const [card, actionBar] of [
       [ordinaryCard, ordinaryActionBar],

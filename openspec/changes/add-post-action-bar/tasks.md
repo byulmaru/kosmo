@@ -87,7 +87,7 @@ PROD-434의 독립 `actionBar?: ReactNode`·mock surface slice를 실행하지 �
 **Verification**
 
 - 일반 Post·순수 Repost·Quote의 목록 final slot·상세 final Action Bar, link 비중첩과 순수 Repost Source target을 검증한다.
-- 목록의 세 Post variant에서 Action Bar slot 상단 padding 0·하단 padding 4, 1px semantic divider color, 순수 Repost attribution line box 20과 Source 표준행까지 gap 0, Quote Source preview border 아래부터 Action Bar까지 4px을 검증한다.
+- 목록의 세 Post variant에서 Action Bar slot 상단 padding 0·하단 padding 4, 1px semantic divider color, 순수 Repost attribution line box 20과 Source 표준행까지 gap 0, Quote Source preview 내부 하단 padding 4px과 border 밖에서 Action Bar까지 8px을 검증한다.
 - Web outside/Escape/focus return·keyboard navigation과 Native backdrop/back/dismiss/safe area·modal semantics를 검증한다.
 - menu label·item 선택 뒤 create/delete identity·pending, exact toast·latest-replace·자동 dismiss·alert semantics·light `#262626` accent·message 2px optical shift, 실패 뒤 상태 유지·menu 재시도를 검증한다.
 
@@ -104,6 +104,8 @@ PROD-434의 독립 `actionBar?: ReactNode`·mock surface slice를 실행하지 �
 - [x] 3.11 비대칭 spacing 변경 뒤 app·Storybook·lint와 전체 OpenSpec strict validation을 다시 통과시키고 390px Web runtime을 관찰한다.
 - [x] 3.12 Web Repost menu를 scroll container 밖의 downward overlay로 배치해 첫 item이 trigger pointer 지점을 덮고 viewport 안으로 보정되게 하며, theme card surface·36px item 높이·128px 최소폭·18px icon·14px·500 label·8px 좌우 padding·1px border·`0 2px 4px` shadow 및 같은 위치 두 번째 pointer 선택을 focused Storybook interaction으로 검증한다.
 - [ ] 3.13 Web menu 변경 뒤 app·Storybook·lint와 전체 OpenSpec strict validation을 통과시키고 Home·Bookmark scroll surface와 390px Web runtime에서 비클리핑·pointer 선택·focus 복귀를 관찰한다.
+- [x] 3.14 Quote 목록에서만 Source preview 내부 하단 padding을 `spacing.xs` 4px로 줄이고 border 밖에서 Action Bar까지 `spacing.sm` 8px 간격을 두며, 일반 Post·순수 Repost·상세 Source preview는 변경하지 않는다.
+- [x] 3.15 focused Storybook interaction에서 Quote preview 내부 4px·외부 8px geometry를 검증하고 390px Web runtime에서 시각 결과를 확인한다.
 
 ## 4. PROD-432 실제 액션 연결·통합 검증·archive
 

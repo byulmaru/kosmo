@@ -153,11 +153,23 @@
 - Decision Date: 2026-07-29
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/design/accessibility.md`, `docs/design/post-action-bar.md`, `PROD-414`, 2026-07-29 KST 사용자 결정
-- Status: Active
+- Status: Superseded
 - Context / Problem: `PostListItem`의 기존 큰 하단 padding은 제거했지만 Action Bar와 카드 구분선이 바로 붙어 답답하고, 공용 `border`는 입력·메뉴 외곽선까지 함께 사용되어 Post divider만 옅게 만들 수 없다.
 - Decision Outcome: 일반 Post·Quote·순수 Repost 목록에서 Action Bar 자체 28px은 유지하고 목록 전용 slot의 상단 padding은 0, 하단 padding은 `spacing.xs` 4px로 둔다. Quote만 nested Source preview border 아래부터 Action Bar까지 4px 간격을 추가하며 일반 Post와 순수 Repost의 상단 간격은 늘리지 않는다. 카드 구분선은 1px을 유지하며 light `#f2f2f2`, dark `#292929`의 semantic `divider` token을 사용한다. 순수 Repost attribution은 20px line box와 Source 표준행까지 gap 0을 사용한다. Web Profile text link는 inline target 예외를 적용하고 Native target 복구와 인접 target runtime 검증은 출시 gate로 남긴다.
 - Consequences: `PostListItem` spacing과 Post divider color만 변경하며 공용 `border`, `PostLayout`, Action Bar 28px geometry와 action 동작은 유지한다.
 - Confirmation / Follow-up: 390px Web Storybook에서 세 목록 variant의 상단 0px·하단 4px, Quote preview 아래 4px, 1px divider color와 순수 Repost attribution 높이·Source gap을 exact 값으로 검증한다.
+
+### Quote preview 내부·외부 spacing을 분리한다
+
+- Decision Date: 2026-07-29
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/post-action-bar.md`, `PROD-414`, 2026-07-29 KST 사용자 결정
+- Status: Active
+- Context / Problem: Quote Source preview의 공통 12px 하단 padding과 border 밖 4px 간격을 함께 사용하면 실제로 늘어난 공간이 border 내부에만 있는 것처럼 보이고, text-only Post보다 Action Bar 주변이 답답하게 느껴진다.
+- Decision Outcome: 일반 Post·Quote·순수 Repost 목록에서 Action Bar 자체 28px과 목록 final slot의 상단 padding 0·하단 padding 4px을 유지한다. Quote 목록에서만 nested Source preview 내부 하단 padding을 `spacing.xs` 4px로 줄이고, Source preview border 밖에서 Action Bar까지 `spacing.sm` 8px 간격을 둔다. 일반 Post·순수 Repost와 상세의 Source preview spacing은 바꾸지 않는다. 카드 구분선 1px semantic `divider`, 순수 Repost attribution 20px line box·Source gap 0과 Native 출시 gate도 유지한다.
+- Alternatives Considered: Quote preview 내부 12px을 유지한 채 외부 간격만 8px로 늘리면 내부 공백이 더 강하게 보여 의도한 경계가 드러나지 않아 채택하지 않았다. 공용 Action Bar slot의 상단 간격을 늘리면 text-only Post와 순수 Repost까지 불필요하게 높아져 채택하지 않았다. Action Bar를 Post 카드 구분선 밖으로 이동하면 content grid의 final sibling 계약을 깨므로 채택하지 않았다.
+- Consequences: Quote 목록 caller만 Source preview style을 전달하며 다른 `PostSourcePresentationView`와 상세 `PostSourcePreview`의 기본 12px padding은 유지된다. Quote 카드 전체 높이는 내부에서 8px 줄고 외부에서 4px 늘어 이전보다 4px 낮아진다.
+- Confirmation / Follow-up: focused Storybook interaction과 390px Web runtime에서 Source body부터 border 안쪽까지 4px, border 밖에서 Action Bar까지 8px, Action Bar 28px과 하단 4px을 각각 exact geometry로 검증한다.
 
 ### 공유 change와 부모 소유의 최종 archive
 
@@ -294,4 +306,5 @@
 - 2026-07-21 `count는 K/M 단위 최대 네 글자로 표시`는 2026-07-23 `locale-aware 표준 compact number formatting을 사용`으로 대체했다.
 - 2026-07-23 `액션별 광학 크기와 선 두께를 조정`은 같은 날 `Reply·Repost의 실제 획 높이를 count와 맞춘다`로 대체했다.
 - 2026-07-23 `Reply·Repost의 실제 획 높이를 count와 맞춘다`는 2026-07-29 `Figma 기반 28px geometry로 Action Bar를 정규화한다`로 대체했다.
+- 2026-07-29 `목록 Post 카드의 Action Bar 주변 spacing을 Figma에 맞춘다`는 같은 날 `Quote preview 내부·외부 spacing을 분리한다`로 Quote spacing이 대체됐다. Action Bar 하단 4px, 1px semantic divider와 순수 Repost spacing 결과는 유지한다.
 - 2026-07-21 `실행할 수 없는 액션은 숨기지 않고 disabled로 유지`는 2026-07-27 `production surface는 표시 Post와 action target을 구분한다`로 대체했다.
