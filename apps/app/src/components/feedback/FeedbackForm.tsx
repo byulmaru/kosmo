@@ -82,10 +82,7 @@ export function FeedbackForm() {
   };
 
   return (
-    <View
-      accessibilityLabel="피드백 보내기"
-      style={[styles.root, { backgroundColor: theme.card, borderColor: theme.border }]}
-    >
+    <View style={[styles.root, { backgroundColor: theme.card, borderColor: theme.border }]}>
       <View style={styles.header}>
         <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
           피드백 보내기
