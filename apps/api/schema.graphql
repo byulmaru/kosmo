@@ -502,7 +502,6 @@ type Session implements Node {
 input SubmitFeedbackInput {
   body: String!
   kind: FeedbackKind!
-  sentryEventId: String
 }
 
 type SubmitFeedbackPayload {

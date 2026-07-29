@@ -32,10 +32,9 @@ test('schema에 login-scoped feedback mutation contract를 제공한다', () => 
   assert.ok(mutationFields?.submitFeedback);
   assert.equal(String(mutationFields.submitFeedback.type), 'SubmitFeedbackPayload!');
   assert.ok(isInputObjectType(input));
-  assert.deepEqual(Object.keys(input.getFields()).sort(), ['body', 'kind', 'sentryEventId']);
+  assert.deepEqual(Object.keys(input.getFields()).sort(), ['body', 'kind']);
   assert.equal(String(input.getFields().body.type), 'String!');
   assert.equal(String(input.getFields().kind.type), 'FeedbackKind!');
-  assert.equal(String(input.getFields().sentryEventId.type), 'String');
   assert.ok(isObjectType(payload));
   assert.equal(String(payload.getFields().completed.type), 'Boolean!');
   assert.ok(isEnumType(kind));
@@ -73,36 +72,7 @@ test('선택 Profile이 없는 login session도 feedback을 제출할 수 있다
   }
 });
 
-test('BUG_REPORT의 Sentry event ID는 소문자로 정규화되어 Slack payload에 전달된다', async () => {
-  let payload: { blocks?: { fields?: { text: string }[] }[] } = {};
-  const previousFetch = globalThis.fetch;
-  globalThis.fetch = async (_input, init) => {
-    payload = JSON.parse(String(init?.body)) as typeof payload;
-    return new Response(null, { status: 200 });
-  };
-
-  try {
-    const result = await graphql({
-      contextValue: { session: { accountId, id: 'session-1', profileId: null } },
-      schema,
-      source: mutation,
-      variableValues: {
-        input: {
-          body: '버그가 있어요.',
-          kind: 'BUG_REPORT',
-          sentryEventId: 'A'.repeat(32),
-        },
-      },
-    });
-
-    assert.equal(result.errors, undefined);
-    assert.equal(payload.blocks?.[3]?.fields?.[0]?.text, `Sentry event ID: ${'a'.repeat(32)}`);
-  } finally {
-    globalThis.fetch = previousFetch;
-  }
-});
-
-test('anonymous, invalid body와 non-bug Sentry ID는 Slack 전에 거부한다', async () => {
+test('anonymous와 invalid body는 Slack 전에 거부한다', async () => {
   let calls = 0;
   const previousFetch = globalThis.fetch;
   globalThis.fetch = async () => {
@@ -123,18 +93,8 @@ test('anonymous, invalid body와 non-bug Sentry ID는 Slack 전에 거부한다'
       source: mutation,
       variableValues: { input: { body: '   ', kind: 'POSITIVE' } },
     });
-    const eventId = await graphql({
-      contextValue: { session: { accountId, id: 'session-1', profileId: null } },
-      schema,
-      source: mutation,
-      variableValues: {
-        input: { body: 'body', kind: 'POSITIVE', sentryEventId: 'a'.repeat(32) },
-      },
-    });
-
     assert.equal(anonymous.errors?.length, 1);
     assert.equal(empty.errors?.length, 1);
-    assert.equal(eventId.errors?.length, 1);
     assert.equal(calls, 0);
   } finally {
     globalThis.fetch = previousFetch;

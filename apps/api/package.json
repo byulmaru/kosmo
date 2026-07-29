@@ -3,7 +3,7 @@
   "type": "module",
   "scripts": {
     "db:bootstrap-local-instance": "tsx scripts/bootstrap-local-instance.ts",
-    "dev": "tsx watch src/index.ts",
+    "dev": "node ../../scripts/vault-run.mjs --secret-path secret/kubernetes/kosmo/local --optional-secret-path secret/kubernetes/kosmo/local/api -- tsx watch src/index.ts",
     "lint:schema": "NODE_ENV=production node --import tsx scripts/check-schema.ts",
     "lint:tsc": "tsc --noEmit",
     "start": "node --import tsx src/index.ts",

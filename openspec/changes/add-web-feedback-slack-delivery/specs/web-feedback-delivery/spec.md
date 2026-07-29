@@ -22,7 +22,7 @@
 
 ### Requirement: Feedback input validation
 
-**Authority / Provenance:** `PROD-479`, `PROD-487` — Feedback input MUST contain one of `POSITIVE`, `NEGATIVE`, `FEATURE_REQUEST`, or `BUG_REPORT` and a body whose trimmed length is 1 through 2,000 characters. `BUG_REPORT` MUST accept an optional Sentry event ID, and a provided event ID MUST be exactly 32 case-insensitive hexadecimal characters. Other feedback kinds MUST NOT contain a Sentry event ID.
+**Authority / Provenance:** `PROD-479`, `PROD-487` — Feedback input MUST contain one of `POSITIVE`, `NEGATIVE`, `FEATURE_REQUEST`, or `BUG_REPORT` and a body whose trimmed length is 1 through 2,000 characters. Feedback input MUST NOT expose or forward a Sentry event ID.
 
 #### Scenario: Accept the four feedback kinds
 
@@ -41,25 +41,9 @@
 - **THEN** API는 본문 field의 validation error를 반환한다
 - **AND** Slack webhook을 호출하지 않는다
 
-#### Scenario: Accept an optional Sentry event ID for a bug
-
-- **WHEN** `BUG_REPORT` input이 32자 hexadecimal Sentry event ID를 포함한다
-- **THEN** API는 event ID를 정규화한 lowercase 값으로 feedback payload에 포함한다
-
-#### Scenario: Accept a bug without a Sentry event ID
-
-- **WHEN** `BUG_REPORT` input이 Sentry event ID를 포함하지 않는다
-- **THEN** API는 event ID 없이 feedback 전달을 시도한다
-
-#### Scenario: Reject an invalid or inapplicable Sentry event ID
-
-- **WHEN** event ID가 32자 hexadecimal 형식이 아니거나 `BUG_REPORT`가 아닌 종류에 포함된다
-- **THEN** API는 event ID field의 validation error를 반환한다
-- **AND** Slack webhook을 호출하지 않는다
-
 ### Requirement: Server-owned Slack delivery
 
-**Authority / Provenance:** `PROD-479`, `PROD-487` — The server MUST deliver valid feedback with exactly one Slack Incoming Webhook POST to the API runtime's `SLACK_FEEDBACK_WEBHOOK_URL`. The Slack payload MUST contain only the feedback kind, trimmed body, optional Sentry event ID, and current source `Web`; user-controlled values MUST use plain-text blocks that Slack does not interpret as markup or mentions. The server MUST NOT persist the feedback body or event ID in the database.
+**Authority / Provenance:** `PROD-479`, `PROD-487` — The server MUST deliver valid feedback with exactly one Slack Incoming Webhook POST to the API runtime's `SLACK_FEEDBACK_WEBHOOK_URL`. The Slack payload MUST contain only the feedback kind, trimmed body, submitting Account internal ID, and the selected Profile's internal ID, `displayName` nickname, and `relativeHandle`. It MUST omit a source field and represent the absence of a selected Profile without rejecting the submission. User-controlled values MUST use plain-text blocks that Slack does not interpret as markup or mentions. The server MUST NOT persist the feedback body in the database.
 
 #### Scenario: Deliver a valid feedback request
 
@@ -68,10 +52,19 @@
 - **AND** mutation은 제출 성공을 반환한다
 - **AND** DB에 feedback record를 생성하지 않는다
 
-#### Scenario: Deliver a bug event ID
+#### Scenario: Identify the submitting Account and selected Profile
 
-- **WHEN** 유효한 `BUG_REPORT`가 Sentry event ID를 포함한다
-- **THEN** Slack message는 정규화된 event ID를 별도의 plain-text field로 포함한다
+- **WHEN** 선택 Profile이 있는 로그인 사용자의 유효한 feedback을 Slack payload로 구성한다
+- **THEN** payload는 제출 Account 내부 ID를 포함한다
+- **AND** 선택 Profile의 내부 ID, `displayName`을 사용한 닉네임과 `relativeHandle`을 포함한다
+- **AND** `출처: Web` 같은 source field를 포함하지 않는다
+
+#### Scenario: Submit without Profile identity
+
+- **WHEN** 선택 Profile이 없는 로그인 사용자의 유효한 feedback을 Slack payload로 구성한다
+- **THEN** payload는 제출 Account 내부 ID를 포함한다
+- **AND** Profile 정보가 없음을 표시한다
+- **AND** 선택 Profile 부재를 이유로 제출을 거부하지 않는다
 
 #### Scenario: Prevent Slack formatting injection
 
@@ -79,10 +72,11 @@
 - **THEN** server는 해당 값을 plain-text block content로 전달한다
 - **AND** link와 media unfurl을 비활성화한다
 
-#### Scenario: Omit credentials and internal details
+#### Scenario: Omit credentials and non-allowlisted identity details
 
 - **WHEN** server가 Slack payload를 구성하거나 delivery 실패를 처리한다
-- **THEN** webhook URL, session token, cookie, account ID, session ID와 예상하지 못한 오류 세부를 Slack payload, GraphQL response 또는 application log에 포함하지 않는다
+- **THEN** webhook URL, session token, cookie, OIDC subject, session ID와 예상하지 못한 오류 세부를 Slack payload, GraphQL response 또는 application log에 포함하지 않는다
+- **AND** Account `displayName`, 이메일과 선택되지 않은 다른 Profile 정보는 Slack payload에 포함하지 않는다
 
 #### Scenario: Fail closed when webhook configuration is missing
 
@@ -126,7 +120,7 @@
 
 - **WHEN** Slack request가 timeout, network failure 또는 non-success response로 끝난다
 - **THEN** server는 자동으로 다시 POST하지 않고 안전한 delivery failure를 반환한다
-- **AND** client는 종류, 본문과 적용 가능한 event ID를 유지한다
+- **AND** client는 종류와 본문을 유지한다
 - **AND** 사용자는 같은 화면에서 명시적으로 다시 제출할 수 있다
 
 #### Scenario: Handle an ambiguous failure retry
@@ -142,23 +136,13 @@
 
 ### Requirement: Web feedback form accessibility and state
 
-**Authority / Provenance:** `docs/design/colors.md`, `docs/design/typography.md`, `memory/frontend-react-native.md`, `PROD-479`, `PROD-487` — The protected `/menu` Web screen MUST provide the feedback kind, body, optional bug event ID, and submit control using React Native primitives and semantic theme tokens. UI labels, headings, and buttons MUST use `SUIT`, while the long feedback-body input MUST use `Pretendard`. Error, success, disabled, and busy states MUST be exposed to assistive technology without relying on visual presentation alone.
+**Authority / Provenance:** `docs/design/colors.md`, `docs/design/typography.md`, `memory/frontend-react-native.md`, `PROD-479`, `PROD-487` — The protected `/menu` Web screen MUST provide the feedback kind, body, and submit control using React Native primitives and semantic theme tokens. UI labels, headings, and buttons MUST use `SUIT`, while the long feedback-body input MUST use `Pretendard`. Error, success, disabled, and busy states MUST be exposed to assistive technology without relying on visual presentation alone.
 
 #### Scenario: Render the feedback form on Web
 
 - **WHEN** 로그인한 Web 사용자가 `/menu`를 연다
 - **THEN** 시스템은 네 feedback 종류, 본문 input과 submit control을 렌더링한다
 - **AND** touch target, label, heading과 상태는 접근 가능한 semantics를 제공한다
-
-#### Scenario: Show the event ID field for a bug
-
-- **WHEN** 사용자가 `BUG_REPORT` 종류를 선택한다
-- **THEN** 시스템은 선택적 Sentry event ID input과 32자 hexadecimal 형식 안내를 표시한다
-
-#### Scenario: Hide and clear the event ID for a non-bug
-
-- **WHEN** 사용자가 `BUG_REPORT`에서 다른 종류로 변경한다
-- **THEN** 시스템은 Sentry event ID input을 숨기고 기존 event ID 값을 제거한다
 
 #### Scenario: Announce feedback status
 

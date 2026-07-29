@@ -7,7 +7,15 @@ export type FeedbackKind = 'POSITIVE' | 'NEGATIVE' | 'FEATURE_REQUEST' | 'BUG_RE
 export type FeedbackInput = {
   body: string;
   kind: FeedbackKind;
-  sentryEventId?: string | null;
+};
+
+export type FeedbackIdentity = {
+  accountId: string;
+  profile: {
+    displayName: string;
+    id: string;
+    relativeHandle: string;
+  } | null;
 };
 
 const inFlightFeedbackDeliveries = new Set<string>();
@@ -43,7 +51,10 @@ const getWebhookUrl = (value: string | undefined) => {
   }
 };
 
-const createPayload = ({ body, kind, sentryEventId }: FeedbackInput) => ({
+const createPayload = (
+  { body, kind }: FeedbackInput,
+  { accountId, profile }: FeedbackIdentity,
+) => ({
   blocks: [
     {
       text: { text: '새 Web 피드백', type: 'plain_text' },
@@ -52,7 +63,14 @@ const createPayload = ({ body, kind, sentryEventId }: FeedbackInput) => ({
     {
       fields: [
         { text: `종류: ${kindLabels[kind]}`, type: 'plain_text' },
-        { text: '출처: Web', type: 'plain_text' },
+        { text: `Account ID: ${accountId}`, type: 'plain_text' },
+        ...(profile
+          ? [
+              { text: `닉네임: ${profile.displayName}`, type: 'plain_text' },
+              { text: `Profile ID: ${profile.id}`, type: 'plain_text' },
+              { text: `Profile: ${profile.relativeHandle}`, type: 'plain_text' },
+            ]
+          : [{ text: 'Profile: 선택된 프로필 없음', type: 'plain_text' }]),
       ],
       type: 'section',
     },
@@ -60,14 +78,6 @@ const createPayload = ({ body, kind, sentryEventId }: FeedbackInput) => ({
       text: { text: body, type: 'plain_text' },
       type: 'section',
     },
-    ...(sentryEventId
-      ? [
-          {
-            fields: [{ text: `Sentry event ID: ${sentryEventId}`, type: 'plain_text' }],
-            type: 'section',
-          },
-        ]
-      : []),
   ],
   text: '새 Web 피드백',
   unfurl_links: false,
@@ -82,20 +92,20 @@ const claimDelivery = (accountId: string) => {
   inFlightFeedbackDeliveries.add(accountId);
 };
 
-export const deliverFeedback = async (accountId: string, input: FeedbackInput) => {
+export const deliverFeedback = async (identity: FeedbackIdentity, input: FeedbackInput) => {
   const webhookUrl = getWebhookUrl(process.env.SLACK_FEEDBACK_WEBHOOK_URL);
   if (!webhookUrl) {
     throw new ValidationError('피드백을 전달할 수 없어요. 잠시 후 다시 시도해주세요.');
   }
 
-  claimDelivery(accountId);
+  claimDelivery(identity.accountId);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FEEDBACK_DELIVERY_TIMEOUT_MS);
 
   try {
     const response = await globalThis.fetch(webhookUrl, {
-      body: JSON.stringify(createPayload(input)),
+      body: JSON.stringify(createPayload(input, identity)),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
       signal: controller.signal,
@@ -108,7 +118,7 @@ export const deliverFeedback = async (accountId: string, input: FeedbackInput) =
     throw new ValidationError('피드백을 전달하지 못했어요. 다시 시도해주세요.');
   } finally {
     clearTimeout(timeout);
-    inFlightFeedbackDeliveries.delete(accountId);
+    inFlightFeedbackDeliveries.delete(identity.accountId);
   }
 
   return { completed: true } as const;

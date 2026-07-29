@@ -10,6 +10,15 @@ const validFeedback = {
 let accountId: string;
 let testSequence = 0;
 
+const feedbackIdentity = () => ({
+  accountId,
+  profile: {
+    displayName: '혜주',
+    id: 'profile-1',
+    relativeHandle: '@hyeju',
+  },
+});
+
 test.beforeEach(() => {
   accountId = `account-${(testSequence += 1)}`;
   process.env.SLACK_FEEDBACK_WEBHOOK_URL = webhookUrl;
@@ -28,7 +37,7 @@ test('Slack에 안전한 plain-text payload를 한 번 전송한다', async (t) 
 
   t.mock.method(globalThis, 'fetch', fetch);
 
-  await deliverFeedback(accountId, validFeedback);
+  await deliverFeedback(feedbackIdentity(), validFeedback);
 
   assert.equal(requests.length, 1);
   assert.equal(requests[0]?.url, webhookUrl);
@@ -41,7 +50,10 @@ test('Slack에 안전한 plain-text payload를 한 번 전송한다', async (t) 
       {
         fields: [
           { text: '종류: 필요한 점', type: 'plain_text' },
-          { text: '출처: Web', type: 'plain_text' },
+          { text: `Account ID: ${accountId}`, type: 'plain_text' },
+          { text: '닉네임: 혜주', type: 'plain_text' },
+          { text: 'Profile ID: profile-1', type: 'plain_text' },
+          { text: 'Profile: @hyeju', type: 'plain_text' },
         ],
         type: 'section',
       },
@@ -56,23 +68,38 @@ test('Slack에 안전한 plain-text payload를 한 번 전송한다', async (t) 
   });
 });
 
-test('버그 피드백의 Sentry event ID는 payload에만 선택적으로 포함한다', async (t) => {
-  const requests: Request[] = [];
-  const fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-    requests.push(new Request(input, init));
+test('선택 Profile이 없으면 Account ID와 Profile 부재만 전달한다', async (t) => {
+  let payload: unknown;
+  t.mock.method(globalThis, 'fetch', async (_input: RequestInfo | URL, init?: RequestInit) => {
+    payload = JSON.parse(String(init?.body));
     return new Response(null, { status: 200 });
-  };
-
-  t.mock.method(globalThis, 'fetch', fetch);
-
-  await deliverFeedback(accountId, {
-    body: '버그가 있어요.',
-    kind: 'BUG_REPORT',
-    sentryEventId: 'A'.repeat(32).toLowerCase(),
   });
 
-  const payload = (await requests[0]?.json()) as { blocks: { fields?: { text: string }[] }[] };
-  assert.equal(payload.blocks[3]?.fields?.[0]?.text, `Sentry event ID: ${'a'.repeat(32)}`);
+  await deliverFeedback({ accountId, profile: null }, validFeedback);
+
+  assert.deepEqual(payload, {
+    blocks: [
+      {
+        text: { text: '새 Web 피드백', type: 'plain_text' },
+        type: 'header',
+      },
+      {
+        fields: [
+          { text: '종류: 필요한 점', type: 'plain_text' },
+          { text: `Account ID: ${accountId}`, type: 'plain_text' },
+          { text: 'Profile: 선택된 프로필 없음', type: 'plain_text' },
+        ],
+        type: 'section',
+      },
+      {
+        text: { text: validFeedback.body, type: 'plain_text' },
+        type: 'section',
+      },
+    ],
+    text: '새 Web 피드백',
+    unfurl_links: false,
+    unfurl_media: false,
+  });
 });
 
 test('webhook 설정이 없거나 Slack 전달이 실패하면 안전한 오류를 반환한다', async (t) => {
@@ -84,9 +111,15 @@ test('webhook 설정이 없거나 Slack 전달이 실패하면 안전한 오류�
 
   t.mock.method(globalThis, 'fetch', fetch);
   process.env.SLACK_FEEDBACK_WEBHOOK_URL = 'https://example.com/hook';
-  await assert.rejects(deliverFeedback(accountId, validFeedback), /피드백을 전달할 수 없어요/u);
+  await assert.rejects(
+    deliverFeedback(feedbackIdentity(), validFeedback),
+    /피드백을 전달할 수 없어요/u,
+  );
   process.env.SLACK_FEEDBACK_WEBHOOK_URL = webhookUrl;
-  await assert.rejects(deliverFeedback(accountId, validFeedback), /피드백을 전달하지 못했어요/u);
+  await assert.rejects(
+    deliverFeedback(feedbackIdentity(), validFeedback),
+    /피드백을 전달하지 못했어요/u,
+  );
   assert.equal(calls, 1);
 });
 
@@ -99,8 +132,8 @@ test('전송 실패는 자동 재시도하지 않고 명시적 재시도만 새 
 
   t.mock.method(globalThis, 'fetch', fetch);
 
-  await assert.rejects(deliverFeedback(accountId, validFeedback));
-  await assert.rejects(deliverFeedback(accountId, validFeedback));
+  await assert.rejects(deliverFeedback(feedbackIdentity(), validFeedback));
+  await assert.rejects(deliverFeedback(feedbackIdentity(), validFeedback));
   assert.equal(calls, 2);
 });
 
@@ -120,12 +153,12 @@ test('전송 timeout은 abort 후 안전한 오류를 반환하고 in-flight를 
   t.mock.method(globalThis, 'fetch', fetch);
   t.mock.timers.enable({ apis: ['setTimeout'] });
 
-  const delivery = deliverFeedback(accountId, validFeedback);
+  const delivery = deliverFeedback(feedbackIdentity(), validFeedback);
   t.mock.timers.tick(FEEDBACK_DELIVERY_TIMEOUT_MS);
   await assert.rejects(delivery, /피드백을 전달하지 못했어요/u);
   assert.equal(calls, 1);
 
-  await deliverFeedback(accountId, validFeedback);
+  await deliverFeedback(feedbackIdentity(), validFeedback);
   assert.equal(calls, 2);
 });
 
@@ -138,8 +171,8 @@ test('완료된 같은 계정의 다음 전송을 허용한다', async (t) => {
 
   t.mock.method(globalThis, 'fetch', fetch);
 
-  await deliverFeedback(accountId, validFeedback);
-  await deliverFeedback(accountId, validFeedback);
+  await deliverFeedback(feedbackIdentity(), validFeedback);
+  await deliverFeedback(feedbackIdentity(), validFeedback);
 
   assert.equal(calls, 2);
 });
@@ -158,9 +191,9 @@ test('같은 계정의 in-flight 전송은 두 번째 POST를 시작하지 않�
 
   t.mock.method(globalThis, 'fetch', fetch);
 
-  const first = deliverFeedback(accountId, validFeedback);
+  const first = deliverFeedback(feedbackIdentity(), validFeedback);
   await new Promise((resolve) => setImmediate(resolve));
-  await assert.rejects(deliverFeedback(accountId, validFeedback), /처리 중이에요/u);
+  await assert.rejects(deliverFeedback(feedbackIdentity(), validFeedback), /처리 중이에요/u);
   release();
   await first;
   assert.equal(calls, 1);
@@ -180,8 +213,11 @@ test('서로 다른 계정의 in-flight 전송은 함께 진행할 수 있다', 
 
   t.mock.method(globalThis, 'fetch', fetch);
 
-  const first = deliverFeedback(accountId, validFeedback);
-  const second = deliverFeedback(`${accountId}-other`, validFeedback);
+  const first = deliverFeedback(feedbackIdentity(), validFeedback);
+  const second = deliverFeedback(
+    { ...feedbackIdentity(), accountId: `${accountId}-other` },
+    validFeedback,
+  );
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(calls, 2);
   release();

@@ -19,6 +19,7 @@
 - Android/iOS feedback navigation, form 노출·검증과 앱 배포
 - feedback DB, outbox, 조회·관리 화면 또는 Slack-to-Linear 자동화
 - 첨부, Session Replay, 사용자 행동 분석과 Slack 외 delivery channel
+- Sentry event 연결
 - 부모 `PROD-479`의 cross-platform 최종 통합, OpenSpec archive와 completion gate
 - Slack Incoming Webhook 위에서 강한 exactly-once delivery를 구현하는 것
 - 계정별 요청 횟수 제한(rate limit)을 구현하는 것
@@ -37,11 +38,11 @@
 ### Recommended Approach
 
 1. 기존 `/menu` route 안에 Web feedback form을 구성하고 `Platform.OS === 'web'` 경계에서만 현재 form을 노출한다. 기존 sidebar footer 위치는 Web에서 `/menu`로 이동하는 "피드백 보내기" Link로 만들고 native rendering은 유지한다.
-2. 기존 React Native form primitive와 theme token을 조합해 category selector, Pretendard multiline body, BUG_REPORT 전용 Sentry event ID와 submit status를 구성한다. Relay mutation은 form을 실제로 소유하는 component에 colocate한다.
-3. `submitFeedback`은 API `login` scope의 GraphQL mutation으로 둔다. Input validation은 category enum, trim된 body 1~2,000자, BUG_REPORT 전용 32자 hexadecimal event ID를 한 경계에서 적용한다. 성공 payload는 persistence object를 가장하지 않고 제출 완료 사실만 반환한다.
+2. 기존 React Native form primitive와 theme token을 조합해 category selector, Pretendard multiline body와 submit status를 구성한다. Relay mutation은 form을 실제로 소유하는 component에 colocate한다.
+3. `submitFeedback`은 API `login` scope의 GraphQL mutation으로 둔다. Input validation은 category enum과 trim된 body 1~2,000자를 한 경계에서 적용한다. 성공 payload는 persistence object를 가장하지 않고 제출 완료 사실만 반환한다.
 4. API-local feedback delivery 경계가 account별 in-flight guard를 확인한 뒤 built-in `fetch`로 Incoming Webhook을 한 번 호출한다. In-flight state는 성공·실패와 관계없이 `finally`에서 즉시 제거해 memory leak과 영구 잠금을 피한다.
 5. Webhook URL은 `SLACK_FEEDBACK_WEBHOOK_URL`에서만 읽고 HTTPS `hooks.slack.com` Incoming Webhook 형태인지 검증한다. Request에는 짧은 timeout을 적용하되 timeout, network error와 non-success response에서 다시 POST하지 않는다.
-6. Slack top-level fallback은 user content 없이 새 Web feedback과 category만 식별한다. Block Kit은 category, source Web, body와 선택적 event ID를 plain-text로 표현하고 unfurl을 끈다. Account/session/Profile identity, request headers와 upstream response body는 포함하거나 기록하지 않는다.
+6. Slack top-level fallback은 user content 없이 새 Web feedback과 category만 식별한다. Block Kit은 category, body, 제출 Account 내부 ID와 선택 Profile의 내부 ID·`displayName` 닉네임·`relativeHandle`을 plain-text로 표현하고 source field와 unfurl을 뺀다. 선택 Profile이 없으면 그 사실만 표시하며 Account `displayName`, 이메일, OIDC subject, session identity, request headers와 다른 Profile 정보는 포함하거나 기록하지 않는다.
 7. API test에서는 network를 호출하지 않고 fetch 경계를 stub해 auth, validation, payload, timeout, non-success와 concurrent flow를 검증한다. App story/test는 idle, invalid, bug-ID, pending, success, failure와 retry를 다루고 Web E2E는 shell surface에서 `/menu` 이동과 Relay request state를 검증한다.
 8. 배포 전에 Vault의 production API environment에 secret을 설정하고, 배포 후 전용 smoke account와 비민감 payload로 실제 Slack message 한 건과 UI 성공 상태를 확인한다. 절차와 확인 결과는 재현 가능한 운영 문서 또는 PR 검증 기록에 남긴다.
 
@@ -58,7 +59,7 @@
 - 선택 Profile이 없는 로그인 사용자를 `usingProfile` scope로 거부하지 않는다.
 - timeout이나 5xx를 server에서 자동 retry하지 않고, Slack response body 또는 webhook URL을 error/log에 넣지 않는다.
 - User body를 mrkdwn top-level text나 mention이 활성화된 block에 넣지 않는다.
-- Feedback content, event ID, idempotency record나 in-flight state를 DB에 추가하지 않는다.
+- Feedback content, idempotency record나 in-flight state를 DB에 추가하지 않는다.
 - Input hash로 서로 다른 사용자의 의도적인 반복 feedback을 중복으로 간주하지 않는다.
 - `PROD-488` 전 native menu나 form을 완료된 기능으로 노출하지 않는다.
 

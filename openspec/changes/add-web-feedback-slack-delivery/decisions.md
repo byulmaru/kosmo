@@ -33,24 +33,48 @@
 - Decision Date: 2026-07-28
 - Decision Class: Implementation Choice
 - Authority / Provenance: `PROD-479`, `PROD-487`
-- Status: Active
+- Status: Superseded
 - Context / Problem: Linear는 네 feedback 의도, 본문, BUG 전용 선택적 Sentry 추적 ID와 payload 제한의 정밀화를 요구하지만 exact GraphQL shape와 길이는 고정하지 않았다.
 - Decision Outcome: Category는 `POSITIVE`, `NEGATIVE`, `FEATURE_REQUEST`, `BUG_REPORT` enum으로 제한한다. Body는 trim 후 1~2,000자이고, BUG_REPORT의 선택적 Sentry event ID는 대소문자를 허용하는 32자 hexadecimal 입력을 lowercase로 정규화한다. Non-bug category의 event ID는 거부한다.
 - Alternatives Considered: Free-form category는 팀 분류 계약을 잃으므로 제외했다. Slack 권장 text 상한까지 4,000자를 허용하는 방식은 block payload와 abuse surface를 불필요하게 늘려 제외했다. Event ID를 무검증 string으로 받는 방식은 잘못된 추적값을 늘려 제외했다.
 - Consequences: UI와 API가 같은 경계를 검증하고 malformed input은 Slack을 호출하지 않는다. `PROD-486`이 제공할 실제 Sentry event ID 형식과 호환된다.
 - Confirmation / Follow-up: Boundary value, trim, category/event-ID 조합과 lowercase normalization test로 확인한다.
 
+### Feedback 계약에서 Sentry event ID를 제외한다
+
+- Decision Date: 2026-07-29
+- Decision Class: Derived Contract
+- Authority / Provenance: `PROD-479`, `PROD-487`
+- Status: Active
+- Context / Problem: Sentry event ID는 일반 사용자가 이해하거나 안정적으로 제공할 수 있는 입력이 아니며, 최신 제품 결정은 피드백 흐름에서 Sentry event 연결 자체를 제외한다.
+- Decision Outcome: Feedback 공개 input과 Web form은 종류와 1~2,000자 본문만 받는다. API는 Sentry event ID를 검증·정규화·전달하지 않고 Slack payload에도 포함하지 않는다.
+- Alternatives Considered: 사용자 직접 입력과 자동 event 연결은 모두 피드백 계약에서 Sentry 전송을 유지하므로 제외했다.
+- Consequences: 버그 피드백은 다른 종류와 같은 본문 중심 계약을 사용하며 Sentry event와 상호 참조되지 않는다.
+- Confirmation / Follow-up: GraphQL schema, Web form, Slack payload와 관련 test에서 Sentry event ID가 제거됐는지 검증한다.
+
 ### Incoming Webhook secret과 plain-text Slack payload를 API가 소유한다
 
 - Decision Date: 2026-07-28
 - Decision Class: Implementation Choice
 - Authority / Provenance: `PROD-479`, `PROD-487`
-- Status: Active
+- Status: Superseded
 - Context / Problem: Webhook credential과 사용자 content를 client·log·Slack markup injection에서 격리하면서 지정 channel에 읽기 쉬운 message를 전달해야 한다.
-- Decision Outcome: API는 optional `api-env` Secret의 `SLACK_FEEDBACK_WEBHOOK_URL`만 사용하고 HTTPS `hooks.slack.com` Incoming Webhook 형태를 fail-closed로 검증한다. Secret 누락은 API Pod 기동이 아니라 feedback mutation만 실패시킨다. Payload는 user content가 없는 fallback text와 category, source Web, body, 선택적 event ID의 plain-text Block Kit field로 구성하고 unfurl을 끈다. Account/session/Profile identity와 upstream response body는 포함하거나 기록하지 않는다.
+- Decision Outcome: API는 optional `api-env` Secret의 `SLACK_FEEDBACK_WEBHOOK_URL`만 사용하고 HTTPS `hooks.slack.com` Incoming Webhook 형태를 fail-closed로 검증한다. Secret 누락은 API Pod 기동이 아니라 feedback mutation만 실패시킨다. Payload는 user content가 없는 fallback text와 category, source Web, body의 plain-text Block Kit field로 구성하고 unfurl을 끈다. Account/session/Profile identity와 upstream response body는 포함하거나 기록하지 않는다.
 - Alternatives Considered: Client direct webhook은 secret을 노출하므로 제외했다. Bot token과 `chat.postMessage`는 현재 webhook scope를 확대하므로 제외했다. User content를 mrkdwn fallback에 포함하는 방식은 mention·formatting injection surface를 키워 제외했다.
 - Consequences: Channel은 Slack app의 Incoming Webhook 설정이 소유한다. Missing/invalid secret은 mutation만 fail closed로 실패하고, feedback content와 credential은 DB나 exported asset에 남지 않는다.
 - Confirmation / Follow-up: Helm render, missing/invalid config test, stubbed fetch payload snapshot, secret-redaction search와 production Slack smoke로 확인한다.
+
+### Slack payload에서 제출 Account와 선택 Profile을 제한적으로 식별한다
+
+- Decision Date: 2026-07-29
+- Decision Class: Derived Contract
+- Authority / Provenance: `PROD-479`, `PROD-487`
+- Status: Active
+- Context / Problem: 팀이 Slack에서 피드백 제출자를 구분하려면 실행 환경 source보다 Kosmo identity가 필요하다. 최신 제품 결정은 Account 내부 ID와 선택 Profile의 공개 표현만 허용하고, 닉네임은 Account가 아니라 Profile `displayName`을 사용한다.
+- Decision Outcome: Payload에서 source field를 제거한다. 제출 Account 내부 ID를 포함하고, 선택 Profile이 있으면 내부 ID, `displayName` 닉네임과 `relativeHandle`을 plain-text field로 포함한다. 선택 Profile이 없으면 Profile 정보가 없음을 표시하고 제출은 계속 허용한다. Account `displayName`, 이메일, OIDC subject, session identity와 선택되지 않은 다른 Profile 정보는 포함하지 않는다.
+- Alternatives Considered: `출처: Web`은 현재 Web slice 외 식별 가치가 없어 제외했다. Account `displayName`을 닉네임으로 보내는 방식은 사용자가 정정한 Profile 정체성과 다르므로 제외했다. 이메일·OIDC subject와 모든 Profile 목록은 목적보다 넓은 개인정보이므로 제외했다.
+- Consequences: Slack message는 제출 Account와 현재 선택 Profile을 식별할 수 있다. Resolver는 검증된 session identity에 해당하는 Profile 표현을 조회해야 하지만 GraphQL input과 client payload는 바뀌지 않는다.
+- Confirmation / Follow-up: 선택 Profile 유무별 payload, source field 부재, 허용되지 않은 Account/Profile 필드 부재와 기존 secret redaction을 API test 및 production smoke로 확인한다.
 
 ### Account별 비영속 fixed-window와 in-flight guard를 사용한다
 
@@ -95,3 +119,5 @@
 ## Superseded Decisions
 
 - 2026-07-28 `Account별 비영속 fixed-window와 in-flight guard를 사용한다`는 2026-07-29 `같은 account의 진행 중 delivery만 process-local로 차단한다`로 대체했다.
+- 2026-07-28 `Feedback input과 Sentry event ID를 좁은 공개 계약으로 제한한다`는 2026-07-29 `Feedback 계약에서 Sentry event ID를 제외한다`로 대체했다.
+- 2026-07-28 `Incoming Webhook secret과 plain-text Slack payload를 API가 소유한다`의 identity 비노출 payload 결정은 2026-07-29 `Slack payload에서 제출 Account와 선택 Profile을 제한적으로 식별한다`로 대체했다. API secret 소유와 plain-text·unfurl 비활성화 결정은 유지한다.

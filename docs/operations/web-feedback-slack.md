@@ -19,6 +19,11 @@ SLACK_FEEDBACK_WEBHOOK_URL=https://hooks.slack.com/services/...
 Webhook 값은 HTTPS `hooks.slack.com/services/...` 형식이어야 한다. URL이 없거나 형식이
 잘못되면 API는 피드백을 Slack으로 보내지 않고 안전한 오류만 반환한다.
 
+로컬 `pnpm dev`의 API process는 공용 `secret/kubernetes/kosmo/local` 위에
+`secret/kubernetes/kosmo/local/api`를 선택적으로 병합한다. API 전용 경로가 아직 없으면 다른 API
+기능은 계속 기동하고 feedback mutation만 fail closed로 실패한다. 이 overlay는 API process 안에서만
+읽으므로 Web·Expo 개발 process에는 webhook 값이 주입되지 않는다.
+
 ## 배포 전 확인
 
 - `api-env` VaultStaticSecret이 API Rollout만 재시작하도록 렌더링되는지 확인한다.

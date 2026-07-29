@@ -24,7 +24,7 @@ export const Idle: Story = {
   ),
 };
 
-export const BugReportWithSentryEvent: Story = {
+export const BugReport: Story = {
   render: () => (
     <Catalog width={760}>
       <Section title="피드백 · 버그 리포트">
@@ -35,33 +35,8 @@ export const BugReportWithSentryEvent: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('radio', { name: '버그를 발견했어요' }));
-    await userEvent.type(
-      canvas.getByRole('textbox', { name: 'Sentry 이벤트 ID (선택)' }),
-      'A'.repeat(32),
-    );
-    expect(canvas.getByRole('textbox', { name: 'Sentry 이벤트 ID (선택)' })).toHaveValue(
-      'A'.repeat(32),
-    );
-  },
-};
-
-export const Validation: Story = {
-  render: () => (
-    <Catalog width={760}>
-      <Section title="피드백 · 입력 검증">
-        <FeedbackForm />
-      </Section>
-    </Catalog>
-  ),
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('radio', { name: '버그를 발견했어요' }));
-    await userEvent.type(
-      canvas.getByRole('textbox', { name: 'Sentry 이벤트 ID (선택)' }),
-      'invalid-event-id',
-    );
-    await expect(canvas.getByText('Sentry 이벤트 ID는 32자리 16진수여야 합니다.')).toBeVisible();
-    expect(canvas.getByRole('button', { name: '피드백 보내기' })).toBeDisabled();
+    expect(canvas.getByRole('radio', { name: '버그를 발견했어요' })).toBeChecked();
+    expect(canvas.getAllByRole('textbox')).toHaveLength(1);
   },
 };
 
@@ -122,8 +97,6 @@ export const Pending: Story = {
       canvas.getByRole('textbox', { name: '피드백 내용' }),
       '전달 중인 피드백입니다.',
     );
-    const sentryEventId = canvas.getByRole('textbox', { name: 'Sentry 이벤트 ID (선택)' });
-    await userEvent.type(sentryEventId, 'a'.repeat(32));
     const submit = canvas.getByRole('button', { name: '피드백 보내기' });
     await userEvent.click(submit);
     await expect(submit).toBeDisabled();
@@ -131,7 +104,6 @@ export const Pending: Story = {
     expect(bugReport).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(canvas.getByRole('radio', { name: '좋아요' }));
     expect(bugReport).toBeChecked();
-    expect(sentryEventId).toHaveValue('a'.repeat(32));
   },
 };
 
@@ -151,15 +123,10 @@ export const Success: Story = {
     const body = canvas.getByRole('textbox', { name: '피드백 내용' });
     await userEvent.click(canvas.getByRole('radio', { name: '버그를 발견했어요' }));
     await userEvent.type(body, '버그를 고쳐주세요.');
-    await userEvent.type(
-      canvas.getByRole('textbox', { name: 'Sentry 이벤트 ID (선택)' }),
-      'a'.repeat(32),
-    );
     await userEvent.click(canvas.getByRole('button', { name: '피드백 보내기' }));
     await expect(canvas.getByText('피드백을 전달했습니다. 감사합니다!')).toBeVisible();
     expect(canvas.getByRole('radio', { name: '좋아요' })).toBeChecked();
     expect(body).toHaveValue('');
-    expect(canvas.queryByRole('textbox', { name: 'Sentry 이벤트 ID (선택)' })).toBeNull();
   },
 };
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
 import { Button } from '@/components/ui/Button';
-import { TextArea, TextField } from '@/components/ui/TextField';
+import { TextArea } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import type { FeedbackFormSubmitFeedbackMutation } from './__generated__/FeedbackFormSubmitFeedbackMutation.graphql';
@@ -25,39 +25,29 @@ const SubmitFeedbackMutation = graphql`
   }
 `;
 
-const sentryEventIdPattern = /^[\da-f]{32}$/iu;
-
 export function FeedbackForm() {
   const theme = useTheme();
   const [kind, setKind] = useState<FeedbackKind>('POSITIVE');
   const [body, setBody] = useState('');
   const [bodyTouched, setBodyTouched] = useState(false);
-  const [sentryEventId, setSentryEventId] = useState('');
   const [status, setStatus] = useState<FeedbackStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [commit, submitting] =
     useMutation<FeedbackFormSubmitFeedbackMutation>(SubmitFeedbackMutation);
   const trimmedBody = body.trim();
-  const trimmedSentryEventId = sentryEventId.trim();
   const bodyError =
     trimmedBody.length === 0
       ? '피드백 내용을 입력해주세요.'
       : trimmedBody.length > 2000
         ? '피드백은 2,000자 이내로 입력해주세요.'
         : null;
-  const sentryEventIdError =
-    kind === 'BUG_REPORT' &&
-    trimmedSentryEventId &&
-    !sentryEventIdPattern.test(trimmedSentryEventId)
-      ? 'Sentry 이벤트 ID는 32자리 16진수여야 합니다.'
-      : null;
   const showBodyError = bodyTouched || status === 'error';
-  const canSubmit = !submitting && !bodyError && !sentryEventIdError;
+  const canSubmit = !submitting && !bodyError;
   const actionLabel = status === 'error' ? '다시 시도' : '보내기';
 
   const submit = () => {
     if (!canSubmit) {
-      setError(bodyError ?? sentryEventIdError);
+      setError(bodyError);
       setStatus('error');
       return;
     }
@@ -69,9 +59,6 @@ export function FeedbackForm() {
         input: {
           body: trimmedBody,
           kind,
-          ...(kind === 'BUG_REPORT' && trimmedSentryEventId
-            ? { sentryEventId: trimmedSentryEventId.toLowerCase() }
-            : {}),
         },
       },
       onCompleted: (response, errors) => {
@@ -84,7 +71,6 @@ export function FeedbackForm() {
         setKind('POSITIVE');
         setBody('');
         setBodyTouched(false);
-        setSentryEventId('');
         setError(null);
         setStatus('success');
       },
@@ -125,9 +111,6 @@ export function FeedbackForm() {
                 setKind(option.value);
                 setStatus('idle');
                 setError(null);
-                if (option.value !== 'BUG_REPORT') {
-                  setSentryEventId('');
-                }
               }}
               role="radio"
               style={({ pressed }) => [
@@ -173,23 +156,6 @@ export function FeedbackForm() {
         placeholder="어떤 점이 좋았거나 불편했는지 알려주세요."
         value={body}
       />
-
-      {kind === 'BUG_REPORT' ? (
-        <TextField
-          accessibilityLabel="Sentry 이벤트 ID (선택)"
-          aria-invalid={Boolean(sentryEventIdError)}
-          editable={!submitting}
-          error={sentryEventIdError ?? undefined}
-          label="Sentry 이벤트 ID (선택)"
-          onChangeText={(value) => {
-            setSentryEventId(value);
-            setStatus('idle');
-            setError(null);
-          }}
-          placeholder="32자리 이벤트 ID"
-          value={sentryEventId}
-        />
-      ) : null}
 
       {status === 'success' ? (
         <Text accessibilityLiveRegion="polite" style={[styles.success, { color: theme.text }]}>

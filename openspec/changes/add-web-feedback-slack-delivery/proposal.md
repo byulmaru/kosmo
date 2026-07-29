@@ -5,11 +5,11 @@
 ## What Changes
 
 - Web full/compact sidebar와 mobile drawer의 기존 설정·지원 위치를 직접적인 "피드백 보내기" 진입점으로 바꾸고 보호된 `/menu` 피드백 화면으로 이동할 수 있게 한다.
-- 사용자가 좋았던 점·나빴던 점·필요한 점·버그를 선택하고 본문과 버그용 선택적 Sentry event ID를 입력하는 접근 가능한 상태 흐름을 추가한다.
+- 사용자가 좋았던 점·나빴던 점·필요한 점·버그를 선택하고 본문을 입력하는 접근 가능한 상태 흐름을 추가한다.
 - 로그인 세션을 요구하는 GraphQL 제출 계약과 server-owned Slack Incoming Webhook 전송 경계를 추가한다.
 - 피드백 내용을 DB에 저장하지 않고, client의 진행 중 반복 제출 차단과 server의 동일 계정 동시 전송 차단을 적용한다. 계정별 요청 횟수 제한은 이번 범위에 포함하지 않는다.
 - Slack 성공 응답을 확인한 요청만 성공 처리하고 server 자동 재전송은 하지 않는다. 모호한 실패에서는 입력을 유지해 사용자가 명시적으로 재시도할 수 있으며, 이 경우 드문 중복 가능성을 허용한다.
-- webhook secret의 Vault 환경 주입, 안전한 Slack payload, 오류 정보 비노출과 production smoke 검증 절차를 정의한다.
+- webhook secret의 Vault 환경 주입, 제출 Account와 선택 Profile을 제한적으로 식별하는 안전한 Slack payload, 오류 정보 비노출과 production smoke 검증 절차를 정의한다.
 - Android/iOS 메뉴·화면·앱 배포와 부모 `PROD-479`의 cross-platform 최종 통합·archive는 이번 변경에 포함하지 않는다.
 
 ## Authority / Provenance
