@@ -113,7 +113,7 @@ Reaction의 원본 activity를 내장한 `Undo`를 전달해야 한다(MUST). `U
 
 ### Requirement: delivery를 commit 이후 실패 격리 경계에서 실행한다
 
-**Authority / Provenance:** `docs/domain/objects/reaction.md`, `docs/architecture/core-services.md`, PROD-499. 시스템은 Reaction domain transaction이 commit된 뒤 기존 Fedify 경계로 직접 delivery를 시도해야 한다(MUST).
+**Authority / Provenance:** `docs/architecture/core-services.md`, PROD-499. 시스템은 Reaction domain transaction이 commit된 뒤 기존 Fedify 경계로 직접 delivery를 시도해야 한다(MUST).
 delivery 실패는 관측 가능하게 기록해야 하지만(MUST), 이미 commit된 Reaction 추가·삭제나 application 응답을
 실패로 바꾸지 않아야 한다(MUST NOT).
 
@@ -134,7 +134,7 @@ delivery 실패는 관측 가능하게 기록해야 하지만(MUST), 이미 comm
 
 ### Requirement: 현재 직접 delivery 제한을 유지한다
 
-**Authority / Provenance:** `docs/domain/objects/reaction.md`, `docs/architecture/core-services.md`, PROD-499. 시스템은 PROD-499에서 기존 Fedify 직접 delivery 경계를 사용해야 하며(MUST), transactional outbox, NATS/Fedify
+**Authority / Provenance:** `docs/architecture/core-services.md`, PROD-499. 시스템은 PROD-499에서 기존 Fedify 직접 delivery 경계를 사용해야 하며(MUST), transactional outbox, NATS/Fedify
 MessageQueue, durable retry, delivery history 또는 사용자용 delivery status를 선행 조건으로 추가하지 않아야 한다
 (MUST NOT).
 
