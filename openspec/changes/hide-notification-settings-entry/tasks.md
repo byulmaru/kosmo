@@ -70,8 +70,14 @@
 - App test/check, 변경 파일 lint·Prettier, scoped/all OpenSpec strict validation, scope diff와 stack diff 검사를 통과한다.
 - 최종 diff에서 PR #390의 feedback footer, API, DB, dependency와 migration 변경이 없는지 확인한다.
 
-- [ ] 2.1 `SidebarNavigation.navItems`에서 `프로필 설정` row만 제거하고 feedback footer와 기존 비설정 menu 동작을 유지한다.
-- [ ] 2.2 기존 Shell Storybook에서 full·compact·mobile drawer의 `프로필 설정` link 부재와 유지 대상 진입점을 최소 assertion으로 검증한다.
-- [ ] 2.3 responsive viewport와 접근성 동작을 확인하고 Android·iOS runtime을 포함해 실행한 검증과 미실행 검증을 구분해 기록한다.
+**실행 기록 (2026-07-30)**
+
+- Web Storybook full sidebar 1280×900, compact rail 1024×900, mobile drawer 390×844: `프로필 설정` link는 시각·접근성 트리에 0건이고 `프로필`·`팔로워 요청`·`피드백 보내기`·로그아웃은 각 surface에 유지됨을 확인했다.
+- 세 viewport 모두 가로 overflow가 없고, mobile drawer의 종료 버튼과 기존 응답형 navigation이 유지됨을 확인했다.
+- Android·iOS native runtime과 VoiceOver·TalkBack: 미실행. Web Storybook 시각·접근성 관찰 및 자동화 결과와 구분한다.
+
+- [x] 2.1 `SidebarNavigation.navItems`에서 `프로필 설정` row만 제거하고 feedback footer와 기존 비설정 menu 동작을 유지한다.
+- [x] 2.2 기존 Shell Storybook에서 full·compact·mobile drawer의 `프로필 설정` link 부재와 유지 대상 진입점을 최소 assertion으로 검증한다.
+- [x] 2.3 responsive viewport와 접근성 동작을 확인하고 Android·iOS runtime을 포함해 실행한 검증과 미실행 검증을 구분해 기록한다.
 - [ ] 2.4 관련 자동화, formatting, scoped/all strict validation, scope diff와 PR #390 기준 stack diff 검사를 통과한다.
 - [ ] 2.5 최신 canonical·Linear와 구현 정합성을 재확인한 뒤 change를 다시 archive하고 archive 후 strict validation을 통과한다.

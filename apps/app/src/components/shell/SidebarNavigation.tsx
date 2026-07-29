@@ -48,7 +48,6 @@ const navigation: NavigationItem[] = [
   { href: '/menu', Icon: UserRound, label: '프로필', profile: true },
   { href: '/bookmarks', Icon: Bookmark, label: '북마크' },
   { href: '/menu', Icon: UserRoundPlus, label: '팔로워 요청' },
-  { href: '/menu', Icon: Settings, label: '프로필 설정' },
 ];
 
 type Props = {

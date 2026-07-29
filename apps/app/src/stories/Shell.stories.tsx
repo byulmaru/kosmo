@@ -193,6 +193,14 @@ export const SharedNavigation: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     expect(canvas.getByRole('link', { name: '북마크' })).toHaveAttribute('href', '/bookmarks');
+    expect(canvas.getByRole('link', { name: '프로필' })).toHaveAttribute('href', '/@selected');
+    expect(canvas.getByRole('link', { name: '팔로워 요청' })).toHaveAttribute('href', '/menu');
+    expect(canvas.getByRole('link', { name: '피드백 보내기' })).toHaveAttribute(
+      'href',
+      '/feedback',
+    );
+    expect(canvas.getByRole('button', { name: '로그아웃' })).toBeInTheDocument();
+    expect(canvas.queryByRole('link', { name: '프로필 설정' })).not.toBeInTheDocument();
   },
 };
 
@@ -202,6 +210,14 @@ export const CompactSidebar: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     expect(canvas.getByRole('link', { name: '북마크' })).toHaveAttribute('href', '/bookmarks');
+    expect(canvas.getByRole('link', { name: '프로필' })).toHaveAttribute('href', '/@selected');
+    expect(canvas.getByRole('link', { name: '팔로워 요청' })).toHaveAttribute('href', '/menu');
+    expect(canvas.getByRole('link', { name: '피드백 보내기' })).toHaveAttribute(
+      'href',
+      '/feedback',
+    );
+    expect(canvas.getByRole('button', { name: '로그아웃' })).toBeInTheDocument();
+    expect(canvas.queryByRole('link', { name: '프로필 설정' })).not.toBeInTheDocument();
   },
   render: () => <CompactSidebarStory />,
 };
@@ -893,6 +909,17 @@ export const UniversalMobile: Story = {
       'href',
       '/bookmarks',
     );
+    expect(within(drawer).getByRole('link', { name: '프로필' })).toHaveAttribute(
+      'href',
+      '/@selected',
+    );
+    expect(within(drawer).getByRole('link', { name: '팔로워 요청' })).toHaveAttribute(
+      'href',
+      '/menu',
+    );
+    expect(page.getByRole('link', { name: '피드백 보내기' })).toHaveAttribute('href', '/feedback');
+    expect(within(drawer).getByRole('button', { name: '로그아웃' })).toBeInTheDocument();
+    expect(within(drawer).queryByRole('link', { name: '프로필 설정' })).not.toBeInTheDocument();
     const profileSummary = page.getByLabelText('활성 프로필');
     expect(profileSummary).toBeInTheDocument();
     expect(within(profileSummary).getByRole('link', { name: /팔로잉/ })).toHaveAttribute(
