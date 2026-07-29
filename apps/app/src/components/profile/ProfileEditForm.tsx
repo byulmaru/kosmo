@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Switch, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
 import { TextArea, TextField } from '../ui/TextField';
@@ -95,6 +95,23 @@ export function ProfileEditForm({
           </Text>
         </View>
 
+        <View style={styles.followPolicyRow}>
+          <Text style={[styles.followPolicyLabel, { color: theme.text }]}>
+            팔로우 요청 자동 승인
+          </Text>
+          <Switch
+            accessibilityLabel="팔로우 요청 자동 승인"
+            disabled={disabled}
+            onValueChange={(automaticApproval) =>
+              onChange({
+                ...value,
+                followPolicy: automaticApproval ? 'OPEN' : 'APPROVAL_REQUIRED',
+              })
+            }
+            value={value.followPolicy === 'OPEN'}
+          />
+        </View>
+
         <View style={styles.field}>
           <ProfileTagEditor
             disabled={disabled}
@@ -124,6 +141,15 @@ const styles = StyleSheet.create({
   },
   field: {
     gap: spacing.xs,
+  },
+  followPolicyRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  followPolicyLabel: {
+    fontFamily: 'SUIT',
+    ...typography.sm,
   },
   counter: {
     alignSelf: 'flex-end',
