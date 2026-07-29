@@ -160,6 +160,8 @@ spec:
   bootstrap:
     recovery:
       source: production
+      database: kosmo
+      owner: kosmo
       recoveryTarget:
         targetName: 'RESTORE_POINT_NAME'
   externalClusters:
@@ -183,7 +185,7 @@ kubectl get cluster,pod -n kosmo-prod-restore
 
 ### 4. 데이터와 목표 검증
 
-Restore Cluster의 application credential로 읽기 전용 연결을 만든 뒤 다음을 비교한다.
+CNPG가 생성한 `kosmo-postgres-restore-app` Secret을 `kosmo` owner와 `kosmo` database의 application credential로 사용해 읽기 전용 연결을 만든 뒤 다음을 비교한다. Secret 값은 terminal history, command output이나 Linear에 출력하지 않는다.
 
 - `pg_dump --schema-only` 결과의 구조적 차이
 - restore point 직전 snapshot에 기록한 `drizzle.__drizzle_migrations` count와 마지막 migration hash
