@@ -10,10 +10,6 @@ import type { LocalOutboundContextData } from './local-outbound-federation';
 const FollowerProfiles = alias(Profiles, 'outbound_recipient_follower_profile');
 const FollowerInstances = alias(Instances, 'outbound_recipient_follower_instance');
 
-export type OutboundRecipientTarget =
-  | { readonly profileId: string; readonly type: 'PROFILE' }
-  | { readonly profileId: string; readonly type: 'FOLLOWERS' };
-
 type StoredRecipient = {
   readonly inboxUri: string | null;
   readonly sharedInboxUri: string | null;
@@ -52,20 +48,13 @@ export const dispatchActivityPubActivity = async ({
   activity,
   actorProfileId,
   context,
-  targets,
+  directProfileIds,
 }: {
   readonly activity: Activity;
   readonly actorProfileId: string;
   readonly context: Context<LocalOutboundContextData>;
-  readonly targets: readonly OutboundRecipientTarget[];
+  readonly directProfileIds: readonly string[];
 }): Promise<void> => {
-  const directProfileIds = targets
-    .filter((target) => target.type === 'PROFILE')
-    .map((target) => target.profileId);
-  const followerProfileIds = targets
-    .filter((target) => target.type === 'FOLLOWERS')
-    .map((target) => target.profileId);
-
   const directActors =
     directProfileIds.length === 0
       ? []
@@ -87,28 +76,25 @@ export const dispatchActivityPubActivity = async ({
               isNotNull(ActivityPubActors.inboxUri),
             ),
           );
-  const followerActors =
-    followerProfileIds.length === 0
-      ? []
-      : await db
-          .select({
-            inboxUri: ActivityPubActors.inboxUri,
-            sharedInboxUri: ActivityPubActors.sharedInboxUri,
-            uri: ActivityPubActors.uri,
-          })
-          .from(ProfileFollows)
-          .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
-          .innerJoin(FollowerInstances, eq(FollowerInstances.id, FollowerProfiles.instanceId))
-          .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, FollowerProfiles.id))
-          .where(
-            and(
-              inArray(ProfileFollows.followeeProfileId, followerProfileIds),
-              eq(FollowerProfiles.state, ProfileState.ACTIVE),
-              eq(FollowerInstances.kind, InstanceKind.ACTIVITYPUB),
-              eq(FollowerInstances.state, InstanceState.ACTIVE),
-              isNotNull(ActivityPubActors.inboxUri),
-            ),
-          );
+  const followerActors = await db
+    .select({
+      inboxUri: ActivityPubActors.inboxUri,
+      sharedInboxUri: ActivityPubActors.sharedInboxUri,
+      uri: ActivityPubActors.uri,
+    })
+    .from(ProfileFollows)
+    .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
+    .innerJoin(FollowerInstances, eq(FollowerInstances.id, FollowerProfiles.instanceId))
+    .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, FollowerProfiles.id))
+    .where(
+      and(
+        eq(ProfileFollows.followeeProfileId, actorProfileId),
+        eq(FollowerProfiles.state, ProfileState.ACTIVE),
+        eq(FollowerInstances.kind, InstanceKind.ACTIVITYPUB),
+        eq(FollowerInstances.state, InstanceState.ACTIVE),
+        isNotNull(ActivityPubActors.inboxUri),
+      ),
+    );
 
   const recipientsByActor = new Map<string, Recipient>();
   for (const actor of [...directActors, ...followerActors]) {

@@ -12,7 +12,6 @@ import { alias } from 'drizzle-orm/pg-core';
 import { localOutboundFederation } from './local-outbound-federation';
 import { projectLocalPostNote } from './local-post-note';
 import { dispatchActivityPubActivity } from './outbound-recipient-dispatch';
-import type { OutboundRecipientTarget } from './outbound-recipient-dispatch';
 
 const ReplyParents = alias(Posts, 'local_post_delivery_reply_parent');
 const ReplyParentProfiles = alias(Profiles, 'local_post_delivery_reply_parent_profile');
@@ -23,20 +22,6 @@ const noteUri = (canonicalOrigin: string | URL, postId: string): URL =>
 
 const getFollowersUri = (actorUri: URL): URL =>
   new URL(`${actorUri.pathname.replace(/\/$/, '')}/followers`, actorUri);
-
-const createTargets = ({
-  authorProfileId,
-  parentProfileId,
-}: {
-  readonly authorProfileId: string;
-  readonly parentProfileId?: string;
-}): OutboundRecipientTarget[] => {
-  const targets: OutboundRecipientTarget[] = [{ profileId: authorProfileId, type: 'FOLLOWERS' }];
-  if (parentProfileId) {
-    targets.push({ profileId: parentProfileId, type: 'PROFILE' });
-  }
-  return targets;
-};
 
 export const sendLocalPostCreate = async (postId: string): Promise<void> => {
   const source = await db
@@ -87,20 +72,18 @@ export const sendLocalPostCreate = async (postId: string): Promise<void> => {
     published: projection.createdAt,
     tos: projection.object.toIds,
   });
+  const directProfileId =
+    projection.replyParentId &&
+    (projection.visibility === PostVisibility.PUBLIC ||
+      projection.visibility === PostVisibility.UNLISTED) &&
+    source.parentInstanceKind === InstanceKind.ACTIVITYPUB
+      ? source.parentProfileId
+      : null;
   await dispatchActivityPubActivity({
     activity,
     actorProfileId: projection.authorProfileId,
     context,
-    targets: createTargets({
-      authorProfileId: projection.authorProfileId,
-      parentProfileId:
-        projection.replyParentId &&
-        (projection.visibility === PostVisibility.PUBLIC ||
-          projection.visibility === PostVisibility.UNLISTED) &&
-        source.parentInstanceKind === InstanceKind.ACTIVITYPUB
-          ? (source.parentProfileId ?? undefined)
-          : undefined,
-    }),
+    directProfileIds: directProfileId ? [directProfileId] : [],
   });
 };
 
@@ -160,19 +143,17 @@ export const sendLocalPostDelete = async (postId: string): Promise<void> => {
     published: source.deletedAt,
     tos: source.visibility === PostVisibility.PUBLIC ? [PUBLIC_COLLECTION] : [followersUri],
   });
+  const directProfileId =
+    source.replyParentId &&
+    (source.visibility === PostVisibility.PUBLIC ||
+      source.visibility === PostVisibility.UNLISTED) &&
+    source.parentInstanceKind === InstanceKind.ACTIVITYPUB
+      ? source.parentProfileId
+      : null;
   await dispatchActivityPubActivity({
     activity,
     actorProfileId: source.authorProfileId,
     context,
-    targets: createTargets({
-      authorProfileId: source.authorProfileId,
-      parentProfileId:
-        source.replyParentId &&
-        (source.visibility === PostVisibility.PUBLIC ||
-          source.visibility === PostVisibility.UNLISTED) &&
-        source.parentInstanceKind === InstanceKind.ACTIVITYPUB
-          ? (source.parentProfileId ?? undefined)
-          : undefined,
-    }),
+    directProfileIds: directProfileId ? [directProfileId] : [],
   });
 };
