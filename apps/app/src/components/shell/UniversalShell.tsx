@@ -149,6 +149,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
             style={[
               styles.sidebar,
               web && webStickyRail,
+              switcherOpen && styles.sidebarWithOverlay,
               { borderColor: theme.border, width: full ? 320 : 80 },
             ]}
           >
@@ -265,6 +266,7 @@ const styles = StyleSheet.create({
   nativeRoot: { flex: 1 },
   webRoot: { flexGrow: 1 },
   sidebar: { borderRightWidth: 1, minHeight: '100%' },
+  sidebarWithOverlay: { zIndex: 30 },
   center: { flex: 1, maxWidth: 600, minHeight: '100%', minWidth: 0 },
   centerWithRightRail: { borderRightWidth: 1 },
   route: { minHeight: 0 },

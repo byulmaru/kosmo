@@ -39,13 +39,14 @@ Web은 Hono BFF가 발급한 HttpOnly `kosmo_session` cookie를 `/graphql`에서
 3. **GraphQL은 전용 mutation을 둔다.** `revokeCurrentSession`은 Session ID input 없이 special credential boundary를 사용하고, 확정 결과를 `RevokeCurrentSessionPayload { completed: Boolean! }`로 mapping한다. 예상 밖 DB/server 실패는 기존 `INTERNAL_SERVER_ERROR` 경로를 사용한다.
 4. **Web은 전용 `POST /logout` route를 둔다.** 구성된 public origin과 Origin header를 정확히 비교한 뒤 cookie credential을 처리한다. 확정 결과는 cache 불가 `204 No Content`와 동일 scope의 expired `kosmo_session` cookie로 응답하고, 불명 실패는 cookie를 유지한 채 non-2xx를 반환한다. `/graphql` proxy는 변경하지 않는다.
 5. **client logout action이 cleanup 순서를 소유한다.** Web은 credential 포함 `POST /logout`, Native는 Relay mutation을 호출한다. 성공 뒤 Native SecureStore token 삭제를 완료하고, 모든 runtime에서 actor revision을 바꿔 새 guest Environment/Store를 만든 다음 router replace로 `/`에 이동한다.
-6. **shell control은 같은 action 상태를 공유한다.** full/compact/drawer control은 하나의 pending/error 상태를 사용해 중복 요청을 막고, 실패 시 credential과 Environment를 유지한 채 접근 가능한 오류와 재시도를 제공한다. 별도 확인 dialog 없이 기존 logout control을 직접 실행하는 방식을 기본으로 한다.
+6. **현재 조작 가능한 shell control이 production action을 직접 소유한다.** layout마다 full/compact/drawer 중 하나만 조작 가능하므로 렌더된 `SidebarNavigation`의 logout control이 production action과 pending/error 상태를 직접 소유한다. caller가 lifecycle을 callback으로 교체할 수 없게 하고, 현재 surface 안에서 중복 요청을 막으며 실패 시 credential과 Environment를 유지한 채 접근 가능한 오류와 재시도를 제공한다. 별도 확인 dialog 없이 기존 logout control을 직접 실행하는 방식을 기본으로 한다.
 
 ### Allowed Alternatives
 
 - GraphQL/BFF는 각 transport에서 raw Session credential을 추출하는 방식만 각각 소유할 수 있다. credential 조회·결과 분류·조건부 revoke는 transport-neutral logout action 안에서 직접 수행하거나 그 action만 사용하는 server-side helper로 분리할 수 있다. 어느 방식이든 일반 API `ctx.session` 정책을 넓히거나 공유 action에 GraphQL/HTTP 타입을 전달해서는 안 된다.
 - core의 조건부 전이는 단일 update 후 outcome 조회 또는 짧은 transaction 안의 동등한 방식으로 구현할 수 있다. specs의 terminal winner, 다른 Session 격리와 결과 분류를 만족해야 한다.
 - shell 실패 표현은 inline status 또는 기존 접근 가능한 공통 오류 surface를 사용할 수 있다. raw backend message나 credential material을 노출하지 않고 재시도를 제공해야 한다.
+- shell layout이 여러 logout surface를 동시에 조작 가능하게 바뀌면 action 상태를 공통 provider로 끌어올릴 수 있다. 현재처럼 한 surface만 조작 가능한 동안에는 production hook을 control 내부에서 직접 호출해 lifecycle 주입 seam을 만들지 않는다.
 
 ### Known Traps
 

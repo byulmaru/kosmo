@@ -5,6 +5,7 @@ KOSMO의 UI/프로덕트 디자인 결정을 기록하고 공유하는 문서 �
 ## 문서 목록
 
 - [figma.md](./figma.md) — Figma 파일 구조와 작업 규칙
+- [accessibility.md](./accessibility.md) — Web·Android·iOS 접근성 목표, target과 검증 기준
 - [colors.md](./colors.md) — 컬러 토큰 정책
 - [typography.md](./typography.md) — 폰트 사용 규칙
 - [breakpoints.md](./breakpoints.md) — 레이아웃 브레이크포인트 단계와 컨벤션

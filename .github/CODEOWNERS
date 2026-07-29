@@ -1,1 +1,9 @@
 * @robin-maki
+
+# Design decisions and app presentation
+/docs/design/ @robin-maki @yeeun-uwu
+/apps/app/.storybook/ @robin-maki @yeeun-uwu
+/apps/app/src/app/ @robin-maki @yeeun-uwu
+/apps/app/src/components/ @robin-maki @yeeun-uwu
+/apps/app/src/stories/ @robin-maki @yeeun-uwu
+/apps/app/src/theme/ @robin-maki @yeeun-uwu

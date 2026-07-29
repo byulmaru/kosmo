@@ -3,6 +3,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import {
   db,
   firstOrThrowWith,
+  getDatabaseConnection,
   Instances,
   Notifications,
   Posts,
@@ -19,6 +20,7 @@ import {
   ProfileState,
 } from '../enums';
 import { NotFoundError } from '../error';
+import type { Transaction } from '../db';
 
 const NotificationRepostAuthors = alias(Profiles, 'notification_repost_author');
 const NotificationRepostAuthorInstances = alias(Instances, 'notification_repost_author_instance');
@@ -91,14 +93,17 @@ export const createReactionNotification = async (sourceId: string): Promise<void
     });
 };
 
-const selectReplyVisibleToProfile = async ({
-  profileId,
-  sourceId,
-}: {
-  profileId: string;
-  sourceId: string;
-}) =>
-  db
+const selectReplyVisibleToProfile = async (
+  tx: Transaction,
+  {
+    profileId,
+    sourceId,
+  }: {
+    profileId: string;
+    sourceId: string;
+  },
+) =>
+  tx
     .select({ id: Posts.id })
     .from(Posts)
     .innerJoin(ReplyParents, eq(ReplyParents.id, Posts.replyParentId))
@@ -133,53 +138,46 @@ const selectReplyVisibleToProfile = async ({
     .limit(1)
     .then((rows) => rows.length > 0);
 
-export const createReplyNotification = async (sourceId: string): Promise<void> => {
-  const source = await db
-    .select({
-      actorProfileId: Posts.profileId,
-      id: Posts.id,
-      recipientInstanceKind: Instances.kind,
-      recipientProfileId: ReplyParents.profileId,
-    })
-    .from(Posts)
-    .innerJoin(ReplyParents, eq(ReplyParents.id, Posts.replyParentId))
-    .innerJoin(Profiles, eq(Profiles.id, ReplyParents.profileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(eq(Posts.id, sourceId))
-    .limit(1)
-    .then(firstOrThrowWith(() => new NotFoundError('Reply not found')));
+export const createReplyNotification = async (sourceId: string, tx?: Transaction): Promise<void> =>
+  getDatabaseConnection(tx).transaction(async (tx) => {
+    const source = await tx
+      .select({
+        actorProfileId: Posts.profileId,
+        id: Posts.id,
+        recipientInstanceKind: Instances.kind,
+        recipientProfileId: ReplyParents.profileId,
+      })
+      .from(Posts)
+      .innerJoin(ReplyParents, eq(ReplyParents.id, Posts.replyParentId))
+      .innerJoin(Profiles, eq(Profiles.id, ReplyParents.profileId))
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(eq(Posts.id, sourceId))
+      .limit(1)
+      .then(firstOrThrowWith(() => new NotFoundError('Reply not found')));
 
-  if (
-    source.actorProfileId === source.recipientProfileId ||
-    source.recipientInstanceKind !== InstanceKind.LOCAL ||
-    !(await selectReplyVisibleToProfile({
-      profileId: source.recipientProfileId,
-      sourceId: source.id,
-    }))
-  ) {
-    return;
-  }
+    if (
+      source.actorProfileId === source.recipientProfileId ||
+      source.recipientInstanceKind !== InstanceKind.LOCAL ||
+      !(await selectReplyVisibleToProfile(tx, {
+        profileId: source.recipientProfileId,
+        sourceId: source.id,
+      }))
+    ) {
+      return;
+    }
 
-  await db
-    .insert(Notifications)
-    .values({
-      data: {},
-      kind: NotificationKind.REPLY,
-      recipientProfileId: source.recipientProfileId,
-      sourceId: source.id,
-    })
-    .onConflictDoNothing({
-      target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
-    });
-};
-
-export const createReplyNotificationBestEffort = async (sourceId: string): Promise<void> => {
-  try {
-    await createReplyNotification(sourceId);
-  } catch {
-    // Notification은 Reply source 성공을 바꾸지 않는다.
-  }
-};
+    await tx
+      .insert(Notifications)
+      .values({
+        data: {},
+        kind: NotificationKind.REPLY,
+        recipientProfileId: source.recipientProfileId,
+        sourceId: source.id,
+      })
+      .onConflictDoNothing({
+        target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
+      });
+  });
 
 export const createRepostNotification = async (sourceId: string): Promise<void> => {
   const source = await db

@@ -22,6 +22,7 @@
     "@pothos/plugin-simple-objects": "^4.1.3",
     "@pothos/plugin-validation": "^4.2.0",
     "@pothos/plugin-with-input": "^4.1.4",
+    "@sentry/node": "^10.66.0",
     "dataloader": "^2.2.3",
     "drizzle-orm": "1.0.0-beta.22",
     "fast-json-stable-stringify": "^2.1.0",

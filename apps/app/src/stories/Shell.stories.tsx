@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { commitLocalUpdate } from 'relay-runtime';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { BottomTabBar } from '@/components/shell/BottomTabBar';
@@ -49,6 +49,19 @@ const followedProfile = profile({
 const query = {
   ...shellQuery({ profiles: [selectedProfile, secondProfile], selectedProfile }),
   node: followedProfile,
+};
+const additionalProfiles = Array.from({ length: 11 }, (_, index) =>
+  profile({
+    displayName: `테스트 프로필 ${index + 1}`,
+    handle: `picker_${index + 1}`,
+    id: `profile-picker-${index + 1}`,
+    relativeHandle: `@picker_${index + 1}`,
+    viewerState: { follow: null, followRequest: null, isSelf: true },
+  }),
+);
+const longProfileQuery = {
+  ...query,
+  ...shellQuery({ profiles: [selectedProfile, ...additionalProfiles], selectedProfile }),
 };
 
 const ShellStoriesQuery = graphql`
@@ -138,7 +151,7 @@ function FeedbackNavigationDrawerStory() {
 function ProfileSwitcherStory() {
   return (
     <View style={{ maxWidth: 360 }}>
-      <ProfileSwitcher query={useShellStoryData().query} showAvatar={false} />
+      <ProfileSwitcher query={useShellStoryData().query} surface="full" />
     </View>
   );
 }
@@ -231,6 +244,112 @@ export const FeedbackNavigationDrawerCurrentState: Story = {
     expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
   },
   render: () => <FeedbackNavigationDrawerStory />,
+};
+
+export const ResponsiveProfilePickerFull: Story = {
+  parameters: {
+    relay: { data: longProfileQuery },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: '프로필 목록' });
+    const navigation = canvas.getByRole('navigation', { name: '주요 메뉴' });
+    const triggerName = within(trigger).getByText('코스모 작가');
+    const triggerIcon = trigger.querySelector('svg')!;
+    const triggerRect = trigger.getBoundingClientRect();
+    const closedNavigationTop = navigation.getBoundingClientRect().top;
+    const nameRect = triggerName.getBoundingClientRect();
+    const iconRect = triggerIcon.getBoundingClientRect();
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(
+      nameRect.top + nameRect.height / 2 - (triggerRect.top + triggerRect.height / 2),
+    ).toBeCloseTo(6, 0);
+    expect(
+      iconRect.top + iconRect.height / 2 - (triggerRect.top + triggerRect.height / 2),
+    ).toBeCloseTo(6, 0);
+    await userEvent.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    const pickerRegion = await canvas.findByLabelText('프로필 전환');
+    const picker = pickerRegion.parentElement;
+    const list = canvas.getByLabelText('전환할 프로필 목록');
+    const options = within(list).getAllByRole('button');
+    const footerAction = canvas.getByRole('button', { name: '새 프로필 추가' });
+    const pickerRect = pickerRegion.getBoundingClientRect();
+    const openTriggerRect = trigger.getBoundingClientRect();
+    const openNavigationTop = navigation.getBoundingClientRect().top;
+    const followingLink = canvas.getByRole('link', { name: /팔로잉/ });
+
+    expect(pickerRegion).toBeVisible();
+    expect(picker).not.toBeNull();
+    expect(picker!.getBoundingClientRect().height).toBeLessThanOrEqual(430);
+    expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
+    expect(footerAction).toBeVisible();
+    expect(pickerRect.top).toBeGreaterThanOrEqual(triggerRect.bottom);
+    expect(pickerRect.top - triggerRect.bottom).toBeLessThanOrEqual(12);
+    expect(openTriggerRect).toEqual(triggerRect);
+    expect(openNavigationTop).toBe(closedNavigationTop);
+    expect(pickerRect.bottom).toBeGreaterThan(openNavigationTop);
+    expect(canvas.queryByRole('dialog')).toBeNull();
+    expect(options).toHaveLength(12);
+    expect(trigger).toHaveFocus();
+
+    for (const option of options) {
+      await userEvent.tab();
+      expect(option).toHaveFocus();
+    }
+    const listRect = list.getBoundingClientRect();
+    const focusedRect = options.at(-1)!.getBoundingClientRect();
+    expect(focusedRect.top).toBeGreaterThanOrEqual(listRect.top);
+    expect(focusedRect.bottom).toBeLessThanOrEqual(listRect.bottom);
+    await userEvent.tab();
+    expect(footerAction).toHaveFocus();
+    await userEvent.tab();
+    expect(followingLink).toHaveFocus();
+    await waitFor(() => expect(canvas.queryByLabelText('프로필 전환')).toBeNull());
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(followingLink).toHaveFocus();
+
+    await userEvent.click(trigger);
+    await canvas.findByLabelText('프로필 전환');
+    await userEvent.click(canvas.getByRole('button', { name: '새 프로필 추가' }));
+    const handle = canvas.getByRole('textbox', { name: '프로필 핸들' });
+    await userEvent.type(handle, 'outside_reset');
+    expect(handle).toHaveValue('outside_reset');
+
+    const support = canvas.getByRole('button', { name: '설정 & 지원' });
+    await userEvent.click(support);
+    await waitFor(() => expect(canvas.queryByLabelText('프로필 전환')).toBeNull());
+    expect(support).toHaveFocus();
+
+    await userEvent.click(trigger);
+    await waitFor(() => {
+      expect(canvas.queryByRole('form', { name: '새 프로필 만들기' })).toBeNull();
+      expect(canvas.queryByRole('alert')).toBeNull();
+    });
+    await userEvent.click(canvas.getByRole('button', { name: '새 프로필 추가' }));
+    expect(canvas.getByRole('textbox', { name: '프로필 핸들' })).toHaveValue('');
+
+    followingLink.addEventListener('click', (event) => event.preventDefault(), { once: true });
+    await userEvent.click(followingLink);
+    await waitFor(() => expect(canvas.queryByLabelText('프로필 전환')).toBeNull());
+
+    await userEvent.click(trigger);
+    await canvas.findByLabelText('프로필 전환');
+    const followersLink = canvasElement.querySelector<HTMLAnchorElement>(
+      'a[href="/@selected/followers"]',
+    );
+    expect(followersLink).not.toBeNull();
+    followersLink!.addEventListener('click', (event) => event.preventDefault(), { once: true });
+    followersLink!.focus();
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(canvas.queryByLabelText('프로필 전환')).toBeNull());
+  },
+  render: () => (
+    <View style={{ height: 900, width: 320 }}>
+      <SidebarNavigation query={useShellStoryData().query} />
+    </View>
+  ),
 };
 
 export const FollowUpdatesBothProfileCounts: Story = {
@@ -509,19 +628,49 @@ export const ProfileSwitcherInteraction: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
-    const menu = await canvas.findByRole('menu', { name: '프로필 전환' });
+    const pickerRegion = await canvas.findByLabelText('프로필 전환');
+    const list = canvas.getByLabelText('전환할 프로필 목록');
 
-    expect(menu).toBeVisible();
-    expect(within(menu).getAllByRole('menuitemradio')).toHaveLength(2);
+    expect(pickerRegion).toBeVisible();
+    expect(within(list).getAllByRole('button')).toHaveLength(2);
     expect(canvas.queryByText('프로필 전환')).not.toBeInTheDocument();
     expect(canvas.queryByRole('dialog', { name: '프로필 전환' })).not.toBeInTheDocument();
-    await userEvent.click(within(menu).getByRole('menuitem', { name: '새 프로필 추가' }));
+    await userEvent.click(canvas.getByRole('button', { name: '새 프로필 추가' }));
     expect(canvas.getByRole('form', { name: '새 프로필 만들기' })).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
-    const reopenedMenu = await canvas.findByRole('menu', { name: '프로필 전환' });
-    expect(within(reopenedMenu).queryByRole('form', { name: '새 프로필 만들기' })).toBeNull();
-    expect(within(reopenedMenu).getByRole('menuitem', { name: '새 프로필 추가' })).toBeVisible();
+    const reopenedPicker = await canvas.findByLabelText('프로필 전환');
+    expect(within(reopenedPicker).queryByRole('form', { name: '새 프로필 만들기' })).toBeNull();
+    expect(canvas.getByRole('button', { name: '새 프로필 추가' })).toBeVisible();
+  },
+  render: () => <ProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherLateErrorAfterDismissal: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        ProfileSwitcherSelectProfileMutation: {
+          delayMs: 100,
+          error: '지연된 프로필 전환 실패',
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: '프로필 목록' });
+    await userEvent.click(trigger);
+    await canvas.findByLabelText('프로필 전환');
+    const list = canvas.getByLabelText('전환할 프로필 목록');
+    await userEvent.click(within(list).getAllByRole('button')[1]!);
+    await userEvent.click(trigger);
+    const responseDeadline = Date.now() + 120;
+    await waitFor(() => expect(Date.now()).toBeGreaterThanOrEqual(responseDeadline));
+
+    await userEvent.click(trigger);
+    await canvas.findByLabelText('프로필 전환');
+    expect(canvas.queryByRole('alert')).toBeNull();
   },
   render: () => <ProfileSwitcherStory />,
 };
@@ -541,12 +690,13 @@ export const ProfileSwitcherSelectGraphQLError: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
-    const menu = await canvas.findByRole('menu', { name: '프로필 전환' });
-    await userEvent.click(within(menu).getAllByRole('menuitemradio')[1]!);
+    const pickerRegion = await canvas.findByLabelText('프로필 전환');
+    const list = canvas.getByLabelText('전환할 프로필 목록');
+    await userEvent.click(within(list).getAllByRole('button')[1]!);
     await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
       '프로필을 전환하지 못했습니다.',
     );
-    expect(menu).toBeVisible();
+    expect(pickerRegion).toBeVisible();
   },
   render: () => <ProfileSwitcherStory />,
 };
@@ -563,8 +713,8 @@ export const ProfileSwitcherCreateGraphQLError: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
-    const menu = await canvas.findByRole('menu', { name: '프로필 전환' });
-    await userEvent.click(within(menu).getByRole('menuitem', { name: '새 프로필 추가' }));
+    await canvas.findByLabelText('프로필 전환');
+    await userEvent.click(canvas.getByRole('button', { name: '새 프로필 추가' }));
     const input = canvas.getByRole('textbox', { name: '프로필 핸들' });
     await userEvent.type(input, 'kept_handle');
     await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
@@ -572,6 +722,11 @@ export const ProfileSwitcherCreateGraphQLError: Story = {
       '프로필을 생성하지 못했습니다.',
     );
     expect(input).toHaveValue('kept_handle');
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    expect(canvas.queryByRole('alert')).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: '새 프로필 추가' }));
+    expect(canvas.getByRole('textbox', { name: '프로필 핸들' })).toHaveValue('');
   },
   render: () => <ProfileSwitcherStory />,
 };
@@ -662,10 +817,50 @@ export const UniversalMobile: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
     const page = within(canvasElement.ownerDocument.body);
     const drawer = await page.findByRole('navigation', { name: '주요 메뉴' });
+    const profileTrigger = page.getByRole('button', { name: '프로필 목록' });
+    const triggerName = within(profileTrigger).getByText('코스모 작가');
+    const triggerIcon = profileTrigger.querySelector('svg')!;
+    const triggerRect = profileTrigger.getBoundingClientRect();
+    const navigationRect = drawer.getBoundingClientRect();
+    const nameRect = triggerName.getBoundingClientRect();
+    const iconRect = triggerIcon.getBoundingClientRect();
+
     expect(within(drawer).getByRole('link', { name: '북마크' })).toHaveAttribute(
       'href',
       '/bookmarks',
     );
+    const profileSummary = page.getByLabelText('활성 프로필');
+    expect(profileSummary).toBeInTheDocument();
+    expect(within(profileSummary).getByRole('link', { name: /팔로잉/ })).toHaveAttribute(
+      'href',
+      '/@selected/following',
+    );
+    expect(within(profileSummary).getByRole('link', { name: /팔로워/ })).toHaveAttribute(
+      'href',
+      '/@selected/followers',
+    );
+    expect(triggerIcon.querySelector('path')).toHaveAttribute('d', 'm6 9 6 6 6-6');
+    expect(
+      nameRect.top + nameRect.height / 2 - (triggerRect.top + triggerRect.height / 2),
+    ).toBeCloseTo(6, 0);
+    expect(
+      iconRect.top + iconRect.height / 2 - (triggerRect.top + triggerRect.height / 2),
+    ).toBeCloseTo(6, 0);
+
+    await userEvent.click(profileTrigger);
+    expect(profileTrigger).toHaveAttribute('aria-expanded', 'true');
+    expect(profileTrigger.querySelector('path')).toHaveAttribute('d', 'm18 15-6-6-6 6');
+    const menu = await page.findByRole('menu', { name: '프로필 전환' });
+    const picker = menu.parentElement;
+    const openTriggerRect = profileTrigger.getBoundingClientRect();
+    const openNavigationRect = drawer.getBoundingClientRect();
+    expect(picker).not.toBeNull();
+    const pickerRect = picker!.getBoundingClientRect();
+
+    expect(openTriggerRect).toEqual(triggerRect);
+    expect(openNavigationRect).toEqual(navigationRect);
+    expect(pickerRect.top).toBeGreaterThanOrEqual(triggerRect.bottom);
+    expect(pickerRect.top - triggerRect.bottom).toBeLessThanOrEqual(12);
   },
   render: () => (
     <View style={{ height: 844 }}>
@@ -919,6 +1114,78 @@ export const UnreadBadgeHidesPreviousProfileCountUntilNextRetry: Story = {
 export const UniversalCompact: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
   parameters: universalParameters,
+  render: () => (
+    <View style={{ height: 900 }}>
+      <UniversalShellStory />
+    </View>
+  ),
+};
+
+export const ResponsiveProfilePickerCompact: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: {
+    ...universalParameters,
+    relay: {
+      data: longProfileQuery,
+      mutationResponse: {
+        selectProfile: {
+          profile: additionalProfiles[0]!,
+          session: {
+            id: 'session-story',
+            selectedProfile: { id: additionalProfiles[0]!.id },
+          },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: '프로필 목록' });
+    const route = canvas.getByText('홈 타임라인');
+
+    await userEvent.click(trigger);
+    const pickerRegion = await canvas.findByLabelText('프로필 전환');
+    const picker = pickerRegion.parentElement;
+    const list = canvas.getByLabelText('전환할 프로필 목록');
+    const options = within(list).getAllByRole('button');
+    const footerAction = canvas.getByRole('button', { name: '새 프로필 추가' });
+    expect(pickerRegion).toBeVisible();
+    expect(picker).not.toBeNull();
+    expect(picker!.getBoundingClientRect().height).toBeLessThanOrEqual(430);
+    expect(pickerRegion.getBoundingClientRect().left).toBeGreaterThanOrEqual(80);
+    expect(canvas.queryByRole('dialog')).toBeNull();
+    expect(options).toHaveLength(12);
+    expect(trigger).toHaveFocus();
+    expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
+    expect(footerAction).toBeVisible();
+
+    for (const option of options) {
+      await userEvent.tab();
+      expect(option).toHaveFocus();
+    }
+    const listRect = list.getBoundingClientRect();
+    const focusedRect = options[11]!.getBoundingClientRect();
+    expect(focusedRect.top).toBeGreaterThanOrEqual(listRect.top);
+    expect(focusedRect.bottom).toBeLessThanOrEqual(listRect.bottom);
+    await userEvent.tab();
+    expect(footerAction).toHaveFocus();
+
+    await userEvent.click(options[1]!);
+    await waitFor(() => expect(canvas.queryByLabelText('프로필 전환')).toBeNull());
+
+    await userEvent.click(trigger);
+    await userEvent.click(route);
+    expect(canvas.queryByLabelText('프로필 전환')).toBeNull();
+
+    await userEvent.click(trigger);
+    await userEvent.click(trigger);
+    expect(canvas.queryByLabelText('프로필 전환')).toBeNull();
+
+    await userEvent.click(trigger);
+    await userEvent.keyboard('{Escape}');
+    expect(canvas.queryByLabelText('프로필 전환')).toBeNull();
+    expect(trigger).toHaveFocus();
+  },
   render: () => (
     <View style={{ height: 900 }}>
       <UniversalShellStory />

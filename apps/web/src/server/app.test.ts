@@ -13,18 +13,25 @@ import type {
   discovery as oidcDiscovery,
 } from 'openid-client';
 
-const { authorizationCodeGrant, createSession, discovery, federationFetch, revokeSession } =
-  vi.hoisted(() => ({
-    authorizationCodeGrant: vi.fn<typeof oidcAuthorizationCodeGrant>(),
-    createSession:
-      vi.fn<(identity: { displayName: string; oidcSubject: string }) => Promise<string>>(),
-    discovery: vi.fn<typeof oidcDiscovery>(),
-    federationFetch: vi.fn<typeof federation.fetch>(),
-    revokeSession:
-      vi.fn<
-        (input: { token?: string }) => Promise<{ status: 'REVOKED' | 'ALREADY_UNAUTHENTICATED' }>
-      >(),
-  }));
+const {
+  authorizationCodeGrant,
+  captureUnexpectedError,
+  createSession,
+  discovery,
+  federationFetch,
+  revokeSession,
+} = vi.hoisted(() => ({
+  authorizationCodeGrant: vi.fn<typeof oidcAuthorizationCodeGrant>(),
+  captureUnexpectedError: vi.fn<(cause: unknown) => void>(),
+  createSession:
+    vi.fn<(identity: { displayName: string; oidcSubject: string }) => Promise<string>>(),
+  discovery: vi.fn<typeof oidcDiscovery>(),
+  federationFetch: vi.fn<typeof federation.fetch>(),
+  revokeSession:
+    vi.fn<
+      (input: { token?: string }) => Promise<{ status: 'REVOKED' | 'ALREADY_UNAUTHENTICATED' }>
+    >(),
+}));
 
 vi.mock('openid-client', async (importOriginal) => ({
   ...((await importOriginal()) as object),
@@ -40,6 +47,8 @@ vi.mock('@kosmo/core/services', () => ({
 vi.mock('@kosmo/fedify', () => ({
   federation: { fetch: federationFetch },
 }));
+
+vi.mock('./sentry', () => ({ captureUnexpectedError }));
 
 let staticRoot: string;
 let app: Hono;
@@ -212,6 +221,20 @@ describe('browser login', () => {
     expect(setCookie).toContain('Secure');
   });
 
+  test('does not capture an expected OIDC client error', async () => {
+    authorizationCodeGrant.mockResolvedValueOnce({ claims: () => undefined } as never);
+    const login = await app.request('https://kos.moe/login');
+    const cookies = responseCookies(login.headers);
+    const response = await app.request(
+      `https://kos.moe/login/callback?code=oidc-code&state=${cookies.kosmo_oidc_state}`,
+      { headers: { cookie: cookieHeader(cookies) } },
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.text()).toBe('Invalid id_token claims');
+    expect(captureUnexpectedError).not.toHaveBeenCalled();
+  });
+
   test('rejects a non-browser redirect before token exchange', async () => {
     const login = await app.request('https://kos.moe/login');
     const cookies = responseCookies(login.headers);
@@ -311,6 +334,24 @@ describe('Web logout BFF', () => {
 });
 
 describe('GraphQL proxy', () => {
+  test('captures missing server configuration while preserving its 500 response', async () => {
+    vi.stubEnv('PUBLIC_API_ORIGIN', undefined);
+
+    const response = await app.request('/graphql', {
+      body: '{}',
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(500);
+    expect(await response.text()).toBe('PUBLIC_API_ORIGIN is required');
+    expect(captureUnexpectedError).toHaveBeenCalledOnce();
+    expect(captureUnexpectedError.mock.calls[0]?.[0]).toMatchObject({
+      message: 'PUBLIC_API_ORIGIN is required',
+      status: 500,
+    });
+  });
+
   test.each([
     {
       expectedAuthorization: 'Bearer cookie-token',

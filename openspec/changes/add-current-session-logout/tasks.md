@@ -53,7 +53,7 @@ full/compact/drawer의 공용 로그아웃 control이 Web에서는 logout BFF를
 - server 결과가 확정되기 전에 local credential, Relay Environment/Store 또는 authenticated route를 제거하지 않는다.
 - 결과 불명 실패에서는 credential과 현재 viewer 상태를 유지하고 재시도를 제공한다.
 - 이전 viewer Relay cache를 guest 또는 다음 Session에 재사용하지 않는다.
-- 모든 shell surface는 하나의 pending/error 상태를 공유해 중복 server 요청을 막고 접근 가능한 상태를 제공한다.
+- 현재 layout에서 조작 가능한 각 shell surface는 production logout action을 직접 소유하고, 그 surface의 pending/error 상태로 중복 server 요청을 막고 접근 가능한 상태를 제공한다.
 - 메뉴 스타일·배치 개편과 Android·iOS production 배포를 포함하지 않는다.
 
 **Verification**
@@ -64,10 +64,10 @@ full/compact/drawer의 공용 로그아웃 control이 Web에서는 logout BFF를
 - full/compact/drawer control의 press, busy/disabled, 실패 안내와 접근성 상태를 검증한다.
 - Relay compile, client typecheck·lint, Web export/E2E와 2026-07-29 Web production smoke 결과를 남긴다.
 
-- [ ] 2.1 Web BFF와 Native GraphQL을 선택하는 공용 runtime logout action을 구현한다.
-- [ ] 2.2 확정된 성공 뒤 credential과 Relay Environment/Store를 정리하고 `/`로 replace 이동하는 흐름을 구현한다.
-- [ ] 2.3 full/compact/drawer logout control에 공용 action, 중복 방지와 접근 가능한 진행·실패·재시도 상태를 연결한다.
-- [ ] 2.4 Web·Native 성공/이미 비인증/결과 불명/중복 실행/cache 격리 검증과 Relay compile·client check를 통과시킨다.
+- [x] 2.1 Web BFF와 Native GraphQL을 선택하는 공용 runtime logout action을 구현한다.
+- [x] 2.2 확정된 성공 뒤 credential과 Relay Environment/Store를 정리하고 `/`로 replace 이동하는 흐름을 구현한다.
+- [x] 2.3 full/compact/drawer logout control에 공용 action, 중복 방지와 접근 가능한 진행·실패·재시도 상태를 연결한다.
+- [x] 2.4 Web·Native 성공/이미 비인증/결과 불명/중복 실행/cache 격리 검증과 Relay compile·client check를 통과시킨다.
 - [ ] 2.5 2026-07-29 Web production 배포 뒤 logout smoke 결과를 PROD-473에 전달한다.
 
 ## 3. PROD-473 종단 간 통합 검증과 archive 준비

@@ -112,7 +112,38 @@ async function executeStoryOperation(
   nextPaginationResponseIndex: () => number,
   nextOperationResponseIndex: (operationName: string) => number,
 ): Promise<GraphQLResponse> {
+  const getOperationResponse = () => {
+    const configuredResponse = mock.operationResponses?.[request.name];
+    return Array.isArray(configuredResponse)
+      ? configuredResponse[Math.min(environmentIndex, configuredResponse.length - 1)]
+      : configuredResponse && 'sequence' in configuredResponse
+        ? configuredResponse.sequence[
+            Math.min(
+              nextOperationResponseIndex(request.name),
+              configuredResponse.sequence.length - 1,
+            )
+          ]
+        : configuredResponse;
+  };
+  const resolveOperationResponse = async (
+    operationResponse: StoryOperationResponse,
+  ): Promise<GraphQLResponse> => {
+    if (operationResponse.delayMs) {
+      await new Promise((resolve) => setTimeout(resolve, operationResponse.delayMs));
+    }
+
+    if (operationResponse.error) {
+      return Promise.reject(new Error(operationResponse.error));
+    }
+
+    return { data: (operationResponse.data ?? {}) as GraphQLResponse['data'] };
+  };
+
   if (request.operationKind === 'mutation') {
+    const operationResponse = getOperationResponse();
+    if (operationResponse) {
+      return resolveOperationResponse(operationResponse);
+    }
     if (mock.mutationError) {
       return Promise.reject(new Error(mock.mutationError));
     }
@@ -153,25 +184,9 @@ async function executeStoryOperation(
     return Promise.resolve({ data: (mock.paginationResponse ?? {}) as GraphQLResponse['data'] });
   }
 
-  const configuredResponse = mock.operationResponses?.[request.name];
-  const operationResponse = Array.isArray(configuredResponse)
-    ? configuredResponse[Math.min(environmentIndex, configuredResponse.length - 1)]
-    : configuredResponse && 'sequence' in configuredResponse
-      ? configuredResponse.sequence[
-          Math.min(nextOperationResponseIndex(request.name), configuredResponse.sequence.length - 1)
-        ]
-      : configuredResponse;
-
-  if (operationResponse?.delayMs) {
-    await new Promise((resolve) => setTimeout(resolve, operationResponse.delayMs));
-  }
-
-  if (operationResponse?.error) {
-    return Promise.reject(new Error(operationResponse.error));
-  }
-
+  const operationResponse = getOperationResponse();
   if (operationResponse) {
-    return Promise.resolve({ data: (operationResponse.data ?? {}) as GraphQLResponse['data'] });
+    return resolveOperationResponse(operationResponse);
   }
 
   return Promise.resolve({ data: (mock.queryData ?? {}) as GraphQLResponse['data'] });

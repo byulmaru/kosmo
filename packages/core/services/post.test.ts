@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import {
   ActivityPubPosts,
   db,
   firstOrThrow,
   Instances,
+  Notifications,
   pg,
   PostContents,
   Posts,
@@ -14,6 +15,7 @@ import {
 import {
   InstanceKind,
   InstanceState,
+  NotificationKind,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -174,6 +176,50 @@ test('createPost는 caller transaction rollback에 Post와 Content를 남기지 
 
   assert.equal(await db.$count(Posts, eq(Posts.profileId, profile.id)), 0);
   assert.equal(await db.$count(PostContents), contentCount);
+});
+
+test('caller transaction의 Reply Notification은 rollback에 참여한다', async () => {
+  const author = await createProfile();
+  const recipient = await createProfile();
+  const parent = await createPost({
+    document: postContentDocumentFromText('parent'),
+    origin: 'LOCAL',
+    profileId: recipient.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  let replyId: string | undefined;
+
+  await assert.rejects(
+    db.transaction(async (tx) => {
+      const reply = await createPost(
+        {
+          document: postContentDocumentFromText('reply'),
+          origin: 'LOCAL',
+          profileId: author.id,
+          replyParentId: parent.post.id,
+          visibility: PostVisibility.PUBLIC,
+        },
+        tx,
+      );
+      replyId = reply.post.id;
+      assert.equal(
+        await tx.$count(
+          Notifications,
+          and(
+            eq(Notifications.kind, NotificationKind.REPLY),
+            eq(Notifications.sourceId, reply.post.id),
+          ),
+        ),
+        1,
+      );
+      throw new Error('rollback caller transaction');
+    }),
+    /rollback caller transaction/,
+  );
+
+  assert.ok(replyId);
+  assert.equal(await db.$count(Posts, eq(Posts.id, replyId)), 0);
+  assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, replyId)), 0);
 });
 
 test('createPost는 존재하지 않는 Reply Parent에서 ActivityPub transaction을 rollback한다', async () => {

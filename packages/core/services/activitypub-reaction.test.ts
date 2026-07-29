@@ -246,11 +246,17 @@ test('exact duplicate와 기존 core Reaction mapping은 멱등이고 URI confli
   );
 
   const secondActor = await createProfile(InstanceKind.ACTIVITYPUB);
-  const existing = await addReaction({
-    actorProfileId: secondActor.profile.id,
-    postId: post.id,
-    type: '☘️',
-  });
+  const existing = await db.transaction((tx) =>
+    addReaction(
+      {
+        actorProfileId: secondActor.profile.id,
+        origin: 'ACTIVITYPUB',
+        postId: post.id,
+        type: '☘️',
+      },
+      tx,
+    ),
+  );
   const mapped = await materializeInboundReaction({
     activityUri: `https://${secondActor.instance.domain}/activities/existing`,
     actorUri: secondActor.actorUri,
@@ -407,7 +413,7 @@ test('Undo Notification cleanup 실패에도 source 삭제와 mapping cascade를
       await db.select().from(Reactions).where(eq(Reactions.id, created.reaction.id)),
       [],
     );
-    assert.equal(errors[0]?.[0], 'Failed to clean up inbound Reaction Notification');
+    assert.equal(errors[0]?.[0], 'Failed to clean up Reaction Notification');
   } finally {
     console.error = originalConsoleError;
     await pg.unsafe(`
