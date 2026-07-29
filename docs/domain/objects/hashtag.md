@@ -48,4 +48,5 @@ Owner가 Profile Tag 목록을 편집한 결과로 Hashtag identity 관계를 �
 ## 제외/보류
 
 - Hashtag의 독립 운영 상태, alias, 자동완성, trend, 추천은 현재 범위에서 제외한다.
-- Profile Tag 기반 Profile 검색의 query 문법, 일치, 정렬, pagination과 탐색 UI는 별도 계약에서 결정한다.
+- Profile Tag 기반 Profile 검색의 query 문법, 일치, 정렬, pagination과 탐색 UI는
+  [ADR 0021](../decisions/0021-profile-tag-search-contract.md)을 따른다.

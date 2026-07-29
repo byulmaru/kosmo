@@ -109,6 +109,7 @@ Account 요청에서 Profile이 주체인 행동의 `Account.Active`는 해당 P
 - [ADR 0018: Media Upload State Without File](./decisions/0018-media-upload-lifecycle-without-file.md)
 - [ADR 0019: Selected Profile Authorization Boundary](./decisions/0019-selected-profile-authorization-boundary.md)
 - [ADR 0020: Profile Tag Shared Hashtag Identity](./decisions/0020-profile-tag-shared-hashtag-identity.md)
+- [ADR 0021: Profile Tag Search Contract](./decisions/0021-profile-tag-search-contract.md)
 - [2026-06-28 DDD 명세 점검 기록](./records/2026-06-28-ddd-spec-audit.md)
 - [2026-06-29 결정 반영 기록](./records/2026-06-29-decision-round.md)
 - [2026-06-29 PR 리뷰 반영 기록](./records/2026-06-29-pr-review-followup.md)

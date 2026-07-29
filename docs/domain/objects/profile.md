@@ -99,6 +99,8 @@ Profile 비활성화와 정지는 관계를 보존하지만 공개 조회에서�
 - viewer Profile의 Profile Domain Block 대상 Instance에 속한 Remote Profile은 viewer에게 없는 것처럼 취급한다.
 - 공개 검색 후보는 위 조회 조건을 통과해야 하며 Domain Limit Instance의 Remote Profile은 제외한다.
 - Profile Tag는 해당 Profile이 위 공개 조회 조건을 통과할 때만 공개하며 독립적인 공개 범위를 가지지 않는다.
+- Profile Tag 기반 Profile 검색은 [ADR 0021](../decisions/0021-profile-tag-search-contract.md)에 따라
+  공개 조회 가능한 Active·Normal Local Profile의 정규화된 Hashtag Name 정확 일치만 후보로 사용한다.
 
 위 Domain Limit 및 viewer Profile Domain Block 규칙은 공개 Profile 조회·검색의 최종 canonical moderation
 정책이다. 다만 해당 정책을 exact/partial Profile lookup에 함께 적용할 저장 모델과 공통 predicate가 아직 없는
