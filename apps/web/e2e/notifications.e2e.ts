@@ -191,7 +191,8 @@ async function selectProfile(page: Page, handle: string) {
 
   await page.getByRole('button', { name: '프로필 목록' }).first().click();
   await page
-    .getByRole('menuitemradio')
+    .getByLabel('전환할 프로필 목록')
+    .getByRole('button')
     .filter({ hasText: `@${handle}` })
     .click();
   await response;

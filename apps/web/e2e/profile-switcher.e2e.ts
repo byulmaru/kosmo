@@ -158,7 +158,7 @@ async function createProfileFromSwitcher(page: Page, handle: string) {
   });
 
   await openProfileSwitcher(page);
-  await page.getByRole('menuitem', { name: '새 프로필 추가' }).click();
+  await page.getByRole('button', { name: '새 프로필 추가' }).click();
   const creationForm = page.getByRole('form', { name: '새 프로필 만들기' });
 
   await creationForm.getByPlaceholder('새 프로필 핸들').fill(handle);
@@ -194,7 +194,7 @@ async function createProfileFromSwitcher(page: Page, handle: string) {
 async function openProfileSwitcher(page: Page) {
   await expect(page.getByRole('progressbar')).toHaveCount(0);
   await page.getByRole('button', { name: '프로필 목록' }).first().click();
-  await expect(page.getByRole('menu', { name: '프로필 전환' })).toBeVisible();
+  await expect(page.getByLabel('프로필 전환')).toBeVisible();
 }
 
 async function selectProfileFromSwitcher(page: Page, handle: string) {
@@ -205,7 +205,8 @@ async function selectProfileFromSwitcher(page: Page, handle: string) {
 
   await openProfileSwitcher(page);
   await page
-    .getByRole('menuitemradio')
+    .getByLabel('전환할 프로필 목록')
+    .getByRole('button')
     .filter({ hasText: `@${handle}` })
     .click();
 

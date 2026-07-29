@@ -152,7 +152,7 @@ test('mock OIDC로 로그인하면 보호 홈으로 이동하고 세션이 유�
   await expect(page).toHaveURL(/\/home$/);
   await expect(page.getByRole('heading', { name: '프로필을 만들어 시작하세요' })).toBeVisible();
   await page.getByRole('button', { name: '프로필 만들기' }).click();
-  await expect(page.getByRole('menu', { name: '프로필 전환' })).toBeVisible();
+  await expect(page.getByLabel('프로필 전환')).toBeVisible();
 
   await page.goto('/');
   await expect(page).toHaveURL(/\/home$/);
@@ -306,7 +306,7 @@ test('API는 raw upstream token field를 세션 교환 입력으로 허용하지
   });
   const body = (await response.json()) as NativeSessionGraphQLResponse;
 
-  expect(response.status()).toBe(200);
+  expect(response.status()).toBe(400);
   expectNativeSessionGraphQLError(body);
   expect(await getOIDCTokenRequestCount(request)).toBe(tokenRequestCount);
 });

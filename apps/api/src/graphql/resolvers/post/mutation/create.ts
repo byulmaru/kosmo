@@ -1,12 +1,8 @@
-import { db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
 import { PostVisibility } from '@kosmo/core/enums';
-import { NotFoundError } from '@kosmo/core/error';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
-import { createPost, createReplyNotificationBestEffort } from '@kosmo/core/services';
+import { createPost } from '@kosmo/core/services';
 import { postBodyTextSchema } from '@kosmo/core/validation';
-import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { postVisibilityAccessWhere } from '../access/visibility';
 import { Post } from '../ref';
 
 builder.mutationField('createPost', (t) =>
@@ -22,40 +18,15 @@ builder.mutationField('createPost', (t) =>
       visibility: t.input.field({ type: PostVisibility }),
     },
     resolve: async (_, { input }, ctx) => {
-      const result = await db.transaction(async (tx) => {
-        const replyParentId = input.replyParentId?.id;
-        if (replyParentId) {
-          const parent = await tx
-            .select({ id: Posts.id })
-            .from(Posts)
-            .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
-            .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-            .where(and(eq(Posts.id, replyParentId), postVisibilityAccessWhere({ ctx })))
-            .limit(1)
-            .then(first);
-          if (!parent) {
-            throw new NotFoundError('Post not found');
-          }
-        }
-
-        const { post } = await createPost(
-          {
-            document: postContentDocumentFromText(input.bodyText),
-            origin: 'LOCAL',
-            profileId: ctx.session.profileId,
-            replyParentId,
-            visibility: input.visibility,
-          },
-          tx,
-        );
-
-        return { post };
+      const { post } = await createPost({
+        document: postContentDocumentFromText(input.bodyText),
+        origin: 'LOCAL',
+        profileId: ctx.session.profileId,
+        replyParentId: input.replyParentId?.id,
+        visibility: input.visibility,
       });
 
-      if (input.replyParentId) {
-        await createReplyNotificationBestEffort(result.post.id);
-      }
-      return result;
+      return { post };
     },
   }),
 );

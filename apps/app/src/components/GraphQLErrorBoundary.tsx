@@ -1,30 +1,42 @@
 import { ErrorBoundary } from 'react-error-boundary';
 import { StateView } from '@/components/ui/StateView';
+import {
+  UnexpectedErrorContext,
+  useUnexpectedErrorReporter,
+} from '@/observability/UnexpectedErrorContext';
 import { formatGraphQLError } from '@/relay/network';
 import type { PropsWithChildren } from 'react';
+import type { UnexpectedErrorReporter } from '@/observability/UnexpectedErrorContext';
 
 export type GraphQLErrorBoundaryProps = PropsWithChildren<{
+  onError?: UnexpectedErrorReporter;
   onRetry: () => void;
 }>;
 
-export function GraphQLErrorBoundary({ children, onRetry }: GraphQLErrorBoundaryProps) {
+export function GraphQLErrorBoundary({ children, onError, onRetry }: GraphQLErrorBoundaryProps) {
+  const inheritedErrorReporter = useUnexpectedErrorReporter();
+  const reportError = onError ?? inheritedErrorReporter;
+
   return (
-    <ErrorBoundary
-      fallbackRender={({ error, resetErrorBoundary }) => (
-        <StateView
-          actionLabel="다시 시도"
-          alert
-          description={formatGraphQLError(error)}
-          onAction={resetErrorBoundary}
-          title="화면을 불러오지 못했어요"
-        />
-      )}
-      onError={(error, info) => {
-        console.error('Relay render error', error, info.componentStack);
-      }}
-      onReset={onRetry}
-    >
-      {children}
-    </ErrorBoundary>
+    <UnexpectedErrorContext.Provider value={reportError}>
+      <ErrorBoundary
+        fallbackRender={({ error, resetErrorBoundary }) => (
+          <StateView
+            actionLabel="다시 시도"
+            alert
+            description={formatGraphQLError(error)}
+            onAction={resetErrorBoundary}
+            title="화면을 불러오지 못했어요"
+          />
+        )}
+        onError={(error, info) => {
+          reportError?.(error, info);
+          console.error('Relay render error', error, info.componentStack);
+        }}
+        onReset={onRetry}
+      >
+        {children}
+      </ErrorBoundary>
+    </UnexpectedErrorContext.Provider>
   );
 }

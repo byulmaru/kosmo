@@ -30,7 +30,7 @@ Local Profile Owner가 기존 Profile 편집 흐름에서 구조화된 Profile T
 
 - 공용 화면은 React Native primitive와 기존 theme token을 사용하고 Web·Android·iOS가 같은 정보 구조를
   공유한다.
-- 제거 같은 편집 action은 compact `32×32` 시각 크기와 실제 입력 target을 분리한다. Web target은 최소 32×32 CSS px,
+- 제거 action은 compact `32×32` 시각 크기와 실제 입력 target을 분리한다. Web target은 최소 32×32 CSS px,
   iOS hit region은 `44×44 pt`, Android touch target은 `48×48 dp`로 제공하고 동작을 설명하는
   accessibility label/state를 유지한다.
 - 색만으로 validation, 선택, disabled 상태를 구분하지 않는다.

@@ -107,6 +107,7 @@ const createReply = async (
     replyParentId: parent.id,
     visibility,
   }).then(({ post }) => post);
+  await db.delete(Notifications).where(eq(Notifications.sourceId, reply.id));
   return { parent, reply };
 };
 

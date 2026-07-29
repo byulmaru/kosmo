@@ -14,7 +14,11 @@ import {
 } from '../db';
 import { InstanceState, NotificationKind, PostState, PostVisibility, ProfileState } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
-import { createRepostNotification, deleteNotificationBySource } from './notification';
+import {
+  createReplyNotification,
+  createRepostNotification,
+  deleteNotificationBySource,
+} from './notification';
 import { validatePostStructure } from './post-structure';
 import type { Transaction } from '../db';
 import type { PostContentDocumentV1 } from '../post-content';
@@ -107,49 +111,54 @@ export const deletePost = async (
   },
   tx?: Transaction,
 ): Promise<{ readonly postId: string }> => {
-  const { repostId, result } = await getDatabaseConnection(tx).transaction(async (tx) => {
-    const post = await tx
-      .select({ profileId: Posts.profileId })
-      .from(Posts)
-      .where(eq(Posts.id, postId))
-      .limit(1)
-      .then(first);
-    if (!post) {
-      throw new NotFoundError('Post not found');
-    }
-    if (post.profileId !== actorProfileId) {
-      throw new PermissionDeniedError('Post author permission is required');
-    }
+  const { localPostId, repostId, result } = await getDatabaseConnection(tx).transaction(
+    async (tx) => {
+      const post = await tx
+        .select({
+          profileId: Posts.profileId,
+        })
+        .from(Posts)
+        .where(eq(Posts.id, postId))
+        .limit(1)
+        .then(first);
+      if (!post) {
+        throw new NotFoundError('Post not found');
+      }
+      if (post.profileId !== actorProfileId) {
+        throw new PermissionDeniedError('Post author permission is required');
+      }
 
-    const deleted = await tx
-      .update(Posts)
-      .set({ deletedAt: sql`now()`, state: PostState.DELETED })
-      .where(
-        and(
-          eq(Posts.id, postId),
-          eq(Posts.profileId, actorProfileId),
-          eq(Posts.state, PostState.ACTIVE),
-        ),
-      )
-      .returning({
-        currentContentId: Posts.currentContentId,
-        id: Posts.id,
-        replyParentId: Posts.replyParentId,
-        repostSourceId: Posts.repostSourceId,
-      })
-      .then(first);
+      const deleted = await tx
+        .update(Posts)
+        .set({ deletedAt: sql`now()`, state: PostState.DELETED })
+        .where(
+          and(
+            eq(Posts.id, postId),
+            eq(Posts.profileId, actorProfileId),
+            eq(Posts.state, PostState.ACTIVE),
+          ),
+        )
+        .returning({
+          currentContentId: Posts.currentContentId,
+          id: Posts.id,
+          replyParentId: Posts.replyParentId,
+          repostSourceId: Posts.repostSourceId,
+        })
+        .then(first);
 
-    return {
-      repostId:
-        deleted &&
-        deleted.currentContentId === null &&
-        deleted.replyParentId === null &&
-        deleted.repostSourceId !== null
-          ? deleted.id
-          : undefined,
-      result: { postId },
-    };
-  });
+      return {
+        localPostId: deleted?.currentContentId ? deleted.id : undefined,
+        repostId:
+          deleted &&
+          deleted.currentContentId === null &&
+          deleted.replyParentId === null &&
+          deleted.repostSourceId !== null
+            ? deleted.id
+            : undefined,
+        result: { postId },
+      };
+    },
+  );
 
   // A caller-owned transaction has no after-commit hook. Its caller owns any
   // post-commit side effect so delivery cannot run before the outer commit.
@@ -170,6 +179,18 @@ export const deletePost = async (
       console.error('Post-commit ActivityPub Repost Undo delivery failed', {
         error,
         repostId,
+      });
+    }
+  }
+
+  if (localPostId) {
+    try {
+      const { sendLocalPostDelete } = await import('@kosmo/fedify');
+      await sendLocalPostDelete(localPostId);
+    } catch (error) {
+      console.error('Post-commit ActivityPub Local Post Delete delivery failed', {
+        error,
+        postId: localPostId,
       });
     }
   }
@@ -276,8 +297,24 @@ export async function createPost(
   input: LocalPostInput | ActivityPubPostInput,
   tx?: Transaction,
 ): Promise<CreatedPost | DuplicatePost> {
+  let result: CreatedPost;
   try {
-    return await getDatabaseConnection(tx).transaction(async (tx) => {
+    result = await getDatabaseConnection(tx).transaction(async (tx) => {
+      if (input.origin === 'LOCAL' && input.replyParentId !== undefined) {
+        const parent = await findVisiblePost(tx, {
+          actorProfileId: input.profileId,
+          postId: input.replyParentId,
+        });
+        if (!parent) {
+          throw new NotFoundError('Post not found');
+        }
+        if (parent.currentContentId === null) {
+          throw new ValidationError('Reply Parent must have content', {
+            field: 'replyParentId',
+          });
+        }
+      }
+
       const createdAt =
         input.origin === 'ACTIVITYPUB' &&
         input.publishedAt &&
@@ -323,7 +360,7 @@ export async function createPost(
         repostSourceId: post.repostSourceId,
       });
 
-      if (input.replyParentId !== undefined) {
+      if (input.origin === 'ACTIVITYPUB' && input.replyParentId !== undefined) {
         const replyParent = await tx
           .select({ currentContentId: Posts.currentContentId })
           .from(Posts)
@@ -343,6 +380,10 @@ export async function createPost(
         .returning()
         .then(firstOrThrow);
 
+      if (input.origin === 'LOCAL' && input.replyParentId !== undefined) {
+        await createReplyNotification(linkedPost.id, tx).catch(() => undefined);
+      }
+
       return { content, created: true, post: linkedPost };
     });
   } catch (error) {
@@ -352,4 +393,18 @@ export async function createPost(
 
     return { created: false };
   }
+
+  if (input.origin === 'LOCAL') {
+    try {
+      const { sendLocalPostCreate } = await import('@kosmo/fedify');
+      await sendLocalPostCreate(result.post.id);
+    } catch (error) {
+      console.error('Post-commit ActivityPub Local Post Create delivery failed', {
+        error,
+        postId: result.post.id,
+      });
+    }
+  }
+
+  return result;
 }
