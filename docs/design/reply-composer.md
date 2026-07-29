@@ -45,8 +45,10 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 ### Parent와 thread 맥락
 
 - Parent 영역은 작성자 Avatar, 표시 이름, handle, 작성 시각과 전체 본문을 보여준다.
-- Quote Parent는 기존 Source preview를 유지하고, Reply Parent는 화면에 표시되는 direct Parent만 표시한다.
-  조상 thread 전체를 modal 안에서 다시 펼치지 않는다.
+- Quote Parent는 기존 Source preview를 유지한다. Source preview는 일반 본문과 같은 background를 사용하고,
+  semantic border만으로 경계를 구분한다. 구분용 별도 tonal surface는 사용하지 않는다.
+- Reply Parent는 화면에 표시되는 direct Parent만 표시하고, 조상 thread 전체를 modal 안에서 다시 펼치지
+  않는다.
 - Parent 본문은 줄 수로 생략하지 않는다. 제한 높이를 넘을 때 중앙 영역의 단일 scroll로 접근한다.
 - Parent Avatar 아래의 thread connector를 Reply 작성 Profile의 Avatar까지 이어 기존 Reply 표시 구조와 같은
   대화 관계를 표현한다.
