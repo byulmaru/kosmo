@@ -6,7 +6,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 const meta = {
   component: FeedbackForm,
   parameters: {
-    router: { pathname: '/menu' },
+    router: { pathname: '/feedback' },
   },
   title: 'KOSMO/Feedback/Form',
 } satisfies Meta<typeof FeedbackForm>;

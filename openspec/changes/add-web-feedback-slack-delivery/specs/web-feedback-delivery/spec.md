@@ -136,13 +136,14 @@
 
 ### Requirement: Web feedback form accessibility and state
 
-**Authority / Provenance:** `docs/design/colors.md`, `docs/design/typography.md`, `memory/frontend-react-native.md`, `PROD-479`, `PROD-487` — The protected `/menu` Web screen MUST provide the feedback kind, body, and submit control using React Native primitives and semantic theme tokens. UI labels, headings, and buttons MUST use `SUIT`, while the long feedback-body input MUST use `Pretendard`. Error, success, disabled, and busy states MUST be exposed to assistive technology without relying on visual presentation alone.
+**Authority / Provenance:** `docs/design/colors.md`, `docs/design/typography.md`, `memory/frontend-react-native.md`, `PROD-479`, `PROD-487` — The protected `/feedback` Web screen MUST provide the feedback kind, body, and submit control using React Native primitives and semantic theme tokens. It MUST render the feedback form directly without the legacy `/menu` introduction, description, or login-test link. UI labels, headings, and buttons MUST use `SUIT`, while the long feedback-body input MUST use `Pretendard`. Error, success, disabled, and busy states MUST be exposed to assistive technology without relying on visual presentation alone.
 
 #### Scenario: Render the feedback form on Web
 
-- **WHEN** 로그인한 Web 사용자가 `/menu`를 연다
+- **WHEN** 로그인한 Web 사용자가 `/feedback`을 연다
 - **THEN** 시스템은 네 feedback 종류, 본문 input과 submit control을 렌더링한다
 - **AND** touch target, label, heading과 상태는 접근 가능한 semantics를 제공한다
+- **AND** 기존 메뉴 소개와 로그인 테스트 UI를 렌더링하지 않는다
 
 #### Scenario: Announce feedback status
 
@@ -151,7 +152,7 @@
 
 #### Scenario: Keep native UI out of the Web slice
 
-- **WHEN** Android 또는 iOS 앱이 이번 변경의 `/menu` 화면을 렌더링한다
+- **WHEN** Android 또는 iOS 앱이 이번 변경의 `/feedback` 화면을 렌더링한다
 - **THEN** 시스템은 `PROD-488` 전까지 feedback form과 feedback navigation entry를 native에 새로 노출하지 않는다
 
 ### Requirement: Feedback secret injection and production smoke

@@ -25,7 +25,13 @@ test('인증된 Web 사용자는 메뉴에서 피드백을 보내고 성공 상�
     });
   });
 
-  await page.goto('/menu');
+  await page.goto('/home');
+  const feedbackLink = page.getByRole('link', { name: '피드백 보내기' });
+  await expect(feedbackLink).toHaveAttribute('href', '/feedback');
+  await feedbackLink.click();
+  await expect(page).toHaveURL(/\/feedback$/u);
+  await expect(page.getByText('프로필과 설정 등 주요 메뉴를 확인합니다.')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '로그인 테스트' })).toHaveCount(0);
   await page.getByRole('textbox', { name: '피드백 내용' }).fill('검색 결과가 더 빠르면 좋겠어요.');
   const response = waitForGraphQLOperation(page, 'FeedbackFormSubmitFeedbackMutation');
   await page.getByRole('button', { name: '피드백 보내기' }).click();
@@ -56,7 +62,7 @@ test('Slack 전달 실패 시 Web 입력값을 유지하고 안전한 재시도 
     });
   });
 
-  await page.goto('/menu');
+  await page.goto('/feedback');
   const message = '이 입력은 실패해도 남아 있어야 해요.';
   const body = page.getByRole('textbox', { name: '피드백 내용' });
   await body.fill(message);

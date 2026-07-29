@@ -198,10 +198,11 @@ export const CompactSidebar: Story = {
 };
 
 export const FeedbackNavigationCurrentState: Story = {
-  parameters: { router: { pathname: '/menu' } },
+  parameters: { router: { pathname: '/feedback' } },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const link = canvas.getByRole('link', { name: '피드백 보내기' });
+    expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
     expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
   },
@@ -209,10 +210,11 @@ export const FeedbackNavigationCurrentState: Story = {
 };
 
 export const FeedbackNavigationCompactCurrentState: Story = {
-  parameters: { router: { pathname: '/menu' } },
+  parameters: { router: { pathname: '/feedback' } },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const link = canvas.getByRole('link', { name: '피드백 보내기' });
+    expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
     expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
   },
@@ -220,10 +222,11 @@ export const FeedbackNavigationCompactCurrentState: Story = {
 };
 
 export const FeedbackNavigationDrawerCurrentState: Story = {
-  parameters: { router: { pathname: '/menu' } },
+  parameters: { router: { pathname: '/feedback' } },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const link = canvas.getByRole('link', { name: '피드백 보내기' });
+    expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
     expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
   },

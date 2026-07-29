@@ -4,7 +4,7 @@
 
 ## What Changes
 
-- Web full/compact sidebar와 mobile drawer의 기존 설정·지원 위치를 직접적인 "피드백 보내기" 진입점으로 바꾸고 보호된 `/menu` 피드백 화면으로 이동할 수 있게 한다.
+- Web full/compact sidebar와 mobile drawer의 기존 설정·지원 위치를 직접적인 "피드백 보내기" 진입점으로 바꾸고 보호된 `/feedback` 피드백 화면으로 이동할 수 있게 한다.
 - 사용자가 좋았던 점·나빴던 점·필요한 점·버그를 선택하고 본문을 입력하는 접근 가능한 상태 흐름을 추가한다.
 - 로그인 세션을 요구하는 GraphQL 제출 계약과 server-owned Slack Incoming Webhook 전송 경계를 추가한다.
 - 피드백 내용을 DB에 저장하지 않고, client의 진행 중 반복 제출 차단과 server의 동일 계정 동시 전송 차단을 적용한다. 계정별 요청 횟수 제한은 이번 범위에 포함하지 않는다.
@@ -26,11 +26,11 @@
 
 ### Modified Capabilities
 
-- `web-app-shell`: Web sidebar와 drawer의 기존 설정·지원 위치가 "피드백 보내기" 링크로 바뀌어 보호된 `/menu` 화면으로 이동하고 현재 위치 semantics를 제공하도록 공통 shell 요구사항을 확장
+- `web-app-shell`: Web sidebar와 drawer의 기존 설정·지원 위치가 "피드백 보내기" 링크로 바뀌어 보호된 `/feedback` 화면으로 이동하고 현재 위치 semantics를 제공하도록 공통 shell 요구사항을 확장
 
 ## Impact
 
-- `apps/app`: protected `/menu` route, shared Web shell navigation, React Native form 상태, Relay mutation, Storybook와 Web E2E
+- `apps/app`: protected `/feedback` route, shared Web shell navigation, React Native form 상태, Relay mutation, Storybook와 Web E2E
 - `apps/api`: 로그인 scope GraphQL input/enum/mutation, 비영속 동시 전송 제어, Slack Incoming Webhook adapter와 단위·GraphQL 통합 테스트
 - `apps/api/schema.graphql`: 새 feedback enum, input, payload와 mutation schema
 - Vault/배포 환경: API runtime의 `SLACK_FEEDBACK_WEBHOOK_URL` secret

@@ -35,7 +35,7 @@ Webhook 값은 HTTPS `hooks.slack.com/services/...` 형식이어야 한다. URL�
   webhook 값(예: `https://hooks.slack.com/services/<token>` 형태)이 남아 있지 않은지
   검사한다. 검사는 secret 값을 로그나 문서에 기록하지 않고 배포 단계에서 주입된 값을
   안전한 검증 도구로 비교하는 방식으로 수행한다.
-- 인증된 Web 사용자가 `/menu`에서 피드백을 제출하고, 성공 시 Slack에 정확히 한 메시지가
+- 인증된 Web 사용자가 `/feedback`에서 피드백을 제출하고, 성공 시 Slack에 정확히 한 메시지가
   도착하는지 운영 smoke에서 확인한다.
 
 운영 smoke에서 Slack 응답이 모호하거나 실패하면 입력값을 보존한 채 Web의 명시적인

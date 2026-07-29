@@ -1,13 +1,15 @@
-import { Link } from 'expo-router';
-import { Platform, Pressable, ScrollView, StyleSheet, Text } from 'react-native';
-import { startWebLoginFromPress } from '@/auth/login';
-import { FeedbackForm } from '@/components/feedback/FeedbackForm';
+import { Redirect } from 'expo-router';
+import { Platform, ScrollView, StyleSheet, Text } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
-import type { Href } from 'expo-router';
 
-export default function MenuScreen() {
+export default function MenuRedirect() {
   const theme = useTheme();
+
+  if (Platform.OS === 'web') {
+    return <Redirect href="/feedback" />;
+  }
+
   return (
     <ScrollView contentContainerStyle={styles.root}>
       <Text style={[styles.eyebrow, { color: theme.textSecondary }]}>KOSMO</Text>
@@ -17,16 +19,6 @@ export default function MenuScreen() {
       <Text style={[styles.description, { color: theme.textSecondary }]}>
         프로필과 설정 등 주요 메뉴를 확인합니다.
       </Text>
-      {Platform.OS === 'web' ? (
-        <>
-          <Link asChild href={'/login' as Href}>
-            <Pressable accessibilityRole="link" onPress={startWebLoginFromPress}>
-              <Text style={[styles.login, { color: theme.primary }]}>로그인 테스트</Text>
-            </Pressable>
-          </Link>
-          <FeedbackForm />
-        </>
-      ) : null}
     </ScrollView>
   );
 }
@@ -42,5 +34,4 @@ const styles = StyleSheet.create({
   },
   heading: { fontFamily: 'SUIT', fontSize: 48, fontWeight: '700', lineHeight: 44 },
   description: { fontFamily: 'SUIT', marginTop: spacing.md, maxWidth: 360, ...typography.md },
-  login: { fontFamily: 'SUIT', fontWeight: '700', marginTop: spacing.md, ...typography.md },
 });

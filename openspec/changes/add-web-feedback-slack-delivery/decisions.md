@@ -100,16 +100,16 @@
 - Consequences: 같은 account의 concurrent duplicate POST는 막지만 순차 요청이나 여러 account의 부하는 제한하지 않는다. 장기 abuse protection이 필요하면 신뢰 가능한 별도 upstream 계약에서 결정해야 한다.
 - Confirmation / Follow-up: 같은 account concurrent rejection, 완료 뒤 재시도 허용과 성공·실패 시 상태 해제를 unit test로 검증한다.
 
-### 기존 `/menu`를 Web feedback 화면으로 사용하고 native 노출을 미룬다
+### `/feedback`을 canonical Web feedback route로 사용하고 메뉴 소개 UI를 제거한다
 
-- Decision Date: 2026-07-28
+- Decision Date: 2026-07-29
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/design/breakpoints.md`, `docs/design/colors.md`, `docs/design/typography.md`, `memory/frontend-react-native.md`, `PROD-479`, `PROD-487`
 - Status: Active
-- Context / Problem: Protected `/menu` route와 shared sidebar footer가 이미 존재한다. 별도 Web route tree는 universal client 기준을 어기며, shared component를 무조건 바꾸면 `PROD-488`의 native scope를 선행 구현한다.
-- Decision Outcome: Web full/compact sidebar와 mobile drawer의 기존 설정·지원 위치를 `/menu`의 "피드백 보내기" Link로 바꾸고, `/menu`에서 Web에만 feedback form을 노출한다. Native navigation과 form 노출은 변경하지 않는다.
-- Alternatives Considered: 새 `/feedback` route는 기존 placeholder route와 역할을 중복하므로 제외했다. `/menu` 전체를 모든 platform에서 즉시 feedback으로 바꾸는 방식은 native issue boundary를 침범하므로 제외했다. Modal-only form은 canonical URL과 retryable screen state를 약화해 제외했다.
-- Consequences: 별도 route를 추가하지 않고 기존 protected guard와 drawer-close behavior를 재사용한다. `PROD-488`은 같은 route/component 경계를 native에 활성화하고 검증할 수 있다.
+- Context / Problem: 최초 구현은 기존 `/menu` placeholder에 feedback form을 추가했지만, 해당 URL과 KOSMO eyebrow·메뉴 제목·설명·login-test UI가 전용 피드백 화면의 정보 구조와 맞지 않는다는 사용자 정정이 있었다. Shared sidebar footer를 무조건 바꾸면 `PROD-488`의 native scope를 선행 구현한다.
+- Decision Outcome: Web full/compact sidebar와 mobile drawer의 기존 설정·지원 위치를 canonical `/feedback`의 "피드백 보내기" Link로 바꾸고, `/feedback`에서는 feedback form만 직접 노출한다. 기존 `/menu` 소개 UI는 제거하고 `/menu` 접근은 `/feedback`으로 전환한다. Native navigation과 form 노출은 변경하지 않는다.
+- Alternatives Considered: 기존 `/menu`에서 form을 유지하는 방식은 사용자가 요청한 URL과 전용 화면 구조를 충족하지 않아 제외했다. `/menu` 전체를 모든 platform에서 즉시 feedback으로 바꾸는 방식은 native issue boundary를 침범하므로 제외했다. Modal-only form은 canonical URL과 retryable screen state를 약화해 제외했다.
+- Consequences: 전용 URL과 단순한 피드백 화면을 제공하면서 기존 protected guard와 drawer-close behavior를 재사용한다. 기존 `/menu` 링크는 canonical `/feedback`으로 이동한다. `PROD-488`은 같은 route/component 경계를 native에 활성화하고 검증할 수 있다.
 - Confirmation / Follow-up: Full/compact/drawer navigation, active semantics, drawer close, Web form과 native unchanged scenario를 component/Storybook/E2E로 검증한다.
 
 ## Remaining Decisions

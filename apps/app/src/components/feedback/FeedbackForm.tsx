@@ -194,7 +194,6 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
     gap: spacing.lg,
-    marginTop: spacing.xl,
     maxWidth: 680,
     padding: spacing.xl,
     width: '100%',

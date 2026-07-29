@@ -69,11 +69,11 @@
 
 **Deliverable**
 
-로그인한 Web 사용자가 full/compact sidebar와 mobile drawer에서 `/menu` feedback 화면으로 이동해 접근 가능한 form을 제출하고 성공·실패·명시적 retry 상태를 이해할 수 있다.
+로그인한 Web 사용자가 full/compact sidebar와 mobile drawer에서 `/feedback` 화면으로 이동해 메뉴 소개 UI 없이 접근 가능한 form을 제출하고 성공·실패·명시적 retry 상태를 이해할 수 있다.
 
 **Guardrails**
 
-- Web shell의 기존 설정·지원 위치를 "피드백 보내기" link로 사용하고 `/menu` active semantics와 drawer close를 유지한다.
+- Web shell의 기존 설정·지원 위치를 "피드백 보내기" link로 사용하고 `/feedback` active semantics와 drawer close를 유지한다.
 - Android/iOS feedback entry와 form은 `PROD-488` 전까지 새로 노출하지 않는다.
 - React Native primitive, semantic theme token, SUIT UI text와 Pretendard long-body input을 사용한다.
 - Pending 동안 반복 제출을 막고, 실패 시 input을 유지하며 성공이 확인된 뒤에만 field를 초기화한다.
@@ -85,8 +85,8 @@
 - Idle, validation, BUG_REPORT 선택, pending, success, failure와 retry state를 Storybook interaction과 unit test로 검증한다.
 - Web E2E에서 인증 사용자 menu 진입과 Relay success/failure 흐름을 검증한다.
 
-- [x] 3.1 Web shell의 feedback navigation과 `/menu` current-state behavior를 구현하고 native surface를 유지한다.
-- [x] 3.2 Web feedback form, colocated Relay mutation과 validation·pending·success·failure·retry state를 구현한다.
+- [x] 3.1 Web shell의 feedback navigation과 `/feedback` current-state behavior를 구현하고 native surface를 유지한다.
+- [x] 3.2 Web feedback form을 기존 메뉴 소개 UI 없이 직접 렌더링하고, colocated Relay mutation과 validation·pending·success·failure·retry state를 구현한다.
 - [x] 3.3 Feedback form과 shell surface의 Storybook 상태·접근성·interaction test를 추가한다.
 - [x] 3.4 인증된 Web menu navigation과 제출 성공·실패 흐름의 E2E 증거를 추가한다.
 

@@ -102,7 +102,7 @@ export function SidebarNavigation({
   const unreadNotificationCount = useUnreadNotificationCount();
   const profile = data.currentSession?.selectedProfile ?? null;
   const hasProfiles = (data.me?.profiles?.length ?? 0) > 0;
-  const feedbackActive = Platform.OS === 'web' && pathname === '/menu';
+  const feedbackActive = Platform.OS === 'web' && pathname === '/feedback';
 
   const resolveItem = (item: NavigationItem) => {
     if (!item.profile) {
@@ -323,7 +323,7 @@ export function SidebarNavigation({
             </Pressable>
           ) : null}
           {Platform.OS === 'web' ? (
-            <Link asChild href="/menu">
+            <Link asChild href="/feedback">
               <Pressable
                 aria-current={feedbackActive ? 'page' : undefined}
                 accessibilityLabel="피드백 보내기"
