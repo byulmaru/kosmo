@@ -85,18 +85,9 @@ export const updateProfile = async (input: UpdateProfileInput, tx?: Transaction)
         bio: input.bio === undefined ? profile.profile.bio : input.bio,
         followPolicy: input.followPolicy ?? profile.profile.followPolicy,
       })
-      .where(
-        and(
-          eq(Profiles.id, input.profileId),
-          inArray(Profiles.state, [ProfileState.ACTIVE, ProfileState.DISABLED]),
-        ),
-      )
+      .where(eq(Profiles.id, input.profileId))
       .returning()
-      .then(first);
-
-    if (!updatedProfile) {
-      throw new NotFoundError('Profile not found');
-    }
+      .then((profiles) => profiles[0]!);
 
     if (normalizedTags !== undefined && normalizedTags !== null) {
       await tx.delete(ProfileHashtags).where(eq(ProfileHashtags.profileId, input.profileId));

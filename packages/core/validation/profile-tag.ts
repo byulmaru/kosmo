@@ -334,20 +334,14 @@ export const profileTagsSchema = z
   .array(profileTagNameSchema)
   .max(5, 'Profile Tag는 최대 5개까지 추가할 수 있어요.')
   .superRefine((tags, context) => {
-    const firstIndexes = new Map<string, number>();
-
     tags.forEach((tag, index) => {
-      const firstIndex = firstIndexes.get(tag);
-      if (firstIndex !== undefined) {
+      if (tags.indexOf(tag) !== index) {
         context.addIssue({
           code: 'custom',
           path: [index],
           message: '정규화한 Profile Tag는 중복될 수 없어요.',
         });
-        return;
       }
-
-      firstIndexes.set(tag, index);
     });
   });
 
