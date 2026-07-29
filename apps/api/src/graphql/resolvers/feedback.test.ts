@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { graphql, isEnumType, isInputObjectType, isObjectType } from 'graphql';
-import { resetFeedbackDeliveryState } from '../../feedback/delivery';
 import { schema } from '../../graphql/schema';
 
 const webhookUrl = 'https://hooks.slack.com/services/T000/B000/secret';
@@ -12,9 +11,11 @@ const mutation = `
     }
   }
 `;
+let accountId: string;
+let testSequence = 0;
 
 test.beforeEach(() => {
-  resetFeedbackDeliveryState();
+  accountId = `account-${(testSequence += 1)}`;
   process.env.SLACK_FEEDBACK_WEBHOOK_URL = webhookUrl;
 });
 
@@ -54,7 +55,7 @@ test('선택 Profile이 없는 login session도 feedback을 제출할 수 있다
 
   try {
     const result = await graphql({
-      contextValue: { session: { accountId: 'account-1', id: 'session-1', profileId: null } },
+      contextValue: { session: { accountId, id: 'session-1', profileId: null } },
       schema,
       source: mutation,
       variableValues: {
@@ -82,7 +83,7 @@ test('BUG_REPORT의 Sentry event ID는 소문자로 정규화되어 Slack payloa
 
   try {
     const result = await graphql({
-      contextValue: { session: { accountId: 'account-1', id: 'session-1', profileId: null } },
+      contextValue: { session: { accountId, id: 'session-1', profileId: null } },
       schema,
       source: mutation,
       variableValues: {
@@ -117,13 +118,13 @@ test('anonymous, invalid body와 non-bug Sentry ID는 Slack 전에 거부한다'
       variableValues: { input: { body: 'body', kind: 'POSITIVE' } },
     });
     const empty = await graphql({
-      contextValue: { session: { accountId: 'account-1', id: 'session-1', profileId: null } },
+      contextValue: { session: { accountId, id: 'session-1', profileId: null } },
       schema,
       source: mutation,
       variableValues: { input: { body: '   ', kind: 'POSITIVE' } },
     });
     const eventId = await graphql({
-      contextValue: { session: { accountId: 'account-1', id: 'session-1', profileId: null } },
+      contextValue: { session: { accountId, id: 'session-1', profileId: null } },
       schema,
       source: mutation,
       variableValues: {

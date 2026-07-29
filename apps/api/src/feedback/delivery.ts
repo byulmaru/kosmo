@@ -18,13 +18,6 @@ type FeedbackState = {
   windowStartedAt: number;
 };
 
-type DeliveryOptions = {
-  fetch?: typeof globalThis.fetch;
-  now?: () => number;
-  timeoutMs?: number;
-  webhookUrl?: string | undefined;
-};
-
 const feedbackStates = new Map<string, FeedbackState>();
 const slackWebhookPath = /^\/services\/[^/]+\/[^/]+\/[^/]+$/u;
 
@@ -120,31 +113,19 @@ const claimAttempt = (accountId: string, now: number) => {
   feedbackStates.set(accountId, state);
 };
 
-export const resetFeedbackDeliveryState = () => {
-  feedbackStates.clear();
-};
-
-export const deliverFeedback = async (
-  accountId: string,
-  input: FeedbackInput,
-  options: DeliveryOptions = {},
-) => {
-  const webhookUrl = getWebhookUrl(options.webhookUrl ?? process.env.SLACK_FEEDBACK_WEBHOOK_URL);
+export const deliverFeedback = async (accountId: string, input: FeedbackInput) => {
+  const webhookUrl = getWebhookUrl(process.env.SLACK_FEEDBACK_WEBHOOK_URL);
   if (!webhookUrl) {
     throw new ValidationError('피드백을 전달할 수 없어요. 잠시 후 다시 시도해주세요.');
   }
 
-  const now = options.now ?? Date.now;
-  claimAttempt(accountId, now());
+  claimAttempt(accountId, Date.now());
 
   const controller = new AbortController();
-  const timeout = setTimeout(
-    () => controller.abort(),
-    options.timeoutMs ?? FEEDBACK_DELIVERY_TIMEOUT_MS,
-  );
+  const timeout = setTimeout(() => controller.abort(), FEEDBACK_DELIVERY_TIMEOUT_MS);
 
   try {
-    const response = await (options.fetch ?? globalThis.fetch)(webhookUrl, {
+    const response = await globalThis.fetch(webhookUrl, {
       body: JSON.stringify(createPayload(input)),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
