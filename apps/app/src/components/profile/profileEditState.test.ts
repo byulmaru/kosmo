@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  profileTagDuplicateParityCases,
+  profileTagInvalidParityCases,
+  profileTagNormalizationParityCases,
+} from '@kosmo/core/validation/profile-tag-parity-fixture';
+import {
   canSubmitProfileEdit,
   isProfileEditDraftDirty,
   validateProfileEditDraft,
@@ -46,11 +51,20 @@ test('displayName과 bio를 Unicode code point 기준으로 검증한다', () =>
   );
 });
 
-test('Profile Tag 입력을 client preview 규칙으로 정규화하고 검증한다', () => {
-  assert.deepEqual(validateProfileTagDraftInput('  #Ａrt_1  ', []), { ok: true, value: 'art_1' });
-  assert.equal(validateProfileTagDraftInput('#art', ['art']).ok, false);
+test('Profile Tag 입력을 core와 같은 규칙으로 정규화하고 검증한다', () => {
+  for (const { input, normalized } of profileTagNormalizationParityCases) {
+    assert.deepEqual(validateProfileTagDraftInput(input, []), { ok: true, value: normalized });
+  }
+  for (const { existing, input } of profileTagDuplicateParityCases) {
+    assert.deepEqual(validateProfileTagDraftInput(input, [existing]), {
+      ok: false,
+      error: '이미 추가한 태그예요.',
+    });
+  }
+  for (const { input } of profileTagInvalidParityCases) {
+    assert.equal(validateProfileTagDraftInput(input, []).ok, false);
+  }
   assert.equal(validateProfileTagDraftInput('공예!', []).ok, false);
-  assert.equal(validateProfileTagDraftInput('가'.repeat(21), []).ok, false);
   assert.deepEqual(validateProfileTagDraftInput('추가', ['a', 'b', 'c', 'd', 'e']), {
     ok: true,
     value: '추가',

@@ -1,3 +1,5 @@
+import { normalizeProfileTagName, profileTagNameSchema } from '@kosmo/core/validation';
+
 export type ProfileEditImageDraft =
   | { kind: 'current'; previewUri: string | null }
   | {
@@ -44,7 +46,6 @@ export type CanSubmitProfileEditOptions = {
 
 const MAX_DISPLAY_NAME_CODE_POINTS = 40;
 const MAX_BIO_CODE_POINTS = 500;
-const MAX_PROFILE_TAG_CODE_POINTS = 20;
 
 function countCodePoints(value: string): number {
   return [...value].length;
@@ -126,34 +127,22 @@ export function canSubmitProfileEdit({
   return true;
 }
 
-/** Client-only preview normalization; the server remains authoritative for final tag identity. */
-function normalizeProfileTagPreview(input: string): string {
-  const trimmed = input.trim();
-  const withoutOptionalHash = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed;
-  return withoutOptionalHash.normalize('NFKC').toLowerCase();
-}
-
 export function validateProfileTagDraftInput(
   input: string,
   tags: ReadonlyArray<string>,
 ): ProfileTagValidationResult {
-  const normalized = normalizeProfileTagPreview(input);
+  const result = profileTagNameSchema.safeParse(input);
 
-  if (normalized.length === 0) {
-    return { ok: false, error: '태그를 입력해 주세요.' };
+  if (!result.success) {
+    return {
+      ok: false,
+      error: result.error.issues[0]?.message ?? 'Profile Tag를 확인해 주세요.',
+    };
   }
 
-  if (!/^[\p{L}\p{N}_]+$/u.test(normalized)) {
-    return { ok: false, error: '태그는 문자, 숫자, 밑줄만 사용할 수 있어요.' };
-  }
-
-  if (countCodePoints(normalized) > MAX_PROFILE_TAG_CODE_POINTS) {
-    return { ok: false, error: '태그는 20자 이하로 입력해 주세요.' };
-  }
-
-  if (tags.some((tag) => normalizeProfileTagPreview(tag) === normalized)) {
+  if (tags.some((tag) => normalizeProfileTagName(tag) === result.data)) {
     return { ok: false, error: '이미 추가한 태그예요.' };
   }
 
-  return { ok: true, value: normalized };
+  return { ok: true, value: result.data };
 }
