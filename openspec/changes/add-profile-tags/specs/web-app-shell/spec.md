@@ -2,7 +2,7 @@
 
 ### Requirement: Profile basic information display
 
-**Authority / Provenance:** `docs/design/profile-tags.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-522`, `PROD-527` — 프로필 페이지는 조회된 프로필의 기본 정보를 표시해야 한다(MUST). 표시 항목은 커버 영역, 아바타, 표시 이름, 핸들, bio, 존재할 때의 Local Profile Tag, 팔로잉/팔로워 수이며, Profile Tag는 bio 다음이자 주요 통계·콘텐츠보다 앞에 저장 순서로 표시하고 팔로우 수는 `팔로잉 → 팔로워` 순서로 표시해야 한다(MUST). 색·반경은 시맨틱 디자인 토큰을 사용해 라이트/다크에 대응해야 한다(MUST).
+**Authority / Provenance:** `docs/design/profile-tags.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-527` — 프로필 페이지는 조회된 프로필의 기본 정보를 표시해야 한다(MUST). 표시 항목은 커버 영역, 아바타, 표시 이름, 핸들, bio, 존재할 때의 Local Profile Tag, 팔로잉/팔로워 수이며, Profile Tag는 bio 다음이자 주요 통계·콘텐츠보다 앞에 저장 순서로 표시하고 팔로우 수는 `팔로잉 → 팔로워` 순서로 표시해야 한다(MUST). 색·반경은 시맨틱 디자인 토큰을 사용해 라이트/다크에 대응해야 한다(MUST).
 
 #### Scenario: Display loaded profile
 

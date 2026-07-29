@@ -2,7 +2,7 @@
 
 ### Requirement: Profile Tag editor
 
-**Authority / Provenance:** `docs/design/profile-tags.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-522`, `PROD-527` — 기존 Profile 편집 화면은 Local Profile Owner가 현재 Profile Tag를 확인하고 추가·제거·명시적으로 순서 변경할 수 있는 `프로필 태그` 섹션을 제공해야 한다(MUST). chip에는 정규화된 이름 앞에 `#`를 한 번만 표시해야 하며(MUST), 추가된 항목은 목록 끝에 놓고 제거 뒤 남은 순서를 유지해야 한다(MUST).
+**Authority / Provenance:** `docs/design/profile-tags.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-527` — 기존 Profile 편집 화면은 Local Profile Owner가 현재 Profile Tag를 확인하고 추가·제거·명시적으로 순서 변경할 수 있는 `프로필 태그` 섹션을 제공해야 한다(MUST). chip에는 정규화된 이름 앞에 `#`를 한 번만 표시해야 하며(MUST), 추가된 항목은 목록 끝에 놓고 제거 뒤 남은 순서를 유지해야 한다(MUST).
 
 #### Scenario: Add and remove Profile Tags
 
@@ -24,7 +24,7 @@
 
 ### Requirement: Profile Tag editor validation and save states
 
-**Authority / Provenance:** `docs/design/profile-tags.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-522`, `PROD-527` — Profile Tag 편집기는 빈 값, 허용하지 않는 문자, 정규화 뒤 20 code point 초과와 중복을 저장 전에 입력 가까이에 알려야 한다(MUST). Profile Tag 목록은 다른 Profile 편집 값과 같은 저장 action에 포함해야 하며(MUST), 저장 중 중복 제출을 막고 실패 뒤 draft 입력과 순서를 보존해야 한다(MUST).
+**Authority / Provenance:** `docs/design/profile-tags.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-527` — Profile Tag 편집기는 빈 값, 허용하지 않는 문자, 정규화 뒤 20 code point 초과와 중복을 저장 전에 입력 가까이에 알려야 한다(MUST). Profile Tag 목록은 다른 Profile 편집 값과 같은 저장 action에 포함해야 하며(MUST), 저장 중 중복 제출을 막고 실패 뒤 draft 입력과 순서를 보존해야 한다(MUST).
 
 #### Scenario: Show client validation near the input
 
@@ -52,7 +52,7 @@
 
 ### Requirement: Accessible universal Profile Tag controls
 
-**Authority / Provenance:** `docs/design/profile-tags.md`, `PROD-522`, `PROD-527` — Profile Tag 편집·표시 UI는 React Native primitive와 기존 theme token으로 Web·Android·iOS에서 같은 정보 구조를 사용해야 한다(MUST). 제거·이동 action은 최소 44×44 touch target과 동작을 설명하는 accessibility label·state를 제공해야 하며(MUST), drag gesture를 제공할 때 키보드와 스크린리더로 같은 이동을 수행할 대안을 함께 제공해야 한다(MUST).
+**Authority / Provenance:** `docs/design/profile-tags.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-527` — Profile Tag 편집·표시 UI는 React Native primitive와 기존 theme token으로 Web·Android·iOS에서 같은 정보 구조를 사용해야 한다(MUST). 제거·이동 action은 최소 44×44 touch target과 동작을 설명하는 accessibility label·state를 제공해야 하며(MUST), drag gesture를 제공할 때 키보드와 스크린리더로 같은 이동을 수행할 대안을 함께 제공해야 한다(MUST).
 
 #### Scenario: Operate reorder without drag
 

@@ -6,6 +6,7 @@
 - `docs/domain/objects/hashtag.md`
 - `docs/domain/objects/account-profile-membership.md`
 - `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`
+- `PROD-523` (PR #394)
 - `PROD-522`
 - `PROD-526`
 
@@ -15,7 +16,7 @@ Local Profile Owner가 승인된 Profile Tag 목록을 다른 Profile 값과 원
 
 **Guardrails**
 
-- 기존 Hashtag를 공유 identity로 사용하고 별도 ProfileTag identity나 bio/Post 본문 파생을 추가하지 않는다.
+- Post와 Profile이 공유하는 canonical Hashtag identity를 사용하고, `PROD-526`에서 그 저장 구조와 관계를 추가하며 별도 ProfileTag identity나 bio/Post 본문 파생을 추가하지 않는다.
 - trim·선택적 앞 `#`·NFKC·locale 비종속 Unicode full case folding 뒤 1~20 code point의 Letter·Number·밑줄만 허용한다.
 - Profile당 최대 5개, normalized duplicate 거부, 입력 순서와 전체 목록 replacement를 보장한다.
 - optional `tags`의 배열·빈 배열·생략/`null` 의미와 `Profile.tags: [String!]!` 공개 계약을 유지한다.
@@ -31,7 +32,7 @@ Local Profile Owner가 승인된 Profile Tag 목록을 다른 Profile 값과 원
 - schema snapshot, batch 조회 순서·Remote 빈 목록·query count를 API test로 검증하고 `pnpm --filter @kosmo/core test`, `pnpm --filter @kosmo/api test`, schema·type check를 통과시킨다.
 
 - [ ] 1.1 승인된 Unicode normalization과 Profile Tag 목록 validation을 구현하고 경계·동등성·중복 unit test를 추가한다.
-- [ ] 1.2 공유 Hashtag와 순서 있는 Profile 관계의 additive schema·migration을 구현하고 fresh/upgrade·제약·생명주기 migration test를 추가한다.
+- [ ] 1.2 canonical Hashtag identity와 순서 있는 Profile 관계의 additive schema·migration을 구현하고 fresh/upgrade·제약·생명주기 migration test를 추가한다.
 - [ ] 1.3 Owner·Local·visibility를 검증하면서 Profile 값과 전체 Tag 목록을 원자적으로 교체하는 service 동작을 구현하고 성공·거부·rollback·동시성 DB test를 추가한다.
 - [ ] 1.4 GraphQL `Profile.tags`와 optional update input·payload를 구현하고 저장 순서 batch 조회, 입력 의미, Local/Remote visibility와 기존 update 호환성 integration test를 추가한다.
 - [ ] 1.5 `@kosmo/core`·`@kosmo/api` 필수 검증과 schema 동기화를 통과시키고 `PROD-526` PR에 migration·권한·transaction·query-count 증거를 기록한다.
@@ -44,6 +45,7 @@ Local Profile Owner가 승인된 Profile Tag 목록을 다른 Profile 값과 원
 - `docs/domain/objects/profile.md`
 - `docs/domain/objects/hashtag.md`
 - `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`
+- `PROD-523` (PR #394)
 - `PROD-522`
 - `PROD-492`
 - `PROD-527`
@@ -83,6 +85,7 @@ Local Profile Owner가 기존 Profile 편집 화면에서 Profile Tag를 추가�
 - `docs/domain/objects/hashtag.md`
 - `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`
 - `docs/design/profile-tags.md`
+- `PROD-523` (PR #394)
 - `PROD-522`
 - `PROD-526`
 - `PROD-527`

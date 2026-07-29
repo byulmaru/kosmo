@@ -2,13 +2,13 @@
 
 ### Requirement: Profile Tag 관계 저장
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-522`, `PROD-526` — 시스템은 정규화된 Hashtag Name마다 하나의 Hashtag row를 저장하고(MUST), Profile과 Hashtag 사이의 순서 있는 다대다 Profile Tag 관계를 별도 row로 저장해야 한다(MUST). 같은 Profile은 같은 Hashtag 또는 같은 순서 위치를 중복 참조할 수 없어야 하며(MUST), 저장 제약으로 Profile당 최대 5개의 연속된 순서를 표현할 수 있어야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — 시스템은 canonical Hashtag identity를 나타내는 정규화된 Hashtag Name마다 하나의 Hashtag row를 저장하고(MUST), Profile과 Hashtag 사이의 순서 있는 다대다 Profile Tag 관계를 별도 row로 저장해야 한다(MUST). 같은 Profile은 같은 Hashtag 또는 같은 순서 위치를 중복 참조할 수 없어야 하며(MUST), 저장 제약으로 Profile당 최대 5개의 연속된 순서를 표현할 수 있어야 한다(MUST).
 
-#### Scenario: Store a shared Hashtag identity
+#### Scenario: Store a canonical Hashtag identity
 
 - **WHEN** 정규화된 Hashtag Name이 처음 Profile Tag로 저장된다
 - **THEN** 시스템은 UUID 기반 identity와 고유한 정규화 이름을 가진 Hashtag row를 만든다
-- **AND** 같은 정규화 이름을 다시 저장하면 기존 Hashtag row를 재사용한다
+- **AND** 같은 정규화 이름을 다시 저장하면 동일한 canonical Hashtag identity를 나타내는 row를 재사용한다
 
 #### Scenario: Store an ordered Profile Tag relation
 
@@ -19,7 +19,7 @@
 #### Scenario: Add the model without deriving from bio
 
 - **WHEN** migration이 기존 Profile과 Post data가 있는 데이터베이스에 적용된다
-- **THEN** 시스템은 기존 row를 변경하지 않는 additive Hashtag·Profile Tag 저장 구조를 추가한다
+- **THEN** 시스템은 기존 Profile·Post row를 변경하지 않는 additive Hashtag·Profile Tag 저장 구조를 추가한다
 - **AND** 기존 Profile bio 또는 Post 본문에서 Profile Tag를 backfill하지 않는다
 - **AND** 기존 Profile은 빈 Profile Tag 목록으로 호환된다
 

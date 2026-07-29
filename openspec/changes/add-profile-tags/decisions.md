@@ -4,27 +4,27 @@
 
 ## Decision Records
 
-### Profile Tag는 기존 Hashtag를 공유하는 순서 관계다
+### Profile Tag는 canonical Hashtag identity를 공유하는 순서 관계다
 
 - Decision Date: 2026-07-28
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-522`, `PROD-526`
+- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526`
 - Status: Active
-- Context / Problem: Profile 관심사를 bio 문자열, 별도 ProfileTag identity 또는 기존 Hashtag 관계 중 무엇으로 표현할지 정해져야 저장·검색의 이름 identity가 갈라지지 않는다.
-- Decision Outcome: Profile Tag는 기존 Hashtag를 Profile이 0~5개까지 참조하는 순서 있는 구조화 관계다. bio에서 추출·동기화하지 않으며 정규화된 Hashtag Name을 공유한다.
+- Context / Problem: Profile 관심사를 bio 문자열, 별도 ProfileTag identity 또는 Post와 Profile이 공유할 canonical Hashtag identity 관계 중 무엇으로 표현할지 정해져야 저장·검색의 이름 identity가 갈라지지 않는다.
+- Decision Outcome: Profile Tag는 Post와 Profile이 공유하는 canonical Hashtag identity를 Profile이 0~5개까지 참조하는 순서 있는 구조화 관계다. bio에서 추출·동기화하지 않으며 정규화된 Hashtag Name을 identity 의미로 공유한다.
 - Alternatives Considered: bio 파생은 Owner가 명시적으로 편집한 목록·순서를 보존할 수 없어 제외했다. 별도 ProfileTag identity는 같은 이름의 Post Hashtag와 정규화·검색 identity를 분리하므로 제외했다.
-- Consequences: Post와 Profile의 관계 생성 방식은 독립적으로 유지되지만 같은 Hashtag row를 재사용할 수 있어야 한다. Profile Tag 검색 행동은 이 관계 존재만으로 활성화되지 않는다.
-- Confirmation / Follow-up: DB·service test에서 같은 normalized name 재사용, bio 비파생과 관계 순서를 확인한다.
+- Consequences: Post와 Profile의 관계 생성 방식은 독립적으로 유지되지만 canonical Hashtag identity를 나타내는 저장 row를 공유할 수 있어야 한다. Profile Tag 검색 행동은 이 관계 존재만으로 활성화되지 않는다.
+- Confirmation / Follow-up: 저장 구조가 추가된 뒤 같은 normalized name이 하나의 canonical identity row로 수렴하는지, bio 비파생과 관계 순서를 DB·service test에서 확인한다.
 
-### 공유 Hashtag와 Profile 관계를 additive tables로 저장한다
+### canonical Hashtag identity와 Profile 관계를 additive tables로 저장한다
 
 - Decision Date: 2026-07-28
 - Decision Class: Implementation Choice
-- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-522`, `PROD-526`
+- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526`
 - Status: Active
-- Context / Problem: 현재 DB에는 Hashtag 구현이 없고, normalized identity 재사용·관계 순서·중복·Profile 생명주기를 저장해야 한다.
+- Context / Problem: 현재 DB에는 Hashtag 구현이 없고, `PROD-526`이 canonical Hashtag identity의 normalized 이름 재사용·관계 순서·중복·Profile 생명주기를 저장해야 한다.
 - Decision Outcome: 고유한 normalized `name`과 UUID identity를 가진 `hashtag` table, `profile_id`·`hashtag_id`·0~4 `position`을 가진 `profile_hashtag` relation table을 additive하게 추가한다. `(profile_id, hashtag_id)`와 `(profile_id, position)`을 각각 유일하게 하고 Profile 삭제는 relation만 cascade한다. 관계가 없어져도 Hashtag row를 자동 삭제하지 않으며 기존 bio·Post data를 backfill하지 않는다.
-- Alternatives Considered: Profile row의 JSON/string array는 공통 Hashtag identity와 관계 유일성을 잃으므로 제외했다. 이름을 중복 저장하는 별도 `profile_tag` table은 Post와 공유 identity라는 canonical 계약에 맞지 않는다. 기존 bio backfill은 명시적 Owner 선택이 아니므로 제외했다.
+- Alternatives Considered: Profile row의 JSON/string array는 canonical Hashtag identity와 관계 유일성을 잃으므로 제외했다. 이름을 중복 저장하는 별도 `profile_tag` table은 Post와 공유 identity라는 canonical 계약에 맞지 않는다. 기존 bio backfill은 명시적 Owner 선택이 아니므로 제외했다.
 - Consequences: migration은 새 table과 제약만 추가하고 기존 binary가 이를 무시할 수 있다. 미래 Post Hashtag 구현은 같은 `hashtag` identity를 재사용할 수 있지만 Post relation과 검색 index는 이번 change에 포함되지 않는다.
 - Confirmation / Follow-up: fresh migration, production-equivalent upgrade, unique/check/foreign-key, 비활성 관계 보존과 Profile delete cascade를 migration·DB test로 검증한다.
 
@@ -32,7 +32,7 @@
 
 - Decision Date: 2026-07-28
 - Decision Class: Implementation Choice
-- Authority / Provenance: `docs/domain/objects/hashtag.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-522`, `PROD-526`, `PROD-527`
+- Authority / Provenance: `docs/domain/objects/hashtag.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526`, `PROD-527`
 - Status: Active
 - Context / Problem: JavaScript와 PostgreSQL의 단순 lowercase 또는 client별 구현에 identity 생성을 맡기면 locale·Unicode 처리와 길이 계산이 달라질 수 있다.
 - Decision Outcome: server core의 단일 normalizer가 trim, 선택적 ASCII 앞 `#` 제거, NFKC, locale 비종속 Unicode full case folding을 적용하고 최종 결과를 Unicode code point 단위로 센다. 1~20개의 `Letter | Number | _`만 허용하고 이 결과만 Hashtag `name`으로 저장한다. client는 빠른 feedback을 위해 같은 규칙을 미러링할 수 있지만 server 결과가 권위다. Unicode data 제공 방식은 검증된 dependency와 repository-generated table 중 specs를 만족하는 구현을 허용한다.
@@ -44,7 +44,7 @@
 
 - Decision Date: 2026-07-28
 - Decision Class: Implementation Choice
-- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `docs/design/profile-tags.md`, `PROD-522`, `PROD-526`, `PROD-527`
+- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `docs/design/profile-tags.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526`, `PROD-527`
 - Status: Active
 - Context / Problem: backend와 universal client가 현재 필요한 identity·순서·빈 상태를 호환 가능한 GraphQL shape로 공유해야 하지만 Hashtag 전용 조회·navigation은 제외되어 있다.
 - Decision Outcome: `Profile.tags: [String!]!`는 `#` 없는 normalized Hashtag Name을 저장 순서로 반환한다. 관계가 없는 Local Profile과 현재 범위의 Remote Profile은 빈 목록을 반환한다. 기존 `UpdateProfileInput`의 선택적 `tags: [String!]`에 배열이 오면 전체 replacement, 빈 배열이면 전체 제거, 생략 또는 `null`이면 기존 목록 보존으로 처리한다. `UpdateProfilePayload.profile`에서 최신 tags를 선택할 수 있게 한다.
@@ -56,7 +56,7 @@
 
 - Decision Date: 2026-07-28
 - Decision Class: Implementation Choice
-- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-522`, `PROD-526`
+- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526`
 - Status: Active
 - Context / Problem: 기존 update resolver에 relation delete/insert를 별도로 추가하면 validation 또는 저장 실패 때 scalar Profile 값만 반영되거나 동시 요청의 순서가 섞일 수 있다.
 - Decision Outcome: 권한·Local·visibility 조건을 재확인하고 대상 Profile update를 직렬화하는 하나의 DB transaction에서 scalar 값, Hashtag upsert와 전체 relation replacement를 처리한다. 동시 요청은 Profile 단위로 직렬화하며 마지막으로 성공한 transaction의 전체 값과 Tag 순서가 남는다. row lock 또는 동등하게 검증된 직렬화 수단을 사용할 수 있다.

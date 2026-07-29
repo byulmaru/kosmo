@@ -2,7 +2,7 @@
 
 ### Requirement: Profile Tag identity and normalization
 
-**Authority / Provenance:** `docs/domain/objects/hashtag.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-522`, `PROD-526` — 시스템은 Profile Tag를 별도 durable identity로 만들지 않고 Post와 Profile이 공유하는 Hashtag identity에 연결해야 한다(MUST). Profile Tag 입력은 바깥 공백과 선택적인 앞 `#`를 제거하고 Unicode NFKC와 locale 비종속 case folding을 적용한 뒤 검증해야 하며(MUST), 정규화 결과는 1~20개의 Unicode Letter·Number 또는 밑줄 code point로만 구성되어야 한다(MUST). 같은 정규화된 Hashtag Name은 하나의 Hashtag identity를 공유해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/hashtag.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — 시스템은 Profile Tag를 별도 durable identity로 만들지 않고 Post와 Profile이 공유하는 canonical Hashtag identity에 연결해야 한다(MUST). Profile Tag 입력은 바깥 공백과 선택적인 앞 `#`를 제거하고 Unicode NFKC와 locale 비종속 case folding을 적용한 뒤 검증해야 하며(MUST), 정규화 결과는 1~20개의 Unicode Letter·Number 또는 밑줄 code point로만 구성되어야 한다(MUST). 같은 정규화된 Hashtag Name은 하나의 canonical Hashtag identity를 공유해야 한다(MUST).
 
 #### Scenario: Normalize a valid Profile Tag
 
@@ -10,10 +10,10 @@
 - **THEN** 시스템은 공백과 앞 `#`를 제거하고 Unicode NFKC와 locale 비종속 case folding을 적용한다
 - **AND** 정규화된 Hashtag Name을 Profile Tag 관계의 identity로 사용한다
 
-#### Scenario: Reuse a shared Hashtag identity
+#### Scenario: Use the canonical shared Hashtag identity
 
-- **WHEN** Post 또는 다른 Profile이 이미 같은 정규화된 Hashtag Name의 Hashtag를 참조하고 있다
-- **THEN** 시스템은 새 Profile Tag identity를 만들지 않고 기존 Hashtag를 현재 Profile과 연결한다
+- **WHEN** Post 또는 다른 Profile이 동일하게 정규화된 Hashtag Name을 나타내는 canonical identity를 사용한다
+- **THEN** 시스템은 새 Profile Tag identity를 만들지 않고 동일한 canonical Hashtag identity와 현재 Profile 사이의 관계를 만든다
 - **AND** Post에서 파생된 Hashtag 관계와 Profile Owner가 선택한 관계는 서로의 생성 방식을 바꾸지 않는다
 
 #### Scenario: Reject an invalid normalized name
@@ -24,7 +24,7 @@
 
 ### Requirement: Ordered Profile Tag list
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-522`, `PROD-526` — 한 Profile은 0~5개의 Profile Tag를 가져야 하며(MUST), 시스템은 입력 순서를 저장하고 공개 순서로 반환해야 한다(MUST). 시스템은 한 입력 목록 안에서 정규화된 Hashtag Name이 중복되면 전체 목록을 거부해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — 한 Profile은 0~5개의 Profile Tag를 가져야 하며(MUST), 시스템은 입력 순서를 저장하고 공개 순서로 반환해야 한다(MUST). 시스템은 한 입력 목록 안에서 정규화된 Hashtag Name이 중복되면 전체 목록을 거부해야 한다(MUST).
 
 #### Scenario: Store an ordered list
 
@@ -52,7 +52,7 @@
 
 ### Requirement: Owner-controlled atomic Profile Tag replacement
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-522`, `PROD-526` — Active Account의 Local Profile Owner만 기존 Profile 편집 action에서 Profile Tag 전체 목록을 교체할 수 있어야 한다(MUST). Profile Tag 목록과 같은 요청에 포함된 다른 Profile 편집 값은 하나의 transaction으로 적용되어야 하며(MUST), 권한·정규화·검증·저장 중 하나라도 실패하면 어느 값도 변경되어서는 안 된다(MUST NOT). Profile Tag 입력을 생략하거나 `null`로 보낸 기존 update 요청은 현재 목록을 유지해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — Active Account의 Local Profile Owner만 기존 Profile 편집 action에서 Profile Tag 전체 목록을 교체할 수 있어야 한다(MUST). Profile Tag 목록과 같은 요청에 포함된 다른 Profile 편집 값은 하나의 transaction으로 적용되어야 하며(MUST), 권한·정규화·검증·저장 중 하나라도 실패하면 어느 값도 변경되어서는 안 된다(MUST NOT). Profile Tag 입력을 생략하거나 `null`로 보낸 기존 update 요청은 현재 목록을 유지해야 한다(MUST).
 
 #### Scenario: Replace Profile Tags as Local Profile Owner
 
@@ -79,7 +79,7 @@
 
 ### Requirement: Profile Tag visibility and lifecycle
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-522`, `PROD-526` — 시스템은 공개 조회 조건을 통과한 Local Profile의 Profile Tag만 해당 Profile과 함께 공개해야 한다(MUST). Profile이 비활성화되거나 정지되면 관계는 보존하되 공개 결과에서 숨겨야 하며(MUST), Profile이 삭제되면 그 Profile의 관계를 제거하되 공유 Hashtag와 다른 참조를 제거해서는 안 된다(MUST NOT). Remote Profile Tag 수집·표시와 ActivityPub 표현을 제공해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — 시스템은 공개 조회 조건을 통과한 Local Profile의 Profile Tag만 해당 Profile과 함께 공개해야 한다(MUST). Profile이 비활성화되거나 정지되면 관계는 보존하되 공개 결과에서 숨겨야 하며(MUST), Profile이 삭제되면 그 Profile의 관계를 제거하되 canonical Hashtag identity와 다른 참조를 제거해서는 안 된다(MUST NOT). Remote Profile Tag 수집·표시와 ActivityPub 표현을 제공해서는 안 된다(MUST NOT).
 
 #### Scenario: Read visible Local Profile Tags
 
@@ -97,7 +97,7 @@
 
 - **WHEN** Profile이 삭제된다
 - **THEN** 시스템은 삭제된 Profile의 Profile Tag 관계를 제거한다
-- **AND** 공유 Hashtag identity와 다른 Post 또는 Profile의 관계는 유지한다
+- **AND** canonical Hashtag identity와 다른 Post 또는 Profile의 관계는 유지한다
 
 #### Scenario: Do not expose Remote Profile Tags
 
