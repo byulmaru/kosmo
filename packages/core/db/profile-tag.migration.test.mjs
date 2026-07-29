@@ -83,14 +83,27 @@ test('enforces the Profile Tag additive storage contract', async () => {
     `;
     assert.deepEqual(hashtag, { idVersion: 8 });
 
+    assert.deepEqual(
+      [
+        ...(await sql`
+          SELECT column_name
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'profile_hashtag'
+            AND column_name = 'position'
+        `),
+      ],
+      [],
+    );
+
     await sql`
-      INSERT INTO profile_hashtag (id, profile_id, hashtag_id, position)
-      VALUES (${relationId}, ${profileId}, ${hashtagId}, 0)
+      INSERT INTO profile_hashtag (id, profile_id, hashtag_id)
+      VALUES (${relationId}, ${profileId}, ${hashtagId})
     `;
 
     await assert.rejects(sql`INSERT INTO hashtag (name) VALUES ('kosmo')`, { code: '23505' });
     await assert.rejects(
-      sql`INSERT INTO profile_hashtag (profile_id, hashtag_id, position) VALUES (${profileId}, ${hashtagId}, 1)`,
+      sql`INSERT INTO profile_hashtag (profile_id, hashtag_id) VALUES (${profileId}, ${hashtagId})`,
       { code: '23505' },
     );
 
@@ -99,16 +112,32 @@ test('enforces the Profile Tag additive storage contract', async () => {
       VALUES ('profile')
       RETURNING id::text AS id
     `;
-    await assert.rejects(
-      sql`INSERT INTO profile_hashtag (profile_id, hashtag_id, position) VALUES (${profileId}, ${secondHashtag.id}, 0)`,
-      { code: '23505' },
+    await sql`
+      INSERT INTO profile_hashtag (profile_id, hashtag_id)
+      VALUES (${profileId}, ${secondHashtag.id})
+    `;
+    await sql`
+      WITH inserted AS (
+        INSERT INTO hashtag (name)
+        SELECT 'extra-' || value
+        FROM generate_series(1, 6) AS value
+        RETURNING id
+      )
+      INSERT INTO profile_hashtag (profile_id, hashtag_id)
+      SELECT ${profileId}, id FROM inserted
+    `;
+    assert.deepEqual(
+      [
+        ...(await sql`
+          SELECT count(*)::int AS count
+          FROM profile_hashtag
+          WHERE profile_id = ${profileId}
+        `),
+      ],
+      [{ count: 8 }],
     );
     await assert.rejects(
-      sql`INSERT INTO profile_hashtag (profile_id, hashtag_id, position) VALUES (${profileId}, ${secondHashtag.id}, 5)`,
-      { code: '23514' },
-    );
-    await assert.rejects(
-      sql`INSERT INTO profile_hashtag (profile_id, hashtag_id, position) VALUES (${profileId}, '00000000-0000-8000-8000-000000000099', 1)`,
+      sql`INSERT INTO profile_hashtag (profile_id, hashtag_id) VALUES (${profileId}, '00000000-0000-8000-8000-000000000099')`,
       { code: '23503' },
     );
 
@@ -119,10 +148,7 @@ test('enforces the Profile Tag additive storage contract', async () => {
       ],
       [{ count: 0 }],
     );
-    assert.deepEqual(
-      [...(await sql`SELECT name FROM hashtag ORDER BY name`)],
-      [{ name: 'kosmo' }, { name: 'profile' }],
-    );
+    assert.deepEqual([...(await sql`SELECT count(*)::int AS count FROM hashtag`)], [{ count: 8 }]);
 
     await sql`DELETE FROM hashtag WHERE id = ${hashtagId}`;
     assert.deepEqual(

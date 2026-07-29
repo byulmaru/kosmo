@@ -330,19 +330,20 @@ export const profileTagNameSchema = z.string().transform((value, context) => {
   return normalized;
 });
 
-export const profileTagsSchema = z
-  .array(profileTagNameSchema)
-  .max(5, 'Profile Tag는 최대 5개까지 추가할 수 있어요.')
-  .superRefine((tags, context) => {
-    tags.forEach((tag, index) => {
-      if (tags.indexOf(tag) !== index) {
-        context.addIssue({
-          code: 'custom',
-          path: [index],
-          message: '정규화한 Profile Tag는 중복될 수 없어요.',
-        });
-      }
-    });
+export const profileTagsSchema = z.array(profileTagNameSchema).superRefine((tags, context) => {
+  const seen = new Set<string>();
+
+  tags.forEach((tag, index) => {
+    if (seen.has(tag)) {
+      context.addIssue({
+        code: 'custom',
+        path: [index],
+        message: '정규화한 Profile Tag는 중복될 수 없어요.',
+      });
+    } else {
+      seen.add(tag);
+    }
   });
+});
 
 export const profileTagsInputSchema = profileTagsSchema.nullable().optional();

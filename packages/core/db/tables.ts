@@ -406,15 +406,9 @@ export const ProfileHashtags = pgTable(
     hashtagId: uuid('hashtag_id')
       .notNull()
       .references(() => Hashtags.id, { onDelete: 'cascade' }),
-    position: integer('position').notNull(),
     createdAt: createdAt(),
   },
-  (table) => [
-    unique().on(table.profileId, table.hashtagId),
-    unique().on(table.profileId, table.position),
-    check('profile_hashtag_position_range', sql`${table.position} BETWEEN 0 AND 4`),
-    index().on(table.hashtagId),
-  ],
+  (table) => [unique().on(table.profileId, table.hashtagId), index().on(table.hashtagId)],
 );
 
 export const Reactions = pgTable(

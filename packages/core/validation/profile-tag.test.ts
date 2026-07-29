@@ -35,10 +35,17 @@ test('Profile Tag name schema rejects invalid normalized names', () => {
   }
 });
 
-test('Profile Tags schema enforces count and normalized uniqueness', () => {
+test('Profile Tags schema allows arbitrary counts and enforces normalized uniqueness', () => {
   assert.deepEqual(profileTagsSchema.parse(['#Foo', 'bar']), ['foo', 'bar']);
   assert.throws(() => profileTagsSchema.parse(['#Foo', ' foo ']));
-  assert.throws(() => profileTagsSchema.parse(['a', 'b', 'c', 'd', 'e', 'f']));
+  assert.deepEqual(profileTagsSchema.parse(['a', 'b', 'c', 'd', 'e', 'f']), [
+    'a',
+    'b',
+    'c',
+    'd',
+    'e',
+    'f',
+  ]);
 });
 
 test('Profile Tags input distinguishes omitted and null from replacement arrays', () => {

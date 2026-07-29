@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { asc, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import {
   AccountProfiles,
   Accounts,
@@ -69,14 +69,17 @@ const createProfileFixture = async ({
 };
 
 const readTags = async (profileId: string) =>
-  db
-    .select({ name: Hashtags.name, position: ProfileHashtags.position })
-    .from(ProfileHashtags)
-    .innerJoin(Hashtags, eq(Hashtags.id, ProfileHashtags.hashtagId))
-    .where(eq(ProfileHashtags.profileId, profileId))
-    .orderBy(asc(ProfileHashtags.position));
+  (
+    await db
+      .select({ name: Hashtags.name })
+      .from(ProfileHashtags)
+      .innerJoin(Hashtags, eq(Hashtags.id, ProfileHashtags.hashtagId))
+      .where(eq(ProfileHashtags.profileId, profileId))
+  )
+    .map(({ name }) => name)
+    .sort();
 
-test('Owner는 scalar와 정규화된 ordered tags를 하나의 update로 저장한다', async () => {
+test('Owner는 scalar와 정규화된 tags를 하나의 update로 저장한다', async () => {
   const { account, profile } = await createProfileFixture();
 
   const updated = await updateProfile({
@@ -89,11 +92,7 @@ test('Owner는 scalar와 정규화된 ordered tags를 하나의 update로 저장
 
   assert.equal(updated.displayName, 'Updated');
   assert.equal(updated.bio, 'Bio');
-  assert.deepEqual(await readTags(profile.id), [
-    { name: 'foo', position: 0 },
-    { name: 'strasse', position: 1 },
-    { name: 'ı', position: 2 },
-  ]);
+  assert.deepEqual(await readTags(profile.id), ['foo', 'strasse', 'ı'].sort());
 });
 
 test('omitted와 null tags는 기존 관계를 유지하고 empty array는 관계만 제거한다', async () => {
@@ -101,15 +100,9 @@ test('omitted와 null tags는 기존 관계를 유지하고 empty array는 관�
   await updateProfile({ accountId: account.id, profileId: profile.id, tags: ['one', 'two'] });
 
   await updateProfile({ accountId: account.id, profileId: profile.id, displayName: 'Changed' });
-  assert.deepEqual(
-    (await readTags(profile.id)).map(({ name }) => name),
-    ['one', 'two'],
-  );
+  assert.deepEqual(await readTags(profile.id), ['one', 'two']);
   await updateProfile({ accountId: account.id, profileId: profile.id, tags: null });
-  assert.deepEqual(
-    (await readTags(profile.id)).map(({ name }) => name),
-    ['one', 'two'],
-  );
+  assert.deepEqual(await readTags(profile.id), ['one', 'two']);
 
   await updateProfile({ accountId: account.id, profileId: profile.id, tags: [] });
   assert.deepEqual(await readTags(profile.id), []);
@@ -147,10 +140,7 @@ test('validation 실패는 scalar와 기존 tags를 함께 보존한다', async 
     .where(eq(Profiles.id, profile.id))
     .then(firstOrThrow);
   assert.equal(persisted.displayName, 'Before');
-  assert.deepEqual(
-    (await readTags(profile.id)).map(({ name }) => name),
-    ['before'],
-  );
+  assert.deepEqual(await readTags(profile.id), ['before']);
 });
 
 test('Deactivated Local Profile은 Owner가 tags를 보존·교체하며 수정한다', async () => {
@@ -169,20 +159,14 @@ test('Deactivated Local Profile은 Owner가 tags를 보존·교체하며 수정�
 
   assert.equal(scalarUpdated.state, ProfileState.DISABLED);
   assert.equal(scalarUpdated.displayName, 'Changed while deactivated');
-  assert.deepEqual(
-    (await readTags(deactivated.profile.id)).map(({ name }) => name),
-    ['before', 'preserved'],
-  );
+  assert.deepEqual(await readTags(deactivated.profile.id), ['before', 'preserved']);
 
   await updateProfile({
     accountId: deactivated.account.id,
     profileId: deactivated.profile.id,
     tags: ['replacement'],
   });
-  assert.deepEqual(
-    (await readTags(deactivated.profile.id)).map(({ name }) => name),
-    ['replacement'],
-  );
+  assert.deepEqual(await readTags(deactivated.profile.id), ['replacement']);
 });
 
 test('Member와 inactive Account는 거부되고 관계없는 Account와 Remote/Suspended Profile은 조회 경계를 따른다', async () => {
@@ -192,6 +176,14 @@ test('Member와 inactive Account는 거부되고 관계없는 Account와 Remote/
   const remote = await createProfileFixture({ instanceKind: InstanceKind.ACTIVITYPUB });
   const suspended = await createProfileFixture({ profileState: ProfileState.SUSPENDED });
   const inactiveAccount = await createProfileFixture({ accountState: AccountState.DISABLED });
+  const retainedHashtag = await db
+    .insert(Hashtags)
+    .values({ name: `retained_${crypto.randomUUID().replaceAll('-', '_')}` })
+    .returning()
+    .then(firstOrThrow);
+  await db
+    .insert(ProfileHashtags)
+    .values({ hashtagId: retainedHashtag.id, profileId: suspended.profile.id });
 
   await assert.rejects(
     updateProfile({ accountId: member.account.id, profileId: member.profile.id, tags: ['member'] }),
@@ -217,6 +209,7 @@ test('Member와 inactive Account는 거부되고 관계없는 Account와 Remote/
     }),
     NotFoundError,
   );
+  assert.deepEqual(await readTags(suspended.profile.id), [retainedHashtag.name]);
   await assert.rejects(
     updateProfile({
       accountId: inactiveAccount.account.id,
@@ -247,10 +240,7 @@ test('호출 transaction이 rollback되면 scalar와 relation이 모두 복구�
     .where(eq(Profiles.id, profile.id))
     .then(firstOrThrow);
   assert.equal(persisted.displayName, profile.displayName);
-  assert.deepEqual(
-    (await readTags(profile.id)).map(({ name }) => name),
-    ['before'],
-  );
+  assert.deepEqual(await readTags(profile.id), ['before']);
 });
 
 test('동시 replacement는 중간 목록 없이 한 요청의 전체 목록으로 끝난다', async () => {
@@ -263,9 +253,9 @@ test('동시 replacement는 중간 목록 없이 한 요청의 전체 목록으�
     updateProfile({ accountId: account.id, profileId: profile.id, tags: second }),
   ]);
 
-  const names = (await readTags(profile.id)).map(({ name }) => name);
+  const names = await readTags(profile.id);
   assert.ok(
-    names.join(',') === first.join(',') || names.join(',') === second.join(','),
+    names.join(',') === first.sort().join(',') || names.join(',') === second.sort().join(','),
     `unexpected concurrent result: ${names.join(',')}`,
   );
 });

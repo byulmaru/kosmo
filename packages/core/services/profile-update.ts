@@ -105,10 +105,9 @@ export const updateProfile = async (input: UpdateProfileInput, tx?: Transaction)
         const hashtagIds = new Map(hashtags.map((hashtag) => [hashtag.name, hashtag.id]));
 
         await tx.insert(ProfileHashtags).values(
-          normalizedTags.map((name, position) => ({
+          normalizedTags.map((name) => ({
             profileId: input.profileId,
             hashtagId: hashtagIds.get(name)!,
-            position,
           })),
         );
       }

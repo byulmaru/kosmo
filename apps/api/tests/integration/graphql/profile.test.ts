@@ -714,7 +714,7 @@ describe('GraphQL remote profile boundary', () => {
     });
   });
 
-  test('updates ordered Profile tags and preserves omitted/null input semantics', async () => {
+  test('updates Profile tags without ordering guarantees and preserves omitted/null semantics', async () => {
     const auth = await createAuthenticatedSession();
     const update = await requestGraphQL<{
       updateProfile: { profile: { displayName: string; tags: string[] } };
@@ -729,10 +729,8 @@ describe('GraphQL remote profile boundary', () => {
     );
 
     assertNoGraphQLErrors(update);
-    assert.deepEqual(update.data?.updateProfile.profile, {
-      displayName: 'Tagged Owner',
-      tags: ['foo', 'strasse'],
-    });
+    assert.equal(update.data?.updateProfile.profile.displayName, 'Tagged Owner');
+    assert.deepEqual(update.data?.updateProfile.profile.tags.toSorted(), ['foo', 'strasse']);
 
     const omitted = await requestGraphQL<{
       updateProfile: { profile: { bio: string | null; tags: string[] } };
@@ -746,10 +744,8 @@ describe('GraphQL remote profile boundary', () => {
       auth.token,
     );
     assertNoGraphQLErrors(omitted);
-    assert.deepEqual(omitted.data?.updateProfile.profile, {
-      bio: 'updated bio',
-      tags: ['foo', 'strasse'],
-    });
+    assert.equal(omitted.data?.updateProfile.profile.bio, 'updated bio');
+    assert.deepEqual(omitted.data?.updateProfile.profile.tags.toSorted(), ['foo', 'strasse']);
 
     const nullInput = await requestGraphQL<{
       updateProfile: { profile: { tags: string[] } };
@@ -761,7 +757,7 @@ describe('GraphQL remote profile boundary', () => {
       auth.token,
     );
     assertNoGraphQLErrors(nullInput);
-    assert.deepEqual(nullInput.data?.updateProfile.profile.tags, ['foo', 'strasse']);
+    assert.deepEqual(nullInput.data?.updateProfile.profile.tags.toSorted(), ['foo', 'strasse']);
 
     const cleared = await requestGraphQL<{
       updateProfile: { profile: { tags: string[] } };
@@ -786,7 +782,6 @@ describe('GraphQL remote profile boundary', () => {
       .then(firstOrThrow);
     await db.insert(ProfileHashtags).values({
       hashtagId: hashtag.id,
-      position: 0,
       profileId: remote.id,
     });
 
@@ -803,7 +798,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.deepEqual(result.data?.profileByHandle?.tags, []);
   });
 
-  test('batches Profile tag reads while preserving position order', async () => {
+  test('batches unordered Profile tag reads in one relation query', async () => {
     const first = await createProfile({ handle: 'tag-batch-first', instanceId: localInstanceId });
     const second = await createProfile({ handle: 'tag-batch-second', instanceId: localInstanceId });
     const hashtags = await db
@@ -815,9 +810,9 @@ describe('GraphQL remote profile boundary', () => {
       ])
       .returning();
     await db.insert(ProfileHashtags).values([
-      { hashtagId: hashtags[1]!.id, position: 1, profileId: first.id },
-      { hashtagId: hashtags[0]!.id, position: 0, profileId: first.id },
-      { hashtagId: hashtags[2]!.id, position: 0, profileId: second.id },
+      { hashtagId: hashtags[1]!.id, profileId: first.id },
+      { hashtagId: hashtags[0]!.id, profileId: first.id },
+      { hashtagId: hashtags[2]!.id, profileId: second.id },
     ]);
 
     const previousDebug = pg.options.debug;
@@ -846,16 +841,15 @@ describe('GraphQL remote profile boundary', () => {
       );
 
       assertNoGraphQLErrors(result);
-      assert.deepEqual(result.data?.nodes, [
-        {
-          id: globalId('Profile', first.id),
-          tags: [hashtags[0]!.name, hashtags[1]!.name],
-        },
-        {
-          id: globalId('Profile', second.id),
-          tags: [hashtags[2]!.name],
-        },
-      ]);
+      assert.equal(result.data?.nodes[0]?.id, globalId('Profile', first.id));
+      assert.deepEqual(
+        result.data?.nodes[0]?.tags.toSorted(),
+        [hashtags[0]!.name, hashtags[1]!.name].toSorted(),
+      );
+      assert.deepEqual(result.data?.nodes[1], {
+        id: globalId('Profile', second.id),
+        tags: [hashtags[2]!.name],
+      });
       assert.equal(profileHashtagQueries.length, 1);
     } finally {
       pg.options.debug = previousDebug;

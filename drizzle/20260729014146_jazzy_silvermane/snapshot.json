@@ -1935,19 +1935,6 @@
       "table": "profile_hashtag"
     },
     {
-      "type": "integer",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "position",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "profile_hashtag"
-    },
-    {
       "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
@@ -3733,15 +3720,6 @@
     },
     {
       "nameExplicit": false,
-      "columns": ["profile_id", "position"],
-      "nullsNotDistinct": false,
-      "name": "profile_hashtag_profile_id_position_unique",
-      "entityType": "uniques",
-      "schema": "public",
-      "table": "profile_hashtag"
-    },
-    {
-      "nameExplicit": false,
       "columns": ["instance_id", "normalized_handle"],
       "nullsNotDistinct": false,
       "name": "profile_instance_id_normalized_handle_unique",
@@ -3845,13 +3823,6 @@
       "entityType": "checks",
       "schema": "public",
       "table": "post"
-    },
-    {
-      "value": "\"position\" BETWEEN 0 AND 4",
-      "name": "profile_hashtag_position_range",
-      "entityType": "checks",
-      "schema": "public",
-      "table": "profile_hashtag"
     }
   ],
   "renames": []

@@ -1,6 +1,6 @@
 import { db, Hashtags, Instances, ProfileHashtags, Profiles } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
-import { and, asc, eq, inArray, ne } from 'drizzle-orm';
+import { and, eq, inArray, ne } from 'drizzle-orm';
 import type { UserContext } from '@/context';
 
 export type ProfileTagRow = {
@@ -26,7 +26,6 @@ export const profileTagsLoader = (ctx: UserContext) =>
             eq(Instances.kind, InstanceKind.LOCAL),
             ne(Instances.state, InstanceState.SUSPENDED),
           ),
-        )
-        .orderBy(asc(ProfileHashtags.profileId), asc(ProfileHashtags.position)),
+        ),
     key: (tag) => tag.profileId,
   });
