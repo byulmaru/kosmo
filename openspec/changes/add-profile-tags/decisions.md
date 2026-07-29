@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 `PROD-523`에서 승인해 canonical 문서에 반영한 Profile Tag 제품 계약과, 이를 저장·GraphQL·Web·Android·iOS로 전달하는 `PROD-522`, `PROD-526`, `PROD-527`의 구현 경계를 반영한다. 제품 행동은 canonical·Linear authority에서 파생하고, 여러 구현 slice가 호환성을 위해 공유해야 하는 저장·API·transaction 선택만 Implementation Choice로 고정한다. `PROD-532`는 Local Profile terminal Deactivated→Deleted action의 선행 Linear 이슈이며, 이 change는 그 action을 대체하거나 소유하지 않고 lifecycle 경계에 Profile Tag 관계 cleanup만 통합한다.
+이 기록은 `PROD-523`에서 승인해 canonical 문서에 반영한 Profile Tag 제품 계약과, 이를 저장·GraphQL·Web·Android·iOS로 전달하는 `PROD-522`, `PROD-526`, `PROD-527`의 구현 경계를 반영한다. 제품 행동은 canonical·Linear authority에서 파생하고, 여러 구현 slice가 호환성을 위해 공유해야 하는 저장·API·transaction 선택만 Implementation Choice로 고정한다. 취소된 `PROD-532`·`PROD-542`·`PROD-543`·`PROD-544`는 이 change의 authority, dependency 또는 구현 입력이 아니다.
 
 ## Decision Records
 
@@ -23,10 +23,10 @@
 - Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526`
 - Status: Active
 - Context / Problem: 현재 DB에는 Hashtag 구현이 없고, `PROD-526`이 canonical Hashtag identity와 Profile 관계의 유일성·Profile 생명주기를 저장해야 한다.
-- Decision Outcome: 고유한 Hashtag Name과 UUID identity를 가진 `hashtag` table, `profile_id`·`hashtag_id`를 가진 `profile_hashtag` relation table을 additive하게 추가한다. 관계 table은 `(profile_id, hashtag_id)` identity 조합만 유일하게 보장하며 position column·순서 제약·제품 max count를 두지 않는다. Hashtag Name의 syntax·normalization·length·normalized-name uniqueness는 Hashtag가 소유한다. 선행 `PROD-532`가 제공하는 Deactivated→Deleted lifecycle transaction 경계에 해당 Profile 관계 cleanup을 통합하며, `PROD-526`은 terminal action이나 상태 전이를 구현하지 않는다. Profile row 물리 삭제의 FK cascade는 별도 DB safety 경로로 유지한다. 두 경로 모두 canonical Hashtag row와 다른 Profile/Post 관계를 삭제하지 않는다. 관계가 없어져도 Hashtag row를 자동 삭제하지 않으며 기존 bio·Post data를 backfill하지 않는다.
+- Decision Outcome: 고유한 Hashtag Name과 UUID identity를 가진 `hashtag` table, `profile_id`·`hashtag_id`를 가진 `profile_hashtag` relation table을 additive하게 추가한다. 관계 table은 `(profile_id, hashtag_id)` identity 조합만 유일하게 보장하며 position column·순서 제약·제품 max count를 두지 않는다. Hashtag Name의 syntax·normalization·length·normalized-name uniqueness는 Hashtag가 소유한다. Lifecycle State가 Deleted로 전이됐다는 사실만으로 관계를 제거하지 않는다. Profile row 물리 삭제의 FK cascade는 별도 DB safety 경로로 유지하며 canonical Hashtag row와 다른 Profile/Post 관계를 삭제하지 않는다. 관계가 없어져도 Hashtag row를 자동 삭제하지 않으며 기존 bio·Post data를 backfill하지 않는다.
 - Alternatives Considered: Profile row의 JSON/string array는 canonical Hashtag identity와 관계 유일성을 잃으므로 제외했다. 이름을 중복 저장하는 별도 `profile_tag` table은 Post와 공유 identity라는 canonical 계약에 맞지 않는다. position column과 개수 제약은 승인된 계약에 없으므로 추가하지 않는다. 기존 bio backfill은 명시적 Owner 선택이 아니므로 제외했다.
 - Consequences: migration은 새 table과 identity 제약만 추가하고 기존 binary가 이를 무시할 수 있다. 미래 Post Hashtag 구현은 같은 `hashtag` identity를 재사용할 수 있지만 Post relation과 검색 index는 이번 change에 포함되지 않는다. 관계 조회나 API 배열의 반환 순서는 계약에 포함되지 않는다.
-- Confirmation / Follow-up: `PROD-532` terminal action의 선행 완료를 확인한 뒤, `PROD-526`은 제공된 lifecycle 경계에서 Profile Tag 관계만 제거하고 canonical Hashtag row와 다른 Profile/Post 관계를 보존하는 integration test를 수행한다. 물리 Profile row 삭제의 FK cascade safety는 terminal action 및 관계 cleanup 통합과 별도의 DB test로 검증한다.
+- Confirmation / Follow-up: 비활성화·정지·Deleted 상태 전이에서 관계가 보존되는지 service test로 확인한다. 물리 Profile row 삭제의 FK cascade safety와 canonical Hashtag row·다른 Profile 관계 보존은 별도의 DB test로 검증한다. 관계 cleanup이 필요해지면 별도 canonical 보존·파기 정책을 먼저 확정한다.
 
 ### Hashtag가 Name syntax와 identity normalization을 소유한다
 

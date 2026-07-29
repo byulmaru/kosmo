@@ -2,7 +2,7 @@
 
 현재 `packages/core/db/tables.ts`에는 Profile 저장 모델만 있고 Hashtag 또는 Profile-Hashtag 관계가 없다. `apps/api/src/graphql/resolvers/profile/ref.ts`의 Profile object와 `mutation/update.ts`도 scalar 표현 값만 조회·수정하며, update resolver가 직접 Profile row를 갱신한다. 공개 화면은 `apps/app/src/components/profile/ProfileHero.tsx`가 담당한다. Profile Tag controlled editor·client validation presentation은 선행 이슈 `PROD-491`이 제공하고, Profile 편집 화면의 최종 route·저장 흐름은 `PROD-492`가 제공한다.
 
-이번 change는 `PROD-523`에서 승인한 Profile Tag 계약을 `PROD-526`의 저장·서비스·GraphQL 기반과 `PROD-527`의 Web·Android·iOS UI로 나눠 구현한다. `PROD-532`가 소유하는 Local Profile terminal Deactivated→Deleted action을 선행 의존성으로 삼고, 이 change의 `PROD-526` slice는 해당 lifecycle 경계에 Profile Tag 관계 cleanup만 통합하며 terminal action 자체는 구현하지 않는다. 두 slice는 같은 `add-profile-tags` specs와 decisions를 공유하고, 부모 `PROD-522`가 종단 간 검증과 archive를 소유한다. Profile Tag 검색은 `PROD-525`의 별도 change이므로 검색을 가정한 API·index·navigation을 선제 추가하지 않는다.
+이번 change는 `PROD-523`에서 승인한 Profile Tag 계약을 `PROD-526`의 저장·서비스·GraphQL 기반과 `PROD-527`의 Web·Android·iOS UI로 나눠 구현한다. Lifecycle State가 Deleted로 전이됐다는 사실만으로 Profile Tag 관계를 제거하지 않으며, 취소된 `PROD-532`·`PROD-542`·`PROD-543`·`PROD-544`는 선행 의존성이나 구현 입력이 아니다. 두 slice는 같은 `add-profile-tags` specs와 decisions를 공유하고, 부모 `PROD-522`가 종단 간 검증과 archive를 소유한다. Profile Tag 검색은 `PROD-525`의 별도 change이므로 검색을 가정한 API·index·navigation을 선제 추가하지 않는다.
 
 ## Goals / Non-Goals
 
@@ -30,13 +30,13 @@
 - JavaScript에는 Unicode full case folding 표준 API가 없다. 단순 `toLocaleLowerCase()`나 PostgreSQL `lower()`는 locale·Unicode 버전에 따라 canonical 계약과 달라질 수 있다.
 - 현재 GraphQL Profile update는 authorization 조회와 Profile row update를 resolver에서 분리 수행한다. Tag 관계의 delete/insert를 그대로 덧붙이면 다른 Profile 값과 atomic하지 않고 동시 update가 섞일 수 있다.
 - `Profile.tags`는 여러 Profile을 한 query에서 읽는 화면에서 사용되므로 Profile별 query를 수행하면 N+1 회귀가 생긴다. loader는 배열 위치를 의미 있는 계약으로 취급하지 않는다.
-- `PROD-532`가 terminal Deactivated→Deleted action과 상태 전이를 소유하므로 `PROD-526`은 그 action을 다시 구현하지 않고, upstream이 제공하는 lifecycle transaction 경계에 관계 cleanup을 연결해야 한다.
+- 취소된 terminal deletion 계획을 구현하거나 기다리지 않는다. 별도 canonical 보존·파기 정책이 없는 상태 기반 관계 cleanup을 추가하지 않는다.
 - `PROD-527`이 의존하는 `PROD-491` editor와 `PROD-492` route·mutation 결과는 현재 branch에 없을 수 있다. 두 결과가 도착한 뒤 기존 component를 재작성하지 않고 그 seam에 Profile Tag API·Relay 상태를 통합해야 한다.
 - Relay가 mutation payload의 `Profile.tags`를 선택하지 않으면 서버 저장 성공 뒤 normalized record와 공개 화면에 이전 목록이 남을 수 있다.
 
 ### Recommended Approach
 
-1. Core DB에 Hashtag가 소유하는 고유 normalized name의 Hashtag table과 Profile ID·Hashtag ID identity 조합을 가진 관계 table을 additive하게 추가한다. `(profile_id, hashtag_id)`를 유일하게 만들고 position column·순서 제약·제품 max count는 두지 않는다. 선행 `PROD-532`가 제공하는 Deactivated→Deleted lifecycle transaction 경계에 해당 Profile 관계 cleanup을 통합한다. `PROD-526`은 terminal action이나 상태 전이를 구현하지 않는다. Profile row 물리 삭제의 FK cascade는 별도 DB safety 경로로 유지하며 두 경로 모두 canonical Hashtag row와 다른 Profile/Post 관계를 삭제하지 않는다. 관계 해제 때 canonical Hashtag identity row는 자동 삭제하지 않는다.
+1. Core DB에 Hashtag가 소유하는 고유 normalized name의 Hashtag table과 Profile ID·Hashtag ID identity 조합을 가진 관계 table을 additive하게 추가한다. `(profile_id, hashtag_id)`를 유일하게 만들고 position column·순서 제약·제품 max count는 두지 않는다. Lifecycle State가 Deleted로 전이돼도 관계를 보존한다. Profile row 물리 삭제의 FK cascade는 별도 DB safety 경로로 유지하며 canonical Hashtag row와 다른 Profile/Post 관계를 삭제하지 않는다. 관계 해제 때 canonical Hashtag identity row는 자동 삭제하지 않는다.
 2. Hashtag가 소유하는 순수 normalization boundary 한 곳에서 trim, 선택적 앞 `#` 제거, NFKC, locale 비종속 Unicode case folding, code point 개수와 `Letter | Number | _` 검증을 수행한다. Profile 관계는 이 boundary의 규칙을 복제하지 않고 입력을 Hashtag identity로 resolve/create한다. 구현은 Unicode version이 명확한 검증된 case-fold data 또는 package를 사용하고, API와 DB service가 같은 Hashtag 함수를 호출한다.
 3. Active Account의 Owner·Local Profile에 대해 Lifecycle State가 `Deleted`가 아니고 Suspension State가 `Normal`인 editable 조건을 확인하고 Profile row를 잠근 하나의 DB transaction에서 Profile scalar update, Hashtag resolve/create, 기존 관계 삭제와 새 관계 insert를 수행한다. `tags`가 undefined 또는 null이면 관계 작업을 생략하고 빈 목록이면 전부 제거한다. 같은 Hashtag identity가 목록에 두 번 나타나는지 identity 기준으로 검증하며 resolve/create 경합은 unique constraint와 재조회로 수렴시킨다.
 4. GraphQL Profile에 non-null 문자열 목록 `tags`를 추가하고, profile IDs를 묶어 관계를 읽는 request-scoped loader를 사용한다. loader와 resolver는 배열 위치나 API 반환 순서를 의미 있는 계약으로 정렬·보장하지 않는다. Profile Origin과 연결된 Instance Kind가 Local인 모든 Profile은 configured instance ID와 무관하게 유효한 관계를 반환하고, Remote Profile은 빈 목록을 반환한다. update payload는 갱신된 Profile에서 `tags`를 다시 읽을 수 있게 한다.

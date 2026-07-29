@@ -29,16 +29,15 @@
 - **WHEN** Profile이 비활성화되거나 정지된다
 - **THEN** 시스템은 저장된 Profile Tag 관계를 삭제하거나 변경하지 않는다
 
-### Requirement: Profile 삭제 생명주기 관계 invariant
+### Requirement: Profile Tag 관계 보존과 물리 삭제 safety
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-522`, `PROD-526` — Profile Lifecycle State가 `Deleted`로 전이될 때 service/lifecycle 경계는 해당 Profile의 `profile_hashtag` 관계를 명시적으로 제거해야 하며(MUST), 이는 물리 Profile row 삭제 시 FK cascade safety 보장과 별도로 유지되어야 한다(MUST). `PROD-532`가 Deactivated→Deleted terminal action과 상태 전이를 소유하며, 이 change는 제공된 경계에 Profile Tag 관계 cleanup을 통합한다. 두 경로 모두 canonical Hashtag row와 다른 Post 또는 Profile의 관계를 삭제해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-522`, `PROD-526` — Profile Lifecycle State가 `Deleted`로 전이됐다는 사실만으로 `profile_hashtag` 관계를 제거해서는 안 된다(MUST NOT). Profile row가 물리 삭제되면 FK cascade로 해당 Profile 관계만 제거해야 하며(MUST), canonical Hashtag row와 다른 Post 또는 Profile의 관계를 삭제해서는 안 된다(MUST NOT).
 
-#### Scenario: Remove relations on Deleted lifecycle transition
+#### Scenario: Retain relations on Deleted lifecycle transition
 
-- **WHEN** 선행 `PROD-532`가 제공하는 Profile delete action이 Lifecycle State를 `Deactivated`에서 `Deleted`로 전이한다
-- **THEN** `PROD-526`의 lifecycle integration은 해당 Profile의 `profile_hashtag` 관계를 명시적으로 제거한다
-- **AND** Profile row가 물리적으로 남아 있더라도 삭제된 Profile의 Profile Tag 조회 관계는 존재하지 않는다
-- **AND** canonical Hashtag row와 다른 Post 또는 Profile의 Hashtag 관계는 유지한다
+- **WHEN** Profile Lifecycle State가 `Deleted`로 전이하고 Profile row가 유지된다
+- **THEN** 시스템은 해당 Profile의 `profile_hashtag` 관계를 상태 전이만으로 제거하지 않는다
+- **AND** 공개 조회 정책은 Deleted Profile과 그 Tag를 노출하지 않는다
 
 #### Scenario: Cascade only the deleted Profile relations on physical row deletion
 
