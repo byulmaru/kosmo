@@ -53,7 +53,7 @@ Web Storybook 상태 카탈로그를 전달한다. Native route 연결과 실제
 - [x] 1.3 Profile Tag inline chip editor의 로컬 추가·제거·validation을 구현한다.
 - [x] 1.4 unchanged/callback 없음의 disabled submit과 `followPolicy` Switch의 dirty·disabled·saving·failure·retry
       상태를 포함한 상태 카탈로그, 접근성 metadata를 추가한다.
-- [x] 1.5 `followPolicy` Switch의 초기 enum 매핑과 `OPEN`/`APPROVAL_REQUIRED` 제출, dirty·disabled·saving·failure·retry
+- [x] 1.5 `followPolicy` Switch의 두 enum 초기 표시와 `OPEN`/`APPROVAL_REQUIRED` 양방향 제출, dirty·disabled·saving·failure·retry
       동작을 최소 component test와 Storybook 상태·a11y/static build로 검증하고 app 필수 check를 통과해 PROD-491
       PR에 증거를 기록한다.
 

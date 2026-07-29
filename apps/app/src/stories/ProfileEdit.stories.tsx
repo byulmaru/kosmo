@@ -111,15 +111,19 @@ function ProfileEditServerErrorHarness() {
   );
 }
 
-function ProfileEditTagSubmitHarness() {
-  const [value, setValue] = useState(initialDraft);
+function ProfileEditTagSubmitHarness({
+  initialValue = initialDraft,
+}: {
+  initialValue?: ProfileEditDraft;
+}) {
+  const [value, setValue] = useState(initialValue);
   const [submittedTags, setSubmittedTags] = useState<ReadonlyArray<string>>();
   const [submittedPolicy, setSubmittedPolicy] = useState<string | null>(null);
 
   return (
     <>
       <ProfileEditScreen
-        initialValue={initialDraft}
+        initialValue={initialValue}
         onChange={setValue}
         onSubmit={(draft) => {
           setSubmittedTags(draft.tags);
@@ -127,6 +131,7 @@ function ProfileEditTagSubmitHarness() {
         }}
         value={value}
       />
+      <Text accessibilityLabel="현재 팔로우 정책">{value.followPolicy}</Text>
       {submittedTags ? (
         <Text accessibilityLabel="마지막 제출 태그">{submittedTags.join(',')}</Text>
       ) : null}
@@ -267,6 +272,31 @@ export const FollowPolicySwitchSubmitsEnum: Story = {
     expect(canvas.getByRole('button', { name: '저장' })).toBeEnabled();
     await userEvent.click(canvas.getByRole('button', { name: '저장' }));
     expect(canvas.getByLabelText('마지막 제출 팔로우 정책')).toHaveTextContent('APPROVAL_REQUIRED');
+  },
+};
+
+export const FollowPolicyApprovalRequiredInitialState: Story = {
+  render: () => (
+    <ProfileEditTagSubmitHarness
+      initialValue={{ ...initialDraft, followPolicy: 'APPROVAL_REQUIRED' }}
+    />
+  ),
+  play: async ({ canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+    const toggle = canvas.getByRole('switch', { name: '팔로우 요청 자동 승인' });
+    const save = canvas.getByRole('button', { name: '저장' });
+
+    expect(canvas.getByLabelText('현재 팔로우 정책')).toHaveTextContent('APPROVAL_REQUIRED');
+    expect(toggle).not.toBeChecked();
+    expect(save).toBeDisabled();
+
+    await userEvent.click(toggle);
+    expect(canvas.getByLabelText('현재 팔로우 정책')).toHaveTextContent('OPEN');
+    expect(toggle).toBeChecked();
+    expect(save).toBeEnabled();
+
+    await userEvent.click(save);
+    expect(canvas.getByLabelText('마지막 제출 팔로우 정책')).toHaveTextContent('OPEN');
   },
 };
 
