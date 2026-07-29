@@ -113,22 +113,23 @@
 ### PROD-418은 Reaction이 있는 Post에서 modal 기반 Profile 탐색을 제공한다
 
 - Decision Date: 2026-07-25
+- Decision Updated: 2026-07-29
 - Decision Class: Implementation Choice
 - Authority / Provenance:
   - `docs/domain/objects/reaction.md`
   - `docs/design/reactions.md`
   - `PROD-418`의 2026-07-25 설계 결정 댓글
-- Status: Active
+- Status: Active for data·pagination·error behavior; entry interaction superseded by the 2026-07-29 PROD-417 decision
 - Context / Problem: PROD-418은 이미 제공된 viewer-independent Type별 count와 viewer-filtered Profile connection을 현재 Post 맥락에서 연결해야 한다. Reaction이 없는 Post의 빈 요약, 별도 route, 조회 오류용 전역 알림과 매번 빈 loading부터 시작하는 modal은 이 결과에 불필요한 UI·cache 계약을 추가한다.
-- Decision Outcome: `reactionCounts`가 비어 있으면 `ReactionSummary`를 렌더링하지 않고, 양수 count가 있으면 server 순서를 그대로 표시한다. Type 선택은 현재 Post 위의 modal overlay를 열며 별도 route나 URL을 만들지 않는다. modal은 외부 영역 클릭·터치와 Android back으로 닫고 별도 닫기 버튼을 두지 않는다. 최초 Profile 조회 실패와 추가 page 실패는 각각 modal·목록 내부 오류와 다시 시도로 복구하며 추가 page 실패 전까지의 Profile을 유지한다. Profile 조회 오류에는 snackbar·toast·전역 outlet을 추가하지 않는다. 같은 Type의 modal 재진입은 cache된 목록을 먼저 표시하고 background에서 갱신하며 selected Profile 전환 뒤에는 이전 Relay Environment의 cache를 재사용하지 않는다.
+- Decision Outcome: `reactionCounts`가 비어 있으면 `ReactionSummary`를 렌더링하지 않고, 양수 count가 있으면 server 순서를 그대로 표시한다. PROD-418 전달 당시에는 Type token이 현재 Post 위 modal을 열었지만, 2026-07-29 PROD-417 계약부터 token은 same-Type Reaction toggle을 실행하고 Profile 목록은 Reaction 전용 More 버튼에서 연다. modal의 별도 route/URL 없음, 외부 영역·Android back dismiss, 별도 닫기 버튼 없음, 최초·추가 page inline retry, 기존 edge 보존, cache 우선 background 갱신과 selected Profile별 Relay Environment 격리는 유지한다.
 - Alternatives Considered: Reaction이 없는 Post에 빈 요약을 표시하는 방식은 요약 진입점 없이 중복 empty UI를 남긴다. Profile 목록을 별도 route로 여는 방식은 현재 Post 맥락과 불필요한 URL 계약을 추가한다. 조회 오류를 snackbar로만 알리는 방식은 지속적인 복구 동작을 화면 밖의 일시적 알림에 의존하게 한다. 매번 network-only loading부터 시작하는 방식은 이미 조회한 목록을 불필요하게 숨긴다.
-- Consequences: PROD-418은 기존 backend API와 props-only seam의 Relay·modal·cache 통합 및 기존 Post detail route의 요약 진입점만 추가한다. Reaction 추가·삭제 mutation 오류 UX, snackbar/toast infrastructure, 공통 Post Action Bar와 feed/list surface 조립은 이 결정에 포함하지 않는다.
-- Confirmation / Follow-up: PROD-418 component/integration test는 zero-count 미렌더링, server 순서, modal dismiss, 최초·추가 page 오류 복구, 기존 edge 보존, cache 우선 재진입과 selected Profile 격리를 검증한다.
+- Consequences: PROD-418의 기존 backend API, Relay connection, modal·cache 구현은 재사용한다. PROD-417은 같은 seam의 token interaction, Reaction 전용 More·emoji tab, 목록 surface와 mutation 상태 연결을 소유하며 API·DB를 확장하지 않는다.
+- Confirmation / Follow-up: 기존 PROD-418 검증은 zero-count, server 순서, modal dismiss, 조회 오류·edge·cache 격리를 계속 보장한다. PROD-417은 새 token toggle·More/tab/list surface를 별도로 검증한다.
 
 ### PROD-450은 supplied option 기반 Quick Picker 프레젠테이션을 먼저 전달한다
 
 - Decision Date: 2026-07-23
-- Decision Updated: 2026-07-24
+- Decision Updated: 2026-07-29
 - Decision Class: Implementation Choice
 - Authority / Provenance:
   - `docs/domain/objects/reaction.md`
@@ -137,14 +138,15 @@
   - `openspec/changes/add-post-reactions/specs/post-reaction-ui/spec.md`
 - Status: Active
 - Context / Problem: 최종 Reaction selector는 selected Profile의 실제 add/delete mutation과 Relay cache를 연결해야 하지만, PROD-450은 API 없이 독립 검증 가능한 프레젠테이션과 상태 경계만 소유한다. 현재는 canonical 여섯 Unicode를 GitHub Reaction 선택기처럼 빠르게 고르는 panel이 필요하고, 장기 custom emoji 탐색은 별도 제품·federation 계약이 필요하다.
-- Decision Outcome: PROD-450은 부모가 공급한 ordered option을 한 줄로 표시하는 props-only `ReactionSelector` Quick Picker panel을 제공한다. 외부 컨테이너는 16px radius와 border를 유지하고 각 44×44px option은 border 없는 12px 둥근 사각형으로 표시한다. selected는 이모지 아래의 분리된 `primary`/`primaryHover` 배경 layer를 70% opacity로 표시해 이모지 opacity를 유지하고, error에는 빨간 border를 추가하지 않는다. pending은 이모지를 유지한 채 `zIndex` 없는 full-size 투명 overlay를 표시하고, 가운데에서 `textSecondary` head가 투명한 tail로 흐려지는 24×24px·3px 두께의 연결된 180° 호를 약 820ms 주기로 시계 방향·linear 회전시킨다. spinner에는 배경 track, 점과 분리된 spoke를 사용하지 않는다. 전체 disabled이면 panel을 렌더링하지 않는다. option의 선택 identity는 표시 문자열과 분리된 opaque 값으로 취급하고 selected·pending·error를 option별 controlled 상태로 받으며, toggle intent만 callback으로 전달한다. 현재 fixture는 `🥹`, `❤️`, `🎉`, `👀`, `☘️`, `🌈`을 사용하고 서로 다른 Type의 선택 상태를 함께 유지한다. trigger, popover 위치·열림 상태, Post Action Bar 배치와 실제 mutation·Relay/cache·서버 실패 복구는 소유하지 않는다.
-- Alternatives Considered: full-opacity selected 배경은 현재 theme 색이 지나치게 강조돼 사용자가 30% 더 투명한 표현을 선택했다. 기존 `ActivityIndicator`, 점·spoke spinner와 균일한 ring은 회전 방향과 head-to-tail 진행감이 약해 제외했다. `react-awesome-spinners` package는 React DOM과 styled-components에 결합돼 universal React Native 경계에 맞지 않으므로 설치하지 않고 시각 원리만 참고한다. component 내부에 현재 여섯 Type을 고정하면 option 공급과 미래 확장을 가로막는다. Promise callback으로 비동기 상태를 내부 소유하면 PROD-417의 mutation·rollback 책임을 앞당긴다. 지금 custom emoji Full Picker까지 구현하면 identity, asset lifecycle, animation, sensitive/local-remote permission, 검색·category·최근 사용을 상위 계약 없이 선결정한다.
-- Consequences: selected 배경과 이모지를 별도 layer로 관리하고, existing `react-native-svg`와 React Native `Animated`로 서로 맞닿은 arc segment를 하나의 회전 layer 안에 그린다. 새 dependency는 추가하지 않으며 spinner는 Quick Picker의 private presentation detail로 유지한다. PROD-417은 같은 seam에 실제 option data, add/delete adapter와 selected Profile cache를 연결할 수 있다. 장기 Misskey형 palette·Full Picker와 custom emoji renderer는 별도 Domain Gate와 Issue Gate 뒤 option 공급자로 연결할 수 있지만, 이번 결정은 custom emoji identity나 wire format을 정하지 않는다. 이 presentation slice는 최종 `post-reaction-ui` spec을 축소하거나 대체하지 않는다.
-- Confirmation / Follow-up: PROD-450 Storybook/component interaction에서 supplied order, 현재 여섯 fixture, 선택·해제·복수 Type, option별 border·radius, 70% selected 배경과 100% 이모지, 44×44px pending overlay와 24×24px fading arc, error와 전체 disabled 미렌더링 및 callback을 검증한다. 390px·600px viewport에서 layout을 확인한다. PROD-417은 실제 Relay data shape, mutation 성공·실패 복구와 selected Profile 전환을 별도로 검증한다.
+- Decision Outcome: PROD-450은 부모가 공급한 ordered option을 한 줄로 표시하는 props-only `ReactionSelector` Quick Picker panel과 opaque option identity, controlled selected·pending·error, toggle callback seam을 제공했다. 2026-07-29 PROD-417은 최신 canonical 디자인에 맞춰 Web option을 32×32 CSS px, emoji를 20px, pending spinner를 16×16px·2px stroke, option gap과 panel padding을 4px로 조정한다. border 없는 12px radius option, 분리한 `primary`/`primaryHover` selected layer의 70% opacity, error의 red border 없음, `zIndex` 없는 fading arc, 전체 disabled 미렌더링과 supplied option 계약은 유지한다. iOS·Android target과 spinner geometry는 이번 Web 우선 변경에서 축소하지 않는다.
+- Alternatives Considered: Web 44px 유지는 WCAG 2.2 AA 최소 target보다 크지만 Figma Post Action Bar의 28px 밀도와 실제 Reaction row에 비해 과도한 높이를 만든다. 28px로 동일화하면 emoji·pending 상태의 독립 target 여유가 줄어 32px를 선택했다. full-opacity selected 배경, 기존 `ActivityIndicator`, 점·spoke spinner와 균일한 ring, 새 spinner package, component 내부 Type 고정과 custom emoji Full Picker는 기존 이유로 채택하지 않았다.
+- Consequences: platform 분기를 presentation 내부에 유지하고 새 dependency를 추가하지 않는다. Native 44pt·48dp target과 runtime 관찰은 Native 출시 gate이며 Web 32px 검증으로 대체하지 않는다. 장기 palette·Full Picker와 custom emoji renderer는 별도 Domain·Issue Gate 뒤 option 공급자로 연결한다.
+- Confirmation / Follow-up: PROD-417 Storybook/component interaction에서 Web exact 32px option, 20px emoji, 16px·2px fading arc, 70% selected layer, supplied order·callback을 검증한다. 320px·390px·600px Web runtime과 Native 미실행 상태를 분리해 기록한다.
 
 ### PROD-417은 기존 Post Action Bar에 private anchored Reaction popover를 연결한다
 
 - Decision Date: 2026-07-28
+- Decision Updated: 2026-07-29
 - Decision Class: Implementation Choice
 - Authority / Provenance:
   - `docs/design/reactions.md`
@@ -153,14 +155,15 @@
   - `openspec/changes/add-post-reactions/specs/post-reaction-ui/spec.md`
 - Status: Active
 - Context / Problem: PROD-450의 `ReactionSelector`는 펼쳐진 props-only panel만 제공한다. PROD-417은 실제 Post Action Bar trigger와 모든 platform의 overlay를 소유해야 하며, 향후 Reply composer가 overlay를 사용할 가능성만으로 아직 공통 계약이 없는 `ActionMenu`나 범용 anchored overlay를 확장해서는 안 된다.
-- Decision Outcome: PROD-417은 `ReactionSelector`를 변경하지 않고 feature-local private `ReactionAction`과 `ReactionPopover`를 추가한다. `PostActionBar`는 공개 composite fragment, toolbar semantics와 action 순서를 유지하고 Reaction child에 fragment ref를 전달한다. popover는 Web·iOS·Android 모두 trigger에 anchored된 작은 floating surface이며, 공간에 따라 위·아래로 전환하고 viewport/safe area 안으로 수평 위치를 제한한다. 여섯 option의 고유 너비가 가용 너비보다 크면 target 크기를 줄이지 않고 popover shell 안에서 수평 scroll을 허용한다. 같은 trigger, 외부 입력, Web `Escape`, Android back, Post unmount와 actor 전환으로 닫는다. Web에서는 열 때 첫 option, 닫을 때 trigger focus를 보장하고 mutation 완료 뒤에도 여러 Type을 조작할 수 있게 열린 상태를 유지한다. guest이거나 selected Profile이 없으면 trigger는 Action Bar 자리를 유지한 채 disabled이며 popover·mutation을 시작하지 않는다.
+- Decision Outcome: PROD-417은 feature-local private `ReactionAction`과 `ReactionPopover`를 유지하고, `ReactionSelector`의 Web presentation만 최신 32px 계약에 맞춘다. `PostActionBar`는 공개 composite fragment, toolbar semantics와 action 순서를 유지한다. popover는 Web·iOS·Android 모두 trigger에 anchored된 작은 floating surface이며 공간에 따라 위·아래 전환, viewport/safe area 수평 clamp와 feature-local horizontal `ScrollView`를 사용한다. 같은 trigger, 외부 입력, Web `Escape`, Android back, Post unmount와 actor 전환으로 닫고 Web focus 이동·복원과 mutation 뒤 열린 상태를 유지한다. guest이거나 selected Profile이 없으면 trigger는 자리를 유지한 채 disabled이며 popover·mutation을 시작하지 않는다.
 - Alternatives Considered: 기존 `ActionMenu` 일반화는 item-only Web menu와 native bottom sheet 계약을 임의 ReactNode·anchored native overlay까지 확장한다. 처음부터 공용 `AnchoredPopover`를 만들면 현재 단일 consumer와 확정되지 않은 Reply surface를 근거로 public abstraction을 선결정한다. mobile bottom sheet는 여섯 fixed option의 짧은 quick action에 과도하다.
-- Consequences: ordinary·Quote Post는 자신의 Post Action Bar fragment가 가리키는 Post를, 순수 Repost는 source Post Action Bar fragment가 가리키는 source Post를 mutation 대상으로 사용한다. Reply가 나중에 동일한 anchored UX를 확정하면 그때 공통 primitive를 추출할 수 있다. PROD-417은 Reply composer·More·전체 action 조립이나 disabled trigger에서 로그인·가입·Profile 선택 onboarding으로 연결하는 흐름을 소유하지 않는다.
+- Consequences: ordinary·Quote Post는 own Post, 순수 Repost는 source Post를 Action Bar와 summary의 공통 `reactionTarget`으로 사용한다. Reply가 나중에 동일한 anchored UX를 확정하면 그때 공통 primitive를 추출할 수 있다. PROD-417은 Reaction 전용 More를 소유하지만 Reply composer·Post Action Bar의 일반 More action·전체 action 조립이나 onboarding 흐름은 소유하지 않는다.
 - Confirmation / Follow-up: Web interaction은 retrigger, outside pointer, `Escape`, 첫 option focus, trigger focus 복원, `aria-haspopup`/`aria-expanded`, 열린 상태 유지, top/left와 bottom/right edge의 양방향 flip/clamp·좁은 너비 scroll과 selected Profile 부재 시 disabled/no-request를 검증한다. production Post fixture에서 ordinary·Quote·순수 Repost의 mutation target을 검증한다. iOS·Android 동작 계약은 유지하지만, 2026-07-28 사용자 결정에 따라 native app runtime 관찰은 현재 제품 범위와 PROD-417 PR Ready gate에서 제외하고 native app 작업 재개 시 후속 확인한다.
 
 ### PROD-417은 server-confirmed payload로 selected Profile Reaction cache를 갱신한다
 
 - Decision Date: 2026-07-28
+- Decision Updated: 2026-07-29
 - Decision Class: Implementation Choice
 - Authority / Provenance:
   - `docs/design/reactions.md`
@@ -169,10 +172,27 @@
   - `openspec/changes/add-post-reactions/specs/post-reaction-ui/spec.md`
 - Status: Active
 - Context / Problem: selector는 non-connection `Post.viewerReactions`를 selected Profile별 Relay Environment에서 읽는다. optimistic state와 불완전한 updater는 같은 Type 중복, idempotent delete의 nullable ID 오판, actor 전환 뒤 stale UI 갱신 또는 cache record 합성을 만들 수 있다.
-- Decision Outcome: fixed 여섯 Type은 zero-count와 무관하게 client catalog가 공급하고 `viewerReactions`는 selected state만 제공한다. optimistic update는 사용하지 않는다. add payload에 `Reaction { id type }`이 있고 대상 Post와 기존 `viewerReactions` field가 모두 있으면 같은 Type 또는 같은 data ID의 record를 제거한 뒤 반환 record 하나를 추가한다. delete payload의 `post`가 non-null이면 nullable `reactionId`와 무관하게 반환된 Post와 `viewerReactions`를 Relay가 authoritative하게 정규화하고, `post: null`이면 기존 field에서 요청 Type만 제거한다. payload가 없으면 record나 field를 변경하지 않는다. add와 delete `post: null` fallback의 수동 updater는 대상 Post/field가 없을 때 이를 합성하지 않는다. 필요한 payload와 GraphQL `errors`가 함께 오면 payload 결과를 성공으로 처리하며, payload 부재와 network failure만 실패로 처리한다.
-- Alternatives Considered: optimistic updater는 빠른 시각 반응을 주지만 현재 picker가 명시적인 Type별 pending을 제공하고 rollback·부분 응답·actor 전환 복잡도를 늘린다. connection directive나 refetch는 plural linked field에 맞지 않으며 불필요한 network/cache 표면을 만든다. payload가 있는데 GraphQL error 하나만으로 전체 실패 처리하면 Relay가 이미 정규화한 결과를 되돌리거나 자동 정규화를 회피하는 추가 계약이 필요하다.
-- Consequences: mutation과 updater는 요청을 시작한 Relay Environment 안에서 끝난다. actor token 또는 Environment가 달라진 늦은 callback은 현재 화면의 popover·pending·error를 바꾸지 않는다. 같은 Type의 한 surface 내 중복 입력은 막고 서로 다른 Type은 동시에 진행할 수 있지만, 같은 actor의 여러 surface를 client 전역에서 직렬화하지 않으므로 cross-surface same-Type 최종 상태는 server 응답 순서에 의존한다.
-- Confirmation / Follow-up: production updater seam을 실제 mutation으로 실행하는 unit test에서 add same-Type/different-ID replacement, same-ID 중복 방지, 다른 Type 보존, add와 `post: null` fallback의 payload/Post/field 부재 무합성, delete non-null Post의 정상 정규화·authoritative list·`post: null` fallback·nullable `reactionId`, add 성공 뒤 delete, reverse completion과 actor 전환 stale callback을 검증한다. Storybook integration은 Type별 pending/error, 실패·재시도, unmount 뒤 늦은 callback과 actor 전환을 검증한다.
+- Decision Outcome: fixed 여섯 Type은 zero-count와 무관하게 client catalog가 공급하고 `viewerReactions`는 selected state를 제공한다. optimistic update는 사용하지 않는다. 기존 add/delete updater의 same-Type/data-ID dedupe, non-null Post normalization, `post: null` fallback, no-synthesis와 partial GraphQL payload 계약을 유지한다. 성공 payload 뒤에만 선택 상태와 count delta를 반영하고 대상 Post의 `reactionCounts`만 targeted refetch해 authoritative server count로 맞춘다. payload가 없거나 network가 실패하면 선택 상태와 count를 변경하지 않는다.
+- Alternatives Considered: optimistic updater는 rollback·부분 응답·actor 전환 복잡도를 늘린다. add payload에 Post/count를 추가하면 API 범위를 확장한다. mutation 뒤 전체 surface refetch는 불필요한 network 범위가 크므로 대상 Post의 `reactionCounts`만 다시 조회한다. payload가 있는데 GraphQL error 하나만으로 전체 실패 처리하면 Relay가 이미 정규화한 결과와 충돌한다.
+- Consequences: mutation, updater와 targeted refetch는 요청을 시작한 Relay Environment 안에서 끝난다. actor token 또는 operation guard가 다른 늦은 callback은 현재 화면의 popover·pending·error·selected·count를 바꾸지 않는다. 같은 Type의 한 surface 내 중복 입력은 막고 서로 다른 Type은 동시에 진행할 수 있지만, cross-surface same-Type 최종 상태는 server 응답 순서에 의존한다.
+- Confirmation / Follow-up: 기존 updater matrix에 성공 전 count 불변, 성공 뒤 delta와 targeted refetch, refetch 실패·역순 완료·actor 전환 stale callback을 추가하고 Quick Picker와 summary token의 공유 상태를 검증한다.
+
+### PROD-417은 목록·상세 Reaction token toggle과 More 기반 Profile 탐색을 연결한다
+
+- Decision Date: 2026-07-29
+- Decision Class: Product and Implementation Choice
+- Authority / Provenance:
+  - `docs/design/reactions.md`
+  - `docs/design/accessibility.md`
+  - `PROD-417`
+  - `PROD-418`
+  - `PROD-414`
+- Status: Active
+- Context / Problem: PROD-418이 전달한 summary token은 Profile modal 진입점이었고 상세에만 연결됐다. 실제 Reaction을 Discord·Slack처럼 기존 token에서 바로 toggle하려면 Quick Picker와 summary가 같은 actor·Post·pending/error/cache 상태를 공유해야 하며, Profile 탐색에는 별도 진입점이 필요하다. 순수 Repost의 기존 summary와 Action Bar가 서로 다른 Post를 가리키는 불일치도 제거해야 한다.
+- Decision Outcome: private `PostReactionController`가 surface에서 한 번 결정한 `reactionTarget`의 `viewerReactions`, Type별 pending/error, add/delete와 count refetch를 소유하고 Quick Picker와 summary token에 공급한다. 목록과 상세 모두 body/source 아래와 Action Bar 위에 summary row를 표시한다. 일반·Quote는 own Post, 순수 Repost는 source Post를 사용한다. 양수 count token은 same-Type add/delete toggle이며 selected Profile이 없으면 보이되 disabled다. standalone `반응` 제목을 제거하고 Web token을 32px pill로 표시한다. 양수 count 뒤의 32px Reaction 전용 More는 selected Profile 유무와 무관하게 modal을 열며 server 순서의 emoji tab 중 첫 Type을 기본 선택한다. Profile item의 emoji는 현재 tab Type에서 파생한다.
+- Alternatives Considered: token 클릭으로 modal을 계속 열면 기존 Reaction에서 직접 toggle할 수 없다. plus는 Reaction 추가 affordance와 혼동되므로 Profile 전체를 탐색하는 ellipsis More를 선택했다. Quick Picker·summary별 mutation state는 pending/error/count가 갈라진다. generic React context나 public controller는 현재 단일 feature 범위를 불필요하게 넓힌다. outer Repost summary를 유지하면 source Action Bar mutation과 표시 count가 다른 Post를 가리킨다.
+- Consequences: PROD-417은 완료된 PROD-418의 API·Relay pagination·modal cache를 재사용하면서 entry interaction, emoji tab과 목록 surface를 변경한다. Reaction 전용 More는 Post Action Bar의 일반 More menu와 별개다. selected Profile이 없어도 viewer-independent count와 허용된 Profile 목록 조회는 가능하지만 mutation은 불가능하다. API·DB, custom emoji, generic Storybook/mock infrastructure와 global toast는 추가하지 않는다.
+- Confirmation / Follow-up: Storybook/component/integration test는 exact Web geometry, picker/token 공유 상태, 성공 전 불변·성공 뒤 count/refetch·실패 보존, 목록·상세 ordinary/Quote/source Repost target, selected Profile 부재, More·tab·item emoji·pagination/retry를 검증한다. 320px·390px·600px Web runtime 관찰과 미실행 Native 관찰을 분리해 기록한다.
 
 ### Reaction Notification은 source 밖의 Best Effort projection으로 처리한다
 

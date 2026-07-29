@@ -11,12 +11,20 @@
 - **AND** 현재 count가 0인 Type도 client catalog에서 같은 순서로 공급한다
 - **AND** selected Profile이 이미 남긴 Type을 선택 상태로 표시한다
 
+#### Scenario: Web Quick Picker geometry
+
+- **WHEN** Reaction 선택 component를 Web에서 표시한다
+- **THEN** 각 option은 32×32 CSS px target과 20px emoji를 사용한다
+- **AND** pending spinner는 16×16px와 2px stroke를 사용한다
+- **AND** option gap과 panel padding은 각각 4px이고 selected 배경 layer만 70% opacity를 사용한다
+- **AND** iOS·Android target과 spinner geometry는 이번 Web 우선 변경으로 축소하지 않는다
+
 #### Scenario: anchored popover 열기와 닫기
 
 - **WHEN** 사용자가 기존 Post Action Bar의 Reaction trigger를 누른다
 - **THEN** Web·iOS·Android에서 trigger에 붙은 작은 floating popover를 연다
 - **AND** 공간에 따라 trigger 위·아래로 전환하고 viewport와 safe area 안으로 수평 위치를 제한한다
-- **AND** 여섯 option의 고유 너비가 가용 너비보다 크면 target 크기를 줄이지 않고 popover shell 안에서 수평 scroll을 허용한다
+- **AND** 여섯 option의 고유 너비가 가용 너비보다 크면 target 크기를 줄이지 않고 feature-local `ScrollView` shell 안에서 수평 scroll을 허용한다
 - **AND** 같은 trigger 재입력, 외부 클릭·터치, Web `Escape` 또는 Android back으로 닫는다
 - **AND** Web에서는 열릴 때 첫 option에 focus하고 닫힐 때 trigger에 focus를 복원한다
 
@@ -89,15 +97,42 @@
 - **WHEN** 순수 Repost가 source Post의 Action Bar를 표시한다
 - **THEN** source Post ID를 mutation 대상으로 사용한다
 
+### Requirement: Post surface의 공유 Reaction controller
+
+클라이언트는 한 Post surface의 Quick Picker와 Reaction 요약 token이 동일하게 결정된 `reactionTarget`, selected 상태, Type별 pending·error와 server-confirmed mutation 결과를 공유하게 해야 한다(MUST). 이를 위한 controller는 Reaction feature 내부에 유지해야 하며(MUST), generic context나 공용 mock infrastructure로 일반화해서는 안 된다(MUST NOT).
+
+#### Scenario: Quick Picker와 요약 token의 공유 toggle
+
+- **WHEN** 사용자가 Quick Picker option 또는 같은 Type의 Reaction 요약 token을 누른다
+- **THEN** 두 control은 같은 selected Profile과 `reactionTarget`의 추가·삭제 동작을 실행한다
+- **AND** 한쪽에서 성공한 선택 상태·pending·error 결과는 같은 surface의 다른쪽에도 일관되게 표시된다
+
+#### Scenario: server-confirmed count 갱신
+
+- **WHEN** Reaction 추가·삭제 mutation이 성공 payload를 반환한다
+- **THEN** 클라이언트는 성공을 확인한 뒤에만 해당 Type의 선택 상태와 count delta를 반영한다
+- **AND** 대상 Post의 `reactionCounts`만 좁게 다시 조회해 최종 server count로 맞춘다
+- **AND** mutation payload가 도착하기 전에는 선택 상태와 count를 바꾸지 않는다
+- **AND** API나 database payload를 확장하지 않는다
+
+#### Scenario: count 갱신 실패와 actor 격리
+
+- **WHEN** mutation이 실패하거나 actor 전환 뒤 이전 mutation·refetch callback이 도착한다
+- **THEN** 실패 전 server-confirmed 선택 상태와 count를 유지한다
+- **AND** 이전 actor callback은 새 actor의 선택·count·pending·error를 변경하지 않는다
+- **AND** 실패한 Type 외의 toggle과 Profile 목록 탐색은 계속 사용할 수 있다
+
 ### Requirement: Reaction 요약 component
 
-클라이언트는 Post의 viewer-independent Type별 count를 내림차순으로 표시하고, Type별로 viewer가 조회할 수 있는 Profile 목록을 열어 page 단위로 탐색할 수 있어야 한다(MUST).
+클라이언트는 목록과 상세 Post에 viewer-independent Type별 count를 내림차순으로 표시하고, 기존 token으로 같은 Type의 Reaction을 toggle하며, Reaction 전용 More 버튼에서 viewer가 조회할 수 있는 Profile 목록을 Type별 page 단위로 탐색할 수 있어야 한다(MUST).
 
 #### Scenario: Type별 count 표시
 
 - **WHEN** Post에 현재 Reaction이 존재한다
 - **THEN** component는 Type과 count를 count 내림차순으로 표시한다
 - **AND** count 동률 Type의 순서에 의존하지 않는다
+- **AND** standalone `반응` 제목을 표시하지 않는다
+- **AND** Web token은 높이 32px, emoji 20px, count 14px, 내부 gap 4px, 좌우 padding 8px와 token gap 4px을 사용한다
 
 #### Scenario: Reaction이 없는 Post
 
@@ -105,12 +140,36 @@
 - **THEN** 클라이언트는 Reaction 요약 영역을 렌더링하지 않는다
 - **AND** zero-count Type이나 별도 빈 요약 상태를 합성하지 않는다
 
-#### Scenario: Type별 Profile 목록 진입
+#### Scenario: 기존 Reaction token toggle
 
-- **WHEN** 사용자가 한 Reaction Type 요약을 연다
-- **THEN** 클라이언트는 현재 Post 위의 modal overlay에서 그 Type의 Profile connection만 표시한다
+- **WHEN** 사용자가 양수 count인 한 Reaction Type token을 누른다
+- **THEN** selected Profile이 그 Type에 반응하지 않았다면 추가하고 이미 반응했다면 삭제한다
+- **AND** token은 Profile 목록 modal을 직접 열지 않는다
+- **AND** selected Profile이 없으면 token을 표시하되 disabled로 유지하고 mutation을 시작하지 않는다
+
+#### Scenario: Reaction More와 Type tab Profile 목록 진입
+
+- **WHEN** 사용자가 양수 count Type 뒤의 Reaction 전용 More 버튼을 누른다
+- **THEN** 클라이언트는 현재 Post 위의 modal overlay를 연다
+- **AND** modal 상단에 server가 제공한 양수 count Type을 같은 순서의 emoji tab으로 표시한다
+- **AND** 처음 열 때 server 순서의 첫 Type을 선택하고 tab 전환 시 해당 Type의 Profile connection만 표시한다
+- **AND** Profile 목록 item에는 현재 Type의 Reaction emoji를 표시한다
 - **AND** 별도 route나 공개 URL을 만들지 않는다
 - **AND** server가 viewer 기준으로 숨긴 Profile을 client에서 복구하거나 count에서 빼지 않는다
+- **AND** More는 selected Profile이 없어도 사용할 수 있다
+
+#### Scenario: Reaction More geometry와 좁은 너비
+
+- **WHEN** Reaction 요약 row를 Web에서 표시한다
+- **THEN** 양수 count Type 뒤에 32×32px target과 16px ellipsis의 More button을 표시한다
+- **AND** 가용 너비가 부족하면 token과 More를 줄이거나 여러 줄로 바꾸지 않고 feature-local horizontal `ScrollView` shell을 사용한다
+
+#### Scenario: 목록·상세와 Reaction 대상
+
+- **WHEN** Reaction 요약 row를 목록 또는 상세 Post에 표시한다
+- **THEN** 일반 Post와 Quote Post는 own Post를 `reactionTarget`으로 사용한다
+- **AND** 순수 Repost는 source Post를 `reactionTarget`으로 사용한다
+- **AND** 요약 row는 Post body 또는 source body 아래와 Post Action Bar 위에 표시한다
 
 #### Scenario: Profile 목록 modal 닫기
 
@@ -150,10 +209,10 @@ Reaction 선택과 요약 UI는 각 소유 범위의 component 및 integration �
 #### Scenario: component 상태 검증
 
 - **WHEN** Reaction component와 integration test를 실행한다
-- **THEN** 선택·해제·복수 Type·pending·오류 복구·popover dismiss/focus·Post 종류별 mutation 대상·actor 격리·count 정렬·Profile pagination 상태를 실제 Relay data shape로 검증한다
+- **THEN** Web 32px geometry, picker·token 공유 선택·해제, 복수 Type·pending·오류 복구·popover dismiss/focus, 목록·상세 Post 종류별 mutation 대상, actor 격리, count/refetch, More·emoji tab·Profile item emoji와 pagination 상태를 실제 Relay data shape로 검증한다
 
 #### Scenario: Post Action Bar 책임 경계
 
 - **WHEN** 이 capability를 완료한다
 - **THEN** PROD-417은 기존 Post Action Bar의 Reaction action과 실제 Post surface 연결을 제공한다
-- **AND** Reply composer·More를 포함한 전체 action 조립, 기존 `ActionMenu` 일반화와 범용 anchored overlay 추출은 요구하지 않는다
+- **AND** Reply composer·Post Action Bar의 일반 More action을 포함한 전체 action 조립, 기존 `ActionMenu` 일반화와 범용 anchored overlay 추출은 요구하지 않는다
