@@ -44,7 +44,7 @@ test('Slack에 안전한 plain-text payload를 한 번 전송한다', async (t) 
   assert.deepEqual(await requests[0]?.json(), {
     blocks: [
       {
-        text: { text: '새 Web 피드백', type: 'plain_text' },
+        text: { text: '새 피드백', type: 'plain_text' },
         type: 'header',
       },
       {
@@ -62,7 +62,7 @@ test('Slack에 안전한 plain-text payload를 한 번 전송한다', async (t) 
         type: 'section',
       },
     ],
-    text: '새 Web 피드백',
+    text: '새 피드백 · 종류: 필요한 점',
     unfurl_links: false,
     unfurl_media: false,
   });
@@ -80,7 +80,7 @@ test('선택 Profile이 없으면 Account ID와 Profile 부재만 전달한다',
   assert.deepEqual(payload, {
     blocks: [
       {
-        text: { text: '새 Web 피드백', type: 'plain_text' },
+        text: { text: '새 피드백', type: 'plain_text' },
         type: 'header',
       },
       {
@@ -96,7 +96,7 @@ test('선택 Profile이 없으면 Account ID와 Profile 부재만 전달한다',
         type: 'section',
       },
     ],
-    text: '새 Web 피드백',
+    text: '새 피드백 · 종류: 필요한 점',
     unfurl_links: false,
     unfurl_media: false,
   });
@@ -121,6 +121,44 @@ test('webhook 설정이 없거나 Slack 전달이 실패하면 안전한 오류�
     /피드백을 전달하지 못했어요/u,
   );
   assert.equal(calls, 1);
+});
+
+test('webhook URL은 canonical Slack origin과 userinfo만 허용한다', async (t) => {
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return new Response(null, { status: 200 });
+  });
+
+  for (const invalidUrl of [
+    'https://user:password@hooks.slack.com/services/T000/B000/secret',
+    'https://hooks.slack.com:8443/services/T000/B000/secret',
+    'https://hooks.slack.com.evil.example/services/T000/B000/secret',
+  ]) {
+    process.env.SLACK_FEEDBACK_WEBHOOK_URL = invalidUrl;
+    await assert.rejects(
+      deliverFeedback(feedbackIdentity(), validFeedback),
+      /피드백을 전달할 수 없어요/u,
+    );
+  }
+
+  assert.equal(calls, 0);
+});
+
+test('redirect 응답은 delivery failure이고 follow-up POST를 만들지 않는다', async (t) => {
+  const requests: Request[] = [];
+  t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+    requests.push(new Request(input, init));
+    return Response.redirect('https://evil.example/collect', 307);
+  });
+
+  await assert.rejects(
+    deliverFeedback(feedbackIdentity(), validFeedback),
+    /피드백을 전달하지 못했어요/u,
+  );
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0]?.redirect, 'error');
 });
 
 test('전송 실패는 자동 재시도하지 않고 명시적 재시도만 새 POST를 시작한다', async (t) => {

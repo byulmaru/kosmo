@@ -47,56 +47,46 @@ test('schema에 login-scoped feedback mutation contract를 제공한다', () => 
   );
 });
 
-test('선택 Profile이 없는 login session도 feedback을 제출할 수 있다', async () => {
+test('선택 Profile이 없는 login session도 feedback을 제출할 수 있다', async (t) => {
   const fetch = async () => new Response(null, { status: 200 });
-  const previousFetch = globalThis.fetch;
-  globalThis.fetch = fetch;
+  t.mock.method(globalThis, 'fetch', fetch);
 
-  try {
-    const result = await graphql({
-      contextValue: { session: { accountId, id: 'session-1', profileId: null } },
-      schema,
-      source: mutation,
-      variableValues: {
-        input: { body: '  도움이 됐어요.  ', kind: 'POSITIVE' },
-      },
-    });
+  const result = await graphql({
+    contextValue: { session: { accountId, id: 'session-1', profileId: null } },
+    schema,
+    source: mutation,
+    variableValues: {
+      input: { body: '  도움이 됐어요.  ', kind: 'POSITIVE' },
+    },
+  });
 
-    assert.equal(result.errors, undefined);
-    assert.equal(
-      (result.data as { submitFeedback?: { completed?: boolean } }).submitFeedback?.completed,
-      true,
-    );
-  } finally {
-    globalThis.fetch = previousFetch;
-  }
+  assert.equal(result.errors, undefined);
+  assert.equal(
+    (result.data as { submitFeedback?: { completed?: boolean } }).submitFeedback?.completed,
+    true,
+  );
 });
 
-test('anonymous와 invalid body는 Slack 전에 거부한다', async () => {
+test('anonymous와 invalid body는 Slack 전에 거부한다', async (t) => {
   let calls = 0;
-  const previousFetch = globalThis.fetch;
-  globalThis.fetch = async () => {
+  t.mock.method(globalThis, 'fetch', async () => {
     calls += 1;
     return new Response(null, { status: 200 });
-  };
+  });
 
-  try {
-    const anonymous = await graphql({
-      contextValue: {},
-      schema,
-      source: mutation,
-      variableValues: { input: { body: 'body', kind: 'POSITIVE' } },
-    });
-    const empty = await graphql({
-      contextValue: { session: { accountId, id: 'session-1', profileId: null } },
-      schema,
-      source: mutation,
-      variableValues: { input: { body: '   ', kind: 'POSITIVE' } },
-    });
-    assert.equal(anonymous.errors?.length, 1);
-    assert.equal(empty.errors?.length, 1);
-    assert.equal(calls, 0);
-  } finally {
-    globalThis.fetch = previousFetch;
-  }
+  const anonymous = await graphql({
+    contextValue: {},
+    schema,
+    source: mutation,
+    variableValues: { input: { body: 'body', kind: 'POSITIVE' } },
+  });
+  const empty = await graphql({
+    contextValue: { session: { accountId, id: 'session-1', profileId: null } },
+    schema,
+    source: mutation,
+    variableValues: { input: { body: '   ', kind: 'POSITIVE' } },
+  });
+  assert.equal(anonymous.errors?.length, 1);
+  assert.equal(empty.errors?.length, 1);
+  assert.equal(calls, 0);
 });

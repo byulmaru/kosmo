@@ -37,7 +37,9 @@ const getWebhookUrl = (value: string | undefined) => {
     const url = new URL(value);
     if (
       url.protocol !== 'https:' ||
-      url.hostname !== 'hooks.slack.com' ||
+      url.origin !== 'https://hooks.slack.com' ||
+      url.username ||
+      url.password ||
       !slackWebhookPath.test(url.pathname) ||
       url.search ||
       url.hash
@@ -57,7 +59,7 @@ const createPayload = (
 ) => ({
   blocks: [
     {
-      text: { text: '새 Web 피드백', type: 'plain_text' },
+      text: { text: '새 피드백', type: 'plain_text' },
       type: 'header',
     },
     {
@@ -79,7 +81,7 @@ const createPayload = (
       type: 'section',
     },
   ],
-  text: '새 Web 피드백',
+  text: `새 피드백 · 종류: ${kindLabels[kind]}`,
   unfurl_links: false,
   unfurl_media: false,
 });
@@ -108,6 +110,7 @@ export const deliverFeedback = async (identity: FeedbackIdentity, input: Feedbac
       body: JSON.stringify(createPayload(input, identity)),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
+      redirect: 'error',
       signal: controller.signal,
     });
 
