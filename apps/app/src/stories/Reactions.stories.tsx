@@ -88,6 +88,18 @@ const reactionPostSummary = {
   viewerReactions: [],
 };
 
+const reactionPostSummaryAllTypes = {
+  ...reactionPostSummary,
+  reactionCounts: [
+    { count: 12, type: '🥹' },
+    { count: 11, type: '❤️' },
+    { count: 10, type: '🎉' },
+    { count: 9, type: '👀' },
+    { count: 8, type: '☘️' },
+    { count: 7, type: '🌈' },
+  ],
+};
+
 function reactionPostWithProfile(displayName: string, id: string) {
   return {
     __typename: 'Post' as const,
@@ -311,6 +323,9 @@ function ReactionProfileListCatalog() {
       <Section title="Populated">
         <ReactionProfileList items={items} loading reactionType="❤️" />
       </Section>
+      <Section title="Single profile">
+        <ReactionProfileList items={items.slice(0, 1)} reactionType="❤️" />
+      </Section>
       <Section title="Pagination">
         <ReactionProfileList
           hasNext
@@ -527,6 +542,8 @@ export const AllStates: Story = {
 export const ProfileListStates: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const populatedSection = within(canvas.getByText('Populated').parentElement!);
+    const singleProfileSection = within(canvas.getByText('Single profile').parentElement!);
 
     expect(canvas.getByText(profileCopy.loadingTitle)).toBeVisible();
     expect(canvas.getByRole('progressbar', { name: profileCopy.loadingTitle })).toBeVisible();
@@ -534,7 +551,14 @@ export const ProfileListStates: Story = {
     expect(canvas.getAllByText(profileCopy.emptyTitle)).toHaveLength(2);
     expect(canvasElement.querySelector('a[href="/@starlight"]')).toBeInTheDocument();
     expect(canvasElement.querySelector('a[href="/@milky-way"]')).toBeInTheDocument();
-    expect(canvas.getAllByText('❤️')).toHaveLength(8);
+    expect(canvas.getAllByText('❤️')).toHaveLength(9);
+    const populatedRows = populatedSection
+      .getAllByLabelText('❤️ 반응')
+      .map((reaction) => reaction.parentElement!);
+    const singleProfileRow = singleProfileSection.getByLabelText('❤️ 반응').parentElement!;
+    expect(getComputedStyle(populatedRows[0]!).borderBottomWidth).toBe('1px');
+    expect(getComputedStyle(populatedRows[1]!).borderBottomWidth).toBe('0px');
+    expect(getComputedStyle(singleProfileRow).borderBottomWidth).toBe('0px');
 
     await userEvent.click(canvas.getAllByRole('button', { name: '다시 시도' })[0]!);
     expect(canvas.getByText('초기 재시도: 1')).toBeVisible();
@@ -635,6 +659,43 @@ export const SummaryOrderAndModalDismiss: Story = {
     );
     await userEvent.click(screen.getByLabelText('반응한 프로필 닫기'));
     expect(screen.queryByRole('dialog', { name: '반응한 프로필' })).not.toBeInTheDocument();
+  },
+};
+
+export const ProfileTabsViewport320: Story = {
+  globals: { viewport: { isRotated: false, value: 'reactionProfilesNarrow' } },
+  parameters: {
+    layout: 'fullscreen',
+    relay: {
+      operationResponses: {
+        ReactionsIntegrationStoriesQuery: { data: { node: reactionPostSummaryAllTypes } },
+        ReactionProfilesModalQuery: { data: { node: reactionPostWithProfiles } },
+      },
+    },
+    viewport: {
+      options: {
+        reactionProfilesNarrow: {
+          name: 'Reaction profiles narrow',
+          styles: { height: '640px', width: '320px' },
+          type: 'mobile',
+        },
+      },
+    },
+  },
+  render: () => <PostReactionSummaryStory />,
+  play: async ({ canvasElement }) => {
+    await userEvent.click(
+      within(canvasElement).getByRole('button', { name: '반응한 프로필 보기' }),
+    );
+    const tabList = await screen.findByRole('tablist');
+    const tabs = within(tabList).getAllByRole('tab');
+
+    expect(tabs).toHaveLength(6);
+    expect(tabList.scrollWidth).toBeGreaterThan(tabList.clientWidth);
+    expect(getComputedStyle(tabList).overflowX).toBe('auto');
+    await userEvent.click(tabs[5]!);
+    expect(tabs[5]).toHaveAttribute('aria-selected', 'true');
+    await userEvent.click(screen.getByLabelText('반응한 프로필 닫기'));
   },
 };
 

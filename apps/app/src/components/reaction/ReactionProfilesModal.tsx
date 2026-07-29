@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { StateView } from '@/components/ui/StateView';
@@ -85,7 +85,13 @@ export function ReactionProfilesModal({
           role="dialog"
           style={[styles.surface, { backgroundColor: theme.card, borderColor: theme.border }]}
         >
-          <View accessibilityRole="tablist" style={styles.tabs}>
+          <ScrollView
+            accessibilityRole="tablist"
+            contentContainerStyle={styles.tabs}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.tabsScroll}
+          >
             {reactionCounts.map(({ count, type }) => {
               const selected = type === reactionType;
 
@@ -113,7 +119,7 @@ export function ReactionProfilesModal({
                 </Pressable>
               );
             })}
-          </View>
+          </ScrollView>
           <ScrollView contentContainerStyle={styles.content}>
             <RouteBoundary
               key={reactionType}
@@ -150,15 +156,18 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   tabs: {
+    alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.xs,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
   },
+  tabsScroll: { flexGrow: 0, maxWidth: '100%' },
   tab: {
     alignItems: 'center',
     borderRadius: radii.sm,
     borderWidth: 1,
+    flexShrink: 0,
     justifyContent: 'center',
     minHeight: 32,
     paddingHorizontal: spacing.sm,

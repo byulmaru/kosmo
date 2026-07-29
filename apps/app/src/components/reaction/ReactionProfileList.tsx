@@ -61,8 +61,15 @@ export function ReactionProfileList({
       {items !== undefined ? (
         items.length ? (
           <>
-            {items.map((item) => (
-              <View key={item.id} style={[styles.item, { borderColor: theme.border }]}>
+            {items.map((item, index) => (
+              <View
+                key={item.id}
+                style={[
+                  styles.item,
+                  index < items.length - 1 ? styles.itemSeparator : null,
+                  { borderColor: theme.border },
+                ]}
+              >
                 <Text accessibilityLabel={`${reactionType} 반응`} style={styles.itemReaction}>
                   {reactionType}
                 </Text>
@@ -120,8 +127,9 @@ export function ReactionProfileList({
 const styles = StyleSheet.create({
   root: { gap: spacing.md },
   title: { fontFamily: 'SUIT', fontWeight: '700', ...typography.lg },
-  item: { alignItems: 'center', borderBottomWidth: 1, flexDirection: 'row' },
+  item: { alignItems: 'center', flexDirection: 'row' },
   itemReaction: { fontSize: 20, lineHeight: 24, marginLeft: spacing.lg },
+  itemSeparator: { borderBottomWidth: 1 },
   profileItem: { borderBottomWidth: 0, flex: 1, minWidth: 0 },
   pagination: { borderTopWidth: 1, gap: spacing.sm, paddingTop: spacing.md },
   paginationAction: { minHeight: 44 },
