@@ -43,7 +43,7 @@ Local Profile과 Remote Profile은 Profile Origin 상태 차원으로 구분한�
 | handle           | 문자열, 필수       | Local은 3-30자 영문/숫자/밑줄, Remote는 원격 원본 값을 보존한다    | 항상            | Profile 조회 정책 통과 | 없음      |
 | 표시 handle      | 문자열, 필수       | 같은 Host 안에서 유일하다                                          | 항상            | Profile 조회 정책 통과 | 없음      |
 | qualified handle | 문자열, 필수       | `@handle@host` 형식이며 Host는 연결된 Instance Domain에서 파생한다 | 항상            | Profile 조회 정책 통과 | 없음      |
-| 표시 이름        | 문자열, 필수       | 새 값·변경값은 1-40자. 기존 초과 값은 원문 유지 시에만 존속한다    | 항상            | Profile 조회 정책 통과 | 없음      |
+| 표시 이름        | 문자열, 필수       | Local 편집의 새·변경값은 1-40자. Remote는 원격 원본을 보존한다     | 항상            | Profile 조회 정책 통과 | 없음      |
 | bio              | 문자열, nullable   | 500자 이하                                                         | 항상            | Profile 조회 정책 통과 | 없음      |
 | Remote URL       | URL, 필수          | 원격 원본 Profile URL                                              | Origin이 Remote | Profile 조회 정책 통과 | 없음      |
 | Profile Link     | URL 목록, nullable | 각 항목은 유효한 URL이다                                           | Origin이 Local  | Profile 조회 정책 통과 | 없음      |
@@ -78,9 +78,10 @@ Local Profile과 Remote Profile은 Profile Origin 상태 차원으로 구분한�
 Profile Origin은 연결된 Instance Type과 같아야 한다. Follow Approval Policy 변경은 이미 존재하는 Pending Follow
 Request의 상태나 존재를 바꾸지 않는다.
 
-표시 이름의 1-40자 정책은 새로 입력하거나 기존 값을 변경할 때 적용한다. 이미 40자를 초과한 legacy 표시 이름은
-원문을 변경하지 않고 다른 Profile 속성만 편집하는 동안 존속할 수 있다. 표시 이름 원문을 한 글자라도 변경하면
-legacy 예외를 적용하지 않고 1-40자 정책을 다시 적용한다.
+표시 이름의 1-40자 정책은 Local Profile 편집에서 새로 입력하거나 기존 값을 변경할 때 적용한다. 이미 40자를
+초과한 legacy Local 표시 이름은 원문을 변경하지 않고 다른 Profile 속성만 편집하는 동안 존속할 수 있다. 표시
+이름 원문을 한 글자라도 변경하면 legacy 예외를 적용하지 않고 1-40자 정책을 다시 적용한다. Remote Profile
+등록·갱신은 원격 원본 표시 이름을 보존하며 이 Local 편집 제한의 대상이 아니다.
 
 Profile Tag는 Profile이 [Hashtag](./hashtag.md)를 참조하는 구조화 관계다. bio에서 파생하지 않으며 관계는
 순서를 가지지 않는다. 제품상 Profile Tag 개수 상한은 두지 않는다. Profile 편집 입력은 각 이름을
