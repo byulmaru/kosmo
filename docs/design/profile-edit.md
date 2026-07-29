@@ -14,10 +14,14 @@
 2. header 이미지와 겹쳐 보이는 avatar 이미지 편집 영역
 3. 표시 이름
 4. 소개(bio)
-5. 프로필 태그
+5. 팔로우 요청 자동 승인
+6. 프로필 태그
 
 - 표시 이름은 1~40자다.
 - bio는 500자 이하이며 긴 텍스트 입력으로 표현한다.
+- `팔로우 요청 자동 승인`은 설명 없는 한 줄 Switch로 표현한다. Switch가 켜지면 `OPEN`, 꺼지면
+  `APPROVAL_REQUIRED`로 해석하며, 표시 이름·소개·avatar/header와 같은 Profile draft와 저장 동작에 포함한다.
+- Follow Approval Policy를 바꿔도 기존 Pending Follow Request의 상태나 존재는 바뀌지 않는다.
 - 프로필 태그는 [Profile Tag 디자인](./profile-tags.md)의 Hashtag Name 정규화·중복·접근성
   계약을 따른다. 개수 상한과 순서·재정렬 계약은 두지 않는다.
 - form은 avatar와 header의 현재 이미지를 각각 초기 draft로 표시하며 별도의 `유지` action을 두지 않는다.
@@ -29,14 +33,15 @@
 - 원본 이미지 비율이 다르면 header 변경 영역의 `3:1` 경계 안에서 중앙 기준 cover crop으로 미리 보이고,
   선택·업로드 과정에서도 container 비율은 바뀌지 않는다.
 - Profile Link, handle, location, website, gender, pronouns, contacts와 고정 게시물은 이 화면에 포함하지 않는다.
-- Follow Approval Policy는 Profile 편집 화면에 포함하지 않고 별도 Settings 계약 `PROD-531`과 화면에서 다룬다.
+- Settings 진입점이 제공되기 전까지 Follow Approval Policy 조회·변경은 Profile 편집이 소유한다. 이후
+  `PROD-531`이 Settings로 제어를 이전하고 Profile 편집에서 중복 제어를 제거한다.
 
 ## 화면과 연결 경계
 
 ### Presentation
 
 - `ProfileEditScreen`과 `ProfileEditForm`은 route나 Relay Environment를 직접 읽지 않는다.
-- 값, validation, 이미지 상태, 저장 상태와 callback을 controlled prop으로 받는다.
+- 값, validation, 이미지 상태, `followPolicy` draft, 저장 상태와 callback을 controlled prop으로 받는다.
 - 제출 callback이 없거나 초기값에서 바뀐 draft가 없으면 저장 action을 disabled로 표현한다. 사용자가 원하는
   field만 편집하면 해당 draft가 dirty가 되고, 저장은 현재 draft 전체를 제출한다. 성공을 가장하거나 임시 local
   persistence를 만들지 않는다.
@@ -44,6 +49,8 @@
   동작하게 한다.
 - dirty, validation, 이미지 업로드 대기·오류, saving, failure와 retry는 production 연결 전에는
   Storybook의 controlled state로 검증한다.
+- Switch는 `followPolicy` enum을 controlled draft로 유지하며 별도 즉시 저장하지 않는다. 토글만 바꿔도
+  draft가 dirty가 되고, 저장 callback에는 다른 Profile draft와 함께 현재 enum 값이 전달된다.
 - 이미지 업로드 오류는 해당 field의 `<label> 이미지 업로드에 실패했어요. 다시 시도해 주세요.` 문구로
   안내하고 현재 image draft를 보존한다.
 
@@ -54,6 +61,8 @@
 - selected Profile id나 `Profile.instance.kind`만으로 Owner 또는 편집 권한을 추측하지 않는다.
 - route가 초기값 조회, 제출 callback, Media 선택·업로드, Relay 갱신, 성공 navigation과 production 진입점을
   연결한다.
+- route는 현재 `followPolicy`를 초기 draft로 조회하고 표시 이름·소개·Media 관계와 같은 저장 동작으로
+  제출한다. Settings 이전 전까지 이 Profile 편집 경계를 우회하는 별도 정책 저장을 만들지 않는다.
 - 위 권한·조회·저장 계약이 준비되기 전에는 route 파일과 production 편집 버튼을 만들거나 활성화하지 않는다.
 
 권한과 route 경계의 durable decision은
@@ -118,5 +127,6 @@
 - `PROD-492`: protected route, selected Local Owner capability/query, 초기값, submit/Relay, Media picker·upload,
   성공 navigation과 production 진입점.
 - `PROD-527`: `PROD-491`의 Profile Tag editor를 재사용한 저장·서버 오류·Relay 연결과 공개 Profile 표시.
-- `PROD-531`: Settings 안의 Follow Approval Policy 조회·변경과 검증.
+- `PROD-531`: Settings 진입점이 제공된 뒤 Follow Approval Policy 제어를 이전하고 Profile 편집과의 중복
+  저장 소유권을 제거한다.
 - `PROD-490`: 두 Profile 편집 slice의 통합 검증, OpenSpec 정합성 확인과 archive.

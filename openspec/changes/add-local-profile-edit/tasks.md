@@ -10,14 +10,16 @@
 
 **Deliverable**
 
-route·GraphQL 없이 displayName, bio, avatar/header controlled state와 Profile Tag 로컬 편집을 표현하는 React
-Native 공용 Profile edit component와 현재 Web Storybook 상태 카탈로그를 전달한다. Native route 연결과 실제 기기
-검증은 PROD-492 전달 시 수행한다.
+route·GraphQL 없이 displayName, bio, `followPolicy` enum draft와 한 줄 `팔로우 요청 자동 승인` Switch,
+avatar/header controlled state와 Profile Tag 로컬 편집을 표현하는 React Native 공용 Profile edit component와 현재
+Web Storybook 상태 카탈로그를 전달한다. Native route 연결과 실제 기기 검증은 PROD-492 전달 시 수행한다.
 
 **Guardrails**
 
 - route, selected Owner query, Relay mutation, Media picker/upload, navigation과 persistence를 추가하지 않는다.
 - optional submit callback이 없으면 저장을 disabled로 표현하고 success를 가장하지 않는다.
+- Switch가 켜지면 `OPEN`, 꺼지면 `APPROVAL_REQUIRED`로 해석하고 다른 Profile draft와 같은 submit callback에
+  포함한다. 별도 즉시 저장이나 별도 mutation seam을 만들지 않는다.
 - 현재 avatar/header를 초기 draft로 사용하고 공통 `유지` action row를 두지 않는다. 각 이미지의 편집 control은
   해당 field만 변경하며 초기값과 같은 draft에서는 저장을 disabled로 표현한다.
 - inline TagChip 추가·제거를 제공하되 Tag 저장·Relay는 연결하지 않는다. 개수 상한·순서
@@ -32,6 +34,8 @@ Native 공용 Profile edit component와 현재 Web Storybook 상태 카탈로그
 
 - 기본·dirty·displayName/bio 경계·Tag 추가/제거/임의 개수/invalid/duplicate를 component test와
   Storybook에서 확인한다. 순서 변경 control이 없음도 확인한다.
+- `팔로우 요청 자동 승인` Switch의 초기 enum 매핑, 토글 dirty, callback `OPEN`/`APPROVAL_REQUIRED` 제출과
+  callback 없음/unchanged disabled, saving 중 재토글 방지를 확인한다.
 - avatar/header 각각의 교체·제거·upload-wait·error, saving·failure·retry controlled state와 이미지 오류의
   `<label> 이미지 업로드에 실패했어요. 다시 시도해 주세요.` 안내를 검증한다.
 - 한 이미지 field만 편집할 때 다른 이미지의 현재 draft가 유지되고 공통 `유지` action row가 없는지 확인한다.
@@ -66,20 +70,23 @@ Native 공용 Profile edit component와 현재 Web Storybook 상태 카탈로그
 **Deliverable**
 
 PROD-491 presentation을 server-authoritative selected Local Owner query/capability, protected route, displayName·bio와
-avatar/header 저장, Relay·navigation에 연결한다.
+avatar/header·`followPolicy` 저장, Relay·navigation에 연결한다.
 
 **Guardrails**
 
 - selectedProfileId나 Local origin을 client-side Owner 권한으로 사용하지 않는다.
 - 같은 Profile의 Ready Local Media만 avatar/header로 연결하고 관계 제거 때 Media를 삭제하지 않는다.
-- Follow Approval Policy와 Profile Tag 저장·Relay를 포함하지 않는다.
+- `followPolicy`는 displayName·bio·Media 관계와 같은 draft/save 경계에서 저장하고, 별도 즉시 저장이나 별도
+  mutation seam을 만들지 않는다. 정책 변경은 기존 Pending Follow Request를 바꾸지 않는다.
 - Tag API가 연결되기 전에는 production에서 저장 가능한 Tag control을 노출하지 않는다.
-- displayName·bio와 Media 관계를 부분 저장하지 않고 실패 뒤 draft를 보존한다.
+- displayName·bio·`followPolicy`와 Media 관계를 부분 저장하지 않고 실패 뒤 draft를 보존한다.
 
 **Verification**
 
 - Owner·Member·무관 Account, Local/Remote·inactive/suspended Profile과 직접 route 진입을 API·route test로 검증한다.
 - displayName 1~40, bio 500, Ready/Uploading/Failed·다른 Profile Media와 교체·제거·rollback을 통합 test로 확인한다.
+- `followPolicy` 초기값과 `OPEN`/`APPROVAL_REQUIRED` enum 매핑, text·Media와의 동일 저장 경계, 기존 Pending
+  Follow Request 불변을 통합 test로 확인한다.
 - Relay 성공·실패·retry, production entrypoint와 Profile 복귀를 Web·Android·iOS에서 확인한다.
 - 테스트 코드 범위는 authorization, text/Media 저장 원자성과 route 연결을 직접 검증하는 기존 API/app test에
   한정하고 Media upload 인프라·Profile Tag·Settings coverage 확대는 제외한다.
@@ -110,18 +117,21 @@ canonical·Linear·구현·OpenSpec이 일치할 때 `add-local-profile-edit`을
 **Guardrails**
 
 - PROD-491·492와 각 검증이 완료되기 전에는 부모 완료나 archive를 처리하지 않는다.
-- Profile Tag 저장·공개 표시와 Follow Approval Policy Settings 완료를 이 change의 완료 조건으로 만들지 않는다.
+- Profile Tag 저장·공개 표시와 Settings 진입점 제공 뒤의 Follow Approval Policy 이전 완료를 이 change의 완료
+  조건으로 만들지 않는다.
 - PR readiness와 OpenSpec archive를 분리하고 구현에서 계약 불일치가 발견되면 canonical·Linear부터 갱신한다.
 
 **Verification**
 
 - Owner route 진입→초기값→text/Media save→Relay 갱신→Profile 복귀와 권한·validation·upload·save 실패 복구를
   통합 환경에서 검증한다.
-- API 미연결 route, enabled but unsaved Tag control과 followPolicy field가 노출되지 않음을 확인한다.
+- API 미연결 route와 enabled but unsaved Tag control이 노출되지 않음을 확인하고, 연결된 Profile edit route에서
+  followPolicy Switch가 enum과 동일 저장 경계로 제공되는지 확인한다.
 - archive 전후 strict validation과 delta spec 동기화를 확인한다.
 
 - [ ] 3.1 PROD-491·492 완료 조건, PR, 필수 test와 unresolved review thread를 확인한다.
 - [ ] 3.2 Owner 성공과 Member/무관 Account·invalid text/Media·upload/save 실패 복구를 종단 간 검증한다.
-- [ ] 3.3 Profile Tag·followPolicy·Profile Link 제외 범위와 기존 Profile 조회 회귀를 확인한다.
+- [ ] 3.3 Profile Tag 저장·공개 표시와 Settings 이전은 제외 범위로 유지하고, 현재 followPolicy 저장 경계·기존
+      Pending Follow Request 불변과 Profile Link 제외 범위·기존 Profile 조회 회귀를 확인한다.
 - [ ] 3.4 canonical·Linear·OpenSpec 정합성과 strict validation을 확인한다.
 - [ ] 3.5 모든 task와 통합 gate 완료 뒤 change를 archive하고 archive 후 validation·Linear 상태를 확인한다.

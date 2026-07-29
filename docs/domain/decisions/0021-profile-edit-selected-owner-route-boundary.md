@@ -30,8 +30,10 @@ Tag 계약과 backend 기반을 기다린다. 이 두 생명주기를 분리하�
   성공 navigation과 production 진입점을 함께 소유한다.
 - Profile Tag editor presentation은 UI 선제작 slice가 만들고, Profile Tag 연결 slice는 같은 component를
   재사용해 mutation·server validation·Relay와 공개 Profile 표시를 연결한다.
-- Follow Approval Policy는 Profile 객체의 정책으로 유지하지만 Profile 편집 화면에서는 제외하고 별도 Settings
-  계약 `PROD-531`과 화면에서 변경한다.
+- Follow Approval Policy는 Profile 객체의 정책으로 유지하며, Settings 진입점이 제공되기 전까지 Profile 편집
+  화면의 한 줄 Switch와 같은 draft/save 경계에서 다룬다. Switch는 `OPEN`/`APPROVAL_REQUIRED` enum으로
+  매핑되고 정책 변경은 기존 Pending Follow Request를 바꾸지 않는다. Settings 진입점이 제공되면
+  `PROD-531`이 이 제어를 Settings로 이전하고 Profile 편집의 중복 제어를 제거한다.
 
 ## 이유
 
@@ -48,7 +50,8 @@ Profile Tag editor를 한 번만 만들면 Profile 편집과 Tag 저장 change�
 - `PROD-491`은 production route, GraphQL query/mutation, Media picker/upload와 navigation을 소유하지 않는다.
 - `PROD-492`가 완료되기 전에는 Profile 편집 진입점을 production에 노출하지 않는다.
 - `PROD-527`은 Profile Tag editor를 재작성하지 않고 연결과 공개 표시를 소유한다.
-- Follow Approval Policy Settings는 Profile 편집 OpenSpec과 별도로 승인·구현한다.
+- `PROD-492`는 Settings 이전 전까지 Profile 편집 draft/save에서 Follow Approval Policy의 초기값 조회와
+  enum 저장을 함께 소유하며, `PROD-531`은 Settings 진입점 제공 뒤 이 경계를 이전한다.
 - 향후 modal presentation이 필요하면 form을 재사용할 수 있지만 현재 승인 UX는 shell 안의 전용 route다.
 
 ## 근거

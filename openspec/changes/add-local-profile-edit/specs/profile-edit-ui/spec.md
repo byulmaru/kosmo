@@ -2,7 +2,7 @@
 
 ### Requirement: Controlled universal Profile edit presentation
 
-**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/domain/decisions/0021-profile-edit-selected-owner-route-boundary.md`, `PROD-490`, `PROD-491` — universal client는 route·GraphQL과 독립된 controlled Profile edit screen/form으로 displayName, bio, avatar/header와 Profile Tag presentation을 제공해야 한다(MUST). 제출 callback이 없거나 draft가 초기값과 같을 때 저장 action을 disabled로 표현하고 저장 성공이나 local persistence를 가장하지 않아야 한다(MUST NOT).
+**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/domain/decisions/0021-profile-edit-selected-owner-route-boundary.md`, `PROD-490`, `PROD-491` — universal client는 route·GraphQL과 독립된 controlled Profile edit screen/form으로 displayName, bio, `followPolicy`, avatar/header와 Profile Tag presentation을 제공해야 한다(MUST). 제출 callback이 없거나 draft가 초기값과 같을 때 저장 action을 disabled로 표현하고 저장 성공이나 local persistence를 가장하지 않아야 한다(MUST NOT).
 
 #### Scenario: Render the disconnected presentation safely
 
@@ -25,16 +25,34 @@
 - **AND** 건드리지 않은 이미지 field는 현재 값을 draft로 유지한다
 - **AND** 별도의 `유지` action이나 두 이미지의 공통 `유지`·`교체`·`제거` action row를 표시하지 않는다
 
+### Requirement: Follow Approval Policy uses the Profile edit draft boundary
+
+**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/domain/decisions/0021-profile-edit-selected-owner-route-boundary.md`, `PROD-490`, `PROD-491`, `PROD-492`, `PROD-531` — Profile edit presentation은 설명 없는 한 줄 `팔로우 요청 자동 승인` Switch를 controlled `followPolicy` enum draft로 제공해야 한다(MUST). Switch가 켜지면 `OPEN`, 꺼지면 `APPROVAL_REQUIRED`를 같은 submit callback으로 제출해야 하며(MUST), 정책 변경을 별도 즉시 저장이나 별도 mutation seam으로 실행해서는 안 된다(MUST NOT).
+
+#### Scenario: Map the policy switch to the controlled enum draft
+
+- **WHEN** 초기 `followPolicy`가 `OPEN` 또는 `APPROVAL_REQUIRED`로 주어지고 사용자가 `팔로우 요청 자동 승인` Switch를 토글한다
+- **THEN** Switch는 각각 켜짐 또는 꺼짐 상태를 표시한다
+- **AND** 토글만 바뀌어도 Profile draft가 dirty가 되고 저장 action이 활성화된다
+- **AND** submit callback에는 현재 displayName·bio·avatar/header와 함께 정확한 `OPEN` 또는 `APPROVAL_REQUIRED` 값이 전달된다
+
+#### Scenario: Keep the policy draft until the shared save completes
+
+- **WHEN** 정책만 변경한 뒤 저장 중이거나 저장이 실패한다
+- **THEN** Switch는 저장 중 다시 변경할 수 없고 현재 선택과 draft를 유지한다
+- **AND** 별도 즉시 저장이나 별도 mutation 요청을 실행하지 않는다
+- **AND** 실패 뒤 재시도할 때 같은 `followPolicy` enum이 다른 Profile draft와 함께 제출된다
+
 ### Requirement: Profile edit fields and Profile Tag interaction
 
-**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/profile-tags.md`, `PROD-491`, `PROD-522` — Profile edit presentation은 1~40자 displayName, 500자 이하 bio와 avatar/header별 controlled 편집 control을 제공해야 하며(MUST), 개수 상한 없이 Profile Tag를 inline chip으로 추가·제거할 수 있어야 한다(MUST). 순서·재정렬 control을 제공해서는 안 되며(MUST NOT), Follow Approval Policy와 승인되지 않은 field를 표시해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/profile-tags.md`, `PROD-491`, `PROD-522` — Profile edit presentation은 1~40자 displayName, 500자 이하 bio와 avatar/header별 controlled 편집 control을 제공해야 하며(MUST), 개수 상한 없이 Profile Tag를 inline chip으로 추가·제거할 수 있어야 한다(MUST). 순서·재정렬 control을 제공해서는 안 되며(MUST NOT), 승인되지 않은 field를 표시해서는 안 된다(MUST NOT).
 
 #### Scenario: Edit approved text and image fields
 
 - **WHEN** 사용자가 displayName, bio 또는 avatar/header control을 편집한다
 - **THEN** form은 승인된 길이와 각 이미지 field의 교체·제거·upload-wait·error state를 표현한다
 - **AND** 초기값과 다른 field가 하나라도 있을 때 현재 draft를 저장할 수 있는 dirty state를 표현한다
-- **AND** followPolicy, Profile Link, handle, location, website, gender, pronouns, contacts와 pinned post를 표시하지 않는다
+- **AND** Profile Link, handle, location, website, gender, pronouns, contacts와 pinned post를 표시하지 않는다
 
 #### Scenario: Add and remove Profile Tags locally
 

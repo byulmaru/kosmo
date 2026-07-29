@@ -1,8 +1,8 @@
 ## Context
 
 이 기록은 `PROD-490`, `PROD-491`, `PROD-492`와 canonical Profile edit 문서에서 승인한 presentation·route·권한
-경계를 반영한다. Profile Tag와 Follow Approval Policy는 관련 계약을 참조하되 이 change가 저장·표시나 Settings
-행동을 소유하지 않는다.
+경계를 반영한다. Profile Tag 저장·공개 표시는 별도 계약이 소유하지만 Follow Approval Policy는 현재 Profile
+편집 draft/save 경계에 포함하고, Settings 진입점이 제공되면 `PROD-531`이 제어를 이전한다.
 
 ## Decision Records
 
@@ -93,23 +93,30 @@
 - Confirmation / Follow-up: Figma ratio lock과 component/Storybook에서 390·600·중간 폭의 계산된 크기를
   검증한다.
 
-### Follow Approval Policy는 Settings 계약이 소유한다
+### Follow Approval Policy는 현재 Profile edit draft/save가 소유하고 PROD-531에서 Settings로 이전한다
 
 - Decision Date: 2026-07-29
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/profile.md`,
   `docs/domain/decisions/0021-profile-edit-selected-owner-route-boundary.md`, `docs/design/profile-edit.md`, `PROD-490`,
-  `PROD-531`
+  `PROD-491`, `PROD-492`, `PROD-531`
 - Status: Active
-- Context / Problem: 관계 수립 정책을 표현 속성 편집 화면에 포함하면 Profile edit와 Settings의 목적과 생명주기가
-  섞인다.
-- Decision Outcome: Profile edit UI와 PROD-490/492 저장 범위에서 followPolicy를 제외한다. 정책 자체의 도메인
-  의미와 기존 Follow Request 불변조건은 유지하며 `PROD-531` Settings 계약에서 변경한다.
-- Alternatives Considered: 기존 updateProfile field라는 이유로 화면에 유지하는 방식은 독립 설정 결과와 범위를
-  섞어 제외했다.
-- Consequences: Profile edit 구현·테스트는 followPolicy를 성공 조건으로 삼지 않고 Settings change는 별도
-  OpenSpec Gate를 거친다.
-- Confirmation / Follow-up: Profile edit UI·mutation selection에 followPolicy가 포함되지 않는지 확인한다.
+- Context / Problem: Settings 진입점이 아직 없어 정책 제어를 다른 화면으로 옮길 수 없고, 현재 Profile 편집에서
+  표시 이름·소개·Media와 함께 사용자가 한 번에 저장할 정책 draft 경계가 필요하다.
+- Decision Outcome: Profile edit는 한 줄 `팔로우 요청 자동 승인` Switch를 controlled `followPolicy` enum draft로
+  제공한다. Switch가 켜지면 `OPEN`, 꺼지면 `APPROVAL_REQUIRED`로 제출하며 displayName·bio·avatar/header와 같은
+  저장 callback·transaction에 포함한다. 정책 변경은 기존 Pending Follow Request의 상태나 존재를 바꾸지 않는다.
+  Settings 진입점이 제공되면 `PROD-531`이 이 제어와 저장 소유권을 Settings로 이전하고 Profile edit의 중복
+  제어를 제거한다.
+- Alternatives Considered: Switch 변경 때 별도 즉시 저장을 실행하는 방식은 draft 전체의 원자적 저장과 실패 뒤
+  재시도 경계를 깨므로 제외했다. 정책만 별도 mutation seam으로 분리하는 방식도 text·Media와 저장 소유권과
+  오류 처리를 중복시켜 제외했다. Settings 이전은 현재 저장을 분리하는 근거가 아니라 `PROD-531`에서 한 번에
+  소유권을 옮기는 후속 경계로 둔다.
+- Consequences: `PROD-491`은 enum draft·Switch·dirty/disabled 상태와 동일 submit callback을 표현하고,
+  `PROD-492`는 초기값 조회와 text·Media·policy 저장을 함께 연결한다. `PROD-531` 완료 뒤에는 Profile edit
+  control과 저장 계약에서 policy를 제거한다.
+- Confirmation / Follow-up: Switch 토글만으로 dirty가 되고 정확한 enum이 같은 save callback에 전달되는지,
+  저장 실패 뒤 draft가 보존되는지, 정책 변경이 기존 Pending Follow Request를 바꾸지 않는지 검증한다.
 
 ### Profile Tag 제거 action은 시각 크기와 플랫폼 target을 분리한다
 
