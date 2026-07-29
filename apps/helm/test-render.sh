@@ -4,11 +4,12 @@ set -euo pipefail
 chart_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 render_dir="$(mktemp -d)"
 trap 'rm -rf "${render_dir}"' EXIT
+cd "${chart_dir}"
 
-helm lint "${chart_dir}" --set env=dev
-helm lint "${chart_dir}" --set env=prod
-helm template kosmo "${chart_dir}" --namespace kosmo-dev --set env=dev >"${render_dir}/dev.yaml"
-helm template kosmo "${chart_dir}" --namespace kosmo-prod --set env=prod >"${render_dir}/prod.yaml"
+helm lint . --set env=dev
+helm lint . --set env=prod
+helm template kosmo . --namespace kosmo-dev --set env=dev >"${render_dir}/dev.yaml"
+helm template kosmo . --namespace kosmo-prod --set env=prod >"${render_dir}/prod.yaml"
 
 backup_markers=(
   "apiVersion: barmancloud.cnpg.io/v1"
