@@ -1,5 +1,4 @@
-import '@sun-typeface/suit/fonts/variable/woff2/SUIT-Variable.css';
-import 'pretendard/dist/web/variable/pretendardvariable.css';
+import './fonts.css';
 import './preview.css';
 
 import { Suspense } from 'react';
