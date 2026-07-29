@@ -15,6 +15,7 @@
 
 - Canonical: `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `docs/design/profile-tags.md`
 - Canonical Contract: `PROD-523` / PR #394
+- Linear Profile Edit Contract: `PROD-489` 확정 결정 기록, `PROD-490`
 - Linear Change: `PROD-522`
 - Linear Presentation Contributor: `PROD-491` (controlled editor·client validation의 최초 구현)
 - Linear Implementations: `PROD-526` (저장·수정·조회 기반), `PROD-527` (수정·공개 화면 연결)

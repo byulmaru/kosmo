@@ -56,6 +56,8 @@ Local 편집·공개 표시만 먼저 전달하면 원격 서버의 Profile meta
 
 ## 근거
 
+- [PROD-489](https://linear.app/byulmaru/issue/PROD-489/account-profile-role에서-레거시-admin을-제거한다)의 selected Profile 편집 확정 결정 기록
+- [PROD-490](https://linear.app/byulmaru/issue/PROD-490/local-profile-수정-화면과-저장-흐름을-제공한다)
 - [PROD-523](https://linear.app/byulmaru/issue/PROD-523/프로필-태그-도메인-계약을-확정한다)
 - [Profile](../objects/profile.md)
 - [Hashtag](../objects/hashtag.md)

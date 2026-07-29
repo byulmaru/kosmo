@@ -44,7 +44,7 @@
 
 - Decision Date: 2026-07-28
 - Decision Class: Implementation Choice
-- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `docs/design/profile-tags.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526`, `PROD-527`
+- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `docs/design/profile-tags.md`, `PROD-489` 확정 결정 기록, `PROD-490`, `PROD-523` (PR #394), `PROD-522`, `PROD-526`, `PROD-527`
 - Status: Active
 - Context / Problem: backend와 universal client가 현재 필요한 identity·빈 상태를 호환 가능한 GraphQL shape로 공유해야 하지만 Hashtag 전용 조회·navigation은 제외되어 있다.
 - Decision Outcome: `Profile.tags: [String!]!`는 `#` 없는 normalized Hashtag Name을 반환한다. 배열의 요소 순서는 API 계약이 아니며 소비자는 순서에 의존해서는 안 된다. Profile Origin과 연결된 Instance Kind가 Local인 모든 Profile은 configured instance ID와 무관하게 유효한 관계를 반환하고, 현재 범위의 Remote Profile은 빈 목록을 반환한다. `UpdateProfileInput`은 대상 ID를 받지 않고 `usingProfile`이 검증한 세션의 selected Profile을 대상으로 한다. 선택적 `tags: [String!]`에 배열이 오면 전체 replacement, 빈 배열이면 전체 제거, 생략 또는 `null`이면 기존 목록 보존으로 처리한다. `UpdateProfilePayload.profile`에서 최신 tags를 선택할 수 있게 한다.
@@ -56,7 +56,7 @@
 
 - Decision Date: 2026-07-28
 - Decision Class: Implementation Choice
-- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526`
+- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-489` 확정 결정 기록, `PROD-490`, `PROD-523` (PR #394), `PROD-522`, `PROD-526`
 - Status: Active
 - Context / Problem: 기존 update resolver에 relation delete/insert를 별도로 추가하면 validation 또는 저장 실패 때 scalar Profile 값만 반영되거나 동시 update가 섞일 수 있다.
 - Decision Outcome: GraphQL `usingProfile` 경계가 검증한 selected Profile identity를 사용하고, Core는 Active Account의 Owner·Local Profile에 대해 Lifecycle State `Active`와 Suspension State `Normal`인 editable 조건을 재확인한다. 대상 Profile update를 직렬화하는 하나의 DB transaction에서 scalar 값, Hashtag resolve/create와 전체 relation replacement를 처리한다. 공개 조회 visibility도 Lifecycle State `Active`와 Suspension State `Normal`을 사용한다. 동시 요청은 Profile 단위로 직렬화하며 마지막으로 성공한 transaction의 전체 값이 남는다. row lock 또는 동등하게 검증된 직렬화 수단을 사용할 수 있다.

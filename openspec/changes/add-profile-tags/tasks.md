@@ -6,6 +6,8 @@
 - `docs/domain/objects/hashtag.md`
 - `docs/domain/objects/account-profile-membership.md`
 - `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`
+- `PROD-489` 확정 결정 기록
+- `PROD-490`
 - `PROD-523` (PR #394)
 - `PROD-522`
 - `PROD-526`

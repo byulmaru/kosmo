@@ -48,7 +48,7 @@
 
 ### Requirement: Owner-controlled atomic Profile Tag replacement
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — Active Account가 현재 선택한 Profile의 `OWNER`이고 대상 Origin이 Local, Lifecycle State가 `Active`, Suspension State가 `Normal`일 때만 기존 Profile 편집 action에서 Profile Tag 전체 목록을 교체할 수 있어야 한다(MUST). Profile update input은 대상 Profile ID를 받지 않고 검증된 세션의 selected Profile identity를 사용해야 한다(MUST). Profile Tag 목록과 같은 요청에 포함된 다른 Profile 편집 값은 하나의 transaction으로 적용되어야 하며(MUST), 권한·정규화·검증·저장 중 하나라도 실패하면 어느 값도 변경되어서는 안 된다(MUST NOT). Profile Tag 입력을 생략하거나 `null`로 보낸 기존 update 요청은 현재 목록을 유지해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-489` 확정 결정 기록, `PROD-490`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — Active Account가 현재 선택한 Profile의 `OWNER`이고 대상 Origin이 Local, Lifecycle State가 `Active`, Suspension State가 `Normal`일 때만 기존 Profile 편집 action에서 Profile Tag 전체 목록을 교체할 수 있어야 한다(MUST). Profile update input은 대상 Profile ID를 받지 않고 검증된 세션의 selected Profile identity를 사용해야 한다(MUST). Profile Tag 목록과 같은 요청에 포함된 다른 Profile 편집 값은 하나의 transaction으로 적용되어야 하며(MUST), 권한·정규화·검증·저장 중 하나라도 실패하면 어느 값도 변경되어서는 안 된다(MUST NOT). Profile Tag 입력을 생략하거나 `null`로 보낸 기존 update 요청은 현재 목록을 유지해야 한다(MUST).
 
 #### Scenario: Replace Profile Tags as Local Profile Owner
 
