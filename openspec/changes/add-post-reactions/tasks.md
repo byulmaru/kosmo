@@ -215,10 +215,10 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 - [x] 7.7 Post Action Bar Storybook integration에서 Web popover dismiss/focus/placement, 동시 mutation·실패/retry·unmount를 검증하고 production Post fixture에서 ordinary·Quote·순수 Repost mutation target을 검증한다.
 - [x] 7.8 app test·lint·format·diff check와 OpenSpec strict validation을 통과시키고 Web 자동 검증·runtime 관찰을 분리해 기록하며, 현재 제품 범위에서 제외한 iOS·Android runtime 관찰은 후속 확인으로 남긴다.
 - [x] 7.9 2026-07-29 PROD-417의 Web geometry, summary token toggle, shared controller/count refetch, 목록·상세 target과 Reaction 전용 More/Profile tab 계약을 canonical·Linear·specs·design·decisions·tasks에 동기화하고 strict validation을 통과시킨다.
-- [ ] 7.10 TDD로 `ReactionSelector`와 `ReactionSummary`의 Web exact 32px presentation, standalone 제목 제거, pending/error/disabled와 feature-local horizontal scroll을 구현·검증한다.
-- [ ] 7.11 TDD로 private `PostReactionController`를 도입해 Quick Picker와 summary token의 server-confirmed selected·count·Type별 pending/error, updater no-synthesis, targeted `reactionCounts` refetch와 actor isolation을 구현·검증한다.
-- [ ] 7.12 TDD로 목록·상세의 ordinary·Quote own Post와 pure Repost source Post target, summary 배치, Reaction 전용 More·양수 count emoji tab·Profile item emoji와 기존 pagination/retry/cache를 구현·검증한다.
-- [ ] 7.13 app test·lint·format·diff check와 OpenSpec strict validation을 통과시키고 320px·390px·600px Web runtime을 관찰한다. 자동 검증·Web 관찰·미실행 iOS/Android 관찰을 분리해 기록한다.
+- [x] 7.10 TDD로 `ReactionSelector`와 `ReactionSummary`의 Web exact 32px presentation, standalone 제목 제거, pending/error/disabled와 feature-local horizontal scroll을 구현·검증한다.
+- [x] 7.11 TDD로 private `PostReactionController`를 도입해 Quick Picker와 summary token의 server-confirmed selected·count·Type별 pending/error, updater no-synthesis, targeted `reactionCounts` refetch와 actor isolation을 구현·검증한다.
+- [x] 7.12 TDD로 목록·상세의 ordinary·Quote own Post와 pure Repost source Post target, summary 배치, Reaction 전용 More·양수 count emoji tab·Profile item emoji와 기존 pagination/retry/cache를 구현·검증한다.
+- [x] 7.13 app test·lint·format·diff check와 OpenSpec strict validation을 통과시키고 320px·390px·600px Web runtime을 관찰한다. 자동 검증·Web 관찰·미실행 iOS/Android 관찰을 분리해 기록한다.
 
 ## 8. PROD-449 Reaction 요약 프레젠테이션과 PROD-418 통합
 
