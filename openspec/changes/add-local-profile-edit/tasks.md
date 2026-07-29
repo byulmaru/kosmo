@@ -65,9 +65,9 @@ Web Storybook 상태 카탈로그를 전달한다. Native route 연결과 실제
 - [x] 1.5 `followPolicy` Switch의 두 enum 초기 표시와 `OPEN`/`APPROVAL_REQUIRED` 양방향 제출, dirty·disabled·saving·failure·retry
       동작을 최소 component test와 Storybook 상태·a11y/static build로 검증하고 app 필수 check를 통과해 PROD-491
       PR에 증거를 기록한다.
-- [ ] 1.6 header·avatar preview 전체 button, 중앙 camera affordance·pressed veil, `48px` 상단 navigation header와
+- [x] 1.6 header·avatar preview 전체 button, 중앙 camera affordance·pressed veil, `48px` 상단 navigation header와
       canonical 이미지 오류 문구를 구현하고 component test·Storybook에서 geometry·disabled·접근성 상태를 검증한다.
-- [ ] 1.7 40자를 초과하는 legacy displayName의 unchanged 호환 경계와 변경 시 1~40자 validation을 구현하고 경계
+- [x] 1.7 40자를 초과하는 legacy displayName의 unchanged 호환 경계와 변경 시 1~40자 validation을 구현하고 경계
       component test를 추가한다.
 
 ## 2. PROD-492 selected Owner route·API·Media 연결
