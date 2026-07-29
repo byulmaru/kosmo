@@ -21,6 +21,7 @@ mockModule(new URL('../session/SessionProvider.tsx', import.meta.url), {
   useSession: () => session,
 });
 mockModule(new URL('./client.ts', import.meta.url), {
+  clearAnalytics: () => calls.push('clear'),
   consumeWebLoginStarted: () => {
     const current = loginStarted;
     loginStarted = false;
@@ -44,9 +45,9 @@ beforeEach(() => {
 });
 
 describe('AnalyticsSessionBridge', () => {
-  it('guest session은 identify하지 않는다', () => {
+  it('guest session은 anonymous client를 초기화하고 이전 identity를 지운다', () => {
     AnalyticsSessionBridge();
-    assert.deepEqual(calls, []);
+    assert.deepEqual(calls, ['clear']);
   });
 
   it('valid session은 opaque Account ID로 identify한다', () => {
@@ -71,5 +72,17 @@ describe('AnalyticsSessionBridge', () => {
       'track:login_succeeded',
       'identify:account-id',
     ]);
+  });
+
+  it('valid session이 guest로 바뀌면 이전 identity를 지운다', () => {
+    session.accountId = 'account-id';
+    session.status = 'valid';
+    AnalyticsSessionBridge();
+
+    session.accountId = null;
+    session.status = 'guest';
+    AnalyticsSessionBridge();
+
+    assert.deepEqual(calls, ['identify:account-id', 'clear']);
   });
 });

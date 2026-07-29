@@ -35,6 +35,7 @@ export function startWebLoginFromPress(event: GestureResponderEvent): void {
     pointer.metaKey ||
     pointer.shiftKey
   ) {
+    markWebLoginStarted();
     return;
   }
 

@@ -1,13 +1,12 @@
 import assert from 'node:assert/strict';
-import { before, beforeEach, describe, it, mock } from 'node:test';
+import { before, beforeEach, describe, it } from 'node:test';
 import type { OpenPanel as OpenPanelType, OpenPanelOptions } from '@openpanel/web';
-import type * as AnalyticsModule from './client';
+import type * as AnalyticsModule from './client.web';
 
 type OpenPanelClass = typeof OpenPanelType;
 
 type Call = { name: string; properties?: Record<string, unknown> };
 
-const platform = { OS: 'web' };
 const instances: FakeOpenPanel[] = [];
 const storage = new Map<string, string>();
 let constructorFails = false;
@@ -50,17 +49,10 @@ class FakeOpenPanel {
   }
 }
 
-const mockModule = (specifier: string | URL, exports: object) =>
-  mock.module(specifier, {
-    exports,
-  } as unknown as Parameters<typeof mock.module>[1]);
-
-mockModule('react-native', { Platform: platform });
-
 Object.defineProperty(globalThis, 'window', {
   configurable: true,
   value: {
-    sessionStorage: {
+    localStorage: {
       getItem: (key: string) => storage.get(key) ?? null,
       removeItem: (key: string) => storage.delete(key),
       setItem: (key: string, value: string) => storage.set(key, value),
@@ -71,7 +63,7 @@ Object.defineProperty(globalThis, 'window', {
 let analytics: typeof AnalyticsModule;
 
 before(async () => {
-  analytics = await import('./client');
+  analytics = await import('./client.web');
 });
 
 beforeEach(() => {
@@ -79,7 +71,6 @@ beforeEach(() => {
   constructorFails = false;
   methodFails = false;
   instances.length = 0;
-  platform.OS = 'web';
   storage.clear();
   delete process.env.EXPO_PUBLIC_OPENPANEL_CLIENT_ID;
 });
@@ -87,12 +78,6 @@ beforeEach(() => {
 describe('OpenPanel Web client', () => {
   it('Client ID가 없으면 client를 만들지 않는다', () => {
     assert.equal(analytics.initializeAnalytics(undefined), null);
-    assert.equal(instances.length, 0);
-  });
-
-  it('native에서는 Client ID가 있어도 client를 만들지 않는다', () => {
-    platform.OS = 'ios';
-    assert.equal(analytics.initializeAnalytics('client-id'), null);
     assert.equal(instances.length, 0);
   });
 

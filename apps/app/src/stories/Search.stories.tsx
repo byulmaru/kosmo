@@ -63,6 +63,10 @@ export const Result: Story = {
       'href',
       '/@byulmaru-dev',
     );
+    globalThis.localStorage?.removeItem('kosmo:recent-searches');
+    await userEvent.click(canvas.getByRole('tab', { name: '사람' }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(globalThis.localStorage?.getItem('kosmo:recent-searches')).toBeNull();
   },
 };
 

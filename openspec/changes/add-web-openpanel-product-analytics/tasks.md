@@ -10,14 +10,14 @@ Client ID가 있는 Kosmo Web은 OpenPanel 자동 수집과 10% replay를 시작
 
 **Guardrails**
 
-- Client ID가 없거나 native인 경우 client와 분석 전송을 만들지 않는다.
+- Client ID가 없거나 native인 경우 client와 분석 전송을 만들지 않고 Web SDK를 native bundle에 포함하지 않는다.
 - Account의 opaque ID만 identity로 사용한다.
 - 모든 입력값과 canonical Post Content를 replay에서 마스킹한다.
 - 분석 실패는 인증·렌더링·navigation을 실패시키지 않는다.
 
 **Verification**
 
-- Client ID 유무, identify·clear, replay 설정과 Post Content mask를 unit test와 typecheck로 검증한다.
+- Client ID 유무, guest 초기화, identify·clear, native no-op, replay 설정과 Post Content mask를 unit test와 typecheck로 검증한다.
 
 - [x] 1.1 Web 전용 OpenPanel dependency와 Client ID 기반 초기화를 구현한다.
 - [x] 1.2 Session의 Account identify, 로그인 성공, 로그아웃 clear를 구현한다.
@@ -42,7 +42,7 @@ Web의 Profile 생성·선택, Post 생성, Follow와 검색 흐름이 실제 �
 
 **Verification**
 
-- 성공·실패 callback과 검색 제출·첫 페이지·결과 선택 event payload를 component test로 검증한다.
+- 성공·실패 callback, 검색 제출·첫 페이지·결과 선택 event payload와 활성 탭 재선택 no-op을 component test로 검증한다.
 
 - [x] 2.1 허용된 이벤트명과 속성을 제한하는 공통 event 계약을 구현한다.
 - [x] 2.2 Profile·Post·Follow 성공 이벤트를 기존 성공 경계에 연결한다.

@@ -374,7 +374,11 @@ export default function SearchScreen() {
                 accessibilityRole="tab"
                 accessibilityState={{ selected: activeTab === tab.value }}
                 key={tab.value}
-                onPress={() => navigate(query, tab.value, 'tab')}
+                onPress={() => {
+                  if (tab.value !== activeTab) {
+                    navigate(query, tab.value, 'tab');
+                  }
+                }}
                 style={styles.tab}
               >
                 <Text
