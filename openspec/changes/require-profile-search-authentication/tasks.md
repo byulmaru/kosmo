@@ -32,7 +32,7 @@
 - `pnpm --filter @kosmo/api lint:schema`
 - 구현 diff에 DB/schema/client/dependency 변경이 없고 `openspec validate require-profile-search-authentication --strict`가 통과하는지 확인한다.
 
-- [ ] 1.1 `searchProfiles`만 Account 로그인 field scope로 보호하고 인증 실패가 resolver와 후보 조회 전에 끝나게 한다.
-- [ ] 1.2 인증 없음·유효하지 않은 credential·인증 성공·selected Profile 없는 인증 성공을 직접 검증하는 API 통합 회귀를 추가한다.
-- [ ] 1.3 기존 검색·pagination·visibility·literal escape·remote no-materialization 및 공개 exact lookup 회귀를 인증 경계와 함께 통과시킨다.
-- [ ] 1.4 관련 API typecheck·unit·schema check와 strict OpenSpec validation을 완료하고 DB/schema/client/dependency diff가 없음을 확인한다.
+- [x] 1.1 `searchProfiles`만 Account 로그인 field scope로 보호하고 인증 실패가 resolver와 후보 조회 전에 끝나게 한다.
+- [x] 1.2 인증 없음·유효하지 않은 credential·인증 성공·selected Profile 없는 인증 성공을 직접 검증하는 API 통합 회귀를 추가한다.
+- [x] 1.3 기존 검색·pagination·visibility·literal escape·remote no-materialization 및 공개 exact lookup 회귀를 인증 경계와 함께 통과시킨다.
+- [x] 1.4 관련 API typecheck·unit·schema check와 strict OpenSpec validation을 완료하고 DB/schema/client/dependency diff가 없음을 확인한다.

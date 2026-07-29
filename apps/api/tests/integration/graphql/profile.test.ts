@@ -162,7 +162,37 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(await countRows(Profiles), profileCountBefore);
   });
 
+  test('requires an authenticated account for partial profile search', async () => {
+    await createProfile({ handle: 'alice', instanceId: localInstanceId });
+
+    const query = `query SearchProfiles {
+      searchProfiles(query: "alice", first: 20) {
+        edges { node { relativeHandle } }
+      }
+    }`;
+
+    const anonymous = await requestGraphQL(query, {});
+    assertGraphQLErrorCode(anonymous, 'PERMISSION_DENIED');
+
+    const invalidCredential = await requestGraphQL(query, {}, 'invalid-token');
+    assertGraphQLErrorCode(invalidCredential, 'PERMISSION_DENIED');
+
+    const authenticatedWithoutProfile = await createAuthenticatedSession({
+      selectedProfile: false,
+    });
+    const authenticated = await requestGraphQL<{
+      searchProfiles: { edges: Array<{ node: { relativeHandle: string } }> };
+    }>(query, {}, authenticatedWithoutProfile.token);
+
+    assertNoGraphQLErrors(authenticated);
+    assert.deepEqual(
+      authenticated.data?.searchProfiles.edges.map(({ node }) => node.relativeHandle),
+      ['@alice'],
+    );
+  });
+
   test('searches stored profiles by partial handle with literal LIKE metacharacters', async () => {
+    const auth = await createAuthenticatedSession();
     await createProfile({ handle: 'alice', instanceId: localInstanceId });
     await createProfile({ handle: 'malice', instanceId: localInstanceId });
     const pageFirst = await createProfile({
@@ -230,6 +260,7 @@ describe('GraphQL remote profile boundary', () => {
           }
         }`,
         { handle },
+        auth.token,
       );
     const relativeHandles = (
       result: GraphQLResult<{
@@ -251,6 +282,7 @@ describe('GraphQL remote profile boundary', () => {
           }
         }`,
         { exactHandle, partialHandle },
+        auth.token,
       );
 
     for (const [handle, expectedHandles] of [
@@ -294,6 +326,7 @@ describe('GraphQL remote profile boundary', () => {
         }
       }`,
       { after: null },
+      auth.token,
     );
     assertNoGraphQLErrors(firstPage);
     assert.deepEqual(
@@ -322,6 +355,7 @@ describe('GraphQL remote profile boundary', () => {
         }
       }`,
       { after: firstPage.data?.searchProfiles.pageInfo.endCursor },
+      auth.token,
     );
     assertNoGraphQLErrors(secondPage);
     assert.deepEqual(
@@ -2762,7 +2796,9 @@ const createRemoteActor = (
     uri: `https://${domain}/users/remote`,
   });
 
-const createAuthenticatedSession = async () => {
+const createAuthenticatedSession = async ({
+  selectedProfile = true,
+}: { selectedProfile?: boolean } = {}) => {
   const account = await db
     .insert(Accounts)
     .values({
@@ -2786,7 +2822,7 @@ const createAuthenticatedSession = async () => {
     .insert(Sessions)
     .values({
       accountId: account.id,
-      activeProfileId: profile.id,
+      activeProfileId: selectedProfile ? profile.id : null,
       state: SessionState.ACTIVE,
       token,
     })
