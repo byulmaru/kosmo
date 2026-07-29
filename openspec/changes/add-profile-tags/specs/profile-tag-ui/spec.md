@@ -2,12 +2,12 @@
 
 ### Requirement: Profile Tag editor
 
-**Authority / Provenance:** `docs/design/profile-tags.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-491`, `PROD-527` — 기존 Profile 편집 화면은 Local Profile Owner가 현재 Profile Tag를 확인하고 추가·제거할 수 있는 `프로필 태그` 섹션을 제공해야 한다(MUST). chip에는 정규화된 이름 앞에 `#`를 한 번만 표시해야 하며(MUST). Profile Tag 개수와 저장·노출 순서는 제품 계약이 아니다.
+**Authority / Provenance:** `docs/design/profile-tags.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-491`, `PROD-527` — 기존 Profile 편집 화면은 Local Profile Owner가 현재 Profile Tag를 확인하고 추가·제거할 수 있는 `프로필 태그` 섹션을 제공해야 한다(MUST). chip에는 Hashtag가 보존한 Display Hashtag Name 앞에 `#`를 한 번만 표시해야 하며(MUST). canonical lowercase 이름은 identity·중복 판정에만 사용해야 한다(MUST). Profile Tag 개수와 저장·노출 순서는 제품 계약이 아니다.
 
 #### Scenario: Add and remove Profile Tags
 
 - **WHEN** Owner가 유효한 Profile Tag를 추가한다
-- **THEN** 편집기는 정규화된 이름에 `#`를 한 번 붙인 chip을 현재 draft 목록에 추가한다
+- **THEN** 편집기는 Hashtag가 보존한 Display Hashtag Name에 `#`를 한 번 붙인 chip을 현재 draft 목록에 추가한다
 - **AND** Owner가 chip을 제거하면 해당 Profile Tag 관계를 draft에서 제거한다
 
 ### Requirement: Profile Tag editor validation and save states
@@ -35,8 +35,8 @@
 #### Scenario: Synchronize the saved Profile
 
 - **WHEN** Profile Tag를 포함한 Profile 저장이 성공한다
-- **THEN** 클라이언트는 mutation이 반환한 Profile의 정규화된 Tag 목록으로 편집 화면과 공개 Profile cache를 동기화한다
-- **AND** 서버가 반환한 normalized Tag 값으로 동기화하며 배열 순서를 계약으로 해석하지 않는다
+- **THEN** 클라이언트는 mutation이 반환한 Profile의 Hashtag Node 목록으로 편집 화면과 공개 Profile cache를 동기화한다
+- **AND** 서버가 반환한 Hashtag global `id`와 Display Hashtag Name `name`으로 동기화하며 배열 순서를 계약으로 해석하지 않는다
 
 ### Requirement: Accessible universal Profile Tag controls
 

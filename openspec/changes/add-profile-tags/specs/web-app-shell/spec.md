@@ -19,7 +19,7 @@
 #### Scenario: Display non-interactive Profile Tag chips
 
 - **WHEN** 공개 Local Profile에 하나 이상의 Profile Tag가 있다
-- **THEN** 시스템은 각 정규화된 이름 앞에 `#`를 한 번 붙인 비대화형 chip으로 표시한다
+- **THEN** 시스템은 각 Hashtag가 보존한 Display Hashtag Name 앞에 `#`를 한 번 붙인 비대화형 chip으로 표시한다
 - **AND** chip과 tags 배열의 순서는 계약하지 않는다
 - **AND** Profile Tag 검색이 전달되기 전에는 chip을 링크나 버튼으로 표현하지 않는다
 

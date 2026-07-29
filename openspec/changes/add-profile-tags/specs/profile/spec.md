@@ -2,7 +2,7 @@
 
 ### Requirement: Profile object visibility
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — API는 활성 local profile과 저장된 활성 ActivityPub remote profile을 GraphQL profile object로 조회할 수 있게 해야 한다(MUST). Profile object는 연결된 normalized Hashtag Name을 제공하는 non-null `tags: [String!]!` field를 가져야 하며(MUST). 배열의 요소 순서는 API 계약이 아니다. Local 여부는 configured instance ID가 아니라 Profile Origin과 연결된 Instance Kind로 판정해 모든 Local Profile의 유효한 관계를 반환하고 Remote Profile은 빈 목록을 반환해야 하며(MUST), 현재 범위에서 Local Profile Tag만 반환해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — API는 활성 local profile과 저장된 활성 ActivityPub remote profile을 GraphQL profile object로 조회할 수 있게 해야 한다(MUST). Profile object는 연결된 Hashtag global `id`와 first-write-wins Display Hashtag Name `name`을 제공하는 non-null `tags: [Hashtag!]!` field를 가져야 하며(MUST). 배열의 요소 순서는 API 계약이 아니다. Local 여부는 configured instance ID가 아니라 Profile Origin과 연결된 Instance Kind로 판정해 모든 Local Profile의 유효한 관계를 반환하고 Remote Profile은 빈 목록을 반환해야 하며(MUST), 현재 범위에서 Local Profile Tag만 반환해야 한다(MUST).
 
 #### Scenario: Access active local profile object
 

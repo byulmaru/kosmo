@@ -2,13 +2,14 @@
 
 ### Requirement: Profile Tag identity and normalization
 
-**Authority / Provenance:** `docs/domain/objects/hashtag.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — 시스템은 Profile Tag를 별도 durable identity로 만들지 않고 Post와 Profile이 공유하는 canonical Hashtag identity에 연결해야 한다(MUST). Hashtag가 Profile Tag 입력의 바깥 공백·선택적인 앞 `#`·Unicode NFKC·locale 비종속 case folding·Name syntax·길이·normalized-name uniqueness를 소유해야 하며(MUST), 정규화 결과는 1~20개의 Unicode Letter·Number 또는 밑줄 code point로만 구성되어야 한다(MUST). Profile 관계는 Hashtag를 resolve/create한 canonical identity를 사용해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/hashtag.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — 시스템은 Profile Tag를 별도 durable identity로 만들지 않고 Post와 Profile이 공유하는 canonical Hashtag identity에 연결해야 한다(MUST). Hashtag가 Profile Tag 입력의 바깥 공백·선택적인 앞 `#`·Unicode NFKC·locale 비종속 `toLowerCase()`·Name syntax·길이·canonical-name uniqueness와 최초 유효 입력의 NFKC 표기를 보존하는 first-write-wins Display Hashtag Name을 소유해야 하며(MUST), canonical 정규화 결과는 1~20개의 Unicode Letter·Number 또는 밑줄 code point로만 구성되어야 한다(MUST). Profile 관계는 Hashtag를 resolve/create한 canonical identity를 사용해야 한다(MUST).
 
 #### Scenario: Normalize a valid Profile Tag
 
 - **WHEN** Local Profile Owner가 바깥 공백, 선택적인 앞 `#` 또는 대소문자 차이가 있는 유효한 Profile Tag를 입력한다
-- **THEN** Hashtag normalizer는 공백과 앞 `#`를 제거하고 Unicode NFKC와 locale 비종속 case folding을 적용한다
+- **THEN** Hashtag normalizer는 공백과 앞 `#`를 제거하고 Unicode NFKC와 locale 비종속 `toLowerCase()`를 적용한다
 - **AND** Hashtag는 정규화 결과의 Name syntax와 1~20 code point 길이를 검증한다
+- **AND** 새 identity는 최초 입력의 NFKC 대소문자 표기를 Display Hashtag Name으로 보존하고 후속 입력으로 갱신하지 않는다
 - **AND** Profile Tag 관계는 결과를 canonical Hashtag identity로 resolve/create한다
 
 #### Scenario: Use the canonical shared Hashtag identity
@@ -31,7 +32,7 @@
 
 - **WHEN** 권한이 있는 Owner가 서로 다른 유효한 Profile Tag를 저장한다
 - **THEN** 시스템은 각 입력을 canonical Hashtag identity로 resolve/create하고 현재 Profile과 관계를 만든다
-- **AND** 후속 Profile 조회는 연결된 normalized Hashtag Names를 반환할 수 있다
+- **AND** 후속 Profile 조회는 연결된 Hashtag global identity와 Display Hashtag Name을 반환할 수 있다
 - **AND** 관계 저장·조회와 반환 배열의 순서는 계약되지 않는다
 
 #### Scenario: Clear all Profile Tags
@@ -80,7 +81,7 @@
 #### Scenario: Read visible Local Profile Tags
 
 - **WHEN** Lifecycle State가 `Active`이고 Suspension State가 `Normal`인 Local Profile을 조회한다
-- **THEN** 시스템은 해당 Profile에 연결된 정규화된 Hashtag Name을 반환한다
+- **THEN** 시스템은 해당 Profile에 연결된 Hashtag global identity와 Display Hashtag Name을 반환한다
 - **AND** 반환 배열의 순서는 계약하지 않는다
 - **AND** Profile Tag는 Profile과 별도의 visibility 경로를 만들지 않는다
 

@@ -14,29 +14,29 @@
 
 **Deliverable**
 
-Active Account가 현재 선택한 Active Local Owner Profile의 승인된 Profile Tag 목록을 다른 Profile 값과 원자적으로 저장하고, 공개 조회 가능한 Local Profile이 연결된 normalized Tag를 제공하는 DB·service·GraphQL 기반을 전달한다. 관계와 API 배열의 순서는 계약하지 않는다.
+Active Account가 현재 선택한 Active Local Owner Profile의 승인된 Profile Tag 목록을 다른 Profile 값과 원자적으로 저장하고, 공개 조회 가능한 Local Profile이 연결된 Hashtag global identity와 Display Hashtag Name을 제공하는 DB·service·GraphQL 기반을 전달한다. 관계와 API 배열의 순서는 계약하지 않는다.
 
 **Guardrails**
 
 - Post와 Profile이 공유하는 canonical Hashtag identity를 사용하고, `PROD-526`에서 그 저장 구조와 관계를 추가하며 별도 ProfileTag identity나 bio/Post 본문 파생을 추가하지 않는다.
-- Hashtag가 trim·선택적 앞 `#`·NFKC·locale 비종속 Unicode full case folding, 1~20 code point의 Letter·Number·밑줄 Name syntax와 normalized-name uniqueness를 소유한다.
+- Hashtag가 trim·선택적 앞 `#`·NFKC·locale 비종속 `toLowerCase()`, 1~20 code point의 Letter·Number·밑줄 Name syntax와 canonical-name uniqueness를 소유한다. 최초 유효 입력의 NFKC 표기는 first-write-wins `display_name`으로 보존한다.
 - Profile 관계는 입력을 Hashtag identity로 resolve/create하고 같은 canonical identity의 duplicate를 거부하며 전체 목록 replacement를 보장한다. 제품상 max count·관계 position·저장/노출 순서는 없다.
-- optional `tags`의 배열·빈 배열·생략/`null` 의미와 `Profile.tags: [String!]!` 공개 계약을 유지한다.
-- GraphQL update input은 대상 Profile ID를 받지 않고 `usingProfile`이 검증한 selected Profile identity를 사용한다. Active Account가 현재 선택한 Profile의 Owner이고 대상이 Active·Local·Normal일 때만 scalar 값과 Tag 관계를 직렬화된 한 transaction으로 적용한다. Member·비-Owner·selected Profile 없음·inactive Account·Deactivated·Remote·Deleted·Suspended Profile은 거부한다.
+- optional `tags`의 배열·빈 배열·생략/`null` 의미와 global `id`·Display Hashtag Name `name`을 가진 `Profile.tags: [Hashtag!]!` 공개 계약을 유지한다.
+- GraphQL update input은 대상 Profile ID를 받지 않고 `usingProfile`이 검증한 selected Profile identity를 사용한다. Active Account가 현재 선택한 Profile의 Owner이고 대상이 Active·Local·Normal일 때만 제공된 scalar 값과 Tag 관계를 한 transaction으로 적용한다. explicit `SELECT ... FOR UPDATE`, table lock 또는 advisory lock은 사용하지 않고 atomic `UPDATE`, 일반 relation DML, unique/conflict 처리를 사용한다. Member·비-Owner·selected Profile 없음·inactive Account·Deactivated·Remote·Deleted·Suspended Profile은 거부한다.
 - Deactivated·Suspended·Deleted 상태 전이에서 관계를 보존하는 정책은 공개 visibility에서 숨기는 정책과 분리한다. 별도 canonical 보존·파기 정책이 없는 상태 기반 cleanup을 추가하지 않는다. Profile row 물리 삭제의 FK cascade는 별도 DB safety invariant/test로 검증한다. Remote Profile은 빈 tags를 반환하며 actor fetch를 수행하지 않는다.
 - migration은 additive하고 기존 bio·Post data를 backfill하지 않는다. 검색 API·reverse lookup·검색 index와 Post Hashtag 관계를 추가하지 않는다.
 
 **Verification**
 
-- Hashtag가 소유한 normalization의 Unicode·길이·허용 문자·normalized-name uniqueness vector와 Profile 관계의 canonical identity duplicate vector를 core unit test로 검증한다.
+- Hashtag가 소유한 normalization의 Unicode·길이·허용 문자·canonical-name uniqueness, first-write-wins 표시 이름 vector와 Profile 관계의 canonical identity duplicate vector를 core unit test로 검증한다.
 - fresh/upgrade migration, Hashtag Name 및 `(profile_id, hashtag_id)` unique/foreign-key 제약, position column·position unique/check·제품 max count가 없음을 확인하고, 빈 기존 Profile, Deactivated/Suspended/Deleted 관계 보존과 물리 Profile row 삭제 FK cascade safety를 `@kosmo/core` migration·DB test로 검증한다.
 - Active Account가 현재 선택한 Active Local Owner Profile의 성공과 Member·비-Owner·selected Profile 없음·inactive Account·Deactivated·Remote·Deleted·Suspended 거부, omitted·null·empty·임의 개수 tags, canonical identity duplicate, rollback과 concurrent replacement를 service·GraphQL database integration test로 검증한다. 관계 저장·조회와 API 배열의 순서를 가정하지 않는 테스트를 포함한다.
-- schema snapshot, Profile Origin/연결 Instance Kind가 Local인 모든 Profile의 관계 batch 조회·Remote 빈 목록·query count와 `Profile.tags: [String!]!` 배열 순서 비보장 계약을 API test로 검증하고 `pnpm --filter @kosmo/core test`, `pnpm --filter @kosmo/api test`, schema·type check를 통과시킨다.
+- schema snapshot, Hashtag global ID·first-write-wins 표시 이름, Profile Origin/연결 Instance Kind가 Local인 모든 Profile의 관계 batch 조회·Remote 빈 목록·query count와 `Profile.tags: [Hashtag!]!` 배열 순서 비보장 계약을 API test로 검증하고 `pnpm --filter @kosmo/core test`, `pnpm --filter @kosmo/api test`, schema·type check를 통과시킨다.
 
-- [ ] 1.1 Hashtag-owned Name normalization·syntax·length·normalized-name uniqueness와 Profile Tag 목록의 canonical identity duplicate validation을 구현하고 경계·동등성·중복 unit test를 추가한다.
+- [ ] 1.1 Hashtag-owned Name normalization·syntax·length·canonical-name uniqueness와 first-write-wins Display Hashtag Name, Profile Tag 목록의 canonical identity duplicate validation을 구현하고 경계·동등성·중복 unit test를 추가한다.
 - [ ] 1.2 canonical Hashtag identity와 `(profile_id, hashtag_id)` Profile 관계의 additive schema·migration을 구현하고 position column·position unique/check·제품 max count 없이 fresh/upgrade·제약 test를 추가한다. 상태 전이 관계 보존과 물리 Profile row 삭제 FK cascade를 각각 검증한다.
 - [ ] 1.3 Active Account Owner·Active·Local·Normal 조건을 검증하면서 Profile 값과 전체 Tag 목록을 원자적으로 교체하는 service 동작을 구현하고 성공·Deactivated/Deleted/Suspended/Remote/non-Owner/inactive Account 거부·canonical identity duplicate·rollback·동시성 DB test를 추가한다. 관계나 반환 배열 순서를 의미 있는 결과로 가정하지 않는다.
-- [ ] 1.4 GraphQL `Profile.tags`와 대상 ID 없는 selected Profile update input·payload를 구현하고 Profile Origin/연결 Instance Kind가 Local인 모든 공개 Profile의 관계 batch 조회, Remote 빈 목록, 배열 순서 비보장, 입력 의미와 selected Profile authorization integration test를 추가한다.
+- [ ] 1.4 global `id`와 Display Hashtag Name을 가진 GraphQL `Profile.tags: [Hashtag!]!`와 대상 ID 없는 selected Profile update input·payload를 구현하고 Profile Origin/연결 Instance Kind가 Local인 모든 공개 Profile의 관계 batch 조회, Remote 빈 목록, 배열 순서 비보장, 입력 의미와 selected Profile authorization integration test를 추가한다.
 - [ ] 1.5 `@kosmo/core`·`@kosmo/api` 필수 검증과 schema 동기화를 통과시키고 `PROD-526` PR에 migration·권한·transaction·query-count 및 상태별 관계 보존 증거를 기록한다.
 
 ## 2. PROD-527 프로필 수정·공개 화면 연결
@@ -60,7 +60,7 @@ Active Account가 현재 선택한 Active Local Owner Profile의 승인된 Profi
 **Guardrails**
 
 - `PROD-491`의 controlled editor·client validation과 `PROD-492`의 route·저장 action을 재사용하며 editor, route나 저장 흐름을 중복 구현하지 않는다. 순서 변경 control은 추가하지 않는다.
-- chip은 normalized name 앞에 `#`를 한 번만 표시하고, 추가·제거를 지원한다. 개수·관계 position·저장/표시 순서를 UI 계약으로 만들지 않는다.
+- chip은 Hashtag가 보존한 Display Hashtag Name 앞에 `#`를 한 번만 표시하고, 추가·제거를 지원한다. canonical lowercase 이름은 identity·중복 판정에만 사용하며 개수·관계 position·저장/표시 순서를 UI 계약으로 만들지 않는다.
 - `PROD-491`이 제공한 Hashtag Name syntax·문자·길이·canonical identity duplicate client validation을 재사용하고 server Hashtag validation을 권위로 유지한다. 제품 max count validation은 추가하지 않는다.
 - Profile 저장 중 중복 제출을 막고 실패 뒤 현재 Tag draft와 다른 draft를 보존하며, 성공 뒤 payload의 tags로 Relay Profile record를 동기화한다. 배열 순서는 계약으로 해석하지 않는다.
 - 제거 action은 compact `32×32` 시각 크기를 유지하되 실제 target은 Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp`로 제공하고 명확한 accessibility label/state를 유지한다. Web에서는 Tab으로 focus하고 focus-visible 표시를 유지하며 Enter/Space로 pointer·touch와 동일한 Tag 제거 결과를 실행해야 한다. iOS `44×44 pt`와 Android `48×48 dp`로 시각 크기보다 확장된 실제 target은 인접한 다른 TagChip 제거 action target과 겹치지 않아야 하며, 여러 줄 wrapping에서도 이 비중첩 조건을 유지한다. 순서 변경 action이나 drag gesture는 제공하지 않는다.
