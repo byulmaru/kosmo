@@ -28,8 +28,8 @@ Local/Remote와 생명주기 경계를 먼저 확정해야 한다.
 - Active Account의 Local Profile Owner만 Profile 편집을 통해 전체 Profile Tag 목록을 원자적으로 교체한다.
   Profile Tag는 Profile과 별도의 편집 권한을 가지지 않는다.
 - Profile Tag는 Profile이 공개 조회 가능한 동안에만 함께 공개한다. Profile 비활성화 또는 정지는 관계를
-  보존하지만 공개 결과에서 숨기고, Profile 삭제는 관계를 제거한다. 다른 Post나 Profile의 Hashtag 관계에는
-  영향을 주지 않는다.
+  보존하지만 공개 결과에서 숨긴다. Profile Lifecycle State가 Deleted로 전이됐다는 사실만으로 관계를
+  제거하지 않으며, 관계 cleanup은 별도의 canonical 보존·파기 정책이 소유한다.
 - 이번 전달에서는 Remote Profile의 Profile Tag 수집·표시와 ActivityPub 표현을 제외한다.
 - 후속 검색 계약에는 정규화된 Hashtag identity와 공개 조회 가능한 Local Profile 관계를 입력으로 제공한다.
   query 문법, 일치, 정렬, pagination, 인증과 navigation은 검색 Domain Gate에서 별도로 결정한다.
