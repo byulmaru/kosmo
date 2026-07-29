@@ -245,7 +245,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
         }
 
         trackAnalytics('profile_created', {
-          selected_profile_id: response.createProfile.profile.id,
+          selected_profile_id: active?.id ?? null,
         });
         setHandle('');
         setCreating(false);

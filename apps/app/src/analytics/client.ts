@@ -1,5 +1,9 @@
 type TrackProperties = Record<string, unknown>;
 
+export function initializeAnalytics(): null {
+  return null;
+}
+
 export function trackAnalytics(name: string, properties?: TrackProperties): void {
   void name;
   void properties;

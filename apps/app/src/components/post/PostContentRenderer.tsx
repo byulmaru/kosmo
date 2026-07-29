@@ -20,7 +20,7 @@ interface RenderContext {
   readonly bodyStyle: StyleProp<TextStyle>;
 }
 
-const replayMaskProps = { dataSet: { openpanelReplayMask: '' } } as unknown as TextProps;
+const replayBlockProps = { dataSet: { openpanelReplayBlock: '' } } as unknown as TextProps;
 
 export function PostContentRenderer({
   bodyText,
@@ -41,7 +41,7 @@ export function PostContentRenderer({
 
   if (!document) {
     return bodyText ? (
-      <Text {...replayMaskProps} style={bodyStyle}>
+      <Text {...replayBlockProps} style={bodyStyle}>
         {bodyText}
       </Text>
     ) : null;
@@ -53,7 +53,7 @@ export function PostContentRenderer({
 function renderNode(node: PostContentNode, key: Key, context: RenderContext): ReactNode {
   return match(node)
     .with({ type: 'doc' }, (document) => (
-      <Text {...replayMaskProps} key={key} style={context.bodyStyle}>
+      <Text {...replayBlockProps} key={key} style={context.bodyStyle}>
         {document.content.map((child, index) => (
           <Fragment key={`${key}.${index}`}>
             {index > 0 ? '\n\n' : null}

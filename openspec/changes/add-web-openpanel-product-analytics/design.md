@@ -36,9 +36,9 @@ OpenPanel Web SDK의 자동 화면·외부 링크·속성 추적은 브라우저
 
 플랫폼별 모듈 해석을 사용해 Web 구현은 `@openpanel/web` singleton을 지연 생성하고 native 구현은 동일 API의 no-op으로 둔다. 공통 event helper가 OpenPanel의 event name과 선택적 properties를 그대로 전달하고, 모든 SDK 호출은 오류를 흡수하는 fire-and-forget 경계 뒤에 둔다. 허용된 이벤트와 속성은 실제 성공 경계의 호출부와 payload test로 유지한다.
 
-Session 내부의 bridge가 guest에서 anonymous client를 초기화하고 이전 identity를 clear한다. valid Session에서는 Account ID를 identify하고 로그인 시작 marker를 한 번 소비해 `login_succeeded`를 보낸다. 명시적 로그아웃 경계도 서버 로그아웃과 actor reset이 완료된 뒤 identity를 clear한다. Profile·Post·Follow mutation과 검색 UI는 기존 성공 callback에서만 event helper를 호출한다.
+App provider가 Session query 경계 밖에서 anonymous client를 초기화하여 guest·Session error 화면에서도 자동 수집과 replay를 유지한다. Session 내부의 bridge는 guest에서 이전 identity를 clear하고, valid Session에서 Account ID를 identify한 뒤 로그인 시작 marker를 한 번 소비해 `login_succeeded`를 보낸다. 명시적 로그아웃 경계도 서버 로그아웃과 actor reset이 완료된 뒤 identity를 clear한다. Profile·Post·Follow mutation과 검색 UI는 기존 성공 callback에서만 event helper를 호출한다.
 
-SDK는 `trackScreenViews`, `trackOutgoingLinks`, `trackAttributes`를 활성화하고 replay를 10%로 설정한다. `maskAllInputs`를 사용하고 canonical Post Content root에는 플랫폼 분기 없이 OpenPanel replay mask attribute를 부여한다.
+SDK는 `trackScreenViews`, `trackOutgoingLinks`, `trackAttributes`를 활성화하고 replay를 10%로 설정한다. `maskAllInputs`를 사용하고 canonical Post Content root에는 플랫폼 분기 없이 OpenPanel replay block attribute를 부여해 텍스트와 하위 DOM 속성을 함께 제외한다.
 
 개인정보 처리방침은 인증 바깥 `/privacy` route로 제공하고 landing과 menu에서 연결한다. OpenPanel 배포·검증·Account별 삭제는 운영 문서에 분리해 기록한다.
 

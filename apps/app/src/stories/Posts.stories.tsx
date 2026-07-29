@@ -1040,18 +1040,20 @@ type Story = StoryObj<typeof meta>;
 export const BodyTimeAndLayoutStates: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByText('짧은 본문 한 줄.')).toHaveAttribute('data-openpanel-replay-mask', '');
+    expect(canvas.getByText('짧은 본문 한 줄.')).toHaveAttribute('data-openpanel-replay-block', '');
     expect(canvas.getByText('미지원 문서는 안전한 Plain Text로 표시합니다.')).toHaveAttribute(
-      'data-openpanel-replay-mask',
+      'data-openpanel-replay-block',
       '',
     );
     expect(canvasElement.querySelector('a[href="/@user@remote.example"]')).toBeInTheDocument();
     expect(
       canvasElement.querySelector('a[href="/@user@remote.example/detail-remote"]'),
     ).toBeInTheDocument();
-    expect(
-      canvas.getByRole('link', { name: /안전한 외부 링크, https:\/\/example\.com\/path/ }),
-    ).toBeVisible();
+    const contentLink = canvas.getByRole('link', {
+      name: /안전한 외부 링크, https:\/\/example\.com\/path/,
+    });
+    expect(contentLink).toBeVisible();
+    expect(contentLink.closest('[data-openpanel-replay-block]')).not.toBeNull();
     expect(canvasElement.textContent).toContain('강제 개행을 함께 표시합니다.');
     expect(canvasElement.textContent).toContain(
       '강제 개행을 함께 표시합니다.\n\n두 번째 문단입니다.',
