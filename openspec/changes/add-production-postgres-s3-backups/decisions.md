@@ -47,7 +47,7 @@
 - Authority / Provenance: Linear `PROD-546`, `PROD-551`
 - Status: Active
 - Context / Problem: 명시적인 RPO와 recovery window를 지원하는 실행 일정과 보존 정책이 필요하다.
-- Decision Outcome: 최초 활성화 때 immediate base backup을 실행하고 이후 매일 03:00 KST에 base backup을 수행한다. Cluster의 `archive_timeout`은 5분, ObjectStore retention은 7일로 둔다. 초기 10Gi 전제에서 압축·병렬화는 plugin 기본값을 사용한다.
+- Decision Outcome: 최초 활성화 때 immediate base backup을 실행하고 이후 매일 03:00 KST에 base backup을 수행한다. Cluster의 `archive_timeout`은 4분으로 두어 S3 업로드·관측 시간을 포함한 RPO 5분 목표에 1분 여유를 확보하고, ObjectStore retention은 7일로 둔다. 초기 10Gi 전제에서 압축·병렬화는 plugin 기본값을 사용한다.
 - Alternatives Considered: 더 잦은 base backup은 초기 규모에서 비용과 I/O 대비 RPO 개선이 작아 제외했다. WAL archive 없는 일일 backup은 RPO 5분을 충족하지 못해 제외했다. 수동 최초 backup만 사용하는 방식은 활성화 누락 가능성이 있어 제외했다.
 - Consequences: ScheduledBackup cron은 초를 포함한 UTC 6-field `0 0 18 * * *`을 사용한다. RPO 5분은 실제 WAL archive와 restore에서 검증해야 할 목표다.
 - Confirmation / Follow-up: Helm render, immediate Backup 상태, WAL archive 상태와 S3 versioned object를 확인한다.
@@ -71,7 +71,7 @@
 - Authority / Provenance: Linear `PROD-546`, `PROD-551`
 - Status: Active
 - Context / Problem: backup 성공만으로 복구 가능성을 증명할 수 없으며 rehearsal이 production 데이터나 backup chain을 오염시키면 안 된다.
-- Decision Outcome: `kosmo-prod-restore` namespace의 새 Cluster를 기록된 target time으로 복구한다. Restore Cluster에는 source ObjectStore를 recovery source로만 연결하고 같은 destination의 WAL archiver 또는 ScheduledBackup을 구성하지 않는다. 출시 전 한 번과 이후 월 1회 RPO, RTO, schema, Drizzle migration history, 대표 row count와 최소 read를 검증한다.
+- Decision Outcome: application write pause 중 불변 snapshot과 named restore point를 만들고 WAL 전환을 강제하지 않은 상태에서 대상 WAL의 자연 archive 성공을 확인한 뒤 `kosmo-prod-restore` namespace의 새 Cluster를 해당 restore point로 복구한다. Restore Cluster에는 source ObjectStore를 recovery source로만 연결하고 같은 destination의 WAL archiver 또는 ScheduledBackup을 구성하지 않는다. 출시 전 한 번과 이후 월 1회 RPO, RTO, schema, Drizzle migration history, 대표 row count와 최소 read를 검증한다.
 - Alternatives Considered: production Cluster in-place restore는 원본을 덮어쓸 위험이 있어 제외했다. Backup phase만 확인하는 방식은 실제 복구 경로를 검증하지 못해 제외했다.
 - Consequences: rehearsal용 namespace/PVC 비용과 월간 운영 작업이 발생한다. 민감 데이터가 아닌 시각·phase·측정값·검증 결과만 Linear에 기록해야 한다.
 - Confirmation / Follow-up: 최초 production 준비 후 RPO 5분/RTO 60분 목표를 측정하고 `PROD-546`에 증거를 남긴 뒤 restore namespace를 제거한다.

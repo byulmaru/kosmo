@@ -12,6 +12,17 @@ spec:
 {{- if eq .Values.env "dev" }}
   enablePDB: false
 {{- end }}
+{{- if eq .Values.env "prod" }}
+  serviceAccountName: kosmo-postgres-backup
+  postgresql:
+    parameters:
+      archive_timeout: 4min
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: kosmo-postgres-backup
+{{- end }}
   bootstrap:
     initdb:
       database: kosmo
