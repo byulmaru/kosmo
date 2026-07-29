@@ -16,7 +16,7 @@ Client ID가 없는 build에서는 SDK client, browser listener와 분석 요청
 
 - 자동 수집: screen view의 전체 URL·query·title·referrer, 외부 링크 URL·표시 텍스트, `data-track` attribute event
 - identity: 로그인 전 anonymous device/session, 로그인 후 opaque Account ID. 이름·이메일·handle trait는 보내지 않는다.
-- 명시적 event: `login_succeeded`, `profile_created`, `profile_selected`, `post_created`, `follow_succeeded`, `search_submitted`, `search_results_loaded`, `search_more_results_loaded`, `search_result_selected`
+- 명시적 event: `login_succeeded`, `profile_created`, `profile_selected`, `post_created`, `follow_succeeded`, `search_submitted`, `search_results_loaded`, `search_result_selected`
 - replay: 10% sample, `maskAllInputs: true`, 모든 canonical Post Content root에 `[data-openpanel-replay-mask]`
 - 보유: 일반 event는 분석 목적 달성, project 삭제, Account 삭제 또는 이용자 요청 중 먼저 도달한 때까지다. Replay chunk는 OpenPanel ClickHouse TTL에 따라 30일 뒤 삭제된다.
 

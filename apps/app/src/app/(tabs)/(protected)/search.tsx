@@ -121,12 +121,7 @@ function SearchPeopleResults({
 
     setLoadError(false);
     pagination.loadNext(20, {
-      onComplete: (error) => {
-        setLoadError(Boolean(error));
-        if (!error) {
-          trackAnalytics('search_more_results_loaded', { tab: 'people' });
-        }
-      },
+      onComplete: (error) => setLoadError(Boolean(error)),
     });
   };
 

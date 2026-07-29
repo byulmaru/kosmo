@@ -145,7 +145,6 @@ describe('OpenPanel Web client', () => {
     });
     analytics.trackAnalytics('search_submitted', { source: 'keyboard', tab: 'people' });
     analytics.trackAnalytics('search_results_loaded', { has_results: true, tab: 'people' });
-    analytics.trackAnalytics('search_more_results_loaded', { tab: 'people' });
     analytics.trackAnalytics('search_result_selected', { tab: 'people' });
     analytics.clearAnalytics();
 
@@ -169,7 +168,6 @@ describe('OpenPanel Web client', () => {
         name: 'search_results_loaded',
         properties: { has_results: true, tab: 'people' },
       },
-      { name: 'search_more_results_loaded', properties: { tab: 'people' } },
       { name: 'search_result_selected', properties: { tab: 'people' } },
     ]);
     assert.equal(instances[0]?.clears, 1);

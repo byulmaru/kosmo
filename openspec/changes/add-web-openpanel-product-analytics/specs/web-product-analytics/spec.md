@@ -50,7 +50,7 @@ Kosmo Web은 `login_succeeded`, `profile_created`, `profile_selected`, `post_cre
 
 ### Requirement: 검색 행동 이벤트
 
-Kosmo Web은 검색 제출, 결과 첫 페이지 성공, 다음 페이지 성공과 결과 Profile 선택을 MUST 추적해야 한다. 명시적 검색 이벤트는 검색 원문과 대상 Profile ID를 속성으로 보내지 않아야 한다.
+Kosmo Web은 검색 제출, 결과 첫 페이지 성공과 결과 Profile 선택을 MUST 추적해야 한다. 명시적 검색 이벤트는 검색 원문과 대상 Profile ID를 속성으로 보내지 않아야 한다.
 
 **Authority / Provenance:** `PROD-469`
 
@@ -61,8 +61,8 @@ Kosmo Web은 검색 제출, 결과 첫 페이지 성공, 다음 페이지 성공
 
 #### Scenario: 검색 결과가 로드된다
 
-- **WHEN** 검색 결과 첫 페이지 또는 다음 페이지가 성공적으로 로드된다
-- **THEN** 결과 유무 또는 페이지 성공을 나타내는 이벤트가 검색 원문 없이 전송된다
+- **WHEN** 검색 결과 첫 페이지가 성공적으로 로드된다
+- **THEN** 결과 유무를 나타내는 이벤트가 검색 원문 없이 전송된다
 
 #### Scenario: 검색 결과를 선택한다
 

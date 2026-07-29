@@ -1,6 +1,6 @@
 import { isPostContentDocumentV1 } from '@kosmo/core/post-content';
 import { Fragment } from 'react';
-import { Linking, Platform, StyleSheet, Text } from 'react-native';
+import { Linking, StyleSheet, Text } from 'react-native';
 import { match } from 'ts-pattern';
 import { useTheme } from '@/theme/ThemeProvider';
 import { typography } from '@/theme/tokens';
@@ -20,8 +20,7 @@ interface RenderContext {
   readonly bodyStyle: StyleProp<TextStyle>;
 }
 
-const replayMaskProps =
-  Platform.OS === 'web' ? ({ dataSet: { openpanelReplayMask: '' } } as unknown as TextProps) : {};
+const replayMaskProps = { dataSet: { openpanelReplayMask: '' } } as unknown as TextProps;
 
 export function PostContentRenderer({
   bodyText,
