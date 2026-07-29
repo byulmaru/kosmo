@@ -8,12 +8,15 @@ import {
   MemoryKvStore,
   signRequest,
 } from '@fedify/fedify';
-import { CryptographicKey, Note, Person, PUBLIC_COLLECTION } from '@fedify/vocab';
+import { CryptographicKey, Image, Note, Person, PUBLIC_COLLECTION } from '@fedify/vocab';
 import { getDocumentLoader } from '@fedify/vocab-runtime';
 import {
+  AccountState,
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
+  MediaSource,
+  MediaState,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -32,6 +35,7 @@ const remoteActorUri = new URL('https://prod-494.remote.example/users/follower')
 const remoteKeyUri = new URL('#main-key', remoteActorUri);
 
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
+let Accounts: typeof CoreDb.Accounts;
 let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let authorizeLocalPostNote: typeof LocalPostNoteModule.authorizeLocalPostNote;
 let db: typeof CoreDb.db;
@@ -40,6 +44,7 @@ let firstOrThrow: typeof CoreDb.firstOrThrow;
 let isCanonicalPostId: typeof PostUriModule.isCanonicalPostId;
 let Instances: typeof CoreDb.Instances;
 let localInstanceId: string;
+let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
@@ -48,6 +53,7 @@ let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
 let resolveActivityPubPostUri: typeof PostUriModule.resolveActivityPubPostUri;
 let testInstanceIds: string[] = [];
+let testAccountIds: string[] = [];
 let testProfileIds: string[] = [];
 
 describe('ActivityPub Local Post Note', () => {
@@ -56,10 +62,12 @@ describe('ActivityPub Local Post Note', () => {
     process.env.PUBLIC_ORIGIN = publicOrigin;
     ({
       ActivityPubActors,
+      Accounts,
       ActivityPubPosts,
       db,
       firstOrThrow,
       Instances,
+      Media,
       pg,
       PostContents,
       Posts,
@@ -189,6 +197,60 @@ describe('ActivityPub Local Post Note', () => {
       tombstoneParentNote?.replyTargetId?.href,
       `${publicOrigin}/ap/note/${localParent.id}`,
     );
+  });
+
+  test('projects ordered Ready Local Media as Image attachments without HTML duplication', async () => {
+    const author = await createProfile({ handle: 'media-author', kind: InstanceKind.LOCAL });
+    const firstMedia = await createMedia(author.id);
+    const secondMedia = await createMedia(author.id);
+    const post = await createPost(author.id, {
+      media: [
+        { altText: null, mediaId: secondMedia.id },
+        { altText: '첫 번째 설명', mediaId: firstMedia.id },
+      ],
+      sensitiveMedia: true,
+    });
+
+    const note = await dispatchLocalPostNote(createContext(), { id: post.id });
+    assert.ok(note);
+    assert.equal(note.content?.toString(), '<p>body</p>');
+    assert.equal(note.content?.toString().includes('<img'), false);
+    assert.equal(note.sensitive, true);
+
+    const attachments: Image[] = [];
+    for await (const attachment of note.getAttachments()) {
+      assert.ok(attachment instanceof Image);
+      attachments.push(attachment);
+    }
+    assert.equal(attachments.length, 2);
+    assert.equal(
+      attachments[0]?.url?.toString(),
+      `https://media.byulma.run/original/${secondMedia.storageReference}.webp`,
+    );
+    assert.equal(attachments[0]?.mediaType, 'image/webp');
+    assert.equal(attachments[0]?.name, null);
+    assert.equal(
+      attachments[1]?.url?.toString(),
+      `https://media.byulma.run/original/${firstMedia.storageReference}.webp`,
+    );
+    assert.equal(attachments[1]?.name?.toString(), '첫 번째 설명');
+
+    const json = JSON.stringify(await note.toJsonLd());
+    assert.equal(json.includes(firstMedia.id), false);
+    assert.equal(json.includes(secondMedia.id), false);
+  });
+
+  test('does not project a partial Note when required Media is unavailable', async () => {
+    const author = await createProfile({ handle: 'unavailable-media', kind: InstanceKind.LOCAL });
+    const uploading = await createMedia(author.id, { state: MediaState.UPLOADING });
+    const remote = await createMedia(author.id, { source: MediaSource.REMOTE });
+    const unsafe = await createMedia(author.id, { storageReference: 'unsafe/reference' });
+    const missingId = crypto.randomUUID();
+
+    for (const mediaId of [uploading.id, remote.id, unsafe.id, missingId]) {
+      const post = await createPost(author.id, { media: [{ altText: null, mediaId }] });
+      assert.equal(await dispatchLocalPostNote(createContext(), { id: post.id }), null);
+    }
   });
 
   test('returns the same unavailable boundary for unsupported or ineligible Posts', async () => {
@@ -429,11 +491,15 @@ const createPost = async (
   profileId: string,
   {
     replyParentId = null,
+    media = [],
+    sensitiveMedia = false,
     state = PostState.ACTIVE,
     summary = null,
     visibility = PostVisibility.PUBLIC,
   }: {
     replyParentId?: string | null;
+    media?: readonly { readonly altText: string | null; readonly mediaId: string }[];
+    sensitiveMedia?: boolean;
     state?: (typeof PostState)[keyof typeof PostState];
     summary?: string | null;
     visibility?: (typeof PostVisibility)[keyof typeof PostVisibility];
@@ -449,7 +515,14 @@ const createPost = async (
     .values({
       document: {
         body: {
-          content: [{ content: [{ text: 'body', type: 'text' }], type: 'paragraph' }],
+          ...(sensitiveMedia ? { attrs: { sensitiveMedia: true } } : {}),
+          content: [
+            { content: [{ text: 'body', type: 'text' }], type: 'paragraph' },
+            ...media.map(({ altText, mediaId }) => ({
+              attrs: { altText, mediaId },
+              type: 'media' as const,
+            })),
+          ],
           type: 'doc',
         },
         summary,
@@ -463,6 +536,43 @@ const createPost = async (
     .update(Posts)
     .set({ currentContentId: content.id })
     .where(eq(Posts.id, post.id))
+    .returning()
+    .then(firstOrThrow);
+};
+
+const createMedia = async (
+  profileId: string,
+  {
+    source = MediaSource.LOCAL,
+    state = MediaState.READY,
+    storageReference = `u_${crypto.randomUUID()}`,
+  }: {
+    source?: (typeof MediaSource)[keyof typeof MediaSource];
+    state?: (typeof MediaState)[keyof typeof MediaState];
+    storageReference?: string;
+  } = {},
+) => {
+  const account = await db
+    .insert(Accounts)
+    .values({
+      displayName: `media-${crypto.randomUUID()}`,
+      oidcSubject: `media-${crypto.randomUUID()}`,
+      state: AccountState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  testAccountIds.push(account.id);
+  return db
+    .insert(Media)
+    .values({
+      accountId: account.id,
+      profileId,
+      readyAt: state === MediaState.READY ? Temporal.Now.instant() : null,
+      source,
+      state,
+      storageReference,
+      uploadExpiresAt: Temporal.Now.instant().add({ minutes: 5 }),
+    })
     .returning()
     .then(firstOrThrow);
 };
@@ -482,10 +592,15 @@ const cleanTestRows = async () => {
     await db.delete(PostContents).where(inArray(PostContents.postId, postIds));
     await db.delete(Posts).where(inArray(Posts.id, postIds));
   }
+  await db.delete(Media).where(inArray(Media.profileId, testProfileIds));
   await db.delete(Profiles).where(inArray(Profiles.id, testProfileIds));
+  if (testAccountIds.length > 0) {
+    await db.delete(Accounts).where(inArray(Accounts.id, testAccountIds));
+  }
   if (testInstanceIds.length > 0) {
     await db.delete(Instances).where(inArray(Instances.id, testInstanceIds));
   }
   testInstanceIds = [];
+  testAccountIds = [];
   testProfileIds = [];
 };
