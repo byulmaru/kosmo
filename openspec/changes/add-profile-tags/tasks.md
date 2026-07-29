@@ -66,19 +66,19 @@ Local Profile Owner가 승인된 Profile Tag 목록을 다른 Profile 값과 원
 - chip은 normalized name 앞에 `#`를 한 번만 표시하고, 추가·제거를 지원한다. 개수·관계 position·저장/표시 순서를 UI 계약으로 만들지 않는다.
 - `PROD-491`이 제공한 Hashtag Name syntax·문자·길이·canonical identity duplicate client validation을 재사용하고 server Hashtag validation을 권위로 유지한다. 제품 max count validation은 추가하지 않는다.
 - Profile 저장 중 중복 제출을 막고 실패 뒤 현재 Tag draft와 다른 draft를 보존하며, 성공 뒤 payload의 tags로 Relay Profile record를 동기화한다. 배열 순서는 계약으로 해석하지 않는다.
-- 제거 action은 최소 44×44 target과 명확한 accessibility label/state를 제공하고, 순서 변경 action이나 drag gesture는 제공하지 않는다.
+- 제거 action은 compact `32×32` 시각 크기를 유지하되 실제 target은 Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp`로 제공하고 명확한 accessibility label/state를 유지한다. 순서 변경 action이나 drag gesture는 제공하지 않는다.
 - 공개 Tag는 bio 다음·통계와 콘텐츠보다 앞에서 wrap하고, 빈 목록은 섹션을 숨기며 검색 전달 전에는 링크·버튼으로 만들지 않는다. TagChip 목록의 배열 순서는 계약하지 않는다.
 - 기존 theme token·breakpoint와 React Native primitive를 재사용하고 Remote Profile Tag, 검색·자동완성·추천·trend를 추가하지 않는다.
 
 **Verification**
 
 - `PROD-491` editor의 기본·추가·제거·임의 개수·invalid·canonical identity duplicate 상태가 연결 뒤에도 회귀하지 않고 pending·server failure·retry·Relay 성공 상태와 함께 동작하는지 component/Storybook interaction test로 검증한다. 순서 변경·max count 제약이 추가되지 않았는지도 확인한다.
-- Hashtag-owned client validation과 server parity를 재사용했는지 확인하고, native accessibility label/state·44×44 target·색 외 상태 표현과 좁은 화면 wrapping을 접근성·layout test로 보강한다. 순서 변경 control이 없음을 검증한다.
+- Hashtag-owned client validation과 server parity를 재사용했는지 확인하고, 공통 `32×32` 시각 크기와 Web `32×32 CSS px`·iOS `44×44 pt`·Android `48×48 dp` 실제 target, accessibility label/state·색 외 상태 표현과 좁은 화면 wrapping을 접근성·layout test로 보강한다. 순서 변경 control이 없음을 검증한다.
 - 빈/임의 개수/긴 Local tags와 Remote 빈 tags를 Web·Android·iOS 공용 상태 카탈로그에서 검증한다.
 - Owner 편집 저장부터 공개 Profile 재조회·표시까지 Web E2E를 검증하고 `pnpm --filter @kosmo/app test`, `pnpm --filter @kosmo/web test`의 관련 suite를 통과시킨다.
 
 - [ ] 2.1 `PROD-491`의 controlled Profile Tag editor를 재작성하지 않고 `PROD-492` Profile edit route·저장 흐름에 연결해 현재 tags를 초기화한다.
-- [ ] 2.2 `PROD-491`의 Hashtag Name normalization 미리보기·문자·길이·canonical identity duplicate validation을 재사용하고 회귀·server parity를 검증하며, `PROD-527` 고유의 native accessibility·touch target 상태를 보강한다. max count·순서 변경 control은 추가하지 않는다.
+- [ ] 2.2 `PROD-491`의 Hashtag Name normalization 미리보기·문자·길이·canonical identity duplicate validation과 플랫폼별 제거 target을 재사용하고 회귀·server parity를 검증하며, `PROD-527` 연결 뒤 Web `32×32 CSS px`·iOS `44×44 pt`·Android `48×48 dp` runtime 상태를 보강한다. max count·순서 변경 control은 추가하지 않는다.
 - [ ] 2.3 기존 Profile mutation에 전체 Tag draft를 포함하고 pending·server field error·retry·성공 Relay record 동기화를 구현해 상태 전이를 검증한다.
 - [ ] 2.4 공개 Profile의 bio 다음에 비대화형 wrapping TagChip 목록을 연결하고 빈·임의 개수·긴·Remote 상태와 배열 순서 비보장 test를 추가한다.
 - [ ] 2.5 Web·Android·iOS 공용 상태 카탈로그, app 필수 check와 Owner 편집→공개 표시 Web E2E를 통과시키고 `PROD-527` PR에 접근성·layout·Relay 증거를 기록한다.

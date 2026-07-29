@@ -40,12 +40,14 @@
 
 ### Requirement: Accessible universal Profile Tag controls
 
-**Authority / Provenance:** `docs/design/profile-tags.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-491`, `PROD-527` — Profile Tag 편집·표시 UI는 React Native primitive와 기존 theme token으로 Web·Android·iOS에서 같은 정보 구조를 사용해야 한다(MUST). 제거 action은 최소 44×44 touch target과 동작을 설명하는 accessibility label·state를 제공해야 한다(MUST). Profile Tag 순서 변경 control은 제공하지 않는다.
+**Authority / Provenance:** `docs/design/profile-tags.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-491`, `PROD-527` — Profile Tag 편집·표시 UI는 React Native primitive와 기존 theme token으로 Web·Android·iOS에서 같은 정보 구조를 사용해야 한다(MUST). 제거 action은 compact `32×32` 시각 크기와 별도로 Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp` 실제 target 및 동작을 설명하는 accessibility label·state를 제공해야 한다(MUST). Profile Tag 순서 변경 control은 제공하지 않는다.
 
 #### Scenario: Operate removal with touch or assistive technology
 
 - **WHEN** 사용자가 touch 또는 보조 기술로 Profile Tag 제거 action을 탐색한다
-- **THEN** 제거 control은 최소 44×44 target과 대상 Tag를 포함한 accessibility label을 제공한다
+- **THEN** 제거 control은 compact `32×32` 시각 크기를 유지한다
+- **AND** 실제 target은 Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp`를 제공한다
+- **AND** 대상 Tag를 포함한 accessibility label을 제공한다
 - **AND** disabled·validation·선택 상태를 색만으로 전달하지 않는다
 
 #### Scenario: Render the shared states on every platform

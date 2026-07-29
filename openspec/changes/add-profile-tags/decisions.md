@@ -64,6 +64,18 @@
 - Consequences: GraphQL resolver의 직접 row update 일부를 transaction/service 경계로 이동해야 한다. validation·권한·Hashtag resolve/create·relation 실패는 모두 요청 전 상태를 보존해야 한다.
 - Confirmation / Follow-up: scalar와 tags 동시 성공, 각 실패 rollback, concurrent replacement와 Hashtag identity upsert 경합을 database integration test로 검증한다.
 
+### Profile Tag 제거 action은 시각 크기와 플랫폼 target을 분리한다
+
+- Decision Date: 2026-07-29
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/profile-tags.md`, `PROD-523` (PR #394), `PROD-491`, `PROD-522`, `PROD-527`
+- Status: Active
+- Context / Problem: 공용 제거 action을 `44×44` 하나로 고정하면 Web compact geometry와 충돌하고 Android의 `48×48 dp` 기본 target보다 작다. 반대로 공용 `32×32` control만 사용하면 iOS·Android target을 충족하지 못한다.
+- Decision Outcome: 제거 action은 compact `32×32` 시각 크기를 유지하되 실제 target을 Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp`로 분리한다. target 확장은 동작과 대상 Tag를 설명하는 accessibility label/state 및 키보드 동작을 바꾸지 않는다.
+- Alternatives Considered: 모든 플랫폼에 `44×44`를 적용하는 방식은 Android 기준보다 작고 Web 밀도를 불필요하게 키워 제외했다. Native target을 후속으로 미루는 방식은 공용 component가 Android/iOS에서도 사용되는 현재 범위와 맞지 않아 제외했다.
+- Consequences: 공용 component는 플랫폼별 target 값을 선택하되 보이는 chip과 제거 glyph의 compact geometry를 유지해야 한다. `PROD-491`이 target 구현과 component 검증을 소유하고 `PROD-527`은 route 연결 뒤 Web·Android·iOS runtime 회귀를 검증한다.
+- Confirmation / Follow-up: Web에서 `32×32 CSS px`, iOS에서 `44×44 pt`, Android에서 `48×48 dp` 실제 target과 공통 `32×32` 시각 크기를 component·runtime 검증으로 확인한다.
+
 ## Remaining Decisions
 
 - 없음.
