@@ -24,7 +24,7 @@ Web Storybook 상태 카탈로그를 전달한다. Native route 연결과 실제
   해당 field만 변경하며 초기값과 같은 draft에서는 저장을 disabled로 표현한다.
 - inline TagChip 추가·제거를 제공하되 Tag 저장·Relay는 연결하지 않는다. 개수 상한·순서
   변경 UI·gesture는 추가하지 않는다.
-- Follow Approval Policy, Profile Link와 기존 Figma 시안의 범위 밖 field를 포함하지 않는다.
+- Profile Link와 기존 Figma 시안의 범위 밖 field를 포함하지 않는다.
 - 기존 theme token·breakpoint와 React Native primitive를 사용한다. Profile Tag 제거 action은 시각 크기
   `32×32`, 실제 입력 target Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp`를 제공하고 text
   action은 최소 높이 `36`과 accessibility state를 유지한다.
