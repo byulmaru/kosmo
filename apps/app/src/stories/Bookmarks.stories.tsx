@@ -156,22 +156,28 @@ const bookmarkRepostAuthor = profile({
   id: 'bookmark-repost-author',
   relativeHandle: '@bookmark-reposter',
 });
-const bookmarkPureRepostSource = post({
-  bodyText: '북마크 순수 재게시의 일반 Source입니다.',
-  id: 'bookmark-pure-repost-source',
-  profile: profile({
-    displayName: '순수 재게시 Source 작성자',
-    handle: 'bookmark-pure-source',
-    id: 'bookmark-pure-source-author',
-    relativeHandle: '@bookmark-pure-source',
+const bookmarkPureRepostSource = {
+  ...post({
+    bodyText: '북마크 순수 재게시의 일반 Source입니다.',
+    id: 'bookmark-pure-repost-source',
+    profile: profile({
+      displayName: '순수 재게시 Source 작성자',
+      handle: 'bookmark-pure-source',
+      id: 'bookmark-pure-source-author',
+      relativeHandle: '@bookmark-pure-source',
+    }),
   }),
-});
-const bookmarkedPureRepost = post({
-  bodyText: null,
-  id: 'bookmark-pure-repost',
-  profile: bookmarkRepostAuthor,
-  repostSource: bookmarkPureRepostSource,
-});
+  viewerReactions: [],
+};
+const bookmarkedPureRepost = {
+  ...post({
+    bodyText: null,
+    id: 'bookmark-pure-repost',
+    profile: bookmarkRepostAuthor,
+    repostSource: bookmarkPureRepostSource,
+  }),
+  viewerReactions: [],
+};
 const bookmarkPresentationOwner = {
   ...profile({ id: 'bookmark-owner' }),
   bookmarks: {
