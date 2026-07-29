@@ -607,3 +607,26 @@ export const LongTextAndLongTags: Story = {
     expect(canvas.getByRole('textbox', { name: '프로필 태그' })).toBeEnabled();
   },
 };
+
+export const BioCounterMatchesServerUtf16Boundary: Story = {
+  render: () => (
+    <ProfileEditScreenHarness
+      initialValue={{
+        ...initialDraft,
+        bio: '😀'.repeat(250),
+      }}
+    />
+  ),
+  play: async ({ canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+    const bio = canvas.getByRole('textbox', { name: '소개' });
+
+    expect(canvas.getByText('500/500')).toBeVisible();
+
+    await userEvent.type(bio, '😀');
+
+    expect(canvas.getByText('502/500')).toBeVisible();
+    expect(canvas.getByText('한 줄 소개는 500자 이하로 입력해 주세요.')).toBeVisible();
+    expect(canvas.getByRole('button', { name: '저장' })).toBeDisabled();
+  },
+};
