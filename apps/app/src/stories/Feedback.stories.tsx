@@ -116,14 +116,22 @@ export const Pending: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const bugReport = canvas.getByRole('radio', { name: '버그를 발견했어요' });
+    await userEvent.click(bugReport);
     await userEvent.type(
       canvas.getByRole('textbox', { name: '피드백 내용' }),
       '전달 중인 피드백입니다.',
     );
+    const sentryEventId = canvas.getByRole('textbox', { name: 'Sentry 이벤트 ID (선택)' });
+    await userEvent.type(sentryEventId, 'a'.repeat(32));
     const submit = canvas.getByRole('button', { name: '피드백 보내기' });
     await userEvent.click(submit);
     await expect(submit).toBeDisabled();
     expect(submit).toHaveAttribute('aria-busy', 'true');
+    expect(bugReport).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(canvas.getByRole('radio', { name: '좋아요' }));
+    expect(bugReport).toBeChecked();
+    expect(sentryEventId).toHaveValue('a'.repeat(32));
   },
 };
 

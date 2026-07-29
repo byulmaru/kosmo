@@ -115,8 +115,10 @@ export function FeedbackForm() {
             <Pressable
               accessibilityLabel={option.label}
               accessibilityRole="radio"
-              accessibilityState={{ checked: selected }}
+              accessibilityState={{ checked: selected, disabled: submitting }}
               aria-checked={selected}
+              aria-disabled={submitting}
+              disabled={submitting}
               key={option.value}
               onPress={() => {
                 setKind(option.value);
