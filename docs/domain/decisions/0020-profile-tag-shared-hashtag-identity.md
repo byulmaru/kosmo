@@ -19,12 +19,12 @@ Local/Remote와 생명주기 경계를 먼저 확정해야 한다.
 
 - Hashtag를 Post와 Profile이 공유하는 canonical 공통 주제 identity로 정의한다. Profile Tag라는 별도 durable
   객체나 별도 이름 identity를 만들지 않는다.
-- Profile Tag는 Profile이 Hashtag를 참조하는 순서 있는 구조화 관계다. bio 문자열에서 추출하거나 동기화하지
+- Profile Tag는 Profile이 Hashtag를 참조하는 구조화 관계다. bio 문자열에서 추출하거나 동기화하지
   않는다.
-- Hashtag 입력은 앞의 선택적 `#`와 바깥 공백을 제거하고 Unicode NFKC와 locale 비종속 case folding을
-  적용한다. 정규화 결과는 1-20자의 Unicode 문자, 숫자 또는 밑줄이어야 한다.
-- 한 Profile은 최대 5개의 Profile Tag를 가진다. 입력 순서를 공개 표시 순서로 보존하며, 정규화 뒤 중복된
-  Hashtag Name이 있으면 전체 변경을 거부한다.
+- Hashtag Name 문법·정규화·normalized name uniqueness는 [Hashtag](../objects/hashtag.md)가 소유한다. Profile
+  Tag는 이 규칙을 사용한다.
+- Profile Tag 관계는 순서를 가지지 않으며 제품상 개수 상한을 두지 않는다. 목록의 각 입력 이름은 먼저
+  canonical Hashtag identity로 해석·생성하고, 동일 Hashtag identity를 둘 이상 참조하면 전체 변경을 거부한다.
 - Active Account의 Local Profile Owner만 Profile 편집을 통해 전체 Profile Tag 목록을 원자적으로 교체한다.
   Profile Tag는 Profile과 별도의 편집 권한을 가지지 않는다.
 - Profile Tag는 Profile이 공개 조회 가능한 동안에만 함께 공개한다. Profile 비활성화 또는 정지는 관계를
@@ -46,9 +46,9 @@ Local 편집·공개 표시만 먼저 전달하면 원격 서버의 Profile meta
 
 ## 결과
 
-- Profile Tag 저장은 순서와 Profile 소유권을 표현하는 관계가 필요하다.
+- Profile Tag 저장은 Profile 소유권과 Hashtag identity 참조를 표현하는 관계가 필요하다.
 - Profile 편집은 표현 속성과 Profile Tag 관계를 함께 바꿀 때 원자성을 보장해야 한다.
-- 공개 Profile 조회는 저장된 관계 순서를 제공하되 Profile visibility를 우회하지 않아야 한다.
+- 공개 Profile 조회는 Profile visibility를 우회하지 않고 Profile과 함께 관계를 노출해야 한다.
 - Remote Profile과 ActivityPub 확장은 별도 canonical 결정과 계약 없이는 추가할 수 없다.
 - Profile Tag로 Profile을 검색하는 기능은 이 결정만으로 활성화되지 않으며
   [ADR 0021](./0021-profile-tag-search-contract.md)의 검색 Domain Gate와 이후 PROD-525의 OpenSpec을 거친다.
@@ -61,7 +61,8 @@ Local 편집·공개 표시만 먼저 전달하면 원격 서버의 Profile meta
 
 ## 문서 반영
 
-- [Profile](../objects/profile.md)은 관계, 편집 권한, 순서, 개수와 생명주기를 정의한다.
-- [Hashtag](../objects/hashtag.md)은 공유 identity와 정규화 규칙을 정의한다.
-- [Profile Tag 디자인](../../design/profile-tags.md)은 편집·공개 표시의 플랫폼 공통 경계를 정의한다.
+- [Profile](../objects/profile.md)은 관계의 무순서성, 편집 권한, cardinality와 생명주기를 정의한다.
+- [Hashtag](../objects/hashtag.md)은 공유 identity, Hashtag Name 문법·정규화·normalized name uniqueness를 정의한다.
+- [Profile Tag 디자인](../../design/profile-tags.md)은 reorder UI와 안정적인 표시 순서에 의존하지 않는 편집·공개
+  표시의 플랫폼 공통 경계를 정의한다.
 - [ADR 0021](./0021-profile-tag-search-contract.md)은 Profile Tag로 Profile을 검색하는 계약을 정의한다.
