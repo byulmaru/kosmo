@@ -2,7 +2,7 @@
 
 ### Requirement: Profile object visibility
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — API는 활성 local profile과 저장된 활성 ActivityPub remote profile을 GraphQL profile object로 조회할 수 있게 해야 한다(MUST). Profile object는 정규화된 Hashtag Name을 저장 순서로 제공하는 non-null `tags: [String!]!` field를 가져야 하며(MUST), 현재 범위에서 Local Profile Tag만 반환해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — API는 활성 local profile과 저장된 활성 ActivityPub remote profile을 GraphQL profile object로 조회할 수 있게 해야 한다(MUST). Profile object는 정규화된 Hashtag Name을 저장 순서로 제공하는 non-null `tags: [String!]!` field를 가져야 하며(MUST), Local 여부는 configured instance ID가 아니라 Profile Origin과 연결된 Instance Kind로 판정해 모든 Local Profile의 유효한 관계를 반환하고 Remote Profile은 빈 목록을 반환해야 하며(MUST), 현재 범위에서 Local Profile Tag만 반환해야 한다(MUST).
 
 #### Scenario: Access active local profile object
 
@@ -10,6 +10,7 @@
 - **THEN** 시스템은 프로필 object 접근을 허용한다
 - **AND** handle, relativeHandle, instance.kind, displayName, nullable bio, followPolicy, createdAt 필드와 저장 순서의 tags를 노출한다
 - **AND** Profile Tag가 없으면 tags는 빈 목록이다
+- **AND** Local 판정은 Profile Origin과 연결된 Instance Kind를 사용하며 configured Local Instance ID에 제한하지 않는다
 - **AND** Node ID 기반 profile load는 활성 local profile을 반환할 수 있다
 
 #### Scenario: Access active remote profile object

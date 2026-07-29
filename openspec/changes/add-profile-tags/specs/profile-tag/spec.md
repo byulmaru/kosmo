@@ -79,7 +79,7 @@
 
 ### Requirement: Profile Tag visibility and lifecycle
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — 시스템은 공개 조회 조건인 Lifecycle State `Active`와 Suspension State `Normal`을 통과한 Local Profile의 Profile Tag만 해당 Profile과 함께 공개해야 한다(MUST). Profile이 비활성화되거나 정지되면 관계는 보존하되 공개 결과에서 숨겨야 하며(MUST), Profile Lifecycle State가 `Deleted`로 전이될 때 service/lifecycle invariant가 해당 Profile의 `profile_hashtag` 관계를 명시적으로 제거해야 한다(MUST). 물리 Profile row 삭제 시 FK cascade는 별도의 DB safety invariant이며, 두 경우 모두 canonical Hashtag identity와 다른 Profile/Post 참조를 제거해서는 안 된다(MUST NOT). Remote Profile Tag 수집·표시와 ActivityPub 표현을 제공해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — 시스템은 공개 조회 조건인 Lifecycle State `Active`와 Suspension State `Normal`을 통과한 Local Profile의 Profile Tag만 해당 Profile과 함께 공개해야 한다(MUST). Profile이 비활성화되거나 정지되면 관계는 보존하되 공개 결과에서 숨겨야 하며(MUST), 선행 `PROD-532`가 제공하는 Deactivated→Deleted lifecycle 경계에 `PROD-526`의 service/lifecycle integration이 해당 Profile의 `profile_hashtag` 관계를 명시적으로 제거해야 한다(MUST). `PROD-526`은 terminal action이나 상태 전이를 구현하지 않는다. 물리 Profile row 삭제 시 FK cascade는 별도의 DB safety invariant이며, 두 경우 모두 canonical Hashtag identity와 다른 Profile/Post 참조를 제거해서는 안 된다(MUST NOT). Remote Profile Tag 수집·표시와 ActivityPub 표현을 제공해서는 안 된다(MUST NOT).
 
 #### Scenario: Read visible Local Profile Tags
 
@@ -95,8 +95,8 @@
 
 #### Scenario: Remove only deleted Profile relations on lifecycle transition
 
-- **WHEN** Profile delete action이 Lifecycle State를 `Deactivated`에서 `Deleted`로 전이한다
-- **THEN** service/lifecycle transaction은 삭제된 Profile의 `profile_hashtag` 관계를 명시적으로 제거한다
+- **WHEN** 선행 `PROD-532`가 제공하는 Profile delete action이 Lifecycle State를 `Deactivated`에서 `Deleted`로 전이한다
+- **THEN** `PROD-526`의 service/lifecycle integration은 삭제된 Profile의 `profile_hashtag` 관계를 명시적으로 제거한다
 - **AND** canonical Hashtag identity와 다른 Post 또는 Profile의 관계는 유지한다
 
 #### Scenario: Do not expose Remote Profile Tags
