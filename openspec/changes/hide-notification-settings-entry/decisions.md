@@ -28,17 +28,29 @@
 - Consequences: active notification requirement의 placeholder scenario가 비노출 scenario로 교체되고 Notifications Storybook도 button 부재를 검증한다. 설정 진입점 복원은 별도 Linear·OpenSpec이 필요하다.
 - Confirmation / Follow-up: mobile/Web 공용 component와 Storybook에서 설정 button 부재, heading 표시와 header layout을 검증한다.
 
-### 사이드바의 피드백 진입점은 설정 비노출 범위와 분리한다
+### 사이드바 전체를 설정 비노출 범위에서 제외한다
 
 - Decision Date: 2026-07-29
 - Decision Class: Derived Contract
 - Authority / Provenance: `PROD-541`, `PROD-487`
-- Status: Active
+- Status: Superseded
 - Context / Problem: 기존 사이드바의 `설정 & 지원` 영역은 PROD-487이 소유하는 실제 `/feedback` 진입점으로 교체되므로 설정 기능의 준비 상태와 같은 대상으로 숨기면 안 된다.
 - Decision Outcome: PROD-541은 sidebar navigation, `피드백 보내기` label·icon·link와 `/feedback` route를 변경하지 않는다.
 - Alternatives Considered: PROD-541에서 sidebar footer도 제거, 피드백을 향후 `설정 & 지원` dropdown까지 숨김.
 - Consequences: 이 change는 notification header만 수정하며 PROD-487과 독립적으로 구현·검증할 수 있다. 향후 dropdown 구성은 별도 제품 결정이 소유한다.
-- Confirmation / Follow-up: implementation diff와 검증 범위에 `SidebarNavigation` 또는 `/feedback` 변경이 없는지 확인한다.
+- Confirmation / Follow-up: 2026-07-30 PROD-541 범위 재확인에서 `프로필 설정` nav row도 비노출 대상임이 확인되어, sidebar 전체 제외 대신 feedback footer만 제외하는 아래 Derived Contract로 대체됐다.
+
+### 사이드바의 프로필 설정은 숨기고 피드백 진입점은 유지한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Derived Contract
+- Authority / Provenance: `PROD-541`, `PROD-487`
+- Status: Active
+- Context / Problem: `SidebarNavigation`에는 준비되지 않은 `프로필 설정` nav row와 현재 필요한 feedback footer가 별도 진입점으로 공존한다. 둘을 하나의 sidebar 설정 표면으로 취급하면 설정을 계속 노출하거나 피드백까지 숨기게 된다.
+- Decision Outcome: full Web sidebar, compact Web rail과 mobile drawer에서 `프로필 설정` nav row를 제거한다. PROD-487과 PR #390의 `피드백 보내기` label·icon·link와 `/feedback`, 기존 `프로필`·`팔로워 요청`·로그아웃은 유지한다.
+- Alternatives Considered: sidebar 전체 유지, sidebar footer까지 제거, `/menu` route 또는 같은 route를 쓰는 다른 메뉴까지 제거.
+- Consequences: PROD-541은 `SidebarNavigation`을 변경하므로 PR #390이 미병합인 동안 그 위에 stack한다. 설정 복원은 별도 Linear·OpenSpec이 필요하다.
+- Confirmation / Follow-up: Shell Storybook의 full·compact·mobile drawer에서 `프로필 설정` link 부재와 유지 대상 진입점을 검증한다.
 
 ## Remaining Decisions
 
@@ -47,3 +59,4 @@
 ## Superseded Decisions
 
 - 위 `44px disabled 알림 설정 placeholder를 표시한다` Implementation Choice는 PROD-541의 Active Derived Contract로 대체됐다. archived `2026-07-27-add-in-app-notifications`의 같은 기록에 포함된 단일 목록, Follow item 표현, 탭·section heading 부재와 나머지 결과는 유지한다.
+- 위 `사이드바 전체를 설정 비노출 범위에서 제외한다` Derived Contract는 `프로필 설정`과 feedback footer를 같은 표면으로 잘못 묶어 2026-07-30의 새 Derived Contract로 대체됐다.
