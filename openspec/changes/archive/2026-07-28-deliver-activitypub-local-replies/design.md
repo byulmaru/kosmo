@@ -1,0 +1,118 @@
+## Context
+
+PROD-494는 `packages/fedify`에 Local Post의 `/ap/note/{postId}` identity, Local Note projection, visibility audience,
+signed fetch authorization과 Local/Remote Post URI resolver를 제공한다. Local Reply도 이 dispatcher에서 기존
+`inReplyTo`를 포함한 Note로 역참조할 수 있지만, 현재 Local Post 생성·삭제 application flow는 activity를 remote
+inbox로 전달하지 않는다.
+
+Local Reply 생성은 통합 core `createPost` action이 Parent 접근 검증을 소유하고 optional caller transaction에
+합류할 수 있다. `deletePost()`도 같은 optional transaction 계약을 유지한다. 기존 Remote Follow은 domain
+transaction이 끝난 뒤 Fedify delivery를 `await`하고, 실패를 catch/log해 committed result와 분리한다. 현재
+federation에는 MessageQueue가 없으므로 `sendActivity()`는 remote HTTP 요청을 직접 수행한다.
+
+## Goals / Non-Goals
+
+**Goals:**
+
+- Local Reply 생성과 삭제를 기존 Fedify delivery 경계에 연결한다.
+- Local Note projection과 Post identity를 복제하지 않고 Create와 Delete에서 재사용한다.
+- visibility, remote Parent Author와 Instance 상태에서 direct recipient를 결정한다.
+- top-level transaction commit 뒤 delivery하고 실패와 committed application 결과를 격리한다. caller transaction은
+  rollback될 Activity를 전달하지 않으며 commit 뒤 누락을 허용한다.
+- 반복 호출에 안정적인 activity identity와 Create/Delete ordering domain을 제공한다.
+
+**Non-Goals:**
+
+- transactional outbox, NATS, Fedify MessageQueue, worker, retry/history와 delivery status
+- 과거 Create Parent endpoint snapshot에 대한 Delete 보정
+- inbound Reply, Repost, Reaction, Mention, Media, Direct와 Tombstone object endpoint
+- followers fanout/collection dispatcher(PROD-512) 또는 ActivityPub outbox collection
+- Post·Profile·Follow·ActivityPub Actor schema와 GraphQL payload 변경
+
+## Implementation Guidance
+
+### Current Constraints
+
+- `createPost()`는 optional caller transaction 계약을 유지하지만 transaction 인자의 존재 여부로 lifecycle을
+  켜거나 끄지 않는다. Reply Notification은 caller transaction에 참여한다. Fedify delivery는 별도 committed-read
+  조회를 사용하므로 uncommitted Reply에서는 no-op이며 rollback될 Activity를 전달하지 않는다. outer commit 뒤
+  재실행하지 않아 생기는 Activity 누락과 commit 뒤 delivery 실패는 PROD-448 전까지 수용한다.
+- 현재 Local Note loader는 Active Post만 제공한다. Reply가 Tombstone이 된 뒤에는 dispatcher를 그대로 호출해
+  Delete projection을 만들 수 없다.
+- Create의 embedded Note를 별도로 다시 직렬화하면 object dispatcher의 content, summary, audience와 `inReplyTo`
+  계약이 쉽게 달라진다.
+- Fedify의 special `"followers"` recipient는 followers collection dispatcher가 필요하지만 현재 actor 계약은
+  collection GET을 열지 않는다.
+- deployment configured Local Instance를 항상 사용하면 다른 Local Instance에 속한 Author의 actor와 Note가 잘못된
+  origin으로 전달된다.
+
+### Recommended Approach
+
+통합 core `createPost` action이 origin별 Parent 정책을 소유하고 Reply Notification을 생성 transaction의 nested
+savepoint에 참여시킨다. transaction 단계가 반환된 뒤 Fedify package의 좁은 Reply Create delivery API를 호출한다.
+top-level 호출은 실제 commit 뒤 전달하고 caller transaction은 uncommitted source에서 no-op될 수 있다.
+`deletePost()`는 commit 결과에서 Reply를 판별해 Reply Delete delivery를 호출한다. 두 Fedify delivery는 각각
+`await`하되 오류를 구조화해 기록하고 committed domain 결과를 반환한다. GraphQL resolver는 인증된 Profile과
+business input만 전달하고 payload를 구성한다.
+
+Fedify package에서는 기존 Local Note 조회와 projection을 내부적으로 재사용 가능한 경계로 정리한다. Create는
+commit된 Active Reply에서 object dispatcher와 동일한 Note를 만들고, Delete는 Tombstone row에 남아 있는 Author,
+Visibility와 Reply Parent 관계에서 actor, canonical Note URI, audience와 recipient를 복원한다. Delete에는 Active
+Note representation이나 새 Tombstone endpoint가 필요하지 않다.
+
+Create는 Reply Post에서 Author Profile의 Local Instance `canonicalOrigin`을 먼저 조회하고 그 origin으로 Fedify
+Context를 만든 뒤 Local Note를 projection한다. Delete는 Tombstone source 조회 결과에 같은 origin을 포함하고 그
+origin으로 Context, actor URI와 Note identity를 재구성한다. configured deployment origin은 사용하지 않는다.
+
+Recipient는 delivery 시점의 저장 상태에서 직접 Parent Author만 조회한다. Public/Unlisted Reply이며 Parent가
+Active remote Profile, ACTIVE ActivityPub Instance, 유효한 HTTP(S) actor URI와 personal inbox를
+가질 때만 `Recipient`로 만든다. 유효한 shared inbox는 Fedify의 선호 옵션에 맡기고 사용할 수 없으면 personal
+inbox로 fallback한다. Followers Only·Direct, Local Parent 또는 usable Parent recipient가 없으면 `sendActivity()`를
+호출하지 않는다. follower expansion은 PROD-512가 별도 공통 dispatcher에서 소유한다.
+
+Activity ID는 canonical Note URI에서 Create와 Delete를 구분하는 안정적인 fragment로 파생하고 ordering key는
+fragment 없는 Note URI를 사용한다. 이 방법은 별도 activity row나 공개 activity dispatcher 없이 같은 Post의
+반복 delivery identity와 Create/Delete ordering domain을 유지한다.
+
+### Allowed Alternatives
+
+- 별도 Local Post action이나 API-local orchestration module이 outer transaction과 post-commit lifecycle을 소유할
+  수 있다. 하지만 진입점 통일을 깨뜨리므로 통합 `createPost` action의 origin별 정책으로 유지한다.
+
+### Known Traps
+
+- caller transaction의 uncommitted Reply는 별도 committed-read delivery 조회에서 no-op으로 처리해 rollback될
+  state를 먼저 전달하지 않는다. outer commit 뒤 delivery가 재실행되지 않는 누락은 허용한다.
+- delivery Promise를 await하지 않는 fire-and-forget으로 바꾸지 않는다. 실패 관측과 process 종료 동작이 더
+  불명확해진다.
+- Fedify의 자동 생성 activity ID를 사용하지 않는다. 같은 Reply 재호출이 다른 activity가 된다.
+- Create 전용 Note serialization을 새로 만들거나 Delete를 위해 Active-only dispatcher 조건을 완화하지 않는다.
+- follower 집합을 `ProfileFollows`에서 직접 조회하거나 special `"followers"` recipient를 이 capability에 추가하지 않는다.
+- Followers Only Reply를 remote Parent Author에게 direct delivery하지 않는다.
+- `UNRESPONSIVE` recipient에게 direct delivery하거나 durable pending delivery를 저장하지 않는다.
+- usable Parent actor/inbox가 없으면 invalid URL을 Fedify에 전달하지 않고 no-op한다.
+- PROD-448의 outbox·queue 구조를 현재 작업의 abstraction이나 test seam으로 미리 추가하지 않는다.
+
+## Risks / Trade-offs
+
+- [Remote HTTP가 느리면 mutation 응답이 지연됨] → 현재 직접 delivery 계약에 따라 await하되 transaction은 이미
+  commit된 상태로 유지한다. 응답 경로 분리는 PROD-448이 소유한다.
+- [Commit 뒤 process 종료 시 activity 유실] → 현재 제한을 문서와 테스트 경계에 남기고 outbox를 부분 구현하지
+  않는다.
+- [Parent delivery가 실패한 뒤 재호출될 수 있음] → activity identity와 ordering key를 안정적으로 유지해 재호출이
+  새 logical activity가 되지 않게 하고 committed 결과에는 영향을 주지 않는다.
+- [Parent actor endpoint가 Create 뒤 바뀌면 Delete가 과거 inbox에 도달하지 않을 수 있음] → history가 없는
+  현재 범위에서는 action 시점의 Parent recipient만 사용하며 delivery history migration과 분리한다.
+- [Tombstone Post에서 Note projection을 잘못 재사용할 수 있음] → Create의 full Note projection과 Delete의 identity·
+  audience projection을 구분하고 각각 lifecycle matrix를 검증한다.
+
+## Migration Plan
+
+DB schema와 저장 데이터 migration은 없다. OpenSpec Gate 승인 뒤 Fedify projection/delivery와 core lifecycle
+wiring을 추가하고 package·core·API integration test를 먼저 통과시킨다. Rollback은 새 core lifecycle wiring과
+Fedify Reply delivery 경계를 제거하면 기존 Local Reply 저장·조회·삭제 동작으로 돌아가며 저장 데이터 변환은
+필요 없다.
+
+## Open Questions
+
+없음.

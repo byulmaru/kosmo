@@ -2,9 +2,11 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, test } from 'node:test';
+import { Create, Delete } from '@fedify/vocab';
 import {
   AccountProfileRole,
   AccountState,
+  ActivityPubActorType,
   InstanceKind,
   InstanceState,
   PostState,
@@ -17,8 +19,10 @@ import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
+import type { Activity, Recipient } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
 import type { encodeGlobalId as EncodeGlobalId } from '@kosmo/core/global-id';
+import type { localOutboundFederation as LocalOutboundFederation } from '../../../../../packages/fedify/src/local-outbound-federation';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
 import type { yoga as YogaRouter } from '../../../src/graphql';
 
@@ -26,6 +30,7 @@ const publicOrigin = 'http://127.0.0.1:4173';
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
 let db: typeof CoreDb.db;
+let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
@@ -39,8 +44,11 @@ let Sessions: typeof CoreDb.Sessions;
 let deriveContext: typeof DeriveContext;
 let yoga: typeof YogaRouter;
 let encodeGlobalId: typeof EncodeGlobalId;
+let localOutboundFederation: typeof LocalOutboundFederation;
 let app: Hono<Env>;
 let localInstanceId: string;
+
+type FederationContext = ReturnType<(typeof LocalOutboundFederation)['createContext']>;
 
 describe('Post Reply GraphQL 경계', () => {
   before(async () => {
@@ -50,6 +58,7 @@ describe('Post Reply GraphQL 경계', () => {
     ({
       AccountProfiles,
       Accounts,
+      ActivityPubActors,
       db,
       firstOrThrow,
       Instances,
@@ -69,6 +78,8 @@ describe('Post Reply GraphQL 경계', () => {
     ({ deriveContext } = await import('../../../src/context'));
     ({ yoga } = await import('../../../src/graphql'));
     ({ encodeGlobalId } = await import('@kosmo/core/global-id'));
+    ({ localOutboundFederation } =
+      await import('../../../../../packages/fedify/src/local-outbound-federation'));
 
     app = new Hono<Env>();
     app.use('*', async (c, next) => {
@@ -156,12 +167,13 @@ describe('Post Reply GraphQL 경계', () => {
     }
   });
 
-  test('없거나 조회할 수 없거나 삭제된 Parent는 같은 NOT_FOUND로 숨기고 rollback한다', async () => {
+  test('없거나 조회할 수 없거나 삭제된 Parent는 같은 NOT_FOUND로 숨기고 rollback한다', async (t) => {
     const auth = await createAuthenticatedSession();
     const author = await createProfile('hidden-parent-author');
     const hidden = await createContentPost(author.id, { visibility: PostVisibility.DIRECT });
     const deleted = await createContentPost(author.id, { state: PostState.DELETED });
     const before = await db.$count(Posts);
+    const createContext = t.mock.method(localOutboundFederation, 'createContext');
 
     for (const parentId of [hidden.id, deleted.id, crypto.randomUUID()]) {
       const result = await requestCreatePost(
@@ -176,6 +188,127 @@ describe('Post Reply GraphQL 경계', () => {
     }
 
     assert.equal(await db.$count(Posts), before);
+    assert.equal(createContext.mock.callCount(), 0);
+  });
+
+  test('Root Post Create delivery 실패는 commit된 Post와 GraphQL 성공을 바꾸지 않는다', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const follower = await createRemoteActorProfile('delivery-create-follower');
+    await db.insert(ProfileFollows).values({
+      followeeProfileId: auth.profile.id,
+      followerProfileId: follower.id,
+    });
+    const deliveredPostIds: string[] = [];
+    t.mock.method(localOutboundFederation, 'createContext', () =>
+      createFailingDeliveryContext(async (activity) => {
+        assert.ok(activity instanceof Create);
+        const postId = activity.objectId?.pathname.split('/').at(-1);
+        assert.ok(postId);
+        const committed = await db
+          .select({ currentContentId: Posts.currentContentId, state: Posts.state })
+          .from(Posts)
+          .where(eq(Posts.id, postId))
+          .then(firstOrThrow);
+        assert.equal(committed.state, PostState.ACTIVE);
+        assert.ok(committed.currentContentId);
+        deliveredPostIds.push(postId);
+      }),
+    );
+    const errorLog = t.mock.method(console, 'error', () => undefined);
+
+    const result = await requestCreatePost(
+      {
+        bodyText: 'committed root post',
+        visibility: PostVisibility.PUBLIC,
+      },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.equal(deliveredPostIds.length, 1);
+    assert.equal(errorLog.mock.callCount(), 1);
+    assert.equal(
+      errorLog.mock.calls[0]?.arguments[0],
+      'Post-commit ActivityPub Local Post Create delivery failed',
+    );
+  });
+
+  test('Root Post Delete delivery 실패는 commit된 Tombstone과 GraphQL 성공을 바꾸지 않는다', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const follower = await createRemoteActorProfile('delivery-delete-follower');
+    await db.insert(ProfileFollows).values({
+      followeeProfileId: auth.profile.id,
+      followerProfileId: follower.id,
+    });
+    const post = await createContentPost(auth.profile.id);
+    t.mock.method(localOutboundFederation, 'createContext', () =>
+      createFailingDeliveryContext(async (activity) => {
+        assert.ok(activity instanceof Delete);
+        const committed = await db
+          .select({ deletedAt: Posts.deletedAt, state: Posts.state })
+          .from(Posts)
+          .where(eq(Posts.id, post.id))
+          .then(firstOrThrow);
+        assert.equal(committed.state, PostState.DELETED);
+        assert.ok(committed.deletedAt);
+      }),
+    );
+    const errorLog = t.mock.method(console, 'error', () => undefined);
+
+    const result = await requestDeletePost(post.id, auth.token);
+
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.deletePost.postId, encodeGlobalId('Post', post.id));
+    assert.equal(errorLog.mock.callCount(), 1);
+    assert.equal(
+      errorLog.mock.calls[0]?.arguments[0],
+      'Post-commit ActivityPub Local Post Delete delivery failed',
+    );
+  });
+
+  test('Reply 삭제 transaction 실패는 ActivityPub delivery를 호출하지 않는다', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const otherAuthor = await createProfile('delete-rollback-author');
+    const parent = await createContentPost(otherAuthor.id);
+    const reply = await createContentPost(otherAuthor.id, { replyParentId: parent.id });
+    const createContext = t.mock.method(localOutboundFederation, 'createContext');
+
+    const forbidden = await requestDeletePost(reply.id, auth.token);
+    const missing = await requestDeletePost(crypto.randomUUID(), auth.token);
+
+    assert.equal(forbidden.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+    assert.equal(missing.errors?.[0]?.extensions?.code, 'NOT_FOUND');
+    assert.equal(createContext.mock.callCount(), 0);
+    const stored = await db
+      .select({ deletedAt: Posts.deletedAt, state: Posts.state })
+      .from(Posts)
+      .where(eq(Posts.id, reply.id))
+      .then(firstOrThrow);
+    assert.equal(stored.state, PostState.ACTIVE);
+    assert.equal(stored.deletedAt, null);
+  });
+
+  test('처음 Tombstone 전이만 Delete를 전달하고 반복 삭제는 다시 전달하지 않는다', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const parentAuthor = await createRemoteActorProfile('delivery-repeat-parent');
+    const parent = await createContentPost(parentAuthor.id);
+    const reply = await createContentPost(auth.profile.id, { replyParentId: parent.id });
+    const rootPost = await createContentPost(auth.profile.id);
+    const activityIds: string[] = [];
+    t.mock.method(localOutboundFederation, 'createContext', () =>
+      createDeliveryContext(async (activity) => {
+        assert.ok(activity instanceof Delete);
+        assert.ok(activity.id);
+        activityIds.push(activity.id.href);
+      }),
+    );
+
+    for (const post of [reply, reply, rootPost]) {
+      const result = await requestDeletePost(post.id, auth.token);
+      assertNoGraphQLErrors(result);
+    }
+
+    assert.deepEqual(activityIds, [`${publicOrigin}/ap/note/${reply.id}#delete`]);
   });
 
   test('Content 없는 Repost Parent는 replyParentId VALIDATION으로 거부하고 rollback한다', async () => {
@@ -645,6 +778,10 @@ type CreatePostNode = {
   visibility: PostVisibility;
 };
 
+type DeletePostNode = {
+  postId: string;
+};
+
 type PostAncestorsNode = {
   id: string;
   replyAncestors: Array<{ id: string }>;
@@ -770,6 +907,15 @@ const requestCreatePost = (
     token,
   );
 
+const requestDeletePost = (postId: string, token?: string) =>
+  requestGraphQL<{ deletePost: DeletePostNode }>(
+    `mutation DeletePost($input: DeletePostInput!) {
+      deletePost(input: $input) { postId }
+    }`,
+    { input: { id: encodeGlobalId('Post', postId) } },
+    token,
+  );
+
 const assertNoGraphQLErrors = (result: GraphQLResult<unknown>) => {
   assert.equal(result.errors, undefined, JSON.stringify(result.errors));
 };
@@ -793,6 +939,42 @@ const createInstance = (kind: InstanceKind, state: InstanceState) => {
     .returning()
     .then(firstOrThrow);
 };
+
+const createRemoteActorProfile = async (handle: string) => {
+  const instance = await createInstance(InstanceKind.ACTIVITYPUB, InstanceState.ACTIVE);
+  const profile = await createProfile(handle, { instanceId: instance.id });
+  const actorUri = `https://${instance.domain}/users/${handle}`;
+  await db.insert(ActivityPubActors).values({
+    inboxUri: `${actorUri}/inbox`,
+    profileId: profile.id,
+    type: ActivityPubActorType.PERSON,
+    uri: actorUri,
+  });
+  return profile;
+};
+
+const createFailingDeliveryContext = (
+  beforeFailure: (activity: Activity) => Promise<void>,
+): FederationContext =>
+  createDeliveryContext(async (activity) => {
+    await beforeFailure(activity);
+    throw new Error('remote delivery unavailable');
+  });
+
+const createDeliveryContext = (
+  sendActivity: (activity: Activity) => Promise<void>,
+): FederationContext =>
+  ({
+    canonicalOrigin: publicOrigin,
+    getActorUri: (identifier: string) => new URL(`/ap/actor/${identifier}`, publicOrigin),
+    sendActivity: async (
+      _sender: { identifier: string },
+      _recipients: Recipient[],
+      activity: Activity,
+    ) => {
+      await sendActivity(activity);
+    },
+  }) as unknown as FederationContext;
 
 const createProfile = (
   handle: string,

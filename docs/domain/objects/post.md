@@ -140,9 +140,10 @@ Profile과 달라도 같은 Upload Account를 가지면 연결할 수 있다. St
 
 ### ActivityPub Local Note 표현
 
-- Content가 있는 Local Post의 ActivityPub identity는 현재 deployment가 사용하는 configured Local Instance의
-  canonical origin과 `/ap/note/{postId}` 경로를 결합한 절대 URI다. `postId`는 Post의 immutable DB UUID이며
-  Author Profile의 handle이나 GraphQL global ID를 사용하지 않는다.
+- Content가 있는 Local Post의 ActivityPub identity는 Author Profile이 연결된 Local Instance의 canonical
+  origin과 `/ap/note/{postId}` 경로를 결합한 절대 URI다. `postId`는 Post의 immutable DB UUID이며 Author
+  Profile의 handle이나 GraphQL global ID를 사용하지 않는다. Activity를 실행하는 deployment의 configured
+  Local Instance가 다르더라도 이 identity를 대체하지 않는다.
 - 같은 Local Post는 프로세스 재시작, 역참조 요청 경로와 후속 Activity 종류에 관계없이 같은 Note URI를
   가진다. Local Post를 위해 remote ActivityPub Post mapping을 만들지 않는다.
 - ActivityPub `Note`는 위 URI를 `id`, Author Profile의 canonical ActivityPub URI를 `attributedTo`, Post
@@ -171,8 +172,10 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 - Followers Only signed fetch는 서명으로 검증된 요청 Profile이 Author이거나 저장된 established Follow 관계의
   Follower일 때만 허용한다. 인증되지 않았거나 식별되지 않은 요청 주체와 Follower가 아닌 Profile에게는 Post가
   없는 것처럼 응답한다.
-- Post가 Tombstone이거나 Content가 없거나, Author Profile 또는 configured Local Instance가 unavailable이거나,
-  지원하지 않는 Visibility이면 Note를 제공하지 않는다. 이 unavailable 응답은 Post의 존재를 노출하지 않는다.
+- Post가 Tombstone이거나 Content가 없거나, Author Profile 또는 Author Profile이 연결된 Local Instance가
+  unavailable이거나, 지원하지 않는 Visibility이면 Note를 제공하지 않는다. Author Local Instance의 HTTP
+  경계는 그 Instance origin의 Author Profile과 Note를 역참조할 수 있어야 한다. 이 unavailable 응답은 Post의
+  존재를 노출하지 않는다.
 - Local Note의 ActivityPub Tombstone, `Delete`, `Create`, `Announce`, `Like`, `EmojiReact`, `Undo` delivery는 각
   lifecycle과 delivery 계약이 소유한다.
 

@@ -3,8 +3,6 @@ export { createBookmark, deleteBookmark } from './bookmark';
 export {
   createFollowNotification,
   createReactionNotification,
-  createReplyNotification,
-  createReplyNotificationBestEffort,
   createRepostNotification,
   deleteNotificationBySource,
 } from './notification';

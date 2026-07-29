@@ -10,8 +10,9 @@ Accepted
 
 ## 결정
 
-- Content가 있는 Local Post의 ActivityPub identity는 configured Local Instance의 canonical origin과
-  `/ap/note/{postId}`를 결합한 URI다. `postId`는 immutable DB UUID다.
+- Content가 있는 Local Post의 ActivityPub identity는 Author Profile이 연결된 Local Instance의 canonical
+  origin과 `/ap/note/{postId}`를 결합한 URI다. `postId`는 immutable DB UUID다. Activity를 실행하는
+  deployment의 configured Local Instance가 다르더라도 Author Instance identity를 대체하지 않는다.
 - Author handle이나 GraphQL global ID는 ActivityPub identity에 포함하지 않는다. Post의 canonical Web 공유
   참조는 ActivityPub identity와 구분해 Note의 `url`로 제공한다.
 - PROD-255와 archived 원격 Post 수신 계약에 따라 ActivityPub Post mapping은 remote object URI와
@@ -41,6 +42,10 @@ Post UUID에 기반한 별도 ActivityPub URI는 mutable handle과 API 전용 gl
 분리한다. Web 공유 URL은 사람이 탐색하는 canonical 참조이고 ActivityPub object URI는 protocol이 안정적으로
 역참조하는 identity이므로 역할을 하나의 URL에 합치지 않는다.
 
+Local Post의 federation identity를 Author Profile의 Local Instance에 결속하면 여러 Local Instance가 같은
+저장 모델에 존재하더라도 Activity를 실행한 deployment에 따라 Author Profile과 object origin이 바뀌지 않는다.
+해당 Local Instance를 운영하는 HTTP 경계는 그 origin에서 Author Profile과 Note를 역참조할 수 있어야 한다.
+
 기존 remote mapping은 remote ingestion의 received/published metadata를 포함하며 Local Post를 저장 대상으로
 정의하지 않는다. Local identity는 이 상위 계약을 변경하지 않고 파생 규칙만 추가한다. Visibility에서
 audience를 직접 투영하면 후속 Reply, Repost와 Reaction delivery가 별도 규칙을 만들지 않고 같은 Post 계약을
@@ -54,6 +59,8 @@ Note 역참조 권한이 독립적으로 제한하므로, Reply를 조회한 req
 
 - canonical Web 공유 URL을 Note `id`로 사용하는 방안은 handle과 GraphQL URL shape 변화가 federation identity에
   영향을 주므로 채택하지 않았다.
+- Activity를 실행하는 deployment의 configured Local Instance origin을 사용하는 방안은 Author가 속한 Local
+  Instance와 다른 Author Profile과 object identity를 만들 수 있으므로 채택하지 않았다.
 - Author와 Post ID를 모두 path에 넣는 방안은 globally unique Post UUID에 중복 identity를 추가하고 Author
   경로 정합성을 별도로 검증해야 하므로 채택하지 않았다.
 - 모든 Visibility를 anonymous dispatcher에서 반환하는 방안은 Followers Only와 Mentioned Profiles 조회 정책을
@@ -65,6 +72,8 @@ Note 역참조 권한이 독립적으로 제한하므로, Reply를 조회한 req
 
 - `packages/fedify`의 Local Note dispatcher와 후속 activity delivery는 하나의 Post URI resolver와 Note
   projection을 공유한다.
+- Local Post의 Author Profile, Note와 후속 activity identity는 Author Profile이 연결된 Local Instance의
+  canonical origin을 공유하며, 해당 Instance의 HTTP 경계에서 역참조할 수 있어야 한다.
 - Followers Only 역참조는 서명으로 검증된 요청 Profile과 stored Follow 관계를 연결해야 한다.
 - remote Parent와 대상 Post는 기존 ActivityPub Post mapping URI를 사용하고 local Parent와 대상 Post는 파생 URI를
   사용한다.
