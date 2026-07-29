@@ -11,10 +11,10 @@
 - Authority / Provenance: Linear `PROD-546`, `PROD-549`
 - Status: Active
 - Context / Problem: 7일 PITR에 필요한 backup을 cluster와 독립적으로 보존하면서 초기 운영 복잡도와 비용을 제한해야 한다.
-- Decision Outcome: `ap-northeast-2`의 단일 전용 bucket을 SSE-S3, public access block, TLS-only, versioning, 삭제 보호로 운영한다. Barman recovery window는 7일, S3 lifecycle은 current 10일, non-current 30일, incomplete multipart 1일로 둔다.
+- Decision Outcome: `ap-northeast-2`의 단일 전용 bucket 객체는 S3의 기본 SSE-S3 암호화를 사용하며 별도 default encryption resource를 관리하지 않는다. Bucket은 public access block, TLS-only, versioning과 삭제 보호를 사용한다. Barman recovery window는 7일, S3 lifecycle은 current 10일, non-current 30일, incomplete multipart 1일로 둔다.
 - Alternatives Considered: KMS CMK, Object Lock, cross-region/account replication은 초기 범위를 넘고 별도 key/replication 운영이 필요해 제외했다. Lifecycle만 7일로 맞추는 방식은 정리 시점 차이에 대한 여유가 없어 제외했다.
 - Consequences: 리전 전체 장애는 방어하지 않는다. Terraform 일반 destroy로 bucket을 제거할 수 없고 객체가 남아 있으면 삭제되지 않는다.
-- Confirmation / Follow-up: Terraform plan과 AWS live 설정에서 encryption, policy, versioning, lifecycle과 삭제 보호를 확인한다.
+- Confirmation / Follow-up: Terraform plan에서 별도 default encryption resource가 없고 policy, versioning, lifecycle과 삭제 보호만 관리하는지 확인한다. AWS live object의 SSE-S3 적용은 최초 backup 검증에서 확인한다.
 
 ### Backup workload의 AWS 인증 방식
 

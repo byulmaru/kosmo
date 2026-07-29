@@ -11,17 +11,17 @@ Production PostgreSQL backup이 cluster와 독립된 서울 리전 S3 저장소�
 
 **Guardrails**
 
-- Bucket은 SSE-S3, public access block, TLS-only, versioning, current 10일/non-current 30일/incomplete multipart 1일 lifecycle과 Terraform 삭제 보호를 사용한다.
+- Bucket 객체는 S3의 기본 SSE-S3 암호화를 사용하며 별도 default encryption resource를 관리하지 않는다. Bucket은 public access block, TLS-only, versioning, current 10일/non-current 30일/incomplete multipart 1일 lifecycle과 Terraform 삭제 보호를 사용한다.
 - KMS, Object Lock, cross-region/account replication과 영구 access key는 추가하지 않는다.
 - IAM role 이름은 `byulmaru-kosmo-prod-postgres-backup`이며 권한은 대상 bucket의 `kosmo-prod/` prefix와 필요한 backup/restore object 동작으로 제한한다.
 - 이 Terraform state는 bucket과 role을 소유하며 Kubernetes resource를 소유하지 않는다.
 
 **Verification**
 
-- Terraform fmt/validate와 검토 가능한 saved plan에서 bucket, lifecycle, policy와 role/policy/output만 추가되는지 확인한다.
+- Terraform fmt/validate와 검토 가능한 saved plan에서 bucket, lifecycle, policy와 role/policy/output만 추가되고 별도 default encryption resource가 없는지 확인한다.
 - 적용 후 AWS live 설정, role policy와 output을 조회해 선언과 일치하는지 확인한다.
 
-- [x] 1.1 기존 Terraform 구조와 design guidance에 맞춰 backup bucket, 보안 설정, versioning과 lifecycle을 선언한다.
+- [x] 1.1 기존 Terraform 구조와 design guidance에 맞춰 backup bucket, 접근 보안 설정, versioning과 lifecycle을 선언한다.
 - [x] 1.2 production·restore workload용 최소 권한 Pod Identity role과 trust/policy를 선언한다.
 - [x] 1.3 Terraform bootstrap 주체에 대상 bucket 설정과 workload role만 관리할 권한을 추가한다.
 - [x] 1.4 bucket/role 식별자를 output과 운영자가 찾을 수 있는 repository 문서에 기록한다.

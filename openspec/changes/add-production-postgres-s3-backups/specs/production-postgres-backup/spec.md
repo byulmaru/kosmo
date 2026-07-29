@@ -2,12 +2,12 @@
 
 ### Requirement: 독립된 프로덕션 backup 저장소
 
-**Authority / Provenance:** `PROD-546`. 시스템은 프로덕션 PostgreSQL의 base backup과 WAL archive를 Kubernetes cluster와 독립된 `ap-northeast-2` 전용 S3 bucket의 prod 전용 prefix에 저장해야 한다. 이를 위해 시스템은 해당 저장 경계와 보안 설정을 반드시 유지해야 한다(MUST). Bucket은 SSE-S3 암호화, public access 전면 차단, TLS 전송 강제, versioning과 lifecycle을 사용해야 하며 Terraform의 일반 destroy나 빈 bucket이 아닌 삭제로 제거되어서는 안 된다.
+**Authority / Provenance:** `PROD-546`. 시스템은 프로덕션 PostgreSQL의 base backup과 WAL archive를 Kubernetes cluster와 독립된 `ap-northeast-2` 전용 S3 bucket의 prod 전용 prefix에 저장해야 한다. 이를 위해 시스템은 해당 저장 경계와 보안 설정을 반드시 유지해야 한다(MUST). Bucket 객체는 S3가 기본 제공하는 SSE-S3 암호화를 사용해야 한다. Bucket은 public access 전면 차단, TLS 전송 강제, versioning과 lifecycle을 사용해야 하며 Terraform의 일반 destroy나 빈 bucket이 아닌 삭제로 제거되어서는 안 된다. Terraform은 별도 default encryption resource를 관리하지 않는다.
 
 #### Scenario: Terraform으로 backup 저장소 생성
 
 - **WHEN** 승인된 Kosmo Terraform plan을 적용한다
-- **THEN** 전용 S3 bucket과 암호화, public access block, TLS-only policy, versioning, lifecycle과 삭제 보호가 선언형으로 생성된다
+- **THEN** 전용 S3 bucket, public access block, TLS-only policy, versioning, lifecycle과 삭제 보호가 선언형으로 생성되고 새 객체는 S3의 기본 SSE-S3 암호화를 사용한다
 
 #### Scenario: 허용하지 않은 저장소 범위
 
