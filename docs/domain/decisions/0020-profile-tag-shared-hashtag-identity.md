@@ -27,12 +27,13 @@ Local/Remote와 생명주기 경계를 먼저 확정해야 한다.
   canonical Hashtag identity로 해석·생성하고, 동일 Hashtag identity를 둘 이상 참조하면 전체 변경을 거부한다.
 - Active Account의 Local Profile Owner만 Profile 편집을 통해 전체 Profile Tag 목록을 원자적으로 교체한다.
   Profile Tag는 Profile과 별도의 편집 권한을 가지지 않는다.
-- Profile Tag는 Profile이 공개 조회 가능한 동안에만 함께 공개한다. Profile 비활성화 또는 정지는 관계를
-  보존하지만 공개 결과에서 숨긴다. Profile Lifecycle State가 Deleted로 전이됐다는 사실만으로 관계를
-  제거하지 않으며, 관계 cleanup은 별도의 canonical 보존·파기 정책이 소유한다.
+- Profile Tag는 Profile이 공개 조회 가능한 동안에만 함께 공개한다. Profile 비활성화·정지·Deleted 전이는
+  관계를 보존하지만 공개 결과에서 숨긴다. 관계 cleanup이 필요하다면 lifecycle 전이와 분리된 canonical 보존·파기
+  정책에서 대상과 시점을 결정하며, 다른 Post나 Profile의 Hashtag 관계에는 영향을 주지 않는다.
 - 이번 전달에서는 Remote Profile의 Profile Tag 수집·표시와 ActivityPub 표현을 제외한다.
-- 후속 검색 계약에는 정규화된 Hashtag identity와 공개 조회 가능한 Local Profile 관계를 입력으로 제공한다.
-  query 문법, 일치, 정렬, pagination, 인증과 navigation은 검색 Domain Gate에서 별도로 결정한다.
+- 후속 탐색 계약에는 TagChip에서 이미 확인한 정규화된 Hashtag identity와 공개 조회 가능한 Local Profile 관계를
+  입력으로 제공한다. 임의 검색창 입력의 Hashtag 해석이나 Hashtag/Hashtag Name 검색은 이 결정과 별도 계약에서
+  다루며, 구체 route/API 이름은 각 구현 이슈가 소유한다.
 
 ## 이유
 
@@ -50,7 +51,8 @@ Local 편집·공개 표시만 먼저 전달하면 원격 서버의 Profile meta
 - Profile 편집은 표현 속성과 Profile Tag 관계를 함께 바꿀 때 원자성을 보장해야 한다.
 - 공개 Profile 조회는 Profile visibility를 우회하지 않고 Profile과 함께 관계를 노출해야 한다.
 - Remote Profile과 ActivityPub 확장은 별도 canonical 결정과 계약 없이는 추가할 수 없다.
-- Profile Tag 검색은 이 결정만으로 활성화되지 않으며 별도 Domain Gate와 OpenSpec을 거친다.
+- Hashtag 관련 Profile 목록 탐색은 이 결정만으로 활성화되지 않으며
+  [ADR 0021](./0021-hashtag-related-profile-navigation.md)의 탐색 Domain Gate와 이후 PROD-525의 OpenSpec을 거친다.
 
 ## 근거
 
@@ -64,3 +66,4 @@ Local 편집·공개 표시만 먼저 전달하면 원격 서버의 Profile meta
 - [Hashtag](../objects/hashtag.md)은 공유 identity, Hashtag Name 문법·정규화·normalized name uniqueness를 정의한다.
 - [Profile Tag 디자인](../../design/profile-tags.md)은 reorder UI와 안정적인 표시 순서에 의존하지 않는 편집·공개
   표시의 플랫폼 공통 경계를 정의한다.
+- [ADR 0021](./0021-hashtag-related-profile-navigation.md)은 Hashtag 관련 Profile 목록 탐색 계약을 정의한다.

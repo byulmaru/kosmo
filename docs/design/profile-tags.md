@@ -23,7 +23,7 @@ Local Profile Owner가 기존 Profile 편집 흐름에서 구조화된 Profile T
 - TagChip 목록은 안정적인 표시 순서에 의존하지 않는다.
 - 태그가 없으면 빈 섹션이나 안내 문구를 표시하지 않는다.
 - TagChip은 줄바꿈할 수 있으며 긴 허용값과 좁은 화면에서도 Profile 본문을 가로로 넘치게 하지 않는다.
-- Profile Tag 검색이 별도로 전달되기 전에는 TagChip을 링크나 버튼으로 표현하지 않는다.
+- PROD-525가 전체 탐색을 전달하기 전에는 TagChip을 비대화형으로 표시한다. PROD-529가 소유한 navigation 구현은 PROD-525가 전체 탐색을 전달한 후 TagChip을 [Hashtag 관련 Profile 목록 탐색](./hashtag-related-profiles.md)으로 이동하는 링크 또는 버튼으로 활성화한다.
 - Profile이 공개 조회 조건을 통과하지 않으면 Profile Tag만 별도로 표시하지 않는다.
 
 ## 플랫폼과 접근성
@@ -39,7 +39,7 @@ Local Profile Owner가 기존 Profile 편집 흐름에서 구조화된 Profile T
 
 ## 제외 범위
 
-- 태그 선택 시 검색 화면으로 이동하는 navigation
+- [Hashtag 관련 Profile 목록 탐색](./hashtag-related-profiles.md)에 정의된 TagChip navigation 자체
 - 자동완성, 추천, trend와 관련도 표시
 - Remote Profile Tag 편집·표시와 ActivityPub 표현
 - Hashtag Post List 또는 검색 결과 화면 변경

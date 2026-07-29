@@ -83,7 +83,8 @@ Profile Tag는 Profile이 [Hashtag](./hashtag.md)를 참조하는 구조화 관�
 [Hashtag](./hashtag.md)의 canonical Hashtag identity로 먼저 해석·생성한 뒤, 동일 Hashtag identity를 둘 이상
 참조하는 목록은 거부한다. Profile 비활성화와 정지는 관계를 보존하지만 공개 조회에서는 Profile과 함께 숨긴다.
 Lifecycle State가 Deleted로 전이됐다는 이유만으로 Profile Tag 관계를 제거하지 않는다. 관계 cleanup이 필요하다면
-삭제 상태 전이와 분리된 canonical 보존·파기 정책에서 대상과 시점을 결정한다.
+삭제 상태 전이와 분리된 canonical 보존·파기 정책에서 대상과 시점을 결정한다. 다른 Post 또는 Profile이 참조하는
+Hashtag에는 영향을 주지 않는다.
 
 ## 권한
 
@@ -101,6 +102,8 @@ Lifecycle State가 Deleted로 전이됐다는 이유만으로 Profile Tag 관계
 - viewer Profile의 Profile Domain Block 대상 Instance에 속한 Remote Profile은 viewer에게 없는 것처럼 취급한다.
 - 공개 검색 후보는 위 조회 조건을 통과해야 하며 Domain Limit Instance의 Remote Profile은 제외한다.
 - Profile Tag는 해당 Profile이 위 공개 조회 조건을 통과할 때만 공개하며 독립적인 공개 범위를 가지지 않는다.
+- Hashtag 관련 Profile 목록 탐색은 [ADR 0021](../decisions/0021-hashtag-related-profile-navigation.md)에 따라
+  공개 조회 가능한 Active·Normal Local Profile 중 TagChip이 전달한 Hashtag identity 정확 일치만 후보로 사용한다.
 
 위 Domain Limit 및 viewer Profile Domain Block 규칙은 공개 Profile 조회·검색의 최종 canonical moderation
 정책이다. 다만 해당 정책을 exact/partial Profile lookup에 함께 적용할 저장 모델과 공통 predicate가 아직 없는
