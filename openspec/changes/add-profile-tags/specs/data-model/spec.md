@@ -2,13 +2,14 @@
 
 ### Requirement: Profile Tag 관계 저장
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — Hashtag가 소유하는 canonical Name identity마다 하나의 Hashtag row를 저장하고(MUST), Profile과 Hashtag 사이의 Profile Tag 관계를 별도 row로 저장해야 한다(MUST). 같은 Profile은 같은 Hashtag identity를 중복 참조할 수 없어야 하며 `(profile_id, hashtag_id)` 유일성으로 보장해야 한다(MUST). 관계 row에는 position column·순서 제약·제품 max count를 두지 않는다.
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — Hashtag가 소유하는 canonical Name identity마다 unique `name`과 최초 입력 표기의 non-null `display_name`을 가진 하나의 Hashtag row를 저장하고(MUST), Profile과 Hashtag 사이의 Profile Tag 관계를 별도 row로 저장해야 한다(MUST). 같은 canonical name의 후속 입력은 기존 row를 재사용하고 `display_name`을 갱신해서는 안 된다(MUST NOT). 같은 Profile은 같은 Hashtag identity를 중복 참조할 수 없어야 하며 `(profile_id, hashtag_id)` 유일성으로 보장해야 한다(MUST). 관계 row에는 position column·순서 제약·제품 max count를 두지 않는다.
 
 #### Scenario: Store a canonical Hashtag identity
 
 - **WHEN** 정규화된 Hashtag Name이 처음 Profile Tag로 저장된다
-- **THEN** 시스템은 UUID 기반 identity와 고유한 정규화 이름을 가진 Hashtag row를 만든다
+- **THEN** 시스템은 UUID 기반 identity, 고유한 canonical name과 최초 입력 표기의 display name을 가진 Hashtag row를 만든다
 - **AND** 같은 정규화 이름을 다시 저장하면 동일한 canonical Hashtag identity를 나타내는 row를 재사용한다
+- **AND** 후속 입력의 표기가 달라도 기존 display name을 유지한다
 
 #### Scenario: Store a Profile Tag identity relation
 
