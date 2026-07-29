@@ -46,9 +46,10 @@ Local application Reaction의 실제 create/delete만 transaction commit 후 Fed
 
 **Guardrails**
 
-- 단일 `addReaction`은 `LOCAL`·`ACTIVITYPUB` origin으로 outbound provenance를 명시하고 optional caller transaction에는
-  origin과 독립적으로 참여한다. caller transaction이 있으면 post-commit side effect는 caller가 소유하고, top-level
-  actual create의 Notification은 origin과 무관하며 Fedify delivery만 Local origin으로 제한한다.
+- 단일 `addReaction`과 `deleteReaction`은 `LOCAL`·`ACTIVITYPUB` origin으로 outbound provenance를 명시하고 optional
+  caller transaction에는 origin과 독립적으로 참여한다. caller transaction이 있으면 exact Reaction 결과와 post-commit
+  side effect를 caller가 소유하고, top-level actual create/delete의 Notification은 origin과 무관하며 Fedify delivery만
+  Local origin으로 제한한다. inbound Undo는 mapping 검증 후 공통 delete action에 exact Reaction ID를 전달한다.
 - top-level Local action이 actual 변화를 commit하고 immutable Reaction row를 Fedify에 넘긴다. Fedify가 저장된 target
   projection을 조회해 eligibility를 판단한다. commit 전에는 Fedify 호출이나 remote I/O를 하지 않는다.
 - Local Post, non-local sender, Active가 아닌 Remote Instance와 unsupported Type에는 delivery를 시도하지 않는다.

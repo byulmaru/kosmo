@@ -111,7 +111,12 @@ test('허용되지 않은 Type은 추가·삭제에서 field type validation 오
         error instanceof ValidationError && error.code === 'VALIDATION' && error.field === 'type',
     );
     await assert.rejects(
-      deleteReaction({ actorProfileId: input.actorProfileId, postId: input.postId, type }),
+      deleteReaction({
+        actorProfileId: input.actorProfileId,
+        origin: 'LOCAL',
+        postId: input.postId,
+        type,
+      }),
       (error: unknown) =>
         error instanceof ValidationError && error.code === 'VALIDATION' && error.field === 'type',
     );
@@ -161,6 +166,7 @@ test('core는 entry에서 검증된 actor의 Profile/Instance 상태를 다시 �
     assert.equal(await countReactions(fixture.input.postId), 1);
     await deleteReaction({
       actorProfileId: fixture.profile.id,
+      origin: 'LOCAL',
       postId: fixture.post.id,
       type: reaction.type,
     });
@@ -223,6 +229,79 @@ test('top-level ActivityPub origin은 Notification만 commit 후 생성한다', 
   assert.equal(await countReactionNotifications(reaction.id), 1);
 });
 
+test('Local과 ActivityPub 삭제는 caller transaction에 독립적으로 참여한다', async () => {
+  for (const origin of ['LOCAL', 'ACTIVITYPUB'] as const) {
+    const actor = await createFixture({
+      instanceKind: origin === 'LOCAL' ? InstanceKind.LOCAL : InstanceKind.ACTIVITYPUB,
+    });
+    const recipient = await createFixture();
+    const { reaction } = await addReaction({
+      actorProfileId: actor.profile.id,
+      origin: 'ACTIVITYPUB',
+      postId: recipient.post.id,
+      type: '☘️',
+    });
+    assert.equal(await countReactionNotifications(reaction.id), 1);
+
+    await assert.rejects(
+      db.transaction(async (tx) => {
+        const deleted = await deleteReaction(
+          {
+            actorProfileId: actor.profile.id,
+            origin,
+            postId: recipient.post.id,
+            type: reaction.type,
+          },
+          tx,
+        );
+        assert.equal(deleted.reaction?.id, reaction.id);
+        throw new Error('rollback');
+      }),
+      /rollback/,
+    );
+
+    assert.equal(await countReactions(recipient.post.id), 1);
+    assert.equal(await countReactionNotifications(reaction.id), 1);
+  }
+});
+
+test('top-level ActivityPub 삭제는 Notification만 commit 후 정리한다', async () => {
+  const actor = await createFixture({ instanceKind: InstanceKind.ACTIVITYPUB });
+  const recipient = await createFixture();
+  const { reaction } = await addReaction({
+    actorProfileId: actor.profile.id,
+    origin: 'ACTIVITYPUB',
+    postId: recipient.post.id,
+    type: '🥹',
+  });
+
+  const deleted = await deleteReaction({
+    actorProfileId: actor.profile.id,
+    origin: 'ACTIVITYPUB',
+    postId: recipient.post.id,
+    type: reaction.type,
+  });
+
+  assert.equal(deleted.reaction?.id, reaction.id);
+  assert.equal(await countReactionNotifications(reaction.id), 0);
+});
+
+test('expected Reaction ID가 다르면 교체된 같은 Type을 삭제하지 않는다', async () => {
+  const fixture = await createFixture();
+  const { reaction } = await addReaction({ ...fixture.input, type: '👀' });
+
+  const result = await deleteReaction({
+    actorProfileId: fixture.profile.id,
+    expectedReactionId: crypto.randomUUID(),
+    origin: 'ACTIVITYPUB',
+    postId: fixture.post.id,
+    type: reaction.type,
+  });
+
+  assert.deepEqual(result, { postId: fixture.post.id, reaction: null });
+  assert.equal(await countReactions(fixture.post.id), 1);
+});
+
 test('Owner는 Post가 unavailable해져도 Post와 Type으로 Reaction을 삭제한다', async () => {
   const fixture = await createFixture();
   const { reaction } = await addReaction({ ...fixture.input, type: '❤️' });
@@ -230,11 +309,12 @@ test('Owner는 Post가 unavailable해져도 Post와 Type으로 Reaction을 삭�
 
   const result = await deleteReaction({
     actorProfileId: fixture.profile.id,
+    origin: 'LOCAL',
     postId: fixture.post.id,
     type: reaction.type,
   });
 
-  assert.deepEqual(result, { postId: fixture.post.id, reactionId: reaction.id });
+  assert.deepEqual(result, { postId: fixture.post.id, reaction });
   assert.equal(await countReactions(fixture.post.id), 0);
 });
 
@@ -243,6 +323,7 @@ test('Reaction 삭제는 실제 삭제된 ID의 Notification만 정리한다', a
   const recipient = await createFixture();
   const { reaction } = await addReaction({
     actorProfileId: author.profile.id,
+    origin: 'LOCAL',
     postId: recipient.post.id,
     type: '🎉',
   });
@@ -251,10 +332,11 @@ test('Reaction 삭제는 실제 삭제된 ID의 Notification만 정리한다', a
   assert.equal(await countReactionNotifications(reaction.id), 1);
   const deleted = await deleteReaction({
     actorProfileId: author.profile.id,
+    origin: 'LOCAL',
     postId: recipient.post.id,
     type: reaction.type,
   });
-  assert.deepEqual(deleted, { postId: recipient.post.id, reactionId: reaction.id });
+  assert.deepEqual(deleted, { postId: recipient.post.id, reaction });
   assert.equal(await countReactionNotifications(reaction.id), 0);
 
   await db.insert(Notifications).values({
@@ -266,10 +348,11 @@ test('Reaction 삭제는 실제 삭제된 ID의 Notification만 정리한다', a
 
   const repeated = await deleteReaction({
     actorProfileId: author.profile.id,
+    origin: 'LOCAL',
     postId: recipient.post.id,
     type: reaction.type,
   });
-  assert.deepEqual(repeated, { postId: recipient.post.id, reactionId: null });
+  assert.deepEqual(repeated, { postId: recipient.post.id, reaction: null });
   assert.equal(await countReactionNotifications(reaction.id), 1);
 });
 
@@ -278,6 +361,7 @@ test('Notification cleanup 실패에도 Reaction 삭제 성공과 오류 관측�
   const recipient = await createFixture();
   const { reaction } = await addReaction({
     actorProfileId: author.profile.id,
+    origin: 'LOCAL',
     postId: recipient.post.id,
     type: '👀',
   });
@@ -303,11 +387,12 @@ test('Notification cleanup 실패에도 Reaction 삭제 성공과 오류 관측�
   try {
     const result = await deleteReaction({
       actorProfileId: author.profile.id,
+      origin: 'LOCAL',
       postId: recipient.post.id,
       type: reaction.type,
     });
 
-    assert.deepEqual(result, { postId: recipient.post.id, reactionId: reaction.id });
+    assert.deepEqual(result, { postId: recipient.post.id, reaction });
     assert.equal(await countReactions(recipient.post.id), 0);
     assert.equal(await countReactionNotifications(reaction.id), 1);
     assert.equal(errors.length, 1);
@@ -328,6 +413,7 @@ test('반복·동시 삭제는 하나만 삭제 ID를 반환하고 나머지는 
   const { reaction } = await addReaction({ ...fixture.input, type: '🎉' });
   const input = {
     actorProfileId: fixture.profile.id,
+    origin: 'LOCAL' as const,
     postId: fixture.post.id,
     type: reaction.type,
   };
@@ -335,9 +421,9 @@ test('반복·동시 삭제는 하나만 삭제 ID를 반환하고 나머지는 
   const concurrent = await Promise.all(Array.from({ length: 4 }, () => deleteReaction(input)));
   const repeated = await deleteReaction(input);
 
-  assert.equal(concurrent.filter(({ reactionId }) => reactionId === reaction.id).length, 1);
-  assert.equal(concurrent.filter(({ reactionId }) => reactionId === null).length, 3);
-  assert.deepEqual(repeated, { postId: fixture.post.id, reactionId: null });
+  assert.equal(concurrent.filter(({ reaction: deleted }) => deleted?.id === reaction.id).length, 1);
+  assert.equal(concurrent.filter(({ reaction: deleted }) => deleted === null).length, 3);
+  assert.deepEqual(repeated, { postId: fixture.post.id, reaction: null });
   assert.equal(await countReactions(fixture.post.id), 0);
 });
 
@@ -345,26 +431,29 @@ test('없는 조합은 no-op이고 오래된 Post/Type 재시도는 재생성된
   const fixture = await createFixture();
   const missing = await deleteReaction({
     actorProfileId: fixture.profile.id,
+    origin: 'LOCAL',
     postId: fixture.post.id,
     type: '👀',
   });
-  assert.deepEqual(missing, { postId: fixture.post.id, reactionId: null });
+  assert.deepEqual(missing, { postId: fixture.post.id, reaction: null });
 
   const { reaction: first } = await addReaction({ ...fixture.input, type: '👀' });
   await deleteReaction({
     actorProfileId: fixture.profile.id,
+    origin: 'LOCAL',
     postId: fixture.post.id,
     type: first.type,
   });
   const { reaction: recreated } = await addReaction({ ...fixture.input, type: '👀' });
   const staleRetry = await deleteReaction({
     actorProfileId: fixture.profile.id,
+    origin: 'LOCAL',
     postId: fixture.post.id,
     type: first.type,
   });
 
   assert.notEqual(recreated.id, first.id);
-  assert.deepEqual(staleRetry, { postId: fixture.post.id, reactionId: recreated.id });
+  assert.deepEqual(staleRetry, { postId: fixture.post.id, reaction: recreated });
   assert.deepEqual(await db.select().from(Reactions).where(eq(Reactions.id, recreated.id)), []);
 });
 
@@ -376,10 +465,11 @@ test('다른 Profile의 Reaction은 삭제하지 않는다', async () => {
   assert.deepEqual(
     await deleteReaction({
       actorProfileId: attacker.profile.id,
+      origin: 'LOCAL',
       postId: owner.post.id,
       type: reaction.type,
     }),
-    { postId: owner.post.id, reactionId: null },
+    { postId: owner.post.id, reaction: null },
   );
   assert.deepEqual(await db.select().from(Reactions).where(eq(Reactions.id, reaction.id)), [
     reaction,

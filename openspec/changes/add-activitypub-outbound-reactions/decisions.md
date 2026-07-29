@@ -165,7 +165,7 @@
 - Confirmation / Follow-up: package services index가 helper를 export하지 않는지, GraphQL caller input에 분기 값이 없는지,
   inbound rollback·no-echo와 local post-commit failure isolation 회귀를 검증한다.
 
-### origin과 transaction 참여를 독립적으로 다룬다
+### Reaction action의 origin과 transaction 참여를 독립적으로 다룬다
 
 - Decision Date: 2026-07-28
 - Decision Class: Implementation Choice
@@ -173,19 +173,21 @@
   implementation review decision on 2026-07-28
 - Status: Active
 - Context / Problem: origin별 overload로 transaction 조합을 제한하면 `LOCAL + tx`를 금지해 GraphQL이나 다른 local caller가
-  더 큰 domain transaction에 참여할 수 없다. 반대로 transaction 유무로 origin을 추론하면 provenance가 암시적이 된다.
-- Decision Outcome: 단일 `addReaction(input, tx?)`이 `input.origin: 'LOCAL' | 'ACTIVITYPUB'`으로 Fedify outbound
-  provenance를 분기하고 optional transaction에는 origin과 독립적으로 참여한다. caller transaction이 없는 top-level
-  actual create는 origin과 무관하게 Notification을 commit 후 만들고 Local origin에서만 Fedify delivery를 실행한다.
-  caller transaction이 있으면 `created`와 Reaction을 반환하고 post-commit side effect는 outer caller가 소유한다.
+  더 큰 domain transaction에 참여할 수 없다. transaction 유무로 origin을 추론하면 provenance가 암시적이고, inbound
+  Undo가 `Reactions`를 직접 삭제하면 add와 달리 공통 domain action을 우회한다.
+- Decision Outcome: 단일 `addReaction(input, tx?)`과 `deleteReaction(input, tx?)`이
+  `input.origin: 'LOCAL' | 'ACTIVITYPUB'`으로 Fedify outbound provenance를 분기하고 optional transaction에는 origin과
+  독립적으로 참여한다. caller transaction이 없는 top-level actual create/delete는 origin과 무관하게 Notification을
+  처리하고 Local origin에서만 Fedify delivery를 실행한다. caller transaction이 있으면 exact Reaction snapshot을 반환하고
+  post-commit side effect는 outer caller가 소유한다. inbound Undo는 mapping의 Reaction ID를 exact-row guard로 전달한다.
 - Alternatives Considered: origin별 transaction overload는 두 입력을 불필요하게 결속한다. transaction 유무에 따른
-  암시적 분기와 generic execution mode는 provenance를 표현하지 못한다. 별도 transaction helper는 사용자가 요구한 단일
-  action을 다시 분리한다.
-- Consequences: `LOCAL + tx`, `ACTIVITYPUB + tx`, 두 origin의 top-level 호출이 모두 유효하다. inbound는 ActivityPub
-  origin과 mapping transaction을 함께 전달해 no-echo와 원자성을 유지한다. Local outer caller는 commit 뒤 side effect를
-  직접 이어야 하며, 이는 `deletePost`·`repostPost`의 caller-owned transaction 계약과 같다.
-- Confirmation / Follow-up: 두 origin의 caller transaction rollback, GraphQL Local top-level lifecycle, inbound mapping
-  atomicity·no-echo와 post-commit failure isolation을 검증한다.
+  암시적 분기와 generic execution mode는 provenance를 표현하지 못한다. 별도 transaction helper나 inbound 직접 삭제는
+  사용자가 요구한 공통 action을 다시 분리한다.
+- Consequences: `LOCAL + tx`, `ACTIVITYPUB + tx`, 두 origin의 top-level add/delete 호출이 모두 유효하다. inbound는
+  ActivityPub origin과 mapping transaction을 함께 전달해 no-echo와 원자성을 유지한다. Local outer caller는 commit 뒤
+  side effect를 직접 이어야 하며, 이는 `deletePost`·`repostPost`의 caller-owned transaction 계약과 같다.
+- Confirmation / Follow-up: 두 origin의 add/delete caller transaction rollback, GraphQL Local top-level lifecycle,
+  inbound mapping atomicity·exact-row delete·no-echo와 post-commit failure isolation을 검증한다.
 
 ## Remaining Decisions
 

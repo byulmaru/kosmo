@@ -22,7 +22,7 @@ import {
 } from '../enums';
 import { reactionTypeSchema } from '../validation';
 import { createReactionNotification, deleteNotificationBySource } from './notification';
-import { addReaction } from './reaction';
+import { addReaction, deleteReaction } from './reaction';
 import type { Transaction } from '../db';
 
 const RemotePostAuthorActors = alias(ActivityPubActors, 'remote_post_author_actor');
@@ -279,7 +279,7 @@ export const undoInboundReaction = async ({
 
   const reactionId = await db.transaction(async (tx) => {
     const mapped = await tx
-      .select({ reactionId: Reactions.id })
+      .select({ reaction: Reactions })
       .from(ActivityPubReactions)
       .innerJoin(Reactions, eq(Reactions.id, ActivityPubReactions.reactionId))
       .innerJoin(Profiles, eq(Profiles.id, Reactions.profileId))
@@ -300,13 +300,18 @@ export const undoInboundReaction = async ({
       return null;
     }
 
-    const deleted = await tx
-      .delete(Reactions)
-      .where(eq(Reactions.id, mapped.reactionId))
-      .returning({ id: Reactions.id })
-      .then(first);
+    const deleted = await deleteReaction(
+      {
+        actorProfileId: mapped.reaction.profileId,
+        expectedReactionId: mapped.reaction.id,
+        origin: 'ACTIVITYPUB',
+        postId: mapped.reaction.postId,
+        type: mapped.reaction.type,
+      },
+      tx,
+    );
 
-    return deleted?.id ?? null;
+    return deleted.reaction?.id ?? null;
   });
 
   if (reactionId) {
