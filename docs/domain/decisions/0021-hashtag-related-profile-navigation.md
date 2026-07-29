@@ -8,6 +8,13 @@ Accepted
 
 2026-07-29
 
+## 대체 결정
+
+2026-07-29 @HJSmiley 승인으로 PROD-524의 이전 승인 snapshot을 이 결정으로 대체한다. 이전 snapshot은 사람
+검색의 `#` 모드와 TagChip이 `/search?tab=people&q=%23<normalized-name>` 상태를 공유하도록 했지만, 두 진입점은
+결과 타입과 인증·pagination 책임이 다르므로 분리한다. 검색창의 Hashtag 검색은 별도 결과 계약으로 남기고,
+TagChip은 정확한 Hashtag identity에서 관련 Profile 목록을 여는 탐색만 시작한다.
+
 ## 맥락
 
 [PROD-523](https://linear.app/byulmaru/issue/PROD-523/프로필-태그-도메인-계약을-확정한다)은 Profile Tag가
@@ -40,8 +47,8 @@ Accepted
 
 ## 이유
 
-정확한 Hashtag를 이미 보여 준 TagChip에서 시작하면 사용자가 선택한 주제와 관계된 Profile만 탐색할 수 있고,
-기존 사람 검색 입력과 모드를 섞지 않는다. Hashtag identity 정확 일치와 공개 Profile 조건을 함께 적용하면
+정확한 Hashtag를 이미 보여 준 TagChip에서 시작하면 TagChip에서 선택된 Hashtag와 관계된 Profile만 탐색할 수
+있고, 기존 사람 검색 입력과 모드를 섞지 않는다. Hashtag identity 정확 일치와 공개 Profile 조건을 함께 적용하면
 비공개·정지·삭제 Profile이나 Remote Profile이 태그 관계만으로 노출되지 않는다.
 
 무순서·무상한 관계를 그대로 두고 결과에만 안정적인 immutable cursor와 페이지 상한을 적용하면 저장 표현에
