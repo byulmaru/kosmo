@@ -44,7 +44,7 @@ Web의 Profile 생성·선택, Post 생성, Follow와 검색 흐름이 실제 �
 
 - 성공·실패 callback, 검색 제출·첫 페이지·결과 선택 event payload와 활성 탭 재선택 no-op을 component test로 검증한다.
 
-- [x] 2.1 허용된 이벤트명과 속성을 제한하는 공통 event 계약을 구현한다.
+- [x] 2.1 이벤트명과 선택적 속성을 그대로 전달하는 공통 event helper를 구현한다.
 - [x] 2.2 Profile·Post·Follow 성공 이벤트를 기존 성공 경계에 연결한다.
 - [x] 2.3 검색 제출·결과 load·선택 이벤트를 검색어 없이 연결한다.
 - [x] 2.4 핵심 행동과 검색 계측의 성공·실패 test를 추가한다.

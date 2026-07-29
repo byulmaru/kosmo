@@ -29,7 +29,7 @@ Client ID가 없는 build에서는 SDK client, browser listener와 분석 요청
 3. 외부 링크를 열어 `link_out`의 `href`와 `text`를 확인한다.
 4. 로그인해 같은 browser session이 opaque Account ID로 identify되고 `login_succeeded`가 한 번만 기록되는지 확인한다.
 5. Profile 생성·선택, Post 작성, Follow를 각각 성공시켜 대응 event와 허용된 enum/ID 속성만 확인한다. 실패 요청에는 성공 event가 없어야 한다.
-6. 검색 직접 입력, 최근 검색, tab 변경, People 첫 결과, 더 보기, 결과 선택을 확인한다. 명시적 event property에 검색 원문과 대상 Profile ID가 없어야 한다.
+6. 검색 직접 입력, 최근 검색, tab 변경, People 첫 결과와 결과 선택을 확인한다. 명시적 event property에 검색 원문과 대상 Profile ID가 없어야 한다.
 7. replay 표본 session에서 input·textarea 값과 게시글 본문이 별표로 가려지고 표시명·handle과 화면 동작은 보이는지 확인한다.
 8. OpenPanel endpoint를 browser에서 차단한 상태로 로그인·navigation·mutation·검색이 동일하게 완료되는지 확인한다.
 9. 로그아웃 후 새 event가 이전 Account ID가 아닌 anonymous identity로 기록되는지 확인한다.
@@ -65,6 +65,22 @@ WHERE project_id = {project_id:String}
     )
   )
 UNION ALL
+SELECT 'cohort_events_mv', count()
+FROM cohort_events_mv
+WHERE project_id = {project_id:String} AND profile_id = {account_id:String}
+UNION ALL
+SELECT 'cohort_members', count()
+FROM cohort_members
+WHERE project_id = {project_id:String} AND profile_id = {account_id:String}
+UNION ALL
+SELECT 'profile_event_summary_mv', count()
+FROM profile_event_summary_mv
+WHERE project_id = {project_id:String} AND profile_id = {account_id:String}
+UNION ALL
+SELECT 'profile_event_property_summary_mv', count()
+FROM profile_event_property_summary_mv
+WHERE project_id = {project_id:String} AND profile_id = {account_id:String}
+UNION ALL
 SELECT 'replay_chunks', count()
 FROM session_replay_chunks
 WHERE project_id = {project_id:String}
@@ -79,7 +95,15 @@ Account ID가 직접 연결된 event와 해당 Account session에서 로그인 �
 ### 2. 삭제
 
 1. 배포 중 ingest가 대상 Account에 새 event를 만들지 않도록 먼저 Kosmo 계정 삭제 또는 session 철회를 완료한다.
-2. 현재 배포된 OpenPanel version의 `packages/db/src/clickhouse/client.ts`와 code migration에서 아래 table·column이 그대로인지 확인한다. schema가 다르면 실행을 중단하고 runbook을 먼저 갱신한다.
+2. 현재 배포된 OpenPanel version의 `packages/db/src/clickhouse/client.ts`와 code migration에서 아래 table·column이 그대로인지 확인한다. `system.columns`에서도 `profile_id` column을 가진 table을 조회해 Account별 파생·cache table이 목록에서 빠지지 않았는지 대조한다. schema가 다르면 실행을 중단하고 runbook을 먼저 갱신한다.
+
+   ```sql
+   SELECT table
+   FROM system.columns
+   WHERE database = currentDatabase() AND name = 'profile_id'
+   ORDER BY table;
+   ```
+
 3. ClickHouse backup 또는 복구 지점을 확인하고 maintenance 작업으로 승인받는다.
 4. replay와 event처럼 session scope를 참조하는 table부터 삭제하고, session과 profile은 마지막에 삭제한다. Self-hosted 기본 table 이름은 아래와 같다. Clustered 배포라면 현재 OpenPanel의 `getReplicatedTableName()` 결과를 사용한다.
 
@@ -103,6 +127,9 @@ WHERE project_id = {project_id:String}
       WHERE project_id = {project_id:String} AND profile_id = {account_id:String}
     )
   );
+
+ALTER TABLE cohort_events_mv
+  DELETE WHERE project_id = {project_id:String} AND profile_id = {account_id:String};
 
 DELETE FROM cohort_members
 WHERE project_id = {project_id:String} AND profile_id = {account_id:String};
