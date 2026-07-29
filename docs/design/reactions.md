@@ -17,7 +17,7 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 ### 형태
 
 - Web option은 Figma Post Action Bar의 28px 밀도와 함께 사용할 수 있도록 32×32 CSS px의 둥근 사각형으로 정규화하며 radius는 12px이다. emoji는 20px, option 사이 gap과 panel padding은 각각 4px이다. border를 포함한 panel의 전체 높이는 약 42px이다.
-- iOS·Android의 target은 이번 Web 우선 변경에서 축소하지 않는다. iOS 44×44pt, Android 48×48dp 계약과 Native runtime 검증은 출시 gate로 유지한다.
+- 이번 Web 우선 변경은 Native interaction geometry를 변경하지 않는다. 현재 selector·summary는 iOS·Android 모두 44 logical unit을 사용하고 Profile tab은 32 minimum을 사용하므로, iOS Profile tab과 Android target은 각각 44×44pt·48×48dp baseline을 아직 충족하지 않는다. Native 출시 전 iOS target을 최소 44×44pt, Android target을 최소 48×48dp로 복구하고 assistive technology·touch runtime에서 검증한다.
 - 바깥 컨테이너는 border가 있는 둥근 직사각형이며 radius는 16px이다.
 - option 자체에는 border를 표시하지 않는다.
 - 선택 여부는 border가 아니라 option 아래에 분리한 배경 layer로만 구분한다.
@@ -69,6 +69,8 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 - More button은 현재 Post 위에 modal overlay를 열며 별도 route나 공개 URL은 만들지 않는다.
 - modal 상단에는 server가 제공한 양수 count Type을 같은 순서로 emoji tab으로 표시한다. 처음 열 때 server 순서의 첫 Type을 선택하고, 사용자가 tab을 바꾸면 해당 Type의 Profile 목록을 표시한다.
 - 각 tab은 emoji와 count, selected 상태를 표시한다. 목록 제목은 선택 Type과 무관하게 `반응한 사람`으로 표시하고, 각 item 왼쪽에는 Profile이 남긴 Reaction Type을 식별할 수 있는 emoji를 표시한다.
+- emoji tab의 고유 너비가 modal의 가용 너비보다 크면 tab을 축소하거나 wrap하지 않고 feature-local horizontal `ScrollView`에서 같은 한 줄로 탐색하게 한다.
+- Profile row의 border는 인접한 Profile 사이에만 표시한다. 마지막 row 뒤에는 표시하지 않으므로 Profile이 한 명이면 separator가 없다. pagination 영역의 별도 상단 border는 유지한다.
 - modal은 외부 영역 클릭·터치와 Android back으로 닫으며 별도 닫기 버튼을 표시하지 않는다.
 - Profile 목록의 최초 조회가 실패하면 modal 내부에 오류와 다시 시도 동작을 표시한다.
 - 추가 page 조회가 실패하면 이미 표시한 Profile을 유지하고 목록 내부에 오류와 다시 시도 동작을 표시한다. 이 조회 오류에 snackbar나 toast를 사용하지 않는다.
@@ -105,6 +107,6 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 - mutation 성공 전 상태 불변, 성공 후 count delta와 targeted refetch, 실패 시 기존 상태 보존, Type별 동시성·재시도, selected Profile별 Environment 격리를 검증한다.
 - 일반·Quote는 own Post ID, 순수 Repost는 source Post ID를 목록과 상세 각각에서 사용하는지 검증한다.
 - selected Profile이 없을 때 Action Bar trigger와 token toggle은 disabled이고 popover·mutation이 없지만 More와 Profile 목록 조회는 가능한지 검증한다.
-- modal의 양수 count emoji tab 순서, 기본 선택, tab별 목록, item emoji, pagination·최초/추가 조회 재시도와 actor별 cache 격리를 검증한다.
+- modal의 양수 count emoji tab 순서, 기본 선택, tab별 목록, item emoji, Profile 사이 separator, pagination·최초/추가 조회 재시도와 actor별 cache 격리를 검증한다. 320px에서 여섯 Type tab이 horizontal scroll로 접근 가능한지도 검증한다.
 - 320px, 390px, 600px Web viewport에서 Quick Picker와 요약 row가 viewport 안에 머물고 exact 32px target을 유지한 채 feature-local horizontal scroll로 접근 가능한지 실제 관찰한다.
 - 자동 검증과 Web runtime 관찰을 분리해 기록한다. iOS·Android runtime은 이번 Web 우선 범위의 완료 증거가 아니며 Native 출시 전 44pt·48dp target과 assistive technology 동작을 별도로 관찰한다.

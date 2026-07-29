@@ -17,7 +17,8 @@
 - **THEN** 각 option은 32×32 CSS px target과 20px emoji를 사용한다
 - **AND** pending spinner는 16×16px와 2px stroke를 사용한다
 - **AND** option gap과 panel padding은 각각 4px이고 selected 배경 layer만 70% opacity를 사용한다
-- **AND** iOS·Android target과 spinner geometry는 이번 Web 우선 변경으로 축소하지 않는다
+- **AND** 이번 Web 우선 변경은 현재 Native 44 logical unit option과 spinner geometry를 변경하지 않는다
+- **AND** Android 48×48dp target과 iOS·Android runtime 검증은 Native 출시 전 gate로 유지한다
 
 #### Scenario: anchored popover 열기와 닫기
 
@@ -156,6 +157,8 @@
 - **AND** 처음 열 때 server 순서의 첫 Type을 선택하고 tab 전환 시 해당 Type의 Profile connection만 표시한다
 - **AND** Profile 목록 제목은 선택 Type과 무관하게 `반응한 사람`으로 표시한다
 - **AND** Profile 목록 item에는 현재 Type의 Reaction emoji를 표시한다
+- **AND** tab의 고유 너비가 modal의 가용 너비보다 크면 tab을 축소하거나 wrap하지 않고 feature-local horizontal `ScrollView`에서 탐색하게 한다
+- **AND** Profile row separator는 인접한 Profile 사이에만 표시하고 마지막 row 또는 단일 Profile 뒤에는 표시하지 않는다
 - **AND** 별도 route나 공개 URL을 만들지 않는다
 - **AND** server가 viewer 기준으로 숨긴 Profile을 client에서 복구하거나 count에서 빼지 않는다
 - **AND** More는 selected Profile이 없어도 사용할 수 있다

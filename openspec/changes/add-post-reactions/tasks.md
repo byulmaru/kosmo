@@ -220,6 +220,7 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 - [x] 7.12 TDD로 목록·상세의 ordinary·Quote own Post와 pure Repost source Post target, summary 배치, Reaction 전용 More·양수 count emoji tab·Profile item emoji와 기존 pagination/retry/cache를 구현·검증한다.
 - [x] 7.13 app test·lint·format·diff check와 OpenSpec strict validation을 통과시키고 320px·390px·600px Web runtime을 관찰한다. 자동 검증·Web 관찰·미실행 iOS/Android 관찰을 분리해 기록한다.
 - [x] 7.14 TDD로 selected summary token의 `primary` 70% 배경 layer와 `반응한 사람` Profile 목록 제목을 구현·검증한다.
+- [x] 7.15 독립 리뷰 finding에 따라 320px·여섯 Type Profile tab의 horizontal scroll과 Profile 사이 separator를 TDD로 구현·검증하고, 현재 Native target 편차와 44pt·48dp 출시 gate를 canonical·OpenSpec에 동기화한다.
 
 ## 8. PROD-449 Reaction 요약 프레젠테이션과 PROD-418 통합
 

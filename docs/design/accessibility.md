@@ -79,7 +79,7 @@ PR과 이슈에는 실행한 자동화, 실제 관찰한 platform·viewport·입
 이 문서는 전역의 무조건적인 44×44 규칙을 제거하지만, 컴포넌트의 플랫폼별 exact contract를 임의로 바꾸지 않는다.
 
 - Reaction Quick Picker와 Reaction 요약 token은 [reactions.md](./reactions.md)의 Web 32×32 CSS px geometry를 사용한다. 이 값은 SC 2.5.8의 24×24 CSS px minimum을 자체 크기로 충족하며, `apps/app/src/stories/Reactions.stories.tsx`의 Web exact-size assertion도 32×32로 맞춘다.
-- Reaction의 iOS·Android target은 이번 Web 우선 변경에서 축소하지 않는다. iOS 44×44pt, Android 48×48dp 계약과 assistive technology·touch runtime 관찰은 Native 출시 gate로 유지하며 Web 검증으로 대체하지 않는다.
+- 이번 Web 우선 Reaction 변경은 Native interaction geometry를 수정하지 않는다. 현재 selector·summary의 44 logical unit과 Profile tab의 32 minimum은 iOS Profile tab 44×44pt 및 Android 48×48dp baseline을 모두 충족하는 구현이 아니다. Native 출시 전 iOS target을 최소 44×44pt, Android target을 최소 48×48dp로 복구하고 assistive technology·touch runtime에서 검증한다. Web 검증은 이 출시 gate를 대체하지 않는다.
 - Post Action Bar는 `post-action-bar.md`의 component-specific 28px geometry를 사용한다. 기존 PROD-433의 최소 44×44 assertion은 이 결정에 맞춰 PROD-414에서 교체하되, 이 변경을 전역 Web 또는 Native target 완화로 해석하지 않는다.
 - Post Action Bar의 Native 28pt·28dp 값은 출시 전 임시 예외다. iOS 44×44pt와 Android 48×48dp 복구 및 runtime 관찰은 Native 출시 gate이며 현재 Web 우선 slice의 완료 증거와 분리한다.
 - 순수 Repost의 `{displayName}님이 재게시함` Profile link는 독립 icon button이 아니라 attribution 문장 전체에
