@@ -6,8 +6,10 @@ import {
   useRefetchableFragment,
   useRelayEnvironment,
 } from 'react-relay';
+import { fetchQuery } from 'relay-runtime';
 import { useSession } from '@/session/SessionProvider';
-import type { SelectorStoreUpdater } from 'relay-runtime';
+import PostReactionControllerRefetchQueryNode from './__generated__/PostReactionControllerRefetchQuery.graphql';
+import type { Disposable, SelectorStoreUpdater } from 'relay-runtime';
 import type { ReactionToggleIntent } from '@/components/reaction/ReactionSelector';
 import type { PostReactionController_post$key } from './__generated__/PostReactionController_post.graphql';
 import type { PostReactionControllerAddReactionMutation } from './__generated__/PostReactionControllerAddReactionMutation.graphql';
@@ -107,7 +109,7 @@ export function usePostReactionController(
   post: PostReactionController_post$key,
 ): PostReactionController {
   const data = useFragment(postReactionControllerFragment, post);
-  const [countData, refetch] = useRefetchableFragment<
+  const [countData] = useRefetchableFragment<
     PostReactionControllerRefetchQuery,
     PostReactionControllerCounts_post$key
   >(postReactionControllerCountsFragment, data.counts);
@@ -125,10 +127,9 @@ export function usePostReactionController(
   const mounted = useRef(false);
   const deltaVersion = useRef(0);
   const deltaValues = useRef(new Map<string, VersionedDelta>());
+  const refetchDisposable = useRef<Disposable | null>(null);
   const refetchRunning = useRef(false);
-  const refetchQueued = useRef(false);
   const refetchRunId = useRef(0);
-  const runCountRefetchRef = useRef<() => void>(() => {});
   const postId = data.id;
   const identity = useRef({ environment, epoch: 0, postId });
 
@@ -150,6 +151,9 @@ export function usePostReactionController(
     return () => {
       mounted.current = false;
       refetchRunId.current += 1;
+      refetchDisposable.current?.dispose();
+      refetchDisposable.current = null;
+      refetchRunning.current = false;
       inFlightTypes.current.clear();
     };
   }, []);
@@ -157,17 +161,21 @@ export function usePostReactionController(
   useEffect(() => {
     inFlightTypes.current.clear();
     deltaValues.current = new Map();
-    refetchQueued.current = false;
-    refetchRunning.current = false;
     refetchRunId.current += 1;
+    refetchDisposable.current?.dispose();
+    refetchDisposable.current = null;
+    refetchRunning.current = false;
     setPendingTypes(new Set());
     setErrorTypes(new Set());
     setVersionedDeltas(new Map());
   }, [environment, postId]);
 
   const runCountRefetch = useCallback(() => {
-    if (refetchRunning.current) {
-      refetchQueued.current = true;
+    if (
+      refetchRunning.current ||
+      inFlightTypes.current.size > 0 ||
+      deltaValues.current.size === 0
+    ) {
       return;
     }
 
@@ -179,52 +187,66 @@ export function usePostReactionController(
     refetchRunId.current = runId;
     refetchRunning.current = true;
 
-    refetch(
-      {},
-      {
-        fetchPolicy: 'network-only',
-        onComplete(error) {
-          if (refetchRunId.current !== runId) {
-            return;
+    let receivedPost = false;
+    const finishRefetch = (succeeded: boolean) => {
+      if (refetchRunId.current !== runId) {
+        return;
+      }
+      refetchRunning.current = false;
+      refetchDisposable.current = null;
+      if (
+        !isCurrentIdentity(
+          requestIdentity.environment,
+          requestIdentity.postId,
+          requestIdentity.epoch,
+        )
+      ) {
+        return;
+      }
+      if (succeeded) {
+        setVersionedDeltas((current) => {
+          const next = new Map(current);
+          for (const [type, version] of snapshot) {
+            if (next.get(type)?.version === version) {
+              next.delete(type);
+            }
           }
-          refetchRunning.current = false;
-          if (
-            !isCurrentIdentity(
-              requestIdentity.environment,
-              requestIdentity.postId,
-              requestIdentity.epoch,
-            )
-          ) {
-            refetchQueued.current = false;
-            return;
-          }
-          if (!error) {
-            setVersionedDeltas((current) => {
-              const next = new Map(current);
-              for (const [type, version] of snapshot) {
-                if (next.get(type)?.version === version) {
-                  next.delete(type);
-                }
-              }
-              deltaValues.current = next;
-              return next;
-            });
-          }
-          if (refetchQueued.current) {
-            refetchQueued.current = false;
-            runCountRefetchRef.current();
-          }
-        },
+          deltaValues.current = next;
+          return next;
+        });
+      }
+    };
+    const subscription = fetchQuery<PostReactionControllerRefetchQuery>(
+      requestIdentity.environment,
+      PostReactionControllerRefetchQueryNode,
+      { id: requestIdentity.postId },
+      { fetchPolicy: 'network-only' },
+    ).subscribe({
+      complete: () => finishRefetch(receivedPost),
+      error: () => finishRefetch(false),
+      next: (response) => {
+        receivedPost = response.node !== null && response.node !== undefined;
       },
-    );
-  }, [isCurrentIdentity, refetch]);
-
-  runCountRefetchRef.current = runCountRefetch;
+    });
+    const disposable = { dispose: () => subscription.unsubscribe() };
+    if (refetchRunId.current === runId && refetchRunning.current) {
+      refetchDisposable.current = disposable;
+    } else {
+      disposable.dispose();
+    }
+  }, [isCurrentIdentity]);
 
   const toggleReaction = useCallback(
     ({ nextSelected, optionId }: ReactionToggleIntent) => {
       if (selectedProfileId === null || inFlightTypes.current.has(optionId)) {
         return;
+      }
+
+      if (refetchRunning.current) {
+        refetchRunId.current += 1;
+        refetchDisposable.current?.dispose();
+        refetchDisposable.current = null;
+        refetchRunning.current = false;
       }
 
       const requestIdentity = identity.current;
@@ -255,6 +277,7 @@ export function usePostReactionController(
         });
         if (!succeeded) {
           setErrorTypes((current) => new Set(current).add(optionId));
+          runCountRefetch();
           return;
         }
 
