@@ -50,8 +50,8 @@ Local 편집·공개 표시만 먼저 전달하면 원격 서버의 Profile meta
 - Profile 편집은 표현 속성과 Profile Tag 관계를 함께 바꿀 때 원자성을 보장해야 한다.
 - 공개 Profile 조회는 저장된 관계 순서를 제공하되 Profile visibility를 우회하지 않아야 한다.
 - Remote Profile과 ActivityPub 확장은 별도 canonical 결정과 계약 없이는 추가할 수 없다.
-- Profile Tag 검색은 이 결정만으로 활성화되지 않으며 [ADR 0021](./0021-profile-tag-search-contract.md)의
-  검색 Domain Gate와 이후 PROD-525의 OpenSpec을 거친다.
+- Profile Tag로 Profile을 검색하는 기능은 이 결정만으로 활성화되지 않으며
+  [ADR 0021](./0021-profile-tag-search-contract.md)의 검색 Domain Gate와 이후 PROD-525의 OpenSpec을 거친다.
 
 ## 근거
 
@@ -64,4 +64,4 @@ Local 편집·공개 표시만 먼저 전달하면 원격 서버의 Profile meta
 - [Profile](../objects/profile.md)은 관계, 편집 권한, 순서, 개수와 생명주기를 정의한다.
 - [Hashtag](../objects/hashtag.md)은 공유 identity와 정규화 규칙을 정의한다.
 - [Profile Tag 디자인](../../design/profile-tags.md)은 편집·공개 표시의 플랫폼 공통 경계를 정의한다.
-- [ADR 0021](./0021-profile-tag-search-contract.md)은 Profile Tag 검색 계약을 정의한다.
+- [ADR 0021](./0021-profile-tag-search-contract.md)은 Profile Tag로 Profile을 검색하는 계약을 정의한다.
