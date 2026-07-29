@@ -12,13 +12,13 @@ Accepted
 
 [Profile](../objects/profile.md)은 Profile Tag를 제외하고 있었고, [Hashtag](../objects/hashtag.md)는 Post 본문에서
 파생되는 관계만 정의했다. Local Profile Owner가 태그를 직접 편집하고 공개 Profile에 표시하려면 Profile
-Tag가 bio 표현인지 구조화 관계인지, 기존 Hashtag와 identity를 공유하는지, Local/Remote와 생명주기 경계를
-먼저 확정해야 한다.
+Tag가 bio 표현인지 구조화 관계인지, Post와 Profile이 공유할 canonical Hashtag identity를 어떻게 정의할지,
+Local/Remote와 생명주기 경계를 먼저 확정해야 한다.
 
 ## 결정
 
-- Hashtag를 Post와 Profile이 공유하는 공통 주제 identity로 사용한다. Profile Tag라는 별도 durable 객체나
-  별도 이름 identity를 만들지 않는다.
+- Hashtag를 Post와 Profile이 공유하는 canonical 공통 주제 identity로 정의한다. Profile Tag라는 별도 durable
+  객체나 별도 이름 identity를 만들지 않는다.
 - Profile Tag는 Profile이 Hashtag를 참조하는 순서 있는 구조화 관계다. bio 문자열에서 추출하거나 동기화하지
   않는다.
 - Hashtag 입력은 앞의 선택적 `#`와 바깥 공백을 제거하고 Unicode NFKC와 locale 비종속 case folding을
@@ -36,9 +36,9 @@ Tag가 bio 표현인지 구조화 관계인지, 기존 Hashtag와 identity를 �
 
 ## 이유
 
-같은 주제 이름에 Post용 Hashtag와 Profile용 identity를 따로 만들면 정규화와 검색 결과가 갈라진다. 기존
-Hashtag를 공통 identity로 확장하되 Profile Tag를 별도 관계로 두면 Post 본문 파생과 Owner의 명시적 편집을
-혼동하지 않으면서 동일한 이름 규칙을 재사용할 수 있다.
+같은 주제 이름에 Post용 Hashtag와 Profile용 identity를 따로 만들면 정규화와 검색 결과가 갈라진다. Hashtag를
+공통 identity로 정의하되 Profile Tag를 별도 관계로 두면 Post 본문 파생과 Owner의 명시적 편집을 혼동하지
+않으면서 동일한 이름 규칙을 공유할 수 있다.
 
 Local 편집·공개 표시만 먼저 전달하면 원격 서버의 Profile metadata 표현을 추정하지 않고도 독립적으로 출시할 수
 있다. 관계를 Profile visibility에 종속시키면 태그만으로 비공개 또는 정지 Profile이 노출되는 별도 경로도

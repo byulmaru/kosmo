@@ -26,7 +26,7 @@ Hashtag는 정규화된 이름으로 Post와 Profile을 연결하는 공통 주�
 ## 행동
 
 Hashtag는 독립 Mutation을 소유하지 않는다. Post/Reply/Quote 작성 결과에서 본문을 정규화하거나 Local Profile
-Owner가 Profile Tag 목록을 편집한 결과로 기존 Hashtag와 연결하거나 새 Hashtag를 생성한다.
+Owner가 Profile Tag 목록을 편집한 결과로 Hashtag identity 관계를 만든다.
 
 ## 권한
 
