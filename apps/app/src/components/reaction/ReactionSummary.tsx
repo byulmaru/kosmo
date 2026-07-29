@@ -1,17 +1,24 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { radii, spacing } from '@/theme/tokens';
 import type React from 'react';
+import type { ReactionToggleIntent } from './ReactionSelector';
 
 export type ReactionSummaryEntry = Readonly<{ count: number; type: string }>;
 
 export type ReactionSummaryProps = {
+  disabled?: boolean;
   entries?: ReadonlyArray<ReactionSummaryEntry>;
   error?: boolean;
+  errorTypeIds?: ReadonlyArray<string>;
   loading?: boolean;
+  onMore?: () => void;
   onRetry?: () => void;
   onSelectType?: (type: string) => void;
+  onToggle?: (intent: ReactionToggleIntent) => void;
+  pendingTypeIds?: ReadonlyArray<string>;
+  selectedTypeIds?: ReadonlyArray<string>;
 };
 
 const copy = {
@@ -20,61 +27,102 @@ const copy = {
   errorDescription: '잠시 후 다시 시도해주세요.',
   errorTitle: '반응을 불러오지 못했어요',
   loadingTitle: '반응 요약을 불러오는 중입니다.',
-  title: '반응',
 } as const;
 
 export function ReactionSummary({
+  disabled = false,
   entries,
   error,
+  errorTypeIds = [],
   loading,
+  onMore,
   onRetry,
   onSelectType,
+  onToggle,
+  pendingTypeIds = [],
+  selectedTypeIds = [],
 }: ReactionSummaryProps): React.ReactElement {
   const theme = useTheme();
+  const errorTypes = new Set(errorTypeIds);
+  const pendingTypes = new Set(pendingTypeIds);
+  const selectedTypes = new Set(selectedTypeIds);
 
   return (
     <View style={styles.root}>
-      <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
-        {copy.title}
-      </Text>
       {entries !== undefined ? (
         entries.length === 0 ? (
           <StateView description={copy.emptyDescription} title={copy.emptyTitle} />
         ) : (
-          <View style={styles.entries}>
-            {entries.map((entry, index) =>
-              onSelectType ? (
+          <ScrollView
+            contentContainerStyle={styles.entries}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.entriesScroll}
+            testID="reaction-summary-scroll"
+          >
+            {entries.map((entry, index) => {
+              const entryError = errorTypes.has(entry.type);
+              const pending = pendingTypes.has(entry.type);
+              const selected = selectedTypes.has(entry.type);
+              const legacySelect = onToggle === undefined && onSelectType !== undefined;
+              const entryDisabled =
+                disabled || pending || (onToggle === undefined && onSelectType === undefined);
+              const accessibilityLabel = legacySelect
+                ? `${entry.type} 반응 ${entry.count}개 보기`
+                : entryError
+                  ? `${entry.type} 반응 ${entry.count}개, 오류, 다시 시도`
+                  : pending
+                    ? `${entry.type} 반응 ${entry.count}개, 처리 중`
+                    : `${entry.type} 반응 ${entry.count}개`;
+
+              return (
                 <Pressable
-                  accessibilityLabel={`${entry.type} 반응 ${entry.count}개 보기`}
+                  accessibilityLabel={accessibilityLabel}
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: false }}
+                  accessibilityState={{ busy: pending, disabled: entryDisabled, selected }}
+                  aria-busy={pending}
+                  aria-pressed={selected}
+                  disabled={entryDisabled}
                   key={`${entry.type}-${index}`}
-                  onPress={() => onSelectType(entry.type)}
+                  onPress={() => {
+                    if (onToggle) {
+                      onToggle({ nextSelected: !selected, optionId: entry.type });
+                    } else {
+                      onSelectType?.(entry.type);
+                    }
+                  }}
                   style={({ pressed }) => [
                     styles.entry,
                     {
                       backgroundColor: theme.card,
                       borderColor: theme.border,
-                      opacity: pressed ? 0.85 : 1,
+                      opacity: entryDisabled ? 0.6 : pressed ? 0.85 : 1,
                     },
                   ]}
                 >
-                  <Text style={[styles.entryLabel, { color: theme.text }]}>
-                    {entry.type} {entry.count}
-                  </Text>
+                  <Text style={[styles.entryEmoji, { color: theme.text }]}>{entry.type}</Text>
+                  <Text style={[styles.entryCount, { color: theme.text }]}>{entry.count}</Text>
                 </Pressable>
-              ) : (
-                <View
-                  key={`${entry.type}-${index}`}
-                  style={[styles.entry, { backgroundColor: theme.card, borderColor: theme.border }]}
-                >
-                  <Text style={[styles.entryLabel, { color: theme.text }]}>
-                    {entry.type} {entry.count}
-                  </Text>
-                </View>
-              ),
-            )}
-          </View>
+              );
+            })}
+            {onMore ? (
+              <Pressable
+                accessibilityLabel="반응한 프로필 보기"
+                accessibilityRole="button"
+                onPress={onMore}
+                style={({ pressed }) => [
+                  styles.more,
+                  {
+                    backgroundColor: theme.card,
+                    borderColor: theme.border,
+                    opacity: pressed ? 0.85 : 1,
+                  },
+                ]}
+              >
+                <Text style={[styles.moreGlyph, { color: theme.text }]}>…</Text>
+              </Pressable>
+            ) : null}
+          </ScrollView>
         )
       ) : error ? (
         <StateView
@@ -94,15 +142,50 @@ export function ReactionSummary({
 }
 
 const styles = StyleSheet.create({
-  root: { gap: spacing.md },
-  title: { fontFamily: 'SUIT', fontWeight: '700', ...typography.lg },
-  entries: { gap: spacing.sm },
+  root: { maxWidth: '100%' },
+  entries: { alignItems: 'center', gap: spacing.xs },
+  entriesScroll: { flexGrow: 0, maxWidth: '100%' },
   entry: {
+    alignItems: 'center',
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+    ...Platform.select({
+      default: { height: 44 },
+      web: { height: 32 },
+    }),
+  },
+  entryCount: {
+    fontFamily: 'SUIT',
+    fontWeight: '700',
+    ...Platform.select({
+      default: { fontSize: 16, lineHeight: 24 },
+      web: { fontSize: 14, lineHeight: 20 },
+    }),
+  },
+  entryEmoji: {
+    ...Platform.select({
+      default: { fontSize: 16, lineHeight: 24 },
+      web: { fontSize: 20, lineHeight: 24 },
+    }),
+  },
+  more: {
+    alignItems: 'center',
     borderRadius: radii.sm,
     borderWidth: 1,
     justifyContent: 'center',
-    minHeight: 44,
-    paddingHorizontal: spacing.md,
+    ...Platform.select({
+      default: { height: 44, width: 44 },
+      web: { height: 32, width: 32 },
+    }),
   },
-  entryLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md },
+  moreGlyph: {
+    fontFamily: 'SUIT',
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
 });
