@@ -81,13 +81,12 @@ spec:
 
 한 달에 한 번, 그리고 최초 production 출시 전에 다음 절차를 수행한다. 실행자는 `PROD-546` assignee이며 해당 월이 끝나기 전에 결과를 같은 이슈에 기록한다.
 
-### 1. Target 시점과 불변 기준 기록
+### 1. 복구 지점과 불변 기준 기록
 
-Application의 쓰기 경로를 maintenance/read-only 상태로 전환하고 실제 writer가 멈춘 것을 확인한다. 쓰기가 중지된 동안 원본 database의 한 read-only transaction에서 UTC target time과 비민감 집계값을 함께 기록한다.
+고유한 `RESTORE_POINT_NAME`을 정한다. Application의 쓰기 경로를 maintenance/read-only 상태로 전환하고 실제 writer가 멈춘 것을 확인한다. 쓰기가 중지된 동안 원본 database의 한 read-only transaction에서 비민감 집계값을 기록한다.
 
 ```sql
 BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;
-SELECT clock_timestamp() AS target_time;
 SELECT count(*) FROM drizzle.__drizzle_migrations;
 SELECT count(*) FROM account;
 SELECT count(*) FROM profile;
@@ -97,7 +96,25 @@ COMMIT;
 
 실제 schema에 없는 대표 테이블은 현재 production의 핵심 테이블로 교체하되 row 값은 출력하지 않는다. 마지막 migration hash와 최소 read에서 사용할 불변 식별자도 같은 snapshot에서 기록하되 Linear나 workflow log에는 값 자체를 남기지 않는다.
 
-Transaction이 끝날 때까지 write pause를 유지한다. 기록이 끝나면 application 쓰기를 재개하고 target time이 현재보다 최소 5분 이전이 될 때까지 기다린 뒤 restore를 시작한다. 현재 원본의 count를 다시 기준으로 사용하지 않는다. Write pause를 확보하지 못했으면 rehearsal을 진행하지 않는다. 그렇지 않으면 target 이후의 정상 insert/delete를 복구 실패와 구분할 수 없다.
+Write pause를 유지한 채 CNPG의 `postgres` superuser 연결에서 named restore point를 만들고 해당 WAL segment, LSN과 UTC 시각을 기록한 뒤 segment 전환을 요청한다.
+
+```sql
+SELECT pg_create_restore_point('RESTORE_POINT_NAME') AS target_lsn;
+SELECT pg_walfile_name(pg_current_wal_lsn()) AS target_wal;
+SELECT clock_timestamp() AS target_time;
+SELECT pg_switch_wal();
+```
+
+이후 application 쓰기를 재개한다. 현재 원본의 count를 다시 기준으로 사용하지 않는다. Write pause를 확보하지 못했으면 rehearsal을 진행하지 않는다. 그렇지 않으면 restore point 이후의 정상 insert/delete를 복구 실패와 구분할 수 없다.
+
+원본의 `pg_stat_archiver`와 CNPG/plugin 상태에서 `target_wal` 또는 그 이후 WAL의 archive 성공을 확인한다.
+
+```sql
+SELECT last_archived_wal, last_archived_time, failed_count, last_failed_wal
+FROM pg_stat_archiver;
+```
+
+`last_archived_wal`이 기록한 `target_wal`과 같거나 이후이고 새로운 archive 실패가 없을 때만 restore를 시작한다. Target time부터 이 조건을 처음 관측한 시각까지를 WAL archive 지연으로 기록한다. 단순히 5분이 지났다는 이유만으로 restore를 시작하지 않는다.
 
 ### 2. Restore namespace와 source ObjectStore 생성
 
@@ -128,9 +145,9 @@ spec:
       inheritFromIAMRole: true
 ```
 
-### 3. 새 Cluster를 target time으로 복구
+### 3. 새 Cluster를 named restore point로 복구
 
-`TARGET_TIME`을 timezone이 포함된 RFC3339 UTC 값으로 바꿔 적용한다. `serverName`은 source Cluster 이름인 `kosmo-postgres`로 유지한다.
+`RESTORE_POINT_NAME`을 1단계에서 생성한 이름으로 바꿔 적용한다. `serverName`은 source Cluster 이름인 `kosmo-postgres`로 유지한다.
 
 ```yaml
 apiVersion: postgresql.cnpg.io/v1
@@ -145,7 +162,7 @@ spec:
     recovery:
       source: production
       recoveryTarget:
-        targetTime: 'TARGET_TIME'
+        targetName: 'RESTORE_POINT_NAME'
   externalClusters:
     - name: production
       plugin:
@@ -170,12 +187,12 @@ kubectl get cluster,pod -n kosmo-prod-restore
 Restore Cluster의 application credential로 읽기 전용 연결을 만든 뒤 다음을 비교한다.
 
 - `pg_dump --schema-only` 결과의 구조적 차이
-- target 시점 snapshot에 기록한 `drizzle.__drizzle_migrations` count와 마지막 migration hash
-- target 시점 snapshot에 기록한 대표 테이블의 row count와 불변 식별자 존재 여부
+- restore point 직전 snapshot에 기록한 `drizzle.__drizzle_migrations` count와 마지막 migration hash
+- restore point 직전 snapshot에 기록한 대표 테이블의 row count와 불변 식별자 존재 여부
 - 대표 GraphQL read query 또는 동일 query path의 최소 application read
-- `pg_last_xact_replay_timestamp()` 또는 검증 가능한 최신 domain timestamp와 target time의 차이
+- Restore Cluster의 마지막 replay LSN이 기록한 `target_lsn`에 도달했는지 여부
 
-현재 production 상태가 아니라 1단계에서 target 시점에 고정한 기준과 Restore Cluster를 비교한다. Rehearsal 시작부터 Cluster Ready까지를 RTO로, target time 기준 마지막 복구 데이터의 차이를 RPO로 기록한다. 목표는 각각 60분과 5분 이내다. Timestamp, Backup phase, 측정값과 성공/실패만 `PROD-546`에 남긴다.
+현재 production 상태가 아니라 1단계에서 restore point 직전에 고정한 기준과 Restore Cluster를 비교한다. Restore point LSN 도달은 선택한 복구 지점까지 데이터가 복원됐음을 증명한다. Target time부터 `target_wal` archive 성공을 처음 관측한 시각까지의 지연을 RPO 증거로, rehearsal 시작부터 Cluster Ready까지를 RTO로 기록한다. 목표는 각각 5분과 60분 이내다. Restore point 이름, timestamp, Backup phase, 측정값과 성공/실패만 `PROD-546`에 남긴다.
 
 ### 5. 정리
 

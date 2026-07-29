@@ -72,18 +72,18 @@
 
 #### Scenario: 최신 복구 가능 시점으로 PITR
 
-- **WHEN** 운영자가 runbook에 따라 기록한 target time으로 restore rehearsal을 시작한다
-- **THEN** 별도 namespace의 새 Cluster가 base backup과 WAL을 사용해 target time까지 복구되고 production Cluster는 변경되지 않으며 write pause 중 target time과 함께 기록한 불변 snapshot으로 데이터 정확성을 검증한다
+- **WHEN** 운영자가 write pause 중 named restore point와 불변 snapshot을 기록하고 대상 WAL의 archive 성공을 확인한 뒤 restore rehearsal을 시작한다
+- **THEN** 별도 namespace의 새 Cluster가 base backup과 WAL을 사용해 named restore point까지 복구되고 production Cluster는 변경되지 않으며 restore point 직전의 불변 snapshot으로 데이터 정확성을 검증한다
 
 #### Scenario: RPO와 RTO 측정
 
 - **WHEN** restore Cluster가 Ready가 되고 검증 query가 성공한다
-- **THEN** source 기준 복구 데이터 차이는 5분 이내이고 rehearsal 시작부터 Ready까지는 60분 이내이며 측정값을 민감 정보 없이 Linear에 기록한다
+- **THEN** restore point 생성부터 대상 WAL archive 성공 관측까지의 지연은 5분 이내이고 restore Cluster는 해당 LSN에 도달하며 rehearsal 시작부터 Ready까지는 60분 이내이고 측정값을 민감 정보 없이 Linear에 기록한다
 
 #### Scenario: 복구 데이터 검증
 
 - **WHEN** 복구된 Cluster에 연결한다
-- **THEN** production과 schema, Drizzle migration history, 대표 row count와 최소 read 결과가 합의한 target time 기준으로 일치한다
+- **THEN** schema, Drizzle migration history, 대표 row count와 최소 read 결과가 named restore point 직전에 기록한 불변 기준과 일치한다
 
 #### Scenario: Rehearsal 정리
 

@@ -73,7 +73,7 @@ Production CNPG Cluster가 5분 WAL archive 목표와 매일 03:00 KST base back
 - Production Cluster는 `kosmo-postgres-backup` ServiceAccount를 사용하고 ObjectStore는 IAM role 상속으로 고정 bucket의 `kosmo-prod/` prefix에 연결한다.
 - 공식 plugin을 WAL archiver와 ScheduledBackup method로 사용하며 `archive_timeout=5min`, retention 7일, immediate 실행과 UTC 6-field cron `0 0 18 * * *`을 사용한다.
 - Restore Cluster는 별도 `kosmo-prod-restore` namespace에서 source를 recovery source로만 읽고 같은 destination에 WAL 또는 새 backup을 쓰지 않는다.
-- Restore 검증은 application write pause 중 target time과 함께 기록한 불변 snapshot을 기준으로 하며 이후 현재 production count와 비교하지 않는다.
+- Restore 검증은 application write pause 중 생성한 named restore point와 직전 불변 snapshot을 기준으로 하며 이후 현재 production count와 비교하지 않는다. 대상 WAL의 archive 성공을 확인한 뒤 restore를 시작한다.
 - Prometheus/Slack 자동 알림, dev backup, replica/failover, EBS snapshot과 plugin 압축·병렬화 조정은 포함하지 않는다.
 
 **Verification**
@@ -86,7 +86,7 @@ Production CNPG Cluster가 5분 WAL archive 목표와 매일 03:00 KST base back
 - [x] 3.2 Immediate 실행과 일일 schedule을 갖는 plugin 방식 ScheduledBackup을 선언한다.
 - [x] 3.3 Dev/prod render assertion을 추가해 환경 경계와 backup 계약을 검증한다.
 - [x] 3.4 On-demand backup, 상태 확인과 S3/Pod Identity/plugin 장애 진단 절차를 운영 문서에 기록한다.
-- [x] 3.5 격리 PITR manifest 작성, target time 선택, 데이터 검증과 namespace 정리 절차를 운영 문서에 기록한다.
+- [x] 3.5 격리 PITR manifest 작성, named restore point와 WAL archive gate, 데이터 검증과 namespace 정리 절차를 운영 문서에 기록한다.
 - [x] 3.6 OpenSpec strict validation과 관련 Helm 검증을 통과시키고 결과를 `PROD-551`에 기록한다.
 
 ## 4. PROD-546 운영 통합 검증과 archive gate
