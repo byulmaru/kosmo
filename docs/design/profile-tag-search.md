@@ -25,7 +25,7 @@
 
 ## TagChip navigation
 
-- 공개 Profile이 조회 조건을 통과한 TagChip은 PROD-529가 navigation을 전달한 후 저장 순서의 링크 또는 버튼으로 활성화된다.
+- 공개 Profile이 조회 조건을 통과한 TagChip의 navigation 구현은 PROD-529가 소유한다. TagChip은 PROD-525가 전체 검색을 전달한 후 저장 순서의 링크 또는 버튼으로 활성화된다.
 - TagChip에는 `#<normalized-name>`과 목적을 설명하는 접근성 이름을 제공한다.
 - 선택 시 태그 검색 화면으로 이동하며, 직접 검색과 동일한 결과·pagination 계약을 사용한다.
 - 기존 Profile Tag 편집의 순서·최대 5개·정규화 표시 규칙은 [Profile Tag 편집·공개 표시](./profile-tags.md)를

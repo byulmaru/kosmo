@@ -34,7 +34,7 @@ Accepted
   한 요청의 페이지 크기는 최대 20개다.
 - Profile Tag 선택과 직접 입력은 같은 검색 상태를 사용한다. canonical URL은
   `/search?tab=people&q=%23<normalized-name>`이며, 검색 화면은 보호 라우트의 로그인 정책을 따른다.
-  공개 Profile의 TagChip은 PROD-529가 navigation을 전달할 때 이 URL로 이동하는 링크 또는 버튼으로 활성화된다.
+  공개 Profile의 TagChip navigation 구현은 PROD-529가 소유하며, PROD-525가 전체 검색을 전달한 후 이 URL로 이동하는 링크 또는 버튼으로 활성화된다.
 - 기존 handle 검색의 입력·결과·pagination 의미는 변경하지 않는다. 태그 query 실패나 다음 페이지 실패는
   기존 결과와 handle 모드를 지우지 않고 해당 상태만 재시도할 수 있게 한다.
 
