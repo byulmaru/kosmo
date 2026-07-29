@@ -1,49 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
+import { useEffect, useState } from 'react';
+import { graphql, useFragment, useRelayEnvironment } from 'react-relay';
 import { ReactionSelector } from '@/components/reaction/ReactionSelector';
-import { useSession } from '@/session/SessionProvider';
+import { usePostReactionController } from './PostReactionController';
 import { ReactionPopover } from './ReactionPopover';
 import type { ReactNode, Ref } from 'react';
 import type { View } from 'react-native';
-import type { SelectorStoreUpdater } from 'relay-runtime';
 import type { ReactionOption } from '@/components/reaction/ReactionSelector';
 import type { ReactionAction_post$key } from './__generated__/ReactionAction_post.graphql';
-import type { ReactionActionAddReactionMutation } from './__generated__/ReactionActionAddReactionMutation.graphql';
-import type { ReactionActionDeleteReactionMutation } from './__generated__/ReactionActionDeleteReactionMutation.graphql';
+import type { PostReactionController } from './PostReactionController';
 
 const reactionActionPostFragment = graphql`
   fragment ReactionAction_post on Post {
-    id
-    viewerReactions {
-      id
-      type
-    }
-  }
-`;
-
-const addReactionMutation = graphql`
-  mutation ReactionActionAddReactionMutation($postId: ID!, $type: String!) {
-    addReaction(input: { postId: $postId, type: $type }) {
-      reaction {
-        id
-        type
-      }
-    }
-  }
-`;
-
-const deleteReactionMutation = graphql`
-  mutation ReactionActionDeleteReactionMutation($postId: ID!, $type: String!) {
-    deleteReaction(input: { postId: $postId, type: $type }) {
-      reactionId
-      post {
-        id
-        viewerReactions {
-          id
-          type
-        }
-      }
-    }
+    ...PostReactionController_post
   }
 `;
 
@@ -62,176 +30,59 @@ export type ReactionActionTriggerRenderProps = Readonly<{
 }>;
 
 type ReactionActionProps = Readonly<{
+  controller: PostReactionController;
+  renderTrigger: (props: ReactionActionTriggerRenderProps) => ReactNode;
+}>;
+
+type LegacyReactionActionProps = Readonly<{
   post: ReactionAction_post$key;
   renderTrigger: (props: ReactionActionTriggerRenderProps) => ReactNode;
 }>;
 
-export function ReactionAction({ post, renderTrigger }: ReactionActionProps): ReactNode {
+export function ReactionAction(props: ReactionActionProps | LegacyReactionActionProps): ReactNode {
+  if ('controller' in props) {
+    return <ReactionActionView {...props} />;
+  }
+  return <LegacyReactionAction {...props} />;
+}
+
+function LegacyReactionAction({ post, renderTrigger }: LegacyReactionActionProps): ReactNode {
   const data = useFragment(reactionActionPostFragment, post);
+  const controller = usePostReactionController(data);
+  return <ReactionActionView controller={controller} renderTrigger={renderTrigger} />;
+}
+
+function ReactionActionView({ controller, renderTrigger }: ReactionActionProps): ReactNode {
   const environment = useRelayEnvironment();
-  const { selectedProfileId } = useSession();
-  const [commitAdd] = useMutation<ReactionActionAddReactionMutation>(addReactionMutation);
-  const [commitDelete] = useMutation<ReactionActionDeleteReactionMutation>(deleteReactionMutation);
   const [open, setOpen] = useState(false);
-  const [pendingTypes, setPendingTypes] = useState<Set<string>>(() => new Set());
-  const [errorTypes, setErrorTypes] = useState<Set<string>>(() => new Set());
-  const inFlightTypes = useRef(new Set<string>());
-  const mounted = useRef(false);
-  const currentEnvironment = useRef(environment);
-  const postId = data.id;
-  const currentPostId = useRef(postId);
-  const disabled = selectedProfileId === null;
-  const selectedTypes = (data.viewerReactions ?? []).map(({ type }) => type);
-
-  currentEnvironment.current = environment;
-  currentPostId.current = postId;
 
   useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-      inFlightTypes.current.clear();
-    };
-  }, []);
-
-  useEffect(() => {
-    inFlightTypes.current.clear();
-    setPendingTypes(new Set());
-    setErrorTypes(new Set());
     setOpen(false);
-  }, [environment, postId]);
-
-  useEffect(() => {
-    if (disabled) {
-      setOpen(false);
-    }
-  }, [disabled]);
-
-  const toggleReaction = useCallback(
-    ({ nextSelected, optionId }: { nextSelected: boolean; optionId: string }) => {
-      if (disabled || inFlightTypes.current.has(optionId)) {
-        return;
-      }
-      const requestEnvironment = environment;
-      const requestPostId = postId;
-      inFlightTypes.current.add(optionId);
-      setPendingTypes((value) => new Set(value).add(optionId));
-      setErrorTypes((value) => {
-        const next = new Set(value);
-        next.delete(optionId);
-        return next;
-      });
-      const finish = (succeeded: boolean) => {
-        if (
-          !mounted.current ||
-          currentEnvironment.current !== requestEnvironment ||
-          currentPostId.current !== requestPostId
-        ) {
-          return;
-        }
-        inFlightTypes.current.delete(optionId);
-        setPendingTypes((value) => {
-          const next = new Set(value);
-          next.delete(optionId);
-          return next;
-        });
-        if (!succeeded) {
-          setErrorTypes((value) => new Set(value).add(optionId));
-        }
-      };
-      const onCompleted = (response: unknown) => {
-        const payload = nextSelected
-          ? (response as ReactionActionAddReactionMutation['response'] | null)?.addReaction
-          : (response as ReactionActionDeleteReactionMutation['response'] | null)?.deleteReaction;
-        finish(Boolean(payload));
-      };
-      if (nextSelected) {
-        commitAdd({
-          onCompleted,
-          onError: () => finish(false),
-          updater: createAddReactionUpdater(postId),
-          variables: { postId, type: optionId },
-        });
-      } else {
-        commitDelete({
-          onCompleted,
-          onError: () => finish(false),
-          updater: createDeleteReactionUpdater(postId, optionId),
-          variables: { postId, type: optionId },
-        });
-      }
-    },
-    [commitAdd, commitDelete, disabled, environment, postId],
-  );
+  }, [controller.disabled, controller.postId, environment]);
 
   return (
     <ReactionPopover
       accessibilityLabel="반응 선택"
-      disabled={disabled}
+      disabled={controller.disabled}
       onOpenChange={setOpen}
       open={open}
       renderTrigger={({ expanded, onPress, ref }) =>
-        renderTrigger({ disabled, expanded, hasReacted: selectedTypes.length > 0, onPress, ref })
+        renderTrigger({
+          disabled: controller.disabled,
+          expanded,
+          hasReacted: controller.selectedTypeIds.length > 0,
+          onPress,
+          ref,
+        })
       }
     >
       <ReactionSelector
-        errorOptionIds={[...errorTypes]}
-        onToggle={toggleReaction}
+        errorOptionIds={controller.errorTypeIds}
+        onToggle={controller.toggleReaction}
         options={reactionOptions}
-        pendingOptionIds={[...pendingTypes]}
-        selectedOptionIds={selectedTypes}
+        pendingOptionIds={controller.pendingTypeIds}
+        selectedOptionIds={controller.selectedTypeIds}
       />
     </ReactionPopover>
   );
-}
-
-export function createAddReactionUpdater(
-  postId: string,
-): SelectorStoreUpdater<ReactionActionAddReactionMutation['response']> {
-  return (store) => {
-    const payload = store.getRootField('addReaction');
-    const reaction = payload?.getLinkedRecord('reaction');
-    const post = store.get(postId);
-    const current = post?.getLinkedRecords('viewerReactions');
-    if (!reaction || !post || !current) {
-      return;
-    }
-
-    const type = reaction.getValue('type');
-    post.setLinkedRecords(
-      [
-        ...current.filter(
-          (item) => item.getDataID() !== reaction.getDataID() && item.getValue('type') !== type,
-        ),
-        reaction,
-      ],
-      'viewerReactions',
-    );
-  };
-}
-
-export function createDeleteReactionUpdater(
-  postId: string,
-  type: string,
-): SelectorStoreUpdater<ReactionActionDeleteReactionMutation['response']> {
-  return (store) => {
-    const payload = store.getRootField('deleteReaction');
-    if (!payload) {
-      return;
-    }
-    if (payload.getLinkedRecord('post')) {
-      return;
-    }
-
-    const post = store.get(postId);
-    const current = post?.getLinkedRecords('viewerReactions');
-    if (!post || !current) {
-      return;
-    }
-
-    post.setLinkedRecords(
-      current.filter((item) => item.getValue('type') !== type),
-      'viewerReactions',
-    );
-  };
 }

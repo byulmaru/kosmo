@@ -4,22 +4,26 @@ import { before, describe, it } from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { commitMutation } from 'react-relay';
 import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
-import AddReactionMutation from './__generated__/ReactionActionAddReactionMutation.graphql';
-import DeleteReactionMutation from './__generated__/ReactionActionDeleteReactionMutation.graphql';
+import AddReactionMutation from './__generated__/PostReactionControllerAddReactionMutation.graphql';
+import DeleteReactionMutation from './__generated__/PostReactionControllerDeleteReactionMutation.graphql';
 import type { SelectorStoreUpdater } from 'relay-runtime';
-import type { ReactionActionAddReactionMutation } from './__generated__/ReactionActionAddReactionMutation.graphql';
-import type { ReactionActionDeleteReactionMutation } from './__generated__/ReactionActionDeleteReactionMutation.graphql';
+import type { PostReactionControllerAddReactionMutation } from './__generated__/PostReactionControllerAddReactionMutation.graphql';
+import type { PostReactionControllerDeleteReactionMutation } from './__generated__/PostReactionControllerDeleteReactionMutation.graphql';
 
 const postId = 'post-content';
 const missingPostId = 'post-missing';
 const require = createRequire(import.meta.url);
+let applyReactionCountDeltas: (
+  entries: ReadonlyArray<Readonly<{ count: number; type: string }>>,
+  deltas: ReadonlyMap<string, number>,
+) => ReadonlyArray<Readonly<{ count: number; type: string }>>;
 let createAddReactionUpdater: (
   postId: string,
-) => SelectorStoreUpdater<ReactionActionAddReactionMutation['response']>;
+) => SelectorStoreUpdater<PostReactionControllerAddReactionMutation['response']>;
 let createDeleteReactionUpdater: (
   postId: string,
   type: string,
-) => SelectorStoreUpdater<ReactionActionDeleteReactionMutation['response']>;
+) => SelectorStoreUpdater<PostReactionControllerDeleteReactionMutation['response']>;
 
 before(async () => {
   const secureStoreMock = new URL('../../../.storybook/mocks/expo-secure-store.ts', import.meta.url)
@@ -48,7 +52,8 @@ before(async () => {
     value: () => null,
   });
   try {
-    ({ createAddReactionUpdater, createDeleteReactionUpdater } = await import('./ReactionAction'));
+    ({ applyReactionCountDeltas, createAddReactionUpdater, createDeleteReactionUpdater } =
+      await import('./PostReactionController'));
   } finally {
     hooks.deregister();
   }
@@ -128,7 +133,7 @@ function commitAdd(
   errors?: Array<{ message: string }>,
 ) {
   return new Promise<void>((resolve, reject) => {
-    commitMutation<ReactionActionAddReactionMutation>(environment, {
+    commitMutation<PostReactionControllerAddReactionMutation>(environment, {
       mutation: AddReactionMutation,
       variables: { postId: id, type },
       updater: createAddReactionUpdater(id),
@@ -149,7 +154,7 @@ function commitDelete(
   },
 ) {
   return new Promise<void>((resolve, reject) => {
-    commitMutation<ReactionActionDeleteReactionMutation>(environment, {
+    commitMutation<PostReactionControllerDeleteReactionMutation>(environment, {
       mutation: DeleteReactionMutation,
       variables: { postId: id, type },
       updater: createDeleteReactionUpdater(id, type),
@@ -160,7 +165,33 @@ function commitDelete(
   });
 }
 
-describe('ReactionAction Relay cache contract', () => {
+describe('PostReactionController count contract', () => {
+  it('sorts updated counts stably and removes zero-count Types', () => {
+    assert.deepEqual(
+      applyReactionCountDeltas(
+        [
+          { count: 2, type: '❤️' },
+          { count: 1, type: '🎉' },
+        ],
+        new Map([
+          ['❤️', -1],
+          ['👀', 1],
+        ]),
+      ),
+      [
+        { count: 1, type: '❤️' },
+        { count: 1, type: '🎉' },
+        { count: 1, type: '👀' },
+      ],
+    );
+    assert.deepEqual(
+      applyReactionCountDeltas([{ count: 1, type: '❤️' }], new Map([['❤️', -1]])),
+      [],
+    );
+  });
+});
+
+describe('PostReactionController Relay cache contract', () => {
   it('replaces the same Type and preserves other Types after add', async () => {
     const { environment, respond } = createEnvironment();
 
