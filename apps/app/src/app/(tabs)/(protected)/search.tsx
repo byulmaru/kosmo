@@ -71,7 +71,7 @@ function PeopleResultsContent({ fetchKey, handle }: { fetchKey: string; handle: 
   const data = useLazyLoadQuery<SearchPeopleByHandlePageQuery>(
     SearchPeopleQuery,
     { query: handle.replace(/^@/, '') },
-    { fetchKey, fetchPolicy: 'store-and-network' },
+    { fetchKey, fetchPolicy: 'network-only' },
   );
 
   return <SearchPeopleResults handle={handle} query={data} />;
