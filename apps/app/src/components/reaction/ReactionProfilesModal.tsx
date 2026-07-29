@@ -159,6 +159,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: radii.sm,
     borderWidth: 1,
+    justifyContent: 'center',
     minHeight: 32,
     paddingHorizontal: spacing.sm,
   },

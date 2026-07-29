@@ -626,10 +626,9 @@ export const SummaryOrderAndModalDismiss: Story = {
     expect(dialog).toBeInTheDocument();
     await expect(within(dialog).findByText('별빛 반응 프로필')).resolves.toBeVisible();
     expect(within(dialog).getByRole('heading', { name: '반응한 사람' })).toBeVisible();
-    expect(screen.getByRole('tab', { name: '❤️ 반응 12개' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    const selectedTab = screen.getByRole('tab', { name: '❤️ 반응 12개' });
+    expect(selectedTab).toHaveAttribute('aria-selected', 'true');
+    expect(getComputedStyle(selectedTab).justifyContent).toBe('center');
     expect(screen.getByRole('tab', { name: '🎉 반응 7개' })).toHaveAttribute(
       'aria-selected',
       'false',
