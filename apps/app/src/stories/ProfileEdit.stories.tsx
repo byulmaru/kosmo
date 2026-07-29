@@ -405,7 +405,9 @@ export const TagInvalidInput: Story = {
 
     await userEvent.type(canvas.getByRole('textbox', { name: '프로필 태그' }), '공예!');
     await userEvent.click(canvas.getByRole('button', { name: '태그 추가' }));
-    expect(canvas.getByText('태그는 문자, 숫자, 밑줄만 사용할 수 있어요.')).toBeVisible();
+    expect(
+      canvas.getByText('Profile Tag는 1~20자의 문자, 숫자 또는 밑줄만 사용할 수 있어요.'),
+    ).toBeVisible();
     expect(canvas.queryAllByTestId('profile-tag-chip')).toHaveLength(0);
   },
 };
