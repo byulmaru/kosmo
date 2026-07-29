@@ -8,7 +8,7 @@ Production CloudNativePG Cluster는 Barman Cloud CNPG-I plugin으로 다음 경�
 - Cluster: `kosmo-postgres`
 - Backup ServiceAccount와 ObjectStore: `kosmo-postgres-backup`
 - Destination: `s3://byulmaru-kosmo-prod-postgresql-backups-822638974464/kosmo-prod/`
-- WAL archive timeout: 5분
+- WAL archive timeout: 4분(업로드·관측 시간을 포함한 RPO 5분 목표에 1분 여유)
 - Base backup: 매일 03:00 KST, 최초 동기화 시 즉시 1회
 - PITR recovery window: 7일
 - Restore namespace: `kosmo-prod-restore`
@@ -106,7 +106,7 @@ SELECT clock_timestamp() AS target_time;
 
 이후 application 쓰기를 재개한다. 현재 원본의 count를 다시 기준으로 사용하지 않는다. Write pause를 확보하지 못했으면 rehearsal을 진행하지 않는다. 그렇지 않으면 restore point 이후의 정상 insert/delete를 복구 실패와 구분할 수 없다.
 
-RPO 측정 중에는 `pg_switch_wal()`이나 backup 명령으로 WAL 전환을 강제하지 않는다. 실제 workload 또는 `archive_timeout=5min`이 segment를 자연스럽게 전환하도록 두고, 원본의 `pg_stat_archiver`와 CNPG/plugin 상태에서 `target_wal` 또는 그 이후 WAL의 archive 성공을 확인한다.
+RPO 측정 중에는 `pg_switch_wal()`이나 backup 명령으로 WAL 전환을 강제하지 않는다. 실제 workload 또는 `archive_timeout=4min`이 segment를 자연스럽게 전환하도록 두고, 원본의 `pg_stat_archiver`와 CNPG/plugin 상태에서 `target_wal` 또는 그 이후 WAL의 archive 성공을 확인한다.
 
 ```sql
 SELECT last_archived_wal, last_archived_time, failed_count, last_failed_wal

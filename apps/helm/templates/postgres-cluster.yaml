@@ -16,7 +16,7 @@ spec:
   serviceAccountName: kosmo-postgres-backup
   postgresql:
     parameters:
-      archive_timeout: 5min
+      archive_timeout: 4min
   plugins:
     - name: barman-cloud.cloudnative-pg.io
       isWALArchiver: true

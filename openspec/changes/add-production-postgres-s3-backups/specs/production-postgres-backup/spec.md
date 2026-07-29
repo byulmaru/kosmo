@@ -45,7 +45,7 @@
 #### Scenario: WAL archive 최대 지연 목표
 
 - **WHEN** production database에 WAL이 생성되고 segment가 가득 차지 않는다
-- **THEN** 시스템은 5분 archive timeout으로 WAL archive를 시도해 RPO 5분 이내 목표를 유지한다
+- **THEN** 시스템은 4분 archive timeout으로 WAL segment 전환을 시도하고 S3 업로드 시간을 포함한 RPO 5분 이내 목표를 유지한다
 
 #### Scenario: Dev 환경 렌더
 

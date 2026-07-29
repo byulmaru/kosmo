@@ -11,7 +11,7 @@ CloudNativePG 1.30.0에서는 내장 `barmanObjectStore` 경로가 deprecated되
 ### Goals
 
 - production PostgreSQL의 base backup과 연속 WAL을 서울 리전 S3에 7일 PITR window로 보관한다.
-- 매일 03:00 KST base backup과 5분 WAL archive timeout으로 RPO 5분 목표를 지원한다.
+- 매일 03:00 KST base backup과 4분 WAL archive timeout으로 업로드 시간을 포함한 RPO 5분 목표를 지원한다.
 - 장기 AWS credential 없이 production과 restore workload에 최소 권한을 제공한다.
 - 원본을 덮어쓰지 않는 restore rehearsal로 RTO 60분 목표와 데이터 복구 가능성을 검증한다.
 - production cluster가 아직 없어도 안전하게 선언형 변경을 먼저 병합할 수 있게 한다.
@@ -37,7 +37,7 @@ CloudNativePG 1.30.0에서는 내장 `barmanObjectStore` 경로가 deprecated되
 
 1. `PROD-549`에서 `ap-northeast-2`의 `byulmaru-kosmo-prod-postgresql-backups-822638974464` bucket과 `kosmo-prod/` prefix 전용 `byulmaru-kosmo-prod-postgres-backup` role을 만든다. Bucket 객체는 S3의 기본 SSE-S3 암호화를 사용하며 별도 default encryption resource를 관리하지 않는다. Bucket에는 public access block, TLS-only policy, versioning, current 10일/non-current 30일/incomplete multipart 1일 lifecycle, `prevent_destroy = true`, `force_destroy = false`를 적용한다.
 2. `PROD-550`에서 공식 CNPG Helm repository의 `plugin-barman-cloud` chart 0.7.0(app v0.13.0)을 `cnpg-system`에 설치한다. CloudNativePG operator와 cert-manager 이후 준비되게 하고 같은 role을 `kosmo-prod/kosmo-postgres-backup`, `kosmo-prod-restore/kosmo-postgres-backup`에 연결한다.
-3. `PROD-551`에서 prod 값에만 ServiceAccount, ObjectStore, Cluster plugin과 ScheduledBackup을 렌더한다. ObjectStore는 IAM role을 상속하고 7일 retention을 사용한다. Cluster는 plugin을 WAL archiver로 지정하고 `archive_timeout=5min`을 사용한다. ScheduledBackup은 plugin method, self ownership, immediate 실행과 6-field UTC cron `0 0 18 * * *`을 사용한다.
+3. `PROD-551`에서 prod 값에만 ServiceAccount, ObjectStore, Cluster plugin과 ScheduledBackup을 렌더한다. ObjectStore는 IAM role을 상속하고 7일 retention을 사용한다. Cluster는 plugin을 WAL archiver로 지정하고 `archive_timeout=4min`을 사용한다. ScheduledBackup은 plugin method, self ownership, immediate 실행과 6-field UTC cron `0 0 18 * * *`을 사용한다.
 4. runbook은 on-demand backup, 상태·접근 장애 확인, 격리된 PITR restore, 검증과 정리를 포함한다. Application write pause 중 불변 snapshot과 named restore point를 만들고 WAL 전환을 강제하지 않은 상태에서 실제 workload 또는 `archive_timeout`에 따른 대상 WAL의 자연 archive 성공을 확인한 뒤 restore를 시작한다. 이후 현재 production count를 비교 기준으로 사용하지 않는다. Restore workload는 source prefix를 읽을 수 있지만 ScheduledBackup 또는 WAL archiver destination을 구성하지 않는다.
 
 ### Allowed Alternatives

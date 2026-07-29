@@ -34,7 +34,7 @@ required_prod_markers=(
   "inheritFromIAMRole: true"
   "retentionPolicy: 7d"
   "serviceAccountName: kosmo-postgres-backup"
-  "archive_timeout: 5min"
+  "archive_timeout: 4min"
   "name: barman-cloud.cloudnative-pg.io"
   "isWALArchiver: true"
   "barmanObjectName: kosmo-postgres-backup"

@@ -47,7 +47,7 @@
 - Authority / Provenance: Linear `PROD-546`, `PROD-551`
 - Status: Active
 - Context / Problem: 명시적인 RPO와 recovery window를 지원하는 실행 일정과 보존 정책이 필요하다.
-- Decision Outcome: 최초 활성화 때 immediate base backup을 실행하고 이후 매일 03:00 KST에 base backup을 수행한다. Cluster의 `archive_timeout`은 5분, ObjectStore retention은 7일로 둔다. 초기 10Gi 전제에서 압축·병렬화는 plugin 기본값을 사용한다.
+- Decision Outcome: 최초 활성화 때 immediate base backup을 실행하고 이후 매일 03:00 KST에 base backup을 수행한다. Cluster의 `archive_timeout`은 4분으로 두어 S3 업로드·관측 시간을 포함한 RPO 5분 목표에 1분 여유를 확보하고, ObjectStore retention은 7일로 둔다. 초기 10Gi 전제에서 압축·병렬화는 plugin 기본값을 사용한다.
 - Alternatives Considered: 더 잦은 base backup은 초기 규모에서 비용과 I/O 대비 RPO 개선이 작아 제외했다. WAL archive 없는 일일 backup은 RPO 5분을 충족하지 못해 제외했다. 수동 최초 backup만 사용하는 방식은 활성화 누락 가능성이 있어 제외했다.
 - Consequences: ScheduledBackup cron은 초를 포함한 UTC 6-field `0 0 18 * * *`을 사용한다. RPO 5분은 실제 WAL archive와 restore에서 검증해야 할 목표다.
 - Confirmation / Follow-up: Helm render, immediate Backup 상태, WAL archive 상태와 S3 versioned object를 확인한다.
