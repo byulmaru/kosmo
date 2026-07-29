@@ -17,8 +17,8 @@ import type { Context } from '@fedify/fedify';
 import type { Activity, Recipient } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
-import type * as LocalReplyDelivery from './local-reply-delivery';
-import type { localReplyFederation as LocalReplyFederation } from './local-reply-federation';
+import type { localOutboundFederation as LocalOutboundFederation } from './local-outbound-federation';
+import type * as LocalPostDelivery from './local-post-delivery';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -29,17 +29,18 @@ let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let localInstanceId: string;
-let localReplyFederation: typeof LocalReplyFederation;
+let localOutboundFederation: typeof LocalOutboundFederation;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
+let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
-let sendLocalReplyCreate: typeof LocalReplyDelivery.sendLocalReplyCreate;
-let sendLocalReplyDelete: typeof LocalReplyDelivery.sendLocalReplyDelete;
+let sendLocalPostCreate: typeof LocalPostDelivery.sendLocalPostCreate;
+let sendLocalPostDelete: typeof LocalPostDelivery.sendLocalPostDelete;
 let testInstanceIds: string[] = [];
 let testProfileIds: string[] = [];
 
-describe('ActivityPub Local Reply delivery', () => {
+describe('ActivityPub Local Post delivery', () => {
   before(async () => {
     process.env.DATABASE_URL = databaseUrl;
     process.env.PUBLIC_ORIGIN = publicOrigin;
@@ -52,11 +53,12 @@ describe('ActivityPub Local Reply delivery', () => {
       pg,
       PostContents,
       Posts,
+      ProfileFollows,
       Profiles,
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
-    ({ localReplyFederation } = await import('./local-reply-federation'));
-    ({ sendLocalReplyCreate, sendLocalReplyDelete } = await import('./local-reply-delivery'));
+    ({ localOutboundFederation } = await import('./local-outbound-federation'));
+    ({ sendLocalPostCreate, sendLocalPostDelete } = await import('./local-post-delivery'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
   });
@@ -86,7 +88,7 @@ describe('ActivityPub Local Reply delivery', () => {
       uri: parentUri.href,
     });
     const reply = await createPost(author.id, { replyParentId: parent.id });
-    const actualContext = localReplyFederation.createContext(new URL(authorOrigin), {
+    const actualContext = localOutboundFederation.createContext(new URL(authorOrigin), {
       localInstanceId: authorInstanceId,
     });
     assert.equal(actualContext.canonicalOrigin, authorOrigin);
@@ -96,7 +98,7 @@ describe('ActivityPub Local Reply delivery', () => {
     assert.ok(keyPairs.every((keyPair) => keyPair.keyId.origin === authorOrigin));
     const fixture = createContextFixture(authorOrigin);
     const createContext = mock.method(
-      localReplyFederation,
+      localOutboundFederation,
       'createContext',
       (origin: URL, data: { readonly localInstanceId: string }) => {
         assert.equal(origin.href, `${authorOrigin}/`);
@@ -105,8 +107,8 @@ describe('ActivityPub Local Reply delivery', () => {
       },
     );
 
-    await sendLocalReplyCreate(reply.id);
-    await sendLocalReplyCreate(reply.id);
+    await sendLocalPostCreate(reply.id);
+    await sendLocalPostCreate(reply.id);
 
     assert.equal(createContext.mock.callCount(), 2);
     assert.equal(fixture.calls.length, 2);
@@ -151,17 +153,62 @@ describe('ActivityPub Local Reply delivery', () => {
     });
     const rootPost = await createPost(author.id);
     const fixture = createContextFixture();
-    mock.method(localReplyFederation, 'createContext', () => fixture.context);
+    mock.method(localOutboundFederation, 'createContext', () => fixture.context);
 
-    await sendLocalReplyCreate(publicReply.id);
-    await sendLocalReplyCreate(unlistedReply.id);
-    await sendLocalReplyCreate(followersReply.id);
-    await sendLocalReplyCreate(directReply.id);
-    await sendLocalReplyCreate(rootPost.id);
+    await sendLocalPostCreate(publicReply.id);
+    await sendLocalPostCreate(unlistedReply.id);
+    await sendLocalPostCreate(followersReply.id);
+    await sendLocalPostCreate(directReply.id);
+    await sendLocalPostCreate(rootPost.id);
 
     assert.equal(fixture.calls.length, 2);
     assert.ok(
       fixture.calls.every((call) => call.recipients[0]?.id?.href === parentAuthor.actorUri),
+    );
+  });
+
+  test('Root Post followers와 direct Parent target을 함께 확장하고 actor 기준으로 중복 제거한다', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const follower = await createRemoteActor({ handle: 'follower', sharedInbox: true });
+    await db.insert(ProfileFollows).values({
+      followeeProfileId: author.id,
+      followerProfileId: follower.profile.id,
+    });
+    const rootPost = await createPost(author.id);
+    const remoteParent = await createPost(follower.profile.id);
+    const reply = await createPost(author.id, { replyParentId: remoteParent.id });
+    const fixture = createContextFixture();
+    mock.method(localOutboundFederation, 'createContext', () => fixture.context);
+
+    await sendLocalPostCreate(rootPost.id);
+    await sendLocalPostCreate(reply.id);
+
+    assert.equal(fixture.calls.length, 2);
+    assert.deepEqual(
+      fixture.calls.map((call) => call.recipients.map((recipient) => recipient.id?.href)),
+      [[follower.actorUri], [follower.actorUri]],
+    );
+  });
+
+  test('Local Parent Reply는 Parent direct target 없이 Author followers에게만 전달한다', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const parentAuthor = await createProfile({ kind: InstanceKind.LOCAL });
+    const follower = await createRemoteActor({ handle: 'follower' });
+    await db.insert(ProfileFollows).values({
+      followeeProfileId: author.id,
+      followerProfileId: follower.profile.id,
+    });
+    const parent = await createPost(parentAuthor.id);
+    const reply = await createPost(author.id, { replyParentId: parent.id });
+    const fixture = createContextFixture();
+    mock.method(localOutboundFederation, 'createContext', () => fixture.context);
+
+    await sendLocalPostCreate(reply.id);
+
+    assert.equal(fixture.calls.length, 1);
+    assert.deepEqual(
+      fixture.calls[0]?.recipients.map((recipient) => recipient.id?.href),
+      [follower.actorUri],
     );
   });
 
@@ -175,9 +222,9 @@ describe('ActivityPub Local Reply delivery', () => {
     const parent = await createPost(parentAuthor.profile.id);
     const reply = await createPost(author.id, { replyParentId: parent.id });
     const fixture = createContextFixture();
-    mock.method(localReplyFederation, 'createContext', () => fixture.context);
+    mock.method(localOutboundFederation, 'createContext', () => fixture.context);
 
-    await sendLocalReplyCreate(reply.id);
+    await sendLocalPostCreate(reply.id);
 
     assert.equal(fixture.calls.length, 1);
     assert.equal(fixture.calls[0]?.recipients[0]?.inboxId?.href, `${parentAuthor.actorUri}/inbox`);
@@ -187,14 +234,14 @@ describe('ActivityPub Local Reply delivery', () => {
       .update(ActivityPubActors)
       .set({ inboxUri: 'ftp://remote.example/inbox' })
       .where(eq(ActivityPubActors.profileId, parentAuthor.profile.id));
-    await sendLocalReplyCreate(reply.id);
+    await sendLocalPostCreate(reply.id);
     assert.equal(fixture.calls.length, 1);
 
     await db
       .update(ActivityPubActors)
       .set({ inboxUri: `${parentAuthor.actorUri}/inbox`, uri: 'ftp://remote.example/actor' })
       .where(eq(ActivityPubActors.profileId, parentAuthor.profile.id));
-    await sendLocalReplyCreate(reply.id);
+    await sendLocalPostCreate(reply.id);
     assert.equal(fixture.calls.length, 1);
   });
 
@@ -215,18 +262,98 @@ describe('ActivityPub Local Reply delivery', () => {
       replyParentId: (await createPost(suspended.profile.id)).id,
     });
     const fixture = createContextFixture();
-    mock.method(localReplyFederation, 'createContext', () => fixture.context);
+    mock.method(localOutboundFederation, 'createContext', () => fixture.context);
 
-    await sendLocalReplyCreate(unresponsiveReply.id);
-    await sendLocalReplyCreate(suspendedReply.id);
+    await sendLocalPostCreate(unresponsiveReply.id);
+    await sendLocalPostCreate(suspendedReply.id);
 
     assert.equal(fixture.calls.length, 0);
+  });
+
+  test('followers expansion은 Active remote actor만 유지한다', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const active = await createRemoteActor({ handle: 'active-follower' });
+    const unresponsive = await createRemoteActor({
+      handle: 'unresponsive-follower',
+      instanceState: InstanceState.UNRESPONSIVE,
+    });
+    const suspended = await createRemoteActor({
+      handle: 'suspended-follower',
+      instanceState: InstanceState.SUSPENDED,
+    });
+    const disabled = await createRemoteActor({ handle: 'disabled-follower' });
+    const invalidInbox = await createRemoteActor({ handle: 'invalid-inbox-follower' });
+    const localFollower = await createProfile({ kind: InstanceKind.LOCAL });
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, disabled.profile.id));
+    await db
+      .update(ActivityPubActors)
+      .set({ inboxUri: 'ftp://remote.example/inbox' })
+      .where(eq(ActivityPubActors.profileId, invalidInbox.profile.id));
+    await db.insert(ProfileFollows).values(
+      [
+        active.profile.id,
+        unresponsive.profile.id,
+        suspended.profile.id,
+        disabled.profile.id,
+        invalidInbox.profile.id,
+        localFollower.id,
+      ].map((followerProfileId) => ({
+        followeeProfileId: author.id,
+        followerProfileId,
+      })),
+    );
+    const rootPost = await createPost(author.id);
+    const fixture = createContextFixture();
+    mock.method(localOutboundFederation, 'createContext', () => fixture.context);
+
+    await sendLocalPostCreate(rootPost.id);
+
+    assert.equal(fixture.calls.length, 1);
+    assert.deepEqual(
+      fixture.calls[0]?.recipients.map((recipient) => recipient.id?.href),
+      [active.actorUri],
+    );
+  });
+
+  test('Content 없는 Repost와 Direct Post는 Local Note lifecycle에서 제외한다', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const source = await createPost(author.id);
+    const repost = await db
+      .insert(Posts)
+      .values({
+        profileId: author.id,
+        repostSourceId: source.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.UNLISTED,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const directPost = await createPost(author.id, { visibility: PostVisibility.DIRECT });
+    const createContext = mock.method(localOutboundFederation, 'createContext');
+
+    await sendLocalPostCreate(repost.id);
+    await sendLocalPostCreate(directPost.id);
+    await db
+      .update(Posts)
+      .set({ deletedAt: Temporal.Instant.from('2026-07-28T02:00:00Z'), state: PostState.DELETED })
+      .where(inArray(Posts.id, [repost.id, directPost.id]));
+    await sendLocalPostDelete(repost.id);
+    await sendLocalPostDelete(directPost.id);
+
+    assert.equal(createContext.mock.callCount(), 0);
   });
 
   test('Delete가 tombstone 뒤 같은 Note·activity identity와 Create ordering domain을 반복 사용한다', async () => {
     const { canonicalOrigin: authorOrigin, id: authorInstanceId } = await createLocalInstance();
     const author = await createProfile({ instanceId: authorInstanceId });
     const parentAuthor = await createRemoteActor({ handle: 'parent' });
+    await db.insert(ProfileFollows).values({
+      followeeProfileId: author.id,
+      followerProfileId: parentAuthor.profile.id,
+    });
     const parent = await createPost(parentAuthor.profile.id);
     const reply = await createPost(author.id, { replyParentId: parent.id });
     const deletedAt = Temporal.Instant.from('2026-07-28T01:00:00Z');
@@ -234,14 +361,14 @@ describe('ActivityPub Local Reply delivery', () => {
       .update(Posts)
       .set({ deletedAt, state: PostState.DELETED })
       .where(eq(Posts.id, reply.id));
-    const actualContext = localReplyFederation.createContext(new URL(authorOrigin), {
+    const actualContext = localOutboundFederation.createContext(new URL(authorOrigin), {
       localInstanceId: authorInstanceId,
     });
     assert.equal(actualContext.canonicalOrigin, authorOrigin);
     assert.equal(actualContext.getActorUri(author.id).origin, authorOrigin);
     const fixture = createContextFixture(authorOrigin);
     const createContext = mock.method(
-      localReplyFederation,
+      localOutboundFederation,
       'createContext',
       (origin: URL, data: { readonly localInstanceId: string }) => {
         assert.equal(origin.href, `${authorOrigin}/`);
@@ -250,8 +377,8 @@ describe('ActivityPub Local Reply delivery', () => {
       },
     );
 
-    await sendLocalReplyDelete(reply.id);
-    await sendLocalReplyDelete(reply.id);
+    await sendLocalPostDelete(reply.id);
+    await sendLocalPostDelete(reply.id);
 
     assert.equal(createContext.mock.callCount(), 2);
     assert.equal(fixture.calls.length, 2);

@@ -1,16 +1,16 @@
 import { createFederation, MemoryKvStore } from '@fedify/fedify';
 import { ensureDrizzleLocalProfileActor } from './local-actor-store';
 
-type LocalReplyContextData = {
+export type LocalOutboundContextData = {
   readonly localInstanceId: string;
 };
 
-export const localReplyFederation = createFederation<LocalReplyContextData>({
+export const localOutboundFederation = createFederation<LocalOutboundContextData>({
   allowPrivateAddress: false,
   kv: new MemoryKvStore(),
 });
 
-localReplyFederation
+localOutboundFederation
   .setActorDispatcher('/ap/actor/{identifier}', () => null)
   .setKeyPairsDispatcher(async (context, identifier) => {
     const result = await ensureDrizzleLocalProfileActor({

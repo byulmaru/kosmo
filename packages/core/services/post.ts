@@ -111,61 +111,54 @@ export const deletePost = async (
   },
   tx?: Transaction,
 ): Promise<{ readonly postId: string }> => {
-  const { replyId, repostId, result } = await getDatabaseConnection(tx).transaction(async (tx) => {
-    const post = await tx
-      .select({
-        currentContentId: Posts.currentContentId,
-        profileId: Posts.profileId,
-        replyParentId: Posts.replyParentId,
-        state: Posts.state,
-      })
-      .from(Posts)
-      .where(eq(Posts.id, postId))
-      .limit(1)
-      .then(first);
-    if (!post) {
-      throw new NotFoundError('Post not found');
-    }
-    if (post.profileId !== actorProfileId) {
-      throw new PermissionDeniedError('Post author permission is required');
-    }
+  const { localPostId, repostId, result } = await getDatabaseConnection(tx).transaction(
+    async (tx) => {
+      const post = await tx
+        .select({
+          profileId: Posts.profileId,
+        })
+        .from(Posts)
+        .where(eq(Posts.id, postId))
+        .limit(1)
+        .then(first);
+      if (!post) {
+        throw new NotFoundError('Post not found');
+      }
+      if (post.profileId !== actorProfileId) {
+        throw new PermissionDeniedError('Post author permission is required');
+      }
 
-    const deleted = await tx
-      .update(Posts)
-      .set({ deletedAt: sql`now()`, state: PostState.DELETED })
-      .where(
-        and(
-          eq(Posts.id, postId),
-          eq(Posts.profileId, actorProfileId),
-          eq(Posts.state, PostState.ACTIVE),
-        ),
-      )
-      .returning({
-        currentContentId: Posts.currentContentId,
-        id: Posts.id,
-        replyParentId: Posts.replyParentId,
-        repostSourceId: Posts.repostSourceId,
-      })
-      .then(first);
+      const deleted = await tx
+        .update(Posts)
+        .set({ deletedAt: sql`now()`, state: PostState.DELETED })
+        .where(
+          and(
+            eq(Posts.id, postId),
+            eq(Posts.profileId, actorProfileId),
+            eq(Posts.state, PostState.ACTIVE),
+          ),
+        )
+        .returning({
+          currentContentId: Posts.currentContentId,
+          id: Posts.id,
+          replyParentId: Posts.replyParentId,
+          repostSourceId: Posts.repostSourceId,
+        })
+        .then(first);
 
-    const replySource = deleted ?? post;
-    const isDeletedReply =
-      replySource.currentContentId !== null &&
-      replySource.replyParentId !== null &&
-      (deleted !== undefined || post.state === PostState.DELETED);
-
-    return {
-      replyId: isDeletedReply ? postId : undefined,
-      repostId:
-        deleted &&
-        deleted.currentContentId === null &&
-        deleted.replyParentId === null &&
-        deleted.repostSourceId !== null
-          ? deleted.id
-          : undefined,
-      result: { postId },
-    };
-  });
+      return {
+        localPostId: deleted?.currentContentId ? deleted.id : undefined,
+        repostId:
+          deleted &&
+          deleted.currentContentId === null &&
+          deleted.replyParentId === null &&
+          deleted.repostSourceId !== null
+            ? deleted.id
+            : undefined,
+        result: { postId },
+      };
+    },
+  );
 
   // A caller-owned transaction has no after-commit hook. Its caller owns any
   // post-commit side effect so delivery cannot run before the outer commit.
@@ -190,14 +183,14 @@ export const deletePost = async (
     }
   }
 
-  if (!tx && replyId) {
+  if (localPostId) {
     try {
-      const { sendLocalReplyDelete } = await import('@kosmo/fedify');
-      await sendLocalReplyDelete(replyId);
+      const { sendLocalPostDelete } = await import('@kosmo/fedify');
+      await sendLocalPostDelete(localPostId);
     } catch (error) {
-      console.error('Post-commit ActivityPub Reply Delete delivery failed', {
+      console.error('Post-commit ActivityPub Local Post Delete delivery failed', {
         error,
-        postId: replyId,
+        postId: localPostId,
       });
     }
   }
@@ -401,12 +394,12 @@ export async function createPost(
     return { created: false };
   }
 
-  if (input.origin === 'LOCAL' && input.replyParentId !== undefined) {
+  if (input.origin === 'LOCAL') {
     try {
-      const { sendLocalReplyCreate } = await import('@kosmo/fedify');
-      await sendLocalReplyCreate(result.post.id);
+      const { sendLocalPostCreate } = await import('@kosmo/fedify');
+      await sendLocalPostCreate(result.post.id);
     } catch (error) {
-      console.error('Post-commit ActivityPub Reply Create delivery failed', {
+      console.error('Post-commit ActivityPub Local Post Create delivery failed', {
         error,
         postId: result.post.id,
       });
