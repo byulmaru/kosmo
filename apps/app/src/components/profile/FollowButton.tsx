@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
+import { trackAnalytics } from '@/analytics/client';
 import { Button } from '@/components/ui/Button';
+import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
 import type { StyleProp, ViewStyle } from 'react-native';
@@ -98,6 +100,7 @@ const getSelectedProfile = (store: RecordSourceSelectorProxy) =>
 
 export function FollowButton({ profile, style }: FollowButtonProps) {
   const theme = useTheme();
+  const { selectedProfileId } = useSession();
   const data = useFragment(followButtonProfileFragment, profile);
   const [commitFollow, following] =
     useMutation<FollowButtonFollowProfileMutation>(followProfileMutation);
@@ -167,7 +170,22 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
       });
     } else {
       commitFollow({
-        ...callbacks,
+        onCompleted: (response, errors) => {
+          const failed = Boolean(errors?.length);
+          setError(failed);
+          if (failed || !selectedProfileId) {
+            return;
+          }
+
+          trackAnalytics('follow_succeeded', {
+            result:
+              response.followProfile.result.__typename === 'ProfileFollowRequest'
+                ? 'request'
+                : 'follow',
+            selected_profile_id: selectedProfileId,
+          });
+        },
+        onError: callbacks.onError,
         optimisticUpdater: (store) => {
           const followee = store.get(data.id);
           const follower = getSelectedProfile(store);

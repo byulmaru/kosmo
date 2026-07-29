@@ -16,6 +16,11 @@ export default function MenuScreen() {
       <Text style={[styles.description, { color: theme.textSecondary }]}>
         프로필과 설정 등 주요 메뉴를 확인합니다.
       </Text>
+      <Link asChild href={'/privacy' as Href}>
+        <Pressable accessibilityRole="link">
+          <Text style={[styles.privacy, { color: theme.text }]}>개인정보 처리방침</Text>
+        </Pressable>
+      </Link>
       {Platform.OS === 'web' ? (
         <Link asChild href={'/login' as Href}>
           <Pressable accessibilityRole="link" onPress={startWebLoginFromPress}>
@@ -39,4 +44,5 @@ const styles = StyleSheet.create({
   heading: { fontFamily: 'SUIT', fontSize: 48, fontWeight: '700', lineHeight: 44 },
   description: { fontFamily: 'SUIT', marginTop: spacing.md, maxWidth: 360, ...typography.md },
   login: { fontFamily: 'SUIT', fontWeight: '700', marginTop: spacing.md, ...typography.md },
+  privacy: { fontFamily: 'SUIT', fontWeight: '700', marginTop: spacing.xl, ...typography.md },
 });

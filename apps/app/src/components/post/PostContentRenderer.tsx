@@ -1,6 +1,6 @@
 import { isPostContentDocumentV1 } from '@kosmo/core/post-content';
 import { Fragment } from 'react';
-import { Linking, StyleSheet, Text } from 'react-native';
+import { Linking, Platform, StyleSheet, Text } from 'react-native';
 import { match } from 'ts-pattern';
 import { useTheme } from '@/theme/ThemeProvider';
 import { typography } from '@/theme/tokens';
@@ -11,7 +11,7 @@ import type {
   PostContentTextNode,
 } from '@kosmo/core/post-content';
 import type { Key, ReactNode } from 'react';
-import type { StyleProp, TextStyle } from 'react-native';
+import type { StyleProp, TextProps, TextStyle } from 'react-native';
 
 type PostContentNode = PostContentBodyDocumentV1 | PostContentParagraphNode | PostContentInlineNode;
 type PostContentMark = NonNullable<PostContentTextNode['marks']>[number];
@@ -19,6 +19,9 @@ type PostContentMark = NonNullable<PostContentTextNode['marks']>[number];
 interface RenderContext {
   readonly bodyStyle: StyleProp<TextStyle>;
 }
+
+const replayMaskProps =
+  Platform.OS === 'web' ? ({ dataSet: { openpanelReplayMask: '' } } as unknown as TextProps) : {};
 
 export function PostContentRenderer({
   bodyText,
@@ -38,7 +41,11 @@ export function PostContentRenderer({
   ];
 
   if (!document) {
-    return bodyText ? <Text style={bodyStyle}>{bodyText}</Text> : null;
+    return bodyText ? (
+      <Text {...replayMaskProps} style={bodyStyle}>
+        {bodyText}
+      </Text>
+    ) : null;
   }
 
   return renderNode(document, 'body', { bodyStyle });
@@ -47,7 +54,7 @@ export function PostContentRenderer({
 function renderNode(node: PostContentNode, key: Key, context: RenderContext): ReactNode {
   return match(node)
     .with({ type: 'doc' }, (document) => (
-      <Text key={key} style={context.bodyStyle}>
+      <Text {...replayMaskProps} key={key} style={context.bodyStyle}>
         {document.content.map((child, index) => (
           <Fragment key={`${key}.${index}`}>
             {index > 0 ? '\n\n' : null}

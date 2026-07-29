@@ -1,0 +1,75 @@
+import assert from 'node:assert/strict';
+import { before, beforeEach, describe, it, mock } from 'node:test';
+import type { AnalyticsSessionBridge as AnalyticsSessionBridgeType } from './AnalyticsSessionBridge';
+
+const calls: string[] = [];
+const session = {
+  accountId: null as string | null,
+  status: 'guest' as 'guest' | 'valid',
+};
+let loginStarted = false;
+
+const mockModule = (specifier: string | URL, exports: object) =>
+  mock.module(specifier, {
+    exports,
+  } as unknown as Parameters<typeof mock.module>[1]);
+
+mockModule('react', {
+  useEffect: (effect: () => void) => effect(),
+});
+mockModule(new URL('../session/SessionProvider.tsx', import.meta.url), {
+  useSession: () => session,
+});
+mockModule(new URL('./client.ts', import.meta.url), {
+  consumeWebLoginStarted: () => {
+    const current = loginStarted;
+    loginStarted = false;
+    return current;
+  },
+  identifyAnalytics: (accountId: string) => calls.push(`identify:${accountId}`),
+  trackAnalytics: (name: string) => calls.push(`track:${name}`),
+});
+
+let AnalyticsSessionBridge: typeof AnalyticsSessionBridgeType;
+
+before(async () => {
+  ({ AnalyticsSessionBridge } = await import('./AnalyticsSessionBridge'));
+});
+
+beforeEach(() => {
+  calls.length = 0;
+  session.accountId = null;
+  session.status = 'guest';
+  loginStarted = false;
+});
+
+describe('AnalyticsSessionBridge', () => {
+  it('guest session은 identify하지 않는다', () => {
+    AnalyticsSessionBridge();
+    assert.deepEqual(calls, []);
+  });
+
+  it('valid session은 opaque Account ID로 identify한다', () => {
+    session.accountId = 'account-id';
+    session.status = 'valid';
+
+    AnalyticsSessionBridge();
+
+    assert.deepEqual(calls, ['identify:account-id']);
+  });
+
+  it('로그인 시작 marker가 있으면 identify 뒤 성공 event를 한 번 보낸다', () => {
+    session.accountId = 'account-id';
+    session.status = 'valid';
+    loginStarted = true;
+
+    AnalyticsSessionBridge();
+    AnalyticsSessionBridge();
+
+    assert.deepEqual(calls, [
+      'identify:account-id',
+      'track:login_succeeded',
+      'identify:account-id',
+    ]);
+  });
+});

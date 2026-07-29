@@ -5,6 +5,7 @@ import { AtSignIcon, GlobeIcon, LockIcon, MoonIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
+import { trackAnalytics } from '@/analytics/client';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -95,6 +96,10 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
           return;
         }
 
+        trackAnalytics('post_created', {
+          selected_profile_id: profile.id,
+          visibility,
+        });
         setBody('');
         setVisibility(PostVisibility.UNLISTED);
         editor.current?.focus();

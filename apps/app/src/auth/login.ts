@@ -6,6 +6,7 @@ import {
   ResponseType,
 } from 'expo-auth-session';
 import { Platform } from 'react-native';
+import { markWebLoginStarted } from '@/analytics/client';
 import { getWebOrigin } from '@/relay/network';
 import { getNativeSessionConfiguration } from './nativeConfig';
 import type { GestureResponderEvent } from 'react-native';
@@ -21,6 +22,7 @@ export function startWebLogin(): void {
     throw new Error('Browser login is only available on web.');
   }
 
+  markWebLoginStarted();
   window.location.assign(`${getWebOrigin()}/login`);
 }
 

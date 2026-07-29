@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
 import { RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import {
   SessionErrorProvider,
@@ -21,7 +22,10 @@ function RelaySessionBoundary({ children }: PropsWithChildren) {
         resetKey={revision}
       >
         <Suspense fallback={<Splash label="세션을 확인하는 중입니다." />}>
-          <SessionProvider>{children}</SessionProvider>
+          <SessionProvider>
+            <AnalyticsSessionBridge />
+            {children}
+          </SessionProvider>
         </Suspense>
       </SessionFailOpenBoundary>
     </GraphQLErrorBoundary>

@@ -4,6 +4,7 @@ import { ArrowLeft, History, Search as SearchIcon, X } from 'lucide-react-native
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
+import { trackAnalytics } from '@/analytics/client';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { Button } from '@/components/ui/Button';
@@ -89,7 +90,20 @@ function SearchPeopleResults({
     SearchPeopleResults_query$key
   >(SearchPeopleResultsFragment, query);
   const [loadError, setLoadError] = useState(false);
+  const trackedFirstPage = useRef(false);
   const edges = pagination.data.searchProfiles.edges;
+
+  useEffect(() => {
+    if (trackedFirstPage.current) {
+      return;
+    }
+
+    trackedFirstPage.current = true;
+    trackAnalytics('search_results_loaded', {
+      has_results: edges.length > 0,
+      tab: 'people',
+    });
+  }, [edges.length]);
 
   if (!edges.length) {
     return (
@@ -106,13 +120,25 @@ function SearchPeopleResults({
     }
 
     setLoadError(false);
-    pagination.loadNext(20, { onComplete: (error) => setLoadError(Boolean(error)) });
+    pagination.loadNext(20, {
+      onComplete: (error) => {
+        setLoadError(Boolean(error));
+        if (!error) {
+          trackAnalytics('search_more_results_loaded', { tab: 'people' });
+        }
+      },
+    });
   };
 
   return (
     <View>
       {edges.map(({ cursor, node }) => (
-        <ProfileListItem key={cursor} linked profile={node} />
+        <ProfileListItem
+          key={cursor}
+          linked
+          onPress={() => trackAnalytics('search_result_selected', { tab: 'people' })}
+          profile={node}
+        />
       ))}
       {pagination.hasNext || loadError ? (
         <View style={styles.pagination}>
@@ -215,10 +241,15 @@ export default function SearchScreen() {
     }, 0);
   };
 
-  const navigate = (nextQuery: string, tab: SearchTab = activeTab) => {
+  const navigate = (
+    nextQuery: string,
+    tab: SearchTab = activeTab,
+    source: 'keyboard' | 'tab' = 'keyboard',
+  ) => {
     const normalized = nextQuery.trim();
     if (normalized) {
       remember(normalized);
+      trackAnalytics('search_submitted', { source, tab });
     }
     setFocused(false);
     router.push(searchHref(normalized, tab));
@@ -299,6 +330,7 @@ export default function SearchScreen() {
                       onPress={() => {
                         setFocused(false);
                         remember(term);
+                        trackAnalytics('search_submitted', { source: 'recent', tab: activeTab });
                       }}
                       onPressIn={keepSearchFocused}
                       style={styles.recentTerm}
@@ -347,7 +379,7 @@ export default function SearchScreen() {
                 accessibilityRole="tab"
                 accessibilityState={{ selected: activeTab === tab.value }}
                 key={tab.value}
-                onPress={() => navigate(query, tab.value)}
+                onPress={() => navigate(query, tab.value, 'tab')}
                 style={styles.tab}
               >
                 <Text

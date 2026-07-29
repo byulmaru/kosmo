@@ -122,7 +122,32 @@ test('비로그인 사용자는 루트 온보딩에서 로그인 진입점을 �
 
   await expect(page.getByRole('heading', { name: /나만의 타임라인/ })).toBeVisible();
   await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '개인정보 처리방침' })).toHaveAttribute(
+    'href',
+    '/privacy',
+  );
   await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toHaveCount(0);
+});
+
+test('개인정보 처리방침은 로그인 없이 공개되고 landing으로 돌아갈 수 있다', async ({ page }) => {
+  await page.goto('/privacy');
+
+  await expect(page.getByRole('heading', { name: 'Kosmo 개인정보 처리방침' })).toBeVisible();
+  await expect(page.getByText('시행일: 2026년 7월 29일')).toBeVisible();
+  await expect(page.getByText('9. 자동 수집 정보와 행태정보')).toBeVisible();
+  await expect(page.getByText(/Session replay: 세션의 10%/)).toBeVisible();
+  await expect(page.getByRole('link', { name: 'KOSMO로 돌아가기' })).toHaveAttribute('href', '/');
+});
+
+test('로그인 후 menu에서도 개인정보 처리방침으로 이동한다', async ({ context, page }) => {
+  const session = await createE2ESession();
+  await setE2ESessionCookie(context, session.token);
+  await page.goto('/menu');
+
+  const privacyLink = page.getByRole('link', { name: '개인정보 처리방침' });
+  await expect(privacyLink).toHaveAttribute('href', '/privacy');
+  await privacyLink.click();
+  await expect(page).toHaveURL(/\/privacy$/);
 });
 
 test('세션 확인이 실패해도 루트 온보딩과 로그인 진입점을 유지한다', async ({ page }) => {

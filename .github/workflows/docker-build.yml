@@ -110,6 +110,7 @@ jobs:
             runtime
           build-args: |
             EXPO_PUBLIC_ENVIRONMENT=${{ env.ENVIRONMENT }}
+            EXPO_PUBLIC_OPENPANEL_CLIENT_ID=${{ startsWith(github.ref, 'refs/tags/') && vars.EXPO_PUBLIC_OPENPANEL_CLIENT_ID || '' }}
             EXPO_PUBLIC_SENTRY_DSN=${{ steps.sentry.outputs.EXPO_PUBLIC_SENTRY_DSN }}
             SENTRY_ORG=${{ vars.SENTRY_ORG }}
             SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}

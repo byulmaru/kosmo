@@ -1040,6 +1040,11 @@ type Story = StoryObj<typeof meta>;
 export const BodyTimeAndLayoutStates: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    expect(canvas.getByText('짧은 본문 한 줄.')).toHaveAttribute('data-openpanel-replay-mask', '');
+    expect(canvas.getByText('미지원 문서는 안전한 Plain Text로 표시합니다.')).toHaveAttribute(
+      'data-openpanel-replay-mask',
+      '',
+    );
     expect(canvasElement.querySelector('a[href="/@user@remote.example"]')).toBeInTheDocument();
     expect(
       canvasElement.querySelector('a[href="/@user@remote.example/detail-remote"]'),
