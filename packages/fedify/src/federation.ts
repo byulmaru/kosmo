@@ -21,7 +21,7 @@ import { ensureDrizzleLocalProfileActor, findDrizzleActiveLocalProfile } from '.
 import { authorizeLocalPostNote, dispatchLocalPostNote } from './local-post-note';
 import { createLocalProfilePerson } from './local-profile-person';
 import { resolveLocalActorIdentifierByHandle } from './webfinger';
-import type { Federation } from '@fedify/fedify';
+import type { Context, Federation } from '@fedify/fedify';
 
 const federationOrigin = process.env.PUBLIC_ORIGIN;
 
@@ -73,7 +73,14 @@ federation
     return result ? [...result.keyPairs] : [];
   });
 
-const findActiveLocalProfile = async (profileId: string) => {
+const findActiveLocalProfile = async (
+  context: Pick<Context<void>, 'canonicalOrigin' | 'host'>,
+  profileId: string,
+) => {
+  if (context.host !== new URL(context.canonicalOrigin).host) {
+    return undefined;
+  }
+
   const localInstance = await resolveConfiguredLocalInstance();
 
   return findDrizzleActiveLocalProfile({
@@ -83,19 +90,23 @@ const findActiveLocalProfile = async (profileId: string) => {
 };
 
 federation
-  .setFollowersDispatcher('/ap/actor/{identifier}/followers', async (_, identifier) =>
-    (await findActiveLocalProfile(identifier)) ? { items: [] } : null,
+  .setFollowersDispatcher(
+    '/ap/actor/{identifier}/followers',
+    async (context, identifier, cursor) =>
+      cursor == null && (await findActiveLocalProfile(context, identifier)) ? { items: [] } : null,
   )
-  .setCounter(async (_, identifier) =>
-    findActiveLocalProfile(identifier).then((profile) => profile?.followersCount ?? null),
+  .setCounter(async (context, identifier) =>
+    findActiveLocalProfile(context, identifier).then((profile) => profile?.followersCount ?? null),
   );
 
 federation
-  .setFollowingDispatcher('/ap/actor/{identifier}/following', async (_, identifier) =>
-    (await findActiveLocalProfile(identifier)) ? { items: [] } : null,
+  .setFollowingDispatcher(
+    '/ap/actor/{identifier}/following',
+    async (context, identifier, cursor) =>
+      cursor == null && (await findActiveLocalProfile(context, identifier)) ? { items: [] } : null,
   )
-  .setCounter(async (_, identifier) =>
-    findActiveLocalProfile(identifier).then((profile) => profile?.followingCount ?? null),
+  .setCounter(async (context, identifier) =>
+    findActiveLocalProfile(context, identifier).then((profile) => profile?.followingCount ?? null),
   );
 
 federation

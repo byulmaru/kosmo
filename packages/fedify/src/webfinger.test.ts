@@ -281,6 +281,22 @@ describe('WebFinger local profile handle mapping', () => {
       assert.deepEqual(json.orderedItems ?? [], []);
       assert.equal(json.first, undefined);
       assert.equal(json.last, undefined);
+
+      const pageResponse = await federation.fetch(
+        new Request(`${collectionUri}?cursor=arbitrary`, {
+          headers: { accept: 'application/activity+json' },
+        }),
+        { contextData: undefined },
+      );
+      assert.equal(pageResponse.status, 404);
+
+      const alternateHostResponse = await federation.fetch(
+        new Request(collectionUri.replace(publicOrigin, 'https://alternate.example'), {
+          headers: { accept: 'application/activity+json' },
+        }),
+        { contextData: undefined },
+      );
+      assert.equal(alternateHostResponse.status, 404);
     }
 
     assert.deepEqual(await db.select().from(ActivityPubActors), []);
