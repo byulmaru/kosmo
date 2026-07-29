@@ -52,18 +52,19 @@ Local Profile Owner가 승인된 Profile Tag 목록을 다른 Profile 값과 원
 - `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`
 - `PROD-523` (PR #394)
 - `PROD-522`
+- `PROD-491`
 - `PROD-492`
 - `PROD-527`
 
 **Deliverable**
 
-Local Profile Owner가 기존 Profile 편집 화면에서 Profile Tag를 추가·제거·순서 변경하고 저장 실패에서 복구할 수 있으며, 공개 Local Profile이 같은 목록을 Web·Android·iOS에서 bio 다음에 일관되게 표시한다.
+`PROD-491`의 controlled Profile Tag editor를 기존 Profile edit route·저장 action에 연결해 Local Profile Owner가 저장 실패에서 복구할 수 있으며, 공개 Local Profile이 같은 목록을 Web·Android·iOS에서 bio 다음에 일관되게 표시한다.
 
 **Guardrails**
 
-- `PROD-492`가 제공하는 기존 Profile edit form·저장 action을 확장하며 별도 route나 중복 저장 흐름을 만들지 않는다.
+- `PROD-491`의 controlled editor·client validation·순서 변경 presentation과 `PROD-492`의 route·저장 action을 재사용하며 editor, route나 저장 흐름을 중복 구현하지 않는다.
 - chip은 normalized name 앞에 `#`를 한 번만 표시하고, 추가는 끝에 배치하며 제거 뒤 상대 순서를 유지한다.
-- 최대 5개·문자·길이·normalized duplicate를 입력 가까이에 안내하되 server validation을 권위로 유지한다.
+- `PROD-491`이 제공한 최대 5개·문자·길이·normalized duplicate client validation을 재사용하고 server validation을 권위로 유지한다.
 - Profile 저장 중 중복 제출을 막고 실패 뒤 Tag 순서와 다른 draft를 보존하며, 성공 뒤 payload의 tags로 Relay Profile record를 동기화한다.
 - 순서 변경은 drag 없이도 키보드·스크린리더로 가능해야 하고 제거·이동 action은 최소 44×44 target과 명확한 accessibility label/state를 제공한다.
 - 공개 Tag는 bio 다음·통계와 콘텐츠보다 앞에서 wrap하고, 빈 목록은 섹션을 숨기며 검색 전달 전에는 링크·버튼으로 만들지 않는다.
@@ -71,13 +72,13 @@ Local Profile Owner가 기존 Profile 편집 화면에서 Profile Tag를 추가�
 
 **Verification**
 
-- 기본·추가·제거·순서 변경·5개·invalid·duplicate·pending·server failure·retry와 Relay 성공 상태를 component/Storybook interaction test로 검증한다.
-- keyboard·screen-reader 대체 이동, accessibility label/state, 44×44 target, 색 외 상태 표현과 좁은 화면 wrapping을 접근성·layout test로 확인한다.
+- `PROD-491` editor의 기본·추가·제거·순서 변경·5개·invalid·duplicate 상태가 연결 뒤에도 회귀하지 않고 pending·server failure·retry·Relay 성공 상태와 함께 동작하는지 component/Storybook interaction test로 검증한다.
+- 기존 keyboard·screen-reader 대체 이동과 client validation을 재사용했는지 확인하고, server parity·native accessibility label/state·44×44 target·색 외 상태 표현과 좁은 화면 wrapping을 접근성·layout test로 보강한다.
 - 빈/최대/긴 Local tags와 Remote 빈 tags를 Web·Android·iOS 공용 상태 카탈로그에서 검증한다.
 - Owner 편집 저장부터 공개 Profile 재조회·표시까지 Web E2E를 검증하고 `pnpm --filter @kosmo/app test`, `pnpm --filter @kosmo/web test`의 관련 suite를 통과시킨다.
 
-- [ ] 2.1 `PROD-492` Profile edit form에 현재 tags를 초기화하고 추가·제거·명시적 순서 변경을 제공하는 controlled editor를 연결한다.
-- [ ] 2.2 최대 개수·normalization 미리보기·문자·길이·duplicate validation과 keyboard/screen-reader·touch 접근성 상태를 구현하고 component interaction test를 추가한다.
+- [ ] 2.1 `PROD-491`의 controlled Profile Tag editor를 재작성하지 않고 `PROD-492` Profile edit route·저장 흐름에 연결해 현재 tags를 초기화한다.
+- [ ] 2.2 `PROD-491`의 최대 개수·normalization 미리보기·문자·길이·duplicate validation과 keyboard/screen-reader 순서 변경을 재사용하고 회귀·server parity를 검증하며, `PROD-527` 고유의 native accessibility·touch target 상태를 보강한다.
 - [ ] 2.3 기존 Profile mutation에 전체 Tag draft를 포함하고 pending·server field error·retry·성공 Relay record 동기화를 구현해 상태 전이를 검증한다.
 - [ ] 2.4 공개 Profile의 bio 다음에 저장 순서의 비대화형 wrapping TagChip 목록을 연결하고 빈·최대·긴·Remote 상태 test를 추가한다.
 - [ ] 2.5 Web·Android·iOS 공용 상태 카탈로그, app 필수 check와 Owner 편집→공개 표시 Web E2E를 통과시키고 `PROD-527` PR에 접근성·layout·Relay 증거를 기록한다.
