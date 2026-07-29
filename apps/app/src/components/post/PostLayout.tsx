@@ -9,6 +9,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { PostActionBar } from './PostActionBar';
 import { PostBody } from './PostBody';
+import { usePostReactionController } from './PostReactionController';
 import { PostSourcePreview } from './PostSourcePresentationView';
 import { useRepostFailureToast } from './useRepostFailureToast';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
@@ -33,6 +34,7 @@ const PostLayoutFragment = graphql`
       id
     }
     ...PostActionBar_post @alias(as: "actionBar")
+    ...PostReactionController_post @alias(as: "reactionController")
     repostSource {
       id
       createdAt
@@ -46,9 +48,9 @@ const PostLayoutFragment = graphql`
         relativeHandle
       }
       ...PostActionBar_post @alias(as: "actionBar")
+      ...PostReactionController_post @alias(as: "reactionController")
     }
     ...PostBody_post
-    ...PostReactionSummary_post
   }
 `;
 
@@ -67,6 +69,9 @@ export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
   const source = post.repostSource;
   const pureRepost = !post.content && !post.replyParent && post.repostSource;
   const actionBarPost = pureRepost ? post.repostSource?.actionBar : post.actionBar;
+  const reactionController = usePostReactionController(
+    (pureRepost ? post.repostSource?.reactionController : post.reactionController)!,
+  );
   const presentationSource: SourcePostPresentationData | null = source
     ? {
         content: source.content
@@ -108,8 +113,12 @@ export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
             {formatPostDate(post.createdAt)} ·{' '}
             {visibilityLabels[post.visibility] ?? post.visibility}
           </Text>
-          <PostReactionSummary post={post} style={styles.reactionSummary} />
-          <PostActionBar onRepostError={onRepostError} post={actionBarPost} />
+          <PostReactionSummary controller={reactionController} style={styles.reactionSummary} />
+          <PostActionBar
+            onRepostError={onRepostError}
+            post={actionBarPost}
+            reactionController={reactionController}
+          />
         </View>
       </View>
     </View>
