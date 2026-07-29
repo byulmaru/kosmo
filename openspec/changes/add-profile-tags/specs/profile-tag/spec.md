@@ -52,11 +52,11 @@
 
 ### Requirement: Owner-controlled atomic Profile Tag replacement
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — Active Account의 Local Profile Owner만 기존 Profile 편집 action에서 Profile Tag 전체 목록을 교체할 수 있어야 한다(MUST). Profile Tag 목록과 같은 요청에 포함된 다른 Profile 편집 값은 하나의 transaction으로 적용되어야 하며(MUST), 권한·정규화·검증·저장 중 하나라도 실패하면 어느 값도 변경되어서는 안 된다(MUST NOT). Profile Tag 입력을 생략하거나 `null`로 보낸 기존 update 요청은 현재 목록을 유지해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — Active Account의 `OWNER`만 Origin이 Local이고 Lifecycle State가 `Deleted`가 아니며 Suspension State가 `Normal`인 Profile(Deactivated Profile 포함)을 기존 Profile 편집 action에서 수정하고 Profile Tag 전체 목록을 교체할 수 있어야 한다(MUST). Profile Tag 목록과 같은 요청에 포함된 다른 Profile 편집 값은 하나의 transaction으로 적용되어야 하며(MUST), 권한·정규화·검증·저장 중 하나라도 실패하면 어느 값도 변경되어서는 안 된다(MUST NOT). Profile Tag 입력을 생략하거나 `null`로 보낸 기존 update 요청은 현재 목록을 유지해야 한다(MUST).
 
 #### Scenario: Replace Profile Tags as Local Profile Owner
 
-- **WHEN** Active Account의 `OWNER`가 Active·Normal 상태의 Local Profile에 유효한 Profile Tag 목록을 포함해 수정을 요청한다
+- **WHEN** Active Account의 `OWNER`가 Lifecycle State가 `Deleted`가 아니고 Suspension State가 `Normal`인 Local Profile(Deactivated Profile 포함)에 유효한 Profile Tag 목록을 포함해 수정을 요청한다
 - **THEN** 시스템은 기존 Profile Tag 전체 목록을 새 목록으로 교체한다
 - **AND** 같은 요청의 다른 Profile 편집 값과 Profile Tag 관계를 하나의 transaction으로 commit한다
 
@@ -73,17 +73,17 @@
 
 #### Scenario: Reject a non-owner or inaccessible profile
 
-- **WHEN** Member 또는 관계없는 Account가 Profile Tag 변경을 요청하거나 대상 Profile이 Local·Active·Normal 조건을 통과하지 않는다
+- **WHEN** Member 또는 관계없는 Account가 Profile Tag 변경을 요청하거나 Account가 inactive이거나 대상 Profile이 Remote이거나 Lifecycle State가 `Deleted`이거나 Suspension State가 `Suspended`다
 - **THEN** 시스템은 기존 Profile 수정의 permission 또는 not-found 경계로 요청을 거부한다
 - **AND** Profile과 Profile Tag 관계를 변경하지 않는다
 
 ### Requirement: Profile Tag visibility and lifecycle
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — 시스템은 공개 조회 조건을 통과한 Local Profile의 Profile Tag만 해당 Profile과 함께 공개해야 한다(MUST). Profile이 비활성화되거나 정지되면 관계는 보존하되 공개 결과에서 숨겨야 하며(MUST), Profile이 삭제되면 그 Profile의 관계를 제거하되 canonical Hashtag identity와 다른 참조를 제거해서는 안 된다(MUST NOT). Remote Profile Tag 수집·표시와 ActivityPub 표현을 제공해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — 시스템은 공개 조회 조건인 Lifecycle State `Active`와 Suspension State `Normal`을 통과한 Local Profile의 Profile Tag만 해당 Profile과 함께 공개해야 한다(MUST). Profile이 비활성화되거나 정지되면 관계는 보존하되 공개 결과에서 숨겨야 하며(MUST), Profile Lifecycle State가 `Deleted`로 전이될 때 service/lifecycle invariant가 해당 Profile의 `profile_hashtag` 관계를 명시적으로 제거해야 한다(MUST). 물리 Profile row 삭제 시 FK cascade는 별도의 DB safety invariant이며, 두 경우 모두 canonical Hashtag identity와 다른 Profile/Post 참조를 제거해서는 안 된다(MUST NOT). Remote Profile Tag 수집·표시와 ActivityPub 표현을 제공해서는 안 된다(MUST NOT).
 
 #### Scenario: Read visible Local Profile Tags
 
-- **WHEN** 공개 조회 조건을 통과한 Local Profile을 조회한다
+- **WHEN** Lifecycle State가 `Active`이고 Suspension State가 `Normal`인 Local Profile을 조회한다
 - **THEN** 시스템은 해당 Profile에 저장된 정규화된 Hashtag Name을 저장 순서로 반환한다
 - **AND** Profile Tag는 Profile과 별도의 visibility 경로를 만들지 않는다
 
@@ -93,11 +93,12 @@
 - **THEN** 시스템은 Profile Tag를 별도로 공개하지 않는다
 - **AND** Profile Tag 관계와 순서는 재활성화 또는 정지 해제를 위해 보존한다
 
-#### Scenario: Remove only deleted Profile relations
+#### Scenario: Remove only deleted Profile relations on lifecycle transition
 
-- **WHEN** Profile이 삭제된다
-- **THEN** 시스템은 삭제된 Profile의 Profile Tag 관계를 제거한다
+- **WHEN** Profile delete action이 Lifecycle State를 `Deactivated`에서 `Deleted`로 전이한다
+- **THEN** service/lifecycle transaction은 삭제된 Profile의 `profile_hashtag` 관계를 명시적으로 제거한다
 - **AND** canonical Hashtag identity와 다른 Post 또는 Profile의 관계는 유지한다
+- **AND** 이 invariant는 물리 Profile row 삭제 시 FK cascade safety test와 별도로 검증한다
 
 #### Scenario: Do not expose Remote Profile Tags
 

@@ -35,9 +35,9 @@
 
 ### Recommended Approach
 
-1. Core DB에 canonical Hashtag identity를 나타내는 고유한 normalized name의 Hashtag table과 Profile ID·Hashtag ID·0~4 position을 가진 관계 table을 additive하게 추가한다. Profile/Hashtag와 Profile/position을 각각 유일하게 만들고 Profile 삭제만 관계에 cascade한다. 관계 해제 때 canonical Hashtag identity row는 자동 삭제하지 않는다.
+1. Core DB에 canonical Hashtag identity를 나타내는 고유한 normalized name의 Hashtag table과 Profile ID·Hashtag ID·0~4 position을 가진 관계 table을 additive하게 추가한다. Profile/Hashtag와 Profile/position을 각각 유일하게 만들고, Profile Lifecycle State가 `Deleted`로 전이될 때 service/lifecycle transaction에서 해당 Profile 관계를 제거한다. Profile row 물리 삭제의 FK cascade는 별도 DB safety 경로로 유지하며 두 경로 모두 canonical Hashtag row와 다른 Profile/Post 관계를 삭제하지 않는다. 관계 해제 때 canonical Hashtag identity row는 자동 삭제하지 않는다.
 2. core의 순수 normalization boundary 한 곳에서 trim, 선택적 앞 `#` 제거, NFKC, locale 비종속 Unicode case folding, code point 개수와 `Letter | Number | _` 검증을 수행한다. 구현은 Unicode version이 명확한 검증된 case-fold data 또는 package를 사용하고, API와 DB service가 같은 함수를 호출한다.
-3. Owner·Local·visible 상태를 확인하고 Profile row를 잠근 하나의 DB transaction에서 Profile scalar update, Hashtag upsert, 기존 관계 삭제와 새 position insert를 수행한다. `tags`가 undefined 또는 null이면 관계 작업을 생략하고 빈 목록이면 전부 제거한다. upsert 경합은 unique constraint와 재조회로 수렴시킨다.
+3. Active Account의 Owner·Local Profile에 대해 Lifecycle State가 `Deleted`가 아니고 Suspension State가 `Normal`인 editable 조건을 확인하고 Profile row를 잠근 하나의 DB transaction에서 Profile scalar update, Hashtag upsert, 기존 관계 삭제와 새 position insert를 수행한다. `tags`가 undefined 또는 null이면 관계 작업을 생략하고 빈 목록이면 전부 제거한다. upsert 경합은 unique constraint와 재조회로 수렴시킨다.
 4. GraphQL Profile에 non-null 문자열 목록 `tags`를 추가하고, profile IDs를 묶어 position 오름차순으로 읽는 request-scoped loader를 사용한다. configured Local Instance에 속하지 않은 Profile은 관계가 잘못 존재하더라도 빈 목록을 반환한다. update payload는 갱신된 Profile에서 `tags`를 다시 읽을 수 있게 한다.
 5. `PROD-492`의 controlled edit form에 Tag editor를 합성한다. client validation은 빠른 feedback용으로 서버 규칙을 미러링하되 서버 결과를 권위로 유지하고, 공통 parity fixture로 정상화·경계·중복 사례를 양쪽에서 검증한다.
 6. 공개 화면은 기존 `ProfileHero` fragment에서 `tags`를 읽고 bio 다음·follow count 전에 wrapping TagChip 목록을 렌더한다. chip은 Pressable/Link가 아닌 비대화형 표현으로 유지한다. mutation fragment에도 `tags`를 선택해 같은 Relay Profile record를 갱신한다.

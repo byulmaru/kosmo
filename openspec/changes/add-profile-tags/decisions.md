@@ -23,10 +23,10 @@
 - Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526`
 - Status: Active
 - Context / Problem: 현재 DB에는 Hashtag 구현이 없고, `PROD-526`이 canonical Hashtag identity의 normalized 이름 재사용·관계 순서·중복·Profile 생명주기를 저장해야 한다.
-- Decision Outcome: 고유한 normalized `name`과 UUID identity를 가진 `hashtag` table, `profile_id`·`hashtag_id`·0~4 `position`을 가진 `profile_hashtag` relation table을 additive하게 추가한다. `(profile_id, hashtag_id)`와 `(profile_id, position)`을 각각 유일하게 하고 Profile 삭제는 relation만 cascade한다. 관계가 없어져도 Hashtag row를 자동 삭제하지 않으며 기존 bio·Post data를 backfill하지 않는다.
+- Decision Outcome: 고유한 normalized `name`과 UUID identity를 가진 `hashtag` table, `profile_id`·`hashtag_id`·0~4 `position`을 가진 `profile_hashtag` relation table을 additive하게 추가한다. Profile Lifecycle State가 `Deleted`로 전이될 때 service/lifecycle transaction에서 해당 Profile 관계를 제거하고, Profile row 물리 삭제의 FK cascade는 별도 DB safety 경로로 유지한다. 두 경로 모두 canonical Hashtag row와 다른 Profile/Post 관계를 삭제하지 않는다. 관계가 없어져도 Hashtag row를 자동 삭제하지 않으며 기존 bio·Post data를 backfill하지 않는다.
 - Alternatives Considered: Profile row의 JSON/string array는 canonical Hashtag identity와 관계 유일성을 잃으므로 제외했다. 이름을 중복 저장하는 별도 `profile_tag` table은 Post와 공유 identity라는 canonical 계약에 맞지 않는다. 기존 bio backfill은 명시적 Owner 선택이 아니므로 제외했다.
 - Consequences: migration은 새 table과 제약만 추가하고 기존 binary가 이를 무시할 수 있다. 미래 Post Hashtag 구현은 같은 `hashtag` identity를 재사용할 수 있지만 Post relation과 검색 index는 이번 change에 포함되지 않는다.
-- Confirmation / Follow-up: fresh migration, production-equivalent upgrade, unique/check/foreign-key, 비활성 관계 보존과 Profile delete cascade를 migration·DB test로 검증한다.
+- Confirmation / Follow-up: fresh migration, production-equivalent upgrade, unique/check/foreign-key와 비활성 관계 보존을 검증한다. Deleted lifecycle 전이의 service/lifecycle 관계 제거와 물리 Profile row 삭제의 FK cascade safety는 서로 별도의 integration·DB test로 검증한다.
 
 ### 하나의 server normalizer가 Hashtag identity를 결정한다
 
@@ -59,7 +59,7 @@
 - Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526`
 - Status: Active
 - Context / Problem: 기존 update resolver에 relation delete/insert를 별도로 추가하면 validation 또는 저장 실패 때 scalar Profile 값만 반영되거나 동시 요청의 순서가 섞일 수 있다.
-- Decision Outcome: 권한·Local·visibility 조건을 재확인하고 대상 Profile update를 직렬화하는 하나의 DB transaction에서 scalar 값, Hashtag upsert와 전체 relation replacement를 처리한다. 동시 요청은 Profile 단위로 직렬화하며 마지막으로 성공한 transaction의 전체 값과 Tag 순서가 남는다. row lock 또는 동등하게 검증된 직렬화 수단을 사용할 수 있다.
+- Decision Outcome: Active Account의 Owner·Local Profile에 대해 Lifecycle State가 `Deleted`가 아니고 Suspension State가 `Normal`인 editable 조건을 재확인하고 대상 Profile update를 직렬화하는 하나의 DB transaction에서 scalar 값, Hashtag upsert와 전체 relation replacement를 처리한다. 공개 조회 visibility는 canonical 조건인 Lifecycle State `Active`와 Suspension State `Normal`을 그대로 사용하며 edit eligibility와 혼동하지 않는다. 동시 요청은 Profile 단위로 직렬화하며 마지막으로 성공한 transaction의 전체 값과 Tag 순서가 남는다. row lock 또는 동등하게 검증된 직렬화 수단을 사용할 수 있다.
 - Alternatives Considered: scalar update 뒤 별도 relation transaction은 부분 commit 위험 때문에 제외했다. 별도 Tag mutation은 같은 저장 action 계약과 draft 복구를 복잡하게 한다. optimistic version field 추가는 현재 Profile 공개 계약을 확장하므로 채택하지 않았다.
 - Consequences: GraphQL resolver의 직접 row update 일부를 transaction/service 경계로 이동해야 한다. validation·권한·upsert·relation 실패는 모두 요청 전 상태를 보존해야 한다.
 - Confirmation / Follow-up: scalar와 tags 동시 성공, 각 실패 rollback, concurrent replacement와 Hashtag upsert 경합을 database integration test로 검증한다.
