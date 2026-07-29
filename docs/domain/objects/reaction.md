@@ -79,7 +79,9 @@ Reaction 삭제는 입력한 Post와 Reaction Type에서 행동 주체 Profile�
   Reaction의 반복 직렬화는 activity type과 관계없이 같은 URI를 사용한다.
 - Activity의 `actor`는 행동 주체 Local Profile의 canonical actor URI이고, `object`는 대상 Post의
   ActivityPub identity다. Local Post는 파생 Note URI를, 저장된 Remote Post는 기존 ActivityPub Post URI를
-  사용한다.
+  사용한다. actor와 activity URI, 서명 key identity는 행동 주체 Profile이 속한 LOCAL Instance의
+  canonical origin에서 파생하며, 배포에 configured된 단일 instance와의 일치 여부로 발신을 제한하지
+  않는다.
 - 발신 대상은 저장된 Remote Post Author actor다. 대상 Post Author actor를 `to`에 포함하고, 저장된 shared
   inbox가 있으면 이를 우선하며 없으면 personal inbox로 직접 전달한다. 행동 주체의 followers collection에는
   fan-out하지 않는다. Local Post 대상 Reaction과

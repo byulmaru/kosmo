@@ -9,12 +9,12 @@ import {
   Profiles,
 } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, PostState, ProfileState } from '@kosmo/core/enums';
-import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { reactionTypeSchema } from '@kosmo/core/validation';
 import { and, eq } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { federation } from './federation';
-import type { Context } from '@fedify/fedify';
+import { ensureDrizzleLocalProfileActor } from './local-actor-store';
+import type { SenderKeyPair } from '@fedify/fedify';
 import type { Recipient } from '@fedify/vocab';
 import type { Reactions } from '@kosmo/core/db';
 
@@ -30,10 +30,12 @@ type ReactionRecipient = Recipient & {
 };
 
 type ReactionProjection = {
+  readonly actorUri: URL;
   readonly canonicalOrigin: string;
   readonly objectUri: URL;
   readonly reaction: OutboundReaction;
   readonly recipient: ReactionRecipient;
+  readonly senderKeys: SenderKeyPair[];
 };
 
 const toHttpUrl = (value: string, label: string): URL => {
@@ -46,6 +48,12 @@ const toHttpUrl = (value: string, label: string): URL => {
 
 const getReactionActivityUri = (canonicalOrigin: string, reactionId: string): URL =>
   new URL(`/ap/reaction/${reactionId}`, canonicalOrigin);
+
+const toSenderKeys = (actorUri: URL, keyPairs: readonly CryptoKeyPair[]): SenderKeyPair[] =>
+  keyPairs.map(({ privateKey }, index) => ({
+    keyId: new URL(index === 0 ? '#main-key' : `#key-${index + 1}`, actorUri),
+    privateKey,
+  }));
 
 const loadReactionProjection = async (
   reaction: OutboundReaction,
@@ -91,16 +99,27 @@ const loadReactionProjection = async (
     return undefined;
   }
 
-  const localInstance = await resolveConfiguredLocalInstance();
-  if (
-    row.senderInstanceId !== localInstance.id ||
-    row.senderInstanceOrigin !== localInstance.canonicalOrigin
-  ) {
+  if (!row.senderInstanceOrigin) {
+    return undefined;
+  }
+
+  const canonicalOrigin = toHttpUrl(
+    row.senderInstanceOrigin,
+    'ActivityPub Reaction sender origin',
+  ).origin;
+  const actorUri = new URL(`/ap/actor/${reaction.profileId}`, canonicalOrigin);
+  const sender = await ensureDrizzleLocalProfileActor({
+    actorUri,
+    localInstanceId: row.senderInstanceId,
+    profileId: reaction.profileId,
+  });
+  if (!sender) {
     return undefined;
   }
 
   return {
-    canonicalOrigin: localInstance.canonicalOrigin,
+    actorUri,
+    canonicalOrigin,
     objectUri: toHttpUrl(row.objectUri, 'ActivityPub Reaction object'),
     reaction,
     recipient: {
@@ -110,22 +129,20 @@ const loadReactionProjection = async (
       id: toHttpUrl(row.actorUri, 'ActivityPub Reaction recipient'),
       inboxId: toHttpUrl(row.actorInboxUri, 'ActivityPub Reaction inbox'),
     },
+    senderKeys: toSenderKeys(actorUri, sender.keyPairs),
   };
 };
 
-const createReactionActivity = (
-  context: Pick<Context<void>, 'canonicalOrigin' | 'getActorUri'>,
-  projection: ReactionProjection,
-) => {
+const createReactionActivity = (projection: ReactionProjection) => {
   const parsedType = reactionTypeSchema.safeParse(projection.reaction.type);
   if (!parsedType.success) {
     throw new TypeError('Unsupported outbound ActivityPub Reaction Type.');
   }
 
   const activityOptions = {
-    actor: context.getActorUri(projection.reaction.profileId),
+    actor: projection.actorUri,
     content: parsedType.data,
-    id: getReactionActivityUri(context.canonicalOrigin, projection.reaction.id),
+    id: getReactionActivityUri(projection.canonicalOrigin, projection.reaction.id),
     object: projection.objectUri,
     published: projection.reaction.createdAt,
     tos: [projection.recipient.id],
@@ -141,9 +158,9 @@ export const sendReaction = async (reaction: OutboundReaction): Promise<void> =>
   }
 
   const context = federation.createContext(new URL(projection.canonicalOrigin), undefined);
-  const activity = createReactionActivity(context, projection);
-  const orderingKey = getReactionActivityUri(context.canonicalOrigin, reaction.id).href;
-  await context.sendActivity({ identifier: reaction.profileId }, projection.recipient, activity, {
+  const activity = createReactionActivity(projection);
+  const orderingKey = getReactionActivityUri(projection.canonicalOrigin, reaction.id).href;
+  await context.sendActivity(projection.senderKeys, projection.recipient, activity, {
     orderingKey,
     preferSharedInbox: true,
   });
@@ -156,19 +173,19 @@ export const sendReactionUndo = async (reaction: OutboundReaction): Promise<void
   }
 
   const context = federation.createContext(new URL(projection.canonicalOrigin), undefined);
-  const originalActivity = createReactionActivity(context, projection);
+  const originalActivity = createReactionActivity(projection);
   if (!originalActivity.id) {
     throw new TypeError('ActivityPub Reaction must have an ID.');
   }
 
   const activity = new Undo({
-    actor: context.getActorUri(reaction.profileId),
+    actor: projection.actorUri,
     id: new URL(`${originalActivity.id.href}#undo`),
     object: originalActivity,
     tos: [projection.recipient.id],
   });
 
-  await context.sendActivity({ identifier: reaction.profileId }, projection.recipient, activity, {
+  await context.sendActivity(projection.senderKeys, projection.recipient, activity, {
     orderingKey: originalActivity.id.href,
     preferSharedInbox: true,
   });

@@ -25,6 +25,8 @@
 
 **Authority / Provenance:** `docs/domain/objects/reaction.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-499. 시스템은 immutable Reaction ID에서 `/ap/reaction/{reactionId}` 형식의 원본 activity URI를 파생해야 한다(MUST).
 activity actor는 행동 주체 Local Profile의 actor URI, object는 대상 Post의 canonical ActivityPub URI여야 한다(MUST).
+actor, activity URI와 서명 key identity는 행동 주체 Profile이 속한 LOCAL Instance의 canonical origin을
+사용해야 하며(MUST), configured instance와 다르다는 이유로 delivery를 제한하지 않아야 한다(MUST NOT).
 
 #### Scenario: 같은 Reaction을 반복 직렬화한다
 
@@ -40,6 +42,12 @@ activity actor는 행동 주체 Local Profile의 actor URI, object는 대상 Pos
 
 - **WHEN** 직렬화 경계가 Local Post를 object로 받는다
 - **THEN** object는 해당 Local Post의 canonical ActivityPub Note URI이다
+
+#### Scenario: configured instance와 다른 LOCAL Instance의 Profile이 발신한다
+
+- **WHEN** 행동 주체 Profile이 configured instance와 다른 Active LOCAL Instance에 속한다
+- **THEN** actor, activity URI와 서명 key identity는 해당 Profile의 LOCAL Instance canonical origin을 사용한다
+- **THEN** 시스템은 configured instance와 다르다는 이유로 delivery를 건너뛰지 않는다
 
 ### Requirement: Remote Post Author에게만 직접 전달한다
 

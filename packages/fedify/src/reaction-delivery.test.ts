@@ -12,7 +12,7 @@ import {
   ProfileState,
 } from '@kosmo/core/enums';
 import { eq } from 'drizzle-orm';
-import type { Context } from '@fedify/fedify';
+import type { Context, SenderKeyPair } from '@fedify/fedify';
 import type { Activity, Recipient } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -120,7 +120,7 @@ describe('Reaction delivery', () => {
       assert.equal(call.recipient.id?.href, target.actorUri);
       assert.equal(call.recipient.inboxId?.href, target.inboxUri);
       assert.equal(call.recipient.endpoints?.sharedInbox?.href, target.sharedInboxUri);
-      assert.deepEqual(call.sender, { identifier: target.senderProfileId });
+      assertSenderKeys(call.sender, `${publicOrigin}/ap/actor/${target.senderProfileId}`);
       assert.deepEqual(call.options, {
         orderingKey: `${publicOrigin}/ap/reaction/${reaction.id}`,
         preferSharedInbox: true,
@@ -171,6 +171,48 @@ describe('Reaction delivery', () => {
       preferSharedInbox: true,
     });
     assert.equal(context.calls[0]?.options?.orderingKey, call.options?.orderingKey);
+  });
+
+  test('발신 Profile의 LOCAL Instance canonical origin으로 actor·activity·서명 key를 구성한다', async () => {
+    const suffix = crypto.randomUUID();
+    const senderOrigin = `https://sender-${suffix}.local.example`;
+    const senderInstance = await db
+      .insert(Instances)
+      .values({
+        canonicalOrigin: senderOrigin,
+        domain: `sender-${suffix}.local.example`,
+        kind: InstanceKind.LOCAL,
+        state: InstanceState.ACTIVE,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const target = await createDeliveryFixture({ senderInstanceId: senderInstance.id });
+    const context = createContextFixture(senderOrigin);
+    const contextOrigins: string[] = [];
+    mock.method(federation, 'createContext', (origin: URL) => {
+      contextOrigins.push(origin.origin);
+      return context.context;
+    });
+    const reaction = await createReaction(target, '❤️');
+
+    await sendReaction(reaction);
+    await sendReactionUndo(reaction);
+
+    assert.deepEqual(contextOrigins, [senderOrigin, senderOrigin]);
+    assert.equal(context.calls.length, 2);
+    for (const call of context.calls) {
+      assert.equal(
+        call.activity.actorId?.href,
+        `${senderOrigin}/ap/actor/${target.senderProfileId}`,
+      );
+      assertSenderKeys(call.sender, `${senderOrigin}/ap/actor/${target.senderProfileId}`);
+      assert.equal(call.options?.orderingKey, `${senderOrigin}/ap/reaction/${reaction.id}`);
+    }
+    assert.equal(context.calls[0]?.activity.id?.href, `${senderOrigin}/ap/reaction/${reaction.id}`);
+    assert.equal(
+      context.calls[1]?.activity.id?.href,
+      `${senderOrigin}/ap/reaction/${reaction.id}#undo`,
+    );
   });
 
   test('unsupported Type과 없거나 malformed인 저장 projection은 전송하지 않는다', async () => {
@@ -224,9 +266,11 @@ type DeliveryFixture = {
 const createDeliveryFixture = async ({
   inboxUri,
   objectUri,
+  senderInstanceId = localInstanceId,
 }: {
   inboxUri?: string | null;
   objectUri?: string;
+  senderInstanceId?: string;
 } = {}): Promise<DeliveryFixture> => {
   const suffix = crypto.randomUUID();
   const sender = await db
@@ -235,7 +279,7 @@ const createDeliveryFixture = async ({
       displayName: `sender-${suffix}`,
       followPolicy: ProfileFollowPolicy.OPEN,
       handle: `sender-${suffix}`,
-      instanceId: localInstanceId,
+      instanceId: senderInstanceId,
       normalizedHandle: `sender-${suffix}`,
       state: ProfileState.ACTIVE,
     })
@@ -313,23 +357,31 @@ interface SendActivityCall {
     | { readonly orderingKey?: string; readonly preferSharedInbox?: boolean }
     | undefined;
   readonly recipient: Recipient;
-  readonly sender: { readonly identifier: string };
+  readonly sender: readonly SenderKeyPair[];
 }
 
-const createContextFixture = () => {
+const assertSenderKeys = (sender: readonly SenderKeyPair[], actorUri: string) => {
+  assert.equal(sender.length, 2);
+  assert.equal(sender[0]?.keyId.href, `${actorUri}#main-key`);
+  assert.equal(sender[1]?.keyId.href, `${actorUri}#key-2`);
+  assert.ok(sender[0]?.privateKey instanceof CryptoKey);
+  assert.ok(sender[1]?.privateKey instanceof CryptoKey);
+};
+
+const createContextFixture = (canonicalOrigin = publicOrigin) => {
   const calls: SendActivityCall[] = [];
   const context = {
-    canonicalOrigin: publicOrigin,
-    getActorUri: (identifier: string) => new URL(`/ap/actor/${identifier}`, publicOrigin),
+    canonicalOrigin,
+    getActorUri: (identifier: string) => new URL(`/ap/actor/${identifier}`, canonicalOrigin),
     sendActivity: async (
-      sender: { identifier: string },
+      sender: readonly SenderKeyPair[],
       recipient: Recipient,
       activity: Activity,
       options?: { orderingKey?: string; preferSharedInbox?: boolean },
     ) => {
       calls.push({ activity, options, recipient, sender });
     },
-  } as Context<void>;
+  } as unknown as Context<void>;
 
   return { calls, context };
 };
