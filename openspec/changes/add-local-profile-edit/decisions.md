@@ -96,7 +96,7 @@
 ### Header와 avatar preview 전체를 단일 이미지 편집 button으로 사용한다
 
 - Decision Date: 2026-07-29
-- Decision Class: User-confirmed Decision
+- Decision Class: Derived Contract
 - Authority / Provenance: `docs/design/profile-edit.md`, `PROD-491`, 2026-07-29 사용자 확인 A안
 - Status: Active
 - Context / Problem: preview 위의 작은 연필 button은 이미지 자체와 편집 동작의 관계가 약하고 Native 입력 target을
@@ -117,7 +117,7 @@
 ### 상단 navigation header는 safe area를 제외하고 48px를 유지한다
 
 - Decision Date: 2026-07-29
-- Decision Class: User-confirmed Decision
+- Decision Class: Derived Contract
 - Authority / Provenance: `docs/design/profile-edit.md`, `PROD-491`, 2026-07-29 사용자 확인
 - Status: Active
 - Context / Problem: compact 화면에서 상단 제목·저장 행이 불필요하게 높아지지 않으면서 Native 뒤로가기 action의
@@ -133,8 +133,8 @@
 ### 40자를 초과한 legacy 표시 이름은 변경하지 않은 경우에만 통과시킨다
 
 - Decision Date: 2026-07-29
-- Decision Class: Derived Compatibility Contract
-- Authority / Provenance: `docs/design/profile-edit.md`, 현재 core/API Profile validation, `PROD-491`, `PROD-492`
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/profile-edit.md`, `PROD-490`, `PROD-491`, `PROD-492`, 2026-07-29 사용자 확인
 - Status: Active
 - Context / Problem: presentation의 새 표시 이름 제한은 40자지만 현재 서버가 더 긴 값을 보유할 수 있어, legacy
   Profile이 bio·정책·이미지처럼 무관한 field를 편집하지 못하는 회귀가 생길 수 있다.

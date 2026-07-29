@@ -41,13 +41,19 @@
 
 ### Requirement: Profile edit text and Media relationship validation
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/media.md`, `docs/design/profile-edit.md`, `PROD-490`, `PROD-492` — displayName은 1~40자, bio는 500자 이하여야 하며(MUST), avatar/header는 대상 Profile이 소유한 Ready Local Media만 연결해야 한다(MUST). 관계 교체·제거는 Media 자체를 삭제해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/media.md`, `docs/design/profile-edit.md`, `PROD-490`, `PROD-492` — 새로 입력하거나 변경한 displayName은 1~40자, bio는 500자 이하여야 한다(MUST). 기존 displayName이 40자를 초과하면 원문을 변경하지 않고 다른 field만 수정하는 요청은 legacy 호환을 위해 허용해야 한다(MUST). avatar/header는 대상 Profile이 소유한 Ready Local Media만 연결해야 한다(MUST). 관계 교체·제거는 Media 자체를 삭제해서는 안 된다(MUST NOT).
 
 #### Scenario: Reject invalid text without partial update
 
-- **WHEN** displayName이 비어 있거나 40자를 초과하거나 bio가 500자를 초과한다
+- **WHEN** displayName이 비어 있거나 새로 입력·변경한 displayName이 40자를 초과하거나 bio가 500자를 초과한다
 - **THEN** 시스템은 field validation 오류로 전체 수정을 거부한다
 - **AND** 기존 text와 Media 관계를 유지한다
+
+#### Scenario: Preserve an unchanged legacy displayName while updating another field
+
+- **WHEN** 대상 Profile의 기존 displayName이 40자를 초과하고 Owner가 displayName 원문은 그대로 둔 채 다른 Profile field를 변경한다
+- **THEN** 시스템은 해당 legacy displayName만을 이유로 전체 수정을 거부하지 않는다
+- **AND** displayName 원문을 한 글자라도 변경하면 새로 입력·변경한 값의 1~40자 validation을 적용한다
 
 #### Scenario: Replace or remove Ready Local Media relationships
 

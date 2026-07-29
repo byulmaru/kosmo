@@ -99,7 +99,8 @@ avatar/header·`followPolicy` 저장, Relay·navigation에 연결한다.
 **Verification**
 
 - Owner·Member·무관 Account, Local/Remote·inactive/suspended Profile과 직접 route 진입을 API·route test로 검증한다.
-- displayName 1~40, bio 500, Ready/Uploading/Failed·다른 Profile Media와 교체·제거·rollback을 통합 test로 확인한다.
+- 새로 입력·변경한 displayName 1~40, 40자 초과 legacy 초기값 그대로+다른 field 변경, legacy 초기값 변경 거부,
+  bio 500, Ready/Uploading/Failed·다른 Profile Media와 교체·제거·rollback을 통합 test로 확인한다.
 - `followPolicy` 초기값과 `OPEN`/`APPROVAL_REQUIRED` enum 매핑, text·Media와의 동일 저장 경계, 기존 Pending
   Follow Request 불변을 통합 test로 확인한다.
 - Relay 성공·실패·retry, production entrypoint와 Profile 복귀를 Web·Android·iOS에서 확인한다.
