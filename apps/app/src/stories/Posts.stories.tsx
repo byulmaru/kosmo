@@ -8,7 +8,7 @@ import { Temporal } from 'temporal-polyfill';
 import { trackAnalytics } from '@/analytics/client';
 import PostDetailScreen from '@/app/(tabs)/(post)/[profileHandle]/[postId]';
 import { PostBody } from '@/components/post/PostBody';
-import { PostComposer } from '@/components/post/PostComposer';
+import { PostComposer, PostComposerMediaControls } from '@/components/post/PostComposer';
 import { PostDetailThread } from '@/components/post/PostDetailThread';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostList } from '@/components/post/PostList';
@@ -21,6 +21,7 @@ import { longBody, post, profile, profileWithPosts, timeline } from './fixtures'
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
+import type { ComposerMediaItem } from '@/components/post/PostComposer';
 import type { PostSourcePresentationData } from '@/components/post/PostSourcePresentationView';
 import type { PostDetailThreadIdentityStoryQuery } from './__generated__/PostDetailThreadIdentityStoryQuery.graphql';
 import type { PostsStoriesQuery as PostsStoriesQueryType } from './__generated__/PostsStoriesQuery.graphql';
@@ -922,6 +923,56 @@ function ComposerStory() {
   return (
     <Catalog>
       <PostComposer profile={usePostsStoryData().composerProfile} />
+    </Catalog>
+  );
+}
+
+const composerMediaAsset = {
+  height: 96,
+  uri: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="96" height="96"%3E%3Crect width="96" height="96" fill="%236b7280"/%3E%3C/svg%3E',
+  width: 96,
+};
+
+function ComposerMediaStatesStory() {
+  const [media, setMedia] = useState<ComposerMediaItem[]>([
+    { altText: '', asset: composerMediaAsset, key: 'uploading', state: 'uploading' },
+    {
+      altText: '회색 이미지의 대체 텍스트',
+      asset: composerMediaAsset,
+      key: 'ready',
+      mediaId: 'media-ready',
+      state: 'ready',
+    },
+    {
+      altText: '',
+      asset: composerMediaAsset,
+      key: 'failed',
+      state: 'failed',
+      uploadError: '업로드 실패',
+    },
+  ]);
+  const [sensitiveMedia, setSensitiveMedia] = useState(true);
+
+  return (
+    <Catalog>
+      <PostComposerMediaControls
+        media={media}
+        onAdd={() => undefined}
+        onAltTextChange={(key, altText) =>
+          setMedia((items) => items.map((item) => (item.key === key ? { ...item, altText } : item)))
+        }
+        onRemove={(key) => setMedia((items) => items.filter((item) => item.key !== key))}
+        onRetry={(item) =>
+          setMedia((items) =>
+            items.map((candidate) =>
+              candidate.key === item.key ? { ...candidate, state: 'uploading' } : candidate,
+            ),
+          )
+        }
+        onSensitiveMediaChange={setSensitiveMedia}
+        sensitiveMedia={sensitiveMedia}
+        submitting={false}
+      />
     </Catalog>
   );
 }
@@ -2445,6 +2496,22 @@ export const ComposerDefault: Story = {
     expect(canvas.getByRole('textbox', { name: '게시글 본문' })).not.toHaveAttribute('maxlength');
   },
   render: () => <ComposerStory />,
+};
+
+export const ComposerMediaStates: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByLabelText('첨부 이미지 1, 업로드 중')).toBeVisible();
+    expect(canvas.getByLabelText('첨부 이미지 2, 업로드 완료')).toBeVisible();
+    expect(canvas.getByLabelText('첨부 이미지 3, 업로드 실패')).toBeVisible();
+    expect(canvas.getByRole('textbox', { name: '첨부 이미지 2 대체 텍스트' })).toHaveValue(
+      '회색 이미지의 대체 텍스트',
+    );
+    expect(canvas.getByRole('switch', { name: '민감한 이미지로 표시' })).toBeChecked();
+    await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 3 업로드 재시도' }));
+    expect(canvas.getByLabelText('첨부 이미지 3, 업로드 중')).toBeVisible();
+  },
+  render: () => <ComposerMediaStatesStory />,
 };
 
 export const ComposerSubmitting: Story = {
