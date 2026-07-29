@@ -1,11 +1,38 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { graphql } from 'graphql';
+import { graphql, isInputObjectType, isObjectType } from 'graphql';
 import { schema } from '@/graphql/schema';
 
-test('rejects empty and over-500-character Plain Text before creating a post', async () => {
+test('exposes the versioned PostContent document and Plain Text composer contract', () => {
+  const postContent = schema.getType('PostContent');
+  const createPostInput = schema.getType('CreatePostInput');
+
+  assert.ok(isObjectType(postContent));
+  assert.ok(postContent.getFields().document);
+  assert.ok(postContent.getFields().bodyText);
+  assert.ok(postContent.getFields().contentWarning);
+  assert.equal(postContent.getFields().spoilerText, undefined);
+  assert.equal(postContent.getFields().bodyJson, undefined);
+
+  assert.ok(isInputObjectType(createPostInput));
+  assert.equal(createPostInput.getFields().content, undefined);
+  assert.equal(String(createPostInput.getFields().bodyText?.type), 'String!');
+  assert.equal(String(createPostInput.getFields().media?.type), '[CreatePostMediaInput!]');
+  assert.equal(String(createPostInput.getFields().replyParentId?.type), 'ID');
+  assert.equal(String(createPostInput.getFields().sensitiveMedia?.type), 'Boolean');
+
+  const createPostMediaInput = schema.getType('CreatePostMediaInput');
+  assert.ok(isInputObjectType(createPostMediaInput));
+  assert.equal(String(createPostMediaInput.getFields().mediaId?.type), 'ID!');
+  assert.equal(String(createPostMediaInput.getFields().altText?.type), 'String');
+  assert.equal(schema.getType('TipTapDocument'), undefined);
+  assert.equal(schema.getType('PostContentBody'), undefined);
+  assert.equal(String(schema.getType('PostContentDocument')), 'PostContentDocument');
+});
+
+test('rejects contentless and over-500-character Plain Text before creating a post', async () => {
   for (const [bodyText, message] of [
-    [' \n ', '본문을 입력해주세요.'],
+    [' \n ', '본문 또는 이미지를 추가해주세요.'],
     ['가'.repeat(501), '본문은 500자까지 작성할 수 있어요.'],
   ] as const) {
     const result = await graphql({

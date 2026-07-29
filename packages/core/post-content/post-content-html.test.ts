@@ -41,6 +41,31 @@ test('serializes the PROD-341 canonical fixture to deterministic safe HTML', () 
   assert.equal(postContentDocumentToHtml(canonicalFixture), expected);
 });
 
+test('omits Media nodes from HTML projection', () => {
+  assert.equal(
+    postContentDocumentToHtml({
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        attrs: { sensitiveMedia: true },
+        content: [
+          { type: 'paragraph', content: [{ type: 'text', text: 'before' }] },
+          {
+            type: 'media',
+            attrs: {
+              altText: 'image',
+              mediaId: '019f6678-86fa-709b-984e-1520766b8447',
+            },
+          },
+          { type: 'paragraph', content: [{ type: 'text', text: 'after' }] },
+        ],
+      },
+    }),
+    '<p>before</p><p>after</p>',
+  );
+});
+
 for (const [name, document] of [
   ['unsupported version', { ...canonicalFixture, version: 2 }],
   [

@@ -85,14 +85,19 @@ describe('projectRemoteNoteContent', () => {
       mediaType: 'text/html',
     });
 
-    assert.deepEqual(JSON.parse(JSON.stringify(result.body.content[0]?.content)), [
-      { type: 'text', text: 'visit ' },
-      {
-        type: 'text',
-        text: 'Kosmo',
-        marks: [{ type: 'link', attrs: { href: 'https://example.com/b?q=1#top' } }],
-      },
-    ]);
+    const paragraph = result.body.content[0];
+    assert.equal(paragraph?.type, 'paragraph');
+    assert.deepEqual(
+      JSON.parse(JSON.stringify(paragraph?.type === 'paragraph' ? paragraph.content : undefined)),
+      [
+        { type: 'text', text: 'visit ' },
+        {
+          type: 'text',
+          text: 'Kosmo',
+          marks: [{ type: 'link', attrs: { href: 'https://example.com/b?q=1#top' } }],
+        },
+      ],
+    );
   });
 
   it('removes executable markup, unsafe URLs, attributes, and images while keeping safe text', () => {

@@ -113,6 +113,29 @@ const unsupportedDocumentPost = post({
   bodyText: '미지원 문서는 안전한 Plain Text로 표시합니다.',
   id: 'unsupported-document',
 });
+const mediaTextFallbackPost = post({
+  bodyDocument: {
+    type: 'doc',
+    content: [
+      { type: 'paragraph', content: [{ type: 'text', text: 'document text' }] },
+      { type: 'media', attrs: { altText: '표시하지 않는 이미지', mediaId: 'media-story' } },
+    ],
+  },
+  bodyText: '이미지가 있는 문서는 안전한 Plain Text로 표시합니다.',
+  id: 'media-text-fallback',
+});
+const mediaOnlyFallbackPost = post({
+  bodyDocument: {
+    type: 'doc',
+    attrs: { sensitiveMedia: true },
+    content: [
+      { type: 'paragraph' },
+      { type: 'media', attrs: { altText: '표시하지 않는 이미지', mediaId: 'media-only-story' } },
+    ],
+  },
+  bodyText: '',
+  id: 'media-only-fallback',
+});
 const sourceAuthor = profile({
   displayName: '아주 긴 Source 작성자 표시 이름',
   handle: 'source@remote.example',
@@ -450,6 +473,8 @@ const storyPosts = [
   sourceQuotePost,
   pureRepostOfQuote,
   quoteOfQuotePost,
+  mediaTextFallbackPost,
+  mediaOnlyFallbackPost,
 ];
 const composerProfile = profile({ id: 'profile-composer' });
 const emptyPostsProfile = profileWithPosts([], { id: 'profile-posts-empty' });
@@ -621,6 +646,22 @@ function PostCatalog(_args: PostsStoryArgs) {
         <PostBody
           post={requireFragment(requirePost(posts, 15).body, 'unsupported document post body')}
         />
+        <View testID="media-text-fallback">
+          <PostBody
+            post={requireFragment(
+              requirePostById(posts, mediaTextFallbackPost.id).body,
+              'text and media fallback post body',
+            )}
+          />
+        </View>
+        <View testID="media-only-fallback">
+          <PostBody
+            post={requireFragment(
+              requirePostById(posts, mediaOnlyFallbackPost.id).body,
+              'media-only fallback post body',
+            )}
+          />
+        </View>
       </Section>
 
       <Section title="List items · body states">
@@ -1064,6 +1105,11 @@ export const BodyTimeAndLayoutStates: Story = {
     );
     expect(canvas.getByText('미지원 문서는 안전한 Plain Text로 표시합니다.')).toBeVisible();
     expect(canvas.queryByText('실행하면 안 되는 구조')).not.toBeInTheDocument();
+    expect(canvas.getByTestId('media-text-fallback')).toHaveTextContent(
+      '이미지가 있는 문서는 안전한 Plain Text로 표시합니다.',
+    );
+    expect(canvas.queryByText('document text')).not.toBeInTheDocument();
+    expect(canvas.getByTestId('media-only-fallback')).toBeEmptyDOMElement();
     const quoteLayout = within(canvas.getByTestId('detail-quote-layout'));
     expect(quoteLayout.getAllByTestId('source-post-preview')).toHaveLength(1);
     expect(quoteLayout.getByTestId('source-post-body')).toHaveTextContent(

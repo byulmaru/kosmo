@@ -13,7 +13,6 @@ import type {
 import type { Key, ReactNode } from 'react';
 import type { StyleProp, TextProps, TextStyle } from 'react-native';
 
-type PostContentNode = PostContentBodyDocumentV1 | PostContentParagraphNode | PostContentInlineNode;
 type PostContentMark = NonNullable<PostContentTextNode['marks']>[number];
 
 interface RenderContext {
@@ -46,9 +45,21 @@ export function PostContentRenderer({
       </Text>
     ) : null;
   }
+  if (document.content.some((node) => node.type === 'media')) {
+    return bodyText ? <Text style={bodyStyle}>{bodyText}</Text> : null;
+  }
 
-  return renderNode(document, 'body', { bodyStyle });
+  return renderNode(document as TextOnlyPostContentBodyDocument, 'body', { bodyStyle });
 }
+
+type TextOnlyPostContentBodyDocument = Omit<PostContentBodyDocumentV1, 'content'> & {
+  readonly content: readonly PostContentParagraphNode[];
+};
+
+type PostContentNode =
+  | TextOnlyPostContentBodyDocument
+  | PostContentParagraphNode
+  | PostContentInlineNode;
 
 function renderNode(node: PostContentNode, key: Key, context: RenderContext): ReactNode {
   return match(node)

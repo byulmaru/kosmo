@@ -11,7 +11,9 @@ Accepted
 중첩 Repost 평탄화 결정은 [ADR 0010](./0010-post-interaction-contracts.md)의 직접 Source 참조와 Repost 입력
 거절 결정으로 대체되었다. Kind 기반 Post 구조와 목록 후보 판별은
 [ADR 0014](./0014-post-structure-relations.md)의 관계 조합 결정으로 대체되었다. Quote Eligibility의 Source
-조회 가능성 의존은 2026-07-23 정정으로 제거되었다. 나머지 결정은 유지한다.
+조회 가능성 의존은 2026-07-23 정정으로 제거되었다. Post Content revision의 Media·Alt Text·Sensitive Media
+소유권과 편집에 관한 결정은 [ADR 0022](./0022-post-content-revision-media-nodes.md)가 대체한다. 나머지 결정은
+유지한다.
 
 ## 결정
 

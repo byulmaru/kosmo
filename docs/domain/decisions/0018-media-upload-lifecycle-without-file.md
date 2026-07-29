@@ -8,6 +8,12 @@ Accepted
 
 2026-07-26
 
+## 후속 결정
+
+Post Content revision의 Media 참조 소유권과 편집은
+[ADR 0022](./0022-post-content-revision-media-nodes.md)가 정의한다. Uploading Media를 참조할 수 없다는 Ready
+조건은 계속 적용된다.
+
 ## 결정
 
 - Kosmo는 Media Storage Service가 소유하는 원본·파생 파일 표현을 별도 File 객체로 복제하지 않는다.

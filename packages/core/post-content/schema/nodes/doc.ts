@@ -1,5 +1,8 @@
 import type { NodeSpec } from 'prosemirror-model';
 
 export const docNodeSpec = {
-  content: 'paragraph+',
+  attrs: {
+    sensitiveMedia: { default: false },
+  },
+  content: '(paragraph | media)+',
 } satisfies NodeSpec;

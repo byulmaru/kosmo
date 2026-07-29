@@ -9,6 +9,8 @@ import {
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
+  MediaSource,
+  MediaState,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -35,6 +37,7 @@ let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
+let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
@@ -62,6 +65,7 @@ describe('Post Reply GraphQL 경계', () => {
       db,
       firstOrThrow,
       Instances,
+      Media,
       pg,
       PostContents,
       ProfileFollows,
@@ -121,6 +125,83 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(stored.currentContentId, content.id);
     assert.equal(stored.replyParentId, null);
     assert.equal(stored.repostSourceId, null);
+  });
+
+  test('Ready Media와 Alt Text를 첫 PostContent에 저장하고 조회 ID를 global ID로 투영한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const uploadProfile = await createProfile('media-upload-profile');
+    const first = await createReadyMedia(auth.account.id, uploadProfile.id);
+    const second = await createReadyMedia(auth.account.id, auth.profile.id);
+
+    const result = await requestCreatePost(
+      {
+        bodyText: '',
+        media: [
+          { altText: '첫 번째 이미지', mediaId: encodeGlobalId('Media', first.id) },
+          { altText: null, mediaId: encodeGlobalId('Media', second.id) },
+        ],
+        sensitiveMedia: true,
+        visibility: PostVisibility.PUBLIC,
+      },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    const postId = result.data?.createPost.post.id;
+    assert.ok(postId);
+    const contentResult = await requestPostContent(postId, auth.token);
+    assertNoGraphQLErrors(contentResult);
+    assert.equal(contentResult.data?.node?.content.bodyText, '');
+    assert.deepEqual(contentResult.data?.node?.content.document, {
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        attrs: { sensitiveMedia: true },
+        content: [
+          { type: 'paragraph' },
+          {
+            type: 'media',
+            attrs: {
+              altText: '첫 번째 이미지',
+              mediaId: encodeGlobalId('Media', first.id),
+            },
+          },
+          {
+            type: 'media',
+            attrs: { altText: null, mediaId: encodeGlobalId('Media', second.id) },
+          },
+        ],
+      },
+    });
+  });
+
+  test('잘못된 Media typename과 사용할 수 없는 Media를 validation 경계에서 거부한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const uploading = await createUploadingMedia(auth.account.id, auth.profile.id);
+    const before = await db.$count(Posts);
+
+    const wrongType = await requestCreatePost(
+      {
+        bodyText: 'wrong type',
+        media: [{ altText: null, mediaId: encodeGlobalId('Post', uploading.id) }],
+        visibility: PostVisibility.PUBLIC,
+      },
+      auth.token,
+    );
+    assert.ok(wrongType.errors?.[0]);
+
+    const unavailable = await requestCreatePost(
+      {
+        bodyText: 'uploading',
+        media: [{ altText: null, mediaId: encodeGlobalId('Media', uploading.id) }],
+        visibility: PostVisibility.PUBLIC,
+      },
+      auth.token,
+    );
+    assert.equal(unavailable.errors?.[0]?.extensions?.code, 'VALIDATION');
+    assert.equal(unavailable.errors?.[0]?.extensions?.field, 'media');
+    assert.equal(await db.$count(Posts), before);
   });
 
   test('조회 가능한 일반 Post·Reply·Quote를 Parent로 하고 독립 Visibility를 저장한다', async () => {
@@ -778,6 +859,10 @@ type CreatePostNode = {
   visibility: PostVisibility;
 };
 
+type PostContentNode = {
+  content: { bodyText: string; document: unknown };
+};
+
 type DeletePostNode = {
   postId: string;
 };
@@ -816,6 +901,17 @@ const requestPostNode = (postId: string) =>
       }
     }`,
     { postId: encodeGlobalId('Post', postId) },
+  );
+
+const requestPostContent = (postId: string, token?: string) =>
+  requestGraphQL<{ node: PostContentNode | null }>(
+    `query PostMediaContent($postId: ID!) {
+      node(id: $postId) {
+        ... on Post { content { bodyText document } }
+      }
+    }`,
+    { postId },
+    token,
   );
 
 const requestPostAndParent = (postId: string, parentId: string) =>
@@ -894,7 +990,13 @@ const requestGraphQL = async <TData>(
 };
 
 const requestCreatePost = (
-  input: { bodyText: string; replyParentId?: string; visibility: PostVisibility },
+  input: {
+    bodyText: string;
+    media?: Array<{ altText: string | null; mediaId: string }>;
+    replyParentId?: string;
+    sensitiveMedia?: boolean;
+    visibility: PostVisibility;
+  },
   token?: string,
 ) =>
   requestGraphQL<{ createPost: { post: CreatePostNode } }>(
@@ -999,6 +1101,35 @@ const createProfile = (
     .then(firstOrThrow);
 };
 
+const createReadyMedia = (accountId: string, profileId: string) =>
+  db
+    .insert(Media)
+    .values({
+      accountId,
+      profileId,
+      readyAt: Temporal.Now.instant(),
+      source: MediaSource.LOCAL,
+      state: MediaState.READY,
+      storageReference: `u_${crypto.randomUUID()}`,
+      uploadExpiresAt: Temporal.Now.instant().add({ minutes: 5 }),
+    })
+    .returning()
+    .then(firstOrThrow);
+
+const createUploadingMedia = (accountId: string, profileId: string) =>
+  db
+    .insert(Media)
+    .values({
+      accountId,
+      profileId,
+      source: MediaSource.LOCAL,
+      state: MediaState.UPLOADING,
+      storageReference: `u_${crypto.randomUUID()}`,
+      uploadExpiresAt: Temporal.Now.instant().add({ minutes: 5 }),
+    })
+    .returning()
+    .then(firstOrThrow);
+
 const createContentfulPost = async (
   profileId: string,
   {
@@ -1086,6 +1217,7 @@ const resetFixtures = async () => {
   await db.delete(ProfileFollows);
   await db.delete(Sessions);
   await db.delete(AccountProfiles);
+  await db.delete(Media);
   await db.delete(Accounts);
   await db.delete(Profiles);
   await db.delete(Instances).where(ne(Instances.id, localInstanceId));
