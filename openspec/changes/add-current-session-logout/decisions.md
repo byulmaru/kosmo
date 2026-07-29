@@ -64,17 +64,29 @@
 - Consequences: logout action은 server call, credential cleanup, Environment reset과 navigation의 순서를 소유해야 한다. 실패 시 현재 token, Environment와 route를 유지한다.
 - Confirmation / Follow-up: PROD-475의 Web/Native test에서 성공 순서, failure retention, 다른 Session 로그인 뒤 cache 격리와 replace navigation을 확인한다.
 
-### 기존 logout control은 별도 확인 dialog 없이 직접 실행한다
+### 기존 logout control은 별도 확인 dialog 없이 하나의 상위 action 상태를 공유한다
 
 - Decision Date: 2026-07-27
 - Decision Class: Implementation Choice
 - Authority / Provenance: Linear: `PROD-473`, `PROD-475`
-- Status: Active
+- Status: Superseded by `현재 조작 가능한 logout control이 production action을 직접 소유한다`
 - Context / Problem: full/compact/drawer에 이미 logout control이 존재하며, 이번 변경은 메뉴 구조를 바꾸지 않고 실제 action·진행·실패 의미를 연결해야 한다.
 - Decision Outcome: 기존 control을 활성화하면 추가 confirmation step 없이 공용 logout action을 실행한다. 진행 중에는 모든 surface의 중복 실행을 막고 busy/disabled 상태를 보조 기술에 전달한다. 결과 불명 실패에서는 generic 안내와 같은 control의 재시도를 제공한다.
 - Alternatives Considered: confirmation dialog는 실수 방지를 돕지만, 재로그인이 가능한 current-session action에 추가 modal 상태와 접근성 경계를 만들고 현재 승인 범위에서 요구되지 않아 기본 경로로 채택하지 않았다. 각 surface가 독립 pending 상태를 가지는 방식은 중복 요청을 허용하므로 채택하지 않았다.
 - Consequences: 공용 action 상태가 shell surface들보다 상위에서 공유되어야 하고, 오류 원문이나 credential material을 UI에 노출하지 않아야 한다.
 - Confirmation / Follow-up: full/compact/drawer interaction 및 pending/error accessibility test로 확인한다.
+
+### 현재 조작 가능한 logout control이 production action을 직접 소유한다
+
+- Decision Date: 2026-07-29
+- Decision Class: Implementation Choice
+- Authority / Provenance: Linear: `PROD-473`, `PROD-475`; PR #389 review thread `PRRT_kwDOR_2JU86Ua8g6`
+- Status: Active
+- Context / Problem: 현재 shell layout은 full sidebar, compact rail, mobile drawer 중 하나만 조작 가능하지만, 상위 `UniversalShell`이 logout state를 만들고 `SidebarNavigation`에 callback bag으로 전달하면 Storybook이나 다른 caller가 필수 server revoke·credential cleanup·Relay reset lifecycle을 no-op으로 교체할 수 있다.
+- Decision Outcome: `SidebarNavigation`이 logout control의 존재와 배치를 소유하고, `LogoutControl`이 production `useLogout()`을 직접 호출한다. 각 현재 surface는 자체 pending/error 상태로 그 surface의 중복 요청을 막고 동일한 접근 가능한 실패·재시도를 제공한다. 별도 confirmation dialog는 추가하지 않는다.
+- Alternatives Considered: 상위 shell의 단일 action state는 여러 surface가 동시에 조작 가능할 때 유효하지만 현재 layout에는 그 근거가 없고 필수 lifecycle을 prop으로 대체할 수 있는 seam을 만든다. 별도 provider는 이 seam을 닫을 수 있지만 동시에 조작 가능한 consumer가 없는 현재 구조에서는 추가 abstraction이므로 채택하지 않았다.
+- Consequences: Storybook도 production logout composition을 렌더링하며 no-op callback fixture를 가질 수 없다. 향후 여러 logout surface가 동시에 조작 가능해지면 공통 provider와 cross-surface 중복 방지를 다시 검토해야 한다.
+- Confirmation / Follow-up: production `useLogout` composition, full/compact/drawer 각각의 pending·disabled·failure·retry E2E로 확인한다.
 
 ## Remaining Decisions
 
@@ -82,4 +94,5 @@
 
 ## Superseded Decisions
 
+- `기존 logout control은 별도 확인 dialog 없이 하나의 상위 action 상태를 공유한다`는 현재 shell에서 여러 surface가 동시에 조작 가능하다는 근거가 없고 필수 lifecycle을 caller가 교체할 수 있어, `현재 조작 가능한 logout control이 production action을 직접 소유한다`로 대체했다. confirmation dialog를 추가하지 않는 결정은 유지한다.
 - 이 change의 초기 design에서 GraphQL과 BFF가 각각 raw credential을 조회·분류한 뒤 검증된 Session identity만 core에 전달하도록 한 transport/core 분리 결정은 위의 transport-neutral current-session logout action 소유 결정으로 대체했다. terminal/missing credential에서는 identity를 만들 수 없고, 결과 분류가 transport마다 중복되어 동작이 달라질 수 있기 때문이다.
