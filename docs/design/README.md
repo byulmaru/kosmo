@@ -10,6 +10,7 @@ KOSMO의 UI/프로덕트 디자인 결정을 기록하고 공유하는 문서 �
 - [typography.md](./typography.md) — 폰트 사용 규칙
 - [breakpoints.md](./breakpoints.md) — 레이아웃 브레이크포인트 단계와 컨벤션
 - [reactions.md](./reactions.md) — Reaction Quick Picker의 형태와 상태 표현
+- [profile-tags.md](./profile-tags.md) — Profile Tag 편집·공개 표시의 플랫폼 공통 계약
 
 ## 갱신 규칙
 
