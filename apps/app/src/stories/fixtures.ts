@@ -91,9 +91,11 @@ export type StoryPost = {
   id: string;
   profile: StoryProfile;
   reactionCounts: Array<{ count: number; type: string }>;
+  repostCount: number;
   replyParent: StoryPostReference | null;
   repostSource: StoryPost | null;
   state: 'ACTIVE';
+  viewerRepost: StoryPostReference | null;
   visibility: 'DIRECT' | 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
 };
 
@@ -104,8 +106,10 @@ export function post({
   id = 'post-1',
   profile: author = profile(),
   reactionCounts = [],
+  repostCount = 0,
   replyParent = null,
   repostSource = null,
+  viewerRepost = null,
   visibility = 'UNLISTED',
 }: {
   bodyDocument?: PostContentBodyDocumentV1;
@@ -114,8 +118,10 @@ export function post({
   id?: string;
   profile?: StoryProfile;
   reactionCounts?: StoryPost['reactionCounts'];
+  repostCount?: number;
   replyParent?: StoryPostReference | null;
   repostSource?: StoryPost | null;
+  viewerRepost?: StoryPostReference | null;
   visibility?: StoryPost['visibility'];
 } = {}): StoryPost {
   return {
@@ -137,9 +143,11 @@ export function post({
     id,
     profile: author,
     reactionCounts,
+    repostCount,
     replyParent,
     repostSource,
     state: 'ACTIVE',
+    viewerRepost,
     visibility,
   };
 }
