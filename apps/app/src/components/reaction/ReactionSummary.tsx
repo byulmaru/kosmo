@@ -84,12 +84,28 @@ export function ReactionSummary({
                     {
                       backgroundColor: theme.card,
                       borderColor: theme.border,
-                      opacity: entryDisabled ? 0.6 : pressed ? 0.85 : 1,
+                      opacity: selected ? 1 : entryDisabled ? 0.6 : pressed ? 0.85 : 1,
                     },
                   ]}
                 >
-                  <Text style={[styles.entryEmoji, { color: theme.text }]}>{entry.type}</Text>
-                  <Text style={[styles.entryCount, { color: theme.text }]}>{entry.count}</Text>
+                  {({ pressed }) => (
+                    <>
+                      {selected ? (
+                        <View
+                          style={[
+                            styles.entrySelectedBackground,
+                            {
+                              backgroundColor: pressed ? theme.primaryHover : theme.primary,
+                              opacity: 0.7,
+                            },
+                          ]}
+                          testID="reaction-summary-selected-background"
+                        />
+                      ) : null}
+                      <Text style={[styles.entryEmoji, { color: theme.text }]}>{entry.type}</Text>
+                      <Text style={[styles.entryCount, { color: theme.text }]}>{entry.count}</Text>
+                    </>
+                  )}
                 </Pressable>
               );
             })}
@@ -141,10 +157,20 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
+    position: 'relative',
     ...Platform.select({
       default: { height: 44 },
       web: { height: 32 },
     }),
+  },
+  entrySelectedBackground: {
+    borderRadius: radii.sm,
+    bottom: 0,
+    left: 0,
+    pointerEvents: 'none',
+    position: 'absolute',
+    right: 0,
+    top: 0,
   },
   entryCount: {
     fontFamily: 'SUIT',

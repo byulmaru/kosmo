@@ -9,6 +9,7 @@ import { ReactionProfileList } from '@/components/reaction/ReactionProfileList';
 import { ReactionSelector } from '@/components/reaction/ReactionSelector';
 import { ReactionSummary } from '@/components/reaction/ReactionSummary';
 import { useRelayActor } from '@/relay/RelayActorProvider';
+import { colors } from '@/theme/tokens';
 import { profile } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -269,7 +270,7 @@ function ReactionSummaryCatalog() {
             setLastIntent(`${optionId}:${nextSelected ? '선택' : '해제'}`)
           }
           pendingTypeIds={['🎉']}
-          selectedTypeIds={['❤️']}
+          selectedTypeIds={['❤️', '🎉']}
         />
         <Text>{`마지막 동작: ${lastIntent}`}</Text>
         <Text>{`More 열기: ${moreCount}`}</Text>
@@ -495,9 +496,19 @@ export const AllStates: Story = {
     expect(heart.getBoundingClientRect().height).toBe(32);
     expect(getComputedStyle(heart).gap).toBe('4px');
     expect(getComputedStyle(heart).paddingInline).toBe('8px');
-    expect(getComputedStyle(heart.children[0]!).fontSize).toBe('20px');
-    expect(getComputedStyle(heart.children[1]!).fontSize).toBe('14px');
+    expect(getComputedStyle(within(heart).getByText('❤️')).fontSize).toBe('20px');
+    expect(getComputedStyle(within(heart).getByText('3')).fontSize).toBe('14px');
+    const selectedBackground = heart.querySelector(
+      '[data-testid="reaction-summary-selected-background"]',
+    );
+    expect(selectedBackground).not.toBeNull();
+    expect(selectedBackground).toHaveStyle({ backgroundColor: colors.light.primary, opacity: 0.7 });
     expect(heart).toHaveAttribute('aria-pressed', 'true');
+    expect(party).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      party.querySelector('[data-testid="reaction-summary-selected-background"]'),
+    ).not.toBeNull();
+    expect(getComputedStyle(party).opacity).toBe('1');
     expect(party).toHaveAttribute('aria-busy', 'true');
     expect(party).toBeDisabled();
     expect(eyes).toBeEnabled();
@@ -611,9 +622,10 @@ export const SummaryOrderAndModalDismiss: Story = {
 
     expect(canvas.getByRole('button', { name: '❤️ 반응 12개' })).toBeDisabled();
     await userEvent.click(canvas.getByRole('button', { name: '반응한 프로필 보기' }));
-    await expect(
-      screen.findByRole('dialog', { name: '반응한 프로필' }),
-    ).resolves.toBeInTheDocument();
+    const dialog = await screen.findByRole('dialog', { name: '반응한 프로필' });
+    expect(dialog).toBeInTheDocument();
+    await expect(within(dialog).findByText('별빛 반응 프로필')).resolves.toBeVisible();
+    expect(within(dialog).getByRole('heading', { name: '반응한 사람' })).toBeVisible();
     expect(screen.getByRole('tab', { name: '❤️ 반응 12개' })).toHaveAttribute(
       'aria-selected',
       'true',

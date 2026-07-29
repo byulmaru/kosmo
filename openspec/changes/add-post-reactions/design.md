@@ -47,7 +47,7 @@
 - `Post.viewerReactions`는 connection이 아닌 plural linked field다. add와 delete `post: null` fallback의 수동 updater는 요청을 시작한 Relay Environment의 기존 Post와 field가 모두 있을 때만 `getLinkedRecords`/`setLinkedRecords`로 갱신하며 record나 field를 합성하지 않는다. delete의 non-null `post` payload는 server가 반환한 Post와 field를 Relay가 정상 정규화한다.
 - mutation 성공 payload 뒤에만 해당 Type의 선택 상태와 count delta를 반영하고, 대상 Post의 `reactionCounts`만 targeted refetch해 최종 server 상태로 맞춘다. mutation·refetch callback은 요청을 시작한 Relay Environment와 actor token 안에서만 현재 surface UI를 변경한다.
 - `PostListItem`과 `PostLayout`은 일반·Quote는 own Post, 순수 Repost는 source Post로 `reactionTarget`을 한 번 결정한다. 목록·상세의 summary row는 body/source 아래와 Action Bar 위에 배치한다.
-- summary token은 Profile modal을 직접 열지 않고 같은 controller의 Type toggle을 실행한다. 양수 count 뒤의 Reaction 전용 More는 selected Profile 유무와 무관하게 modal을 열며, server 순서의 양수 count emoji tab 중 첫 Type을 기본 선택한다. Profile row의 emoji는 현재 tab Type에서 파생하므로 API·DB를 확장하지 않는다.
+- summary token은 Profile modal을 직접 열지 않고 같은 controller의 Type toggle을 실행한다. selected token은 Quick Picker와 같은 분리된 `primary`/`primaryHover` 70% 배경 layer를 사용해 emoji·count의 opacity를 유지한다. 양수 count 뒤의 Reaction 전용 More는 selected Profile 유무와 무관하게 modal을 열며, server 순서의 양수 count emoji tab 중 첫 Type을 기본 선택한다. Profile 목록 제목은 선택 Type과 무관하게 `반응한 사람`으로 고정하고, Profile row의 emoji는 현재 tab Type에서 파생하므로 API·DB를 확장하지 않는다.
 
 ### Recommended Approach
 
@@ -59,7 +59,7 @@
 6. PROD-449는 먼저 props-only `ReactionSummary`와 `ReactionProfileList`의 fixture 상태 catalog를 전달한다. supplied count entry는 order·zero-count를 바꾸지 않고 렌더하며, Profile row는 기존 `ProfileListItem` Relay fragment ref를 재사용하고 Storybook은 Relay mock fragment ref로 상태를 구성한다. 이 구현 단계는 최종 `post-reaction-ui` spec을 변경하지 않는다.
 7. PROD-450은 부모가 공급한 option 순서를 그대로 사용하는 props-only `ReactionSelector` Quick Picker panel을 먼저 제공했다. PROD-417은 supplied identity·selected layer·controlled state seam을 유지하면서 Web만 32×32 option, 20px emoji, 16×16px·2px spinner와 4px gap/padding으로 조정한다. Native target과 spinner geometry는 이번 slice에서 변경하지 않는다.
 8. PROD-417은 기존 `PostActionBar`에서 private `ReactionAction`과 `ReactionPopover`를 유지하고 private `PostReactionController`가 fixed 여섯 option, `viewerReactions`, Type별 pending/error, mutation/cache와 targeted count refetch를 공급하게 한다. Quick Picker와 summary token은 같은 toggle을 사용한다. 선택/count는 optimistic하게 바꾸지 않고 성공 payload 뒤에만 delta를 반영한 다음 `reactionCounts`를 좁게 refetch한다. add/delete updater의 기존 no-synthesis·partial payload·actor 격리 계약을 유지한다.
-9. PROD-418이 전달한 count query와 `reactionProfiles` connection을 재사용하되 PROD-417이 summary를 목록과 상세에 연결한다. `reactionCounts`가 비어 있으면 summary를 렌더링하지 않고, 양수 count는 server 순서를 그대로 표시한다. Web token과 Reaction 전용 More는 32px이며 standalone 제목은 제거한다. token은 same-Type toggle이고 More는 현재 Post 위 modal을 연다. modal 상단은 양수 count emoji tab을 server 순서로 표시하고 첫 Type을 기본 선택하며 Profile item은 현재 tab emoji를 표시한다. 기존 dismiss·pagination·inline retry·edge 보존·cache 우선 actor 격리 계약은 유지한다.
+9. PROD-418이 전달한 count query와 `reactionProfiles` connection을 재사용하되 PROD-417이 summary를 목록과 상세에 연결한다. `reactionCounts`가 비어 있으면 summary를 렌더링하지 않고, 양수 count는 server 순서를 그대로 표시한다. Web token과 Reaction 전용 More는 32px이며 standalone 제목은 제거한다. token은 same-Type toggle이고 selected token은 Quick Picker와 같은 70% `primary`/`primaryHover` 배경 layer를 사용한다. More는 현재 Post 위 modal을 열고, modal 상단은 양수 count emoji tab을 server 순서로 표시해 첫 Type을 기본 선택한다. 목록 제목은 `반응한 사람`으로 고정하며 Profile item은 현재 tab emoji를 표시한다. 기존 dismiss·pagination·inline retry·edge 보존·cache 우선 actor 격리 계약은 유지한다.
 10. PROD-277·324·372가 전달한 공통 목록 UI·badge·read/navigation 계약 위에 Reaction Notification item을 확장한다. `add-in-app-notifications`의 남은 E2E·archive는 그 부모 범위로 유지하며 PROD-413의 직접 구현 gate로 사용하지 않는다.
 11. PROD-419는 Owner 삭제 transaction이 성공한 뒤 반환된 Reaction ID로 기존 Notification delete 경계를 호출한다. 같은 request에서 cleanup을 await하되 실패는 Reaction 성공 payload와 분리하고, 기존 post-commit 오류 관례에 따라 error와 source Reaction ID를 기록한다.
 12. PROD-472는 `Post.viewerReactions: [Reaction!]!`를 selected Profile별 batch loader로 제공하고, GraphQL 삭제 input을 `{ postId: ID!, type: String! }`로 교체한다. core는 actor/Post/Type 조합을 원자적으로 삭제해 실제 삭제된 Reaction ID만 post-commit Notification cleanup에 전달한다. GraphQL payload는 nullable `reactionId`와 nullable `post`를 반환한다.
@@ -98,6 +98,8 @@
 - selected 배경 opacity를 option 전체에 적용해 이모지까지 흐리게 만들거나 pending spinner에 불투명한 track을 추가하지 않는다.
 - PROD-417의 기존 Action Bar Reaction slot·목록/상세 summary 통합을 PROD-432로 미루거나, 반대로 Reply composer·Post Action Bar의 일반 More action·범용 overlay까지 PROD-417에 포함하지 않는다.
 - summary token 클릭으로 Profile modal을 직접 열거나 Reaction 전용 More를 mutation trigger로 사용하지 않는다.
+- selected summary token을 기본 card 배경과 동일하게 표시하거나 배경 opacity를 token 전체에 적용해 emoji·count까지 흐리게 만들지 않는다.
+- Profile item에 이미 현재 Type emoji를 표시하면서 목록 제목에 같은 emoji를 반복하지 않는다.
 - 일반·Quote와 순수 Repost에서 Quick Picker·summary·Profile modal의 대상 Post를 서로 다르게 결정하지 않는다.
 - mutation 성공 전 count를 바꾸거나 actor 전환 뒤 이전 targeted refetch로 새 actor count를 덮어쓰지 않는다.
 - add updater에서 같은 Type·같은 data ID를 단순 append해 중복시키거나 delete의 nullable `reactionId`를 실패로 취급하지 않는다.

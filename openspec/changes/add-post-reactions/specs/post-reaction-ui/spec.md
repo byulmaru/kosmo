@@ -133,6 +133,7 @@
 - **AND** count 동률 Type의 순서에 의존하지 않는다
 - **AND** standalone `반응` 제목을 표시하지 않는다
 - **AND** Web token은 높이 32px, emoji 20px, count 14px, 내부 gap 4px, 좌우 padding 8px와 token gap 4px을 사용한다
+- **AND** selected token은 emoji·count와 분리한 `primary`/`primaryHover` 배경 layer만 70% opacity로 표시하고 emoji·count는 100% opacity를 유지한다
 
 #### Scenario: Reaction이 없는 Post
 
@@ -153,6 +154,7 @@
 - **THEN** 클라이언트는 현재 Post 위의 modal overlay를 연다
 - **AND** modal 상단에 server가 제공한 양수 count Type을 같은 순서의 emoji tab으로 표시한다
 - **AND** 처음 열 때 server 순서의 첫 Type을 선택하고 tab 전환 시 해당 Type의 Profile connection만 표시한다
+- **AND** Profile 목록 제목은 선택 Type과 무관하게 `반응한 사람`으로 표시한다
 - **AND** Profile 목록 item에는 현재 Type의 Reaction emoji를 표시한다
 - **AND** 별도 route나 공개 URL을 만들지 않는다
 - **AND** server가 viewer 기준으로 숨긴 Profile을 client에서 복구하거나 count에서 빼지 않는다

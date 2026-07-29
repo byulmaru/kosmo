@@ -58,6 +58,7 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 - server가 제공한 양수 count Type과 순서를 그대로 사용하며, 조회된 Profile 수로 count를 다시 계산하지 않는다.
 - Web token은 높이 32px의 pill이다. emoji는 20px, count는 14px, 내부 gap은 4px, 좌우 padding은 8px, token 사이 gap은 4px이다.
 - 요약 row의 token은 Profile 목록을 여는 control이 아니라 해당 Type의 Reaction을 추가·삭제하는 toggle이다. 선택 상태, pending, error와 disabled 상태는 Quick Picker와 동일한 controller에서 공급한다.
+- 선택된 token은 Quick Picker와 동일하게 이모지·count와 분리한 `primary` 배경 layer를 70% opacity로 표시하고, pressed 상태에서는 `primaryHover`를 사용한다. 이모지와 count는 100% opacity를 유지한다.
 - 이미 다른 사용자가 남겨 둔 token도 선택한 Profile의 Reaction이 없으면 추가하고, 있으면 삭제한다. mutation이 성공하기 전에는 count나 선택 상태를 바꾸지 않는다.
 - selected Profile이 없으면 token은 보이지만 disabled이며 mutation을 시작하지 않는다.
 - 양수 count Type 뒤에는 32×32px More button을 둔다. glyph는 16px ellipsis이며 Profile 목록 modal을 연다. More는 selected Profile이 없어도 사용할 수 있다.
@@ -67,7 +68,7 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 
 - More button은 현재 Post 위에 modal overlay를 열며 별도 route나 공개 URL은 만들지 않는다.
 - modal 상단에는 server가 제공한 양수 count Type을 같은 순서로 emoji tab으로 표시한다. 처음 열 때 server 순서의 첫 Type을 선택하고, 사용자가 tab을 바꾸면 해당 Type의 Profile 목록을 표시한다.
-- 각 tab은 emoji와 count, selected 상태를 표시한다. 목록 item에도 Profile이 남긴 Reaction Type을 식별할 수 있는 emoji를 표시한다.
+- 각 tab은 emoji와 count, selected 상태를 표시한다. 목록 제목은 선택 Type과 무관하게 `반응한 사람`으로 표시하고, 각 item 왼쪽에는 Profile이 남긴 Reaction Type을 식별할 수 있는 emoji를 표시한다.
 - modal은 외부 영역 클릭·터치와 Android back으로 닫으며 별도 닫기 버튼을 표시하지 않는다.
 - Profile 목록의 최초 조회가 실패하면 modal 내부에 오류와 다시 시도 동작을 표시한다.
 - 추가 page 조회가 실패하면 이미 표시한 Profile을 유지하고 목록 내부에 오류와 다시 시도 동작을 표시한다. 이 조회 오류에 snackbar나 toast를 사용하지 않는다.

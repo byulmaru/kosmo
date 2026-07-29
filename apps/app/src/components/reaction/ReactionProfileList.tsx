@@ -56,7 +56,7 @@ export function ReactionProfileList({
   return (
     <View style={styles.root}>
       <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
-        {`${reactionType} 반응`}
+        반응한 사람
       </Text>
       {items !== undefined ? (
         items.length ? (

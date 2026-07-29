@@ -192,7 +192,7 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 - guest이거나 selected Profile이 없으면 Reaction trigger를 disabled로 표시하고 popover·mutation을 시작하지 않는다. 로그인·가입·Profile 선택 onboarding은 포함하지 않는다.
 - selected Profile이 없으면 양수 count summary token도 disabled지만 Reaction 전용 More와 Profile 목록 조회는 사용할 수 있다.
 - 목록·상세의 일반·Quote는 own Post, 순수 Repost는 source Post를 Quick Picker·summary·Profile modal의 공통 `reactionTarget`으로 사용한다.
-- summary token은 same-Type toggle이고 standalone 제목은 제거한다. 양수 count 뒤의 32px Reaction 전용 More는 server 순서의 emoji tab modal을 열며 item emoji는 현재 tab Type에서 파생한다.
+- summary token은 same-Type toggle이고 standalone 제목은 제거한다. selected token은 Quick Picker와 같은 분리된 `primary`/`primaryHover` 70% 배경 layer를 사용해 emoji·count opacity를 유지한다. 양수 count 뒤의 32px Reaction 전용 More는 server 순서의 emoji tab modal을 열며 목록 제목은 `반응한 사람`으로 고정하고 item emoji는 현재 tab Type에서 파생한다.
 - mutation 성공 payload 뒤에만 선택 상태와 count delta를 반영하고 대상 Post `reactionCounts`를 targeted refetch한다. 실패나 stale actor callback은 이전 server-confirmed 상태를 유지한다.
 - 사용자 정의 Reaction identity·asset·federation 계약을 포함하지 않는다.
 
@@ -203,7 +203,7 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 - PROD-417 Web integration은 trigger 재입력, outside pointer, `Escape`, 첫 option·trigger focus, `aria-haspopup`/`aria-expanded`, 열린 상태 유지, top/left·bottom/right flip/clamp와 좁은 너비 scroll, Type별 동시 pending·reverse completion·실패/retry·actor 전환·unmount 뒤 늦은 callback을 검증한다.
 - selected Profile 부재 fixture는 disabled trigger가 popover와 mutation request를 만들지 않는지 검증한다.
 - production Post fixture는 ordinary·Quote가 자신의 Post ID를, 순수 Repost가 source Post ID를 mutation 대상으로 사용하는지 검증한다.
-- 목록·상세 fixture는 summary 배치, picker/token 공유 state, count delta/refetch, Reaction 전용 More·emoji tab·item emoji·pagination/retry와 selected Profile 부재 조회를 검증한다.
+- 목록·상세 fixture는 summary 배치, selected token의 primary layer, picker/token 공유 state, count delta/refetch, Reaction 전용 More·emoji tab·`반응한 사람` 제목·item emoji·pagination/retry와 selected Profile 부재 조회를 검증한다.
 - iOS·Android 동작 계약은 유지하되, 2026-07-28 사용자 결정에 따라 native app runtime 관찰은 현재 제품 범위와 PROD-417 PR Ready gate에서 제외하고 native app 작업 재개 시 후속 확인한다. 기존 `Reactions`·`ActionMenu` presentation catalog와 API/DB test를 중복 확장하지 않는다.
 
 - [x] 7.1 PROD-450 supplied-option Quick Picker 프레젠테이션과 후속 PROD-417 통합 경계를 proposal·design·decisions·tasks에 기록하고 strict validation을 통과시킨다.
@@ -219,6 +219,7 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 - [x] 7.11 TDD로 private `PostReactionController`를 도입해 Quick Picker와 summary token의 server-confirmed selected·count·Type별 pending/error, updater no-synthesis, targeted `reactionCounts` refetch와 actor isolation을 구현·검증한다.
 - [x] 7.12 TDD로 목록·상세의 ordinary·Quote own Post와 pure Repost source Post target, summary 배치, Reaction 전용 More·양수 count emoji tab·Profile item emoji와 기존 pagination/retry/cache를 구현·검증한다.
 - [x] 7.13 app test·lint·format·diff check와 OpenSpec strict validation을 통과시키고 320px·390px·600px Web runtime을 관찰한다. 자동 검증·Web 관찰·미실행 iOS/Android 관찰을 분리해 기록한다.
+- [x] 7.14 TDD로 selected summary token의 `primary` 70% 배경 layer와 `반응한 사람` Profile 목록 제목을 구현·검증한다.
 
 ## 8. PROD-449 Reaction 요약 프레젠테이션과 PROD-418 통합
 
