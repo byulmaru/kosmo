@@ -318,6 +318,7 @@ type Profile implements Node {
   outgoingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileOutgoingProfileFollowRequestsConnection
   posts(after: String, before: String, first: Int, last: Int): PostConnection!
   relativeHandle: String!
+  tags: [String!]!
   unreadNotificationCount: Int!
   viewerState: ProfileViewerState
 }
@@ -506,6 +507,7 @@ input UpdateProfileInput {
   displayName: String
   followPolicy: ProfileFollowPolicy
   id: ID!
+  tags: [String!]
 }
 
 type UpdateProfilePayload {

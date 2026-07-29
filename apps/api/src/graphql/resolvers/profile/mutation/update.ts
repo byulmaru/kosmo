@@ -1,17 +1,11 @@
+import { ProfileFollowPolicy } from '@kosmo/core/enums';
+import { updateProfile } from '@kosmo/core/services';
 import {
-  AccountProfiles,
-  db,
-  firstOrThrow,
-  firstOrThrowWith,
-  Instances,
-  Profiles,
-} from '@kosmo/core/db';
-import { AccountProfileRole, ProfileFollowPolicy } from '@kosmo/core/enums';
-import { NotFoundError, PermissionDeniedError } from '@kosmo/core/error';
-import { profileBioSchema, profileDisplayNameSchema } from '@kosmo/core/validation';
-import { and, eq } from 'drizzle-orm';
+  profileBioSchema,
+  profileDisplayNameSchema,
+  profileTagsInputSchema,
+} from '@kosmo/core/validation';
 import { builder } from '@/graphql/builder';
-import { visibleProfileWhere } from '@/profile/visibility';
 import { Profile } from '../ref';
 
 builder.mutationField('updateProfile', (t) =>
@@ -29,37 +23,17 @@ builder.mutationField('updateProfile', (t) =>
       }),
       bio: t.input.string({ required: false, validate: profileBioSchema.optional() }),
       followPolicy: t.input.field({ type: ProfileFollowPolicy, required: false }),
+      tags: t.input.stringList({ required: false, validate: profileTagsInputSchema }),
     },
     resolve: async (_, { input }, ctx) => {
-      const profile = await db
-        .select({ id: Profiles.id, actorRole: AccountProfiles.role })
-        .from(Profiles)
-        .innerJoin(AccountProfiles, eq(AccountProfiles.profileId, Profiles.id))
-        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-        .where(
-          and(
-            eq(Profiles.id, input.id.id),
-            eq(AccountProfiles.accountId, ctx.session.accountId),
-            visibleProfileWhere({ profile: Profiles, instance: Instances }),
-          ),
-        )
-        .limit(1)
-        .then(firstOrThrowWith(() => new NotFoundError('Profile not found')));
-
-      if (profile.actorRole !== AccountProfileRole.OWNER) {
-        throw new PermissionDeniedError('Profile owner permission is required');
-      }
-
-      const updatedProfile = await db
-        .update(Profiles)
-        .set({
-          displayName: input.displayName ?? undefined,
-          bio: input.bio,
-          followPolicy: input.followPolicy ?? undefined,
-        })
-        .where(eq(Profiles.id, input.id.id))
-        .returning()
-        .then(firstOrThrow);
+      const updatedProfile = await updateProfile({
+        accountId: ctx.session.accountId,
+        profileId: input.id.id,
+        displayName: input.displayName ?? undefined,
+        bio: input.bio,
+        followPolicy: input.followPolicy ?? undefined,
+        tags: input.tags,
+      });
 
       return { profile: updatedProfile };
     },

@@ -39,10 +39,12 @@ let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
+let Hashtags: typeof CoreDb.Hashtags;
 let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
+let ProfileHashtags: typeof CoreDb.ProfileHashtags;
 let Profiles: typeof CoreDb.Profiles;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
@@ -68,10 +70,12 @@ describe('GraphQL remote profile boundary', () => {
       ActivityPubPosts,
       db,
       firstOrThrow,
+      Hashtags,
       Instances,
       pg,
       ProfileFollows,
       ProfileFollowRequests,
+      ProfileHashtags,
       Profiles,
       PostContents,
       Posts,
@@ -708,6 +712,138 @@ describe('GraphQL remote profile boundary', () => {
       displayName: 'Updated Owner',
       id: globalId('Profile', auth.profile.id),
     });
+  });
+
+  test('updates ordered Profile tags and preserves omitted/null input semantics', async () => {
+    const auth = await createAuthenticatedSession();
+    const update = await requestGraphQL<{
+      updateProfile: { profile: { displayName: string; tags: string[] } };
+    }>(
+      `mutation UpdateProfileTags($id: ID!, $tags: [String!]) {
+        updateProfile(input: { id: $id, displayName: "Tagged Owner", tags: $tags }) {
+          profile { displayName tags }
+        }
+      }`,
+      { id: globalId('Profile', auth.profile.id), tags: [' #Ｆｏｏ ', 'Straße'] },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(update);
+    assert.deepEqual(update.data?.updateProfile.profile, {
+      displayName: 'Tagged Owner',
+      tags: ['foo', 'strasse'],
+    });
+
+    const omitted = await requestGraphQL<{
+      updateProfile: { profile: { bio: string | null; tags: string[] } };
+    }>(
+      `mutation PreserveOmittedTags($id: ID!) {
+        updateProfile(input: { id: $id, bio: "updated bio" }) {
+          profile { bio tags }
+        }
+      }`,
+      { id: globalId('Profile', auth.profile.id) },
+      auth.token,
+    );
+    assertNoGraphQLErrors(omitted);
+    assert.deepEqual(omitted.data?.updateProfile.profile, {
+      bio: 'updated bio',
+      tags: ['foo', 'strasse'],
+    });
+
+    const nullInput = await requestGraphQL<{
+      updateProfile: { profile: { tags: string[] } };
+    }>(
+      `mutation PreserveNullTags($id: ID!) {
+        updateProfile(input: { id: $id, tags: null }) { profile { tags } }
+      }`,
+      { id: globalId('Profile', auth.profile.id) },
+      auth.token,
+    );
+    assertNoGraphQLErrors(nullInput);
+    assert.deepEqual(nullInput.data?.updateProfile.profile.tags, ['foo', 'strasse']);
+
+    const cleared = await requestGraphQL<{
+      updateProfile: { profile: { tags: string[] } };
+    }>(
+      `mutation ClearTags($id: ID!) {
+        updateProfile(input: { id: $id, tags: [] }) { profile { tags } }
+      }`,
+      { id: globalId('Profile', auth.profile.id) },
+      auth.token,
+    );
+    assertNoGraphQLErrors(cleared);
+    assert.deepEqual(cleared.data?.updateProfile.profile.tags, []);
+  });
+
+  test('returns empty tags for a Remote Profile without fetching remote metadata', async () => {
+    const remoteInstance = await createRemoteInstance({ domain: 'tagged.remote.example' });
+    const remote = await createProfile({ handle: 'tagged-remote', instanceId: remoteInstance.id });
+    const hashtag = await db
+      .insert(Hashtags)
+      .values({ name: `remote-${crypto.randomUUID()}` })
+      .returning()
+      .then(firstOrThrow);
+    await db.insert(ProfileHashtags).values({
+      hashtagId: hashtag.id,
+      position: 0,
+      profileId: remote.id,
+    });
+
+    const result = await requestGraphQL<{
+      profileByHandle: { tags: string[] } | null;
+    }>(
+      `query RemoteProfileTags($handle: String!) {
+        profileByHandle(handle: $handle) { tags }
+      }`,
+      { handle: `tagged-remote@${remoteInstance.domain}` },
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.profileByHandle?.tags, []);
+  });
+
+  test('batches Profile tag reads while preserving position order', async () => {
+    const first = await createProfile({ handle: 'tag-batch-first', instanceId: localInstanceId });
+    const second = await createProfile({ handle: 'tag-batch-second', instanceId: localInstanceId });
+    const hashtags = await db
+      .insert(Hashtags)
+      .values([
+        { name: `batch-first-one-${crypto.randomUUID()}` },
+        { name: `batch-first-two-${crypto.randomUUID()}` },
+        { name: `batch-second-one-${crypto.randomUUID()}` },
+      ])
+      .returning();
+    await db.insert(ProfileHashtags).values([
+      { hashtagId: hashtags[1]!.id, position: 1, profileId: first.id },
+      { hashtagId: hashtags[0]!.id, position: 0, profileId: first.id },
+      { hashtagId: hashtags[2]!.id, position: 0, profileId: second.id },
+    ]);
+
+    const result = await requestGraphQL<{
+      nodes: Array<{ id: string; tags: string[] } | null>;
+    }>(
+      `query BatchProfileTags($ids: [ID!]!) {
+        nodes(ids: $ids) {
+          ... on Profile { id tags }
+        }
+      }`,
+      {
+        ids: [globalId('Profile', first.id), globalId('Profile', second.id)],
+      },
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.nodes, [
+      {
+        id: globalId('Profile', first.id),
+        tags: [hashtags[0]!.name, hashtags[1]!.name],
+      },
+      {
+        id: globalId('Profile', second.id),
+        tags: [hashtags[2]!.name],
+      },
+    ]);
   });
 
   test('rejects a Member updating a Profile', async () => {

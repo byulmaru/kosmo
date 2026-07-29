@@ -1,0 +1,141 @@
+import { and, eq, inArray, ne } from 'drizzle-orm';
+import {
+  AccountProfiles,
+  Accounts,
+  first,
+  getDatabaseConnection,
+  Hashtags,
+  Instances,
+  ProfileHashtags,
+  Profiles,
+} from '../db';
+import {
+  AccountProfileRole,
+  AccountState,
+  InstanceKind,
+  InstanceState,
+  ProfileState,
+} from '../enums';
+import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
+import { profileTagsSchema } from '../validation';
+import type { Transaction } from '../db';
+import type { ProfileFollowPolicy } from '../enums';
+
+export type UpdateProfileInput = {
+  readonly accountId: string;
+  readonly profileId: string;
+  readonly displayName?: string;
+  readonly bio?: string | null;
+  readonly followPolicy?: ProfileFollowPolicy;
+  readonly tags?: readonly string[] | null;
+};
+
+const normalizeTags = (tags: UpdateProfileInput['tags']): string[] | null | undefined => {
+  if (tags === undefined || tags === null) {
+    return tags;
+  }
+
+  const result = profileTagsSchema.safeParse(tags);
+  if (!result.success) {
+    throw new ValidationError(result.error.issues[0]?.message ?? 'Invalid profile tags', {
+      field: 'tags',
+    });
+  }
+
+  return result.data;
+};
+
+export const updateProfile = async (input: UpdateProfileInput, tx?: Transaction) =>
+  getDatabaseConnection(tx).transaction(async (tx) => {
+    const normalizedTags = normalizeTags(input.tags);
+    const profile = await tx
+      .select({ profile: Profiles, actorRole: AccountProfiles.role })
+      .from(Profiles)
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .innerJoin(AccountProfiles, eq(AccountProfiles.profileId, Profiles.id))
+      .innerJoin(Accounts, eq(Accounts.id, AccountProfiles.accountId))
+      .where(
+        and(
+          eq(Profiles.id, input.profileId),
+          eq(AccountProfiles.accountId, input.accountId),
+          eq(Accounts.state, AccountState.ACTIVE),
+          eq(AccountProfiles.role, AccountProfileRole.OWNER),
+          eq(Instances.kind, InstanceKind.LOCAL),
+          eq(Profiles.state, ProfileState.ACTIVE),
+          ne(Instances.state, InstanceState.SUSPENDED),
+        ),
+      )
+      .limit(1)
+      .then(first);
+
+    if (!profile) {
+      const membership = await tx
+        .select({ actorRole: AccountProfiles.role })
+        .from(Profiles)
+        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+        .innerJoin(AccountProfiles, eq(AccountProfiles.profileId, Profiles.id))
+        .innerJoin(Accounts, eq(Accounts.id, AccountProfiles.accountId))
+        .where(
+          and(
+            eq(Profiles.id, input.profileId),
+            eq(AccountProfiles.accountId, input.accountId),
+            eq(Accounts.state, AccountState.ACTIVE),
+            eq(Instances.kind, InstanceKind.LOCAL),
+            eq(Profiles.state, ProfileState.ACTIVE),
+            ne(Instances.state, InstanceState.SUSPENDED),
+          ),
+        )
+        .limit(1)
+        .then(first);
+
+      if (membership?.actorRole !== undefined) {
+        throw new PermissionDeniedError('Profile owner permission is required');
+      }
+
+      throw new NotFoundError('Profile not found');
+    }
+
+    // A normal UPDATE acquires the Profile row lock before replacing its relations. This
+    // serializes concurrent replacements without adding an explicit application lock.
+    const updatedProfile = await tx
+      .update(Profiles)
+      .set({
+        displayName: input.displayName ?? profile.profile.displayName,
+        bio: input.bio === undefined ? profile.profile.bio : input.bio,
+        followPolicy: input.followPolicy ?? profile.profile.followPolicy,
+      })
+      .where(and(eq(Profiles.id, input.profileId), eq(Profiles.state, ProfileState.ACTIVE)))
+      .returning()
+      .then(first);
+
+    if (!updatedProfile) {
+      throw new NotFoundError('Profile not found');
+    }
+
+    if (normalizedTags !== undefined && normalizedTags !== null) {
+      await tx.delete(ProfileHashtags).where(eq(ProfileHashtags.profileId, input.profileId));
+
+      if (normalizedTags.length > 0) {
+        await tx
+          .insert(Hashtags)
+          .values(normalizedTags.map((name) => ({ name })))
+          .onConflictDoNothing({ target: Hashtags.name });
+
+        const hashtags = await tx
+          .select({ id: Hashtags.id, name: Hashtags.name })
+          .from(Hashtags)
+          .where(inArray(Hashtags.name, normalizedTags));
+        const hashtagIds = new Map(hashtags.map((hashtag) => [hashtag.name, hashtag.id]));
+
+        await tx.insert(ProfileHashtags).values(
+          normalizedTags.map((name, position) => ({
+            profileId: input.profileId,
+            hashtagId: hashtagIds.get(name)!,
+            position,
+          })),
+        );
+      }
+    }
+
+    return updatedProfile;
+  });
