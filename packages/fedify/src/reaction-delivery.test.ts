@@ -123,6 +123,7 @@ describe('Reaction delivery', () => {
       assert.deepEqual(call.sender, { identifier: target.senderProfileId });
       assert.deepEqual(call.options, {
         orderingKey: `${publicOrigin}/ap/reaction/${reaction.id}`,
+        preferSharedInbox: true,
       });
 
       const json = (await call.activity.toJsonLd()) as { content?: unknown; type?: unknown };
@@ -167,6 +168,7 @@ describe('Reaction delivery', () => {
     assert.equal(original.published?.toString(), '2026-07-28T00:00:00Z');
     assert.deepEqual(call.options, {
       orderingKey: `${publicOrigin}/ap/reaction/${reaction.id}`,
+      preferSharedInbox: true,
     });
     assert.equal(context.calls[0]?.options?.orderingKey, call.options?.orderingKey);
   });
@@ -307,7 +309,9 @@ const createReaction = (fixture: DeliveryFixture, type: string) =>
 
 interface SendActivityCall {
   readonly activity: Activity;
-  readonly options: { readonly orderingKey?: string } | undefined;
+  readonly options:
+    | { readonly orderingKey?: string; readonly preferSharedInbox?: boolean }
+    | undefined;
   readonly recipient: Recipient;
   readonly sender: { readonly identifier: string };
 }
@@ -321,7 +325,7 @@ const createContextFixture = () => {
       sender: { identifier: string },
       recipient: Recipient,
       activity: Activity,
-      options?: { orderingKey?: string },
+      options?: { orderingKey?: string; preferSharedInbox?: boolean },
     ) => {
       calls.push({ activity, options, recipient, sender });
     },

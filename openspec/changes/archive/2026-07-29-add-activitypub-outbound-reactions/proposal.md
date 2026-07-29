@@ -10,7 +10,8 @@ Kosmo는 Local Profile의 Reaction을 domain transaction에 저장하지만 Remo
   직렬화한다.
 - immutable Reaction ID에서 `/ap/reaction/{reactionId}` activity URI를 파생하고 canonical ActivityPub Post URI를
   object로 사용한다.
-- 저장된 Remote Post Author inbox/shared inbox에만 직접 전달하고 행동 주체 followers에는 fan-out하지 않는다.
+- 저장된 Remote Post Author의 shared inbox를 우선하고 없으면 personal inbox로 직접 전달하며 행동 주체 followers에는
+  fan-out하지 않는다.
 - 실제 생성·삭제에만 발신하며, 삭제는 원본 activity를 내장한 `{activityUri}#undo` `Undo`를 같은 ordering key로
   전달한다.
 - Local Post, non-local actor, unsupported Type과 Active가 아닌 remote target에는 delivery를 시도하지 않는다.
@@ -46,7 +47,7 @@ Kosmo는 Local Profile의 Reaction을 domain transaction에 저장하지만 Remo
   구분하고 optional transaction에는 독립적으로 참여한다. top-level actual create/delete는 commit 뒤 Notification을,
   Local origin은 Fedify lifecycle을 실행한다.
 - `packages/fedify`: 저장된 Reaction·Post·actor projection 조회, stable activity identity,
-  `Like`·`EmojiReact`·`Undo` 직렬화와 inbox/shared inbox 직접 delivery 경계
+  `Like`·`EmojiReact`·`Undo` 직렬화와 shared inbox 우선·personal inbox fallback 직접 delivery 경계
 - API/Fedify/core 테스트: 여섯 Type 매핑, local/remote·actor/instance eligibility, duplicate add/repeated delete,
   exact Undo, recipient·ordering과 post-commit failure isolation 검증
 - PostgreSQL/Drizzle schema, MessageQueue/NATS/transactional outbox 변경 없음

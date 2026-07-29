@@ -44,13 +44,14 @@ activity actor는 행동 주체 Local Profile의 actor URI, object는 대상 Pos
 ### Requirement: Remote Post Author에게만 직접 전달한다
 
 **Authority / Provenance:** `docs/domain/objects/reaction.md`, `docs/domain/objects/post.md`, PROD-499. 시스템은 조회 가능한 Remote Post의 저장 author에게만 Reaction activity를 직접 전달해야 한다(MUST). Local Profile이 만든 activity는 Remote Post Author actor를
-`to`로 하여 그 actor의 inbox/shared inbox로 직접 전달해야 한다(MUST). 대상 author의 Remote Instance가 Active일
-때만 delivery를 시도해야 하며(MUST), 행동 주체의 followers collection에는 fan-out하지 않아야 한다(MUST NOT).
+`to`로 하고, 저장된 shared inbox가 있으면 이를 우선하며 없으면 personal inbox로 직접 전달해야 한다(MUST). 대상
+author의 Remote Instance가 Active일 때만 delivery를 시도해야 하며(MUST), 행동 주체의 followers collection에는
+fan-out하지 않아야 한다(MUST NOT).
 
 #### Scenario: Active Remote Post Author에게 전달한다
 
 - **WHEN** Local actor identity를 가진 Profile이 Active Remote Instance의 author가 작성한 조회 가능한 Remote Post에 Reaction을 실제 생성한다
-- **THEN** 시스템은 저장된 author actor를 `to`로 포함해 author inbox/shared inbox에 직접 전달한다
+- **THEN** 시스템은 저장된 author actor를 `to`로 포함하고 shared inbox가 있으면 이를 우선하며 없으면 personal inbox로 직접 전달한다
 - **THEN** 시스템은 행동 주체의 followers collection에는 전달하지 않는다
 
 #### Scenario: Local Post에는 전달하지 않는다

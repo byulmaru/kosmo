@@ -30,15 +30,15 @@
 - Status: Active
 - Context / Problem: Reaction의 대상 author와 행동 주체 followers 중 누가 이번 delivery recipient인지 경계를
   고정해야 한다.
-- Decision Outcome: 조회 가능한 Remote Post의 저장 author actor를 `to`로 하여 inbox/shared inbox에 직접 전달하고
-  행동 주체 followers에는 fan-out하지 않는다. sender는 Local actor identity를 가져야 하고 target Remote Instance는
-  Active여야 한다.
+- Decision Outcome: 조회 가능한 Remote Post의 저장 author actor를 `to`로 하고, 저장된 shared inbox가 있으면 이를
+  우선하며 없으면 personal inbox로 직접 전달한다. 행동 주체 followers에는 fan-out하지 않는다. sender는 Local actor
+  identity를 가져야 하고 target Remote Instance는 Active여야 한다.
 - Alternatives Considered: Hackers’ Pub처럼 author와 followers에 모두 전달하는 방식은 federation 도달 범위를
   넓히고 PROD-499의 author-delivery 범위를 벗어난다. Local Post delivery는 remote recipient가 없다.
 - Consequences: Local Post, non-local sender, Unresponsive target과 기존 조회 정책상 unavailable target은
   committed Reaction만 유지하고 Fedify delivery를 만들지 않는다.
-- Confirmation / Follow-up: author inbox/shared inbox recipient, followers 부재와 각 eligibility no-delivery를
-  integration test로 검증한다.
+- Confirmation / Follow-up: author shared inbox 우선·personal inbox fallback, followers 부재와 각 eligibility
+  no-delivery를 integration test로 검증한다.
 
 ### Reaction ID를 원본과 Undo의 안정 identity로 사용한다
 

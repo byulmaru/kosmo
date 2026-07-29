@@ -59,7 +59,8 @@ mapping이 가리킨 exact row ID를 concurrency guard로 전달해 같은 Profi
 
 Fedify create와 Undo delivery는 core transaction이 반환한 immutable Reaction row를 받는다. 따라서 create commit 직후
 동시 delete가 일어나도 원본 activity를 잃지 않는다. 두 경로 모두 Fedify 내부에서 sender Local identity, target Remote ActivityPub Profile/Instance Active 상태, canonical
-ActivityPub Post URI와 stored actor URI/inbox/shared inbox를 조회한다. 부적격 projection에는 전송하지 않는다.
+ActivityPub Post URI와 stored actor URI/inbox/shared inbox를 조회한다. shared inbox가 있으면 이를 우선하고 없으면
+personal inbox로 fallback하며, 부적격 projection에는 전송하지 않는다.
 
 Fedify는 `❤️`를 exact content의 `Like`, 나머지 허용 Type을 `EmojiReact`로 만든다. 원본 activity URI는 configured
 local canonical origin과 Reaction ID로 만들고, Undo는 같은 데이터로 exact 원본 activity를 재구성해

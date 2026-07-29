@@ -145,6 +145,7 @@ export const sendReaction = async (reaction: OutboundReaction): Promise<void> =>
   const orderingKey = getReactionActivityUri(context.canonicalOrigin, reaction.id).href;
   await context.sendActivity({ identifier: reaction.profileId }, projection.recipient, activity, {
     orderingKey,
+    preferSharedInbox: true,
   });
 };
 
@@ -169,5 +170,6 @@ export const sendReactionUndo = async (reaction: OutboundReaction): Promise<void
 
   await context.sendActivity({ identifier: reaction.profileId }, projection.recipient, activity, {
     orderingKey: originalActivity.id.href,
+    preferSharedInbox: true,
   });
 };

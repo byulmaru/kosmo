@@ -80,8 +80,9 @@ Reaction 삭제는 입력한 Post와 Reaction Type에서 행동 주체 Profile�
 - Activity의 `actor`는 행동 주체 Local Profile의 canonical actor URI이고, `object`는 대상 Post의
   ActivityPub identity다. Local Post는 파생 Note URI를, 저장된 Remote Post는 기존 ActivityPub Post URI를
   사용한다.
-- 발신 대상은 저장된 Remote Post Author actor의 inbox 또는 shared inbox다. 대상 Post Author actor를
-  `to`에 포함하며 행동 주체의 followers collection에는 fan-out하지 않는다. Local Post 대상 Reaction과
+- 발신 대상은 저장된 Remote Post Author actor다. 대상 Post Author actor를 `to`에 포함하고, 저장된 shared
+  inbox가 있으면 이를 우선하며 없으면 personal inbox로 직접 전달한다. 행동 주체의 followers collection에는
+  fan-out하지 않는다. Local Post 대상 Reaction과
   Local actor identity를 소유하지 않는 Profile의 application action에는 outbound activity를 만들지 않는다.
 - Remote Post Author의 Profile과 Instance가 available하고 Instance State가 `Active`일 때만 delivery를
   시도한다. `Unresponsive` 대상에는 현재 상태를 유지한 채 delivery를 시도하지 않으며 `Suspended` 대상은

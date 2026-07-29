@@ -10,7 +10,7 @@
 **Deliverable**
 
 여섯 built-in Reaction이 stable identity의 `Like`·`EmojiReact`와 exact `Undo`로 직렬화되어 저장된 Remote Post
-Author inbox/shared inbox에 직접 전달된다.
+Author의 shared inbox를 우선하고 없으면 personal inbox로 직접 전달된다.
 
 **Guardrails**
 
@@ -22,13 +22,13 @@ Author inbox/shared inbox에 직접 전달된다.
 
 **Verification**
 
-- 여섯 Type의 vocabulary JSON-LD, stable URI, canonical object, recipient actor, shared inbox routing, exact embedded
-  Undo와 동일 ordering key를 Fedify test로 검증한다.
+- 여섯 Type의 vocabulary JSON-LD, stable URI, canonical object, recipient actor, shared inbox 우선·personal inbox
+  fallback routing, exact embedded Undo와 동일 ordering key를 Fedify test로 검증한다.
 - unsupported Type, inbox 부재와 malformed stored URI의 delivery 거부를 검증한다.
 
 - [x] 1.1 여섯 Type의 원본 activity identity와 `Like`·`EmojiReact` 직렬화를 구현한다.
 - [x] 1.2 exact 원본 activity를 내장하는 `#undo` identity와 공통 ordering lifecycle을 구현한다.
-- [x] 1.3 Remote Post Author inbox/shared inbox direct delivery와 직렬화 fixture를 검증한다.
+- [x] 1.3 Remote Post Author shared inbox 우선·personal inbox fallback delivery와 직렬화 fixture를 검증한다.
 
 ## 2. PROD-499 Local Reaction post-commit lifecycle 연결
 
