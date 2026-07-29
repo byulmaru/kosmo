@@ -15,6 +15,7 @@ type State = {
   commitNativeLogout: (options: NativeCommitOptions) => void;
   errors: unknown[];
   events: string[];
+  requestWebLogout: () => Promise<void>;
   routerReplace: (href: string) => void;
 };
 
@@ -29,6 +30,9 @@ function createState(): State {
     },
     errors: [],
     events: [],
+    requestWebLogout: async () => {
+      state.events.push('request-web-logout');
+    },
     routerReplace: (href) => {
       assert.equal(href, '/');
       state.events.push('replace-root');
@@ -37,6 +41,7 @@ function createState(): State {
 }
 
 let state = createState();
+const platform = { OS: 'native' };
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -59,7 +64,7 @@ mockModule('react', {
   },
 });
 mockModule('react-native', {
-  Platform: { OS: 'native' },
+  Platform: platform,
 });
 mockModule('react-relay', {
   graphql: () => ({}),
@@ -67,12 +72,12 @@ mockModule('react-relay', {
 });
 mockModule(new URL('../auth/logout.ts', import.meta.url), {
   LOGOUT_FAILURE_MESSAGE: '로그아웃하지 못했습니다. 다시 시도해주세요.',
-  requestWebLogout: async () => {},
+  requestWebLogout: () => state.requestWebLogout(),
 });
 mockModule(new URL('../relay/RelayActorProvider.tsx', import.meta.url), {
   useRelayActor: () => ({
     clearNativeSession: () => state.clearNativeSession(),
-    resetActor: () => {},
+    resetActor: () => state.events.push('reset-actor'),
   }),
 });
 
@@ -84,6 +89,7 @@ before(async () => {
 
 beforeEach(() => {
   state = createState();
+  platform.OS = 'native';
 });
 
 async function flushLogout() {
@@ -91,6 +97,15 @@ async function flushLogout() {
 }
 
 describe('useLogout production composition', () => {
+  it('Web은 BFF 성공 뒤 actor Store를 교체하고 root로 replace한다', async () => {
+    platform.OS = 'web';
+
+    useLogout().logout();
+    await flushLogout();
+
+    assert.deepEqual(state.events, ['request-web-logout', 'reset-actor', 'replace-root']);
+  });
+
   it('Native는 실제 Relay mutation 성공 뒤 SecureStore와 actor를 정리하고 root로 replace한다', async () => {
     useLogout().logout();
     await flushLogout();

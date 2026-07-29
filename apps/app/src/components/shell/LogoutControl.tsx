@@ -1,23 +1,19 @@
 import { LogOut } from 'lucide-react-native';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useLogout } from '@/session/logout';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import type { StyleProp, ViewStyle } from 'react-native';
 
-export type LogoutControlProps = {
-  error: string | null;
-  logout: () => void;
-  pending: boolean;
-};
-
 export function LogoutControl({
   compact = false,
-  error,
-  logout,
-  pending,
   style,
-}: LogoutControlProps & { compact?: boolean; style?: StyleProp<ViewStyle> }) {
+}: {
+  compact?: boolean;
+  style?: StyleProp<ViewStyle>;
+}) {
   const theme = useTheme();
+  const { error, logout, pending } = useLogout();
 
   return (
     <View style={[styles.root, compact && styles.compactRoot]}>

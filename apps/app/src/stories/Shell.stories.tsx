@@ -16,7 +16,6 @@ import { spacing } from '@/theme/tokens';
 import { profile, shellQuery } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { LogoutControlProps } from '@/components/shell/LogoutControl';
 import type { ShellStoriesQuery as ShellStoriesQueryType } from './__generated__/ShellStoriesQuery.graphql';
 
 const secondProfile = profile({
@@ -50,12 +49,6 @@ const followedProfile = profile({
 const query = {
   ...shellQuery({ profiles: [selectedProfile, secondProfile], selectedProfile }),
   node: followedProfile,
-};
-
-const storyLogout: LogoutControlProps = {
-  error: null,
-  logout: () => undefined,
-  pending: false,
 };
 
 const ShellStoriesQuery = graphql`
@@ -94,7 +87,7 @@ function NavigationCatalog() {
     <Catalog width={760}>
       <Section title="Sidebar · full">
         <View style={{ height: 620 }}>
-          <SidebarNavigation logout={storyLogout} query={data.query} />
+          <SidebarNavigation query={data.query} />
         </View>
       </Section>
       <Section title="Right rail">
@@ -113,7 +106,7 @@ function BottomNavigationStory() {
 function CompactSidebarStory() {
   return (
     <View style={{ height: 560, width: 80 }}>
-      <SidebarNavigation compact logout={storyLogout} query={useShellStoryData().query} />
+      <SidebarNavigation compact query={useShellStoryData().query} />
     </View>
   );
 }
@@ -137,7 +130,7 @@ function FollowCacheStory() {
       <Section title="Sidebar and followed profile">
         <View style={{ flexDirection: 'row', gap: spacing.lg }}>
           <View style={{ height: 620, width: 320 }}>
-            <SidebarNavigation logout={storyLogout} query={data} />
+            <SidebarNavigation query={data} />
           </View>
           <View style={{ flex: 1 }}>
             <ProfileHero

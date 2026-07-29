@@ -53,7 +53,7 @@ full/compact/drawer의 공용 로그아웃 control이 Web에서는 logout BFF를
 - server 결과가 확정되기 전에 local credential, Relay Environment/Store 또는 authenticated route를 제거하지 않는다.
 - 결과 불명 실패에서는 credential과 현재 viewer 상태를 유지하고 재시도를 제공한다.
 - 이전 viewer Relay cache를 guest 또는 다음 Session에 재사용하지 않는다.
-- 모든 shell surface는 하나의 pending/error 상태를 공유해 중복 server 요청을 막고 접근 가능한 상태를 제공한다.
+- 현재 layout에서 조작 가능한 각 shell surface는 production logout action을 직접 소유하고, 그 surface의 pending/error 상태로 중복 server 요청을 막고 접근 가능한 상태를 제공한다.
 - 메뉴 스타일·배치 개편과 Android·iOS production 배포를 포함하지 않는다.
 
 **Verification**

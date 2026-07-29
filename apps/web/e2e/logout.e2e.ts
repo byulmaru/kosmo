@@ -67,68 +67,70 @@ for (const surface of logoutSurfaces) {
   });
 }
 
-test('결과 불명 실패는 Session과 화면을 유지하고 중복 실행 없이 재시도한다', async ({
-  context,
-  page,
-}) => {
-  const viewer = await createE2ESession({
-    displayName: 'E2E Logout Retry',
-    handle: 'e2e-logout-retry',
+for (const surface of logoutSurfaces) {
+  test(`${surface.name} 결과 불명 실패는 Session과 화면을 유지하고 중복 실행 없이 재시도한다`, async ({
+    context,
+    page,
+  }) => {
+    const viewer = await createE2ESession({
+      displayName: `E2E Logout Retry ${surface.name}`,
+      handle: `e2e-logout-retry-${surface.name.replaceAll(' ', '-')}`,
+    });
+    let releaseFirstLogout!: () => void;
+    const firstLogoutPaused = new Promise<void>((resolve) => {
+      releaseFirstLogout = resolve;
+    });
+    let logoutRequestCount = 0;
+
+    await setE2ESessionCookie(context, viewer.token);
+    await page.setViewportSize(surface.viewport);
+    await page.route('**/logout', async (route) => {
+      logoutRequestCount += 1;
+
+      if (logoutRequestCount === 1) {
+        await firstLogoutPaused;
+        await route.fulfill({ body: 'temporary logout failure', status: 503 });
+        return;
+      }
+
+      await route.continue();
+    });
+    await page.goto('/home');
+
+    const logout = await logoutControl(page, surface.name);
+
+    await logout.click();
+    await expect.poll(() => logoutRequestCount).toBe(1);
+    await expect(logout).toBeDisabled();
+    await expect(logout).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.getByRole('progressbar', { name: '로그아웃 처리 중' })).toBeVisible();
+
+    await logout.dispatchEvent('click');
+    await expect.poll(() => logoutRequestCount).toBe(1);
+
+    releaseFirstLogout();
+
+    await expect(page.getByRole('alert')).toHaveText('로그아웃하지 못했습니다. 다시 시도해주세요.');
+    await expect(logout).toBeEnabled();
+    await expect(page).toHaveURL(/\/home$/);
+    await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toBeVisible();
+    expect((await sessionCookie(context))?.value).toBe(viewer.token);
+    expect(await readSessionState(viewer.session.id)).toBe(SessionState.ACTIVE);
+
+    await page.unroute('**/logout');
+    const retryResponse = page.waitForResponse(
+      (response) => new URL(response.url()).pathname === '/logout',
+    );
+
+    await logout.click();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    expect((await retryResponse).status()).toBe(204);
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
+    expect(await sessionCookie(context)).toBeUndefined();
+    expect(await readSessionState(viewer.session.id)).toBe(SessionState.REVOKED);
   });
-  let releaseFirstLogout!: () => void;
-  const firstLogoutPaused = new Promise<void>((resolve) => {
-    releaseFirstLogout = resolve;
-  });
-  let logoutRequestCount = 0;
-
-  await setE2ESessionCookie(context, viewer.token);
-  await page.setViewportSize({ height: 800, width: 1440 });
-  await page.route('**/logout', async (route) => {
-    logoutRequestCount += 1;
-
-    if (logoutRequestCount === 1) {
-      await firstLogoutPaused;
-      await route.fulfill({ body: 'temporary logout failure', status: 503 });
-      return;
-    }
-
-    await route.continue();
-  });
-  await page.goto('/home');
-
-  const logout = page.getByRole('button', { name: '로그아웃' });
-
-  await logout.click();
-  await expect.poll(() => logoutRequestCount).toBe(1);
-  await expect(logout).toBeDisabled();
-  await expect(logout).toHaveAttribute('aria-disabled', 'true');
-  await expect(page.getByRole('progressbar', { name: '로그아웃 처리 중' })).toBeVisible();
-
-  await logout.dispatchEvent('click');
-  await expect.poll(() => logoutRequestCount).toBe(1);
-
-  releaseFirstLogout();
-
-  await expect(page.getByRole('alert')).toHaveText('로그아웃하지 못했습니다. 다시 시도해주세요.');
-  await expect(logout).toBeEnabled();
-  await expect(page).toHaveURL(/\/home$/);
-  await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toBeVisible();
-  expect((await sessionCookie(context))?.value).toBe(viewer.token);
-  expect(await readSessionState(viewer.session.id)).toBe(SessionState.ACTIVE);
-
-  await page.unroute('**/logout');
-  const retryResponse = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === '/logout',
-  );
-
-  await logout.click();
-  await expect(page.getByRole('alert')).toHaveCount(0);
-  expect((await retryResponse).status()).toBe(204);
-  await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
-  expect(await sessionCookie(context)).toBeUndefined();
-  expect(await readSessionState(viewer.session.id)).toBe(SessionState.REVOKED);
-});
+}
 
 test('화면을 연 뒤 이미 폐기된 Session도 로그아웃 성공으로 정리한다', async ({ context, page }) => {
   const viewer = await createE2ESession({

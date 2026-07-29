@@ -24,7 +24,6 @@ import type { Href } from 'expo-router';
 import type { LucideIcon } from 'lucide-react-native';
 import type { ViewStyle } from 'react-native';
 import type { SidebarNavigation_query$key } from './__generated__/SidebarNavigation_query.graphql';
-import type { LogoutControlProps } from './LogoutControl';
 
 const SidebarNavigationFragment = graphql`
   fragment SidebarNavigation_query on Query {
@@ -82,7 +81,6 @@ const avatarShadow = {
 
 type Props = {
   compact?: boolean;
-  logout: LogoutControlProps;
   onNavigate?: () => void;
   onSwitcherOpenChange?: (open: boolean) => void;
   query: SidebarNavigation_query$key;
@@ -92,7 +90,6 @@ type Props = {
 
 export function SidebarNavigation({
   compact = false,
-  logout,
   onNavigate,
   onSwitcherOpenChange,
   query,
@@ -304,14 +301,14 @@ export function SidebarNavigation({
               </Pressable>
             </Link>
           ) : null}
-          {!compact ? <LogoutControl {...logout} /> : null}
+          {!compact ? <LogoutControl /> : null}
         </View>
 
         <View
           style={[styles.footer, compact && styles.compactFooter, { borderColor: theme.border }]}
         >
           {compact ? (
-            <LogoutControl {...logout} compact style={[styles.footerItem, styles.compactItem]} />
+            <LogoutControl compact style={[styles.footerItem, styles.compactItem]} />
           ) : null}
           <Pressable
             accessibilityLabel="설정 & 지원"

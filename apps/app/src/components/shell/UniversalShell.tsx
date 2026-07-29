@@ -16,7 +16,6 @@ import { graphql, useLazyLoadQuery } from 'react-relay';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { Splash } from '@/components/Splash';
 import { useRelayActor } from '@/relay/RelayActorProvider';
-import { useLogout } from '@/session/logout';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { BottomTabBar } from './BottomTabBar';
@@ -94,7 +93,6 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  const logout = useLogout();
   const data = useLazyLoadQuery<UniversalShellQuery>(
     ShellQuery,
     {},
@@ -156,7 +154,6 @@ function UniversalShellContent({ revision }: { revision: number }) {
           >
             <SidebarNavigation
               compact={compact}
-              logout={logout}
               onSwitcherOpenChange={setSwitcherOpen}
               query={data}
               switcherOpen={switcherOpen}
@@ -243,7 +240,6 @@ function UniversalShellContent({ revision }: { revision: number }) {
               style={[styles.drawer, { backgroundColor: theme.card }]}
             >
               <SidebarNavigation
-                logout={logout}
                 onNavigate={closeDrawer}
                 onSwitcherOpenChange={setSwitcherOpen}
                 query={data}
