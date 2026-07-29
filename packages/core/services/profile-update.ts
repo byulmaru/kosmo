@@ -59,44 +59,25 @@ export const updateProfile = async (input: UpdateProfileInput, tx?: Transaction)
           eq(Profiles.id, input.profileId),
           eq(AccountProfiles.accountId, input.accountId),
           eq(Accounts.state, AccountState.ACTIVE),
-          eq(AccountProfiles.role, AccountProfileRole.OWNER),
           eq(Instances.kind, InstanceKind.LOCAL),
           eq(Profiles.state, ProfileState.ACTIVE),
           ne(Instances.state, InstanceState.SUSPENDED),
         ),
       )
       .limit(1)
+      .for('update', { of: Profiles })
       .then(first);
 
     if (!profile) {
-      const membership = await tx
-        .select({ actorRole: AccountProfiles.role })
-        .from(Profiles)
-        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-        .innerJoin(AccountProfiles, eq(AccountProfiles.profileId, Profiles.id))
-        .innerJoin(Accounts, eq(Accounts.id, AccountProfiles.accountId))
-        .where(
-          and(
-            eq(Profiles.id, input.profileId),
-            eq(AccountProfiles.accountId, input.accountId),
-            eq(Accounts.state, AccountState.ACTIVE),
-            eq(Instances.kind, InstanceKind.LOCAL),
-            eq(Profiles.state, ProfileState.ACTIVE),
-            ne(Instances.state, InstanceState.SUSPENDED),
-          ),
-        )
-        .limit(1)
-        .then(first);
-
-      if (membership?.actorRole !== undefined) {
-        throw new PermissionDeniedError('Profile owner permission is required');
-      }
-
       throw new NotFoundError('Profile not found');
     }
 
-    // A normal UPDATE acquires the Profile row lock before replacing its relations. This
-    // serializes concurrent replacements without adding an explicit application lock.
+    if (profile.actorRole !== AccountProfileRole.OWNER) {
+      throw new PermissionDeniedError('Profile owner permission is required');
+    }
+
+    // The authorization SELECT locks the current Profile row before replacing scalar fields or
+    // relations. This serializes concurrent partial updates without writing stale fallback values.
     const updatedProfile = await tx
       .update(Profiles)
       .set({

@@ -214,8 +214,8 @@ test('호출 transaction이 rollback되면 scalar와 relation이 모두 복구�
 
 test('동시 replacement는 중간 목록 없이 한 요청의 전체 목록으로 끝난다', async () => {
   const { account, profile } = await createProfileFixture();
-  const first = ['first', 'first_two'];
-  const second = ['second', 'second_two', 'second_three'];
+  const first = ['shared', 'first_two'];
+  const second = ['shared', 'second_two', 'second_three'];
 
   await Promise.all([
     updateProfile({ accountId: account.id, profileId: profile.id, tags: first }),
@@ -227,4 +227,20 @@ test('동시 replacement는 중간 목록 없이 한 요청의 전체 목록으�
     names.join(',') === first.join(',') || names.join(',') === second.join(','),
     `unexpected concurrent result: ${names.join(',')}`,
   );
+});
+
+test('동시 partial scalar update는 서로 다른 필드를 모두 보존한다', async () => {
+  const { account, profile } = await createProfileFixture();
+
+  await Promise.all([
+    updateProfile({ accountId: account.id, profileId: profile.id, displayName: 'Display name' }),
+    updateProfile({ accountId: account.id, profileId: profile.id, bio: 'Bio' }),
+  ]);
+
+  const persisted = await db
+    .select({ displayName: Profiles.displayName, bio: Profiles.bio })
+    .from(Profiles)
+    .where(eq(Profiles.id, profile.id))
+    .then(firstOrThrow);
+  assert.deepEqual(persisted, { displayName: 'Display name', bio: 'Bio' });
 });

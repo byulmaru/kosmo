@@ -820,30 +820,46 @@ describe('GraphQL remote profile boundary', () => {
       { hashtagId: hashtags[2]!.id, position: 0, profileId: second.id },
     ]);
 
-    const result = await requestGraphQL<{
-      nodes: Array<{ id: string; tags: string[] } | null>;
-    }>(
-      `query BatchProfileTags($ids: [ID!]!) {
-        nodes(ids: $ids) {
-          ... on Profile { id tags }
-        }
-      }`,
-      {
-        ids: [globalId('Profile', first.id), globalId('Profile', second.id)],
-      },
-    );
+    const previousDebug = pg.options.debug;
+    const profileHashtagQueries: string[] = [];
+    pg.options.debug = (connection, query, parameters, paramTypes) => {
+      if (typeof previousDebug === 'function') {
+        previousDebug(connection, query, parameters, paramTypes);
+      }
+      if (query.toLowerCase().includes('profile_hashtag')) {
+        profileHashtagQueries.push(query);
+      }
+    };
 
-    assertNoGraphQLErrors(result);
-    assert.deepEqual(result.data?.nodes, [
-      {
-        id: globalId('Profile', first.id),
-        tags: [hashtags[0]!.name, hashtags[1]!.name],
-      },
-      {
-        id: globalId('Profile', second.id),
-        tags: [hashtags[2]!.name],
-      },
-    ]);
+    try {
+      const result = await requestGraphQL<{
+        nodes: Array<{ id: string; tags: string[] } | null>;
+      }>(
+        `query BatchProfileTags($ids: [ID!]!) {
+          nodes(ids: $ids) {
+            ... on Profile { id tags }
+          }
+        }`,
+        {
+          ids: [globalId('Profile', first.id), globalId('Profile', second.id)],
+        },
+      );
+
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(result.data?.nodes, [
+        {
+          id: globalId('Profile', first.id),
+          tags: [hashtags[0]!.name, hashtags[1]!.name],
+        },
+        {
+          id: globalId('Profile', second.id),
+          tags: [hashtags[2]!.name],
+        },
+      ]);
+      assert.equal(profileHashtagQueries.length, 1);
+    } finally {
+      pg.options.debug = previousDebug;
+    }
   });
 
   test('rejects a Member updating a Profile', async () => {
