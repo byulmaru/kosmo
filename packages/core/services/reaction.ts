@@ -1,27 +1,50 @@
 import { and, eq } from 'drizzle-orm';
-import { db, first, getDatabaseConnection, Posts, Reactions } from '../db';
+import { first, getDatabaseConnection, Posts, Reactions } from '../db';
 import { NotificationKind, PostState } from '../enums';
 import { NotFoundError, ValidationError } from '../error';
 import { reactionTypeSchema } from '../validation';
-import { deleteNotificationBySource } from './notification';
+import { createReactionNotification, deleteNotificationBySource } from './notification';
 import type { Transaction } from '../db';
 
 type AddReactionInput = {
   readonly actorProfileId: string;
+  readonly origin: 'LOCAL' | 'ACTIVITYPUB';
   readonly postId: string;
   readonly type: string;
 };
 
+type DeleteReactionInput = {
+  readonly actorProfileId: string;
+  readonly expectedReactionId?: string;
+  readonly origin: 'LOCAL' | 'ACTIVITYPUB';
+  readonly postId: string;
+  readonly type: string;
+};
+
+type AddReactionResult = {
+  readonly created: boolean;
+  readonly postCommit: () => Promise<void>;
+  readonly reaction: typeof Reactions.$inferSelect;
+};
+
+const noPostCommit = async (): Promise<void> => {};
+
+const oncePostCommit = (effect: () => Promise<void>): (() => Promise<void>) => {
+  let pending: Promise<void> | undefined;
+
+  return () => (pending ??= effect());
+};
+
 export const addReaction = async (
-  { actorProfileId, postId, type }: AddReactionInput,
+  { actorProfileId, origin, postId, type }: AddReactionInput,
   tx?: Transaction,
-): Promise<{ readonly created: boolean; readonly reaction: typeof Reactions.$inferSelect }> => {
+): Promise<AddReactionResult> => {
   const parsedType = reactionTypeSchema.safeParse(type);
   if (!parsedType.success) {
     throw new ValidationError(parsedType.error.issues[0]?.message, { field: 'type' });
   }
 
-  return getDatabaseConnection(tx).transaction(async (tx) => {
+  const result = await getDatabaseConnection(tx).transaction(async (tx) => {
     const post = await tx
       .select({ id: Posts.id })
       .from(Posts)
@@ -60,48 +83,84 @@ export const addReaction = async (
 
     return { created: inserted !== undefined, reaction };
   });
-};
 
-type DeleteReactionInput = {
-  readonly actorProfileId: string;
-  readonly postId: string;
-  readonly type: string;
+  return {
+    ...result,
+    postCommit: result.created
+      ? oncePostCommit(async () => {
+          await createReactionNotification(result.reaction.id).catch(() => undefined);
+
+          if (origin === 'LOCAL') {
+            try {
+              const { sendReaction } = await import('@kosmo/fedify');
+              await sendReaction(result.reaction);
+            } catch (error) {
+              console.error('Post-commit ActivityPub Reaction delivery failed', {
+                error,
+                reactionId: result.reaction.id,
+              });
+            }
+          }
+        })
+      : noPostCommit,
+  };
 };
 
 export const deleteReaction = async (
   input: DeleteReactionInput,
-): Promise<{ readonly postId: string; readonly reactionId: string | null }> => {
+  tx?: Transaction,
+): Promise<{
+  readonly postId: string;
+  readonly postCommit: () => Promise<void>;
+  readonly reaction: typeof Reactions.$inferSelect | null;
+}> => {
   const parsedType = reactionTypeSchema.safeParse(input.type);
   if (!parsedType.success) {
     throw new ValidationError(parsedType.error.issues[0]?.message, { field: 'type' });
   }
 
-  const result = await db.transaction(async (tx) => {
-    const deleted = await tx
-      .delete(Reactions)
-      .where(
-        and(
-          eq(Reactions.profileId, input.actorProfileId),
-          eq(Reactions.postId, input.postId),
-          eq(Reactions.type, parsedType.data),
-        ),
-      )
-      .returning({ id: Reactions.id })
-      .then(first);
+  const reaction = await getDatabaseConnection(tx)
+    .transaction((tx) =>
+      tx
+        .delete(Reactions)
+        .where(
+          and(
+            input.expectedReactionId ? eq(Reactions.id, input.expectedReactionId) : undefined,
+            eq(Reactions.profileId, input.actorProfileId),
+            eq(Reactions.postId, input.postId),
+            eq(Reactions.type, parsedType.data),
+          ),
+        )
+        .returning()
+        .then(first),
+    )
+    .then((deleted) => deleted ?? null);
+  return {
+    postId: input.postId,
+    postCommit: reaction
+      ? oncePostCommit(async () => {
+          try {
+            await deleteNotificationBySource(NotificationKind.REACTION, reaction.id);
+          } catch (error) {
+            console.error('Failed to clean up Reaction Notification', {
+              error,
+              reactionId: reaction.id,
+            });
+          }
 
-    return { postId: input.postId, reactionId: deleted?.id ?? null };
-  });
-
-  if (result.reactionId) {
-    try {
-      await deleteNotificationBySource(NotificationKind.REACTION, result.reactionId);
-    } catch (error) {
-      console.error('Failed to clean up Reaction Notification', {
-        error,
-        reactionId: result.reactionId,
-      });
-    }
-  }
-
-  return result;
+          if (input.origin === 'LOCAL') {
+            try {
+              const { sendReactionUndo } = await import('@kosmo/fedify');
+              await sendReactionUndo(reaction);
+            } catch (error) {
+              console.error('Post-commit ActivityPub Reaction Undo delivery failed', {
+                error,
+                reactionId: reaction.id,
+              });
+            }
+          }
+        })
+      : noPostCommit,
+    reaction,
+  };
 };

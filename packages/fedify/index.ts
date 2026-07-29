@@ -3,6 +3,7 @@ export { federation } from './src/federation';
 export { sendAcceptFollowActivity } from './src/follow-delivery';
 export { sendLocalPostCreate, sendLocalPostDelete } from './src/local-post-delivery';
 export { sendProfileFollow, sendProfileUnfollow } from './src/profile-follow-delivery';
+export { sendReaction, sendReactionUndo } from './src/reaction-delivery';
 export {
   findOrMaterializeRemoteProfileActor,
   materializeRemoteProfileActor,

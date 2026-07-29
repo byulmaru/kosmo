@@ -69,6 +69,34 @@ Reaction 삭제는 입력한 Post와 Reaction Type에서 행동 주체 Profile�
 - 새 Reaction이 실제 생성되거나 `Undo`로 실제 제거된 경우 기존 Reaction Notification 생성·정리 lifecycle을
   적용한다. Notification 실패는 Reaction과 ActivityPub mapping 결과를 바꾸지 않는다.
 
+## ActivityPub 발신 투영
+
+- Local Profile의 application action으로 실제 생성된 `❤️` Reaction은 `content: "❤️"`를 가진 `Like`로
+  전달한다. 실제 생성된 나머지 허용 Type(`🥹`, `🎉`, `👀`, `☘️`, `🌈`)은 정확한 Type을 `content`에 가진
+  `EmojiReact`로 전달한다. `Like`는 별도 canonical 좋아요 객체가 아니라 기본 Reaction인 `❤️`의 호환
+  표현이다.
+- Local Reaction activity URI는 immutable Reaction ID에서 `/ap/reaction/{reactionId}`로 파생한다. 같은
+  Reaction의 반복 직렬화는 activity type과 관계없이 같은 URI를 사용한다.
+- Activity의 `actor`는 행동 주체 Local Profile의 canonical actor URI이고, `object`는 대상 Post의
+  ActivityPub identity다. Local Post는 파생 Note URI를, 저장된 Remote Post는 기존 ActivityPub Post URI를
+  사용한다. actor와 activity URI, 서명 key identity는 행동 주체 Profile이 속한 LOCAL Instance의
+  canonical origin에서 파생하며, 배포에 configured된 단일 instance와의 일치 여부로 발신을 제한하지
+  않는다.
+- 발신 대상은 저장된 Remote Post Author actor다. 대상 Post Author actor를 `to`에 포함하고, 저장된 shared
+  inbox가 있으면 이를 우선하며 없으면 personal inbox로 직접 전달한다. 행동 주체의 followers collection에는
+  fan-out하지 않는다. Local Post 대상 Reaction과
+  Local actor identity를 소유하지 않는 Profile의 application action에는 outbound activity를 만들지 않는다.
+- Remote Post Author의 Profile과 Instance가 available하고 Instance State가 `Active`일 때만 delivery를
+  시도한다. `Unresponsive` 대상에는 현재 상태를 유지한 채 delivery를 시도하지 않으며 `Suspended` 대상은
+  기존 Post 조회 정책에 따라 Reaction 추가 대상이 아니다.
+- FOLLOWERS Remote Post의 새 `Like` 또는 `EmojiReact`는 delivery 시점에도 행동 주체가 Post Author를 Follow할
+  때만 전달한다. 이전에 전달된 Reaction을 실제 삭제하는 `Undo`는 그 사이 Follow 관계가 사라져도 원격 상태를
+  철회하기 위해 전달한다.
+- 같은 Profile/Post/Type의 멱등 추가는 기존 Reaction을 유지하고 새 activity delivery를 만들지 않는다.
+  Reaction이 실제 제거된 경우에만 원본 `Like` 또는 `EmojiReact`를 내장한 `Undo`를 전달한다. `Undo` URI는
+  원본 activity URI에 `#undo`를 결합하고, 원본 activity URI를 생성과 취소 delivery의 같은 ordering key로
+  사용한다.
+
 ## 권한
 
 | 권한             | 종류      | 성립 조건                                  |
