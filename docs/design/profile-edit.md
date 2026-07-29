@@ -19,7 +19,8 @@
 
 - 표시 이름은 1~40자다.
 - bio는 500자 이하이며 긴 텍스트 입력으로 표현한다.
-- `팔로우 요청 자동 승인`은 설명 없는 한 줄 Switch로 표현한다. Switch가 켜지면 `OPEN`, 꺼지면
+- `팔로우 요청 자동 승인`은 설명 없는 한 줄 Switch로 표현한다. 독립 설정에 가까운 시각적 위계를 위해
+  라벨은 SUIT `16/24`, weight `600`을 사용한다. Switch가 켜지면 `OPEN`, 꺼지면
   `APPROVAL_REQUIRED`로 해석하며, 표시 이름·소개·avatar/header와 같은 Profile draft와 저장 동작에 포함한다.
 - Follow Approval Policy를 바꿔도 기존 Pending Follow Request의 상태나 존재는 바뀌지 않는다.
 - 프로필 태그는 [Profile Tag 디자인](./profile-tags.md)의 Hashtag Name 정규화·중복·접근성

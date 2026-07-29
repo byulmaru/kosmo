@@ -149,7 +149,8 @@ const styles = StyleSheet.create({
   },
   followPolicyLabel: {
     fontFamily: 'SUIT',
-    ...typography.sm,
+    fontWeight: '600',
+    ...typography.md,
   },
   counter: {
     alignSelf: 'flex-end',
