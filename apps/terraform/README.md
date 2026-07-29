@@ -12,6 +12,7 @@
 - Firebase provider가 지원하지 않는 `native-testers` group의 멱등 REST bootstrap
 - `kosmo` ECR 저장소와 Docker Build 전용 GitHub Actions OIDC push role
 - ECR의 `main`/`stable` 이미지 보호, untagged 1일 만료, 나머지 이미지 7일 만료 정책
+- `byulmaru-kosmo-prod-postgresql-backups-822638974464` PostgreSQL backup bucket과 `byulmaru-kosmo-prod-postgres-backup` EKS Pod Identity role
 - Argo CD `kosmo` ApplicationSet과 여기서 생성하는 `kosmo-dev` Application의 선언
 
 Firebase를 Google Cloud 프로젝트에 추가하는 작업은 되돌릴 수 없다. 앱 리소스에는 `PREVENT` 삭제 정책을 적용한다.
@@ -48,6 +49,8 @@ main 브랜치를 push하면 Docker Build는 `main` 이미지 태그를 갱신�
 정식 버전 태그는 일회성 발행을 원칙으로 한다. GHCR과 ECR 중 한쪽에만 이미지가 발행된 부분 실패를 같은 Git tag에서 복구해야 할 때만 `aws ecr batch-delete-image --repository-name kosmo --image-ids imageTag=1.2.0 --region ap-northeast-2`로 ECR의 해당 버전 태그를 제거한 뒤 workflow를 재실행한다.
 
 ECR repository URL과 push role ARN은 공개된 고정 식별자이므로 Docker Build workflow에 직접 선언한다. ECR 리소스가 생성된 뒤에는 별도 GitHub repository variable bootstrap 없이 GHCR과 ECR에 같은 태그를 함께 push한다.
+
+Production PostgreSQL backup은 `s3://byulmaru-kosmo-prod-postgresql-backups-822638974464/kosmo-prod/`에 저장한다. Bucket은 SSE-S3, public access 차단, TLS-only policy, versioning과 lifecycle을 사용하며 Terraform destroy로 제거되지 않는다. `byulmaru-kosmo-prod-postgres-backup` role은 EKS Pod Identity 전용이며 `kosmo-prod/` prefix의 backup/WAL 객체만 관리한다. Bucket과 role ARN은 각각 `postgres_backup_bucket_arn`, `postgres_backup_role_arn` Terraform output으로 확인한다.
 
 `ios-device-onboarding`은 `robin-maki`의 승인을 요구하며, Firebase WIF 입력과 `MATCH_GIT_URL`을 일반 배포 환경과 별도로 받는다. Apple signing secret과 공개 native test 설정은 `apps/app/README.md`의 iOS Ad Hoc 배포 절차에 따라 해당 environment에 수동으로 넣는다.
 

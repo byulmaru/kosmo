@@ -29,3 +29,11 @@ output "terraform_gcp_service_account" {
 output "terraform_gcp_workload_identity_provider" {
   value = google_iam_workload_identity_pool_provider.terraform.name
 }
+
+output "postgres_backup_bucket_arn" {
+  value = aws_s3_bucket.postgres_backup.arn
+}
+
+output "postgres_backup_role_arn" {
+  value = aws_iam_role.postgres_backup.arn
+}
