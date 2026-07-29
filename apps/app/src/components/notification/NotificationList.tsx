@@ -1,14 +1,5 @@
-import { Settings } from 'lucide-react-native';
 import { useState, useTransition } from 'react';
-import {
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/StateView';
@@ -217,15 +208,6 @@ function NotificationHeader() {
       <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
         알림
       </Text>
-      <Pressable
-        accessibilityLabel="알림 설정 (준비 중)"
-        accessibilityRole="button"
-        accessibilityState={{ disabled: true }}
-        disabled
-        style={styles.settingsButton}
-      >
-        <Settings color={theme.textSecondary} size={24} strokeWidth={1.5} />
-      </Pressable>
     </View>
   );
 }
@@ -242,13 +224,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   title: { fontFamily: 'SUIT', fontWeight: '700', ...typography.xl },
-  settingsButton: {
-    alignItems: 'center',
-    height: 44,
-    justifyContent: 'center',
-    opacity: 0.45,
-    width: 44,
-  },
   state: {
     alignItems: 'center',
     gap: spacing.sm,
