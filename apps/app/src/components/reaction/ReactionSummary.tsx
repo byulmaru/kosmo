@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
   entriesScroll: { flexGrow: 0, maxWidth: '100%' },
   entry: {
     alignItems: 'center',
-    borderRadius: radii.sm,
+    borderRadius: radii.md,
     borderWidth: 1,
     flexDirection: 'row',
     gap: spacing.xs,
@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
     }),
   },
   entrySelectedBackground: {
-    borderRadius: radii.sm,
+    borderRadius: radii.md,
     bottom: 0,
     left: 0,
     pointerEvents: 'none',
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
   },
   more: {
     alignItems: 'center',
-    borderRadius: radii.sm,
+    borderRadius: radii.md,
     borderWidth: 1,
     justifyContent: 'center',
     ...Platform.select({

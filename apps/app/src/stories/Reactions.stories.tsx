@@ -511,6 +511,7 @@ export const AllStates: Story = {
     expect(heart.getBoundingClientRect().height).toBe(32);
     expect(getComputedStyle(heart).gap).toBe('4px');
     expect(getComputedStyle(heart).paddingInline).toBe('8px');
+    expect(getComputedStyle(heart).borderRadius).toBe('12px');
     expect(getComputedStyle(within(heart).getByText('❤️')).fontSize).toBe('20px');
     expect(getComputedStyle(within(heart).getByText('3')).fontSize).toBe('14px');
     const selectedBackground = heart.querySelector(
@@ -518,6 +519,7 @@ export const AllStates: Story = {
     );
     expect(selectedBackground).not.toBeNull();
     expect(selectedBackground).toHaveStyle({ backgroundColor: colors.light.primary, opacity: 0.7 });
+    expect(getComputedStyle(selectedBackground!).borderRadius).toBe('12px');
     expect(heart).toHaveAttribute('aria-pressed', 'true');
     expect(party).toHaveAttribute('aria-pressed', 'true');
     expect(
@@ -528,6 +530,7 @@ export const AllStates: Story = {
     expect(party).toBeDisabled();
     expect(eyes).toBeEnabled();
     expect(more.getBoundingClientRect().width).toBe(32);
+    expect(getComputedStyle(more).borderRadius).toBe('12px');
 
     await userEvent.click(heart);
     expect(canvas.getByText('마지막 동작: ❤️:해제')).toBeVisible();

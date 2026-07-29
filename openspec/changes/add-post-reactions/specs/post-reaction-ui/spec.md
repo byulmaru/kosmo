@@ -133,7 +133,7 @@
 - **THEN** component는 Type과 count를 count 내림차순으로 표시한다
 - **AND** count 동률 Type의 순서에 의존하지 않는다
 - **AND** standalone `반응` 제목을 표시하지 않는다
-- **AND** Web token은 높이 32px, emoji 20px, count 14px, 내부 gap 4px, 좌우 padding 8px와 token gap 4px을 사용한다
+- **AND** Web token은 높이 32px, radius 12px, emoji 20px, count 14px, 내부 gap 4px, 좌우 padding 8px와 token gap 4px을 사용한다
 - **AND** selected token은 emoji·count와 분리한 `primary`/`primaryHover` 배경 layer만 70% opacity로 표시하고 emoji·count는 100% opacity를 유지한다
 
 #### Scenario: Reaction이 없는 Post
@@ -166,7 +166,7 @@
 #### Scenario: Reaction More geometry와 좁은 너비
 
 - **WHEN** Reaction 요약 row를 Web에서 표시한다
-- **THEN** 양수 count Type 뒤에 32×32px target과 16px ellipsis의 More button을 표시한다
+- **THEN** 양수 count Type 뒤에 radius 12px의 32×32px target과 16px ellipsis의 More button을 표시한다
 - **AND** 가용 너비가 부족하면 token과 More를 줄이거나 여러 줄로 바꾸지 않고 feature-local horizontal `ScrollView` shell을 사용한다
 
 #### Scenario: 목록·상세와 Reaction 대상
