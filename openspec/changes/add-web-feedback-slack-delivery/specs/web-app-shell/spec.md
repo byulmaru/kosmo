@@ -28,6 +28,12 @@
 - **THEN** 시스템은 "피드백 보내기" 링크를 active로 표시한다
 - **AND** active 상태는 page-current semantics로 노출된다
 
+#### Scenario: Preserve the existing menu route
+
+- **WHEN** 로그인한 Web 사용자가 `/menu`를 연다
+- **THEN** 시스템은 `/feedback`으로 redirect하지 않고 기존 메뉴 화면을 렌더링한다
+- **AND** `/feedback`은 독립된 protected route로 유지된다
+
 #### Scenario: Leave native menu navigation unchanged
 
 - **WHEN** Android 또는 iOS 앱이 이번 변경의 shell navigation을 렌더링한다

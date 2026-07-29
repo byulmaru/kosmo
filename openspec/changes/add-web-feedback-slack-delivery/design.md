@@ -1,6 +1,6 @@
 ## Context
 
-`PROD-487`은 부모 `PROD-479`의 Web 구현 slice다. 현재 `apps/app`의 full/compact sidebar와 Web mobile drawer는 같은 sidebar component를 공유하며 footer의 "피드백 보내기" control은 보호된 `/feedback` route로 이동한다. 기존 `/menu` placeholder의 KOSMO eyebrow, 메뉴 제목·설명과 Web login test link는 피드백 화면에서 제거한다. Web Relay는 same-origin BFF `/graphql`을 사용하고 BFF가 HttpOnly session cookie를 API Bearer token으로 전달하며, API의 `login` scope는 선택 Profile 없이도 유효한 account session을 식별한다.
+`PROD-487`은 부모 `PROD-479`의 Web 구현 slice다. 현재 `apps/app`의 full/compact sidebar와 Web mobile drawer는 같은 sidebar component를 공유하며 footer의 "피드백 보내기" control은 보호된 `/feedback` route로 이동한다. `/feedback`은 기존 `/menu` placeholder의 KOSMO eyebrow, 메뉴 제목·설명과 Web login test link를 렌더링하지 않지만, 기존 프로필 관련 진입점이 사용하는 `/menu` route와 그 UI는 독립적으로 보존한다. Web Relay는 same-origin BFF `/graphql`을 사용하고 BFF가 HttpOnly session cookie를 API Bearer token으로 전달하며, API의 `login` scope는 선택 Profile 없이도 유효한 account session을 식별한다.
 
 현재 API runtime에는 Slack client나 feedback persistence가 없다. Vault-managed environment secret을 API에 주입할 수 있지만 feedback secret은 선택적 기능 설정이므로 누락이 API 전체 기동을 막아서는 안 된다. Slack Incoming Webhook은 성공 또는 오류 응답을 반환하지만 멱등 key를 제공하지 않으므로, 사용자가 선택한 계약에 따라 server 자동 retry를 금지하고 모호한 실패 후 명시적 재시도의 드문 중복을 허용한다.
 
@@ -37,7 +37,7 @@
 
 ### Recommended Approach
 
-1. `/feedback` route 안에 Web feedback form을 직접 구성하고 `Platform.OS === 'web'` 경계에서만 현재 form을 노출한다. 기존 sidebar footer 위치는 Web에서 `/feedback`으로 이동하는 "피드백 보내기" Link로 만들고 native rendering은 유지한다. 기존 `/menu` 소개·설명·login-test UI는 렌더링하지 않는다.
+1. `/feedback` route 안에 Web feedback form을 직접 구성하고 `Platform.OS === 'web'` 경계에서만 현재 form을 노출한다. 기존 sidebar footer 위치는 Web에서 `/feedback`으로 이동하는 "피드백 보내기" Link로 만들고 native rendering은 유지한다. 기존 `/menu` 소개·설명·login-test UI는 `/feedback`에서 렌더링하지 않되, `/menu`는 redirect하지 않고 기존 화면으로 보존한다.
 2. 기존 React Native form primitive와 theme token을 조합해 category selector, Pretendard multiline body와 submit status를 구성한다. Relay mutation은 form을 실제로 소유하는 component에 colocate한다.
 3. `submitFeedback`은 API `login` scope의 GraphQL mutation으로 둔다. Input validation은 category enum과 trim된 body 1~2,000자를 한 경계에서 적용한다. 성공 payload는 persistence object를 가장하지 않고 제출 완료 사실만 반환한다.
 4. API-local feedback delivery 경계가 account별 in-flight guard를 확인한 뒤 built-in `fetch`로 Incoming Webhook을 한 번 호출한다. In-flight state는 성공·실패와 관계없이 `finally`에서 즉시 제거해 memory leak과 영구 잠금을 피한다.

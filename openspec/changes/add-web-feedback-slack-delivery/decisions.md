@@ -105,12 +105,24 @@
 - Decision Date: 2026-07-29
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/design/breakpoints.md`, `docs/design/colors.md`, `docs/design/typography.md`, `memory/frontend-react-native.md`, `PROD-479`, `PROD-487`
-- Status: Active
+- Status: Superseded
 - Context / Problem: 최초 구현은 기존 `/menu` placeholder에 feedback form을 추가했지만, 해당 URL과 KOSMO eyebrow·메뉴 제목·설명·login-test UI가 전용 피드백 화면의 정보 구조와 맞지 않는다는 사용자 정정이 있었다. Shared sidebar footer를 무조건 바꾸면 `PROD-488`의 native scope를 선행 구현한다.
 - Decision Outcome: Web full/compact sidebar와 mobile drawer의 기존 설정·지원 위치를 canonical `/feedback`의 "피드백 보내기" Link로 바꾸고, `/feedback`에서는 feedback form만 직접 노출한다. 기존 `/menu` 소개 UI는 제거하고 `/menu` 접근은 `/feedback`으로 전환한다. Native navigation과 form 노출은 변경하지 않는다.
 - Alternatives Considered: 기존 `/menu`에서 form을 유지하는 방식은 사용자가 요청한 URL과 전용 화면 구조를 충족하지 않아 제외했다. `/menu` 전체를 모든 platform에서 즉시 feedback으로 바꾸는 방식은 native issue boundary를 침범하므로 제외했다. Modal-only form은 canonical URL과 retryable screen state를 약화해 제외했다.
 - Consequences: 전용 URL과 단순한 피드백 화면을 제공하면서 기존 protected guard와 drawer-close behavior를 재사용한다. 기존 `/menu` 링크는 canonical `/feedback`으로 이동한다. `PROD-488`은 같은 route/component 경계를 native에 활성화하고 검증할 수 있다.
 - Confirmation / Follow-up: Full/compact/drawer navigation, active semantics, drawer close, Web form과 native unchanged scenario를 component/Storybook/E2E로 검증한다.
+
+### `/feedback`을 canonical Web feedback route로 사용하고 기존 `/menu`는 보존한다
+
+- Decision Date: 2026-07-29
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/breakpoints.md`, `docs/design/colors.md`, `docs/design/typography.md`, `memory/frontend-react-native.md`, `PROD-479`, `PROD-487`
+- Status: Active
+- Context / Problem: `/feedback`은 전용 피드백 화면이어야 하지만, 기존 프로필·팔로워 요청·프로필 설정 항목도 `/menu`를 destination으로 사용한다. `/menu`를 `/feedback`으로 redirect하면 이 소비자들이 피드백 화면으로 이동하는 회귀가 발생한다.
+- Decision Outcome: Web shell의 "피드백 보내기" 진입점은 canonical `/feedback`을 직접 가리키고, `/feedback`은 기존 메뉴 소개·설명·login-test UI 없이 form만 렌더링한다. `/menu`는 redirect하지 않고 기존 메뉴 화면과 UI를 보존한다. Native feedback navigation과 form 노출은 변경하지 않는다.
+- Alternatives Considered: `/menu`를 `/feedback`으로 redirect하는 방식은 기존 route 소비자를 깨뜨려 제외했다. `/menu`에 form을 유지하는 방식은 전용 URL과 화면 구조를 충족하지 않아 제외했다.
+- Consequences: `/menu`와 `/feedback`이 독립된 protected route로 남고, sidebar feedback link만 `/feedback`으로 이동한다. 피드백 화면은 단순한 정보 구조를 유지하면서 기존 메뉴 소비자의 destination을 보존한다.
+- Confirmation / Follow-up: Full/compact/drawer의 `/feedback` navigation과 active semantics, `/menu`의 기존 heading·UI 렌더링, 두 route의 독립성과 native unchanged scenario를 component/Storybook/E2E로 검증한다.
 
 ## Remaining Decisions
 
@@ -121,3 +133,4 @@
 - 2026-07-28 `Account별 비영속 fixed-window와 in-flight guard를 사용한다`는 2026-07-29 `같은 account의 진행 중 delivery만 process-local로 차단한다`로 대체했다.
 - 2026-07-28 `Feedback input과 Sentry event ID를 좁은 공개 계약으로 제한한다`는 2026-07-29 `Feedback 계약에서 Sentry event ID를 제외한다`로 대체했다.
 - 2026-07-28 `Incoming Webhook secret과 plain-text Slack payload를 API가 소유한다`의 identity 비노출 payload 결정은 2026-07-29 `Slack payload에서 제출 Account와 선택 Profile을 제한적으로 식별한다`로 대체했다. API secret 소유와 plain-text·unfurl 비활성화 결정은 유지한다.
+- 2026-07-29의 기존 `/menu` → `/feedback` redirect 결정은 `/feedback`을 canonical Web feedback route로 사용하면서 기존 `/menu`는 보존하는 결정으로 대체했다.

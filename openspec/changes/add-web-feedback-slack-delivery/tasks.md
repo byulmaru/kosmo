@@ -83,12 +83,12 @@
 
 - Full/compact/drawer navigation, active semantics, drawer close와 native unchanged behavior를 component 또는 Storybook test로 검증한다.
 - Idle, validation, BUG_REPORT 선택, pending, success, failure와 retry state를 Storybook interaction과 unit test로 검증한다.
-- Web E2E에서 인증 사용자 menu 진입과 Relay success/failure 흐름을 검증한다.
+- Web E2E에서 인증 사용자의 `/menu`·`/feedback` 독립 route와 Relay success/failure 흐름을 검증한다.
 
 - [x] 3.1 Web shell의 feedback navigation과 `/feedback` current-state behavior를 구현하고 native surface를 유지한다.
 - [x] 3.2 Web feedback form을 기존 메뉴 소개 UI 없이 직접 렌더링하고, colocated Relay mutation과 validation·pending·success·failure·retry state를 구현한다.
 - [x] 3.3 Feedback form과 shell surface의 Storybook 상태·접근성·interaction test를 추가한다.
-- [x] 3.4 인증된 Web menu navigation과 제출 성공·실패 흐름의 E2E 증거를 추가한다.
+- [x] 3.4 인증된 Web `/menu`·`/feedback` route 독립성과 제출 성공·실패 흐름의 E2E 증거를 추가한다.
 
 ## 4. PROD-487 Integrated verification and production delivery
 
