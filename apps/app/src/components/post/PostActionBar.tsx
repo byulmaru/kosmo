@@ -8,6 +8,7 @@ import { RepostAction } from './RepostAction';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostActionBar_post$key } from './__generated__/PostActionBar_post.graphql';
 import type { PostActionProcessingState } from './PostActionControl';
+import type { PostReactionController } from './PostReactionController';
 import type { RepostActionFailure } from './RepostAction';
 
 type SocialActionConfig = {
@@ -26,17 +27,24 @@ export type PostActionBarProps = {
   more?: MoreActionConfig;
   onRepostError?: (failure: RepostActionFailure) => void;
   post?: PostActionBar_post$key | null;
+  reactionController?: PostReactionController;
   reply?: ReplyActionConfig;
 };
 
 const postActionBarPostFragment = graphql`
   fragment PostActionBar_post on Post {
     ...RepostAction_post @alias(as: "repost")
-    ...ReactionAction_post @alias(as: "reaction")
   }
 `;
 
-export function PostActionBar({ bookmark, more, onRepostError, post, reply }: PostActionBarProps) {
+export function PostActionBar({
+  bookmark,
+  more,
+  onRepostError,
+  post,
+  reactionController,
+  reply,
+}: PostActionBarProps) {
   const data = useFragment(postActionBarPostFragment, post ?? null);
 
   return (
@@ -53,9 +61,9 @@ export function PostActionBar({ bookmark, more, onRepostError, post, reply }: Po
         />
       ) : null}
       {data?.repost ? <RepostAction onError={onRepostError} post={data.repost} /> : null}
-      {data?.reaction ? (
+      {reactionController ? (
         <ReactionAction
-          post={data.reaction}
+          controller={reactionController}
           renderTrigger={({ disabled, expanded, hasReacted, onPress, ref }) => (
             <PostActionControl
               accessibilityLabel="반응"

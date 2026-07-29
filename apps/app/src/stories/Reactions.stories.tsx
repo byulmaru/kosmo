@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button, Text } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, screen, spyOn, userEvent, within } from 'storybook/test';
+import { usePostReactionController } from '@/components/post/PostReactionController';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { ReactionProfileConnection } from '@/components/reaction/ReactionProfileConnection';
 import { ReactionProfileList } from '@/components/reaction/ReactionProfileList';
@@ -83,6 +84,7 @@ const reactionPostSummary = {
     { count: 12, type: '❤️' },
     { count: 7, type: '🎉' },
   ],
+  viewerReactions: [],
 };
 
 function reactionPostWithProfile(displayName: string, id: string) {
@@ -171,7 +173,7 @@ const ReactionsIntegrationStoriesQueryNode = graphql`
     node(id: $postId) {
       __typename
       ... on Post {
-        ...PostReactionSummary_post @alias(as: "reactionSummary")
+        ...PostReactionController_post @alias(as: "reactionController")
       }
     }
   }
@@ -218,11 +220,12 @@ function PostReactionSummaryStory({ postId = 'reaction-post' }: { postId?: strin
     ReactionsIntegrationStoriesQueryNode,
     { postId },
   );
-  if (data.node?.__typename !== 'Post' || !data.node.reactionSummary) {
-    throw new Error('Missing Reaction Summary Post fixture.');
+  if (data.node?.__typename !== 'Post' || !data.node.reactionController) {
+    throw new Error('Missing Reaction controller Post fixture.');
   }
+  const controller = usePostReactionController(data.node.reactionController);
 
-  return <PostReactionSummary post={data.node.reactionSummary} />;
+  return <PostReactionSummary controller={controller} />;
 }
 
 function ActorSwitchPostReactionSummaryStory() {
@@ -520,6 +523,7 @@ export const ProfileListStates: Story = {
     expect(canvas.getAllByText(profileCopy.emptyTitle)).toHaveLength(2);
     expect(canvasElement.querySelector('a[href="/@starlight"]')).toBeInTheDocument();
     expect(canvasElement.querySelector('a[href="/@milky-way"]')).toBeInTheDocument();
+    expect(canvas.getAllByText('❤️')).toHaveLength(8);
 
     await userEvent.click(canvas.getAllByRole('button', { name: '다시 시도' })[0]!);
     expect(canvas.getByText('초기 재시도: 1')).toBeVisible();
@@ -568,7 +572,14 @@ export const ZeroCountSummaryIsNotRendered: Story = {
     relay: {
       operationResponses: {
         ReactionsIntegrationStoriesQuery: {
-          data: { node: { __typename: 'Post', id: 'post-empty', reactionCounts: [] } },
+          data: {
+            node: {
+              __typename: 'Post',
+              id: 'post-empty',
+              reactionCounts: [],
+              viewerReactions: [],
+            },
+          },
         },
       },
     },
@@ -595,14 +606,24 @@ export const SummaryOrderAndModalDismiss: Story = {
     expect(canvas.getAllByRole('button').map((button) => button.textContent)).toEqual([
       '❤️12',
       '🎉7',
+      '…',
     ]);
 
-    await userEvent.click(canvas.getByRole('button', { name: '❤️ 반응 12개 보기' }));
+    expect(canvas.getByRole('button', { name: '❤️ 반응 12개' })).toBeDisabled();
+    await userEvent.click(canvas.getByRole('button', { name: '반응한 프로필 보기' }));
     await expect(
-      screen.findByRole('dialog', { name: '❤️ 반응한 프로필' }),
+      screen.findByRole('dialog', { name: '반응한 프로필' }),
     ).resolves.toBeInTheDocument();
-    await userEvent.click(screen.getByLabelText('❤️ 반응한 프로필 닫기'));
-    expect(screen.queryByRole('dialog', { name: '❤️ 반응한 프로필' })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '❤️ 반응 12개' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByRole('tab', { name: '🎉 반응 7개' })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
+    await userEvent.click(screen.getByLabelText('반응한 프로필 닫기'));
+    expect(screen.queryByRole('dialog', { name: '반응한 프로필' })).not.toBeInTheDocument();
   },
 };
 
@@ -638,14 +659,16 @@ export const InitialProfileQueryFailureIsInline: Story = {
   },
   render: () => <PostReactionSummaryStory />,
   play: async ({ canvasElement }) => {
-    await userEvent.click(within(canvasElement).getByRole('button', { name: '❤️ 반응 12개 보기' }));
+    await userEvent.click(
+      within(canvasElement).getByRole('button', { name: '반응한 프로필 보기' }),
+    );
     await expect(screen.findByRole('alert')).resolves.toHaveTextContent(
       '반응한 프로필을 불러오지 못했어요',
     );
     await userEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     await expect(screen.findByText('별빛 반응 프로필')).resolves.toBeVisible();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    await userEvent.click(screen.getByLabelText('❤️ 반응한 프로필 닫기'));
+    await userEvent.click(screen.getByLabelText('반응한 프로필 닫기'));
   },
 };
 
@@ -666,15 +689,15 @@ export const ReopenShowsCacheBeforeBackgroundRefresh: Story = {
   render: () => <PostReactionSummaryStory />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const summaryButton = canvas.getByRole('button', { name: '❤️ 반응 12개 보기' });
+    const summaryButton = canvas.getByRole('button', { name: '반응한 프로필 보기' });
 
     await userEvent.click(summaryButton);
     await expect(screen.findByText('Actor A Profile')).resolves.toBeVisible();
-    await userEvent.click(screen.getByLabelText('❤️ 반응한 프로필 닫기'));
+    await userEvent.click(screen.getByLabelText('반응한 프로필 닫기'));
     await userEvent.click(summaryButton);
     expect(screen.getByText('Actor A Profile')).toBeInTheDocument();
     await expect(screen.findByText('Refreshed Profile')).resolves.toBeInTheDocument();
-    await userEvent.click(screen.getByLabelText('❤️ 반응한 프로필 닫기'));
+    await userEvent.click(screen.getByLabelText('반응한 프로필 닫기'));
   },
 };
 
@@ -696,14 +719,14 @@ export const SwitchingReactionTypeDoesNotReuseProfileRows: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    await userEvent.click(canvas.getByRole('button', { name: '❤️ 반응 12개 보기' }));
+    await userEvent.click(canvas.getByRole('button', { name: '반응한 프로필 보기' }));
     await expect(screen.findByText('Heart Type Profile')).resolves.toBeVisible();
-    await userEvent.click(screen.getByLabelText('❤️ 반응한 프로필 닫기'));
-    await userEvent.click(canvas.getByRole('button', { name: '🎉 반응 7개 보기' }));
+    await userEvent.click(screen.getByRole('tab', { name: '🎉 반응 7개' }));
     expect(screen.queryByText('Heart Type Profile')).not.toBeInTheDocument();
     await expect(screen.findByText('Party Type Profile')).resolves.toBeVisible();
     expect(screen.queryByText('Heart Type Profile')).not.toBeInTheDocument();
-    await userEvent.click(screen.getByLabelText('🎉 반응한 프로필 닫기'));
+    expect(screen.getByLabelText('🎉 반응')).toBeVisible();
+    await userEvent.click(screen.getByLabelText('반응한 프로필 닫기'));
   },
 };
 
@@ -726,14 +749,14 @@ export const ActorSwitchDoesNotReuseProfileRows: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    await userEvent.click(canvas.getByRole('button', { name: '❤️ 반응 12개 보기' }));
+    await userEvent.click(canvas.getByRole('button', { name: '반응한 프로필 보기' }));
     await expect(screen.findByText('Actor A Profile')).resolves.toBeVisible();
-    await userEvent.click(screen.getByLabelText('❤️ 반응한 프로필 닫기'));
+    await userEvent.click(screen.getByLabelText('반응한 프로필 닫기'));
     await userEvent.click(canvas.getByRole('button', { name: '프로필 전환' }));
-    await userEvent.click(await canvas.findByRole('button', { name: '❤️ 반응 12개 보기' }));
+    await userEvent.click(await canvas.findByRole('button', { name: '반응한 프로필 보기' }));
     await expect(screen.findByText('Actor B Profile')).resolves.toBeVisible();
     expect(screen.queryByText('Actor A Profile')).not.toBeInTheDocument();
-    await userEvent.click(screen.getByLabelText('❤️ 반응한 프로필 닫기'));
+    await userEvent.click(screen.getByLabelText('반응한 프로필 닫기'));
   },
 };
 

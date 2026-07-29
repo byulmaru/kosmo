@@ -1,19 +1,11 @@
 import { useEffect, useState } from 'react';
-import { graphql, useFragment, useRelayEnvironment } from 'react-relay';
+import { useRelayEnvironment } from 'react-relay';
 import { ReactionSelector } from '@/components/reaction/ReactionSelector';
-import { usePostReactionController } from './PostReactionController';
 import { ReactionPopover } from './ReactionPopover';
 import type { ReactNode, Ref } from 'react';
 import type { View } from 'react-native';
 import type { ReactionOption } from '@/components/reaction/ReactionSelector';
-import type { ReactionAction_post$key } from './__generated__/ReactionAction_post.graphql';
 import type { PostReactionController } from './PostReactionController';
-
-const reactionActionPostFragment = graphql`
-  fragment ReactionAction_post on Post {
-    ...PostReactionController_post
-  }
-`;
 
 const reactionOptions = ['🥹', '❤️', '🎉', '👀', '☘️', '🌈'].map((type) => ({
   emoji: type,
@@ -29,30 +21,12 @@ export type ReactionActionTriggerRenderProps = Readonly<{
   ref: Ref<View>;
 }>;
 
-type ReactionActionProps = Readonly<{
+export type ReactionActionProps = Readonly<{
   controller: PostReactionController;
   renderTrigger: (props: ReactionActionTriggerRenderProps) => ReactNode;
 }>;
 
-type LegacyReactionActionProps = Readonly<{
-  post: ReactionAction_post$key;
-  renderTrigger: (props: ReactionActionTriggerRenderProps) => ReactNode;
-}>;
-
-export function ReactionAction(props: ReactionActionProps | LegacyReactionActionProps): ReactNode {
-  if ('controller' in props) {
-    return <ReactionActionView {...props} />;
-  }
-  return <LegacyReactionAction {...props} />;
-}
-
-function LegacyReactionAction({ post, renderTrigger }: LegacyReactionActionProps): ReactNode {
-  const data = useFragment(reactionActionPostFragment, post);
-  const controller = usePostReactionController(data);
-  return <ReactionActionView controller={controller} renderTrigger={renderTrigger} />;
-}
-
-function ReactionActionView({ controller, renderTrigger }: ReactionActionProps): ReactNode {
+export function ReactionAction({ controller, renderTrigger }: ReactionActionProps): ReactNode {
   const environment = useRelayEnvironment();
   const [open, setOpen] = useState(false);
 

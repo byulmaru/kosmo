@@ -15,7 +15,6 @@ export type ReactionSummaryProps = {
   loading?: boolean;
   onMore?: () => void;
   onRetry?: () => void;
-  onSelectType?: (type: string) => void;
   onToggle?: (intent: ReactionToggleIntent) => void;
   pendingTypeIds?: ReadonlyArray<string>;
   selectedTypeIds?: ReadonlyArray<string>;
@@ -37,7 +36,6 @@ export function ReactionSummary({
   loading,
   onMore,
   onRetry,
-  onSelectType,
   onToggle,
   pendingTypeIds = [],
   selectedTypeIds = [],
@@ -64,16 +62,12 @@ export function ReactionSummary({
               const entryError = errorTypes.has(entry.type);
               const pending = pendingTypes.has(entry.type);
               const selected = selectedTypes.has(entry.type);
-              const legacySelect = onToggle === undefined && onSelectType !== undefined;
-              const entryDisabled =
-                disabled || pending || (onToggle === undefined && onSelectType === undefined);
-              const accessibilityLabel = legacySelect
-                ? `${entry.type} 반응 ${entry.count}개 보기`
-                : entryError
-                  ? `${entry.type} 반응 ${entry.count}개, 오류, 다시 시도`
-                  : pending
-                    ? `${entry.type} 반응 ${entry.count}개, 처리 중`
-                    : `${entry.type} 반응 ${entry.count}개`;
+              const entryDisabled = disabled || pending || onToggle === undefined;
+              const accessibilityLabel = entryError
+                ? `${entry.type} 반응 ${entry.count}개, 오류, 다시 시도`
+                : pending
+                  ? `${entry.type} 반응 ${entry.count}개, 처리 중`
+                  : `${entry.type} 반응 ${entry.count}개`;
 
               return (
                 <Pressable
@@ -84,13 +78,7 @@ export function ReactionSummary({
                   aria-pressed={selected}
                   disabled={entryDisabled}
                   key={`${entry.type}-${index}`}
-                  onPress={() => {
-                    if (onToggle) {
-                      onToggle({ nextSelected: !selected, optionId: entry.type });
-                    } else {
-                      onSelectType?.(entry.type);
-                    }
-                  }}
+                  onPress={() => onToggle?.({ nextSelected: !selected, optionId: entry.type })}
                   style={({ pressed }) => [
                     styles.entry,
                     {

@@ -1,6 +1,4 @@
-// eslint-disable-next-line import/newline-after-import -- TypeScript's suppression comment must stay immediately above the untyped Storybook-only import.
 import { Suspense, useCallback, useMemo, useRef, useState } from 'react';
-// @ts-expect-error The workspace does not install react-dom declarations for this Storybook-only batching helper.
 import { unstable_batchedUpdates } from 'react-dom';
 import { Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
@@ -16,6 +14,8 @@ import {
 import { expect, fn, screen, spyOn, userEvent, waitFor, within } from 'storybook/test';
 import { PostActionBar } from '@/components/post/PostActionBar';
 import { formatPostActionCount } from '@/components/post/postActionCount';
+import { usePostReactionController } from '@/components/post/PostReactionController';
+import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
 import { spacing, typography } from '@/theme/tokens';
@@ -57,6 +57,7 @@ type FixtureProps = Omit<PostActionBarProps, 'post'> & {
   onMutationRequest?: (requestName: string) => void;
   repostState?: RepostFixtureState;
   selectedProfileId?: string | null;
+  showReactionSummary?: boolean;
 };
 
 const postActionBarStoryQuery = graphql`
@@ -64,6 +65,7 @@ const postActionBarStoryQuery = graphql`
     node(id: $id) {
       ... on Post {
         ...PostActionBar_post @alias(as: "actionBar")
+        ...PostReactionController_post @alias(as: "reactionController")
       }
     }
   }
@@ -73,6 +75,14 @@ const unselectedSource = {
   __typename: 'Post',
   id: sourcePostId,
   repostCount: 12_345,
+  reactionCounts: [
+    { count: 12, type: '❤️' },
+    { count: 7, type: '🎉' },
+  ],
+  reactionProfiles: {
+    edges: [],
+    pageInfo: { endCursor: null, hasNextPage: false },
+  },
   viewerRepost: null,
   viewerReactions: [],
 };
@@ -87,6 +97,7 @@ function PostActionBarFixture({
   onMutationRequest,
   repostState = 'unselected',
   selectedProfileId = 'profile-story',
+  showReactionSummary = false,
   ...props
 }: FixtureProps) {
   const environment = useMemo(() => {
@@ -152,21 +163,30 @@ function PostActionBarFixture({
     <RelayActorProvider createEnvironment={createEnvironment}>
       <Suspense fallback={<View />}>
         <SessionProvider>
-          <PostActionBarFixtureContents {...props} />
+          <PostActionBarFixtureContents {...props} showReactionSummary={showReactionSummary} />
         </SessionProvider>
       </Suspense>
     </RelayActorProvider>
   );
 }
 
-function PostActionBarFixtureContents(props: Omit<PostActionBarProps, 'post'>) {
+function PostActionBarFixtureContents({
+  showReactionSummary = false,
+  ...props
+}: Omit<PostActionBarProps, 'post' | 'reactionController'> & { showReactionSummary?: boolean }) {
   const data = useLazyLoadQuery<PostActionBarStoryQuery>(
     postActionBarStoryQuery,
     { id: sourcePostId },
     { fetchPolicy: 'store-only' },
   );
+  const controller = usePostReactionController(data.node!.reactionController!);
 
-  return <PostActionBar {...props} post={data.node!.actionBar!} />;
+  return (
+    <>
+      {showReactionSummary ? <PostReactionSummary controller={controller} /> : null}
+      <PostActionBar {...props} post={data.node!.actionBar!} reactionController={controller} />
+    </>
+  );
 }
 
 type ReactionRequestOutcome = 'data-errors-success' | 'network-error' | 'payload-error' | 'success';
@@ -208,6 +228,11 @@ function ReactionContractHarness() {
     const environment = new Environment({
       network: Network.create((request: RequestParameters, variables: Variables) => {
         if (request.operationKind !== 'mutation') {
+          const selectedTypes = selectedTypesByActor.current.get(actorId)!;
+          const reactionCounts = unselectedSource.reactionCounts.map((entry) => ({
+            ...entry,
+            count: entry.count + (selectedTypes.has(entry.type) ? 1 : 0),
+          }));
           return Promise.resolve({
             data:
               request.name === 'SessionProviderQuery'
@@ -226,7 +251,7 @@ function ReactionContractHarness() {
                       name: `Actor ${actorId}`,
                     },
                   }
-                : { node: unselectedSource },
+                : { node: { ...unselectedSource, reactionCounts } },
           } as GraphQLResponse);
         }
 
@@ -280,7 +305,7 @@ function ReactionContractHarness() {
     if (outcome === 'payload-error') {
       request.sink.next({
         data:
-          request.name === 'ReactionActionAddReactionMutation'
+          request.name === 'PostReactionControllerAddReactionMutation'
             ? { addReaction: null }
             : { deleteReaction: null },
         errors: [{ message: `request ${id} payload missing` }],
@@ -290,7 +315,7 @@ function ReactionContractHarness() {
     }
 
     const selectedTypes = selectedTypesByActor.current.get(request.actorId)!;
-    const add = request.name === 'ReactionActionAddReactionMutation';
+    const add = request.name === 'PostReactionControllerAddReactionMutation';
     if (add) {
       selectedTypes.add(request.type);
     } else {
@@ -391,7 +416,7 @@ function ReactionContractControls({
       {mounted ? (
         <Suspense fallback={<View />}>
           <SessionProvider>
-            <PostActionBarFixtureContents />
+            <PostActionBarFixtureContents showReactionSummary />
           </SessionProvider>
         </Suspense>
       ) : null}
@@ -610,8 +635,8 @@ export const ReactionPopoverDismissFocusAndPlacement: Story = {
     expect(getComputedStyle(shell).overflowX).toBe('auto');
     for (const option of within(dialog).getAllByRole('button', { name: /반응/ })) {
       const bounds = option.getBoundingClientRect();
-      expect(bounds.width).toBeGreaterThanOrEqual(44);
-      expect(bounds.height).toBeGreaterThanOrEqual(44);
+      expect(bounds.width).toBe(32);
+      expect(bounds.height).toBe(32);
     }
 
     await userEvent.click(screen.getByTestId('reaction-popover-trigger-dismiss'));
@@ -652,15 +677,61 @@ export const NoSelectedProfileDisablesReaction: Story = {
     const canvas = within(canvasElement);
     reactionMutationRequest.mockClear();
     const trigger = canvas.getByRole('button', { name: '반응' });
+    const heartSummary = canvas.getByRole('button', { name: '❤️ 반응 12개' });
+    const moreProfiles = canvas.getByRole('button', { name: '반응한 프로필 보기' });
 
     expect(trigger).toBeDisabled();
+    expect(heartSummary).toBeDisabled();
+    expect(moreProfiles).toBeEnabled();
     trigger.click();
+    heartSummary.click();
     expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
     expect(reactionMutationRequest).not.toHaveBeenCalled();
+
+    await userEvent.click(moreProfiles);
+    await expect(
+      screen.findByRole('dialog', { name: '반응한 프로필' }),
+    ).resolves.toBeInTheDocument();
+    await expect(screen.findByText('아직 이 반응을 남긴 프로필이 없어요')).resolves.toBeVisible();
   },
   render: () => (
-    <PostActionBarFixture onMutationRequest={reactionMutationRequest} selectedProfileId={null} />
+    <PostActionBarFixture
+      onMutationRequest={reactionMutationRequest}
+      selectedProfileId={null}
+      showReactionSummary
+    />
   ),
+};
+
+export const ReactionSummaryToggleContract: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const heart = canvas.getByRole('button', { name: '❤️ 반응 12개' });
+
+    await userEvent.click(heart);
+    expect(screen.queryByRole('dialog', { name: '반응한 프로필' })).toBeNull();
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(1));
+    expect(canvas.getByRole('button', { name: '❤️ 반응 12개, 처리 중' })).toBeDisabled();
+    canvas.getByRole('button', { name: '요청 1 success' }).click();
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: '❤️ 반응 13개' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+
+    await userEvent.click(canvas.getByRole('button', { name: '❤️ 반응 13개' }));
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(2));
+    expect(canvas.getByRole('button', { name: '❤️ 반응 13개, 처리 중' })).toBeDisabled();
+    canvas.getByRole('button', { name: '요청 2 success' }).click();
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: '❤️ 반응 12개' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      ),
+    );
+  },
+  render: () => <ReactionContractHarness />,
 };
 
 export const ReactionConcurrentMutationContract: Story = {
@@ -706,7 +777,7 @@ export const ReactionConcurrentMutationContract: Story = {
     await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(3));
     requests = readReactionRequests(canvas);
     const deleteHeart = requests.find(
-      (request) => request.name === 'ReactionActionDeleteReactionMutation',
+      (request) => request.name === 'PostReactionControllerDeleteReactionMutation',
     )!;
     canvas.getByRole('button', { name: `요청 ${deleteHeart.id} success` }).click();
     await waitFor(() =>
@@ -747,6 +818,7 @@ export const ReactionFailureRetryActorSwitchAndUnmount: Story = {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: '❤️ 반응, 오류, 다시 시도' })).toBeVisible(),
     );
+    expect(canvas.getByRole('button', { name: '❤️ 반응 12개, 오류, 다시 시도' })).toBeVisible();
     expect(screen.getByRole('button', { name: '🎉 반응' })).not.toBeDisabled();
 
     await userEvent.click(screen.getByRole('button', { name: '❤️ 반응, 오류, 다시 시도' }));
