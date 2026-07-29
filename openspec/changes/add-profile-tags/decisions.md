@@ -47,9 +47,9 @@
 - Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `docs/design/profile-tags.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526`, `PROD-527`
 - Status: Active
 - Context / Problem: backend와 universal client가 현재 필요한 identity·빈 상태를 호환 가능한 GraphQL shape로 공유해야 하지만 Hashtag 전용 조회·navigation은 제외되어 있다.
-- Decision Outcome: `Profile.tags: [String!]!`는 `#` 없는 normalized Hashtag Name을 반환한다. 배열의 요소 순서는 API 계약이 아니며 소비자는 순서에 의존해서는 안 된다. Profile Origin과 연결된 Instance Kind가 Local인 모든 Profile은 configured instance ID와 무관하게 유효한 관계를 반환하고, 현재 범위의 Remote Profile은 빈 목록을 반환한다. 기존 `UpdateProfileInput`의 선택적 `tags: [String!]`에 배열이 오면 전체 replacement, 빈 배열이면 전체 제거, 생략 또는 `null`이면 기존 목록 보존으로 처리한다. `UpdateProfilePayload.profile`에서 최신 tags를 선택할 수 있게 한다.
+- Decision Outcome: `Profile.tags: [String!]!`는 `#` 없는 normalized Hashtag Name을 반환한다. 배열의 요소 순서는 API 계약이 아니며 소비자는 순서에 의존해서는 안 된다. Profile Origin과 연결된 Instance Kind가 Local인 모든 Profile은 configured instance ID와 무관하게 유효한 관계를 반환하고, 현재 범위의 Remote Profile은 빈 목록을 반환한다. `UpdateProfileInput`은 대상 ID를 받지 않고 `usingProfile`이 검증한 세션의 selected Profile을 대상으로 한다. 선택적 `tags: [String!]`에 배열이 오면 전체 replacement, 빈 배열이면 전체 제거, 생략 또는 `null`이면 기존 목록 보존으로 처리한다. `UpdateProfilePayload.profile`에서 최신 tags를 선택할 수 있게 한다.
 - Alternatives Considered: Hashtag object/Node/connection은 독립 조회·pagination이 필요 없는 현재 범위에 과하다. nullable output은 빈 목록과 미지원 상태를 불필요하게 분리한다. 별도 Profile Tag mutation은 다른 Profile 표현 값과 같은 저장 action이라는 계약을 깨뜨린다. chip용 `#`를 API 값에 포함하면 identity와 presentation이 결합되어 제외했다.
-- Consequences: 새 output field와 optional input은 기존 client와 호환된다. 이후 검색 navigation에 별도 Hashtag identity field가 필요하면 검색 change가 GraphQL 계약을 확장해야 하며, 이번 field의 normalized string 의미와 순서 비보장 원칙을 바꾸지 않는다.
+- Consequences: 새 output field와 optional tags input은 기존 client와 호환되지만 대상 `id` 제거는 Profile update caller가 selected Profile 세션 경계를 사용하도록 공개 input을 좁힌다. 이후 검색 navigation에 별도 Hashtag identity field가 필요하면 검색 change가 GraphQL 계약을 확장해야 하며, 이번 field의 normalized string 의미와 순서 비보장 원칙을 바꾸지 않는다.
 - Confirmation / Follow-up: schema snapshot과 GraphQL integration에서 omitted·null·empty·nonempty input, Local/Remote output, 배열 순서 비보장과 mutation payload cache 동기화를 검증한다.
 
 ### Profile 값과 Tag 관계를 직렬화된 한 transaction으로 교체한다
@@ -59,7 +59,7 @@
 - Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526`
 - Status: Active
 - Context / Problem: 기존 update resolver에 relation delete/insert를 별도로 추가하면 validation 또는 저장 실패 때 scalar Profile 값만 반영되거나 동시 update가 섞일 수 있다.
-- Decision Outcome: Active Account의 Owner·Local Profile에 대해 Lifecycle State가 `Deleted`가 아니고 Suspension State가 `Normal`인 editable 조건을 재확인하고 대상 Profile update를 직렬화하는 하나의 DB transaction에서 scalar 값, Hashtag resolve/create와 전체 relation replacement를 처리한다. 공개 조회 visibility는 canonical 조건인 Lifecycle State `Active`와 Suspension State `Normal`을 그대로 사용하며 edit eligibility와 혼동하지 않는다. 동시 요청은 Profile 단위로 직렬화하며 마지막으로 성공한 transaction의 전체 값이 남는다. row lock 또는 동등하게 검증된 직렬화 수단을 사용할 수 있다.
+- Decision Outcome: GraphQL `usingProfile` 경계가 검증한 selected Profile identity를 사용하고, Core는 Active Account의 Owner·Local Profile에 대해 Lifecycle State `Active`와 Suspension State `Normal`인 editable 조건을 재확인한다. 대상 Profile update를 직렬화하는 하나의 DB transaction에서 scalar 값, Hashtag resolve/create와 전체 relation replacement를 처리한다. 공개 조회 visibility도 Lifecycle State `Active`와 Suspension State `Normal`을 사용한다. 동시 요청은 Profile 단위로 직렬화하며 마지막으로 성공한 transaction의 전체 값이 남는다. row lock 또는 동등하게 검증된 직렬화 수단을 사용할 수 있다.
 - Alternatives Considered: scalar update 뒤 별도 relation transaction은 부분 commit 위험 때문에 제외했다. 별도 Tag mutation은 같은 저장 action 계약과 draft 복구를 복잡하게 한다. optimistic version field 추가는 현재 Profile 공개 계약을 확장하므로 채택하지 않았다.
 - Consequences: GraphQL resolver의 직접 row update 일부를 transaction/service 경계로 이동해야 한다. validation·권한·Hashtag resolve/create·relation 실패는 모두 요청 전 상태를 보존해야 한다.
 - Confirmation / Follow-up: scalar와 tags 동시 성공, 각 실패 rollback, concurrent replacement와 Hashtag identity upsert 경합을 database integration test로 검증한다.

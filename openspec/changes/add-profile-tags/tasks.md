@@ -12,7 +12,7 @@
 
 **Deliverable**
 
-Local Profile Owner가 승인된 Profile Tag 목록을 다른 Profile 값과 원자적으로 저장하고, 공개 조회 가능한 Local Profile이 연결된 normalized Tag를 제공하는 DB·service·GraphQL 기반을 전달한다. 관계와 API 배열의 순서는 계약하지 않는다.
+Active Account가 현재 선택한 Active Local Owner Profile의 승인된 Profile Tag 목록을 다른 Profile 값과 원자적으로 저장하고, 공개 조회 가능한 Local Profile이 연결된 normalized Tag를 제공하는 DB·service·GraphQL 기반을 전달한다. 관계와 API 배열의 순서는 계약하지 않는다.
 
 **Guardrails**
 
@@ -20,7 +20,7 @@ Local Profile Owner가 승인된 Profile Tag 목록을 다른 Profile 값과 원
 - Hashtag가 trim·선택적 앞 `#`·NFKC·locale 비종속 Unicode full case folding, 1~20 code point의 Letter·Number·밑줄 Name syntax와 normalized-name uniqueness를 소유한다.
 - Profile 관계는 입력을 Hashtag identity로 resolve/create하고 같은 canonical identity의 duplicate를 거부하며 전체 목록 replacement를 보장한다. 제품상 max count·관계 position·저장/노출 순서는 없다.
 - optional `tags`의 배열·빈 배열·생략/`null` 의미와 `Profile.tags: [String!]!` 공개 계약을 유지한다.
-- Active Account의 Owner만 Origin이 Local이고 Lifecycle State가 `Deleted`가 아니며 Suspension State가 `Normal`인 Profile(Deactivated Profile 포함)을 변경하고 scalar 값과 Tag 관계를 직렬화된 한 transaction으로 적용한다. Member·비-Owner·inactive Account, Remote Profile, Deleted Profile, Suspended Profile은 거부한다.
+- GraphQL update input은 대상 Profile ID를 받지 않고 `usingProfile`이 검증한 selected Profile identity를 사용한다. Active Account가 현재 선택한 Profile의 Owner이고 대상이 Active·Local·Normal일 때만 scalar 값과 Tag 관계를 직렬화된 한 transaction으로 적용한다. Member·비-Owner·selected Profile 없음·inactive Account·Deactivated·Remote·Deleted·Suspended Profile은 거부한다.
 - Deactivated·Suspended·Deleted 상태 전이에서 관계를 보존하는 정책은 공개 visibility에서 숨기는 정책과 분리한다. 별도 canonical 보존·파기 정책이 없는 상태 기반 cleanup을 추가하지 않는다. Profile row 물리 삭제의 FK cascade는 별도 DB safety invariant/test로 검증한다. Remote Profile은 빈 tags를 반환하며 actor fetch를 수행하지 않는다.
 - migration은 additive하고 기존 bio·Post data를 backfill하지 않는다. 검색 API·reverse lookup·검색 index와 Post Hashtag 관계를 추가하지 않는다.
 
@@ -28,13 +28,13 @@ Local Profile Owner가 승인된 Profile Tag 목록을 다른 Profile 값과 원
 
 - Hashtag가 소유한 normalization의 Unicode·길이·허용 문자·normalized-name uniqueness vector와 Profile 관계의 canonical identity duplicate vector를 core unit test로 검증한다.
 - fresh/upgrade migration, Hashtag Name 및 `(profile_id, hashtag_id)` unique/foreign-key 제약, position column·position unique/check·제품 max count가 없음을 확인하고, 빈 기존 Profile, Deactivated/Suspended/Deleted 관계 보존과 물리 Profile row 삭제 FK cascade safety를 `@kosmo/core` migration·DB test로 검증한다.
-- Active Account Owner의 Local Profile(Deactivated 포함) 성공과 Member·비-Owner·inactive Account·Remote·Deleted·Suspended 거부, omitted·null·empty·임의 개수 tags, canonical identity duplicate, rollback과 concurrent replacement를 service·GraphQL database integration test로 검증한다. 관계 저장·조회와 API 배열의 순서를 가정하지 않는 테스트를 포함한다.
+- Active Account가 현재 선택한 Active Local Owner Profile의 성공과 Member·비-Owner·selected Profile 없음·inactive Account·Deactivated·Remote·Deleted·Suspended 거부, omitted·null·empty·임의 개수 tags, canonical identity duplicate, rollback과 concurrent replacement를 service·GraphQL database integration test로 검증한다. 관계 저장·조회와 API 배열의 순서를 가정하지 않는 테스트를 포함한다.
 - schema snapshot, Profile Origin/연결 Instance Kind가 Local인 모든 Profile의 관계 batch 조회·Remote 빈 목록·query count와 `Profile.tags: [String!]!` 배열 순서 비보장 계약을 API test로 검증하고 `pnpm --filter @kosmo/core test`, `pnpm --filter @kosmo/api test`, schema·type check를 통과시킨다.
 
 - [ ] 1.1 Hashtag-owned Name normalization·syntax·length·normalized-name uniqueness와 Profile Tag 목록의 canonical identity duplicate validation을 구현하고 경계·동등성·중복 unit test를 추가한다.
 - [ ] 1.2 canonical Hashtag identity와 `(profile_id, hashtag_id)` Profile 관계의 additive schema·migration을 구현하고 position column·position unique/check·제품 max count 없이 fresh/upgrade·제약 test를 추가한다. 상태 전이 관계 보존과 물리 Profile row 삭제 FK cascade를 각각 검증한다.
-- [ ] 1.3 Active Account Owner·Local·editable 조건(Lifecycle != `Deleted`, Suspension `Normal`)을 검증하면서 Profile 값과 전체 Tag 목록을 원자적으로 교체하는 service 동작을 구현하고 성공·Deactivated 허용·Deleted/Suspended/Remote/non-Owner/inactive Account 거부·canonical identity duplicate·rollback·동시성 DB test를 추가한다. 관계나 반환 배열 순서를 의미 있는 결과로 가정하지 않는다.
-- [ ] 1.4 GraphQL `Profile.tags`와 optional update input·payload를 구현하고 Profile Origin/연결 Instance Kind가 Local인 모든 Profile의 관계 batch 조회, Remote 빈 목록, 배열 순서 비보장, 입력 의미와 기존 update 호환성 integration test를 추가한다.
+- [ ] 1.3 Active Account Owner·Active·Local·Normal 조건을 검증하면서 Profile 값과 전체 Tag 목록을 원자적으로 교체하는 service 동작을 구현하고 성공·Deactivated/Deleted/Suspended/Remote/non-Owner/inactive Account 거부·canonical identity duplicate·rollback·동시성 DB test를 추가한다. 관계나 반환 배열 순서를 의미 있는 결과로 가정하지 않는다.
+- [ ] 1.4 GraphQL `Profile.tags`와 대상 ID 없는 selected Profile update input·payload를 구현하고 Profile Origin/연결 Instance Kind가 Local인 모든 공개 Profile의 관계 batch 조회, Remote 빈 목록, 배열 순서 비보장, 입력 의미와 selected Profile authorization integration test를 추가한다.
 - [ ] 1.5 `@kosmo/core`·`@kosmo/api` 필수 검증과 schema 동기화를 통과시키고 `PROD-526` PR에 migration·권한·transaction·query-count 및 상태별 관계 보존 증거를 기록한다.
 
 ## 2. PROD-527 프로필 수정·공개 화면 연결
@@ -111,7 +111,7 @@ Local Profile Owner가 승인된 Profile Tag 목록을 다른 Profile 값과 원
 - `node_modules/.bin/openspec validate add-profile-tags --strict`를 archive 전 통과시키고 archive 뒤 전체 OpenSpec validation과 canonical delta 반영을 확인한다.
 
 - [ ] 3.1 `PROD-526`·`PROD-527`의 완료 조건, PR, 필수 test와 unresolved review thread가 모두 정리되었는지 확인한다.
-- [ ] 3.2 backend와 universal client 결과를 통합해 Owner 성공·Deactivated 편집·Deleted/Suspended/Remote/non-Owner/inactive Account 거부·Hashtag Name validation·canonical identity duplicate·rollback·draft retry·배열 순서 비보장·Active+Normal visibility 종단 간 시나리오를 검증한다. 제품 max count·position·reorder 제약이 없는지도 확인하고, 상태별 관계 보존과 물리 Profile row 삭제 FK cascade safety를 별도 검증한다.
+- [ ] 3.2 backend와 universal client 결과를 통합해 selected Active Local Owner 성공·selected Profile 없음·Deactivated/Deleted/Suspended/Remote/non-Owner/inactive Account 거부·Hashtag Name validation·canonical identity duplicate·rollback·draft retry·배열 순서 비보장·Active+Normal visibility 종단 간 시나리오를 검증한다. 제품 max count·position·reorder 제약이 없는지도 확인하고, 상태별 관계 보존과 물리 Profile row 삭제 FK cascade safety를 별도 검증한다.
 - [ ] 3.3 기존 Profile update·공개/Remote 조회 회귀와 검색·navigation·ActivityPub 제외 범위를 확인하고 부모 `PROD-522`에 통합 증거를 기록한다.
 - [ ] 3.4 구현과 canonical·Linear·OpenSpec 정합성을 재검토하고 필요한 upstream 승인·delta 수정 뒤 strict validation을 통과시킨다.
 - [ ] 3.5 모든 task와 통합 gate가 완료된 뒤 `add-profile-tags`를 archive하고 archive 후 validation·Linear 완료 상태를 확인한다.

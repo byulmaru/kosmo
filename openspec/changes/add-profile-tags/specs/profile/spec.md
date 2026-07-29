@@ -35,11 +35,11 @@
 
 ### Requirement: Profile updates
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/decisions/0008-relationship-report-state-exclusions.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-489`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — Active Account의 Owner는 Origin이 Local이고 Lifecycle State가 `Deleted`가 아니며 Suspension State가 `Normal`인 Profile(Deactivated Profile 포함)의 표시 이름, bio, 팔로우 정책과 전체 Profile Tag 목록을 수정할 수 있어야 한다(MUST). Member는 Profile 운영 권한을 갖지 않으며 Profile을 수정할 수 없어야 한다(MUST NOT). 선택적 `tags: [String!]` input에 목록이 제공되면 기존 Profile Tag 전체 목록을 같은 Profile update transaction에서 교체해야 하며(MUST), input을 생략하거나 `null`로 보내면 기존 목록을 유지해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/decisions/0008-relationship-report-state-exclusions.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-489`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — Active Account가 현재 선택한 Profile의 Owner이고 대상 Origin이 Local이며 Lifecycle State가 `Active`, Suspension State가 `Normal`일 때만 표시 이름, bio, 팔로우 정책과 전체 Profile Tag 목록을 수정할 수 있어야 한다(MUST). Profile update input은 대상 Profile ID를 받지 않고 검증된 세션의 selected Profile identity를 사용해야 한다(MUST). Member, selected Profile 없음, Deactivated Profile과 Remote Profile은 수정할 수 없어야 한다(MUST NOT). 선택적 `tags: [String!]` input에 목록이 제공되면 기존 Profile Tag 전체 목록을 같은 Profile update transaction에서 교체해야 하며(MUST), input을 생략하거나 `null`로 보내면 기존 목록을 유지해야 한다(MUST).
 
 #### Scenario: Update profile as owner
 
-- **WHEN** Active Account의 프로필 `OWNER`가 Lifecycle State가 `Deleted`가 아니고 Suspension State가 `Normal`인 Local Profile(Deactivated Profile 포함) 수정을 요청한다
+- **WHEN** Active Account가 현재 선택한 Lifecycle State `Active`, Suspension State `Normal`의 Local Profile `OWNER`로 수정을 요청한다
 - **THEN** 시스템은 제공된 displayName, bio, followPolicy 값을 갱신한다
 - **AND** tags가 제공되면 Hashtag identity로 검증·resolve한 전체 목록과 관계를 같은 transaction에서 교체한다
 - **AND** tags가 생략되거나 `null`이면 기존 Profile Tag 관계를 유지한다
@@ -47,7 +47,7 @@
 
 #### Scenario: Clear Profile Tags as owner
 
-- **WHEN** Active Account의 `OWNER`가 Lifecycle State가 `Deleted`가 아니고 Suspension State가 `Normal`인 Local Profile(Deactivated Profile 포함)에 tags 빈 목록을 명시해 수정을 요청한다
+- **WHEN** Active Account가 현재 선택한 Active Local Profile의 `OWNER`로 tags 빈 목록을 명시해 수정을 요청한다
 - **THEN** 시스템은 해당 Profile의 Profile Tag 관계를 모두 제거한다
 - **AND** 다른 제공 값과 빈 tags를 포함한 갱신된 Profile을 반환한다
 
@@ -57,9 +57,15 @@
 - **THEN** 시스템은 tags field와 연결된 validation 오류를 반환한다
 - **AND** 같은 요청의 displayName, bio, followPolicy와 기존 Profile Tag 관계를 어느 것도 변경하지 않는다
 
-#### Scenario: Update missing or inaccessible profile
+#### Scenario: Reject update without a usable selected Profile
 
-- **WHEN** 수정 대상 프로필이 없거나 Remote Profile이거나 Lifecycle State가 `Deleted`이거나 Suspension State가 `Suspended`이거나 현재 Account가 inactive이거나 Profile과 연결되어 있지 않다
+- **WHEN** selected Profile이 없거나 Deactivated·Deleted·Suspended 상태이거나 현재 Account가 inactive이거나 selected Profile membership이 유효하지 않다
+- **THEN** 시스템은 selected Profile authorization 오류로 요청을 거부한다
+- **AND** Profile Tag 관계를 변경하지 않는다
+
+#### Scenario: Reject a selected Remote Profile update
+
+- **WHEN** Active Account가 현재 선택한 Remote Profile의 수정을 요청한다
 - **THEN** 시스템은 profile not found 오류를 반환한다
 - **AND** Profile Tag 관계를 변경하지 않는다
 

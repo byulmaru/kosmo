@@ -48,11 +48,11 @@
 
 ### Requirement: Owner-controlled atomic Profile Tag replacement
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — Active Account의 `OWNER`만 Origin이 Local이고 Lifecycle State가 `Deleted`가 아니며 Suspension State가 `Normal`인 Profile(Deactivated Profile 포함)을 기존 Profile 편집 action에서 수정하고 Profile Tag 전체 목록을 교체할 수 있어야 한다(MUST). Profile Tag 목록과 같은 요청에 포함된 다른 Profile 편집 값은 하나의 transaction으로 적용되어야 하며(MUST), 권한·정규화·검증·저장 중 하나라도 실패하면 어느 값도 변경되어서는 안 된다(MUST NOT). Profile Tag 입력을 생략하거나 `null`로 보낸 기존 update 요청은 현재 목록을 유지해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — Active Account가 현재 선택한 Profile의 `OWNER`이고 대상 Origin이 Local, Lifecycle State가 `Active`, Suspension State가 `Normal`일 때만 기존 Profile 편집 action에서 Profile Tag 전체 목록을 교체할 수 있어야 한다(MUST). Profile update input은 대상 Profile ID를 받지 않고 검증된 세션의 selected Profile identity를 사용해야 한다(MUST). Profile Tag 목록과 같은 요청에 포함된 다른 Profile 편집 값은 하나의 transaction으로 적용되어야 하며(MUST), 권한·정규화·검증·저장 중 하나라도 실패하면 어느 값도 변경되어서는 안 된다(MUST NOT). Profile Tag 입력을 생략하거나 `null`로 보낸 기존 update 요청은 현재 목록을 유지해야 한다(MUST).
 
 #### Scenario: Replace Profile Tags as Local Profile Owner
 
-- **WHEN** Active Account의 `OWNER`가 Lifecycle State가 `Deleted`가 아니고 Suspension State가 `Normal`인 Local Profile(Deactivated Profile 포함)에 유효한 Profile Tag 목록을 포함해 수정을 요청한다
+- **WHEN** Active Account가 현재 선택한 Active Local Profile의 `OWNER`로 유효한 Profile Tag 목록을 포함해 수정을 요청한다
 - **THEN** 시스템은 기존 Profile Tag 전체 목록을 새 목록으로 교체한다
 - **AND** 같은 요청의 다른 Profile 편집 값과 Profile Tag 관계를 하나의 transaction으로 commit한다
 
@@ -69,7 +69,7 @@
 
 #### Scenario: Reject a non-owner or inaccessible profile
 
-- **WHEN** Member 또는 관계없는 Account가 Profile Tag 변경을 요청하거나 Account가 inactive이거나 대상 Profile이 Remote이거나 Lifecycle State가 `Deleted`이거나 Suspension State가 `Suspended`다
+- **WHEN** Member 또는 관계없는 Account가 Profile Tag 변경을 요청하거나 selected Profile이 없거나 Account가 inactive이거나 대상 Profile이 Deactivated·Deleted·Suspended 상태이거나 Remote다
 - **THEN** 시스템은 기존 Profile 수정의 permission 또는 not-found 경계로 요청을 거부한다
 - **AND** Profile과 Profile Tag 관계를 변경하지 않는다
 
