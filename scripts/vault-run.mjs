@@ -42,6 +42,7 @@ const config = run(
 );
 const command = config.command;
 const secretPath = config.secretPath ?? `secret/kubernetes/kosmo/${config.env}`;
+const missingSecretPattern = /^No value found at \S+$/u;
 
 if (command.length === 0) {
   console.error('Usage: vault-run [--env <name>] [--secret-path <path>] -- <command> [args...]');
@@ -81,7 +82,7 @@ const readSecret = (path, optionalPath = false) => {
   }
 
   if (vault.status !== 0) {
-    if (optionalPath && vault.status === 2) {
+    if (optionalPath && vault.status === 2 && missingSecretPattern.test(vault.stderr.trim())) {
       return {};
     }
 

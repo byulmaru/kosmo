@@ -176,4 +176,6 @@
 - **WHEN** 운영자가 production Web에서 인증된 smoke account로 식별 가능한 비민감 test feedback을 제출한다
 - **THEN** Web UI는 성공 상태를 표시한다
 - **AND** 지정 Slack channel에는 해당 요청의 message 한 건이 나타난다
-- **AND** message와 관찰 가능한 log에 webhook URL, token, cookie, account ID와 예상하지 못한 오류 세부가 없다
+- **AND** message에는 제출 Account 내부 ID가 나타난다
+- **AND** message에는 Account `displayName`, 이메일, OIDC subject, session ID와 선택되지 않은 다른 Profile 정보가 없다
+- **AND** 관찰 가능한 log에는 webhook URL, token, cookie, Account 내부 ID와 예상하지 못한 오류 세부가 없다

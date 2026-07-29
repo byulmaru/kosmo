@@ -22,7 +22,8 @@ Webhook 값은 HTTPS `hooks.slack.com/services/...` 형식이어야 한다. URL�
 로컬 `pnpm dev`의 API process는 공용 `secret/kubernetes/kosmo/local` 위에
 `secret/kubernetes/kosmo/local/api`를 선택적으로 병합한다. API 전용 경로가 아직 없으면 다른 API
 기능은 계속 기동하고 feedback mutation만 fail closed로 실패한다. 이 overlay는 API process 안에서만
-읽으므로 Web·Expo 개발 process에는 webhook 값이 주입되지 않는다.
+읽으므로 Web·Expo 개발 process에는 webhook 값이 주입되지 않는다. API 전용 경로의 permission, TLS,
+Vault API 또는 연결 오류는 Secret 미존재로 숨기지 않고 API 개발 process 시작을 실패시킨다.
 
 ## 배포 전 확인
 
@@ -36,7 +37,10 @@ Webhook 값은 HTTPS `hooks.slack.com/services/...` 형식이어야 한다. URL�
   검사한다. 검사는 secret 값을 로그나 문서에 기록하지 않고 배포 단계에서 주입된 값을
   안전한 검증 도구로 비교하는 방식으로 수행한다.
 - 인증된 Web 사용자가 `/feedback`에서 피드백을 제출하고, 성공 시 Slack에 정확히 한 메시지가
-  도착하는지 운영 smoke에서 확인한다.
+  도착하는지 운영 smoke에서 확인한다. 메시지에는 제출 Account 내부 ID와 선택된 Profile의 허용
+  필드만 포함되고, Account `displayName`·이메일·OIDC subject·session ID·선택되지 않은 Profile은
+  포함되지 않아야 한다. 관찰 가능한 API log에는 webhook URL·token·cookie·Account 내부 ID와 예상하지
+  못한 오류 세부가 남지 않는지도 함께 확인한다.
 
 운영 smoke에서 Slack 응답이 모호하거나 실패하면 입력값을 보존한 채 Web의 명시적인
 `다시 시도` 동작으로 재전송한다. API가 자동으로 재시도하지 않으므로, 중복 메시지 가능성을
