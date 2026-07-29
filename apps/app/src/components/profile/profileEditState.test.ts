@@ -51,6 +51,28 @@ test('displayName과 bio를 Unicode code point 기준으로 검증한다', () =>
   );
 });
 
+test('40자를 초과한 초기 displayName을 바꾸지 않으면 다른 field를 저장할 수 있다', () => {
+  const initialValue = { ...draft, displayName: '가'.repeat(41) };
+  const value = { ...initialValue, bio: '변경한 소개' };
+  const errors = validateProfileEditDraft(value, initialValue);
+
+  assert.equal(errors.displayName, undefined);
+  assert.equal(
+    canSubmitProfileEdit({
+      initialValue,
+      value,
+      errors,
+      onSubmit: () => undefined,
+      submitState: { kind: 'idle' },
+    }),
+    true,
+  );
+  assert.equal(
+    validateProfileEditDraft({ ...value, displayName: '나'.repeat(41) }, initialValue).displayName,
+    '표시 이름은 40자 이하로 입력해 주세요.',
+  );
+});
+
 test('Profile Tag 입력을 core와 같은 규칙으로 정규화하고 검증한다', () => {
   for (const { input, normalized } of profileTagNormalizationParityCases) {
     assert.deepEqual(validateProfileTagDraftInput(input, []), { ok: true, value: normalized });

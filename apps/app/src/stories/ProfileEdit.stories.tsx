@@ -356,6 +356,25 @@ export const AstralDisplayNameUsesCodePointLimit: Story = {
   },
 };
 
+export const LegacyDisplayNameCanSaveAnotherField: Story = {
+  render: () => {
+    const initialValue = { ...initialDraft, displayName: '가'.repeat(41) };
+
+    return (
+      <ProfileEditScreenHarness
+        initialValue={initialValue}
+        startingValue={{ ...initialValue, bio: '변경한 소개' }}
+      />
+    );
+  },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    expect(canvas.queryByText('표시 이름은 40자 이하로 입력해 주세요.')).not.toBeInTheDocument();
+    expect(canvas.getByRole('button', { name: '저장' })).toBeEnabled();
+  },
+};
+
 export const ServerFieldErrorClearsAfterEditing: Story = {
   render: () => <ProfileEditServerErrorHarness />,
   play: async ({ canvasElement, userEvent }) => {

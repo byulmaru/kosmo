@@ -9,6 +9,7 @@ import type { ProfileEditDraft, ProfileEditFieldErrors } from './profileEditStat
 
 export type ProfileEditFormProps = {
   disabled?: boolean;
+  initialValue: ProfileEditDraft;
   onAvatarEdit?: () => void;
   onChange: (next: ProfileEditDraft) => void;
   onHeaderEdit?: () => void;
@@ -40,6 +41,7 @@ function FieldError({ message }: { message?: string }) {
 
 export function ProfileEditForm({
   disabled = false,
+  initialValue,
   onAvatarEdit,
   onChange,
   onHeaderEdit,
@@ -47,7 +49,7 @@ export function ProfileEditForm({
   value,
 }: ProfileEditFormProps) {
   const theme = useTheme();
-  const localErrors = validateProfileEditDraft(value);
+  const localErrors = validateProfileEditDraft(value, initialValue);
   const displayNameError = resolveFieldError(localErrors.displayName, serverErrors?.displayName);
   const bioError = resolveFieldError(localErrors.bio, serverErrors?.bio);
 

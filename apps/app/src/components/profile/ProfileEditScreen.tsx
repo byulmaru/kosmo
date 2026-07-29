@@ -66,7 +66,7 @@ export function ProfileEditScreen({
   value,
 }: ProfileEditScreenProps) {
   const theme = useTheme();
-  const errors = mergeFieldErrors(validateProfileEditDraft(value), serverErrors);
+  const errors = mergeFieldErrors(validateProfileEditDraft(value, initialValue), serverErrors);
   const saving = submitState.kind === 'saving';
   const canSubmit =
     !disabled &&
@@ -132,6 +132,7 @@ export function ProfileEditScreen({
 
       <ProfileEditForm
         disabled={disabled || saving}
+        initialValue={initialValue}
         onAvatarEdit={onAvatarEdit}
         onChange={onChange}
         onHeaderEdit={onHeaderEdit}

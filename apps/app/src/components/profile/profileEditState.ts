@@ -51,13 +51,19 @@ function countCodePoints(value: string): number {
   return [...value].length;
 }
 
-export function validateProfileEditDraft(value: ProfileEditDraft): ProfileEditFieldErrors {
+export function validateProfileEditDraft(
+  value: ProfileEditDraft,
+  initialValue?: ProfileEditDraft,
+): ProfileEditFieldErrors {
   const errors: ProfileEditFieldErrors = {};
   const displayNameLength = countCodePoints(value.displayName.trim());
 
   if (displayNameLength === 0) {
     errors.displayName = '표시 이름을 입력해 주세요.';
-  } else if (displayNameLength > MAX_DISPLAY_NAME_CODE_POINTS) {
+  } else if (
+    displayNameLength > MAX_DISPLAY_NAME_CODE_POINTS &&
+    value.displayName !== initialValue?.displayName
+  ) {
     errors.displayName = '표시 이름은 40자 이하로 입력해 주세요.';
   }
 
