@@ -18,7 +18,8 @@
 
 - 표시 이름은 1~40자다.
 - bio는 500자 이하이며 긴 텍스트 입력으로 표현한다.
-- 프로필 태그는 [Profile Tag 디자인](./profile-tags.md)의 최대 5개·정규화·순서·접근성 계약을 따른다.
+- 프로필 태그는 [Profile Tag 디자인](./profile-tags.md)의 Hashtag Name 정규화·중복·접근성
+  계약을 따른다. 개수 상한과 순서·재정렬 계약은 두지 않는다.
 - form은 avatar와 header의 현재 이미지를 각각 초기 draft로 표시하며 별도의 `유지` action을 두지 않는다.
   header와 avatar에는 각 field를 수정하는 편집 control만 제공하고, 한쪽을 편집해도 건드리지 않은 다른 쪽의
   draft는 현재 값으로 남긴다. 각 field의 편집 흐름은 교체 선택, 제거, 업로드 대기와 오류를 구분해 표현한다.
@@ -39,10 +40,12 @@
 - 제출 callback이 없거나 초기값에서 바뀐 draft가 없으면 저장 action을 disabled로 표현한다. 사용자가 원하는
   field만 편집하면 해당 draft가 dirty가 되고, 저장은 현재 draft 전체를 제출한다. 성공을 가장하거나 임시 local
   persistence를 만들지 않는다.
-- UI 선제작 단계에서는 표시 이름·bio와 Profile Tag의 로컬 입력, 추가·제거·순서 변경, client validation을
+- UI 선제작 단계에서는 표시 이름·bio와 Profile Tag의 로컬 입력, 추가·제거, client validation을
   동작하게 한다.
 - dirty, validation, 이미지 업로드 대기·오류, saving, failure와 retry는 production 연결 전에는
   Storybook의 controlled state로 검증한다.
+- 이미지 업로드 오류는 해당 field의 `<label> 이미지 업로드에 실패했어요. 다시 시도해 주세요.` 문구로
+  안내하고 현재 image draft를 보존한다.
 
 ### Production route와 저장
 
@@ -59,9 +62,8 @@
 ## Profile Tag 편집
 
 - 기본 상태에서는 현재 TagChip과 추가 입력을 같은 섹션에 둔다.
-- 태그를 추가하면 목록 끝에 놓고, 제거하면 남은 태그의 상대 순서를 유지한다.
-- 순서 변경은 같은 섹션 안의 명시적 `순서 변경` mode로 진입해 수행한다. 각 행 왼쪽의 drag handle로
-  pointer 재정렬을 제공하고, 위·아래 이동 action을 키보드·스크린리더 대체 수단으로 유지한다.
+- 태그를 추가하거나 기존 TagChip을 제거할 수 있다. 개수 상한을 두지 않으며 순서 변경
+  control이나 drag gesture를 제공하지 않는다.
 - 추천, 자동완성, trend, 검색 link를 표시하지 않는다.
 - 저장과 서버 validation, Relay 동기화는 Profile Tag 연결 이슈가 같은 presentation component를 재사용해
   제공한다. 별도의 태그 편집기를 다시 만들지 않는다.
@@ -85,16 +87,16 @@
 ## 접근성과 상태 표현
 
 - 현재 Web-first presentation은 공용 compact rhythm을 사용한다. icon action은 `32×32`, text action은
-  최소 높이 `36`, Tag reorder row는 최소 높이 `40`을 기준으로 하며 `44×44`를 강제하지 않는다.
+  최소 높이 `36`을 기준으로 하며 `44×44`를 강제하지 않는다.
 - 이 compact target은 현재 Web 검증을 우선한 선택이다. Native 전달을 본격화할 때 touch target과 간격을
   플랫폼 입력 방식에 맞게 다시 검토한다.
-- 저장, 제거, 순서 이동과 header·avatar 각각의 편집 action은 대상과 상태를 포함한 accessibility label/state를
+- 저장, 태그 제거와 header·avatar 각각의 편집 action은 대상과 상태를 포함한 accessibility label/state를
   제공한다.
 - validation, disabled, saving과 failure를 색만으로 구분하지 않는다.
 - presentation은 저장 성공 문구를 남기지 않는다. production route가 성공 payload로 갱신된 Profile을 확보한 뒤
   해당 Profile로 복귀한다.
-- 실패 뒤 표시 이름·bio·Profile Tag 순서와 이미지 선택 상태를 보존해 같은 draft로 재시도할 수 있게 한다.
-- 긴 표시 이름·bio, 빈 값, 최대 5개·긴 태그, 이미지 없음과 오류, compact/desktop 폭을 상태 카탈로그에서
+- 실패 뒤 표시 이름·bio·Profile Tag·이미지 선택 상태를 보존해 같은 draft로 재시도할 수 있게 한다.
+- 긴 표시 이름·bio, 빈 값, 여러 개·긴 태그, 이미지 없음과 오류, compact/desktop 폭을 상태 카탈로그에서
   확인한다.
 
 ## Figma 대응
@@ -111,7 +113,7 @@
 
 ## 전달 경계
 
-- `PROD-491`: route 없는 presentation component, 로컬 입력·validation·태그 순서 UI, 이미지 controlled
+- `PROD-491`: route 없는 presentation component, 로컬 입력·validation·태그 추가·제거 UI, 이미지 controlled
   state와 Storybook 상태 카탈로그.
 - `PROD-492`: protected route, selected Local Owner capability/query, 초기값, submit/Relay, Media picker·upload,
   성공 navigation과 production 진입점.

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Text } from 'react-native';
-import { expect, waitFor, within } from 'storybook/test';
+import { expect, within } from 'storybook/test';
 import { ProfileEditImageFields } from '@/components/profile/ProfileEditImageFields';
 import { ProfileEditScreen } from '@/components/profile/ProfileEditScreen';
 import { ProfileTagEditor } from '@/components/profile/ProfileTagEditor';
@@ -327,90 +327,6 @@ export const TagAddDuplicateAndRemove: Story = {
   },
 };
 
-export const TagReorderMode: Story = {
-  render: () => <ProfileTagEditorHarness initialTags={['공예', '개발', '사진']} />,
-  play: async ({ canvasElement, userEvent }) => {
-    const canvas = within(canvasElement);
-
-    await userEvent.click(canvas.getByRole('button', { name: '순서 변경' }));
-    expect(canvas.getAllByTestId('profile-tag-drag-handle')).toHaveLength(3);
-    expect(canvas.getByRole('button', { name: '#공예 위로 이동' })).toBeDisabled();
-    expect(canvas.getByRole('button', { name: '#공예 아래로 이동' })).toBeEnabled();
-    expect(canvas.getByRole('button', { name: '#사진 아래로 이동' })).toBeDisabled();
-
-    expect(canvas.getByRole('button', { name: '순서 변경 완료' })).toHaveFocus();
-    await userEvent.tab();
-    const moveDown = canvas.getByRole('button', { name: '#공예 아래로 이동' });
-    expect(moveDown).toHaveFocus();
-    await userEvent.tab({ shift: true });
-    expect(canvas.getByRole('button', { name: '순서 변경 완료' })).toHaveFocus();
-    await userEvent.tab();
-    expect(moveDown).toHaveFocus();
-    await userEvent.keyboard('{Enter}');
-    expect(canvas.getAllByTestId('profile-tag-order-item').map((item) => item.textContent)).toEqual(
-      ['#개발', '#공예', '#사진'],
-    );
-
-    await userEvent.click(canvas.getByRole('button', { name: '순서 변경 완료' }));
-    expect(canvas.getAllByTestId('profile-tag-chip').map((item) => item.textContent)).toEqual([
-      '#개발',
-      '#공예',
-      '#사진',
-    ]);
-  },
-};
-
-export const TagReorderWithSpace: Story = {
-  render: () => <ProfileTagEditorHarness initialTags={['공예', '개발']} />,
-  play: async ({ canvasElement, userEvent }) => {
-    const canvas = within(canvasElement);
-
-    await userEvent.click(canvas.getByRole('button', { name: '순서 변경' }));
-    await userEvent.tab();
-    expect(canvas.getByRole('button', { name: '#공예 아래로 이동' })).toHaveFocus();
-    await userEvent.keyboard(' ');
-    expect(canvas.getAllByTestId('profile-tag-order-item').map((item) => item.textContent)).toEqual(
-      ['#개발', '#공예'],
-    );
-  },
-};
-
-export const TagDragReorder: Story = {
-  render: () => <ProfileTagEditorHarness initialTags={['가'.repeat(20), '개발', '사진']} />,
-  play: async ({ canvasElement, userEvent }) => {
-    const canvas = within(canvasElement);
-
-    await userEvent.click(canvas.getByRole('button', { name: '순서 변경' }));
-    const rows = canvas.getAllByTestId('profile-tag-order-item');
-    expect(
-      rows.map((row) =>
-        Math.round(row.parentElement!.parentElement!.getBoundingClientRect().height),
-      ),
-    ).toEqual([40, 40, 40]);
-    const handle = canvas.getAllByTestId('profile-tag-drag-handle')[0];
-    const target = rows[2];
-    const handleRect = handle.getBoundingClientRect();
-    const targetRect = target.getBoundingClientRect();
-
-    const clientX = Math.round(handleRect.left + handleRect.width / 2);
-    const clientY = Math.round(targetRect.top + targetRect.height / 2);
-
-    handle.dispatchEvent(
-      new MouseEvent('mousedown', { bubbles: true, button: 0, buttons: 1, clientX }),
-    );
-    target.dispatchEvent(
-      new MouseEvent('mousemove', { bubbles: true, buttons: 1, clientX, clientY }),
-    );
-    target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0, clientX, clientY }));
-
-    await waitFor(() => {
-      expect(
-        canvas.getAllByTestId('profile-tag-order-item').map((item) => item.textContent),
-      ).toEqual(['#개발', '#사진', `#${'가'.repeat(20)}`]);
-    });
-  },
-};
-
 export const TagInvalidInput: Story = {
   render: () => <ProfileTagEditorHarness />,
   play: async ({ canvasElement, userEvent }) => {
@@ -423,16 +339,20 @@ export const TagInvalidInput: Story = {
   },
 };
 
-export const TagMaximumState: Story = {
+export const TagWithoutLimitOrReorder: Story = {
   render: () => <ProfileTagEditorHarness initialTags={['공예', '개발', '사진', '독서', '음악']} />,
-  play: ({ canvasElement }) => {
+  play: async ({ canvasElement, userEvent }) => {
     const canvas = within(canvasElement);
     const input = canvas.getByRole('textbox', { name: '프로필 태그' });
+    const add = canvas.getByRole('button', { name: '태그 추가' });
 
-    expect(input).toHaveAttribute('readonly');
-    expect(input).toHaveAttribute('aria-disabled', 'true');
-    expect(canvas.getByRole('button', { name: '태그 추가' })).toBeDisabled();
-    expect(canvas.getByText('최대 5개까지 추가할 수 있어요.')).toBeVisible();
+    expect(canvas.queryByRole('button', { name: '순서 변경' })).not.toBeInTheDocument();
+    expect(input).toBeEnabled();
+    expect(add).toBeEnabled();
+    await userEvent.type(input, '여섯');
+    await userEvent.click(add);
+    expect(canvas.getAllByTestId('profile-tag-chip')).toHaveLength(6);
+    expect(canvas.getByText('#여섯')).toBeVisible();
   },
 };
 
@@ -511,7 +431,6 @@ export const DisabledFormBlocksEveryAction: Story = {
     expect(canvas.getByRole('button', { name: '헤더 이미지 변경' })).toBeDisabled();
     expect(canvas.getByRole('button', { name: '아바타 이미지 편집' })).toBeDisabled();
     expect(canvas.getByRole('button', { name: '#공예 제거' })).toBeDisabled();
-    expect(canvas.getByRole('button', { name: '순서 변경' })).toBeDisabled();
     expect(canvas.getByRole('button', { name: '태그 추가' })).toBeDisabled();
     expect(canvas.getByRole('button', { name: '저장' })).toBeDisabled();
     for (const input of canvas.getAllByRole('textbox')) {
@@ -557,7 +476,7 @@ export const Responsive1440: Story = {
   },
 };
 
-export const LongTextAndFiveLongTags: Story = {
+export const LongTextAndLongTags: Story = {
   render: () => (
     <ProfileEditScreenHarness
       initialValue={{
@@ -578,6 +497,6 @@ export const LongTextAndFiveLongTags: Story = {
     expect(
       new Set(chips.map((chip) => Math.round(chip.getBoundingClientRect().top))).size,
     ).toBeGreaterThan(1);
-    expect(canvas.getByText('최대 5개까지 추가할 수 있어요.')).toBeVisible();
+    expect(canvas.getByRole('textbox', { name: '프로필 태그' })).toBeEnabled();
   },
 };

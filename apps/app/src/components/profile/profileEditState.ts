@@ -31,8 +31,6 @@ export type ProfileEditFieldErrors = {
 
 export type ProfileTagValidationResult = { ok: true; value: string } | { ok: false; error: string };
 
-export type ProfileTagMoveDirection = -1 | 1;
-
 export type CanSubmitProfileEditOptions = {
   initialValue: ProfileEditDraft;
   value: ProfileEditDraft;
@@ -44,7 +42,6 @@ export type CanSubmitProfileEditOptions = {
 const MAX_DISPLAY_NAME_CODE_POINTS = 40;
 const MAX_BIO_CODE_POINTS = 500;
 const MAX_PROFILE_TAG_CODE_POINTS = 20;
-const MAX_PROFILE_TAGS = 5;
 
 function countCodePoints(value: string): number {
   return [...value].length;
@@ -96,7 +93,8 @@ export function isProfileEditDraftDirty(
     return true;
   }
 
-  return initial.tags.some((tag, index) => tag !== value.tags[index]);
+  const initialTags = new Set(initial.tags);
+  return value.tags.some((tag) => !initialTags.has(tag));
 }
 
 function areReplacementUploadsReady(image: ProfileEditImageDraft): boolean {
@@ -153,41 +151,5 @@ export function validateProfileTagDraftInput(
     return { ok: false, error: '이미 추가한 태그예요.' };
   }
 
-  if (tags.length >= MAX_PROFILE_TAGS) {
-    return { ok: false, error: '프로필 태그는 최대 5개까지 추가할 수 있어요.' };
-  }
-
   return { ok: true, value: normalized };
-}
-
-export function moveProfileTag(
-  tags: ReadonlyArray<string>,
-  index: number,
-  direction: ProfileTagMoveDirection,
-): string[] {
-  return moveProfileTagToIndex(tags, index, index + direction);
-}
-
-export function moveProfileTagToIndex(
-  tags: ReadonlyArray<string>,
-  fromIndex: number,
-  toIndex: number,
-): string[] {
-  const next = [...tags];
-
-  if (
-    !Number.isInteger(fromIndex) ||
-    !Number.isInteger(toIndex) ||
-    fromIndex < 0 ||
-    fromIndex >= next.length ||
-    toIndex < 0 ||
-    toIndex >= next.length ||
-    fromIndex === toIndex
-  ) {
-    return next;
-  }
-
-  const [tag] = next.splice(fromIndex, 1);
-  next.splice(toIndex, 0, tag);
-  return next;
 }

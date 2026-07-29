@@ -15,7 +15,8 @@
 
 - **WHEN** 상태 카탈로그가 dirty, validation, upload-wait, saving, failure 또는 retry state를 제공한다
 - **THEN** form은 해당 상태를 색 외의 text와 accessibility state로 구분한다
-- **AND** failure와 retry state에서 현재 text, Tag 순서와 image draft를 유지한다
+- **AND** 이미지 upload error는 해당 field의 `<label> 이미지 업로드에 실패했어요. 다시 시도해 주세요.` 문구로 안내한다
+- **AND** failure와 retry state에서 현재 text, Tag 목록과 image draft를 유지한다
 
 #### Scenario: Keep untouched image fields as their current draft
 
@@ -26,7 +27,7 @@
 
 ### Requirement: Profile edit fields and Profile Tag interaction
 
-**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/profile-tags.md`, `PROD-491`, `PROD-522` — Profile edit presentation은 1~40자 displayName, 500자 이하 bio와 avatar/header별 controlled 편집 control을 제공해야 하며(MUST), 최대 5개 Profile Tag를 inline chip으로 추가·제거하고 같은 영역의 명시적 순서 변경 mode로 이동할 수 있어야 한다(MUST). Follow Approval Policy와 승인되지 않은 field를 표시해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/profile-tags.md`, `PROD-491`, `PROD-522` — Profile edit presentation은 1~40자 displayName, 500자 이하 bio와 avatar/header별 controlled 편집 control을 제공해야 하며(MUST), 개수 상한 없이 Profile Tag를 inline chip으로 추가·제거할 수 있어야 한다(MUST). 순서·재정렬 control을 제공해서는 안 되며(MUST NOT), Follow Approval Policy와 승인되지 않은 field를 표시해서는 안 된다(MUST NOT).
 
 #### Scenario: Edit approved text and image fields
 
@@ -35,11 +36,13 @@
 - **AND** 초기값과 다른 field가 하나라도 있을 때 현재 draft를 저장할 수 있는 dirty state를 표현한다
 - **AND** followPolicy, Profile Link, handle, location, website, gender, pronouns, contacts와 pinned post를 표시하지 않는다
 
-#### Scenario: Add remove and reorder Profile Tags locally
+#### Scenario: Add and remove Profile Tags locally
 
-- **WHEN** 사용자가 유효한 Profile Tag를 추가·제거하거나 순서 변경 mode의 이동 control을 사용한다
-- **THEN** form은 정규화된 이름에 `#`를 한 번 붙인 chip과 변경된 상대 순서를 즉시 표시한다
-- **AND** 최대 5개, 1~20자 문자·숫자·밑줄과 정규화 뒤 중복을 입력 가까이에 안내한다
+- **WHEN** 사용자가 유효한 Profile Tag를 추가하거나 기존 TagChip을 제거한다
+- **THEN** form은 정규화된 이름에 `#`를 한 번 붙인 chip 목록을 즉시 표시한다
+- **AND** 개수 상한 없이 1~20자 문자·숫자·밑줄과 정규화 뒤 canonical identity 중복을 입력
+  가까이에 안내한다
+- **AND** 순서 변경 control이나 drag gesture를 표시하지 않는다
 - **AND** 자동완성·추천·trend·검색 link를 표시하지 않는다
 
 ### Requirement: Header image editing surface preserves a 3:1 aspect ratio
@@ -61,7 +64,7 @@
 
 ### Requirement: Responsive accessible Profile edit layout
 
-**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/breakpoints.md`, `PROD-491` — Profile edit presentation은 Web shell 중앙 최대 600px surface와 mobile/native 정보 구조를 공유해야 한다(MUST). 현재 Web-first presentation은 icon action `32×32`, text action 최소 높이 `36`, Tag reorder row 최소 높이 `40`의 compact rhythm과 대상·상태를 설명하는 accessibility label/state를 제공해야 한다(MUST).
+**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/breakpoints.md`, `PROD-491` — Profile edit presentation은 Web shell 중앙 최대 600px surface와 mobile/native 정보 구조를 공유해야 한다(MUST). 현재 Web-first presentation은 icon action `32×32`, text action 최소 높이 `36`의 compact rhythm과 대상·상태를 설명하는 accessibility label/state를 제공해야 한다(MUST).
 
 #### Scenario: Render desktop shell layouts
 
@@ -69,11 +72,11 @@
 - **THEN** form은 각각 full sidebar/right rail 또는 icon rail 다음의 최대 600px 중앙 surface에 렌더된다
 - **AND** 중앙 content를 별도 internal scroller로 바꾸지 않고 shell document scroll을 유지한다
 
-#### Scenario: Operate drag and fallback controls
+#### Scenario: Operate compact controls accessibly
 
-- **WHEN** 사용자가 pointer로 Tag 행 왼쪽의 drag handle을 이동한다
-- **THEN** form은 요청한 위치로 Tag를 이동하고 보이는 순서를 즉시 갱신한다
-- **AND** 키보드 또는 스크린리더 사용자는 대상이 포함된 위·아래 이동 action으로 같은 순서 변경을 수행할 수 있다
+- **WHEN** 사용자가 header·avatar 편집, Tag 제거 또는 저장 action을 사용한다
+- **THEN** form은 각 action의 대상·동작·disabled 상태를 accessibility label/state로 전달한다
+- **AND** 색만으로 validation·disabled·saving·failure 상태를 구분하지 않는다
 
 ### Requirement: Protected selected Owner Profile edit route
 

@@ -3,8 +3,6 @@ import test from 'node:test';
 import {
   canSubmitProfileEdit,
   isProfileEditDraftDirty,
-  moveProfileTag,
-  moveProfileTagToIndex,
   validateProfileEditDraft,
   validateProfileTagDraftInput,
 } from './profileEditState';
@@ -52,30 +50,19 @@ test('Profile Tag 입력을 client preview 규칙으로 정규화하고 검증�
   assert.equal(validateProfileTagDraftInput('#art', ['art']).ok, false);
   assert.equal(validateProfileTagDraftInput('공예!', []).ok, false);
   assert.equal(validateProfileTagDraftInput('가'.repeat(21), []).ok, false);
-  assert.equal(validateProfileTagDraftInput('추가', ['a', 'b', 'c', 'd', 'e']).ok, false);
+  assert.deepEqual(validateProfileTagDraftInput('추가', ['a', 'b', 'c', 'd', 'e']), {
+    ok: true,
+    value: '추가',
+  });
 });
 
-test('Profile Tag 순서를 요청한 방향으로 이동한다', () => {
-  assert.deepEqual(moveProfileTag(['a', 'b', 'c'], 1, -1), ['b', 'a', 'c']);
-  assert.deepEqual(moveProfileTag(['a', 'b', 'c'], 1, 1), ['a', 'c', 'b']);
-});
-
-test('Profile Tag를 drag가 지정한 index로 직접 이동한다', () => {
-  assert.deepEqual(moveProfileTagToIndex(['공예', '개발', '사진'], 0, 2), ['개발', '사진', '공예']);
-  assert.deepEqual(moveProfileTagToIndex(['공예', '개발', '사진'], 1, 1), ['공예', '개발', '사진']);
-  assert.deepEqual(moveProfileTagToIndex(['공예', '개발', '사진'], -1, 2), [
-    '공예',
-    '개발',
-    '사진',
-  ]);
-});
-
-test('draft dirty 비교에 이미지와 Tag 순서를 포함한다', () => {
+test('draft dirty 비교는 이미지와 Tag identity 집합을 포함한다', () => {
   assert.equal(isProfileEditDraftDirty(draft, draft), false);
   assert.equal(isProfileEditDraftDirty(draft, { ...draft, bio: '변경' }), true);
   assert.equal(isProfileEditDraftDirty(draft, { ...draft, header: replacementHeader }), true);
   assert.equal(isProfileEditDraftDirty(draft, { ...draft, avatar: draft.avatar }), false);
-  assert.equal(isProfileEditDraftDirty(draft, { ...draft, tags: ['개발', '공예'] }), true);
+  assert.equal(isProfileEditDraftDirty(draft, { ...draft, tags: ['개발', '공예'] }), false);
+  assert.equal(isProfileEditDraftDirty(draft, { ...draft, tags: ['공예', '사진'] }), true);
 });
 
 test('submit gate는 callback, dirty, errors, upload과 saving 상태를 모두 확인한다', () => {
