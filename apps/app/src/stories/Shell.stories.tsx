@@ -317,10 +317,11 @@ export const ResponsiveProfilePickerFull: Story = {
     await userEvent.type(handle, 'outside_reset');
     expect(handle).toHaveValue('outside_reset');
 
-    const support = canvas.getByRole('button', { name: '설정 & 지원' });
-    await userEvent.click(support);
+    const feedbackLink = canvas.getByRole('link', { name: '피드백 보내기' });
+    feedbackLink.addEventListener('click', (event) => event.preventDefault(), { once: true });
+    await userEvent.click(feedbackLink);
     await waitFor(() => expect(canvas.queryByLabelText('프로필 전환')).toBeNull());
-    expect(support).toHaveFocus();
+    expect(feedbackLink).toHaveFocus();
 
     await userEvent.click(trigger);
     await waitFor(() => {
