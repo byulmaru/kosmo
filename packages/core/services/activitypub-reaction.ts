@@ -12,16 +12,8 @@ import {
   Profiles,
   Reactions,
 } from '../db';
-import {
-  InstanceKind,
-  InstanceState,
-  NotificationKind,
-  PostState,
-  PostVisibility,
-  ProfileState,
-} from '../enums';
+import { InstanceKind, InstanceState, PostState, PostVisibility, ProfileState } from '../enums';
 import { reactionTypeSchema } from '../validation';
-import { createReactionNotification, deleteNotificationBySource } from './notification';
 import { addReaction, deleteReaction } from './reaction';
 import type { Transaction } from '../db';
 
@@ -187,7 +179,9 @@ export const materializeInboundReaction = async (
     return { kind: 'REJECTED' };
   }
 
-  let result: Exclude<MaterializeInboundReactionResult, { kind: 'REJECTED' }>;
+  let result: Exclude<MaterializeInboundReactionResult, { kind: 'REJECTED' }> & {
+    readonly postCommit: () => Promise<void>;
+  };
   try {
     result = await db.transaction(async (tx) => {
       const actor = await tx
@@ -228,7 +222,11 @@ export const materializeInboundReaction = async (
         if (!isSameReaction(existingMapping, identity)) {
           throw new InboundReactionConflict();
         }
-        return { kind: 'DUPLICATE' as const, reaction: existingMapping };
+        return {
+          kind: 'DUPLICATE' as const,
+          postCommit: async () => {},
+          reaction: existingMapping,
+        };
       }
 
       const reactionResult = await addReaction(identity, tx);
@@ -241,6 +239,7 @@ export const materializeInboundReaction = async (
       if (insertedMapping) {
         return {
           kind: reactionResult.created ? ('CREATED' as const) : ('MAPPED' as const),
+          postCommit: reactionResult.postCommit,
           reaction: reactionResult.reaction,
         };
       }
@@ -250,7 +249,11 @@ export const materializeInboundReaction = async (
         throw new InboundReactionConflict();
       }
 
-      return { kind: 'DUPLICATE' as const, reaction: concurrentMapping };
+      return {
+        kind: 'DUPLICATE' as const,
+        postCommit: async () => {},
+        reaction: concurrentMapping,
+      };
     });
   } catch (error) {
     if (error instanceof InboundReactionConflict) {
@@ -259,11 +262,9 @@ export const materializeInboundReaction = async (
     throw error;
   }
 
-  if (result.kind === 'CREATED') {
-    await createReactionNotification(result.reaction.id).catch(() => undefined);
-  }
+  await result.postCommit();
 
-  return result;
+  return { kind: result.kind, reaction: result.reaction };
 };
 
 export const undoInboundReaction = async ({
@@ -277,7 +278,7 @@ export const undoInboundReaction = async ({
     return { reactionId: null };
   }
 
-  const reactionId = await db.transaction(async (tx) => {
+  const deleted = await db.transaction(async (tx) => {
     const mapped = await tx
       .select({ reaction: Reactions })
       .from(ActivityPubReactions)
@@ -311,19 +312,10 @@ export const undoInboundReaction = async ({
       tx,
     );
 
-    return deleted.reaction?.id ?? null;
+    return deleted;
   });
 
-  if (reactionId) {
-    try {
-      await deleteNotificationBySource(NotificationKind.REACTION, reactionId);
-    } catch (error) {
-      console.error('Failed to clean up inbound Reaction Notification', {
-        error,
-        reactionId,
-      });
-    }
-  }
+  await deleted?.postCommit();
 
-  return { reactionId };
+  return { reactionId: deleted?.reaction?.id ?? null };
 };

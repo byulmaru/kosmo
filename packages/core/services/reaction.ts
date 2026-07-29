@@ -23,7 +23,16 @@ type DeleteReactionInput = {
 
 type AddReactionResult = {
   readonly created: boolean;
+  readonly postCommit: () => Promise<void>;
   readonly reaction: typeof Reactions.$inferSelect;
+};
+
+const noPostCommit = async (): Promise<void> => {};
+
+const oncePostCommit = (effect: () => Promise<void>): (() => Promise<void>) => {
+  let pending: Promise<void> | undefined;
+
+  return () => (pending ??= effect());
 };
 
 export const addReaction = async (
@@ -75,25 +84,26 @@ export const addReaction = async (
     return { created: inserted !== undefined, reaction };
   });
 
-  // A caller-owned transaction has no after-commit hook. Its caller owns any
-  // post-commit side effect so delivery cannot run before the outer commit.
-  if (!tx && result.created) {
-    await createReactionNotification(result.reaction.id).catch(() => undefined);
+  return {
+    ...result,
+    postCommit: result.created
+      ? oncePostCommit(async () => {
+          await createReactionNotification(result.reaction.id).catch(() => undefined);
 
-    if (origin === 'LOCAL') {
-      try {
-        const { sendReaction } = await import('@kosmo/fedify');
-        await sendReaction(result.reaction);
-      } catch (error) {
-        console.error('Post-commit ActivityPub Reaction delivery failed', {
-          error,
-          reactionId: result.reaction.id,
-        });
-      }
-    }
-  }
-
-  return result;
+          if (origin === 'LOCAL') {
+            try {
+              const { sendReaction } = await import('@kosmo/fedify');
+              await sendReaction(result.reaction);
+            } catch (error) {
+              console.error('Post-commit ActivityPub Reaction delivery failed', {
+                error,
+                reactionId: result.reaction.id,
+              });
+            }
+          }
+        })
+      : noPostCommit,
+  };
 };
 
 export const deleteReaction = async (
@@ -101,6 +111,7 @@ export const deleteReaction = async (
   tx?: Transaction,
 ): Promise<{
   readonly postId: string;
+  readonly postCommit: () => Promise<void>;
   readonly reaction: typeof Reactions.$inferSelect | null;
 }> => {
   const parsedType = reactionTypeSchema.safeParse(input.type);
@@ -124,28 +135,32 @@ export const deleteReaction = async (
         .then(first),
     )
     .then((deleted) => deleted ?? null);
-  if (!tx && reaction) {
-    try {
-      await deleteNotificationBySource(NotificationKind.REACTION, reaction.id);
-    } catch (error) {
-      console.error('Failed to clean up Reaction Notification', {
-        error,
-        reactionId: reaction.id,
-      });
-    }
+  return {
+    postId: input.postId,
+    postCommit: reaction
+      ? oncePostCommit(async () => {
+          try {
+            await deleteNotificationBySource(NotificationKind.REACTION, reaction.id);
+          } catch (error) {
+            console.error('Failed to clean up Reaction Notification', {
+              error,
+              reactionId: reaction.id,
+            });
+          }
 
-    if (input.origin === 'LOCAL') {
-      try {
-        const { sendReactionUndo } = await import('@kosmo/fedify');
-        await sendReactionUndo(reaction);
-      } catch (error) {
-        console.error('Post-commit ActivityPub Reaction Undo delivery failed', {
-          error,
-          reactionId: reaction.id,
-        });
-      }
-    }
-  }
-
-  return { postId: input.postId, reaction };
+          if (input.origin === 'LOCAL') {
+            try {
+              const { sendReactionUndo } = await import('@kosmo/fedify');
+              await sendReactionUndo(reaction);
+            } catch (error) {
+              console.error('Post-commit ActivityPub Reaction Undo delivery failed', {
+                error,
+                reactionId: reaction.id,
+              });
+            }
+          }
+        })
+      : noPostCommit,
+    reaction,
+  };
 };

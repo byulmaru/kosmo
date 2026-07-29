@@ -177,15 +177,18 @@
   Undo가 `Reactions`를 직접 삭제하면 add와 달리 공통 domain action을 우회한다.
 - Decision Outcome: 단일 `addReaction(input, tx?)`과 `deleteReaction(input, tx?)`이
   `input.origin: 'LOCAL' | 'ACTIVITYPUB'`으로 Fedify outbound provenance를 분기하고 optional transaction에는 origin과
-  독립적으로 참여한다. caller transaction이 없는 top-level actual create/delete는 origin과 무관하게 Notification을
-  처리하고 Local origin에서만 Fedify delivery를 실행한다. caller transaction이 있으면 exact Reaction snapshot을 반환하고
-  post-commit side effect는 outer caller가 소유한다. inbound Undo는 mapping의 Reaction ID를 exact-row guard로 전달한다.
+  독립적으로 참여한다. action은 transaction 유무로 side effect 필요 여부를 분기하지 않고,
+  actual create/delete와 origin에서 파생한 core-owned `postCommit()`을 exact Reaction snapshot과 함께 반환한다.
+  transaction owner는 자신이 소유한 commit 후 `postCommit()`을 호출한다. 이 lifecycle은 origin과 무관하게
+  Notification을 처리하고 Local origin에서만 Fedify delivery를 실행한다. inbound Undo는 mapping의 Reaction ID를
+  exact-row guard로 전달한다.
 - Alternatives Considered: origin별 transaction overload는 두 입력을 불필요하게 결속한다. transaction 유무에 따른
   암시적 분기와 generic execution mode는 provenance를 표현하지 못한다. 별도 transaction helper나 inbound 직접 삭제는
   사용자가 요구한 공통 action을 다시 분리한다.
 - Consequences: `LOCAL + tx`, `ACTIVITYPUB + tx`, 두 origin의 top-level add/delete 호출이 모두 유효하다. inbound는
-  ActivityPub origin과 mapping transaction을 함께 전달해 no-echo와 원자성을 유지한다. Local outer caller는 commit 뒤
-  side effect를 직접 이어야 하며, 이는 `deletePost`·`repostPost`의 caller-owned transaction 계약과 같다.
+  ActivityPub origin과 mapping transaction을 함께 전달해 no-echo와 원자성을 유지한다. 모든 transaction
+  owner는 반환된 `postCommit()`을 자신의 commit 후 호출해야 하며, 이 책임이 결과 type에 명시적으로
+  드러난다.
 - Confirmation / Follow-up: 두 origin의 add/delete caller transaction rollback, GraphQL Local top-level lifecycle,
   inbound mapping atomicity·exact-row delete·no-echo와 post-commit failure isolation을 검증한다.
 

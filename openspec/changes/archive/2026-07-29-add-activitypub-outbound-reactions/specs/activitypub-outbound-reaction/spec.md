@@ -38,11 +38,6 @@ actor, activity URI와 서명 key identity는 행동 주체 Profile이 속한 LO
 - **WHEN** 같은 Profile과 Post에 서로 다른 Type의 Reaction이 존재한다
 - **THEN** 각 Reaction은 자신의 immutable Reaction ID에서 파생한 서로 다른 activity URI를 사용한다
 
-#### Scenario: Local Post의 canonical URI를 object로 직렬화할 수 있다
-
-- **WHEN** 직렬화 경계가 Local Post를 object로 받는다
-- **THEN** object는 해당 Local Post의 canonical ActivityPub Note URI이다
-
 #### Scenario: configured instance와 다른 LOCAL Instance의 Profile이 발신한다
 
 - **WHEN** 행동 주체 Profile이 configured instance와 다른 Active LOCAL Instance에 속한다

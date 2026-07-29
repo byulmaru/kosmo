@@ -38,6 +38,7 @@ builder.mutationField('addReaction', (t) =>
         postId: post.id,
         type: input.type,
       });
+      await result.postCommit();
 
       return { reaction: result.reaction };
     },

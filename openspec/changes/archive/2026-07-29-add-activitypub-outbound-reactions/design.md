@@ -34,10 +34,12 @@ projection과 recipient eligibility, vocabulary 직렬화는 Fedify delivery 경
 
 - 단일 `addReaction`과 `deleteReaction`은 `origin: 'LOCAL' | 'ACTIVITYPUB'`과 optional caller transaction을 받되 둘을
   overload나 runtime validation으로 결속하지 않아야 한다. `LOCAL + tx`와 `ACTIVITYPUB + tx` 모두 유효하다.
-- origin만 Fedify outbound provenance를 결정한다. caller transaction이 있으면 after-commit hook이 없으므로 caller가
-  post-commit side effect를 소유해야 한다. `addReaction`은 `created`와 Reaction을, `deleteReaction`은 삭제된 exact
-  Reaction snapshot을 반환한다. top-level actual create/delete는 origin과 무관하게 Notification을 처리하고 Local
-  origin에서만 Fedify를 호출한다.
+- origin만 Fedify outbound provenance를 결정한다. `addReaction`과 `deleteReaction`은 transaction 인자로
+  side effect 필요 여부를 분기하지 않고, actual lifecycle 결과와 origin에서 파생한 core-owned
+  `postCommit()`을 반환한다. transaction owner는 자신이 소유한 commit이 완료된 뒤 이를 호출한다.
+  `postCommit()`은 origin과 무관하게 Notification lifecycle을 처리하고 Local origin에서만 Fedify를
+  호출한다. `addReaction`은 `created`와 Reaction을, `deleteReaction`은 삭제된 exact Reaction snapshot을
+  함께 반환한다.
 - GraphQL API는 protocol-specific command 타입이나 actor/inbox projection을 알지 않아야 한다.
 - delete 이후 exact Undo를 만들려면 삭제된 Reaction의 ID, Type, 생성 시각과 actor/post identity를 보존해야 한다.
 - Fedify는 저장된 actor와 Post projection만 사용하고 delivery 중 remote fetch/materialization을 하지 않아야 한다.
@@ -46,9 +48,9 @@ projection과 recipient eligibility, vocabulary 직렬화는 Fedify delivery 경
 ### Recommended Approach
 
 GraphQL add resolver는 인증된 Profile과 Post 조회 가능 여부를 확인한 뒤 `origin: 'LOCAL'`인 `addReaction`을 호출한다.
-caller transaction이 없으므로 `addReaction`이 actual create를 자체 transaction으로 commit한 뒤 Notification과 Fedify
-create delivery를 호출한다. PROD-498 inbound handler는 같은 `addReaction`을 `origin: 'ACTIVITYPUB'`과 자신의
-transaction으로 호출하고 mapping을 같은 transaction에 기록한 뒤 Notification을 post-commit으로 처리한다.
+action이 자체 transaction을 commit해 반환하면 resolver는 반환된 `postCommit()`을 호출한다. PROD-498 inbound handler는
+같은 `addReaction`을 `origin: 'ACTIVITYPUB'`과 자신의 transaction으로 호출하고 mapping을 같은 transaction에
+기록한 뒤 outer commit 후 반환된 `postCommit()`을 호출한다.
 ActivityPub origin은 outbound delivery를 일으키지 않으므로 echo가 발생하지 않는다.
 
 GraphQL delete resolver는 `origin: 'LOCAL'`인 `deleteReaction`을 호출한다. PROD-498 inbound Undo handler는 activity
@@ -69,8 +71,8 @@ origin에서 파생한다. Undo는 같은 데이터로 exact 원본 activity를 
 
 ### Allowed Alternatives
 
-- caller가 Local origin을 outer transaction에 포함해야 하면 같은 add/delete action에 transaction을 전달하고 반환된
-  Reaction snapshot을 사용해 outer commit 뒤 side effect를 실행할 수 있다.
+- caller가 Local origin을 outer transaction에 포함해야 하면 같은 add/delete action에 transaction을 전달하고,
+  반환된 core-owned `postCommit()`을 outer commit 뒤 호출한다.
 - Fedify projection은 하나의 join 또는 분리된 조회로 구성할 수 있다. 어느 쪽이든 API로 projection 책임을 올리거나
   remote network fetch를 추가하지 않는다.
 

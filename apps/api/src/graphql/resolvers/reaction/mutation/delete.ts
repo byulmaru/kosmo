@@ -37,6 +37,7 @@ builder.mutationField('deleteReaction', (t) =>
         postId: input.postId.id,
         type: input.type,
       });
+      await result.postCommit();
 
       return { post: result.postId, reactionId: result.reaction?.id ?? null };
     },
