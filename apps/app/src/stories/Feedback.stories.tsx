@@ -40,6 +40,38 @@ export const BugReport: Story = {
   },
 };
 
+export const KeyboardNavigation: Story = {
+  render: () => (
+    <Catalog width={760}>
+      <Section title="피드백 · 키보드 라디오">
+        <FeedbackForm />
+      </Section>
+    </Catalog>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const radios = canvas.getAllByRole('radio');
+    expect(radios).toHaveLength(4);
+    expect(radios[0]).toHaveAttribute('tabindex', '0');
+    radios.slice(1).forEach((radio) => expect(radio).toHaveAttribute('tabindex', '-1'));
+
+    await userEvent.tab();
+    expect(radios[0]).toHaveFocus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(radios[1]).toHaveFocus();
+    expect(radios[1]).toBeChecked();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(radios[2]).toHaveFocus();
+    expect(radios[2]).toBeChecked();
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(radios[1]).toHaveFocus();
+    expect(radios[1]).toBeChecked();
+    await userEvent.keyboard('{ArrowUp}');
+    expect(radios[0]).toHaveFocus();
+    expect(radios[0]).toBeChecked();
+  },
+};
+
 export const TrimmedBodyBoundary: Story = {
   parameters: {
     relay: { mutationResponse: { submitFeedback: { completed: true } } },

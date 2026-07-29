@@ -223,7 +223,10 @@ export function SidebarNavigation({
               style={StyleSheet.flatten([
                 styles.footerItem,
                 compact && styles.compactItem,
-                { backgroundColor: feedbackActive ? theme.surface : 'transparent' },
+                styles.feedbackFooterItem,
+                {
+                  backgroundColor: feedbackActive ? theme.surface : 'transparent',
+                },
               ])}
             >
               <Settings
@@ -329,6 +332,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
+  feedbackFooterItem: { height: 48, minHeight: 48 },
   footerLabel: { fontFamily: 'SUIT', fontSize: 14, lineHeight: 21 },
   footerLabelGrow: { flex: 1 },
 });

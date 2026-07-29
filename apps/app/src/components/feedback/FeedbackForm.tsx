@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
 import { Button } from '@/components/ui/Button';
 import { TextArea } from '@/components/ui/TextField';
@@ -32,6 +32,8 @@ export function FeedbackForm() {
   const [bodyTouched, setBodyTouched] = useState(false);
   const [status, setStatus] = useState<FeedbackStatus>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [focusedKind, setFocusedKind] = useState<FeedbackKind | null>(null);
+  const radioRefs = useRef<Array<{ focus?: () => void } | null>>([]);
   const [commit, submitting] =
     useMutation<FeedbackFormSubmitFeedbackMutation>(SubmitFeedbackMutation);
   const trimmedBody = body.trim();
@@ -44,6 +46,11 @@ export function FeedbackForm() {
   const showBodyError = bodyTouched || status === 'error';
   const canSubmit = !submitting && !bodyError;
   const actionLabel = status === 'error' ? '다시 시도' : '보내기';
+  const selectKind = (value: FeedbackKind) => {
+    setKind(value);
+    setStatus('idle');
+    setError(null);
+  };
 
   const submit = () => {
     if (!canSubmit) {
@@ -93,10 +100,31 @@ export function FeedbackForm() {
       </View>
 
       <View accessibilityLabel="피드백 종류" role="radiogroup" style={styles.options}>
-        {feedbackOptions.map((option) => {
+        {feedbackOptions.map((option, index) => {
           const selected = option.value === kind;
+          const focused = option.value === focusedKind;
+          const webKeyboardProps =
+            Platform.OS === 'web'
+              ? {
+                  onKeyDown: (event: KeyboardEvent) => {
+                    if (!['ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowUp'].includes(event.key)) {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    const direction =
+                      event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : -1;
+                    const nextIndex =
+                      (index + direction + feedbackOptions.length) % feedbackOptions.length;
+                    const nextOption = feedbackOptions[nextIndex];
+                    selectKind(nextOption.value);
+                    requestAnimationFrame(() => radioRefs.current[nextIndex]?.focus?.());
+                  },
+                }
+              : {};
           return (
             <Pressable
+              {...webKeyboardProps}
               accessibilityLabel={option.label}
               accessibilityRole="radio"
               accessibilityState={{ checked: selected, disabled: submitting }}
@@ -104,10 +132,15 @@ export function FeedbackForm() {
               aria-disabled={submitting}
               disabled={submitting}
               key={option.value}
-              onPress={() => {
-                setKind(option.value);
-                setStatus('idle');
-                setError(null);
+              onBlur={() =>
+                setFocusedKind((current) => (current === option.value ? null : current))
+              }
+              onFocus={() => setFocusedKind(option.value)}
+              onPress={() => selectKind(option.value)}
+              ref={(ref) => {
+                radioRefs.current[index] = ref as unknown as {
+                  focus?: () => void;
+                };
               }}
               role="radio"
               style={({ pressed }) => [
@@ -118,9 +151,10 @@ export function FeedbackForm() {
                     : pressed
                       ? theme.surface
                       : 'transparent',
-                  borderColor: selected ? theme.primary : theme.border,
+                  borderColor: focused ? theme.text : selected ? theme.primary : theme.border,
                 },
               ]}
+              tabIndex={Platform.OS === 'web' ? (selected ? 0 : -1) : undefined}
             >
               <View
                 style={[
@@ -205,7 +239,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: 'row',
     gap: spacing.sm,
-    minHeight: 44,
+    minHeight: 48,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
@@ -221,6 +255,6 @@ const styles = StyleSheet.create({
   optionLabel: { fontFamily: 'SUIT', ...typography.md },
   success: { fontFamily: 'SUIT', ...typography.sm },
   error: { fontFamily: 'SUIT', ...typography.sm },
-  submitButton: { minHeight: 44 },
+  submitButton: { minHeight: 48 },
   actions: { alignItems: 'flex-start' },
 });

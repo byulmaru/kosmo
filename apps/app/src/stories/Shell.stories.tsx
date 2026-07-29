@@ -132,14 +132,6 @@ function FeedbackNavigationFullStory() {
   );
 }
 
-function FeedbackNavigationCompactStory() {
-  return (
-    <View style={{ height: 560, width: 80 }}>
-      <SidebarNavigation compact query={useShellStoryData().query} />
-    </View>
-  );
-}
-
 function FeedbackNavigationDrawerStory() {
   return (
     <View style={{ height: 560, width: 320 }}>
@@ -231,7 +223,7 @@ export const FeedbackNavigationCompactCurrentState: Story = {
     expect(link).toHaveAttribute('aria-current', 'page');
     expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
   },
-  render: () => <FeedbackNavigationCompactStory />,
+  render: () => <CompactSidebarStory />,
 };
 
 export const FeedbackNavigationDrawerCurrentState: Story = {
