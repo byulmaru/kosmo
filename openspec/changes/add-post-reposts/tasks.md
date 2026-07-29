@@ -251,15 +251,15 @@ production fragment shape를 유지하는 fixture와 Storybook에서 Repost·Quo
 
 - raw Relay unit test로 생성 payload의 Source Post cache 정규화, 취소 payload 뒤 Source cache 비변경과 서로 다른 actor Store 격리를 검증한다.
 - actual Post fragment ref를 받는 Storybook `PostActionBar` wrapper의 `play` interaction으로 parent→child fragment 전달, menu open·dismiss·항목 선택, Source Post ID 생성 호출, 정확한 Active Repost ID 취소, 같은 tick pending 중복 차단, 생성 성공, 취소 뒤 cache 비변경, network·GraphQL 오류 callback·재시도, selected Profile actor reset과 접근성 상태를 검증한다.
-- 목록·상세 integration에서 일반 Post·순수 Repost·Quote의 Action Bar final sibling·link 비중첩, 순수 Repost Source target과 action별 toast를 검증한다. Web anchored menu와 Android·iOS bottom action sheet는 각 runtime의 dismiss·focus/back·safe area·접근성을 확인한다.
+- 목록·상세 integration에서 일반 Post·순수 Repost·Quote의 Action Bar final sibling·link 비중첩, 순수 Repost Source target과 action별 toast를 검증한다. Web anchored menu는 runtime에서 dismiss·focus·접근성을 확인하고, Android·iOS bottom action sheet는 공통 구현의 정적·Storybook 검증까지만 수행하며 touch·VoiceOver·TalkBack·back·safe area runtime 관찰은 Native 출시 gate에 남긴다.
 
-- [x] 8.1 `PostActionBar_post` composite fragment와 private `RepostAction_post` child fragment를 연결하고 Repost 선택 상태·label·delete identity·mutation 종류를 child action에서 함께 파생한다.
+- [x] 8.1 `PostActionBar.tsx`에는 `PostActionBar_post` composite fragment와 고정 순서·toolbar root를 남기고, 별도 internal `RepostAction.tsx`가 private `RepostAction_post` child fragment와 Repost 선택 상태·label·delete identity·mutation 종류를 소유하며 별도 internal `PostActionControl.tsx`를 렌더링한다.
 - [x] 8.2 private `RepostAction`에 `repostPost`·`deletePost`, pending·actor callback 격리를 두고 생성 normalized cache, 정확한 취소 identity, 취소 뒤 Source cache 비변경과 error callback 계약을 유지한다.
 - [x] 8.3 raw Relay unit과 실제 parent→child fragment ref를 사용하는 Storybook `play` interaction으로 pending·생성·취소·오류 재시도·Profile actor reset을 검증하고 relay/app/Storybook scoped check를 통과시킨다.
 - [x] 8.4 `PostListItem`·`PostLayout`에 Action Bar를 final content-grid sibling이자 navigation link 밖에 배치하고, 순수 Repost surface는 direct Source fragment를 Action Bar target으로 공급한다.
 - [x] 8.5 새 dependency 없이 Web anchored menu와 Android·iOS bottom action sheet의 공용 Repost action menu 경계를 구현하고 선택·미선택 label, dismiss·keyboard/focus/back·접근성 및 pending 중복 차단을 검증한다.
 - [x] 8.6 앱 provider의 단일 transient toast host와 actual surface의 action별 Repost error callback 연결을 구현하고 정확한 문구, latest-replace, 약 3초 dismiss, safe area·tab bar 위치, alert semantics와 실패 뒤 상태 유지·재시도를 검증한다.
-- [ ] 8.7 app check·unit·Relay·Storybook·static Storybook·Web/Android/iOS runtime 및 scoped·전체 strict OpenSpec 검증을 통과시킨다.
+- [ ] 8.7 app check·unit·Relay·Storybook·static Storybook·Web runtime 및 scoped·전체 strict OpenSpec 검증을 통과시킨다. Android·iOS는 공통 구현의 정적·Storybook 검증만 수행하고 44pt·48dp target 복구와 touch·VoiceOver·TalkBack·bottom sheet runtime 관찰을 Native 출시 gate에 남긴다.
 
 ## 9. PROD-415 Post renderer Repost 연결
 
