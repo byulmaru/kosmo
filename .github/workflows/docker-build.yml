@@ -15,6 +15,10 @@ permissions:
 env:
   AWS_REGION: ap-northeast-2
   AWS_ECR_REPOSITORY_URL: 822638974464.dkr.ecr.ap-northeast-2.amazonaws.com/kosmo
+  ENVIRONMENT: ${{ startsWith(github.ref, 'refs/tags/') && 'prod' || 'dev' }}
+  SENTRY_RELEASE: kosmo@${{ github.sha }}
+  VAULT_ADDR: https://vault.tail1fdd55.ts.net
+  VAULT_GITHUB_ACTIONS_AUDIENCE: https://vault.tail1fdd55.ts.net
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -50,6 +54,29 @@ jobs:
           role-to-assume: arn:aws:iam::822638974464:role/github-actions-kosmo-ecr-push
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Validate build ref
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ ! "${GITHUB_REF}" =~ ^refs/heads/.+$ && ! "${GITHUB_REF}" =~ ^refs/tags/[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Sentry-enabled builds are allowed only from a branch or a semantic version tag." >&2
+            exit 1
+          fi
+
+      - name: Load Sentry DSN from Vault
+        id: sentry
+        uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4.0.0
+        with:
+          url: ${{ env.VAULT_ADDR }}
+          path: github-actions
+          method: jwt
+          role: ${{ startsWith(github.ref, 'refs/tags/') && 'kosmo-build-prod' || 'kosmo-build-dev' }}
+          jwtGithubAudience: ${{ env.VAULT_GITHUB_ACTIONS_AUDIENCE }}
+          exportEnv: false
+          secrets: |
+            secret/data/kubernetes/kosmo/${{ env.ENVIRONMENT }} EXPO_PUBLIC_SENTRY_DSN | EXPO_PUBLIC_SENTRY_DSN
+
       - name: Log in to ECR
         uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64 # v2.1.6
 
@@ -70,13 +97,26 @@ jobs:
       - name: Build and push Docker image
         id: build
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         with:
           context: .
           file: ./Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          no-cache-filters: runtime
+          no-cache-filters: |
+            app-build
+            runtime
+          build-args: |
+            EXPO_PUBLIC_ENVIRONMENT=${{ env.ENVIRONMENT }}
+            EXPO_PUBLIC_SENTRY_DSN=${{ steps.sentry.outputs.EXPO_PUBLIC_SENTRY_DSN }}
+            SENTRY_ORG=${{ vars.SENTRY_ORG }}
+            SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}
+            SENTRY_RELEASE=${{ env.SENTRY_RELEASE }}
+            SENTRY_UPLOAD_REQUIRED=1
+          secret-envs: |
+            sentry_auth_token=SENTRY_AUTH_TOKEN
 
       - name: Save Docker image reference
         shell: bash

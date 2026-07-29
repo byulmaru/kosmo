@@ -43,7 +43,7 @@ GCP 리소스를 적용한 뒤 관리 권한이 있는 로컬 `gh` 인증으로 
 ./scripts/ensure-github.sh
 ```
 
-main 브랜치를 push하면 Docker Build는 `main` 이미지 태그를 갱신한다. 다른 브랜치에서 수동 실행하면 `branch-<브랜치명>`과 `sha-*` 태그로 ECR에도 이미지를 push한다. `1.2.0` 형식의 정식 SemVer Git tag를 push하면 `1.2.0`과 `stable` 이미지 태그를 함께 발행하며, `v1.2.0` 형식은 지원하지 않는다. ECR에서는 `main`, `stable`, `branch-*`, `sha-*` 태그를 갱신할 수 있고 정식 버전 태그는 덮어쓸 수 없다. Lifecycle policy는 현재 `main` 이미지와 현재 `stable` 릴리스 이미지를 보호하고, 이전 버전 이미지는 push 후 7일이 지나면 만료한다.
+main 브랜치를 push하면 Docker Build는 `main` 이미지 태그를 갱신한다. 다른 브랜치에서 수동 실행하면 dev 환경의 Vault build role로 shared 설정을 읽고 `branch-<브랜치명>`과 `sha-*` 태그로 ECR에도 이미지를 push한다. `1.2.0` 형식의 정식 SemVer Git tag를 push하면 prod 환경의 Vault build role을 사용해 `1.2.0`과 `stable` 이미지 태그를 함께 발행하며, `v1.2.0` 형식은 지원하지 않는다. ECR에서는 `main`, `stable`, `branch-*`, `sha-*` 태그를 갱신할 수 있고 정식 버전 태그는 덮어쓸 수 없다. Lifecycle policy는 현재 `main` 이미지와 현재 `stable` 릴리스 이미지를 보호하고, 이전 버전 이미지는 push 후 7일이 지나면 만료한다.
 
 정식 버전 태그는 일회성 발행을 원칙으로 한다. GHCR과 ECR 중 한쪽에만 이미지가 발행된 부분 실패를 같은 Git tag에서 복구해야 할 때만 `aws ecr batch-delete-image --repository-name kosmo --image-ids imageTag=1.2.0 --region ap-northeast-2`로 ECR의 해당 버전 태그를 제거한 뒤 workflow를 재실행한다.
 

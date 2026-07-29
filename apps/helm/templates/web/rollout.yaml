@@ -45,6 +45,8 @@ spec:
           args:
             - web
           env:
+            - name: ENVIRONMENT
+              value: {{ .Values.env | quote }}
             - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
