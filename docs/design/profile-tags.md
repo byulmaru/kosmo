@@ -23,22 +23,23 @@ Local Profile Owner가 기존 Profile 편집 흐름에서 구조화된 Profile T
 - TagChip 목록은 안정적인 표시 순서에 의존하지 않는다.
 - 태그가 없으면 빈 섹션이나 안내 문구를 표시하지 않는다.
 - TagChip은 줄바꿈할 수 있으며 긴 허용값과 좁은 화면에서도 Profile 본문을 가로로 넘치게 하지 않는다.
-- PROD-525가 전체 검색을 전달하기 전에는 TagChip을 비대화형으로 표시한다. PROD-529가 소유한 navigation 구현은 PROD-525가 전체 검색을 전달한 후 TagChip을 [Profile Tag로 Profile 검색 디자인](./profile-tag-search.md)의 검색 URL로 이동하는 링크 또는 버튼으로 활성화한다.
+- PROD-525가 전체 탐색을 전달하기 전에는 TagChip을 비대화형으로 표시한다. PROD-529가 소유한 navigation 구현은 PROD-525가 전체 탐색을 전달한 후 TagChip을 [Hashtag 관련 Profile 목록 탐색](./hashtag-related-profiles.md)으로 이동하는 링크 또는 버튼으로 활성화한다.
 - Profile이 공개 조회 조건을 통과하지 않으면 Profile Tag만 별도로 표시하지 않는다.
 
 ## 플랫폼과 접근성
 
 - 공용 화면은 React Native primitive와 기존 theme token을 사용하고 Web·Android·iOS가 같은 정보 구조를
   공유한다.
-- 제거 같은 편집 action은 최소 44×44 touch target과 동작을 설명하는 accessibility label/state를
-  제공한다.
+- 제거 같은 편집 action은 compact `32×32` 시각 크기와 실제 입력 target을 분리한다. Web target은 최소 32×32 CSS px,
+  iOS hit region은 `44×44 pt`, Android touch target은 `48×48 dp`로 제공하고 동작을 설명하는
+  accessibility label/state를 유지한다.
 - 색만으로 validation, 선택, disabled 상태를 구분하지 않는다.
 - 별도 breakpoint나 Profile Tag 전용 foundation token은 추가하지 않는다. 기존 spacing, color, typography,
   radius와 공용 breakpoint를 사용한다.
 
 ## 제외 범위
 
-- [Profile Tag로 Profile 검색 디자인](./profile-tag-search.md)에 정의된 태그 선택 navigation 자체
+- [Hashtag 관련 Profile 목록 탐색](./hashtag-related-profiles.md)에 정의된 TagChip navigation 자체
 - 자동완성, 추천, trend와 관련도 표시
 - Remote Profile Tag 편집·표시와 ActivityPub 표현
 - Hashtag Post List 또는 검색 결과 화면 변경

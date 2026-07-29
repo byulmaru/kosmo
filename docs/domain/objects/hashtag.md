@@ -36,6 +36,8 @@ identity가 없으면 생성하고, 있으면 해당 identity를 재사용한다
 ## 조회 정책
 
 - Hashtag 검색은 공개 조회 가능한 Hashtag Name만 반환한다.
+- 이 Hashtag 검색은 [ADR 0021](../decisions/0021-hashtag-related-profile-navigation.md)의 Hashtag 관련 Profile
+  목록 탐색과 별도 계약이다.
 - Profile Tag 관계는 공개 조회 가능한 Profile만 반환하며 Profile과 독립적인 visibility를 가지지 않는다.
 - Hashtag Post List 후보는 Post Visibility가 Public이고 Content가 있으며 Reply Parent가 없고 Post
   Eligibility를 통과한 Post다.
@@ -49,6 +51,6 @@ identity가 없으면 생성하고, 있으면 해당 identity를 재사용한다
 ## 제외/보류
 
 - Hashtag의 독립 운영 상태, alias, 자동완성, trend, 추천은 현재 범위에서 제외한다.
-- Profile Tag 관계를 조건으로 Profile을 검색하는 query 문법, 일치, 정렬, pagination과 탐색 UI는
-  [ADR 0021](../decisions/0021-profile-tag-search-contract.md)을 따른다.
-- Hashtag 자체를 찾거나 Hashtag Name 목록을 반환하는 검색은 ADR 0021의 범위가 아니다.
+- Hashtag 관련 Profile 목록 탐색의 정확한 identity 일치, 공개 조건, pagination과 탐색 UI는
+  [ADR 0021](../decisions/0021-hashtag-related-profile-navigation.md)을 따른다.
+- Hashtag 자체를 찾거나 Hashtag Name 목록을 반환하는 검색은 별도 계약이며 ADR 0021의 범위가 아니다.
