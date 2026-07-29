@@ -68,20 +68,19 @@ Instance identity를 대체해서는 안 된다(MUST NOT).
 
 - **WHEN** configured Local Instance와 다른 Local Instance에 속한 Author의 Post Create 또는 Delete를 전달한다
 - **THEN** signing context와 actor URI는 Author Local Instance를 사용한다
-- **AND** Create/Delete는 같은 Author origin에서 파생한 canonical Note URI와 ordering domain을 사용한다
+- **AND** Create/Delete는 같은 Author origin에서 파생한 canonical Note URI를 사용한다
 
 ### Requirement: 일반 Local Post Delete delivery
 
 **Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`,
 `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-512. 시스템은 Local content Post가 Tombstone으로 commit된 뒤 같은 canonical Note URI를 object로 가리키는 ActivityPub
-`Delete`를 구성하고 공통 outbound dispatcher에 전달해야 한다(MUST). 같은 Post의 Create와 Delete는 같은
-stable ordering domain을 사용해야 한다(MUST).
+`Delete`를 구성하고 공통 outbound dispatcher에 전달해야 한다(MUST).
 
 #### Scenario: Root Post 삭제
 
 - **WHEN** Author가 Active Local Root Post를 삭제하고 Tombstone transaction이 commit된다
 - **THEN** 시스템은 생성 때 사용한 canonical Note URI를 object로 가리키는 `Delete`를 구성한다
-- **AND** Author followers target과 Create와 동일한 ordering domain을 사용한다
+- **AND** Author followers target을 사용한다
 
 #### Scenario: Reply 삭제
 
@@ -99,13 +98,20 @@ stable ordering domain을 사용해야 한다(MUST).
 
 **Authority / Provenance:** 이 요구사항은 반드시 준수해야 한다(MUST). 근거: `docs/domain/objects/post.md`,
 `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-512. 시스템은 별도 activity row 없이 같은 Local Post lifecycle의 중복 호출이 동일한 Create 또는 Delete activity
-identity와 ordering key를 사용하게 해야 한다(MUST).
+identity를 사용하게 해야 한다(MUST). 현재 direct delivery에 queue ordering key를 추가하거나 Create/Delete
+전달 순서를 보장해서는 안 된다(MUST NOT).
 
 #### Scenario: Create와 Delete 재호출
 
 - **WHEN** 같은 committed Post의 Create 또는 Delete delivery가 둘 이상 호출된다
 - **THEN** 같은 lifecycle kind의 호출은 동일한 activity ID를 사용한다
-- **AND** Create와 Delete는 fragment 없는 canonical Note URI를 같은 ordering key로 사용한다
+- **AND** dispatcher 호출은 ordering key를 제공하지 않는다
+
+#### Scenario: Create와 Delete의 direct delivery 순서
+
+- **WHEN** 같은 Post의 Create와 Delete가 MessageQueue 없는 direct delivery로 실행된다
+- **THEN** 시스템은 recipient server에 도착하는 순서를 보장하지 않는다
+- **AND** queue ordering 계약은 PROD-448 후속 범위로 유지한다
 
 ### Requirement: Post lifecycle과 delivery failure isolation
 

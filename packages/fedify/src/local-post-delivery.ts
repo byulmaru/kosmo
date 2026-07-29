@@ -91,7 +91,6 @@ export const sendLocalPostCreate = async (postId: string): Promise<void> => {
     activity,
     actorProfileId: projection.authorProfileId,
     context,
-    orderingKey: objectUri.href,
     targets: createTargets({
       authorProfileId: projection.authorProfileId,
       parentProfileId:
@@ -165,7 +164,6 @@ export const sendLocalPostDelete = async (postId: string): Promise<void> => {
     activity,
     actorProfileId: source.authorProfileId,
     context,
-    orderingKey: objectUri.href,
     targets: createTargets({
       authorProfileId: source.authorProfileId,
       parentProfileId:
