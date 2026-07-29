@@ -1,7 +1,7 @@
-import { Pencil } from 'lucide-react-native';
+import { Camera } from 'lucide-react-native';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { colors, radii, spacing, typography } from '@/theme/tokens';
 import type { ProfileEditImageDraft } from './profileEditState';
 
 type ProfileEditImageFieldsProps = {
@@ -36,7 +36,7 @@ function getImageFieldStatus(
   if (draft.uploadState === 'error') {
     return {
       kind: 'error',
-      message: draft.error ?? `${label} 이미지 업로드에 실패했어요. 다시 시도해 주세요.`,
+      message: `${label} 이미지 업로드에 실패했어요. 다시 시도해 주세요.`,
     };
   }
 
@@ -64,6 +64,19 @@ function ImageStatus({ status }: { status: ImageFieldStatus | null }) {
   );
 }
 
+function CameraAffordance({ disabled }: { disabled: boolean }) {
+  return (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={[styles.cameraAffordance, { opacity: disabled ? 0.45 : 1 }]}
+    >
+      <View style={[StyleSheet.absoluteFill, styles.cameraScrim]} />
+      <Camera color={colors.light.background} size={22} strokeWidth={2} />
+    </View>
+  );
+}
+
 export function ProfileEditImageFields({
   avatar,
   disabled = false,
@@ -77,75 +90,63 @@ export function ProfileEditImageFields({
 
   return (
     <View style={styles.root}>
-      <View
-        testID="profile-edit-header-preview"
+      <Pressable
+        accessibilityLabel="헤더 이미지 변경"
+        accessibilityRole="button"
+        accessibilityState={{ disabled: headerActionDisabled }}
+        disabled={headerActionDisabled}
+        onPress={onHeaderEdit}
         style={[styles.headerPreview, { backgroundColor: theme.surface }]}
+        testID="profile-edit-header-preview"
       >
-        {header.previewUri ? (
-          <Image
-            accessibilityIgnoresInvertColors
-            resizeMode="cover"
-            source={{ uri: header.previewUri }}
-            style={StyleSheet.absoluteFill}
-          />
-        ) : (
-          <View style={[styles.imagePlaceholder, { backgroundColor: theme.primary }]} />
+        {({ pressed }) => (
+          <>
+            {header.previewUri ? (
+              <Image
+                accessibilityIgnoresInvertColors
+                resizeMode="cover"
+                source={{ uri: header.previewUri }}
+                style={StyleSheet.absoluteFill}
+              />
+            ) : (
+              <View style={[styles.imagePlaceholder, { backgroundColor: theme.primary }]} />
+            )}
+            {pressed ? <View style={[StyleSheet.absoluteFill, styles.pressedVeil]} /> : null}
+            <CameraAffordance disabled={headerActionDisabled} />
+          </>
         )}
-        <Pressable
-          accessibilityLabel="헤더 이미지 변경"
-          accessibilityRole="button"
-          accessibilityState={{ disabled: headerActionDisabled }}
-          disabled={headerActionDisabled}
-          onPress={onHeaderEdit}
-          style={({ pressed }) => [
-            styles.imageAction,
-            styles.headerAction,
-            {
-              backgroundColor: theme.accent,
-              opacity: headerActionDisabled ? 0.45 : pressed ? 0.75 : 1,
-            },
-          ]}
-        >
-          <Pencil color={theme.background} size={18} strokeWidth={2} />
-        </Pressable>
-      </View>
+      </Pressable>
 
       <View style={styles.avatarRow}>
-        <View
-          testID="profile-edit-avatar-preview"
+        <Pressable
+          accessibilityLabel="아바타 이미지 편집"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: avatarActionDisabled }}
+          disabled={avatarActionDisabled}
+          onPress={onAvatarEdit}
           style={[
             styles.avatarPreview,
             { backgroundColor: theme.surface, borderColor: theme.background },
           ]}
+          testID="profile-edit-avatar-preview"
         >
-          {avatar.previewUri ? (
-            <Image
-              accessibilityIgnoresInvertColors
-              resizeMode="cover"
-              source={{ uri: avatar.previewUri }}
-              style={StyleSheet.absoluteFill}
-            />
-          ) : (
-            <View style={[styles.imagePlaceholder, { backgroundColor: theme.primary }]} />
+          {({ pressed }) => (
+            <>
+              {avatar.previewUri ? (
+                <Image
+                  accessibilityIgnoresInvertColors
+                  resizeMode="cover"
+                  source={{ uri: avatar.previewUri }}
+                  style={StyleSheet.absoluteFill}
+                />
+              ) : (
+                <View style={[styles.imagePlaceholder, { backgroundColor: theme.primary }]} />
+              )}
+              {pressed ? <View style={[StyleSheet.absoluteFill, styles.pressedVeil]} /> : null}
+              <CameraAffordance disabled={avatarActionDisabled} />
+            </>
           )}
-          <Pressable
-            accessibilityLabel="아바타 이미지 편집"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: avatarActionDisabled }}
-            disabled={avatarActionDisabled}
-            onPress={onAvatarEdit}
-            style={({ pressed }) => [
-              styles.imageAction,
-              styles.avatarAction,
-              {
-                backgroundColor: theme.accent,
-                opacity: avatarActionDisabled ? 0.45 : pressed ? 0.75 : 1,
-              },
-            ]}
-          >
-            <Pencil color={theme.background} size={18} strokeWidth={2} />
-          </Pressable>
-        </View>
+        </Pressable>
       </View>
 
       <View style={styles.statuses}>
@@ -172,17 +173,27 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
   },
-  imageAction: {
+  cameraAffordance: {
     alignItems: 'center',
-    height: 32,
+    height: 40,
     justifyContent: 'center',
+    left: '50%',
+    marginLeft: -20,
+    marginTop: -20,
+    pointerEvents: 'none',
     position: 'absolute',
-    width: 32,
+    top: '50%',
+    width: 40,
   },
-  headerAction: {
+  cameraScrim: {
+    backgroundColor: colors.dark.background,
     borderRadius: radii.full,
-    bottom: spacing.md,
-    right: spacing.md,
+    opacity: 0.56,
+  },
+  pressedVeil: {
+    backgroundColor: colors.dark.background,
+    opacity: 0.16,
+    pointerEvents: 'none',
   },
   avatarRow: {
     minHeight: 60,
@@ -196,11 +207,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
     width: 96,
-  },
-  avatarAction: {
-    borderRadius: radii.full,
-    bottom: 0,
-    right: 0,
   },
   statuses: {
     gap: spacing.xs,

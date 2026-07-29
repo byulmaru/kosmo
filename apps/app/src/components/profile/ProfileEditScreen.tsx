@@ -156,14 +156,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 1,
     flexDirection: 'row',
-    minHeight: 52,
+    height: 48,
     paddingHorizontal: spacing.sm,
   },
   backAction: {
     alignItems: 'center',
-    height: 32,
+    height: 48,
     justifyContent: 'center',
-    width: 32,
+    width: 48,
   },
   title: {
     flex: 1,

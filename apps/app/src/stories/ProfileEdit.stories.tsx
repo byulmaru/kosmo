@@ -51,6 +51,7 @@ function ProfileEditScreenHarness({
       disabled={disabled}
       initialValue={initialValue}
       onAvatarEdit={withImageActions ? () => undefined : undefined}
+      onBack={() => undefined}
       onChange={setValue}
       onHeaderEdit={withImageActions ? () => undefined : undefined}
       onSubmit={connected ? () => undefined : undefined}
@@ -156,11 +157,18 @@ function expectResponsiveSurface(
   const canvas = within(canvasElement);
   const surface = canvas.getByTestId('profile-edit-screen').getBoundingClientRect();
   const header = canvas.getByTestId('profile-edit-header-preview').getBoundingClientRect();
+  const navigationHeader = canvas.getByTestId('profile-edit-screen-header').getBoundingClientRect();
+  const backAction = canvas
+    .getByRole('button', { name: '프로필 편집 닫기' })
+    .getBoundingClientRect();
 
   expect(Math.round(surface.width)).toBe(expectedWidth);
   expect(Math.round(header.width)).toBe(expectedWidth);
   expect(Math.round(header.height)).toBe(expectedHeaderHeight);
   expect(Math.round(header.width / header.height)).toBe(3);
+  expect(Math.round(navigationHeader.height)).toBe(48);
+  expect(Math.round(backAction.width)).toBe(48);
+  expect(Math.round(backAction.height)).toBe(48);
   expect(canvas.queryByText(/현재.*유지/)).not.toBeInTheDocument();
 }
 
@@ -185,17 +193,21 @@ type Story = StoryObj<typeof meta>;
 export const ImageFields: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const headerButton = canvas.getByRole('button', { name: '헤더 이미지 변경' });
+    const avatarButton = canvas.getByRole('button', { name: '아바타 이미지 편집' });
 
-    expect(canvas.getByRole('button', { name: '헤더 이미지 변경' })).toBeVisible();
-    expect(canvas.getByRole('button', { name: '아바타 이미지 편집' })).toBeVisible();
+    expect(headerButton).toBe(canvas.getByTestId('profile-edit-header-preview'));
+    expect(avatarButton).toBe(canvas.getByTestId('profile-edit-avatar-preview'));
     expect(canvas.queryByText(/현재.*유지/)).not.toBeInTheDocument();
     expect(canvas.queryByRole('button', { name: '교체' })).not.toBeInTheDocument();
     expect(canvas.queryByRole('button', { name: '제거' })).not.toBeInTheDocument();
 
-    const preview = canvas.getByTestId('profile-edit-header-preview');
-    const rect = preview.getBoundingClientRect();
-    expect(Math.round(rect.width)).toBe(390);
-    expect(Math.round(rect.height)).toBe(130);
+    const headerRect = headerButton.getBoundingClientRect();
+    const avatarRect = avatarButton.getBoundingClientRect();
+    expect(Math.round(headerRect.width)).toBe(390);
+    expect(Math.round(headerRect.height)).toBe(130);
+    expect(Math.round(avatarRect.width)).toBe(96);
+    expect(Math.round(avatarRect.height)).toBe(96);
   },
 };
 
@@ -231,6 +243,7 @@ export const HeaderErrorKeepsCurrentAvatar: Story = {
       kind: 'replacement',
       previewUri: null,
       uploadState: 'error',
+      error: '업로드 서버 내부 detail',
     },
   },
   play: ({ canvasElement }) => {
@@ -239,6 +252,7 @@ export const HeaderErrorKeepsCurrentAvatar: Story = {
     expect(canvas.getByRole('alert')).toHaveTextContent(
       '헤더 이미지 업로드에 실패했어요. 다시 시도해 주세요.',
     );
+    expect(canvas.queryByText('업로드 서버 내부 detail')).not.toBeInTheDocument();
     expect(canvas.getByTestId('profile-edit-avatar-preview')).toBeVisible();
     expect(canvas.getByRole('button', { name: '아바타 이미지 편집' })).toBeEnabled();
     expect(canvas.queryByText(/아바타 이미지 업로드에 실패/)).not.toBeInTheDocument();
@@ -533,7 +547,7 @@ export const DisabledFormBlocksEveryAction: Story = {
 };
 
 export const Responsive390: Story = {
-  render: () => <ProfileEditScreenHarness />,
+  render: () => <ProfileEditScreenHarness withImageActions />,
   play: ({ canvasElement }) => {
     expectResponsiveSurface(canvasElement, 390, 130);
   },
@@ -543,7 +557,7 @@ export const Responsive480: Story = {
   parameters: {
     viewport: { defaultViewport: 'kosmoProfileIntermediate' },
   },
-  render: () => <ProfileEditScreenHarness />,
+  render: () => <ProfileEditScreenHarness withImageActions />,
   play: ({ canvasElement }) => {
     expectResponsiveSurface(canvasElement, 480, 160);
   },
@@ -553,7 +567,7 @@ export const Responsive1024: Story = {
   parameters: {
     viewport: { defaultViewport: 'kosmoProfileCompact' },
   },
-  render: () => <ProfileEditScreenHarness />,
+  render: () => <ProfileEditScreenHarness withImageActions />,
   play: ({ canvasElement }) => {
     expectResponsiveSurface(canvasElement, 600, 200);
   },
@@ -563,7 +577,7 @@ export const Responsive1440: Story = {
   parameters: {
     viewport: { defaultViewport: 'kosmoProfileFull' },
   },
-  render: () => <ProfileEditScreenHarness />,
+  render: () => <ProfileEditScreenHarness withImageActions />,
   play: ({ canvasElement }) => {
     expectResponsiveSurface(canvasElement, 600, 200);
   },
