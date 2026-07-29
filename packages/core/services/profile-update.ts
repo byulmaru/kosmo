@@ -65,7 +65,6 @@ export const updateProfile = async (input: UpdateProfileInput, tx?: Transaction)
         ),
       )
       .limit(1)
-      .for('update', { of: Profiles })
       .then(first);
 
     if (!profile) {
@@ -76,18 +75,30 @@ export const updateProfile = async (input: UpdateProfileInput, tx?: Transaction)
       throw new PermissionDeniedError('Profile owner permission is required');
     }
 
-    // The authorization SELECT locks the current Profile row before replacing scalar fields or
-    // relations. This serializes concurrent partial updates without writing stale fallback values.
-    const updatedProfile = await tx
-      .update(Profiles)
-      .set({
-        displayName: input.displayName ?? profile.profile.displayName,
-        bio: input.bio === undefined ? profile.profile.bio : input.bio,
-        followPolicy: input.followPolicy ?? profile.profile.followPolicy,
-      })
-      .where(eq(Profiles.id, input.profileId))
-      .returning()
-      .then((profiles) => profiles[0]!);
+    const scalarChanges: {
+      displayName?: string;
+      bio?: string | null;
+      followPolicy?: ProfileFollowPolicy;
+    } = {};
+    if (input.displayName !== undefined) {
+      scalarChanges.displayName = input.displayName;
+    }
+    if (input.bio !== undefined) {
+      scalarChanges.bio = input.bio;
+    }
+    if (input.followPolicy !== undefined) {
+      scalarChanges.followPolicy = input.followPolicy;
+    }
+
+    const updatedProfile =
+      Object.keys(scalarChanges).length > 0
+        ? await tx
+            .update(Profiles)
+            .set(scalarChanges)
+            .where(eq(Profiles.id, input.profileId))
+            .returning()
+            .then((profiles) => profiles[0]!)
+        : profile.profile;
 
     if (normalizedTags !== undefined && normalizedTags !== null) {
       await tx.delete(ProfileHashtags).where(eq(ProfileHashtags.profileId, input.profileId));

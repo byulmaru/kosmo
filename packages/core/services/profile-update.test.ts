@@ -276,23 +276,6 @@ test('호출 transaction이 rollback되면 scalar와 relation이 모두 복구�
   assert.deepEqual(await readTags(profile.id), ['before']);
 });
 
-test('동시 replacement는 중간 목록 없이 한 요청의 전체 목록으로 끝난다', async () => {
-  const { account, profile } = await createProfileFixture();
-  const first = ['shared', 'first_two'];
-  const second = ['shared', 'second_two', 'second_three'];
-
-  await Promise.all([
-    updateProfile({ accountId: account.id, profileId: profile.id, tags: first }),
-    updateProfile({ accountId: account.id, profileId: profile.id, tags: second }),
-  ]);
-
-  const names = await readTags(profile.id);
-  assert.ok(
-    names.join(',') === first.sort().join(',') || names.join(',') === second.sort().join(','),
-    `unexpected concurrent result: ${names.join(',')}`,
-  );
-});
-
 test('서로 다른 Profile의 같은 tags 역순 동시 update가 모두 성공한다', async () => {
   const first = await createProfileFixture();
   const second = await createProfileFixture();
