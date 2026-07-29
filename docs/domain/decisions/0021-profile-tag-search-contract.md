@@ -26,7 +26,7 @@ Accepted
   랭킹은 별도 계약 없이는 제공하지 않는다.
 - 검색 후보는 공개 조회 정책을 통과한 Active·Normal Local Profile의 Profile Tag 관계로 한정한다.
   Remote Profile, 원격 조회, refresh, 새 materialization과 ActivityPub 표현은 포함하지 않는다.
-- Profile Tag 검색은 로그인 사용자만 호출할 수 있다. 인증되지 않은 요청은 검색 후보 DB 조회 전에
+- Profile Tag 검색은 인증된 Account 요청만 허용한다. 인증되지 않은 요청은 검색 후보 DB 조회 전에
   거부하며, 인증 정책은 [PROD-517](https://linear.app/byulmaru/issue/PROD-517/searchProfiles를-로그인-사용자로-제한한다)과
   일치해야 한다.
 - 결과는 Profile 목록으로 반환하고 Profile마다 한 번만 나타난다. 관련도·알파벳순 정렬은 도입하지 않으며,
