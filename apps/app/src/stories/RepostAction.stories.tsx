@@ -10,7 +10,7 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
 import { PostActionBar } from '@/components/post/PostActionBar';
 import { RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import RepostActionStoryQueryNode from './__generated__/RepostActionStoryQuery.graphql';
@@ -233,11 +233,62 @@ export const CreatesRepost: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const trigger = await canvas.findByRole('button', { name: '재게시' });
-    await userEvent.click(trigger);
-    const menu = await canvas.findByRole('menu', { name: '재게시 메뉴' });
-    expect(within(menu).getByRole('menuitem', { name: '재게시하기' })).toBeVisible();
+    const triggerRect = trigger.getBoundingClientRect();
+    const triggerPointer = {
+      x: triggerRect.left + triggerRect.width / 2,
+      y: triggerRect.top + triggerRect.height / 2,
+    };
+    await userEvent.pointer({ coords: triggerPointer, keys: '[MouseLeft]', target: trigger });
+    const menu = await screen.findByRole('menu', { name: '재게시 메뉴' });
+    const menuItem = within(menu).getByRole('menuitem', { name: '재게시하기' });
+    const menuIcon = menuItem.querySelector('svg')!;
+    const menuLabel = within(menuItem).getByText('재게시하기');
+    const menuRect = menu.getBoundingClientRect();
+    const menuItemRect = menuItem.getBoundingClientRect();
+    const menuStyle = getComputedStyle(menu);
+    const menuLabelStyle = getComputedStyle(menuLabel);
+    const menuItemStyle = getComputedStyle(menuItem);
+    const triggerPoints = [
+      { x: triggerRect.left + 1, y: triggerRect.top + 1 },
+      triggerPointer,
+      { x: triggerRect.right - 1, y: triggerRect.bottom - 1 },
+    ];
+    const secondPointerTarget = canvasElement.ownerDocument.elementFromPoint(
+      triggerPointer.x,
+      triggerPointer.y,
+    );
+
+    expect(menuItem).toBeVisible();
+    expect(canvasElement.contains(menu)).toBe(false);
+    expect(menuStyle.backgroundColor).toBe('rgb(255, 255, 255)');
+    expect(menuStyle.borderWidth).toBe('1px');
+    expect(menuStyle.boxShadow).toBe('rgba(0, 0, 0, 0.12) 0px 2px 4px 0px');
+    expect(menuStyle.padding).toBe('4px');
+    expect(menuRect.width).toBeLessThan(160);
+    expect(menuRect.height).toBe(46);
+    expect(menuItemRect.height).toBe(36);
+    expect(menuItemStyle.paddingLeft).toBe('8px');
+    expect(menuItemStyle.paddingRight).toBe('8px');
+    expect(menuItemStyle.columnGap).toBe('8px');
+    expect(menuLabelStyle.fontSize).toBe('14px');
+    expect(menuLabelStyle.fontWeight).toBe('500');
+    expect(menuIcon).toHaveAttribute('width', '18');
+    expect(menuIcon).toHaveAttribute('height', '18');
+    expect(menuItemRect.left).toBeLessThanOrEqual(triggerPointer.x);
+    expect(menuItemRect.right).toBeGreaterThanOrEqual(triggerPointer.x);
+    expect(menuItemRect.top).toBeLessThanOrEqual(triggerPointer.y);
+    expect(menuItemRect.bottom).toBeGreaterThanOrEqual(triggerPointer.y);
+    expect(
+      triggerPoints.map((point) =>
+        menuItem.contains(canvasElement.ownerDocument.elementFromPoint(point.x, point.y)),
+      ),
+    ).toEqual([true, true, true]);
     expect(canvas.getByTestId('repost-request-log')).toHaveTextContent('[]');
-    await userEvent.click(within(menu).getByRole('menuitem', { name: '재게시하기' }));
+    await userEvent.pointer({
+      coords: triggerPointer,
+      keys: '[MouseLeft]',
+      target: secondPointerTarget as Element,
+    });
     await expect(canvas.findByRole('button', { name: '재게시 취소' })).resolves.toHaveAttribute(
       'aria-pressed',
       'true',
@@ -257,7 +308,7 @@ export const CancelsWithActiveRepost: Story = {
     const canvas = within(canvasElement);
     const trigger = await canvas.findByRole('button', { name: '재게시 취소' });
     await userEvent.click(trigger);
-    const menu = await canvas.findByRole('menu', { name: '재게시 메뉴' });
+    const menu = await screen.findByRole('menu', { name: '재게시 메뉴' });
     await userEvent.click(within(menu).getByRole('menuitem', { name: '재게시 취소' }));
     await expect(canvas.findByRole('button', { name: '재게시 취소' })).resolves.toHaveAttribute(
       'aria-pressed',
@@ -275,7 +326,7 @@ export const FailureAllowsRetry: Story = {
     const button = await canvas.findByRole('button', { name: '재게시' });
     await userEvent.click(button);
     await userEvent.click(
-      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
         name: '재게시하기',
       }),
     );
@@ -284,7 +335,7 @@ export const FailureAllowsRetry: Story = {
     expect(button).not.toBeDisabled();
     await userEvent.click(button);
     await userEvent.click(
-      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
         name: '재게시하기',
       }),
     );
@@ -299,7 +350,7 @@ export const PendingIsDisabled: Story = {
     const button = await canvas.findByRole('button', { name: '재게시' });
     await userEvent.click(button);
     await userEvent.click(
-      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
         name: '재게시하기',
       }),
     );
@@ -347,7 +398,7 @@ export const ActorResetIgnoresStaleCallbacks: Story = {
     const repost = await canvas.findByRole('button', { name: '재게시' });
     await userEvent.click(repost);
     await userEvent.click(
-      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
         name: '재게시하기',
       }),
     );
@@ -360,7 +411,7 @@ export const ActorResetIgnoresStaleCallbacks: Story = {
     const secondActorRepost = canvas.getByRole('button', { name: '재게시' });
     await userEvent.click(secondActorRepost);
     await userEvent.click(
-      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
         name: '재게시하기',
       }),
     );
@@ -381,7 +432,7 @@ export const RequestVariablesAndDuplicateGuard: Story = {
     const canvas = within(canvasElement);
     const createTrigger = await canvas.findByRole('button', { name: '재게시' });
     await userEvent.click(createTrigger);
-    const createMenu = await canvas.findByRole('menu', { name: '재게시 메뉴' });
+    const createMenu = await screen.findByRole('menu', { name: '재게시 메뉴' });
     expect(within(createMenu).queryByRole('menuitem', { name: '인용하기' })).toBeNull();
     const createItem = within(createMenu).getByRole('menuitem', { name: '재게시하기' });
     createItem.click();
@@ -400,7 +451,7 @@ export const RequestVariablesAndDuplicateGuard: Story = {
     await expect(canvas.findByRole('button', { name: '재게시 취소' })).resolves.toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: '재게시 취소' }));
     await userEvent.click(
-      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
         name: '재게시 취소',
       }),
     );
@@ -418,7 +469,7 @@ export const NetworkErrorKeepsSourceAndRetries: Story = {
     const action = await canvas.findByRole('button', { name: '재게시' });
     await userEvent.click(action);
     await userEvent.click(
-      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
         name: '재게시하기',
       }),
     );
@@ -427,7 +478,7 @@ export const NetworkErrorKeepsSourceAndRetries: Story = {
     expect(canvas.getByRole('button', { name: '재게시' })).toHaveTextContent('3');
     await userEvent.click(action);
     await userEvent.click(
-      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
         name: '재게시하기',
       }),
     );
@@ -443,7 +494,7 @@ export const GraphQLErrorKeepsSourceAndRetries: Story = {
     const action = await canvas.findByRole('button', { name: '재게시' });
     await userEvent.click(action);
     await userEvent.click(
-      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
         name: '재게시하기',
       }),
     );
@@ -452,7 +503,7 @@ export const GraphQLErrorKeepsSourceAndRetries: Story = {
     expect(canvas.getByRole('button', { name: '재게시' })).toHaveTextContent('3');
     await userEvent.click(action);
     await userEvent.click(
-      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
         name: '재게시하기',
       }),
     );
@@ -468,7 +519,7 @@ export const CancelNetworkErrorKeepsSourceAndRetries: Story = {
     const action = await canvas.findByRole('button', { name: '재게시 취소' });
     await userEvent.click(action);
     await userEvent.click(
-      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
         name: '재게시 취소',
       }),
     );
@@ -477,7 +528,7 @@ export const CancelNetworkErrorKeepsSourceAndRetries: Story = {
     expect(canvas.getByRole('button', { name: '재게시 취소' })).toHaveTextContent('4');
     await userEvent.click(action);
     await userEvent.click(
-      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
         name: '재게시 취소',
       }),
     );

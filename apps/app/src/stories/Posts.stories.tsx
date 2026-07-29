@@ -2,7 +2,7 @@ import { usePathname } from 'expo-router';
 import { useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fn, screen, userEvent, waitFor, within } from 'storybook/test';
 import { Temporal } from 'temporal-polyfill';
 import PostDetailScreen from '@/app/(tabs)/(post)/[profileHandle]/[postId]';
 import { PostBody } from '@/components/post/PostBody';
@@ -875,9 +875,9 @@ export const BodyTimeAndLayoutStates: Story = {
       within(pureRepostActionBar).getByRole('button', { name: '재게시 취소' }),
     ).toHaveTextContent('7');
     await userEvent.click(within(pureRepostActionBar).getByRole('button', { name: '재게시 취소' }));
-    expect(await canvas.findByRole('menu', { name: '재게시 메뉴' })).toBeVisible();
+    expect(await screen.findByRole('menu', { name: '재게시 메뉴' })).toBeVisible();
     expect(
-      within(canvas.getByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+      within(screen.getByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
         name: '재게시 취소',
       }),
     ).toBeVisible();
@@ -942,16 +942,21 @@ export const ProductionRepostQuoteListIntegration: Story = {
       name: '액션 바',
     });
     const ordinaryCard = ordinaryActionBar.closest<HTMLElement>('[role="article"]')!;
-    const quoteCard = quoteActionBar.parentElement!.parentElement!;
+    const quoteCard = quoteRow!.parentElement!.parentElement!;
     const pureRepostAttributionLink = home
       .getByText('재게시한 코스모 사용자님이 재게시함')
       .closest<HTMLAnchorElement>('a')!;
     const pureRepostSourceRow = within(pureRepostRow!).getByTestId('post-list-standard-row');
+    const quoteSourcePreview = within(quoteRow!).getByTestId('source-post-preview');
     expect(pureRepostAttributionLink.getBoundingClientRect().height).toBe(20);
     expect(
       pureRepostSourceRow.getBoundingClientRect().top -
         pureRepostAttributionLink.getBoundingClientRect().bottom,
     ).toBeCloseTo(0, 0);
+    expect(
+      quoteActionBar.getBoundingClientRect().top -
+        quoteSourcePreview.getBoundingClientRect().bottom,
+    ).toBeCloseTo(4, 0);
     for (const [card, actionBar] of [
       [ordinaryCard, ordinaryActionBar],
       [quoteCard, quoteActionBar],
@@ -960,11 +965,17 @@ export const ProductionRepostQuoteListIntegration: Story = {
       const cardBounds = card.getBoundingClientRect();
       const actionBarBounds = actionBar.getBoundingClientRect();
       const borderBottomWidth = Number.parseFloat(getComputedStyle(card).borderBottomWidth);
-      expect(cardBounds.bottom - borderBottomWidth - actionBarBounds.bottom).toBeCloseTo(0, 0);
+      const actionBarSlotStyle = getComputedStyle(actionBar.parentElement!);
+      expect(actionBarSlotStyle.paddingTop).toBe('0px');
+      expect(actionBarSlotStyle.paddingBottom).toBe('4px');
+      expect(cardBounds.bottom - borderBottomWidth - actionBarBounds.bottom).toBeCloseTo(4, 0);
+      expect(getComputedStyle(card).borderBottomColor).toBe('rgb(242, 242, 242)');
     }
     for (const actionBar of [ordinaryActionBar, quoteActionBar, pureRepostActionBar]) {
-      expect(actionBar.parentElement?.closest('a, [role="link"], [role="button"]')).toBeNull();
-      expect(actionBar.parentElement?.lastElementChild).toBe(actionBar);
+      const actionBarSlot = actionBar.parentElement!;
+      expect(actionBarSlot.closest('a, [role="link"], [role="button"]')).toBeNull();
+      expect(actionBarSlot.lastElementChild).toBe(actionBar);
+      expect(actionBarSlot.parentElement?.lastElementChild).toBe(actionBarSlot);
     }
     expect(
       within(ordinaryActionBar).getByRole('button', { name: '재게시 취소' }),
@@ -1101,7 +1112,7 @@ export const ProductionRepostFailureToast: Story = {
 
     await userEvent.click(within(quoteActionBar).getByRole('button', { name: '재게시' }));
     await userEvent.click(
-      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
         name: '재게시하기',
       }),
     );
@@ -1112,7 +1123,7 @@ export const ProductionRepostFailureToast: Story = {
 
     await userEvent.click(within(pureRepostActionBar).getByRole('button', { name: '재게시 취소' }));
     await userEvent.click(
-      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
         name: '재게시 취소',
       }),
     );

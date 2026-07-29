@@ -1,30 +1,43 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { spacing } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
-function ActionMenuFixture({ disabled = false }: { disabled?: boolean }) {
+function ActionMenuFixture({
+  compactTrigger = false,
+  disabled = false,
+  singleItem = false,
+}: {
+  compactTrigger?: boolean;
+  disabled?: boolean;
+  singleItem?: boolean;
+}) {
   const [selectionCount, setSelectionCount] = useState(0);
+  const repostItem = {
+    key: 'repost',
+    label: '재게시',
+    onSelect: () => setSelectionCount((count) => count + 1),
+  };
 
   return (
     <View style={styles.fixture}>
       <ActionMenu
         accessibilityLabel="재게시 메뉴"
         disabled={disabled}
-        items={[
-          {
-            key: 'repost',
-            label: '재게시',
-            onSelect: () => setSelectionCount((count) => count + 1),
-          },
-          {
-            key: 'quote',
-            label: '인용 재게시',
-            onSelect: () => setSelectionCount((count) => count + 1),
-          },
-        ]}
+        items={
+          singleItem
+            ? [repostItem]
+            : [
+                repostItem,
+                {
+                  key: 'quote',
+                  label: '인용 재게시',
+                  onSelect: () => setSelectionCount((count) => count + 1),
+                },
+              ]
+        }
         renderTrigger={({ expanded, onPress, ref }) => (
           <Pressable
             accessibilityLabel="재게시"
@@ -33,7 +46,7 @@ function ActionMenuFixture({ disabled = false }: { disabled?: boolean }) {
             aria-haspopup="menu"
             onPress={onPress}
             ref={ref}
-            style={styles.trigger}
+            style={[styles.trigger, compactTrigger ? styles.compactTrigger : undefined]}
           >
             <Text>재게시</Text>
           </Pressable>
@@ -59,6 +72,9 @@ function ActionMenuInteractionFixtures() {
       <View accessibilityLabel="비활성 메뉴 fixture">
         <ActionMenuFixture disabled />
       </View>
+      <View accessibilityLabel="viewport collision fixture">
+        <ActionMenuFixture compactTrigger singleItem />
+      </View>
     </View>
   );
 }
@@ -79,15 +95,15 @@ export const InteractionContract: Story = {
 
     expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
     await userEvent.click(trigger);
-    const menu = await defaultFixture.findByRole('menu', { name: '재게시 메뉴' });
+    const menu = await screen.findByRole('menu', { name: '재게시 메뉴' });
     expect(menu).toBeVisible();
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
     await userEvent.keyboard('{Escape}');
-    expect(defaultFixture.queryByRole('menu', { name: '재게시 메뉴' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
     await userEvent.click(trigger);
     await userEvent.click(
-      within(await defaultFixture.findByRole('menu')).getByRole('menuitem', { name: '재게시' }),
+      within(await screen.findByRole('menu')).getByRole('menuitem', { name: '재게시' }),
     );
     expect(defaultFixture.getByTestId('selection-count')).toHaveTextContent('1');
     expect(trigger).toHaveFocus();
@@ -95,19 +111,19 @@ export const InteractionContract: Story = {
     const outsideFixture = within(canvas.getByLabelText('외부 상호작용 fixture'));
     const outsideTrigger = outsideFixture.getByRole('button', { name: '재게시' });
     await userEvent.click(outsideTrigger);
-    await outsideFixture.findByRole('menu', { name: '재게시 메뉴' });
+    await screen.findByRole('menu', { name: '재게시 메뉴' });
     await userEvent.click(outsideFixture.getByRole('button', { name: '바깥 버튼' }));
-    expect(outsideFixture.queryByRole('menu', { name: '재게시 메뉴' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).not.toBeInTheDocument();
 
     await userEvent.click(outsideTrigger);
-    await outsideFixture.findByRole('menu', { name: '재게시 메뉴' });
+    await screen.findByRole('menu', { name: '재게시 메뉴' });
     await userEvent.tab();
     await userEvent.tab();
     expect(outsideFixture.getByRole('button', { name: '바깥 버튼' })).toHaveFocus();
-    expect(outsideFixture.queryByRole('menu', { name: '재게시 메뉴' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).not.toBeInTheDocument();
 
     await userEvent.click(outsideTrigger);
-    const keyboardMenu = await outsideFixture.findByRole('menu', { name: '재게시 메뉴' });
+    const keyboardMenu = await screen.findByRole('menu', { name: '재게시 메뉴' });
     const [repostItem, quoteItem] = within(keyboardMenu).getAllByRole('menuitem');
     expect(repostItem).toHaveFocus();
     await userEvent.keyboard('{ArrowDown}');
@@ -122,14 +138,53 @@ export const InteractionContract: Story = {
     expect(quoteItem).toHaveFocus();
     await userEvent.keyboard('{Escape}');
 
+    const collisionFixture = within(canvas.getByLabelText('viewport collision fixture'));
+    const collisionTrigger = collisionFixture.getByRole('button', { name: '재게시' });
+    const ownerDocument = canvasElement.ownerDocument;
+    const ownerWindow = ownerDocument.defaultView!;
+    Object.assign(collisionTrigger.style, {
+      bottom: '8px',
+      position: 'fixed',
+      right: '8px',
+    });
+    await userEvent.click(collisionTrigger);
+    const collisionMenu = await screen.findByRole('menu', { name: '재게시 메뉴' });
+    const collisionItem = within(collisionMenu).getByRole('menuitem', { name: '재게시' });
+    const expectCollisionGeometry = () => {
+      const menuRect = collisionMenu.getBoundingClientRect();
+      const triggerRect = collisionTrigger.getBoundingClientRect();
+      const triggerCorners = [
+        { x: triggerRect.left + 1, y: triggerRect.top + 1 },
+        { x: triggerRect.right - 1, y: triggerRect.bottom - 1 },
+      ];
+
+      expect(menuRect.left).toBeGreaterThanOrEqual(0);
+      expect(menuRect.top).toBeGreaterThanOrEqual(0);
+      expect(menuRect.right).toBeLessThanOrEqual(ownerDocument.documentElement.clientWidth);
+      expect(menuRect.bottom).toBeLessThanOrEqual(ownerDocument.documentElement.clientHeight);
+      for (const point of triggerCorners) {
+        expect(collisionItem.contains(ownerDocument.elementFromPoint(point.x, point.y))).toBe(true);
+      }
+    };
+    expectCollisionGeometry();
+
+    Object.assign(collisionTrigger.style, { bottom: '40px', right: '40px' });
+    ownerDocument.dispatchEvent(new Event('scroll'));
+    await waitFor(expectCollisionGeometry);
+    Object.assign(collisionTrigger.style, { bottom: '72px', right: '72px' });
+    ownerWindow.dispatchEvent(new Event('resize'));
+    await waitFor(expectCollisionGeometry);
+    await userEvent.keyboard('{Escape}');
+
     const disabledFixture = within(canvas.getByLabelText('비활성 메뉴 fixture'));
     const disabledTrigger = disabledFixture.getByRole('button', { name: '재게시' });
     disabledTrigger.click();
-    expect(disabledFixture.queryByRole('menu', { name: '재게시 메뉴' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).not.toBeInTheDocument();
   },
 };
 
 const styles = StyleSheet.create({
+  compactTrigger: { height: 28, minHeight: 28, padding: 0, width: 50 },
   fixture: { gap: spacing.md },
   trigger: { alignSelf: 'flex-start', minHeight: 44, padding: spacing.md },
 });

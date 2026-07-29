@@ -250,7 +250,7 @@ function RepostAction({ onError, post }: RepostActionProps) {
     <ActionMenu
       accessibilityLabel="재게시 메뉴"
       disabled={processing}
-      items={[{ key: action, label, onSelect: () => runMutation(action) }]}
+      items={[{ icon: Repeat2, key: action, label, onSelect: () => runMutation(action) }]}
       renderTrigger={({ expanded: menuExpanded, onPress, ref }) => (
         <PostActionControl
           accessibilityLabel={data.viewerRepost ? '재게시 취소' : '재게시'}

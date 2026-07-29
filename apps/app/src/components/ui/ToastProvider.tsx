@@ -80,7 +80,7 @@ const webHost = {
 } as unknown as ViewStyle;
 
 const styles = StyleSheet.create({
-  message: { fontFamily: 'SUIT', ...typography.sm },
+  message: { fontFamily: 'SUIT', transform: [{ translateY: 2 }], ...typography.sm },
   nativeHost: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',

@@ -77,7 +77,7 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
 
   if (!post.repostSource) {
     return (
-      <View role="article" style={[styles.card, { borderColor: theme.border }]}>
+      <View role="article" style={[styles.card, { borderColor: theme.divider }]}>
         <PostListRow onRepostError={onRepostError} post={post} />
       </View>
     );
@@ -91,7 +91,7 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
 
   if (!post.content) {
     return (
-      <View role="article" style={[styles.card, { borderColor: theme.border }]}>
+      <View role="article" style={[styles.card, { borderColor: theme.divider }]}>
         <View style={styles.repostAttribution}>
           <View style={styles.repostIconColumn}>
             <Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>
@@ -143,7 +143,7 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
   };
 
   return (
-    <View style={[styles.card, styles.quoteRow, { borderColor: theme.border }]}>
+    <View style={[styles.card, styles.quoteRow, { borderColor: theme.divider }]}>
       <Link asChild href={profileHref}>
         <Pressable
           aria-hidden
@@ -159,7 +159,9 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
       </Link>
       <View style={styles.sourcePresentation}>
         <PostSourcePresentationView post={presentationPost} showPostAvatar={false} />
-        <PostActionBar onRepostError={onRepostError} post={post.actionBar} />
+        <View style={[styles.actionBarSlot, styles.quoteActionBarSlot]}>
+          <PostActionBar onRepostError={onRepostError} post={post.actionBar} />
+        </View>
       </View>
     </View>
   );
@@ -216,7 +218,9 @@ function PostListRow({
             <PostBody post={post} />
           </Pressable>
         ) : null}
-        <PostActionBar onRepostError={onRepostError} post={post.actionBar} />
+        <View style={styles.actionBarSlot}>
+          <PostActionBar onRepostError={onRepostError} post={post.actionBar} />
+        </View>
       </View>
     </View>
   );
@@ -240,6 +244,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   avatar: { borderRadius: radii.full },
+  actionBarSlot: { paddingBottom: spacing.xs },
+  quoteActionBarSlot: { marginTop: spacing.xs },
   content: { flex: 1, gap: spacing.xs, minWidth: 0 },
   header: {
     alignItems: 'flex-start',

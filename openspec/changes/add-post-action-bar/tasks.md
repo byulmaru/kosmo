@@ -73,7 +73,7 @@ PROD-434의 독립 `actionBar?: ReactNode`·mock surface slice를 실행하지 �
 
 **Deliverable**
 
-`PostListItem`·`PostLayout`이 Action Bar를 content grid의 마지막 sibling으로 직접 렌더링하고, 일반 Post·Quote는 자신을, 순수 Repost는 direct Source를 Repost target으로 사용한다. Repost trigger는 Web anchored menu와 Android·iOS bottom action sheet에서 `재게시하기` 또는 `재게시 취소`를 제공하며 실제 mutation과 action별 실패 toast까지 동작한다.
+`PostLayout`은 Action Bar를, `PostListItem`은 Action Bar를 담은 목록 전용 slot을 content grid의 마지막 sibling으로 직접 렌더링하고, 일반 Post·Quote는 자신을, 순수 Repost는 direct Source를 Repost target으로 사용한다. Repost trigger는 Web anchored menu와 Android·iOS bottom action sheet에서 `재게시하기` 또는 `재게시 취소`를 제공하며 실제 mutation과 action별 실패 toast까지 동작한다.
 
 **Guardrails**
 
@@ -86,18 +86,24 @@ PROD-434의 독립 `actionBar?: ReactNode`·mock surface slice를 실행하지 �
 
 **Verification**
 
-- 일반 Post·순수 Repost·Quote의 final sibling·link 비중첩과 순수 Repost Source target을 목록·상세에서 검증한다.
-- 목록의 세 Post variant에서 Action Bar 아래 외부 padding 0, 순수 Repost attribution line box 20과 Source 표준행까지 gap 0을 검증한다.
+- 일반 Post·순수 Repost·Quote의 목록 final slot·상세 final Action Bar, link 비중첩과 순수 Repost Source target을 검증한다.
+- 목록의 세 Post variant에서 Action Bar slot 상단 padding 0·하단 padding 4, 1px semantic divider color, 순수 Repost attribution line box 20과 Source 표준행까지 gap 0, Quote Source preview border 아래부터 Action Bar까지 4px을 검증한다.
 - Web outside/Escape/focus return·keyboard navigation과 Native backdrop/back/dismiss/safe area·modal semantics를 검증한다.
-- menu label·item 선택 뒤 create/delete identity·pending, exact toast·latest-replace·자동 dismiss·alert semantics, 실패 뒤 상태 유지·menu 재시도를 검증한다.
+- menu label·item 선택 뒤 create/delete identity·pending, exact toast·latest-replace·자동 dismiss·alert semantics·light `#262626` accent·message 2px optical shift, 실패 뒤 상태 유지·menu 재시도를 검증한다.
 
 - [x] 3.1 `PostListItem`·`PostLayout`에 actual Action Bar를 final sibling으로 배치하고 순수 Repost Source target과 navigation 비중첩을 연결한다.
 - [x] 3.2 Web anchored menu와 Android·iOS bottom action sheet를 구현하고 선택·미선택 label, dismiss·focus/back·접근성, `인용하기` 미노출과 항목 선택 뒤 mutation을 검증한다.
-- [x] 3.3 앱 provider의 단일 transient toast host와 Repost action별 surface callback을 연결하고 exact copy·latest-replace·자동 dismiss·safe area·alert semantics·실패 상태 유지를 검증한다.
+- [x] 3.3 앱 provider의 단일 transient toast host와 Repost action별 surface callback을 연결하고 exact copy·latest-replace·자동 dismiss·safe area·alert semantics·light `#262626` accent·message 2px optical shift·실패 상태 유지를 검증한다.
 - [x] 3.4 Figma 기반 28px geometry를 Action Bar에 적용하고 exact height·padding·action width·glyph·gap, Web 최소 target과 non-overlap을 Storybook에서 검증한다.
 - [x] 3.5 app·Relay·unit·Storybook·static build·Web runtime과 두 OpenSpec의 scoped·전체 strict validation을 통과시킨다. Native는 공통 구현의 정적·Storybook 검증만 수행하고 44pt·48dp 복구와 runtime 관찰을 출시 gate에 남긴다.
 - [x] 3.6 목록 일반 Post·Quote·순수 Repost의 Action Bar 하단 외부 padding을 0으로 맞추고, 순수 Repost attribution을 20px line box·Source gap 0으로 줄여 기존 Storybook interaction으로 exact geometry를 검증한다.
 - [x] 3.7 compact spacing 변경 뒤 app·Storybook·lint와 전체 OpenSpec strict validation을 다시 통과시키고 390px Web runtime을 관찰한다.
+- [x] 3.8 목록 Action Bar의 28px geometry를 유지한 채 final slot에 상하 2px을 추가하고, light/dark semantic `divider` token을 1px Post 구분선에만 적용해 focused Storybook interaction을 통과시킨다.
+- [x] 3.9 spacing·divider 변경 뒤 app·Storybook·lint와 전체 OpenSpec strict validation을 다시 통과시키고 390px Web runtime을 관찰한다.
+- [x] 3.10 목록 Action Bar final slot의 상단 padding을 0, 하단 padding을 `spacing.xs` 4px로 조정하고 Quote Source preview border 아래에만 4px 간격을 추가해 focused Storybook interaction을 통과시킨다.
+- [x] 3.11 비대칭 spacing 변경 뒤 app·Storybook·lint와 전체 OpenSpec strict validation을 다시 통과시키고 390px Web runtime을 관찰한다.
+- [x] 3.12 Web Repost menu를 scroll container 밖의 downward overlay로 배치해 첫 item이 trigger pointer 지점을 덮고 viewport 안으로 보정되게 하며, theme card surface·36px item 높이·128px 최소폭·18px icon·14px·500 label·8px 좌우 padding·1px border·`0 2px 4px` shadow 및 같은 위치 두 번째 pointer 선택을 focused Storybook interaction으로 검증한다.
+- [ ] 3.13 Web menu 변경 뒤 app·Storybook·lint와 전체 OpenSpec strict validation을 통과시키고 Home·Bookmark scroll surface와 390px Web runtime에서 비클리핑·pointer 선택·focus 복귀를 관찰한다.
 
 ## 4. PROD-432 실제 액션 연결·통합 검증·archive
 

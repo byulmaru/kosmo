@@ -48,9 +48,16 @@ export const ReplacementAndAutoDismiss: Story = {
 
     expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: '생성 실패 표시' }));
-    expect(await canvas.findByRole('alert')).toHaveTextContent(
+    const alert = await canvas.findByRole('alert');
+    const toastMessage = within(alert).getByText(
       '재게시하지 못했습니다. 잠시 후 다시 시도해 주세요.',
     );
+    const toastSurface = toastMessage.parentElement!;
+    expect(alert).toHaveTextContent('재게시하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    expect(getComputedStyle(toastSurface).backgroundColor).toBe('rgb(38, 38, 38)');
+    expect(
+      toastMessage.getBoundingClientRect().top - toastSurface.getBoundingClientRect().top,
+    ).toBeCloseTo(14, 0);
     await userEvent.click(canvas.getByRole('button', { name: '취소 실패 표시' }));
     expect(canvas.getByRole('alert')).toHaveTextContent(
       '재게시를 취소하지 못했습니다. 잠시 후 다시 시도해 주세요.',

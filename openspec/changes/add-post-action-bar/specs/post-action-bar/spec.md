@@ -92,7 +92,10 @@
 #### Scenario: Web anchored menu
 
 - **WHEN** Web에서 Repost menu가 열린다
-- **THEN** menu는 trigger 근처에 배치되고 trigger는 popup·expanded 상태를 노출한다
+- **THEN** menu는 scroll container 밖의 overlay layer에서 trigger 근처에 배치되고 trigger는 popup·expanded 상태를 노출한다
+- **AND** 첫 action item target은 trigger의 pointer 지점을 덮어 포인터를 움직이지 않은 두 번째 활성화가 실제 menu item을 선택한다
+- **AND** menu는 첫 item에서 아래 방향으로 펼치되 viewport 가장자리 안으로 보정되어 화면이나 scroll container에 잘리지 않는다
+- **AND** item은 theme card surface, 36px 높이, 128px 최소폭, 8px 좌우 padding, 18px Repost icon, 14px·500 label, 1px menu border와 `0 2px 4px` shadow를 사용한다
 - **AND** 바깥 pointer·focus 또는 Escape로 닫히며 Escape 뒤 trigger로 focus가 돌아간다
 - **AND** 방향키, Home과 End로 item focus를 이동할 수 있다
 
@@ -183,7 +186,7 @@
 
 ### Requirement: Production Post surface 배치
 
-**Authority / Provenance:** `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `docs/domain/objects/profile.md`, `docs/domain/README.md`, `docs/design/post-action-bar.md`, `PROD-432`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425` — 지원되는 Home Post List, Profile Post List 및 Post 상세 surface의 게시글은 공통 Post Action Bar 계약을 사용해야 한다(MUST). `PostListItem`과 `PostLayout`은 Action Bar를 Post content grid의 마지막 sibling으로 직접 렌더링해야 하고(MUST), 본문·작성자·생성 시각·Source navigation `Link`/`Pressable` 안에 중첩하지 않아야 한다(MUST NOT). 일반 Post와 Quote는 바깥 Post를, 순수 Repost는 화면에 표시한 direct Source Post를 Action Bar target으로 공급해야 한다(MUST). surface는 display Post와 action target을 구분하면서 canonical 관계 조합, Post Visibility·권한 계약과 각 action 계약에서 target 자체의 적격성과 현재 실행 주체·세션의 실행 권한을 분리해 판단해야 한다(MUST). Action Bar child는 전달받은 policy input을 표현하되 대상 정책 또는 guest 인증 진입을 자체 판단하지 않아야 한다(MUST NOT). target Post가 적격하지 않거나 인증된 실행 주체가 실행 권한을 갖지 못한 액션은 config 또는 child action을 생략하지 않고 disabled 상태로 제공해야 한다(MUST). 인증하지 않은 guest에게 현재 세션 전제가 없다는 이유만으로 조회 가능하고 target 자체가 적격한 액션을 disabled로 제공해서는 안 되며(MUST NOT), 활성화는 상위 인증 진입 callback에 위임해야 한다(MUST). `PostList`, route와 외부 caller는 Action Bar subtree나 `actionBar?: ReactNode`를 주입하지 않아야 하며(MUST NOT), surface 배치는 기존 상세 navigation 및 다른 interactive control의 입력을 가로채지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `docs/domain/objects/profile.md`, `docs/domain/README.md`, `docs/design/post-action-bar.md`, `PROD-432`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425` — 지원되는 Home Post List, Profile Post List 및 Post 상세 surface의 게시글은 공통 Post Action Bar 계약을 사용해야 한다(MUST). `PostLayout`은 Action Bar를, `PostListItem`은 Action Bar만 담은 목록 전용 slot을 Post content grid의 마지막 sibling으로 직접 렌더링해야 하고(MUST), 본문·작성자·생성 시각·Source navigation `Link`/`Pressable` 안에 중첩하지 않아야 한다(MUST NOT). 일반 Post와 Quote는 바깥 Post를, 순수 Repost는 화면에 표시한 direct Source Post를 Action Bar target으로 공급해야 한다(MUST). surface는 display Post와 action target을 구분하면서 canonical 관계 조합, Post Visibility·권한 계약과 각 action 계약에서 target 자체의 적격성과 현재 실행 주체·세션의 실행 권한을 분리해 판단해야 한다(MUST). Action Bar child는 전달받은 policy input을 표현하되 대상 정책 또는 guest 인증 진입을 자체 판단하지 않아야 한다(MUST NOT). target Post가 적격하지 않거나 인증된 실행 주체가 실행 권한을 갖지 못한 액션은 config 또는 child action을 생략하지 않고 disabled 상태로 제공해야 한다(MUST). 인증하지 않은 guest에게 현재 세션 전제가 없다는 이유만으로 조회 가능하고 target 자체가 적격한 액션을 disabled로 제공해서는 안 되며(MUST NOT), 활성화는 상위 인증 진입 callback에 위임해야 한다(MUST). `PostList`, route와 외부 caller는 Action Bar subtree나 `actionBar?: ReactNode`를 주입하지 않아야 하며(MUST NOT), surface 배치는 기존 상세 navigation 및 다른 interactive control의 입력을 가로채지 않아야 한다(MUST).
 
 #### Scenario: 목록과 상세의 공통 계약
 
@@ -193,14 +196,17 @@
 #### Scenario: content grid 마지막 sibling
 
 - **WHEN** `PostListItem` 또는 `PostLayout`이 일반 Post, 순수 Repost 또는 Quote를 렌더한다
-- **THEN** Action Bar는 각 구조의 마지막 presentation 뒤 content grid의 마지막 sibling으로 렌더된다
+- **THEN** `PostLayout`의 Action Bar와 `PostListItem`의 Action Bar slot은 각 구조의 마지막 presentation 뒤 content grid의 마지막 sibling으로 렌더된다
+- **AND** 목록 전용 slot은 Action Bar만 포함한다
 - **AND** 본문·작성자·생성 시각·Source navigation link의 descendant가 아니다
 
 #### Scenario: 목록 Post 카드의 compact spacing
 
 - **WHEN** `PostListItem`이 일반 Post, 순수 Repost 또는 Quote를 렌더한다
-- **THEN** Action Bar 아래 외부 padding 없이 카드 구분선이 바로 이어진다
+- **THEN** 목록 전용 Action Bar slot은 상단 0px·하단 4px padding을 제공하고 content grid의 마지막 sibling으로 렌더된다
+- **AND** 1px 카드 구분선은 입력·메뉴 외곽선용 `border`가 아니라 저강도 semantic `divider` color를 사용한다
 - **AND** 순수 Repost attribution은 20px line box를 사용하고 아래 Source 표준행과의 추가 gap을 두지 않는다
+- **AND** Quote는 공용 slot 상단 padding을 늘리지 않고 Source preview border 아래부터 Action Bar까지 4px 간격을 제공한다
 
 #### Scenario: 순수 Repost의 Source action target
 
@@ -265,6 +271,7 @@ Reaction Type 선택·해제와 Type별 count·Profile 목록은 PROD-417·PROD-
 - **THEN** production surface는 해당 액션의 pending을 종료하고 요청 직전의 확정된 `expanded`·`hasReposted`·`hasReacted`·`hasBookmarked`와 제공된 Reply·Repost count를 유지한다
 - **AND** Repost 생성 실패는 `재게시하지 못했습니다. 잠시 후 다시 시도해 주세요.`, 취소 실패는 `재게시를 취소하지 못했습니다. 잠시 후 다시 시도해 주세요.`라는 toast로 안내하고 같은 내용을 보조 기술이 즉시 인식할 수 있게 한다
 - **AND** Repost toast는 safe area와 고정 탭 바 위의 화면 하단에서 약 3초 뒤 사라지고 새 toast가 기존 toast를 교체한다
+- **AND** light toast는 `#262626` accent 배경을 사용하고 message line box·padding을 유지한 채 glyph를 2px 아래로 이동한다
 - **AND** Action Bar에 지속 error 상태나 toast close·retry control을 공급하지 않고, 사용자가 Repost menu를 다시 열어 같은 항목을 선택하면 재시도할 수 있게 한다
 
 ### Requirement: More 링크 복사 통합

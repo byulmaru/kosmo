@@ -10,7 +10,7 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, screen, userEvent, within } from 'storybook/test';
 import { PostActionBar } from '@/components/post/PostActionBar';
 import { formatPostActionCount } from '@/components/post/postActionCount';
 import { spacing, typography } from '@/theme/tokens';
@@ -371,7 +371,7 @@ export const ProcessingAccessibility: Story = {
     const repostButton = canvas.getByRole('button', { name: '재게시 취소' });
     await userEvent.click(repostButton);
     await userEvent.click(
-      within(await canvas.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
         name: '재게시 취소',
       }),
     );

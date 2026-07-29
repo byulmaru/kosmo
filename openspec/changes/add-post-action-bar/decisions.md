@@ -47,7 +47,7 @@
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/design/post-action-bar.md`, `PROD-414`, `PROD-432`, `PROD-433`
 - Status: Active
 - Context / Problem: Repost child를 Storybook에만 연결하고 production 배치·menu·오류 안내를 최종 통합 이슈까지 미루면 PROD-414는 사용자가 실제 목록·상세에서 사용할 수 없는 slice로 남는다. 순수 Repost surface가 바깥 Repost fragment를 Action Bar target으로 사용하면 Content 없는 Repost를 다시 Repost하는 잘못된 target도 만든다.
-- Decision Outcome: 공개 UI API는 `PostActionBar` 하나로 유지하고 private `RepostAction`이 child fragment·mutation·pending·actor 격리와 파생 상태를 소유한다. PROD-414는 `PostListItem`·`PostLayout`이 Action Bar를 content grid의 마지막 sibling이자 모든 navigation link 밖에 렌더링하게 하며, 일반 Post·Quote는 자신을, 순수 Repost는 화면에 표시한 direct Source fragment를 Action Bar target으로 공급한다. Repost trigger는 항상 action menu를 열고 항목 선택 뒤 mutation을 시작하며 PROD-414 surface가 action별 실패 toast를 제공한다. 나머지 action 조립, concrete disabled seam, 대상·세션 정책과 전체 통합은 PROD-432에 남긴다.
+- Decision Outcome: 공개 UI API는 `PostActionBar` 하나로 유지하고 private `RepostAction`이 child fragment·mutation·pending·actor 격리와 파생 상태를 소유한다. PROD-414는 `PostLayout`에는 Action Bar를, `PostListItem`에는 Action Bar를 담은 목록 전용 slot을 content grid의 마지막 sibling이자 모든 navigation link 밖에 렌더링하며, 일반 Post·Quote는 자신을, 순수 Repost는 화면에 표시한 direct Source fragment를 Action Bar target으로 공급한다. Repost trigger는 항상 action menu를 열고 항목 선택 뒤 mutation을 시작하며 PROD-414 surface가 action별 실패 toast를 제공한다. 나머지 action 조립, concrete disabled seam, 대상·세션 정책과 전체 통합은 PROD-432에 남긴다.
 - Alternatives Considered: Storybook-only Repost child, PROD-434의 별도 layout seam, PROD-432까지 모든 production 연결 연기, 순수 Repost 바깥 identity target. 각각 실제 사용자 결과를 늦추거나 canceled ownership을 되살리고 잘못된 action target을 만드므로 채택하지 않았다.
 - Consequences: production query는 parent fragment spread를 통해 Repost fields를 포함하고 순수 Repost에서는 Source fragment도 Action Bar에 전달해야 한다. `PostList`, route 또는 `actionBar?: ReactNode`가 조립 책임을 갖지 않는다.
 - Confirmation / Follow-up: PROD-414에서 actual parent→child와 Source target, final sibling·link 비중첩, menu·toast를 검증하고 PROD-432에서 최종 policy와 전체 action 조합을 검증한다.
@@ -63,6 +63,18 @@
 - Alternatives Considered: 즉시 mutation 유지, 선택 상태에서만 즉시 취소, 모든 플랫폼의 중앙 Modal, row별 toast, 새 menu/toast package. 각각 미래 항목 확장을 막거나 interaction을 비대칭으로 만들고, 승인된 platform 동작·단일 feedback 수명·dependency 경계를 위반하므로 채택하지 않았다.
 - Consequences: private Repost child는 fragment·mutation·pending을 유지하고 menu는 항목 선택 결과만 action에 전달한다. toast host는 후속 action이 재사용할 수 있는 좁은 message API만 제공하며 queue·persistent notification을 미리 구현하지 않는다.
 - Confirmation / Follow-up: Web outside/Escape/focus return·keyboard navigation, Native backdrop/back/dismiss/safe area, menu label·pending, toast latest-replace·자동 dismiss·alert semantics와 실패 뒤 상태 유지·재시도를 검증한다.
+
+### Web Repost menu는 같은 pointer 위치를 이어받는 downward overlay로 배치한다
+
+- Decision Date: 2026-07-29
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/post-action-bar.md`, `PROD-414`, 2026-07-29 KST 사용자 결정
+- Status: Active
+- Context / Problem: trigger 아래의 absolute menu는 Home·Bookmark scroll container와 viewport 하단에서 잘리고, trigger와 첫 item이 떨어져 있어 사용자가 Repost를 확정하려면 포인터를 다시 찾아 이동해야 한다. 기존 menu의 단순 border surface와 text-only item도 Action Bar 위에 떠 있는 action이라는 시각 계층이 약하다.
+- Decision Outcome: Web menu는 새 외부 dependency 없이 scroll container 밖의 overlay layer에 렌더링한다. 첫 action item target이 trigger pointer 지점을 덮고 그 item부터 아래 방향으로 menu가 펼쳐지게 배치해, 첫 pointer 입력은 menu만 열고 포인터를 움직이지 않은 두 번째 입력이 실제 item을 선택하게 한다. viewport 가장자리에서는 overlay 좌표를 화면 안으로 보정한다. item은 theme card surface(light theme에서는 흰색), 4px card padding, 36px 높이, 128px 최소폭, 8px 좌우 padding, 18px Repost icon, 14px·500 label, 1px menu border와 `0 2px 4px` shadow를 사용한다. Trigger 자체가 mutation을 직접 실행하는 경계와 최소 44px item을 유지하는 Native bottom action sheet는 바꾸지 않는다.
+- Alternatives Considered: 기존 relative subtree에서 아래에만 여는 방식은 clipping과 포인터 이동을 남겨 채택하지 않았다. 위 방향 고정 menu는 같은 위치 연속 입력 UX와 맞지 않아 채택하지 않았다. Radix/Floating UI 같은 새 dependency는 단일 item의 현재 범위에 과하므로 채택하지 않았다.
+- Consequences: portal menu를 trigger control과 함께 내부 interaction 영역으로 취급해야 하며 scroll·resize에서 좌표를 다시 계산해야 한다. 현재 `인용하기`는 계속 미노출이고, 미래 다중 item의 세부 collision 정책은 PROD-431이 실제 항목을 추가할 때 재검토한다.
+- Confirmation / Follow-up: Storybook에서 첫 item이 trigger corner·center pointer를 포함하는 geometry, 같은 위치의 두 번째 pointer 선택, viewport clamp, scroll container 비클리핑, card surface·36px 높이·128px 최소폭·18px icon·14px·500 label·8px 좌우 padding·border·`0 2px 4px` shadow와 기존 outside/Escape/focus/keyboard 계약을 검증한다.
 
 ### 선택 상태와 처리 상태의 분리
 
@@ -142,10 +154,10 @@
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/design/accessibility.md`, `docs/design/post-action-bar.md`, `PROD-414`, 2026-07-29 KST 사용자 결정
 - Status: Active
-- Context / Problem: `PostListItem`의 하단 16px padding과 순수 Repost attribution의 44px target·4px gap이 Figma에 없는 여백을 추가한다.
-- Decision Outcome: 일반 Post·Quote·순수 Repost 목록에서 Action Bar 아래 외부 padding은 0이다. 순수 Repost attribution은 20px line box와 Source 표준행까지 gap 0을 사용한다. Web Profile text link는 inline target 예외를 적용하고 Native target 복구와 인접 target runtime 검증은 출시 gate로 남긴다.
-- Consequences: `PostListItem` spacing과 기존 Storybook geometry assertion만 변경하며 `PostLayout`, Action Bar 28px geometry와 action 동작은 유지한다.
-- Confirmation / Follow-up: 390px Web Storybook에서 세 목록 variant의 하단 gap과 순수 Repost attribution 높이·Source gap을 exact 값으로 검증한다.
+- Context / Problem: `PostListItem`의 기존 큰 하단 padding은 제거했지만 Action Bar와 카드 구분선이 바로 붙어 답답하고, 공용 `border`는 입력·메뉴 외곽선까지 함께 사용되어 Post divider만 옅게 만들 수 없다.
+- Decision Outcome: 일반 Post·Quote·순수 Repost 목록에서 Action Bar 자체 28px은 유지하고 목록 전용 slot의 상단 padding은 0, 하단 padding은 `spacing.xs` 4px로 둔다. Quote만 nested Source preview border 아래부터 Action Bar까지 4px 간격을 추가하며 일반 Post와 순수 Repost의 상단 간격은 늘리지 않는다. 카드 구분선은 1px을 유지하며 light `#f2f2f2`, dark `#292929`의 semantic `divider` token을 사용한다. 순수 Repost attribution은 20px line box와 Source 표준행까지 gap 0을 사용한다. Web Profile text link는 inline target 예외를 적용하고 Native target 복구와 인접 target runtime 검증은 출시 gate로 남긴다.
+- Consequences: `PostListItem` spacing과 Post divider color만 변경하며 공용 `border`, `PostLayout`, Action Bar 28px geometry와 action 동작은 유지한다.
+- Confirmation / Follow-up: 390px Web Storybook에서 세 목록 variant의 상단 0px·하단 4px, Quote preview 아래 4px, 1px divider color와 순수 Repost attribution 높이·Source gap을 exact 값으로 검증한다.
 
 ### 공유 change와 부모 소유의 최종 archive
 
@@ -202,10 +214,10 @@
 - Authority / Provenance: `docs/design/post-action-bar.md`, `PROD-414`, `PROD-432`
 - Status: Active
 - Context / Problem: 일시적 실패를 지속 error 상태와 분리하는 기존 결정은 유효하지만, Repost toast를 PROD-432까지 미루면 PROD-414의 production action이 실패 이유를 사용자에게 제공하지 못한다.
-- Decision Outcome: 공개 도메인 상태는 처리 상태와 독립적으로 유지하고 요청 실패 시 pending만 종료한 뒤 직전 서버 확정 상태와 count를 보존한다. private Repost child는 action별 error callback을 호출하고 PROD-414의 actual surface가 정확한 한국어 transient toast와 동일한 alert semantics를 제공한다. 별도 retry 상태나 toast 버튼 없이 menu를 다시 열고 같은 항목을 선택해 재시도한다. `PostActionBar` toolbar container는 toast를 소유하지 않는다. Repost 외 action의 실패 표면과 전체 통합은 각 action 계약과 PROD-432가 소유한다.
+- Decision Outcome: 공개 도메인 상태는 처리 상태와 독립적으로 유지하고 요청 실패 시 pending만 종료한 뒤 직전 서버 확정 상태와 count를 보존한다. private Repost child는 action별 error callback을 호출하고 PROD-414의 actual surface가 정확한 한국어 transient toast와 동일한 alert semantics를 제공한다. light toast는 `#262626` accent 배경을 사용하고 message line box·padding을 유지한 채 glyph만 2px 아래로 이동한다. 별도 retry 상태나 toast 버튼 없이 menu를 다시 열고 같은 항목을 선택해 재시도한다. `PostActionBar` toolbar container는 toast를 소유하지 않는다. Repost 외 action의 실패 표면과 전체 통합은 각 action 계약과 PROD-432가 소유한다.
 - Alternatives Considered: PROD-432까지 Repost toast 연기, Action Bar danger 상태, toast 내 retry 버튼. 각각 독립 전달 결과를 불완전하게 만들거나 transient 결과와 domain 상태를 섞고 중복 재시도 UI를 만들므로 채택하지 않았다.
 - Consequences: PROD-414는 provider host·surface callback 연결과 Web·Android·iOS 접근성 검증을 추가한다. PROD-432는 이를 재구현하지 않고 전체 action 조합에서 회귀만 확인한다.
-- Confirmation / Follow-up: action별 exact copy, latest-replace, 약 3초 dismiss, safe area·tab bar 위치, alert semantics, 이전 상태 유지와 다음 menu 재시도를 검증한다.
+- Confirmation / Follow-up: action별 exact copy, latest-replace, 약 3초 dismiss, safe area·tab bar 위치, alert semantics, light `#262626` accent와 message 2px optical shift, 이전 상태 유지와 다음 menu 재시도를 검증한다.
 
 ### More callback 경계와 Post Share Reference 통합을 분리
 
