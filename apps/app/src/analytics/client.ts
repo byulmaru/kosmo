@@ -1,42 +1,9 @@
 import { OpenPanel } from '@openpanel/web';
 import { Platform } from 'react-native';
-import type { PostVisibility } from '@kosmo/core/enums';
-import type { SearchTab } from '@kosmo/core/search';
+import type { TrackProperties } from '@openpanel/web';
 
 const OPENPANEL_API_URL = 'https://openpanel.byulmaru.co/api';
 const LOGIN_STARTED_KEY = 'kosmo-openpanel-login-started';
-
-type AnalyticsEvents = {
-  follow_succeeded: {
-    result: 'follow' | 'request';
-    selected_profile_id: string;
-  };
-  login_succeeded: undefined;
-  post_created: {
-    selected_profile_id: string;
-    visibility: PostVisibility;
-  };
-  profile_created: {
-    selected_profile_id: string;
-  };
-  profile_selected: {
-    selected_profile_id: string;
-  };
-  search_more_results_loaded: {
-    tab: 'people';
-  };
-  search_result_selected: {
-    tab: 'people';
-  };
-  search_results_loaded: {
-    has_results: boolean;
-    tab: 'people';
-  };
-  search_submitted: {
-    source: 'keyboard' | 'recent' | 'tab';
-    tab: SearchTab;
-  };
-};
 
 let client: OpenPanel | null | undefined;
 let identifiedAccountId: string | null = null;
@@ -87,14 +54,9 @@ function ignoreAnalyticsFailure(result: unknown): void {
   }
 }
 
-export function trackAnalytics<EventName extends keyof AnalyticsEvents>(
-  name: EventName,
-  ...args: AnalyticsEvents[EventName] extends undefined
-    ? []
-    : [properties: AnalyticsEvents[EventName]]
-): void {
+export function trackAnalytics(name: string, properties?: TrackProperties): void {
   try {
-    ignoreAnalyticsFailure(getAnalyticsClient()?.track(name, args[0]));
+    ignoreAnalyticsFailure(getAnalyticsClient()?.track(name, properties));
   } catch {
     // Analytics is best-effort and must not affect the product flow.
   }

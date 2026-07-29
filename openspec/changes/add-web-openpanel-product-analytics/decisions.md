@@ -49,7 +49,7 @@
 - Context / Problem: 사용자 여정을 연결하려면 identity가 필요하지만 직접 식별자와 자유 형식 콘텐츠 전송은 피해야 한다.
 - Decision Outcome: opaque Account ID만 identity로 사용한다. 선택 Profile ID는 필요한 명시적 이벤트 속성으로만 보내며 이름·handle·검색어·Post 본문·오류 원문은 보내지 않는다. 성공한 로그아웃 뒤 identity를 clear한다.
 - Alternatives Considered: Profile ID를 identity로 사용하거나 이메일·이름을 trait로 보내는 방법은 계정 생명주기와 최소수집 원칙에 맞지 않아 제외했다.
-- Consequences: event taxonomy는 허용 속성을 타입으로 제한해야 하고, 로그인 성공은 인증 redirect 전후를 연결하는 marker가 필요하다.
+- Consequences: 허용된 event taxonomy와 속성은 성공 경계의 호출부와 payload test로 유지하고, 로그인 성공은 인증 redirect 전후를 연결하는 marker가 필요하다.
 - Confirmation / Follow-up: SDK 호출 test에서 identity와 event payload를 검사한다.
 
 ### 분석 장애를 제품 흐름에서 격리
