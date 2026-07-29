@@ -12,6 +12,7 @@ const draft: ProfileEditDraft = {
   avatar: { kind: 'current', previewUri: 'avatar://current' },
   bio: '안녕하세요',
   displayName: '코스모',
+  followPolicy: 'OPEN',
   header: { kind: 'current', previewUri: 'header://current' },
   tags: ['공예', '개발'],
 };
@@ -63,6 +64,10 @@ test('draft dirty 비교는 이미지와 Tag identity 집합을 포함한다', (
   assert.equal(isProfileEditDraftDirty(draft, { ...draft, avatar: draft.avatar }), false);
   assert.equal(isProfileEditDraftDirty(draft, { ...draft, tags: ['개발', '공예'] }), false);
   assert.equal(isProfileEditDraftDirty(draft, { ...draft, tags: ['공예', '사진'] }), true);
+  assert.equal(
+    isProfileEditDraftDirty(draft, { ...draft, followPolicy: 'APPROVAL_REQUIRED' }),
+    true,
+  );
 });
 
 test('submit gate는 callback, dirty, errors, upload과 saving 상태를 모두 확인한다', () => {

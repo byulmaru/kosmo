@@ -8,10 +8,13 @@ export type ProfileEditImageDraft =
     }
   | { kind: 'removed'; previewUri: null };
 
+export type ProfileFollowPolicy = 'OPEN' | 'APPROVAL_REQUIRED';
+
 export type ProfileEditDraft = {
   avatar: ProfileEditImageDraft;
   bio: string;
   displayName: string;
+  followPolicy: ProfileFollowPolicy;
   header: ProfileEditImageDraft;
   tags: ReadonlyArray<string>;
 };
@@ -84,6 +87,7 @@ export function isProfileEditDraftDirty(
   value: ProfileEditDraft,
 ): boolean {
   if (
+    initial.followPolicy !== value.followPolicy ||
     initial.displayName !== value.displayName ||
     initial.bio !== value.bio ||
     !areProfileEditImagesEqual(initial.avatar, value.avatar) ||
