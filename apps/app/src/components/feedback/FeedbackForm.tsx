@@ -31,7 +31,6 @@ export function FeedbackForm() {
   const [body, setBody] = useState('');
   const [bodyTouched, setBodyTouched] = useState(false);
   const [status, setStatus] = useState<FeedbackStatus>('idle');
-  const [error, setError] = useState<string | null>(null);
   const [focusedKind, setFocusedKind] = useState<FeedbackKind | null>(null);
   const radioRefs = useRef<Array<{ focus?: () => void } | null>>([]);
   const [commit, submitting] =
@@ -49,17 +48,13 @@ export function FeedbackForm() {
   const selectKind = (value: FeedbackKind) => {
     setKind(value);
     setStatus('idle');
-    setError(null);
   };
 
   const submit = () => {
     if (!canSubmit) {
-      setError(bodyError);
-      setStatus('error');
       return;
     }
 
-    setError(null);
     setStatus('idle');
     commit({
       variables: {
@@ -70,7 +65,6 @@ export function FeedbackForm() {
       },
       onCompleted: (response, errors) => {
         if (errors?.length || !response.submitFeedback?.completed) {
-          setError('피드백을 전달하지 못했습니다. 입력 내용을 확인한 뒤 다시 시도해주세요.');
           setStatus('error');
           return;
         }
@@ -78,11 +72,9 @@ export function FeedbackForm() {
         setKind('POSITIVE');
         setBody('');
         setBodyTouched(false);
-        setError(null);
         setStatus('success');
       },
       onError: () => {
-        setError('피드백을 전달하지 못했습니다. 입력 내용을 확인한 뒤 다시 시도해주세요.');
         setStatus('error');
       },
     });
@@ -182,7 +174,6 @@ export function FeedbackForm() {
           setBody(value);
           setBodyTouched(true);
           setStatus('idle');
-          setError(null);
         }}
         placeholder="어떤 점이 좋았거나 불편했는지 알려주세요."
         value={body}
@@ -193,13 +184,13 @@ export function FeedbackForm() {
           피드백을 전달했습니다. 감사합니다!
         </Text>
       ) : null}
-      {status === 'error' && error ? (
+      {status === 'error' ? (
         <Text
           accessibilityLiveRegion="polite"
           accessibilityRole="alert"
           style={[styles.error, { color: theme.danger }]}
         >
-          {error}
+          피드백을 전달하지 못했습니다. 입력 내용을 확인한 뒤 다시 시도해주세요.
         </Text>
       ) : null}
 
