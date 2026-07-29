@@ -15,7 +15,7 @@ import {
 import { InstanceState, NotificationKind, PostState, PostVisibility, ProfileState } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import {
-  createReplyNotificationBestEffort,
+  createReplyNotification,
   createRepostNotification,
   deleteNotificationBySource,
 } from './notification';
@@ -387,6 +387,10 @@ export async function createPost(
         .returning()
         .then(firstOrThrow);
 
+      if (input.origin === 'LOCAL' && input.replyParentId !== undefined) {
+        await createReplyNotification(linkedPost.id, tx).catch(() => undefined);
+      }
+
       return { content, created: true, post: linkedPost };
     });
   } catch (error) {
@@ -398,8 +402,6 @@ export async function createPost(
   }
 
   if (input.origin === 'LOCAL' && input.replyParentId !== undefined) {
-    await createReplyNotificationBestEffort(result.post.id);
-
     try {
       const { sendLocalReplyCreate } = await import('@kosmo/fedify');
       await sendLocalReplyCreate(result.post.id);

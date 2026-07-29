@@ -44,28 +44,29 @@ Local Reply가 기존 canonical Note 표현과 identity를 사용하는 안정�
 
 **Deliverable**
 
-Local Reply domain transaction이 commit된 뒤에만 Create/Delete delivery가 실행되고, remote delivery 실패에도
-GraphQL application 결과와 committed Reply state가 성공으로 유지된다.
+rollback된 Local Reply의 Create/Delete는 전달되지 않고, top-level commit 뒤 remote delivery 실패에도 GraphQL
+application 결과와 committed Reply state가 성공으로 유지된다. caller transaction의 commit 뒤 Activity 누락은
+현재 직접 delivery 제한으로 수용한다.
 
 **Guardrails**
 
 - transaction 인자의 존재 여부로 origin이나 lifecycle 실행 여부를 분기하지 않는다.
-- caller transaction 합류가 필요해지면 delivery를 생략하거나 commit 전에 실행하지 않고 명시적인 post-commit
-  coordination 경계를 먼저 설계한다.
+- caller transaction의 uncommitted Reply는 별도 delivery 조회에서 no-op으로 처리하며 commit 뒤 재실행 누락을
+  수용한다.
 - core Post public contract에 GraphQL·Fedify 타입, callback이나 speculative delivery port를 추가하지 않는다.
 - GraphQL resolver가 Reply Notification이나 Fedify delivery를 직접 조립하지 않는다.
-- 통합 `createPost`와 `deletePost`가 outer commit과 origin별 post-commit lifecycle을 소유한다.
+- 통합 `createPost`와 `deletePost`가 origin별 lifecycle을 소유한다.
 - delivery Promise를 fire-and-forget하지 않고 await한 뒤 실패를 Reply identity와 함께 관측한다.
 - 기존 Reply Notification과 Post 삭제 Notification cleanup의 best-effort lifecycle을 재정의하지 않는다.
 - Reply가 아닌 Post의 생성·삭제에는 이 capability의 activity를 전달하지 않는다.
 
 **Verification**
 
-- transaction rollback에서 delivery가 호출되지 않고 commit 뒤에만 호출되는지 검증한다.
+- transaction rollback에서 Activity가 전달되지 않고 top-level commit 뒤 delivery되는지 검증한다.
 - Create/Delete remote failure에서 GraphQL 성공 payload와 committed DB state가 일치하는지 검증한다.
 - 일반 Post, Repost와 remote-origin Post lifecycle이 Reply delivery를 만들지 않는지 회귀 검증한다.
 
-- [x] 2.1 통합 `createPost`의 Local Reply outer transaction commit 뒤 Notification과 Create delivery를 연결하고 실패를 application 결과와 격리한다.
+- [x] 2.1 통합 `createPost`의 Local Reply Notification을 transaction에 참여시키고 top-level commit 뒤 Create delivery 실패를 application 결과와 격리한다.
 - [x] 2.2 `deletePost`의 Local Reply Tombstone commit 뒤 Delete delivery를 연결하고 실패를 application 결과와 격리한다.
 - [x] 2.3 create/delete rollback, delivery rejection, 반복 삭제와 non-Reply 경계의 API integration 검증을 추가한다.
 

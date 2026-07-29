@@ -5,8 +5,8 @@ signed fetch authorization과 Local/Remote Post URI resolver를 제공한다. Lo
 `inReplyTo`를 포함한 Note로 역참조할 수 있지만, 현재 Local Post 생성·삭제 application flow는 activity를 remote
 inbox로 전달하지 않는다.
 
-Local Reply 생성은 통합 core `createPost` action이 Parent 접근 검증과 가장 바깥 transaction을 함께 소유한다.
-`deletePost()`도 core action이 transaction을 직접 연다. 기존 Remote Follow은 domain
+Local Reply 생성은 통합 core `createPost` action이 Parent 접근 검증을 소유하고 optional caller transaction에
+합류할 수 있다. `deletePost()`도 같은 optional transaction 계약을 유지한다. 기존 Remote Follow은 domain
 transaction이 끝난 뒤 Fedify delivery를 `await`하고, 실패를 catch/log해 committed result와 분리한다. 현재
 federation에는 MessageQueue가 없으므로 `sendActivity()`는 remote HTTP 요청을 직접 수행한다.
 
@@ -17,7 +17,8 @@ federation에는 MessageQueue가 없으므로 `sendActivity()`는 remote HTTP �
 - Local Reply 생성과 삭제를 기존 Fedify delivery 경계에 연결한다.
 - Local Note projection과 Post identity를 복제하지 않고 Create와 Delete에서 재사용한다.
 - visibility, remote Parent Author와 Instance 상태에서 direct recipient를 결정한다.
-- 실제 outer transaction commit 뒤 delivery하고 실패와 committed application 결과를 격리한다.
+- top-level transaction commit 뒤 delivery하고 실패와 committed application 결과를 격리한다. caller transaction은
+  rollback될 Activity를 전달하지 않으며 commit 뒤 누락을 허용한다.
 - 반복 호출에 안정적인 activity identity와 Create/Delete ordering domain을 제공한다.
 
 **Non-Goals:**
@@ -33,8 +34,9 @@ federation에는 MessageQueue가 없으므로 `sendActivity()`는 remote HTTP �
 ### Current Constraints
 
 - `createPost()`는 optional caller transaction 계약을 유지하지만 transaction 인자의 존재 여부로 lifecycle을
-  켜거나 끄지 않는다. caller transaction에서 실제 outer commit 이후 전달까지 보장해야 하는 production 요구가
-  생기면 명시적인 post-commit coordination 경계를 먼저 설계해야 한다.
+  켜거나 끄지 않는다. Reply Notification은 caller transaction에 참여한다. Fedify delivery는 별도 committed-read
+  조회를 사용하므로 uncommitted Reply에서는 no-op이며 rollback될 Activity를 전달하지 않는다. outer commit 뒤
+  재실행하지 않아 생기는 Activity 누락과 commit 뒤 delivery 실패는 PROD-448 전까지 수용한다.
 - 현재 Local Note loader는 Active Post만 제공한다. Reply가 Tombstone이 된 뒤에는 dispatcher를 그대로 호출해
   Delete projection을 만들 수 없다.
 - Create의 embedded Note를 별도로 다시 직렬화하면 object dispatcher의 content, summary, audience와 `inReplyTo`
@@ -46,10 +48,12 @@ federation에는 MessageQueue가 없으므로 `sendActivity()`는 remote HTTP �
 
 ### Recommended Approach
 
-통합 core `createPost` action이 origin별 Parent 정책과 가장 바깥 transaction을 소유하고, Local Reply의 commit된
-ID를 받은 뒤 Notification과 Fedify package의 좁은 Reply Create delivery API를 호출한다. `deletePost()`는 commit
-결과에서 Reply를 판별해 Reply Delete delivery를 호출한다. 두 delivery는 각각 `await`하되 오류를 구조화해 기록하고
-committed domain 결과를 반환한다. GraphQL resolver는 인증된 Profile과 business input만 전달하고 payload를 구성한다.
+통합 core `createPost` action이 origin별 Parent 정책을 소유하고 Reply Notification을 생성 transaction의 nested
+savepoint에 참여시킨다. transaction 단계가 반환된 뒤 Fedify package의 좁은 Reply Create delivery API를 호출한다.
+top-level 호출은 실제 commit 뒤 전달하고 caller transaction은 uncommitted source에서 no-op될 수 있다.
+`deletePost()`는 commit 결과에서 Reply를 판별해 Reply Delete delivery를 호출한다. 두 Fedify delivery는 각각
+`await`하되 오류를 구조화해 기록하고 committed domain 결과를 반환한다. GraphQL resolver는 인증된 Profile과
+business input만 전달하고 payload를 구성한다.
 
 Fedify package에서는 기존 Local Note 조회와 projection을 내부적으로 재사용 가능한 경계로 정리한다. Create는
 commit된 Active Reply에서 object dispatcher와 동일한 Note를 만들고, Delete는 Tombstone row에 남아 있는 Author,
@@ -77,7 +81,8 @@ fragment 없는 Note URI를 사용한다. 이 방법은 별도 activity row나 �
 
 ### Known Traps
 
-- `createPost(..., tx)` 또는 transaction callback 안에서 Fedify를 호출해 rollback될 state를 먼저 전달하지 않는다.
+- caller transaction의 uncommitted Reply는 별도 committed-read delivery 조회에서 no-op으로 처리해 rollback될
+  state를 먼저 전달하지 않는다. outer commit 뒤 delivery가 재실행되지 않는 누락은 허용한다.
 - delivery Promise를 await하지 않는 fire-and-forget으로 바꾸지 않는다. 실패 관측과 process 종료 동작이 더
   불명확해진다.
 - Fedify의 자동 생성 activity ID를 사용하지 않는다. 같은 Reply 재호출이 다른 activity가 된다.
@@ -103,7 +108,7 @@ fragment 없는 Note URI를 사용한다. 이 방법은 별도 activity row나 �
 
 ## Migration Plan
 
-DB schema와 저장 데이터 migration은 없다. OpenSpec Gate 승인 뒤 Fedify projection/delivery와 core post-commit
+DB schema와 저장 데이터 migration은 없다. OpenSpec Gate 승인 뒤 Fedify projection/delivery와 core lifecycle
 wiring을 추가하고 package·core·API integration test를 먼저 통과시킨다. Rollback은 새 core lifecycle wiring과
 Fedify Reply delivery 경계를 제거하면 기존 Local Reply 저장·조회·삭제 동작으로 돌아가며 저장 데이터 변환은
 필요 없다.
