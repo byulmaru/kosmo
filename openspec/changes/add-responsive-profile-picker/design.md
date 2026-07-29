@@ -69,12 +69,13 @@ Web의 시각적 picker wrapper가 viewport bounds, border와 overflow를 소유
 
 full·compact Web picker가 열려도 focus를 강제로 이동하지 않는다. DOM과 브라우저 기본 `Tab` 순서는 trigger,
 profile button, add/create control, full summary link 순으로 구성하고 `Enter`·`Space`는 일반 버튼 동작을 따른다.
+Full Web에서 summary link로 focus가 이동하면 overlay를 닫고 해당 link focus를 유지해 focus indicator를 노출한다.
 긴 목록에서 Tab으로 focus된 profile button은 scroll container의 브라우저 기본 focus scroll로 보이는 영역 안에
 유지한다. `Escape`는 picker를 닫고 trigger로 focus를 복원하며, mobile Web drawer와 native에는 이 Web lifecycle을
 추가하지 않는다.
 
 full·compact Web open 상태에서는 trigger 재실행, trigger와 picker 밖의 pointer interaction, `Escape`, 프로필
-선택 성공을 동일한 close transition으로 모으고 listener를 정리한다. pointer listener는 trigger와 picker
+선택 성공과 Full summary link focus를 동일한 close transition으로 모으고 listener를 정리한다. pointer listener는 trigger와 picker
 containment를 먼저 확인해 trigger press와 close가 중복 실행되지 않게 하며, pointer event의 기본 동작을 막지
 않아 대상의 기본 focus를 따른다. `Escape`로 닫으면 trigger에 focus를 복원한다. 선택·생성 failure는 close
 transition을 실행하지 않으며, full·compact Web의 명시적 close transition은 `open=false`, `creating=false`,
@@ -82,7 +83,7 @@ transition을 실행하지 않으며, full·compact Web의 명시적 close trans
 
 Storybook fixture는 기존 shell query fixture builder 안에서 10개 이상의 typed profile fixture를 제공한다. full과
 compact surface의 trigger·expanded 상태·overlay 위치·navigation 위치 불변·outside dismissal, 기본 `Tab` 순서와
-focus 가시성, 목록과 footer 접근성을 가장 가까운 story에서 검증하고, 기존 선택·생성 interaction과 Web E2E는 회귀
+focus 가시성, Full summary link focus close, 목록과 footer 접근성을 가장 가까운 story에서 검증하고, 기존 선택·생성 interaction과 Web E2E는 회귀
 검증으로 실행한다. 기존 full·mobile story에서는 trigger의 down/up chevron과 이름·icon center가 trigger center보다
 6px 아래에 보이는 geometry를 검증한다. Storybook viewport preset이나 새 test harness는 추가하지 않고
 768·1024·1279·1280·1440px는 browser resize로 직접 확인해 story URL과 관찰 결과를 기록한다.

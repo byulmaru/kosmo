@@ -51,8 +51,9 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
   프로필 행이 보이게 한다. 실제 가시 행 수보다 고정 footer 접근성과 목록 내부 스크롤을 우선한다.
 - full·compact Web picker를 열어도 focus를 강제로 이동하지 않는다. 브라우저의 기본 `Tab` 순서는 trigger,
   프로필 버튼, 새 프로필 추가·생성 control, full summary link 순으로 이어지고 `Enter`·`Space`는 focus된 버튼을
-  실행한다. 긴 목록에서 focus된 프로필 버튼은 목록의 보이는 영역 안에 유지한다. `Escape`는 picker를 닫고
-  trigger로 focus를 복원한다.
+  실행한다. Full Web에서 summary link로 focus가 이동하면 picker를 닫고 해당 link focus를 유지해 focus indicator가
+  overlay에 가려지지 않게 한다. 긴 목록에서 focus된 프로필 버튼은 목록의 보이는 영역 안에 유지한다. `Escape`는
+  picker를 닫고 trigger로 focus를 복원한다.
 - full·compact Web에서 프로필 선택·생성 실패는 picker와 오류를 유지하고 생성 실패는 입력값도 유지한다.
   trigger 재실행, full·compact 바깥 pointer close 또는 `Escape`처럼 사용자가 명시적으로 닫으면 `open=false`,
   `creating=false`, 빈 handle과 오류 없음으로 초기화한다. 바깥 pointer close는 이벤트 기본 동작을 막지 않아

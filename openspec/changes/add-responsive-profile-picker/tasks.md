@@ -32,7 +32,7 @@ Web full sidebar와 compact icon rail에서 각각 자연스러운 trigger와 su
   클릭·`Escape`·선택 성공 dismissal을 검증한다.
 - compact avatar trigger, 본문 위 drawer, layout 폭 보존과 trigger 재실행·바깥 클릭·`Escape`·선택 성공 dismissal을 검증한다.
 - 10개 이상 프로필에서 목록 내부 스크롤, trigger부터 profile button·add action·full summary link까지 기본 `Tab`
-  순서, focus 가시성·`Escape` focus 복원과 고정 add/create footer를 검증한다.
+  순서, Full summary link focus close, focus 가시성·`Escape` focus 복원과 고정 add/create footer를 검증한다.
 - 선택·생성 성공과 실패 상태의 기존 interaction을 검증한다.
 - Storybook browser를 768·1024·1279·1280·1440px로 직접 조절해 surface, stacking과 scroll을 시각 확인한다.
 - full Storybook에서 이름·chevron의 6px 광학 보정과 open 전후 trigger·navigation 위치 불변을 확인한다.
@@ -100,3 +100,6 @@ Web full sidebar와 compact icon rail에서 각각 자연스러운 trigger와 su
       DOM상 trigger와 summary link 사이에 두되 기존 absolute anchor·layout을 유지하고, `Escape` close·trigger focus
       복원·outside dismissal과 mobile Web drawer·native 동작을 보존한다. 관련 Shell Storybook·Web E2E·canonical
       design/OpenSpec 정합성을 검증한다.
+- [x] 1.14 코드 리뷰에 따라 Full Web에서 기본 `Tab` 순서로 summary link가 focus되면 picker를 닫고 link focus를
+      유지해 focus indicator가 overlay에 가려지지 않게 한다. 기존 Full Shell Storybook에서 focus close와 trigger
+      expanded 상태를 검증하고 compact·mobile Web drawer·native 및 overlay anchor·navigation geometry를 유지한다.

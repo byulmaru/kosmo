@@ -246,10 +246,9 @@ export const ResponsiveProfilePickerFull: Story = {
     expect(footerAction).toHaveFocus();
     await userEvent.tab();
     expect(followingLink).toHaveFocus();
-
-    await userEvent.click(trigger);
+    await waitFor(() => expect(canvas.queryByLabelText('프로필 전환')).toBeNull());
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
-    expect(canvas.queryByLabelText('프로필 전환')).toBeNull();
+    expect(followingLink).toHaveFocus();
 
     await userEvent.click(trigger);
     await canvas.findByLabelText('프로필 전환');

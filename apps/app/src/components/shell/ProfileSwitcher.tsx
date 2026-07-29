@@ -454,6 +454,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
         <Link asChild href={`/${active.relativeHandle}/following`}>
           <Pressable
             accessibilityRole="link"
+            onFocus={fullWeb && open ? dismissPicker : undefined}
             onPress={fullWeb && open ? dismissPicker : undefined}
             style={styles.countLink}
           >
@@ -466,6 +467,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
         <Link asChild href={`/${active.relativeHandle}/followers`}>
           <Pressable
             accessibilityRole="link"
+            onFocus={fullWeb && open ? dismissPicker : undefined}
             onPress={fullWeb && open ? dismissPicker : undefined}
             style={styles.countLink}
           >

@@ -25,11 +25,12 @@
 
 #### Scenario: Dismiss the full picker
 
-- **WHEN** full sidebar profile picker가 열린 상태에서 사용자가 같은 프로필 이름 trigger를 다시 실행하거나 바깥을 클릭하거나 `Escape`를 누르거나 프로필 선택을 성공한다
+- **WHEN** full sidebar profile picker가 열린 상태에서 사용자가 같은 프로필 이름 trigger를 다시 실행하거나 바깥을 클릭하거나 `Escape`를 누르거나 프로필 선택을 성공하거나 summary link로 focus를 이동한다
 - **THEN** 시스템은 overlay picker를 닫는다
 - **AND** trigger는 닫힌 accessibility `expanded` 상태와 아래 방향 chevron을 표시한다
 - **AND** 바깥 pointer close이면 시스템은 pointer event의 기본 동작을 막지 않아 pointer 대상의 기본 focus를 따른다
-- **AND** trigger 재실행, 바깥 pointer close 또는 `Escape`의 명시적 close이면 `open=false`, `creating=false`, 빈 handle과 오류 없음으로 초기화한다
+- **AND** summary link focus close이면 시스템은 해당 link focus를 유지해 focus indicator를 노출한다
+- **AND** trigger 재실행, 바깥 pointer close, `Escape` 또는 summary link focus의 명시적 close이면 `open=false`, `creating=false`, 빈 handle과 오류 없음으로 초기화한다
 
 #### Scenario: Open the compact picker beside the icon rail
 
@@ -78,6 +79,7 @@
 - **WHEN** 사용자가 full 또는 compact Web profile picker를 연다
 - **THEN** 시스템은 picker 안으로 focus를 강제로 이동하지 않는다
 - **AND** `Tab`은 trigger, 프로필 버튼, 새 프로필 추가·생성 control, full summary link 순으로 이동한다
+- **AND** Full Web에서 summary link가 focus되면 시스템은 overlay picker를 닫고 해당 link focus를 유지한다
 - **AND** `Enter`·`Space`는 focus된 프로필 또는 추가 버튼을 실행한다
 - **AND** focus된 프로필 항목을 목록의 보이는 영역 안에 유지한다
 - **AND** `Escape`는 picker를 닫고 해당 trigger로 focus를 복원한다

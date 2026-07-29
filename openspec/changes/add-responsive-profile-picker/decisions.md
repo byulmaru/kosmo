@@ -99,15 +99,16 @@
   오는 DOM 순서 때문에 비모달 picker의 자연스러운 keyboard 흐름도 깨진다.
 - Decision Outcome: full·compact Web profile option과 add action은 일반 `Pressable` 버튼을 사용한다. open 시
   focus를 강제로 옮기지 않고 DOM을 trigger, profile button, add/create control, full summary link 순서로 구성해
-  브라우저 기본 `Tab`·`Enter`·`Space` 동작을 사용한다. `Escape` close와 trigger focus 복원, 바깥 pointer close는
-  유지하며 완전한 menu keyboard model은 `PROD-213`에 남긴다.
+  브라우저 기본 `Tab`·`Enter`·`Space` 동작을 사용한다. Full Web에서 summary link로 focus가 이동하면 overlay를
+  닫고 해당 link focus를 유지해 focus indicator를 노출한다. `Escape` close와 trigger focus 복원, 바깥 pointer
+  close는 유지하며 완전한 menu keyboard model은 `PROD-213`에 남긴다.
 - Alternatives Considered: 기존 custom menu model을 유지하면 이 component가 공용 Dropdown keyboard behavior를
   중복 소유한다. focus trap은 compact 비모달 계약과 충돌한다.
 - Consequences: `menuRef`, item DOM query, 초기 focus, 방향키 handler, roving `tabIndex`와 관련 test를 제거한다.
   full picker는 시각적 absolute anchor를 유지하면서 DOM상 trigger와 summary link 사이에 둔다. mobile Web drawer와
   native 동작은 바꾸지 않는다.
 - Confirmation / Follow-up: 10개 이상 typed fixture에서 trigger부터 profile button·add action·full summary link까지
-  기본 `Tab` 순서, 긴 목록 focus 가시성, `Escape` focus 복원을 검증한다.
+  기본 `Tab` 순서, Full summary link focus close, 긴 목록 focus 가시성, `Escape` focus 복원을 검증한다.
 
 ### Compact overlay는 현재 shell hierarchy의 absolute layer를 사용한다
 
