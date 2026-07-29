@@ -56,7 +56,7 @@ Local Profile과 Remote Profile은 Profile Origin 상태 차원으로 구분한�
 | Instance            | [Instance](./instance.md)                                     | Profile -> Instance            | 1 -> 1      | 항상             | Profile 조회 정책 통과 | 없음                                      |
 | avatar Media        | [Media](./media.md)                                           | Profile -> Media               | 1 -> 0..1   | 설정된 경우      | Profile 조회 정책 통과 | 없음                                      |
 | header Media        | [Media](./media.md)                                           | Profile -> Media               | 1 -> 0..1   | 설정된 경우      | Profile 조회 정책 통과 | 없음                                      |
-| Profile Tag         | [Hashtag](./hashtag.md)                                       | Profile -> Hashtag             | 1 -> 0..5   | 설정된 경우      | Profile 조회 정책 통과 | 없음                                      |
+| Profile Tag         | [Hashtag](./hashtag.md)                                       | Profile -> Hashtag             | 1 -> 0..N   | 설정된 경우      | Profile 조회 정책 통과 | 없음                                      |
 | 작성 Post           | [Post](./post.md)                                             | Profile <- Post                | 1 -> 0..N   | Post가 존재할 때 | 각 Post 조회 정책 통과 | 없음                                      |
 | Follow Relationship | [Follow Relationship](./follow-relationship.md)               | Profile <- Follow Relationship | 1 -> 0..N   | 관계가 존재할 때 | 관계 당사자            | `Follow.Participant`                      |
 | Follow Request      | [Follow Request](./follow-request.md)                         | Profile <- Follow Request      | 1 -> 0..N   | 요청이 존재할 때 | 요청 당사자            | `FollowRequest.Participant`               |
@@ -68,7 +68,7 @@ Local Profile과 Remote Profile은 Profile Origin 상태 차원으로 구분한�
 | Local Profile 생성  | Account        | Profile   | handle, 선택적 표시 이름, Follow Approval Policy                              | `Account.Active`                     | 같은 Local handle이 없다                                                                     | Origin=Local, Lifecycle=Active, Suspension=Normal인 Profile이 현재 Local Instance와 연결되고 Owner Membership이 생성된다. 표시 이름은 입력값이 없으면 handle이 되며 표시/qualified handle은 handle과 Instance에서 파생한다 |
 | Remote Profile 등록 | 시스템         | Profile   | Instance, 원격 표현 속성, Follow Approval Policy                              | `System.RemoteProfileSource`         | Instance Type이 Remote이고 새 원격 요청 허용 상태이며 입력 qualified handle의 Profile이 없다 | Origin=Remote, Lifecycle=Active, Suspension=Normal인 Profile이 입력 Instance와 연결되고 원격 표현 속성/Policy가 생성된다                                                                                                   |
 | Remote Profile 갱신 | 시스템         | Profile   | 원격 표현 속성, Follow Approval Policy                                        | `System.RemoteProfileSource`         | 대상 Origin이 Remote이고 Lifecycle State가 Deleted가 아니다                                  | 원격 표현 속성과 Policy가 바뀌며 Lifecycle/Suspension State는 유지된다                                                                                                                                                     |
-| Profile 편집        | Account        | Profile   | 표시 이름, bio, avatar/header, 링크, Follow Approval Policy, Profile Tag 목록 | `Account.Active`, `Profile.Owner`    | Origin이 Local이고 Lifecycle State가 Deleted가 아니며 Suspension State가 Normal이다          | Profile 표현 속성, Policy, 선택된 Media 관계와 순서 있는 Profile Tag 목록이 원자적으로 바뀐다                                                                                                                              |
+| Profile 편집        | Account        | Profile   | 표시 이름, bio, avatar/header, 링크, Follow Approval Policy, Profile Tag 목록 | `Account.Active`, `Profile.Owner`    | Origin이 Local이고 Lifecycle State가 Deleted가 아니며 Suspension State가 Normal이다          | Profile 표현 속성, Policy, 선택된 Media 관계와 Profile Tag 목록이 원자적으로 바뀐다                                                                                                                                        |
 | Profile 비활성화    | Account        | Profile   | 없음                                                                          | `Account.Active`, `Profile.Owner`    | Origin이 Local이고 Lifecycle State가 Active이며 Suspension State가 Normal이다                | Lifecycle State가 Deactivated가 된다                                                                                                                                                                                       |
 | Profile 재활성화    | Account        | Profile   | 없음                                                                          | `Account.Active`, `Profile.Owner`    | Origin이 Local이고 Lifecycle State가 Deactivated이며 Suspension State가 Normal이다           | Lifecycle State가 Active가 된다                                                                                                                                                                                            |
 | Profile 삭제        | Account        | Profile   | 없음                                                                          | `Account.Active`, `Profile.Owner`    | Origin이 Local이고 Lifecycle State가 Deactivated이며 Suspension State가 Normal이다           | Lifecycle State가 Deleted가 되고 Profile Tag 관계가 제거되며 다른 Post 또는 Profile의 Hashtag 참조는 유지된다                                                                                                              |
@@ -78,10 +78,11 @@ Local Profile과 Remote Profile은 Profile Origin 상태 차원으로 구분한�
 Profile Origin은 연결된 Instance Type과 같아야 한다. Follow Approval Policy 변경은 이미 존재하는 Pending Follow
 Request의 상태나 존재를 바꾸지 않는다.
 
-Profile Tag는 Profile이 [Hashtag](./hashtag.md)를 참조하는 순서 있는 구조화 관계다. bio에서 파생하지 않으며
-입력 순서를 보존한다. 한 Profile은 최대 5개를 가질 수 있고, 정규화한 Hashtag Name이 중복된 목록은 거부한다.
-Profile 비활성화와 정지는 관계를 보존하지만 공개 조회에서는 Profile과 함께 숨긴다. Profile 삭제는 Profile Tag
-관계를 제거하며, 다른 Post 또는 Profile이 참조하는 Hashtag에는 영향을 주지 않는다.
+Profile Tag는 Profile이 [Hashtag](./hashtag.md)를 참조하는 구조화 관계다. bio에서 파생하지 않으며 관계·API·공개
+노출에서 순서를 보장하지 않는다. 제품상 Profile Tag 개수 상한은 두지 않는다. Profile 편집 입력은 각 이름을
+[Hashtag](./hashtag.md)의 canonical Hashtag identity로 먼저 해석·생성한 뒤, 동일 Hashtag identity를 둘 이상
+참조하는 목록은 거부한다. Profile 비활성화와 정지는 관계를 보존하지만 공개 조회에서는 Profile과 함께 숨긴다.
+Profile 삭제는 Profile Tag 관계를 제거하며, 다른 Post 또는 Profile이 참조하는 Hashtag에는 영향을 주지 않는다.
 
 ## 권한
 
