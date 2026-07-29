@@ -153,12 +153,45 @@ test('validation 실패는 scalar와 기존 tags를 함께 보존한다', async 
   );
 });
 
-test('Member는 거부되고 관계없는 Account와 Remote/비활성 Profile은 조회 경계를 따른다', async () => {
+test('Deactivated Local Profile은 Owner가 tags를 보존·교체하며 수정한다', async () => {
+  const deactivated = await createProfileFixture({ profileState: ProfileState.DISABLED });
+
+  await updateProfile({
+    accountId: deactivated.account.id,
+    profileId: deactivated.profile.id,
+    tags: ['before', 'preserved'],
+  });
+  const scalarUpdated = await updateProfile({
+    accountId: deactivated.account.id,
+    profileId: deactivated.profile.id,
+    displayName: 'Changed while deactivated',
+  });
+
+  assert.equal(scalarUpdated.state, ProfileState.DISABLED);
+  assert.equal(scalarUpdated.displayName, 'Changed while deactivated');
+  assert.deepEqual(
+    (await readTags(deactivated.profile.id)).map(({ name }) => name),
+    ['before', 'preserved'],
+  );
+
+  await updateProfile({
+    accountId: deactivated.account.id,
+    profileId: deactivated.profile.id,
+    tags: ['replacement'],
+  });
+  assert.deepEqual(
+    (await readTags(deactivated.profile.id)).map(({ name }) => name),
+    ['replacement'],
+  );
+});
+
+test('Member와 inactive Account는 거부되고 관계없는 Account와 Remote/Suspended Profile은 조회 경계를 따른다', async () => {
   const owner = await createProfileFixture();
   const member = await createProfileFixture({ role: AccountProfileRole.MEMBER });
   const unrelated = await createProfileFixture();
   const remote = await createProfileFixture({ instanceKind: InstanceKind.ACTIVITYPUB });
-  const disabled = await createProfileFixture({ profileState: ProfileState.DISABLED });
+  const suspended = await createProfileFixture({ profileState: ProfileState.SUSPENDED });
+  const inactiveAccount = await createProfileFixture({ accountState: AccountState.DISABLED });
 
   await assert.rejects(
     updateProfile({ accountId: member.account.id, profileId: member.profile.id, tags: ['member'] }),
@@ -178,9 +211,17 @@ test('Member는 거부되고 관계없는 Account와 Remote/비활성 Profile은
   );
   await assert.rejects(
     updateProfile({
-      accountId: disabled.account.id,
-      profileId: disabled.profile.id,
-      tags: ['disabled'],
+      accountId: suspended.account.id,
+      profileId: suspended.profile.id,
+      tags: ['suspended'],
+    }),
+    NotFoundError,
+  );
+  await assert.rejects(
+    updateProfile({
+      accountId: inactiveAccount.account.id,
+      profileId: inactiveAccount.profile.id,
+      tags: ['inactive_account'],
     }),
     NotFoundError,
   );

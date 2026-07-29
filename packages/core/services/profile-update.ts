@@ -60,7 +60,7 @@ export const updateProfile = async (input: UpdateProfileInput, tx?: Transaction)
           eq(AccountProfiles.accountId, input.accountId),
           eq(Accounts.state, AccountState.ACTIVE),
           eq(Instances.kind, InstanceKind.LOCAL),
-          eq(Profiles.state, ProfileState.ACTIVE),
+          inArray(Profiles.state, [ProfileState.ACTIVE, ProfileState.DISABLED]),
           ne(Instances.state, InstanceState.SUSPENDED),
         ),
       )
@@ -85,7 +85,12 @@ export const updateProfile = async (input: UpdateProfileInput, tx?: Transaction)
         bio: input.bio === undefined ? profile.profile.bio : input.bio,
         followPolicy: input.followPolicy ?? profile.profile.followPolicy,
       })
-      .where(and(eq(Profiles.id, input.profileId), eq(Profiles.state, ProfileState.ACTIVE)))
+      .where(
+        and(
+          eq(Profiles.id, input.profileId),
+          inArray(Profiles.state, [ProfileState.ACTIVE, ProfileState.DISABLED]),
+        ),
+      )
       .returning()
       .then(first);
 
