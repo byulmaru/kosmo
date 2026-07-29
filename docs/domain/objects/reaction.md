@@ -89,6 +89,9 @@ Reaction 삭제는 입력한 Post와 Reaction Type에서 행동 주체 Profile�
 - Remote Post Author의 Profile과 Instance가 available하고 Instance State가 `Active`일 때만 delivery를
   시도한다. `Unresponsive` 대상에는 현재 상태를 유지한 채 delivery를 시도하지 않으며 `Suspended` 대상은
   기존 Post 조회 정책에 따라 Reaction 추가 대상이 아니다.
+- FOLLOWERS Remote Post의 새 `Like` 또는 `EmojiReact`는 delivery 시점에도 행동 주체가 Post Author를 Follow할
+  때만 전달한다. 이전에 전달된 Reaction을 실제 삭제하는 `Undo`는 그 사이 Follow 관계가 사라져도 원격 상태를
+  철회하기 위해 전달한다.
 - 같은 Profile/Post/Type의 멱등 추가는 기존 Reaction을 유지하고 새 activity delivery를 만들지 않는다.
   Reaction이 실제 제거된 경우에만 원본 `Like` 또는 `EmojiReact`를 내장한 `Undo`를 전달한다. `Undo` URI는
   원본 activity URI에 `#undo`를 결합하고, 원본 activity URI를 생성과 취소 delivery의 같은 ordering key로

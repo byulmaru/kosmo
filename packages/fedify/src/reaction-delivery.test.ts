@@ -31,6 +31,7 @@ let Instances: typeof CoreDb.Instances;
 let localInstanceId: string;
 let pg: typeof CoreDb.pg;
 let Posts: typeof CoreDb.Posts;
+let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
 let Reactions: typeof CoreDb.Reactions;
 let sendReaction: typeof ReactionDelivery.sendReaction;
@@ -49,6 +50,7 @@ describe('Reaction delivery', () => {
       Instances,
       pg,
       Posts,
+      ProfileFollows,
       Profiles,
       Reactions,
     } = await import('@kosmo/core/db'));
@@ -215,6 +217,34 @@ describe('Reaction delivery', () => {
     );
   });
 
+  test('FOLLOWERS Post는 create의 최신 접근만 확인하고 Undo 철회는 유지한다', async () => {
+    const target = await createDeliveryFixture({ visibility: PostVisibility.FOLLOWERS });
+    const context = createContextFixture();
+    mock.method(federation, 'createContext', () => context.context);
+    const reaction = await createReaction(target, '❤️');
+
+    await sendReaction(reaction);
+    assert.equal(context.calls.length, 0);
+
+    const relation = await db
+      .insert(ProfileFollows)
+      .values({
+        followeeProfileId: target.authorProfileId,
+        followerProfileId: target.senderProfileId,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await sendReaction(reaction);
+    assert.equal(context.calls.length, 1);
+
+    await db.delete(ProfileFollows).where(eq(ProfileFollows.id, relation.id));
+    await sendReaction(reaction);
+    await sendReactionUndo(reaction);
+
+    assert.equal(context.calls.length, 2);
+    assert.ok(context.calls[1]?.activity instanceof Undo);
+  });
+
   test('unsupported Type과 없거나 malformed인 저장 projection은 전송하지 않는다', async () => {
     const context = createContextFixture();
     mock.method(federation, 'createContext', () => context.context);
@@ -256,6 +286,7 @@ describe('Reaction delivery', () => {
 
 type DeliveryFixture = {
   readonly actorUri: string;
+  readonly authorProfileId: string;
   readonly inboxUri: string | null;
   readonly objectUri: string;
   readonly postId: string;
@@ -267,10 +298,12 @@ const createDeliveryFixture = async ({
   inboxUri,
   objectUri,
   senderInstanceId = localInstanceId,
+  visibility = PostVisibility.PUBLIC,
 }: {
   inboxUri?: string | null;
   objectUri?: string;
   senderInstanceId?: string;
+  visibility?: PostVisibility;
 } = {}): Promise<DeliveryFixture> => {
   const suffix = crypto.randomUUID();
   const sender = await db
@@ -323,7 +356,7 @@ const createDeliveryFixture = async ({
     .values({
       profileId: author.id,
       state: PostState.ACTIVE,
-      visibility: PostVisibility.PUBLIC,
+      visibility,
     })
     .returning()
     .then(firstOrThrow);
@@ -336,6 +369,7 @@ const createDeliveryFixture = async ({
 
   return {
     actorUri,
+    authorProfileId: author.id,
     inboxUri: resolvedInboxUri,
     objectUri: resolvedObjectUri,
     postId: post.id,

@@ -6,11 +6,18 @@ import {
   first,
   Instances,
   Posts,
+  ProfileFollows,
   Profiles,
 } from '@kosmo/core/db';
-import { InstanceKind, InstanceState, PostState, ProfileState } from '@kosmo/core/enums';
+import {
+  InstanceKind,
+  InstanceState,
+  PostState,
+  PostVisibility,
+  ProfileState,
+} from '@kosmo/core/enums';
 import { reactionTypeSchema } from '@kosmo/core/validation';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { federation } from './federation';
 import { ensureDrizzleLocalProfileActor } from './local-actor-store';
@@ -57,6 +64,7 @@ const toSenderKeys = (actorUri: URL, keyPairs: readonly CryptoKeyPair[]): Sender
 
 const loadReactionProjection = async (
   reaction: OutboundReaction,
+  activity: 'REACTION' | 'UNDO',
 ): Promise<ReactionProjection | undefined> => {
   const row = await db
     .select({
@@ -78,9 +86,27 @@ const loadReactionProjection = async (
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
     .innerJoin(SenderProfiles, eq(SenderProfiles.id, reaction.profileId))
     .innerJoin(SenderInstances, eq(SenderInstances.id, SenderProfiles.instanceId))
+    .leftJoin(
+      ProfileFollows,
+      and(
+        eq(ProfileFollows.followerProfileId, reaction.profileId),
+        eq(ProfileFollows.followeeProfileId, Posts.profileId),
+      ),
+    )
     .leftJoin(ActivityPubPosts, eq(ActivityPubPosts.postId, Posts.id))
     .leftJoin(TargetActors, eq(TargetActors.profileId, Profiles.id))
-    .where(and(eq(Posts.id, reaction.postId), eq(Posts.state, PostState.ACTIVE)))
+    .where(
+      and(
+        eq(Posts.id, reaction.postId),
+        eq(Posts.state, PostState.ACTIVE),
+        activity === 'REACTION'
+          ? or(
+              inArray(Posts.visibility, [PostVisibility.PUBLIC, PostVisibility.UNLISTED]),
+              and(eq(Posts.visibility, PostVisibility.FOLLOWERS), isNotNull(ProfileFollows.id)),
+            )
+          : undefined,
+      ),
+    )
     .limit(1)
     .then(first);
 
@@ -152,7 +178,7 @@ const createReactionActivity = (projection: ReactionProjection) => {
 };
 
 export const sendReaction = async (reaction: OutboundReaction): Promise<void> => {
-  const projection = await loadReactionProjection(reaction);
+  const projection = await loadReactionProjection(reaction, 'REACTION');
   if (!projection) {
     return;
   }
@@ -167,7 +193,7 @@ export const sendReaction = async (reaction: OutboundReaction): Promise<void> =>
 };
 
 export const sendReactionUndo = async (reaction: OutboundReaction): Promise<void> => {
-  const projection = await loadReactionProjection(reaction);
+  const projection = await loadReactionProjection(reaction, 'UNDO');
   if (!projection) {
     return;
   }

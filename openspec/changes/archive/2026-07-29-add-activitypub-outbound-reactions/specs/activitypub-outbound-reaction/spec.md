@@ -72,6 +72,12 @@ fan-out하지 않아야 한다(MUST NOT).
 - **WHEN** 대상 Remote Post Author의 Instance가 Unresponsive이거나 기존 Post 조회 정책상 unavailable하다
 - **THEN** 시스템은 outbound Reaction delivery를 시도하지 않고 application의 committed Reaction 결과를 유지한다
 
+#### Scenario: FOLLOWERS Post 접근이 delivery 전에 사라진다
+
+- **WHEN** FOLLOWERS Remote Post의 Reaction 생성은 commit됐지만 delivery 전에 행동 주체의 Follow 관계가 사라진다
+- **THEN** 시스템은 새 `Like` 또는 `EmojiReact`를 전달하지 않고 committed Reaction 결과를 유지한다
+- **THEN** 이전에 전달된 Reaction을 실제 삭제한 `Undo`는 원격 상태를 철회하기 위해 전달한다
+
 ### Requirement: 실제 lifecycle 변화에만 activity와 exact Undo를 전달한다
 
 **Authority / Provenance:** `docs/domain/objects/reaction.md`, PROD-499. 시스템은 실제 Reaction lifecycle 변화에만 activity를 전달해야 한다(MUST). Reaction이 실제 생성된 경우에만 원본 `Like` 또는 `EmojiReact`를 전달하고, 실제 삭제된 경우에만 삭제한
