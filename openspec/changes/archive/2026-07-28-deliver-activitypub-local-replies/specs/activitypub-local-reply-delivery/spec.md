@@ -88,13 +88,12 @@ Remote Parent의 ActivityPub Post identity를 `inReplyTo`로 제공해야 한다
 
 ### Requirement: Post-commit delivery failure isolation
 
-**Authority / Provenance:** `docs/architecture/core-services.md`, PROD-447, PROD-497. 시스템은 Reply domain transaction이 commit된 뒤 기존 Fedify 경계로 activity를 직접 전달해야 한다(MUST).
+**Authority / Provenance:** `docs/architecture/core-services.md`, PROD-447, PROD-497. 시스템은 top-level Reply domain transaction이 commit된 뒤 기존 Fedify 경계로 activity를 직접 전달해야 한다(MUST).
 Delivery 실패는 관측 가능하게 기록하되 이미 commit된 Reply 생성·삭제 또는 application 성공 결과를 실패로
 바꾸거나 rollback해서는 안 된다(MUST NOT).
 
-통합 core `createPost`·`deletePost` action은 outer transaction과 origin별 post-commit Reply lifecycle을 소유해야
-하며(MUST), 별도 Local Post action이나 GraphQL resolver가 Reply Notification 또는 Fedify delivery를 직접
-조립해서는 안 된다(MUST NOT).
+통합 core `createPost`·`deletePost` action은 origin별 Reply lifecycle을 소유해야 하며(MUST), 별도 Local Post
+action이나 GraphQL resolver가 Reply Notification 또는 Fedify delivery를 직접 조립해서는 안 된다(MUST NOT).
 
 #### Scenario: Create delivery 실패
 
@@ -115,18 +114,25 @@ Delivery 실패는 관측 가능하게 기록하되 이미 commit된 Reply 생�
 - **WHEN** Local Reply 생성 또는 삭제 transaction이 rollback된다
 - **THEN** 시스템은 해당 state transition의 Create 또는 Delete activity를 전달하지 않는다
 
+#### Scenario: caller transaction commit 뒤 Activity 누락
+
+- **WHEN** Local Reply action이 caller transaction에 합류하고 outer commit 전에 direct delivery 조회가 uncommitted Reply를 찾지 못한다
+- **THEN** 시스템은 rollback될 수 있는 Reply의 Activity를 전달하지 않는다
+- **AND** outer transaction이 commit된 뒤 Activity를 재실행하지 않아 발생하는 전달 누락은 PROD-448 전까지 수용한다
+- **AND** Reply Notification은 caller transaction에 참여해 commit과 rollback을 함께 따른다
+
 #### Scenario: GraphQL entry의 책임
 
 - **WHEN** GraphQL mutation이 Local Reply를 생성하거나 삭제한다
 - **THEN** resolver는 인증된 Profile과 business input을 통합 `createPost` 또는 `deletePost`에 전달한다
-- **AND** 통합 core production 기본 경로가 commit 뒤 Reply Notification과 Create 또는 Delete delivery를 실행한다
+- **AND** 통합 core production 기본 경로가 Reply Notification을 transaction에 참여시키고 top-level commit 뒤 Create 또는 Delete delivery를 실행한다
 - **AND** resolver는 Notification 또는 Fedify lifecycle 함수를 직접 호출하지 않는다
 
 #### Scenario: Transaction 구성은 lifecycle 의미를 바꾸지 않는다
 
 - **WHEN** Post 생성 action의 transaction 구성 방식이 달라진다
 - **THEN** transaction 인자의 존재 여부로 Reply lifecycle 실행 여부를 결정하지 않는다
-- **AND** caller transaction 합류가 필요하면 commit 이후 전달을 보장하는 명시적 coordination 경계를 먼저 정의한다
+- **AND** caller transaction에서는 rollback될 Activity를 전달하지 않고 commit 뒤 전달 누락을 현재 제한으로 수용한다
 
 ### Requirement: 현재 직접 delivery 제한
 
