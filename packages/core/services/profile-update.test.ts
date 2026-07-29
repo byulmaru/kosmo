@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import {
   AccountProfiles,
   Accounts,
@@ -262,6 +262,38 @@ test('동시 replacement는 중간 목록 없이 한 요청의 전체 목록으�
     names.join(',') === first.sort().join(',') || names.join(',') === second.sort().join(','),
     `unexpected concurrent result: ${names.join(',')}`,
   );
+});
+
+test('서로 다른 Profile의 같은 tags 역순 동시 update가 모두 성공한다', async () => {
+  const first = await createProfileFixture();
+  const second = await createProfileFixture();
+  const suffix = crypto.randomUUID().replaceAll('-', '').slice(0, 8);
+  const firstTag = `tag_${suffix}a`;
+  const secondTag = `tag_${suffix}b`;
+
+  assert.deepEqual(
+    await db
+      .select({ name: Hashtags.name })
+      .from(Hashtags)
+      .where(inArray(Hashtags.name, [firstTag, secondTag])),
+    [],
+  );
+
+  await Promise.all([
+    updateProfile({
+      accountId: first.account.id,
+      profileId: first.profile.id,
+      tags: [firstTag, secondTag],
+    }),
+    updateProfile({
+      accountId: second.account.id,
+      profileId: second.profile.id,
+      tags: [secondTag, firstTag],
+    }),
+  ]);
+
+  assert.deepEqual(await readTags(first.profile.id), [firstTag, secondTag].sort());
+  assert.deepEqual(await readTags(second.profile.id), [firstTag, secondTag].sort());
 });
 
 test('동시 partial scalar update는 서로 다른 필드를 모두 보존한다', async () => {

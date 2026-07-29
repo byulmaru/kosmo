@@ -772,6 +772,43 @@ describe('GraphQL remote profile boundary', () => {
     assert.deepEqual(cleared.data?.updateProfile.profile.tags, []);
   });
 
+  test('canonical duplicate tags validation preserves existing scalar and tags', async () => {
+    const auth = await createAuthenticatedSession();
+    const existingTag = `existing_${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
+    const seeded = await requestGraphQL(
+      `mutation SeedProfile($tag: String!) {
+        updateProfile(input: { displayName: "Before", tags: [$tag] }) {
+          profile { displayName tags }
+        }
+      }`,
+      { tag: existingTag },
+      auth.token,
+    );
+    assertNoGraphQLErrors(seeded);
+
+    const invalid = await requestGraphQL(
+      `mutation RejectCanonicalDuplicateTags($tags: [String!]!) {
+        updateProfile(input: { displayName: "Should not commit", tags: $tags }) {
+          profile { displayName tags }
+        }
+      }`,
+      { tags: ['Straße', 'strasse'] },
+      auth.token,
+    );
+
+    assert.equal(invalid.data, null);
+    assert.equal(invalid.errors?.[0]?.extensions?.code, 'VALIDATION');
+    assert.equal(invalid.errors?.[0]?.extensions?.field, 'tags.1');
+
+    const persisted = await db
+      .select({ displayName: Profiles.displayName })
+      .from(Profiles)
+      .where(eq(Profiles.id, auth.profile.id))
+      .then(firstOrThrow);
+    assert.equal(persisted.displayName, 'Before');
+    assert.deepEqual(await readProfileTags(auth.profile.id), [existingTag]);
+  });
+
   test('returns empty tags for a Remote Profile without fetching remote metadata', async () => {
     const remoteInstance = await createRemoteInstance({ domain: 'tagged.remote.example' });
     const remote = await createProfile({ handle: 'tagged-remote', instanceId: remoteInstance.id });
@@ -2644,7 +2681,7 @@ describe('GraphQL remote profile boundary', () => {
 });
 
 type GraphQLErrorResult = {
-  extensions?: { code?: string };
+  extensions?: { code?: string; field?: string };
   message: string;
 };
 

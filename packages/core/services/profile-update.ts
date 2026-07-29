@@ -95,7 +95,7 @@ export const updateProfile = async (input: UpdateProfileInput, tx?: Transaction)
       if (normalizedTags.length > 0) {
         await tx
           .insert(Hashtags)
-          .values(normalizedTags.map((name) => ({ name })))
+          .values(normalizedTags.toSorted().map((name) => ({ name })))
           .onConflictDoNothing({ target: Hashtags.name });
 
         const hashtags = await tx
