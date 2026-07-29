@@ -44,11 +44,6 @@
 - **AND** tags가 생략되거나 `null`이면 기존 Profile Tag 관계와 순서를 유지한다
 - **AND** mutation은 `UpdateProfilePayload.profile`로 갱신된 `Profile`과 저장 순서의 tags를 반환한다
 
-#### Scenario: Update a deactivated profile as owner
-
-- **WHEN** Active Account의 프로필 `OWNER`가 Lifecycle State가 `Deactivated`이고 Suspension State가 `Normal`인 Local Profile 수정을 요청한다
-- **THEN** 시스템은 제공된 Profile 값과 Profile Tag 목록을 같은 transaction에서 갱신한다
-
 #### Scenario: Clear Profile Tags as owner
 
 - **WHEN** Active Account의 `OWNER`가 Lifecycle State가 `Deleted`가 아니고 Suspension State가 `Normal`인 Local Profile(Deactivated Profile 포함)에 tags 빈 목록을 명시해 수정을 요청한다

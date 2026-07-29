@@ -98,7 +98,6 @@
 - **WHEN** Profile delete action이 Lifecycle State를 `Deactivated`에서 `Deleted`로 전이한다
 - **THEN** service/lifecycle transaction은 삭제된 Profile의 `profile_hashtag` 관계를 명시적으로 제거한다
 - **AND** canonical Hashtag identity와 다른 Post 또는 Profile의 관계는 유지한다
-- **AND** 이 invariant는 물리 Profile row 삭제 시 FK cascade safety test와 별도로 검증한다
 
 #### Scenario: Do not expose Remote Profile Tags
 

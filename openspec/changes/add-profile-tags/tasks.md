@@ -34,8 +34,9 @@ Local Profile Owner가 승인된 Profile Tag 목록을 다른 Profile 값과 원
 - [ ] 1.1 승인된 Unicode normalization과 Profile Tag 목록 validation을 구현하고 경계·동등성·중복 unit test를 추가한다.
 - [ ] 1.2 canonical Hashtag identity와 순서 있는 Profile 관계의 additive schema·migration을 구현하고 fresh/upgrade·제약·생명주기 migration test를 추가한다.
 - [ ] 1.3 Active Account Owner·Local·editable 조건(Lifecycle != `Deleted`, Suspension `Normal`)을 검증하면서 Profile 값과 전체 Tag 목록을 원자적으로 교체하는 service 동작을 구현하고 성공·Deactivated 허용·Deleted/Suspended/Remote/non-Owner/inactive Account 거부·rollback·동시성 DB test를 추가한다.
-- [ ] 1.4 GraphQL `Profile.tags`와 optional update input·payload를 구현하고 저장 순서 batch 조회, 입력 의미, Local/Remote visibility와 기존 update 호환성 integration test를 추가한다.
-- [ ] 1.5 `@kosmo/core`·`@kosmo/api` 필수 검증과 schema 동기화를 통과시키고 `PROD-526` PR에 migration·권한·transaction·query-count 증거를 기록한다.
+- [ ] 1.4 Profile Lifecycle이 `Deactivated`에서 `Deleted`로 전이될 때 service/lifecycle transaction에서 해당 Profile의 `profile_hashtag` 관계만 제거하고 canonical Hashtag row/다른 Profile·Post 관계는 보존하며, 물리 FK cascade와 독립된 integration test로 검증한다.
+- [ ] 1.5 GraphQL `Profile.tags`와 optional update input·payload를 구현하고 저장 순서 batch 조회, 입력 의미, Local/Remote visibility와 기존 update 호환성 integration test를 추가한다.
+- [ ] 1.6 `@kosmo/core`·`@kosmo/api` 필수 검증과 schema 동기화를 통과시키고 `PROD-526` PR에 migration·권한·transaction·query-count 증거를 기록한다.
 
 ## 2. PROD-527 프로필 수정·공개 화면 연결
 

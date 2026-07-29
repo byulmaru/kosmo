@@ -44,4 +44,3 @@
 - **WHEN** Profile row가 물리 삭제된다
 - **THEN** 데이터베이스는 해당 Profile의 Profile Tag 관계를 함께 삭제한다
 - **AND** Hashtag row와 다른 Post 또는 Profile의 Hashtag 관계는 유지한다
-- **AND** 이 FK cascade는 Deleted lifecycle transition의 service/lifecycle invariant와 별도 DB safety test로 검증한다
