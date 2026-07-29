@@ -43,6 +43,8 @@ export const createLocalProfilePerson = ({
     published: profile.createdAt,
     inbox: inboxUri,
     outbox: outboxUri,
+    followers: context.getFollowersUri(profile.id),
+    following: context.getFollowingUri(profile.id),
     publicKey: rsaKeyPair.cryptographicKey,
     assertionMethods: ed25519KeyPairs.map((keyPair) => keyPair.multikey),
     endpoints: new Endpoints({ sharedInbox: sharedInboxUri }),

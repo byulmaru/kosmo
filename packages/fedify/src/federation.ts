@@ -17,7 +17,7 @@ import { handleInboundCreate } from './inbound-create';
 import { handleInboundFollow, handleInboundUndo } from './inbound-follow';
 import { handleInboundReaction } from './inbound-reaction';
 import { handleInboundReject } from './inbound-reject';
-import { ensureDrizzleLocalProfileActor } from './local-actor-store';
+import { ensureDrizzleLocalProfileActor, findDrizzleActiveLocalProfile } from './local-actor-store';
 import { authorizeLocalPostNote, dispatchLocalPostNote } from './local-post-note';
 import { createLocalProfilePerson } from './local-profile-person';
 import { resolveLocalActorIdentifierByHandle } from './webfinger';
@@ -72,6 +72,31 @@ federation
 
     return result ? [...result.keyPairs] : [];
   });
+
+const findActiveLocalProfile = async (profileId: string) => {
+  const localInstance = await resolveConfiguredLocalInstance();
+
+  return findDrizzleActiveLocalProfile({
+    localInstanceId: localInstance.id,
+    profileId,
+  });
+};
+
+federation
+  .setFollowersDispatcher('/ap/actor/{identifier}/followers', async (_, identifier) =>
+    (await findActiveLocalProfile(identifier)) ? { items: [] } : null,
+  )
+  .setCounter(async (_, identifier) =>
+    findActiveLocalProfile(identifier).then((profile) => profile?.followersCount ?? null),
+  );
+
+federation
+  .setFollowingDispatcher('/ap/actor/{identifier}/following', async (_, identifier) =>
+    (await findActiveLocalProfile(identifier)) ? { items: [] } : null,
+  )
+  .setCounter(async (_, identifier) =>
+    findActiveLocalProfile(identifier).then((profile) => profile?.followingCount ?? null),
+  );
 
 federation
   .setObjectDispatcher(Note, '/ap/note/{id}', dispatchLocalPostNote)

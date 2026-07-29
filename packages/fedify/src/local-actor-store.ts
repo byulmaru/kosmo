@@ -3,7 +3,7 @@ import '@kosmo/core/polyfill';
 import { ActivityPubActorKeys, ActivityPubActors, db, first, Profiles } from '@kosmo/core/db';
 import { ActivityPubActorType, ProfileState } from '@kosmo/core/enums';
 import { and, eq } from 'drizzle-orm';
-import { ensureLocalProfileActor } from './local-profile-actor';
+import { ensureLocalProfileActor, isCanonicalLocalProfileId } from './local-profile-actor';
 import type { Database } from '@kosmo/core/db';
 import type {
   CreateLocalActorKeyInput,
@@ -25,8 +25,30 @@ const toLocalProfileActorProfile = (
   handle: profile.handle,
   name: profile.displayName,
   bio: profile.bio,
+  followersCount: profile.followersCount,
+  followingCount: profile.followingCount,
   createdAt: profile.createdAt,
 });
+
+const findActiveLocalProfile = async (
+  client: LocalActorDbClient,
+  { localInstanceId, profileId }: { localInstanceId: string; profileId: string },
+): Promise<LocalProfileActorProfile | undefined> => {
+  const profile = await client
+    .select()
+    .from(Profiles)
+    .where(
+      and(
+        eq(Profiles.id, profileId),
+        eq(Profiles.instanceId, localInstanceId),
+        eq(Profiles.state, ProfileState.ACTIVE),
+      ),
+    )
+    .limit(1)
+    .then(first);
+
+  return profile ? toLocalProfileActorProfile(profile) : undefined;
+};
 
 const findActorByProfileId = async (
   client: LocalActorDbClient,
@@ -84,21 +106,8 @@ const requireExistingActorKey = async (
 };
 
 export const createDrizzleLocalActorStore = (client: LocalActorDbClient = db): LocalActorStore => ({
-  async findActiveLocalProfile({ localInstanceId, profileId }) {
-    const profile = await client
-      .select()
-      .from(Profiles)
-      .where(
-        and(
-          eq(Profiles.id, profileId),
-          eq(Profiles.instanceId, localInstanceId),
-          eq(Profiles.state, ProfileState.ACTIVE),
-        ),
-      )
-      .limit(1)
-      .then(first);
-
-    return profile ? toLocalProfileActorProfile(profile) : undefined;
+  findActiveLocalProfile(input) {
+    return findActiveLocalProfile(client, input);
   },
 
   findActorByProfileId(profileId) {
@@ -140,6 +149,14 @@ export const createDrizzleLocalActorStore = (client: LocalActorDbClient = db): L
     return insertedKey ?? requireExistingActorKey(client, input);
   },
 });
+
+export const findDrizzleActiveLocalProfile = (input: {
+  localInstanceId: string;
+  profileId: string;
+}): Promise<LocalProfileActorProfile | undefined> =>
+  isCanonicalLocalProfileId(input.profileId)
+    ? findActiveLocalProfile(db, input)
+    : Promise.resolve(undefined);
 
 export const ensureDrizzleLocalProfileActor = async (
   options: Omit<EnsureLocalProfileActorOptions, 'store'>,

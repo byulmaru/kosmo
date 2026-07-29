@@ -45,6 +45,8 @@ Local Profile과 Remote Profile은 Profile Origin 상태 차원으로 구분한�
 | qualified handle | 문자열, 필수       | `@handle@host` 형식이며 Host는 연결된 Instance Domain에서 파생한다 | 항상            | Profile 조회 정책 통과 | 없음      |
 | 표시 이름        | 문자열, 필수       | 1-40자                                                             | 항상            | Profile 조회 정책 통과 | 없음      |
 | bio              | 문자열, nullable   | 500자 이하                                                         | 항상            | Profile 조회 정책 통과 | 없음      |
+| 팔로워 수        | 0 이상 정수, 필수  | 저장된 best-effort Follow Relationship 수다                        | 항상            | Profile 조회 정책 통과 | 없음      |
+| 팔로잉 수        | 0 이상 정수, 필수  | 저장된 best-effort Follow Relationship 수다                        | 항상            | Profile 조회 정책 통과 | 없음      |
 | Remote URL       | URL, 필수          | 원격 원본 Profile URL                                              | Origin이 Remote | Profile 조회 정책 통과 | 없음      |
 | Profile Link     | URL 목록, nullable | 각 항목은 유효한 URL이다                                           | Origin이 Local  | Profile 조회 정책 통과 | 없음      |
 
@@ -104,6 +106,8 @@ Hashtag에는 영향을 주지 않는다.
 - Profile Tag는 해당 Profile이 위 공개 조회 조건을 통과할 때만 공개하며 독립적인 공개 범위를 가지지 않는다.
 - Hashtag 관련 Profile 목록 탐색은 [ADR 0021](../decisions/0021-hashtag-related-profile-navigation.md)에 따라
   공개 조회 가능한 Active·Normal Local Profile 중 TagChip이 전달한 Hashtag identity 정확 일치만 후보로 사용한다.
+- Local Profile의 ActivityPub actor는 followers와 following collection 참조를 공개한다. 각 collection은 저장된
+  팔로워 수 또는 팔로잉 수를 `totalItems`로 제공하지만 membership, page 또는 item은 공개하지 않는다.
 
 위 Domain Limit 및 viewer Profile Domain Block 규칙은 공개 Profile 조회·검색의 최종 canonical moderation
 정책이다. 다만 해당 정책을 exact/partial Profile lookup에 함께 적용할 저장 모델과 공통 predicate가 아직 없는
@@ -128,11 +132,14 @@ partial lookup을 함께 전환해야 한다.
 - qualified handle: Qualified Handle
 - 원격 원본 URL: Remote URL
 - 팔로우 승인 정책: Follow Approval Policy
+- 팔로워 수: Followers Count
+- 팔로잉 수: Following Count
 - 프로필 태그: Profile Tag
 
 ## 제외/보류
 
-- 팔로워/팔로잉 목록 공개 범위의 구체 값은 확정 전이므로 canonical 속성에서 제외한다.
+- 팔로워/팔로잉 membership 목록 공개 범위의 구체 값은 확정 전이며 ActivityPub collection도 membership을
+  공개하지 않는다.
 - 다른 Profile의 Media를 avatar/header로 재사용할 수 있는지는 후속 결정 대상으로 둔다.
 - active Profile 선택은 Profile 객체를 바꾸지 않는 세션 동작이므로 도메인 행동에서 제외한다.
 - theme, 계정 이동, 서버 이전은 현재 범위에서 제외한다.
