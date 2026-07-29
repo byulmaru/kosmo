@@ -134,7 +134,8 @@
 
 - Decision Date: 2026-07-29
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/design/profile-edit.md`, `PROD-490`, `PROD-491`, `PROD-492`, 2026-07-29 사용자 확인
+- Authority / Provenance: `docs/domain/objects/profile.md`, `docs/design/profile-edit.md`, `PROD-490`, `PROD-491`,
+  `PROD-492`, 2026-07-29 사용자 확인
 - Status: Active
 - Context / Problem: presentation의 새 표시 이름 제한은 40자지만 현재 서버가 더 긴 값을 보유할 수 있어, legacy
   Profile이 bio·정책·이미지처럼 무관한 field를 편집하지 못하는 회귀가 생길 수 있다.
@@ -143,7 +144,7 @@
 - Alternatives Considered: 모든 40자 초과 초기값을 즉시 invalid로 만드는 방식은 무관한 field 저장을 막아 제외했다.
   UI 제한을 서버의 현행 상한까지 늘리는 방식은 승인된 40자 제품 계약을 무효화해 제외했다.
 - Consequences: PROD-491은 existing-value compatibility를 presentation validation에 반영하고, PROD-492는 서버
-  계약·migration 방향을 정렬한다. 사용자가 값을 변경했다가 원문과 정확히 같게 되돌리면 unchanged legacy로 본다.
+  구현·migration 방향을 정렬한다. 사용자가 값을 변경했다가 원문과 정확히 같게 되돌리면 unchanged legacy로 본다.
 - Confirmation / Follow-up: 40자 이하 경계, 40자 초과 초기값 그대로+다른 field 변경, 40자 초과 초기값 변경을
   component test와 후속 route integration test로 검증한다.
 
