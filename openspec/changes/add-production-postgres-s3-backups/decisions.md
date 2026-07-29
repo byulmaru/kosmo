@@ -71,7 +71,7 @@
 - Authority / Provenance: Linear `PROD-546`, `PROD-551`
 - Status: Active
 - Context / Problem: backup 성공만으로 복구 가능성을 증명할 수 없으며 rehearsal이 production 데이터나 backup chain을 오염시키면 안 된다.
-- Decision Outcome: application write pause 중 불변 snapshot과 named restore point를 만들고 대상 WAL의 archive 성공을 확인한 뒤 `kosmo-prod-restore` namespace의 새 Cluster를 해당 restore point로 복구한다. Restore Cluster에는 source ObjectStore를 recovery source로만 연결하고 같은 destination의 WAL archiver 또는 ScheduledBackup을 구성하지 않는다. 출시 전 한 번과 이후 월 1회 RPO, RTO, schema, Drizzle migration history, 대표 row count와 최소 read를 검증한다.
+- Decision Outcome: application write pause 중 불변 snapshot과 named restore point를 만들고 WAL 전환을 강제하지 않은 상태에서 대상 WAL의 자연 archive 성공을 확인한 뒤 `kosmo-prod-restore` namespace의 새 Cluster를 해당 restore point로 복구한다. Restore Cluster에는 source ObjectStore를 recovery source로만 연결하고 같은 destination의 WAL archiver 또는 ScheduledBackup을 구성하지 않는다. 출시 전 한 번과 이후 월 1회 RPO, RTO, schema, Drizzle migration history, 대표 row count와 최소 read를 검증한다.
 - Alternatives Considered: production Cluster in-place restore는 원본을 덮어쓸 위험이 있어 제외했다. Backup phase만 확인하는 방식은 실제 복구 경로를 검증하지 못해 제외했다.
 - Consequences: rehearsal용 namespace/PVC 비용과 월간 운영 작업이 발생한다. 민감 데이터가 아닌 시각·phase·측정값·검증 결과만 Linear에 기록해야 한다.
 - Confirmation / Follow-up: 최초 production 준비 후 RPO 5분/RTO 60분 목표를 측정하고 `PROD-546`에 증거를 남긴 뒤 restore namespace를 제거한다.
