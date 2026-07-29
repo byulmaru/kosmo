@@ -26,7 +26,7 @@
 - token이 없는 요청과 유효하지 않은 credential이 `PERMISSION_DENIED` GraphQL error를 반환하고 search data를 제공하지 않는지 검증한다.
 - Active Session token과 selected Profile 없는 Active Session token이 기존 부분검색을 성공하는지 검증한다.
 - 기존 local/remote 결과, suspended visibility, `%`·`_`·escape 문자 처리, 다중 page ID cursor, remote no-materialization과 guest `profileByHandle` 회귀 assertion을 유지한다.
-- `node scripts/test-db.mjs run -- pnpm --filter @kosmo/api exec node --import tsx --test --test-concurrency=1 tests/integration/graphql/profile.test.ts`
+- `pnpm --filter @kosmo/api test:integration`
 - `pnpm --filter @kosmo/api lint:tsc`
 - `pnpm --filter @kosmo/api test:unit`
 - `pnpm --filter @kosmo/api lint:schema`
