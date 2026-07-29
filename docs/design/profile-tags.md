@@ -32,9 +32,10 @@ Profile 화면이 같은 태그를 Web·Android·iOS에서 일관되게 표시�
 
 - 공용 화면은 React Native primitive와 기존 theme token을 사용하고 Web·Android·iOS가 같은 정보 구조를
   공유한다.
-- 제거 action은 compact `32×32` 시각 크기와 실제 입력 target을 분리한다. Web target은 최소 32×32 CSS px,
-  iOS hit region은 `44×44 pt`, Android touch target은 `48×48 dp`로 제공하고 동작을 설명하는
-  accessibility label/state를 유지한다.
+- 제거 action은 시각 크기 `32×32`를 유지하고 실제 입력 target은 Web `32×32 CSS px`, iOS `44×44 pt`,
+  Android `48×48 dp`로 제공한다. 공용 component는 시각 geometry와 platform별 입력 target을 분리한다.
+- text action은 최소 높이 `36`의 compact rhythm을 사용한다.
+- 제거 같은 편집 action은 동작과 대상 Tag를 설명하는 accessibility label/state를 제공한다.
 - 색만으로 validation, 선택, disabled 상태를 구분하지 않는다.
 - 별도 breakpoint나 Profile Tag 전용 foundation token은 추가하지 않는다. 기존 spacing, color, typography,
   radius와 공용 breakpoint를 사용한다.

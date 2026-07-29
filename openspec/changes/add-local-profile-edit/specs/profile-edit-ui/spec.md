@@ -64,7 +64,7 @@
 
 ### Requirement: Responsive accessible Profile edit layout
 
-**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/breakpoints.md`, `PROD-491` — Profile edit presentation은 Web shell 중앙 최대 600px surface와 mobile/native 정보 구조를 공유해야 한다(MUST). 현재 Web-first presentation은 icon action `32×32`, text action 최소 높이 `36`의 compact rhythm과 대상·상태를 설명하는 accessibility label/state를 제공해야 한다(MUST).
+**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/breakpoints.md`, `PROD-491` — Profile edit presentation은 Web shell 중앙 최대 600px surface와 mobile/native 정보 구조를 공유해야 한다(MUST). Profile Tag 제거 action은 시각 크기 `32×32`와 실제 입력 target Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp`를 분리하고, text action은 최소 높이 `36`과 대상·상태를 설명하는 accessibility label/state를 제공해야 한다(MUST).
 
 #### Scenario: Render desktop shell layouts
 
@@ -76,6 +76,8 @@
 
 - **WHEN** 사용자가 header·avatar 편집, Tag 제거 또는 저장 action을 사용한다
 - **THEN** form은 각 action의 대상·동작·disabled 상태를 accessibility label/state로 전달한다
+- **AND** Profile Tag 제거 action은 `32×32` visual과 Web `32×32 CSS px`, iOS `44×44 pt`, Android
+  `48×48 dp` 실제 입력 target을 제공한다
 - **AND** 색만으로 validation·disabled·saving·failure 상태를 구분하지 않는다
 
 ### Requirement: Protected selected Owner Profile edit route

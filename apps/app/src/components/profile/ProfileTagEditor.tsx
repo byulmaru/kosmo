@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { Button } from '../ui/Button';
@@ -11,6 +11,10 @@ export type ProfileTagEditorProps = {
   onChange: (next: ReadonlyArray<string>) => void;
   tags: ReadonlyArray<string>;
 };
+
+const REMOVE_ACTION_VISUAL_SIZE = 32;
+const REMOVE_ACTION_TARGET_SIZE = Platform.select({ android: 48, ios: 44, web: 32, default: 48 });
+const REMOVE_ACTION_TARGET_INSET = (REMOVE_ACTION_TARGET_SIZE - REMOVE_ACTION_VISUAL_SIZE) / 2;
 
 export function ProfileTagEditor({ disabled = false, onChange, tags }: ProfileTagEditorProps) {
   const theme = useTheme();
@@ -36,13 +40,14 @@ export function ProfileTagEditor({ disabled = false, onChange, tags }: ProfileTa
 
       <View style={styles.chips}>
         {tags.map((tag, index) => (
-          <View
-            key={tag}
-            style={[styles.chip, { backgroundColor: theme.surface, borderColor: theme.border }]}
-          >
-            <Text style={[styles.tagText, { color: theme.text }]} testID="profile-tag-chip">
-              #{tag}
-            </Text>
+          <View key={tag} style={styles.chipTarget}>
+            <View
+              style={[styles.chip, { backgroundColor: theme.surface, borderColor: theme.border }]}
+            >
+              <Text style={[styles.tagText, { color: theme.text }]} testID="profile-tag-chip">
+                #{tag}
+              </Text>
+            </View>
             <Pressable
               accessibilityLabel={`#${tag} 제거`}
               accessibilityRole="button"
@@ -51,8 +56,10 @@ export function ProfileTagEditor({ disabled = false, onChange, tags }: ProfileTa
               onPress={() => onChange(tags.filter((_, tagIndex) => tagIndex !== index))}
               style={({ pressed }) => [
                 styles.removeButton,
+                { height: REMOVE_ACTION_TARGET_SIZE, width: REMOVE_ACTION_TARGET_SIZE },
                 { opacity: disabled ? 0.45 : pressed ? 0.7 : 1 },
               ]}
+              testID="profile-tag-remove-button"
             >
               <Text style={[styles.removeLabel, { color: theme.textSecondary }]}>×</Text>
             </Pressable>
@@ -110,8 +117,17 @@ const styles = StyleSheet.create({
     borderRadius: radii.full,
     borderWidth: 1,
     flexDirection: 'row',
-    minHeight: 32,
+    height: REMOVE_ACTION_VISUAL_SIZE,
     paddingLeft: spacing.md,
+    paddingRight: REMOVE_ACTION_VISUAL_SIZE,
+    pointerEvents: 'none',
+  },
+  chipTarget: {
+    alignSelf: 'flex-start',
+    justifyContent: 'center',
+    minHeight: REMOVE_ACTION_TARGET_SIZE,
+    paddingRight: REMOVE_ACTION_TARGET_INSET,
+    position: 'relative',
   },
   tagText: {
     fontFamily: 'SUIT',
@@ -120,8 +136,8 @@ const styles = StyleSheet.create({
   removeButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 32,
-    minWidth: 32,
+    position: 'absolute',
+    right: 0,
   },
   removeLabel: {
     fontFamily: 'SUIT',

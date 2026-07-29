@@ -86,10 +86,10 @@
 
 ## 접근성과 상태 표현
 
-- 현재 Web-first presentation은 공용 compact rhythm을 사용한다. icon action은 `32×32`, text action은
-  최소 높이 `36`을 기준으로 하며 `44×44`를 강제하지 않는다.
-- 이 compact target은 현재 Web 검증을 우선한 선택이다. Native 전달을 본격화할 때 touch target과 간격을
-  플랫폼 입력 방식에 맞게 다시 검토한다.
+- Profile Tag 제거 action은 시각 크기 `32×32`를 유지하면서 실제 입력 target을 Web `32×32 CSS px`, iOS
+  `44×44 pt`, Android `48×48 dp`로 제공한다. 공용 component가 시각 geometry와 platform별 입력 target을
+  분리해 compact rhythm과 각 플랫폼 접근성 기준을 함께 지킨다.
+- text action은 최소 높이 `36`을 기준으로 한다.
 - 저장, 태그 제거와 header·avatar 각각의 편집 action은 대상과 상태를 포함한 accessibility label/state를
   제공한다.
 - validation, disabled, saving과 failure를 색만으로 구분하지 않는다.

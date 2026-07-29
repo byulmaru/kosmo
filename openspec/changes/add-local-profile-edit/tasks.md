@@ -23,8 +23,9 @@ Native 공용 Profile edit component와 현재 Web Storybook 상태 카탈로그
 - inline TagChip 추가·제거를 제공하되 Tag 저장·Relay는 연결하지 않는다. 개수 상한·순서
   변경 UI·gesture는 추가하지 않는다.
 - Follow Approval Policy, Profile Link와 기존 Figma 시안의 범위 밖 field를 포함하지 않는다.
-- 기존 theme token·breakpoint와 React Native primitive를 사용하고 icon action `32×32`, text action 최소 높이
-  `36`의 compact rhythm과 accessibility state를 유지한다.
+- 기존 theme token·breakpoint와 React Native primitive를 사용한다. Profile Tag 제거 action은 시각 크기
+  `32×32`, 실제 입력 target Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp`를 제공하고 text
+  action은 최소 높이 `36`과 accessibility state를 유지한다.
 - header 이미지 preview는 hero wrapper와 분리하고 모든 지원 폭에서 `3:1`과 중앙 기준 cover crop을 유지한다.
 
 **Verification**
@@ -36,8 +37,9 @@ Native 공용 Profile edit component와 현재 Web Storybook 상태 카탈로그
 - 한 이미지 field만 편집할 때 다른 이미지의 현재 draft가 유지되고 공통 `유지` action row가 없는지 확인한다.
 - `390×130`, `600×200`과 중간 폭에서 header preview가 `3:1`이며 wrapper·avatar·action이 비율을
   왜곡하지 않는지 검증한다.
-- Web 390·1024·1440 wrapping과 compact action target을 확인한다.
-- Native 실제 기기의 safe area·layout·touch target은 PROD-492 전달 시 확인한다.
+- Web 390·1024·1440 wrapping과 Profile Tag 제거 action의 `32×32 CSS px` target을 확인한다.
+- Native 실제 기기의 safe area·layout과 Profile Tag 제거 action의 iOS `44×44 pt`, Android `48×48 dp`
+  target은 PROD-492 전달 시 확인한다.
 - 테스트 코드 범위는 Profile edit form/editor의 승인 동작을 직접 검증하는 최소 component test로 제한하고 중복
   snapshot·새 harness·관련 없는 fixture 확대는 제외한다.
 

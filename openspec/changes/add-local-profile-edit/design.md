@@ -63,8 +63,8 @@ Profile Tag는 `add-profile-tags`가 별도 저장·공개 계약을 소유한�
    transaction에서 변경한다. Media가 같은 Profile의 Ready Local Media인지 검증하고 관계 제거 때 Media는 남긴다.
 6. route가 초기값, submit, picker/upload 결과, Relay payload와 성공 navigation을 연결한다. Tag API가 없는 동안
    production Tag editor는 숨기거나 disabled로 두고 저장 가능하다고 오인시키지 않는다.
-7. Web-first presentation은 icon action `32×32`, text action 최소 높이 `36`의
-   compact rhythm을 Web·Native 공용으로 사용한다. Native 전달 시 touch target은 별도 검증으로 다시 정렬한다.
+7. Profile Tag 제거 action은 시각 크기 `32×32`와 실제 입력 target Web `32×32 CSS px`, iOS `44×44 pt`,
+   Android `48×48 dp`를 분리하고 text action은 최소 높이 `36`을 사용한다.
 
 ### Allowed Alternatives
 
