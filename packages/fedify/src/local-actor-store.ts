@@ -25,30 +25,8 @@ const toLocalProfileActorProfile = (
   handle: profile.handle,
   name: profile.displayName,
   bio: profile.bio,
-  followersCount: profile.followersCount,
-  followingCount: profile.followingCount,
   createdAt: profile.createdAt,
 });
-
-const findActiveLocalProfile = async (
-  client: LocalActorDbClient,
-  { localInstanceId, profileId }: { localInstanceId: string; profileId: string },
-): Promise<LocalProfileActorProfile | undefined> => {
-  const profile = await client
-    .select()
-    .from(Profiles)
-    .where(
-      and(
-        eq(Profiles.id, profileId),
-        eq(Profiles.instanceId, localInstanceId),
-        eq(Profiles.state, ProfileState.ACTIVE),
-      ),
-    )
-    .limit(1)
-    .then(first);
-
-  return profile ? toLocalProfileActorProfile(profile) : undefined;
-};
 
 const findActorByProfileId = async (
   client: LocalActorDbClient,
@@ -106,8 +84,21 @@ const requireExistingActorKey = async (
 };
 
 export const createDrizzleLocalActorStore = (client: LocalActorDbClient = db): LocalActorStore => ({
-  findActiveLocalProfile(input) {
-    return findActiveLocalProfile(client, input);
+  async findActiveLocalProfile({ localInstanceId, profileId }) {
+    const profile = await client
+      .select()
+      .from(Profiles)
+      .where(
+        and(
+          eq(Profiles.id, profileId),
+          eq(Profiles.instanceId, localInstanceId),
+          eq(Profiles.state, ProfileState.ACTIVE),
+        ),
+      )
+      .limit(1)
+      .then(first);
+
+    return profile ? toLocalProfileActorProfile(profile) : undefined;
   },
 
   findActorByProfileId(profileId) {

@@ -39,10 +39,9 @@ source로 사용하지 않는다.
 
 ### Recommended Approach
 
-Local actor store의 Active Local Profile read projection에 두 저장 count를 포함한다. key 생성 없이 같은 projection을
-조회하는 read helper를 두고, root federation에 followers/following dispatcher를 등록한다. 각 item dispatcher는
-Profile이 없으면 `null`, 있으면 빈 items를 반환하고, counter는 같은 공개 조건을 통과한 Profile의 해당 저장 count를
-반환한다.
+root federation에 followers/following dispatcher를 등록하고, HTTP federation entry에서 canonical Host와 Profile
+식별자를 검증한 뒤 Active Local Profile의 두 저장 count만 DB에서 직접 조회한다. 각 item dispatcher는 Profile이
+없으면 `null`, 있으면 빈 items를 반환하고, counter는 같은 공개 조건을 통과한 Profile의 해당 저장 count를 반환한다.
 
 actor `Person`은 Fedify context가 생성한 두 collection URI를 사용한다. 이를 통해 actor와 collection route가 같은
 canonical URI template을 공유한다. wire 테스트는 actor reference, collection `id`/`type`/`totalItems`, 빈

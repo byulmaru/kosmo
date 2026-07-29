@@ -10,8 +10,6 @@ export interface LocalProfileActorProfile {
   readonly handle: string;
   readonly name: string;
   readonly bio: string | null;
-  readonly followersCount: number;
-  readonly followingCount: number;
   readonly createdAt: Temporal.Instant;
 }
 
