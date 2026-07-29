@@ -148,9 +148,18 @@ export const Success: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.type(canvas.getByRole('textbox', { name: '피드백 내용' }), '사용하기 편해요.');
+    const body = canvas.getByRole('textbox', { name: '피드백 내용' });
+    await userEvent.click(canvas.getByRole('radio', { name: '버그를 발견했어요' }));
+    await userEvent.type(body, '버그를 고쳐주세요.');
+    await userEvent.type(
+      canvas.getByRole('textbox', { name: 'Sentry 이벤트 ID (선택)' }),
+      'a'.repeat(32),
+    );
     await userEvent.click(canvas.getByRole('button', { name: '피드백 보내기' }));
     await expect(canvas.getByText('피드백을 전달했습니다. 감사합니다!')).toBeVisible();
+    expect(canvas.getByRole('radio', { name: '좋아요' })).toBeChecked();
+    expect(body).toHaveValue('');
+    expect(canvas.queryByRole('textbox', { name: 'Sentry 이벤트 ID (선택)' })).toBeNull();
   },
 };
 

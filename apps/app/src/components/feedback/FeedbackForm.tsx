@@ -81,6 +81,7 @@ export function FeedbackForm() {
           return;
         }
 
+        setKind('POSITIVE');
         setBody('');
         setBodyTouched(false);
         setSentryEventId('');
