@@ -2,33 +2,21 @@
 
 ### Requirement: Profile Tag editor
 
-**Authority / Provenance:** `docs/design/profile-tags.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-491`, `PROD-527` — 기존 Profile 편집 화면은 Local Profile Owner가 현재 Profile Tag를 확인하고 추가·제거·명시적으로 순서 변경할 수 있는 `프로필 태그` 섹션을 제공해야 한다(MUST). chip에는 정규화된 이름 앞에 `#`를 한 번만 표시해야 하며(MUST), 추가된 항목은 목록 끝에 놓고 제거 뒤 남은 순서를 유지해야 한다(MUST).
+**Authority / Provenance:** `docs/design/profile-tags.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-491`, `PROD-527` — 기존 Profile 편집 화면은 Local Profile Owner가 현재 Profile Tag를 확인하고 추가·제거할 수 있는 `프로필 태그` 섹션을 제공해야 한다(MUST). chip에는 정규화된 이름 앞에 `#`를 한 번만 표시해야 하며(MUST). Profile Tag 개수와 저장·노출 순서는 제품 계약이 아니다.
 
 #### Scenario: Add and remove Profile Tags
 
 - **WHEN** Owner가 유효한 Profile Tag를 추가한다
-- **THEN** 편집기는 정규화된 이름에 `#`를 한 번 붙인 chip을 현재 목록 끝에 표시한다
-- **AND** Owner가 chip을 제거하면 나머지 chip의 상대 순서를 유지한다
-
-#### Scenario: Reorder Profile Tags explicitly
-
-- **WHEN** Owner가 저장 전에 Profile Tag 이동 제어를 사용한다
-- **THEN** 편집기는 선택한 chip을 요청한 위치로 옮긴다
-- **AND** 저장 action에 변경된 전체 순서를 포함한다
-
-#### Scenario: Reach the maximum count
-
-- **WHEN** 편집 중인 목록이 5개에 도달한다
-- **THEN** 편집기는 추가 입력을 비활성화한다
-- **AND** 최대 개수에 도달했다는 이유를 보이는 텍스트와 접근성 상태로 알린다
+- **THEN** 편집기는 정규화된 이름에 `#`를 한 번 붙인 chip을 현재 draft 목록에 추가한다
+- **AND** Owner가 chip을 제거하면 해당 Profile Tag 관계를 draft에서 제거한다
 
 ### Requirement: Profile Tag editor validation and save states
 
-**Authority / Provenance:** `docs/design/profile-tags.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-491`, `PROD-527` — Profile Tag 편집기는 빈 값, 허용하지 않는 문자, 정규화 뒤 20 code point 초과와 중복을 저장 전에 입력 가까이에 알려야 한다(MUST). Profile Tag 목록은 다른 Profile 편집 값과 같은 저장 action에 포함해야 하며(MUST), 저장 중 중복 제출을 막고 실패 뒤 draft 입력과 순서를 보존해야 한다(MUST).
+**Authority / Provenance:** `docs/design/profile-tags.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-491`, `PROD-527` — Profile Tag 편집기는 Hashtag가 정의한 빈 값·허용하지 않는 문자·정규화 뒤 20 code point 초과를 저장 전에 입력 가까이에 알려야 한다(MUST). Profile Tag 입력은 Hashtag identity로 resolve한 뒤 같은 canonical identity가 중복되는 경우도 알려야 한다(MUST). Profile Tag 목록은 다른 Profile 편집 값과 같은 저장 action에 포함해야 하며(MUST), 저장 중 중복 제출을 막고 실패 뒤 draft 입력을 보존해야 한다(MUST).
 
 #### Scenario: Show client validation near the input
 
-- **WHEN** Owner가 비어 있거나 허용 범위를 벗어나거나 정규화 뒤 중복되는 Profile Tag를 추가 또는 저장하려 한다
+- **WHEN** Owner가 비어 있거나 Hashtag가 허용하지 않는 범위를 벗어나거나 Hashtag identity로 resolve한 뒤 중복되는 Profile Tag를 추가 또는 저장하려 한다
 - **THEN** 편집기는 원인을 입력 또는 관련 chip 가까이에 표시한다
 - **AND** 색만으로 오류 상태를 구분하지 않는다
 
@@ -41,24 +29,18 @@
 #### Scenario: Preserve draft after server failure
 
 - **WHEN** Profile Tag를 포함한 Profile 저장이 서버 validation 또는 일시적 오류로 실패한다
-- **THEN** 편집기는 Owner가 입력한 현재 Tag 목록과 순서 및 다른 Profile draft를 유지한다
+- **THEN** 편집기는 Owner가 입력한 현재 Tag draft와 다른 Profile draft를 유지한다
 - **AND** 서버 validation을 해당 입력에 연결해 보여 주고 같은 draft로 재시도할 수 있게 한다
 
 #### Scenario: Synchronize the saved Profile
 
 - **WHEN** Profile Tag를 포함한 Profile 저장이 성공한다
 - **THEN** 클라이언트는 mutation이 반환한 Profile의 정규화된 Tag 목록으로 편집 화면과 공개 Profile cache를 동기화한다
-- **AND** 서버에 저장된 순서를 canonical 화면 순서로 사용한다
+- **AND** 서버가 반환한 normalized Tag 값으로 동기화하며 배열 순서를 계약으로 해석하지 않는다
 
 ### Requirement: Accessible universal Profile Tag controls
 
-**Authority / Provenance:** `docs/design/profile-tags.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-491`, `PROD-527` — Profile Tag 편집·표시 UI는 React Native primitive와 기존 theme token으로 Web·Android·iOS에서 같은 정보 구조를 사용해야 한다(MUST). 제거·이동 action은 최소 44×44 touch target과 동작을 설명하는 accessibility label·state를 제공해야 하며(MUST), drag gesture를 제공할 때 키보드와 스크린리더로 같은 이동을 수행할 대안을 함께 제공해야 한다(MUST).
-
-#### Scenario: Operate reorder without drag
-
-- **WHEN** 사용자가 drag gesture를 사용할 수 없고 키보드 또는 스크린리더로 Tag 순서를 변경한다
-- **THEN** 편집기는 같은 순서 변경을 수행하는 명시적 이동 control을 제공한다
-- **AND** 이동 결과를 보이는 순서와 접근성 정보에 반영한다
+**Authority / Provenance:** `docs/design/profile-tags.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-491`, `PROD-527` — Profile Tag 편집·표시 UI는 React Native primitive와 기존 theme token으로 Web·Android·iOS에서 같은 정보 구조를 사용해야 한다(MUST). 제거 action은 최소 44×44 touch target과 동작을 설명하는 accessibility label·state를 제공해야 한다(MUST). Profile Tag 순서 변경 control은 제공하지 않는다.
 
 #### Scenario: Operate removal with touch or assistive technology
 
@@ -68,6 +50,6 @@
 
 #### Scenario: Render the shared states on every platform
 
-- **WHEN** Profile Tag 편집·표시 component의 기본, 최대 개수, validation, 저장 중, 실패와 긴 목록 상태를 검증한다
+- **WHEN** Profile Tag 편집·표시 component의 기본, validation, 저장 중, 실패와 임의 개수의 긴 목록 상태를 검증한다
 - **THEN** Web·Android·iOS 공용 component와 상태 카탈로그가 같은 정보 구조와 theme token으로 렌더된다
 - **AND** Profile Tag 전용 foundation token 또는 별도 breakpoint를 요구하지 않는다

@@ -2,13 +2,13 @@
 
 ### Requirement: Profile object visibility
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — API는 활성 local profile과 저장된 활성 ActivityPub remote profile을 GraphQL profile object로 조회할 수 있게 해야 한다(MUST). Profile object는 정규화된 Hashtag Name을 저장 순서로 제공하는 non-null `tags: [String!]!` field를 가져야 하며(MUST), Local 여부는 configured instance ID가 아니라 Profile Origin과 연결된 Instance Kind로 판정해 모든 Local Profile의 유효한 관계를 반환하고 Remote Profile은 빈 목록을 반환해야 하며(MUST), 현재 범위에서 Local Profile Tag만 반환해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — API는 활성 local profile과 저장된 활성 ActivityPub remote profile을 GraphQL profile object로 조회할 수 있게 해야 한다(MUST). Profile object는 연결된 normalized Hashtag Name을 제공하는 non-null `tags: [String!]!` field를 가져야 하며(MUST). 배열의 요소 순서는 API 계약이 아니다. Local 여부는 configured instance ID가 아니라 Profile Origin과 연결된 Instance Kind로 판정해 모든 Local Profile의 유효한 관계를 반환하고 Remote Profile은 빈 목록을 반환해야 하며(MUST), 현재 범위에서 Local Profile Tag만 반환해야 한다(MUST).
 
 #### Scenario: Access active local profile object
 
 - **WHEN** local profile 상태가 `ACTIVE`이고 소속 instance가 차단되지 않았다
 - **THEN** 시스템은 프로필 object 접근을 허용한다
-- **AND** handle, relativeHandle, instance.kind, displayName, nullable bio, followPolicy, createdAt 필드와 저장 순서의 tags를 노출한다
+- **AND** handle, relativeHandle, instance.kind, displayName, nullable bio, followPolicy, createdAt 필드와 연결된 tags를 노출한다
 - **AND** Profile Tag가 없으면 tags는 빈 목록이다
 - **AND** Local 판정은 Profile Origin과 연결된 Instance Kind를 사용하며 configured Local Instance ID에 제한하지 않는다
 - **AND** Node ID 기반 profile load는 활성 local profile을 반환할 수 있다
@@ -41,9 +41,9 @@
 
 - **WHEN** Active Account의 프로필 `OWNER`가 Lifecycle State가 `Deleted`가 아니고 Suspension State가 `Normal`인 Local Profile(Deactivated Profile 포함) 수정을 요청한다
 - **THEN** 시스템은 제공된 displayName, bio, followPolicy 값을 갱신한다
-- **AND** tags가 제공되면 검증·정규화한 전체 목록과 순서를 같은 transaction에서 교체한다
-- **AND** tags가 생략되거나 `null`이면 기존 Profile Tag 관계와 순서를 유지한다
-- **AND** mutation은 `UpdateProfilePayload.profile`로 갱신된 `Profile`과 저장 순서의 tags를 반환한다
+- **AND** tags가 제공되면 Hashtag identity로 검증·resolve한 전체 목록과 관계를 같은 transaction에서 교체한다
+- **AND** tags가 생략되거나 `null`이면 기존 Profile Tag 관계를 유지한다
+- **AND** mutation은 `UpdateProfilePayload.profile`로 갱신된 `Profile`과 tags를 반환하며 배열 순서는 계약하지 않는다
 
 #### Scenario: Clear Profile Tags as owner
 
@@ -53,7 +53,7 @@
 
 #### Scenario: Reject an invalid atomic update
 
-- **WHEN** Profile update의 tags가 최대 개수·정규화·문자·길이 또는 중복 검증을 통과하지 않는다
+- **WHEN** Profile update의 tags가 Hashtag Name syntax·정규화·문자·길이 또는 canonical identity 중복 검증을 통과하지 않는다
 - **THEN** 시스템은 tags field와 연결된 validation 오류를 반환한다
 - **AND** 같은 요청의 displayName, bio, followPolicy와 기존 Profile Tag 관계를 어느 것도 변경하지 않는다
 

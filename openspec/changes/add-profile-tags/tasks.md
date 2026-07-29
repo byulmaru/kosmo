@@ -16,13 +16,13 @@
 
 **Deliverable**
 
-Local Profile Owner가 승인된 Profile Tag 목록을 다른 Profile 값과 원자적으로 저장하고, 공개 조회 가능한 Local Profile이 정규화된 Tag를 저장 순서로 제공하는 DB·service·GraphQL 기반을 전달한다.
+Local Profile Owner가 승인된 Profile Tag 목록을 다른 Profile 값과 원자적으로 저장하고, 공개 조회 가능한 Local Profile이 연결된 normalized Tag를 제공하는 DB·service·GraphQL 기반을 전달한다. 관계와 API 배열의 순서는 계약하지 않는다.
 
 **Guardrails**
 
 - Post와 Profile이 공유하는 canonical Hashtag identity를 사용하고, `PROD-526`에서 그 저장 구조와 관계를 추가하며 별도 ProfileTag identity나 bio/Post 본문 파생을 추가하지 않는다.
-- trim·선택적 앞 `#`·NFKC·locale 비종속 Unicode full case folding 뒤 1~20 code point의 Letter·Number·밑줄만 허용한다.
-- Profile당 최대 5개, normalized duplicate 거부, 입력 순서와 전체 목록 replacement를 보장한다.
+- Hashtag가 trim·선택적 앞 `#`·NFKC·locale 비종속 Unicode full case folding, 1~20 code point의 Letter·Number·밑줄 Name syntax와 normalized-name uniqueness를 소유한다.
+- Profile 관계는 입력을 Hashtag identity로 resolve/create하고 같은 canonical identity의 duplicate를 거부하며 전체 목록 replacement를 보장한다. 제품상 max count·관계 position·저장/노출 순서는 없다.
 - optional `tags`의 배열·빈 배열·생략/`null` 의미와 `Profile.tags: [String!]!` 공개 계약을 유지한다.
 - Active Account의 Owner만 Origin이 Local이고 Lifecycle State가 `Deleted`가 아니며 Suspension State가 `Normal`인 Profile(Deactivated Profile 포함)을 변경하고 scalar 값과 Tag 관계를 직렬화된 한 transaction으로 적용한다. Member·비-Owner·inactive Account, Remote Profile, Deleted Profile, Suspended Profile은 거부한다.
 - Deactivated Profile과 Suspended Profile의 관계 보존은 공개 visibility에서 숨기는 정책과 분리한다. 선행 `PROD-532`가 제공하는 Deactivated→Deleted lifecycle transaction 경계에 `profile_hashtag` 관계 cleanup을 통합하며, terminal action이나 상태 전이는 이 task에서 구현하지 않는다. Profile row 물리 삭제의 FK cascade는 별도 DB safety invariant/test로 검증한다. Remote Profile은 빈 tags를 반환하며 actor fetch를 수행하지 않는다.
@@ -30,16 +30,16 @@ Local Profile Owner가 승인된 Profile Tag 목록을 다른 Profile 값과 원
 
 **Verification**
 
-- normalization의 Unicode·길이·허용 문자·duplicate vector를 core unit test로 검증한다.
-- fresh/upgrade migration, unique/check/foreign-key, 빈 기존 Profile, Deactivated/Suspended 관계 보존과 물리 Profile row 삭제 FK cascade safety를 `@kosmo/core` migration·DB test로 검증한다. 이 검증은 `PROD-532` terminal action의 동작을 대체하지 않는다.
-- Active Account Owner의 Local Profile(Deactivated 포함) 성공과 Member·비-Owner·inactive Account·Remote·Deleted·Suspended 거부, omitted·null·empty·ordered tags, rollback과 concurrent replacement를 service·GraphQL database integration test로 검증한다. `PROD-532`가 완료된 뒤 제공된 Deleted lifecycle 경계에서 `profile_hashtag` 관계만 제거하고 canonical Hashtag row와 다른 Profile/Post 관계를 보존하는 cleanup integration을 별도로 검증한다.
-- schema snapshot, Profile Origin/연결 Instance Kind가 Local인 모든 Profile의 저장 순서 batch 조회·Remote 빈 목록·query count를 API test로 검증하고 `pnpm --filter @kosmo/core test`, `pnpm --filter @kosmo/api test`, schema·type check를 통과시킨다.
+- Hashtag가 소유한 normalization의 Unicode·길이·허용 문자·normalized-name uniqueness vector와 Profile 관계의 canonical identity duplicate vector를 core unit test로 검증한다.
+- fresh/upgrade migration, Hashtag Name 및 `(profile_id, hashtag_id)` unique/foreign-key 제약, position column·position unique/check·제품 max count가 없음을 확인하고, 빈 기존 Profile, Deactivated/Suspended 관계 보존과 물리 Profile row 삭제 FK cascade safety를 `@kosmo/core` migration·DB test로 검증한다. 이 검증은 `PROD-532` terminal action의 동작을 대체하지 않는다.
+- Active Account Owner의 Local Profile(Deactivated 포함) 성공과 Member·비-Owner·inactive Account·Remote·Deleted·Suspended 거부, omitted·null·empty·임의 개수 tags, canonical identity duplicate, rollback과 concurrent replacement를 service·GraphQL database integration test로 검증한다. 관계 저장·조회와 API 배열의 순서를 가정하지 않는 테스트를 포함한다. `PROD-532`가 완료된 뒤 제공된 Deleted lifecycle 경계에서 `profile_hashtag` 관계만 제거하고 canonical Hashtag row와 다른 Profile/Post 관계를 보존하는 cleanup integration을 별도로 검증한다.
+- schema snapshot, Profile Origin/연결 Instance Kind가 Local인 모든 Profile의 관계 batch 조회·Remote 빈 목록·query count와 `Profile.tags: [String!]!` 배열 순서 비보장 계약을 API test로 검증하고 `pnpm --filter @kosmo/core test`, `pnpm --filter @kosmo/api test`, schema·type check를 통과시킨다.
 
-- [ ] 1.1 승인된 Unicode normalization과 Profile Tag 목록 validation을 구현하고 경계·동등성·중복 unit test를 추가한다.
-- [ ] 1.2 canonical Hashtag identity와 순서 있는 Profile 관계의 additive schema·migration을 구현하고 fresh/upgrade·제약 test를 추가한다. 물리 Profile row 삭제 FK cascade는 `PROD-532` terminal action 및 lifecycle cleanup과 별도로 검증한다.
-- [ ] 1.3 Active Account Owner·Local·editable 조건(Lifecycle != `Deleted`, Suspension `Normal`)을 검증하면서 Profile 값과 전체 Tag 목록을 원자적으로 교체하는 service 동작을 구현하고 성공·Deactivated 허용·Deleted/Suspended/Remote/non-Owner/inactive Account 거부·rollback·동시성 DB test를 추가한다.
+- [ ] 1.1 Hashtag-owned Name normalization·syntax·length·normalized-name uniqueness와 Profile Tag 목록의 canonical identity duplicate validation을 구현하고 경계·동등성·중복 unit test를 추가한다.
+- [ ] 1.2 canonical Hashtag identity와 `(profile_id, hashtag_id)` Profile 관계의 additive schema·migration을 구현하고 position column·position unique/check·제품 max count 없이 fresh/upgrade·제약 test를 추가한다. 물리 Profile row 삭제 FK cascade는 `PROD-532` terminal action 및 lifecycle cleanup과 별도로 검증한다.
+- [ ] 1.3 Active Account Owner·Local·editable 조건(Lifecycle != `Deleted`, Suspension `Normal`)을 검증하면서 Profile 값과 전체 Tag 목록을 원자적으로 교체하는 service 동작을 구현하고 성공·Deactivated 허용·Deleted/Suspended/Remote/non-Owner/inactive Account 거부·canonical identity duplicate·rollback·동시성 DB test를 추가한다. 관계나 반환 배열 순서를 의미 있는 결과로 가정하지 않는다.
 - [ ] 1.4 **선행 `PROD-532` 완료 후** 해당 이슈가 제공하는 Deactivated→Deleted lifecycle transaction 경계에 `profile_hashtag` 관계 cleanup을 통합한다. terminal action·상태 전이는 구현하지 않으며, cleanup이 삭제된 Profile의 관계만 제거하고 canonical Hashtag row·다른 Profile/Post 관계는 보존하는 integration test를 추가한다. 물리 FK cascade safety는 별도 DB test로 검증한다.
-- [ ] 1.5 GraphQL `Profile.tags`와 optional update input·payload를 구현하고 Profile Origin/연결 Instance Kind가 Local인 모든 Profile의 저장 순서 batch 조회, Remote 빈 목록, 입력 의미와 기존 update 호환성 integration test를 추가한다.
+- [ ] 1.5 GraphQL `Profile.tags`와 optional update input·payload를 구현하고 Profile Origin/연결 Instance Kind가 Local인 모든 Profile의 관계 batch 조회, Remote 빈 목록, 배열 순서 비보장, 입력 의미와 기존 update 호환성 integration test를 추가한다.
 - [ ] 1.6 `@kosmo/core`·`@kosmo/api` 필수 검증과 schema 동기화를 통과시키고 `PROD-526` PR에 migration·권한·transaction·query-count 및 `PROD-532` dependency/cleanup integration 증거를 기록한다.
 
 ## 2. PROD-527 프로필 수정·공개 화면 연결
@@ -62,25 +62,25 @@ Local Profile Owner가 승인된 Profile Tag 목록을 다른 Profile 값과 원
 
 **Guardrails**
 
-- `PROD-491`의 controlled editor·client validation·순서 변경 presentation과 `PROD-492`의 route·저장 action을 재사용하며 editor, route나 저장 흐름을 중복 구현하지 않는다.
-- chip은 normalized name 앞에 `#`를 한 번만 표시하고, 추가는 끝에 배치하며 제거 뒤 상대 순서를 유지한다.
-- `PROD-491`이 제공한 최대 5개·문자·길이·normalized duplicate client validation을 재사용하고 server validation을 권위로 유지한다.
-- Profile 저장 중 중복 제출을 막고 실패 뒤 Tag 순서와 다른 draft를 보존하며, 성공 뒤 payload의 tags로 Relay Profile record를 동기화한다.
-- 순서 변경은 drag 없이도 키보드·스크린리더로 가능해야 하고 제거·이동 action은 최소 44×44 target과 명확한 accessibility label/state를 제공한다.
-- 공개 Tag는 bio 다음·통계와 콘텐츠보다 앞에서 wrap하고, 빈 목록은 섹션을 숨기며 검색 전달 전에는 링크·버튼으로 만들지 않는다.
+- `PROD-491`의 controlled editor·client validation과 `PROD-492`의 route·저장 action을 재사용하며 editor, route나 저장 흐름을 중복 구현하지 않는다. 순서 변경 control은 추가하지 않는다.
+- chip은 normalized name 앞에 `#`를 한 번만 표시하고, 추가·제거를 지원한다. 개수·관계 position·저장/표시 순서를 UI 계약으로 만들지 않는다.
+- `PROD-491`이 제공한 Hashtag Name syntax·문자·길이·canonical identity duplicate client validation을 재사용하고 server Hashtag validation을 권위로 유지한다. 제품 max count validation은 추가하지 않는다.
+- Profile 저장 중 중복 제출을 막고 실패 뒤 현재 Tag draft와 다른 draft를 보존하며, 성공 뒤 payload의 tags로 Relay Profile record를 동기화한다. 배열 순서는 계약으로 해석하지 않는다.
+- 제거 action은 최소 44×44 target과 명확한 accessibility label/state를 제공하고, 순서 변경 action이나 drag gesture는 제공하지 않는다.
+- 공개 Tag는 bio 다음·통계와 콘텐츠보다 앞에서 wrap하고, 빈 목록은 섹션을 숨기며 검색 전달 전에는 링크·버튼으로 만들지 않는다. TagChip 목록의 배열 순서는 계약하지 않는다.
 - 기존 theme token·breakpoint와 React Native primitive를 재사용하고 Remote Profile Tag, 검색·자동완성·추천·trend를 추가하지 않는다.
 
 **Verification**
 
-- `PROD-491` editor의 기본·추가·제거·순서 변경·5개·invalid·duplicate 상태가 연결 뒤에도 회귀하지 않고 pending·server failure·retry·Relay 성공 상태와 함께 동작하는지 component/Storybook interaction test로 검증한다.
-- 기존 keyboard·screen-reader 대체 이동과 client validation을 재사용했는지 확인하고, server parity·native accessibility label/state·44×44 target·색 외 상태 표현과 좁은 화면 wrapping을 접근성·layout test로 보강한다.
-- 빈/최대/긴 Local tags와 Remote 빈 tags를 Web·Android·iOS 공용 상태 카탈로그에서 검증한다.
+- `PROD-491` editor의 기본·추가·제거·임의 개수·invalid·canonical identity duplicate 상태가 연결 뒤에도 회귀하지 않고 pending·server failure·retry·Relay 성공 상태와 함께 동작하는지 component/Storybook interaction test로 검증한다. 순서 변경·max count 제약이 추가되지 않았는지도 확인한다.
+- Hashtag-owned client validation과 server parity를 재사용했는지 확인하고, native accessibility label/state·44×44 target·색 외 상태 표현과 좁은 화면 wrapping을 접근성·layout test로 보강한다. 순서 변경 control이 없음을 검증한다.
+- 빈/임의 개수/긴 Local tags와 Remote 빈 tags를 Web·Android·iOS 공용 상태 카탈로그에서 검증한다.
 - Owner 편집 저장부터 공개 Profile 재조회·표시까지 Web E2E를 검증하고 `pnpm --filter @kosmo/app test`, `pnpm --filter @kosmo/web test`의 관련 suite를 통과시킨다.
 
 - [ ] 2.1 `PROD-491`의 controlled Profile Tag editor를 재작성하지 않고 `PROD-492` Profile edit route·저장 흐름에 연결해 현재 tags를 초기화한다.
-- [ ] 2.2 `PROD-491`의 최대 개수·normalization 미리보기·문자·길이·duplicate validation과 keyboard/screen-reader 순서 변경을 재사용하고 회귀·server parity를 검증하며, `PROD-527` 고유의 native accessibility·touch target 상태를 보강한다.
+- [ ] 2.2 `PROD-491`의 Hashtag Name normalization 미리보기·문자·길이·canonical identity duplicate validation을 재사용하고 회귀·server parity를 검증하며, `PROD-527` 고유의 native accessibility·touch target 상태를 보강한다. max count·순서 변경 control은 추가하지 않는다.
 - [ ] 2.3 기존 Profile mutation에 전체 Tag draft를 포함하고 pending·server field error·retry·성공 Relay record 동기화를 구현해 상태 전이를 검증한다.
-- [ ] 2.4 공개 Profile의 bio 다음에 저장 순서의 비대화형 wrapping TagChip 목록을 연결하고 빈·최대·긴·Remote 상태 test를 추가한다.
+- [ ] 2.4 공개 Profile의 bio 다음에 비대화형 wrapping TagChip 목록을 연결하고 빈·임의 개수·긴·Remote 상태와 배열 순서 비보장 test를 추가한다.
 - [ ] 2.5 Web·Android·iOS 공용 상태 카탈로그, app 필수 check와 Owner 편집→공개 표시 Web E2E를 통과시키고 `PROD-527` PR에 접근성·layout·Relay 증거를 기록한다.
 
 ## 3. PROD-522 통합 검증과 OpenSpec archive
@@ -120,7 +120,7 @@ Local Profile Owner가 승인된 Profile Tag 목록을 다른 Profile 값과 원
 - `node_modules/.bin/openspec validate add-profile-tags --strict`를 archive 전 통과시키고 archive 뒤 전체 OpenSpec validation과 canonical delta 반영을 확인한다.
 
 - [ ] 3.1 `PROD-532` terminal action의 완료·필수 검증과 `PROD-526`·`PROD-527`의 완료 조건, PR, 필수 test와 unresolved review thread가 모두 정리되었는지 확인한다.
-- [ ] 3.2 backend와 universal client 결과를 통합해 Owner 성공·Deactivated 편집·Deleted/Suspended/Remote/non-Owner/inactive Account 거부·validation 실패·rollback·draft retry·공개 순서·Active+Normal visibility 종단 간 시나리오를 검증한다. `PROD-532`가 제공한 terminal lifecycle 경계에서의 Profile Tag 관계 cleanup과 물리 Profile row 삭제 FK cascade safety는 terminal action 자체의 검증과 서로 별도 통합·DB 검증으로 확인한다.
+- [ ] 3.2 backend와 universal client 결과를 통합해 Owner 성공·Deactivated 편집·Deleted/Suspended/Remote/non-Owner/inactive Account 거부·Hashtag Name validation·canonical identity duplicate·rollback·draft retry·배열 순서 비보장·Active+Normal visibility 종단 간 시나리오를 검증한다. 제품 max count·position·reorder 제약이 없는지도 확인한다. `PROD-532`가 제공한 terminal lifecycle 경계에서의 Profile Tag 관계 cleanup과 물리 Profile row 삭제 FK cascade safety는 terminal action 자체의 검증과 서로 별도 통합·DB 검증으로 확인한다.
 - [ ] 3.3 기존 Profile update·공개/Remote 조회 회귀와 검색·navigation·ActivityPub 제외 범위를 확인하고 부모 `PROD-522`에 통합 증거를 기록한다.
 - [ ] 3.4 구현과 canonical·Linear·OpenSpec 정합성을 재검토하고 필요한 upstream 승인·delta 수정 뒤 strict validation을 통과시킨다.
 - [ ] 3.5 모든 task와 통합 gate가 완료된 뒤 `add-profile-tags`를 archive하고 archive 후 validation·Linear 완료 상태를 확인한다.
