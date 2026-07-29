@@ -21,7 +21,11 @@ Web Storybook 상태 카탈로그를 전달한다. Native route 연결과 실제
 - Switch가 켜지면 `OPEN`, 꺼지면 `APPROVAL_REQUIRED`로 해석하고 다른 Profile draft와 같은 submit callback에
   포함한다. 별도 즉시 저장이나 별도 mutation seam을 만들지 않는다.
 - 현재 avatar/header를 초기 draft로 사용하고 공통 `유지` action row를 두지 않는다. 각 이미지의 편집 control은
-  해당 field만 변경하며 초기값과 같은 draft에서는 저장을 disabled로 표현한다.
+  해당 field만 변경하며 초기값과 같은 draft에서는 저장을 disabled로 표현한다. header `3:1` preview 전체와
+  `96×96` avatar preview 전체를 각각 단일 편집 button으로 사용하고 별도의 연필 button을 두지 않는다.
+- 상단 navigation header는 safe-area를 제외한 content 높이 `48px`, 뒤로가기 action은 `48×48`로 유지한다.
+- 새로 입력하거나 변경한 displayName에는 1~40자 validation을 적용한다. 40자를 초과하는 legacy 초기값은 form에
+  들어온 원문과 정확히 같은 경우에만 다른 field 저장을 막지 않는다.
 - inline TagChip 추가·제거를 제공하되 Tag 저장·Relay는 연결하지 않는다. 개수 상한·순서
   변경 UI·gesture는 추가하지 않는다.
 - Profile Link와 기존 Figma 시안의 범위 밖 field를 포함하지 않는다.
@@ -38,10 +42,15 @@ Web Storybook 상태 카탈로그를 전달한다. Native route 연결과 실제
   callback 없음/unchanged disabled, saving 중 재토글 방지를 확인한다.
 - avatar/header 각각의 교체·제거·upload-wait·error, saving·failure·retry controlled state와 이미지 오류의
   `<label> 이미지 업로드에 실패했어요. 다시 시도해 주세요.` 안내를 검증한다.
+- caller가 제공한 임의 오류 detail 대신 canonical 이미지 오류 문구만 표시하는지 확인한다.
 - 한 이미지 field만 편집할 때 다른 이미지의 현재 draft가 유지되고 공통 `유지` action row가 없는지 확인한다.
+- header·avatar preview 전체가 각각 단일 button이고 중앙 camera affordance, pressed veil, disabled/accessibility
+  state를 제공하며 별도 연필 button이나 중첩 focus target이 없는지 확인한다.
 - `390×130`, `600×200`과 중간 폭에서 header preview가 `3:1`이며 wrapper·avatar·action이 비율을
   왜곡하지 않는지 검증한다.
-- Web 390·1024·1440 wrapping과 Profile Tag 제거 action의 `32×32 CSS px` target을 확인한다.
+- Web 390·1024·1440 wrapping, 상단 navigation header·뒤로가기 action의 `48px` geometry와 Profile Tag 제거
+  action의 `32×32 CSS px` target을 확인한다.
+- displayName 40자 경계, 40자 초과 legacy 초기값 그대로+다른 field 변경, 40자 초과 초기값 변경 거부를 확인한다.
 - Native 실제 기기의 safe area·layout과 Profile Tag 제거 action의 iOS `44×44 pt`, Android `48×48 dp`
   target은 PROD-492 전달 시 확인한다.
 - 테스트 코드 범위는 Profile edit form/editor의 승인 동작을 직접 검증하는 최소 component test로 제한하고 중복
@@ -56,6 +65,10 @@ Web Storybook 상태 카탈로그를 전달한다. Native route 연결과 실제
 - [x] 1.5 `followPolicy` Switch의 두 enum 초기 표시와 `OPEN`/`APPROVAL_REQUIRED` 양방향 제출, dirty·disabled·saving·failure·retry
       동작을 최소 component test와 Storybook 상태·a11y/static build로 검증하고 app 필수 check를 통과해 PROD-491
       PR에 증거를 기록한다.
+- [ ] 1.6 header·avatar preview 전체 button, 중앙 camera affordance·pressed veil, `48px` 상단 navigation header와
+      canonical 이미지 오류 문구를 구현하고 component test·Storybook에서 geometry·disabled·접근성 상태를 검증한다.
+- [ ] 1.7 40자를 초과하는 legacy displayName의 unchanged 호환 경계와 변경 시 1~40자 validation을 구현하고 경계
+      component test를 추가한다.
 
 ## 2. PROD-492 selected Owner route·API·Media 연결
 

@@ -93,6 +93,60 @@
 - Confirmation / Follow-up: Figma ratio lock과 component/Storybook에서 390·600·중간 폭의 계산된 크기를
   검증한다.
 
+### Header와 avatar preview 전체를 단일 이미지 편집 button으로 사용한다
+
+- Decision Date: 2026-07-29
+- Decision Class: User-confirmed Decision
+- Authority / Provenance: `docs/design/profile-edit.md`, `PROD-491`, 2026-07-29 사용자 확인 A안
+- Status: Active
+- Context / Problem: preview 위의 작은 연필 button은 이미지 자체와 편집 동작의 관계가 약하고 Native 입력 target을
+  충분히 제공하지 못한다. 별도 icon target을 키우면 header와 avatar 위에 불필요한 control 면적이 생긴다.
+- Decision Outcome: header의 실제 `3:1` preview 전체와 `96×96` avatar preview 전체를 각각 하나의 Pressable로
+  사용한다. 각 button 중앙에는 반투명 원형 scrim 위 흰색 camera icon을 두고 press 중에는 이미지 전체에 옅은
+  veil을 표시한다. camera affordance는 장식 요소이며 별도의 focus target이 아니다. 편집 callback이 없거나
+  form이 disabled/saving 상태면 preview 전체 button을 disabled로 표현한다.
+- Alternatives Considered: 기존 작은 연필 button은 Native target과 이미지-동작 관계가 약해 제외했다. 우하단
+  camera button은 avatar에는 익숙하지만 header와 상호작용 계약이 달라지고 이미지 일부를 가려 제외했다. 이미지
+  아래 text action은 field마다 세로 공간을 늘려 제외했다.
+- Consequences: Web·Android·iOS가 같은 whole-image interaction을 공유하고 별도 연필 button을 제거한다. icon은
+  접근성 tree에서 숨기며 preview button 하나에 field별 label/state를 제공한다. header 비율과 avatar overlap은
+  그대로 유지한다.
+- Confirmation / Follow-up: component test와 Storybook에서 header 전체 button의 `3:1` geometry, avatar button의
+  `96×96`, 중앙 camera affordance, pressed/disabled state와 단일 accessibility target을 검증한다.
+
+### 상단 navigation header는 safe area를 제외하고 48px를 유지한다
+
+- Decision Date: 2026-07-29
+- Decision Class: User-confirmed Decision
+- Authority / Provenance: `docs/design/profile-edit.md`, `PROD-491`, 2026-07-29 사용자 확인
+- Status: Active
+- Context / Problem: compact 화면에서 상단 제목·저장 행이 불필요하게 높아지지 않으면서 Native 뒤로가기 action의
+  충분한 입력 target을 확보해야 한다.
+- Decision Outcome: shell이 소유하는 safe-area inset을 제외한 상단 navigation header content 높이를 정확히
+  `48px`로 유지하고, 뒤로가기 action은 행 전체 높이의 `48×48` target을 사용한다.
+- Alternatives Considered: Web 기준의 더 작은 공통 높이는 Native 뒤로가기 target을 줄여 제외했다. safe-area까지
+  포함한 고정 `48px`은 기기별 inset을 침범하므로 제외했다.
+- Consequences: Web과 Native의 header content rhythm은 같고, safe-area padding은 외부 shell이 별도로 소유한다.
+- Confirmation / Follow-up: Storybook에서 content row와 뒤로가기 target이 `48px`인지 검증하고 Native 실제 safe-area
+  배치는 PROD-492 route 통합에서 확인한다.
+
+### 40자를 초과한 legacy 표시 이름은 변경하지 않은 경우에만 통과시킨다
+
+- Decision Date: 2026-07-29
+- Decision Class: Derived Compatibility Contract
+- Authority / Provenance: `docs/design/profile-edit.md`, 현재 core/API Profile validation, `PROD-491`, `PROD-492`
+- Status: Active
+- Context / Problem: presentation의 새 표시 이름 제한은 40자지만 현재 서버가 더 긴 값을 보유할 수 있어, legacy
+  Profile이 bio·정책·이미지처럼 무관한 field를 편집하지 못하는 회귀가 생길 수 있다.
+- Decision Outcome: 초기 displayName이 40자를 초과하면 form에 들어온 원문과 정확히 같은 값인 동안에만 legacy
+  값으로 허용한다. 새 값이나 원문에서 한 글자라도 달라진 값에는 1~40자 규칙을 적용한다.
+- Alternatives Considered: 모든 40자 초과 초기값을 즉시 invalid로 만드는 방식은 무관한 field 저장을 막아 제외했다.
+  UI 제한을 서버의 현행 상한까지 늘리는 방식은 승인된 40자 제품 계약을 무효화해 제외했다.
+- Consequences: PROD-491은 existing-value compatibility를 presentation validation에 반영하고, PROD-492는 서버
+  계약·migration 방향을 정렬한다. 사용자가 값을 변경했다가 원문과 정확히 같게 되돌리면 unchanged legacy로 본다.
+- Confirmation / Follow-up: 40자 이하 경계, 40자 초과 초기값 그대로+다른 field 변경, 40자 초과 초기값 변경을
+  component test와 후속 route integration test로 검증한다.
+
 ### Follow Approval Policy는 현재 Profile edit draft/save가 소유하고 PROD-531에서 Settings로 이전한다
 
 - Decision Date: 2026-07-29

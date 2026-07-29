@@ -17,7 +17,9 @@
 5. 팔로우 요청 자동 승인
 6. 프로필 태그
 
-- 표시 이름은 1~40자다.
+- 표시 이름은 새로 입력하거나 변경할 때 1~40자다. 서버 계약 정렬 전의 호환 경계로, 40자를 초과하는
+  legacy 초기값은 form에 들어온 원문과 정확히 같은 값으로 남겨 둔 경우에만 다른 field와 함께 저장할 수 있다.
+  40자를 초과한 이름을 한 글자라도 변경하면 1~40자 규칙을 적용한다.
 - bio는 500자 이하이며 긴 텍스트 입력으로 표현한다.
 - `팔로우 요청 자동 승인`은 설명 없는 한 줄 Switch로 표현한다. 독립 설정에 가까운 시각적 위계를 위해
   라벨은 SUIT `16/24`, weight `600`을 사용한다. Switch가 켜지면 `OPEN`, 꺼지면
@@ -26,8 +28,12 @@
 - 프로필 태그는 [Profile Tag 디자인](./profile-tags.md)의 Hashtag Name 정규화·중복·접근성
   계약을 따른다. 개수 상한과 순서·재정렬 계약은 두지 않는다.
 - form은 avatar와 header의 현재 이미지를 각각 초기 draft로 표시하며 별도의 `유지` action을 두지 않는다.
-  header와 avatar에는 각 field를 수정하는 편집 control만 제공하고, 한쪽을 편집해도 건드리지 않은 다른 쪽의
-  draft는 현재 값으로 남긴다. 각 field의 편집 흐름은 교체 선택, 제거, 업로드 대기와 오류를 구분해 표현한다.
+  header preview 전체와 avatar preview 전체를 각 field의 단일 편집 button으로 사용하고, 별도의 연필·편집
+  button은 두지 않는다. 한쪽을 편집해도 건드리지 않은 다른 쪽의 draft는 현재 값으로 남긴다. 각 field의 편집
+  흐름은 교체 선택, 제거, 업로드 대기와 오류를 구분해 표현한다.
+- header와 avatar button 중앙에는 반투명 원형 scrim 위의 흰색 camera icon을 표시하고, press 중에는 이미지
+  전체에 옅은 veil을 더한다. camera icon과 scrim은 장식 요소이며 별도의 focus target이나 중첩 button이 아니다.
+  편집 callback이 없거나 form이 disabled/saving 상태면 preview 전체 button을 disabled로 표현한다.
 - header 이미지 변경 영역은 모든 지원 폭에서 항상 가로:세로 `3:1`을 유지한다. avatar overlap과 편집
   control을 담는 hero wrapper는 이 비율에 포함하지 않으며 header preview의 높이를 고정값으로 두어 비율을
   왜곡하지 않는다.
@@ -53,7 +59,8 @@
 - Switch는 `followPolicy` enum을 controlled draft로 유지하며 별도 즉시 저장하지 않는다. 토글만 바꿔도
   draft가 dirty가 되고, 저장 callback에는 다른 Profile draft와 함께 현재 enum 값이 전달된다.
 - 이미지 업로드 오류는 해당 field의 `<label> 이미지 업로드에 실패했어요. 다시 시도해 주세요.` 문구로
-  안내하고 현재 image draft를 보존한다.
+  안내하고 현재 image draft를 보존한다. 내부 오류 detail이나 caller가 제공한 임의 문구를 사용자에게 그대로
+  표시하지 않는다.
 
 ### Production route와 저장
 
@@ -82,6 +89,8 @@
 
 - Web은 기존 KOSMO shell 안의 중앙 route로 제공하며 modal이나 별도 desktop-only route를 만들지 않는다.
 - 중앙 편집 surface는 최대 `600px`를 유지한다.
+- 상단 navigation header는 shell이 소유하는 safe-area inset을 제외한 content 높이를 정확히 `48px`로 유지한다.
+  뒤로가기 action은 이 행의 `48×48` 전체를 입력 target으로 사용하고 제목·저장 action은 같은 행 안에서 정렬한다.
 - header 이미지 변경 영역은 surface 폭을 기준으로 `aspect-ratio: 3 / 1`을 적용한다. 따라서 `600px`
   중앙 surface에서는 `600×200`, `390px` mobile에서는 `390×130`이며 임의 폭 `W`에서는 높이가
   `W / 3`이 된다.
@@ -100,8 +109,8 @@
   `44×44 pt`, Android `48×48 dp`로 제공한다. 공용 component가 시각 geometry와 platform별 입력 target을
   분리해 compact rhythm과 각 플랫폼 접근성 기준을 함께 지킨다.
 - text action은 최소 높이 `36`을 기준으로 한다.
-- 저장, 태그 제거와 header·avatar 각각의 편집 action은 대상과 상태를 포함한 accessibility label/state를
-  제공한다.
+- 저장, 태그 제거와 header·avatar 각각의 이미지 전체 button은 대상과 상태를 포함한 accessibility label/state를
+  제공한다. camera icon은 접근성 tree에서 숨기고 preview button 하나만 focus target으로 노출한다.
 - validation, disabled, saving과 failure를 색만으로 구분하지 않는다.
 - presentation은 저장 성공 문구를 남기지 않는다. production route가 성공 payload로 갱신된 Profile을 확보한 뒤
   해당 Profile로 복귀한다.
@@ -113,10 +122,12 @@
 
 - `04 Screens - Mobile`의 기존 Profile Edit 원본은 `07 Archive`에 보관한 뒤 현재 범위로 정리한다.
 - `05 Screens - Web`의 Profile 영역에 1440/1024 두 프레임을 추가한다.
-- Mobile/Web 모두 실제 `Header image preview` layer에 `3:1` ratio lock을 적용하고, avatar와 image
-  action을 배치하는 hero wrapper와 preview layer를 분리한다.
-- header와 avatar의 개별 편집 control은 preview 위에 유지하되, 두 이미지를 함께 다루는 `유지`·`교체`·`제거`
-  action row는 두지 않는다.
+- Mobile/Web 모두 상단 navigation header의 safe area 제외 높이를 `48px`로 고정하고 뒤로가기 action에
+  `48×48` 영역을 배정한다.
+- 실제 `Header image preview` layer에 `3:1` ratio lock을 적용하고, avatar overlap을 배치하는 hero wrapper와
+  preview layer를 분리한다. header preview 전체와 avatar preview 전체를 각각 단일 button으로 사용하며 중앙
+  camera affordance와 pressed veil을 표현한다.
+- 별도의 연필 button이나 두 이미지를 함께 다루는 `유지`·`교체`·`제거` action row는 두지 않는다.
 - 기존 모바일 시안의 `분류 태그 4/8`, AI 자동 추천과 현재 범위 밖 필드는 사용하지 않는다.
 - Figma 작업 환경에서는 [typography.md](./typography.md)의 대치 폰트와 Foundation variable, `02 Components`의
   현행 primitive를 사용한다.

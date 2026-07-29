@@ -16,6 +16,7 @@
 - **WHEN** 상태 카탈로그가 dirty, validation, upload-wait, saving, failure 또는 retry state를 제공한다
 - **THEN** form은 해당 상태를 색 외의 text와 accessibility state로 구분한다
 - **AND** 이미지 upload error는 해당 field의 `<label> 이미지 업로드에 실패했어요. 다시 시도해 주세요.` 문구로 안내한다
+- **AND** 내부 오류 detail이나 caller가 제공한 임의 문구를 사용자에게 그대로 표시하지 않는다
 - **AND** failure와 retry state에서 현재 text, Tag 목록과 image draft를 유지한다
 
 #### Scenario: Keep untouched image fields as their current draft
@@ -24,6 +25,14 @@
 - **THEN** 해당 preview의 draft만 교체·제거·upload state로 변경된다
 - **AND** 건드리지 않은 이미지 field는 현재 값을 draft로 유지한다
 - **AND** 별도의 `유지` action이나 두 이미지의 공통 `유지`·`교체`·`제거` action row를 표시하지 않는다
+
+#### Scenario: Use each image preview as the only edit button
+
+- **WHEN** header 또는 avatar 편집 callback이 제공되고 form이 편집 가능한 상태다
+- **THEN** header의 `3:1` preview 전체와 `96×96` avatar preview 전체를 각각 하나의 button으로 제공한다
+- **AND** 각 button 중앙에 반투명 원형 scrim과 흰색 camera icon을 표시하고 press 중 이미지 전체에 옅은 veil을 표시한다
+- **AND** 별도의 연필 button이나 중첩 focus target을 표시하지 않는다
+- **AND** callback이 없거나 form이 disabled/saving 상태면 해당 preview button을 disabled와 접근성 상태로 표현한다
 
 ### Requirement: Follow Approval Policy uses the Profile edit draft boundary
 
@@ -45,7 +54,7 @@
 
 ### Requirement: Profile edit fields and Profile Tag interaction
 
-**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/profile-tags.md`, `PROD-491`, `PROD-522` — Profile edit presentation은 1~40자 displayName, 500자 이하 bio와 avatar/header별 controlled 편집 control을 제공해야 하며(MUST), 개수 상한 없이 Profile Tag를 inline chip으로 추가·제거할 수 있어야 한다(MUST). 순서·재정렬 control을 제공해서는 안 되며(MUST NOT), 승인되지 않은 field를 표시해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/profile-tags.md`, `PROD-491`, `PROD-522` — Profile edit presentation은 새로 입력하거나 변경한 값에 1~40자 displayName, 500자 이하 bio와 avatar/header별 controlled 편집 control을 제공해야 하며(MUST), 40자를 초과한 legacy displayName은 초기 원문과 정확히 같은 경우에만 허용해야 한다(MUST). 개수 상한 없이 Profile Tag를 inline chip으로 추가·제거할 수 있어야 하고(MUST), 순서·재정렬 control을 제공해서는 안 되며(MUST NOT), 승인되지 않은 field를 표시해서는 안 된다(MUST NOT).
 
 #### Scenario: Edit approved text and image fields
 
@@ -53,6 +62,13 @@
 - **THEN** form은 승인된 길이와 각 이미지 field의 교체·제거·upload-wait·error state를 표현한다
 - **AND** 초기값과 다른 field가 하나라도 있을 때 현재 draft를 저장할 수 있는 dirty state를 표현한다
 - **AND** Profile Link, handle, location, website, gender, pronouns, contacts와 pinned post를 표시하지 않는다
+
+#### Scenario: Preserve an unchanged legacy display name
+
+- **WHEN** 초기 displayName이 40자를 초과하고 사용자가 그 원문을 정확히 유지한 채 다른 field만 편집한다
+- **THEN** form은 legacy displayName만을 이유로 저장을 막지 않는다
+- **AND** displayName이 원문에서 한 글자라도 달라지면 새 값에 1~40자 validation을 적용한다
+- **AND** 사용자가 값을 변경했다가 원문과 정확히 같게 되돌리면 unchanged legacy 값으로 취급한다
 
 #### Scenario: Add and remove Profile Tags locally
 
@@ -82,7 +98,7 @@
 
 ### Requirement: Responsive accessible Profile edit layout
 
-**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/breakpoints.md`, `PROD-491` — Profile edit presentation은 Web shell 중앙 최대 600px surface와 mobile/native 정보 구조를 공유해야 한다(MUST). Profile Tag 제거 action은 시각 크기 `32×32`와 실제 입력 target Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp`를 분리하고, text action은 최소 높이 `36`과 대상·상태를 설명하는 accessibility label/state를 제공해야 한다(MUST).
+**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/breakpoints.md`, `PROD-491` — Profile edit presentation은 Web shell 중앙 최대 600px surface와 mobile/native 정보 구조를 공유해야 한다(MUST). safe-area를 제외한 상단 navigation header와 뒤로가기 action은 `48px` 높이를 유지해야 한다(MUST). Profile Tag 제거 action은 시각 크기 `32×32`와 실제 입력 target Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp`를 분리하고, text action은 최소 높이 `36`과 대상·상태를 설명하는 accessibility label/state를 제공해야 한다(MUST).
 
 #### Scenario: Render desktop shell layouts
 
@@ -94,6 +110,8 @@
 
 - **WHEN** 사용자가 header·avatar 편집, Tag 제거 또는 저장 action을 사용한다
 - **THEN** form은 각 action의 대상·동작·disabled 상태를 accessibility label/state로 전달한다
+- **AND** safe-area를 제외한 상단 navigation header content와 뒤로가기 target은 각각 `48px`, `48×48`이다
+- **AND** header·avatar의 camera icon은 접근성 tree에서 숨기고 각 preview button 하나만 focus target으로 제공한다
 - **AND** Profile Tag 제거 action은 `32×32` visual과 Web `32×32 CSS px`, iOS `44×44 pt`, Android
   `48×48 dp` 실제 입력 target을 제공한다
 - **AND** 색만으로 validation·disabled·saving·failure 상태를 구분하지 않는다
