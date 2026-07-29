@@ -70,9 +70,18 @@ Remote actor 검증 뒤 같은 action을 재사용할 수 있지만, ingress와 
   계층을 맞추기 위한 pass-through core service를 만들지 않는다.
 - 여러 DB 변경이 원자적이어야 하면 core action이 transaction 경계를 소유한다. 실제 caller
   transaction과 합류해야 할 때만 optional transaction을 받는다.
+- 새로운 Post origin이나 lifecycle 계약을 transaction 인자의 존재 여부에서 추론하지 않는다.
+  `createPost`처럼 origin별 lifecycle을 소유하는 action이 caller transaction과 합류하면서 commit 이후 side
+  effect까지 보장해야 한다면 `tx` 유무만으로 side effect를 생략하거나 commit 전에 실행하지 말고, 실제
+  요구가 생긴 시점에 명시적인 post-commit coordination 경계를 먼저 설계한다. capability 문서가
+  caller-owned transaction 경로의 lifecycle 생략을 현재 제한으로 명시한 기존 계약은 그 결정이 변경될
+  때까지 유지한다.
 - 외부 delivery나 notification처럼 DB transaction에 포함되지 않는 side effect는 domain write가 commit된
   뒤 실행한다. side effect 실패가 이미 commit된 domain 결과를 되돌려서는 안 되는 계약이면 실패를 호출
   경계에서 격리하고 commit된 상태를 유지한다.
+- rollback되어 존재하지 않는 domain transition의 Activity를 외부에 전달해서는 안 된다. 반대로 commit된
+  transition의 post-commit Activity delivery 실패나 현재 direct-delivery 경계에서의 전달 누락을 수용하는지는
+  각 capability가 명시적으로 결정할 수 있다.
 - core는 공통 domain error를 반환하고 각 진입점이 외부 오류 표현으로 mapping한다.
 - 실제 caller 없이 evaluator, callback, generic port나 대체 implementation을 미리 추가하지 않는다.
 
