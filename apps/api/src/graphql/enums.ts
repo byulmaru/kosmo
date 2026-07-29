@@ -15,3 +15,7 @@ createEnumRef('PostVisibility');
 createEnumRef('ProfileFollowPolicy');
 createEnumRef('InstanceKind');
 createEnumRef('ProfileState');
+
+export const FeedbackKind = builder.enumType('FeedbackKind', {
+  values: ['POSITIVE', 'NEGATIVE', 'FEATURE_REQUEST', 'BUG_REPORT'] as const,
+});

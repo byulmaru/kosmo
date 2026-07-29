@@ -2,7 +2,7 @@ import { ValidationError } from '@kosmo/core/error';
 import { z } from 'zod';
 import { deliverFeedback } from '@/feedback/delivery';
 import { builder } from '@/graphql/builder';
-import { FeedbackKind } from '../ref';
+import { FeedbackKind } from '@/graphql/enums';
 
 const sentryEventIdSchema = z
   .string()
