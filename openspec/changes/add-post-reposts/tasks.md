@@ -242,7 +242,7 @@ production fragment shape를 유지하는 fixture와 Storybook에서 Repost·Quo
 - 생성 mutation payload의 normalized Post identity·count·viewer relation을 사용하고 임시 목록 membership updater를 만들지 않는다.
 - 취소 성공 뒤 client count 산술, 광범위한 cache invalidation, 임시 refetch 또는 Source cache 직접 변경을 추가하지 않는다.
 - 취소 성공 뒤 임시 local deselect나 같은 Tombstone ID의 후속 입력을 막는 client 상태를 추가하지 않는다.
-- mutation 실패는 pending을 종료하고 서버 확정 domain/cache 상태를 유지한 채 action별 error callback을 호출한다. actual surface는 하나의 공용 transient toast host를 통해 정확한 한국어 문구, 약 3초 자동 dismiss, latest-replace와 alert semantics를 제공하고 persistent 오류·toast close/retry control·success toast는 추가하지 않는다.
+- mutation 실패는 pending을 종료하고 서버 확정 domain/cache 상태를 유지한 채 action별 error callback을 호출한다. actual surface는 하나의 공용 transient toast host를 통해 정확한 한국어 문구, 약 3초 자동 dismiss, latest-replace, 동일 문구 반복 시 새 alert instance와 dismiss timer 재시작 및 alert semantics를 제공하고 persistent 오류·toast close/retry control·success toast는 추가하지 않는다.
 - 새 외부 dependency를 추가하지 않고 최소 공용 toast host와 cross-platform action menu 경계만 만든다. private `RepostAction`의 Relay·mutation 소유권을 platform UI에 옮기지 않는다.
 - Storybook 전용 wrapper는 실제 Relay operation의 Post fragment ref를 `PostActionBar_post`에서 `RepostAction_post`까지 전달한다. 나머지 action의 production 조립·최종 disabled 정책과 전체 통합 검증은 PROD-432에 남긴다.
 - 공통 test harness를 신설하거나 기존 harness를 범용 확장하지 않는다.
@@ -251,7 +251,7 @@ production fragment shape를 유지하는 fixture와 Storybook에서 Repost·Quo
 
 - raw Relay unit test로 생성 payload의 Source Post cache 정규화, 취소 payload 뒤 Source cache 비변경과 서로 다른 actor Store 격리를 검증한다.
 - actual Post fragment ref를 받는 Storybook `PostActionBar` wrapper의 `play` interaction으로 parent→child fragment 전달, menu open·dismiss·항목 선택, Source Post ID 생성 호출, 정확한 Active Repost ID 취소, 같은 tick pending 중복 차단, 생성 성공, 취소 뒤 cache 비변경, network·GraphQL 오류 callback·재시도, selected Profile actor reset과 접근성 상태를 검증한다.
-- 목록·상세 integration에서 일반 Post·순수 Repost·Quote의 Action Bar final sibling·link 비중첩, 순수 Repost Source target과 action별 toast를 검증한다. Web anchored menu는 runtime에서 dismiss·focus·접근성을 확인하고, Android·iOS bottom action sheet는 공통 구현의 정적·Storybook 검증까지만 수행하며 touch·VoiceOver·TalkBack·back·safe area runtime 관찰은 Native 출시 gate에 남긴다.
+- 목록·상세 integration에서 일반 Post·순수 Repost·Quote의 Action Bar final sibling·link 비중첩, 순수 Repost Source target과 action별 toast를 검증한다. 동일 실패 문구 반복은 새 alert instance와 두 번째 호출 기준 dismiss timer 재시작을 검증한다. Web anchored menu는 runtime에서 dismiss·focus·접근성을 확인하고, Android·iOS bottom action sheet는 공통 구현의 정적·Storybook 검증까지만 수행하며 touch·VoiceOver·TalkBack·back·safe area runtime 관찰은 Native 출시 gate에 남긴다.
 
 - [x] 8.1 `PostActionBar.tsx`에는 `PostActionBar_post` composite fragment와 고정 순서·toolbar root를 남기고, 별도 internal `RepostAction.tsx`가 private `RepostAction_post` child fragment와 Repost 선택 상태·label·delete identity·mutation 종류를 소유하며 별도 internal `PostActionControl.tsx`를 렌더링한다.
 - [x] 8.2 private `RepostAction`에 `repostPost`·`deletePost`, pending·actor callback 격리를 두고 생성 normalized cache, 정확한 취소 identity, 취소 뒤 Source cache 비변경과 error callback 계약을 유지한다.
@@ -259,7 +259,8 @@ production fragment shape를 유지하는 fixture와 Storybook에서 Repost·Quo
 - [x] 8.4 `PostListItem`·`PostLayout`에 Action Bar를 final content-grid sibling이자 navigation link 밖에 배치하고, 순수 Repost surface는 direct Source fragment를 Action Bar target으로 공급한다.
 - [x] 8.5 새 dependency 없이 Web anchored menu와 Android·iOS bottom action sheet의 공용 Repost action menu 경계를 구현하고 선택·미선택 label, dismiss·keyboard/focus/back·접근성 및 pending 중복 차단을 검증한다.
 - [x] 8.6 앱 provider의 단일 transient toast host와 actual surface의 action별 Repost error callback 연결을 구현하고 정확한 문구, latest-replace, 약 3초 dismiss, safe area·tab bar 위치, alert semantics와 실패 뒤 상태 유지·재시도를 검증한다.
-- [ ] 8.7 app check·unit·Relay·Storybook·static Storybook·Web runtime 및 scoped·전체 strict OpenSpec 검증을 통과시킨다. Android·iOS는 공통 구현의 정적·Storybook 검증만 수행하고 44pt·48dp target 복구와 touch·VoiceOver·TalkBack·bottom sheet runtime 관찰을 Native 출시 gate에 남긴다.
+- [x] 8.7 app check·unit·Relay·Storybook·static Storybook·Web runtime 및 scoped·전체 strict OpenSpec 검증을 통과시킨다. Android·iOS는 공통 구현의 정적·Storybook 검증만 수행하고 44pt·48dp target 복구와 touch·VoiceOver·TalkBack·bottom sheet runtime 관찰을 Native 출시 gate에 남긴다.
+- [x] 8.8 활성 toast와 동일한 실패 문구가 다시 발생해도 증가하는 identity의 새 alert instance로 교체하고 dismiss timer를 다시 시작하도록 하며, 단일 alert host·반복 알림·두 번째 호출 기준 자동 dismiss를 focused Storybook interaction으로 검증한다.
 
 ## 9. PROD-415 Post renderer Repost 연결
 

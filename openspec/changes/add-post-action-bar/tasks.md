@@ -81,7 +81,7 @@ PROD-434의 독립 `actionBar?: ReactNode`·mock surface slice를 실행하지 �
 - private Repost child의 fragment·mutation·pending·actor 격리와 생성 cache 정규화·취소 cache 비변경을 유지한다.
 - trigger에서 mutation을 즉시 실행하지 않고 menu item 선택 뒤 실행한다. `인용하기`는 PROD-431 전까지 노출하지 않는다.
 - 새 외부 dependency 없이 최소 공용 toast host와 platform action menu 경계만 구현한다.
-- toast는 exact action별 copy, 약 3초 dismiss, latest-replace, safe area·tab bar 위치와 alert semantics를 제공하고 close·retry control·success toast를 두지 않는다.
+- toast는 exact action별 copy, 약 3초 dismiss, latest-replace, 동일 문구 반복 시 새 alert instance와 dismiss timer 재시작, safe area·tab bar 위치와 alert semantics를 제공하고 close·retry control·success toast를 두지 않는다.
 - 최종 disabled policy, 나머지 action 조립, More와 전체 통합 archive는 PROD-432에 남긴다.
 
 **Verification**
@@ -89,7 +89,7 @@ PROD-434의 독립 `actionBar?: ReactNode`·mock surface slice를 실행하지 �
 - 일반 Post·순수 Repost·Quote의 목록 final slot·상세 final Action Bar, link 비중첩과 순수 Repost Source target을 검증한다.
 - 목록의 세 Post variant에서 Action Bar slot 상단 padding 0·하단 padding 4, 1px semantic divider color, 순수 Repost attribution line box 20과 Source 표준행까지 gap 0, Quote Source preview 내부 하단 padding 4px과 border 밖에서 Action Bar까지 8px을 검증한다.
 - Web outside/Escape/focus return·keyboard navigation과 Native backdrop/back/dismiss/safe area·modal semantics를 검증한다.
-- menu label·item 선택 뒤 create/delete identity·pending, exact toast·latest-replace·자동 dismiss·alert semantics·light `#262626` accent·message 2px optical shift, 실패 뒤 상태 유지·menu 재시도를 검증한다.
+- menu label·item 선택 뒤 create/delete identity·pending, exact toast·latest-replace·동일 문구 반복 시 새 alert instance와 dismiss timer 재시작·자동 dismiss·alert semantics·light `#262626` accent·message 2px optical shift, 실패 뒤 상태 유지·menu 재시도를 검증한다.
 
 - [x] 3.1 `PostListItem`·`PostLayout`에 actual Action Bar를 final sibling으로 배치하고 순수 Repost Source target과 navigation 비중첩을 연결한다.
 - [x] 3.2 Web anchored menu와 Android·iOS bottom action sheet를 구현하고 선택·미선택 label, dismiss·focus/back·접근성, `인용하기` 미노출과 항목 선택 뒤 mutation을 검증한다.
@@ -103,9 +103,10 @@ PROD-434의 독립 `actionBar?: ReactNode`·mock surface slice를 실행하지 �
 - [x] 3.10 목록 Action Bar final slot의 상단 padding을 0, 하단 padding을 `spacing.xs` 4px로 조정하고 Quote Source preview border 아래에만 4px 간격을 추가해 focused Storybook interaction을 통과시킨다.
 - [x] 3.11 비대칭 spacing 변경 뒤 app·Storybook·lint와 전체 OpenSpec strict validation을 다시 통과시키고 390px Web runtime을 관찰한다.
 - [x] 3.12 Web Repost menu를 scroll container 밖의 downward overlay로 배치해 첫 item이 trigger pointer 지점을 덮고 viewport 안으로 보정되게 하며, theme card surface·36px item 높이·128px 최소폭·18px icon·14px·500 label·8px 좌우 padding·1px border·`0 2px 4px` shadow 및 같은 위치 두 번째 pointer 선택을 focused Storybook interaction으로 검증한다.
-- [ ] 3.13 Web menu 변경 뒤 app·Storybook·lint와 전체 OpenSpec strict validation을 통과시키고 Home·Bookmark scroll surface와 390px Web runtime에서 비클리핑·pointer 선택·focus 복귀를 관찰한다.
+- [x] 3.13 Web menu 변경 뒤 app·Storybook·lint와 전체 OpenSpec strict validation을 통과시키고 Home·Bookmark scroll surface와 390px Web runtime에서 비클리핑·pointer 선택·focus 복귀를 관찰한다.
 - [x] 3.14 Quote 목록에서만 Source preview 내부 하단 padding을 `spacing.xs` 4px로 줄이고 border 밖에서 Action Bar까지 `spacing.sm` 8px 간격을 두며, 일반 Post·순수 Repost·상세 Source preview는 변경하지 않는다.
 - [x] 3.15 focused Storybook interaction에서 Quote preview 내부 4px·외부 8px geometry를 검증하고 390px Web runtime에서 시각 결과를 확인한다.
+- [x] 3.16 활성 toast와 동일한 실패 문구가 다시 발생해도 증가하는 identity의 새 alert instance로 교체하고 dismiss timer를 다시 시작하도록 하며, 단일 alert host·반복 알림·두 번째 호출 기준 자동 dismiss를 focused Storybook interaction으로 검증한다.
 
 ## 4. PROD-432 실제 액션 연결·통합 검증·archive
 

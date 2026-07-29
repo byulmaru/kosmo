@@ -71,8 +71,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 생성 실패 문구는 `재게시하지 못했습니다. 잠시 후 다시 시도해 주세요.`다.
 - 취소 실패 문구는 `재게시를 취소하지 못했습니다. 잠시 후 다시 시도해 주세요.`다.
 - toast는 화면 하단에서 safe area와 고정 탭 바 위에 표시하고 약 3초 뒤 자동으로 사라진다. 새 toast가 오면
-  기존 toast를 교체하며 queue, 닫기 control과 toast 내부 재시도 control은 두지 않는다.
-- 오류 toast는 보조 기술이 즉시 인식할 수 있는 alert semantics를 제공한다.
+  기존 toast를 교체하고 dismiss timer를 다시 시작하며 queue, 닫기 control과 toast 내부 재시도 control은 두지 않는다.
+- 오류 toast는 보조 기술이 즉시 인식할 수 있는 alert semantics를 제공한다. 활성 toast와 같은 문구가 다시
+  발생해도 새 alert instance로 교체해 보조 기술이 반복된 실패를 다시 인식할 수 있어야 한다.
 - light toast는 `accent`의 `#262626` 배경, dark toast는 `#ffffff` 배경을 사용한다. message line box와 toast
   padding은 유지하고 glyph만 2px 아래로 이동해 시각 중심을 맞춘다.
 - 실패 시 pending만 종료하고 이전 서버 확정 selected 상태, `repostCount`와 Relay cache를 유지한다. 사용자는
@@ -105,5 +106,6 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - Native 44pt·48dp Action Bar target과 VoiceOver·TalkBack runtime은 출시 전 후속 gate로 남기고, 현재 28px
   공통 구현의 완료 증거로 보고하지 않는다.
 - 선택·미선택 상태의 메뉴 label, pending 중복 차단, 생성·취소 mutation identity와 actor 격리를 검증한다.
-- 실패 문구, latest-replace, 자동 dismiss, alert semantics, light `#262626` accent와 message 2px optical shift,
-  실패 뒤 상태 유지·다음 입력 재시도를 검증한다.
+- 실패 문구, latest-replace, 동일 문구 반복 시 새 alert instance와 dismiss timer 재시작, 자동 dismiss,
+  alert semantics, light `#262626` accent와 message 2px optical shift, 실패 뒤 상태 유지·다음 입력 재시도를
+  검증한다.

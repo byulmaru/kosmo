@@ -14,8 +14,14 @@ type ToastContextValue = Readonly<{
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
+type Toast = Readonly<{
+  id: number;
+  message: string;
+}>;
+
 export function ToastProvider({ children }: PropsWithChildren): ReactNode {
-  const [message, setMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
+  const nextToastId = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -27,9 +33,9 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
     if (timer.current) {
       clearTimeout(timer.current);
     }
-    setMessage(nextMessage);
+    setToast({ id: nextToastId.current++, message: nextMessage });
     timer.current = setTimeout(() => {
-      setMessage(null);
+      setToast(null);
       timer.current = null;
     }, toastDurationMs);
   }, []);
@@ -46,14 +52,15 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      {message ? (
+      {toast ? (
         <View
+          key={toast.id}
           accessibilityLiveRegion="assertive"
           accessibilityRole="alert"
           style={[Platform.OS === 'web' ? webHost : styles.nativeHost, { paddingBottom: bottom }]}
         >
           <View style={[styles.toast, { backgroundColor: theme.accent }]}>
-            <Text style={[styles.message, { color: theme.background }]}>{message}</Text>
+            <Text style={[styles.message, { color: theme.background }]}>{toast.message}</Text>
           </View>
         </View>
       ) : null}

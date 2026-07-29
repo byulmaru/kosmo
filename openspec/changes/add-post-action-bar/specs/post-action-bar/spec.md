@@ -271,6 +271,7 @@ Reaction Type 선택·해제와 Type별 count·Profile 목록은 PROD-417·PROD-
 - **THEN** production surface는 해당 액션의 pending을 종료하고 요청 직전의 확정된 `expanded`·`hasReposted`·`hasReacted`·`hasBookmarked`와 제공된 Reply·Repost count를 유지한다
 - **AND** Repost 생성 실패는 `재게시하지 못했습니다. 잠시 후 다시 시도해 주세요.`, 취소 실패는 `재게시를 취소하지 못했습니다. 잠시 후 다시 시도해 주세요.`라는 toast로 안내하고 같은 내용을 보조 기술이 즉시 인식할 수 있게 한다
 - **AND** Repost toast는 safe area와 고정 탭 바 위의 화면 하단에서 약 3초 뒤 사라지고 새 toast가 기존 toast를 교체한다
+- **AND** 활성 toast와 같은 실패 문구가 다시 발생해도 새 alert instance로 교체하고 dismiss timer를 다시 시작해 보조 기술이 반복된 실패를 다시 인식할 수 있게 한다
 - **AND** light toast는 `#262626` accent 배경을 사용하고 message line box·padding을 유지한 채 glyph를 2px 아래로 이동한다
 - **AND** Action Bar에 지속 error 상태나 toast close·retry control을 공급하지 않고, 사용자가 Repost menu를 다시 열어 같은 항목을 선택하면 재시도할 수 있게 한다
 
