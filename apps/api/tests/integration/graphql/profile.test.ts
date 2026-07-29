@@ -698,12 +698,12 @@ describe('GraphQL remote profile boundary', () => {
     const result = await requestGraphQL<{
       updateProfile: { profile: { displayName: string; id: string } };
     }>(
-      `mutation UpdateOwnedProfile($id: ID!, $displayName: String!) {
-        updateProfile(input: { id: $id, displayName: $displayName }) {
+      `mutation UpdateOwnedProfile($displayName: String!) {
+        updateProfile(input: { displayName: $displayName }) {
           profile { displayName id }
         }
       }`,
-      { displayName: 'Updated Owner', id: globalId('Profile', auth.profile.id) },
+      { displayName: 'Updated Owner' },
       auth.token,
     );
 
@@ -719,12 +719,12 @@ describe('GraphQL remote profile boundary', () => {
     const update = await requestGraphQL<{
       updateProfile: { profile: { displayName: string; tags: string[] } };
     }>(
-      `mutation UpdateProfileTags($id: ID!, $tags: [String!]) {
-        updateProfile(input: { id: $id, displayName: "Tagged Owner", tags: $tags }) {
+      `mutation UpdateProfileTags($tags: [String!]) {
+        updateProfile(input: { displayName: "Tagged Owner", tags: $tags }) {
           profile { displayName tags }
         }
       }`,
-      { id: globalId('Profile', auth.profile.id), tags: [' #Ｆｏｏ ', 'Straße'] },
+      { tags: [' #Ｆｏｏ ', 'Straße'] },
       auth.token,
     );
 
@@ -735,12 +735,12 @@ describe('GraphQL remote profile boundary', () => {
     const omitted = await requestGraphQL<{
       updateProfile: { profile: { bio: string | null; tags: string[] } };
     }>(
-      `mutation PreserveOmittedTags($id: ID!) {
-        updateProfile(input: { id: $id, bio: "updated bio" }) {
+      `mutation PreserveOmittedTags {
+        updateProfile(input: { bio: "updated bio" }) {
           profile { bio tags }
         }
       }`,
-      { id: globalId('Profile', auth.profile.id) },
+      {},
       auth.token,
     );
     assertNoGraphQLErrors(omitted);
@@ -750,10 +750,10 @@ describe('GraphQL remote profile boundary', () => {
     const nullInput = await requestGraphQL<{
       updateProfile: { profile: { tags: string[] } };
     }>(
-      `mutation PreserveNullTags($id: ID!) {
-        updateProfile(input: { id: $id, tags: null }) { profile { tags } }
+      `mutation PreserveNullTags {
+        updateProfile(input: { tags: null }) { profile { tags } }
       }`,
-      { id: globalId('Profile', auth.profile.id) },
+      {},
       auth.token,
     );
     assertNoGraphQLErrors(nullInput);
@@ -762,10 +762,10 @@ describe('GraphQL remote profile boundary', () => {
     const cleared = await requestGraphQL<{
       updateProfile: { profile: { tags: string[] } };
     }>(
-      `mutation ClearTags($id: ID!) {
-        updateProfile(input: { id: $id, tags: [] }) { profile { tags } }
+      `mutation ClearTags {
+        updateProfile(input: { tags: [] }) { profile { tags } }
       }`,
-      { id: globalId('Profile', auth.profile.id) },
+      {},
       auth.token,
     );
     assertNoGraphQLErrors(cleared);
@@ -869,17 +869,94 @@ describe('GraphQL remote profile boundary', () => {
       );
 
     const result = await requestGraphQL(
-      `mutation UpdateMemberProfile($id: ID!) {
-        updateProfile(input: { id: $id, displayName: "Member Update" }) {
+      `mutation UpdateMemberProfile {
+        updateProfile(input: { displayName: "Member Update" }) {
           profile { id }
         }
       }`,
-      { id: globalId('Profile', auth.profile.id) },
+      {},
       auth.token,
     );
 
     assertGraphQLErrorCode(result, 'PERMISSION_DENIED');
     assert.equal(result.errors?.[0]?.message, 'Profile owner permission is required');
+  });
+
+  test('rejects Profile update without a selected Profile or with a Deactivated selection', async () => {
+    const auth = await createAuthenticatedSession();
+    const update = () =>
+      requestGraphQL(
+        `mutation UpdateUnavailableSelectedProfile {
+          updateProfile(input: { displayName: "Blocked Update", tags: ["blocked"] }) {
+            profile { id }
+          }
+        }`,
+        {},
+        auth.token,
+      );
+
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: null })
+      .where(eq(Sessions.id, auth.session.id));
+    const withoutSelection = await update();
+    assertGraphQLErrorCode(withoutSelection, 'PERMISSION_DENIED');
+
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, auth.profile.id));
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: auth.profile.id })
+      .where(eq(Sessions.id, auth.session.id));
+    const deactivated = await update();
+    assertGraphQLErrorCode(deactivated, 'PERMISSION_DENIED');
+
+    const persisted = await db
+      .select({ displayName: Profiles.displayName })
+      .from(Profiles)
+      .where(eq(Profiles.id, auth.profile.id))
+      .then(firstOrThrow);
+    assert.equal(persisted.displayName, auth.profile.displayName);
+    assert.deepEqual(await readProfileTags(auth.profile.id), []);
+  });
+
+  test('rejects a selected Remote Profile update', async () => {
+    const auth = await createAuthenticatedSession();
+    const remoteInstance = await createRemoteInstance({ domain: 'selected-update.remote.example' });
+    const remote = await createProfile({
+      handle: 'selected-update-remote',
+      instanceId: remoteInstance.id,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: remote.id,
+      role: AccountProfileRole.OWNER,
+    });
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: remote.id })
+      .where(eq(Sessions.id, auth.session.id));
+
+    const result = await requestGraphQL(
+      `mutation UpdateSelectedRemoteProfile {
+        updateProfile(input: { displayName: "Blocked Remote Update", tags: ["blocked"] }) {
+          profile { id }
+        }
+      }`,
+      {},
+      auth.token,
+    );
+
+    assertGraphQLErrorCode(result, 'NOT_FOUND');
+    const persisted = await db
+      .select({ displayName: Profiles.displayName })
+      .from(Profiles)
+      .where(eq(Profiles.id, remote.id))
+      .then(firstOrThrow);
+    assert.equal(persisted.displayName, remote.displayName);
+    assert.deepEqual(await readProfileTags(remote.id), []);
   });
 
   test('restores an active profile from another local instance in the session context', async () => {
@@ -2986,6 +3063,14 @@ const countRows = async (
     .from(table)
     .then(firstOrThrow)
     .then((row) => row.value);
+
+const readProfileTags = async (profileId: string) =>
+  db
+    .select({ name: Hashtags.name })
+    .from(ProfileHashtags)
+    .innerJoin(Hashtags, eq(Hashtags.id, ProfileHashtags.hashtagId))
+    .where(eq(ProfileHashtags.profileId, profileId))
+    .then((rows) => rows.map(({ name }) => name).sort());
 
 const resetFixtures = async () => {
   await db.update(Posts).set({ currentContentId: null });

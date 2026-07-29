@@ -506,7 +506,6 @@ input UpdateProfileInput {
   bio: String
   displayName: String
   followPolicy: ProfileFollowPolicy
-  id: ID!
   tags: [String!]
 }
 

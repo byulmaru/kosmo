@@ -9,14 +9,13 @@ import { builder } from '@/graphql/builder';
 import { Profile } from '../ref';
 
 builder.mutationField('updateProfile', (t) =>
-  t.withAuth({ login: true }).fieldWithInput({
+  t.withAuth({ usingProfile: true }).fieldWithInput({
     type: builder.simpleObject('UpdateProfilePayload', {
       fields: (field) => ({
         profile: field.field({ type: Profile }),
       }),
     }),
     input: {
-      id: t.input.globalID({ for: Profile }),
       displayName: t.input.string({
         required: false,
         validate: profileDisplayNameSchema.optional(),
@@ -28,7 +27,7 @@ builder.mutationField('updateProfile', (t) =>
     resolve: async (_, { input }, ctx) => {
       const updatedProfile = await updateProfile({
         accountId: ctx.session.accountId,
-        profileId: input.id.id,
+        profileId: ctx.session.profileId,
         displayName: input.displayName ?? undefined,
         bio: input.bio,
         followPolicy: input.followPolicy ?? undefined,

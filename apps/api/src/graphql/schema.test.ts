@@ -517,20 +517,16 @@ test('rejects legacy raw UUID and unknown typename Node IDs', async () => {
   }
 });
 
-test('rejects a global ID with the wrong concrete mutation input type', async () => {
-  const result = await graphql({
-    schema,
-    source: `mutation UpdateProfile($id: ID!) {
-      updateProfile(input: { id: $id }) { profile { id } }
-    }`,
-    variableValues: {
-      id: encodeGlobalId('Post', '00000000-0000-8006-8000-000000000001'),
-    },
-    contextValue: { session: { accountId: 'account', id: 'session' } },
-  });
+test('targets the selected Profile without accepting a Profile ID in update input', () => {
+  const input = schema.getType('UpdateProfileInput');
 
-  assert.equal(result.data, null);
-  assert.match(result.errors?.[0]?.message ?? '', /is not of type: Profile/);
+  assert.ok(isInputObjectType(input));
+  assert.deepEqual(Object.keys(input.getFields()).sort(), [
+    'bio',
+    'displayName',
+    'followPolicy',
+    'tags',
+  ]);
 });
 
 test('rejects a non-Notification global ID for Notification Read', async () => {

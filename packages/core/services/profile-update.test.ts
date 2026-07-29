@@ -143,30 +143,34 @@ test('validation 실패는 scalar와 기존 tags를 함께 보존한다', async 
   assert.deepEqual(await readTags(profile.id), ['before']);
 });
 
-test('Deactivated Local Profile은 Owner가 tags를 보존·교체하며 수정한다', async () => {
+test('Deactivated Local Profile은 Owner라도 수정할 수 없고 tags를 보존한다', async () => {
   const deactivated = await createProfileFixture({ profileState: ProfileState.DISABLED });
+  const retainedHashtag = await db
+    .insert(Hashtags)
+    .values({ name: `retained_${crypto.randomUUID().replaceAll('-', '_')}` })
+    .returning()
+    .then(firstOrThrow);
+  await db
+    .insert(ProfileHashtags)
+    .values({ hashtagId: retainedHashtag.id, profileId: deactivated.profile.id });
 
-  await updateProfile({
-    accountId: deactivated.account.id,
-    profileId: deactivated.profile.id,
-    tags: ['before', 'preserved'],
-  });
-  const scalarUpdated = await updateProfile({
-    accountId: deactivated.account.id,
-    profileId: deactivated.profile.id,
-    displayName: 'Changed while deactivated',
-  });
+  await assert.rejects(
+    updateProfile({
+      accountId: deactivated.account.id,
+      profileId: deactivated.profile.id,
+      displayName: 'Changed while deactivated',
+      tags: ['replacement'],
+    }),
+    NotFoundError,
+  );
 
-  assert.equal(scalarUpdated.state, ProfileState.DISABLED);
-  assert.equal(scalarUpdated.displayName, 'Changed while deactivated');
-  assert.deepEqual(await readTags(deactivated.profile.id), ['before', 'preserved']);
-
-  await updateProfile({
-    accountId: deactivated.account.id,
-    profileId: deactivated.profile.id,
-    tags: ['replacement'],
-  });
-  assert.deepEqual(await readTags(deactivated.profile.id), ['replacement']);
+  const persisted = await db
+    .select()
+    .from(Profiles)
+    .where(eq(Profiles.id, deactivated.profile.id))
+    .then(firstOrThrow);
+  assert.equal(persisted.displayName, deactivated.profile.displayName);
+  assert.deepEqual(await readTags(deactivated.profile.id), [retainedHashtag.name]);
 });
 
 test('Member와 inactive Account는 거부되고 관계없는 Account와 Remote/Suspended Profile은 조회 경계를 따른다', async () => {

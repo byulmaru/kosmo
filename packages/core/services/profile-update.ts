@@ -60,7 +60,7 @@ export const updateProfile = async (input: UpdateProfileInput, tx?: Transaction)
           eq(AccountProfiles.accountId, input.accountId),
           eq(Accounts.state, AccountState.ACTIVE),
           eq(Instances.kind, InstanceKind.LOCAL),
-          inArray(Profiles.state, [ProfileState.ACTIVE, ProfileState.DISABLED]),
+          eq(Profiles.state, ProfileState.ACTIVE),
           ne(Instances.state, InstanceState.SUSPENDED),
         ),
       )
