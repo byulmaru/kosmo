@@ -22,11 +22,11 @@ type Props = {
   controlRef?: Ref<View>;
   expanded?: boolean;
   fillActive?: boolean;
-  hasMenuPopup?: boolean;
   icon: Icon;
   iconStrokeWidth?: number;
   menuExpanded?: boolean;
   onPress: () => void;
+  popupRole?: 'dialog' | 'menu';
   processing?: PostActionProcessingState;
   stateful?: boolean;
   testID: string;
@@ -40,11 +40,11 @@ export function PostActionControl({
   controlRef,
   expanded,
   fillActive = false,
-  hasMenuPopup = false,
   icon: Icon,
   iconStrokeWidth = 3.5,
   menuExpanded,
   onPress,
+  popupRole,
   processing = 'default',
   stateful = true,
   testID,
@@ -61,7 +61,7 @@ export function PostActionControl({
   const accessibilityState: AccessibilityState = {
     busy: isPending,
     disabled: blocked,
-    ...(hasMenuPopup
+    ...(popupRole
       ? { expanded: menuExpanded, selected: active }
       : expanded === undefined
         ? { selected: active }
@@ -71,10 +71,10 @@ export function PostActionControl({
 
   return (
     <Pressable
-      aria-expanded={stateful ? (hasMenuPopup ? menuExpanded : expanded) : undefined}
+      aria-expanded={stateful ? (popupRole ? menuExpanded : expanded) : undefined}
       aria-busy={stateful && isPending ? true : undefined}
       aria-pressed={stateful && expanded === undefined ? active : undefined}
-      aria-haspopup={hasMenuPopup ? 'menu' : undefined}
+      aria-haspopup={popupRole}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
       accessibilityState={stateful ? accessibilityState : undefined}

@@ -3,10 +3,12 @@ import { StyleSheet, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { spacing } from '@/theme/tokens';
 import { PostActionControl } from './PostActionControl';
+import { ReactionAction } from './ReactionAction';
 import { RepostAction } from './RepostAction';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostActionBar_post$key } from './__generated__/PostActionBar_post.graphql';
 import type { PostActionProcessingState } from './PostActionControl';
+import type { PostReactionController } from './PostReactionController';
 import type { RepostActionFailure } from './RepostAction';
 
 type SocialActionConfig = {
@@ -17,7 +19,6 @@ type SocialActionConfig = {
 };
 
 type ReplyActionConfig = SocialActionConfig & { expanded: boolean };
-type ReactionActionConfig = Omit<SocialActionConfig, 'count'> & { hasReacted: boolean };
 type BookmarkActionConfig = Omit<SocialActionConfig, 'count'> & { hasBookmarked: boolean };
 type MoreActionConfig = { accessibilityLabel: string; onPress: () => void };
 
@@ -26,7 +27,7 @@ export type PostActionBarProps = {
   more?: MoreActionConfig;
   onRepostError?: (failure: RepostActionFailure) => void;
   post?: PostActionBar_post$key | null;
-  reaction?: ReactionActionConfig;
+  reactionController?: PostReactionController;
   reply?: ReplyActionConfig;
 };
 
@@ -41,7 +42,7 @@ export function PostActionBar({
   more,
   onRepostError,
   post,
-  reaction,
+  reactionController,
   reply,
 }: PostActionBarProps) {
   const data = useFragment(postActionBarPostFragment, post ?? null);
@@ -60,15 +61,23 @@ export function PostActionBar({
         />
       ) : null}
       {data?.repost ? <RepostAction onError={onRepostError} post={data.repost} /> : null}
-      {reaction ? (
-        <PostActionControl
-          accessibilityLabel={reaction.accessibilityLabel}
-          active={reaction.hasReacted}
-          fillActive
-          icon={Heart}
-          onPress={reaction.onPress}
-          processing={reaction.processing}
-          testID="reaction"
+      {reactionController ? (
+        <ReactionAction
+          controller={reactionController}
+          renderTrigger={({ disabled, expanded, hasReacted, onPress, ref }) => (
+            <PostActionControl
+              accessibilityLabel="반응"
+              active={hasReacted}
+              controlRef={ref}
+              fillActive
+              icon={Heart}
+              menuExpanded={expanded}
+              onPress={onPress}
+              popupRole="dialog"
+              processing={disabled ? 'disabled' : 'default'}
+              testID="reaction"
+            />
+          )}
         />
       ) : null}
       {bookmark ? (

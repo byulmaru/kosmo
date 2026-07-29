@@ -1,44 +1,39 @@
 import { useState } from 'react';
 import { View } from 'react-native';
-import { graphql, useFragment } from 'react-relay';
 import { ReactionProfilesModal } from './ReactionProfilesModal';
 import { ReactionSummary } from './ReactionSummary';
 import type { StyleProp, ViewStyle } from 'react-native';
-import type { PostReactionSummary_post$key } from './__generated__/PostReactionSummary_post.graphql';
+import type { PostReactionController } from '@/components/post/PostReactionController';
 
-const postReactionSummaryFragment = graphql`
-  fragment PostReactionSummary_post on Post {
-    id
-    reactionCounts {
-      type
-      count
-    }
-  }
-`;
-
-export function PostReactionSummary({
-  post: postKey,
-  style,
-}: {
-  post: PostReactionSummary_post$key;
+type PostReactionSummaryProps = {
+  controller: PostReactionController;
   style?: StyleProp<ViewStyle>;
-}) {
-  const post = useFragment(postReactionSummaryFragment, postKey);
-  const [selectedType, setSelectedType] = useState<string>();
+};
 
-  if (post.reactionCounts.length === 0) {
+export function PostReactionSummary({ controller, style }: PostReactionSummaryProps) {
+  const [profilesOpen, setProfilesOpen] = useState(false);
+
+  if (controller.reactionCounts.length === 0) {
     return null;
   }
 
   return (
     <View style={style}>
-      <ReactionSummary entries={post.reactionCounts} onSelectType={setSelectedType} />
-      {selectedType ? (
+      <ReactionSummary
+        disabled={controller.disabled}
+        entries={controller.reactionCounts}
+        errorTypeIds={controller.errorTypeIds}
+        onMore={() => setProfilesOpen(true)}
+        onToggle={controller.toggleReaction}
+        pendingTypeIds={controller.pendingTypeIds}
+        selectedTypeIds={controller.selectedTypeIds}
+      />
+      {profilesOpen ? (
         <ReactionProfilesModal
-          key={`${post.id}:${selectedType}`}
-          onClose={() => setSelectedType(undefined)}
-          postId={post.id}
-          reactionType={selectedType}
+          key={controller.postId}
+          onClose={() => setProfilesOpen(false)}
+          postId={controller.postId}
+          reactionCounts={controller.reactionCounts}
         />
       ) : null}
     </View>

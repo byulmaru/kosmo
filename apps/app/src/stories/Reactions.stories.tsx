@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { Button, Text } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, screen, spyOn, userEvent, within } from 'storybook/test';
+import { usePostReactionController } from '@/components/post/PostReactionController';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { ReactionProfileConnection } from '@/components/reaction/ReactionProfileConnection';
 import { ReactionProfileList } from '@/components/reaction/ReactionProfileList';
 import { ReactionSelector } from '@/components/reaction/ReactionSelector';
 import { ReactionSummary } from '@/components/reaction/ReactionSummary';
 import { useRelayActor } from '@/relay/RelayActorProvider';
+import { colors } from '@/theme/tokens';
 import { profile } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -20,6 +22,17 @@ const tiedEntries = [
   { count: 3, type: '🎉' },
   { count: 3, type: '❤️' },
   { count: 1, type: '👀' },
+] as const;
+
+const viewportEntries = [
+  { count: 12, type: '🥹' },
+  { count: 11, type: '❤️' },
+  { count: 10, type: '🎉' },
+  { count: 9, type: '👀' },
+  { count: 8, type: '☘️' },
+  { count: 7, type: '🌈' },
+  { count: 6, type: '😆' },
+  { count: 5, type: '🚀' },
 ] as const;
 
 const profileCopy = {
@@ -71,6 +84,19 @@ const reactionPostSummary = {
   reactionCounts: [
     { count: 12, type: '❤️' },
     { count: 7, type: '🎉' },
+  ],
+  viewerReactions: [],
+};
+
+const reactionPostSummaryAllTypes = {
+  ...reactionPostSummary,
+  reactionCounts: [
+    { count: 12, type: '🥹' },
+    { count: 11, type: '❤️' },
+    { count: 10, type: '🎉' },
+    { count: 9, type: '👀' },
+    { count: 8, type: '☘️' },
+    { count: 7, type: '🌈' },
   ],
 };
 
@@ -160,7 +186,7 @@ const ReactionsIntegrationStoriesQueryNode = graphql`
     node(id: $postId) {
       __typename
       ... on Post {
-        ...PostReactionSummary_post @alias(as: "reactionSummary")
+        ...PostReactionController_post @alias(as: "reactionController")
       }
     }
   }
@@ -207,11 +233,12 @@ function PostReactionSummaryStory({ postId = 'reaction-post' }: { postId?: strin
     ReactionsIntegrationStoriesQueryNode,
     { postId },
   );
-  if (data.node?.__typename !== 'Post' || !data.node.reactionSummary) {
-    throw new Error('Missing Reaction Summary Post fixture.');
+  if (data.node?.__typename !== 'Post' || !data.node.reactionController) {
+    throw new Error('Missing Reaction controller Post fixture.');
   }
+  const controller = usePostReactionController(data.node.reactionController);
 
-  return <PostReactionSummary post={data.node.reactionSummary} />;
+  return <PostReactionSummary controller={controller} />;
 }
 
 function ActorSwitchPostReactionSummaryStory() {
@@ -226,7 +253,8 @@ function ActorSwitchPostReactionSummaryStory() {
 }
 
 function ReactionSummaryCatalog() {
-  const [selectedType, setSelectedType] = useState<string>();
+  const [lastIntent, setLastIntent] = useState('없음');
+  const [moreCount, setMoreCount] = useState(0);
   const [retryCount, setRetryCount] = useState(0);
 
   return (
@@ -245,8 +273,19 @@ function ReactionSummaryCatalog() {
         <ReactionSummary entries={[]} loading />
       </Section>
       <Section title="Populated">
-        <ReactionSummary entries={tiedEntries} loading onSelectType={setSelectedType} />
-        {selectedType ? <Text>{`선택: ${selectedType}`}</Text> : null}
+        <ReactionSummary
+          entries={tiedEntries}
+          errorTypeIds={['👀']}
+          loading
+          onMore={() => setMoreCount((count) => count + 1)}
+          onToggle={({ nextSelected, optionId }) =>
+            setLastIntent(`${optionId}:${nextSelected ? '선택' : '해제'}`)
+          }
+          pendingTypeIds={['🎉']}
+          selectedTypeIds={['❤️', '🎉']}
+        />
+        <Text>{`마지막 동작: ${lastIntent}`}</Text>
+        <Text>{`More 열기: ${moreCount}`}</Text>
       </Section>
     </Catalog>
   );
@@ -283,6 +322,9 @@ function ReactionProfileListCatalog() {
       </Section>
       <Section title="Populated">
         <ReactionProfileList items={items} loading reactionType="❤️" />
+      </Section>
+      <Section title="Single profile">
+        <ReactionProfileList items={items.slice(0, 1)} reactionType="❤️" />
       </Section>
       <Section title="Pagination">
         <ReactionProfileList
@@ -393,28 +435,48 @@ function QuickPickerViewportCatalog({ title }: { title: string }) {
           options={quickReactionOptions}
           selectedOptionIds={['❤️', '👀']}
         />
+        <ReactionSummary entries={viewportEntries} onMore={() => {}} onToggle={() => {}} />
       </Section>
     </Catalog>
   );
 }
 
-async function assertQuickPickerViewport(canvasElement: HTMLElement, expectedWidth: number) {
+async function assertReactionViewport(
+  canvasElement: HTMLElement,
+  expectedWidth: number,
+  expectedOverflow: boolean,
+) {
   const canvas = within(canvasElement);
-  const buttons = canvas.getAllByRole('button');
+  const pickerButtons = quickReactionOptions.map((option) =>
+    canvas.getByRole('button', { name: `${option.label} 반응` }),
+  );
+  const summaryButtons = viewportEntries.map((entry) =>
+    canvas.getByRole('button', { name: `${entry.type} 반응 ${entry.count}개` }),
+  );
+  const more = canvas.getByRole('button', { name: '반응한 프로필 보기' });
+  const summaryScroll = canvas.getByTestId('reaction-summary-scroll');
+  const buttons = [...pickerButtons, ...summaryButtons, more];
   const picker = buttons[0]!.parentElement!;
   const canvasRect = canvasElement.getBoundingClientRect();
   const pickerRect = picker.getBoundingClientRect();
 
   expect(canvasElement.ownerDocument.documentElement.clientWidth).toBe(expectedWidth);
-  expect(buttons).toHaveLength(6);
   for (const button of buttons) {
-    expect(button.getBoundingClientRect().width).toBe(44);
-    expect(button.getBoundingClientRect().height).toBe(44);
-    expect(button.getBoundingClientRect().top).toBe(buttons[0]!.getBoundingClientRect().top);
+    expect(button.getBoundingClientRect().height).toBe(32);
   }
+  expect(pickerButtons.every((button) => button.getBoundingClientRect().width === 32)).toBe(true);
+  expect(more.getBoundingClientRect().width).toBe(32);
+  expect(
+    summaryButtons.every(
+      (button) =>
+        button.getBoundingClientRect().top === summaryButtons[0]!.getBoundingClientRect().top,
+    ),
+  ).toBe(true);
+  expect(more.getBoundingClientRect().top).toBe(summaryButtons[0]!.getBoundingClientRect().top);
   expect(picker.scrollWidth).toBeLessThanOrEqual(picker.clientWidth);
   expect(pickerRect.left).toBeGreaterThanOrEqual(canvasRect.left);
   expect(pickerRect.right).toBeLessThanOrEqual(canvasRect.right);
+  expect(summaryScroll.scrollWidth > summaryScroll.clientWidth).toBe(expectedOverflow);
 }
 
 const meta = {
@@ -433,21 +495,47 @@ export const AllStates: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
+    expect(canvas.queryByRole('heading', { name: '반응' })).not.toBeInTheDocument();
     expect(canvas.getByText('반응 요약을 불러오는 중입니다.')).toBeVisible();
     expect(
       canvas.getByRole('progressbar', { name: '반응 요약을 불러오는 중입니다.' }),
     ).toBeVisible();
     expect(canvas.getByRole('alert')).toHaveTextContent('반응을 불러오지 못했어요');
     expect(canvas.getAllByText('아직 반응이 없어요')).toHaveLength(2);
-    expect(
-      canvas
-        .getAllByRole('button', { name: /반응 \d+개 보기/ })
-        .map((button) => button.textContent),
-    ).toEqual(['🎉 3', '❤️ 3', '👀 1']);
-    expect(canvas.getByRole('button', { name: '❤️ 반응 3개 보기' })).toBeEnabled();
+    const party = canvas.getByRole('button', { name: '🎉 반응 3개, 처리 중' });
+    const heart = canvas.getByRole('button', { name: '❤️ 반응 3개' });
+    const eyes = canvas.getByRole('button', { name: '👀 반응 1개, 오류, 다시 시도' });
+    const more = canvas.getByRole('button', { name: '반응한 프로필 보기' });
 
-    await userEvent.click(canvas.getByRole('button', { name: '❤️ 반응 3개 보기' }));
-    expect(canvas.getByText('선택: ❤️')).toBeVisible();
+    expect([party.textContent, heart.textContent, eyes.textContent]).toEqual(['🎉3', '❤️3', '👀1']);
+    expect(heart.getBoundingClientRect().height).toBe(32);
+    expect(getComputedStyle(heart).gap).toBe('4px');
+    expect(getComputedStyle(heart).paddingInline).toBe('8px');
+    expect(getComputedStyle(heart).borderRadius).toBe('12px');
+    expect(getComputedStyle(within(heart).getByText('❤️')).fontSize).toBe('20px');
+    expect(getComputedStyle(within(heart).getByText('3')).fontSize).toBe('14px');
+    const selectedBackground = heart.querySelector(
+      '[data-testid="reaction-summary-selected-background"]',
+    );
+    expect(selectedBackground).not.toBeNull();
+    expect(selectedBackground).toHaveStyle({ backgroundColor: colors.light.primary, opacity: 0.7 });
+    expect(getComputedStyle(selectedBackground!).borderRadius).toBe('12px');
+    expect(heart).toHaveAttribute('aria-pressed', 'true');
+    expect(party).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      party.querySelector('[data-testid="reaction-summary-selected-background"]'),
+    ).not.toBeNull();
+    expect(getComputedStyle(party).opacity).toBe('1');
+    expect(party).toHaveAttribute('aria-busy', 'true');
+    expect(party).toBeDisabled();
+    expect(eyes).toBeEnabled();
+    expect(more.getBoundingClientRect().width).toBe(32);
+    expect(getComputedStyle(more).borderRadius).toBe('12px');
+
+    await userEvent.click(heart);
+    expect(canvas.getByText('마지막 동작: ❤️:해제')).toBeVisible();
+    await userEvent.click(more);
+    expect(canvas.getByText('More 열기: 1')).toBeVisible();
 
     await userEvent.click(canvas.getAllByRole('button', { name: '다시 시도' })[0]!);
     expect(canvas.getByText('재시도: 1')).toBeVisible();
@@ -457,6 +545,8 @@ export const AllStates: Story = {
 export const ProfileListStates: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const populatedSection = within(canvas.getByText('Populated').parentElement!);
+    const singleProfileSection = within(canvas.getByText('Single profile').parentElement!);
 
     expect(canvas.getByText(profileCopy.loadingTitle)).toBeVisible();
     expect(canvas.getByRole('progressbar', { name: profileCopy.loadingTitle })).toBeVisible();
@@ -464,6 +554,14 @@ export const ProfileListStates: Story = {
     expect(canvas.getAllByText(profileCopy.emptyTitle)).toHaveLength(2);
     expect(canvasElement.querySelector('a[href="/@starlight"]')).toBeInTheDocument();
     expect(canvasElement.querySelector('a[href="/@milky-way"]')).toBeInTheDocument();
+    expect(canvas.getAllByText('❤️')).toHaveLength(9);
+    const populatedRows = populatedSection
+      .getAllByLabelText('❤️ 반응')
+      .map((reaction) => reaction.parentElement!);
+    const singleProfileRow = singleProfileSection.getByLabelText('❤️ 반응').parentElement!;
+    expect(getComputedStyle(populatedRows[0]!).borderBottomWidth).toBe('1px');
+    expect(getComputedStyle(populatedRows[1]!).borderBottomWidth).toBe('0px');
+    expect(getComputedStyle(singleProfileRow).borderBottomWidth).toBe('0px');
 
     await userEvent.click(canvas.getAllByRole('button', { name: '다시 시도' })[0]!);
     expect(canvas.getByText('초기 재시도: 1')).toBeVisible();
@@ -512,7 +610,14 @@ export const ZeroCountSummaryIsNotRendered: Story = {
     relay: {
       operationResponses: {
         ReactionsIntegrationStoriesQuery: {
-          data: { node: { __typename: 'Post', id: 'post-empty', reactionCounts: [] } },
+          data: {
+            node: {
+              __typename: 'Post',
+              id: 'post-empty',
+              reactionCounts: [],
+              viewerReactions: [],
+            },
+          },
         },
       },
     },
@@ -537,16 +642,63 @@ export const SummaryOrderAndModalDismiss: Story = {
     const canvas = within(canvasElement);
 
     expect(canvas.getAllByRole('button').map((button) => button.textContent)).toEqual([
-      '❤️ 12',
-      '🎉 7',
+      '❤️12',
+      '🎉7',
+      '…',
     ]);
 
-    await userEvent.click(canvas.getByRole('button', { name: '❤️ 반응 12개 보기' }));
-    await expect(
-      screen.findByRole('dialog', { name: '❤️ 반응한 프로필' }),
-    ).resolves.toBeInTheDocument();
-    await userEvent.click(screen.getByLabelText('❤️ 반응한 프로필 닫기'));
-    expect(screen.queryByRole('dialog', { name: '❤️ 반응한 프로필' })).not.toBeInTheDocument();
+    expect(canvas.getByRole('button', { name: '❤️ 반응 12개' })).toBeDisabled();
+    await userEvent.click(canvas.getByRole('button', { name: '반응한 프로필 보기' }));
+    const dialog = await screen.findByRole('dialog', { name: '반응한 프로필' });
+    expect(dialog).toBeInTheDocument();
+    await expect(within(dialog).findByText('별빛 반응 프로필')).resolves.toBeVisible();
+    expect(within(dialog).getByRole('heading', { name: '반응한 사람' })).toBeVisible();
+    const selectedTab = screen.getByRole('tab', { name: '❤️ 반응 12개' });
+    expect(selectedTab).toHaveAttribute('aria-selected', 'true');
+    expect(getComputedStyle(selectedTab).justifyContent).toBe('center');
+    expect(screen.getByRole('tab', { name: '🎉 반응 7개' })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
+    await userEvent.click(screen.getByLabelText('반응한 프로필 닫기'));
+    expect(screen.queryByRole('dialog', { name: '반응한 프로필' })).not.toBeInTheDocument();
+  },
+};
+
+export const ProfileTabsViewport320: Story = {
+  globals: { viewport: { isRotated: false, value: 'reactionProfilesNarrow' } },
+  parameters: {
+    layout: 'fullscreen',
+    relay: {
+      operationResponses: {
+        ReactionsIntegrationStoriesQuery: { data: { node: reactionPostSummaryAllTypes } },
+        ReactionProfilesModalQuery: { data: { node: reactionPostWithProfiles } },
+      },
+    },
+    viewport: {
+      options: {
+        reactionProfilesNarrow: {
+          name: 'Reaction profiles narrow',
+          styles: { height: '640px', width: '320px' },
+          type: 'mobile',
+        },
+      },
+    },
+  },
+  render: () => <PostReactionSummaryStory />,
+  play: async ({ canvasElement }) => {
+    await userEvent.click(
+      within(canvasElement).getByRole('button', { name: '반응한 프로필 보기' }),
+    );
+    const tabList = await screen.findByRole('tablist');
+    const tabs = within(tabList).getAllByRole('tab');
+
+    expect(tabs).toHaveLength(6);
+    expect(tabList.scrollWidth).toBeGreaterThan(tabList.clientWidth);
+    expect(getComputedStyle(tabList).overflowX).toBe('auto');
+    await userEvent.click(tabs[5]!);
+    expect(tabs[5]).toHaveAttribute('aria-selected', 'true');
+    await userEvent.click(screen.getByLabelText('반응한 프로필 닫기'));
   },
 };
 
@@ -582,14 +734,16 @@ export const InitialProfileQueryFailureIsInline: Story = {
   },
   render: () => <PostReactionSummaryStory />,
   play: async ({ canvasElement }) => {
-    await userEvent.click(within(canvasElement).getByRole('button', { name: '❤️ 반응 12개 보기' }));
+    await userEvent.click(
+      within(canvasElement).getByRole('button', { name: '반응한 프로필 보기' }),
+    );
     await expect(screen.findByRole('alert')).resolves.toHaveTextContent(
       '반응한 프로필을 불러오지 못했어요',
     );
     await userEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     await expect(screen.findByText('별빛 반응 프로필')).resolves.toBeVisible();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    await userEvent.click(screen.getByLabelText('❤️ 반응한 프로필 닫기'));
+    await userEvent.click(screen.getByLabelText('반응한 프로필 닫기'));
   },
 };
 
@@ -610,15 +764,15 @@ export const ReopenShowsCacheBeforeBackgroundRefresh: Story = {
   render: () => <PostReactionSummaryStory />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const summaryButton = canvas.getByRole('button', { name: '❤️ 반응 12개 보기' });
+    const summaryButton = canvas.getByRole('button', { name: '반응한 프로필 보기' });
 
     await userEvent.click(summaryButton);
     await expect(screen.findByText('Actor A Profile')).resolves.toBeVisible();
-    await userEvent.click(screen.getByLabelText('❤️ 반응한 프로필 닫기'));
+    await userEvent.click(screen.getByLabelText('반응한 프로필 닫기'));
     await userEvent.click(summaryButton);
     expect(screen.getByText('Actor A Profile')).toBeInTheDocument();
     await expect(screen.findByText('Refreshed Profile')).resolves.toBeInTheDocument();
-    await userEvent.click(screen.getByLabelText('❤️ 반응한 프로필 닫기'));
+    await userEvent.click(screen.getByLabelText('반응한 프로필 닫기'));
   },
 };
 
@@ -640,14 +794,14 @@ export const SwitchingReactionTypeDoesNotReuseProfileRows: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    await userEvent.click(canvas.getByRole('button', { name: '❤️ 반응 12개 보기' }));
+    await userEvent.click(canvas.getByRole('button', { name: '반응한 프로필 보기' }));
     await expect(screen.findByText('Heart Type Profile')).resolves.toBeVisible();
-    await userEvent.click(screen.getByLabelText('❤️ 반응한 프로필 닫기'));
-    await userEvent.click(canvas.getByRole('button', { name: '🎉 반응 7개 보기' }));
+    await userEvent.click(screen.getByRole('tab', { name: '🎉 반응 7개' }));
     expect(screen.queryByText('Heart Type Profile')).not.toBeInTheDocument();
     await expect(screen.findByText('Party Type Profile')).resolves.toBeVisible();
     expect(screen.queryByText('Heart Type Profile')).not.toBeInTheDocument();
-    await userEvent.click(screen.getByLabelText('🎉 반응한 프로필 닫기'));
+    expect(screen.getByLabelText('🎉 반응')).toBeVisible();
+    await userEvent.click(screen.getByLabelText('반응한 프로필 닫기'));
   },
 };
 
@@ -670,14 +824,14 @@ export const ActorSwitchDoesNotReuseProfileRows: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    await userEvent.click(canvas.getByRole('button', { name: '❤️ 반응 12개 보기' }));
+    await userEvent.click(canvas.getByRole('button', { name: '반응한 프로필 보기' }));
     await expect(screen.findByText('Actor A Profile')).resolves.toBeVisible();
-    await userEvent.click(screen.getByLabelText('❤️ 반응한 프로필 닫기'));
+    await userEvent.click(screen.getByLabelText('반응한 프로필 닫기'));
     await userEvent.click(canvas.getByRole('button', { name: '프로필 전환' }));
-    await userEvent.click(await canvas.findByRole('button', { name: '❤️ 반응 12개 보기' }));
+    await userEvent.click(await canvas.findByRole('button', { name: '반응한 프로필 보기' }));
     await expect(screen.findByText('Actor B Profile')).resolves.toBeVisible();
     expect(screen.queryByText('Actor A Profile')).not.toBeInTheDocument();
-    await userEvent.click(screen.getByLabelText('❤️ 반응한 프로필 닫기'));
+    await userEvent.click(screen.getByLabelText('반응한 프로필 닫기'));
   },
 };
 
@@ -698,6 +852,8 @@ export const QuickPickerInteraction: Story = {
     const firstOptionStyle = getComputedStyle(buttons[0]!);
     const pickerStyle = getComputedStyle(buttons[0]!.parentElement!);
 
+    expect(buttons.every((button) => button.getBoundingClientRect().width === 32)).toBe(true);
+    expect(buttons.every((button) => button.getBoundingClientRect().height === 32)).toBe(true);
     expect(firstOptionStyle.borderTopWidth).toBe('0px');
     expect(firstOptionStyle.borderRadius).toBe('12px');
     expect(pickerStyle.borderTopWidth).toBe('1px');
@@ -713,6 +869,7 @@ export const QuickPickerInteraction: Story = {
     expect(getComputedStyle(heartBackground!).opacity).toBe('0.7');
     expect(heartEmoji).not.toBeNull();
     expect(getComputedStyle(heartEmoji!).opacity).toBe('1');
+    expect(getComputedStyle(heartEmoji!).fontSize).toBe('20px');
     expect(party.querySelector('[data-testid="reaction-selected-background"]')).toBeNull();
 
     expect(heart).toHaveAttribute('aria-pressed', 'true');
@@ -749,16 +906,17 @@ export const QuickPickerStates: Story = {
     expect(pendingHeart).toHaveTextContent('❤️');
     const pendingOverlay = pendingHeart.querySelector('[aria-hidden="true"]');
     expect(pendingOverlay).not.toBeNull();
-    expect(pendingOverlay!.getBoundingClientRect().width).toBe(44);
-    expect(pendingOverlay!.getBoundingClientRect().height).toBe(44);
+    expect(pendingOverlay!.getBoundingClientRect().width).toBe(32);
+    expect(pendingOverlay!.getBoundingClientRect().height).toBe(32);
     const spinner = pendingOverlay!.querySelector('[data-testid="reaction-pending-spinner"]');
     expect(spinner).not.toBeNull();
-    expect(getComputedStyle(spinner!).width).toBe('24px');
-    expect(getComputedStyle(spinner!).height).toBe('24px');
+    expect(getComputedStyle(spinner!).width).toBe('16px');
+    expect(getComputedStyle(spinner!).height).toBe('16px');
 
     const arcSegments = spinner!.querySelectorAll('path');
     expect(arcSegments).toHaveLength(18);
     expect(arcSegments[0]).toHaveAttribute('stroke-opacity', '0');
+    expect(arcSegments[0]).toHaveAttribute('stroke-width', '2');
     expect(arcSegments[17]).toHaveAttribute('stroke-opacity', '1');
     expect(spinner!.querySelector('circle')).toBeNull();
     expect(pendingSection.getByRole('button', { name: '👀 반응' })).toBeEnabled();
@@ -780,14 +938,32 @@ export const QuickPickerStates: Story = {
   render: () => <QuickPickerStateCatalog />,
 };
 
-export const QuickPickerViewport390: Story = {
-  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
-  play: ({ canvasElement }) => assertQuickPickerViewport(canvasElement, 390),
-  render: () => <QuickPickerViewportCatalog title="Quick Picker at 390px" />,
+export const ReactionViewport320: Story = {
+  globals: { viewport: { isRotated: false, value: 'reactionSummaryNarrow' } },
+  parameters: {
+    layout: 'fullscreen',
+    viewport: {
+      options: {
+        reactionSummaryNarrow: {
+          name: 'Reaction summary narrow',
+          styles: { height: '640px', width: '320px' },
+          type: 'mobile',
+        },
+      },
+    },
+  },
+  play: ({ canvasElement }) => assertReactionViewport(canvasElement, 320, true),
+  render: () => <QuickPickerViewportCatalog title="Reactions at 320px" />,
 };
 
-export const QuickPickerViewport600: Story = {
+export const ReactionViewport390: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: ({ canvasElement }) => assertReactionViewport(canvasElement, 390, true),
+  render: () => <QuickPickerViewportCatalog title="Reactions at 390px" />,
+};
+
+export const ReactionViewport600: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoPickerWide' } },
-  play: ({ canvasElement }) => assertQuickPickerViewport(canvasElement, 600),
-  render: () => <QuickPickerViewportCatalog title="Quick Picker at 600px" />,
+  play: ({ canvasElement }) => assertReactionViewport(canvasElement, 600, false),
+  render: () => <QuickPickerViewportCatalog title="Reactions at 600px" />,
 };

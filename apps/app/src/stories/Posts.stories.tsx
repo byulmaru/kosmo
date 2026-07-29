@@ -1,7 +1,8 @@
 import { usePathname } from 'expo-router';
-import { useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
-import { graphql, useLazyLoadQuery } from 'react-relay';
+import { graphql, RelayEnvironmentProvider, useLazyLoadQuery } from 'react-relay';
+import { Environment, Network, RecordSource, Store } from 'relay-runtime';
 import { expect, fn, screen, userEvent, waitFor, within } from 'storybook/test';
 import { Temporal } from 'temporal-polyfill';
 import PostDetailScreen from '@/app/(tabs)/(post)/[profileHandle]/[postId]';
@@ -14,16 +15,22 @@ import { PostListItem } from '@/components/post/PostListItem';
 import { PostSourcePresentationView } from '@/components/post/PostSourcePresentationView';
 import { PostThreadLayout } from '@/components/post/PostThreadLayout';
 import { formatTimelineTimestamp } from '@/lib/date';
+import { SessionProvider } from '@/session/SessionProvider';
 import { longBody, post, profile, profileWithPosts, timeline } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
 import type { PostSourcePresentationData } from '@/components/post/PostSourcePresentationView';
 import type { PostDetailThreadIdentityStoryQuery } from './__generated__/PostDetailThreadIdentityStoryQuery.graphql';
 import type { PostsStoriesQuery as PostsStoriesQueryType } from './__generated__/PostsStoriesQuery.graphql';
 import type { StoryPost } from './fixtures';
 
 const shortPost = {
-  ...post({ bodyText: '짧은 본문 한 줄.', id: 'short' }),
+  ...post({
+    bodyText: '짧은 본문 한 줄.',
+    id: 'short',
+    reactionCounts: [{ count: 2, type: '❤️' }],
+  }),
   repostCount: 2,
   viewerRepost: { __typename: 'Post' as const, id: 'short-viewer-repost' },
 };
@@ -122,6 +129,7 @@ const sourcePost = {
     bodyText: '원문 작성자의 긴 본문과 줄바꿈을 표시합니다.\n두 번째 줄입니다.',
     id: 'post-source',
     profile: sourceAuthor,
+    reactionCounts: [{ count: 4, type: '👀' }],
   }),
   repostCount: 7,
   viewerRepost: { __typename: 'Post' as const, id: 'source-viewer-repost' },
@@ -148,6 +156,7 @@ const pureRepost = {
     bodyText: null,
     id: 'post-repost',
     profile: repostAuthor,
+    reactionCounts: [{ count: 99, type: '🌈' }],
     repostSource: sourcePost,
   }),
   repostCount: 1,
@@ -169,6 +178,7 @@ const quotePost = {
     bodyText: '이 원문에 덧붙이는 인용자의 본문입니다.',
     id: 'post-quote',
     profile: repostAuthor,
+    reactionCounts: [{ count: 3, type: '🎉' }],
     repostSource: sourcePost,
   }),
   repostCount: 3,
@@ -243,91 +253,140 @@ const threadReplyQuotePost = {
   }),
   repostSource: threadQuoteSourcePost,
 };
-const routeRootPost = post({ bodyText: 'Route Root 본문', id: 'route-root' });
-const routeParentPost = post({
-  bodyText: 'Route Parent 본문',
-  id: 'route-parent',
-  replyParent: { __typename: 'Post', id: routeRootPost.id },
-});
-const routeSourcePost = post({ bodyText: 'Source 본문', id: 'route-source' });
-const routeCurrentPost = post({
-  bodyText: '현재 Reply 본문',
-  id: 'route-current',
-  replyParent: { __typename: 'Post', id: routeParentPost.id },
-});
+const routeRootPost = {
+  ...post({ bodyText: 'Route Root 본문', id: 'route-root' }),
+  viewerReactions: [],
+};
+const routeParentPost = {
+  ...post({
+    bodyText: 'Route Parent 본문',
+    id: 'route-parent',
+    replyParent: { __typename: 'Post', id: routeRootPost.id },
+  }),
+  viewerReactions: [],
+};
+const routeSourcePost = {
+  ...post({ bodyText: 'Source 본문', id: 'route-source' }),
+  viewerReactions: [],
+};
+const routeCurrentPost = {
+  ...post({
+    bodyText: '현재 Reply 본문',
+    id: 'route-current',
+    replyParent: { __typename: 'Post', id: routeParentPost.id },
+  }),
+  viewerReactions: [],
+};
 const routeCurrentPostReactionCounts = [{ count: 2, type: '❤️' }];
-const postLayoutReactionPost = post({
-  bodyText: 'PostLayout이 반응 요약을 직접 소유하는 게시글입니다.',
-  id: 'post-layout-reaction',
-  reactionCounts: routeCurrentPostReactionCounts,
-});
+const postLayoutReactionPost = {
+  ...post({
+    bodyText: 'PostLayout이 반응 요약을 직접 소유하는 게시글입니다.',
+    id: 'post-layout-reaction',
+    reactionCounts: routeCurrentPostReactionCounts,
+  }),
+  viewerReactions: [],
+};
 const routeCurrentPostWithoutReactions = { ...routeCurrentPost, reactionCounts: [] };
-const routeChildPost = post({
-  bodyText: 'Child 본문',
-  id: 'route-child',
-  replyParent: { __typename: 'Post', id: routeCurrentPost.id },
-});
-const routeSiblingPost = post({
-  bodyText: 'Sibling 본문',
-  id: 'route-sibling',
-  replyParent: { __typename: 'Post', id: routeParentPost.id },
-});
-const routeReplyQuotePost = post({
-  bodyText: 'Reply+Quote 자체 Content',
-  id: 'route-reply-quote',
-  replyParent: { __typename: 'Post', id: routeSiblingPost.id },
-  repostSource: routeSourcePost,
-});
-const routeSourceNullPost = post({
-  bodyText: 'Source가 없어도 남는 Content',
-  id: 'route-source-null',
-  replyParent: { __typename: 'Post', id: routeSiblingPost.id },
-});
-const routeHiddenAncestorPost = post({
-  bodyText: '숨겨진 답글',
-  id: 'route-hidden-ancestor',
-});
-const routeVisibleParentPost = post({
-  bodyText: '조회 가능한 직접 Parent',
-  id: 'route-visible-parent',
-  replyParent: { __typename: 'Post', id: routeHiddenAncestorPost.id },
-});
-const routeBoundaryCurrentPost = post({
-  bodyText: '경계 Current 본문',
-  id: 'route-boundary-current',
-  replyParent: { __typename: 'Post', id: routeVisibleParentPost.id },
-});
+const routeChildPost = {
+  ...post({
+    bodyText: 'Child 본문',
+    id: 'route-child',
+    replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+  }),
+  viewerReactions: [],
+};
+const routeSiblingPost = {
+  ...post({
+    bodyText: 'Sibling 본문',
+    id: 'route-sibling',
+    replyParent: { __typename: 'Post', id: routeParentPost.id },
+  }),
+  viewerReactions: [],
+};
+const routeReplyQuotePost = {
+  ...post({
+    bodyText: 'Reply+Quote 자체 Content',
+    id: 'route-reply-quote',
+    replyParent: { __typename: 'Post', id: routeSiblingPost.id },
+    repostSource: routeSourcePost,
+  }),
+  viewerReactions: [],
+};
+const routeSourceNullPost = {
+  ...post({
+    bodyText: 'Source가 없어도 남는 Content',
+    id: 'route-source-null',
+    replyParent: { __typename: 'Post', id: routeSiblingPost.id },
+  }),
+  viewerReactions: [],
+};
+const routeHiddenAncestorPost = {
+  ...post({
+    bodyText: '숨겨진 답글',
+    id: 'route-hidden-ancestor',
+  }),
+  viewerReactions: [],
+};
+const routeVisibleParentPost = {
+  ...post({
+    bodyText: '조회 가능한 직접 Parent',
+    id: 'route-visible-parent',
+    replyParent: { __typename: 'Post', id: routeHiddenAncestorPost.id },
+  }),
+  viewerReactions: [],
+};
+const routeBoundaryCurrentPost = {
+  ...post({
+    bodyText: '경계 Current 본문',
+    id: 'route-boundary-current',
+    replyParent: { __typename: 'Post', id: routeVisibleParentPost.id },
+  }),
+  viewerReactions: [],
+};
 const routeBoundaryCurrentPostWithoutReactions = {
   ...routeBoundaryCurrentPost,
   reactionCounts: [],
 };
-const paginationInitialReplies = Array.from({ length: 20 }, (_, index) =>
-  post({
+const paginationInitialReplies = Array.from({ length: 20 }, (_, index) => ({
+  ...post({
     bodyText: `기존 Reply ${index + 1}\n${Array.from({ length: 8 }, () => '긴 document scroll 검증 본문').join('\n')}`,
     id: `pagination-initial-${index + 1}`,
     replyParent: { __typename: 'Post', id: routeCurrentPost.id },
   }),
-);
-const paginationInitialReply = post({
-  bodyText: '짧은 화면의 초기 Reply',
-  id: 'pagination-short-initial',
-  replyParent: { __typename: 'Post', id: routeCurrentPost.id },
-});
-const paginationFirstNextReply = post({
-  bodyText: '첫 다음 page Reply',
-  id: 'pagination-next-first',
-  replyParent: { __typename: 'Post', id: routeCurrentPost.id },
-});
-const paginationDuplicateNextReply = post({
-  bodyText: '중복 요청이면 나타나는 Reply',
-  id: 'pagination-next-duplicate',
-  replyParent: { __typename: 'Post', id: routeCurrentPost.id },
-});
-const paginationRetryReply = post({
-  bodyText: '재시도로 추가된 Reply',
-  id: 'pagination-next-retry',
-  replyParent: { __typename: 'Post', id: routeCurrentPost.id },
-});
+  viewerReactions: [],
+}));
+const paginationInitialReply = {
+  ...post({
+    bodyText: '짧은 화면의 초기 Reply',
+    id: 'pagination-short-initial',
+    replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+  }),
+  viewerReactions: [],
+};
+const paginationFirstNextReply = {
+  ...post({
+    bodyText: '첫 다음 page Reply',
+    id: 'pagination-next-first',
+    replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+  }),
+  viewerReactions: [],
+};
+const paginationDuplicateNextReply = {
+  ...post({
+    bodyText: '중복 요청이면 나타나는 Reply',
+    id: 'pagination-next-duplicate',
+    replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+  }),
+  viewerReactions: [],
+};
+const paginationRetryReply = {
+  ...post({
+    bodyText: '재시도로 추가된 Reply',
+    id: 'pagination-next-retry',
+    replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+  }),
+  viewerReactions: [],
+};
 const threadItems = {
   ancestors: [
     { connectedToPrevious: false, id: threadRootPost.id },
@@ -394,16 +453,13 @@ const storyPosts = [
 const composerProfile = profile({ id: 'profile-composer' });
 const emptyPostsProfile = profileWithPosts([], { id: 'profile-posts-empty' });
 const contentPostsProfile = profileWithPosts(
-  [shortPost, pureRepostOfQuote, quotePost, quoteWithoutSource],
+  [shortPost, pureRepostOfQuote, quotePost, quoteWithoutSource].map(withReactionViewerState),
   { id: 'profile-posts-content' },
 );
 const homeTimeline = timeline(
-  shortPost,
-  pureRepost,
-  quotePost,
-  replyQuotePost,
-  quoteOfQuotePost,
-  linkedSourceQuote,
+  ...[shortPost, pureRepost, quotePost, replyQuotePost, quoteOfQuotePost, linkedSourceQuote].map(
+    withReactionViewerState,
+  ),
 );
 
 const PostsStoriesQuery = graphql`
@@ -665,6 +721,150 @@ function ProductionRepostQuoteLists() {
   );
 }
 
+type ProductionReactionRequest = Readonly<{ postId: string; type: string }>;
+
+function withReactionViewerState(storyPost: StoryPost): StoryPost & {
+  viewerReactions: [];
+} {
+  return {
+    ...storyPost,
+    repostSource: storyPost.repostSource ? withReactionViewerState(storyPost.repostSource) : null,
+    viewerReactions: [],
+  };
+}
+
+function ProductionReactionMutationTargetsStory() {
+  const [requests, setRequests] = useState<ProductionReactionRequest[]>([]);
+  const environment = useMemo(() => {
+    const selectedTypesByPost = new Map<string, Set<string>>();
+
+    return new Environment({
+      network: Network.create((request: RequestParameters, variables: Variables) => {
+        if (request.name === 'SessionProviderQuery') {
+          return Promise.resolve({
+            data: {
+              currentSession: {
+                __typename: 'Session',
+                id: 'session-production-reaction-targets',
+                selectedProfile: {
+                  __typename: 'Profile',
+                  id: 'profile-production-reaction-targets',
+                },
+              },
+              me: {
+                __typename: 'Account',
+                id: 'account-production-reaction-targets',
+                name: 'Reaction Target Story',
+              },
+            },
+          } as GraphQLResponse);
+        }
+        if (request.name === 'PostsStoriesQuery') {
+          return Promise.resolve({
+            data: {
+              composerProfile,
+              contentPostsProfile,
+              emptyPostsProfile,
+              homeTimeline,
+              nodes: storyPosts.map(withReactionViewerState),
+            },
+          } as GraphQLResponse);
+        }
+        if (request.name === 'PostReactionControllerAddReactionMutation') {
+          const postId = String(variables.postId);
+          const type = String(variables.type);
+          const selectedTypes = selectedTypesByPost.get(postId) ?? new Set<string>();
+          selectedTypes.add(type);
+          selectedTypesByPost.set(postId, selectedTypes);
+          setRequests((current) => [...current, { postId, type }]);
+          return Promise.resolve({
+            data: {
+              addReaction: {
+                reaction: {
+                  __typename: 'Reaction',
+                  id: `reaction-${postId}-${type}`,
+                  type,
+                },
+              },
+            },
+          } as GraphQLResponse);
+        }
+        if (request.name === 'PostReactionControllerRefetchQuery') {
+          const postId = String(variables.id);
+          const target = storyPosts.find((candidate) => candidate.id === postId);
+          return Promise.resolve({
+            data: {
+              node: target
+                ? {
+                    __typename: 'Post',
+                    id: postId,
+                    reactionCounts: target.reactionCounts.map((entry) => ({
+                      ...entry,
+                      count:
+                        entry.count + (selectedTypesByPost.get(postId)?.has(entry.type) ? 1 : 0),
+                    })),
+                  }
+                : null,
+            },
+          } as GraphQLResponse);
+        }
+        return Promise.resolve({ data: {} } as GraphQLResponse);
+      }),
+      store: new Store(new RecordSource()),
+    });
+  }, []);
+
+  return (
+    <RelayEnvironmentProvider environment={environment}>
+      <Suspense fallback={<Text>Reaction target fixture를 불러오는 중입니다.</Text>}>
+        <SessionProvider>
+          <ProductionReactionMutationSurfaces />
+        </SessionProvider>
+      </Suspense>
+      <Text testID="production-reaction-request-log">{JSON.stringify(requests)}</Text>
+    </RelayEnvironmentProvider>
+  );
+}
+
+function ProductionReactionMutationSurfaces() {
+  const data = usePostsStoryData();
+
+  return (
+    <Catalog>
+      <View testID="production-home-reposts">
+        <PostList homeTimeline={data.homeTimeline} />
+      </View>
+      <View testID="production-profile-reposts">
+        <PostList profile={data.contentPostsProfile} />
+      </View>
+      <View testID="production-detail-ordinary">
+        <PostLayout
+          post={requireFragment(
+            requirePostById(data.posts, shortPost.id).layout,
+            'production ordinary detail',
+          )}
+        />
+      </View>
+      <View testID="production-detail-quote">
+        <PostLayout
+          post={requireFragment(
+            requirePostById(data.posts, quotePost.id).layout,
+            'production Quote detail',
+          )}
+        />
+      </View>
+      <View testID="production-detail-pure-repost">
+        <PostLayout
+          post={requireFragment(
+            requirePostById(data.posts, pureRepost.id).layout,
+            'production pure Repost detail',
+          )}
+        />
+      </View>
+    </Catalog>
+  );
+}
+
 function RepostQuotePresentationStory({ postId }: { postId: string }) {
   const post = requireStoryPostById(storyPosts, postId);
 
@@ -825,7 +1025,7 @@ const meta = {
         contentPostsProfile,
         emptyPostsProfile,
         homeTimeline,
-        nodes: storyPosts,
+        nodes: storyPosts.map(withReactionViewerState),
       },
       mutationResponse: { createPost: { post: { id: 'post-created-in-story' } } },
     },
@@ -949,15 +1149,22 @@ export const ProductionRepostQuoteListIntegration: Story = {
     const pureRepostSourceRow = within(pureRepostRow!).getByTestId('post-list-standard-row');
     const quoteSourcePreview = within(quoteRow!).getByTestId('source-post-preview');
     const quoteSourceBody = within(quoteSourcePreview).getByTestId('source-post-body');
+    const quoteReactionSummary = within(quoteCard).getByRole('button', {
+      name: '🎉 반응 3개',
+    });
     expect(pureRepostAttributionLink.getBoundingClientRect().height).toBe(20);
     expect(
       pureRepostSourceRow.getBoundingClientRect().top -
         pureRepostAttributionLink.getBoundingClientRect().bottom,
     ).toBeCloseTo(0, 0);
     expect(
-      quoteActionBar.getBoundingClientRect().top -
+      quoteReactionSummary.getBoundingClientRect().top -
         quoteSourcePreview.getBoundingClientRect().bottom,
     ).toBeCloseTo(8, 0);
+    expect(
+      quoteActionBar.getBoundingClientRect().top -
+        quoteReactionSummary.getBoundingClientRect().bottom,
+    ).toBeCloseTo(0, 0);
     expect(
       quoteSourcePreview.getBoundingClientRect().bottom -
         Number.parseFloat(getComputedStyle(quoteSourcePreview).borderBottomWidth) -
@@ -1089,6 +1296,93 @@ export const ProductionRepostQuoteListIntegration: Story = {
   render: () => <ProductionRepostQuoteLists />,
 };
 
+export const ProductionReactionMutationTargets: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const home = within(await canvas.findByTestId('production-home-reposts'));
+    const ordinaryActionBar = within(home.getAllByRole('article')[0]!).getByRole('toolbar', {
+      name: '액션 바',
+    });
+    const quoteActionBar = within(
+      home
+        .getByText('이 원문에 덧붙이는 인용자의 본문입니다.')
+        .closest<HTMLElement>('[role="article"]')!.parentElement!,
+    ).getByRole('toolbar', { name: '액션 바' });
+    const pureRepostActionBar = within(
+      home
+        .getByText('재게시한 코스모 사용자님이 재게시함')
+        .closest<HTMLElement>('[role="article"]')!,
+    ).getByRole('toolbar', { name: '액션 바' });
+    const ordinaryRoot = ordinaryActionBar.closest<HTMLElement>('[role="article"]')!;
+    const quoteRoot = home
+      .getByText('이 원문에 덧붙이는 인용자의 본문입니다.')
+      .closest<HTMLElement>('[role="article"]')!.parentElement!.parentElement!;
+    const pureRepostRoot = pureRepostActionBar.closest<HTMLElement>('[role="article"]')!;
+    const detailTargets = [
+      ['production-detail-ordinary', '❤️ 반응 2개'],
+      ['production-detail-quote', '🎉 반응 3개'],
+      ['production-detail-pure-repost', '👀 반응 4개'],
+    ] as const;
+
+    for (const [testId, summaryLabel] of detailTargets) {
+      const detail = within(canvas.getByTestId(testId));
+      expect(detail.getByRole('button', { name: summaryLabel })).toBeVisible();
+      expect(detail.getByRole('button', { name: '반응' })).toBeEnabled();
+    }
+    expect(
+      within(canvas.getByTestId('production-detail-pure-repost')).queryByRole('button', {
+        name: '🌈 반응 99개',
+      }),
+    ).toBeNull();
+
+    const surfaces = [
+      {
+        actionBar: ordinaryActionBar,
+        root: ordinaryRoot,
+        summaryLabel: '❤️ 반응 2개',
+      },
+      {
+        actionBar: quoteActionBar,
+        root: quoteRoot,
+        summaryLabel: '🎉 반응 3개',
+      },
+      {
+        actionBar: pureRepostActionBar,
+        root: pureRepostRoot,
+        summaryLabel: '👀 반응 4개',
+      },
+    ];
+
+    for (const [index, { actionBar, root, summaryLabel }] of surfaces.entries()) {
+      const summaryToken = within(root).getByRole('button', { name: summaryLabel });
+      await userEvent.click(summaryToken);
+      expect(screen.queryByRole('dialog', { name: '반응한 프로필' })).toBeNull();
+      await waitFor(() => {
+        const requests = JSON.parse(
+          canvas.getByTestId('production-reaction-request-log').textContent ?? '[]',
+        ) as ProductionReactionRequest[];
+        expect(requests).toHaveLength(index + 1);
+      });
+      await waitFor(() =>
+        expect(within(actionBar).getByRole('button', { name: '반응' })).toHaveAttribute(
+          'aria-pressed',
+          'true',
+        ),
+      );
+    }
+
+    const requests = JSON.parse(
+      canvas.getByTestId('production-reaction-request-log').textContent ?? '[]',
+    ) as ProductionReactionRequest[];
+    expect(requests.map(({ postId }) => postId)).toEqual([
+      shortPost.id,
+      quotePost.id,
+      pureRepost.repostSource!.id,
+    ]);
+  },
+  render: () => <ProductionReactionMutationTargetsStory />,
+};
+
 export const ProductionRepostFailureToast: Story = {
   parameters: {
     relay: {
@@ -1097,7 +1391,7 @@ export const ProductionRepostFailureToast: Story = {
         contentPostsProfile,
         emptyPostsProfile,
         homeTimeline,
-        nodes: storyPosts,
+        nodes: storyPosts.map(withReactionViewerState),
       },
       mutationError: 'repost mutation failed',
     },
@@ -1388,7 +1682,7 @@ export const ProductionPureRepostLongAuthorMobile: Story = {
 
 export const PostLayoutOwnsReactionSummary: Story = {
   play: async ({ canvasElement }) => {
-    expect(within(canvasElement).getByRole('button', { name: '❤️ 반응 2개 보기' })).toBeVisible();
+    expect(within(canvasElement).getByRole('button', { name: '❤️ 반응 2개' })).toBeVisible();
   },
   render: () => <PostLayoutReactionSummaryStory />,
 };
@@ -1561,7 +1855,7 @@ export const PostDetailThreadRoute: Story = {
       'post-thread-item-route-source-null',
     ]);
     expect(canvas.getByText('Reply+Quote 자체 Content')).toBeVisible();
-    const reactionButton = canvas.getByRole('button', { name: '❤️ 반응 2개 보기' });
+    const reactionButton = canvas.getByRole('button', { name: '❤️ 반응 2개' });
     expect(reactionButton).toBeVisible();
     const ancestorQuote = within(canvas.getByTestId('post-thread-item-route-parent'));
     expect(ancestorQuote.getAllByText('Source 본문')).toHaveLength(1);
@@ -1650,7 +1944,7 @@ export const PostDetailCurrentQuoteSourceNavigation: Story = {
         PostDetailQuery: {
           data: {
             node: {
-              ...quotePost,
+              ...withReactionViewerState(quotePost),
               reactionCounts: [],
               replyAncestors: [],
               replyDescendants: {
@@ -1717,7 +2011,7 @@ export const PureRepostDetailCanonicalizesToSource: Story = {
         PostDetailQuery: {
           data: {
             node: {
-              ...pureRepost,
+              ...withReactionViewerState(pureRepost),
               reactionCounts: [],
               replyAncestors: [],
               replyDescendants: {

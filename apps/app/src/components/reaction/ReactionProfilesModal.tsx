@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { StateView } from '@/components/ui/StateView';
@@ -25,7 +25,7 @@ const reactionProfilesModalQuery = graphql`
 type ReactionProfilesModalProps = {
   onClose: () => void;
   postId: string;
-  reactionType: string;
+  reactionCounts: ReadonlyArray<Readonly<{ count: number; type: string }>>;
 };
 
 function ReactionProfilesContent({
@@ -56,11 +56,18 @@ function ReactionProfilesContent({
 export function ReactionProfilesModal({
   onClose,
   postId,
-  reactionType,
+  reactionCounts,
 }: ReactionProfilesModalProps) {
   const [fetchKey, setFetchKey] = useState(0);
+  const [reactionType, setReactionType] = useState(reactionCounts[0]?.type ?? '');
   const theme = useTheme();
-  const title = `${reactionType} 반응한 프로필`;
+  const title = '반응한 프로필';
+
+  useEffect(() => {
+    if (!reactionCounts.some(({ type }) => type === reactionType)) {
+      setReactionType(reactionCounts[0]?.type ?? '');
+    }
+  }, [reactionCounts, reactionType]);
 
   return (
     <Modal
@@ -78,8 +85,44 @@ export function ReactionProfilesModal({
           role="dialog"
           style={[styles.surface, { backgroundColor: theme.card, borderColor: theme.border }]}
         >
+          <ScrollView
+            accessibilityRole="tablist"
+            contentContainerStyle={styles.tabs}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.tabsScroll}
+          >
+            {reactionCounts.map(({ count, type }) => {
+              const selected = type === reactionType;
+
+              return (
+                <Pressable
+                  accessibilityLabel={`${type} 반응 ${count}개`}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected }}
+                  aria-selected={selected}
+                  key={type}
+                  onPress={() => {
+                    setFetchKey(0);
+                    setReactionType(type);
+                  }}
+                  style={({ pressed }) => [
+                    styles.tab,
+                    {
+                      backgroundColor: selected ? theme.background : theme.card,
+                      borderColor: selected ? theme.primary : theme.border,
+                      opacity: pressed ? 0.85 : 1,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.tabLabel, { color: theme.text }]}>{`${type} ${count}`}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
           <ScrollView contentContainerStyle={styles.content}>
             <RouteBoundary
+              key={reactionType}
               loading={<ReactionProfileList loading reactionType={reactionType} />}
               onRetry={() => setFetchKey((key) => key + 1)}
               title="반응한 프로필을 불러오지 못했어요"
@@ -112,5 +155,23 @@ const styles = StyleSheet.create({
     maxWidth: 420,
     width: '100%',
   },
+  tabs: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+  },
+  tabsScroll: { flexGrow: 0, maxWidth: '100%' },
+  tab: {
+    alignItems: 'center',
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    flexShrink: 0,
+    justifyContent: 'center',
+    minHeight: 32,
+    paddingHorizontal: spacing.sm,
+  },
+  tabLabel: { fontFamily: 'SUIT', fontSize: 14, fontWeight: '700', lineHeight: 20 },
   content: { padding: spacing.lg },
 });

@@ -56,13 +56,25 @@ export function ReactionProfileList({
   return (
     <View style={styles.root}>
       <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
-        {`${reactionType} 반응`}
+        반응한 사람
       </Text>
       {items !== undefined ? (
         items.length ? (
           <>
-            {items.map((item) => (
-              <ProfileListItem key={item.id} linked profile={item.profile} />
+            {items.map((item, index) => (
+              <View
+                key={item.id}
+                style={[
+                  styles.item,
+                  index < items.length - 1 ? styles.itemSeparator : null,
+                  { borderColor: theme.border },
+                ]}
+              >
+                <Text accessibilityLabel={`${reactionType} 반응`} style={styles.itemReaction}>
+                  {reactionType}
+                </Text>
+                <ProfileListItem linked profile={item.profile} style={styles.profileItem} />
+              </View>
             ))}
             {showPagination ? (
               <View style={[styles.pagination, { borderColor: theme.border }]}>
@@ -115,6 +127,10 @@ export function ReactionProfileList({
 const styles = StyleSheet.create({
   root: { gap: spacing.md },
   title: { fontFamily: 'SUIT', fontWeight: '700', ...typography.lg },
+  item: { alignItems: 'center', flexDirection: 'row' },
+  itemReaction: { fontSize: 20, lineHeight: 24, marginLeft: spacing.lg },
+  itemSeparator: { borderBottomWidth: 1 },
+  profileItem: { borderBottomWidth: 0, flex: 1, minWidth: 0 },
   pagination: { borderTopWidth: 1, gap: spacing.sm, paddingTop: spacing.md },
   paginationAction: { minHeight: 44 },
   stateTitle: { fontFamily: 'SUIT', fontWeight: '700', textAlign: 'center', ...typography.md },

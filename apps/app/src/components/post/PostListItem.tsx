@@ -2,16 +2,20 @@ import { Link, useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
+import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { PostActionBar } from './PostActionBar';
 import { PostBody } from './PostBody';
+import { usePostReactionController } from './PostReactionController';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
 import { useRepostFailureToast } from './useRepostFailureToast';
+import type { PostActionBar_post$key } from './__generated__/PostActionBar_post.graphql';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
 import type { PostListRow_post$key } from './__generated__/PostListRow_post.graphql';
+import type { PostReactionController_post$key } from './__generated__/PostReactionController_post.graphql';
 import type { PostActionBarProps } from './PostActionBar';
 import type { PostSourcePresentationData } from './PostSourcePresentationView';
 
@@ -29,6 +33,7 @@ const PostListRowFragment = graphql`
       ...ProfileNameBlock_profile
     }
     ...PostActionBar_post @alias(as: "actionBar")
+    ...PostReactionController_post @alias(as: "reactionController")
     ...PostBody_post
   }
 `;
@@ -51,6 +56,7 @@ const PostListItemFragment = graphql`
       id
     }
     ...PostActionBar_post @alias(as: "actionBar")
+    ...PostReactionController_post @alias(as: "reactionController")
     repostSource {
       id
       createdAt
@@ -163,9 +169,12 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
           showPostAvatar={false}
           sourcePreviewStyle={styles.quoteSourcePreview}
         />
-        <View style={[styles.actionBarSlot, styles.quoteActionBarSlot]}>
-          <PostActionBar onRepostError={onRepostError} post={post.actionBar} />
-        </View>
+        <PostReactionActions
+          actionBar={post.actionBar!}
+          controllerPost={post.reactionController!}
+          onRepostError={onRepostError}
+          quote
+        />
       </View>
     </View>
   );
@@ -222,11 +231,43 @@ function PostListRow({
             <PostBody post={post} />
           </Pressable>
         ) : null}
-        <View style={styles.actionBarSlot}>
-          <PostActionBar onRepostError={onRepostError} post={post.actionBar} />
-        </View>
+        <PostReactionActions
+          actionBar={post.actionBar!}
+          controllerPost={post.reactionController!}
+          onRepostError={onRepostError}
+        />
       </View>
     </View>
+  );
+}
+
+function PostReactionActions({
+  actionBar,
+  controllerPost,
+  onRepostError,
+  quote = false,
+}: {
+  actionBar: PostActionBar_post$key;
+  controllerPost: PostReactionController_post$key;
+  onRepostError: NonNullable<PostActionBarProps['onRepostError']>;
+  quote?: boolean;
+}) {
+  const controller = usePostReactionController(controllerPost);
+
+  return (
+    <>
+      <PostReactionSummary
+        controller={controller}
+        style={quote ? styles.quoteReactionSummary : styles.reactionSummary}
+      />
+      <View style={styles.actionBarSlot}>
+        <PostActionBar
+          onRepostError={onRepostError}
+          post={actionBar}
+          reactionController={controller}
+        />
+      </View>
+    </>
   );
 }
 
@@ -249,8 +290,9 @@ const styles = StyleSheet.create({
   },
   avatar: { borderRadius: radii.full },
   actionBarSlot: { paddingBottom: spacing.xs },
+  reactionSummary: { marginTop: spacing.xs },
+  quoteReactionSummary: { marginTop: spacing.sm },
   quoteSourcePreview: { paddingBottom: spacing.xs },
-  quoteActionBarSlot: { marginTop: spacing.sm },
   content: { flex: 1, gap: spacing.xs, minWidth: 0 },
   header: {
     alignItems: 'flex-start',
