@@ -2,11 +2,11 @@
 
 ### Requirement: Authenticated feedback submission contract
 
-**Authority / Provenance:** `memory/frontend-react-native.md`, `PROD-479`, `PROD-487` — The API MUST provide a `submitFeedback` GraphQL mutation to accounts with a valid login session. The mutation MUST NOT require a selected Profile, and Web Relay MUST be able to call it through the same-origin BFF `/graphql` with the existing session-cookie authentication.
+**Authority / Provenance:** `memory/frontend-react-native.md`, `PROD-479`, `PROD-487` — The API MUST provide a `submitFeedback` GraphQL mutation to accounts with a valid login session. The mutation MUST NOT require a selected Profile, and Android/iOS clients plus Web Relay MUST be able to call the same GraphQL contract through their existing authenticated transport.
 
 #### Scenario: Submit with a valid login session
 
-- **WHEN** 유효한 login session을 가진 Web 사용자가 유효한 feedback input으로 `submitFeedback`을 호출한다
+- **WHEN** 유효한 login session을 가진 Android/iOS/Web 사용자가 유효한 feedback input으로 `submitFeedback`을 호출한다
 - **THEN** API는 로그인 scope를 통과해 feedback 전달을 시도한다
 
 #### Scenario: Submit without a selected Profile
@@ -96,7 +96,7 @@
 
 #### Scenario: Block repeated client interaction while submitting
 
-- **WHEN** Web feedback mutation이 진행 중이다
+- **WHEN** feedback mutation이 진행 중이다
 - **THEN** client는 submit control을 disabled와 busy 상태로 노출한다
 - **AND** 동일 상호작용으로 추가 mutation을 시작하지 않는다
 
@@ -134,13 +134,13 @@
 - **WHEN** validation 외 feedback delivery가 실패한다
 - **THEN** client는 webhook 응답 body나 내부 예외 message 대신 안전한 한국어 오류와 재시도 동작을 표시한다
 
-### Requirement: Web feedback form accessibility and state
+### Requirement: Universal feedback form accessibility and state
 
-**Authority / Provenance:** `docs/design/colors.md`, `docs/design/typography.md`, `memory/frontend-react-native.md`, `PROD-479`, `PROD-487` — The protected `/feedback` Web screen MUST provide the feedback kind, body, and submit control using React Native primitives and semantic theme tokens. It MUST render the feedback form directly without the legacy `/menu` introduction, description, or login-test link. UI labels, headings, and buttons MUST use `SUIT`, while the long feedback-body input MUST use `Pretendard`. Error, success, disabled, and busy states MUST be exposed to assistive technology without relying on visual presentation alone.
+**Authority / Provenance:** `docs/design/colors.md`, `docs/design/typography.md`, `memory/frontend-react-native.md`, `PROD-479`, `PROD-487` — The protected `/feedback` screen on Android/iOS/Web MUST provide the feedback kind, body, and submit control using React Native primitives and semantic theme tokens. It MUST render the feedback form directly without the legacy `/menu` introduction, description, or login-test link. UI labels, headings, and buttons MUST use `SUIT`, while the long feedback-body input MUST use `Pretendard`. Error, success, disabled, and busy states MUST be exposed to assistive technology without relying on visual presentation alone.
 
-#### Scenario: Render the feedback form on Web
+#### Scenario: Render the feedback form on every client
 
-- **WHEN** 로그인한 Web 사용자가 `/feedback`을 연다
+- **WHEN** 로그인한 Android/iOS/Web 사용자가 `/feedback`을 연다
 - **THEN** 시스템은 네 feedback 종류, 본문 input과 submit control을 렌더링한다
 - **AND** touch target, label, heading과 상태는 접근 가능한 semantics를 제공한다
 - **AND** 기존 메뉴 소개와 로그인 테스트 UI를 렌더링하지 않는다
@@ -150,10 +150,11 @@
 - **WHEN** 제출이 진행 중이거나 성공 또는 실패로 완료된다
 - **THEN** 시스템은 현재 상태를 접근 가능한 한국어 status로 알린다
 
-#### Scenario: Keep native UI out of the Web slice
+#### Scenario: Share the feedback form across platforms
 
-- **WHEN** Android 또는 iOS 앱이 이번 변경의 `/feedback` 화면을 렌더링한다
-- **THEN** 시스템은 `PROD-488` 전까지 feedback form과 feedback navigation entry를 native에 새로 노출하지 않는다
+- **WHEN** Android, iOS 또는 Web 앱이 `/feedback` 화면을 렌더링한다
+- **THEN** 시스템은 동일한 보호 route와 feedback form을 노출한다
+- **AND** 각 플랫폼의 기존 인증·navigation transport를 재사용한다
 
 ### Requirement: Feedback secret injection and production smoke
 

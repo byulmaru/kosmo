@@ -1,14 +1,10 @@
-import { Platform, ScrollView, StyleSheet } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
 import { FeedbackForm } from '@/components/feedback/FeedbackForm';
 import { spacing } from '@/theme/tokens';
 
 export default function FeedbackScreen() {
-  if (Platform.OS !== 'web') {
-    return null;
-  }
-
   return (
-    <ScrollView contentContainerStyle={styles.root}>
+    <ScrollView contentContainerStyle={styles.root} keyboardShouldPersistTaps="handled">
       <FeedbackForm />
     </ScrollView>
   );

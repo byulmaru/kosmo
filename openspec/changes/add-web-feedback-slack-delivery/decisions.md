@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 `PROD-479`의 cross-platform feedback 계약 중 `PROD-487`이 소유하는 Web UI와 인증 server delivery slice를 구현하기 위한 durable choice를 정리한다. 제품 행동은 최신 Linear 본문과 적용되는 디자인·frontend 기준에서 독립적으로 확인했으며, 특히 Slack 성공 확인·retry·중복 허용 범위는 2026-07-28 사용자 선택을 Linear에 먼저 반영한 뒤 기록했다.
+이 기록은 `PROD-479`의 cross-platform feedback 계약 중 `PROD-487`이 소유하는 Android/iOS/Web 공용 UI와 인증 server delivery slice를 구현하기 위한 durable choice를 정리한다. 제품 행동은 최신 Linear 본문과 적용되는 디자인·frontend 기준에서 독립적으로 확인했으며, 특히 Slack 성공 확인·retry·중복 허용 범위는 2026-07-28 사용자 선택을 Linear에 먼저 반영한 뒤 기록했다.
 
 ## Decision Records
 
@@ -22,10 +22,10 @@
 - Decision Class: Implementation Choice
 - Authority / Provenance: `memory/frontend-react-native.md`, `PROD-479`, `PROD-487`
 - Status: Active
-- Context / Problem: Web은 Relay와 same-origin BFF `/graphql`을 사용하고 후속 native slice가 같은 API server boundary를 재사용해야 한다. 제품은 로그인 account만 요구하며 선택 Profile은 요구하지 않는다.
-- Decision Outcome: API는 `submitFeedback` GraphQL mutation을 `login` scope로 제공한다. Web Relay는 기존 cookie-to-Bearer BFF bridge를 사용하며 선택 Profile이 없는 유효한 session도 허용한다.
+- Context / Problem: Android/iOS/Web 클라이언트가 같은 API server boundary를 재사용해야 한다. 제품은 로그인 account만 요구하며 선택 Profile은 요구하지 않는다.
+- Decision Outcome: API는 `submitFeedback` GraphQL mutation을 `login` scope로 제공한다. Web Relay는 기존 cookie-to-Bearer BFF bridge를 사용하고 Android/iOS는 기존 bearer transport를 사용하며, 선택 Profile이 없는 유효한 session도 허용한다.
 - Alternatives Considered: Web BFF 전용 REST endpoint는 native와 transport를 분리하므로 제외했다. API REST endpoint는 기존 client data layer를 우회하므로 제외했다. `usingProfile` scope는 제품보다 강한 precondition을 추가하므로 제외했다.
-- Consequences: GraphQL schema와 Relay operation이 추가되지만 별도 Web 인증 경계는 필요 없다. Payload는 persisted entity를 반환하지 않고 제출 완료만 표현한다.
+- Consequences: GraphQL schema와 Relay operation이 추가되지만 별도 client 인증 경계는 필요 없다. Payload는 persisted entity를 반환하지 않고 제출 완료만 표현한다.
 - Confirmation / Follow-up: Anonymous, selected-Profile 없음, valid session과 BFF forwarding 경로를 GraphQL/app test로 검증한다.
 
 ### Feedback input과 Sentry event ID를 좁은 공개 계약으로 제한한다
@@ -47,10 +47,10 @@
 - Authority / Provenance: `PROD-479`, `PROD-487`
 - Status: Active
 - Context / Problem: Sentry event ID는 일반 사용자가 이해하거나 안정적으로 제공할 수 있는 입력이 아니며, 최신 제품 결정은 피드백 흐름에서 Sentry event 연결 자체를 제외한다.
-- Decision Outcome: Feedback 공개 input과 Web form은 종류와 1~2,000자 본문만 받는다. API는 Sentry event ID를 검증·정규화·전달하지 않고 Slack payload에도 포함하지 않는다.
+- Decision Outcome: Feedback 공개 input과 Android/iOS/Web form은 종류와 1~2,000자 본문만 받는다. API는 Sentry event ID를 검증·정규화·전달하지 않고 Slack payload에도 포함하지 않는다.
 - Alternatives Considered: 사용자 직접 입력과 자동 event 연결은 모두 피드백 계약에서 Sentry 전송을 유지하므로 제외했다.
 - Consequences: 버그 피드백은 다른 종류와 같은 본문 중심 계약을 사용하며 Sentry event와 상호 참조되지 않는다.
-- Confirmation / Follow-up: GraphQL schema, Web form, Slack payload와 관련 test에서 Sentry event ID가 제거됐는지 검증한다.
+- Confirmation / Follow-up: GraphQL schema, 클라이언트 form, Slack payload와 관련 test에서 Sentry event ID가 제거됐는지 검증한다.
 
 ### Incoming Webhook secret과 plain-text Slack payload를 API가 소유한다
 
@@ -72,7 +72,7 @@
 - Status: Active
 - Context / Problem: 팀이 Slack에서 피드백 제출자를 구분하려면 실행 환경 source보다 Kosmo identity가 필요하다. 최신 제품 결정은 Account 내부 ID와 선택 Profile의 공개 표현만 허용하고, 닉네임은 Account가 아니라 Profile `displayName`을 사용한다.
 - Decision Outcome: Payload에서 source field를 제거한다. 제출 Account 내부 ID를 포함하고, 선택 Profile이 있으면 내부 ID, `displayName` 닉네임과 `relativeHandle`을 plain-text field로 포함한다. 선택 Profile이 없으면 Profile 정보가 없음을 표시하고 제출은 계속 허용한다. Account `displayName`, 이메일, OIDC subject, session identity와 선택되지 않은 다른 Profile 정보는 포함하지 않는다.
-- Alternatives Considered: `출처: Web`은 현재 Web slice 외 식별 가치가 없어 제외했다. Account `displayName`을 닉네임으로 보내는 방식은 사용자가 정정한 Profile 정체성과 다르므로 제외했다. 이메일·OIDC subject와 모든 Profile 목록은 목적보다 넓은 개인정보이므로 제외했다.
+- Alternatives Considered: `출처: Web`은 client platform과 무관한 identity 계약에서 식별 가치가 없어 제외했다. Account `displayName`을 닉네임으로 보내는 방식은 사용자가 정정한 Profile 정체성과 다르므로 제외했다. 이메일·OIDC subject와 모든 Profile 목록은 목적보다 넓은 개인정보이므로 제외했다.
 - Consequences: Slack message는 제출 Account와 현재 선택 Profile을 식별할 수 있다. Resolver는 검증된 session identity에 해당하는 Profile 표현을 조회해야 하지만 GraphQL input과 client payload는 바뀌지 않는다.
 - Confirmation / Follow-up: 선택 Profile 유무별 payload, source field 부재, 허용되지 않은 Account/Profile 필드 부재와 기존 secret redaction을 API test 및 production smoke로 확인한다.
 
@@ -117,12 +117,24 @@
 - Decision Date: 2026-07-29
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/design/breakpoints.md`, `docs/design/colors.md`, `docs/design/typography.md`, `memory/frontend-react-native.md`, `PROD-479`, `PROD-487`
-- Status: Active
+- Status: Superseded
 - Context / Problem: `/feedback`은 전용 피드백 화면이어야 하지만, 기존 프로필·팔로워 요청·프로필 설정 항목도 `/menu`를 destination으로 사용한다. `/menu`를 `/feedback`으로 redirect하면 이 소비자들이 피드백 화면으로 이동하는 회귀가 발생한다.
-- Decision Outcome: Web shell의 "피드백 보내기" 진입점은 canonical `/feedback`을 직접 가리키고, `/feedback`은 기존 메뉴 소개·설명·login-test UI 없이 form만 렌더링한다. `/menu`는 redirect하지 않고 기존 메뉴 화면과 UI를 보존한다. Native feedback navigation과 form 노출은 변경하지 않는다.
+- Decision Outcome: Web shell의 "피드백 보내기" 진입점은 canonical `/feedback`을 직접 가리키고, `/feedback`은 기존 메뉴 소개·설명·login-test UI 없이 form만 렌더링한다. `/menu`는 redirect하지 않고 기존 메뉴 화면과 UI를 보존한다. 이후 공용 Android/iOS/Web 결정으로 대체되었다.
 - Alternatives Considered: `/menu`를 `/feedback`으로 redirect하는 방식은 기존 route 소비자를 깨뜨려 제외했다. `/menu`에 form을 유지하는 방식은 전용 URL과 화면 구조를 충족하지 않아 제외했다.
 - Consequences: `/menu`와 `/feedback`이 독립된 protected route로 남고, sidebar feedback link만 `/feedback`으로 이동한다. 피드백 화면은 단순한 정보 구조를 유지하면서 기존 메뉴 소비자의 destination을 보존한다.
-- Confirmation / Follow-up: Full/compact/drawer의 `/feedback` navigation과 active semantics, `/menu`의 기존 heading·UI 렌더링, 두 route의 독립성과 native unchanged scenario를 component/Storybook/E2E로 검증한다.
+- Confirmation / Follow-up: Full/compact/drawer의 `/feedback` navigation과 active semantics, `/menu`의 기존 heading·UI 렌더링, 두 route의 독립성을 component/Storybook/E2E로 검증한다.
+
+### Android/iOS/Web에서 동일한 `/feedback` route와 shell navigation을 사용한다
+
+- Decision Date: 2026-07-29
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/breakpoints.md`, `docs/design/colors.md`, `docs/design/typography.md`, `memory/frontend-react-native.md`, `PROD-479`, `PROD-487`
+- Status: Active
+- Context / Problem: `PROD-487`의 확정 범위가 제한된 플랫폼 구현에서 인증된 Android/iOS/Web 공용 피드백으로 확대되었고 별도 플랫폼 slice가 취소되어 추가 분할이 필요하지 않다. `/feedback`은 보호된 canonical route로, `/menu`는 기존 소비자를 위해 독립 route로 유지해야 한다.
+- Decision Outcome: Android/iOS/Web의 공용 `(tabs)/(protected)/feedback` route는 동일한 피드백 form과 GraphQL 제출 계약을 렌더링한다. 모든 플랫폼의 full/compact sidebar와 mobile drawer footer는 "피드백 보내기" Link를 `/feedback`으로 제공하고 현재 위치를 active/page-current로 노출한다. `/menu`는 redirect하지 않고 기존 화면과 UI를 보존한다.
+- Alternatives Considered: 플랫폼별 route·form을 분리하면 인증·검증·상태 계약이 중복되어 제외했다. 일부 플랫폼만 entry를 제공하고 native 후속 구현을 두는 방식은 최신 `PROD-487` 범위와 맞지 않아 제외했다.
+- Consequences: Android/iOS/Web이 동일한 route, form과 shell semantics를 공유하며 별도 native 구현 slice가 없다. 각 플랫폼의 기존 authenticated transport와 drawer close 동작은 유지한다.
+- Confirmation / Follow-up: Full/compact/drawer navigation, active semantics, drawer close, `/menu`·`/feedback` 독립성 및 각 플랫폼의 form state를 component/Storybook/E2E로 검증한다. Native device harness가 없으면 해당 검증 공백을 결과에 기록한다.
 
 ## Remaining Decisions
 
@@ -134,3 +146,5 @@
 - 2026-07-28 `Feedback input과 Sentry event ID를 좁은 공개 계약으로 제한한다`는 2026-07-29 `Feedback 계약에서 Sentry event ID를 제외한다`로 대체했다.
 - 2026-07-28 `Incoming Webhook secret과 plain-text Slack payload를 API가 소유한다`의 identity 비노출 payload 결정은 2026-07-29 `Slack payload에서 제출 Account와 선택 Profile을 제한적으로 식별한다`로 대체했다. API secret 소유와 plain-text·unfurl 비활성화 결정은 유지한다.
 - 2026-07-29의 기존 `/menu` → `/feedback` redirect 결정은 `/feedback`을 canonical Web feedback route로 사용하면서 기존 `/menu`는 보존하는 결정으로 대체했다.
+- 2026-07-29 `/feedback을 canonical Web feedback route로 사용하고 메뉴 소개 UI를 제거한다`는 Android/iOS/Web에서 동일한 `/feedback` route와 shell navigation을 사용하는 결정으로 대체했다.
+- 2026-07-29 `/feedback을 canonical Web feedback route로 사용하고 기존 /menu는 보존한다`는 Android/iOS/Web에서 동일한 `/feedback` route와 shell navigation을 사용하는 결정으로 대체했다.

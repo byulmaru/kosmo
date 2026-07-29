@@ -2,7 +2,6 @@ import { Link, usePathname } from 'expo-router';
 import {
   Bell,
   Bookmark,
-  ChevronDown,
   House,
   PenLine,
   Search,
@@ -10,7 +9,7 @@ import {
   UserRound,
   UserRoundPlus,
 } from 'lucide-react-native';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
@@ -74,7 +73,7 @@ export function SidebarNavigation({
   const data = useFragment(SidebarNavigationFragment, query);
   const unreadNotificationCount = useUnreadNotificationCount();
   const profile = data.currentSession?.selectedProfile ?? null;
-  const feedbackActive = Platform.OS === 'web' && pathname === '/feedback';
+  const feedbackActive = pathname === '/feedback';
 
   const resolveItem = (item: NavigationItem) => {
     if (!item.profile) {
@@ -214,55 +213,38 @@ export function SidebarNavigation({
           {compact ? (
             <LogoutControl compact style={[styles.footerItem, styles.compactItem]} />
           ) : null}
-          {Platform.OS === 'web' ? (
-            <Link asChild href="/feedback">
-              <Pressable
-                aria-current={feedbackActive ? 'page' : undefined}
-                accessibilityLabel="피드백 보내기"
-                accessibilityRole="link"
-                onPress={onNavigate}
-                style={StyleSheet.flatten([
-                  styles.footerItem,
-                  compact && styles.compactItem,
-                  { backgroundColor: feedbackActive ? theme.surface : 'transparent' },
-                ])}
-              >
-                <Settings
-                  color={feedbackActive ? theme.text : theme.textSecondary}
-                  size={20}
-                  strokeWidth={1.5}
-                />
-                {!compact ? (
-                  <Text
-                    style={[
-                      styles.footerLabel,
-                      styles.footerLabelGrow,
-                      feedbackActive && styles.activeItemLabel,
-                      { color: theme.text },
-                    ]}
-                  >
-                    피드백 보내기
-                  </Text>
-                ) : null}
-              </Pressable>
-            </Link>
-          ) : (
+          <Link asChild href="/feedback">
             <Pressable
-              accessibilityLabel="설정 & 지원"
-              accessibilityRole="button"
-              style={[styles.footerItem, compact && styles.compactItem]}
+              aria-current={feedbackActive ? 'page' : undefined}
+              accessibilityLabel="피드백 보내기"
+              accessibilityRole="link"
+              accessibilityState={{ selected: feedbackActive }}
+              onPress={onNavigate}
+              style={StyleSheet.flatten([
+                styles.footerItem,
+                compact && styles.compactItem,
+                { backgroundColor: feedbackActive ? theme.surface : 'transparent' },
+              ])}
             >
-              <Settings color={theme.textSecondary} size={20} strokeWidth={1.5} />
+              <Settings
+                color={feedbackActive ? theme.text : theme.textSecondary}
+                size={20}
+                strokeWidth={1.5}
+              />
               {!compact ? (
-                <>
-                  <Text style={[styles.footerLabel, styles.footerLabelGrow, { color: theme.text }]}>
-                    설정 &amp; 지원
-                  </Text>
-                  <ChevronDown color={theme.textSecondary} size={20} />
-                </>
+                <Text
+                  style={[
+                    styles.footerLabel,
+                    styles.footerLabelGrow,
+                    feedbackActive && styles.activeItemLabel,
+                    { color: theme.text },
+                  ]}
+                >
+                  피드백 보내기
+                </Text>
               ) : null}
             </Pressable>
-          )}
+          </Link>
         </View>
       </ScrollView>
     </View>
