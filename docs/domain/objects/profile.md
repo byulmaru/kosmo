@@ -78,8 +78,8 @@ Local Profile과 Remote Profile은 Profile Origin 상태 차원으로 구분한�
 Profile Origin은 연결된 Instance Type과 같아야 한다. Follow Approval Policy 변경은 이미 존재하는 Pending Follow
 Request의 상태나 존재를 바꾸지 않는다.
 
-Profile Tag는 Profile이 [Hashtag](./hashtag.md)를 참조하는 구조화 관계다. bio에서 파생하지 않으며 관계·API·공개
-노출에서 순서를 보장하지 않는다. 제품상 Profile Tag 개수 상한은 두지 않는다. Profile 편집 입력은 각 이름을
+Profile Tag는 Profile이 [Hashtag](./hashtag.md)를 참조하는 구조화 관계다. bio에서 파생하지 않으며 관계는
+순서를 가지지 않는다. 제품상 Profile Tag 개수 상한은 두지 않는다. Profile 편집 입력은 각 이름을
 [Hashtag](./hashtag.md)의 canonical Hashtag identity로 먼저 해석·생성한 뒤, 동일 Hashtag identity를 둘 이상
 참조하는 목록은 거부한다. Profile 비활성화와 정지는 관계를 보존하지만 공개 조회에서는 Profile과 함께 숨긴다.
 Profile 삭제는 Profile Tag 관계를 제거하며, 다른 Post 또는 Profile이 참조하는 Hashtag에는 영향을 주지 않는다.

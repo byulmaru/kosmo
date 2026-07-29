@@ -23,9 +23,8 @@ Local/Remote와 생명주기 경계를 먼저 확정해야 한다.
   않는다.
 - Hashtag Name 문법·정규화·normalized name uniqueness는 [Hashtag](../objects/hashtag.md)가 소유한다. Profile
   Tag는 이 규칙을 사용한다.
-- Profile Tag 관계·API·공개 노출은 순서를 보장하지 않으며 reorder UI를 제공하지 않는다. 제품상 Profile Tag
-  개수 상한은 두지 않는다. 목록의 각 입력 이름은 먼저 canonical Hashtag identity로 해석·생성하고, 동일
-  Hashtag identity를 둘 이상 참조하면 전체 변경을 거부한다.
+- Profile Tag 관계는 순서를 가지지 않으며 제품상 개수 상한을 두지 않는다. 목록의 각 입력 이름은 먼저
+  canonical Hashtag identity로 해석·생성하고, 동일 Hashtag identity를 둘 이상 참조하면 전체 변경을 거부한다.
 - Active Account의 Local Profile Owner만 Profile 편집을 통해 전체 Profile Tag 목록을 원자적으로 교체한다.
   Profile Tag는 Profile과 별도의 편집 권한을 가지지 않는다.
 - Profile Tag는 Profile이 공개 조회 가능한 동안에만 함께 공개한다. Profile 비활성화 또는 정지는 관계를
@@ -61,6 +60,7 @@ Local 편집·공개 표시만 먼저 전달하면 원격 서버의 Profile meta
 
 ## 문서 반영
 
-- [Profile](../objects/profile.md)은 관계, 편집 권한, cardinality와 생명주기를 정의한다.
+- [Profile](../objects/profile.md)은 관계의 무순서성, 편집 권한, cardinality와 생명주기를 정의한다.
 - [Hashtag](../objects/hashtag.md)은 공유 identity, Hashtag Name 문법·정규화·normalized name uniqueness를 정의한다.
-- [Profile Tag 디자인](../../design/profile-tags.md)은 편집·공개 표시의 플랫폼 공통 경계를 정의한다.
+- [Profile Tag 디자인](../../design/profile-tags.md)은 reorder UI와 안정적인 표시 순서에 의존하지 않는 편집·공개
+  표시의 플랫폼 공통 경계를 정의한다.
