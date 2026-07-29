@@ -59,10 +59,10 @@
 - Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-489` 확정 결정 기록, `PROD-490`, `PROD-523` (PR #394), `PROD-522`, `PROD-526`
 - Status: Active
 - Context / Problem: 기존 update resolver에 relation delete/insert를 별도로 추가하면 validation 또는 저장 실패 때 scalar Profile 값만 반영되거나 동시 update가 섞일 수 있다.
-- Decision Outcome: GraphQL `usingProfile` 경계가 검증한 selected Profile identity를 사용하고, Core는 Active Account의 Owner·Local Profile에 대해 Lifecycle State `Active`와 Suspension State `Normal`인 editable 조건을 재확인한다. 하나의 DB transaction에서 제공된 scalar field만 atomic `UPDATE`하고 Hashtag resolve/create와 전체 relation replacement를 처리한다. 공개 조회 visibility도 Lifecycle State `Active`와 Suspension State `Normal`을 사용한다. explicit `SELECT ... FOR UPDATE`, table lock 또는 advisory lock은 사용하지 않고 일반 DML이 획득하는 lock, unique constraint와 conflict 처리를 사용한다.
+- Decision Outcome: GraphQL `usingProfile` 경계가 검증한 selected Profile identity를 사용하고, Core는 Active Account의 Owner·Local Profile에 대해 Lifecycle State `Active`와 Suspension State `Normal`인 editable 조건을 재확인한다. 하나의 DB transaction에서 실제 제공된 scalar field만 dynamic `UPDATE`하고 Hashtag resolve/create와 전체 relation replacement를 처리한다. scalar 입력이 없으면 불필요한 Profile `UPDATE`를 생략한다. 공개 조회 visibility도 Lifecycle State `Active`와 Suspension State `Normal`을 사용한다. explicit `SELECT ... FOR UPDATE`, table lock 또는 advisory lock은 사용하지 않고 일반 relation DML, unique constraint와 conflict 처리를 사용한다. 같은 Profile의 concurrent full-list replacement 순서와 strict last-writer 결과는 계약하지 않는다.
 - Alternatives Considered: scalar update 뒤 별도 relation transaction은 부분 commit 위험 때문에 제외했다. 별도 Tag mutation은 같은 저장 action 계약과 draft 복구를 복잡하게 한다. optimistic version field 추가는 현재 Profile 공개 계약을 확장하므로 채택하지 않았다.
 - Consequences: GraphQL resolver의 직접 row update 일부를 transaction/service 경계로 이동해야 한다. validation·권한·Hashtag resolve/create·relation 실패는 모두 요청 전 상태를 보존해야 한다. 미제공 scalar 값은 stale authorization snapshot으로 다시 쓰지 않는다.
-- Confirmation / Follow-up: scalar와 tags 동시 성공, 각 실패 rollback, concurrent partial scalar update 보존, concurrent replacement와 Hashtag identity upsert 경합을 database integration test로 검증한다.
+- Confirmation / Follow-up: scalar와 tags 동시 성공, 각 실패 rollback, concurrent partial scalar update 보존과 서로 다른 Profile의 Hashtag 역순 upsert 경합을 database integration test로 검증한다. 같은 Profile concurrent replacement의 strict 전체 목록 결과를 보장하는 테스트는 두지 않는다.
 
 ### Profile Tag 제거 action은 시각 크기와 플랫폼 target을 분리한다
 

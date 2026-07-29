@@ -38,8 +38,8 @@
 
 1. Core DB에 Hashtag가 소유하는 고유 canonical `name`과 first-write-wins `display_name`의 Hashtag table, Profile ID·Hashtag ID identity 조합을 가진 관계 table을 additive하게 추가한다. `(profile_id, hashtag_id)`를 유일하게 만들고 position column·순서 제약·제품 max count는 두지 않는다. Lifecycle State가 Deleted로 전이돼도 관계를 보존한다. Profile row 물리 삭제의 FK cascade는 별도 DB safety 경로로 유지하며 canonical Hashtag row와 다른 Profile/Post 관계를 삭제하지 않는다. 관계 해제 때 canonical Hashtag identity row는 자동 삭제하지 않는다.
 2. Hashtag가 소유하는 순수 normalization boundary 한 곳에서 trim, 선택적 앞 `#` 제거, NFKC, locale 비종속 `toLowerCase()`, code point 개수와 `Letter | Number | _` 검증을 수행한다. NFKC까지 적용한 최초 입력 표기는 `display_name`으로 insert하고 name conflict에서는 기존 값을 유지한다. Profile 관계는 이 boundary의 규칙을 복제하지 않고 입력을 Hashtag identity로 resolve/create하며, API와 DB service가 같은 Hashtag 함수를 호출한다.
-3. GraphQL `usingProfile` 경계가 검증한 selected Profile identity를 전달하고, Core에서 Active Account의 Owner이며 Origin이 Local, Lifecycle State가 `Active`, Suspension State가 `Normal`인지 재확인한다. 대상 Profile ID는 update input으로 받지 않는다. Profile row를 잠근 하나의 DB transaction에서 Profile scalar update, Hashtag resolve/create, 기존 관계 삭제와 새 관계 insert를 수행한다. `tags`가 undefined 또는 null이면 관계 작업을 생략하고 빈 목록이면 전부 제거한다. 같은 Hashtag identity가 목록에 두 번 나타나는지 identity 기준으로 검증하며 resolve/create 경합은 unique constraint와 재조회로 수렴시킨다.
-4. GraphQL Profile에 non-null 문자열 목록 `tags`를 추가하고, profile IDs를 묶어 관계를 읽는 request-scoped loader를 사용한다. loader와 resolver는 배열 위치나 API 반환 순서를 의미 있는 계약으로 정렬·보장하지 않는다. Profile Origin과 연결된 Instance Kind가 Local인 모든 Profile은 configured instance ID와 무관하게 유효한 관계를 반환하고, Remote Profile은 빈 목록을 반환한다. update payload는 갱신된 Profile에서 `tags`를 다시 읽을 수 있게 한다.
+3. GraphQL `usingProfile` 경계가 검증한 selected Profile identity를 전달하고, Core에서 Active Account의 Owner이며 Origin이 Local, Lifecycle State가 `Active`, Suspension State가 `Normal`인지 재확인한다. 대상 Profile ID는 update input으로 받지 않는다. 하나의 DB transaction에서 실제 제공된 Profile scalar field만 dynamic `UPDATE`하고 Hashtag resolve/create, 기존 관계 삭제와 새 관계 insert를 수행한다. scalar 입력이 없으면 Profile `UPDATE`를 생략하며 explicit row lock은 사용하지 않는다. `tags`가 undefined 또는 null이면 관계 작업을 생략하고 빈 목록이면 전부 제거한다. 같은 Hashtag identity가 목록에 두 번 나타나는지 identity 기준으로 검증하며 resolve/create 경합은 deterministic insert 순서, unique constraint와 conflict 처리·재조회로 수렴시킨다.
+4. GraphQL Profile에 global `id`와 Display Hashtag Name `name`을 가진 non-null Hashtag Node 목록 `tags`를 추가하고, profile IDs를 묶어 관계를 읽는 request-scoped loader를 사용한다. loader와 resolver는 배열 위치나 API 반환 순서를 의미 있는 계약으로 정렬·보장하지 않는다. Profile Origin과 연결된 Instance Kind가 Local인 모든 Profile은 configured instance ID와 무관하게 유효한 관계를 반환하고, Remote Profile은 빈 목록을 반환한다. update payload는 갱신된 Profile에서 `tags { id name }`을 다시 읽을 수 있게 한다.
 5. `PROD-491`의 controlled Tag editor를 `PROD-492`의 edit route·저장 action에 연결한다. `PROD-491`이 제공한 client validation을 재사용하고, 서버 결과를 권위로 유지하며 공통 parity fixture로 Hashtag normalization·경계·canonical identity duplicate 사례의 회귀와 server parity를 검증한다.
 6. 공개 화면은 기존 `ProfileHero` fragment에서 `tags`를 읽고 bio 다음·follow count 전에 wrapping TagChip 목록을 렌더한다. chip은 Pressable/Link가 아닌 비대화형 표현으로 유지하고 배열 순서에 의존하는 UI 계약을 만들지 않는다. mutation fragment에도 `tags`를 선택해 같은 Relay Profile record를 갱신한다.
 7. Storybook 또는 동등한 공용 상태 카탈로그에서 빈 목록, 임의 개수의 긴 값, validation, 저장 중, 실패 상태를 검증하고 Web E2E에서 Owner 저장부터 공개 Profile 표시까지 연결한다. Android·iOS는 같은 component test와 native render smoke로 확인한다.
@@ -47,7 +47,7 @@
 ### Allowed Alternatives
 
 - Canonical identity는 JavaScript `toLowerCase()`를 사용한다. 별도 Unicode full case-fold table/package를 추가하지 않는다.
-- Profile update는 제공된 scalar field만 atomic `UPDATE`하고 같은 transaction에서 relation delete/insert를 수행한다. explicit `SELECT ... FOR UPDATE`, table lock 또는 advisory lock은 사용하지 않으며 일반 DML lock과 unique/conflict 처리를 사용한다.
+- Profile update는 실제 제공된 scalar field만 dynamic `UPDATE`하고 같은 transaction에서 relation delete/insert를 수행한다. scalar 입력이 없으면 Profile `UPDATE`를 생략한다. explicit `SELECT ... FOR UPDATE`, table lock 또는 advisory lock은 사용하지 않으며 일반 DML과 unique/conflict 처리를 사용한다. 같은 Profile의 concurrent replacement 순서나 strict last-writer 결과는 계약하지 않는다.
 
 ### Known Traps
 
@@ -63,7 +63,7 @@
 ## Risks / Trade-offs
 
 - [플랫폼별 lowercase 구현이 달라 같은 입력이 다른 identity가 됨] → server의 NFKC + `toLowerCase()` normalizer를 권위로 두고 고정 test vector를 DB unique name 직전에 적용한다.
-- [동시 Profile update가 서로의 미제공 scalar 값을 덮거나 Tag 집합을 섞음] → stale SELECT 값을 다시 쓰지 않는 atomic `UPDATE`를 relation DML보다 먼저 수행하고, Hashtag resolve/create 경합은 deterministic insert 순서·unique constraint·conflict 처리로 다룬다.
+- [동시 Profile update가 서로의 미제공 scalar 값을 덮거나 Hashtag upsert가 교착함] → 실제 제공된 scalar field만 dynamic `UPDATE`하고, Hashtag resolve/create 경합은 deterministic insert 순서·unique constraint·conflict 처리로 다룬다. benign한 같은 Profile concurrent replacement의 최종 순서는 계약하지 않는다.
 - [새 `tags` field가 목록 화면에서 N+1 query를 유발함] → request-scoped batch loader와 query-count 통합 테스트를 둔다.
 - [클라이언트와 서버 validation 차이로 저장 때만 오류가 발생함] → Hashtag를 권위로 유지하고 공통 fixture의 parity를 검증하며 실패 뒤 draft를 보존한다.
 - [선행 Profile edit 구현과 병합 충돌 또는 editor·route 중복이 생김] → `PROD-491` editor와 `PROD-492` route·Relay mutation을 확장하고 별도 흐름을 만들지 않는다.
