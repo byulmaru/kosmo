@@ -10,9 +10,8 @@ import {
   UserRound,
   UserRoundPlus,
 } from 'lucide-react-native';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
-import { Avatar } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { LogoutControl } from './LogoutControl';
@@ -22,7 +21,6 @@ import { useUnreadNotificationCount } from './UnreadNotificationBadgeController'
 import { getUnreadNotificationAccessibilityLabel } from './unreadNotificationBadgeState';
 import type { Href } from 'expo-router';
 import type { LucideIcon } from 'lucide-react-native';
-import type { ViewStyle } from 'react-native';
 import type { SidebarNavigation_query$key } from './__generated__/SidebarNavigation_query.graphql';
 
 const SidebarNavigationFragment = graphql`
@@ -31,17 +29,7 @@ const SidebarNavigationFragment = graphql`
     currentSession {
       selectedProfile {
         id
-        handle
-        displayName
         relativeHandle
-        followingCount
-        followersCount
-      }
-    }
-    me {
-      id
-      profiles {
-        id
       }
     }
   }
@@ -63,21 +51,6 @@ const navigation: NavigationItem[] = [
   { href: '/menu', Icon: UserRoundPlus, label: '팔로워 요청' },
   { href: '/menu', Icon: Settings, label: '프로필 설정' },
 ];
-
-const countFormatter = new Intl.NumberFormat('en', {
-  maximumFractionDigits: 1,
-  notation: 'compact',
-});
-
-const webCover = {
-  backgroundImage:
-    'radial-gradient(circle at 30% 20%, rgba(255,255,255,0.9), transparent 35%), linear-gradient(135deg, rgba(17,17,17,0.14), transparent), linear-gradient(135deg, #e4e4e7, #f4f4f5, #d4d4d8)',
-  filter: 'blur(1px)',
-} as unknown as ViewStyle;
-
-const avatarShadow = {
-  boxShadow: '1px 1px 2px rgba(0, 0, 0, 0.25)',
-} as ViewStyle;
 
 type Props = {
   compact?: boolean;
@@ -101,7 +74,6 @@ export function SidebarNavigation({
   const data = useFragment(SidebarNavigationFragment, query);
   const unreadNotificationCount = useUnreadNotificationCount();
   const profile = data.currentSession?.selectedProfile ?? null;
-  const hasProfiles = (data.me?.profiles?.length ?? 0) > 0;
 
   const resolveItem = (item: NavigationItem) => {
     if (!item.profile) {
@@ -112,15 +84,7 @@ export function SidebarNavigation({
     return { active: Boolean(href && pathname === href), href };
   };
 
-  const profileSwitcher = (
-    <ProfileSwitcher
-      compact={compact}
-      onOpenChange={onSwitcherOpenChange}
-      open={switcherOpen}
-      query={data}
-      showAvatar={compact}
-    />
-  );
+  const switcherSurface = compact ? 'compact' : surface === 'desktop' ? 'full' : 'drawer';
 
   return (
     <View
@@ -130,73 +94,12 @@ export function SidebarNavigation({
         { backgroundColor: theme.card },
       ]}
     >
-      {compact ? (
-        profileSwitcher
-      ) : (
-        <View accessibilityLabel="활성 프로필" style={styles.profileHeader}>
-          <View
-            style={[
-              styles.cover,
-              { backgroundColor: theme.surface },
-              Platform.OS === 'web' && webCover,
-            ]}
-          />
-          <View style={styles.largeAvatar}>
-            <Avatar
-              label={profile?.displayName || profile?.handle || '?'}
-              size={96}
-              style={avatarShadow}
-            />
-          </View>
-          {profile ? (
-            <Pressable
-              accessibilityLabel="프로필 편집"
-              accessibilityRole="button"
-              accessibilityState={{ disabled: true }}
-              disabled
-              style={[styles.editButton, { backgroundColor: theme.primary }]}
-            >
-              <Text style={styles.editLabel}>편집</Text>
-            </Pressable>
-          ) : null}
-          <View style={styles.profileCopy}>
-            {profileSwitcher}
-            {profile ? (
-              <>
-                <Text
-                  accessibilityLabel="활성 프로필 핸들"
-                  numberOfLines={1}
-                  style={[styles.profileHandle, { color: theme.textSecondary }]}
-                >
-                  {profile.relativeHandle}
-                </Text>
-                <View style={styles.counts}>
-                  <Link asChild href={`/${profile.relativeHandle}/following`}>
-                    <Pressable accessibilityRole="link" style={styles.countLink}>
-                      <Text style={[styles.count, { color: theme.text }]}>
-                        {countFormatter.format(profile.followingCount).toLowerCase()}
-                      </Text>
-                      <Text style={[styles.countLabel, { color: theme.text }]}>팔로잉</Text>
-                    </Pressable>
-                  </Link>
-                  <Link asChild href={`/${profile.relativeHandle}/followers`}>
-                    <Pressable accessibilityRole="link" style={styles.countLink}>
-                      <Text style={[styles.count, { color: theme.text }]}>
-                        {countFormatter.format(profile.followersCount).toLowerCase()}
-                      </Text>
-                      <Text style={[styles.countLabel, { color: theme.text }]}>팔로워</Text>
-                    </Pressable>
-                  </Link>
-                </View>
-              </>
-            ) : (
-              <Text style={[styles.emptyProfile, { color: theme.textSecondary }]}>
-                {hasProfiles ? '사용할 프로필을 선택해주세요.' : '새 프로필을 만들어 시작하세요.'}
-              </Text>
-            )}
-          </View>
-        </View>
-      )}
+      <ProfileSwitcher
+        onOpenChange={onSwitcherOpenChange}
+        open={switcherOpen}
+        query={data}
+        surface={switcherSurface}
+      />
 
       <ScrollView
         contentContainerStyle={[
@@ -342,35 +245,6 @@ const styles = StyleSheet.create({
     width: 80,
   },
   fullRoot: { width: 320 },
-  profileHeader: { height: 260, position: 'relative', width: 320, zIndex: 20 },
-  cover: { height: 104, left: 0, position: 'absolute', right: 0, top: 0 },
-  largeAvatar: { left: 20, position: 'absolute', top: 54 },
-  editButton: {
-    alignItems: 'center',
-    borderRadius: radii.sm,
-    height: 32,
-    justifyContent: 'center',
-    opacity: 0.6,
-    paddingHorizontal: spacing.md,
-    position: 'absolute',
-    right: 20,
-    top: 134,
-  },
-  editLabel: { color: '#111111', fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
-  profileCopy: {
-    left: 10,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    position: 'absolute',
-    top: 140,
-    width: 300,
-  },
-  profileHandle: { fontFamily: 'SUIT', ...typography.sm },
-  emptyProfile: { fontFamily: 'SUIT', marginTop: spacing.sm, ...typography.sm },
-  counts: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm },
-  countLink: { flexDirection: 'row', gap: spacing.sm },
-  count: { fontFamily: 'SUIT', ...typography.sm },
-  countLabel: { fontFamily: 'SUIT', ...typography.sm },
   navigationArea: {
     borderTopWidth: 1,
     flex: 1,

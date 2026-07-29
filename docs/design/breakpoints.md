@@ -23,6 +23,43 @@ KOSMO 웹의 메인 3분할 레이아웃은 트위터/X처럼 화면 폭에 따�
 - `compact`~`full`: 우측 레일이 없으므로 아이콘 레일의 글쓰기 버튼.
 - `≥ full`: 우측 레일 컴포저가 담당하며, 사이드바 글쓰기 버튼은 표시하지 않는다(드로어 surface에서만 유지).
 
+## 프로필 피커
+
+Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사용한다. Android/iOS profile picker는
+이 Web 계약의 적용 대상이 아니다.
+
+- `compact`~`full`에서는 아이콘 레일의 프로필 아바타가 trigger다. picker는 80px 레일 오른쪽에
+  비모달 overlay drawer로 열리며, 레일과 중앙 피드의 실제 layout 폭을 바꾸지 않는다.
+- compact drawer는 본문보다 위에 표시하지만 backdrop과 focus trap을 사용하지 않는다. 아바타 재클릭,
+  바깥 클릭, `Escape`, 프로필 선택 성공으로 닫힌다.
+- `< compact` mobile Web drawer에서는 프로필 이름과 chevron을 하나의 trigger로 유지한다. 닫힌 상태는 아래
+  방향, 열린 상태는 위 방향 chevron으로 표시하고 이름·chevron 콘텐츠만 trigger 상자 안에서 아래로 `6px`
+  광학 보정한다. trigger hitbox, picker anchor와 navigation geometry는 바꾸지 않으며 Android/iOS에는 이 보정을
+  적용하지 않는다.
+- `≥ full`에서는 프로필 이름과 chevron을 하나의 trigger로 사용하고, picker의 시각적 wrapper를 그 trigger
+  바로 아래에 anchored absolute overlay로 표시한다. 닫힌 260px 프로필 요약 영역은 유지하며, picker는 trigger
+  아래의 프로필 상세와 navigation 위에 표시하되 navigation의 layout 위치와 sidebar·중앙 피드의 실제 폭을
+  바꾸지 않는다. backdrop과 focus trap을 사용하지 않으며, 같은 trigger 재실행, 바깥 클릭, `Escape`, 프로필
+  선택 성공으로 닫는다.
+  닫힌 상태는 아래 방향, 열린 상태는 위 방향 chevron으로 표시한다. 이름·chevron 콘텐츠만 trigger 상자 안에서
+  아래로 `6px` 광학 보정하되 trigger hitbox, picker anchor와 navigation geometry는 바꾸지 않으며, chevron 자체는
+  별도 focus target이 아니다.
+- trigger는 열린 상태를 accessibility `expanded` 상태로 노출한다.
+- 프로필이 많을 때는 프로필 목록 영역만 제한된 높이 안에서 스크롤한다. 새 프로필 추가 액션과 생성 폼은
+  목록 아래의 고정 영역에 두며, 생성 폼이 열리면 목록이 남은 높이에 맞게 줄어든다. full·compact Web picker의
+  시각적 wrapper는 기존 viewport 여백 계산을 유지하면서 `430px`를 최대 높이로 사용해 기본 상태에서 약 7개
+  프로필 행이 보이게 한다. 실제 가시 행 수보다 고정 footer 접근성과 목록 내부 스크롤을 우선한다.
+- full·compact Web picker를 열어도 focus를 강제로 이동하지 않는다. 브라우저의 기본 `Tab` 순서는 trigger,
+  프로필 버튼, 새 프로필 추가·생성 control, full summary link 순으로 이어지고 `Enter`·`Space`는 focus된 버튼을
+  실행한다. Full Web에서 summary link로 focus가 이동하면 picker를 닫고 해당 link focus를 유지해 focus indicator가
+  overlay에 가려지지 않게 한다. 긴 목록에서 focus된 프로필 버튼은 목록의 보이는 영역 안에 유지한다. `Escape`는
+  picker를 닫고 trigger로 focus를 복원한다.
+- full·compact Web에서 프로필 선택·생성 실패는 picker와 오류를 유지하고 생성 실패는 입력값도 유지한다.
+  trigger 재실행, full·compact 바깥 pointer close 또는 `Escape`처럼 사용자가 명시적으로 닫으면 `open=false`,
+  `creating=false`, 빈 handle과 오류 없음으로 초기화한다. 바깥 pointer close는 이벤트 기본 동작을 막지 않아
+  pointer 대상의 브라우저 기본 focus를 따른다. `Escape`는 trigger focus를 복원한다. mobile Web drawer의
+  chevron·광학 보정 외 close transition과 Android/iOS의 기존 상태 동작은 이 계약으로 바꾸지 않는다.
+
 ## 알림 Unread badge
 
 모든 셸 단계는 selected Profile의 Unread 상태를 기존 알림 아이콘 우상단 badge로 표시한다. badge는 아이콘 wrapper 안에서 overlay되어 row, touch target과 label layout을 밀지 않는다.
@@ -38,7 +75,11 @@ React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owne
 
 - `< compact`에서는 모바일 header가 document scroll 위의 sticky chrome으로 동작하고, 하단 탭 바는 safe-area를 포함한 fixed bottom chrome으로 유지된다. 콘텐츠는 하단 탭 높이와 safe-area를 고려한 bottom padding 또는 scroll padding으로 겹침을 피한다.
 - `compact`~`full`에서는 아이콘 레일이 layout flow 안에서 sticky viewport column으로 고정된다. 레일 자체가 스크롤 가능한 콘텐츠를 갖지 않는 한 wheel 입력은 document scroll로 이어진다.
+- `compact`~`full` profile picker가 열렸을 때는 overlay drawer 안의 프로필 목록만 internal scroll owner가 된다.
+  drawer 밖의 wheel 입력은 기존 document scroll 흐름을 유지한다.
 - `≥ full`에서는 풀 사이드바와 우측 레일이 각각 layout flow 안의 sticky column으로 배치된다. 두 rail은 중앙 컬럼과 겹치지 않도록 width 계산에 참여한다.
+- `≥ full` profile picker가 열렸을 때는 overlay 안의 프로필 목록만 internal scroll owner가 된다. overlay 밖의
+  wheel 입력은 기존 document scroll 흐름을 유지하고 navigation의 layout 위치는 닫힌 상태와 같게 유지한다.
 - 우측 레일 콘텐츠가 viewport보다 긴 경우 rail 내부 overflow를 허용할 수 있지만, 중앙 피드를 별도 internal scroller로 만들지는 않는다.
 - 일반 route 이동과 back/forward는 Expo Router와 browser history의 document scroll policy에 맞춘다. 검색 화면의 query-only `router.push`/`setParams` 이동은 현재 document scroll과 입력 focus를 보존하도록 명시적으로 검증한다.
 - shell chrome에서 중앙 피드로 wheel 이벤트를 인위적으로 전달하지 않는다.
