@@ -3,7 +3,7 @@ import '@kosmo/core/polyfill';
 import { ActivityPubActorKeys, ActivityPubActors, db, first, Profiles } from '@kosmo/core/db';
 import { ActivityPubActorType, ProfileState } from '@kosmo/core/enums';
 import { and, eq } from 'drizzle-orm';
-import { ensureLocalProfileActor, isCanonicalLocalProfileId } from './local-profile-actor';
+import { ensureLocalProfileActor } from './local-profile-actor';
 import type { Database } from '@kosmo/core/db';
 import type {
   CreateLocalActorKeyInput,
@@ -149,14 +149,6 @@ export const createDrizzleLocalActorStore = (client: LocalActorDbClient = db): L
     return insertedKey ?? requireExistingActorKey(client, input);
   },
 });
-
-export const findDrizzleActiveLocalProfile = (input: {
-  localInstanceId: string;
-  profileId: string;
-}): Promise<LocalProfileActorProfile | undefined> =>
-  isCanonicalLocalProfileId(input.profileId)
-    ? findActiveLocalProfile(db, input)
-    : Promise.resolve(undefined);
 
 export const ensureDrizzleLocalProfileActor = async (
   options: Omit<EnsureLocalProfileActorOptions, 'store'>,

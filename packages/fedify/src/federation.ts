@@ -10,15 +10,19 @@ import {
   Reject,
   Undo,
 } from '@fedify/vocab';
+import { db, first, Profiles } from '@kosmo/core/db';
+import { ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
+import { and, eq } from 'drizzle-orm';
 import { handleInboundAccept } from './inbound-accept';
 import { handleInboundAnnounce } from './inbound-announce';
 import { handleInboundCreate } from './inbound-create';
 import { handleInboundFollow, handleInboundUndo } from './inbound-follow';
 import { handleInboundReaction } from './inbound-reaction';
 import { handleInboundReject } from './inbound-reject';
-import { ensureDrizzleLocalProfileActor, findDrizzleActiveLocalProfile } from './local-actor-store';
+import { ensureDrizzleLocalProfileActor } from './local-actor-store';
 import { authorizeLocalPostNote, dispatchLocalPostNote } from './local-post-note';
+import { isCanonicalLocalProfileId } from './local-profile-actor';
 import { createLocalProfilePerson } from './local-profile-person';
 import { resolveLocalActorIdentifierByHandle } from './webfinger';
 import type { Context, Federation } from '@fedify/fedify';
@@ -77,16 +81,30 @@ const findActiveLocalProfile = async (
   context: Pick<Context<void>, 'canonicalOrigin' | 'host'>,
   profileId: string,
 ) => {
-  if (context.host !== new URL(context.canonicalOrigin).host) {
+  if (
+    context.host !== new URL(context.canonicalOrigin).host ||
+    !isCanonicalLocalProfileId(profileId)
+  ) {
     return undefined;
   }
 
   const localInstance = await resolveConfiguredLocalInstance();
 
-  return findDrizzleActiveLocalProfile({
-    localInstanceId: localInstance.id,
-    profileId,
-  });
+  return db
+    .select({
+      followersCount: Profiles.followersCount,
+      followingCount: Profiles.followingCount,
+    })
+    .from(Profiles)
+    .where(
+      and(
+        eq(Profiles.id, profileId),
+        eq(Profiles.instanceId, localInstance.id),
+        eq(Profiles.state, ProfileState.ACTIVE),
+      ),
+    )
+    .limit(1)
+    .then(first);
 };
 
 federation
