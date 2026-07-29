@@ -1,11 +1,11 @@
 import { builder } from '@/graphql/builder';
+import { Hashtag } from '../../hashtag';
 import { profileTagsLoader } from '../loader/tags';
 import { Profile } from '../ref';
 
 builder.objectField(Profile, 'tags', (t) =>
   t.field({
-    type: ['String'],
-    resolve: async (profile, _, ctx) =>
-      (await profileTagsLoader(ctx).load(profile.id)).map(({ name }) => name),
+    type: [Hashtag],
+    resolve: (profile, _, ctx) => profileTagsLoader(ctx).load(profile.id),
   }),
 );

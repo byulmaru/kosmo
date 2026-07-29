@@ -529,6 +529,21 @@ test('targets the selected Profile without accepting a Profile ID in update inpu
   ]);
 });
 
+test('exposes Profile tags as Hashtag nodes', () => {
+  const hashtag = schema.getType('Hashtag');
+  const profile = schema.getType('Profile');
+
+  assert.ok(isObjectType(hashtag));
+  assert.ok(isObjectType(profile));
+  assert.deepEqual(
+    hashtag.getInterfaces().map(({ name }) => name),
+    ['Node'],
+  );
+  assert.equal(String(hashtag.getFields().id.type), 'ID!');
+  assert.equal(String(hashtag.getFields().name.type), 'String!');
+  assert.equal(String(profile.getFields().tags.type), '[Hashtag!]!');
+});
+
 test('rejects a non-Notification global ID for Notification Read', async () => {
   const result = await graphql({
     schema,

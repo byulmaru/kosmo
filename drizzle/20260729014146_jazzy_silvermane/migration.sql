@@ -1,6 +1,7 @@
 CREATE TABLE "hashtag" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7(),
 	"name" text NOT NULL UNIQUE,
+	"display_name" text NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint

@@ -15,7 +15,7 @@ import {
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
-import { encodeGlobalId as globalId } from '@kosmo/core/global-id';
+import { decodeGlobalId, encodeGlobalId as globalId } from '@kosmo/core/global-id';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { isConfiguredLocalProfile } from '@kosmo/core/profile';
 import { normalizeHandle } from '@kosmo/core/utils';
@@ -716,12 +716,13 @@ describe('GraphQL remote profile boundary', () => {
 
   test('updates Profile tags without ordering guarantees and preserves omitted/null semantics', async () => {
     const auth = await createAuthenticatedSession();
+    type Tag = { id: string; name: string };
     const update = await requestGraphQL<{
-      updateProfile: { profile: { displayName: string; tags: string[] } };
+      updateProfile: { profile: { displayName: string; tags: Tag[] } };
     }>(
       `mutation UpdateProfileTags($tags: [String!]) {
         updateProfile(input: { displayName: "Tagged Owner", tags: $tags }) {
-          profile { displayName tags }
+          profile { displayName tags { id name } }
         }
       }`,
       { tags: [' #Ｆｏｏ ', 'Straße'] },
@@ -730,14 +731,37 @@ describe('GraphQL remote profile boundary', () => {
 
     assertNoGraphQLErrors(update);
     assert.equal(update.data?.updateProfile.profile.displayName, 'Tagged Owner');
-    assert.deepEqual(update.data?.updateProfile.profile.tags.toSorted(), ['foo', 'strasse']);
+    assert.deepEqual(update.data?.updateProfile.profile.tags.map(({ name }) => name).toSorted(), [
+      'Foo',
+      'Straße',
+    ]);
+    assert.ok(
+      update.data?.updateProfile.profile.tags.every(
+        ({ id }) => decodeGlobalId(id).typename === 'Hashtag',
+      ),
+    );
+
+    const recased = await requestGraphQL<{
+      updateProfile: { profile: { tags: Tag[] } };
+    }>(
+      `mutation PreserveFirstTagDisplayNames($tags: [String!]) {
+        updateProfile(input: { tags: $tags }) { profile { tags { id name } } }
+      }`,
+      { tags: ['FOO', 'straße'] },
+      auth.token,
+    );
+    assertNoGraphQLErrors(recased);
+    assert.deepEqual(recased.data?.updateProfile.profile.tags.map(({ name }) => name).toSorted(), [
+      'Foo',
+      'Straße',
+    ]);
 
     const omitted = await requestGraphQL<{
-      updateProfile: { profile: { bio: string | null; tags: string[] } };
+      updateProfile: { profile: { bio: string | null; tags: Tag[] } };
     }>(
       `mutation PreserveOmittedTags {
         updateProfile(input: { bio: "updated bio" }) {
-          profile { bio tags }
+          profile { bio tags { id name } }
         }
       }`,
       {},
@@ -745,25 +769,31 @@ describe('GraphQL remote profile boundary', () => {
     );
     assertNoGraphQLErrors(omitted);
     assert.equal(omitted.data?.updateProfile.profile.bio, 'updated bio');
-    assert.deepEqual(omitted.data?.updateProfile.profile.tags.toSorted(), ['foo', 'strasse']);
+    assert.deepEqual(omitted.data?.updateProfile.profile.tags.map(({ name }) => name).toSorted(), [
+      'Foo',
+      'Straße',
+    ]);
 
     const nullInput = await requestGraphQL<{
-      updateProfile: { profile: { tags: string[] } };
+      updateProfile: { profile: { tags: Tag[] } };
     }>(
       `mutation PreserveNullTags {
-        updateProfile(input: { tags: null }) { profile { tags } }
+        updateProfile(input: { tags: null }) { profile { tags { id name } } }
       }`,
       {},
       auth.token,
     );
     assertNoGraphQLErrors(nullInput);
-    assert.deepEqual(nullInput.data?.updateProfile.profile.tags.toSorted(), ['foo', 'strasse']);
+    assert.deepEqual(
+      nullInput.data?.updateProfile.profile.tags.map(({ name }) => name).toSorted(),
+      ['Foo', 'Straße'],
+    );
 
     const cleared = await requestGraphQL<{
-      updateProfile: { profile: { tags: string[] } };
+      updateProfile: { profile: { tags: Tag[] } };
     }>(
       `mutation ClearTags {
-        updateProfile(input: { tags: [] }) { profile { tags } }
+        updateProfile(input: { tags: [] }) { profile { tags { id name } } }
       }`,
       {},
       auth.token,
@@ -778,7 +808,7 @@ describe('GraphQL remote profile boundary', () => {
     const seeded = await requestGraphQL(
       `mutation SeedProfile($tag: String!) {
         updateProfile(input: { displayName: "Before", tags: [$tag] }) {
-          profile { displayName tags }
+          profile { displayName tags { id name } }
         }
       }`,
       { tag: existingTag },
@@ -789,10 +819,10 @@ describe('GraphQL remote profile boundary', () => {
     const invalid = await requestGraphQL(
       `mutation RejectCanonicalDuplicateTags($tags: [String!]!) {
         updateProfile(input: { displayName: "Should not commit", tags: $tags }) {
-          profile { displayName tags }
+          profile { displayName tags { id name } }
         }
       }`,
-      { tags: ['Straße', 'strasse'] },
+      { tags: ['Foo', 'foo'] },
       auth.token,
     );
 
@@ -814,7 +844,7 @@ describe('GraphQL remote profile boundary', () => {
     const remote = await createProfile({ handle: 'tagged-remote', instanceId: remoteInstance.id });
     const hashtag = await db
       .insert(Hashtags)
-      .values({ name: `remote-${crypto.randomUUID()}` })
+      .values({ name: `remote_${crypto.randomUUID().replaceAll('-', '_')}`, displayName: 'Remote' })
       .returning()
       .then(firstOrThrow);
     await db.insert(ProfileHashtags).values({
@@ -823,10 +853,10 @@ describe('GraphQL remote profile boundary', () => {
     });
 
     const result = await requestGraphQL<{
-      profileByHandle: { tags: string[] } | null;
+      profileByHandle: { tags: Array<{ id: string; name: string }> } | null;
     }>(
       `query RemoteProfileTags($handle: String!) {
-        profileByHandle(handle: $handle) { tags }
+        profileByHandle(handle: $handle) { tags { id name } }
       }`,
       { handle: `tagged-remote@${remoteInstance.domain}` },
     );
@@ -841,9 +871,18 @@ describe('GraphQL remote profile boundary', () => {
     const hashtags = await db
       .insert(Hashtags)
       .values([
-        { name: `batch-first-one-${crypto.randomUUID()}` },
-        { name: `batch-first-two-${crypto.randomUUID()}` },
-        { name: `batch-second-one-${crypto.randomUUID()}` },
+        {
+          name: `batch_first_one_${crypto.randomUUID().replaceAll('-', '_')}`,
+          displayName: 'FirstOne',
+        },
+        {
+          name: `batch_first_two_${crypto.randomUUID().replaceAll('-', '_')}`,
+          displayName: 'FirstTwo',
+        },
+        {
+          name: `batch_second_one_${crypto.randomUUID().replaceAll('-', '_')}`,
+          displayName: 'SecondOne',
+        },
       ])
       .returning();
     await db.insert(ProfileHashtags).values([
@@ -865,11 +904,11 @@ describe('GraphQL remote profile boundary', () => {
 
     try {
       const result = await requestGraphQL<{
-        nodes: Array<{ id: string; tags: string[] } | null>;
+        nodes: Array<{ id: string; tags: Array<{ id: string; name: string }> } | null>;
       }>(
         `query BatchProfileTags($ids: [ID!]!) {
           nodes(ids: $ids) {
-            ... on Profile { id tags }
+            ... on Profile { id tags { id name } }
           }
         }`,
         {
@@ -879,13 +918,13 @@ describe('GraphQL remote profile boundary', () => {
 
       assertNoGraphQLErrors(result);
       assert.equal(result.data?.nodes[0]?.id, globalId('Profile', first.id));
-      assert.deepEqual(
-        result.data?.nodes[0]?.tags.toSorted(),
-        [hashtags[0]!.name, hashtags[1]!.name].toSorted(),
-      );
+      assert.deepEqual(result.data?.nodes[0]?.tags.map(({ name }) => name).toSorted(), [
+        'FirstOne',
+        'FirstTwo',
+      ]);
       assert.deepEqual(result.data?.nodes[1], {
         id: globalId('Profile', second.id),
-        tags: [hashtags[2]!.name],
+        tags: [{ id: globalId('Hashtag', hashtags[2]!.id), name: 'SecondOne' }],
       });
       assert.equal(profileHashtagQueries.length, 1);
     } finally {

@@ -30,7 +30,7 @@ export type UpdateProfileInput = {
   readonly tags?: readonly string[] | null;
 };
 
-const normalizeTags = (tags: UpdateProfileInput['tags']): string[] | null | undefined => {
+const normalizeTags = (tags: UpdateProfileInput['tags']) => {
   if (tags === undefined || tags === null) {
     return tags;
   }
@@ -95,17 +95,20 @@ export const updateProfile = async (input: UpdateProfileInput, tx?: Transaction)
       if (normalizedTags.length > 0) {
         await tx
           .insert(Hashtags)
-          .values(normalizedTags.toSorted().map((name) => ({ name })))
+          .values(
+            normalizedTags.toSorted((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
+          )
           .onConflictDoNothing({ target: Hashtags.name });
 
+        const names = normalizedTags.map(({ name }) => name);
         const hashtags = await tx
           .select({ id: Hashtags.id, name: Hashtags.name })
           .from(Hashtags)
-          .where(inArray(Hashtags.name, normalizedTags));
+          .where(inArray(Hashtags.name, names));
         const hashtagIds = new Map(hashtags.map((hashtag) => [hashtag.name, hashtag.id]));
 
         await tx.insert(ProfileHashtags).values(
-          normalizedTags.map((name) => ({
+          normalizedTags.map(({ name }) => ({
             profileId: input.profileId,
             hashtagId: hashtagIds.get(name)!,
           })),

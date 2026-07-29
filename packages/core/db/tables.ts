@@ -176,6 +176,7 @@ export const Bookmarks = pgTable(
 export const Hashtags = pgTable('hashtag', {
   id: id(),
   name: text('name').notNull().unique(),
+  displayName: text('display_name').notNull(),
   createdAt: createdAt(),
 });
 

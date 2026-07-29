@@ -79,6 +79,9 @@ const readTags = async (profileId: string) =>
     .map(({ name }) => name)
     .sort();
 
+const readHashtag = async (name: string) =>
+  db.select().from(Hashtags).where(eq(Hashtags.name, name)).then(firstOrThrow);
+
 test('Owner는 scalar와 정규화된 tags를 하나의 update로 저장한다', async () => {
   const { account, profile } = await createProfileFixture();
 
@@ -92,7 +95,27 @@ test('Owner는 scalar와 정규화된 tags를 하나의 update로 저장한다',
 
   assert.equal(updated.displayName, 'Updated');
   assert.equal(updated.bio, 'Bio');
-  assert.deepEqual(await readTags(profile.id), ['foo', 'strasse', 'ı'].sort());
+  assert.deepEqual(await readTags(profile.id), ['foo', 'straße', 'ı'].sort());
+  assert.equal((await readHashtag('foo')).displayName, 'Foo');
+  assert.equal((await readHashtag('straße')).displayName, 'Straße');
+});
+
+test('같은 canonical Hashtag의 최초 display name을 유지한다', async () => {
+  const first = await createProfileFixture();
+  const second = await createProfileFixture();
+
+  await updateProfile({
+    accountId: first.account.id,
+    profileId: first.profile.id,
+    tags: ['#Kosmo'],
+  });
+  await updateProfile({
+    accountId: second.account.id,
+    profileId: second.profile.id,
+    tags: ['KOSMO'],
+  });
+
+  assert.equal((await readHashtag('kosmo')).displayName, 'Kosmo');
 });
 
 test('omitted와 null tags는 기존 관계를 유지하고 empty array는 관계만 제거한다', async () => {
@@ -147,7 +170,10 @@ test('Deactivated Local Profile은 Owner라도 수정할 수 없고 tags를 보�
   const deactivated = await createProfileFixture({ profileState: ProfileState.DISABLED });
   const retainedHashtag = await db
     .insert(Hashtags)
-    .values({ name: `retained_${crypto.randomUUID().replaceAll('-', '_')}` })
+    .values({
+      name: `retained_${crypto.randomUUID().replaceAll('-', '_')}`,
+      displayName: 'Retained',
+    })
     .returning()
     .then(firstOrThrow);
   await db
@@ -182,7 +208,10 @@ test('Member와 inactive Account는 거부되고 관계없는 Account와 Remote/
   const inactiveAccount = await createProfileFixture({ accountState: AccountState.DISABLED });
   const retainedHashtag = await db
     .insert(Hashtags)
-    .values({ name: `retained_${crypto.randomUUID().replaceAll('-', '_')}` })
+    .values({
+      name: `retained_${crypto.randomUUID().replaceAll('-', '_')}`,
+      displayName: 'Retained',
+    })
     .returning()
     .then(firstOrThrow);
   await db

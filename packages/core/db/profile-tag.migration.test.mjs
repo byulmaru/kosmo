@@ -77,11 +77,11 @@ test('enforces the Profile Tag additive storage contract', async () => {
     );
 
     const [hashtag] = await sql`
-      INSERT INTO hashtag (id, name)
-      VALUES (${hashtagId}, 'kosmo')
-      RETURNING uuid_extract_version(id)::int AS "idVersion"
+      INSERT INTO hashtag (id, name, display_name)
+      VALUES (${hashtagId}, 'kosmo', 'Kosmo')
+      RETURNING uuid_extract_version(id)::int AS "idVersion", display_name AS "displayName"
     `;
-    assert.deepEqual(hashtag, { idVersion: 8 });
+    assert.deepEqual(hashtag, { displayName: 'Kosmo', idVersion: 8 });
 
     assert.deepEqual(
       [
@@ -101,15 +101,20 @@ test('enforces the Profile Tag additive storage contract', async () => {
       VALUES (${relationId}, ${profileId}, ${hashtagId})
     `;
 
-    await assert.rejects(sql`INSERT INTO hashtag (name) VALUES ('kosmo')`, { code: '23505' });
+    await assert.rejects(sql`INSERT INTO hashtag (name, display_name) VALUES ('kosmo', 'KOSMO')`, {
+      code: '23505',
+    });
+    await assert.rejects(sql`INSERT INTO hashtag (name) VALUES ('missing_display')`, {
+      code: '23502',
+    });
     await assert.rejects(
       sql`INSERT INTO profile_hashtag (profile_id, hashtag_id) VALUES (${profileId}, ${hashtagId})`,
       { code: '23505' },
     );
 
     const [secondHashtag] = await sql`
-      INSERT INTO hashtag (name)
-      VALUES ('profile')
+      INSERT INTO hashtag (name, display_name)
+      VALUES ('profile', 'Profile')
       RETURNING id::text AS id
     `;
     await sql`
@@ -118,8 +123,8 @@ test('enforces the Profile Tag additive storage contract', async () => {
     `;
     await sql`
       WITH inserted AS (
-        INSERT INTO hashtag (name)
-        SELECT 'extra-' || value
+        INSERT INTO hashtag (name, display_name)
+        SELECT 'extra_' || value, 'Extra_' || value
         FROM generate_series(1, 6) AS value
         RETURNING id
       )
