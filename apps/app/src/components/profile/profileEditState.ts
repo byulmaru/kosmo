@@ -1,4 +1,8 @@
-import { normalizeProfileTagName, profileTagNameSchema } from '@kosmo/core/validation';
+import {
+  normalizeProfileTagName,
+  profileBioSchema,
+  profileTagNameSchema,
+} from '@kosmo/core/validation';
 
 export type ProfileEditImageDraft =
   | { kind: 'current'; previewUri: string | null }
@@ -45,7 +49,6 @@ export type CanSubmitProfileEditOptions = {
 };
 
 const MAX_DISPLAY_NAME_CODE_POINTS = 40;
-const MAX_BIO_CODE_POINTS = 500;
 
 function countCodePoints(value: string): number {
   return [...value].length;
@@ -67,7 +70,7 @@ export function validateProfileEditDraft(
     errors.displayName = '표시 이름은 40자 이하로 입력해 주세요.';
   }
 
-  if (countCodePoints(value.bio) > MAX_BIO_CODE_POINTS) {
+  if (!profileBioSchema.safeParse(value.bio).success) {
     errors.bio = '한 줄 소개는 500자 이하로 입력해 주세요.';
   }
 

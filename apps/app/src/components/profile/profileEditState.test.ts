@@ -28,7 +28,7 @@ const replacementHeader: ProfileEditDraft['header'] = {
   uploadState: 'ready',
 };
 
-test('displayName과 bio를 Unicode code point 기준으로 검증한다', () => {
+test('displayName을 Unicode code point 기준으로 검증한다', () => {
   assert.equal(
     validateProfileEditDraft({ ...draft, displayName: '   ' }).displayName,
     '표시 이름을 입력해 주세요.',
@@ -38,16 +38,20 @@ test('displayName과 bio를 Unicode code point 기준으로 검증한다', () =>
     '표시 이름은 40자 이하로 입력해 주세요.',
   );
   assert.equal(
-    validateProfileEditDraft({ ...draft, bio: '가'.repeat(501) }).bio,
-    '한 줄 소개는 500자 이하로 입력해 주세요.',
-  );
-  assert.equal(
     validateProfileEditDraft({ ...draft, displayName: '😀'.repeat(40) }).displayName,
     undefined,
   );
   assert.equal(
     validateProfileEditDraft({ ...draft, displayName: '😀'.repeat(41) }).displayName,
     '표시 이름은 40자 이하로 입력해 주세요.',
+  );
+});
+
+test('bio를 server schema와 같은 UTF-16 경계로 검증한다', () => {
+  assert.equal(validateProfileEditDraft({ ...draft, bio: '😀'.repeat(250) }).bio, undefined);
+  assert.equal(
+    validateProfileEditDraft({ ...draft, bio: '😀'.repeat(251) }).bio,
+    '한 줄 소개는 500자 이하로 입력해 주세요.',
   );
 });
 
