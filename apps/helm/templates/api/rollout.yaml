@@ -57,6 +57,7 @@ spec:
                 name: env
             - secretRef:
                 name: api-env
+                optional: true
           livenessProbe:
             httpGet:
               path: /health

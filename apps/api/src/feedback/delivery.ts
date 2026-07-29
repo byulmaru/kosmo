@@ -1,7 +1,5 @@
 import { ConflictError, ValidationError } from '@kosmo/core/error';
 
-export const FEEDBACK_RATE_LIMIT = 5;
-export const FEEDBACK_RATE_WINDOW_MS = 10 * 60 * 1000;
 export const FEEDBACK_DELIVERY_TIMEOUT_MS = 5_000;
 
 export type FeedbackKind = 'POSITIVE' | 'NEGATIVE' | 'FEATURE_REQUEST' | 'BUG_REPORT';
@@ -12,13 +10,7 @@ export type FeedbackInput = {
   sentryEventId?: string | null;
 };
 
-type FeedbackState = {
-  attempts: number;
-  inFlight: boolean;
-  windowStartedAt: number;
-};
-
-const feedbackStates = new Map<string, FeedbackState>();
+const inFlightFeedbackDeliveries = new Set<string>();
 const slackWebhookPath = /^\/services\/[^/]+\/[^/]+\/[^/]+$/u;
 
 const kindLabels: Record<FeedbackKind, string> = {
@@ -82,35 +74,12 @@ const createPayload = ({ body, kind, sentryEventId }: FeedbackInput) => ({
   unfurl_media: false,
 });
 
-const cleanupExpiredFeedbackStates = (now: number) => {
-  for (const [accountId, state] of feedbackStates) {
-    if (!state.inFlight && now - state.windowStartedAt >= FEEDBACK_RATE_WINDOW_MS) {
-      feedbackStates.delete(accountId);
-    }
-  }
-};
-
-const claimAttempt = (accountId: string, now: number) => {
-  cleanupExpiredFeedbackStates(now);
-
-  const previous = feedbackStates.get(accountId);
-
-  if (previous?.inFlight) {
+const claimDelivery = (accountId: string) => {
+  if (inFlightFeedbackDeliveries.has(accountId)) {
     throw new ConflictError({ message: '피드백을 처리 중이에요. 잠시 후 다시 시도해주세요.' });
   }
 
-  const state =
-    previous && now - previous.windowStartedAt < FEEDBACK_RATE_WINDOW_MS
-      ? previous
-      : { attempts: 0, inFlight: false, windowStartedAt: now };
-
-  if (state.attempts >= FEEDBACK_RATE_LIMIT) {
-    throw new ConflictError({ message: '피드백을 너무 많이 보냈어요. 잠시 후 다시 시도해주세요.' });
-  }
-
-  state.attempts += 1;
-  state.inFlight = true;
-  feedbackStates.set(accountId, state);
+  inFlightFeedbackDeliveries.add(accountId);
 };
 
 export const deliverFeedback = async (accountId: string, input: FeedbackInput) => {
@@ -119,7 +88,7 @@ export const deliverFeedback = async (accountId: string, input: FeedbackInput) =
     throw new ValidationError('피드백을 전달할 수 없어요. 잠시 후 다시 시도해주세요.');
   }
 
-  claimAttempt(accountId, Date.now());
+  claimDelivery(accountId);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FEEDBACK_DELIVERY_TIMEOUT_MS);
@@ -139,10 +108,7 @@ export const deliverFeedback = async (accountId: string, input: FeedbackInput) =
     throw new ValidationError('피드백을 전달하지 못했어요. 다시 시도해주세요.');
   } finally {
     clearTimeout(timeout);
-    const state = feedbackStates.get(accountId);
-    if (state) {
-      state.inFlight = false;
-    }
+    inFlightFeedbackDeliveries.delete(accountId);
   }
 
   return { completed: true } as const;

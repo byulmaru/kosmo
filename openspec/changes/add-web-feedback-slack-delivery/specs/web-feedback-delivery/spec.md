@@ -90,20 +90,9 @@
 - **THEN** mutation은 안전한 delivery unavailable 오류를 반환한다
 - **AND** 구성값이나 내부 오류 세부를 응답 또는 log에 노출하지 않는다
 
-### Requirement: Feedback rate and concurrent submission controls
+### Requirement: Feedback concurrent submission controls
 
-**Authority / Provenance:** `PROD-479`, `PROD-487` — The server MUST limit valid feedback attempts per account to five in each non-persistent fixed ten-minute window, and it MUST NOT start another feedback delivery while the same account already has one in flight. The client MUST disable the submit control while the mutation is in flight. These controls MUST NOT persist feedback content or submission records in the database.
-
-#### Scenario: Allow attempts within the rate window
-
-- **WHEN** account의 현재 10분 window 안 유효한 feedback 시도가 5건 미만이고 진행 중 delivery가 없다
-- **THEN** server는 새 feedback delivery 시도를 허용한다
-
-#### Scenario: Reject a sixth attempt
-
-- **WHEN** account가 현재 10분 window 안에서 여섯 번째 유효한 feedback을 제출한다
-- **THEN** server는 rate-limited 오류를 반환한다
-- **AND** Slack webhook을 호출하지 않는다
+**Authority / Provenance:** `PROD-479`, `PROD-487` — The server MUST NOT start another feedback delivery while the same account already has one in flight. The client MUST disable the submit control while the mutation is in flight. These controls MUST NOT persist feedback content or submission records in the database. Per-account request-count rate limiting is outside the current scope.
 
 #### Scenario: Reject a concurrent account submission
 
@@ -117,11 +106,11 @@
 - **THEN** client는 submit control을 disabled와 busy 상태로 노출한다
 - **AND** 동일 상호작용으로 추가 mutation을 시작하지 않는다
 
-#### Scenario: Do not persist rate or in-flight state
+#### Scenario: Release non-persistent in-flight state
 
-- **WHEN** server가 account rate window와 진행 중 delivery를 추적한다
-- **THEN** 해당 상태는 API process memory에만 유지된다
-- **AND** process restart 또는 rollout 이후 이전 rate window를 복원하지 않는다
+- **WHEN** 같은 account의 Slack delivery가 성공 또는 실패로 완료된다
+- **THEN** server는 해당 account의 in-flight 상태를 즉시 해제한다
+- **AND** 해당 상태를 DB에 영속화하지 않는다
 
 ### Requirement: Explicit retry and delivery outcome
 
@@ -190,6 +179,12 @@
 - **WHEN** API가 Vault-managed 배포 환경에서 시작한다
 - **THEN** `SLACK_FEEDBACK_WEBHOOK_URL`은 API process environment에서만 사용할 수 있다
 - **AND** Expo public environment, generated GraphQL schema와 Web asset에 secret 값이 포함되지 않는다
+
+#### Scenario: Start the API without optional feedback configuration
+
+- **WHEN** Vault synchronization 전이거나 실패해 `api-env` Secret이 존재하지 않는다
+- **THEN** API Pod는 다른 API 기능을 제공할 수 있도록 시작한다
+- **AND** feedback mutation만 안전한 delivery unavailable 오류를 반환한다
 
 #### Scenario: Run the production delivery smoke
 

@@ -34,24 +34,25 @@
 
 **Deliverable**
 
-유효한 feedback 요청은 secret과 사용자 정보를 노출하지 않는 plain-text Slack message로 요청당 한 번 전송되고, 계정별 rate·동시 전송 제어와 명시적 retry 계약을 지킨다.
+유효한 feedback 요청은 secret과 사용자 정보를 노출하지 않는 plain-text Slack message로 요청당 한 번 전송되고, 같은 계정의 동시 전송 차단과 명시적 retry 계약을 지킨다.
 
 **Guardrails**
 
 - API runtime만 `SLACK_FEEDBACK_WEBHOOK_URL`을 소유하며 user body, event ID와 delivery metadata를 DB에 영속화하지 않는다.
 - Slack 성공 응답을 확인한 요청만 성공 처리하고 server는 자동 retry하지 않는다.
-- Account별 비영속 fixed window는 10분당 5건이며 같은 account의 concurrent delivery를 시작하지 않는다.
+- 같은 account의 concurrent delivery를 시작하지 않고, 완료 시 process-local in-flight 상태를 즉시 제거한다.
+- Account별 요청 횟수 제한과 rate history는 이번 범위에서 구현하거나 영속화하지 않는다.
 - Slack payload와 오류 처리에서 credential, account/session/Profile identity, upstream response body와 예상하지 못한 오류 세부를 노출하지 않는다.
 
 **Verification**
 
 - Stubbed network로 success, invalid config, timeout, network failure, non-success와 single-POST 동작을 검증한다.
 - Plain-text payload, unfurl 비활성화, optional event ID, secret/redaction과 DB 미사용을 검증한다.
-- Five-attempt boundary, sixth rejection와 same-account concurrent rejection을 fake time/concurrency test로 검증한다.
+- Same-account concurrent rejection과 완료 뒤 다음 요청 허용을 concurrency test로 검증한다.
 
 - [x] 2.1 API-owned Incoming Webhook configuration, safe payload와 single-attempt delivery 동작을 구현한다.
-- [x] 2.2 Account별 비영속 rate window, in-flight guard와 종료 시 상태 해제를 구현한다.
-- [x] 2.3 Delivery outcome, no-auto-retry, payload/redaction, rate와 concurrent behavior test를 추가한다.
+- [x] 2.2 Account별 process-local in-flight guard와 종료 시 상태 해제를 구현한다.
+- [x] 2.3 Delivery outcome, no-auto-retry, payload/redaction와 concurrent behavior test를 추가한다.
 
 ## 3. PROD-487 Web feedback experience
 
@@ -105,6 +106,7 @@ API·Web contract와 secret 경계가 repository checks를 통과하고, product
 **Guardrails**
 
 - `SLACK_FEEDBACK_WEBHOOK_URL` 실제 값은 repository, client bundle, Relay payload와 test fixture에 기록하지 않는다.
+- `api-env` Secret 참조는 optional이며, 누락 시 API Pod 기동을 유지하고 feedback mutation만 fail closed로 실패한다.
 - Production smoke는 비민감하고 식별 가능한 test feedback을 사용하며 Web UI 성공과 Slack message 한 건을 함께 확인한다.
 - Android/iOS 통합 검증, 부모 `PROD-479`의 final archive와 cross-platform completion은 이번 task group에서 수행하지 않는다.
 
@@ -112,10 +114,11 @@ API·Web contract와 secret 경계가 repository checks를 통과하고, product
 
 - `pnpm --filter @kosmo/api test`, `pnpm --filter @kosmo/app test`, 관련 API integration test와 `pnpm test:e2e`를 통과시킨다.
 - `pnpm lint:eslint`, `pnpm lint:prettier`와 `openspec validate add-web-feedback-slack-delivery --strict`를 통과시킨다.
+- Helm render에서 API `api-env` 참조가 optional인지 확인한다.
 - Web export와 repository search로 client artifact에 webhook secret 또는 hard-coded Slack URL이 없음을 확인한다.
 - Production smoke의 시간, environment, UI result와 Slack single-message/redaction result를 민감값 없이 기록한다.
 
 - [x] 4.1 Relay/schema generation, API·app·Web E2E와 workspace lint/format 검증을 실행하고 실패를 수정한다.
-- [x] 4.2 API-only Vault secret 설정과 production smoke 절차를 민감값 없이 문서화하고 client export의 secret 비노출을 검증한다.
+- [x] 4.2 API-only Vault secret을 optional runtime 설정으로 주입하고 production smoke 절차를 민감값 없이 문서화하며 client export의 secret 비노출을 검증한다.
 - [ ] 4.3 Production Web에서 인증 smoke를 실행해 Slack message 한 건, safe payload와 UI 성공 상태를 확인한다.
 - [x] 4.4 `PROD-487` 검증 증거를 정리하고 `PROD-488` unblock 및 부모 `PROD-479`의 후속 integration/archive 책임을 handoff한다.

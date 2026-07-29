@@ -47,22 +47,34 @@
 - Authority / Provenance: `PROD-479`, `PROD-487`
 - Status: Active
 - Context / Problem: Webhook credential과 사용자 content를 client·log·Slack markup injection에서 격리하면서 지정 channel에 읽기 쉬운 message를 전달해야 한다.
-- Decision Outcome: API는 `SLACK_FEEDBACK_WEBHOOK_URL` environment secret만 사용하고 HTTPS `hooks.slack.com` Incoming Webhook 형태를 fail-closed로 검증한다. Payload는 user content가 없는 fallback text와 category, source Web, body, 선택적 event ID의 plain-text Block Kit field로 구성하고 unfurl을 끈다. Account/session/Profile identity와 upstream response body는 포함하거나 기록하지 않는다.
+- Decision Outcome: API는 optional `api-env` Secret의 `SLACK_FEEDBACK_WEBHOOK_URL`만 사용하고 HTTPS `hooks.slack.com` Incoming Webhook 형태를 fail-closed로 검증한다. Secret 누락은 API Pod 기동이 아니라 feedback mutation만 실패시킨다. Payload는 user content가 없는 fallback text와 category, source Web, body, 선택적 event ID의 plain-text Block Kit field로 구성하고 unfurl을 끈다. Account/session/Profile identity와 upstream response body는 포함하거나 기록하지 않는다.
 - Alternatives Considered: Client direct webhook은 secret을 노출하므로 제외했다. Bot token과 `chat.postMessage`는 현재 webhook scope를 확대하므로 제외했다. User content를 mrkdwn fallback에 포함하는 방식은 mention·formatting injection surface를 키워 제외했다.
 - Consequences: Channel은 Slack app의 Incoming Webhook 설정이 소유한다. Missing/invalid secret은 mutation만 fail closed로 실패하고, feedback content와 credential은 DB나 exported asset에 남지 않는다.
-- Confirmation / Follow-up: Stubbed fetch payload snapshot, secret-redaction search, invalid config test와 production Slack smoke로 확인한다.
+- Confirmation / Follow-up: Helm render, missing/invalid config test, stubbed fetch payload snapshot, secret-redaction search와 production Slack smoke로 확인한다.
 
 ### Account별 비영속 fixed-window와 in-flight guard를 사용한다
 
 - Decision Date: 2026-07-28
 - Decision Class: Implementation Choice
 - Authority / Provenance: `PROD-479`, `PROD-487`
-- Status: Active
+- Status: Superseded
 - Context / Problem: Rate limit과 반복 제출 완화가 필요하지만 feedback 또는 delivery metadata의 DB persistence는 금지되고 현재 API 배포는 single replica다.
 - Decision Outcome: API process는 account별 유효한 feedback 시도를 fixed window 10분당 5건으로 제한하고, 같은 account에 Slack request가 진행 중이면 concurrent request를 거부한다. Client도 pending 동안 submit을 막는다. Counter와 in-flight state는 process memory에만 두고 restart 뒤 복원하지 않는다.
 - Alternatives Considered: DB/Redis-backed global limiter는 현재 persistence·dependency scope를 확대하므로 제외했다. IP-only limit는 shared network와 proxy에서 account contract보다 부정확해 제외했다. Body hash dedupe는 의도적인 동일 feedback을 차단하므로 제외했다.
 - Consequences: 현재 single replica에서는 account abuse를 완화하지만 restart와 향후 multi-replica에서 global guarantee가 아니다. Upstream failure retry도 window를 소비한다.
 - Confirmation / Follow-up: Five-attempt boundary, sixth rejection, concurrent request와 restart-independent unit behavior를 fake clock/fetch로 검증한다. Replica 확장 시 upstream contract와 store를 다시 결정한다.
+
+### 같은 account의 진행 중 delivery만 process-local로 차단한다
+
+- Decision Date: 2026-07-29
+- Decision Class: Derived Contract
+- Authority / Provenance: `PROD-479`, `PROD-487`
+- Status: Active
+- Context / Problem: 2026-07-29 리뷰에서 account별 횟수 제한을 현재 범위에서 제거하기로 제품 결정을 변경했다. 기존 fixed-window 구현은 account 수가 늘 때 매 요청마다 전체 상태를 순회하고, 여러 account의 부하는 제한하지 못한다.
+- Decision Outcome: API는 같은 account의 Slack delivery가 진행 중일 때만 두 번째 delivery를 거부한다. In-flight account ID는 process-local `Set` 또는 동등한 구조에 두고 성공·실패 완료 시 즉시 제거한다. Account별 요청 횟수 제한과 rate history는 구현하거나 영속화하지 않는다.
+- Alternatives Considered: 기존 5회/10분 fixed window는 O(N²) 누적 cleanup 비용과 제한 효과 불일치 때문에 제외했다. DB/Redis-backed global limiter는 최신 Linear 계약에 없고 현재 persistence·dependency 범위를 확대하므로 제외했다.
+- Consequences: 같은 account의 concurrent duplicate POST는 막지만 순차 요청이나 여러 account의 부하는 제한하지 않는다. 장기 abuse protection이 필요하면 신뢰 가능한 별도 upstream 계약에서 결정해야 한다.
+- Confirmation / Follow-up: 같은 account concurrent rejection, 완료 뒤 재시도 허용과 성공·실패 시 상태 해제를 unit test로 검증한다.
 
 ### 기존 `/menu`를 Web feedback 화면으로 사용하고 native 노출을 미룬다
 
@@ -82,4 +94,4 @@
 
 ## Superseded Decisions
 
-- 없음.
+- 2026-07-28 `Account별 비영속 fixed-window와 in-flight guard를 사용한다`는 2026-07-29 `같은 account의 진행 중 delivery만 process-local로 차단한다`로 대체했다.

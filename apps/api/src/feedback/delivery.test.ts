@@ -1,11 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  deliverFeedback,
-  FEEDBACK_DELIVERY_TIMEOUT_MS,
-  FEEDBACK_RATE_LIMIT,
-  FEEDBACK_RATE_WINDOW_MS,
-} from './delivery';
+import { deliverFeedback, FEEDBACK_DELIVERY_TIMEOUT_MS } from './delivery';
 
 const webhookUrl = 'https://hooks.slack.com/services/T000/B000/secret';
 const validFeedback = {
@@ -134,7 +129,7 @@ test('전송 timeout은 abort 후 안전한 오류를 반환하고 in-flight를 
   assert.equal(calls, 2);
 });
 
-test('계정별 10분 fixed window에서 다섯 번만 시도할 수 있다', async (t) => {
+test('완료된 같은 계정의 다음 전송을 허용한다', async (t) => {
   let calls = 0;
   const fetch = async () => {
     calls += 1;
@@ -143,48 +138,10 @@ test('계정별 10분 fixed window에서 다섯 번만 시도할 수 있다', as
 
   t.mock.method(globalThis, 'fetch', fetch);
 
-  for (let attempt = 0; attempt < FEEDBACK_RATE_LIMIT; attempt += 1) {
-    await deliverFeedback(accountId, validFeedback);
-  }
-
-  await assert.rejects(deliverFeedback(accountId, validFeedback), /너무 많이 보냈어요/u);
-  assert.equal(calls, FEEDBACK_RATE_LIMIT);
-});
-
-test('10분 window가 지나면 만료 상태를 청소하고 새 시도를 허용한다', async (t) => {
-  let now = 0;
-  let calls = 0;
-  const fetch = async () => {
-    calls += 1;
-    return new Response(null, { status: 200 });
-  };
-  t.mock.method(globalThis, 'fetch', fetch);
-  t.mock.method(Date, 'now', () => now);
-
-  for (let attempt = 0; attempt < FEEDBACK_RATE_LIMIT; attempt += 1) {
-    await deliverFeedback(accountId, validFeedback);
-  }
-  now = FEEDBACK_RATE_WINDOW_MS + 1;
+  await deliverFeedback(accountId, validFeedback);
   await deliverFeedback(accountId, validFeedback);
 
-  assert.equal(calls, FEEDBACK_RATE_LIMIT + 1);
-});
-
-test('rate limit과 window 상태는 계정별로 격리된다', async (t) => {
-  let calls = 0;
-  const fetch = async () => {
-    calls += 1;
-    return new Response(null, { status: 200 });
-  };
-
-  t.mock.method(globalThis, 'fetch', fetch);
-
-  for (let attempt = 0; attempt < FEEDBACK_RATE_LIMIT; attempt += 1) {
-    await deliverFeedback(accountId, validFeedback);
-  }
-  await deliverFeedback(`${accountId}-other`, validFeedback);
-
-  assert.equal(calls, FEEDBACK_RATE_LIMIT + 1);
+  assert.equal(calls, 2);
 });
 
 test('같은 계정의 in-flight 전송은 두 번째 POST를 시작하지 않는다', async (t) => {
@@ -209,8 +166,7 @@ test('같은 계정의 in-flight 전송은 두 번째 POST를 시작하지 않�
   assert.equal(calls, 1);
 });
 
-test('window rollover 중에도 같은 계정의 in-flight 전송을 중복 시작하지 않는다', async (t) => {
-  let now = 0;
+test('서로 다른 계정의 in-flight 전송은 함께 진행할 수 있다', async (t) => {
   let release!: () => void;
   const pending = new Promise<void>((resolve) => {
     release = resolve;
@@ -221,14 +177,13 @@ test('window rollover 중에도 같은 계정의 in-flight 전송을 중복 시�
     await pending;
     return new Response(null, { status: 200 });
   };
+
   t.mock.method(globalThis, 'fetch', fetch);
-  t.mock.method(Date, 'now', () => now);
 
   const first = deliverFeedback(accountId, validFeedback);
+  const second = deliverFeedback(`${accountId}-other`, validFeedback);
   await new Promise((resolve) => setImmediate(resolve));
-  now = FEEDBACK_RATE_WINDOW_MS + 1;
-  await assert.rejects(deliverFeedback(accountId, validFeedback), /처리 중이에요/u);
+  assert.equal(calls, 2);
   release();
-  await first;
-  assert.equal(calls, 1);
+  await Promise.all([first, second]);
 });
