@@ -54,7 +54,7 @@
 
 ### Requirement: Profile edit fields and Profile Tag interaction
 
-**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/profile-tags.md`, `PROD-491`, `PROD-522` — Profile edit presentation은 새로 입력하거나 변경한 값에 1~40자 displayName, 500자 이하 bio와 avatar/header별 controlled 편집 control을 제공해야 하며(MUST), 40자를 초과한 legacy displayName은 초기 원문과 정확히 같은 경우에만 허용해야 한다(MUST). 개수 상한 없이 Profile Tag를 inline chip으로 추가·제거할 수 있어야 하고(MUST), 순서·재정렬 control을 제공해서는 안 되며(MUST NOT), 승인되지 않은 field를 표시해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/profile-tags.md`, `docs/domain/objects/hashtag.md`, `PROD-491`, `PROD-522`, `PROD-526` — Profile edit presentation은 새로 입력하거나 변경한 값에 1~40자 displayName, 500자 이하 bio와 avatar/header별 controlled 편집 control을 제공해야 하며(MUST), 40자를 초과한 legacy displayName은 초기 원문과 정확히 같은 경우에만 허용해야 한다(MUST). 개수 상한 없이 Profile Tag를 inline chip으로 추가·제거할 수 있어야 하고(MUST), 순서·재정렬 control을 제공해서는 안 되며(MUST NOT), 승인되지 않은 field를 표시해서는 안 된다(MUST NOT). Profile Tag의 canonical identity는 Hashtag의 NFKC·locale 비종속 `toLowerCase()` 규칙을 사용하되 chip은 최초 입력의 NFKC 표기를 유지해야 한다(MUST).
 
 #### Scenario: Edit approved text and image fields
 
@@ -73,7 +73,7 @@
 #### Scenario: Add and remove Profile Tags locally
 
 - **WHEN** 사용자가 유효한 Profile Tag를 추가하거나 기존 TagChip을 제거한다
-- **THEN** form은 정규화된 이름에 `#`를 한 번 붙인 chip 목록을 즉시 표시한다
+- **THEN** form은 최초 입력의 NFKC 표기에 `#`를 한 번 붙인 chip 목록을 즉시 표시한다
 - **AND** 개수 상한 없이 1~20자 문자·숫자·밑줄과 정규화 뒤 canonical identity 중복을 입력
   가까이에 안내한다
 - **AND** 순서 변경 control이나 drag gesture를 표시하지 않는다

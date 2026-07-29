@@ -4,9 +4,11 @@
 
 - `docs/design/profile-edit.md`
 - `docs/design/profile-tags.md`
+- `docs/domain/objects/hashtag.md`
 - `docs/domain/decisions/0021-profile-edit-selected-owner-route-boundary.md`
 - `PROD-490`
 - `PROD-491`
+- `PROD-526`
 
 **Deliverable**
 
@@ -28,6 +30,8 @@ Web Storybook 상태 카탈로그를 전달한다. Native route 연결과 실제
   들어온 원문과 정확히 같은 경우에만 다른 field 저장을 막지 않는다.
 - inline TagChip 추가·제거를 제공하되 Tag 저장·Relay는 연결하지 않는다. 개수 상한·순서
   변경 UI·gesture는 추가하지 않는다.
+- Profile Tag canonical identity는 Hashtag의 NFKC·locale 비종속 `toLowerCase()` 규칙으로 비교하고,
+  chip은 최초 입력의 NFKC 표기를 유지한다.
 - Profile Link와 기존 Figma 시안의 범위 밖 field를 포함하지 않는다.
 - 기존 theme token·breakpoint와 React Native primitive를 사용한다. Profile Tag 제거 action은 시각 크기
   `32×32`, 실제 입력 target Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp`를 제공하고 text
@@ -36,8 +40,8 @@ Web Storybook 상태 카탈로그를 전달한다. Native route 연결과 실제
 
 **Verification**
 
-- 기본·dirty·displayName/bio 경계·Tag 추가/제거/임의 개수/invalid/duplicate를 component test와
-  Storybook에서 확인한다. 순서 변경 control이 없음도 확인한다.
+- 기본·dirty·displayName/bio 경계·Tag 추가/제거/임의 개수/invalid/canonical identity duplicate와 최초 입력
+  NFKC 표기 보존을 공용 parity fixture, component test와 Storybook에서 확인한다. 순서 변경 control이 없음도 확인한다.
 - `팔로우 요청 자동 승인` Switch의 초기 enum 매핑, 토글 dirty, callback `OPEN`/`APPROVAL_REQUIRED` 제출과
   callback 없음/unchanged disabled, saving 중 재토글 방지를 확인한다.
 - avatar/header 각각의 교체·제거·upload-wait·error, saving·failure·retry controlled state와 이미지 오류의

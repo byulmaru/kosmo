@@ -1,4 +1,5 @@
 import {
+  normalizeProfileTagDisplayName,
   normalizeProfileTagName,
   profileBioSchema,
   profileTagNameSchema,
@@ -153,5 +154,5 @@ export function validateProfileTagDraftInput(
     return { ok: false, error: '이미 추가한 태그예요.' };
   }
 
-  return { ok: true, value: result.data };
+  return { ok: true, value: normalizeProfileTagDisplayName(input) };
 }

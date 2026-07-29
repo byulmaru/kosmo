@@ -412,22 +412,22 @@ export const TagAddDuplicateAndRemove: Story = {
     const input = canvas.getByRole('textbox', { name: '프로필 태그' });
     const add = canvas.getByRole('button', { name: '태그 추가' });
 
-    await userEvent.type(input, ' #공예 ');
+    await userEvent.type(input, ' #Ｆｏｏ ');
     await userEvent.click(add);
-    expect(canvas.getByText('#공예')).toBeVisible();
+    expect(canvas.getByText('#Foo')).toBeVisible();
 
-    const remove = canvas.getByRole('button', { name: '#공예 제거' });
+    const remove = canvas.getByRole('button', { name: '#Foo 제거' });
     const removeTarget = remove.getBoundingClientRect();
 
     expect(Math.round(removeTarget.width)).toBe(32);
     expect(Math.round(removeTarget.height)).toBe(32);
 
-    await userEvent.type(input, '#공예');
+    await userEvent.type(input, '#foo');
     await userEvent.click(add);
     expect(canvas.getByText('이미 추가한 태그예요.')).toBeVisible();
 
     await userEvent.click(remove);
-    expect(canvas.queryByText('#공예')).not.toBeInTheDocument();
+    expect(canvas.queryByText('#Foo')).not.toBeInTheDocument();
   },
 };
 

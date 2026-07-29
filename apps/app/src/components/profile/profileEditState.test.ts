@@ -77,9 +77,9 @@ test('40자를 초과한 초기 displayName을 바꾸지 않으면 다른 field�
   );
 });
 
-test('Profile Tag 입력을 core와 같은 규칙으로 정규화하고 검증한다', () => {
-  for (const { input, normalized } of profileTagNormalizationParityCases) {
-    assert.deepEqual(validateProfileTagDraftInput(input, []), { ok: true, value: normalized });
+test('Profile Tag 입력을 core identity로 검증하고 최초 NFKC 표기를 유지한다', () => {
+  for (const { displayName, input } of profileTagNormalizationParityCases) {
+    assert.deepEqual(validateProfileTagDraftInput(input, []), { ok: true, value: displayName });
   }
   for (const { existing, input } of profileTagDuplicateParityCases) {
     assert.deepEqual(validateProfileTagDraftInput(input, [existing]), {
