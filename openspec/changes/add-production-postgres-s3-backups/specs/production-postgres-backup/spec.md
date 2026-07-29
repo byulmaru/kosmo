@@ -73,7 +73,7 @@
 #### Scenario: 최신 복구 가능 시점으로 PITR
 
 - **WHEN** 운영자가 runbook에 따라 기록한 target time으로 restore rehearsal을 시작한다
-- **THEN** 별도 namespace의 새 Cluster가 base backup과 WAL을 사용해 target time까지 복구되고 production Cluster는 변경되지 않는다
+- **THEN** 별도 namespace의 새 Cluster가 base backup과 WAL을 사용해 target time까지 복구되고 production Cluster는 변경되지 않으며 write pause 중 target time과 함께 기록한 불변 snapshot으로 데이터 정확성을 검증한다
 
 #### Scenario: RPO와 RTO 측정
 

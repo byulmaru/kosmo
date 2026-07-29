@@ -27,6 +27,10 @@ jobs:
       - name: Install Playwright Chromium
         run: pnpm --filter @kosmo/app exec playwright install chromium
 
+      - name: Install Helm
+        working-directory: apps/helm
+        run: mise install helm
+
       - name: Run module tests
         run: pnpm test
 

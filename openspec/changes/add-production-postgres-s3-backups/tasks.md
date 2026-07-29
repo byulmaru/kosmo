@@ -73,6 +73,7 @@ Production CNPG Cluster가 5분 WAL archive 목표와 매일 03:00 KST base back
 - Production Cluster는 `kosmo-postgres-backup` ServiceAccount를 사용하고 ObjectStore는 IAM role 상속으로 고정 bucket의 `kosmo-prod/` prefix에 연결한다.
 - 공식 plugin을 WAL archiver와 ScheduledBackup method로 사용하며 `archive_timeout=5min`, retention 7일, immediate 실행과 UTC 6-field cron `0 0 18 * * *`을 사용한다.
 - Restore Cluster는 별도 `kosmo-prod-restore` namespace에서 source를 recovery source로만 읽고 같은 destination에 WAL 또는 새 backup을 쓰지 않는다.
+- Restore 검증은 application write pause 중 target time과 함께 기록한 불변 snapshot을 기준으로 하며 이후 현재 production count와 비교하지 않는다.
 - Prometheus/Slack 자동 알림, dev backup, replica/failover, EBS snapshot과 plugin 압축·병렬화 조정은 포함하지 않는다.
 
 **Verification**

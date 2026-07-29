@@ -81,19 +81,23 @@ spec:
 
 한 달에 한 번, 그리고 최초 production 출시 전에 다음 절차를 수행한다. 실행자는 `PROD-546` assignee이며 해당 월이 끝나기 전에 결과를 같은 이슈에 기록한다.
 
-### 1. 기준 시각과 원본 상태 기록
+### 1. Target 시점과 불변 기준 기록
 
-UTC 기준 target time을 정하고 rehearsal 시작 시각을 기록한다. Target time은 현재 시각보다 최소 5분 이전이며 7일 recovery window 안에 있어야 한다. 원본에서 다음과 같은 비민감 집계값만 기록한다.
+Application의 쓰기 경로를 maintenance/read-only 상태로 전환하고 실제 writer가 멈춘 것을 확인한다. 쓰기가 중지된 동안 원본 database의 한 read-only transaction에서 UTC target time과 비민감 집계값을 함께 기록한다.
 
 ```sql
-SELECT now();
+BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;
+SELECT clock_timestamp() AS target_time;
 SELECT count(*) FROM drizzle.__drizzle_migrations;
 SELECT count(*) FROM account;
 SELECT count(*) FROM profile;
 SELECT count(*) FROM post;
+COMMIT;
 ```
 
-실제 schema에 없는 대표 테이블은 현재 production의 핵심 테이블로 교체하되 row 값은 출력하지 않는다.
+실제 schema에 없는 대표 테이블은 현재 production의 핵심 테이블로 교체하되 row 값은 출력하지 않는다. 마지막 migration hash와 최소 read에서 사용할 불변 식별자도 같은 snapshot에서 기록하되 Linear나 workflow log에는 값 자체를 남기지 않는다.
+
+Transaction이 끝날 때까지 write pause를 유지한다. 기록이 끝나면 application 쓰기를 재개하고 target time이 현재보다 최소 5분 이전이 될 때까지 기다린 뒤 restore를 시작한다. 현재 원본의 count를 다시 기준으로 사용하지 않는다. Write pause를 확보하지 못했으면 rehearsal을 진행하지 않는다. 그렇지 않으면 target 이후의 정상 insert/delete를 복구 실패와 구분할 수 없다.
 
 ### 2. Restore namespace와 source ObjectStore 생성
 
@@ -166,12 +170,12 @@ kubectl get cluster,pod -n kosmo-prod-restore
 Restore Cluster의 application credential로 읽기 전용 연결을 만든 뒤 다음을 비교한다.
 
 - `pg_dump --schema-only` 결과의 구조적 차이
-- `drizzle.__drizzle_migrations` count와 마지막 migration hash
-- 앞에서 선택한 대표 테이블의 row count
+- target 시점 snapshot에 기록한 `drizzle.__drizzle_migrations` count와 마지막 migration hash
+- target 시점 snapshot에 기록한 대표 테이블의 row count와 불변 식별자 존재 여부
 - 대표 GraphQL read query 또는 동일 query path의 최소 application read
 - `pg_last_xact_replay_timestamp()` 또는 검증 가능한 최신 domain timestamp와 target time의 차이
 
-Rehearsal 시작부터 Cluster Ready까지를 RTO로, target time 기준 마지막 복구 데이터의 차이를 RPO로 기록한다. 목표는 각각 60분과 5분 이내다. Timestamp, Backup phase, 측정값과 성공/실패만 `PROD-546`에 남긴다.
+현재 production 상태가 아니라 1단계에서 target 시점에 고정한 기준과 Restore Cluster를 비교한다. Rehearsal 시작부터 Cluster Ready까지를 RTO로, target time 기준 마지막 복구 데이터의 차이를 RPO로 기록한다. 목표는 각각 60분과 5분 이내다. Timestamp, Backup phase, 측정값과 성공/실패만 `PROD-546`에 남긴다.
 
 ### 5. 정리
 
