@@ -21,6 +21,7 @@ import { radii, shadow, spacing, typography } from '@/theme/tokens';
 import { PostBody } from './PostBody';
 import { PostComposer } from './PostComposer';
 import { PostSourcePreview } from './PostSourcePresentationView';
+import { PostThreadConnector } from './PostThreadConnector';
 import { getReplySurfacePresentation } from './replySurface';
 import type { RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
@@ -314,26 +315,32 @@ export function ReplyComposerSurface({
                       style={[styles.parent, { borderColor: theme.border }]}
                       testID="reply-parent"
                     >
-                      <View style={styles.parentHeader}>
+                      <View style={styles.parentAvatarColumn}>
                         <Avatar
                           label={parent.profile.displayName || parent.profile.handle}
                           size={40}
                         />
+                        <PostThreadConnector
+                          style={styles.parentConnector}
+                          testID="reply-parent-thread-connector"
+                        />
+                      </View>
+                      <View style={styles.parentContent}>
                         <View style={styles.parentIdentity}>
                           <ProfileNameBlock profile={parent.profile} />
                           <Text style={[styles.timestamp, { color: theme.textSecondary }]}>
                             {formatTimelineTimestamp(parent.createdAt)}
                           </Text>
                         </View>
+                        <PostBody post={parent} />
+                        {source ? (
+                          <PostSourcePreview
+                            interactive={false}
+                            source={source}
+                            style={styles.source}
+                          />
+                        ) : null}
                       </View>
-                      <PostBody post={parent} />
-                      {source ? (
-                        <PostSourcePreview
-                          interactive={false}
-                          source={source}
-                          style={styles.source}
-                        />
-                      ) : null}
                     </View>
                   }
                   focusOnMount
@@ -438,8 +445,21 @@ const styles = StyleSheet.create({
   },
   title: { fontFamily: 'SUIT', fontWeight: '800', ...typography.lg },
   close: { alignItems: 'center', borderRadius: radii.full, justifyContent: 'center' },
-  parent: { borderBottomWidth: 1, gap: spacing.md, paddingBottom: spacing.lg },
-  parentHeader: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.md },
+  parent: {
+    alignItems: 'stretch',
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    paddingBottom: spacing.lg,
+  },
+  parentAvatarColumn: { position: 'relative', width: 40 },
+  parentConnector: {
+    bottom: -spacing.md,
+    left: '50%',
+    top: 40 + spacing.xs,
+    transform: [{ translateX: -1 }],
+  },
+  parentContent: { flex: 1, gap: spacing.md, minWidth: 0 },
   parentIdentity: { flex: 1, minWidth: 0 },
   timestamp: { fontFamily: 'SUIT', marginTop: spacing.xs, ...typography.xsm },
   source: { marginTop: spacing.sm },

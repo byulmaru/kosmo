@@ -3189,6 +3189,29 @@ export const ReplyModalPresentation: Story = {
     expect(within(dialog).getByRole('button', { name: '답글 게시' })).toBeDisabled();
     expect(within(dialog).queryByRole('toolbar', { name: '액션 바' })).toBeNull();
     expect(within(dialog).getAllByTestId('reply-composer-scroll')).toHaveLength(1);
+    const connector = within(dialog).getByTestId('reply-parent-thread-connector');
+    const [parentAvatar, composerAvatar] = within(dialog).getAllByLabelText(/프로필 이미지$/);
+    const connectorBounds = connector.getBoundingClientRect();
+    const parentAvatarBounds = parentAvatar!.getBoundingClientRect();
+    const composerAvatarBounds = composerAvatar!.getBoundingClientRect();
+    expect(getComputedStyle(connector).width).toBe('2px');
+    expect(
+      Math.abs(
+        connectorBounds.left +
+          connectorBounds.width / 2 -
+          (parentAvatarBounds.left + parentAvatarBounds.width / 2),
+      ),
+    ).toBeLessThanOrEqual(1);
+    expect(
+      Math.abs(
+        connectorBounds.left +
+          connectorBounds.width / 2 -
+          (composerAvatarBounds.left + composerAvatarBounds.width / 2),
+      ),
+    ).toBeLessThanOrEqual(1);
+    expect(connectorBounds.top).toBeGreaterThanOrEqual(parentAvatarBounds.bottom);
+    expect(connectorBounds.bottom).toBeLessThanOrEqual(composerAvatarBounds.top);
+    expect(connectorBounds.height).toBeGreaterThan(0);
     expect(
       within(dialog).getByTestId('reply-composer-dialog-surface').getBoundingClientRect().width,
     ).toBe(600);
