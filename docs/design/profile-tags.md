@@ -10,7 +10,8 @@ Local Profile Owner가 기존 Profile 편집 흐름에서 구조화된 Profile T
 - 기존 Profile 편집 화면에 bio와 함께 이해할 수 있는 `프로필 태그` 섹션을 둔다.
 - 저장된 태그는 TagChip으로 표시한다. 사용자는 태그를 추가하거나 기존 TagChip을 제거할 수 있다.
 - reorder UI를 제공하지 않으며 입력 또는 서버 응답의 안정적인 순서가 유지된다고 가정하지 않는다.
-- 입력은 선택적인 앞 `#`를 허용하지만 chip과 공개 화면에는 정규화된 이름 앞에 `#`를 한 번만 표시한다.
+- 입력은 선택적인 앞 `#`를 허용하지만 chip과 공개 화면에는 Hashtag가 보존한 Display Hashtag Name 앞에
+  `#`를 한 번만 표시한다. canonical lowercase 이름은 identity·중복 판정에만 사용한다.
 - 빈 값, [Hashtag Name 규칙](../domain/objects/hashtag.md)에 맞지 않는 문자, 정규화 결과의 Unicode code point
   20자 초과와 동일 Hashtag identity 중복은 저장 전에 필드 가까이 안내한다. 서버 검증 실패도 같은 항목에
   연결하되 저장된 기존 목록은 유지한다.
