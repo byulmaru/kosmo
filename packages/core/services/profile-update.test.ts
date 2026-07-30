@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { and, eq, inArray } from 'drizzle-orm';
+import { setTimeout as delay } from 'node:timers/promises';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
   AccountProfiles,
   Accounts,
@@ -10,6 +11,7 @@ import {
   Instances,
   Media,
   pg,
+  ProfileFollowRequests,
   ProfileHashtags,
   ProfileMedia,
   Profiles,
@@ -87,25 +89,66 @@ const readTags = async (profileId: string) =>
 const readHashtag = async (name: string) =>
   db.select().from(Hashtags).where(eq(Hashtags.name, name)).then(firstOrThrow);
 
-const createReadyMedia = (accountId: string, profileId: string) =>
+const createMedia = ({
+  accountId,
+  profileId,
+  source = MediaSource.LOCAL,
+  state = MediaState.READY,
+  url = state === MediaState.READY ? `https://media.example/${crypto.randomUUID()}.webp` : null,
+}: {
+  accountId: string;
+  profileId: string;
+  source?: MediaSource;
+  state?: MediaState;
+  url?: string | null;
+}) =>
   db
     .insert(Media)
     .values({
       accountId,
+      mediaType: state === MediaState.READY ? 'image/webp' : null,
       profileId,
-      readyAt: Temporal.Now.instant(),
-      source: MediaSource.LOCAL,
-      state: MediaState.READY,
+      readyAt: state === MediaState.READY ? Temporal.Now.instant() : null,
+      source,
+      state,
       storageReference: `u_${crypto.randomUUID()}`,
       uploadExpiresAt: Temporal.Now.instant().add({ minutes: 5 }),
+      url,
     })
     .returning()
     .then(firstOrThrow);
 
+const readProfileMedia = (profileId: string) =>
+  db
+    .select({ kind: ProfileMedia.kind, mediaId: ProfileMedia.mediaId })
+    .from(ProfileMedia)
+    .where(eq(ProfileMedia.profileId, profileId))
+    .then((rows) => rows.toSorted((a, b) => a.kind.localeCompare(b.kind)));
+
+const waitUntilBlockedBy = async (blockingPid: number) => {
+  for (let attempt = 0; attempt < 250; attempt += 1) {
+    const [activity] = await db.execute<{ blocked: boolean }>(sql`
+      SELECT EXISTS (
+        SELECT 1
+        FROM pg_stat_activity
+        WHERE ${blockingPid} = ANY(pg_blocking_pids(pid))
+      ) AS blocked
+    `);
+
+    if (activity?.blocked) {
+      return;
+    }
+
+    await delay(20);
+  }
+
+  assert.fail('Profile eligibility change did not wait for updateProfile');
+};
+
 test('Profile Media 관계는 kind별 하나만 허용하고 관계 삭제 시 Media를 보존한다', async () => {
   const { account, profile } = await createProfileFixture();
-  const media = await createReadyMedia(account.id, profile.id);
-  const otherMedia = await createReadyMedia(account.id, profile.id);
+  const media = await createMedia({ accountId: account.id, profileId: profile.id });
+  const otherMedia = await createMedia({ accountId: account.id, profileId: profile.id });
 
   await db.insert(ProfileMedia).values([
     { kind: ProfileMediaKind.AVATAR, mediaId: media.id, profileId: profile.id },
@@ -134,6 +177,321 @@ test('Profile Media 관계는 kind별 하나만 허용하고 관계 삭제 시 M
       .then((rows) => rows.length),
     2,
   );
+});
+
+test('avatar/header 입력은 교체·제거·생략을 kind별로 적용하고 Media를 보존한다', async () => {
+  const { account, profile } = await createProfileFixture();
+  const originalAvatar = await createMedia({ accountId: account.id, profileId: profile.id });
+  const originalHeader = await createMedia({ accountId: account.id, profileId: profile.id });
+  const replacementAvatar = await createMedia({ accountId: account.id, profileId: profile.id });
+  await db.insert(ProfileMedia).values([
+    {
+      kind: ProfileMediaKind.AVATAR,
+      mediaId: originalAvatar.id,
+      profileId: profile.id,
+    },
+    {
+      kind: ProfileMediaKind.HEADER,
+      mediaId: originalHeader.id,
+      profileId: profile.id,
+    },
+  ]);
+
+  await updateProfile({
+    accountId: account.id,
+    avatarMediaId: replacementAvatar.id,
+    headerMediaId: null,
+    profileId: profile.id,
+  });
+  assert.deepEqual(await readProfileMedia(profile.id), [
+    { kind: ProfileMediaKind.AVATAR, mediaId: replacementAvatar.id },
+  ]);
+
+  await updateProfile({ accountId: account.id, bio: 'omitted media', profileId: profile.id });
+  assert.deepEqual(await readProfileMedia(profile.id), [
+    { kind: ProfileMediaKind.AVATAR, mediaId: replacementAvatar.id },
+  ]);
+  assert.equal(
+    await db
+      .select()
+      .from(Media)
+      .where(inArray(Media.id, [originalAvatar.id, originalHeader.id, replacementAvatar.id]))
+      .then((rows) => rows.length),
+    3,
+  );
+});
+
+test('사용할 수 없는 avatar/header Media 하나는 scalar·policy·관계를 모두 보존한다', async () => {
+  const target = await createProfileFixture();
+  const other = await createProfileFixture();
+  const currentAvatar = await createMedia({
+    accountId: target.account.id,
+    profileId: target.profile.id,
+  });
+  const validAvatar = await createMedia({
+    accountId: target.account.id,
+    profileId: target.profile.id,
+  });
+  const wrongProfile = await createMedia({
+    accountId: other.account.id,
+    profileId: other.profile.id,
+  });
+  const remote = await createMedia({
+    accountId: target.account.id,
+    profileId: target.profile.id,
+    source: MediaSource.REMOTE,
+  });
+  const uploading = await createMedia({
+    accountId: target.account.id,
+    profileId: target.profile.id,
+    state: MediaState.UPLOADING,
+  });
+  const missingUrl = await createMedia({
+    accountId: target.account.id,
+    profileId: target.profile.id,
+    url: null,
+  });
+  await db.insert(ProfileMedia).values({
+    kind: ProfileMediaKind.AVATAR,
+    mediaId: currentAvatar.id,
+    profileId: target.profile.id,
+  });
+
+  for (const invalidHeaderId of [
+    wrongProfile.id,
+    remote.id,
+    uploading.id,
+    missingUrl.id,
+    crypto.randomUUID(),
+  ]) {
+    await assert.rejects(
+      updateProfile({
+        accountId: target.account.id,
+        avatarMediaId: validAvatar.id,
+        displayName: 'Should not commit',
+        followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
+        headerMediaId: invalidHeaderId,
+        profileId: target.profile.id,
+      }),
+      (error) => error instanceof ValidationError && error.field === 'headerMediaId',
+    );
+
+    const persisted = await db
+      .select()
+      .from(Profiles)
+      .where(eq(Profiles.id, target.profile.id))
+      .then(firstOrThrow);
+    assert.equal(persisted.displayName, target.profile.displayName);
+    assert.equal(persisted.followPolicy, ProfileFollowPolicy.OPEN);
+    assert.deepEqual(await readProfileMedia(target.profile.id), [
+      { kind: ProfileMediaKind.AVATAR, mediaId: currentAvatar.id },
+    ]);
+  }
+});
+
+test('followPolicy만 변경해도 기존 Pending Follow Request를 유지한다', async () => {
+  const target = await createProfileFixture();
+  const follower = await createProfileFixture();
+  const request = await db
+    .insert(ProfileFollowRequests)
+    .values({
+      followeeProfileId: target.profile.id,
+      followerProfileId: follower.profile.id,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+  await updateProfile({
+    accountId: target.account.id,
+    followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
+    profileId: target.profile.id,
+  });
+
+  assert.deepEqual(
+    await db.select().from(ProfileFollowRequests).where(eq(ProfileFollowRequests.id, request.id)),
+    [request],
+  );
+});
+
+test('변경한 displayName은 Unicode code point 40자를 허용하고 41자를 거부한다', async () => {
+  const { account, profile } = await createProfileFixture();
+  const valid = '😀'.repeat(40);
+
+  const updated = await updateProfile({
+    accountId: account.id,
+    displayName: `  ${valid}  `,
+    profileId: profile.id,
+  });
+  assert.equal(updated.displayName, valid);
+
+  await assert.rejects(
+    updateProfile({
+      accountId: account.id,
+      displayName: '😀'.repeat(41),
+      profileId: profile.id,
+    }),
+    (error) => error instanceof ValidationError && error.field === 'displayName',
+  );
+  assert.equal(
+    await db
+      .select({ displayName: Profiles.displayName })
+      .from(Profiles)
+      .where(eq(Profiles.id, profile.id))
+      .then(firstOrThrow)
+      .then(({ displayName }) => displayName),
+    valid,
+  );
+});
+
+test('40 code point 초과 legacy displayName은 저장 원문과 같을 때만 허용한다', async () => {
+  const { account, profile } = await createProfileFixture();
+  const legacyDisplayName = '😀'.repeat(41);
+  await db
+    .update(Profiles)
+    .set({ displayName: legacyDisplayName })
+    .where(eq(Profiles.id, profile.id));
+
+  const updated = await updateProfile({
+    accountId: account.id,
+    bio: 'legacy preserved',
+    displayName: legacyDisplayName,
+    profileId: profile.id,
+  });
+  assert.equal(updated.displayName, legacyDisplayName);
+  assert.equal(updated.bio, 'legacy preserved');
+
+  await assert.rejects(
+    updateProfile({
+      accountId: account.id,
+      displayName: `${legacyDisplayName.slice(0, -2)}a`,
+      profileId: profile.id,
+    }),
+    (error) => error instanceof ValidationError && error.field === 'displayName',
+  );
+});
+
+test('bio는 trim 후 JavaScript UTF-16 길이 500자를 적용한다', async () => {
+  const { account, profile } = await createProfileFixture();
+  const valid = '😀'.repeat(250);
+
+  const updated = await updateProfile({
+    accountId: account.id,
+    bio: `  ${valid}  `,
+    profileId: profile.id,
+  });
+  assert.equal(updated.bio, valid);
+
+  await assert.rejects(
+    updateProfile({
+      accountId: account.id,
+      bio: ` ${'😀'.repeat(251)} `,
+      profileId: profile.id,
+    }),
+    (error) => error instanceof ValidationError && error.field === 'bio',
+  );
+  assert.equal(
+    await db
+      .select({ bio: Profiles.bio })
+      .from(Profiles)
+      .where(eq(Profiles.id, profile.id))
+      .then(firstOrThrow)
+      .then(({ bio }) => bio),
+    valid,
+  );
+});
+
+test('updateProfile이 보유한 eligibility lock은 Owner downgrade보다 먼저 commit된다', async () => {
+  const { account, profile } = await createProfileFixture();
+  const updateLocked = Promise.withResolvers<number>();
+  const allowUpdateCommit = Promise.withResolvers<void>();
+  const updateTransaction = db.transaction(async (tx) => {
+    const [connection] = await tx.execute<{ pid: number }>(
+      sql`SELECT pg_backend_pid()::int AS pid`,
+    );
+    assert.ok(connection);
+    const updated = await updateProfile(
+      { accountId: account.id, displayName: 'Committed first', profileId: profile.id },
+      tx,
+    );
+    updateLocked.resolve(connection.pid);
+    await allowUpdateCommit.promise;
+    return updated;
+  });
+  let ownerDowngrade: Promise<unknown> | undefined;
+
+  try {
+    const blockingPid = await updateLocked.promise;
+    ownerDowngrade = db
+      .update(AccountProfiles)
+      .set({ role: AccountProfileRole.MEMBER })
+      .where(
+        and(eq(AccountProfiles.accountId, account.id), eq(AccountProfiles.profileId, profile.id)),
+      )
+      .then((rows) => rows);
+    await waitUntilBlockedBy(blockingPid);
+    allowUpdateCommit.resolve();
+
+    const [updated] = await Promise.all([updateTransaction, ownerDowngrade]);
+    assert.equal(updated.displayName, 'Committed first');
+    assert.equal(
+      await db
+        .select({ role: AccountProfiles.role })
+        .from(AccountProfiles)
+        .where(
+          and(eq(AccountProfiles.accountId, account.id), eq(AccountProfiles.profileId, profile.id)),
+        )
+        .then(firstOrThrow)
+        .then(({ role }) => role),
+      AccountProfileRole.MEMBER,
+    );
+  } finally {
+    allowUpdateCommit.resolve();
+    await Promise.allSettled([updateTransaction, ...(ownerDowngrade ? [ownerDowngrade] : [])]);
+  }
+});
+
+test('Account가 먼저 비활성화되면 updateProfile은 draft 전체를 거부한다', async () => {
+  const { account, profile } = await createProfileFixture();
+  const eligibilityLocked = Promise.withResolvers<number>();
+  const allowEligibilityCommit = Promise.withResolvers<void>();
+  const eligibilityTransaction = db.transaction(async (tx) => {
+    const [connection] = await tx.execute<{ pid: number }>(
+      sql`SELECT pg_backend_pid()::int AS pid`,
+    );
+    assert.ok(connection);
+    await tx
+      .update(Accounts)
+      .set({ state: AccountState.DISABLED })
+      .where(eq(Accounts.id, account.id));
+    eligibilityLocked.resolve(connection.pid);
+    await allowEligibilityCommit.promise;
+  });
+  let update: ReturnType<typeof updateProfile> | undefined;
+
+  try {
+    const blockingPid = await eligibilityLocked.promise;
+    update = updateProfile({
+      accountId: account.id,
+      bio: 'Should not commit',
+      displayName: 'Should not commit',
+      profileId: profile.id,
+    });
+    await waitUntilBlockedBy(blockingPid);
+    allowEligibilityCommit.resolve();
+    await eligibilityTransaction;
+    await assert.rejects(update, NotFoundError);
+
+    const persisted = await db
+      .select()
+      .from(Profiles)
+      .where(eq(Profiles.id, profile.id))
+      .then(firstOrThrow);
+    assert.equal(persisted.displayName, profile.displayName);
+    assert.equal(persisted.bio, profile.bio);
+  } finally {
+    allowEligibilityCommit.resolve();
+    await Promise.allSettled([eligibilityTransaction, ...(update ? [update] : [])]);
+  }
 });
 
 test('Owner는 scalar와 정규화된 tags를 하나의 update로 저장한다', async () => {
