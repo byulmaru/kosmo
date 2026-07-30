@@ -113,7 +113,7 @@ const unsupportedDocumentPost = post({
   bodyText: '미지원 문서는 안전한 Plain Text로 표시합니다.',
   id: 'unsupported-document',
 });
-const mediaTextFallbackPost = post({
+const mediaTextPost = post({
   bodyDocument: {
     type: 'doc',
     content: [
@@ -122,9 +122,9 @@ const mediaTextFallbackPost = post({
     ],
   },
   bodyText: '이미지가 있는 문서는 안전한 Plain Text로 표시합니다.',
-  id: 'media-text-fallback',
+  id: 'media-text',
 });
-const mediaOnlyFallbackPost = post({
+const mediaOnlyPost = post({
   bodyDocument: {
     type: 'doc',
     attrs: { sensitiveMedia: true },
@@ -134,7 +134,7 @@ const mediaOnlyFallbackPost = post({
     ],
   },
   bodyText: '',
-  id: 'media-only-fallback',
+  id: 'media-only',
 });
 const sourceAuthor = profile({
   displayName: '아주 긴 Source 작성자 표시 이름',
@@ -473,8 +473,8 @@ const storyPosts = [
   sourceQuotePost,
   pureRepostOfQuote,
   quoteOfQuotePost,
-  mediaTextFallbackPost,
-  mediaOnlyFallbackPost,
+  mediaTextPost,
+  mediaOnlyPost,
 ];
 const composerProfile = profile({ id: 'profile-composer' });
 const emptyPostsProfile = profileWithPosts([], { id: 'profile-posts-empty' });
@@ -646,19 +646,19 @@ function PostCatalog(_args: PostsStoryArgs) {
         <PostBody
           post={requireFragment(requirePost(posts, 15).body, 'unsupported document post body')}
         />
-        <View testID="media-text-fallback">
+        <View testID="media-text">
           <PostBody
             post={requireFragment(
-              requirePostById(posts, mediaTextFallbackPost.id).body,
-              'text and media fallback post body',
+              requirePostById(posts, mediaTextPost.id).body,
+              'text and media post body',
             )}
           />
         </View>
-        <View testID="media-only-fallback">
+        <View testID="media-only">
           <PostBody
             post={requireFragment(
-              requirePostById(posts, mediaOnlyFallbackPost.id).body,
-              'media-only fallback post body',
+              requirePostById(posts, mediaOnlyPost.id).body,
+              'media-only post body',
             )}
           />
         </View>
@@ -1105,11 +1105,11 @@ export const BodyTimeAndLayoutStates: Story = {
     );
     expect(canvas.getByText('미지원 문서는 안전한 Plain Text로 표시합니다.')).toBeVisible();
     expect(canvas.queryByText('실행하면 안 되는 구조')).not.toBeInTheDocument();
-    expect(canvas.getByTestId('media-text-fallback')).toHaveTextContent(
-      '이미지가 있는 문서는 안전한 Plain Text로 표시합니다.',
-    );
-    expect(canvas.queryByText('document text')).not.toBeInTheDocument();
-    expect(canvas.getByTestId('media-only-fallback')).toBeEmptyDOMElement();
+    expect(canvas.getByTestId('media-text')).toHaveTextContent('document text');
+    expect(
+      canvas.queryByText('이미지가 있는 문서는 안전한 Plain Text로 표시합니다.'),
+    ).not.toBeInTheDocument();
+    expect(canvas.getByTestId('media-only')).not.toHaveTextContent(/\S/);
     const quoteLayout = within(canvas.getByTestId('detail-quote-layout'));
     expect(quoteLayout.getAllByTestId('source-post-preview')).toHaveLength(1);
     expect(quoteLayout.getByTestId('source-post-body')).toHaveTextContent(

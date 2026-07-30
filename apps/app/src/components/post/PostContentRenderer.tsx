@@ -5,9 +5,9 @@ import { match } from 'ts-pattern';
 import { useTheme } from '@/theme/ThemeProvider';
 import { typography } from '@/theme/tokens';
 import type {
+  PostContentBlockNode,
   PostContentBodyDocumentV1,
   PostContentInlineNode,
-  PostContentParagraphNode,
   PostContentTextNode,
 } from '@kosmo/core/post-content';
 import type { Key, ReactNode } from 'react';
@@ -45,21 +45,10 @@ export function PostContentRenderer({
       </Text>
     ) : null;
   }
-  if (document.content.some((node) => node.type === 'media')) {
-    return bodyText ? <Text style={bodyStyle}>{bodyText}</Text> : null;
-  }
-
-  return renderNode(document as TextOnlyPostContentBodyDocument, 'body', { bodyStyle });
+  return renderNode(document, 'body', { bodyStyle });
 }
 
-type TextOnlyPostContentBodyDocument = Omit<PostContentBodyDocumentV1, 'content'> & {
-  readonly content: readonly PostContentParagraphNode[];
-};
-
-type PostContentNode =
-  | TextOnlyPostContentBodyDocument
-  | PostContentParagraphNode
-  | PostContentInlineNode;
+type PostContentNode = PostContentBodyDocumentV1 | PostContentBlockNode | PostContentInlineNode;
 
 function renderNode(node: PostContentNode, key: Key, context: RenderContext): ReactNode {
   return match(node)
@@ -82,7 +71,7 @@ function renderNode(node: PostContentNode, key: Key, context: RenderContext): Re
     ))
     .with({ type: 'text' }, (text) => renderMarks(text, key))
     .with({ type: 'hard_break' }, () => '\n')
-    .exhaustive();
+    .otherwise(() => null);
 }
 
 function renderMarks(node: PostContentTextNode, key: Key): ReactNode {
