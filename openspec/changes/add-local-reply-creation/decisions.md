@@ -28,14 +28,14 @@
 - Consequences: PROD-425 구현은 PROD-422의 thread API/UI가 제공하는 public connection shape을 선행 조건으로 삼고, generated Relay artifact를 commit하지 않는다.
 - Confirmation / Follow-up: PROD-425 component·route/cache 테스트에서 contentful Parent 진입, disabled Repost, pending/error, selected Profile 격리와 성공 thread 반영을 검증한다.
 
-### Reply Notification은 source commit 후 기존 projection에 Best Effort로 추가한다
+### Reply Notification은 origin과 무관하게 source commit 후 기존 projection에 Best Effort로 추가한다
 
 - Decision Date: 2026-07-23
 - Decision Class: Implementation Choice
-- Authority / Provenance: `docs/domain/objects/notification.md`, `docs/domain/objects/post.md`, `PROD-426`
+- Authority / Provenance: `docs/domain/objects/notification.md`, `docs/domain/objects/post.md`, `docs/architecture/core-services.md`, `PROD-426`, `PROD-507`
 - Status: Active
 - Context / Problem: Reply Notification을 Reply transaction 내에 포함하거나 별도 inbox/storage로 만들면 source 성공 격리 또는 기존 Notification 계약이 깨진다.
-- Decision Outcome: Reply commit 후 같은 request에서 source-only 멱등 Notification 저장 경계를 await/catch한다. Reply kind는 기존 Notification projection·interface·connection·count·Read·badge/cache에 additive로 통합하고, source Reply에서 Parent Author Recipient, Reply Related Post, Reply Author Related Profile을 파생한다.
+- Decision Outcome: 공통 `createPost` action은 origin과 adapter에 관계없이 실제 새 Reply가 commit된 뒤 같은 request에서 source-only 멱등 Notification 저장 경계를 await/catch한다. caller-owned transaction에서는 `afterCommit` 등록 경계로 effect를 transaction owner에게 반환하고 outer commit 뒤에만 실행한다. duplicate/no-op은 effect를 만들지 않는다. Reply kind는 기존 Notification projection·interface·connection·count·Read·badge/cache에 additive로 통합하고, source Reply에서 Parent Author Recipient, Reply Related Post, Reply Author Related Profile을 파생한다.
 - Alternatives Considered: source transaction 내 저장은 Notification 실패가 Reply를 rollback한다. fire-and-forget은 process 종료와 오류 관찰 경계가 불명하다. 별도 Reply inbox/table은 기존 Notification API와 client를 중복한다.
 - Consequences: Notification 저장 실패 시 item이 누락될 수 있지만 Reply는 유지된다. mixed kind visible predicate는 connection limit 전 SQL에서 적용하고 connection·count·Node·Read가 동일한 source 정합성을 사용해야 한다. Reply source hydration은 request-scoped `ctx.loader`를 사용하며, source PK에서 시작한 nested `EXISTS`는 Parent Author/Recipient mapping을 검증하되 Parent Tombstone을 Reply eligibility에서 제외한다.
 - Confirmation / Follow-up: PROD-426에서 self-reply, invisible result, duplicate/concurrent source, 저장 실패 격리와 mixed inbox/count/Read/Node/client 이동을 검증한다. interface-only Notification list가 Reply source loader를 호출하지 않고 여러 concrete Reply source field가 요청당 한 batch로 mapping되는 회귀를 검증한다.

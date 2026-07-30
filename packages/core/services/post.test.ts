@@ -321,7 +321,7 @@ test('createPost는 caller transaction rollback에 Post와 Content를 남기지 
           profileId: profile.id,
           visibility: PostVisibility.PUBLIC,
         },
-        tx,
+        { tx },
       );
       throw new Error('rollback caller transaction');
     }),
@@ -332,7 +332,7 @@ test('createPost는 caller transaction rollback에 Post와 Content를 남기지 
   assert.equal(await db.$count(PostContents), contentCount);
 });
 
-test('caller transaction의 Reply Notification은 rollback에 참여한다', async () => {
+test('caller transaction의 Reply Notification은 outer commit 뒤에만 생성된다', async () => {
   const author = await createProfile();
   const recipient = await createProfile();
   const parent = await createPost({
@@ -341,39 +341,79 @@ test('caller transaction의 Reply Notification은 rollback에 참여한다', asy
     profileId: recipient.id,
     visibility: PostVisibility.PUBLIC,
   });
-  let replyId: string | undefined;
-
-  await assert.rejects(
-    db.transaction(async (tx) => {
-      const reply = await createPost(
-        {
-          document: postContentDocumentFromText('reply'),
-          origin: 'LOCAL',
-          profileId: author.id,
-          replyParentId: parent.post.id,
-          visibility: PostVisibility.PUBLIC,
-        },
-        tx,
-      );
-      replyId = reply.post.id;
-      assert.equal(
-        await tx.$count(
-          Notifications,
-          and(
-            eq(Notifications.kind, NotificationKind.REPLY),
-            eq(Notifications.sourceId, reply.post.id),
-          ),
-        ),
-        1,
-      );
-      throw new Error('rollback caller transaction');
-    }),
-    /rollback caller transaction/,
+  const effects: (() => Promise<void>)[] = [];
+  const reply = await db.transaction((tx) =>
+    createPost(
+      {
+        document: postContentDocumentFromText('reply'),
+        origin: 'LOCAL',
+        profileId: author.id,
+        replyParentId: parent.post.id,
+        visibility: PostVisibility.PUBLIC,
+      },
+      { afterCommit: (effect) => effects.push(effect), tx },
+    ),
   );
 
-  assert.ok(replyId);
-  assert.equal(await db.$count(Posts, eq(Posts.id, replyId)), 0);
-  assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, replyId)), 0);
+  assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, reply.post.id)), 0);
+  assert.equal(effects.length, 1);
+
+  await effects[0]!();
+
+  assert.equal(
+    await db.$count(
+      Notifications,
+      and(
+        eq(Notifications.kind, NotificationKind.REPLY),
+        eq(Notifications.sourceId, reply.post.id),
+      ),
+    ),
+    1,
+  );
+});
+
+test('ActivityPub Reply는 Local Parent Author에게 알림 하나를 만들고 duplicate로 backfill하지 않는다', async () => {
+  const author = await createProfile();
+  const recipient = await createProfile();
+  const parent = await createPost({
+    document: postContentDocumentFromText('parent'),
+    origin: 'LOCAL',
+    profileId: recipient.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const input = {
+    document: postContentDocumentFromText('remote reply'),
+    objectUri: `https://remote.example/notes/reply-notification-${author.id}`,
+    origin: 'ACTIVITYPUB' as const,
+    profileId: author.id,
+    publishedAt: null,
+    receivedAt: Temporal.Instant.from('2026-07-30T00:00:00Z'),
+    replyParentId: parent.post.id,
+    visibility: PostVisibility.PUBLIC,
+  };
+
+  const results = await Promise.all([createPost(input), createPost(input)]);
+  const created = results.find((result) => result.created);
+  assert.ok(created);
+  assert.deepEqual(results.map(({ created }) => created).sort(), [false, true]);
+  assert.equal(created.created, true);
+  assert.equal(
+    await db.$count(
+      Notifications,
+      and(
+        eq(Notifications.kind, NotificationKind.REPLY),
+        eq(Notifications.recipientProfileId, recipient.id),
+        eq(Notifications.sourceId, created.post.id),
+      ),
+    ),
+    1,
+  );
+
+  await db.delete(Notifications).where(eq(Notifications.sourceId, created.post.id));
+  const duplicate = await createPost(input);
+
+  assert.equal(duplicate.created, false);
+  assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, created.post.id)), 0);
 });
 
 test('createPost는 존재하지 않는 Reply Parent에서 ActivityPub transaction을 rollback한다', async () => {

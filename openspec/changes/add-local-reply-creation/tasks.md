@@ -95,6 +95,7 @@ Post 상세의 contentful Parent에서 기존 composer로 Reply를 작성하고 
 - [x] 3.5 기존 inbox item에 Reply Author 표시, 결과 Reply 이동, Best Effort Read와 selected Profile badge/cache 동기화를 연결한다.
 - [x] 3.6 source mapping·self-reply·visibility·uniqueness·실패 격리 서비스 검증과 API Node·connection·count·Read integration 테스트를 통과시킨다.
 - [x] 3.7 inbox 표시·이동·Read·cache·Profile 전환 client 검증과 Relay compiler/check를 통과시킨다.
+- [x] 3.8 PROD-507에서 Local·ActivityPub Reply가 공통 post-commit Notification lifecycle을 사용하도록 정렬하고, duplicate no-op·outer transaction 회귀를 검증한다.
 
 ## 4. PROD-423 통합 검증·OpenSpec 완료
 
