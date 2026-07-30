@@ -13,6 +13,8 @@ apiVersion: barmancloud.cnpg.io/v1
 kind: ObjectStore
 metadata:
   name: kosmo-postgres-backup
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=confirm
   labels:
     helm.sh/chart: {{ include "kosmo.chart" . }}
     app.kubernetes.io/name: postgres-backup
