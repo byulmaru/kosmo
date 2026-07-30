@@ -1,6 +1,6 @@
 ## Context
 
-`PROD-487`은 부모 `PROD-479`의 Android/iOS/Web 공용 구현 slice다. 현재 `apps/app`의 full/compact sidebar와 mobile drawer는 같은 sidebar component를 공유하며 footer의 "피드백 보내기" control은 보호된 `/feedback` route로 이동한다. `/feedback`은 기존 `/menu` placeholder의 KOSMO eyebrow, 메뉴 제목·설명과 login test link를 렌더링하지 않지만, 기존 프로필 관련 진입점이 사용하는 `/menu` route와 그 UI는 독립적으로 보존한다. 각 클라이언트는 기존 GraphQL 인증 경계를 사용하고, API의 `login` scope는 선택 Profile 없이도 유효한 account session을 식별한다.
+`PROD-487`은 부모 `PROD-479`의 Android/iOS/Web 공용 구현 slice다. 현재 `apps/app`의 full/compact sidebar와 mobile drawer는 같은 sidebar component를 공유하며 footer의 "피드백 보내기" control은 보호된 `/feedback` route로 이동한다. `/feedback`은 기존 generic `/menu` placeholder의 KOSMO eyebrow, 메뉴 제목·설명과 login test link를 렌더링하지 않는다. `PROD-541`에서 남은 소비자가 없는 `/menu` route와 UI를 제거했으며, 이 parent feedback change는 이를 보존하거나 복원하지 않는다. 각 클라이언트는 기존 GraphQL 인증 경계를 사용하고, API의 `login` scope는 선택 Profile 없이도 유효한 account session을 식별한다.
 
 현재 API runtime에는 Slack client나 feedback persistence가 없다. 배포 환경은 기존 공용 `env` Secret을 API와
 Web Rollout에 전달하며 API delivery만 webhook 값을 소비한다. 이 변경은 전용 Helm Secret 경로를 추가하지
@@ -40,7 +40,7 @@ Web Rollout에 전달하며 API delivery만 webhook 값을 소비한다. 이 변
 
 ### Recommended Approach
 
-1. `/feedback` route 안에 feedback form을 직접 구성하고 모든 플랫폼에서 동일하게 노출한다. 기존 sidebar footer 위치는 `/feedback`으로 이동하는 "피드백 보내기" Link로 만든다. 기존 `/menu` 소개·설명·login-test UI는 `/feedback`에서 렌더링하지 않되, `/menu`는 redirect하지 않고 기존 화면으로 보존한다.
+1. `/feedback` route 안에 feedback form을 직접 구성하고 모든 플랫폼에서 동일하게 노출한다. 기존 sidebar footer 위치는 `/feedback`으로 이동하는 "피드백 보내기" Link로 만든다. 기존 `/menu` 소개·설명·login-test UI는 `/feedback`에서 렌더링하지 않으며, `PROD-541`에서 제거한 generic `/menu` route와 UI를 이 change에서 복원하거나 redirect하지 않는다.
 2. 기존 React Native form primitive와 theme token을 조합해 category selector, Pretendard multiline body와 submit status를 구성한다. Relay mutation은 form을 실제로 소유하는 component에 colocate한다.
 3. `submitFeedback`은 API `login` scope의 GraphQL mutation으로 둔다. Input validation은 category enum과 trim된 body 1~2,000자를 한 경계에서 적용한다. 성공 payload는 persistence object를 가장하지 않고 제출 완료 사실만 반환한다.
 4. API-local feedback delivery 경계가 account별 in-flight guard를 확인한 뒤 built-in `fetch`로 Incoming Webhook을 한 번 호출한다. In-flight state는 성공·실패와 관계없이 `finally`에서 즉시 제거해 memory leak과 영구 잠금을 피한다.
@@ -67,7 +67,7 @@ Web Rollout에 전달하며 API delivery만 webhook 값을 소비한다. 이 변
 - User body를 mrkdwn top-level text나 mention이 활성화된 block에 넣지 않는다.
 - Feedback content, idempotency record나 in-flight state를 DB에 추가하지 않는다.
 - Input hash로 서로 다른 사용자의 의도적인 반복 feedback을 중복으로 간주하지 않는다.
-- Android/iOS/Web에서 `/menu`와 `/feedback` route를 독립적으로 유지한다.
+- Android/iOS/Web에서 `/feedback` protected route와 shell navigation을 유지하되, 제거된 generic `/menu` route나 UI를 feedback contract로 복원하지 않는다.
 
 ## Risks / Trade-offs
 
