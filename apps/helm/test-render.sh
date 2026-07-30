@@ -36,6 +36,11 @@ if grep -Eq '^kind: (Rollout|Service|HTTPRoute)$' "${render_dir}/prod-runtime.ya
   exit 1
 fi
 
+if grep -Fq 'kind: "argo.Rollout"' "${render_dir}/prod-runtime.yaml"; then
+  echo "prod runtime bootstrap unexpectedly references workload restart targets" >&2
+  exit 1
+fi
+
 for runtime_kind in Cluster ObjectStore ScheduledBackup VaultStaticSecret; do
   if ! grep -Fq "kind: ${runtime_kind}" "${render_dir}/prod-runtime.yaml"; then
     echo "prod runtime bootstrap is missing ${runtime_kind}" >&2
