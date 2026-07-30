@@ -2,7 +2,7 @@
 
 현재 `packages/core/db/tables.ts`에는 Profile 저장 모델만 있고 Hashtag 또는 Profile-Hashtag 관계가 없다. `apps/api/src/graphql/resolvers/profile/ref.ts`의 Profile object와 `mutation/update.ts`도 scalar 표현 값만 조회·수정하며, update resolver가 직접 Profile row를 갱신한다. 공개 화면은 `apps/app/src/components/profile/ProfileHero.tsx`가 담당한다. Profile Tag controlled editor·client validation presentation은 선행 이슈 `PROD-491`이 제공하고, Profile 편집 화면의 최종 route·저장 흐름은 `PROD-492`가 제공한다.
 
-이번 change는 `PROD-523`에서 승인한 Profile Tag 계약을 `PROD-526`의 저장·서비스·GraphQL 기반과 `PROD-527`의 Web·Android·iOS UI로 나눠 구현한다. Profile 편집 대상과 권한은 `PROD-489`의 확정 결정 기록과 이를 전달하는 `PROD-490` 계약에서 파생해, `usingProfile`이 검증한 현재 selected Active·Normal Local Profile의 Owner만 허용하고 임의 대상 Profile ID는 받지 않는다. Lifecycle State가 Deleted로 전이됐다는 사실만으로 Profile Tag 관계를 제거하지 않으며, 취소된 `PROD-532`·`PROD-542`·`PROD-543`·`PROD-544`는 선행 의존성이나 구현 입력이 아니다. 두 slice는 같은 `add-profile-tags` specs와 decisions를 공유하고, 부모 `PROD-522`가 종단 간 검증과 archive를 소유한다. Profile Tag 검색은 `PROD-525`의 별도 change이므로 검색을 가정한 API·index·navigation을 선제 추가하지 않는다.
+이번 change는 `PROD-523`에서 승인한 Profile Tag 계약을 `PROD-526`의 저장·서비스·GraphQL 기반과 `PROD-527`의 Web·Android·iOS UI로 나눠 구현한다. Profile 편집 대상과 권한은 `PROD-489`의 확정 결정 기록과 이를 전달하는 `PROD-490` 계약에서 파생해, `usingProfile`이 검증한 현재 selected Active·Normal Local Profile의 Owner만 허용하고 임의 대상 Profile ID는 받지 않는다. Lifecycle State가 Deleted로 전이됐다는 사실만으로 Profile Tag 관계를 제거하지 않으며, 취소된 `PROD-532`·`PROD-542`·`PROD-543`·`PROD-544`는 선행 의존성이나 구현 입력이 아니다. 두 slice는 같은 `add-profile-tags` specs와 decisions를 공유하고, 부모 `PROD-522`가 종단 간 검증과 archive를 소유한다. 정확한 Hashtag identity에서 시작하는 관련 Profile 목록 탐색은 `PROD-525`의 별도 change이고, 검색창에서 Hashtag 또는 Hashtag Name을 찾는 검색은 별도 보류 범위이므로 탐색·검색을 가정한 API·index·navigation을 선제 추가하지 않는다.
 
 ## Goals / Non-Goals
 
@@ -16,7 +16,7 @@
 
 **Non-Goals:**
 
-- Profile Tag 검색 query, index 최적화, 결과 정렬·pagination과 TagChip navigation
+- `PROD-525`의 Hashtag 관련 Profile 목록 탐색과 TagChip navigation, 검색창의 Hashtag·Hashtag Name 검색 query·index·결과 정렬·pagination
 - Post 본문 Hashtag 추출 또는 Hashtag Post List 구현
 - Remote Profile Tag 수집·표시, actor refresh와 ActivityPub vocabulary
 - 자동완성, 추천, trend, Followed Hashtag와 범용 Tag 관리 화면

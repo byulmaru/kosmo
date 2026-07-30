@@ -9,7 +9,7 @@
 - Active Account가 현재 선택한 Active Local Profile의 Owner일 때만 기존 Profile 편집 action으로 다른 표현 값과 Profile Tag 전체 목록을 원자적으로 교체하게 한다. Profile update input은 대상 Profile ID를 받지 않고 검증된 세션의 selected Profile identity를 사용한다.
 - 공개 조회 가능한 Local Profile에만 Profile Tag를 노출하고 비활성화·정지 때 관계를 보존한 채 숨긴다. Lifecycle State가 Deleted로 전이됐다는 사실만으로 관계를 제거하지 않으며, 별도 canonical 보존·파기 정책이 없는 cleanup은 이번 범위에서 제외한다.
 - `PROD-491`의 controlled Profile Tag editor와 client validation을 재사용해 저장·Relay·재시도 상태에 연결하고, 공개 Profile의 bio 다음에 비대화형 TagChip 목록을 Web·Android·iOS에서 표시한다.
-- Profile Tag 검색, TagChip navigation, 자동완성·추천·trend, Remote Profile Tag와 ActivityPub 표현은 별도 계약으로 남긴다.
+- Hashtag 관련 Profile 목록 탐색과 TagChip navigation, 검색창의 Hashtag·Hashtag Name 검색, 자동완성·추천·trend, Remote Profile Tag와 ActivityPub 표현은 별도 계약으로 남긴다.
 
 ## Authority / Provenance
 
@@ -40,4 +40,4 @@
 - Universal client: 기존 Profile 편집 form과 공개 Profile header, Relay fragment·mutation cache, TagChip과 상태 카탈로그
 - Verification: DB 제약·migration, 서비스·GraphQL 통합, Web·Android·iOS component·접근성·Relay 회귀, 부모 `PROD-522` 종단 간 검증
 - Dependency: `PROD-527`은 `PROD-491`의 controlled editor, `PROD-526`의 API 기반과 기존 Profile 수정 흐름 `PROD-492`에 의존한다.
-- Excluded systems: `PROD-525`의 Profile Tag 검색, 검색 query·정렬·pagination·navigation, Hashtag Post List, Followed Hashtag, Remote Profile Tag와 ActivityPub
+- Excluded systems: `PROD-525`의 Hashtag 관련 Profile 목록 탐색과 TagChip navigation, 검색창의 Hashtag·Hashtag Name 검색과 그 query·정렬·pagination, Hashtag Post List, Followed Hashtag, Remote Profile Tag와 ActivityPub

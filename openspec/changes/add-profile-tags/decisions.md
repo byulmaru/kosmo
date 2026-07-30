@@ -13,7 +13,7 @@
 - Context / Problem: Profile 관심사를 bio 문자열, 별도 ProfileTag identity 또는 Post와 Profile이 공유할 canonical Hashtag identity 관계 중 무엇으로 표현할지 정해져야 저장·검색의 이름 identity가 갈라지지 않는다.
 - Decision Outcome: Profile Tag는 Post와 Profile이 공유하는 canonical Hashtag identity를 Profile이 참조하는 구조화 관계다. bio에서 추출·동기화하지 않으며 관계에 제품상 개수·순서·공개 배열 순서 보장은 없다.
 - Alternatives Considered: bio 파생은 Owner가 명시적으로 편집한 목록을 보존할 수 없어 제외했다. 별도 ProfileTag identity는 같은 이름의 Post Hashtag와 정규화·검색 identity를 분리하므로 제외했다.
-- Consequences: Post와 Profile의 관계 생성 방식은 독립적으로 유지되지만 canonical Hashtag identity를 나타내는 저장 row를 공유할 수 있어야 한다. Profile Tag 검색 행동은 이 관계 존재만으로 활성화되지 않는다.
+- Consequences: Post와 Profile의 관계 생성 방식은 독립적으로 유지되지만 canonical Hashtag identity를 나타내는 저장 row를 공유할 수 있어야 한다. Hashtag 관련 Profile 목록 탐색과 검색창의 Hashtag·Hashtag Name 검색은 이 관계 존재만으로 활성화되지 않는다.
 - Confirmation / Follow-up: 저장 구조가 추가된 뒤 같은 canonical Hashtag identity가 Profile 관계에서 재사용되는지, bio 비파생과 관계 집합 semantics를 DB·service test에서 확인한다.
 
 ### canonical Hashtag identity와 Profile 관계를 additive tables로 저장한다
