@@ -170,11 +170,11 @@ export function postContentDocumentToHtml(document: PostContentDocumentV1): stri
 export function validateLocalPostContentDocument(value: unknown): PostContentDocumentV1 {
   const document = canonicalizePostContentDocument(value);
   const mediaCount = document.body.content.filter((block) => block.type === 'media').length;
-  const authoredTextLength =
-    (document.summary?.length ?? 0) + postContentBodyToText(document.body).length;
+  const bodyTextLength = postContentBodyToText(document.body).length;
+  const authoredTextLength = (document.summary?.length ?? 0) + bodyTextLength;
 
-  if (authoredTextLength === 0 && mediaCount === 0) {
-    throw new RangeError('PostContent must contain authored text or Media');
+  if (bodyTextLength === 0 && mediaCount === 0) {
+    throw new RangeError('PostContent must contain body text or Media');
   }
   if (authoredTextLength > postBodyMaxLength) {
     throw new RangeError(`PostContent authored text exceeds ${postBodyMaxLength} characters`);

@@ -379,7 +379,11 @@ test('validates the combined local summary and body length', () => {
   );
   assert.throws(
     () => validateLocalPostContentDocument(postContentDocumentFromText('')),
-    /authored text or Media/,
+    /body text or Media/,
+  );
+  assert.throws(
+    () => validateLocalPostContentDocument(postContentDocumentFromText('', 'warning')),
+    /body text or Media/,
   );
   assert.doesNotThrow(() =>
     validateLocalPostContentDocument(
