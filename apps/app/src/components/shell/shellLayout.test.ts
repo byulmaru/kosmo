@@ -14,7 +14,7 @@ describe('getShellLayout', () => {
   });
 
   it('offsets a Web mobile detail header below the shell header only', () => {
-    assert.equal(getWebMobileShellHeaderStickyOffset(767), 65);
+    assert.equal(getWebMobileShellHeaderStickyOffset(767), 64);
     assert.equal(getWebMobileShellHeaderStickyOffset(768), 0);
     assert.equal(getWebMobileShellHeaderStickyOffset(1_280), 0);
   });

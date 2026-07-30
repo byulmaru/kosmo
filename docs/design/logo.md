@@ -20,6 +20,7 @@
 
 - 앱 내 로딩 화면은 투명 브랜드 마크를 사용한다.
 - 로그인 화면 헤더는 풀 로고를 사용한다.
+- 홈 화면 상단 헤더는 모든 Web layout과 Android/iOS에서 투명 브랜드 마크를 `38px` 너비로 중앙에 표시한다. 모바일에서는 메뉴 버튼과 같은 64px app bar를 사용하고, compact/full Web에서는 route 헤더로 표시한다.
 - 브라우저 favicon은 K+별 전용 마크를 사용한다.
 - iOS, Apple touch icon과 일반 PWA icon은 `#FEFEFE` 배경의 라이트 앱 아이콘을 사용한다.
 - Android adaptive icon과 maskable PWA icon은 투명 foreground와 `#FEFEFE` 배경을 조합한다.

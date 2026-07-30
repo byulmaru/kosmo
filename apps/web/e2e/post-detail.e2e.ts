@@ -46,7 +46,9 @@ test('게시글 목록에서 상세로 이동하고 뒤로 가며 deep-link hand
   await expect
     .poll(() => decodeURIComponent(new URL(page.url()).pathname))
     .toBe(`/@${viewer.profile!.handle}/${postId}`);
-  await expect(page.getByText('게시글', { exact: true }).last()).toBeVisible();
+  const heading = page.getByRole('heading', { name: '게시글' });
+  await expect(heading).toBeVisible();
+  await expect.poll(async () => (await heading.locator('..').boundingBox())?.height).toBe(64);
   await expect(page.getByText(body)).toBeVisible();
   await expect(page.getByText(/전체 공개$/)).toBeVisible();
 

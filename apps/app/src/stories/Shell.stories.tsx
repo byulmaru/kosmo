@@ -1030,8 +1030,15 @@ export const UniversalMobile: Story = {
   parameters: universalParameters,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const homeHeading = canvas.getByRole('heading', { name: '홈' });
+    const menuButton = canvas.getByRole('button', { name: '메뉴 열기' });
+    const homeHeader = homeHeading.parentElement?.parentElement;
+
+    expect(homeHeader).not.toBeNull();
+    expect(homeHeader).toContainElement(menuButton);
+    expect(canvas.getAllByRole('heading', { name: '홈' })).toHaveLength(1);
     expect(canvas.queryByRole('link', { name: '북마크' })).not.toBeInTheDocument();
-    await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
+    await userEvent.click(menuButton);
     const page = within(canvasElement.ownerDocument.body);
     const drawer = await page.findByRole('navigation', { name: '주요 메뉴' });
     const profileTrigger = page.getByRole('button', { name: '프로필 목록' });
@@ -1139,6 +1146,26 @@ export const UniversalMobileUnreadBadgeZero: Story = {
     const notification = await canvas.findByRole('link', { name: '알림' });
     expect(notification).toBeVisible();
     expect(canvas.queryByTestId('unread-notification-dot')).toBeNull();
+  },
+  render: () => <UniversalShellStory />,
+};
+
+export const UniversalMobileNonHomeHeader: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    ...universalParameters,
+    router: { pathname: '/notifications', slotLabel: '알림 화면' },
+  },
+  play: ({ canvasElement }) => {
+    const menuButton = within(canvasElement).getByRole('button', { name: '메뉴 열기' });
+    const header = menuButton.parentElement;
+    const buttonRect = menuButton.getBoundingClientRect();
+    const headerRect = header?.getBoundingClientRect();
+
+    expect(headerRect?.height).toBe(64);
+    expect(
+      Math.abs(buttonRect.y + buttonRect.height / 2 - (headerRect!.y + headerRect!.height / 2)),
+    ).toBeLessThanOrEqual(1);
   },
   render: () => <UniversalShellStory />,
 };

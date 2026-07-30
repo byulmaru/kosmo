@@ -1,4 +1,4 @@
-import { Slot } from 'expo-router';
+import { Slot, usePathname } from 'expo-router';
 import { Menu } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import {
@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useLazyLoadQuery } from 'react-relay';
+import { PageHeader } from '@/components/PageHeader';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { Splash } from '@/components/Splash';
 import { useRelayActor } from '@/relay/RelayActorProvider';
@@ -93,6 +94,7 @@ export function UniversalShell() {
 function UniversalShellContent({ revision }: { revision: number }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -107,6 +109,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const compact = layout === 'compact';
   const full = layout === 'full';
   const mobile = layout === 'mobile';
+  const home = pathname === '/home';
 
   const swipeToOpenDrawer = useMemo(
     () =>
@@ -136,6 +139,22 @@ function UniversalShellContent({ revision }: { revision: number }) {
     }
     setSwitcherOpen(true);
   };
+  const menuButton = (
+    <Pressable
+      aria-controls={drawerOpen ? 'mobile-sidebar' : undefined}
+      accessibilityLabel="메뉴 열기"
+      accessibilityRole="button"
+      accessibilityState={{ expanded: drawerOpen }}
+      onPress={() => setDrawerOpen(true)}
+      style={({ pressed }) => [
+        styles.menuButton,
+        { borderColor: theme.border, opacity: pressed ? 0.7 : 1 },
+      ]}
+    >
+      <Menu color={theme.text} size={20} strokeWidth={2} />
+      <Text style={[styles.menuLabel, { color: theme.text }]}>메뉴</Text>
+    </Pressable>
+  );
 
   return (
     <ShellChromeProvider openProfileSwitcher={openProfileSwitcher}>
@@ -176,29 +195,21 @@ function UniversalShellContent({ revision }: { revision: number }) {
           {mobile ? (
             <View
               style={[
-                styles.mobileHeader,
+                styles.mobileChrome,
                 web && webStickyHeader,
                 {
-                  backgroundColor: theme.card,
-                  borderColor: theme.border,
-                  paddingTop: spacing.md + (web ? 0 : insets.top),
+                  backgroundColor: theme.background,
+                  paddingTop: web ? 0 : insets.top,
                 },
               ]}
             >
-              <Pressable
-                aria-controls={drawerOpen ? 'mobile-sidebar' : undefined}
-                accessibilityLabel="메뉴 열기"
-                accessibilityRole="button"
-                accessibilityState={{ expanded: drawerOpen }}
-                onPress={() => setDrawerOpen(true)}
-                style={({ pressed }) => [
-                  styles.menuButton,
-                  { borderColor: theme.border, opacity: pressed ? 0.7 : 1 },
-                ]}
-              >
-                <Menu color={theme.text} size={20} strokeWidth={2} />
-                <Text style={[styles.menuLabel, { color: theme.text }]}>메뉴</Text>
-              </Pressable>
+              {home ? (
+                <PageHeader accessibilityLabel="홈" leading={menuButton} variant="brand" />
+              ) : (
+                <View style={[styles.mobileHeader, { borderColor: theme.border }]}>
+                  {menuButton}
+                </View>
+              )}
             </View>
           ) : null}
           <View
@@ -281,15 +292,16 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
     width: 350,
   },
+  mobileChrome: { width: '100%' },
   mobileHeader: {
+    alignItems: 'center',
     borderBottomWidth: 1,
-    minHeight: 56,
-    paddingBottom: spacing.md,
+    flexDirection: 'row',
+    minHeight: 64,
     paddingHorizontal: spacing.lg,
   },
   menuButton: {
     alignItems: 'center',
-    alignSelf: 'flex-start',
     borderRadius: 999,
     borderWidth: 1,
     flexDirection: 'row',

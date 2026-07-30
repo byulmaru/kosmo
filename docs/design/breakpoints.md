@@ -6,14 +6,16 @@ KOSMO 웹의 메인 3분할 레이아웃은 트위터/X처럼 화면 폭에 따�
 
 ## 단계
 
-| 단계            | 폭 구간                       | 좌측        | 중앙         | 우측   | 모바일 셸            |
-| --------------- | ----------------------------- | ----------- | ------------ | ------ | -------------------- |
-| 1 모바일        | `< compact` (768px 미만)      | 드로어      | 피드(전체폭) | —      | ☰ 헤더 + 하단 탭 바 |
-| 2 아이콘 + 피드 | `compact`~`full` (768~1279px) | 아이콘 레일 | 피드         | —      | 없음                 |
-| 3 풀 3분할      | `≥ full` (1280px 이상)        | 풀 사이드바 | 피드         | 컴포저 | 없음                 |
+| 단계            | 폭 구간                       | 좌측        | 중앙         | 우측   | 모바일 셸              |
+| --------------- | ----------------------------- | ----------- | ------------ | ------ | ---------------------- |
+| 1 모바일        | `< compact` (768px 미만)      | 드로어      | 피드(전체폭) | —      | 64px 헤더 + 하단 탭 바 |
+| 2 아이콘 + 피드 | `compact`~`full` (768~1279px) | 아이콘 레일 | 피드         | —      | 없음                   |
+| 3 풀 3분할      | `≥ full` (1280px 이상)        | 풀 사이드바 | 피드         | 컴포저 | 없음                   |
 
 - **`compact`(768px, 기존 `md`)** = 모바일 ↔ 데스크톱 경계. 미만은 하단 탭 바 + 드로어 사이드바, 이상은 사이드바가 항상 보인다.
 - **`full`(1280px, 기존 `xl`)** = 좌측 풀 사이드바(프로필 헤더 + 라벨)와 우측 컴포저(우측 레일)가 함께 등장해 풀 3분할이 된다. `compact`~`full`는 좌측이 아이콘 전용 레일이고 우측 레일이 없다.
+
+모바일 셸의 화면 헤더 높이는 `64px`이며 Android/iOS safe-area inset은 이 높이 바깥에서 셸이 추가한다. `/home`에서는 셸이 메뉴 버튼과 중앙 브랜드 마크를 하나의 app bar로 렌더링하고 route는 헤더를 중복 렌더링하지 않는다. `compact`와 `full` Web에서는 모바일 셸 헤더가 없으므로 `/home` route가 중앙 브랜드 마크 헤더를 소유한다. 다른 주요 route의 텍스트 헤더와 게시글 상세의 뒤로가기 헤더는 route가 소유한다.
 
 각 컬럼 폭(풀 사이드바 `320px` / 아이콘 레일 `80px`, 중앙 최대 `600px`, 우측 `290~350px`)을 더하면 `full`(1280px) 경계에서 풀 3분할(`320`+`600`+`350` ≈ `1270px`)이 눌리지 않고 중앙 피드를 `600px`로 확보한 채 들어맞는다. 풀 3분할 등장을 1024px가 아닌 1280px로 둬, 1024~1279px 구간에서는 중앙 피드를 비좁게 누르는 대신 아이콘 레일 단계로 폭을 확보한다.
 
@@ -86,7 +88,7 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
 
 React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owner로 둔다. 중앙 피드만 별도 internal scroller가 되는 앱형 shell은 이 기준의 목표가 아니다. 사용자가 피드 바깥의 비스크롤 sidebar, 우측 rail, 빈 레이아웃 영역에서 wheel/trackpad를 사용해도 브라우저 기본 document scroll 흐름으로 페이지가 움직여야 한다. Android/iOS 화면은 platform의 `ScrollView`를 사용하되 이 web scroll 계약을 바꾸지 않는다.
 
-- `< compact`에서는 모바일 header가 document scroll 위의 sticky chrome으로 동작하고, 하단 탭 바는 safe-area를 포함한 fixed bottom chrome으로 유지된다. 콘텐츠는 하단 탭 높이와 safe-area를 고려한 bottom padding 또는 scroll padding으로 겹침을 피한다.
+- `< compact`에서는 64px 모바일 header가 document scroll 위의 sticky chrome으로 동작하고, 하단 탭 바는 safe-area를 포함한 fixed bottom chrome으로 유지된다. 콘텐츠는 하단 탭 높이와 safe-area를 고려한 bottom padding 또는 scroll padding으로 겹침을 피한다.
 - `compact`~`full`에서는 아이콘 레일이 layout flow 안에서 sticky viewport column으로 고정된다. 레일 자체가 스크롤 가능한 콘텐츠를 갖지 않는 한 wheel 입력은 document scroll로 이어진다.
 - `compact`~`full` profile picker가 열렸을 때는 overlay drawer 안의 프로필 목록만 internal scroll owner가 된다.
   drawer 밖의 wheel 입력은 기존 document scroll 흐름을 유지한다.

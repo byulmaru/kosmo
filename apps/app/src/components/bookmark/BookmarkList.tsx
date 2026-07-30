@@ -1,4 +1,5 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { PageHeader } from '@/components/PageHeader';
 import { PostListItem } from '@/components/post/PostListItem';
 import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import { Button } from '@/components/ui/Button';
@@ -100,21 +101,10 @@ export function BookmarkList({
   return (
     <PostReplyCoordinatorProvider owner="list" profile={replyProfile ?? null}>
       <ScrollView contentContainerStyle={styles.root} testID="bookmark-list-scroll">
-        <BookmarkListTitle />
+        <PageHeader title="북마크" />
         {content}
       </ScrollView>
     </PostReplyCoordinatorProvider>
-  );
-}
-
-function BookmarkListTitle() {
-  const theme = useTheme();
-  return (
-    <View style={styles.titleBar}>
-      <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
-        북마크
-      </Text>
-    </View>
   );
 }
 
@@ -179,8 +169,6 @@ function BookmarkListState({
 
 const styles = StyleSheet.create({
   root: { flexGrow: 1, width: '100%' },
-  titleBar: { justifyContent: 'center', minHeight: 43, paddingHorizontal: spacing.lg },
-  title: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
   skeletonItem: {
     alignItems: 'flex-start',
     borderBottomWidth: 1,
