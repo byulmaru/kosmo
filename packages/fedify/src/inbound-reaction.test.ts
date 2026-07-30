@@ -87,14 +87,8 @@ const createLocalTarget = async () => {
   };
 };
 
-const createContext = (
-  recipient: string | null,
-  canonicalOrigin = 'https://kos.moe',
-): InboxContext<void> =>
-  ({
-    getActorUri: (identifier: string) => new URL(`/ap/actor/${identifier}`, canonicalOrigin),
-    recipient,
-  }) as unknown as InboxContext<void>;
+const createContext = (recipient: string | null): InboxContext<void> =>
+  ({ recipient }) as unknown as InboxContext<void>;
 
 const readReaction = (profileId: string, postId: string) =>
   db
@@ -127,23 +121,20 @@ test('Like와 EmojiReact의 supported·missing·unsupported content를 공통 �
   }
 });
 
-test('personal inbox recipient mismatch는 거부하고 일치 recipient와 shared inbox는 처리한다', async () => {
+test('activity audience와 personal/shared inbox route에 의존하지 않는다', async () => {
   const actor = await createProfile(InstanceKind.ACTIVITYPUB);
-  const target = await createLocalTarget();
-  const activity = new Like({
-    actor: new URL(actor.actorUri),
-    content: '🌈',
-    id: new URL(`/activities/${crypto.randomUUID()}`, actor.actorUri),
-    object: target.objectUri,
-    to: new URL(target.author.actorUri),
-  });
-
-  await handleInboundReaction(createContext(crypto.randomUUID()), activity);
-  assert.equal(await readReaction(actor.profile.id, target.post.id), undefined);
-
-  const personalContext = createContext(target.author.profile.id, target.author.canonicalOrigin!);
-  await handleInboundReaction(personalContext, activity);
-  assert.equal((await readReaction(actor.profile.id, target.post.id))?.type, '🌈');
+  const explicitAudienceTarget = await createLocalTarget();
+  await handleInboundReaction(
+    createContext(crypto.randomUUID()),
+    new Like({
+      actor: new URL(actor.actorUri),
+      content: '🌈',
+      id: new URL(`/activities/${crypto.randomUUID()}`, actor.actorUri),
+      object: explicitAudienceTarget.objectUri,
+      to: new URL('https://unrelated.example/users/recipient'),
+    }),
+  );
+  assert.equal((await readReaction(actor.profile.id, explicitAudienceTarget.post.id))?.type, '🌈');
 
   const sharedTarget = await createLocalTarget();
   await handleInboundReaction(
@@ -153,36 +144,20 @@ test('personal inbox recipient mismatch는 거부하고 일치 recipient와 shar
       content: '🎉',
       id: new URL(`/activities/${crypto.randomUUID()}`, actor.actorUri),
       object: sharedTarget.objectUri,
-      to: new URL(sharedTarget.author.actorUri),
     }),
   );
   assert.equal((await readReaction(actor.profile.id, sharedTarget.post.id))?.type, '🎉');
-});
 
-test('audience 없는 activity는 대상 personal inbox에서만 처리한다', async () => {
-  const actor = await createProfile(InstanceKind.ACTIVITYPUB);
-  const target = await createLocalTarget();
-  const otherTarget = await createLocalTarget();
-  const activity = new Like({
-    actor: new URL(actor.actorUri),
-    id: new URL(`/activities/${crypto.randomUUID()}`, actor.actorUri),
-    object: target.objectUri,
-  });
-
-  await handleInboundReaction(createContext(null), activity);
-  assert.equal(await readReaction(actor.profile.id, target.post.id), undefined);
-
+  const personalTarget = await createLocalTarget();
   await handleInboundReaction(
-    createContext(otherTarget.author.profile.id, otherTarget.author.canonicalOrigin!),
-    activity,
+    createContext(crypto.randomUUID()),
+    new Like({
+      actor: new URL(actor.actorUri),
+      id: new URL(`/activities/${crypto.randomUUID()}`, actor.actorUri),
+      object: personalTarget.objectUri,
+    }),
   );
-  assert.equal(await readReaction(actor.profile.id, target.post.id), undefined);
-
-  await handleInboundReaction(
-    createContext(target.author.profile.id, target.author.canonicalOrigin!),
-    activity,
-  );
-  assert.equal((await readReaction(actor.profile.id, target.post.id))?.type, '❤️');
+  assert.equal((await readReaction(actor.profile.id, personalTarget.post.id))?.type, '❤️');
 });
 
 test('malformed identity와 복수 actor/object activity는 side effect 없이 거부한다', async () => {

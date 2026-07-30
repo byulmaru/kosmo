@@ -171,6 +171,11 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 | Followers Only     | Author followers collection | 없음                        | Author 또는 established Follower의 signed fetch만 허용 |
 | Mentioned Profiles | 지원하지 않음               | 지원하지 않음               | 제공하지 않음                                          |
 
+- 수신 `Create(Note)`는 Note의 `to`·`cc`에 있는 Public marker 위치로 Public과 Unlisted Visibility를 구분한다.
+  지원되는 공개 audience가 없거나 addressing이 모호하면 Post Visibility를 정확히 결정할 수 없으므로 Note를
+  materialize하지 않는다. 이는 송신 actor의 권한을 증명하기 위한 검사가 아니라 저장할 Post Visibility를 결정하는
+  필수 입력 검증이다.
+
 - Followers Only signed fetch는 서명으로 검증된 요청 Profile이 Author이거나 저장된 established Follow 관계의
   Follower일 때만 허용한다. 인증되지 않았거나 식별되지 않은 요청 주체와 Follower가 아닌 Profile에게는 Post가
   없는 것처럼 응답한다.

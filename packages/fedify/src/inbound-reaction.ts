@@ -16,7 +16,7 @@ const toReactionType = (activity: Like | EmojiReact): string => {
 };
 
 export const handleInboundReaction = async (
-  context: InboxContext<void>,
+  _context: InboxContext<void>,
   activity: Like | EmojiReact,
 ): Promise<void> => {
   const activityUri = activity.id;
@@ -26,25 +26,10 @@ export const handleInboundReaction = async (
     return;
   }
 
-  const recipientUris = [
-    ...activity.toIds,
-    ...activity.btoIds,
-    ...activity.ccIds,
-    ...activity.bccIds,
-  ].map((uri) => uri.href);
-  if (context.recipient !== null) {
-    const inboxRecipientUri = context.getActorUri(context.recipient).href;
-    if (recipientUris.length > 0 && !recipientUris.includes(inboxRecipientUri)) {
-      return;
-    }
-    recipientUris.push(inboxRecipientUri);
-  }
-
   await materializeInboundReaction({
     activityUri: activityUri.href,
     actorUri,
     objectUri,
-    recipientUris,
     type: toReactionType(activity),
   });
 };

@@ -1,5 +1,4 @@
 import { and, eq, inArray, isNotNull, ne, or } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/pg-core';
 import {
   ActivityPubActors,
   ActivityPubPosts,
@@ -17,13 +16,10 @@ import { reactionTypeSchema } from '../validation';
 import { addReaction, deleteReaction } from './reaction';
 import type { Transaction } from '../db';
 
-const RemotePostAuthorActors = alias(ActivityPubActors, 'remote_post_author_actor');
-
 type MaterializeInboundReactionInput = {
   readonly activityUri: string;
   readonly actorUri: string;
   readonly objectUri: string;
-  readonly recipientUris: readonly string[];
   readonly type: string;
 };
 
@@ -35,7 +31,6 @@ type MaterializeInboundReactionResult =
   | { readonly kind: 'REJECTED' };
 
 type InboundReactionTarget = {
-  readonly authorActorUri: string;
   readonly postId: string;
 };
 
@@ -77,14 +72,12 @@ const findInboundReactionTarget = async (
 ): Promise<InboundReactionTarget | undefined> => {
   const remote = await tx
     .select({
-      authorActorUri: RemotePostAuthorActors.uri,
       postId: Posts.id,
     })
     .from(ActivityPubPosts)
     .innerJoin(Posts, eq(Posts.id, ActivityPubPosts.postId))
     .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .innerJoin(RemotePostAuthorActors, eq(RemotePostAuthorActors.profileId, Profiles.id))
     .leftJoin(
       ProfileFollows,
       and(
@@ -112,7 +105,6 @@ const findInboundReactionTarget = async (
 
   const local = await tx
     .select({
-      authorProfileId: Profiles.id,
       canonicalOrigin: Instances.canonicalOrigin,
       postId: Posts.id,
     })
@@ -146,7 +138,6 @@ const findInboundReactionTarget = async (
   }
 
   return {
-    authorActorUri: new URL(`/ap/actor/${local.authorProfileId}`, local.canonicalOrigin).href,
     postId: local.postId,
   };
 };
@@ -207,7 +198,7 @@ export const materializeInboundReaction = async (
         actorProfileId: actor.profileId,
         objectUri: input.objectUri,
       });
-      if (!target || !input.recipientUris.includes(target.authorActorUri)) {
+      if (!target) {
         throw new InboundReactionConflict();
       }
 

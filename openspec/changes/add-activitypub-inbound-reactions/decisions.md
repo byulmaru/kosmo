@@ -44,7 +44,7 @@ outbound, collection과 신규 remote ingestion은 포함하지 않는다.
 - Decision Date: 2026-07-30
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/reaction.md`, `docs/domain/objects/post.md`, PROD-498, PROD-567
-- Status: Active
+- Status: Superseded by `Inbound Reaction validation은 activity audience를 사용하지 않는다`
 - Context / Problem: 호환 구현체는 Local Post의 personal inbox로 직접 전달하면서 activity audience를 생략할 수
   있다. shared inbox는 route-level recipient가 `null`이고 Remote Post Author는 Kosmo local actor가 아니므로 같은
   예외를 적용할 수 없다.
@@ -59,6 +59,27 @@ outbound, collection과 신규 remote ingestion은 포함하지 않는다.
   집합을 Post Author의 canonical actor URI와 비교해야 한다.
 - Confirmation / Follow-up: audience 없는 personal success, 같은 shared delivery 거부, missing/mismatched recipient와
   audience가 있는 personal route mismatch를 검증한다.
+
+### Inbound Reaction validation은 activity audience를 사용하지 않는다
+
+- Decision Date: 2026-07-30
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/reaction.md`, `docs/domain/objects/post.md`, PROD-498, PROD-567
+- Status: Active
+- Context / Problem: Mastodon은 `Like`를 activity audience 없이 대상 actor의 personal inbox로 직접 전달한다.
+  Activity audience는 송신자가 선언하는 routing 정보이며 Reaction이 대상 Post에 생성할 Visibility를 소유하지
+  않으므로 actor·object 진위나 수신 권한의 증거가 아니다.
+- Decision Outcome: inbound `Like`·`EmojiReact`는 audience 존재 여부, Post Author 포함 여부와 personal/shared
+  inbox route를 materialization 검증에 사용하지 않는다. 저장된 active remote actor, 정확한 local·stored remote
+  object identity와 actor의 Post 조회 가능성을 동일하게 검증한다.
+- Alternatives Considered: personal inbox route를 누락 audience에 합성하는 방식은 route와 semantic audience를
+  혼동하고 shared inbox 및 명시 audience mismatch에 불필요한 별도 규칙을 만든다. 모든 activity에서 audience를
+  무시하는 방식은 `Create(Note)`의 Public·Unlisted Visibility projection에 필요한 입력까지 제거하므로 채택하지
+  않는다.
+- Consequences: Fedify handler와 core input에서 recipient set을 제거하고 local·remote target lookup은 Post ID만
+  반환한다. `Create(Note)`의 missing·unsupported audience 거부는 그대로 유지한다.
+- Confirmation / Follow-up: audience 없는 personal/shared success, Post Author가 없는 명시 audience success,
+  local·remote target, invalid actor/object/access와 기존 Create(Note) addressing 거부를 검증한다.
 
 ### Unsupported content는 heart Reaction으로 투영한다
 
