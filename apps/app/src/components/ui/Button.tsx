@@ -1,4 +1,4 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import type { PropsWithChildren } from 'react';
@@ -7,6 +7,7 @@ import type { PressableProps } from 'react-native';
 type ButtonProps = PropsWithChildren<
   PressableProps & {
     loading?: boolean;
+    loadingText?: string;
     tone?: 'primary' | 'secondary' | 'danger';
   }
 >;
@@ -16,6 +17,7 @@ export function Button({
   children,
   disabled,
   loading = false,
+  loadingText,
   style,
   tone = 'primary',
   ...props
@@ -46,7 +48,10 @@ export function Button({
       {...props}
     >
       {loading ? (
-        <ActivityIndicator accessibilityLabel={`${label ?? '요청'} 처리 중`} color={color} />
+        <View style={styles.loadingContent}>
+          <ActivityIndicator accessibilityLabel={`${label ?? '요청'} 처리 중`} color={color} />
+          {loadingText ? <Text style={[styles.label, { color }]}>{loadingText}</Text> : null}
+        </View>
       ) : (
         <Text style={[styles.label, { color }]}>{children}</Text>
       )}
@@ -69,4 +74,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     ...typography.sm,
   },
+  loadingContent: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
 });

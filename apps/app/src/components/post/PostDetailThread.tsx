@@ -21,6 +21,7 @@ import type { PostListItem_post$key } from './__generated__/PostListItem_post.gr
 import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComposerSurface_profile.graphql';
 import type { PostComposerCreatedPost } from './PostComposer';
 import type { PostThreadScrollMetrics } from './postThreadPagination';
+import type { ReplyComposerSurfaceHandle } from './ReplyComposerSurface';
 
 const PostDetailThreadFragment = graphql`
   fragment PostDetailThread_post on Post
@@ -130,6 +131,7 @@ function PostDetailThreadContent({
     PostDetailThread_post$key
   >(PostDetailThreadFragment, postKey);
   const [activeReplyPostId, setActiveReplyPostId] = useState<string | null>(null);
+  const activeReplySurfaceRef = useRef<ReplyComposerSurfaceHandle>(null);
   const [loadError, setLoadError] = useState(false);
   const [nativePageRevision, setNativePageRevision] = useState(0);
   const handledNativePageRevisionRef = useRef(0);
@@ -251,13 +253,21 @@ function PostDetailThreadContent({
             ? {
                 expanded: activeReplyPostId === item.post.id,
                 onPostCreated: onReplyCreated,
-                onPress: () =>
-                  setActiveReplyPostId((current) =>
-                    current === item.post.id ? null : item.post.id,
-                  ),
+                onPress: () => {
+                  if (activeReplyPostId === null) {
+                    setActiveReplyPostId(item.post.id);
+                    return;
+                  }
+                  activeReplySurfaceRef.current?.requestClose(
+                    activeReplyPostId === item.post.id
+                      ? undefined
+                      : () => setActiveReplyPostId(item.post.id),
+                  );
+                },
                 onRequestClose: () => setActiveReplyPostId(null),
                 owner: 'detail' as const,
                 profile: replyProfile,
+                surfaceRef: activeReplyPostId === item.post.id ? activeReplySurfaceRef : undefined,
               }
             : undefined;
           return (

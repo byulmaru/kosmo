@@ -32,12 +32,12 @@
 
 - Decision Date: 2026-07-30
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/design/reply-composer.md`, `PROD-425`
+- Authority / Provenance: 사용자 결정(2026-07-30), `docs/design/reply-composer.md`, `PROD-425`
 - Status: Active
 - Context / Problem: 같은 `PostListItem`이 목록과 상세 thread에서 재사용되므로 화면 폭만으로 Reply surface를 고르면 상세의 행별 inline 계약이 목록 modal·전체 화면 계약으로 바뀐다. 순수 Repost는 direct Source를 Action Bar target으로 사용하므로 바깥 display Post identity를 잃으면 Reply eligibility도 잘못 활성화된다.
-- Decision Outcome: 목록은 Web `>= compact`에서 600px modal, Web `< compact`와 Native에서 전체 화면 Reply surface를 사용한다. 상세 thread owner는 current·ancestor·descendant의 Reply action에 inline surface mode와 하나의 active direct Parent를 공급한다. display Post와 Action Bar target을 분리해 Repost action의 Source target은 유지하되 바깥 display Post가 contentless Repost이면 Reply config를 disabled로 제공하고 callback·composer·mutation 진입을 차단한다. selected Profile이 없는 guest에는 PROD-425의 Reply config를 새로 노출하지 않고 guest 인증 위임과 최종 action 조합은 PROD-432가 소유한다.
-- Alternatives Considered: 하나의 전역 modal은 상세 inline 계약을 위반한다. `PostListItem`이 폭만으로 shell을 고르면 상세 thread 맥락을 알 수 없다. Source Content에서 Reply eligibility를 다시 계산하면 contentless Repost 차단 계약을 잃는다. PROD-425에서 새 guest 로그인 목적지를 만들면 PROD-432의 인증 위임 범위를 선점한다.
-- Consequences: 목록·상세 route는 selected Profile fragment와 surface mode를 actual Post row까지 전달하고, Reply shell은 Parent presentation과 open·close lifecycle만 소유하며 입력·mutation 상태는 기존 composer를 재사용한다. PROD-432는 guest 인증 위임과 전체 action 조합을 통합 검증한다.
+- Decision Outcome: 목록은 Web `>= compact`에서 content 길이와 관계없이 600×720px modal을 사용하되 작은 viewport에서는 높이를 `85dvh`로 제한하고, Web `< compact`와 Native에서는 전체 화면 Reply surface를 사용한다. 상세 thread owner는 current·ancestor·descendant의 Reply action에 inline surface mode와 하나의 active direct Parent를 공급한다. 현재 action 재활성화와 다른 Parent 선택은 surface의 dirty 확인·pending 차단 lifecycle을 거쳐 닫거나 전환한다. display Post와 Action Bar target을 분리해 Repost action의 Source target은 유지하되 바깥 display Post가 contentless Repost이면 Reply config를 disabled로 제공하고 callback·composer·mutation 진입을 차단한다. selected Profile이 없는 guest에는 PROD-425의 Reply config를 새로 노출하지 않고 guest 인증 위임과 최종 action 조합은 PROD-432가 소유한다.
+- Alternatives Considered: 짧은 content에 자연 높이를 사용하는 modal은 선택하지 않고 작성 surface의 고정된 720px frame을 유지한다. 하나의 전역 modal은 상세 inline 계약을 위반한다. `PostListItem`이 폭만으로 shell을 고르면 상세 thread 맥락을 알 수 없다. surface 상태를 우회해 active Parent를 직접 토글하면 dirty draft가 확인 없이 폐기되고 pending 성공 callback이 유실될 수 있다. Source Content에서 Reply eligibility를 다시 계산하면 contentless Repost 차단 계약을 잃는다. PROD-425에서 새 guest 로그인 목적지를 만들면 PROD-432의 인증 위임 범위를 선점한다.
+- Consequences: 목록·상세 route는 selected Profile fragment와 surface mode를 actual Post row까지 전달하고, Reply shell은 Parent presentation과 open·close lifecycle만 소유하며 입력·mutation 상태는 기존 composer를 재사용한다. 짧은 Web modal에도 720px frame이 유지되고 viewport가 작을 때만 `85dvh`로 축소된다. PROD-432는 guest 인증 위임과 전체 action 조합을 통합 검증한다.
 - Confirmation / Follow-up: PROD-425의 component·route 검증에서 일반 Post·Reply·Quote 진입, 순수 Repost disabled, 목록 modal·전체 화면, 상세 행별 inline, selected Profile 없음의 unchanged partial rollout과 controlled `expanded`를 확인한다.
 
 ### 상세 Reply 성공은 현재 route만 targeted refetch한다

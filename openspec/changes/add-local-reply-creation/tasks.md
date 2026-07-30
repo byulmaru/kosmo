@@ -60,7 +60,7 @@
 - Home·Profile·Bookmark·상세 query가 selected Profile fragment를 각 `PostListItem`/`PostLayout`까지 전달하고, guest/null Profile 경계에서는 Reply config를 새로 노출하지 않음을 검증한다.
 - Parent와 다른 Visibility, validation·pending·성공·실패 상태와 selected Profile 전환 격리를 검증한다.
 - pristine·dirty·pending·실패·성공 close, focus trap·복원·배경 scroll lock, single central scroll과 selected Profile 없는 surface의 unchanged partial rollout을 검증한다.
-- 상세 current·ancestor·descendant에서 active Parent를 전환할 때 정확한 한 행만 `expanded` 상태를 받고 close·성공 뒤 해당 Reply action으로 focus가 복원되는지 검증한다.
+- 상세 current·ancestor·descendant에서 active Parent를 전환할 때 dirty 확인·pending 차단을 거치고, 정확한 한 행만 `expanded` 상태를 받으며 close·성공 뒤 해당 Reply action으로 focus가 복원되는지 검증한다.
 - 성공 payload 뒤 현재 detail route만 targeted refetch되어 thread에 반영되고 다른 actor Store나 관련 없는 목록을 변경하지 않으며 refetch 실패는 기존 detail retry 경계를 유지함을 검증한다.
 
 - [x] 2.1 PROD-422의 Reply 조상·하위 API와 Post 상세 thread 계약이 merge되었고 이 change와 ownership 중복이 없음을 확인한다.

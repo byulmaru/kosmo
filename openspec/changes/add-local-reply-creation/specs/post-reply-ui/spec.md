@@ -56,7 +56,7 @@
 #### Scenario: 넓은 Web 목록의 modal
 
 - **WHEN** Web `>= compact` 목록에서 Reply action을 활성화한다
-- **THEN** 클라이언트는 너비 600px, 최대 높이 `min(720px, 85dvh)`인 이름 `답글 쓰기`의 modal dialog를 연다
+- **THEN** 클라이언트는 너비 600px, 높이 `min(720px, 85dvh)`인 이름 `답글 쓰기`의 modal dialog를 연다
 - **AND** header와 footer는 고정하고 direct Parent와 editor를 하나의 중앙 scroll 영역에서 함께 스크롤한다
 - **AND** 배경 document scroll을 잠그고 focus를 dialog 안에 유지한다
 
@@ -89,11 +89,12 @@
 - **THEN** 클라이언트는 즉시 닫고 원래 Reply action으로 focus를 복원한다
 - **BUT WHEN** 본문 또는 Visibility가 초기값에서 바뀌었다
 - **THEN** 클라이언트는 `답글 작성을 취소할까요?` 확인에서 `계속 작성` 또는 `작성 취소`를 선택하게 한다
+- **AND** 상세 inline surface의 현재 Reply action 재활성화와 다른 Parent Reply action 선택도 같은 확인 lifecycle을 사용한다
 
 #### Scenario: pending close 차단
 
 - **WHEN** Reply 제출이 pending이다
-- **THEN** 클라이언트는 본문·Visibility 변경과 `X`, backdrop, `Escape`, platform back을 통한 close를 차단한다
+- **THEN** 클라이언트는 본문·Visibility 변경과 `X`, backdrop, `Escape`, platform back 또는 상세 Reply action을 통한 close·Parent 전환을 차단한다
 - **AND** button에 `게시 중` 상태를 표시한다
 
 #### Scenario: 실패와 성공 close

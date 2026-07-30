@@ -28,8 +28,8 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 
 ### geometry와 scroll
 
-- modal 너비는 `600px`이고 content가 짧으면 자연 높이로 표시한다.
-- modal 최대 높이는 `min(720px, 85dvh)`다. 고정 높이를 사용하지 않는다.
+- modal 너비는 `600px`이고 기본 높이는 content 길이와 관계없이 `720px`로 유지한다.
+- 작은 viewport에서는 `85dvh`를 상한으로 적용하므로 실제 높이는 `min(720px, 85dvh)`다.
 - header와 footer는 modal 안에 고정하고, 제한 높이를 넘는 Parent와 editor만 하나의 중앙 scroll 영역에서
   함께 스크롤한다. Parent만 별도 스크롤하는 nested scroll은 만들지 않는다.
 - card surface, semantic `border`, `radius/lg` 16px과 기존 modal backdrop을 사용한다. 배경 document는 modal이
@@ -82,6 +82,9 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 - 빈 상태에서는 `X`, backdrop과 `Escape`로 즉시 닫는다.
 - 본문 또는 Visibility가 초기값에서 바뀐 상태로 닫기를 시도하면 `답글 작성을 취소할까요?` 확인을 표시한다.
   사용자는 `계속 작성` 또는 `작성 취소`를 선택한다.
+- 상세 inline surface에서 현재 Reply action을 다시 활성화하거나 다른 Parent의 Reply action을 선택하는 동작도
+  같은 close 요청으로 처리한다. dirty 상태에서는 확인 뒤 닫거나 Parent를 전환하고, pending 상태에서는
+  현재 작성과 active Parent를 유지한다.
 - 제출 실패 시 modal, direct Parent 맥락, 본문과 Visibility를 유지한다.
 - 제출 성공 시 modal을 닫고 원래 Reply action으로 focus를 복원한다. 성공 toast는 표시하지 않는다.
 - 성공 payload 반영은 modal이 임의의 Post나 다른 Profile Store membership을 합성하지 않고, 이를 연 surface가
@@ -115,9 +118,9 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 
 ## 검증 기준
 
-- Web 목록 Reply가 Parent 전체 맥락과 기존 Composer control을 가진 600px modal을 열고, 제한 높이 전에는
-  불필요한 scroll을 만들지 않는지 확인한다.
-- `min(720px, 85dvh)`를 넘을 때 header/footer는 유지되고 중앙 영역 하나만 스크롤되는지 확인한다.
+- Web 목록 Reply가 Parent 전체 맥락과 기존 Composer control을 가진 600×720px modal을 열고, 작은
+  viewport에서는 높이가 `85dvh`로 제한되는지 확인한다.
+- content가 중앙 영역을 넘을 때 header/footer는 유지되고 중앙 영역 하나만 스크롤되는지 확인한다.
 - 일반 Post, Reply, Quote Parent의 Content/Source 표시와 Action Bar/menu 제외, thread connector를 확인한다.
 - Visibility 독립성, `UNLISTED` 기본값, `DIRECT` 제외, 500자 count와 disabled/pending/error 상태를 확인한다.
 - pristine/dirty/pending/success close, 취소 확인, focus open/restore와 selected Profile 격리를 확인한다.

@@ -1,5 +1,5 @@
 import { XIcon } from 'lucide-react-native';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -24,7 +24,7 @@ import { PostSourcePreview } from './PostSourcePresentationView';
 import { PostThreadConnector } from './PostThreadConnector';
 import { getReplySurfacePresentation } from './replySurface';
 import type { RefObject } from 'react';
-import type { View as NativeView } from 'react-native';
+import type { TextInput, View as NativeView } from 'react-native';
 import type { ReplyComposerSurface_parent$key } from './__generated__/ReplyComposerSurface_parent.graphql';
 import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComposerSurface_profile.graphql';
 import type { PostComposerCreatedPost, PostComposerState } from './PostComposer';
@@ -75,17 +75,27 @@ type ReplyComposerSurfaceProps = {
   triggerRef?: RefObject<NativeView | null>;
 };
 
+export type ReplyComposerSurfaceHandle = {
+  requestClose: (onClosed?: () => void) => void;
+};
+
 const initialComposerState: PostComposerState = { dirty: false, submitting: false };
 
-export function ReplyComposerSurface({
-  onPostCreated,
-  onRequestClose,
-  open,
-  owner,
-  parent: parentKey,
-  profile: profileKey,
-  triggerRef,
-}: ReplyComposerSurfaceProps) {
+export const ReplyComposerSurface = forwardRef<
+  ReplyComposerSurfaceHandle,
+  ReplyComposerSurfaceProps
+>(function ReplyComposerSurface(
+  {
+    onPostCreated,
+    onRequestClose,
+    open,
+    owner,
+    parent: parentKey,
+    profile: profileKey,
+    triggerRef,
+  },
+  ref,
+) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const parent = useFragment(ReplyComposerSurfaceParentFragment, parentKey);
@@ -94,8 +104,8 @@ export function ReplyComposerSurface({
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const dialogRef = useRef<NativeView>(null);
   const discardConfirmRef = useRef<NativeView>(null);
-  const discardConfirmOpenRef = useRef(discardConfirmOpen);
-  discardConfirmOpenRef.current = discardConfirmOpen;
+  const editorRef = useRef<TextInput>(null);
+  const closeAfterDiscardRef = useRef<(() => void) | undefined>(undefined);
   const replyPlatform =
     Platform.OS === 'ios' || Platform.OS === 'android' ? Platform.OS : ('web' as const);
   const presentation = getReplySurfacePresentation(owner, replyPlatform, width);
@@ -104,26 +114,43 @@ export function ReplyComposerSurface({
     if (open) {
       setComposerState(initialComposerState);
       setDiscardConfirmOpen(false);
+      closeAfterDiscardRef.current = undefined;
     }
   }, [open, parent.id]);
 
-  const closeImmediately = useCallback(() => {
-    setDiscardConfirmOpen(false);
-    onRequestClose();
-  }, [onRequestClose]);
+  const closeImmediately = useCallback(
+    (onClosed?: () => void) => {
+      setDiscardConfirmOpen(false);
+      closeAfterDiscardRef.current = undefined;
+      onRequestClose();
+      onClosed?.();
+    },
+    [onRequestClose],
+  );
 
-  const requestClose = useCallback(() => {
-    if (composerState.submitting) {
-      return;
-    }
-    if (composerState.dirty) {
-      setDiscardConfirmOpen(true);
-      return;
-    }
-    closeImmediately();
-  }, [closeImmediately, composerState]);
+  const requestClose = useCallback(
+    (onClosed?: () => void) => {
+      if (composerState.submitting || discardConfirmOpen) {
+        return;
+      }
+      if (composerState.dirty) {
+        closeAfterDiscardRef.current = onClosed;
+        setDiscardConfirmOpen(true);
+        return;
+      }
+      closeImmediately(onClosed);
+    },
+    [closeImmediately, composerState, discardConfirmOpen],
+  );
   const requestCloseRef = useRef(requestClose);
   requestCloseRef.current = requestClose;
+  useImperativeHandle(ref, () => ({ requestClose }), [requestClose]);
+
+  const continueEditing = useCallback(() => {
+    closeAfterDiscardRef.current = undefined;
+    setDiscardConfirmOpen(false);
+    requestAnimationFrame(() => editorRef.current?.focus());
+  }, []);
 
   const handlePostCreated = useCallback(
     (post: PostComposerCreatedPost) => {
@@ -141,16 +168,26 @@ export function ReplyComposerSurface({
     const previousFocus = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const dialog = dialogRef.current as unknown as HTMLElement | null;
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      requestAnimationFrame(() => {
+        const trigger = triggerRef?.current as unknown as HTMLElement | null;
+        (trigger ?? previousFocus)?.focus();
+      });
+    };
+  }, [open, presentation, triggerRef]);
 
+  useEffect(() => {
+    if (!open || Platform.OS !== 'web' || (presentation === 'inline' && !discardConfirmOpen)) {
+      return;
+    }
+
+    const dialog = dialogRef.current as unknown as HTMLElement | null;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        if (discardConfirmOpenRef.current) {
-          setDiscardConfirmOpen(false);
-          requestAnimationFrame(() => {
-            dialog?.querySelector<HTMLElement>('[aria-label="답글 본문"]')?.focus();
-          });
+        if (discardConfirmOpen) {
+          continueEditing();
           return;
         }
         requestCloseRef.current();
@@ -160,7 +197,7 @@ export function ReplyComposerSurface({
         return;
       }
 
-      const focusRoot = discardConfirmOpenRef.current
+      const focusRoot = discardConfirmOpen
         ? (discardConfirmRef.current as unknown as HTMLElement | null)
         : dialog;
       const focusable = Array.from(
@@ -184,15 +221,8 @@ export function ReplyComposerSurface({
     };
 
     document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      document.body.style.overflow = previousOverflow;
-      requestAnimationFrame(() => {
-        const trigger = triggerRef?.current as unknown as HTMLElement | null;
-        (trigger ?? previousFocus)?.focus();
-      });
-    };
-  }, [open, presentation, triggerRef]);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [continueEditing, discardConfirmOpen, open, presentation]);
 
   useEffect(() => {
     if (!discardConfirmOpen || Platform.OS !== 'web') {
@@ -221,15 +251,53 @@ export function ReplyComposerSurface({
     return null;
   }
 
+  const discardConfirm = discardConfirmOpen ? (
+    <View style={styles.confirmBackdrop}>
+      <View
+        accessibilityLabel="답글 작성을 취소할까요?"
+        accessibilityViewIsModal
+        ref={discardConfirmRef}
+        role="alertdialog"
+        style={[styles.confirm, { backgroundColor: theme.card, borderColor: theme.border }]}
+      >
+        <Text accessibilityRole="header" style={[styles.confirmTitle, { color: theme.text }]}>
+          답글 작성을 취소할까요?
+        </Text>
+        <Text style={[styles.confirmDescription, { color: theme.textSecondary }]}>
+          작성 중인 내용은 저장되지 않습니다.
+        </Text>
+        <View style={styles.confirmActions}>
+          <Button onPress={continueEditing} tone="secondary">
+            계속 작성
+          </Button>
+          <Button onPress={() => closeImmediately(closeAfterDiscardRef.current)} tone="danger">
+            작성 취소
+          </Button>
+        </View>
+      </View>
+    </View>
+  ) : null;
+
   if (presentation === 'inline') {
     return (
-      <PostComposer
-        focusOnMount
-        onPostCreated={handlePostCreated}
-        onStateChange={setComposerState}
-        profile={profile.composer}
-        replyParentId={parent.id}
-      />
+      <View ref={dialogRef} style={styles.inline}>
+        <View
+          accessibilityElementsHidden={discardConfirmOpen}
+          aria-hidden={discardConfirmOpen || undefined}
+          importantForAccessibility={discardConfirmOpen ? 'no-hide-descendants' : 'auto'}
+          style={discardConfirmOpen ? styles.mainBlocked : null}
+        >
+          <PostComposer
+            editorRef={editorRef}
+            focusOnMount
+            onPostCreated={handlePostCreated}
+            onStateChange={setComposerState}
+            profile={profile.composer}
+            replyParentId={parent.id}
+          />
+        </View>
+        {discardConfirm}
+      </View>
     );
   }
 
@@ -252,13 +320,13 @@ export function ReplyComposerSurface({
     <Modal
       accessibilityLabel="답글 쓰기"
       animationType={Platform.OS === 'web' ? 'none' : 'fade'}
-      onRequestClose={requestClose}
+      onRequestClose={() => requestClose()}
       role="dialog"
       transparent
       visible
     >
       <Pressable
-        onPress={requestClose}
+        onPress={() => requestClose()}
         style={[styles.backdrop, presentation === 'fullscreen' ? styles.fullscreenBackdrop : null]}
       >
         <Pressable
@@ -291,7 +359,7 @@ export function ReplyComposerSurface({
                   accessibilityRole="button"
                   disabled={composerState.submitting}
                   hitSlop={4}
-                  onPress={requestClose}
+                  onPress={() => requestClose()}
                   style={({ pressed }) => [
                     styles.close,
                     {
@@ -340,6 +408,7 @@ export function ReplyComposerSurface({
                       </View>
                     </View>
                   }
+                  editorRef={editorRef}
                   focusOnMount
                   onPostCreated={handlePostCreated}
                   onStateChange={setComposerState}
@@ -350,53 +419,13 @@ export function ReplyComposerSurface({
                 />
               </KeyboardAvoidingView>
             </View>
-            {discardConfirmOpen ? (
-              <View style={styles.confirmBackdrop}>
-                <View
-                  accessibilityLabel="답글 작성을 취소할까요?"
-                  accessibilityViewIsModal
-                  ref={discardConfirmRef}
-                  role="alertdialog"
-                  style={[
-                    styles.confirm,
-                    { backgroundColor: theme.card, borderColor: theme.border },
-                  ]}
-                >
-                  <Text
-                    accessibilityRole="header"
-                    style={[styles.confirmTitle, { color: theme.text }]}
-                  >
-                    답글 작성을 취소할까요?
-                  </Text>
-                  <Text style={[styles.confirmDescription, { color: theme.textSecondary }]}>
-                    작성 중인 내용은 저장되지 않습니다.
-                  </Text>
-                  <View style={styles.confirmActions}>
-                    <Button
-                      onPress={() => {
-                        setDiscardConfirmOpen(false);
-                        requestAnimationFrame(() => {
-                          const dialog = dialogRef.current as unknown as HTMLElement | null;
-                          dialog?.querySelector<HTMLElement>('[aria-label="답글 본문"]')?.focus();
-                        });
-                      }}
-                      tone="secondary"
-                    >
-                      계속 작성
-                    </Button>
-                    <Button onPress={closeImmediately} tone="danger">
-                      작성 취소
-                    </Button>
-                  </View>
-                </View>
-              </View>
-            ) : null}
+            {discardConfirm}
           </SafeAreaView>
         </Pressable>
       </Pressable>
     </Modal>
   );
-}
+});
 
 const styles = StyleSheet.create({
   backdrop: {
@@ -429,6 +458,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, minHeight: 0, width: '100%' },
   main: { flex: 1, minHeight: 0, width: '100%' },
   mainBlocked: { pointerEvents: 'none' },
+  inline: { position: 'relative' },
   composerFrame: { flex: 1, minHeight: 0 },
   header: {
     alignItems: 'center',

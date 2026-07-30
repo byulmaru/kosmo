@@ -145,6 +145,7 @@ export function PostLayout({
           {replyController && post.content && post.replySurface ? (
             <View style={styles.replySurface}>
               <ReplyComposerSurface
+                ref={replyController.surfaceRef}
                 onPostCreated={replyController.onPostCreated}
                 onRequestClose={replyController.onRequestClose}
                 open={replyController.expanded}

@@ -15,6 +15,7 @@ import { PostSourcePresentationView } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
 import { getReplyProcessingState } from './replySurface';
 import { useRepostFailureToast } from './useRepostFailureToast';
+import type { RefObject } from 'react';
 import type { PostActionBar_post$key } from './__generated__/PostActionBar_post.graphql';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
 import type { PostListRow_post$key } from './__generated__/PostListRow_post.graphql';
@@ -23,6 +24,7 @@ import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComp
 import type { PostActionBarProps } from './PostActionBar';
 import type { PostComposerCreatedPost } from './PostComposer';
 import type { PostSourcePresentationData } from './PostSourcePresentationView';
+import type { ReplyComposerSurfaceHandle } from './ReplyComposerSurface';
 
 const PostListRowFragment = graphql`
   fragment PostListRow_post on Post {
@@ -88,6 +90,7 @@ export type PostListItemReplyController = {
   onRequestClose: () => void;
   owner: 'detail' | 'list';
   profile: ReplyComposerSurface_profile$key;
+  surfaceRef?: RefObject<ReplyComposerSurfaceHandle | null>;
 };
 
 export function PostListItem({
@@ -114,6 +117,7 @@ export function PostListItem({
   const replySurface =
     replyController && post.content && post.replySurface ? (
       <ReplyComposerSurface
+        ref={replyController.surfaceRef}
         onPostCreated={replyController.onPostCreated}
         onRequestClose={replyController.onRequestClose}
         open={replyController.expanded}

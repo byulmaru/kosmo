@@ -21,7 +21,7 @@ import {
   emptyPostComposerMediaValue,
   PostComposerMediaControls,
 } from './PostComposerMediaControls';
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
@@ -78,6 +78,7 @@ const CreatePostMutation = graphql`
 
 type PostComposerProps = {
   beforeEditor?: ReactNode;
+  editorRef?: RefObject<TextInput | null>;
   focusOnMount?: boolean;
   onPostCreated?: (post: PostComposerCreatedPost) => void;
   onStateChange?: (state: PostComposerState) => void;
@@ -89,6 +90,7 @@ type PostComposerProps = {
 
 export function PostComposer({
   beforeEditor,
+  editorRef,
   focusOnMount = false,
   onPostCreated,
   onStateChange,
@@ -99,7 +101,8 @@ export function PostComposer({
 }: PostComposerProps) {
   const theme = useTheme();
   const profile = useFragment(PostComposerFragment, profileKey);
-  const editor = useRef<TextInput>(null);
+  const internalEditorRef = useRef<TextInput>(null);
+  const editor = editorRef ?? internalEditorRef;
   const visibilityControl = useRef<View>(null);
   const visibilityMenuRef = useRef<View>(null);
   const visibilityTrigger = useRef<View>(null);
@@ -386,8 +389,13 @@ export function PostComposer({
       >
         {remaining.toLocaleString('ko-KR')}
       </Text>
-      <Button disabled={disabled} loading={submitting} onPress={submit}>
-        {replyMode ? '답글 게시' : '게시'}
+      <Button
+        disabled={disabled}
+        loading={submitting}
+        loadingText={replyMode ? '게시 중' : undefined}
+        onPress={submit}
+      >
+        {submitting && replyMode ? '게시 중' : replyMode ? '답글 게시' : '게시'}
       </Button>
     </View>
   );
