@@ -3189,6 +3189,9 @@ export const ReplyModalPresentation: Story = {
     expect(within(dialog).getByRole('button', { name: '답글 게시' })).toBeDisabled();
     expect(within(dialog).queryByRole('toolbar', { name: '액션 바' })).toBeNull();
     expect(within(dialog).getAllByTestId('reply-composer-scroll')).toHaveLength(1);
+    expect(getComputedStyle(within(dialog).getByTestId('reply-parent')).borderBottomWidth).toBe(
+      '0px',
+    );
     const connector = within(dialog).getByTestId('reply-parent-thread-connector');
     const [parentAvatar, composerAvatar] = within(dialog).getAllByLabelText(/프로필 이미지$/);
     const connectorBounds = connector.getBoundingClientRect();

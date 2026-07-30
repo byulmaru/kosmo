@@ -311,10 +311,7 @@ export function ReplyComposerSurface({
               >
                 <PostComposer
                   beforeEditor={
-                    <View
-                      style={[styles.parent, { borderColor: theme.border }]}
-                      testID="reply-parent"
-                    >
+                    <View style={styles.parent} testID="reply-parent">
                       <View style={styles.parentAvatarColumn}>
                         <Avatar
                           label={parent.profile.displayName || parent.profile.handle}
@@ -447,7 +444,6 @@ const styles = StyleSheet.create({
   close: { alignItems: 'center', borderRadius: radii.full, justifyContent: 'center' },
   parent: {
     alignItems: 'stretch',
-    borderBottomWidth: 1,
     flexDirection: 'row',
     gap: spacing.md,
     paddingBottom: spacing.lg,
