@@ -103,19 +103,18 @@ validate_desired_images() {
 active_rollout_identity() {
   local rollout="$1"
   local rollout_data
+  local rollout_tag
   local stable_hash
   local replicaset_data
 
   rollout_data="$(rollout_json "${rollout}")"
+  rollout_tag="$(jq -r '.metadata.labels["app.kubernetes.io/version"] // ""' <<<"${rollout_data}")"
   stable_hash="$(jq -r '.status.stableRS // ""' <<<"${rollout_data}")"
   [[ -n "${stable_hash}" ]] || return 1
-  replicaset_data="$(argocd_prod app get-resource "${application}" \
-    --group apps \
-    --kind ReplicaSet \
-    --resource-name "${rollout}-${stable_hash}" \
-    -o json)"
-  jq -er '
-    (.spec.template.metadata.labels["app.kubernetes.io/version"] // "") as $tag
+  replicaset_data="$(replicaset_json "${rollout}" "${stable_hash}")"
+  jq -er --arg rollout_tag "${rollout_tag}" '
+    (.spec.template.metadata.labels["app.kubernetes.io/version"] // "") as $replicaset_tag
+    | (if $replicaset_tag == "" then $rollout_tag else $replicaset_tag end) as $tag
     | ([.spec.template.spec.containers[]?.image] | unique) as $images
     | select($tag | test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))
     | if $images | length == 1 then [$tag, $images[0]] | @tsv else empty end
@@ -131,31 +130,67 @@ rollout_json() {
     -o json
 }
 
+replicaset_json() {
+  local rollout="$1"
+  local hash="$2"
+
+  argocd_prod app get-resource "${application}" \
+    --group apps \
+    --kind ReplicaSet \
+    --resource-name "${rollout}-${hash}" \
+    -o json
+}
+
+replicaset_ready() {
+  local rollout="$1"
+  local hash="$2"
+  local expected_image="$3"
+  local live
+  live="$(replicaset_json "${rollout}" "${hash}")"
+
+  jq -e --arg image "${expected_image}" '
+    (.spec.replicas // 0) > 0
+    and ((.status.availableReplicas // 0) >= .spec.replicas)
+    and (([.spec.template.spec.containers[]?.image] | unique) == [$image])
+  ' <<<"${live}" >/dev/null
+}
+
 rollout_state() {
   local rollout="$1"
   local expected_image="$2"
   local live
+  local hash
+  local state
   live="$(rollout_json "${rollout}")"
 
-  jq -r --arg image "${expected_image}" '
+  IFS=$'\t' read -r state hash < <(jq -r --arg image "${expected_image}" '
     if (.spec.template.spec.containers | map(.image) | unique) != [$image] then
-      "waiting"
+      ["waiting", ""] | @tsv
     elif ((.status.abort // false) == true) then
-      "failed"
+      ["failed", ""] | @tsv
     elif ((.status.observedGeneration // 0) < (.metadata.generation // 1)) then
-      "waiting"
-    elif ((.status.availableReplicas // 0) < (.spec.replicas // 1))
-      or ((.status.updatedReplicas // 0) < (.spec.replicas // 1)) then
-      "waiting"
+      ["waiting", ""] | @tsv
+    elif (.status.currentPodHash // "") == "" then
+      ["waiting", ""] | @tsv
     elif (.status.currentPodHash // "") == (.status.stableRS // "")
       and (.status.stableRS // "") != "" then
-      "active"
+      ["active", .status.currentPodHash] | @tsv
     elif any(.status.pauseConditions[]?; .reason == "BlueGreenPause") then
-      "preview"
+      ["preview", .status.currentPodHash] | @tsv
     else
-      "waiting"
+      ["waiting", ""] | @tsv
     end
-  ' <<<"${live}"
+  ' <<<"${live}")
+
+  if [[ "${state}" == "active" || "${state}" == "preview" ]]; then
+    if replicaset_ready "${rollout}" "${hash}" "${expected_image}"; then
+      printf '%s\n' "${state}"
+    else
+      printf '%s\n' waiting
+    fi
+  else
+    printf '%s\n' "${state}"
+  fi
 }
 
 wait_for_rollout() {
@@ -191,6 +226,13 @@ activate_rollouts() {
 
   api_state="$(wait_for_rollout kosmo-api "${expected_image}" "preview,active")"
   web_state="$(wait_for_rollout kosmo-web "${expected_image}" "preview,active")"
+
+  api_state="$(rollout_state kosmo-api "${expected_image}")"
+  web_state="$(rollout_state kosmo-web "${expected_image}")"
+  if [[ ",preview,active," != *",${api_state},"* || ",preview,active," != *",${web_state},"* ]]; then
+    echo "production API and Web previews must both remain ready immediately before promotion" >&2
+    return 1
+  fi
 
   for rollout in kosmo-api kosmo-web; do
     if { [[ "${rollout}" == "kosmo-api" && "${api_state}" == "preview" ]] || [[ "${rollout}" == "kosmo-web" && "${web_state}" == "preview" ]]; }; then
@@ -229,18 +271,18 @@ restore_previous_identity() {
     set_release_parameters \
       "${previous_tag}" \
       "${previous_digest}" \
-      "${previous_migration_enabled}"
+      "${previous_migration_enabled}" || return 1
     argocd_prod app sync "${application}" \
       --resource argoproj.io:Rollout:kosmo-api \
       --resource argoproj.io:Rollout:kosmo-web \
-      --timeout "${wait_timeout}"
-    activate_rollouts "ghcr.io/byulmaru/kosmo@${previous_digest}"
+      --timeout "${wait_timeout}" || return 1
+    activate_rollouts "ghcr.io/byulmaru/kosmo@${previous_digest}" || return 1
     recovery_result="restored-${previous_tag}"
   else
     argocd_prod app unset "${application}" \
       -p version \
       -p imageDigest \
-      -p migration.enabled >/dev/null || true
+      -p migration.enabled >/dev/null || return 1
     recovery_result="no-previous-release"
   fi
 }

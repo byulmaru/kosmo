@@ -168,7 +168,8 @@ spec:
 YAML
     ;;
   sync)
-    if [[ "${DEPLOY_SCENARIO:-success}" == "migration-failure" && "$(state_value tag)" == "1.0.0" ]]; then
+    if [[ "${DEPLOY_SCENARIO:-success}" == "migration-failure" && "$(state_value tag)" == "1.0.0" ]] \
+      || [[ "${DEPLOY_SCENARIO:-success}" == "recovery-sync-failure" ]]; then
       exit 1
     fi
     ;;
@@ -181,10 +182,35 @@ YAML
       shift
     done
     if [[ "${kind}" == "ReplicaSet" ]]; then
-      active_digest="$(state_value active-digest)"
-      active_tag="$(state_value active-tag)"
+      replicaset="${rollout}"
+      hash="${replicaset##*-}"
+      rollout="${replicaset%-${hash}}"
+      rollout="${rollout%-}"
+      if [[ "${hash}" == "new" ]]; then
+        replicaset_digest="$(state_value digest)"
+        replicaset_tag="$(state_value tag)"
+      else
+        replicaset_digest="$(state_value active-digest)"
+        replicaset_tag="$(state_value active-tag)"
+      fi
+      available=1
+      if [[ "${DEPLOY_SCENARIO:-success}" == "preview-rs-unready" && "${hash}" == "new" && "${replicaset_tag}" == "1.0.0" && "${rollout}" == "kosmo-web" ]]; then
+        available=0
+      fi
+      if [[ "${DEPLOY_SCENARIO:-success}" == "preview-regression" && "${hash}" == "new" && "${replicaset_tag}" == "1.0.0" ]]; then
+        if [[ "${rollout}" == "kosmo-web" ]]; then
+          touch "${FAKE_STATE}/web-preview-observed"
+        elif [[ -f "${FAKE_STATE}/web-preview-observed" ]]; then
+          available=0
+        fi
+      fi
+      if [[ "${DEPLOY_SCENARIO:-success}" == "legacy-stable-label" && "${hash}" == "old" ]]; then
+        labels='{}'
+      else
+        labels="{\"app.kubernetes.io/version\":\"${replicaset_tag}\"}"
+      fi
       cat <<JSON
-{"spec":{"template":{"metadata":{"labels":{"app.kubernetes.io/version":"${active_tag}"}},"spec":{"containers":[{"image":"ghcr.io/byulmaru/kosmo@${active_digest}"}]}}}}
+{"metadata":{"generation":1},"spec":{"replicas":1,"template":{"metadata":{"labels":${labels}},"spec":{"containers":[{"image":"ghcr.io/byulmaru/kosmo@${replicaset_digest}"}]}}},"status":{"observedGeneration":1,"readyReplicas":${available},"availableReplicas":${available}}}
 JSON
       exit 0
     fi
@@ -209,7 +235,7 @@ JSON
       pauses='[{"reason":"BlueGreenPause"}]'
     fi
     cat <<JSON
-{"metadata":{"generation":2},"spec":{"replicas":1,"template":{"spec":{"containers":[{"image":"${image}"}]}}},"status":{"abort":${abort},"observedGeneration":2,"availableReplicas":1,"updatedReplicas":1,"currentPodHash":"${current}","stableRS":"${stable}","pauseConditions":${pauses}}}
+{"metadata":{"generation":2,"labels":{"app.kubernetes.io/version":"${tag}"}},"spec":{"replicas":1,"template":{"spec":{"containers":[{"image":"${image}"}]}}},"status":{"abort":${abort},"observedGeneration":2,"availableReplicas":1,"updatedReplicas":1,"currentPodHash":"${current}","stableRS":"${stable}","pauseConditions":${pauses}}}
 JSON
     ;;
   actions)
@@ -308,11 +334,15 @@ run_deploy_test() {
   if [[ "${expected_result}" == "success" ]]; then
     "${repo_root}/scripts/deploy-production-release.sh" 1.0.0 "${valid_image}" >/dev/null
     grep -Fq -- '- Result: succeeded' "${PRODUCTION_AUDIT_FILE}" || fail "${scenario} did not record success"
-  else
+  elif [[ "${expected_result}" == "failure" ]]; then
     expect_failure "${repo_root}/scripts/deploy-production-release.sh" 1.0.0 "${valid_image}"
     grep -Fq -- '- Result: failed' "${PRODUCTION_AUDIT_FILE}" || fail "${scenario} did not record failure"
     grep -Fq -- '- Recovery: restored-0.9.0' "${PRODUCTION_AUDIT_FILE}" || fail "${scenario} did not restore the previous release"
     [[ "$(cat "${FAKE_STATE}/digest")" == "${previous_digest}" ]] || fail "${scenario} restored desired state instead of the previous active identity"
+  else
+    expect_failure "${repo_root}/scripts/deploy-production-release.sh" 1.0.0 "${valid_image}"
+    grep -Fq -- '- Result: failed' "${PRODUCTION_AUDIT_FILE}" || fail "${scenario} did not record failure"
+    grep -Fq -- '- Recovery: failed' "${PRODUCTION_AUDIT_FILE}" || fail "${scenario} reported a failed recovery as successful"
   fi
   if grep -Eq 'migration\.(command|phase|schemaAuthority|secretName|restorePointName)=' "${FAKE_LOG}"; then
     fail "${scenario} changed PROD-564-owned migration policy or credential parameters"
@@ -325,12 +355,16 @@ if grep -q 'actions run' "${FAKE_LOG}"; then
   fail "same-identity rerun unexpectedly promoted an already active rollout"
 fi
 run_deploy_test migration-failure failure
+run_deploy_test legacy-stable-label success
 run_deploy_test readback-failure failure
 run_deploy_test desired-mismatch failure
 run_deploy_test preview-failure failure
+run_deploy_test preview-rs-unready failure
+run_deploy_test preview-regression failure
 run_deploy_test promotion-failure failure
 run_deploy_test active-mismatch failure
 run_deploy_test manifest-mismatch failure
+run_deploy_test recovery-sync-failure recovery-failure
 
 deploy_workflow="${repo_root}/.github/workflows/deploy-production.yml"
 build_workflow="${repo_root}/.github/workflows/docker-build.yml"
