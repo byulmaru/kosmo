@@ -224,8 +224,8 @@ export default function PrivacyScreen() {
               이름과 handle은 identity trait로 보내지 않습니다.
             </Bullet>
             <Bullet>
-              행동 이벤트: 로그인, Profile 생성·선택, 게시, 팔로우, 검색 제출·결과 load·결과 선택.
-              명시적 검색 이벤트에는 검색 원문과 선택한 Profile ID를 넣지 않습니다.
+              행동 이벤트: Profile 생성·선택, 게시, 팔로우, 검색 제출·결과 load·결과 선택. 명시적
+              검색 이벤트에는 검색 원문과 선택한 Profile ID를 넣지 않습니다.
             </Bullet>
             <Bullet>
               Session replay: 세션의 10%에서 화면 전환, 클릭, 스크롤과 렌더링 상태를 기록합니다.

@@ -2,7 +2,6 @@ import { OpenPanel } from '@openpanel/web';
 import type { TrackProperties } from '@openpanel/web';
 
 const OPENPANEL_API_URL = 'https://openpanel.byulmaru.co/api';
-const LOGIN_STARTED_KEY = 'kosmo-openpanel-login-started';
 
 let client: OpenPanel | null | undefined;
 let identifiedAccountId: string | null = null;
@@ -86,24 +85,6 @@ export function clearAnalytics(): void {
     // Analytics is best-effort and must not affect the product flow.
   } finally {
     identifiedAccountId = null;
-  }
-}
-
-export function markWebLoginStarted(): void {
-  try {
-    window.localStorage.setItem(LOGIN_STARTED_KEY, '1');
-  } catch {
-    // A blocked storage API must not prevent login.
-  }
-}
-
-export function consumeWebLoginStarted(): boolean {
-  try {
-    const started = window.localStorage.getItem(LOGIN_STARTED_KEY) === '1';
-    window.localStorage.removeItem(LOGIN_STARTED_KEY);
-    return started;
-  } catch {
-    return false;
   }
 }
 

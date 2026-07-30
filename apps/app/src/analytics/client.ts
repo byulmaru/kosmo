@@ -14,9 +14,3 @@ export function identifyAnalytics(accountId: string): void {
 }
 
 export function clearAnalytics(): void {}
-
-export function markWebLoginStarted(): void {}
-
-export function consumeWebLoginStarted(): boolean {
-  return false;
-}

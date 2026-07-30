@@ -7,7 +7,6 @@ const session = {
   accountId: null as string | null,
   status: 'guest' as 'error' | 'guest' | 'valid',
 };
-let loginStarted = false;
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -22,13 +21,7 @@ mockModule(new URL('../session/SessionProvider.tsx', import.meta.url), {
 });
 mockModule(new URL('./client.ts', import.meta.url), {
   clearAnalytics: () => calls.push('clear'),
-  consumeWebLoginStarted: () => {
-    const current = loginStarted;
-    loginStarted = false;
-    return current;
-  },
   identifyAnalytics: (accountId: string) => calls.push(`identify:${accountId}`),
-  trackAnalytics: (name: string) => calls.push(`track:${name}`),
 });
 
 let AnalyticsSessionBridge: typeof AnalyticsSessionBridgeType;
@@ -41,7 +34,6 @@ beforeEach(() => {
   calls.length = 0;
   session.accountId = null;
   session.status = 'guest';
-  loginStarted = false;
 });
 
 describe('AnalyticsSessionBridge', () => {
@@ -57,21 +49,6 @@ describe('AnalyticsSessionBridge', () => {
     AnalyticsSessionBridge();
 
     assert.deepEqual(calls, ['identify:account-id']);
-  });
-
-  it('로그인 시작 marker가 있으면 identify 뒤 성공 event를 한 번 보낸다', () => {
-    session.accountId = 'account-id';
-    session.status = 'valid';
-    loginStarted = true;
-
-    AnalyticsSessionBridge();
-    AnalyticsSessionBridge();
-
-    assert.deepEqual(calls, [
-      'identify:account-id',
-      'track:login_succeeded',
-      'identify:account-id',
-    ]);
   });
 
   it('valid session이 guest로 바뀌면 이전 identity를 지운다', () => {

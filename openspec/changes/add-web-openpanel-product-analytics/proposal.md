@@ -6,7 +6,7 @@ Kosmo Web에는 실제 사용자 여정과 기능 사용을 확인할 제품 분
 
 - Client ID가 제공된 Web 빌드에서 OpenPanel 자동 화면·외부 링크·속성 추적과 10% session replay를 활성화한다.
 - 익명 세션을 로그인 Account identity와 연결하고 로그아웃 뒤 identity를 초기화한다.
-- 로그인, Profile 생성·선택, 게시, 팔로우와 검색 흐름의 성공 이벤트를 공통 taxonomy로 수집한다.
+- Profile 생성·선택, 게시, 팔로우와 검색 흐름의 성공 이벤트를 공통 taxonomy로 수집한다.
 - 모든 입력값과 Post Content를 replay에서 마스킹하고 분석 실패를 제품 흐름과 격리한다.
 - Kosmo 공개 개인정보 처리방침과 Account별 분석 데이터 삭제 운영 절차를 제공한다.
 

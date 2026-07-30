@@ -1,11 +1,6 @@
 import { useEffect } from 'react';
 import { useSession } from '@/session/SessionProvider';
-import {
-  clearAnalytics,
-  consumeWebLoginStarted,
-  identifyAnalytics,
-  trackAnalytics,
-} from './client';
+import { clearAnalytics, identifyAnalytics } from './client';
 
 export function AnalyticsSessionBridge(): null {
   const { accountId, status } = useSession();
@@ -17,9 +12,6 @@ export function AnalyticsSessionBridge(): null {
     }
 
     identifyAnalytics(accountId);
-    if (consumeWebLoginStarted()) {
-      trackAnalytics('login_succeeded');
-    }
   }, [accountId, status]);
 
   return null;

@@ -20,7 +20,7 @@ Client ID가 있는 Kosmo Web은 OpenPanel 자동 수집과 10% replay를 시작
 - Client ID 유무, guest 초기화, identify·clear, native no-op, replay 설정과 Post Content mask를 unit test와 typecheck로 검증한다.
 
 - [x] 1.1 Web 전용 OpenPanel dependency와 Client ID 기반 초기화를 구현한다.
-- [x] 1.2 Session의 Account identify, 로그인 성공, 로그아웃 clear를 구현한다.
+- [x] 1.2 Session의 Account identify와 로그아웃 clear를 구현한다.
 - [x] 1.3 자동 수집과 10% replay 설정, 입력·Post Content 마스킹을 구현한다.
 - [x] 1.4 분석 기반·identity·failure isolation test를 추가한다.
 

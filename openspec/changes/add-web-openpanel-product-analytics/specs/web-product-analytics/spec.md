@@ -34,7 +34,7 @@ Kosmo Web은 로그인 전 익명 세션을 허용하고 로그인 Session이 �
 
 ### Requirement: 핵심 성공 행동 이벤트
 
-Kosmo Web은 `login_succeeded`, `profile_created`, `profile_selected`, `post_created`, `follow_succeeded`를 해당 사용자 행동이 실제 성공한 뒤 정확히 한 번 MUST 수집해야 한다. 실패 응답과 오류 원문은 성공 이벤트를 만들거나 속성으로 전송하지 않아야 한다.
+Kosmo Web은 `profile_created`, `profile_selected`, `post_created`, `follow_succeeded`를 해당 사용자 행동이 실제 성공한 뒤 정확히 한 번 MUST 수집해야 한다. 실패 응답과 오류 원문은 성공 이벤트를 만들거나 속성으로 전송하지 않아야 한다.
 
 **Authority / Provenance:** `PROD-469`
 

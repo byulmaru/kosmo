@@ -27,7 +27,6 @@ OpenPanel Web SDK의 자동 화면·외부 링크·속성 추적은 브라우저
 ### Current Constraints
 
 - Session query는 현재 Account의 이름만 노출하므로 opaque Account ID를 함께 읽도록 확장해야 한다.
-- 로그인은 외부 인증 페이지로 이동한 뒤 새 Session으로 돌아오므로, 로그인 시작 여부를 새 탭과 공유되는 Web local storage에 남기지 않으면 일반 재방문과 로그인 성공을 구분할 수 없다.
 - mutation callback은 GraphQL payload 오류와 network 오류를 별도로 처리한다. 기존 성공 분기 안에서만 이벤트를 보내야 한다.
 - 검색어는 URL query에 존재하므로 자동 화면 추적에는 포함될 수 있지만, 명시적 검색 이벤트 속성에는 다시 복제하지 않아야 한다.
 - 공통 Post Content renderer는 plain text와 structured document를 모두 렌더링하므로 마스킹 경계로 사용하기 적합하다.
@@ -36,7 +35,7 @@ OpenPanel Web SDK의 자동 화면·외부 링크·속성 추적은 브라우저
 
 플랫폼별 모듈 해석을 사용해 Web 구현은 `@openpanel/web` singleton을 지연 생성하고 native 구현은 동일 API의 no-op으로 둔다. 공통 event helper가 OpenPanel의 event name과 선택적 properties를 그대로 전달하고, 모든 SDK 호출은 오류를 흡수하는 fire-and-forget 경계 뒤에 둔다. 허용된 이벤트와 속성은 실제 성공 경계의 호출부와 payload test로 유지한다.
 
-App provider가 Session query 경계 밖에서 anonymous client를 초기화하여 guest·Session error 화면에서도 자동 수집과 replay를 유지한다. Session 내부의 bridge는 guest에서 이전 identity를 clear하고, valid Session에서 Account ID를 identify한 뒤 로그인 시작 marker를 한 번 소비해 `login_succeeded`를 보낸다. 명시적 로그아웃 경계도 서버 로그아웃과 actor reset이 완료된 뒤 identity를 clear한다. Profile·Post·Follow mutation과 검색 UI는 기존 성공 callback에서만 event helper를 호출한다.
+App provider가 Session query 경계 밖에서 anonymous client를 초기화하여 guest·Session error 화면에서도 자동 수집과 replay를 유지한다. Session 내부의 bridge는 guest에서 이전 identity를 clear하고, valid Session에서 Account ID를 identify한다. 명시적 로그아웃 경계도 서버 로그아웃과 actor reset이 완료된 뒤 identity를 clear한다. Profile·Post·Follow mutation과 검색 UI는 기존 성공 callback에서만 event helper를 호출한다.
 
 SDK는 `trackScreenViews`, `trackOutgoingLinks`, `trackAttributes`를 활성화하고 replay를 10%로 설정한다. `maskAllInputs`를 사용하고 canonical Post Content root에는 플랫폼 분기 없이 OpenPanel replay block attribute를 부여해 텍스트와 하위 DOM 속성을 함께 제외한다.
 

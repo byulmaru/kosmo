@@ -8,7 +8,6 @@ type OpenPanelClass = typeof OpenPanelType;
 type Call = { name: string; properties?: Record<string, unknown> };
 
 const instances: FakeOpenPanel[] = [];
-const storage = new Map<string, string>();
 let constructorFails = false;
 let methodFails = false;
 
@@ -49,17 +48,6 @@ class FakeOpenPanel {
   }
 }
 
-Object.defineProperty(globalThis, 'window', {
-  configurable: true,
-  value: {
-    localStorage: {
-      getItem: (key: string) => storage.get(key) ?? null,
-      removeItem: (key: string) => storage.delete(key),
-      setItem: (key: string, value: string) => storage.set(key, value),
-    },
-  },
-});
-
 let analytics: typeof AnalyticsModule;
 
 before(async () => {
@@ -71,7 +59,6 @@ beforeEach(() => {
   constructorFails = false;
   methodFails = false;
   instances.length = 0;
-  storage.clear();
   delete process.env.EXPO_PUBLIC_OPENPANEL_CLIENT_ID;
 });
 
@@ -117,7 +104,6 @@ describe('OpenPanel Web client', () => {
 
     analytics.initializeAnalytics('client-id', FakeOpenPanel as unknown as OpenPanelClass);
     analytics.identifyAnalytics('account-id');
-    analytics.trackAnalytics('login_succeeded');
     analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
     analytics.trackAnalytics('profile_selected', { selected_profile_id: 'profile-id' });
     analytics.trackAnalytics('post_created', {
@@ -134,7 +120,6 @@ describe('OpenPanel Web client', () => {
     analytics.clearAnalytics();
 
     assert.deepEqual(instances[0]?.calls, [
-      { name: 'login_succeeded', properties: undefined },
       { name: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
       { name: 'profile_selected', properties: { selected_profile_id: 'profile-id' } },
       {
@@ -158,13 +143,6 @@ describe('OpenPanel Web client', () => {
     assert.equal(instances[0]?.clears, 1);
   });
 
-  it('로그인 marker를 한 번만 소비한다', () => {
-    analytics.markWebLoginStarted();
-
-    assert.equal(analytics.consumeWebLoginStarted(), true);
-    assert.equal(analytics.consumeWebLoginStarted(), false);
-  });
-
   it('초기화와 SDK method 실패를 제품 흐름으로 전파하지 않는다', () => {
     process.env.EXPO_PUBLIC_OPENPANEL_CLIENT_ID = 'client-id';
     constructorFails = true;
@@ -177,7 +155,7 @@ describe('OpenPanel Web client', () => {
     methodFails = true;
     analytics.initializeAnalytics('client-id', FakeOpenPanel as unknown as OpenPanelClass);
     assert.doesNotThrow(() => analytics.identifyAnalytics('account-id'));
-    assert.doesNotThrow(() => analytics.trackAnalytics('login_succeeded'));
+    assert.doesNotThrow(() => analytics.trackAnalytics('profile_created'));
     assert.doesNotThrow(() => analytics.clearAnalytics());
   });
 });

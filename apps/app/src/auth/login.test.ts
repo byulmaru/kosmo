@@ -16,9 +16,6 @@ mockModule('expo-auth-session', {
   makeRedirectUri: () => 'kosmo://login/callback',
   ResponseType: { Code: 'code' },
 });
-mockModule(new URL('../analytics/client.ts', import.meta.url), {
-  markWebLoginStarted: () => calls.push('mark'),
-});
 mockModule(new URL('./nativeConfig.ts', import.meta.url), {
   getNativeSessionConfiguration: () => ({ clientId: 'client-id', issuer: 'https://issuer.test' }),
 });
@@ -49,21 +46,21 @@ const pressEvent = (nativeEvent: Partial<MouseEvent> = {}) =>
   }) as never;
 
 describe('Web 로그인 진입', () => {
-  it('일반 클릭은 marker를 남기고 BFF endpoint로 문서 탐색한다', () => {
+  it('일반 클릭은 BFF endpoint로 문서 탐색한다', () => {
     startWebLoginFromPress(pressEvent());
 
-    assert.deepEqual(calls, ['mark', 'prevent', 'assign:/login']);
+    assert.deepEqual(calls, ['prevent', 'assign:/login']);
   });
 
-  it('수정키 클릭은 marker만 남기고 Link 기본 동작을 유지한다', () => {
+  it('수정키 클릭은 Link 기본 동작을 유지한다', () => {
     startWebLoginFromPress(pressEvent({ metaKey: true }));
 
-    assert.deepEqual(calls, ['mark']);
+    assert.deepEqual(calls, []);
   });
 
-  it('중간 클릭은 marker만 남기고 Link 기본 동작을 유지한다', () => {
+  it('중간 클릭은 Link 기본 동작을 유지한다', () => {
     startWebLoginFromPress(pressEvent({ button: 1 }));
 
-    assert.deepEqual(calls, ['mark']);
+    assert.deepEqual(calls, []);
   });
 });
