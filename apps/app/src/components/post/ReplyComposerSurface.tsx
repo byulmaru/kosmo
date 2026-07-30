@@ -109,6 +109,7 @@ export const ReplyComposerSurface = forwardRef<
   const replyPlatform =
     Platform.OS === 'ios' || Platform.OS === 'android' ? Platform.OS : ('web' as const);
   const presentation = getReplySurfacePresentation(owner, replyPlatform, width);
+  const webOverlayOpen = open && presentation !== 'inline' && Platform.OS === 'web';
 
   useEffect(() => {
     if (open) {
@@ -161,7 +162,7 @@ export const ReplyComposerSurface = forwardRef<
   );
 
   useEffect(() => {
-    if (!open || presentation === 'inline' || Platform.OS !== 'web') {
+    if (!webOverlayOpen) {
       return;
     }
 
@@ -175,7 +176,7 @@ export const ReplyComposerSurface = forwardRef<
         (trigger ?? previousFocus)?.focus();
       });
     };
-  }, [open, presentation, triggerRef]);
+  }, [triggerRef, webOverlayOpen]);
 
   useEffect(() => {
     if (!open || Platform.OS !== 'web' || (presentation === 'inline' && !discardConfirmOpen)) {
@@ -185,6 +186,9 @@ export const ReplyComposerSurface = forwardRef<
     const dialog = dialogRef.current as unknown as HTMLElement | null;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        if (!discardConfirmOpen && dialog?.querySelector('[role="menu"]')) {
+          return;
+        }
         event.preventDefault();
         if (discardConfirmOpen) {
           continueEditing();
@@ -320,7 +324,11 @@ export const ReplyComposerSurface = forwardRef<
     <Modal
       accessibilityLabel="답글 쓰기"
       animationType={Platform.OS === 'web' ? 'none' : 'fade'}
-      onRequestClose={() => requestClose()}
+      onRequestClose={() => {
+        if (Platform.OS !== 'web') {
+          requestClose();
+        }
+      }}
       role="dialog"
       transparent
       visible

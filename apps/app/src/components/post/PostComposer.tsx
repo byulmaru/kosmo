@@ -2,9 +2,9 @@ import { PostVisibility } from '@kosmo/core/enums';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
 import { AtSignIcon, GlobeIcon, LockIcon, MoonIcon } from 'lucide-react-native';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { graphql, useFragment, useMutation } from 'react-relay';
+import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
@@ -106,6 +106,7 @@ export function PostComposer({
   const visibilityControl = useRef<View>(null);
   const visibilityMenuRef = useRef<View>(null);
   const visibilityTrigger = useRef<View>(null);
+  const remainingDescriptionId = useId();
   const [body, setBody] = useState('');
   const [editorFocused, setEditorFocused] = useState(false);
   const [visibility, setVisibility] = useState<Visibility>(PostVisibility.UNLISTED);
@@ -114,14 +115,17 @@ export function PostComposer({
   const [media, setMedia] = useState<PostComposerMediaValue>(emptyPostComposerMediaValue);
   const [mediaGeneration, setMediaGeneration] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const environment = useRelayEnvironment();
   const [commit] = useMutation<PostComposerCreatePostMutation>(CreatePostMutation);
   const replyMode = Boolean(replyParentId);
   const contextKey = createPostComposerContextKey(profile.id, replyParentId);
   const contextKeyRef = useRef(contextKey);
+  const environmentRef = useRef(environment);
   const contextGenerationRef = useRef(0);
   const mountedRef = useRef(true);
-  if (contextKeyRef.current !== contextKey) {
+  if (contextKeyRef.current !== contextKey || environmentRef.current !== environment) {
     contextKeyRef.current = contextKey;
+    environmentRef.current = environment;
     contextGenerationRef.current += 1;
   }
   const availableVisibilityOptions = visibilityOptions.filter((option) =>
@@ -129,6 +133,7 @@ export function PostComposer({
   );
   const bodyText = normalizePostContentPlainText(body);
   const remaining = postBodyMaxLength - bodyText.length;
+  const remainingDescription = `남은 글자 수 ${remaining.toLocaleString('ko-KR')}자`;
   const dirty =
     body !== '' ||
     visibility !== PostVisibility.UNLISTED ||
@@ -211,7 +216,7 @@ export function PostComposer({
     setSubmitting(false);
     setVisibility(PostVisibility.UNLISTED);
     setVisibilityOpen(false);
-  }, [contextKey]);
+  }, [contextKey, environment]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -383,7 +388,13 @@ export function PostComposer({
 
   const submitActions = (
     <View style={styles.submit}>
+      {Platform.OS === 'web' ? (
+        <Text nativeID={remainingDescriptionId} style={styles.screenReaderOnly}>
+          {remainingDescription}
+        </Text>
+      ) : null}
       <Text
+        accessibilityLabel={remainingDescription}
         accessibilityLiveRegion="polite"
         style={[styles.remaining, { color: remaining < 0 ? theme.danger : theme.textSecondary }]}
       >
@@ -419,7 +430,9 @@ export function PostComposer({
         {replyMode ? null : visibilitySelector}
         <TextArea
           ref={editor}
+          aria-describedby={Platform.OS === 'web' ? remainingDescriptionId : undefined}
           aria-invalid={Boolean(error)}
+          accessibilityHint={Platform.OS === 'web' ? undefined : remainingDescription}
           accessibilityLabel={replyMode ? '답글 본문' : '게시글 본문'}
           editable={!submitting}
           onBlur={() => setEditorFocused(false)}
@@ -550,6 +563,13 @@ const styles = StyleSheet.create({
   webVisibilityMenu: { marginTop: spacing.xs, width: 256, zIndex: 50 },
   submit: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
   remaining: { fontFamily: 'SUIT', ...typography.xsm },
+  screenReaderOnly: {
+    height: 1,
+    left: -10000,
+    overflow: 'hidden',
+    position: 'absolute',
+    width: 1,
+  },
   error: { fontFamily: 'SUIT', ...typography.sm },
   backdrop: {
     alignItems: 'center',

@@ -1,5 +1,5 @@
 import { usePathname } from 'expo-router';
-import { Suspense, useMemo, useState } from 'react';
+import { Suspense, useMemo, useRef, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { graphql, RelayEnvironmentProvider, useLazyLoadQuery } from 'react-relay';
 import { Environment, Network, RecordSource, Store } from 'relay-runtime';
@@ -968,6 +968,7 @@ function ComposerPickerUnmountStory() {
 
 function ReplyModalPresentationStory({ parentId = shortPost.id }: { parentId?: string }) {
   const [open, setOpen] = useState(true);
+  const triggerRef = useRef<View>(null);
   const data = usePostsStoryData();
   const parent = requireFragment(
     requirePostById(data.posts, parentId).replySurface,
@@ -980,6 +981,7 @@ function ReplyModalPresentationStory({ parentId = shortPost.id }: { parentId?: s
         accessibilityLabel="Reply modal 다시 열기"
         accessibilityRole="button"
         onPress={() => setOpen(true)}
+        ref={triggerRef}
       >
         <Text>Reply modal 다시 열기</Text>
       </Pressable>
@@ -989,6 +991,7 @@ function ReplyModalPresentationStory({ parentId = shortPost.id }: { parentId?: s
         owner="list"
         parent={parent}
         profile={data.replyComposerProfile}
+        triggerRef={triggerRef}
       />
       <Text testID="reply-modal-open-state">{open ? 'open' : 'closed'}</Text>
     </Catalog>
@@ -1218,6 +1221,59 @@ function ReplyComposerContextIsolationContents({
       profile={usePostsStoryData().composerProfile}
       replyParentId={parentId}
     />
+  );
+}
+
+function createReplyComposerEnvironment(mutationDelay: number) {
+  return new Environment({
+    network: Network.create(async (request: RequestParameters) => {
+      if (request.name === 'PostsStoriesQuery') {
+        return {
+          data: {
+            composerProfile,
+            contentPostsProfile,
+            emptyPostsProfile,
+            homeTimeline,
+            nodes: storyPosts.map(withReactionViewerState),
+          },
+        } as GraphQLResponse;
+      }
+      if (request.name === 'PostComposerCreatePostMutation') {
+        await new Promise((resolve) => setTimeout(resolve, mutationDelay));
+        return {
+          data: {
+            createPost: { post: { __typename: 'Post', id: 'old-environment-reply' } },
+          },
+        } as GraphQLResponse;
+      }
+      return { data: {} } as GraphQLResponse;
+    }),
+    store: new Store(new RecordSource()),
+  });
+}
+
+function ReplyComposerEnvironmentIsolationStory() {
+  const [createdPostIds, setCreatedPostIds] = useState<string[]>([]);
+  const [environment, setEnvironment] = useState(() => createReplyComposerEnvironment(200));
+
+  return (
+    <RelayEnvironmentProvider environment={environment}>
+      <Suspense fallback={<Text>새 Reply Composer 문맥을 불러오는 중입니다.</Text>}>
+        <ReplyComposerContractContents
+          onPostCreated={(createdPost) =>
+            setCreatedPostIds((current) => [...current, createdPost.id])
+          }
+        />
+      </Suspense>
+      <Pressable
+        accessibilityLabel="Relay Environment 교체"
+        accessibilityRole="button"
+        onPress={() => setEnvironment(createReplyComposerEnvironment(0))}
+      >
+        <Text>Relay Environment 교체</Text>
+      </Pressable>
+      <Text testID="reply-environment-created-log">{JSON.stringify(createdPostIds)}</Text>
+    </RelayEnvironmentProvider>
   );
 }
 
@@ -3201,6 +3257,25 @@ export const ComposerReplyContextIsolation: Story = {
   render: () => <ReplyComposerContextIsolationStory />,
 };
 
+export const ComposerReplyEnvironmentIsolation: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const oldBody = canvas.getByRole('textbox', { name: '답글 본문' });
+
+    await userEvent.type(oldBody, '이전 Environment의 늦은 답글');
+    await userEvent.click(canvas.getByRole('button', { name: '답글 게시' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Relay Environment 교체' }));
+
+    const currentBody = await canvas.findByRole('textbox', { name: '답글 본문' });
+    await waitFor(() => expect(currentBody).toHaveValue(''));
+    await userEvent.type(currentBody, '새 Environment의 답글');
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(currentBody).toHaveValue('새 Environment의 답글');
+    expect(canvas.getByTestId('reply-environment-created-log')).toHaveTextContent('[]');
+  },
+  render: () => <ReplyComposerEnvironmentIsolationStory />,
+};
+
 export const ReplyModalPresentation: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
   play: async ({ canvasElement }) => {
@@ -3210,7 +3285,9 @@ export const ReplyModalPresentation: Story = {
     expect(within(dialog).getByRole('heading', { name: '답글 쓰기' })).toBeVisible();
     expect(within(dialog).getByRole('button', { name: '닫기' })).toBeVisible();
     expect(within(dialog).getByText('짧은 본문 한 줄.')).toBeVisible();
-    expect(within(dialog).getByRole('textbox', { name: '답글 본문' })).toBeVisible();
+    const initialBody = within(dialog).getByRole('textbox', { name: '답글 본문' });
+    expect(initialBody).toBeVisible();
+    expect(initialBody).toHaveAccessibleDescription('남은 글자 수 500자');
     expect(within(dialog).getByRole('button', { name: '조용한 공개' })).toBeVisible();
     expect(within(dialog).getByText('500')).toBeVisible();
     expect(within(dialog).getByRole('button', { name: '답글 게시' })).toBeDisabled();
@@ -3245,6 +3322,17 @@ export const ReplyModalPresentation: Story = {
     const modalSurface = within(dialog).getByTestId('reply-composer-dialog-surface');
     expect(modalSurface.getBoundingClientRect().width).toBe(600);
     expect(modalSurface.getBoundingClientRect().height).toBe(720);
+
+    const visibilityButton = within(dialog).getByRole('button', { name: '조용한 공개' });
+    await userEvent.click(visibilityButton);
+    expect(await within(dialog).findByRole('menu', { name: '답글 공개 설정' })).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => {
+      expect(within(dialog).queryByRole('menu', { name: '답글 공개 설정' })).toBeNull();
+    });
+    expect(dialog).toBeVisible();
+    expect(screen.queryByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).toBeNull();
+    expect(visibilityButton).toHaveFocus();
 
     await userEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
@@ -3282,6 +3370,42 @@ export const ReplyModalPresentation: Story = {
     );
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
     expect(reopen).toHaveFocus();
+  },
+  render: () => <ReplyModalPresentationStory />,
+};
+
+export const ReplyModalResponsiveFocusLifecycle: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  play: async ({ canvasElement }) => {
+    const storyWindow = canvasElement.ownerDocument.defaultView;
+    if (!storyWindow) {
+      throw new Error('Reply modal responsive story requires a browser window.');
+    }
+
+    const visualViewport = storyWindow.visualViewport;
+    if (!visualViewport) {
+      throw new Error('Reply modal responsive story requires visualViewport.');
+    }
+    const originalWidthDescriptor = Object.getOwnPropertyDescriptor(visualViewport, 'width');
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const body = within(dialog).getByRole('textbox', { name: '답글 본문' });
+    const surface = within(dialog).getByTestId('reply-composer-dialog-surface');
+    await waitFor(() => expect(body).toHaveFocus());
+
+    try {
+      Object.defineProperty(visualViewport, 'width', { configurable: true, value: 767 });
+      visualViewport.dispatchEvent(new Event('resize'));
+      await waitFor(() => expect(getComputedStyle(surface).borderRadius).toBe('0px'));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      expect(body).toHaveFocus();
+    } finally {
+      if (originalWidthDescriptor) {
+        Object.defineProperty(visualViewport, 'width', originalWidthDescriptor);
+      } else {
+        Reflect.deleteProperty(visualViewport, 'width');
+      }
+      visualViewport.dispatchEvent(new Event('resize'));
+    }
   },
   render: () => <ReplyModalPresentationStory />,
 };
