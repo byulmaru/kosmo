@@ -58,8 +58,7 @@ verify_production_environment() {
   gh api "repos/${repository}/environments/${production_environment}" \
     | jq -e --argjson reviewer_id "${reviewer_id}" '
         .can_admins_bypass == false
-        and .deployment_branch_policy.protected_branches == false
-        and .deployment_branch_policy.custom_branch_policies == false
+        and .deployment_branch_policy == null
         and any(
           .protection_rules[];
           .type == "required_reviewers"
