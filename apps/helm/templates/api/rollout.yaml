@@ -14,7 +14,6 @@ spec:
     blueGreen:
       activeService: {{ printf "%s-api" .Release.Name | trunc 63 | trimSuffix "-" }}
       previewService: {{ printf "%s-api-preview" .Release.Name | trunc 63 | trimSuffix "-" }}
-      autoPromotionEnabled: true
       previewReplicaCount: 1
   selector:
     matchLabels:
@@ -25,6 +24,7 @@ spec:
       labels:
         app.kubernetes.io/name: api
         app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/version: {{ .Values.version | quote }}
     spec:
       containers:
         - name: api
