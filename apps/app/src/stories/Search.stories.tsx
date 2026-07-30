@@ -1,4 +1,5 @@
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, mocked, userEvent, waitFor, within } from 'storybook/test';
+import { trackAnalytics } from '@/analytics/client';
 import SearchScreen from '@/app/(tabs)/(protected)/search';
 import { StateView } from '@/components/ui/StateView';
 import { profile } from './fixtures';
@@ -37,6 +38,9 @@ const searchConnection = (
 });
 
 const meta = {
+  beforeEach: () => {
+    mocked(trackAnalytics).mockClear();
+  },
   component: SearchScreen,
   title: 'KOSMO/Search/SearchScreen',
 } satisfies Meta<typeof SearchScreen>;
@@ -55,6 +59,12 @@ export const Result: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    await waitFor(() =>
+      expect(trackAnalytics).toHaveBeenCalledWith('search_results_loaded', {
+        has_results: true,
+        tab: 'people',
+      }),
+    );
     await expect(canvas.getByRole('link', { name: /@byulmaru / })).toHaveAttribute(
       'href',
       '/@byulmaru',
@@ -67,6 +77,37 @@ export const Result: Story = {
     await userEvent.click(canvas.getByRole('tab', { name: '사람' }));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(globalThis.localStorage?.getItem('kosmo:recent-searches')).toBeNull();
+    expect(trackAnalytics).not.toHaveBeenCalledWith('search_submitted', expect.anything());
+    await userEvent.click(canvas.getByRole('link', { name: /@byulmaru / }));
+    expect(trackAnalytics).toHaveBeenCalledWith('search_result_selected', { tab: 'people' });
+  },
+};
+
+export const KeyboardSubmissionTracksAnalytics: Story = {
+  parameters: { router: { params: {}, pathname: '/search' } },
+  play: async ({ canvasElement }) => {
+    const input = within(canvasElement).getByRole('textbox', { name: '검색어' });
+    await userEvent.type(input, '검색 원문{enter}');
+    expect(trackAnalytics).toHaveBeenCalledOnce();
+    expect(trackAnalytics).toHaveBeenCalledWith('search_submitted', {
+      source: 'keyboard',
+      tab: 'people',
+    });
+  },
+};
+
+export const FirstPageFailureDoesNotTrackAnalytics: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        SearchPeopleByHandlePageQuery: { error: '검색 결과를 불러오지 못했습니다.' },
+      },
+    },
+    router: { params: { q: 'byulmaru', tab: 'people' }, pathname: '/search' },
+  },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).findByRole('alert')).resolves.toBeVisible();
+    expect(trackAnalytics).not.toHaveBeenCalled();
   },
 };
 

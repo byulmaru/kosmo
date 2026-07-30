@@ -1,5 +1,6 @@
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, mocked, userEvent, within } from 'storybook/test';
+import { trackAnalytics } from '@/analytics/client';
 import { FollowButton } from '@/components/profile/FollowButton';
 import {
   ProfileConnectionList,
@@ -8,6 +9,7 @@ import {
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
+import { SessionProvider } from '@/session/SessionProvider';
 import { followersProfile, followingProfile, profile } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -165,6 +167,14 @@ function FollowButtonStory() {
   return <FollowButton profile={requireFragment(profile.followButton, 'follow button')} />;
 }
 
+function AuthenticatedFollowButtonStory() {
+  return (
+    <SessionProvider>
+      <FollowButtonStory />
+    </SessionProvider>
+  );
+}
+
 function RemoteFollowButtonStory() {
   const profile = requireProfile(useStoryProfiles(), 3);
   return <FollowButton profile={requireFragment(profile.followButton, 'follow button')} />;
@@ -293,9 +303,18 @@ function FollowingWithFollowedProfile() {
 }
 
 const meta = {
+  beforeEach: () => {
+    mocked(trackAnalytics).mockClear();
+  },
   component: ProfileCatalog,
   parameters: {
-    relay: { data: { nodes: storyProfiles } },
+    relay: {
+      data: {
+        currentSession: { id: 'session-story', selectedProfile: { id: 'profile-viewer' } },
+        me: { id: 'account-story', name: '스토리 계정' },
+        nodes: storyProfiles,
+      },
+    },
     router: { pathname: '/@kosmo' },
   },
   title: 'KOSMO/Profiles/Profile',
@@ -336,6 +355,40 @@ export const FollowSubmitting: Story = {
   render: () => <FollowButtonStory />,
 };
 
+export const FollowSuccessTracksAnalytics: Story = {
+  parameters: {
+    relay: {
+      mutationResponse: {
+        followProfile: {
+          followeeProfile: {
+            ...followable,
+            viewerState: {
+              follow: {
+                follower: { followingCount: 1, id: 'profile-viewer' },
+                id: 'follow-story',
+              },
+              followRequest: null,
+              isSelf: false,
+            },
+          },
+          followerProfile: { followingCount: 1, id: 'profile-viewer' },
+          result: { __typename: 'ProfileFollow', id: 'follow-story' },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '팔로우' }));
+    expect(trackAnalytics).toHaveBeenCalledOnce();
+    expect(trackAnalytics).toHaveBeenCalledWith('follow_succeeded', {
+      result: 'follow',
+      selected_profile_id: 'profile-viewer',
+    });
+  },
+  render: () => <AuthenticatedFollowButtonStory />,
+};
+
 export const FollowErrorInteraction: Story = {
   parameters: { relay: { mutationError: '팔로우 실패' } },
   play: async ({ canvasElement }) => {
@@ -345,8 +398,9 @@ export const FollowErrorInteraction: Story = {
       '팔로우 상태를 변경하지 못했습니다.',
     );
     await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeEnabled();
+    expect(trackAnalytics).not.toHaveBeenCalled();
   },
-  render: () => <FollowButtonStory />,
+  render: () => <AuthenticatedFollowButtonStory />,
 };
 
 export const RemoteFollowUsesSameActionSurface: Story = {

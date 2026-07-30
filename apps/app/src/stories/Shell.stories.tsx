@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { commitLocalUpdate } from 'relay-runtime';
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, mocked, userEvent, waitFor, within } from 'storybook/test';
+import { trackAnalytics } from '@/analytics/client';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { BottomTabBar } from '@/components/shell/BottomTabBar';
@@ -158,6 +159,9 @@ function FollowCacheStory() {
 }
 
 const meta = {
+  beforeEach: () => {
+    mocked(trackAnalytics).mockClear();
+  },
   component: NavigationCatalog,
   parameters: {
     relay: { data: query },
@@ -586,6 +590,71 @@ export const ProfileSwitcherInteraction: Story = {
   render: () => <ProfileSwitcherStory />,
 };
 
+export const ProfileSwitcherSelectTracksAnalytics: Story = {
+  parameters: {
+    relay: {
+      mutationResponse: {
+        selectProfile: {
+          profile: secondProfile,
+          session: { id: 'session-story', selectedProfile: { id: secondProfile.id } },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    const list = await canvas.findByLabelText('전환할 프로필 목록');
+    await userEvent.click(within(list).getAllByRole('button')[1]!);
+    expect(trackAnalytics).toHaveBeenCalledOnce();
+    expect(trackAnalytics).toHaveBeenCalledWith('profile_selected', {
+      selected_profile_id: secondProfile.id,
+    });
+  },
+  render: () => <ProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherCreateTracksAnalytics: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        ProfileSwitcherCreateProfileMutation: {
+          data: {
+            createProfile: {
+              account: { ...query.me, profiles: [...query.me.profiles, secondProfile] },
+              profile: secondProfile,
+            },
+          },
+        },
+        ProfileSwitcherSelectProfileMutation: {
+          data: {
+            selectProfile: {
+              profile: secondProfile,
+              session: { id: 'session-story', selectedProfile: { id: secondProfile.id } },
+            },
+          },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    await canvas.findByLabelText('프로필 전환');
+    await userEvent.click(canvas.getByRole('button', { name: '새 프로필 추가' }));
+    await userEvent.type(canvas.getByRole('textbox', { name: '프로필 핸들' }), 'new_profile');
+    await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
+    await waitFor(() => expect(trackAnalytics).toHaveBeenCalledTimes(2));
+    expect(trackAnalytics).toHaveBeenNthCalledWith(1, 'profile_created', {
+      selected_profile_id: selectedProfile.id,
+    });
+    expect(trackAnalytics).toHaveBeenNthCalledWith(2, 'profile_selected', {
+      selected_profile_id: secondProfile.id,
+    });
+  },
+  render: () => <ProfileSwitcherStory />,
+};
+
 export const ProfileSwitcherLateErrorAfterDismissal: Story = {
   parameters: {
     relay: {
@@ -637,6 +706,7 @@ export const ProfileSwitcherSelectGraphQLError: Story = {
       '프로필을 전환하지 못했습니다.',
     );
     expect(pickerRegion).toBeVisible();
+    expect(trackAnalytics).not.toHaveBeenCalled();
   },
   render: () => <ProfileSwitcherStory />,
 };
@@ -667,6 +737,7 @@ export const ProfileSwitcherCreateGraphQLError: Story = {
     expect(canvas.queryByRole('alert')).toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: '새 프로필 추가' }));
     expect(canvas.getByRole('textbox', { name: '프로필 핸들' })).toHaveValue('');
+    expect(trackAnalytics).not.toHaveBeenCalled();
   },
   render: () => <ProfileSwitcherStory />,
 };

@@ -4,11 +4,14 @@ import './preview.css';
 import { Suspense } from 'react';
 import { Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { sb } from 'storybook/test';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 import { RouterMockProvider } from './mocks/expo-router';
 import { RelayStoryProvider } from './mocks/react-relay';
 import type { Preview } from '@storybook/react-vite';
+
+sb.mock(import('../src/analytics/client.web.ts'), { spy: true });
 
 const preview: Preview = {
   decorators: [
