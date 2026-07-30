@@ -3,25 +3,19 @@ import { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
-import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { usePostActionAuthentication } from './PostActionAuthentication';
-import { PostActionBar } from './PostActionBar';
+import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
-import { useBookmarkFailureToast } from './PostBookmarkAction';
-import { usePostReactionController } from './PostReactionController';
 import { usePostReplyBinding } from './PostReplyCoordinator';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
 import { getReplyProcessingState } from './replySurface';
-import { useRepostFailureToast } from './useRepostFailureToast';
-import type { PostActionBar_post$key } from './__generated__/PostActionBar_post.graphql';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
 import type { PostListRow_post$key } from './__generated__/PostListRow_post.graphql';
-import type { PostReactionController_post$key } from './__generated__/PostReactionController_post.graphql';
 import type { PostActionBarProps } from './PostActionBar';
 import type { PostSourcePresentationData } from './PostSourcePresentationView';
 
@@ -42,8 +36,7 @@ const PostListRowFragment = graphql`
       displayName
       ...ProfileNameBlock_profile
     }
-    ...PostActionBar_post @alias(as: "actionBar")
-    ...PostReactionController_post @alias(as: "reactionController")
+    ...PostActionSurface_post @alias(as: "actionSurface")
     ...PostBody_post
   }
 `;
@@ -70,8 +63,7 @@ const PostListItemFragment = graphql`
       id
     }
     ...ReplyComposerSurface_parent @alias(as: "replySurface")
-    ...PostActionBar_post @alias(as: "actionBar")
-    ...PostReactionController_post @alias(as: "reactionController")
+    ...PostActionSurface_post @alias(as: "actionSurface")
     repostSource {
       id
       createdAt
@@ -102,8 +94,6 @@ export function PostListItem({
   showDivider?: boolean;
 }) {
   const theme = useTheme();
-  const onBookmarkError = useBookmarkFailureToast();
-  const onRepostError = useRepostFailureToast();
   const [deleted, setDeleted] = useState(false);
   const post = useFragment(PostListItemFragment, postKey);
   const replyBinding = usePostReplyBinding(post.id);
@@ -162,13 +152,7 @@ export function PostListItem({
     return (
       <>
         <View role="article" style={cardStyle}>
-          <PostListRow
-            onBookmarkError={onBookmarkError}
-            onDeleted={onDeleted}
-            onRepostError={onRepostError}
-            post={post}
-            reply={reply}
-          />
+          <PostListRow onDeleted={onDeleted} post={post} reply={reply} />
         </View>
         {replySurface}
       </>
@@ -206,13 +190,7 @@ export function PostListItem({
               </Link>
             </View>
           </View>
-          <PostListRow
-            onBookmarkError={onBookmarkError}
-            onDeleted={onDeleted}
-            onRepostError={onRepostError}
-            post={source}
-            reply={reply}
-          />
+          <PostListRow onDeleted={onDeleted} post={source} reply={reply} />
         </View>
         {replySurface}
       </>
@@ -271,14 +249,12 @@ export function PostListItem({
             showPostAvatar={false}
             sourcePreviewStyle={styles.quoteSourcePreview}
           />
-          <PostReactionActions
-            actionBar={post.actionBar!}
-            controllerPost={post.reactionController!}
-            onBookmarkError={onBookmarkError}
+          <PostActionSurface
+            actionBarStyle={styles.actionBarSlot}
             onDeleted={onDeleted}
-            onRepostError={onRepostError}
-            quote
+            reactionSummaryStyle={styles.quoteReactionSummary}
             reply={reply}
+            socialActionTarget={post.actionSurface!}
           />
         </View>
       </View>
@@ -288,15 +264,11 @@ export function PostListItem({
 }
 
 function PostListRow({
-  onBookmarkError,
   onDeleted,
-  onRepostError,
   post: postKey,
   reply,
 }: {
-  onBookmarkError: NonNullable<PostActionBarProps['onBookmarkError']>;
   onDeleted: () => void;
-  onRepostError: NonNullable<PostActionBarProps['onRepostError']>;
   post: PostListRow_post$key;
   reply?: PostActionBarProps['reply'];
 }) {
@@ -348,61 +320,15 @@ function PostListRow({
             <PostBody post={post} />
           </Pressable>
         ) : null}
-        <PostReactionActions
-          actionBar={post.actionBar!}
-          controllerPost={post.reactionController!}
-          onBookmarkError={onBookmarkError}
+        <PostActionSurface
+          actionBarStyle={styles.actionBarSlot}
           onDeleted={onDeleted}
-          onRepostError={onRepostError}
+          reactionSummaryStyle={styles.reactionSummary}
           reply={reply}
+          socialActionTarget={post.actionSurface!}
         />
       </View>
     </View>
-  );
-}
-
-function PostReactionActions({
-  actionBar,
-  controllerPost,
-  onBookmarkError,
-  onDeleted,
-  onRepostError,
-  quote = false,
-  reply,
-}: {
-  actionBar: PostActionBar_post$key;
-  controllerPost: PostReactionController_post$key;
-  onBookmarkError: NonNullable<PostActionBarProps['onBookmarkError']>;
-  onDeleted?: () => void;
-  onRepostError: NonNullable<PostActionBarProps['onRepostError']>;
-  quote?: boolean;
-  reply?: PostActionBarProps['reply'];
-}) {
-  const authentication = usePostActionAuthentication(true);
-  const controller = usePostReactionController(
-    controllerPost,
-    authentication.execution.kind === 'enabled',
-  );
-
-  return (
-    <>
-      <PostReactionSummary
-        controller={controller}
-        style={quote ? styles.quoteReactionSummary : styles.reactionSummary}
-      />
-      <View style={styles.actionBarSlot}>
-        <PostActionBar
-          execution={authentication.execution}
-          onBookmarkError={onBookmarkError}
-          onDeleted={onDeleted}
-          onRepostError={onRepostError}
-          onResolutionRequired={authentication.resolve}
-          post={actionBar}
-          reactionController={controller}
-          reply={reply}
-        />
-      </View>
-    </>
   );
 }
 

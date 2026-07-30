@@ -25,6 +25,11 @@ import { RelayEnvironmentBoundary } from '@/relay/RelayEnvironmentBoundary';
 import { SessionProvider } from '@/session/SessionProvider';
 import { colors } from '@/theme/tokens';
 import {
+  getCopiedStrings,
+  resetClipboardMock,
+  setNextClipboardFailure,
+} from '../../.storybook/mocks/expo-clipboard';
+import {
   getImagePickerLaunchCount,
   resetImagePickerMock,
   setNextImagePickerResult,
@@ -1171,12 +1176,14 @@ function ProductionBookmarkMutationContents() {
   const data = usePostsStoryData();
 
   return (
-    <PostLayout
-      post={requireFragment(
-        requirePostById(data.posts, shortPost.id).layout,
-        'production Bookmark detail',
-      )}
-    />
+    <PostReplyCoordinatorProvider owner="detail" profile={data.replyComposerProfile}>
+      <PostLayout
+        post={requireFragment(
+          requirePostById(data.posts, shortPost.id).layout,
+          'production Bookmark detail',
+        )}
+      />
+    </PostReplyCoordinatorProvider>
   );
 }
 
@@ -1899,6 +1906,7 @@ function ThreadNavigationCatalog() {
 const meta = {
   beforeEach: () => {
     mocked(trackAnalytics).mockClear();
+    resetClipboardMock();
     resetImagePickerMock();
   },
   component: PostCatalog,
@@ -1986,6 +1994,10 @@ export const BodyTimeAndLayoutStates: Story = {
     expect(
       within(pureRepostActionBar).getByRole('button', { name: '재게시 취소' }),
     ).toHaveTextContent('7');
+    expect(within(pureRepostActionBar).getByRole('button', { name: '답글' })).toBeDisabled();
+    expect(within(pureRepostActionBar).getByRole('button', { name: '반응' })).toBeEnabled();
+    expect(within(pureRepostActionBar).getByRole('button', { name: '북마크' })).toBeEnabled();
+    expect(within(pureRepostActionBar).getByRole('button', { name: '더 보기' })).toBeEnabled();
     await userEvent.click(within(pureRepostActionBar).getByRole('button', { name: '재게시 취소' }));
     expect(await screen.findByRole('menu', { name: '재게시 메뉴' })).toBeVisible();
     expect(
@@ -2090,16 +2102,23 @@ export const ProductionRepostQuoteListIntegration: Story = {
       const cardBounds = card.getBoundingClientRect();
       const actionBarBounds = actionBar.getBoundingClientRect();
       const borderBottomWidth = Number.parseFloat(getComputedStyle(card).borderBottomWidth);
-      const actionBarSlotStyle = getComputedStyle(actionBar.parentElement!);
+      const actionBarSlotStyle = getComputedStyle(actionBar.parentElement!.parentElement!);
       expect(actionBarSlotStyle.paddingTop).toBe('0px');
       expect(actionBarSlotStyle.paddingBottom).toBe('4px');
       expect(cardBounds.bottom - borderBottomWidth - actionBarBounds.bottom).toBeCloseTo(4, 0);
       expect(getComputedStyle(card).borderBottomColor).toBe('rgb(242, 242, 242)');
     }
     for (const actionBar of [ordinaryActionBar, quoteActionBar, pureRepostActionBar]) {
-      const actionBarSlot = actionBar.parentElement!;
+      expect(
+        within(actionBar)
+          .getAllByRole('button')
+          .map((button) => button.getAttribute('aria-label')),
+      ).toEqual(['답글', expect.stringMatching(/^재게시/), '반응', '북마크', '더 보기']);
+      const actionBarOwner = actionBar.parentElement!;
+      const actionBarSlot = actionBarOwner.parentElement!;
       expect(actionBarSlot.closest('a, [role="link"], [role="button"]')).toBeNull();
-      expect(actionBarSlot.lastElementChild).toBe(actionBar);
+      expect(actionBarOwner.lastElementChild).toBe(actionBar);
+      expect(actionBarSlot.lastElementChild).toBe(actionBarOwner);
       expect(actionBarSlot.parentElement?.lastElementChild).toBe(actionBarSlot);
     }
     expect(
@@ -2370,6 +2389,23 @@ export const ProductionBookmarkPendingGuard: Story = {
     await userEvent.click(bookmark);
     await waitFor(() => expect(bookmark).toHaveAttribute('aria-busy', 'true'));
     expect(bookmark).toBeDisabled();
+    expect(canvas.getByRole('button', { name: '답글' })).toBeEnabled();
+    expect(canvas.getByRole('button', { name: /^재게시/ })).toBeEnabled();
+    expect(canvas.getByRole('button', { name: '반응' })).toBeEnabled();
+    const more = canvas.getByRole('button', { name: '더 보기' });
+    expect(more).toBeEnabled();
+    await userEvent.click(more);
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '더 보기 메뉴' })).getByRole('menuitem', {
+        name: '링크 복사',
+      }),
+    );
+    await waitFor(() =>
+      expect(getCopiedStrings()).toEqual([
+        `https://canonical.story.kosmo.test/${shortPost.profile.relativeHandle}/${shortPost.id}`,
+      ]),
+    );
+    expect(bookmark).toHaveAttribute('aria-busy', 'true');
     bookmark.click();
     const requests = JSON.parse(
       canvas.getByTestId('production-bookmark-request-log').textContent ?? '[]',
@@ -2482,9 +2518,18 @@ export const ProductionGuestActionResolution: Story = {
     await userEvent.click(surface.getByRole('button', { name: /^재게시/ }));
     await userEvent.click(surface.getByRole('button', { name: '반응' }));
     await userEvent.click(surface.getByRole('button', { name: '북마크' }));
+    await userEvent.click(surface.getByRole('button', { name: '더 보기' }));
+    const moreMenu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
+    expect(within(moreMenu).getAllByRole('menuitem')).toHaveLength(1);
+    await userEvent.click(within(moreMenu).getByRole('menuitem', { name: '링크 복사' }));
 
     await waitFor(() =>
       expect(canvas.getByTestId('guest-resolution-count')).toHaveTextContent('4'),
+    );
+    await waitFor(() =>
+      expect(getCopiedStrings()).toEqual([
+        `https://canonical.story.kosmo.test/${shortPost.profile.relativeHandle}/${shortPost.id}`,
+      ]),
     );
     expect(canvas.getByTestId('profile-resolution-count')).toHaveTextContent('0');
     expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull();
@@ -2528,6 +2573,64 @@ export const ProductionSessionErrorDisablesActions: Story = {
     expect(canvas.getByTestId('profile-resolution-count')).toHaveTextContent('0');
   },
   render: () => <ProductionPostActionSessionBoundaryStory state="error" />,
+};
+
+export const ProductionMoreShareReferences: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const home = within(canvas.getByTestId('production-home-reposts'));
+    const ordinaryActionBar = within(home.getAllByRole('article')[0]!).getByRole('toolbar', {
+      name: '액션 바',
+    });
+    const quoteActionBar = within(
+      home
+        .getByText('이 원문에 덧붙이는 인용자의 본문입니다.')
+        .closest<HTMLElement>('[role="article"]')!.parentElement!,
+    ).getByRole('toolbar', { name: '액션 바' });
+    const pureRepostActionBar = within(
+      home
+        .getByText('재게시한 코스모 사용자님이 재게시함')
+        .closest<HTMLElement>('[role="article"]')!,
+    ).getByRole('toolbar', { name: '액션 바' });
+    const targets = [
+      {
+        actionBar: ordinaryActionBar,
+        reference: `https://canonical.story.kosmo.test/${shortPost.profile.relativeHandle}/${shortPost.id}`,
+      },
+      {
+        actionBar: quoteActionBar,
+        reference: `https://canonical.story.kosmo.test/${quotePost.profile.relativeHandle}/${quotePost.id}`,
+      },
+      {
+        actionBar: pureRepostActionBar,
+        reference: `https://canonical.story.kosmo.test/${sourcePost.profile.relativeHandle}/${sourcePost.id}`,
+      },
+    ];
+
+    for (const [index, { actionBar, reference }] of targets.entries()) {
+      const more = within(actionBar).getByRole('button', { name: '더 보기' });
+      await userEvent.click(more);
+      expect(more).toHaveAttribute('aria-expanded', 'true');
+      const menu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
+      expect(within(menu).getAllByRole('menuitem')).toHaveLength(1);
+      await userEvent.click(within(menu).getByRole('menuitem', { name: '링크 복사' }));
+      await waitFor(() => expect(more).toHaveAttribute('aria-expanded', 'false'));
+      await waitFor(() => expect(getCopiedStrings()[index]).toBe(reference));
+    }
+
+    setNextClipboardFailure(new Error('clipboard unavailable'));
+    await userEvent.click(within(ordinaryActionBar).getByRole('button', { name: '더 보기' }));
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '더 보기 메뉴' })).getByRole('menuitem', {
+        name: '링크 복사',
+      }),
+    );
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '링크를 복사하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    );
+    expect(getCopiedStrings()).toHaveLength(3);
+  },
+  render: () => <ProductionRepostQuoteLists />,
 };
 
 export const ProductionRepostFailureToast: Story = {

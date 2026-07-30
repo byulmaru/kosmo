@@ -11,6 +11,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radii, shadow, spacing, typography } from '@/theme/tokens';
 import { PostActionControl } from './PostActionControl';
 import type { ViewStyle } from 'react-native';
+import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { PostDeletionAction_post$key } from './__generated__/PostDeletionAction_post.graphql';
 import type { PostDeletionActionDeletePostMutation } from './__generated__/PostDeletionActionDeletePostMutation.graphql';
 
@@ -36,13 +37,14 @@ const postDeletionActionFragment = graphql`
 `;
 
 type Props = {
+  items?: readonly ActionMenuItem[];
   onDeleted?: () => void;
   post: PostDeletionAction_post$key;
 };
 
 const failureMessage = '게시글을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.';
 
-export function PostDeletionAction({ onDeleted, post: postKey }: Props) {
+export function PostDeletionAction({ items = [], onDeleted, post: postKey }: Props) {
   const theme = useTheme();
   const { selectedProfileId } = useSession();
   const environment = useRelayEnvironment();
@@ -189,9 +191,23 @@ export function PostDeletionAction({ onDeleted, post: postKey }: Props) {
     });
   }, [commitDelete, data.id, eligible, environment, fail, isDeleting, onDeleted, requesting]);
 
-  if (!eligible) {
+  if (!eligible && items.length === 0) {
     return null;
   }
+
+  const menuItems: readonly ActionMenuItem[] = eligible
+    ? [
+        ...items,
+        {
+          accessibilityLabel: '게시글 삭제',
+          icon: Trash2,
+          key: 'delete-post',
+          label: '삭제',
+          onSelect: () => setConfirmationOpen(true),
+          tone: 'danger',
+        },
+      ]
+    : items;
 
   const confirmation = (
     <Pressable
@@ -245,16 +261,7 @@ export function PostDeletionAction({ onDeleted, post: postKey }: Props) {
       <ActionMenu
         accessibilityLabel="더 보기 메뉴"
         disabled={requesting || isDeleting}
-        items={[
-          {
-            accessibilityLabel: '게시글 삭제',
-            icon: Trash2,
-            key: 'delete-post',
-            label: '삭제',
-            onSelect: () => setConfirmationOpen(true),
-            tone: 'danger',
-          },
-        ]}
+        items={menuItems}
         renderTrigger={({ expanded, focusTrigger, onPress, ref }) => {
           restoreFocusRef.current = focusTrigger;
           return (
@@ -271,6 +278,7 @@ export function PostDeletionAction({ onDeleted, post: postKey }: Props) {
             />
           );
         }}
+        webHorizontalPlacement="end"
       />
       {Platform.OS === 'web' ? (
         confirmationOpen ? (

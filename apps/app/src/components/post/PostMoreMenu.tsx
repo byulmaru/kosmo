@@ -1,0 +1,34 @@
+import * as Clipboard from 'expo-clipboard';
+import { Link2 } from 'lucide-react-native';
+import { useCallback } from 'react';
+import { useToast } from '@/components/ui/ToastProvider';
+import { getConfiguredWebOrigin } from '@/relay/network';
+import { createPostShareReference } from './postShareReference';
+import type { ActionMenuItem } from '@/components/ui/ActionMenu';
+
+type Props = Readonly<{
+  postId: string;
+  relativeHandle: string;
+}>;
+
+const copyFailureMessage = '링크를 복사하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+
+export function usePostMoreMenuItem({ postId, relativeHandle }: Props): ActionMenuItem {
+  const { showToast } = useToast();
+  const copyReference = useCallback(async () => {
+    try {
+      const reference = createPostShareReference(getConfiguredWebOrigin(), relativeHandle, postId);
+      await Clipboard.setStringAsync(reference);
+    } catch {
+      showToast(copyFailureMessage);
+    }
+  }, [postId, relativeHandle, showToast]);
+
+  return {
+    accessibilityLabel: '링크 복사',
+    icon: Link2,
+    key: 'copy-link',
+    label: '링크 복사',
+    onSelect: () => void copyReference(),
+  };
+}

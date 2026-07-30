@@ -9,6 +9,7 @@ import { ReactionAction } from './ReactionAction';
 import { RepostAction } from './RepostAction';
 import type { Ref } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
+import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { PostActionBar_post$key } from './__generated__/PostActionBar_post.graphql';
 import type { PostActionExecution, PostActionResolutionReason } from './postActionAvailability';
 import type { PostActionProcessingState } from './PostActionControl';
@@ -24,12 +25,19 @@ type SocialActionConfig = {
 };
 
 type ReplyActionConfig = SocialActionConfig & { controlRef?: Ref<View>; expanded: boolean };
-type MoreActionConfig = { accessibilityLabel: string; onPress: () => void };
+export type MoreActionConfig = {
+  accessibilityLabel: string;
+  controlRef?: Ref<View>;
+  menuExpanded?: boolean;
+  onPress: () => void;
+  popupRole?: 'menu';
+};
 
 export type PostActionBarProps = {
   bookmark?: BookmarkActionConfig;
   execution?: PostActionExecution;
   more?: MoreActionConfig;
+  moreItems?: readonly ActionMenuItem[];
   onDeleted?: () => void;
   onBookmarkError?: (failure: BookmarkActionFailure) => void;
   onRepostError?: (failure: RepostActionFailure) => void;
@@ -51,6 +59,7 @@ export function PostActionBar({
   bookmark,
   execution = { kind: 'enabled' },
   more,
+  moreItems,
   onDeleted,
   onBookmarkError,
   onRepostError,
@@ -126,13 +135,16 @@ export function PostActionBar({
         <PostActionControl
           accessibilityLabel={more.accessibilityLabel}
           alignToEnd
+          controlRef={more.controlRef}
           icon={MoreHorizontal}
+          menuExpanded={more.menuExpanded}
           onPress={more.onPress}
-          stateful={false}
+          popupRole={more.popupRole}
+          stateful={Boolean(more.popupRole)}
           testID="more"
         />
       ) : data?.deletion ? (
-        <PostDeletionAction onDeleted={onDeleted} post={data.deletion} />
+        <PostDeletionAction items={moreItems} onDeleted={onDeleted} post={data.deletion} />
       ) : null}
     </View>
   );
