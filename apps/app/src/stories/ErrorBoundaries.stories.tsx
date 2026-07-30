@@ -7,6 +7,7 @@ import { UnexpectedErrorScreen } from '@/components/UnexpectedErrorScreen';
 import { StructuredClientError } from '@/observability/client-error';
 import { SessionFailOpenBoundary } from '@/session/SessionProvider';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { ErrorInfo } from 'react';
 
 const unexpectedRenderError = new Error('production boundary fixture with a private path');
 const expectedNetworkError = new StructuredClientError({
@@ -45,11 +46,17 @@ function GraphQLBoundaryHarness({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-function RouteBoundaryHarness({ onRetry }: { onRetry: () => void }) {
+function RouteBoundaryHarness({
+  onReport,
+  onRetry,
+}: {
+  onReport: () => string;
+  onRetry: () => void;
+}) {
   const [failed, setFailed] = useState(true);
 
   return (
-    <GraphQLErrorBoundary onRetry={() => undefined}>
+    <GraphQLErrorBoundary onError={onReport} onRetry={() => undefined}>
       <RouteBoundary
         loading={<Text>route loading</Text>}
         onRetry={() => {
@@ -60,6 +67,60 @@ function RouteBoundaryHarness({ onRetry }: { onRetry: () => void }) {
       >
         <ThrowOnRender active={failed} error={expectedNetworkError} />
       </RouteBoundary>
+    </GraphQLErrorBoundary>
+  );
+}
+
+function SafeNavigationHarness({
+  onNavigate,
+  onReport,
+  onRetry,
+}: {
+  onNavigate: () => void;
+  onReport: () => string;
+  onRetry: () => void;
+}) {
+  const [failed, setFailed] = useState(true);
+
+  return (
+    <GraphQLErrorBoundary
+      onError={onReport}
+      onRetry={onRetry}
+      onSafeNavigate={() => {
+        setFailed(false);
+        onNavigate();
+      }}
+    >
+      <ThrowOnRender active={failed} />
+    </GraphQLErrorBoundary>
+  );
+}
+
+function ReporterFallbackHarness({
+  onReport,
+}: {
+  onReport: (error: unknown, info: ErrorInfo) => string | undefined;
+}) {
+  return (
+    <GraphQLErrorBoundary onError={onReport} onRetry={() => undefined}>
+      <ThrowOnRender active />
+    </GraphQLErrorBoundary>
+  );
+}
+
+function RetryReFailureHarness({ onReport }: { onReport: (eventId: string) => void }) {
+  const [attempt, setAttempt] = useState(0);
+
+  return (
+    <GraphQLErrorBoundary
+      onError={() => {
+        const eventId = `event-${attempt + 1}`;
+        onReport(eventId);
+        return eventId;
+      }}
+      onRetry={() => setAttempt((current) => current + 1)}
+    >
+      <ThrowOnRender active error={new Error(`retry failure ${attempt}`)} />
     </GraphQLErrorBoundary>
   );
 }
@@ -102,7 +163,7 @@ export const GraphQLFallbackAndRetry: Story = {
   render: () => <GraphQLBoundaryHarness onRetry={graphQLRetry} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('문제가 발생했어요');
+    await expect(canvas.findByText('문제가 발생했어요')).resolves.toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
 
     await expect(canvas.findByText('콘텐츠가 복구됐습니다.')).resolves.toBeVisible();
@@ -111,9 +172,10 @@ export const GraphQLFallbackAndRetry: Story = {
 };
 
 const routeRetry = fn();
+const expectedRouteReporter = fn(() => 'unexpected-id');
 
 export const RouteFallbackAndRetry: Story = {
-  render: () => <RouteBoundaryHarness onRetry={routeRetry} />,
+  render: () => <RouteBoundaryHarness onReport={expectedRouteReporter} onRetry={routeRetry} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('경로를 불러오지 못했어요');
@@ -121,6 +183,76 @@ export const RouteFallbackAndRetry: Story = {
 
     await expect(canvas.findByText('콘텐츠가 복구됐습니다.')).resolves.toBeVisible();
     expect(routeRetry).toHaveBeenCalledTimes(1);
+  },
+};
+
+const safeNavigationReporter = fn(() => 'event-current');
+const safeNavigationOwnerRetry = fn();
+const safeNavigation = fn();
+
+export const SafeNavigationResetsWithoutOwnerRetry: Story = {
+  render: () => (
+    <SafeNavigationHarness
+      onNavigate={safeNavigation}
+      onReport={safeNavigationReporter}
+      onRetry={safeNavigationOwnerRetry}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.findByText('event-current')).resolves.toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '안전한 화면으로 이동' }));
+
+    await expect(canvas.findByText('콘텐츠가 복구됐습니다.')).resolves.toBeVisible();
+    expect(safeNavigationReporter).toHaveBeenCalledTimes(1);
+    expect(safeNavigationOwnerRetry).not.toHaveBeenCalled();
+    expect(safeNavigation).toHaveBeenCalledTimes(1);
+  },
+};
+
+const throwingReporter = fn(() => {
+  throw new Error('reporter unavailable');
+});
+
+export const ReporterThrowFallsBackWithoutEventId: Story = {
+  render: () => <ReporterFallbackHarness onReport={throwingReporter} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.findByText(/오류 추적 ID를 확인하지 못했지만/)).resolves.toBeVisible();
+    expect(canvas.queryByRole('button', { name: '오류 추적 ID 복사' })).not.toBeInTheDocument();
+    expect(throwingReporter).toHaveBeenCalledTimes(1);
+  },
+};
+
+const noIdReporter = fn(() => undefined);
+
+export const ReporterWithoutEventIdFallsBackSafely: Story = {
+  render: () => <ReporterFallbackHarness onReport={noIdReporter} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.findByText(/오류 추적 ID를 확인하지 못했지만/)).resolves.toBeVisible();
+    expect(canvas.queryByRole('button', { name: '오류 추적 ID 복사' })).not.toBeInTheDocument();
+    expect(noIdReporter).toHaveBeenCalledTimes(1);
+  },
+};
+
+const retryReFailureReports = fn();
+
+export const RetryReFailureUsesNewIdAndClearsOldToast: Story = {
+  render: () => <RetryReFailureHarness onReport={retryReFailureReports} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.findByText('event-1')).resolves.toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '오류 추적 ID 복사' }));
+    await expect(canvas.findByText('오류 추적 ID를 복사했어요.')).resolves.toBeVisible();
+
+    await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
+
+    await expect(canvas.findByText('event-2')).resolves.toBeVisible();
+    expect(canvas.queryByText('오류 추적 ID를 복사했어요.')).not.toBeInTheDocument();
+    expect(retryReFailureReports).toHaveBeenCalledTimes(2);
+    expect(retryReFailureReports).toHaveBeenNthCalledWith(1, 'event-1');
+    expect(retryReFailureReports).toHaveBeenNthCalledWith(2, 'event-2');
   },
 };
 
@@ -153,7 +285,6 @@ export const UnexpectedErrorWithEventIdAndCopy: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '오류 추적 ID 복사' }));
 
     expect(copySuccess).toHaveBeenCalledWith('event-123');
-    await expect(canvas.findByText('오류 추적 ID를 복사했습니다.')).resolves.toBeVisible();
     await expect(canvas.findByText('오류 추적 ID를 복사했어요.')).resolves.toBeVisible();
   },
 };
@@ -182,7 +313,6 @@ export const UnexpectedErrorCopyFailure: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: '오류 추적 ID 복사' }));
 
-    await expect(canvas.findByText('오류 추적 ID를 복사하지 못했습니다.')).resolves.toBeVisible();
     await expect(canvas.findByText('오류 추적 ID를 복사하지 못했어요.')).resolves.toBeVisible();
   },
 };

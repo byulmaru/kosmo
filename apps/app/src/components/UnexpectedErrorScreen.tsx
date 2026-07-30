@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useToast } from '@/components/ui/ToastProvider';
 import { copyToClipboard } from '@/observability/clipboard';
@@ -7,12 +7,11 @@ import { breakpoints, radii, spacing, typography } from '@/theme/tokens';
 import { Button } from './ui/Button';
 import type { ClipboardWriter } from '@/observability/clipboard';
 
-type CopyStatus = 'idle' | 'success' | 'failure';
-
 export type UnexpectedErrorScreenProps = {
   eventId?: string;
   onRetry: () => void;
   onSafeNavigate: () => void;
+  occurrenceKey?: number;
   writeClipboard?: ClipboardWriter;
 };
 
@@ -20,20 +19,45 @@ export function UnexpectedErrorScreen({
   eventId,
   onRetry,
   onSafeNavigate,
+  occurrenceKey,
   writeClipboard = copyToClipboard,
 }: UnexpectedErrorScreenProps) {
   const theme = useTheme();
-  const { showToast } = useToast();
+  const { dismissToast, showToast } = useToast();
   const { width } = useWindowDimensions();
-  const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle');
   const [copying, setCopying] = useState(false);
+  const mountedRef = useRef(true);
+  const copyRequestRef = useRef(0);
   const compact = width < breakpoints.compact;
+
+  useEffect(() => {
+    copyRequestRef.current += 1;
+    setCopying(false);
+    dismissToast();
+  }, [dismissToast, eventId, occurrenceKey]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      copyRequestRef.current += 1;
+      dismissToast();
+    };
+  }, [dismissToast]);
+
+  const clearTransientFeedback = () => {
+    copyRequestRef.current += 1;
+    setCopying(false);
+    dismissToast();
+  };
 
   const copyEventId = async () => {
     if (!eventId || copying) {
       return;
     }
 
+    const requestId = ++copyRequestRef.current;
     setCopying(true);
     let copied = false;
     try {
@@ -41,7 +65,9 @@ export function UnexpectedErrorScreen({
     } catch {
       copied = false;
     }
-    setCopyStatus(copied ? 'success' : 'failure');
+    if (!mountedRef.current || requestId !== copyRequestRef.current) {
+      return;
+    }
     setCopying(false);
     showToast(copied ? '오류 추적 ID를 복사했어요.' : '오류 추적 ID를 복사하지 못했어요.');
   };
@@ -88,22 +114,24 @@ export function UnexpectedErrorScreen({
           </Text>
         )}
 
-        {copyStatus !== 'idle' ? (
-          <Text
-            accessibilityLiveRegion="polite"
-            style={[styles.status, { color: copyStatus === 'success' ? theme.text : theme.danger }]}
-          >
-            {copyStatus === 'success'
-              ? '오류 추적 ID를 복사했습니다.'
-              : '오류 추적 ID를 복사하지 못했습니다.'}
-          </Text>
-        ) : null}
-
         <View style={styles.actions}>
-          <Button onPress={onRetry} style={styles.actionButton}>
+          <Button
+            onPress={() => {
+              clearTransientFeedback();
+              onRetry();
+            }}
+            style={styles.actionButton}
+          >
             다시 시도
           </Button>
-          <Button onPress={onSafeNavigate} style={styles.actionButton} tone="secondary">
+          <Button
+            onPress={() => {
+              clearTransientFeedback();
+              onSafeNavigate();
+            }}
+            style={styles.actionButton}
+            tone="secondary"
+          >
             안전한 화면으로 이동
           </Button>
         </View>
@@ -129,7 +157,6 @@ const styles = StyleSheet.create({
   eventLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
   eventId: { fontFamily: 'SUIT', ...typography.md },
   copyButton: { alignSelf: 'flex-start', minHeight: 48 },
-  status: { fontFamily: 'SUIT', ...typography.sm },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   actionButton: { minHeight: 48 },
 });

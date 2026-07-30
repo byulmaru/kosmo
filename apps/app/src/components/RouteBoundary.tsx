@@ -33,7 +33,13 @@ export function RouteBoundary({
     <ClientErrorBoundary
       onError={reportUnexpectedError}
       onReset={onRetry}
-      renderFallback={({ error, eventId, resetErrorBoundary }) =>
+      renderFallback={({
+        error,
+        eventId,
+        occurrenceKey,
+        resetErrorBoundary,
+        resetForSafeNavigation,
+      }) =>
         isExpectedClientError(error) ? (
           renderError ? (
             renderError(resetErrorBoundary)
@@ -50,7 +56,11 @@ export function RouteBoundary({
           <UnexpectedErrorScreen
             eventId={eventId}
             onRetry={resetErrorBoundary}
-            onSafeNavigate={safeNavigation}
+            onSafeNavigate={() => {
+              resetForSafeNavigation();
+              safeNavigation();
+            }}
+            occurrenceKey={occurrenceKey}
           />
         )
       }

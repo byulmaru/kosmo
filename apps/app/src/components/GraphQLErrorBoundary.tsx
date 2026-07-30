@@ -35,7 +35,13 @@ export function GraphQLErrorBoundary({
         <ClientErrorBoundary
           onError={reportError}
           onReset={onRetry}
-          renderFallback={({ error, eventId, resetErrorBoundary }) =>
+          renderFallback={({
+            error,
+            eventId,
+            occurrenceKey,
+            resetErrorBoundary,
+            resetForSafeNavigation,
+          }) =>
             isExpectedClientError(error) ? (
               <StateView
                 actionLabel="다시 시도"
@@ -48,7 +54,11 @@ export function GraphQLErrorBoundary({
               <UnexpectedErrorScreen
                 eventId={eventId}
                 onRetry={resetErrorBoundary}
-                onSafeNavigate={safeNavigation}
+                onSafeNavigate={() => {
+                  resetForSafeNavigation();
+                  safeNavigation();
+                }}
+                occurrenceKey={occurrenceKey}
               />
             )
           }

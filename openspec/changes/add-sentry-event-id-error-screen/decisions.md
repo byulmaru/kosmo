@@ -4,6 +4,18 @@
 
 ## Decision Records
 
+### 안전한 이동 reset과 copy feedback은 오류 발생 건 단위로 분리한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Implementation Choice
+- Authority / Provenance: PROD-480 review repair, `react-error-boundary` reset contract, ErrorBoundaries Storybook verification
+- Status: Active
+- Context / Problem: 전용 화면의 안전한 이동이 일반 retry callback을 호출하면 소유자 재조회가 불필요하게 실행되고, copy 결과를 화면의 별도 live region과 Toast에 함께 표시하면 중복 announcement가 생긴다. reset·즉시 재실패 뒤에는 이전 Toast와 진행 중 clipboard 결과가 다음 오류 발생 건에 남을 수 있다.
+- Decision Outcome: ClientErrorBoundary는 안전한 이동만을 위한 private reset marker로 occurrence/report 상태를 비우고 owner retry callback은 건너뛴다. Boundary owner가 전달한 public safe callback은 한 번만 실행하고, 일반 retry는 기존 owner callback을 한 번 실행한다. UnexpectedErrorScreen은 occurrence key와 ToastProvider의 좁은 dismiss API를 사용해 reset·unmount·새 오류 발생 건에서 pending clipboard와 이전 Toast를 취소하고, copy 결과는 기존 assertive Toast 하나로만 알린다.
+- Alternatives Considered: 안전한 이동에서 일반 reset callback을 재사용하면 실패한 route의 재조회가 다시 시작된다. 화면 안에 polite copy status를 추가하면 기존 Toast와 중복되며, 전역 이전 Toast를 그대로 두면 새 occurrence에 잘못된 feedback이 남는다. 별도 오류 feedback 시스템은 현재 Toast 소유권과 범위를 불필요하게 늘린다.
+- Consequences: fallback render props에 occurrence key와 안전한 reset callback이 추가되고 Toast context에 dismiss API가 추가된다. Clipboard promise가 늦게 완료되어도 reset된 화면에 feedback을 재표시하지 않는다. 기존 public ClientErrorBoundary props와 owner retry 동작은 유지한다.
+- Confirmation / Follow-up: ErrorBoundaries Storybook에서 reporter return ID·throw/no-ID, safe navigation callback 1회·owner retry 0회, retry 후 새 ID와 이전 Toast 제거를 검증하고 기본 clipboard adapter 단위 테스트에서 ID 전달을 확인한다.
+
 ### 예상 오류와 화면을 사용할 수 없는 예상하지 못한 오류를 분리한다
 
 - Decision Date: 2026-07-30

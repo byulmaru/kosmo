@@ -9,6 +9,7 @@ import type { ViewStyle } from 'react-native';
 const toastDurationMs = 3000;
 
 type ToastContextValue = Readonly<{
+  dismissToast: () => void;
   showToast: (message: string) => void;
 }>;
 
@@ -28,6 +29,14 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
   const { width } = useWindowDimensions();
   const hasBottomTabBar = Platform.OS !== 'web' || width < breakpoints.compact;
   const bottom = insets.bottom + (hasBottomTabBar ? 56 : 0) + spacing.sm;
+
+  const dismissToast = useCallback(() => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    setToast(null);
+  }, []);
 
   const showToast = useCallback((nextMessage: string) => {
     if (timer.current) {
@@ -50,7 +59,7 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
   );
 
   return (
-    <ToastContext.Provider value={{ showToast }}>
+    <ToastContext.Provider value={{ dismissToast, showToast }}>
       {children}
       {toast ? (
         <View

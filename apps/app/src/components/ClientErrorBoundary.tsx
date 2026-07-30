@@ -8,6 +8,8 @@ import type { UnexpectedErrorReporter } from '@/observability/UnexpectedErrorCon
 
 export type ClientErrorFallbackProps = FallbackProps & {
   eventId?: string;
+  occurrenceKey?: number;
+  resetForSafeNavigation: () => void;
 };
 
 type ClientErrorBoundaryProps = PropsWithChildren<{
@@ -24,24 +26,12 @@ export function ClientErrorBoundary({
 }: ClientErrorBoundaryProps) {
   const inheritedReporter = useUnexpectedErrorReporter();
   const reporter = onError ?? inheritedReporter;
-
-  return (
-    <ReportedErrorBoundary onError={reporter} onReset={onReset} renderFallback={renderFallback}>
-      {children}
-    </ReportedErrorBoundary>
-  );
-}
-
-function ReportedErrorBoundary({
-  children,
-  onError,
-  onReset,
-  renderFallback,
-}: ClientErrorBoundaryProps) {
   const reportedErrorRef = useRef<unknown>(null);
+  const occurrenceCounterRef = useRef(0);
   const [reported, setReported] = useState<{
     error: unknown;
     eventId?: string;
+    occurrenceKey: number;
   } | null>(null);
 
   return (
@@ -50,6 +40,9 @@ function ReportedErrorBoundary({
         renderFallback({
           ...props,
           eventId: reported && reported.error === props.error ? reported.eventId : undefined,
+          occurrenceKey:
+            reported && reported.error === props.error ? reported.occurrenceKey : undefined,
+          resetForSafeNavigation: () => props.resetErrorBoundary(safeNavigationReset),
         })
       }
       onError={(error, info) => {
@@ -60,23 +53,27 @@ function ReportedErrorBoundary({
         reportedErrorRef.current = error;
         let eventId: string | undefined;
         try {
-          eventId = onError?.(error, info);
+          eventId = reporter?.(error, info);
         } catch {
           eventId = undefined;
         }
-        setReported({ error, eventId });
+        setReported({ error, eventId, occurrenceKey: ++occurrenceCounterRef.current });
         logBoundaryError(error, info);
       }}
-      onReset={() => {
+      onReset={(details) => {
         reportedErrorRef.current = null;
         setReported(null);
-        onReset();
+        if (details.reason !== 'imperative-api' || details.args[0] !== safeNavigationReset) {
+          onReset();
+        }
       }}
     >
       {children}
     </ErrorBoundary>
   );
 }
+
+const safeNavigationReset = Symbol('safe-navigation-reset');
 
 function logBoundaryError(error: unknown, info: ErrorInfo): void {
   console.error('Client render error', error, info.componentStack);

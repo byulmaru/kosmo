@@ -39,6 +39,7 @@ Android·iOS·Web 공용 앱이 예상 오류의 기존 inline·route-local 복�
 - [x] 1.3 안전한 한국어 안내, optional ID, copy·retry·public root 이동을 제공하는 universal 전용 오류 화면을 구현한다.
 - [x] 1.4 `expo-clipboard`를 pnpm으로 앱 dependency에 추가하고 정확한 ID copy와 기존 toast 기반 성공·실패 feedback을 연결한다.
 - [x] 1.5 기존 Error Boundary·feedback 회귀와 전용 화면의 component·Storybook 상태, 접근성·responsive 검증을 완료한다.
+- [x] 1.6 리뷰 정정으로 안전한 이동 reset의 owner retry 분리, occurrence별 report·copy feedback cleanup, 단일 Toast announcement와 reporter/clipboard 회귀 검증을 보강한다.
 
 ## 2. PROD-486 Web 오류 화면과 실제 event ID
 
