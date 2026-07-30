@@ -4,20 +4,20 @@
 
 **Goal:** 목록과 상세 caller가 행별 Reply controller를 조립하지 않아도 `PostListItem`과 `PostLayout`이 기존 Reply action과 Composer surface를 내부 조립하게 하고, Web Reply editor에는 하나의 둥근 focus indicator만 남긴다.
 
-**Architecture:** collection·thread 단위의 필수 `PostReplyCoordinatorProvider`가 selected Profile, surface owner, 단일 active Parent와 dirty·pending 전환 명령만 소유한다. 각 Post 표현부는 `usePostReplyBinding(post.id)`으로 coordinator를 소비하고, 기존 `ReplyComposerSurface`와 `PostActionBar` 계약을 그대로 조립한다. Provider 부재는 프로그래밍 오류로 드러내고, guest는 Provider 안의 `profile: null`로 명시한다. Web `TextArea`의 브라우저 기본 outline은 `PostComposer` 안에서만 제거하고, `editorSurface`의 기존 둥근 focus/error border를 유일한 시각적 입력 상태 경계로 유지한다.
+**Architecture:** collection·thread 단위의 필수 `PostReplyCoordinatorProvider`가 selected Profile, surface owner, 단일 active Parent와 dirty·pending 전환 명령만 소유한다. 각 Post 표현부는 `usePostReplyBinding(post.id)`으로 coordinator를 소비하고, 기존 `ReplyComposerSurface`와 `PostActionBar` 계약을 그대로 조립한다. Provider 부재는 프로그래밍 오류로 드러내고, guest는 Provider 안의 `profile: null`로 명시한다. Profile·Parent·Relay Environment가 바뀌면 surface와 Composer의 stateful contents를 문맥별로 교체하고 이전 mutation completion을 무시한다. Web `TextArea`의 브라우저 기본 outline은 `PostComposer` 안에서만 제거하고, semantic `focus` token을 쓰는 `editorSurface`의 둥근 focus/error border를 유일한 시각적 입력 상태 경계로 유지한다.
 
 **Tech Stack:** React 19, React Native/React Native Web, React Relay, TypeScript, Node test runner, React Test Renderer, Storybook/Vitest, OpenSpec
 
 ## Global Constraints
 
 - modal·fullscreen·inline geometry, Parent/Quote presentation, action 순서와 copy를 변경하지 않는다.
-- Web Reply editor는 브라우저 기본 사각 outline을 중복 표시하지 않고 기존 `editorSurface`의 둥근 primary focus border와 danger error border를 유지한다.
+- Web Reply editor는 브라우저 기본 사각 outline을 중복 표시하지 않고 `editorSurface`의 둥근 semantic focus border와 danger error border를 유지한다. focus border는 light/dark에서 인접 배경과 3:1 이상 대비를 갖는다.
 - Content 없는 display Repost의 Reply action은 disabled이고 callback·Composer·mutation에 진입하지 않는다. Repost action의 direct Source target은 유지한다.
 - 한 collection 또는 thread에서 하나의 direct Parent만 active 상태가 될 수 있다.
 - dirty 확인, pending close/Parent 전환 차단, 실패 입력 유지, 성공 close·focus 복원, 약 3초 snackbar와 수동 `보기`를 유지한다.
 - 상세 성공 callback은 현재 detail query의 targeted refetch를 정확히 한 번 시작한다. 자동 이동, 목록 connection 합성, pagination membership 합성을 추가하지 않는다.
-- `PostComposer`가 소유하는 Profile·Relay Environment·Parent별 draft/pending/error와 늦은 callback 격리를 변경하지 않는다.
-- API, GraphQL schema, dependency, Notification 코드는 변경하지 않는다. canonical 문서는 승인된 focus 표현을 기록하는 `docs/design/reply-composer.md`만 변경한다.
+- `PostComposer`와 `ReplyComposerSurface`는 Profile·Relay Environment·Parent별 draft/pending/error를 새 문맥의 첫 commit부터 격리하고 이전 문맥의 늦은 callback을 무시한다.
+- API, GraphQL schema, dependency, Notification 코드는 변경하지 않는다. canonical 문서는 승인된 focus 표현을 기록하는 `docs/design/colors.md`와 `docs/design/reply-composer.md`만 변경한다.
 - generated Relay artifact는 생성될 수 있지만 stage·commit하지 않는다.
 - `.superpowers/**`와 `docs/superpowers/**`는 생성·stage·commit하지 않는다.
 - Web 자동화와 Storybook screenshot은 현재 PR의 증거로 남기되, Android·iOS runtime 검증을 수행했다고 주장하지 않는다.
@@ -32,11 +32,16 @@
 - Modify `apps/app/src/components/bookmark/BookmarkList.tsx`: 행별 controller 조립을 제거하고 bookmark collection Provider를 한 번 배치.
 - Modify `apps/app/src/components/post/PostDetailThread.tsx`: active Parent/ref 상태를 Provider로 옮기고 thread renderer는 Post 표현부만 선택.
 - Modify `apps/app/src/stories/Posts.stories.tsx`: standalone Post story의 explicit guest Provider와 production coordinator 기반 Reply stories/interaction assertions.
-- Modify `apps/app/src/components/post/PostComposer.tsx`: Web Reply editor의 브라우저 기본 outline만 제거하고 기존 wrapper focus/error border를 유지.
-- Modify `docs/design/reply-composer.md`: Web editor의 단일 focus indicator 계약 기록.
+- Modify `apps/app/src/components/post/PostComposer.tsx`: Profile·Parent·Relay Environment별 stateful contents와 mutation completion을 격리하고 Web Reply editor의 브라우저 기본 outline을 제거하며 semantic focus/error border를 유지.
+- Modify `apps/app/src/components/post/ReplyComposerSurface.tsx`: Profile·Parent·open state별 surface contents를 교체하고 이전 문맥 completion guard를 제공.
+- Modify `apps/app/src/relay/RelayActorProvider.tsx`: suspend 가능한 actor 전환보다 먼저 shared Environment generation을 갱신.
+- Create `apps/app/src/relay/RelayEnvironmentBoundary.tsx`: 실제 Relay Environment와 generation ref를 함께 제공.
+- Modify `apps/app/src/theme/tokens.ts`: light/dark semantic focus token 추가.
+- Modify `docs/design/colors.md`: semantic focus token과 대비 계약 기록.
+- Modify `docs/design/reply-composer.md`: Web editor의 단일 focus indicator와 문맥 격리 계약 기록.
 - Modify `openspec/changes/add-local-reply-creation/decisions.md`: 사용자 승인 focus 표현과 대안·결과 기록.
 - Modify `openspec/changes/add-local-reply-creation/tasks.md`: 전체 검증 뒤 task 2.2 완료 표시.
-- Keep `apps/app/src/components/post/ReplyComposerSurface.tsx`, `replySurface.ts`, GraphQL documents, generated artifacts unchanged.
+- Keep `apps/app/src/components/post/replySurface.ts`, GraphQL documents, generated artifacts unchanged.
 
 ---
 
@@ -647,6 +652,9 @@ Expected: PR #413의 기존 modal·inline 동작과 OpenSpec 16/21 `in-progress`
 
 - Modify: `apps/app/src/stories/Posts.stories.tsx`
 - Modify: `apps/app/src/components/post/PostComposer.tsx`
+- Modify: `apps/app/src/components/post/ReplyComposerSurface.tsx`
+- Modify: `apps/app/src/relay/RelayActorProvider.tsx`
+- Create: `apps/app/src/relay/RelayEnvironmentBoundary.tsx`
 - Modify: `apps/app/src/theme/tokens.ts`
 - Modify: `docs/design/colors.md`
 - Modify: `docs/design/reply-composer.md`
