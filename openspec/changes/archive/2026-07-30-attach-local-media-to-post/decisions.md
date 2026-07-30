@@ -101,6 +101,24 @@ PROD-554·553·559 구현 경계를 기존 attachment-table 초안 대신 구현
   위치가 attachment 순서로 축약된다. Post 수정과 `Update(Note)`는 독립 Backlog다.
 - Confirmation / Follow-up: 역참조와 최초 Create(Note)의 exact content/attachment/sensitive를 검증한다.
 
+### 공개 Media URL은 Note projection 뒤 재인가하지 않는다
+
+- Decision Date: 2026-07-30
+- Decision Class: Product Contract
+- Authority / Provenance: `docs/domain/objects/media.md`,
+  `docs/domain/decisions/0013-media-storage-service-boundary.md`, PROD-461, PROD-559
+- Status: Active
+- Context / Problem: `FOLLOWERS` Note에 저장된 공개 Media URL을 제공한 뒤 byte 요청에도 Post viewer 권한을
+  재강제하려면 별도 proxy 또는 audience별 signed URL lifecycle이 필요하다.
+- Decision Outcome: Note delivery와 signed dereference에서 recipient 권한을 확인한 뒤 저장된 공개 URL을 그대로
+  전달한다. URL을 획득한 주체의 이후 조회·재전달은 제한하지 않으며 URL 자체를 Post Visibility 인증 경계로
+  취급하지 않는다.
+- Alternatives Considered: Kosmo Media proxy와 audience별 signed URL은 byte 요청마다 authorization 또는 별도
+  credential lifecycle을 추가하므로 현재 공개 표현 저장·직접 제공 경계보다 큰 독립 capability다.
+- Consequences: `FOLLOWERS`는 Note 접근을 제한하지만 전달된 이미지의 재공유 방지를 보장하지 않는다.
+- Confirmation / Follow-up: 통합 테스트에서 Followers Post도 권한을 통과한 projection에 저장된 공개 URL을
+  사용하고 projection 중 추가 storage network read가 없는지 확인한다.
+
 ## Remaining Decisions
 
 - 없음.

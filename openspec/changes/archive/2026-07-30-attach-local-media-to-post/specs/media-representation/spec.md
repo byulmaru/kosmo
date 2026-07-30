@@ -24,3 +24,9 @@
 - **WHEN** Ready Local Media를 허용된 read projection으로 표현한다
 - **THEN** Media row의 URL과 Media Type을 사용한다
 - **AND** 권한 판정이나 projection 중 Media Storage Service를 호출하지 않는다
+
+#### Scenario: 공개 표현 URL의 인가 경계
+
+- **WHEN** Post 조회 또는 ActivityPub projection이 Ready Local Media 표현을 권한 있는 viewer나 recipient에게 제공한다
+- **THEN** 시스템은 저장된 공개 URL을 전달하고 byte 조회를 Kosmo API로 proxy하지 않는다
+- **AND** 전달된 URL은 Post Visibility를 다시 검사하는 인증 경계가 아니며 URL을 획득한 주체의 이후 조회·재전달을 제한하지 않는다

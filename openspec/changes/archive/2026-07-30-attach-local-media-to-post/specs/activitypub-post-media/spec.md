@@ -19,6 +19,13 @@
 - **AND** nullable Alt Text가 있으면 Image의 사람이 읽을 수 있는 이름으로 제공한다
 - **AND** 내부 Media DB UUID, GraphQL global ID, storage reference와 upload URL을 ActivityPub 속성으로 노출하지 않는다
 
+#### Scenario: Followers Note의 공개 Media URL 전달
+
+- **WHEN** 권한을 통과한 `FOLLOWERS` Note를 delivery하거나 signed fetch로 제공한다
+- **THEN** attachment는 Ready Local Media에 저장된 공개 URL을 다른 Visibility와 동일하게 사용한다
+- **AND** Note의 delivery·역참조 권한은 URL 획득 전 projection을 제한하지만 URL을 획득한 주체의 이후 byte 조회나 재전달을 막지 않는다
+- **AND** 이 capability는 Media proxy, audience별 signed URL 또는 byte 요청의 Kosmo viewer 재인가를 추가하지 않는다
+
 #### Scenario: 필요한 Media를 제공할 수 없는 Post
 
 - **WHEN** 현재 PostContent가 참조하는 Media가 없거나 Ready가 아니거나 저장된 URL·Media Type이 없다

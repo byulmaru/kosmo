@@ -100,6 +100,9 @@ PROD-461은 PROD-554, PROD-553, PROD-559와 PROD-581을 하나의 “이미지�
 - [앱과 backend의 순차 rollout] → backend schema/core/API를 먼저 배포하고 구버전 앱의 omitted input을 유지한다.
 - [저장된 공개 URL 정책 변화] → Kosmo는 provider URL을 조립하지 않고 완료 응답을 저장한다. URL
   교체 lifecycle은 별도 계약으로 다루며 raw storage reference는 protocol output에 노출하지 않는다.
+- [Followers Media URL 재공유] → Note delivery·역참조에서 recipient 권한을 확인한 뒤 저장된 공개 URL을
+  전달한다. URL 획득 뒤 byte 조회·재전달은 제한하지 않으며 Media proxy·audience별 signed URL은 별도
+  capability로 둔다.
 
 ## Migration Plan
 
@@ -107,7 +110,8 @@ PROD-461은 PROD-554, PROD-553, PROD-559와 PROD-581을 하나의 “이미지�
 2. PROD-581에서 nullable URL·Media Type column과 완료 write를 배포한다.
 3. PROD-559에서 저장된 표현을 쓰는 Local Note attachment와 sensitive projection을 배포한다. Media 없는 Note는 그대로 유지한다.
 4. PROD-553에서 picker dependency와 Composer upload UI를 배포한다.
-5. PROD-461에서 direct upload → Ready → Post 작성 → GraphQL document → Local Note를 통합 검증한다.
+5. PROD-461에서 격리 DB와 stateful Media Storage fake를 사용하는 통합 테스트로 발급 → client-equivalent direct
+   PUT → Ready → Post 작성 → GraphQL document → Local Note를 한 흐름에서 검증한다.
 6. rollback은 app/Fedify/API code를 이전 버전으로 되돌린다. 새 V1 document가 이미 저장됐다면 구버전
    canonicalizer가 Media node를 거부하므로 backend rollback 전에 해당 document 존재 여부와 호환 처리를 확인한다.
 

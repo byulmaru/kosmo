@@ -168,7 +168,7 @@ canonical·Linear·OpenSpec이 일치한다.
 
 **Verification**
 
-- 실제 browser 방식의 발급 → PUT → 완료 → Post 작성 → document 조회 → Local Note projection을 확인한다.
+- 격리 DB와 stateful Media Storage fake를 사용하는 통합 테스트에서 GraphQL 발급 → client-equivalent direct PUT → 완료 → Post 작성 → document 조회 → Local Note projection을 한 흐름으로 확인한다.
 - Web/iOS/Android의 최대 4개·상태·접근성 결과와 실행하지 못한 runtime 검증을 구분해 기록한다.
 - core/API/app/Fedify tests, schema/Relay, TypeScript, ESLint, Prettier, syncpack, strict OpenSpec과 diff check를 통과시킨다.
 

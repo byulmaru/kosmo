@@ -38,7 +38,8 @@ Accepted
 - ActivityPub projection은 paragraph/text/link를 안전한 `Note.content` HTML로 직렬화하고 Media node를 문서
   순서대로 `Note.attachment` Image로 분리한다. Image URL과 MIME type은 `mediaId`에서 조회 시점에 해석하고
   Media의 Alt Text는 Image의 사람이 읽을 수 있는 이름으로 제공한다. `sensitiveMedia`는 지원하는 ActivityPub
-  sensitive 속성으로 투영한다.
+  sensitive 속성으로 투영한다. Note의 audience·역참조 권한을 통과해 전달한 공개 Image URL은 이후 byte
+  조회에서 Kosmo viewer 인가를 다시 요구하지 않으며 URL 재공유 방지는 보장하지 않는다.
 - Media node를 HTML `<img>`와 `Note.attachment`에 중복 투영하지 않는다. attachment-only 수신자에게 내부
   Media 삽입 위치가 보존되지 않는 것은 현재 federation 표현의 허용된 손실이다.
 - Media 첨부 기능이 아직 배포되지 않은 출시 전 단계에서 기존 V1 초안의 `altText` node attr를 제거하고 Media
