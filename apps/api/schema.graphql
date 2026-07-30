@@ -166,6 +166,11 @@ type FollowProfilePayload {
   result: ProfileFollowResult!
 }
 
+type Hashtag implements Node {
+  id: ID!
+  name: String!
+}
+
 enum InstanceKind {
   ACTIVITYPUB
   LOCAL
@@ -318,6 +323,7 @@ type Profile implements Node {
   outgoingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileOutgoingProfileFollowRequestsConnection
   posts(after: String, before: String, first: Int, last: Int): PostConnection!
   relativeHandle: String!
+  tags: [Hashtag!]!
   unreadNotificationCount: Int!
   viewerState: ProfileViewerState
 }
@@ -505,7 +511,7 @@ input UpdateProfileInput {
   bio: String
   displayName: String
   followPolicy: ProfileFollowPolicy
-  id: ID!
+  tags: [String!]
 }
 
 type UpdateProfilePayload {

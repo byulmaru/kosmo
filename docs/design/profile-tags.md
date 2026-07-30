@@ -2,8 +2,8 @@
 
 ## 목적
 
-Local Profile Owner가 기존 Profile 편집 흐름에서 구조화된 Profile Tag를 관리하고, 공개 Profile 화면이 같은
-태그를 Web·Android·iOS에서 일관되게 표시하도록 한다.
+Local Profile Owner가 현재 선택한 Active Profile의 기존 편집 흐름에서 구조화된 Profile Tag를 관리하고, 공개
+Profile 화면이 같은 태그를 Web·Android·iOS에서 일관되게 표시하도록 한다.
 
 ## 편집
 
