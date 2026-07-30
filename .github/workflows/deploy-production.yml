@@ -7,14 +7,6 @@ on:
         description: Immutable SemVer GitHub Release tag to deploy or roll back to
         required: true
         type: string
-      migration_context_json:
-        description: Non-secret PROD-564 migration gate context JSON for this release
-        required: true
-        type: string
-      migration_secret_name:
-        description: Production database credential Secret name
-        required: true
-        type: string
 
 concurrency:
   group: production-release
@@ -58,24 +50,6 @@ jobs:
           IMAGE_REF: ${{ steps.release.outputs.image_ref }}
         shell: bash
         run: docker buildx imagetools inspect "${IMAGE_REF}" >/dev/null
-
-      - name: Validate migration gate context
-        env:
-          IMAGE_REF: ${{ steps.release.outputs.image_ref }}
-          MIGRATION_CONTEXT_JSON: ${{ inputs.migration_context_json }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          context_file="${RUNNER_TEMP}/production-migration-gate.json"
-          printf '%s' "${MIGRATION_CONTEXT_JSON}" > "${context_file}"
-          node scripts/production-migration-gate.mjs preflight "${context_file}"
-          jq -e --arg image "${IMAGE_REF}" '
-            .releaseImage == $image
-            and .migrationImage == $image
-            and .apiImage == $image
-            and .webImage == $image
-          ' "${context_file}" >/dev/null
 
       - name: Record release verification audit
         if: always()
@@ -170,19 +144,10 @@ jobs:
         env:
           ARGOCD_AUTH_TOKEN: ${{ steps.argocd-token.outputs.token }}
           IMAGE_REF: ${{ needs.verify_release.outputs.image_ref }}
-          MIGRATION_CONTEXT_JSON: ${{ inputs.migration_context_json }}
-          MIGRATION_SECRET_NAME: ${{ inputs.migration_secret_name }}
           PRODUCTION_AUDIT_FILE: ${{ runner.temp }}/production-audit.md
           RELEASE_TAG: ${{ inputs.release_tag }}
         shell: bash
-        run: |
-          set -euo pipefail
-
-          context_file="${RUNNER_TEMP}/production-migration-gate.json"
-          printf '%s' "${MIGRATION_CONTEXT_JSON}" > "${context_file}"
-          PRODUCTION_MIGRATION_CONTEXT_FILE="${context_file}" \
-          PRODUCTION_MIGRATION_SECRET_NAME="${MIGRATION_SECRET_NAME}" \
-            scripts/deploy-production-release.sh "${RELEASE_TAG}" "${IMAGE_REF}"
+        run: scripts/deploy-production-release.sh "${RELEASE_TAG}" "${IMAGE_REF}"
 
       - name: Record production release audit
         if: always()

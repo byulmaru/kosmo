@@ -10,7 +10,7 @@
 - migration Job과 API·Web Rollout에 같은 digest-pinned image를 전달하고, migration 성공과 두 preview workload의 준비가 확인되기 전에는 새 release를 활성화하지 않는다.
 - 같은 immutable GitHub Release tag를 다시 선택하면 고정된 같은 digest로 release를 재실행하고, 이전 정상 Release tag를 같은 pipeline에 입력해 application rollback을 수행한다.
 - workflow 입력·승인·선택한 identity·결과를 GitHub Actions와 Argo CD 기록에서 감사할 수 있게 하고, manifest·workflow·실패 경로 검증을 추가한다.
-- PROD-562의 production Application/runtime resource, PROD-564의 migration 단계·자동 safety gate, PROD-565의 실제 첫 release와 public smoke는 변경하지 않는다.
+- PROD-562의 production Application/runtime resource, PROD-564의 migration 단계·credential·자동 safety gate, PROD-565의 실제 첫 release와 public smoke는 변경하지 않는다.
 
 ## Authority / Provenance
 
@@ -34,5 +34,5 @@
 - GitHub immutable releases 설정, Docker build의 immutable Release 발행과 production deployment workflow
 - GitHub `production` Environment 설정과 Argo CD 배포 권한
 - Helm image reference, production Rollout 승격 설정과 manifest render 검증
-- `kosmo-prod` Application이 제공하는 release parameter seam 및 PROD-564가 제공하는 migration 성공 신호를 소비한다.
+- `kosmo-prod` Application이 제공하는 release parameter seam과 PROD-564가 구성한 Argo CD PreSync migration Job을 소비한다.
 - production resource 생성, migration policy/credential, DB rollback, public-origin smoke와 실제 첫 release 실행에는 영향이 없다.

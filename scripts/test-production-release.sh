@@ -110,12 +110,8 @@ case "${command}" in
     digest="$(state_value digest)"
     migration_enabled="$(state_value migration-enabled)"
     migration_command="$(state_value migration-command)"
-    migration_phase="$(state_value migration-phase)"
-    schema_authority="$(state_value schema-authority)"
-    migration_secret_name="$(state_value migration-secret-name)"
-    restore_point_name="$(state_value restore-point-name)"
     cat <<JSON
-{"spec":{"source":{"helm":{"parameters":[{"name":"version","value":"${tag}"},{"name":"imageDigest","value":"${digest}"},{"name":"migration.enabled","value":"${migration_enabled}"},{"name":"migration.command","value":"${migration_command}"},{"name":"migration.phase","value":"${migration_phase}"},{"name":"migration.schemaAuthority","value":"${schema_authority}"},{"name":"migration.secretName","value":"${migration_secret_name}"},{"name":"migration.restorePointName","value":"${restore_point_name}"}]}}}}
+{"spec":{"source":{"helm":{"parameters":[{"name":"version","value":"${tag}"},{"name":"imageDigest","value":"${digest}"},{"name":"migration.enabled","value":"${migration_enabled}"},{"name":"migration.command","value":"${migration_command}"}]}}}}
 JSON
     ;;
   set)
@@ -125,10 +121,6 @@ JSON
         imageDigest=*) printf '%s' "${argument#imageDigest=}" >"${FAKE_STATE}/digest" ;;
         migration.enabled=*) printf '%s' "${argument#migration.enabled=}" >"${FAKE_STATE}/migration-enabled" ;;
         migration.command=*) printf '%s' "${argument#migration.command=}" >"${FAKE_STATE}/migration-command" ;;
-        migration.phase=*) printf '%s' "${argument#migration.phase=}" >"${FAKE_STATE}/migration-phase" ;;
-        migration.schemaAuthority=*) printf '%s' "${argument#migration.schemaAuthority=}" >"${FAKE_STATE}/schema-authority" ;;
-        migration.secretName=*) printf '%s' "${argument#migration.secretName=}" >"${FAKE_STATE}/migration-secret-name" ;;
-        migration.restorePointName=*) printf '%s' "${argument#migration.restorePointName=}" >"${FAKE_STATE}/restore-point-name" ;;
       esac
     done
     ;;
@@ -137,10 +129,6 @@ JSON
     : >"${FAKE_STATE}/digest"
     : >"${FAKE_STATE}/migration-enabled"
     : >"${FAKE_STATE}/migration-command"
-    : >"${FAKE_STATE}/migration-phase"
-    : >"${FAKE_STATE}/schema-authority"
-    : >"${FAKE_STATE}/migration-secret-name"
-    : >"${FAKE_STATE}/restore-point-name"
     ;;
   manifests)
     digest="$(state_value digest)"
@@ -250,17 +238,6 @@ esac
 EOF
 chmod +x "${fake_bin}/argocd"
 
-cat >"${fake_bin}/migration-gate" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-
-echo "$*" >>"${FAKE_LOG}"
-[[ "$1" == "complete" ]]
-jq -e '.phase == "expand" and .releaseImage == "ghcr.io/byulmaru/kosmo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' "$2" >/dev/null
-jq -e '.status == "succeeded" and .databaseRollbackAttempted == false' "$3" >/dev/null
-EOF
-chmod +x "${fake_bin}/migration-gate"
-
 export PATH="${fake_bin}:${PATH}"
 export GITHUB_REPOSITORY=byulmaru/kosmo
 export ARGOCD_SERVER=argocd.example.test
@@ -311,20 +288,9 @@ run_deploy_test() {
   export FAKE_STATE="${test_dir}/deploy-${scenario}"
   export FAKE_LOG="${FAKE_STATE}/commands.log"
   export PRODUCTION_AUDIT_FILE="${FAKE_STATE}/audit.md"
-  export PRODUCTION_MIGRATION_CONTEXT_FILE="${FAKE_STATE}/migration-context.json"
-  export PRODUCTION_MIGRATION_GATE_COMMAND="${fake_bin}/migration-gate"
-  export PRODUCTION_MIGRATION_SECRET_NAME=kosmo-postgres-app
   export PRODUCTION_POLL_INTERVAL=0
   export PRODUCTION_WAIT_TIMEOUT=1
   mkdir -p "${FAKE_STATE}"
-  jq -n --arg image "${valid_image}" '{
-    phase: "expand",
-    schemaAuthority: "packages/core/drizzle",
-    releaseImage: $image,
-    migrationImage: $image,
-    apiImage: $image,
-    webImage: $image
-  }' >"${PRODUCTION_MIGRATION_CONTEXT_FILE}"
   if [[ "${scenario}" == "rerun" ]]; then
     printf '%s' 1.0.0 >"${FAKE_STATE}/tag"
     printf '%s' "${valid_digest}" >"${FAKE_STATE}/digest"
@@ -342,10 +308,6 @@ run_deploy_test() {
   fi
   printf '%s' true >"${FAKE_STATE}/migration-enabled"
   printf '%s' migrate >"${FAKE_STATE}/migration-command"
-  printf '%s' expand >"${FAKE_STATE}/migration-phase"
-  printf '%s' packages/core/drizzle >"${FAKE_STATE}/schema-authority"
-  printf '%s' kosmo-postgres-app >"${FAKE_STATE}/migration-secret-name"
-  : >"${FAKE_STATE}/restore-point-name"
 
   if [[ "${expected_result}" == "success" ]]; then
     "${repo_root}/scripts/deploy-production-release.sh" 1.0.0 "${valid_image}" >/dev/null
@@ -355,6 +317,9 @@ run_deploy_test() {
     grep -Fq -- '- Result: failed' "${PRODUCTION_AUDIT_FILE}" || fail "${scenario} did not record failure"
     grep -Fq -- '- Recovery: restored-0.9.0' "${PRODUCTION_AUDIT_FILE}" || fail "${scenario} did not restore the previous release"
     [[ "$(cat "${FAKE_STATE}/digest")" == "${previous_digest}" ]] || fail "${scenario} restored desired state instead of the previous active identity"
+  fi
+  if grep -Eq 'migration\.(phase|schemaAuthority|secretName|restorePointName)=' "${FAKE_LOG}"; then
+    fail "${scenario} changed PROD-564-owned migration policy or credential parameters"
   fi
 }
 
@@ -405,6 +370,12 @@ if grep -Fq 'contract-restore-point' "${deploy_workflow}"; then
 fi
 if grep -Eq 'production-contract|contract_approval|APPROVED_CONTRACT_CONTEXT_SHA256|PRODUCTION_CONTRACT_PREFLIGHT' "${deploy_workflow}"; then
   fail "the production release workflow must not add a contract-only approval path"
+fi
+if grep -Eq 'migration_context_json|MIGRATION_CONTEXT_JSON|migration_secret_name|MIGRATION_SECRET_NAME|production-migration-gate' "${deploy_workflow}"; then
+  fail "the production release workflow must not accept or assemble migration gate inputs"
+fi
+if grep -Eq 'PRODUCTION_MIGRATION_CONTEXT_FILE|PRODUCTION_MIGRATION_GATE_COMMAND|PRODUCTION_MIGRATION_SECRET_NAME|production-migration-gate' "${repo_root}/scripts/deploy-production-release.sh"; then
+  fail "the production deploy script must use the Argo CD PreSync Job as its migration barrier"
 fi
 
 echo "Production release publish, verification, rerun, failure recovery, and audit checks passed."

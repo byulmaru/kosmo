@@ -59,10 +59,10 @@
 - Authority / Provenance: PROD-563
 - Status: Active
 - Context / Problem: 현재 dev의 자동 승격을 production에 사용하면 migration 또는 다른 workload의 preview 상태를 확인하기 전에 API나 Web 하나가 active가 될 수 있다.
-- Decision Outcome: Production에서는 PROD-564의 같은-digest migration 성공 뒤 API와 Web preview를 만들고, 둘이 모두 준비된 다음 pipeline이 두 Rollout을 승격한다. Preview 실패 시 승격하지 않고, 승격 또는 active identity 확인 실패 시 직전 active identity로 둘을 복구한다.
+- Decision Outcome: Production에서는 PROD-564의 자동 safety gate가 적용된 같은-digest Argo CD PreSync migration Job을 실행한다. General release workflow는 migration context·phase·schema authority·credential을 입력받거나 gate를 다시 호출하지 않고 `argocd app sync` 성공을 Job 성공 신호로 사용한다. Sync 성공 뒤 API와 Web preview를 만들고, 둘이 모두 준비된 다음 pipeline이 두 Rollout을 승격한다. PreSync Job이나 preview가 실패하면 승격하지 않고, 승격 또는 active identity 확인 실패 시 직전 active identity로 둘을 복구한다.
 - Alternatives Considered: 두 Rollout의 독립 자동 승격은 cross-workload gate를 제공하지 않는다. Migration 뒤 API와 Web을 순차 완전 배포하는 방식은 중간에 서로 다른 release가 active가 되는 시간을 정상 경로로 만들므로 선택하지 않는다.
-- Consequences: Pipeline은 두 Rollout의 preview/active 상태를 관찰하고 promotion/abort 권한을 가져야 한다. Kubernetes 차원에서 완전한 원자 승격은 아니므로 실패 복구와 최종 identity 검증이 필요하다.
-- Confirmation / Follow-up: migration 실패, 각 preview 실패, 정상 동시 준비, promotion 실패와 최종 identity mismatch 경로를 자동 검증한다.
+- Consequences: Pipeline은 Argo CD sync와 두 Rollout의 preview/active 상태를 관찰하고 promotion/abort 권한을 가져야 한다. Migration 정책 입력은 PROD-564와 production Application에 남는다. Kubernetes 차원에서 완전한 원자 승격은 아니므로 실패 복구와 최종 identity 검증이 필요하다.
+- Confirmation / Follow-up: workflow에 수동 migration context가 없는지, rendered PreSync Job의 digest, sync 실패, 각 preview 실패, 정상 동시 준비, promotion 실패와 최종 identity mismatch 경로를 자동 검증한다.
 
 ### Application rollback은 이전 tag와 digest를 같은 pipeline에 재입력한다
 

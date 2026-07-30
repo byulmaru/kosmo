@@ -40,17 +40,17 @@
 
 ### Requirement: Migration과 workload는 같은 release identity를 사용한다
 
-**Authority / Provenance:** PROD-563 — 시스템은 production migration Job, API Rollout과 Web Rollout에 하나의 동일한 digest-pinned image identity를 전달해야 한다(MUST). PROD-564가 제공하는 자동 safety gate와 해당 release migration 성공이 확인되기 전에는 새 API·Web workload를 활성화해서는 안 된다(MUST NOT).
+**Authority / Provenance:** PROD-563 — 시스템은 production migration Job, API Rollout과 Web Rollout에 하나의 동일한 digest-pinned image identity를 전달해야 한다(MUST). PROD-564의 자동 safety gate가 적용된 Argo CD PreSync migration Job이 해당 release에 대해 성공하기 전에는 새 API·Web workload를 활성화해서는 안 된다(MUST NOT). General release workflow가 운영자에게 migration context, phase, schema authority 또는 credential을 별도 입력받아 PROD-564의 계약을 복제해서는 안 된다(MUST NOT).
 
 #### Scenario: Migration 성공
 
 - **WHEN** 선택한 digest를 사용하는 production migration이 성공한다
-- **THEN** 시스템은 같은 digest를 사용하는 API·Web preview workload의 준비 검증으로 진행한다
+- **THEN** Argo CD sync는 PreSync hook 완료 뒤 같은 digest를 사용하는 API·Web preview workload의 준비 검증으로 진행한다
 
 #### Scenario: Migration 실패 또는 성공 신호 부재
 
 - **WHEN** 선택한 release의 migration이 실패하거나 성공으로 확인되지 않는다
-- **THEN** 시스템은 새 API·Web release를 활성화하지 않고 배포를 실패로 기록한다
+- **THEN** Argo CD sync는 실패하고 시스템은 새 API·Web release를 활성화하지 않은 채 배포를 실패로 기록한다
 
 ### Requirement: API와 Web은 활성화 전에 함께 검증된다
 

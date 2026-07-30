@@ -8,17 +8,11 @@ namespace=kosmo-prod
 poll_interval="${PRODUCTION_POLL_INTERVAL:-5}"
 wait_timeout="${PRODUCTION_WAIT_TIMEOUT:-600}"
 audit_file="${PRODUCTION_AUDIT_FILE:-}"
-gate_context_file="${PRODUCTION_MIGRATION_CONTEXT_FILE:?PRODUCTION_MIGRATION_CONTEXT_FILE is required}"
-migration_secret_name="${PRODUCTION_MIGRATION_SECRET_NAME:?PRODUCTION_MIGRATION_SECRET_NAME is required}"
 digest="${image_ref#*@}"
 previous_tag=""
 previous_digest=""
 previous_migration_enabled=""
 previous_migration_command=""
-previous_migration_phase=""
-previous_schema_authority=""
-previous_migration_secret_name=""
-previous_restore_point_name=""
 previous_image="none"
 deployment_changed=false
 deployment_succeeded=false
@@ -38,14 +32,6 @@ argocd_prod() {
   argocd --server "${ARGOCD_SERVER:?ARGOCD_SERVER is required}" --grpc-web "$@"
 }
 
-migration_gate() {
-  if [[ -n "${PRODUCTION_MIGRATION_GATE_COMMAND:-}" ]]; then
-    "${PRODUCTION_MIGRATION_GATE_COMMAND}" "$@"
-  else
-    node scripts/production-migration-gate.mjs "$@"
-  fi
-}
-
 parameter_value() {
   local app_json="$1"
   local parameter="$2"
@@ -60,20 +46,12 @@ set_release_parameters() {
   local release_digest="$2"
   local enabled="$3"
   local command="$4"
-  local phase="$5"
-  local schema_authority="$6"
-  local secret_name="$7"
-  local restore_point_name="$8"
 
   argocd_prod app set "${application}" \
     -p "version=${tag}" \
     -p "imageDigest=${release_digest}" \
     -p "migration.enabled=${enabled}" \
     -p "migration.command=${command}" \
-    -p "migration.phase=${phase}" \
-    -p "migration.schemaAuthority=${schema_authority}" \
-    -p "migration.secretName=${secret_name}" \
-    -p "migration.restorePointName=${restore_point_name}" \
     --validate >/dev/null
 
   verify_release_parameters "$@"
@@ -84,21 +62,13 @@ verify_release_parameters() {
   local release_digest="$2"
   local enabled="$3"
   local command="$4"
-  local phase="$5"
-  local schema_authority="$6"
-  local secret_name="$7"
-  local restore_point_name="$8"
 
   local app_json
   app_json="$(argocd_prod app get "${application}" --refresh -o json)"
   if [[ "$(parameter_value "${app_json}" version)" != "${tag}" \
     || "$(parameter_value "${app_json}" imageDigest)" != "${release_digest}" \
     || "$(parameter_value "${app_json}" migration.enabled)" != "${enabled}" \
-    || "$(parameter_value "${app_json}" migration.command)" != "${command}" \
-    || "$(parameter_value "${app_json}" migration.phase)" != "${phase}" \
-    || "$(parameter_value "${app_json}" migration.schemaAuthority)" != "${schema_authority}" \
-    || "$(parameter_value "${app_json}" migration.secretName)" != "${secret_name}" \
-    || "$(parameter_value "${app_json}" migration.restorePointName)" != "${restore_point_name}" ]]; then
+    || "$(parameter_value "${app_json}" migration.command)" != "${command}" ]]; then
     echo "Argo CD did not preserve the requested production release parameters" >&2
     return 1
   fi
@@ -243,70 +213,21 @@ activate_rollouts() {
   done
 }
 
-complete_migration_gate() {
-  local context_phase="$1"
-  local schema_authority="$2"
-  local result_file
-  result_file="$(mktemp)"
-
-  jq -n \
-    --arg image "${image_ref}" \
-    --arg phase "${context_phase}" \
-    --arg schema_authority "${schema_authority}" \
-    '{
-      releaseImage: $image,
-      phase: $phase,
-      schemaAuthority: $schema_authority,
-      status: "succeeded",
-      databaseRollbackAttempted: false
-    }' >"${result_file}"
-
-  if ! migration_gate complete "${gate_context_file}" "${result_file}"; then
-    rm -f "${result_file}"
-    return 1
-  fi
-  rm -f "${result_file}"
-}
-
 deploy_release() {
-  local context_phase
-  local schema_authority
-
-  context_phase="$(jq -r '.phase' "${gate_context_file}")"
-  schema_authority="$(jq -r '.schemaAuthority' "${gate_context_file}")"
-  if ! jq -e --arg image "${image_ref}" '
-    .releaseImage == $image
-    and .migrationImage == $image
-    and .apiImage == $image
-    and .webImage == $image
-  ' "${gate_context_file}" >/dev/null; then
-    echo "migration gate context does not match the verified release identity" >&2
-    return 1
-  fi
-
   deployment_changed=true
   set_release_parameters \
     "${release_tag}" \
     "${digest}" \
     true \
-    migrate \
-    "${context_phase}" \
-    "${schema_authority}" \
-    "${migration_secret_name}" \
-    ''
+    migrate
   validate_desired_images "${image_ref}"
   argocd_prod app sync "${application}" --timeout "${wait_timeout}"
   verify_release_parameters \
     "${release_tag}" \
     "${digest}" \
     true \
-    migrate \
-    "${context_phase}" \
-    "${schema_authority}" \
-    "${migration_secret_name}" \
-    ''
+    migrate
   validate_desired_images "${image_ref}"
-  complete_migration_gate "${context_phase}" "${schema_authority}"
   activate_rollouts "${image_ref}"
 }
 
@@ -316,11 +237,7 @@ restore_previous_identity() {
       "${previous_tag}" \
       "${previous_digest}" \
       "${previous_migration_enabled}" \
-      "${previous_migration_command}" \
-      "${previous_migration_phase}" \
-      "${previous_schema_authority}" \
-      "${previous_migration_secret_name}" \
-      "${previous_restore_point_name}"
+      "${previous_migration_command}"
     argocd_prod app sync "${application}" \
       --resource argoproj.io:Rollout:kosmo-api \
       --resource argoproj.io:Rollout:kosmo-web \
@@ -332,11 +249,7 @@ restore_previous_identity() {
       -p version \
       -p imageDigest \
       -p migration.enabled \
-      -p migration.command \
-      -p migration.phase \
-      -p migration.schemaAuthority \
-      -p migration.secretName \
-      -p migration.restorePointName >/dev/null || true
+      -p migration.command >/dev/null || true
     recovery_result="no-previous-release"
   fi
 }
@@ -383,10 +296,6 @@ trap on_exit EXIT
 current_app="$(argocd_prod app get "${application}" --refresh -o json)"
 previous_migration_enabled="$(parameter_value "${current_app}" migration.enabled)"
 previous_migration_command="$(parameter_value "${current_app}" migration.command)"
-previous_migration_phase="$(parameter_value "${current_app}" migration.phase)"
-previous_schema_authority="$(parameter_value "${current_app}" migration.schemaAuthority)"
-previous_migration_secret_name="$(parameter_value "${current_app}" migration.secretName)"
-previous_restore_point_name="$(parameter_value "${current_app}" migration.restorePointName)"
 api_active_identity="$(active_rollout_identity kosmo-api)"
 web_active_identity="$(active_rollout_identity kosmo-web)"
 if [[ "${api_active_identity}" != "${web_active_identity}" ]]; then
