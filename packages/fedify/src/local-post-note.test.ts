@@ -59,8 +59,6 @@ let testProfileIds: string[] = [];
 describe('ActivityPub Local Post Note', () => {
   before(async () => {
     process.env.DATABASE_URL = databaseUrl;
-    process.env.MEDIA_STORAGE_SERVICE_API_KEY = 'media-secret';
-    process.env.MEDIA_STORAGE_SERVICE_ORIGIN = 'https://media-api.example';
     process.env.PUBLIC_ORIGIN = publicOrigin;
     ({
       ActivityPubActors,
@@ -205,26 +203,19 @@ describe('ActivityPub Local Post Note', () => {
     );
   });
 
-  test('projects ordered Ready Local Media as Image attachments without HTML duplication', async () => {
+  test('projects stored ordered Ready Local Media as Image attachments without HTML duplication or network reads', async () => {
     const author = await createProfile({ handle: 'media-author', kind: InstanceKind.LOCAL });
     const firstMedia = await createMedia(author.id, {
+      originalMediaType: 'image/avif',
+      originalUrl: 'https://cdn.example/media/first',
       storageReference: 'provider-opaque-reference-1',
     });
     const secondMedia = await createMedia(author.id, {
+      originalUrl: 'https://cdn.example/media/second',
       storageReference: 'provider/opaque?reference=2',
     });
-    const requests: { authorization: string | null; path: string }[] = [];
-    mock.method(globalThis, 'fetch', async (input: string | URL | Request, init?: RequestInit) => {
-      const url = new URL(input instanceof Request ? input.url : input.toString());
-      requests.push({
-        authorization: new Headers(init?.headers).get('Authorization'),
-        path: url.pathname,
-      });
-      const storageReference = decodeURIComponent(url.pathname.split('/').at(-1) ?? '');
-      return Response.json({
-        mediaType: storageReference === firstMedia.storageReference ? 'image/avif' : 'image/webp',
-        url: `https://cdn.example/media/${encodeURIComponent(storageReference)}`,
-      });
+    const networkRead = mock.method(globalThis, 'fetch', async () => {
+      throw new Error('Media projection must use stored representation metadata');
     });
     const post = await createPost(author.id, {
       media: [
@@ -246,31 +237,13 @@ describe('ActivityPub Local Post Note', () => {
       attachments.push(attachment);
     }
     assert.equal(attachments.length, 2);
-    assert.equal(
-      attachments[0]?.url?.toString(),
-      `https://cdn.example/media/${encodeURIComponent(secondMedia.storageReference)}`,
-    );
+    assert.equal(attachments[0]?.url?.toString(), 'https://cdn.example/media/second');
     assert.equal(attachments[0]?.mediaType, 'image/webp');
     assert.equal(attachments[0]?.name?.toString(), '');
-    assert.equal(
-      attachments[1]?.url?.toString(),
-      `https://cdn.example/media/${encodeURIComponent(firstMedia.storageReference)}`,
-    );
+    assert.equal(attachments[1]?.url?.toString(), 'https://cdn.example/media/first');
     assert.equal(attachments[1]?.mediaType, 'image/avif');
     assert.equal(attachments[1]?.name?.toString(), '첫 번째 설명');
-    assert.deepEqual(
-      requests.toSorted((left, right) => left.path.localeCompare(right.path)),
-      [
-        {
-          authorization: 'Bearer media-secret',
-          path: '/v1/uploads/provider-opaque-reference-1',
-        },
-        {
-          authorization: 'Bearer media-secret',
-          path: '/v1/uploads/provider%2Fopaque%3Freference%3D2',
-        },
-      ].toSorted((left, right) => left.path.localeCompare(right.path)),
-    );
+    assert.equal(networkRead.mock.callCount(), 0);
 
     const json = JSON.stringify(await note.toJsonLd());
     assert.equal(json.includes(firstMedia.id), false);
@@ -282,20 +255,29 @@ describe('ActivityPub Local Post Note', () => {
     const uploading = await createMedia(author.id, { state: MediaState.UPLOADING });
     const remote = await createMedia(author.id, { source: MediaSource.REMOTE });
     const unavailable = await createMedia(author.id, {
+      originalMediaType: null,
+      originalUrl: null,
       storageReference: 'provider-opaque-reference',
     });
+    const malformed = await createMedia(author.id, { originalUrl: 'not-a-url' });
+    const nonHttp = await createMedia(author.id, { originalUrl: 'data:image/png;base64,AA==' });
     const missingId = crypto.randomUUID();
-    const mediaLookup = mock.method(
-      globalThis,
-      'fetch',
-      async () => new Response(null, { status: 404 }),
-    );
+    const networkRead = mock.method(globalThis, 'fetch', async () => {
+      throw new Error('Unavailable stored metadata must not trigger a network read');
+    });
 
-    for (const mediaId of [uploading.id, remote.id, unavailable.id, missingId]) {
+    for (const mediaId of [
+      uploading.id,
+      remote.id,
+      unavailable.id,
+      malformed.id,
+      nonHttp.id,
+      missingId,
+    ]) {
       const post = await createPost(author.id, { media: [{ altText: null, mediaId }] });
       assert.equal(await dispatchLocalPostNote(createContext(), { id: post.id }), null);
     }
-    assert.equal(mediaLookup.mock.callCount(), 1);
+    assert.equal(networkRead.mock.callCount(), 0);
   });
 
   test('returns the same unavailable boundary for unsupported or ineligible Posts', async () => {
@@ -606,7 +588,15 @@ const createMedia = async (
     source = MediaSource.LOCAL,
     state = MediaState.READY,
     storageReference = `u_${crypto.randomUUID()}`,
+    originalMediaType = source === MediaSource.LOCAL && state === MediaState.READY
+      ? 'image/webp'
+      : null,
+    originalUrl = source === MediaSource.LOCAL && state === MediaState.READY
+      ? `https://cdn.example/media/${encodeURIComponent(storageReference)}`
+      : null,
   }: {
+    originalMediaType?: string | null;
+    originalUrl?: string | null;
     source?: (typeof MediaSource)[keyof typeof MediaSource];
     state?: (typeof MediaState)[keyof typeof MediaState];
     storageReference?: string;
@@ -626,6 +616,8 @@ const createMedia = async (
     .insert(Media)
     .values({
       accountId: account.id,
+      originalMediaType,
+      originalUrl,
       profileId,
       readyAt: state === MediaState.READY ? Temporal.Now.instant() : null,
       source,

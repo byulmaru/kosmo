@@ -26,7 +26,6 @@ import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { postContentDocumentToHtml } from '@kosmo/core/post-content/server';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import { escapeText } from 'entities/escape';
-import { z } from 'zod';
 import { isCanonicalPostId, resolveActivityPubPostUri } from './activitypub-post-uri';
 import type { Context, RequestContext } from '@fedify/fedify';
 import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
@@ -50,13 +49,6 @@ type LocalPostNoteProjection = LocalPostNote & {
 };
 
 type LocalPostNoteContext = Pick<Context<void>, 'canonicalOrigin' | 'getActorUri'>;
-
-const mediaRepresentationSchema = z.object({
-  mediaType: z.string().trim().min(1),
-  url: z.httpUrl(),
-});
-
-const MEDIA_STORAGE_REQUEST_TIMEOUT_MS = 10_000;
 
 const loadLocalPostNoteRow = async (context: LocalPostNoteContext, postId: string) => {
   if (!isCanonicalPostId(postId)) {
@@ -124,37 +116,6 @@ const loadLocalPostNote = async (
   };
 };
 
-const resolvePublicMediaRepresentation = async (
-  storageReference: string,
-): Promise<{ readonly mediaType: string; readonly url: URL } | null> => {
-  const mediaStorageOrigin = process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
-  const mediaStorageApiKey = process.env.MEDIA_STORAGE_SERVICE_API_KEY;
-  if (!mediaStorageOrigin || !mediaStorageApiKey) {
-    return null;
-  }
-
-  const representationPath = `/v1/uploads/${encodeURIComponent(storageReference)}`;
-  try {
-    const representationUrl = new URL(representationPath, mediaStorageOrigin);
-    if (representationUrl.pathname !== representationPath) {
-      return null;
-    }
-    const response = await globalThis.fetch(representationUrl, {
-      headers: { Authorization: `Bearer ${mediaStorageApiKey}` },
-      signal: AbortSignal.timeout(MEDIA_STORAGE_REQUEST_TIMEOUT_MS),
-    });
-    if (!response.ok) {
-      return null;
-    }
-    const representation = mediaRepresentationSchema.safeParse(await response.json());
-    return representation.success
-      ? { mediaType: representation.data.mediaType, url: new URL(representation.data.url) }
-      : null;
-  } catch {
-    return null;
-  }
-};
-
 const projectLocalMediaAttachments = async (
   mediaNodes: readonly Extract<
     PostContentDocumentV1['body']['content'][number],
@@ -169,7 +130,11 @@ const projectLocalMediaAttachments = async (
     return null;
   }
   const rows = await db
-    .select({ id: Media.id, storageReference: Media.storageReference })
+    .select({
+      id: Media.id,
+      originalMediaType: Media.originalMediaType,
+      originalUrl: Media.originalUrl,
+    })
     .from(Media)
     .where(
       and(
@@ -182,26 +147,27 @@ const projectLocalMediaAttachments = async (
     return null;
   }
 
-  const resolvedRows = await Promise.all(
-    rows.map(async (media) => ({
-      id: media.id,
-      representation: await resolvePublicMediaRepresentation(media.storageReference),
-    })),
-  );
-  const representationsById = new Map(
-    resolvedRows.map(({ id, representation }) => [id, representation]),
-  );
+  const mediaById = new Map(rows.map((media) => [media.id, media]));
   const attachments: Image[] = [];
   for (const node of mediaNodes) {
-    const representation = representationsById.get(node.attrs.mediaId);
-    if (!representation) {
+    const media = mediaById.get(node.attrs.mediaId);
+    if (!media?.originalUrl || !media.originalMediaType) {
+      return null;
+    }
+    let url: URL;
+    try {
+      url = new URL(media.originalUrl);
+    } catch {
+      return null;
+    }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
       return null;
     }
     attachments.push(
       new Image({
-        mediaType: representation.mediaType,
+        mediaType: media.originalMediaType,
         ...(node.attrs.altText !== null ? { name: node.attrs.altText } : {}),
-        url: representation.url,
+        url,
       }),
     );
   }

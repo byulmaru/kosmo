@@ -49,8 +49,6 @@ let testProfileIds: string[] = [];
 describe('ActivityPub Local Post delivery', () => {
   before(async () => {
     process.env.DATABASE_URL = databaseUrl;
-    process.env.MEDIA_STORAGE_SERVICE_API_KEY = 'media-secret';
-    process.env.MEDIA_STORAGE_SERVICE_ORIGIN = 'https://media-api.example';
     process.env.PUBLIC_ORIGIN = publicOrigin;
     ({
       Accounts,
@@ -150,8 +148,18 @@ describe('ActivityPub Local Post delivery', () => {
       receivedAt: Temporal.Instant.from('2026-07-30T00:00:00Z'),
       uri: 'https://remote.example/notes/media-parent',
     });
-    const firstMedia = await createMedia(author.id, 'opaque-first');
-    const secondMedia = await createMedia(author.id, 'opaque/second');
+    const firstMedia = await createMedia(
+      author.id,
+      'opaque-first',
+      'https://cdn.example/first',
+      'image/avif',
+    );
+    const secondMedia = await createMedia(
+      author.id,
+      'opaque/second',
+      'https://cdn.example/second',
+      'image/webp',
+    );
     const reply = await createPost(author.id, {
       media: [
         { altText: '', mediaId: secondMedia.id },
@@ -160,19 +168,8 @@ describe('ActivityPub Local Post delivery', () => {
       replyParentId: parent.id,
       sensitiveMedia: true,
     });
-    const mediaRepresentations = new Map([
-      [firstMedia.storageReference, { mediaType: 'image/avif', url: 'https://cdn.example/first' }],
-      [
-        secondMedia.storageReference,
-        { mediaType: 'image/webp', url: 'https://cdn.example/second' },
-      ],
-    ]);
-    mock.method(globalThis, 'fetch', async (input: string | URL | Request, init?: RequestInit) => {
-      const url = new URL(input instanceof Request ? input.url : input.toString());
-      assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer media-secret');
-      const storageReference = decodeURIComponent(url.pathname.split('/').at(-1) ?? '');
-      const representation = mediaRepresentations.get(storageReference);
-      return representation ? Response.json(representation) : new Response(null, { status: 404 });
+    const networkRead = mock.method(globalThis, 'fetch', async () => {
+      throw new Error('Create delivery must use stored representation metadata');
     });
     const fixture = createContextFixture();
     mock.method(localOutboundFederation, 'createContext', () => fixture.context);
@@ -204,6 +201,7 @@ describe('ActivityPub Local Post delivery', () => {
     const json = JSON.stringify(await object.toJsonLd());
     assert.equal(json.includes(firstMedia.id), false);
     assert.equal(json.includes(secondMedia.id), false);
+    assert.equal(networkRead.mock.callCount(), 0);
   });
 
   test('Public/Unlisted만 Parent Author에게 보내고 Followers·Direct·일반 Post는 no-op이다', async () => {
@@ -633,7 +631,12 @@ const createPost = async (
     .then(firstOrThrow);
 };
 
-const createMedia = async (profileId: string, storageReference: string) => {
+const createMedia = async (
+  profileId: string,
+  storageReference: string,
+  originalUrl: string,
+  originalMediaType: string,
+) => {
   const account = await db
     .insert(Accounts)
     .values({
@@ -648,6 +651,8 @@ const createMedia = async (profileId: string, storageReference: string) => {
     .insert(Media)
     .values({
       accountId: account.id,
+      originalMediaType,
+      originalUrl,
       profileId,
       readyAt: Temporal.Now.instant(),
       source: MediaSource.LOCAL,
