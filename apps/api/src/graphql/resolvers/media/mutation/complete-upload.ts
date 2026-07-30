@@ -2,9 +2,16 @@ import { db, first, firstOrThrowWith, Media } from '@kosmo/core/db';
 import { MediaSource, MediaState } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
 import { and, eq } from 'drizzle-orm';
+import { z } from 'zod';
 import { builder } from '@/graphql/builder';
-import { getMediaStorageRepresentation } from '@/media-storage';
 import { MediaObject } from '../ref';
+
+const representationResponseSchema = z.object({
+  mediaType: z.string().trim().min(1),
+  url: z.httpUrl(),
+});
+
+const MEDIA_STORAGE_REQUEST_TIMEOUT_MS = 10_000;
 
 builder.mutationField('completeMediaUpload', (t) =>
   t.withAuth({ usingProfile: true }).fieldWithInput({
@@ -34,16 +41,43 @@ builder.mutationField('completeMediaUpload', (t) =>
         return { media };
       }
 
-      const representation = await getMediaStorageRepresentation(
-        media.storageReference,
-        ctx.c.req.raw.signal,
-      );
+      const mediaStorageOrigin = process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
+      const mediaStorageApiKey = process.env.MEDIA_STORAGE_SERVICE_API_KEY;
+      if (!mediaStorageOrigin || !mediaStorageApiKey) {
+        throw new Error('Media Storage Service is not configured');
+      }
+
+      const representationPath = `/v1/uploads/${encodeURIComponent(media.storageReference)}`;
+      const representationUrl = new URL(representationPath, mediaStorageOrigin);
+      if (representationUrl.pathname !== representationPath) {
+        throw new Error('Media Storage Service returned an unsafe upload reference');
+      }
+
+      const response = await globalThis.fetch(representationUrl, {
+        headers: { Authorization: `Bearer ${mediaStorageApiKey}` },
+        signal: AbortSignal.any([
+          ctx.c.req.raw.signal,
+          AbortSignal.timeout(MEDIA_STORAGE_REQUEST_TIMEOUT_MS),
+        ]),
+      });
+      if (response.status === 404) {
+        throw new Error('Media upload is not complete');
+      }
+      if (response.status !== 200) {
+        throw new Error(
+          `Media Storage Service rejected representation lookup (${response.status})`,
+        );
+      }
+      const representation = representationResponseSchema.safeParse(await response.json());
+      if (!representation.success) {
+        throw new Error('Media Storage Service returned an invalid representation');
+      }
 
       const completed = await db
         .update(Media)
         .set({
-          originalMediaType: representation.mediaType,
-          originalUrl: representation.url,
+          originalMediaType: representation.data.mediaType,
+          originalUrl: representation.data.url,
           readyAt: Temporal.Now.instant(),
           state: MediaState.READY,
         })
