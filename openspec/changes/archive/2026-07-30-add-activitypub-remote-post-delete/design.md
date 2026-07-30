@@ -38,8 +38,8 @@ activity receipt를 추가하지 않는다.
 - Fedify inbox listener 하나가 actor-scoped route와 shared route를 공유하므로 별도 HTTP route가 필요하지 않다.
 - `Delete.objectIds`는 direct IRI와 embedded object 모두에서 target identity 후보를 제공한다. embedded 여부를
   확인하려고 normal document loader를 사용하면 불필요한 remote fetch가 발생할 수 있다.
-- `findStoredRemoteProfileActorByUri`는 ACTIVE ActivityPub Profile을 조회하고 caller가 Instance
-  ACTIVE/UNRESPONSIVE를 제한하는 기존 Create 경계를 제공한다.
+- `findStoredRemoteProfileActorByUri`는 ACTIVE ActivityPub Profile과 가용 Instance를 제한하는 기존 Create
+  경계이므로, 이미 저장된 identity의 terminal Delete에는 재사용하지 않는다.
 - `ActivityPubPosts`는 URI와 Post를 1:1로 연결하지만 actor를 중복 저장하지 않는다. Author 검증은
   mapping→Post→Profile→ActivityPubActor/Instance join에서 파생해야 한다.
 - `deletePost`는 author revalidation과 조건부 Active→Tombstone 멱등성을 이미 소유한다. ingress가 Posts를

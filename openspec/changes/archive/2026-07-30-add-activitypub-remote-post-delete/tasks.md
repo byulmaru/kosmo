@@ -15,7 +15,8 @@ personal/shared inbox의 verified typed Delete가 direct object IRI 또는 지�
 **Guardrails**
 
 - actor와 object HTTP(S) URI는 각각 정확히 하나여야 한다.
-- ACTIVE stored ActivityPub Actor/Profile과 ACTIVITYPUB ACTIVE/UNRESPONSIVE Instance만 허용한다.
+- stored ActivityPub Actor와 ACTIVITYPUB Instance Type을 요구하되 Profile/Instance의 현재 가용 상태와 무관하게
+  검증된 Delete를 반영한다.
 - Local Post, 다른 actor/object/Author와 unsupported embedded object를 변경하지 않는다.
 - canonical Post delete action을 재사용하고 handler에서 Post lifecycle을 직접 복제하지 않는다.
 - inbound remote Delete는 Local outbound Delete/Repost Undo/Notification cleanup을 만들지 않는다.
@@ -24,7 +25,8 @@ personal/shared inbox의 verified typed Delete가 direct object IRI 또는 지�
 **Verification**
 
 - personal/shared, direct IRI, embedded Tombstone과 no-network 처리를 검증한다.
-- unknown/inactive/SUSPENDED/non-ActivityPub actor, ambiguous URI, cross-actor/object, Announce mapping과 Local Post 거부를 검증한다.
+- unknown/non-ActivityPub actor, ambiguous URI, cross-actor/object, Announce mapping과 Local Post 거부 및 unavailable
+  remote Author의 Delete 반영을 검증한다.
 - Active→Tombstone, deletedAt, transaction rollback과 Local delivery 부재를 검증한다.
 - 기존 Local root/Reply Delete delivery와 repeated Local Delete를 회귀 검증한다.
 

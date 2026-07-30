@@ -24,12 +24,12 @@
 
 ### Requirement: Known remote author와 exact object ownership 검증
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/architecture/core-services.md`, PROD-579, PROD-365 — 시스템은 저장된 eligible ActivityPub actor가 자신이 작성한 기존 remote Post object를 삭제하는 경우만 허용해야 한다(MUST). actor, mapping, Post Author와 origin을 하나의 exact ownership chain으로 검증해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/architecture/core-services.md`, PROD-579, PROD-365 — 시스템은 저장된 ActivityPub actor가 자신이 작성한 기존 remote Post object를 삭제하는 경우만 허용해야 한다(MUST). actor, mapping, Post Author와 origin을 하나의 exact ownership chain으로 검증해야 하며(MUST), 검증된 삭제를 Profile 또는 Instance의 현재 가용 상태 때문에 거부하지 않아야 한다(MUST NOT).
 
 #### Scenario: exact remote author와 mapping 허용
 
 - **WHEN** activity actor URI가 저장된 ActivityPub Actor와 정확히 일치한다
-- **AND** Actor의 Profile은 ACTIVE이고 Instance는 ACTIVITYPUB이면서 ACTIVE 또는 UNRESPONSIVE다
+- **AND** Actor의 Profile Origin은 Remote이고 Instance Type은 ACTIVITYPUB이다
 - **AND** object URI가 기존 ActivityPub Post mapping URI와 정확히 일치한다
 - **AND** mapping의 Post Author Profile이 해당 Actor의 Profile과 같다
 - **AND** mapping의 Post는 Current Content가 있는 Note 구조다
@@ -54,11 +54,12 @@
 - **THEN** 시스템은 그 Repost와 Announce mapping을 변경하지 않는다
 - **AND** Repost 취소는 기존 `Undo(Announce)` lifecycle에 남긴다
 
-#### Scenario: unavailable actor 거부
+#### Scenario: unavailable remote Author의 삭제 반영
 
-- **WHEN** actor가 저장되어 있지 않거나 Profile이 ACTIVE가 아니다
-- **OR** Instance가 ACTIVITYPUB이 아니거나 SUSPENDED다
-- **THEN** 시스템은 network lookup과 domain write 없이 delivery를 skip한다
+- **WHEN** exact ownership 검증을 통과한 remote Author의 Profile이 DISABLED 또는 SUSPENDED다
+- **OR** 그 Profile의 ACTIVITYPUB Instance가 SUSPENDED다
+- **THEN** 시스템은 현재 조회 가용성과 무관하게 mapped Post를 canonical Tombstone으로 전환한다
+- **AND** actor가 저장되어 있지 않거나 Instance Type이 ACTIVITYPUB이 아니면 network lookup과 domain write 없이 delivery를 skip한다
 
 ### Requirement: Canonical remote Post Tombstone 전이와 mapping 보존
 

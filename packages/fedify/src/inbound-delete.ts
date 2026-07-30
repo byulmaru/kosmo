@@ -10,7 +10,7 @@ import {
   Posts,
   Profiles,
 } from '@kosmo/core/db';
-import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
+import { InstanceKind } from '@kosmo/core/enums';
 import { deletePost } from '@kosmo/core/services';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
@@ -51,10 +51,8 @@ export const handleInboundDelete = async (
       .select({
         actorUri: ActivityPubActors.uri,
         instanceKind: Instances.kind,
-        instanceState: Instances.state,
         postId: Posts.id,
         profileId: Profiles.id,
-        profileState: Profiles.state,
       })
       .from(ActivityPubPosts)
       .innerJoin(Posts, eq(Posts.id, ActivityPubPosts.postId))
@@ -65,14 +63,7 @@ export const handleInboundDelete = async (
       .limit(1)
       .then(first);
 
-    if (
-      !row ||
-      row.actorUri !== actorUri.href ||
-      row.instanceKind !== InstanceKind.ACTIVITYPUB ||
-      (row.instanceState !== InstanceState.ACTIVE &&
-        row.instanceState !== InstanceState.UNRESPONSIVE) ||
-      row.profileState !== ProfileState.ACTIVE
-    ) {
+    if (!row || row.actorUri !== actorUri.href || row.instanceKind !== InstanceKind.ACTIVITYPUB) {
       return;
     }
 

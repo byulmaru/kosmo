@@ -154,11 +154,11 @@ describe('inbound Delete dispatch', () => {
     assert.equal((await storedProjection(mismatchedUri)).post.state, PostState.ACTIVE);
   });
 
-  test('rejects unknown, unusable, ambiguous, and non-author identities', async () => {
+  test('deletes a verified Post while its remote author is unavailable', async () => {
     const cases = [
       { instanceState: InstanceState.SUSPENDED, name: 'suspended instance' },
-      { instanceKind: InstanceKind.LOCAL, name: 'local instance' },
       { profileState: ProfileState.DISABLED, name: 'disabled profile' },
+      { profileState: ProfileState.SUSPENDED, name: 'suspended profile' },
     ];
 
     for (const [index, options] of cases.entries()) {
@@ -170,8 +170,22 @@ describe('inbound Delete dispatch', () => {
         createContext(),
         new Delete({ actor: actorUri, object: objectUri }),
       );
-      assert.equal((await storedProjection(objectUri)).post.state, PostState.ACTIVE, options.name);
+      assert.equal((await storedProjection(objectUri)).post.state, PostState.DELETED, options.name);
     }
+  });
+
+  test('rejects unknown, non-ActivityPub, ambiguous, and non-author identities', async () => {
+    const localActorUri = new URL('https://local-kind.example/users/alice');
+    const localObjectUri = new URL('https://local-kind.example/notes/1');
+    const localKindProfile = await createStoredRemoteActor(localActorUri, {
+      instanceKind: InstanceKind.LOCAL,
+    });
+    await materializeRemotePost(localKindProfile.id, localObjectUri);
+    await handleInboundDelete(
+      createContext(),
+      new Delete({ actor: localActorUri, object: localObjectUri }),
+    );
+    assert.equal((await storedProjection(localObjectUri)).post.state, PostState.ACTIVE);
 
     const authorUri = new URL('https://author.example/users/alice');
     const otherUri = new URL('https://other.example/users/mallory');
