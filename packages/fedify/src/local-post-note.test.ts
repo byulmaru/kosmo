@@ -1,7 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
-import { after, before, beforeEach, describe, test } from 'node:test';
+import { after, afterEach, before, beforeEach, describe, mock, test } from 'node:test';
 import {
   createFederation,
   generateCryptoKeyPair,
@@ -59,6 +59,8 @@ let testProfileIds: string[] = [];
 describe('ActivityPub Local Post Note', () => {
   before(async () => {
     process.env.DATABASE_URL = databaseUrl;
+    process.env.MEDIA_STORAGE_SERVICE_API_KEY = 'media-secret';
+    process.env.MEDIA_STORAGE_SERVICE_ORIGIN = 'https://media-api.example';
     process.env.PUBLIC_ORIGIN = publicOrigin;
     ({
       ActivityPubActors,
@@ -84,6 +86,10 @@ describe('ActivityPub Local Post Note', () => {
 
   beforeEach(async () => {
     await cleanTestRows();
+  });
+
+  afterEach(() => {
+    mock.restoreAll();
   });
 
   after(async () => {
@@ -201,11 +207,28 @@ describe('ActivityPub Local Post Note', () => {
 
   test('projects ordered Ready Local Media as Image attachments without HTML duplication', async () => {
     const author = await createProfile({ handle: 'media-author', kind: InstanceKind.LOCAL });
-    const firstMedia = await createMedia(author.id);
-    const secondMedia = await createMedia(author.id);
+    const firstMedia = await createMedia(author.id, {
+      storageReference: 'provider-opaque-reference-1',
+    });
+    const secondMedia = await createMedia(author.id, {
+      storageReference: 'provider/opaque?reference=2',
+    });
+    const requests: { authorization: string | null; path: string }[] = [];
+    mock.method(globalThis, 'fetch', async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(input instanceof Request ? input.url : input.toString());
+      requests.push({
+        authorization: new Headers(init?.headers).get('Authorization'),
+        path: url.pathname,
+      });
+      const storageReference = decodeURIComponent(url.pathname.split('/').at(-1) ?? '');
+      return Response.json({
+        mediaType: storageReference === firstMedia.storageReference ? 'image/avif' : 'image/webp',
+        url: `https://cdn.example/media/${encodeURIComponent(storageReference)}`,
+      });
+    });
     const post = await createPost(author.id, {
       media: [
-        { altText: null, mediaId: secondMedia.id },
+        { altText: '', mediaId: secondMedia.id },
         { altText: '첫 번째 설명', mediaId: firstMedia.id },
       ],
       sensitiveMedia: true,
@@ -225,15 +248,29 @@ describe('ActivityPub Local Post Note', () => {
     assert.equal(attachments.length, 2);
     assert.equal(
       attachments[0]?.url?.toString(),
-      `https://media.byulma.run/original/${secondMedia.storageReference}.webp`,
+      `https://cdn.example/media/${encodeURIComponent(secondMedia.storageReference)}`,
     );
     assert.equal(attachments[0]?.mediaType, 'image/webp');
-    assert.equal(attachments[0]?.name, null);
+    assert.equal(attachments[0]?.name?.toString(), '');
     assert.equal(
       attachments[1]?.url?.toString(),
-      `https://media.byulma.run/original/${firstMedia.storageReference}.webp`,
+      `https://cdn.example/media/${encodeURIComponent(firstMedia.storageReference)}`,
     );
+    assert.equal(attachments[1]?.mediaType, 'image/avif');
     assert.equal(attachments[1]?.name?.toString(), '첫 번째 설명');
+    assert.deepEqual(
+      requests.toSorted((left, right) => left.path.localeCompare(right.path)),
+      [
+        {
+          authorization: 'Bearer media-secret',
+          path: '/v1/uploads/provider-opaque-reference-1',
+        },
+        {
+          authorization: 'Bearer media-secret',
+          path: '/v1/uploads/provider%2Fopaque%3Freference%3D2',
+        },
+      ].toSorted((left, right) => left.path.localeCompare(right.path)),
+    );
 
     const json = JSON.stringify(await note.toJsonLd());
     assert.equal(json.includes(firstMedia.id), false);
@@ -244,13 +281,21 @@ describe('ActivityPub Local Post Note', () => {
     const author = await createProfile({ handle: 'unavailable-media', kind: InstanceKind.LOCAL });
     const uploading = await createMedia(author.id, { state: MediaState.UPLOADING });
     const remote = await createMedia(author.id, { source: MediaSource.REMOTE });
-    const unsafe = await createMedia(author.id, { storageReference: 'unsafe/reference' });
+    const unavailable = await createMedia(author.id, {
+      storageReference: 'provider-opaque-reference',
+    });
     const missingId = crypto.randomUUID();
+    const mediaLookup = mock.method(
+      globalThis,
+      'fetch',
+      async () => new Response(null, { status: 404 }),
+    );
 
-    for (const mediaId of [uploading.id, remote.id, unsafe.id, missingId]) {
+    for (const mediaId of [uploading.id, remote.id, unavailable.id, missingId]) {
       const post = await createPost(author.id, { media: [{ altText: null, mediaId }] });
       assert.equal(await dispatchLocalPostNote(createContext(), { id: post.id }), null);
     }
+    assert.equal(mediaLookup.mock.callCount(), 1);
   });
 
   test('returns the same unavailable boundary for unsupported or ineligible Posts', async () => {

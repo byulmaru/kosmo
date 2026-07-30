@@ -88,7 +88,7 @@ Note 역참조 권한이 독립적으로 제한하므로, Reply를 조회한 req
 - Parent의 Tombstone 전이는 `inReplyTo`를 제거하지 않는다. 현재 physical delete 행동을 추가하지 않고 Reply
   Parent FK만 향후 실제 row 삭제에 대비해 `SET NULL`로 정의하며 Reply Post에는 cascade delete를 적용하지 않는다.
 - Mentioned Profiles, custom emoji, Quote 전용 federation 표현과 실제 Activity delivery는 독립 후속 계약으로
-  남는다. Media federation 표현은 ADR 0020이 정의한다.
+  남는다. Media federation 표현은 [ADR 0022](./0022-post-content-revision-media-nodes.md)가 정의한다.
 
 ## 문서 반영
 

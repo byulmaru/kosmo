@@ -27,7 +27,8 @@ export는 아직 완성되지 않았다. 현재 `post.reply_parent_id` self-FK�
 - Reply `Create`/`Delete`, Repost `Announce`/`Undo`, Reaction `Like`/`EmojiReact`/`Undo` delivery
 - ActivityPub Tombstone/Delete, outbox collection, delivery queue, retry와 backfill
 - followers/following collection endpoint 또는 actor document의 followers/following 속성
-- Mentioned Profiles recipient, Media, Mention, custom emoji와 Quote 전용 federation 표현
+- Mentioned Profiles recipient, Mention, custom emoji와 Quote 전용 federation 표현
+- Media 표현은 이 change의 원래 구현 범위가 아니며 후속 ADR 0022와 `attach-local-media-to-post` change가 확장한다.
 - remote Post ingestion과 기존 GraphQL Post read 계약 변경
 - PostContent node·mark·canonicalization·validation 계약 변경
 - Parent Post physical delete service/API

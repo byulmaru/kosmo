@@ -26,6 +26,7 @@ import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { postContentDocumentToHtml } from '@kosmo/core/post-content/server';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import { escapeText } from 'entities/escape';
+import { z } from 'zod';
 import { isCanonicalPostId, resolveActivityPubPostUri } from './activitypub-post-uri';
 import type { Context, RequestContext } from '@fedify/fedify';
 import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
@@ -49,6 +50,13 @@ type LocalPostNoteProjection = LocalPostNote & {
 };
 
 type LocalPostNoteContext = Pick<Context<void>, 'canonicalOrigin' | 'getActorUri'>;
+
+const mediaRepresentationSchema = z.object({
+  mediaType: z.string().trim().min(1),
+  url: z.httpUrl(),
+});
+
+const MEDIA_STORAGE_REQUEST_TIMEOUT_MS = 10_000;
 
 const loadLocalPostNote = async (
   context: LocalPostNoteContext,
@@ -107,15 +115,35 @@ const loadLocalPostNote = async (
   };
 };
 
-const publicMediaUrl = (storageReference: string): URL | null => {
-  if (
-    !/^u_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
-      storageReference,
-    )
-  ) {
+const resolvePublicMediaRepresentation = async (
+  storageReference: string,
+): Promise<{ readonly mediaType: string; readonly url: URL } | null> => {
+  const mediaStorageOrigin = process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
+  const mediaStorageApiKey = process.env.MEDIA_STORAGE_SERVICE_API_KEY;
+  if (!mediaStorageOrigin || !mediaStorageApiKey) {
     return null;
   }
-  return new URL(`/original/${storageReference}.webp`, 'https://media.byulma.run');
+
+  const representationPath = `/v1/uploads/${encodeURIComponent(storageReference)}`;
+  try {
+    const representationUrl = new URL(representationPath, mediaStorageOrigin);
+    if (representationUrl.pathname !== representationPath) {
+      return null;
+    }
+    const response = await globalThis.fetch(representationUrl, {
+      headers: { Authorization: `Bearer ${mediaStorageApiKey}` },
+      signal: AbortSignal.timeout(MEDIA_STORAGE_REQUEST_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      return null;
+    }
+    const representation = mediaRepresentationSchema.safeParse(await response.json());
+    return representation.success
+      ? { mediaType: representation.data.mediaType, url: new URL(representation.data.url) }
+      : null;
+  } catch {
+    return null;
+  }
 };
 
 const projectLocalMediaAttachments = async (
@@ -145,19 +173,26 @@ const projectLocalMediaAttachments = async (
     return null;
   }
 
-  const rowsById = new Map(rows.map((media) => [media.id, media]));
+  const resolvedRows = await Promise.all(
+    rows.map(async (media) => ({
+      id: media.id,
+      representation: await resolvePublicMediaRepresentation(media.storageReference),
+    })),
+  );
+  const representationsById = new Map(
+    resolvedRows.map(({ id, representation }) => [id, representation]),
+  );
   const attachments: Image[] = [];
   for (const node of mediaNodes) {
-    const media = rowsById.get(node.attrs.mediaId);
-    const url = media ? publicMediaUrl(media.storageReference) : null;
-    if (!url) {
+    const representation = representationsById.get(node.attrs.mediaId);
+    if (!representation) {
       return null;
     }
     attachments.push(
       new Image({
-        mediaType: 'image/webp',
-        ...(node.attrs.altText ? { name: node.attrs.altText } : {}),
-        url,
+        mediaType: representation.mediaType,
+        ...(node.attrs.altText !== null ? { name: node.attrs.altText } : {}),
+        url: representation.url,
       }),
     );
   }

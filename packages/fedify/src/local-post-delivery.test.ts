@@ -2,11 +2,14 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, afterEach, before, beforeEach, describe, mock, test } from 'node:test';
-import { Create, Delete, Note } from '@fedify/vocab';
+import { Create, Delete, Image, Note } from '@fedify/vocab';
 import {
+  AccountState,
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
+  MediaSource,
+  MediaState,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -25,11 +28,13 @@ const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhos
 
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
+let Accounts: typeof CoreDb.Accounts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let localInstanceId: string;
 let localOutboundFederation: typeof LocalOutboundFederation;
+let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
@@ -37,19 +42,24 @@ let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
 let sendLocalPostCreate: typeof LocalPostDelivery.sendLocalPostCreate;
 let sendLocalPostDelete: typeof LocalPostDelivery.sendLocalPostDelete;
+let testAccountIds: string[] = [];
 let testInstanceIds: string[] = [];
 let testProfileIds: string[] = [];
 
 describe('ActivityPub Local Post delivery', () => {
   before(async () => {
     process.env.DATABASE_URL = databaseUrl;
+    process.env.MEDIA_STORAGE_SERVICE_API_KEY = 'media-secret';
+    process.env.MEDIA_STORAGE_SERVICE_ORIGIN = 'https://media-api.example';
     process.env.PUBLIC_ORIGIN = publicOrigin;
     ({
+      Accounts,
       ActivityPubActors,
       ActivityPubPosts,
       db,
       firstOrThrow,
       Instances,
+      Media,
       pg,
       PostContents,
       Posts,
@@ -129,6 +139,71 @@ describe('ActivityPub Local Post delivery', () => {
       );
       assert.equal(call.recipients[0]?.endpoints?.sharedInbox?.href, parentAuthor.sharedInboxUri);
     }
+  });
+
+  test('최초 Create(Note)가 조회 시점의 ordered Media 표현과 sensitive를 그대로 전달한다', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const parentAuthor = await createRemoteActor({ handle: 'media-parent' });
+    const parent = await createPost(parentAuthor.profile.id);
+    await db.insert(ActivityPubPosts).values({
+      postId: parent.id,
+      receivedAt: Temporal.Instant.from('2026-07-30T00:00:00Z'),
+      uri: 'https://remote.example/notes/media-parent',
+    });
+    const firstMedia = await createMedia(author.id, 'opaque-first');
+    const secondMedia = await createMedia(author.id, 'opaque/second');
+    const reply = await createPost(author.id, {
+      media: [
+        { altText: '', mediaId: secondMedia.id },
+        { altText: '대체 텍스트', mediaId: firstMedia.id },
+      ],
+      replyParentId: parent.id,
+      sensitiveMedia: true,
+    });
+    const mediaRepresentations = new Map([
+      [firstMedia.storageReference, { mediaType: 'image/avif', url: 'https://cdn.example/first' }],
+      [
+        secondMedia.storageReference,
+        { mediaType: 'image/webp', url: 'https://cdn.example/second' },
+      ],
+    ]);
+    mock.method(globalThis, 'fetch', async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(input instanceof Request ? input.url : input.toString());
+      assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer media-secret');
+      const storageReference = decodeURIComponent(url.pathname.split('/').at(-1) ?? '');
+      const representation = mediaRepresentations.get(storageReference);
+      return representation ? Response.json(representation) : new Response(null, { status: 404 });
+    });
+    const fixture = createContextFixture();
+    mock.method(localOutboundFederation, 'createContext', () => fixture.context);
+
+    await sendLocalPostCreate(reply.id);
+
+    assert.equal(fixture.calls.length, 1);
+    assert.ok(fixture.calls[0]?.activity instanceof Create);
+    const object = await fixture.calls[0].activity.getObject();
+    assert.ok(object instanceof Note);
+    assert.equal(object.content?.toString(), '<p>body</p>');
+    assert.equal(object.sensitive, true);
+    const attachments: Image[] = [];
+    for await (const attachment of object.getAttachments()) {
+      assert.ok(attachment instanceof Image);
+      attachments.push(attachment);
+    }
+    assert.deepEqual(
+      attachments.map((attachment) => ({
+        mediaType: attachment.mediaType,
+        name: attachment.name?.toString(),
+        url: attachment.url?.toString(),
+      })),
+      [
+        { mediaType: 'image/webp', name: '', url: 'https://cdn.example/second' },
+        { mediaType: 'image/avif', name: '대체 텍스트', url: 'https://cdn.example/first' },
+      ],
+    );
+    const json = JSON.stringify(await object.toJsonLd());
+    assert.equal(json.includes(firstMedia.id), false);
+    assert.equal(json.includes(secondMedia.id), false);
   });
 
   test('Public/Unlisted만 Parent Author에게 보내고 Followers·Direct·일반 Post는 no-op이다', async () => {
@@ -512,9 +587,16 @@ const createRemoteActor = async ({
 const createPost = async (
   profileId: string,
   {
+    media = [],
     replyParentId = null,
+    sensitiveMedia = false,
     visibility = PostVisibility.PUBLIC,
-  }: { replyParentId?: string | null; visibility?: PostVisibility } = {},
+  }: {
+    media?: readonly { readonly altText: string | null; readonly mediaId: string }[];
+    replyParentId?: string | null;
+    sensitiveMedia?: boolean;
+    visibility?: PostVisibility;
+  } = {},
 ) => {
   const post = await db
     .insert(Posts)
@@ -526,7 +608,14 @@ const createPost = async (
     .values({
       document: {
         body: {
-          content: [{ content: [{ text: 'body', type: 'text' }], type: 'paragraph' }],
+          ...(sensitiveMedia ? { attrs: { sensitiveMedia: true } } : {}),
+          content: [
+            { content: [{ text: 'body', type: 'text' }], type: 'paragraph' },
+            ...media.map(({ altText, mediaId }) => ({
+              attrs: { altText, mediaId },
+              type: 'media' as const,
+            })),
+          ],
           type: 'doc',
         },
         summary: null,
@@ -540,6 +629,32 @@ const createPost = async (
     .update(Posts)
     .set({ currentContentId: content.id })
     .where(eq(Posts.id, post.id))
+    .returning()
+    .then(firstOrThrow);
+};
+
+const createMedia = async (profileId: string, storageReference: string) => {
+  const account = await db
+    .insert(Accounts)
+    .values({
+      displayName: `media-${crypto.randomUUID()}`,
+      oidcSubject: `media-${crypto.randomUUID()}`,
+      state: AccountState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  testAccountIds.push(account.id);
+  return db
+    .insert(Media)
+    .values({
+      accountId: account.id,
+      profileId,
+      readyAt: Temporal.Now.instant(),
+      source: MediaSource.LOCAL,
+      state: MediaState.READY,
+      storageReference,
+      uploadExpiresAt: Temporal.Now.instant().add({ minutes: 5 }),
+    })
     .returning()
     .then(firstOrThrow);
 };
@@ -558,10 +673,15 @@ const cleanTestRows = async () => {
     await db.delete(PostContents).where(inArray(PostContents.postId, postIds));
     await db.delete(Posts).where(inArray(Posts.id, postIds));
   }
+  await db.delete(Media).where(inArray(Media.profileId, testProfileIds));
   await db.delete(Profiles).where(inArray(Profiles.id, testProfileIds));
+  if (testAccountIds.length > 0) {
+    await db.delete(Accounts).where(inArray(Accounts.id, testAccountIds));
+  }
   if (testInstanceIds.length > 0) {
     await db.delete(Instances).where(inArray(Instances.id, testInstanceIds));
   }
   testInstanceIds = [];
+  testAccountIds = [];
   testProfileIds = [];
 };
