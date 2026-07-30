@@ -1,3 +1,12 @@
 env:
 image: ghcr.io/byulmaru/kosmo
+imageDigest:
 version: main
+migration:
+  enabled: false
+  command: migrate
+  phase:
+  restorePointName:
+  schemaAuthority:
+  secretName:
+  secretKey: url

@@ -1,0 +1,102 @@
+name: Production Contract Approval
+
+on:
+  workflow_call:
+    inputs:
+      gate-context-json:
+        description: Non-secret production migration gate context JSON
+        required: true
+        type: string
+    outputs:
+      approved-context-sha256:
+        description: SHA-256 of the exact approved gate context
+        value: ${{ jobs.contract-approval.outputs.context-sha256 }}
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  preflight:
+    name: Validate Contract Evidence
+    runs-on: ubuntu-latest
+    outputs:
+      context-sha256: ${{ steps.validate.outputs.context-sha256 }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Validate automatic gates
+        id: validate
+        env:
+          GATE_CONTEXT_JSON: ${{ inputs.gate-context-json }}
+          PRODUCTION_CONTRACT_PREFLIGHT: 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          context_file="${RUNNER_TEMP}/production-migration-gate.json"
+          printf '%s' "${GATE_CONTEXT_JSON}" > "${context_file}"
+          node scripts/production-migration-gate.mjs preflight "${context_file}"
+          context_sha256="$(sha256sum "${context_file}" | awk '{print $1}')"
+          echo "context-sha256=${context_sha256}" >> "${GITHUB_OUTPUT}"
+          echo "Validated contract context SHA-256: ${context_sha256}" >> "${GITHUB_STEP_SUMMARY}"
+
+  verify-environment-protection:
+    name: Verify Protected Environment
+    needs: preflight
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Require configured reviewers
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const { data } = await github.rest.repos.getEnvironment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              environment_name: "production-contract",
+            });
+            const reviewerRule = (data.protection_rules ?? []).find(
+              (rule) => rule.type === "required_reviewers",
+            );
+            if (!reviewerRule || (reviewerRule.reviewers ?? []).length === 0) {
+              core.setFailed("production-contract must have at least one required reviewer");
+            }
+            if (data.can_admins_bypass !== false) {
+              core.setFailed("production-contract must disable administrator bypass");
+            }
+
+  contract-approval:
+    name: Approve Contract Migration
+    needs: [preflight, verify-environment-protection]
+    runs-on: ubuntu-latest
+    environment: production-contract
+    outputs:
+      context-sha256: ${{ steps.approve.outputs.context-sha256 }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Revalidate approved context
+        id: approve
+        env:
+          EXPECTED_CONTEXT_SHA256: ${{ needs.preflight.outputs.context-sha256 }}
+          GATE_CONTEXT_JSON: ${{ inputs.gate-context-json }}
+          PRODUCTION_CONTRACT_APPROVED: 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          context_file="${RUNNER_TEMP}/production-migration-gate.json"
+          printf '%s' "${GATE_CONTEXT_JSON}" > "${context_file}"
+          actual_context_sha256="$(sha256sum "${context_file}" | awk '{print $1}')"
+          if [[ "${actual_context_sha256}" != "${EXPECTED_CONTEXT_SHA256}" ]]; then
+            echo "Contract context changed after preflight." >&2
+            exit 1
+          fi
+          node scripts/production-migration-gate.mjs preflight "${context_file}"
+          echo "context-sha256=${actual_context_sha256}" >> "${GITHUB_OUTPUT}"
+          echo "Approved contract context SHA-256: ${actual_context_sha256}" >> "${GITHUB_STEP_SUMMARY}"

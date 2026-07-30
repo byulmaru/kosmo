@@ -14,6 +14,10 @@ case "${1:-web}" in
     cd /app/packages/core
     exec node --import tsx db/migrate.ts
     ;;
+  contract-restore-point)
+    cd /app/packages/core
+    exec node --import tsx db/contract-restore-point.ts
+    ;;
   *)
     echo "Unknown app: $1" >&2
     exit 1

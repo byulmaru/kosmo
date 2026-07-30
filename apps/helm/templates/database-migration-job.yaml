@@ -1,8 +1,30 @@
-{{- if eq .Values.env "dev" }}
+{{- $isDev := eq .Values.env "dev" -}}
+{{- $isProductionMigration := and (eq .Values.env "prod") .Values.migration.enabled -}}
+{{- if $isProductionMigration -}}
+{{- if not (regexMatch "^sha256:[0-9a-f]{64}$" (default "" .Values.imageDigest)) -}}
+{{- fail "production migration requires imageDigest=sha256:<64 lowercase hex>" -}}
+{{- end -}}
+{{- if not (has .Values.migration.phase (list "expand" "transition" "contract")) -}}
+{{- fail "production migration requires migration.phase=expand|transition|contract" -}}
+{{- end -}}
+{{- if not (has .Values.migration.command (list "migrate" "contract-restore-point")) -}}
+{{- fail "production migration requires migration.command=migrate|contract-restore-point" -}}
+{{- end -}}
+{{- if and (eq .Values.migration.command "contract-restore-point") (ne .Values.migration.phase "contract") -}}
+{{- fail "contract-restore-point command requires migration.phase=contract" -}}
+{{- end -}}
+{{- if eq .Values.migration.command "contract-restore-point" -}}
+{{- $_ := required "contract-restore-point requires migration.restorePointName" .Values.migration.restorePointName -}}
+{{- end -}}
+{{- $_ := required "production migration requires migration.schemaAuthority" .Values.migration.schemaAuthority -}}
+{{- $_ := required "production migration requires migration.secretName" .Values.migration.secretName -}}
+{{- $_ := required "production migration requires migration.secretKey" .Values.migration.secretKey -}}
+{{- end -}}
+{{- if or $isDev $isProductionMigration }}
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ printf "%s-db-migrate" .Release.Name | trunc 63 | trimSuffix "-" }}
+  name: {{ printf "%s-db-%s" .Release.Name (ternary "restore-point" "migrate" (and $isProductionMigration (eq .Values.migration.command "contract-restore-point"))) | trunc 63 | trimSuffix "-" }}
   labels:
     helm.sh/chart: {{ include "kosmo.chart" . }}
     app.kubernetes.io/name: db-migrate
@@ -13,6 +35,10 @@ metadata:
     argocd.argoproj.io/hook: PreSync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
     argocd.argoproj.io/sync-wave: "-1"
+    {{- if $isProductionMigration }}
+    kosmo.dev/migration-phase: {{ .Values.migration.phase | quote }}
+    kosmo.dev/schema-authority: {{ .Values.migration.schemaAuthority | quote }}
+    {{- end }}
 spec:
   activeDeadlineSeconds: 600
   backoffLimit: 0
@@ -26,7 +52,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: db-migrate
-          image: {{ printf "%s:%s" .Values.image .Values.version | quote }}
+          image: {{ include "kosmo.imageRef" . | quote }}
           imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
@@ -37,8 +63,19 @@ spec:
               drop:
                 - ALL
           args:
-            - migrate
+            - {{ ternary .Values.migration.command "migrate" $isProductionMigration | quote }}
           env:
+            {{- if $isProductionMigration }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.migration.secretName | quote }}
+                  key: {{ .Values.migration.secretKey | quote }}
+            {{- if eq .Values.migration.command "contract-restore-point" }}
+            - name: RESTORE_POINT_NAME
+              value: {{ .Values.migration.restorePointName | quote }}
+            {{- end }}
+            {{- else }}
             - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -46,6 +83,7 @@ spec:
                   key: password
             - name: DATABASE_URL
               value: {{ include "kosmo.databaseUrl" . | quote }}
+            {{- end }}
           resources:
             requests:
               cpu: 50m

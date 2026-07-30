@@ -28,7 +28,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: {{ printf "%s:%s" .Values.image .Values.version | quote }}
+          image: {{ include "kosmo.imageRef" . | quote }}
           imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
