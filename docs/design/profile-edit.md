@@ -15,12 +15,13 @@
 3. 표시 이름
 4. 소개(bio)
 5. 팔로우 요청 자동 승인
-6. 프로필 태그
+6. 프로필 태그 presentation(PROD-491 상태 카탈로그 전용)
 
-- 표시 이름은 새로 입력하거나 변경할 때 1~40자다. 서버 구현 정렬 전의 호환 경계로, 40자를 초과하는
+- 표시 이름은 새로 입력하거나 변경할 때 Unicode code point 기준 1~40이다. 서버 구현 정렬 전의 호환 경계로,
+  40 code point를 초과하는
   legacy 초기값은 form에 들어온 원문과 정확히 같은 값으로 남겨 둔 경우에만 다른 field와 함께 저장할 수 있다.
-  40자를 초과한 이름을 한 글자라도 변경하면 1~40자 규칙을 적용한다.
-- bio는 500자 이하이며 긴 텍스트 입력으로 표현한다.
+  40 code point를 초과한 이름을 한 글자라도 변경하면 같은 1~40 code point 규칙을 적용한다.
+- bio는 앞뒤 공백을 제거한 뒤 500자 이하이며 긴 텍스트 입력으로 표현한다.
 - `팔로우 요청 자동 승인`은 설명 없는 한 줄 Switch로 표현한다. 독립 설정에 가까운 시각적 위계를 위해
   라벨은 SUIT `16/24`, weight `600`을 사용한다. Switch가 켜지면 `OPEN`, 꺼지면
   `APPROVAL_REQUIRED`로 해석하며, 표시 이름·소개·avatar/header와 같은 Profile draft와 저장 동작에 포함한다.
@@ -31,6 +32,9 @@
   header preview 전체와 avatar preview 전체를 각 field의 단일 편집 button으로 사용하고, 별도의 연필·편집
   button은 두지 않는다. 한쪽을 편집해도 건드리지 않은 다른 쪽의 draft는 현재 값으로 남긴다. 각 field의 편집
   흐름은 교체 선택, 제거, 업로드 대기와 오류를 구분해 표현한다.
+- 현재 이미지가 있으면 preview를 눌렀을 때 `이미지 변경`, `이미지 삭제`, `취소` 메뉴를 표시한다. 현재 이미지가
+  없으면 메뉴를 거치지 않고 system picker를 연다. 업로드가 실패한 field에는 명시적인 `다시 시도` action을
+  제공하며, 다른 field가 이미 Ready라면 실패한 field만 다시 업로드한다.
 - header와 avatar button 중앙에는 반투명 원형 scrim 위의 흰색 camera icon을 표시하고, press 중에는 이미지
   전체에 옅은 veil을 더한다. camera icon과 scrim은 장식 요소이며 별도의 focus target이나 중첩 button이 아니다.
   편집 callback이 없거나 form이 disabled/saving 상태면 preview 전체 button을 disabled로 표현한다.
@@ -64,13 +68,59 @@
 
 ### Production route와 저장
 
-- 실제 `/profile-edit` protected route는 GraphQL usingProfile 경계를 통과한 selected Active/Normal Local
-  Profile과 Owner Membership을 server-authoritative하게 확인한 뒤에만 화면을 제공한다.
+- 공개 Profile 화면은 nullable top-level `selectedProfileForEdit` 결과의 `id`가 현재 표시 중인 Profile `id`와
+  정확히 같을 때만 편집 button을 렌더한다. guest, selected Profile이 없는 session과 편집 부적격 Account에는
+  이 field가 GraphQL authorization error 없이 `null`을 반환하며 disabled placeholder를 표시하지 않는다.
+- 실제 `/profile-edit` protected route는 `selectedProfileForEdit`이 반환한 selected Active/Normal Local
+  Profile과 Owner Membership을 server-authoritative하게 확인한 뒤에만 화면을 제공한다. 직접 URL이나 stale
+  link로 진입했지만 편집할 수 없으면 form 대신 `이 프로필을 수정할 수 없어요`와 `프로필로 돌아가기` action을
+  가진 StateView를 표시한다.
 - selected Profile id나 `Profile.instance.kind`만으로 Owner 또는 편집 권한을 추측하지 않는다.
-- route가 초기값 조회, 제출 callback, Media 선택·업로드, Relay 갱신, 성공 navigation과 production 진입점을
-  연결한다.
+- mutation은 route query 결과를 권한 증거로 재사용하지 않는다. 저장 transaction 안에서 selected Profile,
+  Owner Membership과 Account의 현재 eligibility를 일관된 순서의 row lock 또는 동등한 atomic guard로 다시
+  확인하고, 하나라도 달라지면 text·policy·avatar/header 관계를 모두 그대로 둔다.
+- route가 초기값 조회, 제출 callback, Media 선택·업로드, Relay 갱신, 공개 Profile avatar/header 표시, 성공
+  navigation과 production 진입점을 연결한다.
 - route는 현재 `followPolicy`를 초기 draft로 조회하고 표시 이름·소개·Media 관계와 같은 저장 동작으로
   제출한다. Settings 이전 전까지 이 Profile 편집 경계를 우회하는 별도 정책 저장을 만들지 않는다.
+- production route는 Profile Tag editor를 렌더하지 않고 update input에도 Tag 값을 포함하지 않는다. 기존
+  presentation과 Storybook 상태는 `PROD-527`이 재사용할 수 있게 유지한다.
+
+### Media 관계와 공개 표시
+
+- Profile과 Media의 avatar/header 연결은 `profile_media` 관계로 저장한다. 관계는 UUIDv7 identity,
+  `profile_id`, `media_id`, `AVATAR | HEADER` kind와 생성 시각을 가지며 Profile마다 kind 하나만 존재한다.
+  Profile 삭제는 관계만 cascade하고 Media row/blob은 삭제하지 않는다. 기존 Profile backfill은 수행하지 않는다.
+- update input에서 avatar/header field 생략은 관계 유지, Media global ID는 교체, `null`은 해당 kind 관계 제거다.
+  요청에 포함된 두 Media를 먼저 모두 검증한 뒤 displayName, bio, `followPolicy`와 관계 upsert/delete를 하나의
+  transaction에서 반영한다. 하나라도 존재하지 않거나 다른 Profile 소유, Remote 또는 Ready가 아니면 전체를
+  rollback한다.
+- Profile 연결은 `PROD-581`이 완료 시 저장한 공개 URL과 media type persistence를 소비한다. 공개 Profile
+  projection은 렌더링에 필요한 Media identity와 URL만 추가하며 media type GraphQL field는 이 범위에 포함하지
+  않는다. Profile edit는 Storage byte·MIME을 다시 검증하거나 Media upload 인프라를 복제하지 않는다.
+- 공개 `Profile.avatar`와 `Profile.header`는 해당 Profile 조회 정책을 통과한 viewer에게 Profile 관계를 통해
+  Media identity와 표시 URL을 제공한다. 일반 Media Node의 owner-only loader 정책은 넓히지 않는다. 초기 query와
+  update payload는 같은 Media `id`와 표시 field를 선택해 Relay가 같은 record를 정규화하며 `ProfileHero`가 실제
+  avatar/header를 표시한다.
+
+### Upload, 실패 복구와 navigation
+
+- route wrapper가 각 field의 local asset, preview URI, upload generation과 Ready Media global ID를 소유한다.
+  선택 즉시 local preview를 표시하고 `issueMediaUploadUrl → PUT → completeMediaUpload`을 실행한다. field가
+  교체되거나 route가 unmount된 뒤 도착한 stale completion은 draft에 반영하지 않으며 Web object preview는
+  교체·삭제·unmount 때 해제한다.
+- 업로드 중이거나 실패한 field가 있으면 저장을 disabled로 둔다. 업로드 실패는 text·policy와 다른 image draft를
+  보존하고 `updateProfile`을 호출하지 않는다. `다시 시도`는 실패한 field의 upload sequence만 다시 수행한다.
+  Profile 저장 실패는 이미 Ready인 Media ID를 포함한 전체 draft를 보존하므로 저장 재시도에서 재업로드하지 않는다.
+- dirty draft에서 route navigation, Web browser back과 Android hardware back을 시도하면 공통 confirmation UI로
+  `변경사항을 버릴까요?`, `계속 편집`, `버리기`를 표시한다. `버리기`는 원래 navigation action을 한 번만
+  재실행한다. 저장 중에는 navigation을 차단하고 확인 UI를 열지 않는다.
+- 저장 성공 시 dirty guard를 먼저 해제하고 mutation payload를 Relay에 정규화한 뒤, 갱신된
+  `Profile.relativeHandle` route로 `router.replace`한다. 별도 성공 toast나 presentation 성공 문구는 표시하지 않는다.
+- 표시 이름은 client omission에 의존하지 않는다. 서버는 기존 저장 원문과 정확히 같은 40 code point 초과
+  displayName을 허용하고, 원문과 달라진 값에만 Unicode code point 기준 1~40 규칙을 적용한다. Remote Profile
+  materialization이 공유하는 validation 계약은 변경하지 않는다.
+
 - 위 권한·조회·저장 계약이 준비되기 전에는 route 파일과 production 편집 버튼을 만들거나 활성화하지 않는다.
 
 권한과 route 경계의 durable decision은
@@ -114,7 +164,8 @@
 - validation, disabled, saving과 failure를 색만으로 구분하지 않는다.
 - presentation은 저장 성공 문구를 남기지 않는다. production route가 성공 payload로 갱신된 Profile을 확보한 뒤
   해당 Profile로 복귀한다.
-- 실패 뒤 표시 이름·bio·Profile Tag·이미지 선택 상태를 보존해 같은 draft로 재시도할 수 있게 한다.
+- presentation 상태 카탈로그는 실패 뒤 표시 이름·bio·Profile Tag·이미지 선택 상태를 보존한다. production은
+  Tag를 렌더링하거나 제출하지 않고 text·policy·Ready image draft를 보존해 같은 draft로 재시도할 수 있게 한다.
 - 긴 표시 이름·bio, 빈 값, 여러 개·긴 태그, 이미지 없음과 오류, compact/desktop 폭을 상태 카탈로그에서
   확인한다.
 
@@ -136,8 +187,8 @@
 
 - `PROD-491`: route 없는 presentation component, 로컬 입력·validation·태그 추가·제거 UI, 이미지 controlled
   state와 Storybook 상태 카탈로그.
-- `PROD-492`: protected route, selected Local Owner capability/query, 초기값, submit/Relay, Media picker·upload,
-  성공 navigation과 production 진입점.
+- `PROD-492`: `PROD-581` 위에서 Profile Media 관계, guest-safe selected Local Owner query, protected route와
+  entrypoint, 초기값, submit/Relay, Media picker·upload, 공개 ProfileHero 이미지와 성공 navigation을 연결한다.
 - `PROD-527`: `PROD-491`의 Profile Tag editor를 재사용한 저장·서버 오류·Relay 연결과 공개 Profile 표시.
 - `PROD-531`: Settings 진입점이 제공된 뒤 Follow Approval Policy 제어를 이전하고 Profile 편집과의 중복
   저장 소유권을 제거한다.

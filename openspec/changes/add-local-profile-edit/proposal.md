@@ -18,13 +18,22 @@ Local Profile의 displayName, bio와 avatar/header를 수정할 production 화�
   dirty·validation·upload-wait·saving·failure·retry를 Storybook controlled state로 검증한다. 저장 성공 뒤에는
   presentation 문구를 남기지 않고 실제 route가 갱신된 Profile로 복귀한다.
 - 실제 `/profile-edit` route는 usingProfile 경계의 selected Active/Normal Local Profile과 Owner Membership을
-  확인하고 초기값, 저장, Media picker/upload 결과, Relay와 navigation을 연결한다.
+  확인하는 nullable `selectedProfileForEdit`을 사용한다. 공개 Profile의 편집 button은 이 결과가 현재 Profile과
+  같을 때만 노출하며, guest·부적격 Account에는 오류 없이 `null`을 반환한다. 직접 route 진입은 편집 불가
+  StateView로 방어한다.
+- `PROD-581`의 Local Media 완료 metadata 위에 `profile_media` 관계를 추가하고, 생략=유지·Media ID=교체·
+  `null`=제거 입력 의미와 selected Owner 권한 재검사를 포함해 text·policy·avatar/header를 원자적으로 저장한다.
+- 공개 Profile 조회 정책을 통과한 viewer에게 Profile 관계의 avatar/header Media를 표시하고 `ProfileHero`를 실제
+  이미지에 연결한다. 일반 Media Node의 owner-only 정책은 넓히지 않는다.
+- route는 Media picker/upload 결과, field별 재시도, Ready ID 보존, Relay 정규화, dirty navigation 확인과 성공
+  navigation을 연결한다. 저장 중에는 navigation을 차단한다.
 - Web은 기존 shell의 최대 600px 중앙 route를 사용하고 1440/1024 단계와 mobile/native 정보 구조를 공유한다.
 - header 이미지 변경 영역은 avatar·편집 action을 담는 hero wrapper와 분리하고 모든 지원 폭에서 가로:세로
   `3:1`을 유지한다. 원본 비율이 다르면 해당 preview 안에서 cover crop한다.
 - Follow Approval Policy는 현재 Profile 편집 화면과 저장에 포함한다. Settings 진입점 제공 뒤 `PROD-531`이
   제어를 이전하고 Profile 편집의 중복 제어를 제거한다.
 - Profile Tag 저장·Relay·공개 표시는 `add-profile-tags`의 `PROD-526`·`PROD-527`에 남긴다.
+  PROD-492 production route에서는 Tag UI와 mutation input을 모두 제외한다.
 
 ## Authority / Provenance
 
@@ -34,6 +43,7 @@ Local Profile의 displayName, bio와 avatar/header를 수정할 production 화�
   `docs/design/profile-tags.md`
 - Linear Contract: `PROD-490`
 - Linear Implementations: `PROD-491` (presentation), `PROD-492` (route·API·Media 연결)
+- Blocking implementation: `PROD-581` (Local Media 완료 시 공개 URL·media type metadata 저장)
 - Related contracts: `PROD-522`·`PROD-526`·`PROD-527` (Profile Tag), `PROD-531` (향후 Follow Approval Policy 이전)
 
 ## Capabilities
@@ -50,9 +60,13 @@ Local Profile의 displayName, bio와 avatar/header를 수정할 production 화�
 ## Impact
 
 - Universal client: Profile edit presentation, Storybook states, 실제 protected route, Relay와 navigation
-- API/Core: selected Local Owner capability/query, displayName·bio validation, avatar/header Media 관계와 원자성
-- Media: 같은 Profile의 Ready Local Media만 연결하고 교체·제거 때 Media 자체는 보존
+- Database/API/Core: additive `profile_media` 관계, guest-safe selected Local Owner query, commit 시 권한 재검사,
+  legacy displayName validation과 avatar/header tri-state 입력·원자성
+- Media/Profile read: `PROD-581` metadata를 소비하고 같은 Profile의 Ready Local Media만 연결하며, 교체·제거 때
+  Media 자체를 보존하고 공개 ProfileHero에 viewer-authorized avatar/header를 표시
 - Profile Tag: `PROD-491` presentation을 `PROD-527`이 재사용하며 이 change는 저장·공개 표시를 완료로 간주하지 않음
-- Verification: component·접근성·responsive state, API/Core 권한·Media 통합, Web/native route와 부모 종단 간 검증
+- Verification: DB 제약·권한 동시 변경·guest/public read, API/Core text·Media 원자성, Relay·부분 upload 재시도,
+  Web/native dirty route와 부모 종단 간 검증
 - Excluded systems: Settings 전체 정보 구조와 `PROD-531`의 Follow Approval Policy 이전, Profile Tag
-  storage/public display, Profile Link·handle, Media upload 인프라, crop editor, Admin role 제거
+  storage/public display, Profile Link·handle, Media upload 인프라, crop editor, Admin role 제거, orphan Media cleanup,
+  thumbnail·variant·Remote Media와 Fedify/ActivityPub
