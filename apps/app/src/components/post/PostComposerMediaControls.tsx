@@ -61,6 +61,7 @@ export function PostComposerMediaControls({
   const mediaRef = useRef<readonly ComposerMediaItem[]>(media);
   const [sensitiveMedia, setSensitiveMedia] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mounted = useRef(true);
   const removedMediaKeys = useRef(new Set<string>());
   const selectingMedia = useRef(false);
   const nextMediaKey = useRef(0);
@@ -114,7 +115,7 @@ export function PostComposerMediaControls({
               onError: reject,
             });
           }),
-        isActive: () => !removedMediaKeys.current.has(key),
+        isActive: () => mounted.current && !removedMediaKeys.current.has(key),
         issue: () =>
           new Promise((resolve, reject) => {
             commitIssueMediaUploadUrl({
@@ -151,7 +152,7 @@ export function PostComposerMediaControls({
         items.map((item) => (item.key === key ? { ...item, mediaId, state: 'ready' } : item)),
       );
     } catch {
-      if (removedMediaKeys.current.has(key)) {
+      if (!mounted.current || removedMediaKeys.current.has(key)) {
         return;
       }
       updateMedia((items) =>
@@ -175,7 +176,7 @@ export function PostComposerMediaControls({
         orderedSelection: true,
         selectionLimit: availableAtOpen,
       });
-      if (result.canceled) {
+      if (!mounted.current || result.canceled) {
         return;
       }
 
@@ -191,7 +192,9 @@ export function PostComposerMediaControls({
         void uploadMedia(item.key, item.asset);
       }
     } catch {
-      setError('이미지를 선택하지 못했습니다.');
+      if (mounted.current) {
+        setError('이미지를 선택하지 못했습니다.');
+      }
     } finally {
       selectingMedia.current = false;
     }
@@ -221,17 +224,19 @@ export function PostComposerMediaControls({
     });
   }, [media, onValueChange, sensitiveMedia]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mounted.current = true;
+
+    return () => {
+      mounted.current = false;
       for (const item of mediaRef.current) {
         removedMediaKeys.current.add(item.key);
         if (Platform.OS === 'web') {
           releaseComposerMediaPreview(item.asset.uri);
         }
       }
-    },
-    [],
-  );
+    };
+  }, []);
 
   return (
     <>

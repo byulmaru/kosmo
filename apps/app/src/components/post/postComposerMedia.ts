@@ -20,6 +20,10 @@ export async function uploadComposerMedia({
   readonly issue: () => Promise<{ readonly mediaId: string; readonly uploadUrl: string }>;
   readonly put: (uploadUrl: string) => Promise<void>;
 }): Promise<string | null> {
+  if (!isActive()) {
+    return null;
+  }
+
   const { mediaId, uploadUrl } = await issue();
   if (!isActive()) {
     return null;

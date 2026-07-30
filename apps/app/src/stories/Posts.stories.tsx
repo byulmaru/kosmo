@@ -933,6 +933,24 @@ function ComposerStory() {
   );
 }
 
+function ComposerPickerUnmountStory() {
+  const [composerVisible, setComposerVisible] = useState(true);
+  const profile = usePostsStoryData().composerProfile;
+
+  return (
+    <Catalog>
+      <Pressable
+        accessibilityLabel="Composer 닫기"
+        accessibilityRole="button"
+        onPress={() => setComposerVisible(false)}
+      >
+        <Text>Composer 닫기</Text>
+      </Pressable>
+      {composerVisible ? <PostComposer profile={profile} /> : null}
+    </Catalog>
+  );
+}
+
 const composerMediaAsset = {
   height: 96,
   uri: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="96" height="96"%3E%3Crect width="96" height="96" fill="%236b7280"/%3E%3C/svg%3E',
@@ -2604,6 +2622,56 @@ export const ComposerMediaUploadInteraction: Story = {
     }
   },
   render: () => <ComposerStory />,
+};
+
+export const ComposerPickerResultAfterUnmount: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostComposerCompleteMediaUploadMutation: {
+          data: { completeMediaUpload: { media: { id: 'media-after-unmount', state: 'READY' } } },
+        },
+        PostComposerIssueMediaUploadUrlMutation: {
+          data: {
+            issueMediaUploadUrl: {
+              media: { id: 'media-after-unmount' },
+              uploadUrl: 'https://upload.example/after-unmount',
+            },
+          },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const originalFetch = globalThis.fetch;
+    const upload = fn(async () => new Response(null, { status: 200 }));
+    globalThis.fetch = upload;
+
+    let finishSelection!: (result: {
+      assets: (typeof composerMediaAsset)[];
+      canceled: false;
+    }) => void;
+    setNextImagePickerResult(
+      new Promise((resolve) => {
+        finishSelection = resolve;
+      }),
+    );
+
+    try {
+      await userEvent.click(canvas.getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }));
+      await userEvent.click(canvas.getByRole('button', { name: 'Composer 닫기' }));
+
+      finishSelection({ assets: [composerMediaAsset], canceled: false });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(getImagePickerLaunchCount()).toBe(1);
+      expect(upload).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  },
+  render: () => <ComposerPickerUnmountStory />,
 };
 
 export const ComposerSubmitting: Story = {

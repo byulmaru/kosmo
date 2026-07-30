@@ -33,6 +33,31 @@ test('issues, uploads, and completes a fresh media in order', async () => {
   assert.deepEqual(calls, ['issue', 'put:https://upload.example/1', 'complete:media-1']);
 });
 
+test('does not issue an upload when the media is inactive before starting', async () => {
+  let issueCalled = false;
+  let putCalled = false;
+  let completeCalled = false;
+
+  const result = await uploadComposerMedia({
+    complete: async () => {
+      completeCalled = true;
+    },
+    isActive: () => false,
+    issue: async () => {
+      issueCalled = true;
+      return { mediaId: 'inactive', uploadUrl: 'https://upload.example/inactive' };
+    },
+    put: async () => {
+      putCalled = true;
+    },
+  });
+
+  assert.equal(result, null);
+  assert.equal(issueCalled, false);
+  assert.equal(putCalled, false);
+  assert.equal(completeCalled, false);
+});
+
 test('stops after removal so a late issue result cannot upload or complete', async () => {
   let active = true;
   let putCalled = false;
