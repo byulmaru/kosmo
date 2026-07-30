@@ -224,7 +224,7 @@ export function SidebarNavigation({
               <Mail
                 color={feedbackActive ? theme.text : theme.textSecondary}
                 size={20}
-                strokeWidth={1.5}
+                strokeWidth={2}
               />
               {!compact ? (
                 <Text

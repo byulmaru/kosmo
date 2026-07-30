@@ -235,11 +235,24 @@ export const CompactSidebar: Story = {
     );
     const logout = canvas.getByRole('button', { name: '로그아웃' });
     const feedback = canvas.getByRole('link', { name: '피드백 보내기' });
+    const trigger = canvas.getByRole('button', { name: '프로필 목록' });
+    const avatar = canvas.getByLabelText('코스모 작가 프로필 이미지');
+    const triggerRect = trigger.getBoundingClientRect();
+    const avatarRect = avatar.getBoundingClientRect();
     const logoutRect = logout.getBoundingClientRect();
     const feedbackRect = feedback.getBoundingClientRect();
 
     expect(logout).toBeInTheDocument();
     expect(logout.querySelector('svg')).toHaveAttribute('stroke-width', '2');
+    expect(avatarRect.x + avatarRect.width / 2).toBeCloseTo(
+      feedbackRect.x + feedbackRect.width / 2,
+      0,
+    );
+    expect(triggerRect.x + triggerRect.width / 2).toBeCloseTo(
+      feedbackRect.x + feedbackRect.width / 2,
+      0,
+    );
+    expect(feedback.querySelector('svg')).toHaveAttribute('stroke-width', '2');
     expect(logoutRect.x + logoutRect.width / 2).toBeCloseTo(
       feedbackRect.x + feedbackRect.width / 2,
       0,
