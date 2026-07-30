@@ -9,7 +9,8 @@
 - Local ActivityPub actor document에 canonical `followers`와 `following` collection URI를 추가한다.
 - 두 collection은 저장된 `followersCount` 또는 `followingCount`를 `totalItems`로 반환한다.
 - collection membership, page와 item은 공개하지 않는다.
-- Local Profile 공개 조건과 Local Instance별 actor identity를 collection에도 동일하게 적용한다.
+- Local Profile 공개 조건과 현재 runtime의 configured Local Instance 안전 경계를 collection에도 동일하게 적용한다.
+- 여러 Local Instance를 허용하는 도메인 계약은 유지하며, request origin별 instance 해석은 PROD-376에서 구현한다.
 - outbound followers expansion, GraphQL follow graph와 remote collection materialization은 변경하지 않는다.
 
 ## Authority / Provenance
@@ -31,8 +32,8 @@
 
 ## Impact
 
-- `packages/fedify`: Local actor 조회 projection, `Person` 직렬화, count-only collection dispatcher와 federation
-  테스트가 변경된다.
+- `packages/fedify`: `Person` 직렬화, count-only collection dispatcher의 직접 DB 조회와 federation 테스트가
+  변경된다.
 - `openspec/specs/activitypub-actor-discovery/spec.md`: 기존 social graph collection 제외 계약이 count-only 공개
   계약으로 바뀐다.
 - DB schema, GraphQL schema, 앱 UI와 dependency는 변경하지 않는다.

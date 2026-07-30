@@ -69,6 +69,23 @@ discovery 계약과 현재 Fedify 경계에 적용한다.
 - Confirmation / Follow-up: collection 구현이 actor ensure helper를 호출하지 않는지 코드 경계와 테스트 fixture로
   확인한다.
 
+### Configured Local Instance 검사는 현재 runtime 안전 경계다
+
+- Decision Date: 2026-07-30
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/instance.md`, PROD-560, PROD-376
+- Status: Active
+- Context / Problem: 도메인 계약은 여러 Local Instance를 허용하지만 현재 federation runtime은 `PUBLIC_ORIGIN`에
+  대응하는 configured Local Instance 하나만 해석한다.
+- Decision Outcome: 이번 collection dispatcher는 현재 runtime과 같은 configured Local Instance 및 canonical Host
+  검사를 유지한다. 이를 영구적인 단일 origin 계약으로 해석하지 않는다.
+- Alternatives Considered: 이 이슈에서 request origin별 instance resolver까지 구현하면 PROD-376의 actor, key,
+  inbox/outbox identity 전환과 분리되어 일부 route만 다중 origin을 지원하게 되므로 선택하지 않았다.
+- Consequences: 현재 지원하지 않는 origin이나 다른 Local Instance의 Profile을 교차 노출하지 않으며, 다중 instance
+  지원 전까지 collection endpoint도 configured origin 하나에서만 동작한다.
+- Confirmation / Follow-up: PROD-376은 request origin별 Local Instance resolver를 도입할 때 followers/following
+  collection dispatcher와 count 조회도 함께 전환하고 기존 configured origin의 URI를 유지한다.
+
 ## Remaining Decisions
 
 - 없음.

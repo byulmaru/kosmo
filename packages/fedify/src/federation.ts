@@ -81,6 +81,8 @@ const findActiveLocalProfile = async (
   context: Pick<Context<void>, 'canonicalOrigin' | 'host'>,
   profileId: string,
 ) => {
+  // Multiple Local Instances are valid domain state. This runtime currently serves only its
+  // configured origin; request-origin instance resolution is tracked by PROD-376.
   if (
     context.host !== new URL(context.canonicalOrigin).host ||
     !isCanonicalLocalProfileId(profileId)

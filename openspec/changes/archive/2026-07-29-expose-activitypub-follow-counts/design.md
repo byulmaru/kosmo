@@ -1,9 +1,9 @@
 ## Context
 
 Local actor는 `packages/fedify/src/federation.ts`의 Fedify actor dispatcher와
-`local-profile-person.ts`의 `Person` projection으로 제공된다. 현재 actor 조회용 Profile projection은 표시 속성만
-가지며, Fedify root federation에는 followers/following collection dispatcher가 없다. 저장 count는 이미
-`Profiles.followersCount`와 `Profiles.followingCount`에 있고 GraphQL과 follow lifecycle이 이를 유지한다.
+`local-profile-person.ts`의 `Person` projection으로 제공된다. Fedify root federation에는 followers/following
+collection dispatcher가 없다. 저장 count는 이미 `Profiles.followersCount`와 `Profiles.followingCount`에 있고
+GraphQL과 follow lifecycle이 이를 유지한다.
 
 HTTP federation singleton과 outbound delivery용 `localOutboundFederation`은 분리되어 있다. PROD-512의 outbound
 recipient dispatcher는 `ProfileFollows`를 직접 확장하므로, 이번 read-only collection을 delivery membership
@@ -36,16 +36,23 @@ source로 사용하지 않는다.
 - collection 요청에서 actor key를 생성할 필요가 없으므로 key lifecycle을 포함하는
   `ensureDrizzleLocalProfileActor()`를 재사용하면 불필요한 mutation이 생긴다.
 - root HTTP federation의 count-only dispatcher는 outbound delivery용 `localOutboundFederation`과 다른 경계다.
+- 도메인 계약은 서로 다른 domain을 가진 여러 Local Instance를 허용하지만, 현재 federation runtime은
+  `PUBLIC_ORIGIN`에 대응하는 configured Local Instance 하나만 해석한다. 이 제한은 현재 구현의 안전 경계이며
+  영구적인 단일 origin 계약이 아니다.
 
 ### Recommended Approach
 
-root federation에 followers/following dispatcher를 등록하고, HTTP federation entry에서 canonical Host와 Profile
-식별자를 검증한 뒤 Active Local Profile의 두 저장 count만 DB에서 직접 조회한다. 각 item dispatcher는 Profile이
-없으면 `null`, 있으면 빈 items를 반환하고, counter는 같은 공개 조건을 통과한 Profile의 해당 저장 count를 반환한다.
+root federation에 followers/following dispatcher를 등록하고, 현재 HTTP federation entry에서 canonical Host와
+configured Local Instance의 Profile 식별자를 검증한 뒤 Active Local Profile의 두 저장 count만 DB에서 직접
+조회한다. 각 item dispatcher는 Profile이 없으면 `null`, 있으면 빈 items를 반환하고, counter는 같은 공개 조건을
+통과한 Profile의 해당 저장 count를 반환한다.
 
 actor `Person`은 Fedify context가 생성한 두 collection URI를 사용한다. 이를 통해 actor와 collection route가 같은
 canonical URI template을 공유한다. wire 테스트는 actor reference, collection `id`/`type`/`totalItems`, 빈
 membership과 unavailable Profile의 404를 검증한다.
+
+PROD-376이 request origin별 Local Instance 해석을 구현할 때 이 collection dispatcher와 count 조회도 같은 resolver로
+전환한다. 기존 configured origin의 collection URI와 count 계약은 유지한다.
 
 ### Allowed Alternatives
 
