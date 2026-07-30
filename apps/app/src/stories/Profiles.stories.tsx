@@ -58,6 +58,11 @@ const remoteApprovalRequired = profile({
 });
 const noBio = profile({ bio: null, id: 'profile-no-bio' });
 const noViewer = profile({ id: 'profile-no-viewer', viewerState: null });
+const withImages = {
+  ...profile({ id: 'profile-with-images' }),
+  avatar: { id: 'media-profile-avatar', url: '/apple-touch-icon.png' },
+  header: { id: 'media-profile-header', url: '/og-default.png' },
+};
 const followersEmpty = { ...followersProfile([]), id: 'profile-followers-empty' };
 const followersContent = {
   ...followersProfile([followable, followed], { hasNext: true }),
@@ -82,6 +87,7 @@ const storyProfiles = [
   followingContent,
   remoteApprovalRequired,
   pending,
+  withImages,
 ];
 
 const ProfilesStoriesQuery = graphql`
@@ -139,6 +145,7 @@ function ProfileCatalog() {
   const followableRef = requireProfile(profiles, 0);
   const remoteRef = requireProfile(profiles, 3);
   const noBioRef = requireProfile(profiles, 4);
+  const withImagesRef = requireProfile(profiles, 12);
 
   return (
     <Catalog>
@@ -147,13 +154,14 @@ function ProfileCatalog() {
         <ProfileNameBlock profile={requireFragment(remoteRef.nameBlock, 'remote name block')} />
       </Section>
 
-      <Section title="Hero · default / no bio / remote / loading">
+      <Section title="Hero · default / images / no bio / remote / loading">
         <ProfileHero
           action={
             <FollowButton profile={requireFragment(followableRef.followButton, 'follow button')} />
           }
           profile={requireFragment(followableRef.hero, 'profile hero')}
         />
+        <ProfileHero profile={requireFragment(withImagesRef.hero, 'profile hero with images')} />
         <ProfileHero profile={requireFragment(noBioRef.hero, 'no-bio profile hero')} />
         <ProfileHero profile={requireFragment(remoteRef.hero, 'remote profile hero')} />
         <ProfileHero loading />

@@ -510,17 +510,6 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
           style={avatarShadow}
         />
       </View>
-      {active ? (
-        <Pressable
-          accessibilityLabel="프로필 편집"
-          accessibilityRole="button"
-          accessibilityState={{ disabled: true }}
-          disabled
-          style={[styles.editButton, { backgroundColor: theme.primary }]}
-        >
-          <Text style={styles.editLabel}>편집</Text>
-        </Pressable>
-      ) : null}
       <View style={styles.profileCopy}>
         {trigger}
         {fullWebPicker}
@@ -604,18 +593,6 @@ const styles = StyleSheet.create({
   profileHeader: { height: 260, position: 'relative', width: 320, zIndex: 20 },
   cover: { height: 104, left: 0, position: 'absolute', right: 0, top: 0 },
   largeAvatar: { left: 20, position: 'absolute', top: 54 },
-  editButton: {
-    alignItems: 'center',
-    borderRadius: radii.sm,
-    height: 32,
-    justifyContent: 'center',
-    opacity: 0.6,
-    paddingHorizontal: spacing.md,
-    position: 'absolute',
-    right: 20,
-    top: 134,
-  },
-  editLabel: { color: '#111111', fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
   profileCopy: {
     left: 10,
     paddingHorizontal: spacing.sm,

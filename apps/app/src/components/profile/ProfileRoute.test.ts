@@ -30,6 +30,7 @@ let layoutLocalParams: RouteParams = {};
 let screenLocalParams: RouteParams = {};
 let renderer: ReactTestRenderer | null = null;
 let SlotContent: ComponentType | null = null;
+let selectedProfileForEditId: string | null = null;
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -37,6 +38,8 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('expo-router', {
+  Link: ({ children, href }: { children: ReturnType<typeof createElement>; href: string }) =>
+    createElement('Link', { href }, children),
   Slot: () =>
     SlotContent
       ? createElement(
@@ -50,8 +53,10 @@ mockModule('expo-router', {
 });
 mockModule('react-native', {
   Platform: { OS: 'web' },
+  Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: <T>(styles: T) => styles },
+  Text: 'Text',
   View: 'View',
 });
 mockModule('react-relay', {
@@ -79,6 +84,7 @@ mockModule('react-relay', {
         handle: variables.handle,
         id: `profile:${variables.handle}`,
       },
+      selectedProfileForEdit: selectedProfileForEditId ? { id: selectedProfileForEditId } : null,
     };
   },
 });
@@ -96,6 +102,10 @@ mockModule(new URL('./ProfileHero.tsx', import.meta.url), {
 mockModule(new URL('./FollowButton.tsx', import.meta.url), {
   FollowButton: ({ profile }: { profile: { handle: string } }) =>
     createElement('FollowButton', { identity: profile.handle }),
+});
+mockModule(new URL('../ui/Button.tsx', import.meta.url), {
+  Button: ({ children, ...props }: { children: string }) =>
+    createElement('Button', props, children),
 });
 mockModule(new URL('../post/PostList.tsx', import.meta.url), {
   PostList: ({
@@ -145,6 +155,7 @@ afterEach(async () => {
   queryModes.ProfileLayoutQuery = 'success';
   queryModes.ProfilePostListPageQuery = 'success';
   queryHistory.length = 0;
+  selectedProfileForEditId = null;
 });
 
 async function renderRoute(profileHandle: string) {
@@ -191,6 +202,27 @@ function requireRendered(type: string) {
 }
 
 describe('profile route parameter lifecycle', () => {
+  it('표시 중인 selected Owner Profile에만 편집 Link를 노출한다', async () => {
+    selectedProfileForEditId = 'profile:local';
+    await renderRoute('@local');
+
+    assert.deepEqual(
+      rendered('Link').map((node) => node.props.href),
+      ['/profile-edit'],
+    );
+    assert.deepEqual(identities('FollowButton'), []);
+
+    selectedProfileForEditId = null;
+    await renderRoute('@local');
+    assert.deepEqual(rendered('Link'), []);
+    assert.deepEqual(identities('FollowButton'), ['local']);
+
+    selectedProfileForEditId = 'profile:other';
+    await renderRoute('@local');
+    assert.deepEqual(rendered('Link'), []);
+    assert.deepEqual(identities('FollowButton'), ['local']);
+  });
+
   it('local → remote → local 뒤로 가기에서 header, action, nested list를 같은 identity로 전환한다', async () => {
     await renderRoute('@local');
     assert.deepEqual(identities('ProfileHero'), ['local']);

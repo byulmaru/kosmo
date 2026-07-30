@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/StateView';
@@ -21,6 +21,14 @@ const profileHeroFragment = graphql`
     relativeHandle
     displayName
     bio
+    avatar {
+      id
+      url
+    }
+    header {
+      id
+      url
+    }
     followersCount
     followingCount
   }
@@ -70,11 +78,20 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
 
   return (
     <View style={styles.root}>
-      <View style={[styles.cover, { backgroundColor: theme.primary }]} />
+      <View style={[styles.cover, { backgroundColor: theme.primary }]}>
+        {data.header?.url ? (
+          <Image
+            accessible={false}
+            resizeMode="cover"
+            source={{ uri: data.header.url }}
+            style={styles.coverImage}
+          />
+        ) : null}
+      </View>
       <View style={styles.body}>
         <View style={styles.avatarRow}>
           <View style={[styles.avatarBorder, { backgroundColor: theme.background }]}>
-            <Avatar label={data.displayName || data.handle} size={72} />
+            <Avatar imageUri={data.avatar?.url} label={data.displayName || data.handle} size={72} />
           </View>
           {action ? <View style={styles.action}>{action}</View> : null}
         </View>
@@ -109,6 +126,7 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
 const styles = StyleSheet.create({
   root: { marginBottom: spacing.xl },
   cover: { height: 104, width: '100%' },
+  coverImage: { height: '100%', width: '100%' },
   body: { paddingHorizontal: spacing.lg },
   avatarRow: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between' },
   avatarBorder: { borderRadius: radii.full, marginTop: -40, padding: spacing.xs },
