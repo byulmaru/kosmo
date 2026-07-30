@@ -141,19 +141,19 @@ avatar/header·`followPolicy` 저장, viewer-authorized Profile image read, Prof
 - 테스트 제외 범위: Media upload 인프라 자체, orphan cleanup, Profile Tag·Settings, crop·thumbnail·variant·Remote
   Media·Fedify, 관련 없는 coverage·snapshot·새 범용 test harness 확대.
 
-- [ ] 2.1 `profile_media` enum/table, FK·unique·index와 relation을 additive migration으로 추가하고 DB 제약·cascade·
+- [x] 2.1 `profile_media` enum/table, FK·unique·index와 relation을 additive migration으로 추가하고 DB 제약·cascade·
       Media 보존을 검증한다.
-- [ ] 2.2 guest-safe nullable `selectedProfileForEdit`, Profile/Membership/Account commit-time authorization과 거부
+- [x] 2.2 guest-safe nullable `selectedProfileForEdit`, Profile/Membership/Account commit-time authorization과 거부
       경계를 구현하고 권한·동시 변경 integration test를 추가한다.
-- [ ] 2.3 update input/service를 selected Profile 기준 text·`followPolicy`·avatar/header omitted/ID/null로 정렬하고
+- [x] 2.3 update input/service를 selected Profile 기준 text·`followPolicy`·avatar/header omitted/ID/null로 정렬하고
       legacy displayName, Media 선검증·원자 rollback integration test를 추가한다.
-- [ ] 2.4 Profile avatar/header viewer-authorized resolver와 mutation/query payload identity를 연결하고 공개 조회,
+- [x] 2.4 Profile avatar/header viewer-authorized resolver와 mutation/query payload identity를 연결하고 공개 조회,
       기존 Media Node visibility와 ProfileHero 표시 test를 추가한다.
-- [ ] 2.5 protected route에 초기값과 production entrypoint를 연결하고 id-match edit button, direct-access StateView,
+- [x] 2.5 protected route에 초기값과 production entrypoint를 연결하고 id-match edit button, direct-access StateView,
       Profile Tag UI/input 제외를 route test로 검증한다.
-- [ ] 2.6 picker와 issue→PUT→complete를 field별 draft에 연결하고 변경·삭제·취소/direct picker, stale completion,
+- [x] 2.6 picker와 issue→PUT→complete를 field별 draft에 연결하고 변경·삭제·취소/direct picker, stale completion,
       명시적 field retry와 save retry Ready ID 재사용을 검증한다.
-- [ ] 2.7 dirty route/Web/Android back confirmation, saving navigation 차단과 성공 guard 해제→Relay normalize→
+- [x] 2.7 dirty route/Web/Android back confirmation, saving navigation 차단과 성공 guard 해제→Relay normalize→
       relativeHandle Profile replace를 구현하고 route test를 추가한다.
 - [ ] 2.8 core·API·app·Web 필수 검증을 통과하고 실제 Web·iOS·Android QA 수행 여부를 구분해 PROD-492 PR에
       권한·Media·Relay·navigation 증거와 남은 플랫폼 공백을 기록한다.
