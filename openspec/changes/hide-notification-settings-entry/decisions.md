@@ -45,12 +45,36 @@
 - Decision Date: 2026-07-30
 - Decision Class: Derived Contract
 - Authority / Provenance: `PROD-541`, `PROD-487`
-- Status: Active
+- Status: Superseded
 - Context / Problem: `SidebarNavigation`에는 준비되지 않은 `프로필 설정` nav row와 현재 필요한 feedback footer가 별도 진입점으로 공존한다. 둘을 하나의 sidebar 설정 표면으로 취급하면 설정을 계속 노출하거나 피드백까지 숨기게 된다.
 - Decision Outcome: full Web sidebar, compact Web rail과 mobile drawer에서 `프로필 설정` nav row를 제거한다. PROD-487과 PR #390의 `피드백 보내기` label·icon·link와 `/feedback`, 기존 `프로필`·`팔로워 요청`·로그아웃은 유지한다.
 - Alternatives Considered: sidebar 전체 유지, sidebar footer까지 제거, `/menu` route 또는 같은 route를 쓰는 다른 메뉴까지 제거.
 - Consequences: PROD-541은 `SidebarNavigation`을 변경하므로 PR #390이 미병합인 동안 그 위에 stack한다. 설정 복원은 별도 Linear·OpenSpec이 필요하다.
-- Confirmation / Follow-up: Shell Storybook의 full·compact·mobile drawer에서 `프로필 설정` link 부재와 유지 대상 진입점을 검증한다.
+- Confirmation / Follow-up: 2026-07-30 받은 팔로우 요청 UI가 없다는 사실과 개인 메시지에서 확인한 임시 비노출 방향을 PROD-541에 기록하면서, `팔로워 요청`과 generic `/menu`도 함께 제거하는 아래 Derived Contract로 대체됐다.
+
+### 준비되지 않은 설정·팔로워 요청 진입점과 generic menu placeholder를 제거한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `PROD-541`, `PROD-566`, `PROD-487`
+- Status: Active
+- Context / Problem: `SidebarNavigation`의 `프로필 설정`은 실제 설정 화면이 없고, `팔로워 요청`은 pending domain/API가 존재하지만 받은 요청 관리 UI 대신 generic `/menu` 소개 화면으로 이동한다. 준비되지 않은 두 진입점을 유지하면 사용자가 실행 가능한 기능으로 오인한다. 반면 feedback, 실제 Profile navigation, Bookmark와 logout은 현재 동작한다.
+- Decision Outcome: full Web sidebar, compact Web rail과 mobile drawer에서 `프로필 설정`과 `팔로워 요청` row를 시각·접근성 트리에서 제거하고, 남은 user-facing 소비자가 없는 generic `/menu` placeholder route와 positive route smoke를 제거한다. `프로필`은 선택한 Profile의 canonical route만 사용한다. PROD-487과 PR #390의 `피드백 보내기`와 `/feedback`, `프로필`, `북마크`, 로그아웃은 유지한다. 팔로우 요청의 pending 모델/API와 보낸 요청의 `요청됨`·취소는 변경하지 않는다.
+- Alternatives Considered: 두 row와 `/menu` 유지, 받은 요청 UI를 PROD-541에서 즉시 구현, 승인제 팔로우를 제품에서 제거, navigation item을 literal source comment로 남김.
+- Consequences: 현재 App에서 잘못된 진입점은 사라지지만 받은 요청을 App에서 확인·처리하는 UI는 계속 없다. 해당 UI와 진입점 복원은 PROD-566이 별도로 소유하며 기존 Lucide `UserRoundPlus` 아이콘 이름을 보존한다. `/menu` 직접 접근에 새 redirect나 전용 404 화면을 추가하지 않는다.
+- Confirmation / Follow-up: Shell Storybook의 full·compact·mobile drawer에서 두 진입점 부재와 유지 대상을 검증하고, Web auth route의 positive `/menu` smoke를 제거한다. Android·iOS runtime 미실행 여부를 별도로 기록한다.
+
+### Parent feedback change를 먼저 archive한 뒤 child에서 menu 보존 scenario를 제거한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-487`, `PROD-541`, PR #390, PR #412
+- Status: Active
+- Context / Problem: Parent `add-web-feedback-slack-delivery`는 parent head의 기존 `/menu` 소비자를 보호하기 위해 `Universal shell feedback navigation` requirement에서 `/menu` 보존을 요구한다. Child PROD-541은 그 소비자를 제거한 뒤 같은 requirement의 최종 내용을 바꾼다. Active change 간 의미적 적용 순서는 strict validation만으로 보장되지 않는다.
+- Decision Outcome: Parent #390과 `add-web-feedback-slack-delivery`는 parent slice의 `/menu` 보존 계약을 유지한다. Parent change를 먼저 archive해 requirement를 canonical에 반영하고, child archive 직전에 canonical requirement 전체를 다시 복사·대조한 뒤 `/menu` 보존 scenario만 제거한 MODIFIED requirement를 적용한다. Child는 parent active artifact를 직접 수정하지 않는다.
+- Alternatives Considered: Parent에서 보존 계약을 먼저 철회, child에서 parent active 파일 직접 수정, child 문구로만 supersede하고 archive 순서를 확인하지 않음.
+- Consequences: 각 stack 단계의 코드와 계약이 일치하고 issue ownership이 섞이지 않는다. Parent archive 전에는 child archive가 blocked되며, child delta는 feedback navigation의 나머지 scenario를 빠뜨리지 않도록 requirement 전체를 포함해야 한다.
+- Confirmation / Follow-up: Parent archive 여부와 canonical requirement 내용을 child archive stop gate에서 재확인하고 archive 후 strict validation을 수행한다.
 
 ## Remaining Decisions
 
@@ -60,3 +84,4 @@
 
 - 위 `44px disabled 알림 설정 placeholder를 표시한다` Implementation Choice는 PROD-541의 Active Derived Contract로 대체됐다. archived `2026-07-27-add-in-app-notifications`의 같은 기록에 포함된 단일 목록, Follow item 표현, 탭·section heading 부재와 나머지 결과는 유지한다.
 - 위 `사이드바 전체를 설정 비노출 범위에서 제외한다` Derived Contract는 `프로필 설정`과 feedback footer를 같은 표면으로 잘못 묶어 2026-07-30의 새 Derived Contract로 대체됐다.
+- 위 `사이드바의 프로필 설정은 숨기고 피드백 진입점은 유지한다` Derived Contract는 받은 요청 UI가 없는 `팔로워 요청`과 generic `/menu`를 유지해 최신 PROD-541 범위와 어긋나므로, 같은 날의 `준비되지 않은 설정·팔로워 요청 진입점과 generic menu placeholder를 제거한다` Derived Contract로 대체됐다.

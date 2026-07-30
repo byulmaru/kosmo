@@ -1,14 +1,5 @@
 import { Link, usePathname } from 'expo-router';
-import {
-  Bell,
-  Bookmark,
-  House,
-  PenLine,
-  Search,
-  Settings,
-  UserRound,
-  UserRoundPlus,
-} from 'lucide-react-native';
+import { Bell, Bookmark, House, PenLine, Search, Settings, UserRound } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -34,20 +25,27 @@ const SidebarNavigationFragment = graphql`
   }
 `;
 
-type NavigationItem = {
+type RouteNavigationItem = {
   href: Href;
   Icon: LucideIcon;
   label: string;
-  profile?: boolean;
+  profile?: false;
 };
+
+type ProfileNavigationItem = {
+  Icon: LucideIcon;
+  label: string;
+  profile: true;
+};
+
+type NavigationItem = ProfileNavigationItem | RouteNavigationItem;
 
 const navigation: NavigationItem[] = [
   { href: '/home', Icon: House, label: '홈' },
   { href: '/search', Icon: Search, label: '검색' },
   { href: '/notifications', Icon: Bell, label: '알림' },
-  { href: '/menu', Icon: UserRound, label: '프로필', profile: true },
+  { Icon: UserRound, label: '프로필', profile: true },
   { href: '/bookmarks', Icon: Bookmark, label: '북마크' },
-  { href: '/menu', Icon: UserRoundPlus, label: '팔로워 요청' },
 ];
 
 type Props = {
@@ -75,12 +73,12 @@ export function SidebarNavigation({
   const feedbackActive = pathname === '/feedback';
 
   const resolveItem = (item: NavigationItem) => {
-    if (!item.profile) {
-      return { active: pathname === item.href && item.href !== '/menu', href: item.href };
+    if (item.profile) {
+      const href = profile ? (`/${profile.relativeHandle}` as Href) : undefined;
+      return { active: Boolean(href && pathname === href), href };
     }
 
-    const href = profile ? (`/${profile.relativeHandle}` as Href) : undefined;
-    return { active: Boolean(href && pathname === href), href };
+    return { active: pathname === item.href, href: item.href };
   };
 
   const switcherSurface = compact ? 'compact' : surface === 'desktop' ? 'full' : 'drawer';
