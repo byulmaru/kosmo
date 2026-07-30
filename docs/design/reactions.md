@@ -8,7 +8,7 @@ Reaction UI는 Post에 Reaction을 추가·삭제하는 Quick Picker와, 이미 
 - 순수 Repost는 바깥 Repost가 아니라 source Post를 Reaction 대상으로 사용한다.
 - 목록과 상세 화면은 같은 대상 결정 규칙과 UI를 사용한다. Reaction 요약 row는 Post body 또는 source body 아래, Post Action Bar 위에 표시한다.
 - Post surface는 `reactionTarget`을 한 번 결정하고 Quick Picker, 요약 row, Profile 목록에 같은 Post ID를 전달한다. 같은 surface 안에서 서로 다른 Post를 읽거나 변경하지 않는다.
-- custom emoji Full Picker, API·DB 변경, 전역 toast, 범용 anchored popover, Reply composer, Post Action Bar의 일반 More action menu, 로그인·가입·Profile 선택 onboarding은 이 계약의 범위가 아니다.
+- custom emoji Full Picker, API·DB 변경, 전역 toast, 범용 anchored popover, Reply composer, Post Action Bar의 일반 More action menu, 로그인·가입·Profile 선택 onboarding 자체는 이 계약의 범위가 아니다. Action Bar 부모 surface는 기존 인증·Profile 선택 진입점을 재사용할 수 있지만 Reaction feature가 그 흐름을 새로 구현하지 않는다.
 
 ## Reaction Quick Picker
 
@@ -48,7 +48,7 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 - Reaction trigger는 Web·iOS·Android 모두에서 trigger에 붙은 작은 floating popover를 열며 같은 trigger를 다시 누르면 닫힌다. 화면 공간에 따라 위·아래로 전환하고 viewport와 safe area 안으로 수평 위치를 제한한다. option row의 고유 너비가 가용 너비보다 크면 target 크기를 줄이지 않고 feature-local `ScrollView` shell 안에서 수평 scroll을 허용한다.
 - popover는 외부 클릭·터치, Web `Escape`, Android back, 대상 Post unmount 또는 selected Profile 전환으로 닫힌다. Web에서는 열릴 때 첫 option으로 focus를 옮기고 닫힐 때 trigger로 focus를 복원한다.
 - 한 Type을 선택하거나 해제한 뒤에도 popover를 유지해 여러 Type을 연속으로 조작할 수 있다.
-- guest이거나 selected Profile이 없으면 Reaction trigger는 Action Bar 자리를 유지한 채 disabled로 표시하고 popover나 mutation을 시작하지 않는다.
+- Action Bar 부모 surface는 target 자체가 적격한 Reaction trigger를 세션 상태와 분리해 해석한다. guest는 기존 인증 진입으로 위임하고, valid 세션에서 selected Profile이 없으면 `ShellChromeContext.openProfileSwitcher()`로 기존 Profile 선택기를 연다. session error에서는 trigger를 disabled로 유지한다. 어떤 resolution에서도 popover나 mutation을 먼저 시작하지 않으며, Profile 선택 성공 뒤 원래 Reaction을 자동으로 재실행하지 않는다.
 - 이 통합은 기존 Post Action Bar의 Reaction 자리만 소유한다. 전체 action 조립과 범용 ActionMenu 일반화는 하지 않는다.
 
 ## Reaction 요약 row
@@ -108,7 +108,7 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 - Reaction 요약은 exact 32px token·More geometry, standalone 제목 제거, Quick Picker와 공유하는 selected·pending·error 상태를 검증한다.
 - mutation 성공 전 상태 불변, 성공 payload Post의 authoritative 선택·count·순서 정규화, 실패 시 기존 상태 보존, Type별 동시성·재시도, selected Profile별 Environment 격리를 검증한다.
 - 일반·Quote는 own Post ID, 순수 Repost는 source Post ID를 목록과 상세 각각에서 사용하는지 검증한다.
-- selected Profile이 없을 때 Action Bar trigger와 token toggle은 disabled이고 popover·mutation이 없지만 More와 Profile 목록 조회는 가능한지 검증한다.
+- Action Bar trigger는 target이 적격할 때 guest에서 기존 인증 진입, valid 세션의 selected Profile 부재에서 기존 Profile 선택기 진입, session error에서 disabled인지 검증한다. resolution 전에는 popover·mutation이 없고 Profile 선택 뒤 원래 Reaction을 자동 재실행하지 않는다. 요약 token toggle은 selected Profile이 없으면 계속 disabled이며 More와 Profile 목록 조회는 가능해야 한다.
 - modal의 양수 count emoji tab 순서, 기본 선택, tab별 목록, item emoji, Profile 사이 separator, pagination·최초/추가 조회 재시도와 actor별 cache 격리를 검증한다. 320px에서 여섯 Type tab이 horizontal scroll로 접근 가능한지도 검증한다.
 - 320px, 390px, 600px Web viewport에서 Quick Picker와 요약 row가 viewport 안에 머물고 exact 32px target을 유지한 채 feature-local horizontal scroll로 접근 가능한지 실제 관찰한다.
 - 자동 검증과 Web runtime 관찰을 분리해 기록한다. iOS·Android runtime은 이번 Web 우선 범위의 완료 증거가 아니며 Native 출시 전 44pt·48dp target과 assistive technology 동작을 별도로 관찰한다.

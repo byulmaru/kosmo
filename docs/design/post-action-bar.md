@@ -36,8 +36,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   간격은 늘리지 않는다.
 - 순수 Repost의 본문·생성 시각 affordance는 Repost 자체가 아니라 Source detail로 이동한다. Repost Author와
   Source Author affordance는 각각 해당 Profile로 이동한다.
-- 순수 Repost 아래의 Action Bar는 바깥 Repost Post가 아니라 화면에 표시한 direct Source Post를 대상으로
-  동작한다. 따라서 Repost menu의 선택 상태, count와 생성·취소 identity도 Source fragment에서 파생한다.
+- 순수 Repost 아래 Action Bar의 Reply는 바깥 contentless Repost의 Reply 계약을 유지해 disabled로 표시한다.
+  Repost·Reaction·Bookmark·More는 화면에 표시한 direct Source Post를 대상으로 동작한다. 따라서 Repost
+  menu의 선택 상태, count와 생성·취소 identity도 Source fragment에서 파생한다.
 - Quote의 자체 본문 affordance는 Quote detail로 이동하고 Source preview만 Source detail로 이동한다.
 - 순수 Repost의 `{displayName}님이 재게시함` attribution은 `typography.sm`의 14/20 line box에 맞추고 바로
   아래 Source 표준행과의 추가 간격을 두지 않는다. Web의 Profile text link는 inline target 예외를 사용하며,
@@ -116,8 +117,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - `PROD-471`은 Repost 취소 뒤 서버 확정 Source 상태를 같은 actor Store에 정규화하는 cache 갱신을 소유한다.
 - `PROD-598`은 기존 Post 삭제 domain과 GraphQL resolver를 재사용해 More의 작성자 삭제 항목, 확인 dialog,
   Relay cache 동기화와 실패 복구를 소유한다.
-- Reaction, Reply, Bookmark, More의 실제 연결과 여러 action의 최종 통합 범위는 각 구현 이슈와 `PROD-432`에
-  남긴다.
+- `PROD-425`는 pure Repost Reply의 바깥 contentless Post binding과 disabled 상태를 소유한다.
+- Reaction, Bookmark, More의 실제 연결과 여러 action의 최종 통합, guest 인증 진입, valid 세션의 Profile
+  선택기 진입과 session error 비활성화는 각 구현 이슈와 `PROD-432`가 소유한다.
 
 ## 검증
 
@@ -136,6 +138,11 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - Native bottom action sheet의 backdrop·back dismiss, safe area, modal 접근성과 menu item target을 검증한다.
 - Native 44pt·48dp Action Bar target과 VoiceOver·TalkBack runtime은 출시 전 후속 gate로 남기고, 현재 28px
   공통 구현의 완료 증거로 보고하지 않는다.
+- 순수 Repost에서 Reply는 바깥 contentless Repost identity를 유지해 disabled이고,
+  Repost·Reaction·Bookmark·More만 direct Source Post를 대상으로 사용하는지 검증한다.
+- target 자체가 적격할 때 guest는 기존 인증 진입으로, valid 세션에서 selected Profile이 없으면 기존 Profile
+  선택기로 위임하고 session error에서는 액션을 비활성화하는지 검증한다. Profile 선택 뒤 원래 액션을 자동으로
+  재실행하지 않는다.
 - 선택·미선택 상태의 메뉴 label, pending 중복 차단, 생성·취소 mutation identity와 actor 격리를 검증한다.
 - 실패 문구, latest-replace, 동일 문구 반복 시 새 alert instance와 dismiss timer 재시작, 자동 dismiss,
   alert semantics, light `#262626` accent와 message 2px optical shift, 실패 뒤 상태 유지·다음 입력 재시도를

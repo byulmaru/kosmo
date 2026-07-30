@@ -20,7 +20,7 @@
 
 - Toolbar container가 child mutation payload, cache update 정책, navigation 또는 Content·Reply Parent·Repost Source 관계 조합 정책을 재구현하는 것. 구현된 private child action은 자기 Relay fragment·mutation·pending·파생 상태를 colocate할 수 있다.
 - Toolbar container가 More 팝업·clipboard 또는 private child action의 menu 상태를 직접 소유하는 것. Repost child는 자기 action menu의 open·dismiss·선택을 fragment·mutation 경계와 함께 조립할 수 있다.
-- 링크 복사 외의 More 메뉴 항목이나 guest 인증 목적지·임시 인증 화면을 구현하는 것
+- 링크 복사 외의 More 메뉴 항목, 새로운 guest 인증 목적지·임시 인증 화면 또는 새로운 Profile 선택 화면을 구현하는 것. 기존 플랫폼 인증 진입과 `ShellChromeContext.openProfileSwitcher()`는 재사용한다.
 - 액션을 임의 배열로 조립하는 범용 toolbar API나 공개 action leaf 컴포넌트를 제공하는 것
 - 기존 개별 action 계약을 재정의하거나 Figma 파일을 동기화하는 것
 
@@ -50,7 +50,7 @@ PROD-414는 준비된 `PostActionBar`를 `PostLayout`의 content grid 마지막 
 
 PROD-425는 PROD-414가 배치한 actual Post Action Bar의 Reply config를 existing Composer와 연결한다. display Post와 Action Bar target을 분리해 순수 Repost의 Repost child는 direct Source target을 유지하면서 Reply eligibility는 바깥 contentless Repost에서 disabled로 전달한다. selected Profile이 있는 목록은 modal·전체 화면 Reply surface, 상세 thread는 행별 inline surface를 열고 Composer가 소유한 `expanded`를 Action Bar에 다시 공급한다. selected Profile이 없는 guest에는 이 child slice에서 Reply config를 새로 노출하지 않으며 인증 진입과 최종 guest 정책은 PROD-432가 소유한다.
 
-PROD-432는 PROD-414 surface와 PROD-425가 연결한 Reply 결과 위에 아직 config 기반인 나머지 action 구현 결과를 surface 입력으로 변환한다. surface는 canonical 계약 전체를 하나의 boolean으로 재사용하지 않고, Content·Reply Parent·Repost Source 관계 조합, Post Visibility와 대상 관련 조건으로 결정되는 대상 적격성과 현재 실행 주체·세션의 실행 권한을 분리한다. 대상 자체가 부적격하거나 인증된 실행 주체가 권한을 갖지 못하면 disabled를 전달한다. guest에게 `Account.Active`·`Profile.Member`·선택 Profile이 없다는 이유만으로 대상 자체가 적격한 Reply·Repost·Reaction·Bookmark를 disabled로 만들지 않고 상위 인증 진입 계약으로 위임하되, 대상 자체 제한은 guest에게도 disabled로 유지한다. 이 change에서는 임시 인증 화면이나 목적지를 만들지 않는다. surface는 PROD-425의 Reply callback·`expanded`를 재구현하지 않고 회귀 검증하며, Reaction에 하나 이상의 Reaction Type 존재를 나타내는 `hasReacted`, Bookmark에 `hasBookmarked`를 공급한다. Repost의 최종 disabled 행동을 child에 연결할 concrete host input 또는 fragment shape는 actual Home·Profile·상세 caller와 함께 이 단계에서 설계하고 통합 검증한다. Reaction과 Bookmark count는 연결하지 않고 Reply도 선행 계약이 제공하는 count만 optional로 연결하며 계약이 없는 `0`이나 새 집계를 합성하지 않는다. viewer-independent count와 선택 Profile별 도메인 상태의 기존 Relay cache 경계를 유지하고 action별 pending을 분리한다. Repost 외 action 요청이 실패하면 해당 action 계약에 맞는 접근 가능한 안내를 제공하되 PROD-414의 Repost toast를 재구현하지 않는다. More callback은 surface에서 접근 가능한 최소 팝업을 열고 guest도 사용할 수 있는 `링크 복사`로 ADR 0015의 Post Share Reference를 clipboard에 복사한다. Web·Android·iOS 모두 현재 deployment가 사용하는 configured Local Instance의 `canonical_origin`을 canonical Web origin으로 사용한다. 모든 자식과 선행 action이 준비된 뒤 목록·상세의 동일 계약, Profile 전환, 성공·실패 복귀, disabled 정책 및 More 링크 복사를 통합 검증하고 공유 change를 archive한다.
+PROD-432는 PROD-414 surface와 PROD-425가 연결한 Reply 결과 위에 아직 config 기반인 나머지 action 구현 결과를 surface 입력으로 변환한다. surface는 canonical 계약 전체를 하나의 boolean으로 재사용하지 않고, Content·Reply Parent·Repost Source 관계 조합, Post Visibility와 대상 관련 조건으로 결정되는 대상 적격성과 현재 실행 주체·세션의 실행 권한을 분리한다. 대상 자체가 부적격하거나 인증된 실행 주체가 권한을 갖지 못하면 disabled를 전달한다. 순수 Repost의 Reply는 PROD-425가 연결한 바깥 contentless Repost identity와 disabled 상태를 유지하고, Repost·Reaction·Bookmark·More만 direct Source target을 사용한다. target 자체가 적격하면 `SessionProvider.status`에 따라 `guest`는 기존 플랫폼 인증 진입(Web `/login`, Native `/`)으로 위임하고, `valid`인데 selected Profile이 없으면 `ShellChromeContext.openProfileSwitcher()`를 호출하며, `error`에서는 disabled로 유지한다. resolution 전에 child UI나 mutation을 시작하지 않고 Profile 선택 성공 뒤 원래 action을 자동 재실행하지 않는다. 이 change에서는 새 인증 목적지·임시 인증 화면·Profile 선택 화면을 만들지 않는다. surface는 PROD-425의 Reply callback·`expanded`를 재구현하지 않고 회귀 검증하며, Reaction에 하나 이상의 Reaction Type 존재를 나타내는 `hasReacted`, Bookmark에 `hasBookmarked`를 공급한다. Repost의 최종 disabled 행동을 child에 연결할 concrete host input 또는 fragment shape는 actual Home·Profile·상세 caller와 함께 이 단계에서 설계하고 통합 검증한다. Reaction과 Bookmark count는 연결하지 않고 Reply도 선행 계약이 제공하는 count만 optional로 연결하며 계약이 없는 `0`이나 새 집계를 합성하지 않는다. viewer-independent count와 선택 Profile별 도메인 상태의 기존 Relay cache 경계를 유지하고 action별 pending을 분리한다. Repost 외 action 요청이 실패하면 해당 action 계약에 맞는 접근 가능한 안내를 제공하되 PROD-414의 Repost toast를 재구현하지 않는다. More callback은 surface에서 접근 가능한 최소 팝업을 열고 guest도 사용할 수 있는 `링크 복사`로 ADR 0015의 Post Share Reference를 clipboard에 복사한다. Web·Android·iOS 모두 현재 deployment가 사용하는 configured Local Instance의 `canonical_origin`을 canonical Web origin으로 사용한다. 모든 자식과 선행 action이 준비된 뒤 목록·상세의 동일 계약, Profile 전환, 성공·실패 복귀, disabled 정책 및 More 링크 복사를 통합 검증하고 공유 change를 archive한다.
 
 ### Allowed Alternatives
 
@@ -71,7 +71,8 @@ PROD-432는 PROD-414 surface와 PROD-425가 연결한 Reply 결과 위에 아직
 - Toolbar container가 child mutation payload·cache updater, navigation, More 팝업 또는 Post 정책 분기를 재구현하면 구현 이슈 간 책임이 다시 결합된다. 반대로 구현된 action의 fragment·mutation·pending·파생 상태를 scalar config로 분해하면 함께 바뀌어야 하는 Relay 상태와 mutation identity가 갈라진다.
 - pending 하나로 행 전체를 비활성화하면 독립 액션을 불필요하게 차단한다.
 - canonical action 계약의 인증 전제까지 대상 적격성 boolean에 합치면 guest의 모든 소셜 액션이 disabled가 되어 인증 진입 callback에 도달할 수 없다.
-- 순수 Repost 아래 Action Bar에 바깥 Repost fragment를 공급하면 Content 없는 Repost를 다시 action target으로 사용한다. 화면에 표시한 direct Source fragment를 공급해야 한다.
+- `selectedProfile == null`만 보고 guest로 판단하면 valid 세션의 Profile 선택 onboarding을 건너뛰고 잘못된 로그인 경로로 이동한다. `SessionProvider.status`와 selected Profile을 별도로 해석해야 한다.
+- 순수 Repost 아래 다섯 액션 모두에 바깥 Repost fragment를 공급하면 Content 없는 Repost를 action target으로 사용한다. 반대로 다섯 액션 모두 direct Source를 사용하면 PROD-425의 Reply binding을 깨뜨린다. Reply는 바깥 contentless Repost의 disabled 상태를 유지하고 나머지 액션만 direct Source fragment를 사용해야 한다.
 - Repost trigger에서 즉시 mutation을 실행하거나 선택 상태에 따라 menu와 즉시 실행을 섞으면 미래 `인용하기` 진입점과 interaction 예측 가능성이 깨진다.
 
 ## Risks / Trade-offs
@@ -92,7 +93,7 @@ PROD-432는 PROD-414 surface와 PROD-425가 연결한 Reply 결과 위에 아직
 
 1. PROD-433에서 surface와 분리된 공통 컴포넌트, Storybook 및 component test를 추가한다.
 2. PROD-414에서 `PostActionBar` composite fragment와 private Repost child fragment·mutation·pending을 유지한 채 `PostListItem`·`PostLayout`의 final sibling에 처음 배치하고, 순수 Repost Source target, cross-platform Repost menu와 action별 transient toast를 연결한다. PROD-434의 canceled task는 실행하지 않는다.
-3. 선행 action 구현이 준비되면 PROD-432에서 아직 config 기반인 action 상태와 callback, 대상 적격성·현재 세션 실행 권한이 분리된 disabled 정책, guest 인증 위임과 More 링크 복사를 연결하고 PROD-414의 Repost toast를 포함한 전체 surface 결과를 통합 검증한다.
+3. 선행 action 구현이 준비되면 PROD-432에서 아직 config 기반인 action 상태와 callback, 대상 적격성·현재 세션 실행 권한이 분리된 disabled 정책, 기존 guest 인증 진입, valid 세션의 기존 Profile 선택기 진입, session error 비활성화와 More 링크 복사를 연결하고 PROD-414의 Repost toast를 포함한 전체 surface 결과를 통합 검증한다.
 4. 모든 task와 통합 검증이 완료된 뒤 PROD-432가 change를 archive하고 archive 후 strict validation을 수행한다.
 
 롤백은 역순으로 production surface 연결을 제거한 뒤 공통 컴포넌트를 제거한다. 새 persistence나 schema migration이 없으므로 데이터 rollback은 필요 없다. 일부 구현 PR만 완료된 동안에는 change를 archive하지 않는다.

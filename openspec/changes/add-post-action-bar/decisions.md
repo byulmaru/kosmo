@@ -279,17 +279,29 @@
 - Consequences: 실제 대상 적격성과 실행 권한은 canonical 문서와 선행 action 계약이 소유하고 Action Bar는 adapter가 전달한 disabled 상태만 표현한다. guest 인증 목적지·화면 전환·임시 화면은 이 change에서 구현하지 않는다.
 - Confirmation / Follow-up: PROD-432 통합 검증에서 Content 없는 Repost와 Visibility 등 대상 자체 제한, 인증된 실행 주체의 권한 제한, 대상이 적격한 guest의 인증 위임과 대상이 부적격한 guest의 disabled 유지를 각각 확인한다.
 
-### production surface는 표시 Post와 action target을 구분한다
+### production surface는 표시 Post와 action별 target을 구분한다
 
 - Decision Date: 2026-07-27
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/objects/post.md`, `docs/design/post-action-bar.md`, `PROD-414`, `PROD-432`
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/design/post-action-bar.md`, `PROD-414`, `PROD-425`, `PROD-432`, 2026-07-31 KST 사용자 결정
 - Status: Active
-- Context / Problem: 순수 Repost는 바깥 Repost Post를 표시 단위로 사용하지만 본문과 action의 실제 대상은 direct Source다. 이를 구분하지 않고 관계 조합만으로 바깥 Repost의 Repost action을 disabled 처리하면 사용자가 화면에 보이는 Source를 action할 수 없다.
-- Decision Outcome: production surface는 다섯 액션의 고정 위치를 유지하되 display Post와 각 action target을 구분한다. 일반 Post와 Quote의 Action Bar는 바깥 Post를 target으로 사용하고, 순수 Repost 아래 Action Bar는 direct Source를 target으로 사용한다. target 자체가 부적격하거나 인증된 실행 주체가 권한을 갖지 못한 액션은 숨기지 않고 disabled로 제공한다. guest에게 현재 세션 전제가 없다는 이유만으로 target 자체가 적격한 소셜 action을 disabled로 만들지 않고 상위 인증 진입에 위임한다.
-- Alternatives Considered: 순수 Repost의 Repost action을 항상 disabled, 바깥 Repost identity target, 순수 Repost에서 Action Bar 숨김. 모두 display한 Source에 대한 일관된 action 진입점을 잃거나 잘못된 target을 사용하므로 채택하지 않았다.
-- Consequences: surface adapter와 fragment는 display Post와 target Post를 구분해 전달해야 하지만 toolbar 공개 API나 고정 순서는 바뀌지 않는다. 최종 eligibility·권한 seam은 PROD-432가 실제 caller와 통합 검증한다.
-- Confirmation / Follow-up: 일반·Quote self target, 순수 Repost Source target, disabled·guest 인증 위임과 Action Bar 고정 배치를 각각 검증한다.
+- Context / Problem: 순수 Repost는 바깥 Repost Post를 표시 단위로 사용하지만 본문과 대부분 action의 실제 대상은 direct Source다. 그러나 PROD-425는 Reply를 바깥 contentless Repost identity에 결합하고 disabled로 확정했다. 모든 액션을 하나의 target으로 축약하면 Source action 또는 Reply 계약 중 하나를 깨뜨린다.
+- Decision Outcome: production surface는 다섯 액션의 고정 위치를 유지하되 display Post와 action별 target을 구분한다. 일반 Post와 Quote의 Action Bar는 바깥 Post를 target으로 사용한다. 순수 Repost의 Reply는 바깥 contentless Repost binding과 disabled 상태를 유지하고 Repost·Reaction·Bookmark·More는 direct Source를 target으로 사용한다. target 자체가 부적격하거나 인증된 실행 주체가 권한을 갖지 못한 액션은 숨기지 않고 disabled로 제공한다. guest에게 현재 세션 전제가 없다는 이유만으로 target 자체가 적격한 소셜 action을 disabled로 만들지 않고 상위 인증 진입에 위임한다.
+- Alternatives Considered: 순수 Repost Reply까지 direct Source에 연결하는 방식은 PROD-425 계약과 `add-local-reply-creation` 소유 범위를 침범하므로 채택하지 않았다. Repost·Reaction·Bookmark·More까지 바깥 Repost identity를 target으로 쓰거나 Action Bar를 숨기는 방식도 화면에 표시한 Source의 action 진입점을 잃으므로 채택하지 않았다.
+- Consequences: surface adapter와 fragment는 display Post, Reply binding과 나머지 action target을 구분해 전달해야 하지만 toolbar 공개 API나 고정 순서는 바뀌지 않는다. 최종 eligibility·권한 seam은 PROD-432가 실제 caller와 통합 검증한다.
+- Confirmation / Follow-up: 일반·Quote self target, 순수 Repost의 바깥 contentless Reply disabled와 나머지 direct Source target, Action Bar 고정 배치를 각각 검증한다.
+
+### 세션 상태와 선택 Profile 부재를 별도 resolution으로 처리한다
+
+- Decision Date: 2026-07-31
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/post-action-bar.md`, `docs/design/reactions.md`, `PROD-432`, 2026-07-31 KST 사용자 결정
+- Status: Active
+- Context / Problem: `selectedProfile == null`은 인증하지 않은 guest뿐 아니라 Account 세션은 유효하지만 아직 Profile을 선택하지 않은 상태에도 발생한다. 두 상태를 합치면 valid 세션을 로그인으로 보내거나, 반대로 guest에게 Profile 선택기를 여는 잘못된 진입이 생긴다. session 복원 오류에서도 navigation이나 mutation을 시작해서는 안 된다.
+- Decision Outcome: surface는 target 적격성을 먼저 판정하고, 적격한 액션만 `SessionProvider.status`와 selected Profile로 resolution한다. `guest`는 기존 플랫폼 인증 진입(Web `/login`, Native `/`)으로 위임하고 child UI나 mutation을 시작하지 않는다. `valid`이며 selected Profile이 없으면 `ShellChromeContext.openProfileSwitcher()`로 기존 Profile 선택기를 열고 로그인, child UI와 mutation을 시작하지 않는다. `valid`이며 selected Profile이 있으면 액션을 실행한다. `error`에서는 액션을 disabled로 유지하고 navigation이나 mutation을 시작하지 않는다. Profile 선택 성공 뒤 원래 액션을 자동 재실행하지 않으며 사용자가 다시 활성화한다.
+- Alternatives Considered: selected Profile 부재를 모두 guest로 처리하는 방식은 valid 세션 onboarding을 깨뜨려 채택하지 않았다. selected Profile 부재를 단순 disabled로 두는 방식은 기존 Profile 선택 진입점을 잃어 채택하지 않았다. Profile 선택 뒤 원래 action 자동 재실행은 선택 흐름과 mutation intent 사이에 숨은 side effect를 만들어 채택하지 않았다.
+- Consequences: surface adapter는 session status와 selected Profile을 별도 입력으로 사용하고, action child는 인증·Profile 선택 정책을 소유하지 않는다. 새 route나 선택 화면은 추가하지 않는다. 사용자는 인증 또는 Profile 선택을 마친 뒤 원래 액션을 한 번 더 활성화해야 한다.
+- Confirmation / Follow-up: target 부적격 우선 차단, guest의 플랫폼별 기존 인증 진입, valid/no-profile의 기존 ProfileSwitcher 진입, valid/profile의 action 실행, session error의 disabled, resolution 전 child UI·mutation 부재와 Profile 선택 후 자동 재실행 부재를 검증한다.
 
 ### Action Bar 컨테이너는 고정된 한국어 접근성 이름을 사용
 

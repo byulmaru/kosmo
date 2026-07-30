@@ -186,7 +186,7 @@
 
 ### Requirement: Production Post surface 배치
 
-**Authority / Provenance:** `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `docs/domain/objects/profile.md`, `docs/domain/README.md`, `docs/design/post-action-bar.md`, `PROD-432`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425` — 지원되는 Home Post List, Profile Post List 및 Post 상세 surface의 게시글은 공통 Post Action Bar 계약을 사용해야 한다(MUST). `PostLayout`은 Action Bar를, `PostListItem`은 Action Bar만 담은 목록 전용 slot을 Post content grid의 마지막 sibling으로 직접 렌더링해야 하고(MUST), 본문·작성자·생성 시각·Source navigation `Link`/`Pressable` 안에 중첩하지 않아야 한다(MUST NOT). 일반 Post와 Quote는 바깥 Post를, 순수 Repost는 화면에 표시한 direct Source Post를 Action Bar target으로 공급해야 한다(MUST). surface는 display Post와 action target을 구분하면서 canonical 관계 조합, Post Visibility·권한 계약과 각 action 계약에서 target 자체의 적격성과 현재 실행 주체·세션의 실행 권한을 분리해 판단해야 한다(MUST). Action Bar child는 전달받은 policy input을 표현하되 대상 정책 또는 guest 인증 진입을 자체 판단하지 않아야 한다(MUST NOT). target Post가 적격하지 않거나 인증된 실행 주체가 실행 권한을 갖지 못한 액션은 config 또는 child action을 생략하지 않고 disabled 상태로 제공해야 한다(MUST). 인증하지 않은 guest에게 현재 세션 전제가 없다는 이유만으로 조회 가능하고 target 자체가 적격한 액션을 disabled로 제공해서는 안 되며(MUST NOT), 활성화는 상위 인증 진입 callback에 위임해야 한다(MUST). `PostList`, route와 외부 caller는 Action Bar subtree나 `actionBar?: ReactNode`를 주입하지 않아야 하며(MUST NOT), surface 배치는 기존 상세 navigation 및 다른 interactive control의 입력을 가로채지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `docs/domain/objects/profile.md`, `docs/domain/README.md`, `docs/design/post-action-bar.md`, `PROD-432`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425` — 지원되는 Home Post List, Profile Post List 및 Post 상세 surface의 게시글은 공통 Post Action Bar 계약을 사용해야 한다(MUST). `PostLayout`은 Action Bar를, `PostListItem`은 Action Bar만 담은 목록 전용 slot을 Post content grid의 마지막 sibling으로 직접 렌더링해야 하고(MUST), 본문·작성자·생성 시각·Source navigation `Link`/`Pressable` 안에 중첩하지 않아야 한다(MUST NOT). 일반 Post와 Quote는 다섯 액션 모두 바깥 Post를 target으로 공급해야 한다(MUST). 순수 Repost는 Reply에 바깥 contentless Repost binding과 disabled 상태를 유지하고(MUST), Repost·Reaction·Bookmark·More에는 화면에 표시한 direct Source Post를 target으로 공급해야 한다(MUST). surface는 display Post와 action별 target을 구분하면서 canonical 관계 조합, Post Visibility·권한 계약과 각 action 계약에서 target 자체의 적격성과 현재 실행 주체·세션의 실행 권한을 분리해 판단해야 한다(MUST). Action Bar child는 전달받은 policy input을 표현하되 대상 정책, guest 인증 진입 또는 Profile 선택 진입을 자체 판단하지 않아야 한다(MUST NOT). target Post가 적격하지 않거나 인증된 실행 주체가 실행 권한을 갖지 못한 액션은 config 또는 child action을 생략하지 않고 disabled 상태로 제공해야 한다(MUST). target 자체가 적격하면(MUST) `guest`는 기존 플랫폼 인증 진입으로 위임하고, `valid`인데 selected Profile이 없으면 `ShellChromeContext.openProfileSwitcher()`로 기존 Profile 선택기를 열며, `valid`이고 selected Profile이 있으면 action을 실행하고, `error`에서는 disabled로 유지해야 한다(MUST). 인증·Profile 선택 resolution 전에는 child UI나 mutation을 시작하지 않아야 하며(MUST NOT), Profile 선택 뒤 원래 action을 자동 재실행하지 않아야 한다(MUST NOT). `PostList`, route와 외부 caller는 Action Bar subtree나 `actionBar?: ReactNode`를 주입하지 않아야 하며(MUST NOT), surface 배치는 기존 상세 navigation 및 다른 interactive control의 입력을 가로채지 않아야 한다(MUST).
 
 #### Scenario: 목록과 상세의 공통 계약
 
@@ -211,7 +211,8 @@
 #### Scenario: 순수 Repost의 Source action target
 
 - **WHEN** Post에 Content와 Reply Parent가 없고 Repost Source만 있다
-- **THEN** surface는 바깥 Repost가 아니라 direct Source Post fragment를 Action Bar target으로 공급한다
+- **THEN** surface는 Reply에 바깥 contentless Repost identity와 disabled 상태를 유지한다
+- **AND** Repost·Reaction·Bookmark·More에는 direct Source Post fragment를 action target으로 공급한다
 - **AND** Repost child는 Source의 `repostCount`와 selected Profile의 `viewerRepost`에서 menu 상태와 mutation identity를 파생한다
 
 #### Scenario: 대상 자체가 액션에 부적격
@@ -228,6 +229,20 @@
 
 - **WHEN** 인증하지 않은 guest가 조회할 수 있고 대상 자체가 적격한 Post의 Reply·Repost·Reaction·Bookmark를 활성화한다
 - **THEN** surface는 `Account.Active`·`Profile.Member`·선택 Profile 부재만으로 해당 액션을 숨기거나 비활성화하지 않고 상위 인증·가입·온보딩 진입 callback에 위임한다
+- **AND** child UI나 mutation을 먼저 시작하지 않는다
+
+#### Scenario: valid 세션의 선택 Profile 부재
+
+- **WHEN** session status가 `valid`이고 selected Profile이 없는 사용자가 대상 자체가 적격한 Reply·Repost·Reaction·Bookmark를 활성화한다
+- **THEN** surface는 로그인으로 이동하지 않고 `ShellChromeContext.openProfileSwitcher()`로 기존 Profile 선택기를 연다
+- **AND** child UI나 mutation을 먼저 시작하지 않는다
+- **AND** Profile 선택 뒤 원래 action을 자동으로 재실행하지 않는다
+
+#### Scenario: 세션 복원 오류
+
+- **WHEN** session status가 `error`다
+- **THEN** session이 필요한 Reply·Repost·Reaction·Bookmark는 disabled 상태를 유지한다
+- **AND** navigation, child UI 또는 mutation을 시작하지 않는다
 
 #### Scenario: guest에게도 대상 자체가 부적격
 
