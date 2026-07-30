@@ -52,7 +52,7 @@ Production PostgreSQL backup은 `s3://byulmaru-kosmo-prod-postgresql-backups-822
 
 `ios-device-onboarding`은 `robin-maki`의 승인을 요구하며, Firebase WIF 입력과 `MATCH_GIT_URL`을 일반 배포 환경과 별도로 받는다. Apple signing secret과 공개 native test 설정은 `apps/app/README.md`의 iOS Ad Hoc 배포 절차에 따라 해당 environment에 수동으로 넣는다.
 
-그 뒤 `apps/terraform/**` 또는 Terraform workflow가 바뀐 PR에서는 GCP/Firebase/IAM/WIF plan을 실행해 PR comment와 artifact로 남긴다. PR이 `main`에 병합되면 같은 repository tree에서 만든 성공한 plan artifact만 찾아 그대로 apply한다. plan과 apply는 같은 GCP 서비스 계정과 AWS role을 사용한다.
+그 뒤 `apps/terraform/**` 또는 Terraform workflow가 바뀐 PR에서는 GCP/Firebase/IAM/WIF plan을 실행해 PR comment와 artifact로 남긴다. Merge queue에서는 최신 `main`과 PR을 합친 commit으로 plan을 다시 만들며, 그 commit이 `main`에 병합되면 같은 commit과 repository tree에서 만든 merge queue plan artifact만 찾아 그대로 apply한다. plan과 apply는 같은 GCP 서비스 계정과 AWS role을 사용한다.
 
 외부 기여자의 PR workflow는 기여 이력과 무관하게 저장소 관리자의 실행 승인을 받아야 한다. 이 정책은 GitHub Actions의 `all_external_contributors` 설정으로 관리하며, 조직 구성원의 PR만 자동 실행한다.
 

@@ -7,6 +7,9 @@ on:
     paths:
       - .github/workflows/terraform.yml
       - apps/terraform/**
+  merge_group:
+    types:
+      - checks_requested
   push:
     branches:
       - main
@@ -37,7 +40,7 @@ env:
 jobs:
   plan:
     name: Terraform Plan
-    if: ${{ github.event_name == 'pull_request' }}
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
     runs-on: self-hosted
 
     steps:
@@ -118,9 +121,9 @@ jobs:
 
           terraform show -no-color terraform.tfplan > terraform.tfplan.txt
           {
+            echo "TF_PLAN_EVENT_NAME=${GITHUB_EVENT_NAME}"
+            echo "TF_PLAN_COMMIT_SHA=${GITHUB_SHA}"
             echo "TF_PLAN_TREE_SHA=$(git -C ../.. rev-parse 'HEAD^{tree}')"
-            echo "TF_PLAN_PR_NUMBER=${{ github.event.pull_request.number }}"
-            echo "TF_PLAN_HEAD_SHA=${{ github.event.pull_request.head.sha }}"
           } > plan.env
 
           plan_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
@@ -128,9 +131,14 @@ jobs:
           {
             echo "## Terraform plan"
             echo
-            echo "- Commit: \`${{ github.event.pull_request.head.sha }}\`"
+            echo "- Event: \`${GITHUB_EVENT_NAME}\`"
+            echo "- Commit: \`${GITHUB_SHA}\`"
             echo "- Workflow run: [${GITHUB_RUN_ID}](${plan_url})"
-            echo "- Apply: merge this PR to \`main\`"
+            if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+              echo "- Apply: the merge queue will create the saved plan used on \`main\`"
+            else
+              echo "- Apply: merge this queue commit to \`main\`"
+            fi
             echo
             echo "<details>"
             echo "<summary>terraform show -no-color terraform.tfplan</summary>"
@@ -145,6 +153,7 @@ jobs:
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Comment Terraform plan on pull request
+        if: ${{ github.event_name == 'pull_request' }}
         continue-on-error: true
         working-directory: ${{ env.TF_ROOT }}
         env:
@@ -282,28 +291,17 @@ jobs:
         working-directory: ${{ env.TF_ROOT }}
         run: terraform init
 
-      - name: Download merged pull request plan
+      - name: Download merge queue plan
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
-          pr_api="repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls"
-          pr_jq='(map(select(.merged_at != null)) | sort_by(.number) | last // empty)'
-          pr_number="$(gh api -H "Accept: application/vnd.github+json" "${pr_api}" --jq "${pr_jq} | .number // empty")"
-          pr_head_sha="$(gh api -H "Accept: application/vnd.github+json" "${pr_api}" --jq "${pr_jq} | .head.sha // empty")"
-          pr_url="$(gh api -H "Accept: application/vnd.github+json" "${pr_api}" --jq "${pr_jq} | .html_url // empty")"
-
-          if [[ -z "${pr_number}" || -z "${pr_head_sha}" ]]; then
-            echo "No merged pull request is associated with ${GITHUB_SHA}; refusing to apply an unreviewed plan." >&2
-            exit 1
-          fi
-
-          plan_run_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/terraform.yml/runs?event=pull_request&status=success&per_page=100" \
-            --jq ".workflow_runs | sort_by(.run_started_at) | reverse | .[] | select(.head_sha == \"${pr_head_sha}\") | .id" \
+          plan_run_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/terraform.yml/runs?event=merge_group&status=success&per_page=100" \
+            --jq ".workflow_runs | sort_by(.run_started_at) | reverse | .[] | select(.head_sha == \"${GITHUB_SHA}\") | .id" \
             | head -n 1)"
           if [[ -z "${plan_run_id}" ]]; then
-            echo "No successful Terraform plan found for PR #${pr_number} at ${pr_head_sha}." >&2
+            echo "No successful merge queue Terraform plan found for ${GITHUB_SHA}." >&2
             exit 1
           fi
 
@@ -313,25 +311,24 @@ jobs:
             awk -F= -v key="$1" '$1 == key { print substr($0, length(key) + 2); exit }' "${TF_ROOT}/plan.env"
           }
 
+          planned_event_name="$(plan_env TF_PLAN_EVENT_NAME)"
+          planned_commit_sha="$(plan_env TF_PLAN_COMMIT_SHA)"
           planned_tree_sha="$(plan_env TF_PLAN_TREE_SHA)"
           current_tree_sha="$(git rev-parse 'HEAD^{tree}')"
-          planned_pr_number="$(plan_env TF_PLAN_PR_NUMBER)"
-          planned_head_sha="$(plan_env TF_PLAN_HEAD_SHA)"
 
           if [[ "${planned_tree_sha}" != "${current_tree_sha}" ]]; then
             echo "Downloaded plan was created for a different repository tree." >&2
             exit 1
           fi
-          if [[ "${planned_pr_number}" != "${pr_number}" || "${planned_head_sha}" != "${pr_head_sha}" ]]; then
-            echo "Downloaded plan metadata does not match PR #${pr_number} at ${pr_head_sha}." >&2
+          if [[ "${planned_event_name}" != "merge_group" || "${planned_commit_sha}" != "${GITHUB_SHA}" ]]; then
+            echo "Downloaded plan metadata does not match merge queue commit ${GITHUB_SHA}." >&2
             exit 1
           fi
 
           {
-            echo "TF_PLAN_SOURCE_PR=${pr_number}"
+            echo "TF_PLAN_SOURCE_COMMIT=${GITHUB_SHA}"
             echo "TF_PLAN_SOURCE_RUN_ID=${plan_run_id}"
             echo "TF_PLAN_SOURCE_URL=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${plan_run_id}"
-            echo "TF_PLAN_SOURCE_PR_URL=${pr_url}"
           } >> "${GITHUB_ENV}"
 
       - name: Summarize Terraform apply
@@ -339,7 +336,7 @@ jobs:
           {
             echo "## Terraform apply"
             echo
-            echo "Applying the saved plan from PR [#${TF_PLAN_SOURCE_PR}](${TF_PLAN_SOURCE_PR_URL})."
+            echo "Applying the saved plan for merge queue commit \`${TF_PLAN_SOURCE_COMMIT}\`."
             echo "- Plan workflow run: [${TF_PLAN_SOURCE_RUN_ID}](${TF_PLAN_SOURCE_URL})"
           } >> "${GITHUB_STEP_SUMMARY}"
 
