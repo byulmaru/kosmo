@@ -579,9 +579,23 @@ test.describe('로그인 사용자 보호 라우트', () => {
     const menuButton = page.getByRole('button', { name: '메뉴 열기' });
     const homeHeader = homeHeading.locator('..').locator('..');
     const homeMark = homeHeader.locator('img[src*="brand-mark-light"]');
+    const menuIcon = menuButton.locator('svg');
 
     await expect(homeHeading).toHaveCount(1);
-    await expect(homeHeader).toContainText('메뉴');
+    await expect(menuButton).toBeVisible();
+    await expect(homeHeader.getByText('메뉴', { exact: true })).toHaveCount(0);
+    await expect
+      .poll(async () => {
+        const box = await menuButton.boundingBox();
+        return box ? { height: box.height, width: box.width } : null;
+      })
+      .toEqual({ height: 44, width: 44 });
+    await expect
+      .poll(async () => {
+        const box = await menuIcon.boundingBox();
+        return box ? { height: box.height, width: box.width } : null;
+      })
+      .toEqual({ height: 24, width: 24 });
     await expect.poll(async () => (await homeHeader.boundingBox())?.height).toBe(64);
     await expect.poll(async () => (await homeMark.boundingBox())?.width).toBe(38);
     await expect
