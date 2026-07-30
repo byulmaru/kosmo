@@ -162,6 +162,7 @@ export function PostSourcePreview({
           <PostContentRenderer
             bodyText={source.content.bodyText}
             document={source.content.document}
+            interactive={false}
             size="md"
           />
         </View>

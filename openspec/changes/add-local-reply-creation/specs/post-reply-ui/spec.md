@@ -30,13 +30,15 @@
 
 ### Requirement: Reply 작성 상태와 thread cache 격리
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `PROD-425` 클라이언트는 Reply 작성의 validation·pending·실패·성공 상태를 selected Profile별로 격리하고, 성공한 Reply를 현재 Parent thread에 반영해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/design/reply-composer.md`, `PROD-425` 클라이언트는 Reply 작성의 validation·pending·실패·성공 상태를 selected Profile별로 격리하고, 현재 query의 thread 계약을 합성하지 않으면서 성공한 Reply에 접근할 수 있게 해야 한다(MUST).
 
 #### Scenario: 성공한 Reply의 thread 반영
 
 - **WHEN** 현재 Post 상세에서 Reply mutation이 성공한다
-- **THEN** 클라이언트는 성공 payload의 Post를 현재 thread Relay cache에 반영한다
-- **AND** 현재 thread의 Parent·조상·하위 Reply 관계를 다른 Post로 평탄화하지 않는다
+- **THEN** 클라이언트는 surface를 닫고 현재 detail query만 targeted refetch한다
+- **AND** 성공 payload의 Post가 현재 query 범위에 포함되면 기존 thread 정렬에 따라 표시한다
+- **AND** `답글을 게시했어요` snackbar와 결과 Reply로 이동하는 `보기` action을 제공한다
+- **AND** 자동으로 결과 Reply로 이동하거나 현재 thread의 Parent·조상·하위 Reply 관계와 pagination membership을 합성·평탄화하지 않는다
 
 #### Scenario: validation 또는 network 실패
 
@@ -102,5 +104,6 @@
 - **WHEN** validation 또는 network 오류가 발생한다
 - **THEN** 클라이언트는 direct Parent, 본문과 Visibility를 유지하고 editor와 footer 사이에 accessible inline alert를 표시한다
 - **WHEN** mutation이 성공한다
-- **THEN** 클라이언트는 surface를 닫고 원래 Reply action으로 focus를 복원하며 success toast를 표시하지 않는다
+- **THEN** 클라이언트는 surface를 닫고 원래 Reply action으로 focus를 복원하며 `답글을 게시했어요` snackbar와 결과 Reply `보기` action을 표시한다
+- **AND** 사용자가 `보기`를 활성화할 때만 결과 Reply 상세로 이동한다
 - **AND** 상세 route는 현재 query만 targeted refetch하고 목록 membership이나 다른 actor Store를 합성하지 않는다

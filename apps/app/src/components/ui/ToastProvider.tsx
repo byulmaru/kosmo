@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, radii, shadow, spacing, typography } from '@/theme/tokens';
@@ -9,12 +9,20 @@ import type { ViewStyle } from 'react-native';
 const toastDurationMs = 3000;
 
 type ToastContextValue = Readonly<{
-  showToast: (message: string) => void;
+  showToast: (message: string, options?: ToastOptions) => void;
 }>;
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
+type ToastOptions = Readonly<{
+  action?: Readonly<{
+    label: string;
+    onPress: () => void;
+  }>;
+}>;
+
 type Toast = Readonly<{
+  action?: ToastOptions['action'];
   id: number;
   message: string;
 }>;
@@ -29,11 +37,19 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
   const hasBottomTabBar = Platform.OS !== 'web' || width < breakpoints.compact;
   const bottom = insets.bottom + (hasBottomTabBar ? 56 : 0) + spacing.sm;
 
-  const showToast = useCallback((nextMessage: string) => {
+  const dismissToast = useCallback(() => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    setToast(null);
+  }, []);
+
+  const showToast = useCallback((nextMessage: string, options?: ToastOptions) => {
     if (timer.current) {
       clearTimeout(timer.current);
     }
-    setToast({ id: nextToastId.current++, message: nextMessage });
+    setToast({ action: options?.action, id: nextToastId.current++, message: nextMessage });
     timer.current = setTimeout(() => {
       setToast(null);
       timer.current = null;
@@ -61,6 +77,22 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
         >
           <View style={[styles.toast, { backgroundColor: theme.accent }]}>
             <Text style={[styles.message, { color: theme.background }]}>{toast.message}</Text>
+            {toast.action ? (
+              <Pressable
+                accessibilityRole="button"
+                hitSlop={spacing.sm}
+                onPress={() => {
+                  const action = toast.action;
+                  dismissToast();
+                  action?.onPress();
+                }}
+                style={styles.action}
+              >
+                <Text style={[styles.actionLabel, { color: theme.background }]}>
+                  {toast.action.label}
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
       ) : null}
@@ -80,26 +112,42 @@ const webHost = {
   alignItems: 'center',
   bottom: 0,
   left: 0,
-  pointerEvents: 'none',
+  pointerEvents: 'box-none',
   position: 'fixed',
   right: 0,
   zIndex: 30,
 } as unknown as ViewStyle;
 
 const styles = StyleSheet.create({
-  message: { fontFamily: 'SUIT', transform: [{ translateY: 2 }], ...typography.sm },
+  action: { paddingHorizontal: spacing.xs, paddingVertical: spacing.xs },
+  actionLabel: {
+    fontFamily: 'SUIT',
+    fontWeight: '800',
+    textDecorationLine: 'underline',
+    ...typography.sm,
+  },
+  message: {
+    flexShrink: 1,
+    fontFamily: 'SUIT',
+    transform: [{ translateY: 2 }],
+    ...typography.sm,
+  },
   nativeHost: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'flex-end',
-    pointerEvents: 'none',
+    pointerEvents: 'box-none',
     zIndex: 30,
   },
   toast: {
+    alignItems: 'center',
     borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.md,
     maxWidth: 480,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
+    pointerEvents: 'auto',
     ...shadow,
   },
 });

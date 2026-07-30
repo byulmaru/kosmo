@@ -86,9 +86,12 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
   같은 close 요청으로 처리한다. dirty 상태에서는 확인 뒤 닫거나 Parent를 전환하고, pending 상태에서는
   현재 작성과 active Parent를 유지한다.
 - 제출 실패 시 modal, direct Parent 맥락, 본문과 Visibility를 유지한다.
-- 제출 성공 시 modal을 닫고 원래 Reply action으로 focus를 복원한다. 성공 toast는 표시하지 않는다.
+- 제출 성공 시 modal을 닫고 원래 Reply action으로 focus를 복원한 뒤 `답글을 게시했어요` 성공 snackbar와
+  `보기` action을 표시한다. 사용자가 `보기`를 활성화할 때만 생성된 Reply 상세로 이동하고 자동으로 route를
+  바꾸지 않는다.
 - 성공 payload 반영은 modal이 임의의 Post나 다른 Profile Store membership을 합성하지 않고, 이를 연 surface가
-  제공한 현재 actor의 connection/callback 경계만 사용한다.
+  제공한 현재 actor의 connection/callback 경계만 사용한다. 상세 surface는 현재 detail query만 targeted
+  refetch하며, 새 Reply가 현재 query 범위에 포함될 때만 기존 thread 정렬에 따라 자연스럽게 표시한다.
 
 ## 접근성·입력
 
@@ -123,6 +126,7 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 - content가 중앙 영역을 넘을 때 header/footer는 유지되고 중앙 영역 하나만 스크롤되는지 확인한다.
 - 일반 Post, Reply, Quote Parent의 Content/Source 표시와 Action Bar/menu 제외, thread connector를 확인한다.
 - Visibility 독립성, `UNLISTED` 기본값, `DIRECT` 제외, 500자 count와 disabled/pending/error 상태를 확인한다.
-- pristine/dirty/pending/success close, 취소 확인, focus open/restore와 selected Profile 격리를 확인한다.
+- pristine/dirty/pending/success close, 취소 확인, focus open/restore, 성공 snackbar의 `보기` 이동과 자동 이동
+  없음, selected Profile 격리를 확인한다.
 - Web `< compact`와 Native 전체 화면, 상세 inline surface가 같은 Parent·Composer 계약을 공유하면서 각 shell의
   scroll, keyboard와 accessibility 지침을 따르는지 별도로 확인한다.

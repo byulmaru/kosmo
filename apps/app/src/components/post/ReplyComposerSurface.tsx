@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { XIcon } from 'lucide-react-native';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
@@ -15,6 +16,7 @@ import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { useToast } from '@/components/ui/ToastProvider';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, shadow, spacing, typography } from '@/theme/tokens';
@@ -23,6 +25,7 @@ import { PostComposer } from './PostComposer';
 import { PostSourcePreview } from './PostSourcePresentationView';
 import { PostThreadConnector } from './PostThreadConnector';
 import { getReplySurfacePresentation } from './replySurface';
+import type { Href } from 'expo-router';
 import type { RefObject } from 'react';
 import type { TextInput, View as NativeView } from 'react-native';
 import type { ReplyComposerSurface_parent$key } from './__generated__/ReplyComposerSurface_parent.graphql';
@@ -61,6 +64,7 @@ const ReplyComposerSurfaceParentFragment = graphql`
 
 const ReplyComposerSurfaceProfileFragment = graphql`
   fragment ReplyComposerSurface_profile on Profile {
+    relativeHandle
     ...PostComposer_profile @alias(as: "composer")
   }
 `;
@@ -97,6 +101,8 @@ export const ReplyComposerSurface = forwardRef<
   ref,
 ) {
   const theme = useTheme();
+  const router = useRouter();
+  const { showToast } = useToast();
   const { width } = useWindowDimensions();
   const parent = useFragment(ReplyComposerSurfaceParentFragment, parentKey);
   const profile = useFragment(ReplyComposerSurfaceProfileFragment, profileKey);
@@ -156,9 +162,15 @@ export const ReplyComposerSurface = forwardRef<
   const handlePostCreated = useCallback(
     (post: PostComposerCreatedPost) => {
       closeImmediately();
+      showToast('답글을 게시했어요', {
+        action: {
+          label: '보기',
+          onPress: () => router.push(`/${profile.relativeHandle}/${post.id}` as Href),
+        },
+      });
       requestAnimationFrame(() => onPostCreated?.(post));
     },
-    [closeImmediately, onPostCreated],
+    [closeImmediately, onPostCreated, profile.relativeHandle, router, showToast],
   );
 
   useEffect(() => {
@@ -405,7 +417,7 @@ export const ReplyComposerSurface = forwardRef<
                             {formatTimelineTimestamp(parent.createdAt)}
                           </Text>
                         </View>
-                        <PostBody post={parent} />
+                        <PostBody interactive={false} post={parent} />
                         {source ? (
                           <PostSourcePreview
                             interactive={false}

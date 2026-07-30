@@ -17,6 +17,7 @@ type PostContentMark = NonNullable<PostContentTextNode['marks']>[number];
 
 interface RenderContext {
   readonly bodyStyle: StyleProp<TextStyle>;
+  readonly interactive: boolean;
 }
 
 const replayBlockProps = { dataSet: { openpanelReplayBlock: '' } } as unknown as TextProps;
@@ -24,10 +25,12 @@ const replayBlockProps = { dataSet: { openpanelReplayBlock: '' } } as unknown as
 export function PostContentRenderer({
   bodyText,
   document: value,
+  interactive = true,
   size = 'md',
 }: {
   bodyText: string;
   document: unknown;
+  interactive?: boolean;
   size?: 'md' | 'lg';
 }) {
   const theme = useTheme();
@@ -45,7 +48,7 @@ export function PostContentRenderer({
       </Text>
     ) : null;
   }
-  return renderNode(document, 'body', { bodyStyle });
+  return renderNode(document, 'body', { bodyStyle, interactive });
 }
 
 type PostContentNode = PostContentBodyDocumentV1 | PostContentBlockNode | PostContentInlineNode;
@@ -71,14 +74,14 @@ function renderNode(node: PostContentNode, key: Key, context: RenderContext): Re
         )}
       </Fragment>
     ))
-    .with({ type: 'text' }, (text) => renderMarks(text, key))
+    .with({ type: 'text' }, (text) => renderMarks(text, key, context))
     .with({ type: 'hard_break' }, () => '\n')
     .otherwise(() => null);
 }
 
-function renderMarks(node: PostContentTextNode, key: Key): ReactNode {
+function renderMarks(node: PostContentTextNode, key: Key, context: RenderContext): ReactNode {
   return (node.marks ?? []).reduceRight<ReactNode>(
-    (content, mark, index) => renderMark(mark, content, node.text, `${key}.mark.${index}`),
+    (content, mark, index) => renderMark(mark, content, node.text, `${key}.mark.${index}`, context),
     node.text,
   );
 }
@@ -88,8 +91,13 @@ function renderMark(
   content: ReactNode,
   accessibilityLabel: string,
   key: Key,
+  context: RenderContext,
 ): ReactNode {
   return match(mark)
+    .when(
+      (value) => value.type === 'link' && !context.interactive,
+      () => content,
+    )
     .with({ type: 'link' }, (link) => (
       <Text
         accessibilityLabel={`${accessibilityLabel}, ${link.attrs.href}`}

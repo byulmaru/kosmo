@@ -13,14 +13,14 @@ import { TextArea } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import {
+  emptyPostComposerMediaValue,
+  PostComposerMediaControls,
+} from './PostComposerMediaControls';
+import {
   createPostComposerContextKey,
   createPostComposerMutationInput,
   isPostComposerVisibilityAllowed,
 } from './postComposerState';
-import {
-  emptyPostComposerMediaValue,
-  PostComposerMediaControls,
-} from './PostComposerMediaControls';
 import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
@@ -171,7 +171,9 @@ export function PostComposer({
         }
         setSubmitting(false);
         if (errors?.length) {
-          setError('게시글을 작성하지 못했습니다.');
+          setError(
+            submissionReplyMode ? '답글을 작성하지 못했습니다.' : '게시글을 작성하지 못했습니다.',
+          );
           return;
         }
 
@@ -381,7 +383,14 @@ export function PostComposer({
         </Text>
       </Pressable>
       {Platform.OS === 'web' && visibilityOpen ? (
-        <View style={styles.webVisibilityMenu}>{visibilityMenu}</View>
+        <View
+          style={[
+            styles.webVisibilityMenu,
+            surface ? styles.webVisibilityMenuAbove : styles.webVisibilityMenuBelow,
+          ]}
+        >
+          {visibilityMenu}
+        </View>
       ) : null}
     </View>
   );
@@ -560,7 +569,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   visibilityTriggerLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
-  webVisibilityMenu: { marginTop: spacing.xs, width: 256, zIndex: 50 },
+  webVisibilityMenu: { left: 0, position: 'absolute', width: 256, zIndex: 50 },
+  webVisibilityMenuAbove: { bottom: 44 },
+  webVisibilityMenuBelow: { top: 44 },
   submit: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
   remaining: { fontFamily: 'SUIT', ...typography.xsm },
   screenReaderOnly: {

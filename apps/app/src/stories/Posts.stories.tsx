@@ -1051,6 +1051,7 @@ function ReplyListSurfaceStory() {
 
   return (
     <Catalog>
+      <StoryPathname testID="reply-success-pathname" />
       <PostList homeTimeline={data.homeTimeline} replyProfile={data.replyComposerProfile} />
     </Catalog>
   );
@@ -3207,6 +3208,27 @@ export const ComposerGraphQLErrorPreservesInput: Story = {
   render: () => <ComposerStory />,
 };
 
+export const ComposerReplyGraphQLErrorPreservesInput: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: {
+    relay: {
+      mutationGraphQLErrors: ['본문 형식이 올바르지 않습니다.'],
+      mutationResponse: { createPost: { post: { id: 'reply-rejected-in-story' } } },
+    },
+  },
+  play: async () => {
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const body = within(dialog).getByRole('textbox', { name: '답글 본문' });
+    await userEvent.type(body, '오류가 나도 보존할 답글입니다.');
+    await userEvent.click(within(dialog).getByRole('button', { name: '답글 게시' }));
+    await expect(within(dialog).findByRole('alert')).resolves.toHaveTextContent(
+      '답글을 작성하지 못했습니다.',
+    );
+    expect(body).toHaveValue('오류가 나도 보존할 답글입니다.');
+  },
+  render: () => <ReplyModalPresentationStory />,
+};
+
 export const ComposerReplyMutationContract: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -3325,7 +3347,14 @@ export const ReplyModalPresentation: Story = {
 
     const visibilityButton = within(dialog).getByRole('button', { name: '조용한 공개' });
     await userEvent.click(visibilityButton);
-    expect(await within(dialog).findByRole('menu', { name: '답글 공개 설정' })).toBeVisible();
+    const visibilityMenu = await within(dialog).findByRole('menu', { name: '답글 공개 설정' });
+    expect(visibilityMenu).toBeVisible();
+    const visibilityButtonBounds = visibilityButton.getBoundingClientRect();
+    const visibilityMenuBounds = visibilityMenu.getBoundingClientRect();
+    expect(visibilityMenuBounds.bottom).toBeLessThanOrEqual(visibilityButtonBounds.top);
+    expect(visibilityMenuBounds.top).toBeGreaterThanOrEqual(
+      modalSurface.getBoundingClientRect().top,
+    );
     await userEvent.keyboard('{Escape}');
     await waitFor(() => {
       expect(within(dialog).queryByRole('menu', { name: '답글 공개 설정' })).toBeNull();
@@ -3554,6 +3583,15 @@ export const ReplyListSurfaceSuccessLifecycle: Story = {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
     expect(trigger).toHaveFocus();
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    const success = await screen.findByRole('alert');
+    expect(success).toHaveTextContent('답글을 게시했어요');
+    expect(canvas.getByTestId('reply-success-pathname')).toHaveTextContent('/@kosmo/post-1');
+    await userEvent.click(within(success).getByRole('button', { name: '보기' }));
+    await waitFor(() => {
+      expect(canvas.getByTestId('reply-success-pathname')).toHaveTextContent(
+        '/@kosmo/reply-created-from-list',
+      );
+    });
   },
   render: () => <ReplyListSurfaceStory />,
 };
@@ -3577,11 +3615,13 @@ export const ReplyQuoteParentPresentation: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
   play: async () => {
     const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
-    expect(within(dialog).getByText('이 원문에 덧붙이는 인용자의 본문입니다.')).toBeVisible();
+    expect(within(dialog).getByTestId('reply-parent')).toHaveTextContent('안전한 외부 링크');
+    expect(within(dialog).queryByRole('link')).toBeNull();
     const source = within(dialog).getByTestId('source-post-preview');
     expect(source).toBeVisible();
+    expect(within(source).getByTestId('source-post-body')).toHaveTextContent('안전한 외부 링크');
     expect(within(source).queryByRole('link')).toBeNull();
     expect(getComputedStyle(source).borderStyle).toBe('solid');
   },
-  render: () => <ReplyModalPresentationStory parentId={quotePost.id} />,
+  render: () => <ReplyModalPresentationStory parentId={linkedSourceQuote.id} />,
 };
