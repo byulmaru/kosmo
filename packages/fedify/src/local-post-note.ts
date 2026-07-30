@@ -58,10 +58,7 @@ const mediaRepresentationSchema = z.object({
 
 const MEDIA_STORAGE_REQUEST_TIMEOUT_MS = 10_000;
 
-const loadLocalPostNote = async (
-  context: LocalPostNoteContext,
-  postId: string,
-): Promise<LocalPostNote | null> => {
+const loadLocalPostNoteRow = async (context: LocalPostNoteContext, postId: string) => {
   if (!isCanonicalPostId(postId)) {
     return null;
   }
@@ -91,6 +88,18 @@ const loadLocalPostNote = async (
     .then(first);
 
   if (!row?.instanceCanonicalOrigin || row.post.visibility === PostVisibility.DIRECT) {
+    return null;
+  }
+
+  return { ...row, instanceCanonicalOrigin: row.instanceCanonicalOrigin };
+};
+
+const loadLocalPostNote = async (
+  context: LocalPostNoteContext,
+  postId: string,
+): Promise<LocalPostNote | null> => {
+  const row = await loadLocalPostNoteRow(context, postId);
+  if (!row) {
     return null;
   }
 
@@ -227,11 +236,11 @@ export const authorizeLocalPostNote = async (
   context: RequestContext<void>,
   { id }: { id: string },
 ): Promise<boolean> => {
-  const note = await loadLocalPostNote(context, id);
-  if (!note) {
+  const row = await loadLocalPostNoteRow(context, id);
+  if (!row) {
     return false;
   }
-  if (note.visibility !== PostVisibility.FOLLOWERS) {
+  if (row.post.visibility !== PostVisibility.FOLLOWERS) {
     return true;
   }
 
@@ -241,8 +250,8 @@ export const authorizeLocalPostNote = async (
   }
 
   return (
-    signedActor.id.href === context.getActorUri(note.authorProfileId).href ||
-    (await isEstablishedFollower(signedActor.id, note.authorProfileId))
+    signedActor.id.href === context.getActorUri(row.profile.id).href ||
+    (await isEstablishedFollower(signedActor.id, row.profile.id))
   );
 };
 

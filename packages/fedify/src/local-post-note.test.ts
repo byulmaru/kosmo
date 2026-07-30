@@ -424,6 +424,21 @@ describe('ActivityPub Local Post Note', () => {
 
     assert.equal(await authorizeLocalPostNote(context, { id: followersPost.id }), true);
   });
+
+  test('authorizes Followers Only access before resolving Media representations', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const media = await createMedia(author.id, { storageReference: 'opaque-media' });
+    const followersPost = await createPost(author.id, {
+      media: [{ altText: null, mediaId: media.id }],
+      visibility: PostVisibility.FOLLOWERS,
+    });
+    const mediaLookup = mock.method(globalThis, 'fetch', async () => {
+      throw new Error('Media representation must not be resolved during authorization');
+    });
+
+    assert.equal(await authorizeLocalPostNote(createContext(), { id: followersPost.id }), false);
+    assert.equal(mediaLookup.mock.callCount(), 0);
+  });
 });
 
 const createContext = (): RequestContext<void> => {
