@@ -157,7 +157,7 @@ avatar/header·`followPolicy` 저장, viewer-authorized Profile image read, Prof
       명시적 field retry와 save retry Ready ID 재사용을 검증한다.
 - [x] 2.7 dirty route/Web/Android back confirmation, saving navigation 차단과 성공 guard 해제→Relay normalize→
       relativeHandle Profile replace를 구현하고 route test를 추가한다.
-- [ ] 2.8 core·API·app·Web 필수 검증을 통과하고 실제 Web QA 증거와 iOS·Android 실제 기기 QA의 명시적 제외를
+- [x] 2.8 core·API·app·Web 필수 검증을 통과하고 실제 Web QA 증거와 iOS·Android 실제 기기 QA의 명시적 제외를
       구분해 PROD-492 PR에 권한·Media·Relay·navigation 증거와 Native 출시 gate를 기록한다.
 
 ## 3. PROD-490 통합 검증과 OpenSpec archive
