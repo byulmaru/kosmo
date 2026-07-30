@@ -349,7 +349,9 @@ function EditableProfileRoute({
         onAvatarEdit={() => selectImage('avatar')}
         onAvatarRemove={() => removeImage('avatar')}
         onAvatarRetry={() => retryImage('avatar')}
-        onBack={() => router.back()}
+        onBack={() =>
+          router.canGoBack() ? router.back() : router.replace(`/${profile.relativeHandle}` as Href)
+        }
         onChange={setValue}
         onHeaderEdit={() => selectImage('header')}
         onHeaderRemove={() => removeImage('header')}

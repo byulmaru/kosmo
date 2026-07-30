@@ -6,9 +6,16 @@ type Options = {
   saving: boolean;
 };
 
+type PendingNavigationAction = {
+  readonly payload?: object;
+  readonly source?: string;
+  readonly target?: string;
+  readonly type: string;
+};
+
 export function useProfileEditNavigationGuard({ dirty, saving }: Options) {
   const navigation = useNavigation();
-  const pendingAction = useRef<Parameters<typeof navigation.dispatch>[0] | null>(null);
+  const pendingAction = useRef<PendingNavigationAction | null>(null);
   const allowNavigation = useRef(false);
   const [dialogVisible, setDialogVisible] = useState(false);
 
@@ -44,7 +51,7 @@ export function useProfileEditNavigationGuard({ dirty, saving }: Options) {
     }
 
     allowNavigation.current = true;
-    navigation.dispatch(action);
+    navigation.dispatch({ ...action, target: undefined });
   }, [navigation]);
 
   const allowNextNavigation = useCallback(() => {

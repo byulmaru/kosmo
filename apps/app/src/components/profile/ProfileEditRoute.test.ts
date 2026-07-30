@@ -29,7 +29,11 @@ type ScreenProps = Record<string, unknown> & {
   };
 };
 
-type NavigationAction = { readonly source: string; readonly type: string };
+type NavigationAction = {
+  readonly source: string;
+  readonly target?: string;
+  readonly type: string;
+};
 type BeforeRemoveEvent = {
   readonly data: { readonly action: NavigationAction };
   readonly preventDefault: ReturnType<typeof mock.fn>;
@@ -50,6 +54,7 @@ let lastBackEvent: BeforeRemoveEvent | null = null;
 let lastReplaceEvent: BeforeRemoveEvent | null = null;
 let pickerResult: ImagePickerResult = { canceled: true, assets: null };
 let routerBackCalls = 0;
+let routerCanGoBack = true;
 let triggerBeforeRemoveOnReplace = false;
 let queryData: {
   currentSession: { selectedProfile: { relativeHandle: string } | null } | null;
@@ -92,9 +97,13 @@ mockModule('expo-router', {
       routerBackCalls += 1;
       lastBackEvent = emitBeforeRemove({ source: 'route-action', type: 'GO_BACK' });
     },
+    canGoBack: () => routerCanGoBack,
     replace: (href: string) => {
       if (triggerBeforeRemoveOnReplace) {
         lastReplaceEvent = emitBeforeRemove({ source: 'save-success', type: 'REPLACE' });
+        if (lastReplaceEvent.preventDefault.mock.callCount() > 0) {
+          return;
+        }
       }
       routerReplacements.push(href);
     },
@@ -158,6 +167,7 @@ afterEach(async () => {
   lastReplaceEvent = null;
   routerReplacements.length = 0;
   routerBackCalls = 0;
+  routerCanGoBack = true;
   screenProps = null;
   triggerBeforeRemoveOnReplace = false;
   mock.restoreAll();
@@ -338,7 +348,7 @@ describe('ProfileEditRoute', () => {
     assert.deepEqual(routerReplacements, ['/@updated']);
   });
 
-  it('변경된 draft의 route, Web, Android 이탈을 같은 확인 dialog로 막는다', async () => {
+  it('변경된 draft의 닫기, Web, Android 이탈을 같은 확인 dialog로 막는다', async () => {
     await renderRoute();
     await act(async () =>
       requireScreenProps().onChange({ ...requireScreenProps().value, bio: '변경된 소개' }),
@@ -363,12 +373,28 @@ describe('ProfileEditRoute', () => {
     }
   });
 
-  it('dialog가 열린 동안 두 번째 action으로 교체하지 않고 첫 action만 한 번 dispatch한다', async () => {
+  it('직접 진입해 back이 불가능하면 현재 Profile replace를 확인 dialog로 막는다', async () => {
+    routerCanGoBack = false;
+    triggerBeforeRemoveOnReplace = true;
+    await renderRoute();
+    await act(async () =>
+      requireScreenProps().onChange({ ...requireScreenProps().value, bio: '직접 진입 변경' }),
+    );
+
+    await act(async () => requireScreenProps().onBack());
+
+    assert.equal(routerBackCalls, 0);
+    assert.equal(requireBeforeRemoveEvent(lastReplaceEvent).preventDefault.mock.callCount(), 1);
+    assert.deepEqual(routerReplacements, []);
+    assert.equal(requireDiscardDialogProps().visible, true);
+  });
+
+  it('dialog가 열린 동안 첫 action의 nested target을 제거하고 한 번만 dispatch한다', async () => {
     await renderRoute();
     await act(async () =>
       requireScreenProps().onChange({ ...requireScreenProps().value, displayName: '새 이름' }),
     );
-    const first = { source: 'first', type: 'GO_BACK' };
+    const first = { source: 'first', target: 'nested-stack', type: 'REPLACE' };
     const second = { source: 'second', type: 'POP_TO_TOP' };
 
     let firstEvent: BeforeRemoveEvent | null = null;
@@ -381,8 +407,23 @@ describe('ProfileEditRoute', () => {
     assert.equal(requireBeforeRemoveEvent(secondEvent).preventDefault.mock.callCount(), 1);
 
     await act(async () => requireDiscardDialogProps().onDiscard());
-    assert.deepEqual(navigationDispatches, [first]);
+    assert.deepEqual(navigationDispatches, [{ ...first, target: undefined }]);
     assert.equal(requireDiscardDialogProps().visible, false);
+  });
+
+  it('nested target GO_BACK의 source와 type을 보존해 discard한다', async () => {
+    await renderRoute();
+    await act(async () =>
+      requireScreenProps().onChange({ ...requireScreenProps().value, displayName: '새 이름' }),
+    );
+    const action = { source: 'profile-edit-route', target: 'nested-stack', type: 'GO_BACK' };
+
+    await act(async () => {
+      emitBeforeRemove(action);
+    });
+    await act(async () => requireDiscardDialogProps().onDiscard());
+
+    assert.deepEqual(navigationDispatches, [{ ...action, target: undefined }]);
   });
 
   it('저장 중에는 dialog 없이 이탈을 막는다', async () => {
