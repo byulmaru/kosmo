@@ -60,11 +60,15 @@ describe('PostReplyCoordinator', () => {
     }, /PostReplyCoordinatorProvider가 필요합니다/);
   });
 
-  it('명시적인 null Profile에서는 Reply binding을 제공하지 않는다', async () => {
+  it('명시적인 null Profile에서도 resolution 조립용 disabled binding을 제공한다', async () => {
     await renderCoordinator({ owner: 'list', replyProfile: null });
 
-    assert.equal(binding('a'), null);
-    assert.equal(binding('b'), null);
+    assert.equal(binding('a')?.profile, null);
+    assert.equal(binding('a')?.expanded, false);
+    assert.equal(binding('b')?.profile, null);
+
+    await act(async () => binding('a')?.onPress());
+    assert.equal(binding('a')?.expanded, false);
   });
 
   it('목록 collection에서 한 Parent만 active 상태로 유지한다', async () => {

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
+import { PostActionAuthenticationProvider } from './PostActionAuthentication';
 import { PostListItem } from './PostListItem';
 import { PostReplyCoordinatorProvider } from './PostReplyCoordinator';
 import type { PostList_homeTimeline$key } from './__generated__/PostList_homeTimeline.graphql';
@@ -88,13 +89,15 @@ export function PostList({
   }
 
   return (
-    <PostReplyCoordinatorProvider owner="list" profile={replyProfile ?? null}>
-      <View style={styles.root}>
-        {visibleEdges.map((edge) => (
-          <PostListItem key={edge.cursor} post={edge.node} />
-        ))}
-      </View>
-    </PostReplyCoordinatorProvider>
+    <PostActionAuthenticationProvider>
+      <PostReplyCoordinatorProvider owner="list" profile={replyProfile ?? null}>
+        <View style={styles.root}>
+          {visibleEdges.map((edge) => (
+            <PostListItem key={edge.cursor} post={edge.node} />
+          ))}
+        </View>
+      </PostReplyCoordinatorProvider>
+    </PostActionAuthenticationProvider>
   );
 }
 

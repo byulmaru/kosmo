@@ -75,10 +75,13 @@ const deleteReactionMutation = graphql`
 
 export function usePostReactionController(
   post: PostReactionController_post$key,
+  enabled?: boolean,
 ): PostReactionController {
   const data = useFragment(postReactionControllerFragment, post);
   const environment = useRelayEnvironment();
-  const { selectedProfileId } = useSession();
+  const session = useSession();
+  const resolvedEnabled =
+    enabled ?? (session.status === 'valid' && session.selectedProfileId !== null);
   const [commitAdd] = useMutation<PostReactionControllerAddReactionMutation>(addReactionMutation);
   const [commitDelete] =
     useMutation<PostReactionControllerDeleteReactionMutation>(deleteReactionMutation);
@@ -118,7 +121,7 @@ export function usePostReactionController(
 
   const toggleReaction = useCallback(
     ({ nextSelected, optionId }: ReactionToggleIntent) => {
-      if (selectedProfileId === null || inFlightTypes.current.has(optionId)) {
+      if (!resolvedEnabled || inFlightTypes.current.has(optionId)) {
         return;
       }
 
@@ -175,11 +178,11 @@ export function usePostReactionController(
         });
       }
     },
-    [commitAdd, commitDelete, isCurrentIdentity, postId, selectedProfileId],
+    [commitAdd, commitDelete, isCurrentIdentity, postId, resolvedEnabled],
   );
 
   return {
-    disabled: selectedProfileId === null,
+    disabled: !resolvedEnabled,
     errorTypeIds: [...errorTypes],
     pendingTypeIds: [...pendingTypes],
     postId,

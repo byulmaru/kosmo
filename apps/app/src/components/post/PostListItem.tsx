@@ -8,6 +8,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
+import { usePostActionAuthentication } from './PostActionAuthentication';
 import { PostActionBar } from './PostActionBar';
 import { PostBody } from './PostBody';
 import { useBookmarkFailureToast } from './PostBookmarkAction';
@@ -107,19 +108,32 @@ export function PostListItem({
   const post = useFragment(PostListItemFragment, postKey);
   const replyBinding = usePostReplyBinding(post.id);
   const onDeleted = useCallback(() => setDeleted(true), []);
+  const replyAuthentication = usePostActionAuthentication(Boolean(post.content));
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const replyTriggerRef = useRef<View>(null);
   const reply = replyBinding
     ? {
         accessibilityLabel: '답글',
         controlRef: replyTriggerRef,
-        expanded: replyBinding.expanded,
-        onPress: replyBinding.onPress,
-        processing: getReplyProcessingState(true, Boolean(post.content)),
+        expanded: replyAuthentication.execution.kind === 'enabled' && replyBinding.expanded,
+        onPress: () => {
+          if (replyAuthentication.execution.kind === 'resolution-required') {
+            replyAuthentication.resolve(replyAuthentication.execution.reason);
+          } else if (replyAuthentication.execution.kind === 'enabled') {
+            replyBinding.onPress();
+          }
+        },
+        processing: getReplyProcessingState(
+          replyAuthentication.execution,
+          Boolean(replyBinding.profile),
+        ),
       }
     : undefined;
   const replySurface =
-    replyBinding && post.content && post.replySurface ? (
+    replyAuthentication.execution.kind === 'enabled' &&
+    replyBinding?.profile &&
+    post.content &&
+    post.replySurface ? (
       <ReplyComposerSurface
         ref={replyBinding.surfaceRef}
         onPostCreated={replyBinding.onPostCreated}
@@ -364,7 +378,11 @@ function PostReactionActions({
   quote?: boolean;
   reply?: PostActionBarProps['reply'];
 }) {
-  const controller = usePostReactionController(controllerPost);
+  const authentication = usePostActionAuthentication(true);
+  const controller = usePostReactionController(
+    controllerPost,
+    authentication.execution.kind === 'enabled',
+  );
 
   return (
     <>
@@ -374,9 +392,11 @@ function PostReactionActions({
       />
       <View style={styles.actionBarSlot}>
         <PostActionBar
+          execution={authentication.execution}
           onBookmarkError={onBookmarkError}
           onDeleted={onDeleted}
           onRepostError={onRepostError}
+          onResolutionRequired={authentication.resolve}
           post={actionBar}
           reactionController={controller}
           reply={reply}

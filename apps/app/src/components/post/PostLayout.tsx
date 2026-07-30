@@ -8,6 +8,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { formatPostDate } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
+import { usePostActionAuthentication } from './PostActionAuthentication';
 import { PostActionBar } from './PostActionBar';
 import { PostBody } from './PostBody';
 import { useBookmarkFailureToast } from './PostBookmarkAction';
@@ -87,6 +88,8 @@ export function PostLayout({
   const onRepostError = useRepostFailureToast();
   const post = useFragment(PostLayoutFragment, postKey);
   const replyBinding = usePostReplyBinding(post.id);
+  const replyAuthentication = usePostActionAuthentication(Boolean(post.content));
+  const socialAuthentication = usePostActionAuthentication(true);
   const replyTriggerRef = useRef<View>(null);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const source = post.repostSource;
@@ -94,6 +97,7 @@ export function PostLayout({
   const actionBarPost = pureRepost ? post.repostSource?.actionBar : post.actionBar;
   const reactionController = usePostReactionController(
     (pureRepost ? post.repostSource?.reactionController : post.reactionController)!,
+    socialAuthentication.execution.kind === 'enabled',
   );
   const presentationSource: SourcePostPresentationData | null = source
     ? {
@@ -143,9 +147,11 @@ export function PostLayout({
           </Text>
           <PostReactionSummary controller={reactionController} style={styles.reactionSummary} />
           <PostActionBar
+            execution={socialAuthentication.execution}
             onBookmarkError={onBookmarkError}
             onDeleted={onDeleted}
             onRepostError={onRepostError}
+            onResolutionRequired={socialAuthentication.resolve}
             post={actionBarPost}
             reactionController={reactionController}
             reply={
@@ -153,14 +159,27 @@ export function PostLayout({
                 ? {
                     accessibilityLabel: '답글',
                     controlRef: replyTriggerRef,
-                    expanded: replyBinding.expanded,
-                    onPress: replyBinding.onPress,
-                    processing: getReplyProcessingState(true, Boolean(post.content)),
+                    expanded:
+                      replyAuthentication.execution.kind === 'enabled' && replyBinding.expanded,
+                    onPress: () => {
+                      if (replyAuthentication.execution.kind === 'resolution-required') {
+                        replyAuthentication.resolve(replyAuthentication.execution.reason);
+                      } else if (replyAuthentication.execution.kind === 'enabled') {
+                        replyBinding.onPress();
+                      }
+                    },
+                    processing: getReplyProcessingState(
+                      replyAuthentication.execution,
+                      Boolean(replyBinding.profile),
+                    ),
                   }
                 : undefined
             }
           />
-          {replyBinding && post.content && post.replySurface ? (
+          {replyAuthentication.execution.kind === 'enabled' &&
+          replyBinding?.profile &&
+          post.content &&
+          post.replySurface ? (
             <View style={styles.replySurface}>
               <ReplyComposerSurface
                 ref={replyBinding.surfaceRef}

@@ -4,6 +4,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import type { PostBookmarkAction_post$key } from './__generated__/PostBookmarkAction_post.graphql';
 import type { PostBookmarkActionCreateBookmarkMutation } from './__generated__/PostBookmarkActionCreateBookmarkMutation.graphql';
 import type { PostBookmarkActionDeleteBookmarkMutation } from './__generated__/PostBookmarkActionDeleteBookmarkMutation.graphql';
+import type { PostActionExecution, PostActionResolutionReason } from './postActionAvailability';
 import type { PostActionProcessingState } from './PostActionControl';
 
 export type BookmarkActionKind = 'create' | 'cancel';
@@ -57,6 +58,8 @@ const deleteBookmarkMutation = graphql`
 
 export function usePostBookmarkAction(
   post: PostBookmarkAction_post$key | null,
+  execution: PostActionExecution = { kind: 'enabled' },
+  onResolutionRequired?: (reason: PostActionResolutionReason) => void,
   onError?: (failure: BookmarkActionFailure) => void,
 ): BookmarkActionConfig | undefined {
   const data = useFragment(postBookmarkActionFragment, post);
@@ -77,6 +80,13 @@ export function usePostBookmarkAction(
 
   const onPress = useCallback(() => {
     if (!data || inFlight.current || processing) {
+      return;
+    }
+    if (execution.kind === 'resolution-required') {
+      onResolutionRequired?.(execution.reason);
+      return;
+    }
+    if (execution.kind === 'disabled') {
       return;
     }
 
@@ -116,7 +126,16 @@ export function usePostBookmarkAction(
     }
 
     commitCreate({ ...callbacks, variables: { input: { postId: data.id } } });
-  }, [commitCreate, commitDelete, data, environment, onError, processing]);
+  }, [
+    commitCreate,
+    commitDelete,
+    data,
+    environment,
+    execution,
+    onError,
+    onResolutionRequired,
+    processing,
+  ]);
 
   if (!data) {
     return undefined;
@@ -126,7 +145,7 @@ export function usePostBookmarkAction(
     accessibilityLabel: data.viewerBookmark ? '북마크 취소' : '북마크',
     hasBookmarked: Boolean(data.viewerBookmark),
     onPress,
-    processing: processing ? 'pending' : 'default',
+    processing: processing ? 'pending' : execution.kind === 'disabled' ? 'disabled' : 'default',
   };
 }
 

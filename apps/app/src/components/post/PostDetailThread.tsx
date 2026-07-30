@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
+import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostListItem } from '@/components/post/PostListItem';
 import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
@@ -249,45 +250,47 @@ function PostDetailThreadContent({
   };
 
   return (
-    <PostReplyCoordinatorProvider
-      onPostCreated={onReplyCreated}
-      owner="detail"
-      profile={replyProfile ?? null}
-    >
-      <PostDetailFrame header={header} nativeScrollProps={nativeScrollProps}>
-        <PostThreadLayout<ThreadRenderablePost>
-          ancestors={ancestors}
-          current={current}
-          descendants={descendants}
-          renderPost={({ item, role }) => (
-            <View>
-              {role === 'current' ? (
-                <PostLayout
-                  onDeleted={onPostDeleted}
-                  post={requireThreadFragment(item.post.detail, 'current detail')}
-                />
-              ) : (
-                <PostListItem
-                  post={requireThreadFragment(item.post.listItem, `${role} list item`)}
-                  showDivider={false}
-                />
-              )}
+    <PostActionAuthenticationProvider>
+      <PostReplyCoordinatorProvider
+        onPostCreated={onReplyCreated}
+        owner="detail"
+        profile={replyProfile ?? null}
+      >
+        <PostDetailFrame header={header} nativeScrollProps={nativeScrollProps}>
+          <PostThreadLayout<ThreadRenderablePost>
+            ancestors={ancestors}
+            current={current}
+            descendants={descendants}
+            renderPost={({ item, role }) => (
+              <View>
+                {role === 'current' ? (
+                  <PostLayout
+                    onDeleted={onPostDeleted}
+                    post={requireThreadFragment(item.post.detail, 'current detail')}
+                  />
+                ) : (
+                  <PostListItem
+                    post={requireThreadFragment(item.post.listItem, `${role} list item`)}
+                    showDivider={false}
+                  />
+                )}
+              </View>
+            )}
+          />
+          {isLoadingNext ? (
+            <Text accessibilityLiveRegion="polite">답글을 더 불러오는 중입니다.</Text>
+          ) : loadError ? (
+            <View accessibilityRole="alert">
+              <Text>답글을 더 불러오지 못했어요</Text>
+              <Text>이미 불러온 답글은 그대로 유지돼요.</Text>
+              <Button onPress={loadNextPage} style={styles.retryButton} tone="secondary">
+                답글 다시 불러오기
+              </Button>
             </View>
-          )}
-        />
-        {isLoadingNext ? (
-          <Text accessibilityLiveRegion="polite">답글을 더 불러오는 중입니다.</Text>
-        ) : loadError ? (
-          <View accessibilityRole="alert">
-            <Text>답글을 더 불러오지 못했어요</Text>
-            <Text>이미 불러온 답글은 그대로 유지돼요.</Text>
-            <Button onPress={loadNextPage} style={styles.retryButton} tone="secondary">
-              답글 다시 불러오기
-            </Button>
-          </View>
-        ) : null}
-      </PostDetailFrame>
-    </PostReplyCoordinatorProvider>
+          ) : null}
+        </PostDetailFrame>
+      </PostReplyCoordinatorProvider>
+    </PostActionAuthenticationProvider>
   );
 }
 

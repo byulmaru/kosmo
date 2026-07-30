@@ -10,6 +10,7 @@ import { RepostAction } from './RepostAction';
 import type { Ref } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostActionBar_post$key } from './__generated__/PostActionBar_post.graphql';
+import type { PostActionExecution, PostActionResolutionReason } from './postActionAvailability';
 import type { PostActionProcessingState } from './PostActionControl';
 import type { BookmarkActionConfig, BookmarkActionFailure } from './PostBookmarkAction';
 import type { PostReactionController } from './PostReactionController';
@@ -27,10 +28,12 @@ type MoreActionConfig = { accessibilityLabel: string; onPress: () => void };
 
 export type PostActionBarProps = {
   bookmark?: BookmarkActionConfig;
+  execution?: PostActionExecution;
   more?: MoreActionConfig;
   onDeleted?: () => void;
   onBookmarkError?: (failure: BookmarkActionFailure) => void;
   onRepostError?: (failure: RepostActionFailure) => void;
+  onResolutionRequired?: (reason: PostActionResolutionReason) => void;
   post?: PostActionBar_post$key | null;
   reactionController?: PostReactionController;
   reply?: ReplyActionConfig;
@@ -46,16 +49,23 @@ const postActionBarPostFragment = graphql`
 
 export function PostActionBar({
   bookmark,
+  execution = { kind: 'enabled' },
   more,
   onDeleted,
   onBookmarkError,
   onRepostError,
+  onResolutionRequired,
   post,
   reactionController,
   reply,
 }: PostActionBarProps) {
   const data = useFragment(postActionBarPostFragment, post ?? null);
-  const bookmarkAction = usePostBookmarkAction(data?.bookmark ?? null, onBookmarkError);
+  const bookmarkAction = usePostBookmarkAction(
+    data?.bookmark ?? null,
+    execution,
+    onResolutionRequired,
+    onBookmarkError,
+  );
   const resolvedBookmark = bookmark ?? bookmarkAction;
 
   return (
@@ -72,10 +82,19 @@ export function PostActionBar({
           testID="reply"
         />
       ) : null}
-      {data?.repost ? <RepostAction onError={onRepostError} post={data.repost} /> : null}
+      {data?.repost ? (
+        <RepostAction
+          execution={execution}
+          onError={onRepostError}
+          onResolutionRequired={onResolutionRequired}
+          post={data.repost}
+        />
+      ) : null}
       {reactionController ? (
         <ReactionAction
           controller={reactionController}
+          execution={execution}
+          onResolutionRequired={onResolutionRequired}
           renderTrigger={({ disabled, expanded, hasReacted, onPress, ref }) => (
             <PostActionControl
               accessibilityLabel="반응"

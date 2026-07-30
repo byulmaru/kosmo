@@ -7,6 +7,7 @@ import { expect, fn, mocked, screen, userEvent, waitFor, within } from 'storyboo
 import { Temporal } from 'temporal-polyfill';
 import { trackAnalytics } from '@/analytics/client';
 import PostDetailScreen from '@/app/(tabs)/(post)/[profileHandle]/[postId]';
+import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostBody } from '@/components/post/PostBody';
 import { PostComposer } from '@/components/post/PostComposer';
 import { PostComposerMediaItems } from '@/components/post/PostComposerMediaControls';
@@ -18,6 +19,7 @@ import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordin
 import { PostSourcePresentationView } from '@/components/post/PostSourcePresentationView';
 import { PostThreadLayout } from '@/components/post/PostThreadLayout';
 import { ReplyComposerSurface } from '@/components/post/ReplyComposerSurface';
+import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { RelayEnvironmentBoundary } from '@/relay/RelayEnvironmentBoundary';
 import { SessionProvider } from '@/session/SessionProvider';
@@ -1277,6 +1279,44 @@ function ProductionBookmarkEnvironmentReplacementStory() {
   );
 }
 
+type PostActionSessionState = 'error' | 'guest' | 'profile';
+
+function ProductionPostActionSessionBoundaryStory({ state }: { state: PostActionSessionState }) {
+  const data = usePostsStoryData();
+  const [guestResolutionCount, setGuestResolutionCount] = useState(0);
+  const [profileResolutionCount, setProfileResolutionCount] = useState(0);
+  const sessionOverride =
+    state === 'guest'
+      ? ({ selectedProfileId: null, status: 'guest' } as const)
+      : state === 'profile'
+        ? ({ selectedProfileId: null, status: 'valid' } as const)
+        : ({ selectedProfileId: null, status: 'error' } as const);
+
+  return (
+    <ShellChromeProvider
+      openProfileSwitcher={() => setProfileResolutionCount((count) => count + 1)}
+    >
+      <PostActionAuthenticationProvider
+        onGuestResolution={() => setGuestResolutionCount((count) => count + 1)}
+        sessionOverride={sessionOverride}
+      >
+        <PostReplyCoordinatorProvider owner="list" profile={null}>
+          <View testID="production-session-action-post">
+            <PostListItem
+              post={requireFragment(
+                requirePostById(data.posts, shortPost.id).listItem,
+                'session action boundary Post',
+              )}
+            />
+          </View>
+        </PostReplyCoordinatorProvider>
+        <Text testID="guest-resolution-count">{guestResolutionCount}</Text>
+        <Text testID="profile-resolution-count">{profileResolutionCount}</Text>
+      </PostActionAuthenticationProvider>
+    </ShellChromeProvider>
+  );
+}
+
 function RepostQuotePresentationStory({ postId }: { postId: string }) {
   const post = requireStoryPostById(storyPosts, postId);
 
@@ -1864,9 +1904,13 @@ const meta = {
   component: PostCatalog,
   decorators: [
     (Story) => (
-      <PostReplyCoordinatorProvider owner="list" profile={null}>
-        <Story />
-      </PostReplyCoordinatorProvider>
+      <PostActionAuthenticationProvider
+        sessionOverride={{ selectedProfileId: 'profile-story', status: 'valid' }}
+      >
+        <PostReplyCoordinatorProvider owner="list" profile={null}>
+          <Story />
+        </PostReplyCoordinatorProvider>
+      </PostActionAuthenticationProvider>
     ),
   ],
   parameters: {
@@ -2427,6 +2471,63 @@ export const ProductionBookmarkEnvironmentReplacement: Story = {
     ]);
   },
   render: () => <ProductionBookmarkEnvironmentReplacementStory />,
+};
+
+export const ProductionGuestActionResolution: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const surface = within(canvas.getByTestId('production-session-action-post'));
+
+    await userEvent.click(surface.getByRole('button', { name: '답글' }));
+    await userEvent.click(surface.getByRole('button', { name: /^재게시/ }));
+    await userEvent.click(surface.getByRole('button', { name: '반응' }));
+    await userEvent.click(surface.getByRole('button', { name: '북마크' }));
+
+    await waitFor(() =>
+      expect(canvas.getByTestId('guest-resolution-count')).toHaveTextContent('4'),
+    );
+    expect(canvas.getByTestId('profile-resolution-count')).toHaveTextContent('0');
+    expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: '답글 본문' })).toBeNull();
+  },
+  render: () => <ProductionPostActionSessionBoundaryStory state="guest" />,
+};
+
+export const ProductionProfileActionResolution: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const surface = within(canvas.getByTestId('production-session-action-post'));
+
+    await userEvent.click(surface.getByRole('button', { name: '답글' }));
+    await userEvent.click(surface.getByRole('button', { name: /^재게시/ }));
+    await userEvent.click(surface.getByRole('button', { name: '반응' }));
+    await userEvent.click(surface.getByRole('button', { name: '북마크' }));
+
+    await waitFor(() =>
+      expect(canvas.getByTestId('profile-resolution-count')).toHaveTextContent('4'),
+    );
+    expect(canvas.getByTestId('guest-resolution-count')).toHaveTextContent('0');
+    expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: '답글 본문' })).toBeNull();
+  },
+  render: () => <ProductionPostActionSessionBoundaryStory state="profile" />,
+};
+
+export const ProductionSessionErrorDisablesActions: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const surface = within(canvas.getByTestId('production-session-action-post'));
+
+    expect(surface.getByRole('button', { name: '답글' })).toBeDisabled();
+    expect(surface.getByRole('button', { name: /^재게시/ })).toBeDisabled();
+    expect(surface.getByRole('button', { name: '반응' })).toBeDisabled();
+    expect(surface.getByRole('button', { name: '북마크' })).toBeDisabled();
+    expect(canvas.getByTestId('guest-resolution-count')).toHaveTextContent('0');
+    expect(canvas.getByTestId('profile-resolution-count')).toHaveTextContent('0');
+  },
+  render: () => <ProductionPostActionSessionBoundaryStory state="error" />,
 };
 
 export const ProductionRepostFailureToast: Story = {

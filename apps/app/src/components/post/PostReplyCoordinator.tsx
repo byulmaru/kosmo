@@ -20,7 +20,7 @@ export type PostReplyBinding = {
   onPress: () => void;
   onRequestClose: () => void;
   owner: PostReplyOwner;
-  profile: ReplyComposerSurface_profile$key;
+  profile: ReplyComposerSurface_profile$key | null;
   surfaceRef?: RefObject<ReplyComposerSurfaceHandle | null>;
 };
 
@@ -91,15 +91,15 @@ export function usePostReplyBinding(postId: string): PostReplyBinding | null {
   if (coordinator === undefined) {
     throw new Error('Post Reply 표현부에는 PostReplyCoordinatorProvider가 필요합니다.');
   }
-  if (coordinator.profile === null) {
-    return null;
-  }
-
   const expanded = coordinator.activePostId === postId;
   return {
     expanded,
     onPostCreated: coordinator.onPostCreated,
-    onPress: () => coordinator.press(postId),
+    onPress: () => {
+      if (coordinator.profile) {
+        coordinator.press(postId);
+      }
+    },
     onRequestClose: coordinator.close,
     owner: coordinator.owner,
     profile: coordinator.profile,
