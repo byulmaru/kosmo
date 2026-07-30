@@ -270,11 +270,19 @@ export const FeedbackNavigationCurrentState: Story = {
     const canvas = within(canvasElement);
     const link = canvas.getByRole('link', { name: '피드백 보내기' });
     const logout = canvas.getByRole('button', { name: '로그아웃' });
+    const feedbackLabel = within(link).getByText('피드백 보내기');
+    const logoutLabel = within(logout).getByText('로그아웃');
     expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
     expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
     expect(link.nextElementSibling).toContainElement(logout);
     expect(link.parentElement).toHaveStyle({ borderTopWidth: '1px' });
+    expect(feedbackLabel).toHaveStyle({ fontSize: '14px', lineHeight: '21px' });
+    expect(logoutLabel).toHaveStyle({ fontSize: '14px', lineHeight: '21px' });
+    expect(link.querySelector('svg')).toHaveAttribute('height', '20');
+    expect(link.querySelector('svg')).toHaveAttribute('width', '20');
+    expect(logout.querySelector('svg')).toHaveAttribute('height', '20');
+    expect(logout.querySelector('svg')).toHaveAttribute('width', '20');
     expect(link.querySelector('path')).toHaveAttribute(
       'd',
       'm22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7',

@@ -67,6 +67,6 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     width: 44,
   },
-  label: { fontFamily: 'SUIT', fontSize: 16, lineHeight: 21 },
+  label: { fontFamily: 'SUIT', fontSize: 14, lineHeight: 21 },
   error: { fontFamily: 'SUIT', marginTop: spacing.xs, ...typography.xsm },
 });
