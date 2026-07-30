@@ -1,3 +1,4 @@
+{{- if .Values.workloads.enabled }}
 apiVersion: argoproj.io/v1alpha1
 kind: Rollout
 metadata:
@@ -76,3 +77,4 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+{{- end }}
