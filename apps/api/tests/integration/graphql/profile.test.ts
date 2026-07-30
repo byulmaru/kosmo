@@ -19,6 +19,7 @@ import { decodeGlobalId, encodeGlobalId as globalId } from '@kosmo/core/global-i
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { isConfiguredLocalProfile } from '@kosmo/core/profile';
 import { normalizeHandle } from '@kosmo/core/utils';
+import { profileTagNormalizationParityCases } from '@kosmo/core/validation/profile-tag-parity-fixture';
 import { and, count, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
@@ -717,6 +718,10 @@ describe('GraphQL remote profile boundary', () => {
   test('updates Profile tags without ordering guarantees and preserves omitted/null semantics', async () => {
     const auth = await createAuthenticatedSession();
     type Tag = { id: string; name: string };
+    const inputs = profileTagNormalizationParityCases.map(({ input }) => input);
+    const expectedDisplayNames = profileTagNormalizationParityCases
+      .map(({ displayName }) => displayName)
+      .toSorted();
     const update = await requestGraphQL<{
       updateProfile: { profile: { displayName: string; tags: Tag[] } };
     }>(
@@ -725,16 +730,16 @@ describe('GraphQL remote profile boundary', () => {
           profile { displayName tags { id name } }
         }
       }`,
-      { tags: [' #Ｆｏｏ ', 'Straße'] },
+      { tags: inputs },
       auth.token,
     );
 
     assertNoGraphQLErrors(update);
     assert.equal(update.data?.updateProfile.profile.displayName, 'Tagged Owner');
-    assert.deepEqual(update.data?.updateProfile.profile.tags.map(({ name }) => name).toSorted(), [
-      'Foo',
-      'Straße',
-    ]);
+    assert.deepEqual(
+      update.data?.updateProfile.profile.tags.map(({ name }) => name).toSorted(),
+      expectedDisplayNames,
+    );
     assert.ok(
       update.data?.updateProfile.profile.tags.every(
         ({ id }) => decodeGlobalId(id).typename === 'Hashtag',
@@ -747,14 +752,14 @@ describe('GraphQL remote profile boundary', () => {
       `mutation PreserveFirstTagDisplayNames($tags: [String!]) {
         updateProfile(input: { tags: $tags }) { profile { tags { id name } } }
       }`,
-      { tags: ['FOO', 'straße'] },
+      { tags: ['FOO', 'STRAẞE', 'ος', '𐐨'.repeat(20)] },
       auth.token,
     );
     assertNoGraphQLErrors(recased);
-    assert.deepEqual(recased.data?.updateProfile.profile.tags.map(({ name }) => name).toSorted(), [
-      'Foo',
-      'Straße',
-    ]);
+    assert.deepEqual(
+      recased.data?.updateProfile.profile.tags.map(({ name }) => name).toSorted(),
+      expectedDisplayNames,
+    );
 
     const omitted = await requestGraphQL<{
       updateProfile: { profile: { bio: string | null; tags: Tag[] } };
@@ -769,10 +774,10 @@ describe('GraphQL remote profile boundary', () => {
     );
     assertNoGraphQLErrors(omitted);
     assert.equal(omitted.data?.updateProfile.profile.bio, 'updated bio');
-    assert.deepEqual(omitted.data?.updateProfile.profile.tags.map(({ name }) => name).toSorted(), [
-      'Foo',
-      'Straße',
-    ]);
+    assert.deepEqual(
+      omitted.data?.updateProfile.profile.tags.map(({ name }) => name).toSorted(),
+      expectedDisplayNames,
+    );
 
     const nullInput = await requestGraphQL<{
       updateProfile: { profile: { tags: Tag[] } };
@@ -786,7 +791,7 @@ describe('GraphQL remote profile boundary', () => {
     assertNoGraphQLErrors(nullInput);
     assert.deepEqual(
       nullInput.data?.updateProfile.profile.tags.map(({ name }) => name).toSorted(),
-      ['Foo', 'Straße'],
+      expectedDisplayNames,
     );
 
     const cleared = await requestGraphQL<{

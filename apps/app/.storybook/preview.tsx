@@ -97,6 +97,21 @@ const preview: Preview = {
           styles: { height: '900px', width: '600px' },
           type: 'tablet',
         },
+        kosmoProfileCompact: {
+          name: 'KOSMO Profile compact',
+          styles: { height: '768px', width: '1024px' },
+          type: 'tablet',
+        },
+        kosmoProfileFull: {
+          name: 'KOSMO Profile full',
+          styles: { height: '900px', width: '1440px' },
+          type: 'desktop',
+        },
+        kosmoProfileIntermediate: {
+          name: 'KOSMO Profile intermediate',
+          styles: { height: '800px', width: '480px' },
+          type: 'mobile',
+        },
       },
     },
   },
