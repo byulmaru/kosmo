@@ -17,3 +17,11 @@
 {{- define "kosmo.databaseUrl" -}}
 {{- printf "postgres://kosmo:$(DATABASE_PASSWORD)@%s-rw:5432/kosmo" (include "kosmo.postgresName" .) -}}
 {{- end -}}
+
+{{- define "kosmo.imageRef" -}}
+{{- if .Values.imageDigest -}}
+{{- printf "%s@%s" .Values.image .Values.imageDigest -}}
+{{- else -}}
+{{- printf "%s:%s" .Values.image .Values.version -}}
+{{- end -}}
+{{- end -}}

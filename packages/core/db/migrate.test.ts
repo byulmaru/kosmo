@@ -98,6 +98,58 @@ test('마이그레이션을 한 번만 적용하고 동시 실행을 거부하�
   }
 });
 
+test('PostgreSQL 환경 변수로 마이그레이션 database에 연결한다', async () => {
+  const control = postgres(databaseUrl, { max: 1 });
+  const validMigrations = await migrationFolder(
+    '20260712000000_environment',
+    'CREATE TABLE migration_environment_probe (id integer PRIMARY KEY);',
+  );
+  const connection = new URL(databaseUrl);
+  const environmentNames = [
+    'DATABASE_URL',
+    'PGHOST',
+    'PGPORT',
+    'PGDATABASE',
+    'PGUSER',
+    'PGPASSWORD',
+  ] as const;
+  const previousEnvironment = new Map(
+    environmentNames.map((name) => [name, process.env[name]] as const),
+  );
+
+  delete process.env.DATABASE_URL;
+  process.env.PGHOST = connection.hostname;
+  process.env.PGPORT = connection.port || '5432';
+  process.env.PGDATABASE = decodeURIComponent(connection.pathname.slice(1));
+  process.env.PGUSER = decodeURIComponent(connection.username);
+  process.env.PGPASSWORD = decodeURIComponent(connection.password);
+
+  try {
+    await control.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE;');
+    await control.unsafe('CREATE SCHEMA public;');
+    await runDatabaseMigrations({ migrationsFolder: validMigrations });
+    assert.equal(
+      (
+        await control<{ tableName: string | null }[]>`
+        SELECT to_regclass('public.migration_environment_probe')::text AS "tableName"
+      `
+      )[0]?.tableName,
+      'migration_environment_probe',
+    );
+  } finally {
+    for (const [name, value] of previousEnvironment) {
+      if (value === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = value;
+      }
+    }
+
+    await control.end({ timeout: 5 });
+    await rm(validMigrations, { force: true, recursive: true });
+  }
+});
+
 test('현재 마이그레이션 이력을 빈 데이터베이스에 적용한다', async () => {
   const control = postgres(databaseUrl, { max: 1 });
 

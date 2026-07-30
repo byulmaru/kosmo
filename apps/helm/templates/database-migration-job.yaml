@@ -1,4 +1,11 @@
-{{- if eq .Values.env "dev" }}
+{{- $isDev := eq .Values.env "dev" -}}
+{{- $isProductionMigration := and (eq .Values.env "prod") .Values.migration.enabled -}}
+{{- if $isProductionMigration -}}
+{{- if not (regexMatch "^sha256:[0-9a-f]{64}$" (default "" .Values.imageDigest)) -}}
+{{- fail "production migration requires imageDigest=sha256:<64 lowercase hex>" -}}
+{{- end -}}
+{{- end -}}
+{{- if or $isDev $isProductionMigration }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -26,7 +33,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: db-migrate
-          image: {{ printf "%s:%s" .Values.image .Values.version | quote }}
+          image: {{ include "kosmo.imageRef" . | quote }}
           imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
@@ -39,6 +46,24 @@ spec:
           args:
             - migrate
           env:
+            {{- if $isProductionMigration }}
+            - name: PGHOST
+              value: {{ printf "%s-rw" (include "kosmo.postgresName" .) | quote }}
+            - name: PGPORT
+              value: "5432"
+            - name: PGDATABASE
+              value: "kosmo"
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ printf "%s-postgres-migration" .Release.Name | trunc 63 | trimSuffix "-" | quote }}
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ printf "%s-postgres-migration" .Release.Name | trunc 63 | trimSuffix "-" | quote }}
+                  key: password
+            {{- else }}
             - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -46,6 +71,7 @@ spec:
                   key: password
             - name: DATABASE_URL
               value: {{ include "kosmo.databaseUrl" . | quote }}
+            {{- end }}
           resources:
             requests:
               cpu: 50m
