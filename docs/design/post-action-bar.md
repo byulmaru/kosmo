@@ -17,6 +17,18 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - Figma Action은 내부 상하 padding 4px을 포함한다. 목록 surface는 28px Action Bar 자체 geometry를 바꾸지
   않고 전용 slot의 상단 padding은 0, 하단 padding은 4px로 두어 아래 카드 구분선과 4px 간격을 만든다.
 
+## Web hover target
+
+- Web의 비터치 pointer가 action 위에 머무르면 실제 interactive target 전체에 현재 theme의 `surface`
+  background를 표시한다. Reply, Repost, Reaction과 Bookmark의 50×28px target은 pill로, More의 28×28px
+  target은 원형으로 표시한다.
+- hover background는 target의 크기·padding·간격을 바꾸지 않으며 인접 action target과 겹치지 않는다.
+  icon과 count의 default·active 색, selected fill과 pressed opacity는 기존 상태 표현을 유지한다.
+- pending·disabled·resolution-required처럼 입력이 차단된 action은 hover background를 표시하지 않는다.
+  Native와 Web touch 입력에는 hover 전용 background를 표시하지 않는다.
+- light·dark theme 모두 고정 색상 대신 semantic `surface` token을 사용한다. hover가 active·pressed·blocked
+  상태를 가리거나 별도 action 의미 색상을 만들지 않는다.
+
 ## 플랫폼 rollout과 release gate
 
 - 현재 출시 범위는 Web이며, 구현 drift를 막기 위해 Native platform file도 우선 같은 28px geometry를 사용한다.
@@ -150,6 +162,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 모든 플랫폼 구현에서 Bar와 control 높이 28, Reply·More target의 content column 양끝 정렬, social action 너비 50, More target 너비 최소
   28, glyph 16, icon-count gap 4와 고정 순서를 검증한다. Web runtime에서는 각 target이 24×24 CSS px 자체를
   포함하고 서로 겹치지 않는지도 확인한다.
+- Web pointer hover에서는 전체 target의 `surface` background, 50×28 pill·28×28 원형 geometry와
+  active·pressed 상태 보존을 검증한다. blocked action, Web touch 입력과 Native에는 hover background가
+  나타나지 않는지 확인한다.
 - Web menu가 scroll container 밖에서 잘리지 않고 첫 item이 trigger pointer 지점을 덮는지, 같은 위치의
   두 번째 pointer 활성화로 item이 선택되는지 검증한다. More menu는 card 오른쪽이 trigger 오른쪽보다 5px
   바깥에 있고 첫 item 오른쪽은 trigger 오른쪽과 맞아 왼쪽으로 펼쳐지는지, Repost menu는 기존 시작
