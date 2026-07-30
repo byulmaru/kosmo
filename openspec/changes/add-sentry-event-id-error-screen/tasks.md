@@ -31,7 +31,7 @@ Android·iOS·Web 공용 앱이 예상 오류의 기존 inline·route-local 복�
 
 - Expected mutation·GraphQL response·network fixture가 기존 inline 또는 route-local 상태를 유지하고 reporter를 호출하지 않는지 검증한다.
 - Unexpected render fixture가 report 한 번, returned ID/no-ID, retry reset·재발과 public root 이동으로 이어지는지 단위·Storybook interaction으로 검증한다.
-- ID·no-ID·긴 ID, copy success/failure, 좁은 Web viewport, keyboard, text scaling과 platform target 상태를 Storybook catalog와 접근성 검사에서 확인한다.
+- ID·no-ID·긴 ID, copy success/failure, 좁은 Web viewport와 keyboard focus/action 순서는 Storybook catalog와 접근성 검사에서 확인한다. Native text scaling·touch target은 이 browser harness의 증거로 대체하지 않는다.
 - `pnpm --filter @kosmo/app test`, `pnpm lint:eslint`, `pnpm lint:prettier`를 통과시킨다.
 
 - [x] 1.1 GraphQL response·network·local render 오류의 구조화된 origin을 보존하고 expected/unexpected 분류 및 client 중복 보고 회귀 검증을 추가한다.

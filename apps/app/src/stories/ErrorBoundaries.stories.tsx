@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { usePathname } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { expect, fn, userEvent, within } from 'storybook/test';
+import { AppProviders } from '@/components/AppProviders';
 import { GraphQLErrorBoundary } from '@/components/GraphQLErrorBoundary';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { UnexpectedErrorScreen } from '@/components/UnexpectedErrorScreen';
@@ -8,6 +10,11 @@ import { StructuredClientError } from '@/observability/client-error';
 import { SessionFailOpenBoundary } from '@/session/SessionProvider';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ErrorInfo } from 'react';
+
+const storyGlobal = globalThis as unknown as {
+  process?: { env: Record<string, string | undefined> };
+};
+storyGlobal.process ??= { env: {} };
 
 const unexpectedRenderError = new Error('production boundary fixture with a private path');
 const expectedNetworkError = new StructuredClientError({
@@ -150,6 +157,63 @@ function SessionBoundaryHarness() {
   );
 }
 
+function ProductionRouteFailure() {
+  const pathname = usePathname();
+
+  return (
+    <View>
+      <Text>{pathname}</Text>
+      <ThrowOnRender active={pathname !== '/'} />
+    </View>
+  );
+}
+
+function ProductionAppProvidersHarness() {
+  return (
+    <AppProviders>
+      <ProductionRouteFailure />
+    </AppProviders>
+  );
+}
+
+function DeferredClipboardHarness() {
+  const [visible, setVisible] = useState(true);
+  const resolverRef = useRef<((copied: boolean) => void) | null>(null);
+  const writeClipboard = useCallback(
+    () =>
+      new Promise<boolean>((resolve) => {
+        resolverRef.current = resolve;
+      }),
+    [],
+  );
+  const resolveClipboard = () => {
+    resolverRef.current?.(true);
+    resolverRef.current = null;
+  };
+
+  return (
+    <View>
+      {visible ? (
+        <UnexpectedErrorScreen
+          eventId="event-deferred"
+          onRetry={() => setVisible(false)}
+          onSafeNavigate={() => setVisible(false)}
+          writeClipboard={writeClipboard}
+        />
+      ) : (
+        <Text>복구됐습니다.</Text>
+      )}
+      <Pressable
+        accessibilityLabel="지연 복사 완료"
+        accessibilityRole="button"
+        onPress={resolveClipboard}
+      >
+        <Text>지연 복사 완료</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 const meta = {
   title: 'Foundation/Error Boundaries',
 } satisfies Meta;
@@ -183,6 +247,7 @@ export const RouteFallbackAndRetry: Story = {
 
     await expect(canvas.findByText('콘텐츠가 복구됐습니다.')).resolves.toBeVisible();
     expect(routeRetry).toHaveBeenCalledTimes(1);
+    expect(expectedRouteReporter).not.toHaveBeenCalled();
   },
 };
 
@@ -267,6 +332,50 @@ export const SessionFailOpenAndResetKey: Story = {
   },
 };
 
+export const ProductionAppProvidersSafeNavigation: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: { router: { pathname: '/settings' } },
+  render: () => <ProductionAppProvidersHarness />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.findByText('문제가 발생했어요')).resolves.toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '안전한 화면으로 이동' }));
+
+    await expect(canvas.findByText('/')).resolves.toBeVisible();
+    expect(canvas.queryByText('문제가 발생했어요')).not.toBeInTheDocument();
+  },
+};
+
+export const DeferredClipboardAfterRetry: Story = {
+  render: () => <DeferredClipboardHarness />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '오류 추적 ID 복사' }));
+    expect(canvas.queryByText('오류 추적 ID를 복사했어요.')).not.toBeInTheDocument();
+
+    await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
+    await expect(canvas.findByText('복구됐습니다.')).resolves.toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '지연 복사 완료' }));
+
+    expect(canvas.queryByText('오류 추적 ID를 복사했어요.')).not.toBeInTheDocument();
+  },
+};
+
+export const DeferredClipboardAfterSafeNavigation: Story = {
+  render: () => <DeferredClipboardHarness />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '오류 추적 ID 복사' }));
+    expect(canvas.queryByText('오류 추적 ID를 복사했어요.')).not.toBeInTheDocument();
+
+    await userEvent.click(canvas.getByRole('button', { name: '안전한 화면으로 이동' }));
+    await expect(canvas.findByText('복구됐습니다.')).resolves.toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '지연 복사 완료' }));
+
+    expect(canvas.queryByText('오류 추적 ID를 복사했어요.')).not.toBeInTheDocument();
+  },
+};
+
 const copySuccess = fn(async (value: string) => value === 'event-123');
 const copyFailure = fn(async () => false);
 
@@ -314,5 +423,50 @@ export const UnexpectedErrorCopyFailure: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '오류 추적 ID 복사' }));
 
     await expect(canvas.findByText('오류 추적 ID를 복사하지 못했어요.')).resolves.toBeVisible();
+  },
+};
+
+const longEventId = `sentry-event-${'0123456789abcdef'.repeat(10)}`;
+const longEventCopy = fn(async (value: string) => value === longEventId);
+const longEventRetry = fn();
+const longEventSafeNavigate = fn();
+
+export const LongEventIdMobileKeyboardActions: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  render: () => (
+    <UnexpectedErrorScreen
+      eventId={longEventId}
+      onRetry={longEventRetry}
+      onSafeNavigate={longEventSafeNavigate}
+      writeClipboard={longEventCopy}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const eventId = canvas.getByText(longEventId);
+    const copyButton = canvas.getByRole('button', { name: '오류 추적 ID 복사' });
+    const retryButton = canvas.getByRole('button', { name: '다시 시도' });
+    const safeNavigateButton = canvas.getByRole('button', { name: '안전한 화면으로 이동' });
+
+    expect(eventId).toBeVisible();
+    expect(eventId.getBoundingClientRect().height).toBeGreaterThan(24);
+    expect(canvasElement.scrollWidth).toBeLessThanOrEqual(canvasElement.clientWidth + 1);
+
+    await userEvent.tab();
+    expect(copyButton).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    await expect(canvas.findByText('오류 추적 ID를 복사했어요.')).resolves.toBeVisible();
+    expect(longEventCopy).toHaveBeenCalledWith(longEventId);
+
+    copyButton.focus();
+    await userEvent.tab();
+    expect(retryButton).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    expect(longEventRetry).toHaveBeenCalledTimes(1);
+
+    await userEvent.tab();
+    expect(safeNavigateButton).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    expect(longEventSafeNavigate).toHaveBeenCalledTimes(1);
   },
 };
