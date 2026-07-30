@@ -200,6 +200,9 @@ describe('GraphQL Hashtag related Profiles', () => {
       firstPage.data?.node?.relatedProfiles.edges.map(({ node }) => node.id),
       visibleProfiles.slice(0, 20).map(({ id }) => globalId('Profile', id)),
     );
+    const endCursor = firstPage.data?.node?.relatedProfiles.pageInfo.endCursor;
+    assert.ok(endCursor);
+    assert.notEqual(endCursor, visibleProfiles[19]!.id);
     assert.equal(firstPage.data?.node?.relatedProfiles.edges.length, 20);
     assert.equal(firstPage.data?.node?.relatedProfiles.pageInfo.hasNextPage, true);
 
@@ -281,6 +284,20 @@ describe('GraphQL Hashtag related Profiles', () => {
     assert.equal(new Set(pages.map(({ node }) => node.id)).size, profiles.length);
     assert.equal(secondPage.data?.node?.relatedProfiles.pageInfo.hasNextPage, false);
   });
+
+  test('rejects malformed and non-canonical cursors as validation errors', async () => {
+    const hashtag = await createHashtag('cursor-validation');
+    const auth = await createAuthenticatedSession();
+
+    for (const after of ['not-a-cursor', 'MA==']) {
+      const result = await requestGraphQL<RelatedProfilesData>(
+        relatedProfilesQuery,
+        { after, id: globalId('Hashtag', hashtag.id) },
+        auth.token,
+      );
+      assert.equal(result.errors?.[0]?.extensions?.code, 'VALIDATION');
+    }
+  });
 });
 
 const requestGraphQL = async <TData = Record<string, unknown>>(
@@ -316,20 +333,14 @@ const addTag = (profileId: string, hashtagId: string) =>
 const profileId = (value: number) =>
   `00000000-0000-8006-8000-${value.toString(16).padStart(12, '0')}`;
 
-const createRemoteInstance = async ({
-  domain = 'remote.example',
-  state = InstanceState.ACTIVE,
-}: {
-  domain?: string;
-  state?: InstanceState;
-} = {}) =>
+const createRemoteInstance = async () =>
   db
     .insert(Instances)
     .values({
-      canonicalOrigin: `https://${domain}`,
-      domain,
+      canonicalOrigin: 'https://remote.example',
+      domain: 'remote.example',
       kind: InstanceKind.ACTIVITYPUB,
-      state,
+      state: InstanceState.ACTIVE,
     })
     .returning()
     .then(firstOrThrow);

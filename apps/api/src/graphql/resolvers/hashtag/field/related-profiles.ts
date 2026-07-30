@@ -1,13 +1,33 @@
 import { db, Instances, ProfileHashtags, Profiles } from '@kosmo/core/db';
 import { InstanceKind } from '@kosmo/core/enums';
+import { ValidationError } from '@kosmo/core/error';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, eq, getColumns, gt } from 'drizzle-orm';
+import { parse as parseUuid } from 'uuid';
 import { builder } from '@/graphql/builder';
 import { ProfileConnection } from '@/graphql/resolvers/profile';
 import { visibleProfileWhere } from '@/profile/visibility';
 import { Hashtag } from '../ref';
 
 type ProfileRow = typeof Profiles.$inferSelect;
+
+const encodeRelatedProfileCursor = ({ id }: ProfileRow) => Buffer.from(id).toString('base64url');
+
+const decodeRelatedProfileCursor = (cursor: string) => {
+  try {
+    const decoded = Buffer.from(cursor, 'base64url');
+    if (decoded.toString('base64url') !== cursor) {
+      throw new Error('Non-canonical base64url');
+    }
+
+    const id = decoded.toString('utf8');
+    parseUuid(id);
+
+    return id;
+  } catch {
+    throw new ValidationError('Invalid Related Profile cursor');
+  }
+};
 
 builder.objectField(Hashtag, 'relatedProfiles', (t) =>
   t.withAuth({ login: true }).field({
@@ -22,7 +42,7 @@ builder.objectField(Hashtag, 'relatedProfiles', (t) =>
           args,
           defaultSize: 20,
           maxSize: 20,
-          toCursor: (profile) => profile.id,
+          toCursor: encodeRelatedProfileCursor,
         },
         ({ after, limit }) =>
           db
@@ -35,7 +55,7 @@ builder.objectField(Hashtag, 'relatedProfiles', (t) =>
                 eq(ProfileHashtags.hashtagId, hashtag.id),
                 eq(Instances.kind, InstanceKind.LOCAL),
                 visibleProfileWhere({ profile: Profiles, instance: Instances }),
-                after ? gt(Profiles.id, after) : undefined,
+                after ? gt(Profiles.id, decodeRelatedProfileCursor(after)) : undefined,
               ),
             )
             .orderBy(asc(Profiles.id))
