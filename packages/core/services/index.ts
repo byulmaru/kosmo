@@ -15,6 +15,7 @@ export {
   cancelProfileFollowRequest,
   rejectProfileFollowRequest,
 } from './profile-follow-request';
+export { updateProfile } from './profile-update';
 export { addReaction, deleteReaction } from './reaction';
 export type { RevokeCurrentSessionResult } from './session';
 export { createOidcSession, revokeCurrentSession } from './session';

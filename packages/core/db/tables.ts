@@ -173,6 +173,13 @@ export const Bookmarks = pgTable(
   ],
 );
 
+export const Hashtags = pgTable('hashtag', {
+  id: id(),
+  name: text('name').notNull().unique(),
+  displayName: text('display_name').notNull(),
+  createdAt: createdAt(),
+});
+
 export const Instances = pgTable(
   'instance',
   {
@@ -388,6 +395,21 @@ export const ProfileFollowRequests = pgTable(
     index().on(table.followeeProfileId),
     index().on(table.followerProfileId),
   ],
+);
+
+export const ProfileHashtags = pgTable(
+  'profile_hashtag',
+  {
+    id: id(),
+    profileId: uuid('profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    hashtagId: uuid('hashtag_id')
+      .notNull()
+      .references(() => Hashtags.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  (table) => [unique().on(table.profileId, table.hashtagId), index().on(table.hashtagId)],
 );
 
 export const Reactions = pgTable(

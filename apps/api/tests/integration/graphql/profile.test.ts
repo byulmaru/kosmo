@@ -15,7 +15,7 @@ import {
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
-import { encodeGlobalId as globalId } from '@kosmo/core/global-id';
+import { decodeGlobalId, encodeGlobalId as globalId } from '@kosmo/core/global-id';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { isConfiguredLocalProfile } from '@kosmo/core/profile';
 import { normalizeHandle } from '@kosmo/core/utils';
@@ -39,10 +39,12 @@ let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
+let Hashtags: typeof CoreDb.Hashtags;
 let Instances: typeof CoreDb.Instances;
 let pg: typeof CoreDb.pg;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
+let ProfileHashtags: typeof CoreDb.ProfileHashtags;
 let Profiles: typeof CoreDb.Profiles;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
@@ -68,10 +70,12 @@ describe('GraphQL remote profile boundary', () => {
       ActivityPubPosts,
       db,
       firstOrThrow,
+      Hashtags,
       Instances,
       pg,
       ProfileFollows,
       ProfileFollowRequests,
+      ProfileHashtags,
       Profiles,
       PostContents,
       Posts,
@@ -694,12 +698,12 @@ describe('GraphQL remote profile boundary', () => {
     const result = await requestGraphQL<{
       updateProfile: { profile: { displayName: string; id: string } };
     }>(
-      `mutation UpdateOwnedProfile($id: ID!, $displayName: String!) {
-        updateProfile(input: { id: $id, displayName: $displayName }) {
+      `mutation UpdateOwnedProfile($displayName: String!) {
+        updateProfile(input: { displayName: $displayName }) {
           profile { displayName id }
         }
       }`,
-      { displayName: 'Updated Owner', id: globalId('Profile', auth.profile.id) },
+      { displayName: 'Updated Owner' },
       auth.token,
     );
 
@@ -708,6 +712,224 @@ describe('GraphQL remote profile boundary', () => {
       displayName: 'Updated Owner',
       id: globalId('Profile', auth.profile.id),
     });
+  });
+
+  test('updates Profile tags without ordering guarantees and preserves omitted/null semantics', async () => {
+    const auth = await createAuthenticatedSession();
+    type Tag = { id: string; name: string };
+    const update = await requestGraphQL<{
+      updateProfile: { profile: { displayName: string; tags: Tag[] } };
+    }>(
+      `mutation UpdateProfileTags($tags: [String!]) {
+        updateProfile(input: { displayName: "Tagged Owner", tags: $tags }) {
+          profile { displayName tags { id name } }
+        }
+      }`,
+      { tags: [' #Ｆｏｏ ', 'Straße'] },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(update);
+    assert.equal(update.data?.updateProfile.profile.displayName, 'Tagged Owner');
+    assert.deepEqual(update.data?.updateProfile.profile.tags.map(({ name }) => name).toSorted(), [
+      'Foo',
+      'Straße',
+    ]);
+    assert.ok(
+      update.data?.updateProfile.profile.tags.every(
+        ({ id }) => decodeGlobalId(id).typename === 'Hashtag',
+      ),
+    );
+
+    const recased = await requestGraphQL<{
+      updateProfile: { profile: { tags: Tag[] } };
+    }>(
+      `mutation PreserveFirstTagDisplayNames($tags: [String!]) {
+        updateProfile(input: { tags: $tags }) { profile { tags { id name } } }
+      }`,
+      { tags: ['FOO', 'straße'] },
+      auth.token,
+    );
+    assertNoGraphQLErrors(recased);
+    assert.deepEqual(recased.data?.updateProfile.profile.tags.map(({ name }) => name).toSorted(), [
+      'Foo',
+      'Straße',
+    ]);
+
+    const omitted = await requestGraphQL<{
+      updateProfile: { profile: { bio: string | null; tags: Tag[] } };
+    }>(
+      `mutation PreserveOmittedTags {
+        updateProfile(input: { bio: "updated bio" }) {
+          profile { bio tags { id name } }
+        }
+      }`,
+      {},
+      auth.token,
+    );
+    assertNoGraphQLErrors(omitted);
+    assert.equal(omitted.data?.updateProfile.profile.bio, 'updated bio');
+    assert.deepEqual(omitted.data?.updateProfile.profile.tags.map(({ name }) => name).toSorted(), [
+      'Foo',
+      'Straße',
+    ]);
+
+    const nullInput = await requestGraphQL<{
+      updateProfile: { profile: { tags: Tag[] } };
+    }>(
+      `mutation PreserveNullTags {
+        updateProfile(input: { tags: null }) { profile { tags { id name } } }
+      }`,
+      {},
+      auth.token,
+    );
+    assertNoGraphQLErrors(nullInput);
+    assert.deepEqual(
+      nullInput.data?.updateProfile.profile.tags.map(({ name }) => name).toSorted(),
+      ['Foo', 'Straße'],
+    );
+
+    const cleared = await requestGraphQL<{
+      updateProfile: { profile: { tags: Tag[] } };
+    }>(
+      `mutation ClearTags {
+        updateProfile(input: { tags: [] }) { profile { tags { id name } } }
+      }`,
+      {},
+      auth.token,
+    );
+    assertNoGraphQLErrors(cleared);
+    assert.deepEqual(cleared.data?.updateProfile.profile.tags, []);
+  });
+
+  test('canonical duplicate tags validation preserves existing scalar and tags', async () => {
+    const auth = await createAuthenticatedSession();
+    const existingTag = `existing_${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
+    const seeded = await requestGraphQL(
+      `mutation SeedProfile($tag: String!) {
+        updateProfile(input: { displayName: "Before", tags: [$tag] }) {
+          profile { displayName tags { id name } }
+        }
+      }`,
+      { tag: existingTag },
+      auth.token,
+    );
+    assertNoGraphQLErrors(seeded);
+
+    const invalid = await requestGraphQL(
+      `mutation RejectCanonicalDuplicateTags($tags: [String!]!) {
+        updateProfile(input: { displayName: "Should not commit", tags: $tags }) {
+          profile { displayName tags { id name } }
+        }
+      }`,
+      { tags: ['Foo', 'foo'] },
+      auth.token,
+    );
+
+    assert.equal(invalid.data, null);
+    assert.equal(invalid.errors?.[0]?.extensions?.code, 'VALIDATION');
+    assert.equal(invalid.errors?.[0]?.extensions?.field, 'tags.1');
+
+    const persisted = await db
+      .select({ displayName: Profiles.displayName })
+      .from(Profiles)
+      .where(eq(Profiles.id, auth.profile.id))
+      .then(firstOrThrow);
+    assert.equal(persisted.displayName, 'Before');
+    assert.deepEqual(await readProfileTags(auth.profile.id), [existingTag]);
+  });
+
+  test('returns empty tags for a Remote Profile without fetching remote metadata', async () => {
+    const remoteInstance = await createRemoteInstance({ domain: 'tagged.remote.example' });
+    const remote = await createProfile({ handle: 'tagged-remote', instanceId: remoteInstance.id });
+    const hashtag = await db
+      .insert(Hashtags)
+      .values({ name: `remote_${crypto.randomUUID().replaceAll('-', '_')}`, displayName: 'Remote' })
+      .returning()
+      .then(firstOrThrow);
+    await db.insert(ProfileHashtags).values({
+      hashtagId: hashtag.id,
+      profileId: remote.id,
+    });
+
+    const result = await requestGraphQL<{
+      profileByHandle: { tags: Array<{ id: string; name: string }> } | null;
+    }>(
+      `query RemoteProfileTags($handle: String!) {
+        profileByHandle(handle: $handle) { tags { id name } }
+      }`,
+      { handle: `tagged-remote@${remoteInstance.domain}` },
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.profileByHandle?.tags, []);
+  });
+
+  test('batches unordered Profile tag reads in one relation query', async () => {
+    const first = await createProfile({ handle: 'tag-batch-first', instanceId: localInstanceId });
+    const second = await createProfile({ handle: 'tag-batch-second', instanceId: localInstanceId });
+    const hashtags = await db
+      .insert(Hashtags)
+      .values([
+        {
+          name: `batch_first_one_${crypto.randomUUID().replaceAll('-', '_')}`,
+          displayName: 'FirstOne',
+        },
+        {
+          name: `batch_first_two_${crypto.randomUUID().replaceAll('-', '_')}`,
+          displayName: 'FirstTwo',
+        },
+        {
+          name: `batch_second_one_${crypto.randomUUID().replaceAll('-', '_')}`,
+          displayName: 'SecondOne',
+        },
+      ])
+      .returning();
+    await db.insert(ProfileHashtags).values([
+      { hashtagId: hashtags[1]!.id, profileId: first.id },
+      { hashtagId: hashtags[0]!.id, profileId: first.id },
+      { hashtagId: hashtags[2]!.id, profileId: second.id },
+    ]);
+
+    const previousDebug = pg.options.debug;
+    const profileHashtagQueries: string[] = [];
+    pg.options.debug = (connection, query, parameters, paramTypes) => {
+      if (typeof previousDebug === 'function') {
+        previousDebug(connection, query, parameters, paramTypes);
+      }
+      if (query.toLowerCase().includes('profile_hashtag')) {
+        profileHashtagQueries.push(query);
+      }
+    };
+
+    try {
+      const result = await requestGraphQL<{
+        nodes: Array<{ id: string; tags: Array<{ id: string; name: string }> } | null>;
+      }>(
+        `query BatchProfileTags($ids: [ID!]!) {
+          nodes(ids: $ids) {
+            ... on Profile { id tags { id name } }
+          }
+        }`,
+        {
+          ids: [globalId('Profile', first.id), globalId('Profile', second.id)],
+        },
+      );
+
+      assertNoGraphQLErrors(result);
+      assert.equal(result.data?.nodes[0]?.id, globalId('Profile', first.id));
+      assert.deepEqual(result.data?.nodes[0]?.tags.map(({ name }) => name).toSorted(), [
+        'FirstOne',
+        'FirstTwo',
+      ]);
+      assert.deepEqual(result.data?.nodes[1], {
+        id: globalId('Profile', second.id),
+        tags: [{ id: globalId('Hashtag', hashtags[2]!.id), name: 'SecondOne' }],
+      });
+      assert.equal(profileHashtagQueries.length, 1);
+    } finally {
+      pg.options.debug = previousDebug;
+    }
   });
 
   test('rejects a Member updating a Profile', async () => {
@@ -723,17 +945,94 @@ describe('GraphQL remote profile boundary', () => {
       );
 
     const result = await requestGraphQL(
-      `mutation UpdateMemberProfile($id: ID!) {
-        updateProfile(input: { id: $id, displayName: "Member Update" }) {
+      `mutation UpdateMemberProfile {
+        updateProfile(input: { displayName: "Member Update" }) {
           profile { id }
         }
       }`,
-      { id: globalId('Profile', auth.profile.id) },
+      {},
       auth.token,
     );
 
     assertGraphQLErrorCode(result, 'PERMISSION_DENIED');
     assert.equal(result.errors?.[0]?.message, 'Profile owner permission is required');
+  });
+
+  test('rejects Profile update without a selected Profile or with a Deactivated selection', async () => {
+    const auth = await createAuthenticatedSession();
+    const update = () =>
+      requestGraphQL(
+        `mutation UpdateUnavailableSelectedProfile {
+          updateProfile(input: { displayName: "Blocked Update", tags: ["blocked"] }) {
+            profile { id }
+          }
+        }`,
+        {},
+        auth.token,
+      );
+
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: null })
+      .where(eq(Sessions.id, auth.session.id));
+    const withoutSelection = await update();
+    assertGraphQLErrorCode(withoutSelection, 'PERMISSION_DENIED');
+
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, auth.profile.id));
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: auth.profile.id })
+      .where(eq(Sessions.id, auth.session.id));
+    const deactivated = await update();
+    assertGraphQLErrorCode(deactivated, 'PERMISSION_DENIED');
+
+    const persisted = await db
+      .select({ displayName: Profiles.displayName })
+      .from(Profiles)
+      .where(eq(Profiles.id, auth.profile.id))
+      .then(firstOrThrow);
+    assert.equal(persisted.displayName, auth.profile.displayName);
+    assert.deepEqual(await readProfileTags(auth.profile.id), []);
+  });
+
+  test('rejects a selected Remote Profile update', async () => {
+    const auth = await createAuthenticatedSession();
+    const remoteInstance = await createRemoteInstance({ domain: 'selected-update.remote.example' });
+    const remote = await createProfile({
+      handle: 'selected-update-remote',
+      instanceId: remoteInstance.id,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: remote.id,
+      role: AccountProfileRole.OWNER,
+    });
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: remote.id })
+      .where(eq(Sessions.id, auth.session.id));
+
+    const result = await requestGraphQL(
+      `mutation UpdateSelectedRemoteProfile {
+        updateProfile(input: { displayName: "Blocked Remote Update", tags: ["blocked"] }) {
+          profile { id }
+        }
+      }`,
+      {},
+      auth.token,
+    );
+
+    assertGraphQLErrorCode(result, 'NOT_FOUND');
+    const persisted = await db
+      .select({ displayName: Profiles.displayName })
+      .from(Profiles)
+      .where(eq(Profiles.id, remote.id))
+      .then(firstOrThrow);
+    assert.equal(persisted.displayName, remote.displayName);
+    assert.deepEqual(await readProfileTags(remote.id), []);
   });
 
   test('restores an active profile from another local instance in the session context', async () => {
@@ -2421,7 +2720,7 @@ describe('GraphQL remote profile boundary', () => {
 });
 
 type GraphQLErrorResult = {
-  extensions?: { code?: string };
+  extensions?: { code?: string; field?: string };
   message: string;
 };
 
@@ -2840,6 +3139,14 @@ const countRows = async (
     .from(table)
     .then(firstOrThrow)
     .then((row) => row.value);
+
+const readProfileTags = async (profileId: string) =>
+  db
+    .select({ name: Hashtags.name })
+    .from(ProfileHashtags)
+    .innerJoin(Hashtags, eq(Hashtags.id, ProfileHashtags.hashtagId))
+    .where(eq(ProfileHashtags.profileId, profileId))
+    .then((rows) => rows.map(({ name }) => name).sort());
 
 const resetFixtures = async () => {
   await db.update(Posts).set({ currentContentId: null });
