@@ -110,7 +110,7 @@ export function FeedbackForm() {
                       (index + direction + feedbackOptions.length) % feedbackOptions.length;
                     const nextOption = feedbackOptions[nextIndex];
                     selectKind(nextOption.value);
-                    requestAnimationFrame(() => radioRefs.current[nextIndex]?.focus?.());
+                    radioRefs.current[nextIndex]?.focus?.();
                   },
                 }
               : {};
