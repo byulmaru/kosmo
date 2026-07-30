@@ -96,7 +96,7 @@ PROD-461은 PROD-554, PROD-553, PROD-559와 PROD-581을 하나의 “이미지�
   HTML `<img>` 중복으로 보완하지 않는다.
 - [실패·제거가 orphan Media를 남김] → item 상태와 제외 범위를 명시하고 cleanup을 선제 구현하지 않는다.
 - [앱과 backend의 순차 rollout] → backend schema/core/API를 먼저 배포하고 구버전 앱의 omitted input을 유지한다.
-- [저장된 public original URL 정책 변화] → Kosmo는 provider URL을 조립하지 않고 완료 응답을 저장한다. URL
+- [저장된 공개 URL 정책 변화] → Kosmo는 provider URL을 조립하지 않고 완료 응답을 저장한다. URL
   교체 lifecycle은 별도 계약으로 다루며 raw storage reference는 protocol output에 노출하지 않는다.
 
 ## Migration Plan

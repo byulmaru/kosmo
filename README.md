@@ -21,7 +21,7 @@ or `node scripts/vault-run.mjs --secret-path secret/kubernetes/kosmo/dev -- <com
 to point at another path.
 
 The API uses `MEDIA_STORAGE_SERVICE_ORIGIN` and `MEDIA_STORAGE_SERVICE_API_KEY`
-to issue browser upload URLs and persist the completed original representation
+to issue browser upload URLs and persist the completed public representation
 reported by Media Storage Service. These are server-only values loaded through
 the same Vault environment and must not be exposed to the browser bundle.
 

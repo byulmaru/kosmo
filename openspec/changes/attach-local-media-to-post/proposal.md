@@ -50,6 +50,6 @@ Local Media 업로드 시작·완료로 Ready Media를 만들 수 있지만 새 
 - Core: PostContent V1 schema·canonicalization·Plain Text projection과 `createPost` Media 검증
 - API: Media item을 받는 `CreatePostInput`, PostContent document global ID projection과 권한 오류
 - App: `expo-image-picker`, 항목별 direct upload state, preview·Alt Text·Sensitive Media UI와 Relay mutation
-- Fedify: Local Note HTML/attachment/sensitive projection과 Media Storage public original URL
+- Fedify: Local Note HTML/attachment/sensitive projection과 Media Storage가 반환한 공개 URL
 - Storage: 기존 `media.document` JSONB를 additive하게 사용하고 `media` table에 Uploading state를 지원하는
   nullable URL·Media Type column을 추가한다.
