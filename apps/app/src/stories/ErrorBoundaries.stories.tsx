@@ -8,8 +8,10 @@ import { RouteBoundary } from '@/components/RouteBoundary';
 import { UnexpectedErrorScreen } from '@/components/UnexpectedErrorScreen';
 import { StructuredClientError } from '@/observability/client-error';
 import { SessionFailOpenBoundary } from '@/session/SessionProvider';
+import { RouterMockProvider } from '../../.storybook/mocks/expo-router';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ErrorInfo } from 'react';
+import type { Href } from '../../.storybook/mocks/expo-router';
 
 const storyGlobal = globalThis as unknown as {
   process?: { env: Record<string, string | undefined> };
@@ -168,11 +170,17 @@ function ProductionRouteFailure() {
   );
 }
 
-function ProductionAppProvidersHarness() {
+function ProductionAppProvidersHarness({
+  onNavigate,
+}: {
+  onNavigate: (action: 'push' | 'replace', href: Href) => void;
+}) {
   return (
-    <AppProviders>
-      <ProductionRouteFailure />
-    </AppProviders>
+    <RouterMockProvider onNavigate={onNavigate} pathname="/settings">
+      <AppProviders>
+        <ProductionRouteFailure />
+      </AppProviders>
+    </RouterMockProvider>
   );
 }
 
@@ -332,10 +340,11 @@ export const SessionFailOpenAndResetKey: Story = {
   },
 };
 
+const productionNavigation = fn();
+
 export const ProductionAppProvidersSafeNavigation: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
-  parameters: { router: { pathname: '/settings' } },
-  render: () => <ProductionAppProvidersHarness />,
+  render: () => <ProductionAppProvidersHarness onNavigate={productionNavigation} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.findByText('문제가 발생했어요')).resolves.toBeVisible();
@@ -343,6 +352,8 @@ export const ProductionAppProvidersSafeNavigation: Story = {
 
     await expect(canvas.findByText('/')).resolves.toBeVisible();
     expect(canvas.queryByText('문제가 발생했어요')).not.toBeInTheDocument();
+    expect(productionNavigation).toHaveBeenCalledTimes(1);
+    expect(productionNavigation).toHaveBeenCalledWith('replace', '/');
   },
 };
 

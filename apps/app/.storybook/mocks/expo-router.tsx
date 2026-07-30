@@ -15,6 +15,8 @@ export type Href = string | { params?: Record<string, string | undefined>; pathn
 type RouterContextValue = {
   params: Record<string, string | undefined>;
   pathname: string;
+  push: (href: Href) => void;
+  replace: (href: Href) => void;
   setPathname: (href: Href) => void;
   slotLabel: string;
 };
@@ -22,6 +24,8 @@ type RouterContextValue = {
 const RouterContext = createContext<RouterContextValue>({
   params: {},
   pathname: '/home',
+  push: () => undefined,
+  replace: () => undefined,
   setPathname: () => undefined,
   slotLabel: '현재 라우트 콘텐츠',
 });
@@ -30,18 +34,28 @@ export function RouterMockProvider({
   children,
   params = {},
   pathname: initialPathname = '/home',
+  onNavigate,
   slotLabel = '현재 라우트 콘텐츠',
 }: PropsWithChildren<{
   params?: Record<string, string | undefined>;
   pathname?: string;
+  onNavigate?: (action: 'push' | 'replace', href: Href) => void;
   slotLabel?: string;
 }>) {
   const [pathname, setCurrentPathname] = useState(initialPathname);
   const setPathname = (href: Href) =>
     setCurrentPathname(typeof href === 'string' ? href : href.pathname);
+  const push = (href: Href) => {
+    onNavigate?.('push', href);
+    setPathname(href);
+  };
+  const replace = (href: Href) => {
+    onNavigate?.('replace', href);
+    setPathname(href);
+  };
   const value = useMemo(
-    () => ({ params, pathname, setPathname, slotLabel }),
-    [params, pathname, slotLabel],
+    () => ({ params, pathname, push, replace, setPathname, slotLabel }),
+    [params, pathname, push, replace, setPathname, slotLabel],
   );
 
   return <RouterContext.Provider value={value}>{children}</RouterContext.Provider>;
@@ -60,14 +74,14 @@ export function useGlobalSearchParams<T extends Record<string, string | undefine
 }
 
 export function useRouter() {
-  const { setPathname } = useContext(RouterContext);
+  const { push, replace } = useContext(RouterContext);
   return useMemo(
     () => ({
       back: () => undefined,
-      push: setPathname,
-      replace: setPathname,
+      push,
+      replace,
     }),
-    [setPathname],
+    [push, replace],
   );
 }
 
@@ -76,7 +90,7 @@ export function Link({
   children,
   href,
 }: PropsWithChildren<{ asChild?: boolean; href: Href }>) {
-  const { setPathname } = useContext(RouterContext);
+  const { push } = useContext(RouterContext);
   if (
     !asChild ||
     !isValidElement<{
@@ -92,7 +106,7 @@ export function Link({
     onPress: (event: { preventDefault?: () => void }) => {
       event.preventDefault?.();
       children.props.onPress?.(event);
-      setPathname(href);
+      push(href);
     },
   });
 }
