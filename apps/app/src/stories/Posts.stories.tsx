@@ -1857,6 +1857,9 @@ export const ReplyThreadPresentation: Story = {
       'post-thread-item-thread-sibling',
       'post-thread-item-thread-reply-quote',
     ]);
+    const approvedDividerColumnLeft = canvas
+      .getByText('지금 보고 있는 Reply입니다.')
+      .getBoundingClientRect().left;
     expect(canvas.queryAllByTestId(/^post-thread-divider-/)).toHaveLength(rows.length - 1);
     rows.forEach((row, index) => {
       const dividers = within(row).queryAllByTestId(/^post-thread-divider-/);
@@ -1872,6 +1875,7 @@ export const ReplyThreadPresentation: Story = {
       const rowBounds = row.getBoundingClientRect();
       expect(dividerBounds.height).toBeCloseTo(1, 0);
       expect(dividerBounds.left - rowBounds.left).toBeCloseTo(64, 0);
+      expect(dividerBounds.left).toBeCloseTo(approvedDividerColumnLeft, 0);
       expect(rowBounds.right - dividerBounds.right).toBeCloseTo(8, 0);
       for (const connector of within(row).queryAllByTestId(/^post-thread-connector-/)) {
         expect(connector.getBoundingClientRect().right).toBeLessThan(dividerBounds.left);
