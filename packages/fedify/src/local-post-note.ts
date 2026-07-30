@@ -132,8 +132,8 @@ const projectLocalMediaAttachments = async (
   const rows = await db
     .select({
       id: Media.id,
-      originalMediaType: Media.originalMediaType,
-      originalUrl: Media.originalUrl,
+      mediaType: Media.mediaType,
+      url: Media.url,
     })
     .from(Media)
     .where(
@@ -151,12 +151,12 @@ const projectLocalMediaAttachments = async (
   const attachments: Image[] = [];
   for (const node of mediaNodes) {
     const media = mediaById.get(node.attrs.mediaId);
-    if (!media?.originalUrl || !media.originalMediaType) {
+    if (!media?.url || !media.mediaType) {
       return null;
     }
     let url: URL;
     try {
-      url = new URL(media.originalUrl);
+      url = new URL(media.url);
     } catch {
       return null;
     }
@@ -165,7 +165,7 @@ const projectLocalMediaAttachments = async (
     }
     attachments.push(
       new Image({
-        mediaType: media.originalMediaType,
+        mediaType: media.mediaType,
         ...(node.attrs.altText !== null ? { name: node.attrs.altText } : {}),
         url,
       }),

@@ -634,8 +634,8 @@ const createPost = async (
 const createMedia = async (
   profileId: string,
   storageReference: string,
-  originalUrl: string,
-  originalMediaType: string,
+  url: string,
+  mediaType: string,
 ) => {
   const account = await db
     .insert(Accounts)
@@ -651,8 +651,8 @@ const createMedia = async (
     .insert(Media)
     .values({
       accountId: account.id,
-      originalMediaType,
-      originalUrl,
+      mediaType,
+      url,
       profileId,
       readyAt: Temporal.Now.instant(),
       source: MediaSource.LOCAL,

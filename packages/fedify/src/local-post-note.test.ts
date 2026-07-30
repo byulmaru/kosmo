@@ -206,12 +206,12 @@ describe('ActivityPub Local Post Note', () => {
   test('projects stored ordered Ready Local Media as Image attachments without HTML duplication or network reads', async () => {
     const author = await createProfile({ handle: 'media-author', kind: InstanceKind.LOCAL });
     const firstMedia = await createMedia(author.id, {
-      originalMediaType: 'image/avif',
-      originalUrl: 'https://cdn.example/media/first',
+      mediaType: 'image/avif',
+      url: 'https://cdn.example/media/first',
       storageReference: 'provider-opaque-reference-1',
     });
     const secondMedia = await createMedia(author.id, {
-      originalUrl: 'https://cdn.example/media/second',
+      url: 'https://cdn.example/media/second',
       storageReference: 'provider/opaque?reference=2',
     });
     const networkRead = mock.method(globalThis, 'fetch', async () => {
@@ -255,12 +255,12 @@ describe('ActivityPub Local Post Note', () => {
     const uploading = await createMedia(author.id, { state: MediaState.UPLOADING });
     const remote = await createMedia(author.id, { source: MediaSource.REMOTE });
     const unavailable = await createMedia(author.id, {
-      originalMediaType: null,
-      originalUrl: null,
+      mediaType: null,
+      url: null,
       storageReference: 'provider-opaque-reference',
     });
-    const malformed = await createMedia(author.id, { originalUrl: 'not-a-url' });
-    const nonHttp = await createMedia(author.id, { originalUrl: 'data:image/png;base64,AA==' });
+    const malformed = await createMedia(author.id, { url: 'not-a-url' });
+    const nonHttp = await createMedia(author.id, { url: 'data:image/png;base64,AA==' });
     const missingId = crypto.randomUUID();
     const networkRead = mock.method(globalThis, 'fetch', async () => {
       throw new Error('Unavailable stored metadata must not trigger a network read');
@@ -588,15 +588,13 @@ const createMedia = async (
     source = MediaSource.LOCAL,
     state = MediaState.READY,
     storageReference = `u_${crypto.randomUUID()}`,
-    originalMediaType = source === MediaSource.LOCAL && state === MediaState.READY
-      ? 'image/webp'
-      : null,
-    originalUrl = source === MediaSource.LOCAL && state === MediaState.READY
+    mediaType = source === MediaSource.LOCAL && state === MediaState.READY ? 'image/webp' : null,
+    url = source === MediaSource.LOCAL && state === MediaState.READY
       ? `https://cdn.example/media/${encodeURIComponent(storageReference)}`
       : null,
   }: {
-    originalMediaType?: string | null;
-    originalUrl?: string | null;
+    mediaType?: string | null;
+    url?: string | null;
     source?: (typeof MediaSource)[keyof typeof MediaSource];
     state?: (typeof MediaState)[keyof typeof MediaState];
     storageReference?: string;
@@ -616,8 +614,8 @@ const createMedia = async (
     .insert(Media)
     .values({
       accountId: account.id,
-      originalMediaType,
-      originalUrl,
+      mediaType,
+      url,
       profileId,
       readyAt: state === MediaState.READY ? Temporal.Now.instant() : null,
       source,
