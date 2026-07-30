@@ -40,6 +40,9 @@ Media Storage Service의 opaque 저장 참조는 Local Media를 외부 저장 �
 참조 형식은 Media 속성이나 공개 identity가 아니며 Kosmo API consumer에게 노출하지 않는다.
 URL과 Media Type column은 Uploading Local Media에는 아직 값이 없으며, Ready 전환 시 두 값을 함께
 기록한다.
+Media Storage Service의 완료 응답은 공개 표현의 최종 권위다. Kosmo는 persistence에 필요한 필드의 존재와
+transport type만 확인하고, Media Type의 MIME 문법·지원 목록이나 URL이 가리키는 byte와의 일치 여부를 다시
+검증하지 않는다. 저장 서비스가 반환한 Media Type 문자열은 의미를 해석하거나 정규화하지 않고 저장한다.
 
 ## 관계
 
@@ -94,7 +97,9 @@ identity와 최초 Ready At을 반환한다.
 - 현재 Post Content의 Sensitive Media가 true면 그 revision이 참조하는 모든 Media 표시를 가린다.
 - avatar 표현은 400x400 crop, header 표현은 1500x500 crop을 기준으로 한다.
 - URL은 Ready 전환 때 저장한 persistence metadata다. 이를 API나 protocol에 노출하는 것은 위 조회 정책을
-  통과한 projection의 책임이며 URL 자체를 권한 증명으로 사용하지 않는다.
+  통과한 projection의 책임이다. ActivityPub attachment로 전달된 공개 URL은 URL을 받은 주체가 Kosmo viewer
+  인가를 다시 거치지 않고 조회·전달할 수 있으며 URL 자체를 Post Visibility를 강제하는 인증 경계로 사용하지
+  않는다. `FOLLOWERS`는 Note의 delivery와 역참조를 제한하지만 전달 뒤 이미지 byte의 재공유를 막지 않는다.
 
 ## 확정 용어
 
@@ -111,7 +116,7 @@ identity와 최초 Ready At을 반환한다.
 - Media Proxy 조회는 Mutation이 아니므로 행동에서 제외한다.
 - Media Storage Service의 endpoint, 저장 참조 형식, URL 조립 규칙, 구체 이미지 형식과 제한, 저장 위치와 cache
   정책은 도메인 계약으로 고정하지 않는다. Kosmo는 완료 응답의 URL과 media type을 그대로 저장한다.
-- 구체 MIME type 목록, Hash, EXIF, dedupe, 이미지 변환 실패 삭제 정책, 바이러스 스캔과 성인물 탐지는
-  구현/OpenSpec에서 다룬다.
+- 구체 MIME type 목록과 문법, byte와 Media Type의 일치, Hash, EXIF, dedupe, 이미지 변환 실패 삭제 정책,
+  바이러스 스캔과 성인물 탐지는 Media Storage Service가 소유하며 Kosmo에서 중복 검증하지 않는다.
 - Remote Media의 Media Storage Service 저장 projection은 실제 Remote Media 저장 구현에서 정밀화한다.
 - Remote 원본의 Alt Text 수집·보존과 Post Content로의 투영은 Remote Media 구현에서 정밀화한다.

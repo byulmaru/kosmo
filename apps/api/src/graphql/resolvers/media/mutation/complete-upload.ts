@@ -7,7 +7,7 @@ import { builder } from '@/graphql/builder';
 import { MediaObject } from '../ref';
 
 const representationResponseSchema = z.object({
-  mediaType: z.string().trim().min(1),
+  mediaType: z.string().min(1),
   url: z.httpUrl(),
 });
 
