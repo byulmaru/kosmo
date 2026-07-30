@@ -362,6 +362,22 @@ export const Profiles = pgTable(
   (table) => [unique().on(table.instanceId, table.normalizedHandle)],
 );
 
+export const ProfileMedia = pgTable(
+  'profile_media',
+  {
+    id: id(),
+    profileId: uuid('profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    mediaId: uuid('media_id')
+      .notNull()
+      .references(() => Media.id, { onDelete: 'cascade' }),
+    kind: Enum.profileMediaKind('kind').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [unique().on(table.profileId, table.kind), index().on(table.mediaId)],
+);
+
 export const ProfileFollows = pgTable(
   'profile_follow',
   {

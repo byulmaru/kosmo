@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import {
   AccountProfiles,
   Accounts,
@@ -8,8 +8,10 @@ import {
   firstOrThrow,
   Hashtags,
   Instances,
+  Media,
   pg,
   ProfileHashtags,
+  ProfileMedia,
   Profiles,
 } from '../db';
 import {
@@ -17,7 +19,10 @@ import {
   AccountState,
   InstanceKind,
   InstanceState,
+  MediaSource,
+  MediaState,
   ProfileFollowPolicy,
+  ProfileMediaKind,
   ProfileState,
 } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
@@ -81,6 +86,55 @@ const readTags = async (profileId: string) =>
 
 const readHashtag = async (name: string) =>
   db.select().from(Hashtags).where(eq(Hashtags.name, name)).then(firstOrThrow);
+
+const createReadyMedia = (accountId: string, profileId: string) =>
+  db
+    .insert(Media)
+    .values({
+      accountId,
+      profileId,
+      readyAt: Temporal.Now.instant(),
+      source: MediaSource.LOCAL,
+      state: MediaState.READY,
+      storageReference: `u_${crypto.randomUUID()}`,
+      uploadExpiresAt: Temporal.Now.instant().add({ minutes: 5 }),
+    })
+    .returning()
+    .then(firstOrThrow);
+
+test('Profile Media 관계는 kind별 하나만 허용하고 관계 삭제 시 Media를 보존한다', async () => {
+  const { account, profile } = await createProfileFixture();
+  const media = await createReadyMedia(account.id, profile.id);
+  const otherMedia = await createReadyMedia(account.id, profile.id);
+
+  await db.insert(ProfileMedia).values([
+    { kind: ProfileMediaKind.AVATAR, mediaId: media.id, profileId: profile.id },
+    { kind: ProfileMediaKind.HEADER, mediaId: media.id, profileId: profile.id },
+  ]);
+
+  await assert.rejects(
+    db.insert(ProfileMedia).values({
+      kind: ProfileMediaKind.AVATAR,
+      mediaId: otherMedia.id,
+      profileId: profile.id,
+    }),
+  );
+
+  await db
+    .delete(ProfileMedia)
+    .where(
+      and(eq(ProfileMedia.profileId, profile.id), eq(ProfileMedia.kind, ProfileMediaKind.AVATAR)),
+    );
+
+  assert.equal(
+    await db
+      .select()
+      .from(Media)
+      .where(inArray(Media.id, [media.id, otherMedia.id]))
+      .then((rows) => rows.length),
+    2,
+  );
+});
 
 test('Owner는 scalar와 정규화된 tags를 하나의 update로 저장한다', async () => {
   const { account, profile } = await createProfileFixture();
