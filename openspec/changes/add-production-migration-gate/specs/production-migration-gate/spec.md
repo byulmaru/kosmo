@@ -37,13 +37,13 @@
 #### Scenario: Expand 또는 transition release
 
 - **WHEN** 승인된 release가 `expand` 또는 `transition` phase를 선언한다
-- **THEN** gate는 contract 전용 승인과 destructive evidence gate를 요구하지 않는다
+- **THEN** gate는 contract 전용 destructive evidence gate를 요구하지 않는다
 - **AND** release image에는 현재 phase에서 실행 가능한 migration만 포함되어야 한다
 
 #### Scenario: Contract release
 
 - **WHEN** 승인된 release가 `contract` phase를 선언한다
-- **THEN** gate는 backup/restore evidence, workload compatibility, rollback window 종료와 contract 전용 승인을 모두 통과한 뒤에만 migration을 실행할 수 있다
+- **THEN** gate는 backup/restore evidence, workload compatibility와 rollback window 종료를 모두 통과한 뒤에만 migration을 실행할 수 있다
 
 #### Scenario: Phase가 없는 release
 
@@ -63,7 +63,7 @@
 
 - **WHEN** contract의 다른 자동 조건이 충족돼 migration 실행을 준비한다
 - **THEN** gate는 production database에 고유한 named restore point를 생성한다
-- **AND** 해당 restore point를 포함하는 target WAL이 backup 저장소에 archive됐음을 확인한 뒤에만 contract 승인을 진행한다
+- **AND** 해당 restore point를 포함하는 target WAL이 backup 저장소에 archive됐음을 확인한 뒤에만 migration을 실행한다
 
 #### Scenario: Recovery chain이 유효하지 않음
 
@@ -100,19 +100,21 @@
 - **WHEN** 현재 시각이 schema-change authority가 승인한 rollback window 종료 시각보다 이르다
 - **THEN** gate는 contract migration을 차단한다
 
-### Requirement: Contract 전용 승인
+### Requirement: Production release 단일 승인
 
-**Authority / Provenance:** `PROD-564`, `PROD-269`. Contract migration은 일반 production release 승인과 분리된 보호된 승인 경계를 통과해야 한다(MUST). Expand 또는 transition 실행에 contract 승인을 재사용해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `PROD-563`, `PROD-564`. 정식 production release 승인은 선택한 immutable image에 포함된 migration과 API/Web workload 전체에 한 번 적용되어야 한다(MUST). Contract migration만을 위한 별도 Environment, approval workflow 또는 수동 승인 입력을 추가해서는 안 된다(MUST NOT).
 
-#### Scenario: Contract 승인 완료
+#### Scenario: 승인된 production release의 contract migration
 
-- **WHEN** 모든 자동 gate가 성공하고 contract 전용 승인자가 해당 evidence와 release identity를 승인한다
-- **THEN** 같은 승인 context에서 contract migration Job을 시작할 수 있다
+- **WHEN** production 배포가 승인된 immutable release가 contract phase이고 모든 자동 gate가 성공한다
+- **THEN** 같은 release 승인 안에서 contract migration Job을 시작할 수 있다
+- **AND** migration 성공 뒤에만 같은 release의 API와 Web을 활성화한다
 
-#### Scenario: Contract 승인 없음
+#### Scenario: 중복 contract 승인 금지
 
-- **WHEN** 자동 gate가 성공했지만 contract 전용 승인이 완료되지 않았다
-- **THEN** contract migration Job은 시작되지 않는다
+- **WHEN** production release가 이미 승인됐고 contract 자동 gate를 실행한다
+- **THEN** system은 contract 전용 추가 승인을 기다리지 않는다
+- **AND** 별도 approval 결과를 recovery 또는 compatibility evidence로 취급하지 않는다
 
 ### Requirement: Migration 실패 시 workload 활성화 차단
 

@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
@@ -202,9 +201,6 @@ export function validateMigrationGate(context, options = {}) {
     const now = options.now instanceof Date ? options.now.getTime() : Date.now();
     const restorePointCreatedAt = assertRecoveryEvidence(context.contract, now);
     assertWorkloadCompatibility(context.contract, now, restorePointCreatedAt);
-    if (options.requireContractApproval !== false && options.contractApproved !== true) {
-      throw new MigrationGateError('protected contract approval is required');
-    }
   }
 
   return {
@@ -255,32 +251,14 @@ async function main(argv) {
       'usage: production-migration-gate.mjs preflight <context.json> | complete <context.json> <result.json>',
     );
   }
-  const contextSource = await readFile(contextPath, 'utf8');
-  const context = JSON.parse(contextSource);
-  let contractApproved = process.env.PRODUCTION_CONTRACT_APPROVED === 'true';
-  if (command === 'complete' && context.phase === 'contract') {
-    const expectedContextSha256 = requireString(
-      process.env.APPROVED_CONTRACT_CONTEXT_SHA256,
-      'APPROVED_CONTRACT_CONTEXT_SHA256',
-    );
-    const actualContextSha256 = createHash('sha256').update(contextSource).digest('hex');
-    if (actualContextSha256 !== expectedContextSha256) {
-      throw new MigrationGateError('contract context does not match the protected approval');
-    }
-    contractApproved = true;
-  }
-  const options = {
-    contractApproved,
-    requireContractApproval: process.env.PRODUCTION_CONTRACT_PREFLIGHT !== 'true',
-  };
+  const context = JSON.parse(await readFile(contextPath, 'utf8'));
   const result =
     command === 'complete'
       ? validateMigrationCompletion(
           context,
           JSON.parse(await readFile(requireString(resultPath, 'result path'), 'utf8')),
-          options,
         )
-      : validateMigrationGate(context, options);
+      : validateMigrationGate(context);
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 

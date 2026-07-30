@@ -7,7 +7,8 @@ Production migration은 API/Web과 같은 immutable image digest를 사용하지
 - PROD-562는 production migration 전용 database identity와 Kubernetes Secret을 준비한다.
 - PROD-564의 Helm Job은 그 Secret의 `url` key만 `DATABASE_URL`로 읽는다. Secret이 없으면 Job 생성이 실패하며 runtime database credential로 fallback하지 않는다.
 - API/Web의 일반 runtime Secret을 migration용으로 복제하지 않고 migration Job에도 노출하지 않는다.
-- PROD-563은 release pipeline에서 이 gate를 호출하고 migration 성공 전에는 API/Web을 활성화하지 않는다.
+- PROD-563은 정식 SemVer release의 migration/API/Web 전체를 production 배포로 한 번 승인하고, 그 release pipeline에서 이 gate를 호출한다.
+- Contract migration만을 위한 별도 Environment나 추가 승인은 사용하지 않으며 migration 성공 전에는 API/Web을 활성화하지 않는다.
 - PROD-565는 실제 첫 production release와 public smoke를 검증한다.
 
 Migration database identity에는 schema migration에 필요한 권한과 contract restore point 생성을 위한 `pg_checkpoint` role만 부여한다. API/Web database identity에는 DDL 또는 `pg_checkpoint` 권한을 부여하지 않는다.
@@ -51,11 +52,8 @@ Production pipeline은 운영자가 작성한 workload 목록을 그대로 신�
 2. Migration image에서 `contract-restore-point`를 migration Secret으로 실행한다.
 3. Command가 `targetWal`과 같거나 이후인 `archivedThroughWal`을 반환할 때까지 기다린다.
 4. 결과를 contract context에 넣고 live workload를 다시 조회한 뒤 자동 gate를 실행한다. Workload observation이 restore point보다 오래되면 gate가 거부한다.
-5. `.github/workflows/production-contract-approval.yml`을 호출한다.
-6. Workflow가 `production-contract` Environment에 required reviewer가 실제로 설정되고 administrator bypass가 금지됐는지 확인한다.
-7. Reviewer는 exact context SHA-256을 승인한다. 승인 후 같은 JSON을 재검증해 반환한 SHA-256이 달라지면 중단한다.
-8. PROD-563 pipeline이 같은 digest의 migration Job을 실행하고 성공을 기다린다.
-9. 성공 결과에 대해서만 `complete`를 실행하고 `workloadActivationAllowed: true`를 후속 활성화 조건으로 사용한다.
+5. 자동 gate가 성공하면 PROD-563 pipeline이 이미 승인된 같은 digest의 migration Job을 실행하고 성공을 기다린다.
+6. 성공 결과에 대해서만 `complete`를 실행하고 `workloadActivationAllowed: true`를 후속 활성화 조건으로 사용한다.
 
 Restore point command는 WAL 전환을 강제하지 않는다. 실제 workload 또는 `archive_timeout`으로 target segment가 archive될 때까지 기본 10분 동안 기다린다.
 
@@ -82,13 +80,12 @@ Migration 완료 후 pipeline은 다음 형태의 비민감 결과를 기록한�
 ```
 
 ```sh
-APPROVED_CONTRACT_CONTEXT_SHA256="PROTECTED_WORKFLOW_OUTPUT" \
-  node scripts/production-migration-gate.mjs complete \
+node scripts/production-migration-gate.mjs complete \
   /path/to/gate-context.json \
   /path/to/migration-result.json
 ```
 
-`APPROVED_CONTRACT_CONTEXT_SHA256`는 `production-contract` protected workflow의 `approved-context-sha256` output만 사용한다. Contract context 파일의 byte가 하나라도 달라지면 completion gate가 실패한다. Expand/transition에는 이 output이 필요하지 않다.
+Production 승인 자체는 PROD-563 workflow의 배포 경계에서 수행한다. 이 command는 별도 approval token이나 boolean input을 받지 않고 같은 release identity, phase, schema authority와 migration 성공 여부만 검증한다.
 
 ## 실패와 복구
 
@@ -96,7 +93,7 @@ APPROVED_CONTRACT_CONTEXT_SHA256="PROTECTED_WORKFLOW_OUTPUT" \
 - Preflight 실패: migration Job을 시작하지 않는다. Live evidence를 새로 조회한 뒤 같은 digest로 재시도한다.
 - Advisory lock 실패: 다른 migration을 확인하고 종료된 뒤 같은 digest로 재시도한다.
 - SQL 또는 timeout 실패: API/Web 활성화를 중단한다. Drizzle history를 수동 성공 처리하지 않는다.
-- Contract approval 없음: migration을 시작하지 않는다. 일반 production approval을 대신 사용하지 않는다.
+- Production release 승인 없음: PROD-563 pipeline이 migration을 포함한 배포 전체를 시작하지 않는다. PROD-564는 별도 contract approval로 이를 우회하거나 중복하지 않는다.
 - 부분 적용: 자동 down migration이나 database rollback을 실행하지 않는다. 같은 digest 재시도, 새 forward migration, 또는 승인된 PITR restore 중 하나를 schema authority와 운영자가 선택한다.
 - Restore 선택: [Production PostgreSQL backup과 복구](./postgres-backup.md)의 격리 restore 절차로 먼저 복구 가능성을 확인하고 승인된 rollback window 안에서 실행한다.
 

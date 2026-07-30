@@ -1,11 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
 import {
   MigrationGateError,
   validateMigrationCompletion,
@@ -90,43 +84,27 @@ test('rejects missing authority, unknown phase, mutable images, and digest misma
   }
 });
 
-test('contract passes only with protected approval and complete evidence', () => {
-  assert.throws(
-    () => validateMigrationGate(contractContext(), { now }),
-    /protected contract approval is required/,
-  );
-  assert.equal(
-    validateMigrationGate(contractContext(), { now, contractApproved: true }).gatePassed,
-    true,
-  );
+test('contract passes with complete automatic evidence and no additional approval', () => {
+  assert.equal(validateMigrationGate(contractContext(), { now }).gatePassed, true);
 });
 
 test('contract rejects broken recovery and overdue rehearsal without a backup age threshold', () => {
   const brokenWal = contractContext();
   brokenWal.contract.recovery.walChain.continuous = false;
-  assert.throws(
-    () => validateMigrationGate(brokenWal, { now, contractApproved: true }),
-    /walChain is not continuous/,
-  );
+  assert.throws(() => validateMigrationGate(brokenWal, { now }), /walChain is not continuous/);
 
   const overdue = contractContext();
   overdue.contract.recovery.restoreRehearsal.overdue = true;
-  assert.throws(
-    () => validateMigrationGate(overdue, { now, contractApproved: true }),
-    /restoreRehearsal is overdue/,
-  );
+  assert.throws(() => validateMigrationGate(overdue, { now }), /restoreRehearsal is overdue/);
 
   const olderButRecoverable = contractContext();
   olderButRecoverable.contract.recovery.baseBackup.completedAt = '2026-07-23T00:00:00.000Z';
-  assert.equal(
-    validateMigrationGate(olderButRecoverable, { now, contractApproved: true }).gatePassed,
-    true,
-  );
+  assert.equal(validateMigrationGate(olderButRecoverable, { now }).gatePassed, true);
 
   const invalidRecoveryWindow = contractContext();
   invalidRecoveryWindow.contract.recovery.recoveryWindowStartsAt = '2026-07-22T23:59:59.000Z';
   assert.throws(
-    () => validateMigrationGate(invalidRecoveryWindow, { now, contractApproved: true }),
+    () => validateMigrationGate(invalidRecoveryWindow, { now }),
     /recoveryWindowStartsAt must be within 7 days/,
   );
 });
@@ -134,17 +112,14 @@ test('contract rejects broken recovery and overdue rehearsal without a backup ag
 test('contract rejects a restore point whose target WAL is not archived', () => {
   const context = contractContext();
   context.contract.recovery.restorePoint.archivedThroughWal = '000000010000000000000009';
-  assert.throws(
-    () => validateMigrationGate(context, { now, contractApproved: true }),
-    /target WAL has not been archived/,
-  );
+  assert.throws(() => validateMigrationGate(context, { now }), /target WAL has not been archived/);
 });
 
 test('contract rejects stale compatibility decisions against live workloads', () => {
   const incompatible = contractContext();
   incompatible.contract.workloadObservation.workloads[2].image = oldImage;
   assert.throws(
-    () => validateMigrationGate(incompatible, { now, contractApproved: true }),
+    () => validateMigrationGate(incompatible, { now }),
     (error) =>
       error instanceof MigrationGateError &&
       error.message === 'incompatible rollback workload: kosmo-api-rollback',
@@ -152,16 +127,13 @@ test('contract rejects stale compatibility decisions against live workloads', ()
 
   const openWindow = contractContext();
   openWindow.contract.rollbackWindowEndsAt = '2026-07-31T00:00:00.000Z';
-  assert.throws(
-    () => validateMigrationGate(openWindow, { now, contractApproved: true }),
-    /rollback window has not ended/,
-  );
+  assert.throws(() => validateMigrationGate(openWindow, { now }), /rollback window has not ended/);
 
   const observationBeforeRestorePoint = contractContext();
   observationBeforeRestorePoint.contract.workloadObservation.observedAt =
     '2026-07-29T23:57:59.000Z';
   assert.throws(
-    () => validateMigrationGate(observationBeforeRestorePoint, { now, contractApproved: true }),
+    () => validateMigrationGate(observationBeforeRestorePoint, { now }),
     /workload observation predates the restore point/,
   );
 });
@@ -187,58 +159,4 @@ test('workload activation is allowed only after the same migration succeeds', ()
   ]) {
     assert.throws(() => validateMigrationCompletion(context, invalidResult, { now }));
   }
-});
-
-test('contract completion is bound to the exact protected approval context', async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), 'kosmo-migration-gate-'));
-  t.after(() => rm(directory, { recursive: true }));
-  const contextPath = join(directory, 'context.json');
-  const resultPath = join(directory, 'result.json');
-  const currentTime = Date.now();
-  const context = contractContext();
-  context.contract.rollbackWindowEndsAt = new Date(currentTime - 24 * 60 * 60 * 1000).toISOString();
-  context.contract.recovery.recoveryWindowStartsAt = new Date(
-    currentTime - (7 * 24 * 60 * 60 * 1000 - 60 * 1000),
-  ).toISOString();
-  context.contract.recovery.baseBackup.completedAt = new Date(
-    currentTime - 6 * 24 * 60 * 60 * 1000,
-  ).toISOString();
-  context.contract.recovery.restorePoint.createdAt = new Date(
-    currentTime - 2 * 60 * 1000,
-  ).toISOString();
-  context.contract.workloadObservation.observedAt = new Date(currentTime - 60 * 1000).toISOString();
-  const contextSource = JSON.stringify(context);
-  await writeFile(contextPath, contextSource);
-  await writeFile(
-    resultPath,
-    JSON.stringify({
-      status: 'succeeded',
-      releaseImage: image,
-      phase: 'contract',
-      schemaAuthority: 'PROD-700',
-      databaseRollbackAttempted: false,
-    }),
-  );
-
-  const run = (approvedContextSha256) =>
-    spawnSync(
-      process.execPath,
-      [
-        fileURLToPath(new URL('./production-migration-gate.mjs', import.meta.url)),
-        'complete',
-        contextPath,
-        resultPath,
-      ],
-      {
-        encoding: 'utf8',
-        env: {
-          ...process.env,
-          APPROVED_CONTRACT_CONTEXT_SHA256: approvedContextSha256,
-        },
-      },
-    );
-
-  assert.notEqual(run('0'.repeat(64)).status, 0);
-  const contextSha256 = createHash('sha256').update(contextSource).digest('hex');
-  assert.equal(run(contextSha256).status, 0);
 });

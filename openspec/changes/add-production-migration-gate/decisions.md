@@ -47,7 +47,7 @@
 - Authority / Provenance: Linear `PROD-564`, `PROD-546`; repository operations `docs/operations/postgres-backup.md`
 - Status: Active
 - Context / Problem: 일일 base backup의 경과 시간은 recovery chain의 시작점과 RTO에는 영향을 줄 수 있지만, 연속 WAL이 존재하면 그 자체가 migration 직전 복구 가능성을 결정하지 않는다. 반대로 최근 base backup만 있어도 WAL chain이 끊겼다면 contract 직전으로 복구할 수 없다.
-- Decision Outcome: Contract gate는 recovery window 안의 성공한 base backup, 그 이후의 연속 WAL archive와 overdue가 아닌 월간 restore rehearsal evidence를 확인한다. Contract 실행 직전에는 고유한 named restore point를 만들고 해당 target WAL이 backup 저장소에 archive된 뒤에만 승인을 진행한다. 일일 base backup 지연은 이 recovery chain이 유효한 한 migration 차단 조건으로 중복하지 않는다.
+- Decision Outcome: Contract gate는 recovery window 안의 성공한 base backup, 그 이후의 연속 WAL archive와 overdue가 아닌 월간 restore rehearsal evidence를 확인한다. Contract 실행 직전에는 고유한 named restore point를 만들고 해당 target WAL이 backup 저장소에 archive된 뒤에만 migration을 실행한다. 일일 base backup 지연은 이 recovery chain이 유효한 한 migration 차단 조건으로 중복하지 않는다.
 - Alternatives Considered: 24시간에 고정 유예를 더한 backup age 기준은 backup 운영 이상과 migration 복구 가능성을 과도하게 결합해 제외했다. 매 contract마다 새 base backup 또는 restore rehearsal을 실행하는 방식은 연속 WAL과 월간 rehearsal을 중복하고 release latency를 크게 늘려 제외했다. Evidence 문자열 존재만 확인하는 방식은 실제 recovery chain을 증명하지 못해 제외했다.
 - Consequences: Gate는 backup 생성이나 restore rehearsal을 직접 실행하지 않지만, restore point 생성과 target WAL archive 확인이 끝날 때까지 contract를 기다린다. 일일 backup 누락은 PROD-546 운영 이상으로 별도 처리하며 recovery window, WAL 연속성 또는 RTO evidence를 깨뜨리면 결과적으로 contract도 차단된다.
 - Confirmation / Follow-up: Base backup age만 지난 유효 chain은 통과하고, missing base, 끊긴 WAL, overdue rehearsal과 restore point target WAL 미archive는 실패하는 fixture를 검증한다.
@@ -69,12 +69,24 @@
 - Decision Date: 2026-07-30
 - Decision Class: Implementation Choice
 - Authority / Provenance: Linear `PROD-564`, `PROD-269`
-- Status: Active
+- Status: Superseded
 - Context / Problem: 일반 production release 승인은 destructive schema contract의 backup, compatibility와 rollback 영향 검토를 대신하지 못한다.
 - Decision Outcome: Contract 자동 gate 뒤 별도 protected GitHub environment/job 승인을 요구한다. Expand/transition과 일반 release 승인 UI는 그대로 두고 contract path만 강화한다.
 - Alternatives Considered: 일반 production approval 재사용은 destructive 의도를 구분하지 못해 제외했다. Repository 안 boolean input만으로 승인하면 권한 분리가 없어 제외했다.
 - Consequences: Repository environment reviewer 설정이 prerequisite이며 미구성 상태에서는 contract execution이 fail-closed여야 한다.
-- Confirmation / Follow-up: 승인 전 Job 미실행과 승인 후 같은 evidence context 실행을 workflow fixture 또는 정적 검증으로 확인한다.
+- Confirmation / Follow-up: 2026-07-30 사용자 결정과 갱신된 Linear `PROD-563`, `PROD-564`에 따라 아래 단일 production release 승인 결정으로 대체됐다.
+
+### Production release 승인 하나가 migration과 workload를 함께 승인한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Derived Contract
+- Authority / Provenance: Linear `PROD-563`, `PROD-564`
+- Status: Active
+- Context / Problem: 정식 SemVer release image에는 실행할 migration과 API/Web code가 함께 들어 있으며 production 배포 승인은 이 release 전체를 선택하는 행위다. Contract migration만 다시 승인하면 같은 release에 중복 승인 경계가 생기고 실제 migration 실행과 승인 workflow가 분리된다.
+- Decision Outcome: PROD-563의 production release 승인은 선택한 immutable image의 migration과 API/Web workload를 한 번에 승인한다. PROD-564는 그 승인 뒤 phase, recovery evidence, compatibility와 rollback window를 자동 검증하며 contract 전용 Environment, approval workflow 또는 boolean approval input을 추가하지 않는다.
+- Alternatives Considered: Contract 전용 protected Environment는 destructive 의도를 별도로 드러내지만 동일 release를 두 번 승인하고 migration 실행 job과 결합하기 어렵기 때문에 제외했다. 승인 없는 자동 production 배포도 제외하며 production release 자체의 Environment 경계는 PROD-563에 유지한다.
+- Consequences: Contract의 강화된 안전성은 별도 사람 승인 횟수가 아니라 schema authority, restore point WAL archive, live workload allowlist와 rollback window의 fail-closed 자동 검사로 제공한다.
+- Confirmation / Follow-up: Gate fixture에서 approval input 없이 contract 자동 조건만 검증하고, PROD-563 pipeline이 production approval 전에는 migration을 실행하지 않는지 해당 이슈에서 검증한다.
 
 ### 실패 후 database rollback을 자동 실행하지 않는다
 
@@ -94,4 +106,4 @@
 
 ## Superseded Decisions
 
-- 없음.
+- `Contract는 별도 protected approval 경계를 사용한다` — 2026-07-30 사용자 결정과 Linear `PROD-563`, `PROD-564` 정정으로 superseded.
