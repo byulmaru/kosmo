@@ -34,11 +34,11 @@ Android·iOS·Web 공용 앱이 예상 오류의 기존 inline·route-local 복�
 - ID·no-ID·긴 ID, copy success/failure, 좁은 Web viewport, keyboard, text scaling과 platform target 상태를 Storybook catalog와 접근성 검사에서 확인한다.
 - `pnpm --filter @kosmo/app test`, `pnpm lint:eslint`, `pnpm lint:prettier`를 통과시킨다.
 
-- [ ] 1.1 GraphQL response·network·local render 오류의 구조화된 origin을 보존하고 expected/unexpected 분류 및 client 중복 보고 회귀 검증을 추가한다.
-- [ ] 1.2 공용 platform reporter가 현재 오류 발생 건의 optional event ID를 반환하고 occurrence 단위 중복 방지·reset 상태를 유지하도록 연결한다.
-- [ ] 1.3 안전한 한국어 안내, optional ID, copy·retry·public root 이동을 제공하는 universal 전용 오류 화면을 구현한다.
-- [ ] 1.4 `expo-clipboard`를 pnpm으로 앱 dependency에 추가하고 정확한 ID copy와 기존 toast 기반 성공·실패 feedback을 연결한다.
-- [ ] 1.5 기존 Error Boundary·feedback 회귀와 전용 화면의 component·Storybook 상태, 접근성·responsive 검증을 완료한다.
+- [x] 1.1 GraphQL response·network·local render 오류의 구조화된 origin을 보존하고 expected/unexpected 분류 및 client 중복 보고 회귀 검증을 추가한다.
+- [x] 1.2 공용 platform reporter가 현재 오류 발생 건의 optional event ID를 반환하고 occurrence 단위 중복 방지·reset 상태를 유지하도록 연결한다.
+- [x] 1.3 안전한 한국어 안내, optional ID, copy·retry·public root 이동을 제공하는 universal 전용 오류 화면을 구현한다.
+- [x] 1.4 `expo-clipboard`를 pnpm으로 앱 dependency에 추가하고 정확한 ID copy와 기존 toast 기반 성공·실패 feedback을 연결한다.
+- [x] 1.5 기존 Error Boundary·feedback 회귀와 전용 화면의 component·Storybook 상태, 접근성·responsive 검증을 완료한다.
 
 ## 2. PROD-486 Web 오류 화면과 실제 event ID
 

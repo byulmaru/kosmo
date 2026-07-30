@@ -35,6 +35,10 @@ const config: StorybookConfig = {
           replacement: fileURLToPath(new URL('./mocks/expo-image-picker.ts', import.meta.url)),
         },
         {
+          find: /^expo-clipboard$/,
+          replacement: fileURLToPath(new URL('./mocks/expo-clipboard.ts', import.meta.url)),
+        },
+        {
           find: /^react-native-safe-area-context$/,
           replacement: fileURLToPath(new URL('./mocks/safe-area-context.tsx', import.meta.url)),
         },

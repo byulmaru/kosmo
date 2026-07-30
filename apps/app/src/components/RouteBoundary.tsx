@@ -1,7 +1,12 @@
 import { Suspense } from 'react';
-import { ErrorBoundary } from 'react-error-boundary';
+import { ClientErrorBoundary } from '@/components/ClientErrorBoundary';
 import { StateView } from '@/components/ui/StateView';
-import { useUnexpectedErrorReporter } from '@/observability/UnexpectedErrorContext';
+import { UnexpectedErrorScreen } from '@/components/UnexpectedErrorScreen';
+import { isExpectedClientError } from '@/observability/client-error';
+import {
+  useSafeErrorNavigation,
+  useUnexpectedErrorReporter,
+} from '@/observability/UnexpectedErrorContext';
 import type { ReactNode } from 'react';
 
 type RouteBoundaryProps = {
@@ -22,29 +27,35 @@ export function RouteBoundary({
   title,
 }: RouteBoundaryProps) {
   const reportUnexpectedError = useUnexpectedErrorReporter();
+  const safeNavigation = useSafeErrorNavigation() ?? (() => undefined);
 
   return (
-    <ErrorBoundary
-      fallbackRender={({ resetErrorBoundary }) =>
-        renderError ? (
-          renderError(resetErrorBoundary)
+    <ClientErrorBoundary
+      onError={reportUnexpectedError}
+      onReset={onRetry}
+      renderFallback={({ error, eventId, resetErrorBoundary }) =>
+        isExpectedClientError(error) ? (
+          renderError ? (
+            renderError(resetErrorBoundary)
+          ) : (
+            <StateView
+              actionLabel="다시 시도"
+              alert
+              description={description ?? '잠시 후 다시 시도해주세요.'}
+              onAction={resetErrorBoundary}
+              title={title}
+            />
+          )
         ) : (
-          <StateView
-            actionLabel="다시 시도"
-            alert
-            description={description ?? '잠시 후 다시 시도해주세요.'}
-            onAction={resetErrorBoundary}
-            title={title}
+          <UnexpectedErrorScreen
+            eventId={eventId}
+            onRetry={resetErrorBoundary}
+            onSafeNavigate={safeNavigation}
           />
         )
       }
-      onError={(error, info) => {
-        reportUnexpectedError?.(error, info);
-        console.error('Route error', error, info.componentStack);
-      }}
-      onReset={onRetry}
     >
       <Suspense fallback={loading}>{children}</Suspense>
-    </ErrorBoundary>
+    </ClientErrorBoundary>
   );
 }

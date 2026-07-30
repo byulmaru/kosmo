@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { classifyClientError, StructuredClientError } from '@/observability/client-error';
 import {
   executeGraphQLRequest,
   formatGraphQLError,
@@ -74,6 +75,48 @@ describe('Relay 네트워크', () => {
   it('Error와 알 수 없는 실패를 공통 boundary 형식으로 변환한다', () => {
     assert.equal(formatGraphQLError(new Error('network down')), 'network down');
     assert.equal(formatGraphQLError(null), '요청을 처리하지 못했습니다.');
+  });
+
+  it('transport 실패의 origin과 code를 보존한다', async () => {
+    await assert.rejects(
+      executeGraphQLRequest(request, {}, null, async () => {
+        throw new Error('offline');
+      }),
+      (error: unknown) => {
+        assert.equal(error instanceof StructuredClientError, true);
+        assert.deepEqual(classifyClientError(error), {
+          code: 'NETWORK_REQUEST_FAILED',
+          origin: 'transport',
+          type: 'network',
+        });
+        return true;
+      },
+    );
+  });
+
+  it('HTTP GraphQL 오류의 response origin과 server code를 보존한다', async () => {
+    await assert.rejects(
+      executeGraphQLRequest(
+        request,
+        {},
+        null,
+        async () =>
+          new Response(
+            JSON.stringify({
+              errors: [{ extensions: { code: 'PERMISSION_DENIED' }, message: 'private message' }],
+            }),
+            { status: 403 },
+          ),
+      ),
+      (error: unknown) => {
+        assert.deepEqual(classifyClientError(error), {
+          code: 'PERMISSION_DENIED',
+          origin: 'graphql-response',
+          type: 'graphql',
+        });
+        return true;
+      },
+    );
   });
 });
 

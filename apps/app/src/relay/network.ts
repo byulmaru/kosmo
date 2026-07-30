@@ -1,3 +1,4 @@
+import { getGraphQLErrorCode, StructuredClientError } from '@/observability/client-error';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
 
 const loopbackHosts = new Set(['127.0.0.1', '[::1]', 'localhost']);
@@ -80,35 +81,59 @@ export async function executeGraphQLRequest(
 
   const native = isNativeRuntime();
   const origin = native ? getApiOrigin() : getWebOrigin();
-  const response = await fetchImplementation(`${origin}/graphql`, {
-    method: 'POST',
-    credentials: native ? 'omit' : 'include',
-    headers: {
-      accept: 'application/json',
-      'content-type': 'application/json',
-      ...(native && token ? { authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({
-      operationName: request.name,
-      query: request.text,
-      variables,
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetchImplementation(`${origin}/graphql`, {
+      method: 'POST',
+      credentials: native ? 'omit' : 'include',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+        ...(native && token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        operationName: request.name,
+        query: request.text,
+        variables,
+      }),
+    });
+  } catch (cause) {
+    throw new StructuredClientError({
+      cause,
+      code: 'NETWORK_REQUEST_FAILED',
+      message: cause instanceof Error ? cause.message : 'GraphQL request failed.',
+      origin: 'transport',
+      type: 'network',
+    });
+  }
   const body = (await response.json().catch(() => null)) as GraphQLResponse | null;
 
   if (!response.ok) {
-    const message =
-      body && 'errors' in body
-        ? body.errors
-            ?.map((error) => error.message)
-            .filter(Boolean)
-            .join('\n')
-        : undefined;
-    throw new Error(message || `GraphQL request failed with HTTP ${response.status}.`);
+    const responseError = getResponseError(body);
+    if (responseError) {
+      throw new StructuredClientError({
+        code: getGraphQLErrorCode(responseError) ?? 'GRAPHQL_RESPONSE_ERROR',
+        message: getResponseErrorMessage(body),
+        origin: 'graphql-response',
+        type: 'graphql',
+      });
+    }
+
+    throw new StructuredClientError({
+      code: `HTTP_${response.status}`,
+      message: `GraphQL request failed with HTTP ${response.status}.`,
+      origin: 'transport',
+      type: 'network',
+    });
   }
 
   if (!body) {
-    throw new Error('GraphQL response was not JSON.');
+    throw new StructuredClientError({
+      code: 'INVALID_GRAPHQL_RESPONSE',
+      message: 'GraphQL response was not JSON.',
+      origin: 'transport',
+      type: 'network',
+    });
   }
 
   return body;
@@ -116,4 +141,25 @@ export async function executeGraphQLRequest(
 
 export function formatGraphQLError(error: unknown): string {
   return error instanceof Error ? error.message : '요청을 처리하지 못했습니다.';
+}
+
+function getResponseError(body: GraphQLResponse | null): unknown {
+  if (!body || Array.isArray(body) || !('errors' in body)) {
+    return null;
+  }
+
+  return body.errors?.[0] ?? null;
+}
+
+function getResponseErrorMessage(body: GraphQLResponse | null): string {
+  if (!body || Array.isArray(body) || !('errors' in body)) {
+    return 'GraphQL request failed.';
+  }
+
+  return (
+    body.errors
+      ?.map((error) => error.message)
+      .filter(Boolean)
+      .join('\n') || 'GraphQL request failed.'
+  );
 }

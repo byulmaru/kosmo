@@ -32,6 +32,10 @@ export default defineConfig({
               replacement: join(currentDirectory, '.storybook/mocks/expo-secure-store.ts'),
             },
             {
+              find: /^expo-clipboard$/,
+              replacement: join(currentDirectory, '.storybook/mocks/expo-clipboard.ts'),
+            },
+            {
               find: /^react-native-safe-area-context$/,
               replacement: join(currentDirectory, '.storybook/mocks/safe-area-context.tsx'),
             },

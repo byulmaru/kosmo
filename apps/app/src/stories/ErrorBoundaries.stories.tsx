@@ -3,14 +3,28 @@ import { Pressable, Text, View } from 'react-native';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { GraphQLErrorBoundary } from '@/components/GraphQLErrorBoundary';
 import { RouteBoundary } from '@/components/RouteBoundary';
+import { UnexpectedErrorScreen } from '@/components/UnexpectedErrorScreen';
+import { StructuredClientError } from '@/observability/client-error';
 import { SessionFailOpenBoundary } from '@/session/SessionProvider';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
-const renderError = new Error('production boundary fixture');
+const unexpectedRenderError = new Error('production boundary fixture with a private path');
+const expectedNetworkError = new StructuredClientError({
+  code: 'NETWORK_REQUEST_FAILED',
+  message: 'network down',
+  origin: 'transport',
+  type: 'network',
+});
 
-function ThrowOnRender({ active }: { active: boolean }) {
+function ThrowOnRender({
+  active,
+  error = unexpectedRenderError,
+}: {
+  active: boolean;
+  error?: Error;
+}) {
   if (active) {
-    throw renderError;
+    throw error;
   }
 
   return <Text>콘텐츠가 복구됐습니다.</Text>;
@@ -44,7 +58,7 @@ function RouteBoundaryHarness({ onRetry }: { onRetry: () => void }) {
         }}
         title="경로를 불러오지 못했어요"
       >
-        <ThrowOnRender active={failed} />
+        <ThrowOnRender active={failed} error={expectedNetworkError} />
       </RouteBoundary>
     </GraphQLErrorBoundary>
   );
@@ -88,7 +102,7 @@ export const GraphQLFallbackAndRetry: Story = {
   render: () => <GraphQLBoundaryHarness onRetry={graphQLRetry} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('화면을 불러오지 못했어요');
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('문제가 발생했어요');
     await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
 
     await expect(canvas.findByText('콘텐츠가 복구됐습니다.')).resolves.toBeVisible();
@@ -118,5 +132,57 @@ export const SessionFailOpenAndResetKey: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '세션 갱신' }));
 
     await expect(canvas.findByText('콘텐츠가 복구됐습니다.')).resolves.toBeVisible();
+  },
+};
+
+const copySuccess = fn(async (value: string) => value === 'event-123');
+const copyFailure = fn(async () => false);
+
+export const UnexpectedErrorWithEventIdAndCopy: Story = {
+  render: () => (
+    <UnexpectedErrorScreen
+      eventId="event-123"
+      onRetry={() => undefined}
+      onSafeNavigate={() => undefined}
+      writeClipboard={copySuccess}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByText('event-123')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '오류 추적 ID 복사' }));
+
+    expect(copySuccess).toHaveBeenCalledWith('event-123');
+    await expect(canvas.findByText('오류 추적 ID를 복사했습니다.')).resolves.toBeVisible();
+    await expect(canvas.findByText('오류 추적 ID를 복사했어요.')).resolves.toBeVisible();
+  },
+};
+
+export const UnexpectedErrorWithoutEventIdFallback: Story = {
+  render: () => (
+    <UnexpectedErrorScreen onRetry={() => undefined} onSafeNavigate={() => undefined} />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.queryByRole('button', { name: '오류 추적 ID 복사' })).not.toBeInTheDocument();
+    expect(canvas.getByText(/오류 추적 ID를 확인하지 못했지만/)).toBeVisible();
+  },
+};
+
+export const UnexpectedErrorCopyFailure: Story = {
+  render: () => (
+    <UnexpectedErrorScreen
+      eventId="event-123"
+      onRetry={() => undefined}
+      onSafeNavigate={() => undefined}
+      writeClipboard={copyFailure}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '오류 추적 ID 복사' }));
+
+    await expect(canvas.findByText('오류 추적 ID를 복사하지 못했습니다.')).resolves.toBeVisible();
+    await expect(canvas.findByText('오류 추적 ID를 복사하지 못했어요.')).resolves.toBeVisible();
   },
 };

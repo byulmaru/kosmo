@@ -1,4 +1,5 @@
-import { Suspense, useEffect } from 'react';
+import { useRouter } from 'expo-router';
+import { Suspense, useCallback, useEffect } from 'react';
 import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
 import { initializeAnalytics } from '@/analytics/client';
 import { RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
@@ -14,10 +15,12 @@ import { ToastProvider } from './ui/ToastProvider';
 import type { PropsWithChildren } from 'react';
 
 function RelaySessionBoundary({ children }: PropsWithChildren) {
+  const router = useRouter();
   const { retry, revision } = useRelayActor();
+  const navigateToSafeScreen = useCallback(() => router.replace('/'), [router]);
 
   return (
-    <GraphQLErrorBoundary onRetry={retry}>
+    <GraphQLErrorBoundary onRetry={retry} onSafeNavigate={navigateToSafeScreen}>
       <SessionFailOpenBoundary
         fallback={
           <SessionErrorProvider>

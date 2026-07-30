@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { Platform } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
+import { isExpectedClientError } from '@/observability/client-error';
 import { useUnexpectedErrorReporter } from '@/observability/UnexpectedErrorContext';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import type { PropsWithChildren, ReactNode } from 'react';
@@ -96,7 +97,15 @@ export function SessionFailOpenBoundary({
   const reportUnexpectedError = useUnexpectedErrorReporter();
 
   return (
-    <ErrorBoundary fallback={fallback} onError={reportUnexpectedError} resetKeys={[resetKey]}>
+    <ErrorBoundary
+      fallback={fallback}
+      onError={(error, info) => {
+        if (!isExpectedClientError(error)) {
+          reportUnexpectedError?.(error, info);
+        }
+      }}
+      resetKeys={[resetKey]}
+    >
       {children}
     </ErrorBoundary>
   );

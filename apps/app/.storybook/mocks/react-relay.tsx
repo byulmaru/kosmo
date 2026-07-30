@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef } from 'react';
 import { Environment, Network, RecordSource, Store } from 'relay-runtime';
+import { StructuredClientError } from '@/observability/client-error';
 import { RelayActorProvider } from '@/relay/RelayActorProvider';
 import type { PropsWithChildren } from 'react';
 import type { GraphQLResponse, RequestParameters } from 'relay-runtime';
@@ -133,7 +134,7 @@ async function executeStoryOperation(
     }
 
     if (operationResponse.error) {
-      return Promise.reject(new Error(operationResponse.error));
+      return Promise.reject(createStoryExpectedError(operationResponse.error));
     }
 
     return { data: (operationResponse.data ?? {}) as GraphQLResponse['data'] };
@@ -145,7 +146,7 @@ async function executeStoryOperation(
       return resolveOperationResponse(operationResponse);
     }
     if (mock.mutationError) {
-      return Promise.reject(new Error(mock.mutationError));
+      return Promise.reject(createStoryExpectedError(mock.mutationError));
     }
     if (mock.mutationLoading) {
       return new Promise(() => undefined);
@@ -163,14 +164,14 @@ async function executeStoryOperation(
         Math.min(nextPaginationResponseIndex(), mock.paginationResponses.length - 1)
       ];
     if (configuredResponse?.error) {
-      return Promise.reject(new Error(configuredResponse.error));
+      return Promise.reject(createStoryExpectedError(configuredResponse.error));
     }
     if (configuredResponse) {
       return Promise.resolve({ data: (configuredResponse.data ?? {}) as GraphQLResponse['data'] });
     }
     if (mock.paginationError) {
       return Promise.reject(
-        new Error(
+        createStoryExpectedError(
           typeof mock.paginationError === 'string'
             ? mock.paginationError
             : '다음 페이지를 불러오지 못했습니다.',
@@ -190,4 +191,13 @@ async function executeStoryOperation(
   }
 
   return Promise.resolve({ data: (mock.queryData ?? {}) as GraphQLResponse['data'] });
+}
+
+function createStoryExpectedError(message: string): StructuredClientError {
+  return new StructuredClientError({
+    code: 'NETWORK_REQUEST_FAILED',
+    message,
+    origin: 'transport',
+    type: 'network',
+  });
 }

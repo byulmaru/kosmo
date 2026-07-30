@@ -19,10 +19,16 @@ if (enabled) {
   });
 }
 
-export const captureReactError = (cause: unknown, info: ErrorInfo): void => {
-  if (enabled) {
-    Sentry.captureReactException(cause, info, {
+export const captureReactError = (cause: unknown, info: ErrorInfo): string | undefined => {
+  if (!enabled) {
+    return undefined;
+  }
+
+  try {
+    return Sentry.captureReactException(cause, info, {
       mechanism: { handled: true, type: 'auto.function.react.error_boundary' },
     });
+  } catch {
+    return undefined;
   }
 };
